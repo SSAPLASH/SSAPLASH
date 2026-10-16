@@ -16,14 +16,14 @@ default:
 lint:
   stage: lint
   script:
-    - echo "lint 단계: 스택 확정 후 린트 명령을 넣는다"
+    - echo "lint 단계 - 스택 확정 후 린트 명령을 넣는다"
 
 test:
   stage: test
   script:
-    - echo "test 단계: 스택 확정 후 테스트 명령을 넣는다"
+    - echo "test 단계 - 스택 확정 후 테스트 명령을 넣는다"
 
 build:
   stage: build
   script:
-    - echo "build 단계: 스택 확정 후 빌드 명령을 넣는다"
+    - echo "build 단계 - 스택 확정 후 빌드 명령을 넣는다"
