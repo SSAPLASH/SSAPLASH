@@ -39,6 +39,7 @@ Docs/
 - 브랜치에는 JIRA 키가 아니라 **관련 Story가 속한 Epic의 prefix**를 쓴다 (`feat/{Epic prefix}-{내용}`, 예: `feat/AUTH-login-api`). 관련 Story가 없는 작업은 공식 업무 분류(`PLAN`, `UX`, `DESIGN`, `TECH`, `INFRA`, `DOCS`, `QA`, `PT`)를 prefix로 쓴다.
 - `feat/*`, `fix/*`는 해당 파트 `develop-*`(`develop-FE`/`develop-BE`/`develop-AI`/`develop-EMB`)에서 분기해 그쪽으로 MR을 연다. `main`, `develop-*`에는 직접 커밋·push하지 않는다.
 - MR 본문은 `.gitlab/merge_request_templates/Default.md`(원문 3.3절) 형식을 따른다. 병합은 squash 없이 일반 Merge.
+- **매주 금요일 정기 릴리즈**(원문 7절). 버전은 `v{주차}.{번호}`로 금요일 정기 릴리즈가 `v{주차}.0`, 그 뒤 추가 릴리즈가 `.1`, `.2`…. Git 태그·GitLab Release·Jira 릴리즈 이름을 같게 쓴다. 릴리즈 처리는 팀장이 하며, 코드 변경 Task·Bug에는 Jira `버전`(Fix Version)을 입력한다 (Jira Convention 10장).
 
 ## 작업 시 주의
 
