@@ -1,0 +1,13 @@
+# 시크릿
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Claude Code — 팀 공유 skill만 추적하고 나머지(settings, mail 등)는 제외
+.claude/*
+!.claude/skills/
+
+# OS
+.DS_Store
