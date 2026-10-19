@@ -8,6 +8,11 @@ spring:
     locale: ko_KR
     locale-resolver: fixed
 
+logging:
+  level:
+    # 404·405는 GlobalExceptionHandler가 WARN 한 줄로 남긴다. DispatcherServlet의 중복 WARN은 숨긴다.
+    org.springframework.web.servlet.PageNotFound: ERROR
+
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8080}
