@@ -3,6 +3,7 @@ package com.ssafy.airdrum.common.error;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.springframework.http.HttpStatusCode;
 
 /**
  * 모든 오류 응답의 본문. RFC 9457 Problem Details 필드에 {@code code}·{@code errors}를 확장했다.
@@ -35,12 +36,21 @@ public record ApiErrorResponse(
 	}
 
 	public static ApiErrorResponse of(ErrorCode errorCode, String detail, String instance, List<FieldErrorDetail> errors) {
+		return of(errorCode, errorCode.status(), detail, instance, errors);
+	}
+
+	/**
+	 * 프레임워크가 정한 상태 코드를 그대로 유지해야 할 때(설계 3-7: 분류되지 않은 4xx·5xx) 쓴다.
+	 * {@code status} 필드는 항상 실제 HTTP 상태와 같아야 하므로 코드의 기본 상태 대신 이 값을 쓴다.
+	 */
+	public static ApiErrorResponse of(ErrorCode errorCode, HttpStatusCode status, String detail, String instance,
+			List<FieldErrorDetail> errors) {
 		String resolvedDetail = (detail == null || detail.isBlank()) ? errorCode.title() : detail;
 		List<FieldErrorDetail> resolvedErrors = (errors == null || errors.isEmpty()) ? null : List.copyOf(errors);
 		return new ApiErrorResponse(
 				TYPE_ABOUT_BLANK,
 				errorCode.title(),
-				errorCode.status().value(),
+				status.value(),
 				resolvedDetail,
 				instance,
 				errorCode.code(),
