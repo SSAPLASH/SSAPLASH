@@ -3,6 +3,10 @@ spring:
     name: airdrum-api
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  web:
+    # 검증 메시지 등 프레임워크 문구를 Accept-Language와 무관하게 한국어로 고정한다.
+    locale: ko_KR
+    locale-resolver: fixed
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
@@ -22,3 +26,13 @@ management:
       show-components: never
       probes:
         enabled: true
+
+# OpenAPI 문서(/v3/api-docs)와 Swagger UI(/swagger-ui/index.html).
+# 운영 환경은 SWAGGER_ENABLED=false 로 둘 다 닫는다.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    operations-sorter: method
+    tags-sorter: alpha
