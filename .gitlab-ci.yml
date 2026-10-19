@@ -30,8 +30,11 @@ build:
 
 # BE 초기화 이후의 실제 검증. 기존 공통 골격은 다른 파트가 연결할 때까지 유지한다.
 .be-job:
-  image: eclipse-temurin:21-jdk-jammy
+  # 현재 local 태그 Runner는 Windows PowerShell shell executor다.
+  tags:
+    - local
   variables:
+    JAVA_HOME: 'C:\Program Files\Java\jdk-21.0.11'
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache"
   before_script:
     - cd BE
@@ -52,7 +55,7 @@ be-test:
   extends: .be-job
   stage: test
   script:
-    - sh ./gradlew --no-daemon test
+    - .\gradlew.bat --no-daemon test
   artifacts:
     when: always
     reports:
@@ -65,7 +68,7 @@ be-build:
   extends: .be-job
   stage: build
   script:
-    - sh ./gradlew --no-daemon bootJar
+    - .\gradlew.bat --no-daemon bootJar
   artifacts:
     paths:
       - BE/build/libs/app.jar

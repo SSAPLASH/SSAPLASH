@@ -63,7 +63,11 @@ macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 결과는 `build/reports/tests/test/index.html`에서 확인한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
-통합 브랜치 파이프라인에서 실행된다. JDK 21 이미지를 사용하는 Linux Docker executor가 필요하다.
+통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
+`gradlew.bat`를 실행한다. CI의 `JAVA_HOME` 기본값은 현재 Runner에 설치된
+`C:\Program Files\Java\jdk-21.0.11`이다. 설치 경로가 바뀌면 프로젝트 CI/CD 변수 `JAVA_HOME`으로
+JDK 21 경로를 지정한다. shell executor는 `image`를 사용하지 않는다.
+Linux Docker Runner로 전환할 때는 태그·JDK 이미지·Wrapper 실행 명령을 함께 변경한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 ## 컨테이너 실행
