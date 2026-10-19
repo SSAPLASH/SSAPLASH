@@ -1,0 +1,43 @@
+[project]
+name = "ssaplash-ai"
+version = "0.1.0"
+description = "싸플래쉬(SSAPLASH) AI 파트 — 채보 생성·드럼 분리·코칭 모델과 벤치마크 도구"
+readme = "README.md"
+authors = [
+    { name = "김호준", email = "000304jun@naver.com" }
+]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy>=1.26,<3",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+# ---- 코드 검사 (ruff) ----
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["data", "notebooks"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: import 정렬, B: 흔한 버그, UP: 최신 문법
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = ["E501"]  # 줄 길이는 formatter가 맞춘다
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---- 테스트 (pytest) ----
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
