@@ -4,6 +4,13 @@ stages:
   - test
   - build
 
+# Windows Runner의 소스 준비·캐시 정리에도 긴 경로 지원을 적용한다.
+# 환경변수로 전달하여 Runner 호스트의 전역 Git 설정은 변경하지 않는다.
+variables:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: core.longpaths
+  GIT_CONFIG_VALUE_0: "true"
+
 # MR을 만들거나 갱신할 때, 그리고 main·develop-*에 병합될 때만 실행한다.
 workflow:
   rules:

@@ -69,6 +69,8 @@ GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존
 작업의 `JAVA_HOME`만 설정하므로 Runner의 시스템 Java 설정은 변경하지 않는다.
 JDK는 다음 작업에서도 캐시로 재사용하며, 최초 실행에는 GitHub 배포 파일 다운로드가 필요하다.
 shell executor는 `image`를 사용하지 않는다.
+Windows에서 긴 Gradle 캐시 경로를 정리할 수 있도록 모든 CI 작업의 Git 프로세스에
+`core.longpaths=true`를 환경변수로 전달하며, 호스트의 전역 Git 설정은 변경하지 않는다.
 Linux Docker Runner로 전환할 때는 태그·JDK 이미지·Wrapper 실행 명령을 함께 변경한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
 
