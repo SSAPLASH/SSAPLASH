@@ -1,6 +1,7 @@
 # BE API 서버
 
-관련 작업: [S15P31A307-93 프로젝트 초기화·앱 컨테이너 실행 정의](https://ssafy.atlassian.net/browse/S15P31A307-93)
+관련 작업: [S15P31A307-93 프로젝트 초기화·앱 컨테이너 실행 정의](https://ssafy.atlassian.net/browse/S15P31A307-93),
+[S15P31A307-85 공통 응답·예외 처리·Swagger 설정](https://ssafy.atlassian.net/browse/S15P31A307-85)
 
 ## 기술 스택
 
@@ -11,6 +12,8 @@
 | Gradle | 9.8.1, Wrapper 포함, Groovy DSL |
 | HTTP | Spring MVC, 내장 Tomcat |
 | 상태 확인 | Spring Boot Actuator |
+| 입력 검증 | Bean Validation (`spring-boot-starter-validation`) |
+| API 문서 | springdoc-openapi 3.1.1 (Swagger UI). Boot 4 전용 3.x 라인이며 2.x는 쓰지 않는다 |
 
 2026-10-19 초기화 시 공식 Spring Initializr의 안정 버전을 사용했다.
 기존 설계 문서의 Boot 3.x에서 4.1.1로 변경했다. Java 21과 Gradle 9.x는
@@ -19,7 +22,8 @@ Boot 4는 Jackson 3 및 Spring Security 7을 기준으로 하므로 후속 기�
 3.x용 예제와 패키지·스타터 이름을 혼용하지 않는다.
 
 현재는 DB·Redis·외부 API 없이 기동할 수 있다. 회원·곡·채보 스키마,
-Flyway, 인증, 공통 응답, Swagger와 AI 연동은 해당 기능 작업에서 추가한다.
+Flyway, 인증과 AI 연동은 해당 기능 작업에서 추가한다. 공통 응답·오류 형식과
+OpenAPI 문서는 아래 [API 규약](#api-규약)을 따른다.
 
 ## 로컬 실행
 
@@ -46,9 +50,104 @@ sh ./gradlew bootRun
 | `SERVER_ADDRESS` | `127.0.0.1` | 로컬 수신 주소. 컨테이너에서는 이미지가 `0.0.0.0`으로 지정 |
 | `SERVER_PORT` | `8080` | HTTP 수신 포트 |
 | `JAVA_TOOL_OPTIONS` | JVM 기본값 | 컨테이너 메모리에 맞춘 JVM 옵션이 필요할 때 지정 |
+| `SWAGGER_ENABLED` | `true` | OpenAPI 문서(`/v3/api-docs`)와 Swagger UI 노출. 운영 Compose에서는 `false` |
 
 설정은 실행 환경의 환경변수로 전달한다. Spring Boot가 `.env`를 자동으로 읽지는 않는다.
 비밀값·개인 설정을 소스에 넣지 않는다. 루트 `.gitignore`가 `.env*`와 키 파일을 제외한다.
+
+## API 규약
+
+모든 REST API가 공유하는 규칙이다. FE 클라이언트와 다른 BE 작업은 이 절을 기준으로 맞춘다.
+설계 근거와 결정 과정은 작업 85번 설계 문서(개인 문서)에 있다.
+
+### 성공 응답
+
+성공은 HTTP 상태 코드로 표현하고 본문은 자원 DTO를 그대로 낸다. 별도 래퍼(`success`, `data`)는 쓰지 않는다.
+
+| 상황 | 상태 | 본문 |
+| --- | --- | --- |
+| 조회 | 200 | 자원 DTO (record) |
+| 목록 | 200 | JSON 배열. 페이지네이션이 필요하면 `PageResponse` |
+| 생성 | 201 | 생성된 자원 DTO. `Location` 헤더는 선택 |
+| 수정 | 200 | 수정된 자원 DTO |
+| 삭제·본문 없는 처리 | 204 | 없음 |
+
+페이지 응답 `common.response.PageResponse`는 `items`, `page`(0부터), `size`, `totalElements`,
+`totalPages`, `hasNext` 필드를 가진다. `PageResponse.of(items, page, size, totalElements)`로 만든다.
+
+JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-10-19T07:00:00Z`)로,
+열거형은 UPPER_SNAKE 문자열로 낸다. 숫자 ID는 JSON 숫자, uuid는 문자열이다.
+성공 응답의 null 필드는 생략하지 않는다. 모르는 입력 필드는 무시한다.
+
+### 오류 응답
+
+모든 오류는 `Content-Type: application/problem+json`(RFC 9457)이며 `code`·`errors`를 확장 필드로 더한다.
+클라이언트는 이 미디어 타입으로 오류를 식별하고 `code`로 분기한다. `detail`은 그대로 보여 줘도 되는 한국어 문장이다.
+
+```json
+{
+  "type": "about:blank",
+  "title": "입력값 검증 실패",
+  "status": 400,
+  "detail": "입력값을 확인해 주세요.",
+  "instance": "/api/presets",
+  "code": "VALIDATION_FAILED",
+  "errors": [
+    { "field": "name", "message": "공백일 수 없습니다" },
+    { "field": "pads[2].key", "message": "1 이상이어야 합니다" }
+  ]
+}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `type` | 고정 `about:blank` |
+| `title` | 오류 코드의 한국어 제목 |
+| `status` | HTTP 상태 코드와 같은 값 |
+| `detail` | 사람이 읽는 한국어 설명. 500은 고정 문구만 내고 예외 메시지·스택을 노출하지 않는다 |
+| `instance` | 요청 경로(쿼리 문자열 제외) |
+| `code` | 기계 판별용 코드, UPPER_SNAKE |
+| `errors` | 검증 실패일 때만. `field`(필드 경로 또는 파라미터 이름)와 `message`. 거부된 값은 넣지 않는다 |
+
+공통 코드는 `common.error.CommonErrorCode`에 있다.
+
+| 코드 | 상태 | 언제 |
+| --- | --- | --- |
+| `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
+| `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
+| `UNAUTHORIZED` | 401 | 인증 필요 (Security 작업에서 사용) |
+| `FORBIDDEN` | 403 | 권한 없음, 소유자 검사 실패 |
+| `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
+| `METHOD_NOT_ALLOWED` | 405 | |
+| `NOT_ACCEPTABLE` | 406 | |
+| `CONFLICT` | 409 | 도메인 코드가 없을 때의 기본 |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | |
+| `INTERNAL_ERROR` | 500 | 처리되지 않은 예외, 분류되지 않은 5xx |
+
+도메인 코드는 각 도메인 패키지에 `{Domain}ErrorCode` enum을 두고 `common.error.ErrorCode`를 구현한다.
+코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `USER_NOT_FOUND` 404, `SONG_FORBIDDEN` 403).
+공통 코드에는 접두사가 없고, 같은 코드 문자열을 두 enum이 쓰지 않는다.
+
+사용 규칙:
+
+- 서비스·컨트롤러는 `BusinessException(errorCode)` 또는 `BusinessException(errorCode, detail)`만 던진다.
+  상태·제목은 코드가 정한다. 컨트롤러에 `@ExceptionHandler`를 따로 두지 않는다.
+- 요청 본문은 `@Valid`, 쿼리·경로 파라미터는 제약 애너테이션(`@Min` 등)을 직접 붙인다.
+  검증 메시지는 `Accept-Language`와 무관하게 한국어다.
+- Spring MVC 밖(서블릿 필터, Security 진입점·접근 거부 핸들러)에서는 `common.error.ErrorResponseWriter`를
+  주입받아 `write(response, errorCode, detail, path)`로 응답한다. 자체 JSON을 만들지 않는다.
+- 로그: 4xx는 WARN 한 줄(스택 없음), 5xx는 ERROR + 스택 1회. 검증 실패 로그에 값은 남기지 않는다.
+
+### API 문서
+
+- Swagger UI: `http://127.0.0.1:8080/swagger-ui.html` (→ `/swagger-ui/index.html`)
+- OpenAPI JSON: `GET /v3/api-docs`, YAML: `GET /v3/api-docs.yaml`
+- `SWAGGER_ENABLED=false`면 둘 다 404. 운영 Compose는 끈다.
+- 모든 operation에 400·500 응답이 `ApiErrorResponse` 스키마로 자동 추가된다.
+  401·403·404·409처럼 그 API에만 해당하는 응답은 `@ApiResponse`로 적는다.
+- 보안 스킴 `bearerAuth`(HTTP bearer, JWT)가 등록돼 있다. 보호 API는
+  `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`로 표시한다. 전역 requirement는 걸지 않는다.
+- Security를 도입하는 작업은 `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`을 permitAll로 둔다.
 
 ## 검증과 패키징
 
@@ -59,8 +158,10 @@ java -jar build/libs/app.jar
 
 macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 현재 별도 린터는 없으며 `build`가 컴파일·테스트·실행 JAR 생성을 수행한다.
-테스트는 실제 HTTP 서버에서 health/liveness/readiness 응답과 관리 엔드포인트 비노출을 확인한다.
-결과는 `build/reports/tests/test/index.html`에서 확인한다.
+테스트는 실제 HTTP 서버에서 health/liveness/readiness 응답, 관리 엔드포인트 비노출,
+OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 예외 종류별 오류 응답 형식과
+로그 규칙을 확인한다. 테스트 소스의 `ErrorProbeController`는 이를 위한 전용 컨트롤러이며
+운영 JAR에는 포함되지 않는다. 결과는 `build/reports/tests/test/index.html`에서 확인한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
