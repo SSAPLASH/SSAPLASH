@@ -10,5 +10,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // 테스트 파일이 없는 골격 단계에서도 npm test가 통과하도록 한다
+    passWithNoTests: true,
   },
 })
