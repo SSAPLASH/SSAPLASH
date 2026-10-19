@@ -1,0 +1,29 @@
+# 파이프라인이 도는지 확인하는 골격이다. 파트별 스택이 확정되면 각 job의 script를 채운다.
+stages:
+  - lint
+  - test
+  - build
+
+# MR을 만들거나 갱신할 때, 그리고 main·develop-*에 병합될 때만 실행한다.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH =~ /^(main|develop-.*)$/
+
+default:
+  image: alpine:3.20
+
+lint:
+  stage: lint
+  script:
+    - echo "lint 단계 - 스택 확정 후 린트 명령을 넣는다"
+
+test:
+  stage: test
+  script:
+    - echo "test 단계 - 스택 확정 후 테스트 명령을 넣는다"
+
+build:
+  stage: build
+  script:
+    - echo "build 단계 - 스택 확정 후 빌드 명령을 넣는다"
