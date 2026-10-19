@@ -34,9 +34,9 @@ build:
   tags:
     - local
   variables:
-    JAVA_HOME: 'C:\Program Files\Java\jdk-21.0.11'
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache"
   before_script:
+    - . ./BE/ci/setup-java.ps1
     - cd BE
   cache:
     key:
@@ -46,6 +46,7 @@ build:
     paths:
       - .gradle-cache/caches/
       - .gradle-cache/wrapper/
+      - .gradle-cache/jdks/
   rules:
     - changes:
         - BE/**/*
