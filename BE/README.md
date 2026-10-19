@@ -64,9 +64,11 @@ macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
-`gradlew.bat`를 실행한다. CI의 `JAVA_HOME` 기본값은 현재 Runner에 설치된
-`C:\Program Files\Java\jdk-21.0.11`이다. 설치 경로가 바뀌면 프로젝트 CI/CD 변수 `JAVA_HOME`으로
-JDK 21 경로를 지정한다. shell executor는 `image`를 사용하지 않는다.
+`gradlew.bat`를 실행한다. `ci/setup-java.ps1`이 공식 Temurin 21.0.12.1+1 Windows 배포 파일을
+다운로드하고 SHA-256을 확인한 뒤 작업 폴더의 `.gradle-cache/jdks/`에 준비한다.
+작업의 `JAVA_HOME`만 설정하므로 Runner의 시스템 Java 설정은 변경하지 않는다.
+JDK는 다음 작업에서도 캐시로 재사용하며, 최초 실행에는 GitHub 배포 파일 다운로드가 필요하다.
+shell executor는 `image`를 사용하지 않는다.
 Linux Docker Runner로 전환할 때는 태그·JDK 이미지·Wrapper 실행 명령을 함께 변경한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
 
