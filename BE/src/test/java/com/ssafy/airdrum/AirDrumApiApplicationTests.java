@@ -6,9 +6,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.test.context.SpringBootTest;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -20,6 +23,9 @@ class AirDrumApiApplicationTests {
 	@Value("${local.server.port}")
 	private int port;
 
+	@Autowired
+	private HealthEndpointGroups healthGroups;
+
 	@ParameterizedTest
 	@ValueSource(strings = {"/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness"})
 	void healthEndpointsReportUpWithoutDetails(String path) throws Exception {
@@ -29,6 +35,13 @@ class AirDrumApiApplicationTests {
 		assertThat(body.path("status").asString()).isEqualTo("UP");
 		assertThat(body.has("components")).isFalse();
 		assertThat(body.has("details")).isFalse();
+	}
+
+	/** 설계 문서 U5: DB에 못 붙으면 요청을 받을 준비가 안 된 것으로 본다. 프로세스 생존(liveness)은 DB와 무관하다. */
+	@Test
+	void readinessIncludesDatabaseButLivenessDoesNot() {
+		assertThat(healthGroups.get("readiness").isMember("db")).isTrue();
+		assertThat(healthGroups.get("liveness").isMember("db")).isFalse();
 	}
 
 	@ParameterizedTest

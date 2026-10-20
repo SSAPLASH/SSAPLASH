@@ -47,6 +47,10 @@ management:
       show-components: never
       probes:
         enabled: true
+      # DB에 못 붙으면 readiness는 503이다. liveness는 프로세스 상태만 본다.
+      group:
+        readiness:
+          include: readinessState,db
 
 # OpenAPI 문서(/v3/api-docs)와 Swagger UI(/swagger-ui/index.html).
 # 운영 환경은 SWAGGER_ENABLED=false 로 둘 다 닫는다.
