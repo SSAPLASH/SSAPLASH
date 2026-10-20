@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
+import { sensorRegistry } from '@/app/sensorRegistry';
 import { isProfileComplete } from '@/domain/calibration';
 import { STICK_PADS, PAD_META, LANE_ORDER } from '@/domain/pads';
 
@@ -28,7 +29,7 @@ export function HomePage() {
           <h2>세팅</h2>
           <p className="dim">입력 방식, 키 매핑, 가상 키트 배치, 판정 폭을 정하고 프리셋으로 저장합니다.</p>
           <span className="status">
-            지금: {sensorKind === 'none' ? '키보드' : sensorKind === 'pointer' ? '포인터 모의 IMU + 키보드' : sensorKind === 'ble' ? 'BLE 스틱 + 키보드' : 'WebSocket + 키보드'}
+            지금: {sensorKind === 'none' ? '키보드' : `${sensorRegistry.get(sensorKind)?.label ?? sensorKind} + 키보드`}
             {connected[0] || connected[1] ? ' · 연결됨' : ''}
           </span>
         </Link>
