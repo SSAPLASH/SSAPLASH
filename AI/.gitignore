@@ -1,0 +1,18 @@
+# AI 파트 전용. 경로는 AI/ 기준.
+
+# 세션 인계용 작업 기록 (개인 문서)
+DESIGN.md
+ADR.md
+ROADMAP.md
+
+# 가상환경·데이터·모델 가중치·실험 결과
+.venv/
+data/*
+!data/README.md
+mlruns/
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
