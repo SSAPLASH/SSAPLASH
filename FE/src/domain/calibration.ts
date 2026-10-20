@@ -120,3 +120,33 @@ export function isProfileComplete(profile: CalibrationProfile | null, pads: PadI
   if (!profile) return false;
   return pads.every((p) => !!profile.anchors[p]);
 }
+
+/** 품질 경고 기준 (설계 4-1 품질 지표). 하드웨어 실측 후 조정(U6) */
+export const SPREAD_WARN_DEG = 4;
+export const CLOSE_WARN_DEG = 10;
+
+export interface CalibrationWarning {
+  /** spread: 손 흔들림 · close: 두 앵커 근접 · missing: 대상 패드에 앵커 없음(건너뜀) */
+  kind: 'spread' | 'close' | 'missing';
+  pads: PadId[];
+  /** spread: 퍼짐(도) · close: 앵커 간 거리(도) */
+  value?: number;
+}
+
+/** 앵커 품질 경고 목록. 순서: spread → close → missing. 저장을 막지는 않는다 */
+export function profileWarnings(anchors: Partial<Record<PadId, PadAnchor>>, pads: PadId[]): CalibrationWarning[] {
+  const out: CalibrationWarning[] = [];
+  const list = pads.map((p) => anchors[p]).filter((a): a is PadAnchor => !!a);
+  for (const a of list) {
+    if (a.spread > SPREAD_WARN_DEG) out.push({ kind: 'spread', pads: [a.pad], value: a.spread });
+  }
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const d = poseDistance(list[i], list[j]);
+      if (d < CLOSE_WARN_DEG) out.push({ kind: 'close', pads: [list[i].pad, list[j].pad], value: d });
+    }
+  }
+  const missing = pads.filter((p) => !anchors[p]);
+  if (missing.length) out.push({ kind: 'missing', pads: missing });
+  return out;
+}
