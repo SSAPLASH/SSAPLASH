@@ -2,7 +2,8 @@
 
 관련 작업: [S15P31A307-93 프로젝트 초기화·앱 컨테이너 실행 정의](https://ssafy.atlassian.net/browse/S15P31A307-93),
 [S15P31A307-85 공통 응답·예외 처리·Swagger 설정](https://ssafy.atlassian.net/browse/S15P31A307-85),
-[S15P31A307-86 회원·소셜 연동 정보 스키마·마이그레이션](https://ssafy.atlassian.net/browse/S15P31A307-86)
+[S15P31A307-86 회원·소셜 연동 정보 스키마·마이그레이션](https://ssafy.atlassian.net/browse/S15P31A307-86),
+[S15P31A307-87 OAuth 제공자 연동·최초 로그인 시 회원 가입](https://ssafy.atlassian.net/browse/S15P31A307-87)
 
 ## 기술 스택
 
@@ -19,6 +20,7 @@
 | 영속성 | Spring Data JPA (Hibernate 7). 스키마는 만들지 않고 검증만 한다(`ddl-auto: validate`) |
 | 마이그레이션 | Flyway 12 (`spring-boot-starter-flyway` + `flyway-database-postgresql`) |
 | 테스트 DB | 임베디드 PostgreSQL 16 (`io.zonky.test:embedded-postgres`). Docker 불필요 |
+| 외부 HTTP | `RestClient` (`spring-boot-starter-restclient`). OAuth 제공자 호출. 테스트는 `MockRestServiceServer` |
 
 2026-10-19 초기화 시 공식 Spring Initializr의 안정 버전을 사용했다.
 기존 설계 문서의 Boot 3.x에서 4.1.1로 변경했다. Java 21과 Gradle 9.x는
@@ -27,7 +29,8 @@ Boot 4는 Jackson 3 및 Spring Security 7을 기준으로 하므로 후속 기�
 3.x용 예제와 패키지·스타터 이름을 혼용하지 않는다.
 
 기동하려면 PostgreSQL 16이 필요하다. 기동할 때 Flyway가 마이그레이션을 적용하고
-Hibernate가 엔티티와 스키마를 검증한다. Redis·인증·AI 연동은 해당 기능 작업에서 추가한다.
+Hibernate가 엔티티와 스키마를 검증한다. 소셜 로그인은 [소셜 로그인](#소셜-로그인)을 따른다.
+Redis·JWT 인증·AI 연동은 해당 기능 작업에서 추가한다.
 공통 응답·오류 형식과 OpenAPI 문서는 아래 [API 규약](#api-규약)을, 스키마 변경은
 [DB와 마이그레이션](#db와-마이그레이션)을 따른다.
 
@@ -74,9 +77,19 @@ sh ./gradlew bootRun
 | `DB_URL` | `jdbc:postgresql://127.0.0.1:5432/app` | PostgreSQL JDBC URL |
 | `DB_USERNAME` | `app` | DB 사용자 |
 | `DB_PASSWORD` | 없음 (필수) | DB 비밀번호. 없으면 DB에 접속하기 전에 "DB_PASSWORD를 지정하세요"로 기동을 멈춘다 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 빈 값 | Google OAuth 클라이언트. 둘 중 하나라도 비면 Google 로그인 비활성(404) |
+| `SSAFY_CLIENT_ID`, `SSAFY_CLIENT_SECRET` | 빈 값 | SSAFY 로그인 클라이언트. 비면 SSAFY 로그인 비활성(404) |
+| `ADMIN_EMAILS` | 빈 값 | ADMIN으로 판정할 로그인 계정 이메일. 쉼표 구분, 공백·대소문자 무시 |
+| `FRONTEND_BASE_URL` | `http://localhost:5173` | 로그인 후 돌아갈 FE 주소. 운영은 서비스 도메인 |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8080` | 제공자에 보내는 콜백 URI의 앞부분. 콘솔에 등록한 리다이렉트 URI와 맞아야 한다 |
+| `COOKIE_SECURE` | `true` | state 쿠키의 `Secure` 속성. Safari로 로컬 테스트할 때만 `false` |
 
-설정은 실행 환경의 환경변수로 전달한다. Spring Boot가 `.env`를 자동으로 읽지는 않는다.
-비밀값·개인 설정을 소스에 넣지 않는다. 루트 `.gitignore`가 `.env*`와 키 파일을 제외한다.
+설정은 환경변수로 전달한다. 로컬에서는 `BE/.env.example`을 `BE/.env`로 복사해 값을 채우면
+`BE/`에서 실행할 때 자동으로 읽는다(`spring.config.import: optional:file:.env[.properties]`, 파일이 없으면 건너뜀).
+형식은 `KEY=value`이며 따옴표를 붙이지 않는다. **`KEY=`처럼 값이 빈 줄은 "미설정"이 아니라 빈 문자열이다.**
+기본값을 쓰려면 줄째 지우거나 주석(`#`)으로 둔다(주소·쿠키 설정은 빈 값이면 기본값으로 되돌린다).
+같은 키가 OS 환경변수에도 있으면 환경변수가 이긴다. 운영 Compose는 `.env` 파일 없이 환경변수로 준다.
+비밀값·개인 설정을 소스에 넣지 않는다. 루트 `.gitignore`가 `.env*`(`.env.example` 제외)와 키 파일을 제외한다.
 
 ## 곡·채보 마이그레이션 (94번)
 
@@ -245,6 +258,40 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
   `@SpringBootTest`에서 데이터를 쓰면 `@Transactional`로 롤백하거나 직접 지운다.
 - 최초 실행 때 PostgreSQL 바이너리 jar를 Gradle 캐시로 받는다.
 
+## 소셜 로그인
+
+Google·SSAFY OAuth 2.0 Authorization Code 방식이다. 자체 회원가입은 없다. 콜백은 BE가 받고,
+FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**시키기만 한다(fetch로 호출하지 않는다).
+결정 근거는 FE 요청 `ACCT-001_소셜로그인-결정-전달`과 작업 87번 설계 문서(개인 문서)에 있다.
+
+| 메서드·경로 | 동작 |
+| --- | --- |
+| `GET /api/auth/{provider}/login` | `provider` = `google` \| `ssafy`. 제공자 동의 화면으로 302, state 쿠키 `oauth_state` 설정 |
+| `GET /api/auth/{provider}/callback` | 제공자가 돌려보내는 주소. 성공하면 `{FRONTEND_BASE_URL}/auth/callback`, 실패하면 `{FRONTEND_BASE_URL}/login?error={access_denied\|oauth_failed}`로 302 |
+
+- 없거나 키가 설정되지 않은 제공자는 두 경로 모두 404 `AUTH_PROVIDER_NOT_SUPPORTED`다. 기동 로그에 "비활성" WARN이 남는다.
+- `access_denied`는 사용자가 동의 화면에서 취소한 경우, `oauth_failed`는 그 밖의 모든 실패(state 불일치, 토큰 교환·사용자 정보 조회 실패, 탈퇴 회원 등)다. 상세 사유는 서버 WARN 로그에만 남고 인가 코드·토큰·이메일은 기록하지 않는다.
+- state는 서버 세션 없이 `oauth_state` 쿠키(HttpOnly, `SameSite=Lax`, `Path=/api/auth`, 5분)로 확인하고 콜백에서 지운다. 로그인을 두 번 연달아 시작하면 앞선 콜백은 실패한다.
+- 회원은 (제공자, 제공자 사용자 ID)로 찾는다. Google은 `sub`, SSAFY는 `userId`다. 같은 사람이라도 Google과 SSAFY로 로그인하면 서로 다른 회원이다(계정 연결 없음).
+- 최초 로그인 때만 닉네임(제공자 이름, 30자로 자름, 없으면 `사용자`)과 프로필 이미지(500자 초과·없음은 null, SSAFY는 항상 null)를 채운다. 이후 로그인에서는 덮어쓰지 않는다.
+- 역할은 로그인할 때마다 `ADMIN_EMAILS`로 다시 정한다(목록에서 빠지면 다음 로그인에 USER). Google은 `email_verified=true`인 이메일만, SSAFY는 이메일을 검증된 것으로 본다.
+- 제공자 토큰은 사용자 정보 조회에만 쓰고 저장하지 않는다. 우리 서비스의 access·refresh 토큰 발급은 88번이 `auth.LoginSessionIssuer`를 구현해 붙인다. **88번 전까지는 콜백이 회원만 만들고 쿠키·토큰은 내리지 않는다.**
+- 외부 호출 시간 제한은 연결 3초·응답 5초(`spring.http.clients.*`)다.
+
+제공자 설정은 `application.yaml`의 `auth.providers.{key}`에 있다(인가·토큰·사용자 정보 URI, scope, 클라이언트 인증 방식 `BASIC`/`POST`, 응답 속성 이름).
+제공자를 추가하려면 같은 형식의 블록과 `user.SocialProvider` 값을 추가한다. 마이그레이션은 필요 없다.
+
+### 콘솔 등록과 로컬 확인
+
+1. 콘솔에 리다이렉트 URI를 등록한다. Google: `http://localhost:8080/api/auth/google/callback`,
+   SSAFY: `http://localhost:8080/api/auth/ssafy/callback`. `OAUTH_REDIRECT_BASE_URL` 뒤에 `/api/auth/{provider}/callback`을 붙인 값과 글자까지 같아야 한다(`127.0.0.1`과 `localhost`도 다르다).
+2. Google 클라이언트가 "테스트" 게시 상태면 로그인할 계정을 테스트 사용자로 추가한다.
+3. `BE/.env`에 키를 넣고 `bootRun`한 뒤 브라우저에서 `http://localhost:8080/api/auth/google/login`을 연다.
+   동의하면 `FRONTEND_BASE_URL/auth/callback`으로 돌아온다(FE가 떠 있지 않으면 연결 실패 화면이지만 주소창으로 결과를 확인할 수 있다).
+   `users`·`social_accounts`에 행이 생기고 서버 로그에 `로그인 성공 provider=google userId=…`가 남는다.
+
+운영은 `FRONTEND_BASE_URL`·`OAUTH_REDIRECT_BASE_URL`을 `https://{서비스 도메인}`으로 주고, 같은 콜백 URI를 콘솔에 추가 등록한다.
+
 ## 검증과 패키징
 
 ```powershell
@@ -262,6 +309,11 @@ macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 예외 종류별 오류 응답 형식과
 로그 규칙을 확인한다. `@DataJpaTest`로 마이그레이션 결과(컬럼·제약·cascade)와 엔티티·리포지토리를 확인한다. 테스트 소스의 `ErrorProbeController`는 이를 위한 전용 컨트롤러이며
 운영 JAR에는 포함되지 않는다. 결과는 `build/reports/tests/test/index.html`에서 확인한다.
+
+소셜 로그인 테스트는 실제 제공자를 부르지 않는다. 제공자 호출은 `MockRestServiceServer`가 대신하며,
+단위 범위는 `@RestClientTest`, 엔드포인트 범위는 `@SpringBootTest` + `@AutoConfigureMockMvc` +
+`@AutoConfigureMockRestServiceServer`(Boot 4 패키지 `org.springframework.boot.restclient.test.autoconfigure`)를 쓴다.
+`BE/`에서 테스트를 돌리면 로컬 `.env`도 읽히므로, 인증 설정에 의존하는 테스트는 쓰는 환경변수를 `@SpringBootTest(properties = …)`로 모두 지정한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
