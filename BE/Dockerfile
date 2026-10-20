@@ -3,7 +3,8 @@ WORKDIR /workspace
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle ./gradle
 COPY src ./src
-RUN sh ./gradlew --no-daemon build
+# 테스트는 CI(be-test)가 맡는다. 테스트용 임베디드 PostgreSQL은 root로 실행되는 이 단계에서 뜨지 않는다.
+RUN sh ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
