@@ -1,0 +1,11 @@
+# SCNet XL IHF (ZFTurbo). MUSDB18-HQ만으로 학습한 공개 모델 중 드럼 SDR 최고 (11.81, MSST 기재).
+# 1순위. 받은 파일은 data/models/scnet_xl_ihf/ 에 둠.
+name: scnet_xl_ihf
+adapter: msst
+tier: "1"
+model_type: scnet
+config_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.15/config_musdb18_scnet_xl_more_wide_v5.yaml
+checkpoint_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.15/model_scnet_ep_36_sdr_10.0891.ckpt
+license_code: MIT (MSST)
+license_weights: 미명시. MUSDB18-HQ만으로 학습해 학습 데이터 조건(교육·연구 전용)을 따른다고 봄
+source_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/blob/main/docs/pretrained_models.md

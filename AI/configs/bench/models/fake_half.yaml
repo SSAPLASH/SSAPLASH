@@ -1,0 +1,7 @@
+# 테스트·CI용 가짜 모델. 원곡 × 0.5를 드럼으로 돌려줌.
+name: fake_half
+adapter: fake
+tier: baseline
+fake_mode: half
+license_code: 없음 (테스트용)
+license_weights: 없음 (테스트용)

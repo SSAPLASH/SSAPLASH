@@ -1,0 +1,10 @@
+# BS Roformer (ZFTurbo, MUSDB18-HQ만 학습). SW 가중치 라이선스가 문제될 때의 2순위 대안.
+name: bs_roformer_musdb
+adapter: msst
+tier: "2"
+model_type: bs_roformer
+config_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.12/config_bs_roformer_384_8_2_485100.yaml
+checkpoint_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.12/model_bs_roformer_ep_17_sdr_9.6568.ckpt
+license_code: MIT (MSST)
+license_weights: 미명시. MUSDB18-HQ만으로 학습해 학습 데이터 조건(교육·연구 전용)을 따른다고 봄
+source_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/blob/main/docs/pretrained_models.md

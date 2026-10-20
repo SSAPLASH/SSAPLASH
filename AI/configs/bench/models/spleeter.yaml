@@ -1,0 +1,10 @@
+# Spleeter 4스템. 속도·품질 하한선.
+# spleeter 2.4는 tensorflow 2.12·numpy<2 고정이라 이 저장소 가상환경에 설치 불가.
+# 별도 python 3.11 환경에서만 실행 (separators/spleeter.py 설명).
+name: spleeter
+adapter: spleeter
+tier: baseline
+spleeter_name: spleeter:4stems
+license_code: MIT
+license_weights: MIT
+source_url: https://github.com/deezer/spleeter
