@@ -104,7 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("configs", nargs="+", type=Path, help="configs/bench/datasets/*.yaml")
 
     run_p = sub.add_parser("run", help="모델 × 데이터셋 벤치마크 실행, 보고서·MLflow 기록까지")
-    run_p.add_argument("--models", nargs="+", required=True, help="configs/bench/models/<어댑터>/*.yaml")
+    run_p.add_argument(
+        "--models", nargs="+", required=True, help="configs/bench/models/<어댑터>/*.yaml"
+    )
     run_p.add_argument("--dataset", required=True, help="configs/bench/datasets/*.yaml")
     run_p.add_argument("--out", default="data/results", help="결과 폴더. 아래에 runId 폴더 생성")
     run_p.add_argument("--device", default="cuda", help="cuda 또는 cpu (기본 cuda, 없으면 cpu)")
