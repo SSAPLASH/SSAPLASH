@@ -201,6 +201,9 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 `be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
 및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
+Windows Runner의 IPv6 수신 오류를 피하도록 `gradle.properties`에서 Gradle JVM도 IPv4로 고정한다.
+`build.gradle`의 테스트 JVM IPv4 설정은 별도로 유지한다. `--no-daemon`도 일회용 Gradle 프로세스를
+사용하므로 테스트 JVM 설정만으로 Gradle 시작 오류를 막을 수 없다.
 
 ```powershell
 # BE/에서 실행. JAVA_HOME은 CI와 같은 JDK 21로 설정한다.
