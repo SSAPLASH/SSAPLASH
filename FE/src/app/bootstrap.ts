@@ -8,6 +8,7 @@ import { useLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { pushTelemetry } from '@/engine/telemetry';
 import type { ResolvedHit, SensorId } from '@/domain/events';
+import { applyRadiusTuning } from '@/domain/tuning';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -80,7 +81,11 @@ export function bootstrapInput(): void {
     inputManager.setKeyMap(s.keyMap);
     keyboardSource.setKeys(keyboardKeys());
     applySensorOptions();
-    inputManager.setProfile(s.profile);
+    // 튜닝은 다음 타격부터 반영된다. 프로필의 반경은 앵커 중심 + 현재 튜닝으로 매번 다시 계산한다(T1)
+    inputManager.setProfile(applyRadiusTuning(s.profile, s.tuning));
+    inputManager.setVelocityCurve(s.tuning.velocity);
+    inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
+    inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
     audioEngine.setVolume(s.volume);
   };
   applySettings();

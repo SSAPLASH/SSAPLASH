@@ -4,6 +4,7 @@ import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
+import { TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { unlockAudio } from '@/app/bootstrap';
@@ -177,8 +178,8 @@ export function SetupPage() {
               <input type="range" min={500} max={4000} step={100} value={s.holdMs} onChange={(e) => s.setHoldMs(+e.target.value)} />
             </div>
             <div className="field">
-              <label>판정 반경 상한 {s.maxRadiusDeg}°</label>
-              <input type="range" min={8} max={40} step={1} value={s.maxRadiusDeg} onChange={(e) => s.setMaxRadiusDeg(+e.target.value)} />
+              <label>판정 반경 상한 {s.tuning.maxRadiusDeg}°</label>
+              <input type="range" min={TUNING_RANGES.maxRadiusDeg.min} max={TUNING_RANGES.maxRadiusDeg.max} step={TUNING_RANGES.maxRadiusDeg.step} value={s.tuning.maxRadiusDeg} onChange={(e) => s.setTuning({ maxRadiusDeg: +e.target.value })} />
             </div>
           </div>
 

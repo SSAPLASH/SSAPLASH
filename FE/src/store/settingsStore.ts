@@ -6,6 +6,7 @@ import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
 import { DEFAULT_KEY_MAP, type KeyMap } from '@/domain/keyMap';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
+import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
 export interface KitPreset {
   id: string;
@@ -31,7 +32,8 @@ interface SettingsState {
   scrollMs: number;
   calibrationMode: CaptureMode;
   holdMs: number;
-  maxRadiusDeg: number;
+  /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
+  tuning: SensorTuning;
   metronome: boolean;
   countInBars: number;
   volume: number;
@@ -52,18 +54,21 @@ interface SettingsState {
   setScrollMs: (v: number) => void;
   setCalibrationMode: (m: CaptureMode) => void;
   setHoldMs: (v: number) => void;
-  setMaxRadiusDeg: (v: number) => void;
+  /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
+  setTuning: (partial: PartialTuning) => void;
+  resetTuning: () => void;
   setMetronome: (v: boolean) => void;
   setCountInBars: (v: number) => void;
   setVolume: (v: number) => void;
 }
 
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 /**
  * 저장된 설정 이행.
  * v1 → v2: inputKind(keyboard/pointer/ble/websocket) → sensorKind(none/pointer/ble/websocket)
  * v2 → v3: 최상위 pointerHitKeys·wsUrl → sensorOptions(소스별 설정 묶음). 옛 필드는 지운다.
+ * v3 → v4: 최상위 maxRadiusDeg → tuning.maxRadiusDeg. 나머지 튜닝 값은 기본값.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -84,6 +89,11 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     delete p.pointerHitKeys;
     delete p.wsUrl;
   }
+  if (version < 4) {
+    const moved = typeof p.maxRadiusDeg === 'number' ? { maxRadiusDeg: p.maxRadiusDeg } : {};
+    p.tuning = mergeTuning(DEFAULT_SENSOR_TUNING, { ...(p.tuning as PartialTuning | undefined), ...moved });
+    delete p.maxRadiusDeg;
+  }
   return p as unknown as SettingsState;
 }
 
@@ -101,7 +111,7 @@ export const useSettings = create<SettingsState>()(
       scrollMs: 1400,
       calibrationMode: 'hold',
       holdMs: 2000,
-      maxRadiusDeg: 22,
+      tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
       countInBars: 1,
       volume: 0.8,
@@ -142,7 +152,8 @@ export const useSettings = create<SettingsState>()(
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setCalibrationMode: (calibrationMode) => set({ calibrationMode }),
       setHoldMs: (holdMs) => set({ holdMs }),
-      setMaxRadiusDeg: (maxRadiusDeg) => set({ maxRadiusDeg }),
+      setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
+      resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
       setMetronome: (metronome) => set({ metronome }),
       setCountInBars: (countInBars) => set({ countInBars }),
       setVolume: (volume) => set({ volume }),
@@ -151,6 +162,11 @@ export const useSettings = create<SettingsState>()(
       name: 'ssaplash.settings',
       version: SETTINGS_VERSION,
       migrate: migrateSettings,
+      // 저장된 tuning에 빠진 키(나중에 추가된 항목)는 기본값으로 채우고 범위 밖 값은 자른다
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SettingsState>;
+        return { ...current, ...p, tuning: mergeTuning(DEFAULT_SENSOR_TUNING, p.tuning ?? {}) };
+      },
     },
   ),
 );
