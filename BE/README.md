@@ -78,6 +78,39 @@ sh ./gradlew bootRun
 설정은 실행 환경의 환경변수로 전달한다. Spring Boot가 `.env`를 자동으로 읽지는 않는다.
 비밀값·개인 설정을 소스에 넣지 않는다. 루트 `.gitignore`가 `.env*`와 키 파일을 제외한다.
 
+## 곡·채보 마이그레이션 (94번)
+
+`src/main/resources/db/migration/V2__create_songs_charts_chart_versions.sql`은
+`songs` → `charts` → `chart_versions` 순서로 생성한다. 86번의 실제 V1 다음에 공통 Flyway 설정으로 자동 적용된다.
+94번은 회원 테이블이나 DB 연결 설정을 별도로 도입하지 않는다. 운영 DB에 V2만 단독 적용하지 않는다.
+
+- 공용 곡은 소유자가 없고 라이선스가 필수다. MIDI·AUDIO는 소유자 필수, 반주 키는 AUDIO만 허용한다.
+- 곡·난이도와 채보·버전 조합은 중복되지 않는다. 참조 중인 회원·곡·채보의 물리 삭제를 막는다.
+- `notes`는 배열, `timing`은 객체이며 `note_count`는 노트 배열 길이와 일치해야 한다.
+- `sheet_pages`는 선택적 이미지 페이지 배열이며 이미지 없는 JSON 전달은 SQL NULL로 저장한다.
+  JSON 리터럴 `null`은 허용하지 않는다. 악보 렌더링은 BE 범위가 아니다.
+- `notation_status`에는 기본값이 없다. JSON 내부 검증·준비 상태 판정·소유권 검사·기존 버전 덮어쓰기 방지는
+  후속 등록/조회 API에서 구현한다. 이 SQL이 버전 행의 UPDATE를 금지하는 것은 아니다.
+
+`ChartSchemaMigrationTest`는 86번의 임베디드 PostgreSQL 16을 재사용하고, 매 검사마다 별도 스키마를 만든다.
+실제 V1만 적용해 회원·소셜 계정을 넣은 뒤 V2로 업그레이드하여 기존 데이터·FK 연결을 확인한다.
+빈 스키마의 V1→V2 적용, Flyway validate·재실행 시 추가 적용 0건,
+36개 제약 위반과 버전 보존·소프트 삭제·선택적 이미지 저장도 검사한다.
+이 검사는 `gradlew build`와 CI의 일반 테스트에 포함되며 Docker나 별도 DB 설정이 필요 없다.
+
+```powershell
+.\gradlew.bat test --tests '*ChartSchemaMigrationTest'
+```
+
+Docker PostgreSQL 16에서 SQL만 따로 확인하려면 기존 보조 스크립트를 사용할 수 있다.
+이 스크립트도 실제 V1·V2를 순서대로 적용하며, 호스트 포트·기존 볼륨을 사용하지 않는다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-ChartSchema.ps1
+```
+
+테스트 데이터·검증 SQL은 운영 JAR에 포함되지 않는다. 이미 적용한 마이그레이션은 수정·재번호화하지 않는다.
+
 ## API 규약
 
 모든 REST API가 공유하는 규칙이다. FE 클라이언트와 다른 BE 작업은 이 절을 기준으로 맞춘다.
@@ -222,6 +255,9 @@ java -jar build/libs/app.jar
 
 macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 현재 별도 린터는 없으며 `build`가 컴파일·테스트·실행 JAR 생성을 수행한다. 테스트에는 DB 준비가 필요 없다.
+테스트 DB는 `127.0.0.1`에만 바인딩하고 JDBC도 같은 주소를 사용한다. Windows Runner의
+`localhost` 소켓 연결 실패를 피하도록 테스트 JVM에만 `java.net.preferIPv4Stack=true`를 적용한다.
+공통 DB 테스트는 풀 밖에서 새 JDBC 연결 10개를 순차 생성해 IPv4 루프백 연결도 확인한다.
 테스트는 실제 HTTP 서버에서 health/liveness/readiness 응답, 관리 엔드포인트 비노출,
 OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 예외 종류별 오류 응답 형식과
 로그 규칙을 확인한다. `@DataJpaTest`로 마이그레이션 결과(컬럼·제약·cascade)와 엔티티·리포지토리를 확인한다. 테스트 소스의 `ErrorProbeController`는 이를 위한 전용 컨트롤러이며

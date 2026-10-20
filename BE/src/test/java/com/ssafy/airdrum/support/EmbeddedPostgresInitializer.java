@@ -27,7 +27,8 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 	public void initialize(ConfigurableApplicationContext context) {
 		var postgres = Holder.INSTANCE;
 		context.getEnvironment().getPropertySources().addFirst(new MapPropertySource(PROPERTY_SOURCE_NAME, Map.of(
-				"spring.datasource.url", postgres.getJdbcUrl(USER, USER),
+				// localhost 해석에 의존하지 않고 테스트 서버의 IPv4 루프백에 연결한다.
+				"spring.datasource.url", "jdbc:postgresql://127.0.0.1:" + postgres.getPort() + "/" + USER,
 				"spring.datasource.username", USER,
 				// 임베디드 서버는 trust 인증이라 값은 쓰이지 않는다. yaml의 ${DB_PASSWORD}를 가리는 용도다.
 				"spring.datasource.password", USER,
@@ -42,7 +43,9 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 
 		private static EmbeddedPostgres start() {
 			try {
-				var postgres = EmbeddedPostgres.builder().start();
+				var postgres = EmbeddedPostgres.builder()
+						.setServerConfig("listen_addresses", "127.0.0.1")
+						.start();
 				Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 					try {
 						postgres.close();
