@@ -6,6 +6,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,16 @@ class DatabaseSchemaMigrationTest {
 		try (var c = dataSource.getConnection(); var s = c.createStatement()) {
 			s.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
 		}
+	}
+
+	@Test
+	void v8FailsOnPlainPostgresWithoutLosingV7Data() throws Exception {
+		fresh();
+		assertThatThrownBy(() -> flyway("8").migrate())
+				.isInstanceOf(FlywayException.class).hasMessageContaining("timescaledb");
+		assertThat(flyway("7").info().current().getVersion().getVersion()).isEqualTo("7");
+		assertThat(scalar("SELECT count(*) FROM telemetry_events")).isEqualTo("1");
+		assertThat(scalar("SELECT count(*) FROM hits")).isEqualTo("2");
 	}
 
 	@Test
