@@ -186,3 +186,13 @@ describe('기존 프로필 · build', () => {
     expect(prof.id).toMatch(/^cal-/);
   });
 });
+
+describe('radiusFactor 옵션', () => {
+  it('미리보기와 build의 반경 계산에 계수가 쓰인다', () => {
+    const s = new CalibrationSession(PADS, { mode: 'hits', hitsNeeded: 1, maxRadiusDeg: 40, radiusFactor: 0.8 });
+    s.onHit(P(0, 0));
+    s.onHit(P(0, 20));
+    expect(s.snapshot().anchors.CRASH!.radius).toBeCloseTo(16); // 20 × 0.8
+    expect(s.build().anchors.HIHAT!.radius).toBeCloseTo(16);
+  });
+});

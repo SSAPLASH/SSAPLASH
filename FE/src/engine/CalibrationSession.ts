@@ -11,6 +11,7 @@ import {
   type CaptureMode,
   type PadAnchor,
 } from '@/domain/calibration';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
 
 export type { CaptureMode };
 
@@ -23,6 +24,8 @@ export interface CalibrationOptions {
   /** hits: 필요한 타격 수 */
   hitsNeeded: number;
   maxRadiusDeg: number;
+  /** 앵커 반경 계수(튜닝 radiusFactor). 미리보기·build의 경계 계산에 쓴다 */
+  radiusFactor: number;
   source: CalibrationProfile['source'];
 }
 
@@ -31,7 +34,8 @@ export const DEFAULT_CALIBRATION_OPTIONS: CalibrationOptions = {
   holdMs: 2000,
   stabilityDeg: 3,
   hitsNeeded: 2,
-  maxRadiusDeg: 22,
+  maxRadiusDeg: DEFAULT_SENSOR_TUNING.maxRadiusDeg,
+  radiusFactor: DEFAULT_SENSOR_TUNING.radiusFactor,
   source: 'pointer',
 };
 
@@ -169,7 +173,7 @@ export class CalibrationSession {
       samples: samples.length,
       spread,
     };
-    this.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg);
+    this.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg, this.opts.radiusFactor);
     this.phase = 'done';
     this.progress = 1;
     this.index += 1;
@@ -208,7 +212,7 @@ export class CalibrationSession {
     const i = this.pads.indexOf(pad);
     if (i < 0) return;
     delete this.anchors[pad];
-    this.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg);
+    this.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg, this.opts.radiusFactor);
     this.index = i;
     this.redoOnly = only;
     this.resetStepState();
@@ -226,7 +230,7 @@ export class CalibrationSession {
   build(name?: string): CalibrationProfile {
     const p = createEmptyProfile(this.opts.source);
     p.name = name ?? `${new Date().toLocaleString('ko-KR')} (${this.opts.source})`;
-    p.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg);
+    p.anchors = computeBoundaries(this.anchors, this.opts.maxRadiusDeg, this.opts.radiusFactor);
     p.maxRadiusDeg = this.opts.maxRadiusDeg;
     return p;
   }

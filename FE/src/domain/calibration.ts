@@ -3,6 +3,7 @@
 // 하드웨어가 오면 자세의 출처만 IMU로 바뀌고 이 파일은 그대로 쓴다.
 import type { PadId } from './pads';
 import type { Pose, SensorId } from './events';
+import { DEFAULT_SENSOR_TUNING } from './tuning';
 
 export interface PadAnchor {
   pad: PadId;
@@ -33,8 +34,6 @@ export interface CalibrationProfile {
 /** 캘리브레이션 캡처 방식: 홀딩(기획발표) / 2타(공통 명세서). D7 */
 export type CaptureMode = 'hold' | 'hits';
 
-export const DEFAULT_MAX_RADIUS_DEG = 22;
-
 export function createEmptyProfile(source: CalibrationProfile['source']): CalibrationProfile {
   return {
     id: `cal-${Date.now().toString(36)}`,
@@ -42,7 +41,7 @@ export function createEmptyProfile(source: CalibrationProfile['source']): Calibr
     createdAt: new Date().toISOString(),
     source,
     anchors: {},
-    maxRadiusDeg: DEFAULT_MAX_RADIUS_DEG,
+    maxRadiusDeg: DEFAULT_SENSOR_TUNING.maxRadiusDeg,
     audioOffsetMs: 0,
   };
 }
@@ -66,12 +65,13 @@ export function summarizePoses(samples: Pose[]): { mean: Pose; spread: number } 
 }
 
 /**
- * 경계 계산: 반경 = min(상한, 가장 가까운 다른 앵커까지 거리의 절반 × 여유).
+ * 경계 계산: 반경 = min(상한, 가장 가까운 다른 앵커까지 거리 × radiusFactor).
  * 앵커가 하나뿐이면 상한을 쓴다.
  */
 export function computeBoundaries(
   anchors: Partial<Record<PadId, PadAnchor>>,
   maxRadiusDeg: number,
+  radiusFactor: number = DEFAULT_SENSOR_TUNING.radiusFactor,
 ): Partial<Record<PadId, PadAnchor>> {
   const list = Object.values(anchors).filter((a): a is PadAnchor => !!a);
   const out: Partial<Record<PadId, PadAnchor>> = {};
@@ -81,7 +81,7 @@ export function computeBoundaries(
       if (b.pad === a.pad) continue;
       nearest = Math.min(nearest, poseDistance(a, b));
     }
-    const radius = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, nearest * 0.55) : maxRadiusDeg;
+    const radius = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, nearest * radiusFactor) : maxRadiusDeg;
     out[a.pad] = { ...a, radius };
   }
   return out;

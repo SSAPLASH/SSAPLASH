@@ -85,6 +85,8 @@ export interface ResolvedHit {
   peakAccel: number;
   /** 판정 근거: 가장 가까운 앵커까지 각도 거리 */
   distanceDeg?: number;
+  /** 판정 근거: 그 앵커 반경 안인지(자세 매퍼만) */
+  inside?: boolean;
 }
 
 /** 입력 소스 연결 상태 (센서 소스 기준. 키보드는 항상 connected) */
