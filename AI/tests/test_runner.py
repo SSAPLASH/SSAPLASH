@@ -95,7 +95,7 @@ def test_모델_로드가_실패하면_모든_곡에_같은_error(small_musdb: P
     ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
     model = _write_model_yaml(tmp_path / "bad.yaml", "bad", fake_mode="nope")
     # fake_mode 검증은 어댑터 생성 시점이라 create_separator에서 바로 실패해야 하는데,
-    # 러너는 생성 실패를 곡 단위 error로 바꾸지 않으므로 ValueError가 그대로 올라온다
+    # 러너는 생성 실패를 곡 단위 error로 바꾸지 않으므로 ValueError가 그대로 올라옴
     with pytest.raises(ValueError, match="fake_mode"):
         run_benchmark(
             RunOptions(

@@ -1,7 +1,7 @@
 """분리 모델 어댑터. yaml의 adapter 값으로 구현체 선택. runner는 create_separator만 호출.
 
 모델 패키지(torch·msst·demucs·openunmix)는 어댑터 안에서 늦게 import하므로
-fake 어댑터와 단위 테스트는 `uv sync --extra models` 없이 돈다.
+fake 어댑터와 단위 테스트는 `uv sync --extra models` 없이 동작.
 """
 
 from __future__ import annotations

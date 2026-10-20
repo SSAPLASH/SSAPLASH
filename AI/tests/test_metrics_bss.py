@@ -32,9 +32,9 @@ def test_무음을_예측으로_넣으면_sdr이_매우_작다():
     r = bss_metrics(drums, accomp, np.zeros_like(drums), mixture, SR)
     assert r.sdr_drums == float("-inf") and r.sir_drums == float("-inf")
     assert r.si_sdr_drums == float("-inf")
-    # 무음이 아닌 반주 쪽은 그대로 계산된다
+    # 무음이 아닌 반주 쪽은 그대로 계산됨
     assert np.isfinite(r.sdr_accomp)
-    # 반주 예측 = 원곡이면 드럼이 통째로 새어 들어가므로 반주 SIR이 낮다
+    # 반주 예측 = 원곡이면 드럼이 통째로 새어 들어가므로 반주 SIR이 낮음
     assert r.sir_accomp < 10
 
 
