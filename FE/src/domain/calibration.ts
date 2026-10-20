@@ -2,7 +2,7 @@
 // 패드마다 "중심 자세(앵커)"를 잡고, 경계는 앵커 간 거리로 자동 계산한다.
 // 하드웨어가 오면 자세의 출처만 IMU로 바뀌고 이 파일은 그대로 쓴다.
 import type { PadId } from './pads';
-import type { Pose } from './events';
+import type { Pose, SensorId } from './events';
 
 export interface PadAnchor {
   pad: PadId;
@@ -22,7 +22,7 @@ export interface CalibrationProfile {
   name: string;
   createdAt: string;
   /** 어떤 입력으로 잡았는지. 하드웨어 교체 시 재캘리브레이션 판단 근거 */
-  source: 'pointer' | 'ble' | 'websocket' | 'devicemotion';
+  source: SensorId;
   anchors: Partial<Record<PadId, PadAnchor>>;
   /** 판정 반경 상한 (도) */
   maxRadiusDeg: number;

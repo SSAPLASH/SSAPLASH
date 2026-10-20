@@ -46,8 +46,23 @@ export interface StickStatusEvent {
 
 export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
 
-/** 입력 경로 식별 — 플레이 로그 input_source, 텔레메트리 tags에 기록 */
-export type InputSourceKind = 'keyboard' | 'pointer' | 'ble' | 'websocket' | 'devicemotion';
+/**
+ * 센서 소스 식별자. 입력 소스 디스크립터의 id와 같다(예: 'pointer', 'ble').
+ * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)만 예약어.
+ */
+export type SensorId = string;
+
+/**
+ * 입력 경로 식별 — 플레이 로그 input_source, 텔레메트리 tags에 기록.
+ * 'keyboard'는 리터럴로 남겨 자동완성·비교에 쓴다(매퍼 선택은 이것만 본다). 나머지는 SensorId.
+ */
+export type InputSourceKind = 'keyboard' | (SensorId & Record<never, never>);
+
+/** 소스별 설정값 하나. 항목 스키마는 입력 소스 디스크립터가 선언한다 */
+export type OptionValue = string | number | boolean;
+
+/** 소스 하나의 설정값 묶음. 설정 스토어는 내용을 모르고 그대로 보관한다 */
+export type OptionValues = Record<string, OptionValue>;
 
 /**
  * 패드 판정까지 끝난 타격. 게임·자유 모드·텔레메트리가 이걸 소비한다.
