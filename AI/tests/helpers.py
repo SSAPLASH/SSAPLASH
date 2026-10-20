@@ -37,3 +37,22 @@ def make_musdb_song(song_dir: Path, seconds: float = 1.0, sr: int = SR) -> dict[
     for name, audio in stems.items():
         write_wav(song_dir / f"{name}.wav", audio, sr)
     return stems
+
+
+HITS = [0.2, 0.5, 0.9, 1.3, 1.8]
+
+
+def make_hits(seconds: float = 2.2, times: list[float] | None = None) -> np.ndarray:
+    """타격마다 10ms 안에 솟았다가 80ms 동안 꺼지는 잡음 버스트. (2, 샘플)."""
+    rng = np.random.default_rng(1)
+    n = int(seconds * SR)
+    mono = np.zeros(n, dtype=np.float32)
+    burst_len = int(0.08 * SR)
+    t = np.arange(burst_len) / SR
+    env = np.minimum(t / 0.004, 1.0) * np.exp(-t / 0.02)
+    for hit in times or HITS:
+        start = int(hit * SR)
+        burst = env * rng.standard_normal(burst_len)
+        mono[start : start + burst_len] += burst.astype(np.float32)
+    mono *= 0.5 / np.max(np.abs(mono))
+    return np.stack([mono, mono])

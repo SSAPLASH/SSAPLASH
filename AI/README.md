@@ -11,8 +11,10 @@
 | 코드 검사 | ruff | lint + format |
 | 테스트 | pytest | |
 | 오디오 입출력 | soundfile, soxr, mido | wav 읽고 쓰기, 샘플레이트 변환, MIDI 온셋 추출 |
-| 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 그쪽으로 옮긴다 |
-| 모델 실행 | PyTorch + ZFTurbo MSST (예정) | 벤치마크 하네스 작업에서 추가 |
+| 지표 | museval, mir_eval, librosa, psutil | BSS Eval v4(SDR·SIR·SAR), 온셋 매칭, 온셋 검출, 메모리 측정 |
+| 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 tracking URI만 바꾼다 |
+| 보고서 | pandas, matplotlib | CSV 집계, 마크다운 표, PNG 그래프 |
+| 모델 실행 | PyTorch + ZFTurbo MSST(msst), demucs, openunmix | 선택 extra `models`. 단위 테스트·CI에는 필요 없다 |
 
 이 스택은 2026-10-19 기준 잠정 확정이다. 팀 전체 기술 스택이 확정되면 바뀔 수 있다.
 
@@ -25,13 +27,22 @@ AI/
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
 │   ├─ bench/            벤치마크 하네스
-│   │   ├─ datasets/     데이터셋 로더 (base, musdb, synth) + 합성곡 제작 로직 (synth_build)
-│   │   └─ cli.py        명령줄 진입점 (check-data. run·report는 예정)
+│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report)
+│   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build)
+│   │   ├─ separators/   분리 모델 실행. separator_base(공통 인터페이스·yaml·다운로드),
+│   │   │                mock_separator(모델 없이 원곡·무음을 돌려주는 테스트용), msst_separator(SCNet·BS Roformer),
+│   │   │                demucs_separator(HTDemucs), openunmix_separator(umxhq)
+│   │   ├─ metrics/      지표 계산. bss_eval_metrics(SDR·SIR·SAR·SI-SDR), onset_preservation(타격 보존율),
+│   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM)
+│   │   ├─ runner/       벤치마크 실행. benchmark_runner(모델 × 곡, 결과 CSV), mlflow_tracking(MLflow 기록)
+│   │   └─ report/       결과 보고서. summary_table(집계·요약 표), charts(그래프 PNG), build_report(파일 생성)
 │   └─ chart/            채보 형식·패드 매핑 (예정)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
+├─ configs/bench/models/    모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py)
-├─ tests/                pytest. 실제 데이터 없이 가짜 wav로 돈다
-├─ notebooks/            코랩 실행용 노트북 (예정)
+├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 가짜 wav와 mock 어댑터로 돈다
+├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
+├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
 └─ DESIGN.md             작업 기록·세션 인계 문서 (git 미추적, 개인 문서)
 ```
@@ -48,8 +59,11 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 ```bash
 cd AI
-uv sync          # .venv 생성 + 의존성 설치 (Python 3.11은 uv가 받아 준다)
+uv sync                  # .venv 생성 + 의존성 설치 (Python 3.11은 uv가 받아 준다)
+uv sync --extra models   # 실제 분리 모델까지 돌릴 때. torch(CUDA)·msst·demucs·openunmix 약 3GB
 ```
+
+`models` extra는 Windows에서 CUDA 12.8 휠을, Linux(코랩)에서는 PyPI 기본 휠을 받는다 (`pyproject.toml`의 `tool.uv.index`). Spleeter는 tensorflow 2.12·numpy 1.x에 고정돼 이 환경에 설치할 수 없어 후보에서 뺐다.
 
 ## 실행·검증 명령
 
@@ -71,6 +85,68 @@ uv run ssaplash-bench check-data configs/bench/datasets/musdb18hq_test.yaml conf
 ```
 
 Git Bash에서 한글이 깨지면 `PYTHONUTF8=1`을 앞에 붙인다.
+
+## 벤치마크 실행
+
+모델 yaml 여러 개와 데이터셋 yaml 하나를 받아 모델 × 곡을 전부 돌린다. 곡마다 결과 행을 CSV에 바로 쓰므로 중간에 끊겨도 그때까지의 결과가 남는다. 끝나면 같은 폴더에 보고서를 만들고 MLflow에 run 하나를 남긴다.
+
+```bash
+# 동작 확인: 모델 1개 × 30초 클립 3곡 (GPU 없으면 cpu로 내려간다)
+uv run ssaplash-bench run --models configs/bench/models/msst/scnet_large.yaml     --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
+
+# 여러 모델, 분리 결과 wav를 모델당 3곡 저장, MLflow 기록 생략
+uv run ssaplash-bench run --models configs/bench/models/msst/scnet_xl_ihf.yaml configs/bench/models/demucs/htdemucs_ft.yaml     --dataset configs/bench/datasets/musdb18hq_test.yaml --out data/results --save-wav 3 --mlflow-uri none
+
+# 보고서만 다시 만들기 (CSV 여러 개를 합칠 수 있다)
+uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results/<runId>
+```
+
+| 옵션 | 뜻 | 기본 |
+| --- | --- | --- |
+| `--models` | 모델 yaml 목록 (`configs/bench/models/<어댑터>/*.yaml`) | 필수 |
+| `--dataset` | 데이터셋 yaml | 필수 |
+| `--out` | 결과 폴더. 아래에 `<runId>/` 생성 | `data/results` |
+| `--device` | `cuda` 또는 `cpu` | `cuda` |
+| `--clip START END` | 곡마다 쓸 구간(초). yaml의 clip보다 우선 | 없음 |
+| `--save-wav N` | 모델당 분리 결과 wav를 저장할 곡 수 | 0 |
+| `--run-id` | runId 직접 지정 | 시각+난수 |
+| `--mlflow-uri` | MLflow tracking URI. `none`이면 기록 안 함 | `mlruns` (환경 변수 `MLFLOW_TRACKING_URI`) |
+
+결과 폴더 `data/results/<runId>/`
+
+| 파일 | 내용 |
+| --- | --- |
+| `results.csv` | 곡 × 모델당 1행. 설계 문서 3-3절 열 + 보조 열. 실패한 곡은 `error` 열에 예외 요약 |
+| `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스. 드럼 SDR 내림차순), 보조값 표, 데이터셋별 표, 실패 목록 |
+| `per_song.csv` | 보고서에 쓴 곡별 값 (CSV 여러 개를 합친 경우 합친 것) |
+| `metrics_by_model.png`, `rtf_vs_sdr.png` | 모델별 지표 막대, RTF 대 드럼 SDR 산점도 |
+| `separated/<모델>/<곡>/{drums,accomp}.wav` | `--save-wav`로 저장한 분리 결과 (청취용) |
+
+MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험 이름 `separation-bench`, run 이름이 runId이고, 모델별 중앙값이 `<모델>/<열>` 지표로, CSV·표·그래프가 artifact로 붙는다.
+
+모델 yaml은 어댑터(`msst`, `demucs`, `openunmix`, `mock`)와 가중치 위치, 코드·가중치 라이선스 문자열을 적는다. 라이선스 두 필드는 필수다. MSST 가중치는 첫 실행 때 `data/models/<모델>/`에 내려받고, demucs·openunmix 가중치는 torch hub 캐시에 받는다. 다운로드 시간은 로드 시간(`loadSec`)에 넣지 않는다.
+
+### 코랩에서 돌리기
+
+`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 저장소 zip과 `data/` 폴더를 드라이브 `MyDrive/ssaplash/`에 올려 두면 노트북이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 쌓인다. 본측정은 코랩 GPU에서만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
+
+## 지표 정의
+
+곡 단위 값이고 모델 단위 값은 곡 값들의 중앙값이다. 자세한 계산 규칙은 `src/ssaplash_ai/bench/metrics/` 각 파일 머리말에 있다.
+
+| CSV 열 | 뜻 | 계산 |
+| --- | --- | --- |
+| `sdrDrums`, `sdrAccomp` | 분리 품질 (dB). 정답과 예측이 얼마나 가까운지 | museval(BSS Eval v4)에 정답·예측 드럼과 반주 2소스를 넣고 1초 프레임 값의 중앙값. 예측 반주 = 원곡 − 예측 드럼 |
+| `sirAccomp`, `sarAccomp` | 반주에 남은 드럼 누설, 인공음 (dB) | 같은 museval 호출. 드럼 쪽 `sirDrums`·`sarDrums`도 보조로 기록 |
+| `siSdrDrums`, `siSdrAccomp` | 배율 불변 SDR (dB) | 곡 전체 1회 |
+| `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MUSDB면 정답 드럼 스템에 같은 검출기 적용 |
+| `onsetF1Tight` | 같은 것, ±25ms | |
+| `attackSlopeDistortion` | 어택(타격 직후 음량이 솟는 구간) 왜곡. 0이면 원음 그대로 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
+| `separateSec`, `rtf` | 분리 시간(초), RTF = 분리 시간 / 곡 길이 | 벽시계. 모델 로드 제외. 로드 직후 첫 곡을 한 번 분리하고 버려(워밍업, `--no-warmup`으로 생략) GPU 커널 준비 시간을 뺀다 |
+| `loadSec` | 모델 로드 시간 | 가중치 다운로드 제외. 곡마다 같은 값 반복 |
+| `peakRamMb`, `peakVramMb` | 분리 중 최대 메모리 (MB) | RAM은 50ms마다 프로세스 RSS 표본의 최댓값, VRAM은 torch 최대 할당량. CPU 실행이면 VRAM은 nan |
+
+무음 예측의 BSS 값은 정의되지 않으므로 `-inf`로 적는다. 비교표에는 ADR-011의 6개 지표와 가중치 라이선스만 올리고 나머지는 보조값 표에 둔다.
 
 ## 데이터
 
@@ -120,4 +196,4 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 ## 관련 문서
 
 - 공통 명세서: `Docs/Service Design/공통 명세서.md` (11장 AI 활용 계획, 15장 기술 검증 포인트)
-- Jira: 에픽 `[CHART] 채보` (S15P31A307-29), 스토리 CHART-003 (S15P31A307-62) · CHART-004 (S15P31A307-69)
+- Jira: 에픽 `[CHART] 채보` (S15P31A307-29). 분리 벤치마크(-101~-105)는 스토리 CHART-004 음원 드럼 분리 (S15P31A307-69), 채보 벤치마크(-106~-110)는 스토리 CHART-003 음원 → 채보 생성 (S15P31A307-62)
