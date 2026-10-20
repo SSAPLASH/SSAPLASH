@@ -194,4 +194,4 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 ## 관련 문서
 
 - 공통 명세서: `Docs/Service Design/공통 명세서.md` (11장 AI 활용 계획, 15장 기술 검증 포인트)
-- Jira: 에픽 `[CHART] 채보` (S15P31A307-29), 스토리 CHART-003 (S15P31A307-62) · CHART-004 (S15P31A307-69)
+- Jira: 에픽 `[CHART] 채보` (S15P31A307-29). 분리 벤치마크(-101~-105)는 스토리 CHART-004 음원 드럼 분리 (S15P31A307-69), 채보 벤치마크(-106~-110)는 스토리 CHART-003 음원 → 채보 생성 (S15P31A307-62)
