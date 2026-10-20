@@ -1,5 +1,7 @@
 package com.ssafy.airdrum.config;
 
+import java.sql.DriverManager;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,23 @@ class DatabaseConfigurationTest {
 			var meta = connection.getMetaData();
 			assertThat(meta.getDatabaseProductName()).isEqualTo("PostgreSQL");
 			assertThat(meta.getDatabaseMajorVersion()).isEqualTo(16);
+		}
+	}
+
+	/** 풀에 남은 연결만 재사용하지 않고 새 TCP 연결도 지정한 루프백으로 성립하는지 확인한다. */
+	@Test
+	void freshJdbcConnectionsReachEmbeddedPostgresOverIpv4() throws Exception {
+		var dataSource = context.getBean(DataSource.class);
+		assertThat(dataSource).isInstanceOf(HikariDataSource.class);
+		var pool = (HikariDataSource) dataSource;
+		assertThat(pool.getJdbcUrl()).startsWith("jdbc:postgresql://127.0.0.1:");
+		for (int attempt = 0; attempt < 10; attempt++) {
+			try (var connection = DriverManager.getConnection(pool.getJdbcUrl(), pool.getUsername(), pool.getPassword());
+					var statement = connection.createStatement();
+					var result = statement.executeQuery("SELECT host(inet_server_addr())")) {
+				assertThat(result.next()).isTrue();
+				assertThat(result.getString(1)).isEqualTo("127.0.0.1");
+			}
 		}
 	}
 
