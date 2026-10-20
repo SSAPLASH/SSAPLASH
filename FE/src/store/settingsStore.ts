@@ -1,10 +1,19 @@
-// 사용자 설정. localStorage에 영속.
+// 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, type KitLayout, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
 import { DEFAULT_KEY_MAP, type KeyMap } from '@/domain/keyMap';
+
+export interface KitPreset {
+  id: string;
+  name: string;
+  createdAt: string;
+  layout: KitLayout;
+  keyMap: KeyMap;
+  profile: CalibrationProfile | null;
+}
 
 /** 센서 소스 선택 (설계 D9). 키보드는 항목이 아니라 항상 켜진 보조 소스 */
 export type SensorKind = 'none' | 'pointer' | 'ble' | 'websocket';
@@ -15,6 +24,7 @@ interface SettingsState {
   pointerHitKeys: { left: string; right: string };
   kitLayout: KitLayout;
   profile: CalibrationProfile | null;
+  presets: KitPreset[];
   timing: TimingWindows;
   audioOffsetMs: number;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
@@ -35,6 +45,9 @@ interface SettingsState {
   movePad: (pad: PadId, x: number, y: number) => void;
   resetLayout: () => void;
   setProfile: (p: CalibrationProfile | null) => void;
+  savePreset: (name: string) => void;
+  loadPreset: (id: string) => void;
+  deletePreset: (id: string) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
   setScrollMs: (v: number) => void;
@@ -55,6 +68,7 @@ export const useSettings = create<SettingsState>()(
       pointerHitKeys: { left: 'KeyF', right: 'KeyJ' },
       kitLayout: DEFAULT_KIT_LAYOUT,
       profile: null,
+      presets: [],
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
       scrollMs: 1400,
@@ -79,6 +93,23 @@ export const useSettings = create<SettingsState>()(
         set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
       setProfile: (profile) => set({ profile }),
+      savePreset: (name) => {
+        const s = get();
+        const preset: KitPreset = {
+          id: `preset-${Date.now().toString(36)}`,
+          name,
+          createdAt: new Date().toISOString(),
+          layout: s.kitLayout,
+          keyMap: s.keyMap,
+          profile: s.profile,
+        };
+        set({ presets: [preset, ...s.presets].slice(0, 10) });
+      },
+      loadPreset: (id) => {
+        const p = get().presets.find((x) => x.id === id);
+        if (p) set({ kitLayout: p.layout, keyMap: p.keyMap, profile: p.profile });
+      },
+      deletePreset: (id) => set({ presets: get().presets.filter((x) => x.id !== id) }),
       setTiming: (timing) => set({ timing }),
       setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
