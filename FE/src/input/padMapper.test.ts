@@ -109,3 +109,43 @@ describe('mapHit (소스 종류로 매퍼 선택)', () => {
     expect(mapHit(hit({ pitch: 0, yaw: -20 }), 'ble', noKeys).pad).toBe('SNARE');
   });
 });
+
+describe('mapHitByPose — 앵커 밖 정책', () => {
+  const outside = hit({ pitch: 30, yaw: 0 }); // 두 앵커 모두 반경(22) 밖
+
+  it("기본·'mute': 밖이면 패드 없음, inside=false", () => {
+    const r = mapHitByPose(outside, profile2());
+    expect(r.pad).toBeNull();
+    expect(r.inside).toBe(false);
+    expect(mapHitByPose(outside, profile2(), undefined, 'mute').pad).toBeNull();
+  });
+
+  it("'nearest': 밖이어도 가장 가까운 앵커 패드, inside는 false로 남는다", () => {
+    const r = mapHitByPose(hit({ pitch: 30, yaw: 8 }), profile2(), undefined, 'nearest');
+    expect(r.pad).toBe('HIHAT'); // yaw 8이 +20 앵커에 더 가깝다
+    expect(r.inside).toBe(false);
+    expect(r.distanceDeg).toBeGreaterThan(22);
+  });
+
+  it('반경 안이면 정책과 무관하게 같은 결과, inside=true', () => {
+    const e = hit({ pitch: 1, yaw: -19 });
+    expect(mapHitByPose(e, profile2(), undefined, 'mute')).toEqual(mapHitByPose(e, profile2(), undefined, 'nearest'));
+    expect(mapHitByPose(e, profile2()).inside).toBe(true);
+  });
+
+  it('후보 제한이 있으면 정책과 무관하게 가장 가까운 후보', () => {
+    expect(mapHitByPose(outside, profile2(), ['HIHAT'], 'mute').pad).toBe('HIHAT');
+    expect(mapHitByPose(outside, profile2(), ['HIHAT'], 'nearest').pad).toBe('HIHAT');
+  });
+
+  it('mapHit이 ctx.outsidePolicy를 전달한다', () => {
+    const ctx = { keyMap: DEFAULT_KEY_MAP, profile: profile2() };
+    expect(mapHit(outside, 'pointer', ctx).pad).toBeNull();
+    expect(mapHit(outside, 'pointer', { ...ctx, outsidePolicy: 'nearest' }).pad).not.toBeNull();
+  });
+
+  it('키 매퍼에는 정책이 영향 없다', () => {
+    const e = hit({ keyCode: 'KeyF' });
+    expect(mapHit(e, 'keyboard', { keyMap: DEFAULT_KEY_MAP, profile: null, outsidePolicy: 'nearest' }).pad).toBe('SNARE');
+  });
+});

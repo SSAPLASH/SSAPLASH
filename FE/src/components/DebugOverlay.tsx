@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { subscribeTelemetry, type TelemetryRow } from '@/engine/telemetry';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useLive } from '@/store/liveStore';
+import { TuningPanel } from './TuningPanel';
 
 export function DebugOverlay({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<TelemetryRow[]>([]);
@@ -22,12 +23,15 @@ export function DebugOverlay({ onClose }: { onClose: () => void }) {
         오디오 base {lat ? f(lat.baseLatencyMs) : '–'}ms · output {lat ? f(lat.outputLatencyMs) : '–'}ms · 자세 L{' '}
         {pose[0].pitch.toFixed(0)}/{pose[0].yaw.toFixed(0)} R {pose[1].pitch.toFixed(0)}/{pose[1].yaw.toFixed(0)}
       </div>
+      <TuningPanel rows={rows} />
       <table>
         <thead>
           <tr>
             <th>패드</th>
             <th>손</th>
             <th>vel</th>
+            <th>g</th>
+            <th>거리°</th>
             <th>수신</th>
             <th>판정</th>
             <th>오디오</th>
@@ -41,6 +45,8 @@ export function DebugOverlay({ onClose }: { onClose: () => void }) {
               <td>{r.pad ?? '(없음)'}</td>
               <td>{r.stickId === 0 ? 'L' : 'R'}</td>
               <td>{r.velocity}</td>
+              <td>{r.peakAccel.toFixed(1)}</td>
+              <td>{r.distanceDeg === null ? '–' : `${r.distanceDeg.toFixed(1)}${r.inside ? '' : '*'}`}</td>
               <td>{f(r.recvLagMs)}</td>
               <td>{f(r.resolveLagMs)}</td>
               <td>{f(r.audioLagMs)}</td>

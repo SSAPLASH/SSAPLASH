@@ -15,6 +15,12 @@ export interface TelemetryRow {
   /** 판정 → 오디오 스케줄 */
   audioLagMs: number | null;
   velocity: number;
+  /** 원시 가속도(g). 키보드 타격은 모사값(6.3 / Shift 8) */
+  peakAccel: number;
+  /** 판정된(또는 가장 가까운) 앵커까지 거리(도). 키보드는 null */
+  distanceDeg: number | null;
+  /** 그 앵커 반경 안인지. 키보드는 null */
+  inside: boolean | null;
   judgement?: Judgement;
   deltaMs?: number;
 }
@@ -32,6 +38,9 @@ export function pushTelemetry(h: ResolvedHit, extra?: { judgement?: Judgement; d
     resolveLagMs: h.tResolved - h.tRecv,
     audioLagMs: h.tAudio !== undefined ? h.tAudio - h.tResolved : null,
     velocity: h.velocity,
+    peakAccel: h.peakAccel,
+    distanceDeg: h.distanceDeg ?? null,
+    inside: h.inside ?? null,
     judgement: extra?.judgement,
     deltaMs: extra?.deltaMs,
   });

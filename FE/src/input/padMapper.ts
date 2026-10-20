@@ -5,6 +5,7 @@ import type { PadId } from '@/domain/pads';
 import type { InputSourceKind, StickHitEvent, StickId } from '@/domain/events';
 import type { KeyMap } from '@/domain/keyMap';
 import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
+import type { OutsidePolicy } from '@/domain/tuning';
 
 export type MapperKind = 'key' | 'pose';
 
@@ -15,6 +16,8 @@ export interface PadMapResult {
   stickId?: StickId;
   /** 자세 매퍼: 가장 가까운 앵커까지 각도 거리 */
   distanceDeg?: number;
+  /** 자세 매퍼: 그 앵커의 반경 안인지(nearest 정책으로 밖에서 인정돼도 false) */
+  inside?: boolean;
 }
 
 /** 소스 종류 → 매퍼. 키보드만 키 매퍼, 나머지(IMU 계열)는 자세 매퍼 */
@@ -31,25 +34,28 @@ export function mapHitByKey(hit: StickHitEvent, keyMap: KeyMap): PadMapResult {
 
 /**
  * 자세 매퍼. 프로필의 앵커·반경으로 판정한다.
- * 후보 목록이 있으면(채보 후보 제한) 영역 밖이어도 가장 가까운 후보를 인정한다 — 후보가 곧 정답 가설.
+ * 후보 목록이 있으면(채보 후보 제한) 정책과 무관하게 영역 밖이어도 가장 가까운 후보를 인정한다 — 후보가 곧 정답 가설.
+ * 후보가 없을 때 반경 밖은 outsidePolicy가 정한다: 'mute' 판정 없음 / 'nearest' 가장 가까운 앵커 패드.
  */
 export function mapHitByPose(
   hit: StickHitEvent,
   profile: CalibrationProfile | null,
   candidates?: PadId[],
+  outsidePolicy: OutsidePolicy = 'mute',
 ): PadMapResult {
   const r = resolvePad(profile, { pitch: hit.pitch, yaw: hit.yaw }, candidates);
   if (!r) return { pad: null };
-  return { pad: r.inside || candidates ? r.pad : null, distanceDeg: r.distanceDeg };
+  const accept = r.inside || !!candidates || outsidePolicy === 'nearest';
+  return { pad: accept ? r.pad : null, distanceDeg: r.distanceDeg, inside: r.inside };
 }
 
 /** 소스 종류에 맞는 매퍼를 골라 적용한다 */
 export function mapHit(
   hit: StickHitEvent,
   source: InputSourceKind,
-  ctx: { keyMap: KeyMap; profile: CalibrationProfile | null; candidates?: PadId[] },
+  ctx: { keyMap: KeyMap; profile: CalibrationProfile | null; candidates?: PadId[]; outsidePolicy?: OutsidePolicy },
 ): PadMapResult {
   return mapperFor(source) === 'key'
     ? mapHitByKey(hit, ctx.keyMap)
-    : mapHitByPose(hit, ctx.profile, ctx.candidates);
+    : mapHitByPose(hit, ctx.profile, ctx.candidates, ctx.outsidePolicy);
 }

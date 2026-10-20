@@ -7,28 +7,12 @@ import type { InputSourceKind, Pose, ResolvedHit, StickEvent, StickId } from '@/
 import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
 import { mapHit } from './padMapper';
 import type { KeyMap } from '@/domain/keyMap';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
 export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind) => void;
-
-/** 피크 가속도 → 벨로시티(0~127) 변환 파라미터. PLAY-05. 실측 후 곡선 조정 */
-export interface VelocityCurve {
-  /** 이 가속도(g)에서 127 */
-  maxAccelG: number;
-  /** 이 가속도(g) 미만은 1 */
-  minAccelG: number;
-  /** 1 = 선형, <1 = 약한 타격을 키움 */
-  gamma: number;
-}
-
-export const DEFAULT_VELOCITY_CURVE: VelocityCurve = { maxAccelG: 8, minAccelG: 0.8, gamma: 0.8 };
-
-export function accelToVelocity(peakAccel: number, c: VelocityCurve): number {
-  const n = Math.min(1, Math.max(0, (peakAccel - c.minAccelG) / (c.maxAccelG - c.minAccelG)));
-  return Math.max(1, Math.round(Math.pow(n, c.gamma) * 127));
-}
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -38,7 +22,10 @@ export class InputManager {
   private statusListeners = new Set<StatusListener>();
   private profile: CalibrationProfile | null = null;
   private keyMap: KeyMap = {};
-  private velocityCurve = DEFAULT_VELOCITY_CURVE;
+  private velocityCurve: VelocityCurve = DEFAULT_SENSOR_TUNING.velocity;
+  /** 센서 타격 시각 보정(ms). 키보드 타격에는 적용하지 않는다(T5) */
+  private sensorOffsetMs = DEFAULT_SENSOR_TUNING.sensorOffsetMs;
+  private outsidePolicy: OutsidePolicy = DEFAULT_SENSOR_TUNING.outsidePolicy;
   private seq = 0;
   /** 리듬 게임이 "지금 칠 법한 패드"를 알려주면 판정을 그 후보로 제한한다 */
   private candidateProvider: ((tHit: number) => PadId[] | undefined) | null = null;
@@ -59,6 +46,16 @@ export class InputManager {
 
   setVelocityCurve(c: VelocityCurve): void {
     this.velocityCurve = c;
+  }
+
+  /** 이후 센서(키보드 아님) 타격의 tHit에 더한다. tRecv·tResolved는 그대로 */
+  setSensorOffsetMs(ms: number): void {
+    this.sensorOffsetMs = ms;
+  }
+
+  /** 자세 매퍼의 반경 밖 처리 */
+  setOutsidePolicy(p: OutsidePolicy): void {
+    this.outsidePolicy = p;
   }
 
   setCandidateProvider(fn: ((tHit: number) => PadId[] | undefined) | null): void {
@@ -140,10 +137,12 @@ export class InputManager {
       return;
     }
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };
+    const tHit = source === 'keyboard' ? e.timestamp : e.timestamp + this.sensorOffsetMs;
     const m = mapHit(e, source, {
       keyMap: this.keyMap,
       profile: this.profile,
-      candidates: this.candidateProvider?.(e.timestamp),
+      candidates: this.candidateProvider?.(tHit),
+      outsidePolicy: this.outsidePolicy,
     });
     const stickId = m.stickId ?? e.stickId;
     const hit: ResolvedHit = {
@@ -151,13 +150,14 @@ export class InputManager {
       stickId,
       pad: m.pad,
       velocity: accelToVelocity(e.peakAccel, this.velocityCurve),
-      tHit: e.timestamp,
+      tHit,
       tRecv: e.recvTime,
       tResolved: performance.now(),
       source,
       pose,
       peakAccel: e.peakAccel,
       distanceDeg: m.distanceDeg,
+      inside: m.inside,
     };
     if (m.distanceDeg !== undefined) this.lastPose[stickId] = pose;
     for (const l of this.hitListeners) l(hit);

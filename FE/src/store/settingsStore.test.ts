@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VERSION, migrateSettings } from './settingsStore';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {
@@ -55,5 +56,32 @@ describe('migrateSettings', () => {
     // v2 이행 시 이미 있던 sensorOptions 항목은 보존
     const out = migrateSettings({ sensorOptions: { fake: { a: 1 } }, wsUrl: 'ws://z' }, 2) as unknown as Record<string, unknown>;
     expect(out.sensorOptions).toEqual({ fake: { a: 1 }, websocket: { url: 'ws://z' } });
+  });
+});
+
+describe('migrateSettings v3 → v4 (튜닝)', () => {
+  it('최상위 maxRadiusDeg를 tuning.maxRadiusDeg로 옮기고 옛 필드를 지운다', () => {
+    const out = migrateSettings({ sensorKind: 'pointer', maxRadiusDeg: 30, volume: 0.4 }, 3) as unknown as Record<string, unknown>;
+    expect(out.tuning).toEqual({ ...DEFAULT_SENSOR_TUNING, maxRadiusDeg: 30 });
+    expect('maxRadiusDeg' in out).toBe(false);
+    expect(out.sensorKind).toBe('pointer');
+    expect(out.volume).toBe(0.4);
+  });
+
+  it('maxRadiusDeg가 없으면 기본 튜닝', () => {
+    const out = migrateSettings({ sensorKind: 'none' }, 3) as unknown as Record<string, unknown>;
+    expect(out.tuning).toEqual(DEFAULT_SENSOR_TUNING);
+  });
+
+  it('범위 밖 저장값은 슬라이더 범위로 자른다', () => {
+    const out = migrateSettings({ maxRadiusDeg: 999 }, 3) as unknown as { tuning: { maxRadiusDeg: number } };
+    expect(out.tuning.maxRadiusDeg).toBe(40);
+  });
+
+  it('v2 이하에서도 v4까지 한 번에 이행', () => {
+    const out = migrateSettings({ inputKind: 'pointer', maxRadiusDeg: 15 }, 1) as unknown as Record<string, unknown>;
+    expect(out.sensorKind).toBe('pointer');
+    expect(out.tuning).toEqual({ ...DEFAULT_SENSOR_TUNING, maxRadiusDeg: 15 });
+    expect('maxRadiusDeg' in out).toBe(false);
   });
 });

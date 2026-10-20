@@ -128,7 +128,8 @@ export function CalibrationPage() {
   const sessionOptions = () => ({
     mode: settings.calibrationMode,
     holdMs: settings.holdMs,
-    maxRadiusDeg: settings.maxRadiusDeg,
+    maxRadiusDeg: settings.tuning.maxRadiusDeg,
+    radiusFactor: settings.tuning.radiusFactor,
     source: settings.sensorKind,
   });
 
@@ -261,7 +262,7 @@ export function CalibrationPage() {
   const shownAnchors = stage === 'ready' ? settings.profile?.anchors : snap?.anchors;
 
   let guide: string;
-  if (stage === 'ready') guide = `${sensorLabel} · ${modeLabel} · 반경 상한 ${settings.maxRadiusDeg}° (변경은 세팅에서). ${connNote}`;
+  if (stage === 'ready') guide = `${sensorLabel} · ${modeLabel} · 반경 상한 ${settings.tuning.maxRadiusDeg}° (변경은 세팅에서). ${connNote}`;
   else if (stage === 'capture' && current) {
     const n = STICK_PADS.indexOf(current) + 1;
     guide =
@@ -459,7 +460,7 @@ export function CalibrationPage() {
                   </tr>
                   <tr>
                     <td className="dim">판정 반경 상한</td>
-                    <td>{settings.maxRadiusDeg}°</td>
+                    <td>{settings.tuning.maxRadiusDeg}°</td>
                   </tr>
                   <tr>
                     <td className="dim">대상 패드</td>
