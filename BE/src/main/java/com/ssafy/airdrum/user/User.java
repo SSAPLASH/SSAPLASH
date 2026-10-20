@@ -70,6 +70,20 @@ public class User {
 		return new User(nickname, email, profileImageUrl);
 	}
 
+	/**
+	 * 권한을 바꾼다. 로그인마다 ADMIN 화이트리스트로 다시 정한다.
+	 *
+	 * @return 값이 실제로 바뀌었으면 true
+	 */
+	public boolean changeRole(UserRole role) {
+		Objects.requireNonNull(role, "role");
+		if (this.role == role) {
+			return false;
+		}
+		this.role = role;
+		return true;
+	}
+
 	@PrePersist
 	void onCreate() {
 		var now = now();
