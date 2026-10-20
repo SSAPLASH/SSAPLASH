@@ -1,4 +1,4 @@
-# 기존 서비스·볼륨에 접속하지 않고 일회용 TimescaleDB에서 실제 Flyway를 검증한다.
+﻿# 기존 서비스·볼륨에 접속하지 않고 일회용 TimescaleDB에서 실제 Flyway를 검증한다.
 [CmdletBinding()]
 param()
 
@@ -24,7 +24,17 @@ function Invoke-DockerCheck {
 
 try {
     Invoke-DockerCheck -Arguments @('info', '--format', '{{.ServerVersion}}') | Out-Null
-    Invoke-DockerCheck -Arguments @('pull', $image)
+    # 고정 버전이 있으면 재사용한다. 최초 pull의 일시적인 CDN EOF만 제한적으로 재시도한다.
+    & docker image inspect $image *> $null
+    if ($LASTEXITCODE -ne 0) {
+        $pulled = $false
+        for ($pullAttempt = 1; $pullAttempt -le 3; $pullAttempt++) {
+            & docker pull $image
+            if ($LASTEXITCODE -eq 0) { $pulled = $true; break }
+            if ($pullAttempt -lt 3) { Start-Sleep -Seconds (2 * $pullAttempt) }
+        }
+        if (-not $pulled) { throw "TimescaleDB 이미지 다운로드가 3회 실패했습니다: $image" }
+    }
     $env:POSTGRES_PASSWORD = $testPassword
     # 임시 데이터는 메모리에만 보관한다. 호스트의 기존 볼륨·DB 포트를 재사용하지 않는다.
     Invoke-DockerCheck -Arguments @(
