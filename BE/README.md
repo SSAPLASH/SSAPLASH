@@ -124,6 +124,64 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-ChartSchema.p
 
 테스트 데이터·검증 SQL은 운영 JAR에 포함되지 않는다. 이미 적용한 마이그레이션은 수정·재번호화하지 않는다.
 
+## 잔여 전체 DB 마이그레이션 (97번)
+
+V1·V2를 변경하지 않고 다음 순서로 적용한다. 별도 수동 SQL 실행이나 `outOfOrder` 설정은 필요 없다.
+병합 전 다른 작업의 신규 마이그레이션 번호와 충돌 여부를 확인한다.
+
+| 버전 | 생성 테이블 |
+| --- | --- |
+| V3 | `kit_presets` |
+| V4 | `chart_jobs`, `chart_job_attempts`, `chart_job_results`, `file_cleanup_tasks` |
+| V5 | `play_sessions`, `hits` |
+| V6 | `reports`, `recordings` |
+| V7 | `telemetry_events` |
+
+V1·V2를 포함해 도메인 테이블은 총 15개다. 프리셋·로그·AI·리포트 API와 엔티티는
+각 소비 기능에서 구현한다. 이번 변경은 테이블·제약·인덱스와 마이그레이션 검증이다.
+
+- 프리셋 이름은 회원별 유일하고 기본 프리셋은 회원당 최대 하나다. 삭제해도 플레이 당시 스냅샷은 남는다.
+- AI 작업은 회원별 비종료 작업 하나, 회원별 업로드 멱등 키 하나를 허용한다.
+  먼저 QUEUED 작업을 생성하고 attempt를 만든 다음 `current_attempt_id`를 지정한다.
+  현재 attempt와 단계별 접수 결과는 같은 job의 attempt만 참조한다.
+  `(worker_id, claim_request_id)`와 `(job_id, stage)`는 유일하다.
+  완료·실패 전환 시 `finished_at`도 함께 갱신하며 DONE의 progress는 100이다.
+- `chart_job_results`는 접수 해시와 Receipt를 보존한다. 중복 요청에 Receipt를 재사용하는 서비스 로직,
+  임대·revision 조건부 갱신, 회원 ACTIVE 확인 및 탈퇴 트랜잭션과의 잠금 순서는 후속 AI 연동에서 구현한다.
+- 파일 정리 기록은 삭제 성공 후에도 키를 보존한다. 작업 접수 전 남은 고아 파일도 기록할 수 있다.
+  재시도 대상에는 DELETING도 포함한다. 실행 중단 시 재획득과 삭제 확인, 만료된 PUT 권한의
+  뒤늦은 업로드 재스캔은 후속 정리 작업의 책임이다. 객체 키는 재사용하지 않는다.
+- 플레이 ID는 클라이언트 생성 UUID, 채보 버전 ID는 bigint다.
+  요청 버전·SHA-256 해시는 필수다. RHYTHM/SHEET에는 곡·채보 버전·판정 컨텍스트가 필요하며
+  FREE/TEMPO에는 곡·채보 버전을 연결하지 않는다.
+- `hits.t_ms`·`delta_ms`는 소수 ms를 보존하며 NaN·무한대를 거부한다.
+  카운트인 시점의 음수 `t_ms`는 허용한다. MISS는 실제 타격 수치 없이 noteId를 가진 행이며,
+  PERFECT/GOOD은 noteId·velocity·delta가 필요하다. 판정 없는 타격은 velocity를 가진다.
+  세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
+- 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
+  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 WITHDRAWN과 별도 정리 흐름을 사용한다.
+- JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
+  해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
+
+텔레메트리는 현재 `Infra/docker-compose.yml`의 `postgres:16-alpine`에 맞춘 **일반 테이블**이다.
+요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. TimescaleDB 확장·hypertable·
+자동 보관 기간 삭제는 적용하지 않았다. 도입 시 확장 설치와 기존 데이터 전환을 별도 검증하고
+새 마이그레이션으로 적용해야 한다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
+음수 아닌 값만 검사한다. 원시 IMU 배열은 이 테이블에 저장하지 않는다.
+
+`DatabaseSchemaMigrationTest`는 빈 DB의 V1→V7, V2 기존 데이터·이력 보존 업그레이드,
+재실행 0건, JSON/수치/상태 제약, 중복 접수, 다른 작업 attempt 참조 거부,
+삭제 연쇄·스냅샷 보존을 실제 임베디드 PostgreSQL 16에서 검사한다.
+
+```powershell
+.\gradlew.bat test --tests '*DatabaseSchemaMigrationTest'
+.\gradlew.bat --no-daemon clean build
+```
+
+실패한 DDL은 Flyway 트랜잭션으로 롤백된다. 적용 후 앱을 롤백해도 테이블·데이터는 남긴다.
+공유 DB에 `clean`을 실행하거나 적용된 V1~V7 파일을 수정하지 않고 후속 버전으로 변경한다.
+FE 업로드 계약 합의·MR·CI·병합 확인 전에는 97번 전체를 완료로 간주하지 않는다.
+
 ## API 규약
 
 모든 REST API가 공유하는 규칙이다. FE 클라이언트와 다른 BE 작업은 이 절을 기준으로 맞춘다.
