@@ -1,4 +1,4 @@
-"""패키지가 설치되고 import 되는지 확인하는 최소 테스트."""
+"""패키지 설치·import 확인용 최소 테스트."""
 
 import ssaplash_ai
 
