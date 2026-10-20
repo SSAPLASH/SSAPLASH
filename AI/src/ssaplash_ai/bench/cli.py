@@ -14,11 +14,17 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from ssaplash_ai.bench.datasets import CheckReport, load_dataset
+# 코랩·주피터 커널이 자식 프로세스에 MPLBACKEND=module://matplotlib_inline.backend_inline을 넘기는데
+# uv 가상환경에는 그 모듈이 없어 matplotlib import(모델 로드·그래프)가 실패함. 명령줄 도구는 화면이 없으므로
+# 항상 Agg. matplotlib을 처음 import하기 전에 덮어써야 해서 모듈 맨 위에 둠.
+os.environ["MPLBACKEND"] = "Agg"
+
+from ssaplash_ai.bench.datasets import CheckReport, load_dataset  # noqa: E402
 
 
 def format_report(report: CheckReport) -> str:
