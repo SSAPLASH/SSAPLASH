@@ -16,10 +16,10 @@
 | 상태 확인 | Spring Boot Actuator |
 | 입력 검증 | Bean Validation (`spring-boot-starter-validation`) |
 | API 문서 | springdoc-openapi 3.1.1 (Swagger UI). Boot 4 전용 3.x 라인이며 2.x는 쓰지 않는다 |
-| DB | PostgreSQL 16, JDBC 드라이버 42.7.x |
+| DB | PostgreSQL 16 + TimescaleDB 2.30.2, JDBC 드라이버 42.7.x |
 | 영속성 | Spring Data JPA (Hibernate 7). 스키마는 만들지 않고 검증만 한다(`ddl-auto: validate`) |
 | 마이그레이션 | Flyway 12 (`spring-boot-starter-flyway` + `flyway-database-postgresql`) |
-| 테스트 DB | 임베디드 PostgreSQL 16 (`io.zonky.test:embedded-postgres`). Docker 불필요 |
+| 테스트 DB | 일반 테스트: 임베디드 PostgreSQL 16, V1~V7. V8: 별도 실제 TimescaleDB Docker 검사 |
 | 외부 HTTP | `RestClient` (`spring-boot-starter-restclient`). OAuth 제공자 호출. 테스트는 `MockRestServiceServer` |
 
 2026-10-19 초기화 시 공식 Spring Initializr의 안정 버전을 사용했다.
@@ -28,7 +28,7 @@
 Boot 4는 Jackson 3 및 Spring Security 7을 기준으로 하므로 후속 기능을 추가할 때
 3.x용 예제와 패키지·스타터 이름을 혼용하지 않는다.
 
-기동하려면 PostgreSQL 16이 필요하다. 기동할 때 Flyway가 마이그레이션을 적용하고
+기동하려면 TimescaleDB 확장이 설치·preload된 PostgreSQL 16이 필요하다. 기동할 때 Flyway가 마이그레이션을 적용하고
 Hibernate가 엔티티와 스키마를 검증한다. 소셜 로그인은 [소셜 로그인](#소셜-로그인)을 따른다.
 Redis·JWT 인증·AI 연동은 해당 기능 작업에서 추가한다.
 공통 응답·오류 형식과 OpenAPI 문서는 아래 [API 규약](#api-규약)을, 스키마 변경은
@@ -41,12 +41,13 @@ JDK 21을 설치하고 `JAVA_HOME`을 지정한다. IDE의 Project SDK와 Gradle
 
 로컬 PostgreSQL 16을 준비한다. Infra Compose의 `postgres`는 내부 네트워크 전용이라
 호스트에서 실행한 앱이 붙을 수 없다. Docker를 쓰면 아래처럼 로컬 전용 컨테이너를 띄운다.
-설치형 PostgreSQL 16을 써도 된다. 비밀번호는 각자 정하고 저장소에 남기지 않는다.
+설치형 DB에는 동일한 TimescaleDB 확장과 preload 설정이 필요하다. 비밀번호는 각자 정하고 저장소에 남기지 않는다.
 
 ```sh
 docker run -d --name airdrum-db -p 127.0.0.1:5432:5432 \
   -e POSTGRES_USER=app -e POSTGRES_DB=app -e POSTGRES_PASSWORD=<로컬 비밀번호> \
-  postgres:16-alpine
+  timescale/timescaledb:2.30.2-pg16 \
+  postgres -c shared_preload_libraries=timescaledb
 ```
 
 아래 명령은 `BE/`에서 실행한다.
@@ -136,6 +137,7 @@ V1·V2를 변경하지 않고 다음 순서로 적용한다. 별도 수동 SQL �
 | V5 | `play_sessions`, `hits` |
 | V6 | `reports`, `recordings` |
 | V7 | `telemetry_events` |
+| V8 | `telemetry_events`를 TimescaleDB hypertable로 전환 (기존 데이터 보존) |
 
 V1·V2를 포함해 도메인 테이블은 총 15개다. 프리셋·로그·AI·리포트 API와 엔티티는
 각 소비 기능에서 구현한다. 이번 변경은 테이블·제약·인덱스와 마이그레이션 검증이다.
@@ -163,10 +165,9 @@ V1·V2를 포함해 도메인 테이블은 총 15개다. 프리셋·로그·AI·
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
-텔레메트리는 현재 `Infra/docker-compose.yml`의 `postgres:16-alpine`에 맞춘 **일반 테이블**이다.
-요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. TimescaleDB 확장·hypertable·
-자동 보관 기간 삭제는 적용하지 않았다. 도입 시 확장 설치와 기존 데이터 전환을 별도 검증하고
-새 마이그레이션으로 적용해야 한다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
+텔레메트리는 V7에서 일반 테이블로 만든 뒤 V8에서 **1일 청크의 TimescaleDB hypertable**로 전환한다.
+요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. 자동 보관 기간 삭제·압축 정책은
+적용하지 않았다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
 음수 아닌 값만 검사한다. 원시 IMU 배열은 이 테이블에 저장하지 않는다.
 
 `DatabaseSchemaMigrationTest`는 빈 DB의 V1→V7, V2 기존 데이터·이력 보존 업그레이드,
@@ -179,8 +180,40 @@ V1·V2를 포함해 도메인 테이블은 총 15개다. 프리셋·로그·AI·
 ```
 
 실패한 DDL은 Flyway 트랜잭션으로 롤백된다. 적용 후 앱을 롤백해도 테이블·데이터는 남긴다.
-공유 DB에 `clean`을 실행하거나 적용된 V1~V7 파일을 수정하지 않고 후속 버전으로 변경한다.
+공유 DB에 `clean`을 실행하거나 적용된 V1~V8 파일을 수정하지 않고 후속 버전으로 변경한다.
 FE 업로드 계약 합의·MR·CI·병합 확인 전에는 97번 전체를 완료로 간주하지 않는다.
+
+### TimescaleDB 전환·검증
+
+`Infra/docker-compose.yml`은 `timescale/timescaledb:2.30.2-pg16`을 사용한다.
+V8의 확장 생성에는 권한이 필요하므로 최초 마이그레이션은 DB 관리자 권한으로 실행하거나,
+관리자가 먼저 확장을 설치한 후 테이블 소유자 권한으로 실행한다.
+확장 미설치·preload 누락을 건너뛰는 fallback은 없다. 일반 PostgreSQL만으로 운영 앱을 기동하면 V8이 실패한다.
+
+기존 DB가 있으면 먼저 쓰기를 중단하고 백업 및 별도 DB 복원 검증을 수행한다.
+기존 `pgdata` 볼륨을 무조건 지우거나 이미지 교체만으로 호환성을 가정하지 않는다.
+PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하므로 데이터량에 따라
+테이블 잠금 시간이 길어질 수 있다. 전환 후 행 수·주요 조회·Flyway 이력·hypertable을 확인한다.
+앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
+데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
+
+일반 `build`는 임베디드 PostgreSQL에서 V1~V7까지 검사한다. V8 검사는 별도 필수 CI job
+`be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
+및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
+Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
+
+```powershell
+# BE/에서 실행. JAVA_HOME은 CI와 같은 JDK 21로 설정한다.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSchema.ps1
+```
+
+스크립트는 Compose에 선언된 이미지를 사용해 임시 DB를 띄우고 `timescaleTest`를 실행한 뒤 종료한다.
+기존 볼륨을 쓰지 않고 tmpfs 및 임의의 루프백 포트만 사용한다. 빈 DB V1→V8,
+데이터가 있는 V7→V8, 이력·행·인덱스 보존, 날짜별 청크 생성, CHECK 제약 및
+재실행 0건·자동 삭제 정책 미등록을 검사한다.
+
+근거: [공식 2.30.2 릴리스](https://github.com/timescale/timescaledb/releases/tag/2.30.2),
+[기존 테이블 전환 API](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable).
 
 ## API 규약
 
@@ -307,9 +340,10 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 
 ### 테스트 DB
 
-테스트는 임베디드 PostgreSQL 16을 자동으로 받는다. Docker나 로컬 DB가 필요 없고 테스트 클래스에 따로 선언할 것도 없다.
+일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
-테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때 Flyway가 마이그레이션을 적용한다.
+테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
+Flyway가 V7까지 적용한다. V8과 이후 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,

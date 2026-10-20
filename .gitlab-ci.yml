@@ -57,6 +57,7 @@ build:
   rules:
     - changes:
         - BE/**/*
+        - Infra/docker-compose.yml
         - .gitlab-ci.yml
 
 be-test:
@@ -80,4 +81,18 @@ be-build:
   artifacts:
     paths:
       - BE/build/libs/app.jar
+    expire_in: 1 week
+
+# Windows local Runner에서 Linux Docker 엔진 접근이 필요하다. 실패를 허용하거나 건너뛰지 않는다.
+be-timescale-test:
+  extends: .be-job
+  stage: test
+  script:
+    - powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSchema.ps1
+  artifacts:
+    when: always
+    reports:
+      junit: BE/build/test-results/timescaleTest/TEST-*.xml
+    paths:
+      - BE/build/reports/tests/timescaleTest/
     expire_in: 1 week
