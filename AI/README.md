@@ -90,6 +90,8 @@ Git Bash에서 한글이 깨지면 `PYTHONUTF8=1`을 앞에 붙인다.
 
 모델 yaml 여러 개와 데이터셋 yaml 하나를 받아 모델 × 곡을 전부 돌린다. 곡마다 결과 행을 CSV에 바로 쓰므로 중간에 끊겨도 그때까지의 결과가 남는다. 끝나면 같은 폴더에 보고서를 만들고 MLflow에 run 하나를 남긴다.
 
+**이어하기.** `--run-id`를 지정해 돌리다 끊기면 같은 명령을 그대로 다시 실행한다. 그 폴더의 `results.csv`에서 `error`가 빈 (모델, 곡) 행은 건너뛰고 그대로 두며, `error`가 있던 행은 지우고 다시 돌린다. 한 모델의 곡이 전부 끝나 있으면 그 모델은 로드도 하지 않는다. 열 구성이 다른 옛 CSV에는 이어 붙이지 않고 오류로 멈춘다. MLflow run은 마지막 실행 것 하나만 남고, 지표는 CSV 전체로 계산한다.
+
 ```bash
 # 동작 확인: 모델 1개 × 30초 클립 3곡 (GPU 없으면 cpu로 내려간다)
 uv run ssaplash-bench run --models configs/bench/models/msst/scnet_large.yaml     --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
@@ -109,14 +111,14 @@ uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results
 | `--device` | `cuda` 또는 `cpu` | `cuda` |
 | `--clip START END` | 곡마다 쓸 구간(초). yaml의 clip보다 우선 | 없음 |
 | `--save-wav N` | 모델당 분리 결과 wav를 저장할 곡 수 | 0 |
-| `--run-id` | runId 직접 지정 | 시각+난수 |
+| `--run-id` | runId 직접 지정. 같은 runId의 `results.csv`가 있으면 이어하기 | 시각+난수 |
 | `--mlflow-uri` | MLflow tracking URI. `none`이면 기록 안 함 | `mlruns` (환경 변수 `MLFLOW_TRACKING_URI`) |
 
 결과 폴더 `data/results/<runId>/`
 
 | 파일 | 내용 |
 | --- | --- |
-| `results.csv` | 곡 × 모델당 1행. 설계 문서 3-3절 열 + 보조 열. 실패한 곡은 `error` 열에 예외 요약 |
+| `results.csv` | 곡 × 모델당 1행. 실행 식별(runId·device·gpuName·host), 모델 식별, 곡 식별, 아래 지표 열, 실패한 곡은 `error` 열에 예외 요약. `gpuName`은 torch가 알려주는 GPU 이름이고 CPU 실행이면 빈칸 |
 | `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스. 드럼 SDR 내림차순), 보조값 표, 데이터셋별 표, 실패 목록 |
 | `per_song.csv` | 보고서에 쓴 곡별 값 (CSV 여러 개를 합친 경우 합친 것) |
 | `metrics_by_model.png`, `rtf_vs_sdr.png` | 모델별 지표 막대, RTF 대 드럼 SDR 산점도 |
@@ -128,7 +130,15 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 
 ### 코랩에서 돌리기
 
-`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 저장소 zip과 `data/` 폴더를 드라이브 `MyDrive/ssaplash/`에 올려 두면 노트북이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 쌓인다. 본측정은 코랩 GPU에서만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
+`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 드라이브 `MyDrive/ssaplash/`에 저장소 zip(`S15P31A307.zip`), `data/musdb18hq/test/`(11GB), `data/synth_v1/`(216MB)을 올려 두면 노트북이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤, 데이터를 런타임 로컬 디스크로 복사하고 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 바로 써서 세션이 끊겨도 남는다. 본측정은 코랩 GPU 한 종류로만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
+
+본측정 runId는 `musdb-full`·`synth-full`로 고정돼 있어, 세션이 끊기면 런타임을 다시 연결하고 준비 셀(1~4)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 다시 연결했을 때 GPU 이름이 바뀌었으면 결과의 `gpuName`이 섞이므로 같은 GPU를 받을 때까지 런타임을 바꾼다.
+
+저장소 zip은 저장소 루트에서 만든다. 데이터·결과·MLflow 폴더는 git이 추적하지 않아 zip에 들어가지 않는다.
+
+```bash
+git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
+```
 
 ## 지표 정의
 
