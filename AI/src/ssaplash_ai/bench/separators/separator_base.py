@@ -31,22 +31,20 @@ class SeparatorConfig:
     adapter: str
     license_code: str
     license_weights: str
-    tier: str = "2"
     source_url: str = ""
     # msst
     model_type: str | None = None
     config_url: str | None = None
     checkpoint_url: str | None = None
-    # demucs / openunmix / spleeter
+    # demucs / openunmix
     demucs_name: str | None = None
     umx_name: str | None = None
-    spleeter_name: str | None = None
     # 청크 처리. None이면 패키지 기본값
     segment_sec: float | None = None
     overlap: float | None = None
     batch_size: int | None = None
-    # fake
-    fake_mode: str = "mixture"
+    # mock
+    mock_mode: str = "mixture"
     fail_on_call: int | None = None
     # 예측 드럼으로 쓸 스템 이름
     drums_stem: str = "drums"
@@ -79,7 +77,6 @@ class SeparatorConfig:
         if unknown:
             raise ValueError(f"모르는 모델 설정 필드: {unknown}")
         kwargs = {k: v for k, v in raw.items() if v is not None}
-        kwargs["tier"] = str(kwargs.get("tier", "2"))
         cfg = cls(**kwargs)
         cfg.yaml_text = yaml.safe_dump(raw, allow_unicode=True, sort_keys=True)
         return cfg
@@ -105,7 +102,6 @@ class SeparatorInfo:
     license_code: str
     license_weights: str
     device: str
-    tier: str
 
 
 @dataclass
@@ -191,7 +187,6 @@ class BaseSeparator(abc.ABC):
             license_code=self.config.license_code,
             license_weights=self.config.license_weights,
             device=self.device,
-            tier=self.config.tier,
         )
 
     def close(self) -> None:

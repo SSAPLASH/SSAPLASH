@@ -1,7 +1,6 @@
-# SCNet-large (starrytong 공개 가중치, MSST 변환본). 41.2M, XL보다 가벼운 2순위.
+# SCNet-large (starrytong 공개 가중치, MSST 변환본). 41.2M, XL보다 가벼운 대안.
 name: scnet_large
 adapter: msst
-tier: "2"
 model_type: scnet
 config_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.9/config_musdb18_scnet_large_starrytong.yaml
 checkpoint_url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.9/SCNet-large_starrytong_fixed.ckpt

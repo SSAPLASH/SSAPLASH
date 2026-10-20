@@ -1,4 +1,4 @@
-"""Open-Unmix(openunmix 패키지) 어댑터. umxhq 하한선용.
+"""Open-Unmix(openunmix 패키지) 어댑터. umxhq 기준점용.
 
 yaml 필드: umx_name (umxhq / umxl / umx). 가중치는 torch hub 캐시에 내려받음.
 prepare()에서 한 번 불러 캐시를 채우고 버리므로 loadSec에는 다운로드 시간이 안 들어감.
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ssaplash_ai.bench.separators.base import (
+from ssaplash_ai.bench.separators.separator_base import (
     BaseSeparator,
     SeparatorConfig,
     count_torch_params,

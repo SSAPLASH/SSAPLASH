@@ -1,6 +1,6 @@
-"""테스트용 가짜 어댑터. 모델 없이 러너·CSV·보고서 파이프라인을 돌림 (설계 6장 인수 조건 8).
+"""테스트용 mock 어댑터. 모델 없이 러너·CSV·보고서 파이프라인을 돌림 (설계 6장 인수 조건 8).
 
-fake_mode
+mock_mode
 - mixture: 원곡을 그대로 드럼으로 (SDR 낮음, 온셋은 반주 때문에 지저분)
 - silence: 무음 (SDR -inf, 온셋 F1 0)
 - half: 원곡 × 0.5
@@ -12,18 +12,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from ssaplash_ai.bench.separators.base import BaseSeparator
+from ssaplash_ai.bench.separators.separator_base import BaseSeparator
 
 MODES = ("mixture", "silence", "half", "drums_from_other")
 
 
-class FakeSeparator(BaseSeparator):
-    adapter = "fake"
+class MockSeparator(BaseSeparator):
+    adapter = "mock"
 
     def __init__(self, config, device: str = "cpu") -> None:
         super().__init__(config, device)
-        if config.fake_mode not in MODES:
-            raise ValueError(f"fake_mode는 {MODES} 중 하나: {config.fake_mode}")
+        if config.mock_mode not in MODES:
+            raise ValueError(f"mock_mode는 {MODES} 중 하나: {config.mock_mode}")
         self.calls = 0
 
     def _load(self) -> None:
@@ -32,8 +32,8 @@ class FakeSeparator(BaseSeparator):
     def _separate(self, mixture: np.ndarray, sample_rate: int) -> dict[str, np.ndarray]:
         self.calls += 1
         if self.config.fail_on_call is not None and self.calls == self.config.fail_on_call:
-            raise RuntimeError(f"가짜 실패 (호출 {self.calls})")
-        mode = self.config.fake_mode
+            raise RuntimeError(f"모의 실패 (호출 {self.calls})")
+        mode = self.config.mock_mode
         if mode == "silence":
             return {"drums": np.zeros_like(mixture)}
         if mode == "half":
@@ -44,7 +44,7 @@ class FakeSeparator(BaseSeparator):
         return {"drums": mixture.copy()}
 
     def _checkpoint_id(self) -> str:
-        return f"fake:{self.config.fake_mode}"
+        return f"mock:{self.config.mock_mode}"
 
     def _n_params(self) -> int | None:
         return 0

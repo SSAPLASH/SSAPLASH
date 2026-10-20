@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ssaplash_ai.bench.separators.base import (
+from ssaplash_ai.bench.separators.separator_base import (
     BaseSeparator,
     SeparatorConfig,
     count_torch_params,

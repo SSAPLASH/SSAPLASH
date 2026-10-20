@@ -1,14 +1,18 @@
 """분리 모델 어댑터. yaml의 adapter 값으로 구현체 선택. runner는 create_separator만 호출.
 
 모델 패키지(torch·msst·demucs·openunmix)는 어댑터 안에서 늦게 import하므로
-fake 어댑터와 단위 테스트는 `uv sync --extra models` 없이 동작.
+mock 어댑터와 단위 테스트는 `uv sync --extra models` 없이 동작.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from ssaplash_ai.bench.separators.base import (
+from ssaplash_ai.bench.separators.demucs_separator import DemucsSeparator
+from ssaplash_ai.bench.separators.mock_separator import MockSeparator
+from ssaplash_ai.bench.separators.msst_separator import MsstSeparator
+from ssaplash_ai.bench.separators.openunmix_separator import OpenUnmixSeparator
+from ssaplash_ai.bench.separators.separator_base import (
     MODELS_DIR,
     BaseSeparator,
     SeparationResult,
@@ -16,20 +20,14 @@ from ssaplash_ai.bench.separators.base import (
     SeparatorInfo,
     fit_length,
 )
-from ssaplash_ai.bench.separators.demucs import DemucsSeparator
-from ssaplash_ai.bench.separators.fake import FakeSeparator
-from ssaplash_ai.bench.separators.msst import MsstSeparator
-from ssaplash_ai.bench.separators.openunmix import OpenUnmixSeparator
-from ssaplash_ai.bench.separators.spleeter import SpleeterSeparator
 
 ADAPTERS: dict[str, type[BaseSeparator]] = {
     cls.adapter: cls
     for cls in (
-        FakeSeparator,
+        MockSeparator,
         MsstSeparator,
         DemucsSeparator,
         OpenUnmixSeparator,
-        SpleeterSeparator,
     )
 }
 
@@ -50,13 +48,12 @@ __all__ = [
     "MODELS_DIR",
     "BaseSeparator",
     "DemucsSeparator",
-    "FakeSeparator",
+    "MockSeparator",
     "MsstSeparator",
     "OpenUnmixSeparator",
     "SeparationResult",
     "SeparatorConfig",
     "SeparatorInfo",
-    "SpleeterSeparator",
     "create_separator",
     "fit_length",
 ]

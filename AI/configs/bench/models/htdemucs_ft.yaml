@@ -1,8 +1,7 @@
-# HTDemucs fine-tuned (모델 4개 묶음). 사실상 표준 기준선. 1순위.
+# HTDemucs fine-tuned (모델 4개 묶음). 사실상 표준 기준선.
 # 가중치는 demucs 패키지가 torch hub 캐시에 내려받음.
 name: htdemucs_ft
 adapter: demucs
-tier: "1"
 demucs_name: htdemucs_ft
 license_code: MIT (demucs)
 license_weights: 연구 목적 전용 (관리자 adefossez가 저장소 이슈 327번에서 "가중치는 MIT 대상이 아님"이라고 명시)

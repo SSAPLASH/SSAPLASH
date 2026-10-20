@@ -1,9 +1,8 @@
-# BS Roformer SW 6스템 (jarredou). 공개 단일 모델 중 Multisong 드럼 SDR 1위 (14.11). 1순위.
+# BS Roformer SW 6스템 (jarredou). 공개 단일 모델 중 Multisong 드럼 SDR 1위 (14.11).
 # 원 저장소(jarredou, Hugging Face)는 삭제돼 미러에서 받음. 체크포인트 약 699MB.
 # 8GB GPU에서는 batch_size를 줄여야 할 수 있음.
 name: bs_roformer_sw
 adapter: msst
-tier: "1"
 model_type: bs_roformer
 config_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.yaml
 checkpoint_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.ckpt

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
-from helpers import make_musdb_song
+sys.path.insert(0, str(Path(__file__).parent))  # 하위 폴더 테스트도 helpers를 import
+
+from helpers import make_musdb_song  # noqa: E402
 
 
 @pytest.fixture

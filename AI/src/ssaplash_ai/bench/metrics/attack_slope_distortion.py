@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ssaplash_ai.bench.metrics.onset import to_mono
+from ssaplash_ai.bench.metrics.onset_preservation import to_mono
 
 ATTACK_MS = 10.0
 BLOCK_MS = 1.0

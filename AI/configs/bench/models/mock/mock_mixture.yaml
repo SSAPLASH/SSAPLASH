@@ -1,0 +1,6 @@
+# 테스트·CI용 mock 모델. 원곡을 그대로 드럼으로 돌려줌. 모델 다운로드 없음.
+name: mock_mixture
+adapter: mock
+mock_mode: mixture
+license_code: 없음 (테스트용)
+license_weights: 없음 (테스트용)

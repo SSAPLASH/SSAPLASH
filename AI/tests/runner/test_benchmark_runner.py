@@ -1,4 +1,4 @@
-"""러너·CLI run·MLflow 기록 테스트 (설계 6장 인수 조건 2·3·6·7·8). 가짜 어댑터 + 가짜 wav만."""
+"""러너·CLI run·MLflow 기록 테스트 (설계 6장 인수 조건 2·3·6·7·8). mock 어댑터 + 가짜 wav만."""
 
 from __future__ import annotations
 
@@ -10,14 +10,19 @@ import pytest
 
 from helpers import make_musdb_song
 from ssaplash_ai.bench.cli import main
-from ssaplash_ai.bench.runner import CSV_COLUMNS, METRIC_COLUMNS, RunOptions, run_benchmark
+from ssaplash_ai.bench.runner.benchmark_runner import (
+    CSV_COLUMNS,
+    METRIC_COLUMNS,
+    RunOptions,
+    run_benchmark,
+)
 
-MODELS_DIR = Path(__file__).resolve().parents[1] / "configs" / "bench" / "models"
+MODELS_DIR = Path(__file__).resolve().parents[2] / "configs" / "bench" / "models" / "mock"
 
 
 def _write_dataset_yaml(path: Path, root: Path, clip: str = "null") -> Path:
     path.write_text(
-        f"name: fake_musdb\nkind: musdb\nroot: {root.as_posix()}\nsubset: test\n"
+        f"name: mock_musdb\nkind: musdb\nroot: {root.as_posix()}\nsubset: test\n"
         f"expected_songs: 2\nclip: {clip}\n",
         encoding="utf-8",
     )
@@ -25,7 +30,7 @@ def _write_dataset_yaml(path: Path, root: Path, clip: str = "null") -> Path:
 
 
 def _write_model_yaml(path: Path, name: str, **extra) -> Path:
-    lines = [f"name: {name}", "adapter: fake", "license_code: x", "license_weights: y"]
+    lines = [f"name: {name}", "adapter: mock", "license_code: x", "license_weights: y"]
     lines += [f"{k}: {v}" for k, v in extra.items()]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -45,14 +50,14 @@ def _read_csv(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def test_가짜_어댑터_3개로_csv_필드가_모두_찬다(small_musdb: Path, tmp_path: Path):
+def test_mock_어댑터_3개로_csv_필드가_모두_찬다(small_musdb: Path, tmp_path: Path):
     ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
-    models = [MODELS_DIR / f"fake_{m}.yaml" for m in ("mixture", "half", "silence")]
+    models = [MODELS_DIR / f"mock_{m}.yaml" for m in ("mixture", "half", "silence")]
     result = run_benchmark(
         RunOptions(model_configs=models, dataset_config=ds, out_dir=tmp_path / "out", device="cpu"),
         log=lambda _: None,
     )
-    assert result.n_songs == 2 and result.models == ["fake_mixture", "fake_half", "fake_silence"]
+    assert result.n_songs == 2 and result.models == ["mock_mixture", "mock_half", "mock_silence"]
     rows = _read_csv(result.csv_path)
     assert len(rows) == 6 and result.n_errors == 0
     assert list(rows[0].keys()) == list(CSV_COLUMNS)
@@ -65,11 +70,11 @@ def test_가짜_어댑터_3개로_csv_필드가_모두_찬다(small_musdb: Path,
                 assert row[col] in ("nan", "") or math.isnan(float(row[col]))  # CPU 실행
                 continue
             assert row[col] not in ("", "nan"), col
-    half = next(r for r in rows if r["model"] == "fake_half")
+    half = next(r for r in rows if r["model"] == "mock_half")
     # 원곡 × 0.5 는 배율 불변 지표에서 드럼과의 차이가 반주뿐이라 유한한 값
     assert math.isfinite(float(half["sdrDrums"]))
     assert float(half["rtf"]) > 0 and float(half["loadSec"]) >= 0
-    silence = next(r for r in rows if r["model"] == "fake_silence")
+    silence = next(r for r in rows if r["model"] == "mock_silence")
     assert float(silence["sdrDrums"]) == -math.inf
     assert float(silence["onsetF1"]) == 0.0
 
@@ -86,17 +91,17 @@ def test_곡_하나가_실패해도_error_행이_남고_계속_돈다(small_musd
     )
     rows = _read_csv(result.csv_path)
     assert len(rows) == 2 and result.n_errors == 1
-    assert rows[0]["error"].startswith("RuntimeError: 가짜 실패")
+    assert rows[0]["error"].startswith("RuntimeError: 모의 실패")
     assert rows[0]["sdrDrums"] == "nan"
     assert rows[1]["error"] == "" and rows[1]["sdrDrums"] != "nan"
 
 
 def test_모델_로드가_실패하면_모든_곡에_같은_error(small_musdb: Path, tmp_path: Path):
     ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
-    model = _write_model_yaml(tmp_path / "bad.yaml", "bad", fake_mode="nope")
-    # fake_mode 검증은 어댑터 생성 시점이라 create_separator에서 바로 실패해야 하는데,
+    model = _write_model_yaml(tmp_path / "bad.yaml", "bad", mock_mode="nope")
+    # mock_mode 검증은 어댑터 생성 시점이라 create_separator에서 바로 실패해야 하는데,
     # 러너는 생성 실패를 곡 단위 error로 바꾸지 않으므로 ValueError가 그대로 올라옴
-    with pytest.raises(ValueError, match="fake_mode"):
+    with pytest.raises(ValueError, match="mock_mode"):
         run_benchmark(
             RunOptions(
                 model_configs=[model], dataset_config=ds, out_dir=tmp_path / "out", device="cpu"
@@ -106,16 +111,16 @@ def test_모델_로드가_실패하면_모든_곡에_같은_error(small_musdb: P
 
 
 def test_로드_예외는_곡마다_error_행으로_남는다(small_musdb: Path, tmp_path: Path, monkeypatch):
-    from ssaplash_ai.bench.separators import fake
+    from ssaplash_ai.bench.separators import mock_separator
 
     def boom(self):
         raise RuntimeError("가중치 없음")
 
-    monkeypatch.setattr(fake.FakeSeparator, "_load", boom)
+    monkeypatch.setattr(mock_separator.MockSeparator, "_load", boom)
     ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
     result = run_benchmark(
         RunOptions(
-            model_configs=[MODELS_DIR / "fake_mixture.yaml"],
+            model_configs=[MODELS_DIR / "mock_mixture.yaml"],
             dataset_config=ds,
             out_dir=tmp_path / "out",
             device="cpu",
@@ -148,7 +153,7 @@ def test_save_wav과_clip_옵션(small_musdb: Path, tmp_path: Path):
     ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
     result = run_benchmark(
         RunOptions(
-            model_configs=[MODELS_DIR / "fake_half.yaml"],
+            model_configs=[MODELS_DIR / "mock_half.yaml"],
             dataset_config=ds,
             out_dir=tmp_path / "out",
             device="cpu",
@@ -159,7 +164,7 @@ def test_save_wav과_clip_옵션(small_musdb: Path, tmp_path: Path):
     )
     rows = _read_csv(result.csv_path)
     assert all(abs(float(r["durationSec"]) - 1.0) < 1e-3 for r in rows)
-    saved = result.run_dir / "separated" / "fake_half"
+    saved = result.run_dir / "separated" / "mock_half"
     assert sorted(p.name for p in saved.iterdir()) == ["Song A"]
     assert (saved / "Song A" / "drums.wav").is_file() and (
         saved / "Song A" / "accomp.wav"
@@ -175,9 +180,9 @@ def test_cli_run은_csv_보고서_mlflow_run을_만든다(small_musdb: Path, tmp
         [
             "run",
             "--models",
-            str(MODELS_DIR / "fake_mixture.yaml"),
-            str(MODELS_DIR / "fake_half.yaml"),
-            str(MODELS_DIR / "fake_silence.yaml"),
+            str(MODELS_DIR / "mock_mixture.yaml"),
+            str(MODELS_DIR / "mock_half.yaml"),
+            str(MODELS_DIR / "mock_silence.yaml"),
             "--dataset",
             str(ds),
             "--out",
@@ -205,7 +210,7 @@ def test_cli_run은_csv_보고서_mlflow_run을_만든다(small_musdb: Path, tmp
     assert len(runs) == 1
     r = runs.iloc[0]
     assert r["tags.runId"] == "testrun" and r["params.nModels"] == "3"
-    assert "metrics.fake_half/sdrDrums" in runs.columns
+    assert "metrics.mock_half/sdrDrums" in runs.columns
     artifacts = {a.path for a in mlflow.artifacts.list_artifacts(run_id=r["run_id"])}
     assert {"results.csv", "summary.md", "metrics_by_model.png", "rtf_vs_sdr.png"} <= artifacts
 
@@ -216,7 +221,7 @@ def test_cli_run_mlflow_none이면_기록을_건너뛴다(small_musdb: Path, tmp
         [
             "run",
             "--models",
-            str(MODELS_DIR / "fake_half.yaml"),
+            str(MODELS_DIR / "mock_half.yaml"),
             "--dataset",
             str(ds),
             "--out",

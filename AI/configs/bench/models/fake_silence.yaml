@@ -1,7 +1,0 @@
-# 테스트·CI용 가짜 모델. 무음을 드럼으로 돌려줌 (최악값 확인용).
-name: fake_silence
-adapter: fake
-tier: baseline
-fake_mode: silence
-license_code: 없음 (테스트용)
-license_weights: 없음 (테스트용)

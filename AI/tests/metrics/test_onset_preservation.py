@@ -4,26 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from helpers import SR
+from helpers import HITS, SR, make_hits
 from ssaplash_ai.bench.metrics import detect_onsets, onset_metrics, onset_scores
-
-HITS = [0.2, 0.5, 0.9, 1.3, 1.8]
-
-
-def make_hits(seconds: float = 2.2, times: list[float] | None = None) -> np.ndarray:
-    """타격마다 10ms 안에 솟았다가 80ms 동안 꺼지는 잡음 버스트. (2, 샘플)."""
-    rng = np.random.default_rng(1)
-    n = int(seconds * SR)
-    mono = np.zeros(n, dtype=np.float32)
-    burst_len = int(0.08 * SR)
-    t = np.arange(burst_len) / SR
-    env = np.minimum(t / 0.004, 1.0) * np.exp(-t / 0.02)
-    for hit in times or HITS:
-        start = int(hit * SR)
-        burst = env * rng.standard_normal(burst_len)
-        mono[start : start + burst_len] += burst.astype(np.float32)
-    mono *= 0.5 / np.max(np.abs(mono))
-    return np.stack([mono, mono])
 
 
 def test_검출기가_타격_위치를_찾는다():

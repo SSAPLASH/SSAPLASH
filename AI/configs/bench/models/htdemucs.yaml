@@ -1,7 +1,6 @@
-# HTDemucs 기본 가중치. fine-tune 효과 비교용 하한선.
+# HTDemucs 기본 가중치. fine-tune 효과 비교용 기준점.
 name: htdemucs
 adapter: demucs
-tier: baseline
 demucs_name: htdemucs
 license_code: MIT (demucs)
 license_weights: 연구 목적 전용 (관리자 adefossez가 저장소 이슈 327번에서 "가중치는 MIT 대상이 아님"이라고 명시)

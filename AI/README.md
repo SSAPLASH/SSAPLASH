@@ -27,18 +27,20 @@ AI/
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
 │   ├─ bench/            벤치마크 하네스
-│   │   ├─ datasets/     데이터셋 로더 (base, musdb, synth) + 합성곡 제작 로직 (synth_build)
-│   │   ├─ separators/   분리 모델 어댑터 (base, fake, msst, demucs, openunmix, spleeter)
-│   │   ├─ metrics/      지표 (bss, onset, transient, resource)
-│   │   ├─ runner.py     모델 × 곡 실행, 예외 격리, 결과 CSV
-│   │   ├─ report.py     CSV → 요약 표(md)·곡별 CSV·그래프 PNG
-│   │   ├─ tracking.py   MLflow 기록
-│   │   └─ cli.py        명령줄 진입점 (check-data, run, report)
+│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report)
+│   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build)
+│   │   ├─ separators/   분리 모델 실행. separator_base(공통 인터페이스·yaml·다운로드),
+│   │   │                mock_separator(모델 없이 원곡·무음을 돌려주는 테스트용), msst_separator(SCNet·BS Roformer),
+│   │   │                demucs_separator(HTDemucs), openunmix_separator(umxhq)
+│   │   ├─ metrics/      지표 계산. bss_eval_metrics(SDR·SIR·SAR·SI-SDR), onset_preservation(타격 보존율),
+│   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM)
+│   │   ├─ runner/       벤치마크 실행. benchmark_runner(모델 × 곡, 결과 CSV), mlflow_tracking(MLflow 기록)
+│   │   └─ report/       결과 보고서. summary_table(집계·요약 표), charts(그래프 PNG), build_report(파일 생성)
 │   └─ chart/            채보 형식·패드 매핑 (예정)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
-├─ configs/bench/models/    모델 설정 yaml (어댑터·가중치 URL·라이선스). fake_*는 테스트용
+├─ configs/bench/models/    모델 설정 yaml (어댑터·가중치 URL·라이선스). mock/ 아래는 테스트용
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py)
-├─ tests/                pytest. 실제 데이터·모델 없이 가짜 wav와 가짜 어댑터로 돈다
+├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 가짜 wav와 mock 어댑터로 돈다
 ├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
@@ -61,7 +63,7 @@ uv sync                  # .venv 생성 + 의존성 설치 (Python 3.11은 uv가
 uv sync --extra models   # 실제 분리 모델까지 돌릴 때. torch(CUDA)·msst·demucs·openunmix 약 3GB
 ```
 
-`models` extra는 Windows에서 CUDA 12.8 휠을, Linux(코랩)에서는 PyPI 기본 휠을 받는다 (`pyproject.toml`의 `tool.uv.index`). Spleeter는 tensorflow 2.12·numpy 1.x에 고정돼 이 환경에 같이 설치할 수 없다. 돌리려면 별도 Python 3.11 가상환경에 `pip install spleeter`와 이 패키지를 넣는다.
+`models` extra는 Windows에서 CUDA 12.8 휠을, Linux(코랩)에서는 PyPI 기본 휠을 받는다 (`pyproject.toml`의 `tool.uv.index`). Spleeter는 tensorflow 2.12·numpy 1.x에 고정돼 이 환경에 설치할 수 없어 후보에서 뺐다.
 
 ## 실행·검증 명령
 
@@ -115,14 +117,14 @@ uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results
 | 파일 | 내용 |
 | --- | --- |
 | `results.csv` | 곡 × 모델당 1행. 설계 문서 3-3절 열 + 보조 열. 실패한 곡은 `error` 열에 예외 요약 |
-| `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스), 보조값 표, 데이터셋별 표, 실패 목록 |
+| `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스. 드럼 SDR 내림차순), 보조값 표, 데이터셋별 표, 실패 목록 |
 | `per_song.csv` | 보고서에 쓴 곡별 값 (CSV 여러 개를 합친 경우 합친 것) |
 | `metrics_by_model.png`, `rtf_vs_sdr.png` | 모델별 지표 막대, RTF 대 드럼 SDR 산점도 |
 | `separated/<모델>/<곡>/{drums,accomp}.wav` | `--save-wav`로 저장한 분리 결과 (청취용) |
 
 MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험 이름 `separation-bench`, run 이름이 runId이고, 모델별 중앙값이 `<모델>/<열>` 지표로, CSV·표·그래프가 artifact로 붙는다.
 
-모델 yaml은 어댑터(`msst`, `demucs`, `openunmix`, `spleeter`, `fake`)와 가중치 위치, 코드·가중치 라이선스 문자열을 적는다. 라이선스 두 필드는 필수다. MSST 가중치는 첫 실행 때 `data/models/<모델>/`에 내려받고, demucs·openunmix 가중치는 torch hub 캐시에 받는다. 다운로드 시간은 로드 시간(`loadSec`)에 넣지 않는다.
+모델 yaml은 어댑터(`msst`, `demucs`, `openunmix`, `mock`)와 가중치 위치, 코드·가중치 라이선스 문자열을 적는다. 라이선스 두 필드는 필수다. MSST 가중치는 첫 실행 때 `data/models/<모델>/`에 내려받고, demucs·openunmix 가중치는 torch hub 캐시에 받는다. 다운로드 시간은 로드 시간(`loadSec`)에 넣지 않는다.
 
 ### 코랩에서 돌리기
 

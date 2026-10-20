@@ -46,8 +46,7 @@ def check_data(config_paths: Sequence[Path]) -> int:
 def run(args: argparse.Namespace) -> int:
     """벤치마크 실행 → 보고서 → MLflow 기록 (설계 4-1절)."""
     from ssaplash_ai.bench import report as report_mod
-    from ssaplash_ai.bench.runner import RunOptions, run_benchmark
-    from ssaplash_ai.bench.tracking import log_run
+    from ssaplash_ai.bench.runner import RunOptions, log_run, run_benchmark
 
     opts = RunOptions(
         model_configs=[Path(p) for p in args.models],
@@ -143,7 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return check_data(args.configs)
     if args.command == "run":
         if args.mlflow_uri is None:
-            from ssaplash_ai.bench.tracking import default_tracking_uri
+            from ssaplash_ai.bench.runner import default_tracking_uri
 
             args.mlflow_uri = default_tracking_uri()
         return run(args)

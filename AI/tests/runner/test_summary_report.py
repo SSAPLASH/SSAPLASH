@@ -14,12 +14,10 @@ from ssaplash_ai.bench.report import (
     summary_metrics_by_model,
     write_report,
 )
-from ssaplash_ai.bench.runner import CSV_COLUMNS
+from ssaplash_ai.bench.runner.benchmark_runner import CSV_COLUMNS
 
 
-def _row(
-    model: str, song: str, dataset: str = "musdb", tier: str = "1", error: str = "", **vals
-) -> dict:
+def _row(model: str, song: str, dataset: str = "musdb", error: str = "", **vals) -> dict:
     row = {c: "" for c in CSV_COLUMNS}
     row.update(
         runId="r1",
@@ -29,8 +27,7 @@ def _row(
         model=model,
         checkpoint=f"{model}.ckpt",
         configHash="abc",
-        tier=tier,
-        adapter="fake",
+        adapter="mock",
         nParams=41200000,
         licenseCode="MIT",
         licenseWeights="연구 전용",
@@ -80,19 +77,19 @@ def _write_csv(path: Path, rows: list[dict]) -> Path:
 
 def _sample_csv(tmp_path: Path) -> Path:
     rows = [
-        _row("b_model", "s1", tier="2", sdrDrums=8.0, rtf=0.05),
-        _row("b_model", "s2", tier="2", sdrDrums=9.0, rtf=0.07),
-        _row("b_model", "s3", tier="2", error="RuntimeError: x"),
+        _row("b_model", "s1", sdrDrums=8.0, rtf=0.05),
+        _row("b_model", "s2", sdrDrums=9.0, rtf=0.07),
+        _row("b_model", "s3", error="RuntimeError: x"),
         _row("a_model", "s1", sdrDrums=11.0, rtf=0.4),
         _row("a_model", "s2", sdrDrums=12.0, rtf=0.5),
         _row("a_model", "s3", sdrDrums=13.0, rtf=0.6),
-        _row("c_model", "s1", tier="baseline", sdrDrums=-math.inf, rtf=0.01, dataset="synth"),
-        _row("c_model", "s2", tier="baseline", sdrDrums=4.0, rtf=0.01, dataset="synth"),
+        _row("c_model", "s1", sdrDrums=-math.inf, rtf=0.01, dataset="synth"),
+        _row("c_model", "s2", sdrDrums=4.0, rtf=0.01, dataset="synth"),
     ]
     return _write_csv(tmp_path / "results.csv", rows)
 
 
-def test_summarize는_tier순으로_정렬하고_실패를_뺀_중앙값을_낸다(tmp_path: Path):
+def test_summarize는_드럼_sdr_내림차순으로_정렬하고_실패를_뺀_중앙값을_낸다(tmp_path: Path):
     df = load_results([_sample_csv(tmp_path)])
     s = summarize(df)
     assert list(s["model"]) == ["a_model", "b_model", "c_model"]
@@ -110,9 +107,8 @@ def test_summary_markdown에_비교표_보조값_데이터셋별_실패가_있�
     assert (
         "## 비교표" in md and "## 보조값" in md and "## 데이터셋별" in md and "## 실패한 곡" in md
     )
-    assert (
-        "| a_model | 1 | 3/0 | 12.00 | 0.900 | 0.50 | 16.00 | 0.500 | 3000.00 | 연구 전용 |" in md
-    )
+    assert "| 모델 | 곡/실패 | 드럼 SDR (dB) |" in md and "등급" not in md
+    assert "| a_model | 3/0 | 12.00 | 0.900 | 0.50 | 16.00 | 0.500 | 3000.00 | 연구 전용 |" in md
     assert "−∞" in md
     assert "41.2M" in md
     assert "RuntimeError: x" in md
@@ -127,7 +123,7 @@ def test_write_report는_파일_4개를_만든다(tmp_path: Path):
 
 def test_csv_여러_개를_합친다(tmp_path: Path):
     a = _write_csv(tmp_path / "a.csv", [_row("m1", "s1")])
-    b = _write_csv(tmp_path / "b.csv", [_row("m2", "s1", tier="2")])
+    b = _write_csv(tmp_path / "b.csv", [_row("m2", "s1")])
     df = load_results([a, b])
     assert len(df) == 2 and set(df["model"]) == {"m1", "m2"}
 

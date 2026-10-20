@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from helpers import SR
+from helpers import HITS, SR, make_hits
 from ssaplash_ai.bench.metrics import attack_slope_distortion
-from ssaplash_ai.bench.metrics.transient import block_peak_envelope
-from test_metrics_onset import HITS, make_hits
+from ssaplash_ai.bench.metrics.attack_slope_distortion import block_peak_envelope
 
 
 def test_같은_신호면_왜곡이_0이다():

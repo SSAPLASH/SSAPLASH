@@ -1,7 +1,6 @@
-# Open-Unmix umxhq. 가벼운 품질 하한선. 가중치는 openunmix가 torch hub 캐시에 내려받음.
+# Open-Unmix umxhq. 가벼운 품질 기준점. 가중치는 openunmix가 torch hub 캐시에 내려받음.
 name: umxhq
 adapter: openunmix
-tier: baseline
 umx_name: umxhq
 license_code: MIT
 license_weights: 미명시 (umxl은 CC BY-NC-SA 4.0). MUSDB18-HQ만으로 학습

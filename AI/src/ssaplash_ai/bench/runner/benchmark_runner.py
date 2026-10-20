@@ -38,7 +38,7 @@ from ssaplash_ai.bench.metrics import (
     measure_resources,
     onset_metrics,
 )
-from ssaplash_ai.bench.metrics.resource import cuda_available
+from ssaplash_ai.bench.metrics.resource_usage import cuda_available
 from ssaplash_ai.bench.separators import BaseSeparator, SeparatorConfig, create_separator
 
 CSV_COLUMNS: tuple[str, ...] = (
@@ -51,7 +51,6 @@ CSV_COLUMNS: tuple[str, ...] = (
     "model",
     "checkpoint",
     "configHash",
-    "tier",
     "adapter",
     "nParams",
     "licenseCode",
@@ -260,7 +259,6 @@ def _model_rows_base(
         "model": info.name,
         "checkpoint": info.checkpoint,
         "configHash": sep.config.config_hash,
-        "tier": info.tier,
         "adapter": info.adapter,
         "nParams": info.n_params if info.n_params is not None else "",
         "licenseCode": info.license_code,
