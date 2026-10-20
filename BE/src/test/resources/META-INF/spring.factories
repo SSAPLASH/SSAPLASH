@@ -1,0 +1,3 @@
+# 모든 테스트 컨텍스트에 임베디드 PostgreSQL을 DataSource로 넣는다.
+org.springframework.context.ApplicationContextInitializer=\
+com.ssafy.airdrum.support.EmbeddedPostgresInitializer
