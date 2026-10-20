@@ -6,6 +6,7 @@ import {
   createEmptyProfile,
   isProfileComplete,
   poseDistance,
+  profileWarnings,
   resolvePad,
   summarizePoses,
   type CalibrationProfile,
@@ -129,5 +130,41 @@ describe('isProfileComplete', () => {
     expect(isProfileComplete(p, ['SNARE', 'HIHAT'])).toBe(true);
     expect(isProfileComplete(p, ['SNARE', 'KICK'])).toBe(false);
     expect(isProfileComplete(null, ['SNARE'])).toBe(false);
+  });
+});
+
+describe('profileWarnings', () => {
+  const pads: PadId[] = ['SNARE', 'HIHAT', 'RIDE'];
+
+  it('문제 없으면 빈 목록', () => {
+    expect(profileWarnings(profile3().anchors, pads)).toEqual([]);
+  });
+
+  it('spread > 4°면 손 흔들림 경고', () => {
+    const a = profile3().anchors;
+    a.SNARE = { ...a.SNARE!, spread: 5.5 };
+    const w = profileWarnings(a, pads);
+    expect(w).toEqual([{ kind: 'spread', pads: ['SNARE'], value: 5.5 }]);
+  });
+
+  it('두 앵커 거리 < 10°면 근접 경고 (거리 포함)', () => {
+    const a = computeBoundaries(
+      { SNARE: anchor('SNARE', 0, 0), HIHAT: anchor('HIHAT', 0, 6), RIDE: anchor('RIDE', 20, 30) },
+      22,
+    );
+    const w = profileWarnings(a, pads);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('close');
+    expect(w[0].pads).toEqual(['SNARE', 'HIHAT']);
+    expect(w[0].value).toBeCloseTo(6);
+  });
+
+  it('건너뛴 패드는 missing 하나로 묶인다. 순서는 spread → close → missing', () => {
+    const a = profile3().anchors;
+    delete a.RIDE;
+    a.HIHAT = { ...a.HIHAT!, spread: 9 };
+    const w = profileWarnings(a, [...pads, 'CRASH']);
+    expect(w.map((x) => x.kind)).toEqual(['spread', 'missing']);
+    expect(w[1].pads).toEqual(['RIDE', 'CRASH']);
   });
 });
