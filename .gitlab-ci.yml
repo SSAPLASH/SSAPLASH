@@ -46,6 +46,7 @@ build:
     - . ./BE/ci/setup-java.ps1
     - cd BE
   cache:
+    when: always
     key:
       files:
         - BE/gradle/wrapper/gradle-wrapper.properties
