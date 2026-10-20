@@ -235,3 +235,105 @@ def test_cli_run_mlflow_none이면_기록을_건너뛴다(small_musdb: Path, tmp
     assert code == 0
     assert "MLflow 기록 생략" in capsys.readouterr().out
     assert not (tmp_path / "mlruns").exists()
+
+
+def _run_mixture(ds: Path, out: Path, run_id: str, log=None, **kw):
+    return run_benchmark(
+        RunOptions(
+            model_configs=[MODELS_DIR / "mock_mixture.yaml"],
+            dataset_config=ds,
+            out_dir=out,
+            device="cpu",
+            run_id=run_id,
+            **kw,
+        ),
+        log=log or (lambda _: None),
+    )
+
+
+def _write_csv(path: Path, rows: list[dict]) -> None:
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
+
+
+def test_같은_run_id로_다시_돌리면_성공_곡은_건너뛰고_실패_곡만_다시_돈다(
+    small_musdb: Path, tmp_path: Path
+):
+    ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
+    out = tmp_path / "out"
+    first = _run_mixture(ds, out, "resume")
+    rows = _read_csv(first.csv_path)
+    assert len(rows) == 2 and all(r["error"] == "" for r in rows)
+    # Song A를 실패 행으로 바꿔 두고(지표 nan), Song B는 그대로
+    rows[0]["error"] = "RuntimeError: 끊김"
+    rows[0]["sdrDrums"] = "nan"
+    _write_csv(first.csv_path, rows)
+
+    logs: list[str] = []
+    second = _run_mixture(ds, out, "resume", log=logs.append)
+    after = _read_csv(second.csv_path)
+    assert second.n_skipped == 1 and second.n_retried == 1
+    assert len(after) == 2 and len(second.rows) == 2
+    assert {(r["model"], r["songId"]) for r in after} == {
+        ("mock_mixture", "Song A"),
+        ("mock_mixture", "Song B"),
+    }
+    assert all(r["error"] == "" for r in after)
+    kept = next(r for r in after if r["songId"] == "Song B")
+    assert kept == rows[1]  # 건너뛴 행은 바뀌지 않음
+    redone = next(r for r in after if r["songId"] == "Song A")
+    assert redone["sdrDrums"] != "nan"
+    assert any("건너뜀 1곡, 남은 1곡" in m for m in logs)
+
+
+def test_모든_곡이_끝나_있으면_모델을_로드하지_않는다(
+    small_musdb: Path, tmp_path: Path, monkeypatch
+):
+    ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
+    out = tmp_path / "out"
+    first = _run_mixture(ds, out, "done")
+    before = _read_csv(first.csv_path)
+
+    from ssaplash_ai.bench.separators import mock_separator
+
+    def boom(self):
+        raise RuntimeError("로드하면 안 됨")
+
+    monkeypatch.setattr(mock_separator.MockSeparator, "_load", boom)
+    second = _run_mixture(ds, out, "done")
+    assert second.n_skipped == 2 and second.n_errors == 0
+    assert _read_csv(second.csv_path) == before
+
+
+def test_run_id_없이_돌리면_이어하기를_하지_않는다(small_musdb: Path, tmp_path: Path):
+    ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
+    result = run_benchmark(
+        RunOptions(
+            model_configs=[MODELS_DIR / "mock_mixture.yaml"],
+            dataset_config=ds,
+            out_dir=tmp_path / "out",
+            device="cpu",
+        ),
+        log=lambda _: None,
+    )
+    assert result.n_skipped == 0 and result.n_retried == 0 and len(result.rows) == 2
+
+
+def test_열_구성이_다른_csv에는_이어_붙이지_않는다(small_musdb: Path, tmp_path: Path):
+    ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
+    out = tmp_path / "out"
+    (out / "old").mkdir(parents=True)
+    (out / "old" / "results.csv").write_text("runId,model,songId\nold,m,s\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="열 구성"):
+        _run_mixture(ds, out, "old")
+
+
+def test_gpuName_열은_cpu_실행에서_빈칸(small_musdb: Path, tmp_path: Path):
+    ds = _write_dataset_yaml(tmp_path / "ds.yaml", small_musdb)
+    result = _run_mixture(ds, tmp_path / "out", "gpu")
+    assert result.gpu_name == ""
+    rows = _read_csv(result.csv_path)
+    assert list(rows[0].keys()).index("gpuName") == list(rows[0].keys()).index("device") + 1
+    assert all(r["gpuName"] == "" for r in rows)

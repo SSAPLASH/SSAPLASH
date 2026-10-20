@@ -6,6 +6,9 @@
 로드 직후 첫 곡을 한 번 분리하고 버림(워밍업). msst가 cudnn.benchmark를 켜서 입력 모양마다 커널
 자동 조정이 돌기 때문에 무음 2초·12초 워밍업으로는 첫 곡 RTF가 나머지의 5~8배였음. 첫 곡 자체로
 워밍업하면 그 곡의 모양이 미리 조정됨. 모델당 분리 1회가 추가됨.
+이어하기(설계 #7-1): --run-id를 지정했고 그 폴더에 results.csv가 있으면 error가 빈 (dataset, model, songId)
+행은 건너뛰고 유지, error가 있던 행은 지우고 다시 돌림. 한 모델의 곡이 전부 끝나 있으면 로드·워밍업도 생략.
+열 구성이 지금 CSV_COLUMNS와 다르면 다른 버전의 결과이므로 중단.
 CSV 열 이름은 설계 3-3절 camelCase 그대로. 지표 정의는 metrics 패키지가 담당.
 """
 
@@ -38,7 +41,7 @@ from ssaplash_ai.bench.metrics import (
     measure_resources,
     onset_metrics,
 )
-from ssaplash_ai.bench.metrics.resource_usage import cuda_available
+from ssaplash_ai.bench.metrics.resource_usage import cuda_available, gpu_name
 from ssaplash_ai.bench.separators import BaseSeparator, SeparatorConfig, create_separator
 
 CSV_COLUMNS: tuple[str, ...] = (
@@ -46,6 +49,7 @@ CSV_COLUMNS: tuple[str, ...] = (
     "runId",
     "timestamp",
     "device",
+    "gpuName",
     "host",
     # 모델 식별
     "model",
@@ -135,9 +139,12 @@ class RunResult:
     csv_path: Path
     rows: list[dict] = field(default_factory=list)
     device: str = "cuda"
+    gpu_name: str = ""
     host: str = "local"
     n_songs: int = 0
     models: list[str] = field(default_factory=list)
+    n_skipped: int = 0
+    n_retried: int = 0
 
     @property
     def n_errors(self) -> int:
@@ -177,11 +184,22 @@ def _format_error(exc: BaseException) -> str:
 
 
 class CsvWriter:
-    """행을 받을 때마다 바로 파일에 쓰는 CSV. 중간에 죽어도 그때까지의 행이 남음."""
+    """행을 받을 때마다 바로 파일에 쓰는 CSV. 중간에 죽어도 그때까지의 행이 남음.
 
-    def __init__(self, path: Path) -> None:
+    keep_rows를 주면 파일을 그 행들로 새로 쓰고(이어하기: 성공 행만 유지) 뒤에 이어 붙임.
+    """
+
+    def __init__(self, path: Path, keep_rows: Sequence[dict] | None = None) -> None:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
+        if keep_rows is not None:
+            self._file = open(path, "w", encoding="utf-8", newline="")
+            self._writer = csv.DictWriter(self._file, fieldnames=CSV_COLUMNS)
+            self._writer.writeheader()
+            for row in keep_rows:
+                self._writer.writerow({c: row.get(c, "") for c in CSV_COLUMNS})
+            self._file.flush()
+            return
         new_file = not path.exists() or path.stat().st_size == 0
         self._file = open(path, "a", encoding="utf-8", newline="")
         self._writer = csv.DictWriter(self._file, fieldnames=CSV_COLUMNS)
@@ -195,6 +213,37 @@ class CsvWriter:
 
     def close(self) -> None:
         self._file.close()
+
+
+RowKey = tuple[str, str, str]
+
+
+def row_key(row: dict) -> RowKey:
+    """이어하기 판단 단위 (dataset, model, songId)."""
+    return (str(row.get("dataset", "")), str(row.get("model", "")), str(row.get("songId", "")))
+
+
+def load_resume_rows(csv_path: Path) -> tuple[list[dict], int]:
+    """기존 results.csv에서 유지할 행(error 없음)과 다시 돌릴 행 수(error 있음)를 돌려줌.
+
+    열 구성이 CSV_COLUMNS와 다르면 다른 버전의 결과라 ValueError.
+    """
+    with open(csv_path, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None or list(reader.fieldnames) != list(CSV_COLUMNS):
+            raise ValueError(
+                f"이어하기 불가: {csv_path}의 열 구성이 현재 CSV_COLUMNS와 다름 "
+                f"(기존 {reader.fieldnames})"
+            )
+        rows = list(reader)
+    kept: dict[RowKey, dict] = {}
+    n_stale = 0
+    for row in rows:
+        if row.get("error"):
+            n_stale += 1
+            continue
+        kept[row_key(row)] = row  # 같은 키가 중복이면 마지막 행
+    return list(kept.values()), n_stale
 
 
 def true_onsets(song: SongItem) -> np.ndarray:
@@ -255,6 +304,7 @@ def _model_rows_base(
         "runId": result.run_id,
         "timestamp": timestamp,
         "device": sep.device,
+        "gpuName": result.gpu_name,
         "host": result.host,
         "model": info.name,
         "checkpoint": info.checkpoint,
@@ -291,10 +341,21 @@ def run_model(
     onset_cache: dict[str, np.ndarray],
     log: Logger,
     warmup: bool = True,
+    done_song_ids: frozenset[str] = frozenset(),
 ) -> None:
-    """모델 하나를 데이터셋 전체에 돌림. 행마다 CSV에 즉시 기록."""
+    """모델 하나를 데이터셋 전체에 돌림. 행마다 CSV에 즉시 기록.
+
+    done_song_ids에 든 곡은 이미 끝난 것으로 보고 건너뜀(이어하기). 전부 끝나 있으면 로드도 생략.
+    """
     timestamp = dt.datetime.now().isoformat(timespec="seconds")
-    song_ids = dataset.song_ids()
+    all_ids = dataset.song_ids()
+    song_ids = [s for s in all_ids if s not in done_song_ids]
+    if done_song_ids:
+        log(
+            f"[{sep.name}] 이어하기: 건너뜀 {len(all_ids) - len(song_ids)}곡, 남은 {len(song_ids)}곡"
+        )
+    if not song_ids:
+        return
     try:
         load_sec = sep.load()
         log(f"[{sep.name}] 로드 {load_sec:.1f}s, 장치 {sep.device}")
@@ -357,22 +418,45 @@ def run_benchmark(opts: RunOptions, log: Logger = print) -> RunResult:
         run_dir=run_dir,
         csv_path=run_dir / RESULTS_CSV,
         device=device,
+        gpu_name=gpu_name(device),
         host=detect_host(),
         n_songs=len(dataset),
         models=[c.name for c in configs],
     )
     log(
         f"run {run_id}: 모델 {len(configs)}개 × 곡 {result.n_songs}개 "
-        f"({dataset.name}), 장치 {device}, 호스트 {result.host}"
+        f"({dataset.name}), 장치 {device} {result.gpu_name}, 호스트 {result.host}"
     )
-    writer = CsvWriter(result.csv_path)
+    keep_rows: list[dict] | None = None
+    if opts.run_id and result.csv_path.exists():
+        keep_rows, result.n_retried = load_resume_rows(result.csv_path)
+        result.n_skipped = len(keep_rows)
+        result.rows.extend(keep_rows)
+        log(
+            f"run {run_id}: 이어하기. 기존 성공 {result.n_skipped}행 유지, "
+            f"실패 {result.n_retried}행 다시 실행"
+        )
+    done_by_model: dict[str, set[str]] = {}
+    for row in keep_rows or []:
+        ds_name, model, song_id = row_key(row)
+        if ds_name == dataset.name:
+            done_by_model.setdefault(model, set()).add(song_id)
+    writer = CsvWriter(result.csv_path, keep_rows)
     onset_cache: dict[str, np.ndarray] = {}
     try:
         for config in configs:
             sep = create_separator(config, device)
             try:
                 run_model(
-                    sep, dataset, result, writer, opts.save_wav, onset_cache, log, opts.warmup
+                    sep,
+                    dataset,
+                    result,
+                    writer,
+                    opts.save_wav,
+                    onset_cache,
+                    log,
+                    opts.warmup,
+                    frozenset(done_by_model.get(config.name, ())),
                 )
             finally:
                 sep.close()
