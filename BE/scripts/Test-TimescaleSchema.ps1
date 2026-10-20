@@ -22,15 +22,37 @@ function Invoke-DockerCheck {
     if ($LASTEXITCODE -ne 0) { throw "Docker $($Arguments[0]) 실패: 종료 코드 $LASTEXITCODE" }
 }
 
+function Invoke-DockerAllowFailure {
+    param(
+        [string[]] $Arguments,
+        [switch] $Quiet
+    )
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # PS5는 native command의 예상된 stderr도 Stop으로 올릴 수 있어 검사·재시도 구간에서만 완화한다.
+        $ErrorActionPreference = 'Continue'
+        if ($Quiet) {
+            & docker @Arguments *> $null
+        }
+        else {
+            & docker @Arguments | Out-Host
+        }
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 try {
     Invoke-DockerCheck -Arguments @('info', '--format', '{{.ServerVersion}}') | Out-Null
     # 고정 버전이 있으면 재사용한다. 최초 pull의 일시적인 CDN EOF만 제한적으로 재시도한다.
-    & docker image inspect $image *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $imageInspectExitCode = Invoke-DockerAllowFailure -Arguments @('image', 'inspect', $image) -Quiet
+    if ($imageInspectExitCode -ne 0) {
         $pulled = $false
         for ($pullAttempt = 1; $pullAttempt -le 3; $pullAttempt++) {
-            & docker pull $image
-            if ($LASTEXITCODE -eq 0) { $pulled = $true; break }
+            $pullExitCode = Invoke-DockerAllowFailure -Arguments @('pull', $image)
+            if ($pullExitCode -eq 0) { $pulled = $true; break }
             if ($pullAttempt -lt 3) { Start-Sleep -Seconds (2 * $pullAttempt) }
         }
         if (-not $pulled) { throw "TimescaleDB 이미지 다운로드가 3회 실패했습니다: $image" }
@@ -48,8 +70,8 @@ try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         # initdb 중 임시 소켓 서버가 아닌 실제 TCP 서버의 준비를 확인한다.
-        & docker exec $containerName pg_isready -h 127.0.0.1 -U postgres -d timescale_test *> $null
-        if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+        $readyExitCode = Invoke-DockerAllowFailure -Arguments @('exec', $containerName, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'timescale_test') -Quiet
+        if ($readyExitCode -eq 0) { $ready = $true; break }
         Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'TimescaleDB가 45초 안에 준비되지 않았습니다.' }
