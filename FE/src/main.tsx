@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './app/App';
+import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
 import { bootstrapInput, unlockAudio } from './app/bootstrap';
 import './styles/global.css';
 

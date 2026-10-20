@@ -685,3 +685,9 @@ table.plain th {
     transition: none !important;
   }
 }
+
+/* 입력 방식 라디오 한 줄 (세팅 화면) */
+.sensor-choice {
+  align-items: flex-start;
+  cursor: pointer;
+}
