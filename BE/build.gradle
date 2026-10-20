@@ -46,6 +46,9 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// Windows Runner의 DB 연결 경로를 IPv4로 고정해 localhost·IPv6 환경 차이를 줄인다.
+	// 테스트 JVM에만 적용한다. 운영 JVM의 네트워크 설정은 바꾸지 않는다.
+	systemProperty 'java.net.preferIPv4Stack', 'true'
 }
 
 tasks.withType(JavaCompile).configureEach {

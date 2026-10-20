@@ -255,6 +255,9 @@ java -jar build/libs/app.jar
 
 macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
 현재 별도 린터는 없으며 `build`가 컴파일·테스트·실행 JAR 생성을 수행한다. 테스트에는 DB 준비가 필요 없다.
+테스트 DB는 `127.0.0.1`에만 바인딩하고 JDBC도 같은 주소를 사용한다. Windows Runner의
+`localhost` 소켓 연결 실패를 피하도록 테스트 JVM에만 `java.net.preferIPv4Stack=true`를 적용한다.
+공통 DB 테스트는 풀 밖에서 새 JDBC 연결 10개를 순차 생성해 IPv4 루프백 연결도 확인한다.
 테스트는 실제 HTTP 서버에서 health/liveness/readiness 응답, 관리 엔드포인트 비노출,
 OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 예외 종류별 오류 응답 형식과
 로그 규칙을 확인한다. `@DataJpaTest`로 마이그레이션 결과(컬럼·제약·cascade)와 엔티티·리포지토리를 확인한다. 테스트 소스의 `ErrorProbeController`는 이를 위한 전용 컨트롤러이며
