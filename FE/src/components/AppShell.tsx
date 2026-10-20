@@ -2,14 +2,8 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
+import { sensorRegistry } from '@/app/sensorRegistry';
 import { DebugOverlay } from './DebugOverlay';
-
-const SOURCE_LABEL: Record<string, string> = {
-  none: '키보드',
-  pointer: '포인터 모의 IMU',
-  ble: 'BLE 스틱',
-  websocket: 'WebSocket',
-};
 
 export function AppShell() {
   const connected = useLive((s) => s.connected);
@@ -40,7 +34,7 @@ export function AppShell() {
         </nav>
         <div className="topbar-right">
           <span className="small dim">
-            {SOURCE_LABEL[sensorKind]}
+            {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
             {sensorKind !== 'none' && ' + 키보드'}
             {sourceState === 'connecting' && ' · 연결 중'}
             {sourceState === 'error' && ' · 오류'}

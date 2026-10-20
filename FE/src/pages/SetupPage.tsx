@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react';
 import { KitCanvas } from '@/components/KitCanvas';
-import { useSettings, type SensorKind } from '@/store/settingsStore';
+import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
+import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
 import { audioEngine } from '@/audio/AudioEngine';
-import { bleSource, isBleSupported } from '@/app/sources';
+import { sensorRegistry } from '@/app/sensorRegistry';
 import { unlockAudio } from '@/app/bootstrap';
 
-// 키보드는 항상 켜져 있고(설계 D9), 여기서는 센서 소스만 고른다
-const SENSORS: { kind: SensorKind; label: string; desc: string }[] = [
-  { kind: 'none', label: '키보드만', desc: '키 하나가 패드 하나. 캘리브레이션 없이 바로 플레이' },
-  { kind: 'pointer', label: '포인터 모의 IMU', desc: '마우스 위치가 스틱 자세. 캘리브레이션·판정 흐름 개발용. 키보드도 같이 동작' },
-  { kind: 'ble', label: 'BLE 스틱', desc: 'Web Bluetooth로 스틱 2개를 직접 연결 (하드웨어 필요)' },
-  { kind: 'websocket', label: 'WebSocket 브리지', desc: '임베디드 PC 브리지·허브·폰 IMU에서 받기' },
-];
+// 키보드는 항상 켜져 있고(설계 D9), 여기서는 센서 소스만 고른다.
+// 'none'(키보드만)은 예약어라 맨 앞에 직접 두고, 나머지는 레지스트리 등록 순서를 따른다
+const NO_SENSOR = { id: 'none', label: '키보드만', description: '키 하나가 패드 하나. 캘리브레이션 없이 바로 플레이' };
 
 export function SetupPage() {
   const s = useSettings();
@@ -145,46 +142,24 @@ export function SetupPage() {
           <div className="card col">
             <h3>입력 방식</h3>
             <p className="small dim">키보드는 항상 켜져 있습니다. 센서를 고르면 센서 타격은 캘리브레이션으로, 키보드 타격은 키 매핑으로 패드가 정해집니다.</p>
-            {SENSORS.map((i) => (
-              <label key={i.kind} className="row" style={{ alignItems: 'flex-start', cursor: 'pointer' }}>
+            {[NO_SENSOR, ...sensorRegistry.list()].map((i) => (
+              <label key={i.id} className="row sensor-choice">
                 <input
                   type="radio"
                   name="sensor"
-                  checked={s.sensorKind === i.kind}
-                  onChange={() => s.setSensorKind(i.kind)}
+                  checked={s.sensorKind === i.id}
+                  onChange={() => s.setSensorKind(i.id)}
                   style={{ marginTop: 5 }}
                 />
                 <span className="col" style={{ gap: 0 }}>
                   <strong>{i.label}</strong>
-                  <span className="small dim">{i.desc}</span>
+                  <span className="small dim">{i.description}</span>
                 </span>
               </label>
             ))}
             {live.sourceMessage && <div className={`notice ${live.sourceState === 'error' ? 'error' : ''}`}>{live.sourceMessage}</div>}
 
-            {s.sensorKind === 'pointer' && (
-              <div className="small dim">
-                타격 키: 왼손 <kbd className="kbd">{s.pointerHitKeys.left.replace('Key', '')}</kbd> 오른손{' '}
-                <kbd className="kbd">{s.pointerHitKeys.right.replace('Key', '')}</kbd> · 좌클릭 = 왼손, 우클릭 = 오른손 · 방향키로도
-                자세 이동
-              </div>
-            )}
-            {s.sensorKind === 'ble' && (
-              <div className="col">
-                {!isBleSupported() && <div className="notice error">이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge를 쓰세요.</div>}
-                <div className="row">
-                  <button onClick={() => bleSource.pair(0).catch(() => {})}>왼손 스틱 페어링</button>
-                  <button onClick={() => bleSource.pair(1).catch(() => {})}>오른손 스틱 페어링</button>
-                </div>
-                <p className="small faint">서비스 UUID a7d50001-… 를 광고하는 기기만 목록에 뜹니다.</p>
-              </div>
-            )}
-            {s.sensorKind === 'websocket' && (
-              <div className="field">
-                <label>브리지 주소 (바꾸면 입력 방식을 다시 선택)</label>
-                <input type="text" value={s.wsUrl} onChange={(e) => s.setWsUrl(e.target.value)} />
-              </div>
-            )}
+            {s.sensorKind !== 'none' && <SensorOptionsPanel id={s.sensorKind} />}
           </div>
 
           <div className="card col">

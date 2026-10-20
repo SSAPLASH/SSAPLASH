@@ -2,6 +2,7 @@
 // 하드웨어가 없는 동안은 미검증 — 프로토콜(stickProtocol.ts)과 흐름만 맞춰 둔다.
 import type { StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
+import type { SourceDescriptor } from './SourceDescriptor';
 import {
   STICK_CONTROL_UUID,
   STICK_NOTIFY_UUID,
@@ -139,3 +140,20 @@ export class BleStickSource extends BaseInputSource {
     this.setState('disconnected');
   }
 }
+
+export const bleDescriptor: SourceDescriptor = {
+  id: 'ble',
+  label: 'BLE 스틱',
+  description: 'Web Bluetooth로 스틱 2개를 직접 연결 (하드웨어 필요)',
+  availability: () =>
+    BleStickSource.isSupported()
+      ? { ok: true }
+      : { ok: false, reason: '이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge를 쓰세요.' },
+  create: () => new BleStickSource(),
+  // 페어링 창은 사용자 제스처 안에서만 열 수 있어 버튼으로 노출한다
+  actions: [
+    { label: '왼손 스틱 페어링', run: (instance: BleStickSource) => instance.pair(0) },
+    { label: '오른손 스틱 페어링', run: (instance: BleStickSource) => instance.pair(1) },
+  ],
+  note: '서비스 UUID a7d50001-… 를 광고하는 기기만 목록에 뜹니다.',
+};

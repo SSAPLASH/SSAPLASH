@@ -9,8 +9,9 @@ import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { isProfileComplete } from '@/domain/calibration';
 import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
-import { inputManager, pointerSource } from '@/app/sources';
-import { setSoundOnHit } from '@/app/bootstrap';
+import { inputManager } from '@/app/sources';
+import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
+import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
 
 const keyLabel = (code: string) => code.replace('Key', '').replace('Space', 'Space').replace('Digit', '');
 
@@ -19,7 +20,7 @@ export function FreePlayPage() {
   const keyMap = useSettings((s) => s.keyMap);
   const profile = useSettings((s) => s.profile);
   const sensorKind = useSettings((s) => s.sensorKind);
-  const pointerHitKeys = useSettings((s) => s.pointerHitKeys);
+  const sensorOptions = useSettings((s) => s.sensorOptions);
   const activeSensor = useLive((s) => s.activeSensor);
   const pose = useLive((s) => s.pose);
   const lastHit = useLive((s) => s.lastHit);
@@ -78,15 +79,10 @@ export function FreePlayPage() {
         동작합니다.
       </>
     );
-    if (sensorKind === 'pointer') {
-      guide = calDone ? (
-        <>
-          캔버스 위에 포인터를 두고 <kbd className="kbd">{keyLabel(pointerHitKeys.left)}</kbd>(왼손) /{' '}
-          <kbd className="kbd">{keyLabel(pointerHitKeys.right)}</kbd>(오른손) 또는 클릭으로 칩니다.
-        </>
-      ) : (
-        calNote
-      );
+    const desc = sensorRegistry.get(sensorKind);
+    if (desc?.usageGuide) {
+      // 연결 개념이 없는 소스(포인터 모의 IMU)는 연결 상태 대신 조작 안내를 보여준다
+      guide = calDone ? desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind])) : calNote;
     } else {
       const conn =
         sourceState === 'error'
@@ -98,7 +94,7 @@ export function FreePlayPage() {
               : '연결 안 됨 — 세팅에서 연결하세요.';
       guide = (
         <>
-          {sensorKind === 'ble' ? 'BLE 스틱' : 'WebSocket'} {conn} {calNote}
+          {desc?.label ?? sensorKind} {conn} {calNote}
         </>
       );
     }
@@ -123,7 +119,7 @@ export function FreePlayPage() {
             flashes={flashes}
             poses={pose}
             showPoses={sensorOn}
-            surfaceRef={(el) => pointerSource.setSurface(el)}
+            surfaceRef={bindSensorSurface}
           />
         </div>
 

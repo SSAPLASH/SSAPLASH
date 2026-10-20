@@ -23,6 +23,8 @@ export interface InputSource {
   resetPose?(): void;
   /** 진동 명령 (PLAY-07). 지원 안 하면 무시 */
   haptic?(stickId: 0 | 1, strength: number, durationMs: number): void;
+  /** 자세를 읽을 입력 표면(캔버스) 연결. 화면 좌표를 쓰는 소스(포인터)만 구현한다. 없으면 무시 */
+  setSurface?(el: HTMLElement | null): void;
 }
 
 export abstract class BaseInputSource implements InputSource {

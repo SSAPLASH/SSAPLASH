@@ -6,6 +6,7 @@
 import type { StickEvent, StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import { parsePacket } from './stickProtocol';
+import type { SourceDescriptor } from './SourceDescriptor';
 
 type WsMessage =
   | { kind: 'hit'; stickId: StickId; timestamp: number; peakAccel: number; pitch: number; yaw: number }
@@ -13,19 +14,17 @@ type WsMessage =
   | { kind: 'status'; stickId: StickId; connected: boolean; batteryPct?: number; firmware?: string }
   | { kind: 'sync'; t0: number; t1: number };
 
+export const DEFAULT_WS_URL = 'ws://localhost:8765';
+
 export class WebSocketStickSource extends BaseInputSource {
   readonly kind = 'websocket' as const;
   readonly label = 'WebSocket 브리지';
   private ws: WebSocket | null = null;
-  private url: string;
+  /** 기본 주소. 실제 값은 설정(applyOptions → setUrl)으로만 바뀐다 */
+  private url = DEFAULT_WS_URL;
   private clock = new ClockSync();
   private pending = new Map<number, number>();
   private syncTimer: number | null = null;
-
-  constructor(url: string) {
-    super();
-    this.url = url;
-  }
 
   setUrl(url: string): void {
     this.url = url;
@@ -128,3 +127,15 @@ export class WebSocketStickSource extends BaseInputSource {
     this.setState('disconnected');
   }
 }
+
+export const webSocketDescriptor: SourceDescriptor = {
+  id: 'websocket',
+  label: 'WebSocket 브리지',
+  description: '임베디드 PC 브리지·허브·폰 IMU에서 받기',
+  availability: () => ({ ok: true }),
+  create: () => new WebSocketStickSource(),
+  options: [{ key: 'url', label: '브리지 주소 (바꾸면 입력 방식을 다시 선택)', type: 'text', default: DEFAULT_WS_URL }],
+  applyOptions(instance: WebSocketStickSource, o) {
+    instance.setUrl(String(o.url));
+  },
+};

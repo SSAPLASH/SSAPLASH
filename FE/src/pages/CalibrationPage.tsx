@@ -12,8 +12,9 @@ import type { Pose } from '@/domain/events';
 import { profileWarnings, resolvePad, type CalibrationWarning, type PadResolution } from '@/domain/calibration';
 import { CalibrationSession, type CalibrationSnapshot } from '@/engine/CalibrationSession';
 import { audioEngine } from '@/audio/AudioEngine';
-import { inputManager, pointerSource } from '@/app/sources';
-import { setSoundOnHit } from '@/app/bootstrap';
+import { inputManager } from '@/app/sources';
+import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
+import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
 
 type Stage = 'ready' | 'capture' | 'confirm';
 
@@ -65,7 +66,7 @@ export function CalibrationPage() {
     inputManager.setPoseStream(true);
     return () => {
       setSoundOnHit(true);
-      pointerSource.setSurface(null);
+      bindSensorSurface(null);
       unsubRef.current?.();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
@@ -128,7 +129,7 @@ export function CalibrationPage() {
     mode: settings.calibrationMode,
     holdMs: settings.holdMs,
     maxRadiusDeg: settings.maxRadiusDeg,
-    source: settings.sensorKind === 'none' ? ('pointer' as const) : settings.sensorKind,
+    source: settings.sensorKind,
   });
 
   const startNew = () => {
@@ -221,15 +222,19 @@ export function CalibrationPage() {
 
   // ---- 센서 없음 ----
   if (settings.sensorKind === 'none') {
+    // 전환 제안은 등록된 소스 중 이 브라우저에서 쓸 수 있는 첫 번째(등록 순서)
+    const fallbackSensor = sensorRegistry.list().find((d) => d.availability().ok);
     return (
       <main className="main">
         <h1>캘리브레이션</h1>
         <div className="card col">
           <p className="notice">키보드 입력은 캘리브레이션이 필요 없습니다. 센서(또는 포인터 모의 IMU)를 켜면 패드 자세를 잡을 수 있습니다.</p>
           <div className="row">
-            <button className="btn-primary" onClick={() => settings.setSensorKind('pointer')}>
-              포인터 모의 IMU로 전환
-            </button>
+            {fallbackSensor && (
+              <button className="btn-primary" onClick={() => settings.setSensorKind(fallbackSensor.id)}>
+                {fallbackSensor.label}로 전환
+              </button>
+            )}
             <Link to="/setup" className="btn-ghost">
               세팅으로
             </Link>
@@ -240,11 +245,11 @@ export function CalibrationPage() {
   }
 
   const modeLabel = settings.calibrationMode === 'hold' ? `홀딩 ${(settings.holdMs / 1000).toFixed(1)}초` : '2타';
-  const sensorLabel = settings.sensorKind === 'pointer' ? '포인터 모의 IMU' : settings.sensorKind === 'ble' ? 'BLE 스틱' : 'WebSocket';
-  const connNote =
-    settings.sensorKind === 'pointer'
-      ? '캔버스 위에서 마우스 또는 방향키(2°, Shift 6°)로 자세를 움직이고 F/J·클릭으로 칩니다.'
-      : sourceState === 'error'
+  const sensorDesc = sensorRegistry.get(settings.sensorKind);
+  const sensorLabel = sensorDesc?.label ?? settings.sensorKind;
+  const connNote = sensorDesc?.usageGuide
+    ? sensorDesc.usageGuide(resolveOptions(sensorDesc, settings.sensorOptions[settings.sensorKind]))
+    : sourceState === 'error'
         ? `오류: ${sourceMessage ?? '알 수 없음'}`
         : sourceState === 'connected'
           ? '연결됨'
@@ -286,7 +291,7 @@ export function CalibrationPage() {
             flashes={flashes}
             poses={pose}
             showPoses={activeSensor !== 'none'}
-            surfaceRef={(el) => pointerSource.setSurface(el)}
+            surfaceRef={bindSensorSurface}
           />
           {stage === 'ready' && (
             <div className="overlay">

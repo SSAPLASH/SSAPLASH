@@ -3,6 +3,7 @@
 // 실제 IMU가 오면 BleStickSource가 같은 pose/hit 이벤트를 내므로 상위 코드는 바뀌지 않는다.
 import type { Pose, StickId } from '@/domain/events';
 import { BaseInputSource } from './InputSource';
+import type { SourceDescriptor } from './SourceDescriptor';
 
 export interface PointerStickOptions {
   /** 화면 가로 전체를 yaw 몇 도에 대응시킬지 (±) */
@@ -151,3 +152,26 @@ export class PointerStickSource extends BaseInputSource {
     this.setState('disconnected');
   }
 }
+
+/** 키 코드 표시용: KeyF → F */
+const keyName = (code: string): string => code.replace('Key', '');
+
+export const pointerDescriptor: SourceDescriptor = {
+  id: 'pointer',
+  label: '포인터 모의 IMU',
+  description: '마우스 위치가 스틱 자세. 캘리브레이션·판정 흐름 개발용. 키보드도 같이 동작',
+  availability: () => ({ ok: true }),
+  create: () => new PointerStickSource(),
+  options: [
+    { key: 'leftHitKey', label: '왼손 타격 키', type: 'key', default: DEFAULT_POINTER_OPTIONS.leftHitKey },
+    { key: 'rightHitKey', label: '오른손 타격 키', type: 'key', default: DEFAULT_POINTER_OPTIONS.rightHitKey },
+  ],
+  applyOptions(instance: PointerStickSource, o) {
+    instance.setOptions({ leftHitKey: String(o.leftHitKey), rightHitKey: String(o.rightHitKey) });
+  },
+  // 이 두 키는 포인터 소스가 쓰므로 키보드 소스에서 뺀다(한 키에 두 번 울리지 않게)
+  reservedKeys: (o) => [String(o.leftHitKey), String(o.rightHitKey)],
+  note: '좌클릭 = 왼손, 우클릭 = 오른손 · 방향키로도 자세 이동',
+  usageGuide: (o) =>
+    `캔버스 위에 포인터를 두고 ${keyName(String(o.leftHitKey))}(왼손) / ${keyName(String(o.rightHitKey))}(오른손) 또는 클릭으로 칩니다. 방향키(2°, Shift 6°)로도 자세를 움직일 수 있습니다.`,
+};
