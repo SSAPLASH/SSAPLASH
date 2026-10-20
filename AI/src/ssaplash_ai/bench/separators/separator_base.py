@@ -25,7 +25,7 @@ MODELS_DIR = Path("data/models")
 
 @dataclass
 class SeparatorConfig:
-    """configs/bench/models/*.yaml 한 파일. 어댑터마다 쓰는 필드가 다름."""
+    """configs/bench/models/<어댑터>/*.yaml 한 파일. 어댑터마다 쓰는 필드가 다름."""
 
     name: str
     adapter: str

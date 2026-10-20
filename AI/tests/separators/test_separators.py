@@ -18,13 +18,13 @@ from ssaplash_ai.bench.separators import (
 
 MODELS_DIR = Path(__file__).resolve().parents[2] / "configs" / "bench" / "models"
 REAL_MODELS = [
-    "scnet_xl_ihf",
-    "scnet_large",
-    "bs_roformer_sw",
-    "bs_roformer_musdb",
-    "htdemucs_ft",
-    "htdemucs",
-    "umxhq",
+    "msst/scnet_xl_ihf",
+    "msst/scnet_large",
+    "msst/bs_roformer_sw",
+    "msst/bs_roformer_musdb",
+    "demucs/htdemucs_ft",
+    "demucs/htdemucs",
+    "openunmix/umxhq",
 ]
 
 
@@ -133,7 +133,8 @@ def test_모델_어댑터는_필수_필드가_없으면_생성_단계에서_실�
 @pytest.mark.parametrize("name", REAL_MODELS)
 def test_모델_yaml마다_라이선스_문자열이_있고_어댑터를_만들_수_있다(name: str):
     cfg = SeparatorConfig.from_yaml(MODELS_DIR / f"{name}.yaml")
-    assert cfg.name == name
+    assert cfg.name == name.split("/")[1]
+    assert cfg.adapter == name.split("/")[0]  # 폴더 이름 = 어댑터
     assert cfg.license_code and cfg.license_weights
     assert cfg.adapter in ADAPTERS
     sep = create_separator(cfg, device="cpu")
@@ -141,7 +142,7 @@ def test_모델_yaml마다_라이선스_문자열이_있고_어댑터를_만들_
     if cfg.adapter == "msst":
         assert cfg.config_url and cfg.checkpoint_url and cfg.model_type
         config_path, ckpt_path = sep.weight_paths()
-        assert config_path.parent == Path("data/models") / name
+        assert config_path.parent == Path("data/models") / cfg.name
         assert ckpt_path.suffix in (".ckpt", ".th", ".pth")
 
 

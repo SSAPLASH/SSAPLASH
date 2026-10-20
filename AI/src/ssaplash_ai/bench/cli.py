@@ -6,7 +6,7 @@
 
 예
   uv run ssaplash-bench check-data configs/bench/datasets/musdb18hq_test.yaml
-  uv run ssaplash-bench run --models configs/bench/models/scnet_large.yaml \\
+  uv run ssaplash-bench run --models configs/bench/models/msst/scnet_large.yaml \\
       --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
   uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results/<runId>
 """
@@ -104,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("configs", nargs="+", type=Path, help="configs/bench/datasets/*.yaml")
 
     run_p = sub.add_parser("run", help="모델 × 데이터셋 벤치마크 실행, 보고서·MLflow 기록까지")
-    run_p.add_argument("--models", nargs="+", required=True, help="configs/bench/models/*.yaml")
+    run_p.add_argument("--models", nargs="+", required=True, help="configs/bench/models/<어댑터>/*.yaml")
     run_p.add_argument("--dataset", required=True, help="configs/bench/datasets/*.yaml")
     run_p.add_argument("--out", default="data/results", help="결과 폴더. 아래에 runId 폴더 생성")
     run_p.add_argument("--device", default="cuda", help="cuda 또는 cpu (기본 cuda, 없으면 cpu)")

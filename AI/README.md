@@ -38,7 +38,7 @@ AI/
 │   │   └─ report/       결과 보고서. summary_table(집계·요약 표), charts(그래프 PNG), build_report(파일 생성)
 │   └─ chart/            채보 형식·패드 매핑 (예정)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
-├─ configs/bench/models/    모델 설정 yaml (어댑터·가중치 URL·라이선스). mock/ 아래는 테스트용
+├─ configs/bench/models/    모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 가짜 wav와 mock 어댑터로 돈다
 ├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
@@ -92,10 +92,10 @@ Git Bash에서 한글이 깨지면 `PYTHONUTF8=1`을 앞에 붙인다.
 
 ```bash
 # 동작 확인: 모델 1개 × 30초 클립 3곡 (GPU 없으면 cpu로 내려간다)
-uv run ssaplash-bench run --models configs/bench/models/scnet_large.yaml     --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
+uv run ssaplash-bench run --models configs/bench/models/msst/scnet_large.yaml     --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
 
 # 여러 모델, 분리 결과 wav를 모델당 3곡 저장, MLflow 기록 생략
-uv run ssaplash-bench run --models configs/bench/models/scnet_xl_ihf.yaml configs/bench/models/htdemucs_ft.yaml     --dataset configs/bench/datasets/musdb18hq_test.yaml --out data/results --save-wav 3 --mlflow-uri none
+uv run ssaplash-bench run --models configs/bench/models/msst/scnet_xl_ihf.yaml configs/bench/models/demucs/htdemucs_ft.yaml     --dataset configs/bench/datasets/musdb18hq_test.yaml --out data/results --save-wav 3 --mlflow-uri none
 
 # 보고서만 다시 만들기 (CSV 여러 개를 합칠 수 있다)
 uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results/<runId>
@@ -103,7 +103,7 @@ uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results
 
 | 옵션 | 뜻 | 기본 |
 | --- | --- | --- |
-| `--models` | 모델 yaml 목록 (`configs/bench/models/`) | 필수 |
+| `--models` | 모델 yaml 목록 (`configs/bench/models/<어댑터>/*.yaml`) | 필수 |
 | `--dataset` | 데이터셋 yaml | 필수 |
 | `--out` | 결과 폴더. 아래에 `<runId>/` 생성 | `data/results` |
 | `--device` | `cuda` 또는 `cpu` | `cuda` |
