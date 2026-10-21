@@ -11,19 +11,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import com.ssafy.airdrum.chart.asset.ChartAssetStore;
-import com.ssafy.airdrum.chart.web.ChartQueryUserResolver;
+import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.common.error.BusinessException;
-import com.ssafy.airdrum.common.error.CommonErrorCode;
+import com.ssafy.airdrum.user.AuthUser;
+import com.ssafy.airdrum.user.UserRole;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
-/** 실제 PostgreSQL과 MVC를 함께 검증한다. 신원·스토리지만 대역이며 JWT 통합 증거는 아니다. */
+/**
+ * 실제 PostgreSQL과 MVC를 함께 검증한다. 스토리지만 대역이다.
+ * 신원은 88번 인증 모듈의 실제 access 토큰으로 보낸다({@link #get}이 소유자 토큰을 붙인다).
+ */
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.ssafy.airdrum.chart.QuerySqlCapture")
 @AutoConfigureMockMvc
 @Transactional
@@ -31,9 +37,10 @@ class ChartQueryApiTest {
 	@Autowired MockMvc mvc;
 	@Autowired JdbcTemplate db;
 	@Autowired JsonMapper json;
-	@MockitoBean ChartQueryUserResolver identity;
+	@Autowired AccessTokenService tokens;
 	@MockitoBean ChartAssetStore store;
 	long owner, other, builtin, ownSong, hiddenSong, chart, version;
+	String ownerToken;
 	static final String TIMING = """
 		{"bpm":120,"offsetMs":250,"timeSignature":"4/4","ppq":480,
 		 "tempoMap":[{"tick":0,"bpm":120},{"tick":480,"bpm":60}],
@@ -51,7 +58,7 @@ class ChartQueryApiTest {
 		hiddenSong = song(other, "타인 곡", "AUDIO", "READY");
 		chart = chart(ownSong, "NORMAL");
 		version = version(chart, 1, NOTES, TIMING, "PENDING");
-		doReturn(owner).when(identity).requireUserId(any());
+		ownerToken = tokens.issue(new AuthUser(owner, UserRole.USER), Instant.now()).token();
 		QuerySqlCapture.clear();
 	}
 	@Test void scopesSearchAndCountsNeverExposeOtherSongs() throws Exception {
@@ -92,12 +99,10 @@ class ChartQueryApiTest {
 		verifyNoInteractions(store);
 	}
 	@Test void authenticationPrecedesValidationAndInactiveUserCannotReadBuiltin() throws Exception {
-		when(identity.requireUserId(any())).thenThrow(new BusinessException(CommonErrorCode.UNAUTHORIZED));
-		problem("/api/v1/songs/not-a-number?size=-1", 401, "UNAUTHORIZED");
-		doReturn(owner).when(identity).requireUserId(any());
+		unauthenticated(MockMvcRequestBuilders.get("/api/v1/songs/not-a-number?size=-1"));
 		db.update("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=?", owner);
-		problem("/api/v1/songs", 401, "UNAUTHORIZED");
-		problem("/api/v1/chart-versions/" + version + "/assets", 401, "UNAUTHORIZED");
+		unauthenticated(get("/api/v1/songs"));
+		unauthenticated(get("/api/v1/chart-versions/" + version + "/assets"));
 	}
 	@Test void inputConstraintsUseCommonProblemFormat() throws Exception {
 		for (var query : List.of("?page=-1", "?page=100001", "?size=0", "?size=101"))
@@ -167,7 +172,8 @@ class ChartQueryApiTest {
 		var sql = QuerySqlCapture.statements();
 		assertThat(page.path("items").size()).isEqualTo(6);
 		assertThat(sql).hasSize(first);
-		assertThat(first).isLessThanOrEqualTo(5);
+		// 인증 필터의 회원 확인(users PK 조회) 1건을 포함한 요청 전체 상한이다(88번 이후 +1).
+		assertThat(first).isLessThanOrEqualTo(6);
 		assertThat(String.join("\n", sql).toLowerCase()).doesNotContain("v.notes", "v.timing", "sheet_pages", "select *");
 	}
 	@Test void stableOrderAndDifficultyOrderHaveNoDuplicates() throws Exception {
@@ -290,4 +296,16 @@ class ChartQueryApiTest {
 		return body;
 	}
 	private JsonNode body(MvcResult result) throws Exception { return json.readTree(result.getResponse().getContentAsString()); }
+	/** 소유자 access 토큰을 붙인 GET. */
+	private MockHttpServletRequestBuilder get(String path) {
+		return MockMvcRequestBuilders.get(path).header(AUTHORIZATION, "Bearer " + ownerToken);
+	}
+	/** 인증 필터 단계의 401. 캐시 헤더는 Security 기본값(no-cache, no-store, …)이다. */
+	private void unauthenticated(MockHttpServletRequestBuilder request) throws Exception {
+		var r = mvc.perform(request).andReturn();
+		assertThat(r.getResponse().getStatus()).as(r.getResponse().getContentAsString()).isEqualTo(401);
+		assertThat(r.getResponse().getContentType()).startsWith("application/problem+json");
+		assertThat(r.getResponse().getHeader("Cache-Control")).contains("no-store");
+		assertThat(body(r).path("code").asString()).isEqualTo("UNAUTHORIZED");
+	}
 }
