@@ -30,6 +30,7 @@ export function AppShell() {
           <NavLink to="/setup">세팅</NavLink>
           <NavLink to="/calibration">캘리브레이션</NavLink>
           <NavLink to="/play">리듬 게임</NavLink>
+          <NavLink to="/sheet">악보 연습</NavLink>
           <NavLink to="/free">자유 연주</NavLink>
         </nav>
         <div className="topbar-right">

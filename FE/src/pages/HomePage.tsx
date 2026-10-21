@@ -47,6 +47,12 @@ export function HomePage() {
           <p className="dim">내장 채보를 따라 칩니다. Perfect · Good · Miss 판정, 콤보, 결과 리포트.</p>
           <span className="status">자유 연주는 상단 메뉴에서</span>
         </Link>
+        <Link to="/sheet" className="card step">
+          <span className="num">연습</span>
+          <h2>악보 연습</h2>
+          <p className="dim">격자 악보를 보며 치고, 끝나면 약한 패드와 마디를 짚어 주는 피드백을 받습니다. 점수는 없습니다.</p>
+          <span className="status">채보 기준 판정 · 마디별 피드백</span>
+        </Link>
       </section>
 
       <section className="card" style={{ marginTop: 24 }}>

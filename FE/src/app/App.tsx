@@ -6,6 +6,7 @@ import { CalibrationPage } from '@/pages/CalibrationPage';
 import { PlayPage } from '@/pages/PlayPage';
 import { FreePlayPage } from '@/pages/FreePlayPage';
 import { ResultPage } from '@/pages/ResultPage';
+import { SheetPage } from '@/pages/SheetPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="calibration" element={<CalibrationPage />} />
         <Route path="play" element={<PlayPage />} />
         <Route path="free" element={<FreePlayPage />} />
+        <Route path="sheet" element={<SheetPage />} />
         <Route path="result/:playId" element={<ResultPage />} />
       </Route>
     </Routes>
