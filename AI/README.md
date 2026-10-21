@@ -46,11 +46,11 @@ AI/
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
-├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py), 별도 환경 채보 스크립트 (transcribers_ext/)
+├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py), 별도 환경 채보 스크립트 (transcribers_ext/)
 ├─ ext/                  채보 모델 저장소 클론 (ADT_STR, inverse-drum-machine. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
-├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
+├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
 └─ DESIGN.md             작업 기록·세션 인계 문서 (git 미추적, 개인 문서)
@@ -203,7 +203,7 @@ MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바
 | Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
 | Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
 
-**별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다(Windows 기준. Linux·코랩은 `.venv-xxx/bin/python`으로 고친다).
+**별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다. Windows 경로이지만 그 파일이 없으면 하네스가 `.venv-<env_name>/bin/python`을 대신 찾으므로 Linux·코랩에서도 yaml을 고칠 필요가 없다.
 
 ```bash
 # ADT_STR: 저장소 클론 + torch 2.8(CUDA 12.8) + 저장소 의존성
@@ -229,6 +229,24 @@ uv pip install --python .venv-omnizart/Scripts/python.exe omnizart soundfile
 ```
 
 별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
+
+### 채보 벤치마크를 코랩에서 돌리기
+
+`notebooks/transcription_bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 분리 노트북과 같은 방식이고, 노트북이 별도 환경 3개(ADT_STR·Inverse Drum Machine·Omnizart)까지 만든다. 환경 만들기는 세션마다 10~20분이 든다.
+
+드라이브 `MyDrive/ssaplash/`에 올릴 것. 저장소 zip과 `data/synth_v1/`은 분리 벤치마크 때 올린 것을 그대로 쓴다.
+
+| 드라이브 경로 | 내용 | 만드는 법 |
+| --- | --- | --- |
+| `data/gmd/groove/` | GMD test 연주 45개 + info.csv, 약 560MB | 아래 명령으로 뽑은 `data/upload/gmd/` 폴더를 `data/gmd/`로 올린다. GMD 전체(11GB)는 올리지 않는다 |
+| `data/mdb_drums/` | 로컬 `AI/data/mdb_drums/` 폴더 그대로 (`MDB Drums/` 23곡, 331MB) | 폴더째 올린다 |
+
+```bash
+# gmd_test.yaml의 연주 45개와 info.csv만 data/upload/gmd/groove/ 에 복사하고, 복사본으로 곡 수·누락을 점검한다
+uv run python scripts/pack_gmd_subset.py configs/bench/datasets/gmd_test.yaml data/upload/gmd
+```
+
+본측정 runId는 `drums-synth`·`drums-gmd`·`drums-mdb`·`drums-mdbu`(정답 드럼 입력), `mix-*`(원곡 입력), `sep-sw-*`·`sep-musdb-*`(분리 모델이 뽑은 드럼 입력)로 고정돼 있어, 세션이 끊기면 준비 셀(1~6)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 합친 보고서는 드라이브 `results/combined/`에 생긴다.
 
 ## 지표 정의
 
