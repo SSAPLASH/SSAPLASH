@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,8 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
-/** 설계 문서 3-6·3-8과 인수 조건 1~6: 모든 오류가 같은 형식으로 나가고 로그 규칙을 지키는지 확인한다. */
+/**
+ * 설계 문서 3-6·3-8과 인수 조건 1~6: 모든 오류가 같은 형식으로 나가고 로그 규칙을 지키는지 확인한다.
+ * 오류 형식만 보는 슬라이스라 Security 필터는 뺀다. 인증 오류(401·403)는 auth.SecurityConfigTest가 본다.
+ */
 @WebMvcTest(controllers = ErrorProbeController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
