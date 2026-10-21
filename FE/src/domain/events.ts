@@ -48,7 +48,7 @@ export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
 
 /**
  * 센서 소스 식별자. 입력 소스 디스크립터의 id와 같다(예: 'pointer', 'ble').
- * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)만 예약어.
+ * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)·'keyboard'·'preview'(세팅 화면 톡 치기)는 예약어.
  */
 export type SensorId = string;
 
@@ -91,3 +91,13 @@ export interface ResolvedHit {
 
 /** 입력 소스 연결 상태 (센서 소스 기준. 키보드는 항상 connected) */
 export type SourceState = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+/** 패드 타격 이펙트 입력. 화면이 타격마다 채우고 KitCanvas가 읽기만 한다 */
+export interface HitFx {
+  /** performance.now() */
+  at: number;
+  /** 0~127 */
+  velocity: number;
+  /** 0 = 왼손, 1 = 오른손 */
+  hand: 0 | 1 | null;
+}

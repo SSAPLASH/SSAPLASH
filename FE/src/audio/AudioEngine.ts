@@ -1,6 +1,7 @@
 // PLAY-06 저지연 사운드. Web Audio로 패드 소리를 낸다.
-// 0단계는 합성음(샘플 미선정, DESIGN 작업 대기). 샘플이 오면 voice 테이블만 교체한다.
+// 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
+import type { SoundSet } from './soundSets';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -22,6 +23,7 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
+  private set: SoundSet | null = null;
 
   constructor() {
     this.voices = {
@@ -122,6 +124,20 @@ export class AudioEngine {
     return this.ctx;
   }
 
+  /** 사운드 세트 교체. null이면 합성음. 다음 타격부터 반영된다 */
+  setSoundSet(set: SoundSet | null): void {
+    this.set = set;
+  }
+
+  get soundSet(): SoundSet | null {
+    return this.set;
+  }
+
+  /** 샘플 디코드용. ensure() 이전에는 null */
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
   get ready(): boolean {
     return this.ctx?.state === 'running';
   }
@@ -148,7 +164,19 @@ export class AudioEngine {
     if (whenMs !== undefined && ts.contextTime !== undefined && ts.performanceTime !== undefined) {
       at = Math.max(ctx.currentTime, ts.contextTime + (whenMs - ts.performanceTime) / 1000);
     }
-    this.voices[pad](ctx, this.master, at, v);
+    const sample = this.set?.pads[pad];
+    if (sample && this.set) {
+      // 타격마다 새 소스·게인 노드. 게인 = 패드 게인 × 키트 트림 × 세기 곡선
+      const src = ctx.createBufferSource();
+      src.buffer = sample.buffer;
+      src.playbackRate.value = sample.playbackRate;
+      const g = ctx.createGain();
+      g.gain.value = sample.gain * this.set.masterTrim * v;
+      src.connect(g).connect(this.master);
+      src.start(at);
+    } else {
+      this.voices[pad](ctx, this.master, at, v);
+    }
     if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
       return ts.performanceTime + (at - ts.contextTime) * 1000;
     }

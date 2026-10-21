@@ -1,11 +1,13 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_KIT_LAYOUT, type KitLayout, type PadId } from '@/domain/pads';
+import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
+import type { PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
 import { DEFAULT_KEY_MAP, type KeyMap } from '@/domain/keyMap';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
+import type { SoundSetId } from '@/audio/soundSets';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
 export interface KitPreset {
@@ -37,6 +39,10 @@ interface SettingsState {
   metronome: boolean;
   countInBars: number;
   volume: number;
+  /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
+  soundSetId: SoundSetId;
+  /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
+  testVelocity: TestVelocity;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -45,6 +51,7 @@ interface SettingsState {
   resetKeyMap: () => void;
   movePad: (pad: PadId, x: number, y: number) => void;
   resetLayout: () => void;
+  applyLayoutPreset: (id: KitLayoutPresetId) => void;
   setProfile: (p: CalibrationProfile | null) => void;
   savePreset: (name: string) => void;
   loadPreset: (id: string) => void;
@@ -60,15 +67,20 @@ interface SettingsState {
   setMetronome: (v: boolean) => void;
   setCountInBars: (v: number) => void;
   setVolume: (v: number) => void;
+  setSoundSetId: (id: SoundSetId) => void;
+  setTestVelocity: (v: TestVelocity) => void;
 }
 
-export const SETTINGS_VERSION = 4;
+export type TestVelocity = 64 | 96 | 120;
+
+export const SETTINGS_VERSION = 5;
 
 /**
  * 저장된 설정 이행.
  * v1 → v2: inputKind(keyboard/pointer/ble/websocket) → sensorKind(none/pointer/ble/websocket)
  * v2 → v3: 최상위 pointerHitKeys·wsUrl → sensorOptions(소스별 설정 묶음). 옛 필드는 지운다.
  * v3 → v4: 최상위 maxRadiusDeg → tuning.maxRadiusDeg. 나머지 튜닝 값은 기본값.
+ * v4 → v5: soundSetId(기본 'ssaplash')·testVelocity(기본 96) 추가.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -94,6 +106,10 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.tuning = mergeTuning(DEFAULT_SENSOR_TUNING, { ...(p.tuning as PartialTuning | undefined), ...moved });
     delete p.maxRadiusDeg;
   }
+  if (version < 5) {
+    if (p.soundSetId !== 'synth' && p.soundSetId !== 'ssaplash') p.soundSetId = 'ssaplash';
+    if (p.testVelocity !== 64 && p.testVelocity !== 96 && p.testVelocity !== 120) p.testVelocity = 96;
+  }
   return p as unknown as SettingsState;
 }
 
@@ -115,6 +131,8 @@ export const useSettings = create<SettingsState>()(
       metronome: true,
       countInBars: 1,
       volume: 0.8,
+      soundSetId: 'ssaplash',
+      testVelocity: 96,
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -129,6 +147,7 @@ export const useSettings = create<SettingsState>()(
       movePad: (pad, x, y) =>
         set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
+      applyLayoutPreset: (id) => set({ kitLayout: KIT_LAYOUT_PRESETS[id] }),
       setProfile: (profile) => set({ profile }),
       savePreset: (name) => {
         const s = get();
@@ -157,6 +176,8 @@ export const useSettings = create<SettingsState>()(
       setMetronome: (metronome) => set({ metronome }),
       setCountInBars: (countInBars) => set({ countInBars }),
       setVolume: (volume) => set({ volume }),
+      setSoundSetId: (soundSetId) => set({ soundSetId }),
+      setTestVelocity: (testVelocity) => set({ testVelocity }),
     }),
     {
       name: 'ssaplash.settings',

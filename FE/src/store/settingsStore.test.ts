@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_VERSION, migrateSettings } from './settingsStore';
+import { SETTINGS_VERSION, migrateSettings, useSettings } from './settingsStore';
+import { KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
 import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
 
 describe('migrateSettings', () => {
@@ -83,5 +84,29 @@ describe('migrateSettings v3 → v4 (튜닝)', () => {
     expect(out.sensorKind).toBe('pointer');
     expect(out.tuning).toEqual({ ...DEFAULT_SENSOR_TUNING, maxRadiusDeg: 15 });
     expect('maxRadiusDeg' in out).toBe(false);
+  });
+});
+
+describe('migrateSettings v4 → v5 (사운드 세트)', () => {
+  it('soundSetId·testVelocity 기본값을 채운다', () => {
+    const out = migrateSettings({ volume: 0.5 }, 4) as unknown as Record<string, unknown>;
+    expect(out.soundSetId).toBe('ssaplash');
+    expect(out.testVelocity).toBe(96);
+    expect(out.volume).toBe(0.5);
+  });
+
+  it('이미 유효한 값은 보존한다', () => {
+    const out = migrateSettings({ soundSetId: 'synth', testVelocity: 120 }, 4) as unknown as Record<string, unknown>;
+    expect(out.soundSetId).toBe('synth');
+    expect(out.testVelocity).toBe(120);
+  });
+});
+
+describe('레이아웃 프리셋', () => {
+  it('applyLayoutPreset은 kitLayout을 프리셋으로 바꾼다', () => {
+    useSettings.getState().applyLayoutPreset('wide');
+    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    useSettings.getState().resetLayout();
+    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.basic);
   });
 });
