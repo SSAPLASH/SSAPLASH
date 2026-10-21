@@ -21,6 +21,8 @@
 | 마이그레이션 | Flyway 12 (`spring-boot-starter-flyway` + `flyway-database-postgresql`) |
 | 테스트 DB | 일반 테스트: 임베디드 PostgreSQL 16, V1~V7. V8: 별도 실제 TimescaleDB Docker 검사 |
 | 외부 HTTP | `RestClient` (`spring-boot-starter-restclient`). OAuth 제공자 호출. 테스트는 `MockRestServiceServer` |
+| 인증 | Spring Security 7.1.1. Bearer 필터는 직접 두고 JWT(HS256) 서명·검증만 `spring-security-oauth2-jose`(Nimbus) |
+| 토큰 저장소 | Redis 7 (`spring-boot-starter-data-redis`, Lettuce). refresh 토큰 보관. 테스트는 메모리 구현 |
 
 2026-10-19 초기화 시 공식 Spring Initializr의 안정 버전을 사용했다.
 기존 설계 문서의 Boot 3.x에서 4.1.1로 변경했다. Java 21과 Gradle 9.x는
@@ -30,7 +32,7 @@ Boot 4는 Jackson 3 및 Spring Security 7을 기준으로 하므로 후속 기�
 
 기동하려면 TimescaleDB 확장이 설치·preload된 PostgreSQL 16이 필요하다. 기동할 때 Flyway가 마이그레이션을 적용하고
 Hibernate가 엔티티와 스키마를 검증한다. 소셜 로그인은 [소셜 로그인](#소셜-로그인)을 따른다.
-Redis·JWT 인증·AI 연동은 해당 기능 작업에서 추가한다.
+토큰·인증 규칙과 다른 모듈에서 인증을 쓰는 방법은 [인증과 토큰](#인증과-토큰)을 따른다. AI 연동은 해당 기능 작업에서 추가한다.
 공통 응답·오류 형식과 OpenAPI 문서는 아래 [API 규약](#api-규약)을, 스키마 변경은
 [DB와 마이그레이션](#db와-마이그레이션)을 따른다.
 
@@ -39,7 +41,7 @@ Redis·JWT 인증·AI 연동은 해당 기능 작업에서 추가한다.
 JDK 21을 설치하고 `JAVA_HOME`을 지정한다. IDE의 Project SDK와 Gradle JVM도 21로 맞춘다.
 별도 Gradle 설치는 필요 없다.
 
-로컬 PostgreSQL 16을 준비한다. Infra Compose의 `postgres`는 내부 네트워크 전용이라
+로컬 PostgreSQL 16과 Redis 7을 준비한다. Infra Compose의 `postgres`는 내부 네트워크 전용이라
 호스트에서 실행한 앱이 붙을 수 없다. Docker를 쓰면 아래처럼 로컬 전용 컨테이너를 띄운다.
 설치형 DB에는 동일한 TimescaleDB 확장과 preload 설정이 필요하다. 비밀번호는 각자 정하고 저장소에 남기지 않는다.
 
@@ -48,7 +50,12 @@ docker run -d --name airdrum-db -p 127.0.0.1:5432:5432 \
   -e POSTGRES_USER=app -e POSTGRES_DB=app -e POSTGRES_PASSWORD=<로컬 비밀번호> \
   timescale/timescaledb:2.30.2-pg16 \
   postgres -c shared_preload_libraries=timescaledb
+# refresh 토큰 저장소. 로컬은 비밀번호 없이 루프백에만 연다.
+docker run -d --name airdrum-redis -p 127.0.0.1:6379:6379 redis:7-alpine
 ```
+
+Redis 없이 띄우려면 `REFRESH_TOKEN_STORE=memory`, `MANAGEMENT_HEALTH_REDIS_ENABLED=false`를 준다.
+refresh 토큰이 메모리에만 있어 재시작하면 로그인이 풀린다(기동 시 WARN).
 
 아래 명령은 `BE/`에서 실행한다.
 
@@ -56,6 +63,7 @@ docker run -d --name airdrum-db -p 127.0.0.1:5432:5432 \
 # Windows PowerShell: 실제 설치 경로로 지정한다.
 $env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
 $env:DB_PASSWORD = '<로컬 비밀번호>'
+$env:JWT_SECRET = '<32바이트 이상 난수>'
 .\gradlew.bat --version
 .\gradlew.bat bootRun
 ```
@@ -63,6 +71,7 @@ $env:DB_PASSWORD = '<로컬 비밀번호>'
 ```sh
 # macOS / Linux: JAVA_HOME을 JDK 21 경로로 지정한 뒤 실행한다.
 export DB_PASSWORD='<로컬 비밀번호>'
+export JWT_SECRET='<32바이트 이상 난수>'
 sh ./gradlew --version
 sh ./gradlew bootRun
 ```
@@ -83,7 +92,12 @@ sh ./gradlew bootRun
 | `ADMIN_EMAILS` | 빈 값 | ADMIN으로 판정할 로그인 계정 이메일. 쉼표 구분, 공백·대소문자 무시 |
 | `FRONTEND_BASE_URL` | `http://localhost:5173` | 로그인 후 돌아갈 FE 주소. 운영은 서비스 도메인 |
 | `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8080` | 제공자에 보내는 콜백 URI의 앞부분. 콘솔에 등록한 리다이렉트 URI와 맞아야 한다 |
-| `COOKIE_SECURE` | `true` | state 쿠키의 `Secure` 속성. Safari로 로컬 테스트할 때만 `false` |
+| `COOKIE_SECURE` | `true` | state·refresh 쿠키의 `Secure` 속성. Safari로 로컬 테스트할 때만 `false` |
+| `JWT_SECRET` | 없음 (필수) | access 토큰 서명 키. UTF-8 32바이트 이상. 없거나 짧으면 "JWT_SECRET을 지정하세요"로 기동을 멈춘다. 만드는 법은 `.env.example` |
+| `REDIS_HOST`, `REDIS_PORT` | `127.0.0.1`, `6379` | refresh 토큰 저장소. 운영 Compose는 `redis`, `6379` |
+| `REDIS_PASSWORD` | 빈 값 | Redis 비밀번호. 운영 Compose의 같은 이름 값 |
+| `REFRESH_TOKEN_STORE` | `redis` | `memory`면 Redis 없이 메모리에 보관(재시작 시 로그인 풀림, 로컬·테스트 전용) |
+| `MANAGEMENT_HEALTH_REDIS_ENABLED` | `true` | Redis 없이 실행할 때 `false`. 켜져 있으면 Redis가 없을 때 `/actuator/health`가 503 |
 
 설정은 환경변수로 전달한다. 로컬에서는 `BE/.env.example`을 `BE/.env`로 복사해 값을 채우면
 `BE/`에서 실행할 때 자동으로 읽는다(`spring.config.import: optional:file:.env[.properties]`, 파일이 없으면 건너뜀).
@@ -278,7 +292,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | --- | --- | --- |
 | `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
 | `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
-| `UNAUTHORIZED` | 401 | 인증 필요 (Security 작업에서 사용) |
+| `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
 | `FORBIDDEN` | 403 | 권한 없음, 소유자 검사 실패 |
 | `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
 | `METHOD_NOT_ALLOWED` | 405 | |
@@ -310,7 +324,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
   401·403·404·409처럼 그 API에만 해당하는 응답은 `@ApiResponse`로 적는다.
 - 보안 스킴 `bearerAuth`(HTTP bearer, JWT)가 등록돼 있다. 보호 API는
   `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`로 표시한다. 전역 requirement는 걸지 않는다.
-- Security를 도입하는 작업은 `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`을 permitAll로 둔다.
+- `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`은 인증 없이 열려 있다. Swagger UI의 Authorize에
+  `POST /api/auth/refresh`로 받은 `accessToken`을 넣으면 보호 API를 호출할 수 있다.
 
 ## DB와 마이그레이션
 
@@ -370,7 +385,7 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 - 회원은 (제공자, 제공자 사용자 ID)로 찾는다. Google은 `sub`, SSAFY는 `userId`다. 같은 사람이라도 Google과 SSAFY로 로그인하면 서로 다른 회원이다(계정 연결 없음).
 - 최초 로그인 때만 닉네임(제공자 이름, 30자로 자름, 없으면 `사용자`)과 프로필 이미지(500자 초과·없음은 null, SSAFY는 항상 null)를 채운다. 이후 로그인에서는 덮어쓰지 않는다.
 - 역할은 로그인할 때마다 `ADMIN_EMAILS`로 다시 정한다(목록에서 빠지면 다음 로그인에 USER). Google은 `email_verified=true`인 이메일만, SSAFY는 이메일을 검증된 것으로 본다.
-- 제공자 토큰은 사용자 정보 조회에만 쓰고 저장하지 않는다. 우리 서비스의 access·refresh 토큰 발급은 88번이 `auth.LoginSessionIssuer`를 구현해 붙인다. **88번 전까지는 콜백이 회원만 만들고 쿠키·토큰은 내리지 않는다.**
+- 제공자 토큰은 사용자 정보 조회에만 쓰고 저장하지 않는다. 콜백이 성공하면 우리 서비스의 refresh 쿠키를 심는다(`auth.LoginSessionIssuer`). 이후 흐름은 [인증과 토큰](#인증과-토큰).
 - 외부 호출 시간 제한은 연결 3초·응답 5초(`spring.http.clients.*`)다.
 
 제공자 설정은 `application.yaml`의 `auth.providers.{key}`에 있다(인가·토큰·사용자 정보 URI, scope, 클라이언트 인증 방식 `BASIC`/`POST`, 응답 속성 이름).
@@ -405,12 +420,13 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 모든 경로는 로그인한 ACTIVE 회원 전용이다. 공용 곡도 로그인해야 하며 타인·삭제·없는 자원은 동일한 404다.
 ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 곡은 메타데이터만 조회할 수 있고
 재생·자산 조회는 409다. 응답은 `Cache-Control: private, no-store`이며 오류는 기존 Problem Details 형식이다.
+토큰이 없거나 무효라 인증 필터가 막은 401은 Security 기본값(`no-cache, no-store, max-age=0, must-revalidate`)이다.
 
-**현재 88번 JWT 구현은 미연결이다.** 기본 기동에서는 위 5개 경로가 모두 401이다.
-인증 모듈에서 `ChartQueryUserResolver` Bean을 제공하여 검증된 `AuthUser.id`를 반환하도록 연결해야 한다.
-토큰 검증·만료·인증 실패는 인증 모듈에서 처리하고, 조회 모듈은 DB의 ACTIVE 상태를 추가 확인한다.
+88번 인증과 연결돼 있다. `chart.web.AuthenticatedChartQueryUserResolver`가 인증 필터가 검증한 access 토큰의
+`AuthUser.id`만 돌려준다([인증과 토큰](#인증과-토큰)). 토큰 검증·만료·탈퇴 회원은 인증 모듈이 401로 처리하고,
+조회 모듈은 외부 파일 작업 뒤 DB의 ACTIVE 상태를 다시 확인한다.
 클라이언트가 전달한 userId 쿼리·헤더·가짜 토큰을 사용하는 임시 로그인 기능은 없다.
-테스트의 신원 대역 통과는 실제 JWT 연동 완료를 의미하지 않는다.
+조회 테스트는 실제 access 토큰을 `Authorization` 헤더로 보낸다.
 
 ### FE 소비 계약
 
@@ -462,8 +478,82 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 
 조회 테스트는 실제 임베디드 PostgreSQL, MVC, SDK 서명과 로컬 HTTP HEAD 서버를 사용한다.
 다른 트랜잭션에서 탈퇴·삭제를 커밋하는 경합과 외부 호출 시 DB 트랜잭션 부재도 확인한다.
-**88번 실제 JWT 및 40번 실제 스토리지의 프록시·만료·Range·CORS 검증은 별도로 남아 있다.**
+**40번 실제 스토리지의 프록시·만료·Range·CORS 검증은 별도로 남아 있다.**
 해당 통합 검증, MR CI·리뷰·develop-BE 병합 전에는 96번 전체 완료로 처리하지 않는다.
+
+## 인증과 토큰
+
+세션 없이 토큰으로 인증한다. 계약은 FE 요청 `ACCT-001_소셜로그인-결정-전달`의 회신, 탈퇴·WS 연동은 BE2와의
+mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에서 정했다. 설계는 작업 88번 설계 문서(개인 문서)에 있다.
+
+흐름: 로그인 콜백이 refresh 쿠키를 심고 FE `/auth/callback`으로 302 → FE가 `POST /api/auth/refresh`로 access 토큰을 받는다
+→ API 호출마다 `Authorization: Bearer {accessToken}` → 401이면 refresh를 **한 번** 부르고 원래 요청을 다시 보낸다
+→ 그래도 401이면 로그인 화면. 새로고침 뒤 메모리 토큰을 복구할 때도 refresh를 부른다.
+
+| 메서드·경로 | 인증 | 결과 |
+| --- | --- | --- |
+| `POST /api/auth/refresh` | `refresh_token` 쿠키 | 200 `{accessToken, tokenType: "Bearer", expiresIn: 1800}` + 새 `refresh_token` 쿠키. 실패는 401 `UNAUTHORIZED` "다시 로그인해 주세요." |
+| `POST /api/auth/logout` | 쿠키(없어도 됨) | 204. 서버의 refresh 토큰을 지우고 쿠키를 만료시킨다. 여러 번 불러도 같다 |
+| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt}`. 이메일·상태는 내보내지 않는다 |
+
+| 항목 | access 토큰 | refresh 토큰 |
+| --- | --- | --- |
+| 형식 | HS256 JWT. 클레임 `iss=airdrum-api`, `sub`(회원 id), `iat`, `exp`만. 권한은 넣지 않는다 | 32바이트 난수(Base64 URL 43자) |
+| 수명 | 30분(만료 판정 허용 오차 60초) | 14일. 재발급할 때마다 새 값·새 14일 |
+| 전달 | 응답 본문 → FE 메모리 → `Authorization` 헤더. 쿼리·쿠키로 받지 않는다 | 쿠키 `refresh_token`: `HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=1209600` |
+| 서버 보관 | 없음 | Redis에 SHA-256 해시만. 원문은 저장·로그하지 않는다 |
+
+- **매 요청 회원 확인**: 필터가 토큰 서명·만료를 본 뒤 `users`를 PK로 조회해 ACTIVE인지 확인하고, 권한도 DB 값을 쓴다.
+  탈퇴하면 다음 요청부터 401이고, `ADMIN_EMAILS` 변경으로 권한이 바뀌면 다음 로그인 뒤 바로 반영된다.
+- **refresh는 1회용**이다. 쓴 토큰은 즉시 무효이고, 같은 쿠키로 동시에 부르면 하나만 성공한다. FE는 refresh를 한 번에 하나만 실행한다.
+  이미 쓰였거나 로그아웃된 토큰으로 부르면 401이지만 쿠키는 지우지 않는다(동시 재발급에서 이긴 요청의 새 쿠키를 지우지 않기 위해).
+  쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
+- 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
+
+공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
+`/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
+**나머지는 없는 경로도 미인증이면 404가 아니라 401이다.** 401·403은 [오류 응답](#오류-응답) 형식이며 401에는 `WWW-Authenticate: Bearer`가 붙는다.
+
+| 상황 | 상태 | `code` | `detail` |
+| --- | --- | --- | --- |
+| 토큰 없음 | 401 | `UNAUTHORIZED` | 로그인이 필요합니다. |
+| 만료 | 401 | `UNAUTHORIZED` | 액세스 토큰이 만료되었습니다. |
+| 서명·형식·발급자 불일치, `Bearer` 아닌 헤더 | 401 | `UNAUTHORIZED` | 액세스 토큰이 올바르지 않습니다. |
+| 탈퇴·없는 회원 | 401 | `UNAUTHORIZED` | 사용할 수 없는 계정입니다. |
+| ADMIN 전용에 USER | 403 | `FORBIDDEN` | 권한이 없습니다. |
+
+### 다른 모듈에서 인증 쓰기
+
+- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
+  클라이언트가 보낸 회원 ID는 믿지 않는다. 문서에는 파라미터로 나오지 않는다. 클래스에 `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`를 붙인다.
+- **ADMIN 전용**: `@PreAuthorize("hasRole('ADMIN')")`. USER는 403이다.
+- **컨트롤러 밖**(인터셉터·연결 어댑터): `auth.CurrentAuthUser.find()`로 현재 요청의 `AuthUser`를 꺼낸다. 예: `chart.web.AuthenticatedChartQueryUserResolver`.
+- **WebSocket**(BE2): 연결 뒤 첫 메시지의 토큰으로 `auth.AuthenticationService.authenticate(token)`을 부르면
+  `AuthenticatedUser(user, expiresAt)`가 온다(실패는 `AccessTokenException`, 사유 `getReason()`). 전송마다 `expiresAt` 경과와
+  `findActive(userId)`로 다시 확인한다. 토큰을 URL 쿼리로 받지 않는다. HTTP 필터는 WS 메시지를 처리하지 않는다.
+- **회원 상태와 겨루는 저장**(채보 결과 커밋·업로드 접수): 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare(userId)`
+  (`FOR SHARE`)로 회원 행을 잠그고 `ACTIVE`를 확인한다. 잠금 순서는 `users` → `songs` → `chart_jobs`다. 트랜잭션 밖에서 부르지 않는다.
+- **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
+  `SecurityFilterChain`으로 더한다.
+- **탈퇴**(10/26 주 작업): `users`를 `FOR UPDATE`로 잠근 뒤 `auth.RefreshTokenService.revokeAllOf(userId)`로 refresh 토큰을 모두 지운다.
+
+### Redis 키
+
+| 키 | 값 | TTL |
+| --- | --- | --- |
+| `refresh:token:{SHA-256 16진}` | 회원 id. 재발급·로그아웃은 `GETDEL`로 한 번에 읽고 지운다 | 14일 |
+| `refresh:user:{회원 id}` | 그 회원의 토큰 해시 집합(탈퇴 때 일괄 삭제용) | 발급마다 14일로 연장 |
+
+Redis가 죽으면 로그인 콜백(`oauth_failed`)과 refresh·logout이 2초 안에 실패한다. 이미 받은 access 토큰으로 하는 API 호출은 영향이 없다.
+
+### 로컬 확인
+
+1. Redis를 띄우고(`docker run … redis:7-alpine`, [로컬 실행](#로컬-실행)) `.env`에 `JWT_SECRET`을 넣은 뒤 `bootRun`한다.
+2. 브라우저에서 `http://localhost:8080/api/auth/google/login` → 동의 → `FRONTEND_BASE_URL/auth/callback`으로 돌아오면
+   개발자 도구 Application 탭의 `localhost` 쿠키에 `refresh_token`이 있다.
+3. 같은 브라우저 콘솔에서 `await (await fetch('/api/auth/refresh', {method: 'POST'})).json()` (FE 개발 서버 프록시 경유 또는
+   `http://localhost:8080` 페이지에서) → `accessToken`. Swagger UI의 Authorize에 넣고 `GET /api/users/me`를 호출한다.
+4. `docker exec airdrum-redis redis-cli --scan --pattern 'refresh:*'`로 키를 확인한다. 로그아웃하면 `token` 키가 사라진다.
 
 ## 검증과 패키징
 
@@ -487,6 +577,13 @@ OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 �
 단위 범위는 `@RestClientTest`, 엔드포인트 범위는 `@SpringBootTest` + `@AutoConfigureMockMvc` +
 `@AutoConfigureMockRestServiceServer`(Boot 4 패키지 `org.springframework.boot.restclient.test.autoconfigure`)를 쓴다.
 `BE/`에서 테스트를 돌리면 로컬 `.env`도 읽히므로, 인증 설정에 의존하는 테스트는 쓰는 환경변수를 `@SpringBootTest(properties = …)`로 모두 지정한다.
+
+인증 테스트는 Redis 없이 돈다. `support.TestPropertyDefaultsInitializer`(`spring.factories` 등록)가 모든 테스트 컨텍스트에
+refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRET`이 없으면 테스트 전용 키를 넣는다.
+보호 API를 부르는 테스트는 `AccessTokenService.issue(new AuthUser(id, role), Instant.now())`로 토큰을 만들어 `Authorization` 헤더에 넣는다.
+테스트 소스의 `auth.AuthProbeController`(`/api/test-auth/me`, `/admin`)는 인증·인가 확인 전용이다.
+`@WebMvcTest` 슬라이스에는 우리 Security 체인이 없고 Boot 기본 체인이 붙으므로, 인증과 무관한 슬라이스는
+`@AutoConfigureMockMvc(addFilters = false)`로 필터를 뺀다. 이 경우 로그에 "generated security password"가 나오지만 슬라이스에만 해당한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
@@ -520,7 +617,8 @@ docker run --rm --name airdrum-api -p 127.0.0.1:8080:8080 \
 
 - 빌드 컨텍스트: `BE/`, Dockerfile: `BE/Dockerfile`
 - 컨테이너 수신 포트: `8080`, HTTP
-- 상태 확인: `GET /actuator/health`, HTTP 200 및 JSON `status: "UP"` 확인. 응답에는 프로브 그룹 이름도 포함
+- 상태 확인: `GET /actuator/health/readiness`, HTTP 200 및 JSON `status: "UP"` 확인. DB만 포함하고 Redis는 포함하지 않는다.
+  `GET /actuator/health`는 Redis도 포함하므로 컨테이너 healthcheck에 쓰지 않는다(Redis 장애로 앱이 불량 판정되지 않게)
 - 프로세스 확인: `/actuator/health/liveness`, 요청 수신 준비 확인: `/actuator/health/readiness`
 - 종료: SIGTERM, 요청 처리 대기 최대 20초. Compose 종료 유예는 30초 이상 권장
 - 로그: 표준 출력. 영속 볼륨 불필요
@@ -528,6 +626,8 @@ docker run --rm --name airdrum-api -p 127.0.0.1:8080:8080 \
 
 - DB 연결: 환경변수 `DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}`, `DB_USERNAME=${POSTGRES_USER}`,
   `DB_PASSWORD=${POSTGRES_PASSWORD}`. `postgres`의 healthcheck가 통과한 뒤 기동한다(`depends_on` `service_healthy`)
+- Redis 연결: `REDIS_HOST=redis`, `REDIS_PORT=6379`, `REDIS_PASSWORD=${REDIS_PASSWORD}`. `redis`도 `depends_on` `service_healthy`
+- 토큰: `JWT_SECRET`(32바이트 이상 난수, 비밀). 바꾸면 발급된 access 토큰이 모두 무효가 된다(refresh로 다시 받으면 된다)
 
 `/actuator/health`와 readiness는 DB 연결 상태를 포함한다. DB에 붙지 못하면 둘 다 503이고 liveness는 200을 유지한다.
 DB가 응답하지 않을 때 503은 커넥션 풀 대기 시간 5초(`spring.datasource.hikari.connection-timeout`)가 지난 뒤에 나온다.
