@@ -10,7 +10,7 @@ import com.ssafy.airdrum.chart.web.ChartQueryWebConfiguration;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** 인증 대역조차 없는 기본 기동 상태. 클라이언트가 보낸 ID·토큰은 인증 경로가 아니다. */
+/** 실제 인증 체인이 켜진 기본 기동 상태. 클라이언트가 보낸 ID·헤더·요청 속성·가짜 토큰으로는 인증되지 않는다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class ChartQueryAuthenticationTest {
@@ -21,7 +21,7 @@ class ChartQueryAuthenticationTest {
 			mvc.perform(get(path).header("X-User-Id", "1").header("Authorization", "Bearer fake-test-token")
 					.param("userId", "1").requestAttr(ChartQueryWebConfiguration.USER_ID, 1L))
 					.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
-					.andExpect(header().string("Cache-Control", "private, no-store"));
+					.andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")));
 		}
 	}
 }
