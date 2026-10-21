@@ -14,11 +14,17 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from ssaplash_ai.bench.datasets import CheckReport, load_dataset
+# 코랩·주피터 커널이 자식 프로세스에 MPLBACKEND=module://matplotlib_inline.backend_inline을 넘기는데
+# uv 가상환경에는 그 모듈이 없어 matplotlib import(모델 로드·그래프)가 실패함. 명령줄 도구는 화면이 없으므로
+# 항상 Agg. matplotlib을 처음 import하기 전에 덮어써야 해서 모듈 맨 위에 둠.
+os.environ["MPLBACKEND"] = "Agg"
+
+from ssaplash_ai.bench.datasets import CheckReport, load_dataset  # noqa: E402
 
 
 def format_report(report: CheckReport) -> str:
@@ -71,11 +77,13 @@ def run(args: argparse.Namespace) -> int:
                 "dataset": Path(args.dataset).stem,
                 "models": ",".join(result.models),
                 "device": result.device,
+                "gpuName": result.gpu_name,
                 "host": result.host,
                 "clip": opts.clip or "",
                 "nSongs": result.n_songs,
                 "nModels": len(result.models),
                 "nErrors": result.n_errors,
+                "nSkipped": result.n_skipped,
             },
             summary_metrics=report_mod.summary_metrics_by_model(summary),
             artifacts=[result.csv_path, *paths.all()],
@@ -120,7 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument(
         "--save-wav", type=int, default=0, help="모델당 분리 결과 wav를 저장할 곡 수 (설계 U8: 3)"
     )
-    run_p.add_argument("--run-id", default=None, help="runId 지정. 기본은 시각+난수")
+    run_p.add_argument(
+        "--run-id",
+        default=None,
+        help="runId 지정. 기본은 시각+난수. 같은 runId의 results.csv가 있으면 이어하기"
+        "(성공한 곡은 건너뛰고 실패한 곡만 다시 실행)",
+    )
     run_p.add_argument(
         "--no-warmup",
         action="store_true",

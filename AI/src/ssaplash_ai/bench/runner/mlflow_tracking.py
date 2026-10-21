@@ -7,7 +7,8 @@ MLFLOW_ALLOW_FILE_STORE=true를 켜고 씀 (코랩 드라이브에서 sqlite보�
 
 기록 규약
 - 실험 이름: separation-bench. run 이름: runId
-- 파라미터: dataset, models(쉼표 구분), device, host, clip, nSongs, nModels
+- 파라미터: dataset, models(쉼표 구분), device, gpuName, host, clip, nSongs, nModels, nErrors, nSkipped
+- 이어하기로 여러 번 돌리면 마지막 실행의 run만 남음. 지표는 CSV 전체(건너뛴 행 포함)로 계산
 - 태그: runId, 모델별 configHash(`config_hash.{model}`)
 - 지표: 모델별 요약값 `{model}/{열}` (report.summarize의 중앙값). -inf·nan은 건너뜀
 - 산출물: 결과 CSV, 요약 표(md), 곡별 CSV, 그래프 PNG

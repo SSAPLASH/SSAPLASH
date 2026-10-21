@@ -2,6 +2,7 @@
 
 - 시간: 벽시계(perf_counter). RTF = 처리 시간 / 곡 길이는 runner가 계산.
 - RAM: 측정 구간 동안 별도 스레드가 50ms마다 프로세스 RSS를 읽어 최댓값. psutil.
+- GPU 이름: torch.cuda.get_device_name. 이어하기 중 다른 GPU가 배정됐는지 확인하는 용도.
 - VRAM: torch.cuda.max_memory_allocated. 구간 시작에 peak 통계를 초기화하고 끝에 읽음.
   torch가 없거나 CUDA를 못 쓰면 nan. (ADR-011: 본측정은 GPU, RAM은 CSV 보조값)
 """
@@ -63,6 +64,16 @@ def cuda_available(device: str) -> bool:
     except ImportError:
         return False
     return bool(torch.cuda.is_available())
+
+
+def gpu_name(device: str) -> str:
+    """cuda 장치의 이름(예: NVIDIA A100-SXM4-40GB). CUDA를 못 쓰면 빈 문자열 (설계 #7-2 gpuName)."""
+    if not cuda_available(device):
+        return ""
+    import torch
+
+    index = torch.device(device).index or 0
+    return str(torch.cuda.get_device_name(index))
 
 
 @contextlib.contextmanager

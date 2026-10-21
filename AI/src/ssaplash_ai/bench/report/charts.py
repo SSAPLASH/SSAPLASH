@@ -94,6 +94,29 @@ def plot_metric_bars(summary: pd.DataFrame, out_png: Path) -> Path:
     return out_png
 
 
+LOG_TICK_STEPS: tuple[float, ...] = (1.0, 2.0, 3.0, 5.0)
+
+
+def log_axis_ticks(values: Sequence[float], steps: Sequence[float] = LOG_TICK_STEPS) -> list[float]:
+    """로그 축에 찍을 눈금. 각 자릿수의 1·2·3·5배 중 데이터 범위(양끝 20% 여유)에 드는 값.
+
+    값이 없거나 전부 nan·0 이하이면 빈 목록 (matplotlib 기본 눈금 유지).
+    """
+    finite = [v for v in values if isinstance(v, int | float) and math.isfinite(v) and v > 0]
+    if not finite:
+        return []
+    lo, hi = min(finite) / 1.2, max(finite) * 1.2
+    ticks: list[float] = []
+    exp = math.floor(math.log10(lo))
+    while 10.0**exp <= hi:
+        for s in steps:
+            v = s * 10.0**exp
+            if lo <= v <= hi:
+                ticks.append(round(v, 10))
+        exp += 1
+    return ticks
+
+
 def plot_rtf_vs_sdr(summary: pd.DataFrame, out_png: Path) -> Path:
     """RTF(로그 축) 대 드럼 SDR 산점도. 점마다 모델 이름을 직접 표기."""
     import matplotlib
@@ -122,6 +145,9 @@ def plot_rtf_vs_sdr(summary: pd.DataFrame, out_png: Path) -> Path:
             model, (x, y), xytext=(6, 4), textcoords="offset points", fontsize=8, color=TEXT_PRIMARY
         )
     ax.set_xscale("log")
+    # 로그 축의 기본 큰 눈금은 10의 거듭제곱 자리뿐이라 값이 한 자릿수 구간(예: 0.017~0.078)에
+    # 몰리면 눈금이 하나도 안 찍힘. 데이터 범위 안의 눈금을 직접 지정
+    ax.set_xticks(log_axis_ticks([x for x in rtf if x > 0]))
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     ax.xaxis.set_minor_formatter(FuncFormatter(lambda v, _: ""))
     ax.set_xlabel(
