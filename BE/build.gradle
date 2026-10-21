@@ -37,6 +37,10 @@ dependencies {
 	// OAuth 제공자(Google·SSAFY) 토큰·사용자 정보 호출. Boot 4의 webmvc 스타터에는 RestClient 자동 구성이 없다.
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	testImplementation 'org.springframework.boot:spring-boot-starter-restclient-test'
+	// S3 호환 스토리지의 HEAD 확인과 GET 서명. 배포 설정이 없으면 자산 발급만 503으로 차단한다.
+	implementation platform('software.amazon.awssdk:bom:2.55.12')
+	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:url-connection-client'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
