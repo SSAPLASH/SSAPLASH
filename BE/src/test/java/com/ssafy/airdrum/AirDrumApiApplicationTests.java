@@ -11,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.endpoint.web.PathMappedEndpoints;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.test.context.SpringBootTest;
 import tools.jackson.databind.json.JsonMapper;
@@ -25,6 +26,9 @@ class AirDrumApiApplicationTests {
 
 	@Autowired
 	private HealthEndpointGroups healthGroups;
+
+	@Autowired
+	private PathMappedEndpoints endpoints;
 
 	@ParameterizedTest
 	@ValueSource(strings = {"/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness"})
@@ -44,10 +48,18 @@ class AirDrumApiApplicationTests {
 		assertThat(healthGroups.get("liveness").isMember("db")).isFalse();
 	}
 
+	/** 88번부터 health 외 관리 경로는 인증이 먼저 막는다(401). 노출 자체가 없다는 것은 아래 테스트가 본다. */
 	@ParameterizedTest
 	@ValueSource(strings = {"/actuator", "/actuator/env", "/actuator/configprops", "/actuator/beans"})
-	void internalManagementEndpointsAreNotExposed(String path) throws Exception {
-		assertThat(get(path).statusCode()).isEqualTo(404);
+	void internalManagementEndpointsAreNotReachable(String path) throws Exception {
+		var response = get(path);
+		assertThat(response.statusCode()).isEqualTo(401);
+		assertThat(response.body()).contains("\"code\":\"UNAUTHORIZED\"").doesNotContain("propertySources");
+	}
+
+	@Test
+	void onlyHealthEndpointIsExposed() {
+		assertThat(endpoints.getAllPaths()).containsExactly("/actuator/health");
 	}
 
 	private HttpResponse<String> get(String path) throws Exception {
