@@ -65,3 +65,30 @@ tasks.named('bootJar') {
 tasks.named('jar') {
 	enabled = false
 }
+
+// 확장 의존 검사는 일반 API 테스트와 분리하되 CI에서는 필수 job으로 실행한다.
+sourceSets {
+	timescaleTest {
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += sourceSets.main.output
+	}
+}
+configurations {
+	timescaleTestImplementation.extendsFrom testImplementation
+	timescaleTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+tasks.register('timescaleTest', Test) {
+	description = '실제 TimescaleDB에서 Flyway V8과 데이터 보존을 검증한다.'
+	group = 'verification'
+	testClassesDirs = sourceSets.timescaleTest.output.classesDirs
+	classpath = sourceSets.timescaleTest.runtimeClasspath
+	useJUnitPlatform()
+	systemProperty 'java.net.preferIPv4Stack', 'true'
+	// 매 실행마다 새 일회용 DB를 사용하므로 이전 테스트 결과로 생략하지 않는다.
+	outputs.upToDateWhen { false }
+	doFirst {
+		if (!System.getenv('TIMESCALE_TEST_URL') || !System.getenv('TIMESCALE_TEST_PASSWORD')) {
+			throw new GradleException('scripts/Test-TimescaleSchema.ps1을 통해 일회용 TimescaleDB에서 실행하세요.')
+		}
+	}
+}

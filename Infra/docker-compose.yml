@@ -13,7 +13,9 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16-alpine
+    image: timescale/timescaledb:2.30.2-pg16
+    # 기존 볼륨에서도 확장을 preload한다. 운영 전환 전 백업·복원 검증이 필요하다.
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
