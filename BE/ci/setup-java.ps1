@@ -23,6 +23,17 @@ if (-not (Test-Path -LiteralPath $javaExecutable)) {
     throw 'JDK 압축 해제 후 java.exe를 찾을 수 없습니다.'
 }
 $env:JAVA_HOME = $jdkHome
+
+# CI JVM과 그 자식 프로세스의 소켓을 시작부터 IPv4로 고정한다.
+if ($env:CI -eq 'true') {
+    $ipv4Option = '-Djava.net.preferIPv4Stack=true'
+    if ([string]::IsNullOrWhiteSpace($env:JAVA_TOOL_OPTIONS)) {
+        $env:JAVA_TOOL_OPTIONS = $ipv4Option
+    } else {
+        $env:JAVA_TOOL_OPTIONS = "$($env:JAVA_TOOL_OPTIONS.Trim()) $ipv4Option"
+    }
+}
+
 & $javaExecutable -version
 if ($LASTEXITCODE -ne 0) {
     throw 'JDK 실행 확인에 실패했습니다.'
