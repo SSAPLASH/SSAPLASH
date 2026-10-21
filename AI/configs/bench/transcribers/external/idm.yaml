@@ -6,7 +6,7 @@
 name: idm
 adapter: external
 env_name: idm
-python_exe: .venv-idm/Scripts/python.exe
+python_exe: .venv-idm/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
 script: scripts/transcribers_ext/idm_transcribe.py
 variant: idm-44-train-kits
 options:

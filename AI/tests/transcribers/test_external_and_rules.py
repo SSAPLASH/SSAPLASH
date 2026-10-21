@@ -17,6 +17,7 @@ from ssaplash_ai.bench.transcribers import (
     BatchItem,
     TranscriberConfig,
     create_transcriber,
+    venv_python,
     write_truth_csv,
 )
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
@@ -128,8 +129,25 @@ def test_external_python이_없으면_load_실패(ext: dict, tmp_path: Path):
     cfg = _cfg(ext["script"])
     cfg.python_exe = str(tmp_path / "nope" / "python.exe")
     tr = create_transcriber(cfg, "cpu")
-    with pytest.raises(FileNotFoundError, match="별도 환경 python"):
+    with pytest.raises(FileNotFoundError, match=r"별도 환경 python.*또는 .*\.venv-fake"):
         tr.load()
+
+
+def test_external_python_경로가_없으면_env_name_폴더에서_찾는다(
+    ext: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # yaml에 적힌 Windows 경로가 없는 OS(코랩)라도 .venv-<env_name>의 이 OS python을 쓴다
+    monkeypatch.chdir(tmp_path)
+    alt = venv_python(".venv-fake")
+    alt.parent.mkdir(parents=True)
+    alt.write_text("", encoding="utf-8")
+    cfg = _cfg(ext["script"])
+    cfg.python_exe = (
+        ".venv-fake/Scripts/python.exe" if alt.name != "python.exe" else ".venv-fake/bin/python"
+    )
+    tr = create_transcriber(cfg, "cpu")
+    assert tr.python_exe == alt
+    tr.load()  # 실행 파일·스크립트 존재 확인만 통과하면 됨
 
 
 def test_러너는_external을_batch로_돌린다(ext: dict, tmp_path: Path):

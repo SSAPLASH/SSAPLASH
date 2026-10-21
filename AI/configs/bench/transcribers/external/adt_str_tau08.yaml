@@ -4,7 +4,7 @@
 name: adt_str_tau08
 adapter: external
 env_name: adt-str
-python_exe: .venv-adt-str/Scripts/python.exe
+python_exe: .venv-adt-str/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
 script: scripts/transcribers_ext/adt_str_transcribe.py
 variant: setting-tau-0.8
 options:
