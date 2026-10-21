@@ -41,6 +41,8 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.55.12')
 	implementation 'software.amazon.awssdk:s3'
 	implementation 'software.amazon.awssdk:url-connection-client'
+	// refresh 토큰 보관(S15P31A307-88). Lettuce 클라이언트이며 첫 사용 때 연결한다.
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
