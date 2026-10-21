@@ -1,15 +1,18 @@
 // 가상 드럼 키트 캔버스. 세팅(드래그 배치)·캘리브레이션(목표 패드·자세 마커·앵커)·자유 연주(타격 플래시)에 공용.
 import { useEffect, useRef } from 'react';
-import { ALL_PADS, PAD_META, type KitLayout, type PadId } from '@/domain/pads';
-import type { Pose } from '@/domain/events';
+import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
+import type { KitLayout } from '@/domain/kitLayout';
+import type { HitFx, Pose } from '@/domain/events';
 import type { PadAnchor } from '@/domain/calibration';
 import { poseToScreen, radiusToScreen } from '@/domain/kitMapping';
 import type { KeyMap } from '@/domain/keyMap';
 
 export interface KitCanvasProps {
   layout: KitLayout;
-  /** 타격 플래시: pad → performance.now() */
-  flashes?: React.RefObject<Map<PadId, number>>;
+  /** 타격 이펙트(번쩍임·링·눌림·의성어) 입력. 화면이 useHitFx로 채운다 */
+  hits?: React.RefObject<Map<PadId, HitFx>>;
+  /** 패드를 톡 쳤을 때(이동 6px 이내). 끌기는 호출하지 않는다 */
+  onTapPad?: (pad: PadId, nx: number, ny: number) => void;
   highlightPad?: PadId | null;
   anchors?: Partial<Record<PadId, PadAnchor>>;
   /** 자세 마커 (왼손, 오른손). 없으면 안 그림 */
@@ -25,12 +28,57 @@ export interface KitCanvasProps {
   dimOthers?: boolean;
 }
 
+/** 톡 치기와 끌기를 가르는 이동 거리(px) */
+const TAP_SLOP_PX = 6;
+const FLASH_MS = 220;
+const RING_MS = 500;
+const SQUASH_MS = 280;
+const TEXT_MS = 700;
+
+/** 눌림/튕김 크기 배율 곡선: 0→1, 18%→0.86, 55%→1.07, 100%→1 (구간 선형) */
+function squashScale(u: number, amp: number): number {
+  const keys: [number, number][] = [
+    [0, 1],
+    [0.18, 0.86],
+    [0.55, 1.07],
+    [1, 1],
+  ];
+  for (let i = 1; i < keys.length; i++) {
+    if (u <= keys[i][0]) {
+      const [u0, k0] = keys[i - 1];
+      const [u1, k1] = keys[i];
+      const k = k0 + ((k1 - k0) * (u - u0)) / (u1 - u0);
+      return 1 + (k - 1) * amp;
+    }
+  }
+  return 1;
+}
+
+/** 세기 → 눌림 진폭. 64면 0.7배, 120이면 1.3배 */
+function squashAmp(velocity: number): number {
+  return Math.min(1.5, Math.max(0.5, 0.7 + ((velocity - 64) / 56) * 0.6));
+}
+
 export function KitCanvas(props: KitCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
   const dragRef = useRef<{ pad: PadId; dx: number; dy: number } | null>(null);
+  /** 포인터 다운 기록. 6px 넘게 움직이면 moved → 끌기, 아니면 업에서 톡 치기 */
+  const pressRef = useRef<{ pad: PadId; x: number; y: number; moved: boolean } | null>(null);
+  /** 모션 줄이기 환경이면 링·눌림·의성어를 생략하고 번쩍임만 그린다 */
+  const reducedMotionRef = useRef(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotionRef.current = mq.matches;
+    const on = (e: MediaQueryListEvent) => {
+      reducedMotionRef.current = e.matches;
+    };
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
   useEffect(() => {
     props.surfaceRef?.(wrapRef.current);
@@ -86,13 +134,22 @@ export function KitCanvas(props: KitCanvasProps) {
         const cy = pl.y * H;
         const r = pl.r * W;
         const meta = PAD_META[pad];
-        const flashAt = p.flashes?.current?.get(pad);
-        const flash = flashAt !== undefined ? Math.max(0, 1 - (now - flashAt) / 220) : 0;
+        const fx = p.hits?.current?.get(pad);
+        const age = fx ? now - fx.at : Infinity;
+        const flash = fx ? Math.max(0, 1 - age / FLASH_MS) : 0;
+        const reduced = reducedMotionRef.current;
         const isTarget = p.highlightPad === pad;
         const dim = p.dimOthers && p.highlightPad && !isTarget;
         const isPreview = p.previewPad === pad;
 
         ctx.save();
+        // 눌림/튕김: 패드 중심 기준 배율
+        if (fx && !reduced && age < SQUASH_MS) {
+          const sc = squashScale(age / SQUASH_MS, squashAmp(fx.velocity));
+          ctx.translate(cx, cy);
+          ctx.scale(sc, sc);
+          ctx.translate(-cx, -cy);
+        }
         ctx.globalAlpha = dim ? 0.35 : 1;
         // 림
         ctx.beginPath();
@@ -100,7 +157,7 @@ export function KitCanvas(props: KitCanvasProps) {
         ctx.fillStyle = meta.color + (flash > 0 ? 'ff' : '2e');
         if (flash > 0) {
           ctx.fillStyle = meta.color;
-          ctx.globalAlpha = 0.35 + flash * 0.65;
+          ctx.globalAlpha = 0.18 + flash * 0.82;
         }
         ctx.fill();
         ctx.globalAlpha = dim ? 0.35 : 1;
@@ -131,6 +188,47 @@ export function KitCanvas(props: KitCanvasProps) {
           ctx.fillText(keys, cx, cy + r * 0.28);
         }
         ctx.restore();
+      }
+
+      // 링·의성어 (모든 패드 위에 그린다)
+      if (p.hits?.current && !reducedMotionRef.current) {
+        for (const pad of ALL_PADS) {
+          const fx = p.hits.current.get(pad);
+          if (!fx) continue;
+          const age = now - fx.at;
+          const pl = p.layout[pad];
+          const cx = pl.x * W;
+          const cy = pl.y * H;
+          const r = pl.r * W;
+          const color = PAD_META[pad].color;
+          if (age < RING_MS) {
+            const u = age / RING_MS;
+            const ease = 1 - Math.pow(1 - u, 3);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * (0.9 + 1.0 * ease), 0, Math.PI * 2);
+            ctx.globalAlpha = 0.9 * (1 - u);
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = color;
+            ctx.stroke();
+            ctx.restore();
+          }
+          if (age < TEXT_MS) {
+            const u = age / TEXT_MS;
+            const alpha = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
+            const size = Math.max(14, r * 0.45 * (0.8 + (fx.velocity / 127) * 0.4));
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+            ctx.fillStyle = color;
+            ctx.font = `800 ${size}px Pretendard Variable, Pretendard, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 6;
+            ctx.fillText(PAD_META[pad].onomatopoeia, cx, cy - r * (0.7 + 1.0 * u));
+            ctx.restore();
+          }
+        }
       }
 
       // 자세 마커
@@ -178,30 +276,46 @@ export function KitCanvas(props: KitCanvasProps) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!props.draggable) return;
+    if (!props.draggable && !props.onTapPad) return;
     const h = hitTest(e.clientX, e.clientY);
     if (!h) return;
-    const pl = props.layout[h.pad];
-    dragRef.current = { pad: h.pad, dx: pl.x - h.nx, dy: pl.y - h.ny };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    pressRef.current = { pad: h.pad, x: e.clientX, y: e.clientY, moved: false };
+    if (props.draggable) {
+      const pl = props.layout[h.pad];
+      dragRef.current = { pad: h.pad, dx: pl.x - h.nx, dy: pl.y - h.ny };
+    }
+    // 합성 포인터 이벤트(테스트·자동화)는 활성 포인터가 없어 캡처가 실패한다. 캡처는 끌기 보조일 뿐이라 무시한다
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* 활성 포인터 없음 */
+    }
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    const press = pressRef.current;
+    if (press && !press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) press.moved = true;
     const d = dragRef.current;
-    if (!d || !props.onMovePad) return;
+    // 6px 안쪽 움직임은 톡 치기로 보고 패드를 옮기지 않는다
+    if (!d || !press?.moved || !props.onMovePad) return;
     const rect = wrapRef.current!.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width + d.dx;
     const ny = (e.clientY - rect.top) / rect.height + d.dy;
     props.onMovePad(d.pad, Math.min(0.95, Math.max(0.05, nx)), Math.min(0.95, Math.max(0.05, ny)));
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    const press = pressRef.current;
+    pressRef.current = null;
     dragRef.current = null;
+    if (!press || press.moved || e.type === 'pointercancel') return;
+    const rect = wrapRef.current!.getBoundingClientRect();
+    props.onTapPad?.(press.pad, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
   };
 
   return (
     <div
       ref={wrapRef}
       className="kit-wrap"
-      style={{ cursor: props.draggable ? 'grab' : 'crosshair' }}
+      style={{ cursor: props.draggable ? 'grab' : props.onTapPad ? 'pointer' : 'crosshair' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

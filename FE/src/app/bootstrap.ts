@@ -1,13 +1,15 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import type { InputSource } from '@/input/InputSource';
-import { inputManager, keyboardSource } from './sources';
+import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
+import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
 import type { ResolvedHit, SensorId } from '@/domain/events';
+import type { PadId } from '@/domain/pads';
 import { applyRadiusTuning } from '@/domain/tuning';
 
 let currentSensor: SensorId = 'none';
@@ -113,15 +115,94 @@ export function bootstrapInput(): void {
     if (soundOnHit) pushTelemetry(hit);
   });
 
-  void inputManager.attach(keyboardSource);
+  if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
   void activateSensor(useSettings.getState().sensorKind);
   useSettings.subscribe((s, prev) => {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
+    if (s.soundSetId !== prev.soundSetId) void applySoundSet();
   });
+}
+
+// ── 사운드 세트 ──────────────────────────────────────────────
+/** 디코드가 끝난 세트 캐시. 세트를 다시 고를 때 재다운로드하지 않는다 */
+const soundSetCache = new Map<SoundSetId, SoundSet>();
+let appliedSetId: SoundSetId | null = null;
+let loadingSetId: SoundSetId | null = null;
+/** 세트를 빠르게 바꿔 응답이 뒤섞여도 마지막 선택만 반영하기 위한 번호 */
+let soundSetRequest = 0;
+
+function commitSoundSet(set: SoundSet | null, id: SoundSetId): void {
+  audioEngine.setSoundSet(set);
+  appliedSetId = id;
+  useLive.setState({ soundSetState: 'ready', soundSetMissing: set?.missing ?? [] });
+}
+
+/**
+ * 설정의 soundSetId에 맞춰 세트를 적용한다. 오디오가 아직 켜지지 않았으면(디코드할 컨텍스트가 없으면)
+ * 아무것도 하지 않고, unlockAudio가 다시 부른다. 로딩 중 타격은 합성음으로 울린다.
+ */
+async function applySoundSet(): Promise<void> {
+  const id = useSettings.getState().soundSetId;
+  if (id === 'synth') {
+    soundSetRequest++;
+    loadingSetId = null;
+    commitSoundSet(null, id);
+    return;
+  }
+  const cached = soundSetCache.get(id);
+  if (cached) {
+    soundSetRequest++;
+    loadingSetId = null;
+    commitSoundSet(cached, id);
+    return;
+  }
+  const ctx = audioEngine.context;
+  if (!ctx || loadingSetId === id) return;
+  const req = ++soundSetRequest;
+  loadingSetId = id;
+  appliedSetId = null;
+  audioEngine.setSoundSet(null);
+  useLive.setState({ soundSetState: 'loading', soundSetMissing: [] });
+  try {
+    const set = await loadSampleSet(ctx, id);
+    soundSetCache.set(id, set);
+    if (req !== soundSetRequest) return;
+    loadingSetId = null;
+    commitSoundSet(set, id);
+  } catch {
+    if (req !== soundSetRequest) return;
+    loadingSetId = null;
+    useLive.setState({ soundSetState: 'error', soundSetMissing: [] });
+  }
+}
+
+let previewSeq = 0;
+/**
+ * 세팅 화면의 "톡 치기". 소리와 화면 표시(lastHit·hitSeq)만 내고 텔레메트리·통계에는 넣지 않는다(source 'preview').
+ */
+export async function previewHit(pad: PadId, velocity: number): Promise<void> {
+  await unlockAudio();
+  const now = performance.now();
+  const hit: ResolvedHit = {
+    id: --previewSeq,
+    stickId: 0,
+    pad,
+    velocity,
+    tHit: now,
+    tRecv: now,
+    tResolved: now,
+    source: 'preview',
+    pose: { pitch: 0, yaw: 0 },
+    peakAccel: 0,
+  };
+  hit.tAudio = audioEngine.trigger(pad, velocity);
+  useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
 }
 
 /** 첫 사용자 제스처에서 오디오 켜기 */
 export async function unlockAudio(): Promise<void> {
   await audioEngine.ensure();
   useLive.setState({ audioReady: audioEngine.ready });
+  // 첫 제스처 이후 세트 로드(이미 적용·로딩 중이면 건너뜀)
+  if (appliedSetId !== useSettings.getState().soundSetId) void applySoundSet();
 }
