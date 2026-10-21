@@ -75,7 +75,8 @@ class OAuth2ProviderRegistryTest {
 
 	static AuthProperties properties(String redirectBaseUrl, Map<String, Provider> providers) {
 		return new AuthProperties("http://localhost:5173", redirectBaseUrl, "/auth/callback", "/login", true,
-				Duration.ofMinutes(5), new AuthProperties.Admin(List.of()), providers);
+				Duration.ofMinutes(5), new AuthProperties.Admin(List.of()), providers,
+				new AuthProperties.Jwt(AuthTokenPropertiesTest.SECRET_32, null), null, null);
 	}
 
 }
