@@ -32,6 +32,19 @@ spring:
       ddl-auto: validate
     open-in-view: false
 
+# 파일이 존재할 때만 사용한다. 미설정 상태에서는 자산 URL 요청에 503을 반환한다.
+chart:
+  assets:
+    enabled: ${CHART_ASSET_ENABLED:false}
+    endpoint: ${CHART_ASSET_ENDPOINT:}
+    public-endpoint: ${CHART_ASSET_PUBLIC_ENDPOINT:}
+    region: ${CHART_ASSET_REGION:us-east-1}
+    sheet-bucket: ${CHART_ASSET_SHEET_BUCKET:}
+    accompaniment-bucket: ${CHART_ASSET_ACCOMPANIMENT_BUCKET:}
+    access-key: ${CHART_ASSET_ACCESS_KEY:}
+    secret-key: ${CHART_ASSET_SECRET_KEY:}
+    url-ttl: ${CHART_ASSET_URL_TTL:10m}
+
 logging:
   level:
     # 404·405는 GlobalExceptionHandler가 WARN 한 줄로 남긴다. DispatcherServlet의 중복 WARN은 숨긴다.
