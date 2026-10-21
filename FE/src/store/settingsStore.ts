@@ -43,6 +43,8 @@ interface SettingsState {
   soundSetId: SoundSetId;
   /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
   testVelocity: TestVelocity;
+  /** 리듬 게임 뷰: 'highway' 노트 레인 / 'kit' 세팅한 킷 위 연주 */
+  gameView: GameView;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -69,11 +71,13 @@ interface SettingsState {
   setVolume: (v: number) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
+  setGameView: (v: GameView) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
+export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 5;
+export const SETTINGS_VERSION = 6;
 
 /**
  * 저장된 설정 이행.
@@ -81,6 +85,7 @@ export const SETTINGS_VERSION = 5;
  * v2 → v3: 최상위 pointerHitKeys·wsUrl → sensorOptions(소스별 설정 묶음). 옛 필드는 지운다.
  * v3 → v4: 최상위 maxRadiusDeg → tuning.maxRadiusDeg. 나머지 튜닝 값은 기본값.
  * v4 → v5: soundSetId(기본 'ssaplash')·testVelocity(기본 96) 추가.
+ * v5 → v6: gameView(기본 'highway') 추가. 알 수 없는 값은 'highway'.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -110,6 +115,9 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     if (p.soundSetId !== 'synth' && p.soundSetId !== 'ssaplash') p.soundSetId = 'ssaplash';
     if (p.testVelocity !== 64 && p.testVelocity !== 96 && p.testVelocity !== 120) p.testVelocity = 96;
   }
+  if (version < 6) {
+    if (p.gameView !== 'highway' && p.gameView !== 'kit') p.gameView = 'highway';
+  }
   return p as unknown as SettingsState;
 }
 
@@ -133,6 +141,7 @@ export const useSettings = create<SettingsState>()(
       volume: 0.8,
       soundSetId: 'ssaplash',
       testVelocity: 96,
+      gameView: 'highway',
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -178,6 +187,7 @@ export const useSettings = create<SettingsState>()(
       setVolume: (volume) => set({ volume }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
+      setGameView: (gameView) => set({ gameView }),
     }),
     {
       name: 'ssaplash.settings',

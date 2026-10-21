@@ -4,22 +4,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
+import { KitPlayView } from '@/components/KitPlayView';
+import { useHitFx } from '@/components/useHitFx';
 import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
 import { STICK_PADS, type PadId } from '@/domain/pads';
 import { isProfileComplete } from '@/domain/calibration';
-import type { InputSourceKind } from '@/domain/events';
+import type { HitFx, InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, savePlayLog, toLoggedHit, type LoggedHit } from '@/engine/playLog';
 import { pushTelemetry } from '@/engine/telemetry';
-import { inputManager } from '@/app/sources';
+import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
-import { useSettings } from '@/store/settingsStore';
+import { useSettings, type GameView } from '@/store/settingsStore';
 
 type Stage = 'select' | 'ready' | 'play';
 
 /** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
 const CLICK_LOOKAHEAD_MS = 200;
+
+const GAME_VIEWS: { id: GameView; label: string }[] = [
+  { id: 'highway', label: '노트 하이웨이' },
+  { id: 'kit', label: '킷 위 연주' },
+];
 
 const DIFF_LABEL: Record<Chart['difficulty'], string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
 
@@ -48,6 +55,9 @@ export function PlayPage() {
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
   const hits = useRef<LoggedHit[]>([]);
+  // 킷 뷰 타격 이펙트 (useHitFx가 live 스토어 타격을 기록). 하이웨이 뷰에서는 쓰지 않는다
+  const hitFx = useRef(new Map<PadId, HitFx>());
+  useHitFx(hitFx);
   const startedAt = useRef(new Date());
   const nextBeat = useRef(0);
   const lastHud = useRef(0);
@@ -102,6 +112,7 @@ export function PlayPage() {
         setHud(ss.snapshot());
       });
       flashes.current.clear();
+      hitFx.current.clear();
       popups.current = [];
       hits.current = [];
       nextBeat.current = 0;
@@ -232,6 +243,26 @@ export function PlayPage() {
           <h1>리듬 게임</h1>
           <span className="small dim">곡을 고르면 준비 화면으로 갑니다</span>
         </div>
+        <div className="card col" style={{ marginBottom: 16 }}>
+          <h3>게임 뷰</h3>
+          <div className="row" role="group" aria-label="게임 뷰">
+            {GAME_VIEWS.map((v) => (
+              <button
+                key={v.id}
+                className={settings.gameView === v.id ? 'btn-primary' : 'btn-ghost'}
+                aria-pressed={settings.gameView === v.id}
+                onClick={() => settings.setGameView(v.id)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <span className="small dim">
+            {settings.gameView === 'kit'
+              ? '세팅한 킷 배치 위에서 링이 줄어들어 패드에 닿을 때 칩니다.'
+              : '노트가 레인을 따라 판정선으로 떨어집니다.'}
+          </span>
+        </div>
         <div className="grid-2">
           <div className="card col">
             <h3>곡 선택</h3>
@@ -304,14 +335,25 @@ export function PlayPage() {
     <main className="main wide">
       <div className="play-layout">
         <div style={{ position: 'relative', minHeight: 480 }}>
-          <NoteHighway
-            session={session}
-            scrollMs={settings.scrollMs}
-            flashes={flashes}
-            popups={popups}
-            keyMap={settings.keyMap}
-            onFrame={onFrame}
-          />
+          {settings.gameView === 'kit' ? (
+            <KitPlayView
+              session={session}
+              layout={settings.kitLayout}
+              scrollMs={settings.scrollMs}
+              hits={hitFx}
+              keyMap={KEYBOARD_INPUT_ENABLED ? settings.keyMap : undefined}
+              onFrame={onFrame}
+            />
+          ) : (
+            <NoteHighway
+              session={session}
+              scrollMs={settings.scrollMs}
+              flashes={flashes}
+              popups={popups}
+              keyMap={settings.keyMap}
+              onFrame={onFrame}
+            />
+          )}
           {stage === 'ready' && (
             <div className="overlay">
               <h2>{chart.title}</h2>
