@@ -4,9 +4,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { KitCanvas } from '@/components/KitCanvas';
+import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
+import type { HitFx } from '@/domain/events';
 import { isProfileComplete } from '@/domain/calibration';
 import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
 import { inputManager } from '@/app/sources';
@@ -28,7 +30,8 @@ export function FreePlayPage() {
   const sourceMessage = useLive((s) => s.sourceMessage);
   const connected = useLive((s) => s.connected);
 
-  const flashes = useRef(new Map<PadId, number>());
+  const hits = useRef(new Map<PadId, HitFx>());
+  useHitFx(hits);
   const [stats, setStats] = useState(emptyHitStats);
 
   // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
@@ -37,11 +40,10 @@ export function FreePlayPage() {
     inputManager.setCandidateProvider(null);
   }, []);
 
-  // 타격마다 플래시·통계. 자세(60Hz)와 분리하려고 store를 직접 구독한다
+  // 타격마다 통계(이펙트는 useHitFx). 자세(60Hz)와 분리하려고 store를 직접 구독한다
   useEffect(() => {
     return useLive.subscribe((s, prev) => {
       if (s.hitSeq === prev.hitSeq || !s.lastHit) return;
-      if (s.lastHit.pad) flashes.current.set(s.lastHit.pad, performance.now());
       const hit = s.lastHit;
       setStats((st) => addHit(st, hit));
     });
@@ -116,7 +118,7 @@ export function FreePlayPage() {
             layout={kitLayout}
             keyMap={keyMap}
             anchors={profile?.anchors}
-            flashes={flashes}
+            hits={hits}
             poses={pose}
             showPoses={sensorOn}
             surfaceRef={bindSensorSurface}

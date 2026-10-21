@@ -1,39 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KitCanvas } from '@/components/KitCanvas';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
+import { KeyboardMappingCard } from '@/components/KeyboardMappingCard';
+import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
+import type { HitFx } from '@/domain/events';
+import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
 import { TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
+import { SOUND_SET_LABELS, type SoundSetId } from '@/audio/soundSets';
 import { sensorRegistry } from '@/app/sensorRegistry';
-import { unlockAudio } from '@/app/bootstrap';
+import { previewHit } from '@/app/bootstrap';
+import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 
 // 키보드는 항상 켜져 있고(설계 D9), 여기서는 센서 소스만 고른다.
 // 'none'(키보드만)은 예약어라 맨 앞에 직접 두고, 나머지는 레지스트리 등록 순서를 따른다
+const PRESET_IDS: KitLayoutPresetId[] = ['basic', 'wide', 'tight'];
+const VELOCITY_CHOICES: { v: 64 | 96 | 120; label: string }[] = [
+  { v: 64, label: '약' },
+  { v: 96, label: '보통' },
+  { v: 120, label: '강' },
+];
+
 const NO_SENSOR = { id: 'none', label: '키보드만', description: '키 하나가 패드 하나. 캘리브레이션 없이 바로 플레이' };
 
 export function SetupPage() {
   const s = useSettings();
   const live = useLive();
-  const [bindTarget, setBindTarget] = useState<{ pad: PadId; stickId: 0 | 1 } | null>(null);
   const [presetName, setPresetName] = useState('');
   const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!bindTarget) return;
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault();
-      if (e.code === 'Escape') {
-        setBindTarget(null);
-        return;
-      }
-      s.bindKey(e.code, bindTarget.pad, bindTarget.stickId);
-      setBindTarget(null);
-    };
-    window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [bindTarget, s]);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
@@ -43,10 +40,15 @@ export function SetupPage() {
   const lat = audioEngine.latency();
   void tick;
 
-  const testPad = async (pad: PadId) => {
-    await unlockAudio();
-    audioEngine.trigger(pad, 100);
+  // 타격 이펙트. 톡 치기·키보드·센서 타격 모두 live의 hitSeq로 들어온다
+  const hits = useRef(new Map<PadId, HitFx>());
+  useHitFx(hits);
+
+  const testPad = (pad: PadId) => {
+    void previewHit(pad, s.testVelocity);
   };
+
+  const lastHit = live.lastHit;
 
   return (
     <main className="main">
@@ -84,59 +86,52 @@ export function SetupPage() {
             </div>
             <p className="small dim">
               패드를 끌어 원하는 자리에 둡니다. 포인터 모의 IMU는 이 화면 좌표를 그대로 자세로 쓰고, 센서가 오면 각도↔화면
-              변환 규칙(kitMapping)으로 반영됩니다. 클릭하면 소리가 납니다.
+              변환 규칙(kitMapping)으로 반영됩니다. 패드를 톡 치면 소리와 이펙트가 나고, 끌면 위치만 바뀝니다.
             </p>
-            <KitCanvas layout={s.kitLayout} draggable onMovePad={s.movePad} keyMap={s.keyMap} anchors={s.profile?.anchors} />
+            <div className="chips">
+              {PRESET_IDS.map((id) => (
+                <button key={id} className="chip" onClick={() => s.applyLayoutPreset(id)}>
+                  {KIT_LAYOUT_PRESET_LABELS[id]}
+                </button>
+              ))}
+              <span className="small dim" style={{ marginLeft: 8 }}>
+                세기
+              </span>
+              {VELOCITY_CHOICES.map((c) => (
+                <button
+                  key={c.v}
+                  className={`chip ${s.testVelocity === c.v ? 'active' : ''}`}
+                  onClick={() => s.setTestVelocity(c.v)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <KitCanvas
+              layout={s.kitLayout}
+              draggable
+              onMovePad={s.movePad}
+              onTapPad={testPad}
+              hits={hits}
+              keyMap={KEYBOARD_INPUT_ENABLED ? s.keyMap : undefined}
+              anchors={s.profile?.anchors}
+            />
+            <p className="small dim">
+              마지막 타격:{' '}
+              {lastHit
+                ? `${lastHit.pad ? PAD_META[lastHit.pad].label : '판정 없음'} · 세기 ${lastHit.velocity} · ${lastHit.source}`
+                : '아직 없음'}
+            </p>
             <div className="chips">
               {LANE_ORDER.map((pad) => (
-                <button key={pad} className="chip" onClick={() => void testPad(pad)}>
+                <button key={pad} className="chip" onClick={() => testPad(pad)}>
                   {PAD_META[pad].label} 소리
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="card col">
-            <h3>키 매핑</h3>
-            <p className="small dim">
-              "추가"를 누른 뒤 키를 누르면 바인딩됩니다. 왼손 키는 스틱 0, 오른손 키는 스틱 1로 기록됩니다. Esc로 취소.
-            </p>
-            <div className="keymap-list">
-              {LANE_ORDER.map((pad) => {
-                const keys = Object.entries(s.keyMap).filter(([, b]) => b.pad === pad);
-                const active = bindTarget?.pad === pad;
-                return (
-                  <div key={pad} className={`keymap-row ${active ? 'active' : ''}`}>
-                    <span className="swatch" style={{ background: PAD_META[pad].color }} />
-                    <span>{PAD_META[pad].label}</span>
-                    <span className="keys">
-                      {keys.map(([code, b]) => (
-                        <button key={code} title="클릭하면 해제" onClick={() => s.unbindKey(code)}>
-                          <kbd className="kbd" style={{ borderColor: b.stickId === 0 ? 'var(--left)' : 'var(--right)' }}>
-                            {code.replace('Key', '').replace('Digit', '')}
-                          </kbd>
-                        </button>
-                      ))}
-                      {active && <span className="small dim">키를 누르세요…</span>}
-                    </span>
-                    <span className="row" style={{ gap: 4 }}>
-                      <button className="small" onClick={() => setBindTarget({ pad, stickId: 0 })}>
-                        왼손 추가
-                      </button>
-                      <button className="small" onClick={() => setBindTarget({ pad, stickId: 1 })}>
-                        오른손 추가
-                      </button>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <div>
-              <button className="btn-ghost small" onClick={s.resetKeyMap}>
-                기본 매핑으로
-              </button>
-            </div>
-          </div>
+          {KEYBOARD_INPUT_ENABLED && <KeyboardMappingCard />}
         </div>
 
         <div className="col">
@@ -185,6 +180,29 @@ export function SetupPage() {
 
           <div className="card col">
             <h3>판정·사운드</h3>
+            <div className="field">
+              <label>사운드 세트</label>
+              <select value={s.soundSetId} onChange={(e) => s.setSoundSetId(e.target.value as SoundSetId)}>
+                {(['ssaplash', 'synth'] as SoundSetId[]).map((id) => (
+                  <option key={id} value={id}>
+                    {SOUND_SET_LABELS[id]}
+                  </option>
+                ))}
+              </select>
+              <p className="small faint">
+                {s.soundSetId === 'synth'
+                  ? '합성음을 씁니다.'
+                  : live.soundSetState === 'loading'
+                    ? '샘플 불러오는 중… (그동안은 합성음)'
+                    : live.soundSetState === 'error'
+                      ? '샘플을 불러오지 못해 합성음을 씁니다.'
+                      : live.soundSetState === 'ready'
+                        ? live.soundSetMissing.length > 0
+                          ? `샘플 준비됨 · 합성음으로 대체: ${live.soundSetMissing.map((p) => PAD_META[p].label).join(', ')}`
+                          : '샘플 준비됨'
+                        : '소리를 한 번 내면 샘플을 불러옵니다.'}
+              </p>
+            </div>
             <div className="field">
               <label>
                 판정 폭 Perfect ±{s.timing.perfectMs}ms · Good ±{s.timing.goodMs}ms

@@ -1,0 +1,87 @@
+{
+  "name": "SSAPLASH selected kit",
+  "masterVolume": 0.21,
+  "adjustmentsBakedIntoWav": false,
+  "pads": {
+    "kick": {
+      "file": "audio/kick.wav",
+      "label": "강한 킥",
+      "sampleId": "kick-2",
+      "gain": 1,
+      "semitones": 0,
+      "playbackRate": 1.0,
+      "source": "kick_24/kick/kick/k_vl14_rr1.flac",
+      "sha256": "005c774ff60f614c5e0b1e451e556fbbc9b3e4d2fcf7c932de3c9d7f84b64eff"
+    },
+    "snare": {
+      "file": "audio/snare.wav",
+      "label": "강한 중앙 타격",
+      "sampleId": "snare-2",
+      "gain": 1.2,
+      "semitones": 0,
+      "playbackRate": 1.0,
+      "source": "snare_14/center/top/sn_center_vl10_rr1.flac",
+      "sha256": "9a840e547e6088b7e925be98992b55ddee8037aa4d886dfce6db381761728415"
+    },
+    "hihat": {
+      "file": "audio/hihat.wav",
+      "label": "페달 닫기",
+      "sampleId": "hihat-5",
+      "gain": 0.8,
+      "semitones": 0,
+      "playbackRate": 1.0,
+      "source": "hihat_14/chik/cl/ht_chik_vl4_rr1.flac",
+      "sha256": "8caa8024637c0a54dbaa4f6c7dc9a8e0c1b7e871ed567c025e6b730875eba549"
+    },
+    "high": {
+      "file": "audio/high.wav",
+      "label": "14인치 · 중앙",
+      "sampleId": "high-0",
+      "gain": 1,
+      "semitones": 6,
+      "playbackRate": 1.4142135623730951,
+      "source": "tom_14/center/cl/t14_vl5_rr1.flac",
+      "sha256": "2def4d3b997ae072c7614b7f47bb71b58d873578be2830f8a2269a3eefd4efce"
+    },
+    "mid": {
+      "file": "audio/mid.wav",
+      "label": "15인치 · 강하게",
+      "sampleId": "mid-2",
+      "gain": 1,
+      "semitones": 3,
+      "playbackRate": 1.189207115002721,
+      "source": "tom_15/center/cl/t15_vl7_rr1.flac",
+      "sha256": "5f1c84d3747d6094b99ac788f7aa08e054e2ddf079fc3d670bc5c93e81fa1f5f"
+    },
+    "floor": {
+      "file": "audio/floor.wav",
+      "label": "18인치 · 강하게",
+      "sampleId": "floor-2",
+      "gain": 1,
+      "semitones": -3.5,
+      "playbackRate": 0.8169577266205499,
+      "source": "tom_18/center/cl/t18_vl8_rr1.flac",
+      "sha256": "93ab30c08d23faa1c6ea123410a056e0ddd8b8e150d3c40cec026eeb9330045c"
+    },
+    "crash": {
+      "file": "audio/crash.wav",
+      "label": "Virtuosity · 룸 마이크",
+      "sampleId": "crash-12",
+      "gain": 1,
+      "semitones": 0,
+      "playbackRate": 1.0,
+      "source": "Virtuosity / Samples/room/crash/room_crash_crash_vl2_rr1.flac",
+      "sha256": "7d9b0a03db10679057b3c75d1da6d4bf78fa08d4d7f4d014b51c99b6aa8abedf"
+    },
+    "ride": {
+      "file": "audio/ride.wav",
+      "label": "22인치 · 벨",
+      "sampleId": "ride-2",
+      "gain": 1,
+      "semitones": 0,
+      "playbackRate": 1.0,
+      "source": "ride_22/bl/cl/rd_bl_vl3_rr1.flac",
+      "sha256": "9a7c3e53bfc6a06f5136babc0bb5be4138efeb9acec3afcc249b2d9702c9c172"
+    }
+  }
+}

@@ -6,3 +6,9 @@ import { KeyboardPadSource } from '@/input/KeyboardPadSource';
 
 export const inputManager = new InputManager();
 export const keyboardSource = new KeyboardPadSource();
+
+/**
+ * 키보드(임시 입력) 사용 여부. 빌드 시 VITE_KEYBOARD_INPUT=false면 키 매핑 카드와 키보드 소스 등록을 함께 끈다.
+ * 스틱 도착 후 끄는 용도이고, 기본은 켜짐이다.
+ */
+export const KEYBOARD_INPUT_ENABLED = import.meta.env.VITE_KEYBOARD_INPUT !== 'false';

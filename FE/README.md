@@ -54,9 +54,9 @@ src/
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(캘리브레이션 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     CalibrationSession · RhythmSession(일시정지 포함) · playLog · telemetry
-├─ audio/      AudioEngine
+├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · events · keyMap · calibration · kitMapping · chart · judgement · hitStats
+│   pads · kitLayout · events · keyMap · calibration · kitMapping · chart · judgement · hitStats
 └─ styles/     전역 CSS
 ```
 
@@ -152,3 +152,16 @@ Shift를 같이 누르면 악센트. 세팅 화면에서 바꿀 수 있고 local
 - 기본값과 슬라이더 범위는 `src/domain/tuning.ts`(`DEFAULT_SENSOR_TUNING`, `TUNING_RANGES`)에만 있다. 실측값을 찾으면 여기만 고친다. 이미 저장된 값은 자동으로 덮어쓰지 않으므로 "기본값으로" 버튼으로 받는다.
 - 기본값은 모두 **하드웨어(스틱) 도착 전 초안**이다. 포인터 모의 IMU로 동작만 확인했고 실측 전이다.
 - 튜닝 값은 키 프리셋에 포함되지 않는다(기기·펌웨어별 값).
+
+## 사운드 세트
+
+패드 소리는 사운드 세트가 정한다. 세팅 화면의 "사운드 세트"에서 `SSAPLASH 키트`(샘플)와 `합성음(임시)`을 고르며 선택은 설정(`soundSetId`)에 저장된다.
+
+- 샘플 세트는 `public/sounds/<id>/kit-config.json`과 `audio/*.wav`를 읽는다. 패드별 게인·재생 속도는 코드가 아니라 이 JSON이 정한다. 키트를 교체하려면 파일과 JSON만 바꾼다. `kit-config.json`의 `mid`처럼 대응하는 패드가 없는 항목은 무시한다(매핑표: `src/audio/kitConfig.ts`).
+- 첫 소리(오디오 언락) 이후에 샘플을 불러온다. 불러오는 동안과 파일 하나가 실패한 패드는 합성음으로 울린다. 한 번 불러온 세트는 다시 고를 때 재다운로드하지 않는다.
+- 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 사용자 볼륨 슬라이더는 마스터 게인에 따로 곱해진다.
+- 세팅 화면에서 패드를 톡 치면(이동 6px 이내) 소리와 타격 이펙트가 나온다. 이 타격(`source: 'preview'`)은 텔레메트리·통계에 남지 않는다.
+
+## 키보드 입력(임시)
+
+키보드는 스틱이 오기 전까지의 임시 입력이다. 키 매핑 카드(`components/KeyboardMappingCard`)에 "임시 입력 (개발용)" 라벨을 달아 격리했다. 환경변수 `VITE_KEYBOARD_INPUT=false`로 빌드하면 카드와 키보드 소스 등록이 함께 빠진다(기본은 켜짐, 예시는 `.env.example`). 안정화 후에는 `keyboardSource`·`keyMap` 필드·`domain/keyMap.ts`를 지우고 설정 마이그레이션으로 필드를 버린다.

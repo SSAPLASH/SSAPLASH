@@ -6,13 +6,13 @@ import type { InputSource } from '@/input/InputSource';
 import type { SourceDescriptor } from '@/input/SourceDescriptor';
 
 /** 레지스트리가 id로 받지 않는 예약어 */
-const RESERVED_IDS: readonly string[] = ['none', 'keyboard'];
+const RESERVED_IDS: readonly string[] = ['none', 'keyboard', 'preview'];
 
 export class SensorRegistry {
   private descriptors = new Map<SensorId, SourceDescriptor>();
   private instances = new Map<SensorId, InputSource>();
 
-  /** 같은 id가 이미 있거나 예약어('none'·'keyboard')면 예외 */
+  /** 같은 id가 이미 있거나 예약어('none'·'keyboard'·'preview')면 예외 */
   register(desc: SourceDescriptor): void {
     if (RESERVED_IDS.includes(desc.id)) throw new Error(`예약된 입력 소스 id입니다: ${desc.id}`);
     if (this.descriptors.has(desc.id)) throw new Error(`이미 등록된 입력 소스 id입니다: ${desc.id}`);

@@ -5,10 +5,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { KitCanvas } from '@/components/KitCanvas';
+import { markHit } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { Pose } from '@/domain/events';
+import type { HitFx, Pose } from '@/domain/events';
 import { profileWarnings, resolvePad, type CalibrationWarning, type PadResolution } from '@/domain/calibration';
 import { CalibrationSession, type CalibrationSnapshot } from '@/engine/CalibrationSession';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -48,7 +49,7 @@ export function CalibrationPage() {
   const stageRef = useRef<Stage>('ready');
   const exitRef = useRef(false);
   const unsubRef = useRef<(() => void) | null>(null);
-  const flashes = useRef(new Map<PadId, number>());
+  const hits = useRef(new Map<PadId, HitFx>());
   const rafRef = useRef<number | null>(null);
   const knownAnchors = useRef(new Set<PadId>());
 
@@ -80,7 +81,7 @@ export function CalibrationPage() {
     setTestCount((c) => c + 1);
     if (r?.inside) {
       audioEngine.trigger(r.pad, velocity);
-      flashes.current.set(r.pad, performance.now());
+      markHit(hits.current, r.pad, velocity, CAPTURE_STICK);
     }
   }, []);
 
@@ -111,7 +112,7 @@ export function CalibrationPage() {
       for (const pad of Object.keys(s.anchors) as PadId[]) {
         if (!knownAnchors.current.has(pad)) {
           audioEngine.trigger(pad, CONFIRM_VELOCITY);
-          flashes.current.set(pad, performance.now());
+          markHit(hits.current, pad, CONFIRM_VELOCITY, CAPTURE_STICK);
         }
       }
       knownAnchors.current = new Set(Object.keys(s.anchors) as PadId[]);
@@ -289,7 +290,7 @@ export function CalibrationPage() {
             highlightPad={stage === 'capture' ? current : null}
             dimOthers={stage === 'capture'}
             previewPad={stage === 'confirm' ? (lastTest?.pad ?? null) : null}
-            flashes={flashes}
+            hits={hits}
             poses={pose}
             showPoses={activeSensor !== 'none'}
             surfaceRef={bindSensorSurface}
