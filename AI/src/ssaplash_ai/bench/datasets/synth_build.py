@@ -12,11 +12,11 @@ import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
 
-import mido
 import numpy as np
 import yaml
 
 from ssaplash_ai.bench.datasets.base import SAMPLE_RATE, match_length, read_audio, write_audio
+from ssaplash_ai.bench.datasets.gmd import load_gmd_info, midi_onsets  # noqa: F401 (스크립트 호환)
 from ssaplash_ai.bench.datasets.musdb import ACCOMP_STEMS, read_accompaniment_stems
 from ssaplash_ai.bench.datasets.synth import ONSET_COLUMNS
 
@@ -107,12 +107,6 @@ class Recipe:
 # ---------- GMD 메타·MIDI ----------
 
 
-def load_gmd_info(gmd_root: Path) -> dict[str, dict[str, str]]:
-    """info.csv를 id 열로 찾는 사전으로 읽음."""
-    with open(gmd_root / "info.csv", encoding="utf-8", newline="") as f:
-        return {row["id"]: row for row in csv.DictReader(f)}
-
-
 def list_gmd(
     gmd_root: Path,
     style: str | None = None,
@@ -139,17 +133,6 @@ def list_gmd(
             continue
         rows.append(row)
     return sorted(rows, key=lambda r: (r["style"], int(r["bpm"]), r["id"]))
-
-
-def midi_onsets(path: Path) -> list[tuple[float, int, int]]:
-    """MIDI에서 (시각 초, 피치, 세기) 목록 추출. 세기 0인 note_on은 note_off로 취급."""
-    onsets = []
-    t = 0.0
-    for msg in mido.MidiFile(str(path)):
-        t += msg.time
-        if msg.type == "note_on" and msg.velocity > 0:
-            onsets.append((t, msg.note, msg.velocity))
-    return onsets
 
 
 # ---------- 섞기 ----------
