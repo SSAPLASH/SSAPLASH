@@ -4,6 +4,7 @@
 - onset: 온셋 검출과 온셋 보존율 (F1·정밀도·재현율, ±50ms·±25ms)
 - transient: 어택 기울기 왜곡 (온셋 직후 10ms 포락선 기울기의 로그 비율)
 - resource: 처리 시간·피크 RAM·피크 VRAM 측정
+- hit_f1: 채보 타격 F1 (라벨별 짝짓기, SUM 집계, 5가지·8패드·라벨 무시 기준, 시각 오차·세기 상관)
 """
 
 from ssaplash_ai.bench.metrics.attack_slope_distortion import (
@@ -11,6 +12,14 @@ from ssaplash_ai.bench.metrics.attack_slope_distortion import (
     attack_slope_distortion,
 )
 from ssaplash_ai.bench.metrics.bss_eval_metrics import BssResult, bss_metrics, si_sdr
+from ssaplash_ai.bench.metrics.hit_f1 import (
+    HitEvaluation,
+    HitScores,
+    MatchCounts,
+    evaluate_hits,
+    f1_from_counts,
+    score_hits,
+)
 from ssaplash_ai.bench.metrics.onset_preservation import (
     OnsetResult,
     detect_onsets,
@@ -21,14 +30,20 @@ from ssaplash_ai.bench.metrics.resource_usage import ResourceUsage, measure_reso
 
 __all__ = [
     "BssResult",
+    "HitEvaluation",
+    "HitScores",
+    "MatchCounts",
     "OnsetResult",
     "ResourceUsage",
     "TransientResult",
     "attack_slope_distortion",
     "bss_metrics",
     "detect_onsets",
+    "evaluate_hits",
+    "f1_from_counts",
     "measure_resources",
     "onset_metrics",
     "onset_scores",
+    "score_hits",
     "si_sdr",
 ]

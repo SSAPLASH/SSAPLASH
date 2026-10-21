@@ -3,6 +3,8 @@
 패드 8종은 공통 명세서 채보 pad enum 7종 + MID_TOM. 이름이 확정되면 PADS만 수정.
 타격 표는 numpy 구조화 배열: time_sec(초), pad(8종 중 하나), velocity(1~127, 없으면 -1).
 데이터셋별 라벨 → 패드 대응표는 각 로더가 가지고, 여기서는 표를 만들고 검사하는 함수만 제공.
+모델 예측 표(채보 설계 3-8절)는 pad 자리에 거친 라벨 COARSE(tom = 탐 중 하나, cymbal = 심벌 중
+하나)도 올 수 있음. 5가지만 내는 모델용이며, 거친 라벨이 있으면 8패드 점수는 매기지 않음.
 """
 
 from __future__ import annotations
@@ -34,6 +36,13 @@ FIVE_GROUPS: dict[str, str] = {
     "RIDE": "cymbal",
 }
 
+# 모델 예측에만 쓰는 거친 라벨. 탐 3종을 못 나누면 tom, 크래시·라이드를 못 나누면 cymbal
+COARSE: tuple[str, ...] = ("tom", "cymbal")
+PRED_LABELS: tuple[str, ...] = PADS + COARSE
+
+# 거친 라벨은 5가지 묶음에서 이름이 그대로
+FIVE_GROUPS_PRED: dict[str, str] = {**FIVE_GROUPS, "tom": "tom", "cymbal": "cymbal"}
+
 # 대응표에서 "패드에 없는 타격"을 뜻하는 값. 이 라벨은 표에서 빼고 개수만 셈
 DROP = "__drop__"
 
@@ -51,12 +60,15 @@ def make_hits(
     labels: Iterable[object],
     velocities: Iterable[int | None] | None,
     label_to_pad: Mapping[object, str],
+    allow_coarse: bool = False,
 ) -> tuple[np.ndarray, int]:
     """(시각, 라벨, 세기) 목록을 타격 표로 변환.
 
     label_to_pad 값이 DROP인 라벨은 빼고 개수만 셈. 표에 없는 라벨은 오류
     (조용히 버리면 대응표 누락을 못 잡음). 반환은 시각 오름차순 정렬된 (표, 뺀 개수).
+    allow_coarse가 참이면(모델 예측) 대응표 값에 거친 라벨 tom·cymbal도 허용.
     """
+    allowed = PRED_LABELS if allow_coarse else PADS
     times = list(times)
     labels = list(labels)
     vels = list(velocities) if velocities is not None else [None] * len(times)
@@ -74,8 +86,8 @@ def make_hits(
         if pad == DROP:
             dropped += 1
             continue
-        if pad not in PADS:
-            raise ValueError(f"대응표의 패드 이름이 어휘에 없음: {pad!r}")
+        if pad not in allowed:
+            raise ValueError(f"대응표의 패드 이름이 어휘에 없음: {pad!r} (가능: {allowed})")
         vel = NO_VELOCITY if v is None else int(v)
         rows.append((float(t), pad, vel))
     if unknown:
@@ -86,15 +98,25 @@ def make_hits(
     return hits[order], dropped
 
 
-def validate_hits(hits: np.ndarray) -> None:
+def validate_hits(hits: np.ndarray, allowed: tuple[str, ...] = PADS) -> None:
     """dtype·정렬·패드 값 검사. 로더 테스트와 러너 입력 검사에 사용."""
     if hits.dtype != HITS_DTYPE:
         raise ValueError(f"타격 표 dtype이 다름: {hits.dtype}")
     if len(hits) > 1 and np.any(np.diff(hits["time_sec"]) < 0):
         raise ValueError("타격 표가 시각 오름차순이 아님")
-    bad = set(np.unique(hits["pad"]).tolist()) - set(PADS)
+    bad = set(np.unique(hits["pad"]).tolist()) - set(allowed)
     if bad:
         raise ValueError(f"어휘에 없는 패드: {sorted(bad)}")
+
+
+def validate_pred_hits(hits: np.ndarray) -> None:
+    """모델 예측 표 검사. 패드 8종에 더해 거친 라벨 tom·cymbal 허용."""
+    validate_hits(hits, PRED_LABELS)
+
+
+def has_coarse(hits: np.ndarray) -> bool:
+    """예측 표에 거친 라벨이 하나라도 있는지."""
+    return bool(np.isin(hits["pad"], COARSE).any())
 
 
 def clip_hits(hits: np.ndarray, start_sec: float, end_sec: float) -> np.ndarray:
@@ -115,7 +137,7 @@ def count_by_pad(hits: np.ndarray) -> dict[str, int]:
 
 
 def to_five_groups(hits: np.ndarray) -> np.ndarray:
-    """pad 열을 5가지 묶음 이름으로 바꾼 복사본. 5가지 F1 계산용 (-109)."""
+    """pad 열을 5가지 묶음 이름으로 바꾼 복사본. 거친 라벨은 그대로. 5가지 F1 계산용."""
     out = hits.copy()
-    out["pad"] = [FIVE_GROUPS[p] for p in hits["pad"].tolist()]
+    out["pad"] = [FIVE_GROUPS_PRED[p] for p in hits["pad"].tolist()]
     return out
