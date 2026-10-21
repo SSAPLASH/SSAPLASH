@@ -10,6 +10,7 @@
 | 상태 | zustand (설정은 localStorage에 영속) |
 | 화면 | Canvas 2D (키트·노트 레인), Web Audio (발음) |
 | 센서 연결 | Web Bluetooth (BLE 직접), WebSocket (브리지 대안) |
+| BE 연동 | `fetch` 공통 래퍼(`api/http`). 로그인은 BE OAuth + refresh 쿠키, access 토큰은 메모리 |
 | 검사 | oxlint, vitest |
 
 Node 20 이상, npm 사용.
@@ -19,6 +20,14 @@ Node 20 이상, npm 사용.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
+```
+
+로그인이 필요하므로 BE도 함께 켠다(`BE/README.md` 로컬 실행: PostgreSQL·Redis·`.env`). 개발 서버는 `/api` 요청을 `VITE_API_PROXY_TARGET`(기본 `http://localhost:8080`)으로 넘겨 운영처럼 같은 출처가 된다.
+
+BE 없이 게임 화면만 만질 때는 `.env.local`(git 무시)에 한 줄 둔다. 모든 화면이 로그인 없이 열리고 상단바에 로그인 표시가 사라진다.
+
+```bash
+VITE_AUTH_REQUIRED=false
 ```
 
 ## 검증 (커밋 전 모두 통과)
@@ -33,16 +42,18 @@ npm run build      # tsc 타입 검사 + vite 번들
 
 ```
 src/
-├─ main.tsx     Vite 엔트리. app/bootstrap을 부르고 렌더
+├─ main.tsx     Vite 엔트리. app/bootstrap·app/authBootstrap을 부르고 렌더
 ├─ app/        앱 조립 — 아래 전부를 알아도 되는 유일한 곳
-│   ├─ App.tsx       라우터
+│   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래
 │   ├─ sources.ts         키보드 소스 · inputManager 단일 인스턴스
 │   ├─ sensorRegistry.ts  센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
-│   └─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
-├─ pages/      라우트 단위 화면 — Home · Setup · Calibration · Play · FreePlay · Result
-├─ components/ 공용 UI — AppShell · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간)
+│   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
+│   └─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
+├─ pages/      라우트 단위 화면 — Home · Setup · Calibration · Play · FreePlay · Result · Login · AuthCallback
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · authStore(로그인 상태, 영속 안 함)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -56,11 +67,11 @@ src/
 ├─ engine/     CalibrationSession · RhythmSession(일시정지 포함) · playLog · telemetry
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · events · keyMap · calibration · kitMapping · chart · judgement · hitStats
+│   pads · kitLayout · events · keyMap · calibration · kitMapping · chart · judgement · hitStats · auth
 └─ styles/     전역 CSS
 ```
 
-예약 폴더(첫 파일이 생길 때 만든다): `api/` BE 클라이언트, `hooks/` 페이지 공유 훅, `assets/` 이미지·샘플.
+예약 폴더(첫 파일이 생길 때 만든다): `hooks/` 페이지 공유 훅, `assets/` 이미지·샘플.
 
 ### 의존 방향
 
@@ -78,6 +89,7 @@ src/
 - `types/`·`utils/`는 두지 않는다. 타입은 쓰는 도메인 파일 옆에 둔다(`domain/keyMap.ts`, `domain/events.ts`). 전용 타입 폴더는 "어디 있는지 찾기"와 순환 import를 만들고, 범용 유틸은 아직 없다.
 - 경로 별칭 `@/` = `src/` (`tsconfig.app.json` · `vite.config.ts` · `vitest.config.ts`에 같이 설정). 다른 폴더는 `@/`, 같은 폴더는 `./`로 가져온다.
 - `inputManager`·키보드 소스는 `app/sources.ts`에서, 센서 소스 인스턴스는 `app/sensorRegistry.ts`가 디스크립터의 `create`로 만든다. 화면은 `input/` 클래스를 직접 new 하거나 소스 id 문자열을 비교하지 않고, 레지스트리의 디스크립터(라벨·가용성·설정 항목)를 읽는다.
+- BE는 `api/http`의 `apiFetch`로만 부른다. 화면·store는 401을 직접 처리하지 않는다(아래 [로그인](#로그인)). `api/` 안에서 `http`가 `auth`를 쓰고 `auth`는 `fetch`를 직접 쓴다 — 순환 없음. 로그인 시작·복귀 경로 같은 브라우저 동작은 `store/authStore`의 액션으로 두어 화면이 `api/`를 모른다.
 
 ## 입력 구조
 
@@ -134,6 +146,20 @@ Shift를 같이 누르면 악센트. 세팅 화면에서 바꿀 수 있고 local
 악보 모드(`/sheet`, 상단 "악보 연습")는 같은 내장 채보를 마디 × 16분음 격자 악보로 보여 주며 친다. 판정은 리듬 게임과 같은 `RhythmSession`을 쓰지만 점수·콤보는 화면에 없고, 노트 칸이 판정 색(PERFECT 흰 테두리 / GOOD 노란 테두리 / MISS 회색+빨간 테두리)으로 바뀌며 채보 밖 타격은 빨간 점으로 남는다. 현재 마디·박·재생 헤드가 곡 시간에 맞춰 움직이고 현재 마디가 두 번째 줄에 오도록 스크롤한다. 곡이 끝나면 결과 화면으로 가지 않고 같은 화면에 규칙 기반 피드백 카드(최대 3개)와 패드별 요약 표가 나오며, 카드를 누르면 해당 마디로 이동한다. 플레이 로그는 `mode: 'SHEET'`로 저장된다. 격자 변환은 `src/domain/sheet.ts`, 피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다(AI 스코어링이 오면 이 생성기를 교체).
 
 포인터 모의 IMU를 켜면 마우스 위치가 스틱 자세가 되고, F(왼손)/J(오른손) 또는 좌/우클릭이 타격이다. 이 두 키는 그동안 키보드 매핑에서 제외된다. 방향키로도 자세를 움직일 수 있다.
+
+## 로그인
+
+자체 가입은 없고 소셜 로그인(Google·SSAFY)만 있다. 계약은 BE README "소셜 로그인"·"인증과 토큰" 절과 같다.
+
+- **시작:** `/login`의 버튼이 `GET /api/auth/{provider}/login`으로 브라우저를 통째로 보낸다(fetch 아님). BE가 제공자 동의 화면으로 302한다. 돌아올 경로는 `sessionStorage`(`ssaplash.auth.returnTo`)에 두며 앱 안의 절대 경로만 허용한다(`domain/auth.ts` `sanitizeReturnTo`).
+- **콜백:** 제공자 → BE 콜백 → BE가 refresh 쿠키(`refresh_token`, HttpOnly, `Path=/api/auth`, 14일)를 심고 `/auth/callback`으로 302. 이 화면은 앱 시작 복원을 기다렸다가 저장해 둔 경로로 간다. 토큰은 주소에 실리지 않는다.
+- **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다.
+- **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
+- **로그아웃:** 상단바 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰 폐기 → `/login`.
+- **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패). 문구는 `domain/auth.ts`에 있다.
+- **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
+- **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
+- 정식 디자인은 아직 없다. 로그인 화면·상단바 표시는 기존 클래스(`hero`·`card`·`btn-primary`·`notice`)만 쓴다.
 
 ## 디버그
 
