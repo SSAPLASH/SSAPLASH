@@ -1,4 +1,4 @@
-"""러너·CLI run·MLflow 기록 테스트 (설계 6장 인수 조건 2·3·6·7·8). mock 어댑터 + 가짜 wav만."""
+"""러너·CLI run·MLflow 기록 테스트 (설계 6장 인수 조건 2·3·6·7·8). mock 어댑터 + 테스트용 wav만."""
 
 from __future__ import annotations
 

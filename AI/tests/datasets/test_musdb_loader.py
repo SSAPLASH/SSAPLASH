@@ -1,4 +1,4 @@
-"""MUSDB18-HQ 로더와 오디오 공용 함수 테스트. 가짜 wav 폴더만 사용."""
+"""MUSDB18-HQ 로더와 오디오 공용 함수 테스트. 테스트용 wav 폴더만 사용."""
 
 from __future__ import annotations
 

@@ -40,7 +40,7 @@ AI/
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py)
-├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 가짜 wav와 mock 어댑터로 돈다
+├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
 ├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)

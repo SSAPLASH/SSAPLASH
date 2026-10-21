@@ -1,4 +1,4 @@
-"""GMD 연주 로더 테스트. 가짜 info.csv·wav·mid만 사용."""
+"""GMD 연주 로더 테스트. 테스트용 info.csv·wav·mid만 사용."""
 
 from __future__ import annotations
 

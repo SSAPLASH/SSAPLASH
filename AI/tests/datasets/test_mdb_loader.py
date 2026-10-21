@@ -1,4 +1,4 @@
-"""MDB Drums 로더 테스트. 가짜 wav·주석 파일만 사용."""
+"""MDB Drums 로더 테스트. 테스트용 wav·주석 파일만 사용."""
 
 from __future__ import annotations
 
