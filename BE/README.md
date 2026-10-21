@@ -386,6 +386,84 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
    `users`·`social_accounts`에 행이 생기고 서버 로그에 `로그인 성공 provider=google userId=…`가 남는다.
 
 운영은 `FRONTEND_BASE_URL`·`OAUTH_REDIRECT_BASE_URL`을 `https://{서비스 도메인}`으로 주고, 같은 콜백 URI를 콘솔에 추가 등록한다.
+## 곡·채보 조회 (96번)
+
+| GET 경로 | 응답 |
+| --- | --- |
+| `/api/v1/songs` | `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext` |
+| `/api/v1/songs/{songId}` | 곡 메타데이터와 난이도별 최신 `chartVersionId` 요약 |
+| `/api/v1/charts/{chartId}` | 해당 채보의 가장 큰 `version`에 해당하는 노트·시간 정보 |
+| `/api/v1/chart-versions/{chartVersionId}` | 지정 버전의 노트·시간 정보 |
+| `/api/v1/chart-versions/{chartVersionId}/assets` | 같은 버전의 이미지·반주 URL 발급 및 갱신 |
+
+목록은 `source=BUILTIN`(기본) 또는 `MINE`, `q`(앞뒤 공백 제거 후 100자 이내),
+`page=0`(0~100000), `size=20`(1~100)을 받는다. 제목·아티스트를 대소문자 구분 없이 부분 검색한다.
+`%`, `_`, `!`도 문자 그대로 검색하며 생성 시각 내림차순, 동률이면 ID 내림차순이다.
+`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`와 다르다.
+목록과 count에 같은 권한 조건을 적용하며, 난이도 요약은 일괄 조회한다. 목록 SQL에는 큰 노트 JSON을 넣지 않는다.
+
+모든 경로는 로그인한 ACTIVE 회원 전용이다. 공용 곡도 로그인해야 하며 타인·삭제·없는 자원은 동일한 404다.
+ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 곡은 메타데이터만 조회할 수 있고
+재생·자산 조회는 409다. 응답은 `Cache-Control: private, no-store`이며 오류는 기존 Problem Details 형식이다.
+
+**현재 88번 JWT 구현은 미연결이다.** 기본 기동에서는 위 5개 경로가 모두 401이다.
+인증 모듈에서 `ChartQueryUserResolver` Bean을 제공하여 검증된 `AuthUser.id`를 반환하도록 연결해야 한다.
+토큰 검증·만료·인증 실패는 인증 모듈에서 처리하고, 조회 모듈은 DB의 ACTIVE 상태를 추가 확인한다.
+클라이언트가 전달한 userId 쿼리·헤더·가짜 토큰을 사용하는 임시 로그인 기능은 없다.
+테스트의 신원 대역 통과는 실제 JWT 연동 완료를 의미하지 않는다.
+
+### FE 소비 계약
+
+- 곡 상세에서 난이도와 `chartVersionId`를 고르고, 플레이 시작 이후에는 버전 조회와 assets 갱신에 그 ID를 사용한다.
+  최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
+- `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.
+  `velocityHint`, `notation`, `durationMs`, 확장 timing 필드는 없으면 null이며 가짜 기본값을 채우지 않는다.
+- `timing`은 버전에 저장된 값이다. 곡의 현재 BPM으로 대체하지 않는다. `beatsPerBar`는 박자표의 분자이며
+  `6/8`을 `6/4`로 해석하면 안 된다. 변박은 `timeSignatureMap`을 함께 사용한다.
+- `notationStatus=PENDING`/`UNAVAILABLE`여도 정상 노트는 조회할 수 있다. `READY`에 이미지가 없는 경우도 유효하다.
+- ID는 공통 BE 계약대로 JSON 숫자다. FE string ID 모델로 옮길 때 `Number.isSafeInteger` 확인 후 변환한다.
+- assets 응답은 `chartVersionId`, `notationStatus`, `sheetPages`, `accompanimentUrl`, `assetsExpireAt`이다.
+  페이지는 `page`, `imageUrl`, `fromTick`, `toTick`, `fromMs`, `toMs`를 포함하고 시작 포함/끝 미포함이다.
+  페이지 순서를 정렬하며 템포 변경 전체를 적분해 ms를 계산한다. offset은 한 번만 적용한다.
+  `ppq`·`tempoMap` 등 매핑 근거가 없거나 모순되면 `CHART_SHEET_TIMING_UNAVAILABLE`(409)다.
+- 자산이 없으면 `sheetPages=[]`, `accompanimentUrl=null`, `assetsExpireAt=null`이다.
+  자산이 있으면 `assetsExpireAt`은 발급된 URL 중 가장 이른 만료 시각이다. 노트 응답에는 URL·내부 키가 없다.
+
+### S3 호환 저장소 연결
+
+40번에서 결정한 실제 저장소에 맞춰 실행 환경에 다음 값을 주입한다. 기본은 비활성화다.
+
+| 환경변수 | 의미 |
+| --- | --- |
+| `CHART_ASSET_ENABLED` | 연결 시 `true` |
+| `CHART_ASSET_ENDPOINT` | BE가 HEAD로 객체 존재를 확인할 내부 S3 API endpoint |
+| `CHART_ASSET_PUBLIC_ENDPOINT` | 브라우저가 서명 GET으로 접근할 공개 S3 API endpoint |
+| `CHART_ASSET_REGION` | 서명 region, 기본 `us-east-1` |
+| `CHART_ASSET_SHEET_BUCKET` / `CHART_ASSET_ACCOMPANIMENT_BUCKET` | 비공개 이미지 / 반주 버킷 |
+| `CHART_ASSET_ACCESS_KEY` / `CHART_ASSET_SECRET_KEY` | 읽기 권한 키. 저장소·로그에 기록하지 않음 |
+| `CHART_ASSET_URL_TTL` | URL 유효기간. 기본 `10m`, 허용 1~10분 |
+
+AWS SDK의 SigV4, path-style URL을 사용한다. 활성화 시 필수 설정이 없으면 기동을 실패시킨다.
+내부·공개 endpoint는 같은 저장소를 가리켜야 하며, 프록시는 서명된 Host·경로·쿼리를 보존해야 한다.
+현재 연결은 S3 호환 저장소의 고정 접근 키 방식이다. STS 세션 토큰·역할 자격 증명은 아직 연결하지 않았다.
+파일은 조회 요청에서 업로드하지 않는다. 저장 키는 92번 경계에 맞춰 다음 형식을 검사한다.
+
+- 이미지: `sheet/{chartVersionId}/{파일명}.png|jpg|jpeg|webp` (파일명은 영문·숫자·`_`·`-`)
+- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a`, AUDIO 곡에만 허용
+
+생성·저장 담당자는 이 키 규칙에 맞춰 연결해야 한다. 임의 URL, 타인 버전, 임시 원본·드럼 트랙,
+경로 이동 문자열은 서명하지 않는다. 객체 부재는 `CHART_ASSET_NOT_FOUND`(404), 미설정·저장소 장애는
+`CHART_ASSET_UNAVAILABLE`(503)이며 자산이 없는 정상 응답으로 숨기지 않는다.
+GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공하지 않는다.
+
+스토리지 호출 동안 DB 트랜잭션을 유지하지 않는다. 응답 직전에 회원 ACTIVE·곡 소유권·삭제 상태를
+다시 조회하며, 그 전에 커밋된 탈퇴는 401, 삭제는 404로 차단한다. 이미 발급된 URL은 만료까지 유효할 수 있다.
+내부 키·토큰·서명 URL을 접근 로그에 남기지 않아야 한다.
+
+조회 테스트는 실제 임베디드 PostgreSQL, MVC, SDK 서명과 로컬 HTTP HEAD 서버를 사용한다.
+다른 트랜잭션에서 탈퇴·삭제를 커밋하는 경합과 외부 호출 시 DB 트랜잭션 부재도 확인한다.
+**88번 실제 JWT 및 40번 실제 스토리지의 프록시·만료·Range·CORS 검증은 별도로 남아 있다.**
+해당 통합 검증, MR CI·리뷰·develop-BE 병합 전에는 96번 전체 완료로 처리하지 않는다.
 
 ## 검증과 패키징
 
