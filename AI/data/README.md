@@ -32,7 +32,7 @@ AI/data/
 
 ## synth_v1/ — 합성곡 5곡 (약 216MB)
 
-합성곡은 우리가 직접 합쳐서 만든 곡이다. 실제 밴드가 녹음한 곡이 아니라, 따로 있던 드럼 소리(GMD)와 반주 소리(MUSDB train 곡에서 드럼을 뺀 것)를 더해 만든 가짜 곡이다. 만드는 법과 레시피는 `AI/configs/bench/datasets/synth_v1_recipe.yaml`과 `AI/scripts/make_synth_songs.py`에 있다.
+합성곡은 우리가 직접 합쳐서 만든 곡이다. 실제 밴드가 녹음한 곡이 아니라, 따로 있던 드럼 소리(GMD)와 반주 소리(MUSDB train 곡에서 드럼을 뺀 것)를 더해 우리가 합성한 곡이다. 만드는 법과 레시피는 `AI/configs/bench/datasets/synth_v1_recipe.yaml`과 `AI/scripts/make_synth_songs.py`에 있다.
 
 왜 만드냐면, 벤치마크에 "정답"이 완벽한 곡이 필요해서다.
 
