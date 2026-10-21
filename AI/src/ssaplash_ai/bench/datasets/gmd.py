@@ -9,6 +9,7 @@ GMD MIDI 피치는 Roland TD-11 매핑. synth_build.GMD_PITCH_CLASS(9분류)와 
 from __future__ import annotations
 
 import csv
+import shutil
 from pathlib import Path
 
 import mido
@@ -160,3 +161,22 @@ class GmdDataset(BaseDataset):
             hits_true=hits,
             hits_dropped=dropped,
         )
+
+
+def export_subset(dataset: GmdDataset, out_root: Path) -> list[Path]:
+    """설정 songs의 wav·mid와 info.csv를 out_root 아래 같은 상대 경로로 복사 (코랩에 올릴 묶음용).
+
+    GMD 전체 11GB 대신 평가에 쓰는 연주만 올리려는 것. info.csv는 통째로 복사(작음).
+    빠진 파일이 있으면 FileNotFoundError. 복사한 파일 경로 목록을 돌려줌(info.csv 포함).
+    """
+    root = dataset.config.root
+    out_root.mkdir(parents=True, exist_ok=True)
+    copied = [shutil.copy2(root / "info.csv", out_root / "info.csv")]
+    for song_id in dataset.song_ids():
+        for src in dataset.required_files(song_id):
+            if not src.is_file():
+                raise FileNotFoundError(f"{song_id}: 없음 {src}")
+            dst = out_root / src.relative_to(root)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            copied.append(Path(shutil.copy2(src, dst)))
+    return copied
