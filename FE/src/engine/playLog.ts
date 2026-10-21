@@ -26,7 +26,7 @@ export interface PlayLog {
   songId: string;
   title: string;
   difficulty: string;
-  mode: 'RHYTHM' | 'FREE';
+  mode: 'RHYTHM' | 'FREE' | 'SHEET';
   inputSource: InputSourceKind;
   startedAt: string;
   durationMs: number;
