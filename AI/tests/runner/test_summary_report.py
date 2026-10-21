@@ -142,3 +142,13 @@ def test_cli_report(tmp_path: Path, capsys):
     # --out 없으면 CSV 폴더에
     assert main(["report", str(csv_path)]) == 0
     assert (tmp_path / "summary.md").is_file()
+
+
+def test_log_axis_ticks는_데이터_범위_안의_눈금만_돌려준다():
+    from ssaplash_ai.bench.report.charts import log_axis_ticks
+
+    # 본측정 RTF 범위(0.017~0.078). 기본 로그 눈금 0.01·0.1은 범위 밖이라 안 찍히던 경우
+    assert log_axis_ticks([0.017, 0.032, 0.049, 0.078]) == [0.02, 0.03, 0.05]
+    assert log_axis_ticks([0.5, 3.0]) == [0.5, 1.0, 2.0, 3.0]
+    assert log_axis_ticks([]) == []
+    assert log_axis_ticks([math.nan, 0.0, -1.0]) == []
