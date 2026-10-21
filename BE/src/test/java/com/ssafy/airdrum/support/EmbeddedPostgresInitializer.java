@@ -32,6 +32,8 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 				"spring.datasource.username", USER,
 				// 임베디드 서버는 trust 인증이라 값은 쓰이지 않는다. yaml의 ${DB_PASSWORD}를 가리는 용도다.
 				"spring.datasource.password", USER,
+				// 임베디드 PG에는 확장이 없다. V8은 별도 timescaleTest에서 실제 컨테이너로 검증한다.
+				"spring.flyway.target", "7",
 				// @DataJpaTest가 DataSource를 내장 DB(H2 등)로 바꾸지 않게 한다.
 				"spring.test.database.replace", "none")));
 	}
