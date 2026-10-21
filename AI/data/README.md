@@ -5,8 +5,9 @@
 ```
 AI/data/
 ├─ musdb18hq/   MUSDB18-HQ. 분리 모델 평가용 150곡
-├─ gmd/         Groove MIDI Dataset. 합성곡 드럼 재료
-└─ synth_v1/    우리가 만든 합성곡 5곡
+├─ gmd/         Groove MIDI Dataset. 합성곡 드럼 재료 + 채보 평가용 연주 45개
+├─ synth_v1/    우리가 만든 합성곡 5곡
+└─ mdb_drums/   MDB Drums. 실제 녹음 23곡 + 타격 정답 (채보 평가용)
 ```
 
 ## musdb18hq/ — MUSDB18-HQ (약 52GB)
@@ -27,7 +28,7 @@ AI/data/
 | `groove/info.csv` | — | 연주 1150개의 목록. 드러머, 스타일, bpm, 박자, 길이, train/validation/test 구분 |
 | `groove/drummer1~10/session*/` | 6.2GB | 연주마다 `.mid`와 `.wav` 한 쌍 |
 
-드러머 10명이 전자 드럼(Roland TD-11)으로 친 연주다. `.mid`는 "몇 초에 어느 드럼을 얼마나 세게 쳤는지"의 기록이고 `.wav`는 그때 난 소리라서, 둘이 2ms 안에서 맞는다. 파일명에 정보가 다 들어 있다. 예를 들어 `101_dance-disco_120_beat_4-4`는 101번 연주, 디스코, 120bpm, 비트(필인 아님), 4/4박자다. 우리는 이 중 5개만 쓴다. 라이선스는 CC BY 4.0이다.
+드러머 10명이 전자 드럼(Roland TD-11)으로 친 연주다. 채보 벤치마크는 이 중 test split 45개 연주를 드럼 트랙 입력 평가에 그대로 쓴다(`configs/bench/datasets/gmd_test.yaml`). 모델 몇 개가 train split로 학습해서 test만 쓴다. `.mid`는 "몇 초에 어느 드럼을 얼마나 세게 쳤는지"의 기록이고 `.wav`는 그때 난 소리라서, 둘이 2ms 안에서 맞는다. 파일명에 정보가 다 들어 있다. 예를 들어 `101_dance-disco_120_beat_4-4`는 101번 연주, 디스코, 120bpm, 비트(필인 아님), 4/4박자다. 우리는 이 중 5개만 쓴다. 라이선스는 CC BY 4.0이다.
 
 ## synth_v1/ — 합성곡 5곡 (약 216MB)
 
@@ -53,6 +54,19 @@ AI/data/
 
 반주가 MUSDB에서 왔으므로 합성곡도 교육·연구 목적 전용이다.
 
+## mdb_drums/ — MDB Drums (약 331MB)
+
+MedleyDB 23곡에 사람이 "몇 초에 어느 드럼을 쳤는지"를 적어 둔 공개 데이터셋이다. 채보 논문들이 점수 비교에 쓰는 표준 평가곡이라 우리 측정값을 논문과 맞춰 보는 용도다. 라이선스는 CC BY-NC-SA 4.0이라 음원·주석은 git 미추적이고 `CHECKSUMS.txt`(sha256 115개)만 추적한다.
+
+| 하위 | 내용 |
+| --- | --- |
+| `MDB Drums/audio/full_mix/{곡}_MIX.wav` | 원곡. 분리 모델 입력 |
+| `MDB Drums/audio/drum_only/{곡}_Drum.wav` | 드럼 트랙. 채보 모델 입력이자 정답 드럼 |
+| `MDB Drums/annotations/subclass/{곡}_subclass.txt` | **타격 정답.** 시각(초)과 세부 분류 21종(킥, 스네어 주법 6종, 하이햇 3종, 탐 4종, 심벌 5종, 탬버린). 탭 구분 |
+| `MDB Drums/annotations/class/`, `beats/` | 6분류 주석과 비트 주석. 벤치마크는 안 씀 |
+
+23곡 중 12곡은 MUSDB18 train과 같은 녹음이라 분리 모델을 거치는 평가에는 나머지 11곡(`mdb_drums_unseen.yaml`)만 쓴다. 세기 정답은 없다.
+
 ## 정리
 
-평가 입력은 MUSDB test 50곡 + 합성곡 5곡 = 55곡이다. train 100곡과 GMD의 나머지 연주는 재료다. 두 묶음의 점수는 섞지 않고 따로 집계한다.
+분리 평가 입력은 MUSDB test 50곡 + 합성곡 5곡 = 55곡이다. 채보 평가 입력은 합성곡 5곡 + GMD 연주 45개 + MDB Drums 23곡이다. train 100곡과 GMD의 나머지 연주는 재료다. 두 묶음의 점수는 섞지 않고 따로 집계한다.

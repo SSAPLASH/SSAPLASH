@@ -28,7 +28,7 @@ AI/
 ├─ src/ssaplash_ai/      패키지 본체
 │   ├─ bench/            벤치마크 하네스
 │   │   ├─ cli.py        명령줄 진입점 (check-data · run · report)
-│   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build)
+│   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build, gmd, mdb) · 패드 어휘·타격 표(pads)
 │   │   ├─ separators/   분리 모델 실행. separator_base(공통 인터페이스·yaml·다운로드),
 │   │   │                mock_separator(모델 없이 원곡·무음을 돌려주는 테스트용), msst_separator(SCNet·BS Roformer),
 │   │   │                demucs_separator(HTDemucs), openunmix_separator(umxhq)
@@ -174,10 +174,13 @@ AI/data/
 ├─ gmd/groove/
 │   ├─ info.csv                       연주별 스타일·bpm·길이·split (train/validation/test)
 │   └─ drummer{N}/{session}/*.mid, *.wav
-└─ synth_v1/{곡 이름}/                 아래 스크립트로 생성
-    ├─ mixture.wav, drums.wav, accomp.wav
-    ├─ onsets.csv                     타격 시각(초)·MIDI 피치·악기 분류·세기
-    └─ meta.yaml                      출처·라이선스·bpm·게인
+├─ synth_v1/{곡 이름}/                 아래 스크립트로 생성
+│   ├─ mixture.wav, drums.wav, accomp.wav
+│   ├─ onsets.csv                     타격 시각(초)·MIDI 피치·악기 분류·세기
+│   └─ meta.yaml                      출처·라이선스·bpm·게인
+└─ mdb_drums/                         채보 벤치마크용. 아래 "MDB Drums" 절
+    ├─ CHECKSUMS.txt                  sha256 (git 추적)
+    └─ MDB Drums/{annotations,audio/drum_only,audio/full_mix}/
 ```
 
 ### 자체 합성곡 (synth_v1)
@@ -192,6 +195,38 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 ```
 
 반주가 MUSDB에서 왔으므로 합성곡도 교육용 비상업 라이선스를 따른다. 후보 분리 모델 대부분이 MUSDB train으로 학습했기 때문에 이 반주를 이미 본 셈이고, 결과를 해석할 때 이 점을 적는다. 드럼은 모델이 본 적 없는 GMD 소리라 드럼 분리 평가 자체는 유효하다.
+
+### 채보 벤치마크 정답 데이터 (S15P31A307-108)
+
+채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 와이어프레임과 같은 8종 `KICK, SNARE, HIHAT, HI_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
+
+| 설정 | 내용 | 역할 |
+| --- | --- | --- |
+| `synth_v1.yaml` | 합성곡 5곡. 원곡·정답 드럼·MIDI 타격 정답 | 분리 모델을 거친 뒤 채보 점수가 얼마나 떨어지는지 |
+| `gmd_test.yaml` | GMD test split 드럼 연주 45개(52분). 드럼만 있는 전자 드럼 녹음 + MIDI 타격 정답 | 드럼 트랙 입력 채보, 8패드별 점수 |
+| `mdb_drums.yaml` | MDB Drums 23곡(22분). 실제 밴드 녹음, 원곡·드럼 트랙·사람이 적은 타격 정답 | 논문 수치와 검산 |
+| `mdb_drums_unseen.yaml` | 위 23곡 중 MUSDB18 train에 없는 11곡 | 분리 모델을 거치는 평가는 이 묶음만 (아래 참고) |
+
+GMD 연주는 `list-gmd --split test --min-sec 30 --hits`로 패드별 타격 수를 보고 골랐다. test split만 쓰는 이유는 채보 후보 중 셋(OaF Drums·YourMT3+·Inverse Drum Machine)이 GMD를 다시 녹음·렌더링한 E-GMD·StemGMD의 train split로 학습했기 때문이다. 밴드 장르만 고르면 크래시 73개·미드탐 34개뿐이라 재즈 2개·라틴 3개 연주를 더해 탐·심벌이 각 100개 이상 되게 했다. 합성곡에 쓴 연주 5개는 뺐다.
+
+```bash
+# 세 묶음 점검 (곡 수·길이·누락·패드별 타격 수)
+uv run ssaplash-bench check-data configs/bench/datasets/synth_v1.yaml configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml
+```
+
+### MDB Drums
+
+MedleyDB 23곡에 드럼 타격 시각과 종류(세부 분류 21종)를 사람이 적은 공개 데이터셋. 채보 논문들이 점수 비교에 쓰는 표준 평가곡이다. 라이선스는 **CC BY-NC-SA 4.0**이라 음원·주석을 저장소나 Notion에 올리지 않는다. 벤치마크에 필요한 폴더 세 개만 받으면 331MB다.
+
+```bash
+cd AI/data
+git clone --depth 1 --filter=blob:none --sparse https://github.com/CarlSouthall/MDBDrums.git mdb_drums
+cd mdb_drums
+git sparse-checkout set "MDB Drums/annotations" "MDB Drums/audio/drum_only" "MDB Drums/audio/full_mix"
+sha256sum -c CHECKSUMS.txt   # 115개 파일. 체크섬 파일은 git이 추적한다 (2018-03-12 커밋 b29e2d6 기준)
+```
+
+주의: 23곡 중 12곡(80sRock·Beatles·Britpop·Country1·Disco·Gospel·Grunge·Hendrix·Punk·Reggae·Rock·Rockabilly)은 같은 MedleyDB 녹음이 MUSDB18 train에도 들어 있다. 분리 모델이 학습 때 본 곡이라, 분리 모델을 거치는 평가에는 나머지 11곡(`mdb_drums_unseen.yaml`)만 쓴다. 세부 분류를 패드로 바꾸는 표는 `bench/datasets/mdb.py`에 있고, 탬버린(TMB) 32개는 패드 밖이라 뺀다. 탐 타격이 23곡 합쳐 90개뿐이라 탐별 점수는 GMD 묶음이 맡는다.
 
 ## 관련 문서
 
