@@ -6,15 +6,18 @@ import numpy as np
 import pytest
 
 from ssaplash_ai.bench.datasets import (
+    COARSE,
     DROP,
     FIVE_GROUPS,
     HITS_DTYPE,
     PADS,
     clip_hits,
     count_by_pad,
+    has_coarse,
     make_hits,
     to_five_groups,
     validate_hits,
+    validate_pred_hits,
 )
 
 TABLE = {36: "KICK", 38: "SNARE", 42: "HIHAT", 49: "CRASH", 56: DROP}
@@ -72,3 +75,36 @@ def test_to_five_groups():
     five = to_five_groups(hits)
     assert five["pad"].tolist() == ["cymbal", "kick"]
     assert hits["pad"].tolist() == ["CRASH", "KICK"]
+
+
+# ---- 모델 예측 표: 거친 라벨 (채보 설계 3-8절) ----
+
+PRED_TABLE = {
+    "kick": "KICK",
+    "snare": "SNARE",
+    "hh": "HIHAT",
+    "tom": "tom",
+    "cym": "cymbal",
+    "clap": DROP,
+}
+
+
+def test_거친_라벨은_allow_coarse일_때만_허용():
+    with pytest.raises(ValueError, match="어휘에 없음"):
+        make_hits([0.1], ["tom"], None, PRED_TABLE)
+    hits, dropped = make_hits(
+        [0.1, 0.2, 0.3], ["tom", "cym", "clap"], None, PRED_TABLE, allow_coarse=True
+    )
+    assert dropped == 1 and hits["pad"].tolist() == ["tom", "cymbal"]
+    assert has_coarse(hits)
+    validate_pred_hits(hits)
+    with pytest.raises(ValueError, match="어휘에 없는 패드"):
+        validate_hits(hits)  # 정답 표 검사는 거친 라벨을 거부
+
+
+def test_거친_라벨도_5가지로_바뀐다():
+    hits, _ = make_hits([0.1, 0.2], ["tom", "kick"], None, PRED_TABLE, allow_coarse=True)
+    five = to_five_groups(hits)
+    assert five["pad"].tolist() == ["tom", "kick"]
+    assert set(COARSE) == {"tom", "cymbal"}
+    assert not has_coarse(to_five_groups(make_hits([0.1], ["kick"], None, PRED_TABLE)[0]))

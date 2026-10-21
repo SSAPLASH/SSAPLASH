@@ -1,0 +1,16 @@
+# 5가지만 내는 모델 흉내. 정답의 탐 3종을 tom, 크래시·라이드를 cymbal로 돌려줌 → 8패드 점수 없음(eightPad 거짓).
+name: mock_coarse
+adapter: mock
+mock_mode: truth
+truth_dir: data/results/mock_truth
+license_code: 없음 (테스트용)
+license_weights: 없음 (테스트용)
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  HI_TOM: tom
+  MID_TOM: tom
+  FLOOR_TOM: tom
+  CRASH: cymbal
+  RIDE: cymbal

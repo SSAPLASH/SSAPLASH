@@ -1,6 +1,6 @@
 # AI 파트
 
-싸플래쉬(SSAPLASH)의 AI·데이터 영역. 채보 생성(MIDI 규칙 변환, 음원 드럼 분리, 드럼 트랜스크립션), 실시간·리포트 코칭, 악보 자동 넘기기를 맡는다. 현재는 **드럼 분리 모델 벤치마크 하네스**를 만드는 단계다.
+싸플래쉬(SSAPLASH)의 AI·데이터 영역. 채보 생성(MIDI 규칙 변환, 음원 드럼 분리, 드럼 트랜스크립션), 실시간·리포트 코칭, 악보 자동 넘기기를 맡는다. 현재는 **드럼 분리·채보 모델 벤치마크 하네스**로 서비스에 쓸 모델을 고르는 단계다.
 
 ## 스택
 
@@ -15,6 +15,7 @@
 | 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 tracking URI만 바꾼다 |
 | 보고서 | pandas, matplotlib | CSV 집계, 마크다운 표, PNG 그래프 |
 | 모델 실행 | PyTorch + ZFTurbo MSST(msst), demucs, openunmix | 선택 extra `models`. 단위 테스트·CI에는 필요 없다 |
+| 채보 모델 실행 | ADTOF-pytorch(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
 
 이 스택은 2026-10-19 기준 잠정 확정이다. 팀 전체 기술 스택이 확정되면 바뀔 수 있다.
 
@@ -27,19 +28,27 @@ AI/
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
 │   ├─ bench/            벤치마크 하네스
-│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report)
+│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report · run-transcription · report-transcription)
 │   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build, gmd, mdb) · 패드 어휘·타격 표(pads)
 │   │   ├─ separators/   분리 모델 실행. separator_base(공통 인터페이스·yaml·다운로드),
 │   │   │                mock_separator(모델 없이 원곡·무음을 돌려주는 테스트용), msst_separator(SCNet·BS Roformer),
 │   │   │                demucs_separator(HTDemucs), openunmix_separator(umxhq)
+│   │   ├─ transcribers/ 채보 모델 실행. transcriber_base(공통 인터페이스·yaml 대응표), mock_transcriber(테스트용),
+│   │   │                adtof_transcriber(ADTOF), adtof_drumsep_transcriber(ADTOF + 드럼 킷 분리 + 규칙),
+│   │   │                external_transcriber(별도 가상환경 스크립트 실행)
 │   │   ├─ metrics/      지표 계산. bss_eval_metrics(SDR·SIR·SAR·SI-SDR), onset_preservation(타격 보존율),
-│   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM)
-│   │   ├─ runner/       벤치마크 실행. benchmark_runner(모델 × 곡, 결과 CSV), mlflow_tracking(MLflow 기록)
-│   │   └─ report/       결과 보고서. summary_table(집계·요약 표), charts(그래프 PNG), build_report(파일 생성)
+│   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM), hit_f1(채보 타격 F1)
+│   │   ├─ runner/       벤치마크 실행. benchmark_runner(분리 모델 × 곡), transcription_runner(채보 모델 × 곡 × 입력),
+│   │   │                run_support(둘이 같이 쓰는 CSV 쓰기·이어하기), mlflow_tracking(MLflow 기록)
+│   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
+│   │                    build_report(파일 생성)
 │   └─ chart/            채보 형식·패드 매핑 (예정)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
-├─ configs/bench/models/    모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
-├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py)
+├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
+├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
+├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py), 별도 환경 채보 스크립트 (transcribers_ext/)
+├─ ext/                  채보 모델 저장소 클론 (ADT_STR, inverse-drum-machine. git 미추적)
+├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
 ├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
@@ -61,6 +70,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 cd AI
 uv sync                  # .venv 생성 + 의존성 설치 (Python 3.11은 uv가 받아 준다)
 uv sync --extra models   # 실제 분리 모델까지 돌릴 때. torch(CUDA)·msst·demucs·openunmix 약 3GB
+uv sync --extra models --extra transcribers   # 채보 모델 ADTOF까지. 나머지 채보 모델은 아래 '별도 환경'
 ```
 
 `models` extra는 Windows에서 CUDA 12.8 휠을, Linux(코랩)에서는 PyPI 기본 휠을 받는다 (`pyproject.toml`의 `tool.uv.index`). Spleeter는 tensorflow 2.12·numpy 1.x에 고정돼 이 환경에 설치할 수 없어 후보에서 뺐다.
@@ -140,9 +150,89 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
 ```
 
+## 채보 벤치마크 실행 (S15P31A307-109)
+
+채보 모델은 드럼 소리를 넣으면 "몇 초에 어느 드럼을 쳤는지" 목록을 적어 주는 모델이다. 이 하네스는 채보 모델 여러 개를 같은 곡으로 돌려 정답 타격(위 "채보 벤치마크 정답 데이터")과 맞춰 보고 점수표를 만든다. 분리 벤치마크와 같은 뼈대(모델 yaml × 데이터셋 yaml → 곡마다 CSV 한 줄 → 보고서 → MLflow)이고, 다른 점은 세 가지다.
+
+- **입력이 세 가지**다. `--input drums`(정답 드럼 트랙), `mixture`(원곡 그대로), `separated`(분리 모델이 뽑은 드럼). 한 번 실행에 하나만 고르고, 결과표에서 합쳐 본다. `separated`는 `--separator`로 분리 모델 yaml을 주면 곡마다 분리해 `separated/<분리 모델>/<곡>/drums.wav`에 저장해 두고 다음부터는 읽기만 한다. 다른 run 폴더의 그 파일을 쓰려면 `--separated-dir`.
+- **모델이 내는 드럼 이름을 우리 패드 8종으로 바꾸는 표**가 모델 yaml의 `labels`에 있다. 값은 패드 이름(`KICK`…`RIDE`), 탐 3종을 못 나누면 `tom`, 크래시·라이드를 못 나누면 `cymbal`, 패드에 없는 타격(클랩·카우벨 등)은 `__drop__`. `tom`·`cymbal`이 있으면 8패드 점수는 매기지 않고 5가지 점수만 낸다.
+- **점수는 곡별 평균이 아니라 개수 합산**이다. 곡마다 맞힌·헛것·놓친 개수를 CSV에 남기고, 보고서가 데이터 묶음 단위로 더해 F1을 낸다.
+
+```bash
+# 동작 확인: ADTOF × 합성곡 5곡 30초 (모델 다운로드 없음, 가중치는 패키지에 포함)
+uv run ssaplash-bench run-transcription --models configs/bench/transcribers/adtof/adtof.yaml --dataset configs/bench/datasets/synth_v1.yaml --clip 0 30 --out data/results --mlflow-uri none
+
+# 정답 드럼 입력으로 여러 모델 × MDB Drums, 예측 타격을 모델당 3곡 MIDI로 저장
+uv run ssaplash-bench run-transcription --models configs/bench/transcribers/adtof/adtof.yaml configs/bench/transcribers/external/adt_str_tau08.yaml --dataset configs/bench/datasets/mdb_drums.yaml --input drums --save-midi 3 --out data/results
+
+# 분리 모델을 거친 드럼 입력 (MUSDB train에 없는 MDB 11곡)
+uv run ssaplash-bench run-transcription --models configs/bench/transcribers/adtof/adtof.yaml --dataset configs/bench/datasets/mdb_drums_unseen.yaml --input separated --separator configs/bench/models/msst/bs_roformer_sw.yaml --out data/results
+
+# 여러 run의 결과를 합쳐 보고서 (drums 대비 separated·mixture 변화 열이 생긴다)
+uv run ssaplash-bench report-transcription data/results/<run1>/results.csv data/results/<run2>/results.csv --out data/results/combined
+```
+
+| 옵션 | 뜻 | 기본 |
+| --- | --- | --- |
+| `--models` | 채보 모델 yaml 목록 (`configs/bench/transcribers/<어댑터>/*.yaml`) | 필수 |
+| `--dataset` | 타격 정답이 있는 데이터셋 yaml (synth_v1, gmd_test, mdb_drums, mdb_drums_unseen). MUSDB는 정답이 없어 거부 | 필수 |
+| `--input` | `drums` / `mixture` / `separated` | `drums` |
+| `--separator`, `--separated-dir` | separated일 때 분리 모델 yaml / 이미 분리된 wav 폴더 | 없음 |
+| `--save-midi N` | 모델당 예측 타격을 MIDI로 저장할 곡 수 (`midi/<모델>/<곡>.mid`, 청취·플레이 평가용) | 0 |
+| `--out`, `--device`, `--clip`, `--run-id`, `--no-warmup`, `--mlflow-uri` | 분리 벤치마크와 같음. `--run-id`로 이어하기(키는 묶음·모델·입력·분리 모델·곡) | |
+
+결과 폴더 `data/results/<runId>/`
+
+| 파일 | 내용 |
+| --- | --- |
+| `results.csv` | 곡 × 모델 × 입력당 1행. 5가지·8패드 기준 맞힌·헛것·놓친 개수(±50ms·±25ms)와 곡 단위 F1, Perfect 폭 적중률, 시각 오차, 세기 상관, 채보 시간·RTF·로드 시간·메모리, `eightPad`(8패드를 다 내는지), `input`·`separator`, 실패 시 `error` |
+| `hits_by_class.csv` | 라벨(패드 또는 5가지)별 개수. 보고서의 패드별 F1 표 재료 |
+| `summary.md` | 데이터 묶음별 비교표(5가지 F1, 8패드 F1, 분리 후 F1 변화, Perfect 폭 적중률, RTF, 피크 GPU 메모리, 가중치 라이선스), 보조값, 패드별·5가지별 F1, 실패 목록 |
+| `per_song.csv`, `f1_by_model.png`, `rtf_vs_f1.png` | 곡별 값, 모델별 F1 막대, RTF 대 F1 산점도 |
+| `separated/`, `inputs/`, `midi/` | 분리 드럼 캐시, 별도 환경 모델에 넘긴 입력 wav, 저장한 예측 MIDI |
+
+MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바뀌면 `configHash`가 바뀌어 기록에 남는다.
+
+### 채보 모델과 환경
+
+| 모델 | yaml | 어댑터 | 환경 | 8패드 | 비고 |
+| --- | --- | --- | --- | --- | --- |
+| ADTOF | `adtof/adtof.yaml` | adtof | extra `transcribers` | 5가지만 | 가중치 패키지 포함. CC BY-NC-SA |
+| ADTOF + 드럼 킷 분리 | `adtof_drumsep/adtof_drumsep.yaml` | adtof_drumsep | extra `models` + `transcribers` | 8 | ADTOF 결과의 탐·심벌을 MDX23C DrumSep 6스템(첫 실행 때 437MB 다운로드)과 규칙(탐 음높이 구간, 크래시·라이드 스템 에너지)으로 나눔. DrumSep 가중치 라이선스 미명시 |
+| ADT_STR | `external/adt_str_tau08.yaml` (tau 0.4·0.6 변형도 있음) | external | `.venv-adt-str` + `ext/ADT_STR` | 8 | torch 2.8 고정이라 별도 환경. HF `Pierfrancesco/adt-str`에서 가중치 자동 다운로드. CC BY-SA |
+| Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
+| Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
+
+**별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다(Windows 기준. Linux·코랩은 `.venv-xxx/bin/python`으로 고친다).
+
+```bash
+# ADT_STR: 저장소 클론 + torch 2.8(CUDA 12.8) + 저장소 의존성
+git clone --depth 1 https://github.com/pier-maker92/ADT_STR ext/ADT_STR
+uv venv .venv-adt-str --python 3.11
+uv pip install --python .venv-adt-str/Scripts/python.exe torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python .venv-adt-str/Scripts/python.exe -r ext/ADT_STR/pyproject.toml
+
+# Inverse Drum Machine: 저장소 클론(가중치 포함) + 설치
+git clone --depth 1 https://github.com/bernardo-torres/inverse-drum-machine ext/inverse-drum-machine
+uv venv .venv-idm --python 3.11
+uv pip install --python .venv-idm/Scripts/python.exe "torch>=2.1.1,<2.9" "torchaudio>=2.1.1,<2.9" --index-url https://download.pytorch.org/whl/cu128
+# 저장소 pyproject에 build-system이 없어 패키지로는 설치가 안 된다. 의존성만 깔고 스크립트가 저장소를 sys.path에 넣는다
+uv pip install --python .venv-idm/Scripts/python.exe lightning lightning-utilities auraloss einops "librosa>=0.9.1,<0.10" soundfile "soxr>=0.3.7" mir_eval "numpy<2" scipy scikit-learn pandas "matplotlib==3.8.2" hydra-core hydra-colorlog omegaconf pyyaml rootutils tqdm rich beautifulsoup4 setuptools
+
+# Omnizart: Python 3.10 + TensorFlow. madmom이 Cython·옛 numpy로 빌드돼야 해서 먼저 깔아 둔다
+uv python install 3.10
+uv venv .venv-omnizart --python 3.10
+uv pip install --python .venv-omnizart/Scripts/python.exe "Cython<3" "numpy==1.23.5" wheel setuptools
+uv pip install --python .venv-omnizart/Scripts/python.exe --no-build-isolation "madmom==0.16.1"
+uv pip install --python .venv-omnizart/Scripts/python.exe omnizart soundfile
+.venv-omnizart/Scripts/omnizart download-checkpoints
+```
+
+별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
+
 ## 지표 정의
 
-곡 단위 값이고 모델 단위 값은 곡 값들의 중앙값이다. 자세한 계산 규칙은 `src/ssaplash_ai/bench/metrics/` 각 파일 머리말에 있다.
+분리 벤치마크 지표. 곡 단위 값이고 모델 단위 값은 곡 값들의 중앙값이다. 자세한 계산 규칙은 `src/ssaplash_ai/bench/metrics/` 각 파일 머리말에 있다.
 
 | CSV 열 | 뜻 | 계산 |
 | --- | --- | --- |
@@ -157,6 +247,22 @@ git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
 | `peakRamMb`, `peakVramMb` | 분리 중 최대 메모리 (MB) | RAM은 50ms마다 프로세스 RSS 표본의 최댓값, VRAM은 torch 최대 할당량. CPU 실행이면 VRAM은 nan |
 
 무음 예측의 BSS 값은 정의되지 않으므로 `-inf`로 적는다. 비교표에는 ADR-011의 6개 지표와 가중치 라이선스만 올리고 나머지는 보조값 표에 둔다.
+
+### 채보 지표
+
+정답 타격 표와 모델 예측 표를 드럼 종류(라벨)별로 나눠 ±50ms 안에서 1:1로 짝짓는다(mir_eval). 짝 = 맞힌 것(tp), 예측에만 있으면 헛것(fp), 정답에만 있으면 놓친 것(fn). 모든 라벨의 개수를 더해 정밀도·재현율·F1을 내고(논문 표의 SUM), 묶음 단위 값은 곡들의 개수를 다시 더해 계산한다(곡별 평균 아님). 계산은 `metrics/hit_f1.py`.
+
+| CSV 열 | 뜻 | 계산 |
+| --- | --- | --- |
+| `tpFive50`, `fpFive50`, `fnFive50`, `f1Five50`, `precFive50`, `recFive50` | 5가지(킥·스네어·하이햇·탐·심벌) 기준 개수와 곡 단위 F1·정밀도·재현율 | 정답 패드 → 5가지 묶음, 예측도 같게(`tom`·`cymbal`은 그대로). 모든 모델에 매김. 논문 수치 검산용 |
+| `…Five25`, `f1Five25` | 같은 것 ±25ms | |
+| `tpPads50` … `f1Pads25` | 8패드 기준 | 8패드를 다 내는 모델(`eightPad` 참)만. 아니면 NaN |
+| `perfectRatio` | Perfect 폭 적중률 = ±25ms F1 ÷ ±50ms F1 | 8패드가 있으면 8패드 기준, 없으면 5가지 기준. ±50ms F1이 0이면 NaN |
+| `meanErrMs`, `meanAbsErrMs` | 짝지은 쌍의 (예측 − 정답) 시각 평균(부호 있음, 늦게 찍는 경향)과 절댓값 평균 (ms) | ±50ms 창 |
+| `f1Any50` | 라벨을 무시하고 시각만 맞춘 F1 | 분리 벤치마크 타격 보존율과 같은 계산. 보조 |
+| `velocityCorr` | 세기 상관 | 정답·예측 모두 세기가 있고 짝이 10개 이상일 때 피어슨 상관. 아니면 NaN |
+| `hitsTrue`, `hitsPred`, `hitsPredDropped` | 정답 타격 수, 예측 타격 수, 패드 밖이라 뺀 예측 수 | |
+| `transcribeSec`, `rtf`, `loadSec`, `peakRamMb`, `peakVramMb`, `vramMethod` | 채보 시간·RTF(채보 시간 ÷ 곡 길이)·로드 시간·메모리 | 샘플레이트 변환·MIDI 읽기는 채보 시간에 포함, 로드·다운로드·분리는 제외. 분리 시간은 `separateSec` |
 
 ## 데이터
 

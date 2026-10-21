@@ -20,15 +20,19 @@ from ssaplash_ai.bench.datasets.gmd import GmdDataset
 from ssaplash_ai.bench.datasets.mdb import MdbDataset
 from ssaplash_ai.bench.datasets.musdb import MusdbDataset
 from ssaplash_ai.bench.datasets.pads import (
+    COARSE,
     DROP,
     FIVE_GROUPS,
     HITS_DTYPE,
     PADS,
+    PRED_LABELS,
     clip_hits,
     count_by_pad,
+    has_coarse,
     make_hits,
     to_five_groups,
     validate_hits,
+    validate_pred_hits,
 )
 from ssaplash_ai.bench.datasets.synth import SynthDataset
 
@@ -52,10 +56,12 @@ def load_dataset(config: DatasetConfig | str | Path) -> BaseDataset:
 
 
 __all__ = [
+    "COARSE",
     "DROP",
     "FIVE_GROUPS",
     "HITS_DTYPE",
     "PADS",
+    "PRED_LABELS",
     "SAMPLE_RATE",
     "BaseDataset",
     "CheckReport",
@@ -67,10 +73,12 @@ __all__ = [
     "SynthDataset",
     "clip_hits",
     "count_by_pad",
+    "has_coarse",
     "load_dataset",
     "make_hits",
     "read_audio",
     "to_five_groups",
     "validate_hits",
+    "validate_pred_hits",
     "write_audio",
 ]

@@ -56,3 +56,29 @@ def make_hits(seconds: float = 2.2, times: list[float] | None = None) -> np.ndar
         mono[start : start + burst_len] += burst.astype(np.float32)
     mono *= 0.5 / np.max(np.abs(mono))
     return np.stack([mono, mono])
+
+
+SYNTH_ONSETS = [0.1, 0.5, 1.2, 1.9]
+# 온셋 순서대로 (피치, gmd_class, 세기). 마지막은 패드에 없는 타격
+SYNTH_CLASSES = [(36, "kick", 100), (38, "snare", 90), (46, "hihat_open", 70), (56, "other", 60)]
+
+
+def make_synth_song(
+    song_dir: Path,
+    seconds: float = 2.0,
+    onsets: list[float] | None = None,
+    classes: list[tuple[int, str, int]] | None = None,
+) -> None:
+    """테스트용 합성곡 폴더(mixture·drums·accomp·onsets.csv·meta.yaml). 채보 정답 hits_true 포함."""
+    onsets = onsets or SYNTH_ONSETS
+    classes = classes or SYNTH_CLASSES
+    drums = make_tone(seconds, SR, 220.0)
+    accomp = make_tone(seconds, SR, 110.0) * 0.5
+    write_wav(song_dir / "drums.wav", drums)
+    write_wav(song_dir / "accomp.wav", accomp)
+    write_wav(song_dir / "mixture.wav", drums + accomp)
+    lines = ["time_sec,pitch,gmd_class,velocity"] + [
+        f"{t:.6f},{p},{c},{v}" for t, (p, c, v) in zip(onsets, classes, strict=True)
+    ]
+    (song_dir / "onsets.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (song_dir / "meta.yaml").write_text("name: s\n", encoding="utf-8")

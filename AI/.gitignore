@@ -7,6 +7,9 @@ ROADMAP.md
 
 # 가상환경·데이터·모델 가중치·실험 결과
 .venv/
+# 채보 모델 별도 환경·저장소 클론 (README '채보 벤치마크' 절)
+.venv-*/
+ext/
 data/*
 !data/README.md
 # MDB Drums 체크섬만 추적 (음원·주석은 CC BY-NC-SA, 미추적)
