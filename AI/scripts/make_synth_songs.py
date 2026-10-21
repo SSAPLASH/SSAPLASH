@@ -14,6 +14,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from ssaplash_ai.bench.datasets.gmd import midi_hits
+from ssaplash_ai.bench.datasets.pads import PADS, count_by_pad
 from ssaplash_ai.bench.datasets.synth_build import Recipe, build_all, list_gmd
 
 
@@ -26,12 +28,23 @@ def cmd_list_gmd(args: argparse.Namespace) -> int:
         min_sec=args.min_sec,
         beat_type=None if args.all_types else "beat",
     )
-    print(f"{'id':<40} {'style':<24} {'bpm':>4} {'초':>7} split")
+    if args.split:
+        rows = [r for r in rows if r["split"] == args.split]
+    pad_cols = "".join(f" {p[:6]:>6}" for p in PADS) if args.hits else ""
+    print(f"{'id':<40} {'style':<24} {'bpm':>4} {'초':>7} split{pad_cols}")
+    totals = dict.fromkeys(PADS, 0)
     for r in rows:
-        print(
-            f"{r['id']:<40} {r['style']:<24} {r['bpm']:>4} {float(r['duration']):>7.1f} {r['split']}"
-        )
+        line = f"{r['id']:<40} {r['style']:<24} {r['bpm']:>4} {float(r['duration']):>7.1f} {r['split']}"
+        if args.hits:
+            hits, _ = midi_hits(args.gmd_root / r["midi_filename"])
+            counts = count_by_pad(hits)
+            for p in PADS:
+                totals[p] += counts[p]
+            line += "".join(f" {counts[p]:>6}" for p in PADS)
+        print(line)
     print(f"총 {len(rows)}개")
+    if args.hits:
+        print("패드별 합계: " + ", ".join(f"{p} {n}" for p, n in totals.items()))
     return 0
 
 
@@ -56,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--bpm-max", type=int)
     ls.add_argument("--min-sec", type=float, default=0.0, help="최소 길이(초)")
     ls.add_argument("--all-types", action="store_true", help="fill도 포함 (기본은 beat만)")
+    ls.add_argument("--split", help="train / validation / test 중 하나로 제한")
+    ls.add_argument("--hits", action="store_true", help="MIDI를 읽어 패드별 타격 수 열 추가")
     ls.set_defaults(func=cmd_list_gmd)
 
     bd = sub.add_parser("build", help="레시피대로 합성곡 생성")

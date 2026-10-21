@@ -1,6 +1,6 @@
 """벤치마크 명령줄 진입점 (설계 3-6절). AI/ 폴더에서 실행.
 
-- check-data: 데이터셋 yaml → 곡 수·길이 합·누락 파일 (S15P31A307-103)
+- check-data: 데이터셋 yaml → 곡 수·길이 합·누락 파일·패드별 타격 수 (S15P31A307-103, -108)
 - run: 모델 yaml 목록 × 데이터셋 yaml → 결과 CSV, 보고서, 분리 wav(선택), MLflow run
 - report: 결과 CSV 1개 이상 → 모델별 요약 표(md), 곡별 CSV, 그래프 PNG 2종
 
@@ -35,6 +35,12 @@ def format_report(report: CheckReport) -> str:
         f"길이 합 {minutes:.1f}분, 누락 {len(report.missing)}건"
     ]
     lines.extend(f"  누락: {m}" for m in report.missing)
+    if report.hits_by_pad is None:
+        lines.append("  타격 정답: 없음 (정답 드럼 스템에 검출기 적용)")
+    else:
+        total = sum(report.hits_by_pad.values())
+        pads = ", ".join(f"{pad} {n}" for pad, n in report.hits_by_pad.items())
+        lines.append(f"  타격 정답: {total}개 ({pads}), 패드 밖 제외 {report.hits_dropped}개")
     lines.append("  상태: 정상" if report.ok else "  상태: 문제 있음")
     return "\n".join(lines)
 

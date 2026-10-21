@@ -16,12 +16,27 @@ from ssaplash_ai.bench.datasets.base import (
     read_audio,
     write_audio,
 )
+from ssaplash_ai.bench.datasets.gmd import GmdDataset
+from ssaplash_ai.bench.datasets.mdb import MdbDataset
 from ssaplash_ai.bench.datasets.musdb import MusdbDataset
+from ssaplash_ai.bench.datasets.pads import (
+    DROP,
+    FIVE_GROUPS,
+    HITS_DTYPE,
+    PADS,
+    clip_hits,
+    count_by_pad,
+    make_hits,
+    to_five_groups,
+    validate_hits,
+)
 from ssaplash_ai.bench.datasets.synth import SynthDataset
 
 LOADERS: dict[str, type[BaseDataset]] = {
     MusdbDataset.kind: MusdbDataset,
     SynthDataset.kind: SynthDataset,
+    GmdDataset.kind: GmdDataset,
+    MdbDataset.kind: MdbDataset,
 }
 
 
@@ -37,14 +52,25 @@ def load_dataset(config: DatasetConfig | str | Path) -> BaseDataset:
 
 
 __all__ = [
+    "DROP",
+    "FIVE_GROUPS",
+    "HITS_DTYPE",
+    "PADS",
     "SAMPLE_RATE",
     "BaseDataset",
     "CheckReport",
     "DatasetConfig",
+    "GmdDataset",
+    "MdbDataset",
     "MusdbDataset",
     "SongItem",
     "SynthDataset",
+    "clip_hits",
+    "count_by_pad",
     "load_dataset",
+    "make_hits",
     "read_audio",
+    "to_five_groups",
+    "validate_hits",
     "write_audio",
 ]

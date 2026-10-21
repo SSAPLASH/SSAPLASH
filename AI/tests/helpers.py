@@ -1,4 +1,4 @@
-"""테스트 공용 도구. 짧은 가짜 wav와 가짜 MUSDB 곡 생성.
+"""테스트 공용 도구. 짧은 테스트용 wav와 테스트용 MUSDB 곡 생성.
 
 pytest가 tests/ 를 sys.path에 넣으므로 `from helpers import ...`로 사용.
 """
@@ -26,7 +26,7 @@ def write_wav(path: Path, audio: np.ndarray, sr: int = SR) -> None:
 
 
 def make_musdb_song(song_dir: Path, seconds: float = 1.0, sr: int = SR) -> dict[str, np.ndarray]:
-    """mixture = drums + bass + other + vocals 관계가 정확히 맞는 가짜 곡."""
+    """mixture = drums + bass + other + vocals 관계가 정확히 맞는 테스트용 곡."""
     stems = {
         "drums": make_tone(seconds, sr, 220.0),
         "bass": make_tone(seconds, sr, 110.0) * 0.5,

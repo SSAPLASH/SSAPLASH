@@ -14,7 +14,7 @@ from helpers import make_musdb_song  # noqa: E402
 
 @pytest.fixture
 def musdb_root(tmp_path: Path) -> Path:
-    """test 하위에 곡 2개가 있는 가짜 MUSDB 폴더."""
+    """test 하위에 곡 2개가 있는 테스트용 MUSDB 폴더."""
     root = tmp_path / "musdb18hq"
     make_musdb_song(root / "test" / "Song A", 1.0)
     make_musdb_song(root / "test" / "Song B", 2.0)

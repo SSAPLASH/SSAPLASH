@@ -3,6 +3,8 @@
 설계 문서 3-1절 "데이터셋 항목"을 그대로 옮긴 것. 로더는 곡 하나를
 원곡·정답 드럼·정답 반주 배열로 반환. runner는 이 모양을 전제로 동작.
 배열은 전부 float32, 모양은 (채널 2, 샘플), 샘플레이트는 44100으로 통일.
+채보 벤치마크(설계 CHART-003-transcription-benchmark 3-1절)용 타격 표 hits_true는
+온셋 시각 배열 onsets_true와 별개 필드. 분리 하네스는 onsets_true만 사용.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ import numpy as np
 import soundfile as sf
 import soxr
 import yaml
+
+from ssaplash_ai.bench.datasets.pads import count_by_pad
 
 SAMPLE_RATE = 44100
 
@@ -32,6 +36,10 @@ class SongItem:
     accomp_true: np.ndarray
     clip: tuple[float, float] | None = None
     onsets_true: np.ndarray | None = None
+    # 채보 정답 타격 표 (pads.HITS_DTYPE). 정답이 없는 데이터셋은 None
+    hits_true: np.ndarray | None = None
+    # 패드에 없어 hits_true에서 뺀 타격 수
+    hits_dropped: int = 0
 
     @property
     def duration_sec(self) -> float:
@@ -47,6 +55,9 @@ class CheckReport:
     total_duration_sec: float
     missing: list[str]
     expected_songs: int | None = None
+    # 패드별 타격 수 합계. 타격 정답이 없는 데이터셋은 None
+    hits_by_pad: dict[str, int] | None = None
+    hits_dropped: int = 0
 
     @property
     def ok(self) -> bool:
@@ -169,6 +180,13 @@ class BaseDataset(abc.ABC):
     def load(self, song_id: str) -> SongItem:
         """곡 하나를 읽어 SongItem으로 반환."""
 
+    def hits_of(self, song_id: str) -> tuple[np.ndarray, int] | None:
+        """오디오를 읽지 않고 타격 정답 표와 뺀 개수만 반환. 정답이 없으면 None.
+
+        check()가 패드별 타격 수를 세는 데 사용. 타격 정답이 있는 로더만 구현.
+        """
+        return None
+
     def __iter__(self) -> Iterator[SongItem]:
         for song_id in self.song_ids():
             yield self.load(song_id)
@@ -180,20 +198,37 @@ class BaseDataset(abc.ABC):
         """파일 유무와 길이만 확인. 오디오 본문은 읽지 않음."""
         missing: list[str] = []
         total = 0.0
+        hits_by_pad: dict[str, int] | None = None
+        dropped = 0
         ids = self.song_ids()
         for song_id in ids:
             files = self.required_files(song_id)
+            song_missing = False
             for f in files:
                 if not f.is_file():
                     missing.append(f"{song_id}/{f.name}")
+                    song_missing = True
             if files and files[0].is_file():
                 total += audio_duration_sec(files[0])
+            if song_missing:
+                continue
+            found = self.hits_of(song_id)
+            if found is None:
+                continue
+            hits, n_dropped = found
+            if hits_by_pad is None:
+                hits_by_pad = dict.fromkeys(count_by_pad(hits), 0)
+            for pad, k in count_by_pad(hits).items():
+                hits_by_pad[pad] += k
+            dropped += n_dropped
         return CheckReport(
             dataset=self.name,
             song_count=len(ids),
             total_duration_sec=total,
             missing=missing,
             expected_songs=self.config.expected_songs,
+            hits_by_pad=hits_by_pad,
+            hits_dropped=dropped,
         )
 
     def _read(self, path: Path) -> np.ndarray:

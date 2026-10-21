@@ -1,4 +1,4 @@
-"""합성곡 제작 로직 테스트. 가짜 GMD(info.csv·MIDI·wav)와 가짜 MUSDB train 곡 사용."""
+"""합성곡 제작 로직 테스트. 테스트용 GMD(info.csv·MIDI·wav)와 테스트용 MUSDB train 곡 사용."""
 
 from __future__ import annotations
 
