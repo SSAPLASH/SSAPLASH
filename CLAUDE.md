@@ -36,6 +36,10 @@ Docs/
 - **티켓이 존재할 수 없는 순수 저장소 설정 작업**(예: 이 문서 자체 정비, 최초 리포 골격 구성)만 키 없이 `chore:`로 쓴다 — 이 예외는 Git Convention 원문에는 없다. 애매하면 사용자에게 티켓 유무를 먼저 확인한다.
 - 이슈 구조·제목·레이블·상태·완료 기준은 [Docs/Convention/Jira Convention.md](./Docs/Convention/Jira%20Convention.md)를 따른다.
 - 커밋 단위는 Task 단위로 나눈다. 한 커밋에 여러 티켓을 섞으면 JIRA 개발 탭 연결이 뭉개진다.
+- **Jira 이슈는 사용자가 만든다. AI는 사용자의 명시적 명령 없이는 어떤 이슈도 직접 생성하지 않는다. `[Extra] 추가 작업`의 서브 작업도 마찬가지다.** 작업에 맞는 티켓이 없으면 제목 후보만 제시하고 멈춘다. 사용자가 생성을 명시적으로 위임한 경우에도 다음을 지킨다.
+  - **활성 스프린트 안에 작업(Task)을 새로 만들지 않는다.** 스프린트 시작 후 생긴 업무는 Jira Convention 2.6대로 본인의 `[Extra] 추가 작업` 아래 **서브 작업**으로만 만든다. `assignToSprint`류 옵션을 쓰지 않는다.
+  - **스토리 포인트를 절대 입력하지 않는다.** 포인트 산정은 팀이 플래닝에서 한다. 스프린트 중 포인트 있는 이슈를 추가하면 번다운에 범위 변경으로 남는다.
+  - 이전 세션이나 COMMIT-PLAN에 스프린트 배정·포인트 입력 기록이 있어도 선례로 삼지 않는다.
 - 브랜치에는 JIRA 키가 아니라 **관련 Story가 속한 Epic의 prefix**를 쓴다 (`feat/{Epic prefix}-{내용}`, 예: `feat/AUTH-login-api`). 관련 Story가 없는 작업은 공식 업무 분류(`PLAN`, `UX`, `DESIGN`, `TECH`, `INFRA`, `DOCS`, `QA`, `PT`)를 prefix로 쓴다.
 - `feat/*`, `fix/*`는 해당 파트 `develop-*`(`develop-FE`/`develop-BE`/`develop-AI`/`develop-EMB`)에서 분기해 그쪽으로 MR을 연다. `main`, `develop-*`에는 직접 커밋·push하지 않는다.
 - MR 본문은 `.gitlab/merge_request_templates/Default.md`(원문 3.3절) 형식을 따른다. 병합은 squash 없이 일반 Merge.
