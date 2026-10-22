@@ -64,6 +64,15 @@ tasks.named('test') {
 	systemProperty 'java.net.preferIPv4Stack', 'true'
 }
 
+// 일반 PG 테스트에는 확장 전용 V8만 제외한 실제 SQL을 복사한다.
+// V8을 포함한 전체 이력은 필수 timescaleTest에서 별도로 검증한다.
+tasks.named('processTestResources') {
+	from('src/main/resources/db/migration') {
+		exclude 'V8__convert_telemetry_to_hypertable.sql'
+		into 'db/test-migration'
+	}
+}
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 }

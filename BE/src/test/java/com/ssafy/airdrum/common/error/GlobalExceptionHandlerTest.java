@@ -3,15 +3,18 @@ package com.ssafy.airdrum.common.error;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import com.ssafy.airdrum.play.raw.PlayRawProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,6 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @WebMvcTest(controllers = ErrorProbeController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@EnableConfigurationProperties(PlayRawProperties.class)
+@Import(ErrorResponseWriter.class)
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
