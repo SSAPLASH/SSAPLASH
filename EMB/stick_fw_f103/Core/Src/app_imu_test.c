@@ -10,6 +10,11 @@
  *   TEST_MIXED : 실전 구조 검증 - 고정 주기로 자이로 읽기 + N번에 한 번 가속도·지자기,
  *                부팅 시 자이로 바이어스 보정
  *   TEST_FUSION: NDOF 모드에서 오일러 각도와 캘리브레이션 상태, 오프셋 출력
+ *   TEST_CAPTURE: 타격 검출 튜닝용 스윙 녹화 (S15P31A307-116)
+ *                4ms 주기 자이로 + 저속 가속도를 CSV로 출력. 시리얼 속도를 CAP_BAUD로 올린다
+ *                파란 버튼(B1)을 누를 때마다 구간 번호(seg)가 1씩 올라간다
+ *   TEST_HIT    : 타격 검출 실시간 확인 (S15P31A307-116). 4ms 주기 자이로 → hit_detect,
+ *                타격마다 PA8 토글(지연 측정용) + LED + 한 줄 출력. 115200 그대로
  *
  * TEST_RATE 실험 스위치
  *   USE_FAST_CONFIG : 1 = 자이로 523Hz/가속도 1kHz BW, 0 = BNO055 기본 대역폭
@@ -25,15 +30,19 @@
  *   100kHz     : 18B 4.6ms/회로 400kHz와 같음 -> 병목은 버스가 아니라 BNO055 내부
  */
 #include "app_imu_test.h"
+#include "main.h"
 #include "bno055.h"
 #include "dwt_timer.h"
+#include "hit_detect.h"
 #include <stdio.h>
 #include <string.h>
 
 #define TEST_RATE    1
 #define TEST_MIXED   2
 #define TEST_FUSION  3
-#define TEST_MODE    TEST_FUSION
+#define TEST_CAPTURE 4
+#define TEST_HIT     5
+#define TEST_MODE    TEST_HIT
 
 /* TEST_RATE 스위치 (기본값 = 현재 베스트) */
 #define USE_FAST_CONFIG   1
@@ -50,12 +59,25 @@
 #define BIAS_STILL_SD_LSB 128   /* 축별 표준편차가 이보다 크면 움직인 것 (128 LSB = 8dps)
                                    실측: 책상 위 정지 상태 sd 3.3~4.7dps (523Hz BW) */
 
+/* TEST_CAPTURE 설정 */
+#define CAP_PERIOD_US     4000    /* 자이로 샘플 주기 (4ms = 250Hz) */
+#define CAP_ACC_DIV       25      /* N칸마다 가속도 (25 = 10Hz). 0이면 가속도 안 읽음 */
+#define CAP_BAUD          921600  /* 녹화 중 시리얼 속도. 안 되면 460800 */
+
+/* TEST_HIT 설정 */
+#define HIT_PERIOD_US     4000    /* 자이로 샘플 주기 */
+#define HIT_AXIS          0       /* 스윙 축: 0=x 1=y 2=z (2026-10-21 부착 기준 x) */
+#define HIT_SIGN          (-1)    /* 아래로 칠 때 축 값이 -면 -1 */
+
 #define ERR_RECOVER_COUNT 3     /* 연속 에러가 이만큼 나면 버스 복구 */
 
 extern I2C_HandleTypeDef hi2c1;
 
 static bno055_t imu;
 static int ready = 0;
+#if TEST_MODE == TEST_HIT
+static hit_detector_t hitd;
+#endif
 
 /* ------------------------------------------------------------------ */
 /* I2C 버스 복구
@@ -122,7 +144,7 @@ static void track_error(HAL_StatusTypeDef st)
 }
 
 /* ------------------------------------------------------------------ */
-#if TEST_MODE == TEST_MIXED
+#if TEST_MODE == TEST_MIXED || TEST_MODE == TEST_HIT
 
 static bno055_vec3_t gyro_bias;
 
@@ -201,10 +223,49 @@ static int measure_gyro_bias(void)
 #endif
 
 /* ------------------------------------------------------------------ */
+#if TEST_MODE == TEST_CAPTURE
+
+extern UART_HandleTypeDef huart2;
+
+static volatile uint32_t seg_req = 0;   /* 버튼 누른 횟수 (인터럽트에서 증가) */
+
+static void capture_set_baud(void)
+{
+    HAL_Delay(5);                       /* 이전 출력이 다 나가도록 */
+    HAL_UART_DeInit(&huart2);
+    huart2.Init.BaudRate = CAP_BAUD;
+    HAL_UART_Init(&huart2);
+}
+
+static void capture_header(HAL_StatusTypeDef cfg)
+{
+    printf("# capture: gyro every %lu us, acc every %d slots, baud %lu, fast config %s\r\n",
+           (uint32_t)CAP_PERIOD_US, CAP_ACC_DIV, (uint32_t)CAP_BAUD, cfg == HAL_OK ? "OK" : "FAIL");
+    printf("# units: gyro 16 LSB = 1 dps, acc 100 LSB = 1 m/s2 (raw, no bias). press B1 = next seg\r\n");
+    printf("t_us,seg,gx,gy,gz,ax,ay,az\r\n");
+}
+
+/* 파란 버튼 B1 (PC13 EXTI). 300ms 안의 반복 입력은 무시 */
+void HAL_GPIO_EXTI_Callback(uint16_t pin)
+{
+    static uint32_t last = 0;
+    if (pin != B1_Pin) return;
+    uint32_t now = HAL_GetTick();
+    if (now - last < 300) return;
+    last = now;
+    seg_req++;
+}
+
+#endif
+
+/* ------------------------------------------------------------------ */
 
 void app_imu_test_init(void)
 {
     dwt_init();
+#if TEST_MODE == TEST_CAPTURE
+    capture_set_baud();     /* 여기부터 CAP_BAUD. 이전에 찍힌 "boot"는 깨져 보일 수 있다 */
+#endif
     i2c1_bus_recover();
 
 #if I2C_TEST_SPEED
@@ -243,6 +304,26 @@ void app_imu_test_init(void)
     measure_gyro_bias();
     printf("slots/s, intv_min/avg/max_us, busy_avg/max_us, late_max_us, drop, err, rec | "
            "g[0.1dps] a[0.1m/s2] m[uT]\r\n");
+
+#elif TEST_MODE == TEST_CAPTURE
+    st = bno055_config_fast(&imu);
+    bno055_set_mode(&imu, BNO055_MODE_AMG);
+    capture_header(st);
+
+#elif TEST_MODE == TEST_HIT
+    st = bno055_config_fast(&imu);
+    bno055_set_mode(&imu, BNO055_MODE_AMG);
+    printf("[IMU] fast config %s\r\n", st == HAL_OK ? "OK" : "FAIL");
+    measure_gyro_bias();
+    {
+        hit_params_t hp;
+        hit_default_params(&hp);
+        hit_init(&hitd, &hp);
+        printf("[HIT] start %d dps, brake %u%%, minPeak %d dps, minDecel %u.%u dps/ms\r\n",
+               hp.swing_start_dps, hp.brake_pct, hp.min_peak_dps,
+               hp.min_decel_x10 / 10, hp.min_decel_x10 % 10);
+    }
+    printf("#n  t_hit_ms  lead_ms  peak_dps  vel  swing_ms  decel | reject weak/slow/long\r\n");
 
 #else
     bno055_set_mode(&imu, BNO055_MODE_NDOF);
@@ -403,6 +484,116 @@ void app_imu_test_loop(void)
         next = dwt_now() + period_cyc;
         win_start = dwt_now();
     }
+}
+
+/* ------------------------------------------------------------------ */
+#elif TEST_MODE == TEST_CAPTURE
+
+/* 4ms마다 한 줄. 가속도 칸이 아니면 ax,ay,az는 빈칸
+ * t_us는 녹화 시작부터 경과 µs (DWT 59초 랩어라운드를 누적으로 피함)
+ * 한 주기 이상 밀리면 "# drop n", 읽기 실패는 "# err" 주석 줄 */
+void app_imu_test_loop(void)
+{
+    static uint32_t next = 0, prev = 0, slot = 0, seg = 0;
+    static uint64_t cyc_total = 0;
+    const uint32_t cyc_per_us = SystemCoreClock / 1000000U;
+    const uint32_t period_cyc = CAP_PERIOD_US * cyc_per_us;
+    char line[72];
+
+    if (!ready) return;
+    if (next == 0) { next = dwt_now() + period_cyc; prev = dwt_now(); }
+
+    while ((int32_t)(dwt_now() - next) < 0) { }
+
+    uint32_t t0 = dwt_now();
+    cyc_total += (uint32_t)(t0 - prev);
+    prev = t0;
+    uint32_t t_us = (uint32_t)(cyc_total / cyc_per_us);
+
+    /* 버튼으로 구간 변경 */
+    if (seg != seg_req) {
+        seg = seg_req;
+        HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, (seg & 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        int n = snprintf(line, sizeof line, "# seg %lu\r\n", seg);
+        HAL_UART_Transmit(&huart2, (uint8_t *)line, (uint16_t)n, 10);
+    }
+
+    bno055_vec3_t g, a;
+    HAL_StatusTypeDef st = bno055_read_gyro(&imu, &g);
+    track_error(st);
+
+    int with_acc = 0;
+#if CAP_ACC_DIV
+    if (st == HAL_OK && slot % CAP_ACC_DIV == 0) {
+        HAL_StatusTypeDef sa = bno055_read_acc(&imu, &a);
+        track_error(sa);
+        with_acc = (sa == HAL_OK);
+    }
+#endif
+    slot++;
+
+    int n;
+    if (st != HAL_OK) {
+        n = snprintf(line, sizeof line, "# err %d rec %lu\r\n", st, n_recover);
+    } else if (with_acc) {
+        n = snprintf(line, sizeof line, "%lu,%lu,%d,%d,%d,%d,%d,%d\r\n",
+                     t_us, seg, g.x, g.y, g.z, a.x, a.y, a.z);
+    } else {
+        n = snprintf(line, sizeof line, "%lu,%lu,%d,%d,%d,,,\r\n", t_us, seg, g.x, g.y, g.z);
+    }
+    HAL_UART_Transmit(&huart2, (uint8_t *)line, (uint16_t)n, 10);
+
+    /* 다음 칸. 한 주기 이상 밀린 경우에만 건너뛰고 기록 */
+    next += period_cyc;
+    uint32_t drop = 0;
+    while ((int32_t)(dwt_now() - next) >= (int32_t)period_cyc) { next += period_cyc; drop++; }
+    if (drop) {
+        n = snprintf(line, sizeof line, "# drop %lu\r\n", drop);
+        HAL_UART_Transmit(&huart2, (uint8_t *)line, (uint16_t)n, 10);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+#elif TEST_MODE == TEST_HIT
+
+/* 4ms마다 자이로만 읽어 검출기에 넣는다 (가속도·지자기는 읽지 않음 → 간격 일정)
+ * 타격이면 PA8 토글 + LED 토글 + 한 줄 출력 (출력은 약 5ms 걸려 다음 칸이 조금 밀릴 수 있음) */
+void app_imu_test_loop(void)
+{
+    static uint32_t next = 0, prev = 0;
+    static uint64_t cyc_total = 0;
+    const uint32_t cyc_per_us = SystemCoreClock / 1000000U;
+    const uint32_t period_cyc = HIT_PERIOD_US * cyc_per_us;
+
+    if (!ready) return;
+    if (next == 0) { next = dwt_now() + period_cyc; prev = dwt_now(); }
+
+    while ((int32_t)(dwt_now() - next) < 0) { }
+
+    uint32_t t0 = dwt_now();
+    cyc_total += (uint32_t)(t0 - prev);
+    prev = t0;
+    uint32_t t_us = (uint32_t)(cyc_total / cyc_per_us);
+
+    bno055_vec3_t g;
+    HAL_StatusTypeDef st = bno055_read_gyro(&imu, &g);
+    track_error(st);
+    if (st == HAL_OK) {
+        int16_t raw[3] = { (int16_t)(g.x - gyro_bias.x), (int16_t)(g.y - gyro_bias.y), (int16_t)(g.z - gyro_bias.z) };
+        int32_t down = HIT_SIGN * (int32_t)raw[HIT_AXIS];
+        hit_event_t ev;
+        if (hit_update(&hitd, t_us, down, &ev)) {
+            HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);              /* 지연 측정 루프백용 */
+            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            printf("%3lu %9lu %6lu %6u %4u %6u %4u.%u | %lu/%lu/%lu\r\n",
+                   hitd.n_hits, ev.t_hit_us / 1000, (ev.t_hit_us - ev.t_detect_us) / 1000,
+                   ev.peak_dps, ev.velocity, ev.swing_ms, ev.decel_x10 / 10, ev.decel_x10 % 10,
+                   hitd.n_reject_weak, hitd.n_reject_slow, hitd.n_reject_long);
+        }
+    }
+
+    next += period_cyc;
+    while ((int32_t)(dwt_now() - next) >= (int32_t)period_cyc) next += period_cyc;
 }
 
 /* ------------------------------------------------------------------ */
