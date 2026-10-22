@@ -219,12 +219,16 @@ uv pip install --python .venv-idm/Scripts/python.exe "torch>=2.1.1,<2.9" "torcha
 # 저장소 pyproject에 build-system이 없어 패키지로는 설치가 안 된다. 의존성만 깔고 스크립트가 저장소를 sys.path에 넣는다
 uv pip install --python .venv-idm/Scripts/python.exe lightning lightning-utilities auraloss einops "librosa>=0.9.1,<0.10" soundfile "soxr>=0.3.7" mir_eval "numpy<2" scipy scikit-learn pandas "matplotlib==3.8.2" hydra-core hydra-colorlog omegaconf pyyaml rootutils tqdm rich beautifulsoup4 setuptools
 
-# Omnizart: Python 3.10 + TensorFlow. madmom이 Cython·옛 numpy로 빌드돼야 해서 먼저 깔아 둔다
+# Omnizart: Python 3.10 + TensorFlow. PyPI의 madmom 0.16.1은 Python 3.10에서 C 컴파일이 안 되므로(tp_print·Py_REFCNT 오류)
+# madmom은 저장소 최신판(git)을 먼저 깐다(C 컴파일러 필요: Windows는 Visual Studio, Linux는 gcc). omnizart 설치 스크립트는
+# pyaudio·vamp·pyfluidsynth를 직접 깔므로 Linux에서는 apt로 portaudio19-dev·fluidsynth를 먼저 둔다(코랩 노트북 4번 셀)
 uv python install 3.10
 uv venv .venv-omnizart --python 3.10
-uv pip install --python .venv-omnizart/Scripts/python.exe "Cython<3" "numpy==1.23.5" wheel setuptools
-uv pip install --python .venv-omnizart/Scripts/python.exe --no-build-isolation "madmom==0.16.1"
-uv pip install --python .venv-omnizart/Scripts/python.exe omnizart soundfile
+uv pip install --python .venv-omnizart/Scripts/python.exe "Cython<3" "numpy<2" scipy mido wheel setuptools
+uv pip install --python .venv-omnizart/Scripts/python.exe --no-build-isolation "madmom @ git+https://github.com/CPJKU/madmom.git"
+uv pip install --python .venv-omnizart/Scripts/python.exe --no-build-isolation --no-deps omnizart
+# 의존성을 따로 적는 이유: 그냥 깔면 위의 madmom 시험판(0.17.dev0)을 못 알아보고 PyPI 0.16.1을 다시 받는다. GPU용 TensorFlow는 [and-cuda]
+uv pip install --python .venv-omnizart/Scripts/python.exe "numpy<2" "tensorflow[and-cuda]==2.20.*" "tf-keras==2.20.*" "numba<0.68" click jsonschema "librosa>=0.8" mir_eval pillow pretty_midi pyfluidsynth pyyaml sherpa-onnx soundfile "setuptools<82" urllib3 vamp
 .venv-omnizart/Scripts/omnizart download-checkpoints
 ```
 
