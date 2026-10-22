@@ -240,6 +240,13 @@ def _md_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join(lines)
 
 
+def _gpu_names(summary: pd.DataFrame) -> set[str]:
+    """요약 행들의 GPU 이름 집합. 빈칸·nan은 뺌."""
+    if "gpuName" not in summary:
+        return set()
+    return {str(g) for g in summary["gpuName"] if not pd.isna(g) and str(g) != ""}
+
+
 def _metric_cell(r: pd.Series, col: str) -> str:
     v = r.get(col, math.nan)
     if col == "deltaF1VsDrums":
@@ -267,16 +274,21 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame, hits: pd.DataFrame
         sub = summary[summary["dataset"].astype(str) == ds]
         parts.append(f"## {ds}")
         parts.append("")
+        # 다른 GPU에서 잰 run이 섞이면 RTF·GPU 메모리를 바로 비교할 수 없어 GPU 열을 붙임 (설계 U21)
+        mixed_gpu = len(_gpu_names(sub)) > 1
         headers = (
             ["모델", "입력", "곡/실패"]
             + [t for _, t, _ in COMPARISON_METRICS]
             + ["가중치 라이선스"]
+            + (["GPU"] if mixed_gpu else [])
         )
         rows = []
         for _, r in sub.iterrows():
             cells = [str(r["model"]), str(r["inputLabel"]), f"{r['nSongs']}/{r['nErrors']}"]
             cells += [_metric_cell(r, c) for c, _, _ in COMPARISON_METRICS]
             cells.append(_fmt(r.get("licenseWeights", "")))
+            if mixed_gpu:
+                cells.append(_fmt(r.get("gpuName", "")))
             rows.append(cells)
         parts.append(_md_table(headers, rows))
         parts.append("")

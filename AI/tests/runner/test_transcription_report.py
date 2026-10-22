@@ -191,6 +191,27 @@ def test_라벨별_표와_보고서_파일(tmp_path: Path):
     assert paths.extra_pngs == []  # 정답 드럼 입력만이면 입력별 비교 그림은 없음
 
 
+def test_GPU가_섞인_묶음에만_GPU_열이_붙는다(tmp_path: Path):
+    # 코랩 run과 서버 run을 합칠 때 (설계 U21). 다른 묶음은 GPU 한 종류라 열이 없음
+    a100, h200 = "NVIDIA A100-SXM4-40GB", "NVIDIA H200 NVL"
+    colab = [
+        _row(model="m", songId="a", gpuName=a100, **_counts("Five", 1, 0, 0)),
+        _row(model="m", songId="a", dataset="solo", gpuName=a100, **_counts("Five", 1, 0, 0)),
+    ]
+    server = [_row(model="y", songId="a", gpuName=h200, **_counts("Five", 1, 0, 0))]
+    paths = write_transcription_report(
+        [
+            _write(tmp_path / "c" / "results.csv", colab),
+            _write(tmp_path / "s" / "results.csv", server),
+        ],
+        tmp_path / "out",
+    )
+    md = paths.summary_md.read_text(encoding="utf-8")
+    ds_part, solo_part = md.split("## ds\n")[1].split("## solo\n")
+    assert "| 가중치 라이선스 | GPU |" in ds_part and a100 in ds_part and h200 in ds_part
+    assert "| GPU |" not in solo_part
+
+
 def test_빈_hits_파일이_없어도_보고서는_된다(tmp_path: Path):
     rows = [_row(model="m", songId="a", **_counts("Five", 1, 0, 0), **_counts("Pads", 1, 0, 0))]
     csv_path = _write(tmp_path / "r" / "results.csv", rows)
