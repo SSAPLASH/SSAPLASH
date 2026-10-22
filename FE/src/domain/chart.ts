@@ -23,6 +23,16 @@ export interface Chart {
   notes: ChartNote[];
   source: ChartSource;
   durationMs: number;
+  /** BE 채보의 버전 id. 플레이 시작 후 고정한다. 내장 채보는 미설정 */
+  chartVersionId?: number;
+  /** BE 채보 id(`/play?chart=`에 쓰는 값). 내장 채보는 미설정 */
+  chartId?: number;
+  /** BE 곡 id(숫자). `songId`(string)와 별개. 내장 채보는 미설정 */
+  songNumericId?: number;
+  /** 반주 음원이 있는 곡인지. 내장 채보는 미설정(없음) */
+  hasAccompaniment?: boolean;
+  /** 템포·박자 변화가 있는 곡. 고정 bpm으로 그린다(1단계 미지원) */
+  variableTempo?: boolean;
 }
 
 /* ---------- 내장 데모 채보 생성기 ----------
