@@ -1,6 +1,7 @@
 // 입력 소스 디스크립터 타입. 구현 없음 — 각 소스 파일이 자기 디스크립터를 만들어 export하고,
 // 조립 층(app/sensors.ts)이 레지스트리에 등록한다. 화면·bootstrap은 소스 종류 대신 이 타입만 읽는다.
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
+import type { SensorTuning } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
 
 /** 설정 항목 하나의 스키마. 세팅 화면이 이걸 보고 입력 컨트롤을 그린다 */
@@ -44,6 +45,8 @@ export interface SourceDescriptor {
   options?: OptionSpec[];
   /** 설정이 바뀔 때마다 호출. options의 기본값이 이미 병합된 값이 온다 */
   applyOptions?(instance: InputSource, options: OptionValues): void;
+  /** 튜닝이 바뀔 때마다 호출(선택). 각도 범위처럼 소스가 직접 쓰는 튜닝 값을 받는다 */
+  applyTuning?(instance: InputSource, tuning: SensorTuning): void;
   /** 센서가 점유해 키보드 소스에서 빼야 할 키(KeyboardEvent.code). 없으면 빈 배열 */
   reservedKeys?(options: OptionValues): string[];
   /** 사용자 제스처가 필요한 동작 버튼 */

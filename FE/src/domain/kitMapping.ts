@@ -23,3 +23,8 @@ export function screenToPose(x: number, y: number, r: AngleRange = DEFAULT_ANGLE
 export function radiusToScreen(deg: number, r: AngleRange = DEFAULT_ANGLE_RANGE): number {
   return deg / (2 * r.yawDeg);
 }
+
+/** 화면 가로 비율 반경을 각도 반경(도)으로. radiusToScreen의 역함수 */
+export function screenRadiusToDeg(radius: number, r: AngleRange = DEFAULT_ANGLE_RANGE): number {
+  return radius * 2 * r.yawDeg;
+}
