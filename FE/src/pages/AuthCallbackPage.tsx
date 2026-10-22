@@ -30,8 +30,9 @@ export function AuthCallbackPage() {
   }, [status, lostReason, navigate, consumeReturnTo]);
 
   return (
-    <main className="main">
-      <p className="dim">로그인 처리 중…</p>
-    </main>
+    <div className="auth-wait">
+      <span className="spinner" aria-hidden="true" />
+      <span>로그인 처리 중…</span>
+    </div>
   );
 }

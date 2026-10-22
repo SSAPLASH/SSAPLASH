@@ -20,7 +20,10 @@ export function RequireAuth({ required }: Props) {
   }
   return (
     <main className="main">
-      <p className="dim">로그인 확인 중…</p>
+      <div className="auth-wait">
+        <span className="spinner" aria-hidden="true" />
+        <span>로그인 확인 중…</span>
+      </div>
     </main>
   );
 }

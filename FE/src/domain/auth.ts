@@ -30,6 +30,17 @@ export const LOGIN_PROVIDERS: readonly LoginProvider[] = [
 ];
 
 /**
+ * 로그인 화면에 보일 제공자. `raw`는 환경변수 VITE_LOGIN_PROVIDERS 값(쉼표 구분 키).
+ * 미설정·빈 값이면 전부, 아니면 LOGIN_PROVIDERS에 있는 키만 원래 순서로. 모르는 키는 무시하고, 결과가 비면 전부.
+ */
+export function enabledProviders(raw: string | undefined): readonly LoginProvider[] {
+  if (!raw || raw.trim() === '') return LOGIN_PROVIDERS;
+  const keys = new Set(raw.split(',').map((k) => k.trim().toLowerCase()));
+  const picked = LOGIN_PROVIDERS.filter((p) => keys.has(p.key));
+  return picked.length > 0 ? picked : LOGIN_PROVIDERS;
+}
+
+/**
  * `/login?error=` 코드. BE가 붙이는 것: access_denied(동의 취소) · oauth_failed(그 밖의 실패).
  * FE가 붙이는 것: no_session(콜백 뒤 refresh 실패) · session_expired(사용 중 세션 소실) · network(서버 연결 실패).
  */
