@@ -18,6 +18,7 @@ import { pushTelemetry } from '@/engine/telemetry';
 import { inputManager } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
+import { metronome } from '@/engine/Metronome';
 import { useSettings } from '@/store/settingsStore';
 
 type Stage = 'select' | 'ready' | 'play' | 'feedback';
@@ -145,6 +146,7 @@ export function SheetPage() {
     if (!ss || stageRef.current !== 'ready') return;
     await unlockAudio();
     startedAt.current = new Date();
+    metronome.stop();
     ss.start();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     setStage('play');

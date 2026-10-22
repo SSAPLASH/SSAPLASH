@@ -4,13 +4,14 @@ import type { InputSource } from '@/input/InputSource';
 import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
-import { useLive } from '@/store/liveStore';
+import { useLive, type MetronomeLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
 import type { ResolvedHit, SensorId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { applyRadiusTuning } from '@/domain/tuning';
+import { metronome } from '@/engine/Metronome';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -121,6 +122,72 @@ export function bootstrapInput(): void {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();
   });
+}
+
+/**
+ * 전역 메트로놈 접착. main.tsx에서 bootstrapInput() 다음에 한 번 부른다.
+ * 엔진이 BPM·박자의 주인이고, 여기서 liveStore(화면용)·settingsStore(영속)로 옮긴다.
+ */
+export function bootstrapMetronome(): void {
+  const s0 = useSettings.getState();
+  // 초기값: settings → 엔진
+  metronome.setBpm(s0.metronomeBpm);
+  metronome.setBeatsPerBar(s0.metronomeBeatsPerBar);
+  metronome.bind({
+    click: (atMs, accent) => audioEngine.click(atMs, accent),
+    ensureAudio: unlockAudio,
+    onAudioState: (listener) => {
+      audioEngine.onStateChange(listener);
+    },
+  });
+
+  const setLive = (patch: Partial<MetronomeLive>) =>
+    useLive.setState((s) => ({ metronome: { ...s.metronome, ...patch } }));
+
+  // 박 표시는 소리 시각에 맞춰 늦춰 쓴다. 정지되면 대기 중인 표시를 지운다
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const clearPending = () => {
+    for (const id of pending) clearTimeout(id);
+    pending.clear();
+  };
+
+  metronome.onBeat((info) => {
+    // 햅틱 박자 안내 자리: 여기서 inputManager.haptic(...)을 info.atMs 기준으로 보낼 수 있다(이번엔 호출하지 않음)
+    const id = setTimeout(() => {
+      pending.delete(id);
+      useLive.setState((s) => ({ metronome: { ...s.metronome, beat: info.beatInBar, beatSeq: s.metronome.beatSeq + 1 } }));
+    }, Math.max(0, info.atMs - performance.now()));
+    pending.add(id);
+  });
+
+  metronome.onChange((st) => {
+    if (!st.playing) {
+      clearPending();
+      setLive({ ...st, beat: -1 });
+    } else {
+      setLive(st);
+    }
+    const cur = useSettings.getState();
+    if (cur.metronomeBpm !== st.bpm) cur.setMetronomeBpm(st.bpm);
+    if (cur.metronomeBeatsPerBar !== st.beatsPerBar) cur.setMetronomeBeatsPerBar(st.beatsPerBar);
+  });
+
+  // 탭이 다시 보이거나 오디오가 복구되면 현재 박으로 맞춘다
+  metronome.onResync((beat) => {
+    clearPending();
+    setLive({ beat });
+  });
+
+  // 초기 BPM·박자를 화면용 사본에도 반영(위 setBpm은 구독 전에 불렸다)
+  setLive(metronome.state);
+
+  // 패드 소리 음소거(메트로놈 클릭은 남는다)
+  audioEngine.setPadMuted(!s0.soundOn);
+  useSettings.subscribe((s, prev) => {
+    if (s.soundOn !== prev.soundOn) audioEngine.setPadMuted(!s.soundOn);
+  });
+
+  if (import.meta.env.DEV) (window as unknown as { __metronome?: typeof metronome }).__metronome = metronome;
 }
 
 // ── 사운드 세트 ──────────────────────────────────────────────

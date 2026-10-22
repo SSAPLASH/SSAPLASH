@@ -5,6 +5,8 @@ import { useSettings } from '@/store/settingsStore';
 import { useAuth } from '@/store/authStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { DebugOverlay } from './DebugOverlay';
+import { Metronome } from './shell/Metronome';
+import { SoundToggle } from './shell/SoundToggle';
 
 interface Props {
   /** 로그인 검사 여부(App.tsx가 VITE_AUTH_REQUIRED로 내려준다). 꺼져 있으면 익명일 때 로그인 링크를 보이지 않는다 */
@@ -47,7 +49,9 @@ export function AppShell({ authRequired }: Props) {
           <NavLink to="/sheet">악보 연습</NavLink>
           <NavLink to="/free">자유 연주</NavLink>
         </nav>
+        <Metronome />
         <div className="topbar-right">
+          <SoundToggle />
           <span className="small dim">
             {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
             {sensorKind !== 'none' && ' + 키보드'}

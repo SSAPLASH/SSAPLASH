@@ -16,6 +16,7 @@ import { pushTelemetry } from '@/engine/telemetry';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
+import { metronome } from '@/engine/Metronome';
 import { useSettings, type GameView } from '@/store/settingsStore';
 
 type Stage = 'select' | 'ready' | 'play';
@@ -139,6 +140,7 @@ export function PlayPage() {
     if (!ss || stageRef.current !== 'ready') return;
     await unlockAudio();
     startedAt.current = new Date();
+    metronome.stop();
     ss.start();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     setStage('play');

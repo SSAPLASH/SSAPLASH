@@ -119,6 +119,37 @@ describe('migrateSettings v5 → v6 (게임 뷰)', () => {
   });
 });
 
+describe('migrateSettings v6 → v7 (메트로놈·사운드 토글)', () => {
+  const run = (p: Record<string, unknown>) => migrateSettings(p, 6) as unknown as Record<string, unknown>;
+
+  it('없으면 기본값', () => {
+    const out = run({ volume: 0.5 });
+    expect(out.metronomeBpm).toBe(120);
+    expect(out.metronomeBeatsPerBar).toBe(4);
+    expect(out.soundOn).toBe(true);
+    expect(out.volume).toBe(0.5);
+  });
+
+  it('범위 안 bpm·3박자·soundOn false는 유지', () => {
+    const out = run({ metronomeBpm: 90, metronomeBeatsPerBar: 3, soundOn: false });
+    expect(out).toMatchObject({ metronomeBpm: 90, metronomeBeatsPerBar: 3, soundOn: false });
+  });
+
+  it('범위 밖 bpm은 120', () => {
+    expect(run({ metronomeBpm: 10 }).metronomeBpm).toBe(120);
+    expect(run({ metronomeBpm: 500 }).metronomeBpm).toBe(120);
+    expect(run({ metronomeBpm: 'x' }).metronomeBpm).toBe(120);
+  });
+
+  it('beatsPerBar가 3이 아니면 4', () => {
+    expect(run({ metronomeBeatsPerBar: 5 }).metronomeBeatsPerBar).toBe(4);
+  });
+
+  it('soundOn이 boolean이 아니면 true', () => {
+    expect(run({ soundOn: 'off' }).soundOn).toBe(true);
+  });
+});
+
 describe('레이아웃 프리셋', () => {
   it('applyLayoutPreset은 kitLayout을 프리셋으로 바꾼다', () => {
     useSettings.getState().applyLayoutPreset('wide');
