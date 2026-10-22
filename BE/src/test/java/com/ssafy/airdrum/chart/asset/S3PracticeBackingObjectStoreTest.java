@@ -63,7 +63,7 @@ class S3PracticeBackingObjectStoreTest {
 
 		assertThat(new S3PracticeBackingObjectStore(client).ensureBytes(BUCKET, KEY, expected,
 				S3PracticeBackingObjectStore.sha256(expected))).isTrue();
-	
+
 		verify(client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
 		verify(client).getObject(any(GetObjectRequest.class));
 	}
