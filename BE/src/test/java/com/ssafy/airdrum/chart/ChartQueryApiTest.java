@@ -204,6 +204,27 @@ class ChartQueryApiTest {
 		assertThat(assets.path("accompanimentUrl").isNull()).isTrue();
 		verifyNoInteractions(store);
 	}
+	@Test void builtinAccompanimentUsesTheSignedPathWithoutExpandingPrivateSongAccess() throws Exception {
+		long builtinChart = chart(builtin, "EASY");
+		long builtinVersion = version(builtinChart, 1, NOTES, TIMING, "READY");
+		String builtinKey = "accompaniment/" + builtin + ".wav";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", builtinKey, builtin);
+		Instant expiresAt = Instant.now().plusSeconds(600);
+		when(store.sign(ChartAssetStore.Kind.ACCOMPANIMENT, builtinKey))
+				.thenReturn(new ChartAssetStore.SignedAsset("https://asset.test/builtin.wav", expiresAt));
+
+		var assets = ok("/api/v1/chart-versions/" + builtinVersion + "/assets");
+		assertThat(assets.path("accompanimentUrl").asString()).isEqualTo("https://asset.test/builtin.wav");
+		assertThat(assets.path("assetsExpireAt").asString()).isEqualTo(expiresAt.toString());
+		verify(store).sign(ChartAssetStore.Kind.ACCOMPANIMENT, builtinKey);
+
+		long privateChart = chart(hiddenSong, "EASY");
+		long privateVersion = version(privateChart, 1, NOTES, TIMING, "READY");
+		String privateKey = "accompaniment/" + hiddenSong + ".wav";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", privateKey, hiddenSong);
+		problem("/api/v1/chart-versions/" + privateVersion + "/assets", 404, "CHART_VERSION_NOT_FOUND");
+		verify(store, never()).sign(any(), eq(privateKey));
+	}
 	@Test void assetsConvertTempoMapKeepVersionAndUseEarliestExpiry() throws Exception {
 		image();
 		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/" + ownSong + ".wav", ownSong);

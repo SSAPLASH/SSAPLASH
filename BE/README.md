@@ -112,7 +112,7 @@ sh ./gradlew bootRun
 `songs` → `charts` → `chart_versions` 순서로 생성한다. 86번의 실제 V1 다음에 공통 Flyway 설정으로 자동 적용된다.
 94번은 회원 테이블이나 DB 연결 설정을 별도로 도입하지 않는다. 운영 DB에 V2만 단독 적용하지 않는다.
 
-- 공용 곡은 소유자가 없고 라이선스가 필수다. MIDI·AUDIO는 소유자 필수, 반주 키는 AUDIO만 허용한다.
+- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수이며 반주 키는 AUDIO 또는 자체 합성 BUILTIN에만 허용한다.
 - 곡·난이도와 채보·버전 조합은 중복되지 않는다. 참조 중인 회원·곡·채보의 물리 삭제를 막는다.
 - `notes`는 배열, `timing`은 객체이며 `note_count`는 노트 배열 길이와 일치해야 한다.
 - `sheet_pages`는 선택적 이미지 페이지 배열이며 이미지 없는 JSON 전달은 SQL NULL로 저장한다.
@@ -152,6 +152,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-ChartSchema.p
 원본은 [FE/src/domain/chart.ts@d4080d10521263e6040f3ef6b2ddfe80cff3d771](https://lab.ssafy.com/s15-final/S15P31A307/-/blob/d4080d10521263e6040f3ef6b2ddfe80cff3d771/FE/src/domain/chart.ts)이며, `Math.round`로 계산된 `timeMs`와 같은 시각의 패드 삽입 순서를 그대로 저장한다. DB identity가 만든 song·chart·chart version ID는 고정하지 않으며 목록 API에서 받은 ID로 상세·최신·고정 버전을 조회한다. 세 버전 모두 반주·악보 이미지가 없고 `notation_status=UNAVAILABLE`이다.
 
 `license`에는 프로젝트 FE 데모 패턴의 출처, 별도 라이선스 표기 없음, 음원 미포함 상태를 기록한다. 이는 저작권 합의를 대신하는 라이선스 선언이 아니다. 패턴을 바꾸거나 새 데이터를 추가할 때는 기존 버전을 수정하지 않고 다음 chart version과 확인된 권리 메타데이터를 새 Flyway 마이그레이션으로 추가한다.
+
+### 기본 8비트 합성 반주 등록 (82번)
+
+V12는 `accompaniment_key`를 AUDIO와 BUILTIN에 허용하되 소유자·출처 메타데이터 제약은 유지한다. 마이그레이션이나 앱 기동은 키를 자동 연결하지 않는다. 공용 기본 8비트 반주는 명시적 도구로만 기존 비공개 `accompaniment` 버킷에 등록한다. API에서는 로그인한 ACTIVE 회원이 기존 서명 URL 경로로 재생하며 개인 AUDIO는 계속 소유자만 조회한다.
+
+등록 전에 이번 작업용 DB와 S3 호환 저장소를 준비하고 환경변수를 설정한 뒤 `BE/`에서 아래를 실행한다. 필요한 값은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CHART_ASSET_ENDPOINT`, `CHART_ASSET_PUBLIC_ENDPOINT`, `CHART_ASSET_REGION`, `CHART_ASSET_SHEET_BUCKET`, `CHART_ASSET_ACCOMPANIMENT_BUCKET`, `CHART_ASSET_ACCESS_KEY`, `CHART_ASSET_SECRET_KEY`다. endpoint·버킷·자격 증명을 로그에 기록하지 않는다.
+이 Gradle 등록 작업은 Spring 설정을 불러오지 않으므로 `BE/.env`를 자동으로 읽지 않는다. 해당 값은 작업을 실행하는 셸의 프로세스 환경변수로 지정한다.
+등록 도구 자격 증명에는 대상 반주 버킷의 GetObject·HeadObject·조건부 PutObject 권한이 필요하므로 운영 API의 읽기 전용 자격 증명과 구분해 등록 실행 프로세스에만 주입한다.
+등록한 곡의 반주 음원은 변경하지 않으며, 변경이 필요하면 새 BUILTIN 곡 ID와 채보를 만들어 새 키로 배포한다.
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
+.\gradlew.bat registerBasic8Backing
+```
+
+도구는 V10의 기본 8비트 곡·EASY 채보·전체 96노트·90 BPM/4/4·길이·버전 메타데이터가 기준과 정확히 맞는지 먼저 확인한다. 반주는 `FE/src/audio/practiceBacking.ts`의 90 BPM·4/4·8마디 명세를 따라 44.1 kHz stereo PCM WAV로 직접 합성하며 외부 샘플을 쓰지 않는다. 기존 `accompaniment/{songId}.wav` 객체가 있으면 실제 바이트의 길이와 SHA-256이 일치할 때만 재사용하고, 새 객체는 조건부 업로드한다. 업로드 검증 뒤 DB 행을 잠그고 다시 검사해 키·출처 메타데이터를 한 트랜잭션으로 연결한다. 다른 채보·키·객체나 DB 경쟁이 발견되면 연결하지 않으며, 등록 객체만 남은 경우 같은 도구를 재실행할 수 있다. 도구 클래스는 운영 `bootJar`에 포함하지 않는다.
+
+V12와 등록은 대상 DB에 적용해야 한다. 실제 배포 스토리지의 공개 프록시·CORS·Range 동작은 별도 확인이 필요하며 로컬 성공을 운영 검증으로 간주하지 않는다.
 
 ## 잔여 전체 DB 마이그레이션 (97~99번)
 
@@ -482,7 +500,7 @@ AWS SDK의 SigV4, path-style URL을 사용한다. 활성화 시 필수 설정이
 파일은 조회 요청에서 업로드하지 않는다. 저장 키는 92번 경계에 맞춰 다음 형식을 검사한다.
 
 - 이미지: `sheet/{chartVersionId}/{파일명}.png|jpg|jpeg|webp` (파일명은 영문·숫자·`_`·`-`)
-- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a`, AUDIO 곡에만 허용
+- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a`, 소유자 AUDIO 또는 자체 합성 BUILTIN 곡에 허용
 
 생성·저장 담당자는 이 키 규칙에 맞춰 연결해야 한다. 임의 URL, 타인 버전, 임시 원본·드럼 트랙,
 경로 이동 문자열은 서명하지 않는다. 객체 부재는 `CHART_ASSET_NOT_FOUND`(404), 미설정·저장소 장애는
