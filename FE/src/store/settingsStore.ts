@@ -4,19 +4,11 @@ import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
 import type { PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
-import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
+import type { KitPreset } from '@/domain/preset';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
-
-export interface KitPreset {
-  id: string;
-  name: string;
-  createdAt: string;
-  layout: KitLayout;
-  soundSetId: SoundSetId;
-}
 
 interface SettingsState {
   /** 센서 소스 선택 (설계 D9). 'none'이 아니면 입력 소스 레지스트리의 id. 키보드는 항목이 아니라 항상 켜진 보조 소스 */
@@ -24,14 +16,15 @@ interface SettingsState {
   /** 소스별 설정값 묶음. 항목 스키마는 입력 소스 디스크립터가 선언하고, 여기서는 내용을 모른다 */
   sensorOptions: Record<SensorId, OptionValues>;
   kitLayout: KitLayout;
-  profile: CalibrationProfile | null;
   presets: KitPreset[];
+  /** 최초 설정(3초 보정·배치·프리셋 적용)을 끝냈는지 */
+  firstSetupDone: boolean;
+  /** 지금 적용 중인 프리셋. 없으면 null */
+  activePresetId: string | null;
   timing: TimingWindows;
   audioOffsetMs: number;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
   scrollMs: number;
-  calibrationMode: CaptureMode;
-  holdMs: number;
   /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
   tuning: SensorTuning;
   metronome: boolean;
@@ -54,15 +47,13 @@ interface SettingsState {
   movePad: (pad: PadId, x: number, y: number) => void;
   resetLayout: () => void;
   applyLayoutPreset: (id: KitLayoutPresetId) => void;
-  setProfile: (p: CalibrationProfile | null) => void;
-  savePreset: (name: string) => void;
-  loadPreset: (id: string) => void;
-  deletePreset: (id: string) => void;
+  setFirstSetupDone: (v: boolean) => void;
+  setActivePresetId: (id: string | null) => void;
+  /** 프리셋 저장소 교체. LocalPresetSource만 부른다(화면은 presetStore를 쓴다) */
+  setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
   setScrollMs: (v: number) => void;
-  setCalibrationMode: (m: CaptureMode) => void;
-  setHoldMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
   setTuning: (partial: PartialTuning) => void;
   resetTuning: () => void;
@@ -81,7 +72,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 8;
+export const SETTINGS_VERSION = 9;
 
 /**
  * 저장된 설정 이행.
@@ -92,6 +83,7 @@ export const SETTINGS_VERSION = 8;
  * v5 → v6: gameView(기본 'highway') 추가. 알 수 없는 값은 'highway'.
  * v6 → v7: metronomeBpm(기본 120, 범위 밖이면 120)·metronomeBeatsPerBar(3이 아니면 4)·soundOn(boolean 아니면 true) 추가.
  * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
+ * v8 → v9: profile·calibrationMode·holdMs 삭제(판정 프로필은 배치에서 유도). firstSetupDone=false, activePresetId=presets[0]?.id ?? null 추가. 프리셋에 isDefault(첫 항목)·schemaVersion 1·updatedAt(=createdAt) 채움.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -143,6 +135,15 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
         return { ...rest, soundSetId: rest.soundSetId === 'synth' || rest.soundSetId === 'ssaplash' ? rest.soundSetId : fallback };
       });
   }
+  if (version < 9) {
+    delete p.profile;
+    delete p.calibrationMode;
+    delete p.holdMs;
+    const list = Array.isArray(p.presets) ? (p.presets as Record<string, unknown>[]) : [];
+    p.presets = list.map((x, i) => ({ ...x, isDefault: i === 0, schemaVersion: 1, updatedAt: x.createdAt }));
+    p.firstSetupDone = false;
+    p.activePresetId = (list[0]?.id as string | undefined) ?? null;
+  }
   return p as unknown as SettingsState;
 }
 
@@ -152,13 +153,12 @@ export const useSettings = create<SettingsState>()(
       sensorKind: 'none',
       sensorOptions: {},
       kitLayout: DEFAULT_KIT_LAYOUT,
-      profile: null,
       presets: [],
+      firstSetupDone: false,
+      activePresetId: null,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
       scrollMs: 1400,
-      calibrationMode: 'hold',
-      holdMs: 2000,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
       countInBars: 1,
@@ -177,28 +177,12 @@ export const useSettings = create<SettingsState>()(
         set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
       applyLayoutPreset: (id) => set({ kitLayout: KIT_LAYOUT_PRESETS[id] }),
-      setProfile: (profile) => set({ profile }),
-      savePreset: (name) => {
-        const s = get();
-        const preset: KitPreset = {
-          id: `preset-${Date.now().toString(36)}`,
-          name,
-          createdAt: new Date().toISOString(),
-          layout: s.kitLayout,
-          soundSetId: s.soundSetId,
-        };
-        set({ presets: [preset, ...s.presets].slice(0, 10) });
-      },
-      loadPreset: (id) => {
-        const p = get().presets.find((x) => x.id === id);
-        if (p) set({ kitLayout: p.layout, soundSetId: p.soundSetId });
-      },
-      deletePreset: (id) => set({ presets: get().presets.filter((x) => x.id !== id) }),
+      setFirstSetupDone: (firstSetupDone) => set({ firstSetupDone }),
+      setActivePresetId: (activePresetId) => set({ activePresetId }),
+      setPresets: (presets) => set({ presets }),
       setTiming: (timing) => set({ timing }),
       setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
-      setCalibrationMode: (calibrationMode) => set({ calibrationMode }),
-      setHoldMs: (holdMs) => set({ holdMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
       resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
       setMetronome: (metronome) => set({ metronome }),

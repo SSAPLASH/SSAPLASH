@@ -3,7 +3,9 @@
 import type { PadId } from '@/domain/pads';
 import { resolveKitPads, type KitConfig } from './kitConfig';
 
-export type SoundSetId = 'synth' | 'ssaplash';
+import type { SoundSetId } from '@/domain/soundSet';
+
+export type { SoundSetId };
 
 export interface SamplePad {
   buffer: AudioBuffer;
