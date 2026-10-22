@@ -241,23 +241,33 @@ def apply_labels(
 
 
 def hits_to_midi(hits: np.ndarray, path: Path, pad_pitch: dict[str, int] | None = None) -> Path:
-    """예측 타격 표를 GM 드럼 MIDI로 저장 (--save-midi, 청취·플레이 평가용)."""
+    """예측 타격 표를 GM 드럼 MIDI로 저장 (--save-midi, 청취·플레이 평가용).
+
+    note_on·note_off를 절대 틱으로 모아 정렬한 뒤 델타로 바꾼다. 타격 간격이 음 길이(50ms)보다 짧으면
+    앞 음의 note_off가 뒤 음의 note_on보다 늦어 델타가 음수가 되므로 순서대로 쌓으면 안 된다.
+    """
     import mido
 
     pitch = pad_pitch or GM_PAD_PITCH
+    ticks_per_sec = 960  # 120bpm, ticks_per_beat 480
+    note_ticks = 48  # 50ms
+    events: list[tuple[int, int, str, int, int]] = []  # (틱, 순서, 종류, 피치, 세기)
+    for row in hits:
+        tick = int(round(float(row["time_sec"]) * ticks_per_sec))
+        note = pitch.get(str(row["pad"]), 36)
+        vel = int(row["velocity"]) if row["velocity"] > 0 else 100
+        events.append((tick, 1, "note_on", note, vel))
+        events.append((tick + note_ticks, 0, "note_off", note, 0))  # 같은 틱이면 off가 먼저
+    events.sort(key=lambda ev: (ev[0], ev[1]))
+
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
     mid.tracks.append(track)
-    track.append(mido.MetaMessage("set_tempo", tempo=500000))  # 120bpm → 1초 = 960틱
-    last = 0.0
-    for row in hits:
-        t = float(row["time_sec"])
-        note = pitch.get(str(row["pad"]), 36)
-        vel = int(row["velocity"]) if row["velocity"] > 0 else 100
-        delta = int(round((t - last) * 960))
-        track.append(mido.Message("note_on", note=note, velocity=vel, time=delta, channel=9))
-        track.append(mido.Message("note_off", note=note, velocity=0, time=48, channel=9))
-        last = t + 48 / 960
+    track.append(mido.MetaMessage("set_tempo", tempo=500000))
+    last = 0
+    for tick, _, kind, note, vel in events:
+        track.append(mido.Message(kind, note=note, velocity=vel, time=tick - last, channel=9))
+        last = tick
     path.parent.mkdir(parents=True, exist_ok=True)
     mid.save(str(path))
     return path
