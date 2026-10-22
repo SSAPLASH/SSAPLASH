@@ -1,6 +1,9 @@
-// 리듬 게임 결과 (설계 4-2 결과 단계). localStorage 플레이 로그를 읽어 보여준다.
+// 연주 결과 (리듬 게임 설계 4-2 · 악보 연주 설계 D11). localStorage 플레이 로그를 읽어 보여준다.
+// 악보 연주(mode SHEET)는 점수·콤보 대신 정확도·판정 분포를 앞에 두고 피드백 카드·패드 요약을 붙인다.
 import { useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { FeedbackCards } from '@/components/FeedbackCards';
+import { buildFeedback, summarizeByPad } from '@/domain/feedback';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
 const DIFF_LABEL: Record<string, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
@@ -31,13 +34,26 @@ function histogram(log: PlayLog, bins = 12): { counts: number[]; perfectIdx: boo
   return { counts, perfectIdx, early: eN ? eSum / eN : null, late: lN ? lSum / lN : null };
 }
 
+/** 모드별 선택 화면 경로 */
+const pickPath = (l: PlayLog): string => (l.mode === 'SHEET' ? '/sheet' : '/play');
+
+/** 같은 곡 준비 화면. BE 곡이면 URL로 복원하고, 로그에 id가 없으면(내장·이전 로그) 모드별 선택 화면으로 간다 */
+const retryPath = (l: PlayLog): string =>
+  l.songNumericId != null && l.chartId != null
+    ? `${pickPath(l)}?song=${l.songNumericId}&chart=${l.chartId}`
+    : pickPath(l);
+
 export function ResultPage() {
   const { playId } = useParams();
   const navigate = useNavigate();
   const log = useMemo(() => (playId ? getPlayLog(playId) : null), [playId]);
 
+  // 악보 연주 피드백. 로그에 bpm·박자가 있으면 마디 규칙까지, 이전 로그(필드 없음)는 마디 규칙을 건너뛴다
+  const isSheet = log?.mode === 'SHEET';
+  const feedback = useMemo(() => (log && isSheet ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : undefined) : []), [log, isSheet]);
+  const summary = useMemo(() => (log && isSheet ? summarizeByPad(log) : []), [log, isSheet]);
   const retry = () => {
-    if (log) navigate('/play', { state: { songId: log.songId } });
+    if (log) navigate(retryPath(log));
   };
 
   // Enter = 다시 하기
@@ -45,7 +61,7 @@ export function ResultPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Enter' && log) {
         e.preventDefault();
-        navigate('/play', { state: { songId: log.songId } });
+        navigate(retryPath(log));
       }
     };
     window.addEventListener('keydown', onKey);
@@ -80,9 +96,9 @@ export function ResultPage() {
         </div>
         <div className="row">
           <button className="btn-primary" onClick={retry}>
-            다시 하기 (Enter)
+            {isSheet ? '같은 곡 다시 (Enter)' : '다시 하기 (Enter)'}
           </button>
-          <Link to="/play" className="btn-ghost">
+          <Link to={pickPath(log)} className="btn-ghost">
             다른 곡
           </Link>
           <Link to="/free" className="btn-ghost">
@@ -92,18 +108,29 @@ export function ResultPage() {
       </div>
 
       <div className="result-grid">
-        <div className="card stat">
-          <span className="v">{s.score}</span>
-          <span className="k">점수 / {s.maxScore}</span>
-        </div>
+        {!isSheet && (
+          <div className="card stat">
+            <span className="v">{s.score}</span>
+            <span className="k">점수 / {s.maxScore}</span>
+          </div>
+        )}
         <div className="card stat">
           <span className="v">{(s.accuracy * 100).toFixed(1)}%</span>
           <span className="k">정확도</span>
         </div>
-        <div className="card stat">
-          <span className="v">{s.maxCombo}</span>
-          <span className="k">최대 콤보</span>
-        </div>
+        {isSheet ? (
+          <div className="card stat">
+            <span className="v">
+              {s.counts.PERFECT} / {s.counts.GOOD} / {s.counts.MISS}
+            </span>
+            <span className="k">Perfect / Good / Miss</span>
+          </div>
+        ) : (
+          <div className="card stat">
+            <span className="v">{s.maxCombo}</span>
+            <span className="k">최대 콤보</span>
+          </div>
+        )}
         <div className="card stat">
           <span className="v">{s.strayHits}</span>
           <span className="k">채보 외 타격 (감점 없음)</span>
@@ -152,6 +179,12 @@ export function ResultPage() {
           </div>
         </div>
       </div>
+
+      {isSheet && (
+        <div style={{ marginTop: 16 }}>
+          <FeedbackCards items={feedback} summary={summary} />
+        </div>
+      )}
     </main>
   );
 }
