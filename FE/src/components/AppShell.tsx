@@ -1,16 +1,30 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
+import { useAuth } from '@/store/authStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { DebugOverlay } from './DebugOverlay';
 
-export function AppShell() {
+interface Props {
+  /** 로그인 검사 여부(App.tsx가 VITE_AUTH_REQUIRED로 내려준다). 꺼져 있으면 익명일 때 로그인 링크를 보이지 않는다 */
+  authRequired: boolean;
+}
+
+export function AppShell({ authRequired }: Props) {
   const connected = useLive((s) => s.connected);
   const sourceState = useLive((s) => s.sourceState);
   const audioReady = useLive((s) => s.audioReady);
   const sensorKind = useSettings((s) => s.sensorKind);
+  const authStatus = useAuth((s) => s.status);
+  const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
+  const navigate = useNavigate();
   const [debug, setDebug] = useState(false);
+
+  const onLogout = () => {
+    void logout().then(() => navigate('/login', { replace: true }));
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -49,6 +63,29 @@ export function AppShell() {
             </span>
           </div>
           {!audioReady && <span className="small faint">클릭하면 소리가 켜집니다</span>}
+          {authStatus === 'authenticated' && user && (
+            <span className="row" style={{ gap: 8 }} aria-label="로그인 사용자">
+              {user.profileImageUrl && (
+                <img
+                  src={user.profileImageUrl}
+                  alt=""
+                  width={24}
+                  height={24}
+                  style={{ borderRadius: '50%' }}
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <span className="small dim">{user.nickname}</span>
+              <button className="btn-ghost small" onClick={onLogout}>
+                로그아웃
+              </button>
+            </span>
+          )}
+          {authRequired && authStatus === 'anonymous' && (
+            <NavLink to="/login" className="small">
+              로그인
+            </NavLink>
+          )}
         </div>
       </header>
       <Outlet />
