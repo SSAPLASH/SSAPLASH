@@ -241,9 +241,7 @@ export function SetupPage() {
             {s.presets.length === 0 && <p className="small dim">저장된 프리셋이 없습니다. 위에서 이름을 적고 저장하세요.</p>}
             {s.presets.map((p) => (
               <div key={p.id} className="row" style={{ justifyContent: 'space-between' }}>
-                <span>
-                  {p.name} <span className="small faint">{p.profile ? '· 캘리브레이션 포함' : ''}</span>
-                </span>
+                <span>{p.name}</span>
                 <span className="row" style={{ gap: 4 }}>
                   <button className="small" onClick={() => s.loadPreset(p.id)}>
                     불러오기

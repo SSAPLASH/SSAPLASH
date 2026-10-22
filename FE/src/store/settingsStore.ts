@@ -5,7 +5,6 @@ import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, type KitLayout, type KitLayoutP
 import type { PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
-import { KEY_MAP, type KeyMap } from '@/domain/keyMap';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
@@ -16,8 +15,7 @@ export interface KitPreset {
   name: string;
   createdAt: string;
   layout: KitLayout;
-  keyMap: KeyMap;
-  profile: CalibrationProfile | null;
+  soundSetId: SoundSetId;
 }
 
 interface SettingsState {
@@ -25,7 +23,6 @@ interface SettingsState {
   sensorKind: SensorId;
   /** 소스별 설정값 묶음. 항목 스키마는 입력 소스 디스크립터가 선언하고, 여기서는 내용을 모른다 */
   sensorOptions: Record<SensorId, OptionValues>;
-  keyMap: KeyMap;
   kitLayout: KitLayout;
   profile: CalibrationProfile | null;
   presets: KitPreset[];
@@ -54,9 +51,6 @@ interface SettingsState {
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
-  bindKey: (code: string, pad: PadId, stickId: 0 | 1) => void;
-  unbindKey: (code: string) => void;
-  resetKeyMap: () => void;
   movePad: (pad: PadId, x: number, y: number) => void;
   resetLayout: () => void;
   applyLayoutPreset: (id: KitLayoutPresetId) => void;
@@ -87,7 +81,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 7;
+export const SETTINGS_VERSION = 8;
 
 /**
  * 저장된 설정 이행.
@@ -97,6 +91,7 @@ export const SETTINGS_VERSION = 7;
  * v4 → v5: soundSetId(기본 'ssaplash')·testVelocity(기본 96) 추가.
  * v5 → v6: gameView(기본 'highway') 추가. 알 수 없는 값은 'highway'.
  * v6 → v7: metronomeBpm(기본 120, 범위 밖이면 120)·metronomeBeatsPerBar(3이 아니면 4)·soundOn(boolean 아니면 true) 추가.
+ * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -135,6 +130,19 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     if (p.metronomeBeatsPerBar !== 3) p.metronomeBeatsPerBar = 4;
     if (typeof p.soundOn !== 'boolean') p.soundOn = true;
   }
+  if (version < 8) {
+    delete p.keyMap;
+    const fallback = p.soundSetId === 'synth' || p.soundSetId === 'ssaplash' ? p.soundSetId : 'ssaplash';
+    const list = Array.isArray(p.presets) ? (p.presets as unknown[]) : [];
+    p.presets = list
+      .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null && !!(x as Record<string, unknown>).layout)
+      .map((x) => {
+        const { keyMap: _keyMap, profile: _profile, ...rest } = x;
+        void _keyMap;
+        void _profile;
+        return { ...rest, soundSetId: rest.soundSetId === 'synth' || rest.soundSetId === 'ssaplash' ? rest.soundSetId : fallback };
+      });
+  }
   return p as unknown as SettingsState;
 }
 
@@ -143,7 +151,6 @@ export const useSettings = create<SettingsState>()(
     (set, get) => ({
       sensorKind: 'none',
       sensorOptions: {},
-      keyMap: KEY_MAP,
       kitLayout: DEFAULT_KIT_LAYOUT,
       profile: null,
       presets: [],
@@ -166,13 +173,6 @@ export const useSettings = create<SettingsState>()(
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
         set({ sensorOptions: { ...get().sensorOptions, [id]: { ...get().sensorOptions[id], [key]: value } } }),
-      bindKey: (code, pad, stickId) => set({ keyMap: { ...get().keyMap, [code]: { pad, stickId } } }),
-      unbindKey: (code) => {
-        const next = { ...get().keyMap };
-        delete next[code];
-        set({ keyMap: next });
-      },
-      resetKeyMap: () => set({ keyMap: KEY_MAP }),
       movePad: (pad, x, y) =>
         set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
@@ -185,14 +185,13 @@ export const useSettings = create<SettingsState>()(
           name,
           createdAt: new Date().toISOString(),
           layout: s.kitLayout,
-          keyMap: s.keyMap,
-          profile: s.profile,
+          soundSetId: s.soundSetId,
         };
         set({ presets: [preset, ...s.presets].slice(0, 10) });
       },
       loadPreset: (id) => {
         const p = get().presets.find((x) => x.id === id);
-        if (p) set({ kitLayout: p.layout, keyMap: p.keyMap, profile: p.profile });
+        if (p) set({ kitLayout: p.layout, soundSetId: p.soundSetId });
       },
       deletePreset: (id) => set({ presets: get().presets.filter((x) => x.id !== id) }),
       setTiming: (timing) => set({ timing }),
