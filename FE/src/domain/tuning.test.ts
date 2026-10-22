@@ -1,26 +1,15 @@
-// 센서 튜닝 순수 계산 검증: 세기 곡선 경계·단조성, 범위 보정, 반경 재계산, 기본값.
+// 센서 튜닝 순수 계산 검증: 세기 곡선 경계·단조성, 범위 보정, 기본값.
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SENSOR_TUNING,
   TUNING_RANGES,
   accelToVelocity,
-  applyRadiusTuning,
   clampTuning,
   countChangedTuning,
   mergeTuning,
 } from './tuning';
-import { createEmptyProfile, type CalibrationProfile } from './calibration';
 
 const CURVE = DEFAULT_SENSOR_TUNING.velocity;
-
-function profile(): CalibrationProfile {
-  const p = createEmptyProfile('pointer');
-  p.anchors = {
-    SNARE: { pad: 'SNARE', pitch: 0, yaw: -20, radius: 5, samples: 7, spread: 1.5 },
-    HIHAT: { pad: 'HIHAT', pitch: 0, yaw: 20, radius: 5, samples: 9, spread: 2.5 },
-  };
-  return p;
-}
 
 describe('accelToVelocity', () => {
   it('min 이하는 1, max 이상은 127', () => {
@@ -72,6 +61,28 @@ describe('clampTuning', () => {
   });
 });
 
+describe('angleRange', () => {
+  it('범위 밖 값을 자르고, 일부만 주면 주어진 것만 돌려준다', () => {
+    const r = TUNING_RANGES.angleRange;
+    expect(clampTuning({ angleRange: { yawDeg: 999, pitchDeg: 0 } }).angleRange).toEqual({ yawDeg: r.yawDeg.max, pitchDeg: r.pitchDeg.min });
+    expect(clampTuning({ angleRange: { yawDeg: 50 } }).angleRange).toEqual({ yawDeg: 50 });
+  });
+
+  it('병합은 나머지 축을 유지한다', () => {
+    const t = mergeTuning(DEFAULT_SENSOR_TUNING, { angleRange: { yawDeg: 90 } });
+    expect(t.angleRange).toEqual({ yawDeg: 90, pitchDeg: DEFAULT_SENSOR_TUNING.angleRange.pitchDeg });
+  });
+
+  it('저장된 tuning에 angleRange가 없으면 기본값으로 채워진다', () => {
+    const t = mergeTuning(DEFAULT_SENSOR_TUNING, { radiusFactor: 0.6 });
+    expect(t.angleRange).toEqual({ yawDeg: 60, pitchDeg: 35 });
+  });
+
+  it('기본값과 다르면 변경 항목에 센다', () => {
+    expect(countChangedTuning(mergeTuning(DEFAULT_SENSOR_TUNING, { angleRange: { yawDeg: 90, pitchDeg: 20 } }))).toBe(2);
+  });
+});
+
 describe('mergeTuning', () => {
   it('부분 값을 병합하고 나머지는 유지한다', () => {
     const t = mergeTuning(DEFAULT_SENSOR_TUNING, { radiusFactor: 0.6, velocity: { gamma: 1 } });
@@ -84,40 +95,6 @@ describe('mergeTuning', () => {
     const t = mergeTuning({ ...DEFAULT_SENSOR_TUNING, velocity: { ...CURVE, maxAccelG: 2 } }, { velocity: { minAccelG: 3 } });
     expect(t.velocity.minAccelG).toBe(3);
     expect(t.velocity.maxAccelG).toBe(3.5);
-  });
-});
-
-describe('applyRadiusTuning', () => {
-  it('null은 그대로 통과', () => {
-    expect(applyRadiusTuning(null, DEFAULT_SENSOR_TUNING)).toBeNull();
-  });
-
-  it('반경만 재계산하고 중심·샘플 수·퍼짐은 유지한다', () => {
-    const p = profile();
-    const out = applyRadiusTuning(p, { ...DEFAULT_SENSOR_TUNING, radiusFactor: 0.5, maxRadiusDeg: 30 })!;
-    expect(out.anchors.SNARE?.radius).toBeCloseTo(20); // 40 × 0.5
-    expect(out.anchors.HIHAT?.radius).toBeCloseTo(20);
-    expect(out.anchors.SNARE).toMatchObject({ pitch: 0, yaw: -20, samples: 7, spread: 1.5 });
-    expect(out.anchors.HIHAT).toMatchObject({ samples: 9, spread: 2.5 });
-    expect(out.maxRadiusDeg).toBe(30);
-    expect(out.id).toBe(p.id);
-  });
-
-  it('상한이 반경보다 작으면 상한이 이긴다', () => {
-    const out = applyRadiusTuning(profile(), { ...DEFAULT_SENSOR_TUNING, radiusFactor: 0.8, maxRadiusDeg: 10 })!;
-    expect(out.anchors.SNARE?.radius).toBe(10);
-  });
-
-  it('원본 프로필은 바뀌지 않는다', () => {
-    const p = profile();
-    applyRadiusTuning(p, { ...DEFAULT_SENSOR_TUNING, radiusFactor: 0.3 });
-    expect(p.anchors.SNARE?.radius).toBe(5);
-    expect(p.maxRadiusDeg).toBe(22);
-  });
-
-  it('기본 튜닝이면 기존 0.55 계산과 같다', () => {
-    const out = applyRadiusTuning(profile(), DEFAULT_SENSOR_TUNING)!;
-    expect(out.anchors.SNARE?.radius).toBeCloseTo(22); // 40 × 0.55 = 22 = 상한
   });
 });
 

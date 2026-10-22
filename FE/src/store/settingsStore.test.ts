@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { SETTINGS_VERSION, migrateSettings, useSettings } from './settingsStore';
 import { KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
 import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
-import type { CalibrationProfile } from '@/domain/calibration';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {
@@ -175,12 +174,14 @@ describe('migrateSettings v7 → v8 (키 매핑 폐기·프리셋 정리)', () =
       ],
     });
     expect('keyMap' in out).toBe(false);
-    // 설정 최상위 profile은 그대로
-    expect(out.profile).toEqual({ anchors: {} });
+    // v9 이행으로 최상위 profile은 사라진다
+    expect('profile' in out).toBe(false);
     const presets = out.presets as Record<string, unknown>[];
     expect(presets).toHaveLength(2);
-    expect(presets[0]).toEqual({ id: 'a', name: 'A', createdAt: 'x', layout, soundSetId: 'synth' });
-    expect(presets[1]).toEqual({ id: 'b', name: 'B', createdAt: 'y', layout, soundSetId: 'ssaplash' });
+    expect(presets[0]).toMatchObject({ id: 'a', name: 'A', createdAt: 'x', layout, soundSetId: 'synth' });
+    expect(presets[1]).toMatchObject({ id: 'b', name: 'B', createdAt: 'y', layout, soundSetId: 'ssaplash' });
+    expect('keyMap' in presets[0]).toBe(false);
+    expect('profile' in presets[0]).toBe(false);
   });
 
   it('현재 설정에 soundSetId가 없으면 프리셋은 ssaplash로 채운다', () => {
@@ -196,29 +197,41 @@ describe('migrateSettings v7 → v8 (키 매핑 폐기·프리셋 정리)', () =
   });
 });
 
-describe('프리셋 저장·불러오기', () => {
-  it('savePreset은 layout·soundSetId만 담는다', () => {
-    useSettings.setState({ presets: [], soundSetId: 'synth', profile: null });
-    useSettings.getState().applyLayoutPreset('wide');
-    useSettings.getState().savePreset('테스트');
-    const p = useSettings.getState().presets[0];
-    expect(Object.keys(p).sort()).toEqual(['createdAt', 'id', 'layout', 'name', 'soundSetId']);
-    expect(p.layout).toEqual(KIT_LAYOUT_PRESETS.wide);
-    expect(p.soundSetId).toBe('synth');
+describe('migrateSettings v8 → v9 (프로필 삭제·최초 설정·프리셋 적용 상태)', () => {
+  const layout = KIT_LAYOUT_PRESETS.basic;
+  const run = (p: Record<string, unknown>) => migrateSettings(p, 8) as unknown as Record<string, unknown>;
+
+  it('profile·calibrationMode·holdMs를 지우고 firstSetupDone=false, activePresetId=null을 채운다', () => {
+    const out = run({ profile: { anchors: {} }, calibrationMode: 'hits', holdMs: 3000, volume: 0.5, presets: [] });
+    expect('profile' in out).toBe(false);
+    expect('calibrationMode' in out).toBe(false);
+    expect('holdMs' in out).toBe(false);
+    expect(out.firstSetupDone).toBe(false);
+    expect(out.activePresetId).toBeNull();
+    expect(out.volume).toBe(0.5);
   });
 
-  it('loadPreset은 배치·사운드 세트만 되돌리고 profile은 바꾸지 않는다', () => {
-    useSettings.setState({ presets: [], soundSetId: 'synth', profile: null });
-    useSettings.getState().applyLayoutPreset('wide');
-    useSettings.getState().savePreset('p');
-    const id = useSettings.getState().presets[0].id;
-    const profile = { anchors: { SNARE: { stickId: 0 } } } as unknown as CalibrationProfile;
-    useSettings.setState({ soundSetId: 'ssaplash', profile });
-    useSettings.getState().resetLayout();
-    useSettings.getState().loadPreset(id);
-    const s = useSettings.getState();
-    expect(s.kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
-    expect(s.soundSetId).toBe('synth');
-    expect(s.profile).toBe(profile);
+  it('프리셋이 있으면 첫 항목을 적용 중·기본으로 하고 isDefault·schemaVersion·updatedAt을 채운다', () => {
+    const out = run({
+      presets: [
+        { id: 'a', name: 'A', createdAt: 'x', layout, soundSetId: 'synth' },
+        { id: 'b', name: 'B', createdAt: 'y', layout, soundSetId: 'ssaplash' },
+      ],
+    });
+    expect(out.activePresetId).toBe('a');
+    const presets = out.presets as Record<string, unknown>[];
+    expect(presets[0]).toEqual({ id: 'a', name: 'A', createdAt: 'x', layout, soundSetId: 'synth', isDefault: true, schemaVersion: 1, updatedAt: 'x' });
+    expect(presets[1]).toEqual({ id: 'b', name: 'B', createdAt: 'y', layout, soundSetId: 'ssaplash', isDefault: false, schemaVersion: 1, updatedAt: 'y' });
+  });
+
+  it('presets 필드가 없어도 빈 목록으로 이행한다', () => {
+    const out = run({});
+    expect(out.presets).toEqual([]);
+    expect(out.activePresetId).toBeNull();
+  });
+
+  it('v9 상태는 그대로 통과한다', () => {
+    const state = { firstSetupDone: true, activePresetId: 'z', presets: [] };
+    expect(migrateSettings(state, 9)).toEqual(state);
   });
 });

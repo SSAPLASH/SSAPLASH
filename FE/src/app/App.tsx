@@ -1,10 +1,9 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { HomePage } from '@/pages/HomePage';
 import { SetupPage } from '@/pages/SetupPage';
-import { CalibrationPage } from '@/pages/CalibrationPage';
 import { PlayPage } from '@/pages/PlayPage';
 import { FreePlayPage } from '@/pages/FreePlayPage';
 import { ResultPage } from '@/pages/ResultPage';
@@ -26,7 +25,7 @@ export default function App() {
         <Route element={<RequireAuth required={AUTH_REQUIRED} />}>
           <Route index element={<HomePage />} />
           <Route path="setup" element={<SetupPage />} />
-          <Route path="calibration" element={<CalibrationPage />} />
+          <Route path="calibration" element={<Navigate to="/setup" replace />} />
           <Route path="play" element={<PlayPage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />

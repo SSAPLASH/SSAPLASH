@@ -1265,3 +1265,86 @@ table.plain th {
   background: var(--surface-2);
   color: var(--ink);
 }
+
+/* ---- 통합 설정(/setup) ---- */
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.setup-leave {
+  position: fixed;
+  z-index: 50;
+}
+.ref-status {
+  font-weight: 700;
+}
+.ref-need {
+  color: var(--brass);
+}
+.ref-progress {
+  width: 100%;
+}
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.preset-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.preset-star {
+  color: var(--brass);
+}
+.preset-badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--brass);
+  color: var(--brass);
+  font-size: 12px;
+}
+.preset-dirty {
+  border-color: var(--line);
+  color: var(--ink-dim);
+}
+.preset-saved {
+  color: var(--brass);
+}
+.preset-name-error {
+  color: var(--miss);
+}
+
+/* ---- 준비 조건 안내 ---- */
+.notice.readiness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.readiness-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.notice.readiness.compact {
+  padding: 8px 12px;
+  font-size: 13px;
+}

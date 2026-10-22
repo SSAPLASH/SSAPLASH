@@ -4,7 +4,7 @@ import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { KitLayout } from '@/domain/kitLayout';
 import type { HitFx, Pose } from '@/domain/events';
 import type { PadAnchor } from '@/domain/calibration';
-import { poseToScreen, radiusToScreen } from '@/domain/kitMapping';
+import { DEFAULT_ANGLE_RANGE, poseToScreen, radiusToScreen, type AngleRange } from '@/domain/kitMapping';
 import type { KeyMap } from '@/domain/keyMap';
 
 export interface KitCanvasProps {
@@ -26,6 +26,8 @@ export interface KitCanvasProps {
   /** 캔버스 래퍼 요소를 돌려준다 (포인터 소스의 기준면 등록용) */
   surfaceRef?: (el: HTMLDivElement | null) => void;
   dimOthers?: boolean;
+  /** 판정 원·자세 마커를 그릴 때 쓰는 각도 범위. 기본 DEFAULT_ANGLE_RANGE */
+  angleRange?: AngleRange;
 }
 
 /** 톡 치기와 끌기를 가르는 이동 거리(px) */
@@ -104,13 +106,14 @@ export function KitCanvas(props: KitCanvasProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
       const now = performance.now();
+      const range = p.angleRange ?? DEFAULT_ANGLE_RANGE;
 
       // 앵커 영역 (캘리브레이션 결과)
       if (p.anchors) {
         for (const a of Object.values(p.anchors)) {
           if (!a) continue;
-          const s = poseToScreen(a);
-          const r = radiusToScreen(a.radius) * W;
+          const s = poseToScreen(a, range);
+          const r = radiusToScreen(a.radius, range) * W;
           ctx.beginPath();
           ctx.arc(s.x * W, s.y * H, r, 0, Math.PI * 2);
           ctx.fillStyle = PAD_META[a.pad].color + '22';
@@ -235,7 +238,7 @@ export function KitCanvas(props: KitCanvasProps) {
       if (p.showPoses && p.poses) {
         const colors = ['#7cc4ff', '#ffa07c'];
         p.poses.forEach((pose, i) => {
-          const s = poseToScreen(pose);
+          const s = poseToScreen(pose, range);
           const x = s.x * W;
           const y = s.y * H;
           ctx.beginPath();

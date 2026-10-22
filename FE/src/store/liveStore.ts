@@ -32,6 +32,10 @@ interface LiveState {
   /** 샘플이 없어 합성음으로 폴백하는 패드 */
   soundSetMissing: PadId[];
   metronome: MetronomeLive;
+  /** 3초 기준 자세 보정을 마친 시각(Date.now, 표시용). 아직 안 했으면 null. 세션 값 */
+  referenceSetAt: number | null;
+  /** 보정 뒤 센서 연결이 끊겼다 — 재연결 후 다시 맞추라는 안내용 */
+  referenceStale: boolean;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -49,4 +53,6 @@ export const useLive = create<LiveState>(() => ({
   soundSetState: 'idle',
   soundSetMissing: [],
   metronome: { playing: false, bpm: BPM_DEFAULT, beatsPerBar: 4, beat: -1, beatSeq: 0 },
+  referenceSetAt: null,
+  referenceStale: false,
 }));

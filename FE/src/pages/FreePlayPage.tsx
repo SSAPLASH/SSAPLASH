@@ -1,15 +1,15 @@
 // 자유 연주 (MODE-02, 설계 4-3). 채보 없이 치면 바로 울린다.
 // 소리·텔레메트리는 bootstrap의 공용 경로가 내고, 이 페이지는 표시(플래시·최근 타격·통계)와
 // 포인터 기준면 등록만 맡는다. 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KitCanvas } from '@/components/KitCanvas';
+import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
-import { LANE_ORDER, PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
+import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
-import { isProfileComplete } from '@/domain/calibration';
+import { layoutToProfile } from '@/domain/kitJudge';
 import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { KEY_MAP } from '@/domain/keyMap';
@@ -20,7 +20,7 @@ const keyLabel = (code: string) => code.replace('Key', '').replace('Space', 'Spa
 
 export function FreePlayPage() {
   const kitLayout = useSettings((s) => s.kitLayout);
-  const profile = useSettings((s) => s.profile);
+  const tuning = useSettings((s) => s.tuning);
   const sensorKind = useSettings((s) => s.sensorKind);
   const sensorOptions = useSettings((s) => s.sensorOptions);
   const activeSensor = useLive((s) => s.activeSensor);
@@ -49,7 +49,12 @@ export function FreePlayPage() {
     });
   }, []);
 
-  const calDone = isProfileComplete(profile, STICK_PADS);
+  // 판정 원은 배치에서 유도한 프로필로 그린다(판정과 같은 규칙)
+  const anchors = useMemo(
+    () =>
+      layoutToProfile(kitLayout, tuning.angleRange, { maxRadiusDeg: tuning.maxRadiusDeg, radiusFactor: tuning.radiusFactor }).anchors,
+    [kitLayout, tuning.angleRange, tuning.maxRadiusDeg, tuning.radiusFactor],
+  );
   const sensorOn = activeSensor !== 'none';
   const nearest = lastHit && lastHit.source !== 'keyboard' ? inputManager.previewPad(lastHit.pose) : null;
   const meanDist = meanSensorDistance(stats);
@@ -76,16 +81,10 @@ export function FreePlayPage() {
       </>
     );
   } else {
-    const calNote = !calDone && (
-      <>
-        캘리브레이션이 없어 센서 타격은 울리지 않습니다. <Link to="/calibration">캘리브레이션 하기</Link> · 키보드 타격은 그대로
-        동작합니다.
-      </>
-    );
     const desc = sensorRegistry.get(sensorKind);
     if (desc?.usageGuide) {
       // 연결 개념이 없는 소스(포인터 모의 IMU)는 연결 상태 대신 조작 안내를 보여준다
-      guide = calDone ? desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind])) : calNote;
+      guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
     } else {
       const conn =
         sourceState === 'error'
@@ -97,7 +96,7 @@ export function FreePlayPage() {
               : '연결 안 됨 — 세팅에서 연결하세요.';
       guide = (
         <>
-          {desc?.label ?? sensorKind} {conn} {calNote}
+          {desc?.label ?? sensorKind} {conn}
         </>
       );
     }
@@ -113,12 +112,15 @@ export function FreePlayPage() {
         {guide}
       </p>
 
+      <ReadinessNotice returnTo="/free" />
+
       <div className="grid-2">
         <div className="card col">
           <KitCanvas
             layout={kitLayout}
             keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-            anchors={profile?.anchors}
+            anchors={anchors}
+            angleRange={tuning.angleRange}
             hits={hits}
             poses={pose}
             showPoses={sensorOn}

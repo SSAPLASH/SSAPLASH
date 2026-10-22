@@ -5,13 +5,14 @@ import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources'
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
+import { usePresets } from '@/store/presetStore';
 import { useLive, type MetronomeLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
 import type { ResolvedHit, SensorId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import { applyRadiusTuning } from '@/domain/tuning';
+import { layoutToProfile } from '@/domain/kitJudge';
 import { metronome } from '@/engine/Metronome';
 
 let currentSensor: SensorId = 'none';
@@ -33,6 +34,7 @@ function applySensorOptions(): void {
   if (!desc || !activeInstance) return;
   const stored = useSettings.getState().sensorOptions[currentSensor];
   desc.applyOptions?.(activeInstance, resolveOptions(desc, stored));
+  desc.applyTuning?.(activeInstance, useSettings.getState().tuning);
 }
 
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
@@ -87,8 +89,13 @@ export function bootstrapInput(): void {
     const s = useSettings.getState();
     keyboardSource.setKeys(keyboardKeys());
     applySensorOptions();
-    // 튜닝은 다음 타격부터 반영된다. 프로필의 반경은 앵커 중심 + 현재 튜닝으로 매번 다시 계산한다(T1)
-    inputManager.setProfile(applyRadiusTuning(s.profile, s.tuning));
+    // 튜닝은 다음 타격부터 반영된다. 판정 프로필은 배치에서 유도(설계 D1): 배치·각도 범위·반경 튜닝이 바뀔 때마다 다시 만든다.
+    inputManager.setProfile(
+      layoutToProfile(s.kitLayout, s.tuning.angleRange, {
+        maxRadiusDeg: s.tuning.maxRadiusDeg,
+        radiusFactor: s.tuning.radiusFactor,
+      }),
+    );
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
@@ -103,6 +110,8 @@ export function bootstrapInput(): void {
     const c = [...useLive.getState().connected] as [boolean, boolean];
     c[stickId] = connected;
     useLive.setState({ connected: c });
+    // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
+    if (!connected && useLive.getState().referenceSetAt !== null) useLive.setState({ referenceStale: true });
   });
   inputManager.onPose((stickId, pose) => {
     const p = [...useLive.getState().pose] as [typeof pose, typeof pose];
@@ -275,4 +284,13 @@ export async function unlockAudio(): Promise<void> {
   useLive.setState({ audioReady: audioEngine.ready });
   // 첫 제스처 이후 세트 로드(이미 적용·로딩 중이면 건너뜀)
   if (appliedSetId !== useSettings.getState().soundSetId) void applySoundSet();
+}
+
+/** 앱 시작 시 프리셋 목록을 읽고, 적용 중인 프리셋이 없으면 기본 프리셋을 자동 적용한다 */
+export async function bootstrapPresets(): Promise<void> {
+  await usePresets.getState().refresh();
+  const { items, apply } = usePresets.getState();
+  if (useSettings.getState().activePresetId !== null) return;
+  const def = items.find((p) => p.isDefault);
+  if (def) apply(def.id);
 }

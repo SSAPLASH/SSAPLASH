@@ -4,6 +4,7 @@
 import type { Pose, StickId } from '@/domain/events';
 import { BaseInputSource } from './InputSource';
 import type { SourceDescriptor } from './SourceDescriptor';
+import type { SensorTuning } from '@/domain/tuning';
 
 export interface PointerStickOptions {
   /** 화면 가로 전체를 yaw 몇 도에 대응시킬지 (±) */
@@ -168,6 +169,10 @@ export const pointerDescriptor: SourceDescriptor = {
   ],
   applyOptions(instance: PointerStickSource, o) {
     instance.setOptions({ leftHitKey: String(o.leftHitKey), rightHitKey: String(o.rightHitKey) });
+  },
+  // 마우스 좌표 → 자세 변환은 설정의 각도 범위(tuning.angleRange)를 따른다. 배치 → 판정 변환과 같은 값이어야 맞는다
+  applyTuning(instance: PointerStickSource, tuning: SensorTuning) {
+    instance.setOptions({ yawRangeDeg: tuning.angleRange.yawDeg, pitchRangeDeg: tuning.angleRange.pitchDeg });
   },
   // 이 두 키는 포인터 소스가 쓰므로 키보드 소스에서 뺀다(한 키에 두 번 울리지 않게)
   reservedKeys: (o) => [String(o.leftHitKey), String(o.rightHitKey)],

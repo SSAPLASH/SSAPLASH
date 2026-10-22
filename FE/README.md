@@ -1,6 +1,6 @@
 # FE — SSAPLASH 웹 클라이언트
 
-에어드럼 리듬 게임의 브라우저 클라이언트. 센서(IMU 스틱)가 오기 전에는 키보드와 포인터 모의 IMU로 세팅·캘리브레이션·게임 흐름을 개발한다.
+에어드럼 리듬 게임의 브라우저 클라이언트. 센서(IMU 스틱)가 오기 전에는 키보드와 포인터 모의 IMU로 세팅·기준 자세 보정·게임 흐름을 개발한다.
 
 ## 스택
 
@@ -50,10 +50,10 @@ src/
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   └─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
-├─ pages/      라우트 단위 화면 — Home · Setup · Calibration · Play · FreePlay · Result · Login · AuthCallback
+├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Login · AuthCallback
 ├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · authStore(로그인 상태, 영속 안 함)
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
@@ -63,12 +63,12 @@ src/
 │   ├─ BleStickSource      Web Bluetooth GATT + 디스크립터
 │   ├─ WebSocketStickSource  허브 · PC 브리지 + 디스크립터
 │   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷
-│   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(캘리브레이션 프로필)
+│   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
-├─ engine/     CalibrationSession · RhythmSession(일시정지 포함) · playLog · telemetry
+├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · telemetry
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · events · keyMap · calibration · kitMapping · chart · judgement · hitStats · auth
+│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · judgement · hitStats · auth
 └─ styles/     전역 CSS
 ```
 
@@ -87,6 +87,8 @@ src/
 | 코어 | `input`, `engine`, `audio`, `api` | domain |
 | 도메인 | `domain` | 없음 |
 
+- store 내부: `presetStore` → `settingsStore` 단방향은 허용한다(같은 줄끼리 import 금지의 예외). `localPresetSource`도 `settingsStore`를 읽는다.
+
 - `types/`·`utils/`는 두지 않는다. 타입은 쓰는 도메인 파일 옆에 둔다(`domain/keyMap.ts`, `domain/events.ts`). 전용 타입 폴더는 "어디 있는지 찾기"와 순환 import를 만들고, 범용 유틸은 아직 없다.
 - 경로 별칭 `@/` = `src/` (`tsconfig.app.json` · `vite.config.ts` · `vitest.config.ts`에 같이 설정). 다른 폴더는 `@/`, 같은 폴더는 `./`로 가져온다.
 - `inputManager`·키보드 소스는 `app/sources.ts`에서, 센서 소스 인스턴스는 `app/sensorRegistry.ts`가 디스크립터의 `create`로 만든다. 화면은 `input/` 클래스를 직접 new 하거나 소스 id 문자열을 비교하지 않고, 레지스트리의 디스크립터(라벨·가용성·설정 항목)를 읽는다.
@@ -95,9 +97,9 @@ src/
 ## 입력 구조
 
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
-- **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(캘리브레이션 프로필).
+- **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(배치에서 유도한 판정 프로필).
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
-- 하드웨어가 오면 BLE 소스 연결을 검증하고 캘리브레이션으로 프로필을 채우면 된다. 고정 키·소리·게임 코드는 바뀌지 않는다.
+- 하드웨어가 오면 BLE 소스 연결을 검증하고 기준 자세 보정으로 시작 위치를 맞추면 된다. 고정 키·소리·게임 코드는 바뀌지 않는다.
 
 ## 새 입력 소스 추가 방법
 
@@ -118,9 +120,41 @@ src/
 | `applyOptions(인스턴스, 값)` | 선택 | 설정이 바뀔 때마다 호출. 기본값이 병합된 값이 온다 |
 | `reservedKeys(값)` | 선택 | 센서가 점유해 키보드 소스에서 뺄 키 코드 |
 | `actions` | 선택 | 사용자 제스처가 필요한 동작 버튼(BLE 페어링, 포트 선택 등) |
-| `note` · `usageGuide(값)` | 선택 | 설정 패널 아래 안내 문구 · 자유 연주·캘리브레이션 화면의 조작 안내 |
+| `note` · `usageGuide(값)` | 선택 | 설정 패널 아래 안내 문구 · 자유 연주 화면의 조작 안내 |
 
-소스 클래스가 `setSurface(el)`을 구현하면(포인터처럼 화면 좌표를 쓰는 소스) 자유 연주·캘리브레이션의 캔버스가 `bindSensorSurface`를 통해 자동으로 연결된다. 소스를 지우거나 이름을 바꿀 때도 이 두 곳만 고친다. 저장된 `sensorKind`가 등록되지 않은 id면 앱 시작 때 `none`으로 되돌아간다.
+소스 클래스가 `setSurface(el)`을 구현하면(포인터처럼 화면 좌표를 쓰는 소스) 자유 연주·세팅의 캔버스가 `bindSensorSurface`를 통해 자동으로 연결된다. 소스를 지우거나 이름을 바꿀 때도 이 두 곳만 고친다. 저장된 `sensorKind`가 등록되지 않은 id면 앱 시작 때 `none`으로 되돌아간다.
+
+## 기준 자세 보정
+
+센서(포인터 모의 IMU 포함)를 쓸 때는 스틱을 든 채 자세를 3초 유지해 시작 위치를 잡는다. `engine/ReferenceCapture`가 최근 300ms 샘플의 퍼짐이 3° 이하인 구간을 3초 채우면 완료로 보고, 중간에 흔들리거나 자세 스트림이 300ms 넘게 끊기면 처음부터 다시 센다. 완료되면 호출하는 쪽이 `inputManager.resetPose()`를 불러 그 자세를 기준(캔버스 중앙)으로 삼고, 이후 자세는 기준 대비 상대 각도가 된다.
+
+패드 위치는 보정이 아니라 배치(`kitLayout`)가 정한다. 패드마다 스틱을 가져가 앵커를 잡는 캘리브레이션은 없앴고, 판정 프로필은 배치와 각도 범위에서 유도한다(`domain/kitJudge`). 시스템은 보정이 맞았는지 판정하지 않는다 — 쳐 보고 어긋나면 다시 맞춘다. 연결이 끊긴 뒤에는 `liveStore.referenceStale`로 다시 맞추라고 안내만 하고 강제하지 않는다.
+
+재보정은 통합 설정 페이지(`/setup`)에서 한다. `/calibration`은 `/setup`으로 이동한다.
+
+## 통합 설정(프리셋·캘리브레이션)
+
+`/setup` 한 페이지에서 연결·보정·배치·저장을 끝낸다. 어느 영역이든 언제나 조작할 수 있고 순서를 강제하지 않는다(보정 중에는 보정 카드만 진행 상태가 된다). 2열 레이아웃(좌: 배치·타격 확인, 우: 나머지 카드)이며 960px 미만에서는 1열이다.
+
+- ① **스틱 연결** — 입력 소스 선택과 소스 옵션 패널, 연결 상태 문구. 연결이 끊겼다 돌아오면(`referenceStale`) 시작 위치를 다시 맞추라는 안내만 낸다.
+- ②⑥ **시작 위치 보정** — 센서일 때 "시작 위치 맞추기"로 3초 자세 유지(`ReferenceCapture`, 진행 바·퍼짐 표시). 완료하면 `resetPose()`와 함께 `referenceSetAt`을 기록한다. 이미 보정했다면 같은 버튼이 "다시 맞추기"가 된다. 키보드만 쓰면 "보정이 필요 없습니다"만 보인다. 보정 중 연결이 끊기면 처음부터 다시 센다.
+- ③ **프리셋 목록** — 이름·기본(★)·"적용 중" 배지, 적용·기본으로·삭제.
+- ④ **드럼 배치** — 패드 드래그, 배치 칩 3개, 사운드 세트, 세기 선택. 캔버스가 포인터 기준면(`bindSensorSurface`)이며 배치가 곧 판정이다.
+- ⑤ **타격 확인** — 센서 타격이 바로 울리고 마지막 타격을 한 줄로 보여준다. 연결이 끊기면 "스틱 입력 중단"을 표시한다.
+- ⑦ **저장·적용** — 적용 중인 프리셋 이름과 변경 여부. **변경사항 저장**(적용 프리셋이 있고 변경됐을 때만), **다른 이름으로 저장**(이름 검증 문구: 빈 이름·50자 초과·중복). 저장 중에는 버튼이 잠기고, 실패하면 오류 코드별 문구와 닫기 버튼을 보여주며 편집값은 그대로다.
+- ⑧ **설정 완료** — 아래 조건을 채우면 활성. 누르면 `firstSetupDone = true`로 두고 복귀 경로로 이동한다.
+
+⑥(다시 맞추기)은 ② 카드의 버튼 라벨이 바뀐 것이다. 판정 반경 상한·판정 폭·오디오 오프셋 같은 연주 환경 슬라이더는 8영역 밖의 보조 카드로 아래에 둔다.
+
+**설정 완료 조건**: 키보드만(`sensorKind === 'none'`)이면 항상 가능. 센서면 스틱 연결(`connected[0] || connected[1]`) + 시작 위치 보정(`referenceSetAt`) + 적용된 프리셋(`activePresetId`)이 모두 필요하며, 모자라면 버튼 아래에 남은 조건을 적는다.
+
+**복귀 규칙**: 홈·곡 연주 준비의 바로가기는 `navigate('/setup', { state: { returnTo } })`로 들어오고, 설정 완료는 `sanitizeReturnTo(state.returnTo)`로 이동한다(없으면 `/`).
+
+**이탈 확인**: 변경사항이 저장되지 않았고(`selectDirty`) 보정 중이 아닐 때 다른 경로로 가려 하면 "저장하지 않은 변경이 있습니다" 팝업(나가기 / 계속 편집)이 뜬다. 설정 완료로 인한 이동은 막지 않으며 `beforeunload`는 쓰지 않는다. `useBlocker`는 데이터 라우터에서만 동작하므로 `main.tsx`는 `createBrowserRouter`로 `App`을 splat 라우트 아래에 둔다.
+
+## 준비 조건
+
+연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] || connected[1]`), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈과 자유 연주는 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 설정 완료 시 그 화면으로 돌아온다(곡 선택이 URL에 없어 리듬 게임은 `/play`, 악보 연습은 `/sheet`의 곡 선택으로 돌아온다).
 
 ## 키보드 입력 (개발·시연용, 고정)
 
@@ -136,9 +170,7 @@ src/
 
 Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매핑이며 `domain/keyMap.ts`의 `KEY_MAP` 상수로만 정의한다.
 
-자유 연주 화면은 치면 바로 울리고 최근 타격과 패드별 횟수를 보여준다. 캘리브레이션 결과를 확인하는 화면이기도 하다.
-
-캘리브레이션은 센서(포인터 모의 IMU 포함)가 켜져 있어야 한다. Enter로 기준 자세를 잡고 크래시 → 하이햇 → 스네어 → 하이탐 → 플로어탐 → 라이드 순으로 패드 위에 스틱을 2초 멈추면(또는 2타) 앵커가 잡힌다. Enter 즉시 확정, Backspace 직전 다시, Tab 건너뛰기, Esc 나가기 팝업. 확인 단계에서 테스트 타격으로 판정을 보고 저장하면 그때부터 센서 타격이 그 프로필로 판정된다. 고정 키는 캘리브레이션 중 무시된다.
+자유 연주 화면은 치면 바로 울리고 최근 타격과 패드별 횟수를 보여준다. 배치가 판정에 맞게 반영됐는지 확인하는 화면이기도 하다.
 
 리듬 게임은 내장 채보 3곡을 고른 뒤 Enter로 시작한다(1마디 카운트인). Esc는 중단 확인 팝업을 띄우고 그동안 노트가 멈춘다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
 
@@ -169,7 +201,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 ### 튜닝 (디버그 창)
 
-디버그 창의 "튜닝" 구역(접힘이 기본)에서 센서 판정·세기 파라미터 7개를 플레이 중에 바꾼다. 바꾼 값은 다음 타격부터 반영되고 localStorage(설정 `tuning`)에 저장된다. 재캘리브레이션은 필요 없다 — 프로필에는 앵커 중심만 두고 반경은 현재 튜닝으로 매번 다시 계산한다.
+디버그 창의 "튜닝" 구역(접힘이 기본)에서 센서 판정·세기 파라미터 9개를 플레이 중에 바꾼다. 바꾼 값은 다음 타격부터 반영되고 localStorage(설정 `tuning`)에 저장된다. 재캘리브레이션은 필요 없다 — 판정 프로필은 배치(kitLayout)와 각도 범위에서 유도한다(설계 `SETUP-unified-setup.md` D1). 반경은 현재 튜닝으로 매번 다시 계산한다.
 
 | 값 | 기본값 | 범위 | 의미 |
 | --- | --- | --- | --- |
@@ -180,10 +212,16 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 | `velocity.gamma` | 0.8 | 0.3~2 | 곡선 모양. 1 미만이면 약한 타격이 더 크게 |
 | `sensorOffsetMs` | 0 | -150~150 | 센서 타격 시각에 더하는 값. 키보드 타격에는 적용 안 됨 |
 | `outsidePolicy` | `mute` | `mute` / `nearest` | 앵커 반경 밖 센서 타격: 무음 / 가장 가까운 패드 |
+| `angleRange.yawDeg` | 60 | 20~120 | 화면 가로 전체가 몇 도의 팔 움직임인지(±). 포인터 모의 IMU와 배치 → 판정 변환이 같이 쓴다 |
+| `angleRange.pitchDeg` | 35 | 10~80 | 화면 세로 전체가 몇 도의 팔 움직임인지(±) |
 
 - 기본값과 슬라이더 범위는 `src/domain/tuning.ts`(`DEFAULT_SENSOR_TUNING`, `TUNING_RANGES`)에만 있다. 실측값을 찾으면 여기만 고친다. 이미 저장된 값은 자동으로 덮어쓰지 않으므로 "기본값으로" 버튼으로 받는다.
 - 기본값은 모두 **하드웨어(스틱) 도착 전 초안**이다. 포인터 모의 IMU로 동작만 확인했고 실측 전이다.
 - 튜닝 값은 키 프리셋에 포함되지 않는다(기기·펌웨어별 값).
+
+## 프리셋
+
+배치·사운드를 이름 붙여 저장한 것이 프리셋이다(최대 10개, 이름 1~50자·중복 불가, 기본 프리셋 1개). 저장소는 `domain/preset`의 `PresetSource` 인터페이스(`list`·`create`·`update`·`remove`·`setDefault`, 오류는 `PresetError.code`) 뒤에 있고, 지금은 `settingsStore.presets[]`를 쓰는 `store/localPresetSource`가 구현한다. 서버 구현(Jira 91)은 같은 인터페이스로 `presetStore.setSource`에 끼운다. 화면은 `presetStore`(`items`·`status`·`error`, 액션 `refresh`·`apply`·`saveChanges`·`saveAs`·`setDefault`·`remove`)만 부르며, 실패하면 `status = 'error'`·`error = 코드`만 바꾸고 편집 중인 `kitLayout`·`soundSetId`는 건드리지 않는다. 앱이 시작되면 `bootstrapPresets()`가 목록을 읽고 적용 중인 프리셋(`activePresetId`)이 없을 때 기본 프리셋을 자동 적용한다. 변경 여부(`dirty`)는 상태가 아니라 `selectDirty(settings, presets)`로 현재 편집값과 적용 프리셋을 비교해 얻으며, 적용 프리셋이 없으면 저장할 것이 있는 것으로 보아 true다.
 
 ## 사운드 세트
 

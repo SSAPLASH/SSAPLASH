@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { useSettings } from '@/store/settingsStore';
 import type { TelemetryRow } from '@/engine/telemetry';
 import { PAD_META } from '@/domain/pads';
+import { layoutToProfile } from '@/domain/kitJudge';
 import {
   TUNING_RANGES,
-  applyRadiusTuning,
   countChangedTuning,
   type OutsidePolicy,
   type TuningRange,
@@ -52,7 +52,7 @@ const DELTA_WINDOW = 10;
 export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
   const [open, setOpen] = useState(false);
   const tuning = useSettings((s) => s.tuning);
-  const profile = useSettings((s) => s.profile);
+  const kitLayout = useSettings((s) => s.kitLayout);
   const setTuning = useSettings((s) => s.setTuning);
   const resetTuning = useSettings((s) => s.resetTuning);
 
@@ -65,13 +65,15 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
   const lastPose = rows.find((r) => r.distanceDeg !== null);
   const deltas = rows.filter((r) => r.deltaMs !== undefined).slice(0, DELTA_WINDOW);
   const deltaAvg = deltas.length ? deltas.reduce((s, r) => s + (r.deltaMs ?? 0), 0) / deltas.length : null;
-  const tuned = applyRadiusTuning(profile, tuning);
-  const radii = tuned
-    ? Object.values(tuned.anchors)
-        .filter((a) => !!a)
-        .map((a) => `${PAD_META[a.pad].label} ${a.radius.toFixed(1)}`)
-        .join(' · ')
-    : '';
+  // 앵커별 반경은 배치에서 유도한 판정 프로필 기준(설계 D1)
+  const derived = layoutToProfile(kitLayout, tuning.angleRange, {
+    maxRadiusDeg: tuning.maxRadiusDeg,
+    radiusFactor: tuning.radiusFactor,
+  });
+  const radii = Object.values(derived.anchors)
+    .filter((a) => !!a)
+    .map((a) => `${PAD_META[a.pad].label} ${a.radius.toFixed(1)}`)
+    .join(' · ');
 
   return (
     <section className="tuning">
@@ -103,7 +105,26 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
               unit="°"
               onChange={(maxRadiusDeg) => setTuning({ maxRadiusDeg })}
             />
-            <div className="faint">앵커별 반경(°): {radii || '프로필 없음'}</div>
+            <div className="faint">앵커별 반경(°): {radii}</div>
+          </div>
+
+          <div className="tuning-group">
+            <strong>각도 범위</strong>
+            <TuningSlider
+              label="가로(yaw) ±"
+              value={tuning.angleRange.yawDeg}
+              range={TUNING_RANGES.angleRange.yawDeg}
+              unit="°"
+              onChange={(yawDeg) => setTuning({ angleRange: { yawDeg } })}
+            />
+            <TuningSlider
+              label="세로(pitch) ±"
+              value={tuning.angleRange.pitchDeg}
+              range={TUNING_RANGES.angleRange.pitchDeg}
+              unit="°"
+              onChange={(pitchDeg) => setTuning({ angleRange: { pitchDeg } })}
+            />
+            <div className="faint">화면 가로·세로 전체가 몇 도의 팔 움직임인지</div>
           </div>
 
           <div className="tuning-group">

@@ -1,14 +1,15 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './app/App';
 import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
-import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap';
+import { bootstrapInput, bootstrapMetronome, bootstrapPresets, unlockAudio } from './app/bootstrap';
 import { bootstrapAuth } from './app/authBootstrap';
 import './styles/global.css';
 
 bootstrapInput();
 bootstrapMetronome();
+void bootstrapPresets();
 bootstrapAuth(); // refresh 쿠키로 로그인 복원 시작. 결과는 RequireAuth가 본다
 // 첫 클릭/키 입력에서 AudioContext를 깨운다 (브라우저 자동재생 정책)
 const unlock = () => {
@@ -19,10 +20,11 @@ const unlock = () => {
 window.addEventListener('pointerdown', unlock);
 window.addEventListener('keydown', unlock);
 
+// useBlocker(설정 페이지 이탈 확인)는 데이터 라우터에서만 동작한다. 기존 <Routes> 트리는 splat 라우트 아래에 그대로 둔다
+const router = createBrowserRouter([{ path: '*', element: <App /> }]);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <RouterProvider router={router} />
   </StrictMode>,
 );
