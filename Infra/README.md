@@ -11,7 +11,7 @@ CI는 EC2의 GitLab Runner에서 실행한다. 개인 PC에 러너를 두지 않
 | 러너 이름 | `ec2-docker` |
 | 실행 방식 | Docker executor (Linux) |
 | 태그 | `docker` (모든 job이 `.gitlab-ci.yml`의 `default:`에서 이 태그를 쓴다) |
-| 태그 없는 job | 받지 않는다 |
+| 태그 없는 job | 받는다 (CI 파일이 아직 반영되지 않은 `main`·`develop-FE`·`develop-AI`·`develop-EMB`의 골격 job을 처리하기 위해) |
 | 동시 실행 | 2 |
 | 기본 이미지 | `eclipse-temurin:21-jdk` (job에서 이미지를 지정하면 그 이미지를 쓴다) |
 
@@ -41,7 +41,7 @@ CI는 EC2의 GitLab Runner에서 실행한다. 개인 PC에 러너를 두지 않
 토큰이 노출됐거나 러너를 새로 만들 때의 순서다.
 
 1. GitLab의 Settings → CI/CD → Runners에서 기존 러너를 삭제한다.
-2. 같은 화면에서 새 러너를 만든다. 태그는 `docker`, 태그 없는 job 실행은 끈다.
+2. 같은 화면에서 새 러너를 만든다. 태그는 `docker`, **Run untagged jobs는 켠다.**
 3. EC2에서 `sudo gitlab-runner verify --delete`로 서버에 남은 옛 설정을 지운다.
 4. EC2에서 새 토큰으로 `sudo gitlab-runner register`를 실행한다. 토큰은 서버 터미널에만 입력한다.
 5. `sudo systemctl status gitlab-runner`로 동작을 확인하고 GitLab에서 온라인 표시를 확인한다.
