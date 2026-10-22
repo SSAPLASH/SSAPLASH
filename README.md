@@ -14,8 +14,7 @@ S15P31A307/
 ├─ FE/       웹 클라이언트 
 ├─ Infra/    배포 구성 
 └─ Docs/
-   ├─ Convention/     팀 규칙 (Git · JIRA)
-   └─ Service Design/
+   └─ README.md       상세 문서 안내 (GitLab Wiki)
 ```
 
 각 파트의 셋업과 실행 방법은 해당 폴더의 README를 참조한다.
@@ -32,7 +31,7 @@ S15P31A307/
 
 ## 개발 규칙
 
-브랜치 전략, 커밋 메시지 형식, MR·코드리뷰 규칙은 [Git Convention](./Docs/Convention/Git%20Convention.md)을 따른다.
+브랜치 전략, 커밋 메시지 형식, MR·코드리뷰 규칙은 [Git 컨벤션 Wiki](https://lab.ssafy.com/s15-final/S15P31A307/-/wikis/3-%EA%B7%9C%EC%B9%99/3-1-Git-%EC%BB%A8%EB%B2%A4%EC%85%98)를 따른다.
 
 ```
 브랜치   feat/{Epic prefix}-{작업 내용}   예) feat/AUTH-login-api
@@ -46,5 +45,5 @@ S15P31A307/
 
 ## 기획 문서
 
----
+상세 기획·요구사항은 [GitLab Wiki](https://lab.ssafy.com/s15-final/S15P31A307/-/wikis/home)에서 관리한다. 저장소에는 [문서 안내](./Docs/README.md)와 기획 근거 재현 도구(`tools/planning-references/`)만 둔다.
 
