@@ -3,6 +3,7 @@ stages:
   - lint
   - test
   - build
+  - deploy
 
 # MR을 만들거나 갱신할 때, 그리고 main·develop-*에 병합될 때만 실행한다.
 workflow:
@@ -102,3 +103,45 @@ be-timescale-test:
     paths:
       - BE/build/reports/tests/timescaleTest/
     expire_in: 1 week
+
+# 배포. main에서만 만들어지고 사람이 직접 실행해야 돈다(승인). MR 파이프라인에는 만들어지지 않는다.
+# EC2 호스트에서 직접 도는 배포 전용 러너(태그 deploy, 보호된 러너)가 실행한다. 서버 접속 키가 필요 없다.
+# 서버의 .env(비밀번호, 키)는 서버에만 있고 CI 변수에 올리지 않는다.
+.deploy-job:
+  tags:
+    - deploy
+  # 배포와 롤백이 동시에 돌지 않게 한다.
+  resource_group: production
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+
+deploy:
+  extends: .deploy-job
+  stage: deploy
+  script:
+    - bash Infra/deploy/deploy.sh "$CI_COMMIT_SHA" "$CI_PROJECT_DIR"
+
+# 이전 커밋으로 되돌린다. 실행할 때 변수 ROLLBACK_SHA에 커밋 해시를 넣으면 그 버전을, 비워 두면 직전에 성공한 버전을 다시 배포한다.
+# DB 마이그레이션은 되돌리지 않는다. 새 마이그레이션이 적용된 뒤에는 옛 앱이 뜨지 않을 수 있어 Infra/deploy/README.md를 먼저 확인한다.
+rollback:
+  extends: .deploy-job
+  stage: deploy
+  variables:
+    ROLLBACK_SHA: ""
+  script:
+    - |
+      SHA="$ROLLBACK_SHA"
+      if [ -z "$SHA" ]; then
+        # 배포 기록의 마지막은 현재 버전이므로 그 앞 줄이 직전 성공 버전이다.
+        COUNT=0
+        [ -f /srv/airdrum/.deployed ] && COUNT="$(wc -l < /srv/airdrum/.deployed)"
+        [ "$COUNT" -ge 2 ] || { echo "되돌릴 직전 배포 기록이 없습니다. ROLLBACK_SHA를 지정하세요."; exit 1; }
+        SHA="$(tail -n 2 /srv/airdrum/.deployed | head -n 1 | awk '{print $2}')"
+      fi
+      echo "롤백 대상: $SHA"
+      git fetch origin "$SHA"
+      git checkout -f "$SHA"
+      bash Infra/deploy/deploy.sh "$SHA" "$CI_PROJECT_DIR"
