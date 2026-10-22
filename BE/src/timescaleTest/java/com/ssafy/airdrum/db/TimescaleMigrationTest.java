@@ -36,8 +36,8 @@ class TimescaleMigrationTest {
 			String existingVersion = scalar(connection, "INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator,generator_version) VALUES (" + existingChart + ",1,'[{\"noteId\":\"legacy-1\",\"timeMs\":77,\"pad\":\"SNARE\",\"velocityHint\":88}]'::jsonb,'{\"bpm\":77,\"offsetMs\":11,\"timeSignature\":\"3/4\"}'::jsonb,'UNAVAILABLE',1,'MANUAL','legacy') RETURNING id");
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version <> '10'"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(2);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -81,7 +81,7 @@ class TimescaleMigrationTest {
 	}
 
 	@Test
-	void freshDatabaseAppliesAllTenVersionsAndBuiltinSeed() throws Exception {
+	void freshDatabaseAppliesAllElevenVersionsAndBuiltinSeed() throws Exception {
 		// 별도 DB로 전환 테스트와 확장 카탈로그·이력을 격리한다.
 		try (var connection = connect()) {
 			execute(connection, "CREATE DATABASE timescale_test_fresh");
@@ -92,7 +92,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(10);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(11);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
