@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOGIN_PROVIDERS, loginErrorMessage, sanitizeReturnTo } from './auth';
+import { LOGIN_PROVIDERS, enabledProviders, loginErrorMessage, sanitizeReturnTo } from './auth';
 
 describe('sanitizeReturnTo', () => {
   it('앱 안의 경로는 그대로 돌려준다', () => {
@@ -50,5 +50,29 @@ describe('LOGIN_PROVIDERS', () => {
   it('google, ssafy 순서로 BE 경로 값과 라벨을 가진다', () => {
     expect(LOGIN_PROVIDERS.map((p) => p.key)).toEqual(['google', 'ssafy']);
     for (const p of LOGIN_PROVIDERS) expect(p.label.length).toBeGreaterThan(0);
+  });
+});
+
+describe('enabledProviders', () => {
+  const keys = (raw: string | undefined) => enabledProviders(raw).map((p) => p.key);
+
+  it('미설정·빈 문자열이면 전부', () => {
+    expect(enabledProviders(undefined)).toBe(LOGIN_PROVIDERS);
+    expect(keys('')).toEqual(['google', 'ssafy']);
+    expect(keys('  ')).toEqual(['google', 'ssafy']);
+  });
+
+  it('google만 지정하면 Google만', () => {
+    expect(keys('google')).toEqual(['google']);
+  });
+
+  it('지정 순서와 무관하게 LOGIN_PROVIDERS 순서를 지키고 공백·대소문자를 무시한다', () => {
+    expect(keys('ssafy, google')).toEqual(['google', 'ssafy']);
+    expect(keys(' SSAFY ')).toEqual(['ssafy']);
+  });
+
+  it('모르는 키는 무시하고, 전부 모르면 전부 반환', () => {
+    expect(keys('google,kakao')).toEqual(['google']);
+    expect(keys('kakao')).toEqual(['google', 'ssafy']);
   });
 });

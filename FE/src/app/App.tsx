@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
 import { HomePage } from '@/pages/HomePage';
@@ -15,10 +16,12 @@ import { AUTH_REQUIRED } from './authBootstrap';
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
-        {/* 로그인 전에도 열리는 화면 */}
+      {/* 로그인 전에도 열리는 화면 — 셸 없이 전체 화면 */}
+      <Route element={<PublicLayout />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
+      </Route>
+      <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
         {/* 나머지는 로그인 필요 (VITE_AUTH_REQUIRED=false면 통과) */}
         <Route element={<RequireAuth required={AUTH_REQUIRED} />}>
           <Route index element={<HomePage />} />
