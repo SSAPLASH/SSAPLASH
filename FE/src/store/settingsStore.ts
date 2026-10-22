@@ -8,6 +8,7 @@ import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
 import { DEFAULT_KEY_MAP, type KeyMap } from '@/domain/keyMap';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
+import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
 export interface KitPreset {
@@ -45,6 +46,11 @@ interface SettingsState {
   testVelocity: TestVelocity;
   /** 리듬 게임 뷰: 'highway' 노트 레인 / 'kit' 세팅한 킷 위 연주 */
   gameView: GameView;
+  /** 전역 메트로놈 마지막 BPM(영속 사본. 값의 주인은 엔진) */
+  metronomeBpm: number;
+  metronomeBeatsPerBar: BeatsPerBar;
+  /** 패드 소리 on/off. 메트로놈 클릭은 영향 없음 */
+  soundOn: boolean;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -72,12 +78,16 @@ interface SettingsState {
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
+  /** bootstrap만 부른다(엔진 → 영속). 화면은 엔진 메서드를 부른다 */
+  setMetronomeBpm: (v: number) => void;
+  setMetronomeBeatsPerBar: (v: BeatsPerBar) => void;
+  setSoundOn: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 6;
+export const SETTINGS_VERSION = 7;
 
 /**
  * 저장된 설정 이행.
@@ -86,6 +96,7 @@ export const SETTINGS_VERSION = 6;
  * v3 → v4: 최상위 maxRadiusDeg → tuning.maxRadiusDeg. 나머지 튜닝 값은 기본값.
  * v4 → v5: soundSetId(기본 'ssaplash')·testVelocity(기본 96) 추가.
  * v5 → v6: gameView(기본 'highway') 추가. 알 수 없는 값은 'highway'.
+ * v6 → v7: metronomeBpm(기본 120, 범위 밖이면 120)·metronomeBeatsPerBar(3이 아니면 4)·soundOn(boolean 아니면 true) 추가.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -118,6 +129,12 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   if (version < 6) {
     if (p.gameView !== 'highway' && p.gameView !== 'kit') p.gameView = 'highway';
   }
+  if (version < 7) {
+    const bpm = p.metronomeBpm;
+    if (typeof bpm !== 'number' || !Number.isFinite(bpm) || bpm < BPM_MIN || bpm > BPM_MAX) p.metronomeBpm = BPM_DEFAULT;
+    if (p.metronomeBeatsPerBar !== 3) p.metronomeBeatsPerBar = 4;
+    if (typeof p.soundOn !== 'boolean') p.soundOn = true;
+  }
   return p as unknown as SettingsState;
 }
 
@@ -142,6 +159,9 @@ export const useSettings = create<SettingsState>()(
       soundSetId: 'ssaplash',
       testVelocity: 96,
       gameView: 'highway',
+      metronomeBpm: BPM_DEFAULT,
+      metronomeBeatsPerBar: 4,
+      soundOn: true,
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -188,6 +208,9 @@ export const useSettings = create<SettingsState>()(
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
       setGameView: (gameView) => set({ gameView }),
+      setMetronomeBpm: (metronomeBpm) => set({ metronomeBpm }),
+      setMetronomeBeatsPerBar: (metronomeBeatsPerBar) => set({ metronomeBeatsPerBar }),
+      setSoundOn: (soundOn) => set({ soundOn }),
     }),
     {
       name: 'ssaplash.settings',

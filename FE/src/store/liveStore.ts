@@ -2,7 +2,19 @@
 // 자세는 60Hz로 들어오므로 구독 컴포넌트는 필요한 필드만 select 한다.
 import { create } from 'zustand';
 import type { PadId } from '@/domain/pads';
+import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/metronome';
 import type { Pose, ResolvedHit, SensorId, SourceState } from '@/domain/events';
+
+/** 전역 메트로놈 화면용 사본. 값의 주인은 engine/Metronome이고 bootstrap이 여기 옮긴다 */
+export interface MetronomeLive {
+  playing: boolean;
+  bpm: number;
+  beatsPerBar: BeatsPerBar;
+  /** 지금 울리고 있는 박의 마디 안 인덱스(0부터). 정지 중 -1 */
+  beat: number;
+  /** 박마다 1씩 증가. 같은 beat 값이 이어져도 깜빡임을 다시 트리거하려는 용도 */
+  beatSeq: number;
+}
 
 interface LiveState {
   connected: [boolean, boolean];
@@ -19,6 +31,7 @@ interface LiveState {
   soundSetState: 'idle' | 'loading' | 'ready' | 'error';
   /** 샘플이 없어 합성음으로 폴백하는 패드 */
   soundSetMissing: PadId[];
+  metronome: MetronomeLive;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -35,4 +48,5 @@ export const useLive = create<LiveState>(() => ({
   hitSeq: 0,
   soundSetState: 'idle',
   soundSetMissing: [],
+  metronome: { playing: false, bpm: BPM_DEFAULT, beatsPerBar: 4, beat: -1, beatSeq: 0 },
 }));
