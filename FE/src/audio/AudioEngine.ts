@@ -23,6 +23,8 @@ export class AudioEngine {
   private master: GainNode | null = null;
   /** 패드 소리 전용 버스. 음소거는 여기 게인만 0으로 해 메트로놈 클릭(master 직결)은 남긴다 */
   private padBus: GainNode | null = null;
+  /** 반주 전용 버스(master 직결). 패드 음소거와 무관 */
+  private accBus: GainNode | null = null;
   private padMuted = false;
   private stateListeners = new Set<(state: string) => void>();
   private noise: AudioBuffer | null = null;
@@ -125,6 +127,9 @@ export class AudioEngine {
       this.padBus = this.ctx.createGain();
       this.padBus.gain.value = this.padMuted ? 0 : 1;
       this.padBus.connect(this.master);
+      this.accBus = this.ctx.createGain();
+      this.accBus.gain.value = 1;
+      this.accBus.connect(this.master);
       this.ctx.addEventListener('statechange', () => {
         for (const l of this.stateListeners) l(this.ctx!.state);
       });
@@ -148,6 +153,11 @@ export class AudioEngine {
     return this.ctx;
   }
 
+  /** 반주 재생기가 소스를 연결할 버스. ensure() 이전에는 null */
+  get accompanimentBus(): GainNode | null {
+    return this.accBus;
+  }
+
   get ready(): boolean {
     return this.ctx?.state === 'running';
   }
@@ -161,6 +171,26 @@ export class AudioEngine {
     };
   }
 
+  /** performance.now 기준 시각 → AudioContext 시각(초). getOutputTimestamp 기반이며 컨텍스트가 없으면 0 */
+  perfToContextTime(perfMs: number): number {
+    if (!this.ctx) return 0;
+    const ts = this.ctx.getOutputTimestamp();
+    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
+      return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
+    }
+    return this.ctx.currentTime;
+  }
+
+  /** AudioContext 시각(초) → performance.now 기준 시각. 컨텍스트가 없으면 performance.now() */
+  contextToPerfTime(ctxTime: number): number {
+    if (!this.ctx) return performance.now();
+    const ts = this.ctx.getOutputTimestamp();
+    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
+      return ts.performanceTime + (ctxTime - ts.contextTime) * 1000;
+    }
+    return performance.now();
+  }
+
   /**
    * 패드 소리. whenMs(performance.now 기준)를 주면 그 시각에 맞춰 스케줄, 없으면 즉시.
    * 반환: 실제 스케줄된 performance.now() 기준 시각 (텔레메트리 tAudio).
@@ -169,11 +199,7 @@ export class AudioEngine {
     if (!this.ctx || !this.padBus) return performance.now();
     const ctx = this.ctx;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
-    let at = ctx.currentTime;
-    const ts = ctx.getOutputTimestamp();
-    if (whenMs !== undefined && ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      at = Math.max(ctx.currentTime, ts.contextTime + (whenMs - ts.performanceTime) / 1000);
-    }
+    const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     const sample = this.set?.pads[pad];
     if (sample && this.set) {
       // 타격마다 새 소스·게인 노드. 게인 = 패드 게인 × 키트 트림 × 세기 곡선
@@ -187,21 +213,14 @@ export class AudioEngine {
     } else {
       this.voices[pad](ctx, this.padBus, at, v);
     }
-    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      return ts.performanceTime + (at - ts.contextTime) * 1000;
-    }
-    return performance.now();
+    return this.contextToPerfTime(at);
   }
 
   /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산) */
   click(whenMs: number | undefined, accent: boolean): number {
     if (!this.ctx || !this.master) return performance.now();
     const ctx = this.ctx;
-    let at = ctx.currentTime;
-    const ts = ctx.getOutputTimestamp();
-    if (whenMs !== undefined && ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      at = Math.max(ctx.currentTime, ts.contextTime + (whenMs - ts.performanceTime) / 1000);
-    }
+    const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = 'square';
@@ -211,10 +230,7 @@ export class AudioEngine {
     o.connect(g).connect(this.master);
     o.start(at);
     o.stop(at + 0.05);
-    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      return ts.performanceTime + (at - ts.contextTime) * 1000;
-    }
-    return performance.now();
+    return this.contextToPerfTime(at);
   }
 
   /** 패드 소리 음소거. ensure 전에 불러도 값을 기억했다가 컨텍스트 생성 때 적용한다 */
