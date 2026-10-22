@@ -15,7 +15,7 @@
 | 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 tracking URI만 바꾼다 |
 | 보고서 | pandas, matplotlib | CSV 집계, 마크다운 표, PNG 그래프 |
 | 모델 실행 | PyTorch + ZFTurbo MSST(msst), demucs, openunmix | 선택 extra `models`. 단위 테스트·CI에는 필요 없다 |
-| 채보 모델 실행 | ADTOF-pytorch(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
+| 채보 모델 실행 | ADTOF-pytorch(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart·YourMT3+) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
 
 이 스택은 2026-10-19 기준 잠정 확정이다. 팀 전체 기술 스택이 확정되면 바뀔 수 있다.
 
@@ -46,11 +46,11 @@ AI/
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
-├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py), 별도 환경 채보 스크립트 (transcribers_ext/)
-├─ ext/                  채보 모델 저장소 클론 (ADT_STR, inverse-drum-machine. git 미추적)
+├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py, pack_server_upload.py), 별도 환경 채보 스크립트 (transcribers_ext/)
+├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
-├─ notebooks/            코랩 실행용 노트북 (bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보)
+├─ notebooks/            실행용 노트북 (코랩: bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보 / GPU 서버: transcription_bench_server.ipynb 채보)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
 └─ DESIGN.md             작업 기록·세션 인계 문서 (git 미추적, 개인 문서)
@@ -203,6 +203,7 @@ MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바
 | ADT_STR | `external/adt_str_tau08.yaml` (tau 0.4·0.6 변형도 있음) | external | `.venv-adt-str` + `ext/ADT_STR` | 8 | torch 2.8 고정이라 별도 환경. HF `Pierfrancesco/adt-str`에서 가중치 자동 다운로드. CC BY-SA |
 | Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
 | Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
+| YourMT3+ | `external/yourmt3.yaml` (앱 기본값), `external/yourmt3_ps.yaml` (보조) | external | `.venv-yourmt3` + `ext/YourMT3` | 8 | 피아노·베이스까지 받아 적는 다악기 모델. 그중 드럼 노트만 쓴다. 코드는 GitHub이 아니라 HF Space에만 있어 스크립트의 `download`로 코드와 체크포인트(하나에 약 0.55GB)를 판을 고정해 받는다. 코드·가중치 Apache-2.0 |
 
 **별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다. Windows 경로이지만 그 파일이 없으면 하네스가 `.venv-<env_name>/bin/python`을 대신 찾으므로 Linux·코랩에서도 yaml을 고칠 필요가 없다.
 
@@ -231,9 +232,16 @@ uv pip install --python .venv-omnizart/Scripts/python.exe --no-build-isolation -
 # 의존성을 따로 적는 이유: 그냥 깔면 위의 madmom 시험판(0.17.dev0)을 못 알아보고 PyPI 0.16.1을 다시 받는다. GPU용 TensorFlow는 [and-cuda]
 uv pip install --python .venv-omnizart/Scripts/python.exe "numpy<2" "tensorflow[and-cuda]==2.20.*" "tf-keras==2.20.*" "numba<0.68" click jsonschema "librosa>=0.8" mir_eval pillow pretty_midi pyfluidsynth pyyaml sherpa-onnx soundfile "setuptools<82" urllib3 vamp
 .venv-omnizart/Scripts/omnizart download-checkpoints
+
+# YourMT3+: Python 3.10 + torch 2.8(CUDA 12.8). transformers는 4.46부터 생성 중 오류가 나서 4.45.1로 고정(YourMT3 저장소 이슈 15·16)
+uv venv .venv-yourmt3 --python 3.10
+uv pip install --python .venv-yourmt3/Scripts/python.exe torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python .venv-yourmt3/Scripts/python.exe "numpy==1.26.4" "transformers==4.45.1" "tokenizers==0.20.3" "huggingface-hub<1.0" "pytorch-lightning==2.5.6" "torchmetrics==1.9.0" "einops==0.8.2" "mido==1.3.3" "mir-eval==0.8.2" "scikit-learn==1.7.2" "scipy==1.15.3" "wandb==0.31.0" "soundfile==0.14.0" "deprecated==1.3.1"
+# 코드(HF Space mimbres/YourMT3의 amt/src·model_helper.py)와 체크포인트(HF 모델 저장소)를 ext/YourMT3에 받음. 판 고정, 약 1.1GB
+.venv-yourmt3/Scripts/python.exe -I scripts/transcribers_ext/yourmt3_transcribe.py download --repo-dir ext/YourMT3
 ```
 
-별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
+별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM·YourMT3+), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
 
 ### 채보 벤치마크를 코랩에서 돌리기
 
@@ -252,6 +260,28 @@ uv run python scripts/pack_gmd_subset.py configs/bench/datasets/gmd_test.yaml da
 ```
 
 본측정 runId는 `drums-synth`·`drums-gmd`·`drums-mdb`·`drums-mdbu`(정답 드럼 입력), `mix-*`(원곡 입력), `sep-sw-*`·`sep-musdb-*`(분리 모델이 뽑은 드럼 입력)로 고정돼 있어, 세션이 끊기면 준비 셀(1~6)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 합친 보고서는 드라이브 `results/combined/`에 생긴다.
+
+### 채보 벤치마크를 GPU 서버에서 돌리기
+
+코랩 대신 학교 GPU 서버(JupyterHub)에서 모델을 더 돌릴 때 쓴다. 지금은 YourMT3+ 하나를 돌리고 결과를 코랩 결과와 합친다. 서버에는 드라이브가 없으므로 필요한 것을 zip 5개로 묶어 JupyterHub 홈 폴더에 올리고, `notebooks/transcription_bench_server.ipynb`를 같이 올려 위에서부터 실행한다.
+
+```bash
+# 올릴 zip 5개를 data/upload/server/ 에 만든다. 코랩 분리 드럼 캐시에 빠진 곡이 있으면 목록을 찍고 멈춘다
+uv run python scripts/pack_server_upload.py
+```
+
+| zip | 내용 | 크기 |
+| --- | --- | --- |
+| `S15P31A307_code.zip` | 저장소 코드. git이 추적하는 파일과 아직 커밋하지 않은 새 파일 | 약 2MB |
+| `data_synth_v1.zip`, `data_gmd.zip`, `data_mdb_drums.zip` | 합성곡 5곡, GMD test 연주 45개(`pack_gmd_subset.py`로 뽑은 것), MDB Drums 23곡 | 약 220·550·350MB |
+| `results_separated.zip` | 코랩 `sep-*` run에서 분리 모델이 뽑아 둔 드럼 32곡. 서버에서 `--separated-dir`로 그대로 써서 분리 모델을 설치하지 않는다 | 약 600MB |
+
+서버에서 다른 점
+
+- **지정된 GPU만 쓴다.** 공용 서버라서 노트북 1번 셀의 `GPU_ID`에 지정받은 번호를 넣는다. `CUDA_VISIBLE_DEVICES`로 그 GPU 하나만 보이게 한다.
+- **torch를 CUDA 12.8판으로 바꿔 넣는다.** `uv.lock`의 Linux torch는 CUDA 13판이라 드라이버가 CUDA 12.8인 서버(드라이버 570)에서는 GPU를 못 잡고 경고 한 줄만 찍은 채 CPU로 돈다. 그래서 하네스 환경은 extra 없이 `uv sync`만 하고 CUDA 12.8판 torch를 `uv pip install`로 넣은 뒤, `uv run` 대신 `.venv/bin/ssaplash-bench`로 부른다(`uv run`이 잠금 파일대로 다시 맞추지 않게).
+- **runId는 `ymt3-*`.** 코랩 run 폴더에 이어 붙이지 않고 새 폴더로 돌린다. 한 CSV 안에 GPU가 섞이지 않게 하기 위해서다.
+- **보고서는 로컬에서 만든다.** 서버의 `results_ymt3.zip`(노트북 12번 셀)을 내려받아 `data/results/`에 풀고 코랩 results.csv와 같이 `report-transcription`에 넘긴다. GPU가 다른 행이 섞인 묶음은 비교표에 GPU 열이 붙는다. 점수는 GPU와 상관없어 그대로 비교하고, RTF·GPU 메모리는 GPU가 달라 따로 본다.
 
 ## 지표 정의
 
