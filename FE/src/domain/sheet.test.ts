@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSheet, positionAt } from './sheet';
+import { buildSheet, layoutBar } from './sheet';
 import { BUILTIN_CHARTS, CHART_8_FILL, CHART_BASIC_8, type Chart } from './chart';
 
 function chartOf(notes: Chart['notes'], durationMs: number): Chart {
@@ -69,23 +69,88 @@ describe('buildSheet', () => {
   });
 });
 
-describe('positionAt', () => {
-  const m = buildSheet(chartOf([{ timeMs: 0, pad: 'KICK' }], 8000));
+describe('layoutBar', () => {
+  // 120 BPM 4/4: 마디 2000ms, 칸 125ms
+  const at = (step: number, bar = 0) => (bar * 16 + step) * 125;
 
-  it('마디 경계에서 다음 마디의 처음으로 넘어간다', () => {
-    expect(positionAt(m, 0)).toEqual({ bar: 0, beat: 0, step: 0, fraction: 0 });
-    expect(positionAt(m, 1999)).toMatchObject({ bar: 0, beat: 3, step: 15 });
-    expect(positionAt(m, 2000)).toEqual({ bar: 1, beat: 0, step: 0, fraction: 0 });
+  it('패드를 보표 위치·머리 모양으로 옮긴다 (스트립 문서 3-1 표)', () => {
+    const pads = ['KICK', 'FLOOR_TOM', 'SNARE', 'HI_TOM', 'RIDE', 'HIHAT', 'CRASH'] as const;
+    const l = layoutBar(chartOf(pads.map((pad, i) => ({ timeMs: at(i * 2), pad })), 2000), 0);
+    expect(l.glyphs.map((g) => [g.pad, g.line, g.head])).toEqual([
+      ['KICK', 1, 'normal'],
+      ['FLOOR_TOM', 3, 'normal'],
+      ['SNARE', 5, 'normal'],
+      ['HI_TOM', 7, 'normal'],
+      ['RIDE', 8, 'cross'],
+      ['HIHAT', 9, 'cross'],
+      ['CRASH', 10, 'circle-cross'],
+    ]);
+    expect(l.glyphs.every((g) => g.stem)).toBe(true);
   });
 
-  it('박과 칸, 진행률을 계산한다', () => {
-    const p = positionAt(m, 2000 + 500 + 130);
-    expect(p).toMatchObject({ bar: 1, beat: 1, step: 5 });
-    expect(p.fraction).toBeCloseTo(630 / 2000);
+  it('x 비율은 16분 격자로 양자화한 step/16이고 해당 마디 노트만 담는다', () => {
+    const l = layoutBar(
+      chartOf(
+        [
+          { timeMs: at(0), pad: 'KICK' },
+          { timeMs: at(4) + 40, pad: 'SNARE' }, // 0.32칸 → 4
+          { timeMs: at(8) - 50, pad: 'HIHAT' }, // 0.4칸 전 → 8
+          { timeMs: at(2, 1), pad: 'HIHAT' }, // 다음 마디
+        ],
+        4000,
+      ),
+      0,
+    );
+    expect(l.glyphs.map((g) => [g.noteIndex, g.xRatio])).toEqual([
+      [0, 0],
+      [1, 0.25],
+      [2, 0.5],
+    ]);
+    expect(layoutBar(chartOf([{ timeMs: at(2, 1), pad: 'HIHAT' }], 4000), 1).glyphs[0].xRatio).toBe(2 / 16);
   });
 
-  it('카운트인(음수 시각)은 이전 마디의 끝 박으로 센다', () => {
-    expect(positionAt(m, -1)).toMatchObject({ bar: -1, beat: 3, step: 15 });
-    expect(positionAt(m, -2000)).toMatchObject({ bar: -1, beat: 0, step: 0 });
+  it('한 박 안 16분 4개는 level 2 빔 하나로 묶는다', () => {
+    const l = layoutBar(
+      chartOf([0, 1, 2, 3].map((s) => ({ timeMs: at(s), pad: 'SNARE' as const })), 2000),
+      0,
+    );
+    expect(l.beams).toEqual([{ glyphIndices: [0, 1, 2, 3], level: 2 }]);
+  });
+
+  it('8분 격자(박당 0·2칸)는 level 1, 박이 다르면 빔을 나눈다', () => {
+    const l = layoutBar(
+      chartOf([0, 2, 4, 6].map((s) => ({ timeMs: at(s), pad: 'HIHAT' as const })), 2000),
+      0,
+    );
+    expect(l.beams).toEqual([
+      { glyphIndices: [0, 1], level: 1 },
+      { glyphIndices: [2, 3], level: 1 },
+    ]);
+  });
+
+  it('같은 step의 여러 패드는 x가 같은 코드 음표다', () => {
+    const l = layoutBar(
+      chartOf(
+        [
+          { timeMs: at(0), pad: 'HIHAT' },
+          { timeMs: at(0), pad: 'KICK' },
+        ],
+        2000,
+      ),
+      0,
+    );
+    expect(l.glyphs.map((g) => g.xRatio)).toEqual([0, 0]);
+    expect(l.beams).toEqual([]); // step이 하나뿐이면 빔 없음
+  });
+
+  it('빈 마디는 빈 배열을 돌려준다', () => {
+    const l = layoutBar(chartOf([{ timeMs: at(0), pad: 'KICK' }], 4000), 1);
+    expect(l).toEqual({ bar: 1, glyphs: [], beams: [] });
+  });
+
+  it('stepsPerBar를 바꾸면 3/4 같은 박자도 일반화된다', () => {
+    const c: Chart = { ...chartOf([{ timeMs: 750, pad: 'KICK' }], 1500), beatsPerBar: 3 }; // 마디 1500ms, 칸 125ms
+    expect(layoutBar(c, 0).glyphs[0].xRatio).toBe(6 / 12);
+    expect(layoutBar(c, 0, { stepsPerBar: 6 }).glyphs[0].xRatio).toBe(3 / 6);
   });
 });

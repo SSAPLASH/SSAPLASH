@@ -25,17 +25,6 @@ export interface SheetModel {
   barMs: number;
 }
 
-export interface SheetPosition {
-  /** 0부터. 카운트인(곡 시각 < 0)이면 음수 */
-  bar: number;
-  /** 마디 안 박 0..beatsPerBar-1 */
-  beat: number;
-  /** 마디 안 칸 0..stepsPerBar-1 */
-  step: number;
-  /** 마디 안 진행률 0..1 (칸 사이 위치까지 포함) */
-  fraction: number;
-}
-
 /** durationMs가 마디 길이의 정수배에서 반올림 오차만큼 벗어나도 마디가 하나 늘지 않게 하는 여유(ms) */
 const BAR_COUNT_EPS_MS = 1;
 
@@ -62,11 +51,89 @@ export function buildSheet(chart: Chart, stepsPerBar = 16): SheetModel {
   return { bars, rows, stepsPerBar, beatsPerBar: chart.beatsPerBar, stepMs, beatMs, barMs };
 }
 
-export function positionAt(model: SheetModel, songTimeMs: number): SheetPosition {
-  const bar = Math.floor(songTimeMs / model.barMs);
-  const within = songTimeMs - bar * model.barMs; // 0 <= within < barMs
-  const fraction = Math.min(1, Math.max(0, within / model.barMs));
-  const beat = Math.min(model.beatsPerBar - 1, Math.floor(within / model.beatMs));
-  const step = Math.min(model.stepsPerBar - 1, Math.floor(within / model.stepMs));
-  return { bar, beat, step, fraction };
+/* ---------- 5선 악보 글리프 배치 (MODE-003-sheet-strip 3-1·3-2) ---------- */
+
+/** 스트립 마디 폭(px). 마디당 고정, 곡 BPM과 무관 (설계 U4) */
+export const SHEET_BAR_PX = 320;
+/** 고정 기준선의 x 위치 비율(화면 폭 대비) */
+export const SHEET_BASE_RATIO = 0.35;
+
+export type NoteHead = 'normal' | 'cross' | 'circle-cross';
+
+/**
+ * 패드 → 보표 위치. 반 칸 단위 정수: 선1 = 0, 공간1 = 1, 선2 = 2 … 선5 = 8, 선5 위 공간 = 9, 덧줄 = 10.
+ * (스트립 문서 3-1 표의 pos 값 그대로)
+ */
+const STAFF_POS: Record<PadId, { line: number; head: NoteHead }> = {
+  KICK: { line: 1, head: 'normal' },
+  FLOOR_TOM: { line: 3, head: 'normal' },
+  SNARE: { line: 5, head: 'normal' },
+  HI_TOM: { line: 7, head: 'normal' },
+  RIDE: { line: 8, head: 'cross' },
+  HIHAT: { line: 9, head: 'cross' },
+  CRASH: { line: 10, head: 'circle-cross' },
+};
+
+export function staffPosOf(pad: PadId): { line: number; head: NoteHead } {
+  return STAFF_POS[pad];
+}
+
+export interface NoteGlyph {
+  /** chart.notes 인덱스 (판정 상태 배열과 같은 인덱스) */
+  noteIndex: number;
+  pad: PadId;
+  /** 마디 안 위치 0~1 (시간 선형, 16분 격자 양자화 후) */
+  xRatio: number;
+  /** 보표 위치(반 칸 단위, 위 표 참고) */
+  line: number;
+  head: NoteHead;
+  stem: boolean;
+}
+
+export interface BeamGroup {
+  /** BarLayout.glyphs 인덱스. 같은 박 안 글리프 전부(코드 음표 포함) */
+  glyphIndices: number[];
+  level: 1 | 2;
+}
+
+export interface BarLayout {
+  bar: number;
+  glyphs: NoteGlyph[];
+  beams: BeamGroup[];
+}
+
+export function layoutBar(chart: Chart, barIndex: number, opts: { stepsPerBar?: number } = {}): BarLayout {
+  const stepsPerBar = opts.stepsPerBar ?? chart.beatsPerBar * 4;
+  const stepMs = ((60_000 / chart.bpm) * chart.beatsPerBar) / stepsPerBar;
+  const stepsPerBeat = stepsPerBar / chart.beatsPerBar;
+
+  const glyphs: NoteGlyph[] = [];
+  const steps: number[] = []; // glyphs와 같은 인덱스의 마디 안 step
+  chart.notes.forEach((n, noteIndex) => {
+    const idx = Math.max(0, Math.round(n.timeMs / stepMs));
+    if (Math.floor(idx / stepsPerBar) !== barIndex) return;
+    const step = idx % stepsPerBar;
+    const pos = STAFF_POS[n.pad];
+    glyphs.push({ noteIndex, pad: n.pad, xRatio: step / stepsPerBar, line: pos.line, head: pos.head, stem: true });
+    steps.push(step);
+  });
+
+  // 같은 박 안에서 서로 다른 step이 2개 이상이면 빔으로 묶는다
+  const byBeat = new Map<number, number[]>();
+  steps.forEach((step, gi) => {
+    const beat = Math.floor(step / stepsPerBeat);
+    const list = byBeat.get(beat);
+    if (list) list.push(gi);
+    else byBeat.set(beat, [gi]);
+  });
+  const beams: BeamGroup[] = [];
+  for (const [, indices] of [...byBeat.entries()].sort((a, b) => a[0] - b[0])) {
+    const distinct = new Set(indices.map((gi) => steps[gi]));
+    if (distinct.size < 2) continue;
+    // 박 안 오프셋이 8분 칸(stepsPerBeat/2의 배수)이 아닌 노트가 있으면 16분 → 2줄
+    const half = stepsPerBeat / 2;
+    const has16th = stepsPerBeat >= 4 && indices.some((gi) => (steps[gi] % stepsPerBeat) % half !== 0);
+    beams.push({ glyphIndices: indices, level: has16th ? 2 : 1 });
+  }
+  return { bar: barIndex, glyphs, beams };
 }
