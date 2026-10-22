@@ -139,7 +139,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-ChartSchema.p
 
 테스트 데이터·검증 SQL은 운영 JAR에 포함되지 않는다. 이미 적용한 마이그레이션은 수정·재번호화하지 않는다.
 
-## 잔여 전체 DB 마이그레이션 (97번)
+## 공용 연습 채보 초기 데이터 (99번)
+
+`V10__seed_builtin_practice_charts.sql`은 Flyway가 새 DB와 기존 V9 DB에 자동 적용하는 내부 데모 데이터다. 스토리에서 계획한 자작·퍼블릭 도메인 10곡×3난이도 전체가 아니라, 반주 없이 FE 코드로 만든 연습 패턴 3개만 넣는다. Flyway 이력으로 재기동·재실행 시 중복 적재를 막는다.
+
+| 제목 | 난이도 | BPM | 재생 길이 | 노트 수 |
+| --- | --- | ---: | ---: | ---: |
+| 기본 8비트 | EASY | 90 | 21,333ms | 96 |
+| 8비트 + 필인 | NORMAL | 100 | 19,200ms | 104 |
+| 라이드 16비트 | HARD | 120 | 16,000ms | 128 |
+
+원본은 [FE/src/domain/chart.ts@d4080d10521263e6040f3ef6b2ddfe80cff3d771](https://lab.ssafy.com/s15-final/S15P31A307/-/blob/d4080d10521263e6040f3ef6b2ddfe80cff3d771/FE/src/domain/chart.ts)이며, `Math.round`로 계산된 `timeMs`와 같은 시각의 패드 삽입 순서를 그대로 저장한다. DB identity가 만든 song·chart·chart version ID는 고정하지 않으며 목록 API에서 받은 ID로 상세·최신·고정 버전을 조회한다. 세 버전 모두 반주·악보 이미지가 없고 `notation_status=UNAVAILABLE`이다.
+
+`license`에는 프로젝트 FE 데모 패턴의 출처, 별도 라이선스 표기 없음, 음원 미포함 상태를 기록한다. 이는 저작권 합의를 대신하는 라이선스 선언이 아니다. 패턴을 바꾸거나 새 데이터를 추가할 때는 기존 버전을 수정하지 않고 다음 chart version과 확인된 권리 메타데이터를 새 Flyway 마이그레이션으로 추가한다.
+
+## 잔여 전체 DB 마이그레이션 (97~99번)
 
 V1·V2를 변경하지 않고 다음 순서로 적용한다. 별도 수동 SQL 실행이나 `outOfOrder` 설정은 필요 없다.
 병합 전 다른 작업의 신규 마이그레이션 번호와 충돌 여부를 확인한다.
@@ -152,8 +166,10 @@ V1·V2를 변경하지 않고 다음 순서로 적용한다. 별도 수동 SQL �
 | V6 | `reports`, `recordings` |
 | V7 | `telemetry_events` |
 | V8 | `telemetry_events`를 TimescaleDB hypertable로 전환 (기존 데이터 보존) |
+| V9 | `play_raw_uploads` 접수 기록 |
+| V10 | FE 내부 데모 공용 연습 채보 3개 초기 적재 |
 
-V1·V2를 포함해 도메인 테이블은 총 15개다. 프리셋·로그·AI·리포트 API와 엔티티는
+V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·AI·리포트 API와 엔티티는
 각 소비 기능에서 구현한다. 이번 변경은 테이블·제약·인덱스와 마이그레이션 검증이다.
 
 - 프리셋 이름은 회원별 유일하고 기본 프리셋은 회원당 최대 하나다. 삭제해도 플레이 당시 스냅샷은 남는다.
@@ -211,7 +227,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 `build`는 임베디드 PostgreSQL에서 V8을 뺀 나머지 마이그레이션 전부를 검사한다. V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V11을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
 및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
@@ -362,7 +378,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V8을 뺀 나머지를 목표 버전까지 적용한다(목표 버전은 `EmbeddedPostgresInitializer`). V8과 이후 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V11까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
