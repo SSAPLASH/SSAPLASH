@@ -42,6 +42,7 @@ src/
 │   └─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 ├─ pages/      라우트 단위 화면 — Home · Setup · Calibration · Play · FreePlay · Result
 ├─ components/ 공용 UI — AppShell · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay
+│   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
@@ -165,6 +166,18 @@ Shift를 같이 누르면 악센트. 세팅 화면에서 바꿀 수 있고 local
 - 첫 소리(오디오 언락) 이후에 샘플을 불러온다. 불러오는 동안과 파일 하나가 실패한 패드는 합성음으로 울린다. 한 번 불러온 세트는 다시 고를 때 재다운로드하지 않는다.
 - 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 사용자 볼륨 슬라이더는 마스터 게인에 따로 곱해진다.
 - 세팅 화면에서 패드를 톡 치면(이동 6px 이내) 소리와 타격 이펙트가 나온다. 이 타격(`source: 'preview'`)은 텔레메트리·통계에 남지 않는다.
+
+## 메트로놈·사운드 토글
+
+상단 바에 전역 메트로놈 칩(비트 점 · BPM · 재생/정지)과 "패드 소리" 스위치가 있다. 스케줄러는 `engine/Metronome` 싱글턴이고, 칩(`components/shell/Metronome`)은 `liveStore.metronome`을 읽고 엔진 메서드만 부른다.
+
+- 칩의 ▶/■는 재생·정지, 칩 본체를 누르면 팝오버가 열린다(바깥 클릭·Esc로 닫힘). 팝오버: BPM 슬라이더(40~240)·`-5/+5`·박자(4/4 · 3/4)·탭 템포.
+- 탭 템포는 버튼을 누를 때마다 최근 최대 8번의 평균으로 BPM을 정한다(2번째 탭부터 반영). 2초 이상 쉬면 새로 센다. 첫 박은 악센트(높은 음, 점 색 다름).
+- 재생 중 페이지를 이동해도 유지된다(엔진이 React 밖 싱글턴, 칩은 `AppShell`에 있음). 새로고침 후에는 정지 상태로 시작한다.
+- 리듬 게임·악보 연습에서 세션을 시작하면 메트로놈이 정지한다(끝나도 자동 재개 없음).
+- 사운드 토글은 패드 소리만 음소거한다. 메트로놈 클릭은 계속 난다.
+- 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`soundOn`이 localStorage에 저장된다.
+- 개발 모드에서는 콘솔에서 `window.__metronome.stats`(`scheduled`·`late`·`maxDriftMs`)로 예약 지터를 읽을 수 있다.
 
 ## 키보드 입력(임시)
 
