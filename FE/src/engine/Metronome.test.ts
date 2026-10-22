@@ -237,10 +237,10 @@ describe('Metronome 설정·이벤트', () => {
     await t.m.start();
     t.m.stop();
     expect(seen).toEqual([
-      { playing: false, bpm: 90, beatsPerBar: 4 },
-      { playing: false, bpm: 90, beatsPerBar: 3 },
-      { playing: true, bpm: 90, beatsPerBar: 3 },
-      { playing: false, bpm: 90, beatsPerBar: 3 },
+      { playing: false, bpm: 90, beatsPerBar: 4, locked: false },
+      { playing: false, bpm: 90, beatsPerBar: 3, locked: false },
+      { playing: true, bpm: 90, beatsPerBar: 3, locked: false },
+      { playing: false, bpm: 90, beatsPerBar: 3, locked: false },
     ]);
   });
 
@@ -272,4 +272,54 @@ describe('Metronome 설정·이벤트', () => {
     expect(t.m.tap()).toBe(2);
     expect(t.m.state.bpm).toBe(150);
   });
+});
+
+describe('Metronome 잠금', () => {
+  let t: ReturnType<typeof setup>;
+  beforeEach(() => {
+    t = setup();
+  });
+
+    it('lock은 곡 값을 표시하고 자체 시계를 멈추며 조작을 무시한다', async () => {
+      await t.m.start();
+      t.m.setBpm(100);
+      t.m.lock({ bpm: 120, beatsPerBar: 3 });
+      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, locked: true });
+      t.m.setBpm(200);
+      t.m.setBeatsPerBar(4);
+      t.m.toggle();
+      await t.m.start();
+      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, locked: true });
+      const n = t.clicks.length;
+      t.advance(1000);
+      expect(t.clicks).toHaveLength(n);
+    });
+
+    it('3·4 외 박자는 4로 표시하고 원값을 보존한다', () => {
+      t.m.lock({ bpm: 90, beatsPerBar: 6 });
+      expect(t.m.state.beatsPerBar).toBe(4);
+      expect(t.m.lockedBeatsPerBar).toBe(6);
+    });
+
+    it('unlock은 사용자 값으로 정지 상태 복귀하고 onChange를 낸다', async () => {
+      t.m.setBpm(100);
+      const states: boolean[] = [];
+      t.m.onChange((s) => states.push(s.locked));
+      t.m.lock({ bpm: 120, beatsPerBar: 4 });
+      t.m.unlock();
+      expect(t.m.state).toEqual({ playing: false, bpm: 100, beatsPerBar: 4, locked: false });
+      expect(states).toEqual([true, false]);
+    });
+
+    it('pulse는 잠금 중 onBeat로 누적 index를 전달하고 잠금 아니면 무시한다', () => {
+      const got: { index: number; beatInBar: number; accent: boolean; atMs: number }[] = [];
+      t.m.onBeat((b) => got.push(b));
+      t.m.pulse(0, 5);
+      expect(got).toHaveLength(0);
+      t.m.lock({ bpm: 120, beatsPerBar: 4 });
+      t.m.pulse(0, 5000);
+      t.m.pulse(1);
+      expect(got[0]).toEqual({ index: 0, beatInBar: 0, accent: true, atMs: 5000 });
+      expect(got[1]).toMatchObject({ index: 1, beatInBar: 1, accent: false, atMs: 1000 });
+    });
 });
