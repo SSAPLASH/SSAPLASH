@@ -4,6 +4,8 @@ import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { DebugOverlay } from './DebugOverlay';
+import { Metronome } from './shell/Metronome';
+import { SoundToggle } from './shell/SoundToggle';
 
 export function AppShell() {
   const connected = useLive((s) => s.connected);
@@ -33,7 +35,9 @@ export function AppShell() {
           <NavLink to="/sheet">악보 연습</NavLink>
           <NavLink to="/free">자유 연주</NavLink>
         </nav>
+        <Metronome />
         <div className="topbar-right">
+          <SoundToggle />
           <span className="small dim">
             {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
             {sensorKind !== 'none' && ' + 키보드'}
