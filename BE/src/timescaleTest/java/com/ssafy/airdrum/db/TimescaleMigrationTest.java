@@ -24,14 +24,35 @@ class TimescaleMigrationTest {
 					VALUES ('2026-10-01T12:00:00Z','00000000-0000-0000-0000-000000000001',1,'HIT',12.5,'{"origin":"v7"}'),
 					       ('2026-10-03T12:00:00Z','00000000-0000-0000-0000-000000000001',1,'STATUS',20.25,'{}');
 					""");
+			var throughV9 = flyway("9");
+			assertThat(throughV9.migrate().migrationsExecuted).isEqualTo(2);
+			execute(connection, """
+					INSERT INTO play_raw_uploads(id,original_play_id,object_key,payload_hash,payload_bytes,status,expires_at)
+					VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000011',
+					       'play-raw/legacy.log','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',123,'UPLOADING',now()+interval '1 day')
+					""");
+			String existingSong = scalar(connection, "INSERT INTO songs(title,source,status,bpm,offset_ms,time_signature,duration_ms,license) VALUES ('기본 8비트','BUILTIN','READY',77,11,'3/4',1234,'기존 권리 메타') RETURNING id");
+			String existingChart = scalar(connection, "INSERT INTO charts(song_id,difficulty) VALUES (" + existingSong + ",'EASY') RETURNING id");
+			String existingVersion = scalar(connection, "INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator,generator_version) VALUES (" + existingChart + ",1,'[{\"noteId\":\"legacy-1\",\"timeMs\":77,\"pad\":\"SNARE\",\"velocityHint\":88}]'::jsonb,'{\"bpm\":77,\"offsetMs\":11,\"timeSignature\":\"3/4\"}'::jsonb,'UNAVAILABLE',1,'MANUAL','legacy') RETURNING id");
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(2);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('8','9')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version <> '10'"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
 			assertThat(scalar(connection, "SELECT nickname FROM users")).isEqualTo("전환 전 회원");
+			assertThat(scalar(connection, "SELECT count(*) FROM songs WHERE source='BUILTIN' AND owner_id IS NULL AND status='READY'")).isEqualTo("4");
+			assertThat(scalar(connection, "SELECT count(*) FROM songs WHERE title='기본 8비트'")).isEqualTo("2");
+			assertThat(scalar(connection, "SELECT count(*) FROM charts")).isEqualTo("4");
+			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("4");
+			assertThat(scalar(connection, "SELECT id FROM songs WHERE id=" + existingSong)).isEqualTo(existingSong);
+			assertThat(scalar(connection, "SELECT license FROM songs WHERE id=" + existingSong)).isEqualTo("기존 권리 메타");
+			assertThat(scalar(connection, "SELECT id FROM charts WHERE id=" + existingChart)).isEqualTo(existingChart);
+			assertThat(scalar(connection, "SELECT notes->0->>'noteId' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("legacy-1");
+			assertThat(scalar(connection, "SELECT timing->>'offsetMs' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("11");
+			String seededSongIds = scalar(connection, "SELECT string_agg(id::text,',' ORDER BY id) FROM songs WHERE source='BUILTIN' AND id <> " + existingSong);
+			assertThat(scalar(connection, "SELECT count(*) FROM play_raw_uploads")).isEqualTo("1");
 			verifyHypertable(connection);
 			assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name='telemetry_events'"))
 					.isEqualTo("2");
@@ -51,11 +72,16 @@ class TimescaleMigrationTest {
 			latest.validate();
 			assertThat(latest.migrate().migrationsExecuted).isZero();
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("3");
+			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("4");
+			assertThat(scalar(connection, "SELECT count(*) FROM songs WHERE title='기본 8비트'")).isEqualTo("2");
+			assertThat(scalar(connection, "SELECT string_agg(id::text,',' ORDER BY id) FROM songs WHERE source='BUILTIN' AND id <> " + existingSong)).isEqualTo(seededSongIds);
+			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions WHERE version=1")).isEqualTo("4");
+			assertThat(scalar(connection, "SELECT object_key FROM play_raw_uploads")).isEqualTo("play-raw/legacy.log");
 		}
 	}
 
 	@Test
-	void freshDatabaseAppliesAllNineVersions() throws Exception {
+	void freshDatabaseAppliesAllTenVersionsAndBuiltinSeed() throws Exception {
 		// 별도 DB로 전환 테스트와 확장 카탈로그·이력을 격리한다.
 		try (var connection = connect()) {
 			execute(connection, "CREATE DATABASE timescale_test_fresh");
@@ -66,11 +92,14 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(9);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(10);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
 			verifyHypertable(connection);
+			assertThat(scalar(connection, "SELECT count(*) FROM songs WHERE source='BUILTIN' AND owner_id IS NULL AND status='READY'")).isEqualTo("3");
+			assertThat(scalar(connection, "SELECT count(*) FROM charts")).isEqualTo("3");
+			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("3");
 		}
 	}
 
