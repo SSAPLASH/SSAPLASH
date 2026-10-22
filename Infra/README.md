@@ -45,3 +45,63 @@ CI는 EC2의 GitLab Runner에서 실행한다. 개인 PC에 러너를 두지 않
 3. EC2에서 `sudo gitlab-runner verify --delete`로 서버에 남은 옛 설정을 지운다.
 4. EC2에서 새 토큰으로 `sudo gitlab-runner register`를 실행한다. 토큰은 서버 터미널에만 입력한다.
 5. `sudo systemctl status gitlab-runner`로 동작을 확인하고 GitLab에서 온라인 표시를 확인한다.
+
+## 오브젝트 스토리지 (SeaweedFS)
+
+AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Compose로 띄운다. BE는 S3 호환 클라이언트이며 접속 주소만 이 스토리지로 지정한다. 스토리지 포트는 외부에 공개하지 않고, 브라우저는 Nginx를 거쳐 서명 URL로 접근한다.
+
+### 버킷
+
+| 버킷 | 용도 | 접근 | 만료 |
+| --- | --- | --- | --- |
+| `airdrum-sheets` | 악보 이미지 | 서명 URL | 없음 |
+| `airdrum-accompaniments` | 반주 | 서명 URL | 없음 |
+| `airdrum-play-raw` | 플레이 원본 | 서버 내부만(Nginx로 전달하지 않음) | 없음 |
+| `airdrum-tmp-audio` | 임시 음원(업로드 원본, 드럼 트랙) | 서명 URL | 1일 |
+
+- 버킷은 `seaweedfs-init` 서비스가 만든다. 이미 있으면 건너뛰므로 다시 실행해도 결과가 같다.
+- 임시 음원은 처리 후 즉시 폐기가 원칙이다(기획 확정). 1일 TTL은 지우지 못했을 때를 위한 보험이다.
+- 만료는 S3 수명주기 API가 아니라 SeaweedFS **경로 TTL**을 쓴다. 이 버전에서는 수명주기 API로 규칙을 저장해도 객체에 만료가 붙지 않아 삭제되지 않는다.
+
+### 키
+
+- 읽기용(reader)은 악보·반주 버킷 읽기만 한다(서명 URL 발급용). 쓰기용(writer)은 서버 내부 적재, 플레이 원본, 임시 음원에 쓴다.
+- 읽기용 키로 만든 서명 PUT URL은 거부된다. 업로드 서명이 필요하면 쓰기용 키로 만든다.
+- 키는 서버 `Infra/.env`의 `S3_READ_ACCESS_KEY`, `S3_READ_SECRET_KEY`, `S3_WRITE_ACCESS_KEY`, `S3_WRITE_SECRET_KEY`에만 둔다. 서버에서 무작위로 만들고(접근 키 `openssl rand -hex 10`, 비밀 키 `openssl rand -hex 24`) 채팅, 이슈, 문서에 붙이지 않는다.
+- 키가 비어 있으면 Compose가 실행을 멈춘다.
+
+### 서명 URL과 Nginx
+
+- 공개 주소(`S3_PUBLIC_URL`)는 도메인 루트이며 경로 접두사를 붙이지 않는다. 서명에는 호스트와 경로가 들어 있어 Nginx가 경로를 자르거나 `Host`를 바꾸면 서명이 틀어진다.
+- SeaweedFS에 `-s3.externalUrl`로 같은 주소를 지정해 프록시 뒤에서도 서명을 검증한다. 허용 출처(CORS)도 이 주소로 좁힌다.
+- HTTPS(S15P31A307-39) 적용 후에는 `S3_PUBLIC_URL`을 `https` 주소로 바꾸고 다시 확인한다.
+- Nginx의 업로드 크기 한도는 50MB다. BE·AI와 정한 뒤 조정한다.
+- 앱이 스토리지를 쓰는 스위치(`CHART_ASSET_ENABLED`, `PLAY_RAW_ENABLED`)는 기본 꺼짐이다. 켜는 시점은 BE와 확인한다.
+
+### 운영 메모
+
+- 볼륨 슬롯은 자동(`-volume.max=0`)으로 둔다. 버킷마다 볼륨이 여러 개 잡히고 TTL 경로는 전용 볼륨이 필요해, 고정 값이 작으면 TTL 경로 업로드가 `Not enough data nodes found`로 실패한다.
+- 이 서비스는 `ports:`로 포트를 공개하지 않는다. Docker는 방화벽(`ufw`) 규칙을 건너뛰므로, 어떤 서비스에도 DB·Redis·스토리지 포트를 `ports:`로 추가하지 않는다.
+- 이미지는 `chrislusf/seaweedfs:4.48`로 고정했고 크기는 약 700MB다. 유휴 메모리는 약 80MB다.
+
+### 검증 결과 (2026-10-22)
+
+로컬 Docker와 EC2에서 확인했다.
+
+| 항목 | 결과 |
+| --- | --- |
+| `seaweedfs` 기동, 버킷 4종 생성, 재실행 시 같은 결과 | 통과 |
+| 임시 음원 버킷 객체의 TTL(1일), 다른 버킷은 만료 없음 | 통과 |
+| 서명 PUT·GET으로 외부(PC)에서 업로드·다운로드(Nginx 경유) | 통과 |
+| 읽기 키로 악보·반주 읽기, 쓰기·다른 버킷 접근 거부 | 통과 |
+| 변조된 서명, 만료된 URL, 서명 없는 접근 거부(403) | 통과 |
+| 플레이 원본 버킷이 외부에서 접근되지 않음 | 통과 |
+| 브라우저 사전 요청(CORS) 응답 | 통과(서버 응답 확인) |
+
+- 실제 웹 화면(브라우저)에서의 업로드·다운로드는 FE 연동 이후 확인한다.
+
+### 실패 시 대안
+
+- 서명 URL이 프록시 뒤에서 맞지 않으면 먼저 `S3_PUBLIC_URL`, Nginx의 `Host` 전달, SeaweedFS의 `-s3.externalUrl`을 점검한다.
+- SeaweedFS가 요구에 맞지 않으면 다른 S3 호환 스토리지(예: MinIO)로 바꾼다. BE는 접속 주소와 키만 바뀌므로 코드 변경이 없다.
+- 스토리지 없이 임시로 쓰려면 서버 로컬 볼륨에 저장하는 방식이 있으나, 서명 URL이 없어 BE 변경이 필요하다. 최후의 수단이다.
