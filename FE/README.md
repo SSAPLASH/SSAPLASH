@@ -51,10 +51,10 @@ src/
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   └─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
 ├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas)
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me)
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -68,7 +68,7 @@ src/
 ├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · telemetry
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · judgement · hitStats · auth
+│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth
 └─ styles/     전역 CSS
 ```
 
@@ -154,7 +154,24 @@ src/
 
 ## 준비 조건
 
-연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] || connected[1]`), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈과 자유 연주는 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 설정 완료 시 그 화면으로 돌아온다(곡 선택이 URL에 없어 리듬 게임은 `/play`, 악보 연습은 `/sheet`의 곡 선택으로 돌아온다).
+연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] || connected[1]`), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈과 자유 연주는 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 설정 완료 시 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
+
+## 곡·채보 조회
+
+- **출처:** 기본은 BE(`/api/v1/songs`·`charts`·`chart-versions`). `VITE_SONGS_SOURCE=builtin`으로 빌드하면 BE 없이 내장 3곡(`BUILTIN_CHARTS`)만 쓰고 SongPicker의 "내 곡" 탭은 숨는다. 내장 소스의 곡·채보 id는 둘 다 `-(인덱스+1)`(음수)이고 `chartVersionId`는 null이다.
+- **곡 선택은 URL:** `/play?song=12&chart=34`, `/sheet?song=…&chart=…`. SongPicker에서 난이도 칩을 누르면 `useChartParam.select`가 URL을 바꾸고, 페이지는 쿼리가 있으면 `loading` 단계에서 `loadChart`로 채보를 읽은 뒤 준비 화면으로 간다. 쿼리만으로 준비 화면이 복원되므로 통합 설정에 다녀와도 곡이 유지된다(`ReadinessNotice`의 `returnTo`는 `pathname + search`). 로드 실패는 `ApiError.detail`을 보이고 "곡 선택으로"가 쿼리를 지운다.
+- **변환:** `domain/chartMapping.chartFromDetail`이 BE 채보를 `Chart`로 바꾼다. 알 수 없는 pad는 버리고 경고 1회, `timeMs`에 `offsetMs`를 더하지 않으며, `durationMs`가 null이면 마지막 노트 + 1마디, `tempoMap`·`timeSignatureMap`이 둘 이상이면 `variableTempo`로 표시하고 고정 BPM으로 다룬다.
+- **버전 고정:** 곡 선택 직후 `getChartLatest`는 한 번만 부른다. 이후(재시작·자산 갱신)는 `chart.chartVersionId`로 `getChartVersion`·`getChartAssets`를 부른다. store는 채보를 캐시하지 않는다.
+- **assets:** `loadChart`가 채보와 함께 `getChartAssets`를 부른다. 실패해도 채보는 돌려주고 `assets`가 null이다. `accompanimentUrl`이 있으면 `chart.hasAccompaniment = true`. 서명 URL은 메모리에만 둔다(반주 재생은 아래 "반주 재생" 절).
+- **플레이 로그:** `chartVersionId`·`songNumericId`·`chartId`(다시 하기 URL용)·`presetId`가 같이 저장된다. 내장 곡은 null.
+
+## 반주 재생
+
+- **버퍼 재생:** `audio/Accompaniment`가 서명 URL을 fetch해 `decodeAudioData`로 전부 디코드하고 `AudioBufferSourceNode`로 예약 재생한다. 소스는 전용 `accBus` 게인(`AudioEngine.accompanimentBus`, `master` 직결, 패드 음소거와 무관)에 연결한다. 같은 URL이면 다시 받지 않는다. 일시정지는 소스를 멈추고 위치를 기억하며 재개는 새 소스를 그 위치에서 예약한다(위치 계산은 `domain/accompanimentClock`).
+- **시각 변환:** `AudioEngine.perfToContextTime`·`contextToPerfTime`이 `getOutputTimestamp` 기반으로 performance.now ↔ AudioContext 시각을 바꾼다(`trigger`·`click`도 같은 메서드를 쓴다).
+- **PlayClock:** `engine/sessionClock.PlayClock`이 `RhythmSession`·반주·박 클릭 예약을 묶는다(클릭·반주는 주입). `begin()`은 반주 0초 = `now + lead(300ms) + 카운트인`으로 `RhythmSession.start(at)`과 `accompaniment.start(at, 0)`을 같이 부른다. `start(at)`의 `at`은 곡 0ms가 울리는 performance.now 시각이다. `pause(reason)`·`resume()`·`restart()`·`stop()`·`onFrame(now)`·`songTime(now)`·`state`·`sync`를 제공한다. 재개는 예약 여유 50ms를 두고 세션 시계도 같은 만큼 뒤로 맞춘다.
+- **개발용 반주 주입:** `VITE_ACCOMPANIMENT_OVERRIDE=/dev-accompaniment.wav`(`.env.local`)를 두면 `/play`가 모든 곡에 그 URL을 반주로 쓴다. 로컬 BE에 S3가 없을 때 쓴다. 반주가 없으면 클릭만으로 진행한다.
+- **동기 Δ 디버그:** 연주 중 HUD에 `반주 동기 Δ`(반주 0초 시각 − 세션 0ms 시각)와 마지막 `재개 Δ`가 ms로 보인다. 목표는 둘 다 ±10ms 이내다.
 
 ## 키보드 입력 (개발·시연용, 고정)
 
@@ -176,7 +193,16 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 게임 뷰는 곡 선택 화면에서 고른다(설정에 저장). **노트 하이웨이**는 노트가 레인을 따라 판정선으로 떨어지는 기본 뷰, **킷 위 연주**는 세팅한 킷 배치의 패드 위로 링이 줄어들어 판정 시각에 패드 테두리에 닿는 뷰다. 두 뷰 모두 같은 `RhythmSession`을 읽으므로 판정·점수·결과 저장은 같다.
 
-악보 모드(`/sheet`, 상단 "악보 연습")는 같은 내장 채보를 마디 × 16분음 격자 악보로 보여 주며 친다. 판정은 리듬 게임과 같은 `RhythmSession`을 쓰지만 점수·콤보는 화면에 없고, 노트 칸이 판정 색(PERFECT 흰 테두리 / GOOD 노란 테두리 / MISS 회색+빨간 테두리)으로 바뀌며 채보 밖 타격은 빨간 점으로 남는다. 현재 마디·박·재생 헤드가 곡 시간에 맞춰 움직이고 현재 마디가 두 번째 줄에 오도록 스크롤한다. 곡이 끝나면 결과 화면으로 가지 않고 같은 화면에 규칙 기반 피드백 카드(최대 3개)와 패드별 요약 표가 나오며, 카드를 누르면 해당 마디로 이동한다. 플레이 로그는 `mode: 'SHEET'`로 저장된다. 격자 변환은 `src/domain/sheet.ts`, 피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다(AI 스코어링이 오면 이 생성기를 교체).
+악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 가로로 흐르는 5선 악보를 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
+
+- **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
+- **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 카운트인 뒤 반주 0초 = 세션 0ms. HUD 아래 작은 글씨로 동기 Δ(시작·재개)를 보인다.
+- **스트립:** 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetStrip`에 넘긴다. HUD는 "n / N 노트 · Perfect/Good/Miss · 채보 외"만 보인다.
+- **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`가 둘 다 false로 바뀌고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
+- **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 규칙 기반 피드백 카드(최대 3개)와 패드별 요약을 보여 준다. "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
+
+피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다(AI 스코어링이 오면 이 생성기를 교체). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
+악보 렌더(`components/SheetStrip`)는 클라이언트 Canvas 5선이며 마디당 320px(`SHEET_BAR_PX`) 시간 비례로 가로로 흐르고, 고정 기준선(화면 폭 35%)이 지금 칠 위치다. 글리프 배치(보표 위치·머리·빔)는 `domain/sheet.layoutBar`, 시간 → x와 보이는 마디 범위는 `components/sheetStripMath`의 순수 함수이며 컴포넌트가 자체 rAF로 `getSongTime()`을 읽어 그린다.
 
 포인터 모의 IMU를 켜면 마우스 위치가 스틱 자세가 되고, F(왼손)/J(오른손) 또는 좌/우클릭이 타격이다. 이 두 키는 그동안 고정 키에서 제외된다. 방향키로도 자세를 움직일 수 있다.
 
@@ -239,7 +265,8 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - 칩의 ▶/■는 재생·정지, 칩 본체를 누르면 팝오버가 열린다(바깥 클릭·Esc로 닫힘). 팝오버: BPM 슬라이더(40~240)·`-5/+5`·박자(4/4 · 3/4)·탭 템포.
 - 탭 템포는 버튼을 누를 때마다 최근 최대 8번의 평균으로 BPM을 정한다(2번째 탭부터 반영). 2초 이상 쉬면 새로 센다. 첫 박은 악센트(높은 음, 점 색 다름).
 - 재생 중 페이지를 이동해도 유지된다(엔진이 React 밖 싱글턴, 칩은 `AppShell`에 있음). 새로고침 후에는 정지 상태로 시작한다.
-- 리듬 게임·악보 연습에서 세션을 시작하면 메트로놈이 정지한다(끝나도 자동 재개 없음).
+- 리듬 게임·악보 연습에서 세션을 시작하면 메트로놈이 곡에 잠긴다(`Metronome.lock`): 칩이 곡 BPM·박자와 "곡" 배지를 보이고 슬라이더·박자·탭 템포는 비활성이며, 점은 세션이 `pulse`로 알리는 박에 깜빡이고 ▶/■는 세션 클릭(`settings.metronome`)을 켜고 끈다.
+- 세션이 끝나거나 나가면 `unlock`으로 사용자 BPM·박자(정지 상태)로 돌아온다. 잠금 중 값은 설정에 저장되지 않는다.
 - 사운드 토글은 패드 소리만 음소거한다. 메트로놈 클릭은 계속 난다.
 - 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`soundOn`이 localStorage에 저장된다.
 - 개발 모드에서는 콘솔에서 `window.__metronome.stats`(`scheduled`·`late`·`maxDriftMs`)로 예약 지터를 읽을 수 있다.

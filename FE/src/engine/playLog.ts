@@ -31,6 +31,17 @@ export interface PlayLog {
   durationMs: number;
   timing: TimingWindows;
   calibrationId: string | null;
+  /** BE 채보 버전. 내장 채보는 null (이전 로그에는 필드가 없을 수 있다) */
+  chartVersionId: number | null;
+  /** BE 곡 id(숫자). 내장 채보는 null */
+  songNumericId: number | null;
+  /** BE 채보 id. "다시 하기" URL 복원용 */
+  chartId: number | null;
+  /** 연주 당시 적용 중이던 프리셋 */
+  presetId: string | null;
+  /** 채보 BPM·박자(마디 단위 피드백용). 이전 로그에는 없을 수 있다 */
+  bpm: number;
+  beatsPerBar: number;
   hits: LoggedHit[];
   notes: { index: number; timeMs: number; pad: PadId; judgement: Judgement | null; deltaMs: number | null }[];
   summary: {
@@ -50,10 +61,16 @@ export function buildPlayLog(args: {
   snapshot: SessionSnapshot;
   notes: NoteState[];
   hits: LoggedHit[];
-  chart: { songId: string; title: string; difficulty: string; durationMs: number };
+  chart: { songId: string; title: string; difficulty: string; durationMs: number; bpm: number; beatsPerBar: number };
   inputSource: InputSourceKind;
   timing: TimingWindows;
   startedAt: Date;
+  chartVersionId: number | null;
+  songNumericId: number | null;
+  chartId: number | null;
+  presetId: string | null;
+  /** 기본 'RHYTHM' */
+  mode?: PlayLog['mode'];
 }): PlayLog {
   const { snapshot: s } = args;
   return {
@@ -61,13 +78,19 @@ export function buildPlayLog(args: {
     songId: args.chart.songId,
     title: args.chart.title,
     difficulty: args.chart.difficulty,
-    mode: 'RHYTHM',
+    mode: args.mode ?? 'RHYTHM',
     inputSource: args.inputSource,
     startedAt: args.startedAt.toISOString(),
     durationMs: args.chart.durationMs,
     timing: args.timing,
     // 앵커 캘리브레이션을 없앴다. 프리셋 스냅샷은 ACCT-002에서 넣는다
     calibrationId: null,
+    chartVersionId: args.chartVersionId,
+    songNumericId: args.songNumericId,
+    chartId: args.chartId,
+    presetId: args.presetId,
+    bpm: args.chart.bpm,
+    beatsPerBar: args.chart.beatsPerBar,
     hits: args.hits,
     notes: args.notes.map((n) => ({
       index: n.index,

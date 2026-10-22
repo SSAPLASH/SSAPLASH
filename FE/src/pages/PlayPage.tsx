@@ -3,12 +3,14 @@
 // 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { SongPicker } from '@/components/SongPicker';
+import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { KitPlayView } from '@/components/KitPlayView';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useReadiness } from '@/components/useReadiness';
 import { useHitFx } from '@/components/useHitFx';
-import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/chart';
 import type { PadId } from '@/domain/pads';
 import type { HitFx, InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
@@ -18,13 +20,16 @@ import { pushTelemetry } from '@/engine/telemetry';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
+import { Accompaniment } from '@/audio/Accompaniment';
+import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { useSettings, type GameView } from '@/store/settingsStore';
 
-type Stage = 'select' | 'ready' | 'play';
+// loading: URL의 곡·채보를 불러오는 중(실패하면 같은 단계에서 오류 문구)
+type Stage = 'select' | 'loading' | 'ready' | 'play';
 
-/** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
-const CLICK_LOOKAHEAD_MS = 200;
+/** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
+const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
 
 const GAME_VIEWS: { id: GameView; label: string }[] = [
   { id: 'highway', label: '노트 하이웨이' },
@@ -41,11 +46,18 @@ export function PlayPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
-  const [stage, setStage] = useState<Stage>('select');
+  const param = useChartParam();
+  const [stage, setStage] = useState<Stage>(param.status === 'none' ? 'select' : 'loading');
   const [chart, setChart] = useState<Chart | null>(null);
   const [session, setSession] = useState<RhythmSession | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   const [abortOpen, setAbortOpen] = useState(false);
+  // 반주 디코드 단계 표시·오류, 동기 Δ 디버그 표시
+  const [accStatus, setAccStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [accError, setAccError] = useState<string | null>(null);
+  const [syncInfo, setSyncInfo] = useState<{ begin: number | null; resume: number | null } | null>(null);
+  const [acc] = useState(() => new Accompaniment(audioEngine));
+  const clockRef = useRef<PlayClock | null>(null);
   // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
   const { ready } = useReadiness();
   const readyRef = useRef(ready);
@@ -54,7 +66,7 @@ export function PlayPage() {
   }, [ready]);
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
-  const stageRef = useRef<Stage>('select');
+  const stageRef = useRef<Stage>(stage);
   const sessionRef = useRef<RhythmSession | null>(null);
   useEffect(() => {
     stageRef.current = stage;
@@ -67,10 +79,12 @@ export function PlayPage() {
   // 킷 뷰 타격 이펙트 (useHitFx가 live 스토어 타격을 기록). 하이웨이 뷰에서는 쓰지 않는다
   const hitFx = useRef(new Map<PadId, HitFx>());
   useHitFx(hitFx);
-  const startedAt = useRef(new Date());
-  const nextBeat = useRef(0);
+  const startedAt = useRef<Date | null>(null);
   const lastHud = useRef(0);
   const finishing = useRef(false);
+
+  const returnTo = location.pathname + location.search;
+  const clearParam = param.clear;
 
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
@@ -80,8 +94,11 @@ export function PlayPage() {
     return () => {
       setSoundOnHit(true);
       inputManager.setCandidateProvider(null);
+      clockRef.current?.stop();
+      metronome.unlock();
+      acc.unload();
     };
-  }, []);
+  }, [acc]);
 
   // 타격: 즉시 발음(D6) → 햅틱 → 플래시 → 판정 → 로그·텔레메트리
   useEffect(() => {
@@ -123,7 +140,6 @@ export function PlayPage() {
       hitFx.current.clear();
       popups.current = [];
       hits.current = [];
-      nextBeat.current = 0;
       finishing.current = false;
       setChart(c);
       setSession(ss);
@@ -134,41 +150,93 @@ export function PlayPage() {
     [settings.timing, settings.countInBars, settings.audioOffsetMs],
   );
 
-  // 결과 화면 "다시 하기"로 들어오면 같은 곡 준비 화면
+  // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
+  // 연주 중에는 URL 변화를 따라가지 않는다
+  const chooseRef = useRef(choose);
   useEffect(() => {
-    const songId = (location.state as { songId?: string } | null)?.songId;
-    const c = songId ? BUILTIN_CHARTS.find((x) => x.songId === songId) : undefined;
-    if (c) choose(c);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    chooseRef.current = choose;
+  }, [choose]);
+  const { status: paramStatus, loaded: paramLoaded } = param;
+  useEffect(() => {
+    if (stageRef.current === 'play') return;
+    if (paramStatus === 'loading') {
+      setStage('loading');
+    } else if (paramStatus === 'ready' && paramLoaded) {
+      const url = ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null;
+      if (!url) {
+        acc.unload();
+        chooseRef.current(paramLoaded.chart);
+        return;
+      }
+      // 반주는 준비 화면 전에 디코드해 둔다
+      const ctrl = new AbortController();
+      setAccStatus('loading');
+      setAccError(null);
+      setStage('loading');
+      acc.load(url, ctrl.signal).then(
+        () => {
+          if (ctrl.signal.aborted) return;
+          setAccStatus('idle');
+          chooseRef.current(paramLoaded.chart);
+        },
+        (e: unknown) => {
+          if (ctrl.signal.aborted) return;
+          setAccStatus('error');
+          setAccError(e instanceof Error ? e.message : '반주를 불러오지 못했습니다.');
+        },
+      );
+      return () => ctrl.abort();
+    } else if (paramStatus === 'none') {
+      inputManager.setCandidateProvider(null);
+      setAbortOpen(false);
+      setSession(null);
+      setChart(null);
+      setHud(null);
+      setStage('select');
+    }
+  }, [paramStatus, paramLoaded, acc]);
 
   const begin = useCallback(async () => {
     const ss = sessionRef.current;
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
-    metronome.stop();
-    ss.start();
+    metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
+    clockRef.current?.stop();
+    const clock = new PlayClock(ss, {
+      click: (at, accent) => audioEngine.click(at, accent),
+      accompaniment: acc.state === 'ready' ? acc : undefined,
+      clickOn: () => useSettings.getState().metronome,
+      onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
+    });
+    clockRef.current = clock;
+    clock.begin();
+    setSyncInfo({ ...clock.sync });
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     setStage('play');
-  }, []);
+  }, [acc]);
 
   const toSelect = useCallback(() => {
+    clockRef.current?.stop();
+    metronome.unlock();
     inputManager.setCandidateProvider(null);
     setAbortOpen(false);
     setSession(null);
     setChart(null);
     setHud(null);
     setStage('select');
-  }, []);
+    clearParam();
+  }, [clearParam]);
 
   const openAbort = useCallback(() => {
-    sessionRef.current?.pause();
+    clockRef.current?.pause('user');
     setAbortOpen(true);
   }, []);
 
   const continueGame = useCallback(() => {
-    sessionRef.current?.resume();
+    const clock = clockRef.current;
+    clock?.resume();
+    if (clock) setSyncInfo({ ...clock.sync });
     setAbortOpen(false);
   }, []);
 
@@ -176,6 +244,8 @@ export function PlayPage() {
     (ss: RhythmSession) => {
       if (finishing.current) return;
       finishing.current = true;
+      clockRef.current?.stop();
+      metronome.unlock();
       inputManager.setCandidateProvider(null);
       const log = buildPlayLog({
         snapshot: ss.snapshot(),
@@ -184,7 +254,11 @@ export function PlayPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        startedAt: startedAt.current,
+        startedAt: startedAt.current ?? new Date(),
+        chartVersionId: ss.chart.chartVersionId ?? null,
+        songNumericId: ss.chart.songNumericId ?? null,
+        chartId: ss.chart.chartId ?? null,
+        presetId: useSettings.getState().activePresetId,
       });
       savePlayLog(log);
       navigate(`/result/${log.playId}`);
@@ -192,37 +266,24 @@ export function PlayPage() {
     [navigate, inputSource, settings.timing],
   );
 
-  // 매 프레임: Miss 처리·종료 감지·박 클릭 예약·HUD 4Hz 갱신
+  // 매 프레임: 세션 시계(Miss 처리·종료 감지·박 클릭 예약)는 PlayClock, 여기서는 HUD 4Hz 갱신
   const onFrame = useCallback(
     (now: number) => {
       const ss = sessionRef.current;
       if (!ss || stageRef.current !== 'play') return;
-      ss.tick(now);
-      const st = ss.currentStatus;
-      if (st === 'finished') {
+      const clock = clockRef.current;
+      if (!clock) return;
+      clock.onFrame(now);
+      if (clock.state.phase === 'finished') {
         finish(ss);
         return;
-      }
-      if (st !== 'paused') {
-        const t = ss.songTime(now);
-        const beatMs = ss.beatMs;
-        const beatsPerBar = ss.chart.beatsPerBar;
-        // 박 i의 곡 시각 = −카운트인 + i×박. 카운트인 클릭은 항상, 플레이 중 클릭은 메트로놈 설정
-        for (;;) {
-          const bt = -ss.countInMs + nextBeat.current * beatMs;
-          if (bt > t + CLICK_LOOKAHEAD_MS || bt > ss.chart.durationMs) break;
-          if (bt >= t - 50 && (bt < 0 || settings.metronome)) {
-            audioEngine.click(now + (bt - t), nextBeat.current % beatsPerBar === 0);
-          }
-          nextBeat.current += 1;
-        }
       }
       if (now - lastHud.current > 250) {
         lastHud.current = now;
         setHud(ss.snapshot(now));
       }
     },
-    [finish, settings.metronome],
+    [finish],
   );
 
   // Enter / Esc
@@ -243,6 +304,53 @@ export function PlayPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [abortOpen, begin, toSelect, openAbort, continueGame]);
+
+  if (stage === 'loading' && !chart) {
+    return (
+      <main className="main">
+        <div className="card col" style={{ maxWidth: 480 }}>
+          {accStatus === 'error' ? (
+            <>
+              <div className="notice error" role="alert">
+                {accError ?? '반주를 불러오지 못했습니다.'}
+              </div>
+              <div className="row">
+                {param.loaded && (
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      acc.unload();
+                      setAccStatus('idle');
+                      if (param.loaded) choose(param.loaded.chart);
+                    }}
+                  >
+                    반주 없이 계속
+                  </button>
+                )}
+                <button className="btn-ghost" onClick={toSelect}>
+                  곡 선택으로
+                </button>
+              </div>
+            </>
+          ) : param.status === 'error' ? (
+            <>
+              <div className="notice error" role="alert">
+                {param.error ?? '채보를 불러오지 못했습니다.'}
+              </div>
+              <button className="btn-ghost" onClick={toSelect}>
+                곡 선택으로
+              </button>
+            </>
+          ) : (
+            <div className="row">
+              <span className="spinner" aria-label="불러오는 중" />
+              <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   if (stage === 'select' || !chart || !session) {
     return (
@@ -274,19 +382,7 @@ export function PlayPage() {
         <div className="grid-2">
           <div className="card col">
             <h3>곡 선택</h3>
-            <div className="chart-list" style={{ maxWidth: 'none' }}>
-              {BUILTIN_CHARTS.map((c) => (
-                <button key={c.songId} className="card chart-item" onClick={() => choose(c)}>
-                  <span className="col" style={{ gap: 2 }}>
-                    <strong>{c.title}</strong>
-                    <span className="small dim">
-                      {c.bpm} BPM · {barsOf(c)}마디 · 노트 {c.notes.length}개
-                    </span>
-                  </span>
-                  <span className="diff">{DIFF_LABEL[c.difficulty]}</span>
-                </button>
-              ))}
-            </div>
+            <SongPicker mode="play" onSelect={param.select} />
           </div>
           <div className="card col">
             <h3>현재 설정</h3>
@@ -362,7 +458,7 @@ export function PlayPage() {
               <p className="dim">
                 {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
               </p>
-              <ReadinessNotice returnTo="/play" compact />
+              <ReadinessNotice returnTo={returnTo} compact />
               <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
                 시작 (Enter)
               </button>
@@ -418,6 +514,12 @@ export function PlayPage() {
           <div className="small dim">
             {snap.judgedCount} / {session.notes.length} 노트
           </div>
+          {stage === 'play' && syncInfo?.begin != null && (
+            <div className="small faint">
+              반주 동기 Δ {syncInfo.begin.toFixed(1)}ms
+              {syncInfo.resume != null && <> · 재개 Δ {syncInfo.resume.toFixed(1)}ms</>}
+            </div>
+          )}
           {stage === 'play' && !abortOpen && (
             <button className="btn-ghost small" onClick={openAbort}>
               중단 (Esc)

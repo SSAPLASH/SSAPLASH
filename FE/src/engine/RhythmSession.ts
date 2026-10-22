@@ -82,9 +82,30 @@ export class RhythmSession {
     return () => this.judgementListeners.delete(l);
   }
 
-  start(now: number = performance.now()): void {
-    this.startTime = now + this.countInMs;
+  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at − countInMs부터 시작한다 */
+  start(at: number): void {
+    this.startTime = at;
     this.status = this.opts.countInBars > 0 ? 'countin' : 'playing';
+  }
+
+  /** 처음 상태로 되돌린다(재시작용). 판정·점수·시계를 비우고 idle로 */
+  reset(): void {
+    this.status = 'idle';
+    this.startTime = 0;
+    this.pausedAt = 0;
+    this.score = 0;
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.counts = { PERFECT: 0, GOOD: 0, MISS: 0 };
+    this.strayHits = 0;
+    this.last = null;
+    this.judgedCount = 0;
+    this.cursor = 0;
+    for (const n of this.notes) {
+      n.judgement = null;
+      n.deltaMs = null;
+      n.hitId = null;
+    }
   }
 
   /** 카운트인 클릭 스케줄용: 각 박의 performance.now() 시각 */

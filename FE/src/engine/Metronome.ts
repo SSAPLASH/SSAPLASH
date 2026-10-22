@@ -25,6 +25,8 @@ export interface MetronomeState {
   playing: boolean;
   bpm: number;
   beatsPerBar: BeatsPerBar;
+  /** 곡 연주 중 잠금. 잠기면 bpm·beatsPerBar는 곡 값이고 자체 시계는 돌지 않는다 */
+  locked: boolean;
 }
 
 export interface MetronomeStats {
@@ -72,6 +74,11 @@ export class Metronome {
   private beatListeners = new Set<(info: BeatInfo) => void>();
   private changeListeners = new Set<(s: MetronomeState) => void>();
   private resyncListeners = new Set<(beatInBar: number) => void>();
+  private locked = false;
+  private lockedBpm = BPM_DEFAULT;
+  /** 곡의 박자 원값(3·4 외 값도 보존) */
+  private lockedBeatsPerBarRaw = 4;
+  private pulseIndex = 0;
 
   bind(deps: MetronomeDeps): void {
     this.deps = {
@@ -93,7 +100,16 @@ export class Metronome {
   }
 
   get state(): MetronomeState {
-    return { playing: this.status === 'playing', bpm: this.bpm, beatsPerBar: this.beatsPerBar };
+    if (this.locked) {
+      const bpb: BeatsPerBar = this.lockedBeatsPerBarRaw === 3 ? 3 : 4;
+      return { playing: false, bpm: this.lockedBpm, beatsPerBar: bpb, locked: true };
+    }
+    return { playing: this.status === 'playing', bpm: this.bpm, beatsPerBar: this.beatsPerBar, locked: false };
+  }
+
+  /** 잠금 중 곡의 박자 원값. 3·4 외 값도 그대로 돌려준다(표시는 state.beatsPerBar가 4로 접는다) */
+  get lockedBeatsPerBar(): number {
+    return this.lockedBeatsPerBarRaw;
   }
 
   get stats(): MetronomeStats {
@@ -102,7 +118,7 @@ export class Metronome {
 
   async start(): Promise<void> {
     const d = this.deps;
-    if (!d) return;
+    if (!d || this.locked) return;
     if (this.status === 'starting') {
       this.stopRequested = false;
       return;
@@ -145,11 +161,13 @@ export class Metronome {
   }
 
   toggle(): void {
+    if (this.locked) return;
     if (this.status === 'idle') void this.start();
     else this.stop();
   }
 
   setBpm(bpm: number): void {
+    if (this.locked) return;
     const c = clampBpm(bpm);
     if (c === this.bpm) return;
     if (this.status === 'playing' && this.deps) {
@@ -160,6 +178,7 @@ export class Metronome {
   }
 
   setBeatsPerBar(n: number): void {
+    if (this.locked) return;
     if (n !== 3 && n !== 4) return;
     if (n === this.beatsPerBar) return;
     if (this.status === 'playing' && this.deps) {
@@ -171,11 +190,49 @@ export class Metronome {
 
   /** 탭 템포. 반환: 현재 탭 수 */
   tap(): number {
+    if (this.locked) return this.tapState.taps.length;
     const now = this.deps ? this.deps.now() : performance.now();
     this.tapState = pushTap(this.tapState, now);
     const bpm = tapBpm(this.tapState);
     if (bpm !== null) this.setBpm(bpm);
     return this.tapState.taps.length;
+  }
+
+  /** 곡 연주 시작: 자체 시계를 멈추고 곡의 BPM·박자를 표시 값으로 잠근다. 박은 세션이 pulse로 알린다 */
+  lock(info: { bpm: number; beatsPerBar: number }): void {
+    const d = this.deps;
+    if (d) {
+      if (this.status === 'starting') this.stopRequested = true;
+      else if (this.status === 'playing') {
+        d.clearInterval(this.timer);
+        this.timer = null;
+        this.status = 'idle';
+      }
+    }
+    this.locked = true;
+    this.lockedBpm = info.bpm;
+    this.lockedBeatsPerBarRaw = info.beatsPerBar;
+    this.pulseIndex = 0;
+    this.emitChange();
+  }
+
+  /** 곡 연주 끝·이탈: 사용자 BPM·박자로 돌아가고 정지 상태가 된다 */
+  unlock(): void {
+    if (!this.locked) return;
+    this.locked = false;
+    this.emitChange();
+  }
+
+  /** 잠금 중 세션이 박을 알린다. onBeat 리스너(표시용)에게 그대로 전달한다 */
+  pulse(beatInBar: number, atMs?: number): void {
+    if (!this.locked) return;
+    const info: BeatInfo = {
+      index: this.pulseIndex++,
+      beatInBar,
+      accent: beatInBar === 0,
+      atMs: atMs ?? (this.deps ? this.deps.now() : performance.now()),
+    };
+    for (const l of this.beatListeners) l(info);
   }
 
   /** 박이 예약되는 순간(실제 시각보다 최대 창만큼 앞) 호출 */

@@ -105,7 +105,7 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
   });
 }
 
-export function buildFeedback(log: PlayLog, chart?: Chart): FeedbackItem[] {
+export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPerBar'>): FeedbackItem[] {
   const notes = log.notes;
   const barMs = chart ? (60_000 / chart.bpm) * chart.beatsPerBar : 0;
   const barOf = (n: LogNote) => (barMs ? Math.max(0, Math.floor((n.timeMs + 1) / barMs)) : -1);

@@ -179,6 +179,8 @@ export function bootstrapMetronome(): void {
     } else {
       setLive(st);
     }
+    // 잠금 중 값은 곡 값이므로 사용자 설정에 저장하지 않는다
+    if (st.locked) return;
     const cur = useSettings.getState();
     if (cur.metronomeBpm !== st.bpm) cur.setMetronomeBpm(st.bpm);
     if (cur.metronomeBeatsPerBar !== st.beatsPerBar) cur.setMetronomeBeatsPerBar(st.beatsPerBar);

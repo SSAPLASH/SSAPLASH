@@ -14,6 +14,8 @@ export interface MetronomeLive {
   beat: number;
   /** 박마다 1씩 증가. 같은 beat 값이 이어져도 깜빡임을 다시 트리거하려는 용도 */
   beatSeq: number;
+  /** 곡 연주 중 잠금 — bpm·beatsPerBar는 곡 값이고 칩 조작이 비활성이다 */
+  locked: boolean;
 }
 
 interface LiveState {
@@ -36,6 +38,8 @@ interface LiveState {
   referenceSetAt: number | null;
   /** 보정 뒤 센서 연결이 끊겼다 — 재연결 후 다시 맞추라는 안내용 */
   referenceStale: boolean;
+  /** 일시정지 요청. E0 사이드바가 'menu'로 올리면 곡 연주 페이지가 일시정지하고 null로 되돌린다 */
+  pauseRequested: 'menu' | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -52,7 +56,8 @@ export const useLive = create<LiveState>(() => ({
   hitSeq: 0,
   soundSetState: 'idle',
   soundSetMissing: [],
-  metronome: { playing: false, bpm: BPM_DEFAULT, beatsPerBar: 4, beat: -1, beatSeq: 0 },
+  metronome: { playing: false, bpm: BPM_DEFAULT, beatsPerBar: 4, beat: -1, beatSeq: 0, locked: false },
   referenceSetAt: null,
   referenceStale: false,
+  pauseRequested: null,
 }));

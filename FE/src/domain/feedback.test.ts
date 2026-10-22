@@ -35,6 +35,12 @@ function logOf(ns: N[], stray = 0): PlayLog {
     durationMs: 16_000,
     timing: { perfectMs: 25, goodMs: 60 },
     calibrationId: null,
+    chartVersionId: null,
+    songNumericId: null,
+    chartId: null,
+    presetId: null,
+    bpm: 120,
+    beatsPerBar: 4,
     hits: [],
     notes: ns.map((n, index) => ({
       index,
@@ -88,6 +94,13 @@ describe('buildFeedback', () => {
     const f = buildFeedback(logOf(ns), chart);
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ id: 'segment', title: '5~8마디에서 흔들려요', bars: [4, 7] });
+  });
+
+  it('규칙 3: SHEET 로그의 bpm·beatsPerBar로 마디 규칙이 돈다(ResultPage 경로)', () => {
+    const ns = [...many(16, (i) => perfect(Math.floor(i / 4))), ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0))];
+    const log = logOf(ns);
+    const f = buildFeedback(log, { bpm: log.bpm, beatsPerBar: log.beatsPerBar });
+    expect(f[0]).toMatchObject({ id: 'segment', bars: [4, 7] });
   });
 
   it('규칙 3: 마디 정보가 없으면(chart 없음) 건너뛴다', () => {

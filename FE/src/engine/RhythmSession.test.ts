@@ -46,11 +46,11 @@ function hit(pad: PadId | null, tHit: number): ResolvedHit {
   };
 }
 
-/** start(10000) → 카운트인 2000ms → 곡 0ms = 12000. 곡 시각 t ↔ now = 12000 + t */
+/** start(12000): 곡 0ms = 12000, 카운트인은 10000부터. 곡 시각 t ↔ now = 12000 + t */
 const T0 = 12000;
 function playing(notes = NOTES, opts = OPTS): RhythmSession {
   const s = new RhythmSession(chart(notes), opts);
-  s.start(10000);
+  s.start(12000);
   s.tick(T0);
   return s;
 }
@@ -65,7 +65,7 @@ describe('시작·카운트인', () => {
 
   it('start 후 카운트인, 곡 0ms부터 playing', () => {
     const s = new RhythmSession(chart(NOTES), OPTS);
-    s.start(10000);
+    s.start(12000);
     expect(s.currentStatus).toBe('countin');
     s.tick(11999);
     expect(s.currentStatus).toBe('countin');
@@ -76,7 +76,7 @@ describe('시작·카운트인', () => {
 
   it('카운트인 박 시각은 start 시각부터 박 간격으로 4개, 첫 박 악센트', () => {
     const s = new RhythmSession(chart(NOTES), OPTS);
-    s.start(10000);
+    s.start(12000);
     const beats = s.countInBeats();
     expect(beats.map((b) => b.at)).toEqual([10000, 10500, 11000, 11500]);
     expect(beats.map((b) => b.accent)).toEqual([true, false, false, false]);
@@ -84,7 +84,7 @@ describe('시작·카운트인', () => {
 
   it('카운트인 중에도 창 안의 노트는 판정된다', () => {
     const s = new RhythmSession(chart([{ timeMs: 30, pad: 'RIDE' }]), OPTS);
-    s.start(10000);
+    s.start(12000);
     const ev = s.handleHit(hit('RIDE', T0 - 10));
     expect(ev?.judgement).toBe('GOOD');
     expect(ev?.deltaMs).toBe(-40);
@@ -242,7 +242,7 @@ describe('일시정지 (중단 확인 팝업)', () => {
 
   it('카운트인 중 멈추면 재개 후 카운트인으로 돌아간다', () => {
     const s = new RhythmSession(chart(NOTES), OPTS);
-    s.start(10000);
+    s.start(12000);
     s.pause(11000);
     s.resume(12000);
     expect(s.currentStatus).toBe('countin');
@@ -256,5 +256,19 @@ describe('일시정지 (중단 확인 팝업)', () => {
     const p = playing();
     p.resume(T0 + 100);
     expect(p.songTime(T0 + 100)).toBe(100);
+  });
+});
+
+describe('reset', () => {
+  it('판정·점수·시계를 비우고 idle로 돌아간다', () => {
+    const s = playing();
+    s.handleHit(hit('SNARE', T0 + 1000));
+    expect(s.snapshot(T0 + 1000).judgedCount).toBe(1);
+    s.reset();
+    expect(s.currentStatus).toBe('idle');
+    expect(s.snapshot().judgedCount).toBe(0);
+    expect(s.notes.every((n) => n.judgement === null)).toBe(true);
+    s.start(20000);
+    expect(s.songTime(20000)).toBe(0);
   });
 });

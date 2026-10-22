@@ -1,0 +1,116 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chartFromDetail, type ChartDetailDto } from './chartMapping';
+
+function dto(over: Partial<ChartDetailDto> = {}): ChartDetailDto {
+  return {
+    id: 34,
+    songId: 12,
+    title: '연습곡',
+    source: 'BUILTIN',
+    difficulty: 'EASY',
+    chartVersionId: 77,
+    version: 1,
+    schemaVersion: 1,
+    bpm: 120,
+    offsetMs: 250,
+    timeSignature: '4/4',
+    beatsPerBar: 4,
+    durationMs: 8000,
+    timing: { bpm: 120, offsetMs: 250, timeSignature: '4/4', tempoMap: [{ tick: 0, bpm: 120 }], timeSignatureMap: [] },
+    noteCount: 2,
+    notes: [
+      { noteId: 'n1', timeMs: 500, pad: 'KICK', velocityHint: 100 },
+      { noteId: 'n2', timeMs: 1000, pad: 'SNARE', velocityHint: null },
+    ],
+    notationStatus: 'READY',
+    hasSheetImages: false,
+    ...over,
+  };
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('chartFromDetail', () => {
+  it('id를 number로 옮기고 songId는 문자열 필드에도 채운다', () => {
+    const c = chartFromDetail(dto(), true);
+    expect(c.chartVersionId).toBe(77);
+    expect(c.songNumericId).toBe(12);
+    expect(c.chartId).toBe(34);
+    expect(c.songId).toBe('12');
+    expect(c.hasAccompaniment).toBe(true);
+  });
+
+  it('안전한 정수가 아닌 id는 거부한다', () => {
+    expect(() => chartFromDetail(dto({ chartVersionId: 2 ** 60 }), false)).toThrow();
+    expect(() => chartFromDetail(dto({ songId: 1.5 }), false)).toThrow();
+  });
+
+  it('알 수 없는 pad 노트는 버리고 경고는 한 번만 낸다', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const c = chartFromDetail(
+      dto({
+        notes: [
+          { noteId: 'a', timeMs: 0, pad: 'COWBELL' },
+          { noteId: 'b', timeMs: 100, pad: 'COWBELL' },
+          { noteId: 'c', timeMs: 200, pad: 'HIHAT' },
+        ],
+      }),
+      false,
+    );
+    expect(c.notes).toEqual([{ timeMs: 200, pad: 'HIHAT' }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('timeMs에 offsetMs를 더하지 않고 순서를 유지하며 velocityHint null은 생략한다', () => {
+    const c = chartFromDetail(dto(), false);
+    expect(c.notes).toEqual([
+      { timeMs: 500, pad: 'KICK', velocityHint: 100 },
+      { timeMs: 1000, pad: 'SNARE' },
+    ]);
+    expect(c.offsetMs).toBe(250);
+  });
+
+  it('durationMs가 null이면 마지막 노트 + 1마디', () => {
+    // 120bpm 4/4 → 1마디 2000ms
+    const c = chartFromDetail(dto({ durationMs: null }), false);
+    expect(c.durationMs).toBe(3000);
+  });
+
+  it('durationMs가 null이고 노트가 없으면 1마디', () => {
+    const c = chartFromDetail(dto({ durationMs: null, notes: [] }), false);
+    expect(c.durationMs).toBe(2000);
+  });
+
+  it('durationMs가 있으면 그대로 쓴다', () => {
+    expect(chartFromDetail(dto({ durationMs: 9999 }), false).durationMs).toBe(9999);
+  });
+
+  it('tempoMap 또는 timeSignatureMap 길이가 1 초과면 variableTempo', () => {
+    expect(chartFromDetail(dto(), false).variableTempo).toBeUndefined();
+    const t = dto().timing!;
+    const tempo = chartFromDetail(
+      dto({ timing: { ...t, tempoMap: [{ tick: 0, bpm: 120 }, { tick: 960, bpm: 90 }] } }),
+      false,
+    );
+    expect(tempo.variableTempo).toBe(true);
+    const sig = chartFromDetail(
+      dto({
+        timing: {
+          ...t,
+          timeSignatureMap: [
+            { tick: 0, numerator: 4, denominator: 4 },
+            { tick: 1920, numerator: 3, denominator: 4 },
+          ],
+        },
+      }),
+      false,
+    );
+    expect(sig.variableTempo).toBe(true);
+  });
+
+  it('timing이 없어도 변환된다', () => {
+    const c = chartFromDetail(dto({ timing: null }), false);
+    expect(c.variableTempo).toBeUndefined();
+    expect(c.bpm).toBe(120);
+  });
+});
