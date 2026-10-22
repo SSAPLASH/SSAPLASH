@@ -21,6 +21,10 @@ function noiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** 패드 소리 전용 버스. 음소거는 여기 게인만 0으로 해 메트로놈 클릭(master 직결)은 남긴다 */
+  private padBus: GainNode | null = null;
+  private padMuted = false;
+  private stateListeners = new Set<(state: string) => void>();
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
   private set: SoundSet | null = null;
@@ -118,6 +122,12 @@ export class AudioEngine {
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.8;
       this.master.connect(this.ctx.destination);
+      this.padBus = this.ctx.createGain();
+      this.padBus.gain.value = this.padMuted ? 0 : 1;
+      this.padBus.connect(this.master);
+      this.ctx.addEventListener('statechange', () => {
+        for (const l of this.stateListeners) l(this.ctx!.state);
+      });
       this.noise = noiseBuffer(this.ctx);
     }
     if (this.ctx.state !== 'running') await this.ctx.resume();
@@ -156,7 +166,7 @@ export class AudioEngine {
    * 반환: 실제 스케줄된 performance.now() 기준 시각 (텔레메트리 tAudio).
    */
   trigger(pad: PadId, velocity: number, whenMs?: number): number {
-    if (!this.ctx || !this.master) return performance.now();
+    if (!this.ctx || !this.padBus) return performance.now();
     const ctx = this.ctx;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     let at = ctx.currentTime;
@@ -172,10 +182,10 @@ export class AudioEngine {
       src.playbackRate.value = sample.playbackRate;
       const g = ctx.createGain();
       g.gain.value = sample.gain * this.set.masterTrim * v;
-      src.connect(g).connect(this.master);
+      src.connect(g).connect(this.padBus);
       src.start(at);
     } else {
-      this.voices[pad](ctx, this.master, at, v);
+      this.voices[pad](ctx, this.padBus, at, v);
     }
     if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
       return ts.performanceTime + (at - ts.contextTime) * 1000;
@@ -183,9 +193,9 @@ export class AudioEngine {
     return performance.now();
   }
 
-  /** 메트로놈 클릭 */
-  click(whenMs: number | undefined, accent: boolean): void {
-    if (!this.ctx || !this.master) return;
+  /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산) */
+  click(whenMs: number | undefined, accent: boolean): number {
+    if (!this.ctx || !this.master) return performance.now();
     const ctx = this.ctx;
     let at = ctx.currentTime;
     const ts = ctx.getOutputTimestamp();
@@ -201,6 +211,22 @@ export class AudioEngine {
     o.connect(g).connect(this.master);
     o.start(at);
     o.stop(at + 0.05);
+    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
+      return ts.performanceTime + (at - ts.contextTime) * 1000;
+    }
+    return performance.now();
+  }
+
+  /** 패드 소리 음소거. ensure 전에 불러도 값을 기억했다가 컨텍스트 생성 때 적용한다 */
+  setPadMuted(muted: boolean): void {
+    this.padMuted = muted;
+    if (this.padBus) this.padBus.gain.value = muted ? 0 : 1;
+  }
+
+  /** AudioContext 상태(running·suspended·interrupted 등) 변경 구독. 해제 함수를 돌려준다 */
+  onStateChange(listener: (state: string) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
   }
 
   setVolume(v: number): void {
