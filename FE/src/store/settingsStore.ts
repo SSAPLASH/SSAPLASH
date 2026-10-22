@@ -5,7 +5,7 @@ import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, type KitLayout, type KitLayoutP
 import type { PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { CalibrationProfile, CaptureMode } from '@/domain/calibration';
-import { DEFAULT_KEY_MAP, type KeyMap } from '@/domain/keyMap';
+import { KEY_MAP, type KeyMap } from '@/domain/keyMap';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
@@ -143,7 +143,7 @@ export const useSettings = create<SettingsState>()(
     (set, get) => ({
       sensorKind: 'none',
       sensorOptions: {},
-      keyMap: DEFAULT_KEY_MAP,
+      keyMap: KEY_MAP,
       kitLayout: DEFAULT_KIT_LAYOUT,
       profile: null,
       presets: [],
@@ -172,7 +172,7 @@ export const useSettings = create<SettingsState>()(
         delete next[code];
         set({ keyMap: next });
       },
-      resetKeyMap: () => set({ keyMap: DEFAULT_KEY_MAP }),
+      resetKeyMap: () => set({ keyMap: KEY_MAP }),
       movePad: (pad, x, y) =>
         set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),

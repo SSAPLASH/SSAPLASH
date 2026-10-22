@@ -2,7 +2,7 @@
 // 각각 keyMap / 캘리브레이션 프로필만으로 패드를 정하는지 확인한다.
 import { describe, expect, it } from 'vitest';
 import { mapHit, mapHitByKey, mapHitByPose, mapperFor } from './padMapper';
-import { DEFAULT_KEY_MAP } from '@/domain/keyMap';
+import { KEY_MAP } from '@/domain/keyMap';
 import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/calibration';
 import type { StickHitEvent } from '@/domain/events';
 
@@ -42,14 +42,14 @@ describe('mapperFor', () => {
 
 describe('mapHitByKey', () => {
   it('바인딩된 키 → 패드와 바인딩의 스틱', () => {
-    expect(mapHitByKey(hit({ keyCode: 'KeyF' }), DEFAULT_KEY_MAP)).toEqual({ pad: 'SNARE', stickId: 0 });
-    expect(mapHitByKey(hit({ keyCode: 'KeyJ' }), DEFAULT_KEY_MAP)).toEqual({ pad: 'SNARE', stickId: 1 });
-    expect(mapHitByKey(hit({ keyCode: 'Space' }), DEFAULT_KEY_MAP).pad).toBe('KICK');
+    expect(mapHitByKey(hit({ keyCode: 'KeyF' }), KEY_MAP)).toEqual({ pad: 'SNARE', stickId: 0 });
+    expect(mapHitByKey(hit({ keyCode: 'KeyJ' }), KEY_MAP)).toEqual({ pad: 'SNARE', stickId: 1 });
+    expect(mapHitByKey(hit({ keyCode: 'Space' }), KEY_MAP).pad).toBe('KICK');
   });
 
   it('바인딩 없는 키·키 코드 없음 → 패드 없음', () => {
-    expect(mapHitByKey(hit({ keyCode: 'KeyZ' }), DEFAULT_KEY_MAP)).toEqual({ pad: null });
-    expect(mapHitByKey(hit(), DEFAULT_KEY_MAP)).toEqual({ pad: null });
+    expect(mapHitByKey(hit({ keyCode: 'KeyZ' }), KEY_MAP)).toEqual({ pad: null });
+    expect(mapHitByKey(hit(), KEY_MAP)).toEqual({ pad: null });
   });
 
   it('keyMap을 바꾸면 즉시 따라간다 (설정 재바인딩)', () => {
@@ -59,7 +59,7 @@ describe('mapHitByKey', () => {
   });
 
   it('자세는 보지 않는다', () => {
-    expect(mapHitByKey(hit({ keyCode: 'KeyF', pitch: 50, yaw: 50 }), DEFAULT_KEY_MAP).pad).toBe('SNARE');
+    expect(mapHitByKey(hit({ keyCode: 'KeyF', pitch: 50, yaw: 50 }), KEY_MAP).pad).toBe('SNARE');
   });
 });
 
@@ -95,7 +95,7 @@ describe('mapHitByPose', () => {
 });
 
 describe('mapHit (소스 종류로 매퍼 선택)', () => {
-  const ctx = { keyMap: DEFAULT_KEY_MAP, profile: profile2() };
+  const ctx = { keyMap: KEY_MAP, profile: profile2() };
 
   it('같은 이벤트라도 소스가 keyboard면 keyMap, 아니면 프로필로 정한다', () => {
     const e = hit({ keyCode: 'KeyF', pitch: 0, yaw: 20 }); // 키는 스네어, 자세는 하이햇
@@ -139,13 +139,13 @@ describe('mapHitByPose — 앵커 밖 정책', () => {
   });
 
   it('mapHit이 ctx.outsidePolicy를 전달한다', () => {
-    const ctx = { keyMap: DEFAULT_KEY_MAP, profile: profile2() };
+    const ctx = { keyMap: KEY_MAP, profile: profile2() };
     expect(mapHit(outside, 'pointer', ctx).pad).toBeNull();
     expect(mapHit(outside, 'pointer', { ...ctx, outsidePolicy: 'nearest' }).pad).not.toBeNull();
   });
 
   it('키 매퍼에는 정책이 영향 없다', () => {
     const e = hit({ keyCode: 'KeyF' });
-    expect(mapHit(e, 'keyboard', { keyMap: DEFAULT_KEY_MAP, profile: null, outsidePolicy: 'nearest' }).pad).toBe('SNARE');
+    expect(mapHit(e, 'keyboard', { keyMap: KEY_MAP, profile: null, outsidePolicy: 'nearest' }).pad).toBe('SNARE');
   });
 });

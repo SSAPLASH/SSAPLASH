@@ -3,12 +3,13 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { isProfileComplete } from '@/domain/calibration';
+import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { KEY_MAP } from '@/domain/keyMap';
 import { STICK_PADS, PAD_META, LANE_ORDER } from '@/domain/pads';
 
 export function HomePage() {
   const sensorKind = useSettings((s) => s.sensorKind);
   const profile = useSettings((s) => s.profile);
-  const keyMap = useSettings((s) => s.keyMap);
   const connected = useLive((s) => s.connected);
   const calDone = isProfileComplete(profile, STICK_PADS);
   const needsCal = sensorKind !== 'none';
@@ -27,7 +28,7 @@ export function HomePage() {
         <Link to="/setup" className="card step">
           <span className="num">1단계</span>
           <h2>세팅</h2>
-          <p className="dim">입력 방식, 키 매핑, 가상 키트 배치, 판정 폭을 정하고 프리셋으로 저장합니다.</p>
+          <p className="dim">입력 방식, 가상 키트 배치, 판정 폭을 정하고 배치·사운드를 프리셋으로 저장합니다.</p>
           <span className="status">
             지금: {sensorKind === 'none' ? '키보드' : `${sensorRegistry.get(sensorKind)?.label ?? sensorKind} + 키보드`}
             {connected[0] || connected[1] ? ' · 연결됨' : ''}
@@ -55,28 +56,30 @@ export function HomePage() {
         </Link>
       </section>
 
-      <section className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 10 }}>키보드 매핑</h3>
-        <div className="keyhelp">
-          {LANE_ORDER.map((pad) => (
-            <div key={pad}>
-              <span style={{ color: PAD_META[pad].color, fontWeight: 700 }}>{PAD_META[pad].label}</span>
-              <span className="row" style={{ gap: 4 }}>
-                {Object.entries(keyMap)
-                  .filter(([, b]) => b.pad === pad)
-                  .map(([code]) => (
-                    <kbd className="kbd" key={code}>
-                      {code.replace('Key', '').replace('Space', 'Space')}
-                    </kbd>
-                  ))}
-              </span>
-            </div>
-          ))}
-        </div>
-        <p className="small faint" style={{ marginTop: 10 }}>
-          Shift와 함께 누르면 세게 칩니다. ` 키로 지연·판정 디버그 창을 엽니다.
-        </p>
-      </section>
+      {KEYBOARD_INPUT_ENABLED && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h3 style={{ marginBottom: 10 }}>키보드 입력 (개발용)</h3>
+          <div className="keyhelp">
+            {LANE_ORDER.map((pad) => (
+              <div key={pad}>
+                <span style={{ color: PAD_META[pad].color, fontWeight: 700 }}>{PAD_META[pad].label}</span>
+                <span className="row" style={{ gap: 4 }}>
+                  {Object.entries(KEY_MAP)
+                    .filter(([, b]) => b.pad === pad)
+                    .map(([code]) => (
+                      <kbd className="kbd" key={code}>
+                        {code.replace('Key', '').replace('Space', 'Space')}
+                      </kbd>
+                    ))}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="small faint" style={{ marginTop: 10 }}>
+            Shift와 함께 누르면 세게 칩니다. ` 키로 지연·판정 디버그 창을 엽니다.
+          </p>
+        </section>
+      )}
     </main>
   );
 }

@@ -11,7 +11,8 @@ import { LANE_ORDER, PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { isProfileComplete } from '@/domain/calibration';
 import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
-import { inputManager } from '@/app/sources';
+import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
 import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
 
@@ -19,7 +20,6 @@ const keyLabel = (code: string) => code.replace('Key', '').replace('Space', 'Spa
 
 export function FreePlayPage() {
   const kitLayout = useSettings((s) => s.kitLayout);
-  const keyMap = useSettings((s) => s.keyMap);
   const profile = useSettings((s) => s.profile);
   const sensorKind = useSettings((s) => s.sensorKind);
   const sensorOptions = useSettings((s) => s.sensorOptions);
@@ -60,10 +60,11 @@ export function FreePlayPage() {
     guide = (
       <>
         키보드로 칩니다.{' '}
-        {LANE_ORDER.map((pad) => (
+        {KEYBOARD_INPUT_ENABLED &&
+          LANE_ORDER.map((pad) => (
           <span key={pad} style={{ marginRight: 8 }}>
             <span style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</span>{' '}
-            {Object.entries(keyMap)
+            {Object.entries(KEY_MAP)
               .filter(([, b]) => b.pad === pad)
               .map(([code]) => (
                 <kbd className="kbd" key={code}>
@@ -116,7 +117,7 @@ export function FreePlayPage() {
         <div className="card col">
           <KitCanvas
             layout={kitLayout}
-            keyMap={keyMap}
+            keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
             anchors={profile?.anchors}
             hits={hits}
             poses={pose}
