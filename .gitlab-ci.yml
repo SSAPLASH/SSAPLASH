@@ -4,21 +4,17 @@ stages:
   - test
   - build
 
-# Windows Runner의 소스 준비·캐시 정리에도 긴 경로 지원을 적용한다.
-# 환경변수로 전달하여 Runner 호스트의 전역 Git 설정은 변경하지 않는다.
-variables:
-  GIT_CONFIG_COUNT: "1"
-  GIT_CONFIG_KEY_0: core.longpaths
-  GIT_CONFIG_VALUE_0: "true"
-
 # MR을 만들거나 갱신할 때, 그리고 main·develop-*에 병합될 때만 실행한다.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH =~ /^(main|develop-.*)$/
 
+# 모든 job은 EC2의 Docker Runner(태그 docker)에서 실행한다.
 default:
   image: alpine:3.20
+  tags:
+    - docker
 
 lint:
   stage: lint
@@ -37,13 +33,10 @@ build:
 
 # BE 초기화 이후의 실제 검증. 기존 공통 골격은 다른 파트가 연결할 때까지 유지한다.
 .be-job:
-  # 현재 local 태그 Runner는 Windows PowerShell shell executor다.
-  tags:
-    - local
+  image: eclipse-temurin:21-jdk
   variables:
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache"
   before_script:
-    - . ./BE/ci/setup-java.ps1
     - cd BE
   cache:
     when: always
@@ -54,7 +47,6 @@ build:
     paths:
       - .gradle-cache/caches/
       - .gradle-cache/wrapper/
-      - .gradle-cache/jdks/
   rules:
     - changes:
         - BE/**/*
@@ -65,7 +57,7 @@ be-test:
   extends: .be-job
   stage: test
   script:
-    - .\gradlew.bat --no-daemon test
+    - ./gradlew --no-daemon test
   artifacts:
     when: always
     reports:
@@ -78,18 +70,31 @@ be-build:
   extends: .be-job
   stage: build
   script:
-    - .\gradlew.bat --no-daemon bootJar
+    - ./gradlew --no-daemon bootJar
   artifacts:
     paths:
       - BE/build/libs/app.jar
     expire_in: 1 week
 
-# Windows local Runner에서 Linux Docker 엔진 접근이 필요하다. 실패를 허용하거나 건너뛰지 않는다.
+# 일회용 TimescaleDB 컨테이너를 service로 붙여 Flyway 이력 전체를 검증한다. 실패를 허용하거나 건너뛰지 않는다.
+# 이미지 버전은 Infra/docker-compose.yml의 postgres 이미지와 같아야 한다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
 be-timescale-test:
   extends: .be-job
   stage: test
+  services:
+    - name: timescale/timescaledb:2.30.2-pg16
+      alias: timescaledb
+      command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
+  variables:
+    # job 변수는 service 컨테이너에도 전달된다. 비밀번호는 이 job에서만 쓰는 일회용 값이다.
+    POSTGRES_DB: timescale_test
+    POSTGRES_PASSWORD: "ci-$CI_PIPELINE_ID"
+    TIMESCALE_TEST_URL: "jdbc:postgresql://timescaledb:5432/timescale_test"
+    TIMESCALE_TEST_PASSWORD: "ci-$CI_PIPELINE_ID"
   script:
-    - powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSchema.ps1
+    # service가 연결을 받을 때까지 최대 60초 기다린다.
+    - bash -c 'for i in $(seq 1 60); do (echo > /dev/tcp/timescaledb/5432) 2>/dev/null && exit 0; sleep 1; done; echo "TimescaleDB가 60초 안에 준비되지 않았습니다."; exit 1'
+    - ./gradlew --no-daemon timescaleTest
   artifacts:
     when: always
     reports:
