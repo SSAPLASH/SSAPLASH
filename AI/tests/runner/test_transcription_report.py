@@ -124,6 +124,11 @@ def test_분리_후_변화는_같은_모델의_drums_대비(tmp_path: Path):
     # 순서: 주 F1 내림차순
     assert list(summary["f1Main50"]) == sorted(summary["f1Main50"], reverse=True)
 
+    # 입력이 둘 이상인 묶음이 있으면 입력별 비교 그림이 하나 더 생김
+    paths = write_transcription_report([csv_path], tmp_path / "out")
+    assert [p.name for p in paths.extra_pngs] == ["separation_effect.png"]
+    assert all(p.is_file() for p in paths.all())
+
 
 def test_라벨별_표와_보고서_파일(tmp_path: Path):
     rows = [
@@ -183,6 +188,7 @@ def test_라벨별_표와_보고서_파일(tmp_path: Path):
     assert "## 실패한 곡" not in md
     for p in paths.all():
         assert p.is_file()
+    assert paths.extra_pngs == []  # 정답 드럼 입력만이면 입력별 비교 그림은 없음
 
 
 def test_빈_hits_파일이_없어도_보고서는_된다(tmp_path: Path):
