@@ -52,6 +52,7 @@ class ChartQueryApiTest {
 		"notation":{"tick":0,"durationTicks":480,"voice":1},"internalKey":"never-expose"}]
 		""";
 	@BeforeEach void seed() {
+		clearBuiltinSeed();
 		owner = user("조회 소유자"); other = user("다른 회원");
 		builtin = song(null, "기본", "BUILTIN", "READY");
 		ownSong = song(owner, "내 곡", "AUDIO", "READY");
@@ -60,6 +61,12 @@ class ChartQueryApiTest {
 		version = version(chart, 1, NOTES, TIMING, "PENDING");
 		ownerToken = tokens.issue(new AuthUser(owner, UserRole.USER), Instant.now()).token();
 		QuerySqlCapture.clear();
+	}
+	/** V10의 실제 내장 곡은 별도 통합 검사에서 검증하고, 이 클래스의 단일 fixture 가정을 유지한다. */
+	private void clearBuiltinSeed() {
+		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT c.id FROM charts c JOIN songs s ON s.id = c.song_id WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL)");
+		db.update("DELETE FROM charts WHERE song_id IN (SELECT id FROM songs WHERE source = 'BUILTIN' AND owner_id IS NULL)");
+		db.update("DELETE FROM songs WHERE source = 'BUILTIN' AND owner_id IS NULL");
 	}
 	@Test void scopesSearchAndCountsNeverExposeOtherSongs() throws Exception {
 		var built = ok("/api/v1/songs");
