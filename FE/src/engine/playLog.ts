@@ -3,7 +3,6 @@
 import type { Judgement, TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import type { CalibrationProfile } from '@/domain/calibration';
 import type { NoteState, SessionSnapshot } from './RhythmSession';
 
 export interface LoggedHit {
@@ -54,7 +53,6 @@ export function buildPlayLog(args: {
   chart: { songId: string; title: string; difficulty: string; durationMs: number };
   inputSource: InputSourceKind;
   timing: TimingWindows;
-  profile: CalibrationProfile | null;
   startedAt: Date;
 }): PlayLog {
   const { snapshot: s } = args;
@@ -68,7 +66,8 @@ export function buildPlayLog(args: {
     startedAt: args.startedAt.toISOString(),
     durationMs: args.chart.durationMs,
     timing: args.timing,
-    calibrationId: args.profile?.id ?? null,
+    // 앵커 캘리브레이션을 없앴다. 프리셋 스냅샷은 ACCT-002에서 넣는다
+    calibrationId: null,
     hits: args.hits,
     notes: args.notes.map((n) => ({
       index: n.index,
