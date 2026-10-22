@@ -61,6 +61,17 @@ logging:
     # 404·405는 GlobalExceptionHandler가 WARN 한 줄로 남긴다. DispatcherServlet의 중복 WARN은 숨긴다.
     org.springframework.web.servlet.PageNotFound: ERROR
 
+play:
+  raw:
+    enabled: ${PLAY_RAW_ENABLED:false}
+    endpoint: ${PLAY_RAW_ENDPOINT:}
+    region: ${PLAY_RAW_REGION:us-east-1}
+    bucket: ${PLAY_RAW_BUCKET:}
+    access-key: ${PLAY_RAW_ACCESS_KEY:}
+    secret-key: ${PLAY_RAW_SECRET_KEY:}
+    private-bucket-confirmed: ${PLAY_RAW_PRIVATE_BUCKET_CONFIRMED:false}
+    concurrent-uploads: ${PLAY_RAW_CONCURRENT_UPLOADS:2}
+
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8080}

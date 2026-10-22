@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "playId": "9da79b76-5d88-4875-bc71-c826c3fb4293",
+  "mode": "FREE",
+  "inputSource": "STICK",
+  "startedAt": "2026-10-21T00:00:00Z",
+  "endedAt": "2026-10-21T00:01:00Z",
+  "consent": false,
+  "hits": [
+    {
+      "seq": 0,
+      "tMs": -10.125,
+      "stickId": 0,
+      "pad": "SNARE",
+      "velocity": 85,
+      "peakAccel": 1.25,
+      "pitch": 20,
+      "yaw": -10
+    }
+  ]
+}
