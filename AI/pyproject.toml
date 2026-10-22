@@ -37,7 +37,8 @@ models = [
 ]
 # Spleeter(spleeter==2.4.x)는 tensorflow 2.12·numpy<2·pandas<2 고정이라 이 환경과 충돌해 후보에서 제외 (ADR-014)
 # 채보 모델 중 지금 환경에 같이 들어가는 것 (S15P31A307-109). `uv sync --extra models --extra transcribers`
-# ADT_STR(torch 2.8 고정, 패키지 아님)·Inverse Drum Machine(numpy<2·librosa<0.10 고정)·Omnizart(TensorFlow)는
+# ADT_STR(torch 2.8 고정, 패키지 아님)·Inverse Drum Machine(numpy<2·librosa<0.10 고정)·Omnizart(TensorFlow)·
+# YourMT3+(transformers 4.45.1·numpy 1.26 고정, 코드는 HF Space)는
 # 별도 가상환경에서 scripts/transcribers_ext/ 스크립트로 돌린다 (README "채보 벤치마크" 절)
 transcribers = [
     "adtof-pytorch @ git+https://github.com/xavriley/ADTOF-pytorch",

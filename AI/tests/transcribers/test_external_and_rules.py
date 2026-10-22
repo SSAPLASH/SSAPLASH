@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from helpers import SR, make_synth_song, make_tone
 from ssaplash_ai.bench.datasets import DatasetConfig, SynthDataset
+from ssaplash_ai.bench.datasets.gmd import GMD_PITCH_PAD
 from ssaplash_ai.bench.metrics import score_hits
 from ssaplash_ai.bench.runner.transcription_runner import TranscriptionRunOptions, run_transcription
 from ssaplash_ai.bench.transcribers import (
@@ -249,7 +252,9 @@ def test_저장소의_실제_모델_yaml이_전부_읽힌다():
         names.append(cfg.name)
         if cfg.adapter == "external":
             assert cfg.python_exe and cfg.script
-    assert {"adtof", "adtof_drumsep", "adt_str_tau08", "idm", "omnizart"} <= set(names)
+            assert (ROOT / cfg.script).is_file(), cfg.script
+    assert {"adtof", "adtof_drumsep", "adt_str_tau08", "idm", "omnizart", "yourmt3"} <= set(names)
+    assert "yourmt3_ps" in names
     assert TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof" / "adtof.yaml").eight_pad is False
     assert (
         TranscriberConfig.from_yaml(CONFIGS_DIR / "external" / "adt_str_tau08.yaml").eight_pad
@@ -258,3 +263,34 @@ def test_저장소의_실제_모델_yaml이_전부_읽힌다():
     assert (
         TranscriberConfig.from_yaml(CONFIGS_DIR / "external" / "omnizart.yaml").eight_pad is False
     )
+
+
+def _load_yourmt3_script():
+    """별도 환경 스크립트를 모듈로 읽음. YourMT3+ 코드는 load() 안에서만 import하므로 여기선 없어도 됨."""
+    path = ROOT / "scripts" / "transcribers_ext" / "yourmt3_transcribe.py"
+    spec = importlib.util.spec_from_file_location("yourmt3_transcribe", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_YourMT3_대응표는_0부터_127까지_전부이고_GMD_정답과_같다():
+    # 드럼 토큰 범위 전부가 키라 표에 없는 피치로 곡이 실패하지 않음 (설계 1-3절·U20)
+    for name in ("yourmt3", "yourmt3_ps"):
+        cfg = TranscriberConfig.from_yaml(CONFIGS_DIR / "external" / f"{name}.yaml")
+        assert cfg.eight_pad is True
+        assert set(cfg.labels) == set(range(128))
+        for pitch, pad in GMD_PITCH_PAD.items():
+            assert cfg.labels[pitch] == pad, (name, pitch)
+        assert cfg.labels[41] == "FLOOR_TOM" and cfg.labels[3] == "CRASH"
+
+
+def test_YourMT3_다악기_노트에서_드럼만_시각순으로_고른다():
+    def note(t: float, pitch: int, drum: bool) -> SimpleNamespace:
+        return SimpleNamespace(onset=t, offset=t + 0.01, pitch=pitch, is_drum=drum, velocity=1)
+
+    script = _load_yourmt3_script()
+    notes = [note(0.5, 38, True), note(0.1, 60, False), note(0.1, 42, True), note(0.1, 36, True)]
+    assert script.drum_hits(notes) == [[0.1, 36, None], [0.1, 42, None], [0.5, 38, None]]
+    assert script.drum_hits([note(0.2, 40, False)]) == []
+    assert set(script.MODELS) == {"YPTF.MoE+Multi (noPS)", "YPTF+Multi (PS)"}
