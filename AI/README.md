@@ -188,7 +188,8 @@ uv run ssaplash-bench report-transcription data/results/<run1>/results.csv data/
 | `results.csv` | 곡 × 모델 × 입력당 1행. 5가지·8패드 기준 맞힌·헛것·놓친 개수(±50ms·±25ms)와 곡 단위 F1, Perfect 폭 적중률, 시각 오차, 세기 상관, 채보 시간·RTF·로드 시간·메모리, `eightPad`(8패드를 다 내는지), `input`·`separator`, 실패 시 `error` |
 | `hits_by_class.csv` | 라벨(패드 또는 5가지)별 개수. 보고서의 패드별 F1 표 재료 |
 | `summary.md` | 데이터 묶음별 비교표(5가지 F1, 8패드 F1, 분리 후 F1 변화, Perfect 폭 적중률, RTF, 피크 GPU 메모리, 가중치 라이선스), 보조값, 패드별·5가지별 F1, 실패 목록 |
-| `per_song.csv`, `f1_by_model.png`, `rtf_vs_f1.png` | 곡별 값, 모델별 F1 막대, RTF 대 F1 산점도 |
+| `per_song.csv`, `f1_by_model.png`, `rtf_vs_f1.png` | 곡별 값, 정답 드럼 입력의 모델별 F1 막대, RTF 대 F1 산점도(기준선 0.15). 그래프는 묶음마다 칸 하나 |
+| `separation_effect.png` | 입력을 둘 이상 넣은 묶음만. 모델별로 정답 드럼·분리 드럼·원곡을 넣었을 때의 F1 막대 |
 | `separated/`, `inputs/`, `midi/` | 분리 드럼 캐시, 별도 환경 모델에 넘긴 입력 wav, 저장한 예측 MIDI |
 
 MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바뀌면 `configHash`가 바뀌어 기록에 남는다.
