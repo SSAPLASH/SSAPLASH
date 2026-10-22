@@ -4,12 +4,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FeedbackCards } from '@/components/FeedbackCards';
+import { ReadinessNotice } from '@/components/ReadinessNotice';
+import { useReadiness } from '@/components/useReadiness';
 import { SheetGrid } from '@/components/SheetGrid';
 import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
 import { buildFeedback, summarizeByPad } from '@/domain/feedback';
 import type { Judgement } from '@/domain/judgement';
-import { STICK_PADS, PAD_META } from '@/domain/pads';
-import { isProfileComplete } from '@/domain/calibration';
+import { PAD_META } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
 import { buildSheet, positionAt } from '@/domain/sheet';
 import { RhythmSession, type JudgementEvent, type SessionStatus } from '@/engine/RhythmSession';
@@ -51,6 +52,12 @@ export function SheetPage() {
   const [abortOpen, setAbortOpen] = useState(false);
   const [log, setLog] = useState<PlayLog | null>(null);
   const [focusBar, setFocusBar] = useState<number | undefined>(undefined);
+  // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
+  const { ready } = useReadiness();
+  const readyRef = useRef(ready);
+  useEffect(() => {
+    readyRef.current = ready;
+  }, [ready]);
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사
   const stageRef = useRef<Stage>('select');
@@ -65,7 +72,6 @@ export function SheetPage() {
   const nextBeat = useRef(0);
   const finishing = useRef(false);
 
-  const calDone = isProfileComplete(settings.profile, STICK_PADS);
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const model = useMemo(() => (chart ? buildSheet(chart) : null), [chart]);
@@ -143,7 +149,7 @@ export function SheetPage() {
 
   const begin = useCallback(async () => {
     const ss = sessionRef.current;
-    if (!ss || stageRef.current !== 'ready') return;
+    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
     metronome.stop();
@@ -189,7 +195,6 @@ export function SheetPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        profile: settings.profile,
         startedAt: startedAt.current ?? new Date(),
       });
       const saved: PlayLog = { ...built, mode: 'SHEET' };
@@ -200,7 +205,7 @@ export function SheetPage() {
       setStatus('finished');
       setStage('feedback');
     },
-    [inputSource, settings.timing, settings.profile],
+    [inputSource, settings.timing],
   );
 
   // 매 프레임: Miss 처리·종료 감지·박 클릭 예약·곡 시각 갱신
@@ -310,12 +315,6 @@ export function SheetPage() {
               카운트인 {settings.countInBars}마디 · 메트로놈 {settings.metronome ? '켬' : '끔'} · 입력 {inputSource}{' '}
               <Link to="/setup">세팅에서 바꾸기</Link>
             </p>
-            {settings.sensorKind !== 'none' && !calDone && (
-              <p className="small dim">
-                캘리브레이션이 없어 센서 타격은 판정되지 않습니다. 키보드 타격은 판정됩니다.{' '}
-                <Link to="/calibration">캘리브레이션 하기</Link>
-              </p>
-            )}
             <p className="small faint">Enter 시작 · Esc 중단 확인.</p>
           </div>
         </div>
@@ -358,7 +357,7 @@ export function SheetPage() {
           ))}
         </div>
         <div className="row">
-          <button className="btn-primary" onClick={() => void begin()} disabled={stage !== 'ready'}>
+          <button className="btn-primary" onClick={() => void begin()} disabled={stage !== 'ready' || !ready}>
             시작
           </button>
           <button className="btn-ghost" onClick={restart} disabled={stage === 'ready'}>
@@ -387,7 +386,8 @@ export function SheetPage() {
             <p className="dim">
               {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {totalBars}마디
             </p>
-            <button className="btn-primary btn-lg" onClick={() => void begin()}>
+            <ReadinessNotice returnTo="/sheet" compact />
+            <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
               시작 (Enter)
             </button>
             <button className="btn-ghost" onClick={toSelect}>

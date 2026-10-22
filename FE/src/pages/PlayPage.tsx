@@ -5,10 +5,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { KitPlayView } from '@/components/KitPlayView';
+import { ReadinessNotice } from '@/components/ReadinessNotice';
+import { useReadiness } from '@/components/useReadiness';
 import { useHitFx } from '@/components/useHitFx';
 import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
-import { STICK_PADS, type PadId } from '@/domain/pads';
-import { isProfileComplete } from '@/domain/calibration';
+import type { PadId } from '@/domain/pads';
 import type { HitFx, InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -45,6 +46,12 @@ export function PlayPage() {
   const [session, setSession] = useState<RhythmSession | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   const [abortOpen, setAbortOpen] = useState(false);
+  // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
+  const { ready } = useReadiness();
+  const readyRef = useRef(ready);
+  useEffect(() => {
+    readyRef.current = ready;
+  }, [ready]);
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>('select');
@@ -65,7 +72,6 @@ export function PlayPage() {
   const lastHud = useRef(0);
   const finishing = useRef(false);
 
-  const calDone = isProfileComplete(settings.profile, STICK_PADS);
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
@@ -138,7 +144,7 @@ export function PlayPage() {
 
   const begin = useCallback(async () => {
     const ss = sessionRef.current;
-    if (!ss || stageRef.current !== 'ready') return;
+    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
     metronome.stop();
@@ -178,13 +184,12 @@ export function PlayPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        profile: settings.profile,
         startedAt: startedAt.current,
       });
       savePlayLog(log);
       navigate(`/result/${log.playId}`);
     },
-    [navigate, inputSource, settings.timing, settings.profile],
+    [navigate, inputSource, settings.timing],
   );
 
   // 매 프레임: Miss 처리·종료 감지·박 클릭 예약·HUD 4Hz 갱신
@@ -314,12 +319,6 @@ export function PlayPage() {
             <Link to="/setup" className="small">
               세팅에서 바꾸기
             </Link>
-            {settings.sensorKind !== 'none' && !calDone && (
-              <p className="small dim">
-                캘리브레이션이 없어 센서 타격은 판정되지 않습니다. 키보드 타격은 판정됩니다.{' '}
-                <Link to="/calibration">캘리브레이션 하기</Link>
-              </p>
-            )}
             <p className="small faint">
               매핑 키로 칩니다. Enter 시작 · Esc 중단 확인. 채보에 없는 타격은 감점이 없습니다.
             </p>
@@ -363,7 +362,8 @@ export function PlayPage() {
               <p className="dim">
                 {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
               </p>
-              <button className="btn-primary btn-lg" onClick={() => void begin()}>
+              <ReadinessNotice returnTo="/play" compact />
+              <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
                 시작 (Enter)
               </button>
               <button className="btn-ghost" onClick={toSelect}>
