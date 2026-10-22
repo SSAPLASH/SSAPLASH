@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { KitCanvas } from '@/components/KitCanvas';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
-import { KeyboardMappingCard } from '@/components/KeyboardMappingCard';
 import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
+import { KEY_MAP } from '@/domain/keyMap';
 import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
 import { TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -113,7 +113,7 @@ export function SetupPage() {
               onMovePad={s.movePad}
               onTapPad={testPad}
               hits={hits}
-              keyMap={KEYBOARD_INPUT_ENABLED ? s.keyMap : undefined}
+              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
               anchors={s.profile?.anchors}
             />
             <p className="small dim">
@@ -130,14 +130,12 @@ export function SetupPage() {
               ))}
             </div>
           </div>
-
-          {KEYBOARD_INPUT_ENABLED && <KeyboardMappingCard />}
         </div>
 
         <div className="col">
           <div className="card col">
             <h3>입력 방식</h3>
-            <p className="small dim">키보드는 항상 켜져 있습니다. 센서를 고르면 센서 타격은 캘리브레이션으로, 키보드 타격은 키 매핑으로 패드가 정해집니다.</p>
+            <p className="small dim">키보드는 항상 켜져 있습니다. 센서를 고르면 센서 타격은 캘리브레이션으로, 키보드 타격은 고정 키로 패드가 정해집니다.</p>
             {[NO_SENSOR, ...sensorRegistry.list()].map((i) => (
               <label key={i.id} className="row sensor-choice">
                 <input
@@ -243,9 +241,7 @@ export function SetupPage() {
             {s.presets.length === 0 && <p className="small dim">저장된 프리셋이 없습니다. 위에서 이름을 적고 저장하세요.</p>}
             {s.presets.map((p) => (
               <div key={p.id} className="row" style={{ justifyContent: 'space-between' }}>
-                <span>
-                  {p.name} <span className="small faint">{p.profile ? '· 캘리브레이션 포함' : ''}</span>
-                </span>
+                <span>{p.name}</span>
                 <span className="row" style={{ gap: 4 }}>
                   <button className="small" onClick={() => s.loadPreset(p.id)}>
                     불러오기

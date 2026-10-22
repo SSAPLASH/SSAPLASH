@@ -10,6 +10,7 @@ import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
 import { STICK_PADS, type PadId } from '@/domain/pads';
 import { isProfileComplete } from '@/domain/calibration';
 import type { HitFx, InputSourceKind } from '@/domain/events';
+import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, savePlayLog, toLoggedHit, type LoggedHit } from '@/engine/playLog';
 import { pushTelemetry } from '@/engine/telemetry';
@@ -343,7 +344,7 @@ export function PlayPage() {
               layout={settings.kitLayout}
               scrollMs={settings.scrollMs}
               hits={hitFx}
-              keyMap={KEYBOARD_INPUT_ENABLED ? settings.keyMap : undefined}
+              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
               onFrame={onFrame}
             />
           ) : (
@@ -352,7 +353,7 @@ export function PlayPage() {
               scrollMs={settings.scrollMs}
               flashes={flashes}
               popups={popups}
-              keyMap={settings.keyMap}
+              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
               onFrame={onFrame}
             />
           )}

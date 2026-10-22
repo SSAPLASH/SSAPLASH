@@ -1,4 +1,4 @@
-// 키보드 매핑 데이터 (설정에 영속되는 도메인 데이터). 매핑 규칙은 input/padMapper가 쓴다.
+// 개발·시연용 고정 키보드 매핑. 설정에 저장하지 않는다. 매핑 규칙은 input/padMapper가 쓴다.
 import type { PadId } from './pads';
 import type { StickId } from './events';
 
@@ -11,10 +11,10 @@ export interface KeyBinding {
 export type KeyMap = Record<string, KeyBinding>;
 
 /**
- * 기본 매핑. 양손 대칭. 왼손 = 스틱 0, 오른손 = 스틱 1.
+ * 고정 매핑. 양손 대칭. 왼손 = 스틱 0, 오른손 = 스틱 1.
  * 기능명세서 PLAY-10 예시(F/J 스네어, D/K 하이햇)를 따른다.
  */
-export const DEFAULT_KEY_MAP: KeyMap = {
+export const KEY_MAP: KeyMap = {
   KeyF: { pad: 'SNARE', stickId: 0 },
   KeyJ: { pad: 'SNARE', stickId: 1 },
   KeyD: { pad: 'HIHAT', stickId: 0 },

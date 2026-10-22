@@ -2,6 +2,7 @@
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import type { InputSource } from '@/input/InputSource';
 import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources';
+import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
 import { useLive, type MetronomeLive } from '@/store/liveStore';
@@ -71,17 +72,19 @@ function keyboardKeys(): string[] {
   const desc = sensorRegistry.get(s.sensorKind);
   const reserved = desc?.reservedKeys?.(resolveOptions(desc, s.sensorOptions[s.sensorKind])) ?? [];
   const taken = new Set(reserved);
-  return Object.keys(s.keyMap).filter((code) => !taken.has(code));
+  return Object.keys(KEY_MAP).filter((code) => !taken.has(code));
 }
 
 export function bootstrapInput(): void {
+  // 키보드 매핑은 고정 상수라 설정 구독 밖에서 한 번만 넘긴다
+  inputManager.setKeyMap(KEY_MAP);
+
   // 저장된 sensorKind가 등록되지 않은 id(제거된 소스, 다른 PC에서 복사한 설정)면 'none'으로 되돌린다(R6)
   if (!sensorRegistry.isKnown(useSettings.getState().sensorKind)) useSettings.setState({ sensorKind: 'none' });
 
   // 설정 변경을 소스·매퍼에 반영
   const applySettings = () => {
     const s = useSettings.getState();
-    inputManager.setKeyMap(s.keyMap);
     keyboardSource.setKeys(keyboardKeys());
     applySensorOptions();
     // 튜닝은 다음 타격부터 반영된다. 프로필의 반경은 앵커 중심 + 현재 튜닝으로 매번 다시 계산한다(T1)
