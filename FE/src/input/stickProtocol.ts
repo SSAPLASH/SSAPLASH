@@ -322,6 +322,9 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
         yaw: d.azimuthDeg,
         pad: d.pad,
         velocity: d.velocity,
+        marginDeg: d.marginDeg,
+        ambiguous: d.ambiguous,
+        peakSpeedDps: d.peakSpeedDps,
       };
     case 'pose':
       return {

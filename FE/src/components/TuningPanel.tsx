@@ -128,7 +128,7 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
           </div>
 
           <div className="tuning-group">
-            <strong>세기 곡선</strong>
+            <strong>세기 곡선 (포인터·키보드용, 스틱은 펌웨어 곡선)</strong>
             <TuningSlider
               label="최소 가속도(→1)"
               value={v.minAccelG}
@@ -153,7 +153,11 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
               onChange={(gamma) => setVelocity({ gamma })}
             />
             <div className="faint">
-              {lastHit ? `최근 타격 peakAccel ${lastHit.peakAccel.toFixed(1)}g → vel ${lastHit.velocity}` : '최근 타격 없음'}
+              {!lastHit
+                ? '최근 타격 없음'
+                : lastHit.peakSpeedDps !== undefined
+                  ? `최근 타격 peakSpeed ${lastHit.peakSpeedDps}°/s → vel ${lastHit.velocity} (스틱)`
+                  : `최근 타격 peakAccel ${lastHit.peakAccel.toFixed(1)}g → vel ${lastHit.velocity}`}
             </div>
           </div>
 

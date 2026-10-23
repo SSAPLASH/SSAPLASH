@@ -43,6 +43,7 @@ function hit(pad: PadId | null, tHit: number): ResolvedHit {
     source: 'keyboard',
     pose: { pitch: 0, yaw: 0 },
     peakAccel: 5,
+    judgedBy: 'key',
   };
 }
 

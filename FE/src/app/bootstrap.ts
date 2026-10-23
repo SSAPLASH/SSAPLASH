@@ -288,6 +288,7 @@ export async function previewHit(pad: PadId, velocity: number): Promise<void> {
     source: 'preview',
     pose: { pitch: 0, yaw: 0 },
     peakAccel: 0,
+    judgedBy: 'pose',
   };
   hit.tAudio = audioEngine.trigger(pad, velocity);
   useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
