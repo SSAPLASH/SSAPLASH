@@ -5,6 +5,15 @@ import type { PadId } from './pads';
 import type { Pose, SensorId } from './events';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
 
+/** 스틱에 보낸 패드 표의 적용 상태. 입력 계층(padTableSync)이 만들고 store가 보관한다 */
+export interface PadTableStatus {
+  sent: number;
+  /** PARAM_ACK_PAD_TABLE의 value. 확인 창 안에 못 받았으면 null */
+  acked: number | null;
+  /** 전송 시각(performance.now) */
+  at: number;
+}
+
 export interface PadAnchor {
   pad: PadId;
   /** 중심 자세 (도) */

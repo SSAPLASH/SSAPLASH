@@ -115,6 +115,9 @@ src/
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
 - **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 명령 0x14~0x17·파라미터 표(`STICK_PARAMS`)도 같은 파일에 있다. 판정 경로(매퍼)는 아직 `pad`·`velocity`를 쓰지 않는다.
 - **`packetTap`**: 소스가 프레이밍을 벗긴 payload를 파싱 직전(수신)·송신 직후에 `input/packetTap`으로 publish한다. 모니터가 구독할 예정이며, 구독자가 없으면 아무 비용도 들지 않는다.
+- **패드 테이블 동기화**(`input/padTableSync`): 센서가 연결되거나 판정 프로필(배치·보정·튜닝)이 바뀌면 스틱 패드 중심을 `SET_PAD_TABLE`(지우고 시작, 3개씩)로 보낸다. 소수 2자리 기준으로 직전과 같으면 보내지 않고, `sendCommand`가 없는 소스(키보드·포인터)는 무동작이다.
+- 확인은 `PARAM_ACK_PAD_TABLE`(0x20, value = 적용 개수)을 500ms 창 안에 받아 `acked`로 남긴다. 연결이 끊기거나 소스를 바꾸면 기록을 지운다.
+- 표시: 상태(`PadTableStatus`, `domain/calibration`)를 bootstrap이 `liveStore.padTable`로 옮기고, 세팅 화면 "스틱 연결" 카드가 "적용됨 / 적용 n개 / 확인 없음 / 전송 중"을 보인다. input은 store를 import하지 않으므로 `onStatus` 콜백으로 주입한다.
 - 하드웨어가 오면 BLE 소스 연결을 검증하고 기준 자세 보정으로 시작 위치를 맞추면 된다. 고정 키·소리·게임 코드는 바뀌지 않는다.
 
 ## 새 입력 소스 추가 방법

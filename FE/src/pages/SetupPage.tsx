@@ -15,6 +15,7 @@ import { KEY_MAP } from '@/domain/keyMap';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
 import { PRESET_NAME_MAX, validatePresetName, type PresetErrorCode } from '@/domain/preset';
+import type { PadTableStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { READINESS_MESSAGES, readiness } from '@/domain/readiness';
 import { TUNING_RANGES } from '@/domain/tuning';
@@ -50,6 +51,13 @@ const NAME_TEXT = {
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+/** 스틱에 보낸 패드 표의 적용 상태 문구. 500ms 확인 창이 지났는지는 1초 tick 리렌더로 갱신된다 */
+function padTableText(t: PadTableStatus): string {
+  if (t.acked !== null) return t.acked === t.sent ? `스틱에 패드 ${t.sent}개 적용됨` : `스틱 적용 ${t.acked}개 / 전송 ${t.sent}개`;
+  if (performance.now() - t.at > 500) return `스틱 적용 확인 없음(${t.sent}개 전송)`;
+  return '스틱에 패드 표 전송 중…';
+}
+
 export function SetupPage() {
   const s = useSettings();
   const presets = usePresets();
@@ -58,6 +66,7 @@ export function SetupPage() {
   const lastHit = useLive((l) => l.lastHit);
   const sourceState = useLive((l) => l.sourceState);
   const sourceMessage = useLive((l) => l.sourceMessage);
+  const padTable = useLive((l) => l.padTable);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const referenceStale = useLive((l) => l.referenceStale);
   const soundSetState = useLive((l) => l.soundSetState);
@@ -346,6 +355,7 @@ export function SetupPage() {
             <p className="small">
               {sensorDesc?.label ?? '입력'} · {connText}
             </p>
+            {sensorMode && padTable && <p className="small">{padTableText(padTable)}</p>}
             {sourceMessage && <div className={`notice ${sourceState === 'error' ? 'error' : ''}`}>{sourceMessage}</div>}
             {sensorMode && referenceStale && anyConnected && (
               <div className="notice">다시 연결됐습니다. 쳐 보고 필요하면 시작 위치를 다시 맞추세요</div>

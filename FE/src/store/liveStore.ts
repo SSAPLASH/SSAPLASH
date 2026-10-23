@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import type { PadId } from '@/domain/pads';
 import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/metronome';
+import type { PadTableStatus } from '@/domain/calibration';
 import type { Pose, ResolvedHit, SensorId, SourceState } from '@/domain/events';
 
 /** 전역 메트로놈 화면용 사본. 값의 주인은 engine/Metronome이고 bootstrap이 여기 옮긴다 */
@@ -40,6 +41,8 @@ interface LiveState {
   referenceStale: boolean;
   /** 일시정지 요청. E0 사이드바가 'menu'로 올리면 곡 연주 페이지가 일시정지하고 null로 되돌린다 */
   pauseRequested: 'menu' | null;
+  /** 스틱에 보낸 패드 표 적용 상태. 보낸 적 없거나 연결이 끊기면 null */
+  padTable: PadTableStatus | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -60,4 +63,5 @@ export const useLive = create<LiveState>(() => ({
   referenceSetAt: null,
   referenceStale: false,
   pauseRequested: null,
+  padTable: null,
 }));
