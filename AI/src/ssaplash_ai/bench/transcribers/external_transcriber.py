@@ -64,7 +64,7 @@ class ExternalTranscriber(BaseTranscriber):
         super().__init__(config, device)
         if not config.python_exe or not config.script:
             raise ValueError(f"{config.name}: external 어댑터에는 python_exe와 script가 필요")
-        self.python_exe = Path(config.python_exe)
+        self.python_exe = resolve_python_exe(config.python_exe, config.env_name)
         self.script = Path(config.script)
         self.work_dir: Path | None = None  # 러너가 run 폴더를 넣어 줌. 없으면 임시 폴더
         self._checkpoint = ""
@@ -74,8 +74,11 @@ class ExternalTranscriber(BaseTranscriber):
     def _load(self) -> None:
         """실제 로드는 스크립트 안에서. 여기서는 실행 파일·스크립트 존재만 확인."""
         if not self.python_exe.is_file():
+            tried = str(self.python_exe)
+            if self.config.env_name:
+                tried += f" 또는 {venv_python('.venv-' + self.config.env_name)}"
             raise FileNotFoundError(
-                f"{self.name}: 별도 환경 python이 없음: {self.python_exe} (README '별도 환경' 절)"
+                f"{self.name}: 별도 환경 python이 없음: {tried} (README '별도 환경' 절)"
             )
         if not self.script.is_file():
             raise FileNotFoundError(f"{self.name}: 스크립트가 없음: {self.script}")
@@ -214,3 +217,16 @@ def venv_python(env_dir: str | Path) -> Path:
     if sys.platform == "win32":
         return env_dir / "Scripts" / "python.exe"
     return env_dir / "bin" / "python"
+
+
+def resolve_python_exe(python_exe: str, env_name: str | None) -> Path:
+    """yaml의 python_exe가 없으면(다른 OS에서 만든 경로 등) `.venv-<env_name>`의 이 OS python으로 대체.
+
+    yaml은 Windows 경로 한 벌만 두고, Linux·코랩에서는 같은 폴더의 bin/python을 찾게 하려는 것.
+    둘 다 없으면 yaml 경로를 그대로 돌려주고 load()가 오류를 냄.
+    """
+    path = Path(python_exe)
+    if path.is_file() or not env_name:
+        return path
+    alt = venv_python(f".venv-{env_name}")
+    return alt if alt.is_file() else path

@@ -104,3 +104,25 @@ def test_모르는_id는_info_csv_누락으로_보고(gmd_root: Path):
 
 def test_info_csv가_없으면_곡이_0개(tmp_path: Path):
     assert GmdDataset(_config(tmp_path / "없음")).song_ids() == []
+
+
+def test_export_subset은_songs의_파일만_복사한다(gmd_root: Path, tmp_path: Path):
+    from ssaplash_ai.bench.datasets.gmd import export_subset
+
+    ds = GmdDataset(_config(gmd_root, songs=["drummer1/s1/1"]))
+    out = tmp_path / "upload" / "groove"
+    copied = export_subset(ds, out)
+    rel = sorted(p.relative_to(out).as_posix() for p in copied)
+    assert rel == ["drummer1/s1/1_rock.mid", "drummer1/s1/1_rock.wav", "info.csv"]
+    assert not (out / "drummer1/s1/2_funk.wav").exists()
+    report = GmdDataset(_config(out, songs=["drummer1/s1/1"])).check()
+    assert report.song_count == 1 and report.missing == []
+
+
+def test_export_subset은_빠진_파일이면_오류(gmd_root: Path, tmp_path: Path):
+    from ssaplash_ai.bench.datasets.gmd import export_subset
+
+    (gmd_root / "drummer1/s1/2_funk.mid").unlink()
+    ds = GmdDataset(_config(gmd_root, songs=["drummer1/s1/2"]))
+    with pytest.raises(FileNotFoundError, match="drummer1/s1/2"):
+        export_subset(ds, tmp_path / "out")

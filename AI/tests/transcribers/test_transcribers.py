@@ -213,3 +213,16 @@ def test_resample과_midi_왕복(tmp_path: Path, synth_song):
     assert len(raw) == len(item.hits_true)
     np.testing.assert_allclose([t for t, _, _ in raw], item.hits_true["time_sec"], atol=2e-3)
     assert [p for _, p, _ in raw] == [36, 38, 42]
+
+
+def test_hits_to_midi는_타격_간격이_50ms보다_짧아도_저장된다(tmp_path: Path):
+    # 앞 음의 note_off(50ms 뒤)가 뒤 음의 note_on보다 늦어도 델타가 음수가 되면 안 됨 (코랩 본측정에서 난 오류)
+    from ssaplash_ai.bench.datasets.pads import make_hits as make_pad_hits
+
+    hits, _ = make_pad_hits(
+        [0.100, 0.110, 0.120], ["KICK", "SNARE", "HIHAT"], [100, 90, None], IDENTITY
+    )
+    path = hits_to_midi(hits, tmp_path / "dense.mid")
+    raw = midi_raw_hits(path)
+    np.testing.assert_allclose([t for t, _, _ in raw], [0.100, 0.110, 0.120], atol=2e-3)
+    assert [p for _, p, _ in raw] == [36, 38, 42]

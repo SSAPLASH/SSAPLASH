@@ -4,7 +4,7 @@
 name: adt_str_tau04
 adapter: external
 env_name: adt-str
-python_exe: .venv-adt-str/Scripts/python.exe
+python_exe: .venv-adt-str/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
 script: scripts/transcribers_ext/adt_str_transcribe.py
 variant: setting-tau-0.4
 options:
@@ -48,3 +48,18 @@ labels:
   77: __drop__
   79: __drop__
   81: __drop__
+  # 60~81: 봉고·콩가·팀발레·아고고·카바사·마라카스·휘슬·귀로·클라베·우드블록·쿠이카·트라이앵글. 코랩 GMD 본측정에서 60이 나와 추가
+  60: __drop__
+  61: __drop__
+  62: __drop__
+  63: __drop__
+  64: __drop__
+  65: __drop__
+  67: __drop__
+  69: __drop__
+  71: __drop__
+  73: __drop__
+  75: __drop__
+  76: __drop__
+  78: __drop__
+  80: __drop__
