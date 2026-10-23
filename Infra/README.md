@@ -67,14 +67,15 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 - 읽기용(reader)은 악보·반주 버킷 읽기만 한다(서명 URL 발급용). 쓰기용(writer)은 서버 내부 적재, 플레이 원본, 임시 음원에 쓴다.
 - 읽기용 키로 만든 서명 PUT URL은 거부된다. 업로드 서명이 필요하면 쓰기용 키로 만든다.
-- 키는 서버 `Infra/.env`의 `S3_READ_ACCESS_KEY`, `S3_READ_SECRET_KEY`, `S3_WRITE_ACCESS_KEY`, `S3_WRITE_SECRET_KEY`에만 둔다. 서버에서 무작위로 만들고(접근 키 `openssl rand -hex 10`, 비밀 키 `openssl rand -hex 24`) 채팅, 이슈, 문서에 붙이지 않는다.
+- 이름이 `OBJECT_STORAGE_*`인 이유: AWS S3가 아니라 서버 안 SeaweedFS(S3 호환)의 접속 키다. 저장소를 바꿔도 이름을 바꾸지 않도록 저장소 이름을 쓰지 않았다.
+- 키는 서버 `Infra/.env`의 `OBJECT_STORAGE_READ_ACCESS_KEY`, `OBJECT_STORAGE_READ_SECRET_KEY`, `OBJECT_STORAGE_WRITE_ACCESS_KEY`, `OBJECT_STORAGE_WRITE_SECRET_KEY`에만 둔다. 서버에서 무작위로 만들고(접근 키 `openssl rand -hex 10`, 비밀 키 `openssl rand -hex 24`) 채팅, 이슈, 문서에 붙이지 않는다.
 - 키가 비어 있으면 Compose가 실행을 멈춘다.
 
 ### 서명 URL과 Nginx
 
-- 공개 주소(`S3_PUBLIC_URL`)는 도메인 루트이며 경로 접두사를 붙이지 않는다. 서명에는 호스트와 경로가 들어 있어 Nginx가 경로를 자르거나 `Host`를 바꾸면 서명이 틀어진다.
+- 공개 주소(`OBJECT_STORAGE_PUBLIC_URL`)는 도메인 루트이며 경로 접두사를 붙이지 않는다. 서명에는 호스트와 경로가 들어 있어 Nginx가 경로를 자르거나 `Host`를 바꾸면 서명이 틀어진다.
 - SeaweedFS에 `-s3.externalUrl`로 같은 주소를 지정해 프록시 뒤에서도 서명을 검증한다. 허용 출처(CORS)도 이 주소로 좁힌다.
-- HTTPS(S15P31A307-39) 적용 후에는 `S3_PUBLIC_URL`을 `https` 주소로 바꾸고 다시 확인한다.
+- HTTPS(S15P31A307-39) 적용 후에는 `OBJECT_STORAGE_PUBLIC_URL`을 `https` 주소로 바꾸고 다시 확인한다.
 - Nginx의 업로드 크기 한도는 50MB다. BE·AI와 정한 뒤 조정한다.
 - 앱이 스토리지를 쓰는 스위치(`CHART_ASSET_ENABLED`, `PLAY_RAW_ENABLED`)는 기본 꺼짐이다. 켜는 시점은 BE와 확인한다.
 
@@ -102,6 +103,6 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 ### 실패 시 대안
 
-- 서명 URL이 프록시 뒤에서 맞지 않으면 먼저 `S3_PUBLIC_URL`, Nginx의 `Host` 전달, SeaweedFS의 `-s3.externalUrl`을 점검한다.
+- 서명 URL이 프록시 뒤에서 맞지 않으면 먼저 `OBJECT_STORAGE_PUBLIC_URL`, Nginx의 `Host` 전달, SeaweedFS의 `-s3.externalUrl`을 점검한다.
 - SeaweedFS가 요구에 맞지 않으면 다른 S3 호환 스토리지(예: MinIO)로 바꾼다. BE는 접속 주소와 키만 바뀌므로 코드 변경이 없다.
 - 스토리지 없이 임시로 쓰려면 서버 로컬 볼륨에 저장하는 방식이 있으나, 서명 URL이 없어 BE 변경이 필요하다. 최후의 수단이다.
