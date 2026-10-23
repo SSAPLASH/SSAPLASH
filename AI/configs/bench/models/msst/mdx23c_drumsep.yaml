@@ -1,0 +1,14 @@
+# MDX23C DrumSep (aufr33·jarredou, 6스템 kick/snare/toms/hh/ride/crash). 채보 벤치마크의 ADTOF+드럼 킷 분리용.
+# 원래 배포처(github.com/jarredou/models)는 2026-10 기준 사라져 openmirlab(mdxnet-infer 패키지)이 다시 올린 파일을 받는다.
+# sha256: ckpt d2a4aa53eb584d21eead358a4e66d1882ad182911be018f052b5da73be9096d0,
+#         yaml 17d1649a227f841165bdb4c11a42082898192a1ea3ceab7e7e0b9293d6589dd6 (mdxnet-infer 공개값)
+# 가중치 라이선스 미명시(원작자가 적은 게 없음). 교육·비상업 범위에서만 쓴다. 분리 벤치마크 후보는 아님.
+name: mdx23c_drumsep
+adapter: msst
+model_type: mdx23c
+config_url: https://github.com/openmirlab/mdxnet-infer/releases/download/weights-drumsep-v1/aufr33-jarredou_DrumSep_model_mdx23c_ep_141_sdr_10.8059.yaml
+checkpoint_url: https://github.com/openmirlab/mdxnet-infer/releases/download/weights-drumsep-v1/aufr33-jarredou_DrumSep_model_mdx23c_ep_141_sdr_10.8059.ckpt
+drums_stem: kick
+license_code: MIT (msst)
+license_weights: 미명시 (aufr33·jarredou 공개 가중치. 저장소에 라이선스 파일 없음)
+source_url: https://pypi.org/project/mdxnet-infer/ (원 출처 msst docs/pretrained_models.md)

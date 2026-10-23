@@ -1,0 +1,18 @@
+# 테스트·동작 확인용 mock. truth_dir/<곡>.csv(time_sec,label,velocity)를 그대로 돌려줌 → F1 1.0.
+# truth_dir는 실행 폴더(AI/) 기준. 테스트는 임시 폴더로 바꿔 씀.
+name: mock_truth
+adapter: mock
+mock_mode: truth
+truth_dir: data/results/mock_truth
+velocity: true
+license_code: 없음 (테스트용)
+license_weights: 없음 (테스트용)
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  HI_TOM: HI_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE
