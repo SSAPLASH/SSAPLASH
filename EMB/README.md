@@ -78,9 +78,13 @@
 | `Core/Inc/bno055.h`, `Core/Src/bno055.c` | BNO055 I2C 드라이버 (초기화, 모드 전환, 고속 설정, 읽기, 캘리브레이션 오프셋) |
 | `Core/Inc/dwt_timer.h` | DWT 사이클 카운터 기반 µs 측정 |
 | `Core/Inc/hit_detect.h`, `Core/Src/hit_detect.c` | 자이로 감속 기반 타격 검출기. HAL 없는 순수 C (PC 재생 테스트, nRF52 이식용) |
+| `Core/Inc/pose.h`, `Core/Src/pose.c` | 스틱 끝 방향 추정 (자이로 적분 + 느릴 때 가속도로 기울기 보정, 지자기 미사용). 고도각·방위각 출력 |
+| `Core/Inc/pad.h`, `Core/Src/pad.c` | 패드 판정 (방향 벡터 사이 각도가 가장 작은 패드), 패드 테이블, 캘리브레이션 평균 |
 | `Core/Inc/app_imu_test.h`, `Core/Src/app_imu_test.c` | 실측용 테스트 앱. `TEST_MODE`로 선택 |
 | `tools/capture_serial.py` | TEST_CAPTURE 출력을 CSV로 저장 (`pip install pyserial`) |
 | `tools/hit_replay/replay.c` | 녹화 CSV를 PC에서 검출기에 재생: `gcc -O2 -o replay replay.c ../../stick_fw_f103/Core/Src/hit_detect.c -I../../stick_fw_f103/Core/Inc` → `./replay swing.csv 0 -1 -6` |
+| `tools/pad_replay/pad_replay.c` | 녹화 CSV를 검출기 + 자세 추정 + 패드 판정에 재생: `gcc -O2 -o pad_replay pad_replay.c ../../stick_fw_f103/Core/Src/{hit_detect,pose,pad}.c -I../../stick_fw_f103/Core/Inc -lm` → `./pad_replay pad.csv <정면 보정 시각(초)>` |
+| `tools/sound_test.html` | TEST_HIT 출력 줄을 Web Serial(921600)로 받아 패드별 합성 드럼 소리 재생 (Chrome/Edge, 개발용. 118에서 바이너리 프로토콜로 교체) |
 
 `main.c`에는 USER CODE 영역에 `__io_putchar`(printf → USART2), `app_imu_test_init()`, `app_imu_test_loop()`만 추가합니다.
 
@@ -89,8 +93,8 @@
 | `TEST_RATE` | 연속 읽기 속도 측정 (읽기 시간, 실제 갱신 횟수) |
 | `TEST_MIXED` | 실전 구조 검증: 4ms 주기 자이로 + 가속도·지자기 분산 읽기, 부팅 시 자이로 바이어스 측정 |
 | `TEST_FUSION` | NDOF 퓨전 각도, 캘리브레이션 상태, 오프셋 출력 |
-| `TEST_CAPTURE` | 스윙 녹화. 4ms 자이로 + 10Hz 가속도를 CSV로 출력, **921600 baud**. 파란 버튼(B1) = 다음 구간 |
-| `TEST_HIT` | 타격 검출 실시간 확인. 타격마다 PA8·LED 토글 + 한 줄 출력 (115200) |
+| `TEST_CAPTURE` | 스윙 녹화. 4ms 자이로 + 50Hz 가속도를 CSV로 출력, **921600 baud**. 파란 버튼(B1) = 다음 구간 |
+| `TEST_HIT` | 타격 검출 + 패드 판정 실시간 확인. 타격마다 PA8·LED 토글 + 한 줄 출력, **921600 baud**. 파란 버튼(B1) = 정면 보정 + 패드 캘리브레이션 (10장) |
 
 ## 8. BNO055 실측 결과 (S15P31A307-114, 2026-10-20)
 
@@ -186,7 +190,38 @@ FC FF 26 00 04 00 1F FF 5F FF 81 FE FE FF FC FF FF FF E8 03 EB 02
 - 스윙 축·부호는 부착 방향에 따라 다름 (`HIT_AXIS`, `HIT_SIGN`). 117에서 퓨전 자세의 고도각 변화율로 바꾸면 부착 방향과 무관해짐
 - 한 사람, 한 부착 위치 데이터. 손목 스냅 위주 / 팔 전체 스윙 등 다른 타법은 미검증
 
-## 10. 지연 측정 준비
+## 10. 패드 판정 (S15P31A307-117, 2026-10-22)
+
+**자세 추정 (`pose`)**: 자이로를 적분해 자세를 따라가고, 스틱이 느릴 때(각속도 < 200°/s, |a| − g < 1.5m/s²)만 가속도로 기울기를 보정한다. 출력은 센서 축이 아니라 **스틱 끝 방향 벡터**(`HIT_TIP_AXIS`, 현재 센서 +z)의 각도라 쥔 방향(롤)과 무관하다.
+
+| 출력 | 정의 (통신 프로토콜 v0.5와 같음) |
+| --- | --- |
+| 고도각 | 수평 0, 끝이 위 +. 중력 기준 절대각 |
+| 방위각 | 정면 보정 시점 0, 위에서 봐서 시계 방향(오른쪽) +. 지자기를 안 써서 시간이 지나면 밀림 → 웹이 SET_YAW_OFFSET으로 보정 |
+
+- 가속도는 5칸(20ms)마다, 직전 칸이 느릴 때만 읽는다. 스윙 중에는 원심력 때문에 쓸모없고, 안 읽어야 타격 직전 샘플 간격이 일정하다
+- TEST_HIT도 921600으로 출력한다. 115200이면 타격 한 줄 출력에 약 7ms가 걸려 샘플이 빠지고, 빠진 구간의 회전이 적분에서 사라져 방위각이 밀린다
+
+**패드 판정 (`pad`)**: 타격 순간 스틱 끝 방향과 패드 기준 방향 사이 **각도**가 가장 작은 패드를 고른다 (고도각·방위각 평면 거리는 스틱이 수직에 가까울 때 방위각이 크게 흔들려서 쓰지 않음). 반경 밖이면 판정 없음(0xFF), 2등과의 각도 차가 margin (10° 미만이면 출력에 `?`, 프로토콜 flags 비트 4).
+
+**기본 패드 테이블** (`pad_1022.csv` 녹화, 패드별 10회 평균, 정면 보정 기준)
+
+| 패드 | 고도각 | 방위각 | 반경 |
+| --- | --- | --- | --- |
+| HIHAT | 39° | −50° | 30° |
+| SNARE | 30° | −27° | 30° |
+| SMALL_TOM | 61° | −34° | 30° |
+| FLOOR_TOM | 43° | 55° | 30° |
+
+**보드 단독 캘리브레이션 (TEST_HIT)**: 스틱을 정면으로 들고 B1 → 방위각 0 → 안내대로 HIHAT → SMALL_TOM → SNARE → FLOOR_TOM 순서로 패드마다 2번 친다 (FE PLAY-004와 같은 2타). 평균 방향으로 테이블을 만들고, 반경은 가장 가까운 패드까지 각도 × 0.6 (15~35°)으로 자동 설정한다. 웹 연동 후에는 SET_PAD_TABLE로 덮어쓴다.
+
+**남은 것**
+- 판정 정확도 실측값(녹화 재생, 실시간)을 이 절에 기록
+- 타격 검출은 아직 스윙 축 자이로(`HIT_AXIS`, `HIT_SIGN`)를 쓴다. 고도각 변화율로 바꾸면 부착 방향과 무관해짐
+- 기본 테이블 고도각이 모두 +(끝이 위)라 실제 타격 자세·`HIT_TIP_AXIS` 부호 재확인 필요
+- 1단계는 4개(HIHAT·SNARE·SMALL_TOM·FLOOR_TOM). CRASH·MID_TOM·RIDE는 기본 테이블에 없음 (패드 번호는 통신 프로토콜 v0.7, KICK·HIHAT_PEDAL은 페달)
+
+## 11. 지연 측정 준비
 
 전체 지연 목표는 **타격 검출 → 소리 출력 30ms 이내**이며, 구간별로 실측하며 줄여 나갑니다.
 
@@ -194,7 +229,7 @@ FC FF 26 00 04 00 1F FF 5F FF 81 FE FE FF FC FF FF FF E8 03 EB 02
 - **센서 구간 예상 (BNO055)**: 샘플 대기 최대 4ms + 읽기 약 2.4ms + 감속 확인 샘플 수 × 4ms. 최종 IMU는 kHz 샘플링으로 크게 줄어들 예정
 - **루프백 측정**: 타격 검출 순간 PA8로 부저를 울리고, 브라우저 출력음과 함께 녹음해 파형 간격을 측정
 
-## 11. 트러블슈팅
+## 12. 트러블슈팅
 
 | 증상 | 확인할 것 |
 |---|---|
@@ -208,7 +243,7 @@ FC FF 26 00 04 00 1F FF 5F FF 81 FE FE FF FC FF FF FF E8 03 EB 02
 | float가 출력 안 됨 | 링커 옵션에 `-u _printf_float` 추가 |
 | .ioc 재생성 후 설정이 바뀜 | 재생성 전 커밋, 사용자 코드는 `USER CODE` 영역 안에만 작성 |
 
-## 12. Git 규칙
+## 13. Git 규칙
 
 - 올리는 것: `.ioc`, `.project`, `.cproject`, `.mxproject`, `Core/`, `Drivers/`, 링커 스크립트(`*.ld`)
 - 올리지 않는 것: `Debug/`, `Release/`, `.settings/` 등 빌드 산출물과 개인 설정 (`.gitignore` 참고)

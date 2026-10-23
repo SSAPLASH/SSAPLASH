@@ -13,8 +13,11 @@
  *   TEST_CAPTURE: 타격 검출 튜닝용 스윙 녹화 (S15P31A307-116)
  *                4ms 주기 자이로 + 저속 가속도를 CSV로 출력. 시리얼 속도를 CAP_BAUD로 올린다
  *                파란 버튼(B1)을 누를 때마다 구간 번호(seg)가 1씩 올라간다
- *   TEST_HIT    : 타격 검출 실시간 확인 (S15P31A307-116). 4ms 주기 자이로 → hit_detect,
- *                타격마다 PA8 토글(지연 측정용) + LED + 한 줄 출력. 115200 그대로
+ *   TEST_HIT    : 타격 검출 + 패드 판정 실시간 확인 (S15P31A307-116, -117). 4ms 주기 자이로 → hit_detect,
+ *                느릴 때만 가속도를 읽어 pose(스틱 방향) 보정, 타격 순간 방향으로 pad 판정.
+ *                파란 버튼(B1) = 정면 보정(방위각 0) + 패드 캘리브레이션 시작.
+ *                스틱을 정면으로 들고 누른 뒤, 안내대로 패드마다 CAL_HITS번씩 친다
+ *                타격마다 PA8 토글(지연 측정용) + LED + 한 줄 출력. 921600 (115200이면 출력 중 샘플이 빠져 방위각이 밀림)
  *
  * TEST_RATE 실험 스위치
  *   USE_FAST_CONFIG : 1 = 자이로 523Hz/가속도 1kHz BW, 0 = BNO055 기본 대역폭
@@ -34,6 +37,8 @@
 #include "bno055.h"
 #include "dwt_timer.h"
 #include "hit_detect.h"
+#include "pose.h"
+#include "pad.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -61,13 +66,21 @@
 
 /* TEST_CAPTURE 설정 */
 #define CAP_PERIOD_US     4000    /* 자이로 샘플 주기 (4ms = 250Hz) */
-#define CAP_ACC_DIV       25      /* N칸마다 가속도 (25 = 10Hz). 0이면 가속도 안 읽음 */
+#define CAP_ACC_DIV       5       /* N칸마다 가속도 (5 = 50Hz, 25 = 10Hz). 0이면 가속도 안 읽음 */
 #define CAP_BAUD          921600  /* 녹화 중 시리얼 속도. 안 되면 460800 */
 
 /* TEST_HIT 설정 */
 #define HIT_PERIOD_US     4000    /* 자이로 샘플 주기 */
 #define HIT_AXIS          0       /* 스윙 축: 0=x 1=y 2=z (2026-10-21 부착 기준 x) */
 #define HIT_SIGN          (-1)    /* 아래로 칠 때 축 값이 -면 -1 */
+#define HIT_ACC_DIV       5       /* N칸마다 가속도 (자세 보정용). 스윙 중(각속도 큼)에는 건너뜀 */
+#define HIT_ACC_MAX_DPS   200     /* 각속도가 이보다 크면 가속도를 읽지 않음 → 타격 직전 간격 일정 */
+#define HIT_TIP_AXIS      {0.0f, 0.0f, 1.0f}   /* 스틱 끝 방향 = 센서 +z (2026-10-22 녹화로 확인) */
+#define HIT_MARGIN_AMBIG  10      /* margin(도)이 이보다 작으면 판정 애매 표시 '?' (프로토콜 flags 비트 4) */
+#define CAL_HITS          2       /* 캘리브레이션 때 패드당 타격 수 (FE PLAY-004와 같은 2타) */
+/* 캘리브레이션 순서: HIHAT → SMALL_TOM → SNARE → FLOOR_TOM (패드 번호는 pad.h, 프로토콜 v0.7) */
+static const uint8_t cal_order[] = { 1, 3, 2, 5 };
+#define CAL_PADS          (sizeof cal_order / sizeof cal_order[0])
 
 #define ERR_RECOVER_COUNT 3     /* 연속 에러가 이만큼 나면 버스 복구 */
 
@@ -77,6 +90,20 @@ static bno055_t imu;
 static int ready = 0;
 #if TEST_MODE == TEST_HIT
 static hit_detector_t hitd;
+static pose_t pose;
+static pad_table_t pads;
+static volatile uint32_t yaw_reset_req = 0;
+
+/* 파란 버튼 B1 = 정면 보정 요청. 계산은 루프에서 (인터럽트에서 float 연산 안 함) */
+void HAL_GPIO_EXTI_Callback(uint16_t pin)
+{
+    static uint32_t last = 0;
+    if (pin != B1_Pin) return;
+    uint32_t now = HAL_GetTick();
+    if (now - last < 300) return;
+    last = now;
+    yaw_reset_req++;
+}
 #endif
 
 /* ------------------------------------------------------------------ */
@@ -223,11 +250,9 @@ static int measure_gyro_bias(void)
 #endif
 
 /* ------------------------------------------------------------------ */
-#if TEST_MODE == TEST_CAPTURE
+#if TEST_MODE == TEST_CAPTURE || TEST_MODE == TEST_HIT
 
 extern UART_HandleTypeDef huart2;
-
-static volatile uint32_t seg_req = 0;   /* 버튼 누른 횟수 (인터럽트에서 증가) */
 
 static void capture_set_baud(void)
 {
@@ -236,6 +261,11 @@ static void capture_set_baud(void)
     huart2.Init.BaudRate = CAP_BAUD;
     HAL_UART_Init(&huart2);
 }
+#endif
+
+#if TEST_MODE == TEST_CAPTURE
+
+static volatile uint32_t seg_req = 0;   /* 버튼 누른 횟수 (인터럽트에서 증가) */
 
 static void capture_header(HAL_StatusTypeDef cfg)
 {
@@ -263,8 +293,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t pin)
 void app_imu_test_init(void)
 {
     dwt_init();
-#if TEST_MODE == TEST_CAPTURE
-    capture_set_baud();     /* 여기부터 CAP_BAUD. 이전에 찍힌 "boot"는 깨져 보일 수 있다 */
+#if TEST_MODE == TEST_CAPTURE || TEST_MODE == TEST_HIT
+    capture_set_baud();     /* 여기부터 CAP_BAUD(921600). 이전에 찍힌 "boot"는 깨져 보일 수 있다
+                               TEST_HIT도 115200이면 타격 한 줄 출력에 약 7ms가 걸려 샘플이 빠지고,
+                               빠진 구간의 회전이 자세 적분에서 사라져 방위각이 밀린다 (2026-10-22 확인) */
 #endif
     i2c1_bus_recover();
 
@@ -314,7 +346,22 @@ void app_imu_test_init(void)
     st = bno055_config_fast(&imu);
     bno055_set_mode(&imu, BNO055_MODE_AMG);
     printf("[IMU] fast config %s\r\n", st == HAL_OK ? "OK" : "FAIL");
-    measure_gyro_bias();
+    if (!measure_gyro_bias()) {
+        /* 책상에 두지 못했으면 116 실측값 사용 (-0.35, -0.40, +0.09 dps) */
+        gyro_bias.x = -6; gyro_bias.y = -6; gyro_bias.z = 1;
+        printf("[BIAS] using default\r\n");
+    }
+    {
+        static const float tip[3] = HIT_TIP_AXIS;
+        bno055_vec3_t a;
+        pose_init(&pose, tip);
+        if (bno055_read_acc(&imu, &a) == HAL_OK) {
+            float am[3] = { a.x / 100.0f, a.y / 100.0f, a.z / 100.0f };
+            pose_start(&pose, am);
+        }
+        pad_table_default(&pads);
+        printf("[POSE] tip +z. hold the stick to the front and press B1 to zero the azimuth\r\n");
+    }
     {
         hit_params_t hp;
         hit_default_params(&hp);
@@ -323,7 +370,7 @@ void app_imu_test_init(void)
                hp.swing_start_dps, hp.brake_pct, hp.min_peak_dps,
                hp.min_decel_x10 / 10, hp.min_decel_x10 % 10);
     }
-    printf("#n  t_hit_ms  lead_ms  peak_dps  vel  swing_ms  decel | reject weak/slow/long\r\n");
+    printf("#n t_hit_ms pad        el  az  mg peak vel | busy_us | rej w/s/l   (? = margin < %d deg)\r\n", HIT_MARGIN_AMBIG);
 
 #else
     bno055_set_mode(&imu, BNO055_MODE_NDOF);
@@ -556,11 +603,19 @@ void app_imu_test_loop(void)
 /* ------------------------------------------------------------------ */
 #elif TEST_MODE == TEST_HIT
 
-/* 4ms마다 자이로만 읽어 검출기에 넣는다 (가속도·지자기는 읽지 않음 → 간격 일정)
+/* 4ms마다 자이로를 읽어 검출기와 자세 추정에 넣는다.
+ * 가속도는 HIT_ACC_DIV칸마다, 각속도가 작을 때(스틱이 느릴 때)만 읽어 자세 기울기를 보정한다.
+ * 스윙 중에는 원심력 때문에 가속도가 어차피 쓸모없고, 안 읽어야 타격 직전 샘플 간격이 일정하다.
  * 타격이면 PA8 토글 + LED 토글 + 한 줄 출력 (출력은 약 5ms 걸려 다음 칸이 조금 밀릴 수 있음) */
 void app_imu_test_loop(void)
 {
-    static uint32_t next = 0, prev = 0;
+    static uint32_t next = 0, prev = 0, slot = 0, yaw_done = 0, busy_max = 0;
+    static uint32_t t_prev_us = 0;
+    static int moving_prev = 0;
+    static int cal_step = -1;                 /* -1 = 캘리브레이션 안 함 */
+    static int cal_count = 0;
+    static pad_acc_t cal_acc;
+    static pad_table_t cal_table;
     static uint64_t cyc_total = 0;
     const uint32_t cyc_per_us = SystemCoreClock / 1000000U;
     const uint32_t period_cyc = HIT_PERIOD_US * cyc_per_us;
@@ -576,20 +631,89 @@ void app_imu_test_loop(void)
     uint32_t t_us = (uint32_t)(cyc_total / cyc_per_us);
 
     bno055_vec3_t g;
+    int printed = 0;
     HAL_StatusTypeDef st = bno055_read_gyro(&imu, &g);
     track_error(st);
     if (st == HAL_OK) {
         int16_t raw[3] = { (int16_t)(g.x - gyro_bias.x), (int16_t)(g.y - gyro_bias.y), (int16_t)(g.z - gyro_bias.z) };
+        float gd[3] = { raw[0] / 16.0f, raw[1] / 16.0f, raw[2] / 16.0f };
+
+        /* 느릴 때만 가속도 (직전 칸의 각속도로 판단) */
+        float am[3], *ap = NULL;
+        if (slot % HIT_ACC_DIV == 0 && !moving_prev) {
+            bno055_vec3_t a;
+            HAL_StatusTypeDef sa = bno055_read_acc(&imu, &a);
+            track_error(sa);
+            if (sa == HAL_OK) { am[0] = a.x / 100.0f; am[1] = a.y / 100.0f; am[2] = a.z / 100.0f; ap = am; }
+        }
+        moving_prev = (gd[0] * gd[0] + gd[1] * gd[1] + gd[2] * gd[2]) > (float)HIT_ACC_MAX_DPS * HIT_ACC_MAX_DPS;
+
+        if (t_prev_us) pose_update(&pose, gd, ap, (t_us - t_prev_us) / 1e6f);
+        t_prev_us = t_us;
+
+        if (yaw_done != yaw_reset_req) {
+            yaw_done = yaw_reset_req;
+            pose_reset_yaw(&pose);
+            float el, az; pose_angles(&pose, &el, &az);
+            printf("[POSE] front set (elev %d)\r\n", (int)el);
+            cal_step = 0; cal_count = 0;
+            pad_acc_reset(&cal_acc);
+            pad_table_clear(&cal_table);
+            printf("[CAL] hit %s x%d\r\n", pad_name(cal_order[0]), CAL_HITS);
+            printed = 1;
+        }
+
         int32_t down = HIT_SIGN * (int32_t)raw[HIT_AXIS];
         hit_event_t ev;
         if (hit_update(&hitd, t_us, down, &ev)) {
             HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);              /* 지연 측정 루프백용 */
             HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-            printf("%3lu %9lu %6lu %6u %4u %6u %4u.%u | %lu/%lu/%lu\r\n",
-                   hitd.n_hits, ev.t_hit_us / 1000, (ev.t_hit_us - ev.t_detect_us) / 1000,
-                   ev.peak_dps, ev.velocity, ev.swing_ms, ev.decel_x10 / 10, ev.decel_x10 % 10,
+            float el, az; pose_angles(&pose, &el, &az);
+
+            if (cal_step >= 0) {
+                /* 캘리브레이션 중: 판정하지 않고 방향만 모은다 */
+                uint8_t id = cal_order[cal_step];
+                pad_acc_add(&cal_acc, el, az);
+                printf("[CAL] %s %d/%d  el %d az %d\r\n", pad_name(id), ++cal_count, CAL_HITS, (int)el, (int)az);
+                if (cal_count >= CAL_HITS) {
+                    float me, ma;
+                    if (pad_acc_mean(&cal_acc, &me, &ma)) pad_table_set(&cal_table, id, me, ma, 30.0f);
+                    pad_acc_reset(&cal_acc);
+                    cal_count = 0;
+                    if (++cal_step >= (int)CAL_PADS) {
+                        pad_table_autoradius(&cal_table);
+                        pads = cal_table;
+                        cal_step = -1;
+                        printf("[CAL] done\r\n");
+                        for (uint8_t i = 0; i < pads.n; i++)
+                            printf("[CAL] %-9s el %4d az %4d r %2d\r\n", pad_name(pads.a[i].id),
+                                   (int)pads.a[i].elev_deg, (int)pads.a[i].azim_deg, (int)pads.a[i].radius_deg);
+                    } else {
+                        printf("[CAL] hit %s x%d\r\n", pad_name(cal_order[cal_step]), CAL_HITS);
+                    }
+                }
+                busy_max = 0;
+                printed = 1;
+                goto slot_end;
+            }
+
+            pad_result_t pr = pad_classify(&pads, el, az);
+            uint32_t busy_now = dwt_elapsed_us(t0);              /* 출력 전까지 (출력 시간 제외) */
+            if (busy_now > busy_max) busy_max = busy_now;
+            printf("%2lu %8lu %-9s%c %3d %4d %3d %4u %3u | %5lu | %lu/%lu/%lu\r\n",
+                   hitd.n_hits, ev.t_hit_us / 1000, pad_name(pr.id), pr.margin_deg < HIT_MARGIN_AMBIG ? '?' : ' ',
+                   (int)el, (int)az, (int)pr.margin_deg, ev.peak_dps, ev.velocity, busy_max,
                    hitd.n_reject_weak, hitd.n_reject_slow, hitd.n_reject_long);
+            busy_max = 0;
+            printed = 1;
         }
+    }
+slot_end:
+    slot++;
+
+    if (!printed) {                                            /* 출력한 칸은 통계에서 제외 */
+        uint32_t busy = dwt_elapsed_us(t0);
+        if (busy > busy_max) busy_max = busy;
     }
 
     next += period_cyc;
