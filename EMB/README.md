@@ -210,16 +210,16 @@ FC FF 26 00 04 00 1F FF 5F FF 81 FE FE FF FC FF FF FF E8 03 EB 02
 | --- | --- | --- | --- |
 | HIHAT | 39° | −50° | 30° |
 | SNARE | 30° | −27° | 30° |
-| HI_TOM | 61° | −34° | 30° |
+| SMALL_TOM | 61° | −34° | 30° |
 | FLOOR_TOM | 43° | 55° | 30° |
 
-**보드 단독 캘리브레이션 (TEST_HIT)**: 스틱을 정면으로 들고 B1 → 방위각 0 → 안내대로 HIHAT → HI_TOM → SNARE → FLOOR_TOM 순서로 패드마다 2번 친다 (FE PLAY-004와 같은 2타). 평균 방향으로 테이블을 만들고, 반경은 가장 가까운 패드까지 각도 × 0.6 (15~35°)으로 자동 설정한다. 웹 연동 후에는 SET_PAD_TABLE로 덮어쓴다.
+**보드 단독 캘리브레이션 (TEST_HIT)**: 스틱을 정면으로 들고 B1 → 방위각 0 → 안내대로 HIHAT → SMALL_TOM → SNARE → FLOOR_TOM 순서로 패드마다 2번 친다 (FE PLAY-004와 같은 2타). 평균 방향으로 테이블을 만들고, 반경은 가장 가까운 패드까지 각도 × 0.6 (15~35°)으로 자동 설정한다. 웹 연동 후에는 SET_PAD_TABLE로 덮어쓴다.
 
 **남은 것**
 - 판정 정확도 실측값(녹화 재생, 실시간)을 이 절에 기록
 - 타격 검출은 아직 스윙 축 자이로(`HIT_AXIS`, `HIT_SIGN`)를 쓴다. 고도각 변화율로 바꾸면 부착 방향과 무관해짐
 - 기본 테이블 고도각이 모두 +(끝이 위)라 실제 타격 자세·`HIT_TIP_AXIS` 부호 재확인 필요
-- CRASH·RIDE·KICK은 기본 테이블에 없음
+- 1단계는 4개(HIHAT·SNARE·SMALL_TOM·FLOOR_TOM). CRASH·MID_TOM·RIDE는 기본 테이블에 없음 (패드 번호는 통신 프로토콜 v0.7, KICK·HIHAT_PEDAL은 페달)
 
 ## 11. 지연 측정 준비
 

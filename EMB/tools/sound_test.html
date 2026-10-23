@@ -55,7 +55,7 @@
   <div class="pads">
     <div class="pad" id="p-HIHAT" style="--c:#e6b85c"><b>하이햇</b><span>-</span></div>
     <div class="pad" id="p-SNARE" style="--c:#f2e8d5"><b>스네어</b><span>-</span></div>
-    <div class="pad" id="p-HI_TOM" style="--c:#e0875a"><b>하이탐</b><span>-</span></div>
+    <div class="pad" id="p-SMALL_TOM" style="--c:#e0875a"><b>스몰탐</b><span>-</span></div>
     <div class="pad" id="p-FLOOR_TOM" style="--c:#c5563f"><b>플로어탐</b><span>-</span></div>
   </div>
 
@@ -120,7 +120,7 @@ function play(pad, vel) {
   switch (pad) {
     case 'HIHAT':     noiseHit(t, 0.5 * v, 0.06, 'highpass', 7000); break;
     case 'SNARE':     noiseHit(t, 0.7 * v, 0.18, 'bandpass', 1800, 0.8); toneHit(t, 0.5 * v, 0.12, 220, 160); break;
-    case 'HI_TOM':    toneHit(t, 0.9 * v, 0.28, 240, 140); break;
+    case 'SMALL_TOM': toneHit(t, 0.9 * v, 0.28, 240, 140); break;
     case 'FLOOR_TOM': toneHit(t, 1.0 * v, 0.40, 130, 70); break;
     default:          noiseHit(t, 0.25 * v, 0.03, 'highpass', 2000); break;   /* 판정 없음: 짧은 클릭 */
   }

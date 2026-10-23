@@ -5,7 +5,8 @@
  * "방향 벡터 사이 각도"가 가장 작은 패드를 고른다.
  * (고도각·방위각 평면 거리는 스틱이 수직에 가까울 때 방위각이 크게 흔들려서 쓰지 않는다)
  *
- * 패드 번호는 통신 프로토콜과 같다: 0 CRASH, 1 HIHAT, 2 SNARE, 3 HI_TOM, 4 FLOOR_TOM, 5 RIDE, 6 KICK
+ * 패드 번호는 통신 프로토콜 v0.7과 같다: 0 CRASH, 1 HIHAT, 2 SNARE, 3 SMALL_TOM, 4 MID_TOM, 5 FLOOR_TOM, 6 RIDE (스틱 0~6)
+ *                                       7 KICK, 8 HIHAT_PEDAL (페달, 패드 테이블에는 넣지 않음)
  * 테이블은 웹의 SET_PAD_TABLE로 덮어쓴다. 기본값은 2026-10-22 녹화 1인 데이터 (EMB README)
  */
 #ifndef PAD_H

@@ -44,8 +44,8 @@ void pad_table_default(pad_table_t *t)
     /* 2026-10-22 녹화(pad_1022.csv), 패드별 10회 평균, 정면 보정 기준. 반경은 판정 없음 처리용 */
     pad_table_set(t, 1, 39.0f, -50.0f, 30.0f);   /* HIHAT */
     pad_table_set(t, 2, 30.0f, -27.0f, 30.0f);   /* SNARE */
-    pad_table_set(t, 3, 61.0f, -34.0f, 30.0f);   /* HI_TOM */
-    pad_table_set(t, 4, 43.0f,  55.0f, 30.0f);   /* FLOOR_TOM */
+    pad_table_set(t, 3, 61.0f, -34.0f, 30.0f);   /* SMALL_TOM */
+    pad_table_set(t, 5, 43.0f,  55.0f, 30.0f);   /* FLOOR_TOM */
 }
 
 pad_result_t pad_classify(const pad_table_t *t, float el, float az)
@@ -68,8 +68,9 @@ pad_result_t pad_classify(const pad_table_t *t, float el, float az)
 
 const char *pad_name(uint8_t id)
 {
-    static const char *n[] = {"CRASH", "HIHAT", "SNARE", "HI_TOM", "FLOOR_TOM", "RIDE", "KICK"};
-    return id < 7 ? n[id] : "-";
+    static const char *n[] = {"CRASH", "HIHAT", "SNARE", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "RIDE",
+                              "KICK", "HIHAT_PEDAL"};
+    return id < 9 ? n[id] : "-";
 }
 
 void pad_table_autoradius(pad_table_t *t)

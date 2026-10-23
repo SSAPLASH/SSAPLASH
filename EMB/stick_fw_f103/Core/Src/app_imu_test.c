@@ -78,8 +78,8 @@
 #define HIT_TIP_AXIS      {0.0f, 0.0f, 1.0f}   /* 스틱 끝 방향 = 센서 +z (2026-10-22 녹화로 확인) */
 #define HIT_MARGIN_AMBIG  10      /* margin(도)이 이보다 작으면 판정 애매 표시 '?' (프로토콜 flags 비트 4) */
 #define CAL_HITS          2       /* 캘리브레이션 때 패드당 타격 수 (FE PLAY-004와 같은 2타) */
-/* 캘리브레이션 순서: HIHAT → HI_TOM → SNARE → FLOOR_TOM (패드 번호는 pad.h) */
-static const uint8_t cal_order[] = { 1, 3, 2, 4 };
+/* 캘리브레이션 순서: HIHAT → SMALL_TOM → SNARE → FLOOR_TOM (패드 번호는 pad.h, 프로토콜 v0.7) */
+static const uint8_t cal_order[] = { 1, 3, 2, 5 };
 #define CAL_PADS          (sizeof cal_order / sizeof cal_order[0])
 
 #define ERR_RECOVER_COUNT 3     /* 연속 에러가 이만큼 나면 버스 복구 */
