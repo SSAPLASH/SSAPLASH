@@ -5,7 +5,6 @@ import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources'
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
-import { usePresets } from '@/store/presetStore';
 import { useLive, type MetronomeLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
@@ -286,13 +285,4 @@ export async function unlockAudio(): Promise<void> {
   useLive.setState({ audioReady: audioEngine.ready });
   // 첫 제스처 이후 세트 로드(이미 적용·로딩 중이면 건너뜀)
   if (appliedSetId !== useSettings.getState().soundSetId) void applySoundSet();
-}
-
-/** 앱 시작 시 프리셋 목록을 읽고, 적용 중인 프리셋이 없으면 기본 프리셋을 자동 적용한다 */
-export async function bootstrapPresets(): Promise<void> {
-  await usePresets.getState().refresh();
-  const { items, apply } = usePresets.getState();
-  if (useSettings.getState().activePresetId !== null) return;
-  const def = items.find((p) => p.isDefault);
-  if (def) apply(def.id);
 }

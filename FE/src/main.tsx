@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './app/App';
 import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
-import { bootstrapInput, bootstrapMetronome, bootstrapPresets, unlockAudio } from './app/bootstrap';
+import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap';
 import { bootstrapAuth } from './app/authBootstrap';
+import { bootstrapPresets } from './app/presetBootstrap';
 import './styles/global.css';
 
 bootstrapInput();
 bootstrapMetronome();
-void bootstrapPresets();
+bootstrapPresets(); // 로그인 상태에 따라 프리셋 저장소(로컬/서버)를 맞춘다. 복원 결과보다 먼저 구독해야 한다
 bootstrapAuth(); // refresh 쿠키로 로그인 복원 시작. 결과는 RequireAuth가 본다
 // 첫 클릭/키 입력에서 AudioContext를 깨운다 (브라우저 자동재생 정책)
 const unlock = () => {
