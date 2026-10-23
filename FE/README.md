@@ -95,6 +95,18 @@ src/
 - `inputManager`·키보드 소스는 `app/sources.ts`에서, 센서 소스 인스턴스는 `app/sensorRegistry.ts`가 디스크립터의 `create`로 만든다. 화면은 `input/` 클래스를 직접 new 하거나 소스 id 문자열을 비교하지 않고, 레지스트리의 디스크립터(라벨·가용성·설정 항목)를 읽는다.
 - BE는 `api/http`의 `apiFetch`로만 부른다. 화면·store는 401을 직접 처리하지 않는다(아래 [로그인](#로그인)). `api/` 안에서 `http`가 `auth`를 쓰고 `auth`는 `fetch`를 직접 쓴다 — 순환 없음. 로그인 시작·복귀 경로 같은 브라우저 동작은 `store/authStore`의 액션으로 두어 화면이 `api/`를 모른다.
 
+## 패드
+
+패드 enum은 `domain/pads.ts`의 `PadId` 9개(공통 명세서 5장·미결 #9 결정)다. 스틱 7개(`CRASH`·`HIHAT`·`SNARE`·`SMALL_TOM`·`MID_TOM`·`FLOOR_TOM`·`RIDE`)와 페달 2개(`KICK`·`HIHAT_PEDAL`). 목록은 용도별로 세 가지다.
+
+| 목록 | 개수 | 쓰는 곳 |
+| --- | --- | --- |
+| `ALL_PADS` | 9 | 저장·enum 검증·통계·악보 줄 |
+| `LANE_PADS` | 8 | 노트 레인·킷 캔버스·칩 목록. 페달 입력 장치가 정해지기 전까지 `HIHAT_PEDAL` 제외 |
+| `STICK_PADS` | 7 | 캘리브레이션·스틱 패드 테이블(`stick: true`) |
+
+옛 이름(`HI_TOM` → `SMALL_TOM`)은 `normalizePadId`·`normalizePadKeys`가 한 곳에서 변환한다. 서버 채보(`chartMapping`)·서버 프리셋(`api/presets`)·설정 마이그레이션(v10)·플레이 로그 로드가 이 함수를 거치므로 BE·AI 데이터가 옛 이름이어도 깨지지 않는다. 부족한 패드 배치는 `kitLayout.fillLayout`이 기본값으로 채운다. 프로토콜 패드 번호(0~8, EMB v0.7)는 화면 순서와 별개로 `input/stickProtocol`에 둘 예정이다(스틱 프로토콜 갱신 작업에서 추가).
+
 ## 입력 구조
 
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
@@ -180,11 +192,13 @@ src/
 | --- | --- | --- |
 | 스네어 | F | J |
 | 하이햇 | D | K |
-| 하이탐 | E | I |
+| 스몰탐 | E | I |
+| 미드탐 | W | O |
 | 플로어탐 | C | M |
 | 크래시 | R | U |
 | 라이드 | T | Y |
 | 킥 | — | Space |
+| 하이햇 페달 | — | B |
 
 Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매핑이며 `domain/keyMap.ts`의 `KEY_MAP` 상수로만 정의한다.
 
@@ -264,7 +278,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 패드 소리는 사운드 세트가 정한다. 세팅 화면의 "사운드 세트"에서 `SSAPLASH 키트`(샘플)와 `합성음(임시)`을 고르며 선택은 설정(`soundSetId`)에 저장된다.
 
-- 샘플 세트는 `public/sounds/<id>/kit-config.json`과 `audio/*.wav`를 읽는다. 패드별 게인·재생 속도는 코드가 아니라 이 JSON이 정한다. 키트를 교체하려면 파일과 JSON만 바꾼다. `kit-config.json`의 `mid`처럼 대응하는 패드가 없는 항목은 무시한다(매핑표: `src/audio/kitConfig.ts`).
+- 샘플 세트는 `public/sounds/<id>/kit-config.json`과 `audio/*.wav`를 읽는다. 패드별 게인·재생 속도는 코드가 아니라 이 JSON이 정한다. 키트를 교체하려면 파일과 JSON만 바꾼다. 키트 항목 → 패드 매핑표는 `src/audio/kitConfig.ts`에 있다(`high`=스몰탐, `mid`=미드탐). 샘플이 없는 패드는 `audio/soundSets`의 폴백표를 따라 다른 패드 샘플을 작게 쓴다(하이햇 페달 → 하이햇 0.7배), 폴백도 없으면 합성음.
 - 첫 소리(오디오 언락) 이후에 샘플을 불러온다. 불러오는 동안과 파일 하나가 실패한 패드는 합성음으로 울린다. 한 번 불러온 세트는 다시 고를 때 재다운로드하지 않는다.
 - 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 사용자 볼륨 슬라이더는 마스터 게인에 따로 곱해진다.
 - 세팅 화면에서 패드를 톡 치면(이동 6px 이내) 소리와 타격 이펙트가 나온다. 이 타격(`source: 'preview'`)은 텔레메트리·통계에 남지 않는다.

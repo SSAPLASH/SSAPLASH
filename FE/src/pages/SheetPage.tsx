@@ -11,7 +11,7 @@ import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { formatDuration, formatSongTime } from '@/components/formatTime';
 import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
-import { LANE_ORDER, PAD_META } from '@/domain/pads';
+import { LANE_PADS, PAD_META } from '@/domain/pads';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -399,7 +399,7 @@ export function SheetPage() {
   const usedPads = useMemo(() => {
     if (!chart) return [];
     const set = new Set(chart.notes.map((n) => n.pad));
-    return LANE_ORDER.filter((p) => set.has(p)).map((p) => PAD_META[p].label);
+    return LANE_PADS.filter((p) => set.has(p)).map((p) => PAD_META[p].label);
   }, [chart]);
   const lastLog = useMemo(
     () => (chart ? latestSheetLog(loadPlayLogs(), { songNumericId: chart.songNumericId, songId: chart.songId }) : null),

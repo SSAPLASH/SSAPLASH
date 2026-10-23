@@ -19,13 +19,13 @@ export interface KitConfig {
   pads: Record<string, KitPadConfig>;
 }
 
-/** 키트 패드 id → PadId. 대응하는 패드가 없는 항목(mid)은 null이라 무시한다 */
+/** 키트 패드 id → PadId. 대응하는 패드가 없는 항목은 null이라 무시한다(현재는 없음) */
 export const KIT_PAD_TO_PAD_ID: Record<string, PadId | null> = {
   kick: 'KICK',
   snare: 'SNARE',
   hihat: 'HIHAT',
-  high: 'HI_TOM',
-  mid: null,
+  high: 'SMALL_TOM',
+  mid: 'MID_TOM',
   floor: 'FLOOR_TOM',
   crash: 'CRASH',
   ride: 'RIDE',

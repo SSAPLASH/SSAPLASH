@@ -74,13 +74,15 @@ describe('layoutBar', () => {
   const at = (step: number, bar = 0) => (bar * 16 + step) * 125;
 
   it('패드를 보표 위치·머리 모양으로 옮긴다 (스트립 문서 3-1 표)', () => {
-    const pads = ['KICK', 'FLOOR_TOM', 'SNARE', 'HI_TOM', 'RIDE', 'HIHAT', 'CRASH'] as const;
-    const l = layoutBar(chartOf(pads.map((pad, i) => ({ timeMs: at(i * 2), pad })), 2000), 0);
+    const pads = ['HIHAT_PEDAL', 'KICK', 'FLOOR_TOM', 'SNARE', 'MID_TOM', 'SMALL_TOM', 'RIDE', 'HIHAT', 'CRASH'] as const;
+    const l = layoutBar(chartOf(pads.map((pad, i) => ({ timeMs: at(i), pad })), 2000), 0);
     expect(l.glyphs.map((g) => [g.pad, g.line, g.head])).toEqual([
+      ['HIHAT_PEDAL', 0, 'cross'],
       ['KICK', 1, 'normal'],
       ['FLOOR_TOM', 3, 'normal'],
       ['SNARE', 5, 'normal'],
-      ['HI_TOM', 7, 'normal'],
+      ['MID_TOM', 6, 'normal'],
+      ['SMALL_TOM', 7, 'normal'],
       ['RIDE', 8, 'cross'],
       ['HIHAT', 9, 'cross'],
       ['CRASH', 10, 'circle-cross'],

@@ -7,7 +7,7 @@ import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
-import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
+import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
@@ -66,7 +66,7 @@ export function FreePlayPage() {
       <>
         키보드로 칩니다.{' '}
         {KEYBOARD_INPUT_ENABLED &&
-          LANE_ORDER.map((pad) => (
+          ALL_PADS.map((pad) => (
           <span key={pad} style={{ marginRight: 8 }}>
             <span style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</span>{' '}
             {Object.entries(KEY_MAP)
@@ -176,7 +176,7 @@ export function FreePlayPage() {
             </div>
             <table>
               <tbody>
-                {LANE_ORDER.map((pad) => (
+                {ALL_PADS.map((pad) => (
                   <tr key={pad}>
                     <td style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</td>
                     <td style={{ textAlign: 'right' }}>{stats.byPad[pad]}</td>

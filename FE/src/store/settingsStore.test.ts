@@ -230,8 +230,46 @@ describe('migrateSettings v8 → v9 (프로필 삭제·최초 설정·프리셋 
     expect(out.activePresetId).toBeNull();
   });
 
-  it('v9 상태는 그대로 통과한다', () => {
+  it('v10 상태는 그대로 통과한다', () => {
     const state = { firstSetupDone: true, activePresetId: 'z', presets: [] };
-    expect(migrateSettings(state, 9)).toEqual(state);
+    expect(migrateSettings(state, 10)).toEqual(state);
+  });
+});
+
+describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
+  const basic = KIT_LAYOUT_PRESETS.basic;
+  // v9 배치: HI_TOM 키 7개(MID_TOM·HIHAT_PEDAL 없음)
+  const { SMALL_TOM: _s, MID_TOM: _m, HIHAT_PEDAL: _h, ...rest } = basic;
+  void _s;
+  void _m;
+  void _h;
+  const oldHiTom = { x: 0.11, y: 0.22, r: 0.33 };
+  const v9Layout = { ...rest, HI_TOM: oldHiTom };
+  const run = (p: Record<string, unknown>) => migrateSettings(p, 9) as unknown as Record<string, unknown>;
+
+  const check = (layout: Record<string, unknown>) => {
+    expect(layout.SMALL_TOM).toEqual(oldHiTom);
+    expect(layout.MID_TOM).toEqual(basic.MID_TOM);
+    expect(layout.HIHAT_PEDAL).toEqual(basic.HIHAT_PEDAL);
+    expect('HI_TOM' in layout).toBe(false);
+    expect(layout.SNARE).toEqual(basic.SNARE);
+  };
+
+  it('최상위 kitLayout과 프리셋 layout의 HI_TOM을 SMALL_TOM으로 옮기고 없는 패드를 채운다', () => {
+    const out = run({
+      kitLayout: v9Layout,
+      presets: [{ id: 'a', name: 'A', soundSetId: 'synth', isDefault: true, schemaVersion: 1, createdAt: 'x', updatedAt: 'x', layout: v9Layout }],
+    });
+    check(out.kitLayout as Record<string, unknown>);
+    const presets = out.presets as Record<string, unknown>[];
+    check(presets[0].layout as Record<string, unknown>);
+    expect(presets[0]).toMatchObject({ id: 'a', name: 'A', soundSetId: 'synth', isDefault: true, schemaVersion: 1, createdAt: 'x', updatedAt: 'x' });
+  });
+
+  it('kitLayout이 없거나 객체가 아니면 기본 배치, layout이 객체가 아닌 프리셋은 버린다', () => {
+    const out = run({ kitLayout: 'broken', presets: [{ id: 'a', layout: null }, { id: 'b', layout: v9Layout }] });
+    expect(out.kitLayout).toEqual(basic);
+    expect((out.presets as { id: string }[]).map((x) => x.id)).toEqual(['b']);
+    expect(run({}).kitLayout).toEqual(basic);
   });
 });

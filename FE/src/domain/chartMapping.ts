@@ -1,6 +1,6 @@
 // BE 채보 응답(ChartDetail) → FE Chart 변환 (설계 3-2). 순수 함수, 네트워크 없음.
 import type { Chart, ChartNote, ChartSource, Difficulty } from './chart';
-import { PAD_META, type PadId } from './pads';
+import { normalizePadId } from './pads';
 import { toSafeId } from './songCatalog';
 
 export interface ChartNoteDto {
@@ -59,13 +59,9 @@ export interface ChartAssetsDto {
   assetsExpireAt: string | null;
 }
 
-function isPadId(v: string): v is PadId {
-  return Object.prototype.hasOwnProperty.call(PAD_META, v);
-}
-
 /**
  * BE 채보를 FE Chart로 바꾼다.
- * - 알 수 없는 pad 노트는 버리고 경고를 한 번만 남긴다.
+ * - 옛 이름은 normalizePadId로 변환하고, 알 수 없는 pad 노트는 버리고 경고를 한 번만 남긴다.
  * - `timeMs`는 반주 시작 기준 절대값이라 offsetMs를 더하지 않는다.
  * - tempoMap·timeSignatureMap이 둘 이상이면 고정 bpm으로 그리고 `variableTempo`로 표시한다.
  * - `hasAccompaniment`는 곡 상세 값(또는 자산 확인 결과)을 호출자가 넘긴다.
@@ -78,11 +74,12 @@ export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolea
   const notes: ChartNote[] = [];
   const dropped = new Set<string>();
   for (const n of detail.notes) {
-    if (!isPadId(n.pad)) {
+    const pad = normalizePadId(n.pad);
+    if (!pad) {
       dropped.add(n.pad);
       continue;
     }
-    const note: ChartNote = { timeMs: n.timeMs, pad: n.pad };
+    const note: ChartNote = { timeMs: n.timeMs, pad };
     if (n.velocityHint != null) note.velocityHint = n.velocityHint;
     notes.push(note);
   }

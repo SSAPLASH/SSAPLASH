@@ -1,6 +1,6 @@
 // 가상 드럼 키트 캔버스. 세팅(드래그 배치)·캘리브레이션(목표 패드·자세 마커·앵커)·자유 연주(타격 플래시)에 공용.
 import { useEffect, useRef } from 'react';
-import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
+import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { KitLayout } from '@/domain/kitLayout';
 import type { HitFx, Pose } from '@/domain/events';
 import type { PadAnchor } from '@/domain/calibration';
@@ -131,7 +131,7 @@ export function KitCanvas(props: KitCanvasProps) {
       }
 
       // 패드
-      for (const pad of ALL_PADS) {
+      for (const pad of LANE_PADS) {
         const pl = p.layout[pad];
         const cx = pl.x * W;
         const cy = pl.y * H;
@@ -195,7 +195,7 @@ export function KitCanvas(props: KitCanvasProps) {
 
       // 링·의성어 (모든 패드 위에 그린다)
       if (p.hits?.current && !reducedMotionRef.current) {
-        for (const pad of ALL_PADS) {
+        for (const pad of LANE_PADS) {
           const fx = p.hits.current.get(pad);
           if (!fx) continue;
           const age = now - fx.at;
@@ -269,7 +269,7 @@ export function KitCanvas(props: KitCanvasProps) {
     const nx = (clientX - rect.left) / rect.width;
     const ny = (clientY - rect.top) / rect.height;
     const aspect = rect.width / rect.height;
-    for (const pad of [...ALL_PADS].reverse()) {
+    for (const pad of [...LANE_PADS].reverse()) {
       const pl = propsRef.current.layout[pad];
       const dx = nx - pl.x;
       const dy = (ny - pl.y) / aspect;

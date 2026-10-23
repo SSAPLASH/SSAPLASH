@@ -9,7 +9,7 @@ import { useHitFx } from '@/components/useHitFx';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
-import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
+import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { layoutToProfile } from '@/domain/kitJudge';
@@ -310,7 +310,7 @@ export function SetupPage() {
             {sensorMode && !anyConnected && <div className="notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div>}
             <p className="small dim">마지막 타격: {lastHitText}</p>
             <div className="chips">
-              {LANE_ORDER.map((pad) => (
+              {LANE_PADS.map((pad) => (
                 <button key={pad} className="chip" onClick={() => testPad(pad)}>
                   {PAD_META[pad].label} 소리
                 </button>

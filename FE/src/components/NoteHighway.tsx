@@ -1,6 +1,6 @@
 // 리듬 게임 노트 레인 (Canvas 2D). 노트가 위에서 판정선으로 떨어진다.
 import { useEffect, useRef } from 'react';
-import { LANE_ORDER, PAD_META, type PadId } from '@/domain/pads';
+import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
@@ -53,7 +53,7 @@ export function NoteHighway(props: NoteHighwayProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const lanes = LANE_ORDER;
+      const lanes = LANE_PADS;
       const laneW = W / lanes.length;
       const judgeY = H - 90;
       const top = 10;

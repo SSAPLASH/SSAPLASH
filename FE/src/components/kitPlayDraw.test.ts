@@ -56,7 +56,7 @@ describe('chordGroups', () => {
 
 describe('nextTargets', () => {
   it('가장 가까운 미판정 노트와 같은 시각의 패드', () => {
-    const notes = [note(0, 900, 'HI_TOM', 'PERFECT'), note(1, 1000, 'SNARE'), note(2, 1000, 'KICK'), note(3, 1100, 'SNARE')];
+    const notes = [note(0, 900, 'SMALL_TOM', 'PERFECT'), note(1, 1000, 'SNARE'), note(2, 1000, 'KICK'), note(3, 1100, 'SNARE')];
     expect(nextTargets(notes, 950).sort()).toEqual(['KICK', 'SNARE']);
   });
 });

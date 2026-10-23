@@ -1,7 +1,8 @@
 // 프리셋 API (BE README "키트 프리셋 (90번)", 설계 SETUP-002 프리셋 서버연동 3-2·3-3).
 // PresetSource의 서버 구현. 로그인 상태에서 app/presetBootstrap이 presetStore.setSource로 끼운다.
 // 화면·store는 이 파일을 직접 부르지 않는다. 요청·응답에 calibration은 없다(명세 미결 #23: FE가 쓰지 않음).
-import type { KitLayout } from '@/domain/kitLayout';
+import { fillLayout, type KitLayout, type PadPlacement } from '@/domain/kitLayout';
+import { normalizePadKeys } from '@/domain/pads';
 import {
   PRESET_SCHEMA_VERSION,
   PresetError,
@@ -18,7 +19,8 @@ export interface PresetDto {
   id: number;
   name: string;
   isDefault: boolean;
-  layout: KitLayout;
+  /** 서버가 옛 패드 이름(HI_TOM)·빠진 패드로 보낼 수 있어 키를 느슨하게 둔다. toKitPreset이 보정한다 */
+  layout: Record<string, PadPlacement>;
   /** 1단계는 soundSetId 하나. BE는 내용을 해석하지 않으므로 모르는 값이 올 수 있다 */
   sounds: { soundSetId?: string };
   schemaVersion: number;
@@ -53,7 +55,7 @@ export function toKitPreset(dto: PresetDto): KitPreset {
     id: String(dto.id),
     name: dto.name,
     isDefault: dto.isDefault,
-    layout: dto.layout,
+    layout: fillLayout(normalizePadKeys(dto.layout)),
     soundSetId: toSoundSetId(dto.sounds?.soundSetId),
     schemaVersion: dto.schemaVersion,
     createdAt: dto.createdAt,

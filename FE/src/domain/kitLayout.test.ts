@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS } from './kitLayout';
+import { DEFAULT_KIT_LAYOUT, fillLayout, KIT_LAYOUT_PRESETS } from './kitLayout';
 import { ALL_PADS } from './pads';
 
 describe('KIT_LAYOUT_PRESETS', () => {
@@ -27,5 +27,15 @@ describe('KIT_LAYOUT_PRESETS', () => {
         }
       }
     }
+  });
+});
+
+describe('fillLayout', () => {
+  it('없는 패드는 기본 배치 값으로 채운다', () => {
+    const l = fillLayout({ SNARE: { x: 0.1, y: 0.2, r: 0.3 } });
+    expect(l.SNARE).toEqual({ x: 0.1, y: 0.2, r: 0.3 });
+    expect(l.MID_TOM).toEqual(DEFAULT_KIT_LAYOUT.MID_TOM);
+    expect(l.HIHAT_PEDAL).toEqual(DEFAULT_KIT_LAYOUT.HIHAT_PEDAL);
+    expect(Object.keys(l).sort()).toEqual([...ALL_PADS].sort());
   });
 });

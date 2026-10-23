@@ -5,7 +5,7 @@ import { useLive } from '@/store/liveStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { KEY_MAP } from '@/domain/keyMap';
-import { PAD_META, LANE_ORDER } from '@/domain/pads';
+import { PAD_META, LANE_PADS } from '@/domain/pads';
 
 export function HomePage() {
   const sensorKind = useSettings((s) => s.sensorKind);
@@ -50,7 +50,7 @@ export function HomePage() {
         <section className="card" style={{ marginTop: 24 }}>
           <h3 style={{ marginBottom: 10 }}>키보드 입력 (개발용)</h3>
           <div className="keyhelp">
-            {LANE_ORDER.map((pad) => (
+            {LANE_PADS.map((pad) => (
               <div key={pad}>
                 <span style={{ color: PAD_META[pad].color, fontWeight: 700 }}>{PAD_META[pad].label}</span>
                 <span className="row" style={{ gap: 4 }}>
