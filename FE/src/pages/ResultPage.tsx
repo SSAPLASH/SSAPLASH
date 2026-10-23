@@ -1,9 +1,10 @@
 // 연주 결과 (리듬 게임 설계 4-2 · 악보 연주 설계 D11). localStorage 플레이 로그를 읽어 보여준다.
 // 악보 연주(mode SHEET)는 점수·콤보 대신 정확도·판정 분포를 앞에 두고 피드백 카드·패드 요약을 붙인다.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { FeedbackCards } from '@/components/FeedbackCards';
-import { buildFeedback, summarizeByPad } from '@/domain/feedback';
+import { SheetSnippet } from '@/components/SheetSnippet';
+import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
 const DIFF_LABEL: Record<string, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
@@ -52,6 +53,18 @@ export function ResultPage() {
   const isSheet = log?.mode === 'SHEET';
   const feedback = useMemo(() => (log && isSheet ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : undefined) : []), [log, isSheet]);
   const summary = useMemo(() => (log && isSheet ? summarizeByPad(log) : []), [log, isSheet]);
+  // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
+  const snippetChart = useMemo(() => (log && isSheet ? chartFromLog(log) : null), [log, isSheet]);
+  const noteStates = useMemo(() => (log ? log.notes.map((n) => n.judgement) : []), [log]);
+  // 카드를 누르기 전에는 bars가 있는 첫 카드. 로그가 바뀌면(다른 결과) 선택을 버린다
+  const [picked, setPicked] = useState<{ playId: string; bars: [number, number] } | null>(null);
+  const focusBars: [number, number] | null =
+    picked && picked.playId === log?.playId ? picked.bars : (feedback.find((f) => f.bars)?.bars ?? null);
+  const snippetRef = useRef<HTMLDivElement>(null);
+  const focus = (bars: [number, number]) => {
+    if (log) setPicked({ playId: log.playId, bars });
+    snippetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
   const retry = () => {
     if (log) navigate(retryPath(log));
   };
@@ -180,9 +193,17 @@ export function ResultPage() {
         </div>
       </div>
 
+      {isSheet && snippetChart && focusBars && (
+        <div className="card col" ref={snippetRef} style={{ marginTop: 16 }}>
+          <h3>{focusBars[0] === focusBars[1] ? `약점 ${focusBars[0] + 1}마디` : `약점 마디 ${focusBars[0] + 1}~${focusBars[1] + 1}`}</h3>
+          <SheetSnippet chart={snippetChart} noteStates={noteStates} bars={focusBars} />
+          <div className="small dim">카드를 누르면 구간이 바뀝니다</div>
+        </div>
+      )}
+
       {isSheet && (
         <div style={{ marginTop: 16 }}>
-          <FeedbackCards items={feedback} summary={summary} />
+          <FeedbackCards items={feedback} summary={summary} onFocusBars={snippetChart ? focus : undefined} />
         </div>
       )}
     </main>
