@@ -13,6 +13,8 @@ import type { ResolvedHit, SensorId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { metronome } from '@/engine/Metronome';
+import { padTableSync } from '@/input/padTableSync';
+import type { CalibrationProfile } from '@/domain/calibration';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -36,6 +38,15 @@ function applySensorOptions(): void {
   desc.applyTuning?.(activeInstance, useSettings.getState().tuning);
 }
 
+/** 현재 설정에서 유도한 판정 프로필(설계 D1) */
+function currentProfile(): CalibrationProfile {
+  const s = useSettings.getState();
+  return layoutToProfile(s.kitLayout, s.tuning.angleRange, {
+    maxRadiusDeg: s.tuning.maxRadiusDeg,
+    radiusFactor: s.tuning.radiusFactor,
+  });
+}
+
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
 export async function activateSensor(id: SensorId): Promise<void> {
   if (currentSensor === id) return;
@@ -43,12 +54,14 @@ export async function activateSensor(id: SensorId): Promise<void> {
   unsubState?.();
   unsubState = null;
   activeInstance = null;
+  padTableSync.setSource(null);
   currentSensor = id;
   useLive.setState({ activeSensor: id, connected: [false, false], sourceState: 'disconnected', sourceMessage: null });
   if (id === 'none') return;
   try {
     const src = sensorRegistry.instance(id);
     activeInstance = src;
+    padTableSync.setSource(src);
     applySensorOptions();
     src.setSurface?.(lastSurface);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
@@ -79,6 +92,8 @@ function keyboardKeys(): string[] {
 export function bootstrapInput(): void {
   // 키보드 매핑은 고정 상수라 설정 구독 밖에서 한 번만 넘긴다
   inputManager.setKeyMap(KEY_MAP);
+  // 패드 표 적용 상태를 liveStore로 옮긴다(input → store 직접 import 금지라 콜백 주입)
+  padTableSync.onStatus((st) => useLive.setState({ padTable: st }));
 
   // 저장된 sensorKind가 등록되지 않은 id(제거된 소스, 다른 PC에서 복사한 설정)면 'none'으로 되돌린다(R6)
   if (!sensorRegistry.isKnown(useSettings.getState().sensorKind)) useSettings.setState({ sensorKind: 'none' });
@@ -89,12 +104,9 @@ export function bootstrapInput(): void {
     keyboardSource.setKeys(keyboardKeys());
     applySensorOptions();
     // 튜닝은 다음 타격부터 반영된다. 판정 프로필은 배치에서 유도(설계 D1): 배치·각도 범위·반경 튜닝이 바뀔 때마다 다시 만든다.
-    inputManager.setProfile(
-      layoutToProfile(s.kitLayout, s.tuning.angleRange, {
-        maxRadiusDeg: s.tuning.maxRadiusDeg,
-        radiusFactor: s.tuning.radiusFactor,
-      }),
-    );
+    const profile = currentProfile();
+    inputManager.setProfile(profile);
+    padTableSync.push(profile);
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
@@ -109,6 +121,8 @@ export function bootstrapInput(): void {
     const c = [...useLive.getState().connected] as [boolean, boolean];
     c[stickId] = connected;
     useLive.setState({ connected: c });
+    // 센서가 연결되면 현재 패드 표를 스틱에 보낸다(같은 표를 이미 보냈으면 무동작)
+    if (connected) padTableSync.push(currentProfile());
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
     if (!connected && useLive.getState().referenceSetAt !== null) useLive.setState({ referenceStale: true });
   });
