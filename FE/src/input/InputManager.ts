@@ -149,13 +149,19 @@ export class InputManager {
       id: ++this.seq,
       stickId,
       pad: m.pad,
-      velocity: accelToVelocity(e.peakAccel, this.velocityCurve),
+      // 스틱 velocity는 펌웨어 곡선 결과라 그대로 쓴다(이중 적용 금지). 없으면 가속도 곡선
+      velocity:
+        e.velocity !== undefined
+          ? Math.min(127, Math.max(1, Math.round(e.velocity)))
+          : accelToVelocity(e.peakAccel, this.velocityCurve),
       tHit,
       tRecv: e.recvTime,
       tResolved: performance.now(),
       source,
       pose,
       peakAccel: e.peakAccel,
+      peakSpeedDps: e.peakSpeedDps,
+      judgedBy: m.judgedBy,
       distanceDeg: m.distanceDeg,
       inside: m.inside,
     };

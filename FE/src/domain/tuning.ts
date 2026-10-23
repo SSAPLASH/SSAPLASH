@@ -138,3 +138,9 @@ export function countChangedTuning(t: SensorTuning): number {
     t.angleRange.pitchDeg !== d.angleRange.pitchDeg,
   ].filter(Boolean).length;
 }
+
+/**
+ * 스틱 판정이 "애매"하다고 보는 1·2등 패드 거리 차(도). 펌웨어 `?` 표시 기준과 같다.
+ * 이 값 미만이면 채보 후보로 보정할 수 있다. 실측 뒤 슬라이더 여부 재검토(설계 U2).
+ */
+export const AMBIGUOUS_MARGIN_DEG = 10;

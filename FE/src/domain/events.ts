@@ -29,6 +29,12 @@ export interface StickHitEvent {
   pad?: PadId | null;
   /** 스틱이 계산한 세기 0~127. 센서 스틱 소스만 */
   velocity?: number;
+  /** 스틱 판정의 1·2등 패드 거리 차(도). 작을수록 애매. 센서 스틱 소스만 */
+  marginDeg?: number;
+  /** 스틱이 "판정 애매"로 표시했는지(flags 비트 4). 센서 스틱 소스만 */
+  ambiguous?: boolean;
+  /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 소스만 */
+  peakSpeedDps?: number;
 }
 
 export interface StickPoseEvent {
@@ -68,6 +74,9 @@ export type OptionValue = string | number | boolean;
 /** 소스 하나의 설정값 묶음. 설정 스토어는 내용을 모르고 그대로 보관한다 */
 export type OptionValues = Record<string, OptionValue>;
 
+/** 패드 판정 출처: key 키 매퍼 / stick 스틱 pad 그대로 / chart 채보 후보로 보정 / pose 자세 매퍼 */
+export type HitJudgedBy = 'key' | 'stick' | 'chart' | 'pose';
+
 /**
  * 패드 판정까지 끝난 타격. 게임·자유 모드·텔레메트리가 이걸 소비한다.
  * t* 필드는 모두 performance.now() 기준(ms). 구간별 지연 = 차이.
@@ -87,6 +96,10 @@ export interface ResolvedHit {
   source: InputSourceKind;
   pose: Pose;
   peakAccel: number;
+  /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 타격만 */
+  peakSpeedDps?: number;
+  /** 패드 판정 출처 */
+  judgedBy: HitJudgedBy;
   /** 판정 근거: 가장 가까운 앵커까지 각도 거리 */
   distanceDeg?: number;
   /** 판정 근거: 그 앵커 반경 안인지(자세 매퍼만) */

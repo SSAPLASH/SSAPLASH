@@ -205,6 +205,9 @@ describe('parsePacket', () => {
       yaw: 30.75,
       pad: 'MID_TOM',
       velocity: 100,
+      marginDeg: 3.5,
+      ambiguous: false,
+      peakSpeedDps: 4321,
     });
   });
 

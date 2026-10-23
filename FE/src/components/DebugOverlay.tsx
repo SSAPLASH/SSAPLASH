@@ -31,6 +31,7 @@ export function DebugOverlay({ onClose }: { onClose: () => void }) {
             <th>손</th>
             <th>vel</th>
             <th>g</th>
+            <th>판정자</th>
             <th>거리°</th>
             <th>수신</th>
             <th>판정</th>
@@ -46,6 +47,7 @@ export function DebugOverlay({ onClose }: { onClose: () => void }) {
               <td>{r.stickId === 0 ? 'L' : 'R'}</td>
               <td>{r.velocity}</td>
               <td>{r.peakAccel.toFixed(1)}</td>
+              <td>{r.judgedBy}</td>
               <td>{r.distanceDeg === null ? '–' : `${r.distanceDeg.toFixed(1)}${r.inside ? '' : '*'}`}</td>
               <td>{f(r.recvLagMs)}</td>
               <td>{f(r.resolveLagMs)}</td>
