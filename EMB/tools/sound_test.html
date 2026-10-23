@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스틱 소리 테스트</title>
+<!--
+  EMB 개발용 소리 테스트 (S15P31A307-117)
+  TEST_HIT 펌웨어가 시리얼(921600)로 보내는 텍스트 줄을 Web Serial로 받아,
+  패드별 드럼 소리를 Web Audio로 합성해 바로 낸다. 샘플 파일 없이 합성음.
+  - Chrome / Edge에서 이 파일을 열고 [연결] → STLink Virtual COM Port 선택
+  - MobaXterm 등 다른 터미널은 닫는다 (포트를 하나만 열 수 있음)
+  - 텍스트 줄 파싱은 임시. 118에서 바이너리 프로토콜(v0.5)로 바뀐다
+-->
+<style>
+  :root { --bg:#14161b; --panel:#1d2027; --ink:#eceff4; --dim:#8a92a3; --line:#2c313b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui, "Noto Sans KR", sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:24px 16px 40px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { margin:0 0 20px; color:var(--dim); font-size:14px; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:20px; }
+  button { background:#3a6df0; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:15px; cursor:pointer; }
+  button.ghost { background:var(--panel); color:var(--ink); border:1px solid var(--line); }
+  label { color:var(--dim); font-size:14px; display:flex; gap:6px; align-items:center; }
+  #status { color:var(--dim); font-size:14px; }
+  .pads { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:20px; }
+  .pad { background:var(--panel); border:2px solid var(--line); border-radius:12px; height:120px;
+         display:flex; flex-direction:column; align-items:center; justify-content:center; transition:background .08s, border-color .08s; }
+  .pad b { font-size:18px; }
+  .pad span { color:var(--dim); font-size:13px; margin-top:6px; }
+  .pad.on { background:var(--c); border-color:var(--c); color:#111; }
+  .pad.on span { color:#222; }
+  .stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:20px; }
+  .stat { background:var(--panel); border-radius:10px; padding:10px 12px; }
+  .stat div { color:var(--dim); font-size:12px; }
+  .stat b { font-size:18px; }
+  pre { background:var(--panel); border-radius:10px; padding:12px; height:260px; overflow:auto; font-size:12.5px; line-height:1.5; margin:0; color:#c9d1dc; }
+  @media (max-width:640px) { .pads, .stats { grid-template-columns:repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>스틱 소리 테스트</h1>
+  <p class="sub">TEST_HIT 출력(921600) → Web Serial → Web Audio 합성음</p>
+
+  <div class="bar">
+    <button id="connect">연결</button>
+    <button id="disconnect" class="ghost" disabled>끊기</button>
+    <label><input type="checkbox" id="none"> 판정 없음(-)도 소리</label>
+    <label><input type="checkbox" id="velo" checked> 세기 반영</label>
+    <span id="status">연결 안 됨</span>
+  </div>
+
+  <div class="pads">
+    <div class="pad" id="p-HIHAT" style="--c:#e6b85c"><b>하이햇</b><span>-</span></div>
+    <div class="pad" id="p-SNARE" style="--c:#f2e8d5"><b>스네어</b><span>-</span></div>
+    <div class="pad" id="p-SMALL_TOM" style="--c:#e0875a"><b>스몰탐</b><span>-</span></div>
+    <div class="pad" id="p-FLOOR_TOM" style="--c:#c5563f"><b>플로어탐</b><span>-</span></div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div>타격 수</div><b id="s-n">0</b></div>
+    <div class="stat"><div>판정 없음</div><b id="s-none">0</b></div>
+    <div class="stat"><div>애매(?)</div><b id="s-amb">0</b></div>
+    <div class="stat"><div>오디오 출력 지연</div><b id="s-lat">-</b></div>
+  </div>
+
+  <pre id="log"></pre>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let port = null, reader = null, ctx = null, noise = null;
+const stats = { n: 0, none: 0, amb: 0 };
+
+function log(line) {
+  const el = $('log');
+  el.textContent += line + '\n';
+  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
+  el.scrollTop = el.scrollHeight;
+}
+
+function initAudio() {
+  if (ctx) return;
+  ctx = new AudioContext({ latencyHint: 'interactive' });
+  const len = Math.floor(ctx.sampleRate * 0.5);
+  noise = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = noise.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const lat = (ctx.baseLatency || 0) + (ctx.outputLatency || 0);
+  $('s-lat').textContent = lat ? (lat * 1000).toFixed(1) + ' ms' : '알 수 없음';
+}
+
+function env(gainNode, t, peak, decay) {
+  gainNode.gain.setValueAtTime(peak, t);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, t + decay);
+}
+
+function noiseHit(t, peak, decay, type, freq, q) {
+  const src = ctx.createBufferSource(); src.buffer = noise;
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+  const g = ctx.createGain(); env(g, t, peak, decay);
+  src.connect(f).connect(g).connect(ctx.destination);
+  src.start(t); src.stop(t + decay + 0.02);
+}
+
+function toneHit(t, peak, decay, f0, f1) {
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + decay);
+  const g = ctx.createGain(); env(g, t, peak, decay);
+  o.connect(g).connect(ctx.destination);
+  o.start(t); o.stop(t + decay + 0.02);
+}
+
+function play(pad, vel) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const v = $('velo').checked ? 0.25 + 0.75 * Math.min(vel, 127) / 127 : 0.8;
+  switch (pad) {
+    case 'HIHAT':     noiseHit(t, 0.5 * v, 0.06, 'highpass', 7000); break;
+    case 'SNARE':     noiseHit(t, 0.7 * v, 0.18, 'bandpass', 1800, 0.8); toneHit(t, 0.5 * v, 0.12, 220, 160); break;
+    case 'SMALL_TOM': toneHit(t, 0.9 * v, 0.28, 240, 140); break;
+    case 'FLOOR_TOM': toneHit(t, 1.0 * v, 0.40, 130, 70); break;
+    default:          noiseHit(t, 0.25 * v, 0.03, 'highpass', 2000); break;   /* 판정 없음: 짧은 클릭 */
+  }
+}
+
+function flash(pad, text) {
+  const el = $('p-' + pad);
+  if (!el) return;
+  el.querySelector('span').textContent = text;
+  el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 90);
+}
+
+/* TEST_HIT 줄: " n  t_ms PAD[?] el az mg peak vel | busy | w/s/l" */
+const HIT = /^\s*(\d+)\s+(\d+)\s+([A-Z_]+|-)\s*(\?)?\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\|/;
+
+function onLine(line) {
+  const m = HIT.exec(line);
+  if (!m) { if (line.trim()) log(line); return; }
+  const pad = m[3], amb = !!m[4], el = +m[5], az = +m[6], vel = +m[9];
+  stats.n++; if (pad === '-') stats.none++; if (amb) stats.amb++;
+  $('s-n').textContent = stats.n; $('s-none').textContent = stats.none; $('s-amb').textContent = stats.amb;
+  if (pad !== '-' || $('none').checked) play(pad, vel);
+  flash(pad, `고도 ${el}° 방위 ${az}° 세기 ${vel}${amb ? ' ?' : ''}`);
+  log(line);
+}
+
+async function connect() {
+  if (!('serial' in navigator)) { $('status').textContent = '이 브라우저는 Web Serial을 지원하지 않아요 (Chrome/Edge)'; return; }
+  initAudio(); await ctx.resume();
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 921600 });
+  $('status').textContent = '연결됨 · 921600'; $('connect').disabled = true; $('disconnect').disabled = false;
+  const dec = new TextDecoderStream();
+  port.readable.pipeTo(dec.writable).catch(() => {});
+  reader = dec.readable.getReader();
+  let buf = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) { onLine(buf.slice(0, i).replace(/\r$/, '')); buf = buf.slice(i + 1); }
+    }
+  } catch (e) { log('[읽기 중단] ' + e.message); }
+}
+
+async function disconnect() {
+  try { if (reader) await reader.cancel(); } catch {}
+  try { if (port) await port.close(); } catch {}
+  port = reader = null;
+  $('status').textContent = '연결 안 됨'; $('connect').disabled = false; $('disconnect').disabled = true;
+}
+
+$('connect').onclick = () => connect().catch(e => { $('status').textContent = '연결 실패: ' + e.message; });
+$('disconnect').onclick = disconnect;
+</script>
+</body>
+</html>
