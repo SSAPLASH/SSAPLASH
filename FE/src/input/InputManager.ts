@@ -20,6 +20,7 @@ export class InputManager {
   private hitListeners = new Set<HitListener>();
   private poseListeners = new Set<PoseListener>();
   private statusListeners = new Set<StatusListener>();
+  private resetPoseListeners = new Set<() => void>();
   private profile: CalibrationProfile | null = null;
   private keyMap: KeyMap = {};
   private velocityCurve: VelocityCurve = DEFAULT_SENSOR_TUNING.velocity;
@@ -100,6 +101,13 @@ export class InputManager {
 
   resetPose(): void {
     for (const s of this.sources.values()) s.resetPose?.();
+    for (const l of this.resetPoseListeners) l();
+  }
+
+  /** resetPose()가 소스에 전달된 뒤 불린다. 펌웨어가 방위각 오프셋을 0으로 되돌리는 것을 따라가는 용도 */
+  onResetPose(l: () => void): () => void {
+    this.resetPoseListeners.add(l);
+    return () => this.resetPoseListeners.delete(l);
   }
 
   haptic(stickId: StickId, strength: number, durationMs: number): void {
