@@ -1,0 +1,157 @@
+spring:
+  application:
+    name: airdrum-api
+  # 작업 디렉터리(BE/)의 .env를 properties 형식(KEY=value)으로 읽는다. 없으면 건너뛴다. 운영은 환경변수로 준다.
+  config:
+    import: optional:file:.env[.properties]
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  web:
+    # 검증 메시지 등 프레임워크 문구를 Accept-Language와 무관하게 한국어로 고정한다.
+    locale: ko_KR
+    locale-resolver: fixed
+  # PostgreSQL 16. 비밀번호는 기본값이 없어 DB_PASSWORD를 주지 않으면 기동하지 않는다.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/app}
+    username: ${DB_USERNAME:app}
+    password: ${DB_PASSWORD}
+    hikari:
+      # 풀에서 연결을 기다리는 상한(ms). 기본 30초면 DB 장애 때 요청·헬스체크가 30초씩 묶인다.
+      connection-timeout: 5000
+  # 스키마는 db/migration의 Flyway SQL만 만든다. 파일명 규칙(V{n}__{설명}.sql)에 어긋나면 기동을 실패시킨다.
+  flyway:
+    validate-migration-naming: true
+  # 외부 HTTP 호출(OAuth 제공자) 시간 제한. 넘기면 로그인 실패로 처리한다.
+  http:
+    clients:
+      connect-timeout: 3s
+      read-timeout: 5s
+  # refresh 토큰 저장소(S15P31A307-88). 운영 Compose는 REDIS_HOST=redis. 장애 시 로그인·재발급이 2초 안에 실패한다.
+  # 엔티티 저장소는 JPA만 쓰므로 Redis 리포지토리 스캔은 끈다.
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
+      repositories:
+        enabled: false
+  jpa:
+    # Hibernate는 엔티티와 스키마가 맞는지 검증만 한다.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+# 파일이 존재할 때만 사용한다. 미설정 상태에서는 자산 URL 요청에 503을 반환한다.
+chart:
+  assets:
+    enabled: ${CHART_ASSET_ENABLED:false}
+    endpoint: ${CHART_ASSET_ENDPOINT:}
+    public-endpoint: ${CHART_ASSET_PUBLIC_ENDPOINT:}
+    region: ${CHART_ASSET_REGION:us-east-1}
+    sheet-bucket: ${CHART_ASSET_SHEET_BUCKET:}
+    accompaniment-bucket: ${CHART_ASSET_ACCOMPANIMENT_BUCKET:}
+    access-key: ${CHART_ASSET_ACCESS_KEY:}
+    secret-key: ${CHART_ASSET_SECRET_KEY:}
+    url-ttl: ${CHART_ASSET_URL_TTL:10m}
+
+logging:
+  level:
+    # 404·405는 GlobalExceptionHandler가 WARN 한 줄로 남긴다. DispatcherServlet의 중복 WARN은 숨긴다.
+    org.springframework.web.servlet.PageNotFound: ERROR
+
+play:
+  raw:
+    enabled: ${PLAY_RAW_ENABLED:false}
+    endpoint: ${PLAY_RAW_ENDPOINT:}
+    region: ${PLAY_RAW_REGION:us-east-1}
+    bucket: ${PLAY_RAW_BUCKET:}
+    access-key: ${PLAY_RAW_ACCESS_KEY:}
+    secret-key: ${PLAY_RAW_SECRET_KEY:}
+    private-bucket-confirmed: ${PLAY_RAW_PRIVATE_BUCKET_CONFIRMED:false}
+    concurrent-uploads: ${PLAY_RAW_CONCURRENT_UPLOADS:2}
+
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      # DB에 못 붙으면 readiness는 503이다. liveness는 프로세스 상태만 본다.
+      group:
+        readiness:
+          include: readinessState,db
+
+# 소셜 로그인(S15P31A307-87)과 토큰(-88). client-id·secret이 비어 있는 제공자는 비활성(로그인 404)이다.
+# 빈 값으로 들어온 주소·쿠키 설정은 AuthProperties가 로컬 기본값으로 되돌린다.
+auth:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8080}
+  login-success-path: /auth/callback
+  login-failure-path: /login
+  cookie-secure: ${COOKIE_SECURE:true}
+  state-cookie-max-age: 300s
+  admin:
+    emails: ${ADMIN_EMAILS:}
+  # 우리 서비스 토큰(S15P31A307-88). JWT_SECRET은 기본값이 없어 주지 않으면 기동하지 않는다(32바이트 이상).
+  jwt:
+    secret: ${JWT_SECRET:}
+    issuer: airdrum-api
+  access-token-ttl: 30m
+  refresh-token:
+    ttl: 14d
+    # redis | memory. memory는 재시작하면 모든 로그인이 풀린다(테스트·로컬 전용).
+    store: ${REFRESH_TOKEN_STORE:redis}
+  providers:
+    google:
+      social-provider: GOOGLE
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+      token-uri: https://oauth2.googleapis.com/token
+      user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+      scope: openid email profile
+      client-authentication-method: BASIC
+      attributes:
+        id: sub
+        email: email
+        email-verified: email_verified
+        name: name
+        picture: picture
+    ssafy:
+      social-provider: SSAFY
+      client-id: ${SSAFY_CLIENT_ID:}
+      client-secret: ${SSAFY_CLIENT_SECRET:}
+      authorization-uri: https://project.ssafy.com/oauth/sso-check
+      token-uri: https://project.ssafy.com/ssafy/oauth2/token
+      user-info-uri: https://project.ssafy.com/ssafy/resources/userInfo
+      # SSAFY 명세에 scope 파라미터가 없다. 이메일 검증 여부도 주지 않아 검증된 것으로 본다(10/20 결정).
+      client-authentication-method: POST
+      assume-email-verified: true
+      attributes:
+        id: userId
+        email: email
+        name: name
+
+# OpenAPI 문서(/v3/api-docs)와 Swagger UI(/swagger-ui/index.html).
+# 운영 환경은 SWAGGER_ENABLED=false 로 둘 다 닫는다.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    operations-sorter: method
+    tags-sorter: alpha
