@@ -10,6 +10,7 @@ import {
   PARAM_ACK_PAD_TABLE,
   PARAM_ACK_RESET_POSE,
   PARAM_ACK_YAW_OFFSET,
+  StreamMode,
   STICK_PARAMS,
   stickParamById,
 } from '@/input/stickProtocol';
@@ -139,6 +140,25 @@ export function buildParamAck(f: { role?: Role; paramId: number; value: number }
   return buf;
 }
 
+/** SWING 청크 하나. samples는 ax ay az gx gy gz 순서로 샘플당 6개(Int16 LE) */
+export function buildSwing(f: {
+  role?: Role;
+  hitSeq: number;
+  chunkIdx: number;
+  chunkCount: number;
+  samples: Int16Array;
+}): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(5 + f.samples.length * 2);
+  const v = new DataView(buf.buffer);
+  v.setUint8(0, PacketType.SWING);
+  v.setUint8(1, (f.role ?? 0) & 3);
+  v.setUint8(2, f.hitSeq & 0xff);
+  v.setUint8(3, f.chunkIdx & 0xff);
+  v.setUint8(4, f.chunkCount & 0xff);
+  for (let i = 0; i < f.samples.length; i++) v.setInt16(5 + i * 2, f.samples[i], true);
+  return buf;
+}
+
 export interface MockStartOptions {
   sticks?: 1 | 2;
   /** 스틱당 POSE 주기(Hz). 기본 50 */
@@ -158,6 +178,15 @@ const POSE_SEQ_SKIP_EVERY = 100;
 const HIT_SEQ_SKIP_EVERY = 10;
 const HIT_AMBIGUOUS_EVERY = 20;
 const HIT_TRUNCATED_EVERY = 50;
+/** 모의 SWING: 200샘플(1ms 가정)을 청크 10개 x 20샘플로 나눠 보낸다 (U16~U18 가정값) */
+const SWING_CHUNKS = 10;
+const SWING_CHUNK_SAMPLES = 20;
+const SWING_CHUNK_GAP_MS = 15;
+/** 이 번째마다 HIT의 SWING이 청크 7을 빼먹는다 */
+const SWING_DROP_EVERY = 30;
+const SWING_DROP_CHUNK = 7;
+/** 모의 SWING 파형의 자이로 환산(0.1 deg/s per LSB) */
+const GYRO_LSB_PER_DPS = 10;
 /** 명령 응답 간격(ms) */
 const REPLY_GAP_MS = 20;
 
@@ -179,6 +208,8 @@ export class MockStick {
   private bridgeTick = 0;
   private padCount = 0;
   private lastElevationDeg = 0;
+  /** SET_MODE로 정한 스트림 모드. 기본 HIT_AND_POSE */
+  private mode: number = StreamMode.HIT_AND_POSE;
 
   constructor(deps: MockDeps = {}) {
     this.deps = deps;
@@ -224,6 +255,7 @@ export class MockStick {
     this.bridgeCrc = 0;
     this.bridgeTick = 0;
     this.padCount = 0;
+    this.mode = StreamMode.HIT_AND_POSE;
 
     this.publish(buildLog('BOOT 0.1 mock000'));
     this.emitStatus();
@@ -272,6 +304,7 @@ export class MockStick {
     const role = this.roles()[(this.hitCount - 1) % this.sticks];
     this.hitSeq[role] = (this.hitSeq[role] + (this.hitCount % HIT_SEQ_SKIP_EVERY === 0 ? 2 : 1)) & 0xff;
     const pad = STICK_PADS[Math.floor(Math.random() * STICK_PADS.length)];
+    const peakSpeedDps = rand(500, 750);
     const bytes = buildHit({
       role,
       seq: this.hitSeq[role],
@@ -280,7 +313,7 @@ export class MockStick {
       marginDeg: rand(1, 8),
       elevationDeg: this.lastElevationDeg,
       azimuthDeg: rand(-30, 30),
-      peakSpeedDps: rand(500, 750),
+      peakSpeedDps,
       velocity: rand(40, 120),
       swingMs: rand(60, 200),
       lateralDeg: rand(-5, 5),
@@ -289,10 +322,42 @@ export class MockStick {
     });
     // 50번째마다 한 바이트 모자란 오류 패킷
     this.publish(this.hitCount % HIT_TRUNCATED_EVERY === 0 ? bytes.slice(0, 19) : bytes);
+    // 데이터 수집 모드에서는 HIT 직후 원시 SWING 청크가 따라온다
+    if (this.mode === StreamMode.RAW_COLLECT) {
+      this.emitSwing(role, this.hitSeq[role], peakSpeedDps, this.hitCount % SWING_DROP_EVERY === 0);
+    }
     // HIT 사이에 가끔 거른 스윙 LOG
     if (this.hitCount % 3 === 0) {
       const text = this.hitCount % 6 === 0 ? 'drop slow 512' : 'drop weak 320';
       this.later(hitMs / 2, () => this.publish(buildLog(text, role)));
+    }
+  }
+
+  /** 데이터 수집 모드의 SWING. 청크를 15ms 간격으로 순서대로 흘린다 */
+  private emitSwing(role: Role, hitSeq: number, peakSpeedDps: number, dropChunk: boolean): void {
+    const n = SWING_CHUNKS * SWING_CHUNK_SAMPLES;
+    const peak = Math.min(32767, peakSpeedDps * GYRO_LSB_PER_DPS);
+    const all = new Int16Array(n * 6);
+    const noise = (): number => Math.round(rand(-30, 30));
+    for (let i = 0; i < n; i++) {
+      const o = i * 6;
+      const x = i / (n - 1);
+      // 타격 전까지 속도가 오르다 끝에서 급감속하는 감쇠 사인 모양
+      const env = x < 0.95 ? Math.sin((x / 0.95) * (Math.PI / 2)) : Math.max(0, 1 - (x - 0.95) / 0.05) * 0.6;
+      all[o] = noise();
+      all[o + 1] = noise();
+      // 끝 5샘플은 타격 스파이크
+      all[o + 2] = i >= n - 5 ? clampI16(rand(6000, 9000)) : noise();
+      all[o + 3] = clampI16(peak * env * (0.9 + 0.1 * Math.sin(i / 6)));
+      all[o + 4] = noise();
+      all[o + 5] = noise();
+    }
+    for (let c = 0; c < SWING_CHUNKS; c++) {
+      if (dropChunk && c === SWING_DROP_CHUNK) continue;
+      const samples = all.slice(c * SWING_CHUNK_SAMPLES * 6, (c + 1) * SWING_CHUNK_SAMPLES * 6);
+      this.later(SWING_CHUNK_GAP_MS * (c + 1), () =>
+        this.publish(buildSwing({ role, hitSeq, chunkIdx: c, chunkCount: SWING_CHUNKS, samples })),
+      );
     }
   }
 
@@ -353,8 +418,13 @@ export class MockStick {
         this.later(REPLY_GAP_MS / 4, () => this.publish(buildSyncAck({ t0Ms, t1Us: this.clockUs() })));
         break;
       }
+      case CommandType.SET_MODE: {
+        if (bytes.length < 2) break;
+        this.mode = bytes[1];
+        break;
+      }
       default:
-        // SET_MODE·HAPTIC은 무응답
+        // HAPTIC은 무응답
         break;
     }
   }

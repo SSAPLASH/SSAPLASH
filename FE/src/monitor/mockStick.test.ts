@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
+import { encodeSetMode, StreamMode, encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
 import {
   buildBridgeStats,
@@ -8,6 +8,7 @@ import {
   buildParamAck,
   buildPose,
   buildStatus,
+  buildSwing,
   buildSyncAck,
   MockStick,
 } from './mockStick';
@@ -96,6 +97,20 @@ describe('빌더 왕복', () => {
       role: 1,
       paramId: 0x20,
       value: -300,
+    });
+  });
+});
+
+describe('SWING 빌더', () => {
+  it('왕복', () => {
+    const samples = Int16Array.from({ length: 120 }, (_, i) => (i - 60) * 100);
+    expect(decodePacket(buildSwing({ role: 1, hitSeq: 9, chunkIdx: 3, chunkCount: 10, samples }), 0)).toMatchObject({
+      kind: 'swing',
+      role: 1,
+      hitSeq: 9,
+      chunkIdx: 3,
+      chunkCount: 10,
+      samples,
     });
   });
 });
@@ -211,5 +226,61 @@ describe('MockStick', () => {
     vi.advanceTimersByTime(100);
     const roles = new Set(got.filter((r) => r.bytes[0] === 0x02).map((r) => r.bytes[1] & 3));
     expect(roles).toEqual(new Set([0, 1]));
+  });
+
+  describe('SWING', () => {
+    const swings = () => got.filter((r) => r.bytes[0] === 0x05);
+
+    it('RAW_COLLECT 전에는 SWING이 없다', () => {
+      mock.start({ hitIntervalMs: 100, poseHz: 1 });
+      vi.advanceTimersByTime(1000);
+      expect(count('hit')).toBeGreaterThan(5);
+      expect(swings().length).toBe(0);
+    });
+
+    it('SET_MODE 2 뒤 HIT 1건 → SWING 10청크, hitSeq 일치', () => {
+      mock.start({ hitIntervalMs: 1000, poseHz: 1 });
+      mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
+      vi.advanceTimersByTime(1000 + 200);
+      const hit = got.map((r) => decodePacket(r.bytes, 0)).find((d) => d.kind === 'hit');
+      const sw = swings().map((r) => decodePacket(r.bytes, 0));
+      expect(sw.length).toBe(10);
+      expect(sw.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      for (const d of sw) {
+        expect(d).toMatchObject({ kind: 'swing', chunkCount: 10 });
+        if (d.kind === 'swing') {
+          expect(d.samples.length).toBe(120);
+          expect(d.hitSeq).toBe(hit !== undefined && hit.kind === 'hit' ? hit.seq : -1);
+        }
+      }
+    });
+
+    it('SET_MODE로 되돌리면 다시 SWING이 없다', () => {
+      mock.start({ hitIntervalMs: 1000, poseHz: 1 });
+      mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
+      mock.handleCommand(encodeSetMode(StreamMode.HIT_AND_POSE));
+      vi.advanceTimersByTime(1500);
+      expect(swings().length).toBe(0);
+    });
+
+    it('30번째 HIT의 SWING은 청크 7이 빠진 9청크', () => {
+      mock.start({ hitIntervalMs: 1000, poseHz: 1 });
+      mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
+      vi.advanceTimersByTime(30 * 1000 + 200);
+      const sw = swings();
+      expect(sw.length).toBe(29 * 10 + 9);
+      const last = sw.slice(-9).map((r) => decodePacket(r.bytes, 0));
+      expect(last.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1))).toEqual([0, 1, 2, 3, 4, 5, 6, 8, 9]);
+    });
+
+    it('stop이 SWING 타이머도 정리한다', () => {
+      mock.start({ hitIntervalMs: 1000, poseHz: 1 });
+      mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
+      vi.advanceTimersByTime(1050);
+      mock.stop();
+      const n = swings().length;
+      vi.advanceTimersByTime(1000);
+      expect(swings().length).toBe(n);
+    });
   });
 });
