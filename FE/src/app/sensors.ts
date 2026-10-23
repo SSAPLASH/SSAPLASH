@@ -4,7 +4,9 @@ import { sensorRegistry } from './sensorRegistry';
 import { pointerDescriptor } from '@/input/PointerStickSource';
 import { bleDescriptor } from '@/input/BleStickSource';
 import { webSocketDescriptor } from '@/input/WebSocketStickSource';
+import { webSerialDescriptor } from '@/input/WebSerialStickSource';
 
 sensorRegistry.register(pointerDescriptor);
 sensorRegistry.register(bleDescriptor);
 sensorRegistry.register(webSocketDescriptor);
+sensorRegistry.register(webSerialDescriptor);
