@@ -195,9 +195,11 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 가로로 흐르는 5선 악보를 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
 
+화면은 Claude Design 「악보 연주 화면」(https://claude.ai/artifact/AFPSrCXxQsZULivgY5FsZE)의 4개 보드(곡 선택·준비·연주 중·일시정지)를 따른다. 페이지 루트에 `.sheet-mode`를 붙여 `--sm-*` 변수와 `.sm-*` 클래스(`styles/global.css` 끝 블록)를 그 안에서만 쓰고, 앱 셸·다른 페이지의 `--ink`·`--brass` 계열 테마는 건드리지 않는다. 악보 Canvas는 `readColors(canvas)`로 `--sm-*`를 상속받아 읽고(없으면 앱 공통 변수) 기준선은 사이언 2px + 글로우다. 일시정지 다이얼로그(`PauseOverlay`)는 `.sheet-mode` 밖에서도 보이도록 자체 클래스(`.sm-scrim`·`.sm-dialog`·`.pause-dialog`)에 색을 직접 둔다. 곡 선택 표의 "최근 정확도"와 준비 화면의 "최근 기록"은 로컬 플레이 로그(`latestSheetLog`)에서 읽는다.
+
 - **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
 - **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 카운트인 뒤 반주 0초 = 세션 0ms. HUD 아래 작은 글씨로 동기 Δ(시작·재개)를 보인다.
-- **스트립:** 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetStrip`에 넘긴다. HUD는 "n / N 노트 · Perfect/Good/Miss · 채보 외"만 보인다.
+- **스트립:** 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetStrip`에 넘긴다. HUD는 진행 행(시간·진행 바·마디), 판정 6칸 타일(노트·Perfect·Good·Miss·채보 밖·최근 Δ), 범례 줄로 구성한다.
 - **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`가 둘 다 false로 바뀌고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
 - **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 규칙 기반 피드백 카드(최대 3개)와 패드별 요약을 보여 준다. "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
 
