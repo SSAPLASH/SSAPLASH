@@ -76,6 +76,9 @@ export abstract class BaseInputSource implements InputSource {
   abstract disconnect(): Promise<void>;
 }
 
+/** 센서 시각 u32 µs의 한 주기(2^32 µs)를 ms로 */
+export const WRAP_MS = 4294967.296;
+
 /**
  * 센서 시계 ↔ 브라우저 시계 오프셋 추정 (공통 명세서 8-3 시계 동기화).
  * 왕복 지연이 가장 짧았던 샘플을 신뢰한다.
@@ -83,9 +86,32 @@ export abstract class BaseInputSource implements InputSource {
 export class ClockSync {
   private offsetMs: number | null = null;
   private bestRtt = Infinity;
+  /** 직전까지 본 가장 큰 펼친 센서 시각(ms). 랩 판정 기준 */
+  private lastSensorMs: number | null = null;
+  /** 지금까지 더해진 랩 보정(ms) */
+  private wrapOffsetMs = 0;
+
+  /**
+   * 센서 시각 u32 µs 랩어라운드를 펼친다. 직전보다 주기의 절반 넘게 작아지면 랩으로 보고 주기를 더한다.
+   * 반대로 절반 넘게 크면 랩 전에 보낸 늦은 패킷이므로 그 값에만 주기를 뺀다(상태는 유지).
+   */
+  private unwrap(sensorMs: number): number {
+    if (this.lastSensorMs !== null) {
+      const lastRaw = this.lastSensorMs - this.wrapOffsetMs;
+      if (sensorMs < lastRaw - WRAP_MS / 2) {
+        this.wrapOffsetMs += WRAP_MS;
+      } else if (sensorMs > lastRaw + WRAP_MS / 2) {
+        return sensorMs + this.wrapOffsetMs - WRAP_MS;
+      }
+    }
+    const v = sensorMs + this.wrapOffsetMs;
+    if (this.lastSensorMs === null || v > this.lastSensorMs) this.lastSensorMs = v;
+    return v;
+  }
 
   /** t0: 요청 보낸 브라우저 시각, t1: 센서가 찍은 시각, t2: 응답 받은 브라우저 시각 */
   addSample(t0: number, t1: number, t2: number): void {
+    t1 = this.unwrap(t1);
     const rtt = t2 - t0;
     if (rtt < this.bestRtt) {
       this.bestRtt = rtt;
@@ -95,7 +121,8 @@ export class ClockSync {
 
   /** 동기화 전이면 "지금 받았다"로 간주 */
   toBrowserTime(sensorTs: number, recvTime: number): number {
-    return this.offsetMs === null ? recvTime : sensorTs + this.offsetMs;
+    const t = this.unwrap(sensorTs);
+    return this.offsetMs === null ? recvTime : t + this.offsetMs;
   }
 
   get offset(): number | null {
@@ -109,5 +136,7 @@ export class ClockSync {
   reset(): void {
     this.offsetMs = null;
     this.bestRtt = Infinity;
+    this.lastSensorMs = null;
+    this.wrapOffsetMs = 0;
   }
 }
