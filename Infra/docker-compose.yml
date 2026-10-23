@@ -15,6 +15,8 @@ services:
       - "80:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # 게시된 모델 파일과 매니페스트. nginx는 읽기만 하고 쓰기는 mlflow의 게시 도구가 한다.
+      - models:/usr/share/nginx/models:ro
     networks:
       - public
       - internal
@@ -173,7 +175,7 @@ services:
       - |
         sh_run() { echo "$$1" | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888; }
         existing=$$(sh_run "s3.bucket.list")
-        for b in airdrum-sheets airdrum-accompaniments airdrum-play-raw airdrum-tmp-audio; do
+        for b in airdrum-sheets airdrum-accompaniments airdrum-play-raw airdrum-tmp-audio airdrum-mlflow; do
           # 이미 있는 버킷은 건너뛴다. 다시 실행해도 결과가 같다.
           echo "$$existing" | grep -q "$$b" || sh_run "s3.bucket.create -name $$b"
         done
@@ -307,6 +309,79 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
+  # MLflow가 쓸 DB를 기존 PostgreSQL에 만든다. 앱 DB와 분리해 마이그레이션이 섞이지 않게 한다.
+  # 이미 있으면 건너뛰고 끝나면 종료하는 일회성 작업이다(기존 볼륨에는 초기화 스크립트가 다시 실행되지 않아서 이 방식을 쓴다).
+  mlflow-db-init:
+    image: timescale/timescaledb:2.30.2-pg16
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if psql -h postgres -U "${POSTGRES_USER}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='mlflow'" | grep -q 1; then
+          echo "mlflow DB가 이미 있습니다."
+        else
+          psql -h postgres -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE mlflow"
+        fi
+    networks:
+      - internal
+    mem_limit: 128m
+    restart: "no"
+    logging: *default-logging
+
+  # 실험 기록과 모델 레지스트리. 외부에 공개하지 않는다(UI에 인증이 없다).
+  # 서버의 127.0.0.1:5000에만 열고 팀원은 SSH 터널(ssh -L 5000:localhost:5000)로 접속한다.
+  # 호스트에 포트를 열려면 internal이 아닌 네트워크가 필요해서 public에도 붙인다. 호스트 공개 범위는 루프백뿐이다.
+  mlflow:
+    build:
+      context: ./mlflow
+    # 아티팩트는 서버를 거쳐 저장한다(--serve-artifacts). 클라이언트가 스토리지 키를 가질 필요가 없다.
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      - --artifacts-destination
+      - s3://airdrum-mlflow
+      - --serve-artifacts
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://seaweedfs:8333
+      AWS_ACCESS_KEY_ID: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_ACCESS_KEY를 지정하세요}
+      AWS_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_SECRET_KEY를 지정하세요}
+      AWS_DEFAULT_REGION: us-east-1
+      # 게시 도구(publish-model)가 같은 컨테이너의 서버에 접속한다.
+      MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow-db-init:
+        condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - models:/models
+    networks:
+      - public
+      - internal
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    logging: *default-logging
+
 networks:
   public: {}
   internal:
@@ -316,6 +391,7 @@ volumes:
   pgdata:
   redisdata:
   seaweeddata:
+  models:
   prometheus-data:
   loki-data:
   grafana-data:
