@@ -4,12 +4,15 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
 import { resolvePad } from '@/domain/calibration';
+import { agreeRate, edgeDeg, edgeTone, hitPose, insideRate } from '@/monitor/boundary';
 import type { LogRow } from '@/monitor/packetLog';
 import { hexGroups, hexSpaced, type HitFieldKey } from './hitFields';
 import { cssVar, fmt, prepareCanvas, stickName, type Snap } from './monitorTypes';
 
 const MAX_ROWS = 200;
 const CHART_HITS = 60;
+/** margin과 −edge가 이 값(도)을 넘게 다르면 mon-mismatch */
+const MISMATCH_DEG = 3;
 
 /** 표에 올릴 행. interval은 같은 스틱 직전 HIT와 tBrowser 차 */
 interface ViewRow {
@@ -50,6 +53,7 @@ const COLS: string[] = [
   'pad(fw)',
   'fePad',
   'agree',
+  'edge',
   'margin',
   'elev',
   'azim',
@@ -66,9 +70,11 @@ const COLS: string[] = [
 interface RowProps {
   vr: ViewRow;
   profile: CalibrationProfile | null;
+  /** 행 클릭 콜백(원시 파형 탭 이동용). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
+  onSelectHit?: (stick: 0 | 1, seq: number) => void;
 }
 
-const HitRowView = memo(function HitRowView({ vr, profile }: RowProps) {
+const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit }: RowProps) {
   const [hovered, setHovered] = useState<HitFieldKey | null>(null);
   const { row, interval } = vr;
   const d = row.decoded;
@@ -99,7 +105,11 @@ const HitRowView = memo(function HitRowView({ vr, profile }: RowProps) {
   }
   if (d?.kind !== 'hit') return null;
 
-  const fe = resolvePad(profile, { pitch: d.elevationDeg, yaw: d.azimuthDeg })?.pad ?? null;
+  const fe = resolvePad(profile, hitPose(d))?.pad ?? null;
+  const edge = edgeDeg(profile, hitPose(d))?.edgeDeg ?? null;
+  // 펌웨어 margin은 경계까지 남은 여유(안쪽 +)로 FE edge의 부호를 뒤집은 값과 같아야 한다.
+  // 부호가 어긋나거나 |margin − (−edge)|가 3°를 넘으면 판정 기준 불일치 후보로 강조한다.
+  const mismatch = edge !== null && Math.abs(d.marginDeg + edge) > MISMATCH_DEG;
   const agree = fe === null ? null : fe === d.pad;
   const cell = (key: HitFieldKey, content: React.ReactNode) => (
     <td
@@ -112,8 +122,12 @@ const HitRowView = memo(function HitRowView({ vr, profile }: RowProps) {
   );
   const groups = hexGroups(row.bytes);
 
+  const stick = row.stick;
   return (
-    <tr>
+    <tr
+      className={onSelectHit && stick !== null ? 'clickable' : undefined}
+      onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq) : undefined}
+    >
       <td className="num">{fmt(row.t)}</td>
       <td style={{ color: handColor, fontWeight: 700 }}>{stickName(row.stick)}</td>
       {cell('seq', d.seq)}
@@ -123,7 +137,16 @@ const HitRowView = memo(function HitRowView({ vr, profile }: RowProps) {
       {cell('pad', d.pad ?? '없음')}
       <td className="derived">{fe ?? '–'}</td>
       <td className={`derived ${agree === null ? '' : agree ? 'ok' : 'bad'}`}>{agree === null ? '–' : agree ? '✓' : '✗'}</td>
-      {cell('margin', fmt(d.marginDeg))}
+      <td className={`num derived${edge === null ? '' : ` edge-${edgeTone(edge)}`}`}>
+        {edge === null ? '–' : `${edge > 0 ? '+' : ''}${edge.toFixed(1)}`}
+      </td>
+      <td
+        className={`num raw${mismatch ? ' mon-mismatch' : ''}${hovered === 'margin' ? ' hl' : ''}`}
+        onMouseEnter={() => setHovered('margin')}
+        onMouseLeave={() => setHovered(null)}
+      >
+        {fmt(d.marginDeg)}
+      </td>
       {cell('elev', fmt(d.elevationDeg, 2))}
       {cell('azim', fmt(d.azimuthDeg, 2))}
       {cell('peak', d.peakSpeedDps)}
@@ -211,8 +234,19 @@ function HitStrip({ rows, tick }: { rows: readonly LogRow[]; tick: number }) {
   return <canvas ref={ref} className="mon-strip" />;
 }
 
-export const HitTable = memo(function HitTable({ snap, profile }: { snap: Snap; profile: CalibrationProfile | null }) {
+export const HitTable = memo(function HitTable({
+  snap,
+  profile,
+  onSelectHit,
+}: {
+  snap: Snap;
+  profile: CalibrationProfile | null;
+  onSelectHit?: (stick: 0 | 1, seq: number) => void;
+}) {
   const view = useMemo(() => pickRows(snap.rows), [snap.rows]);
+  const inRate = useMemo(() => insideRate(snap.rows, profile), [snap.rows, profile]);
+  const agRate = useMemo(() => agreeRate(snap.rows, profile), [snap.rows, profile]);
+  const pct = (v: number | null) => (v === null ? '–' : `${Math.round(v * 100)}%`);
   const [f0, f1] = snap.stats.perStick.map((s) => s.hitFuture);
   return (
     <div className="mon-hit">
@@ -220,6 +254,10 @@ export const HitTable = memo(function HitTable({ snap, profile }: { snap: Snap; 
         timestamp − 수신 시각(최근 50건) · L 중앙값 {fmt(f0.median)}ms 최대 {fmt(f0.max)}ms · R 중앙값 {fmt(f1.median)}ms 최대{' '}
         {fmt(f1.max)}ms
         <span className="faint"> (양수 = 미래, 시계 동기화 전이면 –)</span>
+      </div>
+      <div className="mon-summary-line">
+        바운더리 안 {pct(inRate)} · agree {pct(agRate)}
+        <span className="faint"> (최근 50건, FE 프로필 기준)</span>
       </div>
       <div className="faint small">
         차트: peakSpeed(황동) · decel(빨강) · velocity(청록), 각 선은 자기 최댓값으로 정규화 · 표: 파란 글자 = 원시값, 회색 글자 = 파생값 ·
@@ -237,7 +275,7 @@ export const HitTable = memo(function HitTable({ snap, profile }: { snap: Snap; 
           </thead>
           <tbody>
             {view.map((vr) => (
-              <HitRowView key={vr.row.id} vr={vr} profile={profile} />
+              <HitRowView key={vr.row.id} vr={vr} profile={profile} onSelectHit={onSelectHit} />
             ))}
           </tbody>
         </table>
