@@ -50,7 +50,7 @@ AI/
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
-├─ notebooks/            실행용 노트북 (코랩: bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보 / GPU 서버: transcription_bench_server.ipynb 채보)
+├─ notebooks/            실행용 ipynb 파일 (코랩: bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보 / GPU 서버: transcription_bench_server.ipynb 채보)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
 └─ DESIGN.md             작업 기록·세션 인계 문서 (git 미추적, 개인 문서)
@@ -140,7 +140,7 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 
 ### 코랩에서 돌리기
 
-`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 드라이브 `MyDrive/ssaplash/`에 저장소 zip(`S15P31A307.zip`), `data/musdb18hq/test/`(11GB), `data/synth_v1/`(216MB)을 올려 두면 노트북이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤, 데이터를 런타임 로컬 디스크로 복사하고 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 바로 써서 세션이 끊겨도 남는다. 본측정은 코랩 GPU 한 종류로만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
+`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 드라이브 `MyDrive/ssaplash/`에 저장소 zip(`S15P31A307.zip`), `data/musdb18hq/test/`(11GB), `data/synth_v1/`(216MB)을 올려 두면 이 ipynb 파일이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤, 데이터를 런타임 로컬 디스크로 복사하고 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 바로 써서 세션이 끊겨도 남는다. 본측정은 코랩 GPU 한 종류로만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
 
 본측정 runId는 `musdb-full`·`synth-full`로 고정돼 있어, 세션이 끊기면 런타임을 다시 연결하고 준비 셀(1~4)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 다시 연결했을 때 GPU 이름이 바뀌었으면 결과의 `gpuName`이 섞이므로 같은 GPU를 받을 때까지 런타임을 바꾼다.
 
@@ -223,7 +223,7 @@ uv pip install --python .venv-idm/Scripts/python.exe lightning lightning-utiliti
 
 # Omnizart: Python 3.10 + TensorFlow. PyPI의 madmom 0.16.1은 Python 3.10에서 C 컴파일이 안 되므로(tp_print·Py_REFCNT 오류)
 # madmom은 저장소 최신판(git)을 먼저 깐다(C 컴파일러 필요: Windows는 Visual Studio, Linux는 gcc). omnizart 설치 스크립트는
-# pyaudio·vamp·pyfluidsynth를 직접 깔므로 Linux에서는 apt로 portaudio19-dev·fluidsynth를 먼저 둔다(코랩 노트북 4번 셀)
+# pyaudio·vamp·pyfluidsynth를 직접 깔므로 Linux에서는 apt로 portaudio19-dev·fluidsynth를 먼저 둔다(코랩 ipynb 파일 4번 셀)
 uv python install 3.10
 uv venv .venv-omnizart --python 3.10
 uv pip install --python .venv-omnizart/Scripts/python.exe "Cython<3" "numpy<2" scipy mido wheel setuptools
@@ -245,7 +245,7 @@ uv pip install --python .venv-yourmt3/Scripts/python.exe "numpy==1.26.4" "transf
 
 ### 채보 벤치마크를 코랩에서 돌리기
 
-`notebooks/transcription_bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 분리 노트북과 같은 방식이고, 노트북이 별도 환경 3개(ADT_STR·Inverse Drum Machine·Omnizart)까지 만든다. 환경 만들기는 세션마다 10~20분이 든다.
+`notebooks/transcription_bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 분리 벤치마크 ipynb 파일과 같은 방식이고, 이 ipynb 파일이 별도 환경 3개(ADT_STR·Inverse Drum Machine·Omnizart)까지 만든다. 환경 만들기는 세션마다 10~20분이 든다.
 
 드라이브 `MyDrive/ssaplash/`에 올릴 것. 저장소 zip과 `data/synth_v1/`은 분리 벤치마크 때 올린 것을 그대로 쓴다.
 
@@ -278,10 +278,10 @@ uv run python scripts/pack_server_upload.py
 
 서버에서 다른 점
 
-- **지정된 GPU만 쓴다.** 공용 서버라서 노트북 1번 셀의 `GPU_ID`에 지정받은 번호를 넣는다. `CUDA_VISIBLE_DEVICES`로 그 GPU 하나만 보이게 한다.
+- **지정된 GPU만 쓴다.** 공용 서버라서 서버 ipynb 파일 1번 셀의 `GPU_ID`에 지정받은 번호를 넣는다. `CUDA_VISIBLE_DEVICES`로 그 GPU 하나만 보이게 한다.
 - **torch를 CUDA 12.8판으로 바꿔 넣는다.** `uv.lock`의 Linux torch는 CUDA 13판이라 드라이버가 CUDA 12.8인 서버(드라이버 570)에서는 GPU를 못 잡고 경고 한 줄만 찍은 채 CPU로 돈다. 그래서 하네스 환경은 extra 없이 `uv sync`만 하고 CUDA 12.8판 torch를 `uv pip install`로 넣은 뒤, `uv run` 대신 `.venv/bin/ssaplash-bench`로 부른다(`uv run`이 잠금 파일대로 다시 맞추지 않게).
 - **runId는 `ymt3-*`.** 코랩 run 폴더에 이어 붙이지 않고 새 폴더로 돌린다. 한 CSV 안에 GPU가 섞이지 않게 하기 위해서다.
-- **보고서는 로컬에서 만든다.** 서버의 `results_ymt3.zip`(노트북 12번 셀)을 내려받아 `data/results/`에 풀고 코랩 results.csv와 같이 `report-transcription`에 넘긴다. GPU가 다른 행이 섞인 묶음은 비교표에 GPU 열이 붙는다. 점수는 GPU와 상관없어 그대로 비교하고, RTF·GPU 메모리는 GPU가 달라 따로 본다.
+- **보고서는 로컬에서 만든다.** 서버의 `results_ymt3.zip`(서버 ipynb 파일 12번 셀)을 내려받아 `data/results/`에 풀고 코랩 results.csv와 같이 `report-transcription`에 넘긴다. GPU가 다른 행이 섞인 묶음은 비교표에 GPU 열이 붙는다. 점수는 GPU와 상관없어 그대로 비교하고, RTF·GPU 메모리는 GPU가 달라 따로 본다.
 
 ## 지표 정의
 
