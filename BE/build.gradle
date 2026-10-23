@@ -91,10 +91,31 @@ sourceSets {
 		compileClasspath += sourceSets.main.output
 		runtimeClasspath += sourceSets.main.output
 	}
+	// 운영 앱 JAR와 분리한 일회성 관리 도구. S3 SDK·JDBC는 기존 의존성을 사용한다.
+	tools {
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += sourceSets.main.output
+	}
+	test {
+		compileClasspath += sourceSets.tools.output
+		runtimeClasspath += sourceSets.tools.output
+	}
 }
 configurations {
 	timescaleTestImplementation.extendsFrom testImplementation
 	timescaleTestRuntimeOnly.extendsFrom testRuntimeOnly
+	toolsImplementation.extendsFrom implementation
+	toolsRuntimeOnly.extendsFrom runtimeOnly
+}
+tasks.named('compileTestJava') {
+	dependsOn tasks.named('toolsClasses')
+}
+tasks.register('registerBasic8Backing', JavaExec) {
+	description = '검증된 기본 8비트 채보에 합성 반주를 비공개 S3 자산으로 등록한다.'
+	group = 'application'
+	dependsOn tasks.named('toolsClasses')
+	classpath = sourceSets.tools.runtimeClasspath
+	mainClass = 'com.ssafy.airdrum.chart.asset.RegisterBasic8Backing'
 }
 tasks.register('timescaleTest', Test) {
 	description = '실제 TimescaleDB에서 Flyway V8과 데이터 보존을 검증한다.'
