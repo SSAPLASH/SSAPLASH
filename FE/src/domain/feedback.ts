@@ -224,3 +224,13 @@ function fallback(log: PlayLog): FeedbackItem {
     suggestion: '다음 곡에 도전하거나 같은 곡을 더 빠른 템포로 쳐 보세요.',
   };
 }
+
+/** 결과 페이지 미니 악보용: 로그의 노트·BPM·박자만으로 `layoutBar`가 읽는 채보 모양을 만든다. 이전 로그(bpm 없음)는 null */
+export function chartFromLog(log: PlayLog): Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> | null {
+  if (!log.bpm) return null;
+  return {
+    bpm: log.bpm,
+    beatsPerBar: log.beatsPerBar,
+    notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })),
+  };
+}
