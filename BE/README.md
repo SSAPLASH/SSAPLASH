@@ -1,0 +1,717 @@
+# BE API 서버
+
+관련 작업: [S15P31A307-93 프로젝트 초기화·앱 컨테이너 실행 정의](https://ssafy.atlassian.net/browse/S15P31A307-93),
+[S15P31A307-85 공통 응답·예외 처리·Swagger 설정](https://ssafy.atlassian.net/browse/S15P31A307-85),
+[S15P31A307-86 회원·소셜 연동 정보 스키마·마이그레이션](https://ssafy.atlassian.net/browse/S15P31A307-86),
+[S15P31A307-87 OAuth 제공자 연동·최초 로그인 시 회원 가입](https://ssafy.atlassian.net/browse/S15P31A307-87)
+
+## 기술 스택
+
+| 항목 | 버전·구성 |
+| --- | --- |
+| Java | 21 LTS |
+| Spring Boot | 4.1.1 |
+| Gradle | 9.8.1, Wrapper 포함, Groovy DSL |
+| HTTP | Spring MVC, 내장 Tomcat |
+| 상태 확인 | Spring Boot Actuator |
+| 입력 검증 | Bean Validation (`spring-boot-starter-validation`) |
+| API 문서 | springdoc-openapi 3.1.1 (Swagger UI). Boot 4 전용 3.x 라인이며 2.x는 쓰지 않는다 |
+| DB | PostgreSQL 16 + TimescaleDB 2.30.2, JDBC 드라이버 42.7.x |
+| 영속성 | Spring Data JPA (Hibernate 7). 스키마는 만들지 않고 검증만 한다(`ddl-auto: validate`) |
+| 마이그레이션 | Flyway 12 (`spring-boot-starter-flyway` + `flyway-database-postgresql`) |
+| 테스트 DB | 일반 테스트: 임베디드 PostgreSQL 16, V1~V7. V8: 별도 실제 TimescaleDB Docker 검사 |
+| 외부 HTTP | `RestClient` (`spring-boot-starter-restclient`). OAuth 제공자 호출. 테스트는 `MockRestServiceServer` |
+| 인증 | Spring Security 7.1.1. Bearer 필터는 직접 두고 JWT(HS256) 서명·검증만 `spring-security-oauth2-jose`(Nimbus) |
+| 토큰 저장소 | Redis 7 (`spring-boot-starter-data-redis`, Lettuce). refresh 토큰 보관. 테스트는 메모리 구현 |
+
+2026-10-19 초기화 시 공식 Spring Initializr의 안정 버전을 사용했다.
+기존 설계 문서의 Boot 3.x에서 4.1.1로 변경했다. Java 21과 Gradle 9.x는
+[공식 지원 범위](https://docs.spring.io/spring-boot/4.1/system-requirements.html)에 포함된다.
+Boot 4는 Jackson 3 및 Spring Security 7을 기준으로 하므로 후속 기능을 추가할 때
+3.x용 예제와 패키지·스타터 이름을 혼용하지 않는다.
+
+기동하려면 TimescaleDB 확장이 설치·preload된 PostgreSQL 16이 필요하다. 기동할 때 Flyway가 마이그레이션을 적용하고
+Hibernate가 엔티티와 스키마를 검증한다. 소셜 로그인은 [소셜 로그인](#소셜-로그인)을 따른다.
+토큰·인증 규칙과 다른 모듈에서 인증을 쓰는 방법은 [인증과 토큰](#인증과-토큰)을 따른다. AI 연동은 해당 기능 작업에서 추가한다.
+공통 응답·오류 형식과 OpenAPI 문서는 아래 [API 규약](#api-규약)을, 스키마 변경은
+[DB와 마이그레이션](#db와-마이그레이션)을 따른다.
+
+## 로컬 실행
+
+JDK 21을 설치하고 `JAVA_HOME`을 지정한다. IDE의 Project SDK와 Gradle JVM도 21로 맞춘다.
+별도 Gradle 설치는 필요 없다.
+
+로컬 PostgreSQL 16과 Redis 7을 준비한다. Infra Compose의 `postgres`는 내부 네트워크 전용이라
+호스트에서 실행한 앱이 붙을 수 없다. Docker를 쓰면 아래처럼 로컬 전용 컨테이너를 띄운다.
+설치형 DB에는 동일한 TimescaleDB 확장과 preload 설정이 필요하다. 비밀번호는 각자 정하고 저장소에 남기지 않는다.
+
+```sh
+docker run -d --name airdrum-db -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=app -e POSTGRES_DB=app -e POSTGRES_PASSWORD=<로컬 비밀번호> \
+  timescale/timescaledb:2.30.2-pg16 \
+  postgres -c shared_preload_libraries=timescaledb
+# refresh 토큰 저장소. 로컬은 비밀번호 없이 루프백에만 연다.
+docker run -d --name airdrum-redis -p 127.0.0.1:6379:6379 redis:7-alpine
+```
+
+Redis 없이 띄우려면 `REFRESH_TOKEN_STORE=memory`, `MANAGEMENT_HEALTH_REDIS_ENABLED=false`를 준다.
+refresh 토큰이 메모리에만 있어 재시작하면 로그인이 풀린다(기동 시 WARN).
+
+아래 명령은 `BE/`에서 실행한다.
+
+```powershell
+# Windows PowerShell: 실제 설치 경로로 지정한다.
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
+$env:DB_PASSWORD = '<로컬 비밀번호>'
+$env:JWT_SECRET = '<32바이트 이상 난수>'
+.\gradlew.bat --version
+.\gradlew.bat bootRun
+```
+
+```sh
+# macOS / Linux: JAVA_HOME을 JDK 21 경로로 지정한 뒤 실행한다.
+export DB_PASSWORD='<로컬 비밀번호>'
+export JWT_SECRET='<32바이트 이상 난수>'
+sh ./gradlew --version
+sh ./gradlew bootRun
+```
+
+기본 주소는 `http://127.0.0.1:8080`이다. 종료는 `Ctrl+C`를 사용한다.
+
+| 환경변수 | 기본값 | 용도 |
+| --- | --- | --- |
+| `SERVER_ADDRESS` | `127.0.0.1` | 로컬 수신 주소. 컨테이너에서는 이미지가 `0.0.0.0`으로 지정 |
+| `SERVER_PORT` | `8080` | HTTP 수신 포트 |
+| `JAVA_TOOL_OPTIONS` | JVM 기본값 | 컨테이너 메모리에 맞춘 JVM 옵션이 필요할 때 지정 |
+| `SWAGGER_ENABLED` | `true` | OpenAPI 문서(`/v3/api-docs`)와 Swagger UI 노출. 운영 Compose에서는 `false` |
+| `DB_URL` | `jdbc:postgresql://127.0.0.1:5432/app` | PostgreSQL JDBC URL |
+| `DB_USERNAME` | `app` | DB 사용자 |
+| `DB_PASSWORD` | 없음 (필수) | DB 비밀번호. 없으면 DB에 접속하기 전에 "DB_PASSWORD를 지정하세요"로 기동을 멈춘다 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 빈 값 | Google OAuth 클라이언트. 둘 중 하나라도 비면 Google 로그인 비활성(404) |
+| `SSAFY_CLIENT_ID`, `SSAFY_CLIENT_SECRET` | 빈 값 | SSAFY 로그인 클라이언트. 비면 SSAFY 로그인 비활성(404) |
+| `ADMIN_EMAILS` | 빈 값 | ADMIN으로 판정할 로그인 계정 이메일. 쉼표 구분, 공백·대소문자 무시 |
+| `FRONTEND_BASE_URL` | `http://localhost:5173` | 로그인 후 돌아갈 FE 주소. 운영은 서비스 도메인 |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8080` | 제공자에 보내는 콜백 URI의 앞부분. 콘솔에 등록한 리다이렉트 URI와 맞아야 한다 |
+| `COOKIE_SECURE` | `true` | state·refresh 쿠키의 `Secure` 속성. Safari로 로컬 테스트할 때만 `false` |
+| `JWT_SECRET` | 없음 (필수) | access 토큰 서명 키. UTF-8 32바이트 이상. 없거나 짧으면 "JWT_SECRET을 지정하세요"로 기동을 멈춘다. 만드는 법은 `.env.example` |
+| `REDIS_HOST`, `REDIS_PORT` | `127.0.0.1`, `6379` | refresh 토큰 저장소. 운영 Compose는 `redis`, `6379` |
+| `REDIS_PASSWORD` | 빈 값 | Redis 비밀번호. 운영 Compose의 같은 이름 값 |
+| `REFRESH_TOKEN_STORE` | `redis` | `memory`면 Redis 없이 메모리에 보관(재시작 시 로그인 풀림, 로컬·테스트 전용) |
+| `MANAGEMENT_HEALTH_REDIS_ENABLED` | `true` | Redis 없이 실행할 때 `false`. 켜져 있으면 Redis가 없을 때 `/actuator/health`가 503 |
+
+설정은 환경변수로 전달한다. 로컬에서는 `BE/.env.example`을 `BE/.env`로 복사해 값을 채우면
+`BE/`에서 실행할 때 자동으로 읽는다(`spring.config.import: optional:file:.env[.properties]`, 파일이 없으면 건너뜀).
+형식은 `KEY=value`이며 따옴표를 붙이지 않는다. **`KEY=`처럼 값이 빈 줄은 "미설정"이 아니라 빈 문자열이다.**
+기본값을 쓰려면 줄째 지우거나 주석(`#`)으로 둔다(주소·쿠키 설정은 빈 값이면 기본값으로 되돌린다).
+같은 키가 OS 환경변수에도 있으면 환경변수가 이긴다. 운영 Compose는 `.env` 파일 없이 환경변수로 준다.
+비밀값·개인 설정을 소스에 넣지 않는다. 루트 `.gitignore`가 `.env*`(`.env.example` 제외)와 키 파일을 제외한다.
+
+## 곡·채보 마이그레이션 (94번)
+
+`src/main/resources/db/migration/V2__create_songs_charts_chart_versions.sql`은
+`songs` → `charts` → `chart_versions` 순서로 생성한다. 86번의 실제 V1 다음에 공통 Flyway 설정으로 자동 적용된다.
+94번은 회원 테이블이나 DB 연결 설정을 별도로 도입하지 않는다. 운영 DB에 V2만 단독 적용하지 않는다.
+
+- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수이며 반주 키는 AUDIO 또는 자체 합성 BUILTIN에만 허용한다.
+- 곡·난이도와 채보·버전 조합은 중복되지 않는다. 참조 중인 회원·곡·채보의 물리 삭제를 막는다.
+- `notes`는 배열, `timing`은 객체이며 `note_count`는 노트 배열 길이와 일치해야 한다.
+- `sheet_pages`는 선택적 이미지 페이지 배열이며 이미지 없는 JSON 전달은 SQL NULL로 저장한다.
+  JSON 리터럴 `null`은 허용하지 않는다. 악보 렌더링은 BE 범위가 아니다.
+- `notation_status`에는 기본값이 없다. JSON 내부 검증·준비 상태 판정·소유권 검사·기존 버전 덮어쓰기 방지는
+  후속 등록/조회 API에서 구현한다. 이 SQL이 버전 행의 UPDATE를 금지하는 것은 아니다.
+
+`ChartSchemaMigrationTest`는 86번의 임베디드 PostgreSQL 16을 재사용하고, 매 검사마다 별도 스키마를 만든다.
+실제 V1만 적용해 회원·소셜 계정을 넣은 뒤 V2로 업그레이드하여 기존 데이터·FK 연결을 확인한다.
+빈 스키마의 V1→V2 적용, Flyway validate·재실행 시 추가 적용 0건,
+36개 제약 위반과 버전 보존·소프트 삭제·선택적 이미지 저장도 검사한다.
+이 검사는 `gradlew build`와 CI의 일반 테스트에 포함되며 Docker나 별도 DB 설정이 필요 없다.
+
+```powershell
+.\gradlew.bat test --tests '*ChartSchemaMigrationTest'
+```
+
+Docker PostgreSQL 16에서 SQL만 따로 확인하려면 기존 보조 스크립트를 사용할 수 있다.
+이 스크립트도 실제 V1·V2를 순서대로 적용하며, 호스트 포트·기존 볼륨을 사용하지 않는다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-ChartSchema.ps1
+```
+
+테스트 데이터·검증 SQL은 운영 JAR에 포함되지 않는다. 이미 적용한 마이그레이션은 수정·재번호화하지 않는다.
+
+## 공용 연습 채보 초기 데이터 (99번)
+
+`V10__seed_builtin_practice_charts.sql`은 Flyway가 새 DB와 기존 V9 DB에 자동 적용하는 내부 데모 데이터다. 스토리에서 계획한 자작·퍼블릭 도메인 10곡×3난이도 전체가 아니라, 반주 없이 FE 코드로 만든 연습 패턴 3개만 넣는다. Flyway 이력으로 재기동·재실행 시 중복 적재를 막는다.
+
+| 제목 | 난이도 | BPM | 재생 길이 | 노트 수 |
+| --- | --- | ---: | ---: | ---: |
+| 기본 8비트 | EASY | 90 | 21,333ms | 96 |
+| 8비트 + 필인 | NORMAL | 100 | 19,200ms | 104 |
+| 라이드 16비트 | HARD | 120 | 16,000ms | 128 |
+
+원본은 [FE/src/domain/chart.ts@d4080d10521263e6040f3ef6b2ddfe80cff3d771](https://lab.ssafy.com/s15-final/S15P31A307/-/blob/d4080d10521263e6040f3ef6b2ddfe80cff3d771/FE/src/domain/chart.ts)이며, `Math.round`로 계산된 `timeMs`와 같은 시각의 패드 삽입 순서를 그대로 저장한다. DB identity가 만든 song·chart·chart version ID는 고정하지 않으며 목록 API에서 받은 ID로 상세·최신·고정 버전을 조회한다. 세 버전 모두 반주·악보 이미지가 없고 `notation_status=UNAVAILABLE`이다.
+
+`license`에는 프로젝트 FE 데모 패턴의 출처, 별도 라이선스 표기 없음, 음원 미포함 상태를 기록한다. 이는 저작권 합의를 대신하는 라이선스 선언이 아니다. 패턴을 바꾸거나 새 데이터를 추가할 때는 기존 버전을 수정하지 않고 다음 chart version과 확인된 권리 메타데이터를 새 Flyway 마이그레이션으로 추가한다.
+
+### 기본 8비트 합성 반주 등록 (82번)
+
+V12는 `accompaniment_key`를 AUDIO와 BUILTIN에 허용하되 소유자·출처 메타데이터 제약은 유지한다. 마이그레이션이나 앱 기동은 키를 자동 연결하지 않는다. 공용 기본 8비트 반주는 명시적 도구로만 기존 비공개 `accompaniment` 버킷에 등록한다. API에서는 로그인한 ACTIVE 회원이 기존 서명 URL 경로로 재생하며 개인 AUDIO는 계속 소유자만 조회한다.
+
+등록 전에 이번 작업용 DB와 S3 호환 저장소를 준비하고 환경변수를 설정한 뒤 `BE/`에서 아래를 실행한다. 필요한 값은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `CHART_ASSET_ENDPOINT`, `CHART_ASSET_PUBLIC_ENDPOINT`, `CHART_ASSET_REGION`, `CHART_ASSET_SHEET_BUCKET`, `CHART_ASSET_ACCOMPANIMENT_BUCKET`, `CHART_ASSET_ACCESS_KEY`, `CHART_ASSET_SECRET_KEY`다. endpoint·버킷·자격 증명을 로그에 기록하지 않는다.
+이 Gradle 등록 작업은 Spring 설정을 불러오지 않으므로 `BE/.env`를 자동으로 읽지 않는다. 해당 값은 작업을 실행하는 셸의 프로세스 환경변수로 지정한다.
+등록 도구 자격 증명에는 대상 반주 버킷의 GetObject·HeadObject·조건부 PutObject 권한이 필요하므로 운영 API의 읽기 전용 자격 증명과 구분해 등록 실행 프로세스에만 주입한다.
+등록한 곡의 반주 음원은 변경하지 않으며, 변경이 필요하면 새 BUILTIN 곡 ID와 채보를 만들어 새 키로 배포한다.
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
+.\gradlew.bat registerBasic8Backing
+```
+
+도구는 V10의 기본 8비트 곡·EASY 채보·전체 96노트·90 BPM/4/4·길이·버전 메타데이터가 기준과 정확히 맞는지 먼저 확인한다. 반주는 `FE/src/audio/practiceBacking.ts`의 90 BPM·4/4·8마디 명세를 따라 44.1 kHz stereo PCM WAV로 직접 합성하며 외부 샘플을 쓰지 않는다. 기존 `accompaniment/{songId}.wav` 객체가 있으면 실제 바이트의 길이와 SHA-256이 일치할 때만 재사용하고, 새 객체는 조건부 업로드한다. 업로드 검증 뒤 DB 행을 잠그고 다시 검사해 키·출처 메타데이터를 한 트랜잭션으로 연결한다. 다른 채보·키·객체나 DB 경쟁이 발견되면 연결하지 않으며, 등록 객체만 남은 경우 같은 도구를 재실행할 수 있다. 도구 클래스는 운영 `bootJar`에 포함하지 않는다.
+
+V12와 등록은 대상 DB에 적용해야 한다. 실제 배포 스토리지의 공개 프록시·CORS·Range 동작은 별도 확인이 필요하며 로컬 성공을 운영 검증으로 간주하지 않는다.
+
+## 잔여 전체 DB 마이그레이션 (97~99번)
+
+V1·V2를 변경하지 않고 다음 순서로 적용한다. 별도 수동 SQL 실행이나 `outOfOrder` 설정은 필요 없다.
+병합 전 다른 작업의 신규 마이그레이션 번호와 충돌 여부를 확인한다.
+
+| 버전 | 생성 테이블 |
+| --- | --- |
+| V3 | `kit_presets` |
+| V4 | `chart_jobs`, `chart_job_attempts`, `chart_job_results`, `file_cleanup_tasks` |
+| V5 | `play_sessions`, `hits` |
+| V6 | `reports`, `recordings` |
+| V7 | `telemetry_events` |
+| V8 | `telemetry_events`를 TimescaleDB hypertable로 전환 (기존 데이터 보존) |
+| V9 | `play_raw_uploads` 접수 기록 |
+| V10 | FE 내부 데모 공용 연습 채보 3개 초기 적재 |
+
+V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·AI·리포트 API와 엔티티는
+각 소비 기능에서 구현한다. 이번 변경은 테이블·제약·인덱스와 마이그레이션 검증이다.
+
+- 프리셋 이름은 회원별 유일하고 기본 프리셋은 회원당 최대 하나다. 삭제해도 플레이 당시 스냅샷은 남는다.
+- AI 작업은 회원별 비종료 작업 하나, 회원별 업로드 멱등 키 하나를 허용한다.
+  먼저 QUEUED 작업을 생성하고 attempt를 만든 다음 `current_attempt_id`를 지정한다.
+  현재 attempt와 단계별 접수 결과는 같은 job의 attempt만 참조한다.
+  `(worker_id, claim_request_id)`와 `(job_id, stage)`는 유일하다.
+  완료·실패 전환 시 `finished_at`도 함께 갱신하며 DONE의 progress는 100이다.
+- `chart_job_results`는 접수 해시와 Receipt를 보존한다. 중복 요청에 Receipt를 재사용하는 서비스 로직,
+  임대·revision 조건부 갱신, 회원 ACTIVE 확인 및 탈퇴 트랜잭션과의 잠금 순서는 후속 AI 연동에서 구현한다.
+- 파일 정리 기록은 삭제 성공 후에도 키를 보존한다. 작업 접수 전 남은 고아 파일도 기록할 수 있다.
+  재시도 대상에는 DELETING도 포함한다. 실행 중단 시 재획득과 삭제 확인, 만료된 PUT 권한의
+  뒤늦은 업로드 재스캔은 후속 정리 작업의 책임이다. 객체 키는 재사용하지 않는다.
+- 플레이 ID는 클라이언트 생성 UUID, 채보 버전 ID는 bigint다.
+  요청 버전·SHA-256 해시는 필수다. RHYTHM/SHEET에는 곡·채보 버전·판정 컨텍스트가 필요하며
+  FREE/TEMPO에는 곡·채보 버전을 연결하지 않는다.
+- `hits.t_ms`·`delta_ms`는 소수 ms를 보존하며 NaN·무한대를 거부한다.
+  카운트인 시점의 음수 `t_ms`는 허용한다. MISS는 실제 타격 수치 없이 noteId를 가진 행이며,
+  PERFECT/GOOD은 noteId·velocity·delta가 필요하다. 판정 없는 타격은 velocity를 가진다.
+  세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
+- 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
+  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 WITHDRAWN과 별도 정리 흐름을 사용한다.
+- JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
+  해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
+
+텔레메트리는 V7에서 일반 테이블로 만든 뒤 V8에서 **1일 청크의 TimescaleDB hypertable**로 전환한다.
+요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. 자동 보관 기간 삭제·압축 정책은
+적용하지 않았다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
+음수 아닌 값만 검사한다. 원시 IMU 배열은 이 테이블에 저장하지 않는다.
+
+`DatabaseSchemaMigrationTest`는 빈 DB의 V1→V7, V2 기존 데이터·이력 보존 업그레이드,
+재실행 0건, JSON/수치/상태 제약, 중복 접수, 다른 작업 attempt 참조 거부,
+삭제 연쇄·스냅샷 보존을 실제 임베디드 PostgreSQL 16에서 검사한다.
+
+```powershell
+.\gradlew.bat test --tests '*DatabaseSchemaMigrationTest'
+.\gradlew.bat --no-daemon clean build
+```
+
+실패한 DDL은 Flyway 트랜잭션으로 롤백된다. 적용 후 앱을 롤백해도 테이블·데이터는 남긴다.
+공유 DB에 `clean`을 실행하거나 적용된 V1~V8 파일을 수정하지 않고 후속 버전으로 변경한다.
+FE 업로드 계약 합의·MR·CI·병합 확인 전에는 97번 전체를 완료로 간주하지 않는다.
+
+### TimescaleDB 전환·검증
+
+`Infra/docker-compose.yml`은 `timescale/timescaledb:2.30.2-pg16`을 사용한다.
+V8의 확장 생성에는 권한이 필요하므로 최초 마이그레이션은 DB 관리자 권한으로 실행하거나,
+관리자가 먼저 확장을 설치한 후 테이블 소유자 권한으로 실행한다.
+확장 미설치·preload 누락을 건너뛰는 fallback은 없다. 일반 PostgreSQL만으로 운영 앱을 기동하면 V8이 실패한다.
+
+기존 DB가 있으면 먼저 쓰기를 중단하고 백업 및 별도 DB 복원 검증을 수행한다.
+기존 `pgdata` 볼륨을 무조건 지우거나 이미지 교체만으로 호환성을 가정하지 않는다.
+PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하므로 데이터량에 따라
+테이블 잠금 시간이 길어질 수 있다. 전환 후 행 수·주요 조회·Flyway 이력·hypertable을 확인한다.
+앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
+데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
+
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V11을 적용하고, V8 검사는 별도 필수 CI job
+`be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
+및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
+Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
+Windows Runner의 IPv6 수신 오류를 피하도록 `gradle.properties`에서 Gradle JVM도 IPv4로 고정한다.
+`build.gradle`의 테스트 JVM IPv4 설정은 별도로 유지한다. `--no-daemon`도 일회용 Gradle 프로세스를
+사용하므로 테스트 JVM 설정만으로 Gradle 시작 오류를 막을 수 없다.
+
+```powershell
+# BE/에서 실행. JAVA_HOME은 CI와 같은 JDK 21로 설정한다.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSchema.ps1
+```
+
+스크립트는 Compose에 선언된 이미지를 사용해 임시 DB를 띄우고 `timescaleTest`를 실행한 뒤 종료한다.
+기존 볼륨을 쓰지 않고 tmpfs 및 임의의 루프백 포트만 사용한다. 빈 DB V1→V8,
+데이터가 있는 V7→V8, 이력·행·인덱스 보존, 날짜별 청크 생성, CHECK 제약 및
+재실행 0건·자동 삭제 정책 미등록을 검사한다.
+
+근거: [공식 2.30.2 릴리스](https://github.com/timescale/timescaledb/releases/tag/2.30.2),
+[기존 테이블 전환 API](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable).
+
+## API 규약
+
+모든 REST API가 공유하는 규칙이다. FE 클라이언트와 다른 BE 작업은 이 절을 기준으로 맞춘다.
+설계 근거와 결정 과정은 작업 85번 설계 문서(개인 문서)에 있다.
+
+### 성공 응답
+
+성공은 HTTP 상태 코드로 표현하고 본문은 자원 DTO를 그대로 낸다. 별도 래퍼(`success`, `data`)는 쓰지 않는다.
+
+| 상황 | 상태 | 본문 |
+| --- | --- | --- |
+| 조회 | 200 | 자원 DTO (record) |
+| 목록 | 200 | JSON 배열. 페이지네이션이 필요하면 `PageResponse` |
+| 생성 | 201 | 생성된 자원 DTO. `Location` 헤더는 선택 |
+| 수정 | 200 | 수정된 자원 DTO |
+| 삭제·본문 없는 처리 | 204 | 없음 |
+
+페이지 응답 `common.response.PageResponse`는 `items`, `page`(0부터), `size`, `totalElements`,
+`totalPages`, `hasNext` 필드를 가진다. `PageResponse.of(items, page, size, totalElements)`로 만든다.
+
+JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-10-19T07:00:00Z`)로,
+열거형은 UPPER_SNAKE 문자열로 낸다. 숫자 ID는 JSON 숫자, uuid는 문자열이다.
+성공 응답의 null 필드는 생략하지 않는다. 모르는 입력 필드는 무시한다.
+
+### 오류 응답
+
+모든 오류는 `Content-Type: application/problem+json`(RFC 9457)이며 `code`·`errors`를 확장 필드로 더한다.
+클라이언트는 이 미디어 타입으로 오류를 식별하고 `code`로 분기한다. `detail`은 그대로 보여 줘도 되는 한국어 문장이다.
+
+```json
+{
+  "type": "about:blank",
+  "title": "입력값 검증 실패",
+  "status": 400,
+  "detail": "입력값을 확인해 주세요.",
+  "instance": "/api/presets",
+  "code": "VALIDATION_FAILED",
+  "errors": [
+    { "field": "name", "message": "공백일 수 없습니다" },
+    { "field": "pads[2].key", "message": "1 이상이어야 합니다" }
+  ]
+}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `type` | 고정 `about:blank` |
+| `title` | 오류 코드의 한국어 제목 |
+| `status` | HTTP 상태 코드와 같은 값 |
+| `detail` | 사람이 읽는 한국어 설명. 500은 고정 문구만 내고 예외 메시지·스택을 노출하지 않는다 |
+| `instance` | 요청 경로(쿼리 문자열 제외) |
+| `code` | 기계 판별용 코드, UPPER_SNAKE |
+| `errors` | 검증 실패일 때만. `field`(필드 경로 또는 파라미터 이름)와 `message`. 거부된 값은 넣지 않는다 |
+
+공통 코드는 `common.error.CommonErrorCode`에 있다.
+
+| 코드 | 상태 | 언제 |
+| --- | --- | --- |
+| `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
+| `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
+| `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
+| `FORBIDDEN` | 403 | 권한 없음, 소유자 검사 실패 |
+| `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
+| `METHOD_NOT_ALLOWED` | 405 | |
+| `NOT_ACCEPTABLE` | 406 | |
+| `CONFLICT` | 409 | 도메인 코드가 없을 때의 기본 |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | |
+| `INTERNAL_ERROR` | 500 | 처리되지 않은 예외, 분류되지 않은 5xx |
+
+도메인 코드는 각 도메인 패키지에 `{Domain}ErrorCode` enum을 두고 `common.error.ErrorCode`를 구현한다.
+코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `USER_NOT_FOUND` 404, `SONG_FORBIDDEN` 403).
+공통 코드에는 접두사가 없고, 같은 코드 문자열을 두 enum이 쓰지 않는다.
+
+사용 규칙:
+
+- 서비스·컨트롤러는 `BusinessException(errorCode)` 또는 `BusinessException(errorCode, detail)`만 던진다.
+  상태·제목은 코드가 정한다. 컨트롤러에 `@ExceptionHandler`를 따로 두지 않는다.
+- 요청 본문은 `@Valid`, 쿼리·경로 파라미터는 제약 애너테이션(`@Min` 등)을 직접 붙인다.
+  검증 메시지는 `Accept-Language`와 무관하게 한국어다.
+- Spring MVC 밖(서블릿 필터, Security 진입점·접근 거부 핸들러)에서는 `common.error.ErrorResponseWriter`를
+  주입받아 `write(response, errorCode, detail, path)`로 응답한다. 자체 JSON을 만들지 않는다.
+- 로그: 4xx는 WARN 한 줄(스택 없음), 5xx는 ERROR + 스택 1회. 검증 실패 로그에 값은 남기지 않는다.
+
+### API 문서
+
+- Swagger UI: `http://127.0.0.1:8080/swagger-ui.html` (→ `/swagger-ui/index.html`)
+- OpenAPI JSON: `GET /v3/api-docs`, YAML: `GET /v3/api-docs.yaml`
+- `SWAGGER_ENABLED=false`면 둘 다 404. 운영 Compose는 끈다.
+- 모든 operation에 400·500 응답이 `ApiErrorResponse` 스키마로 자동 추가된다.
+  401·403·404·409처럼 그 API에만 해당하는 응답은 `@ApiResponse`로 적는다.
+- 보안 스킴 `bearerAuth`(HTTP bearer, JWT)가 등록돼 있다. 보호 API는
+  `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`로 표시한다. 전역 requirement는 걸지 않는다.
+- `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`은 인증 없이 열려 있다. Swagger UI의 Authorize에
+  `POST /api/auth/refresh`로 받은 `accessToken`을 넣으면 보호 API를 호출할 수 있다.
+
+## DB와 마이그레이션
+
+스키마는 `src/main/resources/db/migration`의 Flyway SQL만 정의한다. Hibernate는 엔티티가
+스키마와 맞는지 기동 시 검증만 하므로, 엔티티를 바꾸면 같은 내용의 마이그레이션도 추가해야 한다.
+
+| 버전 | 파일 | 내용 | 작업 |
+| --- | --- | --- | --- |
+| V1 | `V1__create_users_social_accounts.sql` | `users`, `social_accounts` | -86 |
+| V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
+
+규칙:
+
+- 파일명은 `V{번호}__{설명}.sql`이다. 규칙에 어긋난 파일은 무시되지 않고 기동이 실패한다.
+- 번호는 담당자별 대역 없이 팀 공통으로 1씩 늘린다. MR 병합 직전에 `develop-BE`에 적용된 마지막 번호를 확인해 다음 번호를 쓴다.
+- 이미 병합된 파일은 고치거나 번호를 바꾸지 않는다. 변경은 새 번호의 파일로 추가한다. `outOfOrder`는 쓰지 않는다.
+- 이 MR이 의존성·설정을 이미 넣었으므로, 이후 마이그레이션 MR은 SQL 파일만 추가하면 된다.
+- 제약·인덱스 이름은 아래 규칙을 따른다. 오류 메시지와 이후 `ALTER`에서 이름으로 찾기 위해서다.
+
+| 종류 | 형식 | 예 |
+| --- | --- | --- |
+| 기본 키 | `pk_{table}` | `pk_users` |
+| 외래 키 | `fk_{table}_{column}` | `fk_social_accounts_user_id` |
+| 유니크 | `uq_{table}_{의미}` | `uq_social_accounts_provider_user` |
+| CHECK | `ck_{table}_{column 또는 의미}` | `ck_users_status` |
+| 인덱스 | `ix_{table}_{columns}` | `ix_social_accounts_user_id` |
+
+엔티티 규칙: 시각은 `Instant`(DB `timestamptz`), 열거형은 `@Enumerated(EnumType.STRING)`(DB `varchar`),
+PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문자열 길이는 SQL과 엔티티에 같은 값을 적는다.
+`open-in-view`는 꺼져 있으므로 지연 로딩은 트랜잭션 안(서비스)에서 끝낸다.
+
+### 테스트 DB
+
+일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
+`src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
+테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
+Flyway가 V11까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+
+- 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
+- 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
+  `@SpringBootTest`에서 데이터를 쓰면 `@Transactional`로 롤백하거나 직접 지운다.
+- 최초 실행 때 PostgreSQL 바이너리 jar를 Gradle 캐시로 받는다.
+
+## 소셜 로그인
+
+Google·SSAFY OAuth 2.0 Authorization Code 방식이다. 자체 회원가입은 없다. 콜백은 BE가 받고,
+FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**시키기만 한다(fetch로 호출하지 않는다).
+결정 근거는 FE 요청 `ACCT-001_소셜로그인-결정-전달`과 작업 87번 설계 문서(개인 문서)에 있다.
+
+| 메서드·경로 | 동작 |
+| --- | --- |
+| `GET /api/auth/{provider}/login` | `provider` = `google` \| `ssafy`. 제공자 동의 화면으로 302, state 쿠키 `oauth_state` 설정 |
+| `GET /api/auth/{provider}/callback` | 제공자가 돌려보내는 주소. 성공하면 `{FRONTEND_BASE_URL}/auth/callback`, 실패하면 `{FRONTEND_BASE_URL}/login?error={access_denied\|oauth_failed}`로 302 |
+
+- 없거나 키가 설정되지 않은 제공자는 두 경로 모두 404 `AUTH_PROVIDER_NOT_SUPPORTED`다. 기동 로그에 "비활성" WARN이 남는다.
+- `access_denied`는 사용자가 동의 화면에서 취소한 경우, `oauth_failed`는 그 밖의 모든 실패(state 불일치, 토큰 교환·사용자 정보 조회 실패, 탈퇴 회원 등)다. 상세 사유는 서버 WARN 로그에만 남고 인가 코드·토큰·이메일은 기록하지 않는다.
+- state는 서버 세션 없이 `oauth_state` 쿠키(HttpOnly, `SameSite=Lax`, `Path=/api/auth`, 5분)로 확인하고 콜백에서 지운다. 로그인을 두 번 연달아 시작하면 앞선 콜백은 실패한다.
+- 회원은 (제공자, 제공자 사용자 ID)로 찾는다. Google은 `sub`, SSAFY는 `userId`다. 같은 사람이라도 Google과 SSAFY로 로그인하면 서로 다른 회원이다(계정 연결 없음).
+- 최초 로그인 때만 닉네임(제공자 이름, 30자로 자름, 없으면 `사용자`)과 프로필 이미지(500자 초과·없음은 null, SSAFY는 항상 null)를 채운다. 이후 로그인에서는 덮어쓰지 않는다.
+- 역할은 로그인할 때마다 `ADMIN_EMAILS`로 다시 정한다(목록에서 빠지면 다음 로그인에 USER). Google은 `email_verified=true`인 이메일만, SSAFY는 이메일을 검증된 것으로 본다.
+- 제공자 토큰은 사용자 정보 조회에만 쓰고 저장하지 않는다. 콜백이 성공하면 우리 서비스의 refresh 쿠키를 심는다(`auth.LoginSessionIssuer`). 이후 흐름은 [인증과 토큰](#인증과-토큰).
+- 외부 호출 시간 제한은 연결 3초·응답 5초(`spring.http.clients.*`)다.
+
+제공자 설정은 `application.yaml`의 `auth.providers.{key}`에 있다(인가·토큰·사용자 정보 URI, scope, 클라이언트 인증 방식 `BASIC`/`POST`, 응답 속성 이름).
+제공자를 추가하려면 같은 형식의 블록과 `user.SocialProvider` 값을 추가한다. 마이그레이션은 필요 없다.
+
+### 콘솔 등록과 로컬 확인
+
+1. 콘솔에 리다이렉트 URI를 등록한다. Google: `http://localhost:8080/api/auth/google/callback`,
+   SSAFY: `http://localhost:8080/api/auth/ssafy/callback`. `OAUTH_REDIRECT_BASE_URL` 뒤에 `/api/auth/{provider}/callback`을 붙인 값과 글자까지 같아야 한다(`127.0.0.1`과 `localhost`도 다르다).
+2. Google 클라이언트가 "테스트" 게시 상태면 로그인할 계정을 테스트 사용자로 추가한다.
+3. `BE/.env`에 키를 넣고 `bootRun`한 뒤 브라우저에서 `http://localhost:8080/api/auth/google/login`을 연다.
+   동의하면 `FRONTEND_BASE_URL/auth/callback`으로 돌아온다(FE가 떠 있지 않으면 연결 실패 화면이지만 주소창으로 결과를 확인할 수 있다).
+   `users`·`social_accounts`에 행이 생기고 서버 로그에 `로그인 성공 provider=google userId=…`가 남는다.
+
+운영은 `FRONTEND_BASE_URL`·`OAUTH_REDIRECT_BASE_URL`을 `https://{서비스 도메인}`으로 주고, 같은 콜백 URI를 콘솔에 추가 등록한다.
+## 곡·채보 조회 (96번)
+
+| GET 경로 | 응답 |
+| --- | --- |
+| `/api/v1/songs` | `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext` |
+| `/api/v1/songs/{songId}` | 곡 메타데이터와 난이도별 최신 `chartVersionId` 요약 |
+| `/api/v1/charts/{chartId}` | 해당 채보의 가장 큰 `version`에 해당하는 노트·시간 정보 |
+| `/api/v1/chart-versions/{chartVersionId}` | 지정 버전의 노트·시간 정보 |
+| `/api/v1/chart-versions/{chartVersionId}/assets` | 같은 버전의 이미지·반주 URL 발급 및 갱신 |
+
+목록은 `source=BUILTIN`(기본) 또는 `MINE`, `q`(앞뒤 공백 제거 후 100자 이내),
+`page=0`(0~100000), `size=20`(1~100)을 받는다. 제목·아티스트를 대소문자 구분 없이 부분 검색한다.
+`%`, `_`, `!`도 문자 그대로 검색하며 생성 시각 내림차순, 동률이면 ID 내림차순이다.
+`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`와 다르다.
+목록과 count에 같은 권한 조건을 적용하며, 난이도 요약은 일괄 조회한다. 목록 SQL에는 큰 노트 JSON을 넣지 않는다.
+
+모든 경로는 로그인한 ACTIVE 회원 전용이다. 공용 곡도 로그인해야 하며 타인·삭제·없는 자원은 동일한 404다.
+ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 곡은 메타데이터만 조회할 수 있고
+재생·자산 조회는 409다. 응답은 `Cache-Control: private, no-store`이며 오류는 기존 Problem Details 형식이다.
+토큰이 없거나 무효라 인증 필터가 막은 401은 Security 기본값(`no-cache, no-store, max-age=0, must-revalidate`)이다.
+
+88번 인증과 연결돼 있다. `chart.web.AuthenticatedChartQueryUserResolver`가 인증 필터가 검증한 access 토큰의
+`AuthUser.id`만 돌려준다([인증과 토큰](#인증과-토큰)). 토큰 검증·만료·탈퇴 회원은 인증 모듈이 401로 처리하고,
+조회 모듈은 외부 파일 작업 뒤 DB의 ACTIVE 상태를 다시 확인한다.
+클라이언트가 전달한 userId 쿼리·헤더·가짜 토큰을 사용하는 임시 로그인 기능은 없다.
+조회 테스트는 실제 access 토큰을 `Authorization` 헤더로 보낸다.
+
+### FE 소비 계약
+
+- 곡 상세에서 난이도와 `chartVersionId`를 고르고, 플레이 시작 이후에는 버전 조회와 assets 갱신에 그 ID를 사용한다.
+  최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
+- `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.
+  `velocityHint`, `notation`, `durationMs`, 확장 timing 필드는 없으면 null이며 가짜 기본값을 채우지 않는다.
+- `timing`은 버전에 저장된 값이다. 곡의 현재 BPM으로 대체하지 않는다. `beatsPerBar`는 박자표의 분자이며
+  `6/8`을 `6/4`로 해석하면 안 된다. 변박은 `timeSignatureMap`을 함께 사용한다.
+- `notationStatus=PENDING`/`UNAVAILABLE`여도 정상 노트는 조회할 수 있다. `READY`에 이미지가 없는 경우도 유효하다.
+- ID는 공통 BE 계약대로 JSON 숫자다. FE string ID 모델로 옮길 때 `Number.isSafeInteger` 확인 후 변환한다.
+- assets 응답은 `chartVersionId`, `notationStatus`, `sheetPages`, `accompanimentUrl`, `assetsExpireAt`이다.
+  페이지는 `page`, `imageUrl`, `fromTick`, `toTick`, `fromMs`, `toMs`를 포함하고 시작 포함/끝 미포함이다.
+  페이지 순서를 정렬하며 템포 변경 전체를 적분해 ms를 계산한다. offset은 한 번만 적용한다.
+  `ppq`·`tempoMap` 등 매핑 근거가 없거나 모순되면 `CHART_SHEET_TIMING_UNAVAILABLE`(409)다.
+- 자산이 없으면 `sheetPages=[]`, `accompanimentUrl=null`, `assetsExpireAt=null`이다.
+  자산이 있으면 `assetsExpireAt`은 발급된 URL 중 가장 이른 만료 시각이다. 노트 응답에는 URL·내부 키가 없다.
+
+### S3 호환 저장소 연결
+
+40번에서 결정한 실제 저장소에 맞춰 실행 환경에 다음 값을 주입한다. 기본은 비활성화다.
+
+| 환경변수 | 의미 |
+| --- | --- |
+| `CHART_ASSET_ENABLED` | 연결 시 `true` |
+| `CHART_ASSET_ENDPOINT` | BE가 HEAD로 객체 존재를 확인할 내부 S3 API endpoint |
+| `CHART_ASSET_PUBLIC_ENDPOINT` | 브라우저가 서명 GET으로 접근할 공개 S3 API endpoint |
+| `CHART_ASSET_REGION` | 서명 region, 기본 `us-east-1` |
+| `CHART_ASSET_SHEET_BUCKET` / `CHART_ASSET_ACCOMPANIMENT_BUCKET` | 비공개 이미지 / 반주 버킷 |
+| `CHART_ASSET_ACCESS_KEY` / `CHART_ASSET_SECRET_KEY` | 읽기 권한 키. 저장소·로그에 기록하지 않음 |
+| `CHART_ASSET_URL_TTL` | URL 유효기간. 기본 `10m`, 허용 1~10분 |
+
+AWS SDK의 SigV4, path-style URL을 사용한다. 활성화 시 필수 설정이 없으면 기동을 실패시킨다.
+내부·공개 endpoint는 같은 저장소를 가리켜야 하며, 프록시는 서명된 Host·경로·쿼리를 보존해야 한다.
+현재 연결은 S3 호환 저장소의 고정 접근 키 방식이다. STS 세션 토큰·역할 자격 증명은 아직 연결하지 않았다.
+파일은 조회 요청에서 업로드하지 않는다. 저장 키는 92번 경계에 맞춰 다음 형식을 검사한다.
+
+- 이미지: `sheet/{chartVersionId}/{파일명}.png|jpg|jpeg|webp` (파일명은 영문·숫자·`_`·`-`)
+- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a`, 소유자 AUDIO 또는 자체 합성 BUILTIN 곡에 허용
+
+생성·저장 담당자는 이 키 규칙에 맞춰 연결해야 한다. 임의 URL, 타인 버전, 임시 원본·드럼 트랙,
+경로 이동 문자열은 서명하지 않는다. 객체 부재는 `CHART_ASSET_NOT_FOUND`(404), 미설정·저장소 장애는
+`CHART_ASSET_UNAVAILABLE`(503)이며 자산이 없는 정상 응답으로 숨기지 않는다.
+GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공하지 않는다.
+
+스토리지 호출 동안 DB 트랜잭션을 유지하지 않는다. 응답 직전에 회원 ACTIVE·곡 소유권·삭제 상태를
+다시 조회하며, 그 전에 커밋된 탈퇴는 401, 삭제는 404로 차단한다. 이미 발급된 URL은 만료까지 유효할 수 있다.
+내부 키·토큰·서명 URL을 접근 로그에 남기지 않아야 한다.
+
+조회 테스트는 실제 임베디드 PostgreSQL, MVC, SDK 서명과 로컬 HTTP HEAD 서버를 사용한다.
+다른 트랜잭션에서 탈퇴·삭제를 커밋하는 경합과 외부 호출 시 DB 트랜잭션 부재도 확인한다.
+**40번 실제 스토리지의 프록시·만료·Range·CORS 검증은 별도로 남아 있다.**
+해당 통합 검증, MR CI·리뷰·develop-BE 병합 전에는 96번 전체 완료로 처리하지 않는다.
+
+## 키트 프리셋 (90번)
+
+로그인한 회원이 자기 키트 프리셋을 저장·조회·수정·삭제하고, 하나를 기본으로 지정한다. 프리셋 내용은
+**패드 배치(`layout`)·센서 캘리브레이션(`calibration`)·사운드(`sounds`)** 세 가지이며 모두 FE 형식의 JSON 객체다.
+서버는 내용을 해석하지 않고 객체인지와 크기(각 16 KiB)만 검사한다. 키보드 매핑은 저장하지 않는다(FE 로컬, 추후 FE에서 제거 예정).
+설계는 작업 90번 설계 문서(개인 문서)에 있다.
+
+| 메서드·경로 | 본문 | 성공 | 도메인 오류 |
+| --- | --- | --- | --- |
+| `GET /api/presets` | — | 200 배열. 기본 프리셋이 있으면 첫 원소, 나머지는 최근 생성 순 | — |
+| `POST /api/presets` | 요청 본문 | 201 + `Location: /api/presets/{id}` | 409 `PRESET_NAME_DUPLICATE`·`PRESET_LIMIT_EXCEEDED`·`PRESET_CONFLICT` |
+| `GET /api/presets/{id}` | — | 200 | 404 `PRESET_NOT_FOUND` |
+| `PUT /api/presets/{id}` | 요청 본문(이름·배치·캘리브레이션·사운드를 모두 보낸다) | 200. 기본 여부는 그대로 | 404, 409 `PRESET_NAME_DUPLICATE`·`PRESET_CONFLICT` |
+| `PUT /api/presets/{id}/default` | 없음 | 200. 이전 기본은 해제. 이미 기본이면 그대로 | 404, 409 `PRESET_CONFLICT` |
+| `DELETE /api/presets/{id}` | — | 204. 기본을 지우면 남은 것 중 가장 최근 생성이 기본이 된다 | 404 |
+
+요청 본문:
+
+| 필드 | 필수 | 규칙 |
+| --- | --- | --- |
+| `name` | 예 | 앞뒤 공백을 잘라 1~50자. 내 프리셋끼리 같은 이름 불가(대소문자 구분) |
+| `layout` | 예 | JSON 객체(FE `KitLayout`) |
+| `sounds` | 예 | JSON 객체. 1단계는 `{"soundSetId":"ssaplash"}` |
+| `calibration` | 아니오 | JSON 객체(FE `CalibrationProfile`) 또는 `null`/누락 |
+| `schemaVersion` | 아니오 | 1 이상 정수. 누락이면 1. FE가 위 세 JSON 형식을 바꿀 때 올린다 |
+
+응답은 `id`, `name`, `isDefault`, `layout`, `sounds`, `calibration`(없으면 `null`), `schemaVersion`, `createdAt`, `updatedAt`
+아홉 필드다. 소유자 id는 내보내지 않는다. JSON은 jsonb로 저장되므로 키 순서·공백은 보낸 것과 다를 수 있다.
+
+| 코드 | 상태 | 언제 |
+| --- | --- | --- |
+| `PRESET_NOT_FOUND` | 404 | 없는 id, **다른 회원의 프리셋**(ADMIN 포함. 존재 여부를 드러내지 않는다) |
+| `PRESET_NAME_DUPLICATE` | 409 | 같은 이름의 내 프리셋이 이미 있음 |
+| `PRESET_LIMIT_EXCEEDED` | 409 | 이미 10개(FE 로컬 상한과 같다) |
+| `PRESET_CONFLICT` | 409 | 같은 회원의 동시 요청이 DB 제약(이름 유일·기본 1개)에 걸림. 다시 호출하면 된다 |
+
+FE 소비 계약: 로그인 복원 뒤 `GET /api/presets` 한 번으로 목록과 기본 프리셋을 함께 받는다(전용 "기본 조회" API 없음).
+첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로컬 프리셋 이관은 `POST` 반복이다.
+
+연결점: 쓰기는 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare`로 회원을 잠그고 ACTIVE를 다시 확인한다(아니면 401).
+탈퇴 작업은 `preset.KitPresetRepository.deleteAllByUserId(userId)`로 지운다(`users` 행을 남기므로 cascade에 기대지 않는다).
+플레이 로그의 `play_sessions.kit_preset_id`는 프리셋 삭제 시 NULL이 되고 스냅샷은 남는다(V5).
+V3의 `tuning` 컬럼은 이 API가 쓰지 않는다(SETUP-03, 2단계).
+
+## 인증과 토큰
+
+세션 없이 토큰으로 인증한다. 계약은 FE 요청 `ACCT-001_소셜로그인-결정-전달`의 회신, 탈퇴·WS 연동은 BE2와의
+mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에서 정했다. 설계는 작업 88번 설계 문서(개인 문서)에 있다.
+
+흐름: 로그인 콜백이 refresh 쿠키를 심고 FE `/auth/callback`으로 302 → FE가 `POST /api/auth/refresh`로 access 토큰을 받는다
+→ API 호출마다 `Authorization: Bearer {accessToken}` → 401이면 refresh를 **한 번** 부르고 원래 요청을 다시 보낸다
+→ 그래도 401이면 로그인 화면. 새로고침 뒤 메모리 토큰을 복구할 때도 refresh를 부른다.
+
+| 메서드·경로 | 인증 | 결과 |
+| --- | --- | --- |
+| `POST /api/auth/refresh` | `refresh_token` 쿠키 | 200 `{accessToken, tokenType: "Bearer", expiresIn: 1800}` + 새 `refresh_token` 쿠키. 실패는 401 `UNAUTHORIZED` "다시 로그인해 주세요." |
+| `POST /api/auth/logout` | 쿠키(없어도 됨) | 204. 서버의 refresh 토큰을 지우고 쿠키를 만료시킨다. 여러 번 불러도 같다 |
+| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt}`. 이메일·상태는 내보내지 않는다 |
+
+| 항목 | access 토큰 | refresh 토큰 |
+| --- | --- | --- |
+| 형식 | HS256 JWT. 클레임 `iss=airdrum-api`, `sub`(회원 id), `iat`, `exp`만. 권한은 넣지 않는다 | 32바이트 난수(Base64 URL 43자) |
+| 수명 | 30분(만료 판정 허용 오차 60초) | 14일. 재발급할 때마다 새 값·새 14일 |
+| 전달 | 응답 본문 → FE 메모리 → `Authorization` 헤더. 쿼리·쿠키로 받지 않는다 | 쿠키 `refresh_token`: `HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=1209600` |
+| 서버 보관 | 없음 | Redis에 SHA-256 해시만. 원문은 저장·로그하지 않는다 |
+
+- **매 요청 회원 확인**: 필터가 토큰 서명·만료를 본 뒤 `users`를 PK로 조회해 ACTIVE인지 확인하고, 권한도 DB 값을 쓴다.
+  탈퇴하면 다음 요청부터 401이고, `ADMIN_EMAILS` 변경으로 권한이 바뀌면 다음 로그인 뒤 바로 반영된다.
+- **refresh는 1회용**이다. 쓴 토큰은 즉시 무효이고, 같은 쿠키로 동시에 부르면 하나만 성공한다. FE는 refresh를 한 번에 하나만 실행한다.
+  이미 쓰였거나 로그아웃된 토큰으로 부르면 401이지만 쿠키는 지우지 않는다(동시 재발급에서 이긴 요청의 새 쿠키를 지우지 않기 위해).
+  쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
+- 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
+
+공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
+`/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
+**나머지는 없는 경로도 미인증이면 404가 아니라 401이다.** 401·403은 [오류 응답](#오류-응답) 형식이며 401에는 `WWW-Authenticate: Bearer`가 붙는다.
+
+| 상황 | 상태 | `code` | `detail` |
+| --- | --- | --- | --- |
+| 토큰 없음 | 401 | `UNAUTHORIZED` | 로그인이 필요합니다. |
+| 만료 | 401 | `UNAUTHORIZED` | 액세스 토큰이 만료되었습니다. |
+| 서명·형식·발급자 불일치, `Bearer` 아닌 헤더 | 401 | `UNAUTHORIZED` | 액세스 토큰이 올바르지 않습니다. |
+| 탈퇴·없는 회원 | 401 | `UNAUTHORIZED` | 사용할 수 없는 계정입니다. |
+| ADMIN 전용에 USER | 403 | `FORBIDDEN` | 권한이 없습니다. |
+
+### 다른 모듈에서 인증 쓰기
+
+- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
+  클라이언트가 보낸 회원 ID는 믿지 않는다. 문서에는 파라미터로 나오지 않는다. 클래스에 `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`를 붙인다.
+- **ADMIN 전용**: `@PreAuthorize("hasRole('ADMIN')")`. USER는 403이다.
+- **컨트롤러 밖**(인터셉터·연결 어댑터): `auth.CurrentAuthUser.find()`로 현재 요청의 `AuthUser`를 꺼낸다. 예: `chart.web.AuthenticatedChartQueryUserResolver`.
+- **WebSocket**(BE2): 연결 뒤 첫 메시지의 토큰으로 `auth.AuthenticationService.authenticate(token)`을 부르면
+  `AuthenticatedUser(user, expiresAt)`가 온다(실패는 `AccessTokenException`, 사유 `getReason()`). 전송마다 `expiresAt` 경과와
+  `findActive(userId)`로 다시 확인한다. 토큰을 URL 쿼리로 받지 않는다. HTTP 필터는 WS 메시지를 처리하지 않는다.
+- **회원 상태와 겨루는 저장**(채보 결과 커밋·업로드 접수): 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare(userId)`
+  (`FOR SHARE`)로 회원 행을 잠그고 `ACTIVE`를 확인한다. 잠금 순서는 `users` → `songs` → `chart_jobs`다. 트랜잭션 밖에서 부르지 않는다.
+- **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
+  `SecurityFilterChain`으로 더한다.
+- **탈퇴**(10/26 주 작업): `users`를 `FOR UPDATE`로 잠근 뒤 `auth.RefreshTokenService.revokeAllOf(userId)`로 refresh 토큰을 모두 지운다.
+
+### Redis 키
+
+| 키 | 값 | TTL |
+| --- | --- | --- |
+| `refresh:token:{SHA-256 16진}` | 회원 id. 재발급·로그아웃은 `GETDEL`로 한 번에 읽고 지운다 | 14일 |
+| `refresh:user:{회원 id}` | 그 회원의 토큰 해시 집합(탈퇴 때 일괄 삭제용) | 발급마다 14일로 연장 |
+
+Redis가 죽으면 로그인 콜백(`oauth_failed`)과 refresh·logout이 2초 안에 실패한다. 이미 받은 access 토큰으로 하는 API 호출은 영향이 없다.
+
+### 로컬 확인
+
+1. Redis를 띄우고(`docker run … redis:7-alpine`, [로컬 실행](#로컬-실행)) `.env`에 `JWT_SECRET`을 넣은 뒤 `bootRun`한다.
+2. 브라우저에서 `http://localhost:8080/api/auth/google/login` → 동의 → `FRONTEND_BASE_URL/auth/callback`으로 돌아오면
+   개발자 도구 Application 탭의 `localhost` 쿠키에 `refresh_token`이 있다.
+3. 같은 브라우저 콘솔에서 `await (await fetch('/api/auth/refresh', {method: 'POST'})).json()` (FE 개발 서버 프록시 경유 또는
+   `http://localhost:8080` 페이지에서) → `accessToken`. Swagger UI의 Authorize에 넣고 `GET /api/users/me`를 호출한다.
+4. `docker exec airdrum-redis redis-cli --scan --pattern 'refresh:*'`로 키를 확인한다. 로그아웃하면 `token` 키가 사라진다.
+
+## 검증과 패키징
+
+```powershell
+.\gradlew.bat clean build
+$env:DB_PASSWORD = '<로컬 비밀번호>'
+java -jar build/libs/app.jar
+```
+
+macOS/Linux에서는 `sh ./gradlew clean build`를 사용한다.
+현재 별도 린터는 없으며 `build`가 컴파일·테스트·실행 JAR 생성을 수행한다. 테스트에는 DB 준비가 필요 없다.
+테스트 DB는 `127.0.0.1`에만 바인딩하고 JDBC도 같은 주소를 사용한다. Windows Runner의
+`localhost` 소켓 연결 실패를 피하도록 테스트 JVM에만 `java.net.preferIPv4Stack=true`를 적용한다.
+공통 DB 테스트는 풀 밖에서 새 JDBC 연결 10개를 순차 생성해 IPv4 루프백 연결도 확인한다.
+테스트는 실제 HTTP 서버에서 health/liveness/readiness 응답, 관리 엔드포인트 비노출,
+OpenAPI 문서·Swagger UI 노출과 토글을 확인하고, `@WebMvcTest`로 예외 종류별 오류 응답 형식과
+로그 규칙을 확인한다. `@DataJpaTest`로 마이그레이션 결과(컬럼·제약·cascade)와 엔티티·리포지토리를 확인한다. 테스트 소스의 `ErrorProbeController`는 이를 위한 전용 컨트롤러이며
+운영 JAR에는 포함되지 않는다. 결과는 `build/reports/tests/test/index.html`에서 확인한다.
+
+소셜 로그인 테스트는 실제 제공자를 부르지 않는다. 제공자 호출은 `MockRestServiceServer`가 대신하며,
+단위 범위는 `@RestClientTest`, 엔드포인트 범위는 `@SpringBootTest` + `@AutoConfigureMockMvc` +
+`@AutoConfigureMockRestServiceServer`(Boot 4 패키지 `org.springframework.boot.restclient.test.autoconfigure`)를 쓴다.
+`BE/`에서 테스트를 돌리면 로컬 `.env`도 읽히므로, 인증 설정에 의존하는 테스트는 쓰는 환경변수를 `@SpringBootTest(properties = …)`로 모두 지정한다.
+
+인증 테스트는 Redis 없이 돈다. `support.TestPropertyDefaultsInitializer`(`spring.factories` 등록)가 모든 테스트 컨텍스트에
+refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRET`이 없으면 테스트 전용 키를 넣는다.
+보호 API를 부르는 테스트는 `AccessTokenService.issue(new AuthUser(id, role), Instant.now())`로 토큰을 만들어 `Authorization` 헤더에 넣는다.
+테스트 소스의 `auth.AuthProbeController`(`/api/test-auth/me`, `/admin`)는 인증·인가 확인 전용이다.
+`@WebMvcTest` 슬라이스에는 우리 Security 체인이 없고 Boot 기본 체인이 붙으므로, 인증과 무관한 슬라이스는
+`@AutoConfigureMockMvc(addFilters = false)`로 필터를 뺀다. 이 경우 로그에 "generated security password"가 나오지만 슬라이스에만 해당한다.
+
+GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
+통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
+`gradlew.bat`를 실행한다. `ci/setup-java.ps1`이 공식 Temurin 21.0.12.1+1 Windows 배포 파일을
+다운로드하고 SHA-256을 확인한 뒤 작업 폴더의 `.gradle-cache/jdks/`에 준비한다.
+작업의 `JAVA_HOME`만 설정하므로 Runner의 시스템 Java 설정은 변경하지 않는다.
+JDK는 다음 작업에서도 캐시로 재사용하며, 최초 실행에는 GitHub 배포 파일 다운로드가 필요하다.
+shell executor는 `image`를 사용하지 않는다.
+Windows에서 긴 Gradle 캐시 경로를 정리할 수 있도록 모든 CI 작업의 Git 프로세스에
+`core.longpaths=true`를 환경변수로 전달하며, 호스트의 전역 Git 설정은 변경하지 않는다.
+Linux Docker Runner로 전환할 때는 태그·JDK 이미지·Wrapper 실행 명령을 함께 변경한다.
+Runner 연결·운영과 CD는 인프라 작업 범위다.
+
+## 컨테이너 실행
+
+저장소 루트에서 실행한다. Docker Desktop의 Linux 엔진 또는 Linux Docker가 필요하다.
+
+```sh
+docker build -t airdrum-api:local ./BE
+docker run --rm --name airdrum-api -p 127.0.0.1:8080:8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/app -e DB_PASSWORD=<로컬 비밀번호> \
+  airdrum-api:local
+```
+
+다른 터미널에서 `docker stop airdrum-api`로 종료한다.
+이미지 빌드는 테스트 없이 실행 JAR만 만든다. 테스트는 CI의 `be-test`가 맡는다
+(테스트용 임베디드 PostgreSQL은 root로 실행되는 빌드 단계에서 뜨지 않는다). 실행 이미지는 JRE 21과 JAR만 포함한다.
+앱은 UID/GID `10001`로 실행한다. 소스 외 파일과 `.env`는 빌드 컨텍스트에 포함하지 않는다.
+
+인프라 Compose 연결 기준:
+
+- 빌드 컨텍스트: `BE/`, Dockerfile: `BE/Dockerfile`
+- 컨테이너 수신 포트: `8080`, HTTP
+- 상태 확인: `GET /actuator/health/readiness`, HTTP 200 및 JSON `status: "UP"` 확인. DB만 포함하고 Redis는 포함하지 않는다.
+  `GET /actuator/health`는 Redis도 포함하므로 컨테이너 healthcheck에 쓰지 않는다(Redis 장애로 앱이 불량 판정되지 않게)
+- 프로세스 확인: `/actuator/health/liveness`, 요청 수신 준비 확인: `/actuator/health/readiness`
+- 종료: SIGTERM, 요청 처리 대기 최대 20초. Compose 종료 유예는 30초 이상 권장
+- 로그: 표준 출력. 영속 볼륨 불필요
+- 운영 공개 진입점은 Nginx로 두고 앱 포트는 내부 네트워크에서 연결
+
+- DB 연결: 환경변수 `DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}`, `DB_USERNAME=${POSTGRES_USER}`,
+  `DB_PASSWORD=${POSTGRES_PASSWORD}`. `postgres`의 healthcheck가 통과한 뒤 기동한다(`depends_on` `service_healthy`)
+- Redis 연결: `REDIS_HOST=redis`, `REDIS_PORT=6379`, `REDIS_PASSWORD=${REDIS_PASSWORD}`. `redis`도 `depends_on` `service_healthy`
+- 토큰: `JWT_SECRET`(32바이트 이상 난수, 비밀). 바꾸면 발급된 access 토큰이 모두 무효가 된다(refresh로 다시 받으면 된다)
+
+`/actuator/health`와 readiness는 DB 연결 상태를 포함한다. DB에 붙지 못하면 둘 다 503이고 liveness는 200을 유지한다.
+DB가 응답하지 않을 때 503은 커넥션 풀 대기 시간 5초(`spring.datasource.hikari.connection-timeout`)가 지난 뒤에 나온다.
+healthcheck의 `timeout`은 5초보다 길게(예: 10초) 둔다. 짧으면 503 대신 시간 초과로 실패한다.
+DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. DB가 돌아오면 앱 재시작 없이 다시 200이 된다.
+기동 시 DB에 접속하지 못하면 Flyway 단계에서 앱이 종료된다. Nginx·DB·Redis Compose와 배포 구성은
+[#38](https://ssafy.atlassian.net/browse/S15P31A307-38),
+[#47](https://ssafy.atlassian.net/browse/S15P31A307-47)에서 연결한다.
