@@ -1,7 +1,7 @@
 // PLAY-06 저지연 사운드. Web Audio로 패드 소리를 낸다.
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
-import type { SoundSet } from './soundSets';
+import { SAMPLE_FALLBACK, type SoundSet } from './soundSets';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -82,7 +82,22 @@ export class AudioEngine {
         n.start(t);
         n.stop(t + 0.15);
       },
-      HI_TOM: (ctx, out, t, v) => this.tom(ctx, out, t, v, 240, 150),
+      SMALL_TOM: (ctx, out, t, v) => this.tom(ctx, out, t, v, 240, 150),
+      MID_TOM: (ctx, out, t, v) => this.tom(ctx, out, t, v, 190, 110),
+      HIHAT_PEDAL: (ctx, out, t, v) => {
+        const n = ctx.createBufferSource();
+        n.buffer = this.noise!;
+        const f = ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 9000;
+        f.Q.value = 0.8;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.3 * v, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        n.connect(f).connect(g).connect(out);
+        n.start(t);
+        n.stop(t + 0.1);
+      },
       FLOOR_TOM: (ctx, out, t, v) => this.tom(ctx, out, t, v, 140, 80),
       CRASH: (ctx, out, t, v) => this.cymbal(ctx, out, t, v, 5000, 1.4),
       RIDE: (ctx, out, t, v) => this.cymbal(ctx, out, t, v, 7000, 0.6, 0.5),
@@ -200,14 +215,18 @@ export class AudioEngine {
     const ctx = this.ctx;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
-    const sample = this.set?.pads[pad];
+    // 샘플이 없으면 폴백 패드의 샘플(게인 0.7배), 그것도 없으면 합성음
+    const own = this.set?.pads[pad];
+    const fb = SAMPLE_FALLBACK[pad];
+    const sample = own ?? (fb ? this.set?.pads[fb] : undefined);
+    const gainMul = own ? 1 : 0.7;
     if (sample && this.set) {
       // 타격마다 새 소스·게인 노드. 게인 = 패드 게인 × 키트 트림 × 세기 곡선
       const src = ctx.createBufferSource();
       src.buffer = sample.buffer;
       src.playbackRate.value = sample.playbackRate;
       const g = ctx.createGain();
-      g.gain.value = sample.gain * this.set.masterTrim * v;
+      g.gain.value = sample.gain * this.set.masterTrim * v * gainMul;
       src.connect(g).connect(this.padBus);
       src.start(at);
     } else {

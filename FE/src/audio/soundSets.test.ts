@@ -41,10 +41,10 @@ describe('loadSampleSet', () => {
     expect(await loadSampleSet(mockCtx(), 'synth')).toBe(SYNTH_SET);
   });
 
-  it('전부 성공하면 missing이 비고 mid는 무시한다', async () => {
+  it('전부 성공하면 missing이 비고 mid는 MID_TOM으로 매핑한다', async () => {
     mockFetch([]);
     const set = await loadSampleSet(mockCtx(), 'ssaplash');
-    expect(Object.keys(set.pads).sort()).toEqual(['HIHAT', 'KICK', 'SNARE']);
+    expect(Object.keys(set.pads).sort()).toEqual(['HIHAT', 'KICK', 'MID_TOM', 'SNARE']);
     expect(set.missing).toEqual([]);
     expect(set.masterTrim).toBe(0.21);
     expect(set.pads.SNARE!.gain).toBe(1.2);
@@ -62,7 +62,7 @@ describe('loadSampleSet', () => {
     mockFetch([]);
     const set = await loadSampleSet(mockCtx(0), 'ssaplash');
     expect(set.missing).toHaveLength(1);
-    expect(Object.keys(set.pads)).toHaveLength(2);
+    expect(Object.keys(set.pads)).toHaveLength(3);
   });
 
   it('kit-config.json을 못 읽으면 예외', async () => {

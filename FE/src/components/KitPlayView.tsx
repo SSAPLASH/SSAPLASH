@@ -1,7 +1,7 @@
 // 킷 위 연주 뷰 (MODE 플레이 B). 세팅한 배치의 패드 위로 접근 링이 줄어들어 판정 시각에 패드 테두리에 닿는다.
 // KitCanvas는 세팅용 책임(드래그·앵커·자세)이 커서 쓰지 않고, 같은 PAD_META·layout을 읽는 전용 그리기 루프를 둔다.
 import { useEffect, useRef } from 'react';
-import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
+import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { KitLayout } from '@/domain/kitLayout';
 import type { HitFx } from '@/domain/events';
 import type { Judgement } from '@/domain/judgement';
@@ -124,7 +124,7 @@ export function KitPlayView(props: KitPlayViewProps) {
       const targets = new Set<PadId>(s ? nextTargets(s.notes, t) : []);
 
       // 패드
-      for (const pad of ALL_PADS) {
+      for (const pad of LANE_PADS) {
         const { cx, cy, r } = geo(pad);
         const meta = PAD_META[pad];
         const fx = p.hits.current?.get(pad);
@@ -216,7 +216,7 @@ export function KitPlayView(props: KitPlayViewProps) {
 
       // 타격 링·의성어 (패드 위에 그린다). 의성어는 왼쪽 위, 판정 라벨은 중앙 위
       if (!reduced) {
-        for (const pad of ALL_PADS) {
+        for (const pad of LANE_PADS) {
           const fx = p.hits.current?.get(pad);
           if (!fx) continue;
           const age = now - fx.at;

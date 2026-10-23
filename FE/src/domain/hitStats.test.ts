@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { addHit, emptyHitStats, meanSensorDistance } from './hitStats';
 
 describe('emptyHitStats', () => {
-  it('패드 7개가 모두 0이고 합계·판정 없음·거리도 0이다', () => {
+  it('패드 9개가 모두 0이고 합계·판정 없음·거리도 0이다', () => {
     const s = emptyHitStats();
-    expect(Object.keys(s.byPad)).toHaveLength(7);
+    expect(Object.keys(s.byPad)).toHaveLength(9);
     expect(Object.values(s.byPad).every((v) => v === 0)).toBe(true);
     expect(s.total).toBe(0);
     expect(s.unresolved).toBe(0);

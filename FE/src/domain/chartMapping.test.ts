@@ -61,6 +61,13 @@ describe('chartFromDetail', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  it('옛 이름 HI_TOM 노트는 SMALL_TOM 노트가 된다', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const c = chartFromDetail(dto({ notes: [{ noteId: 'a', timeMs: 300, pad: 'HI_TOM' }] }), false);
+    expect(c.notes).toEqual([{ timeMs: 300, pad: 'SMALL_TOM' }]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('timeMs에 offsetMs를 더하지 않고 순서를 유지하며 velocityHint null은 생략한다', () => {
     const c = chartFromDetail(dto(), false);
     expect(c.notes).toEqual([

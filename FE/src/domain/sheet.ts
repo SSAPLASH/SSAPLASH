@@ -65,10 +65,12 @@ export type NoteHead = 'normal' | 'cross' | 'circle-cross';
  * (스트립 문서 3-1 표의 pos 값 그대로)
  */
 const STAFF_POS: Record<PadId, { line: number; head: NoteHead }> = {
+  HIHAT_PEDAL: { line: 0, head: 'cross' },
   KICK: { line: 1, head: 'normal' },
   FLOOR_TOM: { line: 3, head: 'normal' },
   SNARE: { line: 5, head: 'normal' },
-  HI_TOM: { line: 7, head: 'normal' },
+  SMALL_TOM: { line: 7, head: 'normal' },
+  MID_TOM: { line: 6, head: 'normal' },
   RIDE: { line: 8, head: 'cross' },
   HIHAT: { line: 9, head: 'cross' },
   CRASH: { line: 10, head: 'circle-cross' },

@@ -19,10 +19,12 @@ const BASIC_LAYOUT: KitLayout = {
   CRASH: { x: 0.2, y: 0.22, r: 0.1 },
   HIHAT: { x: 0.24, y: 0.52, r: 0.085 },
   SNARE: { x: 0.42, y: 0.68, r: 0.095 },
-  HI_TOM: { x: 0.5, y: 0.36, r: 0.08 },
+  SMALL_TOM: { x: 0.42, y: 0.34, r: 0.07 },
+  MID_TOM: { x: 0.6, y: 0.34, r: 0.07 },
   FLOOR_TOM: { x: 0.72, y: 0.66, r: 0.1 },
   RIDE: { x: 0.8, y: 0.26, r: 0.11 },
   KICK: { x: 0.58, y: 0.9, r: 0.065 },
+  HIHAT_PEDAL: { x: 0.24, y: 0.9, r: 0.055 },
 };
 
 /** 레이아웃 중심(화면 정중앙)을 기준으로 패드 위치만 배율 조정한다. 반지름은 그대로, 위치는 0.08~0.92로 자른다 */
@@ -50,6 +52,15 @@ export const KIT_LAYOUT_PRESETS: Record<KitLayoutPresetId, KitLayout> = {
   wide: scaleLayout(BASIC_LAYOUT, 1.18),
   tight: scaleLayout(BASIC_LAYOUT, 0.84),
 };
+
+/** 일부 패드만 있는 배치를 완전한 KitLayout으로 만든다. 없는 패드는 기본 배치 값을 쓴다 */
+export function fillLayout(partial: Partial<KitLayout>): KitLayout {
+  const out = {} as KitLayout;
+  for (const pad of Object.keys(BASIC_LAYOUT) as PadId[]) {
+    out[pad] = partial[pad] ?? BASIC_LAYOUT[pad];
+  }
+  return out;
+}
 
 /** 기존 이름 유지: basic의 별칭 */
 export const DEFAULT_KIT_LAYOUT: KitLayout = KIT_LAYOUT_PRESETS.basic;

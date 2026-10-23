@@ -25,6 +25,9 @@ export interface SoundSet {
   missing: PadId[];
 }
 
+/** 샘플이 없는 패드가 대신 쓰는 패드 샘플 (AudioEngine이 게인 0.7배로 재생) */
+export const SAMPLE_FALLBACK: Partial<Record<PadId, PadId>> = { HIHAT_PEDAL: 'HIHAT' };
+
 export const SOUND_SET_LABELS: Record<SoundSetId, string> = {
   ssaplash: 'SSAPLASH 키트',
   synth: '합성음(임시)',

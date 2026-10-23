@@ -112,8 +112,8 @@ export const CHART_8_FILL: Chart = make('demo-8beat-fill', '8비트 + 필인', '
     // 마지막 반 마디 필인: 스네어 → 하이탐 → 플로어탐 → 크래시
     groove[8] = { SNARE: 100 };
     groove[9] = { SNARE: 90 };
-    groove[10] = { HI_TOM: 100 };
-    groove[11] = { HI_TOM: 90 };
+    groove[10] = { SMALL_TOM: 100 };
+    groove[11] = { SMALL_TOM: 90 };
     groove[12] = { FLOOR_TOM: 105 };
     groove[13] = { FLOOR_TOM: 95 };
     groove[14] = { FLOOR_TOM: 110 };
@@ -135,7 +135,7 @@ export const CHART_RIDE_16: Chart = make('demo-ride-16', '라이드 16비트', '
     g.push(s);
   }
   if (bar % 2 === 1) {
-    g[13] = { HI_TOM: 95 };
+    g[13] = { SMALL_TOM: 95 };
     g[14] = { FLOOR_TOM: 100 };
     g[15] = { CRASH: 110 };
   }

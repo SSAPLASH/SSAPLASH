@@ -43,7 +43,7 @@ describe('layoutToProfile', () => {
     const layout: KitLayout = {
       ...DEFAULT_KIT_LAYOUT,
       SNARE: { x: 0.5, y: 0.5, r: 0.2 },
-      HI_TOM: { x: 0.55, y: 0.5, r: 0.2 },
+      SMALL_TOM: { x: 0.55, y: 0.5, r: 0.2 },
     };
     const p = layoutToProfile(layout, DEFAULT_ANGLE_RANGE, OPTS);
     const dist = 0.05 * 120; // 6°
@@ -61,7 +61,7 @@ describe('layoutToProfile', () => {
     const p = layoutToProfile(DEFAULT_KIT_LAYOUT, DEFAULT_ANGLE_RANGE, OPTS);
     expect(p.anchors.KICK).toBeUndefined();
     expect(Object.keys(p.anchors).sort()).toEqual([...STICK_PADS].sort());
-    expect(Object.keys(p.anchors)).toHaveLength(6);
+    expect(Object.keys(p.anchors)).toHaveLength(7);
   });
 
   it('pads를 주면 그 패드만 담는다', () => {
