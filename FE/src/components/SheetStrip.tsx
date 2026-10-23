@@ -48,7 +48,7 @@ export function SheetStrip({
     const wrap = wrapRef.current!;
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const colors = readColors();
+    const colors = readColors(canvas);
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const { sheet, cache } = model;
     const barMs = sheet.barMs;

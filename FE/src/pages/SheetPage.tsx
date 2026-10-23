@@ -8,13 +8,22 @@ import { useChartParam } from '@/components/useChartParam';
 import { SheetStrip } from '@/components/SheetStrip';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
-import { ReadinessNotice } from '@/components/ReadinessNotice';
+import { formatDuration, formatSongTime } from '@/components/formatTime';
 import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
+import { LANE_ORDER, PAD_META } from '@/domain/pads';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
-import { buildPlayLog, savePlayLog, toLoggedHit, type LoggedHit } from '@/engine/playLog';
+import {
+  buildPlayLog,
+  formatAccuracy,
+  latestSheetLog,
+  loadPlayLogs,
+  savePlayLog,
+  toLoggedHit,
+  type LoggedHit,
+} from '@/engine/playLog';
 import { pushTelemetry } from '@/engine/telemetry';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
@@ -23,6 +32,7 @@ import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import type { LoadedChart } from '@/store/songStore';
+import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
@@ -59,13 +69,19 @@ export function SheetPage() {
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
+  // HUD 표시용: 곡 시각(ms)·최근 판정 Δ·일시정지한 시각
+  const [songMs, setSongMs] = useState(0);
+  const [lastDelta, setLastDelta] = useState<number | null>(null);
+  const [pausedAtMs, setPausedAtMs] = useState(0);
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
   const [strays, setStrays] = useState<{ timeMs: number }[]>([]);
   const [syncInfo, setSyncInfo] = useState<{ begin: number | null; resume: number | null } | null>(null);
   const clockRef = useRef<PlayClock | null>(null);
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
-  const { ready } = useReadiness();
+  const { ready, missing } = useReadiness();
+  const referenceStale = useLive((l) => l.referenceStale);
+  const connected = useLive((l) => l.connected);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -164,6 +180,7 @@ export function SheetPage() {
         next[e.noteIndex] = e.judgement;
         return next;
       });
+      setLastDelta(e.deltaMs);
       setHud(activeSession.snapshot());
     });
   }, [activeSession]);
@@ -203,6 +220,7 @@ export function SheetPage() {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
     clock.pause(reason);
+    setPausedAtMs(clock.songTime());
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
     setPauseReason(reason);
@@ -249,6 +267,8 @@ export function SheetPage() {
     setNoteStates(new Array<Judgement | null>(ss.notes.length).fill(null));
     setStrays([]);
     setHud(ss.snapshot());
+    setSongMs(0);
+    setLastDelta(null);
     setPauseReason(null);
   }, []);
 
@@ -324,6 +344,7 @@ export function SheetPage() {
         if (clock.state.phase === 'running' && now - lastHud.current > HUD_INTERVAL_MS) {
           lastHud.current = now;
           setHud(ss.snapshot(now));
+          setSongMs(clock.songTime());
         }
       }
       raf = requestAnimationFrame(loop);
@@ -359,19 +380,42 @@ export function SheetPage() {
     [],
   );
 
+  // 화면 표시용 파생값
+  const sensorMode = settings.sensorKind !== 'none';
+  const inputLabel = sensorMode ? inputSource : '키보드';
+  const presetName = settings.presets.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const stickText = !sensorMode
+    ? '키보드 전용'
+    : connected[0] && connected[1]
+      ? 'L · R'
+      : connected[0]
+        ? 'L'
+        : connected[1]
+          ? 'R'
+          : '연결 안 됨';
+  const usedPads = useMemo(() => {
+    if (!chart) return [];
+    const set = new Set(chart.notes.map((n) => n.pad));
+    return LANE_ORDER.filter((p) => set.has(p)).map((p) => PAD_META[p].label);
+  }, [chart]);
+  const lastLog = useMemo(
+    () => (chart ? latestSheetLog(loadPlayLogs(), { songNumericId: chart.songNumericId, songId: chart.songId }) : null),
+    [chart],
+  );
+
   if (stage === 'loading') {
     return (
-      <main className="main">
-        <div className="card col" style={{ maxWidth: 480 }}>
+      <main className="main sheet-mode">
+        <div className="sm-card" style={{ maxWidth: 480 }}>
           {accError ? (
             <>
               <div className="notice error" role="alert">
                 {accError}
               </div>
-              <div className="row">
+              <div className="sm-toolbar">
                 {paramLoaded && (
                   <button
-                    className="btn-primary"
+                    className="sm-btn primary"
                     onClick={() => {
                       acc.unload();
                       setAccResult({ loaded: paramLoaded, ok: true });
@@ -380,7 +424,7 @@ export function SheetPage() {
                     반주 없이 계속
                   </button>
                 )}
-                <button className="btn-ghost" onClick={toSelect}>
+                <button className="sm-btn" onClick={toSelect}>
                   곡 선택으로
                 </button>
               </div>
@@ -390,14 +434,16 @@ export function SheetPage() {
               <div className="notice error" role="alert">
                 {param.error ?? '채보를 불러오지 못했습니다.'}
               </div>
-              <button className="btn-ghost" onClick={toSelect}>
-                곡 선택으로
-              </button>
+              <div className="sm-toolbar">
+                <button className="sm-btn" onClick={toSelect}>
+                  곡 선택으로
+                </button>
+              </div>
             </>
           ) : (
-            <div className="row">
+            <div className="sm-spinner-row">
               <span className="spinner" aria-label="불러오는 중" />
-              <span className="dim">{accLoading ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
+              <span className="sm-sub">{accLoading ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
             </div>
           )}
         </div>
@@ -407,112 +453,346 @@ export function SheetPage() {
 
   if (stage === 'select' || !chart || !activeSession) {
     return (
-      <main className="main">
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
-          <h1>악보 연주</h1>
-          <span className="small dim">곡을 고르면 준비 화면으로 갑니다</span>
+      <main className="main sheet-mode">
+        <div className="sm-head" style={{ justifyContent: 'space-between' }}>
+          <div className="sm-head-title">
+            <span className="sm-label">악보 연주</span>
+            <h1 className="sm-h1-lg">무엇을 쳐 볼까요</h1>
+          </div>
+          <span style={{ color: 'var(--sm-text-3)' }}>곡을 고르고 난이도를 누르면 준비 화면으로 갑니다</span>
         </div>
-        <div className="grid-2">
-          <div className="card col">
-            <h3>곡 선택</h3>
+        <section className="sm-grid select">
+          <div className="sm-card" style={{ gap: 14 }}>
             <SongPicker mode="sheet" onSelect={param.select} />
           </div>
-          <div className="card col">
-            <h3>악보 연주란</h3>
-            <p className="small dim">
-              반주에 맞춰 악보가 오른쪽에서 왼쪽으로 흐르고, 고정 기준선이 지금 칠 위치입니다. 점수와 콤보는 보이지
-              않고, 칠 때마다 음표가 판정 색으로 바뀝니다. 끝나면 결과 페이지에서 약한 패드·구간을 짚어 줍니다.
-            </p>
-            <p className="small dim">
-              카운트인 {settings.countInBars}마디 · 메트로놈 {settings.metronome ? '켬' : '끔'} · 입력 {inputSource}{' '}
-              <Link to="/setup">세팅에서 바꾸기</Link>
-            </p>
-            <p className="small faint">Enter 시작 · Esc 일시정지.</p>
+          <div className="sm-stack">
+            <div className="sm-card">
+              <span className="sm-label">악보 연주란</span>
+              <p>
+                반주에 맞춰 5선 드럼 악보가 오른쪽에서 왼쪽으로 흐르고, 고정 기준선이 지금 칠 위치입니다. 점수와 콤보는
+                없고, 칠 때마다 음표가 판정 색으로 바뀝니다.
+              </p>
+              <p>끝나면 결과 페이지에서 약한 패드와 마디 구간을 짚어 주고, 그 구간을 미니 악보로 보여 줍니다.</p>
+            </div>
+            <div className="sm-card" style={{ gap: 10 }}>
+              <span className="sm-label">현재 설정</span>
+              <dl className="sm-kv">
+                <dt>입력</dt>
+                <dd>{inputLabel}</dd>
+                <dt>프리셋</dt>
+                <dd>{presetName ?? '—'}</dd>
+                <dt>판정 폭</dt>
+                <dd style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  Perfect ±{settings.timing.perfectMs} ms · Good ±{settings.timing.goodMs} ms
+                </dd>
+                <dt>카운트인</dt>
+                <dd>{settings.countInBars}마디</dd>
+                <dt>메트로놈</dt>
+                <dd>{settings.metronome ? '곡 중 클릭 켬' : '곡 중 클릭 끔'}</dd>
+              </dl>
+              <Link to="/setup" state={{ returnTo }} style={{ alignSelf: 'flex-start', fontSize: 12 }}>
+                세팅에서 바꾸기
+              </Link>
+            </div>
+            <span className="sm-hint">Enter 시작 · Esc 일시정지 · 결과는 이 브라우저에 최근 20건까지 남습니다</span>
           </div>
-        </div>
+        </section>
       </main>
     );
   }
 
   const snap = hud ?? activeSession.snapshot();
   const hasAcc = acc.state === 'ready' || acc.state === 'playing' || acc.state === 'paused';
+  const barMs = (60_000 / chart.bpm) * chart.beatsPerBar;
+  const bars = barsOf(chart);
+  const diffTone = chart.difficulty === 'HARD' ? 'danger' : 'neutral';
+  const metaChips = (
+    <>
+      <span className={`sm-chip ${diffTone}`}>{DIFF_LABEL[chart.difficulty]}</span>
+      <span className="sm-chip neutral">
+        {chart.bpm} BPM · {chart.beatsPerBar}/4
+      </span>
+      <span className="sm-chip neutral">
+        {bars}마디 · {formatDuration(chart.durationMs)}
+        {stage === 'ready' && ` · 노트 ${chart.notes.length}`}
+      </span>
+      <span className={`sm-chip ${hasAcc ? 'info' : 'neutral'}`}>{hasAcc ? '반주 있음' : '반주 없음'}</span>
+    </>
+  );
+  const strip = (
+    <SheetStrip
+      chart={chart}
+      noteStates={noteStates}
+      strayHits={strays}
+      getSongTime={getSongTime}
+      countInMs={activeSession.countInMs}
+    />
+  );
+
+  if (stage === 'ready') {
+    return (
+      <main className="main sheet-mode">
+        <div className="sm-toolbar" style={{ gap: 12 }}>
+          <button className="sm-btn ghost" onClick={toSelect}>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M12 4l-6 6 6 6" />
+            </svg>
+            곡 선택 <span className="sm-hint">Esc</span>
+          </button>
+          <span className="sm-label">악보 연주 · 준비</span>
+        </div>
+
+        <section className="sm-grid ready">
+          <div className="sm-card lg">
+            <h1 className="sm-h1-lg" style={{ overflowWrap: 'anywhere' }}>
+              {chart.title}
+            </h1>
+            <div className="sm-chips">{metaChips}</div>
+            {chart.variableTempo && (
+              <div className="notice" role="status">
+                변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
+              </div>
+            )}
+            <div className="sm-triple">
+              <div className="sm-tile flat">
+                <span className="sm-tile-label">쓰는 패드</span>
+                <span className="sm-tile-text">{usedPads.join(' · ') || '—'}</span>
+              </div>
+              <div className="sm-tile flat">
+                <span className="sm-tile-label">카운트인</span>
+                <span className="sm-tile-text">
+                  {settings.countInBars}마디 · 클릭 {settings.countInBars * chart.beatsPerBar}번
+                </span>
+              </div>
+              <div className="sm-tile flat">
+                <span className="sm-tile-label">최근 기록</span>
+                <span className="sm-tile-text">
+                  {lastLog ? (
+                    <>
+                      정확도 {formatAccuracy(lastLog.summary.accuracy)} <small>· {relativeDay(lastLog.startedAt)}</small>
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+            </div>
+            <div className="sm-toolbar" style={{ gap: 12, paddingTop: 8 }}>
+              <button className="sm-btn primary lg" onClick={() => void begin()} disabled={!ready}>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M6 4l10 6-10 6z" />
+                </svg>
+                시작 <span className="sm-key">Enter</span>
+              </button>
+              <span className="sm-hint">
+                시작하면 {settings.countInBars}마디 카운트인 뒤 악보가 흐릅니다. 지금 쳐 보면 소리만 납니다.
+              </span>
+            </div>
+          </div>
+
+          <div className="sm-card">
+            <span className="sm-label">준비 상태</span>
+            <ul className="sm-check-list">
+              <CheckItem ok={!missing.includes('stick')} name="스틱 연결" value={stickText} strong />
+              <CheckItem
+                ok={!missing.includes('firstSetup')}
+                name="최초 설정"
+                value={missing.includes('firstSetup') ? '필요' : '완료'}
+              />
+              <CheckItem
+                ok={!missing.includes('preset')}
+                name="프리셋"
+                value={presetName ?? (missing.includes('preset') ? '적용 필요' : '—')}
+              />
+              {sensorMode && referenceStale && <CheckItem ok={false} name="기준 자세" value="재연결 후 다시 맞추세요" />}
+            </ul>
+            <Link to="/setup" state={{ returnTo }} className="sm-btn" style={{ alignSelf: 'flex-start', color: 'var(--sm-text)' }}>
+              세팅에서 맞추기
+            </Link>
+            <div className="sm-options">
+              <span className="sm-label">연주 중 옵션</span>
+              <label>
+                <input type="checkbox" checked={settings.metronome} onChange={(e) => settings.setMetronome(e.target.checked)} />
+                메트로놈 클릭을 곡 중에도 낸다
+              </label>
+              <label>
+                <input type="checkbox" checked={hasAcc} disabled readOnly />
+                반주 재생{hasAcc ? '' : ' (반주 없음)'}
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="sm-strip-panel" aria-label="악보 미리보기">
+          <div className="sm-strip-body">
+            <span className="sm-corner left">첫 마디 · 정지</span>
+            {strip}
+          </div>
+          <div className="sm-legend plain">
+            <span>시작하면 기준선을 향해 왼쪽으로 흐릅니다. 음표가 기준선에 닿는 순간이 칠 때입니다.</span>
+            <span className="sm-legend-end">Enter 시작 · Esc 곡 선택</span>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const barNow = Math.min(bars, Math.max(1, Math.floor(Math.max(0, songMs) / barMs) + 1));
+  const ratio = chart.durationMs > 0 ? Math.min(1, Math.max(0, songMs / chart.durationMs)) : 0;
+  const paused = pauseReason !== null;
 
   return (
-    <main className="main">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-        <div>
-          <h1>악보 연주</h1>
-          <div className="small dim">
-            {chart.title} · {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
+    <main className="main sheet-mode">
+      <div className={`sm-stack${paused ? ' sm-dim' : ''}`} aria-hidden={paused || undefined}>
+        <div className="sm-head">
+          <div className="sm-head-title">
+            <span className="sm-label">악보 연주</span>
+            <h1 style={{ overflowWrap: 'anywhere' }}>{chart.title}</h1>
           </div>
-        </div>
-        {stage === 'play' && pauseReason === null && (
-          <button className="btn-ghost small" onClick={() => pauseTo('user')}>
-            일시정지 (Esc)
-          </button>
-        )}
-      </div>
-
-      {stage === 'ready' && (
-        <div className="card col" style={{ marginBottom: 12 }}>
-          <h2>{chart.title}</h2>
-          <p className="dim">
-            {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디 · {hasAcc ? '반주 있음' : '반주 없음'}
-          </p>
-          {chart.variableTempo && (
-            <div className="notice" role="status">
-              변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
-            </div>
-          )}
-          <ReadinessNotice returnTo={returnTo} compact />
-          <div className="row">
-            <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
-              시작 (Enter)
-            </button>
-            <button className="btn-ghost" onClick={toSelect}>
-              곡 선택으로 (Esc)
+          <div className="sm-chips" style={{ paddingBottom: 4 }}>
+            {metaChips}
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <button className="sm-btn" onClick={() => pauseTo('user')} disabled={paused}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <rect x="5" y="4" width="3.5" height="12" rx="1" />
+                <rect x="11.5" y="4" width="3.5" height="12" rx="1" />
+              </svg>
+              일시정지 <span className="sm-hint">Esc</span>
             </button>
           </div>
-          <p className="small faint">쳐 보면 소리만 납니다. 시작하면 {settings.countInBars}마디 카운트인 뒤 악보가 흐릅니다.</p>
         </div>
-      )}
 
-      <div className="sheet-wrap sheet-play">
-        <SheetStrip
-          chart={chart}
-          noteStates={noteStates}
-          strayHits={strays}
-          getSongTime={getSongTime}
-          countInMs={activeSession.countInMs}
-        />
-        {stage === 'play' && (
-          <div className="sheet-hud">
-            <span>
-              {snap.judgedCount} / {activeSession.notes.length} 노트
+        <section className="sm-progress" aria-label="진행">
+          <span className="sm-time">
+            {formatSongTime(songMs)} <small>/ {formatDuration(chart.durationMs)}</small>
+          </span>
+          <div className="sm-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ratio * 100)}>
+            <div style={{ width: `${ratio * 100}%` }} />
+          </div>
+          <span>
+            {barNow} <small>/ {bars} 마디</small>
+          </span>
+        </section>
+
+        <section className="sm-strip-panel" aria-label="악보">
+          <div className="sm-strip-body">
+            <span className="sm-corner left">지난 음표 · 판정 색</span>
+            <span className="sm-corner right">다음 음표 →</span>
+            {strip}
+          </div>
+          <div className="sm-legend">
+            <span className="sm-legend-item">
+              <span className="sm-dot" style={{ background: 'var(--sm-perfect)' }} aria-hidden="true" />
+              Perfect
             </span>
-            <span>Perfect {snap.counts.PERFECT}</span>
-            <span>Good {snap.counts.GOOD}</span>
-            <span>Miss {snap.counts.MISS}</span>
-            <span className="dim">채보 외 {snap.strayHits}</span>
-            {syncInfo?.begin != null && (
-              <span className="small faint">
-                반주 동기 Δ {syncInfo.begin.toFixed(1)}ms
-                {syncInfo.resume != null && <> · 재개 Δ {syncInfo.resume.toFixed(1)}ms</>}
-              </span>
-            )}
+            <span className="sm-legend-item">
+              <span className="sm-dot" style={{ background: 'var(--sm-good)' }} aria-hidden="true" />
+              Good
+            </span>
+            <span className="sm-legend-item">
+              <span className="sm-dot" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
+              Miss
+            </span>
+            <span className="sm-legend-item">
+              <span className="sm-dot sm" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
+              채보 밖 타격(감점 없음)
+            </span>
+            <span className="sm-legend-end">기준선에 음표가 닿는 순간 치세요</span>
           </div>
-        )}
-        {stage === 'play' && pauseReason !== null && (
-          <PauseOverlay
-            reason={pauseReason}
-            canResume={ready}
-            onResume={resume}
-            onRestart={restart}
-            onLeave={leave}
-            returnTo={returnTo}
-          />
-        )}
+        </section>
+
+        <section className="sm-stats" aria-label="판정">
+          <div className="sm-tile">
+            <span className="sm-tile-label">노트</span>
+            <span className="sm-tile-value">
+              {snap.judgedCount} <small>/ {activeSession.notes.length}</small>
+            </span>
+          </div>
+          <div className="sm-tile">
+            <span className="sm-tile-label" style={{ color: 'var(--sm-perfect)' }}>
+              PERFECT
+            </span>
+            <span className="sm-tile-value">{snap.counts.PERFECT}</span>
+          </div>
+          <div className="sm-tile">
+            <span className="sm-tile-label" style={{ color: 'var(--sm-good)' }}>
+              GOOD
+            </span>
+            <span className="sm-tile-value">{snap.counts.GOOD}</span>
+          </div>
+          <div className="sm-tile">
+            <span className="sm-tile-label" style={{ color: 'var(--sm-miss)' }}>
+              MISS
+            </span>
+            <span className="sm-tile-value">{snap.counts.MISS}</span>
+          </div>
+          <div className="sm-tile">
+            <span className="sm-tile-label">채보 밖</span>
+            <span className="sm-tile-value">{snap.strayHits}</span>
+          </div>
+          <div className="sm-tile">
+            <span className="sm-tile-label">최근 Δ</span>
+            <span className="sm-tile-value">
+              {lastDelta === null ? (
+                '—'
+              ) : (
+                <>
+                  {lastDelta > 0 ? '+' : ''}
+                  {Math.round(lastDelta)} <small>ms</small>
+                </>
+              )}
+            </span>
+          </div>
+        </section>
+
+        <div className="sm-foot">
+          <span>
+            입력 {inputLabel} · 프리셋 {presetName ?? '—'} · 카운트인 {settings.countInBars}마디
+          </span>
+          {syncInfo?.begin != null && (
+            <span>
+              반주 동기 Δ {syncInfo.begin.toFixed(1)} ms
+              {syncInfo.resume != null && <> · 재개 Δ {syncInfo.resume.toFixed(1)} ms</>}
+            </span>
+          )}
+        </div>
       </div>
+
+      {pauseReason !== null && (
+        <PauseOverlay
+          reason={pauseReason}
+          canResume={ready}
+          onResume={resume}
+          onRestart={restart}
+          onLeave={leave}
+          returnTo={returnTo}
+          pausedAtMs={pausedAtMs}
+        />
+      )}
     </main>
   );
+}
+
+/** 준비 상태 목록의 한 줄 */
+function CheckItem({ ok, name, value, strong }: { ok: boolean; name: string; value: string; strong?: boolean }) {
+  return (
+    <li className={ok ? 'ok' : 'warn'}>
+      <span className="sm-check-ico" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+          {ok ? <path d="M4 10.5l4 4 8-9" /> : <path d="M10 5v6M10 14.5v.5" />}
+        </svg>
+      </span>
+      <span className="sm-check-name">{name}</span>
+      <span className={`sm-check-val${strong ? ' strong' : ''}`}>{value}</span>
+    </li>
+  );
+}
+
+/** 로그 시각 → "오늘"/"어제"/"N일 전" */
+function relativeDay(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return '오늘';
+  if (days === 1) return '어제';
+  return `${days}일 전`;
 }

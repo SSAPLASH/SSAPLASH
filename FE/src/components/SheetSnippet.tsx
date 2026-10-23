@@ -25,7 +25,7 @@ export function SheetSnippet({ chart, noteStates, bars }: SheetSnippetProps) {
     const wrap = wrapRef.current!;
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const colors = readColors();
+    const colors = readColors(canvas);
     // 마디 배치 캐시(리사이즈로 다시 그릴 때 재사용). 범위가 몇 마디뿐이라 effect마다 새로 만들어도 된다
     const cache = new Map<number, BarLayout>();
     const beatMs = 60_000 / chart.bpm;
