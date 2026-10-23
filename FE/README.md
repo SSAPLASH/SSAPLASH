@@ -86,6 +86,7 @@ src/
 | 공용 UI | `components`, `hooks` | store · engine · audio · domain (+ `app/sensorRegistry` 조회만: AppShell · SensorOptionsPanel) |
 | 상태 | `store` | domain · api |
 | 코어 | `input`, `engine`, `audio`, `api` | domain |
+| 모니터 (예고) | `monitor` | input · domain (모니터 구현 시 추가) |
 | 도메인 | `domain` | 없음 |
 
 - store 내부: `presetStore` → `settingsStore` 단방향은 허용한다(같은 줄끼리 import 금지의 예외). `localPresetSource`도 `settingsStore`를 읽는다.
@@ -105,13 +106,15 @@ src/
 | `LANE_PADS` | 8 | 노트 레인·킷 캔버스·칩 목록. 페달 입력 장치가 정해지기 전까지 `HIHAT_PEDAL` 제외 |
 | `STICK_PADS` | 7 | 캘리브레이션·스틱 패드 테이블(`stick: true`) |
 
-옛 이름(`HI_TOM` → `SMALL_TOM`)은 `normalizePadId`·`normalizePadKeys`가 한 곳에서 변환한다. 서버 채보(`chartMapping`)·서버 프리셋(`api/presets`)·설정 마이그레이션(v10)·플레이 로그 로드가 이 함수를 거치므로 BE·AI 데이터가 옛 이름이어도 깨지지 않는다. 부족한 패드 배치는 `kitLayout.fillLayout`이 기본값으로 채운다. 프로토콜 패드 번호(0~8, EMB v0.7)는 화면 순서와 별개로 `input/stickProtocol`에 둘 예정이다(스틱 프로토콜 갱신 작업에서 추가).
+옛 이름(`HI_TOM` → `SMALL_TOM`)은 `normalizePadId`·`normalizePadKeys`가 한 곳에서 변환한다. 서버 채보(`chartMapping`)·서버 프리셋(`api/presets`)·설정 마이그레이션(v10)·플레이 로그 로드가 이 함수를 거치므로 BE·AI 데이터가 옛 이름이어도 깨지지 않는다. 부족한 패드 배치는 `kitLayout.fillLayout`이 기본값으로 채운다. 프로토콜 패드 번호(0~8, EMB v0.7)는 화면 순서와 별개로 `input/stickProtocol`에 둔다(`PAD_CODE`·`padFromCode`, 0xFF·9 이상은 null).
 
 ## 입력 구조
 
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
 - **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(배치에서 유도한 판정 프로필).
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
+- **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 판정 경로(매퍼)는 아직 `pad`·`velocity`를 쓰지 않는다.
+- **`packetTap`**: 소스가 프레이밍을 벗긴 payload를 파싱 직전(수신)·송신 직후에 `input/packetTap`으로 publish한다. 모니터가 구독할 예정이며, 구독자가 없으면 아무 비용도 들지 않는다.
 - 하드웨어가 오면 BLE 소스 연결을 검증하고 기준 자세 보정으로 시작 위치를 맞추면 된다. 고정 키·소리·게임 코드는 바뀌지 않는다.
 
 ## 새 입력 소스 추가 방법
