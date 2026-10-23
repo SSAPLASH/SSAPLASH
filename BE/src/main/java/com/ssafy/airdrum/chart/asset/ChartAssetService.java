@@ -41,7 +41,8 @@ public class ChartAssetService {
 			bounds.add(new double[] {from, to});
 		}
 		if (row.getAccompanimentKey() != null) {
-			if (!"AUDIO".equals(row.getSource())) throw new IllegalStateException("반주 출처가 올바르지 않습니다.");
+			if (!"AUDIO".equals(row.getSource()) && !"BUILTIN".equals(row.getSource()))
+				throw new IllegalStateException("반주 출처가 올바르지 않습니다.");
 			keys.accompaniment(row.getSongId(), row.getAccompanimentKey());
 		}
 		Instant expiration = null;
