@@ -1,4 +1,4 @@
-// 리듬 게임 (MODE-01, 설계 4-2). 곡 선택 → 준비 → 카운트인 → 플레이 → (중단 확인) → 종료 → 결과.
+// 리듬 게임 (MODE-01, 설계 4-2). 곡 선택 → 준비 → 카운트인 → 플레이 → (일시정지) → 종료 → 결과.
 // 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD, 로그 저장을 맡는다.
 // 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -7,6 +7,8 @@ import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { KitPlayView } from '@/components/KitPlayView';
+import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
+import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useReadiness } from '@/components/useReadiness';
 import { useHitFx } from '@/components/useHitFx';
@@ -51,7 +53,7 @@ export function PlayPage() {
   const [chart, setChart] = useState<Chart | null>(null);
   const [session, setSession] = useState<RhythmSession | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
-  const [abortOpen, setAbortOpen] = useState(false);
+  const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   // 반주 디코드 단계 표시·오류, 동기 Δ 디버그 표시
   const [accStatus, setAccStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [accError, setAccError] = useState<string | null>(null);
@@ -68,10 +70,12 @@ export function PlayPage() {
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
   const sessionRef = useRef<RhythmSession | null>(null);
+  const pauseRef = useRef<PauseReason | null>(null);
   useEffect(() => {
     stageRef.current = stage;
     sessionRef.current = session;
-  }, [stage, session]);
+    pauseRef.current = pauseReason;
+  }, [stage, session, pauseReason]);
 
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
@@ -110,7 +114,10 @@ export function PlayPage() {
       }
       const ss = sessionRef.current;
       const active =
-        ss && stageRef.current === 'play' && (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
+        ss &&
+        stageRef.current === 'play' &&
+        pauseRef.current === null &&
+        (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
       if (active) {
         const lh = toLoggedHit(hit);
@@ -144,7 +151,7 @@ export function PlayPage() {
       setChart(c);
       setSession(ss);
       setHud(ss.snapshot());
-      setAbortOpen(false);
+      setPauseReason(null);
       setStage('ready');
     },
     [settings.timing, settings.countInBars, settings.audioOffsetMs],
@@ -188,7 +195,7 @@ export function PlayPage() {
       return () => ctrl.abort();
     } else if (paramStatus === 'none') {
       inputManager.setCandidateProvider(null);
-      setAbortOpen(false);
+      setPauseReason(null);
       setSession(null);
       setChart(null);
       setHud(null);
@@ -220,7 +227,7 @@ export function PlayPage() {
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
-    setAbortOpen(false);
+    setPauseReason(null);
     setSession(null);
     setChart(null);
     setHud(null);
@@ -228,17 +235,52 @@ export function PlayPage() {
     clearParam();
   }, [clearParam]);
 
-  const openAbort = useCallback(() => {
-    clockRef.current?.pause('user');
-    setAbortOpen(true);
+  const pauseTo = useCallback((reason: PauseReason) => {
+    const clock = clockRef.current;
+    if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
+    clock.pause(reason);
+    // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
+    pauseRef.current = reason;
+    setPauseReason(reason);
   }, []);
 
-  const continueGame = useCallback(() => {
+  // 연결 끊김·메뉴 요청 → 자동 일시정지 (설계 4-3, 8절)
+  usePauseTriggers(pauseTo);
+
+  const resume = useCallback(() => {
     const clock = clockRef.current;
-    clock?.resume();
-    if (clock) setSyncInfo({ ...clock.sync });
-    setAbortOpen(false);
+    if (!clock || pauseRef.current === null || !readyRef.current) return;
+    clock.resume();
+    setSyncInfo({ ...clock.sync });
+    setPauseReason(null);
   }, []);
+
+  // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
+  const restart = useCallback(() => {
+    const clock = clockRef.current;
+    const ss = sessionRef.current;
+    if (!clock || !ss) return;
+    clock.restart();
+    flashes.current.clear();
+    hitFx.current.clear();
+    popups.current = [];
+    hits.current = [];
+    finishing.current = false;
+    startedAt.current = new Date();
+    setHud(ss.snapshot());
+    setSyncInfo({ ...clock.sync });
+    setPauseReason(null);
+  }, []);
+
+  // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
+  const leave = useCallback(() => {
+    const c = sessionRef.current?.chart;
+    clockRef.current?.stop();
+    metronome.unlock();
+    inputManager.setCandidateProvider(null);
+    setPauseReason(null);
+    if (c) choose(c);
+  }, [choose]);
 
   const finish = useCallback(
     (ss: RhythmSession) => {
@@ -296,14 +338,14 @@ export function PlayPage() {
         if (e.code === 'Enter') void begin();
         else toSelect();
       } else if (st === 'play') {
-        if (abortOpen) continueGame();
-        else if (e.code === 'Escape') openAbort();
+        if (pauseRef.current !== null) resume();
+        else if (e.code === 'Escape') pauseTo('user');
       }
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [abortOpen, begin, toSelect, openAbort, continueGame]);
+  }, [begin, toSelect, resume, pauseTo]);
 
   if (stage === 'loading' && !chart) {
     return (
@@ -416,7 +458,7 @@ export function PlayPage() {
               세팅에서 바꾸기
             </Link>
             <p className="small faint">
-              매핑 키로 칩니다. Enter 시작 · Esc 중단 확인. 채보에 없는 타격은 감점이 없습니다.
+              매핑 키로 칩니다. Enter 시작 · Esc 일시정지. 채보에 없는 타격은 감점이 없습니다.
             </p>
           </div>
         </div>
@@ -427,7 +469,7 @@ export function PlayPage() {
   const snap = hud ?? session.snapshot();
   const progress = Math.min(1, Math.max(0, snap.songTimeMs / chart.durationMs));
   const statusLabel =
-    snap.status === 'countin' ? '카운트인' : snap.status === 'paused' ? '멈춤' : snap.status === 'playing' ? '연주 중' : '준비';
+    snap.status === 'countin' ? '카운트인' : snap.status === 'paused' ? '일시정지' : snap.status === 'playing' ? '연주 중' : '준비';
 
   return (
     <main className="main wide">
@@ -468,19 +510,15 @@ export function PlayPage() {
               <p className="small faint">쳐 보면 소리만 납니다. 시작하면 {settings.countInBars}마디 카운트인 뒤 노트가 내려옵니다.</p>
             </div>
           )}
-          {abortOpen && (
-            <div className="overlay" role="dialog" aria-label="중단 확인">
-              <h2>연주를 중단할까요?</h2>
-              <p className="dim">중단하면 이번 연주는 기록되지 않습니다.</p>
-              <div className="row">
-                <button className="btn-primary" onClick={continueGame}>
-                  계속 (Enter)
-                </button>
-                <button className="btn-danger" onClick={toSelect}>
-                  중단
-                </button>
-              </div>
-            </div>
+          {stage === 'play' && pauseReason !== null && (
+            <PauseOverlay
+              reason={pauseReason}
+              canResume={ready}
+              onResume={resume}
+              onRestart={restart}
+              onLeave={leave}
+              returnTo={returnTo}
+            />
           )}
         </div>
 
@@ -520,9 +558,9 @@ export function PlayPage() {
               {syncInfo.resume != null && <> · 재개 Δ {syncInfo.resume.toFixed(1)}ms</>}
             </div>
           )}
-          {stage === 'play' && !abortOpen && (
-            <button className="btn-ghost small" onClick={openAbort}>
-              중단 (Esc)
+          {stage === 'play' && pauseReason === null && (
+            <button className="btn-ghost small" onClick={() => pauseTo('user')}>
+              일시정지 (Esc)
             </button>
           )}
         </aside>

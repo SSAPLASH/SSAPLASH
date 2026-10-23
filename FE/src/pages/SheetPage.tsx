@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
 import { SheetStrip } from '@/components/SheetStrip';
+import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useReadiness } from '@/components/useReadiness';
@@ -22,7 +23,6 @@ import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import type { LoadedChart } from '@/store/songStore';
-import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
@@ -208,18 +208,8 @@ export function SheetPage() {
     setPauseReason(reason);
   }, []);
 
-  // 연결 끊김(둘 다 false로 전이, 센서 모드만)·메뉴 요청 → 자동 일시정지. 스토어 구독이라 effect 안에서 setState하지 않는다
-  useEffect(() => {
-    return useLive.subscribe((s, prev) => {
-      const was = prev.connected[0] || prev.connected[1];
-      const now = s.connected[0] || s.connected[1];
-      if (was && !now && useSettings.getState().sensorKind !== 'none') pauseTo('disconnected');
-      if (s.pauseRequested === 'menu') {
-        pauseTo('menu');
-        useLive.setState({ pauseRequested: null });
-      }
-    });
-  }, [pauseTo]);
+  // 연결 끊김·메뉴 요청 → 자동 일시정지 (공용 훅)
+  usePauseTriggers(pauseTo);
 
   const finish = useCallback(
     (ss: RhythmSession) => {
