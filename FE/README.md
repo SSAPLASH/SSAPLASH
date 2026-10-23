@@ -82,11 +82,11 @@ src/
 | 층 | 폴더 | import 허용 |
 | --- | --- | --- |
 | 조립 | `app`, `main.tsx` | 전부 |
-| 화면 | `pages` | hooks · components · store · engine · audio · domain · app(인스턴스·언락) |
+| 화면 | `pages` | hooks · components · store · engine · audio · domain · monitor · app(인스턴스·언락) |
 | 공용 UI | `components`, `hooks` | store · engine · audio · domain (+ `app/sensorRegistry` 조회만: AppShell · SensorOptionsPanel) |
 | 상태 | `store` | domain · api |
 | 코어 | `input`, `engine`, `audio`, `api` | domain |
-| 모니터 (예고) | `monitor` | input · domain (모니터 구현 시 추가) |
+| 모니터 | `monitor` | input · domain (판정 경로와 분리. `pages/monitor`만 읽는다) |
 | 도메인 | `domain` | 없음 |
 
 - store 내부: `presetStore` → `settingsStore` 단방향은 허용한다(같은 줄끼리 import 금지의 예외). `localPresetSource`도 `settingsStore`를 읽는다.
@@ -274,6 +274,41 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - 기본값과 슬라이더 범위는 `src/domain/tuning.ts`(`DEFAULT_SENSOR_TUNING`, `TUNING_RANGES`)에만 있다. 실측값을 찾으면 여기만 고친다. 이미 저장된 값은 자동으로 덮어쓰지 않으므로 "기본값으로" 버튼으로 받는다.
 - 기본값은 모두 **하드웨어(스틱) 도착 전 초안**이다. 포인터 모의 IMU로 동작만 확인했고 실측 전이다.
 - 튜닝 값은 키 프리셋에 포함되지 않는다(기기·펌웨어별 값).
+
+## 스틱 패킷 모니터 (EMB용, 숨김 주소)
+
+스틱이 보내는 패킷을 판정 경로와 별개로 그대로 들여다보는 페이지. 주소는 `/monitor/stick`이고 네비게이션에 없다. 빌드 플래그 `VITE_MONITOR=true`일 때만 라우트가 등록된다(미설정 빌드에는 페이지 자체가 없다).
+
+> 10/24 기준 README·플래그만 먼저 올라가 있다. 모니터 페이지(MR 2)가 `develop-FE`에 병합되기 전에는 `/monitor/stick`이 404다.
+
+### EMB PC에서 띄우기 (BE 없이)
+
+1. Node 24, `cd FE && npm install`
+2. `FE/.env.local`에 세 줄:
+   ```
+   VITE_AUTH_REQUIRED=false
+   VITE_SONGS_SOURCE=builtin
+   VITE_MONITOR=true
+   ```
+3. 브리지 실행(다른 터미널): `pip install pyserial websockets` → `python EMB/tools/ws_bridge.py COM5` (기본 921600, `ws://localhost:8765`)
+4. `npm run dev` → 브라우저에서 **세팅**(`/setup`) → 스틱 연결 "WebSocket 브리지" 선택 → `/monitor/stick`
+5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`).
+
+### 동작 원리
+
+- 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
+- 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
+- 파라미터 탭: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
+- 모의 스틱: LOG `BOOT 0.1 mock000`, STATUS 5초, POSE 50Hz 13바이트(100번째마다 seq 1 건너뜀), HIT 1초(10번째마다 seq 건너뜀, 20번째마다 판정 애매, 50번째마다 19바이트 오류 패킷), `drop` LOG, BRIDGE_STATS 1초. GET_PARAMS·SET_PAD_TABLE 명령에는 PARAM_ACK로 답한다.
+
+### 녹화 파일 (JSONL)
+
+"녹화" → "정지"로 `stick-YYYYMMDD-HHMMSS.jsonl`을 내려받는다. CSV는 없다(EMB 재생 도구는 펌웨어 녹화 모드의 IMU CSV만 받는다).
+
+| 줄 | 내용 |
+| --- | --- |
+| 1 | meta — `startedAt`(ISO), `source`(종류·주소), `firmware`(마지막 STATUS `major.minor`), `build`(마지막 `BOOT` LOG 원문), `profile`(패드별 중심·반경), `note` |
+| 2~ | 패킷 — `t`(`performance.now()` ms), `dir`(`in`/`out`), `transport`, `stick`, `hex`, `decoded`(`decodePacket` 결과, 수신분만). 수신 순서 그대로, 송신·`bridgeStats` 포함 |
 
 ## 프리셋
 
