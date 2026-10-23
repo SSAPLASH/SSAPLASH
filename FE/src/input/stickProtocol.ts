@@ -1,6 +1,6 @@
 // 스틱 ↔ 브라우저 바이너리 프로토콜. BLE와 WebSocket(바이너리 프레임)이 공유한다.
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
-// 현재 구현 기준: v0.7(회신 기준, 원문 대조 전 — PARAM_ACK·SWING·0x14~0x17 보류)
+// 현재 구현 기준: v0.7 원문(develop-EMB `Docs/Service Design/스틱 통신 프로토콜.md`) 대조 완료
 import type { StickEvent, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
@@ -26,7 +26,20 @@ export const CommandType = {
   SET_MODE: 0x11,
   HAPTIC: 0x12,
   RESET_POSE: 0x13,
+  SET_PARAM: 0x14,
+  SET_PAD_TABLE: 0x15,
+  SET_YAW_OFFSET: 0x16,
+  GET_PARAMS: 0x17,
 } as const;
+
+/** PARAM_ACK 예약 paramId: GET_PARAMS 끝 표시(value = 보낸 개수) */
+export const PARAM_ACK_END = 0x00;
+/** SET_PAD_TABLE 적용됨(value = 적용 후 패드 개수, 지우기 패킷이면 0부터) */
+export const PARAM_ACK_PAD_TABLE = 0x20;
+/** SET_YAW_OFFSET 적용됨(value = 적용된 오프셋, 0.01°) */
+export const PARAM_ACK_YAW_OFFSET = 0x21;
+/** RESET_POSE 적용됨(value = 그 순간 고도각, 0.01°) */
+export const PARAM_ACK_RESET_POSE = 0x22;
 
 export const StreamMode = {
   HIT_ONLY: 0,
@@ -149,11 +162,21 @@ export interface DecodedLog extends FlaggedBase {
   text: string;
 }
 
-/** 형식을 아직 모르는 패킷(SWING·PARAM_ACK). hex 보관용 */
-export interface DecodedUnsupported extends PacketBase {
-  kind: 'unsupported';
-  type: number;
-  bytes: Uint8Array;
+export interface DecodedParamAck extends FlaggedBase {
+  kind: 'paramAck';
+  /** 예약 id(PARAM_ACK_*) 또는 SET_PARAM 파라미터 id */
+  paramId: number;
+  /** 실제로 적용된 값 (예약 id는 의미가 다르다) */
+  value: number;
+}
+
+export interface DecodedSwing extends FlaggedBase {
+  kind: 'swing';
+  hitSeq: number;
+  chunkIdx: number;
+  chunkCount: number;
+  /** ax ay az gx gy gz 순서로 샘플당 6개씩 이어 붙인 값 */
+  samples: Int16Array;
 }
 
 export interface DecodedError extends PacketBase {
@@ -171,7 +194,8 @@ export type DecodedPacket =
   | DecodedSyncAck
   | DecodedBridgeStats
   | DecodedLog
-  | DecodedUnsupported
+  | DecodedParamAck
+  | DecodedSwing
   | DecodedError;
 
 /** 타입별 최소 길이 */
@@ -182,6 +206,8 @@ const MIN_LEN: Record<number, number> = {
   [PacketType.SYNC_ACK]: 10,
   [PacketType.BRIDGE_STATS]: 14,
   [PacketType.LOG]: 2,
+  [PacketType.SWING]: 5,
+  [PacketType.PARAM_ACK]: 5,
 };
 
 /**
@@ -192,9 +218,6 @@ const MIN_LEN: Record<number, number> = {
 export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket {
   if (bytes.length < 2) return { kind: 'error', reason: 'short', type: bytes.length ? bytes[0] : null, bytes, recvTime };
   const type = bytes[0];
-  if (type === PacketType.SWING || type === PacketType.PARAM_ACK) {
-    return { kind: 'unsupported', type, bytes, recvTime };
-  }
   const min = MIN_LEN[type];
   if (min === undefined) return { kind: 'error', reason: 'badType', type, bytes, recvTime };
   if (bytes.length < min) return { kind: 'error', reason: 'short', type, bytes, recvTime };
@@ -244,6 +267,22 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
     }
     case PacketType.SYNC_ACK:
       return { kind: 'syncAck', ...base, t0Ms: v.getUint32(2, true), t1Us: v.getUint32(6, true) };
+    case PacketType.PARAM_ACK:
+      return { kind: 'paramAck', ...base, paramId: v.getUint8(2), value: v.getInt16(3, true) };
+    case PacketType.SWING: {
+      // 5바이트 뒤는 12바이트(i16 × 6) 샘플의 반복. 불완전한 끝 샘플은 버린다
+      const count = Math.floor((bytes.length - 5) / 12) * 6;
+      const samples = new Int16Array(count);
+      for (let i = 0; i < count; i++) samples[i] = v.getInt16(5 + i * 2, true);
+      return {
+        kind: 'swing',
+        ...base,
+        hitSeq: v.getUint8(2),
+        chunkIdx: v.getUint8(3),
+        chunkCount: v.getUint8(4),
+        samples,
+      };
+    }
     case PacketType.BRIDGE_STATS:
       return {
         kind: 'bridgeStats',
@@ -264,7 +303,7 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 export type ParsedPacket = StickEvent | SyncAck | null;
 
 /**
- * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·bridgeStats·log)은 null.
+ * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·bridgeStats·log·paramAck·swing)은 null.
  * hit·pose의 timestamp와 syncAck의 t1은 ms로 환산한다(ClockSync 단위).
  */
 export function parsePacket(data: Uint8Array | DataView, recvTime: number): ParsedPacket {
@@ -330,4 +369,112 @@ export function encodeHaptic(strength: number, durationMs: number): Uint8Array<A
 
 export function encodeResetPose(): Uint8Array<ArrayBuffer> {
   return new Uint8Array([CommandType.RESET_POSE]);
+}
+
+const clampI16 = (n: number): number => Math.max(-32768, Math.min(32767, Math.round(n)));
+
+/** SET_PARAM: [0x14, id, value i16]. value는 반올림 후 i16 범위로 자른다 */
+export function encodeSetParam(id: number, value: number): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(4);
+  const v = new DataView(buf.buffer);
+  v.setUint8(0, CommandType.SET_PARAM);
+  v.setUint8(1, id & 0xff);
+  v.setInt16(2, clampI16(value), true);
+  return buf;
+}
+
+/** SET_YAW_OFFSET: [0x16, offset i16 (0.01°)] */
+export function encodeSetYawOffset(deg: number): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(3);
+  const v = new DataView(buf.buffer);
+  v.setUint8(0, CommandType.SET_YAW_OFFSET);
+  v.setInt16(1, clampI16(deg * 100), true);
+  return buf;
+}
+
+/** GET_PARAMS: [0x17]. 응답은 PARAM_ACK 14개 + 끝 표시(PARAM_ACK_END) */
+export function encodeGetParams(): Uint8Array<ArrayBuffer> {
+  return new Uint8Array([CommandType.GET_PARAMS]);
+}
+
+export interface PadTableEntry {
+  /** 스틱 패드만 허용(페달은 throw) */
+  pad: PadId;
+  elevationDeg: number;
+  azimuthDeg: number;
+  /** 도. 0.5° 단위로 반올림해 1~255로 자른다 */
+  radiusDeg: number;
+}
+
+/**
+ * SET_PAD_TABLE: 3개씩 나눈 패킷 배열. [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
+ * ctrl 비트 7 = 지우고 시작(첫 패킷만, clearFirst일 때), 비트 0–3 = 이 패킷의 패드 수.
+ * 빈 배열이면 clearFirst일 때만 지우기 전용 1패킷([0x15, 0x80]), 아니면 패킷 없음.
+ * 적용 확인은 PARAM_ACK_PAD_TABLE(value = 적용 후 패드 개수).
+ */
+export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean): Uint8Array<ArrayBuffer>[] {
+  for (const e of entries) {
+    if (PAD_CODE[e.pad] >= 7) throw new Error(`SET_PAD_TABLE은 스틱 패드만 보낼 수 있다: ${e.pad}`);
+  }
+  if (entries.length === 0) return clearFirst ? [new Uint8Array([CommandType.SET_PAD_TABLE, 0x80])] : [];
+  const packets: Uint8Array<ArrayBuffer>[] = [];
+  for (let i = 0; i < entries.length; i += 3) {
+    const chunk = entries.slice(i, i + 3);
+    const buf = new Uint8Array(2 + chunk.length * 6);
+    const v = new DataView(buf.buffer);
+    v.setUint8(0, CommandType.SET_PAD_TABLE);
+    v.setUint8(1, (i === 0 && clearFirst ? 0x80 : 0) | chunk.length);
+    chunk.forEach((e, j) => {
+      const o = 2 + j * 6;
+      v.setUint8(o, PAD_CODE[e.pad]);
+      v.setInt16(o + 1, clampI16(e.elevationDeg * 100), true);
+      v.setInt16(o + 3, clampI16(e.azimuthDeg * 100), true);
+      v.setUint8(o + 5, Math.max(1, Math.min(255, Math.round(e.radiusDeg * 2))));
+    });
+    packets.push(buf);
+  }
+  return packets;
+}
+
+/** SET_PARAM 파라미터 한 개의 메타. 범위는 원문에 없어 FE가 가정한 값 */
+export interface StickParam {
+  id: number;
+  key: string;
+  label: string;
+  unit: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+}
+
+const param = (
+  id: number,
+  key: string,
+  label: string,
+  unit: string,
+  defaultValue: number,
+  min = 0,
+  max = 32767,
+): StickParam => ({ id, key, label, unit, defaultValue, min, max });
+
+/** 원문 5장 파라미터 표(0x08 예약 제외 14개, id 오름차순). 기본값은 STM32+BNO055 실측 기준 */
+export const STICK_PARAMS: readonly StickParam[] = [
+  param(0x01, 'swingStart', '스윙 시작 속도', '°/s', 150),
+  param(0x02, 'brakeRatio', '판정 감속 비율', '%', 30, 0, 100),
+  param(0x03, 'minPeak', '최소 최대속도', '°/s', 400),
+  param(0x04, 'debounceMs', '타격 최소 간격', 'ms', 30),
+  param(0x05, 'hapticEnable', '진동 사용', '0/1', 1, 0, 1),
+  param(0x06, 'hapticStrength', '진동 세기', '0~255', 200, 0, 255),
+  param(0x07, 'role', '역할(손·발)', '0~3', 0, 0, 3),
+  param(0x09, 'poseRateHz', 'POSE 주기', 'Hz', 50),
+  param(0x0a, 'minDecel', '최소 감속률', '0.1°/s per ms', 30),
+  param(0x0b, 'maxSwingMs', '최대 스윙 시간', 'ms', 400),
+  param(0x0c, 'rearmUp', '재무장 상승 속도', '°/s', 50),
+  param(0x0d, 'rearmIdleMs', '재무장 대기', 'ms', 150),
+  param(0x0e, 'tsCorrUs', '정지 시각 보정', 'µs', 3000),
+  param(0x0f, 'velMax', '벨로시티 최대 속도', '°/s', 1000),
+];
+
+export function stickParamById(id: number): StickParam | undefined {
+  return STICK_PARAMS.find((p) => p.id === id);
 }
