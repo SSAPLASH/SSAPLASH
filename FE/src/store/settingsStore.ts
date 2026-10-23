@@ -1,8 +1,8 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
-import type { PadId } from '@/domain/pads';
+import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, fillLayout, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
+import { normalizePadKeys, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
@@ -72,7 +72,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 9;
+export const SETTINGS_VERSION = 10;
 
 /**
  * 저장된 설정 이행.
@@ -84,6 +84,7 @@ export const SETTINGS_VERSION = 9;
  * v6 → v7: metronomeBpm(기본 120, 범위 밖이면 120)·metronomeBeatsPerBar(3이 아니면 4)·soundOn(boolean 아니면 true) 추가.
  * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
  * v8 → v9: profile·calibrationMode·holdMs 삭제(판정 프로필은 배치에서 유도). firstSetupDone=false, activePresetId=presets[0]?.id ?? null 추가. 프리셋에 isDefault(첫 항목)·schemaVersion 1·updatedAt(=createdAt) 채움.
+ * v9 → v10: 패드 이름 `HI_TOM` → `SMALL_TOM`, 없는 패드(MID_TOM·HIHAT_PEDAL 등)는 기본 배치로 보충. 최상위 kitLayout과 presets[].layout에 적용(객체가 아닌 layout의 프리셋은 버림).
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -144,7 +145,21 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.firstSetupDone = false;
     p.activePresetId = (list[0]?.id as string | undefined) ?? null;
   }
+  if (version < 10) {
+    p.kitLayout = migrateLayout(p.kitLayout) ?? DEFAULT_KIT_LAYOUT;
+    const list = Array.isArray(p.presets) ? (p.presets as Record<string, unknown>[]) : [];
+    p.presets = list.flatMap((x) => {
+      const layout = migrateLayout(x?.layout);
+      return layout ? [{ ...x, layout }] : [];
+    });
+  }
   return p as unknown as SettingsState;
+}
+
+/** 저장된 배치의 옛 패드 이름을 바꾸고 빠진 패드를 기본 배치로 채운다. 객체가 아니면 null */
+function migrateLayout(raw: unknown): KitLayout | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  return fillLayout(normalizePadKeys(raw as Record<string, KitLayout[PadId]>));
 }
 
 export const useSettings = create<SettingsState>()(
@@ -202,7 +217,13 @@ export const useSettings = create<SettingsState>()(
       // 저장된 tuning에 빠진 키(나중에 추가된 항목)는 기본값으로 채우고 범위 밖 값은 자른다
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
-        return { ...current, ...p, tuning: mergeTuning(DEFAULT_SENSOR_TUNING, p.tuning ?? {}) };
+        return {
+          ...current,
+          ...p,
+          // 저장분에 패드 키가 빠져 있어도 런타임이 깨지지 않게 채운다
+          kitLayout: fillLayout(p.kitLayout ?? {}),
+          tuning: mergeTuning(DEFAULT_SENSOR_TUNING, p.tuning ?? {}),
+        };
       },
     },
   ),

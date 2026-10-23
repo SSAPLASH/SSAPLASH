@@ -2,7 +2,7 @@
 // 서버 업로드(ACCT-02)는 BE API가 나오면 붙인다. 지금은 localStorage에 최근 N건.
 import type { Judgement, TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import { normalizePadId, type PadId } from '@/domain/pads';
 import type { NoteState, SessionSnapshot } from './RhythmSession';
 
 export interface LoggedHit {
@@ -123,7 +123,16 @@ export function savePlayLog(log: PlayLog): void {
 export function loadPlayLogs(): PlayLog[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as PlayLog[]) : [];
+    if (!raw) return [];
+    // 옛 패드 이름(HI_TOM)은 읽을 때만 바꾼다. 저장 형식은 그대로 둔다
+    return (JSON.parse(raw) as PlayLog[]).map((l) => ({
+      ...l,
+      notes: (l.notes ?? []).flatMap((n) => {
+        const pad = normalizePadId(n.pad);
+        return pad ? [{ ...n, pad }] : [];
+      }),
+      hits: (l.hits ?? []).map((h) => ({ ...h, pad: h.pad == null ? null : normalizePadId(h.pad) })),
+    }));
   } catch {
     return [];
   }

@@ -59,6 +59,19 @@ describe('toKitPreset', () => {
     expect(preset).not.toHaveProperty('calibration');
   });
 
+  it('옛 이름 HI_TOM·빠진 패드는 SMALL_TOM으로 옮기고 기본 배치로 채운다', () => {
+    const { SMALL_TOM: _s, MID_TOM: _m, HIHAT_PEDAL: _h, ...rest } = DEFAULT_KIT_LAYOUT;
+    void _s;
+    void _m;
+    void _h;
+    const hi = { x: 0.1, y: 0.2, r: 0.3 };
+    const layout = toKitPreset({ ...DTO, layout: { ...rest, HI_TOM: hi } }).layout;
+    expect(layout.SMALL_TOM).toEqual(hi);
+    expect(layout.MID_TOM).toEqual(DEFAULT_KIT_LAYOUT.MID_TOM);
+    expect(layout.HIHAT_PEDAL).toEqual(DEFAULT_KIT_LAYOUT.HIHAT_PEDAL);
+    expect(layout).not.toHaveProperty('HI_TOM');
+  });
+
   it('모르는 soundSetId는 ssaplash로 보정한다', () => {
     expect(toKitPreset({ ...DTO, sounds: { soundSetId: 'removed-set' } }).soundSetId).toBe('ssaplash');
     expect(toKitPreset({ ...DTO, sounds: {} }).soundSetId).toBe('ssaplash');
