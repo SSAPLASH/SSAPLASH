@@ -22,7 +22,7 @@ S15P31A307/
 | 파트 | 스택 | 문서 |
 | --- | --- | --- |
 | AI & Data |  | [AI/README.md](./AI/README.md) |
-| Backend |  | [BE/README.md](./BE/README.md) |
+| Backend | Java 21 · Spring Boot 4.1.1 · Gradle | [BE/README.md](./BE/README.md) |
 | Embedded |  | [EMB/README.md](./EMB/README.md) |
 | Frontend |  | [FE/README.md](./FE/README.md) |
 | Infra |  | [Infra/README.md](./Infra/README.md) |

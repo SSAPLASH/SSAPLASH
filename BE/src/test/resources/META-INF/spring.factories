@@ -1,0 +1,4 @@
+# 모든 테스트 컨텍스트에 임베디드 PostgreSQL을 DataSource로 넣고, 토큰·Redis 테스트 기본값을 둔다.
+org.springframework.context.ApplicationContextInitializer=\
+com.ssafy.airdrum.support.EmbeddedPostgresInitializer,\
+com.ssafy.airdrum.support.TestPropertyDefaultsInitializer
