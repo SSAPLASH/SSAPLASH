@@ -2,6 +2,8 @@
 // 하드웨어가 없는 동안은 미검증 — 프로토콜(stickProtocol.ts)과 흐름만 맞춰 둔다.
 import type { StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
+import type { TransportStats } from './InputSource';
+import { packetTap } from './packetTap';
 import type { SourceDescriptor } from './SourceDescriptor';
 import {
   STICK_CONTROL_UUID,
@@ -69,7 +71,12 @@ export class BleStickSource extends BaseInputSource {
 
   private onPacket(link: StickLink, data: DataView): void {
     const recvTime = performance.now();
-    const p = parsePacket(data, recvTime);
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    // 구독자가 있을 때만 복사해 넘긴다(버퍼 재사용 대비)
+    if (packetTap.active) {
+      packetTap.publish({ dir: 'in', transport: 'ble', stickId: link.stickId, bytes: bytes.slice(), recvTime });
+    }
+    const p = parsePacket(bytes, recvTime);
     if (!p) return;
     if (p.kind === 'syncAck') {
       const t0 = link.pendingSync.get(p.t0);
@@ -95,7 +102,7 @@ export class BleStickSource extends BaseInputSource {
       const key = Math.floor(t0) >>> 0;
       link.pendingSync.set(key, t0);
       try {
-        await link.control.writeValueWithoutResponse(encodeSync(t0));
+        await this.write(link, encodeSync(t0));
       } catch {
         return;
       }
@@ -103,22 +110,43 @@ export class BleStickSource extends BaseInputSource {
     }
   }
 
+  /** 제어 특성에 쓰고 탭에 송신 기록을 남긴다 */
+  private async write(link: StickLink, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
+    await link.control.writeValueWithoutResponse(bytes);
+    packetTap.publish({ dir: 'out', transport: 'ble', stickId: link.stickId, bytes, recvTime: performance.now() });
+  }
+
   clockOffset(stickId: StickId): number | null {
     return this.links.get(stickId)?.clock.offset ?? null;
   }
 
+  clockOffsetOf(stickId: StickId): number | null {
+    return this.clockOffset(stickId);
+  }
+
+  transportStats(): TransportStats {
+    return { crcErrors: 0, resyncCount: 0, droppedBytes: 0, reconnects: 0 };
+  }
+
+  /** 지정한 링크(없으면 연결된 전부)에 명령 바이트를 그대로 쓴다 */
+  sendCommand(bytes: Uint8Array, stickId?: StickId): void {
+    const buf = new Uint8Array(bytes);
+    const targets = stickId === undefined ? [...this.links.values()] : [this.links.get(stickId)];
+    for (const l of targets) if (l) void this.write(l, buf).catch(() => {});
+  }
+
   setPoseStream(enabled: boolean): void {
     const mode = enabled ? StreamMode.HIT_AND_POSE : StreamMode.HIT_ONLY;
-    for (const l of this.links.values()) void l.control.writeValueWithoutResponse(encodeSetMode(mode)).catch(() => {});
+    for (const l of this.links.values()) void this.write(l, encodeSetMode(mode)).catch(() => {});
   }
 
   resetPose(): void {
-    for (const l of this.links.values()) void l.control.writeValueWithoutResponse(encodeResetPose()).catch(() => {});
+    for (const l of this.links.values()) void this.write(l, encodeResetPose()).catch(() => {});
   }
 
   haptic(stickId: StickId, strength: number, durationMs: number): void {
     const l = this.links.get(stickId);
-    if (l) void l.control.writeValueWithoutResponse(encodeHaptic(strength, durationMs)).catch(() => {});
+    if (l) void this.write(l, encodeHaptic(strength, durationMs)).catch(() => {});
   }
 
   /** connect()는 페어링 창을 띄울 수 없다(제스처 필요). UI에서 pair(0)/pair(1)을 직접 부른다 */

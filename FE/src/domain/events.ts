@@ -25,6 +25,10 @@ export interface StickHitEvent {
   swingWindow?: Int16Array;
   /** 키보드 소스만: 누른 키의 KeyboardEvent.code. 패드는 키 매퍼가 정한다 */
   keyCode?: string;
+  /** 센서 스틱(프로토콜 v0.7)이 판정한 패드. 없으면 undefined, 스틱이 판정 못 했으면(0xFF) null */
+  pad?: PadId | null;
+  /** 스틱이 계산한 세기 0~127. 센서 스틱 소스만 */
+  velocity?: number;
 }
 
 export interface StickPoseEvent {
