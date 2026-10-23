@@ -42,19 +42,20 @@ npm run build      # tsc 타입 검사 + vite 번들
 
 ```
 src/
-├─ main.tsx     Vite 엔트리. app/bootstrap·app/authBootstrap을 부르고 렌더
+├─ main.tsx     Vite 엔트리. app/bootstrap·app/presetBootstrap·app/authBootstrap을 부르고 렌더
 ├─ app/        앱 조립 — 아래 전부를 알아도 되는 유일한 곳
 │   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래
 │   ├─ sources.ts         키보드 소스 · inputManager 단일 인스턴스
 │   ├─ sensorRegistry.ts  센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
-│   └─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
+│   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
+│   └─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 ├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Login · AuthCallback
 ├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보)
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -213,7 +214,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 - **시작:** `/login`의 버튼이 `GET /api/auth/{provider}/login`으로 브라우저를 통째로 보낸다(fetch 아님). BE가 제공자 동의 화면으로 302한다. 돌아올 경로는 `sessionStorage`(`ssaplash.auth.returnTo`)에 두며 앱 안의 절대 경로만 허용한다(`domain/auth.ts` `sanitizeReturnTo`).
 - **콜백:** 제공자 → BE 콜백 → BE가 refresh 쿠키(`refresh_token`, HttpOnly, `Path=/api/auth`, 14일)를 심고 `/auth/callback`으로 302. 이 화면은 앱 시작 복원을 기다렸다가 저장해 둔 경로로 간다. 토큰은 주소에 실리지 않는다.
-- **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다.
+- **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰 폐기 → `/login`.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패). 문구는 `domain/auth.ts`에 있다.
@@ -248,7 +249,14 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 ## 프리셋
 
-배치·사운드를 이름 붙여 저장한 것이 프리셋이다(최대 10개, 이름 1~50자·중복 불가, 기본 프리셋 1개). 저장소는 `domain/preset`의 `PresetSource` 인터페이스(`list`·`create`·`update`·`remove`·`setDefault`, 오류는 `PresetError.code`) 뒤에 있고, 지금은 `settingsStore.presets[]`를 쓰는 `store/localPresetSource`가 구현한다. 서버 구현(Jira 91)은 같은 인터페이스로 `presetStore.setSource`에 끼운다. 화면은 `presetStore`(`items`·`status`·`error`, 액션 `refresh`·`apply`·`saveChanges`·`saveAs`·`setDefault`·`remove`)만 부르며, 실패하면 `status = 'error'`·`error = 코드`만 바꾸고 편집 중인 `kitLayout`·`soundSetId`는 건드리지 않는다. 앱이 시작되면 `bootstrapPresets()`가 목록을 읽고 적용 중인 프리셋(`activePresetId`)이 없을 때 기본 프리셋을 자동 적용한다. 변경 여부(`dirty`)는 상태가 아니라 `selectDirty(settings, presets)`로 현재 편집값과 적용 프리셋을 비교해 얻으며, 적용 프리셋이 없으면 저장할 것이 있는 것으로 보아 true다.
+배치·사운드를 이름 붙여 저장한 것이 프리셋이다(최대 10개, 이름 1~50자·중복 불가, 기본 프리셋 1개). 저장소는 `domain/preset`의 `PresetSource` 인터페이스(`list`·`create`·`update`·`remove`·`setDefault`, 오류는 `PresetError.code`) 뒤에 있고 구현이 둘이다.
+
+- **서버(`api/presets`의 `ServerPresetSource`)** — 로그인 상태에서 쓴다. BE README "키트 프리셋" API(`/api/presets`)를 `apiFetch`로 부른다. 응답 `id`(숫자)는 문자열로, `sounds.soundSetId`는 `soundSetId`로 올리고 모르는 세트 id는 `ssaplash`로 보정한다. 본문은 `name`·`layout`·`sounds`·`schemaVersion`뿐이며 `calibration`은 보내지도 읽지도 않는다(공통 명세서 미결 #23, 10/22: 캘리브레이션은 기기·세션 값). 오류는 `PRESET_NAME_DUPLICATE → NAME_DUPLICATE`, `PRESET_LIMIT_EXCEEDED → LIMIT_EXCEEDED`, `PRESET_NOT_FOUND → NOT_FOUND`, `PRESET_CONFLICT → CONFLICT`, 그 밖(네트워크·5xx·다른 4xx) → `NETWORK`.
+- **로컬(`store/localPresetSource`)** — `settingsStore.presets[]`(localStorage). 익명 상태에서만 쓴다. 운영 빌드는 `/setup`이 로그인 뒤라 사실상 `VITE_AUTH_REQUIRED=false` 개발 빌드 전용이다. 로그인해도 로컬 프리셋을 서버로 옮기지 않는다(10/23 합의).
+
+어느 저장소를 쓸지는 `app/presetBootstrap`이 `authStore.status`를 구독해 정한다. `authenticated`면 서버, `anonymous`면 로컬, 복원 중(`unknown`·`restoring`)이면 기다린다. 저장소를 바꾸면 목록을 다시 읽고 적용 프리셋(`activePresetId`)을 맞춘다 — 목록에 있으면 유지, 없으면 기본 프리셋 적용, 기본도 없으면 비움. 읽기에 실패하면 `status = 'error'`만 남기고 적용 프리셋은 두지 않는다. 전환은 순서대로 처리되고 같은 상태가 다시 와도 다시 읽지 않는다. 로그아웃·세션 만료로 `anonymous`가 되면 서버 목록은 비워지고 로컬로 돌아간다.
+
+화면은 `presetStore`(`items`·`status`·`error`, 액션 `refresh`·`apply`·`saveChanges`·`saveAs`·`setDefault`·`remove`)만 부르며, 실패하면 `status = 'error'`·`error = 코드`만 바꾸고 편집 중인 `kitLayout`·`soundSetId`는 건드리지 않는다. 서버는 첫 프리셋도 기본으로 만들지 않으므로 `saveAs`가 생성 뒤 `setDefault`를 한 번 더 부른다. 변경 여부(`dirty`)는 상태가 아니라 `selectDirty(settings, presets)`로 현재 편집값과 적용 프리셋을 비교해 얻으며, 적용 프리셋이 없으면 저장할 것이 있는 것으로 보아 true다.
 
 ## 사운드 세트
 
