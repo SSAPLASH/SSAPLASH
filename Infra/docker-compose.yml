@@ -73,19 +73,19 @@ services:
       # 악보·반주는 읽기용 키로 서명 URL을 만든다. 공개 주소는 브라우저가 접속하는 도메인 루트다.
       CHART_ASSET_ENABLED: ${CHART_ASSET_ENABLED:-false}
       CHART_ASSET_ENDPOINT: http://seaweedfs:8333
-      CHART_ASSET_PUBLIC_ENDPOINT: ${S3_PUBLIC_URL:-}
+      CHART_ASSET_PUBLIC_ENDPOINT: ${OBJECT_STORAGE_PUBLIC_URL:-}
       CHART_ASSET_REGION: us-east-1
       CHART_ASSET_SHEET_BUCKET: airdrum-sheets
       CHART_ASSET_ACCOMPANIMENT_BUCKET: airdrum-accompaniments
-      CHART_ASSET_ACCESS_KEY: ${S3_READ_ACCESS_KEY:-}
-      CHART_ASSET_SECRET_KEY: ${S3_READ_SECRET_KEY:-}
+      CHART_ASSET_ACCESS_KEY: ${OBJECT_STORAGE_READ_ACCESS_KEY:-}
+      CHART_ASSET_SECRET_KEY: ${OBJECT_STORAGE_READ_SECRET_KEY:-}
       # 플레이 원본은 서버 내부 주소로만 접근한다. 쓰기용 키를 쓰고 버킷은 외부에 전달하지 않는다(nginx 제외).
       PLAY_RAW_ENABLED: ${PLAY_RAW_ENABLED:-false}
       PLAY_RAW_ENDPOINT: http://seaweedfs:8333
       PLAY_RAW_REGION: us-east-1
       PLAY_RAW_BUCKET: airdrum-play-raw
-      PLAY_RAW_ACCESS_KEY: ${S3_WRITE_ACCESS_KEY:-}
-      PLAY_RAW_SECRET_KEY: ${S3_WRITE_SECRET_KEY:-}
+      PLAY_RAW_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:-}
+      PLAY_RAW_SECRET_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:-}
       PLAY_RAW_PRIVATE_BUCKET_CONFIRMED: "true"
       # 운영에서는 API 문서를 닫는다.
       SWAGGER_ENABLED: "false"
@@ -125,16 +125,16 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        printf '{"identities":[{"name":"reader","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Read:airdrum-sheets","List:airdrum-sheets","Read:airdrum-accompaniments","List:airdrum-accompaniments"]},{"name":"writer","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Read","Write","List","Tagging"]}]}' "$$S3_READ_ACCESS_KEY" "$$S3_READ_SECRET_KEY" "$$S3_WRITE_ACCESS_KEY" "$$S3_WRITE_SECRET_KEY" > /tmp/s3.json
+        printf '{"identities":[{"name":"reader","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Read:airdrum-sheets","List:airdrum-sheets","Read:airdrum-accompaniments","List:airdrum-accompaniments"]},{"name":"writer","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Read","Write","List","Tagging"]}]}' "$$OBJECT_STORAGE_READ_ACCESS_KEY" "$$OBJECT_STORAGE_READ_SECRET_KEY" "$$OBJECT_STORAGE_WRITE_ACCESS_KEY" "$$OBJECT_STORAGE_WRITE_SECRET_KEY" > /tmp/s3.json
         # volume.max=0은 디스크 여유에 맞춰 볼륨 수를 자동으로 정한다. 버킷마다 볼륨이 여러 개 잡히고 TTL 경로는 전용 볼륨이 더 필요해 고정 값은 부족해진다.
-        exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json -s3.externalUrl="$$S3_PUBLIC_URL" -s3.allowedOrigins="$$S3_PUBLIC_URL" -volume.max=0 -master.volumeSizeLimitMB=1024
+        exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json -s3.externalUrl="$$OBJECT_STORAGE_PUBLIC_URL" -s3.allowedOrigins="$$OBJECT_STORAGE_PUBLIC_URL" -volume.max=0 -master.volumeSizeLimitMB=1024
     environment:
-      S3_READ_ACCESS_KEY: ${S3_READ_ACCESS_KEY:?Infra/.env에 S3_READ_ACCESS_KEY를 지정하세요}
-      S3_READ_SECRET_KEY: ${S3_READ_SECRET_KEY:?Infra/.env에 S3_READ_SECRET_KEY를 지정하세요}
-      S3_WRITE_ACCESS_KEY: ${S3_WRITE_ACCESS_KEY:?Infra/.env에 S3_WRITE_ACCESS_KEY를 지정하세요}
-      S3_WRITE_SECRET_KEY: ${S3_WRITE_SECRET_KEY:?Infra/.env에 S3_WRITE_SECRET_KEY를 지정하세요}
+      OBJECT_STORAGE_READ_ACCESS_KEY: ${OBJECT_STORAGE_READ_ACCESS_KEY:?Infra/.env에 OBJECT_STORAGE_READ_ACCESS_KEY를 지정하세요}
+      OBJECT_STORAGE_READ_SECRET_KEY: ${OBJECT_STORAGE_READ_SECRET_KEY:?Infra/.env에 OBJECT_STORAGE_READ_SECRET_KEY를 지정하세요}
+      OBJECT_STORAGE_WRITE_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_ACCESS_KEY를 지정하세요}
+      OBJECT_STORAGE_WRITE_SECRET_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_SECRET_KEY를 지정하세요}
       # 서명 URL의 공개 주소. 프록시(nginx) 뒤에서도 이 주소 기준으로 서명을 검증한다. 허용 출처도 이 주소로 좁힌다.
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL:?Infra/.env에 S3_PUBLIC_URL을 지정하세요}
+      OBJECT_STORAGE_PUBLIC_URL: ${OBJECT_STORAGE_PUBLIC_URL:?Infra/.env에 OBJECT_STORAGE_PUBLIC_URL을 지정하세요}
     volumes:
       - seaweeddata:/data
     networks:
