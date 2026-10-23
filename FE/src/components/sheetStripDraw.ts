@@ -15,19 +15,38 @@ export interface Colors {
   ink: string;
   inkDim: string;
   inkFaint: string;
-  brass: string;
+  /** 기준선·박 번호 색 */
+  base: string;
+  /** 기준선 글로우 색 */
+  baseGlow: string;
   judge: Record<Judgement, string>;
 }
 
-export function readColors(): Colors {
-  const s = getComputedStyle(document.documentElement);
-  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback;
+/**
+ * 색을 읽는다. 캔버스 요소에서 읽어 .sheet-mode 스코프 변수(--sm-*)를 상속받고,
+ * 없으면(결과 페이지 등) 앱 공통 변수로 돌아간다.
+ */
+export function readColors(el: Element = document.documentElement): Colors {
+  const s = getComputedStyle(el);
+  const v = (names: string[], fallback: string) => {
+    for (const n of names) {
+      const x = s.getPropertyValue(n).trim();
+      if (x) return x;
+    }
+    return fallback;
+  };
+  const scoped = s.getPropertyValue('--sm-accent').trim() !== '';
   return {
-    ink: v('--ink', '#f3efe6'),
-    inkDim: v('--ink-dim', '#a9b0c2'),
-    inkFaint: v('--ink-faint', '#6e778d'),
-    brass: v('--brass', '#e6b85c'),
-    judge: { PERFECT: v('--perfect', '#ffd166'), GOOD: v('--good', '#5fb8ae'), MISS: v('--miss', '#e05a5a') },
+    ink: v(['--sm-text', '--ink'], '#f3efe6'),
+    inkDim: v(['--sm-text-2', '--ink-dim'], '#a9b0c2'),
+    inkFaint: v(['--sm-text-3', '--ink-faint'], '#6e778d'),
+    base: v(['--sm-accent-text', '--brass'], '#e6b85c'),
+    baseGlow: scoped ? v(['--sm-accent'], '#35a3d4') : v(['--brass'], '#e6b85c'),
+    judge: {
+      PERFECT: v(['--sm-perfect', '--perfect'], '#ffd166'),
+      GOOD: v(['--sm-good', '--good'], '#5fb8ae'),
+      MISS: v(['--sm-miss', '--miss'], '#e05a5a'),
+    },
   };
 }
 
@@ -197,15 +216,19 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
 
   if (!showBase) return;
 
-  // 고정 기준선
-  ctx.strokeStyle = colors.brass;
+  // 고정 기준선: 2px + 글로우
+  ctx.save();
+  ctx.strokeStyle = colors.base;
   ctx.lineWidth = 2;
+  ctx.shadowColor = colors.baseGlow;
+  ctx.shadowBlur = 12;
   ctx.beginPath();
   ctx.moveTo(baseX, top - 30);
   ctx.lineTo(baseX, bottom + 40);
   ctx.stroke();
+  ctx.restore();
 
-  // 현재 박 번호 / 카운트인 남은 박 수
+  // 현재 박 번호(기준선 오른쪽 아래 큰 숫자 + 작은 "박") / 카운트인 남은 박 수
   let label: string | null = null;
   if (raw < 0) {
     if (countInMs === undefined || raw >= -countInMs) {
@@ -215,10 +238,15 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     label = String((Math.floor(raw / beatMs) % chart.beatsPerBar) + 1);
   }
   if (label !== null) {
-    ctx.fillStyle = colors.brass;
-    ctx.font = `800 ${raw < 0 ? 40 : 18}px Pretendard Variable, Pretendard, sans-serif`;
+    const y = bottom + 46;
+    ctx.fillStyle = colors.base;
+    ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, baseX + 8, bottom + (raw < 0 ? 38 : 30));
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(label, baseX + 12, y);
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = colors.inkFaint;
+    ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
+    ctx.fillText('박', baseX + 12 + w + 6, y);
   }
 }
