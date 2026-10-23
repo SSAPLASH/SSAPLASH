@@ -1,0 +1,134 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.ssafy'
+version = '0.0.1-SNAPSHOT'
+description = 'Air drum API server'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+// OpenAPI 문서 메타(버전)에 쓰는 build-info.properties를 생성한다.
+springBoot {
+	buildInfo()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	// Boot 4 전용 라인(3.x). 2.x는 Boot 3까지만 지원한다. 버전은 Boot BOM이 관리하지 않으므로 명시한다.
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	// Boot 4는 Flyway 자동 구성이 전용 스타터로 분리돼 있다. PostgreSQL 지원은 Flyway 10부터 별도 모듈이다.
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	runtimeOnly 'org.postgresql:postgresql'
+	// OAuth 제공자(Google·SSAFY) 토큰·사용자 정보 호출. Boot 4의 webmvc 스타터에는 RestClient 자동 구성이 없다.
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	testImplementation 'org.springframework.boot:spring-boot-starter-restclient-test'
+	// S3 호환 스토리지의 HEAD 확인과 GET 서명. 배포 설정이 없으면 자산 발급만 503으로 차단한다.
+	implementation platform('software.amazon.awssdk:bom:2.55.12')
+	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:url-connection-client'
+	// 인증(S15P31A307-88). Bearer 필터는 직접 두고 JWT 서명·검증만 Spring Security의 Nimbus 모듈을 쓴다.
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.security:spring-security-oauth2-jose'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	// refresh 토큰 보관(S15P31A307-88). Lettuce 클라이언트이며 첫 사용 때 연결한다.
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	// 테스트 JVM 안에서 PostgreSQL 16을 띄운다. Docker가 필요 없다(CI 러너가 Windows shell executor).
+	// Boot BOM이 관리하지 않으므로 버전을 명시한다. 바이너리 BOM이 OS·CPU별 jar를 고른다.
+	testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
+	testImplementation platform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.15.0')
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// Windows Runner의 DB 연결 경로를 IPv4로 고정해 localhost·IPv6 환경 차이를 줄인다.
+	// 테스트 JVM에만 적용한다. 운영 JVM의 네트워크 설정은 바꾸지 않는다.
+	systemProperty 'java.net.preferIPv4Stack', 'true'
+}
+
+// 일반 PG 테스트에는 확장 전용 V8만 제외한 실제 SQL을 복사한다.
+// V8을 포함한 전체 이력은 필수 timescaleTest에서 별도로 검증한다.
+tasks.named('processTestResources') {
+	from('src/main/resources/db/migration') {
+		exclude 'V8__convert_telemetry_to_hypertable.sql'
+		into 'db/test-migration'
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+}
+
+tasks.named('bootJar') {
+	archiveFileName = 'app.jar'
+}
+
+tasks.named('jar') {
+	enabled = false
+}
+
+// 확장 의존 검사는 일반 API 테스트와 분리하되 CI에서는 필수 job으로 실행한다.
+sourceSets {
+	timescaleTest {
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += sourceSets.main.output
+	}
+	// 운영 앱 JAR와 분리한 일회성 관리 도구. S3 SDK·JDBC는 기존 의존성을 사용한다.
+	tools {
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += sourceSets.main.output
+	}
+	test {
+		compileClasspath += sourceSets.tools.output
+		runtimeClasspath += sourceSets.tools.output
+	}
+}
+configurations {
+	timescaleTestImplementation.extendsFrom testImplementation
+	timescaleTestRuntimeOnly.extendsFrom testRuntimeOnly
+	toolsImplementation.extendsFrom implementation
+	toolsRuntimeOnly.extendsFrom runtimeOnly
+}
+tasks.named('compileTestJava') {
+	dependsOn tasks.named('toolsClasses')
+}
+tasks.register('registerBasic8Backing', JavaExec) {
+	description = '검증된 기본 8비트 채보에 합성 반주를 비공개 S3 자산으로 등록한다.'
+	group = 'application'
+	dependsOn tasks.named('toolsClasses')
+	classpath = sourceSets.tools.runtimeClasspath
+	mainClass = 'com.ssafy.airdrum.chart.asset.RegisterBasic8Backing'
+}
+tasks.register('timescaleTest', Test) {
+	description = '실제 TimescaleDB에서 Flyway V8과 데이터 보존을 검증한다.'
+	group = 'verification'
+	testClassesDirs = sourceSets.timescaleTest.output.classesDirs
+	classpath = sourceSets.timescaleTest.runtimeClasspath
+	useJUnitPlatform()
+	systemProperty 'java.net.preferIPv4Stack', 'true'
+	// 매 실행마다 새 일회용 DB를 사용하므로 이전 테스트 결과로 생략하지 않는다.
+	outputs.upToDateWhen { false }
+	doFirst {
+		if (!System.getenv('TIMESCALE_TEST_URL') || !System.getenv('TIMESCALE_TEST_PASSWORD')) {
+			throw new GradleException('scripts/Test-TimescaleSchema.ps1을 통해 일회용 TimescaleDB에서 실행하세요.')
+		}
+	}
+}

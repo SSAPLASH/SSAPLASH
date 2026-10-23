@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "playId": "9da79b76-5d88-4875-bc71-c826c3fb4293",
+  "clockContext": {
+    "sensorTickHz": 1000,
+    "browserClock": "PERFORMANCE_NOW",
+    "audioClock": "SONG_POSITION"
+  },
+  "hits": [
+    {
+      "seq": 0,
+      "stickId": 0,
+      "hitId": "sensor-1",
+      "tHit": 1000,
+      "tRecv": 1200.25,
+      "tResolved": 1201.5,
+      "tAudio": -10.125,
+      "swingWindow": {
+        "sampleRateHz": 100,
+        "accelScale": 0.001,
+        "gyroScale": 0.001,
+        "samples": [[-32768,32767,0,1,2,3],[0,0,0,0,0,0]]
+      }
+    }
+  ]
+}
