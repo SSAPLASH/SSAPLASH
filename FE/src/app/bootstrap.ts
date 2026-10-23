@@ -14,7 +14,8 @@ import type { PadId } from '@/domain/pads';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
-import type { CalibrationProfile } from '@/domain/calibration';
+import { yawDriftMonitor } from '@/input/yawDriftMonitor';
+import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -55,6 +56,7 @@ export async function activateSensor(id: SensorId): Promise<void> {
   unsubState = null;
   activeInstance = null;
   padTableSync.setSource(null);
+  yawDriftMonitor.setSource(null);
   currentSensor = id;
   useLive.setState({ activeSensor: id, connected: [false, false], sourceState: 'disconnected', sourceMessage: null });
   if (id === 'none') return;
@@ -62,6 +64,7 @@ export async function activateSensor(id: SensorId): Promise<void> {
     const src = sensorRegistry.instance(id);
     activeInstance = src;
     padTableSync.setSource(src);
+    yawDriftMonitor.setSource(src);
     applySensorOptions();
     src.setSurface?.(lastSurface);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
@@ -94,6 +97,16 @@ export function bootstrapInput(): void {
   inputManager.setKeyMap(KEY_MAP);
   // 패드 표 적용 상태를 liveStore로 옮긴다(input → store 직접 import 금지라 콜백 주입)
   padTableSync.onStatus((st) => useLive.setState({ padTable: st }));
+  // 방위각 드리프트 보정 상태도 같은 방식으로 스틱별로 옮긴다
+  yawDriftMonitor.onStatus((stickId, st) =>
+    useLive.setState((s) => {
+      const arr: [YawDriftStatus | null, YawDriftStatus | null] = [s.yawDrift[0], s.yawDrift[1]];
+      arr[stickId] = st;
+      return { yawDrift: arr };
+    }),
+  );
+  // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다
+  inputManager.onResetPose(() => yawDriftMonitor.reset());
 
   // 저장된 sensorKind가 등록되지 않은 id(제거된 소스, 다른 PC에서 복사한 설정)면 'none'으로 되돌린다(R6)
   if (!sensorRegistry.isKnown(useSettings.getState().sensorKind)) useSettings.setState({ sensorKind: 'none' });
@@ -123,6 +136,8 @@ export function bootstrapInput(): void {
     useLive.setState({ connected: c });
     // 센서가 연결되면 현재 패드 표를 스틱에 보낸다(같은 표를 이미 보냈으면 무동작)
     if (connected) padTableSync.push(currentProfile());
+    // 연결 직후 스틱 방위각 오프셋을 0으로 맞춰 FE 기억과 일치시킨다
+    if (connected) yawDriftMonitor.onConnected(stickId);
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
     if (!connected && useLive.getState().referenceSetAt !== null) useLive.setState({ referenceStale: true });
   });
@@ -139,6 +154,8 @@ export function bootstrapInput(): void {
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
     if (soundOnHit) pushTelemetry(hit);
+    // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
+    if (hit.source !== 'keyboard') yawDriftMonitor.observe(hit, currentProfile());
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);

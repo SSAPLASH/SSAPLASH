@@ -144,3 +144,15 @@ export function countChangedTuning(t: SensorTuning): number {
  * 이 값 미만이면 채보 후보로 보정할 수 있다. 실측 뒤 슬라이더 여부 재검토(설계 U2).
  */
 export const AMBIGUOUS_MARGIN_DEG = 10;
+
+// 방위각 드리프트 보정 임계값. 실측(패드 반경 15~35°) 뒤 조정한다(설계 PLAY-002 yaw drift U1).
+/** 이 값(도) 이상 밀렸을 때만 보정 */
+export const DRIFT_MIN_DEG = 6;
+/** 오차 중앙절대편차가 이 값(도)을 넘으면 드리프트가 아니라 가장자리 타격으로 보고 보정하지 않음 */
+export const DRIFT_MAX_SPREAD_DEG = 5;
+/** 판정에 필요한 최소 샘플 수 */
+export const DRIFT_MIN_SAMPLES = 8;
+/** 스틱별 샘플 링 크기 */
+export const DRIFT_WINDOW = 12;
+/** 송신 뒤 재송신 금지 시간(ms) */
+export const DRIFT_COOLDOWN_MS = 10_000;

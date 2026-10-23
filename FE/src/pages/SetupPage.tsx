@@ -15,10 +15,10 @@ import { KEY_MAP } from '@/domain/keyMap';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
 import { PRESET_NAME_MAX, validatePresetName, type PresetErrorCode } from '@/domain/preset';
-import type { PadTableStatus } from '@/domain/calibration';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { READINESS_MESSAGES, readiness } from '@/domain/readiness';
-import { TUNING_RANGES } from '@/domain/tuning';
+import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { SOUND_SET_LABELS, type SoundSetId } from '@/audio/soundSets';
 import { ReferenceCapture, type ReferenceSnapshot } from '@/engine/ReferenceCapture';
@@ -51,6 +51,28 @@ const NAME_TEXT = {
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+/** 스틱별 방위각 보정 문구. 보일 게 없으면 null. 쿨다운 경과는 1초 tick 리렌더로 갱신된다 */
+function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], connected: [boolean, boolean]): string | null {
+  const names = ['왼손', '오른손'];
+  const fmt = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`;
+  const applied: string[] = [];
+  let unconfirmed = false;
+  let pending: number | null = null;
+  drift.forEach((st, i) => {
+    if (!st || !connected[i]) return;
+    if (st.appliedDeg !== 0) {
+      applied.push(`${names[i]} ${fmt(st.appliedDeg)}`);
+      if (st.acked === false) unconfirmed = true;
+    }
+    const cooling = st.lastSentAt !== null && performance.now() - st.lastSentAt < DRIFT_COOLDOWN_MS;
+    if (pending === null && st.lastErrorDeg !== null && Math.abs(st.lastErrorDeg) >= DRIFT_MIN_DEG && cooling) pending = st.lastErrorDeg;
+  });
+  const parts: string[] = [];
+  if (applied.length) parts.push(`방위각 보정 ${applied.join(' · ')}${unconfirmed ? ' (미확인)' : ''}`);
+  if (pending !== null) parts.push(`방위각 드리프트 감지(${Math.round(pending)}°) · 잠시 뒤 보정`);
+  return parts.length ? parts.join(' / ') : null;
+}
+
 /** 스틱에 보낸 패드 표의 적용 상태 문구. 500ms 확인 창이 지났는지는 1초 tick 리렌더로 갱신된다 */
 function padTableText(t: PadTableStatus): string {
   if (t.acked !== null) return t.acked === t.sent ? `스틱에 패드 ${t.sent}개 적용됨` : `스틱 적용 ${t.acked}개 / 전송 ${t.sent}개`;
@@ -67,6 +89,7 @@ export function SetupPage() {
   const sourceState = useLive((l) => l.sourceState);
   const sourceMessage = useLive((l) => l.sourceMessage);
   const padTable = useLive((l) => l.padTable);
+  const yawDrift = useLive((l) => l.yawDrift);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const referenceStale = useLive((l) => l.referenceStale);
   const soundSetState = useLive((l) => l.soundSetState);
@@ -83,6 +106,7 @@ export function SetupPage() {
 
   const sensorMode = s.sensorKind !== 'none';
   const anyConnected = connected[0] || connected[1];
+  const yawDriftLine = sensorMode ? yawDriftText(yawDrift, connected) : null;
   const dirty = selectDirty(s, presets);
   const activePreset = presets.items.find((p) => p.id === s.activePresetId) ?? null;
   const saving = presets.status === 'saving';
@@ -356,6 +380,7 @@ export function SetupPage() {
               {sensorDesc?.label ?? '입력'} · {connText}
             </p>
             {sensorMode && padTable && <p className="small">{padTableText(padTable)}</p>}
+            {sensorMode && yawDriftLine && <p className="small">{yawDriftLine}</p>}
             {sourceMessage && <div className={`notice ${sourceState === 'error' ? 'error' : ''}`}>{sourceMessage}</div>}
             {sensorMode && referenceStale && anyConnected && (
               <div className="notice">다시 연결됐습니다. 쳐 보고 필요하면 시작 위치를 다시 맞추세요</div>

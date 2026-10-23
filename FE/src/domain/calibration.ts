@@ -14,6 +14,40 @@ export interface PadTableStatus {
   at: number;
 }
 
+/** 스틱 방위각 드리프트 감지·SET_YAW_OFFSET 보정 상태(스틱별). 입력 계층(yawDriftMonitor)이 만들고 store가 보관한다 */
+export interface YawDriftStatus {
+  /** 지금 스틱에 적용돼 있다고 FE가 아는 오프셋(도). RESET_POSE 뒤 0 */
+  appliedDeg: number;
+  /** 링에 쌓인 샘플 수(0~12) */
+  samples: number;
+  /** 마지막 판정 중앙값(도). 샘플이 모자라면 null */
+  lastErrorDeg: number | null;
+  /** 마지막 송신 시각(performance.now). 없으면 null */
+  lastSentAt: number | null;
+  /** 마지막 송신의 PARAM_ACK 0x21 확인 여부. null = 아직 확인 창 안(또는 송신 없음) */
+  acked: boolean | null;
+}
+
+/** 각도를 (−180, 180]로 접는다 */
+export function wrap180(deg: number): number {
+  let r = ((deg % 360) + 360) % 360;
+  if (r > 180) r -= 360;
+  return r;
+}
+
+/** 중앙값. 빈 배열은 NaN */
+export function median(nums: readonly number[]): number {
+  if (nums.length === 0) return NaN;
+  const a = [...nums].sort((x, y) => x - y);
+  const mid = a.length >> 1;
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+
+/** 중앙절대편차. med를 주면 그 값 기준 */
+export function medianAbsDev(nums: readonly number[], med: number = median(nums)): number {
+  return median(nums.map((n) => Math.abs(n - med)));
+}
+
 export interface PadAnchor {
   pad: PadId;
   /** 중심 자세 (도) */
