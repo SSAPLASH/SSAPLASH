@@ -33,6 +33,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import type { LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
+import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
@@ -61,6 +62,7 @@ export function SheetPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
+  const presetItems = usePresets((p) => p.items);
   const param = useChartParam();
   const { status: paramStatus, loaded: paramLoaded } = param;
   const [acc] = useState(() => new Accompaniment(audioEngine));
@@ -383,7 +385,8 @@ export function SheetPage() {
   // 화면 표시용 파생값
   const sensorMode = settings.sensorKind !== 'none';
   const inputLabel = sensorMode ? inputSource : '키보드';
-  const presetName = settings.presets.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  // 프리셋 이름은 저장소(로컬/서버)와 무관하게 presetStore.items가 단일 진실이다. settings.presets[]는 익명 전용 로컬 목록
+  const presetName = presetItems.find((p) => p.id === settings.activePresetId)?.name ?? null;
   const stickText = !sensorMode
     ? '키보드 전용'
     : connected[0] && connected[1]
