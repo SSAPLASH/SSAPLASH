@@ -1,0 +1,68 @@
+// 컨테이너 로그를 모아 Loki로 보낸다. Promtail은 지원이 종료되어 후속인 Alloy를 쓴다.
+// Docker 소켓으로 컨테이너 목록과 이름을 알아야 서비스별로 로그를 구분할 수 있다.
+
+// 실행 중인 컨테이너를 찾는다.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Compose 서비스 이름과 컨테이너 이름을 라벨로 붙인다.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+// 컨테이너의 표준 출력·오류 로그를 읽는다.
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.mask.receiver]
+  labels     = { job = "docker" }
+}
+
+// 비밀과 토큰, 개인정보가 로그에 그대로 남지 않게 가린다. 첫 번째 그룹에 잡힌 부분만 바뀐다.
+// 순서가 중요하다. Bearer 규칙을 key=값 규칙보다 먼저 두어야 "Authorization: Bearer 토큰"에서
+// 토큰 대신 "Bearer"라는 단어만 가려지는 일이 없다.
+loki.process "mask" {
+  forward_to = [loki.write.default.receiver]
+
+  // Bearer 토큰
+  stage.replace {
+    expression = "(?i)bearer\\s+([A-Za-z0-9._~+/=-]{8,})"
+    replace    = "***"
+  }
+
+  // 로그인 토큰(JWT) 형태의 문자열
+  stage.replace {
+    expression = "(eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,})"
+    replace    = "***JWT***"
+  }
+
+  // password=값, secret: 값 같은 형태
+  stage.replace {
+    expression = "(?i)(?:password|passwd|secret|token|api[_-]?key|authorization)\"?\\s*[=:]\\s*\"?([^\\s\",}]+)"
+    replace    = "***"
+  }
+
+  // 이메일 주소(개인정보)
+  stage.replace {
+    expression = "([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})"
+    replace    = "***@***"
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
