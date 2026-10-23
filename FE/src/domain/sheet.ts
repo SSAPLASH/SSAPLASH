@@ -102,7 +102,7 @@ export interface BarLayout {
   beams: BeamGroup[];
 }
 
-export function layoutBar(chart: Chart, barIndex: number, opts: { stepsPerBar?: number } = {}): BarLayout {
+export function layoutBar(chart: Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'>, barIndex: number, opts: { stepsPerBar?: number } = {}): BarLayout {
   const stepsPerBar = opts.stepsPerBar ?? chart.beatsPerBar * 4;
   const stepMs = ((60_000 / chart.bpm) * chart.beatsPerBar) / stepsPerBar;
   const stepsPerBeat = stepsPerBar / chart.beatsPerBar;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeedback, summarizeByPad } from './feedback';
+import { buildFeedback, chartFromLog, summarizeByPad } from './feedback';
 import type { Chart } from './chart';
 import type { Judgement } from './judgement';
 import type { PadId } from './pads';
@@ -150,5 +150,21 @@ describe('summarizeByPad', () => {
     const s = summarizeByPad(logOf(ns));
     expect(s.map((x) => x.pad)).toEqual(['CRASH', 'KICK']);
     expect(s[1]).toEqual({ pad: 'KICK', total: 3, perfect: 1, good: 1, miss: 1, meanDeltaMs: 20 });
+  });
+});
+
+describe('chartFromLog', () => {
+  it('bpm이 없는 이전 로그는 null', () => {
+    const log = logOf([perfect(0)]);
+    expect(chartFromLog({ ...log, bpm: 0 })).toBeNull();
+    expect(chartFromLog({ ...log, bpm: undefined as unknown as number })).toBeNull();
+  });
+
+  it('노트의 pad·timeMs를 순서대로 보존하고 bpm·박자를 옮긴다', () => {
+    const log = logOf([perfect(0, 'KICK'), miss(1, 'HIHAT'), good(2, 'SNARE', 20)]);
+    const c = chartFromLog(log)!;
+    expect(c.bpm).toBe(120);
+    expect(c.beatsPerBar).toBe(4);
+    expect(c.notes).toEqual(log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })));
   });
 });
