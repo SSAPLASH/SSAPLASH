@@ -440,6 +440,37 @@ export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean)
 }
 
 /** SET_PARAM 파라미터 한 개의 메타. 범위는 원문에 없어 FE가 가정한 값 */
+/** SET_PAD_TABLE 패킷 한 개를 되읽은 값. 모니터가 송신 기록에서 "스틱이 가진 패드 표"를 복원할 때 쓴다 */
+export interface DecodedPadTable {
+  /** ctrl 비트 7: 이 패킷으로 표를 지우고 시작 */
+  clear: boolean;
+  entries: PadTableEntry[];
+}
+
+/**
+ * encodeSetPadTable의 역변환. [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
+ * 타입이 0x15가 아니거나 길이가 맞지 않으면 null. 모르는 패드 번호 항목은 버린다.
+ */
+export function decodeSetPadTable(bytes: Uint8Array): DecodedPadTable | null {
+  if (bytes.length < 2 || bytes[0] !== CommandType.SET_PAD_TABLE) return null;
+  const count = bytes[1] & 0x0f;
+  if (bytes.length !== 2 + count * 6) return null;
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entries: PadTableEntry[] = [];
+  for (let j = 0; j < count; j++) {
+    const o = 2 + j * 6;
+    const pad = padFromCode(v.getUint8(o));
+    if (!pad) continue;
+    entries.push({
+      pad,
+      elevationDeg: v.getInt16(o + 1, true) / 100,
+      azimuthDeg: v.getInt16(o + 3, true) / 100,
+      radiusDeg: v.getUint8(o + 5) / 2,
+    });
+  }
+  return { clear: (bytes[1] & 0x80) !== 0, entries };
+}
+
 export interface StickParam {
   id: number;
   key: string;

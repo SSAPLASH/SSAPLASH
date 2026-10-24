@@ -1,7 +1,7 @@
 // 스틱 패킷 모니터 페이지(/monitor/stick, EMB용). VITE_MONITOR=true 빌드에만 라우트가 있다.
 // 이 파일은 연결(소스·송신·ParamStore)과 100ms 스냅샷 갱신만 맡고, 표시는 하위 컴포넌트가 한다.
 // 판정·발음 경로(InputManager)에는 관여하지 않는다 — packetLog는 packetTap만 구독한다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { layoutToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';
@@ -11,6 +11,7 @@ import { mockStick } from '@/monitor/mockStick';
 import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
 import { downloadJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
+import { SwingAssembler } from '@/monitor/swingAssembler';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { CommandBar } from './CommandBar';
@@ -19,15 +20,17 @@ import { HitTable } from './HitTable';
 import { fmt, type SendFn, type Snap } from './monitorTypes';
 import { ParamPanel } from './ParamPanel';
 import { PoseScope } from './PoseScope';
+import { SwingScope } from './SwingScope';
 import { TransportPanel } from './TransportPanel';
 import './monitor.css';
 
-type Tab = 'hit' | 'pose' | 'param' | 'raw';
+type Tab = 'hit' | 'pose' | 'param' | 'swing' | 'raw';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'hit', label: 'HIT' },
   { key: 'pose', label: 'POSE' },
   { key: 'param', label: '파라미터·명령' },
+  { key: 'swing', label: '원시 파형' },
   { key: 'raw', label: '원시' },
 ];
 
@@ -145,6 +148,33 @@ export function StickMonitorPage() {
     paramStore.reset();
   }, [activeSensor, paramStore]);
 
+  // SwingAssembler도 ParamStore처럼 페이지가 1개 만든다. 청크는 packetLog 버퍼 밀림과 무관하게
+  // packetTap에서 바로 받아야 조립이 끊기지 않고, 탭을 오가도 조립 결과가 유지된다
+  const assembler = useMemo(() => new SwingAssembler(), []);
+  const swingVersion = useSyncExternalStore(
+    (fn) => assembler.subscribe(fn),
+    () => assembler.version,
+  );
+  const [selectedSwing, setSelectedSwing] = useState<string | null>(null);
+  useEffect(() => {
+    const off = packetTap.subscribe((rec) => {
+      if (rec.dir !== 'in' || rec.bytes[0] !== PacketType.SWING) return;
+      const p = decodePacket(rec.bytes, rec.recvTime);
+      if (p.kind !== 'swing') return;
+      assembler.push(p, rec.stickId ?? ((p.role & 1) as 0 | 1), rec.recvTime);
+    });
+    return off;
+  }, [assembler]);
+  // 2초 타임아웃 확정은 100ms 스냅샷과 같은 주기로 확인한다
+  useEffect(() => {
+    const id = setInterval(() => assembler.tick(), SNAP_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [assembler]);
+  const onSelectHit = useCallback((stick: 0 | 1, seq: number) => {
+    setSelectedSwing(`${stick}-${seq}`);
+    setTab('swing');
+  }, []);
+
   const toggleMock = () => {
     if (mockStick.running) {
       mockStick.stop();
@@ -235,13 +265,24 @@ export function StickMonitorPage() {
       </div>
 
       <div className="mon-body">
-        {tab === 'hit' && <HitTable snap={snap} profile={profile} />}
-        {tab === 'pose' && <PoseScope snap={snap} />}
+        {tab === 'hit' && <HitTable snap={snap} profile={profile} onSelectHit={onSelectHit} />}
+        {tab === 'pose' && <PoseScope snap={snap} profile={profile} angleRange={tuning.angleRange} />}
         {tab === 'param' && (
           <div className="mon-param-grid">
             <ParamPanel store={paramStore} canSend={canSend} />
             <CommandBar send={send} store={paramStore} profile={profile} canSend={canSend} />
           </div>
+        )}
+        {tab === 'swing' && (
+          <SwingScope
+            assembler={assembler}
+            version={swingVersion}
+            selectedKey={selectedSwing}
+            onSelect={setSelectedSwing}
+            send={send}
+            canSend={canSend}
+            rows={snap.rows}
+          />
         )}
         {tab === 'raw' && <HexStream snap={snap} />}
       </div>

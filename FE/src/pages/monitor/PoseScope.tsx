@@ -1,7 +1,10 @@
-// POSE 탭: 최근 10초 고도각·방위각 시계열(스틱별 색) + 요약. 평면 산점은 M-2b 범위라 만들지 않는다.
+// POSE 탭: 왼쪽 최근 10초 고도각·방위각 시계열(스틱별 색) + 요약, 오른쪽 자세 평면(PosePlane).
 import { memo, useEffect, useRef } from 'react';
+import type { CalibrationProfile } from '@/domain/calibration';
+import type { AngleRange } from '@/domain/kitMapping';
 import type { LogRow } from '@/monitor/packetLog';
 import { cssVar, fmt, prepareCanvas, type Snap } from './monitorTypes';
+import { PosePlane } from './PosePlane';
 
 const SPAN_MS = 10_000;
 const ELEV_RANGE = 90;
@@ -29,7 +32,15 @@ function collectPose(rows: readonly LogRow[], now: number): PosePoint[] {
   return out.reverse();
 }
 
-export const PoseScope = memo(function PoseScope({ snap }: { snap: Snap }) {
+export const PoseScope = memo(function PoseScope({
+  snap,
+  profile,
+  angleRange,
+}: {
+  snap: Snap;
+  profile: CalibrationProfile | null;
+  angleRange: AngleRange;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -88,42 +99,45 @@ export const PoseScope = memo(function PoseScope({ snap }: { snap: Snap }) {
   };
 
   return (
-    <div className="mon-pose">
-      <div className="mon-summary-line">
-        POSE {snap.stats.ratePerType.pose ?? 0}/s(두 스틱 합) · 최근 10초 · <span style={{ color: 'var(--left)' }}>L 파랑</span> /{' '}
-        <span style={{ color: 'var(--right)' }}>R 주황</span>
+    <div className="mon-pose-grid">
+      <div className="mon-pose">
+        <div className="mon-summary-line">
+          POSE {snap.stats.ratePerType.pose ?? 0}/s(두 스틱 합) · 최근 10초 · <span style={{ color: 'var(--left)' }}>L 파랑</span>{' '}
+          / <span style={{ color: 'var(--right)' }}>R 주황</span>
+        </div>
+        <canvas ref={ref} className="mon-strip tall" />
+        <table className="mon-table">
+          <thead>
+            <tr>
+              <th>손</th>
+              <th>유실률(1초)</th>
+              <th>유실 누적</th>
+              <th>elev</th>
+              <th>azim</th>
+              <th>roll</th>
+            </tr>
+          </thead>
+          <tbody>
+            {([0, 1] as const).map((s) => {
+              const last = lastPose(s)?.decoded;
+              const pose = last?.kind === 'pose' ? last : null;
+              const loss = sticks[s].poseSeqLoss;
+              return (
+                <tr key={s}>
+                  <td style={{ color: s === 0 ? 'var(--left)' : 'var(--right)', fontWeight: 700 }}>{s === 0 ? 'L' : 'R'}</td>
+                  <td className="num">{loss.pct === null ? '–' : `${loss.pct.toFixed(1)}%`}</td>
+                  <td className="num">{loss.total}</td>
+                  <td className="num">{fmt(pose?.elevationDeg, 2)}</td>
+                  <td className="num">{fmt(pose?.azimuthDeg, 2)}</td>
+                  <td className="num">{fmt(pose?.rollDeg, 2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="faint small">12바이트(v0.5) POSE는 seq가 없어 유실률이 –로 표시됩니다.</p>
       </div>
-      <canvas ref={ref} className="mon-strip tall" />
-      <table className="mon-table">
-        <thead>
-          <tr>
-            <th>손</th>
-            <th>유실률(1초)</th>
-            <th>유실 누적</th>
-            <th>elev</th>
-            <th>azim</th>
-            <th>roll</th>
-          </tr>
-        </thead>
-        <tbody>
-          {([0, 1] as const).map((s) => {
-            const last = lastPose(s)?.decoded;
-            const pose = last?.kind === 'pose' ? last : null;
-            const loss = sticks[s].poseSeqLoss;
-            return (
-              <tr key={s}>
-                <td style={{ color: s === 0 ? 'var(--left)' : 'var(--right)', fontWeight: 700 }}>{s === 0 ? 'L' : 'R'}</td>
-                <td className="num">{loss.pct === null ? '–' : `${loss.pct.toFixed(1)}%`}</td>
-                <td className="num">{loss.total}</td>
-                <td className="num">{fmt(pose?.elevationDeg, 2)}</td>
-                <td className="num">{fmt(pose?.azimuthDeg, 2)}</td>
-                <td className="num">{fmt(pose?.rollDeg, 2)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p className="faint small">12바이트(v0.5) POSE는 seq가 없어 유실률이 –로 표시됩니다.</p>
+      <PosePlane snap={snap} profile={profile} angleRange={angleRange} />
     </div>
   );
 });
