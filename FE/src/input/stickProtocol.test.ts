@@ -7,6 +7,7 @@ import {
   encodeGetParams,
   encodeSetParam,
   encodeSetPadTable,
+  decodeSetPadTable,
   encodeSetYawOffset,
   stickParamById,
   PAD_NONE,
@@ -340,5 +341,26 @@ describe('STICK_PARAMS', () => {
     expect(stickParamById(0x0f)).toMatchObject({ defaultValue: 1000, max: 32767 });
     expect(stickParamById(0x08)).toBeUndefined();
     for (const p of STICK_PARAMS) expect(p.defaultValue).toBeGreaterThanOrEqual(p.min);
+  });
+});
+
+describe('decodeSetPadTable', () => {
+  const e = (pad: keyof typeof PAD_CODE, el = 0, az = 0, r = 10) => ({ pad, elevationDeg: el, azimuthDeg: az, radiusDeg: r });
+
+  it('encode → decode 왕복: 3패킷의 clear 비트·항목·0.5° 반경', () => {
+    const entries = [e('CRASH', 10.25, -20.5, 7.5), e('HIHAT', -1.4, -31.2, 10), e('SNARE', -12.6, -9.6, 11.5), e('RIDE', 16.8, 36, 13)];
+    const packets = encodeSetPadTable(entries, true);
+    const decoded = packets.map((p) => decodeSetPadTable(p));
+    expect(decoded.map((d) => d?.clear)).toEqual([true, false]);
+    expect(decoded.flatMap((d) => d?.entries ?? [])).toEqual(entries);
+  });
+
+  it('지우기 전용 패킷은 clear=true·항목 0', () => {
+    expect(decodeSetPadTable(new Uint8Array([0x15, 0x80]))).toEqual({ clear: true, entries: [] });
+  });
+
+  it('타입이 다르거나 길이가 안 맞으면 null', () => {
+    expect(decodeSetPadTable(new Uint8Array([0x14, 0x01, 0, 0, 0, 0, 0, 0]))).toBeNull();
+    expect(decodeSetPadTable(new Uint8Array([0x15, 0x02, 0, 0, 0, 0, 0, 0]))).toBeNull();
   });
 });
