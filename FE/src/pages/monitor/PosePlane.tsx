@@ -6,7 +6,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
 import type { AngleRange } from '@/domain/kitMapping';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { DecodedHit } from '@/input/stickProtocol';
+import type { DecodedHit, PadTableEntry } from '@/input/stickProtocol';
 import { edgeDeg, edgeTone, hitPose, type EdgeResult } from '@/monitor/boundary';
 import type { LogRow } from '@/monitor/packetLog';
 import { cssVar, fmt, prepareCanvas, stickName, type Snap } from './monitorTypes';
@@ -17,6 +17,8 @@ const TRAIL_MAX = 100;
 const HIT_MS = 3000;
 const HOVER_MARGIN_DEG = 3;
 const GRAY = '#8a93a8';
+/** 스틱 표와 프로필 앵커가 이만큼(°) 넘게 다르면 불일치 */
+const TABLE_DIFF_DEG = 0.5;
 
 interface PosePt {
   t: number;
@@ -80,6 +82,19 @@ function EdgeText({ e }: { e: EdgeResult | null }) {
       {e.edgeDeg <= 0 ? '안쪽' : '바깥'} {sign(e.edgeDeg)}°
     </span>
   );
+}
+
+/** 스틱 패드 표 중 같은 pad의 프로필 앵커와 중심 거리나 반경 차가 TABLE_DIFF_DEG를 넘는 패드들 */
+function tableMismatches(table: readonly PadTableEntry[], profile: CalibrationProfile | null): PadId[] {
+  if (!profile) return [];
+  const out: PadId[] = [];
+  for (const e of table) {
+    const a = profile.anchors[e.pad];
+    if (!a) continue;
+    const dist = Math.hypot(e.elevationDeg - a.pitch, e.azimuthDeg - a.yaw);
+    if (dist > TABLE_DIFF_DEG || Math.abs(e.radiusDeg - a.radius) > TABLE_DIFF_DEG) out.push(e.pad);
+  }
+  return out;
 }
 
 interface Tip {
@@ -168,6 +183,18 @@ export const PosePlane = memo(function PosePlane({
       }
       ctx.textAlign = 'start';
 
+      // 스틱 패드 표(FE가 보낸 SET_PAD_TABLE을 되읽은 값): 점선 원. 프로필 실선 원과 어긋나면 스틱이 다른 표를 쓴다는 뜻
+      ctx.setLineDash([4, 4]);
+      ctx.globalAlpha = 0.85;
+      for (const e of snap.stats.padTable.entries) {
+        ctx.strokeStyle = PAD_META[e.pad].color;
+        ctx.beginPath();
+        ctx.arc(gx(e.azimuthDeg), gy(e.elevationDeg), e.radiusDeg * s, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+
       // HIT 마커(3초). 펌웨어 pad와 FE 최근접 패드가 다르면 FE 패드 중심까지 점선
       for (const { t, d } of collectHits(snap.rows, snap.now).recent) {
         const px = gx(d.azimuthDeg);
@@ -254,15 +281,19 @@ export const PosePlane = memo(function PosePlane({
       )
       .filter((x) => x !== null)
       .join(' · ');
+    const st = snap.stats.padTable.entries.find((e) => e.pad === best.pad);
+    const stickTable = st ? ` · 스틱 표: 중심 (${fmt(st.azimuthDeg)}°, ${fmt(st.elevationDeg)}°) 반경 ${fmt(st.radiusDeg)}°` : '';
     setTip({
       x: cx,
       y: cy,
-      text: `${best.pad} 중심 (${fmt(a.yaw)}°, ${fmt(a.pitch)}°) 반경 ${fmt(a.radius)}°${cur ? ` · ${cur}` : ''}`,
+      text: `${best.pad} 중심 (${fmt(a.yaw)}°, ${fmt(a.pitch)}°) 반경 ${fmt(a.radius)}°${cur ? ` · ${cur}` : ''}${stickTable}`,
     });
   };
 
   const poses = collectSticks(snap.rows, snap.now).last;
   const lastHit = collectHits(snap.rows, snap.now).last;
+  const table = snap.stats.padTable.entries;
+  const mismatch = tableMismatches(table, profile);
   const hitEdge = lastHit ? edgeDeg(profile, hitPose(lastHit.d)) : null;
 
   return (
@@ -303,6 +334,17 @@ export const PosePlane = memo(function PosePlane({
             <span className="faint">–</span>
           )}
         </div>
+        <div className={mismatch.length > 0 ? 'warn' : undefined}>
+          스틱 패드 표:{' '}
+          {table.length === 0 ? (
+            <span className="faint">보낸 적 없음</span>
+          ) : (
+            <>
+              {table.length}개 · 프로필과 다름 {mismatch.length}개{mismatch.length > 0 ? ` (${mismatch.join(', ')})` : ''}
+            </>
+          )}
+        </div>
+        <div className="faint">점선 원 = 스틱에 보낸 패드 표 · 실선 원 = FE 프로필</div>
         <div className="faint">× = HIT(3초, 펌웨어 pad 색) · 점선 = FE와 펌웨어 패드가 다를 때 FE 패드 중심으로</div>
       </div>
     </div>

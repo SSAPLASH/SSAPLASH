@@ -4,6 +4,8 @@ import type { PacketRecord } from '@/input/packetTap';
 import { packetTap } from '@/input/packetTap';
 import {
   decodePacket,
+  decodeSetPadTable,
+  type PadTableEntry,
   type DecodedBridgeStats,
   type DecodedPacket,
   type DecodedStatus,
@@ -81,6 +83,8 @@ export interface MonitorStats {
     /** t0Ms가 맞는 pending을 못 찾은 ACK 수 */
     unmatched: number;
   };
+  /** FE가 스틱에 보낸 SET_PAD_TABLE을 되읽어 복원한 "스틱이 가진 패드 표". 보낸 적 없으면 entries 비고 t null */
+  padTable: { entries: PadTableEntry[]; t: number | null };
   errorCount: number;
   total: number;
 }
@@ -177,6 +181,9 @@ export class PacketLog {
   private lastAdopted: [number | null, number | null] = [null, null];
   private syncCount = 0;
   private syncUnmatched = 0;
+  /** 송신 SET_PAD_TABLE 누적 표. 링 버퍼에서 밀려나도 유지한다 */
+  private padTable = new Map<PadTableEntry['pad'], PadTableEntry>();
+  private padTableT: number | null = null;
   private errorCount = 0;
   private total = 0;
 
@@ -254,6 +261,13 @@ export class PacketLog {
       if (row.outType === CommandType.SYNC && row.bytes.length >= 5) {
         const key = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength).getUint32(1, true);
         this.pendingSync.push({ t: row.t, key, matched: new Set() });
+      } else if (row.outType === CommandType.SET_PAD_TABLE) {
+        const pt = decodeSetPadTable(row.bytes);
+        if (pt) {
+          if (pt.clear) this.padTable.clear();
+          for (const e of pt.entries) this.padTable.set(e.pad, e);
+          this.padTableT = row.t;
+        }
       }
       return;
     }
@@ -436,6 +450,7 @@ export class PacketLog {
         count: this.syncCount,
         unmatched: this.syncUnmatched,
       },
+      padTable: { entries: [...this.padTable.values()], t: this.padTableT },
       errorCount: this.errorCount,
       total: this.total,
     };
@@ -482,6 +497,8 @@ export class PacketLog {
     this.lastAdopted = [null, null];
     this.syncCount = 0;
     this.syncUnmatched = 0;
+    this.padTable.clear();
+    this.padTableT = null;
     this.errorCount = 0;
     this.total = 0;
     this.version++;
