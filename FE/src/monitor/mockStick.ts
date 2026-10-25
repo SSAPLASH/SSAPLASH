@@ -192,6 +192,11 @@ const REPLY_GAP_MS = 20;
 
 const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo);
 
+/** 모의 세기 곡선(검증용 가정, 펌웨어 곡선이 아님): peakSpeed가 오르면 velocity도 오른다 */
+export function mockVelocity(peakSpeedDps: number): number {
+  return Math.max(0, Math.min(127, Math.round((peakSpeedDps - 400) / 4 + rand(-6, 6))));
+}
+
 export class MockStick {
   private deps: MockDeps;
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -314,7 +319,7 @@ export class MockStick {
       elevationDeg: this.lastElevationDeg,
       azimuthDeg: rand(-30, 30),
       peakSpeedDps,
-      velocity: rand(40, 120),
+      velocity: mockVelocity(peakSpeedDps),
       swingMs: rand(60, 200),
       lateralDeg: rand(-5, 5),
       decel: rand(55, 126),

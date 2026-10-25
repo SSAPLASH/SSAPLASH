@@ -12,6 +12,7 @@ import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
 import { downloadJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
 import { SwingAssembler } from '@/monitor/swingAssembler';
+import { LossHistory } from '@/monitor/syncTrend';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { CommandBar } from './CommandBar';
@@ -21,10 +22,12 @@ import { fmt, type SendFn, type Snap } from './monitorTypes';
 import { ParamPanel } from './ParamPanel';
 import { PoseScope } from './PoseScope';
 import { SwingScope } from './SwingScope';
+import { SyncScope } from './SyncScope';
 import { TransportPanel } from './TransportPanel';
+import { VelocityScatter } from './VelocityScatter';
 import './monitor.css';
 
-type Tab = 'hit' | 'pose' | 'param' | 'swing' | 'raw';
+type Tab = 'hit' | 'pose' | 'param' | 'swing' | 'raw' | 'trend';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'hit', label: 'HIT' },
@@ -32,6 +35,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'param', label: '파라미터·명령' },
   { key: 'swing', label: '원시 파형' },
   { key: 'raw', label: '원시' },
+  { key: 'trend', label: '추이·분포' },
 ];
 
 const SNAP_INTERVAL_MS = 100;
@@ -42,6 +46,9 @@ const SNAP_INTERVAL_MS = 100;
  */
 const recorder = new Recorder();
 let offAttach: (() => void) | null = null;
+
+/** 추이 탭 아래 패널의 POSE 유실률 이력. 탭을 오가도 이어지도록 모듈에 둔다 */
+const lossHistory = new LossHistory();
 
 /** ParamStore가 항상 최신 send를 부르도록 두는 중간 상자. 소스·모의가 바뀌어도 ParamStore는 그대로 둔다 */
 const sendHolder: { fn: SendFn } = { fn: () => {} };
@@ -85,13 +92,19 @@ export function StickMonitorPage() {
   }, [activeSource]);
 
   const takeSnap = useCallback((tick: number, src: InputSource | null): Snap => {
+    const now = performance.now();
+    const offsets: [number | null, number | null] = [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null];
+    // 채택 오프셋은 읽은 직후 넘긴다(변화점만 기록). stats()보다 먼저 불러야 이번 스냅샷에 반영된다
+    packetLog.noteAdoptedOffsets(now, offsets);
+    const stats = packetLog.stats();
+    lossHistory.push(now, [stats.perStick[0].poseSeqLoss.pct, stats.perStick[1].poseSeqLoss.pct]);
     return {
       tick,
-      now: performance.now(),
-      stats: packetLog.stats(),
+      now,
+      stats,
       rows: packetLog.rows().slice(),
       transport: src?.transportStats?.() ?? null,
-      offsets: [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null],
+      offsets,
     };
   }, []);
   const [snap, setSnap] = useState<Snap>(() => takeSnap(0, null));
@@ -175,6 +188,14 @@ export function StickMonitorPage() {
     setTab('swing');
   }, []);
 
+  // 산점 점 클릭: HIT 탭으로 옮기고 같은 스틱·seq 행을 강조·스크롤한다
+  const [hitPick, setHitPick] = useState<{ stick: 0 | 1; seq: number } | null>(null);
+  const goHit = useCallback((stick: 0 | 1, seq: number) => {
+    setHitPick({ stick, seq });
+    setTab('hit');
+  }, []);
+  const goTrend = useCallback(() => setTab('trend'), []);
+
   const toggleMock = () => {
     if (mockStick.running) {
       mockStick.stop();
@@ -247,14 +268,17 @@ export function StickMonitorPage() {
           <button className={mockOn ? 'btn-primary small' : 'btn-ghost small'} onClick={toggleMock}>
             {mockOn ? '모의 끄기' : '모의 스틱'}
           </button>
-          <button className="btn-ghost small" onClick={() => packetLog.clear()}>
+          <button className="btn-ghost small" onClick={() => {
+              packetLog.clear();
+              lossHistory.clear();
+            }}>
             지우기
           </button>
         </div>
       </div>
       {paused && <div className="notice small">화면 갱신이 멈춰 있습니다. 버퍼에는 계속 쌓입니다.</div>}
 
-      <TransportPanel snap={snap} />
+      <TransportPanel snap={snap} onGoTrend={goTrend} />
 
       <div className="mon-tabs" role="tablist">
         {TABS.map((t) => (
@@ -265,7 +289,7 @@ export function StickMonitorPage() {
       </div>
 
       <div className="mon-body">
-        {tab === 'hit' && <HitTable snap={snap} profile={profile} onSelectHit={onSelectHit} />}
+        {tab === 'hit' && <HitTable snap={snap} profile={profile} onSelectHit={onSelectHit} selected={hitPick} />}
         {tab === 'pose' && <PoseScope snap={snap} profile={profile} angleRange={tuning.angleRange} />}
         {tab === 'param' && (
           <div className="mon-param-grid">
@@ -285,6 +309,12 @@ export function StickMonitorPage() {
           />
         )}
         {tab === 'raw' && <HexStream snap={snap} />}
+        {tab === 'trend' && (
+          <div className="mon-trend-grid">
+            <SyncScope snap={snap} loss={lossHistory} />
+            <VelocityScatter snap={snap} onPick={goHit} />
+          </div>
+        )}
       </div>
     </main>
   );

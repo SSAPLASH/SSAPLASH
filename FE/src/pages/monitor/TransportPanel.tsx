@@ -1,22 +1,41 @@
 // 전송 패널: 스틱별 STATUS 줄 + 요약 타일 1줄. 계산은 packetLog.stats()가 끝냈고 여기는 표시만 한다.
 import { memo } from 'react';
+import { median } from '@/monitor/syncTrend';
 import { fmt, type Snap } from './monitorTypes';
 
 const STATUS_WARN_MS = 12_000;
 
-function Tile({ title, children, warn }: { title: string; children: React.ReactNode; warn?: boolean }) {
+/** 타일에 표시할 최근 표본 수 */
+const RECENT_SYNC = 20;
+
+function Tile({
+  title,
+  children,
+  warn,
+  onClick,
+}: {
+  title: string;
+  children: React.ReactNode;
+  warn?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className={`mon-tile${warn ? ' warn' : ''}`}>
+    <div
+      className={`mon-tile${warn ? ' warn' : ''}${onClick ? ' clickable' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      title={onClick ? '클릭하면 추이·분포 탭으로 이동' : undefined}
+    >
       <div className="mon-tile-title">{title}</div>
       <div className="mon-tile-body">{children}</div>
     </div>
   );
 }
 
-const lagRange = (lags: number[]): string =>
-  lags.length === 0 ? '–' : `${Math.min(...lags).toFixed(1)}~${Math.max(...lags).toFixed(1)}`;
+const range = (xs: number[], digits = 1): string =>
+  xs.length === 0 ? '–' : `${Math.min(...xs).toFixed(digits)}~${Math.max(...xs).toFixed(digits)}`;
 
-export const TransportPanel = memo(function TransportPanel({ snap }: { snap: Snap }) {
+export const TransportPanel = memo(function TransportPanel({ snap, onGoTrend }: { snap: Snap; onGoTrend?: () => void }) {
   const { stats, transport, offsets } = snap;
   const rate = stats.ratePerType;
   const rateText = ['hit', 'pose', 'status', 'syncAck', 'paramAck', 'log', 'swing', 'bridgeStats', 'out']
@@ -27,6 +46,9 @@ export const TransportPanel = memo(function TransportPanel({ snap }: { snap: Sna
     .map(([reason, v]) => `${reason} ${v.total}(+${v.window})`)
     .join(' · ');
   const b = stats.bridge;
+  // 시계 오프셋·SYNC_ACK 지연 타일은 stats.sync의 표본에서 만든다
+  const recentSync = stats.sync.samples.slice(-RECENT_SYNC);
+  const recentRtt = recentSync.map((x) => x.rttMs);
 
   return (
     <div className="mon-transport">
@@ -74,11 +96,18 @@ export const TransportPanel = memo(function TransportPanel({ snap }: { snap: Sna
           <br />
           직결 {transport ? `${transport.crcErrors} · resync ${transport.resyncCount} · 버림 ${transport.droppedBytes}B · 재연결 ${transport.reconnects}` : '–'}
         </Tile>
-        <Tile title="시계 오프셋(ms)">
-          L {fmt(offsets[0])} · R {fmt(offsets[1])}
+        <Tile title="시계 오프셋(ms) · 관측 (최근 20개 범위) / 채택" onClick={onGoTrend}>
+          {([0, 1] as const).map((st) => {
+            const xs = recentSync.filter((x) => x.stick === st).map((x) => x.offsetObsMs);
+            return (
+              <div key={st}>
+                {st === 0 ? 'L' : 'R'} {fmt(xs.length ? xs[xs.length - 1] : null, 2)} ({range(xs, 2)}, 중앙값 {fmt(median(xs), 2)}) / {fmt(offsets[st], 2)}
+              </div>
+            );
+          })}
         </Tile>
-        <Tile title="SYNC_ACK 지연(ms)">
-          마지막 {fmt(stats.syncAck.lastLagMs)} · 최근 {stats.syncAck.lags.length}개 {lagRange(stats.syncAck.lags)} · 수신 {stats.syncAck.count}
+        <Tile title="SYNC_ACK 지연(ms)" onClick={onGoTrend}>
+          마지막 {fmt(stats.sync.lastLagMs)} · 최근 {recentRtt.length}개 {range(recentRtt)} · 수신 {stats.sync.count} · 짝 실패 {stats.sync.unmatched}
         </Tile>
         <Tile title="HIT futureMs 중앙값/최대">
           L {fmt(stats.perStick[0].hitFuture.median)}/{fmt(stats.perStick[0].hitFuture.max)} · R {fmt(stats.perStick[1].hitFuture.median)}/

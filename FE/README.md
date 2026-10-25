@@ -302,6 +302,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
 - 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
 - 파라미터 탭: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
+- 추이·분포 탭(탭 6): 왼쪽은 동기화 추이(SYNC_ACK의 `t0Ms`로 요청과 짝지은 왕복마다 관측 오프셋·rtt를 점으로, 소스가 채택한 오프셋을 계단선으로, POSE 유실률을 회색 막대로 그리며 120초/10분 전환·기울기 ms/분 요약), 오른쪽은 HIT 최근 300건 세기 산점(velocity × peakSpeed/decel/swingMs, 스피어만 상관). 저장 없이 화면에서 바로 보는 용도이고 "시계 오프셋"·"SYNC_ACK 지연" 타일을 누르면 이 탭으로 간다.
 - 모의 스틱: LOG `BOOT 0.1 mock000`, STATUS 5초, POSE 50Hz 13바이트(100번째마다 seq 1 건너뜀), HIT 1초(10번째마다 seq 건너뜀, 20번째마다 판정 애매, 50번째마다 19바이트 오류 패킷), `drop` LOG, BRIDGE_STATS 1초. GET_PARAMS·SET_PAD_TABLE 명령에는 PARAM_ACK로 답한다.
 
 ### 녹화 파일 (JSONL)
