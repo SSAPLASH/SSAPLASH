@@ -72,10 +72,16 @@ interface RowProps {
   profile: CalibrationProfile | null;
   /** 행 클릭 콜백(원시 파형 탭 이동용). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
   onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  /** 다른 탭(세기 산점)에서 고른 행. 강조하고 화면 안으로 스크롤한다 */
+  selected?: boolean;
 }
 
-const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit }: RowProps) {
+const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit, selected }: RowProps) {
   const [hovered, setHovered] = useState<HitFieldKey | null>(null);
+  const trRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (selected) trRef.current?.scrollIntoView({ block: 'center' });
+  }, [selected]);
   const { row, interval } = vr;
   const d = row.decoded;
   const handColor = row.stick === null ? undefined : row.stick === 0 ? 'var(--left)' : 'var(--right)';
@@ -125,7 +131,8 @@ const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit }: RowPro
   const stick = row.stick;
   return (
     <tr
-      className={onSelectHit && stick !== null ? 'clickable' : undefined}
+      ref={trRef}
+      className={[onSelectHit && stick !== null ? 'clickable' : '', selected ? 'selected' : ''].filter(Boolean).join(' ') || undefined}
       onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq) : undefined}
     >
       <td className="num">{fmt(row.t)}</td>
@@ -238,10 +245,13 @@ export const HitTable = memo(function HitTable({
   snap,
   profile,
   onSelectHit,
+  selected,
 }: {
   snap: Snap;
   profile: CalibrationProfile | null;
   onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  /** 세기 산점에서 고른 HIT(스틱·seq). 같은 행을 강조·스크롤한다 */
+  selected?: { stick: 0 | 1; seq: number } | null;
 }) {
   const view = useMemo(() => pickRows(snap.rows), [snap.rows]);
   const inRate = useMemo(() => insideRate(snap.rows, profile), [snap.rows, profile]);
@@ -275,7 +285,18 @@ export const HitTable = memo(function HitTable({
           </thead>
           <tbody>
             {view.map((vr) => (
-              <HitRowView key={vr.row.id} vr={vr} profile={profile} onSelectHit={onSelectHit} />
+              <HitRowView
+                key={vr.row.id}
+                vr={vr}
+                profile={profile}
+                onSelectHit={onSelectHit}
+                selected={
+                  !!selected &&
+                  vr.row.stick === selected.stick &&
+                  vr.row.decoded?.kind === 'hit' &&
+                  vr.row.decoded.seq === selected.seq
+                }
+              />
             ))}
           </tbody>
         </table>
