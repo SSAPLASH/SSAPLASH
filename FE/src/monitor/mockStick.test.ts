@@ -11,7 +11,9 @@ import {
   buildSwing,
   buildSyncAck,
   MockStick,
+  mockVelocity,
 } from './mockStick';
+import { spearman } from './syncTrend';
 
 describe('빌더 왕복', () => {
   it('HIT', () => {
@@ -157,6 +159,27 @@ describe('MockStick', () => {
     expect(hits[49].bytes.length).toBe(19);
     expect(decodePacket(hits[49].bytes, 0).kind).toBe('error');
     expect((decodePacket(hits[19].bytes, 0) as { ambiguous: boolean }).ambiguous).toBe(true);
+  });
+
+  it('HIT velocity가 peakSpeed를 따라 오른다(스피어만 0.8 이상, 0~127)', () => {
+    mock.start({ hitIntervalMs: 100, poseHz: 1 });
+    vi.advanceTimersByTime(100 * 120);
+    const hits = got
+      .filter((r) => r.dir === 'in' && r.bytes[0] === 0x01)
+      .map((r) => decodePacket(r.bytes, 0))
+      .filter((d) => d.kind === 'hit') as { peakSpeedDps: number; velocity: number }[];
+    expect(hits.length).toBeGreaterThan(100);
+    expect(hits.every((h) => h.velocity >= 0 && h.velocity <= 127)).toBe(true);
+    const rho = spearman(hits.map((h) => h.peakSpeedDps), hits.map((h) => h.velocity));
+    expect(rho).not.toBeNull();
+    expect(rho as number).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('mockVelocity는 경계에서 0~127로 자른다', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(mockVelocity(0)).toBe(0);
+      expect(mockVelocity(5000)).toBe(127);
+    }
   });
 
   it('GET_PARAMS → out 기록 + PARAM_ACK 14개와 종료 표시', () => {
