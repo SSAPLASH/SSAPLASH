@@ -218,24 +218,150 @@ describe('LOG 집계', () => {
   });
 });
 
-describe('SYNC lag', () => {
-  it('out 0x10 → SYNC_ACK 짝 맞춤', () => {
-    log.ingest(rec(new Uint8Array([0x10, 0, 0, 0, 0]), 100, { dir: 'out' }));
-    log.ingest(rec(new Uint8Array([0x10, 0, 0, 0, 0]), 200, { dir: 'out' }));
-    log.ingest(rec(buildSyncAck({ t0Ms: 0, t1Us: 5000 }), 103));
-    log.ingest(rec(buildSyncAck({ t0Ms: 0, t1Us: 6000 }), 207));
-    const s = log.stats(210).syncAck;
-    expect(s.lags).toEqual([3, 7]);
-    expect(s.lastLagMs).toBe(7);
-    expect(s.count).toBe(2);
+describe('SYNC 왕복 표본', () => {
+  /** 송신 SYNC. 바이트의 t0는 floor(t). tPublish를 주면 publish 시각만 그만큼 늦춘다(소스가 t0를 찍고 publish까지 걸린 시간) */
+  const out = (t: number, tPublish = t) => {
+    const bytes = new Uint8Array(5);
+    bytes[0] = 0x10;
+    new DataView(bytes.buffer).setUint32(1, Math.floor(t) >>> 0, true);
+    return rec(bytes, tPublish, { dir: 'out' });
+  };
+  const ack = (t0Ms: number, t1Us: number, t: number, role: 0 | 1 = 0) => rec(buildSyncAck({ role, t0Ms, t1Us }), t);
+
+  it('관측 오프셋 = (t0+t2)/2 − t1, rtt = t2 − t0', () => {
+    log.ingest(out(100.4));
+    log.ingest(ack(100, 5000, 110.4));
+    const s = log.stats(111).sync;
+    expect(s.samples).toHaveLength(1);
+    expect(s.samples[0]).toMatchObject({ t: 110.4, stick: 0, t0: 100.4, t1Ms: 5, rttMs: 10 });
+    expect(s.samples[0].offsetObsMs).toBeCloseTo((100.4 + 110.4) / 2 - 5, 9);
+    expect(s.lastLagMs).toBe(10);
+    expect(s.count).toBe(1);
+    expect(s.unmatched).toBe(0);
   });
 
-  it('lags는 최근 20개만 보관한다', () => {
-    for (let i = 0; i < 25; i++) {
-      log.ingest(rec(new Uint8Array([0x10, 0, 0, 0, 0]), i * 10, { dir: 'out' }));
-      log.ingest(rec(buildSyncAck({ t0Ms: 0, t1Us: 0 }), i * 10 + i));
+  it('ACK 순서가 바뀌어도 t0Ms로 짝이 맞는다', () => {
+    log.ingest(out(100));
+    log.ingest(out(200));
+    log.ingest(ack(200, 0, 207));
+    log.ingest(ack(100, 0, 103));
+    const rtts = log.stats(210).sync.samples.map((x) => [x.t0, x.rttMs]);
+    expect(rtts).toEqual([
+      [200, 7],
+      [100, 3],
+    ]);
+  });
+
+  it('ACK 1건이 유실돼도 이후 짝이 밀리지 않는다(FIFO 아님)', () => {
+    log.ingest(out(100));
+    log.ingest(out(200));
+    log.ingest(out(300));
+    log.ingest(ack(100, 0, 104));
+    // 200의 ACK 유실
+    log.ingest(ack(300, 0, 309));
+    const s = log.stats(310).sync;
+    expect(s.samples.map((x) => [x.t0, x.rttMs])).toEqual([
+      [100, 4],
+      [300, 9],
+    ]);
+    expect(s.unmatched).toBe(0);
+  });
+
+  it('같은 ms에 보낸 SYNC 2건은 가장 오래된 것부터 짝짓는다', () => {
+    log.ingest(out(100.1));
+    log.ingest(out(100.7));
+    log.ingest(ack(100, 0, 110));
+    log.ingest(ack(100, 0, 120));
+    expect(log.stats(121).sync.samples.map((x) => x.t0)).toEqual([100.1, 100.7]);
+  });
+
+  it('짝이 없는 ACK는 표본에서 빼고 unmatched만 올린다(FIFO 폴백 없음)', () => {
+    log.ingest(out(100));
+    log.ingest(ack(999, 0, 105));
+    const s = log.stats(106).sync;
+    expect(s.samples).toHaveLength(0);
+    expect(s.unmatched).toBe(1);
+    expect(s.count).toBe(1);
+    // 짝 못 찾은 pending은 그대로 남아 제대로 된 ACK가 오면 짝지어진다
+    log.ingest(ack(100, 0, 108));
+    expect(log.stats(109).sync.samples).toHaveLength(1);
+  });
+
+  it('t0를 찍은 뒤 publish가 ms 경계를 넘어도(Serial writeChain) 바이트의 t0로 짝이 맞는다', () => {
+    // 소스는 t0=100.9로 바이트를 만들고 3.5ms 뒤에 publish. floor(publish)=104 ≠ t0Ms=100
+    log.ingest(out(100.9, 104.4));
+    log.ingest(ack(100, 0, 112.4));
+    const s = log.stats(113).sync;
+    expect(s.samples).toHaveLength(1);
+    expect(s.unmatched).toBe(0);
+    // rtt·오프셋의 t0는 publish 시각(실제 송신에 가까운 쪽)
+    expect(s.samples[0].t0).toBe(104.4);
+    expect(s.samples[0].rttMs).toBeCloseTo(8, 9);
+  });
+
+  it('pending은 2초 지나면 버린다', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 0, 2200));
+    const s = log.stats(2201).sync;
+    expect(s.samples).toHaveLength(0);
+    expect(s.unmatched).toBe(1);
+  });
+
+  it('스틱 시계 u32 랩 전후에도 관측 오프셋이 연속이다', () => {
+    // 스틱 시계 = 브라우저 시계 + 1000ms 뒤처짐. 랩 직전부터 직후까지 5회
+    const base = WRAP_US - 2_000_000;
+    for (let i = 0; i < 5; i++) {
+      const t0 = 1000 + i * 1000;
+      const t2 = t0 + 4;
+      const stickMs = t0 + 2 - 1000 + base / 1000;
+      log.ingest(out(t0));
+      log.ingest(ack(t0, (stickMs * 1000) % WRAP_US, t2));
     }
-    expect(log.stats(0).syncAck.lags.length).toBe(20);
+    const offs = log.stats(7000).sync.samples.map((x) => x.offsetObsMs);
+    expect(offs).toHaveLength(5);
+    for (const o of offs) expect(Math.abs(o - offs[0])).toBeLessThan(1e-6);
+  });
+
+  it('samples는 최근 600개만 보관한다', () => {
+    for (let i = 0; i < 605; i++) {
+      log.ingest(out(i * 10));
+      log.ingest(ack(i * 10, 0, i * 10 + 1));
+    }
+    const s = log.stats(0).sync;
+    expect(s.samples).toHaveLength(600);
+    expect(s.samples[0].t0).toBe(50);
+  });
+
+  it('role 1 ACK는 stick 1 표본', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 0, 105, 1));
+    expect(log.stats(106).sync.samples[0].stick).toBe(1);
+  });
+});
+
+describe('채택 오프셋 기록', () => {
+  it('값이 바뀔 때만 추가하고 null은 무시한다', () => {
+    log.noteAdoptedOffsets(10, [null, null]);
+    log.noteAdoptedOffsets(20, [5, null]);
+    log.noteAdoptedOffsets(30, [5, 7]);
+    log.noteAdoptedOffsets(40, [4.5, 7]);
+    log.noteAdoptedOffsets(50, [null, 7]);
+    expect(log.stats(60).sync.adopted).toEqual([
+      { t: 20, stick: 0, offsetMs: 5 },
+      { t: 30, stick: 1, offsetMs: 7 },
+      { t: 40, stick: 0, offsetMs: 4.5 },
+    ]);
+  });
+
+  it('최근 200개만 보관하고 clear로 비운다', () => {
+    for (let i = 0; i < 205; i++) log.noteAdoptedOffsets(i, [i, null]);
+    const a = log.stats(0).sync.adopted;
+    expect(a).toHaveLength(200);
+    expect(a[0].t).toBe(5);
+    log.clear();
+    expect(log.stats(0).sync.adopted).toHaveLength(0);
+    log.noteAdoptedOffsets(1, [204, null]);
+    expect(log.stats(0).sync.adopted).toHaveLength(1);
   });
 });
 

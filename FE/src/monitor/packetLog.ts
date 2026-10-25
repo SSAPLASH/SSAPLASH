@@ -11,6 +11,19 @@ import {
 } from '@/input/stickProtocol';
 import { parseLogText, type ParsedLog } from './logParse';
 import { futureMs, toBrowserMs, TsUnwrap } from './tsUnwrap';
+import { median } from './syncTrend';
+
+/** SYNC 왕복 1회. t0 = 송신(out 0x10), t1Ms = 스틱 시계(펼친 µs → ms), t2 = SYNC_ACK 수신 */
+export interface SyncSample {
+  /** t2(수신 시각) */
+  t: number;
+  stick: 0 | 1;
+  t0: number;
+  t1Ms: number;
+  rttMs: number;
+  /** (t0 + t2) / 2 − t1Ms. 브라우저 시계 − 스틱 시계 */
+  offsetObsMs: number;
+}
 
 export interface LogRow {
   id: number;
@@ -57,7 +70,17 @@ export interface MonitorStats {
   i2cRecoveries: number | null;
   /** 마지막 BOOT 로그 원문 */
   build: string | null;
-  syncAck: { lastLagMs: number | null; lags: number[]; count: number };
+  sync: {
+    samples: SyncSample[];
+    /** ClockSync가 채택한 오프셋의 변화점 */
+    adopted: { t: number; stick: 0 | 1; offsetMs: number }[];
+    /** 마지막 표본의 rttMs */
+    lastLagMs: number | null;
+    /** SYNC_ACK 수신 수(짝 실패 포함) */
+    count: number;
+    /** t0Ms가 맞는 pending을 못 찾은 ACK 수 */
+    unmatched: number;
+  };
   errorCount: number;
   total: number;
 }
@@ -69,7 +92,10 @@ export interface PacketLogDeps {
 
 const WINDOW_MS = 1000;
 const FUTURE_KEEP = 50;
-const LAG_KEEP = 20;
+const SYNC_KEEP = 600;
+const ADOPTED_KEEP = 200;
+/** 이 시간 넘게 ACK가 없는 SYNC는 유실로 보고 버린다 */
+const SYNC_PENDING_MS = 2000;
 const BRIDGE_STALL_MS = 3000;
 
 interface SeqEvent {
@@ -120,13 +146,6 @@ function seqLoss(prev: number | null, cur: number): number {
   return Math.max(0, diff - 1);
 }
 
-function median(xs: number[]): number | null {
-  if (xs.length === 0) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
 export class PacketLog {
   /** 행 추가마다 +1. useSyncExternalStore 스냅샷으로 쓴다 */
   version = 0;
@@ -151,10 +170,13 @@ export class PacketLog {
   private dropEvents: { t: number; reason: string }[] = [];
   private i2c: number | null = null;
   private build: string | null = null;
-  private pendingSync: number[] = [];
-  private lags: number[] = [];
-  private lastLag: number | null = null;
+  /** 송신한 SYNC. t = publish 시각(rtt·오프셋의 t0), key = 바이트 안의 u32 t0(SYNC_ACK t0Ms와 짝 맞추는 키) */
+  private pendingSync: { t: number; key: number }[] = [];
+  private syncSamples: SyncSample[] = [];
+  private adopted: { t: number; stick: 0 | 1; offsetMs: number }[] = [];
+  private lastAdopted: [number | null, number | null] = [null, null];
   private syncCount = 0;
+  private syncUnmatched = 0;
   private errorCount = 0;
   private total = 0;
 
@@ -189,10 +211,12 @@ export class PacketLog {
 
     let tBrowser: number | null = null;
     let future: number | null = null;
+    let t1Ms: number | null = null;
     if (decoded && stick !== null && (decoded.kind === 'hit' || decoded.kind === 'pose' || decoded.kind === 'syncAck')) {
       const us = decoded.kind === 'syncAck' ? decoded.t1Us : decoded.timestampUs;
       const unwrapped = this.unwrap.feed(stick, us);
       tBrowser = toBrowserMs(unwrapped, this.deps.clockOffsetOf ? this.deps.clockOffsetOf(stick) : null);
+      if (decoded.kind === 'syncAck') t1Ms = unwrapped / 1000;
       if (decoded.kind !== 'syncAck') future = futureMs(tBrowser, rec.recvTime);
     }
 
@@ -215,15 +239,22 @@ export class PacketLog {
     if (buf.length > this.capacity) buf.shift();
     this.total++;
     this.rateEvents.push({ t: rec.recvTime, key: decoded ? decoded.kind : 'out' });
-    this.updateStats(row);
+    this.updateStats(row, t1Ms);
 
     this.version++;
     for (const l of this.listeners) l();
   }
 
-  private updateStats(row: LogRow): void {
+  private updateStats(row: LogRow, t1Ms: number | null): void {
+    // 2초 넘은 pending은 유실 SYNC로 버린다
+    while (this.pendingSync.length > 0 && row.t - this.pendingSync[0].t > SYNC_PENDING_MS) this.pendingSync.shift();
     if (row.dir === 'out') {
-      if (row.outType === CommandType.SYNC) this.pendingSync.push(row.t);
+      // 짝 키는 바이트 안의 u32 t0(펌웨어가 SYNC_ACK로 되돌려주는 값). publish 시각의 floor를 쓰면
+      // 소스가 t0를 찍은 뒤 publish까지의 간격(Serial은 writeChain 대기로 수 ms)에 ms 경계를 넘어 어긋난다
+      if (row.outType === CommandType.SYNC && row.bytes.length >= 5) {
+        const key = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength).getUint32(1, true);
+        this.pendingSync.push({ t: row.t, key });
+      }
       return;
     }
     const d = row.decoded;
@@ -267,13 +298,23 @@ export class PacketLog {
         break;
       case 'syncAck': {
         this.syncCount++;
-        const t0 = this.pendingSync.shift();
-        if (t0 !== undefined) {
-          const lag = row.t - t0;
-          this.lastLag = lag;
-          this.lags.push(lag);
-          if (this.lags.length > LAG_KEEP) this.lags.shift();
+        // 되돌아온 t0Ms와 송신 바이트의 t0가 같은 pending 중 가장 오래된 것. 못 찾으면 표본 제외(FIFO 폴백 없음)
+        const idx = this.pendingSync.findIndex((p) => p.key === d.t0Ms);
+        if (idx < 0 || row.stick === null || t1Ms === null) {
+          this.syncUnmatched++;
+          break;
         }
+        const t0 = this.pendingSync[idx].t;
+        this.pendingSync.splice(idx, 1);
+        this.syncSamples.push({
+          t: row.t,
+          stick: row.stick,
+          t0,
+          t1Ms,
+          rttMs: row.t - t0,
+          offsetObsMs: (t0 + row.t) / 2 - t1Ms,
+        });
+        if (this.syncSamples.length > SYNC_KEEP) this.syncSamples.shift();
         break;
       }
       case 'log': {
@@ -386,10 +427,30 @@ export class PacketLog {
       drops,
       i2cRecoveries: this.i2c,
       build: this.build,
-      syncAck: { lastLagMs: this.lastLag, lags: [...this.lags], count: this.syncCount },
+      sync: {
+        samples: [...this.syncSamples],
+        adopted: [...this.adopted],
+        lastLagMs: this.syncSamples.length ? this.syncSamples[this.syncSamples.length - 1].rttMs : null,
+        count: this.syncCount,
+        unmatched: this.syncUnmatched,
+      },
       errorCount: this.errorCount,
       total: this.total,
     };
+  }
+
+  /**
+   * 소스가 지금 채택한 시계 오프셋을 기록한다. 페이지가 스냅샷마다 부른다.
+   * 직전 값과 다를 때만 변화점으로 추가한다(null은 무시).
+   */
+  noteAdoptedOffsets(now: number, offsets: readonly [number | null, number | null]): void {
+    for (const stick of [0, 1] as const) {
+      const o = offsets[stick];
+      if (o === null || o === this.lastAdopted[stick]) continue;
+      this.lastAdopted[stick] = o;
+      this.adopted.push({ t: now, stick, offsetMs: o });
+      if (this.adopted.length > ADOPTED_KEEP) this.adopted.shift();
+    }
   }
 
   subscribe(fn: () => void): () => void {
@@ -414,9 +475,11 @@ export class PacketLog {
     this.i2c = null;
     this.build = null;
     this.pendingSync = [];
-    this.lags = [];
-    this.lastLag = null;
+    this.syncSamples = [];
+    this.adopted = [];
+    this.lastAdopted = [null, null];
     this.syncCount = 0;
+    this.syncUnmatched = 0;
     this.errorCount = 0;
     this.total = 0;
     this.version++;
