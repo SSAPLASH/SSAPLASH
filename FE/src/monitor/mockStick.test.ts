@@ -233,6 +233,18 @@ describe('MockStick', () => {
     expect(got.filter((r) => r.dir === 'out').length).toBe(2);
   });
 
+  it('스틱 2개면 SYNC에 role 0·1이 같은 t0Ms로 SYNC_ACK를 각각 보낸다', () => {
+    mock.start({ sticks: 2, poseHz: 1, hitIntervalMs: 100000 });
+    got.length = 0;
+    mock.handleCommand(encodeSync(777));
+    vi.advanceTimersByTime(100);
+    const acks = got
+      .filter((r) => r.dir === 'in' && r.bytes[0] === 0x04)
+      .map((r) => decodePacket(r.bytes, 0) as { kind: string; role: number; t0Ms: number });
+    expect(acks.map((a) => a.role)).toEqual([0, 1]);
+    expect(acks.map((a) => a.t0Ms)).toEqual([777, 777]);
+  });
+
   it('stop 후에는 발행하지 않는다', () => {
     mock.start();
     vi.advanceTimersByTime(500);

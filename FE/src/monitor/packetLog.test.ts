@@ -287,6 +287,27 @@ describe('SYNC 왕복 표본', () => {
     expect(log.stats(109).sync.samples).toHaveLength(1);
   });
 
+  it('SYNC 1건에 L·R ACK 각 1건 → 표본 2건(스틱별), unmatched 0', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 5000, 104, 0));
+    log.ingest(ack(100, 5000, 108, 1));
+    const s = log.stats(109).sync;
+    expect(s.samples.map((x) => [x.stick, x.rttMs])).toEqual([
+      [0, 4],
+      [1, 8],
+    ]);
+    expect(s.unmatched).toBe(0);
+  });
+
+  it('같은 스틱의 중복 ACK는 unmatched', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 0, 104, 0));
+    log.ingest(ack(100, 0, 106, 0));
+    const s = log.stats(107).sync;
+    expect(s.samples).toHaveLength(1);
+    expect(s.unmatched).toBe(1);
+  });
+
   it('t0를 찍은 뒤 publish가 ms 경계를 넘어도(Serial writeChain) 바이트의 t0로 짝이 맞는다', () => {
     // 소스는 t0=100.9로 바이트를 만들고 3.5ms 뒤에 publish. floor(publish)=104 ≠ t0Ms=100
     log.ingest(out(100.9, 104.4));
