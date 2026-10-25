@@ -420,7 +420,11 @@ export class MockStick {
       case CommandType.SYNC: {
         if (bytes.length < 5) break;
         const t0Ms = v.getUint32(1, true);
-        this.later(REPLY_GAP_MS / 4, () => this.publish(buildSyncAck({ t0Ms, t1Us: this.clockUs() })));
+        // 스틱마다 ACK를 되돌린다. R은 L보다 조금 늦게 보내 rtt가 서로 다르게 보이게 한다
+        for (const role of this.roles()) {
+          const delay = REPLY_GAP_MS / 4 + (role === 1 ? 3 : 0);
+          this.later(delay, () => this.publish(buildSyncAck({ role, t0Ms, t1Us: this.clockUs() })));
+        }
         break;
       }
       case CommandType.SET_MODE: {
