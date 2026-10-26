@@ -7,6 +7,7 @@ import { layoutToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';
 import { packetTap } from '@/input/packetTap';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
+import { clockHealth, sensorHealth, transportHealth } from '@/monitor/health';
 import { mockStick } from '@/monitor/mockStick';
 import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
@@ -15,28 +16,29 @@ import { SwingAssembler } from '@/monitor/swingAssembler';
 import { LossHistory } from '@/monitor/syncTrend';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
-import { CommandBar } from './CommandBar';
-import { HexStream } from './HexStream';
-import { HitTable } from './HitTable';
+import { Sidebar } from './layout/Sidebar';
+import { SECTION_ITEMS, type Section } from './layout/sections';
 import { fmt, type SendFn, type Snap } from './monitorTypes';
-import { ParamPanel } from './ParamPanel';
-import { PoseScope } from './PoseScope';
-import { SwingScope } from './SwingScope';
-import { SyncScope } from './SyncScope';
-import { TransportPanel } from './TransportPanel';
-import { VelocityScatter } from './VelocityScatter';
+import { ClockSection } from './sections/ClockSection';
+import { ControlSection } from './sections/ControlSection';
+import { Overview } from './sections/Overview';
+import { PendingSection } from './sections/PendingSection';
+import { SensorSection } from './sections/SensorSection';
+import { TransportSection } from './sections/TransportSection';
 import './monitor.css';
 
-type Tab = 'hit' | 'pose' | 'param' | 'swing' | 'raw' | 'trend';
+const SECTION_KEY = 'mon.section';
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'hit', label: 'HIT' },
-  { key: 'pose', label: 'POSE' },
-  { key: 'param', label: '파라미터·명령' },
-  { key: 'swing', label: '원시 파형' },
-  { key: 'raw', label: '원시' },
-  { key: 'trend', label: '추이·분포' },
-];
+/** 마지막으로 본 섹션. 읽기에 실패하거나 알 수 없는 값이면 개요 */
+function readSection(): Section {
+  try {
+    const v = localStorage.getItem(SECTION_KEY);
+    if (SECTION_ITEMS.some((it) => it.key === v)) return v as Section;
+  } catch {
+    // 저장소를 못 쓰는 환경에서도 화면은 정상이다
+  }
+  return 'overview';
+}
 
 const SNAP_INTERVAL_MS = 100;
 
@@ -47,7 +49,7 @@ const SNAP_INTERVAL_MS = 100;
 const recorder = new Recorder();
 let offAttach: (() => void) | null = null;
 
-/** 추이 탭 아래 패널의 POSE 유실률 이력. 탭을 오가도 이어지도록 모듈에 둔다 */
+/** 시계 섹션 추이 패널의 POSE 유실률 이력. 섹션을 오가도 이어지도록 모듈에 둔다 */
 const lossHistory = new LossHistory();
 
 /** ParamStore가 항상 최신 send를 부르도록 두는 중간 상자. 소스·모의가 바뀌어도 ParamStore는 그대로 둔다 */
@@ -77,7 +79,28 @@ export function StickMonitorPage() {
     [kitLayout, tuning.angleRange, tuning.maxRadiusDeg, tuning.radiusFactor],
   );
 
-  const [tab, setTab] = useState<Tab>('hit');
+  const [section, setSectionState] = useState<Section>(readSection);
+  const setSection = useCallback((s: Section) => {
+    setSectionState(s);
+    try {
+      localStorage.setItem(SECTION_KEY, s);
+    } catch {
+      // 기억하지 못해도 동작에는 영향이 없다
+    }
+  }, []);
+  // Fold를 외부에서 여는 신호. 0이 아닌 새 값이 오면 연다. 사이드바로 옮겨 다닐 때는 0으로 되돌려
+  // 섹션에 다시 들어왔을 때 지난 신호로 패널이 또 열리지 않게 한다
+  const [openSwingSignal, setOpenSwingSignal] = useState(0);
+  const [openTrendSignal, setOpenTrendSignal] = useState(0);
+  const signalSeq = useRef(0);
+  const selectSection = useCallback(
+    (s: Section) => {
+      setSection(s);
+      setOpenSwingSignal(0);
+      setOpenTrendSignal(0);
+    },
+    [setSection],
+  );
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
   const [mockOn, setMockOn] = useState(mockStick.running);
@@ -108,6 +131,16 @@ export function StickMonitorPage() {
     };
   }, []);
   const [snap, setSnap] = useState<Snap>(() => takeSnap(0, null));
+
+  // 단계별 상태는 스냅샷이 바뀔 때만 다시 계산한다
+  const health = useMemo(
+    () => ({
+      transport: transportHealth(snap, snap.now),
+      sensor: sensorHealth(snap, snap.now),
+      clock: clockHealth(snap, snap.now),
+    }),
+    [snap],
+  );
 
   // 진입: 로그 수집 시작. 떠나도 stop하지 않는다(세션 동안 누적, 메모리는 링버퍼 상한)
   useEffect(() => {
@@ -183,18 +216,30 @@ export function StickMonitorPage() {
     const id = setInterval(() => assembler.tick(), SNAP_INTERVAL_MS);
     return () => clearInterval(id);
   }, [assembler]);
-  const onSelectHit = useCallback((stick: 0 | 1, seq: number) => {
-    setSelectedSwing(`${stick}-${seq}`);
-    setTab('swing');
-  }, []);
+  // HIT 행 클릭: 센서 섹션에서 SWING 패널을 열고 그 스윙을 고른다
+  const onSelectHit = useCallback(
+    (stick: 0 | 1, seq: number) => {
+      setSelectedSwing(`${stick}-${seq}`);
+      setSection('sensor');
+      setOpenSwingSignal(++signalSeq.current);
+    },
+    [setSection],
+  );
 
-  // 산점 점 클릭: HIT 탭으로 옮기고 같은 스틱·seq 행을 강조·스크롤한다
+  // 산점 점 클릭: 센서 섹션의 같은 스틱·seq HIT 행을 강조·스크롤한다
   const [hitPick, setHitPick] = useState<{ stick: 0 | 1; seq: number } | null>(null);
-  const goHit = useCallback((stick: 0 | 1, seq: number) => {
-    setHitPick({ stick, seq });
-    setTab('hit');
-  }, []);
-  const goTrend = useCallback(() => setTab('trend'), []);
+  const goHit = useCallback(
+    (stick: 0 | 1, seq: number) => {
+      setHitPick({ stick, seq });
+      setSection('sensor');
+    },
+    [setSection],
+  );
+  // 개요 ③ 상자: 시계 섹션으로 가서 추이 패널을 연다
+  const goTrend = useCallback(() => {
+    setSection('clock');
+    setOpenTrendSignal(++signalSeq.current);
+  }, [setSection]);
 
   const toggleMock = () => {
     if (mockStick.running) {
@@ -278,43 +323,47 @@ export function StickMonitorPage() {
       </div>
       {paused && <div className="notice small">화면 갱신이 멈춰 있습니다. 버퍼에는 계속 쌓입니다.</div>}
 
-      <TransportPanel snap={snap} onGoTrend={goTrend} />
-
-      <div className="mon-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} className={`mon-tab${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mon-body">
-        {tab === 'hit' && <HitTable snap={snap} profile={profile} onSelectHit={onSelectHit} selected={hitPick} />}
-        {tab === 'pose' && <PoseScope snap={snap} profile={profile} angleRange={tuning.angleRange} />}
-        {tab === 'param' && (
-          <div className="mon-param-grid">
-            <ParamPanel store={paramStore} canSend={canSend} />
-            <CommandBar send={send} store={paramStore} profile={profile} canSend={canSend} />
-          </div>
-        )}
-        {tab === 'swing' && (
-          <SwingScope
-            assembler={assembler}
-            version={swingVersion}
-            selectedKey={selectedSwing}
-            onSelect={setSelectedSwing}
-            send={send}
-            canSend={canSend}
-            rows={snap.rows}
-          />
-        )}
-        {tab === 'raw' && <HexStream snap={snap} />}
-        {tab === 'trend' && (
-          <div className="mon-trend-grid">
-            <SyncScope snap={snap} loss={lossHistory} />
-            <VelocityScatter snap={snap} onPick={goHit} />
-          </div>
-        )}
+      <div className="mon-layout">
+        <Sidebar current={section} onSelect={selectSection} health={health} />
+        <div className="mon-body">
+          {section === 'overview' && (
+            <Overview
+              health={health}
+              now={snap.now}
+              sourceLabel={sourceLabel}
+              mockOn={mockOn}
+              onSelect={selectSection}
+              onGoTrend={goTrend}
+            />
+          )}
+          {section === 'transport' && <TransportSection health={health.transport} snap={snap} />}
+          {section === 'sensor' && (
+            <SensorSection
+              health={health.sensor}
+              snap={snap}
+              profile={profile}
+              angleRange={tuning.angleRange}
+              hitPick={hitPick}
+              onSelectHit={onSelectHit}
+              onPickHit={goHit}
+              assembler={assembler}
+              swingVersion={swingVersion}
+              selectedSwing={selectedSwing}
+              onSelectSwing={setSelectedSwing}
+              openSwingSignal={openSwingSignal}
+              send={send}
+              canSend={canSend}
+            />
+          )}
+          {section === 'clock' && (
+            <ClockSection health={health.clock} snap={snap} loss={lossHistory} openTrendSignal={openTrendSignal} />
+          )}
+          {section === 'resolve' && <PendingSection title="④ 판정" />}
+          {section === 'score' && <PendingSection title="⑤ 채점" />}
+          {section === 'output' && <PendingSection title="⑥ 출력" />}
+          {section === 'trace' && <PendingSection title="타격 추적" />}
+          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} />}
+        </div>
       </div>
     </main>
   );
