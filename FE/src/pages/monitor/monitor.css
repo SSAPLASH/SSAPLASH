@@ -648,3 +648,7 @@
   background: var(--stage-deep);
   border-radius: var(--radius-sm);
 }
+.mon-hist-cv,
+.mon-latency-cv {
+  height: 240px;
+}
