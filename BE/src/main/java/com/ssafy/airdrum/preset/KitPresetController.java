@@ -30,7 +30,7 @@ import com.ssafy.airdrum.config.OpenApiConfig;
 import com.ssafy.airdrum.user.AuthUser;
 
 /** 키트 프리셋 API(설계 문서(90) 3-1). 로그인한 회원 자신의 프리셋만 다룬다. */
-@Tag(name = "Presets", description = "키트 프리셋(패드 배치·센서 캘리브레이션·사운드)")
+@Tag(name = "Presets", description = "키트 프리셋(패드 배치·사운드)")
 @RestController
 @RequestMapping("/api/presets")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
@@ -71,7 +71,7 @@ public class KitPresetController {
 		return ResponseEntity.created(URI.create("/api/presets/" + created.id())).body(created);
 	}
 
-	@Operation(summary = "프리셋 수정", description = "이름·배치·캘리브레이션·사운드를 통째로 바꾼다. 기본 여부는 그대로다.")
+	@Operation(summary = "프리셋 수정", description = "이름·배치·사운드를 통째로 바꾼다. 기본 여부는 그대로다.")
 	@ApiResponse(responseCode = "404", description = "없거나 다른 회원의 프리셋 (PRESET_NOT_FOUND)",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "409", description = "다른 프리셋과 이름 중복(PRESET_NAME_DUPLICATE)·동시 변경(PRESET_CONFLICT)",
