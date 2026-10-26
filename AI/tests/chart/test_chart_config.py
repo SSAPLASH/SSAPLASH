@@ -1,0 +1,81 @@
+"""분리 설정 읽기·환경 변수 덮어쓰기 테스트."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from ssaplash_ai.chart.config import (
+    ENV_DEVICE,
+    ENV_WORK_DIR,
+    OutputConfig,
+    SeparationConfig,
+    work_dir_from_env,
+)
+
+AI_DIR = Path(__file__).resolve().parents[2]
+CONFIG_DIR = AI_DIR / "configs" / "chart"
+
+
+def test_저장소_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = SeparationConfig.from_yaml(CONFIG_DIR / "separation.yaml")
+    assert cfg.model_config == Path("configs/bench/models/msst/bs_roformer_sw.yaml")
+    assert (AI_DIR / cfg.model_config).is_file()
+    assert cfg.device == "cuda"
+    assert cfg.output == OutputConfig(sample_rate=44100, format="flac")
+    assert cfg.max_duration_sec == 600
+    assert cfg.source_path == CONFIG_DIR / "separation.yaml"
+
+
+def test_mock_설정은_cpu와_mock_모델(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = SeparationConfig.from_yaml(CONFIG_DIR / "separation_mock.yaml")
+    assert cfg.device == "cpu"
+    assert cfg.model_config.name == "mock_half.yaml"
+    assert (AI_DIR / cfg.model_config).is_file()
+
+
+def test_기본값(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = SeparationConfig.from_dict({"model_config": "m.yaml"})
+    assert cfg.model_config == Path("m.yaml") and cfg.device == "cuda"
+    assert cfg.output.format == "flac" and cfg.output.sample_rate == 44100
+    assert cfg.max_duration_sec == 600.0 and cfg.source_path is None
+
+
+def test_환경_변수가_장치를_덮어쓴다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_DEVICE, "cpu")
+    cfg = SeparationConfig.from_dict({"model_config": "m.yaml", "device": "cuda"})
+    assert cfg.device == "cpu"
+
+
+@pytest.mark.parametrize(
+    "raw, 문구",
+    [
+        ({}, "model_config"),
+        ({"model_config": "m", "extra": 1}, "모르는 분리 설정"),
+        ({"model_config": "m", "output": {"format": "mp3"}}, "output.format"),
+        ({"model_config": "m", "output": {"bitrate": 1}}, "모르는 output"),
+        ({"model_config": "m", "output": {"sample_rate": 0}}, "sample_rate"),
+        ({"model_config": "m", "max_duration_sec": 0}, "max_duration_sec"),
+    ],
+)
+def test_잘못된_설정은_ValueError(raw: dict, 문구: str, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    with pytest.raises(ValueError, match=문구):
+        SeparationConfig.from_dict(raw)
+
+
+def test_빈_yaml은_ValueError(tmp_path: Path):
+    (tmp_path / "e.yaml").write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="비어"):
+        SeparationConfig.from_yaml(tmp_path / "e.yaml")
+
+
+def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    monkeypatch.delenv(ENV_WORK_DIR, raising=False)
+    assert work_dir_from_env() is None
+    monkeypatch.setenv(ENV_WORK_DIR, str(tmp_path / "work"))
+    assert work_dir_from_env() == tmp_path / "work"
