@@ -218,6 +218,29 @@ def label_f1_table(hits: pd.DataFrame, scheme: str, window_ms: int = 50) -> pd.D
     return table.reset_index()
 
 
+def label_f1_metrics(hits: pd.DataFrame, window_ms: int = 50) -> dict[str, dict[str, float]]:
+    """tracking.log_run용 {모델: {f1_{라벨}: 값}}. 패드 8종(pads 기준)과 tom·cymbal(five 기준).
+
+    run 하나는 입력이 하나라 모델만 키로 씀. S15P31A307-163: 규칙을 바꿔 가며 잰 run을 MLflow에서
+    나란히 놓고 패드별 차이를 보기 위한 것.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for scheme, keep in (("pads", None), ("five", ("tom", "cymbal"))):
+        table = label_f1_table(hits, scheme, window_ms)
+        if table.empty:
+            continue
+        label_cols = [c for c in table.columns if c not in GROUP_KEY]
+        for _, r in table.iterrows():
+            values = out.setdefault(str(r["model"]), {})
+            for c in label_cols:
+                if keep is not None and c not in keep:
+                    continue
+                v = r[c]
+                if isinstance(v, int | float) and pd.notna(v):
+                    values[f"f1_{c}"] = float(v)
+    return out
+
+
 def _fmt(value: object, digits: int = 3) -> str:
     if isinstance(value, float):
         if math.isnan(value):
