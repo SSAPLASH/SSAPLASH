@@ -126,6 +126,15 @@ describe('WebSocketStickSource', () => {
       expect(tapped.every((r) => r.stickId === null)).toBe(true);
     });
 
+    it('바이너리 HIT의 seq를 이벤트에 싣는다', async () => {
+      await connectAll(src);
+      const b = new Uint8Array(20);
+      b[0] = 0x01; // HIT
+      b[2] = 42; // seq
+      FakeWS.instances[0].recv(b);
+      expect(events.find((e) => e.kind === 'hit')).toMatchObject({ kind: 'hit', seq: 42 });
+    });
+
     it('공용 링크라 stickId와 상관없이 같은 링크로 보내고 오프셋도 공용이다', async () => {
       await connectAll(src);
       const ws = FakeWS.instances[0];
