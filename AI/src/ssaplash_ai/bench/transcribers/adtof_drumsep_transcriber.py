@@ -3,7 +3,7 @@
 흐름: ADTOF(5가지: 킥·스네어·하이햇·탐·심벌) → MDX23C DrumSep(기존 msst 어댑터, 6스템: kick·snare·toms·
 hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 타격에 패드를 붙임.
 - 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 봉우리(tom_fmin~tom_fmax Hz)를 기본 주파수로
-  보고 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / HI_TOM. 경계값은 yaml(rules)에 있고 GMD 정답으로
+  보고 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / SMALL_TOM. 경계값은 yaml(rules)에 있고 GMD 정답으로
   한 번 맞춘 값(U8): GMD(TD-11 킷) 정답 탐의 기본 주파수 중앙값이 플로어 97·미드 129·하이 160Hz라
   경계를 113·142Hz로 둠. 실제 드럼 킷은 음높이가 달라 MDB에서는 틀릴 수 있음(한계로 표기).
   drum2midi의 "음높이 순서" 규칙을 절대 구간으로 바꾼 것.
@@ -78,7 +78,7 @@ def tom_pad(f0: float, bands: Sequence[float]) -> str:
         return "FLOOR_TOM"
     if f0 < hi:
         return "MID_TOM"
-    return "HI_TOM"
+    return "SMALL_TOM"
 
 
 def cymbal_pad(crash_seg: np.ndarray, ride_seg: np.ndarray, min_energy: float) -> str:

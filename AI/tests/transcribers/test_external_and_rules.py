@@ -34,7 +34,7 @@ from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
 ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = ROOT / "configs" / "bench" / "transcribers"
 IDENTITY = {
-    p: p for p in ("KICK", "SNARE", "HIHAT", "HI_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
+    p: p for p in ("KICK", "SNARE", "HIHAT", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
 }
 
 # 가짜 외부 스크립트: 요청의 options.truth_dir에서 <song_id>.csv를 읽어 그대로 돌려줌. 프로토콜만 검증.
@@ -206,7 +206,7 @@ def _sine(freq: float, seconds: float = 0.1) -> np.ndarray:
 
 def test_탐_음높이로_패드를_나눈다():
     r = rules_with_defaults(None)
-    for freq, pad in ((80.0, "FLOOR_TOM"), (140.0, "MID_TOM"), (220.0, "HI_TOM")):
+    for freq, pad in ((80.0, "FLOOR_TOM"), (140.0, "MID_TOM"), (220.0, "SMALL_TOM")):
         f0 = estimate_f0(_sine(freq)[0], SR, r["tom_fmin"], r["tom_fmax"])
         assert abs(f0 - freq) < 6.0, (freq, f0)
         assert tom_pad(f0, r["tom_bands"]) == pad
@@ -239,7 +239,7 @@ def test_assign_pads는_ADTOF_피치를_패드_이름으로():
         (0.3, "SNARE"),
         (0.4, "RIDE"),
         (0.5, "HIHAT"),
-        (0.6, "HI_TOM"),
+        (0.6, "SMALL_TOM"),
         (0.8, "CRASH"),
     ]
     assert seconds == 1.0

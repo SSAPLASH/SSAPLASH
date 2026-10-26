@@ -278,7 +278,7 @@ GM_PAD_PITCH: dict[str, int] = {
     "KICK": 36,
     "SNARE": 38,
     "HIHAT": 42,
-    "HI_TOM": 50,
+    "SMALL_TOM": 50,
     "MID_TOM": 47,
     "FLOOR_TOM": 43,
     "CRASH": 49,
