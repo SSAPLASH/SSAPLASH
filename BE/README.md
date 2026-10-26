@@ -245,7 +245,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V11을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V13을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
 및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
@@ -370,6 +370,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | --- | --- | --- | --- |
 | V1 | `V1__create_users_social_accounts.sql` | `users`, `social_accounts` | -86 |
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
+| V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
 
 규칙:
 
@@ -396,7 +397,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V11까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V13까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -519,8 +520,9 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 ## 키트 프리셋 (90번)
 
 로그인한 회원이 자기 키트 프리셋을 저장·조회·수정·삭제하고, 하나를 기본으로 지정한다. 프리셋 내용은
-**패드 배치(`layout`)·센서 캘리브레이션(`calibration`)·사운드(`sounds`)** 세 가지이며 모두 FE 형식의 JSON 객체다.
-서버는 내용을 해석하지 않고 객체인지와 크기(각 16 KiB)만 검사한다. 키보드 매핑은 저장하지 않는다(FE 로컬, 추후 FE에서 제거 예정).
+**패드 배치(`layout`)·사운드(`sounds`)** 두 가지이며 모두 FE 형식의 JSON 객체다.
+서버는 내용을 해석하지 않고 객체인지와 크기(각 16 KiB)만 검사한다. 센서 캘리브레이션은 기기·세션 값이라 저장하지 않는다
+(V11에서 넣은 `calibration`은 V13에서 삭제, -128).
 설계는 작업 90번 설계 문서(개인 문서)에 있다.
 
 | 메서드·경로 | 본문 | 성공 | 도메인 오류 |
@@ -528,7 +530,7 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `GET /api/presets` | — | 200 배열. 기본 프리셋이 있으면 첫 원소, 나머지는 최근 생성 순 | — |
 | `POST /api/presets` | 요청 본문 | 201 + `Location: /api/presets/{id}` | 409 `PRESET_NAME_DUPLICATE`·`PRESET_LIMIT_EXCEEDED`·`PRESET_CONFLICT` |
 | `GET /api/presets/{id}` | — | 200 | 404 `PRESET_NOT_FOUND` |
-| `PUT /api/presets/{id}` | 요청 본문(이름·배치·캘리브레이션·사운드를 모두 보낸다) | 200. 기본 여부는 그대로 | 404, 409 `PRESET_NAME_DUPLICATE`·`PRESET_CONFLICT` |
+| `PUT /api/presets/{id}` | 요청 본문(이름·배치·사운드를 모두 보낸다) | 200. 기본 여부는 그대로 | 404, 409 `PRESET_NAME_DUPLICATE`·`PRESET_CONFLICT` |
 | `PUT /api/presets/{id}/default` | 없음 | 200. 이전 기본은 해제. 이미 기본이면 그대로 | 404, 409 `PRESET_CONFLICT` |
 | `DELETE /api/presets/{id}` | — | 204. 기본을 지우면 남은 것 중 가장 최근 생성이 기본이 된다 | 404 |
 
@@ -539,11 +541,12 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `name` | 예 | 앞뒤 공백을 잘라 1~50자. 내 프리셋끼리 같은 이름 불가(대소문자 구분) |
 | `layout` | 예 | JSON 객체(FE `KitLayout`) |
 | `sounds` | 예 | JSON 객체. 1단계는 `{"soundSetId":"ssaplash"}` |
-| `calibration` | 아니오 | JSON 객체(FE `CalibrationProfile`) 또는 `null`/누락 |
-| `schemaVersion` | 아니오 | 1 이상 정수. 누락이면 1. FE가 위 세 JSON 형식을 바꿀 때 올린다 |
+| `schemaVersion` | 아니오 | 1 이상 정수. 누락이면 1. FE가 위 두 JSON 형식을 바꿀 때 올린다 |
 
-응답은 `id`, `name`, `isDefault`, `layout`, `sounds`, `calibration`(없으면 `null`), `schemaVersion`, `createdAt`, `updatedAt`
-아홉 필드다. 소유자 id는 내보내지 않는다. JSON은 jsonb로 저장되므로 키 순서·공백은 보낸 것과 다를 수 있다.
+표에 없는 필드는 무시한다. 옛 FE 빌드가 `calibration`을 보내도 400이 아니라 저장 없이 성공한다.
+
+응답은 `id`, `name`, `isDefault`, `layout`, `sounds`, `schemaVersion`, `createdAt`, `updatedAt`
+여덟 필드다. 소유자 id는 내보내지 않는다. JSON은 jsonb로 저장되므로 키 순서·공백은 보낸 것과 다를 수 있다.
 
 | 코드 | 상태 | 언제 |
 | --- | --- | --- |
@@ -553,7 +556,7 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `PRESET_CONFLICT` | 409 | 같은 회원의 동시 요청이 DB 제약(이름 유일·기본 1개)에 걸림. 다시 호출하면 된다 |
 
 FE 소비 계약: 로그인 복원 뒤 `GET /api/presets` 한 번으로 목록과 기본 프리셋을 함께 받는다(전용 "기본 조회" API 없음).
-첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로컬 프리셋 이관은 `POST` 반복이다.
+첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로그인 전 로컬 프리셋은 서버로 옮기지 않는다(91).
 
 연결점: 쓰기는 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare`로 회원을 잠그고 ACTIVE를 다시 확인한다(아니면 401).
 탈퇴 작업은 `preset.KitPresetRepository.deleteAllByUserId(userId)`로 지운다(`users` 행을 남기므로 cascade에 기대지 않는다).
