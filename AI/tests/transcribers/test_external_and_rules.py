@@ -245,6 +245,19 @@ def test_assign_pads는_ADTOF_피치를_패드_이름으로():
     assert seconds == 1.0
 
 
+def test_심벌_구간은_cymbal_window_ms로_따로_둔다():
+    # 라이드 소리가 타격 50ms 뒤에 시작: 구간 80ms면 잡히고 40ms면 둘 다 무음이라 CRASH
+    crash = np.zeros((2, SR), np.float32)
+    ride = np.zeros((2, SR), np.float32)
+    ride[:, int(0.25 * SR) : int(0.25 * SR) + int(0.1 * SR)] = _sine(400.0)
+    stems = {"toms": np.zeros((2, SR), np.float32), "crash": crash, "ride": ride}
+    peaks = {49: [0.2]}
+    assert assign_pads(peaks, stems, SR, {"window_ms": 80})[0][1] == "RIDE"
+    assert assign_pads(peaks, stems, SR, {"window_ms": 80, "cymbal_window_ms": 40})[0][1] == "CRASH"
+    assert assign_pads(peaks, stems, SR, {"window_ms": 40, "cymbal_window_ms": 80})[0][1] == "RIDE"
+    assert rules_with_defaults(None)["cymbal_window_ms"] is None  # 없으면 window_ms와 같음
+
+
 def test_저장소의_실제_모델_yaml이_전부_읽힌다():
     names = []
     for path in sorted(CONFIGS_DIR.rglob("*.yaml")):
