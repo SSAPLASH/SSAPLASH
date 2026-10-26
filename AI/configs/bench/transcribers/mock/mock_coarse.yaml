@@ -9,7 +9,7 @@ labels:
   KICK: KICK
   SNARE: SNARE
   HIHAT: HIHAT
-  HI_TOM: tom
+  SMALL_TOM: tom
   MID_TOM: tom
   FLOOR_TOM: tom
   CRASH: cymbal
