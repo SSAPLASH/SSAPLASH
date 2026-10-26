@@ -17,15 +17,16 @@ export const SECTION_ITEMS: { key: Section; label: string; divider?: boolean }[]
 ];
 
 /** 상태가 계산되는 단계. 나머지 항목은 idle로 그린다 */
-export type StageKey = 'transport' | 'sensor' | 'clock';
+export type StageKey = 'transport' | 'sensor' | 'clock' | 'resolve' | 'score' | 'output';
 
 export type StageHealthMap = Record<StageKey, StageHealth>;
 
 export const LEVEL_LABEL: Record<HealthLevel, string> = { ok: '정상', warn: '주의', bad: '이상', idle: '데이터 없음' };
 
-export const PENDING_REASON = '판정·채점 관찰은 다음 단계에서 연결됩니다';
+export const PENDING_REASON = '타격 추적은 다음 단계에서 연결됩니다';
 
-const isStage = (key: Section): key is StageKey => key === 'transport' || key === 'sensor' || key === 'clock';
+const STAGE_KEYS: readonly Section[] = ['transport', 'sensor', 'clock', 'resolve', 'score', 'output'];
+const isStage = (key: Section): key is StageKey => STAGE_KEYS.includes(key);
 
 export const sectionLevel = (key: Section, health: StageHealthMap): HealthLevel => (isStage(key) ? health[key].level : 'idle');
 
