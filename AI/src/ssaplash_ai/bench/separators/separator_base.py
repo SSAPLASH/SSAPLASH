@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import abc
 import hashlib
+import os
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -88,7 +89,9 @@ class SeparatorConfig:
 
     @property
     def model_dir(self) -> Path:
-        return MODELS_DIR / self.name
+        """가중치 폴더. 환경 변수 SSAPLASH_MODELS_DIR이 있으면 그 아래, 없으면 data/models 아래."""
+        root = os.environ.get("SSAPLASH_MODELS_DIR")
+        return (Path(root) if root else MODELS_DIR) / self.name
 
 
 @dataclass
