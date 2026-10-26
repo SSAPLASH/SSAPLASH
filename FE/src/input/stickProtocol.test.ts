@@ -209,6 +209,7 @@ describe('parsePacket', () => {
       marginDeg: 3.5,
       ambiguous: false,
       peakSpeedDps: 4321,
+      seq: 7,
     });
   });
 

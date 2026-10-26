@@ -325,6 +325,7 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
         marginDeg: d.marginDeg,
         ambiguous: d.ambiguous,
         peakSpeedDps: d.peakSpeedDps,
+        seq: d.seq,
       };
     case 'pose':
       return {

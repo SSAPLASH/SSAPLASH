@@ -169,6 +169,7 @@ export class InputManager {
       pose,
       peakAccel: e.peakAccel,
       peakSpeedDps: e.peakSpeedDps,
+      seq: e.seq,
       judgedBy: m.judgedBy,
       distanceDeg: m.distanceDeg,
       inside: m.inside,
