@@ -1,0 +1,111 @@
+candidates:
+- name: current
+  rules:
+    tom_bands:
+    - 113.0
+    - 142.0
+- name: fit_mdb_drums
+  rules:
+    tom_bands:
+    - 111.0
+    - 194.0
+- name: fit_gmd_test
+  rules:
+    tom_bands:
+    - 105.0
+    - 138.0
+- name: fit_all
+  rules:
+    tom_bands:
+    - 111.0
+    - 138.0
+- name: fit_w2
+  rules:
+    tom_bands:
+    - 111.0
+    - 194.0
+- name: fit_w3
+  rules:
+    tom_bands:
+    - 111.0
+    - 194.0
+- name: fit_w5
+  rules:
+    tom_bands:
+    - 111.0
+    - 194.0
+- name: fit_w10
+  rules:
+    tom_bands:
+    - 111.0
+    - 194.0
+- name: fit_gmd95
+  rules:
+    tom_bands:
+    - 111.0
+    - 138.0
+- name: fit_gmd93
+  rules:
+    tom_bands:
+    - 111.0
+    - 138.0
+- name: fit_gmd90
+  rules:
+    tom_bands:
+    - 111.0
+    - 138.0
+- name: win40
+  rules:
+    window_ms: 40.0
+- name: win120
+  rules:
+    window_ms: 120.0
+- name: win160
+  rules:
+    window_ms: 160.0
+- name: fmax600
+  rules:
+    tom_fmax: 600.0
+- name: fmin30
+  rules:
+    tom_fmin: 30.0
+- name: tom100_cym80
+  rules:
+    window_ms: 100.0
+    cymbal_window_ms: 80.0
+- name: tom120_cym80
+  rules:
+    window_ms: 120.0
+    cymbal_window_ms: 80.0
+- name: tom140_cym80
+  rules:
+    window_ms: 140.0
+    cymbal_window_ms: 80.0
+- name: tom120_cym80_b110_139
+  rules:
+    window_ms: 120.0
+    cymbal_window_ms: 80.0
+    tom_bands:
+    - 110.0
+    - 139.0
+- name: tom120_cym80_b111_138
+  rules:
+    window_ms: 120.0
+    cymbal_window_ms: 80.0
+    tom_bands:
+    - 111.0
+    - 138.0
+- name: tom120_cym80_b110_145
+  rules:
+    window_ms: 120.0
+    cymbal_window_ms: 80.0
+    tom_bands:
+    - 110.0
+    - 145.0
+- name: tom120_cym80_b105_139
+  rules:
+    window_ms: 120.0
+    cymbal_window_ms: 80.0
+    tom_bands:
+    - 105.0
+    - 139.0
