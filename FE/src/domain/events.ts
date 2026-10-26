@@ -35,6 +35,8 @@ export interface StickHitEvent {
   ambiguous?: boolean;
   /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 소스만 */
   peakSpeedDps?: number;
+  /** HIT 패킷 seq(u8, 256마다 돈다). 패킷과 판정 결과를 잇는 열쇠. 센서 스틱 소스만 */
+  seq?: number;
 }
 
 export interface StickPoseEvent {
@@ -98,6 +100,8 @@ export interface ResolvedHit {
   peakAccel: number;
   /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 타격만 */
   peakSpeedDps?: number;
+  /** 스틱 HIT 패킷 seq(u8). 모니터가 패킷과 판정 결과를 묶을 때 쓴다. 센서 스틱 타격만 */
+  seq?: number;
   /** 패드 판정 출처 */
   judgedBy: HitJudgedBy;
   /** 판정 근거: 가장 가까운 앵커까지 각도 거리 */
