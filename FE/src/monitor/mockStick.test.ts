@@ -273,18 +273,18 @@ describe('MockStick', () => {
       expect(swings().length).toBe(0);
     });
 
-    it('SET_MODE 2 뒤 HIT 1건 → SWING 10청크, hitSeq 일치', () => {
+    it('SET_MODE 2 뒤 HIT 1건 → SWING 169청크(샘플 1개씩), hitSeq 일치', () => {
       mock.start({ hitIntervalMs: 1000, poseHz: 1 });
       mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
-      vi.advanceTimersByTime(1000 + 200);
+      vi.advanceTimersByTime(1000 + 800);
       const hit = got.map((r) => decodePacket(r.bytes, 0)).find((d) => d.kind === 'hit');
       const sw = swings().map((r) => decodePacket(r.bytes, 0));
-      expect(sw.length).toBe(10);
-      expect(sw.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(sw.length).toBe(169);
+      expect(sw.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1))).toEqual(Array.from({ length: 169 }, (_, i) => i));
       for (const d of sw) {
-        expect(d).toMatchObject({ kind: 'swing', chunkCount: 10 });
+        expect(d).toMatchObject({ kind: 'swing', chunkCount: 169 });
         if (d.kind === 'swing') {
-          expect(d.samples.length).toBe(120);
+          expect(d.samples.length).toBe(6);
           expect(d.hitSeq).toBe(hit !== undefined && hit.kind === 'hit' ? hit.seq : -1);
         }
       }
@@ -298,20 +298,24 @@ describe('MockStick', () => {
       expect(swings().length).toBe(0);
     });
 
-    it('30번째 HIT의 SWING은 청크 7이 빠진 9청크', () => {
+    it('30번째 HIT의 SWING은 청크 80~84가 빠진 164청크', () => {
       mock.start({ hitIntervalMs: 1000, poseHz: 1 });
       mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
-      vi.advanceTimersByTime(30 * 1000 + 200);
+      vi.advanceTimersByTime(30 * 1000 + 800);
       const sw = swings();
-      expect(sw.length).toBe(29 * 10 + 9);
-      const last = sw.slice(-9).map((r) => decodePacket(r.bytes, 0));
-      expect(last.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1))).toEqual([0, 1, 2, 3, 4, 5, 6, 8, 9]);
+      expect(sw.length).toBe(29 * 169 + 164);
+      const last = sw.slice(-164).map((r) => decodePacket(r.bytes, 0));
+      const idx = last.map((d) => (d.kind === 'swing' ? d.chunkIdx : -1));
+      const all = new Set(idx);
+      const missing = Array.from({ length: 169 }, (_, i) => i).filter((i) => !all.has(i));
+      expect(missing).toEqual([80, 81, 82, 83, 84]);
     });
 
     it('stop이 SWING 타이머도 정리한다', () => {
       mock.start({ hitIntervalMs: 1000, poseHz: 1 });
       mock.handleCommand(encodeSetMode(StreamMode.RAW_COLLECT));
       vi.advanceTimersByTime(1050);
+      expect(swings().length).toBeLessThan(169);
       mock.stop();
       const n = swings().length;
       vi.advanceTimersByTime(1000);

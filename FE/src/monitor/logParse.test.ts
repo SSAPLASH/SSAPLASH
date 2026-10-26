@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { parseLogText } from './logParse';
 
 describe('parseLogText', () => {
+  it('BOOT 1.0 nrf52처럼 해시가 아닌 빌드 식별자도 BOOT로 받는다', () => {
+    expect(parseLogText('BOOT 1.0 nrf52')).toEqual({ kind: 'boot', version: '1.0', hash: 'nrf52', raw: 'BOOT 1.0 nrf52' });
+  });
+
   it('BOOT', () => {
     expect(parseLogText('BOOT 0.1 abc123')).toEqual({ kind: 'boot', version: '0.1', hash: 'abc123', raw: 'BOOT 0.1 abc123' });
   });

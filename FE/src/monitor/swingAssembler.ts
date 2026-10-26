@@ -3,15 +3,15 @@
 // 판정 경로와 무관하다(모니터 전용).
 import type { DecodedSwing } from '@/input/stickProtocol';
 
-// U16·U17 가정값, EMB 회신 뒤 교체
-/** 샘플 주기(ms) */
-export const SWING_SAMPLE_PERIOD_MS = 1;
+// EMB 회신 3(2026-10-26): 844Hz·1.18ms 간격, 가속도 1mg·자이로 0.1°/s per LSB(펌웨어 변환 단위), 타임아웃 3초 권장
+/** 샘플 주기(ms). 약 844Hz(IMU 1.66kHz의 2샘플당 1개) */
+export const SWING_SAMPLE_PERIOD_MS = 1.18;
 /** 가속도 1 LSB당 mg */
 export const SWING_ACCEL_SCALE = 1;
 /** 자이로 1 LSB당 °/s */
 export const SWING_GYRO_SCALE = 0.1;
 /** 첫 청크 이후 이 시간 안에 다 못 받으면 확정 처리(ms) */
-export const SWING_TIMEOUT_MS = 2000;
+export const SWING_TIMEOUT_MS = 3000;
 
 /** 보관할 최대 레코드 수 */
 const MAX_RECORDS = 20;

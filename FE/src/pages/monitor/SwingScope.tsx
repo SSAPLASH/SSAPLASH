@@ -1,5 +1,6 @@
 // 원시 파형 탭: SWING 청크로 조립한 스윙 구간의 가속도·자이로 파형과 같은 hitSeq의 HIT 정보를 보여 준다(설계 3-8 c).
-// 단위·스케일은 EMB 회신 전 가정값이다. 판정 경로와 무관한 모니터 전용 화면이다.
+// 규격은 EMB 회신 3(2026-10-26): 844Hz·1.18ms 간격, 단위는 펌웨어 변환값(가속도 mg, 자이로 °/s). 청크 1개 = 샘플 1개라
+// 누락 음영은 연속된 누락 샘플을 한 구간으로 병합해 그린다. 판정 경로와 무관한 모니터 전용 화면이다.
 import { memo, useEffect, useState } from 'react';
 import { useRef } from 'react';
 import { encodeSetMode, StreamMode, type DecodedHit } from '@/input/stickProtocol';
@@ -29,7 +30,11 @@ function findHit(rows: readonly LogRow[], rec: SwingRecord): DecodedHit | null {
 
 function statusText(rec: SwingRecord): string {
   if (rec.complete) return '완성';
-  if (rec.timedOut) return `불완전 ${rec.missing.length}청크 누락`;
+  if (rec.timedOut) {
+    // 청크 1개 = 샘플 1개면 샘플 단위로, 아니면 청크 단위로 표기
+    const unit = rec.chunkCount > 0 && rec.sampleCount === rec.chunkCount ? '샘플' : '청크';
+    return `불완전 ${rec.missing.length}${unit} 누락`;
+  }
   return '대기 중';
 }
 
@@ -37,7 +42,7 @@ interface PlotOpts {
   series: { data: Float32Array; color: string }[];
   tMs: Float32Array;
   unit: string;
-  /** 누락 청크가 덮는 시간(ms) 구간 */
+  /** 누락 청크가 덮는 시간(ms) 구간(연속 누락은 한 구간으로 병합) */
   missingRanges: [number, number][];
   /** 위 단(가속도)이면 판정선·감속 구간, 아래 단(자이로)이면 peakSpeed 마커 */
   upper: boolean;
@@ -109,7 +114,7 @@ function plot(canvas: HTMLCanvasElement | null, o: PlotOpts): void {
   ctx.translate(10, top + ph / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center';
-  ctx.fillText(`${o.unit} (가정)`, 0, 0);
+  ctx.fillText(o.unit, 0, 0);
   ctx.restore();
   ctx.textAlign = 'start';
 
@@ -206,13 +211,27 @@ export const SwingScope = memo(function SwingScope({ assembler, version, selecte
       const n = target?.sampleCount ?? 0;
       const spc = target && target.chunkCount > 0 ? n / target.chunkCount : 0;
       // 누락 청크가 덮는 샘플 구간 → 시간(ms) 구간. 마지막 샘플이 0ms
-      const missingRanges: [number, number][] =
-        target && s && n > 0
-          ? target.missing.map((c) => [
-              s.tMs[Math.min(n - 1, Math.floor(c * spc))],
-              s.tMs[Math.min(n - 1, Math.ceil((c + 1) * spc) - 1)],
-            ])
-          : [];
+      const missingRanges: [number, number][] = [];
+      if (target && s && n > 0) {
+        // missing은 오름차순 chunkIdx. 이어지는 청크는 한 구간으로 합친다
+        let runStart = -1;
+        let prev = -2;
+        const flush = () => {
+          if (runStart < 0) return;
+          missingRanges.push([
+            s.tMs[Math.min(n - 1, Math.floor(runStart * spc))],
+            s.tMs[Math.min(n - 1, Math.ceil((prev + 1) * spc) - 1)],
+          ]);
+        };
+        for (const c of target.missing) {
+          if (c !== prev + 1) {
+            flush();
+            runStart = c;
+          }
+          prev = c;
+        }
+        flush();
+      }
       const tMs = s?.tMs ?? empty;
       const base = accRef.current ?? document.body;
       const cA = cssVar(base, '--miss', '#e05a5a');
@@ -295,7 +314,7 @@ export const SwingScope = memo(function SwingScope({ assembler, version, selecte
                 )}
               </div>
               <div className="faint small">
-                가로: 정지(0ms, HIT timestampUs 추정) 기준 ms · 회색 음영 = 누락 청크 · 단위·스케일은 가정값 · 위 ax(빨강) ay(청록) az(파랑),
+                가로: 정지(0ms, HIT timestampUs 추정) 기준 ms · 회색 음영 = 누락 샘플(연속 구간은 하나로) · 844Hz · 1.18ms 간격 · 단위는 펌웨어 변환값(EMB 회신 3) · 위 ax(빨강) ay(청록) az(파랑),
                 아래 gx gy gz 같은 색
               </div>
             </>
