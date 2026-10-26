@@ -24,7 +24,7 @@ import {
   toLoggedHit,
   type LoggedHit,
 } from '@/engine/playLog';
-import { pushTelemetry } from '@/engine/telemetry';
+import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/app/sources';
@@ -141,6 +141,7 @@ export function SheetPage() {
   useEffect(() => {
     setSoundOnHit(false);
     return () => {
+      diagSessionEnd('left');
       setSoundOnHit(true);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
@@ -214,7 +215,7 @@ export function SheetPage() {
         }
         hits.current.push(lh);
       }
-      pushTelemetry(hit, ev ? { judgement: ev.judgement, deltaMs: ev.deltaMs ?? undefined } : undefined);
+      reportHit(hit, ev, active ? ss : null);
     });
   }, []);
 
@@ -222,6 +223,7 @@ export function SheetPage() {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
     clock.pause(reason);
+    diagSessionPhase('pause');
     setPausedAtMs(clock.songTime());
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
@@ -235,6 +237,7 @@ export function SheetPage() {
     (ss: RhythmSession) => {
       if (finishing.current) return;
       finishing.current = true;
+      diagSessionEnd('finished');
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);
@@ -292,6 +295,7 @@ export function SheetPage() {
     clock.begin();
     setSyncInfo({ ...clock.sync });
     inputManager.setCandidateProvider((t) => ss.candidates(t));
+    diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setPlaySession(ss);
   }, [acc, resetRun]);
 
@@ -299,6 +303,7 @@ export function SheetPage() {
     const clock = clockRef.current;
     if (!clock || !readyRef.current || pauseRef.current === null) return;
     clock.resume();
+    diagSessionPhase('resume');
     setSyncInfo({ ...clock.sync });
     setPauseReason(null);
   }, []);
@@ -309,12 +314,14 @@ export function SheetPage() {
     if (!clock || !ss) return;
     // 재시작은 카운트인부터. 메트로놈 잠금은 유지한다
     clock.restart();
+    diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     resetRun(ss);
     setSyncInfo({ ...clock.sync });
   }, [resetRun]);
 
   /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
   const leave = useCallback(() => {
+    diagSessionEnd('left');
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -328,6 +335,7 @@ export function SheetPage() {
   }, [navigate, returnTo]);
 
   const toSelect = useCallback(() => {
+    diagSessionEnd('left');
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);

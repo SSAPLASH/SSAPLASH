@@ -3,6 +3,9 @@ import type { CalibrationProfile } from '@/domain/calibration';
 import { STICK_PADS } from '@/domain/pads';
 import type { PadTableEntry } from '@/input/stickProtocol';
 import type { TransportStats } from '@/input/InputSource';
+import type { AudioLatencyInput } from '@/monitor/health';
+import type { JudgeStats } from '@/monitor/judgeLog';
+import type { LatencyStats } from '@/monitor/latencyStats';
 import type { LogRow, MonitorStats } from '@/monitor/packetLog';
 
 /** 100ms마다 페이지가 한 번 찍는 화면용 스냅샷. 일시정지 중에는 갱신하지 않는다 */
@@ -18,6 +21,12 @@ export interface Snap {
   transport: TransportStats | null;
   /** 스틱별 시계 오프셋(ms). 동기화 전이면 null */
   offsets: [number | null, number | null];
+  /** ④ 판정·⑤ 채점 집계(judgeLog) */
+  judge: JudgeStats;
+  /** ⑥ 구간 지연 분위수(latencyStats) */
+  latency: LatencyStats;
+  /** 오디오 컨텍스트 지연. 오디오가 꺼져 있으면 null */
+  audio: AudioLatencyInput | null;
 }
 
 export type SendFn = (bytes: Uint8Array) => void;

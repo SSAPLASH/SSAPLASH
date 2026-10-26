@@ -1,6 +1,8 @@
 // 단계별 상태(ok·warn·bad·idle)와 이유 한 줄. 사이드바 상태 점·개요 상자·지표 카드가 이 결과를 그대로 그린다.
 // 입력은 페이지가 100ms마다 찍는 스냅샷뿐이고 새 통계는 만들지 않는다(설계 3-1·3-4).
 import type { TransportStats } from '@/input/InputSource';
+import type { ResolveStats, ScoreStats } from './judgeLog';
+import type { LatencyStats } from './latencyStats';
 import type { LogRow, MonitorStats } from './packetLog';
 import { median, slopeMsPerMin } from './syncTrend';
 
@@ -80,6 +82,36 @@ export const HEALTH_THRESHOLDS = {
     futureMaxWarnMs: 50,
     /** 데이터 나이 유효 시간(ms). SYNC 주기 10초의 3배 */
     validMs: 30_000,
+  },
+  /** ④ 판정 */
+  resolve: {
+    /** 펌웨어 pad ≠ FE 최종 pad 비율(%) 초과 시 주의. 최근 50건 */
+    padMismatchWarnPct: 10,
+    /** 바운더리 안 비율(%) 미만이면 주의 */
+    insideWarnPct: 80,
+    /** 패드 없음이 이 건수를 넘으면 주의(1건 이상) */
+    padNullWarn: 0,
+    /** 비율 지표를 판단할 최소 표본 수(구현 보강: 몇 건으로는 경고가 거짓으로 뜬다) */
+    minSamples: 5,
+    /** 데이터 나이 유효 시간(ms) */
+    validMs: 10_000,
+  },
+  /** ⑤ 채점. 데이터 나이로 idle 처리하지 않는다(세션 종료 뒤 값 고정) */
+  score: {
+    /** delta 평균 절댓값(ms) 초과 시 주의·이상(계통 오차). 최근 50판정 */
+    deltaMeanWarnMs: 10,
+    deltaMeanBadMs: 20,
+    /** delta 평균을 판단할 최소 판정 수 */
+    minJudgements: 5,
+  },
+  /** ⑥ 출력 */
+  output: {
+    /** 판정→오디오 p95(ms) 초과 시 주의 */
+    audioP95WarnMs: 20,
+    /** 센서→오디오 전체 p95(ms) 초과 시 주의 */
+    totalP95WarnMs: 40,
+    /** 데이터 나이 유효 시간(ms) */
+    validMs: 10_000,
   },
 } as const;
 
@@ -388,4 +420,213 @@ export function clockHealth(snap: HealthInput, now: number): StageHealth {
   const big = present.length ? present.reduce((a, b) => (Math.abs(b.v!) > Math.abs(a.v!) ? b : a)) : null;
   const lastUpdate = samples.length ? samples[samples.length - 1].t : null;
   return buildStage(items, lastUpdate, now, th.validMs, { value: big ? sg(big.v) : '–', unit: 'ms/분' });
+}
+
+// ───────────────────────── ④ 판정 ─────────────────────────
+
+export function resolveHealth(r: ResolveStats, now: number): StageHealth {
+  const th = HEALTH_THRESHOLDS.resolve;
+  const items: HealthItem[] = [];
+
+  // 패드 판정 출처 비율: 표시용
+  const by = r.judgedBy;
+  const byText = (['stick', 'pose', 'chart', 'key'] as const)
+    .filter((k) => by[k] > 0)
+    .map((k) => `${k} ${num((by[k] / r.judgedByN) * 100, 0)}`)
+    .join(' · ');
+  items.push({
+    key: 'judgedBy',
+    label: `패드 판정 출처 (최근 ${r.judgedByN}건)`,
+    value: r.judgedByN === 0 ? '–' : byText,
+    unit: r.judgedByN === 0 ? undefined : '%',
+    level: 'idle',
+    basis: r.judgedByN === 0 ? '데이터 없음: 판정된 타격이 없음' : '기준 없음(표시용)',
+  });
+
+  // 펌웨어 pad와 FE 최종 pad 불일치
+  const mm = r.padMismatch;
+  const mmLevel: HealthLevel =
+    mm.pct === null || mm.compared < th.minSamples ? 'idle' : mm.pct > th.padMismatchWarnPct ? 'warn' : 'ok';
+  items.push({
+    key: 'padMismatch',
+    label: '펌웨어 pad ≠ FE pad',
+    value: num(mm.pct, 0),
+    unit: mm.pct === null ? undefined : `% (${mm.mismatched}/${mm.compared})`,
+    level: mmLevel,
+    basis:
+      mm.compared === 0
+        ? '데이터 없음: HIT 패킷과 짝지을 seq가 없음(키보드·포인터는 제외)'
+        : mm.compared < th.minSamples
+          ? `표본 ${mm.compared}건 — ${th.minSamples}건 이상부터 판단`
+          : `${th.padMismatchWarnPct}% 초과 주의 (최근 50건 중 짝 찾은 것)`,
+    reason: mmLevel === 'warn' ? `펌웨어 pad와 FE pad 불일치 ${num(mm.pct, 0)}% (기준 ${th.padMismatchWarnPct}%)` : undefined,
+  });
+
+  // 바운더리 안 비율·판정 거리 중앙값
+  const ins = r.inside;
+  const insLevel: HealthLevel =
+    ins.pct === null || ins.n < th.minSamples ? 'idle' : ins.pct < th.insideWarnPct ? 'warn' : 'ok';
+  items.push({
+    key: 'inside',
+    label: '바운더리 안 비율 · 판정 거리 중앙값',
+    value: ins.pct === null ? '–' : `${num(ins.pct, 0)}% · ${num(ins.distanceMedian)}°`,
+    level: insLevel,
+    basis:
+      ins.n === 0
+        ? '데이터 없음: 자세 판정이 없음(스틱 pad를 그대로 쓰거나 키보드)'
+        : ins.n < th.minSamples
+          ? `표본 ${ins.n}건 — ${th.minSamples}건 이상부터 판단`
+          : `안 비율 ${th.insideWarnPct}% 미만 주의`,
+    reason: insLevel === 'warn' ? `바운더리 안 비율 ${num(ins.pct, 0)}% (기준 ${th.insideWarnPct}%)` : undefined,
+  });
+
+  // 패드 없음
+  const pn = r.padNull;
+  items.push({
+    key: 'padNull',
+    label: `패드 없음 (최근 ${pn.window}건)`,
+    value: pn.window === 0 ? '–' : String(pn.n),
+    unit: pn.window === 0 ? undefined : '건',
+    level: pn.window === 0 ? 'idle' : pn.n > th.padNullWarn ? 'warn' : 'ok',
+    basis: pn.window === 0 ? '데이터 없음: 판정된 타격이 없음' : '1건 이상 주의',
+    reason: pn.n > th.padNullWarn ? `패드 없음 ${pn.n}건 (기준 0건)` : undefined,
+  });
+
+  const headline = mm.pct === null ? null : { value: num(100 - mm.pct, 0), unit: '% 일치' };
+  return buildStage(items, r.lastT, now, th.validMs, headline);
+}
+
+// ───────────────────────── ⑤ 채점 ─────────────────────────
+
+const sgn = (v: number | null, digits = 1): string => (v === null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(digits)}`);
+
+export function scoreHealth(s: ScoreStats, now: number): StageHealth {
+  const th = HEALTH_THRESHOLDS.score;
+  const has = s.session !== null;
+  const noSession = '데이터 없음: 채점 세션이 없음';
+  const items: HealthItem[] = [];
+
+  items.push({
+    key: 'counts',
+    label: '판정 카운트',
+    value: has ? `P ${s.counts.PERFECT} · G ${s.counts.GOOD} · M ${s.counts.MISS}` : '–',
+    level: 'idle',
+    basis: has ? '기준 없음(표시용)' : noSession,
+  });
+  items.push({
+    key: 'score',
+    label: '점수 · 콤보',
+    value: has ? `${s.score}/${s.maxScore} · 콤보 ${s.combo} (최대 ${s.maxCombo})` : '–',
+    level: 'idle',
+    basis: has ? '기준 없음(표시용)' : noSession,
+  });
+  items.push({
+    key: 'stray',
+    label: '채보 밖 타격 (stray)',
+    value: has ? String(s.stray) : '–',
+    unit: has ? '건' : undefined,
+    level: 'idle',
+    basis: has ? '기준 없음(표시용, 감점 없음)' : noSession,
+  });
+
+  const d = s.delta;
+  const abs = d.mean === null ? null : Math.abs(d.mean);
+  const dLevel: HealthLevel =
+    abs === null || d.n < th.minJudgements
+      ? 'idle'
+      : abs > th.deltaMeanBadMs
+        ? 'bad'
+        : abs > th.deltaMeanWarnMs
+          ? 'warn'
+          : 'ok';
+  items.push({
+    key: 'delta',
+    label: `delta 평균 · 표준편차 (최근 ${d.n}판정)`,
+    value: d.mean === null ? '–' : `${sgn(d.mean)} · σ ${num(d.std)}`,
+    unit: d.mean === null ? undefined : 'ms',
+    level: dLevel,
+    basis:
+      d.n === 0
+        ? '데이터 없음: 매칭된 판정이 없음'
+        : d.n < th.minJudgements
+          ? `표본 ${d.n}건 — ${th.minJudgements}건 이상부터 판단`
+          : `평균 절댓값 ${th.deltaMeanWarnMs}ms 초과 주의 · ${th.deltaMeanBadMs}ms 초과 이상 (+면 늦음)`,
+    reason:
+      dLevel === 'warn' || dLevel === 'bad'
+        ? `delta 평균 ${sgn(d.mean)}ms (기준 ${dLevel === 'bad' ? th.deltaMeanBadMs : th.deltaMeanWarnMs}ms)`
+        : undefined,
+  });
+
+  // 연주 화면이 아니면(직접 연결) 채점 세션이 없다. 종료 뒤에는 값을 고정하고 이유에 종료를 적는다(설계 4-3)
+  const stage = buildStage(items, s.lastT, now, Infinity, d.mean === null ? null : { value: sgn(d.mean), unit: 'ms' });
+  if (!has) return { ...stage, level: 'idle', reason: '채점은 연주 창 따라보기(다음 단계)에서 보입니다' };
+  if (s.session?.status === 'ended') return { ...stage, reason: `세션 종료 · ${stage.reason}` };
+  return stage;
+}
+
+// ───────────────────────── ⑥ 출력 ─────────────────────────
+
+/** 오디오 컨텍스트 지연(ms). 페이지가 audioEngine.latency()에서 읽어 넘긴다 */
+export interface AudioLatencyInput {
+  baseMs: number;
+  outputMs: number;
+}
+
+export function outputHealth(lat: LatencyStats, audio: AudioLatencyInput | null, now: number): StageHealth {
+  const th = HEALTH_THRESHOLDS.output;
+  const items: HealthItem[] = [];
+  const pair = (q: { p50: number | null; p95: number | null }) => (q.p50 === null ? '–' : `${num(q.p50)} / ${num(q.p95)}`);
+  const noAudio = '데이터 없음: 오디오 예약 시각(tAudio)이 없음';
+
+  items.push({
+    key: 'recv',
+    label: '센서→수신 p50/p95',
+    value: pair(lat.recv),
+    unit: lat.recv.n === 0 ? undefined : 'ms',
+    level: 'idle',
+    basis: lat.recv.n === 0 ? '데이터 없음: 타격이 없음' : '기준 없음(표시용)',
+  });
+  items.push({
+    key: 'resolve',
+    label: '수신→판정 p50/p95',
+    value: pair(lat.resolve),
+    unit: lat.resolve.n === 0 ? undefined : 'ms',
+    level: 'idle',
+    basis: lat.resolve.n === 0 ? '데이터 없음: 타격이 없음' : '기준 없음(표시용)',
+  });
+
+  const a95 = lat.audio.p95;
+  const aHot = a95 !== null && a95 > th.audioP95WarnMs;
+  items.push({
+    key: 'audio',
+    label: '판정→오디오 p50/p95',
+    value: pair(lat.audio),
+    unit: lat.audio.n === 0 ? undefined : 'ms',
+    level: a95 === null ? 'idle' : aHot ? 'warn' : 'ok',
+    basis: a95 === null ? noAudio : `p95 ${th.audioP95WarnMs}ms 초과 주의`,
+    reason: aHot ? `판정→오디오 p95 ${num(a95)}ms (기준 ${th.audioP95WarnMs}ms)` : undefined,
+  });
+
+  const t95 = lat.total.p95;
+  const tHot = t95 !== null && t95 > th.totalP95WarnMs;
+  items.push({
+    key: 'total',
+    label: '전체(센서→오디오) p50/p95',
+    value: pair(lat.total),
+    unit: lat.total.n === 0 ? undefined : 'ms',
+    level: t95 === null ? 'idle' : tHot ? 'warn' : 'ok',
+    basis: t95 === null ? noAudio : `p95 ${th.totalP95WarnMs}ms 초과 주의`,
+    reason: tHot ? `전체 p95 ${num(t95)}ms (기준 ${th.totalP95WarnMs}ms)` : undefined,
+  });
+
+  items.push({
+    key: 'audioLatency',
+    label: '오디오 base · output latency',
+    value: audio ? `${num(audio.baseMs)} · ${num(audio.outputMs)}` : '–',
+    unit: audio ? 'ms' : undefined,
+    level: 'idle',
+    basis: audio ? '기준 없음(표시용)' : '데이터 없음: 오디오가 아직 켜지지 않음',
+  });
+
+  return buildStage(items, lat.lastT, now, th.validMs, a95 === null ? null : { value: num(a95), unit: 'ms p95' });
 }
