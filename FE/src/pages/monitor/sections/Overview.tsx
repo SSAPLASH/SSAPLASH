@@ -1,11 +1,11 @@
 // 개요: ①~⑥ 단계 상자를 가로로 늘어놓고 상태 색·대표 숫자·이유를 한눈에 보인다. 상자를 누르면 해당 섹션으로 간다.
 import type { StageHealth } from '@/monitor/health';
-import { LEVEL_LABEL, PENDING_REASON, type Section, type StageHealthMap } from '../layout/sections';
+import { LEVEL_LABEL, type Section, type StageHealthMap } from '../layout/sections';
 
 interface Box {
   key: Section;
   label: string;
-  stage: StageHealth | null;
+  stage: StageHealth;
 }
 
 /** 경과 ms → "N초 전". 없으면 대시 */
@@ -31,9 +31,9 @@ export function Overview({
     { key: 'transport', label: '① 전송', stage: health.transport },
     { key: 'sensor', label: '② 센서', stage: health.sensor },
     { key: 'clock', label: '③ 시계', stage: health.clock },
-    { key: 'resolve', label: '④ 판정', stage: null },
-    { key: 'score', label: '⑤ 채점', stage: null },
-    { key: 'output', label: '⑥ 출력', stage: null },
+    { key: 'resolve', label: '④ 판정', stage: health.resolve },
+    { key: 'score', label: '⑤ 채점', stage: health.score },
+    { key: 'output', label: '⑥ 출력', stage: health.output },
   ];
 
   return (
@@ -41,8 +41,8 @@ export function Overview({
       <h2 className="mon-section-title">개요</h2>
       <div className="mon-flow">
         {boxes.map((b) => {
-          const level = b.stage ? b.stage.level : 'idle';
-          const reason = b.stage ? b.stage.reason : PENDING_REASON;
+          const level = b.stage.level;
+          const reason = b.stage.reason;
           return (
             <button
               key={b.key}
@@ -56,8 +56,8 @@ export function Overview({
                 <span className="mon-flow-level">{LEVEL_LABEL[level]}</span>
               </div>
               <div className="mon-flow-value">
-                {b.stage?.headline ? b.stage.headline.value : '–'}
-                {b.stage?.headline && <span className="mon-metric-unit"> {b.stage.headline.unit}</span>}
+                {b.stage.headline ? b.stage.headline.value : '–'}
+                {b.stage.headline && <span className="mon-metric-unit"> {b.stage.headline.unit}</span>}
               </div>
               <div className="mon-flow-reason">{reason}</div>
             </button>
@@ -70,7 +70,8 @@ export function Overview({
         <span className="faint">
           {' '}
           · 마지막 갱신 전송 {ago(now, health.transport.lastUpdate)} · 센서 {ago(now, health.sensor.lastUpdate)} · 시계{' '}
-          {ago(now, health.clock.lastUpdate)} · 판정·채점·출력 –
+          {ago(now, health.clock.lastUpdate)} · 판정 {ago(now, health.resolve.lastUpdate)} · 채점{' '}
+          {ago(now, health.score.lastUpdate)} · 출력 {ago(now, health.output.lastUpdate)}
         </span>
       </div>
     </div>

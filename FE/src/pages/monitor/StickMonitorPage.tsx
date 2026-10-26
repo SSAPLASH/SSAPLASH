@@ -3,11 +3,15 @@
 // 판정·발음 경로(InputManager)에는 관여하지 않는다 — packetLog는 packetTap만 구독한다.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { sensorRegistry } from '@/app/sensorRegistry';
+import { audioEngine } from '@/audio/AudioEngine';
 import { layoutToProfile } from '@/domain/kitJudge';
+import { diagTap } from '@/engine/diagTap';
 import type { InputSource } from '@/input/InputSource';
 import { packetTap } from '@/input/packetTap';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
-import { clockHealth, sensorHealth, transportHealth } from '@/monitor/health';
+import { clockHealth, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
+import { JudgeLog } from '@/monitor/judgeLog';
+import { LatencyStatsLog } from '@/monitor/latencyStats';
 import { mockStick } from '@/monitor/mockStick';
 import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
@@ -22,7 +26,10 @@ import { fmt, type SendFn, type Snap } from './monitorTypes';
 import { ClockSection } from './sections/ClockSection';
 import { ControlSection } from './sections/ControlSection';
 import { Overview } from './sections/Overview';
+import { OutputSection } from './sections/OutputSection';
 import { PendingSection } from './sections/PendingSection';
+import { ResolveSection } from './sections/ResolveSection';
+import { ScoreSection } from './sections/ScoreSection';
 import { SensorSection } from './sections/SensorSection';
 import { TransportSection } from './sections/TransportSection';
 import './monitor.css';
@@ -51,6 +58,21 @@ let offAttach: (() => void) | null = null;
 
 /** 시계 섹션 추이 패널의 POSE 유실률 이력. 섹션을 오가도 이어지도록 모듈에 둔다 */
 const lossHistory = new LossHistory();
+
+/**
+ * ④ 판정·⑤ 채점·⑥ 출력 기록. 같은 창에서 diagTap을 구독해 채운다. recorder·lossHistory처럼 모듈에 둬
+ * 탭(섹션)을 오가도 이어진다. 구독은 첫 진입에서 한 번 걸고 떠나도 풀지 않는다(세션 동안 누적, 메모리는 링버퍼 상한).
+ */
+const judgeLog = new JudgeLog();
+const latencyLog = new LatencyStatsLog();
+let offDiag: (() => void) | null = null;
+function startDiag(): void {
+  if (offDiag) return;
+  offDiag = diagTap.subscribe((ev) => {
+    judgeLog.push(ev);
+    latencyLog.push(ev);
+  });
+}
 
 /** ParamStore가 항상 최신 send를 부르도록 두는 중간 상자. 소스·모의가 바뀌어도 ParamStore는 그대로 둔다 */
 const sendHolder: { fn: SendFn } = { fn: () => {} };
@@ -121,13 +143,19 @@ export function StickMonitorPage() {
     packetLog.noteAdoptedOffsets(now, offsets);
     const stats = packetLog.stats();
     lossHistory.push(now, [stats.perStick[0].poseSeqLoss.pct, stats.perStick[1].poseSeqLoss.pct]);
+    const rows = packetLog.rows().slice();
+    // 오디오 지연은 판정 경로가 아니라 여기서 읽는다(오디오가 꺼져 있으면 null)
+    const lat = audioEngine.latency();
     return {
       tick,
       now,
       stats,
-      rows: packetLog.rows().slice(),
+      rows,
       transport: src?.transportStats?.() ?? null,
       offsets,
+      judge: judgeLog.stats(rows),
+      latency: latencyLog.stats(),
+      audio: lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null,
     };
   }, []);
   const [snap, setSnap] = useState<Snap>(() => takeSnap(0, null));
@@ -138,6 +166,9 @@ export function StickMonitorPage() {
       transport: transportHealth(snap, snap.now),
       sensor: sensorHealth(snap, snap.now),
       clock: clockHealth(snap, snap.now),
+      resolve: resolveHealth(snap.judge.resolve, snap.now),
+      score: scoreHealth(snap.judge.score, snap.now),
+      output: outputHealth(snap.latency, snap.audio, snap.now),
     }),
     [snap],
   );
@@ -146,6 +177,7 @@ export function StickMonitorPage() {
   useEffect(() => {
     packetLog.configure({ clockOffsetOf: (s) => sourceRef.current?.clockOffsetOf?.(s) ?? null });
     packetLog.start();
+    startDiag();
   }, []);
 
   // 화면 갱신은 100ms 스냅샷으로 던진다. POSE가 50Hz×2로 와도 행마다 리렌더하지 않게 하려는 것이라
@@ -316,6 +348,8 @@ export function StickMonitorPage() {
           <button className="btn-ghost small" onClick={() => {
               packetLog.clear();
               lossHistory.clear();
+              judgeLog.clear();
+              latencyLog.clear();
             }}>
             지우기
           </button>
@@ -358,9 +392,9 @@ export function StickMonitorPage() {
           {section === 'clock' && (
             <ClockSection health={health.clock} snap={snap} loss={lossHistory} openTrendSignal={openTrendSignal} />
           )}
-          {section === 'resolve' && <PendingSection title="④ 판정" />}
-          {section === 'score' && <PendingSection title="⑤ 채점" />}
-          {section === 'output' && <PendingSection title="⑥ 출력" />}
+          {section === 'resolve' && <ResolveSection health={health.resolve} snap={snap} judgeLog={judgeLog} />}
+          {section === 'score' && <ScoreSection health={health.score} snap={snap} judgeLog={judgeLog} />}
+          {section === 'output' && <OutputSection health={health.output} snap={snap} latency={latencyLog} />}
           {section === 'trace' && <PendingSection title="타격 추적" />}
           {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} />}
         </div>
