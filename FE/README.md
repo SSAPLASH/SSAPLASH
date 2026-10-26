@@ -297,6 +297,16 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 4. `npm run dev` → 브라우저에서 **세팅**(`/setup`) → 스틱 연결 "WebSocket 브리지" 선택 → `/monitor/stick`
 5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`).
 
+### 2스틱 WS 연동
+
+브리지는 스틱 1개당 1개(포트 따로)다. 스틱 둘을 함께 쓰려면 브리지를 둘 띄운다.
+
+1. `python EMB/tools/ws_bridge.py COM5` (왼손, `ws://localhost:8765`)
+2. `python EMB/tools/ws_bridge.py COM8 --port 8766` (오른손)
+3. 세팅 → WebSocket 브리지 → **오른손 브리지 주소**에 `ws://localhost:8766` 입력 → 입력 방식을 다시 선택
+
+첫째 주소는 왼손, 둘째 주소는 오른손으로 고정한다. 링크마다 시계 동기화(SYNC)를 따로 하고, 명령은 손에 맞는 링크로 보낸다(손 지정이 없으면 두 링크 모두). 한쪽 링크만 연결에 실패하면 연결은 유지하고 상태 메시지로 경고한다. 오른손 주소를 비우면 지금처럼 링크 1개를 두 손이 함께 쓴다.
+
 ### 동작 원리
 
 - 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
