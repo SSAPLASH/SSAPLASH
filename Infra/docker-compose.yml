@@ -107,6 +107,8 @@ services:
       SWAGGER_ENABLED: "false"
       # 컨테이너 메모리(768m)의 일부만 힙으로 쓰도록 비율로 지정한다.
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60"
+      # 약점 구간 분석(AI 서버) 주소. 내부 네트워크에서만 호출한다. BE는 호출 실패 시 리포트를 정상 제공한다.
+      AI_ANALYSIS_BASE_URL: ${AI_ANALYSIS_BASE_URL:-http://ai-api:8000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -381,6 +383,45 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---- FE·AI (이미지 정의는 각 파트 폴더의 Dockerfile) ----
+  # 웹 화면(정적 파일). 포트를 공개하지 않는다. 앞단 nginx가 `/`를 이 컨테이너(8080)로 넘긴다.
+  # 빌드 때 고정되는 FE 환경 변수는 .env의 FE_VITE_*로 바꾼다(비워 두면 FE 기본값).
+  web:
+    build:
+      context: ../FE
+      args:
+        VITE_KEYBOARD_INPUT: ${FE_VITE_KEYBOARD_INPUT:-}
+        VITE_LOGIN_PROVIDERS: ${FE_VITE_LOGIN_PROVIDERS:-}
+        VITE_MONITOR: ${FE_VITE_MONITOR:-}
+    networks:
+      - internal
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # AI 서버(FastAPI). 포트를 공개하지 않는다. BE만 내부 네트워크(ai-api:8000)로 호출한다.
+  # 채보 워커(GPU)는 이 서비스가 아니라 별도 구성이다.
+  ai-api:
+    build:
+      context: ../AI
+    networks:
+      - internal
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     logging: *default-logging
 
