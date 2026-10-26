@@ -23,7 +23,7 @@
 
 ```
 AI/
-├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench 명령 진입점
+├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart 명령 진입점
 ├─ uv.lock               의존성 잠금
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
@@ -45,10 +45,13 @@ AI/
 │   │   │                run_support(둘이 같이 쓰는 CSV 쓰기·이어하기), mlflow_tracking(MLflow 기록)
 │   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
 │   │                    build_report(파일 생성)
-│   └─ chart/            채보 형식·패드 매핑 (예정)
+│   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
+│   │                    separation(음원 분리 SeparationModule), cli(ssaplash-chart 명령)
+│   └─ server/           AI 서버 진입점 app.py (FastAPI, /health)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
+├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml, 모델 없이 흐름만 확인하는 separation_mock.yaml)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py, pack_server_upload.py), 별도 환경 채보 스크립트 (transcribers_ext/)
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
@@ -98,6 +101,47 @@ uv run ssaplash-bench check-data configs/bench/datasets/musdb18hq_test.yaml conf
 ```
 
 Git Bash에서 한글이 깨지면 `PYTHONUTF8=1`을 앞에 붙인다.
+
+## 음원 분리 실행 (서비스 추론 모듈, S15P31A307-167)
+
+원곡 파일 하나를 드럼 트랙과 반주로 나눈다. 벤치마크에서 고른 BS Roformer SW를 벤치마크 어댑터 그대로 쓰므로 모델 실행 패키지가 필요하다 (`uv sync --extra models`). 가중치 약 700MB는 첫 실행 때 `data/models/bs_roformer_sw/`에 받는다.
+
+```bash
+uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
+# GPU가 없으면 cpu로 내려간다. 강제로 바꾸려면 --device cpu
+```
+
+출력 폴더에 세 파일이 생긴다. 반주는 원곡에서 드럼 트랙을 샘플 단위로 뺀 것이라 세 파일의 샘플 수와 시간축이 원곡과 같다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `drums.flac` | 드럼 트랙. 16비트 44.1kHz 스테레오 |
+| `accompaniment.flac` | 반주. 원곡 − 드럼 트랙 |
+| `separation.json` | 결과 메타. 길이 ms, 모델 이름·버전, 올리기·분리 시간 ms, 최대 GPU 메모리·RAM MB, `audio_time_origin` |
+
+설정은 `configs/chart/separation.yaml`에 있고 상대 경로는 `AI/` 기준이다.
+
+| 키 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `model_config` | `configs/bench/models/msst/bs_roformer_sw.yaml` | 분리 모델 yaml. 벤치마크 yaml을 그대로 가리키므로 대안 모델로 바꾸려면 경로만 바꾼다 |
+| `device` | `cuda` | 없으면 `cpu`로 내려간다 |
+| `output.format` | `flac` | `flac` 16비트 또는 `wav` PCM_16 |
+| `output.sample_rate` | 44100 | 출력 샘플레이트 |
+| `max_duration_sec` | 600 | 이보다 긴 입력은 입력 오류 |
+
+| 환경 변수 | 뜻 |
+| --- | --- |
+| `SSAPLASH_CHART_DEVICE` | `device` 값을 덮어쓴다 |
+| `SSAPLASH_MODELS_DIR` | 가중치 폴더. 기본 `data/models`. 벤치마크 어댑터도 같이 읽는다 |
+| `SSAPLASH_WORK_DIR` | `--out`이 없을 때 출력 폴더의 부모. `<WORK_DIR>/<원곡 파일 이름>/`에 쓴다 |
+
+종료 코드는 0 정상, 2 입력 오류, 3 모델 오류, 4 출력 오류, 1 설정·인자 오류다. 입력 오류는 못 읽는 파일·길이 초과·무음이고 모델을 돌리기 전에 난다. 모델 오류 중 GPU 메모리 부족만 재시도할 수 있는 것으로 표시한다. 파이썬에서 쓸 때는 `ssaplash_ai.chart.separation.SeparationModule`을 만들고 `load()` 한 번, `separate_file()` 곡마다, `close()` 순서로 부른다.
+
+모델 없이 흐름만 확인할 때는 mock 설정을 쓴다. 드럼은 원곡 × 0.5가 나온다.
+
+```bash
+uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/chart/separation_mock.yaml
+```
 
 ## 벤치마크 실행
 
@@ -419,4 +463,4 @@ rm -rf .git                  # 받은 뒤 안쪽 .git은 지운다. 남겨 두�
 ## 관련 문서
 
 - 공통 명세서: `Docs/Service Design/공통 명세서.md` (11장 AI 활용 계획, 15장 기술 검증 포인트)
-- Jira: 에픽 `[CHART] 채보` (S15P31A307-29). 분리 벤치마크(-101~-105)는 스토리 CHART-004 음원 드럼 분리 (S15P31A307-69), 채보 벤치마크(-106~-110)는 스토리 CHART-003 음원 → 채보 생성 (S15P31A307-62)
+- Jira: 에픽 `[CHART] 채보` (S15P31A307-29). 분리 벤치마크(-101~-105)는 스토리 CHART-004 음원 드럼 분리 (S15P31A307-69), 채보 벤치마크(-106~-110)는 스토리 CHART-003 음원 → 채보 생성 (S15P31A307-62). 서비스 추론 모듈은 분리(-167·-168)가 CHART-004, 채보(-169~-171)가 CHART-003
