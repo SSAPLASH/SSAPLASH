@@ -90,11 +90,11 @@ class KitPresetServiceTest {
 
 	private PresetRequest request(String name) {
 		return new PresetRequest(name, json.readTree("{\"SNARE\":{\"x\":0.4}}"), json.readTree("{\"soundSetId\":\"synth\"}"),
-				null, null);
+				null);
 	}
 
 	private static KitPreset preset() {
-		return KitPreset.create(USER, "원래", "{}", "{}", null, 1);
+		return KitPreset.create(USER, "원래", "{}", "{}", 1);
 	}
 
 }
