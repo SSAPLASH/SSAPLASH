@@ -1,0 +1,182 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, apiFetch } from './http';
+import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from './auth';
+
+type Handler = (url: string, init: RequestInit | undefined, call: number) => Response | Promise<Response>;
+
+function mockFetch(handler: Handler) {
+  let call = 0;
+  const fn = vi.fn(async (url: string, init?: RequestInit) => handler(url, init, call++));
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
+function json(status: number, body: unknown, type = 'application/json'): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': type } });
+}
+
+const problem = (status: number, code: string, detail: string, extra: Record<string, unknown> = {}) =>
+  json(status, { type: 'about:blank', title: code, status, detail, instance: '/api/x', code, ...extra }, 'application/problem+json');
+const tokenOk = (accessToken: string) => json(200, { accessToken, tokenType: 'Bearer', expiresIn: 1800 });
+
+function header(init: RequestInit | undefined, name: string): string | null {
+  return new Headers(init?.headers).get(name);
+}
+
+beforeEach(() => resetForTest());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('apiFetch 요청 구성', () => {
+  it('토큰이 있으면 Bearer 헤더를 붙이고 JSON을 돌려준다', async () => {
+    resetForTest('tok');
+    const fetch = mockFetch(() => json(200, { id: 7, nickname: '원빈' }));
+
+    const me = await apiFetch<{ id: number; nickname: string }>('/api/users/me');
+
+    expect(me).toEqual({ id: 7, nickname: '원빈' });
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('/api/users/me');
+    expect(header(init, 'Authorization')).toBe('Bearer tok');
+    expect(header(init, 'Accept')).toBe('application/json');
+    expect(init?.credentials).toBe('same-origin');
+    expect(init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('토큰이 없으면 Authorization 헤더가 없다', async () => {
+    const fetch = mockFetch(() => json(200, {}));
+    await apiFetch('/api/songs');
+    expect(header(fetch.mock.calls[0][1], 'Authorization')).toBeNull();
+  });
+
+  it('body가 있으면 JSON으로 직렬화하고 Content-Type을 붙인다', async () => {
+    const fetch = mockFetch(() => json(201, { id: 1 }));
+    await apiFetch('/api/presets', { method: 'POST', body: { name: '내 킷' } });
+    const init = fetch.mock.calls[0][1];
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe(JSON.stringify({ name: '내 킷' }));
+    expect(header(init, 'Content-Type')).toBe('application/json');
+  });
+
+  it('204·빈 본문은 undefined', async () => {
+    mockFetch(() => new Response(null, { status: 204 }));
+    await expect(apiFetch('/api/presets/1', { method: 'DELETE' })).resolves.toBeUndefined();
+  });
+});
+
+describe('apiFetch 오류', () => {
+  it('problem+json은 status·code·detail·errors·instance를 가진 ApiError', async () => {
+    mockFetch(() =>
+      problem(400, 'VALIDATION_FAILED', '입력값을 확인해 주세요.', { errors: [{ field: 'name', message: '공백일 수 없습니다' }] }),
+    );
+
+    const err = await apiFetch('/api/presets', { method: 'POST', body: {} }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      detail: '입력값을 확인해 주세요.',
+      instance: '/api/x',
+      errors: [{ field: 'name', message: '공백일 수 없습니다' }],
+    });
+    expect(err.message).toBe('입력값을 확인해 주세요.');
+  });
+
+  it('JSON이 아닌 오류 응답은 HTTP_ERROR', async () => {
+    mockFetch(() => new Response('<html>Bad Gateway</html>', { status: 502, headers: { 'Content-Type': 'text/html' } }));
+    const err = await apiFetch('/api/songs').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 502, code: 'HTTP_ERROR', errors: [], instance: null });
+  });
+
+  it('네트워크 실패는 status 0·code NETWORK', async () => {
+    mockFetch(() => {
+      throw new TypeError('Failed to fetch');
+    });
+    const err = await apiFetch('/api/songs').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 0, code: 'NETWORK' });
+  });
+
+  it('403은 그대로 ApiError로 전파한다 (refresh 안 함)', async () => {
+    resetForTest('tok');
+    const fetch = mockFetch(() => problem(403, 'FORBIDDEN', '권한이 없습니다.'));
+    await expect(apiFetch('/api/admin/x')).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('apiFetch 401 처리', () => {
+  it('401이면 refresh 한 번 뒤 새 토큰으로 같은 요청을 다시 보낸다', async () => {
+    resetForTest('expired');
+    const fetch = mockFetch((url, init) => {
+      if (url === '/api/auth/refresh') return tokenOk('fresh');
+      return header(init, 'Authorization') === 'Bearer fresh'
+        ? json(200, { ok: true })
+        : problem(401, 'UNAUTHORIZED', '액세스 토큰이 만료되었습니다.');
+    });
+
+    await expect(apiFetch('/api/users/me')).resolves.toEqual({ ok: true });
+
+    expect(fetch.mock.calls.map(([u]) => u)).toEqual(['/api/users/me', '/api/auth/refresh', '/api/users/me']);
+    expect(header(fetch.mock.calls[2][1], 'Authorization')).toBe('Bearer fresh');
+    expect(getAccessToken()).toBe('fresh');
+  });
+
+  it('refresh가 null이면(세션 없음) 원래 401을 ApiError로 던지고 재시도하지 않는다', async () => {
+    vi.useFakeTimers();
+    resetForTest('expired');
+    const fetch = mockFetch((url) =>
+      url === '/api/auth/refresh'
+        ? problem(401, 'UNAUTHORIZED', '다시 로그인해 주세요.')
+        : problem(401, 'UNAUTHORIZED', '액세스 토큰이 만료되었습니다.'),
+    );
+
+    const p = apiFetch('/api/users/me').catch((e) => e);
+    await vi.advanceTimersByTimeAsync(REFRESH_RETRY_DELAY_MS);
+    const err = await p;
+
+    expect(err).toMatchObject({ status: 401, code: 'UNAUTHORIZED', detail: '액세스 토큰이 만료되었습니다.' });
+    expect(fetch.mock.calls.map(([u]) => u)).toEqual(['/api/users/me', '/api/auth/refresh', '/api/auth/refresh']);
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('refresh가 throw하면(5xx·네트워크) 그 오류를 전파한다', async () => {
+    resetForTest('expired');
+    mockFetch((url) =>
+      url === '/api/auth/refresh' ? problem(500, 'INTERNAL_ERROR', '서버 오류') : problem(401, 'UNAUTHORIZED', '만료'),
+    );
+    await expect(apiFetch('/api/users/me')).rejects.toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
+  });
+
+  it('재시도는 한 번뿐이다: 새 토큰으로도 401이면 refresh를 다시 하지 않는다', async () => {
+    resetForTest('expired');
+    const fetch = mockFetch((url) => (url === '/api/auth/refresh' ? tokenOk('fresh') : problem(401, 'UNAUTHORIZED', '만료')));
+
+    await expect(apiFetch('/api/users/me')).rejects.toMatchObject({ status: 401 });
+
+    expect(fetch.mock.calls.map(([u]) => u)).toEqual(['/api/users/me', '/api/auth/refresh', '/api/users/me']);
+  });
+
+  it('/api/auth/ 아래 경로의 401은 refresh하지 않는다', async () => {
+    resetForTest('tok');
+    const fetch = mockFetch(() => problem(401, 'UNAUTHORIZED', '다시 로그인해 주세요.'));
+    await expect(apiFetch('/api/auth/logout', { method: 'POST' })).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('동시에 여러 요청이 401을 받아도 refresh는 한 번이다', async () => {
+    resetForTest('expired');
+    const fetch = mockFetch((url, init) => {
+      if (url === '/api/auth/refresh') return tokenOk('fresh');
+      return header(init, 'Authorization') === 'Bearer fresh' ? json(200, { url }) : problem(401, 'UNAUTHORIZED', '만료');
+    });
+
+    await Promise.all([apiFetch('/api/a'), apiFetch('/api/b'), apiFetch('/api/c')]);
+
+    expect(fetch.mock.calls.filter(([u]) => u === '/api/auth/refresh')).toHaveLength(1);
+  });
+});
