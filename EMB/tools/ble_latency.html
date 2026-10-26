@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLE 지연 측정</title>
+<!--
+  EMB/tools/ble_latency.html - 스틱 BLE 지연 측정 + 소리 (Web Bluetooth)
+  크롬/엣지에서 파일을 직접 열고 [연결] → SSAPLASH-STICK 선택.
+  - 왕복(RTT): SYNC를 0.2초마다 보내 SYNC_ACK까지 시간. 편도 ≈ RTT/2
+  - 정지 대비 도착: HIT 도착 시각 − 스틱이 멈춘 시각(패킷 timestamp를 시계 동기화로 변환)
+      음수면 스틱이 멈추기 전에 브라우저에 도착한 것
+  - 정지 → 소리 예상: 위 값 + 오디오 출력 지연(outputLatency)
+  프로토콜: 스틱 통신 프로토콜 v0.7
+-->
+<style>
+  :root { --bg:#16181d; --panel:#1f2229; --line:#2c303a; --text:#e8e6e1; --dim:#9aa0ab; --acc:#6c8cff; --good:#5fc28a; --warn:#e6b85c; --bad:#e0675a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, "Malgun Gothic", sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { margin:0 0 4px; font-size:24px; }
+  .sub { color:var(--dim); margin-bottom:18px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  #state { color:var(--dim); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card .k { color:var(--dim); font-size:13px; }
+  .card .v { font-size:24px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .card .s { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .pads { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:16px; }
+  .pad { background:var(--panel); border:2px solid var(--line); border-radius:12px; padding:16px 8px; text-align:center; transition:background .08s; }
+  .pad b { display:block; font-size:18px; }
+  .pad span { color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
+  .pad.on { background:var(--c); color:#111; }
+  .pad.on span { color:#222; }
+  .cols { display:grid; grid-template-columns:3fr 2fr; gap:12px; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } .pads { grid-template-columns:repeat(2, 1fr); } }
+  pre { background:#111317; border:1px solid var(--line); border-radius:10px; padding:10px 12px; height:300px; overflow:auto; margin:0; font:12.5px/1.45 ui-monospace, Consolas, monospace; white-space:pre; }
+  .h { font-size:13px; color:var(--dim); margin:0 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>BLE 지연 측정</h1>
+  <div class="sub">Feather nRF52840 Sense → Web Bluetooth → Web Audio · 프로토콜 v0.7</div>
+
+  <div class="row">
+    <button class="primary" id="btnConnect">연결</button>
+    <button id="btnDisconnect" disabled>끊기</button>
+    <button id="btnReset" disabled>정면 보정</button>
+    <button id="btnParams" disabled>파라미터 읽기</button>
+    <button id="btnClear">통계 초기화</button>
+    <button id="btnCsv">CSV 저장</button>
+    <span id="state">연결 안 됨</span>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">왕복 (RTT)</div><div class="v" id="rttMed">-</div><div class="s" id="rttSub">최소 - · p95 -</div></div>
+    <div class="card"><div class="k">편도 추정 (RTT/2)</div><div class="v" id="oneWay">-</div><div class="s" id="syncN">동기화 0회</div></div>
+    <div class="card"><div class="k">정지 대비 도착</div><div class="v" id="latMed">-</div><div class="s" id="latSub">p95 - · 타격 0</div></div>
+    <div class="card"><div class="k">정지 → 소리 예상</div><div class="v" id="soundMed">-</div><div class="s" id="audioLat">오디오 출력 -</div></div>
+    <div class="card"><div class="k">유실 (HIT seq)</div><div class="v" id="lost">0</div><div class="s" id="fw">펌웨어 -</div></div>
+  </div>
+
+  <div class="pads">
+    <div class="pad" id="p-HIHAT" style="--c:#e6b85c"><b>하이햇</b><span>-</span></div>
+    <div class="pad" id="p-SNARE" style="--c:#f2e8d5"><b>스네어</b><span>-</span></div>
+    <div class="pad" id="p-SMALL_TOM" style="--c:#e0875a"><b>스몰탐</b><span>-</span></div>
+    <div class="pad" id="p-FLOOR_TOM" style="--c:#c5563f"><b>플로어탐</b><span>-</span></div>
+  </div>
+
+  <div class="cols">
+    <div><p class="h">타격 (seq · 패드 · 세기 · 정지 대비 도착 ms)</p><pre id="hits"></pre></div>
+    <div><p class="h">LOG · 상태</p><pre id="log"></pre></div>
+  </div>
+</main>
+
+<script>
+const SVC    = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const NOTIFY = 'a7d50002-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const CTRL   = 'a7d50003-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const PADS = ['CRASH','HIHAT','SNARE','SMALL_TOM','MID_TOM','FLOOR_TOM','RIDE','KICK','HIHAT_PEDAL'];
+
+const $ = (id) => document.getElementById(id);
+let dev = null, ctrl = null, ac = null, syncTimer = null;
+let pending = new Map();          // t0 키(u32) → t0(ms, 소수)
+let syncs = [];                   // {t0, t1us, t2, rtt}
+let hits = [];                    // {seq, pad, vel, lat, recv}
+let lastSeq = -1, lost = 0;
+
+function median(a) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; }
+function pct(a, p) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; }
+const f1 = (x) => Number.isFinite(x) ? x.toFixed(1) : '-';
+function log(s) { const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
+
+/* 시계: 최근 동기화 중 왕복이 가장 짧은 샘플로 offset = 브라우저ms − 센서ms */
+function offset() {
+  const recent = syncs.slice(-40);
+  if (!recent.length) return null;
+  const best = recent.reduce((a, b) => (b.rtt < a.rtt ? b : a));
+  return (best.t0 + best.t2) / 2 - best.t1us / 1000;
+}
+
+/* ---------- 소리 ---------- */
+function noise(t, gain, dur, type, freq, q = 1) {
+  const n = ac.sampleRate * dur, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f).connect(g).connect(ac.destination); src.start(t); src.stop(t + dur);
+}
+function tone(t, gain, dur, f0, f1v) {
+  const o = ac.createOscillator(); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1v, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+}
+function play(pad, vel) {
+  if (!ac) return;
+  const t = ac.currentTime, v = 0.25 + 0.75 * vel / 127;
+  switch (pad) {
+    case 'HIHAT':     noise(t, 0.5 * v, 0.06, 'highpass', 7000); break;
+    case 'SNARE':     noise(t, 0.7 * v, 0.18, 'bandpass', 1800, 0.8); tone(t, 0.5 * v, 0.12, 220, 160); break;
+    case 'SMALL_TOM': tone(t, 0.9 * v, 0.28, 240, 140); break;
+    case 'MID_TOM':   tone(t, 0.95 * v, 0.32, 180, 105); break;
+    case 'FLOOR_TOM': tone(t, 1.0 * v, 0.40, 130, 70); break;
+    case 'CRASH': case 'RIDE': noise(t, 0.4 * v, 0.6, 'highpass', 5000); break;
+    default:          noise(t, 0.25 * v, 0.03, 'highpass', 2000);       // 판정 없음: 짧은 클릭
+  }
+}
+function audioOut() { return ac ? ((ac.outputLatency || 0) + (ac.baseLatency || 0)) * 1000 : NaN; }
+
+/* ---------- 수신 ---------- */
+function onPacket(ev) {
+  const recv = performance.now();
+  const dv = ev.target.value, b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  switch (b[0]) {
+    case 0x04: {                                   // SYNC_ACK
+      const t0k = dv.getUint32(2, true), t1us = dv.getUint32(6, true);
+      const t0 = pending.get(t0k);
+      if (t0 === undefined) return;
+      pending.delete(t0k);
+      syncs.push({ t0, t1us, t2: recv, rtt: recv - t0 });
+      if (syncs.length > 2000) syncs.shift();
+      break;
+    }
+    case 0x01: {                                   // HIT
+      const seq = b[2], ts = dv.getUint32(3, true), pad = PADS[b[7]] || '-';
+      const el = dv.getInt16(9, true) / 100, az = dv.getInt16(11, true) / 100, vel = b[15];
+      if (lastSeq >= 0) { const gap = (seq - lastSeq - 1 + 256) & 0xff; if (gap < 128) lost += gap; }
+      lastSeq = seq;
+      play(pad, vel);
+      const off = offset();
+      const lat = off === null ? NaN : recv - (ts / 1000 + off);
+      hits.push({ seq, pad, vel, el, az, lat, recv });
+      $('hits').textContent += `${String(seq).padStart(3)}  ${pad.padEnd(9)} ${String(vel).padStart(3)}  ${f1(lat).padStart(6)} ms   el ${el.toFixed(0)} az ${az.toFixed(0)}\n`;
+      $('hits').scrollTop = $('hits').scrollHeight;
+      const tile = $('p-' + pad);
+      if (tile) {
+        tile.querySelector('span').textContent = `세기 ${vel} · ${f1(lat)}ms`;
+        tile.classList.add('on'); setTimeout(() => tile.classList.remove('on'), 90);
+      }
+      break;
+    }
+    case 0x03: $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}`; break;
+    case 0x06: log(`PARAM 0x${b[2].toString(16).padStart(2, '0')} = ${dv.getInt16(3, true)}`); break;
+    case 0x7f: log('LOG ' + String.fromCharCode(...b.slice(2))); break;
+  }
+}
+
+/* ---------- 송신 ---------- */
+async function write(bytes) { if (ctrl) await ctrl.writeValueWithoutResponse(new Uint8Array(bytes)); }
+async function sendSync() {
+  const t0 = performance.now(), k = Math.floor(t0) >>> 0;
+  pending.set(k, t0);
+  if (pending.size > 50) pending.delete(pending.keys().next().value);
+  try { await write([0x10, k & 0xff, (k >> 8) & 0xff, (k >> 16) & 0xff, (k >>> 24) & 0xff]); } catch (e) { /* 연결 끊김 */ }
+}
+
+/* ---------- 화면 ---------- */
+function render() {
+  const rtt = syncs.slice(-300).map((s) => s.rtt);
+  $('rttMed').textContent = rtt.length ? f1(median(rtt)) + ' ms' : '-';
+  $('rttSub').textContent = `최소 ${f1(Math.min(...rtt))} · p95 ${f1(pct(rtt, 0.95))}`;
+  $('oneWay').textContent = rtt.length ? f1(median(rtt) / 2) + ' ms' : '-';
+  $('syncN').textContent = `동기화 ${syncs.length}회`;
+  const lat = hits.map((h) => h.lat).filter(Number.isFinite);
+  $('latMed').textContent = lat.length ? f1(median(lat)) + ' ms' : '-';
+  $('latSub').textContent = `p95 ${f1(pct(lat, 0.95))} · 타격 ${hits.length}`;
+  const out = audioOut();
+  $('audioLat').textContent = `오디오 출력 ${f1(out)} ms`;
+  $('soundMed').textContent = lat.length && Number.isFinite(out) ? f1(median(lat) + out) + ' ms' : '-';
+  $('lost').textContent = lost;
+}
+
+$('btnConnect').onclick = async () => {
+  if (!navigator.bluetooth) { alert('Web Bluetooth를 지원하지 않는 브라우저입니다. 크롬이나 엣지를 쓰세요.'); return; }
+  try {
+    ac = ac || new AudioContext({ latencyHint: 'interactive' });
+    await ac.resume();
+    $('state').textContent = '장치 선택...';
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+    dev.addEventListener('gattserverdisconnected', () => {
+      $('state').textContent = '끊김'; clearInterval(syncTimer); ctrl = null;
+      for (const b of ['btnDisconnect', 'btnReset', 'btnParams']) $(b).disabled = true;
+      $('btnConnect').disabled = false;
+    });
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    const nch = await svc.getCharacteristic(NOTIFY);
+    ctrl = await svc.getCharacteristic(CTRL);
+    nch.addEventListener('characteristicvaluechanged', onPacket);
+    await nch.startNotifications();
+    $('state').textContent = `연결됨 · ${dev.name || ''}`;
+    for (const b of ['btnDisconnect', 'btnReset', 'btnParams']) $(b).disabled = false;
+    $('btnConnect').disabled = true;
+    syncTimer = setInterval(sendSync, 200);
+    log('연결됨');
+  } catch (e) {
+    $('state').textContent = '연결 실패: ' + e.message;
+  }
+};
+$('btnDisconnect').onclick = () => dev && dev.gatt.disconnect();
+$('btnReset').onclick = () => write([0x13]);
+$('btnParams').onclick = () => write([0x17]);
+$('btnClear').onclick = () => { syncs = []; hits = []; lost = 0; lastSeq = -1; $('hits').textContent = ''; };
+$('btnCsv').onclick = () => {
+  let s = 'kind,seq,pad,vel,el,az,lat_ms,rtt_ms,recv_ms\n';
+  for (const h of hits) s += `hit,${h.seq},${h.pad},${h.vel},${h.el},${h.az},${h.lat.toFixed(2)},,${h.recv.toFixed(2)}\n`;
+  for (const x of syncs) s += `sync,,,,,,,${x.rtt.toFixed(2)},${x.t2.toFixed(2)}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([s], { type: 'text/csv' }));
+  a.download = `ble_latency_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`;
+  a.click();
+};
+setInterval(render, 250);
+</script>
+</body>
+</html>
