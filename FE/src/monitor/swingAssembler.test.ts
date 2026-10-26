@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DecodedSwing } from '@/input/stickProtocol';
-import { SWING_TIMEOUT_MS, SwingAssembler, toSeries } from './swingAssembler';
+import { SWING_SAMPLE_PERIOD_MS, SWING_TIMEOUT_MS, SwingAssembler, toSeries } from './swingAssembler';
 
 const SPC = 20;
 
@@ -102,8 +102,56 @@ describe('SwingAssembler', () => {
     expect(s.gy[0]).toBeCloseTo(-5, 4);
     expect(s.gz[0]).toBeCloseTo(123.4, 3);
     expect(s.tMs.length).toBe(20);
-    expect(s.tMs[0]).toBe(-19);
+    expect(s.tMs[0]).toBeCloseTo(-19 * 1.18, 4);
     expect(s.tMs[19]).toBe(0);
     expect(a.toSeries(rec).tMs[19]).toBe(0);
+  });
+
+  describe('EMB 회신 3 규격(청크 1개 = 샘플 1개)', () => {
+    /** 샘플 1개짜리 청크. 값은 idx+1 */
+    const one = (hitSeq: number, c: number, count = 169): DecodedSwing =>
+      ({
+        kind: 'swing',
+        recvTime: 0,
+        flags: 0,
+        role: 0,
+        magAnomaly: false,
+        ambiguous: false,
+        hitSeq,
+        chunkIdx: c,
+        chunkCount: count,
+        samples: new Int16Array(6).fill(c + 1),
+      }) as DecodedSwing;
+
+    it('상수는 1.18ms·3초', () => {
+      expect(SWING_SAMPLE_PERIOD_MS).toBe(1.18);
+      expect(SWING_TIMEOUT_MS).toBe(3000);
+    });
+
+    it('1샘플 청크 169개 → complete·sampleCount 169·tMs 약 −198.2~0', () => {
+      const a = new SwingAssembler();
+      let rec;
+      for (let c = 0; c < 169; c++) rec = a.push(one(3, c), 0, c);
+      expect(rec).toMatchObject({ complete: true, receivedChunks: 169, sampleCount: 169, missing: [] });
+      expect(rec!.samples.length).toBe(169 * 6);
+      expect(rec!.samples[168 * 6]).toBe(169);
+      const s = toSeries(rec!);
+      expect(s.tMs.length).toBe(169);
+      expect(s.tMs[0]).toBeCloseTo(-168 * 1.18, 3);
+      expect(s.tMs[0]).toBeGreaterThan(-199.2);
+      expect(s.tMs[0]).toBeLessThan(-198);
+      expect(s.tMs[168]).toBe(0);
+    });
+
+    it('타임아웃: 2.9초 미확정, 3.1초 확정', () => {
+      const a = new SwingAssembler();
+      for (let c = 0; c < 169; c++) if (c < 80 || c > 84) a.push(one(4, c), 0, 1000);
+      const rec = a.get('0-4')!;
+      expect(rec.missing).toEqual([80, 81, 82, 83, 84]);
+      expect(a.tick(1000 + 2900)).toBe(0);
+      expect(rec.timedOut).toBe(false);
+      expect(a.tick(1000 + 3100)).toBe(1);
+      expect(rec.timedOut).toBe(true);
+    });
   });
 });
