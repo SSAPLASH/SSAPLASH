@@ -1,0 +1,28 @@
+# Inverse Drum Machine (TASLP 2026, 9분류, StemGMD 합성 킷 학습). 별도 환경 .venv-idm + 저장소 클론
+# ext/inverse-drum-machine (README). 가중치는 저장소 pretrained/idm-44-train-kits에 포함(Apache-2.0).
+# 분류 이름: KD 킥, SD 스네어, HH_CHH 닫힌 하이햇, HH_OHH 열린 하이햇, TT_HMT 하이-미드 탐(=tom1),
+# TT_LMT 로우-미드 탐(=tom2), TT_HFT 하이 플로어 탐, CY_CR 크래시, CY_RD 라이드.
+# 우리 합성곡·GMD와 같은 계열 소리로 학습해 유리할 수 있음(결과 해석에 표기).
+name: idm
+adapter: external
+env_name: idm
+python_exe: .venv-idm/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/idm_transcribe.py
+variant: idm-44-train-kits
+options:
+  repo_dir: ext/inverse-drum-machine
+velocity: false
+input_sample_rate: 44100
+license_code: Apache-2.0
+license_weights: Apache-2.0 (저장소 포함)
+source_url: https://github.com/bernardo-torres/inverse-drum-machine
+labels:
+  KD: KICK
+  SD: SNARE
+  HH_CHH: HIHAT
+  HH_OHH: HIHAT
+  TT_HMT: HI_TOM
+  TT_LMT: MID_TOM
+  TT_HFT: FLOOR_TOM
+  CY_CR: CRASH
+  CY_RD: RIDE
