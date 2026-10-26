@@ -45,10 +45,13 @@ log "배포 시작: $SHA (직전 성공: ${PREV:-없음})"
 
 # 1. 소스를 고정 폴더로 복사한다. .env는 덮어쓰거나 지우지 않는다.
 #    --inplace: nginx 설정처럼 파일 하나를 컨테이너에 직접 연결한 경우 파일 교체로 연결이 끊기지 않게 한다.
-for d in Infra BE AI; do
+#    FE·AI는 서버에서 이미지를 빌드하므로 의존성·빌드 결과·가상환경은 복사하지 않는다.
+for d in Infra BE AI FE; do
   [ -d "$SRC/$d" ] || continue
   run mkdir -p "$DIR/$d"
-  run rsync -a --delete --inplace --exclude '.env' --exclude 'build/' --exclude '.gradle/' "$SRC/$d/" "$DIR/$d/"
+  run rsync -a --delete --inplace --exclude '.env' --exclude 'build/' --exclude '.gradle/' \
+    --exclude 'node_modules/' --exclude 'dist/' --exclude '.venv*/' --exclude 'mlruns/' --exclude 'ext/' --exclude '__pycache__/' \
+    "$SRC/$d/" "$DIR/$d/"
 done
 
 # 2. Compose를 갱신한다. 이미지는 서버에서 직접 빌드한다(레지스트리 없음).
@@ -61,16 +64,26 @@ run docker compose -p "$PROJECT" up -d --build
 # 3. 바뀐 nginx 설정을 읽게 한다. 설정에 오류가 있으면 여기서 실패한다.
 run docker compose -p "$PROJECT" exec -T nginx nginx -s reload
 
-# 4. 헬스체크: 앱 컨테이너가 healthy이고 nginx의 /health가 ok일 때까지 기다린다.
+# 4. 헬스체크: 앱 컨테이너(api, web, ai-api)가 모두 healthy이고 nginx의 /health가 ok일 때까지 기다린다.
+HEALTH_SERVICES="api web ai-api"
+
+# 서비스 하나가 healthy이면 0을 돌려준다.
+service_healthy() {
+  local id status=""
+  id="$(docker compose -p "$PROJECT" ps -q "$1" || true)"
+  [ -n "$id" ] || return 1
+  status="$(docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || true)"
+  [ "$status" = "healthy" ]
+}
+
 wait_healthy() {
   local deadline=$((SECONDS + TIMEOUT))
   while (( SECONDS < deadline )); do
-    local api status=""
-    api="$(docker compose -p "$PROJECT" ps -q api || true)"
-    if [ -n "$api" ]; then
-      status="$(docker inspect -f '{{.State.Health.Status}}' "$api" 2>/dev/null || true)"
-    fi
-    if [ "$status" = "healthy" ] && [ "$(curl -fsS --max-time 5 http://localhost/health 2>/dev/null || true)" = "ok" ]; then
+    local all=1 svc
+    for svc in $HEALTH_SERVICES; do
+      service_healthy "$svc" || { all=0; break; }
+    done
+    if [ "$all" = "1" ] && [ "$(curl -fsS --max-time 5 http://localhost/health 2>/dev/null || true)" = "ok" ]; then
       return 0
     fi
     sleep 5
@@ -79,7 +92,7 @@ wait_healthy() {
 }
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "[dry-run] 헬스체크: api가 healthy이고 http://localhost/health가 ok일 때까지 최대 ${TIMEOUT}초"
+  echo "[dry-run] 헬스체크: ${HEALTH_SERVICES}가 모두 healthy이고 http://localhost/health가 ok일 때까지 최대 ${TIMEOUT}초"
   echo "[dry-run] 성공하면 $DIR/.deployed에 $SHA 기록"
   exit 0
 fi
@@ -87,7 +100,7 @@ fi
 if ! wait_healthy; then
   log "헬스체크 실패: ${TIMEOUT}초 안에 정상이 되지 않았습니다."
   docker compose -p "$PROJECT" ps || true
-  docker compose -p "$PROJECT" logs --tail 40 api || true
+  docker compose -p "$PROJECT" logs --tail 40 $HEALTH_SERVICES || true
   log "직전 성공 커밋: ${PREV:-없음}. 롤백 잡으로 되돌릴 수 있습니다."
   exit 1
 fi
