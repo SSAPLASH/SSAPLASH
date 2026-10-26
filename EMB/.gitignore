@@ -19,3 +19,6 @@ Release/
 # OS
 .DS_Store
 Thumbs.db
+
+# Arduino IDE 2.x
+.theia/
