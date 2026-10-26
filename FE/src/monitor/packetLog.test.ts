@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PacketRecord } from '@/input/packetTap';
+import { encodeSetPadTable, type PadTableEntry } from '@/input/stickProtocol';
 import { buildBridgeStats, buildHit, buildLog, buildParamAck, buildPose, buildStatus, buildSyncAck } from './mockStick';
 import { PacketLog } from './packetLog';
 import { WRAP_US } from './tsUnwrap';
@@ -287,6 +288,27 @@ describe('SYNC 왕복 표본', () => {
     expect(log.stats(109).sync.samples).toHaveLength(1);
   });
 
+  it('SYNC 1건에 L·R ACK 각 1건 → 표본 2건(스틱별), unmatched 0', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 5000, 104, 0));
+    log.ingest(ack(100, 5000, 108, 1));
+    const s = log.stats(109).sync;
+    expect(s.samples.map((x) => [x.stick, x.rttMs])).toEqual([
+      [0, 4],
+      [1, 8],
+    ]);
+    expect(s.unmatched).toBe(0);
+  });
+
+  it('같은 스틱의 중복 ACK는 unmatched', () => {
+    log.ingest(out(100));
+    log.ingest(ack(100, 0, 104, 0));
+    log.ingest(ack(100, 0, 106, 0));
+    const s = log.stats(107).sync;
+    expect(s.samples).toHaveLength(1);
+    expect(s.unmatched).toBe(1);
+  });
+
   it('t0를 찍은 뒤 publish가 ms 경계를 넘어도(Serial writeChain) 바이트의 t0로 짝이 맞는다', () => {
     // 소스는 t0=100.9로 바이트를 만들고 3.5ms 뒤에 publish. floor(publish)=104 ≠ t0Ms=100
     log.ingest(out(100.9, 104.4));
@@ -369,5 +391,38 @@ describe('start·stop', () => {
   it('paramAck도 행으로 남는다', () => {
     log.ingest(rec(buildParamAck({ paramId: 0x20, value: 7 }), 0));
     expect(log.rows()[0].decoded).toMatchObject({ kind: 'paramAck', paramId: 0x20, value: 7 });
+  });
+});
+
+describe('송신 SET_PAD_TABLE 표 복원', () => {
+  const entry = (pad: PadTableEntry['pad'], radiusDeg = 10): PadTableEntry => ({ pad, elevationDeg: 5, azimuthDeg: -10, radiusDeg });
+  const send = (entries: PadTableEntry[], clearFirst: boolean, t = 0) => {
+    for (const p of encodeSetPadTable(entries, clearFirst)) log.ingest(rec(p, t, { dir: 'out' }));
+  };
+  const pads = ['SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE', 'CRASH', 'HIHAT'] as const;
+
+  it('clear 후 3+3+1 엔트리 3패킷 → 7개, 마지막 수신 시각', () => {
+    expect(log.stats(0).padTable).toEqual({ entries: [], t: null });
+    send(pads.map((p) => entry(p)), true, 42);
+    const t = log.stats(50).padTable;
+    expect(t.entries.map((e) => e.pad)).toEqual([...pads]);
+    expect(t.t).toBe(42);
+  });
+
+  it('같은 pad 재전송은 교체한다', () => {
+    send(pads.map((p) => entry(p)), true);
+    send([entry('SNARE', 20)], false);
+    const t = log.stats(0).padTable.entries;
+    expect(t).toHaveLength(7);
+    expect(t.find((e) => e.pad === 'SNARE')?.radiusDeg).toBe(20);
+  });
+
+  it('clear 패킷은 표를 비우고, 링버퍼에서 밀려나도 표는 유지된다', () => {
+    const small = new PacketLog(3);
+    for (const p of encodeSetPadTable([entry('SNARE')], true)) small.ingest(rec(p, 0, { dir: 'out' }));
+    for (let i = 0; i < 6; i++) small.ingest(hit(i, i + 1));
+    expect(small.stats(10).padTable.entries).toHaveLength(1);
+    for (const p of encodeSetPadTable([], true)) small.ingest(rec(p, 20, { dir: 'out' }));
+    expect(small.stats(20).padTable.entries).toHaveLength(0);
   });
 });
