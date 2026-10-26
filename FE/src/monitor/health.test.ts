@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { clockHealth, HEALTH_THRESHOLDS as TH, sensorHealth, transportHealth, type HealthInput, type StageHealth } from './health';
+import {
+  clockHealth,
+  HEALTH_THRESHOLDS as TH,
+  outputHealth,
+  resolveHealth,
+  scoreHealth,
+  sensorHealth,
+  transportHealth,
+  type HealthInput,
+  type StageHealth,
+} from './health';
+import type { ResolveStats, ScoreStats } from './judgeLog';
+import type { LatencyStats } from './latencyStats';
 import type { LogRow, MonitorStats, StickStats, SyncSample } from './packetLog';
 
 const NOW = 100_000;
@@ -291,5 +303,248 @@ describe('clockHealth', () => {
     expect(item(h, 'adopted').level).toBe('idle');
     expect(item(h, 'adopted').value).toBe('L 12.35 · R –');
     expect(h.level).toBe('ok');
+  });
+});
+
+// ───────────────────────── ④⑤⑥ ─────────────────────────
+
+const mkResolve = (over: Partial<ResolveStats> = {}): ResolveStats => ({
+  lastT: NOW - 1000,
+  total: 20,
+  judgedBy: { stick: 20, pose: 0, chart: 0, key: 0 },
+  judgedByN: 20,
+  padMismatch: { compared: 20, mismatched: 0, pct: 0 },
+  inside: { n: 20, insideCount: 20, pct: 100, distanceMedian: 3 },
+  padNull: { n: 0, window: 20 },
+  ...over,
+});
+
+describe('resolveHealth', () => {
+  const T = TH.resolve;
+
+  it('정상이면 ok와 agree % 대표 숫자', () => {
+    const h = resolveHealth(mkResolve({ padMismatch: { compared: 20, mismatched: 1, pct: 5 } }), NOW);
+    expect(h.level).toBe('ok');
+    expect(h.headline).toEqual({ value: '95', unit: '% 일치' });
+  });
+
+  it('펌웨어 pad 불일치 10% 경계(초과부터 warn)', () => {
+    const f = (mismatched: number) =>
+      resolveHealth(mkResolve({ padMismatch: { compared: 20, mismatched, pct: (mismatched / 20) * 100 } }), NOW);
+    expect(item(f(2), 'padMismatch').level).toBe('ok'); // 10%
+    expect(item(f(3), 'padMismatch').level).toBe('warn'); // 15%
+    expect(f(3).level).toBe('warn');
+    expect(f(3).reason).toMatch(/불일치 15% \(기준 10%\)/);
+  });
+
+  it('표본이 최소 건수 미만이면 idle과 사유', () => {
+    const h = resolveHealth(mkResolve({ padMismatch: { compared: T.minSamples - 1, mismatched: 2, pct: 50 } }), NOW);
+    expect(item(h, 'padMismatch').level).toBe('idle');
+    expect(item(h, 'padMismatch').basis).toMatch(/표본 4건/);
+  });
+
+  it('짝 지을 seq가 없으면 데이터 없음', () => {
+    const h = resolveHealth(mkResolve({ padMismatch: { compared: 0, mismatched: 0, pct: null } }), NOW);
+    expect(item(h, 'padMismatch').level).toBe('idle');
+    expect(item(h, 'padMismatch').basis).toMatch(/^데이터 없음/);
+    expect(h.headline).toBeNull();
+  });
+
+  it('바운더리 안 비율 80% 경계(미만부터 warn)', () => {
+    const f = (pct: number) => resolveHealth(mkResolve({ inside: { n: 20, insideCount: pct / 5, pct, distanceMedian: 6 } }), NOW);
+    expect(item(f(80), 'inside').level).toBe('ok');
+    expect(item(f(75), 'inside').level).toBe('warn');
+    expect(item(f(75), 'inside').value).toBe('75% · 6.0°');
+  });
+
+  it('패드 없음 1건이면 warn', () => {
+    expect(item(resolveHealth(mkResolve(), NOW), 'padNull').level).toBe('ok');
+    const h = resolveHealth(mkResolve({ padNull: { n: 1, window: 20 } }), NOW);
+    expect(item(h, 'padNull').level).toBe('warn');
+    expect(h.reason).toMatch(/패드 없음 1건/);
+  });
+
+  it('가장 나쁜 항목이 단계 이유가 된다', () => {
+    const h = resolveHealth(
+      mkResolve({ inside: { n: 20, insideCount: 10, pct: 50, distanceMedian: 9 }, padNull: { n: 2, window: 20 } }),
+      NOW,
+    );
+    expect(h.level).toBe('warn');
+    expect(h.reason).toMatch(/바운더리/); // 같은 등급이면 앞쪽 항목
+  });
+
+  it('데이터가 없으면 idle, 10초 넘으면 idle과 경과 이유(값은 유지)', () => {
+    const empty = resolveHealth(
+      mkResolve({
+        lastT: null,
+        total: 0,
+        judgedByN: 0,
+        padMismatch: { compared: 0, mismatched: 0, pct: null },
+        inside: { n: 0, insideCount: 0, pct: null, distanceMedian: null },
+        padNull: { n: 0, window: 0 },
+      }),
+      NOW,
+    );
+    expect(empty.level).toBe('idle');
+    expect(empty.reason).toBe('데이터 없음');
+    const stale = resolveHealth(mkResolve({ lastT: NOW - T.validMs - 1 }), NOW);
+    expect(stale.level).toBe('idle');
+    expect(stale.reason).toMatch(/초 전 마지막 데이터$/);
+    expect(item(stale, 'padNull').value).toBe('0');
+    expect(resolveHealth(mkResolve({ lastT: NOW - T.validMs }), NOW).level).toBe('ok');
+  });
+});
+
+const mkScore = (over: Partial<ScoreStats> = {}): ScoreStats => ({
+  session: {
+    mode: 'RHYTHM',
+    songId: 's',
+    title: '곡',
+    chartVersionId: null,
+    windows: { perfectMs: 25, goodMs: 60 },
+    audioOffsetMs: 0,
+    noteCount: 10,
+    status: 'running',
+    endReason: null,
+    startedAt: NOW - 20_000,
+  },
+  lastT: NOW - 500,
+  counts: { PERFECT: 5, GOOD: 2, MISS: 1 },
+  score: 620,
+  maxScore: 1000,
+  combo: 3,
+  maxCombo: 5,
+  stray: 1,
+  judgedCount: 8,
+  delta: { n: 20, mean: 2, std: 6 },
+  recent: [],
+  notes: null,
+  ...over,
+});
+const withDelta = (mean: number, n = 20) => mkScore({ delta: { n, mean, std: 5 } });
+
+describe('scoreHealth', () => {
+  it('delta 평균 절댓값 10ms·20ms 경계(초과부터)', () => {
+    expect(scoreHealth(withDelta(10), NOW).level).toBe('ok');
+    expect(scoreHealth(withDelta(10.1), NOW).level).toBe('warn');
+    expect(scoreHealth(withDelta(-10.1), NOW).level).toBe('warn');
+    expect(scoreHealth(withDelta(20), NOW).level).toBe('warn');
+    expect(scoreHealth(withDelta(20.1), NOW).level).toBe('bad');
+    expect(scoreHealth(withDelta(-25), NOW).level).toBe('bad');
+  });
+
+  it('표본이 최소 판정 수 미만이면 delta는 idle', () => {
+    const h = scoreHealth(withDelta(30, TH.score.minJudgements - 1), NOW);
+    expect(item(h, 'delta').level).toBe('idle');
+    expect(h.level).toBe('idle');
+  });
+
+  it('이유에 부호 있는 평균과 기준이 들어가고 대표 숫자는 평균 delta', () => {
+    const h = scoreHealth(withDelta(12.34), NOW);
+    expect(h.reason).toBe('delta 평균 +12.3ms (기준 10ms)');
+    expect(h.headline).toEqual({ value: '+12.3', unit: 'ms' });
+    expect(item(h, 'delta').value).toBe('+12.3 · σ 5.0');
+  });
+
+  it('세션 종료 뒤에는 idle로 바꾸지 않고 값을 고정, 이유에 세션 종료', () => {
+    const ended = mkScore({
+      session: { ...mkScore().session!, status: 'ended', endReason: 'finished' },
+      lastT: NOW - 600_000,
+      delta: { n: 20, mean: 15, std: 4 },
+    });
+    const h = scoreHealth(ended, NOW);
+    expect(h.level).toBe('warn');
+    expect(h.reason).toMatch(/^세션 종료 · delta 평균/);
+  });
+
+  it('세션이 없으면(직접 연결) idle과 안내, 항목은 데이터 없음', () => {
+    const h = scoreHealth(mkScore({ session: null, lastT: null, counts: { PERFECT: 0, GOOD: 0, MISS: 0 }, delta: { n: 0, mean: null, std: null } }), NOW);
+    expect(h.level).toBe('idle');
+    expect(h.reason).toMatch(/따라보기/);
+    expect(item(h, 'counts').basis).toMatch(/^데이터 없음/);
+    expect(item(h, 'delta').basis).toMatch(/^데이터 없음/);
+  });
+
+  it('세션이 있어도 판정이 아직 없으면 idle', () => {
+    const h = scoreHealth(mkScore({ delta: { n: 0, mean: null, std: null }, lastT: NOW }), NOW);
+    expect(h.level).toBe('idle');
+    expect(h.reason).toBe('데이터 없음');
+  });
+
+  it('카운트·점수·콤보·stray는 표시용이라 상태에 영향이 없다', () => {
+    const h = scoreHealth(mkScore(), NOW);
+    expect(item(h, 'counts').value).toBe('P 5 · G 2 · M 1');
+    expect(item(h, 'score').value).toBe('620/1000 · 콤보 3 (최대 5)');
+    expect(item(h, 'stray').value).toBe('1');
+    expect(h.level).toBe('ok');
+  });
+});
+
+const q = (p50: number | null, p95: number | null, n = 20) => ({ n, p50, p95 });
+const mkLat = (over: Partial<LatencyStats> = {}): LatencyStats => ({
+  recv: q(5, 9),
+  resolve: q(1, 2),
+  audio: q(3, 8),
+  total: q(9, 18),
+  lastT: NOW - 1000,
+  ...over,
+});
+
+describe('outputHealth', () => {
+  const T = TH.output;
+
+  it('판정→오디오 p95 20ms 경계(초과부터 warn)', () => {
+    expect(item(outputHealth(mkLat({ audio: q(3, 20) }), null, NOW), 'audio').level).toBe('ok');
+    const h = outputHealth(mkLat({ audio: q(3, 20.1) }), null, NOW);
+    expect(item(h, 'audio').level).toBe('warn');
+    expect(h.reason).toBe('판정→오디오 p95 20.1ms (기준 20ms)');
+  });
+
+  it('전체 p95 40ms 경계(초과부터 warn)', () => {
+    expect(item(outputHealth(mkLat({ total: q(9, 40) }), null, NOW), 'total').level).toBe('ok');
+    expect(item(outputHealth(mkLat({ total: q(9, 40.1) }), null, NOW), 'total').level).toBe('warn');
+  });
+
+  it('둘 다 넘으면 앞쪽(판정→오디오)이 이유가 된다', () => {
+    const h = outputHealth(mkLat({ audio: q(3, 30), total: q(9, 60) }), null, NOW);
+    expect(h.level).toBe('warn');
+    expect(h.reason).toMatch(/^판정→오디오/);
+  });
+
+  it('센서→수신·수신→판정은 표시용이라 아무리 커도 상태에 영향이 없다', () => {
+    const h = outputHealth(mkLat({ recv: q(80, 200), resolve: q(40, 90) }), null, NOW);
+    expect(item(h, 'recv').level).toBe('idle');
+    expect(item(h, 'resolve').level).toBe('idle');
+    expect(h.level).toBe('ok');
+  });
+
+  it('tAudio가 없으면 오디오·전체는 idle(데이터 없음)', () => {
+    const h = outputHealth(mkLat({ audio: q(null, null, 0), total: q(null, null, 0) }), null, NOW);
+    expect(item(h, 'audio').level).toBe('idle');
+    expect(item(h, 'audio').basis).toMatch(/^데이터 없음/);
+    expect(h.headline).toBeNull();
+  });
+
+  it('오디오 base·output latency를 표시한다(없으면 데이터 없음)', () => {
+    const on = outputHealth(mkLat(), { baseMs: 5.33, outputMs: 12 }, NOW);
+    expect(item(on, 'audioLatency').value).toBe('5.3 · 12.0');
+    expect(item(outputHealth(mkLat(), null, NOW), 'audioLatency').basis).toMatch(/^데이터 없음/);
+  });
+
+  it('대표 숫자는 판정→오디오 p95', () => {
+    expect(outputHealth(mkLat({ audio: q(3, 8.26) }), null, NOW).headline).toEqual({ value: '8.3', unit: 'ms p95' });
+  });
+
+  it('데이터 없음 idle, 10초 넘으면 idle과 경과 이유', () => {
+    const none = outputHealth(
+      mkLat({ recv: q(null, null, 0), resolve: q(null, null, 0), audio: q(null, null, 0), total: q(null, null, 0), lastT: null }),
+      null,
+      NOW,
+    );
+    expect(none.level).toBe('idle');
+    expect(none.reason).toBe('데이터 없음');
+    const stale = outputHealth(mkLat({ lastT: NOW - T.validMs - 1 }), null, NOW);
+    expect(stale.level).toBe('idle');
+    expect(stale.reason).toMatch(/초 전 마지막 데이터$/);
   });
 });
