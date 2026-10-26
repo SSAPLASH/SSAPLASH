@@ -178,13 +178,14 @@ const POSE_SEQ_SKIP_EVERY = 100;
 const HIT_SEQ_SKIP_EVERY = 10;
 const HIT_AMBIGUOUS_EVERY = 20;
 const HIT_TRUNCATED_EVERY = 50;
-/** 모의 SWING: 200샘플(1ms 가정)을 청크 10개 x 20샘플로 나눠 보낸다 (U16~U18 가정값) */
-const SWING_CHUNKS = 10;
-const SWING_CHUNK_SAMPLES = 20;
-const SWING_CHUNK_GAP_MS = 15;
-/** 이 번째마다 HIT의 SWING이 청크 7을 빼먹는다 */
+/** 모의 SWING: EMB 회신 3(2026-10-26) 규격. 청크 1개 = 샘플 1개(844Hz·1.18ms 간격), 200ms 창 약 169청크 */
+const SWING_CHUNKS = 169;
+/** 청크 송신 간격(ms). BLE 전송이 0.5~1초 걸린다는 회신 범위 안(169청크 약 0.68초) */
+const SWING_CHUNK_GAP_MS = 4;
+/** 이 번째마다 HIT의 SWING이 연속 5샘플(청크 80~84)을 빼먹는다 */
 const SWING_DROP_EVERY = 30;
-const SWING_DROP_CHUNK = 7;
+const SWING_DROP_FROM = 80;
+const SWING_DROP_TO = 84;
 /** 모의 SWING 파형의 자이로 환산(0.1 deg/s per LSB) */
 const GYRO_LSB_PER_DPS = 10;
 /** 명령 응답 간격(ms) */
@@ -338,9 +339,9 @@ export class MockStick {
     }
   }
 
-  /** 데이터 수집 모드의 SWING. 청크를 15ms 간격으로 순서대로 흘린다 */
+  /** 데이터 수집 모드의 SWING. 샘플 1개짜리 청크를 4ms 간격으로 순서대로 흘린다 */
   private emitSwing(role: Role, hitSeq: number, peakSpeedDps: number, dropChunk: boolean): void {
-    const n = SWING_CHUNKS * SWING_CHUNK_SAMPLES;
+    const n = SWING_CHUNKS;
     const peak = Math.min(32767, peakSpeedDps * GYRO_LSB_PER_DPS);
     const all = new Int16Array(n * 6);
     const noise = (): number => Math.round(rand(-30, 30));
@@ -358,8 +359,8 @@ export class MockStick {
       all[o + 5] = noise();
     }
     for (let c = 0; c < SWING_CHUNKS; c++) {
-      if (dropChunk && c === SWING_DROP_CHUNK) continue;
-      const samples = all.slice(c * SWING_CHUNK_SAMPLES * 6, (c + 1) * SWING_CHUNK_SAMPLES * 6);
+      if (dropChunk && c >= SWING_DROP_FROM && c <= SWING_DROP_TO) continue;
+      const samples = all.slice(c * 6, (c + 1) * 6);
       this.later(SWING_CHUNK_GAP_MS * (c + 1), () =>
         this.publish(buildSwing({ role, hitSeq, chunkIdx: c, chunkCount: SWING_CHUNKS, samples })),
       );
