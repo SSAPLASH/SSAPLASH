@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MOCK_DIR = ROOT / "configs" / "bench" / "transcribers" / "mock"
 SEP_MOCK_DIR = ROOT / "configs" / "bench" / "models" / "mock"
 IDENTITY = {
-    p: p for p in ("KICK", "SNARE", "HIHAT", "HI_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
+    p: p for p in ("KICK", "SNARE", "HIHAT", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
 }
 
 # 곡마다 다른 타격: 탐·심벌이 들어가야 8패드·5가지 차이가 보임
@@ -93,7 +93,7 @@ def synth(tmp_path: Path) -> dict:
             "mock_coarse",
             labels={
                 **IDENTITY,
-                "HI_TOM": "tom",
+                "SMALL_TOM": "tom",
                 "MID_TOM": "tom",
                 "FLOOR_TOM": "tom",
                 "CRASH": "cymbal",
@@ -168,7 +168,7 @@ def test_mock_어댑터로_결과_CSV와_라벨별_CSV가_찬다(synth: dict, tm
         and h["scheme"] == "pads"
         and h["windowMs"] == "50"
     ]
-    assert {h["label"] for h in truth_a_pads} == {"KICK", "SNARE", "HI_TOM", "CRASH"}
+    assert {h["label"] for h in truth_a_pads} == {"KICK", "SNARE", "SMALL_TOM", "CRASH"}
     assert all(h["tp"] == "1" and h["fp"] == "0" and h["fn"] == "0" for h in truth_a_pads)
 
 

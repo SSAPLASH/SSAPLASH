@@ -2,6 +2,8 @@
 
 run: drums-gmd, drums-mdb, drums-mdbu, drums-synth, mix-mdbu, mix-synth, sep-musdb-mdbu, sep-musdb-synth, sep-sw-mdbu, sep-sw-synth, ymt3-drums-gmd, ymt3-drums-mdb, ymt3-drums-mdbu, ymt3-drums-synth, ymt3-mix-mdbu, ymt3-mix-synth, ymt3-sep-musdb-mdbu, ymt3-sep-musdb-synth, ymt3-sep-sw-mdbu, ymt3-sep-sw-synth · 행 792개. F1은 묶음 안 모든 곡의 맞힌·헛것·놓친 개수를 더해 계산한 값(곡별 평균 아님)이고 오류가 난 곡은 집계에서 뺀다. 8패드 F1은 8패드를 다 내는 모델만, Perfect 폭 적중률은 ±25ms F1 ÷ ±50ms F1(8패드가 있으면 8패드 기준). 분리 후 F1 변화는 같은 모델의 정답 드럼(drums) 입력 대비 차이. RTF는 채보 시간 ÷ 곡 길이(로드·분리 제외, 곡 중앙값).
 
+패드 이름: 이 표의 `HI_TOM`은 2026-10-26 패드 이름 체계 변경(S15P31A307-170)으로 `SMALL_TOM`이 됐다. 표는 측정 당시 이름 그대로 둔다.
+
 ## gmd_test
 
 | 모델 | 입력 | 곡/실패 | 5가지 F1 | 8패드 F1 | 분리 후 F1 변화 | Perfect 폭 적중률 | RTF | 피크 GPU 메모리 (MB) | 가중치 라이선스 | GPU |

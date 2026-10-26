@@ -367,7 +367,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 
 ### 채보 벤치마크 정답 데이터 (S15P31A307-108)
 
-채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 와이어프레임과 같은 8종 `KICK, SNARE, HIHAT, HI_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
+채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 스틱 통신 프로토콜 v0.7과 같은 이름의 8종 `KICK, SNARE, HIHAT, SMALL_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`. 옛 `HI_TOM`은 2026-10-26부터 `SMALL_TOM`이며, 9번째 패드 `HIHAT_PEDAL`은 채보 모델이 못 내서 어휘에 없다), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
 
 | 설정 | 내용 | 역할 |
 | --- | --- | --- |
