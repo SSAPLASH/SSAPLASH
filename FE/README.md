@@ -282,8 +282,6 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 스틱이 보내는 패킷을 판정 경로와 별개로 그대로 들여다보는 페이지. 주소는 `/monitor/stick`이고 네비게이션에 없다. 빌드 플래그 `VITE_MONITOR=true`일 때만 라우트가 등록된다(미설정 빌드에는 페이지 자체가 없다).
 
-> 10/24 기준 README·플래그만 먼저 올라가 있다. 모니터 페이지(MR 2)가 `develop-FE`에 병합되기 전에는 `/monitor/stick`이 404다.
-
 ### EMB PC에서 띄우기 (BE 없이)
 
 1. Node 24, `cd FE && npm install`
@@ -307,12 +305,28 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 첫째 주소는 왼손, 둘째 주소는 오른손으로 고정한다. 링크마다 시계 동기화(SYNC)를 따로 하고, 명령은 손에 맞는 링크로 보낸다(손 지정이 없으면 두 링크 모두). 한쪽 링크만 연결에 실패하면 연결은 유지하고 상태 메시지로 경고한다. 오른손 주소를 비우면 지금처럼 링크 1개를 두 손이 함께 쓴다.
 
+### 화면 구성
+
+데이터 흐름 순서로 섹션을 나눴다. 왼쪽 사이드바 점은 단계 상태다(초록 정상 · 노랑 주의 · 빨강 이상 · 회색 데이터 없음, 점에 마우스를 올리면 이유).
+
+| 섹션 | 위 지표 카드(필수) | 아래 접힌 패널(상세) |
+| --- | --- | --- |
+| 개요 | ①~⑥ 단계 상자(상태·대표 숫자·이유, 누르면 그 섹션) | — |
+| ① 전송 | 마지막 수신 · 패킷 레이트 · POSE/HIT seq 유실 · CRC·재동기화 | 원시 hex·LOG, 브리지 통계 원본 |
+| ② 센서 | STATUS 경과 · 거른 스윙 · ambiguous 비율, 그 아래 HIT 표 | POSE·자세 평면, 원시 파형(SWING), 세기 산점 |
+| ③ 시계 | 채택 오프셋 · 오프셋 기울기 · SYNC rtt · 짝 실패 · futureMs | 동기화 추이 |
+| ④ 판정 · ⑤ 채점 · ⑥ 출력 · 타격 추적 | 다음 단계에서 연결(지금은 안내만) | — |
+| 제어 | 파라미터 표 · 명령 바 | — |
+
+- 상태 기준(임계값)은 `monitor/health.ts` 맨 위 `HEALTH_THRESHOLDS` 한 곳에 있다. 지금 값은 가정값이고 실기 기록을 보고 조정한다.
+- 마지막으로 연 섹션과 패널 펼침 상태는 브라우저에 기억한다. HIT 행을 누르면 ② 센서의 원시 파형 패널이 열리고 같은 hitSeq 스윙을 고른다.
+
 ### 동작 원리
 
 - 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
 - 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
-- 파라미터 탭: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
-- 추이·분포 탭(탭 6): 왼쪽은 동기화 추이(SYNC_ACK의 `t0Ms`로 요청과 짝지은 왕복마다 관측 오프셋·rtt를 점으로, 소스가 채택한 오프셋을 계단선으로, POSE 유실률을 회색 막대로 그리며 120초/10분 전환·기울기 ms/분 요약), 오른쪽은 HIT 최근 300건 세기 산점(velocity × peakSpeed/decel/swingMs, 스피어만 상관). 저장 없이 화면에서 바로 보는 용도이고 "시계 오프셋"·"SYNC_ACK 지연" 타일을 누르면 이 탭으로 간다.
+- 제어 섹션: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
+- 동기화 추이(③ 시계 패널): SYNC_ACK의 `t0Ms`로 요청과 짝지은 왕복마다 관측 오프셋·rtt를 점으로, 소스가 채택한 오프셋을 계단선으로, POSE 유실률을 회색 막대로 그리며 120초/10분 전환·기울기 ms/분 요약. 세기 산점(② 센서 패널)은 HIT 최근 300건의 velocity × peakSpeed/decel/swingMs와 스피어만 상관을 그린다. 개요의 ③ 상자를 누르면 동기화 추이 패널이 열린 채로 이동한다.
 - 모의 스틱: LOG `BOOT 0.1 mock000`, STATUS 5초, POSE 50Hz 13바이트(100번째마다 seq 1 건너뜀), HIT 1초(10번째마다 seq 건너뜀, 20번째마다 판정 애매, 50번째마다 19바이트 오류 패킷), `drop` LOG, BRIDGE_STATS 1초. GET_PARAMS·SET_PAD_TABLE 명령에는 PARAM_ACK로 답한다.
 
 ### 녹화 파일 (JSONL)
