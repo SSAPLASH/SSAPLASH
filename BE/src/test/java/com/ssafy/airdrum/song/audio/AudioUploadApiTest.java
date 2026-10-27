@@ -6,6 +6,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.ssafy.airdrum.withdrawal.WithdrawalService;
+
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,12 +26,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-@SpringBootTest(properties = "auth.jwt.secret=test-only-jwt-secret-0123456789ab")
+@SpringBootTest(
+        properties = {
+            "auth.jwt.secret=test-only-jwt-secret-0123456789ab",
+            "auth.refresh-token.store=memory"
+        })
 @AutoConfigureMockMvc
 class AudioUploadApiTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate db;
     @Autowired SourceCleanupWorker cleanup;
+    @Autowired WithdrawalService withdrawals;
     @MockitoBean AudioStore store;
     @MockitoSpyBean AudioProbe probe;
     long user;
@@ -205,8 +212,14 @@ class AudioUploadApiTest {
                                             .getStatus());
             try {
                 assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-                db.update(
-                        "UPDATE users SET status='WITHDRAWN',withdrawn_at=now() WHERE id=?", user);
+                withdrawals.withdraw(user);
+                assertThat(
+                                db.queryForObject(
+                                        "SELECT status='WITHDRAWN' AND withdrawn_at IS NOT NULL"
+                                                + " FROM users WHERE id=?",
+                                        Boolean.class,
+                                        user))
+                        .isTrue();
             } finally {
                 release.countDown();
             }
@@ -217,6 +230,10 @@ class AudioUploadApiTest {
                                 "SELECT count(*) FROM chart_jobs WHERE user_id=?",
                                 Integer.class,
                                 user))
+                .isZero();
+        assertThat(
+                        db.queryForObject(
+                                "SELECT count(*) FROM songs WHERE owner_id=?", Integer.class, user))
                 .isZero();
         assertThat(
                         db.queryForObject(
