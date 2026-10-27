@@ -24,7 +24,7 @@ from ssaplash_ai.bench.analysis import (
     search_bands,
 )
 from ssaplash_ai.bench.analysis.rule_eval import NONE_LABEL, group_confusion
-from ssaplash_ai.bench.analysis.rule_features import make_features
+from ssaplash_ai.bench.analysis.rule_features import input_as_feature, make_features
 from ssaplash_ai.bench.analysis.tom_pitch import leave_one_song_out, pitch_stats
 from ssaplash_ai.bench.cli import main, rules_params
 from ssaplash_ai.bench.datasets.pads import PADS, make_hits
@@ -430,3 +430,57 @@ def test_규칙값은_adtof_drumsep_모델만_기본값을_채워_기록한다(t
     assert "rules.adtof_drumsep.tom_bands" in two and not any(
         k.startswith("rules.adtof.") for k in two
     )
+
+
+def test_특징에_프레임별_점수와_트랙_전부를_저장하고_규칙이_탐_시각을_다시_고른다(tmp_path: Path):
+    # 정답 탐 0.7·0.9·1.1에 더해 0.75초에 작은 더블. ADTOF 기본 피크 고르기는 0.75를 놓침
+    act = np.zeros((int(SECONDS * 100), 5), np.float32)
+    for t, h in ((0.7, 0.9), (0.75, 0.4), (0.9, 0.9), (1.1, 0.9)):
+        act[int(round(t * 100)), 2] = h
+    hits = [*HITS, (0.75, "FLOOR_TOM", 80.0)]
+    f, hits_true = synthetic_features(hits)
+    f.peaks[47] = np.array([0.7, 0.9, 1.1])  # 저장소 기본 피크 고르기가 낸 시각
+    f.stems["kick"] = np.zeros_like(f.stems["toms"])
+    f.activations = act
+    g = _reload(tmp_path, f)
+    assert g.activations is not None and g.activations.shape == act.shape
+    assert set(g.stems) == {"toms", "crash", "ride", "kick"}
+    g.input_audio = input_as_feature(_mix_of(f))
+    songs = [("s", g, hits_true)]
+    base = eval_candidate(RuleCandidate("base"), "ds", songs).metrics()
+    assert base["tomMissed"] == 1 and base["tomRescued"] == 0
+    loose = eval_candidate(
+        RuleCandidate("loose", {"tom_peak_mode": "raw", "tom_threshold": 0.3}), "ds", songs
+    )
+    assert loose.metrics()["tomMissed"] == 0 and loose.metrics()["f1FLOOR_TOM"] == 1.0
+    assert loose.songs[0].tom_rescued == 0
+    # 옛 파일(점수 없음)은 그대로 읽히고 규칙을 넣어도 시각이 안 바뀜
+    f.activations = None
+    old = _reload(tmp_path, f)
+    assert old.activations is None
+    old.input_audio = g.input_audio
+    res = eval_candidate(
+        RuleCandidate("loose", {"tom_peak_mode": "raw"}), "ds", [("s", old, hits_true)]
+    )
+    assert res.metrics()["tomMissed"] == 1
+
+
+def test_곡_안_이름_바뀜을_맞은_것으로_치는_보조_지표(tmp_path: Path):
+    from ssaplash_ai.bench.analysis.rule_eval import GroupResult
+
+    g = GroupResult(matched=10, correct=2)
+    # 정답 MID를 전부 SMALL로, SMALL을 전부 MID로 붙인 곡: 일대일 대응으로 세면 전부 맞음
+    g.confusion = {
+        ("FLOOR_TOM", "FLOOR_TOM"): 2,
+        ("MID_TOM", "SMALL_TOM"): 5,
+        ("SMALL_TOM", "MID_TOM"): 3,
+    }
+    assert g.consistent_correct(("SMALL_TOM", "MID_TOM", "FLOOR_TOM")) == 10
+    g.confusion[("MID_TOM", "MID_TOM")] = 1  # 섞이면 더 좋은 대응을 고름
+    assert g.consistent_correct(("SMALL_TOM", "MID_TOM", "FLOOR_TOM")) == 10
+    # 후보 평가에 열이 남는다. 합성 정답은 전부 맞으니 1.0
+    f, hits_true = synthetic_features()
+    res = eval_candidate(RuleCandidate("base"), "ds", [("s", _reload(tmp_path, f), hits_true)])
+    m = res.metrics()
+    assert m["tomConsistentAcc"] == 1.0 and m["f1TomConsistent"] == 1.0
+    assert res.songs[0].tom_consistent == 3
