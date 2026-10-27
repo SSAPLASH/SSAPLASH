@@ -58,14 +58,20 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    # 비밀번호를 명령줄 인자(--requirepass)로 넘기면 `docker top`·`ps`에 그대로 보인다. 설정 파일(권한 600)에 쓰고 파일 경로만 넘긴다.
+    # 이미지의 시작 스크립트를 거쳐야 redis 사용자로 내려가 실행되므로(root 방지) `exec docker-entrypoint.sh`로 호출한다.
+    command:
+      - sh
+      - -c
+      - umask 077 && printf 'requirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec docker-entrypoint.sh redis-server /tmp/redis.conf
     volumes:
       - redisdata:/data
     networks:
       - internal
     mem_limit: 128m
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      # `-a 비밀번호`는 명령줄에 남으므로 환경변수 REDISCLI_AUTH로 넘긴다.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -381,13 +387,20 @@ services:
       - 0.0.0.0
       - --port
       - "5000"
-      - --backend-store-uri
-      - postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      # DB 주소(비밀번호 포함)는 명령줄이 아니라 아래 environment의 MLFLOW_BACKEND_STORE_URI로 넘긴다.
+      # 명령줄에 두면 `docker top`·`ps`에 비밀번호가 그대로 보인다.
       - --artifacts-destination
       - s3://airdrum-mlflow
       - --serve-artifacts
+      # 웹 서버 워커는 1개로 충분하다(트래픽이 적다).
+      - --workers
+      - "1"
     environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://seaweedfs:8333
+      # MLflow 3.x의 작업 실행기(huey 프로세스 약 120개, 메모리 1.6GiB)를 끈다. 이 서버는 실험 기록과 모델 저장만 하고 작업 큐가 필요 없다.
+      # 켜 두면 시작 직후 자원을 몰아 쓰며 컨테이너가 11초마다 재시작을 반복했다(Infra/TROUBLESHOOTING.md C10).
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
       AWS_ACCESS_KEY_ID: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_ACCESS_KEY를 지정하세요}
       AWS_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_SECRET_KEY를 지정하세요}
       AWS_DEFAULT_REGION: us-east-1
