@@ -12,6 +12,7 @@ import {
   CommandType,
 } from '@/input/stickProtocol';
 import { parseLogText, type ParsedLog } from './logParse';
+import { SyncPairer, syncKeyOf } from './syncPair';
 import { futureMs, toBrowserMs, TsUnwrap } from './tsUnwrap';
 import { median } from './syncTrend';
 
@@ -98,8 +99,6 @@ const WINDOW_MS = 1000;
 const FUTURE_KEEP = 50;
 const SYNC_KEEP = 600;
 const ADOPTED_KEEP = 200;
-/** 이 시간 넘게 ACK가 없는 SYNC는 유실로 보고 버린다 */
-const SYNC_PENDING_MS = 2000;
 const BRIDGE_STALL_MS = 3000;
 
 interface SeqEvent {
@@ -175,7 +174,7 @@ export class PacketLog {
   private i2c: number | null = null;
   private build: string | null = null;
   /** 송신한 SYNC. t = publish 시각(rtt·오프셋의 t0), key = 바이트 안의 u32 t0(SYNC_ACK t0Ms와 짝 맞추는 키) */
-  private pendingSync: { t: number; key: number; /** 이미 짝을 맺은 스틱(스틱별로 한 번씩만) */ matched: Set<0 | 1> }[] = [];
+  private pairer = new SyncPairer();
   private syncSamples: SyncSample[] = [];
   private adopted: { t: number; stick: 0 | 1; offsetMs: number }[] = [];
   private lastAdopted: [number | null, number | null] = [null, null];
@@ -256,13 +255,13 @@ export class PacketLog {
 
   private updateStats(row: LogRow, t1Ms: number | null): void {
     // 2초 넘은 pending은 유실 SYNC로 버린다
-    while (this.pendingSync.length > 0 && row.t - this.pendingSync[0].t > SYNC_PENDING_MS) this.pendingSync.shift();
+    this.pairer.expire(row.t);
     if (row.dir === 'out') {
       // 짝 키는 바이트 안의 u32 t0(펌웨어가 SYNC_ACK로 되돌려주는 값). publish 시각의 floor를 쓰면
       // 소스가 t0를 찍은 뒤 publish까지의 간격(Serial은 writeChain 대기로 수 ms)에 ms 경계를 넘어 어긋난다
-      if (row.outType === CommandType.SYNC && row.bytes.length >= 5) {
-        const key = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength).getUint32(1, true);
-        this.pendingSync.push({ t: row.t, key, matched: new Set() });
+      const syncKey = row.outType === CommandType.SYNC ? syncKeyOf(row.bytes) : null;
+      if (syncKey !== null) {
+        this.pairer.addOut(row.t, syncKey);
       } else if (row.outType === CommandType.SET_PAD_TABLE) {
         const pt = decodeSetPadTable(row.bytes);
         if (pt) {
@@ -317,13 +316,11 @@ export class PacketLog {
         // 되돌아온 t0Ms와 송신 바이트의 t0가 같고 이 스틱이 아직 짝짓지 않은 pending 중 가장 오래된 것.
         // 못 찾으면 표본 제외(FIFO 폴백 없음). SYNC 1건에 스틱마다 ACK가 오므로 pending은 짝지어도 2초 만료까지 둔다
         const stick = row.stick;
-        const pend = stick === null ? undefined : this.pendingSync.find((p) => p.key === d.t0Ms && !p.matched.has(stick));
-        if (!pend || stick === null || t1Ms === null) {
+        const t0 = stick === null || t1Ms === null ? null : this.pairer.match(d.t0Ms, stick);
+        if (t0 === null || stick === null || t1Ms === null) {
           this.syncUnmatched++;
           break;
         }
-        const t0 = pend.t;
-        pend.matched.add(stick);
         this.syncSamples.push({
           t: row.t,
           stick: stick,
@@ -493,7 +490,7 @@ export class PacketLog {
     this.dropEvents = [];
     this.i2c = null;
     this.build = null;
-    this.pendingSync = [];
+    this.pairer.clear();
     this.syncSamples = [];
     this.adopted = [];
     this.lastAdopted = [null, null];
