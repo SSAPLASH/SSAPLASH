@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arrivalLevel,
   clockHealth,
   HEALTH_THRESHOLDS as TH,
+  keyMetrics,
   outputHealth,
   resolveHealth,
   scoreHealth,
@@ -19,7 +21,8 @@ const NOW = 100_000;
 const stick = (over: Partial<StickStats> = {}): StickStats => ({
   hitSeqLoss: { window: 0, total: 0 },
   poseSeqLoss: { window: 0, total: 0, pct: null },
-  hitFuture: { median: null, max: null },
+  hitFuture: { median: null, max: null, min: null },
+  hitLoss1m: 0,
   statusAgeMs: null,
   lastStatus: null,
   hitCount: 0,
@@ -300,11 +303,30 @@ describe('clockHealth', () => {
     expect(item(mk([]), 'unmatched').level).toBe('idle');
   });
 
-  it('futureMs 최대 50ms 경계', () => {
-    const f = (max: number) =>
-      mk(samples(0), { perStick: [stick({ hitFuture: { median: 1, max } }), stick()] });
-    expect(item(f(50), 'future').level).toBe('ok');
-    expect(item(f(50.1), 'future').level).toBe('warn');
+  it('도착(수신−정지): 정상(−5)은 ok, 중앙값 0 초과 주의, −20 미만 주의, 최대 +20 초과 이상', () => {
+    // 내부 값 futureMs = −도착. 도착 중앙값 d, 도착 최대 m → future median −d, future min −m
+    const f = (d: number, m: number) =>
+      mk(samples(0), { perStick: [stick({ hitFuture: { median: -d, max: -d + 3, min: -m } }), stick()] });
+    expect(item(f(-5, -2), 'arrival')).toMatchObject({ level: 'ok', value: 'L -5.0/-2.0 · R –/–' });
+    expect(item(f(-11, 0), 'arrival').level).toBe('ok');
+    expect(item(f(0, 5), 'arrival').level).toBe('ok');
+    const late = f(0.1, 5);
+    expect(item(late, 'arrival').level).toBe('warn');
+    expect(late.reason).toBe('도착 L 0.1ms — 수신이 정지 시각보다 늦음 — 전송 지연');
+    expect(item(f(-20, 0), 'arrival').level).toBe('ok');
+    const early = f(-20.1, -15);
+    expect(item(early, 'arrival').level).toBe('warn');
+    expect(early.reason).toBe('도착 L -20.1ms — 너무 이름 — tsCorrUs·시계 확인');
+    expect(item(f(-5, 20), 'arrival').level).toBe('ok');
+    expect(item(f(-5, 20.1), 'arrival').level).toBe('bad');
+    expect(item(mk(samples(0)), 'arrival').level).toBe('idle');
+  });
+
+  it('arrivalLevel은 HIT 행 한 건에도 같은 기준을 낸다', () => {
+    expect(arrivalLevel(-5, -5).level).toBe('ok');
+    expect(arrivalLevel(1, 1).level).toBe('warn');
+    expect(arrivalLevel(25, 25).level).toBe('bad');
+    expect(arrivalLevel(null, null).level).toBe('idle');
   });
 
   it('데이터 없으면 idle, 마지막 SYNC가 30초보다 오래되면 idle과 경과 이유', () => {
@@ -562,5 +584,59 @@ describe('outputHealth', () => {
     const stale = outputHealth(mkLat({ lastT: NOW - T.validMs - 1 }), null, NOW);
     expect(stale.level).toBe('idle');
     expect(stale.reason).toMatch(/초 전 마지막 데이터$/);
+  });
+});
+
+describe('keyMetrics', () => {
+  const syncs = (stickIdx: 0 | 1, rtts: number[]): SyncSample[] =>
+    rtts.map((rttMs, i) => ({ t: NOW - (rtts.length - i) * 1000, stick: stickIdx, t0: 0, t1Ms: 0, rttMs, offsetObsMs: 0 }));
+  const snap = (over: Partial<HealthInput> = {}, stats: Partial<MonitorStats> = {}) => mkSnap({ stats: mkStats(stats), ...over });
+
+  it('스틱에서 받은 게 없으면 전 항목 –와 "스틱 없음"', () => {
+    const [l, r] = keyMetrics(snap(), NOW);
+    for (const m of [l.rttLast, l.arrival, l.hitLoss, l.rate, r.rttMedian]) expect(m).toMatchObject({ value: '–', level: 'idle', why: '스틱 없음' });
+  });
+
+  it('스틱이 있으나 동기화 전이면 SYNC·도착은 "동기화 전", 패킷/초는 값', () => {
+    const rows = [row(NOW - 100, 'pose'), row(NOW - 50, 'pose')];
+    const [l, r] = keyMetrics(snap({ rows }), NOW);
+    expect(l.rate).toMatchObject({ value: '2', level: 'idle' });
+    expect(l.rttLast).toMatchObject({ value: '–', why: '동기화 전' });
+    expect(l.arrival.why).toBe('동기화 전');
+    expect(r.rate.why).toBe('스틱 없음');
+  });
+
+  it('SYNC 왕복 최근·중앙값과 25ms 경계, 도착·유실 색', () => {
+    const [l, r] = keyMetrics(
+      snap(
+        { offsets: [0, 0] },
+        {
+          sync: { samples: [...syncs(0, [10, 12, 14]), ...syncs(1, [30, 30, 30])], adopted: [], lastLagMs: null, count: 6, unmatched: 0 },
+          perStick: [
+            stick({ hitCount: 4, hitFuture: { median: 5, max: 6, min: 4 }, hitLoss1m: 0 }),
+            stick({ hitCount: 4, hitFuture: { median: -5, max: -3, min: -8 }, hitLoss1m: 2 }),
+          ],
+        },
+      ),
+      NOW,
+    );
+    expect(l.rttLast).toMatchObject({ value: '14.0', level: 'ok' });
+    expect(l.rttMedian).toMatchObject({ value: '12.0', level: 'ok' });
+    expect(l.arrival).toMatchObject({ value: '-5.0', level: 'ok' });
+    expect(l.hitLoss).toMatchObject({ value: '0', level: 'ok' });
+    expect(r.rttLast.level).toBe('warn');
+    expect(r.arrival).toMatchObject({ value: '5.0', level: 'warn' });
+    expect(r.hitLoss).toMatchObject({ value: '2', level: 'warn' });
+  });
+
+  it('도착 중앙값은 futureMs 중앙값의 부호 반대(future +5 → 도착 −5, ok)', () => {
+    const [l] = keyMetrics(snap({ offsets: [0, 0] }, { perStick: [stick({ hitCount: 1, hitFuture: { median: 5, max: 6, min: 4 } }), stick()] }), NOW);
+    expect(l.arrival).toMatchObject({ value: '-5.0', level: 'ok' });
+  });
+
+  it('수신 패킷/초는 스틱별 1초 창만 센다', () => {
+    const rows = [row(NOW - 1500, 'pose'), row(NOW - 900, 'pose'), row(NOW - 10, 'hit', {})];
+    const [l] = keyMetrics(snap({ rows }), NOW);
+    expect(l.rate.value).toBe('2');
   });
 });

@@ -78,8 +78,15 @@ export const HEALTH_THRESHOLDS = {
     /** SYNC rtt 중앙값(ms) 초과 시 주의. 최근 rttRecent개. Feather fw 1.0 BLE 실측 중앙값(약 18ms)보다 여유를 둬 20→25 */
     rttWarnMs: 25,
     rttRecent: 20,
-    /** futureMs 최대(ms) 초과 시 주의 */
-    futureMaxWarnMs: 50,
+    /**
+     * 도착(수신−정지) = 수신 시각 − 보정 timestamp(ms, futureMs의 부호 반대). 스틱별 최근 HIT 50건 기준.
+     * 정상은 중앙값이 normalMin~normalMax(EMB 실측 −11 ~ −1ms). 중앙값 > normalMax 주의(늦음), 중앙값 < earlyWarn 주의(너무 이름),
+     * 최대 > lateBad 이상. normalMin~earlyWarn 사이(−20 ~ −11)는 정상으로 본다
+     */
+    arrivalNormalMinMs: -11,
+    arrivalNormalMaxMs: 0,
+    arrivalEarlyWarnMs: -20,
+    arrivalLateBadMs: 20,
     /** 데이터 나이 유효 시간(ms). SYNC 주기 10초의 3배 */
     validMs: 30_000,
   },
@@ -157,6 +164,22 @@ function lastInT(rows: readonly LogRow[], kinds?: readonly string[]): number | n
 
 /** 스틱 L·R 값 두 개를 "L a · R b"로 */
 const lr = (a: string, b: string): string => `L ${a} · R ${b}`;
+
+/** null 안전 부호 반전. −0은 0으로. futureMs → 도착(수신−정지) 변환에 쓴다 */
+export const negate = (v: number | null): number | null => (v === null ? null : v === 0 ? 0 : -v);
+
+/**
+ * 도착(수신−정지, ms) 상태. 중앙값이 없으면 idle. 사유는 상태가 ok가 아닐 때만 채운다.
+ * HIT 표 행 색에도 같은 기준을 쓴다(한 건의 값을 median·max 자리에 함께 넣는다).
+ */
+export function arrivalLevel(median: number | null, max: number | null): { level: HealthLevel; why?: string } {
+  const th = HEALTH_THRESHOLDS.clock;
+  if (median === null) return { level: 'idle' };
+  if (max !== null && max > th.arrivalLateBadMs) return { level: 'bad', why: `최대 ${num(max)}ms (기준 +${th.arrivalLateBadMs}ms 초과 이상)` };
+  if (median > th.arrivalNormalMaxMs) return { level: 'warn', why: `${num(median)}ms — 수신이 정지 시각보다 늦음 — 전송 지연` };
+  if (median < th.arrivalEarlyWarnMs) return { level: 'warn', why: `${num(median)}ms — 너무 이름 — tsCorrUs·시계 확인` };
+  return { level: 'ok' };
+}
 
 const STICKS = [0, 1] as const;
 const STICK_NAME = ['L', 'R'] as const;
@@ -426,19 +449,21 @@ export function clockHealth(snap: HealthInput, now: number): StageHealth {
     reason: stats.sync.unmatched > 0 ? `SYNC 짝 실패 ${stats.sync.unmatched}건 (기준 0건)` : undefined,
   });
 
-  // futureMs(timestamp − 수신 시각) 중앙값·최대
-  const fut = STICKS.map((s) => stats.perStick[s].hitFuture);
-  const futMaxes = fut.flatMap((f) => (f.max === null ? [] : [f.max]));
-  const futMax = futMaxes.length ? Math.max(...futMaxes) : null;
-  const futHot = futMax !== null && futMax > th.futureMaxWarnMs;
+  // 도착(수신−정지) 중앙값·최대. 내부 값 futureMs의 부호를 뒤집어 보인다(최대 도착 = −최소 futureMs)
+  const arr = STICKS.map((s) => {
+    const f = stats.perStick[s].hitFuture;
+    return { median: negate(f.median), max: negate(f.min) };
+  });
+  const arrEach = STICKS.map((s) => ({ s, ...arrivalLevel(arr[s].median, arr[s].max) }));
+  const arrWorst = pickWorst(arrEach);
   items.push({
-    key: 'future',
-    label: 'futureMs 중앙값/최대',
-    value: lr(`${num(fut[0].median)}/${num(fut[0].max)}`, `${num(fut[1].median)}/${num(fut[1].max)}`),
+    key: 'arrival',
+    label: '도착(수신−정지) 중앙값/최대',
+    value: lr(`${num(arr[0].median)}/${num(arr[0].max)}`, `${num(arr[1].median)}/${num(arr[1].max)}`),
     unit: 'ms',
-    level: futMax === null ? 'idle' : futHot ? 'warn' : 'ok',
-    basis: `최대 ${th.futureMaxWarnMs}ms 초과 주의 (최근 50건)`,
-    reason: futHot ? `futureMs 최대 ${num(futMax)}ms (기준 ${th.futureMaxWarnMs}ms)` : undefined,
+    level: arrWorst ? arrWorst.level : 'idle',
+    basis: `중앙값 ${th.arrivalNormalMinMs}~${th.arrivalNormalMaxMs}ms 정상 · 최대 +${th.arrivalLateBadMs}ms 초과 이상 (최근 50건)`,
+    reason: arrWorst ? `도착 ${STICK_NAME[arrWorst.s]} ${arrWorst.why}` : undefined,
   });
 
   // 개요 대표 숫자: 기울기 중 절댓값이 큰 쪽
@@ -655,4 +680,66 @@ export function outputHealth(lat: LatencyStats, audio: AudioLatencyInput | null,
   });
 
   return buildStage(items, lat.lastT, now, th.validMs, a95 === null ? null : { value: num(a95), unit: 'ms p95' });
+}
+
+// ───────────────────────── 핵심 수치 바 ─────────────────────────
+
+/** 핵심 수치 하나. 값이 없으면 value는 '–'이고 why에 이유를 둔다 */
+export interface KeyMetric {
+  value: string;
+  unit?: string;
+  level: HealthLevel;
+  /** 값이 없을 때의 이유 */
+  why?: string;
+}
+
+export interface StickKeyMetrics {
+  rttLast: KeyMetric;
+  rttMedian: KeyMetric;
+  arrival: KeyMetric;
+  hitLoss: KeyMetric;
+  rate: KeyMetric;
+}
+
+/** 수신 패킷/초를 셀 창(ms) */
+const RATE_WINDOW_MS = 1000;
+
+/**
+ * 핵심 수치 바용 스틱별 값·상태. 새 통계를 만들지 않고 packetLog stats·SYNC 표본·수신 행에서 읽어 기존 기준(HEALTH_THRESHOLDS)으로 색을 매긴다.
+ * 수신 패킷/초만 스틱별 값이 stats에 없어 행에서 1초 창으로 센다. 스틱에서 아무것도 받은 적이 없으면 전 항목이 '스틱 없음'.
+ */
+export function keyMetrics(snap: HealthInput, now: number): [StickKeyMetrics, StickKeyMetrics] {
+  const th = HEALTH_THRESHOLDS.clock;
+  const { stats, rows } = snap;
+  const rate: [number, number] = [0, 0];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (now - r.t > RATE_WINDOW_MS) break;
+    if (r.dir === 'in' && r.stick !== null) rate[r.stick]++;
+  }
+  const build = (s: 0 | 1): StickKeyMetrics => {
+    const st = stats.perStick[s];
+    const mine = stats.sync.samples.filter((x) => x.stick === s);
+    const present = st.hitCount > 0 || st.lastStatus !== null || mine.length > 0 || rate[s] > 0 || st.poseSeqLoss.total > 0;
+    const none = (why: string): KeyMetric => ({ value: '–', level: 'idle', why: present ? why : '스틱 없음' });
+    // SYNC 표본이 유효 시간보다 오래되면 값은 두고 상태만 idle로 둔다(단계 상태와 같은 규칙)
+    const last = mine.length ? mine[mine.length - 1] : null;
+    const fresh = last !== null && now - last.t <= th.validMs;
+    const rttMed = median(mine.slice(-th.rttRecent).map((x) => x.rttMs));
+    const syncWhy = '동기화 전';
+    const f = st.hitFuture;
+    const aMed = negate(f.median);
+    const aLvl = arrivalLevel(aMed, negate(f.min));
+    return {
+      rttLast: last
+        ? { value: num(last.rttMs), unit: 'ms', level: fresh ? (last.rttMs > th.rttWarnMs ? 'warn' : 'ok') : 'idle' }
+        : none(syncWhy),
+      rttMedian:
+        rttMed === null ? none(syncWhy) : { value: num(rttMed), unit: 'ms', level: fresh ? (rttMed > th.rttWarnMs ? 'warn' : 'ok') : 'idle' },
+      arrival: aMed === null ? none(snap.offsets[s] === null ? syncWhy : 'HIT 없음') : { value: num(aMed), unit: 'ms', level: aLvl.level },
+      hitLoss: st.hitCount === 0 ? none('HIT 없음') : { value: String(st.hitLoss1m), unit: '건', level: st.hitLoss1m > HEALTH_THRESHOLDS.transport.hitLossWarn ? 'warn' : 'ok' },
+      rate: present ? { value: String(rate[s]), unit: '/s', level: 'idle' } : none(''),
+    };
+  };
+  return [build(0), build(1)];
 }
