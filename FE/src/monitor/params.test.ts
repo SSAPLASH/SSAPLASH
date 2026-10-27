@@ -156,6 +156,33 @@ describe('적용 확인', () => {
   });
 });
 
+describe('요청 없는 0x22(스틱 버튼 보정)', () => {
+  it('열린 창이 없으면 버튼 항목 1건', () => {
+    store.onPacket(ack(0x22, 1234));
+    expect(store.confirmations()).toHaveLength(1);
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'resetPose', value: 1234, open: false, source: 'button' });
+  });
+
+  it('창이 있으면 기존 동작(명령 응답), 버튼 항목은 늘지 않는다', () => {
+    store.expectConfirmation('resetPose');
+    store.onPacket(ack(0x22, -500));
+    expect(store.confirmations()).toHaveLength(1);
+    expect(store.confirmations()[0]).toMatchObject({ value: -500, source: 'command' });
+  });
+
+  it('창이 닫힌 뒤의 0x22는 버튼 항목으로 쌓이고, 0x20·0x21은 계속 버린다', () => {
+    store.expectConfirmation('resetPose');
+    vi.advanceTimersByTime(600);
+    store.onPacket(ack(0x22, 7));
+    store.onPacket(ack(0x21, 7));
+    store.onPacket(ack(0x20, 7));
+    const c = store.confirmations();
+    expect(c).toHaveLength(2);
+    expect(c[0]).toMatchObject({ source: 'button', value: 7 });
+    expect(c[1]).toMatchObject({ source: 'command', value: null, open: false });
+  });
+});
+
 describe('reset', () => {
   it('unknown으로 돌아가고 타이머를 정리한다', () => {
     store.load();

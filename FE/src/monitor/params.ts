@@ -33,6 +33,8 @@ export interface Confirmation {
   /** 500ms 확인 창이 아직 열려 있는지(대기 중) */
   open: boolean;
   t: number;
+  /** 'command'는 명령 바 요청에 대한 응답, 'button'은 요청 없이 온 스틱 버튼 보정(USER 버튼 → RESET_POSE) */
+  source: 'command' | 'button';
 }
 
 export interface ParamStoreDeps {
@@ -132,7 +134,7 @@ export class ParamStore {
 
   /** 최신 먼저, 최대 20개 */
   confirmations(): Confirmation[] {
-    return this.confirms.slice(0, MAX_CONFIRMATIONS).map(({ kind, value, t, open }) => ({ kind, value, t, open }));
+    return this.confirms.slice(0, MAX_CONFIRMATIONS).map(({ kind, value, t, open, source }) => ({ kind, value, t, open, source }));
   }
 
   private clearLoadTimer(): void {
@@ -198,6 +200,11 @@ export class ParamStore {
       if (entry) {
         entry.value = p.value;
         this.changed();
+      } else if (confirmKind === 'resetPose') {
+        // 요청 없이 온 0x22: 스틱 USER 버튼으로 정면 보정이 일어났다(Feather fw 1.0)
+        this.confirms.unshift({ kind: 'resetPose', value: p.value, t: this.deps.now(), open: false, source: 'button' });
+        if (this.confirms.length > MAX_CONFIRMATIONS) this.confirms.length = MAX_CONFIRMATIONS;
+        this.changed();
       }
       return;
     }
@@ -247,7 +254,7 @@ export class ParamStore {
 
   /** 명령 바가 SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE를 보낸 직후 호출. 500ms 창을 연다 */
   expectConfirmation(kind: Confirmation['kind']): void {
-    const entry: ConfirmEntry = { kind, value: null, t: this.deps.now(), open: true };
+    const entry: ConfirmEntry = { kind, value: null, t: this.deps.now(), open: true, source: 'command' };
     this.confirms.unshift(entry);
     if (this.confirms.length > MAX_CONFIRMATIONS) this.confirms.length = MAX_CONFIRMATIONS;
     const timer = this.deps.setTimeout(() => {
