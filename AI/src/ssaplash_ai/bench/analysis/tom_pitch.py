@@ -1,6 +1,6 @@
 """정답 탐 타격의 음높이 분석과 고정 경계 후보 (탐·크래시 규칙 설계 4-2절 1~2, 4-4절). S15P31A307-163.
 
-저장 특징의 toms 트랙에서 정답 탐 타격(SMALL_TOM·MID_TOM·FLOOR_TOM) 직후 구간의 음높이(스펙트럼 최대 봉우리,
+저장 특징의 toms 트랙에서 정답 탐 타격(SMALL_TOM·MID_TOM·FLOOR_TOM) 직후 구간의 음높이(스펙트럼 최대 피크,
 규칙 함수 estimate_f0 그대로)를 뽑아
 - 데이터셋별·탐별 분포(중앙값·사분위), 곡별 중앙값의 편차(드럼 세트마다 얼마나 다른지)
 - 고정 경계 후보: 현재값, 묶음 하나에 맞춘 값, 여러 묶음 절충값. 경계 둘(lo < hi)을 격자로 훑어
@@ -26,9 +26,8 @@ from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC
 from ssaplash_ai.bench.runner.run_support import Logger
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
     ADTOF_TOM,
-    _window,
-    estimate_f0,
     rules_with_defaults,
+    tom_f0_at,
     tom_gate_ratios,
     tom_pad,
 )
@@ -59,9 +58,7 @@ def true_tom_f0(
     out = []
     for row in hits_true[np.isin(hits_true["pad"], list(TOM_PADS))]:
         t = float(row["time_sec"])
-        seg = _window(toms, features.sample_rate, t, r["window_ms"])
-        f0 = estimate_f0(seg, features.sample_rate, r["tom_fmin"], r["tom_fmax"])
-        out.append((str(row["pad"]), t, f0))
+        out.append((str(row["pad"]), t, tom_f0_at(toms, features.sample_rate, t, r)))
     return out
 
 
@@ -189,12 +186,7 @@ def predicted_tom_table(
             continue
         sr = features.sample_rate
         toms = features.stems.get(r["stems"]["toms"])
-        f0 = [
-            estimate_f0(_window(toms, sr, t, r["window_ms"]), sr, r["tom_fmin"], r["tom_fmax"])
-            if toms is not None
-            else math.nan
-            for t in times
-        ]
+        f0 = [tom_f0_at(toms, sr, t, r) for t in times]
         if features.input_audio is not None:
             ratios = tom_gate_ratios(times, toms, features.input_audio, sr, gate_window)
         else:
