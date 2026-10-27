@@ -41,7 +41,7 @@ export interface HealthInput {
 }
 
 // 임계값 표. 가정값이며 실기 연동 뒤 이 표에서만 조정한다(U2·R1).
-// BLE 실측 SYNC rtt 중앙값 18.4ms가 rtt 기준(20ms)에 근접해 1순위 조정 대상이다.
+// BLE 실측 SYNC rtt 중앙값 18.4ms에 맞춰 rtt 기준을 25ms로 올렸다(U8 부분 닫힘). 여전히 1순위 조정 대상이다.
 export const HEALTH_THRESHOLDS = {
   /** ① 전송 */
   transport: {
@@ -75,8 +75,8 @@ export const HEALTH_THRESHOLDS = {
     /** 기울기를 낼 최소 표본 수·시간 폭(ms) */
     slopeMinSamples: 5,
     slopeMinSpanMs: 20_000,
-    /** SYNC rtt 중앙값(ms) 초과 시 주의. 최근 rttRecent개 */
-    rttWarnMs: 20,
+    /** SYNC rtt 중앙값(ms) 초과 시 주의. 최근 rttRecent개. Feather fw 1.0 BLE 실측 중앙값(약 18ms)보다 여유를 둬 20→25 */
+    rttWarnMs: 25,
     rttRecent: 20,
     /** futureMs 최대(ms) 초과 시 주의 */
     futureMaxWarnMs: 50,
@@ -286,6 +286,32 @@ export function sensorHealth(snap: HealthInput, now: number): StageHealth {
       statusWorst && statusWorst.level === 'warn'
         ? `STATUS ${STICK_NAME[statusWorst.s]} ${sec(statusWorst.age)}초째 없음 (기준 ${th.statusWarnMs / 1000}초)`
         : undefined,
+  });
+
+  // 부팅 때 자이로 바이어스·IMU 상태(LOG BIAS·IMU FAIL). 스틱별 마지막 값, 다음 BOOT에서 초기화된다
+  const imuEach = STICKS.map((s) => {
+    const st = stats.perStick[s];
+    const level: HealthLevel = st.imuFail ? 'bad' : st.bias === 'default' ? 'warn' : st.bias === 'measured' ? 'ok' : 'idle';
+    return { s, level };
+  });
+  const imuWorst = pickWorst(imuEach);
+  const imuText = (s: 0 | 1) => {
+    const st = stats.perStick[s];
+    return st.imuFail ? 'IMU 실패' : st.bias === 'default' ? '기본값' : st.bias === 'measured' ? '정상' : '–';
+  };
+  items.push({
+    key: 'imu',
+    label: 'IMU·바이어스',
+    value: lr(imuText(0), imuText(1)),
+    level: imuWorst ? imuWorst.level : 'idle',
+    basis: 'IMU FAIL 이상 · BIAS default 주의(부팅 때 흔들림)',
+    reason: imuWorst
+      ? imuWorst.level === 'bad'
+        ? `IMU 초기화 실패 ${STICK_NAME[imuWorst.s]} (LOG IMU FAIL)`
+        : imuWorst.level === 'warn'
+          ? `부팅 때 흔들림, 바이어스 기본값 ${STICK_NAME[imuWorst.s]}`
+          : undefined
+      : undefined,
   });
 
   // 거른 스윙. 최근 1분 창 통계가 없어 누적 값만 보여주고 상태에는 넣지 않는다

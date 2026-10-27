@@ -343,8 +343,11 @@ relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모�
 - 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
 - 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
 - 제어 섹션: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
+- 파라미터 기본값은 펌웨어별 표다(`stickParamDefault`). STATUS의 fwMajor가 0이면 NUCLEO, 1이면 Feather(nRF52840)이고 STATUS를 받기 전에는 Feather 표를 쓴다(스틱 2개의 fwMajor가 다르면 마지막 STATUS 기준). 차이는 minDecel 30/60, maxSwingMs 400/160, tsCorrUs 3000/800, velMax 1000/1200(NUCLEO/Feather)이다. "기본값 복원"은 이 표를 쓰고, 패널 머리글에 지금 쓰는 표를 보여 준다. 현재값은 항상 GET_PARAMS 결과다.
+- 스틱 USER 버튼으로 정면 보정을 하면 요청 없이 PARAM_ACK 0x22가 온다. 열린 확인 창이 없을 때 온 0x22는 명령 바 확인 목록에 "스틱 버튼 정면 보정(요청 없음)"으로 기록된다(명령 응답과 구분).
+- ② 센서 "IMU·바이어스" 항목: 스틱별 마지막 LOG `BIAS x y z`(0.1°/s)는 정상, `BIAS default`는 주의(부팅 때 흔들려 바이어스 기본값), `IMU FAIL`은 이상이다. 다음 `BOOT`에서 초기화된다. `drop short`는 기존 거른 스윙으로 집계하고, `hold still...` 등 그 밖의 LOG는 텍스트로 남는다.
 - 동기화 추이(③ 시계 패널): SYNC_ACK의 `t0Ms`로 요청과 짝지은 왕복마다 관측 오프셋·rtt를 점으로, 소스가 채택한 오프셋을 계단선으로, POSE 유실률을 회색 막대로 그리며 120초/10분 전환·기울기 ms/분 요약. 세기 산점(② 센서 패널)은 HIT 최근 300건의 velocity × peakSpeed/decel/swingMs와 스피어만 상관을 그린다. 개요의 ③ 상자를 누르면 동기화 추이 패널이 열린 채로 이동한다.
-- 모의 스틱: LOG `BOOT 0.1 mock000`, STATUS 5초, POSE 50Hz 13바이트(100번째마다 seq 1 건너뜀), HIT 1초(10번째마다 seq 건너뜀, 20번째마다 판정 애매, 50번째마다 19바이트 오류 패킷), `drop` LOG, BRIDGE_STATS 1초. GET_PARAMS·SET_PAD_TABLE 명령에는 PARAM_ACK로 답한다.
+- 모의 스틱(Feather fw 1.0 모사): LOG `BOOT 1.0 nrf52` 뒤 스틱별 `BIAS` 줄, STATUS 5초(fwMajor 1·배터리 없음), POSE 50Hz 13바이트(100번째마다 seq 1 건너뜀), HIT 1초(10번째마다 seq 건너뜀, 20번째마다 판정 애매, 50번째마다 19바이트 오류 패킷), `drop` LOG(`weak`·`slow`·`short`), BRIDGE_STATS 1초. GET_PARAMS·SET_PAD_TABLE 명령에는 PARAM_ACK로 답한다.
 
 ### 녹화 파일 (JSONL)
 

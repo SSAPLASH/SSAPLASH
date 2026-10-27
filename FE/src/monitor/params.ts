@@ -8,7 +8,10 @@ import {
   PARAM_ACK_RESET_POSE,
   PARAM_ACK_YAW_OFFSET,
   STICK_PARAMS,
+  firmwareOfMajor,
+  stickParamDefault,
   type DecodedPacket,
+  type StickFirmware,
   type StickParam,
 } from '@/input/stickProtocol';
 
@@ -30,6 +33,8 @@ export interface Confirmation {
   /** 500ms 확인 창이 아직 열려 있는지(대기 중) */
   open: boolean;
   t: number;
+  /** 'command'는 명령 바 요청에 대한 응답, 'button'은 요청 없이 온 스틱 버튼 보정(USER 버튼 → RESET_POSE) */
+  source: 'command' | 'button';
 }
 
 export interface ParamStoreDeps {
@@ -68,6 +73,8 @@ export class ParamStore {
   /** GET_PARAMS 종료 표시로 알게 된 유실 개수. 아직 모르면 null */
   lostCount: number | null = null;
   version = 0;
+  /** 마지막 STATUS의 fwMajor. 아직 못 받았으면 null(기본값 표는 Feather로 본다) */
+  fwMajor: number | null = null;
 
   private send: (bytes: Uint8Array) => void;
   private deps: Required<ParamStoreDeps>;
@@ -115,6 +122,11 @@ export class ParamStore {
     };
   }
 
+  /** 지금 쓰는 기본값 표의 펌웨어. STATUS 전이면 Feather */
+  firmware(): StickFirmware {
+    return this.fwMajor === null ? 'feather' : firmwareOfMajor(this.fwMajor);
+  }
+
   /** STICK_PARAMS 순서의 표 행 */
   rows(): ParamRow[] {
     return STICK_PARAMS.map((meta) => ({ id: meta.id, meta, ...this.row(meta.id) }));
@@ -122,7 +134,7 @@ export class ParamStore {
 
   /** 최신 먼저, 최대 20개 */
   confirmations(): Confirmation[] {
-    return this.confirms.slice(0, MAX_CONFIRMATIONS).map(({ kind, value, t, open }) => ({ kind, value, t, open }));
+    return this.confirms.slice(0, MAX_CONFIRMATIONS).map(({ kind, value, t, open, source }) => ({ kind, value, t, open, source }));
   }
 
   private clearLoadTimer(): void {
@@ -165,6 +177,14 @@ export class ParamStore {
   }
 
   onPacket(p: DecodedPacket): void {
+    if (p.kind === 'status') {
+      // 스틱 2개의 fwMajor가 다르면 마지막 STATUS 기준
+      if (p.fwMajor !== this.fwMajor) {
+        this.fwMajor = p.fwMajor;
+        this.changed();
+      }
+      return;
+    }
     if (p.kind !== 'paramAck') return;
     const id = p.paramId;
     if (id === PARAM_ACK_END) {
@@ -179,6 +199,11 @@ export class ParamStore {
       const entry = this.confirms.find((c) => c.open && c.kind === confirmKind);
       if (entry) {
         entry.value = p.value;
+        this.changed();
+      } else if (confirmKind === 'resetPose') {
+        // 요청 없이 온 0x22: 스틱 USER 버튼으로 정면 보정이 일어났다(Feather fw 1.0)
+        this.confirms.unshift({ kind: 'resetPose', value: p.value, t: this.deps.now(), open: false, source: 'button' });
+        if (this.confirms.length > MAX_CONFIRMATIONS) this.confirms.length = MAX_CONFIRMATIONS;
         this.changed();
       }
       return;
@@ -221,14 +246,15 @@ export class ParamStore {
     this.changed();
   }
 
-  /** 모든 파라미터를 기본값으로 SET_PARAM */
+  /** 모든 파라미터를 지금 펌웨어 표의 기본값으로 SET_PARAM */
   resetDefaults(): void {
-    for (const p of STICK_PARAMS) this.apply(p.id, p.defaultValue);
+    const fw = this.firmware();
+    for (const p of STICK_PARAMS) this.apply(p.id, stickParamDefault(p, fw));
   }
 
   /** 명령 바가 SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE를 보낸 직후 호출. 500ms 창을 연다 */
   expectConfirmation(kind: Confirmation['kind']): void {
-    const entry: ConfirmEntry = { kind, value: null, t: this.deps.now(), open: true };
+    const entry: ConfirmEntry = { kind, value: null, t: this.deps.now(), open: true, source: 'command' };
     this.confirms.unshift(entry);
     if (this.confirms.length > MAX_CONFIRMATIONS) this.confirms.length = MAX_CONFIRMATIONS;
     const timer = this.deps.setTimeout(() => {
@@ -251,6 +277,7 @@ export class ParamStore {
     this.received.clear();
     this.confirms = [];
     this.lostCount = null;
+    this.fwMajor = null;
     this.state = 'unknown';
     this.initRows();
     this.changed();
