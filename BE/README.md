@@ -245,7 +245,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V13을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V14를 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -372,6 +372,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V1 | `V1__create_users_social_accounts.sql` | `users`, `social_accounts` | -86 |
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
 | V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
+| V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
 
 규칙:
 
@@ -398,7 +399,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V13까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V14까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -715,8 +716,8 @@ tMs−deltaMs, MISS는 tMs로 구한다. 그래프 전체 로딩 속도를 페�
 
 두 API 모두 읽기 전용 REPEATABLE_READ이며 요약 조회는 hits를 읽지 않는다. 현재 곡 삭제 상태·raw 저장소·AI 가용성에
 의존하지 않는다. endReason=null을 완료로 추정하지 않으며, meanDeltaMs는 부호 있는 편향이다.
-`analysisStatus` enum은 NOT_REQUESTED/PENDING/DONE/FAILED이며 현재는 항상 NOT_REQUESTED다.
-실제 상태 저장·전환은 158번 범위다. weakSegments의 null/[] 및 후속 저장 배열은 그대로 전달한다.
+`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며, 신규 리포트의 기본값은 NOT_REQUESTED다.
+AI 요청과 상태 전환 시점은 AI 연동 합의 후속 범위로 둔다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
 
 미인증·만료·탈퇴는 401, UUID·쿼리 오류는 400이다. 없는 세션·타인 세션은 `PLAY_NOT_FOUND` 404,
 본인 리포트 없음·FREE/TEMPO는 `REPORT_NOT_FOUND` 404이며 ProblemDetail의 code로 분기한다.

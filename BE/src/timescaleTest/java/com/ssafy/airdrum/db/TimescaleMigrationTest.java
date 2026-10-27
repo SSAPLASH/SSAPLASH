@@ -34,10 +34,19 @@ class TimescaleMigrationTest {
 			String existingSong = scalar(connection, "INSERT INTO songs(title,source,status,bpm,offset_ms,time_signature,duration_ms,license) VALUES ('기본 8비트','BUILTIN','READY',77,11,'3/4',1234,'기존 권리 메타') RETURNING id");
 			String existingChart = scalar(connection, "INSERT INTO charts(song_id,difficulty) VALUES (" + existingSong + ",'EASY') RETURNING id");
 			String existingVersion = scalar(connection, "INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator,generator_version) VALUES (" + existingChart + ",1,'[{\"noteId\":\"legacy-1\",\"timeMs\":77,\"pad\":\"SNARE\",\"velocityHint\":88}]'::jsonb,'{\"bpm\":77,\"offsetMs\":11,\"timeSignature\":\"3/4\"}'::jsonb,'UNAVAILABLE',1,'MANUAL','legacy') RETURNING id");
+			String existingPlay = "00000000-0000-0000-0000-000000000021";
+			execute(connection, """
+					INSERT INTO play_sessions(id,user_id,song_id,chart_version_id,mode,input_source,judgement_context,
+						payload_schema_version,payload_hash,started_at,ended_at)
+					VALUES ('%s',1,%s,%s,'RHYTHM','KEYBOARD','{}',1,
+						'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',now(),now());
+					INSERT INTO reports(play_session_id,timing_histogram,pad_stats,weak_segments,recommended_drills,generator_version)
+					VALUES ('%s','{"legacy":true}','[]','[{"description":"legacy"}]','[]','legacy-report-v1');
+					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(4);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(5);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -51,6 +60,14 @@ class TimescaleMigrationTest {
 			assertThat(scalar(connection, "SELECT id FROM charts WHERE id=" + existingChart)).isEqualTo(existingChart);
 			assertThat(scalar(connection, "SELECT notes->0->>'noteId' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("legacy-1");
 			assertThat(scalar(connection, "SELECT timing->>'offsetMs' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("11");
+			assertThat(scalar(connection, "SELECT analysis_status FROM reports WHERE play_session_id='" + existingPlay + "'")).isEqualTo("NOT_REQUESTED");
+			assertThat(scalar(connection, "SELECT timing_histogram->>'legacy' FROM reports WHERE play_session_id='" + existingPlay + "'")).isEqualTo("true");
+			assertThat(scalar(connection, "SELECT weak_segments->0->>'description' FROM reports WHERE play_session_id='" + existingPlay + "'")).isEqualTo("legacy");
+			assertThat(scalar(connection, "SELECT jsonb_typeof(recommended_drills) FROM reports WHERE play_session_id='" + existingPlay + "'")).isEqualTo("array");
+			assertThatThrownBy(() -> execute(connection, "UPDATE reports SET analysis_status=NULL WHERE play_session_id='" + existingPlay + "'"))
+					.isInstanceOfSatisfying(SQLException.class, error -> assertThat(error.getSQLState()).isEqualTo("23502"));
+			assertThatThrownBy(() -> execute(connection, "UPDATE reports SET analysis_status='UNKNOWN' WHERE play_session_id='" + existingPlay + "'"))
+					.isInstanceOfSatisfying(SQLException.class, error -> assertThat(error.getSQLState()).isEqualTo("23514"));
 			String seededSongIds = scalar(connection, "SELECT string_agg(id::text,',' ORDER BY id) FROM songs WHERE source='BUILTIN' AND id <> " + existingSong);
 			assertThat(scalar(connection, "SELECT count(*) FROM play_raw_uploads")).isEqualTo("1");
 			verifyHypertable(connection);
@@ -92,7 +109,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(13);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(14);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
