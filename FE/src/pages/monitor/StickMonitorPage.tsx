@@ -9,7 +9,7 @@ import { layoutToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
 import { feed, type FeedMode } from '@/monitor/feed';
-import { clockHealth, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
+import { clockHealth, keyMetrics, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
 import { JudgeLog } from '@/monitor/judgeLog';
 import { LatencyStatsLog } from '@/monitor/latencyStats';
 import { mockStick } from '@/monitor/mockStick';
@@ -22,6 +22,7 @@ import { buildTrace, type TraceSelection } from '@/monitor/traceIndex';
 import { LossHistory } from '@/monitor/syncTrend';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
+import { KeyMetricsBar } from './layout/KeyMetricsBar';
 import { Sidebar } from './layout/Sidebar';
 import { SECTION_ITEMS, type Section } from './layout/sections';
 import { fmt, type SendFn, type Snap } from './monitorTypes';
@@ -216,6 +217,11 @@ export function StickMonitorPage() {
     }),
     [snap],
   );
+
+  // 핵심 수치 바는 스냅샷 10번(약 1초)에 한 번만 값을 새로 만든다(바가 메모로 렌더를 건너뛴다)
+  const keyTick = Math.floor(snap.tick / 10);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const keyBar = useMemo(() => keyMetrics(snap, snap.now), [keyTick]);
 
   // 진입: 로그 수집 시작. 떠나도 stop하지 않는다(세션 동안 누적, 메모리는 링버퍼 상한)
   useEffect(() => {
@@ -458,6 +464,7 @@ export function StickMonitorPage() {
           </button>
         </div>
       </div>
+      <KeyMetricsBar metrics={keyBar} />
       {paused && <div className="notice small">화면 갱신이 멈춰 있습니다. 버퍼에는 계속 쌓입니다.</div>}
 
       <div className="mon-layout">

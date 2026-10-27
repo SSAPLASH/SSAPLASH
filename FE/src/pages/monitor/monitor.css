@@ -784,3 +784,60 @@
   gap: 6px;
   margin-bottom: 6px;
 }
+
+/* 핵심 수치 바: 상단 바 아래 고정 띠. 스틱 L·R 한 줄씩, 좁으면 칸이 줄바꿈 */
+.mon-keybar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.mon-keystick {
+  flex: 1 1 420px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+.mon-keyname {
+  align-self: center;
+  width: 18px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.mon-key {
+  flex: 1 1 76px;
+  min-width: 0;
+  padding: 2px 8px;
+  border-left: 3px solid var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.mon-key.ok {
+  border-left-color: var(--good);
+}
+.mon-key.warn {
+  border-left-color: var(--perfect);
+}
+.mon-key.bad {
+  border-left-color: var(--miss);
+}
+.mon-key-label,
+.mon-key-basis {
+  color: var(--ink-faint);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.mon-key-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.mon-key.warn .mon-key-value {
+  color: var(--perfect);
+}
+.mon-key.bad .mon-key-value {
+  color: var(--miss);
+}
