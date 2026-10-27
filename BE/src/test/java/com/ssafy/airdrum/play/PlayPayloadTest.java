@@ -14,6 +14,37 @@ class PlayPayloadTest {
 	final PlayUploadValidator validator=new PlayUploadValidator(json);
 	final UUID id=UUID.fromString("9da79b76-5d88-4875-bc71-c826c3fb4293");
 	PlayUploadRequest read(String s) { return json.read(new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8))); }
+	@Test void padAliasesNormalizeEveryTypedPositionAndRejectCollidingKeys() {
+		String body=PlayFixtures.scored(id,1,2).replace("\"SNARE\"", "\"HI_TOM\"")
+				.replace("\"padMapping\":{}", "\"padMapping\":{\"HI_TOM\":\"HI_TOM\"}")
+				.replace("\"hits\":[", "\"calibration\":{\"audioOffsetMs\":0,\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}}},"
+						+ "\"kitPresetSnapshot\":{\"name\":\"kit\",\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}},\"keyBindings\":{\"HI_TOM\":\"HI_TOM\"}},\"hits\":[");
+		var legacy=read(body); var canonical=read(body.replace("\"HI_TOM\":\"HI_TOM\"", "\"HI_TOM\":\"SMALL_TOM\"")
+				.replace("\"pad\":\"HI_TOM\"", "\"pad\":\"SMALL_TOM\"").replace("\"pads\":{\"HI_TOM\"", "\"pads\":{\"SMALL_TOM\""));
+		validator.structure(legacy); validator.structure(canonical);
+		assertThat(legacy).isEqualTo(canonical);
+		assertThat(json.hash(7,legacy)).isEqualTo(json.hash(7,canonical));
+		assertThat(json.write(legacy)).contains("\"pad\":\"SMALL_TOM\"", "\"HI_TOM\":\"SMALL_TOM\"");
+		var chart=new PlaySessionRepository.ChartData(PlayPayloadTest.chart().notes().replace("SNARE","HI_TOM"),2,1,"1","1");
+		validator.notes(legacy,chart);
+		String bad=body.replace("\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}", "\"pads\":{\"SMALL_TOM\":{\"pitch\":0,\"yaw\":0},\"HI_TOM\":{\"pitch\":0,\"yaw\":0}");
+		assertThatThrownBy(()->read(bad)).isInstanceOf(BusinessException.class);
+	}
+	@Test void ninePadsAndSensorAliasesAreAcceptedAndInvalidCodesRejected() {
+		String body=PlayFixtures.free(id).replace("\"pad\":\"SNARE\"", "\"pad\":\"HIHAT_PEDAL\",\"baselinePad\":\"HI_TOM\",\"predictedPad\":\"HI_TOM\"");
+		var request=read(body); validator.structure(request);
+		assertThat(request.hits().getFirst().baselinePad()).isEqualTo(PlayUploadRequest.Pad.SMALL_TOM);
+		assertThat(request.hits().getFirst().predictedPad()).isEqualTo(PlayUploadRequest.Pad.SMALL_TOM);
+		for (String bad : new String[]{body.replace("HIHAT_PEDAL","UNKNOWN"),body.replace("\"HIHAT_PEDAL\"","8")})
+			assertThatThrownBy(()->read(bad)).isInstanceOf(BusinessException.class);
+		String poses=java.util.Arrays.stream(PlayUploadRequest.Pad.values()).map(p->"\""+p+"\":{\"pitch\":0,\"yaw\":0}").collect(java.util.stream.Collectors.joining(","));
+		validator.structure(read(body.replace("\"hits\":[", "\"calibration\":{\"audioOffsetMs\":0,\"pads\":{"+poses+"}},\"hits\":[")));
+	}
+	@Test void legacyHashMatchesTheOriginalV1CanonicalFixture() {
+		var p=read(PlayFixtures.free(id).replace("\"pad\":\"SNARE\"", "\"pad\":\"HI_TOM\""));
+		// 이전 DTO의 필드 전체와 play:1:7: 접두사를 기존 v1 방식으로 직렬화한 고정값.
+		assertThat(json.legacyHash(7,p)).isEqualTo("e0e3bcecdf05fe8a9c9b0c48fd0e05803d9c73c6a347bcd7e8a4b3748096ace9");
+	}
 	@Test void equivalentNumbersInstantsAndOptionalFieldsHaveOneHash() {
 		var first=read(PlayFixtures.free(id));
 		var second=read(PlayFixtures.free(id).replace("00:00:00Z","09:00:00+09:00").replace("\"pitch\":20","\"pitch\":20.0")

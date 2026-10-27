@@ -41,7 +41,7 @@ Content-Type: `application/json`. HTTP Content-Encoding 압축은 사용하지 �
 
 clientMeta.endReason은 `COMPLETED`, `ABORTED`, `DISCONNECTED` 중 하나다. elapsedActiveMs는 pause를 제외한 음수 아닌 경과시간이다. appVersion·firmwareVersion과 tag는 최대 64자, text는 최대 2,048자다. 임의 환경 정보·토큰·URL 필드는 받지 않는다. 자세 단위는 도(degree), audioOffsetMs는 ms다. 스냅샷은 실제 적용값만 보낸다.
 
-v1 패드 코드는 `HIHAT`, `SNARE`, `HI_TOM`, `MID_TOM`, `FLOOR_TOM`, `CRASH`, `RIDE`, `KICK`이다. 기존 FE 7종에 `MID_TOM`을 추가하는 서버 계약으로 정했다. FE·EMB의 기존 합의 완료를 주장하지 않으며 키트/센서 어댑터가 이 코드에 맞춰야 한다. padMapping/keyBindings는 최대 32개, 패드별 자세는 최대 8개다.
+v1 패드 코드는 `CRASH`, `HIHAT`, `SNARE`, `SMALL_TOM`, `MID_TOM`, `FLOOR_TOM`, `RIDE`, `KICK`, `HIHAT_PEDAL`이다. 문자열 코드만 받는다. 기존 `HI_TOM`은 `SMALL_TOM`의 입력 별칭이며 신규 로그에는 `SMALL_TOM`으로 저장한다. 패드별 자세 맵에서 두 이름을 동시에 보내면 거부한다. padMapping/keyBindings는 최대 32개, 패드별 자세는 최대 9개다.
 
 ### hits
 
@@ -49,7 +49,7 @@ v1 패드 코드는 `HIHAT`, `SNARE`, `HI_TOM`, `MID_TOM`, `FLOOR_TOM`, `CRASH`,
 | --- | --- |
 | seq | 정수, 0부터 1씩 증가. FE 이벤트 처리 순서, tMs로 재정렬하지 않음 |
 | tMs | 유한 실수 ms. 당시 음원/세션 위치, 카운트인 음수 허용 |
-| pad | 위 8종 중 하나 |
+| pad | 위 9종 중 하나 또는 입력 별칭 `HI_TOM` |
 | stickId | 실제 센서 손 0 또는 1. 키보드/페달 등 비센서 입력은 null |
 | velocity | 실제 타격 정수 0~127. MISS는 null |
 | baselinePad / predictedPad | 실제 수집한 패드 코드 또는 null |
@@ -98,7 +98,7 @@ SCORE_V1은 PERFECT=100점, GOOD=60점, MISS=0점이다. `abs(deltaMs) ≤ perfe
 
 원본 접수 뒤에는 rawLogStatus가 `UPLOADED`다. `PENDING`은 원본 미접수를 뜻하며 실패/원본 불필요 여부를 따로 표현하지 않는다. 센서 없는 플레이의 원본을 생략할 수 있고 이 경우 PENDING이 유지된다. 원본까지 전송할 경우 raw.hits는 빈 배열이다. reportId는 반환하지 않는다. 리포트 생성·조회는 별도 기능이다.
 
-서버는 회원·요청의 의미값을 SHA-256으로 보존한다. JSON 키 순서, 동일 시각의 다른 오프셋 표기, 동등 숫자 표현, 선택 필드 누락/null 차이는 정규화한다. 배열 순서·동의·원래 프리셋 ID도 해시에 포함한다. 같은 UUID에 다른 내용은 409다. 저장 후 프리셋/곡이 삭제되거나 원본 상태가 바뀌어도 최초 내용의 재전송은 성공한다. schemaVersion이 같으면 해시 정규화 규칙도 유지한다.
+서버는 회원·요청의 의미값을 SHA-256으로 보존한다. JSON 키 순서, 동일 시각의 다른 오프셋 표기, 동등 숫자 표현, 선택 필드 누락/null 차이는 정규화한다. 배열 순서·동의·원래 프리셋 ID도 해시에 포함한다. 같은 UUID에 다른 내용은 409다. 저장 후 프리셋/곡이 삭제되거나 원본 상태가 바뀌어도 최초 내용의 재전송은 성공한다. `HI_TOM`과 `SMALL_TOM`은 같은 패드로 취급하며 이전 이름으로 저장된 해시도 재전송 시 비교한다. 기존 로그·해시와 채보 버전은 변경하지 않으며, 기존 채보의 `HI_TOM`은 판정 검증 시 같은 패드로 취급한다. 과거 리포트는 8패드일 수 있다.
 
 ## 원본: POST /api/v1/plays/{playId}/raw
 

@@ -18,21 +18,22 @@ public class PlayUploadTransaction {
 	private final PlayHitRepository hits;
 	private final JdbcTemplate db;
 	private final ReportRepository reports;
-	public PlayUploadTransaction(UserRepository users, PlaySessionRepository sessions, PlayHitRepository hits, JdbcTemplate db, ReportRepository reports) {
+	private final PlayJson json;
+	public PlayUploadTransaction(UserRepository users, PlaySessionRepository sessions, PlayHitRepository hits, JdbcTemplate db, ReportRepository reports, PlayJson json) {
 		this.users = users; this.sessions = sessions; this.hits = hits; this.db = db;
-		this.reports = reports;
+		this.reports = reports; this.json = json;
 	}
 	@Transactional(isolation = Isolation.READ_COMMITTED, timeout = 15)
 	public PlayUploadResponse save(long user, PlayUploadRequest p, String hash, PlaySessionRepository.ChartData chart, ReportAggregate report) {
 		db.execute("SET LOCAL lock_timeout = '3s'"); db.execute("SET LOCAL statement_timeout = '10s'");
 		active(user);
 		var existing = sessions.find(p.playId(), true);
-		if (existing.isPresent()) return replay(user, hash, existing.get());
+		if (existing.isPresent()) return replay(user, p, hash, existing.get());
 		if (p.scored() && (chart == null || report == null)) throw new BusinessException(PlayErrorCode.PLAY_STATE_CHANGED);
 		sessions.checkReferences(user, p, chart);
 		if (!sessions.insert(user, p, hash)) {
 			var winner = sessions.find(p.playId(), true).orElseThrow(() -> new BusinessException(PlayErrorCode.PLAY_STATE_CHANGED));
-			return replay(user, hash, winner);
+			return replay(user, p, hash, winner);
 		}
 		hits.insert(p);
 		if (p.scored()) reports.insert(p.playId(), report);
@@ -42,9 +43,9 @@ public class PlayUploadTransaction {
 		var u = users.findByIdForShare(user);
 		if (u.isEmpty() || u.get().getStatus() != UserStatus.ACTIVE) throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
 	}
-	private PlayUploadResponse replay(long user, String hash, PlaySessionRepository.Session s) {
+	private PlayUploadResponse replay(long user, PlayUploadRequest p, String hash, PlaySessionRepository.Session s) {
 		if (s.userId() != user) throw new BusinessException(PlayErrorCode.PLAY_NOT_FOUND);
-		if (!s.hash().equals(hash)) throw new BusinessException(PlayErrorCode.PLAY_PAYLOAD_CONFLICT);
+		if (!s.hash().equals(hash) && !s.hash().equals(json.legacyHash(user, p))) throw new BusinessException(PlayErrorCode.PLAY_PAYLOAD_CONFLICT);
 		return new PlayUploadResponse(s.id(), s.rawStatus(), false);
 	}
 }
