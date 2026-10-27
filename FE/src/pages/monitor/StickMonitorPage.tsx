@@ -9,12 +9,13 @@ import { layoutToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
 import { feed, type FeedMode } from '@/monitor/feed';
-import { clockHealth, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
+import { clockHealth, keyMetrics, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
 import { JudgeLog } from '@/monitor/judgeLog';
 import { LatencyStatsLog } from '@/monitor/latencyStats';
 import { mockStick } from '@/monitor/mockStick';
 import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
+import { buildTimeline } from '@/monitor/replay';
 import { downloadJsonl, parseJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
 import { summarizeRecording, type RecordingSummary } from '@/monitor/recordingSummary';
 import { SwingAssembler } from '@/monitor/swingAssembler';
@@ -22,6 +23,8 @@ import { buildTrace, type TraceSelection } from '@/monitor/traceIndex';
 import { LossHistory } from '@/monitor/syncTrend';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
+import { KeyMetricsBar } from './layout/KeyMetricsBar';
+import { ReplayBar } from './layout/ReplayBar';
 import { Sidebar } from './layout/Sidebar';
 import { SECTION_ITEMS, type Section } from './layout/sections';
 import { fmt, type SendFn, type Snap } from './monitorTypes';
@@ -82,6 +85,8 @@ const sendHolder: { fn: SendFn } = { fn: () => {} };
 
 /** ?follow=1로 열렸으면 따라보기로 시작하고, 아니면 feed가 기억한 모드(처음이면 직접 연결) */
 function initialMode(): FeedMode {
+  // 재생은 페이지를 떠날 때 닫으므로 처음엔 없다. 혹시 남아 있으면 직접 연결로 시작한다
+  if (feed.mode === 'replay') return 'direct';
   try {
     if (new URLSearchParams(location.search).get('follow') === '1') return 'follow';
   } catch {
@@ -143,9 +148,18 @@ export function StickMonitorPage() {
       mockStick.stop();
       setMockOn(false);
     }
+    // 재생에서 나가면 재생 데이터가 남지 않게 화면 상태를 비운다
+    if (mode === 'replay') {
+      clearAll();
+      setReplayName(null);
+    }
     setMode(next);
   };
   const follow = mode === 'follow';
+  const replaying = mode === 'replay';
+  // 재생을 열기 전 입력 방식. 닫으면 여기로 돌아간다
+  const beforeReplay = useRef<FeedMode>('direct');
+  const [replayName, setReplayName] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
   const [mockOn, setMockOn] = useState(mockStick.running);
@@ -165,7 +179,8 @@ export function StickMonitorPage() {
   // 설정 sensorKind는 바꾸지 않아 직접 연결로 돌아오면 저장된 센서를 다시 연다
   useEffect(() => {
     feed.setMode(mode);
-    if (mode === 'follow') {
+    // 재생에서도 이 창의 센서는 해제한다(재생 패킷에 실제 패킷이 섞이지 않게)
+    if (mode === 'follow' || mode === 'replay') {
       void activateSensor('none');
     } else {
       void activateSensor(useSettings.getState().sensorKind);
@@ -176,9 +191,13 @@ export function StickMonitorPage() {
     const now = performance.now();
     // 따라보기: 오프셋·전송 통계는 연주 창이 보낸 hello 값(이 창 시각 기준으로 옮겨 둔 것)
     const fs = feed.mode === 'follow' ? feed.followStatus() : null;
+    const replay = feed.mode === 'replay';
+    // 재생: 녹화의 SYNC 짝에서 다시 구한 오프셋(재생 시각 기준)
     const offsets: [number | null, number | null] = fs
       ? fs.offsets
-      : [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null];
+      : replay
+        ? feed.replaySnapshotOffsets()
+        : [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null];
     // 채택 오프셋은 읽은 직후 넘긴다(변화점만 기록). stats()보다 먼저 불러야 이번 스냅샷에 반영된다
     packetLog.noteAdoptedOffsets(now, offsets);
     const stats = packetLog.stats();
@@ -191,18 +210,19 @@ export function StickMonitorPage() {
       now,
       stats,
       rows,
-      transport: fs ? fs.transport : (src?.transportStats?.() ?? null),
+      transport: fs ? fs.transport : replay ? null : (src?.transportStats?.() ?? null),
       offsets,
       judge: judgeLog.stats(rows),
       latency: latencyLog.stats(),
       // 따라보기: 오디오는 연주 창 것이라 hello 값을 쓴다
-      audio: fs ? fs.audio : lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null,
+      audio: fs ? fs.audio : replay ? null : lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null,
     };
   }, []);
   const [snap, setSnap] = useState<Snap>(() => takeSnap(0, null));
 
   // 상단 바 표시용. 렌더(스냅샷 100ms마다)마다 읽는다
   const followStatus = feed.followStatus();
+  const replayStatus = feed.replayStatus();
 
   // 단계별 상태는 스냅샷이 바뀔 때만 다시 계산한다
   const health = useMemo(
@@ -217,11 +237,20 @@ export function StickMonitorPage() {
     [snap],
   );
 
+  // 핵심 수치 바는 스냅샷 10번(약 1초)에 한 번만 값을 새로 만든다(바가 메모로 렌더를 건너뛴다)
+  const keyTick = Math.floor(snap.tick / 10);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const keyBar = useMemo(() => keyMetrics(snap, snap.now), [keyTick]);
+
   // 진입: 로그 수집 시작. 떠나도 stop하지 않는다(세션 동안 누적, 메모리는 링버퍼 상한)
   useEffect(() => {
     packetLog.configure({
       clockOffsetOf: (s) =>
-        feed.mode === 'follow' ? feed.followStatus().offsets[s] : (sourceRef.current?.clockOffsetOf?.(s) ?? null),
+        feed.mode === 'follow'
+          ? feed.followStatus().offsets[s]
+          : feed.mode === 'replay'
+            ? feed.replayOffsetOf(s)
+            : (sourceRef.current?.clockOffsetOf?.(s) ?? null),
     });
     packetLog.start((fn) => feed.subscribePacket(fn));
     startDiag();
@@ -245,13 +274,13 @@ export function StickMonitorPage() {
   // dir:'out'으로 packetTap에 publish하므로 여기서는 publish하지 않는다(중복 방지)
   const send: SendFn = useCallback(
     (bytes) => {
-      if (follow) return; // 따라보기는 읽기 전용(U4)
+      if (follow || replaying) return; // 따라보기·재생은 읽기 전용(U4)
       if (mockStick.running) mockStick.handleCommand(bytes);
       else activeSource?.sendCommand?.(bytes);
     },
-    [activeSource, follow],
+    [activeSource, follow, replaying],
   );
-  const canSend = !follow && (mockOn || !!activeSource?.sendCommand);
+  const canSend = !follow && !replaying && (mockOn || !!activeSource?.sendCommand);
   useEffect(() => {
     sendHolder.fn = send;
   }, [send]);
@@ -300,6 +329,16 @@ export function StickMonitorPage() {
   // HIT 행 클릭: 센서 섹션에서 SWING 패널을 열고 그 스윙을 고른다
   // 같은 클릭으로 공통 선택(타격 추적)도 정한다
   const [traceSel, setTraceSel] = useState<TraceSelection | null>(null);
+  // 화면 상태 비우기("지우기"·재생 시작·재생 닫기·처음부터)
+  const clearAll = useCallback(() => {
+    packetLog.clear();
+    lossHistory.clear();
+    judgeLog.clear();
+    latencyLog.clear();
+    assembler.clear();
+    setSelectedSwing(null);
+    setTraceSel(null);
+  }, [assembler]);
   const onSelectHit = useCallback(
     (stick: 0 | 1, seq: number, t: number) => {
       setSelectedSwing(`${stick}-${seq}`);
@@ -348,6 +387,43 @@ export function StickMonitorPage() {
     setSection('clock');
     setOpenTrendSignal(++signalSeq.current);
   }, [setSection]);
+
+  // 페이지를 떠나면 재생을 닫는다(feed는 모듈 단위라 남겨 두면 다른 입력과 섞인다)
+  useEffect(
+    () => () => {
+      if (feed.mode === 'replay') feed.setMode('direct');
+    },
+    [],
+  );
+
+  // 녹화 파일 열기 → 재생 모드. 모의 스틱은 끄고, 화면 상태를 비운 뒤 시작한다(요약은 패널이 따로 채운다)
+  const startReplay = (parsed: ReturnType<typeof parseJsonl>, name: string) => {
+    if (mockStick.running) {
+      mockStick.stop();
+      setMockOn(false);
+    }
+    if (mode !== 'replay') beforeReplay.current = mode;
+    clearAll();
+    feed.openReplay(buildTimeline(parsed));
+    setReplayName(name);
+    setMode('replay');
+  };
+  const closeReplay = () => {
+    clearAll();
+    setReplayName(null);
+    setMode(beforeReplay.current);
+  };
+  const restartReplay = () => {
+    clearAll();
+    feed.replayRestart();
+  };
+  const toggleReplay = () => {
+    const st = feed.replayStatus();
+    if (!st) return;
+    if (st.state === 'playing') feed.replayPause();
+    else if (st.state === 'ended') restartReplay();
+    else feed.replayPlay();
+  };
 
   const toggleMock = () => {
     if (mockStick.running) {
@@ -404,9 +480,19 @@ export function StickMonitorPage() {
         <select value={mode} onChange={(e) => changeMode(e.target.value as FeedMode)} aria-label="입력 방식">
           <option value="direct">직접 연결</option>
           <option value="follow">따라보기</option>
+          {replaying && (
+            <option value="replay" disabled>
+              녹화 재생
+            </option>
+          )}
         </select>
         <span className="mon-source">
-          {follow ? (
+          {replaying ? (
+            <>
+              녹화 재생 · <strong>{replayName ?? '–'}</strong>
+              <span className="badge">읽기 전용</span>
+            </>
+          ) : follow ? (
             <>
               연주 창: <strong>{followStatus.source ?? '–'}</strong> · {followStatus.connected ? '연결됨' : '연주 창 없음'}
               <span className="badge">읽기 전용</span>
@@ -429,7 +515,7 @@ export function StickMonitorPage() {
             disabled={recording}
             onChange={(e) => setNote(e.target.value)}
           />
-          <button className={recording ? 'btn-primary small' : 'btn-ghost small'} onClick={toggleRecord}>
+          <button className={recording ? 'btn-primary small' : 'btn-ghost small'} disabled={replaying} onClick={toggleRecord}>
             {recording ? `녹화 정지·저장 (${recorder.lineCount})` : '녹화 시작'}
           </button>
           <button className={paused ? 'btn-primary small' : 'btn-ghost small'} onClick={togglePause}>
@@ -437,14 +523,14 @@ export function StickMonitorPage() {
           </button>
           <select
             value={mockSticks}
-            disabled={mockOn || follow}
+            disabled={mockOn || follow || replaying}
             onChange={(e) => setMockSticks(Number(e.target.value) as 1 | 2)}
             aria-label="모의 스틱 수"
           >
             <option value={1}>모의 1스틱</option>
             <option value={2}>모의 2스틱</option>
           </select>
-          <button className={mockOn ? 'btn-primary small' : 'btn-ghost small'} disabled={follow} onClick={toggleMock}>
+          <button className={mockOn ? 'btn-primary small' : 'btn-ghost small'} disabled={follow || replaying} onClick={toggleMock}>
             {mockOn ? '모의 끄기' : '모의 스틱'}
           </button>
           <button className="btn-ghost small" onClick={() => {
@@ -458,6 +544,17 @@ export function StickMonitorPage() {
           </button>
         </div>
       </div>
+      {replaying && replayStatus && (
+        <ReplayBar
+          name={replayName ?? ''}
+          status={replayStatus}
+          onToggle={toggleReplay}
+          onRestart={restartReplay}
+          onSpeed={(sp) => feed.replaySetSpeed(sp)}
+          onClose={closeReplay}
+        />
+      )}
+      <KeyMetricsBar metrics={keyBar} />
       {paused && <div className="notice small">화면 갱신이 멈춰 있습니다. 버퍼에는 계속 쌓입니다.</div>}
 
       <div className="mon-layout">
@@ -511,7 +608,7 @@ export function StickMonitorPage() {
               canSend={canSend}
             />
           )}
-          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} follow={follow} summary={summary} onSummary={setSummary} />}
+          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} follow={follow} summary={summary} onSummary={setSummary} canReplay={!recording} onReplay={startReplay} />}
         </div>
       </div>
     </main>

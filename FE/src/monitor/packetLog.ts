@@ -51,7 +51,9 @@ export interface StickStats {
   hitSeqLoss: { window: number; total: number };
   poseSeqLoss: { window: number; total: number; pct: number | null };
   /** 최근 50건 */
-  hitFuture: { median: number | null; max: number | null };
+  hitFuture: { median: number | null; max: number | null; min: number | null };
+  /** 최근 1분(60초) HIT 유실 건수 */
+  hitLoss1m: number;
   statusAgeMs: number | null;
   lastStatus: DecodedStatus | null;
   hitCount: number;
@@ -101,6 +103,7 @@ export interface PacketLogDeps {
 
 const WINDOW_MS = 1000;
 const FUTURE_KEEP = 50;
+const LOSS_KEEP_MS = 60_000;
 const SYNC_KEEP = 600;
 const ADOPTED_KEEP = 200;
 const BRIDGE_STALL_MS = 3000;
@@ -119,6 +122,8 @@ interface StickState {
   hitLossTotal: number;
   poseLossTotal: number;
   hitEvents: SeqEvent[];
+  /** 유실이 있었던 HIT만(최근 1분 집계용) */
+  hitLossEvents: { t: number; lost: number }[];
   poseEvents: SeqEvent[];
   future: number[];
   lastStatus: { pkt: DecodedStatus; t: number } | null;
@@ -134,6 +139,7 @@ const freshStick = (): StickState => ({
   hitLossTotal: 0,
   poseLossTotal: 0,
   hitEvents: [],
+  hitLossEvents: [],
   poseEvents: [],
   future: [],
   lastStatus: null,
@@ -293,6 +299,7 @@ export class PacketLog {
         st.lastHitSeq = d.seq;
         st.hitLossTotal += lost;
         st.hitEvents.push({ t: row.t, lost, hasSeq: true });
+        if (lost > 0) st.hitLossEvents.push({ t: row.t, lost });
         st.hitCount++;
         st.lastHitT = row.t;
         if (row.futureMs !== null) {
@@ -412,6 +419,10 @@ export class PacketLog {
     const perStick = this.sticks.map((st) => {
       st.hitEvents = prune(st.hitEvents);
       st.poseEvents = prune(st.poseEvents);
+      const lossFrom = now - LOSS_KEEP_MS;
+      let li = 0;
+      while (li < st.hitLossEvents.length && st.hitLossEvents[li].t < lossFrom) li++;
+      if (li) st.hitLossEvents.splice(0, li);
       const hitWin = st.hitEvents.reduce((a, e) => a + e.lost, 0);
       const seqPose = st.poseEvents.filter((e) => e.hasSeq);
       const poseWin = seqPose.reduce((a, e) => a + e.lost, 0);
@@ -419,7 +430,12 @@ export class PacketLog {
       return {
         hitSeqLoss: { window: hitWin, total: st.hitLossTotal },
         poseSeqLoss: { window: poseWin, total: st.poseLossTotal, pct },
-        hitFuture: { median: median(st.future), max: st.future.length ? Math.max(...st.future) : null },
+        hitFuture: {
+          median: median(st.future),
+          max: st.future.length ? Math.max(...st.future) : null,
+          min: st.future.length ? Math.min(...st.future) : null,
+        },
+        hitLoss1m: st.hitLossEvents.reduce((a, e) => a + e.lost, 0),
         statusAgeMs: st.lastStatus ? now - st.lastStatus.t : null,
         lastStatus: st.lastStatus ? st.lastStatus.pkt : null,
         hitCount: st.hitCount,
