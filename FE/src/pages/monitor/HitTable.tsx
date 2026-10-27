@@ -70,8 +70,8 @@ const COLS: string[] = [
 interface RowProps {
   vr: ViewRow;
   profile: CalibrationProfile | null;
-  /** 행 클릭 콜백(원시 파형 탭 이동용). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
-  onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  /** 행 클릭 콜백(원시 파형 탭 이동·타격 추적 선택용, t = 행 수신 시각). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
+  onSelectHit?: (stick: 0 | 1, seq: number, t: number) => void;
   /** 다른 탭(세기 산점)에서 고른 행. 강조하고 화면 안으로 스크롤한다 */
   selected?: boolean;
 }
@@ -133,7 +133,7 @@ const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit, selected
     <tr
       ref={trRef}
       className={[onSelectHit && stick !== null ? 'clickable' : '', selected ? 'selected' : ''].filter(Boolean).join(' ') || undefined}
-      onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq) : undefined}
+      onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq, row.t) : undefined}
     >
       <td className="num">{fmt(row.t)}</td>
       <td style={{ color: handColor, fontWeight: 700 }}>{stickName(row.stick)}</td>
@@ -249,7 +249,7 @@ export const HitTable = memo(function HitTable({
 }: {
   snap: Snap;
   profile: CalibrationProfile | null;
-  onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  onSelectHit?: (stick: 0 | 1, seq: number, t: number) => void;
   /** 세기 산점에서 고른 HIT(스틱·seq). 같은 행을 강조·스크롤한다 */
   selected?: { stick: 0 | 1; seq: number } | null;
 }) {

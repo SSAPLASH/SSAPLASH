@@ -34,7 +34,7 @@ export function SensorSection({
   /** 세기 산점에서 고른 HIT 행 */
   hitPick: { stick: 0 | 1; seq: number } | null;
   /** HIT 행 클릭: 페이지가 SWING 선택과 패널 펼침을 맡는다 */
-  onSelectHit: (stick: 0 | 1, seq: number) => void;
+  onSelectHit: (stick: 0 | 1, seq: number, t: number) => void;
   /** 산점 점 클릭: 페이지가 HIT 행 선택을 맡는다 */
   onPickHit: (stick: 0 | 1, seq: number) => void;
   assembler: SwingAssembler;
