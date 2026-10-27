@@ -199,10 +199,12 @@ export class PacketLog {
     return this.deps.now ? this.deps.now() : performance.now();
   }
 
-  /** tap 구독 시작. 중복 호출은 무해하다 */
-  start(): void {
+  /**
+   * 구독 시작. 중복 호출은 무해하다. 기본은 packetTap, 모니터 페이지는 직접 연결·따라보기를 아우르는 feed 구독 함수를 넘긴다
+   */
+  start(subscribe: (fn: (rec: PacketRecord) => void) => () => void = (fn) => packetTap.subscribe(fn)): void {
     if (this.offTap) return;
-    this.offTap = packetTap.subscribe((rec) => this.ingest(rec));
+    this.offTap = subscribe((rec) => this.ingest(rec));
   }
 
   stop(): void {

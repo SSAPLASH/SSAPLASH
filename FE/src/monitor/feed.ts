@@ -1,0 +1,231 @@
+// 모니터의 단일 입력. 직접 연결(같은 창의 packetTap·diagTap)과 따라보기(BroadcastChannel로 연주 창이 중계)를
+// 같은 구독 함수 뒤에 둔다. 소비자(packetLog·judgeLog·ParamStore·SwingAssembler)는 모드를 모른다.
+// 따라보기 프로토콜은 설계 3-5-1. 채널 이름·메시지 모양은 app/monitorRelay와 같지만 import하지 않는다(의존 방향).
+import { diagTap, type DiagEvent } from '@/engine/diagTap';
+import type { ResolvedHit } from '@/domain/events';
+import type { TransportStats } from '@/input/InputSource';
+import { packetTap, type PacketRecord } from '@/input/packetTap';
+
+export type FeedMode = 'direct' | 'follow';
+
+/** BroadcastChannel에서 쓰는 부분만 */
+export interface FeedChannel {
+  postMessage(message: unknown): void;
+  onmessage: ((e: { data: unknown }) => void) | null;
+  close(): void;
+}
+
+export interface FollowStatus {
+  /** hello가 3초 안에 왔는지 */
+  connected: boolean;
+  /** 마지막 hello 후 경과 ms. 한 번도 못 받았으면 null */
+  helloAgeMs: number | null;
+  source: string | null;
+  profileId: string | null;
+  /** 따르는 연주 창 id */
+  windowId: string | null;
+  /** 이 창 시각 기준으로 옮긴 시계 오프셋 */
+  offsets: [number | null, number | null];
+  transport: TransportStats | null;
+  /** 연주 창 오디오 지연(ms) */
+  audio: { baseMs: number; outputMs: number } | null;
+}
+
+export interface FeedDeps {
+  createChannel?: () => FeedChannel;
+  now?: () => number;
+  timeOrigin?: () => number;
+}
+
+type Subscribe<T> = (fn: (v: T) => void) => () => void;
+export interface FeedTaps {
+  packet: Subscribe<PacketRecord>;
+  diag: Subscribe<DiagEvent>;
+}
+
+/** hello가 이 시간 넘게 없으면 연주 창 없음 */
+export const HELLO_TIMEOUT_MS = 3000;
+const WATCH_MS = 1000;
+export const FEED_CHANNEL = 'ssaplash-monitor';
+
+interface Hello {
+  k: 'hello';
+  id: string;
+  source: string;
+  profileId: string | null;
+  origin: number;
+  offsets: [number | null, number | null];
+  transport: TransportStats | null;
+  audio?: { baseMs: number; outputMs: number } | null;
+  at: number;
+}
+type Item = { k: 'packet'; rec: PacketRecord } | { k: 'diag'; ev: DiagEvent };
+
+const shift = (v: number | null, d: number): number | null => (v === null ? null : v + d);
+
+export class MonitorFeed {
+  private _mode: FeedMode = 'direct';
+  private packetListeners = new Set<(rec: PacketRecord) => void>();
+  private diagListeners = new Set<(ev: DiagEvent) => void>();
+  private offTaps: { packet: (() => void) | null; diag: (() => void) | null } = { packet: null, diag: null };
+  private channel: FeedChannel | null = null;
+  private watchTimer: ReturnType<typeof setInterval> | null = null;
+  private nextId = 1;
+
+  private windowId: string | null = null;
+  private lastHelloAt: number | null = null;
+  private d = 0;
+  private hello: Hello | null = null;
+
+  private deps: FeedDeps;
+  private taps: FeedTaps;
+
+  constructor(
+    deps: FeedDeps = {},
+    taps: FeedTaps = { packet: (fn) => packetTap.subscribe(fn), diag: (fn) => diagTap.subscribe(fn) },
+  ) {
+    this.deps = deps;
+    this.taps = taps;
+  }
+
+  get mode(): FeedMode {
+    return this._mode;
+  }
+
+  private now(): number {
+    return this.deps.now ? this.deps.now() : performance.now();
+  }
+
+  subscribePacket(fn: (rec: PacketRecord) => void): () => void {
+    this.packetListeners.add(fn);
+    this.syncTaps();
+    return () => {
+      this.packetListeners.delete(fn);
+      this.syncTaps();
+    };
+  }
+
+  subscribeDiag(fn: (ev: DiagEvent) => void): () => void {
+    this.diagListeners.add(fn);
+    this.syncTaps();
+    return () => {
+      this.diagListeners.delete(fn);
+      this.syncTaps();
+    };
+  }
+
+  /** 직접 연결일 때만, 그리고 구독자가 있을 때만 로컬 탭을 구독한다 */
+  private syncTaps(): void {
+    const direct = this._mode === 'direct';
+    if (direct && this.packetListeners.size > 0) {
+      this.offTaps.packet ??= this.taps.packet((rec) => {
+        for (const l of this.packetListeners) l(rec);
+      });
+    } else {
+      this.offTaps.packet?.();
+      this.offTaps.packet = null;
+    }
+    if (direct && this.diagListeners.size > 0) {
+      this.offTaps.diag ??= this.taps.diag((ev) => {
+        for (const l of this.diagListeners) l(ev);
+      });
+    } else {
+      this.offTaps.diag?.();
+      this.offTaps.diag = null;
+    }
+  }
+
+  setMode(mode: FeedMode): void {
+    if (mode === this._mode) return;
+    this._mode = mode;
+    if (mode === 'follow') this.openChannel();
+    else this.closeChannel();
+    this.syncTaps();
+  }
+
+  private openChannel(): void {
+    const ch = this.deps.createChannel ? this.deps.createChannel() : (new BroadcastChannel(FEED_CHANNEL) as unknown as FeedChannel);
+    this.channel = ch;
+    this.windowId = null;
+    this.lastHelloAt = null;
+    this.hello = null;
+    ch.onmessage = (e) => this.onMessage(e.data);
+    const watch = () => ch.postMessage({ k: 'watch', at: this.now() });
+    watch();
+    this.watchTimer = setInterval(watch, WATCH_MS);
+  }
+
+  private closeChannel(): void {
+    if (this.watchTimer !== null) clearInterval(this.watchTimer);
+    this.watchTimer = null;
+    if (this.channel) {
+      this.channel.onmessage = null;
+      this.channel.close();
+    }
+    this.channel = null;
+  }
+
+  private onMessage(data: unknown): void {
+    const m = data as { k?: string } | null;
+    if (!m) return;
+    if (m.k === 'ready') {
+      // 연주 창이 새로 떴다. 다음 watch 주기를 기다리지 않고 바로 알린다
+      this.channel?.postMessage({ k: 'watch', at: this.now() });
+    } else if (m.k === 'hello') {
+      const h = m as Hello;
+      // 가장 최근 hello를 보낸 창을 따른다
+      this.windowId = h.id;
+      this.hello = h;
+      this.lastHelloAt = this.now();
+      const origin = this.deps.timeOrigin ? this.deps.timeOrigin() : performance.timeOrigin;
+      this.d = h.origin - origin;
+    } else if (m.k === 'batch') {
+      const b = m as { id?: string; items?: Item[] };
+      // 첫 hello 전이거나 따르는 창이 아니면 버린다(시각 정렬 값을 모른다)
+      if (this.windowId === null || b.id !== this.windowId || !b.items) return;
+      for (const it of b.items) {
+        if (it.k === 'packet') this.emitPacket(it.rec);
+        else if (it.k === 'diag') this.emitDiag(it.ev);
+      }
+    }
+  }
+
+  private emitPacket(rec: PacketRecord): void {
+    if (this.packetListeners.size === 0) return;
+    const out: PacketRecord = { ...rec, id: this.nextId++, recvTime: rec.recvTime + this.d };
+    for (const l of this.packetListeners) l(out);
+  }
+
+  private emitDiag(ev: DiagEvent): void {
+    if (this.diagListeners.size === 0) return;
+    const d = this.d;
+    let out: DiagEvent;
+    if (ev.type === 'resolved') {
+      const hit: ResolvedHit = { ...ev.hit, tHit: ev.hit.tHit + d, tRecv: ev.hit.tRecv + d, tResolved: ev.hit.tResolved + d };
+      if (ev.hit.tAudio !== undefined) hit.tAudio = ev.hit.tAudio + d;
+      out = { ...ev, hit, t: ev.t + d };
+    } else {
+      out = { ...ev, t: ev.t + d };
+    }
+    for (const l of this.diagListeners) l(out);
+  }
+
+  /** 따라보기 상태. 직접 연결이면 connected=false·값 비움 */
+  followStatus(): FollowStatus {
+    const h = this.hello;
+    const age = this.lastHelloAt === null ? null : this.now() - this.lastHelloAt;
+    const d = this.d;
+    return {
+      connected: age !== null && age < HELLO_TIMEOUT_MS,
+      helloAgeMs: age,
+      source: h ? h.source : null,
+      profileId: h ? h.profileId : null,
+      windowId: this.windowId,
+      offsets: h ? [shift(h.offsets[0], d), shift(h.offsets[1], d)] : [null, null],
+      transport: h ? h.transport : null,
+      audio: h ? (h.audio ?? null) : null,
+    };
+  }
+}
+
+export const feed = new MonitorFeed();
