@@ -60,6 +60,22 @@ describe('apiFetch 요청 구성', () => {
     expect(header(init, 'Content-Type')).toBe('application/json');
   });
 
+  it('FormData 본문은 Content-Type 없이 그대로 보낸다', async () => {
+    const fetch = mockFetch(() => json(202, { jobId: 1 }));
+    const form = new FormData();
+    form.append('title', '곡');
+    await apiFetch('/api/v1/songs/audio', { method: 'POST', body: form });
+    const init = fetch.mock.calls[0][1];
+    expect(header(init, 'Content-Type')).toBeNull();
+    expect(init?.body).toBe(form);
+  });
+
+  it('headers로 준 Idempotency-Key가 요청에 실린다', async () => {
+    const fetch = mockFetch(() => json(200, {}));
+    await apiFetch('/api/x', { method: 'POST', body: {}, headers: { 'Idempotency-Key': 'abc' } });
+    expect(header(fetch.mock.calls[0][1], 'Idempotency-Key')).toBe('abc');
+  });
+
   it('204·빈 본문은 undefined', async () => {
     mockFetch(() => new Response(null, { status: 204 }));
     await expect(apiFetch('/api/presets/1', { method: 'DELETE' })).resolves.toBeUndefined();
