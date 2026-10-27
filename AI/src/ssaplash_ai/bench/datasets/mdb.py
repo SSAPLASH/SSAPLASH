@@ -28,7 +28,7 @@ MDB_SUBCLASS_PAD: dict[str, str] = {
     "CHH": "HIHAT",
     "OHH": "HIHAT",
     "PHH": "HIHAT",
-    "HIT": "HI_TOM",
+    "HIT": "SMALL_TOM",
     "MHT": "MID_TOM",
     "HFT": "FLOOR_TOM",
     "LFT": "FLOOR_TOM",

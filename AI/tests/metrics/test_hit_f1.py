@@ -14,7 +14,7 @@ TABLE = {
     "KICK": "KICK",
     "SNARE": "SNARE",
     "HIHAT": "HIHAT",
-    "HI_TOM": "HI_TOM",
+    "SMALL_TOM": "SMALL_TOM",
     "MID_TOM": "MID_TOM",
     "FLOOR_TOM": "FLOOR_TOM",
     "CRASH": "CRASH",
@@ -25,7 +25,7 @@ TABLE = {
 }
 
 TIMES = [0.10, 0.35, 0.60, 0.85, 1.10, 1.35, 1.60, 1.85]
-PADS_SEQ = ["KICK", "HIHAT", "SNARE", "HIHAT", "HI_TOM", "CRASH", "FLOOR_TOM", "RIDE"]
+PADS_SEQ = ["KICK", "HIHAT", "SNARE", "HIHAT", "SMALL_TOM", "CRASH", "FLOOR_TOM", "RIDE"]
 VELS = [100, 60, 110, 62, 90, 120, 95, 70]
 
 
@@ -72,7 +72,7 @@ def test_라벨을_틀리면_라벨_기준은_떨어지고_라벨_무시는_1():
 
 def test_탐_종류만_틀리면_5가지는_맞고_8패드는_틀린다():
     true = _hits(TIMES, PADS_SEQ)
-    swapped = [{"HI_TOM": "MID_TOM", "CRASH": "RIDE"}.get(p, p) for p in PADS_SEQ]
+    swapped = [{"SMALL_TOM": "MID_TOM", "CRASH": "RIDE"}.get(p, p) for p in PADS_SEQ]
     ev = evaluate_hits(true, _hits(TIMES, swapped), eight_pad=True)
     assert ev.five.f1 == 1.0
     assert ev.pads.counts == MatchCounts(tp=6, fp=2, fn=2)
@@ -81,7 +81,7 @@ def test_탐_종류만_틀리면_5가지는_맞고_8패드는_틀린다():
 def test_거친_라벨_예측은_5가지만_매기고_8패드는_없다():
     true = _hits(TIMES, PADS_SEQ)
     coarse = [
-        {"HI_TOM": "tom", "FLOOR_TOM": "tom", "CRASH": "cymbal", "RIDE": "cymbal"}.get(p, p)
+        {"SMALL_TOM": "tom", "FLOOR_TOM": "tom", "CRASH": "cymbal", "RIDE": "cymbal"}.get(p, p)
         for p in PADS_SEQ
     ]
     pred = _hits(TIMES, coarse, coarse=True)
