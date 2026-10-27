@@ -245,7 +245,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V13을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V14를 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -372,6 +372,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V1 | `V1__create_users_social_accounts.sql` | `users`, `social_accounts` | -86 |
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
 | V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
+| V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
 
 규칙:
 
@@ -398,7 +399,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V13까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V14까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -560,7 +561,7 @@ FE 소비 계약: 로그인 복원 뒤 `GET /api/presets` 한 번으로 목록�
 첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로그인 전 로컬 프리셋은 서버로 옮기지 않는다(91).
 
 연결점: 쓰기는 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare`로 회원을 잠그고 ACTIVE를 다시 확인한다(아니면 401).
-탈퇴 작업은 `preset.KitPresetRepository.deleteAllByUserId(userId)`로 지운다(`users` 행을 남기므로 cascade에 기대지 않는다).
+탈퇴 트랜잭션(`withdrawal.WithdrawalService`)이 `preset.KitPresetRepository.deleteAllByUserId(userId)`로 지운다(`users` 행을 남기므로 cascade에 기대지 않는다).
 플레이 로그의 `play_sessions.kit_preset_id`는 프리셋 삭제 시 NULL이 되고 스냅샷은 남는다(V5).
 V3의 `tuning` 컬럼은 이 API가 쓰지 않는다(SETUP-03, 2단계).
 
@@ -578,6 +579,7 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 | `POST /api/auth/refresh` | `refresh_token` 쿠키 | 200 `{accessToken, tokenType: "Bearer", expiresIn: 1800}` + 새 `refresh_token` 쿠키. 실패는 401 `UNAUTHORIZED` "다시 로그인해 주세요." |
 | `POST /api/auth/logout` | 쿠키(없어도 됨) | 204. 서버의 refresh 토큰을 지우고 쿠키를 만료시킨다. 여러 번 불러도 같다 |
 | `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt}`. 이메일·상태는 내보내지 않는다 |
+| `DELETE /api/users/me` | Bearer | 204(본문 없음) + `refresh_token` 쿠키 만료. 본인만 탈퇴하며 되돌릴 수 없다. 동시에 두 번 부르면 늦은 쪽은 401 |
 
 | 항목 | access 토큰 | refresh 토큰 |
 | --- | --- | --- |
@@ -592,6 +594,8 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   이미 쓰였거나 로그아웃된 토큰으로 부르면 401이지만 쿠키는 지우지 않는다(동시 재발급에서 이긴 요청의 새 쿠키를 지우지 않기 위해).
   쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
 - 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
+- **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
+  `users` 행은 WITHDRAWN으로 남고 소셜 연동·키트 프리셋·refresh 토큰은 지운다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
 
 공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
 `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
@@ -618,7 +622,12 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   (`FOR SHARE`)로 회원 행을 잠그고 `ACTIVE`를 확인한다. 잠금 순서는 `users` → `songs` → `chart_jobs`다. 트랜잭션 밖에서 부르지 않는다.
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
-- **탈퇴**(10/26 주 작업): `users`를 `FOR UPDATE`로 잠근 뒤 `auth.RefreshTokenService.revokeAllOf(userId)`로 refresh 토큰을 모두 지운다.
+- **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸고, 소셜 연동·키트 프리셋 삭제, `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
+  `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
+  `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
+  리스너 예외는 탈퇴 응답(204)에 영향이 없으므로 직접 로그를 남긴다. 놓친 정리는 `UserRepository.findWithdrawnIds(withdrawnAfter, pageable)`
+  (탈퇴 시각·id 순)로 다시 찾는다.
 
 ### Redis 키
 
@@ -687,7 +696,7 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 - `timingHistogram`: PERFECT·GOOD의 deltaMs만 10ms 구간으로 집계한다. 판정창을 10ms 단위로
   올림한 ±범위이며 마지막 구간만 우측 끝값을 포함한다. MISS·미매칭 타격은 제외한다.
-- `padStats`: enum 순서의 8패드. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
+- `padStats`: 신규 리포트는 enum 순서의 9패드이며 기존 리포트는 8패드일 수 있다. 과거 `HI_TOM`은 조회 시 `SMALL_TOM`으로 반환한다. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
   내부 저장은 0~1 비율(소수 넷째 자리 HALF_UP)이다. **API accuracy는 모두 0~100, 소수 둘째 자리 HALF_UP**이며
   패드 값은 원본 판정 개수에서 직접 계산한다. 평가 표본이 없으면 null이다. 전체 summary 값은 그대로 유지한다.
 - `meanDeltaMs`, `meanVelocity`: PERFECT·GOOD 표본의 평균(소수 둘째 자리 HALF_UP), 표본 없으면 null.
@@ -715,8 +724,8 @@ tMs−deltaMs, MISS는 tMs로 구한다. 그래프 전체 로딩 속도를 페�
 
 두 API 모두 읽기 전용 REPEATABLE_READ이며 요약 조회는 hits를 읽지 않는다. 현재 곡 삭제 상태·raw 저장소·AI 가용성에
 의존하지 않는다. endReason=null을 완료로 추정하지 않으며, meanDeltaMs는 부호 있는 편향이다.
-`analysisStatus` enum은 NOT_REQUESTED/PENDING/DONE/FAILED이며 현재는 항상 NOT_REQUESTED다.
-실제 상태 저장·전환은 158번 범위다. weakSegments의 null/[] 및 후속 저장 배열은 그대로 전달한다.
+`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며, 신규 리포트의 기본값은 NOT_REQUESTED다.
+AI 요청과 상태 전환 시점은 AI 연동 합의 후속 범위로 둔다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
 
 미인증·만료·탈퇴는 401, UUID·쿼리 오류는 400이다. 없는 세션·타인 세션은 `PLAY_NOT_FOUND` 404,
 본인 리포트 없음·FREE/TEMPO는 `REPORT_NOT_FOUND` 404이며 ProblemDetail의 code로 분기한다.
