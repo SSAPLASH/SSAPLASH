@@ -1,7 +1,7 @@
-"""어택 기울기 왜곡 (설계 3-5절, 미결 U5 간이 버전).
+"""attack slope 왜곡 (설계 3-5절, 미결 U5 간이 버전).
 
 정답 온셋 시각마다 정답 드럼과 예측 드럼의 진폭 포락선이 온셋 후 10ms 동안 오른 기울기를
-구해 로그 비율의 절댓값을 온셋 전체로 평균. 0이면 어택이 그대로.
+구해 로그 비율의 절댓값을 온셋 전체로 평균. 0이면 타격 앞머리(attack slope)가 그대로.
 
 계산 규칙
 - 포락선: 모노 절댓값을 1ms 블록으로 나눠 블록마다 최댓값. 10ms 구간이면 블록 10개.
@@ -28,7 +28,7 @@ SLOPE_FLOOR = 1e-6
 
 @dataclass
 class TransientResult:
-    """어택 기울기 왜곡. distortion이 3-3절 attackSlopeDistortion. 나머지는 보조값."""
+    """attack slope 왜곡. distortion이 3-3절 attackSlopeDistortion. 나머지는 보조값."""
 
     distortion: float
     n_used: int
@@ -64,7 +64,7 @@ def attack_slope_distortion(
     sample_rate: int,
     attack_ms: float = ATTACK_MS,
 ) -> TransientResult:
-    """온셋마다 10ms 어택 기울기의 로그 비율 절댓값을 평균. 쓸 온셋이 없으면 nan."""
+    """온셋마다 10ms attack slope의 로그 비율 절댓값을 평균. 쓸 온셋이 없으면 nan."""
     true_mono = to_mono(drums_true)
     pred_mono = to_mono(drums_pred)
     n = min(true_mono.shape[0], pred_mono.shape[0])

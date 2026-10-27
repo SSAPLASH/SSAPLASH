@@ -1,0 +1,13 @@
+# 음원 분리 추론 모듈 설정 (S15P31A307-167). 상대 경로는 AI/ 폴더 기준.
+# 환경 변수: SSAPLASH_CHART_DEVICE(장치), SSAPLASH_MODELS_DIR(가중치 폴더, 기본 data/models),
+# SSAPLASH_WORK_DIR(--out이 없을 때 출력 폴더의 부모).
+# 분리 모델 yaml. 벤치마크 yaml을 그대로 가리킴. 대안은 configs/bench/models/msst/bs_roformer_musdb.yaml
+model_config: configs/bench/models/msst/bs_roformer_sw.yaml
+# cuda가 없으면 cpu로 내려감
+device: cuda
+output:
+  sample_rate: 44100
+  # flac(16비트 무손실, 기본) 또는 wav(PCM_16)
+  format: flac
+# 이보다 긴 입력은 입력 오류
+max_duration_sec: 600
