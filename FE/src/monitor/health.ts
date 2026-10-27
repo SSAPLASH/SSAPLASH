@@ -288,6 +288,32 @@ export function sensorHealth(snap: HealthInput, now: number): StageHealth {
         : undefined,
   });
 
+  // 부팅 때 자이로 바이어스·IMU 상태(LOG BIAS·IMU FAIL). 스틱별 마지막 값, 다음 BOOT에서 초기화된다
+  const imuEach = STICKS.map((s) => {
+    const st = stats.perStick[s];
+    const level: HealthLevel = st.imuFail ? 'bad' : st.bias === 'default' ? 'warn' : st.bias === 'measured' ? 'ok' : 'idle';
+    return { s, level };
+  });
+  const imuWorst = pickWorst(imuEach);
+  const imuText = (s: 0 | 1) => {
+    const st = stats.perStick[s];
+    return st.imuFail ? 'IMU 실패' : st.bias === 'default' ? '기본값' : st.bias === 'measured' ? '정상' : '–';
+  };
+  items.push({
+    key: 'imu',
+    label: 'IMU·바이어스',
+    value: lr(imuText(0), imuText(1)),
+    level: imuWorst ? imuWorst.level : 'idle',
+    basis: 'IMU FAIL 이상 · BIAS default 주의(부팅 때 흔들림)',
+    reason: imuWorst
+      ? imuWorst.level === 'bad'
+        ? `IMU 초기화 실패 ${STICK_NAME[imuWorst.s]} (LOG IMU FAIL)`
+        : imuWorst.level === 'warn'
+          ? `부팅 때 흔들림, 바이어스 기본값 ${STICK_NAME[imuWorst.s]}`
+          : undefined
+      : undefined,
+  });
+
   // 거른 스윙. 최근 1분 창 통계가 없어 누적 값만 보여주고 상태에는 넣지 않는다
   const dropTotal = Object.values(stats.drops).reduce((a, v) => a + v.total, 0);
   const hitTotal = stats.perStick[0].hitCount + stats.perStick[1].hitCount;
