@@ -28,7 +28,8 @@ AI/
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
 │   ├─ bench/            벤치마크 하네스
-│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report · run-transcription · report-transcription)
+│   │   ├─ cli.py        명령줄 진입점 (check-data · run · report · run-transcription · report-transcription ·
+│   │   │                rule-features · rule-eval · tom-pitch)
 │   │   ├─ datasets/     평가 데이터 읽기 (base, musdb, synth, synth_build, gmd, mdb) · 패드 어휘·타격 표(pads)
 │   │   ├─ separators/   분리 모델 실행. separator_base(공통 인터페이스·yaml·다운로드),
 │   │   │                mock_separator(모델 없이 원곡·무음을 돌려주는 테스트용), msst_separator(SCNet·BS Roformer),
@@ -38,6 +39,8 @@ AI/
 │   │   │                external_transcriber(별도 가상환경 스크립트 실행)
 │   │   ├─ metrics/      지표 계산. bss_eval_metrics(SDR·SIR·SAR·SI-SDR), onset_preservation(타격 보존율),
 │   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM), hit_f1(채보 타격 F1)
+│   │   ├─ analysis/     채보 규칙 분석. rule_features(ADTOF 타격 시각·드럼 킷 분리 트랙 저장), rule_eval(규칙 후보 점수·혼동표),
+│   │   │                tom_pitch(정답 탐 음높이 분포·경계 후보)
 │   │   ├─ runner/       벤치마크 실행. benchmark_runner(분리 모델 × 곡), transcription_runner(채보 모델 × 곡 × 입력),
 │   │   │                run_support(둘이 같이 쓰는 CSV 쓰기·이어하기), mlflow_tracking(MLflow 기록)
 │   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
@@ -283,6 +286,21 @@ uv run python scripts/pack_server_upload.py
 - **runId는 `ymt3-*`.** 코랩 run 폴더에 이어 붙이지 않고 새 폴더로 돌린다. 한 CSV 안에 GPU가 섞이지 않게 하기 위해서다.
 - **보고서는 로컬에서 만든다.** 서버의 `results_ymt3.zip`(서버 ipynb 파일 12번 셀)을 내려받아 `data/results/`에 풀고 코랩 results.csv와 같이 `report-transcription`에 넘긴다. GPU가 다른 행이 섞인 묶음은 비교표에 GPU 열이 붙는다. 점수는 GPU와 상관없어 그대로 비교하고, RTF·GPU 메모리는 GPU가 달라 따로 본다.
 
+### 채보 규칙 분석 도구 (S15P31A307-163)
+
+1순위 채보 모델(ADTOF + 드럼 킷 분리)은 탐 3종·크래시/라이드를 규칙으로 나눈다(`configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml`의 `rules`). 규칙값을 바꿔 가며 다시 재는 일을 빠르게 하기 위해, 무거운 계산(ADTOF·드럼 킷 분리)은 곡마다 한 번만 GPU로 돌려 저장하고 규칙 비교는 CPU로 몇 초 안에 한다.
+
+```bash
+# 1. 특징 저장 (GPU, 한 번). 정답 드럼 트랙 입력으로 ADTOF 타격 시각과 toms·crash·ride 트랙을 data/rule_features/<데이터셋>/<곡>.npz 에 둔다. 있으면 건너뜀
+uv run ssaplash-bench rule-features --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml
+# 2. 정답 탐 타격의 음높이 분포·경계 후보·곡 하나 빼고 확인. 후보는 candidates.yaml로 나와 3번에 바로 넣는다
+uv run ssaplash-bench tom-pitch --dataset configs/bench/datasets/mdb_drums.yaml configs/bench/datasets/gmd_test.yaml --out data/results/tom-pitch
+# 3. 규칙 후보 비교 (CPU). 후보 하나 = MLflow run 하나(실험 chart-rules). 기본값(후보 rules: {})으로 돌리면 지난 벤치마크 hits_by_class.csv와 같은 개수가 나와야 한다
+uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml --candidates data/results/tom-pitch/candidates.yaml --out data/results/rule-eval --mlflow-uri mlruns
+```
+
+후보 yaml은 `candidates: [{name, rules}]` 목록이거나 `{name, rules}` 하나이며 `rules`는 모델 yaml의 `rules`와 같은 키만 쓴다(없는 키는 기본값). 결과 폴더에 `candidates.csv`(후보 × 데이터셋: 패드별 F1, 탐·심벌 배정 정확도, 정답 없는 탐 수), `confusion.csv`·`summary.md`(혼동표), `by_song.csv`가 생긴다. 배정 정확도는 정답과 시각이 맞은 타격 중 패드를 맞게 붙인 비율로, 모델이 놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 본다. `run-transcription`도 이제 MLflow에 패드별 F1(`f1_KICK` 등)과 규칙값(`rules.tom_bands` 등)을 함께 남겨 run끼리 패드 단위로 비교할 수 있다.
+
 ## 지표 정의
 
 분리 벤치마크 지표. 곡 단위 값이고 모델 단위 값은 곡 값들의 중앙값이다. 자세한 계산 규칙은 `src/ssaplash_ai/bench/metrics/` 각 파일 머리말에 있다.
@@ -367,7 +385,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 
 ### 채보 벤치마크 정답 데이터 (S15P31A307-108)
 
-채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 와이어프레임과 같은 8종 `KICK, SNARE, HIHAT, HI_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
+채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 스틱 통신 프로토콜 v0.7과 같은 이름의 8종 `KICK, SNARE, HIHAT, SMALL_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`. 옛 `HI_TOM`은 2026-10-26부터 `SMALL_TOM`이며, 9번째 패드 `HIHAT_PEDAL`은 채보 모델이 못 내서 어휘에 없다), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
 
 | 설정 | 내용 | 역할 |
 | --- | --- | --- |
