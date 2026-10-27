@@ -343,7 +343,19 @@ uv run ssaplash-bench tom-pitch --dataset configs/bench/datasets/mdb_drums.yaml 
 uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml --candidates data/results/tom-pitch/candidates.yaml --out data/results/rule-eval --mlflow-uri mlruns
 ```
 
-후보 yaml은 `candidates: [{name, rules}]` 목록이거나 `{name, rules}` 하나이며 `rules`는 모델 yaml의 `rules`와 같은 키만 쓴다(없는 키는 기본값). 결과 폴더에 `candidates.csv`(후보 × 데이터셋: 패드별 F1, 탐·심벌 배정 정확도, 정답 없는 탐 수), `confusion.csv`·`summary.md`(혼동표), `by_song.csv`가 생긴다. 배정 정확도는 정답과 시각이 맞은 타격 중 패드를 맞게 붙인 비율로, 모델이 놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 본다. `run-transcription`도 이제 MLflow에 패드별 F1(`f1_KICK` 등)과 규칙값(`rules.tom_bands` 등)을 함께 남겨 run끼리 패드 단위로 비교할 수 있다.
+후보 yaml은 `candidates: [{name, rules}]` 목록이거나 `{name, rules}` 하나이며 `rules`는 모델 yaml의 `rules`와 같은 키만 쓴다(없는 키는 기본값). 결과 폴더에 `candidates.csv`(후보 × 데이터셋: 패드별 F1, 탐·심벌 배정 정확도, 정답 없는 탐 수, 버린 탐 수), `confusion.csv`·`summary.md`(혼동표), `by_song.csv`(곡마다 버린 탐 수 `tomDropped`, 묶음 수·중앙값 `tomClusters`·`tomClusterHz`)가 생긴다. 배정 정확도는 정답과 시각이 맞은 타격 중 패드를 맞게 붙인 비율로, 모델이 놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 본다. `run-transcription`도 이제 MLflow에 패드별 F1(`f1_KICK` 등)과 규칙값(`rules.tom_bands` 등)을 함께 남겨 run끼리 패드 단위로 비교할 수 있다.
+
+탐 규칙에는 아래 선택 키가 있다 (S15P31A307-164 실험). 기본값은 전부 꺼져 있어 안 넣으면 결과가 전과 같다. 거르기를 켜려면 어댑터 입력 드럼이 필요하며, `rule-eval`·`tom-pitch`는 데이터셋의 정답 드럼 트랙을 자동으로 읽어 쓴다.
+
+| 키 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `tom_mode` | `fixed` | `fixed`: 고정 Hz 경계 `tom_bands`. `relative`: 곡 안의 탐 타격 음높이를 모아 큰 틈에서 1~3묶음으로 나누고 낮은 순서로 FLOOR·MID·SMALL |
+| `tom_relative_k` / `tom_relative_min_gap` / `tom_relative_min_hits` | 3 / 2.0 / 2 | 최대 묶음 수, 묶음을 가르는 최소 틈(반음), 묶음 하나의 최소 타격 수(작으면 이웃에 합침) |
+| `tom_relative_naming` | `bands` | 묶음이 3개보다 적을 때 이름. `bands`는 묶음 중앙값을 고정 경계로 정하고 둘이 같으면 순서로 벌림, `order`는 1개 MID·2개 FLOOR·MID |
+| `tom_gate_ratio` | 없음 | 켜면 타격 직후 toms 트랙 에너지 / 입력 드럼 에너지가 이 값 아래인 탐 타격을 거른다(탐이 아닌 소리를 탐으로 잡은 것). 재는 구간은 `tom_gate_window_ms`, 없으면 `window_ms` |
+| `tom_gate_action` | `drop` | 거른 탐을 어떻게 할지. `drop`은 버림, `snare`는 50ms 안에 ADTOF 스네어 타격이 없으면 SNARE로 돌리고 있으면 버림 |
+
+`tom-pitch`는 ADTOF가 탐으로 잡은 타격마다 음높이·거르기 비율·짝지은 정답 탐·근처 정답 패드를 `pred_tom.csv`에 남기고, 거르기 비율 분포(`tom_gate_ratio.png`)와 문턱값별로 버려지는 정답 탐·정답 없는 탐 수를 `summary.md`에 적는다.
 
 ## 지표 정의
 
