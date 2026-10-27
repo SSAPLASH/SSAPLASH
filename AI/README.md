@@ -335,7 +335,8 @@ uv run python scripts/pack_server_upload.py
 1순위 채보 모델(ADTOF + 드럼 킷 분리)은 탐 3종·크래시/라이드를 규칙으로 나눈다(`configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml`의 `rules`). 규칙값을 바꿔 가며 다시 재는 일을 빠르게 하기 위해, 무거운 계산(ADTOF·드럼 킷 분리)은 곡마다 한 번만 GPU로 돌려 저장하고 규칙 비교는 CPU로 몇 초 안에 한다.
 
 ```bash
-# 1. 특징 저장 (GPU, 한 번). 정답 드럼 트랙 입력으로 ADTOF 타격 시각과 toms·crash·ride 트랙을 data/rule_features/<데이터셋>/<곡>.npz 에 둔다. 있으면 건너뜀
+# 1. 특징 저장 (GPU, 한 번). 정답 드럼 트랙 입력으로 ADTOF 타격 시각·프레임별 확신 점수와 드럼 킷 분리 트랙 전부(kick·snare·toms·hh·ride·crash)를 data/rule_features/<데이터셋>/<곡>.npz 에 둔다. 있으면 건너뜀.
+#    2026-10-27 전에 만든 파일은 점수와 kick·snare·hh 트랙이 없으므로 --overwrite 로 다시 만든다 (탐 시각 다시 고르기·거르기 분모 옵션에 필요)
 uv run ssaplash-bench rule-features --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml
 # 2. 정답 탐 타격의 음높이 분포·경계 후보·곡 하나 빼고 확인. 후보는 candidates.yaml로 나와 3번에 바로 넣는다
 uv run ssaplash-bench tom-pitch --dataset configs/bench/datasets/mdb_drums.yaml configs/bench/datasets/gmd_test.yaml --out data/results/tom-pitch
@@ -351,9 +352,17 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 | --- | --- | --- |
 | `tom_mode` | `fixed` | `fixed`: 고정 Hz 경계 `tom_bands`. `relative`: 곡 안의 탐 타격 음높이를 모아 큰 틈에서 1~3묶음으로 나누고 낮은 순서로 FLOOR·MID·SMALL |
 | `tom_relative_k` / `tom_relative_min_gap` / `tom_relative_min_hits` | 3 / 2.0 / 2 | 최대 묶음 수, 묶음을 가르는 최소 틈(반음), 묶음 하나의 최소 타격 수(작으면 이웃에 합침) |
-| `tom_relative_naming` | `bands` | 묶음이 3개보다 적을 때 이름. `bands`는 묶음 중앙값을 고정 경계로 정하고 둘이 같으면 순서로 벌림, `order`는 1개 MID·2개 FLOOR·MID |
+| `tom_relative_naming` | `bands` | 묶음이 3개보다 적을 때 이름. `bands`는 묶음 중앙값을 고정 경계로 정하고 둘이 같으면 순서로 벌림, `order`는 1개 MID·2개 FLOOR·MID. `hybrid`는 묶음 수와 절대 음높이를 같이 봄: 1개면 `tom_hybrid_floor_max_hz`(120) 아래 FLOOR·`tom_hybrid_small_min_hz`(200) 위 SMALL·사이 MID, 2개면 낮은 쪽은 120 아래일 때만 FLOOR 아니면 MID, 높은 쪽은 200 위일 때만 SMALL 아니면 MID. 실제 킷은 탐이 둘인 경우가 많고 그 랙탐이 160~180Hz라 MID로 두는 쪽이 정답 표기와 맞음 |
+| `tom_relative_method` | `gap` | 곡 안 음높이를 묶는 법. `gap`은 반음으로 정렬해 이웃 사이 틈이 `tom_relative_min_gap` 이상인 곳에서 자름(타격이 수백 개면 틈이 안 생겨 한 묶음이 됨). `peaks`는 반음 히스토그램(칸 `tom_relative_bin` 0.25, 부드럽게 `tom_relative_smooth` 0.5)의 피크를 찾아 가장 가까운 피크에 붙임. 피크 사이 최소 거리는 `tom_relative_min_gap`. `tom_relative_min_frac`(0)은 묶음 하나의 최소 타격 비율로, `tom_relative_min_hits`와 둘 중 큰 쪽을 씀 |
+| `tom_f0_method` | `peak` | 음높이 재는 법. `peak`는 구간 전체 스펙트럼의 가장 큰 피크 하나, `median`은 구간을 `tom_f0_frame_ms`(40) 길이·`tom_f0_hop_ms`(20) 간격 프레임으로 잘라 프레임마다 재고 중앙값. 킥 겹침이 한 프레임에만 있을 때 흔들리지 않음. `tom_f0_start_ms`(0)는 타격 뒤 얼마부터 잴지 |
 | `tom_gate_ratio` | 없음 | 켜면 타격 직후 toms 트랙 에너지 / 입력 드럼 에너지가 이 값 아래인 탐 타격을 거른다(탐이 아닌 소리를 탐으로 잡은 것). 재는 구간은 `tom_gate_window_ms`, 없으면 `window_ms` |
 | `tom_gate_action` | `drop` | 거른 탐을 어떻게 할지. `drop`은 버림, `snare`는 50ms 안에 ADTOF 스네어 타격이 없으면 SNARE로 돌리고 있으면 버림 |
+| `tom_threshold` | 없음 = 0.32 | ADTOF 탐 확신 점수의 기준값. 저장 특징에 프레임별 점수가 있을 때만 적용 |
+| `tom_peak_mode` | `madmom` | 탐 타격 시각 고르기. `madmom`은 저장소 방식(100ms 이동평균을 뺀 뒤 기준값 비교), `raw`는 이동평균을 빼지 않음. 50~70ms 간격 더블·롤의 두 번째 타격이 살아남는다 |
+| `tom_gate_mode` | `input` | 거르기 비율의 분모. `input`은 입력 드럼 전체, `others`는 snare·hh·crash·ride 트랙 합 |
+| `tom_gate_low_rescue` | 없음 | 켜면 거르기 기준 아래여도 (toms+kick 트랙)/분모가 이 값 이상이고 확신 점수가 `tom_gate_low_min_score`(0.5) 이상이며 음높이가 `tom_low_hz`(60~130Hz) 안인 타격을 탐으로 남긴다. 분리 모델이 낮은 플로어탐을 kick 트랙에 넣는 경우 대응 |
+
+`by_song.csv`의 `tomRescued`가 그렇게 남긴 수다. `tomConsistentAcc`·`f1TomConsistent`는 곡 안에서 탐 이름만 서로 바뀐 것(탐 둘인 킷의 위쪽 탐을 MID로 적을지 SMALL로 적을지)을 맞은 것으로 친 보조 지표로, 곡마다 정답 패드와 붙인 패드를 가장 잘 맞춰 주는 일대일 대응으로 센다. 2026-10-28 비교 결과는 `docs/chart-rules/tom-detect-2026-10-28/`.
 
 `tom-pitch`는 ADTOF가 탐으로 잡은 타격마다 음높이·거르기 비율·짝지은 정답 탐·근처 정답 패드를 `pred_tom.csv`에 남기고, 거르기 비율 분포(`tom_gate_ratio.png`)와 문턱값별로 버려지는 정답 탐·정답 없는 탐 수를 `summary.md`에 적는다.
 
@@ -449,6 +458,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 | `gmd_test.yaml` | GMD test split 드럼 연주 45개(52분). 드럼만 있는 전자 드럼 녹음 + MIDI 타격 정답 | 드럼 트랙 입력 채보, 8패드별 점수 |
 | `mdb_drums.yaml` | MDB Drums 23곡(22분). 실제 밴드 녹음, 원곡·드럼 트랙·사람이 적은 타격 정답 | 논문 수치와 검산 |
 | `mdb_drums_unseen.yaml` | 위 23곡 중 MUSDB18 train에 없는 11곡 | 분리 모델을 거치는 평가는 이 묶음만 (아래 참고) |
+| `star_drums_test.yaml`, `star_drums_validation.yaml` | STAR Drums(Weber 외 2025) test·validation 분할. 실제 반주에 샘플 킷 20개(어쿠스틱 15·전자 5)로 합성한 드럼, 탐 3종(HT·MT·LT) 정답. 미리보기 1곡은 `star_drums_preview.yaml` | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 오디오는 CC BY-NC-SA·개별 라이선스라 평가·연구용. 181GB 전체는 GPU 서버에 받고 로더는 `bench/datasets/star.py` |
 
 GMD 연주는 `list-gmd --split test --min-sec 30 --hits`로 패드별 타격 수를 보고 골랐다. test split만 쓰는 이유는 채보 후보 중 셋(OaF Drums·YourMT3+·Inverse Drum Machine)이 GMD를 다시 녹음·렌더링한 E-GMD·StemGMD의 train split로 학습했기 때문이다. 밴드 장르만 고르면 크래시 73개·미드탐 34개뿐이라 재즈 2개·라틴 3개 연주를 더해 탐·심벌이 각 100개 이상 되게 했다. 합성곡에 쓴 연주 5개는 뺐다.
 

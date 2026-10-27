@@ -1,0 +1,24 @@
+# 피크 사이 최소 거리(반음)와 히스토그램 뭉개기 폭 훑기. 검출은 거르기 0.10 + 이동평균 안 뺌 0.32
+candidates:
+- name: gap1.5
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 1.5}
+- name: gap2.0
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 2.0}
+- name: gap2.5
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 2.5}
+- name: gap3.0
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: gap3.5
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5}
+- name: gap4.0
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 4.0}
+- name: gap4.5
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 4.5}
+- name: gap5.0
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 5.0}
+- name: gap3.0_sm0.25
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_relative_smooth: 0.25}
+- name: gap3.0_sm0.75
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_relative_smooth: 0.75}
+- name: gap3.0_sm1.0
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_relative_smooth: 1.0}
