@@ -28,6 +28,9 @@ public class PlayUploadFilter extends OncePerRequestFilter {
 		String path=request.getServletPath(); if(path.isEmpty()) path=request.getRequestURI();
 		boolean summary=path.equals("/api/v1/plays"), raw=path.matches("/api/v1/plays/[^/]+/raw");
 		if(!request.getMethod().equals("POST") || !(summary||raw)) { chain.doFilter(request,response); return; }
+		if(raw && request.getContentLengthLong()<0) {
+			errors.write(response,PlayErrorCode.PLAY_RAW_LENGTH_REQUIRED,null,path); return;
+		}
 		if(request.getContentLengthLong()>(summary?PlayJson.SUMMARY_BYTES:21L*1024*1024)) {
 			errors.write(response,PlayErrorCode.PLAY_UPLOAD_TOO_LARGE,null,path); return;
 		}
