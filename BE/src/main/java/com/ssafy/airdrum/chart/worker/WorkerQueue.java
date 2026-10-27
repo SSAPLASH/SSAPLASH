@@ -26,7 +26,7 @@ class WorkerQueue {
         this.newTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.newTx.setTimeout(15);
     }
-    record Input(String role, UUID fileId, String contentType, long sizeBytes, String sha256) {}
+    record Input(String role, UUID fileId, String contentType, long sizeBytes, String sha256, int durationMs) {}
     record Assignment(int contractVersion, long jobId, long songId, UUID attemptId, String resumeStage,
             Input input, List<String> requestedDifficulties, List<Integer> acceptedChartSchemaVersions,
             Instant leaseExpiresAt, Instant stageDeadlineAt) {}
@@ -98,8 +98,9 @@ class WorkerQueue {
                    CASE WHEN j.status='SEPARATING' THEN au.id ELSE f.id END,
                    CASE WHEN j.status='SEPARATING' THEN au.content_type ELSE f.content_type END,
                    CASE WHEN j.status='SEPARATING' THEN au.size_bytes ELSE f.size_bytes END,
-                   CASE WHEN j.status='SEPARATING' THEN au.sha256 ELSE f.sha256 END
-            FROM chart_jobs j JOIN chart_job_attempts a ON a.id=? AND a.job_id=j.id
+                   CASE WHEN j.status='SEPARATING' THEN au.sha256 ELSE f.sha256 END,
+                   so.duration_ms
+            FROM chart_jobs j JOIN songs so ON so.id=j.song_id JOIN chart_job_attempts a ON a.id=? AND a.job_id=j.id
             LEFT JOIN audio_uploads au ON au.job_id=j.id AND au.status='ACCEPTED'
             LEFT JOIN chart_worker_files f ON f.job_id=j.id AND f.object_key=j.drum_stem_key AND f.role='DRUM_STEM'
             WHERE j.id=?
@@ -107,7 +108,7 @@ class WorkerQueue {
                 UUID file=r.getObject(7,UUID.class);
                 if(file==null) throw new BusinessException(WorkerError.UNAVAILABLE);
                 return new Assignment(1,r.getLong(1),r.getLong(2),attempt,r.getString(3),
-                        new Input(r.getString(6),file,r.getString(8),r.getLong(9),r.getString(10)),
+                        new Input(r.getString(6),file,r.getString(8),r.getLong(9),r.getString(10),r.getInt(11)),
                         List.of("NORMAL"),List.of(1),r.getTimestamp(4).toInstant(),r.getTimestamp(5).toInstant());
             },attempt,id);
     }
