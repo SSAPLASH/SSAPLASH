@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PARAM_ACK_END, STICK_PARAMS, decodePacket, type DecodedPacket } from '@/input/stickProtocol';
-import { buildParamAck } from './mockStick';
+import { buildParamAck, buildStatus } from './mockStick';
 import { ParamStore } from './params';
 
+const status = (fwMajor: number): DecodedPacket =>
+  decodePacket(buildStatus({ batteryPct: null, rssi: -60, fwMajor, fwMinor: 0 }), 0);
+/** 복원 때 보낸 SET_PARAM을 id → 값으로 */
+const sentValues = (bytes: Uint8Array[]): Record<number, number> =>
+  Object.fromEntries(bytes.map((b) => [b[1], new DataView(b.buffer, b.byteOffset).getInt16(2, true)]));
 const ack = (paramId: number, value: number): DecodedPacket => decodePacket(buildParamAck({ paramId, value }), 0);
 
 let sent: Uint8Array[];
@@ -91,6 +96,36 @@ describe('apply', () => {
   it('resetDefaults는 14개를 모두 보낸다', () => {
     store.resetDefaults();
     expect(sent.length).toBe(STICK_PARAMS.length);
+  });
+
+  it('기본값 복원: STATUS 전은 Feather 표', () => {
+    expect(store.firmware()).toBe('feather');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200, 0x01: 150, 0x02: 30 });
+  });
+
+  it('기본값 복원: fwMajor 0은 NUCLEO 표', () => {
+    store.onPacket(status(0));
+    expect(store.firmware()).toBe('nucleo');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 30, 0x0b: 400, 0x0e: 3000, 0x0f: 1000, 0x01: 150 });
+  });
+
+  it('기본값 복원: fwMajor 1은 Feather 표, 마지막 STATUS가 이긴다, reset하면 미확인', () => {
+    store.onPacket(status(0));
+    store.onPacket(status(1));
+    expect(store.firmware()).toBe('feather');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200 });
+    store.reset();
+    expect(store.fwMajor).toBeNull();
+  });
+
+  it('STATUS가 같은 fwMajor면 알림을 내지 않는다', () => {
+    store.onPacket(status(1));
+    const v = store.version;
+    store.onPacket(status(1));
+    expect(store.version).toBe(v);
   });
 });
 
