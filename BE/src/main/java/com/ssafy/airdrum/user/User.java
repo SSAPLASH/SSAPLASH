@@ -18,7 +18,7 @@ import jakarta.persistence.Table;
 /**
  * 회원 ({@code users}). 스키마는 V1 마이그레이션이 정의하고 이 매핑은 그것과 맞아야 한다(Hibernate validate).
  *
- * <p>세터를 두지 않는다. 상태를 바꾸는 메서드(탈퇴 등)는 그 전이를 구현하는 작업에서 추가한다.
+ * <p>세터를 두지 않는다. 상태는 전이 메서드({@link #withdraw})로만 바꾼다.
  */
 @Entity
 @Table(name = "users")
@@ -82,6 +82,20 @@ public class User {
 		}
 		this.role = role;
 		return true;
+	}
+
+	/**
+	 * 탈퇴 전이(ACTIVE → WITHDRAWN, 되돌리지 않는다). 호출자는 행을 {@code FOR UPDATE}로 잠근 뒤 상태를 먼저 확인한다.
+	 *
+	 * @throws IllegalStateException 이미 탈퇴한 회원
+	 */
+	public void withdraw(Instant now) {
+		Objects.requireNonNull(now, "now");
+		if (status == UserStatus.WITHDRAWN) {
+			throw new IllegalStateException("회원 " + id + "은(는) 이미 탈퇴했습니다.");
+		}
+		status = UserStatus.WITHDRAWN;
+		withdrawnAt = now.truncatedTo(ChronoUnit.MICROS);
 	}
 
 	@PrePersist
