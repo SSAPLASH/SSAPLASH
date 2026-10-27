@@ -17,7 +17,9 @@ import type { PadId } from '@/domain/pads';
 import type { HitFx, InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
-import { buildPlayLog, savePlayLog, toLoggedHit, type LoggedHit } from '@/engine/playLog';
+import { buildPlayLog, savePlayLog } from '@/engine/playLog';
+import { PlayRecorder } from '@/engine/playRecorder';
+import { startPlaySync } from '@/app/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
@@ -79,7 +81,7 @@ export function PlayPage() {
 
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
-  const hits = useRef<LoggedHit[]>([]);
+  const recorder = useRef(new PlayRecorder());
   // 킷 뷰 타격 이펙트 (useHitFx가 live 스토어 타격을 기록). 하이웨이 뷰에서는 쓰지 않는다
   const hitFx = useRef(new Map<PadId, HitFx>());
   useHitFx(hitFx);
@@ -120,15 +122,7 @@ export function PlayPage() {
         pauseRef.current === null &&
         (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
-      if (active) {
-        const lh = toLoggedHit(hit);
-        if (ev) {
-          lh.judgement = ev.judgement;
-          lh.matchedNoteIndex = ev.noteIndex;
-          lh.deltaMs = ev.deltaMs ?? undefined;
-        }
-        hits.current.push(lh);
-      }
+      if (active) recorder.current.hit(hit, ev, ss);
       reportHit(hit, ev, active ? ss : null);
     });
   }, []);
@@ -141,13 +135,14 @@ export function PlayPage() {
         audioOffsetMs: settings.audioOffsetMs,
       });
       ss.onJudgement((e) => {
+        recorder.current.judgement(e);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
       });
       flashes.current.clear();
       hitFx.current.clear();
       popups.current = [];
-      hits.current = [];
+      recorder.current.reset();
       finishing.current = false;
       setChart(c);
       setSession(ss);
@@ -270,7 +265,7 @@ export function PlayPage() {
     flashes.current.clear();
     hitFx.current.clear();
     popups.current = [];
-    hits.current = [];
+    recorder.current.reset();
     finishing.current = false;
     startedAt.current = new Date();
     setHud(ss.snapshot());
@@ -300,7 +295,10 @@ export function PlayPage() {
       const log = buildPlayLog({
         snapshot: ss.snapshot(),
         notes: ss.notes,
-        hits: hits.current,
+        hits: recorder.current.hits,
+        missSeqs: recorder.current.missSeqs,
+        audioOffsetMs: ss.audioOffsetMs,
+        countInMs: ss.countInMs,
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
@@ -311,6 +309,8 @@ export function PlayPage() {
         presetId: useSettings.getState().activePresetId,
       });
       savePlayLog(log);
+      // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
+      void startPlaySync(log.playId);
       navigate(`/result/${log.playId}`);
     },
     [navigate, inputSource, settings.timing],
