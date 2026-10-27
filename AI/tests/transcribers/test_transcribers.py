@@ -25,7 +25,7 @@ from ssaplash_ai.bench.transcribers import (
 
 CONFIGS_DIR = Path(__file__).resolve().parents[2] / "configs" / "bench" / "transcribers"
 IDENTITY = {
-    p: p for p in ("KICK", "SNARE", "HIHAT", "HI_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
+    p: p for p in ("KICK", "SNARE", "HIHAT", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
 }
 
 
@@ -76,7 +76,7 @@ def test_모르는_필드와_라이선스_누락은_오류():
 
 def test_eight_pad는_대응표만_보고_정해진다():
     assert _cfg().eight_pad
-    assert not _cfg(labels={**IDENTITY, "HI_TOM": "tom"}).eight_pad  # 거친 라벨
+    assert not _cfg(labels={**IDENTITY, "SMALL_TOM": "tom"}).eight_pad  # 거친 라벨
     assert not _cfg(
         labels={k: v for k, v in IDENTITY.items() if k != "RIDE"}
     ).eight_pad  # 빠진 패드
@@ -85,7 +85,7 @@ def test_eight_pad는_대응표만_보고_정해진다():
 
 def test_config_hash는_대응표가_바뀌면_달라진다():
     a = _cfg()
-    b = _cfg(labels={**IDENTITY, "HI_TOM": "MID_TOM"})
+    b = _cfg(labels={**IDENTITY, "SMALL_TOM": "MID_TOM"})
     assert a.config_hash != b.config_hash and len(a.config_hash) == 12
 
 
@@ -156,7 +156,7 @@ def test_mock_shift와_coarse(synth_song):
         _cfg(
             mock_mode="truth",
             truth_dir=str(truth_dir),
-            labels={**IDENTITY, "HI_TOM": "tom", "MID_TOM": "tom", "FLOOR_TOM": "tom"},
+            labels={**IDENTITY, "SMALL_TOM": "tom", "MID_TOM": "tom", "FLOOR_TOM": "tom"},
         ),
         "cpu",
     )
