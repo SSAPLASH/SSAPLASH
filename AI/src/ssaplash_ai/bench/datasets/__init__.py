@@ -34,6 +34,7 @@ from ssaplash_ai.bench.datasets.pads import (
     validate_hits,
     validate_pred_hits,
 )
+from ssaplash_ai.bench.datasets.star import StarDataset
 from ssaplash_ai.bench.datasets.synth import SynthDataset
 
 LOADERS: dict[str, type[BaseDataset]] = {
@@ -41,6 +42,7 @@ LOADERS: dict[str, type[BaseDataset]] = {
     SynthDataset.kind: SynthDataset,
     GmdDataset.kind: GmdDataset,
     MdbDataset.kind: MdbDataset,
+    StarDataset.kind: StarDataset,
 }
 
 
@@ -70,6 +72,7 @@ __all__ = [
     "MdbDataset",
     "MusdbDataset",
     "SongItem",
+    "StarDataset",
     "SynthDataset",
     "clip_hits",
     "count_by_pad",
