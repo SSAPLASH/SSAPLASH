@@ -24,6 +24,9 @@ import jakarta.persistence.Table;
 @Table(name = "users")
 public class User {
 
+	/** 탈퇴 회원의 닉네임. 컬럼이 NOT NULL이라 비우지 않고 이 문구로 바꾼다(ERD 3-1). */
+	public static final String WITHDRAWN_NICKNAME = "탈퇴한 사용자";
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -85,7 +88,8 @@ public class User {
 	}
 
 	/**
-	 * 탈퇴 전이(ACTIVE → WITHDRAWN, 되돌리지 않는다). 호출자는 행을 {@code FOR UPDATE}로 잠근 뒤 상태를 먼저 확인한다.
+	 * 탈퇴 전이(ACTIVE → WITHDRAWN, 되돌리지 않는다). 개인정보 컬럼도 같은 UPDATE로 비워 상태만 바뀐 채 개인정보가 남는 순간이 없게 한다.
+	 * 호출자는 행을 {@code FOR UPDATE}로 잠근 뒤 상태를 먼저 확인한다.
 	 *
 	 * @throws IllegalStateException 이미 탈퇴한 회원
 	 */
@@ -96,6 +100,9 @@ public class User {
 		}
 		status = UserStatus.WITHDRAWN;
 		withdrawnAt = now.truncatedTo(ChronoUnit.MICROS);
+		nickname = WITHDRAWN_NICKNAME;
+		email = null;
+		profileImageUrl = null;
 	}
 
 	@PrePersist
