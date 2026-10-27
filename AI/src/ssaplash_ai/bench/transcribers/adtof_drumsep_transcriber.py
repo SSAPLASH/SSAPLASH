@@ -3,11 +3,11 @@
 흐름: ADTOF(5가지: 킥·스네어·하이햇·탐·심벌) → MDX23C DrumSep(기존 msst 어댑터, 6스템: kick·snare·toms·
 hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 타격에 패드를 붙임.
 - 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 봉우리(tom_fmin~tom_fmax Hz)를 기본 주파수로
-  보고 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / HI_TOM. 경계값은 yaml(rules)에 있고 GMD 정답으로
+  보고 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / SMALL_TOM. 경계값은 yaml(rules)에 있고 GMD 정답으로
   한 번 맞춘 값(U8): GMD(TD-11 킷) 정답 탐의 기본 주파수 중앙값이 플로어 97·미드 129·하이 160Hz라
   경계를 113·142Hz로 둠. 실제 드럼 킷은 음높이가 달라 MDB에서는 틀릴 수 있음(한계로 표기).
   drum2midi의 "음높이 순서" 규칙을 절대 구간으로 바꾼 것.
-- 심벌: 타격 직후 window_ms 구간에서 crash 스템과 ride 스템의 에너지를 비교해 큰 쪽.
+- 심벌: 타격 직후 cymbal_window_ms(없으면 window_ms) 구간에서 crash 스템과 ride 스템의 에너지를 비교해 큰 쪽.
 킥·스네어·하이햇은 ADTOF 결과 그대로. 세기 없음. 채보 시간에는 ADTOF + 분리 + 규칙이 다 들어감.
 """
 
@@ -32,6 +32,8 @@ DEFAULT_RULES: dict = {
     ],  # f0 < 113 플로어, 113~142 미드, > 142 하이 (GMD TD-11 정답으로 맞춤)
     "stems": {"toms": "toms", "crash": "crash", "ride": "ride"},
     "cymbal_min_energy": 1e-8,
+    # 심벌 판정 구간. None이면 window_ms와 같음 (탐 구간만 따로 바꿀 수 있게, S15P31A307-163)
+    "cymbal_window_ms": None,
 }
 ADTOF_TOM = 47
 ADTOF_CYMBAL = 49
@@ -78,7 +80,7 @@ def tom_pad(f0: float, bands: Sequence[float]) -> str:
         return "FLOOR_TOM"
     if f0 < hi:
         return "MID_TOM"
-    return "HI_TOM"
+    return "SMALL_TOM"
 
 
 def cymbal_pad(crash_seg: np.ndarray, ride_seg: np.ndarray, min_energy: float) -> str:
@@ -98,6 +100,7 @@ def assign_pads(
 ) -> list[RawHit]:
     """ADTOF 피치별 시각 + 분리 스템 → (시각, 패드 이름, None) 목록. 패드 이름이 원래 라벨."""
     r = rules_with_defaults(rules)
+    cymbal_window = r["cymbal_window_ms"] if r.get("cymbal_window_ms") else r["window_ms"]
     names = r["stems"]
     toms = stems.get(names["toms"])
     crash = stems.get(names["crash"])
@@ -117,12 +120,12 @@ def assign_pads(
                 out.append((t, tom_pad(f0, r["tom_bands"]), None))
             elif pitch == ADTOF_CYMBAL:
                 c = (
-                    _window(crash, sample_rate, t, r["window_ms"])
+                    _window(crash, sample_rate, t, cymbal_window)
                     if crash is not None
                     else np.zeros(0)
                 )
                 d = (
-                    _window(ride, sample_rate, t, r["window_ms"])
+                    _window(ride, sample_rate, t, cymbal_window)
                     if ride is not None
                     else np.zeros(0)
                 )

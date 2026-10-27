@@ -1,6 +1,7 @@
 """패드 어휘와 타격 정답 표 (채보 벤치마크 설계 3-2절).
 
-패드 8종은 공통 명세서 채보 pad enum 7종 + MID_TOM. 이름이 확정되면 PADS만 수정.
+패드 8종은 스틱 통신 프로토콜 v0.7 패드 9종에서 HIHAT_PEDAL을 뺀 것. 채보 모델이 하이햇 페달을
+따로 못 내므로 어휘에 두지 않음. 옛 HI_TOM은 2026-10-26부터 SMALL_TOM (S15P31A307-170).
 타격 표는 numpy 구조화 배열: time_sec(초), pad(8종 중 하나), velocity(1~127, 없으면 -1).
 데이터셋별 라벨 → 패드 대응표는 각 로더가 가지고, 여기서는 표를 만들고 검사하는 함수만 제공.
 모델 예측 표(채보 설계 3-8절)는 pad 자리에 거친 라벨 COARSE(tom = 탐 중 하나, cymbal = 심벌 중
@@ -17,7 +18,7 @@ PADS: tuple[str, ...] = (
     "KICK",
     "SNARE",
     "HIHAT",
-    "HI_TOM",
+    "SMALL_TOM",
     "MID_TOM",
     "FLOOR_TOM",
     "CRASH",
@@ -29,7 +30,7 @@ FIVE_GROUPS: dict[str, str] = {
     "KICK": "kick",
     "SNARE": "snare",
     "HIHAT": "hihat",
-    "HI_TOM": "tom",
+    "SMALL_TOM": "tom",
     "MID_TOM": "tom",
     "FLOOR_TOM": "tom",
     "CRASH": "cymbal",

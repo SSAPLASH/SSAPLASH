@@ -9,6 +9,7 @@ import { useLive, type MetronomeLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
+import { diagTap } from '@/engine/diagTap';
 import type { ResolvedHit, SensorId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { layoutToProfile } from '@/domain/kitJudge';
@@ -154,6 +155,8 @@ export function bootstrapInput(): void {
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
     if (soundOnHit) pushTelemetry(hit);
+    // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
+    diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
     if (hit.source !== 'keyboard') yawDriftMonitor.observe(hit, currentProfile());
   });
