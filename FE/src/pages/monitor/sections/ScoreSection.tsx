@@ -41,7 +41,7 @@ export function ScoreSection({ health, snap, judgeLog }: { health: StageHealth; 
       {s.session ? (
         <SessionLine s={s.session} />
       ) : (
-        <p className="faint mon-empty">채점은 연주 창 따라보기(다음 단계)에서 보입니다. 이 창에서 직접 곡을 연주하면 채워집니다.</p>
+        <p className="faint mon-empty">채점은 상단 바에서 입력 방식을 따라보기로 바꾸면 연주 창(/play·/sheet)의 결과가 채워집니다. 이 창에서 직접 곡을 연주해도 채워집니다.</p>
       )}
       <MetricRow items={health.items} />
       {s.session && (
