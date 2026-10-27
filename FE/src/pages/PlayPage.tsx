@@ -18,7 +18,7 @@ import type { HitFx, InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, savePlayLog, toLoggedHit, type LoggedHit } from '@/engine/playLog';
-import { pushTelemetry } from '@/engine/telemetry';
+import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -96,6 +96,7 @@ export function PlayPage() {
   useEffect(() => {
     setSoundOnHit(false);
     return () => {
+      diagSessionEnd('left');
       setSoundOnHit(true);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
@@ -128,7 +129,7 @@ export function PlayPage() {
         }
         hits.current.push(lh);
       }
-      pushTelemetry(hit, ev ? { judgement: ev.judgement, deltaMs: ev.deltaMs ?? undefined } : undefined);
+      reportHit(hit, ev, active ? ss : null);
     });
   }, []);
 
@@ -220,10 +221,12 @@ export function PlayPage() {
     clock.begin();
     setSyncInfo({ ...clock.sync });
     inputManager.setCandidateProvider((t) => ss.candidates(t));
+    diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setStage('play');
   }, [acc]);
 
   const toSelect = useCallback(() => {
+    diagSessionEnd('left');
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -239,6 +242,7 @@ export function PlayPage() {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
     clock.pause(reason);
+    diagSessionPhase('pause');
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
     setPauseReason(reason);
@@ -251,6 +255,7 @@ export function PlayPage() {
     const clock = clockRef.current;
     if (!clock || pauseRef.current === null || !readyRef.current) return;
     clock.resume();
+    diagSessionPhase('resume');
     setSyncInfo({ ...clock.sync });
     setPauseReason(null);
   }, []);
@@ -261,6 +266,7 @@ export function PlayPage() {
     const ss = sessionRef.current;
     if (!clock || !ss) return;
     clock.restart();
+    diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     flashes.current.clear();
     hitFx.current.clear();
     popups.current = [];
@@ -275,6 +281,7 @@ export function PlayPage() {
   // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
   const leave = useCallback(() => {
     const c = sessionRef.current?.chart;
+    diagSessionEnd('left');
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -286,6 +293,7 @@ export function PlayPage() {
     (ss: RhythmSession) => {
       if (finishing.current) return;
       finishing.current = true;
+      diagSessionEnd('finished');
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);

@@ -1,0 +1,133 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PARAM_ACK_END, STICK_PARAMS, decodePacket, type DecodedPacket } from '@/input/stickProtocol';
+import { buildParamAck } from './mockStick';
+import { ParamStore } from './params';
+
+const ack = (paramId: number, value: number): DecodedPacket => decodePacket(buildParamAck({ paramId, value }), 0);
+
+let sent: Uint8Array[];
+let store: ParamStore;
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  sent = [];
+  store = new ParamStore((b) => sent.push(b));
+});
+afterEach(() => {
+  store.reset();
+  vi.useRealTimers();
+});
+
+describe('load', () => {
+  it('14개 + 종료 표시 → loaded, lost 0', () => {
+    expect(store.state).toBe('unknown');
+    store.load();
+    expect(store.state).toBe('loading');
+    expect(sent[0][0]).toBe(0x17);
+    for (const p of STICK_PARAMS) store.onPacket(ack(p.id, p.defaultValue));
+    store.onPacket(ack(PARAM_ACK_END, 14));
+    expect(store.state).toBe('loaded');
+    expect(store.lostCount).toBe(0);
+    expect(store.rows().every((r) => r.current !== null && r.note === null)).toBe(true);
+  });
+
+  it('13개 + 종료(value 14) → 유실 1, 못 받은 id는 lost', () => {
+    store.load();
+    for (const p of STICK_PARAMS.slice(0, 13)) store.onPacket(ack(p.id, p.defaultValue));
+    store.onPacket(ack(PARAM_ACK_END, 14));
+    expect(store.lostCount).toBe(1);
+    const missing = store.rows()[13];
+    expect(missing.current).toBeNull();
+    expect(missing.note).toBe('lost');
+    expect(store.rows()[0].note).toBeNull();
+  });
+
+  it('1초 안에 종료 표시가 없으면 보조 타임아웃으로 loaded', () => {
+    store.load();
+    store.onPacket(ack(0x01, 150));
+    vi.advanceTimersByTime(999);
+    expect(store.state).toBe('loading');
+    vi.advanceTimersByTime(2);
+    expect(store.state).toBe('loaded');
+    expect(store.lostCount).toBeNull();
+    expect(store.rows()[1].note).toBe('lost');
+  });
+
+  it('구독자는 변경마다 알림을 받고 version이 오른다', () => {
+    let n = 0;
+    store.subscribe(() => n++);
+    const v = store.version;
+    store.load();
+    expect(n).toBeGreaterThan(0);
+    expect(store.version).toBeGreaterThan(v);
+  });
+});
+
+describe('apply', () => {
+  it('같은 값이 돌아오면 note 없음, 다른 값이면 clipped', () => {
+    store.apply(0x02, 20);
+    expect(sent[0]).toEqual(new Uint8Array([0x14, 0x02, 20, 0]));
+    let r = store.rows().find((x) => x.id === 0x02)!;
+    expect(r.pending).toBe(true);
+    expect(r.input).toBe(20);
+    store.onPacket(ack(0x02, 20));
+    r = store.rows().find((x) => x.id === 0x02)!;
+    expect(r).toMatchObject({ pending: false, note: null, current: 20 });
+
+    store.apply(0x02, 500);
+    store.onPacket(ack(0x02, 100));
+    r = store.rows().find((x) => x.id === 0x02)!;
+    expect(r).toMatchObject({ pending: false, note: 'clipped', current: 100 });
+  });
+
+  it('500ms 무응답 → noAck', () => {
+    store.apply(0x03, 300);
+    vi.advanceTimersByTime(499);
+    expect(store.rows().find((x) => x.id === 0x03)!.pending).toBe(true);
+    vi.advanceTimersByTime(2);
+    expect(store.rows().find((x) => x.id === 0x03)).toMatchObject({ pending: false, note: 'noAck' });
+  });
+
+  it('resetDefaults는 14개를 모두 보낸다', () => {
+    store.resetDefaults();
+    expect(sent.length).toBe(STICK_PARAMS.length);
+  });
+});
+
+describe('적용 확인', () => {
+  it('padTable은 3패킷이면 마지막 값(7)', () => {
+    store.expectConfirmation('padTable');
+    store.onPacket(ack(0x20, 3));
+    store.onPacket(ack(0x20, 6));
+    store.onPacket(ack(0x20, 7));
+    vi.advanceTimersByTime(600);
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'padTable', value: 7 });
+  });
+
+  it('창 안에 안 오면 value null(확인 없음), 창이 닫힌 뒤 오는 값은 무시', () => {
+    store.expectConfirmation('yawOffset');
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'yawOffset', value: null, open: true });
+    vi.advanceTimersByTime(600);
+    store.onPacket(ack(0x21, 100));
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'yawOffset', value: null, open: false });
+  });
+
+  it('최신 먼저, 최대 20개', () => {
+    for (let i = 0; i < 25; i++) store.expectConfirmation(i % 2 ? 'yawOffset' : 'resetPose');
+    const c = store.confirmations();
+    expect(c.length).toBe(20);
+    store.onPacket(ack(0x22, -500));
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'resetPose', value: -500 });
+  });
+});
+
+describe('reset', () => {
+  it('unknown으로 돌아가고 타이머를 정리한다', () => {
+    store.load();
+    store.apply(0x01, 1);
+    store.reset();
+    expect(store.state).toBe('unknown');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(store.rows().every((r) => r.current === null && !r.pending)).toBe(true);
+  });
+});

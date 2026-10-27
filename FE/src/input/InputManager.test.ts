@@ -58,6 +58,15 @@ describe('InputManager 판정', () => {
     expect(hits[0]).toMatchObject({ pad: 'SNARE', velocity: 90, judgedBy: 'stick', peakSpeedDps: 1500 });
   });
 
+  it('스틱 hit seq를 ResolvedHit에 그대로 싣는다(판정에는 영향 없음)', async () => {
+    const { src, hits } = await setup('ble');
+    src.fire(hit({ pad: 'SNARE', velocity: 90, seq: 255 }));
+    src.fire(hit({ pad: 'SNARE', velocity: 90 }));
+    expect(hits[0]).toMatchObject({ seq: 255, pad: 'SNARE', judgedBy: 'stick' });
+    expect(hits[1].seq).toBeUndefined();
+    expect({ ...hits[0], id: 0, seq: undefined, tResolved: 0 }).toEqual({ ...hits[1], id: 0, tResolved: 0 });
+  });
+
   it('스틱 velocity는 1~127로 clamp한다', async () => {
     const { src, hits } = await setup('ble');
     src.fire(hit({ pad: 'SNARE', velocity: 0 }));
