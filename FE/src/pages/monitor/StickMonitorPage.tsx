@@ -17,6 +17,7 @@ import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
 import { downloadJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
 import { SwingAssembler } from '@/monitor/swingAssembler';
+import { buildTrace, type TraceSelection } from '@/monitor/traceIndex';
 import { LossHistory } from '@/monitor/syncTrend';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
@@ -27,10 +28,10 @@ import { ClockSection } from './sections/ClockSection';
 import { ControlSection } from './sections/ControlSection';
 import { Overview } from './sections/Overview';
 import { OutputSection } from './sections/OutputSection';
-import { PendingSection } from './sections/PendingSection';
 import { ResolveSection } from './sections/ResolveSection';
 import { ScoreSection } from './sections/ScoreSection';
 import { SensorSection } from './sections/SensorSection';
+import { TraceSection } from './sections/TraceSection';
 import { TransportSection } from './sections/TransportSection';
 import './monitor.css';
 
@@ -292,13 +293,40 @@ export function StickMonitorPage() {
     return () => clearInterval(id);
   }, [assembler]);
   // HIT 행 클릭: 센서 섹션에서 SWING 패널을 열고 그 스윙을 고른다
+  // 같은 클릭으로 공통 선택(타격 추적)도 정한다
+  const [traceSel, setTraceSel] = useState<TraceSelection | null>(null);
   const onSelectHit = useCallback(
-    (stick: 0 | 1, seq: number) => {
+    (stick: 0 | 1, seq: number, t: number) => {
       setSelectedSwing(`${stick}-${seq}`);
+      setTraceSel({ kind: 'packet', stick, seq, t });
       setSection('sensor');
       setOpenSwingSignal(++signalSeq.current);
     },
     [setSection],
+  );
+  // ⑤ 판정 행 클릭: 그 타격을 고르고 타격 추적으로 이동
+  const onSelectJudged = useCallback(
+    (hitId: number) => {
+      setTraceSel({ kind: 'hit', hitId });
+      setSection('trace');
+      setOpenSwingSignal(0);
+      setOpenTrendSignal(0);
+    },
+    [setSection],
+  );
+  const openTrace = useCallback(() => selectSection('trace'), [selectSection]);
+  // 선택한 타격의 카드. 스냅샷·조립 결과가 바뀔 때만 다시 만든다
+  const traceCard = useMemo(
+    () =>
+      traceSel
+        ? buildTrace(traceSel, { rows: snap.rows, events: judgeLog.events(), hasSwing: (k) => assembler.get(k) !== undefined })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [traceSel, snap, swingVersion, assembler],
+  );
+  const sideSelected = useMemo(
+    () => (traceSel ? { summary: traceCard?.summary ?? null } : null),
+    [traceSel, traceCard],
   );
 
   // 산점 점 클릭: 센서 섹션의 같은 스틱·seq HIT 행을 강조·스크롤한다
@@ -408,6 +436,7 @@ export function StickMonitorPage() {
               lossHistory.clear();
               judgeLog.clear();
               latencyLog.clear();
+              setTraceSel(null);
             }}>
             지우기
           </button>
@@ -416,7 +445,7 @@ export function StickMonitorPage() {
       {paused && <div className="notice small">화면 갱신이 멈춰 있습니다. 버퍼에는 계속 쌓입니다.</div>}
 
       <div className="mon-layout">
-        <Sidebar current={section} onSelect={selectSection} health={health} />
+        <Sidebar current={section} onSelect={selectSection} health={health} selected={sideSelected} onOpenTrace={openTrace} />
         <div className="mon-body">
           {section === 'overview' && (
             <Overview
@@ -451,9 +480,21 @@ export function StickMonitorPage() {
             <ClockSection health={health.clock} snap={snap} loss={lossHistory} openTrendSignal={openTrendSignal} />
           )}
           {section === 'resolve' && <ResolveSection health={health.resolve} snap={snap} judgeLog={judgeLog} />}
-          {section === 'score' && <ScoreSection health={health.score} snap={snap} judgeLog={judgeLog} />}
+          {section === 'score' && <ScoreSection health={health.score} snap={snap} judgeLog={judgeLog} onSelectTrace={onSelectJudged} />}
           {section === 'output' && <OutputSection health={health.output} snap={snap} latency={latencyLog} />}
-          {section === 'trace' && <PendingSection title="타격 추적" />}
+          {section === 'trace' && (
+            <TraceSection
+              snap={snap}
+              judgeLog={judgeLog}
+              selection={traceSel}
+              card={traceCard}
+              onSelect={setTraceSel}
+              assembler={assembler}
+              swingVersion={swingVersion}
+              send={send}
+              canSend={canSend}
+            />
+          )}
           {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} />}
         </div>
       </div>

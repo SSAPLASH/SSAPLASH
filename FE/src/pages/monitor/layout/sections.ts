@@ -23,8 +23,6 @@ export type StageHealthMap = Record<StageKey, StageHealth>;
 
 export const LEVEL_LABEL: Record<HealthLevel, string> = { ok: '정상', warn: '주의', bad: '이상', idle: '데이터 없음' };
 
-export const PENDING_REASON = '타격 추적은 다음 단계에서 연결됩니다';
-
 const STAGE_KEYS: readonly Section[] = ['transport', 'sensor', 'clock', 'resolve', 'score', 'output'];
 const isStage = (key: Section): key is StageKey => STAGE_KEYS.includes(key);
 
@@ -32,5 +30,5 @@ export const sectionLevel = (key: Section, health: StageHealthMap): HealthLevel 
 
 export const sectionReason = (key: Section, health: StageHealthMap): string | null => {
   if (isStage(key)) return health[key].reason;
-  return key === 'control' || key === 'overview' ? null : PENDING_REASON;
+  return null;
 };
