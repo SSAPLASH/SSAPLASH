@@ -8,7 +8,10 @@ import {
   PARAM_ACK_RESET_POSE,
   PARAM_ACK_YAW_OFFSET,
   STICK_PARAMS,
+  firmwareOfMajor,
+  stickParamDefault,
   type DecodedPacket,
+  type StickFirmware,
   type StickParam,
 } from '@/input/stickProtocol';
 
@@ -68,6 +71,8 @@ export class ParamStore {
   /** GET_PARAMS 종료 표시로 알게 된 유실 개수. 아직 모르면 null */
   lostCount: number | null = null;
   version = 0;
+  /** 마지막 STATUS의 fwMajor. 아직 못 받았으면 null(기본값 표는 Feather로 본다) */
+  fwMajor: number | null = null;
 
   private send: (bytes: Uint8Array) => void;
   private deps: Required<ParamStoreDeps>;
@@ -113,6 +118,11 @@ export class ParamStore {
     return () => {
       this.listeners.delete(fn);
     };
+  }
+
+  /** 지금 쓰는 기본값 표의 펌웨어. STATUS 전이면 Feather */
+  firmware(): StickFirmware {
+    return this.fwMajor === null ? 'feather' : firmwareOfMajor(this.fwMajor);
   }
 
   /** STICK_PARAMS 순서의 표 행 */
@@ -165,6 +175,14 @@ export class ParamStore {
   }
 
   onPacket(p: DecodedPacket): void {
+    if (p.kind === 'status') {
+      // 스틱 2개의 fwMajor가 다르면 마지막 STATUS 기준
+      if (p.fwMajor !== this.fwMajor) {
+        this.fwMajor = p.fwMajor;
+        this.changed();
+      }
+      return;
+    }
     if (p.kind !== 'paramAck') return;
     const id = p.paramId;
     if (id === PARAM_ACK_END) {
@@ -221,9 +239,10 @@ export class ParamStore {
     this.changed();
   }
 
-  /** 모든 파라미터를 기본값으로 SET_PARAM */
+  /** 모든 파라미터를 지금 펌웨어 표의 기본값으로 SET_PARAM */
   resetDefaults(): void {
-    for (const p of STICK_PARAMS) this.apply(p.id, p.defaultValue);
+    const fw = this.firmware();
+    for (const p of STICK_PARAMS) this.apply(p.id, stickParamDefault(p, fw));
   }
 
   /** 명령 바가 SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE를 보낸 직후 호출. 500ms 창을 연다 */
@@ -251,6 +270,7 @@ export class ParamStore {
     this.received.clear();
     this.confirms = [];
     this.lostCount = null;
+    this.fwMajor = null;
     this.state = 'unknown';
     this.initRows();
     this.changed();
