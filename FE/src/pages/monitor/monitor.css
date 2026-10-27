@@ -841,3 +841,33 @@
 .mon-key.bad .mon-key-value {
   color: var(--miss);
 }
+
+/* 녹화 재생 바 */
+.mon-replay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mon-replay-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mon-replay-speed {
+  display: inline-flex;
+  gap: 4px;
+}
+.mon-replay-bar {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 8px;
+}
+.mon-replay-time {
+  font-variant-numeric: tabular-nums;
+}

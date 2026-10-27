@@ -17,6 +17,8 @@ export function ControlSection({
   follow,
   summary,
   onSummary,
+  canReplay,
+  onReplay,
 }: {
   store: ParamStore;
   send: SendFn;
@@ -26,6 +28,9 @@ export function ControlSection({
   follow: boolean;
   summary: RecordingSummary | null;
   onSummary: (s: RecordingSummary | null) => void;
+  /** 녹화 파일을 열었을 때 재생해도 되는지(녹화 중에는 요약만) */
+  canReplay: boolean;
+  onReplay: (parsed: ParsedRecording, name: string) => void;
 }) {
   return (
     <div className="mon-section">
@@ -35,7 +40,7 @@ export function ControlSection({
         <CommandBar send={send} store={store} profile={profile} canSend={canSend} />
       </div>
       <TelemetryPanel follow={follow} />
-      <SummaryPanel summary={summary} onSummary={onSummary} />
+      <SummaryPanel summary={summary} onSummary={onSummary} canReplay={canReplay} onReplay={onReplay} />
     </div>
   );
 }
@@ -84,15 +89,34 @@ function TelemetryPanel({ follow }: { follow: boolean }) {
 const fmt1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : v.toFixed(1));
 
 /** 녹화 요약 패널: 방금 녹화 또는 연 녹화 파일의 구간 지연·rtt·delta 표. 표 복사는 Wiki 붙여넣기용 Markdown */
-function SummaryPanel({ summary, onSummary }: { summary: RecordingSummary | null; onSummary: (s: RecordingSummary | null) => void }) {
+type ParsedRecording = ReturnType<typeof parseJsonl>;
+
+function SummaryPanel({
+  summary,
+  onSummary,
+  canReplay,
+  onReplay,
+}: {
+  summary: RecordingSummary | null;
+  onSummary: (s: RecordingSummary | null) => void;
+  canReplay: boolean;
+  onReplay: (parsed: ParsedRecording, name: string) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const openFile = async (file: File) => {
     try {
-      onSummary(summarizeRecording(parseJsonl(await file.text())));
-      setError(null);
+      const parsed = parseJsonl(await file.text());
+      onSummary(summarizeRecording(parsed));
+      // 요약과 함께 재생 모드로 연다. 녹화 중에는 이 창의 녹화에 재생 패킷이 섞이므로 요약만 보인다
+      if (canReplay) {
+        onReplay(parsed, file.name);
+        setError(null);
+      } else {
+        setError('녹화 중에는 재생하지 않고 요약만 보입니다. 녹화를 정지한 뒤 다시 여세요.');
+      }
     } catch (e) {
       setError(`녹화 파일을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -125,7 +149,7 @@ function SummaryPanel({ summary, onSummary }: { summary: RecordingSummary | null
       <h4 className="mon-h">녹화 요약</h4>
       <div className="mon-summary-actions">
         <button className="btn-ghost small" onClick={() => fileRef.current?.click()}>
-          녹화 파일 열기
+          녹화 파일 열기·재생
         </button>
         <input
           ref={fileRef}
