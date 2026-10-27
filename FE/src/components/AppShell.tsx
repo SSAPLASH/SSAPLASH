@@ -45,6 +45,7 @@ export function AppShell({ authRequired }: Props) {
           <NavLink to="/play">리듬 게임</NavLink>
           <NavLink to="/sheet">악보 연습</NavLink>
           <NavLink to="/free">자유 연주</NavLink>
+          <NavLink to="/studio">곡 만들기</NavLink>
         </nav>
         <Metronome />
         <div className="topbar-right">
