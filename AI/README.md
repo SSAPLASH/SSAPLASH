@@ -38,7 +38,7 @@ AI/
 │   │   │                adtof_transcriber(ADTOF), adtof_drumsep_transcriber(ADTOF + 드럼 킷 분리 + 규칙),
 │   │   │                external_transcriber(별도 가상환경 스크립트 실행)
 │   │   ├─ metrics/      지표 계산. bss_eval_metrics(SDR·SIR·SAR·SI-SDR), onset_preservation(타격 보존율),
-│   │   │                attack_slope_distortion(어택 왜곡), resource_usage(시간·RAM·VRAM), hit_f1(채보 타격 F1)
+│   │   │                attack_slope_distortion(attack slope 왜곡), resource_usage(시간·RAM·VRAM), hit_f1(채보 타격 F1)
 │   │   ├─ analysis/     채보 규칙 분석. rule_features(ADTOF 타격 시각·드럼 킷 분리 트랙 저장), rule_eval(규칙 후보 점수·혼동표),
 │   │   │                tom_pitch(정답 탐 음높이 분포·경계 후보)
 │   │   ├─ runner/       벤치마크 실행. benchmark_runner(분리 모델 × 곡), transcription_runner(채보 모델 × 곡 × 입력),
@@ -176,7 +176,7 @@ uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results
 | 파일 | 내용 |
 | --- | --- |
 | `results.csv` | 곡 × 모델당 1행. 실행 식별(runId·device·gpuName·host), 모델 식별, 곡 식별, 아래 지표 열, 실패한 곡은 `error` 열에 예외 요약. `gpuName`은 torch가 알려주는 GPU 이름이고 CPU 실행이면 빈칸 |
-| `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스. 드럼 SDR 내림차순), 보조값 표, 데이터셋별 표, 실패 목록 |
+| `summary.md` | 모델별 비교표(드럼 SDR, 타격 보존율, attack slope 왜곡, 반주 SIR, RTF, 피크 GPU 메모리, 가중치 라이선스. 드럼 SDR 내림차순), 보조값 표, 데이터셋별 표, 실패 목록 |
 | `per_song.csv` | 보고서에 쓴 곡별 값 (CSV 여러 개를 합친 경우 합친 것) |
 | `metrics_by_model.png`, `rtf_vs_sdr.png` | 모델별 지표 막대, RTF 대 드럼 SDR 산점도 |
 | `separated/<모델>/<곡>/{drums,accomp}.wav` | `--save-wav`로 저장한 분리 결과 (청취용) |
@@ -356,7 +356,7 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 | `siSdrDrums`, `siSdrAccomp` | 배율 불변 SDR (dB) | 곡 전체 1회 |
 | `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MUSDB면 정답 드럼 스템에 같은 검출기 적용 |
 | `onsetF1Tight` | 같은 것, ±25ms | |
-| `attackSlopeDistortion` | 어택(타격 직후 음량이 솟는 구간) 왜곡. 0이면 원음 그대로 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
+| `attackSlopeDistortion` | attack slope는 드럼을 친 직후 10ms 동안 소리가 커지는 기울기(Beyond SDR 논문 용어). 분리한 드럼의 이 기울기가 정답 드럼과 얼마나 달라졌는지를 잼. 0이면 원음 그대로, 클수록 타격 앞머리가 뭉개진 것. 뭉개지면 채보 모델이 타격 시각을 늦게 잡거나 놓치므로 봄 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
 | `separateSec`, `rtf` | 분리 시간(초), RTF = 분리 시간 / 곡 길이 | 벽시계. 모델 로드 제외. 로드 직후 첫 곡을 한 번 분리하고 버려(워밍업, `--no-warmup`으로 생략) GPU 커널 준비 시간을 뺀다 |
 | `loadSec` | 모델 로드 시간 | 가중치 다운로드 제외. 곡마다 같은 값 반복 |
 | `peakRamMb`, `peakVramMb` | 분리 중 최대 메모리 (MB) | RAM은 50ms마다 프로세스 RSS 표본의 최댓값, VRAM은 torch 최대 할당량. CPU 실행이면 VRAM은 nan |

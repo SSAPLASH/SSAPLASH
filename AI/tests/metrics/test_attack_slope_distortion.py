@@ -1,4 +1,4 @@
-"""어택 기울기 왜곡 테스트. 합성 타격음만 사용."""
+"""attack slope 왜곡 테스트. 합성 타격음만 사용."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def test_절반_크기면_왜곡이_ln2이다():
     assert abs(r.distortion - np.log(2)) < 1e-6
 
 
-def test_어택을_뭉개면_왜곡이_커진다():
+def test_타격_앞머리를_뭉개면_왜곡이_커진다():
     drums = make_hits()
     kernel = np.ones(int(0.008 * SR)) / int(0.008 * SR)
     smeared = np.stack([np.convolve(ch, kernel, mode="same") for ch in drums]).astype(np.float32)

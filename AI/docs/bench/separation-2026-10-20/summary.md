@@ -1,10 +1,10 @@
 # 드럼 분리 벤치마크 요약
 
-run: musdb-full, synth-full · 데이터셋: musdb18hq_test, synth_v1 · 행 385개. 값은 실패한 곡을 뺀 곡별 값의 중앙값이고 표는 드럼 SDR 내림차순. RTF는 분리 시간 / 곡 길이(모델 로드 제외). 어택 기울기 왜곡은 0이 원음 그대로.
+run: musdb-full, synth-full · 데이터셋: musdb18hq_test, synth_v1 · 행 385개. 값은 실패한 곡을 뺀 곡별 값의 중앙값이고 표는 드럼 SDR 내림차순. RTF는 분리 시간 / 곡 길이(모델 로드 제외). attack slope 왜곡은 타격 직후 10ms 동안 소리가 커지는 기울기(attack slope)가 정답과 얼마나 다른지로, 0이 원음 그대로이고 클수록 타격 앞머리가 뭉개진 것.
 
 ## 비교표
 
-| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | 어택 기울기 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) | 가중치 라이선스 |
+| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) | 가중치 라이선스 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | bs_roformer_sw | 55/0 | 13.53 | 0.953 | 1.42 | 25.95 | 0.049 | 1546.34 | CC BY-NC-SA 4.0 (unblend 메타데이터 기준. 원 저장소 삭제로 미확인, 미러는 unknown 표기) |
 | scnet_xl_ihf | 55/0 | 12.56 | 0.930 | 1.47 | 24.52 | 0.078 | 4668.62 | 미명시. MUSDB18-HQ만으로 학습해 학습 데이터 조건(교육·연구 전용)을 따른다고 봄 |
@@ -32,7 +32,7 @@ run: musdb-full, synth-full · 데이터셋: musdb18hq_test, synth_v1 · 행 385
 
 ### musdb18hq_test
 
-| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | 어택 기울기 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
+| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | bs_roformer_sw | 50/0 | 13.40 | 0.957 | 1.42 | 25.25 | 0.049 | 1546.34 |
 | scnet_xl_ihf | 50/0 | 12.09 | 0.935 | 1.51 | 24.47 | 0.078 | 4668.62 |
@@ -44,7 +44,7 @@ run: musdb-full, synth-full · 데이터셋: musdb18hq_test, synth_v1 · 행 385
 
 ### synth_v1
 
-| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | 어택 기울기 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
+| 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | bs_roformer_sw | 5/0 | 15.39 | 0.642 | 0.55 | 28.52 | 0.054 | 1546.34 |
 | scnet_xl_ihf | 5/0 | 15.10 | 0.619 | 0.58 | 26.41 | 0.091 | 4669.33 |
