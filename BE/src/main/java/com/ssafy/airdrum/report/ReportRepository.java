@@ -31,7 +31,7 @@ public class ReportRepository {
 		return db.query("""
 			SELECT r.id,s.id AS play_id,s.score,s.accuracy,s.max_combo,s.judgement_counts::text,
 				r.timing_histogram::text,r.pad_stats::text,s.mode,s.input_source,s.client_meta->>'endReason' AS end_reason,
-				r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at
+				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at
 			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id WHERE s.id=? AND s.user_id=?
 			""", (r,n) -> new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
 				r.getInt("score"), r.getBigDecimal("accuracy"), r.getInt("max_combo"),
@@ -40,7 +40,7 @@ public class ReportRepository {
 				Arrays.stream(json.readValue(r.getString("pad_stats"), ReportAggregate.PadStats[].class))
 						.map(ReportResponse.PadStats::from).toList(),
 				r.getString("mode"), r.getString("input_source"), r.getString("end_reason"),
-				ReportResponse.AnalysisStatus.NOT_REQUESTED,
+				ReportResponse.AnalysisStatus.valueOf(r.getString("analysis_status")),
 				r.getString("weak_segments") == null ? null : json.readTree(r.getString("weak_segments")),
 				r.getString("recommended_drills") == null ? null : json.readTree(r.getString("recommended_drills")),
 				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant()), playId, userId)
@@ -52,7 +52,8 @@ public class ReportRepository {
 			FROM hits h JOIN play_sessions s ON s.id=h.play_session_id
 			WHERE s.id=? AND s.user_id=? AND h.judgement IS NOT NULL AND h.seq>?
 			ORDER BY h.seq LIMIT ?
-			""", (r,n) -> new ReportNotesResponse.Item(r.getInt(1),r.getString(2),r.getDouble(3),r.getString(4),
+			""", (r,n) -> new ReportNotesResponse.Item(r.getInt(1),r.getString(2),r.getDouble(3),
+					"HI_TOM".equals(r.getString(4)) ? "SMALL_TOM" : r.getString(4),
 					r.getString(5),r.getObject(6,Double.class),r.getObject(7,Integer.class)), playId,userId,afterSeq,fetchSize);
 	}
 	/** 세션·hits와 동일 트랜잭션에서만 저장한다. 재전송은 이 경로에 진입하지 않는다. */

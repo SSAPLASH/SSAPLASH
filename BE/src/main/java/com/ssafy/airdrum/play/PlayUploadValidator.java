@@ -81,7 +81,8 @@ public class PlayUploadValidator {
 		int perfect = 0, good = 0, miss = 0, combo = 0, maxCombo = 0;
 		for (var h : p.hits()) {
 			if (h.judgement() == null) continue;
-			var n = notes.get(h.matchedNoteId()); check(n != null && n.pad().equals(h.pad().name()));
+			var n = notes.get(h.matchedNoteId()); check(n != null && (n.pad().equals(h.pad().name())
+					|| ("HI_TOM".equals(n.pad()) && h.pad() == Pad.SMALL_TOM)));
 			if (h.judgement() == Judgement.MISS) { check(Math.abs(h.tMs() - n.time()) <= .001); miss++; combo = 0; }
 			else {
 				check(Math.abs(h.deltaMs() - (h.tMs() - n.time())) <= .001);
@@ -97,7 +98,7 @@ public class PlayUploadValidator {
 				&& new Counts(perfect, good, miss).equals(s.judgementCounts()));
 	}
 	private record Note(double time, String pad) {}
-	private static void poses(Map<Pad, Pose> values) { if (values != null) { check(values.size() <= 8); values.forEach((k,v) -> check(k != null && v != null && finite(v.pitch()) && finite(v.yaw()))); } }
+	private static void poses(Map<Pad, Pose> values) { if (values != null) { check(values.size() <= 9); values.forEach((k,v) -> check(k != null && v != null && finite(v.pitch()) && finite(v.yaw()))); } }
 	private static void mapping(Map<String, Pad> values) { if (values != null) { check(values.size() <= 32); values.forEach((k,v) -> { text(k, 64); check(v != null); }); } }
 	private static boolean optionalFinite(Float n) { return n == null || Float.isFinite(n); }
 	public static boolean finite(Double n) { return n != null && Double.isFinite(n); }

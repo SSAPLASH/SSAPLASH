@@ -35,7 +35,7 @@ public interface KitPresetRepository extends JpaRepository<KitPreset, Long> {
 	@Query("update KitPreset p set p.isDefault = false where p.userId = :userId and p.isDefault = true")
 	int clearDefault(@Param("userId") Long userId);
 
-	/** 탈퇴 작업이 호출한다. 이 기능에서는 쓰지 않는다. */
+	/** 탈퇴 트랜잭션({@code withdrawal.WithdrawalService})이 호출한다. 프리셋 API에서는 쓰지 않는다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("delete from KitPreset p where p.userId = :userId")
 	int deleteAllByUserId(@Param("userId") Long userId);

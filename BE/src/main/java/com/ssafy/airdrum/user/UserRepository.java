@@ -1,15 +1,18 @@
 package com.ssafy.airdrum.user;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 회원 저장소. 탈퇴 회원 조회 등은 그 기능을 구현하는 작업에서 추가한다. */
+/** 회원 저장소. */
 public interface UserRepository extends JpaRepository<User, Long> {
 
 	/** 인증이 매 요청 호출한다. ACTIVE 회원만 id·현재 권한으로 돌려주고 엔티티는 읽지 않는다. */
@@ -27,5 +30,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Lock(LockModeType.PESSIMISTIC_READ)
 	@Query("select u from User u where u.id = :id")
 	Optional<User> findByIdForShare(@Param("id") Long id);
+
+	/**
+	 * 회원 행을 배타 잠금(PostgreSQL {@code FOR UPDATE})으로 읽는다. 탈퇴 트랜잭션이 첫 단계에서 호출한다.
+	 * {@link #findByIdForShare}와 짝이라 같은 회원의 저장과 탈퇴는 직렬화된다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select u from User u where u.id = :id")
+	Optional<User> findByIdForUpdate(@Param("id") Long id);
+
+	/**
+	 * {@code withdrawnAfter} 이후(포함) 탈퇴한 회원 id를 탈퇴 시각·id 순으로 돌려준다. 탈퇴 이벤트 리스너가 놓친 정리를 다시 찾을 때 쓴다.
+	 */
+	@Query("select u.id from User u where u.status = com.ssafy.airdrum.user.UserStatus.WITHDRAWN "
+			+ "and u.withdrawnAt >= :withdrawnAfter order by u.withdrawnAt, u.id")
+	List<Long> findWithdrawnIds(@Param("withdrawnAfter") Instant withdrawnAfter, Pageable page);
 
 }
