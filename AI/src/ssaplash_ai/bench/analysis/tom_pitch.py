@@ -20,17 +20,32 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from ssaplash_ai.bench.analysis.rule_eval import TOM_PADS, load_dataset_songs
+from ssaplash_ai.bench.analysis.rule_eval import NONE_LABEL, TOM_PADS, load_dataset_songs
 from ssaplash_ai.bench.analysis.rule_features import RuleFeatures
+from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC
 from ssaplash_ai.bench.runner.run_support import Logger
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
+    ADTOF_TOM,
     _window,
     estimate_f0,
     rules_with_defaults,
+    tom_gate_ratios,
     tom_pad,
 )
 
 PAD_ORDER: tuple[str, ...] = ("FLOOR_TOM", "MID_TOM", "SMALL_TOM")  # 음높이 낮은 순
+# 거르기 문턱값 후보. 문턱값마다 버려지는 정답 탐·정답 없는 탐 수를 셈 (S15P31A307-164)
+GATE_THRESHOLDS: tuple[float, ...] = (0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5)
+PRED_COLUMNS = [
+    "dataset",
+    "songId",
+    "timeSec",
+    "f0",
+    "gateRatio",
+    "truePad",
+    "nearestPad",
+    "nearestMs",
+]
 
 
 def true_tom_f0(
@@ -148,6 +163,167 @@ def leave_one_song_out(
     return pd.DataFrame(rows, columns=["songId", "nHits", "lo", "hi", "acc"])
 
 
+# ---------- 예측 탐 분석: 거르기 비율·근처 정답 (S15P31A307-164) ----------
+
+
+def predicted_tom_table(
+    dataset_name: str,
+    songs: Sequence[tuple[str, RuleFeatures, np.ndarray]],
+    rules: dict | None = None,
+    window_sec: float = WINDOW_SEC,
+) -> pd.DataFrame:
+    """ADTOF가 탐으로 잡은 타격마다 음높이·거르기 비율·짝지은 정답 탐·근처 정답 패드.
+
+    열: dataset, songId, timeSec, f0(Hz), gateRatio(toms 트랙 에너지 / 입력 드럼 에너지. 입력이 없으면 nan),
+    truePad(window_sec 안에 짝지은 정답 탐 패드, 없으면 (없음)), nearestPad(정답 전체 중 가장 가까운 패드,
+    window_sec 밖이면 (없음)), nearestMs.
+    """
+    import mir_eval
+
+    r = rules_with_defaults(rules)
+    gate_window = r["tom_gate_window_ms"] if r.get("tom_gate_window_ms") else r["window_ms"]
+    rows = []
+    for song_id, features, hits_true in songs:
+        times = [float(t) for t in features.peaks_as_lists().get(ADTOF_TOM, [])]
+        if not times:
+            continue
+        sr = features.sample_rate
+        toms = features.stems.get(r["stems"]["toms"])
+        f0 = [
+            estimate_f0(_window(toms, sr, t, r["window_ms"]), sr, r["tom_fmin"], r["tom_fmax"])
+            if toms is not None
+            else math.nan
+            for t in times
+        ]
+        if features.input_audio is not None:
+            ratios = tom_gate_ratios(times, toms, features.input_audio, sr, gate_window)
+        else:
+            ratios = np.full(len(times), math.nan)
+        tom_truth = hits_true[np.isin(hits_true["pad"], list(TOM_PADS))]
+        pairs = mir_eval.util.match_events(
+            np.asarray(tom_truth["time_sec"], dtype=np.float64),
+            np.asarray(times, dtype=np.float64),
+            window_sec,
+        )
+        true_pad = {j: str(tom_truth["pad"][i]) for i, j in pairs}
+        all_times = np.asarray(hits_true["time_sec"], dtype=np.float64)
+        for j, t in enumerate(times):
+            nearest, nearest_ms = NONE_LABEL, math.nan
+            if all_times.size:
+                k = int(np.argmin(np.abs(all_times - t)))
+                dist = float(abs(all_times[k] - t))
+                nearest_ms = dist * 1000
+                if dist <= window_sec:
+                    nearest = str(hits_true["pad"][k])
+            rows.append(
+                {
+                    "dataset": dataset_name,
+                    "songId": song_id,
+                    "timeSec": t,
+                    "f0": f0[j],
+                    "gateRatio": float(ratios[j]),
+                    "truePad": true_pad.get(j, NONE_LABEL),
+                    "nearestPad": nearest,
+                    "nearestMs": nearest_ms,
+                }
+            )
+    return pd.DataFrame(rows, columns=PRED_COLUMNS)
+
+
+def _split_pred(part: pd.DataFrame) -> list[tuple[str, pd.DataFrame]]:
+    return [
+        ("정답 탐", part[part["truePad"] != NONE_LABEL]),
+        ("정답 없음", part[part["truePad"] == NONE_LABEL]),
+    ]
+
+
+def gate_ratio_stats(pred: pd.DataFrame) -> pd.DataFrame:
+    """데이터셋 × (정답 탐 / 정답 없음): 타격 수와 거르기 비율의 10·25·50·75·90 백분위."""
+    rows = []
+    for ds, part in pred.groupby("dataset", sort=False):
+        for kind, sub in _split_pred(part):
+            v = sub["gateRatio"].dropna()
+            q = v.quantile([0.1, 0.25, 0.5, 0.75, 0.9]) if len(v) else None
+            rows.append(
+                {
+                    "dataset": ds,
+                    "kind": kind,
+                    "nHits": int(len(sub)),
+                    "p10": float(q.iloc[0]) if q is not None else math.nan,
+                    "p25": float(q.iloc[1]) if q is not None else math.nan,
+                    "median": float(q.iloc[2]) if q is not None else math.nan,
+                    "p75": float(q.iloc[3]) if q is not None else math.nan,
+                    "p90": float(q.iloc[4]) if q is not None else math.nan,
+                }
+            )
+    return pd.DataFrame(
+        rows, columns=["dataset", "kind", "nHits", "p10", "p25", "median", "p75", "p90"]
+    )
+
+
+def gate_sweep(pred: pd.DataFrame, thresholds: Sequence[float] = GATE_THRESHOLDS) -> pd.DataFrame:
+    """문턱값마다 데이터셋별로 버려지는 정답 탐 수와 정답 없는 탐 수."""
+    rows = []
+    for ds, part in pred.groupby("dataset", sort=False):
+        (_, matched), (_, none) = _split_pred(part)
+        m = matched["gateRatio"].dropna()
+        n = none["gateRatio"].dropna()
+        for th in thresholds:
+            rows.append(
+                {
+                    "dataset": ds,
+                    "threshold": float(th),
+                    "trueDropped": int((m < th).sum()),
+                    "trueTotal": int(len(m)),
+                    "falseDropped": int((n < th).sum()),
+                    "falseTotal": int(len(n)),
+                }
+            )
+    return pd.DataFrame(
+        rows,
+        columns=["dataset", "threshold", "trueDropped", "trueTotal", "falseDropped", "falseTotal"],
+    )
+
+
+def false_tom_nearest(pred: pd.DataFrame) -> pd.DataFrame:
+    """정답 없는 탐이 실제로 무슨 소리 근처였는지: 데이터셋 × 가장 가까운 정답 패드 개수."""
+    part = pred[pred["truePad"] == NONE_LABEL]
+    if part.empty:
+        return pd.DataFrame(columns=["dataset", "nearestPad", "count"])
+    out = part.groupby(["dataset", "nearestPad"], sort=False).size().reset_index(name="count")
+    return out.sort_values(["dataset", "count"], ascending=[True, False]).reset_index(drop=True)
+
+
+def plot_gate_ratio(pred: pd.DataFrame, out_png: Path) -> Path:
+    """데이터셋별 거르기 비율 히스토그램. 정답 탐과 정답 없는 탐을 겹쳐 그림."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    datasets = list(dict.fromkeys(pred["dataset"].tolist()))
+    fig, axes = plt.subplots(1, max(len(datasets), 1), figsize=(5 * max(len(datasets), 1), 4))
+    axes = np.atleast_1d(axes)
+    bins = np.linspace(0.0, 1.0, 21)
+    # 범례는 영어 (기본 글꼴에 한글이 없음. 표는 summary.md에 한글로)
+    legend = {"정답 탐": "true tom", "정답 없음": "no truth"}
+    for ax, ds in zip(axes, datasets, strict=False):
+        part = pred[pred["dataset"] == ds]
+        for kind, sub in _split_pred(part):
+            v = sub["gateRatio"].dropna().clip(0.0, 1.0)
+            ax.hist(v, bins=bins, alpha=0.5, label=f"{legend.get(kind, kind)} (n={len(v)})")
+        ax.set_title(ds)
+        ax.set_xlabel("toms energy / input energy")
+        ax.set_ylabel("hits")
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3)
+    fig.tight_layout()
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=120)
+    plt.close(fig)
+    return out_png
+
+
 # ---------- 통계·출력 ----------
 
 
@@ -212,6 +388,7 @@ class TomPitchResult:
     loo: pd.DataFrame
     out_dir: Path
     files: list[Path] = field(default_factory=list)
+    pred: pd.DataFrame = field(default_factory=pd.DataFrame)  # 예측 탐 표 (S15P31A307-164)
 
 
 def plot_distribution(
@@ -294,9 +471,25 @@ def run_tom_pitch(opts: TomPitchOptions, log: Logger = print) -> TomPitchResult:
         loo = leave_one_song_out(loo_table, opts.lo_range, opts.step)
         log(f"[tom-pitch] {loo_name} 곡 하나 빼고 확인: 평균 bandAcc {loo['acc'].mean():.3f}")
 
+    pred_tables = [predicted_tom_table(name, songs, opts.rules) for name, songs in datasets]
+    pred = pd.concat(pred_tables, ignore_index=True) if pred_tables else pd.DataFrame()
+    gate_stats = gate_ratio_stats(pred) if not pred.empty else pd.DataFrame()
+    sweep = gate_sweep(pred) if not pred.empty else pd.DataFrame()
+    nearest = false_tom_nearest(pred) if not pred.empty else pd.DataFrame()
+    if not pred.empty:
+        n_matched = int((pred["truePad"] != NONE_LABEL).sum())
+        log(
+            f"[tom-pitch] 예측 탐 {len(pred)}개: 정답 탐과 짝 {n_matched}, 정답 없음 {len(pred) - n_matched}"
+        )
+
     csv_path = out_dir / "tom_f0.csv"
     table.to_csv(csv_path, index=False)
     files.append(csv_path)
+    pred_path = out_dir / "pred_tom.csv"
+    pred.to_csv(pred_path, index=False)
+    files.append(pred_path)
+    if not pred.empty and pred["gateRatio"].notna().any():
+        files.append(plot_gate_ratio(pred, out_dir / "tom_gate_ratio.png"))
     stats_path = out_dir / "tom_f0_stats.csv"
     stats.to_csv(stats_path, index=False)
     files.append(stats_path)
@@ -372,22 +565,53 @@ def run_tom_pitch(opts: TomPitchOptions, log: Logger = print) -> TomPitchResult:
         )
         md.append("")
         md.append(_md(loo, ["songId", "nHits", "lo", "hi", "acc"]))
+    if not pred.empty:
+        md.append("")
+        md.append("## 예측 탐의 거르기 비율과 근처 정답 (S15P31A307-164)")
+        md.append("")
+        md.append(
+            "ADTOF가 탐으로 잡은 타격마다 toms 트랙 에너지 / 입력 드럼 에너지(거르기 비율)를 재고 50ms 안의 정답 탐과 짝지음. "
+            "정답 탐과 짝이 없는 타격은 가장 가까운 정답 패드를 적음."
+        )
+        md.append("")
+        md.append(
+            _md(gate_stats, ["dataset", "kind", "nHits", "p10", "p25", "median", "p75", "p90"])
+        )
+        md.append("")
+        md.append("문턱값별로 버려지는 타격 수 (정답 탐 / 정답 없음)")
+        md.append("")
+        md.append(
+            _md(
+                sweep,
+                ["dataset", "threshold", "trueDropped", "trueTotal", "falseDropped", "falseTotal"],
+            )
+        )
+        md.append("")
+        md.append("정답 없는 탐이 실제로 무슨 소리 근처였는지 (50ms 안 가장 가까운 정답 패드)")
+        md.append("")
+        md.append(_md(nearest, ["dataset", "nearestPad", "count"]))
     md_path = out_dir / "summary.md"
     md_path.write_text("\n".join(md) + "\n", encoding="utf-8")
     files.append(md_path)
     log(f"[tom-pitch] 결과 → {md_path}")
-    return TomPitchResult(table, stats, candidates, loo, out_dir, files)
+    return TomPitchResult(table, stats, candidates, loo, out_dir, files, pred)
 
 
 __all__ = [
+    "GATE_THRESHOLDS",
     "PAD_ORDER",
     "TomPitchOptions",
     "TomPitchResult",
     "band_accuracy",
     "collect_true_tom_f0",
+    "false_tom_nearest",
+    "gate_ratio_stats",
+    "gate_sweep",
     "leave_one_song_out",
     "pitch_stats",
     "plot_distribution",
+    "plot_gate_ratio",
+    "predicted_tom_table",
     "run_tom_pitch",
     "search_bands",
     "true_tom_f0",

@@ -34,13 +34,18 @@ STEM_DTYPE = np.float16
 
 @dataclass
 class RuleFeatures:
-    """곡 하나의 저장 특징. stems 값은 (1, 샘플) float32로 돌려줌 (규칙 함수가 (채널, 샘플)을 받음)."""
+    """곡 하나의 저장 특징. stems 값은 (1, 샘플) float32로 돌려줌 (규칙 함수가 (채널, 샘플)을 받음).
+
+    input_audio는 어댑터에 넣은 드럼 입력(모노 (1, 샘플) float16). npz에는 없고 rule_eval이 데이터셋에서
+    읽어 채움. 탐 아닌 소리 거르기(tom_gate_ratio, S15P31A307-164)가 toms 트랙과 비교할 기준.
+    """
 
     peaks: dict[int, np.ndarray]
     stems: dict[str, np.ndarray]
     sample_rate: int
     duration_sec: float
     meta: dict = field(default_factory=dict)
+    input_audio: np.ndarray | None = None
 
     def peaks_as_lists(self) -> dict[int, list[float]]:
         """assign_pads가 받는 {피치: 시각 목록} 형태."""
@@ -53,6 +58,11 @@ def _safe_name(song_id: str) -> str:
 
 def feature_path(root: Path, dataset_name: str, song_id: str) -> Path:
     return Path(root) / dataset_name / f"{_safe_name(song_id)}.npz"
+
+
+def input_as_feature(audio: np.ndarray) -> np.ndarray:
+    """어댑터 입력 (채널, 샘플) → RuleFeatures.input_audio 형태 (1, 샘플) float16."""
+    return to_mono(np.asarray(audio)).astype(STEM_DTYPE)[None, :]
 
 
 def make_features(
