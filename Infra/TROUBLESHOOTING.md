@@ -12,7 +12,7 @@
 | --- | --- |
 | A. CI·러너 | A1 Windows 러너 초기 설정, A2 BE 테스트 `Bad address: listen`, A3 임베디드 PostgreSQL 시작 실패, A4 잡이 멈춤, A5 EC2 러너로 옮긴 뒤 잡이 대기, A6 러너 토큰 노출 |
 | B. 로컬 Docker(Windows) | B1 포트 공개 실패, B2 이미지 받기 실패, B3 Docker Desktop 꺼짐 |
-| C. Compose·서버 | C1 `.env` 값 누락, C2 DB 비밀번호 불일치, C3 네트워크 구성, C4 Nginx `/api` 경로, C5 필수 변수 누락 시 명령 중단, C6 서버 구성이 최신이 아님, C7 Nginx 중단(원인 미확인), C8 키 이름 혼란, C9 서버 `.env`의 키 소실, C10 MLflow가 `psycopg` 없이 시작하다 죽음 |
+| C. Compose·서버 | C1 `.env` 값 누락, C2 DB 비밀번호 불일치, C3 네트워크 구성, C4 Nginx `/api` 경로, C5 필수 변수 누락 시 명령 중단, C6 서버 구성이 최신이 아님, C7 Nginx 중단(원인 미확인), C8 키 이름 혼란, C9 서버 `.env`의 키 소실, C10 MLflow가 `psycopg` 없이 시작하다 죽음, C11 MLflow 작업 실행기로 재시작 반복 |
 | D. 스토리지(SeaweedFS) | D1 만료 정책이 적용되지 않음, D2 볼륨 슬롯 부족, D3 프록시 뒤 서명 URL |
 | E. 배포(CD) | E1 파일 바인드 마운트와 파일 교체, E2 러너 사용자의 홈 폴더 권한, E3 MR 대상 브랜치 실수, E4 `main` 배포 시 서버가 퇴보, E5 서버에서 GitLab SSH 접속 불가 |
 | F. 모니터링·로그 | F1 로그의 토큰·이메일 누출 |
@@ -143,6 +143,19 @@
 - **해결:** 이미지에 `psycopg[binary]==3.3.6`을 추가했다(`psycopg2-binary`는 그대로). 설치 조합(`mlflow 3.17.2`, `sqlalchemy 2.1.6`)이 충돌 없이 해결되는 것은 `uv pip compile`로 확인했고, 서버 기동은 배포 후 확인한다.
 - **재발 방지:** 서버에서 처음 기동하는 서비스는 병합 전에 서버에서 한 번 띄워 본다(이번 FE·AI는 그렇게 해서 문제가 없었다). 이미지에 데이터베이스 드라이버를 넣을 때는 DB 주소가 쓰는 드라이버 이름(`postgresql+psycopg` 등)이 실제로 설치되는지 확인한다.
 - **근거:** `Infra/mlflow/Dockerfile`, 서버 `docker logs infra-mlflow-1`.
+
+### C11. psycopg를 고친 뒤에도 MLflow가 약 11초마다 종료·재시작을 반복(작업 실행기)
+- **증상:** C10 수정 뒤 `docker ps`는 `Up 7 seconds (health: starting)`이었고, `docker inspect`의 재시작 횟수가 210에서 211로 늘었다(시작 시각이 11초 간격으로 갱신). 로그에는 `Traceback` 없이 `Uvicorn running`, `Started parent process [14]`만 같은 모양으로 반복됐다.
+- **확인한 것:** 종료코드 `0`, `OOMKilled=false`라서 메모리 부족으로 죽은 것이 아니었다. `docker stats`는 시작 직후 CPU 360%, 메모리 708MiB/1GiB, 프로세스 37개였고, 안정된 뒤에는 프로세스 121개, 메모리 1.627GiB였다.
+- **잘못 짚었던 가설:** 메모리 한도(1g) 초과로 인한 OOM. 종료코드와 `OOMKilled`를 확인하자 아니었다.
+- **원인:** MLflow 3.x는 서버를 띄울 때 작업 실행기(`_job_runner`와 `huey_consumer` 7개)도 함께 띄우고, 프로세스마다 같은 라이브러리를 올려 시작 때 CPU·메모리를 한꺼번에 쓴다. 시작 직후 이 부하와 컨테이너 한도가 겹쳐 기동이 끝나기 전에 종료를 반복한 것으로 보인다(종료 직전 상황을 직접 잡지는 못해 이 부분은 추정). 이 서버는 실험 기록과 모델 저장만 해서 작업 큐가 필요 없다.
+- **해결:** 서버에서 시험해 확인한 뒤 `Infra/docker-compose.yml`에 반영했다.
+  1. `--workers 1`: 웹 서버 워커를 1개로 줄여 이것만으로 `healthy`가 됐다(재시작 0, 메모리 1.627GiB, 프로세스 121개).
+  2. `MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false`: 작업 실행기를 껐다(이름은 `mlflow.environment_variables`를 `dir()`로 조회해 실제 있는 것을 확인). 프로세스 12개, 메모리 346MiB로 줄었고 `healthy`, 재시작 0회.
+  3. 한도는 원래의 `1g`로 유지(346MiB로 충분).
+- **재발 방지:** 오류 없이 재시작을 반복할 때는 `docker inspect`로 종료코드·`OOMKilled`·재시작 횟수를 먼저 본다. `docker top`과 `docker stats`로 프로세스 수·메모리 상위를 보면 어떤 프로세스가 자원을 쓰는지 드러난다. 환경변수 이름은 추측하지 말고 해당 버전에서 조회해서 쓴다.
+- **참고(보안):** 이 진단 중 `docker top` 출력에 DB 비밀번호가 평문으로 보였다. `--backend-store-uri`에 비밀번호가 들어 있어 명령줄에 노출되기 때문이다. 환경변수로 옮기는 개선은 별도 작업으로 한다(`Infra/SECURITY.md` 참고).
+- **근거:** 서버 `docker inspect`, `docker stats`, `docker top` 출력, `Infra/docker-compose.yml`.
 
 ---
 
