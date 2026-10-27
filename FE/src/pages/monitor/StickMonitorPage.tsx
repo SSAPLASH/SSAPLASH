@@ -15,7 +15,8 @@ import { LatencyStatsLog } from '@/monitor/latencyStats';
 import { mockStick } from '@/monitor/mockStick';
 import { packetLog } from '@/monitor/packetLog';
 import { ParamStore } from '@/monitor/params';
-import { downloadJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
+import { downloadJsonl, parseJsonl, Recorder, type RecordingMeta } from '@/monitor/recorder';
+import { summarizeRecording, type RecordingSummary } from '@/monitor/recordingSummary';
 import { SwingAssembler } from '@/monitor/swingAssembler';
 import { buildTrace, type TraceSelection } from '@/monitor/traceIndex';
 import { LossHistory } from '@/monitor/syncTrend';
@@ -56,6 +57,7 @@ const SNAP_INTERVAL_MS = 100;
  */
 const recorder = new Recorder();
 let offAttach: (() => void) | null = null;
+let offAttachDiag: (() => void) | null = null;
 
 /** 시계 섹션 추이 패널의 POSE 유실률 이력. 섹션을 오가도 이어지도록 모듈에 둔다 */
 const lossHistory = new LossHistory();
@@ -150,6 +152,8 @@ export function StickMonitorPage() {
   const [mockSticks, setMockSticks] = useState<1 | 2>(2);
   const [recording, setRecording] = useState(recorder.recording);
   const [note, setNote] = useState('');
+  // 녹화 요약 패널에 보일 요약. 녹화 정지 직후 또는 파일 열기로 채운다
+  const [summary, setSummary] = useState<RecordingSummary | null>(null);
 
   // 시계 오프셋 조회 대상은 ref로 읽는다 — 소스가 바뀌어도 configure를 다시 하지 않는다
   const sourceRef = useRef<InputSource | null>(activeSource);
@@ -358,7 +362,16 @@ export function StickMonitorPage() {
     if (recorder.recording) {
       offAttach?.();
       offAttach = null;
-      downloadJsonl(recorder.stop());
+      offAttachDiag?.();
+      offAttachDiag = null;
+      const text = recorder.stop();
+      downloadJsonl(text);
+      // 방금 녹화를 파일과 같은 경로(되읽기)로 요약해 파일을 다시 열었을 때와 같은 결과를 보인다
+      try {
+        setSummary(summarizeRecording(parseJsonl(text)));
+      } catch {
+        setSummary(null);
+      }
       setRecording(false);
       return;
     }
@@ -375,9 +388,11 @@ export function StickMonitorPage() {
         a ? [{ pad: a.pad, pitch: a.pitch, yaw: a.yaw, radiusDeg: a.radius }] : [],
       ),
       note,
+      inputMode: follow ? 'follow' : 'direct',
     };
     recorder.start(meta);
     offAttach = recorder.attach(packetLog);
+    offAttachDiag = recorder.attachDiag((l) => feed.subscribeDiag(l));
     setRecording(true);
   };
 
@@ -495,7 +510,7 @@ export function StickMonitorPage() {
               canSend={canSend}
             />
           )}
-          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} />}
+          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} summary={summary} onSummary={setSummary} />}
         </div>
       </div>
     </main>
