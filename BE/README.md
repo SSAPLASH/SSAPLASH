@@ -330,7 +330,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
 | `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
 | `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
-| `FORBIDDEN` | 403 | 권한 없음, 소유자 검사 실패 |
+| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다) |
 | `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
 | `METHOD_NOT_ALLOWED` | 405 | |
 | `NOT_ACCEPTABLE` | 406 | |
@@ -339,7 +339,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INTERNAL_ERROR` | 500 | 처리되지 않은 예외, 분류되지 않은 5xx |
 
 도메인 코드는 각 도메인 패키지에 `{Domain}ErrorCode` enum을 두고 `common.error.ErrorCode`를 구현한다.
-코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `USER_NOT_FOUND` 404, `SONG_FORBIDDEN` 403).
+코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `PRESET_NOT_FOUND` 404, `PLAY_NOT_FOUND` 404).
 공통 코드에는 접두사가 없고, 같은 코드 문자열을 두 enum이 쓰지 않는다.
 
 사용 규칙:
