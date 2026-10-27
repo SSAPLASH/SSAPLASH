@@ -1,14 +1,14 @@
 // 스틱 패킷 모니터 페이지(/monitor/stick, EMB용). VITE_MONITOR=true 빌드에만 라우트가 있다.
 // 이 파일은 연결(소스·송신·ParamStore)과 100ms 스냅샷 갱신만 맡고, 표시는 하위 컴포넌트가 한다.
-// 판정·발음 경로(InputManager)에는 관여하지 않는다 — packetLog는 packetTap만 구독한다.
+// 판정·발음 경로(InputManager)에는 관여하지 않는다 — 입력은 monitor/feed(직접 연결: packetTap·diagTap, 따라보기: 채널)로만 받는다.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { activateSensor } from '@/app/bootstrap';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { audioEngine } from '@/audio/AudioEngine';
 import { layoutToProfile } from '@/domain/kitJudge';
-import { diagTap } from '@/engine/diagTap';
 import type { InputSource } from '@/input/InputSource';
-import { packetTap } from '@/input/packetTap';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
+import { feed, type FeedMode } from '@/monitor/feed';
 import { clockHealth, outputHealth, resolveHealth, scoreHealth, sensorHealth, transportHealth } from '@/monitor/health';
 import { JudgeLog } from '@/monitor/judgeLog';
 import { LatencyStatsLog } from '@/monitor/latencyStats';
@@ -60,7 +60,7 @@ let offAttach: (() => void) | null = null;
 const lossHistory = new LossHistory();
 
 /**
- * ④ 판정·⑤ 채점·⑥ 출력 기록. 같은 창에서 diagTap을 구독해 채운다. recorder·lossHistory처럼 모듈에 둬
+ * ④ 판정·⑤ 채점·⑥ 출력 기록. feed(직접 연결: 이 창의 diagTap, 따라보기: 연주 창 중계)를 구독해 채운다. recorder·lossHistory처럼 모듈에 둬
  * 탭(섹션)을 오가도 이어진다. 구독은 첫 진입에서 한 번 걸고 떠나도 풀지 않는다(세션 동안 누적, 메모리는 링버퍼 상한).
  */
 const judgeLog = new JudgeLog();
@@ -68,7 +68,7 @@ const latencyLog = new LatencyStatsLog();
 let offDiag: (() => void) | null = null;
 function startDiag(): void {
   if (offDiag) return;
-  offDiag = diagTap.subscribe((ev) => {
+  offDiag = feed.subscribeDiag((ev) => {
     judgeLog.push(ev);
     latencyLog.push(ev);
   });
@@ -76,6 +76,16 @@ function startDiag(): void {
 
 /** ParamStore가 항상 최신 send를 부르도록 두는 중간 상자. 소스·모의가 바뀌어도 ParamStore는 그대로 둔다 */
 const sendHolder: { fn: SendFn } = { fn: () => {} };
+
+/** ?follow=1로 열렸으면 따라보기로 시작하고, 아니면 feed가 기억한 모드(처음이면 직접 연결) */
+function initialMode(): FeedMode {
+  try {
+    if (new URLSearchParams(location.search).get('follow') === '1') return 'follow';
+  } catch {
+    // 주소를 못 읽으면 기억한 모드를 쓴다
+  }
+  return feed.mode;
+}
 
 export function StickMonitorPage() {
   const kitLayout = useSettings((s) => s.kitLayout);
@@ -123,6 +133,16 @@ export function StickMonitorPage() {
     },
     [setSection],
   );
+  const [mode, setMode] = useState<FeedMode>(initialMode);
+  // 따라보기로 바꿀 때 모의 스틱을 멈춘다(모의 패킷이 이 창의 탭으로만 흘러 따라보기와 섞이지 않게)
+  const changeMode = (next: FeedMode) => {
+    if (next === 'follow' && mockStick.running) {
+      mockStick.stop();
+      setMockOn(false);
+    }
+    setMode(next);
+  };
+  const follow = mode === 'follow';
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
   const [mockOn, setMockOn] = useState(mockStick.running);
@@ -136,9 +156,24 @@ export function StickMonitorPage() {
     sourceRef.current = activeSource;
   }, [activeSource]);
 
+  // 입력 방식 적용. 따라보기에서는 모의 스틱을 멈추고 이 창의 센서를 해제한다(연결은 연주 창이 가진다).
+  // 설정 sensorKind는 바꾸지 않아 직접 연결로 돌아오면 저장된 센서를 다시 연다
+  useEffect(() => {
+    feed.setMode(mode);
+    if (mode === 'follow') {
+      void activateSensor('none');
+    } else {
+      void activateSensor(useSettings.getState().sensorKind);
+    }
+  }, [mode]);
+
   const takeSnap = useCallback((tick: number, src: InputSource | null): Snap => {
     const now = performance.now();
-    const offsets: [number | null, number | null] = [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null];
+    // 따라보기: 오프셋·전송 통계는 연주 창이 보낸 hello 값(이 창 시각 기준으로 옮겨 둔 것)
+    const fs = feed.mode === 'follow' ? feed.followStatus() : null;
+    const offsets: [number | null, number | null] = fs
+      ? fs.offsets
+      : [src?.clockOffsetOf?.(0) ?? null, src?.clockOffsetOf?.(1) ?? null];
     // 채택 오프셋은 읽은 직후 넘긴다(변화점만 기록). stats()보다 먼저 불러야 이번 스냅샷에 반영된다
     packetLog.noteAdoptedOffsets(now, offsets);
     const stats = packetLog.stats();
@@ -151,14 +186,18 @@ export function StickMonitorPage() {
       now,
       stats,
       rows,
-      transport: src?.transportStats?.() ?? null,
+      transport: fs ? fs.transport : (src?.transportStats?.() ?? null),
       offsets,
       judge: judgeLog.stats(rows),
       latency: latencyLog.stats(),
-      audio: lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null,
+      // 따라보기: 오디오는 연주 창 것이라 hello 값을 쓴다
+      audio: fs ? fs.audio : lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null,
     };
   }, []);
   const [snap, setSnap] = useState<Snap>(() => takeSnap(0, null));
+
+  // 상단 바 표시용. 렌더(스냅샷 100ms마다)마다 읽는다
+  const followStatus = feed.followStatus();
 
   // 단계별 상태는 스냅샷이 바뀔 때만 다시 계산한다
   const health = useMemo(
@@ -175,8 +214,11 @@ export function StickMonitorPage() {
 
   // 진입: 로그 수집 시작. 떠나도 stop하지 않는다(세션 동안 누적, 메모리는 링버퍼 상한)
   useEffect(() => {
-    packetLog.configure({ clockOffsetOf: (s) => sourceRef.current?.clockOffsetOf?.(s) ?? null });
-    packetLog.start();
+    packetLog.configure({
+      clockOffsetOf: (s) =>
+        feed.mode === 'follow' ? feed.followStatus().offsets[s] : (sourceRef.current?.clockOffsetOf?.(s) ?? null),
+    });
+    packetLog.start((fn) => feed.subscribePacket(fn));
     startDiag();
   }, []);
 
@@ -198,12 +240,13 @@ export function StickMonitorPage() {
   // dir:'out'으로 packetTap에 publish하므로 여기서는 publish하지 않는다(중복 방지)
   const send: SendFn = useCallback(
     (bytes) => {
+      if (follow) return; // 따라보기는 읽기 전용(U4)
       if (mockStick.running) mockStick.handleCommand(bytes);
       else activeSource?.sendCommand?.(bytes);
     },
-    [activeSource],
+    [activeSource, follow],
   );
-  const canSend = mockOn || !!activeSource?.sendCommand;
+  const canSend = !follow && (mockOn || !!activeSource?.sendCommand);
   useEffect(() => {
     sendHolder.fn = send;
   }, [send]);
@@ -212,7 +255,7 @@ export function StickMonitorPage() {
   // packetLog 일시정지·버퍼 밀림과 무관하게 응답을 놓치지 않고, 디코드도 PARAM_ACK 타입만 한다
   const paramStore = useMemo(() => new ParamStore((b) => sendHolder.fn(b)), []);
   useEffect(() => {
-    const off = packetTap.subscribe((rec) => {
+    const off = feed.subscribePacket((rec) => {
       if (rec.dir !== 'in' || rec.bytes[0] !== PacketType.PARAM_ACK) return;
       paramStore.onPacket(decodePacket(rec.bytes, rec.recvTime));
     });
@@ -221,10 +264,10 @@ export function StickMonitorPage() {
       paramStore.reset(); // 대기 중 타이머 정리
     };
   }, [paramStore]);
-  // 소스가 바뀌면 이전 소스의 파라미터 값은 무효다
+  // 소스나 입력 방식이 바뀌면 이전 소스의 파라미터 값은 무효다
   useEffect(() => {
     paramStore.reset();
-  }, [activeSensor, paramStore]);
+  }, [activeSensor, mode, paramStore]);
 
   // SwingAssembler도 ParamStore처럼 페이지가 1개 만든다. 청크는 packetLog 버퍼 밀림과 무관하게
   // packetTap에서 바로 받아야 조립이 끊기지 않고, 탭을 오가도 조립 결과가 유지된다
@@ -235,7 +278,7 @@ export function StickMonitorPage() {
   );
   const [selectedSwing, setSelectedSwing] = useState<string | null>(null);
   useEffect(() => {
-    const off = packetTap.subscribe((rec) => {
+    const off = feed.subscribePacket((rec) => {
       if (rec.dir !== 'in' || rec.bytes[0] !== PacketType.SWING) return;
       const p = decodePacket(rec.bytes, rec.recvTime);
       if (p.kind !== 'swing') return;
@@ -295,7 +338,9 @@ export function StickMonitorPage() {
     const fw = stats.perStick[0].lastStatus ?? stats.perStick[1].lastStatus;
     const meta: RecordingMeta = {
       startedAt: new Date().toISOString(),
-      source: { kind: mockStick.running ? 'mock' : activeSensor, label: mockStick.running ? '모의 스틱' : sourceLabel },
+      source: follow
+        ? { kind: 'follow', label: `연주 창: ${feed.followStatus().source ?? '없음'}` }
+        : { kind: mockStick.running ? 'mock' : activeSensor, label: mockStick.running ? '모의 스틱' : sourceLabel },
       firmware: fw ? `${fw.fwMajor}.${fw.fwMinor}` : null,
       build: stats.build,
       profile: Object.values(profile.anchors).flatMap((a) =>
@@ -312,9 +357,22 @@ export function StickMonitorPage() {
     <main className="main wide mon">
       <div className="mon-bar">
         <h1 className="mon-title">스틱 패킷 모니터</h1>
+        <select value={mode} onChange={(e) => changeMode(e.target.value as FeedMode)} aria-label="입력 방식">
+          <option value="direct">직접 연결</option>
+          <option value="follow">따라보기</option>
+        </select>
         <span className="mon-source">
-          소스 <strong>{sourceLabel}</strong> · {sourceState}
-          {mockOn && <span className="badge warn">모의 스틱</span>}
+          {follow ? (
+            <>
+              연주 창: <strong>{followStatus.source ?? '–'}</strong> · {followStatus.connected ? '연결됨' : '연주 창 없음'}
+              <span className="badge">읽기 전용</span>
+            </>
+          ) : (
+            <>
+              소스 <strong>{sourceLabel}</strong> · {sourceState}
+              {mockOn && <span className="badge warn">모의 스틱</span>}
+            </>
+          )}
         </span>
         <span className="faint small">
           {fmt(snap.stats.total, 0)}건 수신 · 버퍼 {snap.rows.length}
@@ -335,14 +393,14 @@ export function StickMonitorPage() {
           </button>
           <select
             value={mockSticks}
-            disabled={mockOn}
+            disabled={mockOn || follow}
             onChange={(e) => setMockSticks(Number(e.target.value) as 1 | 2)}
             aria-label="모의 스틱 수"
           >
             <option value={1}>모의 1스틱</option>
             <option value={2}>모의 2스틱</option>
           </select>
-          <button className={mockOn ? 'btn-primary small' : 'btn-ghost small'} onClick={toggleMock}>
+          <button className={mockOn ? 'btn-primary small' : 'btn-ghost small'} disabled={follow} onClick={toggleMock}>
             {mockOn ? '모의 끄기' : '모의 스틱'}
           </button>
           <button className="btn-ghost small" onClick={() => {
@@ -364,7 +422,7 @@ export function StickMonitorPage() {
             <Overview
               health={health}
               now={snap.now}
-              sourceLabel={sourceLabel}
+              sourceLabel={follow ? `연주 창 ${followStatus.source ?? '–'} (${followStatus.connected ? '연결됨' : '연주 창 없음'})` : sourceLabel}
               mockOn={mockOn}
               onSelect={selectSection}
               onGoTrend={goTrend}

@@ -559,7 +559,7 @@ export function scoreHealth(s: ScoreStats, now: number): StageHealth {
 
   // 연주 화면이 아니면(직접 연결) 채점 세션이 없다. 종료 뒤에는 값을 고정하고 이유에 종료를 적는다(설계 4-3)
   const stage = buildStage(items, s.lastT, now, Infinity, d.mean === null ? null : { value: sgn(d.mean), unit: 'ms' });
-  if (!has) return { ...stage, level: 'idle', reason: '채점은 연주 창 따라보기(다음 단계)에서 보입니다' };
+  if (!has) return { ...stage, level: 'idle', reason: '채점은 상단 바에서 따라보기를 고르면 연주 창 결과가 보입니다' };
   if (s.session?.status === 'ended') return { ...stage, reason: `세션 종료 · ${stage.reason}` };
   return stage;
 }
