@@ -256,12 +256,13 @@ export function StickMonitorPage() {
     sendHolder.fn = send;
   }, [send]);
 
-  // ParamStore는 페이지가 하나 만든다. PARAM_ACK는 packetLog를 거치지 않고 packetTap에서 바로 받는다 —
-  // packetLog 일시정지·버퍼 밀림과 무관하게 응답을 놓치지 않고, 디코드도 PARAM_ACK 타입만 한다
+  // ParamStore는 페이지가 하나 만든다. PARAM_ACK·STATUS는 packetLog를 거치지 않고 packetTap에서 바로 받는다 —
+  // packetLog 일시정지·버퍼 밀림과 무관하게 응답을 놓치지 않고, 디코드도 두 타입만 한다
   const paramStore = useMemo(() => new ParamStore((b) => sendHolder.fn(b)), []);
   useEffect(() => {
     const off = feed.subscribePacket((rec) => {
-      if (rec.dir !== 'in' || rec.bytes[0] !== PacketType.PARAM_ACK) return;
+      // STATUS는 fwMajor(기본값 표 선택)용으로 함께 받는다
+      if (rec.dir !== 'in' || (rec.bytes[0] !== PacketType.PARAM_ACK && rec.bytes[0] !== PacketType.STATUS)) return;
       paramStore.onPacket(decodePacket(rec.bytes, rec.recvTime));
     });
     return () => {

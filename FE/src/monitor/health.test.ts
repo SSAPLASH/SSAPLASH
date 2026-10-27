@@ -24,6 +24,8 @@ const stick = (over: Partial<StickStats> = {}): StickStats => ({
   lastStatus: null,
   hitCount: 0,
   lastHitT: null,
+  bias: null,
+  imuFail: false,
   ...over,
 });
 
@@ -209,6 +211,20 @@ describe('sensorHealth', () => {
     expect(w.reason).toBe('STATUS L 3.0초째 없음 (기준 3초)');
   });
 
+  it('IMU·바이어스: default 주의, IMU FAIL 이상, 정상 ok, 로그 없으면 idle', () => {
+    const mk = (a: Partial<StickStats>, b: Partial<StickStats> = {}) =>
+      sensorHealth(mkSnap({ rows: [row(NOW - 10, 'pose')], stats: mkStats({ perStick: [stick(a), stick(b)] }) }), NOW);
+    expect(item(mk({}), 'imu').level).toBe('idle');
+    expect(item(mk({ bias: 'measured' }), 'imu')).toMatchObject({ level: 'ok', value: 'L 정상 · R –' });
+    const w = mk({ bias: 'measured' }, { bias: 'default' });
+    expect(item(w, 'imu').level).toBe('warn');
+    expect(w.reason).toBe('부팅 때 흔들림, 바이어스 기본값 R');
+    const b = mk({ bias: 'default' }, { imuFail: true });
+    expect(item(b, 'imu').level).toBe('bad');
+    expect(b.level).toBe('bad');
+    expect(b.reason).toBe('IMU 초기화 실패 R (LOG IMU FAIL)');
+  });
+
   it('ambiguous 20% 경계와 최소 표본', () => {
     const hits = (n: number, amb: number) =>
       Array.from({ length: n }, (_, i) => row(NOW - 100 + i, 'hit', { ambiguous: i < amb }));
@@ -268,11 +284,11 @@ describe('clockHealth', () => {
     expect(item(mk(narrow), 'slope').level).toBe('idle');
   });
 
-  it('rtt 중앙값 20ms 경계', () => {
-    expect(item(mk(samples(0, 8, 20)), 'rtt').level).toBe('ok');
-    const w = mk(samples(0, 8, 20.5));
+  it('rtt 중앙값 25ms 경계', () => {
+    expect(item(mk(samples(0, 8, 25)), 'rtt').level).toBe('ok');
+    const w = mk(samples(0, 8, 25.5));
     expect(item(w, 'rtt').level).toBe('warn');
-    expect(w.reason).toBe('SYNC rtt 20.5ms (기준 20ms)');
+    expect(w.reason).toBe('SYNC rtt 25.5ms (기준 25ms)');
   });
 
   it('짝 실패 1건이면 warn, ACK가 없으면 idle', () => {
