@@ -22,7 +22,7 @@ export function ResolveSection({ health, snap, judgeLog }: { health: StageHealth
       <MetricRow items={health.items} />
       <div className="mon-summary-line">
         최근 판정 {r.total}건 보관
-        <span className="faint"> · 같은 창의 입력 소스가 낸 타격(bootstrap의 resolved) 기준입니다</span>
+        <span className="faint"> · 입력 소스가 낸 타격(bootstrap의 resolved) 기준입니다. 따라보기면 연주 창의 타격입니다</span>
       </div>
       <Fold id="resolve.velocity" title="세기 곡선 (스틱 velocity → FE velocity)">
         <VelocityCurvePanel judgeLog={judgeLog} snap={snap} />
