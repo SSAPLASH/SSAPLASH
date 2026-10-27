@@ -49,5 +49,5 @@ class PlayUploadBoundaryTest {
 			}
 		}
 	}
-	private MockHttpServletRequest request() { return new MockHttpServletRequest("POST","/api/v1/plays/"+UUID.randomUUID()+"/raw"); }
+	private MockHttpServletRequest request() { var request=new MockHttpServletRequest("POST","/api/v1/plays/"+UUID.randomUUID()+"/raw"); request.setContent(new byte[0]); return request; }
 }

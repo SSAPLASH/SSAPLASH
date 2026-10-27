@@ -23,10 +23,11 @@ public class PlayMultipartConfiguration {
 	SpoolDirectory playMultipartSpool() throws IOException { return new SpoolDirectory(Path.of(System.getProperty("java.io.tmpdir"),"airdrum-play-multipart")); }
 	@Bean
 	MultipartConfigElement multipartConfigElement(SpoolDirectory spool) {
-		return new MultipartConfigElement(spool.directory.toString(),20L*1024*1024,21L*1024*1024,0);
+		return new MultipartConfigElement(spool.directory.toString(),50L*1024*1024,51L*1024*1024,0);
 	}
-	static final class SpoolDirectory implements AutoCloseable {
+	public static final class SpoolDirectory implements AutoCloseable {
 		final Path root,directory;
+		public Path path() { return directory; }
 		private final FileChannel channel;
 		private final FileLock lock;
 		SpoolDirectory(Path base) throws IOException {
