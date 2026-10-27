@@ -52,11 +52,11 @@ src/
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   └─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·조회 오류 분류
-├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부)
+├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Login · AuthCallback
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·JobProgressCard, 곡 작업실)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · AnalysisPlaceholder
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`)
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
@@ -195,6 +195,16 @@ src/
 - **assets:** `loadChart`가 채보와 함께 `getChartAssets`를 부른다. 실패해도 채보는 돌려주고 `assets`가 null이다. `accompanimentUrl`이 있으면 `chart.hasAccompaniment = true`. 서명 URL은 메모리에만 둔다(반주 재생은 아래 "반주 재생" 절).
 - **플레이 로그:** `chartVersionId`·`songNumericId`·`chartId`(다시 하기 URL용)·`presetId`가 같이 저장된다. 내장 곡은 null. 채보 노트의 `noteId`와 BE 전체 노트 수(`sourceNoteCount`)도 남긴다(업로드용).
 
+## 곡 작업실(음원 업로드·채보 생성)
+
+- **화면:** `/studio`(상단 메뉴 "곡 만들기"). 음원(MP3·WAV, 50 MiB·10분 이내)을 올리면 BE가 채보 생성 작업을 만들고(`POST /api/v1/songs/audio`, 202 `{jobId, songId, status}`), 완료되면 곡 선택 "내 곡" 탭에서 고를 수 있다. 회원당 활성 작업은 하나다(초과 시 429 `AUDIO_BUSY`).
+- **사전 검사:** `domain/chartJob.precheckAudio`가 빈 파일·크기 초과·확장자(MIME)를 전송 전에 거른다. 제목 기본값은 파일명(확장자 제거, 100자).
+- **멱등 키:** 파일·제목·아티스트 조합마다 UUID 하나를 `Idempotency-Key` 헤더로 보낸다. 네트워크·503 실패의 **다시 시도**는 같은 키, 내용이 바뀌면 새 키. 같은 키에 다른 내용(409)은 새 키로 한 번 자동 재전송한다.
+- **진행 표시:** BE 진행 WebSocket(161)이 아직 없어 `GET /api/v1/songs/{id}`의 `status`(PROCESSING→READY/FAILED)를 폴링한다(30초까지 3초, 10분까지 5초, 그 뒤 15초. 탭이 숨겨지면 멈추고 다시 보이면 즉시 1회). 4칸(접수·드럼 분리·채보 생성·완료) 중 폴링만으로는 분리·생성을 구분할 수 없어 두 칸을 함께 "처리 중"으로 칠한다(`JobProgress.stageKnown=false`). WS가 붙으면 `chartJobStore`에 소스만 추가한다.
+- **복원:** 활성 작업 하나를 `localStorage`(`ssaplash.chartJob.v1`)에 두고 새로고침·재방문 때 이어서 폴링한다. 429인데 기록이 없으면(다른 브라우저) "내 곡" 목록의 PROCESSING 곡으로 복원한다. 완료·실패 기록은 **다른 곡 올리기**(`clear`)로 지운다. 실패 사유는 BE가 주지 않아 기본 문구만 보인다.
+- **완료 후:** "리듬 게임에서 플레이" → `/play?scope=MINE`(SongPicker가 `?scope=MINE`이면 내 곡 탭으로 시작). 내 곡 탭이 비어 있으면 `/studio` 안내 링크가 보인다.
+- **제외(후속):** MIDI 업로드(BE 151), 개인 곡 이름 변경·삭제(BE 162), 진행 WebSocket(BE 161).
+
 ## 플레이 기록 업로드·상세 분석
 
 - **흐름:** 연주 종료 → 로컬 저장 → 결과 화면(로컬 값, 기다리지 않음). 동시에 `app/playSync.startPlaySync`가 `POST /api/v1/plays`(ACCT-002 요약)를 보낸다. 성공하면 리포트 요약과 노트 첫 페이지를 미리 받아 두고 결과 화면의 **상세 분석 보기**가 `/result/:playId/report`로 열린다.
@@ -259,7 +269,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **콜백:** 제공자 → BE 콜백 → BE가 refresh 쿠키(`refresh_token`, HttpOnly, `Path=/api/auth`, 14일)를 심고 `/auth/callback`으로 302. 이 화면은 앱 시작 복원을 기다렸다가 저장해 둔 경로로 간다. 토큰은 주소에 실리지 않는다.
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
-- **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰 폐기 → `/login`.
+- **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패). 문구는 `domain/auth.ts`에 있다.
 - **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
