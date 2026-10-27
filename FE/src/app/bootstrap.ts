@@ -119,6 +119,21 @@ function startRelay(): void {
   );
 }
 
+/**
+ * 텔레메트리 전송(VITE_MONITOR 빌드 한정, 설계 MONITOR-001). 이 창이 이벤트 원천이다 —
+ * 따라보기 모니터 창은 센서를 열지 않고 resolved를 만들지 않으므로 수집해도 0건이다.
+ */
+function startTelemetry(): void {
+  if (!MONITOR_ENABLED) return;
+  void import('@/telemetry/enable').then((m) =>
+    m.initTelemetry({
+      subscribeConnection: (l) => inputManager.onStatus(l),
+      getActiveSource: () => (useLive.getState().activeSensor === 'none' ? null : useLive.getState().activeSensor),
+      subscribeActiveSource: (l) => useLive.subscribe((s, prev) => s.activeSensor !== prev.activeSensor && l()),
+    }),
+  );
+}
+
 export function bootstrapInput(): void {
   // 키보드 매핑은 고정 상수라 설정 구독 밖에서 한 번만 넘긴다
   inputManager.setKeyMap(KEY_MAP);
@@ -197,6 +212,7 @@ export function bootstrapInput(): void {
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();
   });
   startRelay();
+  startTelemetry();
 }
 
 /**
