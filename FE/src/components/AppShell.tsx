@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { useAuth } from '@/store/authStore';
@@ -8,6 +8,9 @@ import { DebugOverlay } from './DebugOverlay';
 import { Metronome } from './shell/Metronome';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { SoundToggle } from './shell/SoundToggle';
+
+/** 개발 모니터 빌드(VITE_MONITOR=true)에서만 "모니터 새 창" 버튼을 둔다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
+const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 
 interface Props {
   /** 로그인 검사 여부(App.tsx가 VITE_AUTH_REQUIRED로 내려준다). 꺼져 있으면 익명일 때 로그인 링크를 보이지 않는다 */
@@ -21,6 +24,7 @@ export function AppShell({ authRequired }: Props) {
   const sensorKind = useSettings((s) => s.sensorKind);
   const authStatus = useAuth((s) => s.status);
   const [debug, setDebug] = useState(false);
+  const inMonitor = useLocation().pathname.startsWith('/monitor');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,6 +48,14 @@ export function AppShell({ authRequired }: Props) {
         </nav>
         <Metronome />
         <div className="topbar-right">
+          {MONITOR_ENABLED && !inMonitor && (
+            <button
+              className="btn-ghost small"
+              onClick={() => window.open('/monitor/stick?follow=1', 'ssaplash-monitor', 'popup,width=1400,height=900')}
+            >
+              모니터 새 창
+            </button>
+          )}
           <SoundToggle />
           <span className="small dim">
             {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
