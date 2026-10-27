@@ -632,6 +632,71 @@ p {
   font-size: 12px;
   color: var(--ink-faint);
 }
+/* 결과 → 상세 분석 진입부 */
+.report-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+/* 링크를 버튼 모양으로(button 기본 스타일과 같은 치수) */
+a.btn-primary,
+a.btn-ghost.as-button {
+  display: inline-block;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  text-decoration: none;
+}
+a.btn-ghost.as-button {
+  border-color: var(--line);
+}
+/* 상세 분석: 패드별 정확도 막대 */
+.pad-acc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pad-acc-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 56px;
+  align-items: center;
+  column-gap: 10px;
+}
+.pad-acc-name {
+  font-size: 14px;
+}
+.pad-acc-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--stage-deep);
+  overflow: hidden;
+}
+.pad-acc-bar > div {
+  height: 100%;
+  border-radius: 999px;
+}
+.pad-acc-v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.pad-acc-meta {
+  grid-column: 2 / 4;
+}
+/* 상세 분석: 노트 타임라인 */
+.timeline svg {
+  display: block;
+  width: 100%;
+}
+.timeline .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
 table.plain {
   width: 100%;
   border-collapse: collapse;

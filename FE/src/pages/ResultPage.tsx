@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { FeedbackCards } from '@/components/FeedbackCards';
+import { ReportEntry } from '@/components/ReportEntry';
+import { resumePlaySync, startPlaySync, usePlaySync } from '@/app/playSync';
+import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
@@ -69,6 +72,14 @@ export function ResultPage() {
     if (log) navigate(retryPath(log));
   };
 
+  // 서버 업로드 상태(설계 COACH-002 4-1). 진입 시 한 번 끊긴 업로드·재시도 가능한 실패를 다시 보낸다 —
+  // 연주 직후라면 이미 진행 중이라 무시된다
+  const legacy = !playId || !isServerPlayId(playId);
+  const liveUpload = usePlaySync((s) => (playId ? s.states[playId] : undefined));
+  useEffect(() => {
+    if (playId && !legacy) resumePlaySync(playId);
+  }, [playId, legacy]);
+
   // Enter = 다시 하기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -119,6 +130,13 @@ export function ResultPage() {
           </Link>
         </div>
       </div>
+
+      <ReportEntry
+        playId={log.playId}
+        legacy={legacy}
+        state={liveUpload ?? log.upload}
+        onRetry={() => void startPlaySync(log.playId)}
+      />
 
       <div className="result-grid">
         {!isSheet && (
