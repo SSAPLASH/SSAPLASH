@@ -105,12 +105,12 @@ describe('시각 펼치기·미래 ms', () => {
     expect(a.futureMs).toBeCloseTo((a.tBrowser as number) - 1000);
   });
 
-  it('hitFuture는 중앙값·최대를 낸다', () => {
+  it('hitFuture는 중앙값·최대·최소를 낸다', () => {
     log.configure({ clockOffsetOf: () => 0 });
     // timestampUs 1000·3000·5000 → tBrowser 1·3·5ms, recvTime 0 → future 1·3·5
     for (const [i, us] of [1000, 3000, 5000].entries()) log.ingest(hit(i, 0, 0, us));
     const s = log.stats(0).perStick[0];
-    expect(s.hitFuture).toEqual({ median: 3, max: 5 });
+    expect(s.hitFuture).toEqual({ median: 3, max: 5, min: 1 });
   });
 });
 
@@ -123,6 +123,14 @@ describe('seq 유실', () => {
     expect(s.hitSeqLoss).toEqual({ window: 1, total: 1 });
     expect(s.hitCount).toBe(3);
     expect(s.lastHitT).toBe(20);
+  });
+
+  it('HIT 유실은 최근 1분 건수(hitLoss1m)로도 센다', () => {
+    log.ingest(hit(1, 0));
+    log.ingest(hit(4, 10)); // 유실 2
+    expect(log.stats(1000).perStick[0].hitLoss1m).toBe(2);
+    expect(log.stats(59_000).perStick[0].hitLoss1m).toBe(2);
+    expect(log.stats(61_000).perStick[0].hitLoss1m).toBe(0);
   });
 
   it('seq 255 → 0은 유실 아님, 1초 창 밖은 window에서 빠진다', () => {
