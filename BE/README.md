@@ -739,7 +739,7 @@ docker run --rm --name airdrum-api -p 127.0.0.1:8080:8080 \
 
 다른 터미널에서 `docker stop airdrum-api`로 종료한다.
 이미지 빌드는 테스트 없이 실행 JAR만 만든다. 테스트는 CI의 `be-test`가 맡는다
-(테스트용 임베디드 PostgreSQL은 root로 실행되는 빌드 단계에서 뜨지 않는다). 실행 이미지는 JRE 21과 JAR만 포함한다.
+(테스트용 임베디드 PostgreSQL은 root로 실행되는 빌드 단계에서 뜨지 않는다). 실행 이미지는 JRE 21, 음원 검사용 FFmpeg와 JAR를 포함한다.
 앱은 UID/GID `10001`로 실행한다. 소스 외 파일과 `.env`는 빌드 컨텍스트에 포함하지 않는다.
 
 인프라 Compose 연결 기준:
@@ -765,3 +765,12 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 기동 시 DB에 접속하지 못하면 Flyway 단계에서 앱이 종료된다. Nginx·DB·Redis Compose와 배포 구성은
 [#38](https://ssafy.atlassian.net/browse/S15P31A307-38),
 [#47](https://ssafy.atlassian.net/browse/S15P31A307-47)에서 연결한다.
+
+
+## 음원 접수 (159번)
+
+`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
+
+실제 형식과 길이는 `ffprobe`로 검사한다. 운영 이미지에 FFmpeg가 포함되며 로컬에서는 `AUDIO_FFPROBE_PATH`로 실행 파일을 지정할 수 있다. 실행 파일이 없거나 저장소가 설정되지 않으면 503이다. 비공개 비버전 S3 호환 버킷 설정은 `AUDIO_STORAGE_ENABLED`, `AUDIO_STORAGE_ENDPOINT`, `AUDIO_STORAGE_REGION`, `AUDIO_STORAGE_BUCKET`, `AUDIO_STORAGE_ACCESS_KEY`, `AUDIO_STORAGE_SECRET_KEY`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED`로 제공한다. 원본 키는 서버에서 생성하며 접수 전에 기록하고 실패·중단된 PUT은 재시도 정리한다. 활성화는 실제 저장소 권한과 버킷의 비공개 설정을 확인한 환경에서만 한다.
+
+159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.

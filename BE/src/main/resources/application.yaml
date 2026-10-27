@@ -72,6 +72,17 @@ play:
     private-bucket-confirmed: ${PLAY_RAW_PRIVATE_BUCKET_CONFIRMED:false}
     concurrent-uploads: ${PLAY_RAW_CONCURRENT_UPLOADS:2}
 
+audio:
+  ffprobe-path: ${AUDIO_FFPROBE_PATH:ffprobe}
+  storage:
+    enabled: ${AUDIO_STORAGE_ENABLED:false}
+    endpoint: ${AUDIO_STORAGE_ENDPOINT:}
+    region: ${AUDIO_STORAGE_REGION:us-east-1}
+    bucket: ${AUDIO_STORAGE_BUCKET:}
+    access-key: ${AUDIO_STORAGE_ACCESS_KEY:}
+    secret-key: ${AUDIO_STORAGE_SECRET_KEY:}
+    private-bucket-confirmed: ${AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED:false}
+
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8080}

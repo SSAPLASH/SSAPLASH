@@ -34,7 +34,7 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 				"spring.datasource.password", USER,
 				// 임베디드 PG에는 확장이 없다. V8은 별도 timescaleTest에서 실제 컨테이너로 검증한다.
 				"spring.flyway.locations", "classpath:db/test-migration",
-				"spring.flyway.target", "14",
+				"spring.flyway.target", "15",
 				// @DataJpaTest가 DataSource를 내장 DB(H2 등)로 바꾸지 않게 한다.
 				"spring.test.database.replace", "none")));
 	}
