@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -98,6 +99,14 @@ class ReportQueryApiTest {
         assertThat(notes.get(1).get("velocity").isNull()).isTrue();
         assertThat(notes.get(1).get("deltaMs").isNull()).isTrue();
         assertThat(notes.get(1).get("matchedNoteId").asText()).isEqualTo("n2");
+    }
+    @ParameterizedTest
+    @EnumSource(ReportResponse.AnalysisStatus.class)
+    void reportReturnsPersistedAnalysisStatus(ReportResponse.AnalysisStatus analysisStatus) throws Exception {
+        upload();
+        db.update("UPDATE reports SET analysis_status=? WHERE play_session_id=?", analysisStatus.name(), play);
+
+        assertThat(read("").get("analysisStatus").asText()).isEqualTo(analysisStatus.name());
     }
     @Test void originalCountsDeterminePercentAndNotRoundedStoredRatio() throws Exception {
         upload();
@@ -207,18 +216,22 @@ class ReportQueryApiTest {
     @Test void aiArraysArePreservedAndDeletedSongDoesNotBlockRead() throws Exception {
         upload();
         db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
-        db.update("UPDATE reports SET weak_segments='[]',recommended_drills='[]' WHERE play_session_id=?", play);
+        db.update("UPDATE reports SET weak_segments='[]',recommended_drills=NULL WHERE play_session_id=?", play);
         assertThat(read("").get("weakSegments").isArray()).isTrue();
         assertThat(read("").get("weakSegments").size()).isZero();
+        assertThat(read("").get("recommendedDrills").isNull()).isTrue();
         db.update("""
-                UPDATE reports SET weak_segments='[{"fromMs":100,"toMs":200,"description":"박자를 확인하세요."}]',
-                generator_version='AI_TEST' WHERE play_session_id=?
+                UPDATE reports SET analysis_status='DONE',
+                weak_segments='[{"fromMs":100,"toMs":200,"description":"박자를 확인하세요."}]',
+                recommended_drills='[{"name":"기본 박자 연습"}]',generator_version='AI_TEST'
+                WHERE play_session_id=?
                 """, play);
         var before = read("");
         uploadBody(PlayFixtures.scored(play, song, version), 200);
         assertThat(read("")).isEqualTo(before);
         assertThat(before.get("weakSegments").get(0).get("description").asText()).isEqualTo("박자를 확인하세요.");
-        assertThat(before.get("analysisStatus").asText()).isEqualTo("NOT_REQUESTED");
+        assertThat(before.get("recommendedDrills").get(0).get("name").asText()).isEqualTo("기본 박자 연습");
+        assertThat(before.get("analysisStatus").asText()).isEqualTo("DONE");
         assertThat(read("/notes").get("items").size()).isEqualTo(2);
     }
     @ParameterizedTest
