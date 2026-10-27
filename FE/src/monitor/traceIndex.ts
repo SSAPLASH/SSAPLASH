@@ -4,6 +4,7 @@
 import type { DiagEvent } from '@/engine/diagTap';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
+import { negate } from './health';
 import { findHitRow, SEQ_MATCH_MS } from './judgeLog';
 import type { LogRow } from './packetLog';
 
@@ -182,7 +183,7 @@ function sensorStages(row: LogRow | null, noPacketReason: string): { sensor: Tra
       items: [
         { label: '센서 timestamp', value: String(d.timestampUs), unit: 'µs' },
         { label: '보정 시각(tBrowser)', ...ms(row.tBrowser) },
-        { label: 'futureMs', ...ms(row.futureMs) },
+        { label: '도착(수신−정지)', ...ms(negate(row.futureMs)) },
       ],
     },
   };

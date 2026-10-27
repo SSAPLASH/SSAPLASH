@@ -5,8 +5,9 @@ import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import type { ResolvedHit } from '@/domain/events';
 import type { TransportStats } from '@/input/InputSource';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
+import { ReplayOffsets, ReplayPlayer, type ReplaySpeed, type Timeline } from './replay';
 
-export type FeedMode = 'direct' | 'follow';
+export type FeedMode = 'direct' | 'follow' | 'replay';
 
 /** BroadcastChannel에서 쓰는 부분만 */
 export interface FeedChannel {
@@ -36,6 +37,9 @@ export interface FeedDeps {
   now?: () => number;
   timeOrigin?: () => number;
 }
+
+/** 재생 틱 간격(ms) */
+export const REPLAY_TICK_MS = 20;
 
 type Subscribe<T> = (fn: (v: T) => void) => () => void;
 export interface FeedTaps {
@@ -93,6 +97,17 @@ export class MonitorFeed {
   private nextHitId = FOLLOW_HIT_ID_BASE;
   private hello: Hello | null = null;
 
+  /** 재생 모드 상태. 재생 시각 = 녹화 t를 재생 시점으로 옮긴 값이고, 옮긴 차이(replayD)는 줄마다 다르다(배속 때문) */
+  private player: ReplayPlayer | null = null;
+  private replayOffsets = new ReplayOffsets();
+  private replayTimer: ReturnType<typeof setInterval> | null = null;
+  private replayD = 0;
+  /** 화면 스냅샷용 오프셋. 배속에서 d가 계속 변해 채택 오프셋이 매 틱 바뀌어 보이지 않게, 값이 새로 구해졌거나 1배속일 때만 갱신 */
+  private replaySnap: { src: [number | null, number | null]; out: [number | null, number | null] } = {
+    src: [null, null],
+    out: [null, null],
+  };
+
   private deps: FeedDeps;
   private taps: FeedTaps;
 
@@ -133,6 +148,7 @@ export class MonitorFeed {
   /** 직접 연결일 때만, 그리고 구독자가 있을 때만 로컬 탭을 구독한다 */
   private syncTaps(): void {
     const direct = this._mode === 'direct';
+    // 재생·따라보기에서는 로컬 탭을 구독하지 않는다
     if (direct && this.packetListeners.size > 0) {
       this.offTaps.packet ??= this.taps.packet((rec) => {
         for (const l of this.packetListeners) l(rec);
@@ -152,11 +168,108 @@ export class MonitorFeed {
   }
 
   setMode(mode: FeedMode): void {
-    if (mode === this._mode) return;
+    // 재생은 openReplay(시간표 필요)로만 들어간다
+    if (mode === this._mode || mode === 'replay') return;
+    this.closeReplay();
     this._mode = mode;
     if (mode === 'follow') this.openChannel();
     else this.closeChannel();
     this.syncTaps();
+  }
+
+  /** 녹화 재생 시작. 로컬 탭·채널은 끊고 시간표를 구독자에게 흘린다. 바로 재생을 시작한다 */
+  openReplay(timeline: Timeline): void {
+    this.closeReplay();
+    this.closeChannel();
+    this._mode = 'replay';
+    this.syncTaps();
+    this.player = new ReplayPlayer(timeline);
+    this.resetReplayOffsets();
+    this.player.play(this.now());
+    this.replayTimer = setInterval(() => this.replayTick(), REPLAY_TICK_MS);
+  }
+
+  private closeReplay(): void {
+    if (this.replayTimer !== null) clearInterval(this.replayTimer);
+    this.replayTimer = null;
+    this.player = null;
+  }
+
+  private resetReplayOffsets(): void {
+    this.replayOffsets.reset();
+    this.replayD = 0;
+    this.replaySnap = { src: [null, null], out: [null, null] };
+  }
+
+  /** 재생 조작. 재생 모드가 아니면 무시 */
+  replayPlay(): void {
+    this.player?.play(this.now());
+  }
+
+  replayPause(): void {
+    this.player?.pause(this.now());
+  }
+
+  /** 처음부터 다시 재생. 오프셋도 다시 구한다(화면 상태 비우기는 호출자) */
+  replayRestart(): void {
+    if (!this.player) return;
+    this.player.restart(this.now());
+    this.resetReplayOffsets();
+  }
+
+  replaySetSpeed(s: ReplaySpeed): void {
+    this.player?.setSpeed(s, this.now());
+  }
+
+  /** 재생 상태(화면용). 재생 모드가 아니면 null */
+  replayStatus(): { state: 'paused' | 'playing' | 'ended'; speed: ReplaySpeed; elapsedMs: number; totalMs: number } | null {
+    const p = this.player;
+    if (!p) return null;
+    return { state: p.state, speed: p.speed, elapsedMs: p.positionMs(this.now()), totalMs: p.timeline.durationMs };
+  }
+
+  /** 재생 중 packetLog에 넘길 오프셋(재생 시각 기준). 줄 하나를 내보내는 동안의 값이라 그 줄의 시각 이동을 반영한다 */
+  replayOffsetOf(stick: 0 | 1): number | null {
+    const o = this.replayOffsets.offsetOf(stick);
+    return o === null ? null : o + this.replayD;
+  }
+
+  /** 화면 스냅샷용 오프셋(채택 오프셋 표시) */
+  replaySnapshotOffsets(): [number | null, number | null] {
+    const speed1 = this.player?.speed === 1;
+    for (const s of [0, 1] as const) {
+      const src = this.replayOffsets.offsetOf(s);
+      if (src !== this.replaySnap.src[s] || speed1) {
+        this.replaySnap.src[s] = src;
+        this.replaySnap.out[s] = src === null ? null : src + this.replayD;
+      }
+    }
+    return [this.replaySnap.out[0], this.replaySnap.out[1]];
+  }
+
+  private replayTick(): void {
+    const p = this.player;
+    if (!p) return;
+    for (const { item, wallT } of p.take(this.now())) {
+      const d = wallT - item.t;
+      this.replayD = d;
+      if (item.k === 'packet') {
+        const r = item.row;
+        this.replayOffsets.observe(item.t, r.dir, r.stick, item.bytes);
+        if (this.packetListeners.size === 0) continue;
+        const rec: PacketRecord = {
+          id: this.nextId++,
+          dir: r.dir,
+          transport: r.transport as PacketRecord['transport'],
+          stickId: r.stick,
+          bytes: item.bytes,
+          recvTime: wallT,
+        };
+        for (const l of this.packetListeners) l(rec);
+      } else {
+        this.emitShifted(item.ev, d, false);
+      }
+    }
   }
 
   private openChannel(): void {
@@ -213,13 +326,17 @@ export class MonitorFeed {
   }
 
   private emitDiag(ev: DiagEvent): void {
+    this.emitShifted(ev, this.d, true);
+  }
+
+  /** 진단 이벤트를 시각 차이 d만큼 옮겨 내보낸다. remap이면 hitId를 다시 매긴다(따라보기), 아니면 원래 id 그대로(재생) */
+  private emitShifted(ev: DiagEvent, d: number, remap: boolean): void {
     if (this.diagListeners.size === 0) return;
-    const d = this.d;
     let out: DiagEvent;
     if (ev.type === 'resolved') {
       const hit: ResolvedHit = {
         ...ev.hit,
-        id: this.mapHitId(ev.hit.id, true),
+        id: remap ? this.mapHitId(ev.hit.id, true) : ev.hit.id,
         tHit: ev.hit.tHit + d,
         tRecv: ev.hit.tRecv + d,
         tResolved: ev.hit.tResolved + d,
@@ -227,7 +344,7 @@ export class MonitorFeed {
       if (ev.hit.tAudio !== undefined) hit.tAudio = ev.hit.tAudio + d;
       out = { ...ev, hit, t: ev.t + d };
     } else if (ev.type === 'judged') {
-      out = { ...ev, hitId: this.mapHitId(ev.hitId, false), t: ev.t + d };
+      out = { ...ev, hitId: remap ? this.mapHitId(ev.hitId, false) : ev.hitId, t: ev.t + d };
     } else {
       out = { ...ev, t: ev.t + d };
     }
