@@ -314,7 +314,7 @@ class PlayUploadApiTest {
 	}
 	private void raw(byte[] data,String auth,int expected) throws Exception {
 		mvc.perform(multipart("/api/v1/plays/"+play+"/raw").file(new MockMultipartFile("file","play.json.gz","application/gzip",data))
-				.header("Authorization","Bearer "+auth)).andExpect(status().is(expected));
+				.content(new byte[0]).header("Authorization","Bearer "+auth)).andExpect(status().is(expected));
 	}
 	private void postSummary(String body,String auth,int expected) throws Exception {
 		mvc.perform(post("/api/v1/plays").header("Authorization","Bearer "+auth).contentType("application/json").content(body)).andExpect(status().is(expected));
