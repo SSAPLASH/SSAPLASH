@@ -139,12 +139,56 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost/health   # 서버 안�
 docker compose -p infra ps                                          # 컨테이너 상태(healthy 확인)
 ```
 
-## 5. 도메인과 HTTPS (S15P31A307-39 진행 중)
+## 5. 도메인과 HTTPS (S15P31A307-130, 2026-10-27 적용)
 
-- 도메인 `k15a307.p.ssafy.io`가 서버 공개 IP를 가리킨다(확인함). 80, 443이 바깥에서 닿는 것도 확인했다.
-- 코드 준비는 끝났다: Nginx의 인증서 발급 경로(`/.well-known/acme-challenge/`), `certbot` 서비스, 인증서·챌린지 볼륨.
-- **남은 작업:** 서버 배포 → 스테이징 인증서 시험 발급 → 실제 발급 → 443·80→443 리다이렉트 설정 → 자동 갱신과 갱신 시험 → 앱 주소를 https로 변경 → 외부 검증.
-- 이 절은 39번이 끝나면 실제 명령과 결과로 채운다.
+- 도메인 `k15a307.p.ssafy.io`가 서버 공개 IP를 가리킨다. **https://k15a307.p.ssafy.io** 로 접속한다. `http://`는 `301`로 https에 보낸다.
+- 구성: Nginx가 80번(인증서 갱신 경로와 `/health`만 처리, 나머지는 https로 리다이렉트)과 443번(실제 서비스, TLS 1.2·1.3, HTTP/2)을 듣는다. 인증서·개인 키는 `letsencrypt` 볼륨에 있고 Nginx에는 읽기 전용으로 연결한다. `certbot`은 평소에는 실행하지 않고(`profiles: ["tools"]`) 필요할 때만 쓴다.
+- **중요한 순서:** 443 설정은 인증서 파일을 가리킨다. 인증서가 없는 상태에서 배포하면 Nginx가 시작하지 못해 서비스 전체가 내려간다. **인증서를 먼저 발급하고 443 설정을 배포한다.**
+
+### 인증서 최초 발급 (서버에서 `/srv/airdrum/Infra`, 명령은 `sudo`가 필요하다)
+
+1. 사전 점검 – Let's Encrypt가 접근하는 것과 같은 경로가 바깥에서 열리는지 본다. `ok`가 나와야 한다.
+   ```bash
+   sudo docker compose -p infra run --rm --entrypoint sh certbot -c 'mkdir -p /var/www/certbot/.well-known/acme-challenge && echo ok > /var/www/certbot/.well-known/acme-challenge/test'
+   curl -s http://k15a307.p.ssafy.io/.well-known/acme-challenge/test
+   sudo docker compose -p infra run --rm --entrypoint sh certbot -c 'rm -f /var/www/certbot/.well-known/acme-challenge/test'
+   ```
+2. 스테이징(시험용) 발급 – 발급 횟수 제한에 영향이 없다. `Successfully received certificate`가 나와야 한다.
+   ```bash
+   sudo docker compose -p infra run --rm certbot certonly --webroot -w /var/www/certbot -d k15a307.p.ssafy.io --staging --agree-tos --email <이메일> --no-eff-email
+   ```
+3. 진짜 발급 – 같은 이름의 스테이징 인증서를 `--force-renewal`로 교체한다. 진짜 발급 횟수 제한이 적용되므로 한 번만 한다.
+   ```bash
+   sudo docker compose -p infra run --rm certbot certonly --webroot -w /var/www/certbot -d k15a307.p.ssafy.io --force-renewal --agree-tos --email <이메일> --no-eff-email
+   ```
+4. 발급자와 만료일 확인 – 발급자에 `(STAGING)`이 없어야 진짜 인증서다.
+   ```bash
+   sudo docker compose -p infra run --rm --entrypoint sh certbot -c "openssl x509 -in /etc/letsencrypt/live/k15a307.p.ssafy.io/fullchain.pem -noout -issuer -enddate"
+   ```
+5. 새 Nginx 설정을 배포 전에 임시 컨테이너로 시험한다(운영 Nginx는 건드리지 않는다). `test is successful`이 나와야 한다.
+   ```bash
+   docker run --rm -v <default.conf 경로>:/etc/nginx/conf.d/default.conf:ro -v infra_letsencrypt:/etc/letsencrypt:ro -v infra_models:/usr/share/nginx/models:ro nginx:1.27-alpine nginx -t
+   ```
+
+### 현재 상태 (2026-10-27)
+- 진짜 인증서 발급 완료. 발급자 Let's Encrypt(`YE2`), **만료 2027-01-25**.
+- 갱신 시험 `certbot renew --dry-run`이 성공했다(`all simulated renewals succeeded`).
+- **자동 갱신은 구성하지 않았다.** 프로젝트가 만료일 이전에 끝나므로 수동 갱신으로 대체하기로 했다(결정 2026-10-27). 서버를 만료일 이후에도 쓰게 되면 아래 수동 갱신을 한다.
+
+### 수동 갱신 (만료 30일 전부터 가능)
+`renew`는 만료까지 30일 넘게 남았으면 갱신하지 않는다. 2026-12-26 이후에 실행한다.
+```bash
+cd /srv/airdrum/Infra
+sudo docker compose -p infra run --rm certbot renew
+sudo docker compose -p infra exec -T nginx nginx -s reload
+```
+두 번째 줄을 빼면 Nginx가 옛 인증서를 계속 쓴다. 갱신 뒤 위 4번 명령으로 만료일이 바뀌었는지 확인한다.
+
+### 앱 주소 (서버 `.env`)
+`FRONTEND_BASE_URL`, `OAUTH_REDIRECT_BASE_URL`, `OBJECT_STORAGE_PUBLIC_URL`을 모두 `https://k15a307.p.ssafy.io`로 둔다(2026-10-27 서버 `.env` 변경, 배포 때 `api`·`seaweedfs`가 새 값으로 다시 시작). 소셜 로그인 제공자 콘솔(Google, SSAFY)에도 콜백 주소 `https://k15a307.p.ssafy.io/api/auth/{google|ssafy}/callback`을 등록해야 한다(BE 담당).
+
+### 남은 것
+HSTS 적용 시점 결정, 외부 검증(SSL Labs, 폰·다른 브라우저 접속), 로그인 동작 확인(콜백 등록 후).
 
 ## 6. 백업과 복구 (최소 절차, **서버 시험 전**)
 
