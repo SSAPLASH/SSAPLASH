@@ -153,6 +153,10 @@ export class InputManager {
       outsidePolicy: this.outsidePolicy,
     });
     const stickId = m.stickId ?? e.stickId;
+    // 센서 소스는 소스가 timestamp를 이미 브라우저 시계로 환산해 넘기므로, 센서 시각은 오프셋을 되빼서 얻는다.
+    // 오프셋을 모르면(동기화 전·모의 소스) tSensorMs도 채우지 않는다. 텔레메트리 전용이라 판정에는 쓰지 않는다
+    const isSensor = source !== 'keyboard';
+    const clockOffsetMs = isSensor ? (this.sources.get(source)?.clockOffsetOf?.(stickId) ?? null) : null;
     const hit: ResolvedHit = {
       id: ++this.seq,
       stickId,
@@ -170,6 +174,9 @@ export class InputManager {
       peakAccel: e.peakAccel,
       peakSpeedDps: e.peakSpeedDps,
       seq: e.seq,
+      firmwarePad: isSensor ? e.pad : undefined,
+      tSensorMs: clockOffsetMs === null ? undefined : e.timestamp - clockOffsetMs,
+      clockOffsetMs: isSensor ? clockOffsetMs : undefined,
       judgedBy: m.judgedBy,
       distanceDeg: m.distanceDeg,
       inside: m.inside,

@@ -1,7 +1,8 @@
 // 제어 섹션: 데이터가 아니라 도구(파라미터 표·명령 바). 기존 파라미터·명령 탭을 그대로 옮겼다.
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
 import type { ParamStore } from '@/monitor/params';
+import { telemetryStore } from '@/telemetry/enable';
 import { parseJsonl } from '@/monitor/recorder';
 import { summarizeRecording, summaryToMarkdown, type RecordingSummary } from '@/monitor/recordingSummary';
 import { CommandBar } from '../CommandBar';
@@ -13,6 +14,7 @@ export function ControlSection({
   send,
   profile,
   canSend,
+  follow,
   summary,
   onSummary,
 }: {
@@ -20,6 +22,8 @@ export function ControlSection({
   send: SendFn;
   profile: CalibrationProfile;
   canSend: boolean;
+  /** 따라보기 모드(이 창은 이벤트를 만들지 않는다) */
+  follow: boolean;
   summary: RecordingSummary | null;
   onSummary: (s: RecordingSummary | null) => void;
 }) {
@@ -30,8 +34,50 @@ export function ControlSection({
         <ParamPanel store={store} canSend={canSend} />
         <CommandBar send={send} store={store} profile={profile} canSend={canSend} />
       </div>
+      <TelemetryPanel follow={follow} />
       <SummaryPanel summary={summary} onSummary={onSummary} />
     </div>
+  );
+}
+
+/** 텔레메트리 패널: 켜기 토글과 전송 카운터(설계 MONITOR-001). 전송 코드는 모니터 빌드에만 있다 */
+function TelemetryPanel({ follow }: { follow: boolean }) {
+  const st = useSyncExternalStore(telemetryStore.subscribe, telemetryStore.getSnapshot);
+  const s = st.sender;
+  const err = s.lastError;
+  const reason = !st.enabled ? '꺼져 있음' : !st.roleOk ? 'ADMIN 계정으로 로그인해야 전송합니다' : null;
+  return (
+    <section className="mon-panel">
+      <div className="mon-panel-head">
+        <h4 className="mon-h">텔레메트리</h4>
+        <button
+          className="btn-ghost small"
+          aria-pressed={st.enabled}
+          onClick={() => telemetryStore.setEnabled(!st.enabled)}
+        >
+          {st.enabled ? '끄기' : '켜기'}
+        </button>
+        <span>{st.active ? (s.inflight ? '전송 중' : '전송 켜짐') : '전송 안 함'}</span>
+      </div>
+      {st.forbidden && <div className="mon-empty">서버가 403으로 거절해 자동으로 껐습니다. 계정 권한을 확인한 뒤 다시 켜세요.</div>}
+      {!st.forbidden && reason && <div className="mon-empty">{reason}</div>}
+      {follow && (
+        <div className="mon-empty">
+          전송은 연주 창(이벤트가 생기는 창)에서 합니다. 따라보기 창은 이벤트를 만들지 않으므로 아래 카운터(이 창 기준)는 0으로 보입니다.
+        </div>
+      )}
+      <div className="mon-summary-line">
+        보낸 {s.sent} · 결과 불명 {s.unknown} · 거절 {s.rejected} · 401 폐기 {s.unauthorized} · 큐 {s.queueSize}
+      </div>
+      <div className="mon-summary-line">
+        폐기: 큐 초과 {s.drops.overflow} · 만료(10초) {s.drops.ttl} · 크기 초과 {s.drops.oversize}
+      </div>
+      {err && (
+        <div className="mon-summary-line">
+          마지막 오류: {err.status === 0 ? err.code : `${err.status} ${err.code}`} — {err.message}
+        </div>
+      )}
+    </section>
   );
 }
 
