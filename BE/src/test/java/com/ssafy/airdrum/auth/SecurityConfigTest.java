@@ -37,7 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 로컬 BE/.env에 흔들리지 않도록 이 테스트가 쓰는 제공자 키를 지정한다.
  */
 @SpringBootTest(properties = { "GOOGLE_CLIENT_ID=google-id", "GOOGLE_CLIENT_SECRET=google-secret",
-		"SSAFY_CLIENT_ID=", "SSAFY_CLIENT_SECRET=" })
+		"SSAFY_CLIENT_ID=", "SSAFY_CLIENT_SECRET=",
+        "chart.worker.credentials=test-worker=01234567890123456789012345678901" })
 @AutoConfigureMockMvc
 @Transactional
 @ExtendWith(OutputCaptureExtension.class)
@@ -77,8 +78,17 @@ class SecurityConfigTest {
 		mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
 		mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
 		mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
-		mvc.perform(get("/internal/anything")).andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.code").value("NOT_FOUND"));
+	}
+
+	@Test
+	void internalRequiresServiceAuthentication() throws Exception {
+		String path = "/internal/anything";
+		unauthorized(mvc.perform(get(path)), path, "인증이 필요합니다.");
+		var user = users.saveAndFlush(User.create("내부 인증 확인", null, null));
+		unauthorized(mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, bearer(user, Instant.now()))),
+				path, "인증이 필요합니다.");
+		mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer 01234567890123456789012345678901"))
+				.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 	}
 
 	@Test
