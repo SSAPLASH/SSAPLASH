@@ -31,7 +31,7 @@ public class ReportRepository {
 		return db.query("""
 			SELECT r.id,s.id AS play_id,s.score,s.accuracy,s.max_combo,s.judgement_counts::text,
 				r.timing_histogram::text,r.pad_stats::text,s.mode,s.input_source,s.client_meta->>'endReason' AS end_reason,
-				r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at
+				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at
 			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id WHERE s.id=? AND s.user_id=?
 			""", (r,n) -> new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
 				r.getInt("score"), r.getBigDecimal("accuracy"), r.getInt("max_combo"),
@@ -40,7 +40,7 @@ public class ReportRepository {
 				Arrays.stream(json.readValue(r.getString("pad_stats"), ReportAggregate.PadStats[].class))
 						.map(ReportResponse.PadStats::from).toList(),
 				r.getString("mode"), r.getString("input_source"), r.getString("end_reason"),
-				ReportResponse.AnalysisStatus.NOT_REQUESTED,
+				ReportResponse.AnalysisStatus.valueOf(r.getString("analysis_status")),
 				r.getString("weak_segments") == null ? null : json.readTree(r.getString("weak_segments")),
 				r.getString("recommended_drills") == null ? null : json.readTree(r.getString("recommended_drills")),
 				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant()), playId, userId)
