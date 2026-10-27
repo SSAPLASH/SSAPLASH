@@ -16,11 +16,11 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * 키트 프리셋 ({@code kit_presets}). 스키마는 V3·V11이 정의하고 이 매핑은 그것과 맞아야 한다(Hibernate validate).
+ * 키트 프리셋 ({@code kit_presets}). 스키마는 V3·V13이 정의하고 이 매핑은 그것과 맞아야 한다(Hibernate validate).
  *
- * <p>내용은 패드 배치({@code layout})·센서 캘리브레이션({@code calibration}, 선택)·사운드({@code sounds}) 세 가지이며
- * 모두 FE 형식의 JSON 객체 문자열이다. 이 클래스는 내용을 해석하지 않는다. V3의 {@code tuning}은 이 기능에서 쓰지 않아
- * 매핑하지 않는다(항상 NULL).
+ * <p>내용은 패드 배치({@code layout})·사운드({@code sounds}) 두 가지이며 모두 FE 형식의 JSON 객체 문자열이다.
+ * 이 클래스는 내용을 해석하지 않는다. 캘리브레이션은 기기·세션 값이라 저장하지 않는다(V13에서 컬럼 삭제).
+ * V3의 {@code tuning}은 이 기능에서 쓰지 않아 매핑하지 않는다(항상 NULL).
  */
 @Entity
 @Table(name = "kit_presets")
@@ -47,10 +47,6 @@ public class KitPreset {
 	@Column(nullable = false, columnDefinition = "jsonb")
 	private String sounds;
 
-	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(columnDefinition = "jsonb")
-	private String calibration;
-
 	@Column(nullable = false)
 	private Integer schemaVersion;
 
@@ -64,28 +60,26 @@ public class KitPreset {
 		// JPA 전용
 	}
 
-	private KitPreset(Long userId, String name, String layout, String sounds, String calibration, int schemaVersion) {
+	private KitPreset(Long userId, String name, String layout, String sounds, int schemaVersion) {
 		if (userId == null) {
 			throw new IllegalArgumentException("userId가 없습니다.");
 		}
 		this.userId = userId;
-		assign(name, layout, sounds, calibration, schemaVersion);
+		assign(name, layout, sounds, schemaVersion);
 	}
 
 	/**
 	 * 새 프리셋을 만든다. 기본 프리셋이 아닌 상태로 시작한다.
 	 *
-	 * @param calibration 캘리브레이션 JSON 객체 문자열. 없으면 null
 	 * @throws IllegalArgumentException 이름이 비었거나 배치·사운드가 없거나 형식 버전이 1 미만일 때
 	 */
-	public static KitPreset create(Long userId, String name, String layout, String sounds, String calibration,
-			int schemaVersion) {
-		return new KitPreset(userId, name, layout, sounds, calibration, schemaVersion);
+	public static KitPreset create(Long userId, String name, String layout, String sounds, int schemaVersion) {
+		return new KitPreset(userId, name, layout, sounds, schemaVersion);
 	}
 
 	/** 내용 전체를 바꾼다. 소유자·기본 여부는 그대로다. */
-	public void replace(String name, String layout, String sounds, String calibration, int schemaVersion) {
-		assign(name, layout, sounds, calibration, schemaVersion);
+	public void replace(String name, String layout, String sounds, int schemaVersion) {
+		assign(name, layout, sounds, schemaVersion);
 	}
 
 	public void markDefault() {
@@ -96,7 +90,7 @@ public class KitPreset {
 		this.isDefault = false;
 	}
 
-	private void assign(String name, String layout, String sounds, String calibration, int schemaVersion) {
+	private void assign(String name, String layout, String sounds, int schemaVersion) {
 		if (name == null || name.isBlank()) {
 			throw new IllegalArgumentException("프리셋 이름이 비었습니다.");
 		}
@@ -109,7 +103,6 @@ public class KitPreset {
 		this.name = name;
 		this.layout = layout;
 		this.sounds = sounds;
-		this.calibration = calibration;
 		this.schemaVersion = schemaVersion;
 	}
 
@@ -152,10 +145,6 @@ public class KitPreset {
 
 	public String getSounds() {
 		return sounds;
-	}
-
-	public String getCalibration() {
-		return calibration;
 	}
 
 	public Integer getSchemaVersion() {

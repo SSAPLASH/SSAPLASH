@@ -245,9 +245,10 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V11을 적용하고, V8 검사는 별도 필수 CI job
-`be-timescale-test`가 수행한다. Windows `local` Runner의 실행 계정에 **Linux Docker 엔진 접근**
-및 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V13을 적용하고, V8 검사는 별도 필수 CI job
+`be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
+TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
+이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
 Windows Runner의 IPv6 수신 오류를 피하도록 `gradle.properties`에서 Gradle JVM도 IPv4로 고정한다.
 `build.gradle`의 테스트 JVM IPv4 설정은 별도로 유지한다. `--no-daemon`도 일회용 Gradle 프로세스를
@@ -370,6 +371,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | --- | --- | --- | --- |
 | V1 | `V1__create_users_social_accounts.sql` | `users`, `social_accounts` | -86 |
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
+| V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
 
 규칙:
 
@@ -396,7 +398,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V11까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V13까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -519,8 +521,9 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 ## 키트 프리셋 (90번)
 
 로그인한 회원이 자기 키트 프리셋을 저장·조회·수정·삭제하고, 하나를 기본으로 지정한다. 프리셋 내용은
-**패드 배치(`layout`)·센서 캘리브레이션(`calibration`)·사운드(`sounds`)** 세 가지이며 모두 FE 형식의 JSON 객체다.
-서버는 내용을 해석하지 않고 객체인지와 크기(각 16 KiB)만 검사한다. 키보드 매핑은 저장하지 않는다(FE 로컬, 추후 FE에서 제거 예정).
+**패드 배치(`layout`)·사운드(`sounds`)** 두 가지이며 모두 FE 형식의 JSON 객체다.
+서버는 내용을 해석하지 않고 객체인지와 크기(각 16 KiB)만 검사한다. 센서 캘리브레이션은 기기·세션 값이라 저장하지 않는다
+(V11에서 넣은 `calibration`은 V13에서 삭제, -128).
 설계는 작업 90번 설계 문서(개인 문서)에 있다.
 
 | 메서드·경로 | 본문 | 성공 | 도메인 오류 |
@@ -528,7 +531,7 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `GET /api/presets` | — | 200 배열. 기본 프리셋이 있으면 첫 원소, 나머지는 최근 생성 순 | — |
 | `POST /api/presets` | 요청 본문 | 201 + `Location: /api/presets/{id}` | 409 `PRESET_NAME_DUPLICATE`·`PRESET_LIMIT_EXCEEDED`·`PRESET_CONFLICT` |
 | `GET /api/presets/{id}` | — | 200 | 404 `PRESET_NOT_FOUND` |
-| `PUT /api/presets/{id}` | 요청 본문(이름·배치·캘리브레이션·사운드를 모두 보낸다) | 200. 기본 여부는 그대로 | 404, 409 `PRESET_NAME_DUPLICATE`·`PRESET_CONFLICT` |
+| `PUT /api/presets/{id}` | 요청 본문(이름·배치·사운드를 모두 보낸다) | 200. 기본 여부는 그대로 | 404, 409 `PRESET_NAME_DUPLICATE`·`PRESET_CONFLICT` |
 | `PUT /api/presets/{id}/default` | 없음 | 200. 이전 기본은 해제. 이미 기본이면 그대로 | 404, 409 `PRESET_CONFLICT` |
 | `DELETE /api/presets/{id}` | — | 204. 기본을 지우면 남은 것 중 가장 최근 생성이 기본이 된다 | 404 |
 
@@ -539,11 +542,12 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `name` | 예 | 앞뒤 공백을 잘라 1~50자. 내 프리셋끼리 같은 이름 불가(대소문자 구분) |
 | `layout` | 예 | JSON 객체(FE `KitLayout`) |
 | `sounds` | 예 | JSON 객체. 1단계는 `{"soundSetId":"ssaplash"}` |
-| `calibration` | 아니오 | JSON 객체(FE `CalibrationProfile`) 또는 `null`/누락 |
-| `schemaVersion` | 아니오 | 1 이상 정수. 누락이면 1. FE가 위 세 JSON 형식을 바꿀 때 올린다 |
+| `schemaVersion` | 아니오 | 1 이상 정수. 누락이면 1. FE가 위 두 JSON 형식을 바꿀 때 올린다 |
 
-응답은 `id`, `name`, `isDefault`, `layout`, `sounds`, `calibration`(없으면 `null`), `schemaVersion`, `createdAt`, `updatedAt`
-아홉 필드다. 소유자 id는 내보내지 않는다. JSON은 jsonb로 저장되므로 키 순서·공백은 보낸 것과 다를 수 있다.
+표에 없는 필드는 무시한다. 옛 FE 빌드가 `calibration`을 보내도 400이 아니라 저장 없이 성공한다.
+
+응답은 `id`, `name`, `isDefault`, `layout`, `sounds`, `schemaVersion`, `createdAt`, `updatedAt`
+여덟 필드다. 소유자 id는 내보내지 않는다. JSON은 jsonb로 저장되므로 키 순서·공백은 보낸 것과 다를 수 있다.
 
 | 코드 | 상태 | 언제 |
 | --- | --- | --- |
@@ -553,7 +557,7 @@ GET URL은 inline 재생·표시 용도이고 별도 다운로드 API는 제공�
 | `PRESET_CONFLICT` | 409 | 같은 회원의 동시 요청이 DB 제약(이름 유일·기본 1개)에 걸림. 다시 호출하면 된다 |
 
 FE 소비 계약: 로그인 복원 뒤 `GET /api/presets` 한 번으로 목록과 기본 프리셋을 함께 받는다(전용 "기본 조회" API 없음).
-첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로컬 프리셋 이관은 `POST` 반복이다.
+첫 프리셋을 바로 기본으로 하려면 생성 뒤 `PUT …/default`를 한 번 더 부른다. 로그인 전 로컬 프리셋은 서버로 옮기지 않는다(91).
 
 연결점: 쓰기는 트랜잭션 첫 단계에서 `UserRepository.findByIdForShare`로 회원을 잠그고 ACTIVE를 다시 확인한다(아니면 401).
 탈퇴 작업은 `preset.KitPresetRepository.deleteAllByUserId(userId)`로 지운다(`users` 행을 남기므로 cascade에 기대지 않는다).
@@ -665,16 +669,61 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 `@AutoConfigureMockMvc(addFilters = false)`로 필터를 뺀다. 이 경우 로그에 "generated security password"가 나오지만 슬라이스에만 해당한다.
 
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
-통합 브랜치 파이프라인에서 실행된다. 현재는 `local` 태그의 Windows PowerShell shell Runner에서
-`gradlew.bat`를 실행한다. `ci/setup-java.ps1`이 공식 Temurin 21.0.12.1+1 Windows 배포 파일을
-다운로드하고 SHA-256을 확인한 뒤 작업 폴더의 `.gradle-cache/jdks/`에 준비한다.
-작업의 `JAVA_HOME`만 설정하므로 Runner의 시스템 Java 설정은 변경하지 않는다.
-JDK는 다음 작업에서도 캐시로 재사용하며, 최초 실행에는 GitHub 배포 파일 다운로드가 필요하다.
-shell executor는 `image`를 사용하지 않는다.
-Windows에서 긴 Gradle 캐시 경로를 정리할 수 있도록 모든 CI 작업의 Git 프로세스에
-`core.longpaths=true`를 환경변수로 전달하며, 호스트의 전역 Git 설정은 변경하지 않는다.
-Linux Docker Runner로 전환할 때는 태그·JDK 이미지·Wrapper 실행 명령을 함께 변경한다.
+통합 브랜치 파이프라인에서 실행된다. 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와
+`eclipse-temurin:21-jdk`를 사용하며 `./gradlew --no-daemon test`, `./gradlew --no-daemon bootJar`를 실행한다.
+필수 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
+`./gradlew --no-daemon timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
+사용하고 기존 루프백·테스트 JVM IPv4 설정을 유지한다. 로컬 통과와 실제 CI 통과는 구분한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
+
+### 플레이 리포트 집계·조회 (S15P31A307-157)
+
+신규 RHYTHM·SHEET 업로드는 검증된 hits에서 BE 통계를 계산하고 세션·hits·reports를 한 트랜잭션으로
+저장한다. 저장 실패 시 전체 롤백한다. 집계 계산은 트랜잭션 밖에서 수행하며 AI 호출이나 raw 로그
+업로드를 기다리지 않는다. FREE·TEMPO는 리포트를 생성하지 않는다. 업로드 응답의 `rawLogStatus`는
+원본 로그 상태이며 리포트 상태가 아니다. 신규 scored 업로드 201 직후 조회할 수 있다.
+
+내부 저장 통계는 `BE_REPORT_V1`이다. FE 회신을 반영한 공개 응답은 저장 DTO와 분리한다.
+
+- `timingHistogram`: PERFECT·GOOD의 deltaMs만 10ms 구간으로 집계한다. 판정창을 10ms 단위로
+  올림한 ±범위이며 마지막 구간만 우측 끝값을 포함한다. MISS·미매칭 타격은 제외한다.
+- `padStats`: enum 순서의 8패드. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
+  내부 저장은 0~1 비율(소수 넷째 자리 HALF_UP)이다. **API accuracy는 모두 0~100, 소수 둘째 자리 HALF_UP**이며
+  패드 값은 원본 판정 개수에서 직접 계산한다. 평가 표본이 없으면 null이다. 전체 summary 값은 그대로 유지한다.
+- `meanDeltaMs`, `meanVelocity`: PERFECT·GOOD 표본의 평균(소수 둘째 자리 HALF_UP), 표본 없으면 null.
+  `sampleCount`는 PERFECT+GOOD이며 `judgementCounts`에 패드별 판정 건수를 기록한다.
+  평가 노트 수는 PERFECT+GOOD+MISS다. sampleCount와 혼동하지 않는다. chartNoteCount는 이번 응답에 없다.
+- `weak_segments`·`recommended_drills`는 초기 null이다. 같은 UUID·본문 재전송은 기존 리포트를
+  갱신하지 않아 AI 결과도 보존한다. 배포 전 리포트 없는 세션의 재전송도 백필하지 않는다.
+
+`ReportAggregatorTest`는 소수 구간 경계·무표본·MISS·미매칭·50,000건을,
+`PlayUploadApiTest`는 실제 PostgreSQL과 인증 경로에서 저장·재전송·동시성·롤백을 검사한다.
+`ReportQueryApiTest`는 업로드→조회, 백분율·중단·null, 소유권·오류 코드, 커서·페이지 상한과 삭제 경합의 읽기 스냅샷을 검사한다.
+전체 검증 명령은 위의 Gradle test·bootJar 및 TimescaleDB 검증 절을 따른다.
+
+리포트 API는 Bearer 인증과 본인 소유권을 확인하며, 성공 DTO를 직접 반환한다.
+
+| API | 응답·규칙 |
+| --- | --- |
+| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt |
+| `GET /api/v1/plays/{playId}/report/notes?afterSeq=4&limit=1000` | items, nextAfterSeq. limit 기본 500·범위 1~1000. afterSeq 생략 시 처음부터, 명시 시 0~2147483647. seq 오름차순·커서 초과 행을 limit+1개 읽어 다음 페이지 판별 |
+
+notes.items는 seq, matchedNoteId, tMs, pad, judgement, deltaMs, velocity다. PERFECT·GOOD·MISS만 반환하고
+미매칭 타격은 제외한다. MISS의 deltaMs·velocity는 null이다. seq가 0·4·9, limit=2이면 첫 커서는 4이고
+다음 페이지가 9를 반환한다. 끝에서는 nextAfterSeq=null이다. seq는 시간순이 아니며 FE가 유효타의 노트 시각을
+tMs−deltaMs, MISS는 tMs로 구한다. 그래프 전체 로딩 속도를 페이지 분리만으로 보장하지 않는다.
+
+두 API 모두 읽기 전용 REPEATABLE_READ이며 요약 조회는 hits를 읽지 않는다. 현재 곡 삭제 상태·raw 저장소·AI 가용성에
+의존하지 않는다. endReason=null을 완료로 추정하지 않으며, meanDeltaMs는 부호 있는 편향이다.
+`analysisStatus` enum은 NOT_REQUESTED/PENDING/DONE/FAILED이며 현재는 항상 NOT_REQUESTED다.
+실제 상태 저장·전환은 158번 범위다. weakSegments의 null/[] 및 후속 저장 배열은 그대로 전달한다.
+
+미인증·만료·탈퇴는 401, UUID·쿼리 오류는 400이다. 없는 세션·타인 세션은 `PLAY_NOT_FOUND` 404,
+본인 리포트 없음·FREE/TEMPO는 `REPORT_NOT_FOUND` 404이며 ProblemDetail의 code로 분기한다.
+배포 전 리포트 없는 세션은 동일 업로드 200을 다시 받아도 백필되지 않는다.
+
+FE 회신 기준 흐름은 종료 직후 로컬 요약 표시 → 업로드 후 요약/첫 페이지 프리패치 → 서버 상세 리포트다.
+종료 후 3초 표시 대상의 기능명세 반영과 FE 통합 검증은 별도이며, 상세 리포트 요약+첫 페이지 3초는 실측 전 목표다.
 
 ## 컨테이너 실행
 

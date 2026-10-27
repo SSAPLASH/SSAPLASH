@@ -26,6 +26,8 @@ import com.ssafy.airdrum.play.raw.PlayRawStore;
 import com.ssafy.airdrum.play.raw.PlayRawUploadRepository;
 import com.ssafy.airdrum.play.raw.PlayRawValidator;
 import com.ssafy.airdrum.storage.cleanup.RawLogCleanupWorker;
+import com.ssafy.airdrum.report.ReportAggregator;
+import com.ssafy.airdrum.report.ReportRepository;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -45,6 +47,9 @@ class PlayUploadApiTest {
 	@Autowired RawLogCleanupWorker worker;
 	@MockitoBean PlayRawStore store;
 	@MockitoSpyBean PlayRawValidator rawValidator;
+	@MockitoSpyBean ReportRepository reports;
+	@MockitoSpyBean ReportAggregator reportAggregator;
+	@MockitoSpyBean PlaySessionRepository sessions;
 	long user,other,song,chart,version;
 	String token,otherToken;
 	UUID play;
@@ -97,7 +102,7 @@ class PlayUploadApiTest {
 		chart(); var p=read(PlayFixtures.scored(play,song,version));
 		var checked=new PlaySessionRepository(db,json).chart(user,song,version);
 		db.update("UPDATE chart_versions SET generator_version='changed' WHERE id=?",version);
-		assertThatThrownBy(()->transaction.save(user,p,json.hash(user,p),checked)).isInstanceOfSatisfying(BusinessException.class,
+		assertThatThrownBy(()->transaction.save(user,p,json.hash(user,p),checked,reportAggregator.aggregate(p))).isInstanceOfSatisfying(BusinessException.class,
 				ex->assertThat(ex.getErrorCode()).isEqualTo(PlayErrorCode.PLAY_STATE_CHANGED));
 		assertThat(count()).isZero();
 	}
@@ -106,7 +111,7 @@ class PlayUploadApiTest {
 		var hits=root.putArray("hits");
 		for(int i=0;i<501;i++) hits.addObject().put("seq",i==500?0:i).put("tMs",i).put("pad","SNARE").put("velocity",80);
 		var p=read(root.toString());
-		assertThatThrownBy(()->transaction.save(user,p,json.hash(user,p),null)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+		assertThatThrownBy(()->transaction.save(user,p,json.hash(user,p),null,null)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
 		assertThat(count()).isZero();
 		assertThat(db.queryForObject("SELECT count(*) FROM hits WHERE play_session_id=?",Integer.class,play)).isZero();
 	}
@@ -227,6 +232,85 @@ class PlayUploadApiTest {
 		doAnswer(i->{objects.remove(i.getArgument(0));return null;}).when(store).delete(anyString());
 		db.update("UPDATE file_cleanup_tasks SET next_attempt_at=now() WHERE object_key LIKE ?","play-raw/"+play+"/%");
 		worker.runOnce(); assertThat(objects).isEmpty();
+	}
+	@Test void scoredUploadPersistsReportBeforeRawAndReplayPreservesAiResult() throws Exception {
+		chart(); String body=PlayFixtures.scored(play,song,version).replace("RHYTHM","SHEET");
+		postSummary(body,token,201);
+		var report=db.queryForMap("SELECT timing_histogram::text,pad_stats::text,weak_segments,generator_version FROM reports WHERE play_session_id=?",play);
+		assertThat(report.get("generator_version")).isEqualTo("BE_REPORT_V1");
+		assertThat(report.get("weak_segments")).isNull();
+		var pads=json.mapper().readTree((String) report.get("pad_stats"));
+		assertThat(pads.get(1).get("accuracy").doubleValue()).isEqualTo(1d);
+		assertThat(pads.get(1).get("meanDeltaMs").doubleValue()).isEqualTo(0.13);
+		assertThat(pads.get(7).get("accuracy").doubleValue()).isZero();
+		assertThat(pads.get(7).get("meanVelocity").isNull()).isTrue();
+		assertThat(db.queryForObject("SELECT raw_log_status FROM play_sessions WHERE id=?",String.class,play)).isEqualTo("PENDING");
+		db.update("UPDATE reports SET weak_segments='[]',generator_version='BE_REPORT_V1+AI_V1' WHERE play_session_id=?",play);
+		postSummary(body,token,200);
+		postSummary(body.replace("\"consent\":false","\"consent\":true"),token,409);
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isEqualTo(1);
+		assertThat(db.queryForObject("SELECT generator_version FROM reports WHERE play_session_id=?",String.class,play)).isEqualTo("BE_REPORT_V1+AI_V1");
+		assertThat(db.queryForObject("SELECT weak_segments::text FROM reports WHERE play_session_id=?",String.class,play)).isEqualTo("[]");
+		verifyNoInteractions(store);
+	}
+	@Test void reportWriteFailureRollsBackSessionHitsAndInsertedReport() {
+		chart(); var p=read(PlayFixtures.scored(play,song,version));
+		ReportRepository target=org.springframework.test.util.AopTestUtils.getUltimateTargetObject(reports);
+		doAnswer(i->{ i.callRealMethod(); throw new IllegalStateException("리포트 저장 실패 검사"); }).when(target).insert(eq(play),any());
+		assertThatThrownBy(()->service.upload(user,p))
+				.isInstanceOf(org.springframework.dao.InvalidDataAccessApiUsageException.class)
+				.hasRootCauseInstanceOf(IllegalStateException.class);
+		assertThat(count()).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM hits WHERE play_session_id=?",Integer.class,play)).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isZero();
+	}
+	@Test void concurrentScoredUploadsCreateOnlyOneReport() throws Exception {
+		chart(); var p=read(PlayFixtures.scored(play,song,version)); var gate=new CountDownLatch(1);
+		try(var pool=Executors.newFixedThreadPool(4)) {
+			var tasks=new ArrayList<java.util.concurrent.Future<PlayUploadResponse>>();
+			for(int i=0;i<4;i++) tasks.add(pool.submit(()->{gate.await();return service.upload(user,p);}));
+			gate.countDown(); int created=0;
+			for(var task:tasks) if(task.get(15,TimeUnit.SECONDS).created()) created++;
+			assertThat(created).isEqualTo(1);
+			assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isEqualTo(1);
+		}
+	}
+	@Test void freeTempoAndHistoricalReplayDoNotCreateReports() {
+		service.upload(user,read(PlayFixtures.free(play)));
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isZero();
+		db.update("DELETE FROM play_sessions WHERE id=?",play);
+		service.upload(user,read(PlayFixtures.free(play).replace("FREE","TEMPO")));
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isZero();
+		db.update("DELETE FROM play_sessions WHERE id=?",play);
+		chart(); var p=read(PlayFixtures.scored(play,song,version)); service.upload(user,p);
+		db.update("DELETE FROM reports WHERE play_session_id=?",play);
+		assertThat(service.upload(user,p).created()).isFalse();
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isZero();
+	}
+	@Test void chartChangeAfterAggregationRevalidatesAndAggregatesOutsideTransaction() {
+		chart(); var p=read(PlayFixtures.scored(play,song,version));
+		var first=new java.util.concurrent.atomic.AtomicBoolean(true);
+		doAnswer(i->{
+			assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+			Object result=i.callRealMethod();
+			if(first.getAndSet(false)) db.update("UPDATE chart_versions SET generator_version='changed-after-aggregate' WHERE id=?",version);
+			return result;
+		}).when(reportAggregator).aggregate(any());
+		assertThat(service.upload(user,p).created()).isTrue();
+		verify(reportAggregator,times(2)).aggregate(any());
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isEqualTo(1);
+	}
+	@Test void deletionAfterReplayLookupRetriesWithFreshReport() {
+		chart(); var p=read(PlayFixtures.scored(play,song,version)); service.upload(user,p);
+		var first=new java.util.concurrent.atomic.AtomicBoolean(true);
+		doAnswer(i->{
+			Object result=i.callRealMethod();
+			if(first.getAndSet(false)) db.update("DELETE FROM play_sessions WHERE id=?",play);
+			return result;
+		}).when(sessions).find(eq(play),eq(false));
+		assertThat(service.upload(user,p).created()).isTrue();
+		assertThat(db.queryForObject("SELECT count(*) FROM reports WHERE play_session_id=?",Integer.class,play)).isEqualTo(1);
+		assertThat(db.queryForObject("SELECT count(*) FROM hits WHERE play_session_id=?",Integer.class,play)).isEqualTo(2);
 	}
 	private void raw(byte[] data,String auth,int expected) throws Exception {
 		mvc.perform(multipart("/api/v1/plays/"+play+"/raw").file(new MockMultipartFile("file","play.json.gz","application/gzip",data))
