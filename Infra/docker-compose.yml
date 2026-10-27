@@ -56,14 +56,20 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    # 비밀번호를 명령줄 인자(--requirepass)로 넘기면 `docker top`·`ps`에 그대로 보인다. 설정 파일(권한 600)에 쓰고 파일 경로만 넘긴다.
+    # 이미지의 시작 스크립트를 거쳐야 redis 사용자로 내려가 실행되므로(root 방지) `exec docker-entrypoint.sh`로 호출한다.
+    command:
+      - sh
+      - -c
+      - umask 077 && printf 'requirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec docker-entrypoint.sh redis-server /tmp/redis.conf
     volumes:
       - redisdata:/data
     networks:
       - internal
     mem_limit: 128m
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      # `-a 비밀번호`는 명령줄에 남으므로 환경변수 REDISCLI_AUTH로 넘긴다.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
