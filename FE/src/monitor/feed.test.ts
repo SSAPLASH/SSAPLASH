@@ -3,7 +3,7 @@ import type { DiagEvent } from '@/engine/diagTap';
 import { diagTap } from '@/engine/diagTap';
 import type { ResolvedHit } from '@/domain/events';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
-import { HELLO_TIMEOUT_MS, MonitorFeed, type FeedChannel } from './feed';
+import { FOLLOW_HIT_ID_BASE, HELLO_TIMEOUT_MS, MonitorFeed, type FeedChannel } from './feed';
 
 class FakeChannel implements FeedChannel {
   onmessage: ((e: { data: unknown }) => void) | null = null;
@@ -163,6 +163,34 @@ describe('MonitorFeed', () => {
     expect((diag[1] as Extract<DiagEvent, { type: 'resolved' }>).hit.tAudio).toBe(550);
     expect(diag[2].t).toBe(560);
     expect(feed.followStatus().offsets).toEqual([510, null]);
+  });
+
+  it('follow: 연주 창이 다시 떠 hitId가 1부터 반복돼도 모니터 안에서는 겹치지 않고, 판정은 자기 타격 id를 따른다', () => {
+    const diag: DiagEvent[] = [];
+    feed.subscribeDiag((e) => diag.push(e));
+    feed.setMode('follow');
+    const judged = (hitId: number): DiagEvent => ({
+      type: 'judged',
+      hitId,
+      judgement: 'GOOD',
+      noteIndex: 0,
+      notePad: null,
+      hitPad: null,
+      deltaMs: 1,
+      songTimeMs: 0,
+      t: 1,
+    });
+    const run = (win: string) => {
+      ch.recv(hello(win, 1000));
+      ch.recv({ k: 'batch', id: win, items: [{ k: 'diag', ev: { type: 'resolved', hit: hit(), t: 0 } }, { k: 'diag', ev: judged(1) }] });
+    };
+    run('a');
+    run('b'); // 새로고침한 연주 창: 원래 hitId 1이 다시 온다
+    const ids = diag.map((e) => (e.type === 'resolved' ? e.hit.id : e.type === 'judged' ? e.hitId : null));
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).toBe(ids[3]);
+    expect(ids[0]).not.toBe(ids[2]);
+    expect(ids[0]).toBeGreaterThanOrEqual(FOLLOW_HIT_ID_BASE);
   });
 
   it('follow: 가장 최근 hello의 id만 따르고 다른 id의 batch는 버린다', () => {
