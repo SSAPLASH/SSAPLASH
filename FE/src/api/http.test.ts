@@ -161,6 +161,34 @@ describe('apiFetch 401 처리', () => {
     expect(fetch.mock.calls.map(([u]) => u)).toEqual(['/api/users/me', '/api/auth/refresh', '/api/users/me']);
   });
 
+  it('noRetryOn401: refresh는 한 번 하되 원래 요청은 다시 보내지 않고 401을 던진다', async () => {
+    resetForTest('expired');
+    const fetch = mockFetch((url) => (url === '/api/auth/refresh' ? tokenOk('fresh') : problem(401, 'UNAUTHORIZED', '만료')));
+
+    await expect(apiFetch('/api/telemetry/batches', { method: 'POST', body: {}, noRetryOn401: true })).rejects.toMatchObject({ status: 401 });
+
+    expect(fetch.mock.calls.map(([u]) => u)).toEqual(['/api/telemetry/batches', '/api/auth/refresh']);
+    expect(getAccessToken()).toBe('fresh');
+  });
+
+  it('noRetryOn401이어도 다음 요청은 새 토큰으로 나간다', async () => {
+    resetForTest('expired');
+    const fetch = mockFetch((url, init) => {
+      if (url === '/api/auth/refresh') return tokenOk('fresh');
+      return header(init, 'Authorization') === 'Bearer fresh' ? json(200, { ok: true }) : problem(401, 'UNAUTHORIZED', '만료');
+    });
+    await expect(apiFetch('/api/x', { noRetryOn401: true })).rejects.toMatchObject({ status: 401 });
+    await expect(apiFetch('/api/x', { noRetryOn401: true })).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('Retry-After(초)를 ApiError.retryAfterMs로 싣는다', async () => {
+    mockFetch(() => new Response('{}', { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '3' } }));
+    await expect(apiFetch('/api/x')).rejects.toMatchObject({ status: 429, retryAfterMs: 3000 });
+    mockFetch(() => new Response('', { status: 429, headers: { 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' } }));
+    await expect(apiFetch('/api/x')).rejects.toMatchObject({ status: 429, retryAfterMs: null });
+  });
+
   it('/api/auth/ 아래 경로의 401은 refresh하지 않는다', async () => {
     resetForTest('tok');
     const fetch = mockFetch(() => problem(401, 'UNAUTHORIZED', '다시 로그인해 주세요.'));

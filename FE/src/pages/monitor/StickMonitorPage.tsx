@@ -511,7 +511,7 @@ export function StickMonitorPage() {
               canSend={canSend}
             />
           )}
-          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} summary={summary} onSummary={setSummary} />}
+          {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} follow={follow} summary={summary} onSummary={setSummary} />}
         </div>
       </div>
     </main>
