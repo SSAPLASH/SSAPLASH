@@ -31,7 +31,7 @@ extern "C" {
 /* ===================== 설정 ===================== */
 #define SERIAL_TEXT   0
 #define SERIAL_BINARY 1
-#define SERIAL_MODE   SERIAL_TEXT
+#define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
 #define FW_MINOR 0                     /* develop-EMB 병합 전 */

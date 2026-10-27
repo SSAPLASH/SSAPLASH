@@ -59,7 +59,7 @@ IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘
 
 | 이름 | 값 | 설명 |
 |---|---|---|
-| `SERIAL_MODE` | `SERIAL_TEXT` | USB 시리얼 출력. `SERIAL_BINARY`면 0xA5 프레임 → `../tools/ws_bridge.py`로 브라우저 연결 |
+| `SERIAL_MODE` | `SERIAL_BINARY` | USB 시리얼 출력. 0xA5 프레임 → Web Serial 직결 또는 `../tools/ws_bridge.py`로 브라우저 연결. **시리얼 모니터로 텍스트를 보려면 `SERIAL_TEXT`로 바꿔 빌드** |
 | `HIT_AXIS`, `HIT_SIGN` | 1, +1 | 스윙 축. 10/26 녹화(보드를 손에 쥔 방향)에서 내려칠 때 자이로 y가 +. **스틱 부착 후 재확인** |
 | `TIP_AXIS` | {1, 0, 0} | 센서 좌표에서 스틱 끝 방향. **스틱 부착 후 녹화로 확인** (현재 가정값) |
 | `FW_MAJOR.FW_MINOR` | 1.0 | 1 = Feather. develop-EMB 병합마다 minor +1 |
@@ -115,6 +115,16 @@ IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘
 | HIT 유실 | 0 |
 | 오디오 출력 (크롬 보고값) | 50ms → 정지 → 소리 예상 약 45ms |
 
+**경로별 HIT 도착 − 스틱 정지** (2026-10-27, `../tools/ble_latency.html`, 같은 계산)
+
+| 경로 | 중앙값 | sd |
+|---|---|---|
+| USB 시리얼 직결 (Web Serial) | **−9.2ms** | 1.1ms |
+| BLE | −4.8ms | 3.9ms |
+| WS 브리지 (`ws_bridge.py`) | +0.7ms | 6.1ms |
+
+WS 브리지 값은 `read(256)` 수정 전 실측이다 (256바이트 또는 timeout 10ms까지 묶여서 늦게 나감). `read(1)` + `in_waiting`으로 고친 뒤 **재측정 예정**.
+
 센서 + BLE 구간은 정지 시점보다 앞서 끝나서 여유가 있고, **30ms 목표를 넘기는 건 PC 오디오 출력 지연**이다. 크롬 보고값은 추정치일 수 있어 슬로모션 녹화로 실제 정지 → 소리를 확인할 예정.
 
 녹화 원본(`swing_1026.csv`, `nohit_1026.csv`, `ble_latency_*.csv`)은 저장소 밖(`ssaplash/`)에 있다.
@@ -126,7 +136,7 @@ IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘
 - DRV2605L 진동 로컬 트리거 (PLAY-006), SWING 패킷, 배터리 잔량, BOOT LOG git 해시
 - IMU FIFO로 읽기 (지금은 샘플마다 I2C, 루프가 느려지면 `missed` 증가)
 - 아주 약한 타격 녹화로 minDecel 6 재확인
-- `SERIAL_BINARY` + `ws_bridge.py` 경로는 아직 보드로 안 돌려 봄 (USB vs BLE 비교용)
+- `ws_bridge.py` read 수정 후 WS 경로 재측정
 
 ## 9. 트러블슈팅
 
