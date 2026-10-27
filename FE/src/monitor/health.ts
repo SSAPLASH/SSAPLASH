@@ -41,7 +41,7 @@ export interface HealthInput {
 }
 
 // 임계값 표. 가정값이며 실기 연동 뒤 이 표에서만 조정한다(U2·R1).
-// BLE 실측 SYNC rtt 중앙값 18.4ms가 rtt 기준(20ms)에 근접해 1순위 조정 대상이다.
+// BLE 실측 SYNC rtt 중앙값 18.4ms에 맞춰 rtt 기준을 25ms로 올렸다(U8 부분 닫힘). 여전히 1순위 조정 대상이다.
 export const HEALTH_THRESHOLDS = {
   /** ① 전송 */
   transport: {
@@ -75,8 +75,8 @@ export const HEALTH_THRESHOLDS = {
     /** 기울기를 낼 최소 표본 수·시간 폭(ms) */
     slopeMinSamples: 5,
     slopeMinSpanMs: 20_000,
-    /** SYNC rtt 중앙값(ms) 초과 시 주의. 최근 rttRecent개 */
-    rttWarnMs: 20,
+    /** SYNC rtt 중앙값(ms) 초과 시 주의. 최근 rttRecent개. Feather fw 1.0 BLE 실측 중앙값(약 18ms)보다 여유를 둬 20→25 */
+    rttWarnMs: 25,
     rttRecent: 20,
     /** futureMs 최대(ms) 초과 시 주의 */
     futureMaxWarnMs: 50,
