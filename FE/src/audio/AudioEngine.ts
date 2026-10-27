@@ -9,6 +9,9 @@ export interface LatencyInfo {
   outputLatencyMs: number;
 }
 
+/** getOutputTimestamp 짝이 현재 시각과 이만큼 넘게 어긋나면 무효로 본다(수십 초 오류만 거르는 폭) */
+const ANCHOR_MAX_SKEW_MS = 1000;
+
 type Voice = (ctx: AudioContext, out: AudioNode, when: number, vel: number) => void;
 
 function noiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
@@ -186,32 +189,45 @@ export class AudioEngine {
     };
   }
 
-  /** performance.now 기준 시각 → AudioContext 시각(초). getOutputTimestamp 기반이며 컨텍스트가 없으면 0 */
+  /**
+   * 시각 변환 기준점 (contextSec ↔ perfMs). getOutputTimestamp 짝이 유효하면 그것을 쓴다.
+   * 컨텍스트가 아직 출력한 적 없으면(suspended, resume 직후) 브라우저가 0·오래된 값을 주므로,
+   * 짝으로 계산한 "지금"이 performance.now()와 1초 넘게 어긋나면 같은 순간 읽은 currentTime↔performance.now 짝으로 대체한다
+   * (출력 지연 보정은 잃지만 수십 초 오차는 사라진다).
+   */
+  private timeAnchor(ctx: AudioContext): { contextSec: number; perfMs: number } {
+    const nowPerf = performance.now();
+    const ts = ctx.getOutputTimestamp();
+    if (ts.contextTime !== undefined && ts.performanceTime !== undefined && ts.performanceTime > 0) {
+      const impliedNow = ts.performanceTime + (ctx.currentTime - ts.contextTime) * 1000;
+      if (Math.abs(impliedNow - nowPerf) <= ANCHOR_MAX_SKEW_MS) {
+        return { contextSec: ts.contextTime, perfMs: ts.performanceTime };
+      }
+    }
+    return { contextSec: ctx.currentTime, perfMs: nowPerf };
+  }
+
+  /** performance.now 기준 시각 → AudioContext 시각(초). 컨텍스트가 없으면 0 */
   perfToContextTime(perfMs: number): number {
     if (!this.ctx) return 0;
-    const ts = this.ctx.getOutputTimestamp();
-    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
-    }
-    return this.ctx.currentTime;
+    const a = this.timeAnchor(this.ctx);
+    return a.contextSec + (perfMs - a.perfMs) / 1000;
   }
 
   /** AudioContext 시각(초) → performance.now 기준 시각. 컨텍스트가 없으면 performance.now() */
   contextToPerfTime(ctxTime: number): number {
     if (!this.ctx) return performance.now();
-    const ts = this.ctx.getOutputTimestamp();
-    if (ts.contextTime !== undefined && ts.performanceTime !== undefined) {
-      return ts.performanceTime + (ctxTime - ts.contextTime) * 1000;
-    }
-    return performance.now();
+    const a = this.timeAnchor(this.ctx);
+    return a.perfMs + (ctxTime - a.contextSec) * 1000;
   }
 
   /**
    * 패드 소리. whenMs(performance.now 기준)를 주면 그 시각에 맞춰 스케줄, 없으면 즉시.
    * 반환: 실제 스케줄된 performance.now() 기준 시각 (텔레메트리 tAudio).
+   * 컨텍스트가 없거나 running이 아니면 소리가 나지 않으므로 예약하지 않고 null.
    */
-  trigger(pad: PadId, velocity: number, whenMs?: number): number {
-    if (!this.ctx || !this.padBus) return performance.now();
+  trigger(pad: PadId, velocity: number, whenMs?: number): number | null {
+    if (!this.ctx || !this.padBus || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
@@ -235,9 +251,9 @@ export class AudioEngine {
     return this.contextToPerfTime(at);
   }
 
-  /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산) */
-  click(whenMs: number | undefined, accent: boolean): number {
-    if (!this.ctx || !this.master) return performance.now();
+  /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */
+  click(whenMs: number | undefined, accent: boolean): number | null {
+    if (!this.ctx || !this.master || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     const o = ctx.createOscillator();

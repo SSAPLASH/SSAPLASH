@@ -37,7 +37,7 @@ export interface MetronomeStats {
 
 export interface MetronomeDeps {
   /** 클릭 예약. 실제 예약된 시각(ms)을 돌려준다 */
-  click: (atMs: number, accent: boolean) => number;
+  click: (atMs: number, accent: boolean) => number | null;
   ensureAudio: () => Promise<void>;
   now?: () => number;
   setInterval?: (fn: () => void, ms: number) => unknown;
@@ -294,10 +294,14 @@ export class Metronome {
     const window = d.visibility() === 'hidden' ? HIDDEN_LOOKAHEAD_MS : LOOKAHEAD_MS;
     const beats = beatsInWindow(this.clock, -Infinity, now + window, this.nextIndex);
     for (const b of beats) {
-      const drift = d.click(b.atMs, b.accent) - b.atMs;
+      const at = d.click(b.atMs, b.accent);
       this._stats.scheduled++;
-      if (drift > 0) this._stats.late++;
-      this._stats.maxDriftMs = Math.max(this._stats.maxDriftMs, Math.abs(drift));
+      // null = 소리를 예약하지 못함(오디오 미해제 등). drift를 잴 수 없으니 기록하지 않는다
+      if (at !== null) {
+        const drift = at - b.atMs;
+        if (drift > 0) this._stats.late++;
+        this._stats.maxDriftMs = Math.max(this._stats.maxDriftMs, Math.abs(drift));
+      }
       this.nextIndex = b.index + 1;
       for (const l of this.beatListeners) l(b);
     }
