@@ -6,8 +6,11 @@ ADTOF + 드럼 킷 분리 어댑터의 무거운 계산(ADTOF 활성값 → 피�
 
 저장 내용 (곡 하나 = npz 하나)
 - peaks_{피치}: ADTOF가 잡은 시각(초). 피치 35 킥·38 스네어·42 하이햇·47 탐·49 심벌
-- stem_{이름}: 드럼 킷 분리 트랙 중 규칙이 쓰는 toms·crash·ride. 모노 float16, 샘플레이트는 입력과 같음(44.1kHz).
-  float16은 float32의 절반 크기이고 규칙(스펙트럼 봉우리·에너지 비교)에는 차이가 거의 없음
+- activations: ADTOF가 프레임(100fps)마다 내는 5가지 확신 점수 (프레임, 5) float16. 탐 기준값·타격 시각
+  고르기를 규칙으로 바꿔 다시 돌리기 위해 저장 (S15P31A307-164 재연구). 옛 파일에는 없을 수 있음
+- stem_{이름}: 드럼 킷 분리 트랙 전부(kick·snare·toms·hh·ride·crash). 모노 float16, 샘플레이트는 입력과 같음(44.1kHz).
+  float16은 float32의 절반 크기이고 규칙(스펙트럼 봉우리·에너지 비교)에는 차이가 거의 없음.
+  옛 파일은 toms·crash·ride 셋만 있음
 - sample_rate, duration_sec, meta(json: 모델·checkpoint·설정 해시·기본 규칙)
 경로 `data/rule_features/{데이터셋}/{곡}.npz`. 이미 있으면 건너뜀. `data/`는 git 미추적.
 """
@@ -46,6 +49,8 @@ class RuleFeatures:
     duration_sec: float
     meta: dict = field(default_factory=dict)
     input_audio: np.ndarray | None = None
+    # ADTOF 프레임별 확신 점수 (프레임, 5) float32. 없으면 None (옛 파일)
+    activations: np.ndarray | None = None
 
     def peaks_as_lists(self) -> dict[int, list[float]]:
         """assign_pads가 받는 {피치: 시각 목록} 형태."""
@@ -71,14 +76,16 @@ def make_features(
     sample_rate: int,
     duration_sec: float,
     meta: dict | None = None,
+    activations: np.ndarray | None = None,
 ) -> RuleFeatures:
-    """어댑터 출력(피치별 시각, 스템 (채널, 샘플))을 저장 형태로. 스템은 모노 float16."""
+    """어댑터 출력(피치별 시각, 스템 (채널, 샘플), 프레임별 점수)을 저장 형태로. 스템은 모노 float16."""
     return RuleFeatures(
         peaks={int(p): np.asarray(list(t), dtype=np.float64) for p, t in peaks.items()},
         stems={name: to_mono(np.asarray(a)).astype(STEM_DTYPE) for name, a in stems.items()},
         sample_rate=int(sample_rate),
         duration_sec=float(duration_sec),
         meta=dict(meta or {}),
+        activations=None if activations is None else np.asarray(activations, dtype=np.float32),
     )
 
 
@@ -94,6 +101,8 @@ def save_features(path: Path, f: RuleFeatures) -> Path:
         arrays[f"peaks_{int(pitch)}"] = np.asarray(times, dtype=np.float64)
     for name, audio in f.stems.items():
         arrays[f"stem_{name}"] = np.asarray(audio, dtype=STEM_DTYPE)
+    if f.activations is not None:
+        arrays["activations"] = np.asarray(f.activations, dtype=STEM_DTYPE)
     tmp = path.with_suffix(".npz.part")
     with open(tmp, "wb") as fh:
         np.savez(fh, **arrays)
@@ -119,6 +128,9 @@ def load_features(path: Path) -> RuleFeatures:
             sample_rate=int(z["sample_rate"]),
             duration_sec=float(z["duration_sec"]),
             meta=json.loads(str(z["meta"])),
+            activations=(
+                np.asarray(z["activations"], dtype=np.float32) if "activations" in z.files else None
+            ),
         )
 
 
@@ -127,21 +139,25 @@ def features_from_adapter(tr, audio: np.ndarray, sample_rate: int) -> RuleFeatur
     audio = np.ascontiguousarray(audio, dtype=np.float32)
     if audio.ndim == 1:
         audio = np.stack([audio, audio])
-    peaks = tr._adtof.peaks(tr._adtof.activations(audio, sample_rate))
+    activations = tr._adtof.activations(audio, sample_rate)
+    peaks = tr._adtof.peaks(activations)
     all_stems = tr.stems(audio, sample_rate)
     names = tr.rules["stems"]
     wanted = {names["toms"], names["crash"], names["ride"]}
     missing = sorted(wanted - set(all_stems))
     if missing:
         raise KeyError(f"드럼 킷 분리 출력에 스템이 없음: {missing} (있는 것: {sorted(all_stems)})")
-    stems = {n: all_stems[n] for n in sorted(wanted)}
+    # 규칙이 쓰는 셋뿐 아니라 분리 트랙 전부 저장 (거르기 분모·낮은 탐 판단에 kick·snare·hh가 필요)
+    stems = {n: all_stems[n] for n in sorted(all_stems)}
     meta = {
         "model": tr.name,
         "checkpoint": tr._checkpoint_id(),
         "configHash": tr.config.config_hash,
         "rulesDefault": tr.rules,
     }
-    return make_features(peaks, stems, sample_rate, audio.shape[1] / sample_rate, meta)
+    return make_features(
+        peaks, stems, sample_rate, audio.shape[1] / sample_rate, meta, activations=activations
+    )
 
 
 @dataclass

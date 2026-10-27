@@ -30,15 +30,15 @@ from ssaplash_ai.bench.analysis.rule_features import (
 )
 from ssaplash_ai.bench.datasets import DatasetConfig, load_dataset
 from ssaplash_ai.bench.datasets.pads import HITS_DTYPE, PADS, make_hits, to_five_groups
-from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC, MatchCounts, score_hits
+from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC, MatchCounts, f1_from_counts, score_hits
 from ssaplash_ai.bench.runner.run_support import Logger
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
     ADTOF_SNARE,
-    ADTOF_TOM,
     TomAssignment,
     assign_pads,
     assign_toms,
     rules_with_defaults,
+    tom_times_and_scores,
 )
 
 TOM_PADS: tuple[str, ...] = ("SMALL_TOM", "MID_TOM", "FLOOR_TOM")
@@ -82,13 +82,17 @@ def load_candidates(paths: Sequence[Path]) -> list[RuleCandidate]:
 
 
 def predict_hits(features: RuleFeatures, rules: dict) -> np.ndarray:
-    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 8종). 입력 드럼이 있으면 거르기(tom_gate_ratio)에 씀."""
+    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 8종).
+
+    입력 드럼이 있으면 거르기(tom_gate_ratio)에, 프레임별 점수가 있으면 탐 시각 다시 고르기에 씀.
+    """
     raw = assign_pads(
         features.peaks_as_lists(),
         features.stems,
         features.sample_rate,
         rules,
         mixture=features.input_audio,
+        activations=features.activations,
     )
     hits, _ = make_hits(
         (t for t, _, _ in raw), (label for _, label, _ in raw), None, IDENTITY_LABELS
@@ -101,13 +105,16 @@ def tom_summary(features: RuleFeatures, rules: dict) -> TomAssignment:
     r = rules_with_defaults(rules)
     toms = features.stems.get(r["stems"]["toms"])
     peaks = features.peaks_as_lists()
+    times, scores = tom_times_and_scores(peaks, r, features.activations)
     return assign_toms(
-        peaks.get(ADTOF_TOM, []),
+        times,
         toms,
         features.sample_rate,
         r,
         features.input_audio,
         snare_times=peaks.get(ADTOF_SNARE, []),
+        stems=features.stems,
+        scores=scores,
     )
 
 
@@ -124,6 +131,20 @@ class GroupResult:
     @property
     def assign_acc(self) -> float:
         return self.correct / self.matched if self.matched else math.nan
+
+    def consistent_correct(self, pads: Sequence[str]) -> int:
+        """짝지어진 타격 중, 이 묶음 안에서 정답 패드와 붙인 패드를 가장 잘 맞춰 주는 일대일 대응으로 셌을 때 맞는 수.
+
+        곡 안에서 이름만 서로 바뀐 경우(실제 킷의 두 번째 탐을 MID로 적을지 SMALL로 적을지)를 맞은 것으로 치는
+        보조 지표용. 곡마다 따로 계산해야 뜻이 있다(여러 곡을 합친 뒤 구하면 안 됨).
+        """
+        from itertools import permutations
+
+        best = 0
+        for perm in permutations(pads):
+            total = sum(self.confusion.get((t, p), 0) for t, p in zip(pads, perm, strict=True))
+            best = max(best, total)
+        return best
 
     def __add__(self, other: GroupResult) -> GroupResult:
         conf = dict(self.confusion)
@@ -188,6 +209,10 @@ class SongEval:
     tom_dropped: int = 0
     tom_clusters: int = 0
     tom_cluster_hz: str = ""
+    # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 수 (S15P31A307-164 재연구)
+    tom_rescued: int = 0
+    # 곡 안 일대일 대응으로 셌을 때 맞는 탐 수 (이름이 서로 바뀐 것은 맞은 것으로)
+    tom_consistent: int = 0
 
 
 def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules: dict) -> SongEval:
@@ -195,17 +220,20 @@ def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules
     pads = score_hits(hits_true, hits_pred, "pads")
     five = score_hits(hits_true, hits_pred, "five")
     toms = tom_summary(features, rules)
+    tom_group = group_confusion(hits_true, hits_pred, TOM_PADS)
     return SongEval(
         song_id=song_id,
         pads=dict(pads.by_label),
         five=dict(five.by_label),
-        tom=group_confusion(hits_true, hits_pred, TOM_PADS),
+        tom=tom_group,
+        tom_consistent=tom_group.consistent_correct(TOM_PADS),
         cymbal=group_confusion(hits_true, hits_pred, CYMBAL_PADS),
         n_true=int(len(hits_true)),
         n_pred=int(len(hits_pred)),
         tom_dropped=toms.n_dropped,
         tom_clusters=toms.n_clusters,
         tom_cluster_hz="/".join(f"{m:.0f}" for m in toms.cluster_medians),
+        tom_rescued=toms.n_rescued,
     )
 
 
@@ -220,6 +248,8 @@ class CandidateResult:
     tom: GroupResult = field(default_factory=GroupResult)
     cymbal: GroupResult = field(default_factory=GroupResult)
     tom_dropped: int = 0
+    tom_rescued: int = 0
+    tom_consistent: int = 0
     songs: list[SongEval] = field(default_factory=list)
 
     def f1(self, label: str) -> float:
@@ -242,6 +272,19 @@ class CandidateResult:
     def f1_cymbal(self) -> float:
         return _sum(self.pads.get(p, MatchCounts()) for p in CYMBAL_PADS).f1
 
+    @property
+    def f1_tom_consistent(self) -> float:
+        """곡 안 이름 바뀜을 맞은 것으로 친 탐 F1. 맞은 수는 곡별 일대일 대응 합, 나머지 예측·정답은 틀린 것."""
+        total = _sum(self.pads.get(p, MatchCounts()) for p in TOM_PADS)
+        n_pred = total.tp + total.fp
+        n_true = total.tp + total.fn
+        tp = self.tom_consistent
+        return f1_from_counts(tp, n_pred - tp, n_true - tp)
+
+    @property
+    def tom_consistent_acc(self) -> float:
+        return self.tom_consistent / self.tom.matched if self.tom.matched else math.nan
+
     def metrics(self) -> dict[str, float]:
         """CSV 한 행 · MLflow 지표."""
         out: dict[str, float] = {f"f1{p}": self.f1(p) for p in PADS}
@@ -255,6 +298,9 @@ class CandidateResult:
             tomFalseKept=float(self.tom.false_kept),
             tomMissed=float(self.tom.missed),
             tomDropped=float(self.tom_dropped),
+            tomRescued=float(self.tom_rescued),
+            tomConsistentAcc=self.tom_consistent_acc,
+            f1TomConsistent=self.f1_tom_consistent,
             cymbalAssignAcc=self.cymbal.assign_acc,
             cymbalMatched=float(self.cymbal.matched),
             cymbalFalseKept=float(self.cymbal.false_kept),
@@ -292,6 +338,8 @@ def eval_candidate(
         res.tom = res.tom + s.tom
         res.cymbal = res.cymbal + s.cymbal
         res.tom_dropped += s.tom_dropped
+        res.tom_rescued += s.tom_rescued
+        res.tom_consistent += s.tom_consistent
     return res
 
 
@@ -381,7 +429,7 @@ def summary_markdown(
     results: Sequence[CandidateResult], candidates: Sequence[RuleCandidate]
 ) -> str:
     cols = ["f1Tom", "f1SMALL_TOM", "f1MID_TOM", "f1FLOOR_TOM", "tomAssignAcc", "tomFalseKept"]
-    cols += ["tomDropped"]
+    cols += ["tomMissed", "tomDropped", "tomRescued", "tomConsistentAcc", "f1TomConsistent"]
     cols += [
         "f1Cymbal",
         "f1CRASH",
@@ -484,6 +532,8 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
         "tomCorrect",
         "tomFalseKept",
         "tomDropped",
+        "tomRescued",
+        "tomConsistent",
         "tomClusters",
         "tomClusterHz",
         "cymbalMatched",
@@ -504,6 +554,8 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
                 "tomCorrect": s.tom.correct,
                 "tomFalseKept": s.tom.false_kept,
                 "tomDropped": s.tom_dropped,
+                "tomRescued": s.tom_rescued,
+                "tomConsistent": s.tom_consistent,
                 "tomClusters": s.tom_clusters,
                 "tomClusterHz": s.tom_cluster_hz,
                 "cymbalMatched": s.cymbal.matched,

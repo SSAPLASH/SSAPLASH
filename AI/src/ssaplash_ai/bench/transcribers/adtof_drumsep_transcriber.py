@@ -2,7 +2,7 @@
 
 흐름: ADTOF(5가지: 킥·스네어·하이햇·탐·심벌) → MDX23C DrumSep(기존 msst 어댑터, 6스템: kick·snare·toms·
 hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 타격에 패드를 붙임.
-- 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 봉우리(tom_fmin~tom_fmax Hz)를 기본 주파수로 봄.
+- 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 피크(tom_fmin~tom_fmax Hz)를 기본 주파수로 봄.
   tom_mode가 fixed(기본)면 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / SMALL_TOM. 경계값은 yaml(rules)에
   있고 GMD 정답으로 한 번 맞춘 값(U8): GMD(TD-11 킷) 정답 탐의 기본 주파수 중앙값이 플로어 97·미드 129·하이
   160Hz라 경계를 113·142Hz로 둠. 실제 드럼 킷은 음높이가 달라 MDB에서는 틀릴 수 있음(한계로 표기,
@@ -35,7 +35,14 @@ DEFAULT_RULES: dict = {
         113.0,
         142.0,
     ],  # f0 < 113 플로어, 113~142 미드, > 142 하이 (GMD TD-11 정답으로 맞춤)
-    "stems": {"toms": "toms", "crash": "crash", "ride": "ride"},
+    "stems": {
+        "toms": "toms",
+        "crash": "crash",
+        "ride": "ride",
+        "kick": "kick",
+        "snare": "snare",
+        "hh": "hh",
+    },
     "cymbal_min_energy": 1e-8,
     # 심벌 판정 구간. None이면 window_ms와 같음 (탐 구간만 따로 바꿀 수 있게, S15P31A307-163)
     "cymbal_window_ms": None,
@@ -54,13 +61,54 @@ DEFAULT_RULES: dict = {
     # 거른 탐을 어떻게 할지. drop: 버림. snare: 50ms 안에 ADTOF 스네어 타격이 없으면 SNARE로 돌리고 있으면 버림
     # (거른 탐 대부분이 정답 스네어 옆이라서, S15P31A307-164 분석)
     "tom_gate_action": "drop",
+    # 탐 타격 시각 고르기 (S15P31A307-164 재연구). ADTOF 프레임별 확신 점수가 있을 때만 적용
+    "tom_threshold": None,  # 탐 확신 점수 기준값. None이면 저장소 기본값 0.32
+    # madmom: 100ms 이동평균을 뺀 뒤 기준값과 비교(저장소 방식). raw: 이동평균을 빼지 않음
+    "tom_peak_mode": "madmom",
+    # 거르기 분모. input: 입력 드럼 전체. others: snare·hh·crash·ride 트랙 합 (kick은 뺌)
+    "tom_gate_mode": "input",
+    # 낮은 탐 되살리기. 탐 트랙 비율이 기준 아래여도 (toms+kick)/분모가 이 값 이상이고 확신 점수가
+    # tom_gate_low_min_score 이상이며 음높이가 tom_low_hz 안이면 탐으로 둠. None이면 끔.
+    # 분리 모델이 80Hz 플로어탐을 kick 트랙에 넣는 경우(MDB Grunge) 대응
+    "tom_gate_low_rescue": None,
+    "tom_gate_low_min_score": 0.5,
+    "tom_low_hz": [60.0, 130.0],
+    # 음높이 재는 법 (S15P31A307-164 재연구). peak: 구간 전체 스펙트럼의 가장 큰 피크 하나(지금 방식).
+    # median: 구간을 tom_f0_frame_ms 길이·tom_f0_hop_ms 간격 프레임으로 잘라 프레임마다 피크를 재고 중앙값.
+    # 킥 겹침·스틱 잡음이 한 프레임에만 있을 때 흔들리지 않게. tom_f0_start_ms는 타격 뒤 얼마부터 잴지
+    "tom_f0_method": "peak",
+    "tom_f0_frame_ms": 40.0,
+    "tom_f0_hop_ms": 20.0,
+    "tom_f0_start_ms": 0.0,
+    # tom_relative_naming이 hybrid일 때 묶음 수에 따른 이름 규칙의 절대 음높이 기준.
+    # 1묶음: floor_max 아래 FLOOR, small_min 위 SMALL, 사이 MID. 2묶음: 낮은 쪽은 floor_max 아래면 FLOOR 아니면 MID,
+    # 높은 쪽은 small_min 위면 SMALL 아니면 MID. 둘이 같아지면 순서로 벌림. 3묶음: 순서
+    "tom_hybrid_floor_max_hz": 120.0,
+    "tom_hybrid_small_min_hz": 200.0,
+    # 곡 안 음높이 묶는 법. gap: 반음으로 정렬해 이웃 사이 틈이 tom_relative_min_gap 이상인 곳에서 자름(-164 실험 방식.
+    # 타격이 수백 개면 음높이가 연속으로 깔려 틈이 안 생겨 묶음이 하나가 됨). peaks: 반음 히스토그램을 부드럽게 한 뒤
+    # 피크를 찾고(피크 사이 최소 거리 tom_relative_min_gap) 타격을 가장 가까운 피크에 붙임
+    "tom_relative_method": "gap",
+    "tom_relative_bin": 0.25,  # peaks 히스토그램 칸(반음)
+    "tom_relative_smooth": 0.5,  # peaks 히스토그램을 부드럽게 하는 폭(반음)
+    # 묶음 하나의 최소 타격 비율(곡 안 탐 타격 수 대비). tom_relative_min_hits와 둘 중 큰 쪽을 씀.
+    # 실제 드럼은 같은 탐도 세기에 따라 음높이가 3반음쯤 흔들려 작은 곁가지 묶음이 생기므로 비율로 합침
+    "tom_relative_min_frac": 0.0,
 }
+TOM_F0_METHODS = ("peak", "median")
+TOM_RELATIVE_METHODS = ("gap", "peaks")
+ADTOF_LABELS: tuple[int, ...] = (35, 38, 47, 42, 49)  # ADTOF 출력 열 순서
+ADTOF_DEFAULT_THRESHOLDS: tuple[float, ...] = (0.22, 0.24, 0.32, 0.22, 0.30)
+ADTOF_FPS = 100
+TOM_PEAK_MODES = ("madmom", "raw")
+TOM_GATE_MODES = ("input", "others")
+GATE_OTHER_STEMS = ("snare", "hh", "crash", "ride")
 ADTOF_SNARE = 38
 ADTOF_TOM = 47
 ADTOF_CYMBAL = 49
 LABEL_BY_PITCH = {35: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT"}
 TOM_MODES = ("fixed", "relative")
-TOM_NAMINGS = ("bands", "order")
+TOM_NAMINGS = ("bands", "order", "hybrid")
 TOM_GATE_ACTIONS = ("drop", "snare")
 GATE_SNARE_SEC = 0.05  # 거른 탐을 스네어로 돌릴 때 이미 스네어 타격이 있는지 보는 거리
 TOM_PAD_ORDER: tuple[str, str, str] = ("FLOOR_TOM", "MID_TOM", "SMALL_TOM")  # 음높이 낮은 순
@@ -80,7 +128,108 @@ def rules_with_defaults(rules: dict | None) -> dict:
         raise ValueError(
             f"tom_gate_action은 {TOM_GATE_ACTIONS} 중 하나: {out['tom_gate_action']!r}"
         )
+    if out["tom_relative_method"] not in TOM_RELATIVE_METHODS:
+        raise ValueError(
+            f"tom_relative_method는 {TOM_RELATIVE_METHODS} 중 하나: {out['tom_relative_method']!r}"
+        )
+    if out["tom_f0_method"] not in TOM_F0_METHODS:
+        raise ValueError(f"tom_f0_method는 {TOM_F0_METHODS} 중 하나: {out['tom_f0_method']!r}")
+    if out["tom_peak_mode"] not in TOM_PEAK_MODES:
+        raise ValueError(f"tom_peak_mode는 {TOM_PEAK_MODES} 중 하나: {out['tom_peak_mode']!r}")
+    if out["tom_gate_mode"] not in TOM_GATE_MODES:
+        raise ValueError(f"tom_gate_mode는 {TOM_GATE_MODES} 중 하나: {out['tom_gate_mode']!r}")
     return out
+
+
+# ---------- 탐 타격 시각 고르기 (S15P31A307-164 재연구) ----------
+
+
+def _moving_average(x: np.ndarray, left: int, right: int) -> np.ndarray:
+    kernel = np.ones(left + 1 + right, dtype=np.float32) / (left + 1 + right)
+    padded = np.pad(x, (left, right), mode="edge")
+    return np.convolve(padded, kernel, mode="valid").astype(np.float32)
+
+
+def _local_max(x: np.ndarray, left: int, right: int) -> np.ndarray:
+    padded = np.pad(x, (left, right), mode="edge")
+    return np.max(
+        np.stack([padded[k : k + len(x)] for k in range(left + 1 + right)], axis=0), axis=0
+    )
+
+
+def pick_peaks(
+    act: np.ndarray,
+    threshold: float,
+    pre_avg: float = 0.1,
+    post_avg: float = 0.01,
+    pre_max: float = 0.02,
+    post_max: float = 0.01,
+    combine: float = 0.02,
+    fps: int = ADTOF_FPS,
+) -> list[float]:
+    """프레임별 점수 한 열 → 타격 시각(초). ADTOF-pytorch의 madmom식 피크 고르기와 같은 계산.
+
+    pre_avg·post_avg가 0이면 이동평균을 빼지 않고 점수 그대로 기준값과 비교함(raw).
+    """
+    act = np.asarray(act, dtype=np.float32).reshape(-1)
+    if act.size == 0:
+        return []
+    la, ra = int(round(pre_avg * fps)), int(round(post_avg * fps))
+    proc = np.maximum(0.0, act - _moving_average(act, la, ra)) if (la > 0 or ra > 0) else act
+    lm, rm = int(round(pre_max * fps)), int(round(post_max * fps))
+    is_peak = (proc >= _local_max(proc, lm, rm)) if (lm > 0 or rm > 0) else np.ones_like(proc, bool)
+    idx = np.where(is_peak & (proc >= threshold))[0]
+    if idx.size == 0:
+        return []
+    gap = max(1, int(round(combine * fps)))
+    kept: list[int] = []
+    group = [int(idx[0])]
+    for i in idx[1:]:
+        if i - group[-1] <= gap:
+            group.append(int(i))
+        else:
+            kept.append(max(group, key=lambda k: proc[k]))
+            group = [int(i)]
+    kept.append(max(group, key=lambda k: proc[k]))
+    return [k / float(fps) for k in kept]
+
+
+def tom_scores(act: np.ndarray, times: Sequence[float], fps: int = ADTOF_FPS) -> np.ndarray:
+    """타격 시각마다 ±20ms 안 탐 점수의 최댓값. act는 탐 열 하나."""
+    act = np.asarray(act, dtype=np.float32).reshape(-1)
+    out = np.zeros(len(times), dtype=np.float64)
+    for i, t in enumerate(times):
+        c = int(round(float(t) * fps))
+        a, b = max(0, c - 2), min(act.size, c + 3)
+        out[i] = float(act[a:b].max()) if b > a else 0.0
+    return out
+
+
+def pick_tom_times(
+    activations: np.ndarray, rules: dict, fps: int = ADTOF_FPS
+) -> tuple[list[float], np.ndarray]:
+    """ADTOF 프레임별 점수 (프레임, 5) → 규칙(tom_threshold·tom_peak_mode)대로 고른 탐 시각과 확신 점수."""
+    r = rules_with_defaults(rules)
+    col = ADTOF_LABELS.index(ADTOF_TOM)
+    th = r["tom_threshold"] if r["tom_threshold"] is not None else ADTOF_DEFAULT_THRESHOLDS[col]
+    act = np.asarray(activations, dtype=np.float32)
+    if act.ndim != 2 or act.shape[1] != len(ADTOF_LABELS):
+        raise ValueError(f"활성값 모양이 (프레임, 5)가 아님: {act.shape}")
+    raw = r["tom_peak_mode"] == "raw"
+    times = pick_peaks(
+        act[:, col],
+        float(th),
+        pre_avg=0.0 if raw else 0.1,
+        post_avg=0.0 if raw else 0.01,
+        fps=fps,
+    )
+    return times, tom_scores(act[:, col], times, fps)
+
+
+def uses_custom_tom_peaks(rules: dict) -> bool:
+    """규칙이 저장소 기본 피크 고르기와 다른 탐 시각을 요구하는지."""
+    r = rules_with_defaults(rules)
+    return r["tom_threshold"] is not None or r["tom_peak_mode"] != "madmom"
 
 
 def _window(audio: np.ndarray, sample_rate: int, t: float, window_ms: float) -> np.ndarray:
@@ -98,7 +247,7 @@ def _energy(segment: np.ndarray) -> float:
 
 
 def estimate_f0(segment: np.ndarray, sample_rate: int, fmin: float, fmax: float) -> float:
-    """구간의 스펙트럼 최대 봉우리 주파수(Hz). 구간이 비거나 무음이면 nan. 4배 zero-pad로 해상도 확보."""
+    """구간의 스펙트럼 최대 피크 주파수(Hz). 구간이 비거나 무음이면 nan. 4배 zero-pad로 해상도 확보."""
     if segment.size == 0 or not np.any(segment):
         return math.nan
     n = int(2 ** math.ceil(math.log2(max(segment.size * 4, 2048))))
@@ -110,6 +259,47 @@ def estimate_f0(segment: np.ndarray, sample_rate: int, fmin: float, fmax: float)
         return math.nan
     idx = int(np.argmax(spec[mask]))
     return float(freqs[mask][idx])
+
+
+def estimate_f0_median(
+    segment: np.ndarray,
+    sample_rate: int,
+    fmin: float,
+    fmax: float,
+    frame_ms: float = 40.0,
+    hop_ms: float = 20.0,
+) -> float:
+    """구간을 프레임으로 잘라 프레임마다 스펙트럼 피크를 재고 그 중앙값. 프레임이 하나도 안 나오면 구간 전체로."""
+    frame = max(1, int(round(frame_ms / 1000 * sample_rate)))
+    hop = max(1, int(round(hop_ms / 1000 * sample_rate)))
+    values = []
+    start = 0
+    while start + frame <= segment.size:
+        v = estimate_f0(segment[start : start + frame], sample_rate, fmin, fmax)
+        if not math.isnan(v):
+            values.append(v)
+        start += hop
+    if not values:
+        return estimate_f0(segment, sample_rate, fmin, fmax)
+    return float(np.median(values))
+
+
+def tom_f0_at(toms: np.ndarray | None, sample_rate: int, t: float, rules: dict) -> float:
+    """타격 시각 t의 탐 음높이(Hz)를 규칙대로 잼. toms가 없거나 무음이면 nan. 규칙 함수와 분석 도구가 같이 씀."""
+    if toms is None:
+        return math.nan
+    r = rules_with_defaults(rules)
+    seg = _window(toms, sample_rate, t + r["tom_f0_start_ms"] / 1000.0, r["window_ms"])
+    if r["tom_f0_method"] == "median":
+        return estimate_f0_median(
+            seg,
+            sample_rate,
+            r["tom_fmin"],
+            r["tom_fmax"],
+            r["tom_f0_frame_ms"],
+            r["tom_f0_hop_ms"],
+        )
+    return estimate_f0(seg, sample_rate, r["tom_fmin"], r["tom_fmax"])
 
 
 def tom_pad(f0: float, bands: Sequence[float]) -> str:
@@ -186,13 +376,80 @@ def cluster_pitches(
     return labels
 
 
+def cluster_pitches_peaks(
+    f0: Sequence[float],
+    k: int = 3,
+    min_gap: float = 2.0,
+    min_hits: int = 2,
+    bin_st: float = 0.25,
+    smooth_st: float = 0.5,
+) -> np.ndarray:
+    """음높이(Hz) 목록 → 묶음 번호(0이 가장 낮음). nan은 -1. 반음 히스토그램의 피크로 묶음.
+
+    gap 방식은 타격이 수백 개면 음높이가 연속으로 깔려 틈이 안 생기므로, 대신 bin_st 칸 히스토그램을 smooth_st 폭
+    가우시안으로 부드럽게 한 뒤 지역 최대 중 높은 순으로 최대 k개를 고르되 피크 사이는 min_gap 이상 떨어지게 함.
+    타격은 가장 가까운 피크에 붙이고, min_hits보다 작은 묶음은 가까운 이웃에 합침.
+    """
+    f0 = np.asarray(list(f0), dtype=np.float64)
+    labels = np.full(f0.shape, -1, dtype=np.int64)
+    ok = np.where(np.isfinite(f0) & (f0 > 0))[0]
+    if ok.size == 0:
+        return labels
+    st = semitones(f0[ok])
+    lo, hi = float(st.min()) - 1.0, float(st.max()) + 1.0
+    edges = np.arange(lo, hi + bin_st, bin_st)
+    hist, _ = np.histogram(st, bins=edges)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    radius = max(1, int(round(3 * smooth_st / bin_st)))
+    kernel = np.exp(-0.5 * (np.arange(-radius, radius + 1) * bin_st / smooth_st) ** 2)
+    dens = np.convolve(hist.astype(np.float64), kernel / kernel.sum(), mode="full")[
+        radius : radius + hist.size
+    ]
+    is_max = np.ones_like(dens, dtype=bool)
+    is_max[1:] &= dens[1:] >= dens[:-1]
+    is_max[:-1] &= dens[:-1] > dens[1:]
+    cand = [int(i) for i in np.argsort(-dens, kind="stable") if is_max[i] and dens[i] > 0]
+    peaks: list[float] = []
+    for i in cand:
+        c = float(centers[i])
+        if all(abs(c - p) >= min_gap for p in peaks):
+            peaks.append(c)
+        if len(peaks) >= max(k, 1):
+            break
+    peaks.sort()
+    groups: list[list[int]] = [[] for _ in peaks]
+    for idx, v in enumerate(st):
+        groups[int(np.argmin([abs(v - p) for p in peaks]))].append(idx)
+    groups = [sorted(g, key=lambda i: st[i]) for g in groups if g]
+    while len(groups) > 1:
+        sizes = [len(g) for g in groups]
+        smallest = int(np.argmin(sizes))
+        if sizes[smallest] >= min_hits:
+            break
+        medians = [float(np.median(st[g])) for g in groups]
+        neighbors = [j for j in (smallest - 1, smallest + 1) if 0 <= j < len(groups)]
+        target = min(neighbors, key=lambda j: abs(medians[j] - medians[smallest]))
+        groups[target] = sorted(groups[target] + groups[smallest], key=lambda i: st[i])
+        del groups[smallest]
+    for label, g in enumerate(groups):
+        labels[ok[g]] = label
+    return labels
+
+
 def name_clusters(
-    medians_hz: Sequence[float], naming: str = "bands", bands: Sequence[float] = (113.0, 142.0)
+    medians_hz: Sequence[float],
+    naming: str = "bands",
+    bands: Sequence[float] = (113.0, 142.0),
+    floor_max_hz: float = 120.0,
+    small_min_hz: float = 200.0,
 ) -> list[str]:
     """묶음 중앙값(낮은 순) → 패드 이름. 3개면 순서대로 FLOOR·MID·SMALL.
 
     1~2개일 때 bands는 중앙값을 고정 경계로 이름 짓고 둘이 같으면 그 안에서 순서로 벌림(둘 다 플로어면
     FLOOR·MID, 둘 다 스몰이면 MID·SMALL, 둘 다 미드면 경계에 더 가까운 쪽을 밖으로). order는 1개 MID, 2개 FLOOR·MID.
+    hybrid는 1개면 floor_max 아래 FLOOR·small_min 위 SMALL·사이 MID, 2개면 낮은 쪽을 floor_max 아래일 때만
+    FLOOR(아니면 MID), 높은 쪽을 small_min 위일 때만 SMALL(아니면 MID)로 하고 둘이 같아지면 순서로 벌림.
+    실제 킷은 탐이 둘인 경우가 많고 그 랙탐이 160~180Hz라 MID로 두는 것이 정답(MDB 표기)과 맞음.
     """
     medians = [float(m) for m in medians_hz]
     m = len(medians)
@@ -202,6 +459,17 @@ def name_clusters(
         return ["FLOOR_TOM"] + ["MID_TOM"] * (m - 2) + ["SMALL_TOM"]
     if naming == "order":
         return ["MID_TOM"] if m == 1 else ["FLOOR_TOM", "MID_TOM"]
+    if naming == "hybrid":
+        if m == 1:
+            v = medians[0]
+            return [
+                "FLOOR_TOM" if v < floor_max_hz else "SMALL_TOM" if v > small_min_hz else "MID_TOM"
+            ]
+        low = "FLOOR_TOM" if medians[0] < floor_max_hz else "MID_TOM"
+        high = "SMALL_TOM" if medians[1] > small_min_hz else "MID_TOM"
+        if low == high:
+            return ["MID_TOM", "SMALL_TOM"]
+        return [low, high]
     names = [tom_pad(v, bands) for v in medians]
     if m == 1 or names[0] != names[1]:
         return names
@@ -229,10 +497,18 @@ class TomAssignment:
     cluster_names: list[str] = field(default_factory=list)
     # 최종 패드. 버린 타격은 None, 거른 뒤 스네어로 돌린 타격은 "SNARE"
     pads: list[str | None] = field(default_factory=list)
+    # 타격마다 ADTOF 탐 확신 점수. 활성값이 없으면 None
+    scores: np.ndarray | None = None
+    # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 타격 (tom_gate_low_rescue)
+    rescued: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     @property
     def n_dropped(self) -> int:
         return sum(p is None for p in self.pads)
+
+    @property
+    def n_rescued(self) -> int:
+        return int(self.rescued.sum()) if self.rescued.size else 0
 
     @property
     def n_relabeled(self) -> int:
@@ -261,6 +537,51 @@ def tom_gate_ratios(
     return out
 
 
+def gate_energies(
+    times: Sequence[float],
+    stems: dict[str, np.ndarray] | None,
+    mixture: np.ndarray | None,
+    sample_rate: int,
+    window_ms: float,
+    rules: dict,
+) -> tuple[np.ndarray, np.ndarray]:
+    """타격마다 (탐 트랙 비율, 탐+킥 트랙 비율). 분모는 tom_gate_mode대로 입력 전체 또는 다른 트랙 합.
+
+    분모가 0이면 둘 다 0. others 모드는 stems에 snare·hh·crash·ride 중 있는 것만 더함.
+    """
+    r = rules_with_defaults(rules)
+    names = r["stems"]
+    stems = stems or {}
+    toms = stems.get(names["toms"])
+    kick = stems.get(names["kick"])
+    ratio = np.zeros(len(times), dtype=np.float64)
+    tomkick = np.zeros(len(times), dtype=np.float64)
+    if r["tom_gate_mode"] == "input":
+        if mixture is None:
+            raise ValueError("tom_gate_mode가 input이면 입력 드럼(mixture)이 필요")
+        others = []
+    else:
+        others = [stems[names[k]] for k in GATE_OTHER_STEMS if names[k] in stems]
+        if not others:
+            raise ValueError(
+                f"tom_gate_mode가 others이면 {GATE_OTHER_STEMS} 트랙 중 하나는 있어야 함 "
+                f"(있는 것: {sorted(stems)})"
+            )
+    for i, t in enumerate(times):
+        t = float(t)
+        if r["tom_gate_mode"] == "input":
+            denom = _energy(_window(mixture, sample_rate, t, window_ms))
+        else:
+            denom = sum(_energy(_window(s, sample_rate, t, window_ms)) for s in others)
+        if denom <= 0.0:
+            continue
+        e_toms = _energy(_window(toms, sample_rate, t, window_ms)) if toms is not None else 0.0
+        e_kick = _energy(_window(kick, sample_rate, t, window_ms)) if kick is not None else 0.0
+        ratio[i] = e_toms / denom
+        tomkick[i] = (e_toms + e_kick) / denom
+    return ratio, tomkick
+
+
 def assign_toms(
     times: Sequence[float],
     toms: np.ndarray | None,
@@ -268,35 +589,42 @@ def assign_toms(
     rules: dict,
     mixture: np.ndarray | None = None,
     snare_times: Sequence[float] | None = None,
+    stems: dict[str, np.ndarray] | None = None,
+    scores: Sequence[float] | None = None,
 ) -> TomAssignment:
     """ADTOF 탐 타격 시각 → 음높이 → (거르기) → 고정 경계 또는 곡별 상대 방식으로 패드.
 
     snare_times는 ADTOF 스네어 타격 시각. tom_gate_action이 snare일 때 이미 스네어가 있는 타격은 돌리지 않음.
+    stems는 분리 트랙 전부(거르기 분모 others·낮은 탐 되살리기에 kick·snare·hh가 필요). 없으면 toms만 씀.
+    scores는 타격마다 ADTOF 탐 확신 점수. 없으면 되살리기의 점수 조건은 통과한 것으로 봄.
     """
     r = rules_with_defaults(rules)
     times = [float(t) for t in times]
-    f0 = np.array(
-        [
-            estimate_f0(
-                _window(toms, sample_rate, t, r["window_ms"]),
-                sample_rate,
-                r["tom_fmin"],
-                r["tom_fmax"],
-            )
-            if toms is not None
-            else math.nan
-            for t in times
-        ],
-        dtype=np.float64,
-    )
+    stems = dict(stems or {})
+    if toms is not None:
+        stems.setdefault(r["stems"]["toms"], toms)
+    f0 = np.array([tom_f0_at(toms, sample_rate, t, r) for t in times], dtype=np.float64)
     kept = np.ones(len(times), dtype=bool)
+    rescued = np.zeros(len(times), dtype=bool)
     ratios: np.ndarray | None = None
+    score_arr = None if scores is None else np.asarray(list(scores), dtype=np.float64)
     if r["tom_gate_ratio"] is not None:
-        if mixture is None:
+        if mixture is None and r["tom_gate_mode"] == "input":
             raise ValueError("tom_gate_ratio를 쓰려면 입력 드럼(mixture)이 필요")
         gate_window = r["tom_gate_window_ms"] if r.get("tom_gate_window_ms") else r["window_ms"]
-        ratios = tom_gate_ratios(times, toms, mixture, sample_rate, gate_window)
+        ratios, tomkick = gate_energies(times, stems, mixture, sample_rate, gate_window, r)
         kept = ratios >= float(r["tom_gate_ratio"])
+        if r["tom_gate_low_rescue"] is not None:
+            lo_hz, hi_hz = float(r["tom_low_hz"][0]), float(r["tom_low_hz"][1])
+            ok_score = (
+                np.ones(len(times), dtype=bool)
+                if score_arr is None
+                else score_arr >= float(r["tom_gate_low_min_score"])
+            )
+            with np.errstate(invalid="ignore"):
+                ok_hz = (f0 >= lo_hz) & (f0 <= hi_hz)
+            rescued = (~kept) & (tomkick >= float(r["tom_gate_low_rescue"])) & ok_score & ok_hz
+            kept = kept | rescued
     labels = np.full(len(times), -1, dtype=np.int64)
     pads: list[str | None] = [None] * len(times)
     medians: list[float] = []
@@ -306,16 +634,37 @@ def assign_toms(
         for i in kept_idx:
             pads[i] = tom_pad(float(f0[i]), r["tom_bands"])
     else:
-        sub = cluster_pitches(
-            f0[kept_idx],
-            int(r["tom_relative_k"]),
-            float(r["tom_relative_min_gap"]),
+        n_ok = int(np.sum(np.isfinite(f0[kept_idx]) & (f0[kept_idx] > 0)))
+        min_hits = max(
             int(r["tom_relative_min_hits"]),
+            int(math.ceil(float(r["tom_relative_min_frac"]) * n_ok)),
         )
+        if r["tom_relative_method"] == "peaks":
+            sub = cluster_pitches_peaks(
+                f0[kept_idx],
+                int(r["tom_relative_k"]),
+                float(r["tom_relative_min_gap"]),
+                min_hits,
+                float(r["tom_relative_bin"]),
+                float(r["tom_relative_smooth"]),
+            )
+        else:
+            sub = cluster_pitches(
+                f0[kept_idx],
+                int(r["tom_relative_k"]),
+                float(r["tom_relative_min_gap"]),
+                min_hits,
+            )
         labels[kept_idx] = sub
         n_clusters = int(sub.max()) + 1 if sub.size and sub.max() >= 0 else 0
         medians = [float(np.median(f0[kept_idx][sub == c])) for c in range(n_clusters)]
-        names = name_clusters(medians, r["tom_relative_naming"], r["tom_bands"])
+        names = name_clusters(
+            medians,
+            r["tom_relative_naming"],
+            r["tom_bands"],
+            float(r["tom_hybrid_floor_max_hz"]),
+            float(r["tom_hybrid_small_min_hz"]),
+        )
         for i, label in zip(kept_idx, sub, strict=True):
             pads[i] = names[label] if label >= 0 else NAN_TOM_PAD
     if r["tom_gate_action"] == "snare":
@@ -333,7 +682,22 @@ def assign_toms(
         cluster_medians=medians,
         cluster_names=names,
         pads=pads,
+        scores=score_arr,
+        rescued=rescued,
     )
+
+
+def tom_times_and_scores(
+    peaks: dict[int, list[float]], rules: dict, activations: np.ndarray | None
+) -> tuple[list[float], np.ndarray | None]:
+    """규칙이 기본 피크 고르기면 ADTOF가 낸 탐 시각 그대로, 아니면 활성값에서 다시 고름. 점수는 활성값이 있을 때만."""
+    if activations is not None and uses_custom_tom_peaks(rules):
+        return pick_tom_times(activations, rules)
+    times = [float(t) for t in peaks.get(ADTOF_TOM, [])]
+    if activations is None:
+        return times, None
+    col = ADTOF_LABELS.index(ADTOF_TOM)
+    return times, tom_scores(np.asarray(activations, dtype=np.float32)[:, col], times)
 
 
 def assign_pads(
@@ -342,10 +706,13 @@ def assign_pads(
     sample_rate: int,
     rules: dict,
     mixture: np.ndarray | None = None,
+    activations: np.ndarray | None = None,
 ) -> list[RawHit]:
-    """ADTOF 피치별 시각 + 분리 스템 (+ 입력 드럼) → (시각, 패드 이름, None) 목록. 패드 이름이 원래 라벨.
+    """ADTOF 피치별 시각 + 분리 스템 (+ 입력 드럼, 프레임별 점수) → (시각, 패드 이름, None) 목록.
 
-    mixture는 tom_gate_ratio(탐 아닌 소리 거르기)를 켰을 때만 필요한 입력 드럼 (채널, 샘플).
+    mixture는 tom_gate_ratio(탐 아닌 소리 거르기)를 켰을 때 필요한 입력 드럼 (채널, 샘플).
+    activations는 ADTOF 프레임별 점수 (프레임, 5). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
+    낮은 탐 되살리기의 점수 조건에 씀. 없으면 peaks의 탐 시각 그대로.
     """
     r = rules_with_defaults(rules)
     cymbal_window = r["cymbal_window_ms"] if r.get("cymbal_window_ms") else r["window_ms"]
@@ -354,16 +721,25 @@ def assign_pads(
     crash = stems.get(names["crash"])
     ride = stems.get(names["ride"])
     out: list[RawHit] = []
+    tom_times, scores = tom_times_and_scores(peaks, r, activations)
+    if tom_times:
+        toms_result = assign_toms(
+            tom_times,
+            toms,
+            sample_rate,
+            r,
+            mixture,
+            snare_times=peaks.get(ADTOF_SNARE, []),
+            stems=stems,
+            scores=scores,
+        )
+        out.extend(
+            (t, pad, None)
+            for t, pad in zip(toms_result.times, toms_result.pads, strict=True)
+            if pad is not None
+        )
     for pitch, times in peaks.items():
         if pitch == ADTOF_TOM:
-            toms_result = assign_toms(
-                times, toms, sample_rate, r, mixture, snare_times=peaks.get(ADTOF_SNARE, [])
-            )
-            out.extend(
-                (t, pad, None)
-                for t, pad in zip(toms_result.times, toms_result.pads, strict=True)
-                if pad is not None
-            )
             continue
         for t in times:
             if pitch in LABEL_BY_PITCH:
@@ -422,7 +798,8 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
     def _transcribe(
         self, audio: np.ndarray, sample_rate: int, song_id: str | None
     ) -> Sequence[RawHit]:
-        peaks = self._adtof.peaks(self._adtof.activations(audio, sample_rate))
+        activations = self._adtof.activations(audio, sample_rate)
+        peaks = self._adtof.peaks(activations)
         stems = self.stems(audio, sample_rate)
         missing = [
             n
@@ -435,7 +812,9 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         ]
         if missing:
             raise KeyError(f"드럼 킷 분리 출력에 스템이 없음: {missing} (있는 것: {sorted(stems)})")
-        return assign_pads(peaks, stems, sample_rate, self.rules, mixture=audio)
+        return assign_pads(
+            peaks, stems, sample_rate, self.rules, mixture=audio, activations=activations
+        )
 
     def _checkpoint_id(self) -> str:
         sep_ckpt = self._sep.info().checkpoint if self._sep is not None and self._sep.loaded else ""
