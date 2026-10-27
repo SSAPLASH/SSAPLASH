@@ -144,10 +144,20 @@ export class RhythmSession {
     return this.status;
   }
 
+  /** 판정에 적용 중인 오디오 출력 오프셋(ms) */
+  get audioOffsetMs(): number {
+    return this.opts.audioOffsetMs;
+  }
+
+  /** 타격 시각(performance.now) → 판정에 쓰는 곡 시각(ms). 오디오 출력 오프셋을 뺀다 */
+  hitSongTimeMs(tHit: number): number {
+    return tHit - this.opts.audioOffsetMs - this.startTime;
+  }
+
   /** IMU 판정용 후보: 이 시각 근처에 칠 법한 패드들 */
   candidates(tHit: number): PadId[] | undefined {
     if (this.status !== 'playing' && this.status !== 'countin') return undefined;
-    const t = tHit - this.opts.audioOffsetMs - this.startTime;
+    const t = this.hitSongTimeMs(tHit);
     const w = this.opts.windows.goodMs * 2;
     const set = new Set<PadId>();
     for (let i = this.cursor; i < this.notes.length; i++) {
@@ -160,7 +170,7 @@ export class RhythmSession {
 
   handleHit(hit: ResolvedHit): JudgementEvent | null {
     if (!hit.pad || (this.status !== 'playing' && this.status !== 'countin')) return null;
-    const t = hit.tHit - this.opts.audioOffsetMs - this.startTime;
+    const t = this.hitSongTimeMs(hit.tHit);
     const w = this.opts.windows.goodMs;
     let best: NoteState | null = null;
     let bestDelta = Infinity;

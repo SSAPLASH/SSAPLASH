@@ -89,7 +89,8 @@ const signed = (x: number) => `${x >= 0 ? '+' : '-'}${Math.abs(x).toFixed(0)}`;
 
 export function summarizeByPad(log: PlayLog): PadSummary[] {
   return ALL_PADS.flatMap((pad) => {
-    const notes = log.notes.filter((n) => n.pad === pad);
+    // 분모는 판정된 노트만(BE 리포트 padStats와 같은 기준). 중도 중단으로 판정 전인 노트는 뺀다
+    const notes = log.notes.filter((n) => n.pad === pad && n.judgement !== null);
     if (!notes.length) return [];
     const deltas = notes.flatMap((n) => (n.deltaMs === null ? [] : [n.deltaMs]));
     return [
@@ -98,7 +99,7 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
         total: notes.length,
         perfect: notes.filter((n) => n.judgement === 'PERFECT').length,
         good: notes.filter((n) => n.judgement === 'GOOD').length,
-        miss: notes.filter(isMiss).length,
+        miss: notes.filter((n) => n.judgement === 'MISS').length,
         meanDeltaMs: deltas.length ? mean(deltas) : null,
       },
     ];

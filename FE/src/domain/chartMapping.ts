@@ -79,7 +79,7 @@ export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolea
       dropped.add(n.pad);
       continue;
     }
-    const note: ChartNote = { timeMs: n.timeMs, pad };
+    const note: ChartNote = { timeMs: n.timeMs, pad, noteId: n.noteId };
     if (n.velocityHint != null) note.velocityHint = n.velocityHint;
     notes.push(note);
   }
@@ -108,6 +108,7 @@ export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolea
     chartId,
     songNumericId,
     hasAccompaniment,
+    sourceNoteCount: detail.noteCount,
   };
   if (tempoCount > 1 || sigCount > 1) chart.variableTempo = true;
   return chart;
