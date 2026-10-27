@@ -12,6 +12,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.net.URI;
@@ -45,7 +46,8 @@ public class AudioStorageConfiguration {
                 S3Client.builder()
                         .endpointOverride(uri)
                         .region(Region.of(region))
-                        .forcePathStyle(true)
+                        .serviceConfiguration(S3Configuration.builder()
+                                .pathStyleAccessEnabled(true).chunkedEncodingEnabled(false).build())
                         .credentialsProvider(
                                 StaticCredentialsProvider.create(
                                         AwsBasicCredentials.create(access, secret)))

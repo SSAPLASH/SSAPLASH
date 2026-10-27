@@ -786,3 +786,27 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 실제 형식과 길이는 `ffprobe`로 검사한다. 운영 이미지에 FFmpeg가 포함되며 로컬에서는 `AUDIO_FFPROBE_PATH`로 실행 파일을 지정할 수 있다. 실행 파일이 없거나 저장소가 설정되지 않으면 503이다. 비공개 비버전 S3 호환 버킷 설정은 `AUDIO_STORAGE_ENABLED`, `AUDIO_STORAGE_ENDPOINT`, `AUDIO_STORAGE_REGION`, `AUDIO_STORAGE_BUCKET`, `AUDIO_STORAGE_ACCESS_KEY`, `AUDIO_STORAGE_SECRET_KEY`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED`로 제공한다. 원본 키는 서버에서 생성하며 접수 전에 기록하고 실패·중단된 PUT은 재시도 정리한다. 활성화는 실제 저장소 권한과 버킷의 비공개 설정을 확인한 환경에서만 한다.
 
 159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
+
+
+## AI 워커 내부 작업 API (160번)
+
+`/internal/v1/chart-jobs`는 보호된 내부 네트워크에서만 사용한다. 공개 Nginx는 `/internal/`을 404로 차단한다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다.
+
+`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 기본은 BE 내부 음원 endpoint이고 Compose 내부 워커에는 `http://seaweedfs:8333`을 쓴다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
+
+| 요청 | 주요 입력과 동작 |
+| --- | --- |
+| `POST /claim` | `workerId`, UUID `claimRequestId`. 배정은 200, 대기 작업 없음은 204. 같은 요청 ID의 유효 배정은 복구되며 만료된 ID는 409다. |
+| `POST /{jobId}/heartbeat` | `attemptId`, 증가하는 `eventSeq`, `progress`. 분리 0~49, 채보 50~99. 중복·이전 순번은 임대를 연장하지 않는다. |
+| `POST /{jobId}/file-access` | `attemptId`, `files` 배열. 분리 입력은 `{role: SOURCE_AUDIO, fileId: 배정 input.fileId}`, 분리 출력은 `DRUM_STEM`·`ACCOMPANIMENT`이며 각 파일의 `sizeBytes`를 지정한다. fileId 생략 시 각 시도에 하나씩 발급한다. 채보 입력은 `{role: DRUM_STEM, fileId: 배정 input.fileId}`. 응답은 역할·fileId·GET/PUT·URL·만료시각이다. PUT 시 `Content-Type: audio/flac`과 지정한 `Content-Length`를 사용한다. |
+| `POST /{jobId}/results/separation` | 공통 결과 봉투와 `drumStem`, `accompaniment` manifest, `durationMs`, `audioTimeOrigin`, `model`, `metrics`를 제출한다. 분리 파일은 FLAC 16비트·44,100Hz·스테레오, 시간축은 `SOURCE_START`다. |
+| `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
+| `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
+
+manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, 소문자 SHA-256 `sha256`을 포함한다. 분리 파일 한 개의 상한은 128MiB로, 사용자 입력 50MiB와 별개다. metrics에는 `loadMs`, `separateMs`, `peakVramMb`, `peakRamMb`를 사용하며 메모리 필드는 null을 허용하고 MB는 1,000,000바이트다. `model.name`은 `bs_roformer_sw`, version은 가중치 파일명·`@`·설정 해시 소문자 12자리다. 반주와 체크포인트는 검증된 바이트로 별도 불변 키에 저장한다. 파일 업로드나 외부 검사 중 DB 잠금을 유지하지 않는다.
+
+결과 봉투는 `contractVersion: 1`, `jobId`, `attemptId`, UUID `resultId`, 소문자 `payloadHash`, `result`다. `payloadHash`는 **result 객체만** 다음 규칙으로 정규화한 UTF-8 바이트의 SHA-256이다. 객체 키는 Java 문자열의 UTF-16 코드 단위 사전순으로 정렬하고 배열 순서는 유지한다. 공백 없이 JSON을 쓰며 문자열은 Jackson의 일반 JSON 이스케이프(제어 문자·역슬래시·따옴표 이스케이프, 그 외 유니코드 그대로)를 쓴다. 숫자는 십진수 값의 후행 0을 없애고 지수 표기 없이 쓰며 모든 0은 `0`이다. null·true·false는 그대로 쓴다. 중복 키, JSON 후행 데이터, 24단계 초과 중첩 및 과도한 숫자는 거부한다. 예를 들어 입력 result `{"b":[true,null],"a":1.00}`의 정규 바이트는 `{"a":1,"b":[true,null]}`다. 원래 바이트 전체나 envelope의 해시가 아니다.
+
+인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
+
+채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
