@@ -47,6 +47,15 @@ export interface FeedTaps {
 export const HELLO_TIMEOUT_MS = 3000;
 const WATCH_MS = 1000;
 export const FEED_CHANNEL = 'ssaplash-monitor';
+/** 따라보기에서 다시 매기는 hitId의 시작값 */
+export const FOLLOW_HIT_ID_BASE = 1_000_000_000;
+/** 재부여 표 상한. 넘으면 오래된 것부터 버린다(판정은 타격 직후에 오므로 충분) */
+const HIT_ID_KEEP = 2000;
+
+/** 화면용 hitId. 따라보기에서 다시 매긴 id는 시작값을 빼 짧게(1부터) 보인다 */
+export function hitIdLabel(id: number): string {
+  return id >= FOLLOW_HIT_ID_BASE ? String(id - FOLLOW_HIT_ID_BASE + 1) : String(id);
+}
 
 interface Hello {
   k: 'hello';
@@ -75,6 +84,13 @@ export class MonitorFeed {
   private windowId: string | null = null;
   private lastHelloAt: number | null = null;
   private d = 0;
+  /**
+   * 따라보기 hitId 재부여. 연주 창은 새로고침할 때마다 hitId를 1부터 다시 매기므로, 그대로 쓰면 이전 판과 이번 판의
+   * 타격·판정이 같은 id로 섞인다. (연주 창 id, 원래 hitId) → 모니터 안에서 겹치지 않는 id. 이 창의 직접 연결 id와도
+   * 겹치지 않게 큰 수에서 시작한다
+   */
+  private hitIds = new Map<string, number>();
+  private nextHitId = FOLLOW_HIT_ID_BASE;
   private hello: Hello | null = null;
 
   private deps: FeedDeps;
@@ -201,13 +217,33 @@ export class MonitorFeed {
     const d = this.d;
     let out: DiagEvent;
     if (ev.type === 'resolved') {
-      const hit: ResolvedHit = { ...ev.hit, tHit: ev.hit.tHit + d, tRecv: ev.hit.tRecv + d, tResolved: ev.hit.tResolved + d };
+      const hit: ResolvedHit = {
+        ...ev.hit,
+        id: this.mapHitId(ev.hit.id, true),
+        tHit: ev.hit.tHit + d,
+        tRecv: ev.hit.tRecv + d,
+        tResolved: ev.hit.tResolved + d,
+      };
       if (ev.hit.tAudio !== undefined) hit.tAudio = ev.hit.tAudio + d;
       out = { ...ev, hit, t: ev.t + d };
+    } else if (ev.type === 'judged') {
+      out = { ...ev, hitId: this.mapHitId(ev.hitId, false), t: ev.t + d };
     } else {
       out = { ...ev, t: ev.t + d };
     }
     for (const l of this.diagListeners) l(out);
+  }
+
+  /** resolved는 새 id를 받고, judged는 같은 창·같은 원래 id의 resolved가 받은 id를 쓴다 */
+  private mapHitId(id: number, fresh: boolean): number {
+    const key = `${this.windowId}:${id}`;
+    const known = this.hitIds.get(key);
+    if (known !== undefined && !fresh) return known;
+    const next = this.nextHitId++;
+    this.hitIds.delete(key);
+    this.hitIds.set(key, next);
+    if (this.hitIds.size > HIT_ID_KEEP) this.hitIds.delete(this.hitIds.keys().next().value as string);
+    return next;
   }
 
   /** 따라보기 상태. 직접 연결이면 connected=false·값 비움 */
