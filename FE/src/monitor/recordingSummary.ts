@@ -1,0 +1,209 @@
+// 녹화 요약(순수 함수). 녹화 JSONL을 되읽은 결과(meta·패킷 행·진단 이벤트)에서 구간 지연·SYNC rtt·채점 delta의 분위수를 내고,
+// 현재 HEALTH_THRESHOLDS의 대응 기준값을 옆에 붙인다. R1(임계값 재설정)·체감 지연 측정의 근거 표를 만드는 도구다.
+import type { DiagEvent } from '@/engine/diagTap';
+import { CommandType } from '@/input/stickProtocol';
+import { HEALTH_THRESHOLDS } from './health';
+import { percentile } from './latencyStats';
+import { hexToBytes, type RecordedRow, type RecordingMeta } from './recorder';
+import { SyncPairer, syncKeyOf } from './syncPair';
+
+/** 지표 옆에 보여줄 현재 기준값 */
+export interface ThresholdRef {
+  /** 어떤 통계와 비교하는가 */
+  stat: 'p50' | 'p95' | 'absMean';
+  /** 주의 기준(ms). 초과하면 주의 */
+  warn: number;
+  /** 이상 기준(ms). 있으면 */
+  bad?: number;
+}
+
+export interface MetricSummary {
+  n: number;
+  p50: number | null;
+  p95: number | null;
+  max: number | null;
+  /** 평균. delta에만 채운다 */
+  mean?: number | null;
+  threshold: ThresholdRef | null;
+}
+
+export interface SessionSummary {
+  title: string;
+  mode: 'RHYTHM' | 'SHEET';
+  audioOffsetMs: number;
+}
+
+export interface RecordingSummary {
+  meta: RecordingMeta;
+  packets: {
+    /** 수신 패킷 종류별(decoded.kind) 건수 */
+    in: Record<string, number>;
+    inTotal: number;
+    /** 송신 패킷 타입별(0xNN) 건수 */
+    out: Record<string, number>;
+    outTotal: number;
+    /** 수신 HIT 수 */
+    hits: number;
+  };
+  diagCount: number;
+  rtt: MetricSummary;
+  latency: { recv: MetricSummary; resolve: MetricSummary; audio: MetricSummary; total: MetricSummary };
+  /** ⑤ 채점 delta(ms, +면 늦음). judged 중 deltaMs가 있는 것 */
+  delta: MetricSummary;
+  judgements: { PERFECT: number; GOOD: number; MISS: number };
+  /** 채보 밖 타격(judged인데 judgement가 null) */
+  stray: number;
+  /** 연결된 타격 없이 MISS가 된 노트 */
+  missed: number;
+  sessions: SessionSummary[];
+}
+
+function metric(xs: number[], threshold: ThresholdRef | null, withMean = false): MetricSummary {
+  const m: MetricSummary = {
+    n: xs.length,
+    p50: percentile(xs, 0.5),
+    p95: percentile(xs, 0.95),
+    max: xs.length ? Math.max(...xs) : null,
+    threshold,
+  };
+  if (withMean) m.mean = xs.length ? xs.reduce((a, v) => a + v, 0) / xs.length : null;
+  return m;
+}
+
+/** 송신 SYNC ↔ SYNC_ACK를 packetLog와 같은 규칙(syncPair)으로 짝지어 rtt(ms) 목록을 낸다 */
+function pairRtts(rows: readonly RecordedRow[]): number[] {
+  const pairer = new SyncPairer();
+  const out: number[] = [];
+  for (const r of rows) {
+    pairer.expire(r.t);
+    if (r.dir === 'out') {
+      const key = r.outType === CommandType.SYNC ? syncKeyOf(hexToBytes(r.hex)) : null;
+      if (key !== null) pairer.addOut(r.t, key);
+      continue;
+    }
+    const d = r.decoded as { kind?: string; t0Ms?: number } | null;
+    if (d?.kind !== 'syncAck' || typeof d.t0Ms !== 'number' || r.stick === null) continue;
+    const t0 = pairer.match(d.t0Ms, r.stick);
+    if (t0 !== null) out.push(r.t - t0);
+  }
+  return out;
+}
+
+export function summarizeRecording(input: {
+  meta: RecordingMeta;
+  rows: readonly RecordedRow[];
+  diags: readonly DiagEvent[];
+}): RecordingSummary {
+  const { meta, rows, diags } = input;
+  const inKinds: Record<string, number> = {};
+  const outTypes: Record<string, number> = {};
+  let inTotal = 0;
+  let outTotal = 0;
+  for (const r of rows) {
+    if (r.dir === 'out') {
+      outTotal++;
+      const k = `0x${(r.outType ?? 0).toString(16).toUpperCase().padStart(2, '0')}`;
+      outTypes[k] = (outTypes[k] ?? 0) + 1;
+    } else {
+      inTotal++;
+      const k = (r.decoded as { kind?: string } | null)?.kind ?? 'unknown';
+      inKinds[k] = (inKinds[k] ?? 0) + 1;
+    }
+  }
+
+  const recv: number[] = [];
+  const resolve: number[] = [];
+  const audio: number[] = [];
+  const total: number[] = [];
+  const deltas: number[] = [];
+  const judgements = { PERFECT: 0, GOOD: 0, MISS: 0 };
+  let stray = 0;
+  let missed = 0;
+  const sessions: SessionSummary[] = [];
+  for (const ev of diags) {
+    if (ev.type === 'resolved') {
+      const h = ev.hit;
+      recv.push(h.tRecv - h.tHit);
+      resolve.push(h.tResolved - h.tRecv);
+      if (h.tAudio !== undefined) {
+        audio.push(h.tAudio - h.tResolved);
+        total.push(h.tAudio - h.tHit);
+      }
+    } else if (ev.type === 'judged') {
+      if (ev.judgement === null) stray++;
+      else judgements[ev.judgement]++;
+      if (ev.deltaMs !== null) deltas.push(ev.deltaMs);
+    } else if (ev.type === 'missed') {
+      missed++;
+    } else if (ev.type === 'session' && ev.phase === 'start') {
+      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs });
+    }
+  }
+
+  const th = HEALTH_THRESHOLDS;
+  return {
+    meta,
+    packets: { in: inKinds, inTotal, out: outTypes, outTotal, hits: inKinds.hit ?? 0 },
+    diagCount: diags.length,
+    rtt: metric(pairRtts(rows), { stat: 'p50', warn: th.clock.rttWarnMs }),
+    latency: {
+      recv: metric(recv, null),
+      resolve: metric(resolve, null),
+      audio: metric(audio, { stat: 'p95', warn: th.output.audioP95WarnMs }),
+      total: metric(total, { stat: 'p95', warn: th.output.totalP95WarnMs }),
+    },
+    delta: metric(deltas, { stat: 'absMean', warn: th.score.deltaMeanWarnMs, bad: th.score.deltaMeanBadMs }, true),
+    judgements,
+    stray,
+    missed,
+    sessions,
+  };
+}
+
+/** 1자리 소수 문자열. 없으면 '–' */
+const f1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : v.toFixed(1));
+
+const STAT_LABEL: Record<ThresholdRef['stat'], string> = { p50: 'p50', p95: 'p95', absMean: '|평균|' };
+
+function thresholdText(t: ThresholdRef | null): string {
+  if (!t) return '–';
+  return `${STAT_LABEL[t.stat]} ≤ ${t.warn}${t.bad !== undefined ? ` (이상 ${t.bad})` : ''}`;
+}
+
+const INPUT_MODE_LABEL = { direct: '직접 연결', follow: '따라보기' } as const;
+
+/** Wiki에 붙여넣을 Markdown 표. 숫자는 1자리 소수, 값이 없으면 '–' */
+export function summaryToMarkdown(s: RecordingSummary): string {
+  const { meta } = s;
+  const row = (name: string, m: MetricSummary): string =>
+    `| ${name} | ${m.n} | ${f1(m.p50)} | ${f1(m.p95)} | ${f1(m.max)} | ${thresholdText(m.threshold)} |`;
+  const lines: string[] = [
+    '## 녹화 요약',
+    '',
+    `- 시작: ${meta.startedAt}`,
+    `- 소스: ${meta.source.label} (${meta.source.kind})`,
+    `- 입력 방식: ${meta.inputMode ? INPUT_MODE_LABEL[meta.inputMode] : '–'}`,
+    `- 메모: ${meta.note || '–'}`,
+    `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
+    '',
+    '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
+    '| --- | --- | --- | --- | --- | --- |',
+    row('SYNC rtt', s.rtt),
+    row('센서→수신', s.latency.recv),
+    row('수신→판정', s.latency.resolve),
+    row('판정→오디오', s.latency.audio),
+    row('센서→오디오', s.latency.total),
+    row('채점 delta (+늦음)', s.delta),
+    '',
+    `채점 delta 평균: ${f1(s.delta.mean)}ms`,
+    '',
+    '| PERFECT | GOOD | MISS | stray(채보 밖) | 무타격 MISS |',
+    '| --- | --- | --- | --- | --- |',
+    `| ${s.judgements.PERFECT} | ${s.judgements.GOOD} | ${s.judgements.MISS} | ${s.stray} | ${s.missed} |`,
+  ];
+  if (s.sessions.length > 0) {
+    lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) |', '| --- | --- | --- |');
+    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} |`);
+  }
+  return lines.join('\n') + '\n';
+}
