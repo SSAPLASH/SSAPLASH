@@ -695,7 +695,7 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 - `timingHistogram`: PERFECT·GOOD의 deltaMs만 10ms 구간으로 집계한다. 판정창을 10ms 단위로
   올림한 ±범위이며 마지막 구간만 우측 끝값을 포함한다. MISS·미매칭 타격은 제외한다.
-- `padStats`: enum 순서의 8패드. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
+- `padStats`: 신규 리포트는 enum 순서의 9패드이며 기존 리포트는 8패드일 수 있다. 과거 `HI_TOM`은 조회 시 `SMALL_TOM`으로 반환한다. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
   내부 저장은 0~1 비율(소수 넷째 자리 HALF_UP)이다. **API accuracy는 모두 0~100, 소수 둘째 자리 HALF_UP**이며
   패드 값은 원본 판정 개수에서 직접 계산한다. 평가 표본이 없으면 null이다. 전체 summary 값은 그대로 유지한다.
 - `meanDeltaMs`, `meanVelocity`: PERFECT·GOOD 표본의 평균(소수 둘째 자리 HALF_UP), 표본 없으면 null.

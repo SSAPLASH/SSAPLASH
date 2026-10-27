@@ -52,7 +52,8 @@ public class ReportRepository {
 			FROM hits h JOIN play_sessions s ON s.id=h.play_session_id
 			WHERE s.id=? AND s.user_id=? AND h.judgement IS NOT NULL AND h.seq>?
 			ORDER BY h.seq LIMIT ?
-			""", (r,n) -> new ReportNotesResponse.Item(r.getInt(1),r.getString(2),r.getDouble(3),r.getString(4),
+			""", (r,n) -> new ReportNotesResponse.Item(r.getInt(1),r.getString(2),r.getDouble(3),
+					"HI_TOM".equals(r.getString(4)) ? "SMALL_TOM" : r.getString(4),
 					r.getString(5),r.getObject(6,Double.class),r.getObject(7,Integer.class)), playId,userId,afterSeq,fetchSize);
 	}
 	/** 세션·hits와 동일 트랜잭션에서만 저장한다. 재전송은 이 경로에 진입하지 않는다. */

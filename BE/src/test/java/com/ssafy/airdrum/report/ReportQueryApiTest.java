@@ -81,7 +81,7 @@ class ReportQueryApiTest {
         assertThat(report.get("generatorVersion").asText()).isEqualTo("BE_REPORT_V1");
         assertThat(Instant.parse(report.get("generatedAt").asText())).isBeforeOrEqualTo(Instant.now());
         var pads = report.get("padStats");
-        assertThat(pads.size()).isEqualTo(8);
+        assertThat(pads.size()).isEqualTo(9);
         assertThat(pads.get(1).get("pad").asText()).isEqualTo("SNARE");
         assertThat(pads.get(1).get("accuracy").asDouble()).isEqualTo(100);
         assertThat(pads.get(1).get("meanDeltaMs").asDouble()).isEqualTo(0.13);
@@ -98,6 +98,16 @@ class ReportQueryApiTest {
         assertThat(notes.get(1).get("velocity").isNull()).isTrue();
         assertThat(notes.get(1).get("deltaMs").isNull()).isTrue();
         assertThat(notes.get(1).get("matchedNoteId").asText()).isEqualTo("n2");
+    }
+    @Test void legacyReportAndHitAreReadUsingTheCanonicalName() throws Exception {
+        upload();
+        db.update("UPDATE reports SET pad_stats=(replace(pad_stats::text, '\"SMALL_TOM\"', '\"HI_TOM\"')::jsonb - 8) WHERE play_session_id=?", play);
+        db.update("UPDATE hits SET pad='HI_TOM' WHERE play_session_id=? AND seq=0", play);
+        var pads = read("").get("padStats");
+        assertThat(pads.size()).isEqualTo(8);
+        assertThat(pads.get(2).get("pad").asText()).isEqualTo("SMALL_TOM");
+        assertThat(read("/notes").get("items").get(0).get("pad").asText()).isEqualTo("SMALL_TOM");
+        assertThat(db.queryForObject("SELECT pad FROM hits WHERE play_session_id=? AND seq=0",String.class,play)).isEqualTo("HI_TOM");
     }
     @Test void originalCountsDeterminePercentAndNotRoundedStoredRatio() throws Exception {
         upload();
