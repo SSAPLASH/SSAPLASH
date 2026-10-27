@@ -796,12 +796,27 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 | 요청 | 주요 입력과 동작 |
 | --- | --- |
-| `POST /claim` | `workerId`, UUID `claimRequestId`. 배정은 200, 대기 작업 없음은 204. 같은 요청 ID의 유효 배정은 복구되며 만료된 ID는 409다. |
+| `POST /claim` | `workerId`, UUID `claimRequestId`. 배정은 200, 대기 작업 없음은 204. `input.durationMs`는 BE가 원곡 접수 때 저장한 길이이며 SOURCE_AUDIO와 DRUM_STEM 모두 같은 값이다. 같은 요청 ID의 유효 배정은 복구되며 만료된 ID는 409다. |
 | `POST /{jobId}/heartbeat` | `attemptId`, 증가하는 `eventSeq`, `progress`. 분리 0~49, 채보 50~99. 중복·이전 순번은 임대를 연장하지 않는다. |
 | `POST /{jobId}/file-access` | `attemptId`, `files` 배열. 분리 입력은 `{role: SOURCE_AUDIO, fileId: 배정 input.fileId}`, 분리 출력은 `DRUM_STEM`·`ACCOMPANIMENT`이며 각 파일의 `sizeBytes`를 지정한다. fileId 생략 시 각 시도에 하나씩 발급한다. 채보 입력은 `{role: DRUM_STEM, fileId: 배정 input.fileId}`. 응답은 역할·fileId·GET/PUT·URL·만료시각이다. PUT 시 `Content-Type: audio/flac`과 지정한 `Content-Length`를 사용한다. |
 | `POST /{jobId}/results/separation` | 공통 결과 봉투와 `drumStem`, `accompaniment` manifest, `durationMs`, `audioTimeOrigin`, `model`, `metrics`를 제출한다. 분리 파일은 FLAC 16비트·44,100Hz·스테레오, 시간축은 `SOURCE_START`다. |
 | `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
 | `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
+
+claim의 `input` 예시(파일 ID·크기·해시는 설명용):
+
+```json
+{
+  "role": "SOURCE_AUDIO",
+  "fileId": "33333333-3333-4333-8333-333333333333",
+  "contentType": "audio/wav",
+  "sizeBytes": 176444,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "durationMs": 1000
+}
+```
+
+`contractVersion`은 1을 유지하며 `durationMs`는 추가 필드다. 같은 claim 재조회에서 분리 인수 후 또는 새 시도의 재배정으로 `DRUM_STEM`을 받더라도 원곡 기준 길이는 같다. BE는 입력·분리 출력의 ffprobe `format.duration` 초 문자열을 십진수로 읽고 1000을 곱해 올림한 정수 ms를 비교한다. 기존에 저장된 원곡 길이는 재계산하지 않는다. MP3의 보고 길이는 ffprobe 버전이나 디코더에 따라 다를 수 있으므로 워커는 직접 측정한 길이 대신 배정받은 값을 기준으로 사용한다. 양수·600초 이하만 허용하고 분리 결과의 `durationMs`와 두 FLAC 길이는 이 값과 같아야 한다. 워커는 44,100Hz 출력의 기준 샘플 수를 `floor(durationMs * 44100 / 1000)` 정수 연산으로 정하고, 필요한 경우 끝에서만 자르거나 무음을 채울 수 있다. 시작점을 바꾸거나 추정 지연을 `timeMs`·offset에 더하지 않는다. 이는 길이 일치를 위한 권장 방식이며 BE가 특정 샘플 수 자체를 강제하지는 않는다.
 
 manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, 소문자 SHA-256 `sha256`을 포함한다. 분리 파일 한 개의 상한은 128MiB로, 사용자 입력 50MiB와 별개다. metrics에는 `loadMs`, `separateMs`, `peakVramMb`, `peakRamMb`를 사용하며 메모리 필드는 null을 허용하고 MB는 1,000,000바이트다. `model.name`은 `bs_roformer_sw`, version은 가중치 파일명·`@`·설정 해시 소문자 12자리다. 반주와 체크포인트는 검증된 바이트로 별도 불변 키에 저장한다. 파일 업로드나 외부 검사 중 DB 잠금을 유지하지 않는다.
 
