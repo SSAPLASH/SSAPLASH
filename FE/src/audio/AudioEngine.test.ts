@@ -83,3 +83,36 @@ describe('AudioEngine 시각 변환', () => {
     expect(e.perfToContextTime(6050)).toBeCloseTo(11);
   });
 });
+
+describe('AudioEngine trigger·click 반환', () => {
+  const ts = { contextTime: 9.9, performanceTime: 4950 };
+  beforeEach(() => {
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('컨텍스트가 없으면 null', () => {
+    const e = new AudioEngine();
+    expect(e.trigger('KICK', 100)).toBeNull();
+    expect(e.click(undefined, true)).toBeNull();
+  });
+
+  it('suspended이면 소리를 예약하지 않고 null', async () => {
+    const e = await engineWith({ state: 'suspended', currentTime: 0, ts: { contextTime: 0, performanceTime: 0 } });
+    expect(e.trigger('KICK', 100)).toBeNull();
+    expect(e.click(5100, false)).toBeNull();
+  });
+
+  it('running이면 performance.now 기준 숫자를 돌려준다', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts });
+    const t = e.trigger('KICK', 100);
+    expect(t).not.toBeNull();
+    expect(Math.abs((t as number) - 5000)).toBeLessThan(100);
+    const c = e.click(undefined, true);
+    expect(c).not.toBeNull();
+    expect(Math.abs((c as number) - 5000)).toBeLessThan(100);
+  });
+});
