@@ -175,7 +175,9 @@ export function bootstrapInput(): void {
   });
   inputManager.onHit((hit: ResolvedHit) => {
     if (soundOnHit && hit.pad) {
-      hit.tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+      // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
+      const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+      if (tAudio !== null) hit.tAudio = tAudio;
       // PLAY-07: 브라우저 측 진동 명령. 실제 지연 없는 진동은 MCU 로컬 트리거가 맡는다
       inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
     }
@@ -338,7 +340,8 @@ export async function previewHit(pad: PadId, velocity: number): Promise<void> {
     peakAccel: 0,
     judgedBy: 'pose',
   };
-  hit.tAudio = audioEngine.trigger(pad, velocity);
+  const tAudio = audioEngine.trigger(pad, velocity);
+  if (tAudio !== null) hit.tAudio = tAudio;
   useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
 }
 

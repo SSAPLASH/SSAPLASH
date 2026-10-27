@@ -25,7 +25,7 @@ export interface ClockAccompaniment {
 
 export interface PlayClockDeps {
   /** 클릭 예약. 실제 예약된 시각(ms)을 돌려준다 */
-  click(atMs: number, accent: boolean): number;
+  click(atMs: number, accent: boolean): number | null;
   accompaniment?: ClockAccompaniment;
   /** 곡 중 박 클릭을 낼지. 카운트인은 항상 낸다 */
   clickOn(): boolean;
