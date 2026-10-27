@@ -458,6 +458,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 | `gmd_test.yaml` | GMD test split 드럼 연주 45개(52분). 드럼만 있는 전자 드럼 녹음 + MIDI 타격 정답 | 드럼 트랙 입력 채보, 8패드별 점수 |
 | `mdb_drums.yaml` | MDB Drums 23곡(22분). 실제 밴드 녹음, 원곡·드럼 트랙·사람이 적은 타격 정답 | 논문 수치와 검산 |
 | `mdb_drums_unseen.yaml` | 위 23곡 중 MUSDB18 train에 없는 11곡 | 분리 모델을 거치는 평가는 이 묶음만 (아래 참고) |
+| `egmd_test_acoustic.yaml` | E-GMD(GMD 연주를 Roland TD-17 킷 43개로 다시 녹음, CC BY 4.0) test 분할 중 `gmd_test.yaml`의 연주 45개 × 어쿠스틱 음색 킷 26개 = 1170개(22.7시간). 로더는 `bench/datasets/gmd.py`의 `EgmdDataset`, 곡 id는 오디오 파일 이름 | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 96GB 전체는 GPU 서버에 받고 목록 csv 9.6MB만 로컬에 둬도 곡 목록은 뽑힘 |
 | `star_drums_test.yaml`, `star_drums_validation.yaml` | STAR Drums(Weber 외 2025) test·validation 분할. 실제 반주에 샘플 킷 20개(어쿠스틱 15·전자 5)로 합성한 드럼, 탐 3종(HT·MT·LT) 정답. 미리보기 1곡은 `star_drums_preview.yaml` | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 오디오는 CC BY-NC-SA·개별 라이선스라 평가·연구용. 181GB 전체는 GPU 서버에 받고 로더는 `bench/datasets/star.py` |
 
 GMD 연주는 `list-gmd --split test --min-sec 30 --hits`로 패드별 타격 수를 보고 골랐다. test split만 쓰는 이유는 채보 후보 중 셋(OaF Drums·YourMT3+·Inverse Drum Machine)이 GMD를 다시 녹음·렌더링한 E-GMD·StemGMD의 train split로 학습했기 때문이다. 밴드 장르만 고르면 크래시 73개·미드탐 34개뿐이라 재즈 2개·라틴 3개 연주를 더해 탐·심벌이 각 100개 이상 되게 했다. 합성곡에 쓴 연주 5개는 뺐다.
