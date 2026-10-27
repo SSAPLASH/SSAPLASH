@@ -50,12 +50,14 @@ src/
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
-│   └─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
-├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅)
+│   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
+│   └─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·조회 오류 분류
+├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Login · AuthCallback
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부)
+│   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · AnalysisPlaceholder
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -68,10 +70,10 @@ src/
 │   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
-├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · telemetry
+├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth
+│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
 └─ styles/     전역 CSS
 ```
 
@@ -191,7 +193,17 @@ src/
 - **변환:** `domain/chartMapping.chartFromDetail`이 BE 채보를 `Chart`로 바꾼다. 알 수 없는 pad는 버리고 경고 1회, `timeMs`에 `offsetMs`를 더하지 않으며, `durationMs`가 null이면 마지막 노트 + 1마디, `tempoMap`·`timeSignatureMap`이 둘 이상이면 `variableTempo`로 표시하고 고정 BPM으로 다룬다.
 - **버전 고정:** 곡 선택 직후 `getChartLatest`는 한 번만 부른다. 이후(재시작·자산 갱신)는 `chart.chartVersionId`로 `getChartVersion`·`getChartAssets`를 부른다. store는 채보를 캐시하지 않는다.
 - **assets:** `loadChart`가 채보와 함께 `getChartAssets`를 부른다. 실패해도 채보는 돌려주고 `assets`가 null이다. `accompanimentUrl`이 있으면 `chart.hasAccompaniment = true`. 서명 URL은 메모리에만 둔다(반주 재생은 아래 "반주 재생" 절).
-- **플레이 로그:** `chartVersionId`·`songNumericId`·`chartId`(다시 하기 URL용)·`presetId`가 같이 저장된다. 내장 곡은 null.
+- **플레이 로그:** `chartVersionId`·`songNumericId`·`chartId`(다시 하기 URL용)·`presetId`가 같이 저장된다. 내장 곡은 null. 채보 노트의 `noteId`와 BE 전체 노트 수(`sourceNoteCount`)도 남긴다(업로드용).
+
+## 플레이 기록 업로드·상세 분석
+
+- **흐름:** 연주 종료 → 로컬 저장 → 결과 화면(로컬 값, 기다리지 않음). 동시에 `app/playSync.startPlaySync`가 `POST /api/v1/plays`(ACCT-002 요약)를 보낸다. 성공하면 리포트 요약과 노트 첫 페이지를 미리 받아 두고 결과 화면의 **상세 분석 보기**가 `/result/:playId/report`로 열린다.
+- **playId:** 연주마다 UUID(`newPlayId`). 이전 로그(`play-…`)는 업로드하지 않는다.
+- **seq:** `engine/playRecorder`가 활성 타격과 MISS 판정에 처리 순서대로 번호를 매긴다. 서버가 seq 순서로 maxCombo를 다시 계산하므로 이 순서가 어긋나면 400이다.
+- **본문 조립:** `domain/playUpload.buildUploadBody`. 판정 타격 `tMs` = 노트 시각 + Δ, MISS `tMs` = 노트 시각, 정확도는 `score / 전체 노트 수` 백분율 소수 둘째 자리 HALF_UP. 입력은 실제 스틱(ble·webserial·websocket)만 `STICK`, 키보드·포인터는 `KEYBOARD`(센서 필드 null). `consent`는 정책이 정해질 때까지 `false`.
+- **업로드하지 않는 경우(SKIPPED):** 내장 곡, 이전 로그, 변환에서 버린 노트가 있는 채보, 자유 연주, 50,000행 초과. 결과 화면 버튼에 사유가 나온다.
+- **실패·재전송:** 상태는 로그의 `upload`(UPLOADING·DONE·FAILED·SKIPPED)에 저장한다. 처음 조립한 본문을 보관해 같은 playId로 그대로 다시 보낸다(같은 UUID에 다른 내용은 409). 네트워크·5xx·401·`PLAY_STATE_CHANGED`는 재시도 가능, 400·404·그 밖의 409·413은 불가. 결과 화면에 들어올 때 한 번 자동 재전송하고 이후는 **다시 시도** 버튼.
+- **상세 분석:** 서버 데이터만 쓴다. `api/reports`가 정확도(0~100 → 0~1)·패드 옛 이름·null을 변환하고, 노트는 `limit` 1000으로 `nextAfterSeq`가 null일 때까지 받아 시간순으로 정렬한다(seq는 시간순이 아니다). 약점·추천 자리는 `analysisStatus`에 따라 안내만 보인다.
 
 ## 반주 재생
 
