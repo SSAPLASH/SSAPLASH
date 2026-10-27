@@ -151,6 +151,11 @@ describe('summarizeByPad', () => {
     expect(s.map((x) => x.pad)).toEqual(['CRASH', 'KICK']);
     expect(s[1]).toEqual({ pad: 'KICK', total: 3, perfect: 1, good: 1, miss: 1, meanDeltaMs: 20 });
   });
+
+  it('판정 전 노트(null)는 분모에서 뺀다', () => {
+    const s = summarizeByPad(logOf([{ bar: 0, pad: 'KICK', j: 'PERFECT', d: 0 }, { bar: 0, pad: 'KICK', j: null, d: null }]));
+    expect(s[0]).toMatchObject({ pad: 'KICK', total: 1, perfect: 1, miss: 0 });
+  });
 });
 
 describe('chartFromLog', () => {
