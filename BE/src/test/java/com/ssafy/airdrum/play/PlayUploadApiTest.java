@@ -85,6 +85,24 @@ class PlayUploadApiTest {
 		db.update("UPDATE users SET status='WITHDRAWN',withdrawn_at=now() WHERE id=?",user);
 		postSummary(body,token,401);
 	}
+	@Test void aliasIsStoredCanonicallyAndOldHashReplaysWithoutChangingIt() throws Exception {
+		String body=PlayFixtures.free(play).replace("\"pad\":\"SNARE\"", "\"pad\":\"HI_TOM\",\"baselinePad\":\"HI_TOM\",\"predictedPad\":\"HI_TOM\"")
+				.replace("\"hits\":[", "\"calibration\":{\"audioOffsetMs\":0,\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}}},"
+						+ "\"kitPresetSnapshot\":{\"name\":\"kit\",\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}},\"keyBindings\":{\"HI_TOM\":\"HI_TOM\"}},\"hits\":[");
+		String canonical=body.replace("\"HI_TOM\":\"HI_TOM\"", "\"HI_TOM\":\"SMALL_TOM\"")
+				.replace("\"pad\":\"HI_TOM\"", "\"pad\":\"SMALL_TOM\"").replace("\"baselinePad\":\"HI_TOM\"", "\"baselinePad\":\"SMALL_TOM\"")
+				.replace("\"predictedPad\":\"HI_TOM\"", "\"predictedPad\":\"SMALL_TOM\"").replace("\"pads\":{\"HI_TOM\"", "\"pads\":{\"SMALL_TOM\"");
+		postSummary(body,token,201); postSummary(canonical,token,200);
+		var row=db.queryForMap("SELECT pad,baseline_pad,predicted_pad FROM hits WHERE play_session_id=?",play);
+		assertThat(row.values()).containsOnly("SMALL_TOM");
+		String snapshot=db.queryForObject("SELECT kit_preset_snapshot::text FROM play_sessions WHERE id=?",String.class,play);
+		assertThat(snapshot).contains("SMALL_TOM", "HI_TOM");
+		String oldHash=json.legacyHash(user,read(body));
+		db.update("UPDATE play_sessions SET payload_hash=? WHERE id=?",oldHash,play);
+		postSummary(canonical,token,200); postSummary(body,token,200);
+		postSummary(canonical.replace("\"consent\":false","\"consent\":true"),token,409);
+		assertThat(summaryHash()).isEqualTo(oldHash);
+	}
 	@Test void chartMatchingAndDeletedResourcesDoNotBreakReplay() throws Exception {
 		chart(); String body=PlayFixtures.scored(play,song,version);
 		postSummary(body.replace("\"matchedNoteId\":\"n2\"","\"matchedNoteId\":\"absent\""),token,400);

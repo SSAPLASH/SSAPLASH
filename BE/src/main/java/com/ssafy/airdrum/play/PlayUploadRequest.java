@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /** schemaVersion=1의 전송 계약. 선택 필드는 null, 필수 필드는 검증기로 검사한다. */
@@ -20,7 +21,7 @@ public record PlayUploadRequest(
 	public enum Mode { RHYTHM, FREE, TEMPO, SHEET }
 	public enum InputSource { KEYBOARD, STICK }
 	public enum Judgement { PERFECT, GOOD, MISS }
-	public enum Pad { HIHAT, SNARE, HI_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE, KICK }
+	public enum Pad { HIHAT, SNARE, @JsonAlias("HI_TOM") SMALL_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE, KICK, HIHAT_PEDAL }
 	public record Hit(Integer seq, Double tMs, Integer stickId, Pad pad, Pad baselinePad,
 			Pad predictedPad, Integer velocity, Float peakAccel, Float pitch, Float yaw,
 			Judgement judgement, String matchedNoteId, Double deltaMs) {}
