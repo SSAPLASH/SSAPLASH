@@ -652,3 +652,128 @@
 .mon-latency-cv {
   height: 240px;
 }
+
+/* 타격 추적: 왼쪽 최근 타격 목록 + 오른쪽 ①~⑥ 카드 */
+.mon-trace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.mon-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.mon-trace-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+}
+.mon-trace-item:hover {
+  border-color: var(--line);
+}
+.mon-trace-item.active {
+  background: var(--surface);
+  border-color: var(--brass);
+}
+.mon-trace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mon-trace-nav {
+  float: right;
+  display: inline-flex;
+  gap: 6px;
+}
+.mon-trace-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px;
+}
+.mon-trace-card {
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  min-width: 0;
+}
+.mon-trace-card.ok {
+  border-left-color: var(--good);
+}
+.mon-trace-card-title {
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.mon-trace-items {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+.mon-trace-items > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.mon-trace-items dt {
+  color: var(--ink-faint);
+}
+.mon-trace-items dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.mon-trace-swing {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .mon-trace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mon-trace-list {
+    max-height: 200px;
+  }
+}
+
+/* 사이드바 하단 선택 타격 카드 */
+.mon-side-sel {
+  margin-top: auto;
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.mon-side-sel-title {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .mon-side-sel {
+    margin-top: 0;
+    margin-left: auto;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+}
