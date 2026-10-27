@@ -209,7 +209,9 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   PERFECT/GOOD은 noteId·velocity·delta가 필요하다. 판정 없는 타격은 velocity를 가진다.
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
-  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 WITHDRAWN과 별도 정리 흐름을 사용한다.
+  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
+  같은 트랜잭션에서 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
+  `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
@@ -595,7 +597,8 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
 - 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
 - **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
-  `users` 행은 WITHDRAWN으로 남고 소셜 연동·키트 프리셋·refresh 토큰은 지운다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
+  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰과
+  학습 데이터 사용에 동의하지 않은 플레이 기록은 지우고, 동의한 플레이 기록은 남긴다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
 
 공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
 `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
@@ -623,7 +626,8 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸고, 소셜 연동·키트 프리셋 삭제, `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·`consent=false` 플레이 세션 삭제,
+  `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
   리스너 예외는 탈퇴 응답(204)에 영향이 없으므로 직접 로그를 남긴다. 놓친 정리는 `UserRepository.findWithdrawnIds(withdrawnAfter, pageable)`
