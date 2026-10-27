@@ -30,7 +30,7 @@ public class PlayUploadController {
 	private final PlayRawUploadService raw;
 	public PlayUploadController(PlayJson json,PlayUploadService plays,PlayRawUploadService raw) { this.json=json; this.plays=plays; this.raw=raw; }
 	@PostMapping(consumes=MediaType.APPLICATION_JSON_VALUE)
-	@Operation(summary="플레이 요약·전체 hits 저장",description="schemaVersion 1. 신규 201, 동일 UUID·내용 재전송 200, 다른 내용 409. 리포트는 생성하지 않습니다.",
+	@Operation(summary="플레이 요약·전체 hits 저장",description="schemaVersion 1. 신규 201, 동일 UUID·내용 재전송 200, 다른 내용 409. 신규 RHYTHM·SHEET는 BE 집계 리포트를 함께 저장합니다. rawLogStatus는 원본 로그 업로드 상태입니다.",
 			requestBody=@io.swagger.v3.oas.annotations.parameters.RequestBody(required=true,content=@Content(schema=@Schema(implementation=PlayUploadRequest.class))))
 	@ApiResponse(responseCode="201",description="최초 저장",content=@Content(schema=@Schema(implementation=PlayUploadResponse.class)))
 	@ApiResponse(responseCode="200",description="동일 요청 재전송",content=@Content(schema=@Schema(implementation=PlayUploadResponse.class)))
