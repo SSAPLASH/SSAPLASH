@@ -18,7 +18,7 @@ main 병합 → 파이프라인 → deploy 잡(수동 승인) → ec2-deploy 러
 | 항목 | 값 |
 | --- | --- |
 | 러너 | `ec2-deploy` (shell executor, 보호된 러너, 태그 `deploy`, 태그 없는 job은 받지 않음) |
-| 배포 폴더 | `/srv/airdrum` (`Infra/`, `BE/`, 이후 `AI/`) |
+| 배포 폴더 | `/srv/airdrum` (`Infra/`, `BE/`, `AI/`, `FE/`) |
 | 서버 설정 파일 | `/srv/airdrum/Infra/.env` (저장소에 없음) |
 | 배포 기록 | `/srv/airdrum/.deployed` (한 줄에 시각과 커밋 해시. 마지막 줄이 현재 버전) |
 | 동시 실행 | `resource_group: production`으로 배포와 롤백이 겹치지 않는다 |
@@ -77,11 +77,11 @@ main 병합 → 파이프라인 → deploy 잡(수동 승인) → ec2-deploy 러
 1. `main`에 병합되면 파이프라인이 만들어진다. CI 잡(`be-test` 등)이 통과했는지 확인한다.
 2. 파이프라인의 `deploy` 잡을 **직접 실행**(재생 버튼)한다. 실행 권한은 `main`을 병합할 수 있는 Maintainer에게 있다.
 3. `deploy`는 `Infra/deploy/deploy.sh`를 실행한다.
-   - 소스를 `/srv/airdrum`으로 복사한다(`.env`는 건드리지 않는다).
+   - 소스(`Infra`, `BE`, `AI`, `FE`)를 `/srv/airdrum`으로 복사한다(`.env`는 건드리지 않는다). 서버에서 이미지를 빌드하므로 `node_modules/`, `dist/`, `.venv*/` 등은 복사하지 않는다.
    - `docker compose -p infra up -d --build`로 갱신하고 Nginx 설정을 다시 읽게 한다.
-   - 앱이 `healthy`이고 `http://localhost/health`가 `ok`일 때까지 최대 300초 기다린다.
+   - 앱 컨테이너(`api`, `web`, `ai-api`)가 모두 `healthy`이고 `http://localhost/health`가 `ok`일 때까지 최대 300초 기다린다.
    - 성공하면 `.deployed`에 커밋 해시를 기록한다.
-4. 앱 이미지를 새로 빌드하므로 3~5분 걸린다. 빌드가 실패하면 기존 컨테이너는 그대로 유지된다.
+4. BE·FE·AI 이미지를 새로 빌드하므로 처음에는 10분 안팎, 이후에는 캐시 덕에 3~5분 걸린다. 빌드가 실패하면 기존 컨테이너는 그대로 유지된다.
 
 ## 롤백
 
