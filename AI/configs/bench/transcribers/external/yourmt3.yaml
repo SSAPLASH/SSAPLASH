@@ -1,0 +1,148 @@
+# YourMT3+ (2024, 다악기 채보 모델. 앱 기본값 YPTF.MoE+Multi (noPS), 45.8M). 별도 환경 .venv-yourmt3 +
+# 코드·체크포인트 ext/YourMT3 (HF Space·모델 저장소 mimbres/YourMT3, 판 고정. README). 비교표 본표용
+# 출력은 다악기 노트 중 드럼(is_drum)의 GM 피치, 세기 없음(0/1만 학습). 드럼 토큰 범위 0~127이 전부 키로 있음.
+# 탐 경계는 우리 정답(GMD) 기준: 50·48 하이, 47·45 미드, 43·41·58 플로어 (설계 U9). 58은 GM 이름(비브라슬랩)이
+# 아니라 E-GMD 탐 림 뜻, 3은 ENST 전처리의 기타 심벌(MDB 정답의 차이나·스플래시처럼 CRASH) (설계 U20)
+name: yourmt3
+adapter: external
+env_name: yourmt3
+python_exe: .venv-yourmt3/Scripts/python.exe  # 이 파일이 없으면(Linux·서버) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/yourmt3_transcribe.py
+variant: YPTF.MoE+Multi (noPS)
+options:
+  repo_dir: ext/YourMT3
+velocity: false
+input_sample_rate: 16000
+license_code: Apache-2.0 (HF Space 소스 머리 주석·메타데이터. GitHub 저장소 표기는 GPL-3.0이나 코드 없음)
+license_weights: Apache-2.0 (HF 모델 저장소 mimbres/YourMT3 README. 학습 데이터 중 MAESTRO·ENST는 비상업 조건)
+source_url: https://huggingface.co/spaces/mimbres/YourMT3
+labels:
+  35: KICK
+  36: KICK
+  37: SNARE
+  38: SNARE
+  40: SNARE
+  42: HIHAT
+  44: HIHAT
+  46: HIHAT
+  22: HIHAT
+  26: HIHAT
+  50: HI_TOM
+  48: HI_TOM
+  47: MID_TOM
+  45: MID_TOM
+  43: FLOOR_TOM
+  41: FLOOR_TOM
+  58: FLOOR_TOM
+  49: CRASH
+  57: CRASH
+  52: CRASH
+  55: CRASH
+  3: CRASH
+  51: RIDE
+  53: RIDE
+  59: RIDE
+  # 그 밖의 피치: 패드에 없는 타악기(클랩·탬버린·카우벨·콩가 등)와 ENST 브러시(0)·스틱(1)
+  0: __drop__
+  1: __drop__
+  2: __drop__
+  4: __drop__
+  5: __drop__
+  6: __drop__
+  7: __drop__
+  8: __drop__
+  9: __drop__
+  10: __drop__
+  11: __drop__
+  12: __drop__
+  13: __drop__
+  14: __drop__
+  15: __drop__
+  16: __drop__
+  17: __drop__
+  18: __drop__
+  19: __drop__
+  20: __drop__
+  21: __drop__
+  23: __drop__
+  24: __drop__
+  25: __drop__
+  27: __drop__
+  28: __drop__
+  29: __drop__
+  30: __drop__
+  31: __drop__
+  32: __drop__
+  33: __drop__
+  34: __drop__
+  39: __drop__
+  54: __drop__
+  56: __drop__
+  60: __drop__
+  61: __drop__
+  62: __drop__
+  63: __drop__
+  64: __drop__
+  65: __drop__
+  66: __drop__
+  67: __drop__
+  68: __drop__
+  69: __drop__
+  70: __drop__
+  71: __drop__
+  72: __drop__
+  73: __drop__
+  74: __drop__
+  75: __drop__
+  76: __drop__
+  77: __drop__
+  78: __drop__
+  79: __drop__
+  80: __drop__
+  81: __drop__
+  82: __drop__
+  83: __drop__
+  84: __drop__
+  85: __drop__
+  86: __drop__
+  87: __drop__
+  88: __drop__
+  89: __drop__
+  90: __drop__
+  91: __drop__
+  92: __drop__
+  93: __drop__
+  94: __drop__
+  95: __drop__
+  96: __drop__
+  97: __drop__
+  98: __drop__
+  99: __drop__
+  100: __drop__
+  101: __drop__
+  102: __drop__
+  103: __drop__
+  104: __drop__
+  105: __drop__
+  106: __drop__
+  107: __drop__
+  108: __drop__
+  109: __drop__
+  110: __drop__
+  111: __drop__
+  112: __drop__
+  113: __drop__
+  114: __drop__
+  115: __drop__
+  116: __drop__
+  117: __drop__
+  118: __drop__
+  119: __drop__
+  120: __drop__
+  121: __drop__
+  122: __drop__
+  123: __drop__
+  124: __drop__
+  125: __drop__
+  126: __drop__
+  127: __drop__

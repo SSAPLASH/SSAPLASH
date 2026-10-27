@@ -12,7 +12,7 @@
 | --- | --- |
 | A. CI·러너 | A1 Windows 러너 초기 설정, A2 BE 테스트 `Bad address: listen`, A3 임베디드 PostgreSQL 시작 실패, A4 잡이 멈춤, A5 EC2 러너로 옮긴 뒤 잡이 대기, A6 러너 토큰 노출 |
 | B. 로컬 Docker(Windows) | B1 포트 공개 실패, B2 이미지 받기 실패, B3 Docker Desktop 꺼짐 |
-| C. Compose·서버 | C1 `.env` 값 누락, C2 DB 비밀번호 불일치, C3 네트워크 구성, C4 Nginx `/api` 경로, C5 필수 변수 누락 시 명령 중단, C6 서버 구성이 최신이 아님, C7 Nginx 중단(원인 미확인), C8 키 이름 혼란, C9 서버 `.env`의 키 소실 |
+| C. Compose·서버 | C1 `.env` 값 누락, C2 DB 비밀번호 불일치, C3 네트워크 구성, C4 Nginx `/api` 경로, C5 필수 변수 누락 시 명령 중단, C6 서버 구성이 최신이 아님, C7 Nginx 중단(원인 미확인), C8 키 이름 혼란, C9 서버 `.env`의 키 소실, C10 MLflow가 `psycopg` 없이 시작하다 죽음 |
 | D. 스토리지(SeaweedFS) | D1 만료 정책이 적용되지 않음, D2 볼륨 슬롯 부족, D3 프록시 뒤 서명 URL |
 | E. 배포(CD) | E1 파일 바인드 마운트와 파일 교체, E2 러너 사용자의 홈 폴더 권한, E3 MR 대상 브랜치 실수, E4 `main` 배포 시 서버가 퇴보, E5 서버에서 GitLab SSH 접속 불가 |
 | F. 모니터링·로그 | F1 로그의 토큰·이메일 누출 |
@@ -136,6 +136,13 @@
 - **원인:** 서버의 `.env`에 이후에 추가한 스토리지 키가 없었다(다시 만들어진 파일로 보임).
 - **해결:** 서버에서 무작위 값을 만들어 `.env`에 추가하고 개수를 확인(값은 출력하지 않음).
 - **재발 방지:** 새 필수 변수를 추가하는 MR에는 서버 `.env` 변경 절차를 적는다. 배포 전에 `.env` 변수 개수를 확인한다.
+
+### C10. MLflow가 서버에서 시작하자마자 죽고 다시 시작을 반복(`No module named 'psycopg'`)
+- **증상:** `main` 통합 배포 뒤 `infra-mlflow-1`이 `Restarting (1)`. 로그 끝에 `ModuleNotFoundError: No module named 'psycopg'`. 다른 컨테이너와 사용자 서비스(FE·API)는 정상이었다.
+- **원인:** `Infra/mlflow/Dockerfile`이 `psycopg2-binary`(예전 PostgreSQL 드라이버)만 설치했는데, 함께 설치되는 SQLAlchemy 2.1이 `postgresql://` 주소의 기본 드라이버를 `psycopg`(v3)로 바꿔서 그것을 요청했다. 모니터링·MLflow는 코드로만 만들고 서버에서 한 번도 기동해 보지 않은 채 `main`에 들어갔다.
+- **해결:** 이미지에 `psycopg[binary]==3.3.6`을 추가했다(`psycopg2-binary`는 그대로). 설치 조합(`mlflow 3.17.2`, `sqlalchemy 2.1.6`)이 충돌 없이 해결되는 것은 `uv pip compile`로 확인했고, 서버 기동은 배포 후 확인한다.
+- **재발 방지:** 서버에서 처음 기동하는 서비스는 병합 전에 서버에서 한 번 띄워 본다(이번 FE·AI는 그렇게 해서 문제가 없었다). 이미지에 데이터베이스 드라이버를 넣을 때는 DB 주소가 쓰는 드라이버 이름(`postgresql+psycopg` 등)이 실제로 설치되는지 확인한다.
+- **근거:** `Infra/mlflow/Dockerfile`, 서버 `docker logs infra-mlflow-1`.
 
 ---
 

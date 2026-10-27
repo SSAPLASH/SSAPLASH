@@ -1,0 +1,25 @@
+# AI 파트 전용. 경로는 AI/ 기준.
+
+# 세션 인계용 작업 기록 (개인 문서)
+DESIGN.md
+ADR.md
+ROADMAP.md
+
+# 가상환경·데이터·모델 가중치·실험 결과
+.venv/
+# 채보 모델 별도 환경·저장소 클론 (README '채보 벤치마크' 절)
+.venv-*/
+ext/
+data/*
+!data/README.md
+# MDB Drums 체크섬만 추적 (음원·주석은 CC BY-NC-SA, 미추적)
+!data/mdb_drums/
+data/mdb_drums/*
+!data/mdb_drums/CHECKSUMS.txt
+mlruns/
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/

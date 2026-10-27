@@ -1,0 +1,15 @@
+# ADTOF (ADTOF-pytorch 포트). 5가지만 냄: 탐은 tom, 심벌은 cymbal → 8패드 점수 없음.
+# 가중치는 패키지에 포함(원본 Keras 가중치를 변환). 문턱값은 저장소 기본값(비워 둠).
+name: adtof
+adapter: adtof
+velocity: false
+input_sample_rate: 44100
+license_code: CC BY-NC-SA 4.0 (원본 ADTOF 저장소. ADTOF-pytorch 포트 저장소는 라이선스 필드 없음)
+license_weights: CC BY-NC-SA 4.0 (원본 ADTOF 가중치를 변환한 것)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  35: KICK
+  38: SNARE
+  42: HIHAT
+  47: tom
+  49: cymbal

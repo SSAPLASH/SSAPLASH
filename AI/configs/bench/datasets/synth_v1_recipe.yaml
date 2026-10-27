@@ -1,0 +1,59 @@
+# 합성곡 synth_v1 레시피. 산출물(data/synth_v1/)은 git 미추적, 이 파일만 추적.
+# 곡마다: GMD 연주 하나(드럼·정답 온셋) + MUSDB18-HQ train 곡의 드럼 없는 구간(반주).
+# 후보 고르기: uv run python scripts/make_synth_songs.py list-gmd data/gmd/groove --style rock --bpm-min 80 --bpm-max 100
+#
+# GMD 연주 5개는 2026-10-19 확정, ADR-012. 전부 test split.
+# 밴드 음악 범위 안에서 템포는 87~128, 패턴은 성긴 힙합부터 16분 하이햇 펑크까지 고름. 재즈·라틴은 서비스 범위 밖이라 제외.
+# 반주 곡: train 100곡 drums.wav의 템포를 저장소 밖 스크립트로 추정해 GMD bpm과 3% 안에서 맞는 곡을 고름.
+# 템포가 1~2% 다르면 60초에 최대 1박 어긋남. 정답 스템과 온셋의 정확성에는 영향 없음.
+# accomp_gain_db: 드럼과 반주의 RMS 차이가 MUSDB test 50곡 중앙값 -3.3 dB 근처가 되게 조정.
+version: synth_v1
+gmd_root: data/gmd/groove
+musdb_root: data/musdb18hq
+output_root: data/synth_v1
+sample_rate: 44100
+
+# 필드
+#   name             곡 폴더 이름 (영문 소문자·숫자·밑줄)
+#   gmd_id           info.csv의 id 열 (예: drummer1/session1/5)
+#   musdb_song       "train/곡 폴더 이름"
+#   accomp_start_sec 반주를 잘라 내기 시작하는 초
+#   duration_sec     곡 길이(초). 비우면 GMD 연주 길이 전체
+#   drums_gain_db    드럼 음량 보정(dB)
+#   accomp_gain_db   반주 음량 보정(dB)
+songs:
+  - name: rock_slow_90
+    gmd_id: drummer9/session1/24          # rock 90bpm 69초
+    musdb_song: "train/Black Bloc - If You Want Success"
+    accomp_start_sec: 45
+    duration_sec: 60
+    drums_gain_db: 0
+    accomp_gain_db: -3
+  - name: rock_fast_128
+    gmd_id: drummer1/session2/35          # punk 128bpm 111초
+    musdb_song: "train/Hollow Ground - Left Blind"
+    accomp_start_sec: 30
+    duration_sec: 60
+    drums_gain_db: 0
+    accomp_gain_db: -8
+  - name: funk_108
+    gmd_id: drummer8/session1/19          # funk 108bpm 187초, 16분 하이햇
+    musdb_song: "train/Music Delta - Disco"
+    accomp_start_sec: 20
+    duration_sec: 60
+    drums_gain_db: 0
+    accomp_gain_db: 0
+  - name: soul_105
+    gmd_id: drummer7/session3/132         # soul 105bpm 110초
+    musdb_song: "train/Fergessen - The Wind"
+    accomp_start_sec: 30
+    duration_sec: 60
+    drums_gain_db: 0
+    accomp_gain_db: -4
+  - name: hiphop_87
+    gmd_id: drummer8/eval_session/6       # hiphop 87bpm 44초, 전체 사용
+    musdb_song: "train/Lushlife - Toynbee Suite"
+    accomp_start_sec: 60
+    duration_sec: null
+    drums_gain_db: 0
+    accomp_gain_db: -8
