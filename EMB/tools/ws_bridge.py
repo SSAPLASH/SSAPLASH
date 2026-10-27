@@ -295,7 +295,11 @@ class Bridge:
                 self.ser = serial.Serial(self.args.device, self.args.baud, timeout=0.01)
                 print(f"[serial] {self.args.device} {self.args.baud} 열림")
                 while True:
-                    data = self.ser.read(256)
+                    # read(256)은 256바이트가 다 차거나 timeout(10ms)까지 기다려서 패킷이 최대 10ms 묶여 늦게 나감
+                    # → 1바이트가 오면 바로 깨어나고, 이미 들어와 있는 만큼만 더 읽는다 (2026-10-27 실측 WS 지터 sd 6ms)
+                    data = self.ser.read(1)
+                    if data and self.ser.in_waiting:
+                        data += self.ser.read(self.ser.in_waiting)
                     if data:
                         self.loop.call_soon_threadsafe(self.on_bytes, data)
             except Exception as e:  # noqa: BLE001  (포트 없음, 보드 리셋, USB 뽑힘)
