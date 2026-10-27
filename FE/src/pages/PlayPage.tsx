@@ -111,7 +111,8 @@ export function PlayPage() {
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad) {
-        hit.tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+        const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+        if (tAudio !== null) hit.tAudio = tAudio;
         inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
         flashes.current.set(hit.pad, performance.now());
       }

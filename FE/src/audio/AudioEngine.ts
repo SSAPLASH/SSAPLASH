@@ -224,9 +224,10 @@ export class AudioEngine {
   /**
    * 패드 소리. whenMs(performance.now 기준)를 주면 그 시각에 맞춰 스케줄, 없으면 즉시.
    * 반환: 실제 스케줄된 performance.now() 기준 시각 (텔레메트리 tAudio).
+   * 컨텍스트가 없거나 running이 아니면 소리가 나지 않으므로 예약하지 않고 null.
    */
-  trigger(pad: PadId, velocity: number, whenMs?: number): number {
-    if (!this.ctx || !this.padBus) return performance.now();
+  trigger(pad: PadId, velocity: number, whenMs?: number): number | null {
+    if (!this.ctx || !this.padBus || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
@@ -250,9 +251,9 @@ export class AudioEngine {
     return this.contextToPerfTime(at);
   }
 
-  /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산) */
-  click(whenMs: number | undefined, accent: boolean): number {
-    if (!this.ctx || !this.master) return performance.now();
+  /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */
+  click(whenMs: number | undefined, accent: boolean): number | null {
+    if (!this.ctx || !this.master || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     const o = ctx.createOscillator();
