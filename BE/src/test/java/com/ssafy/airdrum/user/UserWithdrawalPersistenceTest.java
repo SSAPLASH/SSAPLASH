@@ -41,6 +41,22 @@ class UserWithdrawalPersistenceTest {
 		assertThat(found.getWithdrawnAt()).isEqualTo(NOW.truncatedTo(ChronoUnit.MICROS));
 	}
 
+	/** 인수 조건 10(153): 상태 전이와 같은 UPDATE로 개인정보 컬럼을 비운다. 닉네임은 NOT NULL이라 대체 문구다. */
+	@Test
+	void withdrawClearsPersonalInformation() {
+		var user = users.save(User.create("드러머", "drummer@example.com", "https://cdn.example.com/p.png"));
+
+		user.withdraw(NOW);
+		em.flush();
+		em.clear();
+
+		var found = users.findById(user.getId()).orElseThrow();
+		assertThat(found.getNickname()).isEqualTo(User.WITHDRAWN_NICKNAME).isEqualTo("탈퇴한 사용자");
+		assertThat(found.getEmail()).isNull();
+		assertThat(found.getProfileImageUrl()).isNull();
+		assertThat(found.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+	}
+
 	@Test
 	void withdrawingTwiceIsRejected() {
 		var user = User.create("드러머", null, null);
