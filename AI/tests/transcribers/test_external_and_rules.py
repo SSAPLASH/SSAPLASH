@@ -245,6 +245,136 @@ def test_assign_pads는_ADTOF_피치를_패드_이름으로():
     assert seconds == 1.0
 
 
+def test_cluster_pitches는_큰_틈에서_자르고_작은_묶음은_합친다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import cluster_pitches
+
+    # 94·96 / 129·131 / 160·162 Hz: 반음 틈 5.1·3.5 → 3묶음
+    assert cluster_pitches([94, 96, 129, 131, 160, 162]).tolist() == [0, 0, 1, 1, 2, 2]
+    # 틈이 2반음 미만이면 한 묶음
+    assert cluster_pitches([100, 103, 106]).tolist() == [0, 0, 0]
+    # 한 번 튄 값(300)은 min_hits=2라 이웃 묶음에 합침. min_hits=1이면 따로
+    assert cluster_pitches([94, 96, 129, 131, 300]).tolist() == [0, 0, 1, 1, 1]
+    assert cluster_pitches([94, 96, 129, 131, 300], min_hits=1).tolist() == [0, 0, 1, 1, 2]
+    # k=2면 가장 큰 틈 한 곳만 자름
+    assert cluster_pitches([94, 96, 129, 131, 160, 162], k=2).tolist() == [0, 0, 1, 1, 1, 1]
+    # 정렬돼 있지 않아도 번호는 음높이 낮은 순
+    assert cluster_pitches([160, 94, 129, 162, 96, 131]).tolist() == [2, 0, 1, 2, 0, 1]
+    # 무음(nan)은 -1
+    assert cluster_pitches([float("nan"), 100, 102]).tolist() == [-1, 0, 0]
+    assert cluster_pitches([float("nan")]).tolist() == [-1]
+    assert cluster_pitches([]).tolist() == []
+
+
+def test_name_clusters는_3개면_순서_그보다_적으면_naming대로():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import name_clusters
+
+    assert name_clusters([94, 129, 162]) == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]
+    assert name_clusters([200, 250, 300]) == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]  # 순서만
+    # bands: 묶음 중앙값을 고정 경계로. 둘이 같은 이름이면 그 안에서 벌림
+    assert name_clusters([100]) == ["FLOOR_TOM"]
+    assert name_clusters([130]) == ["MID_TOM"]
+    assert name_clusters([200]) == ["SMALL_TOM"]
+    assert name_clusters([100, 200]) == ["FLOOR_TOM", "SMALL_TOM"]
+    assert name_clusters([80, 100]) == ["FLOOR_TOM", "MID_TOM"]
+    assert name_clusters([160, 200]) == ["MID_TOM", "SMALL_TOM"]
+    assert name_clusters([115, 140]) == [
+        "FLOOR_TOM",
+        "MID_TOM",
+    ]  # 둘 다 미드, 아래가 경계에 더 가까움
+    assert name_clusters([120, 141]) == [
+        "MID_TOM",
+        "SMALL_TOM",
+    ]  # 둘 다 미드, 위가 경계에 더 가까움
+    # order: 순서만. 1개 MID, 2개 FLOOR·MID
+    assert name_clusters([200], naming="order") == ["MID_TOM"]
+    assert name_clusters([200, 300], naming="order") == ["FLOOR_TOM", "MID_TOM"]
+    assert name_clusters([]) == []
+
+
+def _toms_track(bursts: list[tuple[float, float, float]], seconds: float = 2.0) -> np.ndarray:
+    """(시각, Hz, 진폭 배수) 목록 → (2, 샘플) toms 트랙."""
+    toms = np.zeros((2, int(seconds * SR)), np.float32)
+    for t, freq, scale in bursts:
+        s = int(t * SR)
+        toms[:, s : s + int(0.1 * SR)] = _sine(freq) * scale
+    return toms
+
+
+def test_relative_모드는_곡_안_순서로_탐을_나눈다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import assign_toms
+
+    # 세 탐이 70·100·140Hz, 각 2번. 고정 경계면 FLOOR·FLOOR·MID, 상대 방식이면 FLOOR·MID·SMALL
+    times = [0.2, 0.5, 0.8, 1.1, 1.4, 1.7]
+    toms = _toms_track(
+        [(0.2, 70, 1), (0.5, 70, 1), (0.8, 100, 1), (1.1, 100, 1), (1.4, 140, 1), (1.7, 140, 1)]
+    )
+    fixed = assign_toms(times, toms, SR, {})
+    assert fixed.pads == ["FLOOR_TOM"] * 4 + ["MID_TOM"] * 2
+    assert fixed.n_clusters == 0 and fixed.n_dropped == 0 and fixed.gate_ratio is None
+    rel = assign_toms(times, toms, SR, {"tom_mode": "relative"})
+    assert rel.pads == ["FLOOR_TOM", "FLOOR_TOM", "MID_TOM", "MID_TOM", "SMALL_TOM", "SMALL_TOM"]
+    assert rel.n_clusters == 3 and rel.labels.tolist() == [0, 0, 1, 1, 2, 2]
+    assert [round(m) for m in rel.cluster_medians] == pytest.approx([70, 100, 140], abs=6)
+    assert rel.cluster_names == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]
+    # 탐이 둘뿐이고 둘 다 높으면(150·200): bands는 MID·SMALL, order는 FLOOR·MID
+    two = _toms_track([(0.2, 150, 1), (0.5, 150, 1), (0.8, 200, 1), (1.1, 200, 1)])
+    bands = assign_toms(times[:4], two, SR, {"tom_mode": "relative"})
+    assert bands.pads == ["MID_TOM", "MID_TOM", "SMALL_TOM", "SMALL_TOM"]
+    order = assign_toms(
+        times[:4], two, SR, {"tom_mode": "relative", "tom_relative_naming": "order"}
+    )
+    assert order.pads == ["FLOOR_TOM", "FLOOR_TOM", "MID_TOM", "MID_TOM"]
+    # assign_pads도 같은 결과. 모르는 방식 이름은 오류
+    hits = assign_pads({47: times}, {"toms": toms}, SR, {"tom_mode": "relative"})
+    assert [p for _, p, _ in hits] == rel.pads
+    with pytest.raises(ValueError, match="tom_mode"):
+        assign_pads({47: times}, {"toms": toms}, SR, {"tom_mode": "kmeans"})
+
+
+def test_거르기는_toms_에너지가_약한_탐을_버린다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
+        assign_toms,
+        tom_gate_ratios,
+    )
+
+    # 0.2초는 진짜 탐(toms 트랙에 소리), 0.6초는 toms가 거의 없고 입력에만 큰 소리(스네어를 탐으로 잡은 경우)
+    toms = _toms_track([(0.2, 100, 1), (0.6, 100, 0.05)])
+    mixture = _toms_track([(0.2, 300, 1), (0.6, 300, 1)])
+    ratios = tom_gate_ratios([0.2, 0.6], toms, mixture, SR, 80)
+    assert ratios[0] == pytest.approx(1.0, abs=0.05) and ratios[1] < 0.01
+    gated = assign_toms([0.2, 0.6], toms, SR, {"tom_gate_ratio": 0.1}, mixture)
+    assert gated.kept.tolist() == [True, False] and gated.pads == ["FLOOR_TOM", None]
+    assert gated.n_dropped == 1 and gated.gate_ratio is not None
+    hits = assign_pads(
+        {47: [0.2, 0.6], 35: [0.1]}, {"toms": toms}, SR, {"tom_gate_ratio": 0.1}, mixture
+    )
+    assert [(round(t, 1), p) for t, p, _ in hits] == [(0.1, "KICK"), (0.2, "FLOOR_TOM")]
+    # 거르기를 안 켜면 둘 다 남고, 켰는데 입력이 없으면 오류
+    assert assign_toms([0.2, 0.6], toms, SR, {}, mixture).kept.tolist() == [True, True]
+    with pytest.raises(ValueError, match="mixture"):
+        assign_toms([0.2, 0.6], toms, SR, {"tom_gate_ratio": 0.1})
+    # 입력이 무음이면 비율 0이라 버림
+    silent = np.zeros_like(mixture)
+    assert tom_gate_ratios([0.2], toms, silent, SR, 80).tolist() == [0.0]
+    # 거른 탐을 스네어로 돌리기: 50ms 안에 ADTOF 스네어 타격이 없을 때만
+    snare_rules = {"tom_gate_ratio": 0.1, "tom_gate_action": "snare"}
+    turned = assign_toms([0.2, 0.6], toms, SR, snare_rules, mixture)
+    assert turned.pads == ["FLOOR_TOM", "SNARE"] and turned.kept.tolist() == [True, False]
+    assert turned.n_dropped == 0 and turned.n_relabeled == 1
+    already = assign_toms([0.2, 0.6], toms, SR, snare_rules, mixture, snare_times=[0.62])
+    assert (
+        already.pads == ["FLOOR_TOM", None] and already.n_dropped == 1 and already.n_relabeled == 0
+    )
+    hits = assign_pads({47: [0.2, 0.6], 38: [0.9]}, {"toms": toms}, SR, snare_rules, mixture)
+    assert [(round(t, 1), p) for t, p, _ in hits] == [
+        (0.2, "FLOOR_TOM"),
+        (0.6, "SNARE"),
+        (0.9, "SNARE"),
+    ]
+    with pytest.raises(ValueError, match="tom_gate_action"):
+        rules_with_defaults({"tom_gate_action": "hihat"})
+
+
 def test_심벌_구간은_cymbal_window_ms로_따로_둔다():
     # 라이드 소리가 타격 50ms 뒤에 시작: 구간 80ms면 잡히고 40ms면 둘 다 무음이라 CRASH
     crash = np.zeros((2, SR), np.float32)

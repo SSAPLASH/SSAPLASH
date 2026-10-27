@@ -187,6 +187,71 @@ def test_정답_탐_음높이를_뽑고_경계를_찾는다(tmp_path: Path):
     ]
 
 
+def _mix_of(f, extra: list[tuple[float, float]] | None = None) -> np.ndarray:
+    """저장 특징의 세 트랙 합 = 어댑터 입력 드럼. extra는 (시각, 진폭)으로 toms에 없는 큰 소리를 더함."""
+    mix = sum(f.stems[n].astype(np.float32) for n in ("toms", "crash", "ride"))
+    for t, amp in extra or []:
+        s = int(t * SR)
+        mix[s : s + int(0.1 * SR)] += make_tone(0.1, SR, 180.0)[0] * (amp / 0.25)
+    return mix
+
+
+def test_거르기와_상대_방식이_점수와_by_song_통계에_남는다(tmp_path: Path):
+    from ssaplash_ai.bench.analysis import tom_summary
+    from ssaplash_ai.bench.analysis.rule_features import input_as_feature
+
+    # 1.7초 탐은 정답이 없고, 입력에는 그 자리에 큰 다른 소리가 있음 → toms 에너지 비율이 작음
+    f, hits_true = synthetic_features(extra_tom_times=[1.7])
+    g = _reload(tmp_path, f)
+    g.input_audio = input_as_feature(_mix_of(f, extra=[(1.7, 2.5)]))
+    songs = [("s", g, hits_true)]
+    base = eval_candidate(RuleCandidate("base"), "ds", songs).metrics()
+    assert base["tomFalseKept"] == 1 and base["tomDropped"] == 0
+    gated = eval_candidate(RuleCandidate("gate", {"tom_gate_ratio": 0.1}), "ds", songs)
+    m = gated.metrics()
+    assert m["tomDropped"] == 1 and m["tomFalseKept"] == 0 and m["tomAssignAcc"] == 1.0
+    assert all(m[f"f1{p}"] == 1.0 for p in ("FLOOR_TOM", "MID_TOM", "SMALL_TOM"))
+    assert gated.songs[0].tom_dropped == 1 and gated.songs[0].tom_clusters == 0
+    # 상대 방식: 80·130·200(·250 거짓 탐) 한 번씩이라 min_hits=1로 3묶음
+    rel = eval_candidate(
+        RuleCandidate("rel", {"tom_mode": "relative", "tom_relative_min_hits": 1}), "ds", songs
+    )
+    assert rel.metrics()["tomAssignAcc"] == 1.0
+    assert rel.songs[0].tom_clusters == 3 and rel.songs[0].tom_cluster_hz.count("/") == 2
+    summary = tom_summary(g, {"tom_mode": "relative", "tom_relative_min_hits": 1})
+    assert summary.cluster_names == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]
+    # 거르기를 켰는데 입력이 없으면 오류
+    g.input_audio = None
+    with pytest.raises(ValueError, match="mixture"):
+        predict_hits(g, {"tom_gate_ratio": 0.1})
+
+
+def test_예측_탐_표는_정답_탐과_짝짓고_근처_패드를_적는다(tmp_path: Path):
+    from ssaplash_ai.bench.analysis import predicted_tom_table
+    from ssaplash_ai.bench.analysis.rule_eval import NONE_LABEL as NONE
+    from ssaplash_ai.bench.analysis.rule_features import input_as_feature
+    from ssaplash_ai.bench.analysis.tom_pitch import false_tom_nearest, gate_ratio_stats, gate_sweep
+
+    f, hits_true = synthetic_features(extra_tom_times=[1.31])  # 1.3초 크래시 옆 10ms
+    g = _reload(tmp_path, f)
+    g.input_audio = input_as_feature(_mix_of(f))
+    table = predicted_tom_table("ds", [("s", g, hits_true)])
+    assert len(table) == 4
+    assert table["truePad"].tolist() == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM", NONE]
+    assert table["nearestPad"].tolist() == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM", "CRASH"]
+    assert table["nearestMs"].iloc[3] == pytest.approx(10.0, abs=0.5)
+    assert table["gateRatio"].between(0.0, 1.01).all()
+    stats = gate_ratio_stats(table)
+    assert stats["kind"].tolist() == ["정답 탐", "정답 없음"] and stats["nHits"].tolist() == [3, 1]
+    sweep = gate_sweep(table, thresholds=[0.5])
+    assert sweep.iloc[0]["trueTotal"] == 3 and sweep.iloc[0]["falseTotal"] == 1
+    nearest = false_tom_nearest(table)
+    assert nearest.iloc[0].tolist() == ["ds", "CRASH", 1]
+    # 입력이 없으면 비율은 nan
+    g.input_audio = None
+    assert predicted_tom_table("ds", [("s", g, hits_true)])["gateRatio"].isna().all()
+
+
 def test_band_accuracy는_무음_타격을_빼고_전부_무음이면_nan():
     assert band_accuracy(np.array([80.0, math.nan]), ["FLOOR_TOM", "SMALL_TOM"], [113, 142]) == 1.0
     assert math.isnan(band_accuracy(np.array([math.nan]), ["FLOOR_TOM"], [113, 142]))
@@ -261,7 +326,8 @@ def test_rule_eval과_tom_pitch_명령이_끝까지_돈다(
     conf = pd.read_csv(out / "confusion.csv")
     assert (conf[(conf.candidate == "high") & (conf.group == "tom")]["count"].sum()) == 6
     assert "규칙 후보 비교" in (out / "summary.md").read_text(encoding="utf-8")
-    assert len(pd.read_csv(out / "by_song.csv")) == 4
+    by_song = pd.read_csv(out / "by_song.csv")
+    assert len(by_song) == 4 and {"tomDropped", "tomClusters", "tomClusterHz"} <= set(by_song)
 
     out2 = tmp_path / "pitch"
     code = main(
@@ -284,8 +350,12 @@ def test_rule_eval과_tom_pitch_명령이_끝까지_돈다(
     names = [c["name"] for c in cand["candidates"]]
     assert names == ["current", f"fit_{ds_name}"]
     assert (out2 / "tom_f0_distribution.png").is_file()
-    assert "곡 하나 빼고 확인" in (out2 / "summary.md").read_text(encoding="utf-8")
+    summary = (out2 / "summary.md").read_text(encoding="utf-8")
+    assert "곡 하나 빼고 확인" in summary and "거르기 비율" in summary
     assert len(pd.read_csv(out2 / "tom_f0.csv")) == 6
+    pred = pd.read_csv(out2 / "pred_tom.csv")
+    assert len(pred) == 6 and pred["gateRatio"].notna().all()  # 합성곡 입력을 읽어 비율을 잼
+    assert (out2 / "tom_gate_ratio.png").is_file()
 
 
 def test_특징이_없는_곡이_있으면_먼저_만들라고_한다(tmp_path: Path):
