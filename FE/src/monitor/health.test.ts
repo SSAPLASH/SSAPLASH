@@ -284,11 +284,11 @@ describe('clockHealth', () => {
     expect(item(mk(narrow), 'slope').level).toBe('idle');
   });
 
-  it('rtt 중앙값 20ms 경계', () => {
-    expect(item(mk(samples(0, 8, 20)), 'rtt').level).toBe('ok');
-    const w = mk(samples(0, 8, 20.5));
+  it('rtt 중앙값 25ms 경계', () => {
+    expect(item(mk(samples(0, 8, 25)), 'rtt').level).toBe('ok');
+    const w = mk(samples(0, 8, 25.5));
     expect(item(w, 'rtt').level).toBe('warn');
-    expect(w.reason).toBe('SYNC rtt 20.5ms (기준 20ms)');
+    expect(w.reason).toBe('SYNC rtt 25.5ms (기준 25ms)');
   });
 
   it('짝 실패 1건이면 warn, ACK가 없으면 idle', () => {
