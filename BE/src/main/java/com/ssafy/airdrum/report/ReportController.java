@@ -27,7 +27,7 @@ public class ReportController {
     public ReportController(ReportQueryService reports) { this.reports = reports; }
 
     @GetMapping
-    @Operation(summary = "리포트 요약", description = "신규 RHYTHM/SHEET 업로드 성공 직후 조회. AI·raw 업로드를 기다리지 않습니다. accuracy는 모두 0~100이며 analysisStatus는 AI 연동 전 NOT_REQUESTED입니다.")
+    @Operation(summary = "리포트 요약", description = "신규 RHYTHM/SHEET 업로드 성공 직후 조회. AI·raw 업로드를 기다리지 않습니다. accuracy는 모두 0~100이며 analysisStatus는 저장된 값이고 신규 리포트의 기본값은 NOT_REQUESTED입니다.")
     public ReportResponse report(@Parameter(hidden = true) AuthUser me, @PathVariable UUID playId) {
         return reports.report(me.id(), playId);
     }
