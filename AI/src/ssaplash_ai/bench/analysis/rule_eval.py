@@ -22,13 +22,22 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from ssaplash_ai.bench.analysis.rule_features import RuleFeatures, feature_path, load_features
+from ssaplash_ai.bench.analysis.rule_features import (
+    RuleFeatures,
+    feature_path,
+    input_as_feature,
+    load_features,
+)
 from ssaplash_ai.bench.datasets import DatasetConfig, load_dataset
 from ssaplash_ai.bench.datasets.pads import HITS_DTYPE, PADS, make_hits, to_five_groups
 from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC, MatchCounts, score_hits
 from ssaplash_ai.bench.runner.run_support import Logger
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
+    ADTOF_SNARE,
+    ADTOF_TOM,
+    TomAssignment,
     assign_pads,
+    assign_toms,
     rules_with_defaults,
 )
 
@@ -73,12 +82,33 @@ def load_candidates(paths: Sequence[Path]) -> list[RuleCandidate]:
 
 
 def predict_hits(features: RuleFeatures, rules: dict) -> np.ndarray:
-    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 8종)."""
-    raw = assign_pads(features.peaks_as_lists(), features.stems, features.sample_rate, rules)
+    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 8종). 입력 드럼이 있으면 거르기(tom_gate_ratio)에 씀."""
+    raw = assign_pads(
+        features.peaks_as_lists(),
+        features.stems,
+        features.sample_rate,
+        rules,
+        mixture=features.input_audio,
+    )
     hits, _ = make_hits(
         (t for t, _, _ in raw), (label for _, label, _ in raw), None, IDENTITY_LABELS
     )
     return hits
+
+
+def tom_summary(features: RuleFeatures, rules: dict) -> TomAssignment:
+    """곡 하나의 탐 처리 결과(음높이·거르기·묶음·패드). by_song 통계와 분석 도구용."""
+    r = rules_with_defaults(rules)
+    toms = features.stems.get(r["stems"]["toms"])
+    peaks = features.peaks_as_lists()
+    return assign_toms(
+        peaks.get(ADTOF_TOM, []),
+        toms,
+        features.sample_rate,
+        r,
+        features.input_audio,
+        snare_times=peaks.get(ADTOF_SNARE, []),
+    )
 
 
 @dataclass
@@ -154,12 +184,17 @@ class SongEval:
     cymbal: GroupResult
     n_true: int
     n_pred: int
+    # 탐 거르기로 버린 타격 수, 상대 방식의 묶음 수와 묶음 중앙값 Hz (S15P31A307-164)
+    tom_dropped: int = 0
+    tom_clusters: int = 0
+    tom_cluster_hz: str = ""
 
 
 def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules: dict) -> SongEval:
     hits_pred = predict_hits(features, rules)
     pads = score_hits(hits_true, hits_pred, "pads")
     five = score_hits(hits_true, hits_pred, "five")
+    toms = tom_summary(features, rules)
     return SongEval(
         song_id=song_id,
         pads=dict(pads.by_label),
@@ -168,6 +203,9 @@ def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules
         cymbal=group_confusion(hits_true, hits_pred, CYMBAL_PADS),
         n_true=int(len(hits_true)),
         n_pred=int(len(hits_pred)),
+        tom_dropped=toms.n_dropped,
+        tom_clusters=toms.n_clusters,
+        tom_cluster_hz="/".join(f"{m:.0f}" for m in toms.cluster_medians),
     )
 
 
@@ -181,6 +219,7 @@ class CandidateResult:
     five: dict[str, MatchCounts] = field(default_factory=dict)
     tom: GroupResult = field(default_factory=GroupResult)
     cymbal: GroupResult = field(default_factory=GroupResult)
+    tom_dropped: int = 0
     songs: list[SongEval] = field(default_factory=list)
 
     def f1(self, label: str) -> float:
@@ -215,6 +254,7 @@ class CandidateResult:
             tomMatched=float(self.tom.matched),
             tomFalseKept=float(self.tom.false_kept),
             tomMissed=float(self.tom.missed),
+            tomDropped=float(self.tom_dropped),
             cymbalAssignAcc=self.cymbal.assign_acc,
             cymbalMatched=float(self.cymbal.matched),
             cymbalFalseKept=float(self.cymbal.false_kept),
@@ -251,6 +291,7 @@ def eval_candidate(
         _add_counts(res.five, s.five)
         res.tom = res.tom + s.tom
         res.cymbal = res.cymbal + s.cymbal
+        res.tom_dropped += s.tom_dropped
     return res
 
 
@@ -258,9 +299,12 @@ def eval_candidate(
 
 
 def load_dataset_songs(
-    dataset_config: Path, features_root: Path, log: Logger = print
+    dataset_config: Path, features_root: Path, log: Logger = print, with_input: bool = True
 ) -> tuple[str, list[tuple[str, RuleFeatures, np.ndarray]]]:
-    """데이터셋 yaml + 특징 폴더 → (데이터셋 이름, [(곡, 특징, 정답)]). 특징이 없는 곡은 오류."""
+    """데이터셋 yaml + 특징 폴더 → (데이터셋 이름, [(곡, 특징, 정답)]). 특징이 없는 곡은 오류.
+
+    with_input이면 어댑터에 넣었던 드럼 입력(정답 드럼 트랙)도 데이터셋에서 읽어 특징에 붙임(거르기 규칙용).
+    """
     dataset = load_dataset(DatasetConfig.from_yaml(dataset_config))
     songs = []
     missing = []
@@ -275,7 +319,10 @@ def load_dataset_songs(
         hits_true, _ = hits
         if hits_true.dtype != HITS_DTYPE:
             raise ValueError(f"{dataset.name}/{song_id}: 정답 표 dtype이 HITS_DTYPE이 아님")
-        songs.append((song_id, load_features(path), hits_true))
+        features = load_features(path)
+        if with_input:
+            features.input_audio = input_as_feature(dataset.load(song_id).drums_true)
+        songs.append((song_id, features, hits_true))
     if missing:
         raise FileNotFoundError(
             f"{dataset.name}: 특징 파일이 없는 곡 {len(missing)}개 (먼저 rule-features 실행): "
@@ -334,6 +381,7 @@ def summary_markdown(
     results: Sequence[CandidateResult], candidates: Sequence[RuleCandidate]
 ) -> str:
     cols = ["f1Tom", "f1SMALL_TOM", "f1MID_TOM", "f1FLOOR_TOM", "tomAssignAcc", "tomFalseKept"]
+    cols += ["tomDropped"]
     cols += [
         "f1Cymbal",
         "f1CRASH",
@@ -435,6 +483,9 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
         "tomMatched",
         "tomCorrect",
         "tomFalseKept",
+        "tomDropped",
+        "tomClusters",
+        "tomClusterHz",
         "cymbalMatched",
         "cymbalCorrect",
         "cymbalFalseKept",
@@ -452,6 +503,9 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
                 "tomMatched": s.tom.matched,
                 "tomCorrect": s.tom.correct,
                 "tomFalseKept": s.tom.false_kept,
+                "tomDropped": s.tom_dropped,
+                "tomClusters": s.tom_clusters,
+                "tomClusterHz": s.tom_cluster_hz,
                 "cymbalMatched": s.cymbal.matched,
                 "cymbalCorrect": s.cymbal.correct,
                 "cymbalFalseKept": s.cymbal.false_kept,
@@ -516,4 +570,5 @@ __all__ = [
     "predict_hits",
     "run_rule_eval",
     "summary_markdown",
+    "tom_summary",
 ]
