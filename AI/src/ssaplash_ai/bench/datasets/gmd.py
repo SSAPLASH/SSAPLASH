@@ -1,9 +1,13 @@
-"""GMD(Groove MIDI Dataset) 연주 로더와 라벨 → 패드 대응표 (설계 3-3절, 4-3절).
+"""GMD(Groove MIDI Dataset) 연주 로더와 라벨 → 패드 대응표 (설계 3-3절, 4-3절). E-GMD 로더 포함.
 
 폴더 규칙은 `{root}/info.csv`와 그 안의 midi_filename·audio_filename. 연주 하나가 곡 하나이며
 드럼만 있으므로 mixture = drums_true, accomp_true = 무음. 타격 정답은 MIDI에서 추출.
 GMD MIDI 피치는 Roland TD-11 매핑. synth_build.GMD_PITCH_CLASS(9분류)와 같은 출처이며
 여기서는 패드 8종으로 묶음. 합성곡 onsets.csv의 gmd_class 열도 GMD_CLASS_PAD로 변환.
+
+E-GMD(S15P31A307-164 재연구, 작업 12)는 GMD 연주를 Roland TD-17 킷 43개로 다시 녹음한 것(CC BY 4.0,
+Zenodo 10.5281/zenodo.4300943). 목록 csv `e-gmd-v1.0.0.csv`는 GMD info.csv와 열이 같고 kit_name 열이 더 있으며,
+같은 연주 id가 킷마다 한 행씩 있어 곡 id로 오디오 파일 이름(확장자 뺀 것)을 쓴다. MIDI 피치 표는 GMD와 같음.
 """
 
 from __future__ import annotations
@@ -180,3 +184,53 @@ def export_subset(dataset: GmdDataset, out_root: Path) -> list[Path]:
             dst.parent.mkdir(parents=True, exist_ok=True)
             copied.append(Path(shutil.copy2(src, dst)))
     return copied
+
+
+EGMD_CSV = "e-gmd-v1.0.0.csv"
+
+
+class EgmdDataset(GmdDataset):
+    """E-GMD 로더. 곡 id = 오디오 파일 이름(확장자 뺀 것, 예 `drummer1/eval_session/1_funk-groove1_138_beat_4-4_10`).
+
+    설정: `subset`은 split(test·validation·train, 기본 test). `extra.perf_ids`는 GMD 연주 id 목록(없으면 전부),
+    `extra.kits`는 kit_name 목록(없으면 43개 전부), `extra.beat_type`은 beat·fill(기본 beat). `songs`가 있으면 그대로.
+    """
+
+    kind = "egmd"
+
+    @property
+    def info(self) -> dict[str, dict[str, str]]:
+        if self._info is None:
+            path = self.config.root / EGMD_CSV
+            if not path.is_file():
+                self._info = {}
+            else:
+                with open(path, encoding="utf-8", newline="") as f:
+                    self._info = {
+                        row["audio_filename"].rsplit(".", 1)[0]: row for row in csv.DictReader(f)
+                    }
+        return self._info
+
+    def kit_of(self, song_id: str) -> str:
+        return self._row(song_id)["kit_name"]
+
+    def perf_of(self, song_id: str) -> str:
+        """곡 id → GMD 연주 id (`drummer1/eval_session/1`)."""
+        return self._row(song_id)["id"]
+
+    def song_ids(self) -> list[str]:
+        if self.config.songs:
+            return list(self.config.songs)
+        split = self.config.subset or "test"
+        beat_type = str(self.config.extra.get("beat_type", "beat"))
+        perf_ids = self.config.extra.get("perf_ids")
+        kits = self.config.extra.get("kits")
+        return sorted(
+            sid
+            for sid, row in self.info.items()
+            if row["split"] == split
+            and row["beat_type"] == beat_type
+            and row.get("audio_filename")
+            and (perf_ids is None or row["id"] in set(perf_ids))
+            and (kits is None or row["kit_name"] in set(kits))
+        )

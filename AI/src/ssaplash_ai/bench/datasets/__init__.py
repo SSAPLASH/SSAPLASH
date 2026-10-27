@@ -16,7 +16,7 @@ from ssaplash_ai.bench.datasets.base import (
     read_audio,
     write_audio,
 )
-from ssaplash_ai.bench.datasets.gmd import GmdDataset
+from ssaplash_ai.bench.datasets.gmd import EgmdDataset, GmdDataset
 from ssaplash_ai.bench.datasets.mdb import MdbDataset
 from ssaplash_ai.bench.datasets.musdb import MusdbDataset
 from ssaplash_ai.bench.datasets.pads import (
@@ -43,6 +43,7 @@ LOADERS: dict[str, type[BaseDataset]] = {
     GmdDataset.kind: GmdDataset,
     MdbDataset.kind: MdbDataset,
     StarDataset.kind: StarDataset,
+    EgmdDataset.kind: EgmdDataset,
 }
 
 
@@ -68,6 +69,7 @@ __all__ = [
     "BaseDataset",
     "CheckReport",
     "DatasetConfig",
+    "EgmdDataset",
     "GmdDataset",
     "MdbDataset",
     "MusdbDataset",
