@@ -56,6 +56,10 @@ export interface StickStats {
   lastStatus: DecodedStatus | null;
   hitCount: number;
   lastHitT: number | null;
+  /** 마지막 BIAS 로그 결과. 'default'는 부팅 때 흔들려 기본값으로 떨어진 경우. 다음 BOOT에서 null로 초기화 */
+  bias: 'measured' | 'default' | null;
+  /** IMU FAIL 로그를 받았는지. 다음 BOOT에서 초기화 */
+  imuFail: boolean;
 }
 
 export interface MonitorStats {
@@ -120,6 +124,8 @@ interface StickState {
   lastStatus: { pkt: DecodedStatus; t: number } | null;
   hitCount: number;
   lastHitT: number | null;
+  bias: StickStats['bias'];
+  imuFail: boolean;
 }
 
 const freshStick = (): StickState => ({
@@ -133,6 +139,8 @@ const freshStick = (): StickState => ({
   lastStatus: null,
   hitCount: 0,
   lastHitT: null,
+  bias: null,
+  imuFail: false,
 });
 
 interface BridgeSample {
@@ -342,6 +350,15 @@ export class PacketLog {
           this.i2c = p.count;
         } else if (p.kind === 'boot') {
           this.build = p.raw;
+          // 재부팅이면 그 스틱의 센서 로그 상태를 비운다(stick 모르면 둘 다)
+          for (const s of row.stick === null ? this.sticks : [this.sticks[row.stick]]) {
+            s.bias = null;
+            s.imuFail = false;
+          }
+        } else if (p.kind === 'bias') {
+          if (st) st.bias = p.values === null ? 'default' : 'measured';
+        } else if (p.kind === 'imuFail') {
+          if (st) st.imuFail = true;
         }
         break;
       }
@@ -407,6 +424,8 @@ export class PacketLog {
         lastStatus: st.lastStatus ? st.lastStatus.pkt : null,
         hitCount: st.hitCount,
         lastHitT: st.lastHitT,
+        bias: st.bias,
+        imuFail: st.imuFail,
       } satisfies StickStats;
     }) as [StickStats, StickStats];
 

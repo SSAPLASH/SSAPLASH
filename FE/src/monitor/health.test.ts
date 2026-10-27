@@ -24,6 +24,8 @@ const stick = (over: Partial<StickStats> = {}): StickStats => ({
   lastStatus: null,
   hitCount: 0,
   lastHitT: null,
+  bias: null,
+  imuFail: false,
   ...over,
 });
 

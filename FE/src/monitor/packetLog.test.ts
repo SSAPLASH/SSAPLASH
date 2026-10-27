@@ -217,6 +217,24 @@ describe('LOG 집계', () => {
     expect(log.rows()[5].log?.kind).toBe('text');
     expect(log.rows()[1].log?.kind).toBe('drop');
   });
+
+  it('drop short는 기존 drop으로 집계', () => {
+    log.ingest(rec(buildLog('drop short 90'), 100));
+    expect(log.stats(200).drops.short).toEqual({ total: 1, window: 1 });
+  });
+
+  it('BIAS·IMU FAIL은 스틱별 마지막 값, 다음 BOOT에서 초기화', () => {
+    log.ingest(rec(buildLog('BIAS 12 -3 5', 0), 0));
+    log.ingest(rec(buildLog('BIAS default', 1), 1));
+    log.ingest(rec(buildLog('IMU FAIL', 1), 2));
+    let s = log.stats(10);
+    expect(s.perStick[0]).toMatchObject({ bias: 'measured', imuFail: false });
+    expect(s.perStick[1]).toMatchObject({ bias: 'default', imuFail: true });
+    log.ingest(rec(buildLog('BOOT 1.0 nrf52', 1), 20));
+    s = log.stats(30);
+    expect(s.perStick[0].bias).toBe('measured');
+    expect(s.perStick[1]).toMatchObject({ bias: null, imuFail: false });
+  });
 });
 
 describe('SYNC 왕복 표본', () => {
