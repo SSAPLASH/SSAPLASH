@@ -17,6 +17,11 @@ export interface ApiRequestInit {
   /** JSON으로 직렬화한다. undefined면 본문 없음 */
   body?: unknown;
   signal?: AbortSignal;
+  /**
+   * 401을 받으면 refresh는 한 번 하되 원래 요청은 다시 보내지 않고 401 ApiError를 던진다.
+   * 재전송하면 안 되는 요청(텔레메트리 배치 등)용. 기본 false(재전송)
+   */
+  noRetryOn401?: boolean;
 }
 
 async function send(path: string, init: ApiRequestInit): Promise<Response> {
@@ -40,14 +45,14 @@ async function send(path: string, init: ApiRequestInit): Promise<Response> {
 
 /**
  * BE 호출. 2xx면 JSON 본문(204·빈 본문은 undefined), 아니면 ApiError를 던진다.
- * 401이면 refresh를 한 번 하고 새 토큰으로 재시도한다. refresh가 null이면(세션 없음) 원래 401을 던지고,
+ * 401이면 refresh를 한 번 하고 새 토큰으로 재시도한다(`noRetryOn401`이면 refresh만 하고 재시도 안 함). refresh가 null이면(세션 없음) 원래 401을 던지고,
  * refresh가 throw하면(5xx·네트워크) 그 오류를 그대로 전파한다.
  */
 export async function apiFetch<T = void>(path: string, init: ApiRequestInit = {}): Promise<T> {
   let res = await send(path, init);
   if (res.status === 401 && !path.startsWith(AUTH_PREFIX)) {
     const token = await refreshAccessToken();
-    if (token !== null) res = await send(path, init);
+    if (token !== null && !init.noRetryOn401) res = await send(path, init);
   }
   if (!res.ok) throw await errorFromResponse(res);
   if (res.status === 204) return undefined as T;
