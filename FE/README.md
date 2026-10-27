@@ -377,6 +377,16 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 
 제어 섹션의 "녹화 요약" 패널이 녹화의 구간 지연·SYNC rtt·채점 delta 분포를 표로 보여준다. 녹화 정지 직후 방금 녹화가 표시되고, "녹화 파일 열기"로 이전 `.jsonl`을 열 수 있다(읽기 실패 시 오류 문구 표시). "표 복사"는 Wiki에 붙여넣을 Markdown 표를 클립보드에 넣는다. 각 지표 옆 "기준"은 `HEALTH_THRESHOLDS`의 대응 값이다(rtt p50 ≤ `clock.rttWarnMs`, 판정→오디오 p95 ≤ `output.audioP95WarnMs`, 센서→오디오 p95 ≤ `output.totalP95WarnMs`, delta |평균| ≤ `score.deltaMeanWarnMs`). rtt는 송신 SYNC의 t0와 SYNC_ACK `t0Ms`를 packetLog와 같은 규칙(`monitor/syncPair`)으로 짝지어 구한다. 진단 줄이 없는 이전 파일은 패킷 수·rtt만 채워진다.
 
+### 텔레메트리 전송 (ADMIN 진단)
+
+스틱 연결 진단(지연·시계·연결 품질)용 HIT·STATUS 이벤트를 BE `POST /api/telemetry/batches`로 보낸다. 운영 모니터링이 아니라 ADMIN이 켠 동안만 도는 진단 수집이다. `VITE_MONITOR=true` 빌드에만 들어가고, 일반 빌드 번들에는 이 코드(`telemetry/*`)가 없다(bootstrap이 동적 import).
+
+- **켜는 법**: 모니터 제어 섹션의 "텔레메트리" 패널에서 **켜기**. 켜기 값은 브라우저 localStorage 키 `airdrum.monitor.telemetry`(`1`/`0`) 하나이고, 같은 출처의 다른 창은 `storage` 이벤트로 따라간다(모니터 창에서 켜면 연주 창이 보낸다).
+- **전송 조건**: 켜기 ∧ 로그인 사용자 role이 `ADMIN`. 로그아웃하거나 ADMIN이 아니면 멈추고, ADMIN 로그인이 복원되면 켜기 값에 따라 재개한다. 서버가 403을 주면 자동으로 끄고(저장소 값 `0`) 패널에 사유를 보인다.
+- **이벤트 원천 창에서만 전송**: 이벤트는 센서를 연 창(연주 창 또는 직접 연결 모니터 창)에서 만들어 그 창이 보낸다. 따라보기 모니터 창은 이벤트를 만들지 않으므로 패널 카운터(이 창 기준)가 0이다.
+- **전송 규칙 요약**: 큐 적재는 동기, 전송은 1초 타이머 또는 100건 도달 때 배치 하나(1~100건·128 KiB 이하, 동시 요청 1개, 타임아웃 5초). 큐 상한 1,000건·대기 TTL 10초, 넘치면 오래된 것부터 폐기하고 사유(`overflow`·`ttl`·`oversize`)별로 센다. 401은 refresh 뒤에도 그 배치를 다시 보내지 않고 폐기한다. 타임아웃·네트워크·5xx·429는 결과 불명으로 세고 같은 배치를 재전송하지 않으며 1·2·4초(최대 10초) 쉬었다 다음 배치를 보낸다(429는 Retry-After 우선). 끌 때와 페이지를 떠날 때(`pagehide`)는 남은 큐를 한 번 보내 보고(최선 노력) 끌 때는 큐를 비운다.
+- **미확정**: BE 152번(수신 API) 병합 전이라 경로(`telemetry/sender.ts`의 `TELEMETRY_PATH`)와 오류 `code` 문자열은 확정 전이다. 지금은 HTTP 상태로만 분기하며, 병합 뒤 맞춘다.
+
 ## 프리셋
 
 배치·사운드를 이름 붙여 저장한 것이 프리셋이다(최대 10개, 이름 1~50자·중복 불가, 기본 프리셋 1개). 저장소는 `domain/preset`의 `PresetSource` 인터페이스(`list`·`create`·`update`·`remove`·`setDefault`, 오류는 `PresetError.code`) 뒤에 있고 구현이 둘이다.
