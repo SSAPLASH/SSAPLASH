@@ -1,0 +1,29 @@
+# ADTOF + 드럼 킷 분리 (drum2midi 방식을 하네스 안에서 다시 구현). 5가지 → 8패드.
+# 탐 음높이 경계(tom_bands)와 창 길이(window_ms)는 우리 규칙이며 GMD(TD-11 킷) 정답 탐의 기본 주파수
+# (플로어 97·미드 129·하이 160Hz 중앙값)로 맞춘 값 (설계 U8). 실제 킷은 음높이가 달라 MDB에서는 틀릴 수 있다.
+name: adtof_drumsep
+adapter: adtof_drumsep
+velocity: false
+input_sample_rate: 44100
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep.yaml
+rules:
+  window_ms: 80
+  tom_fmin: 50
+  tom_fmax: 400
+  tom_bands: [113, 142]
+  stems:
+    toms: toms
+    crash: crash
+    ride: ride
+license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치) + 미명시 (MDX23C DrumSep 가중치, aufr33·jarredou 공개)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  HI_TOM: HI_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE

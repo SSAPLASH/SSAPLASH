@@ -1,0 +1,120 @@
+// 센서 → 브라우저 이벤트. 공통 명세서 9-1 타격 이벤트 필드명을 그대로 쓴다.
+import type { PadId } from './pads';
+
+/** 0 = 왼손, 1 = 오른손 */
+export type StickId = 0 | 1;
+
+/** 스틱 자세. 기준 자세 대비 상대 각도(도). pitch: 위(+)/아래(-), yaw: 왼쪽(-)/오른쪽(+) */
+export interface Pose {
+  pitch: number;
+  yaw: number;
+}
+
+export interface StickHitEvent {
+  kind: 'hit';
+  stickId: StickId;
+  /** 센서 시계 기준 타격 시각(ms). 키보드·모의 입력은 performance.now() */
+  timestamp: number;
+  /** 브라우저가 이벤트를 받은 시각 performance.now() */
+  recvTime: number;
+  /** 피크 가속도 (g) */
+  peakAccel: number;
+  pitch: number;
+  yaw: number;
+  /** 타격 직전 ~200ms 6축 샘플 (가속도 3 + 각속도 3). 수집 모드에서만 */
+  swingWindow?: Int16Array;
+  /** 키보드 소스만: 누른 키의 KeyboardEvent.code. 패드는 키 매퍼가 정한다 */
+  keyCode?: string;
+  /** 센서 스틱(프로토콜 v0.7)이 판정한 패드. 없으면 undefined, 스틱이 판정 못 했으면(0xFF) null */
+  pad?: PadId | null;
+  /** 스틱이 계산한 세기 0~127. 센서 스틱 소스만 */
+  velocity?: number;
+  /** 스틱 판정의 1·2등 패드 거리 차(도). 작을수록 애매. 센서 스틱 소스만 */
+  marginDeg?: number;
+  /** 스틱이 "판정 애매"로 표시했는지(flags 비트 4). 센서 스틱 소스만 */
+  ambiguous?: boolean;
+  /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 소스만 */
+  peakSpeedDps?: number;
+}
+
+export interface StickPoseEvent {
+  kind: 'pose';
+  stickId: StickId;
+  timestamp: number;
+  pitch: number;
+  yaw: number;
+}
+
+export interface StickStatusEvent {
+  kind: 'status';
+  stickId: StickId;
+  connected: boolean;
+  batteryPct?: number;
+  rssi?: number;
+  firmware?: string;
+}
+
+export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
+
+/**
+ * 센서 소스 식별자. 입력 소스 디스크립터의 id와 같다(예: 'pointer', 'ble').
+ * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)·'keyboard'·'preview'(세팅 화면 톡 치기)는 예약어.
+ */
+export type SensorId = string;
+
+/**
+ * 입력 경로 식별 — 플레이 로그 input_source, 텔레메트리 tags에 기록.
+ * 'keyboard'는 리터럴로 남겨 자동완성·비교에 쓴다(매퍼 선택은 이것만 본다). 나머지는 SensorId.
+ */
+export type InputSourceKind = 'keyboard' | (SensorId & Record<never, never>);
+
+/** 소스별 설정값 하나. 항목 스키마는 입력 소스 디스크립터가 선언한다 */
+export type OptionValue = string | number | boolean;
+
+/** 소스 하나의 설정값 묶음. 설정 스토어는 내용을 모르고 그대로 보관한다 */
+export type OptionValues = Record<string, OptionValue>;
+
+/** 패드 판정 출처: key 키 매퍼 / stick 스틱 pad 그대로 / chart 채보 후보로 보정 / pose 자세 매퍼 */
+export type HitJudgedBy = 'key' | 'stick' | 'chart' | 'pose';
+
+/**
+ * 패드 판정까지 끝난 타격. 게임·자유 모드·텔레메트리가 이걸 소비한다.
+ * t* 필드는 모두 performance.now() 기준(ms). 구간별 지연 = 차이.
+ */
+export interface ResolvedHit {
+  id: number;
+  stickId: StickId;
+  pad: PadId | null;
+  /** 0~127 */
+  velocity: number;
+  /** 센서 타격 시각을 브라우저 시계로 환산한 값 */
+  tHit: number;
+  tRecv: number;
+  tResolved: number;
+  /** 오디오 스케줄 시각. 사운드 엔진이 채운다 */
+  tAudio?: number;
+  source: InputSourceKind;
+  pose: Pose;
+  peakAccel: number;
+  /** 스틱이 잰 최대 하강 각속도(°/s). 센서 스틱 타격만 */
+  peakSpeedDps?: number;
+  /** 패드 판정 출처 */
+  judgedBy: HitJudgedBy;
+  /** 판정 근거: 가장 가까운 앵커까지 각도 거리 */
+  distanceDeg?: number;
+  /** 판정 근거: 그 앵커 반경 안인지(자세 매퍼만) */
+  inside?: boolean;
+}
+
+/** 입력 소스 연결 상태 (센서 소스 기준. 키보드는 항상 connected) */
+export type SourceState = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+/** 패드 타격 이펙트 입력. 화면이 타격마다 채우고 KitCanvas가 읽기만 한다 */
+export interface HitFx {
+  /** performance.now() */
+  at: number;
+  /** 0~127 */
+  velocity: number;
+  /** 0 = 왼손, 1 = 오른손 */
+  hand: 0 | 1 | null;
+}
