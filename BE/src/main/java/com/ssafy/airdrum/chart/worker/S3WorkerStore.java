@@ -18,24 +18,31 @@ import tools.jackson.databind.json.JsonMapper;
 /** 저장소 요청은 트랜잭션 밖에서 실행하고 실제 바이트를 검증한다. */
 final class S3WorkerStore implements WorkerStore, AutoCloseable {
     static final long MAX_BYTES = 128L * 1024 * 1024;
-    private final S3Client audio, accompaniment;
+    private final S3Client audio, accompaniment, sheet;
     private final S3Presigner audioSigner, accompanimentSigner;
-    private final String audioBucket, accompanimentBucket, ffprobe;
+    private final String audioBucket, accompanimentBucket, sheetBucket, ffprobe;
     private final Duration ttl;
     private final JsonMapper json;
 
     S3WorkerStore(S3Client audio, S3Presigner audioSigner, String audioBucket,
                   S3Client accompaniment, S3Presigner accompanimentSigner, String accompanimentBucket,
                   Duration ttl, String ffprobe, JsonMapper json) {
+        this(audio, audioSigner, audioBucket, accompaniment, accompanimentSigner, accompanimentBucket, null, "", ttl, ffprobe, json);
+    }
+    S3WorkerStore(S3Client audio, S3Presigner audioSigner, String audioBucket,
+                  S3Client accompaniment, S3Presigner accompanimentSigner, String accompanimentBucket,
+                  S3Client sheet, String sheetBucket, Duration ttl, String ffprobe, JsonMapper json) {
+        this.sheet = sheet; this.sheetBucket = sheetBucket;
         this.audio = audio; this.audioSigner = audioSigner; this.audioBucket = audioBucket;
         this.accompaniment = accompaniment; this.accompanimentSigner = accompanimentSigner;
         this.accompanimentBucket = accompanimentBucket; this.ttl = ttl; this.ffprobe = ffprobe; this.json = json;
     }
-    private S3Client client(Bucket b) { return b == Bucket.AUDIO ? audio : accompaniment; }
+    private S3Client client(Bucket b) { return switch (b) { case AUDIO -> audio; case ACCOMPANIMENT -> accompaniment; case SHEET -> sheet; }; }
     private S3Presigner signer(Bucket b) { return b == Bucket.AUDIO ? audioSigner : accompanimentSigner; }
-    private String bucket(Bucket b) { return b == Bucket.AUDIO ? audioBucket : accompanimentBucket; }
-    private void available(Bucket b) { if (client(b) == null || signer(b) == null) throw unavailable(); }
+    private String bucket(Bucket b) { return switch (b) { case AUDIO -> audioBucket; case ACCOMPANIMENT -> accompanimentBucket; case SHEET -> sheetBucket; }; }
+    private void available(Bucket b) { if (client(b) == null || (b != Bucket.SHEET && signer(b) == null)) throw unavailable(); }
     public Signed signGet(Bucket b, String key) {
+        if (b == Bucket.SHEET) throw unavailable();
         available(b);
         try {
             var req = GetObjectRequest.builder().bucket(bucket(b)).key(key).build();
@@ -151,7 +158,7 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
             });
         }
     }
-    public void close() { if (audio != null) audio.close(); if (audioSigner != null) audioSigner.close(); if (accompaniment != null) accompaniment.close(); if (accompanimentSigner != null) accompanimentSigner.close(); }
+    public void close() { if (audio != null) audio.close(); if (audioSigner != null) audioSigner.close(); if (accompaniment != null) accompaniment.close(); if (accompanimentSigner != null) accompanimentSigner.close(); if (sheet != null) sheet.close(); }
     private static void remove(Path p) { if (p != null) try { Files.deleteIfExists(p); } catch (IOException ignored) {} }
     private static BusinessException invalid() { return new BusinessException(WorkerError.RESULT_INVALID); }
     private static BusinessException unavailable() { return new BusinessException(WorkerError.UNAVAILABLE); }
