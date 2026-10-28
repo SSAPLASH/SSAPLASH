@@ -128,4 +128,26 @@ describe('bindPlayLogOwner', () => {
     useAuth.getState().sessionLost();
     expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u1']);
   });
+
+  it('탈퇴 요청이 401이면 탈퇴가 아니라 세션 만료라 기록을 지우지 않는다', async () => {
+    const data = stubStorage();
+    // DELETE는 401, refresh도 401 → 토큰 소실
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(401, { status: 401, code: 'UNAUTHORIZED', detail: 'x' }, 'application/problem+json')),
+    );
+    vi.useFakeTimers();
+    resetForTest('tok');
+    unbind = bindPlayLogOwner();
+    useAuth.setState({ status: 'authenticated', user: ME });
+    savePlayLog(logOf('a'));
+
+    const p = useAuth.getState().withdraw();
+    p.catch(() => {});
+    await vi.advanceTimersByTimeAsync(REFRESH_RETRY_DELAY_MS);
+    await expect(p).rejects.toMatchObject({ status: 401 });
+
+    expect(useAuth.getState()).toMatchObject({ status: 'anonymous', lostReason: 'session_expired' });
+    expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u1']);
+  });
 });

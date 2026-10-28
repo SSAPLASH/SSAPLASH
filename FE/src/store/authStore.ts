@@ -19,7 +19,10 @@ interface AuthState {
   /** refresh → me로 로그인 복원. 진행 중이면 같은 Promise를 돌려준다(콜백 화면과 앱 시작이 겹쳐도 한 번) */
   restore: () => Promise<void>;
   logout: () => Promise<void>;
-  /** 회원 탈퇴. 성공(204)·401이면 로컬 흔적을 지우고 anonymous + withdrawn. 그 밖의 오류는 상태를 두고 던진다 */
+  /**
+   * 회원 탈퇴. 성공(204)만 탈퇴로 본다 — 로컬 흔적을 지우고 anonymous + withdrawn.
+   * 401은 탈퇴 근거가 아니라 인증 만료다: 토큰을 비우고 session_expired로 내린 뒤 던진다(로컬 데이터 유지). 그 밖의 오류는 상태를 두고 던진다
+   */
   withdraw: () => Promise<void>;
   /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
@@ -106,8 +109,14 @@ export const useAuth = create<AuthState>()((set, get) => ({
     try {
       await withdrawMe();
     } catch (e) {
-      // 401은 이미 세션이 없다는 뜻이라 탈퇴된 것과 같게 본다. 그 밖(네트워크·5xx)은 호출자가 보인다
-      if (!(e instanceof ApiError && e.status === 401)) throw e;
+      // 401은 refresh·재시도 뒤에도 인증이 안 된 것이지 탈퇴 완료가 아니다(BE 요청). 세션 만료와 같게 내리고 던진다.
+      // refresh가 401이라 토큰이 이미 비워졌으면 sessionLost는 구독으로 먼저 불렸고 여기서는 무시된다
+      if (e instanceof ApiError && e.status === 401) {
+        clearAccessToken();
+        get().sessionLost();
+      }
+      // 네트워크·5xx는 상태를 두고 호출자가 보인다
+      throw e;
     }
     try {
       localStorage.removeItem(ACTIVE_JOB_KEY);
