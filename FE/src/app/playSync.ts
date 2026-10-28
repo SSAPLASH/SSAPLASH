@@ -1,6 +1,7 @@
 // 플레이 로그 서버 업로드와 리포트 미리 받기 (설계 COACH-002 D1·D2·D4·D7).
 // 결과 화면은 이걸 기다리지 않는다. 상태는 로컬 로그의 upload에 저장하고, 화면은 usePlaySync로 구독한다.
 // 실패해도 로그는 지우지 않고 처음 조립한 본문을 같은 playId로 다시 보낸다(같은 UUID에 다른 내용은 409).
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { uploadPlay } from '@/api/plays';
@@ -122,18 +123,93 @@ export interface ReportPrefetch {
 
 const prefetched = new Map<string, ReportPrefetch>();
 
+/** 캐시가 바뀔 때 구독자(usePrefetchedReport)에게 알리는 리스너 집합 */
+const reportListeners = new Set<() => void>();
+
+function notifyReportListeners(): void {
+  for (const l of [...reportListeners]) l();
+}
+
 /** 요약과 노트 첫 페이지 요청을 시작해 두고, 리포트 페이지가 같은 Promise를 쓴다. 실패한 요청은 캐시에서 지운다 */
 export function prefetchReport(playId: string): ReportPrefetch {
   const hit = prefetched.get(playId);
   if (hit) return hit;
   const entry: ReportPrefetch = { report: getReport(playId), firstNotes: getReportNotesPage(playId, null) };
   const drop = () => {
-    if (prefetched.get(playId) === entry) prefetched.delete(playId);
+    if (prefetched.get(playId) === entry) {
+      prefetched.delete(playId);
+      notifyReportListeners();
+    }
   };
   entry.report.catch(drop);
   entry.firstNotes.catch(drop);
   prefetched.set(playId, entry);
+  notifyReportListeners();
   return entry;
+}
+
+/**
+ * 캐시를 무시하고 GET /report를 다시 받아 캐시의 report를 바꾼다(PENDING 재조회용). firstNotes는 유지한다.
+ * 실패하면 캐시는 그대로 두고 오류를 던진다.
+ */
+export async function refreshReport(playId: string): Promise<Report> {
+  const report = await getReport(playId);
+  const hit = prefetched.get(playId);
+  if (hit) {
+    hit.report = Promise.resolve(report);
+  } else {
+    const entry: ReportPrefetch = { report: Promise.resolve(report), firstNotes: getReportNotesPage(playId, null) };
+    entry.firstNotes.catch(() => {
+      if (prefetched.get(playId) === entry) {
+        prefetched.delete(playId);
+        notifyReportListeners();
+      }
+    });
+    prefetched.set(playId, entry);
+  }
+  notifyReportListeners();
+  return report;
+}
+
+/**
+ * 캐시의 리포트를 구독한다. 해결되면 Report, 거부·캐시 없음이면 null을 cb로 알린다.
+ * 캐시에 없어도 요청을 시작하지 않는다. 캐시가 바뀌면 다시 알린다. 반환값은 구독 해제 함수.
+ */
+export function subscribePrefetchedReport(playId: string, cb: (report: Report | null) => void): () => void {
+  let alive = true;
+  let seq = 0;
+  const sync = () => {
+    const mine = ++seq;
+    const entry = prefetched.get(playId);
+    if (!entry) {
+      cb(null);
+      return;
+    }
+    entry.report.then(
+      (r) => {
+        if (alive && mine === seq) cb(r);
+      },
+      () => {
+        if (alive && mine === seq) cb(null);
+      },
+    );
+  };
+  reportListeners.add(sync);
+  sync();
+  return () => {
+    alive = false;
+    reportListeners.delete(sync);
+  };
+}
+
+/** 프리패치된 리포트만 보여 주는 훅(결과 화면 진입부용). 요청을 시작하지 않는다. 없거나 실패면 null */
+export function usePrefetchedReport(playId: string | null | undefined): Report | null {
+  const [state, setState] = useState<{ playId: string; report: Report | null } | null>(null);
+  useEffect(() => {
+    if (!playId) return;
+    return subscribePrefetchedReport(playId, (report) => setState({ playId, report }));
+  }, [playId]);
+  return playId && state?.playId === playId ? state.report : null;
 }
 
 /** 노트 전부(시간순). 미리 받은 첫 페이지를 이어 받는다 */
@@ -158,5 +234,6 @@ export function reportErrorKind(e: unknown): ReportErrorKind {
 export function resetPlaySyncForTest(): void {
   inflight.clear();
   prefetched.clear();
+  reportListeners.clear();
   usePlaySync.setState({ states: {} });
 }
