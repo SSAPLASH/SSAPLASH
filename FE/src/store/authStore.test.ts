@@ -173,6 +173,53 @@ describe('logout', () => {
   });
 });
 
+describe('withdraw', () => {
+  // 테스트 환경은 node라 localStorage가 없다 — Map 기반 스텁
+  const store = new Map<string, string>();
+  beforeEach(() => {
+    store.clear();
+    store.set('ssaplash.chartJob.v1', 'job');
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    resetForTest('tok');
+    useAuth.setState({ status: 'authenticated', user: ME, lostReason: null });
+  });
+
+  it('204면 anonymous + withdrawn, 토큰·작업 id를 지운다', async () => {
+    const fetch = mockFetch(() => new Response(null, { status: 204 }));
+
+    await useAuth.getState().withdraw();
+
+    expect(fetch.mock.calls[0][0]).toBe('/api/users/me');
+    expect(fetch.mock.calls[0][1]?.method).toBe('DELETE');
+    expect(useAuth.getState()).toMatchObject({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    expect(getAccessToken()).toBeNull();
+    expect(store.has('ssaplash.chartJob.v1')).toBe(false);
+  });
+
+  it('401도 같은 결과', async () => {
+    mockFetch(() => problem(401, 'UNAUTHORIZED'));
+
+    await useAuth.getState().withdraw();
+
+    expect(useAuth.getState()).toMatchObject({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('500이면 던지고 authenticated를 유지한다', async () => {
+    mockFetch(() => problem(500, 'INTERNAL'));
+
+    await expect(useAuth.getState().withdraw()).rejects.toMatchObject({ status: 500 });
+
+    expect(useAuth.getState()).toMatchObject({ status: 'authenticated', user: ME });
+    expect(getAccessToken()).toBe('tok');
+    expect(store.get('ssaplash.chartJob.v1')).toBe('job');
+  });
+});
+
 describe('startLogin / consumeReturnTo', () => {
   function stubBrowser(opts: { brokenStorage?: boolean } = {}) {
     const store = new Map<string, string>();

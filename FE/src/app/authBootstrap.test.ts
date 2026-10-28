@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bootstrapAuth } from './authBootstrap';
+import { bindPlayLogOwner, bootstrapAuth } from './authBootstrap';
+import { loadPlayLogs, savePlayLog, setPlayLogOwner, type PlayLog } from '@/engine/playLog';
 import { resetAuthStoreForTest, useAuth } from '@/store/authStore';
 import { REFRESH_RETRY_DELAY_MS, refreshAccessToken, resetForTest } from '@/api/auth';
 import type { UserMe } from '@/domain/auth';
@@ -68,5 +69,63 @@ describe('bootstrapAuth', () => {
     await p;
 
     expect(useAuth.getState()).toMatchObject({ status: 'anonymous', user: null, lostReason: 'session_expired' });
+  });
+});
+
+describe('bindPlayLogOwner', () => {
+  /** 메모리 localStorage. 키 목록을 확인할 수 있게 data를 돌려준다 */
+  function stubStorage() {
+    const data: Record<string, string> = {};
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => data[k] ?? null,
+      setItem: (k: string, v: string) => {
+        data[k] = v;
+      },
+      removeItem: (k: string) => {
+        delete data[k];
+      },
+    });
+    return data;
+  }
+  const logOf = (playId: string) => ({ playId, notes: [], hits: [] }) as unknown as PlayLog;
+  let unbind: () => void = () => {};
+  afterEach(() => {
+    unbind();
+    setPlayLogOwner(null);
+  });
+
+  it('로그인 계정별로 기록을 나누고 로그아웃하면 계정 기록을 보지 않는다', () => {
+    const data = stubStorage();
+    unbind = bindPlayLogOwner();
+    useAuth.setState({ status: 'authenticated', user: ME });
+    savePlayLog(logOf('a'));
+    expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u1']);
+
+    useAuth.setState({ status: 'authenticated', user: { ...ME, id: 2 } });
+    expect(loadPlayLogs()).toEqual([]);
+
+    useAuth.setState({ status: 'anonymous', user: null });
+    expect(loadPlayLogs()).toEqual([]);
+  });
+
+  it('탈퇴로 내려가면 그 계정의 로컬 기록을 지운다', () => {
+    const data = stubStorage();
+    unbind = bindPlayLogOwner();
+    useAuth.setState({ status: 'authenticated', user: ME });
+    savePlayLog(logOf('a'));
+    useAuth.setState({ status: 'authenticated', user: { ...ME, id: 2 } });
+    savePlayLog(logOf('b'));
+
+    useAuth.setState({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u1']);
+  });
+
+  it('세션 만료로 내려가면 기록을 지우지 않는다', () => {
+    const data = stubStorage();
+    unbind = bindPlayLogOwner();
+    useAuth.setState({ status: 'authenticated', user: ME });
+    savePlayLog(logOf('a'));
+    useAuth.getState().sessionLost();
+    expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u1']);
   });
 });

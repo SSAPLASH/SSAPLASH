@@ -1,8 +1,8 @@
 // 로그인 상태 (설계 3-6). 영속하지 않는다 — access 토큰은 api/auth가 메모리에 들고, 새로고침 복원은 refresh 쿠키로 한다.
 import { create } from 'zustand';
-import { loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
+import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
-import { fetchMe } from '@/api/users';
+import { fetchMe, withdrawMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
 import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
 
@@ -19,6 +19,8 @@ interface AuthState {
   /** refresh → me로 로그인 복원. 진행 중이면 같은 Promise를 돌려준다(콜백 화면과 앱 시작이 겹쳐도 한 번) */
   restore: () => Promise<void>;
   logout: () => Promise<void>;
+  /** 회원 탈퇴. 성공(204)·401이면 로컬 흔적을 지우고 anonymous + withdrawn. 그 밖의 오류는 상태를 두고 던진다 */
+  withdraw: () => Promise<void>;
   /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
   clearLostReason: () => void;
@@ -99,6 +101,22 @@ export const useAuth = create<AuthState>()((set, get) => ({
       // 저장소를 못 써도 로그아웃은 진행한다
     }
     await logoutApi();
+  },
+  withdraw: async () => {
+    try {
+      await withdrawMe();
+    } catch (e) {
+      // 401은 이미 세션이 없다는 뜻이라 탈퇴된 것과 같게 본다. 그 밖(네트워크·5xx)은 호출자가 보인다
+      if (!(e instanceof ApiError && e.status === 401)) throw e;
+    }
+    try {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    } catch {
+      // 저장소를 못 써도 탈퇴는 끝난 것이다
+    }
+    // 상태를 먼저 내린다. 토큰 비움 알림(sessionLost)은 이미 anonymous라 무시된다
+    set({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    clearAccessToken();
   },
   sessionLost: () => {
     if (get().status !== 'authenticated') return;

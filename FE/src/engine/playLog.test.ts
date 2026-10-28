@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadPlayLogs } from './playLog';
+import { clearPlayLogs, getPlayLog, loadPlayLogs, savePlayLog, setPlayLogOwner, updatePlayLog, type PlayLog } from './playLog';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setPlayLogOwner(null);
+});
 
 /** node 환경에는 localStorage가 없어 메모리 스텁을 끼운다 */
 function stubStorage(value: unknown) {
@@ -11,7 +14,11 @@ function stubStorage(value: unknown) {
     setItem: (k: string, v: string) => {
       data[k] = v;
     },
+    removeItem: (k: string) => {
+      delete data[k];
+    },
   });
+  return data;
 }
 
 describe('loadPlayLogs 패드 이름 변환', () => {
@@ -39,5 +46,41 @@ describe('loadPlayLogs 패드 이름 변환', () => {
   it('저장분이 없으면 빈 목록', () => {
     stubStorage(null);
     expect(loadPlayLogs()).toEqual([]);
+  });
+});
+
+/** 저장·조회 확인용 최소 로그. 패드 이름 변환을 거치도록 notes·hits는 빈 배열 */
+const logOf = (playId: string) => ({ playId, notes: [], hits: [] }) as unknown as PlayLog;
+
+describe('계정별 저장', () => {
+  it('주인이 없으면 기존 키, 있으면 계정 키에 저장한다', () => {
+    const data = stubStorage(null);
+    savePlayLog(logOf('guest'));
+    setPlayLogOwner(7);
+    savePlayLog(logOf('a'));
+    expect(Object.keys(data).sort()).toEqual(['ssaplash.playlogs', 'ssaplash.playlogs.u7']);
+    expect(loadPlayLogs().map((l) => l.playId)).toEqual(['a']);
+  });
+
+  it('다른 계정의 로그는 목록·단건 조회·수정에서 보이지 않는다', () => {
+    stubStorage(null);
+    setPlayLogOwner(7);
+    savePlayLog(logOf('a'));
+    setPlayLogOwner(8);
+    expect(loadPlayLogs()).toEqual([]);
+    expect(getPlayLog('a')).toBeNull();
+    expect(updatePlayLog('a', (l) => l)).toBeNull();
+    setPlayLogOwner(7);
+    expect(getPlayLog('a')?.playId).toBe('a');
+  });
+
+  it('clearPlayLogs는 그 계정 키만 지운다', () => {
+    const data = stubStorage(null);
+    setPlayLogOwner(7);
+    savePlayLog(logOf('a'));
+    setPlayLogOwner(8);
+    savePlayLog(logOf('b'));
+    clearPlayLogs(7);
+    expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u8']);
   });
 });
