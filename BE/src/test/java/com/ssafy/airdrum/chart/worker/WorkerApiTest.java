@@ -111,6 +111,8 @@ class WorkerApiTest {
             assertThat(a.get(20,TimeUnit.SECONDS).attemptId()).isEqualTo(b.get(20,TimeUnit.SECONDS).attemptId());
         }
         var first=claim("worker1",T1,request,200); UUID id=attempt(first);
+        assertThat(first.path("input").path("durationMs").isIntegralNumber()).isTrue();
+        assertThat(first.path("input").path("durationMs").asInt()).isEqualTo(60000);
         raw(path("/heartbeat"),T2,event(id,1,10),409);
         raw(path("/heartbeat"),T1,event(id,2,20),200);
         var expiry=db.queryForObject("SELECT lease_expires_at FROM chart_job_attempts WHERE id=?",java.sql.Timestamp.class,id);
@@ -120,6 +122,7 @@ class WorkerApiTest {
         queue.recover(); db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
         var second=claim("worker2",T2,UUID.randomUUID(),200);
         assertThat(attempt(second)).isNotEqualTo(id);
+        assertThat(second.path("input").path("durationMs").asInt()).isEqualTo(60000);
         raw(path("/heartbeat"),T1,event(id,3,21),409);
         claim("worker1",T1,request,409);
     }
@@ -149,14 +152,31 @@ class WorkerApiTest {
         assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("FAILED");
         assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=?",Integer.class,job)).isGreaterThanOrEqualTo(3);
     }
-    @Test void checkpointRetryUsesDrumAndRejectsDeletedSong() throws Exception {
+    @Test void invalidActualFlacCommitsFailureAndCleanup() throws Exception {
         UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200)); var files=outputs(id);
+        var result=envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1)));
+        when(store.inspectFlac(anyString(),anyLong(),anyString(),anyInt())).thenThrow(new BusinessException(WorkerError.RESULT_INVALID));
+        raw(path("/results/separation"),T1,result,422);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=?",Integer.class,job)).isGreaterThanOrEqualTo(3);
+        assertThat(db.queryForObject("SELECT count(*) FROM chart_job_results WHERE job_id=?",Integer.class,job)).isZero();
+    }
+    @Test void checkpointRetryUsesDrumAndRejectsDeletedSong() throws Exception {
+        UUID request=UUID.randomUUID();
+        var initial=claim("worker1",T1,request,200);
+        assertThat(initial.path("input").path("role").asString()).isEqualTo("SOURCE_AUDIO");
+        assertThat(initial.path("input").path("durationMs").asInt()).isEqualTo(60000);
+        UUID id=attempt(initial); var files=outputs(id);
         raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1))),200);
+        var replay=claim("worker1",T1,request,200);
+        assertThat(replay.path("input").path("role").asString()).isEqualTo("DRUM_STEM");
+        assertThat(replay.path("input").path("durationMs").asInt()).isEqualTo(60000);
         raw(path("/failure"),T1,Map.of("attemptId",id,"eventSeq",1,"stage","TRANSCRIBING","code","MODEL_FAILED","retryable",true,"summary","OOM"),200);
         db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
         var next=claim("worker2",T2,UUID.randomUUID(),200);
         assertThat(next.path("resumeStage").asString()).isEqualTo("TRANSCRIBING");
         assertThat(next.path("input").path("role").asString()).isEqualTo("DRUM_STEM");
+        assertThat(next.path("input").path("durationMs").asInt()).isEqualTo(60000);
         db.update("UPDATE songs SET deleted_at=now() WHERE id=?",song);
         raw(path("/heartbeat"),T2,event(attempt(next),1,55),409);
         queue.recover();

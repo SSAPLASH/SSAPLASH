@@ -74,4 +74,29 @@ class S3WorkerStoreTest {
         when(audio.getObject(any(GetObjectRequest.class))).thenReturn(object(bytes, "audio/flac"));
         assertEquals(WorkerError.RESULT_INVALID, assertThrows(BusinessException.class, () -> store.inspectFlac("staging", bytes.length, hash, 999)).getErrorCode());
     }
+
+    @Test void exactDurationUsesRealFlacFilesAndStrictMilliseconds() throws Exception {
+        // 44.1kHz에서 floor(D*44100/1000) 샘플로 만든 실제 16bit stereo FLAC.
+        for (int duration : new int[] {1,1001,4001,4030,12345}) {
+            byte[] audioBytes;
+            try (var resource=getClass().getResourceAsStream("/worker/duration-"+duration+"ms.flac")) {
+                audioBytes=resource.readAllBytes();
+            }
+            String sha=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(audioBytes));
+            when(audio.getObject(any(GetObjectRequest.class))).thenAnswer(i -> object(audioBytes, "audio/flac"));
+            try (var verified=store.inspectFlac("staging",audioBytes.length,sha,duration)) {
+                assertEquals(duration,verified.durationMs());
+            }
+            assertEquals(WorkerError.RESULT_INVALID, assertThrows(BusinessException.class,
+                    () -> store.inspectFlac("staging",audioBytes.length,sha,duration+1)).getErrorCode());
+        }
+    }
+
+    @Test void missingProbeIsUnavailableRatherThanInvalidResult() {
+        when(audio.getObject(any(GetObjectRequest.class))).thenReturn(object(bytes, "audio/flac"));
+        String missing=Path.of(System.getProperty("java.io.tmpdir"), "missing-ffprobe-"+java.util.UUID.randomUUID()).toString();
+        var unavailable=new S3WorkerStore(audio, signer, "audio", backing, signer, "backing", Duration.ofMinutes(10), missing, JsonMapper.builder().build());
+        assertEquals(WorkerError.UNAVAILABLE, assertThrows(BusinessException.class,
+                () -> unavailable.inspectFlac("staging",bytes.length,hash,1000)).getErrorCode());
+    }
 }
