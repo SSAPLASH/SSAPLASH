@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 
 from fastapi import APIRouter, Request
@@ -20,7 +21,38 @@ from ssaplash_ai.coach.config import MAX_BODY_BYTES
 from ssaplash_ai.coach.notes import build_notes
 from ssaplash_ai.coach.schema import AnalysisRequest
 
-logger = logging.getLogger("ssaplash_ai.coach")
+
+class _StdoutHandler(logging.StreamHandler):
+    """표준 출력으로 쓰는 핸들러. 출력 대상을 쓸 때마다 `sys.stdout`에서 읽는다(시험의 출력 캡처와도 맞는다)."""
+
+    def __init__(self) -> None:
+        super().__init__(sys.stdout)
+
+    @property
+    def stream(self):  # type: ignore[override]
+        return sys.stdout
+
+    @stream.setter
+    def stream(self, value) -> None:
+        pass
+
+
+def _configure_logger() -> logging.Logger:
+    """분석 요약 로그가 컨테이너 로그(그리고 Loki)까지 가게 한다.
+
+    uvicorn은 자기 로거만 설정하고 root에는 핸들러가 없어서, 따로 설정하지 않으면 INFO 로그가 버려진다
+    (WARNING 이상만 남는다). 그래서 이 로거에만 표준 출력 핸들러를 단다. `propagate`는 그대로 둔다.
+    """
+    log = logging.getLogger("ssaplash_ai.coach")
+    if not any(isinstance(h, _StdoutHandler) for h in log.handlers):
+        handler = _StdoutHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    return log
+
+
+logger = _configure_logger()
 router = APIRouter()
 
 _MAX_FIELDS_IN_ERROR = 20
