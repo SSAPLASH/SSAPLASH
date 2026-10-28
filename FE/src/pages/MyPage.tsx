@@ -85,7 +85,9 @@ export function MyPage() {
       () => navigate('/login?error=withdrawn', { replace: true }),
       (e: unknown) => {
         // pages는 api를 import하지 않으므로 ApiError는 구조로 구분한다
-        const detail = e instanceof Error ? (e as { detail?: unknown }).detail : undefined;
+        const { status, detail } = e instanceof Error ? (e as { status?: unknown; detail?: unknown }) : {};
+        // 401은 탈퇴가 아니라 세션 만료다. store가 anonymous로 내렸으므로 RequireAuth가 로그인 화면으로 보낸다
+        if (status === 401) return;
         setWithdrawError(typeof detail === 'string' && detail ? detail : '요청을 보내지 못했습니다. 다시 시도해 주세요.');
         setWithdrawBusy(false);
       },
