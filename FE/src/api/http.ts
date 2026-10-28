@@ -14,8 +14,10 @@ const AUTH_PREFIX = '/api/auth/';
 
 export interface ApiRequestInit {
   method?: string;
-  /** JSON으로 직렬화한다. undefined면 본문 없음 */
+  /** JSON으로 직렬화한다. undefined면 본문 없음. FormData면 그대로 보내고 Content-Type은 브라우저가 boundary와 함께 붙인다 */
   body?: unknown;
+  /** 기본 헤더 위에 덮어쓴다(예: Idempotency-Key) */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   /**
    * 401을 받으면 refresh는 한 번 하되 원래 요청은 다시 보내지 않고 401 ApiError를 던진다.
@@ -29,12 +31,14 @@ async function send(path: string, init: ApiRequestInit): Promise<Response> {
   const token = getAccessToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const hasBody = init.body !== undefined;
-  if (hasBody) headers.set('Content-Type', 'application/json');
+  const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData;
+  if (hasBody && !isForm) headers.set('Content-Type', 'application/json');
+  for (const [k, v] of Object.entries(init.headers ?? {})) headers.set(k, v);
   try {
     return await fetch(API_BASE + path, {
       method: init.method ?? 'GET',
       headers,
-      body: hasBody ? JSON.stringify(init.body) : undefined,
+      body: !hasBody ? undefined : isForm ? (init.body as FormData) : JSON.stringify(init.body),
       credentials: 'same-origin',
       signal: init.signal,
     });

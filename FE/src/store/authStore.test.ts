@@ -142,6 +142,22 @@ describe('logout', () => {
     expect(getAccessToken()).toBeNull();
   });
 
+  it('활성 채보 작업 기록(localStorage)을 지운다', async () => {
+    const store = new Map<string, string>([['ssaplash.chartJob.v1', 'job']]);
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    resetForTest('tok');
+    useAuth.setState({ status: 'authenticated', user: ME, lostReason: null });
+    mockFetch(() => new Response(null, { status: 204 }));
+
+    await useAuth.getState().logout();
+
+    expect(store.has('ssaplash.chartJob.v1')).toBe(false);
+  });
+
   it('요청이 실패해도 anonymous로 끝난다', async () => {
     resetForTest('tok');
     useAuth.setState({ status: 'authenticated', user: ME });

@@ -2,6 +2,7 @@
 // /play·/sheet가 같이 쓴다. 선택 결과는 페이지가 URL로 옮긴다.
 // mode="sheet"는 Claude Design Select 보드의 표 모양(열 헤더·행·펼친 난이도 칩, .sheet-mode 스코프 클래스)으로 그린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DIFFICULTY_LABEL, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy, latestSheetLog, loadPlayLogs } from '@/engine/playLog';
@@ -22,7 +23,9 @@ type DetailState = { status: 'loading' } | { status: 'error'; message: string } 
 
 export function SongPicker({ onSelect, mode }: Props) {
   const { source, scope, items, status, error, load, selectSong } = useSongs();
-  const [tab, setTab] = useState<SongScope>(scope);
+  // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<SongScope>(params.get('scope') === 'MINE' ? 'MINE' : scope);
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
   const [details, setDetails] = useState<Record<number, DetailState>>({});
@@ -99,7 +102,17 @@ export function SongPicker({ onSelect, mode }: Props) {
             </button>
           </div>
         )}
-        {status === 'ready' && items.length === 0 && <p className="sm-hint">곡이 없습니다</p>}
+        {status === 'ready' && items.length === 0 && (
+          <p className="sm-hint">
+            {tab === 'MINE' ? (
+              <>
+                아직 만든 곡이 없습니다. <Link to="/studio">곡 만들기</Link>에서 음원을 올려 보세요.
+              </>
+            ) : (
+              '곡이 없습니다'
+            )}
+          </p>
+        )}
 
         {status === 'ready' && items.length > 0 && (
           <>
@@ -205,7 +218,17 @@ export function SongPicker({ onSelect, mode }: Props) {
         </div>
       )}
 
-      {status === 'ready' && items.length === 0 && <p className="small dim">곡이 없습니다</p>}
+      {status === 'ready' && items.length === 0 && (
+        <p className="small dim">
+          {tab === 'MINE' ? (
+            <>
+              아직 만든 곡이 없습니다. <Link to="/studio">곡 만들기</Link>에서 음원을 올려 보세요.
+            </>
+          ) : (
+            '곡이 없습니다'
+          )}
+        </p>
+      )}
 
       {status === 'ready' && (
         <div className="chart-list" style={{ maxWidth: 'none' }} data-mode={mode}>
