@@ -8,6 +8,7 @@ RUN sh ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
 COPY --from=build --chown=app:app /workspace/build/libs/app.jar ./app.jar
 ENV SERVER_ADDRESS=0.0.0.0

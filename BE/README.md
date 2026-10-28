@@ -209,7 +209,9 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   PERFECT/GOOD은 noteId·velocity·delta가 필요하다. 판정 없는 타격은 velocity를 가진다.
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
-  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 WITHDRAWN과 별도 정리 흐름을 사용한다.
+  recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
+  같은 트랜잭션에서 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
+  `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
@@ -245,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V14를 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V18을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -328,7 +330,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
 | `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
 | `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
-| `FORBIDDEN` | 403 | 권한 없음, 소유자 검사 실패 |
+| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다) |
 | `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
 | `METHOD_NOT_ALLOWED` | 405 | |
 | `NOT_ACCEPTABLE` | 406 | |
@@ -337,7 +339,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INTERNAL_ERROR` | 500 | 처리되지 않은 예외, 분류되지 않은 5xx |
 
 도메인 코드는 각 도메인 패키지에 `{Domain}ErrorCode` enum을 두고 `common.error.ErrorCode`를 구현한다.
-코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `USER_NOT_FOUND` 404, `SONG_FORBIDDEN` 403).
+코드 문자열은 `{도메인}_{상황}` 형식이다 (예: `PRESET_NOT_FOUND` 404, `PLAY_NOT_FOUND` 404).
 공통 코드에는 접두사가 없고, 같은 코드 문자열을 두 enum이 쓰지 않는다.
 
 사용 규칙:
@@ -373,6 +375,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
 | V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
 | V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
+| V17 | `V17__widen_telemetry_pad_and_clock_offset.sql` | `telemetry_events` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL), `clock_offset_ms` `double precision`과 CHECK `ck_telemetry_events_clock_offset_ms` | -152 |
+| V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
 
 규칙:
 
@@ -399,7 +403,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V14까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V18까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -595,7 +599,8 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
 - 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
 - **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
-  `users` 행은 WITHDRAWN으로 남고 소셜 연동·키트 프리셋·refresh 토큰은 지운다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
+  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰과
+  학습 데이터 사용에 동의하지 않은 플레이 기록은 지우고, 동의한 플레이 기록은 남긴다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
 
 공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
 `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
@@ -623,7 +628,8 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸고, 소셜 연동·키트 프리셋 삭제, `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·`consent=false` 플레이 세션 삭제,
+  `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
   리스너 예외는 탈퇴 응답(204)에 영향이 없으므로 직접 로그를 남긴다. 놓친 정리는 `UserRepository.findWithdrawnIds(withdrawnAfter, pageable)`
@@ -724,8 +730,9 @@ tMs−deltaMs, MISS는 tMs로 구한다. 그래프 전체 로딩 속도를 페�
 
 두 API 모두 읽기 전용 REPEATABLE_READ이며 요약 조회는 hits를 읽지 않는다. 현재 곡 삭제 상태·raw 저장소·AI 가용성에
 의존하지 않는다. endReason=null을 완료로 추정하지 않으며, meanDeltaMs는 부호 있는 편향이다.
-`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며, 신규 리포트의 기본값은 NOT_REQUESTED다.
-AI 요청과 상태 전환 시점은 AI 연동 합의 후속 범위로 둔다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
+`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며 신규 리포트는 PENDING으로 분석을 시작한다.
+기존 NOT_REQUESTED 리포트는 자동 분석하지 않는다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
+AI 호출과 상태 전환은 [리포트 약점 분석](#리포트-약점-분석-158번-후속)을 따른다.
 
 미인증·만료·탈퇴는 401, UUID·쿼리 오류는 400이다. 없는 세션·타인 세션은 `PLAY_NOT_FOUND` 404,
 본인 리포트 없음·FREE/TEMPO는 `REPORT_NOT_FOUND` 404이며 ProblemDetail의 code로 분기한다.
@@ -747,7 +754,7 @@ docker run --rm --name airdrum-api -p 127.0.0.1:8080:8080 \
 
 다른 터미널에서 `docker stop airdrum-api`로 종료한다.
 이미지 빌드는 테스트 없이 실행 JAR만 만든다. 테스트는 CI의 `be-test`가 맡는다
-(테스트용 임베디드 PostgreSQL은 root로 실행되는 빌드 단계에서 뜨지 않는다). 실행 이미지는 JRE 21과 JAR만 포함한다.
+(테스트용 임베디드 PostgreSQL은 root로 실행되는 빌드 단계에서 뜨지 않는다). 실행 이미지는 JRE 21, 음원 검사용 FFmpeg와 JAR를 포함한다.
 앱은 UID/GID `10001`로 실행한다. 소스 외 파일과 `.env`는 빌드 컨텍스트에 포함하지 않는다.
 
 인프라 Compose 연결 기준:
@@ -773,3 +780,121 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 기동 시 DB에 접속하지 못하면 Flyway 단계에서 앱이 종료된다. Nginx·DB·Redis Compose와 배포 구성은
 [#38](https://ssafy.atlassian.net/browse/S15P31A307-38),
 [#47](https://ssafy.atlassian.net/browse/S15P31A307-47)에서 연결한다.
+
+
+## 음원 접수 (159번)
+
+`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
+
+실제 형식과 길이는 `ffprobe`로 검사한다. 운영 이미지에 FFmpeg가 포함되며 로컬에서는 `AUDIO_FFPROBE_PATH`로 실행 파일을 지정할 수 있다. 실행 파일이 없거나 저장소가 설정되지 않으면 503이다. 비공개 비버전 S3 호환 버킷 설정은 `AUDIO_STORAGE_ENABLED`, `AUDIO_STORAGE_ENDPOINT`, `AUDIO_STORAGE_REGION`, `AUDIO_STORAGE_BUCKET`, `AUDIO_STORAGE_ACCESS_KEY`, `AUDIO_STORAGE_SECRET_KEY`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED`로 제공한다. 원본 키는 서버에서 생성하며 접수 전에 기록하고 실패·중단된 PUT은 재시도 정리한다. 활성화는 실제 저장소 권한과 버킷의 비공개 설정을 확인한 환경에서만 한다.
+
+159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
+
+
+## AI 워커 내부 작업 API (160번)
+
+`/internal/v1/chart-jobs`는 보호된 내부 네트워크에서만 사용한다. 공개 Nginx는 `/internal/`을 404로 차단한다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다.
+
+`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 기본은 BE 내부 음원 endpoint이고 Compose 내부 워커에는 `http://seaweedfs:8333`을 쓴다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
+
+| 요청 | 주요 입력과 동작 |
+| --- | --- |
+| `POST /claim` | `workerId`, UUID `claimRequestId`. 배정은 200, 대기 작업 없음은 204. `input.durationMs`는 BE가 원곡 접수 때 저장한 길이이며 SOURCE_AUDIO와 DRUM_STEM 모두 같은 값이다. 같은 요청 ID의 유효 배정은 복구되며 만료된 ID는 409다. |
+| `POST /{jobId}/heartbeat` | `attemptId`, 증가하는 `eventSeq`, `progress`. 분리 0~49, 채보 50~99. 중복·이전 순번은 임대를 연장하지 않는다. |
+| `POST /{jobId}/file-access` | `attemptId`, `files` 배열. 분리 입력은 `{role: SOURCE_AUDIO, fileId: 배정 input.fileId}`, 분리 출력은 `DRUM_STEM`·`ACCOMPANIMENT`이며 각 파일의 `sizeBytes`를 지정한다. fileId 생략 시 각 시도에 하나씩 발급한다. 채보 입력은 `{role: DRUM_STEM, fileId: 배정 input.fileId}`. 응답은 역할·fileId·GET/PUT·URL·만료시각이다. PUT 시 `Content-Type: audio/flac`과 지정한 `Content-Length`를 사용한다. |
+| `POST /{jobId}/results/separation` | 공통 결과 봉투와 `drumStem`, `accompaniment` manifest, `durationMs`, `audioTimeOrigin`, `model`, `metrics`를 제출한다. 분리 파일은 FLAC 16비트·44,100Hz·스테레오, 시간축은 `SOURCE_START`다. |
+| `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
+| `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
+
+claim의 `input` 예시(파일 ID·크기·해시는 설명용):
+
+```json
+{
+  "role": "SOURCE_AUDIO",
+  "fileId": "33333333-3333-4333-8333-333333333333",
+  "contentType": "audio/wav",
+  "sizeBytes": 176444,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "durationMs": 1000
+}
+```
+
+`contractVersion`은 1을 유지하며 `durationMs`는 추가 필드다. 같은 claim 재조회에서 분리 인수 후 또는 새 시도의 재배정으로 `DRUM_STEM`을 받더라도 원곡 기준 길이는 같다. BE는 입력·분리 출력의 ffprobe `format.duration` 초 문자열을 십진수로 읽고 1000을 곱해 올림한 정수 ms를 비교한다. 기존에 저장된 원곡 길이는 재계산하지 않는다. MP3의 보고 길이는 ffprobe 버전이나 디코더에 따라 다를 수 있으므로 워커는 직접 측정한 길이 대신 배정받은 값을 기준으로 사용한다. 양수·600초 이하만 허용하고 분리 결과의 `durationMs`와 두 FLAC 길이는 이 값과 같아야 한다. 워커는 44,100Hz 출력의 기준 샘플 수를 `floor(durationMs * 44100 / 1000)` 정수 연산으로 정하고, 필요한 경우 끝에서만 자르거나 무음을 채울 수 있다. 시작점을 바꾸거나 추정 지연을 `timeMs`·offset에 더하지 않는다. 이는 길이 일치를 위한 권장 방식이며 BE가 특정 샘플 수 자체를 강제하지는 않는다.
+
+manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, 소문자 SHA-256 `sha256`을 포함한다. 분리 파일 한 개의 상한은 128MiB로, 사용자 입력 50MiB와 별개다. metrics에는 `loadMs`, `separateMs`, `peakVramMb`, `peakRamMb`를 사용하며 메모리 필드는 null을 허용하고 MB는 1,000,000바이트다. `model.name`은 `bs_roformer_sw`, version은 가중치 파일명·`@`·설정 해시 소문자 12자리다. 반주와 체크포인트는 검증된 바이트로 별도 불변 키에 저장한다. 파일 업로드나 외부 검사 중 DB 잠금을 유지하지 않는다.
+
+결과 봉투는 `contractVersion: 1`, `jobId`, `attemptId`, UUID `resultId`, 소문자 `payloadHash`, `result`다. `payloadHash`는 **result 객체만** 다음 규칙으로 정규화한 UTF-8 바이트의 SHA-256이다. 객체 키는 Java 문자열의 UTF-16 코드 단위 사전순으로 정렬하고 배열 순서는 유지한다. 공백 없이 JSON을 쓰며 문자열은 Jackson의 일반 JSON 이스케이프(제어 문자·역슬래시·따옴표 이스케이프, 그 외 유니코드 그대로)를 쓴다. 숫자는 십진수 값의 후행 0을 없애고 지수 표기 없이 쓰며 모든 0은 `0`이다. null·true·false는 그대로 쓴다. 중복 키, JSON 후행 데이터, 24단계 초과 중첩 및 과도한 숫자는 거부한다. 예를 들어 입력 result `{"b":[true,null],"a":1.00}`의 정규 바이트는 `{"a":1,"b":[true,null]}`다. 원래 바이트 전체나 envelope의 해시가 아니다.
+
+인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
+
+채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
+
+
+## 리포트 약점 분석 (158번 후속)
+
+신규 RHYTHM/SHEET 플레이의 세션·전체 타격·기본 리포트를 함께 저장한 뒤 별도 작업에서
+AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트는 AI 응답을 기다리지 않는다.
+`AI_ANALYSIS_BASE_URL` 기본값은 `http://ai-api:8000`이며 로컬 AI 시험 시 해당 서버 주소로 바꾼다.
+요청에는 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
+넘으면 자르지 않고 실패 처리한다. 연결 1초·응답 3초이며 연결 실패·시간 초과·5xx만 한 번 더 시도한다.
+
+`analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을
+뜻하며 표본 부족도 포함한다. 실패는 null이다. `generatorVersion`에는 기존 BE 버전과 분석기 버전을
+함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V18은 처리 시도 수와 임대를
+저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
+결과는 임대 토큰이 일치할 때만 반영한다. 요청 본문·playId는 분석 로그에 남기지 않는다.
+
+## 탈퇴 후 곡·파일 정리 (37번)
+
+회원 탈퇴 커밋 후 개인 MIDI·AUDIO 곡을 소프트 삭제하고 반주와 기존 악보 이미지의 정리 작업을 등록한다. 공용 곡과 다른 회원 곡, 동의한 플레이 기록은 보존한다. 작업 취소는 기존 워커 경로를 사용한다. 누락된 이벤트는 주기적으로 전체 탈퇴 곡을 순회해 복구하며, 저장소 삭제 실패는 재시도한다. 잘못된 귀속 키는 삭제하지 않고 오류를 기록한다. 이미 발급한 URL은 만료 전까지 유효할 수 있다.
+
+정리 작업자는 `CHART_ASSET_ENABLED`, endpoint와 `CHART_ASSET_SHEET_BUCKET` / `CHART_ASSET_ACCOMPANIMENT_BUCKET`을 사용한다. `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY` / `WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY` (미지정 시 AUDIO 저장소 자격 증명)을 두 버킷에 대한 삭제 권한이 있는 자격 증명으로 설정한다. 조회 전용 `CHART_ASSET_ACCESS_KEY`는 삭제에 쓰지 않는다. 정리가 비활성화되면 작업이 대기 상태로 남고, 활성화된 저장소의 미설정·삭제 권한 오류는 실패로 기록해 재시도한다. 실제 저장소 권한 검증은 별도로 필요하다.
+
+## 텔레메트리 수신·조회 (152번)
+
+MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오디오 스케줄 구간 지연과 연결 상태를 세션 단위로 남겨, 연주가 끝난 뒤 지연 통계·연결 방식 비교에 쓴다.
+점수·플레이 리포트·AI 약점 분석의 원본이 아니며(유실 허용), 연주 중 실시간 확인은 FE 로컬 모니터가 맡는다.
+계약은 2026-10-27 BE 간 합의(REST 배치·ADMIN 진단 모드 한정·무재전송)를 따르며 FE 동의는 187번에서 진행 중이다.
+
+세 API 모두 Bearer 인증과 **ADMIN 역할**이 필요하다(`@PreAuthorize`). 미인증·만료·탈퇴는 401, USER는 403 `FORBIDDEN`이다.
+
+| API | 요청 | 응답 |
+| --- | --- | --- |
+| `POST /api/telemetry/batches` | JSON 본문 128 KiB 이하, 이벤트 1~100건 | 200 `{acceptedCount}`. 배치 전체를 한 트랜잭션으로 저장 |
+| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount}>`, lastEventTime 내림차순 |
+| `GET /api/telemetry/sessions/{sessionId}/events` | `userId`(필수), `kind`(`HIT`·`STATUS`, 선택), `page`, `size`(1~1000, 기본 500) | `PageResponse<이벤트>`, time 오름차순(같은 시각은 stickId 0·1·null). 없는 세션은 빈 페이지 |
+
+요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`다. `userId`는 받지 않고
+인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
+
+| 이벤트 필드 | HIT | STATUS |
+| --- | --- | --- |
+| `time`(ISO-8601 문자열), `kind`, `tags` | 필수 | 필수 |
+| `stickId`(0·1) | `tags.source`가 `keyboard`가 아니면 필수 | 필수 |
+| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `HI_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL`, 그대로 저장 | null |
+| `judgement`·`deltaMs` | PERFECT·GOOD이면 deltaMs 필수, 판정 없음·MISS이면 deltaMs null | null |
+| `velocity`(0~127 정수), `tRecv`·`tJudge`(ms) | 필수 | null |
+| `tAudio`(ms) | 선택 | null |
+| `tSensor`(정수 µs, 0 이상), `clockOffsetMs`, `packetLoss`(0~1), `batteryPct`(0~100 정수) | 선택 | 선택 |
+
+- `tags`는 1 KiB 이하 객체이고 키는 `source`(필수, 1~32자), `clockSynced`(boolean, HIT 필수), `connected`(boolean, STATUS 필수),
+  `firmware`(1~64자)만 받는다.
+- 선택 필드의 부재와 null은 같다. BE는 null을 0으로 채우거나 계산하지 않는다(동기화 전 `clockOffsetMs`=null 등).
+- 숫자는 JSON 숫자 토큰만 받는다. 정수 자리의 소수(`96.0`), 문자열 숫자, 유한하지 않은 값(`1e999`), 서버 시각보다 5분 넘게 미래인 `time`은 거절한다.
+- 계약 밖 필드(`rawWindow` 등)·중복 키·FE 내부 이름 `SMALL_TOM`은 거절한다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드·타입 불일치·목록 밖 enum. detail에 `events[0].pad` 같은 위치만 담는다 |
+| 400 | `TELEMETRY_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
+| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`. detail은 `events[i].필드: 이유`이며 값은 넣지 않는다 |
+| 400 | `VALIDATION_FAILED` | 조회 페이지·기간 범위 밖 |
+| 413 | `TELEMETRY_BATCH_TOO_LARGE` | 본문 128 KiB 초과(Content-Length가 없어도 읽는 도중 끊음) 또는 이벤트 100건 초과 |
+| 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
+
+한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
+요청 횟수 제한(429)은 MVP에서 구현하지 않는다. 보관 기간·삭제 정책과 탈퇴 시 처리는 Infra 포함 별도 합의 대상이다
+(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+`TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
+`TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.

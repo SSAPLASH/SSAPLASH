@@ -75,7 +75,7 @@ class ReportQueryApiTest {
         assertThat(report.get("judgementCounts").get("miss").asInt()).isEqualTo(1);
         assertThat(report.get("mode").asText()).isEqualTo(mode);
         assertThat(report.get("inputSource").asText()).isEqualTo("KEYBOARD");
-        assertThat(report.get("analysisStatus").asText()).isEqualTo("NOT_REQUESTED");
+        assertThat(report.get("analysisStatus").asText()).isEqualTo("PENDING");
         assertThat(report.get("weakSegments").isNull()).isTrue();
         assertThat(report.get("recommendedDrills").isNull()).isTrue();
         assertThat(report.get("endReason").isNull()).isTrue();
