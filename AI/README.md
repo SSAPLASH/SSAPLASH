@@ -47,7 +47,9 @@ AI/
 │   │                    build_report(파일 생성)
 │   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
 │   │                    separation(음원 분리 SeparationModule), cli(ssaplash-chart 명령)
-│   └─ server/           AI 서버 진입점 app.py (FastAPI, /health)
+│   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
+│   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   └─ server/           AI 서버 진입점 app.py (FastAPI, /health), weak_segments.py (POST /analysis/weak-segments)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
@@ -141,6 +143,16 @@ uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/cha
 
 ```bash
 uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/chart/separation_mock.yaml
+```
+
+## 약점 구간 분석 (COACH-003, S15P31A307-138)
+
+BE가 플레이 후 호출하는 통계 규칙 엔진이다(학습 모델 없음). `POST /analysis/weak-segments`로 `hits[]`를 받아
+`weakSegments[]`를 돌려준다. 호출 형식·패턴 규칙·임계값 위치·시험 방법은 [docs/coach-weak-segments.md](docs/coach-weak-segments.md)에 있다.
+
+```bash
+uv run uvicorn ssaplash_ai.server.app:app --port 8000
+uv run pytest tests/coach tests/server/test_weak_segments.py
 ```
 
 ## 벤치마크 실행
