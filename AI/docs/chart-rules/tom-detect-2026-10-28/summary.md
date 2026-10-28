@@ -56,9 +56,20 @@ GMD. 짝지어진 탐 1620개 중 맞음 1516. 틀린 104개 중 92개가 탐 �
 | drummer1/session1/239 | 43 | 20 | 94 / 157 (탐 둘) |
 | 나머지 9곡 | 185 | 171 | |
 
+## 정답 정의: 탐 둘인 곡의 위쪽 탐은 미드
+
+탐이 둘뿐인 곡은 플로어·미드로 적기로 정함(2026-10-28, AI 파트 결정. 실제 킷은 탐이 둘이면 랙탐 하나 + 플로어 하나라 실제 킷 데이터 MDB가 이미 이렇게 적음. 전자 드럼 GMD만 TD-11 패드 번호 때문에 스몰로 적음). `rule-eval --two-tom-upper MID_TOM`이 정답에서 탐 패드가 둘이고 그중 하나가 플로어인 곡의 나머지 탐 이름을 미드로 바꿔 채점함. GMD 45곡 중 3곡이 바뀌고 MDB는 0곡.
+
+| 후보 | GMD 탐 F1 (정답 그대로) | GMD 탐 F1 (미드 통일) | MDB 탐 F1 |
+| --- | --- | --- | --- |
+| 거르기 0.10 | 0.919 | 0.879 | 0.432 |
+| 거르기 + 이동평균 안 뺌 0.32 | 0.903 | 0.865 | 0.470 |
+| **위 검출 + 피크 묶기(3.0 또는 3.5반음) + hybrid 이름** | 0.863 | **0.901** | **0.671** |
+
+이 정의에서는 피크 묶기 + hybrid 이름이 GMD·MDB 둘 다 가장 높음(GMD 스몰 0.927·미드 0.893·플로어 0.889). 고정 경계가 GMD에서 떨어지는 건 2탐 연주의 157Hz를 142Hz 경계 위라 스몰로 부르기 때문. 파일: `candidates_final_scores.csv`(정답 그대로)·`candidates_final_mid_scores.csv`(미드 통일)
+
 ## 남은 문제
 
-- **정답 정의.** 탐 둘인 곡의 위쪽 탐을 미드로 볼지 스몰로 볼지 정해야 함. 지금 규칙은 실제 킷 표기(미드)를 따르고, 그래서 GMD 2탐 연주 92개가 틀림. 반대로 정하면 MDB FreeJazz·FusionJazz 24개가 틀림. 서비스 입력은 실제 녹음이라 지금 쪽을 제안하되 팀 확인이 필요함
 - **같은 음높이의 두 드럼**(FreeJazz 163/164, Punk 91/94)은 어떤 규칙도 못 가름. 8개
 - **Grunge 낮은 플로어탐 12개**는 분리 모델 한계. 되살리기 규칙으로는 가짜 탐이 더 생김. 분리 모델 교체·비교(LarsNet) 또는 채보 모델 추가 학습으로
 - **검출 놓침 32개**(MDB): 더블 두 번째 5, 작은 타격, 킥·스네어 혼동. 기준값을 0.16까지 내리면 24개로 줄지만 GMD가 0.80으로 떨어짐
@@ -66,7 +77,7 @@ GMD. 짝지어진 탐 1620개 중 맞음 1516. 틀린 104개 중 92개가 탐 �
 
 ## 바꾼 것
 
-규칙 기본값은 그대로. `adtof_drumsep_transcriber.py`에 선택 키 `tom_threshold`·`tom_peak_mode`·`tom_gate_mode`·`tom_gate_low_rescue`·`tom_gate_low_min_score`·`tom_low_hz`·`tom_f0_method`·`tom_f0_frame_ms`·`tom_f0_hop_ms`·`tom_f0_start_ms`·`tom_relative_method`·`tom_relative_bin`·`tom_relative_smooth`·`tom_relative_min_frac`·`tom_hybrid_floor_max_hz`·`tom_hybrid_small_min_hz`, `tom_relative_naming: hybrid`. 저장 특징에 채보 모델 프레임별 점수와 분리 트랙 6개. `rule-eval`에 `tomRescued`·`tomConsistentAcc`·`f1TomConsistent`.
+규칙 기본값은 그대로. `adtof_drumsep_transcriber.py`에 선택 키 `tom_threshold`·`tom_peak_mode`·`tom_gate_mode`·`tom_gate_low_rescue`·`tom_gate_low_min_score`·`tom_low_hz`·`tom_f0_method`·`tom_f0_frame_ms`·`tom_f0_hop_ms`·`tom_f0_start_ms`·`tom_relative_method`·`tom_relative_bin`·`tom_relative_smooth`·`tom_relative_min_frac`·`tom_hybrid_floor_max_hz`·`tom_hybrid_small_min_hz`, `tom_relative_naming: hybrid`. 저장 특징에 채보 모델 프레임별 점수와 분리 트랙 6개. `rule-eval`에 `tomRescued`·`tomConsistentAcc`·`f1TomConsistent`, `--two-tom-upper`.
 
 ## 재현
 
@@ -77,4 +88,4 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml --candidates docs/chart-rules/tom-detect-2026-10-28/candidates_cluster.yaml --out data/results/rule-eval-tom-cluster
 ```
 
-고른 후보는 `candidates_cluster.yaml`의 `pk_gap35_nores`. 파일: `candidates.yaml`·`candidates_cluster.yaml`(후보), `candidates_scores.csv`·`candidates_cluster_scores.csv`(점수), `by_song_cluster.csv`(곡별)
+고른 후보는 `candidates_cluster.yaml`의 `pk_gap35_nores`(`candidates_final.yaml`의 `pk_gap35`와 같음. 미드 통일 채점은 `--two-tom-upper MID_TOM`을 붙임). 파일: `candidates.yaml`·`candidates_cluster.yaml`(후보), `candidates_scores.csv`·`candidates_cluster_scores.csv`(점수), `by_song_cluster.csv`(곡별)
