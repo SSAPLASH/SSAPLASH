@@ -153,6 +153,22 @@ def test_검증_실패도_입력_값을_로그에_남기지_않는다(caplog):
     assert "rejected status=400" in caplog.text
 
 
+def test_uvicorn_로깅_설정에서도_분석_요약이_표준_출력으로_나간다(capsys):
+    # 운영(uvicorn)은 root에 핸들러를 달지 않아 INFO가 버려지기 쉽다. 같은 설정을 적용해도 나가야 한다.
+    import logging.config
+
+    from uvicorn.config import LOGGING_CONFIG
+
+    logging.config.dictConfig(LOGGING_CONFIG)
+
+    _call(SAMPLES["A"]["request"])
+
+    out = capsys.readouterr().out
+    assert "weak-segments reason=OK" in out
+    assert "TIMING_LATE:0.36" in out
+    assert SAMPLES["A"]["request"]["playId"] not in out
+
+
 def test_예상치_못한_오류는_500이고_메시지를_로그에_남기지_않는다(caplog, monkeypatch):
     def boom(_notes):
         raise RuntimeError("secret body text")
