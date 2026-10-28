@@ -21,9 +21,9 @@ import {
   latestSheetLog,
   loadPlayLogs,
   savePlayLog,
-  toLoggedHit,
-  type LoggedHit,
 } from '@/engine/playLog';
+import { PlayRecorder } from '@/engine/playRecorder';
+import { startPlaySync } from '@/app/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
@@ -128,7 +128,7 @@ export function SheetPage() {
     pauseRef.current = pauseReason;
   }, [stage, activeSession, pauseReason]);
 
-  const hits = useRef<LoggedHit[]>([]);
+  const recorder = useRef(new PlayRecorder());
   const startedAt = useRef<Date | null>(null);
   const lastHud = useRef(0);
   const finishing = useRef(false);
@@ -178,6 +178,7 @@ export function SheetPage() {
   useEffect(() => {
     if (!activeSession) return;
     return activeSession.onJudgement((e) => {
+      recorder.current.judgement(e);
       setNoteStates((prev) => {
         const next = prev.slice();
         next[e.noteIndex] = e.judgement;
@@ -192,7 +193,8 @@ export function SheetPage() {
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad) {
-        hit.tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+        const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+        if (tAudio !== null) hit.tAudio = tAudio;
         inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
       }
       const ss = sessionRef.current;
@@ -203,17 +205,12 @@ export function SheetPage() {
         (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
       if (active) {
-        const lh = toLoggedHit(hit);
-        if (ev) {
-          lh.judgement = ev.judgement;
-          lh.matchedNoteIndex = ev.noteIndex;
-          lh.deltaMs = ev.deltaMs ?? undefined;
-        } else if (hit.pad) {
-          // 채보 밖 타격: 악보에 작은 점으로 남긴다. 판정과 같은 기준으로 오디오 오프셋을 뺀다
-          const timeMs = ss.songTime(hit.tHit) - useSettings.getState().audioOffsetMs;
+        const lh = recorder.current.hit(hit, ev, ss);
+        // 채보 밖 타격: 악보에 작은 점으로 남긴다. 판정과 같은 곡 시각(오디오 오프셋 반영)
+        if (!ev && hit.pad && lh.tSongMs !== undefined) {
+          const timeMs = lh.tSongMs;
           setStrays((prev) => [...prev, { timeMs }]);
         }
-        hits.current.push(lh);
       }
       reportHit(hit, ev, active ? ss : null);
     });
@@ -245,7 +242,10 @@ export function SheetPage() {
         mode: 'SHEET',
         snapshot: ss.snapshot(),
         notes: ss.notes,
-        hits: hits.current,
+        hits: recorder.current.hits,
+        missSeqs: recorder.current.missSeqs,
+        audioOffsetMs: ss.audioOffsetMs,
+        countInMs: ss.countInMs,
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
@@ -256,6 +256,8 @@ export function SheetPage() {
         presetId: useSettings.getState().activePresetId,
       });
       savePlayLog(log);
+      // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
+      void startPlaySync(log.playId);
       navigate(`/result/${log.playId}`, { replace: true });
     },
     [navigate, inputSource, settings.timing],
@@ -266,7 +268,7 @@ export function SheetPage() {
   }, [finish]);
 
   const resetRun = useCallback((ss: RhythmSession) => {
-    hits.current = [];
+    recorder.current.reset();
     finishing.current = false;
     startedAt.current = new Date();
     setNoteStates(new Array<Judgement | null>(ss.notes.length).fill(null));

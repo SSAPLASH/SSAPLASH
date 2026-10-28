@@ -2,7 +2,15 @@
 // /play·/sheet가 같이 쓴다. 선택 결과는 페이지가 URL로 옮긴다.
 // mode="sheet"는 Claude Design Select 보드의 표 모양(열 헤더·행·펼친 난이도 칩, .sheet-mode 스코프 클래스)으로 그린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DIFFICULTY_LABEL, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  DIFFICULTY_LABEL,
+  isPlayableStatus,
+  songStatusView,
+  type SongDetail,
+  type SongScope,
+  type SongSummary,
+} from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy, latestSheetLog, loadPlayLogs } from '@/engine/playLog';
 import { useSongs } from '@/store/songStore';
@@ -18,13 +26,21 @@ function mmss(ms: number | null): string {
   return ms === null ? '–' : formatDuration(ms);
 }
 
+/** 내 곡 탭에서 완료되지 않은 곡은 고를 수 없다 */
+function isLocked(tab: SongScope, song: SongSummary): boolean {
+  return tab === 'MINE' && !isPlayableStatus(song.status);
+}
+
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
 export function SongPicker({ onSelect, mode }: Props) {
   const { source, scope, items, status, error, load, selectSong } = useSongs();
-  const [tab, setTab] = useState<SongScope>(scope);
+  // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<SongScope>(params.get('scope') === 'MINE' ? 'MINE' : scope);
   const [query, setQuery] = useState('');
-  const [openId, setOpenId] = useState<number | null>(null);
+  // undefined: 사용자가 아직 펼침·접기를 하지 않았다(이때는 `?song=` 딥링크 곡이 펼쳐진다)
+  const [manualOpenId, setOpenId] = useState<number | null | undefined>(undefined);
   const [details, setDetails] = useState<Record<number, DetailState>>({});
   // 최근 정확도 열: 마운트 시점의 로컬 악보 연주 로그(최신순)
   const logs = useMemo(() => (mode === 'sheet' ? loadPlayLogs() : []), [mode]);
@@ -52,7 +68,26 @@ export function SongPicker({ onSelect, mode }: Props) {
     [selectSong],
   );
 
+  // `?song={id}`: 내 곡 탭의 목록에 그 곡이 있고 완료 상태면 펼친 채로 연다. 상세 조회는 한 번만 한다
+  const deepLinkId = useMemo(() => {
+    const n = Number(params.get('song'));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, [params]);
+  const deepTarget =
+    deepLinkId !== null && tab === 'MINE' && status === 'ready' && scope === 'MINE'
+      ? items.find((s) => s.id === deepLinkId && isPlayableStatus(s.status))
+      : undefined;
+  const openId = manualOpenId !== undefined ? manualOpenId : (deepTarget?.id ?? null);
+  const deepFetched = useRef(false);
+  const deepTargetId = deepTarget?.id;
+  useEffect(() => {
+    if (deepFetched.current || deepTargetId === undefined) return;
+    deepFetched.current = true;
+    fetchDetail(deepTargetId);
+  }, [deepTargetId, fetchDetail]);
+
   const toggle = (song: SongSummary) => {
+    if (isLocked(tab, song)) return;
     if (openId === song.id) {
       setOpenId(null);
       return;
@@ -60,6 +95,13 @@ export function SongPicker({ onSelect, mode }: Props) {
     setOpenId(song.id);
     if (details[song.id]?.status !== 'ready') fetchDetail(song.id);
   };
+
+  const hasUnplayable = tab === 'MINE' && items.some((s) => !isPlayableStatus(s.status));
+  const unplayableNote = hasUnplayable ? (
+    <p className="small dim">
+      처리 중·실패한 곡은 <Link to="/studio">내 곡 관리</Link>에서 확인하세요.
+    </p>
+  ) : null;
 
   if (mode === 'sheet') {
     return (
@@ -99,7 +141,17 @@ export function SongPicker({ onSelect, mode }: Props) {
             </button>
           </div>
         )}
-        {status === 'ready' && items.length === 0 && <p className="sm-hint">곡이 없습니다</p>}
+        {status === 'ready' && items.length === 0 && (
+          <p className="sm-hint">
+            {tab === 'MINE' ? (
+              <>
+                아직 만든 곡이 없습니다. <Link to="/studio">내 곡 관리</Link>에서 음원을 올려 보세요.
+              </>
+            ) : (
+              '곡이 없습니다'
+            )}
+          </p>
+        )}
 
         {status === 'ready' && items.length > 0 && (
           <>
@@ -115,12 +167,21 @@ export function SongPicker({ onSelect, mode }: Props) {
                 const open = openId === song.id;
                 const last = latestSheetLog(logs, { songNumericId: song.id });
                 const pct = last ? last.summary.accuracy * 100 : null;
+                const locked = isLocked(tab, song);
+                const view = songStatusView(song.status);
                 const tone = pct === null ? undefined : pct >= 80 ? 'var(--sm-perfect)' : pct >= 60 ? 'var(--sm-good)' : 'var(--sm-miss)';
                 return (
-                  <div key={song.id} className={`sm-song-row${open ? ' selected' : ''}`}>
-                    <button className="sm-song-main" aria-expanded={open} onClick={() => toggle(song)}>
+                  <div key={song.id} className={`sm-song-row${open ? ' selected' : ''}${locked ? ' disabled' : ''}`}>
+                    <button
+                      className="sm-song-main"
+                      aria-expanded={open}
+                      disabled={locked}
+                      aria-disabled={locked || undefined}
+                      onClick={() => toggle(song)}
+                    >
                       <span>
                         <span className="sm-song-title">{song.title}</span>
+                        {locked && <span className={`my-badge ${view.tone}`}>{view.label}</span>}
                         <span className="sm-song-meta">
                           {song.artist ? `${song.artist} · ` : ''}
                           {tab === 'MINE' ? '내 곡' : '기본 제공'} · {song.hasAccompaniment ? '반주 있음' : '반주 없음'}
@@ -159,6 +220,7 @@ export function SongPicker({ onSelect, mode }: Props) {
                 );
               })}
             </div>
+            {unplayableNote}
           </>
         )}
       </>
@@ -205,22 +267,39 @@ export function SongPicker({ onSelect, mode }: Props) {
         </div>
       )}
 
-      {status === 'ready' && items.length === 0 && <p className="small dim">곡이 없습니다</p>}
+      {status === 'ready' && items.length === 0 && (
+        <p className="small dim">
+          {tab === 'MINE' ? (
+            <>
+              아직 만든 곡이 없습니다. <Link to="/studio">내 곡 관리</Link>에서 음원을 올려 보세요.
+            </>
+          ) : (
+            '곡이 없습니다'
+          )}
+        </p>
+      )}
 
       {status === 'ready' && (
         <div className="chart-list" style={{ maxWidth: 'none' }} data-mode={mode}>
           {items.map((song) => {
             const d = details[song.id];
             const open = openId === song.id;
+            const locked = isLocked(tab, song);
+            const view = songStatusView(song.status);
             return (
               <div key={song.id} className="col" style={{ gap: 6 }}>
                 <button
-                  className={`card chart-item${open ? ' active' : ''}`}
+                  className={`card chart-item${open ? ' active' : ''}${locked ? ' disabled' : ''}`}
                   aria-expanded={open}
+                  disabled={locked}
+                  aria-disabled={locked || undefined}
                   onClick={() => toggle(song)}
                 >
                   <span className="col" style={{ gap: 2 }}>
-                    <strong>{song.title}</strong>
+                    <strong>
+                      {song.title}
+                      {locked && <span className={`my-badge ${view.tone}`}>{view.label}</span>}
+                    </strong>
                     <span className="small dim">
                       {song.artist} · {song.bpm} BPM · {mmss(song.durationMs)}
                     </span>
@@ -255,6 +334,7 @@ export function SongPicker({ onSelect, mode }: Props) {
           })}
         </div>
       )}
+      {status === 'ready' && unplayableNote}
     </div>
   );
 }

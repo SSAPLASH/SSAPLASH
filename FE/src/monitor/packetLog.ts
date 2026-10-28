@@ -12,6 +12,7 @@ import {
   CommandType,
 } from '@/input/stickProtocol';
 import { parseLogText, type ParsedLog } from './logParse';
+import { SyncPairer, syncKeyOf } from './syncPair';
 import { futureMs, toBrowserMs, TsUnwrap } from './tsUnwrap';
 import { median } from './syncTrend';
 
@@ -50,11 +51,17 @@ export interface StickStats {
   hitSeqLoss: { window: number; total: number };
   poseSeqLoss: { window: number; total: number; pct: number | null };
   /** 최근 50건 */
-  hitFuture: { median: number | null; max: number | null };
+  hitFuture: { median: number | null; max: number | null; min: number | null };
+  /** 최근 1분(60초) HIT 유실 건수 */
+  hitLoss1m: number;
   statusAgeMs: number | null;
   lastStatus: DecodedStatus | null;
   hitCount: number;
   lastHitT: number | null;
+  /** 마지막 BIAS 로그 결과. 'default'는 부팅 때 흔들려 기본값으로 떨어진 경우. 다음 BOOT에서 null로 초기화 */
+  bias: 'measured' | 'default' | null;
+  /** IMU FAIL 로그를 받았는지. 다음 BOOT에서 초기화 */
+  imuFail: boolean;
 }
 
 export interface MonitorStats {
@@ -96,10 +103,9 @@ export interface PacketLogDeps {
 
 const WINDOW_MS = 1000;
 const FUTURE_KEEP = 50;
+const LOSS_KEEP_MS = 60_000;
 const SYNC_KEEP = 600;
 const ADOPTED_KEEP = 200;
-/** 이 시간 넘게 ACK가 없는 SYNC는 유실로 보고 버린다 */
-const SYNC_PENDING_MS = 2000;
 const BRIDGE_STALL_MS = 3000;
 
 interface SeqEvent {
@@ -116,11 +122,15 @@ interface StickState {
   hitLossTotal: number;
   poseLossTotal: number;
   hitEvents: SeqEvent[];
+  /** 유실이 있었던 HIT만(최근 1분 집계용) */
+  hitLossEvents: { t: number; lost: number }[];
   poseEvents: SeqEvent[];
   future: number[];
   lastStatus: { pkt: DecodedStatus; t: number } | null;
   hitCount: number;
   lastHitT: number | null;
+  bias: StickStats['bias'];
+  imuFail: boolean;
 }
 
 const freshStick = (): StickState => ({
@@ -129,11 +139,14 @@ const freshStick = (): StickState => ({
   hitLossTotal: 0,
   poseLossTotal: 0,
   hitEvents: [],
+  hitLossEvents: [],
   poseEvents: [],
   future: [],
   lastStatus: null,
   hitCount: 0,
   lastHitT: null,
+  bias: null,
+  imuFail: false,
 });
 
 interface BridgeSample {
@@ -175,7 +188,7 @@ export class PacketLog {
   private i2c: number | null = null;
   private build: string | null = null;
   /** 송신한 SYNC. t = publish 시각(rtt·오프셋의 t0), key = 바이트 안의 u32 t0(SYNC_ACK t0Ms와 짝 맞추는 키) */
-  private pendingSync: { t: number; key: number; /** 이미 짝을 맺은 스틱(스틱별로 한 번씩만) */ matched: Set<0 | 1> }[] = [];
+  private pairer = new SyncPairer();
   private syncSamples: SyncSample[] = [];
   private adopted: { t: number; stick: 0 | 1; offsetMs: number }[] = [];
   private lastAdopted: [number | null, number | null] = [null, null];
@@ -199,10 +212,12 @@ export class PacketLog {
     return this.deps.now ? this.deps.now() : performance.now();
   }
 
-  /** tap 구독 시작. 중복 호출은 무해하다 */
-  start(): void {
+  /**
+   * 구독 시작. 중복 호출은 무해하다. 기본은 packetTap, 모니터 페이지는 직접 연결·따라보기를 아우르는 feed 구독 함수를 넘긴다
+   */
+  start(subscribe: (fn: (rec: PacketRecord) => void) => () => void = (fn) => packetTap.subscribe(fn)): void {
     if (this.offTap) return;
-    this.offTap = packetTap.subscribe((rec) => this.ingest(rec));
+    this.offTap = subscribe((rec) => this.ingest(rec));
   }
 
   stop(): void {
@@ -254,13 +269,13 @@ export class PacketLog {
 
   private updateStats(row: LogRow, t1Ms: number | null): void {
     // 2초 넘은 pending은 유실 SYNC로 버린다
-    while (this.pendingSync.length > 0 && row.t - this.pendingSync[0].t > SYNC_PENDING_MS) this.pendingSync.shift();
+    this.pairer.expire(row.t);
     if (row.dir === 'out') {
       // 짝 키는 바이트 안의 u32 t0(펌웨어가 SYNC_ACK로 되돌려주는 값). publish 시각의 floor를 쓰면
       // 소스가 t0를 찍은 뒤 publish까지의 간격(Serial은 writeChain 대기로 수 ms)에 ms 경계를 넘어 어긋난다
-      if (row.outType === CommandType.SYNC && row.bytes.length >= 5) {
-        const key = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength).getUint32(1, true);
-        this.pendingSync.push({ t: row.t, key, matched: new Set() });
+      const syncKey = row.outType === CommandType.SYNC ? syncKeyOf(row.bytes) : null;
+      if (syncKey !== null) {
+        this.pairer.addOut(row.t, syncKey);
       } else if (row.outType === CommandType.SET_PAD_TABLE) {
         const pt = decodeSetPadTable(row.bytes);
         if (pt) {
@@ -284,6 +299,7 @@ export class PacketLog {
         st.lastHitSeq = d.seq;
         st.hitLossTotal += lost;
         st.hitEvents.push({ t: row.t, lost, hasSeq: true });
+        if (lost > 0) st.hitLossEvents.push({ t: row.t, lost });
         st.hitCount++;
         st.lastHitT = row.t;
         if (row.futureMs !== null) {
@@ -315,13 +331,11 @@ export class PacketLog {
         // 되돌아온 t0Ms와 송신 바이트의 t0가 같고 이 스틱이 아직 짝짓지 않은 pending 중 가장 오래된 것.
         // 못 찾으면 표본 제외(FIFO 폴백 없음). SYNC 1건에 스틱마다 ACK가 오므로 pending은 짝지어도 2초 만료까지 둔다
         const stick = row.stick;
-        const pend = stick === null ? undefined : this.pendingSync.find((p) => p.key === d.t0Ms && !p.matched.has(stick));
-        if (!pend || stick === null || t1Ms === null) {
+        const t0 = stick === null || t1Ms === null ? null : this.pairer.match(d.t0Ms, stick);
+        if (t0 === null || stick === null || t1Ms === null) {
           this.syncUnmatched++;
           break;
         }
-        const t0 = pend.t;
-        pend.matched.add(stick);
         this.syncSamples.push({
           t: row.t,
           stick: stick,
@@ -343,6 +357,15 @@ export class PacketLog {
           this.i2c = p.count;
         } else if (p.kind === 'boot') {
           this.build = p.raw;
+          // 재부팅이면 그 스틱의 센서 로그 상태를 비운다(stick 모르면 둘 다)
+          for (const s of row.stick === null ? this.sticks : [this.sticks[row.stick]]) {
+            s.bias = null;
+            s.imuFail = false;
+          }
+        } else if (p.kind === 'bias') {
+          if (st) st.bias = p.values === null ? 'default' : 'measured';
+        } else if (p.kind === 'imuFail') {
+          if (st) st.imuFail = true;
         }
         break;
       }
@@ -396,6 +419,10 @@ export class PacketLog {
     const perStick = this.sticks.map((st) => {
       st.hitEvents = prune(st.hitEvents);
       st.poseEvents = prune(st.poseEvents);
+      const lossFrom = now - LOSS_KEEP_MS;
+      let li = 0;
+      while (li < st.hitLossEvents.length && st.hitLossEvents[li].t < lossFrom) li++;
+      if (li) st.hitLossEvents.splice(0, li);
       const hitWin = st.hitEvents.reduce((a, e) => a + e.lost, 0);
       const seqPose = st.poseEvents.filter((e) => e.hasSeq);
       const poseWin = seqPose.reduce((a, e) => a + e.lost, 0);
@@ -403,11 +430,18 @@ export class PacketLog {
       return {
         hitSeqLoss: { window: hitWin, total: st.hitLossTotal },
         poseSeqLoss: { window: poseWin, total: st.poseLossTotal, pct },
-        hitFuture: { median: median(st.future), max: st.future.length ? Math.max(...st.future) : null },
+        hitFuture: {
+          median: median(st.future),
+          max: st.future.length ? Math.max(...st.future) : null,
+          min: st.future.length ? Math.min(...st.future) : null,
+        },
+        hitLoss1m: st.hitLossEvents.reduce((a, e) => a + e.lost, 0),
         statusAgeMs: st.lastStatus ? now - st.lastStatus.t : null,
         lastStatus: st.lastStatus ? st.lastStatus.pkt : null,
         hitCount: st.hitCount,
         lastHitT: st.lastHitT,
+        bias: st.bias,
+        imuFail: st.imuFail,
       } satisfies StickStats;
     }) as [StickStats, StickStats];
 
@@ -491,7 +525,7 @@ export class PacketLog {
     this.dropEvents = [];
     this.i2c = null;
     this.build = null;
-    this.pendingSync = [];
+    this.pairer.clear();
     this.syncSamples = [];
     this.adopted = [];
     this.lastAdopted = [null, null];

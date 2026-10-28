@@ -4,6 +4,8 @@ import { buildHit, buildLog, buildPose } from './mockStick';
 import { PacketLog, type LogRow } from './packetLog';
 import { bytesToHex, downloadJsonl, hexToBytes, parseJsonl, Recorder, serializeRow, type RecordingMeta } from './recorder';
 import type { PacketRecord } from '@/input/packetTap';
+import type { DiagEvent } from '@/engine/diagTap';
+import type { ResolvedHit } from '@/domain/events';
 
 const meta: RecordingMeta = {
   startedAt: '2026-10-23T00:00:00.000Z',
@@ -102,6 +104,76 @@ describe('직렬화·되읽기', () => {
     off();
     log.ingest(mk(buildLog('after'), 3));
     expect(rec.lineCount).toBe(2);
+  });
+});
+
+describe('diag 줄', () => {
+  const miss = (t: number): DiagEvent => ({ type: 'missed', noteIndex: 1, pad: 'SNARE', songTimeMs: 500, t });
+  const resolvedEv = (t: number): DiagEvent => ({
+    type: 'resolved',
+    t,
+    hit: { id: 1, stickId: 0, pad: 'SNARE', velocity: 90, tHit: 1, tRecv: 2, tResolved: 3 } as ResolvedHit,
+  });
+
+  it('왕복: kind diag 줄로 쓰고 t를 되살리며 패킷과 도착 순서를 지킨다', () => {
+    const rows = makeRows();
+    const rec = new Recorder();
+    rec.start({ ...meta, inputMode: 'follow' });
+    rec.append(rows[0]);
+    rec.appendDiag(miss(15));
+    rec.append(rows[1]);
+    expect(rec.lineCount).toBe(3);
+    const text = rec.stop();
+    const lines = text.split('\n');
+    expect(JSON.parse(lines[2])).toEqual({ kind: 'diag', t: 15, ev: { type: 'missed', noteIndex: 1, pad: 'SNARE', songTimeMs: 500 } });
+    expect(JSON.parse(lines[1]).kind).toBeUndefined();
+    const parsed = parseJsonl(text);
+    expect(parsed.meta.inputMode).toBe('follow');
+    expect(parsed.rows.length).toBe(2);
+    expect(parsed.diags).toEqual([miss(15)]);
+  });
+
+  it('늦게 채워진 tAudio가 파일에 남는다(stop에서 직렬화)', () => {
+    const rec = new Recorder();
+    rec.start(meta);
+    const ev = resolvedEv(10);
+    rec.appendDiag(ev);
+    if (ev.type === 'resolved') ev.hit.tAudio = 9;
+    const parsed = parseJsonl(rec.stop());
+    const got = parsed.diags[0];
+    expect(got.type === 'resolved' && got.hit.tAudio).toBe(9);
+  });
+
+  it('attachDiag는 구독 해제 뒤와 녹화 밖 이벤트를 무시한다', () => {
+    let listener: ((ev: DiagEvent) => void) | null = null;
+    const sub = (l: (ev: DiagEvent) => void) => {
+      listener = l;
+      return () => {
+        listener = null;
+      };
+    };
+    const rec = new Recorder();
+    rec.start(meta);
+    const off = rec.attachDiag(sub);
+    listener!(miss(1));
+    off();
+    expect(listener).toBeNull();
+    expect(rec.lineCount).toBe(1);
+    rec.stop();
+    rec.appendDiag(miss(2));
+    expect(rec.lineCount).toBe(1);
+  });
+
+  it('모르는 kind는 건너뛰고 이전 형식 파일은 diags가 빈 배열이다', () => {
+    const rows = makeRows();
+    const row = serializeRow(rows[0]);
+    const withUnknown = [JSON.stringify(meta), row, JSON.stringify({ kind: 'future', t: 1 }), ''].join('\n');
+    const p = parseJsonl(withUnknown);
+    expect(p.rows.length).toBe(1);
+    expect(p.diags).toEqual([]);
+    const old = parseJsonl([JSON.stringify(meta), row].join('\n'));
+    expect(old.rows.length).toBe(1);
+    expect(old.diags).toEqual([]);
   });
 });
 

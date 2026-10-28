@@ -20,7 +20,7 @@ const chart: Chart = {
 
 type N = { bar: number; pad: PadId; j: Judgement | null; d: number | null };
 
-function logOf(ns: N[], stray = 0): PlayLog {
+function logOf(ns: N[], stray = 0, goodMs = 60): PlayLog {
   const counts: Record<Judgement, number> = { PERFECT: 0, GOOD: 0, MISS: 0 };
   for (const n of ns) counts[n.j ?? 'MISS'] += 1;
   const score = counts.PERFECT * 100 + counts.GOOD * 60;
@@ -33,7 +33,7 @@ function logOf(ns: N[], stray = 0): PlayLog {
     inputSource: 'keyboard',
     startedAt: '2026-10-21T00:00:00.000Z',
     durationMs: 16_000,
-    timing: { perfectMs: 25, goodMs: 60 },
+    timing: { perfectMs: 25, goodMs },
     calibrationId: null,
     chartVersionId: null,
     songNumericId: null,
@@ -108,10 +108,19 @@ describe('buildFeedback', () => {
     expect(buildFeedback(logOf(ns)).some((x) => x.id === 'segment')).toBe(false);
   });
 
-  it('규칙 4: 패드 Δ 표준편차 35ms 이상', () => {
+  it('규칙 4: 패드 Δ 표준편차 0.5×goodMs 이상', () => {
     const ds = [-40, 40, -40, 40, -40, 40];
     const f = buildFeedback(logOf(ds.map((d, i) => good(i % 4, 'HIHAT', d))), chart);
     expect(f[0]).toMatchObject({ id: 'pad-jitter', title: '하이햇 타이밍이 들쭉날쭉해요', pads: ['HIHAT'] });
+  });
+
+  it('규칙 4: goodMs 50이면 표준편차 26ms는 걸리고 24ms는 안 걸린다', () => {
+    const jitterOf = (d: number) =>
+      buildFeedback(logOf([-d, d, -d, d, -d, d].map((x, i) => good(i % 4, 'HIHAT', x)), 0, 50), chart).some(
+        (x) => x.id === 'pad-jitter',
+      );
+    expect(jitterOf(26)).toBe(true);
+    expect(jitterOf(24)).toBe(false);
   });
 
   it('규칙 5: 채보 밖 타격이 노트 수의 10% 이상', () => {
@@ -150,6 +159,11 @@ describe('summarizeByPad', () => {
     const s = summarizeByPad(logOf(ns));
     expect(s.map((x) => x.pad)).toEqual(['CRASH', 'KICK']);
     expect(s[1]).toEqual({ pad: 'KICK', total: 3, perfect: 1, good: 1, miss: 1, meanDeltaMs: 20 });
+  });
+
+  it('판정 전 노트(null)는 분모에서 뺀다', () => {
+    const s = summarizeByPad(logOf([{ bar: 0, pad: 'KICK', j: 'PERFECT', d: 0 }, { bar: 0, pad: 'KICK', j: null, d: null }]));
+    expect(s[0]).toMatchObject({ pad: 'KICK', total: 1, perfect: 1, miss: 0 });
   });
 });
 
