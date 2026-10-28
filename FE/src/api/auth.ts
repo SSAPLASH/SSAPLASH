@@ -19,6 +19,11 @@ function setToken(next: string | null): void {
   for (const l of listeners) l(next);
 }
 
+/** 메모리 토큰을 비운다(서버 호출 없음). 회원 탈퇴처럼 서버가 세션을 이미 끝낸 경우에 쓴다 */
+export function clearAccessToken(): void {
+  setToken(null);
+}
+
 export function getAccessToken(): string | null {
   return accessToken;
 }
