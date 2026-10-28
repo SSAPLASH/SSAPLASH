@@ -1,5 +1,5 @@
 // 플레이 로그 (공통 명세서 9-3) 의 로컬 버전. 텔레메트리는 telemetry.ts.
-// localStorage에 최근 N건. 서버 업로드(ACCT-002 요약)는 app/playSync가 이 로그로 하고 상태를 upload에 적는다.
+// localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 app/playSync가 이 로그로 하고 상태를 upload에 적는다.
 import type { Judgement, TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
 import { normalizePadId, type PadId } from '@/domain/pads';
@@ -99,8 +99,30 @@ export interface PlayLog {
   upload?: PlayUploadState;
 }
 
-const KEY = 'ssaplash.playlogs';
+/** 비로그인(인증 끔 개발 모드)의 저장 키. 계정 로그는 뒤에 `.u{userId}`를 붙여 따로 둔다 */
+const BASE_KEY = 'ssaplash.playlogs';
 const MAX = 20;
+
+/** 지금 읽고 쓰는 로그의 주인. 로그인 상태는 app/authBootstrap이 넣어 준다(engine은 store를 모른다) */
+let owner: number | null = null;
+
+function storageKey(userId: number | null = owner): string {
+  return userId === null ? BASE_KEY : `${BASE_KEY}.u${userId}`;
+}
+
+/** 로그를 읽고 쓸 계정을 바꾼다. null이면 비로그인 키 */
+export function setPlayLogOwner(userId: number | null): void {
+  owner = userId;
+}
+
+/** 한 계정의 로컬 로그를 모두 지운다(회원 탈퇴) */
+export function clearPlayLogs(userId: number): void {
+  try {
+    localStorage.removeItem(storageKey(userId));
+  } catch {
+    /* 저장소를 못 쓰면 지울 것도 없다 */
+  }
+}
 
 export function buildPlayLog(args: {
   snapshot: SessionSnapshot;
@@ -190,7 +212,7 @@ export function savePlayLog(log: PlayLog): void {
   try {
     const list = loadPlayLogs();
     list.unshift(log);
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)));
+    localStorage.setItem(storageKey(), JSON.stringify(list.slice(0, MAX)));
   } catch {
     /* 저장 실패는 플레이를 막지 않는다 */
   }
@@ -199,13 +221,14 @@ export function savePlayLog(log: PlayLog): void {
 /** 저장된 로그 하나를 고친다(업로드 상태 갱신용). 없으면 아무것도 하지 않는다 */
 export function updatePlayLog(playId: string, patch: (log: PlayLog) => PlayLog): PlayLog | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const key = storageKey();
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const list = JSON.parse(raw) as PlayLog[];
     const i = list.findIndex((l) => l.playId === playId);
     if (i < 0) return null;
     list[i] = patch(list[i]);
-    localStorage.setItem(KEY, JSON.stringify(list));
+    localStorage.setItem(key, JSON.stringify(list));
     return list[i];
   } catch {
     return null;
@@ -214,7 +237,7 @@ export function updatePlayLog(playId: string, patch: (log: PlayLog) => PlayLog):
 
 export function loadPlayLogs(): PlayLog[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(storageKey());
     if (!raw) return [];
     // 옛 패드 이름(HI_TOM)은 읽을 때만 바꾼다. 저장 형식은 그대로 둔다
     return (JSON.parse(raw) as PlayLog[]).map((l) => ({
