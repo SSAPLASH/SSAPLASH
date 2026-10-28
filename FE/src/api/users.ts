@@ -6,3 +6,8 @@ import { apiFetch } from './http';
 export function fetchMe(): Promise<UserMe> {
   return apiFetch<UserMe>('/api/users/me');
 }
+
+/** `DELETE /api/users/me`(204). 계정·올린 곡·반주를 지우고, 학습 동의한 플레이 기록만 식별 정보를 제거해 보관한다(BE 153) */
+export async function withdrawMe(): Promise<void> {
+  await apiFetch('/api/users/me', { method: 'DELETE' });
+}

@@ -42,9 +42,9 @@ export function enabledProviders(raw: string | undefined): readonly LoginProvide
 
 /**
  * `/login?error=` 코드. BE가 붙이는 것: access_denied(동의 취소) · oauth_failed(그 밖의 실패).
- * FE가 붙이는 것: no_session(콜백 뒤 refresh 실패) · session_expired(사용 중 세션 소실) · network(서버 연결 실패).
+ * FE가 붙이는 것: no_session(콜백 뒤 refresh 실패) · session_expired(사용 중 세션 소실) · network(서버 연결 실패) · withdrawn(회원 탈퇴 완료).
  */
-export type LoginErrorCode = 'access_denied' | 'oauth_failed' | 'no_session' | 'session_expired' | 'network';
+export type LoginErrorCode = 'access_denied' | 'oauth_failed' | 'no_session' | 'session_expired' | 'network' | 'withdrawn';
 
 const LOGIN_ERROR_MESSAGES: Record<LoginErrorCode, string> = {
   access_denied: '로그인을 취소했습니다. 다시 시도해 주세요.',
@@ -52,6 +52,7 @@ const LOGIN_ERROR_MESSAGES: Record<LoginErrorCode, string> = {
   no_session: '로그인 정보를 확인하지 못했습니다. 다시 로그인해 주세요.',
   session_expired: '로그인이 만료되었습니다. 다시 로그인해 주세요.',
   network: '서버에 연결할 수 없습니다. 서버 상태를 확인한 뒤 다시 시도해 주세요.',
+  withdrawn: '탈퇴가 완료되었습니다. 같은 계정으로 다시 로그인하면 새 회원으로 시작합니다.',
 };
 
 /** 오류 코드의 안내 문구. 모르는 코드·빈 값은 null */

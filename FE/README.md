@@ -52,10 +52,10 @@ src/
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   └─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·조회 오류 분류
-├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·JobProgressCard, 곡 작업실)
+├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · My(마이페이지) · Login · AuthCallback
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·JobProgressCard, 곡 작업실) · mypage/(MySongList·RecentPlays, 마이페이지)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · AnalysisPlaceholder
-│   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu
+│   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu · WithdrawDialog(회원 탈퇴 확인)
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
@@ -241,7 +241,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 자유 연주 화면은 치면 바로 울리고 최근 타격과 패드별 횟수를 보여준다. 배치가 판정에 맞게 반영됐는지 확인하는 화면이기도 하다.
 
-리듬 게임은 내장 채보 3곡을 고른 뒤 Enter로 시작한다(1마디 카운트인). 일시정지는 Esc·스틱 연결 끊김·메뉴 요청 3종이고(`PauseOverlay`, 악보 연주와 같은 정책) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
+리듬 게임은 내장 채보 3곡을 고른 뒤 Enter로 시작한다(1마디 카운트인). 일시정지는 Esc·스틱 연결 끊김·메뉴 요청 3종이고(`PauseOverlay`, 악보 연주와 같은 정책) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 계정별 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
 
 게임 뷰는 곡 선택 화면에서 고른다(설정에 저장). **노트 하이웨이**는 노트가 레인을 따라 판정선으로 떨어지는 기본 뷰, **킷 위 연주**는 세팅한 킷 배치의 패드 위로 링이 줄어들어 판정 시각에 패드 테두리에 닿는 뷰다. 두 뷰 모두 같은 `RhythmSession`을 읽으므로 판정·점수·결과 저장은 같다.
 
@@ -270,7 +270,10 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패). 문구는 `domain/auth.ts`에 있다.
+- **마이페이지(`/me`):** 아바타 메뉴의 "마이페이지". 프로필(닉네임·로그인 제공자·가입일), 내 곡(`GET /api/v1/songs?source=MINE`, 상태 배지: 완료 → 플레이, 채보 생성 중 → 곡 작업실, 생성 실패 → 다시 올리기 안내), 이 계정의 최근 플레이 5건(→ 결과 화면), 회원 탈퇴를 둔다.
+- **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
+- **회원 탈퇴:** 마이페이지 하단 "회원 탈퇴" → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 401(이미 탈퇴)도 같은 흐름, 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
+- **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
 - **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
 - **화면:** `/login`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다.
