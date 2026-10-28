@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import type { Judgement } from '@/domain/judgement';
 import { PAD_META } from '@/domain/pads';
-import { isTooShortForAnalysis, segmentBars, type AnalysisStatus, type WeakSegment } from '@/domain/report';
+import { formatSeconds, isTooShortForAnalysis, segmentBars, type AnalysisStatus, type WeakSegment } from '@/domain/report';
 
 /** 이 값 이상이면 강조선·"주의" 뱃지 */
 const SEVERE_THRESHOLD = 0.7;
@@ -19,10 +19,10 @@ export interface WeakSegmentsProps {
   onRefresh: () => void;
 }
 
-/** 시간 범위 문구. SEGMENT는 `7~12초`, 악보 모드면 ` · 3~5마디` 병기. WHOLE은 "연주 전체" */
+/** 시간 범위 문구. SEGMENT는 `7~12초`(초 표기는 AI description과 같은 규칙), 악보 모드면 ` · 3~5마디` 병기. WHOLE은 "연주 전체" */
 function formatRange(seg: WeakSegment, bars: WeakSegmentsProps['bars']): string {
   if (seg.scope === 'WHOLE') return '연주 전체';
-  const text = `${Math.round(seg.fromMs / 1000)}~${Math.round(seg.toMs / 1000)}초`;
+  const text = `${formatSeconds(seg.fromMs)}~${formatSeconds(seg.toMs)}초`;
   const b = bars ? segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar) : null;
   if (!b) return text;
   const [from, to] = [b[0] + 1, b[1] + 1];

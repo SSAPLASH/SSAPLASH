@@ -94,13 +94,21 @@ describe('WeakSegments 목록', () => {
     const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 100, beatsPerBar: 4 } });
     expect(h).toContain('7~12초 · 3~5마디');
   });
+  it('머리글 초는 description과 같은 규칙: 정수가 아니면 소수 한 자리', () => {
+    const h = render({
+      status: 'DONE',
+      segments: [{ ...SEG, fromMs: 2400, toMs: 7400, description: '2.4~7.4초 구간에서 노트의 40%를 놓쳤어요.' }],
+    });
+    expect(h).toContain('2.4~7.4초</strong>');
+    expect(h).not.toContain('2~7초');
+  });
   it('같은 마디면 한 마디만 쓴다', () => {
     const h = render({
       status: 'DONE',
       segments: [{ ...SEG, fromMs: 2100, toMs: 3900 }],
       bars: { bpm: 120, beatsPerBar: 4 },
     });
-    expect(h).toContain('2~4초 · 2마디');
+    expect(h).toContain('2.1~3.9초 · 2마디');
   });
   it('모르는 pattern도 description을 표시한다', () => {
     const h = render({

@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { analysisTeaser, isTooShortForAnalysis, isUploadTarget, MIN_NOTES_FOR_ANALYSIS, segmentBars, type AnalysisStatus, type Report, type WeakSegment } from './report';
+import { analysisTeaser, formatSeconds, isTooShortForAnalysis, isUploadTarget, MIN_NOTES_FOR_ANALYSIS, segmentBars, type AnalysisStatus, type Report, type WeakSegment } from './report';
+
+describe('formatSeconds (AI seconds_text와 같은 규칙)', () => {
+  it('정수 초는 소수점 없이', () => {
+    expect(formatSeconds(7000)).toBe('7');
+    expect(formatSeconds(0)).toBe('0');
+  });
+  it('정수에서 0.05 미만이면 정수로, 0.05 이상이면 한 자리', () => {
+    expect(formatSeconds(2960)).toBe('3');
+    expect(formatSeconds(3040)).toBe('3');
+    // 2.95·3.05는 배정밀도 차이가 0.05보다 약간 작아 파이썬도 "3"
+    expect(formatSeconds(2950)).toBe('3');
+    expect(formatSeconds(3050)).toBe('3');
+    expect(formatSeconds(2940)).toBe('2.9');
+    expect(formatSeconds(3060)).toBe('3.1');
+  });
+  it('정수가 아니면 소수 한 자리', () => {
+    expect(formatSeconds(2400)).toBe('2.4');
+    expect(formatSeconds(7400)).toBe('7.4');
+    expect(formatSeconds(2340)).toBe('2.3');
+    expect(formatSeconds(2360)).toBe('2.4');
+  });
+  it('정확히 .x5는 파이썬처럼 짝수 쪽으로', () => {
+    expect(formatSeconds(7250)).toBe('7.2');
+    expect(formatSeconds(7750)).toBe('7.8');
+    expect(formatSeconds(2250)).toBe('2.2');
+    expect(formatSeconds(12250)).toBe('12.2');
+    expect(formatSeconds(2350)).toBe('2.4'); // 2.35는 이진수로 2.35보다 크다(파이썬 "2.4")
+    expect(formatSeconds(2550)).toBe('2.5'); // 2.55는 이진수로 2.55보다 작다(파이썬 "2.5")
+  });
+});
 
 describe('segmentBars', () => {
   it('bpm 120·4박에서 7000~12000ms는 [3, 5]', () => {
