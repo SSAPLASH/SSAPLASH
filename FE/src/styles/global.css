@@ -581,6 +581,19 @@ p {
   border-color: var(--brass);
   background: rgba(230, 184, 92, 0.1);
 }
+/* 곡 선택 창 "내 곡" 탭: 처리 중·실패 곡은 흐리게, 눌리지 않는다(설계 CHART-003 D6) */
+.chart-item.disabled,
+.chart-item.disabled:hover {
+  opacity: 0.5;
+  cursor: default;
+  border-color: var(--line);
+  background: transparent;
+}
+.chart-item strong .my-badge,
+.sm-song-title + .my-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
 .diff {
   font-size: 12px;
   padding: 2px 8px;
@@ -1870,6 +1883,12 @@ a.my-list-row:focus-visible {
 }
 .sm-song-main:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+.sm-song-row.disabled .sm-song-main,
+.sm-song-row.disabled .sm-song-main:hover {
+  opacity: 0.5;
+  cursor: default;
+  background: transparent;
 }
 .sm-song-main .sm-song-title {
   display: block;
