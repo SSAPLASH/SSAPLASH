@@ -484,3 +484,24 @@ def test_곡_안_이름_바뀜을_맞은_것으로_치는_보조_지표(tmp_path
     m = res.metrics()
     assert m["tomConsistentAcc"] == 1.0 and m["f1TomConsistent"] == 1.0
     assert res.songs[0].tom_consistent == 3
+
+
+def test_탐_둘인_곡의_위쪽_탐_정답_이름을_통일한다():
+    from ssaplash_ai.bench.analysis.rule_eval import rename_two_tom_upper
+
+    two = make_hits(
+        [0.1, 0.5, 0.9], ["FLOOR_TOM", "SMALL_TOM", "KICK"], None, {p: p for p in PADS}
+    )[0]
+    out = rename_two_tom_upper(two, "MID_TOM")
+    assert out["pad"].tolist() == ["FLOOR_TOM", "MID_TOM", "KICK"]
+    assert two["pad"].tolist()[1] == "SMALL_TOM"  # 원본은 안 건드림
+    assert rename_two_tom_upper(two, "SMALL_TOM") is two  # 이미 그 이름이면 그대로
+    # 탐 셋이거나 플로어탐이 없으면 그대로
+    three = make_hits(
+        [0.1, 0.5, 0.9], ["FLOOR_TOM", "SMALL_TOM", "MID_TOM"], None, {p: p for p in PADS}
+    )[0]
+    assert rename_two_tom_upper(three, "MID_TOM") is three
+    no_floor = make_hits([0.1, 0.5], ["SMALL_TOM", "MID_TOM"], None, {p: p for p in PADS})[0]
+    assert rename_two_tom_upper(no_floor, "MID_TOM") is no_floor
+    with pytest.raises(ValueError, match="two_tom_upper"):
+        rename_two_tom_upper(two, "KICK")

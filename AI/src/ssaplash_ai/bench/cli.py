@@ -229,6 +229,7 @@ def rule_eval_cmd(args: argparse.Namespace) -> int:
             candidate_configs=[Path(p) for p in args.candidates],
             out_dir=Path(args.out),
             mlflow_uri=args.mlflow_uri,
+            two_tom_upper=args.two_tom_upper,
         )
     )
     print(f"후보 {len(result.candidates)}개 × 묶음 {len(args.dataset)}개 → {result.summary_md}")
@@ -394,6 +395,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     re_p.add_argument(
         "--out", required=True, help="결과 폴더 (candidates.csv·confusion.csv·summary.md)"
+    )
+    re_p.add_argument(
+        "--two-tom-upper",
+        choices=["MID_TOM", "SMALL_TOM"],
+        default=None,
+        help="탐 둘만 쓴 곡의 위쪽 탐 정답 이름을 이걸로 통일 (기본은 정답 그대로)",
     )
     re_p.add_argument(
         "--mlflow-uri",

@@ -346,16 +346,41 @@ def eval_candidate(
 # ---------- 데이터 읽기 ----------
 
 
+def rename_two_tom_upper(hits_true: np.ndarray, upper: str) -> np.ndarray:
+    """탐 둘만 쓴 곡의 위쪽 탐 이름을 upper(MID_TOM 또는 SMALL_TOM)로 통일한 정답 표.
+
+    정답에 탐 패드가 정확히 둘이고 그중 하나가 FLOOR_TOM일 때만 나머지 하나를 upper로 바꿈. 전자 드럼(GMD)은
+    탐 둘 연주의 위쪽 탐을 SMALL_TOM, 실제 킷(MDB)은 MID_TOM으로 적어 같은 소리의 이름이 데이터마다 다른 것을 맞추는 용도.
+    """
+    if upper not in ("MID_TOM", "SMALL_TOM"):
+        raise ValueError(f"two_tom_upper는 MID_TOM 또는 SMALL_TOM: {upper}")
+    pads = {str(p) for p in np.unique(hits_true["pad"]) if str(p) in TOM_PADS}
+    if len(pads) != 2 or "FLOOR_TOM" not in pads:
+        return hits_true
+    (other,) = pads - {"FLOOR_TOM"}
+    if other == upper:
+        return hits_true
+    out = hits_true.copy()
+    out["pad"][out["pad"] == other] = upper
+    return out
+
+
 def load_dataset_songs(
-    dataset_config: Path, features_root: Path, log: Logger = print, with_input: bool = True
+    dataset_config: Path,
+    features_root: Path,
+    log: Logger = print,
+    with_input: bool = True,
+    two_tom_upper: str | None = None,
 ) -> tuple[str, list[tuple[str, RuleFeatures, np.ndarray]]]:
     """데이터셋 yaml + 특징 폴더 → (데이터셋 이름, [(곡, 특징, 정답)]). 특징이 없는 곡은 오류.
 
     with_input이면 어댑터에 넣었던 드럼 입력(정답 드럼 트랙)도 데이터셋에서 읽어 특징에 붙임(거르기 규칙용).
+    two_tom_upper를 주면 탐 둘만 쓴 곡의 정답을 `rename_two_tom_upper`로 고쳐 읽음.
     """
     dataset = load_dataset(DatasetConfig.from_yaml(dataset_config))
     songs = []
     missing = []
+    n_renamed = 0
     for song_id in dataset.song_ids():
         path = feature_path(features_root, dataset.name, song_id)
         if not path.is_file():
@@ -367,6 +392,11 @@ def load_dataset_songs(
         hits_true, _ = hits
         if hits_true.dtype != HITS_DTYPE:
             raise ValueError(f"{dataset.name}/{song_id}: 정답 표 dtype이 HITS_DTYPE이 아님")
+        if two_tom_upper:
+            renamed = rename_two_tom_upper(hits_true, two_tom_upper)
+            if renamed is not hits_true:
+                n_renamed += 1
+            hits_true = renamed
         features = load_features(path)
         if with_input:
             features.input_audio = input_as_feature(dataset.load(song_id).drums_true)
@@ -376,7 +406,8 @@ def load_dataset_songs(
             f"{dataset.name}: 특징 파일이 없는 곡 {len(missing)}개 (먼저 rule-features 실행): "
             f"{missing[:5]}{'...' if len(missing) > 5 else ''}"
         )
-    log(f"[rule-eval] {dataset.name}: 곡 {len(songs)}개 특징 읽음")
+    extra = f", 탐 둘인 곡 {n_renamed}개 위쪽 탐을 {two_tom_upper}로" if two_tom_upper else ""
+    log(f"[rule-eval] {dataset.name}: 곡 {len(songs)}개 특징 읽음{extra}")
     return dataset.name, songs
 
 
@@ -479,6 +510,7 @@ class RuleEvalOptions:
     candidate_configs: Sequence[Path]
     out_dir: Path
     mlflow_uri: str | None = None  # None이면 기록 안 함
+    two_tom_upper: str | None = None  # 탐 둘인 곡의 위쪽 탐 정답 이름 통일 (MID_TOM·SMALL_TOM)
 
 
 @dataclass
@@ -496,7 +528,10 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
     from ssaplash_ai.bench.runner.run_support import CsvWriter
 
     candidates = load_candidates(opts.candidate_configs)
-    datasets = [load_dataset_songs(p, Path(opts.features_root), log) for p in opts.dataset_configs]
+    datasets = [
+        load_dataset_songs(p, Path(opts.features_root), log, two_tom_upper=opts.two_tom_upper)
+        for p in opts.dataset_configs
+    ]
     results: list[CandidateResult] = []
     for cand in candidates:
         for ds_name, songs in datasets:
@@ -618,6 +653,7 @@ __all__ = [
     "eval_song",
     "group_confusion",
     "load_candidates",
+    "rename_two_tom_upper",
     "load_dataset_songs",
     "predict_hits",
     "run_rule_eval",
