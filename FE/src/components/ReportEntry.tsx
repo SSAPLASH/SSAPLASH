@@ -1,6 +1,7 @@
 // 결과 화면의 [상세 분석 보기] 진입부 (설계 COACH-002 4-1). 업로드 상태에 따라 활성·사유·다시 시도를 보여 준다.
 // 상태 구독·재전송은 화면(ResultPage)이 app/playSync로 하고 여기는 그리기만 한다.
 import { Link } from 'react-router-dom';
+import { analysisTeaser, type Report } from '@/domain/report';
 import type { PlayUploadState } from '@/engine/playLog';
 
 /** 업로드하지 않은 사유·실패 코드 → 안내 문구 */
@@ -27,12 +28,15 @@ export function ReportEntry({
   playId,
   legacy,
   state: st,
+  report,
   onRetry,
 }: {
   playId: string;
   /** 이전 형식 로그(UUID 아님) */
   legacy: boolean;
   state: PlayUploadState | undefined;
+  /** 프리패치된 리포트. 없거나 로딩 중이면 null */
+  report: Report | null;
   onRetry: () => void;
 }) {
   const disabled = (text: string) => (
@@ -52,7 +56,7 @@ export function ReportEntry({
         <Link to={`/result/${playId}/report`} className="btn-primary">
           상세 분석 보기
         </Link>
-        <span className="small dim">패드별 정확도·타이밍·노트 흐름</span>
+        <span className="small dim">{analysisTeaser(report) ?? '패드별 정확도·타이밍·노트 흐름'}</span>
       </div>
     );
   }
