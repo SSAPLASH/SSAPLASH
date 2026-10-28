@@ -200,13 +200,26 @@ describe('withdraw', () => {
     expect(store.has('ssaplash.chartJob.v1')).toBe(false);
   });
 
-  it('401도 같은 결과', async () => {
+  it('401이면 탈퇴로 보지 않는다: 던지고 session_expired로 내리며 작업 id는 남긴다', async () => {
     mockFetch(() => problem(401, 'UNAUTHORIZED'));
 
-    await useAuth.getState().withdraw();
+    await expect(useAuth.getState().withdraw()).rejects.toMatchObject({ status: 401 });
 
-    expect(useAuth.getState()).toMatchObject({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    expect(useAuth.getState()).toMatchObject({ status: 'anonymous', user: null, lostReason: 'session_expired' });
     expect(getAccessToken()).toBeNull();
+    expect(store.get('ssaplash.chartJob.v1')).toBe('job');
+  });
+
+  it('네트워크 오류면 던지고 authenticated를 유지한다', async () => {
+    mockFetch(() => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    await expect(useAuth.getState().withdraw()).rejects.toMatchObject({ status: 0, code: 'NETWORK' });
+
+    expect(useAuth.getState()).toMatchObject({ status: 'authenticated', user: ME, lostReason: null });
+    expect(getAccessToken()).toBe('tok');
+    expect(store.get('ssaplash.chartJob.v1')).toBe('job');
   });
 
   it('500이면 던지고 authenticated를 유지한다', async () => {
