@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayLog } from '@/engine/playLog';
-import { prefetchReport, resetPlaySyncForTest, resumePlaySync, startPlaySync, usePlaySync } from './playSync';
+import type { Report } from '@/domain/report';
+import {
+  prefetchReport,
+  refreshReport,
+  resetPlaySyncForTest,
+  resumePlaySync,
+  startPlaySync,
+  subscribePrefetchedReport,
+  usePlaySync,
+} from './playSync';
 
 const ID = '9da79b76-5d88-4875-bc71-c826c3fb4293';
 let data: Record<string, string>;
@@ -147,5 +156,123 @@ describe('prefetchReport', () => {
     await expect(a.report).rejects.toBeTruthy();
     await expect(a.firstNotes).rejects.toBeTruthy();
     expect(prefetchReport(ID)).not.toBe(a);
+  });
+});
+
+/** 리포트·노트 요청 횟수를 세고, 리포트 응답을 차례로 돌려준다 */
+function mockReportFetch(...reports: (() => Response)[]) {
+  const fn = vi.fn(async (url: string) => {
+    if (url.includes('/report/notes')) return json(200, { items: [], nextAfterSeq: null });
+    if (url.endsWith('/report')) {
+      const next = reports.shift();
+      if (!next) throw new Error('예상 밖 리포트 요청');
+      return next();
+    }
+    throw new Error(`예상 밖 요청 ${url}`);
+  });
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
+const status = (analysisStatus: string) =>
+  json(200, {
+    playId: ID,
+    score: 100,
+    accuracy: 100,
+    maxCombo: 1,
+    judgementCounts: { perfect: 1, good: 0, miss: 0 },
+    timingHistogram: null,
+    padStats: [],
+    mode: 'RHYTHM',
+    inputSource: 'keyboard',
+    endReason: null,
+    analysisStatus,
+    weakSegments: null,
+    recommendedDrills: null,
+    generatorVersion: 'v1',
+    generatedAt: '2026-10-28T00:00:00Z',
+  });
+const err500 = () => json(500, { status: 500, code: 'INTERNAL', detail: 'x' }, 'application/problem+json');
+const reportCalls = (fn: ReturnType<typeof mockReportFetch>) => fn.mock.calls.filter(([u]) => String(u).endsWith('/report'));
+
+describe('refreshReport', () => {
+  it('GET /report를 다시 받아 캐시의 report를 바꾸고 firstNotes는 유지한다', async () => {
+    const fn = mockReportFetch(() => status('PENDING'), () => status('DONE'));
+    const before = prefetchReport(ID);
+    expect((await before.report).analysisStatus).toBe('PENDING');
+
+    const fresh = await refreshReport(ID);
+    expect(fresh.analysisStatus).toBe('DONE');
+    const after = prefetchReport(ID);
+    expect(after).toBe(before);
+    expect(await after.report).toBe(fresh);
+    expect(after.firstNotes).toBe(before.firstNotes);
+    expect(reportCalls(fn)).toHaveLength(2);
+  });
+
+  it('캐시 항목이 없으면 새로 만들고 노트 첫 페이지도 시작한다', async () => {
+    const fn = mockReportFetch(() => status('DONE'));
+    const r = await refreshReport(ID);
+    expect(await prefetchReport(ID).report).toBe(r);
+    expect(fn.mock.calls.some(([u]) => String(u).includes('/report/notes'))).toBe(true);
+    expect(reportCalls(fn)).toHaveLength(1);
+  });
+
+  it('실패하면 캐시를 그대로 두고 오류를 던진다', async () => {
+    mockReportFetch(() => status('PENDING'), err500);
+    const before = prefetchReport(ID);
+    const old = await before.report;
+    await expect(refreshReport(ID)).rejects.toBeTruthy();
+    const after = prefetchReport(ID);
+    expect(after).toBe(before);
+    expect(await after.report).toBe(old);
+  });
+});
+
+describe('subscribePrefetchedReport', () => {
+  it('캐시가 없으면 null이고 요청을 시작하지 않는다', () => {
+    const fn = mockReportFetch();
+    const seen: (Report | null)[] = [];
+    const off = subscribePrefetchedReport(ID, (r) => seen.push(r));
+    expect(seen).toEqual([null]);
+    expect(fn).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('성공하면 Report를 알린다', async () => {
+    mockReportFetch(() => status('DONE'));
+    prefetchReport(ID);
+    const seen: (Report | null)[] = [];
+    const off = subscribePrefetchedReport(ID, (r) => seen.push(r));
+    await vi.waitFor(() => expect(seen.at(-1)?.analysisStatus).toBe('DONE'));
+    off();
+  });
+
+  it('실패하면 null이다', async () => {
+    mockReportFetch(err500);
+    const entry = prefetchReport(ID);
+    const seen: (Report | null)[] = [];
+    const off = subscribePrefetchedReport(ID, (r) => seen.push(r));
+    await entry.report.catch(() => {});
+    await vi.waitFor(() => expect(seen.at(-1)).toBeNull());
+    expect(seen.every((r) => r === null)).toBe(true);
+    off();
+  });
+
+  it('refresh 뒤 새 값을 받고, 해제하면 더 받지 않는다', async () => {
+    mockReportFetch(() => status('PENDING'), () => status('DONE'), () => status('FAILED'));
+    prefetchReport(ID);
+    const seen: (Report | null)[] = [];
+    const off = subscribePrefetchedReport(ID, (r) => seen.push(r));
+    await vi.waitFor(() => expect(seen.at(-1)?.analysisStatus).toBe('PENDING'));
+
+    await refreshReport(ID);
+    await vi.waitFor(() => expect(seen.at(-1)?.analysisStatus).toBe('DONE'));
+
+    off();
+    const n = seen.length;
+    await refreshReport(ID);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toHaveLength(n);
   });
 });

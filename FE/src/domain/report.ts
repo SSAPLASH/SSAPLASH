@@ -15,6 +15,42 @@ export interface PadStat {
   sampleCount: number;
 }
 
+export type WeakScope = 'WHOLE' | 'SEGMENT';
+
+/** AI 약점 구간 한 건 (COACH-003). description을 그대로 표시하고 pattern으로 분기하지 않는다 */
+export interface WeakSegment {
+  /** 노트 시각 기준 ms, 시작 포함·끝 미포함 */
+  fromMs: number;
+  toMs: number;
+  pattern: string;
+  description: string;
+  causeTags: string[];
+  pads: PadId[];
+  /** 0~1 */
+  severity: number;
+  scope: WeakScope;
+  /** severity·scope를 뺀 나머지 키(자유 형식, 보관만) */
+  metrics: Record<string, unknown>;
+}
+
+/** 판정 수 합(PERFECT+GOOD+MISS)이 이 값보다 적으면 서버가 짧은 곡으로 보고 분석하지 않는다(AI 회신 전 가정) */
+export const MIN_NOTES_FOR_ANALYSIS = 20;
+
+/** 구간을 마디 번호(0부터, 양쪽 포함)로 환산한다. bpm·박자가 없으면 null. feedback.ts의 barOf와 같은 식 */
+export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerBar: number): [number, number] | null {
+  if (!(bpm > 0) || !(beatsPerBar > 0)) return null;
+  const barMs = (60000 / bpm) * beatsPerBar;
+  // 끝 미포함이므로 마지막 포함 시각 toMs − 1이 속한 마디. 시작은 feedback.ts의 barOf와 같은 식
+  const fromBar = Math.max(0, Math.floor((fromMs + 1) / barMs));
+  const toBar = Math.max(fromBar, Math.floor((toMs - 1) / barMs));
+  return [fromBar, toBar];
+}
+
+/** 판정 수 합이 분석 최소 노트 수 미만인지 */
+export function isTooShortForAnalysis(counts: Record<Judgement, number>): boolean {
+  return counts.PERFECT + counts.GOOD + counts.MISS < MIN_NOTES_FOR_ANALYSIS;
+}
+
 export interface Report {
   playId: string;
   score: number;
@@ -28,8 +64,8 @@ export interface Report {
   mode: string;
   inputSource: string;
   analysisStatus: AnalysisStatus;
-  /** 158 이후 AI 결과. 아직 해석하지 않는다(null과 []를 구분해 그대로 보관) */
-  weakSegments: unknown;
+  /** AI 약점 구간. null = 미분석·실패, [] = 분석했으나 약점 없음 */
+  weakSegments: WeakSegment[] | null;
   recommendedDrills: unknown;
   generatedAt: string;
 }
