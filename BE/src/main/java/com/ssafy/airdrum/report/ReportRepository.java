@@ -60,8 +60,8 @@ public class ReportRepository {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void insert(UUID playId, ReportAggregate report) {
 		db.update("""
-			INSERT INTO reports(play_session_id,timing_histogram,pad_stats,generator_version)
-			VALUES (?,?::jsonb,?::jsonb,?)
+			INSERT INTO reports(play_session_id,timing_histogram,pad_stats,generator_version,analysis_status)
+			VALUES (?,?::jsonb,?::jsonb,?,'PENDING')
 			""", playId, json.writeValueAsString(report.timingHistogram()),
 				json.writeValueAsString(report.padStats()), ReportAggregate.GENERATOR_VERSION);
 	}
