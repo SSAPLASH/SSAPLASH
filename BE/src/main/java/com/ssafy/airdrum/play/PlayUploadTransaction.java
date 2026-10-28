@@ -1,6 +1,8 @@
 package com.ssafy.airdrum.play;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ssafy.airdrum.report.AnalysisRequested;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +21,10 @@ public class PlayUploadTransaction {
 	private final JdbcTemplate db;
 	private final ReportRepository reports;
 	private final PlayJson json;
-	public PlayUploadTransaction(UserRepository users, PlaySessionRepository sessions, PlayHitRepository hits, JdbcTemplate db, ReportRepository reports, PlayJson json) {
+	private final ApplicationEventPublisher events;
+	public PlayUploadTransaction(UserRepository users, PlaySessionRepository sessions, PlayHitRepository hits, JdbcTemplate db, ReportRepository reports, PlayJson json, ApplicationEventPublisher events) {
 		this.users = users; this.sessions = sessions; this.hits = hits; this.db = db;
-		this.reports = reports; this.json = json;
+		this.reports = reports; this.json = json; this.events = events;
 	}
 	@Transactional(isolation = Isolation.READ_COMMITTED, timeout = 15)
 	public PlayUploadResponse save(long user, PlayUploadRequest p, String hash, PlaySessionRepository.ChartData chart, ReportAggregate report) {
@@ -36,7 +39,10 @@ public class PlayUploadTransaction {
 			return replay(user, p, hash, winner);
 		}
 		hits.insert(p);
-		if (p.scored()) reports.insert(p.playId(), report);
+		if (p.scored()) {
+			reports.insert(p.playId(), report);
+			events.publishEvent(new AnalysisRequested(p.playId()));
+		}
 		return new PlayUploadResponse(p.playId(), "PENDING", true);
 	}
 	public void active(long user) {
