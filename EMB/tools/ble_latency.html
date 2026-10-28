@@ -43,6 +43,8 @@
   .calib { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:10px; }
   .calib b { font-weight:600; }
   #calibMsg { color:var(--text); }
+  .vol { display:inline-flex; align-items:center; gap:6px; color:var(--dim); font-size:14px; }
+  .vol input[type=range] { width:110px; }
   #padTable { color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
   .pad.on span { color:#222; }
   .cols { display:grid; grid-template-columns:3fr 2fr; gap:12px; }
@@ -65,6 +67,8 @@
     <button id="btnParams" disabled>파라미터 읽기</button>
     <button id="btnClear">통계 초기화</button>
     <button id="btnCsv">CSV 저장</button>
+    <label class="vol">음량 <input type="range" id="vol" min="1" max="8" step="0.5" value="4"><span id="volV">×4</span></label>
+    <label class="vol"><input type="checkbox" id="clickMode"> 측정용 클릭</label>
     <span id="state">연결 안 됨</span>
   </div>
 
@@ -133,16 +137,18 @@ function noise(t, gain, dur, type, freq, q = 1) {
   const src = ac.createBufferSource(); src.buffer = buf;
   const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
   const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(f).connect(g).connect(ac.destination); src.start(t); src.stop(t + dur);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + dur);
 }
 function tone(t, gain, dur, f0, f1v) {
   const o = ac.createOscillator(); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1v, t + dur);
   const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur);
 }
 function play(pad, vel) {
   if (!ac) return;
   const t = ac.currentTime, v = 0.25 + 0.75 * vel / 127;
+  /* 측정용 클릭: 녹음에서 시작점이 바로 보이게 짧고 큰 소리 하나 (패드 무관) */
+  if ($('clickMode').checked) { noise(t, 1.0, 0.01, 'highpass', 300); return; }
   switch (pad) {
     case 'HIHAT':     noise(t, 0.5 * v, 0.06, 'highpass', 7000); break;
     case 'SNARE':     noise(t, 0.7 * v, 0.18, 'bandpass', 1800, 0.8); tone(t, 0.5 * v, 0.12, 220, 160); break;
@@ -350,7 +356,16 @@ function onDisconnected() {
   for (const b of CONN_BTNS) $(b).disabled = false;
   calib = null; anchor = null; calibShow();
 }
-async function audioStart() { ac = ac || new AudioContext({ latencyHint: 'interactive' }); await ac.resume(); }
+/* 마스터 음량: 컴프레서는 미리보기 지연이 있어 측정을 흐리므로 쓰지 않는다 (커지면 찌그러지는 건 감수) */
+let master = null;
+async function audioStart() {
+  if (!ac) {
+    ac = new AudioContext({ latencyHint: 'interactive' });
+    master = ac.createGain(); master.gain.value = Number($('vol').value); master.connect(ac.destination);
+  }
+  await ac.resume();
+}
+$('vol').oninput = () => { $('volV').textContent = '×' + $('vol').value; if (master) master.gain.value = Number($('vol').value); };
 
 /* 시리얼: 0xA5 LEN payload CRC8 프레임 해제 (청크 도착 시각을 그 안 패킷의 수신 시각으로) */
 async function serialLoop(reader) {
@@ -393,10 +408,14 @@ $('btnWs').onclick = async () => {
     await audioStart();
     ws = new WebSocket('ws://localhost:8765');
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => onConnected('ws', 'WS 브리지');
+    let opened = false;
+    $('state').textContent = 'WS 연결 중...';
+    ws.onopen = () => { opened = true; onConnected('ws', 'WS 브리지'); };
     ws.onmessage = (m) => { if (m.data instanceof ArrayBuffer) handle(new DataView(m.data), performance.now()); };
-    ws.onclose = onDisconnected;
-    ws.onerror = () => { $('state').textContent = 'WS 연결 실패 (ws_bridge.py 실행 중인지 확인)'; };
+    ws.onclose = () => {                                   // 연결 실패도 onclose로 끝나서 여기서 안내를 남긴다
+      onDisconnected();
+      if (!opened) { $('state').textContent = 'WS 연결 실패: ws_bridge.py가 켜져 있는지 확인'; log('WS 연결 실패 (ws://localhost:8765 응답 없음)'); }
+    };
   } catch (e) { $('state').textContent = 'WS 연결 실패: ' + e.message; }
 };
 
