@@ -42,7 +42,7 @@ export function LoginPage() {
       <section className="login-card">
         <h1>로그인</h1>
         <p className="dim">소셜 계정으로 로그인하면 세팅·프리셋과 플레이 기록이 계정에 저장됩니다. 이메일·비밀번호 가입은 없습니다.</p>
-        {message && <p className="notice error">{message}</p>}
+        {message && <p className={params.get('error') === 'withdrawn' ? 'notice' : 'notice error'}>{message}</p>}
         <div className="col login-buttons">
           {PROVIDERS.map((p, i) => (
             <button key={p.key} className={i === 0 ? 'btn-primary login-btn' : 'login-btn'} onClick={() => startLogin(p.key, from)}>

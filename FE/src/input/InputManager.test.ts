@@ -17,6 +17,11 @@ class MockSource extends BaseInputSource {
   }
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
+  /** 테스트가 정하는 센서 시계 오프셋. null이면 미동기 */
+  offset: number | null = null;
+  clockOffsetOf(): number | null {
+    return this.offset;
+  }
   fire(e: StickEvent): void {
     this.emit(e);
   }
@@ -87,6 +92,31 @@ describe('InputManager 판정', () => {
     const { src, hits } = await setup('keyboard');
     src.fire(hit({ keyCode: 'KeyF' }));
     expect(hits[0]).toMatchObject({ pad: 'SNARE', judgedBy: 'key' });
+  });
+
+  it('센서 hit: firmwarePad·clockOffsetMs를 채우고 tSensorMs는 오프셋을 되뺀 센서 시각이다', async () => {
+    const { src, hits } = await setup('ble');
+    src.offset = 250;
+    src.fire(hit({ pad: 'SNARE', velocity: 90, timestamp: 1000 }));
+    src.fire(hit({ pad: null, velocity: 90, timestamp: 1000 }));
+    expect(hits[0]).toMatchObject({ firmwarePad: 'SNARE', clockOffsetMs: 250, tSensorMs: 750 });
+    expect(hits[1].firmwarePad).toBeNull();
+  });
+
+  it('센서 hit 미동기: clockOffsetMs null, tSensorMs 없음', async () => {
+    const { src, hits } = await setup('ble');
+    src.fire(hit({ pad: 'SNARE', velocity: 90 }));
+    expect(hits[0].clockOffsetMs).toBeNull();
+    expect(hits[0].tSensorMs).toBeUndefined();
+  });
+
+  it('키보드 hit: firmwarePad·tSensorMs·clockOffsetMs를 채우지 않는다', async () => {
+    const { src, hits } = await setup('keyboard');
+    src.offset = 250;
+    src.fire(hit({ keyCode: 'KeyF', pad: 'SNARE' }));
+    expect(hits[0].firmwarePad).toBeUndefined();
+    expect(hits[0].tSensorMs).toBeUndefined();
+    expect(hits[0].clockOffsetMs).toBeUndefined();
   });
 
   it('후보 [KICK], 스틱 pad SNARE, ambiguous → KICK·chart', async () => {

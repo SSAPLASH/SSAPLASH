@@ -9,6 +9,8 @@ export interface ChartNote {
   pad: PadId;
   /** 0~127, 선택 */
   velocityHint?: number;
+  /** BE 채보의 노트 id(업로드 matchedNoteId). 내장 채보는 미설정 */
+  noteId?: string;
 }
 
 export interface Chart {
@@ -33,6 +35,8 @@ export interface Chart {
   hasAccompaniment?: boolean;
   /** 템포·박자 변화가 있는 곡. 고정 bpm으로 그린다(1단계 미지원) */
   variableTempo?: boolean;
+  /** BE 채보의 전체 노트 수. 변환에서 버린 노트가 있으면 notes.length와 다르다. 내장 채보는 미설정 */
+  sourceNoteCount?: number;
 }
 
 /* ---------- 내장 데모 채보 생성기 ----------

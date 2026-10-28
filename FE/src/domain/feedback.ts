@@ -14,8 +14,11 @@ export const MEAN_DELTA_THRESHOLD_MS = 15;
 export const SEGMENT_ACCURACY_GAP = 0.15;
 export const SEGMENT_BARS = 4;
 export const SEGMENT_MIN_NOTES = 4;
-/** 4. 패드 Δ 표준편차 하한(ms)과 최소 표본 수 */
-export const PAD_STD_THRESHOLD_MS = 35;
+/**
+ * 4. 패드 Δ 표준편차 하한 비율(× log.timing.goodMs)과 최소 표본 수.
+ * 오차가 판정 폭(±goodMs) 안에 갇혀 고르게 흩어져도 표준편차가 약 0.58×goodMs라 35ms 고정은 거의 걸리지 않는다(AI 쪽과 같은 수정).
+ */
+export const PAD_STD_GOOD_RATIO = 0.5;
 export const PAD_STD_MIN_SAMPLES = 4;
 /** 5. 채보 밖 타격 비율 하한 (노트 수 대비) */
 export const STRAY_RATE_THRESHOLD = 0.1;
@@ -89,7 +92,8 @@ const signed = (x: number) => `${x >= 0 ? '+' : '-'}${Math.abs(x).toFixed(0)}`;
 
 export function summarizeByPad(log: PlayLog): PadSummary[] {
   return ALL_PADS.flatMap((pad) => {
-    const notes = log.notes.filter((n) => n.pad === pad);
+    // 분모는 판정된 노트만(BE 리포트 padStats와 같은 기준). 중도 중단으로 판정 전인 노트는 뺀다
+    const notes = log.notes.filter((n) => n.pad === pad && n.judgement !== null);
     if (!notes.length) return [];
     const deltas = notes.flatMap((n) => (n.deltaMs === null ? [] : [n.deltaMs]));
     return [
@@ -98,7 +102,7 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
         total: notes.length,
         perfect: notes.filter((n) => n.judgement === 'PERFECT').length,
         good: notes.filter((n) => n.judgement === 'GOOD').length,
-        miss: notes.filter(isMiss).length,
+        miss: notes.filter((n) => n.judgement === 'MISS').length,
         meanDeltaMs: deltas.length ? mean(deltas) : null,
       },
     ];
@@ -182,12 +186,13 @@ export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPe
   }
 
   // 4. 패드별 Δ 표준편차 (가장 큰 패드 하나)
+  const padStdThresholdMs = PAD_STD_GOOD_RATIO * log.timing.goodMs;
   let jittery: { pad: PadId; sd: number } | null = null;
   for (const pad of ALL_PADS) {
     const ds = notes.flatMap((n) => (n.pad === pad && n.deltaMs !== null ? [n.deltaMs] : []));
     if (ds.length < PAD_STD_MIN_SAMPLES) continue;
     const sd = std(ds);
-    if (sd >= PAD_STD_THRESHOLD_MS && (!jittery || sd > jittery.sd)) jittery = { pad, sd };
+    if (sd >= padStdThresholdMs && (!jittery || sd > jittery.sd)) jittery = { pad, sd };
   }
   if (jittery) {
     const label = PAD_META[jittery.pad].label;

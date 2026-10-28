@@ -492,7 +492,7 @@ const param = (
   max = 32767,
 ): StickParam => ({ id, key, label, unit, defaultValue, min, max });
 
-/** 원문 5장 파라미터 표(0x08 예약 제외 14개, id 오름차순). 기본값은 STM32+BNO055 실측 기준 */
+/** 원문 5장 파라미터 표(0x08 예약 제외 14개, id 오름차순). `defaultValue`는 NUCLEO(STM32+BNO055, fwMajor 0) 실측 기준 */
 export const STICK_PARAMS: readonly StickParam[] = [
   param(0x01, 'swingStart', '스윙 시작 속도', '°/s', 150),
   param(0x02, 'brakeRatio', '판정 감속 비율', '%', 30, 0, 100),
@@ -512,4 +512,30 @@ export const STICK_PARAMS: readonly StickParam[] = [
 
 export function stickParamById(id: number): StickParam | undefined {
   return STICK_PARAMS.find((p) => p.id === id);
+}
+
+/** 스틱 펌웨어 종류. STATUS의 fwMajor로 가른다(0 NUCLEO, 1 Feather nRF52840) */
+export type StickFirmware = 'nucleo' | 'feather';
+
+export const STICK_FIRMWARE_LABEL: Record<StickFirmware, string> = {
+  nucleo: 'NUCLEO (fw 0.x)',
+  feather: 'Feather (fw 1.x)',
+};
+
+/** Feather fw 1.0 기본값이 NUCLEO와 다른 파라미터(id → 값). 나머지는 같다 */
+const FEATHER_DEFAULT_OVERRIDES: Record<number, number> = {
+  0x0a: 60, // minDecel
+  0x0b: 160, // maxSwingMs
+  0x0e: 800, // tsCorrUs
+  0x0f: 1200, // velMax
+};
+
+/** fwMajor → 펌웨어 종류. 0만 NUCLEO이고 그 밖(1·미래 버전)은 Feather 표를 쓴다 */
+export function firmwareOfMajor(fwMajor: number): StickFirmware {
+  return fwMajor === 0 ? 'nucleo' : 'feather';
+}
+
+/** 펌웨어별 파라미터 기본값 */
+export function stickParamDefault(p: StickParam, fw: StickFirmware): number {
+  return fw === 'feather' ? (FEATHER_DEFAULT_OVERRIDES[p.id] ?? p.defaultValue) : p.defaultValue;
 }

@@ -106,3 +106,61 @@ export function songDetailFromDto(d: Record<string, unknown>): SongDetail {
     charts: sortCharts(charts),
   };
 }
+
+/** 곡 처리 상태 표기(설계 ACCT-001 마이페이지 3-2). tone은 배지 색, 모르는 값은 원문 그대로 */
+export interface SongStatusView {
+  label: string;
+  tone: 'default' | 'active' | 'danger';
+}
+
+export function songStatusView(status: string): SongStatusView {
+  switch (status) {
+    case 'READY':
+      return { label: '완료', tone: 'default' };
+    case 'PROCESSING':
+      return { label: '채보 생성 중', tone: 'active' };
+    case 'FAILED':
+      return { label: '생성 실패', tone: 'danger' };
+    default:
+      return { label: status, tone: 'default' };
+  }
+}
+
+/** 플레이·악보 연습에 쓸 수 있는 상태(설계 3-3). READY만 true */
+export function isPlayableStatus(status: string): boolean {
+  return status === 'READY';
+}
+
+function mineGroup(status: string): number {
+  if (status === 'PROCESSING') return 0;
+  if (status === 'FAILED') return 1;
+  return 2;
+}
+
+function createdTime(iso: string): number {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** 내 곡 정렬: 처리 중 → 실패 → 그 밖, 같은 그룹은 createdAt 내림차순. 원본은 건드리지 않는다 */
+export function sortMineSongs(items: readonly SongSummary[]): SongSummary[] {
+  return [...items].sort((a, b) => mineGroup(a.status) - mineGroup(b.status) || createdTime(b.createdAt) - createdTime(a.createdAt));
+}
+
+export interface MineSongSummary {
+  total: number;
+  ready: number;
+  processing: number;
+  failed: number;
+}
+
+/** 내 곡 상태별 개수. 모르는 상태는 total에만 센다 */
+export function summarizeMineSongs(items: readonly SongSummary[]): MineSongSummary {
+  const s: MineSongSummary = { total: items.length, ready: 0, processing: 0, failed: 0 };
+  for (const it of items) {
+    if (it.status === 'READY') s.ready += 1;
+    else if (it.status === 'PROCESSING') s.processing += 1;
+    else if (it.status === 'FAILED') s.failed += 1;
+  }
+  return s;
+}

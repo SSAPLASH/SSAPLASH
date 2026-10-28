@@ -12,6 +12,7 @@ import {
   PARAM_ACK_YAW_OFFSET,
   StreamMode,
   STICK_PARAMS,
+  stickParamDefault,
   stickParamById,
 } from '@/input/stickProtocol';
 import { STICK_PADS } from '@/domain/pads';
@@ -263,7 +264,9 @@ export class MockStick {
     this.padCount = 0;
     this.mode = StreamMode.HIT_AND_POSE;
 
-    this.publish(buildLog('BOOT 0.1 mock000'));
+    // Feather fw 1.0 모사: BOOT 뒤 스틱마다 부팅 바이어스(0.1°/s) 로그
+    this.publish(buildLog('BOOT 1.0 nrf52'));
+    for (const role of this.roles()) this.publish(buildLog(`BIAS ${3 + role} -2 4`, role));
     this.emitStatus();
     this.intervals.push(setInterval(() => this.emitStatus(), STATUS_INTERVAL_MS));
     this.intervals.push(setInterval(() => this.emitPose(), 1000 / poseHz));
@@ -285,7 +288,7 @@ export class MockStick {
 
   private emitStatus(): void {
     for (const role of this.roles()) {
-      this.publish(buildStatus({ role, batteryPct: null, rssi: -60, fwMajor: 0, fwMinor: 1 }));
+      this.publish(buildStatus({ role, batteryPct: null, rssi: -60, fwMajor: 1, fwMinor: 0 }));
     }
   }
 
@@ -334,7 +337,7 @@ export class MockStick {
     }
     // HIT 사이에 가끔 거른 스윙 LOG
     if (this.hitCount % 3 === 0) {
-      const text = this.hitCount % 6 === 0 ? 'drop slow 512' : 'drop weak 320';
+      const text = this.hitCount % 6 === 0 ? 'drop slow 512' : this.hitCount % 9 === 3 ? 'drop short 90' : 'drop weak 320';
       this.later(hitMs / 2, () => this.publish(buildLog(text, role)));
     }
   }
@@ -382,7 +385,7 @@ export class MockStick {
     switch (bytes[0]) {
       case CommandType.GET_PARAMS: {
         STICK_PARAMS.forEach((p, i) => {
-          this.later(REPLY_GAP_MS * (i + 1), () => this.publish(buildParamAck({ paramId: p.id, value: p.defaultValue })));
+          this.later(REPLY_GAP_MS * (i + 1), () => this.publish(buildParamAck({ paramId: p.id, value: stickParamDefault(p, 'feather') })));
         });
         this.later(REPLY_GAP_MS * (STICK_PARAMS.length + 1), () =>
           this.publish(buildParamAck({ paramId: PARAM_ACK_END, value: STICK_PARAMS.length })),
