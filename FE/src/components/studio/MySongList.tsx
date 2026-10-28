@@ -1,0 +1,78 @@
+// 내 곡 섹션 목록 (설계 4-2). 로딩·오류·행 목록을 그린다. 빈 목록(①)은 페이지가 처리한다.
+import type { ActiveJob, JobProgress } from '@/domain/chartJob';
+import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
+import { MySongRow } from './MySongRow';
+
+interface Props {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  items: SongSummary[];
+  error: string | null;
+  onRetry: () => void;
+  active: ActiveJob | null;
+  progress: JobProgress | null;
+  justDoneId: number | null;
+  onReupload: (song: SongSummary) => void;
+}
+
+/** 202 직후 목록에 아직 없는 활성 작업을 임시 곡으로 만든다 */
+function tempSong(job: ActiveJob): SongSummary {
+  return {
+    id: job.songId,
+    title: job.title,
+    artist: '',
+    source: 'AUDIO',
+    status: 'PROCESSING',
+    bpm: 0,
+    timeSignature: '4/4',
+    durationMs: null,
+    hasAccompaniment: false,
+    difficulties: [],
+    createdAt: job.startedAt,
+  };
+}
+
+export function MySongList({ status, items, error, onRetry, active, progress, justDoneId, onReupload }: Props) {
+  if (status === 'idle' || status === 'loading') {
+    return (
+      <div className="row" style={{ justifyContent: 'center', padding: 24 }}>
+        <span className="spinner" aria-label="불러오는 중" />
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="notice error col" role="alert">
+        <span>{error ?? '내 곡을 불러오지 못했습니다.'}</span>
+        <button type="button" className="btn-ghost" onClick={onRetry}>
+          다시 시도
+        </button>
+      </div>
+    );
+  }
+
+  const merged = active && !items.some((s) => s.id === active.songId) ? [tempSong(active), ...items] : items;
+  if (merged.length === 0) return null;
+  const sorted = sortMineSongs(merged);
+  // 활성 작업 행은 항상 맨 위에 둔다
+  const rows = active
+    ? [...sorted.filter((s) => s.id === active.songId), ...sorted.filter((s) => s.id !== active.songId)]
+    : sorted;
+
+  return (
+    <ul className="studio-list">
+      {rows.map((song) => {
+        const isActive = active !== null && song.id === active.songId;
+        return (
+          <MySongRow
+            key={song.id}
+            song={song}
+            job={isActive ? active : null}
+            progress={isActive ? progress : null}
+            justDone={song.id === justDoneId}
+            onReupload={onReupload}
+          />
+        );
+      })}
+    </ul>
+  );
+}
