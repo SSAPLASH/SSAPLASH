@@ -2251,3 +2251,68 @@ a.my-list-row:focus-visible {
   font-size: 14px;
   line-height: 1.7;
 }
+
+/* 내 곡 목록(/studio) */
+.studio-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.studio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+.studio-row.job {
+  border-color: var(--brass);
+}
+.studio-row.just-done {
+  animation: studio-just-done 2s ease-out;
+}
+@keyframes studio-just-done {
+  from {
+    background: color-mix(in srgb, var(--brass) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+.studio-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.studio-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.studio-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.studio-row-actions,
+.studio-row-fail {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.studio-row-fail p {
+  margin: 0 auto 0 0;
+}
+.studio-strip {
+  gap: 4px;
+}
