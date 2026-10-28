@@ -15,7 +15,7 @@
 | 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 tracking URI만 바꾼다 |
 | 보고서 | pandas, matplotlib | CSV 집계, 마크다운 표, PNG 그래프 |
 | 모델 실행 | PyTorch + ZFTurbo MSST(msst), demucs, openunmix | 선택 extra `models`. 단위 테스트·CI에는 필요 없다 |
-| 채보 모델 실행 | ADTOF-pytorch(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart·YourMT3+) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
+| 채보 모델 실행 | ADTOF-pytorch·Beat This!(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart·YourMT3+) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
 
 이 스택은 2026-10-19 기준 잠정 확정이다. 팀 전체 기술 스택이 확정되면 바뀔 수 있다.
 
@@ -46,14 +46,16 @@ AI/
 │   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
 │   │                    build_report(파일 생성)
 │   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
-│   │                    separation(음원 분리 SeparationModule), cli(ssaplash-chart 명령)
+│   │                    separation(음원 분리 SeparationModule), transcription(드럼 채보 TranscriptionModule),
+│   │                    chart_json(채보 JSON 만들기·검증), tempo(bpm 추정), cli(ssaplash-chart 명령)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
 │   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
 │   └─ server/           AI 서버 진입점 app.py (FastAPI, /health), weak_segments.py (POST /analysis/weak-segments)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
-├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml, 모델 없이 흐름만 확인하는 separation_mock.yaml)
+├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml·transcription.yaml, 모델 없이 흐름만 확인하는
+│                        separation_mock.yaml·transcription_mock.yaml)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py, pack_server_upload.py), 별도 환경 채보 스크립트 (transcribers_ext/)
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
@@ -143,6 +145,50 @@ uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/cha
 
 ```bash
 uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/chart/separation_mock.yaml
+```
+
+## 드럼 채보 실행 (서비스 추론 모듈, S15P31A307-169)
+
+드럼 트랙 파일 하나로 채보 JSON을 만든다. 채보 모델은 벤치마크 어댑터를 그대로 쓰므로 모델 실행 패키지가 필요하다 (`uv sync --extra models --extra transcribers`). 기본 모델은 ADTOF + 드럼 킷 분리(MDX23C DrumSep)이고, 드럼 킷 분리 가중치는 첫 실행 때 `data/models/mdx23c_drumsep/`에 받는다. bpm 추정에 쓰는 Beat This! 가중치(81MB)도 첫 실행 때 `data/models/beat_this/`에 받고 md5로 확인한다. 공식 서버가 안 되면 개발자 사이트에서 받는다.
+
+```bash
+# 드럼 트랙 → 채보
+uv run ssaplash-chart transcribe data/chart/funk_108/drums.flac --out data/chart/funk_108
+# 원곡 → 분리 → 채보. 마지막에 단계별 시간·메모리를 찍는다
+uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
+```
+
+| 파일 | 내용 |
+| --- | --- |
+| `chart.json` | 채보. BE 채보 결과 형식 schemaVersion 1 그대로라 워커가 `result`에 넣어 보내면 된다 |
+| `transcription.json` | 결과 메타. 노트 수·패드별 수, 길이 ms, bpm, 첫 박 시각 ms, 모델 이름·버전, 올리기·채보 시간 ms, 최대 GPU 메모리·RAM MB |
+
+`chart.json`에서 정해진 값은 다음과 같다.
+
+- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<yaml 해시 12자리>`로 남는다
+- 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
+- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE)다
+- bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고, 박 간격 평균으로 계산한다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. `offsetMs`는 0, 박자는 `4/4` 고정이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
+- 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
+
+채보 모델이나 탐·심벌 규칙을 바꿀 때는 `configs/chart/transcription.yaml`의 `model_config` 경로만 바꾼다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
+
+| 키 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `model_config` | `configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml` | 채보 모델 yaml |
+| `device` | `cuda` | 없으면 `cpu`로 내려간다 |
+| `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
+| `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
+| `tempo.min_bpm`, `tempo.max_bpm` | 60, 200 | 이 범위 밖이면 2배·절반으로 접는다. 상한은 하한의 2배 이상 |
+| `tempo.time_signature` | `4/4` | 박자. 추정하지 않는다 |
+| `max_duration_sec` | 600 | 이보다 긴 드럼 트랙은 입력 오류 |
+
+환경 변수와 종료 코드는 음원 분리와 같다. 파이썬에서 쓸 때는 `ssaplash_ai.chart.transcription.TranscriptionModule`을 만들고 `load()` 한 번, `transcribe_file()` 곡마다, `close()` 순서로 부른다. 워커는 BE가 준 원곡 길이를 `transcribe_file(..., duration_ms=)`로 넘기면 노트 시각 상한과 `metrics.durationMs`에 그 값을 쓴다.
+
+모델 없이 흐름만 확인할 때는 mock 설정을 쓴다. 온셋 검출로 시각만 찾고 패드는 전부 KICK이 나온다.
+
+```bash
+uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config configs/chart/transcription_mock.yaml
 ```
 
 ## 약점 구간 분석 (COACH-003, S15P31A307-138)
