@@ -251,6 +251,7 @@ MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바
 | Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
 | Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
 | YourMT3+ | `external/yourmt3.yaml` (앱 기본값), `external/yourmt3_ps.yaml` (보조) | external | `.venv-yourmt3` + `ext/YourMT3` | 8 | 피아노·베이스까지 받아 적는 다악기 모델. 그중 드럼 노트만 쓴다. 코드는 GitHub이 아니라 HF Space에만 있어 스크립트의 `download`로 코드와 체크포인트(하나에 약 0.55GB)를 판을 고정해 받는다. 코드·가중치 Apache-2.0 |
+| drum2midi | `external/drum2midi.yaml` (세기·페달 학습 모델 끔), `external/drum2midi_learned.yaml` (원본 기본값) | external | `.venv-drum2midi` + `ext/drum2midi` | 8 | ADTOF + 드럼 킷 분리 어댑터가 참고한 원본 프로그램(S15P31A307-164 비교용). 곡마다 `drum2midi.py`를 불러서 채보 시간에 분리 모델 로드가 섞인다. 기준값·탐 나누기를 MDB Drums로 맞춘 프로그램이라 MDB 점수는 유리할 수 있다. 코드 MIT, 가중치는 ADTOF(CC BY-NC-SA)·DrumSep(미명시) |
 
 **별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다. Windows 경로이지만 그 파일이 없으면 하네스가 `.venv-<env_name>/bin/python`을 대신 찾으므로 Linux·코랩에서도 yaml을 고칠 필요가 없다.
 
@@ -286,6 +287,17 @@ uv pip install --python .venv-yourmt3/Scripts/python.exe torch==2.8.0 torchaudio
 uv pip install --python .venv-yourmt3/Scripts/python.exe "numpy==1.26.4" "transformers==4.45.1" "tokenizers==0.20.3" "huggingface-hub<1.0" "pytorch-lightning==2.5.6" "torchmetrics==1.9.0" "einops==0.8.2" "mido==1.3.3" "mir-eval==0.8.2" "scikit-learn==1.7.2" "scipy==1.15.3" "wandb==0.31.0" "soundfile==0.14.0" "deprecated==1.3.1"
 # 코드(HF Space mimbres/YourMT3의 amt/src·model_helper.py)와 체크포인트(HF 모델 저장소)를 ext/YourMT3에 받음. 판 고정, 약 1.1GB
 .venv-yourmt3/Scripts/python.exe -I scripts/transcribers_ext/yourmt3_transcribe.py download --repo-dir ext/YourMT3
+
+# drum2midi: Python 3.12 + CUDA 12.8판 torch·torchaudio·torchvision을 먼저 넣고 저장소의 setup_env.py로 나머지(ADTOF-pytorch
+# 클론 포함)를 설치. torchvision을 먼저 넣지 않으면 setup_env.py가 torchvision 최신판을 따라 torch를 CUDA 13판으로 올리고,
+# 그 뒤 torch만 되돌려도 CUDA 13판 cuDNN 파일이 남아 CUDNN_STATUS_NOT_INITIALIZED가 난다(드라이버 570 서버에서 확인).
+# FFmpeg 프로그램이 PATH에 있어야 한다. 드럼 분리 모델은 첫 실행 때 약 400MB를 받는다
+git clone --depth 1 https://github.com/miraer/drum2midi ext/drum2midi
+uv venv .venv-drum2midi --python 3.12 --seed
+uv pip install --python .venv-drum2midi/Scripts/python.exe torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+.venv-drum2midi/Scripts/python.exe ext/drum2midi/setup_env.py --no-render
+# librosa 1.0이 audioread를 같이 깔지 않아 드럼 분리 단계가 ModuleNotFoundError로 멈춘다(2026-10-28 서버에서 확인)
+uv pip install --python .venv-drum2midi/Scripts/python.exe audioread
 ```
 
 별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM·YourMT3+), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
@@ -365,6 +377,12 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 `by_song.csv`의 `tomRescued`가 그렇게 남긴 수다. `tomConsistentAcc`·`f1TomConsistent`는 곡 안에서 탐 이름만 서로 바뀐 것(탐 둘인 킷의 위쪽 탐을 MID로 적을지 SMALL로 적을지)을 맞은 것으로 친 보조 지표로, 곡마다 정답 패드와 붙인 패드를 가장 잘 맞춰 주는 일대일 대응으로 센다. 2026-10-28 비교 결과는 `docs/chart-rules/tom-detect-2026-10-28/`.
 
 `tom-pitch`는 ADTOF가 탐으로 잡은 타격마다 음높이·거르기 비율·짝지은 정답 탐·근처 정답 패드를 `pred_tom.csv`에 남기고, 거르기 비율 분포(`tom_gate_ratio.png`)와 문턱값별로 버려지는 정답 탐·정답 없는 탐 수를 `summary.md`에 적는다.
+
+drum2midi 원본(`external/drum2midi.yaml`)과 우리 규칙 후보는 `scripts/compare_drum2midi.py`로 같은 표에 놓는다. run-transcription 결과 폴더와 rule-eval 결과 폴더를 받아 8패드·탐 3종·크래시와 라이드·킥과 스네어와 하이햇·탐 검출 F1을 50ms 기준으로 세고, 곡 단위로 2,000번 다시 뽑은 95% 구간과 같은 곡끼리 짝지은 탐 3종 F1 차이 구간을 붙인다. 구간이 0을 포함하면 그 데이터로는 어느 쪽이 나은지 판정할 수 없다는 뜻이다. rule-eval은 `--two-tom-upper` 없이 돌린 결과를 써야 정답 표기가 같다.
+
+```bash
+uv run python scripts/compare_drum2midi.py --run d2m=data/results/d2m-drums-mdb --run d2m=data/results/d2m-drums-gmd --rule-eval fixed=data/results/rule-eval-tom-detect --rule-eval pk_gap30=data/results/rule-eval-tom-final --out data/results/compare-drum2midi.md
+```
 
 ## 지표 정의
 
