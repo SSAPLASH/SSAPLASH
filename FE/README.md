@@ -51,10 +51,11 @@ src/
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
-│   └─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·조회 오류 분류
+│   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
+│   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
 ├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · My(마이페이지) · Login · AuthCallback
 ├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·JobStageStrip·MySongRow·MySongList, 내 곡 화면) · mypage/(MySongSummary·RecentPlays, 마이페이지)
-│   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · AnalysisPlaceholder
+│   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · WeakSegments(AI 약점 구간·상태 안내)
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu · WithdrawDialog(회원 탈퇴 확인)
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
@@ -215,7 +216,10 @@ src/
 - **본문 조립:** `domain/playUpload.buildUploadBody`. 판정 타격 `tMs` = 노트 시각 + Δ, MISS `tMs` = 노트 시각, 정확도는 `score / 전체 노트 수` 백분율 소수 둘째 자리 HALF_UP. 입력은 실제 스틱(ble·webserial·websocket)만 `STICK`, 키보드·포인터는 `KEYBOARD`(센서 필드 null). `consent`는 정책이 정해질 때까지 `false`.
 - **업로드하지 않는 경우(SKIPPED):** 내장 곡, 이전 로그, 변환에서 버린 노트가 있는 채보, 자유 연주, 50,000행 초과. 결과 화면 버튼에 사유가 나온다.
 - **실패·재전송:** 상태는 로그의 `upload`(UPLOADING·DONE·FAILED·SKIPPED)에 저장한다. 처음 조립한 본문을 보관해 같은 playId로 그대로 다시 보낸다(같은 UUID에 다른 내용은 409). 네트워크·5xx·401·`PLAY_STATE_CHANGED`는 재시도 가능, 400·404·그 밖의 409·413은 불가. 결과 화면에 들어올 때 한 번 자동 재전송하고 이후는 **다시 시도** 버튼.
-- **상세 분석:** 서버 데이터만 쓴다. `api/reports`가 정확도(0~100 → 0~1)·패드 옛 이름·null을 변환하고, 노트는 `limit` 1000으로 `nextAfterSeq`가 null일 때까지 받아 시간순으로 정렬한다(seq는 시간순이 아니다). 약점·추천 자리는 `analysisStatus`에 따라 안내만 보인다.
+- **상세 분석:** 서버 데이터만 쓴다. `api/reports`가 정확도(0~100 → 0~1)·패드 옛 이름·null을 변환하고, 노트는 `limit` 1000으로 `nextAfterSeq`가 null일 때까지 받아 시간순으로 정렬한다(seq는 시간순이 아니다).
+- **AI 약점 구간(COACH-003, `components/report/WeakSegments`):** 리포트의 `weakSegments`를 `api/reports.toWeakSegments`가 화면 타입으로 바꾼다. 배열이 아니면 null(미분석·실패), `[]`는 "약점 없음". `description`은 서버 한국어 문장을 그대로 보여 주고 `pattern`으로 분기하지 않는다(모르는 패턴·`metrics` 키는 통과). 카드는 서버 순서 그대로 `scope: WHOLE`("연주 전체") 그룹을 위에, `SEGMENT`를 아래에 두고, 구간은 초 단위(악보 모드는 `domain/report.segmentBars`로 마디 병기), `severity ≥ 0.7`은 "주의" 강조. 상태별 안내: `PENDING`은 "분석 중" + 재조회, `DONE`+`[]`는 판정 수 합이 20 미만이면 "곡이 짧아 분석하지 않았어요"(`isTooShortForAnalysis`, BE가 사유를 저장하지 않아 FE 추정) 아니면 "뚜렷한 약점 없음", `FAILED`는 실패 안내(나머지 리포트는 정상), `NOT_REQUESTED`는 "분석 대상이 아니에요". 추천 연습(`recommendedDrills`)은 아직 해석하지 않는다.
+- **PENDING 재조회:** 리포트 페이지가 `app/analysisPoller`로 2초 간격 최대 5회 `GET /report`만 다시 받는다(`playSync.refreshReport`, 프리패치 캐시의 리포트만 교체하고 노트는 유지). 5회 뒤에도 PENDING이면 "잠시 뒤 다시 확인" 안내와 **새로고침** 버튼(5회 재시작). 결과 화면은 재조회하지 않는다.
+- **결과 화면 분석 일원화:** 플레이마다 분석 생성기는 하나다. 업로드 대상 플레이(`domain/report.isUploadTarget`: 서버 형식 로그이고 SKIPPED·재시도 불가 FAILED가 아님)는 결과 화면에 로컬 피드백 카드·미니 악보·패드 요약 표를 보이지 않고, **상세 분석 보기** 버튼 설명이 프리패치 리포트의 분석 상태를 보여 준다(`domain/report.analysisTeaser`: "분석 중" / "AI가 약점 n곳을 찾았어요" / "뚜렷한 약점 없음" / "분석 실패"). 업로드가 생략되거나 재시도 불가로 실패한 플레이만 "간단 피드백" 제목으로 로컬 카드를 보여 준다.
 
 ## 반주 재생
 
@@ -255,11 +259,11 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 카운트인 뒤 반주 0초 = 세션 0ms. HUD 아래 작은 글씨로 동기 Δ(시작·재개)를 보인다.
 - **스트립:** 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetStrip`에 넘긴다. HUD는 진행 행(시간·진행 바·마디), 판정 6칸 타일(노트·Perfect·Good·Miss·채보 밖·최근 Δ), 범례 줄로 구성한다.
 - **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`가 둘 다 false로 바뀌고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
-- **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 규칙 기반 피드백 카드(최대 3개)와 패드별 요약을 보여 준다. "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
+- **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 업로드가 생략된 플레이(내장 곡 등)에 한해 규칙 기반 "간단 피드백" 카드(최대 3개)와 패드별 요약을 보여 준다(업로드 대상 플레이는 리포트의 AI 약점 분석으로 일원화 — 위 "플레이 기록 업로드·상세 분석" 절). "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
 
-피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다(AI 스코어링이 오면 이 생성기를 교체). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
+피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다. 서버 AI 분석이 붙은 뒤로는 업로드가 안 되는 플레이의 폴백으로만 쓴다. 패드 Δ 표준편차 규칙의 기준은 35ms 고정이 아니라 `0.5 × goodMs`(goodMs 50이면 25ms)다 — 오차가 판정 폭 안에 갇혀 있어 고르게 흩어져도 표준편차가 약 0.58×goodMs라 고정값은 거의 걸리지 않았다(AI 쪽과 같은 수정). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
 악보 렌더(`components/SheetStrip`)는 클라이언트 Canvas 5선이며 마디당 320px(`SHEET_BAR_PX`) 시간 비례로 가로로 흐르고, 고정 기준선(화면 폭 35%)이 지금 칠 위치다. 글리프 배치(보표 위치·머리·빔)는 `domain/sheet.layoutBar`, 시간 → x와 보이는 마디 범위는 `components/sheetStripMath`의 순수 함수이며 컴포넌트가 자체 rAF로 `getSongTime()`을 읽어 그린다.
-결과 페이지는 피드백 카드가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetStrip`과 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 카드를 누르면 구간이 바뀐다.
+결과 페이지(로컬 카드가 보이는 경우)는 피드백 카드가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetStrip`과 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 카드를 누르면 구간이 바뀐다.
 
 포인터 모의 IMU를 켜면 마우스 위치가 스틱 자세가 되고, F(왼손)/J(오른손) 또는 좌/우클릭이 타격이다. 이 두 키는 그동안 고정 키에서 제외된다. 방향키로도 자세를 움직일 수 있다.
 
