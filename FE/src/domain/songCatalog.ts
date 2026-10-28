@@ -106,3 +106,22 @@ export function songDetailFromDto(d: Record<string, unknown>): SongDetail {
     charts: sortCharts(charts),
   };
 }
+
+/** 곡 처리 상태 표기(설계 ACCT-001 마이페이지 3-2). tone은 배지 색, 모르는 값은 원문 그대로 */
+export interface SongStatusView {
+  label: string;
+  tone: 'default' | 'active' | 'danger';
+}
+
+export function songStatusView(status: string): SongStatusView {
+  switch (status) {
+    case 'READY':
+      return { label: '완료', tone: 'default' };
+    case 'PROCESSING':
+      return { label: '채보 생성 중', tone: 'active' };
+    case 'FAILED':
+      return { label: '생성 실패', tone: 'danger' };
+    default:
+      return { label: status, tone: 'default' };
+  }
+}
