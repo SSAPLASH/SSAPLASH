@@ -2392,3 +2392,12 @@ a.my-list-row:focus-visible {
 .studio-strip {
   gap: 4px;
 }
+
+/* ---- 리포트 약점 구간 (COACH-003) ---- */
+.weak-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.weak-card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--radius-sm); background: var(--stage-deep); }
+.weak-card.severe { border-left-color: var(--miss); }
+.weak-badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); color: var(--ink-dim); }
+.weak-badge.severe { border-color: var(--miss); color: var(--miss); }
+.weak-spinner { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--brass); border-radius: 50%; animation: weak-spin 0.9s linear infinite; }
+@keyframes weak-spin { to { transform: rotate(360deg); } }
