@@ -4,6 +4,7 @@ import { loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
 import { fetchMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
+import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';
@@ -91,6 +92,12 @@ export const useAuth = create<AuthState>()((set, get) => ({
   logout: async () => {
     // 먼저 내리고 서버에 알린다. 토큰 비움 알림(sessionLost)은 이미 anonymous라 무시된다
     set({ status: 'anonymous', user: null, lostReason: null });
+    // 다른 계정으로 로그인했을 때 이전 계정의 채보 작업을 폴링하지 않게 기록을 지운다
+    try {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    } catch {
+      // 저장소를 못 써도 로그아웃은 진행한다
+    }
     await logoutApi();
   },
   sessionLost: () => {

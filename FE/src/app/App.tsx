@@ -10,6 +10,7 @@ import { FreePlayPage } from '@/pages/FreePlayPage';
 import { ResultPage } from '@/pages/ResultPage';
 import { ReportPage } from '@/pages/ReportPage';
 import { SheetPage } from '@/pages/SheetPage';
+import { StudioPage } from '@/pages/StudioPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="play" element={<PlayPage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
+          <Route path="studio" element={<StudioPage />} />
           <Route path="result/:playId" element={<ResultPage />} />
           <Route path="result/:playId/report" element={<ReportPage />} />
           {StickMonitorPage && (
