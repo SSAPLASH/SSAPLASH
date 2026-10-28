@@ -46,6 +46,8 @@ models = [
 transcribers = [
     "adtof-pytorch @ git+https://github.com/xavriley/ADTOF-pytorch",
     "pretty-midi>=0.2.10",
+    # 채보 bpm 추정 (S15P31A307-169, 설계 U15). 코드·가중치 MIT
+    "beat-this>=1.1.0",
 ]
 
 [project.scripts]
