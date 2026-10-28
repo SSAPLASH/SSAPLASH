@@ -620,3 +620,70 @@ def test_히스토그램_피크_묶기는_타격이_많아_틈이_없어도_탐_
     assert one.n_clusters == 1 and set(one.pads) == {"FLOOR_TOM"}
     with pytest.raises(ValueError, match="tom_relative_method"):
         rules_with_defaults({"tom_relative_method": "x"})
+
+
+# ---- drum2midi 원본 비교 (S15P31A307-164 작업 16) ----
+
+# 가짜 drum2midi.py: 받은 인자를 args.json에 적고 -o 경로에 노트 세 개짜리 MIDI를 씀. FAIL 인자면 실패
+FAKE_DRUM2MIDI = """
+import json, sys
+from pathlib import Path
+import pretty_midi
+args = sys.argv[1:]
+Path("args.json").write_text(json.dumps(args))
+if "FAIL" in args:
+    print("boom", file=sys.stderr)
+    sys.exit(3)
+out = Path(args[args.index("-o") + 1])
+pm = pretty_midi.PrettyMIDI()
+kit = pretty_midi.Instrument(program=0, is_drum=True)
+for t, p, v in [(0.5, 43, 90), (0.1, 36, 100), (0.3, 50, 70)]:
+    kit.notes.append(pretty_midi.Note(velocity=v, pitch=p, start=t, end=t + 0.06))
+pm.instruments.append(kit)
+pm.write(str(out))
+"""
+
+
+def _load_drum2midi_script():
+    path = ROOT / "scripts" / "transcribers_ext" / "drum2midi_transcribe.py"
+    spec = importlib.util.spec_from_file_location("drum2midi_transcribe", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_drum2midi_스크립트는_저장소_폴더에서_곡마다_부르고_MIDI를_읽는다(tmp_path: Path):
+    script = _load_drum2midi_script()
+    repo = tmp_path / "drum2midi"
+    with pytest.raises(FileNotFoundError, match="drum2midi"):
+        script.load({"repo_dir": str(repo)}, "cpu")
+    repo.mkdir()
+    (repo / "drum2midi.py").write_text(FAKE_DRUM2MIDI, encoding="utf-8")
+    handle, checkpoint, _ = script.load({"repo_dir": str(repo)}, "cpu")
+    assert checkpoint.startswith("drum2midi@")
+    wav = tmp_path / "song.wav"
+    wav.write_bytes(b"")
+    hits = script.transcribe(handle, str(wav), "cuda:0", {})
+    assert [[round(t, 3), p, v] for t, p, v in hits] == [
+        [0.1, 36, 100],
+        [0.3, 50, 70],
+        [0.5, 43, 90],
+    ]
+    # 저장소 폴더에서 실행되고, 기본 옵션은 --no-learned, 장치는 cuda로 넘어감
+    args = json.loads((repo / "args.json").read_text(encoding="utf-8"))
+    assert args[0] == str(wav) and args[args.index("--device") + 1] == "cuda"
+    assert args[-1] == "--no-learned"
+    script.transcribe(handle, str(wav), "cpu", {"args": []})
+    assert "--no-learned" not in json.loads((repo / "args.json").read_text(encoding="utf-8"))
+    with pytest.raises(RuntimeError, match="boom"):
+        script.transcribe(handle, str(wav), "cpu", {"args": ["FAIL"]})
+
+
+def test_drum2midi_대응표는_탐_묶음_음번호를_플로어_미드_스몰로():
+    for name in ("drum2midi", "drum2midi_learned"):
+        cfg = TranscriberConfig.from_yaml(CONFIGS_DIR / "external" / f"{name}.yaml")
+        assert cfg.eight_pad is True and cfg.velocity is True
+        # 원본 TOM_LADDER: 1묶음 47, 2묶음 43·47, 3묶음 43·47·50
+        assert [cfg.labels[p] for p in (43, 47, 50)] == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]
+        assert cfg.labels[36] == "KICK" and cfg.labels[49] == "CRASH" and cfg.labels[51] == "RIDE"
+        assert {cfg.labels[p] for p in (42, 44, 46)} == {"HIHAT"}
