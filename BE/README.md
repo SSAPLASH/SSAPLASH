@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V17을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V18을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -376,6 +376,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
 | V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
 | V17 | `V17__widen_telemetry_pad_and_clock_offset.sql` | `telemetry_events` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL), `clock_offset_ms` `double precision`과 CHECK `ck_telemetry_events_clock_offset_ms` | -152 |
+| V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
 
 규칙:
 
@@ -402,7 +403,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V17까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V18까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -729,8 +730,9 @@ tMs−deltaMs, MISS는 tMs로 구한다. 그래프 전체 로딩 속도를 페�
 
 두 API 모두 읽기 전용 REPEATABLE_READ이며 요약 조회는 hits를 읽지 않는다. 현재 곡 삭제 상태·raw 저장소·AI 가용성에
 의존하지 않는다. endReason=null을 완료로 추정하지 않으며, meanDeltaMs는 부호 있는 편향이다.
-`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며, 신규 리포트의 기본값은 NOT_REQUESTED다.
-AI 요청과 상태 전환 시점은 AI 연동 합의 후속 범위로 둔다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
+`analysisStatus`는 DB에 저장된 NOT_REQUESTED/PENDING/DONE/FAILED 값을 반환하며 신규 리포트는 PENDING으로 분석을 시작한다.
+기존 NOT_REQUESTED 리포트는 자동 분석하지 않는다. weakSegments·recommendedDrills의 null/[] 구분과 저장된 배열은 그대로 전달한다.
+AI 호출과 상태 전환은 [리포트 약점 분석](#리포트-약점-분석-158번-후속)을 따른다.
 
 미인증·만료·탈퇴는 401, UUID·쿼리 오류는 400이다. 없는 세션·타인 세션은 `PLAY_NOT_FOUND` 404,
 본인 리포트 없음·FREE/TEMPO는 `REPORT_NOT_FOUND` 404이며 ProblemDetail의 code로 분기한다.
@@ -826,6 +828,21 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
+
+
+## 리포트 약점 분석 (158번 후속)
+
+신규 RHYTHM/SHEET 플레이의 세션·전체 타격·기본 리포트를 함께 저장한 뒤 별도 작업에서
+AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트는 AI 응답을 기다리지 않는다.
+`AI_ANALYSIS_BASE_URL` 기본값은 `http://ai-api:8000`이며 로컬 AI 시험 시 해당 서버 주소로 바꾼다.
+요청에는 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
+넘으면 자르지 않고 실패 처리한다. 연결 1초·응답 3초이며 연결 실패·시간 초과·5xx만 한 번 더 시도한다.
+
+`analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을
+뜻하며 표본 부족도 포함한다. 실패는 null이다. `generatorVersion`에는 기존 BE 버전과 분석기 버전을
+함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V18은 처리 시도 수와 임대를
+저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
+결과는 임대 토큰이 일치할 때만 반영한다. 요청 본문·playId는 분석 로그에 남기지 않는다.
 
 ## 탈퇴 후 곡·파일 정리 (37번)
 
