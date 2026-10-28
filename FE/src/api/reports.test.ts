@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getAllReportNotes, toReport, toReportNote, type ReportDto, type ReportNoteDto } from './reports';
+import { getAllReportNotes, toReport, toReportNote, toWeakSegments, type ReportDto, type ReportNoteDto } from './reports';
 
 const DTO: ReportDto = {
   id: 1,
@@ -87,5 +87,88 @@ describe('getAllReportNotes', () => {
     const notes = await getAllReportNotes('p', { first: { items: [], nextAfterSeq: null } });
     expect(notes).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// AI 샘플(develop-AI AI/tests/fixtures/coach/samples.json)의 response.weakSegments 복사
+const SAMPLE_A = [
+  {
+    fromMs: 2000,
+    toMs: 14501,
+    pattern: 'TIMING_LATE',
+    description: '전체적으로 평균 22ms 늦게 치고 있어요.',
+    causeTags: ['LATE', 'OVERALL'],
+    pads: ['HIHAT', 'SNARE'],
+    metrics: { severity: 0.36, meanDeltaMs: 21.7, hitCount: 22, scope: 'WHOLE' },
+  },
+  {
+    fromMs: 7000,
+    toMs: 12000,
+    pattern: 'MISS_CLUSTER',
+    description: '7~12초 구간에서 노트의 40%를 놓쳤어요.',
+    causeTags: ['MISS', 'CLUSTER'],
+    pads: ['SNARE'],
+    metrics: { severity: 0.67, missRate: 0.4, missCount: 4, noteCount: 10, scope: 'SEGMENT' },
+  },
+];
+const SAMPLE_B: unknown[] = [];
+const SAMPLE_C: unknown[] = [];
+
+const seg = (over: Record<string, unknown> = {}) => ({ ...SAMPLE_A[1], ...over });
+
+describe('toWeakSegments', () => {
+  it('샘플 A는 연주 전체 1개 + 구간 1개로 순서대로 변환한다', () => {
+    const r = toWeakSegments(SAMPLE_A)!;
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ fromMs: 2000, toMs: 14501, pattern: 'TIMING_LATE', scope: 'WHOLE', severity: 0.36, pads: ['HIHAT', 'SNARE'], causeTags: ['LATE', 'OVERALL'] });
+    expect(r[0].metrics).toEqual({ meanDeltaMs: 21.7, hitCount: 22 });
+    expect(r[1]).toMatchObject({ fromMs: 7000, toMs: 12000, pattern: 'MISS_CLUSTER', scope: 'SEGMENT', severity: 0.67, pads: ['SNARE'] });
+    expect(r[1].metrics).toEqual({ missRate: 0.4, missCount: 4, noteCount: 10 });
+  });
+
+  it('샘플 B·C(빈 배열)는 빈 배열, null은 null, 배열이 아니면 null', () => {
+    expect(toWeakSegments(SAMPLE_B)).toEqual([]);
+    expect(toWeakSegments(SAMPLE_C)).toEqual([]);
+    expect(toWeakSegments(null)).toBeNull();
+    expect(toWeakSegments(undefined)).toBeNull();
+    expect(toWeakSegments('약점')).toBeNull();
+    expect(toWeakSegments({ a: 1 })).toBeNull();
+  });
+
+  it('description이 비었거나 문자열이 아니거나 fromMs·toMs가 숫자가 아닌 요소와 객체가 아닌 요소는 버린다', () => {
+    const r = toWeakSegments([seg({ description: '' }), seg({ description: 3 }), seg({ fromMs: 'abc' }), seg({ toMs: null }), seg({ fromMs: '' }), 'x', null, seg()])!;
+    expect(r).toHaveLength(1);
+  });
+
+  it('모르는 pattern·추가 metrics 키·추가 causeTags는 그대로 통과한다', () => {
+    const [r] = toWeakSegments([seg({ pattern: 'NEW_PATTERN', causeTags: ['A', 'NEW'], metrics: { severity: 0.5, scope: 'SEGMENT', extra: { x: 1 } } })])!;
+    expect(r.pattern).toBe('NEW_PATTERN');
+    expect(r.causeTags).toEqual(['A', 'NEW']);
+    expect(r.metrics).toEqual({ extra: { x: 1 } });
+  });
+
+  it('pattern이 문자열이 아니면 빈 문자열, causeTags가 배열이 아니면 빈 배열, metrics가 객체가 아니면 빈 객체', () => {
+    const [r] = toWeakSegments([seg({ pattern: 5, causeTags: 'LATE', metrics: 'x' })])!;
+    expect(r).toMatchObject({ pattern: '', causeTags: [], metrics: {}, severity: 0, scope: 'SEGMENT' });
+  });
+
+  it('패드는 옛 이름을 정규화하고 모르는 패드는 버린다', () => {
+    const [r] = toWeakSegments([seg({ pads: ['HI_TOM', 'COWBELL', 'SNARE', 7] })])!;
+    expect(r.pads).toEqual(['SMALL_TOM', 'SNARE']);
+  });
+
+  it('숫자 문자열 시각을 받고 severity는 0~1로 자르며 없으면 0, scope가 이상하면 SEGMENT', () => {
+    const [a] = toWeakSegments([seg({ fromMs: '7000.0', toMs: '12000.0' })])!;
+    expect(a).toMatchObject({ fromMs: 7000, toMs: 12000 });
+    expect(toWeakSegments([seg({ metrics: { severity: 1.5 } })])![0].severity).toBe(1);
+    expect(toWeakSegments([seg({ metrics: { severity: -0.2 } })])![0].severity).toBe(0);
+    expect(toWeakSegments([seg({ metrics: { scope: 'WHOLE' } })])![0]).toMatchObject({ severity: 0, scope: 'WHOLE' });
+    expect(toWeakSegments([seg({ metrics: { severity: 'x', scope: 'ALL' } })])![0]).toMatchObject({ severity: 0, scope: 'SEGMENT' });
+  });
+
+  it('toReport가 weakSegments를 변환하고 null과 빈 배열을 구분한다', () => {
+    expect(toReport({ ...DTO, weakSegments: SAMPLE_A }).weakSegments).toHaveLength(2);
+    expect(toReport({ ...DTO, weakSegments: [] }).weakSegments).toEqual([]);
+    expect(toReport({ ...DTO, weakSegments: null }).weakSegments).toBeNull();
   });
 });

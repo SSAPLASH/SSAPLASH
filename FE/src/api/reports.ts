@@ -3,8 +3,8 @@
 // - 패드 코드: normalizePadId(옛 이름 HI_TOM → SMALL_TOM). 모르는 패드는 버린다
 // - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
 import type { Judgement } from '@/domain/judgement';
-import { normalizePadId } from '@/domain/pads';
-import type { AnalysisStatus, Report, ReportNote } from '@/domain/report';
+import { normalizePadId, type PadId } from '@/domain/pads';
+import type { AnalysisStatus, Report, ReportNote, WeakScope, WeakSegment } from '@/domain/report';
 import { apiFetch } from './http';
 
 type Num = number | string;
@@ -60,6 +60,47 @@ const num = (v: Num): number => (typeof v === 'number' ? v : Number(v));
 const numOrNull = (v: Num | null): number | null => (v === null ? null : num(v));
 const counts = (c: CountsDto): Record<Judgement, number> => ({ PERFECT: c.perfect, GOOD: c.good, MISS: c.miss });
 
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** 숫자 또는 숫자 문자열 → 유한수, 아니면 null */
+function finite(v: unknown): number | null {
+  if (typeof v === 'string' && v.trim() === '') return null;
+  const n = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** 약점 구간 응답 변환(설계 3-1). 배열이 아니면 null, 깨진 요소만 버리고 서버 순서는 유지한다 */
+export function toWeakSegments(raw: unknown): WeakSegment[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.flatMap((el: unknown): WeakSegment[] => {
+    if (!isObj(el)) return [];
+    const fromMs = finite(el.fromMs);
+    const toMs = finite(el.toMs);
+    if (typeof el.description !== 'string' || el.description === '' || fromMs === null || toMs === null) return [];
+    const { severity, scope, ...rest } = isObj(el.metrics) ? el.metrics : ({} as Record<string, unknown>);
+    const sev = finite(severity);
+    const pads = Array.isArray(el.pads)
+      ? el.pads.flatMap((p: unknown): PadId[] => {
+          const id = typeof p === 'string' ? normalizePadId(p) : null;
+          return id ? [id] : [];
+        })
+      : [];
+    return [
+      {
+        fromMs,
+        toMs,
+        pattern: typeof el.pattern === 'string' ? el.pattern : '',
+        description: el.description,
+        causeTags: Array.isArray(el.causeTags) ? el.causeTags.filter((t): t is string => typeof t === 'string') : [],
+        pads,
+        severity: sev === null ? 0 : Math.min(1, Math.max(0, sev)),
+        scope: (scope === 'WHOLE' || scope === 'SEGMENT' ? scope : 'SEGMENT') as WeakScope,
+        metrics: rest,
+      },
+    ];
+  });
+}
+
 export function toReport(dto: ReportDto): Report {
   return {
     playId: dto.playId,
@@ -86,7 +127,7 @@ export function toReport(dto: ReportDto): Report {
     mode: dto.mode,
     inputSource: dto.inputSource,
     analysisStatus: dto.analysisStatus,
-    weakSegments: dto.weakSegments,
+    weakSegments: toWeakSegments(dto.weakSegments),
     recommendedDrills: dto.recommendedDrills,
     generatedAt: dto.generatedAt,
   };
