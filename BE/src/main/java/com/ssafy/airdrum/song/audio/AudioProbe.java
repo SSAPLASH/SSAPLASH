@@ -84,15 +84,12 @@ public class AudioProbe {
                     audio = true;
                 }
             }
-            double seconds;
+            if (!audio) throw new BusinessException(AudioErrorCode.UNSUPPORTED);
             try {
-                seconds = Double.parseDouble(format.path("duration").asText());
-            } catch (NumberFormatException e) {
+                return new Info(mime, AudioDuration.milliseconds(format.path("duration").asText()));
+            } catch (IllegalArgumentException | ArithmeticException e) {
                 throw new BusinessException(AudioErrorCode.UNSUPPORTED);
             }
-            if (!audio || !Double.isFinite(seconds) || seconds <= 0 || seconds > 600)
-                throw new BusinessException(AudioErrorCode.UNSUPPORTED);
-            return new Info(mime, (int) Math.max(1, Math.ceil(seconds * 1000)));
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {

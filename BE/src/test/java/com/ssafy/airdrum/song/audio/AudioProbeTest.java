@@ -31,6 +31,40 @@ class AudioProbeTest {
     }
 
     @Test
+    void readsExactDecimalMillisecondsFromReal48KhzInputs() throws Exception {
+        var probe = new AudioProbe(System.getenv().getOrDefault("AUDIO_FFPROBE_PATH", "ffprobe"), JsonMapper.builder().build());
+        Path wav = dir.resolve("4.001.wav");
+        wav(wav, 48000L * 4 * 4 + 48L * 4, 48000, 2);
+        assertThat(probe.inspect(wav).durationMs()).isEqualTo(4001);
+        Path mp3 = dir.resolve("4.001.mp3");
+        try (var in = getClass().getResourceAsStream("/worker/duration-4001ms-48khz.mp3")) { Files.copy(in, mp3); }
+        // MP3 gapless 메타 해석은 ffprobe 버전에 따라 다르므로 실행 중인 도구의
+        // format.duration을 독립적으로 읽어 십진수 올림한 값과 비교한다.
+        var executable=System.getenv().getOrDefault("AUDIO_FFPROBE_PATH", "ffprobe");
+        var process=new ProcessBuilder(executable, "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", mp3.toString()).redirectErrorStream(true).start();
+        boolean finished=process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+        if (!finished) process.destroyForcibly();
+        assertThat(finished).isTrue();
+        assertThat(process.exitValue()).isZero();
+        String seconds=new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        int expected=new java.math.BigDecimal(seconds).movePointRight(3).setScale(0, java.math.RoundingMode.CEILING).intValueExact();
+        assertThat(expected).isBetween(1,600000);
+        assertThat(probe.inspect(mp3).durationMs()).isEqualTo(expected);
+    }
+
+    @Test
+    void rejectsInvalidProbeDurationAsUnsupported() {
+        for (String value : new String[] {"NaN", "Infinity", "-Infinity", "0", "-1", "600.000001", "N/A"}) {
+            String output = "{\"format\":{\"format_name\":\"wav\",\"duration\":\"" + value
+                    + "\"},\"streams\":[{\"codec_type\":\"audio\",\"codec_name\":\"pcm_s16le\"}]}";
+            var probe = new AudioProbe("unused", JsonMapper.builder().build(), args -> new CompletedProcess(output));
+            assertThatThrownBy(() -> probe.inspect(dir.resolve("x")))
+                    .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode()).isEqualTo(AudioErrorCode.UNSUPPORTED));
+        }
+    }
+
+    @Test
     void durationBoundaryAndNetworkPlaylistAreRejected() throws Exception {
         var probe =
                 new AudioProbe(
@@ -75,7 +109,9 @@ class AudioProbeTest {
         }
     }
 
-    private void wav(Path file, long data) throws Exception {
+    private void wav(Path file, long data) throws Exception { wav(file, data, 8000, 1); }
+
+    private void wav(Path file, long data, int rate, int channels) throws Exception {
         try (var f = new java.io.RandomAccessFile(file.toFile(), "rw")) {
             f.setLength(data + 44);
             var b = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN);
@@ -84,10 +120,10 @@ class AudioProbeTest {
                     .put("WAVEfmt ".getBytes(java.nio.charset.StandardCharsets.US_ASCII))
                     .putInt(16)
                     .putShort((short) 1)
-                    .putShort((short) 1)
-                    .putInt(8000)
-                    .putInt(16000)
-                    .putShort((short) 2)
+                    .putShort((short) channels)
+                    .putInt(rate)
+                    .putInt(rate * channels * 2)
+                    .putShort((short) (channels * 2))
                     .putShort((short) 16)
                     .put("data".getBytes(java.nio.charset.StandardCharsets.US_ASCII))
                     .putInt((int) data);

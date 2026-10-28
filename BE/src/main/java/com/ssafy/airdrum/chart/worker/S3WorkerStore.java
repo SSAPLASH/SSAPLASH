@@ -1,6 +1,7 @@
 package com.ssafy.airdrum.chart.worker;
 
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.song.audio.AudioDuration;
 import java.io.*;
 import java.nio.file.*;
 import java.security.MessageDigest;
@@ -127,9 +128,10 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
             byte[] bytes = output.get(2, TimeUnit.SECONDS);
             if (process.exitValue() != 0) throw invalid();
             var root = json.readTree(bytes); var format = root.path("format");
-            double seconds;
-            try { seconds = Double.parseDouble(format.path("duration").asText()); } catch (NumberFormatException e) { throw invalid(); }
-            if (!"flac".equals(format.path("format_name").asText()) || !Double.isFinite(seconds) || seconds <= 0 || seconds > 600 || (int)Math.ceil(seconds * 1000) != durationMs) throw invalid();
+            int actualDuration;
+            try { actualDuration = AudioDuration.milliseconds(format.path("duration").asText()); }
+            catch (IllegalArgumentException | ArithmeticException e) { throw invalid(); }
+            if (!"flac".equals(format.path("format_name").asText()) || actualDuration != durationMs) throw invalid();
             int count = 0;
             for (var s : root.path("streams")) {
                 if (!"audio".equals(s.path("codec_type").asText()) || !"flac".equals(s.path("codec_name").asText()) || !"44100".equals(s.path("sample_rate").asText()) || s.path("channels").asInt() != 2 || !"16".equals(s.path("bits_per_raw_sample").asText())) throw invalid();
