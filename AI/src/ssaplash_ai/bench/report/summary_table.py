@@ -2,7 +2,7 @@
 
 CSV만 읽고 모델·지표 코드는 모름 (설계 2장 의존 방향).
 모델 단위 값은 곡 값들의 중앙값 (MUSDB 관례, 설계 3-5절). 실패한 곡(error 열)은 집계에서 뺌.
-비교표 지표는 ADR-011의 6개(드럼 SDR, 타격 보존율, 어택 기울기 왜곡, 반주 SIR, RTF, 피크 GPU 메모리)
+비교표 지표는 ADR-011의 6개(드럼 SDR, 타격 보존율, attack slope 왜곡, 반주 SIR, RTF, 피크 GPU 메모리)
 + 가중치 라이선스. 나머지 열은 보조값 표에 둠.
 합성곡(synth)은 정답 온셋이 MIDI라 MUSDB(검출기)와 온셋 지표 의미가 달라 데이터셋별 표도 따로 냄.
 모델 순서는 드럼 SDR 중앙값 내림차순. 조사 단계의 1·2순위 등급은 쓰지 않음 (ADR-017).
@@ -20,7 +20,7 @@ import pandas as pd
 COMPARISON_METRICS: tuple[tuple[str, str, bool], ...] = (
     ("sdrDrums", "드럼 SDR (dB)", True),
     ("onsetF1", "타격 보존율 F1 (±50ms)", True),
-    ("attackSlopeDistortion", "어택 기울기 왜곡", False),
+    ("attackSlopeDistortion", "attack slope 왜곡", False),
     ("sirAccomp", "반주 SIR (dB)", True),
     ("rtf", "RTF", False),
     ("peakVramMb", "피크 GPU 메모리 (MB)", False),
@@ -117,7 +117,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame) -> str:
     parts.append(
         f"run: {', '.join(run_ids) or '—'} · 데이터셋: {', '.join(datasets) or '—'} · "
         f"행 {len(df)}개. 값은 실패한 곡을 뺀 곡별 값의 중앙값이고 표는 드럼 SDR 내림차순. "
-        "RTF는 분리 시간 / 곡 길이(모델 로드 제외). 어택 기울기 왜곡은 0이 원음 그대로."
+        "RTF는 분리 시간 / 곡 길이(모델 로드 제외). attack slope 왜곡은 타격 직후 10ms 동안 소리가 커지는 기울기(attack slope)가 정답과 얼마나 다른지로, 0이 원음 그대로이고 클수록 타격 앞머리가 뭉개진 것."
     )
     parts.append("")
     parts.append("## 비교표")
