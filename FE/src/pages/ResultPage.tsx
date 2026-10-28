@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { FeedbackCards } from '@/components/FeedbackCards';
 import { ReportEntry } from '@/components/ReportEntry';
-import { resumePlaySync, startPlaySync, usePlaySync } from '@/app/playSync';
+import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
+import { isUploadTarget } from '@/domain/report';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
 const DIFF_LABEL: Record<string, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
@@ -52,12 +53,26 @@ export function ResultPage() {
   const navigate = useNavigate();
   const log = useMemo(() => (playId ? getPlayLog(playId) : null), [playId]);
 
+  // 서버 업로드 상태(설계 COACH-002 4-1). 진입 시 한 번 끊긴 업로드·재시도 가능한 실패를 다시 보낸다 —
+  // 연주 직후라면 이미 진행 중이라 무시된다
+  const legacy = !playId || !isServerPlayId(playId);
+  const liveUpload = usePlaySync((s) => (playId ? s.states[playId] : undefined));
+  const uploadState = liveUpload ?? log?.upload;
+  // 업로드 대상이면 분석은 서버(AI) 하나로 일원화해 로컬 카드를 숨긴다(COACH-003 D3). 프리패치된 리포트만 구독하고 재조회하지 않는다
+  const uploadTarget = isUploadTarget(legacy, uploadState);
+  const prefetchedReport = usePrefetchedReport(log?.playId);
+  useEffect(() => {
+    if (playId && !legacy) resumePlaySync(playId);
+  }, [playId, legacy]);
+
   // 악보 연주 피드백. 로그에 bpm·박자가 있으면 마디 규칙까지, 이전 로그(필드 없음)는 마디 규칙을 건너뛴다
   const isSheet = log?.mode === 'SHEET';
-  const feedback = useMemo(() => (log && isSheet ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : undefined) : []), [log, isSheet]);
-  const summary = useMemo(() => (log && isSheet ? summarizeByPad(log) : []), [log, isSheet]);
+  // 로컬 피드백 카드·미니 악보·패드 요약 표를 보일지. 업로드 대상이면 만들지 않는다
+  const showLocalFeedback = isSheet && !uploadTarget;
+  const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : undefined) : []), [log, showLocalFeedback]);
+  const summary = useMemo(() => (log && showLocalFeedback ? summarizeByPad(log) : []), [log, showLocalFeedback]);
   // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
-  const snippetChart = useMemo(() => (log && isSheet ? chartFromLog(log) : null), [log, isSheet]);
+  const snippetChart = useMemo(() => (log && showLocalFeedback ? chartFromLog(log) : null), [log, showLocalFeedback]);
   const noteStates = useMemo(() => (log ? log.notes.map((n) => n.judgement) : []), [log]);
   // 카드를 누르기 전에는 bars가 있는 첫 카드. 로그가 바뀌면(다른 결과) 선택을 버린다
   const [picked, setPicked] = useState<{ playId: string; bars: [number, number] } | null>(null);
@@ -71,14 +86,6 @@ export function ResultPage() {
   const retry = () => {
     if (log) navigate(retryPath(log));
   };
-
-  // 서버 업로드 상태(설계 COACH-002 4-1). 진입 시 한 번 끊긴 업로드·재시도 가능한 실패를 다시 보낸다 —
-  // 연주 직후라면 이미 진행 중이라 무시된다
-  const legacy = !playId || !isServerPlayId(playId);
-  const liveUpload = usePlaySync((s) => (playId ? s.states[playId] : undefined));
-  useEffect(() => {
-    if (playId && !legacy) resumePlaySync(playId);
-  }, [playId, legacy]);
 
   // Enter = 다시 하기
   useEffect(() => {
@@ -134,7 +141,8 @@ export function ResultPage() {
       <ReportEntry
         playId={log.playId}
         legacy={legacy}
-        state={liveUpload ?? log.upload}
+        state={uploadState}
+        report={prefetchedReport}
         onRetry={() => void startPlaySync(log.playId)}
       />
 
@@ -211,7 +219,7 @@ export function ResultPage() {
         </div>
       </div>
 
-      {isSheet && snippetChart && focusBars && (
+      {showLocalFeedback && snippetChart && focusBars && (
         <div className="card col" ref={snippetRef} style={{ marginTop: 16 }}>
           <h3>{focusBars[0] === focusBars[1] ? `약점 ${focusBars[0] + 1}마디` : `약점 마디 ${focusBars[0] + 1}~${focusBars[1] + 1}`}</h3>
           <SheetSnippet chart={snippetChart} noteStates={noteStates} bars={focusBars} />
@@ -219,8 +227,9 @@ export function ResultPage() {
         </div>
       )}
 
-      {isSheet && (
+      {showLocalFeedback && (
         <div style={{ marginTop: 16 }}>
+          <h3>간단 피드백</h3>
           <FeedbackCards items={feedback} summary={summary} onFocusBars={snippetChart ? focus : undefined} />
         </div>
       )}
