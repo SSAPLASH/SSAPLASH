@@ -99,4 +99,45 @@ class WorkerCleanupAndSchemaTest {
         assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,raw)).isEqualTo("PENDING");
         assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,staging)).isEqualTo("DELETED");
     }
+    @Test void sheetCleanupRetriesFailureAndProtectsActiveReferences() {
+        long chart=db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'EASY') RETURNING id",Long.class,song);
+        long version=db.queryForObject("INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator) VALUES(?,1,'[]','{}','READY',0,'MANUAL') RETURNING id",Long.class,chart);
+        String key="sheet/"+version+"/page.png";
+        db.update("UPDATE chart_versions SET sheet_pages=?::jsonb WHERE id=?","[{\"imageKey\":\""+key+"\"}]",version);
+        db.update("INSERT INTO file_cleanup_tasks(object_key,file_role,user_id) VALUES(?,'SHEET_PAGE',?)",key,user);
+        cleanup.runOnce();
+        verify(store,never()).exists(WorkerStore.Bucket.SHEET,key);
+        db.update("UPDATE songs SET deleted_at=clock_timestamp() WHERE id=?",song);
+        when(store.exists(WorkerStore.Bucket.SHEET,key)).thenThrow(new IllegalStateException()).thenReturn(true);
+        cleanup.runOnce();
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("FAILED");
+        db.update("UPDATE file_cleanup_tasks SET next_attempt_at=clock_timestamp() WHERE object_key=?",key);
+        cleanup.runOnce();
+        verify(store).delete(WorkerStore.Bucket.SHEET,key);
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("DELETED");
+    }
+
+    @Test void builtinSheetReferenceIsProtected() {
+        long builtin=db.queryForObject("INSERT INTO songs(title,source,license) VALUES('builtin','BUILTIN','test') RETURNING id",Long.class);
+        try {
+            long chart=db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'EASY') RETURNING id",Long.class,builtin);
+            long version=db.queryForObject("INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator) VALUES(?,1,'[]','{}','READY',0,'BUILTIN') RETURNING id",Long.class,chart);
+            String key="sheet/"+version+"/page.png";
+            db.update("UPDATE chart_versions SET sheet_pages=?::jsonb WHERE id=?","[{\"imageKey\":\""+key+"\"}]",version);
+            db.update("INSERT INTO file_cleanup_tasks(object_key,file_role,user_id) VALUES(?,'SHEET_PAGE',?)",key,user);
+            String backing="accompaniment/"+builtin+".wav";
+            db.update("UPDATE songs SET accompaniment_key=? WHERE id=?",backing,builtin);
+            db.update("INSERT INTO file_cleanup_tasks(object_key,file_role,user_id) VALUES(?,'ACCOMPANIMENT',?)",backing,user);
+            cleanup.runOnce();
+            verify(store,never()).exists(WorkerStore.Bucket.ACCOMPANIMENT,backing);
+            assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,backing)).isEqualTo("PENDING");
+            verify(store,never()).exists(WorkerStore.Bucket.SHEET,key);
+            assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("PENDING");
+        } finally {
+            db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",builtin);
+            db.update("DELETE FROM charts WHERE song_id=?",builtin);
+            db.update("DELETE FROM songs WHERE id=?",builtin);
+        }
+    }
+
 }
