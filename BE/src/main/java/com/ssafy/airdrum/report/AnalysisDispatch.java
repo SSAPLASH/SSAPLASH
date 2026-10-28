@@ -9,6 +9,8 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -47,7 +49,7 @@ public class AnalysisDispatch {
             }
         } catch(RuntimeException ex) {
             log.warn("weak-segments processing failed: {}",ex.getClass().getSimpleName());
-            if(lease!=null) try { repository.failure(lease,false); } catch(RuntimeException ignored) { /* 임대 만료 시 복구 */ }
+            if(lease!=null) try { repository.failure(lease,ex instanceof TransientDataAccessException || ex instanceof RecoverableDataAccessException); } catch(RuntimeException ignored) { /* 임대 만료 시 복구 */ }
         }
     }
     @PreDestroy public void stop() { executor.shutdown(); }
