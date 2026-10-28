@@ -8,7 +8,11 @@
 - audio_io: 원곡 읽기(mp3·wav·flac → 44.1kHz 스테레오 float32), 트랙 쓰기(flac 16비트·wav)
 - errors: 예외 분류(입력·모델·출력). 워커가 실패 보고의 code·retryable로 바꿈
 - separation: SeparationModule. 원곡 파일 → 드럼 트랙·반주 파일 + SeparationOutput
-- cli: `ssaplash-chart separate` 명령
+- transcription: TranscriptionModule. 드럼 트랙 파일 → chart.json + TranscriptionOutput
+- chart_json: 타격 표 → 채보 JSON, BE 검사와 같은 검증
+- tempo: 드럼 트랙에서 bpm 추정(서비스 Beat This!, mock librosa)
+- cli: `ssaplash-chart separate / transcribe / run` 명령
 
-의존 방향: cli → separation → bench. bench는 chart를 모름. 워커·서버가 chart를 부름.
+의존 방향: cli → separation·transcription → bench. transcription → chart_json·tempo.
+bench는 chart를 모름. 워커·서버가 chart를 부름.
 """
