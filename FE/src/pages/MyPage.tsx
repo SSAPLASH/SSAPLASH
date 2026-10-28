@@ -2,7 +2,7 @@
 // 내 곡은 songStore(MINE), 최근 플레이는 로그인 계정의 로컬 로그, 탈퇴는 authStore.withdraw.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MySongList } from '@/components/mypage/MySongList';
+import { MySongSummary } from '@/components/mypage/MySongSummary';
 import { RecentPlays, type RecentPlayItem } from '@/components/mypage/RecentPlays';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import type { SocialProvider } from '@/domain/auth';
@@ -126,10 +126,10 @@ export function MyPage() {
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h3>내 곡</h3>
               <Link to="/studio" className="small">
-                곡 만들기
+                내 곡 관리
               </Link>
             </div>
-            <MySongList
+            <MySongSummary
               status={mineStatus}
               items={songScope === 'MINE' ? songItems : []}
               error={songError}
