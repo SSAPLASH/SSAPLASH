@@ -790,6 +790,71 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
 
+## MIDI 업로드 → 채보 변환 (151번)
+
+CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안에서 채보 3난이도로 바꿔 **내 곡**(`source=MIDI`)으로 저장한다.
+음원과 달리 작업 큐·워커 없이 바로 응답하며, 마이그레이션은 없다(V2의 `MIDI`·`MIDI_RULE` 값을 쓴다).
+MIDI는 소리가 아니라 연주 지시 데이터라 반주가 없고, 원본 파일은 변환 후 보관하지 않는다.
+
+`POST /api/v1/songs/midi`: Bearer 인증, multipart `file`(1 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
+다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, 본문은 `GET /api/v1/songs/{songId}`와 같은 곡 상세다.
+같은 파일을 다시 올리면 새 곡이 하나 더 생긴다(멱등 키 없음).
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `MIDI_INVALID` | 요청 형태 위반, 제목 없음·100자 초과, 빈 파일 |
+| 401 | `UNAUTHORIZED` | 토큰 없음·무효, ACTIVE가 아닌 회원 |
+| 413 | `MIDI_TOO_LARGE` | 파일 1 MiB 초과(선언 크기를 믿지 않고 읽은 바이트로도 확인) |
+| 422 | `MIDI_UNSUPPORTED` | MIDI 아님·손상, format 2, SMPTE 시간 단위, 템포 1~999 BPM 밖, 5자 넘는 박자표, 곡 길이 30분 초과, 드럼 노트 50,000개 초과. detail에 이유 한 줄 |
+| 422 | `MIDI_NO_DRUM_NOTES` | 드럼 채널(10)에 패드로 바꿀 노트가 없음 |
+| 500 | `INTERNAL_ERROR` | 저장 실패. 곡·채보 행을 하나도 남기지 않는다 |
+
+변환 규칙:
+
+- JDK `javax.sound.midi`로 파일만 읽는다(소리 장치·외부 라이브러리 없음). format 0·1, PPQ 분해능만 받는다.
+- GM 규격대로 **채널 10의 note-on(velocity > 0)** 만 드럼으로 본다. 다른 채널은 무시한다.
+- GM 피치 → 패드는 AI 파트 `gmd.py`의 표와 맞추되 44(페달 하이햇)는 `HIHAT_PEDAL`로 따로 저장한다.
+
+| 패드 | GM 피치 |
+| --- | --- |
+| `KICK` | 35, 36 |
+| `SNARE` | 37, 38, 40 |
+| `HIHAT` | 22, 26, 42, 46 |
+| `HIHAT_PEDAL` | 44 |
+| `SMALL_TOM` | 48, 50 |
+| `MID_TOM` | 45, 47 |
+| `FLOOR_TOM` | 41, 43, 58 |
+| `CRASH` | 49, 52, 55, 57 |
+| `RIDE` | 51, 53, 59 |
+| 제외 | 그 밖의 피치(클랩·탬버린·카우벨 등) |
+
+- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.0`):
+
+| 규칙 | HARD | NORMAL | EASY |
+| --- | --- | --- | --- |
+| 패드 | 전체 | 전체 | `HIHAT`·`HIHAT_PEDAL`·`RIDE` 제외 |
+| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 4분 격자만 |
+| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 전부 제외 |
+| 같은 시각 상한 | 없음 | 2개 | 1개 |
+| 최소 간격(기준의 3/4 미만이면 충돌) | 없음 | 16분 | 8분 |
+
+  상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
+  EASY가 비면 NORMAL을, NORMAL이 비면 HARD를 그대로 쓴다. 규칙을 바꾸면 버전을 올린다.
+- 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, `offsetMs=0`)를
+  `ChartDocumentReader.milliseconds`와 같은 식으로 계산한다. 그래서 악보 페이지 ms와 노트 시각이 어긋나지 않는다.
+- `notation`은 tick·note-off까지 길이(없으면 16분음표)·voice(`KICK`·`HIHAT_PEDAL` 2, 나머지 1), `timing`에는 `ppq`·`tempoMap`·`timeSignatureMap`을 항상 넣는다.
+  저장 전에 조회 리더로 다시 읽어 검증한다.
+- 곡 `duration_ms`는 마지막 노트에서 한 마디 뒤와 시퀀스 길이 중 긴 쪽이다. `songs.bpm`·`time_signature`는 첫 템포·박자표다.
+- 채보 버전은 난이도마다 version 1, `notation_status=PENDING`, `sheet_pages=NULL`이다. 악보 이미지는 FE가 채보 데이터로 그려 별도 API(155번)로 올린다.
+
+FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는다. 조회 응답에는 포함되므로 FE가 레인 표시 여부를 정한다.
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.midi.*'
+```
+
+테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다.
+
 
 ## AI 워커 내부 작업 API (160번)
 
