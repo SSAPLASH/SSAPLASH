@@ -30,6 +30,7 @@ class WorkerStorageConfiguration {
             @Value("${chart.assets.public-endpoint:}") String chartPublic,
             @Value("${chart.assets.region:us-east-1}") String chartRegion,
             @Value("${chart.assets.accompaniment-bucket:}") String chartBucket,
+            @Value("${chart.assets.sheet-bucket:}") String sheetBucket,
             @Value("${chart.assets.access-key:}") String chartAccess,
             @Value("${chart.assets.secret-key:}") String chartSecret,
             @Value("${worker.storage.accompaniment-write-access-key:${audio.storage.access-key:}}") String chartWriteAccess,
@@ -45,7 +46,9 @@ class WorkerStorageConfiguration {
         return new S3WorkerStore(audioEnabled ? client(audioEndpoint, audioRegion, audioAccess, audioSecret) : null,
                 audioEnabled ? signer(audioPublic, audioRegion, audioAccess, audioSecret) : null, audioBucket,
                 chartWriterEnabled ? client(chartEndpoint, chartRegion, chartWriteAccess, chartWriteSecret) : null,
-                chartEnabled ? signer(chartPublic, chartRegion, chartAccess, chartSecret) : null, chartBucket, ttl, ffprobe, json);
+                chartEnabled ? signer(chartPublic, chartRegion, chartAccess, chartSecret) : null, chartBucket,
+                chartWriterEnabled && !sheetBucket.isBlank() ? client(chartEndpoint, chartRegion, chartWriteAccess, chartWriteSecret) : null,
+                sheetBucket, ttl, ffprobe, json);
     }
     private static void validate(String endpoint, String publicEndpoint, String region, String bucket, String access, String secret, boolean confirmed) {
         if (!url(endpoint) || !url(publicEndpoint) || region.isBlank() || bucket.isBlank() || access.isBlank() || secret.isBlank() || !confirmed)

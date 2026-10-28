@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V14를 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V18을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -375,6 +375,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V11 | `V11__add_kit_presets_calibration.sql` | `kit_presets.calibration`(jsonb, 객체 또는 NULL) | -90 |
 | V13 | `V13__drop_kit_presets_calibration.sql` | `kit_presets.calibration` 컬럼·CHECK 삭제(캘리브레이션은 프리셋에 저장하지 않음) | -128 |
 | V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
+| V17 | `V17__widen_telemetry_pad_and_clock_offset.sql` | `telemetry_events` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL), `clock_offset_ms` `double precision`과 CHECK `ck_telemetry_events_clock_offset_ms` | -152 |
+| V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
 
 규칙:
 
@@ -401,7 +403,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V14까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V18까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -838,6 +840,61 @@ AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트
 
 `analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을
 뜻하며 표본 부족도 포함한다. 실패는 null이다. `generatorVersion`에는 기존 BE 버전과 분석기 버전을
-함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V17은 처리 시도 수와 임대를
+함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V18은 처리 시도 수와 임대를
 저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
 결과는 임대 토큰이 일치할 때만 반영한다. 요청 본문·playId는 분석 로그에 남기지 않는다.
+
+## 탈퇴 후 곡·파일 정리 (37번)
+
+회원 탈퇴 커밋 후 개인 MIDI·AUDIO 곡을 소프트 삭제하고 반주와 기존 악보 이미지의 정리 작업을 등록한다. 공용 곡과 다른 회원 곡, 동의한 플레이 기록은 보존한다. 작업 취소는 기존 워커 경로를 사용한다. 누락된 이벤트는 주기적으로 전체 탈퇴 곡을 순회해 복구하며, 저장소 삭제 실패는 재시도한다. 잘못된 귀속 키는 삭제하지 않고 오류를 기록한다. 이미 발급한 URL은 만료 전까지 유효할 수 있다.
+
+정리 작업자는 `CHART_ASSET_ENABLED`, endpoint와 `CHART_ASSET_SHEET_BUCKET` / `CHART_ASSET_ACCOMPANIMENT_BUCKET`을 사용한다. `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY` / `WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY` (미지정 시 AUDIO 저장소 자격 증명)을 두 버킷에 대한 삭제 권한이 있는 자격 증명으로 설정한다. 조회 전용 `CHART_ASSET_ACCESS_KEY`는 삭제에 쓰지 않는다. 정리가 비활성화되면 작업이 대기 상태로 남고, 활성화된 저장소의 미설정·삭제 권한 오류는 실패로 기록해 재시도한다. 실제 저장소 권한 검증은 별도로 필요하다.
+
+## 텔레메트리 수신·조회 (152번)
+
+MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오디오 스케줄 구간 지연과 연결 상태를 세션 단위로 남겨, 연주가 끝난 뒤 지연 통계·연결 방식 비교에 쓴다.
+점수·플레이 리포트·AI 약점 분석의 원본이 아니며(유실 허용), 연주 중 실시간 확인은 FE 로컬 모니터가 맡는다.
+계약은 2026-10-27 BE 간 합의(REST 배치·ADMIN 진단 모드 한정·무재전송)를 따르며 FE 동의는 187번에서 진행 중이다.
+
+세 API 모두 Bearer 인증과 **ADMIN 역할**이 필요하다(`@PreAuthorize`). 미인증·만료·탈퇴는 401, USER는 403 `FORBIDDEN`이다.
+
+| API | 요청 | 응답 |
+| --- | --- | --- |
+| `POST /api/telemetry/batches` | JSON 본문 128 KiB 이하, 이벤트 1~100건 | 200 `{acceptedCount}`. 배치 전체를 한 트랜잭션으로 저장 |
+| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount}>`, lastEventTime 내림차순 |
+| `GET /api/telemetry/sessions/{sessionId}/events` | `userId`(필수), `kind`(`HIT`·`STATUS`, 선택), `page`, `size`(1~1000, 기본 500) | `PageResponse<이벤트>`, time 오름차순(같은 시각은 stickId 0·1·null). 없는 세션은 빈 페이지 |
+
+요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`다. `userId`는 받지 않고
+인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
+
+| 이벤트 필드 | HIT | STATUS |
+| --- | --- | --- |
+| `time`(ISO-8601 문자열), `kind`, `tags` | 필수 | 필수 |
+| `stickId`(0·1) | `tags.source`가 `keyboard`가 아니면 필수 | 필수 |
+| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `HI_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL`, 그대로 저장 | null |
+| `judgement`·`deltaMs` | PERFECT·GOOD이면 deltaMs 필수, 판정 없음·MISS이면 deltaMs null | null |
+| `velocity`(0~127 정수), `tRecv`·`tJudge`(ms) | 필수 | null |
+| `tAudio`(ms) | 선택 | null |
+| `tSensor`(정수 µs, 0 이상), `clockOffsetMs`, `packetLoss`(0~1), `batteryPct`(0~100 정수) | 선택 | 선택 |
+
+- `tags`는 1 KiB 이하 객체이고 키는 `source`(필수, 1~32자), `clockSynced`(boolean, HIT 필수), `connected`(boolean, STATUS 필수),
+  `firmware`(1~64자)만 받는다.
+- 선택 필드의 부재와 null은 같다. BE는 null을 0으로 채우거나 계산하지 않는다(동기화 전 `clockOffsetMs`=null 등).
+- 숫자는 JSON 숫자 토큰만 받는다. 정수 자리의 소수(`96.0`), 문자열 숫자, 유한하지 않은 값(`1e999`), 서버 시각보다 5분 넘게 미래인 `time`은 거절한다.
+- 계약 밖 필드(`rawWindow` 등)·중복 키·FE 내부 이름 `SMALL_TOM`은 거절한다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드·타입 불일치·목록 밖 enum. detail에 `events[0].pad` 같은 위치만 담는다 |
+| 400 | `TELEMETRY_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
+| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`. detail은 `events[i].필드: 이유`이며 값은 넣지 않는다 |
+| 400 | `VALIDATION_FAILED` | 조회 페이지·기간 범위 밖 |
+| 413 | `TELEMETRY_BATCH_TOO_LARGE` | 본문 128 KiB 초과(Content-Length가 없어도 읽는 도중 끊음) 또는 이벤트 100건 초과 |
+| 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
+
+한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
+요청 횟수 제한(429)은 MVP에서 구현하지 않는다. 보관 기간·삭제 정책과 탈퇴 시 처리는 Infra 포함 별도 합의 대상이다
+(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+`TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
+`TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.

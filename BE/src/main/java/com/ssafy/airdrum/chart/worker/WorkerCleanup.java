@@ -17,8 +17,9 @@ class WorkerCleanup {
     private final WorkerStore store;
     private final boolean enabled;
     WorkerCleanup(JdbcTemplate db,PlatformTransactionManager manager,WorkerStore store,
-            @Value("${audio.storage.enabled:false}") boolean enabled) {
-        this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(10); this.store=store; this.enabled=enabled;
+            @Value("${audio.storage.enabled:false}") boolean audioEnabled,
+            @Value("${chart.assets.enabled:false}") boolean chartEnabled) {
+        this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(10); this.store=store; this.enabled=audioEnabled || chartEnabled;
     }
     record Claim(long id,String key,String role,int retry,Timestamp token) {}
     @Scheduled(fixedDelayString="${chart.worker.cleanup-interval-ms:60000}",initialDelayString="${chart.worker.cleanup-interval-ms:60000}")
@@ -30,7 +31,7 @@ class WorkerCleanup {
         for(int i=0;i<100;i++) {
             Claim c=claim(); if(c==null) break;
             try {
-                var bucket=c.role().equals("ACCOMPANIMENT")?WorkerStore.Bucket.ACCOMPANIMENT:WorkerStore.Bucket.AUDIO;
+                var bucket=switch(c.role()) { case "ACCOMPANIMENT" -> WorkerStore.Bucket.ACCOMPANIMENT; case "SHEET_PAGE" -> WorkerStore.Bucket.SHEET; default -> WorkerStore.Bucket.AUDIO; };
                 if(store.exists(bucket,c.key())) store.delete(bucket,c.key());
                 finish(c,true);
             } catch(RuntimeException x) { finish(c,false); }
@@ -40,13 +41,16 @@ class WorkerCleanup {
         return tx.execute(s -> {
             var rows=db.query("""
                 SELECT t.id,t.object_key,t.file_role,t.retry_count FROM file_cleanup_tasks t
-                WHERE t.file_role IN ('STAGING','DRUM_STEM','ACCOMPANIMENT') AND t.next_attempt_at<=clock_timestamp()
+                WHERE t.file_role IN ('STAGING','DRUM_STEM','ACCOMPANIMENT','SHEET_PAGE') AND t.next_attempt_at<=clock_timestamp()
                   AND (t.status<>'DELETED' OR t.created_at+interval '1 day'>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j JOIN chart_job_attempts a ON a.id=j.current_attempt_id
                     WHERE j.id=t.job_id AND a.id=t.attempt_id AND j.status IN ('SEPARATING','TRANSCRIBING')
                       AND a.finished_at IS NULL AND a.lease_expires_at>clock_timestamp() AND j.stage_deadline_at>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j WHERE j.drum_stem_key=t.object_key)
-                  AND NOT EXISTS(SELECT 1 FROM songs s JOIN users u ON u.id=s.owner_id WHERE s.accompaniment_key=t.object_key AND s.deleted_at IS NULL AND u.status='ACTIVE')
+                  AND NOT EXISTS(SELECT 1 FROM songs s LEFT JOIN users u ON u.id=s.owner_id WHERE s.accompaniment_key=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
+                AND NOT EXISTS(SELECT 1 FROM chart_versions v JOIN charts c ON c.id=v.chart_id JOIN songs s ON s.id=c.song_id
+                    LEFT JOIN users u ON u.id=s.owner_id CROSS JOIN LATERAL jsonb_array_elements(coalesce(v.sheet_pages,'[]'::jsonb)) p
+                    WHERE p->>'imageKey'=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
                 ORDER BY t.next_attempt_at,t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED
                 """,(r,n)->new Claim(r.getLong(1),r.getString(2),r.getString(3),r.getInt(4),null));
             if(rows.isEmpty()) return null;
