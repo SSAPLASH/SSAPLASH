@@ -51,6 +51,36 @@ export function isTooShortForAnalysis(counts: Record<Judgement, number>): boolea
   return counts.PERFECT + counts.GOOD + counts.MISS < MIN_NOTES_FOR_ANALYSIS;
 }
 
+/** 결과 화면 진입부 설명 문구 (COACH-003 4-3). null이면 호출 쪽이 기존 설명을 유지한다 */
+export function analysisTeaser(report: Report | null): string | null {
+  if (!report) return null;
+  const failedText = 'AI 분석은 만들지 못했어요 · 패드별 정확도·타이밍은 볼 수 있어요';
+  switch (report.analysisStatus) {
+    case 'PENDING':
+      return 'AI가 연주를 분석하고 있어요';
+    case 'FAILED':
+      return failedText;
+    case 'DONE': {
+      const segs = report.weakSegments;
+      if (segs === null) return failedText;
+      if (segs.length > 0) return `AI가 약점 ${segs.length}곳을 찾았어요`;
+      return isTooShortForAnalysis(report.counts) ? '곡이 짧아 분석하지 않았어요' : 'AI 분석 완료 · 뚜렷한 약점 없음';
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * 업로드 대상 플레이인지 (COACH-003 4-3). 참이면 결과 화면은 로컬 피드백 대신 서버 분석을 쓴다.
+ * 업로드 상태가 아직 없으면(업로드 시작 전) 대상으로 본다. 이전 형식 로그·생략·재시도 불가 실패는 대상이 아니다
+ */
+export function isUploadTarget(legacy: boolean, state: { status: string; retryable: boolean } | undefined): boolean {
+  if (legacy) return false;
+  if (state?.status === 'SKIPPED') return false;
+  return !(state?.status === 'FAILED' && !state.retryable);
+}
+
 export interface Report {
   playId: string;
   score: number;
