@@ -45,8 +45,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(5);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(9);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -86,9 +86,20 @@ class TimescaleMigrationTest {
 					VALUES(now(),'00000000-0000-0000-0000-000000000003','STATUS',101)
 					""")).isInstanceOfSatisfying(SQLException.class,
 							error -> assertThat(error.getSQLState()).isEqualTo("23514"));
+			// V17: hypertable에서도 패드 varchar(16)·clock_offset_ms double precision이 적용된다.
+			execute(connection, """
+					INSERT INTO telemetry_events(time,session_id,kind,pad,baseline_pad,predicted_pad,clock_offset_ms)
+					VALUES('2026-10-05T13:00:00Z','00000000-0000-0000-0000-000000000002','HIT','HIHAT_PEDAL','HIHAT_PEDAL','HIHAT_PEDAL',1234567.891)
+					""");
+			assertThat(scalar(connection, "SELECT clock_offset_ms FROM telemetry_events WHERE pad='HIHAT_PEDAL'")).isEqualTo("1234567.891");
+			assertThatThrownBy(() -> execute(connection, """
+					INSERT INTO telemetry_events(time,session_id,kind,clock_offset_ms)
+					VALUES('2026-10-05T14:00:00Z','00000000-0000-0000-0000-000000000003','STATUS','Infinity')
+					""")).isInstanceOfSatisfying(SQLException.class,
+							error -> assertThat(error.getSQLState()).isEqualTo("23514"));
 			latest.validate();
 			assertThat(latest.migrate().migrationsExecuted).isZero();
-			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("3");
+			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("4");
 			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("4");
 			assertThat(scalar(connection, "SELECT count(*) FROM songs WHERE title='기본 8비트'")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT string_agg(id::text,',' ORDER BY id) FROM songs WHERE source='BUILTIN' AND id <> " + existingSong)).isEqualTo(seededSongIds);
@@ -109,7 +120,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(14);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(18);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {

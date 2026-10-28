@@ -25,7 +25,8 @@ public class TestPropertyDefaultsInitializer implements ApplicationContextInitia
 				"auth.refresh-token.store", "memory",
 				"management.health.redis.enabled", "false")));
 		sources.addLast(new MapPropertySource("testFallbackDefaults", Map.of(
-				"JWT_SECRET", TEST_JWT_SECRET)));
+				"JWT_SECRET", TEST_JWT_SECRET,
+				"report.analysis.dispatch-enabled", "false")));
 	}
 
 }

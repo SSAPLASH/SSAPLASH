@@ -48,6 +48,7 @@ build:
     paths:
       - .gradle-cache/caches/
       - .gradle-cache/wrapper/
+      - BE/.cache/audio-ffprobe/
   rules:
     - changes:
         - BE/**/*
@@ -58,6 +59,7 @@ be-test:
   extends: .be-job
   stage: test
   script:
+    - . ./scripts/Prepare-AudioProbe.sh
     - ./gradlew --no-daemon test
   artifacts:
     when: always
