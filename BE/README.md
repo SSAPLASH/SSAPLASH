@@ -825,3 +825,9 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
+
+## 탈퇴 후 곡·파일 정리 (37번)
+
+회원 탈퇴 커밋 후 개인 MIDI·AUDIO 곡을 소프트 삭제하고 반주와 기존 악보 이미지의 정리 작업을 등록한다. 공용 곡과 다른 회원 곡, 동의한 플레이 기록은 보존한다. 작업 취소는 기존 워커 경로를 사용한다. 누락된 이벤트는 주기적으로 전체 탈퇴 곡을 순회해 복구하며, 저장소 삭제 실패는 재시도한다. 잘못된 귀속 키는 삭제하지 않고 오류를 기록한다. 이미 발급한 URL은 만료 전까지 유효할 수 있다.
+
+정리 작업자는 `CHART_ASSET_ENABLED`, endpoint와 `CHART_ASSET_SHEET_BUCKET` / `CHART_ASSET_ACCOMPANIMENT_BUCKET`을 사용한다. `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY` / `WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY` (미지정 시 AUDIO 저장소 자격 증명)을 두 버킷에 대한 삭제 권한이 있는 자격 증명으로 설정한다. 조회 전용 `CHART_ASSET_ACCESS_KEY`는 삭제에 쓰지 않는다. 정리가 비활성화되면 작업이 대기 상태로 남고, 활성화된 저장소의 미설정·삭제 권한 오류는 실패로 기록해 재시도한다. 실제 저장소 권한 검증은 별도로 필요하다.

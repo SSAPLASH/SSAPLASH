@@ -5,7 +5,7 @@ import java.time.Instant;
 
 /** 서버가 생성한 키만 전달한다. 메서드는 데이터베이스 트랜잭션 밖에서 호출한다. */
 interface WorkerStore {
-    enum Bucket { AUDIO, ACCOMPANIMENT }
+    enum Bucket { AUDIO, ACCOMPANIMENT, SHEET }
     record Signed(String url, Instant expiresAt) {}
     record Verified(Path path, long sizeBytes, String sha256, int durationMs) implements AutoCloseable {
         public void close() {
