@@ -84,7 +84,7 @@ CSV_COLUMNS: tuple[str, ...] = (
     "onsetF1Tight",
     "onsetTrueCount",
     "onsetPredCount",
-    # 어택
+    # attack slope 왜곡
     "attackSlopeDistortion",
     "attackOnsetsUsed",
     # 자원
