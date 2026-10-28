@@ -1,6 +1,6 @@
 // 곡 작업실의 음원 선택·제목 입력 (설계 CHART-ACCT 2절). 파일을 고르면 사전 검사와 제목 기본값을 채우고,
 // 업로드 호출은 하지 않는다 — 완성된 UploadDraft를 onSubmit으로 넘긴다. 파일·제목·아티스트가 바뀌면 멱등 키를 새로 만든다.
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   MAX_AUDIO_BYTES,
   MAX_TITLE_LEN,
@@ -21,21 +21,33 @@ interface Props {
   retryable: boolean;
   onSubmit: (draft: UploadDraft) => void;
   onRetry: () => void;
+  /** 실패한 곡 다시 올리기: 제목·아티스트를 미리 채우고 파일만 다시 고르게 한다 */
+  prefill: { title: string; artist: string } | null;
+  onCancelPrefill: () => void;
+  /** 첫 방문(곡도 작업도 없음)의 큰 드롭존 */
+  emphasis: boolean;
 }
 
 function mib(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry }: Props) {
+export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, emphasis }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<PrecheckResult | null>(null);
-  const [title, setTitle] = useState('');
-  const [artist, setArtist] = useState('');
+  const [title, setTitle] = useState(prefill?.title ?? '');
+  const [artist, setArtist] = useState(prefill?.artist ?? '');
   const [dragging, setDragging] = useState(false);
   // 파일·제목·아티스트 조합마다 키 하나. 바뀌면 null로 두고 제출 때 새로 만든다
   const keyRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // 파일 입력은 hidden이라 포커스를 받지 못한다. 키보드로 파일 선택을 여는 드롭 영역에 둔다
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  // 프리필은 마운트 시 초기값으로 받는다. 값이 바뀌면 부모가 key를 바꿔 새로 마운트한다(파일·검사 결과·멱등 키도 초기화)
+  useEffect(() => {
+    if (prefill) dropRef.current?.focus({ preventScroll: true });
+  }, [prefill]);
 
   const pick = (f: File | null) => {
     keyRef.current = null;
@@ -45,7 +57,8 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry }: Pro
       return;
     }
     setCheck(precheckAudio(f));
-    setTitle(defaultTitleFromFile(f.name));
+    // 제목이 비어 있을 때만 파일명을 기본값으로 쓴다(다시 올리기의 미리 채운 제목·직접 친 제목은 유지)
+    setTitle((t) => (t.trim() === '' ? defaultTitleFromFile(f.name) : t));
   };
 
   const onInput = (e: ChangeEvent<HTMLInputElement>) => pick(e.target.files?.[0] ?? null);
@@ -68,8 +81,17 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry }: Pro
 
   return (
     <div className="studio-form col">
+      {prefill && (
+        <div className="studio-reupload row">
+          <span>「{prefill.title}」 다시 올리기 — 파일만 다시 골라 주세요</span>
+          <button type="button" className="btn-ghost small" onClick={onCancelPrefill}>
+            취소
+          </button>
+        </div>
+      )}
       <div
-        className={`studio-drop${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
+        ref={dropRef}
+        className={`studio-drop${emphasis ? ' large' : ''}${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
           if (!busy) setDragging(true);

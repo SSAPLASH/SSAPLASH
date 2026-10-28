@@ -19,6 +19,9 @@ import {
 
 export type ChartJobPhase = 'idle' | 'uploading' | 'polling' | 'done' | 'failed';
 
+/** 끝 상태를 본 경위: live는 이 화면에서 주기 조회 중, restored는 복원 뒤 첫 조회 */
+export type DoneSource = 'live' | 'restored';
+
 export interface ChartJobError {
   code: string;
   detail: string;
@@ -89,6 +92,8 @@ interface ChartJobState {
   error: ChartJobError | null;
   /** 업로드 재시도용. 저장하지 않는다 */
   draft: UploadDraft | null;
+  /** 완료·실패를 본 경위(설계 3-2). 끝 상태가 아니면 null */
+  doneSource: DoneSource | null;
 
   upload: (draft: UploadDraft) => Promise<void>;
   /** 429 BUSY인데 활성 작업 기록이 없을 때: 내 곡의 PROCESSING 곡을 활성 작업으로 복원(U2 (a)) */
@@ -105,6 +110,7 @@ const INITIAL = {
   phase: 'idle' as ChartJobPhase,
   error: null,
   draft: null,
+  doneSource: null as DoneSource | null,
 };
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -113,6 +119,8 @@ let gen = 0;
 /** 조회 중인 세대. 없으면 -1 */
 let inflightGen = -1;
 let listening = false;
+/** resume·recoverFromMine 직후 첫 응답을 아직 받지 못했으면 true. 그 응답의 끝 상태는 restored로 본다 */
+let restoredPending = false;
 
 const hasDocument = (): boolean => typeof document !== 'undefined';
 const isHidden = (): boolean => hasDocument() && document.visibilityState === 'hidden';
@@ -170,9 +178,11 @@ async function poll(my: number): Promise<void> {
   try {
     const song = await getSong(job.songId);
     if (my !== gen) return;
+    const doneSource: DoneSource = restoredPending ? 'restored' : 'live';
+    restoredPending = false;
     const progress = songStatusToProgress(song.status);
     if (progress.stage === 'DONE') {
-      useChartJob.setState({ progress, phase: 'done', error: null });
+      useChartJob.setState({ progress, phase: 'done', error: null, doneSource });
       stopLoop();
       return;
     }
@@ -181,6 +191,7 @@ async function poll(my: number): Promise<void> {
         progress,
         phase: 'failed',
         error: { code: 'JOB_FAILED', detail: '채보를 만들지 못했습니다.', retryable: false },
+        doneSource,
       });
       stopLoop();
       return;
@@ -224,7 +235,8 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
   const accepted = (draft: UploadDraft, jobId: number, songId: number): void => {
     const active: ActiveJob = { jobId, songId, title: draft.title, idempotencyKey: draft.idempotencyKey, startedAt: new Date().toISOString() };
     saveActive(active);
-    set({ active, progress: songStatusToProgress('QUEUED'), phase: 'polling', error: null });
+    restoredPending = false;
+    set({ active, progress: songStatusToProgress('QUEUED'), phase: 'polling', error: null, doneSource: null });
     startPolling(false);
   };
 
@@ -255,6 +267,7 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
 
     upload: async (draft) => {
       stopLoop();
+      restoredPending = false;
       set({ ...INITIAL, draft });
       const check = precheckAudio(draft.file);
       if (!check.ok) {
@@ -281,7 +294,8 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
             startedAt: song.createdAt || new Date().toISOString(),
           };
           saveActive(active);
-          set({ active, progress: songStatusToProgress('PROCESSING'), phase: 'polling', error: null });
+          restoredPending = true;
+          set({ active, progress: songStatusToProgress('PROCESSING'), phase: 'polling', error: null, doneSource: null });
           startPolling(true);
           return;
         }
@@ -294,7 +308,8 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
     resume: () => {
       const active = loadActive();
       if (!active) return;
-      set({ active, progress: songStatusToProgress('QUEUED'), phase: 'polling', error: null });
+      restoredPending = true;
+      set({ active, progress: songStatusToProgress('QUEUED'), phase: 'polling', error: null, doneSource: null });
       startPolling(true);
     },
 
@@ -306,6 +321,7 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
 
     clear: () => {
       stopLoop();
+      restoredPending = false;
       removeActive();
       set({ ...INITIAL });
     },
