@@ -2251,6 +2251,63 @@ a.my-list-row:focus-visible {
   font-size: 14px;
   line-height: 1.7;
 }
+/* 첫 방문: 4단계를 가로 4칸으로. 폰 폭에서는 세로 */
+.studio-howto.wide {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  counter-reset: howto;
+}
+.studio-howto.wide li {
+  counter-increment: howto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.studio-howto.wide li::before {
+  content: counter(howto) '. ';
+  color: var(--brass);
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .studio-howto.wide {
+    grid-template-columns: 1fr;
+  }
+}
+/* 활성 작업이 있을 때 드롭존 자리의 접힌 안내 줄 */
+.studio-busy {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-sm);
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+/* 첫 방문의 큰 드롭존: 높이 2배, 본문 폭 */
+.studio-drop.large {
+  width: 100%;
+  min-height: 220px;
+  justify-content: center;
+  padding: 72px 20px;
+}
+/* 실패 곡 다시 올리기 안내 줄 */
+.studio-reupload {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+.studio-main > .card > h3 {
+  margin-bottom: 4px;
+}
+/* 다시 올리기로 스크롤할 때 상단 바 아래에 카드 머리가 보이게 */
+.studio-main > .card {
+  scroll-margin-top: 72px;
+}
 
 /* 내 곡 목록(/studio) */
 .studio-list {

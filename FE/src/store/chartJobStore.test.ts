@@ -79,6 +79,43 @@ describe('chartJobStore', () => {
     expect(storage.has(ACTIVE_JOB_KEY)).toBe(true);
   });
 
+  it('업로드 뒤 폴링 중 DONE을 보면 doneSource는 live', async () => {
+    mockFetch((url, init) => (isUpload(url, init) ? accepted() : songBody(22, 'READY')));
+    await useChartJob.getState().upload(draft());
+    expect(useChartJob.getState().doneSource).toBeNull();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'done', doneSource: 'live' });
+    useChartJob.getState().clear();
+    expect(useChartJob.getState().doneSource).toBeNull();
+  });
+
+  it('resume 첫 조회에서 DONE·FAILED를 보면 restored, 그 뒤 주기 조회는 live', async () => {
+    const job = { jobId: 1, songId: 9, title: '저장된 곡', idempotencyKey: 'k', startedAt: new Date().toISOString() };
+    storage.set(ACTIVE_JOB_KEY, JSON.stringify(job));
+    mockFetch(() => songBody(9, 'FAILED'));
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'failed', doneSource: 'restored' });
+    useChartJob.getState().clear();
+
+    storage.set(ACTIVE_JOB_KEY, JSON.stringify(job));
+    let status = 'PROCESSING';
+    mockFetch(() => songBody(9, status));
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'polling', doneSource: null });
+    status = 'READY';
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'done', doneSource: 'live' });
+
+    useChartJob.getState().clear();
+    storage.set(ACTIVE_JOB_KEY, JSON.stringify(job));
+    mockFetch(() => songBody(9, 'READY'));
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'done', doneSource: 'restored' });
+  });
+
   it('곡 상태 FAILED → failed', async () => {
     mockFetch((url, init) => (isUpload(url, init) ? accepted() : songBody(22, 'FAILED')));
     await useChartJob.getState().upload(draft());
@@ -245,6 +282,6 @@ describe('chartJobStore', () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(fetch.mock.calls.length).toBe(calls);
     expect(storage.has(ACTIVE_JOB_KEY)).toBe(false);
-    expect(useChartJob.getState()).toMatchObject({ phase: 'idle', active: null, progress: null, error: null, draft: null });
+    expect(useChartJob.getState()).toMatchObject({ phase: 'idle', active: null, progress: null, error: null, draft: null, doneSource: null });
   });
 });
