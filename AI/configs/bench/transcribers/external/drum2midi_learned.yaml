@@ -1,0 +1,38 @@
+# drum2midi 원본 기본 설정(세기·페달 학습 모델 켬). 하이햇·심벌 세기와 하이햇 페달 판정에 저장소의
+# models/velocity.pkl·pedal.pkl(scikit-learn pickle)을 읽음. pickle은 열 때 코드가 실행될 수 있으므로
+# 공식 저장소에서 받은 파일만 씀. 나머지는 drum2midi.yaml과 같음 (S15P31A307-164 작업 16).
+name: drum2midi_learned
+adapter: external
+env_name: drum2midi
+python_exe: .venv-drum2midi/Scripts/python.exe  # 이 파일이 없으면(Linux·서버) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/drum2midi_transcribe.py
+variant: learned
+options:
+  repo_dir: ext/drum2midi
+  args: []
+velocity: true
+input_sample_rate: 44100
+license_code: MIT (drum2midi) + CC BY-NC-SA 4.0 (ADTOF-pytorch)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치) + 미명시 (MDX23C DrumSep 가중치) + MIT (drum2midi 세기·페달 모델)
+source_url: https://github.com/miraer/drum2midi
+labels:
+  35: KICK
+  36: KICK
+  38: SNARE
+  40: SNARE
+  42: HIHAT
+  44: HIHAT
+  46: HIHAT
+  50: SMALL_TOM
+  48: SMALL_TOM
+  47: MID_TOM
+  45: MID_TOM
+  43: FLOOR_TOM
+  41: FLOOR_TOM
+  49: CRASH
+  52: CRASH
+  55: CRASH
+  57: CRASH
+  51: RIDE
+  53: RIDE
+  59: RIDE

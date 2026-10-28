@@ -1,0 +1,41 @@
+# drum2midi (miraer/drum2midi, MIT). ADTOF + MDX23C 드럼 분리 + 탐·하이햇·심벌 규칙을 묶은 원본 프로그램.
+# adtof_drumsep 어댑터가 참고한 방식을 원본 그대로 돌려 같은 채점으로 비교 (S15P31A307-164 작업 16).
+# 별도 환경 .venv-drum2midi + 저장소 클론 ext/drum2midi (README). 곡마다 drum2midi.py를 부르므로 채보 시간에
+# 분리 모델 로드가 섞임. 세기·페달 학습 모델(pickle)은 끔(--no-learned). 킥·스네어 세기는 계산식이라 그대로 나옴.
+# drum2midi는 기준값·탐 나누기를 MDB Drums로 교차 검증해 정했으므로 MDB 점수는 drum2midi에 유리할 수 있음.
+# 탐은 곡 안 음높이를 1~3묶음으로 나눠 1묶음 47, 2묶음 43·47, 3묶음 43·47·50으로 적음(원본 TOM_LADDER).
+name: drum2midi
+adapter: external
+env_name: drum2midi
+python_exe: .venv-drum2midi/Scripts/python.exe  # 이 파일이 없으면(Linux·서버) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/drum2midi_transcribe.py
+variant: no-learned
+options:
+  repo_dir: ext/drum2midi
+  args: ["--no-learned"]
+velocity: true
+input_sample_rate: 44100
+license_code: MIT (drum2midi) + CC BY-NC-SA 4.0 (ADTOF-pytorch)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치) + 미명시 (MDX23C DrumSep 가중치)
+source_url: https://github.com/miraer/drum2midi
+labels:
+  35: KICK
+  36: KICK
+  38: SNARE
+  40: SNARE
+  42: HIHAT
+  44: HIHAT
+  46: HIHAT
+  50: SMALL_TOM
+  48: SMALL_TOM
+  47: MID_TOM
+  45: MID_TOM
+  43: FLOOR_TOM
+  41: FLOOR_TOM
+  49: CRASH
+  52: CRASH
+  55: CRASH
+  57: CRASH
+  51: RIDE
+  53: RIDE
+  59: RIDE
