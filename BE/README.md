@@ -856,6 +856,18 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다.
 
 
+## 채보 작업 진행 조회·알림 (172번)
+
+`GET /api/v1/jobs/{jobId}`는 Bearer access 토큰으로 본인의 최신 작업 상태를 반환한다. 타인·삭제된 곡·없는 작업은 404, 미인증·비활성 회원은 401이다. `GET /api/v1/jobs?status=QUEUED&page=0&size=20`은 본인 작업 목록을 `PageResponse`로 반환한다. `status`는 선택이며 `QUEUED`, `SEPARATING`, `TRANSCRIBING`, `DONE`, `FAILED` 중 하나다. page는 0~100000, size는 1~100이다. 다른 브라우저에서 jobId를 모르면 목록으로 복구할 수 있다.
+
+두 GET과 WS는 동일한 DB 상태를 사용한다. JobSnapshot은 숫자 `jobId`, `songId`, `progress`(0~100), `revision`, 문자열 `status`, `error`(null 또는 안전한 `code`·`message`), UTC 시각 `createdAt`, `startedAt`, `finishedAt`으로 구성된다. 오류 원문·파일 키는 노출하지 않는다. 재시도에서는 progress가 감소할 수 있으므로 FE는 revision이 증가한 상태만 적용한다.
+
+브라우저는 `wss://<호스트>/ws/jobs/{jobId}`를 연결하고 **5초 안에 첫 텍스트 프레임**으로 `{"type":"AUTH","accessToken":"<access token>"}`을 보낸다. 인증 전 데이터는 전송하지 않는다. URL 쿼리와 추가 필드·중복 키·후행 JSON은 허용하지 않으며 텍스트·바이너리 프레임 한도는 4096바이트다. 서버는 토큰·ACTIVE·본인 소유·곡 삭제를 확인하고 현재 JobSnapshot을 먼저 보낸 뒤 revision이 커진 커밋 상태만 보낸다. DONE·FAILED는 최종 스냅샷을 보낸 후 1000으로 닫는다. 이미 끝난 작업에 접속하면 현재 스냅샷 한 개를 받은 뒤 닫힌다. 인증 실패·만료·접근 불가·잘못된 인증 프레임은 1008, 프레임 한도 초과는 1009, 연결 한도 초과는 1013, 서버 오류는 1011이다. 소켓이 닫히거나 느리면 FE는 GET으로 현재 상태를 복구하고 필요할 때 재연결한다. 연결 불가 중에는 3초 간격의 GET 복구를 사용할 수 있으며 DONE·FAILED 또는 401·404에서 중단한다.
+
+연결은 인스턴스 전체 200개, 인증 회원당 4개로 제한한다. 활성 구독만 약 1초마다 DB 상태를 확인하고, 매 전송 전 토큰 만료·회원 상태·작업 접근을 다시 검사한다. 무변경 연결도 확인하며 30초마다 WebSocket ping을 전송한다. 이 간격과 연결 한도는 초기 설정이며 성능 측정 결과가 아니다. Nginx는 `/ws/jobs/`만 BE로 전달하고 read timeout을 120초로 둔다. WS 접근 로그는 URL 토큰 노출 방지를 위해 끈다.
+
+`CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS`는 쉼표로 구분한 정확한 Origin 목록이다. 개발 기본값은 `http://localhost:5173,http://127.0.0.1:5173`이며 누락 Origin과 와일드카드는 허용하지 않는다. 운영 Compose에서 실제 FE HTTPS Origin을 명시해야 한다. Nginx 설정·Origin 값은 배포 환경에 반영하고 직접 연결을 확인해야 하며 이번 로컬 검증이 실제 배포 성공을 뜻하지 않는다.
+
 ## AI 워커 내부 작업 API (160번)
 
 `/internal/v1/chart-jobs`는 보호된 내부 네트워크에서만 사용한다. 공개 Nginx는 `/internal/`을 404로 차단한다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다.
