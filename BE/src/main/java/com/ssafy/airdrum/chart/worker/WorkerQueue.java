@@ -38,9 +38,10 @@ class WorkerQueue {
         var ids = db.query("SELECT user_id,song_id FROM chart_jobs WHERE id=?", (r,n) -> new long[]{r.getLong(1),r.getLong(2)}, jobId);
         if (ids.isEmpty()) return null;
         long[] id = ids.getFirst();
-        var users = db.query("SELECT status FROM users WHERE id=? FOR SHARE", (r,n)->r.getString(1), id[0]);
-        var songs = db.query("SELECT deleted_at IS NOT NULL,duration_ms FROM songs WHERE id=? FOR UPDATE", (r,n)->new Object[]{r.getBoolean(1),r.getInt(2)}, id[1]);
-        if (users.isEmpty() || songs.isEmpty()) return null;
+        var users = db.query("SELECT status FROM users WHERE id=? FOR SHARE" + (skip ? " SKIP LOCKED" : ""), (r,n)->r.getString(1), id[0]);
+        if (users.isEmpty()) return null;
+        var songs = db.query("SELECT deleted_at IS NOT NULL,duration_ms FROM songs WHERE id=? FOR UPDATE" + (skip ? " SKIP LOCKED" : ""), (r,n)->new Object[]{r.getBoolean(1),r.getInt(2)}, id[1]);
+        if (songs.isEmpty()) return null;
         var jobs = db.query("SELECT status,current_attempt_id,stage_deadline_at FROM chart_jobs WHERE id=? FOR UPDATE" + (skip ? " SKIP LOCKED" : ""),
                 (r,n)->new Object[]{r.getString(1),r.getObject(2,UUID.class),r.getTimestamp(3)}, jobId);
         if (jobs.isEmpty()) return null;

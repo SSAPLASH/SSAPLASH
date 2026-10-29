@@ -871,6 +871,8 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 | `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
 | `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
 
+새 작업 배정과 만료 작업 복구는 회원·곡·작업 행 중 잠긴 후보를 건너뛰고 다른 후보를 처리한다. 건너뛴 후보는 이후 배정 또는 복구 주기에 다시 확인한다.
+
 claim의 `input` 예시(파일 ID·크기·해시는 설명용):
 
 ```json

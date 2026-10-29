@@ -36,6 +36,7 @@ class WorkerApiTest {
     @Autowired WorkerPayload payload;
     @MockitoSpyBean WorkerQueue queue;
     @Autowired WorkerResults results;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired com.ssafy.airdrum.withdrawal.WithdrawalService withdrawals;
     @Autowired WorkerCleanup cleanup;
     @MockitoBean S3WorkerStore store;
@@ -99,6 +100,48 @@ class WorkerApiTest {
                 "notes",List.of(Map.of("noteId","n1","timeMs",100,"pad","SNARE")),
                 "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
     }
+    @Test void claimSkipsLockedSong() throws Exception { assertClaimSkipsLockedCandidate("songs", false); }
+    @Test void claimSkipsLockedUser() throws Exception { assertClaimSkipsLockedCandidate("users", false); }
+    @Test void recoverySkipsLockedExpiredCandidate() throws Exception { assertClaimSkipsLockedCandidate("songs", true); }
+
+    private void assertClaimSkipsLockedCandidate(String table, boolean expired) throws Exception {
+        long otherUser=db.queryForObject("INSERT INTO users(nickname) VALUES ('other worker') RETURNING id",Long.class);
+        long otherSong=db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,'other','AUDIO','PROCESSING',60000) RETURNING id",Long.class,otherUser);
+        String otherKey="source-audio/"+UUID.randomUUID();
+        long otherJob=db.queryForObject("INSERT INTO chart_jobs(song_id,user_id,source_key,idempotency_key,request_hash) VALUES(?,?,?,?,?) RETURNING id",Long.class,otherSong,otherUser,otherKey,UUID.randomUUID().toString(),HASH);
+        db.update("INSERT INTO audio_uploads(id,user_id,job_id,object_key,content_type,size_bytes,sha256,duration_ms,status,expires_at) VALUES(?,?,?,?,'audio/wav',100,?,60000,'ACCEPTED',now()+interval '1 hour')",UUID.randomUUID(),otherUser,otherJob,otherKey,HASH);
+        if(expired) db.update("UPDATE chart_jobs SET queued_at=now()-interval '31 minutes' WHERE id=?",job);
+        var acquired=new CountDownLatch(1); var release=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var locker=pool.submit(()->{
+                var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                tx.executeWithoutResult(x->{
+                    db.queryForObject("SELECT id FROM "+table+" WHERE id=? FOR UPDATE",Long.class,table.equals("users")?user:song);
+                    acquired.countDown();
+                    try { if(!release.await(20,TimeUnit.SECONDS)) throw new IllegalStateException("잠금 해제 시간 초과"); }
+                    catch(InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+                });
+            });
+            try {
+                assertThat(acquired.await(10,TimeUnit.SECONDS)).isTrue();
+                var claim=pool.submit(()->queue.claim("worker1",UUID.randomUUID()));
+                assertThat(claim.get(3,TimeUnit.SECONDS).jobId()).isEqualTo(otherJob);
+            } finally { release.countDown(); locker.get(10,TimeUnit.SECONDS); }
+            if(expired) {
+                queue.recover();
+                assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("FAILED");
+            } else {
+                assertThat(queue.claim("worker2",UUID.randomUUID()).jobId()).isEqualTo(job);
+            }
+        } finally {
+            db.update("DELETE FROM audio_uploads WHERE user_id=?",otherUser);
+            db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",otherJob);
+            db.update("DELETE FROM chart_job_attempts WHERE job_id=?",otherJob);
+            db.update("DELETE FROM chart_jobs WHERE id=?",otherJob);
+            db.update("DELETE FROM songs WHERE id=?",otherSong); db.update("DELETE FROM users WHERE id=?",otherUser);
+        }
+    }
+
     @Test void authAndConcurrentClaimReplayAndFencing() throws Exception {
         mvc.perform(post("/internal/v1/chart-jobs/claim").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized()).andExpect(content().contentTypeCompatibleWith("application/problem+json"))
