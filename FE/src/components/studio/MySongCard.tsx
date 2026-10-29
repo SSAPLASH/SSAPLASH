@@ -18,9 +18,11 @@ interface Props {
   onReupload: (song: SongSummary) => void;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
+  /** 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
+  onCoverError?: () => void;
 }
 
-export function MySongCard({ song, job, progress, justDone, onReupload, onEdit }: Props) {
+export function MySongCard({ song, job, progress, justDone, onReupload, onEdit, onCoverError }: Props) {
   const view = songStatusView(song.status);
   const query = `scope=MINE&song=${song.id}`;
   const ready = song.status === 'READY';
@@ -33,7 +35,7 @@ export function MySongCard({ song, job, progress, justDone, onReupload, onEdit }
   return (
     <li className={cls}>
       <div className="song-card-cover">
-        <SongCover coverUrl={song.coverUrl} />
+        <SongCover coverUrl={song.coverUrl} onImageError={onCoverError} />
         {ready && (
           <Link to={`/play?${query}`} className="song-card-play" aria-label={`「${song.title}」 플레이`}>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

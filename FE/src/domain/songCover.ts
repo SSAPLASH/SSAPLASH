@@ -1,4 +1,4 @@
-// 곡 커버 도메인 (설계 CHART-001 3-2). 고른 파일의 사전 검사, 정사각형 자르기 크기 계산(순수 함수).
+// 곡 커버 도메인 (설계 CHART-001 3-2). 고른 파일의 사전 검사, 정사각형 자르기 크기 계산, 커버 오류 재조회 간격(순수 함수).
 // 기본 커버는 모든 곡에 같은 CD 그림이라 계산할 것이 없다(components/studio/SongCover).
 // 캔버스 조작은 media/coverImage가 맡는다.
 
@@ -45,4 +45,12 @@ export function centerSquareCrop(width: number, height: number): SquareCrop | nu
   const size = Math.floor(Math.min(width, height));
   if (size <= 0) return null;
   return { sx: Math.floor((width - size) / 2), sy: Math.floor((height - size) / 2), size };
+}
+
+/** 커버 이미지 오류로 목록을 다시 읽는 최소 간격(U10). 서명 URL이 만료되면 카드 여럿이 한꺼번에 실패하므로 한 번만 읽는다 */
+export const COVER_REFRESH_MIN_MS = 60_000;
+
+/** 마지막 재조회 시각(없으면 null)과 지금 시각으로 목록을 다시 읽을지 정한다 */
+export function coverRefreshDue(lastAt: number | null, now: number): boolean {
+  return lastAt === null || now - lastAt >= COVER_REFRESH_MIN_MS;
 }

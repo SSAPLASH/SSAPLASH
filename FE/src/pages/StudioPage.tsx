@@ -14,7 +14,7 @@ import { UploadDialog } from '@/components/studio/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/components/studio/UploadPanel';
 import type { MidiDraft } from '@/domain/midiUpload';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
-import type { CoverChange } from '@/domain/songCover';
+import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
 import type { SongMetaPatch } from '@/domain/songEdit';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
@@ -87,6 +87,8 @@ export function StudioPage() {
   const justDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 커버 오류로 목록을 마지막으로 다시 읽은 시각(U10)
+  const coverRefreshAt = useRef<number | null>(null);
 
   // 들어오면 진행 중 작업을 복원해 폴링하고 목록을 읽는다. 나가면 타이머만 멈춘다(기록은 남는다)
   useEffect(() => {
@@ -111,6 +113,14 @@ export function StudioPage() {
     if (toastTimer.current !== null) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
+
+  // 서명 URL이 만료돼 커버를 못 불러오면 목록을 다시 읽어 새 URL을 받는다. 카드 여럿이 한꺼번에 실패해도 1분에 한 번만
+  const onCoverError = useCallback(() => {
+    const now = Date.now();
+    if (!coverRefreshDue(coverRefreshAt.current, now)) return;
+    coverRefreshAt.current = now;
+    void load('MINE');
+  }, [load]);
 
   // 접착 규칙: 202(업로드 → 폴링)·완료·실패에 따라 창 닫기·목록 재조회·이동·강조·clear
   useEffect(() => {
@@ -335,6 +345,7 @@ export function StudioPage() {
                 onReupload={onReupload}
                 view={view}
                 onEdit={SONG_EDIT_ENABLED ? openEdit : undefined}
+                onCoverError={onCoverError}
               />
             </div>
           </div>
