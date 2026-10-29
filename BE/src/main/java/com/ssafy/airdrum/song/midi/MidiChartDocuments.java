@@ -2,6 +2,7 @@ package com.ssafy.airdrum.song.midi;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -57,6 +58,7 @@ class MidiChartDocuments {
 		if (durationMs > MAX_DURATION_MS) throw new BusinessException(MidiErrorCode.UNSUPPORTED, "곡 길이는 30분 이하여야 합니다.");
 		int duration = (int) Math.round(durationMs);
 
+		var noteIds = new DecimalFormat("'n'0000");
 		var built = new EnumMap<Difficulty, Built>(Difficulty.class);
 		for (var entry : charts.entrySet()) {
 			var sorted = new ArrayList<>(entry.getValue());
@@ -65,7 +67,7 @@ class MidiChartDocuments {
 			for (int i = 0; i < sorted.size(); i++) {
 				var n = sorted.get(i);
 				long durationTicks = n.durationTicks() > 0 ? n.durationTicks() : Math.max(1, ppq / 4);
-				notes.add(new Note(String.format("n%04d", i + 1), Math.round(reader.milliseconds(timing, n.tick())),
+				notes.add(new Note(noteIds.format(i + 1), Math.round(reader.milliseconds(timing, n.tick())),
 						n.pad().name(), n.velocity(), new Notation(n.tick(), durationTicks, n.pad().voice())));
 			}
 			var result = new Built(json.writeValueAsString(notes), timingJson, notes.size());
