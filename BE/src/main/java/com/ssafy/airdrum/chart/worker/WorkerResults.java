@@ -1,6 +1,13 @@
 package com.ssafy.airdrum.chart.worker;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HexFormat;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -8,6 +15,9 @@ import java.util.UUID;
 import com.ssafy.airdrum.chart.ChartDocumentReader;
 import com.ssafy.airdrum.chart.ChartVersionRepository;
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.song.midi.DifficultyThinner;
+import com.ssafy.airdrum.song.midi.DrumNote;
+import com.ssafy.airdrum.song.midi.DrumPad;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -162,7 +172,7 @@ class WorkerResults {
         db.update("INSERT INTO chart_job_results(result_id,job_id,attempt_id,stage,payload_hash,receipt) VALUES(?,?,?,?,?,?::jsonb)",e.resultId(),e.jobId(),e.attemptId(),stage,e.payloadHash(),payload.write(receipt));
     }
     private static final Set<String> PADS=Set.of("KICK","SNARE","HIHAT","SMALL_TOM","MID_TOM","FLOOR_TOM","CRASH","RIDE");
-    record ChartData(String notes,String timing,String notationStatus,int noteCount,String generatorVersion,
+    record ChartData(String notes,String normalNotes,String easyNotes,String timing,String notationStatus,int noteCount,int normalCount,int easyCount,String generatorVersion,
             java.math.BigDecimal bpm,int offset,String timeSignature,String metrics) {}
     private ChartData chart(JsonNode n,int duration) {
         require(n.path("schemaVersion").isIntegralNumber() && n.path("schemaVersion").canConvertToInt() && n.path("schemaVersion").asInt()==1
@@ -191,9 +201,51 @@ class WorkerResults {
         double bpm=t.path("bpm").doubleValue();
         require(Double.isFinite(bpm) && bpm>=0.01 && bpm<=9999.99 && t.path("offsetMs").isIntegralNumber()
                 && t.path("offsetMs").canConvertToInt() && t.path("timeSignature").asString().length()<=5);
-        return new ChartData(notes,timing,status,count,n.path("generatorVersion").asString(),
+        var source=c.path("notes");
+        boolean useTicks=t.path("ppq").isIntegralNumber() && t.path("ppq").canConvertToInt() && t.path("ppq").asInt()>0;
+        for (var note:source) useTicks &= note.path("notation").isObject();
+        int ppq=useTicks ? t.path("ppq").asInt() : 480;
+        var drumNotes=new ArrayList<DrumNote>();
+        var originals=new IdentityHashMap<DrumNote,JsonNode>();
+        for (var note:source) {
+            long tick=useTicks ? note.path("notation").path("tick").asLong()
+                    : Math.max(0,Math.round((note.path("timeMs").asLong()-(double)t.path("offsetMs").asInt())*bpm*ppq/60000.0));
+            int velocity=note.path("velocityHint").isIntegralNumber() ? note.path("velocityHint").asInt() : 100;
+            var drum=new DrumNote(tick,DrumPad.valueOf(note.path("pad").asString()),velocity,0);
+            drumNotes.add(drum); originals.put(drum,note);
+        }
+        var thinned=DifficultyThinner.thin(drumNotes,ppq);
+        var hard=thinned.get(DifficultyThinner.Difficulty.HARD);
+        var normalKept=thinned.get(DifficultyThinner.Difficulty.NORMAL);
+        var easyKept=thinned.get(DifficultyThinner.Difficulty.EASY);
+        // 공통 규칙의 빈 결과 폴백이 HARD라면 병합 전 음원 원본을 복원한다.
+        var normal=normalKept==hard ? originalNotes(source) : selected(source,originals,normalKept);
+        var easy=easyKept==hard ? originalNotes(source) : selected(source,originals,easyKept);
+        return new ChartData(notes,payload.write(normal),payload.write(easy),timing,status,count,normal.size(),easy.size(),n.path("generatorVersion").asString(),
                 java.math.BigDecimal.valueOf(bpm).setScale(2,java.math.RoundingMode.HALF_UP),
                 t.path("offsetMs").asInt(),t.path("timeSignature").asString(),payload.write(n.path("metrics")));
+    }
+    private List<JsonNode> originalNotes(JsonNode source) {
+        var result=new ArrayList<JsonNode>();
+        for (var node:source) result.add(node);
+        return result;
+    }
+    private List<JsonNode> selected(JsonNode source,IdentityHashMap<DrumNote,JsonNode> originals,List<DrumNote> kept) {
+        var selected=Collections.newSetFromMap(new IdentityHashMap<JsonNode,Boolean>());
+        for (var note:kept) selected.add(originals.get(note));
+        var result=new ArrayList<JsonNode>();
+        for (var node:source) if(selected.contains(node)) result.add(node);
+        return result;
+    }
+    private static String derivedVersion(String original) {
+        String suffix="+"+DifficultyThinner.RULE_VERSION;
+        if(original.length()+suffix.length()<=50) return original+suffix;
+        try {
+            String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(original.getBytes(StandardCharsets.UTF_8))).substring(0,12);
+            int end=50-suffix.length()-hash.length()-1;
+            if (Character.isHighSurrogate(original.charAt(end-1)) && Character.isLowSurrogate(original.charAt(end))) end--;
+            return original.substring(0,end)+"~"+hash+suffix;
+        } catch(NoSuchAlgorithmException x) { throw new IllegalStateException(x); }
     }
     private record Detail(String notes,String timing,String notationStatus,int noteCount,int duration) implements ChartVersionRepository.Detail {
         public Long getSongId(){return 1L;} public Long getChartId(){return 1L;} public String getDifficulty(){return "NORMAL";}
@@ -227,13 +279,19 @@ class WorkerResults {
             Receipt saved=prior(e,worker,"TRANSCRIBING",hash); if(saved!=null) return saved;
             var l=queue.valid(job,e.attemptId(),worker,"TRANSCRIBING");
             if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM chart_job_results WHERE job_id=? AND stage='TRANSCRIBING')",Boolean.class,job))) throw WorkerQueue.conflict();
-            Long chartId=db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'NORMAL') RETURNING id",Long.class,l.songId());
-            Long versionId=db.queryForObject("INSERT INTO chart_versions(chart_id,version,schema_version,notes,timing,notation_status,note_count,generator,generator_version) VALUES(?,1,1,?::jsonb,?::jsonb,?,?,'ADT_MODEL',?) RETURNING id",Long.class,chartId,chart.notes(),chart.timing(),chart.notationStatus(),chart.noteCount(),chart.generatorVersion());
+            var versionIds=new ArrayList<Long>();
+            for (String difficulty:List.of("HARD","NORMAL","EASY")) {
+                Long chartId=db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,?) RETURNING id",Long.class,l.songId(),difficulty);
+                String selectedNotes=switch(difficulty) { case "HARD" -> chart.notes(); case "NORMAL" -> chart.normalNotes(); default -> chart.easyNotes(); };
+                int selectedCount=switch(difficulty) { case "HARD" -> chart.noteCount(); case "NORMAL" -> chart.normalCount(); default -> chart.easyCount(); };
+                String version=difficulty.equals("HARD") ? chart.generatorVersion() : derivedVersion(chart.generatorVersion());
+                versionIds.add(db.queryForObject("INSERT INTO chart_versions(chart_id,version,schema_version,notes,timing,notation_status,note_count,generator,generator_version) VALUES(?,1,1,?::jsonb,?::jsonb,?,?,'ADT_MODEL',?) RETURNING id",Long.class,chartId,selectedNotes,chart.timing(),chart.notationStatus(),selectedCount,version));
+            }
             db.update("UPDATE songs SET status='READY',bpm=?,offset_ms=?,time_signature=?,updated_at=clock_timestamp() WHERE id=? AND deleted_at IS NULL",chart.bpm(),chart.offset(),chart.timeSignature(),l.songId());
             db.update("UPDATE chart_job_attempts SET finished_at=clock_timestamp() WHERE id=?",e.attemptId());
             queue.cleanupInputs(l);
             Long revision=db.queryForObject("UPDATE chart_jobs SET status='DONE',progress=100,transcription_model='ADT_MODEL',metrics=jsonb_build_object('separation',metrics,'transcription',?::jsonb),finished_at=clock_timestamp(),revision=revision+1 WHERE id=? RETURNING revision",Long.class,chart.metrics(),job);
-            var receipt=new Receipt(e.resultId(),true,"DONE",revision,List.of(versionId));
+            var receipt=new Receipt(e.resultId(),true,"DONE",revision,List.copyOf(versionIds));
             save(e,"TRANSCRIBING",receipt);
             return receipt;
         });
