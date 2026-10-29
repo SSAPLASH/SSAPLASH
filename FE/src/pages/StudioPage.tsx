@@ -3,16 +3,48 @@
 // 상태·폴링은 store/chartJobStore, MIDI는 store/midiUploadStore, 목록은 store/songStore. 이 페이지는 세 store를 접착한다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MySongList } from '@/components/studio/MySongList';
+import { SONG_EDIT_ENABLED } from '@/app/features';
+import { MySongList, type StudioView } from '@/components/studio/MySongList';
+import { SongCoverDialog } from '@/components/studio/SongCoverDialog';
+import { SongDeleteDialog } from '@/components/studio/SongDeleteDialog';
+import { SongMetaDialog } from '@/components/studio/SongMetaDialog';
+import type { SongEditKind } from '@/components/studio/SongMenu';
 import { UploadDialog } from '@/components/studio/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/components/studio/UploadPanel';
 import type { MidiDraft } from '@/domain/midiUpload';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
+import type { CoverChange } from '@/domain/songCover';
+import type { SongMetaPatch } from '@/domain/songEdit';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
+import { useSongEdit } from '@/store/songEditStore';
 import { useSongs } from '@/store/songStore';
 
 const JUST_DONE_MS = 2000;
+
+/** 고른 보기(카드·목록)를 브라우저에 기억한다. 접근이 막힌 환경에서는 기본(카드)으로 동작한다 */
+const VIEW_KEY = 'airdrum.studio.view';
+
+function loadView(): StudioView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'card';
+  } catch {
+    return 'card';
+  }
+}
+
+function saveView(view: StudioView): void {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // 저장하지 못해도 화면은 그대로 쓴다
+  }
+}
+
+interface Editing {
+  kind: SongEditKind;
+  song: SongSummary;
+}
 
 const HOWTO_STEPS = [
   '음원을 접수하면 작업 대기열에 들어갑니다.',
@@ -35,7 +67,13 @@ export function StudioPage() {
   const midiUpload = useMidiUpload((s) => s.upload);
   const midiReset = useMidiUpload((s) => s.reset);
 
-  const [prefill, setPrefill] = useState<{ title: string; artist: string } | null>(null);
+  const editPhase = useSongEdit((s) => s.phase);
+  const editError = useSongEdit((s) => s.error);
+  const editReset = useSongEdit((s) => s.reset);
+
+  const [view, setView] = useState<StudioView>(loadView);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [prefill, setPrefill] =useState<{ title: string; artist: string } | null>(null);
   // 다시 올리기를 누를 때마다 올려 업로드 패널을 새로 마운트한다(프리필 반영)
   const [prefillSeq, setPrefillSeq] = useState(0);
   const [justDoneId, setJustDoneId] = useState<number | null>(null);
@@ -97,6 +135,53 @@ export function StudioPage() {
     setTab('AUDIO');
     setDialogOpen(true);
   }, []);
+
+  const changeView = useCallback((v: StudioView) => {
+    setView(v);
+    saveView(v);
+  }, []);
+
+  const openEdit = useCallback(
+    (kind: SongEditKind, song: SongSummary) => {
+      editReset();
+      setEditing({ kind, song });
+    },
+    [editReset],
+  );
+
+  // 저장 중에는 닫지 않는다
+  const closeEdit = useCallback(() => {
+    if (useSongEdit.getState().phase === 'saving') return;
+    editReset();
+    setEditing(null);
+  }, [editReset]);
+
+  // 편집 1회: 성공하면 창 닫기 → 목록 재조회 → (삭제 아니면) 카드 강조. 이미 없는 곡·결과를 모르는 실패는 목록만 다시 읽는다
+  const runEdit = useCallback(
+    async (song: SongSummary, action: () => Promise<void>, removed: boolean) => {
+      await action();
+      const { phase: p, error: err } = useSongEdit.getState();
+      if (p === 'done') {
+        setEditing(null);
+        editReset();
+        if (removed && useChartJob.getState().active?.songId === song.id) clear();
+        await load('MINE');
+        if (!removed) flashRow(song.id);
+      } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
+        void load('MINE');
+      }
+    },
+    [editReset, clear, load, flashRow],
+  );
+
+  const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
+    void runEdit(song, () => useSongEdit.getState().saveMeta(song.id, patch), false);
+  const saveCover = (song: SongSummary, change: CoverChange) =>
+    void runEdit(song, () => useSongEdit.getState().saveCover(song.id, change), false);
+  const removeSong = (song: SongSummary) => void runEdit(song, () => useSongEdit.getState().remove(song.id), true);
+
+  const editBusy = editPhase === 'saving';
+  const editErrorText = editPhase === 'failed' ? (editError?.text ?? null) : null;
 
   const locked = phase === 'uploading' || midiPhase === 'uploading';
 
@@ -215,6 +300,17 @@ export function StudioPage() {
         <div className="grid-2">
           <div className="col studio-main" style={{ gap: 20 }}>
             <div className="card col">
+              {status === 'ready' && (
+                <div className="studio-toolbar">
+                  <div className="view-toggle" role="group" aria-label="보기 방식">
+                    {(['card', 'list'] as const).map((v) => (
+                      <button key={v} type="button" aria-pressed={view === v} onClick={() => changeView(v)}>
+                        {v === 'card' ? '카드' : '목록'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <MySongList
                 status={status}
                 items={items}
@@ -224,6 +320,8 @@ export function StudioPage() {
                 progress={progress}
                 justDoneId={justDoneId}
                 onReupload={onReupload}
+                view={view}
+                onEdit={SONG_EDIT_ENABLED ? openEdit : undefined}
               />
             </div>
           </div>
@@ -231,6 +329,35 @@ export function StudioPage() {
             {howto(false)}
           </div>
         </div>
+      )}
+      {editing?.kind === 'cover' && (
+        <SongCoverDialog
+          key={editing.song.id}
+          song={editing.song}
+          busy={editBusy}
+          error={editErrorText}
+          onSave={(change) => saveCover(editing.song, change)}
+          onClose={closeEdit}
+        />
+      )}
+      {editing?.kind === 'meta' && (
+        <SongMetaDialog
+          key={editing.song.id}
+          song={editing.song}
+          busy={editBusy}
+          error={editErrorText}
+          onSave={(patch) => saveMeta(editing.song, patch)}
+          onClose={closeEdit}
+        />
+      )}
+      {editing?.kind === 'delete' && (
+        <SongDeleteDialog
+          song={editing.song}
+          busy={editBusy}
+          error={editErrorText}
+          onDelete={() => removeSong(editing.song)}
+          onClose={closeEdit}
+        />
       )}
       <UploadDialog open={dialogOpen && !firstVisit} locked={locked} onClose={closeDialog}>
         {panel(false)}
