@@ -2323,9 +2323,63 @@ a.my-list-row:focus-visible {
 .studio-main > .card > h3 {
   margin-bottom: 4px;
 }
-/* 다시 올리기로 스크롤할 때 상단 바 아래에 카드 머리가 보이게 */
-.studio-main > .card {
-  scroll-margin-top: 72px;
+/* 헤더: 제목 오른쪽에 [+ 곡 올리기], 그 아래 요약 */
+.studio-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.studio-summary {
+  margin-top: 6px;
+}
+/* 곡 올리기 창 */
+.dialog.upload-dialog {
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.upload-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.upload-dialog-head h2 {
+  margin: 0;
+}
+.upload-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.upload-tabs button {
+  padding: 8px 16px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.upload-tabs button.active {
+  color: var(--ink);
+  border-bottom-color: var(--brass);
+}
+.upload-tabs button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+/* 목록 행 제목 옆 출처 칩 */
+.studio-chip {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  vertical-align: middle;
 }
 
 /* 내 곡 목록(/studio) */
