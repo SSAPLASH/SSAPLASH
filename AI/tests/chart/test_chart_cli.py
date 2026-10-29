@@ -97,6 +97,21 @@ def test_설정_파일이_없으면_1(tmp_path: Path, capsys: pytest.CaptureFixt
     assert "설정을 읽지 못함" in capsys.readouterr().err
 
 
+def test_duration_ms_인자가_출력_길이와_메타를_맞춘다(tmp_path: Path):
+    import soundfile as sf
+
+    cfg = _write_configs(tmp_path)
+    out = tmp_path / "out"
+    args = ["separate", str(_song(tmp_path)), "--out", str(out), "--config", str(cfg)]
+    assert main([*args, "--duration-ms", "1020"]) == 0
+    n = 1020 * SR // 1000
+    assert sf.info(str(out / "drums.flac")).frames == n
+    meta = json.loads((out / "separation.json").read_text(encoding="utf-8"))
+    assert meta["duration_ms"] == 1020
+    # 실측(1000ms)과 너무 다르면 입력 오류
+    assert main([*args, "--duration-ms", "5000"]) == 2
+
+
 def test_device_인자가_설정을_덮어쓴다(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     cfg = _write_configs(tmp_path, device="cuda")
     out = tmp_path / "out"
@@ -184,3 +199,27 @@ def test_run은_분리와_채보를_잇는다(tmp_path: Path, capsys: pytest.Cap
     assert meta["duration_ms"] == 2200 and meta["n_notes"] == len(HITS)
     captured = capsys.readouterr()
     assert "반주:" in captured.out and "채보:" in captured.out and "합계: 분리" in captured.out
+
+
+def test_run의_duration_ms는_분리와_채보_둘_다에_쓰인다(tmp_path: Path):
+    sep_cfg = _write_configs(tmp_path)
+    tr_cfg = _write_transcription_config(tmp_path)
+    out = tmp_path / "out"
+    args = [
+        "run",
+        str(_drum_song(tmp_path)),
+        "--out",
+        str(out),
+        "--separation-config",
+        str(sep_cfg),
+        "--transcription-config",
+        str(tr_cfg),
+        "--duration-ms",
+        "2230",
+    ]
+    assert main(args) == 0
+    sep_meta = json.loads((out / "separation.json").read_text(encoding="utf-8"))
+    tr_meta = json.loads((out / "transcription.json").read_text(encoding="utf-8"))
+    chart = json.loads((out / "chart.json").read_text(encoding="utf-8"))
+    assert sep_meta["duration_ms"] == 2230 and tr_meta["duration_ms"] == 2230
+    assert chart["metrics"]["durationMs"] == 2230

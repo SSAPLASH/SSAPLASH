@@ -7,6 +7,10 @@
 흐름: SeparationModule(config).load() 한 번 → separate_file() 곡마다 → close().
 진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·SEPARATE·WRITE, fraction은 단계 시작 0·끝 1.
 처리 시간·메모리는 벤치마크 `metrics/resource_usage.py`로 잼.
+
+원곡 길이 맞추기(워커 설계 3-7절, 추론 모듈 설계 U13): separate_file(duration_ms=)에 BE가 준 원곡 길이(ms)를
+주면 출력 두 파일을 `duration_ms × 샘플레이트 // 1000` 샘플로 끝에서만 자르거나 채우고, 결과 duration_ms에
+그 값을 넣음. 실측 길이와 DURATION_TOLERANCE_MS보다 크게 다르면 모델을 돌리기 전에 입력 오류.
 """
 
 from __future__ import annotations
@@ -18,10 +22,12 @@ from pathlib import Path
 
 from ssaplash_ai.bench.metrics.resource_usage import cuda_available, measure_resources
 from ssaplash_ai.bench.separators import BaseSeparator, SeparatorConfig, create_separator
-from ssaplash_ai.chart.audio_io import duration_ms, read_audio_file, write_audio_file
+from ssaplash_ai.chart.audio_io import duration_ms as samples_to_ms
+from ssaplash_ai.chart.audio_io import fit_length, read_audio_file, samples_for_ms, write_audio_file
 from ssaplash_ai.chart.config import SeparationConfig
 from ssaplash_ai.chart.errors import (
     ChartError,
+    ChartInputError,
     ChartModelError,
     model_error_from,
     summarize_exception,
@@ -31,6 +37,8 @@ STAGES = ("LOAD_INPUT", "SEPARATE", "WRITE")
 AUDIO_TIME_ORIGIN = "SOURCE_START"
 DRUM_STEM_NAME = "drums"
 ACCOMPANIMENT_NAME = "accompaniment"
+# BE가 준 원곡 길이와 실측 길이의 허용 차이(ms). mp3 디코더·ffprobe 버전 차이는 수십 ms (워커 설계 U4)
+DURATION_TOLERANCE_MS = 1000
 
 ProgressCallback = Callable[[str, float], None]
 
@@ -68,6 +76,18 @@ def resolve_device(device: str) -> str:
 
 def _mb_or_none(value: float) -> float | None:
     return None if value is None or math.isnan(value) else round(float(value), 1)
+
+
+def target_samples(duration_ms: int, measured_ms: int, sample_rate: int) -> int:
+    """BE가 준 원곡 길이(ms)로 출력 샘플 수를 정함. 실측과 너무 다르면 ChartInputError."""
+    if duration_ms <= 0:
+        raise ChartInputError(f"원곡 길이가 양수가 아님: {duration_ms} ms")
+    if abs(measured_ms - duration_ms) > DURATION_TOLERANCE_MS:
+        raise ChartInputError(
+            f"원곡 길이가 배정 값과 다름: 실측 {measured_ms} ms, 배정 {duration_ms} ms "
+            f"(허용 차이 {DURATION_TOLERANCE_MS} ms)"
+        )
+    return samples_for_ms(duration_ms, sample_rate)
 
 
 class SeparationModule:
@@ -116,8 +136,13 @@ class SeparationModule:
         input_path: str | Path,
         out_dir: str | Path,
         on_progress: ProgressCallback | None = None,
+        duration_ms: int | None = None,
     ) -> SeparationOutput:
-        """원곡 파일 → out_dir/drums.<형식>, out_dir/accompaniment.<형식> 저장 → SeparationOutput."""
+        """원곡 파일 → out_dir/drums.<형식>, out_dir/accompaniment.<형식> 저장 → SeparationOutput.
+
+        duration_ms를 주면(워커가 BE claim의 원곡 길이를 넘김) 출력 두 파일을 그 길이의 샘플 수에
+        맞추고 결과 duration_ms에 그 값을 씀. 없으면 원곡 샘플 수 그대로.
+        """
         self._require_loaded()
         notify = on_progress or _no_progress
         sample_rate = self.config.output.sample_rate
@@ -125,6 +150,10 @@ class SeparationModule:
 
         notify("LOAD_INPUT", 0.0)
         mixture = read_audio_file(input_path, sample_rate, self.config.max_duration_sec)
+        measured_ms = samples_to_ms(mixture.shape[1], sample_rate)
+        n_target = None
+        if duration_ms is not None:
+            n_target = target_samples(duration_ms, measured_ms, sample_rate)
         notify("LOAD_INPUT", 1.0)
 
         notify("SEPARATE", 0.0)
@@ -137,6 +166,9 @@ class SeparationModule:
             raise model_error_from(e, "분리") from e
         drums = result.drums
         accompaniment = mixture - drums
+        if n_target is not None:
+            drums = fit_length(drums, n_target)
+            accompaniment = fit_length(accompaniment, n_target)
         notify("SEPARATE", 1.0)
 
         notify("WRITE", 0.0)
@@ -150,7 +182,7 @@ class SeparationModule:
         return SeparationOutput(
             drum_stem_path=drum_path,
             accompaniment_path=accomp_path,
-            duration_ms=duration_ms(mixture.shape[1], sample_rate),
+            duration_ms=duration_ms if duration_ms is not None else measured_ms,
             sample_rate=sample_rate,
             model_name=self.model_name,
             model_version=self.model_version,

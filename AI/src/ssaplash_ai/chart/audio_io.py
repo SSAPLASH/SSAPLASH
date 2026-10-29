@@ -8,6 +8,9 @@ soundfile 0.14(libsndfile 1.2)가 mp3를 읽으므로 ffmpeg가 필요 없음(�
 어느 하나라도 걸리면 ChartInputError, 모델은 돌지 않음(4-4절).
 
 쓰기: flac 16비트(기본) 또는 wav PCM_16. ±1을 넘는 값은 잘라 저장. 실패하면 ChartOutputError.
+
+길이 맞추기: BE가 준 원곡 길이(ms)로 샘플 수를 정하고(samples_for_ms) 끝에서만 자르거나 채움(fit_length).
+워커 설계 3-7절. BE는 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사함.
 """
 
 from __future__ import annotations
@@ -111,3 +114,26 @@ def write_audio_file(
 def duration_ms(n_samples: int, sample_rate: int) -> int:
     """샘플 수 → 길이(ms, 반올림 정수)."""
     return int(round(n_samples * 1000 / sample_rate))
+
+
+def samples_for_ms(duration_ms: int, sample_rate: int) -> int:
+    """길이(ms) → 샘플 수. 정수 연산 내림 (BE 회신 2: N = durationMs × 44100 // 1000).
+
+    이 N으로 만든 파일의 길이를 ms로 올림하면 항상 duration_ms와 같음 (워커 설계 인수 조건 9).
+    """
+    if duration_ms <= 0:
+        raise ValueError(f"길이는 양수: {duration_ms} ms")
+    return duration_ms * sample_rate // 1000
+
+
+def fit_length(audio: np.ndarray, n_samples: int) -> np.ndarray:
+    """(채널, 샘플) 배열을 끝에서만 잘라 내거나 끝에 0을 채워 n_samples로 맞춤. 시작점은 그대로."""
+    if n_samples <= 0:
+        raise ValueError(f"샘플 수는 양수: {n_samples}")
+    length = audio.shape[1]
+    if length == n_samples:
+        return audio
+    if length > n_samples:
+        return audio[:, :n_samples]
+    pad = np.zeros((audio.shape[0], n_samples - length), dtype=audio.dtype)
+    return np.concatenate([audio, pad], axis=1)
