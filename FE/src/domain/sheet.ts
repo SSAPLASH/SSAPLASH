@@ -51,6 +51,20 @@ export function buildSheet(chart: Chart, stepsPerBar = 16): SheetModel {
   return { bars, rows, stepsPerBar, beatsPerBar: chart.beatsPerBar, stepMs, beatMs, barMs };
 }
 
+export type CountSub = '' | 'e' | '&' | 'a';
+
+const COUNT_SUBS: CountSub[] = ['', 'e', '&', 'a'];
+
+/**
+ * 마디 안 칸 번호를 드러머가 세는 박 위치(1, 1e, 1&, 1a …)로 바꾼다.
+ * 한 박 = stepsPerBar / beatsPerBar 칸(보통 4). 박 안 칸 위치 0/1/2/3 → ''/'e'/'&'/'a'.
+ */
+export function countLabel(step: number, stepsPerBar: number, beatsPerBar: number): { beat: number; sub: CountSub } {
+  const stepsPerBeat = stepsPerBar / beatsPerBar;
+  const beat = Math.floor(step / stepsPerBeat);
+  const inBeat = step - beat * stepsPerBeat;
+  return { beat: beat + 1, sub: COUNT_SUBS[Math.min(3, Math.max(0, Math.round(inBeat)))] };
+}
 /* ---------- 5선 악보 글리프 배치 (MODE-003-sheet-strip 3-1·3-2) ---------- */
 
 /** 스트립 마디 폭(px). 마디당 고정, 곡 BPM과 무관 (설계 U4) */
