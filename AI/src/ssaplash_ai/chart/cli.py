@@ -9,6 +9,7 @@
   uv run ssaplash-chart separate song.mp3 --out out/song --device cpu --config configs/chart/separation.yaml
   uv run ssaplash-chart transcribe data/chart/funk_108/drums.flac --out data/chart/funk_108
   uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
+  uv run ssaplash-chart run song.mp3 --out out/song --duration-ms 183450   # BE가 준 원곡 길이에 맞춤
 
 종료 코드: 0 정상, 1 설정·인자 오류, 2 입력 오류(INPUT_INVALID), 3 모델 오류(MODEL_FAILED),
 4 출력 오류(OUTPUT_INVALID). 진행 상황은 표준 오류, 결과 요약은 표준 출력.
@@ -101,27 +102,39 @@ def _report_error(e: ChartError) -> int:
 
 
 def _run_separation(
-    config: SeparationConfig, device: str | None, input_path: Path, out_dir: Path
+    config: SeparationConfig,
+    device: str | None,
+    input_path: Path,
+    out_dir: Path,
+    duration_ms: int | None = None,
 ) -> SeparationOutput:
     module = SeparationModule(config, device=device)
     _log(f"장치: {module.device}, 분리 모델 설정: {config.model_config}")
     try:
         load_sec = module.load()
         _log(f"분리 모델 올리기 {load_sec:.1f}초")
-        return module.separate_file(input_path, out_dir, on_progress=_progress)
+        return module.separate_file(
+            input_path, out_dir, on_progress=_progress, duration_ms=duration_ms
+        )
     finally:
         module.close()
 
 
 def _run_transcription(
-    config: TranscriptionConfig, device: str | None, drum_path: Path, out_dir: Path
+    config: TranscriptionConfig,
+    device: str | None,
+    drum_path: Path,
+    out_dir: Path,
+    duration_ms: int | None = None,
 ) -> TranscriptionOutput:
     module = TranscriptionModule(config, device=device)
     _log(f"장치: {module.device}, 채보 모델 설정: {config.model_config}")
     try:
         load_sec = module.load()
         _log(f"채보 모델 올리기 {load_sec:.1f}초")
-        return module.transcribe_file(drum_path, out_dir, on_progress=_progress)
+        return module.transcribe_file(
+            drum_path, out_dir, on_progress=_progress, duration_ms=duration_ms
+        )
     finally:
         module.close()
 
@@ -140,7 +153,7 @@ def separate_cmd(args: argparse.Namespace) -> int:
 
     _log(f"입력: {input_path}")
     try:
-        output = _run_separation(config, args.device, input_path, out_dir)
+        output = _run_separation(config, args.device, input_path, out_dir, args.duration_ms)
     except ChartError as e:
         return _report_error(e)
 
@@ -164,7 +177,7 @@ def transcribe_cmd(args: argparse.Namespace) -> int:
 
     _log(f"입력: {input_path}")
     try:
-        output = _run_transcription(config, args.device, input_path, out_dir)
+        output = _run_transcription(config, args.device, input_path, out_dir, args.duration_ms)
     except ChartError as e:
         return _report_error(e)
 
@@ -189,9 +202,11 @@ def run_cmd(args: argparse.Namespace) -> int:
 
     _log(f"입력: {input_path}")
     try:
-        sep = _run_separation(sep_config, args.device, input_path, out_dir)
+        sep = _run_separation(sep_config, args.device, input_path, out_dir, args.duration_ms)
         write_meta(out_dir / META_FILENAME, sep)
-        tr = _run_transcription(tr_config, args.device, sep.drum_stem_path, out_dir)
+        tr = _run_transcription(
+            tr_config, args.device, sep.drum_stem_path, out_dir, args.duration_ms
+        )
         write_meta(out_dir / TRANSCRIPTION_META_FILENAME, tr)
     except ChartError as e:
         return _report_error(e)
@@ -209,6 +224,12 @@ def run_cmd(args: argparse.Namespace) -> int:
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", help="출력 폴더. 없으면 SSAPLASH_WORK_DIR/<입력 파일 이름>/")
     parser.add_argument("--device", help="cuda 또는 cpu. 없으면 설정값(없으면 cpu로 내려감)")
+    parser.add_argument(
+        "--duration-ms",
+        type=int,
+        help="BE가 준 원곡 길이(ms). 분리 출력 두 파일의 끝을 이 길이에 맞추고 채보 노트 시각 상한에 씀. "
+        "없으면 파일 길이 그대로",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
