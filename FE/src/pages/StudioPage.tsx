@@ -8,6 +8,7 @@ import { MySongList, type StudioView } from '@/components/studio/MySongList';
 import { SongCoverDialog } from '@/components/studio/SongCoverDialog';
 import { SongDeleteDialog } from '@/components/studio/SongDeleteDialog';
 import { SongMetaDialog } from '@/components/studio/SongMetaDialog';
+import { StudioToast } from '@/components/studio/StudioToast';
 import type { SongEditKind } from '@/components/studio/SongMenu';
 import { UploadDialog } from '@/components/studio/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/components/studio/UploadPanel';
@@ -21,6 +22,8 @@ import { useSongEdit } from '@/store/songEditStore';
 import { useSongs } from '@/store/songStore';
 
 const JUST_DONE_MS = 2000;
+/** 삭제 완료 알림을 보이는 시간(U8) */
+const TOAST_MS = 3000;
 
 /** 고른 보기(카드·목록)를 브라우저에 기억한다. 접근이 막힌 환경에서는 기본(카드)으로 동작한다 */
 const VIEW_KEY = 'airdrum.studio.view';
@@ -82,6 +85,8 @@ export function StudioPage() {
   const [tab, setTab] = useState<UploadTab>('AUDIO');
   const prevPhase = useRef(phase);
   const justDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 들어오면 진행 중 작업을 복원해 폴링하고 목록을 읽는다. 나가면 타이머만 멈춘다(기록은 남는다)
   useEffect(() => {
@@ -90,6 +95,7 @@ export function StudioPage() {
     return () => {
       stopPolling();
       if (justDoneTimer.current !== null) clearTimeout(justDoneTimer.current);
+      if (toastTimer.current !== null) clearTimeout(toastTimer.current);
     };
   }, [resume, stopPolling, load]);
 
@@ -98,6 +104,12 @@ export function StudioPage() {
     setJustDoneId(songId);
     if (justDoneTimer.current !== null) clearTimeout(justDoneTimer.current);
     justDoneTimer.current = setTimeout(() => setJustDoneId(null), JUST_DONE_MS);
+  }, []);
+
+  const showToast = useCallback((text: string) => {
+    setToast(text);
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
   // 접착 규칙: 202(업로드 → 폴링)·완료·실패에 따라 창 닫기·목록 재조회·이동·강조·clear
@@ -166,12 +178,13 @@ export function StudioPage() {
         editReset();
         if (removed && useChartJob.getState().active?.songId === song.id) clear();
         await load('MINE');
-        if (!removed) flashRow(song.id);
+        if (removed) showToast(`「${song.title}」을 삭제했습니다.`);
+        else flashRow(song.id);
       } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
         void load('MINE');
       }
     },
-    [editReset, clear, load, flashRow],
+    [editReset, clear, load, flashRow, showToast],
   );
 
   const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
@@ -359,6 +372,7 @@ export function StudioPage() {
           onClose={closeEdit}
         />
       )}
+      <StudioToast text={toast} />
       <UploadDialog open={dialogOpen && !firstVisit} locked={locked} onClose={closeDialog}>
         {panel(false)}
       </UploadDialog>
