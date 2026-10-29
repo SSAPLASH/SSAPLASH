@@ -13,11 +13,11 @@ import java.util.Set;
  * 난이도별 노트 솎기(설계 4-3절). HARD는 전부, NORMAL·EASY는 규칙으로 덜어낸다.
  * 규칙을 바꾸면 {@link #RULE_VERSION}을 올려 chart_versions.generator_version으로 구분한다.
  */
-final class DifficultyThinner {
+public final class DifficultyThinner {
 
-	static final String RULE_VERSION = "midi-rule-1.1";
+	public static final String RULE_VERSION = "midi-rule-1.1";
 
-	enum Difficulty { EASY, NORMAL, HARD }
+	public enum Difficulty { EASY, NORMAL, HARD }
 
 	/** 이 세기 미만은 고스트 노트로 본다. */
 	private static final int GHOST = 40;
@@ -35,7 +35,7 @@ final class DifficultyThinner {
 	 * @param notes 패드로 바꾼 노트(순서 무관)
 	 * @param ppq 4분음표당 tick
 	 */
-	static Map<Difficulty, List<DrumNote>> thin(List<DrumNote> notes, int ppq) {
+	public static Map<Difficulty, List<DrumNote>> thin(List<DrumNote> notes, int ppq) {
 		var hard = merge(notes);
 		var normal = thin(hard, ppq, false);
 		if (normal.isEmpty()) normal = hard;
