@@ -334,6 +334,7 @@ AI 서버(`ai-api`)에 약점 구간 분석을 올리면서 겪은 문제다. �
 - **원인:** uvicorn은 자기 로거(`uvicorn`, `uvicorn.access`)만 설정하고 root 로거에는 핸들러를 달지 않는다. 우리 로거 `ssaplash_ai.coach`는 핸들러가 없어서 `WARNING` 이상(`logging.lastResort`)만 출력되고 `INFO`는 버려진다. `caplog`는 로깅 설정과 무관하게 레코드를 잡아서 이 차이를 못 잡았다.
 - **확인:** uvicorn의 `LOGGING_CONFIG`를 적용한 파이썬 프로세스에서 `INFO`와 `ERROR`를 남기면 `ERROR`만 출력됨을 로컬에서 확인했다.
 - **해결:** 이 로거에 표준 출력 핸들러를 달고 `INFO`로 설정했다(`propagate`는 유지해 `caplog` 시험도 동작). uvicorn 로깅 설정을 적용한 상태에서 요약 줄이 표준 출력으로 나가는지 확인하는 시험을 추가했다. 수정은 다음 배포에 반영된다.
+- **배포 후 확인:** 수정 배포 뒤 Grafana Explore(Loki)에서 `{service="ai-api"} |= "weak-segments reason="`로 요약 줄이 조회됨을 확인했다. 이 쿼리들을 모아 "약점 분석 연동" 대시보드(`coach-weak-segments.json`)를 만들었다.
 - **재발 방지:** 로그에 의존하는 기능은 **운영과 같은 로깅 설정에서** 출력되는지 시험한다. 배포 직후에는 `docker logs`와 Grafana(Loki)에서 실제로 찍히는지 본다.
 - **근거:** `AI/src/ssaplash_ai/server/weak_segments.py`, `AI/tests/server/test_weak_segments.py`, `Infra/monitoring/alloy/config.alloy`(로그 수집 라벨 `service`).
 
