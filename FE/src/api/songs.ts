@@ -1,5 +1,6 @@
 // 곡 API (BE 96, 설계 3-1). 응답 숫자 id·bpm 변환까지만 하고 Chart 변환은 domain/chartMapping이 맡는다.
 import type { UploadDraft } from '@/domain/chartJob';
+import type { MidiDraft } from '@/domain/midiUpload';
 import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongPage, type SongScope } from '@/domain/songCatalog';
 import { apiFetch } from './http';
 
@@ -51,4 +52,14 @@ export async function uploadAudio(draft: UploadDraft, signal?: AbortSignal): Pro
     songId: toSafeId(body.songId, 'songId'),
     status: typeof body.status === 'string' ? body.status : 'QUEUED',
   };
+}
+
+/** `POST /api/v1/songs/midi` — multipart, 201 곡 상세. 멱등 키 없음: 자동 재시도하지 않는다 (설계 CHART-002 3-3) */
+export async function uploadMidi(draft: MidiDraft, signal?: AbortSignal): Promise<SongDetail> {
+  const form = new FormData();
+  form.append('title', draft.title);
+  if (draft.artist.trim() !== '') form.append('artist', draft.artist.trim());
+  form.append('file', draft.file);
+  const body = await apiFetch<Record<string, unknown>>('/api/v1/songs/midi', { method: 'POST', body: form, signal });
+  return songDetailFromDto(body);
 }
