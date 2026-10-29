@@ -1,5 +1,6 @@
 // 내 곡 카드 보기의 카드 하나 (설계 CHART-001 4-1, D4-1·D4-2·D5). 큰 정사각 커버 아래 제목·아티스트, 그 아래 배지·MIDI 칩, 맨 아래 동작.
-// 카드에는 날짜를 두지 않는다(목록 보기에만). 완료 곡의 플레이는 커버 오른쪽 아래 ▶(hover·focus, 터치 기기는 항상).
+// 카드에는 날짜를 두지 않는다(목록 보기에만). 완료 곡의 리듬 게임은 커버 오른쪽 아래 ▶(hover·focus, 터치 기기는 항상),
+// 악보 연주는 카드 아래 [악보 연주]. 실패 곡은 [다시 올리기] 버튼만 둬 카드 높이를 맞춘다(사유 문장 없음, 배지가 상태를 알린다).
 // 활성 작업 카드는 한 줄 전체를 차지하고 진행 띠를 품는다. ⋯ 메뉴는 onEdit이 있고 완료·실패 곡일 때만 보인다.
 import { Link } from 'react-router-dom';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
@@ -37,7 +38,7 @@ export function MySongCard({ song, job, progress, justDone, onReupload, onEdit, 
       <div className="song-card-cover">
         <SongCover coverUrl={song.coverUrl} onImageError={onCoverError} />
         {ready && (
-          <Link to={`/play?${query}`} className="song-card-play" aria-label={`「${song.title}」 플레이`}>
+          <Link to={`/play?${query}`} className="song-card-play" aria-label={`「${song.title}」 리듬 게임`}>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M8 5.5v13l10.5-6.5z" />
             </svg>
@@ -59,14 +60,13 @@ export function MySongCard({ song, job, progress, justDone, onReupload, onEdit, 
         {ready && (
           <div className="song-card-actions">
             <Link to={`/sheet?${query}`} className="btn-ghost as-button">
-              악보 확인
+              악보 연주
             </Link>
           </div>
         )}
 
         {song.status === 'FAILED' && (
           <div className="song-card-fail">
-            <p className="faint small">채보를 만들지 못했습니다. 음원을 다시 올려 주세요.</p>
             <button type="button" className="btn-ghost" onClick={() => onReupload(song)}>
               다시 올리기
             </button>
