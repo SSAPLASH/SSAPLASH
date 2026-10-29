@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { deleteSong, deleteSongCover, updateSongMeta, uploadMidi, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, updateSongMeta, uploadMidi, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -78,5 +78,37 @@ describe('곡 편집 API', () => {
     const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/v1/songs/7');
     expect(init.method).toBe('DELETE');
+  });
+});
+
+describe('checkSongAvailability', () => {
+  const respond = (status: number, json: unknown) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(json), { status, headers: { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json' } })),
+    );
+
+  it('곡 상세가 오면 available', async () => {
+    respond(200, body);
+    await expect(checkSongAvailability(7)).resolves.toBe('available');
+  });
+
+  it('404 SONG_NOT_FOUND면 deleted', async () => {
+    respond(404, { status: 404, code: 'SONG_NOT_FOUND', detail: '곡을 찾을 수 없습니다.' });
+    await expect(checkSongAvailability(7)).resolves.toBe('deleted');
+  });
+
+  it('5xx·네트워크 실패는 unknown', async () => {
+    respond(503, { status: 503, code: 'UNAVAILABLE', detail: '점검 중' });
+    await expect(checkSongAvailability(7)).resolves.toBe('unknown');
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('fail'))));
+    await expect(checkSongAvailability(7)).resolves.toBe('unknown');
+  });
+
+  it('취소되면 판정하지 않고 던진다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new DOMException('aborted', 'AbortError'))));
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(checkSongAvailability(7, ctrl.signal)).rejects.toBeTruthy();
   });
 });

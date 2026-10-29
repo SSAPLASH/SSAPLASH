@@ -1,11 +1,14 @@
 // 마이페이지 (ACCT-001, Jira 197). 프로필·내 곡 상태·최근 플레이를 한 화면에 모으고 회원 탈퇴 진입을 둔다.
 // 내 곡은 songStore(MINE), 최근 플레이는 로그인 계정의 로컬 로그, 탈퇴는 authStore.withdraw.
+// 최근 플레이의 BE 곡은 곡마다 한 번 상세를 조회해 삭제된 곡을 표시한다(CHART-001 U9).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { checkSongAvailability } from '@/api/songs';
 import { MySongSummary } from '@/components/mypage/MySongSummary';
 import { RecentPlays, type RecentPlayItem } from '@/components/mypage/RecentPlays';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import type { SocialProvider } from '@/domain/auth';
+import { songIdsToCheck } from '@/domain/songAvailability';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 import { useSongs } from '@/store/songStore';
@@ -42,21 +45,34 @@ export function MyPage() {
   }, [user, reloadSongs]);
 
   // 로그의 주인은 로그인 계정이다(app/authBootstrap). 계정이 바뀌면 다시 읽는다
+  const recentLogs = useMemo(() => (user ? loadPlayLogs().slice(0, RECENT_MAX) : []), [user]);
+
+  // 삭제(404)로 확인된 곡 id. 다른 실패는 표시하지 않는다
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<number>>(() => new Set());
+  useEffect(() => {
+    const ids = songIdsToCheck(recentLogs);
+    if (ids.length === 0) return;
+    const ctrl = new AbortController();
+    void Promise.all(ids.map((id) => checkSongAvailability(id, ctrl.signal).then((a) => (a === 'deleted' ? id : null), () => null))).then(
+      (found) => {
+        if (!ctrl.signal.aborted) setDeletedIds(new Set(found.filter((id): id is number => id !== null)));
+      },
+    );
+    return () => ctrl.abort();
+  }, [recentLogs]);
+
   const recent = useMemo<RecentPlayItem[]>(
     () =>
-      user
-        ? loadPlayLogs()
-            .slice(0, RECENT_MAX)
-            .map((l) => ({
-              playId: l.playId,
-              title: l.title,
-              mode: l.mode,
-              difficulty: l.difficulty,
-              startedAt: l.startedAt,
-              accuracy: l.summary.accuracy,
-            }))
-        : [],
-    [user],
+      recentLogs.map((l) => ({
+        playId: l.playId,
+        title: l.title,
+        mode: l.mode,
+        difficulty: l.difficulty,
+        startedAt: l.startedAt,
+        accuracy: l.summary.accuracy,
+        deleted: l.songNumericId != null && deletedIds.has(l.songNumericId),
+      })),
+    [recentLogs, deletedIds],
   );
 
   if (!user) {

@@ -1,4 +1,4 @@
-// 표시명 변경 창 (설계 CHART-001 4-2). 제목(1~100자)·아티스트(0~100자). 바뀐 필드만 onSave로 넘긴다.
+// 곡 정보 수정 창 (설계 CHART-001 4-2, v0.3 명칭). 제목(1~100자)·아티스트(0~100자). 바뀐 필드만 onSave로 넘긴다.
 import { useState } from 'react';
 import type { SongSummary } from '@/domain/songCatalog';
 import { META_CHECK_TEXT, MAX_NAME_LEN, diffMeta, validateMeta, type SongMetaPatch } from '@/domain/songEdit';
@@ -22,7 +22,7 @@ export function SongMetaDialog({ song, busy, error, onSave, onClose }: Props) {
   const canSave = !busy && check.ok && changed;
 
   return (
-    <EditDialog title="표시명 변경" locked={busy} onClose={onClose}>
+    <EditDialog title="곡 정보 수정" locked={busy} onClose={onClose}>
       <form
         className="col"
         style={{ gap: 12 }}
@@ -32,12 +32,14 @@ export function SongMetaDialog({ song, busy, error, onSave, onClose }: Props) {
         }}
       >
         <label className="col" style={{ gap: 4 }}>
-          <span className="small dim">곡 제목</span>
+          <span className="small dim">곡 제목 *</span>
           <input type="text" value={title} maxLength={MAX_NAME_LEN + 20} disabled={busy} onChange={(e) => setTitle(e.target.value)} />
+          <span className="field-help small faint">1~{MAX_NAME_LEN}자</span>
         </label>
         <label className="col" style={{ gap: 4 }}>
           <span className="small dim">아티스트 (선택)</span>
           <input type="text" value={artist} maxLength={MAX_NAME_LEN + 20} disabled={busy} onChange={(e) => setArtist(e.target.value)} />
+          <span className="field-help small faint">{MAX_NAME_LEN}자까지</span>
         </label>
         {!check.ok && (
           <p className="small" style={{ color: 'var(--miss)' }}>

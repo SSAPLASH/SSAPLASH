@@ -42,6 +42,16 @@ export function diffMeta(current: SongMetaInput, next: SongMetaInput): SongMetaP
   return patch;
 }
 
+/** 카드 ⋯ 메뉴의 편집 종류 */
+export type SongEditKind = 'cover' | 'meta' | 'delete';
+
+/** 곡 상태별 ⋯ 메뉴 항목(D5): 완료 = 커버·곡 정보·삭제, 실패 = 삭제만, 처리 중·알 수 없는 상태 = 없음 */
+export function menuKinds(status: string): SongEditKind[] {
+  if (status === 'READY') return ['cover', 'meta', 'delete'];
+  if (status === 'FAILED') return ['delete'];
+  return [];
+}
+
 export const SONG_EDIT_UNCERTAIN_TEXT = '결과를 확인하지 못했습니다. 목록을 확인해 주세요.';
 
 const SONG_EDIT_ERROR_TEXT: Record<string, string> = {
@@ -52,12 +62,22 @@ const SONG_EDIT_ERROR_TEXT: Record<string, string> = {
   COVER_INVALID: 'JPG·PNG·WebP 이미지만 쓸 수 있습니다.',
   COVER_UNSUPPORTED: 'JPG·PNG·WebP 이미지만 쓸 수 있습니다.',
   COVER_TOO_LARGE: '이미지가 너무 큽니다.',
+  COVER_UNAVAILABLE: '지금은 커버를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요.',
   UNAUTHORIZED: '로그인이 필요합니다. 다시 로그인해 주세요.',
 };
 
 /** 오류 코드가 "서버에 반영됐는지 모르는" 종류인가(네트워크·5xx·알 수 없는 코드). 이때 목록을 다시 읽는다 */
 export function isSongEditUncertain(code: string): boolean {
   return !(code in SONG_EDIT_ERROR_TEXT);
+}
+
+/** 5xx지만 반영되지 않은 것이 확실한 코드(저장소 장애로 저장 전에 실패). 이 밖의 5xx는 결과를 모른다 */
+const KNOWN_SERVER_FAILURES: ReadonlySet<string> = new Set(['COVER_UNAVAILABLE']);
+
+/** 실패 응답(status·code) → 창에 보일 문구와 결과를 모르는지. 네트워크는 status 0 */
+export function songEditFailure(status: number, code: string): { text: string; uncertain: boolean } {
+  if (status >= 500 && !KNOWN_SERVER_FAILURES.has(code)) return { text: SONG_EDIT_UNCERTAIN_TEXT, uncertain: true };
+  return { text: songEditErrorText(code), uncertain: isSongEditUncertain(code) };
 }
 
 /** 오류 코드 → 문구. 표에 없으면 "결과를 확인하지 못했습니다" */

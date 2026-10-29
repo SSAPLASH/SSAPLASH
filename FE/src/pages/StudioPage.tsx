@@ -8,12 +8,13 @@ import { MySongList, type StudioView } from '@/components/studio/MySongList';
 import { SongCoverDialog } from '@/components/studio/SongCoverDialog';
 import { SongDeleteDialog } from '@/components/studio/SongDeleteDialog';
 import { SongMetaDialog } from '@/components/studio/SongMetaDialog';
+import { StudioToast } from '@/components/studio/StudioToast';
 import type { SongEditKind } from '@/components/studio/SongMenu';
 import { UploadDialog } from '@/components/studio/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/components/studio/UploadPanel';
 import type { MidiDraft } from '@/domain/midiUpload';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
-import type { CoverChange } from '@/domain/songCover';
+import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
 import type { SongMetaPatch } from '@/domain/songEdit';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
@@ -21,6 +22,8 @@ import { useSongEdit } from '@/store/songEditStore';
 import { useSongs } from '@/store/songStore';
 
 const JUST_DONE_MS = 2000;
+/** 삭제 완료 알림을 보이는 시간(U8) */
+const TOAST_MS = 3000;
 
 /** 고른 보기(카드·목록)를 브라우저에 기억한다. 접근이 막힌 환경에서는 기본(카드)으로 동작한다 */
 const VIEW_KEY = 'airdrum.studio.view';
@@ -50,7 +53,7 @@ const HOWTO_STEPS = [
   '음원을 접수하면 작업 대기열에 들어갑니다.',
   '드럼 트랙과 반주를 분리합니다. 원본과 드럼 트랙은 처리 후 지웁니다.',
   '드럼 트랙으로 쉬움·보통·어려움 채보를 만듭니다.',
-  '완료되면 목록의 [악보 확인]·[플레이]로 바로 갈 수 있습니다.',
+  '완료되면 [악보 연주]나 ▶ 리듬 게임으로 바로 연주할 수 있습니다.',
 ];
 const HOWTO_MIDI = 'MIDI는 바로 채보가 만들어집니다(반주 없음).';
 
@@ -82,6 +85,10 @@ export function StudioPage() {
   const [tab, setTab] = useState<UploadTab>('AUDIO');
   const prevPhase = useRef(phase);
   const justDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 커버 오류로 목록을 마지막으로 다시 읽은 시각(U10)
+  const coverRefreshAt = useRef<number | null>(null);
 
   // 들어오면 진행 중 작업을 복원해 폴링하고 목록을 읽는다. 나가면 타이머만 멈춘다(기록은 남는다)
   useEffect(() => {
@@ -90,6 +97,7 @@ export function StudioPage() {
     return () => {
       stopPolling();
       if (justDoneTimer.current !== null) clearTimeout(justDoneTimer.current);
+      if (toastTimer.current !== null) clearTimeout(toastTimer.current);
     };
   }, [resume, stopPolling, load]);
 
@@ -99,6 +107,20 @@ export function StudioPage() {
     if (justDoneTimer.current !== null) clearTimeout(justDoneTimer.current);
     justDoneTimer.current = setTimeout(() => setJustDoneId(null), JUST_DONE_MS);
   }, []);
+
+  const showToast = useCallback((text: string) => {
+    setToast(text);
+    if (toastTimer.current !== null) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
+
+  // 서명 URL이 만료돼 커버를 못 불러오면 목록을 다시 읽어 새 URL을 받는다. 카드 여럿이 한꺼번에 실패해도 1분에 한 번만
+  const onCoverError = useCallback(() => {
+    const now = Date.now();
+    if (!coverRefreshDue(coverRefreshAt.current, now)) return;
+    coverRefreshAt.current = now;
+    void load('MINE');
+  }, [load]);
 
   // 접착 규칙: 202(업로드 → 폴링)·완료·실패에 따라 창 닫기·목록 재조회·이동·강조·clear
   useEffect(() => {
@@ -166,12 +188,13 @@ export function StudioPage() {
         editReset();
         if (removed && useChartJob.getState().active?.songId === song.id) clear();
         await load('MINE');
-        if (!removed) flashRow(song.id);
+        if (removed) showToast(`「${song.title}」을 삭제했습니다.`);
+        else flashRow(song.id);
       } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
         void load('MINE');
       }
     },
-    [editReset, clear, load, flashRow],
+    [editReset, clear, load, flashRow, showToast],
   );
 
   const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
@@ -322,6 +345,7 @@ export function StudioPage() {
                 onReupload={onReupload}
                 view={view}
                 onEdit={SONG_EDIT_ENABLED ? openEdit : undefined}
+                onCoverError={onCoverError}
               />
             </div>
           </div>
@@ -359,6 +383,7 @@ export function StudioPage() {
           onClose={closeEdit}
         />
       )}
+      <StudioToast text={toast} />
       <UploadDialog open={dialogOpen && !firstVisit} locked={locked} onClose={closeDialog}>
         {panel(false)}
       </UploadDialog>

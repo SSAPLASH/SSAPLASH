@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { deleteSong, deleteSongCover, updateSongMeta, uploadSongCover } from '@/api/songs';
 import type { CoverChange } from '@/domain/songCover';
-import { isSongEditUncertain, songEditErrorText, type SongMetaPatch } from '@/domain/songEdit';
+import { songEditFailure, type SongMetaPatch } from '@/domain/songEdit';
 
 export type SongEditPhase = 'idle' | 'saving' | 'done' | 'failed';
 
@@ -33,10 +33,8 @@ export const useSongEdit = create<SongEditState>()((set, get) => {
       set({ phase: 'done', error: null });
     } catch (e) {
       const code = e instanceof ApiError ? e.code : 'NETWORK';
-      // 5xx는 코드가 있어도 결과를 알 수 없다
-      const serverError = e instanceof ApiError && e.status >= 500;
-      const uncertain = serverError || isSongEditUncertain(code);
-      const text = serverError ? songEditErrorText('HTTP_ERROR') : songEditErrorText(code);
+      // 5xx는 코드가 있어도 결과를 알 수 없다(저장소 장애 COVER_UNAVAILABLE만 저장 전 실패로 확실)
+      const { text, uncertain } = songEditFailure(e instanceof ApiError ? e.status : 0, code);
       set({ phase: 'failed', error: { code, text, uncertain } });
     }
   }

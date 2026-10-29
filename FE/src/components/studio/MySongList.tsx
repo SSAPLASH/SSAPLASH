@@ -21,6 +21,8 @@ interface Props {
   view?: StudioView;
   /** 없으면 카드의 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
+  /** 카드 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
+  onCoverError?: () => void;
 }
 
 /** 202 직후 목록에 아직 없는 활성 작업을 임시 곡으로 만든다 */
@@ -41,7 +43,7 @@ function tempSong(job: ActiveJob): SongSummary {
   };
 }
 
-export function MySongList({ status, items, error, onRetry, active, progress, justDoneId, onReupload, view = 'card', onEdit }: Props) {
+export function MySongList({ status, items, error, onRetry, active, progress, justDoneId, onReupload, view = 'card', onEdit, onCoverError }: Props) {
   if (status === 'idle' || status === 'loading') {
     return (
       <div className="row" style={{ justifyContent: 'center', padding: 24 }}>
@@ -82,6 +84,7 @@ export function MySongList({ status, items, error, onRetry, active, progress, ju
               justDone={song.id === justDoneId}
               onReupload={onReupload}
               onEdit={onEdit}
+              onCoverError={onCoverError}
             />
           );
         })}
