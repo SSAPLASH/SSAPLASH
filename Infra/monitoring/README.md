@@ -48,6 +48,7 @@ ssh -i <키 파일> -L 3000:localhost:3000 ubuntu@k15a307.p.ssafy.io
 | `alloy/config.alloy` | 로그 수집, 서비스 라벨, **비밀·개인정보 가림 규칙** |
 | `grafana/provisioning/` | 데이터 소스, 대시보드 위치, 알림 규칙. 서버를 다시 만들어도 같은 화면이 복원된다 |
 | `grafana/dashboards/infra-overview.json` | 대시보드 원본. 화면에서 고쳐도 저장되지 않으므로 이 파일을 고친다 |
+| `grafana/dashboards/coach-weak-segments.json` | "약점 분석 연동" 대시보드. 업로드 → BE → ai-api 흐름의 요청 수·결과 종류·처리 시간·패턴별 횟수·실패와 로그 |
 
 설정 파일을 고친 뒤에는 해당 서비스를 다시 시작해야 반영된다(파일 하나를 컨테이너에 연결한 방식이라 Compose가 변경을 감지하지 못한다).
 
