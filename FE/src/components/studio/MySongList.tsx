@@ -54,7 +54,7 @@ export function MySongList({ status, items, error, onRetry, active, progress, ju
   if (status === 'error') {
     return (
       <div className="notice error col" role="alert">
-        <span>{error ?? '내 곡을 불러오지 못했습니다.'}</span>
+        <span>{error ?? '라이브러리를 불러오지 못했습니다.'}</span>
         <button type="button" className="btn-ghost" onClick={onRetry}>
           다시 시도
         </button>
