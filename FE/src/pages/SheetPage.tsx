@@ -1,11 +1,13 @@
 // 악보 연주 (MODE-003 설계 4-1~4-4). 곡 선택 → 불러오기(채보·반주) → 준비 → 카운트인 → 연주 → 결과 페이지.
-// PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이고 뷰만 가로 스트립(SheetStrip)이다.
+// PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이고 뷰는 마디 고정 악보(SheetPager) + 드럼 가이드(KitGuideView)다.
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
-import { SheetStrip } from '@/components/SheetStrip';
+import { SheetPager } from '@/components/SheetPager';
+import { KitGuideView } from '@/components/KitGuideView';
+import { useHitFx } from '@/components/useHitFx';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { formatDuration, formatSongTime } from '@/components/formatTime';
@@ -13,7 +15,9 @@ import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
 import { LANE_PADS, PAD_META } from '@/domain/pads';
 import type { Judgement } from '@/domain/judgement';
-import type { InputSourceKind } from '@/domain/events';
+import type { PadId } from '@/domain/pads';
+import type { HitFx, InputSourceKind } from '@/domain/events';
+import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import {
   buildPlayLog,
@@ -27,7 +31,7 @@ import { startPlaySync } from '@/app/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
-import { inputManager } from '@/app/sources';
+import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
@@ -79,6 +83,9 @@ export function SheetPage() {
   const [strays, setStrays] = useState<{ timeMs: number }[]>([]);
   const [syncInfo, setSyncInfo] = useState<{ begin: number | null; resume: number | null } | null>(null);
   const clockRef = useRef<PlayClock | null>(null);
+  // 드럼 가이드 타격 이펙트 (useHitFx가 live 스토어 타격을 기록)
+  const hits = useRef(new Map<PadId, HitFx>());
+  useHitFx(hits);
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
@@ -174,7 +181,7 @@ export function SheetPage() {
     return () => ctrl.abort();
   }, [paramLoaded, accUrl, acc]);
 
-  // 판정 → 노트 색(새 배열로 갱신: SheetStrip이 렌더 후 ref에 복사한다) · HUD
+  // 판정 → 노트 색(새 배열로 갱신: SheetPager가 렌더 후 ref에 복사한다) · HUD
   useEffect(() => {
     if (!activeSession) return;
     return activeSession.onJudgement((e) => {
@@ -482,8 +489,8 @@ export function SheetPage() {
             <div className="sm-card">
               <span className="sm-label">악보 연주란</span>
               <p>
-                반주에 맞춰 5선 드럼 악보가 오른쪽에서 왼쪽으로 흐르고, 고정 기준선이 지금 칠 위치입니다. 점수와 콤보는
-                없고, 칠 때마다 음표가 판정 색으로 바뀝니다.
+                반주에 맞춰 마디가 화면에 고정되고 커서가 왼쪽에서 오른쪽으로 지나갑니다. 아래 드럼 킷에는 다음에 칠 박
+                번호가 패드 위에 보입니다. 점수와 콤보는 없고, 칠 때마다 음표가 판정 색으로 바뀝니다.
               </p>
               <p>끝나면 결과 페이지에서 약한 패드와 마디 구간을 짚어 주고, 그 구간을 미니 악보로 보여 줍니다.</p>
             </div>
@@ -533,7 +540,7 @@ export function SheetPage() {
     </>
   );
   const strip = (
-    <SheetStrip
+    <SheetPager
       chart={chart}
       noteStates={noteStates}
       strayHits={strays}
@@ -598,7 +605,7 @@ export function SheetPage() {
                 시작 <span className="sm-key">Enter</span>
               </button>
               <span className="sm-hint">
-                시작하면 {settings.countInBars}마디 카운트인 뒤 악보가 흐릅니다. 지금 쳐 보면 소리만 납니다.
+                시작하면 {settings.countInBars}마디 카운트인 뒤 커서가 움직입니다. 지금 쳐 보면 소리만 납니다.
               </span>
             </div>
           </div>
@@ -629,6 +636,10 @@ export function SheetPage() {
                 메트로놈 클릭을 곡 중에도 낸다
               </label>
               <label>
+                <input type="checkbox" checked={settings.sheetPadCount} onChange={(e) => settings.setSheetPadCount(e.target.checked)} />
+                드럼 패드 위에 다음 칠 박 번호를 보인다
+              </label>
+              <label>
                 <input type="checkbox" checked={hasAcc} disabled readOnly />
                 반주 재생{hasAcc ? '' : ' (반주 없음)'}
               </label>
@@ -638,11 +649,11 @@ export function SheetPage() {
 
         <section className="sm-strip-panel" aria-label="악보 미리보기">
           <div className="sm-strip-body">
-            <span className="sm-corner left">첫 마디 · 정지</span>
+            <span className="sm-corner left">첫 페이지 · 정지</span>
             {strip}
           </div>
           <div className="sm-legend plain">
-            <span>시작하면 기준선을 향해 왼쪽으로 흐릅니다. 음표가 기준선에 닿는 순간이 칠 때입니다.</span>
+            <span>시작하면 커서가 왼쪽에서 오른쪽으로 갑니다. 커서가 음표에 닿는 순간이 칠 때입니다.</span>
             <span className="sm-legend-end">Enter 시작 · Esc 곡 선택</span>
           </div>
         </section>
@@ -688,76 +699,63 @@ export function SheetPage() {
           </span>
         </section>
 
-        <section className="sm-strip-panel" aria-label="악보">
-          <div className="sm-strip-body">
-            <span className="sm-corner left">지난 음표 · 판정 색</span>
-            <span className="sm-corner right">다음 음표 →</span>
-            {strip}
-          </div>
-          <div className="sm-legend">
-            <span className="sm-legend-item">
-              <span className="sm-dot" style={{ background: 'var(--sm-perfect)' }} aria-hidden="true" />
-              Perfect
-            </span>
-            <span className="sm-legend-item">
-              <span className="sm-dot" style={{ background: 'var(--sm-good)' }} aria-hidden="true" />
-              Good
-            </span>
-            <span className="sm-legend-item">
-              <span className="sm-dot" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
-              Miss
-            </span>
-            <span className="sm-legend-item">
-              <span className="sm-dot sm" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
-              채보 밖 타격(감점 없음)
-            </span>
-            <span className="sm-legend-end">기준선에 음표가 닿는 순간 치세요</span>
-          </div>
-        </section>
+        <div className="sm-judge-chips" aria-label="판정">
+          <span className="sm-chip neutral sm-judge-chip">
+            노트 {snap.judgedCount}/{activeSession.notes.length}
+          </span>
+          <span className="sm-chip neutral sm-judge-chip" style={{ color: 'var(--sm-perfect)' }}>
+            P {snap.counts.PERFECT}
+          </span>
+          <span className="sm-chip neutral sm-judge-chip" style={{ color: 'var(--sm-good)' }}>
+            G {snap.counts.GOOD}
+          </span>
+          <span className="sm-chip neutral sm-judge-chip" style={{ color: 'var(--sm-miss)' }}>
+            M {snap.counts.MISS}
+          </span>
+          <span className="sm-chip neutral sm-judge-chip">채보 밖 {snap.strayHits}</span>
+          <span className="sm-chip neutral sm-judge-chip">
+            Δ {lastDelta === null ? '—' : `${lastDelta > 0 ? '+' : ''}${Math.round(lastDelta)} ms`}
+          </span>
+        </div>
 
-        <section className="sm-stats" aria-label="판정">
-          <div className="sm-tile">
-            <span className="sm-tile-label">노트</span>
-            <span className="sm-tile-value">
-              {snap.judgedCount} <small>/ {activeSession.notes.length}</small>
-            </span>
-          </div>
-          <div className="sm-tile">
-            <span className="sm-tile-label" style={{ color: 'var(--sm-perfect)' }}>
-              PERFECT
-            </span>
-            <span className="sm-tile-value">{snap.counts.PERFECT}</span>
-          </div>
-          <div className="sm-tile">
-            <span className="sm-tile-label" style={{ color: 'var(--sm-good)' }}>
-              GOOD
-            </span>
-            <span className="sm-tile-value">{snap.counts.GOOD}</span>
-          </div>
-          <div className="sm-tile">
-            <span className="sm-tile-label" style={{ color: 'var(--sm-miss)' }}>
-              MISS
-            </span>
-            <span className="sm-tile-value">{snap.counts.MISS}</span>
-          </div>
-          <div className="sm-tile">
-            <span className="sm-tile-label">채보 밖</span>
-            <span className="sm-tile-value">{snap.strayHits}</span>
-          </div>
-          <div className="sm-tile">
-            <span className="sm-tile-label">최근 Δ</span>
-            <span className="sm-tile-value">
-              {lastDelta === null ? (
-                '—'
-              ) : (
-                <>
-                  {lastDelta > 0 ? '+' : ''}
-                  {Math.round(lastDelta)} <small>ms</small>
-                </>
-              )}
-            </span>
-          </div>
-        </section>
+        <div className="sm-play-grid">
+          <section className="sm-strip-panel sm-play-sheet" aria-label="악보">
+            <div className="sm-strip-body">
+              <span className="sm-corner left">지난 음표 · 판정 색</span>
+              {strip}
+            </div>
+            <div className="sm-legend">
+              <span className="sm-legend-item">
+                <span className="sm-dot" style={{ background: 'var(--sm-perfect)' }} aria-hidden="true" />
+                Perfect
+              </span>
+              <span className="sm-legend-item">
+                <span className="sm-dot" style={{ background: 'var(--sm-good)' }} aria-hidden="true" />
+                Good
+              </span>
+              <span className="sm-legend-item">
+                <span className="sm-dot" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
+                Miss
+              </span>
+              <span className="sm-legend-item">
+                <span className="sm-dot sm" style={{ background: 'var(--sm-miss)' }} aria-hidden="true" />
+                채보 밖 타격(감점 없음)
+              </span>
+              <span className="sm-legend-end">커서가 음표에 닿는 순간 치세요</span>
+            </div>
+          </section>
+
+          <section className="sm-kit-panel" aria-label="드럼">
+            <KitGuideView
+              layout={settings.kitLayout}
+              session={activeSession}
+              getSongTime={getSongTime}
+              hits={hits}
+              showCount={settings.sheetPadCount}
+              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
+            />
+          </section>
+        </div>
 
         <div className="sm-foot">
           <span>

@@ -7,6 +7,7 @@ import type { HitFx } from '@/domain/events';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
 import type { RhythmSession } from '@/engine/RhythmSession';
+import { FONT, paintHitFx, paintPad } from './kitPadPaint';
 import { chordGroups, MISS_SHRINK_MS, nextTargets, visibleNotes } from './kitPlayDraw';
 
 export interface KitPlayViewProps {
@@ -26,7 +27,6 @@ interface JudgeLabel {
 }
 
 const JUDGE_COLOR: Record<Judgement, string> = { PERFECT: '#ffd166', GOOD: '#5fb8ae', MISS: '#e05a5a' };
-const FONT = 'Pretendard Variable, Pretendard, sans-serif';
 
 /** 링 반지름: 등장 2.2r → 판정 1.0r (U1: 겹침이 거슬리면 1.8로) */
 const RING_START = 2.2;
@@ -36,33 +36,6 @@ const MAX_RINGS_PER_PAD = 4;
 /** 동시 노트 선을 그리는 허용 오차(ms). 한 프레임 안팎 */
 const CHORD_TOLERANCE_MS = 17;
 const LABEL_MS = 600;
-
-// 타격 이펙트 타이밍: KitCanvas와 같게 맞춘다
-const FLASH_MS = 220;
-const RING_MS = 500;
-const SQUASH_MS = 280;
-const TEXT_MS = 700;
-
-function squashScale(u: number, amp: number): number {
-  const keys: [number, number][] = [
-    [0, 1],
-    [0.18, 0.86],
-    [0.55, 1.07],
-    [1, 1],
-  ];
-  for (let i = 1; i < keys.length; i++) {
-    if (u <= keys[i][0]) {
-      const [u0, k0] = keys[i - 1];
-      const [u1, k1] = keys[i];
-      return 1 + (k0 + ((k1 - k0) * (u - u0)) / (u1 - u0) - 1) * amp;
-    }
-  }
-  return 1;
-}
-
-function squashAmp(velocity: number): number {
-  return Math.min(1.5, Math.max(0.5, 0.7 + ((velocity - 64) / 56) * 0.6));
-}
 
 export function KitPlayView(props: KitPlayViewProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -125,55 +98,19 @@ export function KitPlayView(props: KitPlayViewProps) {
 
       // 패드
       for (const pad of LANE_PADS) {
-        const { cx, cy, r } = geo(pad);
-        const meta = PAD_META[pad];
-        const fx = p.hits.current?.get(pad);
-        const age = fx ? now - fx.at : Infinity;
-        const flash = fx ? Math.max(0, 1 - age / FLASH_MS) : 0;
-        const isTarget = targets.has(pad);
-        ctx.save();
-        if (fx && !reduced && age < SQUASH_MS) {
-          const sc = squashScale(age / SQUASH_MS, squashAmp(fx.velocity));
-          ctx.translate(cx, cy);
-          ctx.scale(sc, sc);
-          ctx.translate(-cx, -cy);
-        }
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        if (flash > 0) {
-          ctx.fillStyle = meta.color;
-          ctx.globalAlpha = 0.18 + flash * 0.82;
-        } else {
-          ctx.fillStyle = meta.color + '2e';
-        }
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.lineWidth = isTarget ? 4 : 2;
-        ctx.strokeStyle = isTarget ? '#ffffff' : meta.color + 'aa';
-        ctx.stroke();
-        if (isTarget) {
-          const pulse = 0.5 + 0.5 * Math.sin(now / 180);
-          ctx.beginPath();
-          ctx.arc(cx, cy, r + 8 + pulse * 6, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255,255,255,${0.25 + pulse * 0.35})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-        ctx.fillStyle = '#f3efe6';
-        ctx.font = `700 ${Math.max(12, r * 0.32)}px ${FONT}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(meta.label, cx, cy - (p.keyMap ? r * 0.12 : 0));
-        if (p.keyMap) {
-          const keys = Object.entries(p.keyMap)
-            .filter(([, b]) => b.pad === pad)
-            .map(([code]) => code.replace('Key', '').replace('Space', '␣'))
-            .join(' ');
-          ctx.font = `600 ${Math.max(10, r * 0.24)}px ${FONT}`;
-          ctx.fillStyle = 'rgba(243,239,230,0.7)';
-          ctx.fillText(keys, cx, cy + r * 0.28);
-        }
-        ctx.restore();
+        const keys = p.keyMap
+          ? Object.entries(p.keyMap)
+              .filter(([, b]) => b.pad === pad)
+              .map(([code]) => code.replace('Key', '').replace('Space', '␣'))
+              .join(' ')
+          : undefined;
+        paintPad(ctx, geo(pad), pad, {
+          fx: p.hits.current?.get(pad),
+          now,
+          reduced,
+          ringStyle: targets.has(pad) ? 'target' : 'none',
+          keys,
+        });
       }
 
       if (s) {
@@ -219,36 +156,7 @@ export function KitPlayView(props: KitPlayViewProps) {
         for (const pad of LANE_PADS) {
           const fx = p.hits.current?.get(pad);
           if (!fx) continue;
-          const age = now - fx.at;
-          const { cx, cy, r } = geo(pad);
-          const color = PAD_META[pad].color;
-          if (age < RING_MS) {
-            const u = age / RING_MS;
-            const ease = 1 - Math.pow(1 - u, 3);
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(cx, cy, r * (0.9 + 1.0 * ease), 0, Math.PI * 2);
-            ctx.globalAlpha = 0.9 * (1 - u);
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = color;
-            ctx.stroke();
-            ctx.restore();
-          }
-          if (age < TEXT_MS) {
-            const u = age / TEXT_MS;
-            const alpha = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
-            const size = Math.max(14, r * 0.45 * (0.8 + (fx.velocity / 127) * 0.4));
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-            ctx.fillStyle = color;
-            ctx.font = `800 ${size}px ${FONT}`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0,0,0,0.6)';
-            ctx.shadowBlur = 6;
-            ctx.fillText(PAD_META[pad].onomatopoeia, cx - r * 0.7, cy - r * (0.7 + 0.8 * u));
-            ctx.restore();
-          }
+          paintHitFx(ctx, geo(pad), pad, fx, now);
         }
       }
 

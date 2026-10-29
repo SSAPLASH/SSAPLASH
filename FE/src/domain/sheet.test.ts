@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSheet, layoutBar } from './sheet';
+import { buildSheet, countLabel, layoutBar } from './sheet';
 import { BUILTIN_CHARTS, CHART_8_FILL, CHART_BASIC_8, type Chart } from './chart';
 
 function chartOf(notes: Chart['notes'], durationMs: number): Chart {
@@ -154,5 +154,24 @@ describe('layoutBar', () => {
     const c: Chart = { ...chartOf([{ timeMs: 750, pad: 'KICK' }], 1500), beatsPerBar: 3 }; // 마디 1500ms, 칸 125ms
     expect(layoutBar(c, 0).glyphs[0].xRatio).toBe(6 / 12);
     expect(layoutBar(c, 0, { stepsPerBar: 6 }).glyphs[0].xRatio).toBe(3 / 6);
+  });
+});
+
+describe('countLabel', () => {
+  it('박 안 칸 위치 0/1/2/3을 박 번호·e·&·a로 바꾼다', () => {
+    expect(countLabel(4, 16, 4)).toEqual({ beat: 2, sub: '' });
+    expect(countLabel(5, 16, 4)).toEqual({ beat: 2, sub: 'e' });
+    expect(countLabel(6, 16, 4)).toEqual({ beat: 2, sub: '&' });
+    expect(countLabel(7, 16, 4)).toEqual({ beat: 2, sub: 'a' });
+  });
+
+  it('마디 처음과 끝', () => {
+    expect(countLabel(0, 16, 4)).toEqual({ beat: 1, sub: '' });
+    expect(countLabel(15, 16, 4)).toEqual({ beat: 4, sub: 'a' });
+  });
+
+  it('3/4박자(12칸)도 한 박 4칸이다', () => {
+    expect(countLabel(8, 12, 3)).toEqual({ beat: 3, sub: '' });
+    expect(countLabel(11, 12, 3)).toEqual({ beat: 3, sub: 'a' });
   });
 });
