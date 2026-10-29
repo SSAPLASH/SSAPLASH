@@ -1,14 +1,24 @@
-// 내 곡 카드의 ⋯ 메뉴 (설계 CHART-001 4-2). 커버 변경·표시명 변경·곡 삭제. Esc·바깥 클릭으로 닫힌다.
+// 내 곡 카드의 ⋯ 메뉴 (설계 CHART-001 4-2, D5). 완료 곡 = 커버 변경·곡 정보 수정·곡 삭제, 실패 곡 = 곡 삭제만.
+// 처리 중 곡에는 카드가 메뉴를 그리지 않는다. Esc·바깥 클릭으로 닫힌다.
 import { useEffect, useRef, useState } from 'react';
+import { menuKinds, type SongEditKind } from '@/domain/songEdit';
 
-export type SongEditKind = 'cover' | 'meta' | 'delete';
+export type { SongEditKind };
+
+const KIND_LABEL: Record<SongEditKind, string> = {
+  cover: '커버 변경',
+  meta: '곡 정보 수정',
+  delete: '곡 삭제',
+};
 
 interface Props {
   title: string;
+  status: string;
   onPick: (kind: SongEditKind) => void;
 }
 
-export function SongMenu({ title, onPick }: Props) {
+export function SongMenu({ title, status, onPick }: Props) {
+  const kinds = menuKinds(status);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -37,6 +47,8 @@ export function SongMenu({ title, onPick }: Props) {
     onPick(kind);
   };
 
+  if (kinds.length === 0) return null;
+
   return (
     <div className="song-menu" ref={wrapRef}>
       <button
@@ -52,15 +64,11 @@ export function SongMenu({ title, onPick }: Props) {
       </button>
       {open && (
         <div className="song-menu-list" role="menu">
-          <button type="button" role="menuitem" onClick={() => pick('cover')}>
-            커버 변경
-          </button>
-          <button type="button" role="menuitem" onClick={() => pick('meta')}>
-            표시명 변경
-          </button>
-          <button type="button" role="menuitem" className="danger" onClick={() => pick('delete')}>
-            곡 삭제
-          </button>
+          {kinds.map((kind) => (
+            <button key={kind} type="button" role="menuitem" className={kind === 'delete' ? 'danger' : undefined} onClick={() => pick(kind)}>
+              {KIND_LABEL[kind]}
+            </button>
+          ))}
         </div>
       )}
     </div>

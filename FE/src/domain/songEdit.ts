@@ -42,6 +42,16 @@ export function diffMeta(current: SongMetaInput, next: SongMetaInput): SongMetaP
   return patch;
 }
 
+/** 카드 ⋯ 메뉴의 편집 종류 */
+export type SongEditKind = 'cover' | 'meta' | 'delete';
+
+/** 곡 상태별 ⋯ 메뉴 항목(D5): 완료 = 커버·곡 정보·삭제, 실패 = 삭제만, 처리 중·알 수 없는 상태 = 없음 */
+export function menuKinds(status: string): SongEditKind[] {
+  if (status === 'READY') return ['cover', 'meta', 'delete'];
+  if (status === 'FAILED') return ['delete'];
+  return [];
+}
+
 export const SONG_EDIT_UNCERTAIN_TEXT = '결과를 확인하지 못했습니다. 목록을 확인해 주세요.';
 
 const SONG_EDIT_ERROR_TEXT: Record<string, string> = {

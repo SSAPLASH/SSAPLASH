@@ -2555,6 +2555,49 @@ a.my-list-row:focus-visible {
 .song-cover-disc .disc-hole {
   fill: var(--stage-deep);
 }
+/* 완료 곡 ▶ 플레이 (D4-2): 커버 오른쪽 아래. 마우스 기기는 카드 hover·focus 때, 터치 기기는 항상 보인다 */
+.song-card-play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--brass);
+  color: #1a1408;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.song-card-play svg {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+.song-card-play:hover {
+  background: var(--perfect);
+}
+.song-card:hover .song-card-play,
+.song-card:focus-within .song-card-play {
+  opacity: 1;
+  transform: none;
+}
+@media (hover: none) {
+  .song-card-play {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-card-play {
+    transition: none;
+  }
+}
 .song-card-body {
   display: flex;
   flex-direction: column;
