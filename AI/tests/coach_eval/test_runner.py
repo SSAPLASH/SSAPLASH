@@ -54,7 +54,7 @@ def test_summarize_by_good_ms_splits_each_cell(result):
 
 def test_markdown_has_all_sections(result):
     text = report.render_markdown(result, perf=None, smoke=None, date="2026-10-30")
-    for heading in ("## 1.", "## 2.", "## 3.", "## 4.", "## 한계"):
+    for heading in ("## 1.", "## 2.", "## 3.", "## 4.", "## 5.", "## 한계"):
         assert heading in text
     assert "`TIMING_LATE`" in text and "`CLEAN_NOVICE`" in text
 

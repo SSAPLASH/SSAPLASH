@@ -50,6 +50,8 @@ AI/
 │   │                    chart_json(채보 JSON 만들기·검증), tempo(bpm 추정), cli(ssaplash-chart 명령)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
 │   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
+│   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
 │   └─ server/           AI 서버 진입점 app.py (FastAPI, /health), weak_segments.py (POST /analysis/weak-segments)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
@@ -200,6 +202,22 @@ BE가 플레이 후 호출하는 통계 규칙 엔진이다(학습 모델 없음
 uv run uvicorn ssaplash_ai.server.app:app --port 8000
 uv run pytest tests/coach tests/server/test_weak_segments.py
 ```
+
+### 약점 분석 합성 평가 (S15P31A307-139)
+
+실제 플레이 로그가 없는 동안 규칙을 검증하는 도구다. 약점을 심은 가짜 플레이 로그를 만들어 `analyze()`가 찾는지(탐지율),
+약점 없는 로그에서 잘못 찾는지(오탐률)를 잰다. 개발·평가 전용 패키지(`src/ssaplash_ai/coach_eval/`)다. 서버 이미지에는 소스 파일로 들어가지만 서버가 가져다 쓰지 않는다.
+결과와 해석은 [docs/coach-eval/weak-segments-2026-10-29/summary.md](docs/coach-eval/weak-segments-2026-10-29/summary.md)에 있다.
+합성 데이터 기준이라 "규칙이 설계대로 동작하는가"의 근거이지 정확도 주장이 아니다.
+
+```bash
+uv run python -m ssaplash_ai.coach_eval.cli --out docs/coach-eval/weak-segments-2026-10-29 --mlflow
+uv run pytest tests/coach_eval
+```
+
+- 같은 `--base-seed`면 결과가 같다. 규칙·임계값을 바꾼 뒤에는 같은 명령으로 다시 돌려 비교한다(날짜 폴더를 새로 만든다).
+- `--mlflow`는 실험 `coach-weak-segments-eval`에 기록한다. 주소는 `--tracking-uri`나 환경 변수 `MLFLOW_TRACKING_URI`이고 없으면 로컬 `mlruns/`(git 미추적)다.
+- 시나리오(심는 약점)와 강도는 `coach_eval/scenarios.py`, 연주 모델은 `player.py`에 있다. 새 패턴을 켜면 시나리오를 하나 추가한다.
 
 ## 벤치마크 실행
 
