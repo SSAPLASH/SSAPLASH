@@ -45,8 +45,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(9);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(10);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -120,7 +120,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(18);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(19);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
@@ -132,7 +132,8 @@ class TimescaleMigrationTest {
 	}
 
 	private void verifyHypertable(Connection connection) throws SQLException {
-		assertThat(scalar(connection, "SELECT extversion FROM pg_extension WHERE extname='timescaledb'")).isEqualTo("2.30.2");
+		assertThat(scalar(connection, "SELECT count(*) FROM information_schema.columns WHERE table_name='songs' AND column_name='cover_key' AND is_nullable='YES'")).isEqualTo("1");
+			assertThat(scalar(connection, "SELECT extversion FROM pg_extension WHERE extname='timescaledb'")).isEqualTo("2.30.2");
 		assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.hypertables WHERE hypertable_schema='public' AND hypertable_name='telemetry_events'"))
 				.isEqualTo("1");
 		assertThat(scalar(connection, "SELECT extract(epoch FROM time_interval)::bigint FROM timescaledb_information.dimensions WHERE hypertable_name='telemetry_events' AND column_name='time'"))
