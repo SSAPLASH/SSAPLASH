@@ -26,6 +26,8 @@ class Trial:
     cross: tuple[str, ...] = ()  # 기대 밖 pattern (교차 반응)
     allowed: tuple[str, ...] = ()  # 허용 목록에 있어 따로 표시만 하는 pattern
     false_positive: bool = False  # 정상 로그에서 약점이 하나라도 나왔는가
+    good_ms: float = 0.0  # 이 시험의 판정 폭 (집계용)
+    n_notes: int = 0  # 이 시험의 노트 수 (집계용)
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -77,6 +79,7 @@ class Cell:
     scenario: str
     kind: str
     strength: float
+    group: float | None = None  # `summarize_by`가 나눈 기준 값(판정 폭 등)
     n: int = 0
     detected: int = 0
     location_ok: int = 0
@@ -136,3 +139,20 @@ def false_positive_by_pattern(cells: list[Cell]) -> dict[str, tuple[int, int]]:
         for pattern, count in c.pattern_counts.items():
             hits[pattern] += count
     return {p: (k, total) for p, k in sorted(hits.items())}
+
+
+def summarize_by(trials: list[Trial], key: str) -> list[Cell]:
+    """(시나리오, 강도, `key` 값) 칸별로 집계한다. `key`는 `good_ms` 또는 `n_notes`.
+
+    `Cell.strength` 자리에는 강도를 두고, 칸을 구분하는 `key` 값은 `group`에 담는다.
+    """
+    cells: dict[tuple[str, float, float], Cell] = {}
+    for t in trials:
+        group = float(getattr(t, key))
+        cell = cells.setdefault(
+            (t.scenario, t.strength, group), Cell(t.scenario, t.kind, t.strength, group=group)
+        )
+        cell.n += 1
+        cell.detected += t.detected
+        cell.false_positive += t.false_positive
+    return list(cells.values())
