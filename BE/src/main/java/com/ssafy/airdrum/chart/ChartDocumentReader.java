@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -13,6 +14,7 @@ import static com.ssafy.airdrum.chart.ChartResponses.*;
 /** 저장 JSON을 공개 DTO로 제한해 매핑한다. 원문·내부 키를 예외 메시지에 넣지 않는다. */
 @Component
 public class ChartDocumentReader {
+	private static final Pattern PAD_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]{0,31}");
 	private final JsonMapper json;
 	public ChartDocumentReader(JsonMapper json) { this.json = json; }
 
@@ -31,7 +33,7 @@ public class ChartDocumentReader {
 			check(time >= 0 && time >= previous);
 			previous = time;
 			String pad = text(node, "pad");
-			check(pad.matches("[A-Z][A-Z0-9_]{0,31}"));
+			check(PAD_PATTERN.matcher(pad).matches());
 			Integer velocity = optionalInt(node, "velocityHint");
 			check(velocity == null || (velocity >= 0 && velocity <= 127));
 			Notation notation = null;
