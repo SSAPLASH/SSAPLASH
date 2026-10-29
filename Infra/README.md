@@ -114,3 +114,31 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - 서명 URL이 프록시 뒤에서 맞지 않으면 먼저 `OBJECT_STORAGE_PUBLIC_URL`, Nginx의 `Host` 전달, SeaweedFS의 `-s3.externalUrl`을 점검한다.
 - SeaweedFS가 요구에 맞지 않으면 다른 S3 호환 스토리지(예: MinIO)로 바꾼다. BE는 접속 주소와 키만 바뀌므로 코드 변경이 없다.
 - 스토리지 없이 임시로 쓰려면 서버 로컬 볼륨에 저장하는 방식이 있으나, 서명 URL이 없어 BE 변경이 필요하다. 최후의 수단이다.
+
+## 약점 분석 보정 배치 (coach-calibration, COACH-003)
+
+동의한 사용자의 비식별 연주 기록으로 약점 분석 임계값 **후보**를 만들어 MLflow에 기록하는 일회성 배치다. 임계값을 자동으로 바꾸지 않는다.
+동작·정책·승인 절차는 [AI/docs/coach-calibration.md](../AI/docs/coach-calibration.md)에 있고, 여기에는 운영에 필요한 것만 적는다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 서비스 | `docker-compose.yml`의 `coach-calibration`. `profiles: ["calibration"]`라서 `up -d`로는 뜨지 않는다 |
+| 실행 | `docker compose -p infra run --rm coach-calibration` (`--force` 등 인자는 배치에 그대로 전달된다) |
+| 읽는 곳 | DB 뷰 `coach_export_v`만. 전용 읽기 전용 계정 `coach_export`로 접속하고 원본 테이블 권한은 없다 |
+| 쓰는 곳 | MLflow(`http://mlflow:5000`, 내부 네트워크). DB에는 쓰지 않는다 |
+| 정책 파일 | `AI/configs/coach/`를 `/config`에 읽기 전용으로 마운트한다(서버 이미지에는 정책 파일이 없다). 파일이 없으면 배치가 실패한다 |
+| 권한 | 내부 네트워크만, `cap_drop: ALL`, `no-new-privileges`, 메모리 1GiB |
+| 상태 줄 | 끝에 `coach-calibration status=OK\|SKIPPED\|FAIL ...` 한 줄. 알림과 점검이 이 줄을 본다 |
+
+**선행 조건 (모두 갖춰져야 의미 있게 돈다)**
+1. AI 쪽 배치 코드(`ssaplash_ai.coach_calibration`)가 서버에 배포돼 있다. 아직 배포 전에는 이 서비스를 실행하면 모듈이 없어 실패한다.
+2. BE가 뷰 `coach_export_v`와 그룹 역할 `coach_export_reader`(마이그레이션 V19)를 서버 DB에 적용했다.
+3. 서버에서 읽기 전용 로그인 계정을 만들고 그룹 역할에 넣고 소금을 설정했다(비밀 값은 저장소에 없다). 비밀번호는 `.env`의 `COACH_EXPORT_PASSWORD`에 둔다.
+4. `.env`의 `ADMIN_EMAILS`에 팀원 로그인 이메일을 모두 넣었다(뷰가 `role = 'ADMIN'` 계정을 제외한다. ADMIN 권한이 같이 부여되는 점은 알고 하는 선택이다).
+5. Alloy가 5초 주기 설정으로 다시 떴다. 설정 파일을 마운트해서 쓰므로 `up -d`로는 다시 읽지 않는다: `docker compose -p infra restart alloy`.
+
+`COACH_EXPORT_PASSWORD`가 비어 있으면 배치는 DB에 접속하기 전에 `status=FAIL error=MissingExportPassword`를 남기고 멈춘다. 다른 서비스에는 영향이 없다.
+
+**로그 수집을 위한 대기**: Alloy의 컨테이너 탐색 기본 주기가 1분이라 일회성 컨테이너의 로그를 놓칠 수 있다. 탐색 주기를 5초로 줄였고
+(`monitoring/alloy/config.alloy`), 컨테이너가 시작 직후와 종료 직전에 15초씩 기다린 뒤 끝난다. 그래서 한 번 실행에 최소 30초가 걸린다.
+첫 실행 뒤 Grafana Explore에서 `{service="coach-calibration"}`로 상태 줄이 실제로 조회되는지 확인한다(서버에서 확인하기 전이다).
