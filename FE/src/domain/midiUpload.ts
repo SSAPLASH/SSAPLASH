@@ -25,7 +25,7 @@ export const MIDI_PRECHECK_TEXT: Record<MidiPrecheckReason, string> = {
   TOO_LARGE: '1 MiB 이하 MIDI만 올릴 수 있어요.',
 };
 
-export const MIDI_UNCERTAIN_TEXT = '업로드 결과를 확인하지 못했습니다. 내 곡 목록을 확인한 뒤 필요하면 다시 올려 주세요.';
+export const MIDI_UNCERTAIN_TEXT = '업로드 결과를 확인하지 못했습니다. 라이브러리를 확인한 뒤 필요하면 다시 올려 주세요.';
 
 const MIDI_ERROR_TEXT: Record<string, string> = {
   MIDI_INVALID: '제목(1~100자)과 파일을 확인해 주세요.',
