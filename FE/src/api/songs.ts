@@ -1,6 +1,7 @@
 // 곡 API (BE 96, 설계 3-1). 응답 숫자 id·bpm 변환까지만 하고 Chart 변환은 domain/chartMapping이 맡는다.
 import type { UploadDraft } from '@/domain/chartJob';
 import type { MidiDraft } from '@/domain/midiUpload';
+import type { SongMetaPatch } from '@/domain/songEdit';
 import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongPage, type SongScope } from '@/domain/songCatalog';
 import { apiFetch } from './http';
 
@@ -62,4 +63,28 @@ export async function uploadMidi(draft: MidiDraft, signal?: AbortSignal): Promis
   form.append('file', draft.file);
   const body = await apiFetch<Record<string, unknown>>('/api/v1/songs/midi', { method: 'POST', body: form, signal });
   return songDetailFromDto(body);
+}
+
+/** `PATCH /api/v1/songs/{id}` — 바뀐 필드만 JSON으로 보낸다. 아티스트 `""`는 비움 (설계 CHART-001 3-1, 제안 API) */
+export async function updateSongMeta(id: number, patch: SongMetaPatch, signal?: AbortSignal): Promise<SongDetail> {
+  const body = await apiFetch<Record<string, unknown>>(`/api/v1/songs/${id}`, { method: 'PATCH', body: patch, signal });
+  return songDetailFromDto(body);
+}
+
+/** `PUT /api/v1/songs/{id}/cover` — multipart `file`(512 JPEG). 200 `{ coverUrl }` */
+export async function uploadSongCover(id: number, blob: Blob, signal?: AbortSignal): Promise<{ coverUrl: string }> {
+  const form = new FormData();
+  form.append('file', blob, 'cover.jpg');
+  const body = await apiFetch<Record<string, unknown>>(`/api/v1/songs/${id}/cover`, { method: 'PUT', body: form, signal });
+  return { coverUrl: typeof body?.coverUrl === 'string' ? body.coverUrl : '' };
+}
+
+/** `DELETE /api/v1/songs/{id}/cover` — 204 */
+export async function deleteSongCover(id: number, signal?: AbortSignal): Promise<void> {
+  await apiFetch(`/api/v1/songs/${id}/cover`, { method: 'DELETE', signal });
+}
+
+/** `DELETE /api/v1/songs/{id}` — 204. 채보·반주·커버가 함께 지워진다 */
+export async function deleteSong(id: number, signal?: AbortSignal): Promise<void> {
+  await apiFetch(`/api/v1/songs/${id}`, { method: 'DELETE', signal });
 }
