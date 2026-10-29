@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 
 from ssaplash_ai.coach import AnalysisRequest, analyze
+from ssaplash_ai.coach.config import DEFAULT_THRESHOLDS, Thresholds
 from ssaplash_ai.coach_eval.chart import make_chart
 from ssaplash_ai.coach_eval.metrics import Trial, evaluate
 from ssaplash_ai.coach_eval.player import PlayerModel, simulate
@@ -41,18 +42,27 @@ def trial_seed(config: RunConfig, scenario_index: int, strength_index: int, k: i
     return config.base_seed * 1_000_003 + scenario_index * 10_007 + strength_index * 101 + k
 
 
-def run_trial(scenario: Scenario, strength: float, config: RunConfig, seed: int, k: int) -> Trial:
+def run_trial(
+    scenario: Scenario,
+    strength: float,
+    config: RunConfig,
+    seed: int,
+    k: int,
+    thresholds: Thresholds = DEFAULT_THRESHOLDS,
+) -> Trial:
     n_notes = config.note_counts[k % len(config.note_counts)]
     good_ms = config.good_ms_values[k % len(config.good_ms_values)]
     chart = make_chart(n_notes, scenario.layout, seed=seed)
     play = simulate(chart, scenario.build(strength, chart), good_ms=good_ms, seed=seed)
-    response = analyze(AnalysisRequest.model_validate(play.request))
+    response = analyze(AnalysisRequest.model_validate(play.request), thresholds)
     trial = evaluate(response, scenario, strength, scenario.truth(strength, chart))
     return dataclasses.replace(trial, good_ms=good_ms, n_notes=n_notes)
 
 
 def run_all(
-    config: RunConfig = DEFAULT_CONFIG, scenarios: tuple[Scenario, ...] = SCENARIOS
+    config: RunConfig = DEFAULT_CONFIG,
+    scenarios: tuple[Scenario, ...] = SCENARIOS,
+    thresholds: Thresholds = DEFAULT_THRESHOLDS,
 ) -> RunResult:
     started = time.perf_counter()
     trials: list[Trial] = []
@@ -60,7 +70,7 @@ def run_all(
         for ti, strength in enumerate(scenario.strengths):
             for k in range(config.seeds):
                 seed = trial_seed(config, si, ti, k)
-                trials.append(run_trial(scenario, strength, config, seed, k))
+                trials.append(run_trial(scenario, strength, config, seed, k, thresholds))
     return RunResult(config, trials, time.perf_counter() - started)
 
 
