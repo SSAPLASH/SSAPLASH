@@ -130,7 +130,7 @@ class MidiUploadApiTest {
 				+ "JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", songId);
 		assertThat(rows).hasSize(3).allSatisfy(row -> {
 			assertThat(row.get("generator")).isEqualTo("MIDI_RULE");
-			assertThat(row.get("generator_version")).isEqualTo("midi-rule-1.0");
+			assertThat(row.get("generator_version")).isEqualTo("midi-rule-1.1");
 			assertThat(row.get("version")).isEqualTo(1);
 			assertThat(row.get("no_pages")).isEqualTo(true);
 		});
@@ -155,7 +155,7 @@ class MidiUploadApiTest {
 		assertThat(chart.path("notes").findValuesAsString("pad")).contains("HIHAT_PEDAL");
 
 		var easy = body(send(get("/api/v1/charts/" + song.path("charts").get(0).path("id").asLong()), user));
-		assertThat(easy.path("notes").findValuesAsString("pad")).doesNotContain("HIHAT", "HIHAT_PEDAL");
+		assertThat(easy.path("notes").findValuesAsString("pad")).contains("HIHAT").doesNotContain("HIHAT_PEDAL");
 	}
 
 	@Test

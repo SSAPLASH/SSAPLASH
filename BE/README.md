@@ -828,14 +828,14 @@ MIDI는 소리가 아니라 연주 지시 데이터라 반주가 없고, 원본 
 | `RIDE` | 51, 53, 59 |
 | 제외 | 그 밖의 피치(클랩·탬버린·카우벨 등) |
 
-- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.0`):
+- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.1`):
 
 | 규칙 | HARD | NORMAL | EASY |
 | --- | --- | --- | --- |
-| 패드 | 전체 | 전체 | `HIHAT`·`HIHAT_PEDAL`·`RIDE` 제외 |
+| 패드 | 전체 | 전체 | `HIHAT_PEDAL` 제외 |
 | 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 4분 격자만 |
 | 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 전부 제외 |
-| 같은 시각 상한 | 없음 | 2개 | 1개 |
+| 같은 시각 상한 | 없음 | 2개 | 2개 |
 | 최소 간격(기준의 3/4 미만이면 충돌) | 없음 | 16분 | 8분 |
 
   상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
