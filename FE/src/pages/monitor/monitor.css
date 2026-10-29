@@ -652,3 +652,222 @@
 .mon-latency-cv {
   height: 240px;
 }
+
+/* 타격 추적: 왼쪽 최근 타격 목록 + 오른쪽 ①~⑥ 카드 */
+.mon-trace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.mon-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.mon-trace-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+}
+.mon-trace-item:hover {
+  border-color: var(--line);
+}
+.mon-trace-item.active {
+  background: var(--surface);
+  border-color: var(--brass);
+}
+.mon-trace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mon-trace-nav {
+  float: right;
+  display: inline-flex;
+  gap: 6px;
+}
+.mon-trace-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px;
+}
+.mon-trace-card {
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  min-width: 0;
+}
+.mon-trace-card.ok {
+  border-left-color: var(--good);
+}
+.mon-trace-card-title {
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.mon-trace-items {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+.mon-trace-items > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.mon-trace-items dt {
+  color: var(--ink-faint);
+}
+.mon-trace-items dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.mon-trace-swing {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .mon-trace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mon-trace-list {
+    max-height: 200px;
+  }
+}
+
+/* 사이드바 하단 선택 타격 카드 */
+.mon-side-sel {
+  margin-top: auto;
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.mon-side-sel-title {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .mon-side-sel {
+    margin-top: 0;
+    margin-left: auto;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+}
+
+/* 녹화 요약 패널 */
+.mon-summary-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+/* 핵심 수치 바: 상단 바 아래 고정 띠. 스틱 L·R 한 줄씩, 좁으면 칸이 줄바꿈 */
+.mon-keybar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.mon-keystick {
+  flex: 1 1 420px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+.mon-keyname {
+  align-self: center;
+  width: 18px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.mon-key {
+  flex: 1 1 76px;
+  min-width: 0;
+  padding: 2px 8px;
+  border-left: 3px solid var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.mon-key.ok {
+  border-left-color: var(--good);
+}
+.mon-key.warn {
+  border-left-color: var(--perfect);
+}
+.mon-key.bad {
+  border-left-color: var(--miss);
+}
+.mon-key-label,
+.mon-key-basis {
+  color: var(--ink-faint);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.mon-key-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.mon-key.warn .mon-key-value {
+  color: var(--perfect);
+}
+.mon-key.bad .mon-key-value {
+  color: var(--miss);
+}
+
+/* 녹화 재생 바 */
+.mon-replay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mon-replay-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mon-replay-speed {
+  display: inline-flex;
+  gap: 4px;
+}
+.mon-replay-bar {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 8px;
+}
+.mon-replay-time {
+  font-variant-numeric: tabular-nums;
+}

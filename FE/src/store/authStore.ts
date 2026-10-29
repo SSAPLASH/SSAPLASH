@@ -1,9 +1,10 @@
 // 로그인 상태 (설계 3-6). 영속하지 않는다 — access 토큰은 api/auth가 메모리에 들고, 새로고침 복원은 refresh 쿠키로 한다.
 import { create } from 'zustand';
-import { loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
+import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
-import { fetchMe } from '@/api/users';
+import { fetchMe, withdrawMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
+import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';
@@ -18,6 +19,11 @@ interface AuthState {
   /** refresh → me로 로그인 복원. 진행 중이면 같은 Promise를 돌려준다(콜백 화면과 앱 시작이 겹쳐도 한 번) */
   restore: () => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * 회원 탈퇴. 성공(204)만 탈퇴로 본다 — 로컬 흔적을 지우고 anonymous + withdrawn.
+   * 401은 탈퇴 근거가 아니라 인증 만료다: 토큰을 비우고 session_expired로 내린 뒤 던진다(로컬 데이터 유지). 그 밖의 오류는 상태를 두고 던진다
+   */
+  withdraw: () => Promise<void>;
   /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
   clearLostReason: () => void;
@@ -91,7 +97,35 @@ export const useAuth = create<AuthState>()((set, get) => ({
   logout: async () => {
     // 먼저 내리고 서버에 알린다. 토큰 비움 알림(sessionLost)은 이미 anonymous라 무시된다
     set({ status: 'anonymous', user: null, lostReason: null });
+    // 다른 계정으로 로그인했을 때 이전 계정의 채보 작업을 폴링하지 않게 기록을 지운다
+    try {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    } catch {
+      // 저장소를 못 써도 로그아웃은 진행한다
+    }
     await logoutApi();
+  },
+  withdraw: async () => {
+    try {
+      await withdrawMe();
+    } catch (e) {
+      // 401은 refresh·재시도 뒤에도 인증이 안 된 것이지 탈퇴 완료가 아니다(BE 요청). 세션 만료와 같게 내리고 던진다.
+      // refresh가 401이라 토큰이 이미 비워졌으면 sessionLost는 구독으로 먼저 불렸고 여기서는 무시된다
+      if (e instanceof ApiError && e.status === 401) {
+        clearAccessToken();
+        get().sessionLost();
+      }
+      // 네트워크·5xx는 상태를 두고 호출자가 보인다
+      throw e;
+    }
+    try {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    } catch {
+      // 저장소를 못 써도 탈퇴는 끝난 것이다
+    }
+    // 상태를 먼저 내린다. 토큰 비움 알림(sessionLost)은 이미 anonymous라 무시된다
+    set({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
+    clearAccessToken();
   },
   sessionLost: () => {
     if (get().status !== 'authenticated') return;

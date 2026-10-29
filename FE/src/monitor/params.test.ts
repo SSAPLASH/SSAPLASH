@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PARAM_ACK_END, STICK_PARAMS, decodePacket, type DecodedPacket } from '@/input/stickProtocol';
-import { buildParamAck } from './mockStick';
+import { buildParamAck, buildStatus } from './mockStick';
 import { ParamStore } from './params';
 
+const status = (fwMajor: number): DecodedPacket =>
+  decodePacket(buildStatus({ batteryPct: null, rssi: -60, fwMajor, fwMinor: 0 }), 0);
+/** 복원 때 보낸 SET_PARAM을 id → 값으로 */
+const sentValues = (bytes: Uint8Array[]): Record<number, number> =>
+  Object.fromEntries(bytes.map((b) => [b[1], new DataView(b.buffer, b.byteOffset).getInt16(2, true)]));
 const ack = (paramId: number, value: number): DecodedPacket => decodePacket(buildParamAck({ paramId, value }), 0);
 
 let sent: Uint8Array[];
@@ -92,6 +97,36 @@ describe('apply', () => {
     store.resetDefaults();
     expect(sent.length).toBe(STICK_PARAMS.length);
   });
+
+  it('기본값 복원: STATUS 전은 Feather 표', () => {
+    expect(store.firmware()).toBe('feather');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200, 0x01: 150, 0x02: 30 });
+  });
+
+  it('기본값 복원: fwMajor 0은 NUCLEO 표', () => {
+    store.onPacket(status(0));
+    expect(store.firmware()).toBe('nucleo');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 30, 0x0b: 400, 0x0e: 3000, 0x0f: 1000, 0x01: 150 });
+  });
+
+  it('기본값 복원: fwMajor 1은 Feather 표, 마지막 STATUS가 이긴다, reset하면 미확인', () => {
+    store.onPacket(status(0));
+    store.onPacket(status(1));
+    expect(store.firmware()).toBe('feather');
+    store.resetDefaults();
+    expect(sentValues(sent)).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200 });
+    store.reset();
+    expect(store.fwMajor).toBeNull();
+  });
+
+  it('STATUS가 같은 fwMajor면 알림을 내지 않는다', () => {
+    store.onPacket(status(1));
+    const v = store.version;
+    store.onPacket(status(1));
+    expect(store.version).toBe(v);
+  });
 });
 
 describe('적용 확인', () => {
@@ -118,6 +153,33 @@ describe('적용 확인', () => {
     expect(c.length).toBe(20);
     store.onPacket(ack(0x22, -500));
     expect(store.confirmations()[0]).toMatchObject({ kind: 'resetPose', value: -500 });
+  });
+});
+
+describe('요청 없는 0x22(스틱 버튼 보정)', () => {
+  it('열린 창이 없으면 버튼 항목 1건', () => {
+    store.onPacket(ack(0x22, 1234));
+    expect(store.confirmations()).toHaveLength(1);
+    expect(store.confirmations()[0]).toMatchObject({ kind: 'resetPose', value: 1234, open: false, source: 'button' });
+  });
+
+  it('창이 있으면 기존 동작(명령 응답), 버튼 항목은 늘지 않는다', () => {
+    store.expectConfirmation('resetPose');
+    store.onPacket(ack(0x22, -500));
+    expect(store.confirmations()).toHaveLength(1);
+    expect(store.confirmations()[0]).toMatchObject({ value: -500, source: 'command' });
+  });
+
+  it('창이 닫힌 뒤의 0x22는 버튼 항목으로 쌓이고, 0x20·0x21은 계속 버린다', () => {
+    store.expectConfirmation('resetPose');
+    vi.advanceTimersByTime(600);
+    store.onPacket(ack(0x22, 7));
+    store.onPacket(ack(0x21, 7));
+    store.onPacket(ack(0x20, 7));
+    const c = store.confirmations();
+    expect(c).toHaveLength(2);
+    expect(c[0]).toMatchObject({ source: 'button', value: 7 });
+    expect(c[1]).toMatchObject({ source: 'command', value: null, open: false });
   });
 });
 

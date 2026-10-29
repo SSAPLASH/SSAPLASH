@@ -1,5 +1,6 @@
 // 파라미터 패널. ParamStore(상태기)를 구독해 표를 그리고, 불러오기·기본값 복원·개별 적용 버튼만 단다.
 import { memo, useState, useSyncExternalStore } from 'react';
+import { STICK_FIRMWARE_LABEL } from '@/input/stickProtocol';
 import type { ParamStore, ParamRow } from '@/monitor/params';
 
 const STATE_LABEL = { unknown: '미확인', loading: '불러오는 중…', loaded: '불러옴' } as const;
@@ -36,6 +37,10 @@ export const ParamPanel = memo(function ParamPanel({ store, canSend }: { store: 
         <button className="btn-ghost small" disabled={!canSend} onClick={() => store.resetDefaults()}>
           기본값 복원
         </button>
+        <span className="faint" title="기본값 복원에 쓰는 표. 마지막 STATUS의 fwMajor로 정한다">
+          기본값 표: {STICK_FIRMWARE_LABEL[store.firmware()]}
+          {store.fwMajor === null && ' (STATUS 전)'}
+        </span>
       </div>
       <table className="mon-table">
         <thead>

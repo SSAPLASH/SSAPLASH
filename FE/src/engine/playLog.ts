@@ -1,5 +1,5 @@
-// 플레이 로그 (공통 명세서 9-3) 의 0단계 로컬 버전. 텔레메트리는 telemetry.ts.
-// 서버 업로드(ACCT-02)는 BE API가 나오면 붙인다. 지금은 localStorage에 최근 N건.
+// 플레이 로그 (공통 명세서 9-3) 의 로컬 버전. 텔레메트리는 telemetry.ts.
+// localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 app/playSync가 이 로그로 하고 상태를 upload에 적는다.
 import type { Judgement, TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
 import { normalizePadId, type PadId } from '@/domain/pads';
@@ -18,6 +18,41 @@ export interface LoggedHit {
   matchedNoteIndex?: number;
   deltaMs?: number;
   distanceDeg?: number;
+  /** 판정 처리 순번(업로드 hits.seq). 이전 로그에는 없다 */
+  seq?: number;
+  /** 판정에 쓴 곡 시각(ms, 오디오 오프셋 반영). 이전 로그에는 없다 */
+  tSongMs?: number;
+  /** 이 타격의 입력 경로(스틱 세션에 섞인 키보드 킥 구분). 이전 로그에는 없다 */
+  source?: InputSourceKind;
+  /** 센서 수집값. 키보드 타격은 업로드에서 null로 보낸다 */
+  peakAccel?: number;
+  pitch?: number;
+  yaw?: number;
+}
+
+export interface LogNote {
+  index: number;
+  timeMs: number;
+  pad: PadId;
+  judgement: Judgement | null;
+  deltaMs: number | null;
+  /** BE 채보 노트 id. 내장 채보·이전 로그는 없다 */
+  noteId?: string | null;
+  /** MISS 판정 처리 순번. 그 밖은 null(타격 쪽 seq를 쓴다) */
+  seq?: number | null;
+}
+
+/** 서버 업로드 상태 (설계 COACH-002 D2). 실패해도 로그는 지우지 않고 같은 playId로 재전송한다 */
+export interface PlayUploadState {
+  status: 'UPLOADING' | 'DONE' | 'FAILED' | 'SKIPPED';
+  /** SKIPPED 사유 또는 실패 오류 코드 */
+  reason: string | null;
+  /** FAILED일 때 같은 본문으로 다시 보내도 되는지 */
+  retryable: boolean;
+  attempts: number;
+  /** 처음 조립한 업로드 본문. 재전송은 이것을 그대로 보낸다. DONE이면 지운다 */
+  body?: unknown;
+  updatedAt: string;
 }
 
 export interface PlayLog {
@@ -43,7 +78,7 @@ export interface PlayLog {
   bpm: number;
   beatsPerBar: number;
   hits: LoggedHit[];
-  notes: { index: number; timeMs: number; pad: PadId; judgement: Judgement | null; deltaMs: number | null }[];
+  notes: LogNote[];
   summary: {
     score: number;
     maxScore: number;
@@ -52,16 +87,56 @@ export interface PlayLog {
     counts: Record<Judgement, number>;
     strayHits: number;
   };
+  /** 아래는 업로드용. 이전 로그에는 없다 */
+  endedAt?: string;
+  /** 판정에 적용한 오디오 출력 오프셋(ms) */
+  audioOffsetMs?: number;
+  /** 종료 시 곡 시각, 일시정지를 뺀 카운트인 포함 경과(ms) */
+  lastSongTimeMs?: number;
+  elapsedActiveMs?: number;
+  /** BE 채보 전체 노트 수. notes.length와 다르면 변환에서 버린 노트가 있다 */
+  sourceNoteCount?: number | null;
+  upload?: PlayUploadState;
 }
 
-const KEY = 'ssaplash.playlogs';
+/** 비로그인(인증 끔 개발 모드)의 저장 키. 계정 로그는 뒤에 `.u{userId}`를 붙여 따로 둔다 */
+const BASE_KEY = 'ssaplash.playlogs';
 const MAX = 20;
+
+/** 지금 읽고 쓰는 로그의 주인. 로그인 상태는 app/authBootstrap이 넣어 준다(engine은 store를 모른다) */
+let owner: number | null = null;
+
+function storageKey(userId: number | null = owner): string {
+  return userId === null ? BASE_KEY : `${BASE_KEY}.u${userId}`;
+}
+
+/** 로그를 읽고 쓸 계정을 바꾼다. null이면 비로그인 키 */
+export function setPlayLogOwner(userId: number | null): void {
+  owner = userId;
+}
+
+/** 한 계정의 로컬 로그를 모두 지운다(회원 탈퇴) */
+export function clearPlayLogs(userId: number): void {
+  try {
+    localStorage.removeItem(storageKey(userId));
+  } catch {
+    /* 저장소를 못 쓰면 지울 것도 없다 */
+  }
+}
 
 export function buildPlayLog(args: {
   snapshot: SessionSnapshot;
   notes: NoteState[];
   hits: LoggedHit[];
-  chart: { songId: string; title: string; difficulty: string; durationMs: number; bpm: number; beatsPerBar: number };
+  chart: {
+    songId: string;
+    title: string;
+    difficulty: string;
+    durationMs: number;
+    bpm: number;
+    beatsPerBar: number;
+    sourceNoteCount?: number;
+  };
   inputSource: InputSourceKind;
   timing: TimingWindows;
   startedAt: Date;
@@ -71,10 +146,16 @@ export function buildPlayLog(args: {
   presetId: string | null;
   /** 기본 'RHYTHM' */
   mode?: PlayLog['mode'];
+  /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
+  missSeqs?: ReadonlyMap<number, number>;
+  audioOffsetMs?: number;
+  /** 카운트인 길이(ms). 경과 시간 계산용 */
+  countInMs?: number;
+  endedAt?: Date;
 }): PlayLog {
   const { snapshot: s } = args;
   return {
-    playId: `play-${Date.now().toString(36)}`,
+    playId: newPlayId(),
     songId: args.chart.songId,
     title: args.chart.title,
     difficulty: args.chart.difficulty,
@@ -98,6 +179,8 @@ export function buildPlayLog(args: {
       pad: n.note.pad,
       judgement: n.judgement,
       deltaMs: n.deltaMs,
+      noteId: n.note.noteId ?? null,
+      seq: args.missSeqs?.get(n.index) ?? null,
     })),
     summary: {
       score: s.score,
@@ -107,22 +190,54 @@ export function buildPlayLog(args: {
       counts: s.counts,
       strayHits: s.strayHits,
     },
+    endedAt: (args.endedAt ?? new Date()).toISOString(),
+    audioOffsetMs: args.audioOffsetMs ?? 0,
+    lastSongTimeMs: s.songTimeMs,
+    elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
+    sourceNoteCount: args.chart.sourceNoteCount ?? null,
   };
+}
+
+/** 서버 계약상 playId는 UUID. randomUUID가 없는 비보안 출처(LAN http)에서는 getRandomValues로 v4를 만든다 */
+export function newPlayId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 export function savePlayLog(log: PlayLog): void {
   try {
     const list = loadPlayLogs();
     list.unshift(log);
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)));
+    localStorage.setItem(storageKey(), JSON.stringify(list.slice(0, MAX)));
   } catch {
     /* 저장 실패는 플레이를 막지 않는다 */
   }
 }
 
+/** 저장된 로그 하나를 고친다(업로드 상태 갱신용). 없으면 아무것도 하지 않는다 */
+export function updatePlayLog(playId: string, patch: (log: PlayLog) => PlayLog): PlayLog | null {
+  try {
+    const key = storageKey();
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const list = JSON.parse(raw) as PlayLog[];
+    const i = list.findIndex((l) => l.playId === playId);
+    if (i < 0) return null;
+    list[i] = patch(list[i]);
+    localStorage.setItem(key, JSON.stringify(list));
+    return list[i];
+  } catch {
+    return null;
+  }
+}
+
 export function loadPlayLogs(): PlayLog[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(storageKey());
     if (!raw) return [];
     // 옛 패드 이름(HI_TOM)은 읽을 때만 바꾼다. 저장 형식은 그대로 둔다
     return (JSON.parse(raw) as PlayLog[]).map((l) => ({
@@ -153,6 +268,10 @@ export function toLoggedHit(h: ResolvedHit): LoggedHit {
     tResolved: h.tResolved,
     tAudio: h.tAudio,
     distanceDeg: h.distanceDeg,
+    source: h.source,
+    peakAccel: h.peakAccel,
+    pitch: h.pose?.pitch,
+    yaw: h.pose?.yaw,
   };
 }
 

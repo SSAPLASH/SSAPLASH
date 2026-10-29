@@ -102,6 +102,12 @@ export interface ResolvedHit {
   peakSpeedDps?: number;
   /** 스틱 HIT 패킷 seq(u8). 모니터가 패킷과 판정 결과를 묶을 때 쓴다. 센서 스틱 타격만 */
   seq?: number;
+  /** 스틱이 판정한 패드(텔레메트리 baselinePad). 비센서 undefined, 스틱이 판정 못 했으면(0xFF) null */
+  firmwarePad?: PadId | null;
+  /** 센서 시계 기준 타격 시각(ms, 랩 보정). 비센서·미동기 undefined */
+  tSensorMs?: number;
+  /** 해석 당시 소스 오프셋(브라우저 − 센서, ms). 센서 소스의 미동기는 null, 비센서 undefined */
+  clockOffsetMs?: number | null;
   /** 패드 판정 출처 */
   judgedBy: HitJudgedBy;
   /** 판정 근거: 가장 가까운 앵커까지 각도 거리 */

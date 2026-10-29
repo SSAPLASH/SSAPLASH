@@ -57,22 +57,24 @@ describe('chartFromDetail', () => {
       }),
       false,
     );
-    expect(c.notes).toEqual([{ timeMs: 200, pad: 'HIHAT' }]);
+    expect(c.notes).toEqual([{ timeMs: 200, pad: 'HIHAT', noteId: 'c' }]);
+    // 버린 노트가 있으면 BE 노트 수와 달라진다(업로드 제외 판정용)
+    expect(c.sourceNoteCount).toBe(2);
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('옛 이름 HI_TOM 노트는 SMALL_TOM 노트가 된다', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const c = chartFromDetail(dto({ notes: [{ noteId: 'a', timeMs: 300, pad: 'HI_TOM' }] }), false);
-    expect(c.notes).toEqual([{ timeMs: 300, pad: 'SMALL_TOM' }]);
+    expect(c.notes).toEqual([{ timeMs: 300, pad: 'SMALL_TOM', noteId: 'a' }]);
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('timeMs에 offsetMs를 더하지 않고 순서를 유지하며 velocityHint null은 생략한다', () => {
+  it('timeMs에 offsetMs를 더하지 않고 순서·noteId를 유지하며 velocityHint null은 생략한다', () => {
     const c = chartFromDetail(dto(), false);
     expect(c.notes).toEqual([
-      { timeMs: 500, pad: 'KICK', velocityHint: 100 },
-      { timeMs: 1000, pad: 'SNARE' },
+      { timeMs: 500, pad: 'KICK', velocityHint: 100, noteId: 'n1' },
+      { timeMs: 1000, pad: 'SNARE', noteId: 'n2' },
     ]);
     expect(c.offsetMs).toBe(250);
   });
