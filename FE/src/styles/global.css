@@ -2533,12 +2533,27 @@ a.my-list-row:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: radial-gradient(120% 120% at 30% 20%, var(--surface-2) 0%, var(--surface) 45%, var(--stage-deep) 100%);
 }
-.song-cover-letter {
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 56px;
-  font-weight: 800;
-  line-height: 1;
+/* 기본 커버 CD (v0.4): 모든 곡 공통 */
+.song-cover-disc {
+  width: 86%;
+  height: 86%;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.song-cover-disc .disc-body {
+  fill: #b9c0cf;
+}
+.song-cover-disc .disc-groove {
+  fill: none;
+  stroke: rgba(14, 19, 32, 0.18);
+  stroke-width: 0.6;
+}
+.song-cover-disc .disc-label {
+  fill: var(--brass);
+}
+.song-cover-disc .disc-hole {
+  fill: var(--stage-deep);
 }
 .song-card-body {
   display: flex;

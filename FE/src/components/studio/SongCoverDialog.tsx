@@ -76,7 +76,7 @@ export function SongCoverDialog({ song, busy, error, onSave, onClose }: Props) {
     <EditDialog title="커버 변경" locked={busy} onClose={onClose}>
       <div className="col" style={{ gap: 12 }}>
         <div className="cover-dialog-preview">
-          <SongCover key={shownUrl ?? 'default'} title={song.title} coverUrl={shownUrl} />
+          <SongCover key={shownUrl ?? 'default'} coverUrl={shownUrl} />
         </div>
         <input ref={inputRef} type="file" accept={COVER_ACCEPT} hidden onChange={(e) => void onPick(e)} disabled={busy} />
         <div className="row" style={{ justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>

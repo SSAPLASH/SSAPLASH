@@ -33,7 +33,7 @@ export function MySongCard({ song, job, progress, justDone, onReupload, onEdit }
   return (
     <li className={cls}>
       <div className="song-card-cover">
-        <SongCover title={song.title} coverUrl={song.coverUrl} />
+        <SongCover coverUrl={song.coverUrl} />
         {showMenu && <SongMenu title={song.title} onPick={(kind) => onEdit(kind, song)} />}
       </div>
       <div className="song-card-body">
