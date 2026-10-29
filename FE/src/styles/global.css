@@ -2656,3 +2656,57 @@ a.my-list-row:focus-visible {
   max-width: 100%;
   margin: 0 auto;
 }
+
+/* ---- 악보 연주 2단 배치 (MODE-003 악보 위·드럼 아래) ---- */
+.sheet-mode .sheet-pager {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+/* 격자 높이를 뷰포트 기준으로 정해야 fr 행이 캔버스 내용 크기(되먹임)로 늘어나지 않는다. 330px ≈ 셸·머리·진행 줄·칩·푸터 */
+.sheet-mode .sm-play-grid {
+  display: grid;
+  grid-template-rows: minmax(240px, 55fr) minmax(220px, 45fr);
+  gap: 12px;
+  height: max(560px, calc(100vh - 300px));
+}
+.sheet-mode .sm-play-sheet {
+  min-height: 0;
+}
+.sheet-mode .sm-play-sheet .sm-strip-body {
+  flex: 1;
+  height: auto;
+  min-height: 230px;
+}
+.sheet-mode .sm-kit-panel {
+  border-radius: 8px;
+  border: 1px solid var(--sm-hairline);
+  background: var(--sm-sunken);
+  overflow: hidden;
+  min-height: 0;
+}
+.sheet-mode .sm-kit-panel .kit-guide {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+}
+/* 캔버스를 흐름에서 빼야 canvas.height 속성이 부모 높이를 다시 키우지 않는다 */
+.sheet-mode .sm-kit-panel .kit-guide canvas {
+  position: absolute;
+  inset: 0;
+}
+.sheet-mode .sm-judge-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.sheet-mode .sm-judge-chip {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .sheet-mode .sm-play-grid {
+    grid-template-rows: minmax(220px, 50fr) minmax(200px, 50fr);
+  }
+}

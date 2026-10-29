@@ -1,4 +1,4 @@
-// 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetStrip(연주 중 흐름)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
+// 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import type { BarLayout } from '@/domain/sheet';
@@ -51,6 +51,9 @@ export function readColors(el: Element = document.documentElement): Colors {
 }
 
 const yOfPos = (pos: number) => STAFF_BOTTOM - pos * (LINE_GAP / 2);
+/** 보표 맨 위 선·맨 아래 선의 y. SheetPager가 커서 길이를 맞출 때 쓴다 */
+export const STAFF_TOP_Y = yOfPos(8);
+export const STAFF_BOTTOM_Y = yOfPos(0);
 
 export interface DrawSheetOpts {
   chart: Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'>;
@@ -84,8 +87,8 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   const { first, last } = bars;
   const X = (ms: number) => xOfTime(ms, t, width, barPx, baseRatio, barMs);
   const baseX = width * baseRatio;
-  const top = yOfPos(8);
-  const bottom = yOfPos(0);
+  const top = STAFF_TOP_Y;
+  const bottom = STAFF_BOTTOM_Y;
 
   // 보표 5선
   ctx.strokeStyle = colors.inkFaint;
@@ -216,37 +219,54 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
 
   if (!showBase) return;
 
-  // 고정 기준선: 2px + 글로우
+  drawCursor(ctx, baseX, top - 30, bottom + 40, colors);
+  drawBeatLabel(ctx, baseX + 12, bottom + 46, raw, beatMs, chart.beatsPerBar, colors, countInMs);
+}
+
+/** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */
+export function drawCursor(ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number, colors: Colors): void {
   ctx.save();
   ctx.strokeStyle = colors.base;
   ctx.lineWidth = 2;
   ctx.shadowColor = colors.baseGlow;
   ctx.shadowBlur = 12;
   ctx.beginPath();
-  ctx.moveTo(baseX, top - 30);
-  ctx.lineTo(baseX, bottom + 40);
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
   ctx.stroke();
   ctx.restore();
+}
 
-  // 현재 박 번호(기준선 오른쪽 아래 큰 숫자 + 작은 "박") / 카운트인 남은 박 수
+/**
+ * 현재 박 번호(큰 숫자 + 작은 "박") / 카운트인 남은 박 수.
+ * x는 숫자의 왼쪽 끝, y는 글자 기준선이다. rawSongTime < 0이면 카운트인 중이다.
+ */
+export function drawBeatLabel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  rawSongTime: number,
+  beatMs: number,
+  beatsPerBar: number,
+  colors: Colors,
+  countInMs?: number,
+): void {
   let label: string | null = null;
-  if (raw < 0) {
-    if (countInMs === undefined || raw >= -countInMs) {
-      label = String(Math.max(1, Math.ceil(-raw / beatMs - 1e-9)));
+  if (rawSongTime < 0) {
+    if (countInMs === undefined || rawSongTime >= -countInMs) {
+      label = String(Math.max(1, Math.ceil(-rawSongTime / beatMs - 1e-9)));
     }
   } else {
-    label = String((Math.floor(raw / beatMs) % chart.beatsPerBar) + 1);
+    label = String((Math.floor(rawSongTime / beatMs) % beatsPerBar) + 1);
   }
-  if (label !== null) {
-    const y = bottom + 46;
-    ctx.fillStyle = colors.base;
-    ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(label, baseX + 12, y);
-    const w = ctx.measureText(label).width;
-    ctx.fillStyle = colors.inkFaint;
-    ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
-    ctx.fillText('박', baseX + 12 + w + 6, y);
-  }
+  if (label === null) return;
+  ctx.fillStyle = colors.base;
+  ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(label, x, y);
+  const w = ctx.measureText(label).width;
+  ctx.fillStyle = colors.inkFaint;
+  ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
+  ctx.fillText('박', x + w + 6, y);
 }

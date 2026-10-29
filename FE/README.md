@@ -55,7 +55,7 @@ src/
 │   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
 │   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
 ├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · My(마이페이지) · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetStrip(5선 악보 Canvas) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·JobStageStrip·MySongRow·MySongCard·MySongList·SongCover·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·dateLabel, 내 곡 화면) · mypage/(MySongSummary·RecentPlays, 마이페이지)
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · KitGuideView(악보 연주 드럼 가이드) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·JobStageStrip·MySongRow·MySongCard·MySongList·SongCover·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·dateLabel, 내 곡 화면) · mypage/(MySongSummary·RecentPlays, 마이페이지)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · WeakSegments(AI 약점 구간·상태 안내)
 │   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu · WithdrawDialog(회원 탈퇴 확인)
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 표시명·커버·삭제 1회 실행)
@@ -261,19 +261,19 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 게임 뷰는 곡 선택 화면에서 고른다(설정에 저장). **노트 하이웨이**는 노트가 레인을 따라 판정선으로 떨어지는 기본 뷰, **킷 위 연주**는 세팅한 킷 배치의 패드 위로 링이 줄어들어 판정 시각에 패드 테두리에 닿는 뷰다. 두 뷰 모두 같은 `RhythmSession`을 읽으므로 판정·점수·결과 저장은 같다.
 
-악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 가로로 흐르는 5선 악보를 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
+악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 마디가 고정된 5선 악보를 커서가 지나가는 것을 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
 
 화면은 Claude Design 「악보 연주 화면」(https://claude.ai/artifact/AFPSrCXxQsZULivgY5FsZE)의 4개 보드(곡 선택·준비·연주 중·일시정지)를 따른다. 페이지 루트에 `.sheet-mode`를 붙여 `--sm-*` 변수와 `.sm-*` 클래스(`styles/global.css` 끝 블록)를 그 안에서만 쓰고, 앱 셸·다른 페이지의 `--ink`·`--brass` 계열 테마는 건드리지 않는다. 악보 Canvas는 `readColors(canvas)`로 `--sm-*`를 상속받아 읽고(없으면 앱 공통 변수) 기준선은 사이언 2px + 글로우다. 일시정지 다이얼로그(`PauseOverlay`)는 `.sheet-mode` 밖에서도 보이도록 자체 클래스(`.sm-scrim`·`.sm-dialog`·`.pause-dialog`)에 색을 직접 둔다. 곡 선택 표의 "최근 정확도"와 준비 화면의 "최근 기록"은 로컬 플레이 로그(`latestSheetLog`)에서 읽는다.
 
 - **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
 - **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 카운트인 뒤 반주 0초 = 세션 0ms. HUD 아래 작은 글씨로 동기 Δ(시작·재개)를 보인다.
-- **스트립:** 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetStrip`에 넘긴다. HUD는 진행 행(시간·진행 바·마디), 판정 6칸 타일(노트·Perfect·Good·Miss·채보 밖·최근 Δ), 범례 줄로 구성한다.
+- **화면(연주 중):** 위에서부터 머리, 진행 행(시간·진행 바·마디), 판정 수 칩(노트·P·G·M·채보 밖·최근 Δ), 악보(`SheetPager`, 약 55%)와 드럼(`KitGuideView`, 약 45%), 푸터다. 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetPager`에 넘기고, 드럼 가이드는 `RhythmSession.notes`를 매 프레임 직접 읽는다.
 - **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`가 둘 다 false로 바뀌고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
 - **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 업로드가 생략된 플레이(내장 곡 등)에 한해 규칙 기반 "간단 피드백" 카드(최대 3개)와 패드별 요약을 보여 준다(업로드 대상 플레이는 리포트의 AI 약점 분석으로 일원화 — 위 "플레이 기록 업로드·상세 분석" 절). "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
 
 피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다. 서버 AI 분석이 붙은 뒤로는 업로드가 안 되는 플레이의 폴백으로만 쓴다. 패드 Δ 표준편차 규칙의 기준은 35ms 고정이 아니라 `0.5 × goodMs`(goodMs 50이면 25ms)다 — 오차가 판정 폭 안에 갇혀 있어 고르게 흩어져도 표준편차가 약 0.58×goodMs라 고정값은 거의 걸리지 않았다(AI 쪽과 같은 수정). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
-악보 렌더(`components/SheetStrip`)는 클라이언트 Canvas 5선이며 마디당 320px(`SHEET_BAR_PX`) 시간 비례로 가로로 흐르고, 고정 기준선(화면 폭 35%)이 지금 칠 위치다. 글리프 배치(보표 위치·머리·빔)는 `domain/sheet.layoutBar`, 시간 → x와 보이는 마디 범위는 `components/sheetStripMath`의 순수 함수이며 컴포넌트가 자체 rAF로 `getSongTime()`을 읽어 그린다.
-결과 페이지(로컬 카드가 보이는 경우)는 피드백 카드가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetStrip`과 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 카드를 누르면 구간이 바뀐다.
+악보 렌더(`components/SheetPager`)는 클라이언트 Canvas 5선이며 마디가 화면에 고정되고 커서가 왼쪽에서 오른쪽으로 곡 시각에 맞춰 지나간다. 한 페이지는 악보 영역 폭 900px 미만이면 2마디, 이상이면 4마디이고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지의 마디로 흐리게 바뀌어 항상 앞을 읽을 수 있다(커서가 다음 페이지로 넘어가면 모두 정상으로 돌아온다). 연주 화면 아래의 드럼 킷(`KitGuideView`)은 세팅한 배치를 축소해 그리고, 패드 위에 그 패드를 칠 다음 박 라벨(`1`·`1e`·`1&`·`1a`)을 보인다. 그 음이 판정(Perfect·Good·Miss)되면 다음 라벨로 바뀌고, 음표가 커서에 닿는 순간 해당 패드에 "지금" 링이 뜬다. 라벨은 준비 화면 "연주 중 옵션"(설정 `sheetPadCount`)에서 끌 수 있고, `prefers-reduced-motion`이면 커서가 박 단위로 이동한다. 계산은 순수 함수로 분리했다: 박 라벨 `domain/sheet.countLabel`, 패드 큐 `domain/padCue.padCues`, 페이지·슬롯·커서 `components/sheetPagerMath`. 마디 그리기는 `drawSheet`를 슬롯마다 clip해 한 번씩 호출해 재사용하고, 패드 그리기는 리듬 게임 킷 뷰와 같은 `components/kitPadPaint`를 쓴다. 글리프 배치(보표 위치·머리·빔)는 `domain/sheet.layoutBar`다.
+결과 페이지(로컬 카드가 보이는 경우)는 피드백 카드가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetPager`와 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 카드를 누르면 구간이 바뀐다.
 
 포인터 모의 IMU를 켜면 마우스 위치가 스틱 자세가 되고, F(왼손)/J(오른손) 또는 좌/우클릭이 타격이다. 이 두 키는 그동안 고정 키에서 제외된다. 방향키로도 자세를 움직일 수 있다.
 
