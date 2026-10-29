@@ -142,3 +142,28 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 **로그 수집을 위한 대기**: Alloy의 컨테이너 탐색 기본 주기가 1분이라 일회성 컨테이너의 로그를 놓칠 수 있다. 탐색 주기를 5초로 줄였고
 (`monitoring/alloy/config.alloy`), 컨테이너가 시작 직후와 종료 직전에 15초씩 기다린 뒤 끝난다. 그래서 한 번 실행에 최소 30초가 걸린다.
 첫 실행 뒤 Grafana Explore에서 `{service="coach-calibration"}`로 상태 줄이 실제로 조회되는지 확인한다(서버에서 확인하기 전이다).
+
+### 예약 실행과 알림
+
+**예약 (GitLab 화면에서 한 번 만든다)**
+1. Build → Pipeline schedules → New schedule.
+2. 설명 `보정 배치`, 간격 `0 4 * * *`(매일 새벽 4시, 시간대는 Seoul), 대상 브랜치 `main`.
+3. 변수 `COACH_CALIBRATION` = `true`를 이 예약에만 넣는다. **프로젝트 CI/CD 변수로는 등록하지 않는다**(등록하면 모든 파이프라인이 보정 전용이 되어 다른 job이 빠진다).
+4. 예약을 만든 사람이 실패 알림을 받는다. 배포용 보호 러너를 쓰므로 만든 사람이 `main`에서 보호된 러너를 쓸 권한(Maintainer)이 있어야 한다.
+
+이 파이프라인에는 `coach-calibration` job 하나만 생긴다(`.gitlab-ci.yml`의 `.calibration-guard`가 기존 job을 막는다). 서버에 배포된 소스와 `.env`로 실행하고
+배포·롤백과 같은 `resource_group`이라 겹쳐 돌지 않는다. 한 번에 최소 30초가 걸린다.
+
+**수동 실행**: Build → Pipelines → Run pipeline, 브랜치 `main`, 변수 `COACH_CALIBRATION=true`. 새 세션이 기준(50개)에 못 미쳐도 돌리려면(예: 정책 파일을 채운 뒤)
+`COACH_CALIBRATION_FORCE=true`를 더한다. 서버에서 직접 실행해도 된다: `cd /srv/airdrum/Infra && docker compose -p infra --profile calibration run --build --rm coach-calibration --force`.
+
+**알림 규칙** (`monitoring/grafana/provisioning/alerting/rules-calibration.yaml`, 배치의 상태 줄을 Loki에서 본다)
+
+| 규칙 | 조건 | 처음 상태 |
+| --- | --- | --- |
+| 약점 분석 보정 배치 실패 | 최근 26시간에 `status=FAIL` 줄이 있다 | 켜짐 |
+| 약점 분석 보정 배치 36시간 넘게 실행 기록 없음 | 최근 36시간에 `status=OK` 또는 `SKIPPED` 줄이 없다(로그가 아예 없어도) | **꺼 둠**(`isPaused: true`) |
+
+두 번째 규칙은 예약을 만들고 첫 상태 줄이 Grafana Explore의 `{service="coach-calibration"}`에서 조회되는 것을 확인한 뒤 `isPaused`를 `false`로 바꾸는 MR을 올려 켠다.
+켜 두면 예약 전에는 항상 울린다. 알림을 밖으로 보내는 채널은 후속이라 지금은 Alerting 화면에 표시된다.
+알림 규칙 파일을 처음 반영한 배포 뒤에는 Grafana 로그에 프로비저닝 오류가 없는지 확인한다(`docker compose -p infra logs grafana`).

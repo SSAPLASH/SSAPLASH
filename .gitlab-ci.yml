@@ -17,18 +17,36 @@ default:
   tags:
     - docker
 
+# 약점 분석 보정 배치(COACH-003)만 도는 파이프라인(예약 파이프라인, 또는 수동 실행에서 변수 COACH_CALIBRATION=true)에서는
+# 다른 job을 만들지 않는다. 막지 않으면 예약 파이프라인마다 BE 시험이 도는데(예약에서는 rules:changes가 항상 참이다),
+# 수동 배포·롤백 job도 대기 상태로 생긴다. 모든 기존 job의 rules 맨 앞에 이 규칙을 붙인다.
+# COACH_CALIBRATION을 프로젝트 CI 변수로 등록하면 모든 파이프라인이 보정 전용이 되므로 등록하지 않는다(예약·수동 실행에서만 준다).
+.calibration-guard:
+  rules:
+    - if: $COACH_CALIBRATION == "true" || $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+
 lint:
   stage: lint
+  rules:
+    - !reference [.calibration-guard, rules]
+    - when: on_success
   script:
     - echo "lint 단계 - 스택 확정 후 린트 명령을 넣는다"
 
 test:
   stage: test
+  rules:
+    - !reference [.calibration-guard, rules]
+    - when: on_success
   script:
     - echo "test 단계 - 스택 확정 후 테스트 명령을 넣는다"
 
 build:
   stage: build
+  rules:
+    - !reference [.calibration-guard, rules]
+    - when: on_success
   script:
     - echo "build 단계 - 스택 확정 후 빌드 명령을 넣는다"
 
@@ -50,6 +68,7 @@ build:
       - .gradle-cache/wrapper/
       - BE/.cache/audio-ffprobe/
   rules:
+    - !reference [.calibration-guard, rules]
     - changes:
         - BE/**/*
         - Infra/docker-compose.yml
@@ -117,6 +136,7 @@ be-timescale-test:
   environment:
     name: production
   rules:
+    - !reference [.calibration-guard, rules]
     - if: $CI_COMMIT_BRANCH == "main"
       when: manual
 
@@ -147,3 +167,27 @@ rollback:
       git fetch origin "$SHA"
       git checkout -f "$SHA"
       bash Infra/deploy/deploy.sh "$SHA" "$CI_PROJECT_DIR"
+
+# 약점 분석 실측 보정 배치(COACH-003). 동의한 사용자의 비식별 기록으로 임계값 후보를 만들어 MLflow에 기록한다. 임계값을 바꾸지 않는다.
+# 실행 방법은 두 가지이고 둘 다 main에서만 된다.
+#   1. 예약(Build > Pipeline schedules): 대상 브랜치 main, 변수 COACH_CALIBRATION=true. 매일 한 번 돈다.
+#   2. 수동(Build > Pipelines > Run pipeline): 브랜치 main, 변수 COACH_CALIBRATION=true. 새 세션이 모자라도 돌리려면 COACH_CALIBRATION_FORCE=true를 더한다.
+# 서버에 배포된 소스(/srv/airdrum)와 서버 .env로 실행하므로 저장소 체크아웃은 쓰지 않는다. 배포와 같은 보호된 러너·같은 resource_group이라
+# 배포·롤백과 겹쳐 돌지 않는다. 배치가 실패하면(종료 코드 1) job이 실패하고 GitLab이 알린다.
+# 이미지가 오래되지 않게 --build를 붙인다(레이어 캐시가 있어 바뀐 게 없으면 빠르다). 한 번에 최소 30초가 걸린다(Infra/README.md).
+coach-calibration:
+  stage: deploy
+  tags:
+    - deploy
+  resource_group: production
+  timeout: 30m
+  variables:
+    GIT_STRATEGY: none
+  rules:
+    - if: $COACH_CALIBRATION == "true" && $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE =~ /^(schedule|web)$/
+  script:
+    - cd /srv/airdrum/Infra
+    - |
+      ARGS=""
+      if [ "$COACH_CALIBRATION_FORCE" = "true" ]; then ARGS="--force"; fi
+      docker compose -p infra --profile calibration run --build --rm coach-calibration $ARGS
