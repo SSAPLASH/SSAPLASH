@@ -1,5 +1,7 @@
 // 마이페이지 "최근 플레이". 로컬 로그(계정별)를 호출자가 넘기고, 여기서는 결과 화면 링크만 만든다.
+// 곡이 삭제된 기록은 제목 옆에 "삭제된 곡"을 붙인다(CHART-001 U7·U9). 기록과 결과는 그대로 열린다.
 import { Link } from 'react-router-dom';
+import { DELETED_SONG_LABEL } from '@/domain/songAvailability';
 
 export interface RecentPlayItem {
   playId: string;
@@ -9,6 +11,8 @@ export interface RecentPlayItem {
   startedAt: string;
   /** 0~1 */
   accuracy: number;
+  /** 곡 상세가 404(삭제)로 확인된 기록 */
+  deleted?: boolean;
 }
 
 const MODE_LABEL: Record<RecentPlayItem['mode'], string> = {
@@ -36,7 +40,10 @@ export function RecentPlays({ items }: { items: RecentPlayItem[] }) {
         <li key={p.playId}>
           <Link className="my-list-row" to={`/result/${p.playId}`}>
             <span className="my-list-main">
-              <span className="my-list-title">{p.title}</span>
+              <span className="my-list-title-row">
+                <span className="my-list-title">{p.title}</span>
+                {p.deleted && <span className="deleted-song-badge">{DELETED_SONG_LABEL}</span>}
+              </span>
               <span className="faint small">
                 {[MODE_LABEL[p.mode] ?? p.mode, p.difficulty, whenOf(p.startedAt)].filter(Boolean).join(' · ')}
               </span>

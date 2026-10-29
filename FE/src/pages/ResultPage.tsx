@@ -1,14 +1,17 @@
 // 연주 결과 (리듬 게임 설계 4-2 · 악보 연주 설계 D11). localStorage 플레이 로그를 읽어 보여준다.
 // 악보 연주(mode SHEET)는 점수·콤보 대신 정확도·판정 분포를 앞에 두고 피드백 카드·패드 요약을 붙인다.
+// 곡이 삭제됐으면(곡 상세 404, CHART-001 U7) 결과는 그대로 보이고 "삭제된 곡" 표시와 함께 [다시 하기]·Enter만 숨긴다.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { FeedbackCards } from '@/components/FeedbackCards';
 import { ReportEntry } from '@/components/ReportEntry';
+import { checkSongAvailability } from '@/api/songs';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
+import { DELETED_SONG_LABEL, type SongAvailability } from '@/domain/songAvailability';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
 const DIFF_LABEL: Record<string, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
@@ -83,21 +86,36 @@ export function ResultPage() {
     if (log) setPicked({ playId: log.playId, bars });
     snippetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
+  // 이 기록의 BE 곡이 아직 있는지(U7). 확인 전·확인 실패는 지금처럼 다시 하기를 둔다
+  const [availability, setAvailability] = useState<{ playId: string; value: SongAvailability } | null>(null);
+  useEffect(() => {
+    const id = log?.songNumericId;
+    if (!log || typeof id !== 'number') return;
+    const ctrl = new AbortController();
+    const owner = log.playId;
+    checkSongAvailability(id, ctrl.signal).then(
+      (value) => setAvailability({ playId: owner, value }),
+      () => {},
+    );
+    return () => ctrl.abort();
+  }, [log]);
+  const songDeleted = availability !== null && availability.playId === log?.playId && availability.value === 'deleted';
+
   const retry = () => {
-    if (log) navigate(retryPath(log));
+    if (log && !songDeleted) navigate(retryPath(log));
   };
 
-  // Enter = 다시 하기
+  // Enter = 다시 하기(지운 곡이면 하지 않는다)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Enter' && log) {
+      if (e.code === 'Enter' && log && !songDeleted) {
         e.preventDefault();
         navigate(retryPath(log));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [log, navigate]);
+  }, [log, navigate, songDeleted]);
 
   if (!log) {
     return (
@@ -120,16 +138,21 @@ export function ResultPage() {
     <main className="main">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h1>{log.title}</h1>
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+            <h1>{log.title}</h1>
+            {songDeleted && <span className="deleted-song-badge">{DELETED_SONG_LABEL}</span>}
+          </div>
           <div className="small dim">
             {DIFF_LABEL[log.difficulty] ?? log.difficulty} · 입력 {log.inputSource} · {new Date(log.startedAt).toLocaleString('ko-KR')}
           </div>
         </div>
         <div className="row">
-          <button className="btn-primary" onClick={retry}>
-            {isSheet ? '같은 곡 다시 (Enter)' : '다시 하기 (Enter)'}
-          </button>
-          <Link to={pickPath(log)} className="btn-ghost">
+          {!songDeleted && (
+            <button className="btn-primary" onClick={retry}>
+              {isSheet ? '같은 곡 다시 (Enter)' : '다시 하기 (Enter)'}
+            </button>
+          )}
+          <Link to={pickPath(log)} className={songDeleted ? 'btn-primary' : 'btn-ghost'}>
             다른 곡
           </Link>
           <Link to="/free" className="btn-ghost">
