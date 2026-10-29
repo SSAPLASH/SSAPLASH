@@ -4,9 +4,11 @@ import { useId, useState } from 'react';
 interface Props {
   coverUrl: string | null;
   className?: string;
+  /** 이미지를 불러오지 못했을 때(서명 URL 만료 등). 호출자가 목록을 다시 읽어 새 URL을 받는다(U10) */
+  onImageError?: (url: string) => void;
 }
 
-export function SongCover({ coverUrl, className }: Props) {
+export function SongCover({ coverUrl, className, onImageError }: Props) {
   // 불러오지 못한 URL은 기본 커버로 대체한다(URL이 바뀌면 다시 시도)
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const cls = ['song-cover', className].filter(Boolean).join(' ');
@@ -20,6 +22,7 @@ export function SongCover({ coverUrl, className }: Props) {
           loading="lazy"
           onError={() => {
             setFailedUrl(coverUrl);
+            onImageError?.(coverUrl);
           }}
         />
       </span>
