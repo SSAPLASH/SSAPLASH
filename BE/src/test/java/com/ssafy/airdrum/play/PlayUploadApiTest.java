@@ -85,6 +85,13 @@ class PlayUploadApiTest {
 		db.update("UPDATE users SET status='WITHDRAWN',withdrawn_at=now() WHERE id=?",user);
 		postSummary(body,token,401);
 	}
+	/** V20 회귀: HIHAT_PEDAL(11자)이 hits 패드 3컬럼에 저장된다. varchar(10)이던 때는 업로드 전체가 실패했다. */
+	@Test void hihatPedalHitIsStored() throws Exception {
+		String body=PlayFixtures.free(play).replace("\"pad\":\"SNARE\"", "\"pad\":\"HIHAT_PEDAL\",\"baselinePad\":\"HIHAT_PEDAL\",\"predictedPad\":\"HIHAT_PEDAL\"");
+		postSummary(body,token,201);
+		assertThat(db.queryForObject("SELECT pad||':'||baseline_pad||':'||predicted_pad FROM hits WHERE play_session_id=?",String.class,play))
+				.isEqualTo("HIHAT_PEDAL:HIHAT_PEDAL:HIHAT_PEDAL");
+	}
 	@Test void aliasIsStoredCanonicallyAndOldHashReplaysWithoutChangingIt() throws Exception {
 		String body=PlayFixtures.free(play).replace("\"pad\":\"SNARE\"", "\"pad\":\"HI_TOM\",\"baselinePad\":\"HI_TOM\",\"predictedPad\":\"HI_TOM\"")
 				.replace("\"hits\":[", "\"calibration\":{\"audioOffsetMs\":0,\"pads\":{\"HI_TOM\":{\"pitch\":0,\"yaw\":0}}},"
