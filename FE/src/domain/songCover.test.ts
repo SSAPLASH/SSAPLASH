@@ -1,36 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COVER_MAX_INPUT_BYTES, centerSquareCrop, defaultCover, precheckCover } from './songCover';
-
-describe('defaultCover', () => {
-  it('같은 제목은 항상 같은 색이고 0~359 범위다', () => {
-    const a = defaultCover('Back in Black');
-    expect(defaultCover('Back in Black')).toEqual(a);
-    expect(a.hue).toBeGreaterThanOrEqual(0);
-    expect(a.hue).toBeLessThan(360);
-  });
-
-  it('제목이 다르면 색이 달라질 수 있다', () => {
-    const hues = new Set(['가', '나', '다', '라', '마', 'a', 'b', 'c'].map((t) => defaultCover(t).hue));
-    expect(hues.size).toBeGreaterThan(1);
-  });
-
-  it('앞뒤 공백은 색과 글자에 영향이 없다', () => {
-    expect(defaultCover('  곡 ')).toEqual(defaultCover('곡'));
-  });
-
-  it('글자: 한글은 그대로, 영문은 대문자, 숫자는 그대로', () => {
-    expect(defaultCover('안녕').letter).toBe('안');
-    expect(defaultCover('  hello').letter).toBe('H');
-    expect(defaultCover('7 Nation Army').letter).toBe('7');
-  });
-
-  it('글자: 없거나 기호·이모지로 시작하면 ♪', () => {
-    expect(defaultCover('').letter).toBe('♪');
-    expect(defaultCover('   ').letter).toBe('♪');
-    expect(defaultCover('!!!').letter).toBe('♪');
-    expect(defaultCover('🎵 노래').letter).toBe('♪');
-  });
-});
+import { COVER_MAX_INPUT_BYTES, COVER_REFRESH_MIN_MS, centerSquareCrop, coverRefreshDue, precheckCover } from './songCover';
 
 describe('precheckCover', () => {
   it('jpeg·png·webp는 통과한다', () => {
@@ -66,5 +35,16 @@ describe('centerSquareCrop', () => {
   it('크기를 알 수 없으면 null', () => {
     expect(centerSquareCrop(0, 100)).toBeNull();
     expect(centerSquareCrop(NaN, 100)).toBeNull();
+  });
+});
+
+describe('coverRefreshDue', () => {
+  it('처음(마지막 재조회 없음)에는 바로 다시 읽는다', () => {
+    expect(coverRefreshDue(null, 0)).toBe(true);
+  });
+
+  it('1분 안의 다른 오류는 다시 읽지 않고, 1분이 지나면 다시 읽는다', () => {
+    expect(coverRefreshDue(1_000, 1_000 + COVER_REFRESH_MIN_MS - 1)).toBe(false);
+    expect(coverRefreshDue(1_000, 1_000 + COVER_REFRESH_MIN_MS)).toBe(true);
   });
 });
