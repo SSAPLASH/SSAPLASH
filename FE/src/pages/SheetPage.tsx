@@ -476,7 +476,7 @@ export function SheetPage() {
       <main className="main sheet-mode">
         <div className="sm-head" style={{ justifyContent: 'space-between' }}>
           <div className="sm-head-title">
-            <span className="sm-label">악보 연주</span>
+            <span className="sm-label">악보 연습</span>
             <h1 className="sm-h1-lg">무엇을 쳐 볼까요</h1>
           </div>
           <span style={{ color: 'var(--sm-text-3)' }}>곡을 고르고 난이도를 누르면 준비 화면으로 갑니다</span>
@@ -487,7 +487,7 @@ export function SheetPage() {
           </div>
           <div className="sm-stack">
             <div className="sm-card">
-              <span className="sm-label">악보 연주란</span>
+              <span className="sm-label">악보 연습이란</span>
               <p>
                 반주에 맞춰 마디가 화면에 고정되고 커서가 왼쪽에서 오른쪽으로 지나갑니다. 아래 드럼 킷에는 다음에 칠 박
                 번호가 패드 위에 보입니다. 점수와 콤보는 없고, 칠 때마다 음표가 판정 색으로 바뀝니다.
@@ -559,7 +559,7 @@ export function SheetPage() {
             </svg>
             곡 선택 <span className="sm-hint">Esc</span>
           </button>
-          <span className="sm-label">악보 연주 · 준비</span>
+          <span className="sm-label">악보 연습 · 준비</span>
         </div>
 
         <section className="sm-grid ready">
@@ -670,7 +670,7 @@ export function SheetPage() {
       <div className={`sm-stack${paused ? ' sm-dim' : ''}`} aria-hidden={paused || undefined}>
         <div className="sm-head">
           <div className="sm-head-title">
-            <span className="sm-label">악보 연주</span>
+            <span className="sm-label">악보 연습</span>
             <h1 style={{ overflowWrap: 'anywhere' }}>{chart.title}</h1>
           </div>
           <div className="sm-chips" style={{ paddingBottom: 4 }}>
