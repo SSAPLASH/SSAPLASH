@@ -1,4 +1,5 @@
-// 곡 커버 도메인 (설계 CHART-001 3-2). 기본 커버 색·글자, 고른 파일의 사전 검사, 정사각형 자르기 크기 계산(순수 함수).
+// 곡 커버 도메인 (설계 CHART-001 3-2). 고른 파일의 사전 검사, 정사각형 자르기 크기 계산(순수 함수).
+// 기본 커버는 모든 곡에 같은 CD 그림이라 계산할 것이 없다(components/studio/SongCover).
 // 캔버스 조작은 media/coverImage가 맡는다.
 
 /** 고르는 원본 한도(줄이기 전): 10 MiB */
@@ -44,25 +45,4 @@ export function centerSquareCrop(width: number, height: number): SquareCrop | nu
   const size = Math.floor(Math.min(width, height));
   if (size <= 0) return null;
   return { sx: Math.floor((width - size) / 2), sy: Math.floor((height - size) / 2), size };
-}
-
-export interface DefaultCover {
-  /** 0~359 */
-  hue: number;
-  letter: string;
-}
-
-/** 문자열 해시(31 곱셈, 부호 없는 32비트). 같은 입력은 언제나 같은 값 */
-function hashString(s: string): number {
-  let h = 0;
-  for (const ch of s) h = (Math.imul(h, 31) + (ch.codePointAt(0) ?? 0)) >>> 0;
-  return h;
-}
-
-/** 기본 커버: 제목 해시로 색, trim한 첫 글자(한글·영문·숫자, 영문은 대문자)를 글자로. 없으면 ♪ */
-export function defaultCover(title: string): DefaultCover {
-  const t = title.trim();
-  const first = Array.from(t)[0] ?? '';
-  const letter = /^[가-힣a-zA-Z0-9]$/.test(first) ? first.toUpperCase() : '♪';
-  return { hue: hashString(t) % 360, letter };
 }
