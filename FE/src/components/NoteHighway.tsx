@@ -137,8 +137,10 @@ export function NoteHighway(props: NoteHighwayProps) {
           if (dt > p.scrollMs) break;
           if (n.judgement !== null && n.judgement !== 'MISS') continue;
           if (dt < -300) continue;
+          // 레인에 없는 패드는 그리지 않는다(첫 레인에 엉뚱하게 떨어지지 않게). 판정은 엔진이 그대로 한다
+          const li = laneIndex.get(n.note.pad);
+          if (li === undefined) continue;
           const y = judgeY - (dt / p.scrollMs) * travel;
-          const li = laneIndex.get(n.note.pad) ?? 0;
           const cx = li * laneW + laneW / 2;
           const vel = n.note.velocityHint ?? 100;
           const r = Math.min(laneW * 0.3, 24) * (0.75 + (vel / 127) * 0.35);
