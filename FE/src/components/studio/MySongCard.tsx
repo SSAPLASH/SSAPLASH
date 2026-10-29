@@ -60,7 +60,7 @@ export function MySongCard({ song, job, progress, justDone, onReupload, onEdit, 
         {ready && (
           <div className="song-card-actions">
             <Link to={`/sheet?${query}`} className="btn-ghost as-button">
-              악보 연주
+              악보 연습
             </Link>
           </div>
         )}
