@@ -1,0 +1,20 @@
+# ENST minus-one 64곡을 반주 게인 1.0(드럼·반주 같은 크기)으로 섞은 묶음. 분리 품질 측정 전용 (S15P31A307-166).
+# enst_minus_one.yaml은 드럼 2/3·반주 1/3 관례와 같은 비율(반주 × 0.5)이라 상용 곡보다 드럼이 큼. 더 어려운 조건에서 SDR을 보려고 둠.
+# 로더·라벨 대응·이용 조건은 enst_minus_one.yaml과 같음. 다른 값은 name·accomp_gain뿐.
+name: enst_minus_one_gain1
+kind: enst
+root: data/enst/ENST-drums-public
+subset: minus-one
+expected_songs: 64
+sample_rate: 44100
+clip: null
+songs: null
+extra:
+  drummers: [1, 2, 3]
+  accomp_gain: 1.0
+  drum_mix: wet_mix
+  tom4:
+    mt: SMALL_TOM
+    lmt: MID_TOM
+    lt: FLOOR_TOM
+    lft: FLOOR_TOM
