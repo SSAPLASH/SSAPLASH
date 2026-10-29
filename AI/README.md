@@ -52,6 +52,9 @@ AI/
 │   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
 │   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
 │   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
+│   ├─ coach_calibration/ 약점 분석 실측 보정 배치(서버가 import하지 않음). source(비식별 뷰 읽기·허용 열 검증), filters(이상치 제외),
+│   │                    profile(걸림 비율·분포), candidates(what-if·후보), policy(정책 파일), register(MLflow 기록·실행 판단),
+│   │                    summary, pipeline, cli. 설명은 docs/coach-calibration.md
 │   └─ server/           AI 서버 진입점 app.py (FastAPI, /health), weak_segments.py (POST /analysis/weak-segments)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
@@ -218,6 +221,22 @@ uv run pytest tests/coach_eval
 - 같은 `--base-seed`면 결과가 같다. 규칙·임계값을 바꾼 뒤에는 같은 명령으로 다시 돌려 비교한다(날짜 폴더를 새로 만든다).
 - `--mlflow`는 실험 `coach-weak-segments-eval`에 기록한다. 주소는 `--tracking-uri`나 환경 변수 `MLFLOW_TRACKING_URI`이고 없으면 로컬 `mlruns/`(git 미추적)다.
 - 시나리오(심는 약점)와 강도는 `coach_eval/scenarios.py`, 연주 모델은 `player.py`에 있다. 새 패턴을 켜면 시나리오를 하나 추가한다.
+
+### 약점 분석 실측 보정 (COACH-003)
+
+동의한 사용자의 **비식별** 연주 기록(BE 뷰 `coach_export_v`)으로 임계값 **후보**를 만들어 MLflow에 기록하는 배치다. 임계값을 자동으로 바꾸지 않고,
+사람이 기록을 검토·승인한 뒤 `config.py`를 고치는 MR로만 바뀐다. 데이터 출처·제외 규칙·정책 파일·기록 규약·승인 절차는
+[docs/coach-calibration.md](docs/coach-calibration.md)에 있다.
+
+```bash
+uv run pytest tests/coach_calibration
+uv run python -m ssaplash_ai.coach_calibration.cli --help
+```
+
+- 접속 문자열은 환경 변수 `SSAPLASH_COACH_EXPORT_DSN`(읽기 전용 계정)으로만 받는다. 명령줄에 쓰지 않는다.
+- 실행 끝에 `coach-calibration status=OK|SKIPPED|FAIL ...` 한 줄을 남긴다(알림이 이 줄을 본다).
+- 정책 파일(`configs/coach/calibration_policy.yaml`)은 서버 이미지에 들어가지 않는다. 컨테이너에서는 마운트하고 `SSAPLASH_CALIBRATION_POLICY`로 경로를 준다.
+- 뷰와 읽기 전용 계정이 서버에 적용되기 전에는 실제 DB 연결을 시험하지 못했다. 모든 시험은 뷰를 모사한 메모리 행으로 한다.
 
 ## 벤치마크 실행
 
