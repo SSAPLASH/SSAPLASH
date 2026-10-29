@@ -76,6 +76,23 @@ class WorkerStorageWireTest {
             assertThatThrownBy(() -> store.exists(WorkerStore.Bucket.SHEET,"sheet/12/page.png")).isInstanceOf(RuntimeException.class);
         }
     }
+    @Test void coverWritesToSheetWithConditionalAndChecksum() throws Exception {
+        var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        var bytes=new AtomicReference<byte[]>(); var path=new AtomicReference<String>();
+        var type=new AtomicReference<String>(); var crc=new AtomicReference<String>(); var conditional=new AtomicReference<String>(); var encoding=new AtomicReference<String>();
+        server.createContext("/",exchange->{ bytes.set(exchange.getRequestBody().readAllBytes()); path.set(exchange.getRequestURI().getPath());
+            type.set(exchange.getRequestHeaders().getFirst("Content-Type")); crc.set(exchange.getRequestHeaders().getFirst("x-amz-checksum-crc32"));
+            conditional.set(exchange.getRequestHeaders().getFirst("If-None-Match")); encoding.set(exchange.getRequestHeaders().getFirst("Content-Encoding"));
+            exchange.sendResponseHeaders(200,-1); exchange.close(); });
+        server.start(); String endpoint="http://127.0.0.1:"+server.getAddress().getPort(); byte[] content=new byte[]{1,2,3,4};
+        try(var store=new WorkerStorageConfiguration().workerStore(false,"","","","","","",false,
+                true,endpoint,endpoint,"us-east-1","backing","sheet","read","read-secret","write","write-secret","ffprobe",Duration.ofMinutes(10),JsonMapper.builder().build())) {
+            store.putCover("cover/1/2/example.png",content,"image/png");
+            assertThat(path.get()).isEqualTo("/sheet/cover/1/2/example.png"); assertThat(bytes.get()).containsExactly(content);
+            assertThat(type.get()).isEqualTo("image/png"); assertThat(crc.get()).isEqualTo(crc32(content));
+            assertThat(conditional.get()).isEqualTo("*"); assertThat(encoding.get()).isNull();
+        } finally { server.stop(0); }
+    }
     private static String crc32(byte[] bytes) {
         var crc=new CRC32(); crc.update(bytes);
         return Base64.getEncoder().encodeToString(ByteBuffer.allocate(4).putInt((int)crc.getValue()).array());

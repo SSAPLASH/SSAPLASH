@@ -16,8 +16,9 @@ public class SongQueryService {
 	private final SongRepository songs;
 	private final ChartVersionRepository versions;
 	private final ChartQueryAccess access;
-	public SongQueryService(SongRepository songs, ChartVersionRepository versions, ChartQueryAccess access) {
-		this.songs = songs; this.versions = versions; this.access = access;
+	private final CoverUrls covers;
+	public SongQueryService(SongRepository songs, ChartVersionRepository versions, ChartQueryAccess access, CoverUrls covers) {
+		this.songs = songs; this.versions = versions; this.access = access; this.covers=covers;
 	}
 	public PageResponse<SongSummary> list(long userId, SongScope scope, String q, int page, int size) {
 		access.requireActive(userId);
@@ -27,10 +28,11 @@ public class SongQueryService {
 		Map<Long, List<ChartVersionRepository.Summary>> summaries = rows.isEmpty() ? Map.of() :
 				versions.summaries(rows.stream().map(SongRepository.View::getId).toList(), userId)
 						.stream().collect(Collectors.groupingBy(ChartVersionRepository.Summary::getSongId));
+		var coverUrls=covers.forSongs(userId,rows);
 		var items = rows.stream().map(s -> new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
 				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(),
 				summaries.getOrDefault(s.getId(), List.of()).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
-				s.getCreatedAt())).toList();
+				s.getCreatedAt(),coverUrls.get(s.getId()))).toList();
 		return PageResponse.of(items, page, size, total);
 	}
 	public SongDetail detail(long userId, long songId) {
@@ -41,6 +43,6 @@ public class SongQueryService {
 						v.getNoteCount(), v.getNotationStatus())).toList();
 		return new SongDetail(s.getId(), s.getTitle(), s.getArtist(), s.getSource(), s.getStatus(), s.getBpm(),
 				s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(),
-				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts);
+				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts,covers.forSongs(userId,List.of(s)).get(s.getId()));
 	}
 }
