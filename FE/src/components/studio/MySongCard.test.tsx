@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { SongSummary } from '@/domain/songCatalog';
 import { MySongCard } from './MySongCard';
+import { MySongRow } from './MySongRow';
 import { SongDeleteDialog } from './SongDeleteDialog';
 import { StudioToast } from './StudioToast';
 
@@ -71,6 +72,19 @@ describe('MySongCard (v0.4)', () => {
 
   it('기능 스위치 꺼짐(onEdit 없음)이면 ⋯ 메뉴가 없다', () => {
     expect(card(song(), false)).not.toContain('song-menu');
+  });
+});
+
+describe('MySongRow 완료 행', () => {
+  it('[악보 연주]·[리듬 게임]으로 카드 보기와 같은 이름을 쓴다', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <MySongRow song={song()} job={null} progress={null} justDone={false} onReupload={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('악보 연주');
+    expect(html).toContain('리듬 게임');
+    expect(html).not.toContain('악보 확인');
   });
 });
 
