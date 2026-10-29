@@ -19,6 +19,8 @@ export interface SongSummary {
   hasAccompaniment: boolean;
   difficulties: Difficulty[];
   createdAt: string;
+  /** 커버 이미지 서명 URL. 없으면 null(기본 커버) */
+  coverUrl: string | null;
 }
 
 export interface ChartSummary {
@@ -85,6 +87,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
       (x) => x.difficulty,
     ),
     createdAt: String(d.createdAt ?? ''),
+    coverUrl: typeof d.coverUrl === 'string' && d.coverUrl !== '' ? d.coverUrl : null,
   };
 }
 
