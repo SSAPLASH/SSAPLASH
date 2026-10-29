@@ -294,7 +294,7 @@ export function StudioPage() {
     <main className="main">
       <section className="hero" style={{ padding: '24px 0 18px', maxWidth: 'none' }}>
         <div className="studio-head">
-          <h1>내 곡</h1>
+          <h1>라이브러리</h1>
           {!firstVisit && (
             <button type="button" className="btn-primary" onClick={() => setDialogOpen(true)}>
               + 곡 올리기

@@ -140,9 +140,9 @@ export function MyPage() {
         <div className="grid-2">
           <div className="card col">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>내 곡</h3>
+              <h3>라이브러리</h3>
               <Link to="/studio" className="small">
-                내 곡 관리
+                라이브러리
               </Link>
             </div>
             <MySongSummary

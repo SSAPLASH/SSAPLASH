@@ -20,7 +20,7 @@ export function MySongSummary({ status, items, error, onRetry }: Props) {
   if (status === 'error') {
     return (
       <div className="notice error col" role="alert">
-        <span>{error ?? '내 곡을 불러오지 못했습니다.'}</span>
+        <span>{error ?? '라이브러리를 불러오지 못했습니다.'}</span>
         <button type="button" className="btn-ghost" onClick={onRetry}>
           다시 시도
         </button>
@@ -31,7 +31,7 @@ export function MySongSummary({ status, items, error, onRetry }: Props) {
   if (sum.total === 0) {
     return (
       <p className="dim small">
-        아직 만든 곡이 없습니다. <Link to="/studio">내 곡 관리</Link>에서 음원을 올리면 채보가 만들어집니다.
+        아직 만든 곡이 없습니다. <Link to="/studio">라이브러리</Link>에서 음원을 올리면 채보가 만들어집니다.
       </p>
     );
   }
@@ -42,7 +42,7 @@ export function MySongSummary({ status, items, error, onRetry }: Props) {
   if (sum.failed > 0) parts.push(`실패 ${sum.failed}`);
   return (
     <p className="small">
-      {parts.join(' · ')} · <Link to="/studio">내 곡 관리</Link>
+      {parts.join(' · ')} · <Link to="/studio">라이브러리</Link>
     </p>
   );
 }
