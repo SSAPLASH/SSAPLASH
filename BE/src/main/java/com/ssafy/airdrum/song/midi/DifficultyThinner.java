@@ -15,7 +15,7 @@ import java.util.Set;
  */
 final class DifficultyThinner {
 
-	static final String RULE_VERSION = "midi-rule-1.0";
+	static final String RULE_VERSION = "midi-rule-1.1";
 
 	enum Difficulty { EASY, NORMAL, HARD }
 
@@ -59,14 +59,14 @@ final class DifficultyThinner {
 
 	private static List<DrumNote> thin(List<DrumNote> hard, int ppq, boolean easy) {
 		double beat = easy ? ppq : ppq / 2.0; // 격자: EASY 4분, NORMAL 8분(하이햇·라이드·페달만)
-		int limit = easy ? 1 : 2;
+		int limit = 2;
 		double minGap = easy ? ppq / 2.0 : ppq / 4.0; // EASY 8분, NORMAL 16분
 		var kept = new ArrayList<List<DrumNote>>();
 		for (var group : groups(hard)) {
 			var candidates = new ArrayList<DrumNote>();
 			for (var n : group) {
 				boolean cymbal = CYMBAL_TIME.contains(n.pad());
-				if (easy && (cymbal || n.velocity() < GHOST || !onGrid(n.tick(), beat, ppq))) continue;
+				if (easy && (n.pad() == DrumPad.HIHAT_PEDAL || n.velocity() < GHOST || !onGrid(n.tick(), beat, ppq))) continue;
 				if (!easy && ((cymbal && !onGrid(n.tick(), beat, ppq)) || (n.pad() == DrumPad.SNARE && n.velocity() < GHOST))) continue;
 				candidates.add(n);
 			}

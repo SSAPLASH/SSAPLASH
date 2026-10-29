@@ -9,7 +9,7 @@ import com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty;
 import static com.ssafy.airdrum.song.midi.DrumPad.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 난이도 솎기 규칙 midi-rule-1.0(설계 4-3절). ppq 480 기준: 4분 480, 8분 240, 16분 120, 32분 60. */
+/** 난이도 솎기 규칙 midi-rule-1.1(설계 4-3절). ppq 480 기준: 4분 480, 8분 240, 16분 120, 32분 60. */
 class DifficultyThinnerTest {
 
 	static final int PPQ = 480;
@@ -85,18 +85,18 @@ class DifficultyThinnerTest {
 	}
 
 	@Test
-	void EASY는_하이햇_라이드_페달을_빼고_4분_격자만_남긴다() {
-		var easy = thin(Difficulty.EASY, n(0, KICK), n(0, HIHAT), n(240, SNARE), n(480, SNARE), n(480, RIDE),
+	void EASY는_페달만_빼고_4분_격자만_남긴다() {
+		var easy = thin(Difficulty.EASY, n(0, KICK), n(0, HIHAT), n(240, SNARE), n(240, HIHAT), n(480, SNARE), n(480, RIDE),
 				n(960, HIHAT_PEDAL), n(1440, FLOOR_TOM));
 
-		assertThat(easy).containsExactly(n(0, KICK), n(480, SNARE), n(1440, FLOOR_TOM));
+		assertThat(easy).containsExactly(n(0, KICK), n(0, HIHAT), n(480, SNARE), n(480, RIDE), n(1440, FLOOR_TOM));
 	}
 
 	@Test
-	void EASY는_약한_노트를_모두_빼고_같은_시각_1개만_남긴다() {
+	void EASY는_약한_노트를_모두_빼고_같은_시각_2개까지_남긴다() {
 		var easy = thin(Difficulty.EASY, n(0, KICK), n(0, SNARE), n(0, CRASH), n(480, KICK, 39), n(960, KICK, 40));
 
-		assertThat(easy).containsExactly(n(0, SNARE), n(960, KICK, 40));
+		assertThat(easy).containsExactly(n(0, KICK), n(0, SNARE), n(960, KICK, 40));
 	}
 
 	@Test
@@ -112,7 +112,7 @@ class DifficultyThinnerTest {
 
 	@Test
 	void EASY만_비면_NORMAL을_쓴다() {
-		var charts = DifficultyThinner.thin(List.of(n(0, HIHAT), n(240, HIHAT)), PPQ);
+		var charts = DifficultyThinner.thin(List.of(n(0, HIHAT_PEDAL), n(240, HIHAT_PEDAL)), PPQ);
 
 		assertThat(charts.get(Difficulty.EASY)).isEqualTo(charts.get(Difficulty.NORMAL));
 		assertThat(charts.get(Difficulty.NORMAL)).hasSize(2);
