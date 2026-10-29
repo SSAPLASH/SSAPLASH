@@ -140,7 +140,7 @@ describe('MockStick', () => {
   it('시작 시 BOOT 로그, 1초 동안 POSE ≈ 50·HIT 1·BRIDGE_STATS 1', () => {
     mock.start();
     expect(mock.running).toBe(true);
-    expect(decodePacket(got[0].bytes, 0)).toMatchObject({ kind: 'log', text: 'BOOT 0.1 mock000' });
+    expect(decodePacket(got[0].bytes, 0)).toMatchObject({ kind: 'log', text: 'BOOT 1.0 nrf52' });
     vi.advanceTimersByTime(1000);
     expect(count('pose')).toBe(50);
     expect(count('hit')).toBe(1);
@@ -192,6 +192,20 @@ describe('MockStick', () => {
     expect(acks.length).toBe(15);
     expect(acks.slice(0, 14).map((a) => a.paramId)).toEqual(STICK_PARAMS.map((p) => p.id));
     expect(acks[14]).toMatchObject({ paramId: 0, value: 14 });
+    // Feather fw 1.0 기본값
+    const byId = Object.fromEntries(acks.slice(0, 14).map((a) => [a.paramId, a.value]));
+    expect(byId).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200, 0x01: 150 });
+  });
+
+  it('Feather 모사: STATUS fwMajor 1·minor 0·battery 없음, 부팅 BIAS 줄, drop short 섞임', () => {
+    mock.start({ poseHz: 1, hitIntervalMs: 100 });
+    vi.advanceTimersByTime(100 * 12);
+    const dec = got.filter((r) => r.dir === 'in').map((r) => decodePacket(r.bytes, 0));
+    expect(dec.find((d) => d.kind === 'status')).toMatchObject({ fwMajor: 1, fwMinor: 0, batteryPct: null });
+    expect(dec.find((d) => d.kind === 'log' && d.text.startsWith('BIAS'))).toMatchObject({ text: 'BIAS 3 -2 4' });
+    const logs = dec.flatMap((d) => (d.kind === 'log' ? [d.text] : []));
+    expect(logs).toContain('drop short 90');
+    expect(logs).toContain('drop weak 320');
   });
 
   it('SET_PARAM은 범위로 잘라 되돌린다', () => {

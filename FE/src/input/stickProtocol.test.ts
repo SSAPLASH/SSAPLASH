@@ -10,6 +10,8 @@ import {
   decodeSetPadTable,
   encodeSetYawOffset,
   stickParamById,
+  stickParamDefault,
+  firmwareOfMajor,
   PAD_NONE,
   decodePacket,
   encodeHaptic,
@@ -342,6 +344,16 @@ describe('STICK_PARAMS', () => {
     expect(stickParamById(0x0f)).toMatchObject({ defaultValue: 1000, max: 32767 });
     expect(stickParamById(0x08)).toBeUndefined();
     for (const p of STICK_PARAMS) expect(p.defaultValue).toBeGreaterThanOrEqual(p.min);
+  });
+  it('펌웨어별 기본값: Feather는 4개만 다르다', () => {
+    expect(firmwareOfMajor(0)).toBe('nucleo');
+    expect(firmwareOfMajor(1)).toBe('feather');
+    const diff = STICK_PARAMS.filter((p) => stickParamDefault(p, 'nucleo') !== stickParamDefault(p, 'feather')).map((p) => p.id);
+    expect(diff).toEqual([0x0a, 0x0b, 0x0e, 0x0f]);
+    const val = (id: number, fw: 'nucleo' | 'feather') => stickParamDefault(stickParamById(id)!, fw);
+    expect([0x0a, 0x0b, 0x0e, 0x0f].map((id) => val(id, 'nucleo'))).toEqual([30, 400, 3000, 1000]);
+    expect([0x0a, 0x0b, 0x0e, 0x0f].map((id) => val(id, 'feather'))).toEqual([60, 160, 800, 1200]);
+    for (const p of STICK_PARAMS) expect(stickParamDefault(p, 'feather')).toBeGreaterThanOrEqual(p.min);
   });
 });
 

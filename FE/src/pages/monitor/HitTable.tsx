@@ -4,6 +4,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
 import { resolvePad } from '@/domain/calibration';
+import { arrivalLevel, negate as neg } from '@/monitor/health';
 import { agreeRate, edgeDeg, edgeTone, hitPose, insideRate } from '@/monitor/boundary';
 import type { LogRow } from '@/monitor/packetLog';
 import { hexGroups, hexSpaced, type HitFieldKey } from './hitFields';
@@ -49,7 +50,7 @@ const COLS: string[] = [
   'seq',
   'timestampUs',
   'tBrowser',
-  'futureMs',
+  '도착(수신−정지)',
   'pad(fw)',
   'fePad',
   'agree',
@@ -70,8 +71,8 @@ const COLS: string[] = [
 interface RowProps {
   vr: ViewRow;
   profile: CalibrationProfile | null;
-  /** 행 클릭 콜백(원시 파형 탭 이동용). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
-  onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  /** 행 클릭 콜백(원시 파형 탭 이동·타격 추적 선택용, t = 행 수신 시각). 안정된 참조로 넘기므로 memo 비교에서 제외한다 */
+  onSelectHit?: (stick: 0 | 1, seq: number, t: number) => void;
   /** 다른 탭(세기 산점)에서 고른 행. 강조하고 화면 안으로 스크롤한다 */
   selected?: boolean;
 }
@@ -129,18 +130,22 @@ const HitRowView = memo(function HitRowView({ vr, profile, onSelectHit, selected
   const groups = hexGroups(row.bytes);
 
   const stick = row.stick;
+  // 도착(수신−정지) = −futureMs. 상태 기준은 ③ 시계 단계와 같다(health.arrivalLevel)
+  const arrival = neg(row.futureMs);
+  const arrLevel = arrivalLevel(arrival, arrival).level;
+  const arrivalTone = arrLevel === 'warn' || arrLevel === 'bad' ? ` ${arrLevel}` : '';
   return (
     <tr
       ref={trRef}
       className={[onSelectHit && stick !== null ? 'clickable' : '', selected ? 'selected' : ''].filter(Boolean).join(' ') || undefined}
-      onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq) : undefined}
+      onClick={onSelectHit && stick !== null ? () => onSelectHit(stick, d.seq, row.t) : undefined}
     >
       <td className="num">{fmt(row.t)}</td>
       <td style={{ color: handColor, fontWeight: 700 }}>{stickName(row.stick)}</td>
       {cell('seq', d.seq)}
       {cell('ts', d.timestampUs)}
       <td className="num derived">{fmt(row.tBrowser)}</td>
-      <td className={`num derived${row.futureMs !== null && row.futureMs > 0 ? ' warn' : ''}`}>{fmt(row.futureMs)}</td>
+      <td className={`num derived${arrivalTone}`}>{fmt(arrival)}</td>
       {cell('pad', d.pad ?? '없음')}
       <td className="derived">{fe ?? '–'}</td>
       <td className={`derived ${agree === null ? '' : agree ? 'ok' : 'bad'}`}>{agree === null ? '–' : agree ? '✓' : '✗'}</td>
@@ -249,7 +254,7 @@ export const HitTable = memo(function HitTable({
 }: {
   snap: Snap;
   profile: CalibrationProfile | null;
-  onSelectHit?: (stick: 0 | 1, seq: number) => void;
+  onSelectHit?: (stick: 0 | 1, seq: number, t: number) => void;
   /** 세기 산점에서 고른 HIT(스틱·seq). 같은 행을 강조·스크롤한다 */
   selected?: { stick: 0 | 1; seq: number } | null;
 }) {
@@ -261,9 +266,9 @@ export const HitTable = memo(function HitTable({
   return (
     <div className="mon-hit">
       <div className="mon-summary-line">
-        timestamp − 수신 시각(최근 50건) · L 중앙값 {fmt(f0.median)}ms 최대 {fmt(f0.max)}ms · R 중앙값 {fmt(f1.median)}ms 최대{' '}
-        {fmt(f1.max)}ms
-        <span className="faint"> (양수 = 미래, 시계 동기화 전이면 –)</span>
+        도착(수신−정지, 최근 50건) · L 중앙값 {fmt(neg(f0.median))}ms 최대 {fmt(neg(f0.min))}ms · R 중앙값 {fmt(neg(f1.median))}ms 최대{' '}
+        {fmt(neg(f1.min))}ms
+        <span className="faint"> (음수 = 정지 시각보다 먼저 도착, 정상 −11 ~ 0, 시계 동기화 전이면 –)</span>
       </div>
       <div className="mon-summary-line">
         바운더리 안 {pct(inRate)} · agree {pct(agRate)}

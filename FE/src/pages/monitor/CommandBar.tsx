@@ -23,6 +23,7 @@ const KIND_LABEL: Record<Confirmation['kind'], string> = {
 };
 
 function confirmText(c: Confirmation): string {
+  if (c.source === 'button') return `스틱 버튼 정면 보정(요청 없음) 고도각 ${((c.value ?? 0) / 100).toFixed(2)}°`;
   if (c.open && c.value === null) return `${KIND_LABEL[c.kind]} 대기 중…`;
   if (c.value === null) return `${KIND_LABEL[c.kind]} 확인 없음`;
   switch (c.kind) {

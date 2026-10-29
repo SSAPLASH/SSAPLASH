@@ -93,6 +93,47 @@ function keyboardKeys(): string[] {
   return Object.keys(KEY_MAP).filter((code) => !taken.has(code));
 }
 
+/** 모니터 따라보기 창으로 열렸는지. 저장된 센서를 자동 연결하지 않는 기준 */
+function isFollowWindow(): boolean {
+  return location.pathname.startsWith('/monitor') && new URLSearchParams(location.search).get('follow') === '1';
+}
+
+/** 모니터 중계(VITE_MONITOR 빌드 한정)를 시작한다. 삼항·상수 분기로 감싸 미설정 빌드에서는 청크가 만들어지지 않는다 */
+const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
+function startRelay(): void {
+  if (!MONITOR_ENABLED) return;
+  void import('./monitorRelay').then((m) =>
+    m.startMonitorRelay({
+      // relay가 bootstrap의 센서 상태를 직접 알지 않도록 getter를 넘긴다
+      getInfo: () => ({
+        source: activeInstance?.label ?? '키보드',
+        profileId: null,
+        offsets: [activeInstance?.clockOffsetOf?.(0) ?? null, activeInstance?.clockOffsetOf?.(1) ?? null],
+        transport: activeInstance?.transportStats?.() ?? null,
+        audio: (() => {
+          const lat = audioEngine.latency();
+          return lat ? { baseMs: lat.baseLatencyMs, outputMs: lat.outputLatencyMs } : null;
+        })(),
+      }),
+    }),
+  );
+}
+
+/**
+ * 텔레메트리 전송(VITE_MONITOR 빌드 한정, 설계 MONITOR-001). 이 창이 이벤트 원천이다 —
+ * 따라보기 모니터 창은 센서를 열지 않고 resolved를 만들지 않으므로 수집해도 0건이다.
+ */
+function startTelemetry(): void {
+  if (!MONITOR_ENABLED) return;
+  void import('@/telemetry/enable').then((m) =>
+    m.initTelemetry({
+      subscribeConnection: (l) => inputManager.onStatus(l),
+      getActiveSource: () => (useLive.getState().activeSensor === 'none' ? null : useLive.getState().activeSensor),
+      subscribeActiveSource: (l) => useLive.subscribe((s, prev) => s.activeSensor !== prev.activeSensor && l()),
+    }),
+  );
+}
+
 export function bootstrapInput(): void {
   // 키보드 매핑은 고정 상수라 설정 구독 밖에서 한 번만 넘긴다
   inputManager.setKeyMap(KEY_MAP);
@@ -149,7 +190,9 @@ export function bootstrapInput(): void {
   });
   inputManager.onHit((hit: ResolvedHit) => {
     if (soundOnHit && hit.pad) {
-      hit.tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+      // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
+      const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
+      if (tAudio !== null) hit.tAudio = tAudio;
       // PLAY-07: 브라우저 측 진동 명령. 실제 지연 없는 진동은 MCU 로컬 트리거가 맡는다
       inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
     }
@@ -162,11 +205,14 @@ export function bootstrapInput(): void {
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
-  void activateSensor(useSettings.getState().sensorKind);
+  // 모니터 따라보기 창(/monitor/stick?follow=1)은 센서를 열지 않는다 — 연결은 연주 창이 가진다
+  if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind);
   useSettings.subscribe((s, prev) => {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();
   });
+  startRelay();
+  startTelemetry();
 }
 
 /**
@@ -310,7 +356,8 @@ export async function previewHit(pad: PadId, velocity: number): Promise<void> {
     peakAccel: 0,
     judgedBy: 'pose',
   };
-  hit.tAudio = audioEngine.trigger(pad, velocity);
+  const tAudio = audioEngine.trigger(pad, velocity);
+  if (tAudio !== null) hit.tAudio = tAudio;
   useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
 }
 
