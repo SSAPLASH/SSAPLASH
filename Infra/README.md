@@ -132,7 +132,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 **선행 조건 (모두 갖춰져야 의미 있게 돈다)**
 1. AI 쪽 배치 코드(`ssaplash_ai.coach_calibration`)가 서버에 배포돼 있다. 아직 배포 전에는 이 서비스를 실행하면 모듈이 없어 실패한다.
-2. BE가 뷰 `coach_export_v`와 그룹 역할 `coach_export_reader`(마이그레이션 V19)를 서버 DB에 적용했다.
+2. BE가 뷰 `coach_export_v`와 그룹 역할 `coach_export_reader`(마이그레이션 V21, BE MR !166)를 서버 DB에 적용했다.
 3. 서버에서 읽기 전용 로그인 계정을 만들고 그룹 역할에 넣고 소금을 설정했다(비밀 값은 저장소에 없다). 비밀번호는 `.env`의 `COACH_EXPORT_PASSWORD`에 둔다.
 4. `.env`의 `ADMIN_EMAILS`에 팀원 로그인 이메일을 모두 넣었다(뷰가 `role = 'ADMIN'` 계정을 제외한다. ADMIN 권한이 같이 부여되는 점은 알고 하는 선택이다).
 5. Alloy가 5초 주기 설정으로 다시 떴다. 설정 파일을 마운트해서 쓰므로 `up -d`로는 다시 읽지 않는다: `docker compose -p infra restart alloy`.
