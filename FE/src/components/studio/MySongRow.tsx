@@ -38,7 +38,10 @@ export function MySongRow({ song, job, progress, justDone, onReupload }: Props) 
     <li className={cls}>
       <div className="studio-row-head">
         <span className="studio-row-main">
-          <span className="studio-row-title">{song.title}</span>
+          <span className="studio-row-title">
+            {song.title}
+            {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
+          </span>
           {sub && <span className="faint small">{sub}</span>}
         </span>
         <span className={`my-badge ${view.tone}`}>{view.label}</span>
