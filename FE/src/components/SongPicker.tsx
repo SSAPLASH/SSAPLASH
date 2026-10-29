@@ -1,4 +1,4 @@
-// 곡 선택 (설계 2). 탭(기본 제공 곡 / 내 곡) · 검색(300ms 디바운스) · 곡 카드 → 펼치면 난이도 칩 → onSelect(songId, chartId).
+// 곡 선택 (설계 2). 탭(기본 곡 / 라이브러리) · 검색(300ms 디바운스) · 곡 카드 → 펼치면 난이도 칩 → onSelect(songId, chartId).
 // /play·/sheet가 같이 쓴다. 선택 결과는 페이지가 URL로 옮긴다.
 // mode="sheet"는 Claude Design Select 보드의 표 모양(열 헤더·행·펼친 난이도 칩, .sheet-mode 스코프 클래스)으로 그린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -99,7 +99,7 @@ export function SongPicker({ onSelect, mode }: Props) {
   const hasUnplayable = tab === 'MINE' && items.some((s) => !isPlayableStatus(s.status));
   const unplayableNote = hasUnplayable ? (
     <p className="small dim">
-      처리 중·실패한 곡은 <Link to="/studio">내 곡 관리</Link>에서 확인하세요.
+      처리 중·실패한 곡은 <Link to="/studio">라이브러리</Link>에서 확인하세요.
     </p>
   ) : null;
 
@@ -110,7 +110,7 @@ export function SongPicker({ onSelect, mode }: Props) {
           {source === 'api' &&
             (['BUILTIN', 'MINE'] as const).map((sc) => (
               <button key={sc} role="tab" aria-selected={tab === sc} className="sm-tab" onClick={() => setTab(sc)}>
-                {sc === 'BUILTIN' ? '기본 제공 곡' : '내 곡'}
+                {sc === 'BUILTIN' ? '기본 곡' : '라이브러리'}
               </button>
             ))}
           <label className="sm-search">
@@ -145,7 +145,7 @@ export function SongPicker({ onSelect, mode }: Props) {
           <p className="sm-hint">
             {tab === 'MINE' ? (
               <>
-                아직 만든 곡이 없습니다. <Link to="/studio">내 곡 관리</Link>에서 음원을 올려 보세요.
+                아직 만든 곡이 없습니다. <Link to="/studio">라이브러리</Link>에서 음원을 올려 보세요.
               </>
             ) : (
               '곡이 없습니다'
@@ -184,7 +184,7 @@ export function SongPicker({ onSelect, mode }: Props) {
                         {locked && <span className={`my-badge ${view.tone}`}>{view.label}</span>}
                         <span className="sm-song-meta">
                           {song.artist ? `${song.artist} · ` : ''}
-                          {tab === 'MINE' ? '내 곡' : '기본 제공'} · {song.hasAccompaniment ? '반주 있음' : '반주 없음'}
+                          {tab === 'MINE' ? '라이브러리' : '기본 곡'} · {song.hasAccompaniment ? '반주 있음' : '반주 없음'}
                         </span>
                       </span>
                       <span className="sm-num sm-col-bpm">{song.bpm}</span>
@@ -239,7 +239,7 @@ export function SongPicker({ onSelect, mode }: Props) {
               className={tab === s ? 'btn-primary' : 'btn-ghost'}
               onClick={() => setTab(s)}
             >
-              {s === 'BUILTIN' ? '기본 제공 곡' : '내 곡'}
+              {s === 'BUILTIN' ? '기본 곡' : '라이브러리'}
             </button>
           ))}
         </div>
@@ -271,7 +271,7 @@ export function SongPicker({ onSelect, mode }: Props) {
         <p className="small dim">
           {tab === 'MINE' ? (
             <>
-              아직 만든 곡이 없습니다. <Link to="/studio">내 곡 관리</Link>에서 음원을 올려 보세요.
+              아직 만든 곡이 없습니다. <Link to="/studio">라이브러리</Link>에서 음원을 올려 보세요.
             </>
           ) : (
             '곡이 없습니다'

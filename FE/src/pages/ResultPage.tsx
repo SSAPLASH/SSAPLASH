@@ -156,7 +156,7 @@ export function ResultPage() {
             다른 곡
           </Link>
           <Link to="/free" className="btn-ghost">
-            자유 연주
+            자유 연습
           </Link>
         </div>
       </div>

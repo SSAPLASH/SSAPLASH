@@ -18,7 +18,7 @@ type Load<T> = { s: 'loading' } | { s: 'ok'; v: T } | { s: 'error'; e: unknown }
 const ANALYSIS_POLL_INTERVAL_MS = 2000;
 const ANALYSIS_POLL_MAX = 5;
 
-const MODE_LABEL: Record<string, string> = { RHYTHM: '리듬 게임', SHEET: '악보 연주' };
+const MODE_LABEL: Record<string, string> = { RHYTHM: '리듬 게임', SHEET: '악보 연습' };
 const INPUT_LABEL: Record<string, string> = { KEYBOARD: '키보드', STICK: '스틱' };
 
 /** 오류 → 안내 문구와 다시 시도 가능 여부 (회신 1 §4) */

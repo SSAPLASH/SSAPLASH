@@ -32,13 +32,13 @@ function card(s: SongSummary, withEdit = true): string {
 }
 
 describe('MySongCard (v0.4)', () => {
-  it('완료 곡: 커버 ▶ 리듬 게임(곡 제목 라벨)과 [악보 연주] 하나, 카드 아래 [플레이] 버튼은 없다', () => {
+  it('완료 곡: 커버 ▶ 리듬 게임(곡 제목 라벨)과 [악보 연습] 하나, 카드 아래 [플레이] 버튼은 없다', () => {
     const html = card(song());
     expect(html).toContain('class="song-card-play"');
     expect(html).toContain('aria-label="「별빛 산책」 리듬 게임"');
     expect(html).toContain('href="/play?scope=MINE&amp;song=7"');
     expect(html).toContain('href="/sheet?scope=MINE&amp;song=7"');
-    expect(html).toContain('악보 연주');
+    expect(html).toContain('악보 연습');
     expect(html).not.toContain('악보 확인');
     expect(html).not.toContain('btn-primary');
   });
@@ -76,13 +76,13 @@ describe('MySongCard (v0.4)', () => {
 });
 
 describe('MySongRow 완료 행', () => {
-  it('[악보 연주]·[리듬 게임]으로 카드 보기와 같은 이름을 쓴다', () => {
+  it('[악보 연습]·[리듬 게임]으로 카드 보기와 같은 이름을 쓴다', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MySongRow song={song()} job={null} progress={null} justDone={false} onReupload={() => {}} />
       </MemoryRouter>,
     );
-    expect(html).toContain('악보 연주');
+    expect(html).toContain('악보 연습');
     expect(html).toContain('리듬 게임');
     expect(html).not.toContain('악보 확인');
   });

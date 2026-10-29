@@ -105,7 +105,7 @@ export function FreePlayPage() {
   return (
     <main className="main wide">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-        <h1>자유 연주</h1>
+        <h1>자유 연습</h1>
         <span className="small dim">채보 없이 전체 패드가 바로 울립니다</span>
       </div>
       <p className="small dim" style={{ marginBottom: 12 }}>

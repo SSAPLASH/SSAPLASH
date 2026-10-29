@@ -53,7 +53,7 @@ const HOWTO_STEPS = [
   '음원을 접수하면 작업 대기열에 들어갑니다.',
   '드럼 트랙과 반주를 분리합니다. 원본과 드럼 트랙은 처리 후 지웁니다.',
   '드럼 트랙으로 쉬움·보통·어려움 채보를 만듭니다.',
-  '완료되면 [악보 연주]나 ▶ 리듬 게임으로 바로 연주할 수 있습니다.',
+  '완료되면 [악보 연습]이나 ▶ 리듬 게임으로 바로 연주할 수 있습니다.',
 ];
 const HOWTO_MIDI = 'MIDI는 바로 채보가 만들어집니다(반주 없음).';
 
@@ -294,7 +294,7 @@ export function StudioPage() {
     <main className="main">
       <section className="hero" style={{ padding: '24px 0 18px', maxWidth: 'none' }}>
         <div className="studio-head">
-          <h1>내 곡</h1>
+          <h1>라이브러리</h1>
           {!firstVisit && (
             <button type="button" className="btn-primary" onClick={() => setDialogOpen(true)}>
               + 곡 올리기

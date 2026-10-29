@@ -37,7 +37,7 @@ export function MySongRow({ song, job, progress, justDone, onReupload }: Props) 
       {song.status === 'READY' && (
         <div className="studio-row-actions">
           <Link to={`/sheet?${query}`} className="btn-ghost as-button">
-            악보 연주
+            악보 연습
           </Link>
           <Link to={`/play?${query}`} className="btn-primary">
             리듬 게임

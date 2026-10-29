@@ -18,7 +18,7 @@ export interface RecentPlayItem {
 const MODE_LABEL: Record<RecentPlayItem['mode'], string> = {
   RHYTHM: '리듬 게임',
   SHEET: '악보 연습',
-  FREE: '자유 연주',
+  FREE: '자유 연습',
 };
 
 function whenOf(iso: string): string {
