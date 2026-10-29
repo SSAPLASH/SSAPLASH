@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_NAME_LEN, SONG_EDIT_UNCERTAIN_TEXT, diffMeta, isSongEditUncertain, songEditErrorText, validateMeta } from './songEdit';
+import { MAX_NAME_LEN, SONG_EDIT_UNCERTAIN_TEXT, diffMeta, isSongEditUncertain, menuKinds, songEditFailure, songEditErrorText, validateMeta } from './songEdit';
 
 describe('validateMeta', () => {
   it('제목 1~100자(trim 후), 아티스트 0~100자', () => {
@@ -45,6 +45,7 @@ describe('오류 문구', () => {
     ['COVER_INVALID', 'JPG·PNG·WebP 이미지만 쓸 수 있습니다.'],
     ['COVER_UNSUPPORTED', 'JPG·PNG·WebP 이미지만 쓸 수 있습니다.'],
     ['COVER_TOO_LARGE', '이미지가 너무 큽니다.'],
+    ['COVER_UNAVAILABLE', '지금은 커버를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요.'],
   ])('%s → 문구, 결과를 아는 실패', (code, text) => {
     expect(songEditErrorText(code)).toBe(text);
     expect(isSongEditUncertain(code)).toBe(false);
@@ -55,5 +56,35 @@ describe('오류 문구', () => {
       expect(songEditErrorText(code)).toBe(SONG_EDIT_UNCERTAIN_TEXT);
       expect(isSongEditUncertain(code)).toBe(true);
     }
+  });
+});
+
+describe('menuKinds', () => {
+  it('완료 곡은 커버 변경·곡 정보 수정·곡 삭제', () => {
+    expect(menuKinds('READY')).toEqual(['cover', 'meta', 'delete']);
+  });
+
+  it('실패 곡은 곡 삭제만', () => {
+    expect(menuKinds('FAILED')).toEqual(['delete']);
+  });
+
+  it('처리 중·알 수 없는 상태는 메뉴 없음', () => {
+    expect(menuKinds('PROCESSING')).toEqual([]);
+    expect(menuKinds('')).toEqual([]);
+  });
+});
+
+describe('songEditFailure', () => {
+  it('4xx는 코드 문구, 결과를 아는 실패', () => {
+    expect(songEditFailure(409, 'SONG_BUSY')).toEqual({ text: '채보를 만드는 중인 곡은 바꿀 수 없습니다.', uncertain: false });
+  });
+
+  it('5xx는 코드가 있어도 결과를 모른다. 단 503 COVER_UNAVAILABLE은 저장 전 실패', () => {
+    expect(songEditFailure(500, 'SONG_INVALID')).toEqual({ text: SONG_EDIT_UNCERTAIN_TEXT, uncertain: true });
+    expect(songEditFailure(503, 'COVER_UNAVAILABLE')).toEqual({ text: '지금은 커버를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요.', uncertain: false });
+  });
+
+  it('네트워크(status 0)는 결과를 모른다', () => {
+    expect(songEditFailure(0, 'NETWORK')).toEqual({ text: SONG_EDIT_UNCERTAIN_TEXT, uncertain: true });
   });
 });
