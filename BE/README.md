@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V18을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V21을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -377,6 +377,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
 | V17 | `V17__widen_telemetry_pad_and_clock_offset.sql` | `telemetry_events` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL), `clock_offset_ms` `double precision`과 CHECK `ck_telemetry_events_clock_offset_ms` | -152 |
 | V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
+| V20 | `V20__widen_hits_pad.sql` | `hits` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL 저장 실패 수정) | -142 |
+| V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
 
 규칙:
 
@@ -403,7 +405,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V18까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V21까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -934,6 +936,43 @@ AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트
 함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V18은 처리 시도 수와 임대를
 저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 명확한 일시적·복구 가능한 DB 예외도 같은 재시도 예산을 사용하며 그 밖의 런타임 오류는 실패 처리한다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
 결과는 임대 토큰이 일치할 때만 반영한다. 요청 본문·playId는 분석 로그에 남기지 않는다.
+
+## 약점 분석 보정용 비식별 내보내기 뷰 (142번)
+
+AI 약점 분석 임계값 보정 배치가 원본 테이블 대신 읽는 읽기 전용 뷰 `coach_export_v`(V21)와, 이 뷰만 읽을 수 있는
+로그인 불가 그룹 역할 `coach_export_reader`다. 뷰의 열 목록이 곧 비식별 허용 목록이며, 열을 늘리려면 AI와 먼저 합의한다.
+앱은 이 뷰를 조회하지 않는다.
+
+행 조건:
+
+- `consent = true`, `mode`가 RHYTHM/SHEET인 세션만. 타격(`hits`)이 없는 세션은 행이 없다.
+- `users.role = 'ADMIN'`인 회원(팀원)의 세션은 뺀다. 팀원은 운영 `ADMIN_EMAILS`에 등록해 다음 로그인부터 ADMIN이 된다.
+- 탈퇴 회원의 동의 세션은 포함한다. 탈퇴 시 `consent=true` 세션을 남기는 목적이 분석 활용이다.
+- 위 조건을 만족하는 세션 중 회원별 최근 10개(`ended_at` 내림차순). 회원 ID는 순위 계산에만 쓰고 내보내지 않는다.
+
+열(이 순서): `session_key`, `mode`, `input_source`, `song_ref`, `song_origin`, `perfect_ms`, `good_ms`, `difficulty`,
+`played_date`, `payload_schema_version`, `seq`, `t_ms`, `stick_id`, `pad`, `velocity`, `peak_accel`, `judgement`,
+`matched_note_id`, `delta_ms`. 한 행이 타격 한 건이다.
+
+- `session_key`는 세션 UUID와 세션 설정 `app.export_salt`를 이어 붙인 SHA-256 hex다. 소금이 없는 세션에서는 어떤 열을
+  조회하든 `unrecognized configuration parameter`(SQLState 42704)로 실패하고, 빈 문자열이면 행이 나오지 않는다.
+- 개인 곡(`songs.owner_id`가 있는 MIDI·AUDIO)은 `song_ref`가 NULL, `song_origin`이 `PRIVATE`다. 공용 곡은 곡 ID와 `PUBLIC`.
+- `difficulty`는 채보 버전의 난이도, `played_date`는 `created_at`의 KST 날짜다.
+- 뷰는 소유자 권한으로 원본을 읽고 `security_barrier`다. 그룹 역할에는 스키마 USAGE와 뷰 SELECT만 있다.
+
+운영 적용(Infra, 비밀 값은 저장소에 두지 않는다):
+
+1. 배포 시 Flyway가 V20·V21을 적용한다. 그룹 역할 생성에는 앱 DB 계정의 `CREATEROLE`(현재는 슈퍼유저)이 필요하다.
+2. 접속 계정을 만든다. `CREATE ROLE coach_export LOGIN PASSWORD '…'`(이름은 자유).
+3. `GRANT coach_export_reader TO coach_export`.
+4. `ALTER ROLE coach_export SET app.export_salt = '…'`. 빈 문자열은 쓰지 않는다. 소금을 바꾸면 `session_key`가 모두 바뀐다.
+5. 운영 `.env`의 `ADMIN_EMAILS`에 팀원 로그인 이메일을 넣고 재기동한다.
+
+배치는 `SELECT * FROM coach_export_v ORDER BY session_key, seq`를 한 번 서버 커서로 읽는다. 뷰는 조회마다 다시 계산하며,
+동의가 바뀌거나 탈퇴로 세션이 지워지면 다음 조회부터 빠진다.
+
+`CoachExportViewMigrationTest`가 V20(기존 행 보존·길이 16·HIHAT_PEDAL 저장)과 V21(열 목록, 행 조건, 최근 10개, 개인 곡,
+KST 날짜, 소금 변경·부재, 그룹 역할의 원본 접근 거부, 같은 클러스터 재적용)을 검사한다.
 
 ## 탈퇴 후 곡·파일 정리 (37번)
 
