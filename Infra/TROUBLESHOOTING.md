@@ -18,7 +18,7 @@
 | F. 모니터링·로그 | F1 로그의 토큰·이메일 누출 |
 | G. 작업 방식 | G1 서버 명령을 다른 터미널에서 실행, G2 `cmd`와 PowerShell, G3 `amend` 후 이력 갈라짐, G4 키 파일 이름 오타, G5 Jira 이슈를 잘못 수정, G6 `.gitignore` 충돌, G7 GitLab 일시 장애로 푸시 실패 |
 | H. 보안 점검 | H1 ufw 규칙이 Docker 공개 포트를 막지 못함, H2 콘솔 권한 없이 443 개방 확인, H3 붙여넣기 오류(`2~`, 여러 줄 명령 합쳐짐), H4 되돌리기 명령이 함께 실행되어 시험이 무효, H5 서버 `.env`에 이후 추가된 변수 누락, H6 PC에서 외부 포트 스캔이 네트워크 오류로 중단, H7 SSH 창이 멈춘 것처럼 보이고 Ctrl+C도 안 먹힘, H8 시험 명령이 실패했는데 결과가 `0`으로 보여 무효 시험 |
-| I. AI 서버·연동 | I1 배포한 AI 서버의 요약 로그가 Loki에 안 나옴, I2 운영에 없는 FE 기능을 "있다"고 안내, I3 `pytest`의 `TestClient`가 이벤트 루프를 못 만듦(`WinError 10014`) |
+| I. AI 서버·연동 | I1 배포한 AI 서버의 요약 로그가 Loki에 안 나옴, I2 운영에 없는 FE 기능을 "있다"고 안내, I3 `pytest`의 `TestClient`가 이벤트 루프를 못 만듦(`WinError 10014`), I4 일회성 컨테이너의 로그를 Alloy가 놓칠 수 있음(예방), I5 예약 파이프라인에서 기존 job이 같이 도는 문제(예방), I6 정책 파일이 이미지에 없는데 조용히 빈 정책으로 동작(코드로 막음) |
 
 ---
 
@@ -351,3 +351,26 @@ AI 서버(`ai-api`)에 약점 구간 분석을 올리면서 겪은 문제다. �
 - **해결:** 요청 처리 로직을 이벤트 루프 없이 부를 수 있는 동기 함수 `process_body`로 분리해 대부분의 시험이 이 함수를 직접 호출하게 했다. 라우팅 연결만 확인하는 시험 3개는 루프를 못 만드는 PC에서 이유를 밝히고 건너뛰게 했다(`pytest.skip`). 건너뛴 시험은 CI(Linux)에서 확인한다.
 - **재발 방지:** 환경 문제를 시험 로직 우회로 숨기지 않고 **건너뛴 이유를 출력에 남긴다.** 이 PC에서 실패해도 코드 결함으로 단정하기 전에 같은 계열의 이전 사례(A2, H6)를 확인한다. 참고로 전체 테스트의 기존 12건(`test_bss_eval_metrics`, `test_benchmark_runner`)은 ffmpeg가 없어서 이 PC에서 실패하며 이번 변경과 무관하다.
 - **근거:** `AI/tests/server/test_weak_segments.py`, `AI/src/ssaplash_ai/server/weak_segments.py`(`process_body`).
+
+### I4. 일회성 컨테이너의 로그를 Alloy가 놓칠 수 있음 (예방, 서버 확인 전)
+- **증상(예상, 아직 겪지 않음):** 약점 분석 보정 배치(`coach-calibration`)는 1분 안에 끝나는 일회성 컨테이너다. 끝에 남기는 상태 줄(`coach-calibration status=...`)을 Loki 알림이 보게 설계했는데, 이 줄이 Loki에 안 들어갈 수 있다.
+- **원인(공식 문서로 확인):** Alloy `discovery.docker`의 새로고침 주기(`refresh_interval`) 기본값이 **1분**이다. 컨테이너가 떠 있는 동안 한 번도 새로고침이 안 되면 로그 수집 대상에 오르지 못한다. 새로 발견한 컨테이너의 로그를 처음부터 읽는지는 문서에 없다.
+- **해결(예방):** 탐색 주기를 5초로 줄였다(`monitoring/alloy/config.alloy`). 배치는 시작 직후와 종료 직전에 15초씩 기다린 뒤 끝나게 해서(`docker-compose.yml`의 `entrypoint`), 탐색이 붙은 뒤에 상태 줄이 나오고 줄이 읽히기 전에 컨테이너가 사라지지 않게 했다. 그래서 한 번 실행에 최소 30초가 걸린다.
+- **확인:** `docker compose config` 렌더링과 래퍼 스크립트(비밀번호 누락 중단, 인자·종료 코드 전달)는 시험했다. **Alloy가 일회성 컨테이너의 줄을 실제로 Loki에 넣는지는 서버에서 첫 실행 뒤 `{service="coach-calibration"}`로 확인해야 한다.**
+- **재발 방지:** 일회성·단명 컨테이너의 로그에 의존하는 알림은 수집이 붙는 시간을 먼저 의심한다. 설정 파일을 마운트해 쓰는 Alloy는 `up -d`로 다시 읽지 않으므로 변경 뒤 `docker compose -p infra restart alloy`가 필요하다. 이 변경이 반영되기 전에는 "36시간 실행 기록 없음" 알림을 켜지 않는다(켜면 계속 울린다).
+- **근거:** `Infra/docker-compose.yml`(`coach-calibration`), `Infra/monitoring/alloy/config.alloy`, `Infra/README.md`("약점 분석 보정 배치").
+
+### I5. 예약 파이프라인에서 기존 job이 같이 도는 문제 (예방, MR 파이프라인에서 확인 필요)
+- **증상(예상, 아직 겪지 않음):** 보정 배치를 GitLab 예약 파이프라인으로 돌리려고 하니, 예약 파이프라인에서 `lint`·`test`·`build`와 BE 시험(`be-*`)이 같이 돌고 `main`용 수동 배포·롤백 job도 대기 상태로 생기게 된다.
+- **원인:** `workflow.rules`가 `main`이면 파이프라인을 만들고, 규칙이 없는 job은 모든 파이프라인에 들어간다. `be-*`의 `rules:changes`는 예약 파이프라인에서 **항상 참**으로 계산된다. 수동 배포·롤백은 `main`이면 만들어진다.
+- **해결(예방):** 숨은 job `.calibration-guard`(`!reference`)를 만들어 `lint`·`test`·`build`·`.be-job`·`.deploy-job`의 `rules` 맨 앞에 붙였다. `COACH_CALIBRATION == "true"`이거나 예약 파이프라인이면 `when: never`다. 보정 job은 그 조건에서만 만들어진다. 일반 파이프라인(MR, `main` 병합)의 규칙은 이전과 같다.
+- **주의:** `COACH_CALIBRATION`을 프로젝트 CI/CD 변수로 등록하면 모든 파이프라인이 보정 전용이 되어 다른 job이 빠진다.
+- **확인:** `.gitlab-ci.yml`을 파싱해 구조는 확인했다. GitLab의 `!reference` 처리와 실제 파이프라인 생성은 **MR 파이프라인이 만들어질 때** 확인한다.
+- **재발 방지:** 예약·수동 전용 job을 넣을 때는 기존 job이 그 파이프라인에 들어가는지부터 점검한다. `rules:changes`는 예약·수동 파이프라인에서 의미가 다르다.
+
+### I6. 정책 파일이 서버 이미지에 없는데 조용히 빈 정책으로 동작 (코드로 막음)
+- **증상(문서를 쓰다 발견, 운영에서 겪지 않음):** 보정 배치의 정책 파일(`AI/configs/coach/calibration_policy.yaml`)이 서버 이미지에 없는데, 정책 로더가 파일이 없으면 오류 없이 **빈 정책**(후보 없음)으로 넘어가서, 컨테이너에서 정책 마운트를 빠뜨려도 배치가 정상처럼 돌았을 것이다.
+- **원인:** `AI/Dockerfile`이 `COPY src ./src`만 해서 `configs/`는 이미지에 안 들어간다. 로더는 "없으면 빈 정책"으로 만들어져 있었다.
+- **해결:** 경로를 **명시했는데** 파일이 없으면 `PolicyError`로 실패하게 했다(`SSAPLASH_CALIBRATION_POLICY` 또는 `--policy`). 기본 경로만 빈 정책을 허용한다. 컨테이너는 정책 디렉터리를 읽기 전용으로 마운트하고 경로를 환경 변수로 준다.
+- **재발 방지:** "없으면 기본값으로" 동작은 개발 편의와 운영 사고를 가른다. 운영에서 필수인 파일을 명시했는데 없으면 조용히 넘어가지 않고 실패하게 한다.
+- **근거:** `AI/src/ssaplash_ai/coach_calibration/policy.py`, `AI/tests/coach_calibration/test_policy.py`, `Infra/docker-compose.yml`.
