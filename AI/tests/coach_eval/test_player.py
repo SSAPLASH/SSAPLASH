@@ -7,7 +7,7 @@ import statistics
 import pytest
 
 from ssaplash_ai.coach import AnalysisRequest
-from ssaplash_ai.coach_eval.chart import LAYOUTS, make_chart
+from ssaplash_ai.coach_eval.chart import LAYOUT_NAMES, make_chart
 from ssaplash_ai.coach_eval.player import PERFECT_MS, PlayerModel, simulate
 
 GOOD_MS_VALUES = (30.0, 50.0, 60.0, 100.0, 150.0)
@@ -21,13 +21,22 @@ def _note_times(play):
     return {n.note_id: n.time_ms for n in play.chart}
 
 
-@pytest.mark.parametrize("layout", sorted(LAYOUTS))
+@pytest.mark.parametrize("layout", LAYOUT_NAMES)
 @pytest.mark.parametrize("good_ms", GOOD_MS_VALUES)
 def test_request_passes_be_schema(layout, good_ms):
     """어떤 배치·판정 폭에서도 요청이 `AnalysisRequest` 검증을 통과한다."""
     play = simulate(make_chart(120, layout), PlayerModel(sigma=0.4, p_stray=0.1), good_ms, seed=1)
     request = AnalysisRequest.model_validate(play.request)
     assert request.timingWindows.goodMs == good_ms
+
+
+def test_random_layout_is_seeded_and_has_no_fixed_predecessor():
+    a = make_chart(300, "random", seed=1)
+    assert a == make_chart(300, "random", seed=1)
+    assert a != make_chart(300, "random", seed=2)
+    # 스네어 앞에 오는 패드가 하나로 정해져 있지 않다
+    before_snare = {a[i - 1].pad for i in range(1, len(a)) if a[i].pad == "SNARE"}
+    assert len(before_snare) >= 4
 
 
 def test_seq_is_contiguous_and_sorted_by_time():
