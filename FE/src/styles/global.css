@@ -2739,6 +2739,25 @@ a.my-list-row:focus-visible {
 .delete-dialog-detail {
   margin: 0;
 }
+/* 삭제된 곡 표시 (CHART-001 U7·U11): 제목은 그대로 두고 옆에 흐린 배지 */
+.deleted-song-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.my-list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 /* 내 곡 알림 (U8) */
 .studio-toast-region {
   position: fixed;
