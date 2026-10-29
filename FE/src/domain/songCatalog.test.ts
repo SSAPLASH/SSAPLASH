@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { isPlayableStatus, songStatusView, sortMineSongs, summarizeMineSongs, type SongSummary } from './songCatalog';
+import { isPlayableStatus, songDetailFromDto, songFromDto, songStatusView, sortMineSongs, summarizeMineSongs, type SongSummary } from './songCatalog';
+
+describe('coverUrl 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('문자열이면 그대로 담는다', () => {
+    expect(songFromDto({ ...base, coverUrl: 'https://x/c.jpg' }).coverUrl).toBe('https://x/c.jpg');
+  });
+
+  it('없거나 null·빈 문자열·문자열이 아니면 null', () => {
+    expect(songFromDto(base).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: null }).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: '' }).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: 123 }).coverUrl).toBeNull();
+  });
+
+  it('상세에도 담긴다', () => {
+    expect(songDetailFromDto({ ...base, coverUrl: 'https://x/c.jpg', charts: [] }).coverUrl).toBe('https://x/c.jpg');
+  });
+});
 
 function song(id: number, status: string, createdAt: string): SongSummary {
   return {
@@ -14,6 +33,7 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     hasAccompaniment: false,
     difficulties: [],
     createdAt,
+    coverUrl: null,
   };
 }
 
