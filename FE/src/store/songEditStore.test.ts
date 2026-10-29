@@ -72,6 +72,16 @@ describe('songEditStore', () => {
     expect(useSongEdit.getState().error).toMatchObject({ text: SONG_EDIT_UNCERTAIN_TEXT, uncertain: true });
   });
 
+  it('503 COVER_UNAVAILABLE(저장소 장애)은 저장 전 실패라 문구를 보이고 uncertain 아님', async () => {
+    mockFetch(() => problem(503, 'COVER_UNAVAILABLE'));
+    await useSongEdit.getState().saveCover(7, { kind: 'set', blob: new Blob(['x'], { type: 'image/jpeg' }) });
+    expect(useSongEdit.getState().error).toEqual({
+      code: 'COVER_UNAVAILABLE',
+      text: '지금은 커버를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+      uncertain: false,
+    });
+  });
+
   it('네트워크 실패·알 수 없는 코드는 uncertain', async () => {
     mockFetch(() => {
       throw new TypeError('fail');

@@ -1,8 +1,10 @@
 // 곡 API (BE 96, 설계 3-1). 응답 숫자 id·bpm 변환까지만 하고 Chart 변환은 domain/chartMapping이 맡는다.
 import type { UploadDraft } from '@/domain/chartJob';
 import type { MidiDraft } from '@/domain/midiUpload';
+import { availabilityFromFailure, type SongAvailability } from '@/domain/songAvailability';
 import type { SongMetaPatch } from '@/domain/songEdit';
 import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongPage, type SongScope } from '@/domain/songCatalog';
+import { ApiError } from './error';
 import { apiFetch } from './http';
 
 export interface ListSongsParams {
@@ -27,6 +29,17 @@ export async function listSongs(params: ListSongsParams, signal?: AbortSignal): 
 export async function getSong(id: number, signal?: AbortSignal): Promise<SongDetail> {
   const body = await apiFetch<Record<string, unknown>>(`/api/v1/songs/${id}`, { signal });
   return songDetailFromDto(body);
+}
+
+/** 연주 기록의 곡이 아직 있는지(U7). 상세가 오면 available, 404 SONG_NOT_FOUND면 deleted, 그 밖의 실패는 unknown. 취소는 그대로 던진다 */
+export async function checkSongAvailability(id: number, signal?: AbortSignal): Promise<SongAvailability> {
+  try {
+    await getSong(id, signal);
+    return 'available';
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    return availabilityFromFailure(e instanceof ApiError ? e : null);
+  }
 }
 
 /** 음원 접수 202 응답 */

@@ -1,4 +1,4 @@
-// 커버 변경 창 (설계 CHART-001 4-2). 미리보기 · 이미지 고르기 · 커버 지우기 · 저장. 고른 이미지는 가운데 정사각형 512 JPEG로 만들어 보여 주고,
+// 커버 변경 창 (설계 CHART-001 4-2). 미리보기 · 이미지 고르기 · 커버 지우기(기본 커버면 비활성) · 저장(바뀐 게 없으면 비활성). 고른 이미지는 가운데 정사각형 512 JPEG로 만들어 보여 주고,
 // 저장을 눌러야 onSave로 넘긴다(여기서는 요청하지 않는다).
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongSummary } from '@/domain/songCatalog';
@@ -76,18 +76,17 @@ export function SongCoverDialog({ song, busy, error, onSave, onClose }: Props) {
     <EditDialog title="커버 변경" locked={busy} onClose={onClose}>
       <div className="col" style={{ gap: 12 }}>
         <div className="cover-dialog-preview">
-          <SongCover key={shownUrl ?? 'default'} title={song.title} coverUrl={shownUrl} />
+          <SongCover key={shownUrl ?? 'default'} coverUrl={shownUrl} />
         </div>
         <input ref={inputRef} type="file" accept={COVER_ACCEPT} hidden onChange={(e) => void onPick(e)} disabled={busy} />
         <div className="row" style={{ justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn-ghost" onClick={() => inputRef.current?.click()} disabled={busy || reading}>
             {reading ? '이미지 처리 중…' : '이미지 고르기'}
           </button>
-          {canClear && (
-            <button type="button" className="btn-ghost btn-danger" onClick={clear} disabled={busy || reading}>
-              커버 지우기
-            </button>
-          )}
+          {/* 기본 커버(CD)일 때는 지울 것이 없어 비활성으로 둔다 */}
+          <button type="button" className="btn-ghost btn-danger" onClick={clear} disabled={busy || reading || !canClear}>
+            커버 지우기
+          </button>
         </div>
         <p className="small faint" style={{ textAlign: 'center' }}>
           JPG·PNG·WebP, 10 MiB 이하. 가운데를 정사각형으로 잘라 씁니다.

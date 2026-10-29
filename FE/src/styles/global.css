@@ -2533,12 +2533,70 @@ a.my-list-row:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: radial-gradient(120% 120% at 30% 20%, var(--surface-2) 0%, var(--surface) 45%, var(--stage-deep) 100%);
 }
-.song-cover-letter {
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 56px;
-  font-weight: 800;
-  line-height: 1;
+/* 기본 커버 CD (v0.4): 모든 곡 공통 */
+.song-cover-disc {
+  width: 86%;
+  height: 86%;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.song-cover-disc .disc-body {
+  fill: #b9c0cf;
+}
+.song-cover-disc .disc-groove {
+  fill: none;
+  stroke: rgba(14, 19, 32, 0.18);
+  stroke-width: 0.6;
+}
+.song-cover-disc .disc-label {
+  fill: var(--brass);
+}
+.song-cover-disc .disc-hole {
+  fill: var(--stage-deep);
+}
+/* 완료 곡 ▶ 플레이 (D4-2): 커버 오른쪽 아래. 마우스 기기는 카드 hover·focus 때, 터치 기기는 항상 보인다 */
+.song-card-play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--brass);
+  color: #1a1408;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.song-card-play svg {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+.song-card-play:hover {
+  background: var(--perfect);
+}
+.song-card:hover .song-card-play,
+.song-card:focus-within .song-card-play {
+  opacity: 1;
+  transform: none;
+}
+@media (hover: none) {
+  .song-card-play {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-card-play {
+    transition: none;
+  }
 }
 .song-card-body {
   display: flex;
@@ -2575,10 +2633,6 @@ a.my-list-row:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
-}
-.song-card-fail p {
-  flex: 1 1 100%;
-  margin: 0;
 }
 @media (max-width: 900px) {
   .song-grid {
@@ -2650,6 +2704,87 @@ a.my-list-row:focus-visible {
   max-width: 440px;
   max-height: calc(100vh - 32px);
   overflow-y: auto;
+}
+.dialog-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dialog-close:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.dialog-close:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.field-help {
+  margin: 0;
+}
+.delete-dialog-question {
+  margin: 0;
+  font-weight: 600;
+}
+.delete-dialog-detail {
+  margin: 0;
+}
+/* 삭제된 곡 표시 (CHART-001 U7·U11): 제목은 그대로 두고 옆에 흐린 배지 */
+.deleted-song-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.my-list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* 내 곡 알림 (U8) */
+.studio-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.studio-toast {
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: studio-toast-in 0.18s ease-out;
+}
+@keyframes studio-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-toast {
+    animation: none;
+  }
 }
 .cover-dialog-preview {
   width: 220px;
