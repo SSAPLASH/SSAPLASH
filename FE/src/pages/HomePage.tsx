@@ -36,7 +36,7 @@ export function HomePage() {
           <span className="num">2단계</span>
           <h2>리듬 게임</h2>
           <p className="dim">내장 채보를 따라 칩니다. Perfect · Good · Miss 판정, 콤보, 결과 리포트.</p>
-          <span className="status">자유 연주는 상단 메뉴에서</span>
+          <span className="status">자유 연습은 상단 메뉴에서</span>
         </Link>
         <Link to="/sheet" className="card step">
           <span className="num">연습</span>
