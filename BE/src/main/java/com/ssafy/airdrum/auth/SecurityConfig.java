@@ -57,7 +57,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/refresh", "/api/auth/logout").permitAll()
 						.requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
 						.permitAll()
-						.requestMatchers("/internal/**").permitAll()
+						.requestMatchers("/internal/**", "/ws/jobs/**").permitAll()
 						// 공개 경로 처리 중 오류가 오류 페이지로 넘어가도 401로 바뀌지 않게 한다.
 						.requestMatchers("/error").permitAll()
 						.anyRequest().authenticated())
