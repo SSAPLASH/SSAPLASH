@@ -37,7 +37,15 @@ extern "C" {
 #define FW_MINOR 0                     /* develop-EMB 병합 전 */
 #define FW_TAG   "BOOT 1.0 nrf52"
 
-#define BLE_NAME "SSAPLASH-STICK"
+/* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
+ * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
+ * 실행 중 SET_PARAM 0x07로도 바꿀 수 있지만 껐다 켜면 이 값으로 돌아온다 */
+#define STICK_ROLE 0
+#if STICK_ROLE == 0
+#define BLE_NAME "SSAPLASH-STICK-L"
+#else
+#define BLE_NAME "SSAPLASH-STICK-R"
+#endif
 
 #define PIN_IMU_INT  3                 /* LSM6DS3TR-C INT1 (Adafruit 핀맵) */
 #define PIN_USER_SW  7
@@ -131,7 +139,7 @@ static hit_detector_t hd;
 static pose_t         pose;
 static pad_table_t    pads;
 static float          bias_dps[3];
-static uint8_t        role = 1;                        /* 0 왼손, 1 오른손 */
+static uint8_t        role = STICK_ROLE;               /* 0 왼손, 1 오른손 */
 static uint8_t        mode = 0;                        /* 0 연주, 1 설정(+POSE) */
 static int16_t        pose_rate_hz = 50;
 static int16_t        haptic_enable = 1, haptic_strength = 200;
@@ -169,10 +177,60 @@ static void send_log(const char *s)
 #endif
 }
 
+/* ===================== 배터리 =====================
+ * Feather nRF52840 Sense: VBAT = A6 (PIN_VBAT), 100k/100k 분압이라 실제 전압 = 읽은 값 × 2.
+ * ADC 기준 3.0V, 12비트 → 1 LSB = 0.732mV (분압 전).
+ * LiPo는 완전 방전하면 상하므로 BAT_OFF_MV 아래가 연속 BAT_OFF_N번이면 스스로 꺼진다 (USER 버튼으로 다시 켬).
+ * USB가 꽂혀 있으면 충전 전압(~4.2V)이 읽혀서 꺼지지 않는다 */
+#define BAT_WARN_MV  3500
+#define BAT_OFF_MV   3300
+#define BAT_OFF_N    3            /* 5초마다 읽으니 15초 연속 */
+
+static uint16_t bat_mv = 0;
+static uint8_t  bat_pct = 0xFF;
+
+static uint16_t bat_read_mv()
+{
+    uint32_t sum = 0;
+    for (int i = 0; i < 8; i++) sum += analogRead(PIN_VBAT);
+    return (uint16_t)(sum / 8 * 0.73242188f * 2.0f);
+}
+
+/* 1셀 LiPo 무부하 곡선 근사 (mV, %) */
+static uint8_t bat_percent(uint16_t mv)
+{
+    static const uint16_t MV[]  = {4200, 4100, 4000, 3900, 3850, 3800, 3750, 3700, 3650, 3500, 3300};
+    static const uint8_t  PCT[] = { 100,   90,   78,   64,   55,   45,   35,   22,   12,    5,    0};
+    if (mv >= MV[0]) return 100;
+    for (int i = 1; i < (int)(sizeof MV / sizeof MV[0]); i++)
+        if (mv >= MV[i]) return (uint8_t)(PCT[i] + (PCT[i - 1] - PCT[i]) * (mv - MV[i]) / (MV[i - 1] - MV[i]));
+    return 0;
+}
+
 static void send_status()
 {
     uint8_t b[PKT_MAX];
-    send(b, pkt_status(b, flags(), 0xFF, 0, FW_MAJOR, FW_MINOR));
+    send(b, pkt_status(b, flags(), bat_pct, 0, FW_MAJOR, FW_MINOR));
+}
+
+static void send_log(const char *s);
+
+/* 5초마다: 전압 읽기, 30초마다 LOG "BAT 3987mV 82%" (사용 시간 측정용), 저전압이면 경고·꺼짐 */
+static void bat_update()
+{
+    static uint8_t n_low = 0, k = 0;
+    static bool warned = false;
+    bat_mv = bat_read_mv();
+    bat_pct = bat_percent(bat_mv);
+    char s[19];
+    if (k++ % 6 == 0) { snprintf(s, sizeof s, "BAT %umV %u%%", bat_mv, bat_pct); send_log(s); }
+    if (bat_mv < BAT_WARN_MV && !warned) { warned = true; send_log("BAT LOW"); }
+    n_low = bat_mv < BAT_OFF_MV ? n_low + 1 : 0;
+    if (n_low >= BAT_OFF_N) {
+        send_log("BAT OFF");
+        delay(200);                                     /* 마지막 LOG가 나가도록 */
+        systemOff(PIN_USER_SW, LOW);                    /* 깊은 잠. USER 버튼 누르면 재부팅 */
+    }
 }
 
 static void send_param(uint8_t id, int16_t v)
@@ -378,6 +436,8 @@ static void measure_bias(float acc_mean_ms2[3])
 void app_setup()
 {
     Serial.begin(115200);
+    analogReference(AR_INTERNAL_3_0);                   /* 배터리 전압용 ADC (VBAT, 분압 1/2) */
+    analogReadResolution(12);
     uint32_t t0 = millis();
     while (!Serial && millis() - t0 < 1500) delay(10);  /* PC 없이도 1.5초 후 시작 (배터리 단독) */
 
@@ -408,6 +468,7 @@ void app_setup()
     measure_bias(acc0);
     pose_init(&pose, TIP_AXIS);
     pose_start(&pose, acc0);
+    bat_update();
     send_status();
 #if SERIAL_MODE == SERIAL_TEXT
     if (Serial) Serial.print("n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed\r\n");
@@ -448,7 +509,7 @@ void app_loop()
     btn_prev = btn;
 
     /* 상태 5초마다 */
-    if (millis() - t_status > 5000) { t_status = millis(); send_status(); }
+    if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 
     /* IMU 새 샘플 */
     uint32_t cnt = drdy_count;
