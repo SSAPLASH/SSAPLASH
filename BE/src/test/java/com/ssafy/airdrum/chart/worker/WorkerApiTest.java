@@ -180,9 +180,108 @@ class WorkerApiTest {
         assertThat(raw(path("/results/transcription"),T1,result,200)).isEqualTo(completed);
         var altered=new HashMap<>(result); altered.put("result",Map.of("different",true));
         raw(path("/results/transcription"),T1,altered,409);
-        assertThat(db.queryForObject("SELECT count(*) FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?",Integer.class,song)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT count(*) FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?",Integer.class,song)).isEqualTo(3);
         assertThat(db.queryForObject("SELECT progress FROM chart_jobs WHERE id=?",Integer.class,job)).isEqualTo(100);
         assertThat(db.queryForObject("SELECT metrics->'transcription'->>'durationMs' FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("2");
+    }
+    UUID prepareTranscription() throws Exception {
+        UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        var files=outputs(id);
+        raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1))),200);
+        return id;
+    }
+    Map<String,Object> chartResult(String status, boolean ticks, String version) {
+        var notes=new ArrayList<Map<String,Object>>();
+        for (int i=0;i<4;i++) {
+            var note=new LinkedHashMap<String,Object>();
+            note.put("noteId","note"+i); note.put("timeMs",100+i*250); note.put("pad",i==1 ? "HIHAT" : "SNARE");
+            note.put("extra",Map.of("source",i));
+            if (i==2) note.put("velocityHint",20);
+            if (ticks) note.put("notation",Map.of("tick",i*240,"durationTicks",120,"voice",1));
+            notes.add(note);
+        }
+        var timing=new LinkedHashMap<String,Object>();
+        timing.put("bpm",120); timing.put("offsetMs",100); timing.put("timeSignature","4/4");
+        if(ticks) { timing.put("ppq",480); timing.put("tempoMap",List.of(Map.of("tick",0,"bpm",120))); timing.put("timeSignatureMap",List.of(Map.of("tick",0,"numerator",4,"denominator",4))); }
+        return Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion",version,"metrics",Map.of(),
+                "charts",List.of(Map.of("difficulty","NORMAL","notationStatus",status,"notes",notes,"timing",timing)));
+    }
+    @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
+        UUID id=prepareTranscription();
+        var input=chartResult("READY",true,"x".repeat(50));
+        var envelope=envelope(id,UUID.randomUUID(),input);
+        String receipt=raw(path("/results/transcription"),T1,envelope,200);
+        assertThat(json.readTree(receipt).path("chartVersionIds").size()).isEqualTo(3);
+        assertThat(raw(path("/results/transcription"),T1,envelope,200)).isEqualTo(receipt);
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.note_count,v.generator_version,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        assertThat(rows).hasSize(3);
+        var byDifficulty=new HashMap<String,Map<String,Object>>();
+        rows.forEach(row->byDifficulty.put((String)row.get("difficulty"),row));
+        var hard=byDifficulty.get("HARD"); var normal=byDifficulty.get("NORMAL"); var easy=byDifficulty.get("EASY");
+        JsonNode original=json.valueToTree(input).path("charts").get(0).path("notes");
+        assertThat(json.readTree((String)hard.get("notes"))).isEqualTo(original);
+        assertThat((Integer)hard.get("note_count")).isGreaterThanOrEqualTo((Integer)normal.get("note_count"));
+        assertThat((Integer)normal.get("note_count")).isGreaterThanOrEqualTo((Integer)easy.get("note_count"));
+        for (var row:List.of(normal,easy)) {
+            var notes=json.readTree((String)row.get("notes")); int previous=-1;
+            for(var note:notes) { int index=Integer.parseInt(note.path("noteId").asString().substring(4)); assertThat(index).isGreaterThan(previous); assertThat(note).isEqualTo(original.get(index)); previous=index; }
+            assertThat((String)row.get("generator_version")).hasSize(50).endsWith("+midi-rule-1.1");
+            assertThat(row.get("notation_status")).isEqualTo("READY");
+        }
+        assertThat(hard.get("generator_version")).isEqualTo("x".repeat(50));
+    }
+    @Test void unavailableUsesVirtualTicksAndDefaultVelocity() throws Exception {
+        UUID id=prepareTranscription(); var input=chartResult("UNAVAILABLE",false,"v1");
+        raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200);
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        var easy=rows.stream().filter(r->r.get("difficulty").equals("EASY")).findFirst().orElseThrow();
+        var notes=json.readTree((String)easy.get("notes"));
+        assertThat(notes.size()).isEqualTo(1);
+        assertThat(notes.get(0).path("noteId").asString()).isEqualTo("note0");
+        assertThat(easy.get("notation_status")).isEqualTo("UNAVAILABLE");
+    }
+    @Test void pendingTicksFallbackPreservesOriginalDuplicates() throws Exception {
+        UUID id=prepareTranscription();
+        var timing=Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4","ppq",480);
+        var weak=Map.of("noteId","weak","timeMs",0,"pad","SNARE","velocityHint",10,"notation",Map.of("tick",0,"durationTicks",120,"voice",1));
+        var stronger=Map.of("noteId","stronger","timeMs",1,"pad","SNARE","velocityHint",20,"notation",Map.of("tick",0,"durationTicks",120,"voice",1));
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","PENDING","timing",timing,"notes",List.of(weak,stronger))));
+        raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200);
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        for(var row:rows) {
+            var notes=json.readTree((String)row.get("notes"));
+            assertThat(notes).isEqualTo(json.valueToTree(List.of(weak,stronger)));
+        }
+    }
+    @Test void duplicateTickAndPadSelectsTheCorrectOriginal() throws Exception {
+        UUID id=prepareTranscription();
+        var timing=Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4","ppq",480);
+        var weak=Map.of("noteId","weak","timeMs",0,"pad","SNARE","velocityHint",60,"notation",Map.of("tick",0,"durationTicks",120,"voice",1));
+        var stronger=Map.of("noteId","stronger","timeMs",1,"pad","SNARE","velocityHint",100,"notation",Map.of("tick",0,"durationTicks",120,"voice",1));
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","PENDING","timing",timing,"notes",List.of(weak,stronger))));
+        raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200);
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        for(var row:rows) if(!row.get("difficulty").equals("HARD")) {
+            var notes=json.readTree((String)row.get("notes")); assertThat(notes.size()).isEqualTo(1);
+            assertThat(notes.get(0)).isEqualTo(json.valueToTree(stronger));
+        }
+    }
+    @Test void laterInsertFailuresRollBackAllResults() throws Exception {
+        UUID id=prepareTranscription();
+        try {
+            db.execute("CREATE OR REPLACE FUNCTION worker_test_fail_chart() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.difficulty = current_setting('worker_test.fail_difficulty', true) THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$");
+            db.execute("CREATE TRIGGER worker_test_fail_chart BEFORE INSERT ON charts FOR EACH ROW EXECUTE FUNCTION worker_test_fail_chart()");
+            for (String difficulty:List.of("NORMAL","EASY")) {
+                // DB 연결마다 적용되는 테스트 설정 대신 트리거 함수를 대상 난이도로 바꾼다.
+                db.execute("CREATE OR REPLACE FUNCTION worker_test_fail_chart() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.difficulty = '"+difficulty+"' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$");
+                raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),transcription()),500);
+                assertThat(db.queryForObject("SELECT count(*) FROM charts WHERE song_id=?",Integer.class,song)).isZero();
+                assertThat(db.queryForObject("SELECT count(*) FROM chart_job_results WHERE job_id=? AND stage='TRANSCRIBING'",Integer.class,job)).isZero();
+                assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("TRANSCRIBING");
+            }
+        } finally { db.execute("DROP TRIGGER IF EXISTS worker_test_fail_chart ON charts"); db.execute("DROP FUNCTION IF EXISTS worker_test_fail_chart()"); }
     }
     @Test void invalidResultCommitsFailureAndStorageOutageDoesNot() throws Exception {
         UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200)); var files=outputs(id);
