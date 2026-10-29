@@ -273,3 +273,15 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
     expect(run({}).kitLayout).toEqual(basic);
   });
 });
+
+describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
+  it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
+    expect(SETTINGS_VERSION).toBe(11);
+    expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
+  });
+
+  it('v11 상태의 sheetPadCount는 건드리지 않는다', () => {
+    const out = migrateSettings({ sheetPadCount: false }, 11) as unknown as Record<string, unknown>;
+    expect(out.sheetPadCount).toBe(false);
+  });
+});
