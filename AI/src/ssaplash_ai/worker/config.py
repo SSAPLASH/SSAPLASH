@@ -1,0 +1,108 @@
+"""워커 설정 (설계 3-1절). 환경 변수 `SSAPLASH_WORKER_*` → WorkerSettings.
+
+비밀 값(BE 주소·workerId·토큰)은 환경 변수로만 받음. 토큰은 repr·오류 메시지에 넣지 않음.
+모델 설정 yaml 경로는 명령줄 인자로 받고, 기본값은 `configs/chart/*.yaml`(chart.config).
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ssaplash_ai.chart.config import (
+    DEFAULT_SEPARATION_CONFIG,
+    DEFAULT_TRANSCRIPTION_CONFIG,
+    ENV_WORK_DIR,
+)
+
+ENV_BASE_URL = "SSAPLASH_WORKER_BASE_URL"
+ENV_WORKER_ID = "SSAPLASH_WORKER_ID"
+ENV_TOKEN = "SSAPLASH_WORKER_TOKEN"
+ENV_POLL_SEC = "SSAPLASH_WORKER_POLL_SEC"
+ENV_HEARTBEAT_SEC = "SSAPLASH_WORKER_HEARTBEAT_SEC"
+ENV_KEEP_FILES = "SSAPLASH_WORKER_KEEP_FILES"
+
+REQUIRED_ENV = (ENV_BASE_URL, ENV_WORKER_ID, ENV_TOKEN, ENV_WORK_DIR)
+# BE README: 토큰은 UTF-8 32바이트 이상
+TOKEN_MIN_BYTES = 32
+# BE WorkerController의 공통 경로. BASE_URL 뒤에 붙임
+API_PATH = "/internal/v1/chart-jobs"
+TRUE_WORDS = ("1", "true", "yes", "on")
+
+
+@dataclass
+class WorkerSettings:
+    """워커 하나의 설정. 비밀 값 token은 repr에서 뺌."""
+
+    base_url: str
+    worker_id: str
+    token: str = field(repr=False)
+    work_dir: Path
+    poll_sec: float = 5.0
+    heartbeat_sec: float = 10.0
+    keep_files: bool = False
+    separation_config: Path = DEFAULT_SEPARATION_CONFIG
+    transcription_config: Path = DEFAULT_TRANSCRIPTION_CONFIG
+    # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기 (설계 3-2·3-6절)
+    connect_timeout_sec: float = 5.0
+    read_timeout_sec: float = 30.0
+    download_timeout_sec: float = 120.0
+    upload_timeout_sec: float = 300.0
+
+    @property
+    def api_url(self) -> str:
+        """`<BASE_URL>/internal/v1/chart-jobs`."""
+        return self.base_url.rstrip("/") + API_PATH
+
+    @property
+    def jobs_dir(self) -> Path:
+        """작업 폴더의 부모 `<WORK_DIR>/worker/`."""
+        return self.work_dir / "worker"
+
+    @classmethod
+    def from_env(
+        cls,
+        env: Mapping[str, str] | None = None,
+        *,
+        separation_config: str | Path | None = None,
+        transcription_config: str | Path | None = None,
+    ) -> WorkerSettings:
+        """환경 변수에서 설정 읽기. 빠진 값·잘못된 값은 ValueError (토큰 값은 메시지에 안 넣음)."""
+        source: Mapping[str, str] = os.environ if env is None else env
+        missing = [name for name in REQUIRED_ENV if not source.get(name, "").strip()]
+        if missing:
+            raise ValueError(f"환경 변수가 없음: {', '.join(missing)}")
+
+        base_url = source[ENV_BASE_URL].strip()
+        if not base_url.startswith(("http://", "https://")):
+            raise ValueError(f"{ENV_BASE_URL}은 http:// 또는 https://로 시작해야 함")
+        token = source[ENV_TOKEN].strip()
+        if len(token.encode("utf-8")) < TOKEN_MIN_BYTES:
+            raise ValueError(f"{ENV_TOKEN}이 너무 짧음 (UTF-8 {TOKEN_MIN_BYTES}바이트 이상)")
+
+        return cls(
+            base_url=base_url,
+            worker_id=source[ENV_WORKER_ID].strip(),
+            token=token,
+            work_dir=Path(source[ENV_WORK_DIR].strip()),
+            poll_sec=_positive_float(source, ENV_POLL_SEC, cls.poll_sec),
+            heartbeat_sec=_positive_float(source, ENV_HEARTBEAT_SEC, cls.heartbeat_sec),
+            keep_files=source.get(ENV_KEEP_FILES, "").strip().lower() in TRUE_WORDS,
+            separation_config=Path(separation_config or DEFAULT_SEPARATION_CONFIG),
+            transcription_config=Path(transcription_config or DEFAULT_TRANSCRIPTION_CONFIG),
+        )
+
+
+def _positive_float(source: Mapping[str, str], name: str, default: float) -> float:
+    raw = source.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as e:
+        raise ValueError(f"{name}은 숫자여야 함: {raw!r}") from e
+    if value <= 0:
+        raise ValueError(f"{name}은 양수여야 함: {raw!r}")
+    return value
