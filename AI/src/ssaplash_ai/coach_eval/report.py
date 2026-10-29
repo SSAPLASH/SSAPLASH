@@ -51,6 +51,21 @@ def _ratio(ok: int, n: int) -> str:
     return f"{ok / n * 100:.0f}% ({ok}/{n})" if n else "—"
 
 
+def _group_table(cells: list[Cell], unit: str) -> list[str]:
+    """강도 행 × 조건(판정 폭·노트 수) 열의 탐지 횟수 표. 칸마다 시험 수가 작아 비율 대신 횟수를 쓴다."""
+    groups = sorted({c.group for c in cells if c.group is not None})
+    out = ["| 시나리오 | 강도 | " + " | ".join(f"{g:g}{unit}" for g in groups) + " |"]
+    out.append("| --- | --- | " + " | ".join("---" for _ in groups) + " |")
+    grid: dict[tuple[str, float], dict[float, Cell]] = defaultdict(dict)
+    for c in cells:
+        if c.kind == "PLANTED":
+            grid[(c.scenario, c.strength)][c.group] = c
+    for (name, strength), row in grid.items():
+        cols = [f"{row[g].detected}/{row[g].n}" if g in row else "—" for g in groups]
+        out.append(f"| `{name}` | {strength:g} | " + " | ".join(cols) + " |")
+    return out
+
+
 def render_markdown(
     result: RunResult, perf: list[dict] | None, smoke: list[dict] | None, date: str
 ) -> str:
@@ -96,21 +111,16 @@ def render_markdown(
         "같은 강도(× `goodMs`)에서 `goodMs`가 달라도 탐지율이 비슷해야 임계값이 `goodMs`에 비례해 동작한다는 뜻이다."
     )
     out.append("")
-    goods = sorted({c.group for c in by_good if c.group is not None})
-    out.append("| 시나리오 | 강도 | " + " | ".join(f"{g:g}ms" for g in goods) + " |")
-    out.append("| --- | --- | " + " | ".join("---" for _ in goods) + " |")
-    grid: dict[tuple[str, float], dict[float, Cell]] = defaultdict(dict)
-    for c in by_good:
-        if c.kind == "PLANTED":
-            grid[(c.scenario, c.strength)][c.group] = c
-    for (name, strength), row in grid.items():
-        cols = [
-            f"{row[g].detected}/{row[g].n}" if g in row else "—"  # 칸마다 시험 수가 작다
-            for g in goods
-        ]
-        out.append(f"| `{name}` | {strength:g} | " + " | ".join(cols) + " |")
+    out += _group_table(by_good, "ms")
 
-    out += ["", "## 3. 교차 반응 (기대 밖 pattern이 함께 나온 비율)", ""]
+    out += ["", "## 3. 노트 수별 탐지율", ""]
+    out.append(
+        "노트가 적으면 패드·전환마다 유효 타격이 모자라 조건을 못 채우고, 많으면 후보가 늘어 최대 5개 선택에서 밀릴 수 있다."
+    )
+    out.append("")
+    out += _group_table(summarize_by(result.trials, "n_notes"), "개")
+
+    out += ["", "## 4. 교차 반응 (기대 밖 pattern이 함께 나온 비율)", ""]
     out.append("| 시나리오 | 강도 | 함께 나온 pattern (시험 수 기준) | 허용 목록 |")
     out.append("| --- | --- | --- | --- |")
     for c in cells:
@@ -120,7 +130,7 @@ def render_markdown(
         allowed = ", ".join(f"`{p}` {k}/{c.n}" for p, k in sorted(c.allowed_counts.items())) or "—"
         out.append(f"| `{c.scenario}` | {c.strength:g} | {cross} | {allowed} |")
 
-    out += ["", "## 4. 정상 로그의 오탐", ""]
+    out += ["", "## 5. 정상 로그의 오탐", ""]
     out.append("| 숙련도 | 오탐률 (95% 구간) | 나온 pattern |")
     out.append("| --- | --- | --- |")
     clean = [c for c in cells if c.kind == "CLEAN"]
@@ -137,7 +147,7 @@ def render_markdown(
         out.append(f"- `{p}`: {k}/{n}")
 
     if perf:
-        out += ["", "## 5. 응답 시간", ""]
+        out += ["", "## 6. 응답 시간", ""]
         out.append("목표는 5,000건 1초, 50,000건 3초이고 BE 응답 제한은 3초다.")
         out.append("")
         out.append("| 타격 행 수 | 검증(초) | 분석(초) |")
@@ -146,7 +156,7 @@ def render_markdown(
             out.append(f"| {row['hits']:,} | {row['validateSec']} | {row['analyzeSec']} |")
 
     if smoke:
-        out += ["", "## 6. 서버 처리 함수 경유 확인", ""]
+        out += ["", "## 7. 서버 처리 함수 경유 확인", ""]
         out.append("| playId | 상태 | 직접 호출과 같음 |")
         out.append("| --- | --- | --- |")
         for row in smoke:
