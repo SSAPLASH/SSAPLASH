@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import SR, make_tone, write_wav
+from helpers import HITS, SR, make_hits, make_tone, write_wav
 from ssaplash_ai.chart.cli import main
 from ssaplash_ai.chart.config import ENV_DEVICE, ENV_WORK_DIR
 
@@ -112,3 +112,75 @@ def test_device_인자가_설정을_덮어쓴다(tmp_path: Path, capsys: pytest.
     ]
     assert main(args) == 0
     assert "장치: cpu" in capsys.readouterr().err
+
+
+# ---- transcribe·run (S15P31A307-169) ----
+
+
+def _write_transcription_config(tmp_path: Path, label: str = "KICK") -> Path:
+    model = tmp_path / "mock_clicks.yaml"
+    model.write_text(
+        "name: mock_clicks\nadapter: mock\nmock_mode: clicks\nlicense_code: x\n"
+        f"license_weights: y\nlabels:\n  kick: {label}\n",
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "transcription.yaml"
+    cfg.write_text(
+        f"model_config: {model.as_posix()}\ndevice: cpu\nmax_duration_sec: 10\n"
+        "tempo:\n  method: librosa\n",
+        encoding="utf-8",
+    )
+    return cfg
+
+
+def _drum_song(tmp_path: Path) -> Path:
+    path = tmp_path / "drums_in.wav"
+    write_wav(path, make_hits(2.2))
+    return path
+
+
+def test_transcribe_정상이면_0과_채보_파일(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    cfg = _write_transcription_config(tmp_path)
+    out = tmp_path / "out"
+    code = main(["transcribe", str(_drum_song(tmp_path)), "--out", str(out), "--config", str(cfg)])
+    assert code == 0
+    chart = json.loads((out / "chart.json").read_text(encoding="utf-8"))
+    assert chart["generator"] == "ADT_MODEL" and len(chart["charts"][0]["notes"]) == len(HITS)
+    meta = json.loads((out / "transcription.json").read_text(encoding="utf-8"))
+    assert meta["n_notes"] == len(HITS) and meta["model_name"] == "mock_clicks"
+    assert "chart" not in meta
+    captured = capsys.readouterr()
+    assert "채보:" in captured.out and f"노트 {len(HITS)}개 (KICK {len(HITS)})" in captured.out
+    assert "[TRANSCRIBE] 끝" in captured.err and "[JSON] 끝" in captured.err
+
+
+def test_transcribe_출력_오류는_4(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    cfg = _write_transcription_config(tmp_path, label="tom")
+    out = tmp_path / "out"
+    code = main(["transcribe", str(_drum_song(tmp_path)), "--out", str(out), "--config", str(cfg)])
+    assert code == 4
+    assert "[OUTPUT_INVALID]" in capsys.readouterr().err
+    assert not (out / "chart.json").exists() and not (out / "transcription.json").exists()
+
+
+def test_run은_분리와_채보를_잇는다(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    sep_cfg = _write_configs(tmp_path)
+    tr_cfg = _write_transcription_config(tmp_path)
+    out = tmp_path / "out"
+    args = [
+        "run",
+        str(_drum_song(tmp_path)),
+        "--out",
+        str(out),
+        "--separation-config",
+        str(sep_cfg),
+        "--transcription-config",
+        str(tr_cfg),
+    ]
+    assert main(args) == 0
+    for name in ("drums.flac", "accompaniment.flac", "separation.json", "chart.json"):
+        assert (out / name).is_file()
+    meta = json.loads((out / "transcription.json").read_text(encoding="utf-8"))
+    assert meta["duration_ms"] == 2200 and meta["n_notes"] == len(HITS)
+    captured = capsys.readouterr()
+    assert "반주:" in captured.out and "채보:" in captured.out and "합계: 분리" in captured.out
