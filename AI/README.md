@@ -292,6 +292,23 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
 ```
 
+### 실제 곡 분리 품질 평가 (S15P31A307-166)
+
+서비스 분리 모델을 실제 드러머 녹음에 돌린 결과와 해석은 `docs/bench/separation-real-2026-10-29/evaluation.md`에 있다. 드럼 SDR은 ENST-Drums minus-one 64곡으로 재고, MDB Drums는 드럼 단독 트랙이 원곡 속 드럼과 달라 타격 보존율만 본다. ENST 로더와 `enst_minus_one.yaml`은 S15P31A307-164에서 들어온다.
+
+GPU 서버에서는 `notebooks/separation_quality_server.ipynb`를 위에서부터 실행한다. 드럼과 반주를 같은 크기로 섞은 조건과 확인 스크립트는 로컬에서 돌린다.
+
+```bash
+# ENST를 드럼·반주 같은 크기로 섞어 분리, 분리 wav 64곡 저장
+uv run ssaplash-bench run --models configs/bench/models/msst/bs_roformer_sw.yaml --dataset configs/bench/datasets/enst_minus_one_gain1.yaml --save-wav 64 --run-id sep-enst-gain1 --mlflow-uri none
+
+# 30ms 안에 붙은 정답 시각을 하나로 합쳐 정답 드럼·원곡·분리 드럼의 타격 보존율을 다시 계산
+uv run python scripts/check_onset_merged.py configs/bench/datasets/enst_minus_one_gain1.yaml --separated data/results/sep-enst-gain1/separated/bs_roformer_sw --out data/results/onset_merged_enst_gain1.csv
+
+# MDB 드럼 단독 트랙과 같은 녹음의 MUSDB18 train 드럼 스템 비교 (MUSDB18-HQ train이 data/musdb18hq/train에 있어야 함)
+uv run python scripts/compare_mdb_musdb_stems.py --out data/results/mdb_musdb_stems.csv
+```
+
 ## 채보 벤치마크 실행 (S15P31A307-109)
 
 채보 모델은 드럼 소리를 넣으면 "몇 초에 어느 드럼을 쳤는지" 목록을 적어 주는 모델이다. 이 하네스는 채보 모델 여러 개를 같은 곡으로 돌려 정답 타격(위 "채보 벤치마크 정답 데이터")과 맞춰 보고 점수표를 만든다. 분리 벤치마크와 같은 뼈대(모델 yaml × 데이터셋 yaml → 곡마다 CSV 한 줄 → 보고서 → MLflow)이고, 다른 점은 세 가지다.
