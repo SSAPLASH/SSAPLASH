@@ -2,18 +2,19 @@
 
 에어드럼 센서 스틱의 펌웨어 파트입니다. IMU로 스윙을 측정해 타격을 검출하고, 어느 패드를 쳤는지 판별한 결과를 브라우저로 보냅니다.
 
-최종 보드(Adafruit Feather nRF52840 Sense)가 도착하기 전까지는 **NUCLEO-F103RB + BNO055**로 프로토타입을 만들고, 브라우저와는 **Web Serial(USB)**로 연결합니다.
+알고리즘은 **NUCLEO-F103RB + BNO055** 프로토타입(`stick_fw_f103`, Web Serial)에서 만들고 검증했고, 2026-10-26부터 최종 보드 **Adafruit Feather nRF52840 Sense**(`stick_fw_nrf52`, BLE)로 옮기는 중입니다. Feather 쪽 개발 환경·실측은 [`stick_fw_nrf52/README.md`](stick_fw_nrf52/README.md)에 있고, 이 문서의 2~13장은 NUCLEO 프로토타입 기준입니다.
 
 ---
 
 ## 1. 하드웨어
 
-| 구분 | 프로토타입 (현재) | 최종 |
+| 구분 | 프로토타입 (`stick_fw_f103`) | 최종 (`stick_fw_nrf52`, 이식 중) |
 |---|---|---|
-| MCU 보드 | NUCLEO-F103RB (STM32F103RB, Cortex-M3) | Adafruit Feather nRF52840 Sense |
-| IMU | Adafruit BNO055 (2472, 9축 + 온보드 퓨전) | 보드 내장 IMU |
-| 브라우저 연결 | USB 가상 COM → Web Serial | BLE → Web Bluetooth |
-| 햅틱 | 없음 | DRV2605L + LRA |
+| MCU 보드 | NUCLEO-F103RB (STM32F103RB, Cortex-M3) | Adafruit Feather nRF52840 Sense (Cortex-M4F) |
+| IMU | Adafruit BNO055 (2472, 9축 + 온보드 퓨전), 250Hz | 보드 내장 LSM6DS3TR-C (6축) + LIS3MDL (지자기), 1.66kHz |
+| 브라우저 연결 | USB 가상 COM → Web Serial | BLE → Web Bluetooth (USB 시리얼도 가능) |
+| 햅틱 | 없음 | DRV2605L + LRA VG0832012 (10/28 도착 예정) |
+| 전원 | USB | LiPo 194mAh (YJ601235) + 보드 충전 회로 |
 
 ## 2. 개발 환경
 
@@ -84,7 +85,9 @@
 | `tools/capture_serial.py` | TEST_CAPTURE 출력을 CSV로 저장 (`pip install pyserial`) |
 | `tools/hit_replay/replay.c` | 녹화 CSV를 PC에서 검출기에 재생: `gcc -O2 -o replay replay.c ../../stick_fw_f103/Core/Src/hit_detect.c -I../../stick_fw_f103/Core/Inc` → `./replay swing.csv 0 -1 -6` |
 | `tools/pad_replay/pad_replay.c` | 녹화 CSV를 검출기 + 자세 추정 + 패드 판정에 재생: `gcc -O2 -o pad_replay pad_replay.c ../../stick_fw_f103/Core/Src/{hit_detect,pose,pad}.c -I../../stick_fw_f103/Core/Inc -lm` → `./pad_replay pad.csv <정면 보정 시각(초)>` |
-| `tools/sound_test.html` | TEST_HIT 출력 줄을 Web Serial(921600)로 받아 패드별 합성 드럼 소리 재생 (Chrome/Edge, 개발용. 118에서 바이너리 프로토콜로 교체) |
+| `tools/sound_test.html` | TEST_HIT 출력 줄을 Web Serial(921600)로 받아 패드별 합성 드럼 소리 재생 (Chrome/Edge, 개발용) |
+| `tools/ws_bridge.py` | 시리얼(0xA5 LEN payload CRC8) ↔ WebSocket(`ws://localhost:8765`) 중계, 1초마다 BRIDGE_STATS(0x7E). `python ws_bridge.py COM5` / 보드 없이 `python ws_bridge.py fake` (`pip install pyserial websockets`) |
+| `tools/ble_latency.html` | Web Bluetooth로 Feather에 연결해 SYNC 왕복, HIT 도착 − 스틱 정지 시각, 오디오 출력 지연을 재고 소리 재생. CSV 저장 (Chrome/Edge) |
 
 `main.c`에는 USER CODE 영역에 `__io_putchar`(printf → USART2), `app_imu_test_init()`, `app_imu_test_loop()`만 추가합니다.
 
