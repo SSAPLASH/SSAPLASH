@@ -78,6 +78,16 @@ class SongWithdrawalCleanupTest {
         assertThat(db.queryForObject("SELECT deleted_at FROM songs WHERE id=?",java.sql.Timestamp.class,audio)).isEqualTo(before);
         assertThat(count("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=?",key)).isEqualTo(1);
     }
+    @Test void recoveryRegistersOwnedCoverAndRejectsForeignKey() {
+        long owner=user(), other=user(), first=song(owner,"MIDI"), second=song(owner,"MIDI");
+        String valid="cover/"+owner+"/"+first+"/"+java.util.UUID.randomUUID()+".png";
+        String foreign="cover/"+other+"/"+second+"/"+java.util.UUID.randomUUID()+".png";
+        db.update("UPDATE songs SET cover_key=? WHERE id=?",valid,first); db.update("UPDATE songs SET cover_key=? WHERE id=?",foreign,second);
+        db.update("UPDATE users SET status='WITHDRAWN',withdrawn_at=clock_timestamp() WHERE id=?",owner);
+        recovery.recover(); recovery.recover();
+        assertThat(count("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=? AND file_role='COVER'",valid)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=?",foreign)).isZero();
+    }
     @Test void recoveryPassesBatchBoundaryAndRevisitsEarlierSongs() {
         long owner=user();
         for(int i=0;i<101;i++) song(owner,"MIDI");

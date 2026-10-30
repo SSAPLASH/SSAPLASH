@@ -33,6 +33,8 @@ public class Song {
 	private String license;
 	@Column(length = 300)
 	private String accompanimentKey;
+	@Column(length = 300)
+	private String coverKey;
 	@Column(nullable = false)
 	private Instant createdAt;
 	@Column(nullable = false)

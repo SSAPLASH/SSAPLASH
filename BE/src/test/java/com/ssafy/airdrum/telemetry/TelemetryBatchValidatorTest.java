@@ -75,15 +75,17 @@ class TelemetryBatchValidatorTest {
 	}
 
 	@Test
-	void everyWirePadIsAcceptedAsIsAndSmallTomIsRejected() {
-		for (var pad : new String[] {"CRASH", "HIHAT", "SNARE", "HI_TOM", "MID_TOM", "FLOOR_TOM", "RIDE", "KICK", "HIHAT_PEDAL"}) {
+	void everyWirePadAndLegacyAliasAreAccepted() {
+		for (var pad : new String[] {"CRASH", "HIHAT", "SNARE", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "RIDE", "KICK", "HIHAT_PEDAL"}) {
 			var request = read(batch(SENSOR_HIT.replace("\"pad\":\"SNARE\"", "\"pad\":\"" + pad + "\"")));
 			assertThat(request.events().getFirst().pad().name()).isEqualTo(pad);
 		}
-		assertThatThrownBy(() -> read(batch(SENSOR_HIT.replace("\"pad\":\"SNARE\"", "\"pad\":\"SMALL_TOM\""))))
+		assertThat(read(batch(SENSOR_HIT.replace("\"pad\":\"SNARE\"", "\"pad\":\"HI_TOM\""))).events().getFirst().pad().name())
+				.isEqualTo("SMALL_TOM");
+		assertThatThrownBy(() -> read(batch(SENSOR_HIT.replace("\"pad\":\"SNARE\"", "\"pad\":\"UNKNOWN_PAD\""))))
 				.isInstanceOfSatisfying(BusinessException.class, ex -> {
 					assertThat(ex.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
-					assertThat(ex.getDetail()).contains("events[0].pad").doesNotContain("SMALL_TOM");
+					assertThat(ex.getDetail()).contains("events[0].pad").doesNotContain("UNKNOWN_PAD");
 				});
 	}
 

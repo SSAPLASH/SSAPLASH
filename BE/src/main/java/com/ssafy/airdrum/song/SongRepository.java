@@ -13,16 +13,16 @@ public interface SongRepository extends Repository<Song, Long> {
 		SELECT s.id, s.title, s.artist, s.source, s.status, s.bpm,
 		 s.time_signature AS "timeSignature", s.duration_ms AS "durationMs",
 		 (s.accompaniment_key IS NOT NULL) AS "hasAccompaniment",
-		 s.created_at AS "createdAt", s.license, s.updated_at AS "updatedAt"
+		 s.created_at AS "createdAt", s.license, s.updated_at AS "updatedAt", s.cover_key AS "coverKey", s.owner_id AS "ownerId"
 		FROM songs s
 		""";
 	String VISIBLE = """
 		s.deleted_at IS NULL AND
-		((s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY') OR s.owner_id = :userId)
+		((s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published) OR s.owner_id = :userId)
 		""";
 	String FILTER = """
 		s.deleted_at IS NULL AND
-		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY')
+		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY' AND s.published)
 		 OR (:scope = 'MINE' AND s.owner_id = :userId))
 		AND (LOWER(s.title) LIKE LOWER(:pattern) ESCAPE '!'
 		 OR LOWER(COALESCE(s.artist, '')) LIKE LOWER(:pattern) ESCAPE '!')
@@ -41,6 +41,6 @@ public interface SongRepository extends Repository<Song, Long> {
 	interface View {
 		Long getId(); String getTitle(); String getArtist(); String getSource(); String getStatus();
 		BigDecimal getBpm(); String getTimeSignature(); Integer getDurationMs();
-		boolean getHasAccompaniment(); Instant getCreatedAt(); String getLicense(); Instant getUpdatedAt();
+		boolean getHasAccompaniment(); Instant getCreatedAt(); String getLicense(); Instant getUpdatedAt(); String getCoverKey(); Long getOwnerId();
 	}
 }

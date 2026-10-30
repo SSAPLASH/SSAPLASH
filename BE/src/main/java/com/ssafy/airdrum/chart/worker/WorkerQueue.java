@@ -38,9 +38,10 @@ class WorkerQueue {
         var ids = db.query("SELECT user_id,song_id FROM chart_jobs WHERE id=?", (r,n) -> new long[]{r.getLong(1),r.getLong(2)}, jobId);
         if (ids.isEmpty()) return null;
         long[] id = ids.getFirst();
-        var users = db.query("SELECT status FROM users WHERE id=? FOR SHARE", (r,n)->r.getString(1), id[0]);
-        var songs = db.query("SELECT deleted_at IS NOT NULL,duration_ms FROM songs WHERE id=? FOR UPDATE", (r,n)->new Object[]{r.getBoolean(1),r.getInt(2)}, id[1]);
-        if (users.isEmpty() || songs.isEmpty()) return null;
+        var users = db.query("SELECT status FROM users WHERE id=? FOR SHARE" + (skip ? " SKIP LOCKED" : ""), (r,n)->r.getString(1), id[0]);
+        if (users.isEmpty()) return null;
+        var songs = db.query("SELECT deleted_at IS NOT NULL,duration_ms FROM songs WHERE id=? FOR UPDATE" + (skip ? " SKIP LOCKED" : ""), (r,n)->new Object[]{r.getBoolean(1),r.getInt(2)}, id[1]);
+        if (songs.isEmpty()) return null;
         var jobs = db.query("SELECT status,current_attempt_id,stage_deadline_at FROM chart_jobs WHERE id=? FOR UPDATE" + (skip ? " SKIP LOCKED" : ""),
                 (r,n)->new Object[]{r.getString(1),r.getObject(2,UUID.class),r.getTimestamp(3)}, jobId);
         if (jobs.isEmpty()) return null;
@@ -68,6 +69,7 @@ class WorkerQueue {
                 Lock l=lock((long)a[0],false);
                 if(l==null || l.currentAttemptId()==null || !l.currentAttemptId().equals(a[1]) || !l.active() || l.deleted()) throw conflict();
                 valid(l.jobId(),(UUID)a[1],worker,l.status());
+                if (!validDuration(l.durationMs())) throw conflict();
                 return assignment(l.jobId(), (UUID)a[1]);
             }
             var candidates=db.queryForList("SELECT id FROM chart_jobs WHERE status='QUEUED' AND next_attempt_at<=clock_timestamp() ORDER BY next_attempt_at,id LIMIT 100",Long.class);
@@ -75,6 +77,7 @@ class WorkerQueue {
                 Lock l=lock(id,true);
                 if(l==null || !l.status().equals("QUEUED")) continue;
                 if (!l.active() || l.deleted()) { finishFailure(l,"JOB_CANCELLED"); continue; }
+                if (!validDuration(l.durationMs())) { finishFailure(l,"INPUT_INVALID"); continue; }
                 if (l.deadline()!=null && !l.deadline().isAfter(Instant.now())) { finishFailure(l,"STAGE_TIMEOUT"); continue; }
                 Boolean inputPresent=db.queryForObject("""
                     SELECT CASE WHEN j.resume_stage='SEPARATING' THEN EXISTS
@@ -91,6 +94,7 @@ class WorkerQueue {
             return null;
         });
     }
+    private boolean validDuration(int durationMs) { return durationMs > 0 && durationMs <= 600_000; }
     Assignment assignment(long id, UUID attempt) {
         return db.queryForObject("""
             SELECT j.id,j.song_id,j.status,a.lease_expires_at,j.stage_deadline_at,

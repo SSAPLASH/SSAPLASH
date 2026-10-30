@@ -117,6 +117,26 @@ class WorkerCleanupAndSchemaTest {
         assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("DELETED");
     }
 
+    @Test void accompanimentCleanupProtectsReferencesAndRetriesStorageFailure() {
+        String key="accompaniment/"+song+"/fixture.flac";
+        db.update("UPDATE songs SET accompaniment_key=? WHERE id=?",key,song);
+        db.update("INSERT INTO file_cleanup_tasks(object_key,file_role,user_id) VALUES(?,'ACCOMPANIMENT',?)",key,user);
+        cleanup.runOnce();
+        verify(store,never()).exists(WorkerStore.Bucket.ACCOMPANIMENT,key);
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("PENDING");
+        db.update("UPDATE songs SET deleted_at=clock_timestamp() WHERE id=?",song);
+        when(store.exists(WorkerStore.Bucket.ACCOMPANIMENT,key))
+                .thenThrow(new BusinessException(WorkerError.UNAVAILABLE)).thenReturn(true);
+        cleanup.runOnce();
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT retry_count FROM file_cleanup_tasks WHERE object_key=?",Integer.class,key)).isEqualTo(1);
+        verify(store,never()).delete(WorkerStore.Bucket.ACCOMPANIMENT,key);
+        db.update("UPDATE file_cleanup_tasks SET next_attempt_at=clock_timestamp() WHERE object_key=?",key);
+        cleanup.runOnce();
+        verify(store).delete(WorkerStore.Bucket.ACCOMPANIMENT,key);
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?",String.class,key)).isEqualTo("DELETED");
+    }
+
     @Test void builtinSheetReferenceIsProtected() {
         long builtin=db.queryForObject("INSERT INTO songs(title,source,license) VALUES('builtin','BUILTIN','test') RETURNING id",Long.class);
         try {

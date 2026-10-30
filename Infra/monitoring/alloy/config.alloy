@@ -2,8 +2,10 @@
 // Docker 소켓으로 컨테이너 목록과 이름을 알아야 서비스별로 로그를 구분할 수 있다.
 
 // 실행 중인 컨테이너를 찾는다.
+// 새로고침 주기의 기본값은 1분이라 1분 안에 끝나는 일회성 컨테이너(예: 보정 배치)는 로그를 못 모을 수 있다. 5초로 줄였다.
 discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
 }
 
 // Compose 서비스 이름과 컨테이너 이름을 라벨로 붙인다.
