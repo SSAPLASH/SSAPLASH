@@ -380,6 +380,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V20 | `V20__widen_hits_pad.sql` | `hits` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL 저장 실패 수정) | -142 |
 | V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
 | V22 | `V22__add_songs_published.sql` | `songs.published`(기본 true) 공용 곡 공개 여부, CHECK `songs_published_builtin_check`(개인 곡은 항상 true) | -156 |
+| V23 | `V23__create_sheet_music.sql` | 내 악보 `sheet_music`·`sheet_music_pages`, 정리 역할 `SHEET_MUSIC` 추가 | -155 |
 
 규칙:
 
@@ -906,6 +907,38 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 ```powershell
 .\gradlew.bat test --tests 'com.ssafy.airdrum.song.admin.*' --tests '*SongPublishedVisibilityTest'
+```
+
+## 내 악보 보관 (155번)
+
+CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 곡·채보와 연결하지 않는다. FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
+모든 경로는 `/api/v1/sheets`이고 Bearer 인증이 필요하다. 미인증·탈퇴 401, 남의 악보·없는 악보·삭제된 악보는 404 `SHEET_NOT_FOUND`. 응답은 `Cache-Control: private, no-store`.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED` | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
+| `GET /` | `q`(제목 부분 검색), `page` 0~100000, `size` 1~100 | `PageResponse<SheetSummary>`, 최신순 |
+| `GET /{id}` | — | 악보 상세 |
+| `PATCH /{id}` | JSON `{"title": "..."}`만 | 악보 상세 |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+- **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`. 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
+- **파일 규칙:** 한 악보는 JPG·PNG·WEBP 이미지 1~20장 또는 PDF 1개. 이미지는 장당 10 MiB, 가로·세로 8000px·4000만 화소 이하, PDF는 20 MiB 이하. 요청 전체는 전역 multipart 상한 50 MiB. 회원당 악보 100개·합계 500 MiB. 실제 바이트를 검사한다(이미지 디코드와 끝 표시, PDF `%PDF-` 머리와 끝 1 KiB 안 `%%EOF`). 확장자·Content-Type은 보지 않는다.
+- **메모리:** 본문은 multipart 임시 파일에서 다시 임시 파일로 옮겨 저장소에도 파일에서 바로 올린다. 이미지는 400만 화소 이하로 줄여 읽는다(운영 힙 약 460MB 보호). 검사·저장 단계는 서버 전체 동시 2건이며 넘으면 503이다.
+- **저장:** 악보 버킷(`CHART_ASSET_SHEET_BUCKET`)의 `sheet-music/{userId}/{sheetId}/{uuid}.{jpg|png|webp|pdf}`. 커버와 같은 악보 버킷 쓰기 자격증명으로 조건부 PUT(`If-None-Match: *`)하고, 서명은 `chart.assets` 읽기 자격증명을 쓴다. `CHART_ASSET_ENABLED=false`면 등록·조회 서명이 503이다.
+- **정리:** 업로드 전에 임시 정리 작업(`SHEET_MUSIC`, 5분 뒤)을 등록하고 저장 뒤 페이지를 연결한다. 실패하면 악보 행을 소프트 삭제하고 503, 올라간 파일은 정리 작업자가 지운다. 삭제·탈퇴(`UserWithdrawnEvent` 커밋 뒤) 때 페이지 키를 바로 실행되도록 등록한다. 정리 작업자는 삭제되지 않은 악보·활성 회원의 페이지 키는 지우지 않는다.
+- **운영 nginx:** `/api/` 경로의 본문 상한이 설정되지 않으면 nginx 기본 1 MB에서 막힌다. `/api/v1/sheets`에 51m가 필요하다(Infra 요청).
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `SHEET_INVALID` | 제목·`source` 형식, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
+| 413 | `SHEET_TOO_LARGE` | 이미지 10 MiB·PDF 20 MiB 초과 |
+| 413 | `SHEET_QUOTA_EXCEEDED` | 회원당 100개 또는 500 MiB 초과 |
+| 415 | `SHEET_UNSUPPORTED` | JPG·PNG·WEBP·PDF가 아님(GIF·BMP·HEIC 등) |
+| 503 | `SHEET_UNAVAILABLE` | 저장소 비활성·쓰기 실패, 동시 처리 초과 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
 ```
 
 ## 채보 작업 진행 조회·알림 (172번)
