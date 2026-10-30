@@ -8,6 +8,7 @@ import { DebugOverlay } from './DebugOverlay';
 import { Metronome } from './shell/Metronome';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { SoundToggle } from './shell/SoundToggle';
+import { StickStatusIndicator } from './shell/StickStatusIndicator';
 
 /** 개발 모니터 빌드(VITE_MONITOR=true)에서만 "모니터 새 창" 버튼을 둔다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
@@ -18,7 +19,6 @@ interface Props {
 }
 
 export function AppShell({ authRequired }: Props) {
-  const connected = useLive((s) => s.connected);
   const sourceState = useLive((s) => s.sourceState);
   const audioReady = useLive((s) => s.audioReady);
   const sensorKind = useSettings((s) => s.sensorKind);
@@ -58,20 +58,13 @@ export function AppShell({ authRequired }: Props) {
             </button>
           )}
           <SoundToggle />
-          <span className="small dim">
+          <span className="small dim topbar-sensor">
             {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
             {sensorKind !== 'none' && ' + 키보드'}
             {sourceState === 'connecting' && ' · 연결 중'}
             {sourceState === 'error' && ' · 오류'}
           </span>
-          <div className="sticks" aria-label="스틱 연결 상태">
-            <span className={`stick ${connected[0] ? 'on' : ''}`}>
-              <span className="dot" />왼손
-            </span>
-            <span className={`stick ${connected[1] ? 'on' : ''}`}>
-              <span className="dot" />오른손
-            </span>
-          </div>
+          <StickStatusIndicator />
           {!audioReady && <span className="small faint">클릭하면 소리가 켜집니다</span>}
           <ProfileMenu />
           {authRequired && authStatus === 'anonymous' && (
