@@ -9,7 +9,14 @@ import pytest
 import soundfile as sf
 
 from helpers import SR, make_tone, write_wav
-from ssaplash_ai.chart.audio_io import duration_ms, probe, read_audio_file, write_audio_file
+from ssaplash_ai.chart.audio_io import (
+    duration_ms,
+    fit_length,
+    probe,
+    read_audio_file,
+    samples_for_ms,
+    write_audio_file,
+)
 from ssaplash_ai.chart.errors import ChartInputError, ChartOutputError
 
 
@@ -122,3 +129,26 @@ def test_duration_ms는_반올림한_정수():
     assert duration_ms(44100, 44100) == 1000
     assert duration_ms(66150, 44100) == 1500
     assert duration_ms(44100 * 3 + 22, 44100) == 3000
+
+
+def test_samples_for_ms는_정수_내림():
+    assert samples_for_ms(1000, 44100) == 44100
+    assert samples_for_ms(1, 44100) == 44  # 44.1 → 44
+    assert samples_for_ms(4030, 44100) == 177723
+    with pytest.raises(ValueError, match="양수"):
+        samples_for_ms(0, 44100)
+
+
+def test_fit_length는_끝에서만_자르거나_채운다():
+    audio = _stereo(0.01)  # 441 샘플
+    same = fit_length(audio, 441)
+    assert same is audio
+    shorter = fit_length(audio, 400)
+    assert shorter.shape == (2, 400)
+    np.testing.assert_array_equal(shorter, audio[:, :400])
+    longer = fit_length(audio, 500)
+    assert longer.shape == (2, 500) and longer.dtype == audio.dtype
+    np.testing.assert_array_equal(longer[:, :441], audio)
+    assert float(np.max(np.abs(longer[:, 441:]))) == 0.0
+    with pytest.raises(ValueError, match="양수"):
+        fit_length(audio, 0)

@@ -11,6 +11,8 @@ from ssaplash_ai.chart.config import (
     ENV_WORK_DIR,
     OutputConfig,
     SeparationConfig,
+    TempoConfig,
+    TranscriptionConfig,
     work_dir_from_env,
 )
 
@@ -79,3 +81,54 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert work_dir_from_env() is None
     monkeypatch.setenv(ENV_WORK_DIR, str(tmp_path / "work"))
     assert work_dir_from_env() == tmp_path / "work"
+
+
+# ---- 채보 설정 (S15P31A307-169) ----
+
+
+def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
+    assert cfg.model_config == Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
+    assert (AI_DIR / cfg.model_config).is_file()
+    assert cfg.device == "cuda"
+    assert cfg.schema_version == 1
+    assert cfg.tempo == TempoConfig(
+        method="beat_this", min_bpm=60, max_bpm=200, time_signature="4/4"
+    )
+    assert cfg.max_duration_sec == 600
+
+
+def test_채보_mock_설정은_cpu와_mock_모델(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription_mock.yaml")
+    assert cfg.device == "cpu"
+    assert cfg.model_config.name == "mock_clicks.yaml"
+    assert cfg.tempo.method == "librosa"
+    assert (AI_DIR / cfg.model_config).is_file()
+
+
+def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_DEVICE, "cpu")
+    cfg = TranscriptionConfig.from_dict({"model_config": "m.yaml", "device": "cuda"})
+    assert cfg.device == "cpu"
+    assert cfg.tempo == TempoConfig()
+    assert cfg.schema_version == 1 and cfg.max_duration_sec == 600
+
+
+@pytest.mark.parametrize(
+    ("raw", "문구"),
+    [
+        ({}, "model_config"),
+        ({"model_config": "m.yaml", "generator": "x"}, "모르는 채보 설정 필드"),
+        ({"model_config": "m.yaml", "schema_version": 2}, "schema_version"),
+        ({"model_config": "m.yaml", "max_duration_sec": 0}, "max_duration_sec"),
+        ({"model_config": "m.yaml", "tempo": {"method": "madmom"}}, "tempo.method"),
+        ({"model_config": "m.yaml", "tempo": {"min_bpm": 80, "max_bpm": 150}}, "tempo 범위"),
+        ({"model_config": "m.yaml", "tempo": {"time_signature": "4-4"}}, "time_signature"),
+        ({"model_config": "m.yaml", "tempo": {"bpm": 120}}, "모르는 tempo 필드"),
+    ],
+)
+def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
+    with pytest.raises(ValueError, match=문구):
+        TranscriptionConfig.from_dict(raw)
