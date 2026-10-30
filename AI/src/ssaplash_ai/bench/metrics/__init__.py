@@ -23,6 +23,7 @@ from ssaplash_ai.bench.metrics.hit_f1 import (
 from ssaplash_ai.bench.metrics.onset_preservation import (
     OnsetResult,
     detect_onsets,
+    merge_onsets,
     onset_metrics,
     onset_scores,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "evaluate_hits",
     "f1_from_counts",
     "measure_resources",
+    "merge_onsets",
     "onset_metrics",
     "onset_scores",
     "score_hits",
