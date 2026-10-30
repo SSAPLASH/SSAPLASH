@@ -89,6 +89,31 @@ def test_401이면_종료_코드_2(tmp_path: Path, server):
     assert loop.run() == EXIT_AUTH
 
 
+def test_403은_IP_허용_문제로_로그에_남기고_계속_폴링한다(tmp_path: Path, server, caplog):
+    """인프라 회신(10/30): 401(토큰)과 403(Nginx IP 허용)을 로그에서 구분."""
+    from ssaplash_ai.worker.api import ApiError
+
+    _, srv = server
+    loop = _loop(tmp_path, srv.base_url)
+    loop.load_models()
+    calls: list[str] = []
+
+    class _Api:
+        session = loop.session
+
+        def claim(self, claim_request_id):
+            calls.append(claim_request_id)
+            if len(calls) >= 2:
+                loop.request_stop()
+            raise ApiError(403, None, "Forbidden")
+
+    loop.api = _Api()  # type: ignore[assignment]
+    with caplog.at_level("ERROR"):
+        assert loop.run() == EXIT_OK
+    assert len(calls) == 2
+    assert "403" in caplog.text and "IP" in caplog.text and "토큰 문제가 아님" in caplog.text
+
+
 def test_대기_작업이_없으면_폴링하다가_stop으로_끝난다(tmp_path: Path, server):
     _, srv = server
     loop = _loop(tmp_path, srv.base_url)

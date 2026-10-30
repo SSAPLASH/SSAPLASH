@@ -130,7 +130,15 @@ class WorkerLoop:
                     if e.status == 401:
                         logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
                         return EXIT_AUTH
-                    logger.warning("claim 실패, %.0f초 뒤 다시: %s", self.settings.poll_sec, e)
+                    if e.status == 403:
+                        # 인프라 회신(10/30): Nginx가 GPU 서버 공인 IP만 허용. IP가 바뀌면 403
+                        logger.error(
+                            "Nginx IP 허용에 막힘(403). 토큰 문제가 아님. GPU 서버 공인 IP가 바뀌었는지 "
+                            "`curl -s https://api.ipify.org`로 확인하고 인프라에 알림. %.0f초 뒤 다시 시도",
+                            self.settings.poll_sec,
+                        )
+                    else:
+                        logger.warning("claim 실패, %.0f초 뒤 다시: %s", self.settings.poll_sec, e)
                     self._wait(self.settings.poll_sec)
                     continue
                 if assignment is None:
