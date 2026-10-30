@@ -5,13 +5,13 @@ import { RhythmSession } from './RhythmSession';
 import type { Chart } from '@/domain/chart';
 
 /** 120BPM(박 500ms, 마디 2000ms), 카운트인 1마디(4박) */
-function makeSession(durationMs: number): RhythmSession {
+function makeSession(durationMs: number, offsetMs = 0): RhythmSession {
   const chart: Chart = {
     songId: 't',
     title: '테스트',
     difficulty: 'EASY',
     bpm: 120,
-    offsetMs: 0,
+    offsetMs,
     beatsPerBar: 4,
     notes: [],
     source: 'BUILTIN',
@@ -20,7 +20,7 @@ function makeSession(durationMs: number): RhythmSession {
   return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
 }
 
-function setup(opts: { clickOn?: boolean; withAcc?: boolean; durationMs?: number } = {}) {
+function setup(opts: { clickOn?: boolean; withAcc?: boolean; durationMs?: number; offsetMs?: number } = {}) {
   let now = 1000;
   const clicks: { at: number; accent: boolean }[] = [];
   const beats: { beatInBar: number; at: number }[] = [];
@@ -45,7 +45,7 @@ function setup(opts: { clickOn?: boolean; withAcc?: boolean; durationMs?: number
       return acc.zero;
     },
   };
-  const session = makeSession(opts.durationMs ?? 1000);
+  const session = makeSession(opts.durationMs ?? 1000, opts.offsetMs ?? 0);
   let finished = 0;
   // 가짜 타이머: 등록된 콜백을 tick으로 직접 부른다
   const timer = { fn: null as (() => void) | null, sets: 0, clears: 0 };
@@ -128,6 +128,34 @@ describe('PlayClock', () => {
     for (let n = 1000; n <= 4000; n += 100) t.frame(n);
     expect(t.clicks.some((c) => c.at === 3300)).toBe(true);
     expect(t.clicks.some((c) => c.at === 3800)).toBe(true);
+  });
+
+  it('offsetMs(1250) < 카운트인: 반주는 now + lead + 750에, 카운트인 4박은 원점 직전에, 곡 중 클릭은 원점부터 박 간격', () => {
+    const t = setup({ clickOn: true, offsetMs: 1250, durationMs: 6000 });
+    t.clock.begin();
+    // 반주 0초 = 1000 + 300 + (2000 − 1250) = 2050. 원점(1마디 1박) = 2050 + 1250 = 3300
+    expect(t.acc.starts).toEqual([[2050, 0]]);
+    expect(t.session.songTime(2050)).toBe(0);
+    for (let n = 1000; n <= 4500; n += 100) t.frame(n);
+    expect(t.clicks.slice(0, 6).map((c) => c.at)).toEqual([1300, 1800, 2300, 2800, 3300, 3800]);
+    expect(t.clicks.slice(0, 5).map((c) => c.accent)).toEqual([true, false, false, false, true]);
+  });
+
+  it('offsetMs(1250) < 카운트인, 곡 중 클릭 꺼짐: 카운트인 4박만 클릭(반주 0초 뒤에도 원점 전이면 클릭)', () => {
+    const t = setup({ clickOn: false, offsetMs: 1250, durationMs: 6000 });
+    t.clock.begin();
+    for (let n = 1000; n <= 4500; n += 100) t.frame(n);
+    expect(t.clicks.map((c) => c.at)).toEqual([1300, 1800, 2300, 2800]);
+  });
+
+  it('offsetMs(3000) > 카운트인: 반주(인트로)가 now + lead에 먼저 시작되고 카운트인은 원점 직전 1마디', () => {
+    const t = setup({ clickOn: false, offsetMs: 3000, durationMs: 8000 });
+    t.clock.begin();
+    // 반주 0초 = 1300, 원점 = 4300, 카운트인 = 2300·2800·3300·3800
+    expect(t.acc.starts).toEqual([[1300, 0]]);
+    for (let n = 1000; n <= 5000; n += 100) t.frame(n);
+    expect(t.clicks.map((c) => c.at)).toEqual([2300, 2800, 3300, 3800]);
+    expect(t.beats.find((b) => b.at === 4300)?.beatInBar).toBe(0);
   });
 
   it('pause/resume 뒤에도 곡 시각이 보존되고 반주·세션 0초가 같다', () => {
