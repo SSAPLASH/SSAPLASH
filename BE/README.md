@@ -803,6 +803,14 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 업로드 전 임시 정리 작업을 등록하고 저장소 작업 뒤 회원·곡 상태를 다시 확인한다. 커버 교체·삭제, 곡 삭제와 탈퇴 시 객체 삭제는 기존 영속 정리 큐가 재시도한다. 곡 삭제는 소프트 삭제이며 채보 버전과 플레이·리포트 참조를 보존한다. 곡 제목의 과거 스냅샷을 새로 만들지 않는다. 현재 리포트 API는 곡 제목을 자체 필드로 반환하지 않으며 이후 곡 상세를 조회하는 화면은 변경된 제목을 볼 수 있다. 운영 저장소의 비공개 설정과 읽기·쓰기·삭제 권한은 배포 환경에서 별도 확인해야 한다.
 
+## 본인 연주 기록 목록 (161번)
+
+`GET /api/v1/plays`는 활성 Bearer 인증 회원의 모든 모드를 종료 시각·playId 내림차순으로 반환한다. `page`는 0~100000(기본 0), `size`는 1~100(기본 20)이며 응답은 `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext`다. 범위를 벗어난 페이지는 빈 배열이며 전체 0건이면 totalPages는 0이다. 인증 실패는 401, 잘못된 페이지 입력은 400이고 서비스 직접 호출에도 같은 범위 검증을 적용한다. 응답은 `Cache-Control: no-cache, no-store`를 포함한다. offset 페이지 조회 도중 기록이 추가·삭제되면 페이지 간 중복이나 누락이 생길 수 있다.
+
+각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `difficulty`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
+
+`hasReport`는 RHYTHM/SHEET 기록에 리포트가 존재하는지를 뜻하며 AI 코칭 상태와 무관하다. 리포트가 없어도 과거 기록은 목록에 남는다. 곡 제목이 없을 때의 대체 문구와 날짜 표시 형식은 FE에서 별도로 정한다. FE는 true인 항목에서 `/result/{playId}/report`로 이동할 수 있으며 데이터는 기존 `/api/v1/plays/{playId}/report`와 `/notes`에서 조회한다.
+
 ## MIDI 업로드 → 채보 변환 (151번)
 
 CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안에서 채보 3난이도로 바꿔 **내 곡**(`source=MIDI`)으로 저장한다.
