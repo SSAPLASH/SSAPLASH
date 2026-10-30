@@ -18,15 +18,12 @@ from ssaplash_ai.worker.payload import (
 VECTOR_1 = '{"b":[true,null],"a":1.00}'
 VECTOR_1_CANONICAL = '{"a":1,"b":[true,null]}'
 VECTOR_1_HASH = "1cc69c7fa23616ca2ec3ee70d24390a6225c8832db8a4c814c7e0e7f942f8668"
-VECTOR_2 = (
-    '{"😀":-0.00,"":1.2300,"제어":"x\\u001f\\n","prec":0.12345678901234567890123456789012345}'
-)
-# BE 안내문에 적힌 벡터 2 해시. 안내문의 파이썬 참조 함수를 그대로 돌려도 이 값이 아니라 아래 REFERENCE 값이 나옴.
-# BE 회신 때 확인 요청(워커 설계 검증 결과 절). 테스트는 참조 함수와 바이트 단위로 같은지 본다.
-VECTOR_2_HASH_IN_MAIL = "a6385d023ac91b8d496887d40c7f840cf7790eb20ddc16ae866e0a080c541921"
-VECTOR_2_HASH_REFERENCE = "a15c15fcce73c8a2279b6e5b9aaca621f664bcf54cd0c7ff870d99471e23eaac"
+# 두 번째 키는 사용자 영역 문자 U+E000. 안내문에서는 빈 문자열처럼 보여 BE 회신 4(10/30)로 확인함
+VECTOR_2 = '{"😀":-0.00,"\\uE000":1.2300,"제어":"x\\u001f\\n","prec":0.12345678901234567890123456789012345}'
+VECTOR_2_HASH = "a6385d023ac91b8d496887d40c7f840cf7790eb20ddc16ae866e0a080c541921"
+# 키 순서는 UTF-16 코드 단위 순: "prec" < "제어"(C81C) < "😀"(D83D DE00) < U+E000
 VECTOR_2_CANONICAL = (
-    '{"":1.23,"prec":0.12345678901234567890123456789012345,"제어":"x\\u001F\\n","😀":0}'
+    '{"prec":0.12345678901234567890123456789012345,"제어":"x\\u001F\\n","😀":0,"":1.23}'
 )
 
 
@@ -94,11 +91,10 @@ def test_검증_벡터_1_정규_JSON과_해시():
     assert payload_hash(value) == VECTOR_1_HASH
 
 
-def test_검증_벡터_2는_참조_함수와_같다():
+def test_검증_벡터_2_해시와_참조_함수_일치():
     value = _load(VECTOR_2)
     assert canonical(value) == _reference_canonical(value) == VECTOR_2_CANONICAL
-    assert payload_hash(value) == VECTOR_2_HASH_REFERENCE
-    assert VECTOR_2_HASH_REFERENCE != VECTOR_2_HASH_IN_MAIL  # 안내문 값과 다름. BE 확인 대기
+    assert payload_hash(value) == VECTOR_2_HASH
 
 
 @pytest.mark.parametrize(
@@ -116,9 +112,9 @@ def test_여러_값에서_참조_함수와_같다(value):
 def test_벡터_2의_규칙_하나씩():
     value = _load(VECTOR_2)
     text = canonical(value)
-    # 키는 UTF-16 코드 단위 순: "" < "prec" < "제어" < "😀"(서러게이트 쌍 D83D)
-    assert text.startswith('{"":1.23,"prec":0.12345678901234567890123456789012345,"제어":')
-    assert text.endswith(',"😀":0}')
+    # 키는 UTF-16 코드 단위 순: "prec" < "제어" < "😀"(서러게이트 쌍 D83D) < U+E000. 코드 포인트 순이면 😀가 마지막
+    assert text.startswith('{"prec":0.12345678901234567890123456789012345,"제어":')
+    assert text.endswith(',"😀":0,"":1.23}')
     # 제어 문자는 대문자 16진수, 줄바꿈은 \n
     assert '"x\\u001F\\n"' in text
     # -0.00은 0, 후행 0 제거
