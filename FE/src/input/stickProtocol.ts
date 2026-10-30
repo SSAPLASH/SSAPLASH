@@ -86,6 +86,8 @@ export function padFromCode(code: number): PadId | null {
 
 export interface SyncAck {
   kind: 'syncAck';
+  /** 답한 스틱(flags role). 동글 아래에선 같은 t0에 두 스틱이 각각 답한다 */
+  stickId: StickId;
   /** 브라우저가 SYNC에 실어 보낸 t0 (ms, u32로 잘림) */
   t0: number;
   /** 센서가 SYNC를 받은 센서 시계 (ms) */
@@ -320,18 +322,27 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 
 export type ParsedPacket = StickEvent | SyncAck | null;
 
+/** flags role → 손. 발(2·3)은 아직 쓰지 않아 null — 손 이벤트로 읽히지 않게 한다 */
+function handOf(role: number): StickId | null {
+  return role === 0 || role === 1 ? role : null;
+}
+
 /**
- * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·link·bridgeStats·log·paramAck·swing)은 null.
+ * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·link·bridgeStats·log·paramAck·swing)과
+ * 발 역할(role 2·3) 패킷은 null.
  * hit·pose의 timestamp와 syncAck의 t1은 ms로 환산한다(ClockSync 단위).
  */
 export function parsePacket(data: Uint8Array | DataView, recvTime: number): ParsedPacket {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   const d = decodePacket(bytes, recvTime);
+  if (!('role' in d)) return null;
+  const stickId = handOf(d.role);
+  if (stickId === null) return null;
   switch (d.kind) {
     case 'hit':
       return {
         kind: 'hit',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         timestamp: d.timestampUs / 1000,
         recvTime,
         // 84-c 전 임시: 피크 각속도(dps)를 기존 피크 가속도(g) 범위로 환산
@@ -348,7 +359,7 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
     case 'pose':
       return {
         kind: 'pose',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         timestamp: d.timestampUs / 1000,
         pitch: d.elevationDeg,
         yaw: d.azimuthDeg,
@@ -356,14 +367,14 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
     case 'status':
       return {
         kind: 'status',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         connected: true,
         batteryPct: d.batteryPct ?? undefined,
         rssi: d.rssi,
         firmware: `${d.fwMajor}.${d.fwMinor}`,
       };
     case 'syncAck':
-      return { kind: 'syncAck', t0: d.t0Ms, t1: d.t1Us / 1000 };
+      return { kind: 'syncAck', stickId, t0: d.t0Ms, t1: d.t1Us / 1000 };
     default:
       return null;
   }
