@@ -1,3 +1,4 @@
+import { STICK_POWER_HINT } from '@/domain/setupSteps';
 import { stickStatus } from '@/domain/stickStatus';
 
 interface Props {
@@ -7,7 +8,7 @@ interface Props {
   batteryPct: number | null;
 }
 
-/** 세팅 ① 본문의 손별 카드. 연결 점·문구·배터리만 보인다(연결은 스틱의 버튼이 맡아 FE 버튼은 없다) */
+/** 세팅 ① 본문의 손별 카드. 연결 점·문구·배터리만 보인다(스틱은 켜지면 동글에 자동으로 붙어 FE 버튼은 없다) */
 export function StickCard({ hand, connected, batteryPct }: Props) {
   const v = stickStatus(connected, batteryPct, hand);
   return (
@@ -19,8 +20,9 @@ export function StickCard({ hand, connected, batteryPct }: Props) {
       </div>
       <div className="stick-card-battery">
         배터리 <span className={`stick-batt ${v.battery}`}>{v.batteryText}</span>
+        {connected && v.battery === 'critical' && <span className="stick-batt critical"> · 곧 꺼짐</span>}
       </div>
-      {!connected && <p className="stick-card-hint">스틱의 연결 버튼을 눌러 주세요</p>}
+      {!connected && <p className="stick-card-hint">{STICK_POWER_HINT}</p>}
     </div>
   );
 }
