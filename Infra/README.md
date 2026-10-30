@@ -87,6 +87,13 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - Nginx의 업로드 크기 한도는 50MB다. BE·AI와 정한 뒤 조정한다.
 - 앱이 스토리지를 쓰는 스위치(`CHART_ASSET_ENABLED`, `PLAY_RAW_ENABLED`)는 기본 꺼짐이다. 켜는 시점은 BE와 확인한다.
 
+### 외부 AI 워커 연결
+
+- Compose의 `AUDIO_STORAGE_PUBLIC_ENDPOINT` 기본값은 `OBJECT_STORAGE_PUBLIC_URL`이다. 외부 GPU에서 접근할 수 있는 `https://k15a307.p.ssafy.io`를 사용하고 BE의 내부 저장소 주소는 유지한다. 실제 DNS·TLS·서명 URL 접근은 배포 환경에서 확인한다.
+- HTTPS의 `/internal/v1/chart-jobs/`는 `222.107.238.74`만 허용하고 Nginx의 최대 본문은 8 MiB이며 BE 결과 JSON 상한은 5 MiB다. 워커 API와 서명 URL 스토리지 경로의 접근·오류 로그는 URL의 query 노출을 막기 위해 끄고 BE·저장소 메트릭으로 진단한다. 나머지 `/internal/`과 HTTP의 `/internal/`은 404다. 추가 EC2 포트는 열지 않는다.
+- 서버에서 새 워커마다 별도 난수를 화면에 출력하지 않고 비밀 파일로 생성한다(예: `umask 077` 후 `openssl rand -hex 32 > /안전한/경로/worker-token`, `chmod 600 /안전한/경로/worker-token`). 기존 워커와 다른 토큰을 사용한다. 서버의 `Infra/.env`도 권한 600으로 제한하고, 비밀 편집기에서 기존 항목을 보존하며 `CHART_WORKER_CREDENTIALS=기존ID=기존토큰,새ID=새토큰` 형식으로 등록한다. 파일·토큰을 로그나 채팅에 붙이지 않고 AI 담당자에게 승인된 비밀 전달 경로로 전달한다. 반영 시 API 컨테이너를 재생성하고 기존 워커와 새 워커 인증을 확인한다.
+- 전송 재시도를 소진한 워커가 heartbeat를 중단하면 임대 만료 후 단계 마감 및 단계별 최대 2회 재시도 안에서만 복구된다. 409·422 또는 이미 DONE이면 재배정을 보장하지 않는다.
+
 ### 운영 메모
 
 - 볼륨 슬롯은 자동(`-volume.max=0`)으로 둔다. 버킷마다 볼륨이 여러 개 잡히고 TTL 경로는 전용 볼륨이 필요해, 고정 값이 작으면 TTL 경로 업로드가 `Not enough data nodes found`로 실패한다.

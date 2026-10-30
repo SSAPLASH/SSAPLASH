@@ -12,6 +12,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import com.ssafy.airdrum.common.error.BusinessException;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -140,6 +143,56 @@ class WorkerApiTest {
             db.update("DELETE FROM chart_jobs WHERE id=?",otherJob);
             db.update("DELETE FROM songs WHERE id=?",otherSong); db.update("DELETE FROM users WHERE id=?",otherUser);
         }
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(ints={0,600001})
+    void invalidQueuedDurationFailsAndNextValidJobIsClaimed(Integer duration) throws Exception {
+        db.update("UPDATE songs SET duration_ms=? WHERE id=?",duration,song);
+        long otherUser=db.queryForObject("INSERT INTO users(nickname) VALUES ('next worker') RETURNING id",Long.class);
+        long otherSong=db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,'next','AUDIO','PROCESSING',600000) RETURNING id",Long.class,otherUser);
+        String key="source-audio/"+UUID.randomUUID();
+        long otherJob=db.queryForObject("INSERT INTO chart_jobs(song_id,user_id,source_key,idempotency_key,request_hash) VALUES(?,?,?,?,?) RETURNING id",Long.class,otherSong,otherUser,key,UUID.randomUUID().toString(),HASH);
+        db.update("INSERT INTO audio_uploads(id,user_id,job_id,object_key,content_type,size_bytes,sha256,duration_ms,status,expires_at) VALUES(?,?,?,?,'audio/wav',100,?,60000,'ACCEPTED',now()+interval '1 hour')",UUID.randomUUID(),otherUser,otherJob,key,HASH);
+        try {
+            var next=claim("worker1",T1,UUID.randomUUID(),200);
+            assertThat(next.path("jobId").asLong()).isEqualTo(otherJob);
+            assertThat(next.path("input").path("durationMs").asInt()).isEqualTo(600000);
+            assertThat(db.queryForObject("SELECT error_code FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("INPUT_INVALID");
+            assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("FAILED");
+            assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=?",Integer.class,job)).isEqualTo(1);
+            assertThat(db.queryForObject("SELECT status FROM audio_uploads WHERE id=?",String.class,source)).isEqualTo("RETIRED");
+        } finally {
+            db.update("DELETE FROM audio_uploads WHERE user_id=?",otherUser);
+            db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",otherJob);
+            db.update("DELETE FROM chart_job_attempts WHERE job_id=?",otherJob);
+            db.update("DELETE FROM chart_jobs WHERE id=?",otherJob);
+            db.update("DELETE FROM songs WHERE id=?",otherSong);
+            db.update("DELETE FROM users WHERE id=?",otherUser);
+        }
+    }
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(ints={0,600001})
+    void invalidCheckpointDurationIsRejectedOnReplayAndRetry(Integer duration) throws Exception {
+        UUID request=UUID.randomUUID();
+        UUID id=attempt(claim("worker1",T1,request,200));
+        var files=outputs(id);
+        raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1))),200);
+        db.update("UPDATE songs SET duration_ms=? WHERE id=?",duration,song);
+        claim("worker1",T1,request,409);
+        raw(path("/failure"),T1,Map.of("attemptId",id,"eventSeq",1,"stage","TRANSCRIBING","code","MODEL_FAILED","retryable",true,"summary","OOM"),200);
+        db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
+        claim("worker2",T2,UUID.randomUUID(),204);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT error_code FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("INPUT_INVALID");
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=? AND file_role='DRUM_STEM'",Integer.class,job)).isEqualTo(1);
+        claim("worker1",T1,request,409);
+    }
+    @Test void minimumPositiveDurationIsClaimed() throws Exception {
+        db.update("UPDATE songs SET duration_ms=1 WHERE id=?",song);
+        assertThat(claim("worker1",T1,UUID.randomUUID(),200).path("input").path("durationMs").asInt()).isEqualTo(1);
     }
 
     @Test void authAndConcurrentClaimReplayAndFencing() throws Exception {
