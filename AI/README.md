@@ -252,10 +252,14 @@ uv run pytest tests/worker
 
 ### GPU 서버에서 띄우기
 
-워커는 사내 GPU 서버(`~/ssaplash/S15P31A307/AI`)에서 `nohup`으로 상시 가동하고 EC2의 BE를 pull한다. 재부팅 뒤 자동 재시작은 없으므로 같은 순서로 다시 띄운다. 비밀 값은 저장소가 아니라 `~/ssaplash/worker.env`(권한 600)에 둔다.
+워커는 사내 GPU 서버(`~/ssaplash/S15P31A307/AI`, git 체크아웃)에서 `nohup`으로 상시 가동하고 EC2의 BE를 pull한다. 재부팅 뒤 자동 재시작은 없으므로 같은 순서로 다시 띄운다. 비밀 값은 저장소가 아니라 `~/ssaplash/worker.env`(권한 600)에 둔다.
+
+서버 주의 두 가지. 서버 드라이버는 570(CUDA 12.8)인데 `uv sync`는 lock의 기본 PyPI torch(CUDA 13 휠)를 깔아 `libcusparseLt.so.0` 오류로 import가 깨진다. `uv sync` 뒤에는 아래처럼 torch를 CUDA 12.8 휠로 다시 깔고, 그다음부터는 `uv run --no-sync`로 실행해 `uv run`이 다시 lock에 맞추지 않게 한다. 작업 폴더에는 `separation.json`·`transcription.json`(시간·메모리)이 남으며 `SSAPLASH_WORKER_KEEP_FILES=1`일 때만 보존된다.
 
 ```bash
 cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers
+uv pip install --reinstall "torch==2.8.0" "torchaudio==2.8.0" --index-url https://download.pytorch.org/whl/cu128
+uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.8.0+cu128 True
 # ~/ssaplash/worker.env 내용 (값은 BE·인프라에게 받음):
 #   SSAPLASH_WORKER_BASE_URL=https://k15a307.p.ssafy.io
 #   SSAPLASH_WORKER_ID=worker1
@@ -264,8 +268,8 @@ cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transc
 #   SSAPLASH_CHART_DEVICE=cuda
 #   CUDA_VISIBLE_DEVICES=6
 chmod 600 ~/ssaplash/worker.env && set -a && source ~/ssaplash/worker.env && set +a
-uv run ssaplash-worker check
-mkdir -p ~/ssaplash/results && nohup uv run ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
+uv run --no-sync ssaplash-worker check
+mkdir -p ~/ssaplash/results && nohup uv run --no-sync ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
 echo $! > ~/ssaplash/worker.pid
 tail -f ~/ssaplash/results/worker.log        # 상태
 kill $(cat ~/ssaplash/worker.pid)            # 멈추기. 처리 중인 작업을 끝내고 종료
