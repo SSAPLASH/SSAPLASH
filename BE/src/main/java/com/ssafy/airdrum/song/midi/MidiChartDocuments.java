@@ -1,5 +1,6 @@
 package com.ssafy.airdrum.song.midi;
 
+import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -44,9 +45,6 @@ class MidiChartDocuments {
 	record Built(String notes, String timing, int noteCount) {}
 	record Song(BigDecimal bpm, String timeSignature, int durationMs, Map<Difficulty, Built> charts) {}
 
-	private record Notation(long tick, long durationTicks, int voice) {}
-	private record Note(String noteId, long timeMs, String pad, int velocityHint, Notation notation) {}
-
 	Song build(DrumSequence sequence, Map<Difficulty, List<DrumNote>> charts) {
 		int ppq = sequence.ppq();
 		var timing = timing(sequence);
@@ -63,14 +61,28 @@ class MidiChartDocuments {
 		for (var entry : charts.entrySet()) {
 			var sorted = new ArrayList<>(entry.getValue());
 			sorted.sort(DifficultyThinner.ORDER);
-			var notes = new ArrayList<Note>(sorted.size());
-			for (int i = 0; i < sorted.size(); i++) {
-				var n = sorted.get(i);
-				long durationTicks = n.durationTicks() > 0 ? n.durationTicks() : Math.max(1, ppq / 4);
-				notes.add(new Note(noteIds.format(i + 1), Math.round(reader.milliseconds(timing, n.tick())),
-						n.pad().name(), n.velocity(), new Notation(n.tick(), durationTicks, n.pad().voice())));
+			var output = new StringWriter();
+			try (var generator = json.createGenerator(output)) {
+				generator.writeStartArray();
+				for (int i = 0; i < sorted.size(); i++) {
+					var n = sorted.get(i);
+					long durationTicks = n.durationTicks() > 0 ? n.durationTicks() : Math.max(1, ppq / 4);
+					generator.writeStartObject();
+					generator.writeStringProperty("noteId", noteIds.format(i + 1));
+					generator.writeNumberProperty("timeMs", Math.round(reader.milliseconds(timing, n.tick())));
+					generator.writeStringProperty("pad", n.pad().name());
+					generator.writeNumberProperty("velocityHint", n.velocity());
+					generator.writeName("notation");
+					generator.writeStartObject();
+					generator.writeNumberProperty("tick", n.tick());
+					generator.writeNumberProperty("durationTicks", durationTicks);
+					generator.writeNumberProperty("voice", n.pad().voice());
+					generator.writeEndObject();
+					generator.writeEndObject();
+				}
+				generator.writeEndArray();
 			}
-			var result = new Built(json.writeValueAsString(notes), timingJson, notes.size());
+			var result = new Built(output.toString(), timingJson, sorted.size());
 			// 조회 API가 못 읽는 채보는 저장하지 않는다. 실패는 생성기 버그다.
 			reader.detail(new Draft(result.notes(), result.timing(), result.noteCount(), duration));
 			built.put(entry.getKey(), result);

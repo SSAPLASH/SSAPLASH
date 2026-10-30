@@ -865,7 +865,7 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 .\gradlew.bat test --tests 'com.ssafy.airdrum.song.midi.*'
 ```
 
-테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다.
+테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다. 노트 JSON은 저장 전 조회 리더로 검증하며, 난이도별 출력과 로케일별 노트 ID를 기존 직렬화 결과와 비교한다.
 
 
 ## 채보 작업 진행 조회·알림 (172번)
