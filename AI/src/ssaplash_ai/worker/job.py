@@ -13,6 +13,7 @@ TRANSCRIBING: 드럼 트랙 준비(로컬 파일 sha256이 같으면 그대로, 
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import time
@@ -82,6 +83,9 @@ EXTENSIONS = {
 STATUS_DONE = "DONE"
 STATUS_FAILED_REPORTED = "FAILED_REPORTED"
 STATUS_ABANDONED = "ABANDONED"
+# 작업 폴더에 남기는 결과 메타(ssaplash-chart와 같은 이름). 시간·메모리 기록용, KEEP_FILES일 때 남음
+SEPARATION_META = "separation.json"
+TRANSCRIPTION_META = "transcription.json"
 
 
 class JobAbandoned(Exception):
@@ -226,6 +230,7 @@ class JobRunner:
             on_progress=_progress_callback(hb, SEPARATION_STAGE_PROGRESS),
             duration_ms=duration,
         )
+        _write_meta(job_dir / SEPARATION_META, out.to_dict())
         _check_lease(hb)
 
         sizes = {
@@ -328,6 +333,7 @@ class JobRunner:
             on_progress=_progress_callback(hb, TRANSCRIPTION_STAGE_PROGRESS),
             duration_ms=duration,
         )
+        _write_meta(job_dir / TRANSCRIPTION_META, out.to_dict())
         hb.set_progress(PROGRESS_TRANSCRIPTION_SUBMIT)
         _check_lease(hb)
         envelope = make_envelope(a.job_id, a.attempt_id, str(uuid.uuid4()), out.chart)
@@ -468,6 +474,14 @@ def _check_duration(duration_ms: int) -> int:
 def _check_lease(hb: Heartbeat) -> None:
     if hb.lease_lost:
         raise JobAbandoned("임대 상실 (heartbeat 거절)")
+
+
+def _write_meta(path: Path, meta: dict) -> None:
+    """결과 메타를 작업 폴더에 JSON으로. 실패해도 작업은 계속(로그만)."""
+    try:
+        path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as e:
+        logger.warning("결과 메타를 쓰지 못함: %s (%s)", path.name, e)
 
 
 def _matches(path: Path, size: int, sha256: str) -> bool:

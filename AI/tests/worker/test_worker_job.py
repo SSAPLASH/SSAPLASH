@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 import time
 from pathlib import Path
@@ -250,6 +251,11 @@ def test_keep_files면_작업_폴더를_남긴다(tmp_path: Path):
         assert len(dirs) == 1
         names = {p.name for p in dirs[0].iterdir()}
         assert {"source.wav", "drums.flac", "accompaniment.flac", "chart.json"} <= names
+        assert {"separation.json", "transcription.json"} <= names
+        sep = json.loads((dirs[0] / "separation.json").read_text(encoding="utf-8"))
+        tr = json.loads((dirs[0] / "transcription.json").read_text(encoding="utf-8"))
+        assert sep["duration_ms"] == 2200 and "separate_ms" in sep and "peak_vram_mb" in sep
+        assert tr["duration_ms"] == 2200 and "transcribe_ms" in tr and "chart" not in tr
 
 
 def test_mib_to_mb():
