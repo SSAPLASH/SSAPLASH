@@ -46,6 +46,23 @@ class CoverCleanupTest {
         verify(store,times(2)).delete(WorkerStore.Bucket.SHEET,old);
         verify(store,never()).delete(WorkerStore.Bucket.SHEET,active);
     }
+    /** 156번: 소유자 없는 공용 곡 커버도 살아 있는 동안 지우지 않고, 곡을 삭제하면 지운다. */
+    @Test void builtinCoverIsProtectedUntilSongDeleted() {
+        long builtin=db.queryForObject("INSERT INTO songs(title,source,status,license) VALUES('builtin cover','BUILTIN','READY','x') RETURNING id",Long.class);
+        String key="cover/builtin/"+builtin+"/"+UUID.randomUUID()+".png";
+        try {
+            db.update("UPDATE songs SET cover_key=? WHERE id=?",key,builtin);
+            db.update("INSERT INTO file_cleanup_tasks(object_key,file_role) VALUES(?,'COVER')",key);
+            cleanup.runOnce();
+            verify(store,never()).delete(WorkerStore.Bucket.SHEET,key);
+            db.update("UPDATE songs SET deleted_at=now() WHERE id=?",builtin);
+            cleanup.runOnce();
+            verify(store).delete(WorkerStore.Bucket.SHEET,key);
+        } finally {
+            db.update("DELETE FROM file_cleanup_tasks WHERE object_key=?",key);
+            db.update("DELETE FROM songs WHERE id=?",builtin);
+        }
+    }
     @Test void coverPresignUsesOneHourWithoutHeadRequest() {
         var signer=S3Presigner.builder().endpointOverride(URI.create("https://objects.example"))
                 .region(Region.US_EAST_1).credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test-access","test-secret")))
