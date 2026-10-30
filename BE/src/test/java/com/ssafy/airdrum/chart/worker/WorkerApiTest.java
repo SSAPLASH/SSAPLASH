@@ -259,6 +259,67 @@ class WorkerApiTest {
         return Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion",version,"metrics",Map.of(),
                 "charts",List.of(Map.of("difficulty","NORMAL","notationStatus",status,"notes",notes,"timing",timing)));
     }
+    @Test void malformedDifficultyFailsValidAttempt() throws Exception {
+        UUID id=prepareTranscription();
+        var result=new HashMap<>(transcription());
+        var chart=new HashMap<>((Map<String,Object>) ((List<?>) result.get("charts")).getFirst());
+        chart.put("difficulty",Map.of()); result.put("charts",List.of(chart));
+        raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),result),422);
+        assertThat(db.queryForObject("SELECT error_code FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("OUTPUT_INVALID");
+    }
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidResultTypes() {
+        var args=new ArrayList<org.junit.jupiter.params.provider.Arguments>();
+        for (String field:List.of("audioTimeOrigin","model.name","generator","difficulty","notationStatus","pad"))
+            for (Object value:List.of(Map.of(),List.of(),123)) args.add(org.junit.jupiter.params.provider.Arguments.of(field,value));
+        for (String field:List.of("model","chart","note"))
+            for (Object value:List.of(List.of(),123)) args.add(org.junit.jupiter.params.provider.Arguments.of(field,value));
+        args.add(org.junit.jupiter.params.provider.Arguments.of("notationStatus",null));
+        args.add(org.junit.jupiter.params.provider.Arguments.of("padMissing",123));
+        return args.stream();
+    }
+    @ParameterizedTest(name="{0} 잘못된 타입 {1}")
+    @org.junit.jupiter.params.provider.MethodSource("invalidResultTypes")
+    @SuppressWarnings("unchecked")
+    void invalidResultTypesFailAndScheduleCleanup(String field,Object value) throws Exception {
+        boolean separating=field.equals("audioTimeOrigin") || field.startsWith("model");
+        UUID id; Map<String,Object> result;
+        if(separating) {
+            id=attempt(claim("worker1",T1,UUID.randomUUID(),200)); var files=outputs(id);
+            result=new HashMap<>(separation(files.get(0),files.get(1)));
+            if(field.equals("model.name")) {var model=new HashMap<>((Map<String,Object>)result.get("model")); model.put("name",value); result.put("model",model);}
+            else result.put(field,value);
+        } else {
+            id=prepareTranscription(); result=new HashMap<>(transcription());
+            var chart=new HashMap<>((Map<String,Object>)((List<?>)result.get("charts")).getFirst());
+            if(field.equals("generator")) result.put(field,value);
+            else if(field.equals("chart")) result.put("charts",Collections.singletonList(value));
+            else {
+                if(field.equals("note")) chart.put("notes",Collections.singletonList(value));
+                else if(field.equals("pad") || field.equals("padMissing")) {var note=new HashMap<>((Map<String,Object>)((List<?>)chart.get("notes")).getFirst()); if(field.equals("padMissing")) note.remove("pad"); else note.put("pad",value); chart.put("notes",List.of(note));}
+                else chart.put(field,value);
+                result.put("charts",List.of(chart));
+            }
+        }
+        String inputKey=db.queryForObject("SELECT "+(separating?"source_key":"drum_stem_key")+" FROM chart_jobs WHERE id=?",String.class,job);
+        raw(path(separating?"/results/separation":"/results/transcription"),T1,envelope(id,UUID.randomUUID(),result),422);
+        assertThat(db.queryForMap("SELECT status,error_code,source_key,drum_stem_key FROM chart_jobs WHERE id=?",job))
+            .containsEntry("status","FAILED").containsEntry("error_code","OUTPUT_INVALID").containsEntry("source_key",null).containsEntry("drum_stem_key",null);
+        assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?",String.class,song)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT finished_at IS NOT NULL FROM chart_job_attempts WHERE id=?",Boolean.class,id)).isTrue();
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=?",Integer.class,job)).isGreaterThanOrEqualTo(3);
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=? AND object_key=? AND file_role=?",Integer.class,job,inputKey,separating?"SOURCE":"DRUM_STEM")).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT count(*) FROM chart_job_results WHERE job_id=? AND stage=?",Integer.class,job,separating?"SEPARATING":"TRANSCRIBING")).isZero();
+        assertThat(db.queryForObject("SELECT count(*) FROM charts WHERE song_id=?",Integer.class,song)).isZero();
+    }
+    @Test void malformedEnvelopeAndStaleAttemptKeepTheirContracts() throws Exception {
+        UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200)); var files=outputs(id);
+        var malformedEnvelope=new HashMap<>(envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1))));
+        malformedEnvelope.put("result",List.of()); raw(path("/results/separation"),T1,malformedEnvelope,400);
+        var malformedResult=new HashMap<>(separation(files.get(0),files.get(1))); malformedResult.put("audioTimeOrigin",Map.of());
+        db.update("UPDATE chart_job_attempts SET lease_expires_at=created_at+interval '1 microsecond' WHERE id=?",id);
+        raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),malformedResult),409);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+    }
     @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
         UUID id=prepareTranscription();
         var input=chartResult("READY",true,"x".repeat(50));
