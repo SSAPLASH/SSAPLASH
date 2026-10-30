@@ -4,6 +4,7 @@ import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
+import { gridOriginMs } from '@/domain/sheet';
 
 export interface NoteState {
   index: number;
@@ -77,12 +78,17 @@ export class RhythmSession {
     return 60_000 / this.chart.bpm;
   }
 
+  /** 격자 원점(ms, 곡 시각 기준) = 1마디 1박. 카운트인은 여기서 끝난다 (MODE-003-sheet-grid-origin 3장) */
+  get originMs(): number {
+    return gridOriginMs(this.chart);
+  }
+
   onJudgement(l: (e: JudgementEvent) => void): () => void {
     this.judgementListeners.add(l);
     return () => this.judgementListeners.delete(l);
   }
 
-  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at − countInMs부터 시작한다 */
+  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at + originMs − countInMs부터 시작한다 */
   start(at: number): void {
     this.startTime = at;
     this.status = this.opts.countInBars > 0 ? 'countin' : 'playing';
@@ -108,12 +114,12 @@ export class RhythmSession {
     }
   }
 
-  /** 카운트인 클릭 스케줄용: 각 박의 performance.now() 시각 */
+  /** 카운트인 클릭 스케줄용: 각 박의 performance.now() 시각. 마지막 박 다음 박이 originMs(1마디 1박)다 */
   countInBeats(): { at: number; accent: boolean }[] {
     const out: { at: number; accent: boolean }[] = [];
     const beats = this.chart.beatsPerBar * this.opts.countInBars;
     for (let i = 0; i < beats; i++) {
-      out.push({ at: this.startTime - this.countInMs + i * this.beatMs, accent: i % this.chart.beatsPerBar === 0 });
+      out.push({ at: this.startTime + this.originMs - this.countInMs + i * this.beatMs, accent: i % this.chart.beatsPerBar === 0 });
     }
     return out;
   }

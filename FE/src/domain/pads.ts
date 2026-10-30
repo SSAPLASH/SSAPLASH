@@ -50,8 +50,21 @@ export const ALL_PADS: PadId[] = [
   'HIHAT_PEDAL',
 ];
 
-/** 화면에 그리는 레인·킷 캔버스 패드 (왼쪽 → 오른쪽). 페달 입력 장치가 정해지기 전까지 HIHAT_PEDAL 제외 */
-export const LANE_PADS: PadId[] = ALL_PADS.filter((p) => p !== 'HIHAT_PEDAL');
+/**
+ * 화면에 그리는 패드 (노트 레인 왼쪽 → 오른쪽, 킷 보기·칩 목록). 9종 전부이고 하이햇 페달은 하이햇 왼쪽.
+ * 킷 보기는 이 순서가 아니라 kitLayout 좌표로 그린다. 저장·통계 순서는 ALL_PADS
+ */
+export const LANE_PADS: PadId[] = [
+  'CRASH',
+  'HIHAT_PEDAL',
+  'HIHAT',
+  'SNARE',
+  'SMALL_TOM',
+  'MID_TOM',
+  'FLOOR_TOM',
+  'RIDE',
+  'KICK',
+];
 
 /** 스틱 캘리브레이션 대상 패드 (KICK·HIHAT_PEDAL 제외) */
 export const STICK_PADS: PadId[] = ALL_PADS.filter((p) => PAD_META[p].stick);

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { PadId } from '@/domain/pads';
 import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/metronome';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
-import type { Pose, ResolvedHit, SensorId, SourceState } from '@/domain/events';
+import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState } from '@/domain/events';
 
 /** 전역 메트로놈 화면용 사본. 값의 주인은 engine/Metronome이고 bootstrap이 여기 옮긴다 */
 export interface MetronomeLive {
@@ -21,6 +21,10 @@ export interface MetronomeLive {
 
 interface LiveState {
   connected: [boolean, boolean];
+  /** 스틱별 배터리(%, 최근 몇 개 평균). 모르거나 그 손이 끊기면 null */
+  battery: [number | null, number | null];
+  /** 동글 링크 상태. 동글 소스가 아니거나 포트가 닫혀 있으면 null */
+  dongle: DongleLink | null;
   pose: [Pose, Pose];
   lastHit: ResolvedHit | null;
   sourceState: SourceState;
@@ -49,6 +53,8 @@ interface LiveState {
 
 export const useLive = create<LiveState>(() => ({
   connected: [false, false],
+  battery: [null, null],
+  dongle: null,
   pose: [
     { pitch: 0, yaw: 0 },
     { pitch: 0, yaw: 0 },

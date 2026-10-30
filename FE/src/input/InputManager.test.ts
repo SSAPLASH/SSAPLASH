@@ -126,3 +126,33 @@ describe('InputManager 판정', () => {
     expect(hits[0]).toMatchObject({ pad: 'KICK', judgedBy: 'chart', velocity: 80 });
   });
 });
+
+describe('InputManager 상태·활동 알림', () => {
+  it('상태 리스너가 배터리를 받는다', async () => {
+    const { im, src } = await setup('webserial');
+    const got: Array<[number, boolean, number | undefined]> = [];
+    im.onStatus((id, c, _s, b) => got.push([id, c, b]));
+    src.fire({ kind: 'status', stickId: 1, connected: true, batteryPct: 64 });
+    src.fire({ kind: 'status', stickId: 0, connected: true });
+    expect(got).toEqual([
+      [1, true, 64],
+      [0, true, undefined],
+    ]);
+  });
+
+  it('attach(auto)는 autoConnect를 지원하면 connect 대신 그걸 부른다', async () => {
+    const calls: string[] = [];
+    class AutoSource extends MockSource {
+      async connect(): Promise<void> {
+        calls.push('connect');
+      }
+      async autoConnect(): Promise<void> {
+        calls.push('auto');
+      }
+    }
+    const im = new InputManager();
+    await im.attach(new AutoSource('webserial'), true);
+    await im.attach(new AutoSource('webserial'));
+    expect(calls).toEqual(['auto', 'connect']);
+  });
+});

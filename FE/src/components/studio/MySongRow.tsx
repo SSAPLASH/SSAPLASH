@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
 import { songStatusView, type SongSummary } from '@/domain/songCatalog';
+import { dateLabel } from './dateLabel';
 import { JobStageStrip } from './JobStageStrip';
 
 interface Props {
@@ -14,20 +15,6 @@ interface Props {
   onReupload: (song: SongSummary) => void;
 }
 
-/** 오늘이면 "방금"/"n분 전"/"n시간 전", 아니면 날짜 */
-function dateLabel(iso: string, now = Date.now()): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  const d = new Date(t);
-  if (d.toDateString() === new Date(now).toDateString()) {
-    const min = Math.floor(Math.max(0, now - t) / 60_000);
-    if (min < 1) return '방금';
-    if (min < 60) return `${min}분 전`;
-    return `${Math.floor(min / 60)}시간 전`;
-  }
-  return d.toLocaleDateString('ko-KR');
-}
-
 export function MySongRow({ song, job, progress, justDone, onReupload }: Props) {
   const view = songStatusView(song.status);
   const sub = [song.artist, dateLabel(song.createdAt)].filter(Boolean).join(' · ');
@@ -38,7 +25,10 @@ export function MySongRow({ song, job, progress, justDone, onReupload }: Props) 
     <li className={cls}>
       <div className="studio-row-head">
         <span className="studio-row-main">
-          <span className="studio-row-title">{song.title}</span>
+          <span className="studio-row-title">
+            {song.title}
+            {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
+          </span>
           {sub && <span className="faint small">{sub}</span>}
         </span>
         <span className={`my-badge ${view.tone}`}>{view.label}</span>
@@ -47,10 +37,10 @@ export function MySongRow({ song, job, progress, justDone, onReupload }: Props) 
       {song.status === 'READY' && (
         <div className="studio-row-actions">
           <Link to={`/sheet?${query}`} className="btn-ghost as-button">
-            악보 확인
+            악보 연습
           </Link>
           <Link to={`/play?${query}`} className="btn-primary">
-            플레이
+            리듬 게임
           </Link>
         </div>
       )}

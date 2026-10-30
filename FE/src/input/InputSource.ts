@@ -1,7 +1,7 @@
 // 입력 소스 공통 인터페이스.
 // 키보드·포인터 모의 IMU·BLE 스틱·WebSocket 허브가 모두 같은 StickEvent를 낸다.
 // 상위(InputManager)는 소스 종류를 모른 채 이벤트만 받는다.
-import type { InputSourceKind, SourceState, StickEvent, StickId } from '@/domain/events';
+import type { DongleLink, InputSourceKind, SourceState, StickEvent, StickId } from '@/domain/events';
 
 export type { SourceState };
 
@@ -23,6 +23,8 @@ export interface InputSource {
   /** 사용자 제스처 안에서 호출해야 하는 소스(BLE)가 있다 */
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  /** 사용자 제스처 없이 이전에 허락받은 연결만 조용히 다시 연다. 열 게 없거나 실패하면 끊김으로 두고 던지지 않는다. 지원 안 하면 없음 */
+  autoConnect?(): Promise<void>;
   subscribe(listener: StickEventListener): () => void;
   onState(listener: StateListener): () => void;
   /** 자세 스트림 켜기/끄기. 캘리브레이션·자유 모드에서 켠다. 지원 안 하면 무시 */
@@ -39,6 +41,8 @@ export interface InputSource {
   clockOffsetOf?(stickId: StickId): number | null;
   /** 전송 계층 통계 */
   transportStats?(): TransportStats;
+  /** 동글 링크 상태 구독. 포트가 닫히면 null. 동글을 쓰는 소스(Web Serial)만 구현 */
+  onDongle?(listener: (link: DongleLink | null) => void): () => void;
 }
 
 export abstract class BaseInputSource implements InputSource {

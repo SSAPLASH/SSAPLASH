@@ -34,6 +34,7 @@ function builtinSummary(c: Chart, index: number): SongSummary {
     hasAccompaniment: false,
     difficulties: [c.difficulty],
     createdAt: '',
+    coverUrl: null,
   };
 }
 

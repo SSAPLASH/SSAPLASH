@@ -41,6 +41,8 @@ interface SettingsState {
   metronomeBeatsPerBar: BeatsPerBar;
   /** 패드 소리 on/off. 메트로놈 클릭은 영향 없음 */
   soundOn: boolean;
+  /** 악보 연주 드럼 가이드의 박 라벨 표시 */
+  sheetPadCount: boolean;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -67,12 +69,13 @@ interface SettingsState {
   setMetronomeBpm: (v: number) => void;
   setMetronomeBeatsPerBar: (v: BeatsPerBar) => void;
   setSoundOn: (v: boolean) => void;
+  setSheetPadCount: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 10;
+export const SETTINGS_VERSION = 11;
 
 /**
  * 저장된 설정 이행.
@@ -85,6 +88,7 @@ export const SETTINGS_VERSION = 10;
  * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
  * v8 → v9: profile·calibrationMode·holdMs 삭제(판정 프로필은 배치에서 유도). firstSetupDone=false, activePresetId=presets[0]?.id ?? null 추가. 프리셋에 isDefault(첫 항목)·schemaVersion 1·updatedAt(=createdAt) 채움.
  * v9 → v10: 패드 이름 `HI_TOM` → `SMALL_TOM`, 없는 패드(MID_TOM·HIHAT_PEDAL 등)는 기본 배치로 보충. 최상위 kitLayout과 presets[].layout에 적용(객체가 아닌 layout의 프리셋은 버림).
+ * v10 → v11: sheetPadCount(기본 true) 추가.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -153,6 +157,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
       return layout ? [{ ...x, layout }] : [];
     });
   }
+  if (version < 11) p.sheetPadCount = true;
   return p as unknown as SettingsState;
 }
 
@@ -184,6 +189,7 @@ export const useSettings = create<SettingsState>()(
       metronomeBpm: BPM_DEFAULT,
       metronomeBeatsPerBar: 4,
       soundOn: true,
+      sheetPadCount: true,
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -209,6 +215,7 @@ export const useSettings = create<SettingsState>()(
       setMetronomeBpm: (metronomeBpm) => set({ metronomeBpm }),
       setMetronomeBeatsPerBar: (metronomeBeatsPerBar) => set({ metronomeBeatsPerBar }),
       setSoundOn: (soundOn) => set({ soundOn }),
+      setSheetPadCount: (sheetPadCount) => set({ sheetPadCount }),
     }),
     {
       name: 'ssaplash.settings',

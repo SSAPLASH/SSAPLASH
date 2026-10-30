@@ -18,6 +18,7 @@ import {
   encodeResetPose,
   encodeSetMode,
   encodeSync,
+  encodeRoute,
   padFromCode,
   parsePacket,
 } from './stickProtocol';
@@ -123,6 +124,18 @@ describe('decodePacket 그 외', () => {
     v.setUint32(2, 123456, true);
     v.setUint32(6, 7_000_000, true);
     expect(decodePacket(b, 0)).toMatchObject({ kind: 'syncAck', t0Ms: 123456, t1Us: 7_000_000 });
+  });
+
+  it('LINK 5B: 연결 마스크·동글 fw, 4B는 error short', () => {
+    expect(decodePacket(new Uint8Array([0x07, 0, 0b0011, 2, 1]), 7)).toEqual({
+      kind: 'link',
+      recvTime: 7,
+      flags: 0,
+      linkMask: 0b0011,
+      fwMajor: 2,
+      fwMinor: 1,
+    });
+    expect(decodePacket(new Uint8Array([0x07, 0, 1, 2]), 0)).toMatchObject({ kind: 'error', reason: 'short', type: 7 });
   });
 
   it('BRIDGE_STATS 14B', () => {
@@ -240,7 +253,30 @@ describe('parsePacket', () => {
     b[0] = 0x04;
     v.setUint32(2, 100, true);
     v.setUint32(6, 2_500_000, true);
-    expect(parsePacket(b, 0)).toEqual({ kind: 'syncAck', t0: 100, t1: 2500 });
+    expect(parsePacket(b, 0)).toEqual({ kind: 'syncAck', stickId: 0, t0: 100, t1: 2500 });
+  });
+
+  it('syncAck stickId는 flags role에서 온다(동글 아래 두 스틱이 각자 답함)', () => {
+    const b = new Uint8Array(10);
+    b[0] = 0x04;
+    b[1] = 1;
+    expect(parsePacket(b, 0)).toMatchObject({ kind: 'syncAck', stickId: 1 });
+  });
+
+  it('발 역할(role 2·3) 패킷은 손 이벤트로 읽지 않는다', () => {
+    expect(parsePacket(hitBytes({ flags: 2 }), 0)).toBeNull();
+    expect(parsePacket(hitBytes({ flags: 3 }), 0)).toBeNull();
+    expect(parsePacket(new Uint8Array([0x03, 2, 80, 0, 1, 2]), 0)).toBeNull();
+    const ack = new Uint8Array(10);
+    ack[0] = 0x04;
+    ack[1] = 3;
+    expect(parsePacket(ack, 0)).toBeNull();
+    // role 외 비트가 켜져 있어도 손이면 그대로
+    expect(parsePacket(hitBytes({ flags: 0x10 | 1 }), 0)).toMatchObject({ kind: 'hit', stickId: 1 });
+  });
+
+  it('link는 이벤트가 아니라 null', () => {
+    expect(parsePacket(new Uint8Array([0x07, 0, 3, 2, 0]), 0)).toBeNull();
   });
 
   it('bridgeStats·log·paramAck·swing·error는 null', () => {
@@ -288,6 +324,10 @@ describe('인코더', () => {
   });
   it('GET_PARAMS', () => {
     expect([...encodeGetParams()]).toEqual([0x17]);
+  });
+  it('ROUTE: [0x70][1 << 손][원래 명령]', () => {
+    expect([...encodeRoute(0, encodeSetYawOffset(2))]).toEqual([0x70, 0b01, 0x16, 0xc8, 0x00]);
+    expect([...encodeRoute(1, encodeHaptic(200, 30))]).toEqual([0x70, 0b10, ...encodeHaptic(200, 30)]);
   });
 });
 

@@ -1,7 +1,6 @@
-// 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetStrip(연주 중 흐름)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
-import type { Chart } from '@/domain/chart';
+// 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Judgement } from '@/domain/judgement';
-import type { BarLayout } from '@/domain/sheet';
+import { gridTimeOf, type BarLayout, type GridChart } from '@/domain/sheet';
 import { xOfTime } from './sheetStripMath';
 
 const LINE_GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
@@ -10,6 +9,8 @@ const STEM_LEN = 34;
 const HEAD_RX = 6;
 const HEAD_RY = 4.5;
 const STEM_DX = HEAD_RX - 0.75; // 기둥은 머리 오른쪽
+/** 격자 밖 노트 표시 점의 반지름(px). 지름 3px */
+const OFF_GRID_DOT_R = 1.5;
 
 export interface Colors {
   ink: string;
@@ -51,17 +52,22 @@ export function readColors(el: Element = document.documentElement): Colors {
 }
 
 const yOfPos = (pos: number) => STAFF_BOTTOM - pos * (LINE_GAP / 2);
+/** 보표 맨 위 선·맨 아래 선의 y. SheetPager가 커서 길이를 맞출 때 쓴다 */
+export const STAFF_TOP_Y = yOfPos(8);
+export const STAFF_BOTTOM_Y = yOfPos(0);
 
 export interface DrawSheetOpts {
-  chart: Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'>;
+  chart: GridChart;
   /** chart.notes와 같은 인덱스. 미판정은 null */
   noteStates: (Judgement | null)[];
   /** 채보 밖 타격(곡 시각 ms) */
   strayHits: { timeMs: number }[];
-  /** 기준선이 가리키는 곡 시각(reduced motion이면 이미 마디 경계로 내린 값) */
+  /** 기준선이 가리키는 곡 시각(반주 기준, reduced motion이면 이미 마디 경계로 내린 값) */
   songTime: number;
-  /** 스냅 전 곡 시각. 박 번호·카운트인 숫자에 쓴다(없으면 songTime) */
+  /** 스냅 전 곡 시각(반주 기준). 박 번호·카운트인 숫자에 쓴다(없으면 songTime) */
   rawSongTime?: number;
+  /** 격자 원점(ms, 반주 기준). 마디 bar의 왼쪽은 originMs + bar·barMs */
+  originMs: number;
   width: number;
   height: number;
   barPx: number;
@@ -79,13 +85,13 @@ export interface DrawSheetOpts {
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
 export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): void {
-  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
+  const { chart, noteStates, strayHits, songTime: t, originMs, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
   const raw = opts.rawSongTime ?? t;
   const { first, last } = bars;
   const X = (ms: number) => xOfTime(ms, t, width, barPx, baseRatio, barMs);
   const baseX = width * baseRatio;
-  const top = yOfPos(8);
-  const bottom = yOfPos(0);
+  const top = STAFF_TOP_Y;
+  const bottom = STAFF_BOTTOM_Y;
 
   // 보표 5선
   ctx.strokeStyle = colors.inkFaint;
@@ -98,8 +104,8 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     ctx.stroke();
   }
 
-  // 박자표: 첫 마디 앞
-  const x0 = X(0);
+  // 박자표: 첫 마디(격자 원점) 앞
+  const x0 = X(originMs);
   if (x0 > -60 && x0 < width + 60) {
     ctx.fillStyle = colors.ink;
     ctx.font = '700 22px Pretendard Variable, Pretendard, sans-serif';
@@ -110,7 +116,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   }
 
   for (let bar = first; bar <= last; bar++) {
-    const left = X(bar * barMs);
+    const left = X(originMs + bar * barMs);
     // 마디선·번호
     ctx.strokeStyle = colors.inkDim;
     ctx.lineWidth = 1.5;
@@ -201,6 +207,13 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
           ctx.stroke();
         }
       }
+      // 격자 밖 노트: 머리 오른쪽 위에 작은 점("악보보다 조금 앞뒤로 친다")
+      if (g.offGrid) {
+        ctx.fillStyle = colors.inkFaint;
+        ctx.beginPath();
+        ctx.arc(x + HEAD_RX + 3, y - HEAD_RY - 3, OFF_GRID_DOT_R, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
@@ -216,37 +229,54 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
 
   if (!showBase) return;
 
-  // 고정 기준선: 2px + 글로우
+  drawCursor(ctx, baseX, top - 30, bottom + 40, colors);
+  drawBeatLabel(ctx, baseX + 12, bottom + 46, gridTimeOf(raw, originMs), beatMs, chart.beatsPerBar, colors, countInMs);
+}
+
+/** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */
+export function drawCursor(ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number, colors: Colors): void {
   ctx.save();
   ctx.strokeStyle = colors.base;
   ctx.lineWidth = 2;
   ctx.shadowColor = colors.baseGlow;
   ctx.shadowBlur = 12;
   ctx.beginPath();
-  ctx.moveTo(baseX, top - 30);
-  ctx.lineTo(baseX, bottom + 40);
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
   ctx.stroke();
   ctx.restore();
+}
 
-  // 현재 박 번호(기준선 오른쪽 아래 큰 숫자 + 작은 "박") / 카운트인 남은 박 수
+/**
+ * 현재 박 번호(큰 숫자 + 작은 "박") / 리드인 남은 박 수.
+ * x는 숫자의 왼쪽 끝, y는 글자 기준선이다. gridTime은 격자 시각(곡 시각 − 원점)이며 0보다 작으면 1마디 1박 전(카운트인·인트로)이다.
+ */
+export function drawBeatLabel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  gridTime: number,
+  beatMs: number,
+  beatsPerBar: number,
+  colors: Colors,
+  countInMs?: number,
+): void {
   let label: string | null = null;
-  if (raw < 0) {
-    if (countInMs === undefined || raw >= -countInMs) {
-      label = String(Math.max(1, Math.ceil(-raw / beatMs - 1e-9)));
+  if (gridTime < 0) {
+    if (countInMs === undefined || gridTime >= -countInMs) {
+      label = String(Math.max(1, Math.ceil(-gridTime / beatMs - 1e-9)));
     }
   } else {
-    label = String((Math.floor(raw / beatMs) % chart.beatsPerBar) + 1);
+    label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
   }
-  if (label !== null) {
-    const y = bottom + 46;
-    ctx.fillStyle = colors.base;
-    ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(label, baseX + 12, y);
-    const w = ctx.measureText(label).width;
-    ctx.fillStyle = colors.inkFaint;
-    ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
-    ctx.fillText('박', baseX + 12 + w + 6, y);
-  }
+  if (label === null) return;
+  ctx.fillStyle = colors.base;
+  ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(label, x, y);
+  const w = ctx.measureText(label).width;
+  ctx.fillStyle = colors.inkFaint;
+  ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
+  ctx.fillText('박', x + w + 6, y);
 }
