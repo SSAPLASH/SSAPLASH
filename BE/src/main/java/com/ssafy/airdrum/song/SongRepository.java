@@ -18,11 +18,11 @@ public interface SongRepository extends Repository<Song, Long> {
 		""";
 	String VISIBLE = """
 		s.deleted_at IS NULL AND
-		((s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY') OR s.owner_id = :userId)
+		((s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published) OR s.owner_id = :userId)
 		""";
 	String FILTER = """
 		s.deleted_at IS NULL AND
-		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY')
+		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY' AND s.published)
 		 OR (:scope = 'MINE' AND s.owner_id = :userId))
 		AND (LOWER(s.title) LIKE LOWER(:pattern) ESCAPE '!'
 		 OR LOWER(COALESCE(s.artist, '')) LIKE LOWER(:pattern) ESCAPE '!')
