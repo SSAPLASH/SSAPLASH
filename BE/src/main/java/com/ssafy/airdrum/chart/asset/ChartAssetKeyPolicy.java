@@ -24,6 +24,11 @@ public class ChartAssetKeyPolicy {
 		requireSafe(key);
 		if (!key.matches("cover/builtin/" + songId + "/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)")) reject();
 	}
+	/** 내 악보(155번). 곡과 무관하게 회원·악보 단위로 둔다. */
+	public void sheetMusic(long userId, long sheetId, String key) {
+		requireSafe(key);
+		if (!key.matches("sheet-music/" + userId + "/" + sheetId + "/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp|pdf)")) reject();
+	}
 	private void requireSafe(String key) {
 		if (key == null || key.length() > 300 || key.contains("..") || key.contains("%") || key.contains("\\")) reject();
 	}
