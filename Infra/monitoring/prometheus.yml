@@ -1,0 +1,20 @@
+# Prometheus 수집 설정. 수집 대상은 모두 내부 네트워크의 서비스 이름으로 접근한다.
+# 보관 기간과 용량 한도는 docker-compose.yml의 실행 옵션(retention.time, retention.size)에 있다.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 서버(호스트) 자원: CPU·메모리·디스크·네트워크
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # 컨테이너별 자원: CPU·메모리·네트워크·디스크 입출력
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]

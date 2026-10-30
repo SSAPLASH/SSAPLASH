@@ -1,0 +1,12 @@
+# 대시보드 JSON을 읽을 폴더를 알려 준다. 대시보드는 저장소의 파일이 원본이다.
+apiVersion: 1
+
+providers:
+  - name: infra
+    orgId: 1
+    folder: 인프라
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

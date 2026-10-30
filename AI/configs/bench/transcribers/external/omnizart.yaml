@@ -1,0 +1,16 @@
+# Omnizart drum (TensorFlow). 별도 환경 .venv-omnizart (README). 13분류 모델이지만 저장소의 공개 추론은
+# 킥(35)·스네어(38)·하이햇(42) 셋만 MIDI로 냄(2026-10-21 코드 확인) → 탐·심벌 타격은 전부 놓친 것으로 집계됨.
+name: omnizart
+adapter: external
+env_name: omnizart
+python_exe: .venv-omnizart/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/omnizart_transcribe.py
+velocity: false
+input_sample_rate: 44100
+license_code: MIT
+license_weights: 명시 없음 (omnizart download-checkpoints로 받음)
+source_url: https://github.com/Music-and-Culture-Technology-Lab/omnizart
+labels:
+  35: KICK
+  38: SNARE
+  42: HIHAT

@@ -1,0 +1,8 @@
+# 모델 없이 흐름만 확인하는 설정 (CI·컨테이너 확인용). 드럼 = 원곡 × 0.5, 반주 = 나머지 절반.
+# 예: uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/chart/separation_mock.yaml
+model_config: configs/bench/models/mock/mock_half.yaml
+device: cpu
+output:
+  sample_rate: 44100
+  format: flac
+max_duration_sec: 600

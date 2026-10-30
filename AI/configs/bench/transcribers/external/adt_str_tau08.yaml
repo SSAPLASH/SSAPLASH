@@ -1,0 +1,65 @@
+# ADT_STR (2026-01, transformer 69M, 26분류). 별도 환경 .venv-adt-str + 저장소 클론 ext/ADT_STR (README).
+# tau 0.8이 저장소 기준 가장 좋은 변형. 출력은 GM 피치 MIDI(세기 있음) → 아래 대응표.
+# 탐 경계는 우리 정답(GMD) 기준: 50·48 하이, 47·45 미드, 43·41 플로어 (설계 U9). 패드 밖 타악기는 제외.
+name: adt_str_tau08
+adapter: external
+env_name: adt-str
+python_exe: .venv-adt-str/Scripts/python.exe  # 이 파일이 없으면(Linux·코랩) .venv-<env_name>/bin/python을 자동으로 찾음
+script: scripts/transcribers_ext/adt_str_transcribe.py
+variant: setting-tau-0.8
+options:
+  repo_dir: ext/ADT_STR
+velocity: true
+input_sample_rate: 24000
+license_code: CC BY-SA 4.0
+license_weights: CC BY-SA 4.0 (HF Pierfrancesco/adt-str, 저장소 README 기준)
+source_url: https://github.com/pier-maker92/ADT_STR
+labels:
+  35: KICK
+  36: KICK
+  37: SNARE
+  38: SNARE
+  40: SNARE
+  42: HIHAT
+  44: HIHAT
+  46: HIHAT
+  50: SMALL_TOM
+  48: SMALL_TOM
+  47: MID_TOM
+  45: MID_TOM
+  43: FLOOR_TOM
+  41: FLOOR_TOM
+  49: CRASH
+  57: CRASH
+  52: CRASH
+  55: CRASH
+  51: RIDE
+  53: RIDE
+  59: RIDE
+  39: __drop__
+  54: __drop__
+  56: __drop__
+  58: __drop__
+  66: __drop__
+  68: __drop__
+  70: __drop__
+  72: __drop__
+  74: __drop__
+  77: __drop__
+  79: __drop__
+  81: __drop__
+  # 60~81: 봉고·콩가·팀발레·아고고·카바사·마라카스·휘슬·귀로·클라베·우드블록·쿠이카·트라이앵글. 코랩 GMD 본측정에서 60이 나와 추가
+  60: __drop__
+  61: __drop__
+  62: __drop__
+  63: __drop__
+  64: __drop__
+  65: __drop__
+  67: __drop__
+  69: __drop__
+  71: __drop__
+  73: __drop__
+  75: __drop__
+  76: __drop__
+  78: __drop__
+  80: __drop__

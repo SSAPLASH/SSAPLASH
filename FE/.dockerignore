@@ -1,0 +1,11 @@
+# 도커 이미지 빌드 컨텍스트에 넣지 않는 것
+node_modules/
+dist/
+coverage/
+.vite/
+.env
+.env.*
+!.env.example
+*.log
+.oxlintrc.json
+vitest.config.ts

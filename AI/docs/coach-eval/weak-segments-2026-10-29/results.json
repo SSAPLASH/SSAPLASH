@@ -1,0 +1,970 @@
+{
+  "analyzerVersion": "weak-rules-0.1",
+  "config": {
+    "seeds": 100,
+    "noteCounts": [
+      60,
+      200,
+      600
+    ],
+    "goodMsValues": [
+      30.0,
+      50.0,
+      60.0,
+      100.0,
+      150.0
+    ],
+    "baseSeed": 0
+  },
+  "trials": 3900,
+  "cells": [
+    {
+      "scenario": "TIMING_LATE",
+      "kind": "PLANTED",
+      "strength": 0.15,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_LATE",
+      "kind": "PLANTED",
+      "strength": 0.25,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_LATE",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "TRANSITION_LATE": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_LATE",
+      "kind": "PLANTED",
+      "strength": 0.6,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "TRANSITION_LATE": 100,
+        "MISS_CLUSTER": 3
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.15,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.25,
+      "n": 100,
+      "detected": 1,
+      "detectionRate": 0.01,
+      "detectionCi": [
+        0.0018,
+        0.0545
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "TIMING_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.6,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 5,
+        "TRANSITION_MISS": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_LATE",
+      "kind": "PLANTED",
+      "strength": 0.25,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "TRANSITION_MISS": 3
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_LATE",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 55,
+      "detectionRate": 0.55,
+      "detectionCi": [
+        0.4524,
+        0.6439
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        55,
+        55
+      ],
+      "cross": {
+        "TRANSITION_LATE": 12,
+        "TRANSITION_MISS": 6,
+        "MISS_CLUSTER": 2
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_LATE",
+      "kind": "PLANTED",
+      "strength": 0.6,
+      "n": 100,
+      "detected": 96,
+      "detectionRate": 0.96,
+      "detectionCi": [
+        0.9016,
+        0.9843
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        96,
+        96
+      ],
+      "cross": {
+        "TRANSITION_LATE": 72,
+        "TRANSITION_MISS": 8,
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_LATE",
+      "kind": "PLANTED",
+      "strength": 0.9,
+      "n": 100,
+      "detected": 77,
+      "detectionRate": 0.77,
+      "detectionCi": [
+        0.6785,
+        0.8416
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        77,
+        77
+      ],
+      "cross": {
+        "TRANSITION_LATE": 72,
+        "TRANSITION_MISS": 64,
+        "MISS_CLUSTER": 17
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.25,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 2,
+        "TRANSITION_MISS": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 47,
+      "detectionRate": 0.47,
+      "detectionCi": [
+        0.3751,
+        0.5671
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        47,
+        47
+      ],
+      "cross": {
+        "TRANSITION_MISS": 5,
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.6,
+      "n": 100,
+      "detected": 95,
+      "detectionRate": 0.95,
+      "detectionCi": [
+        0.8882,
+        0.9785
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        95,
+        95
+      ],
+      "cross": {
+        "TRANSITION_MISS": 2
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "PAD_EARLY",
+      "kind": "PLANTED",
+      "strength": 0.9,
+      "n": 100,
+      "detected": 85,
+      "detectionRate": 0.85,
+      "detectionCi": [
+        0.7672,
+        0.9069
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        85,
+        85
+      ],
+      "cross": {
+        "TRANSITION_MISS": 68,
+        "MISS_CLUSTER": 23
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_LATE",
+      "kind": "PLANTED",
+      "strength": 0.3,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_LATE",
+      "kind": "PLANTED",
+      "strength": 0.5,
+      "n": 100,
+      "detected": 45,
+      "detectionRate": 0.45,
+      "detectionCi": [
+        0.3561,
+        0.5476
+      ],
+      "locationOk": [
+        45,
+        45
+      ],
+      "padsOk": [
+        45,
+        45
+      ],
+      "cross": {
+        "MISS_CLUSTER": 2
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_LATE",
+      "kind": "PLANTED",
+      "strength": 0.7,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        100,
+        100
+      ],
+      "padsOk": [
+        100,
+        100
+      ],
+      "cross": {
+        "TRANSITION_MISS": 1,
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_LATE",
+      "kind": "PLANTED",
+      "strength": 1.0,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        100,
+        100
+      ],
+      "padsOk": [
+        100,
+        100
+      ],
+      "cross": {
+        "TRANSITION_MISS": 99,
+        "MISS_CLUSTER": 19
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_MISS",
+      "kind": "PLANTED",
+      "strength": 0.2,
+      "n": 100,
+      "detected": 7,
+      "detectionRate": 0.07,
+      "detectionCi": [
+        0.0343,
+        0.1375
+      ],
+      "locationOk": [
+        7,
+        7
+      ],
+      "padsOk": [
+        7,
+        7
+      ],
+      "cross": {
+        "MISS_CLUSTER": 7
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_MISS",
+      "kind": "PLANTED",
+      "strength": 0.35,
+      "n": 100,
+      "detected": 77,
+      "detectionRate": 0.77,
+      "detectionCi": [
+        0.6785,
+        0.8416
+      ],
+      "locationOk": [
+        77,
+        77
+      ],
+      "padsOk": [
+        77,
+        77
+      ],
+      "cross": {
+        "MISS_CLUSTER": 18
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_MISS",
+      "kind": "PLANTED",
+      "strength": 0.5,
+      "n": 100,
+      "detected": 97,
+      "detectionRate": 0.97,
+      "detectionCi": [
+        0.9155,
+        0.9897
+      ],
+      "locationOk": [
+        97,
+        97
+      ],
+      "padsOk": [
+        97,
+        97
+      ],
+      "cross": {
+        "MISS_CLUSTER": 26
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "TRANSITION_MISS",
+      "kind": "PLANTED",
+      "strength": 0.7,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        100,
+        100
+      ],
+      "padsOk": [
+        100,
+        100
+      ],
+      "cross": {
+        "MISS_CLUSTER": 46
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "HAND_WEAK",
+      "kind": "PLANTED",
+      "strength": 0.9,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "HAND_WEAK",
+      "kind": "PLANTED",
+      "strength": 0.8,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "HAND_WEAK",
+      "kind": "PLANTED",
+      "strength": 0.7,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 3
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "HAND_WEAK",
+      "kind": "PLANTED",
+      "strength": 0.55,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "MISS_CLUSTER",
+      "kind": "PLANTED",
+      "strength": 0.2,
+      "n": 100,
+      "detected": 11,
+      "detectionRate": 0.11,
+      "detectionCi": [
+        0.0625,
+        0.1863
+      ],
+      "locationOk": [
+        8,
+        11
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "MISS_CLUSTER",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 64,
+      "detectionRate": 0.64,
+      "detectionCi": [
+        0.5424,
+        0.7273
+      ],
+      "locationOk": [
+        63,
+        64
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {
+        "TRANSITION_MISS": 1
+      }
+    },
+    {
+      "scenario": "MISS_CLUSTER",
+      "kind": "PLANTED",
+      "strength": 0.6,
+      "n": 100,
+      "detected": 99,
+      "detectionRate": 0.99,
+      "detectionCi": [
+        0.9455,
+        0.9982
+      ],
+      "locationOk": [
+        98,
+        99
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {
+        "TRANSITION_MISS": 5
+      }
+    },
+    {
+      "scenario": "MISS_CLUSTER",
+      "kind": "PLANTED",
+      "strength": 0.9,
+      "n": 100,
+      "detected": 100,
+      "detectionRate": 1.0,
+      "detectionCi": [
+        0.963,
+        1.0
+      ],
+      "locationOk": [
+        100,
+        100
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {
+        "TRANSITION_MISS": 20
+      }
+    },
+    {
+      "scenario": "UNSTEADY",
+      "kind": "PLANTED",
+      "strength": 0.3,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "UNSTEADY",
+      "kind": "PLANTED",
+      "strength": 0.4,
+      "n": 100,
+      "detected": 0,
+      "detectionRate": 0.0,
+      "detectionCi": [
+        0.0,
+        0.037
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {},
+      "allowed": {}
+    },
+    {
+      "scenario": "UNSTEADY",
+      "kind": "PLANTED",
+      "strength": 0.55,
+      "n": 100,
+      "detected": 4,
+      "detectionRate": 0.04,
+      "detectionCi": [
+        0.0157,
+        0.0984
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 23,
+        "TRANSITION_MISS": 1
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "UNSTEADY",
+      "kind": "PLANTED",
+      "strength": 0.75,
+      "n": 100,
+      "detected": 68,
+      "detectionRate": 0.68,
+      "detectionCi": [
+        0.5834,
+        0.7633
+      ],
+      "locationOk": [
+        0,
+        0
+      ],
+      "padsOk": [
+        0,
+        0
+      ],
+      "cross": {
+        "MISS_CLUSTER": 82,
+        "TRANSITION_MISS": 28
+      },
+      "allowed": {}
+    },
+    {
+      "scenario": "CLEAN_EXPERT",
+      "kind": "CLEAN",
+      "strength": 0.0,
+      "n": 100,
+      "falsePositive": 0,
+      "fpRate": 0.0,
+      "patterns": {}
+    },
+    {
+      "scenario": "CLEAN_AVERAGE",
+      "kind": "CLEAN",
+      "strength": 0.0,
+      "n": 100,
+      "falsePositive": 3,
+      "fpRate": 0.03,
+      "patterns": {
+        "MISS_CLUSTER": 3
+      }
+    },
+    {
+      "scenario": "CLEAN_NOVICE",
+      "kind": "CLEAN",
+      "strength": 0.0,
+      "n": 100,
+      "falsePositive": 12,
+      "fpRate": 0.12,
+      "patterns": {
+        "MISS_CLUSTER": 12
+      }
+    }
+  ],
+  "falsePositiveByPattern": {
+    "MISS_CLUSTER": {
+      "count": 15,
+      "trials": 300
+    }
+  },
+  "performance": [
+    {
+      "hits": 5047,
+      "validateSec": 0.044,
+      "analyzeSec": 0.028
+    },
+    {
+      "hits": 48464,
+      "validateSec": 0.232,
+      "analyzeSec": 0.065
+    }
+  ],
+  "serverSmoke": [
+    {
+      "playId": "sample-timing-late",
+      "status": 200,
+      "same": true
+    },
+    {
+      "playId": "sample-pad-late",
+      "status": 200,
+      "same": true
+    },
+    {
+      "playId": "sample-transition-miss",
+      "status": 200,
+      "same": true
+    },
+    {
+      "playId": "sample-hand-weak",
+      "status": 200,
+      "same": true
+    },
+    {
+      "playId": "sample-miss-cluster",
+      "status": 200,
+      "same": true
+    },
+    {
+      "playId": "sample-clean-average",
+      "status": 200,
+      "same": true
+    }
+  ]
+}
