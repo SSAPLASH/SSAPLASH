@@ -6,6 +6,35 @@ export type SetupStepId = 'stick' | 'calibration' | 'preset';
 /** skipped = 키보드 전용이라 필요 없음 */
 export type SetupStepStatus = 'done' | 'needed' | 'skipped';
 
+/**
+ * 동글 상태(Web Serial만). closed: 포트가 안 열림, waiting: 열렸고 LINK 전(예전 동글 펌웨어 포함),
+ * ok: LINK 수신 중, stale: LINK가 끊김
+ */
+export type SetupDongleState = 'closed' | 'waiting' | 'ok' | 'stale';
+
+/** 스틱이 꺼져 있을 때 안내. 스틱은 켜지면 동글에 자동으로 붙는다(EMB 회신) */
+export const STICK_POWER_HINT = '스틱 버튼을 눌러 켜 주세요';
+
+export interface DongleLine {
+  /** 점 색. 없으면 점을 그리지 않는다(포트가 안 열림) */
+  dot: 'on' | 'off' | null;
+  text: string;
+  /** 버튼: 포트가 안 열렸으면 [동글 연결], 열렸으면 [다른 동글 연결] */
+  action: '동글 연결' | '다른 동글 연결';
+}
+
+/** ① 본문의 동글 한 줄(Figma 264:8805·264:8855) */
+export function dongleLine(dongle: SetupDongleState, connected: readonly [boolean, boolean]): DongleLine {
+  if (dongle === 'closed') return { dot: null, text: '처음 한 번만 동글이 꽂힌 포트를 골라요', action: '동글 연결' };
+  if (dongle === 'stale') return { dot: 'off', text: '동글 응답이 없어요 · 동글을 다시 꽂아 주세요', action: '다른 동글 연결' };
+  const none = !connected[0] && !connected[1];
+  return {
+    dot: 'on',
+    text: none ? `동글이 연결됐어요 · ${STICK_POWER_HINT}` : '동글이 연결됐어요',
+    action: '다른 동글 연결',
+  };
+}
+
 export interface SetupStep {
   id: SetupStepId;
   status: SetupStepStatus;
@@ -26,6 +55,8 @@ export interface SetupStepsInput extends ReadinessInput {
   activePresetName: string | null;
   /** [왼손, 오른손] 배터리 %. null = 알 수 없음. 값을 안 넘기면 요약에 배터리를 붙이지 않는다 */
   battery?: [number | null, number | null];
+  /** 동글 상태. 동글 소스(Web Serial)가 아니면 넘기지 않는다 */
+  dongle?: SetupDongleState;
 }
 
 // ---- 문구 상수 ----
@@ -130,6 +161,9 @@ function stickSummary(input: SetupStepsInput, done: boolean): string {
   }
   if (l) return '왼손만 연결됨';
   if (r) return '오른손만 연결됨';
+  if (input.dongle === 'closed') return '동글을 연결하면 스틱 상태가 보여요';
+  if (input.dongle === 'stale') return '동글 응답이 없어요 · 동글을 다시 꽂아 주세요';
+  if (input.dongle !== undefined) return `동글이 연결됐어요 · ${STICK_POWER_HINT}`;
   return '연결된 스틱이 없어요';
 }
 
