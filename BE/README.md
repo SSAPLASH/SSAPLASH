@@ -1001,7 +1001,7 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | --- | --- | --- |
 | `time`(ISO-8601 문자열), `kind`, `tags` | 필수 | 필수 |
 | `stickId`(0·1) | `tags.source`가 `keyboard`가 아니면 필수 | 필수 |
-| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `HI_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL`, 그대로 저장 | null |
+| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `SMALL_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL` | null |
 | `judgement`·`deltaMs` | PERFECT·GOOD이면 deltaMs 필수, 판정 없음·MISS이면 deltaMs null | null |
 | `velocity`(0~127 정수), `tRecv`·`tJudge`(ms) | 필수 | null |
 | `tAudio`(ms) | 선택 | null |
@@ -1011,7 +1011,8 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
   `firmware`(1~64자)만 받는다.
 - 선택 필드의 부재와 null은 같다. BE는 null을 0으로 채우거나 계산하지 않는다(동기화 전 `clockOffsetMs`=null 등).
 - 숫자는 JSON 숫자 토큰만 받는다. 정수 자리의 소수(`96.0`), 문자열 숫자, 유한하지 않은 값(`1e999`), 서버 시각보다 5분 넘게 미래인 `time`은 거절한다.
-- 계약 밖 필드(`rawWindow` 등)·중복 키·FE 내부 이름 `SMALL_TOM`은 거절한다.
+- 이전 `HI_TOM` 입력도 받으며 새 행에는 `SMALL_TOM`으로 저장한다. 기존 `HI_TOM` 행은 변경하지 않고 세 패드 필드 조회 시 `SMALL_TOM`으로 반환한다.
+- 계약 밖 필드(`rawWindow` 등)·중복 키·목록 밖 패드는 거절한다.
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |

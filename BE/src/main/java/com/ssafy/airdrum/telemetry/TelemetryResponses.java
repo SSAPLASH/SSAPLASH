@@ -24,7 +24,7 @@ public final class TelemetryResponses {
 			long eventCount, long hitCount, long statusCount) {
 	}
 
-	/** 저장된 이벤트 그대로. 필드명·단위는 수신 계약과 같다. */
+	/** 저장된 이벤트. 과거 HI_TOM 패드 값은 SMALL_TOM으로 반환한다. */
 	public record EventItem(Instant time, String kind, Integer stickId, String pad, String baselinePad, String predictedPad,
 			String judgement, Double deltaMs, Integer velocity, Long tSensor, Double tRecv, Double tJudge, Double tAudio,
 			Double clockOffsetMs, Double packetLoss, Integer batteryPct, JsonNode tags) {
