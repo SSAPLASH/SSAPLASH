@@ -103,6 +103,18 @@ describe('buildFeedback', () => {
     expect(f[0]).toMatchObject({ id: 'segment', bars: [4, 7] });
   });
 
+  it('규칙 3: offsetMs가 있으면 마디를 원점부터 센다(음원 곡 약점 마디가 밀리지 않는다)', () => {
+    // 노트 시각을 1250ms 뒤로 민 로그. 원점 없이 세면 5~8마디 구간이 6~9마디로 흩어진다
+    const ns = [...many(16, (i) => perfect(Math.floor(i / 4))), ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0))];
+    const base = logOf(ns);
+    const log = { ...base, offsetMs: 1250, notes: base.notes.map((n) => ({ ...n, timeMs: n.timeMs + 1250 })) };
+    const f = buildFeedback(log, { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs });
+    expect(f[0]).toMatchObject({ id: 'segment', bars: [4, 7] });
+    // offsetMs 필드가 없는 이전 로그는 0으로 읽혀 그대로 돈다
+    const legacy = buildFeedback(base, { bpm: base.bpm, beatsPerBar: base.beatsPerBar });
+    expect(legacy[0]).toMatchObject({ id: 'segment', bars: [4, 7] });
+  });
+
   it('규칙 3: 마디 정보가 없으면(chart 없음) 건너뛴다', () => {
     const ns = [...many(16, (i) => perfect(Math.floor(i / 4))), ...many(8, (i) => good(4 + i, 'KICK', 0))];
     expect(buildFeedback(logOf(ns)).some((x) => x.id === 'segment')).toBe(false);
@@ -180,5 +192,11 @@ describe('chartFromLog', () => {
     expect(c.bpm).toBe(120);
     expect(c.beatsPerBar).toBe(4);
     expect(c.notes).toEqual(log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })));
+  });
+
+  it('offsetMs를 격자 원점으로 옮기고, 없는 이전 로그는 0이다', () => {
+    const log = logOf([perfect(0, 'KICK')]);
+    expect(chartFromLog({ ...log, offsetMs: 1250 })!.offsetMs).toBe(1250);
+    expect(chartFromLog(log)!.offsetMs).toBe(0);
   });
 });
