@@ -12,6 +12,8 @@ export interface PadCue {
   timeMs: number;
   /** next: 마디에서 가장 먼저 칠 음(동시타면 여러 패드), later: 그 뒤 */
   level: 'next' | 'later';
+  /** 대상 칸이 격자 밖(라벨은 가장 가까운 칸, 배지에 점) */
+  offGrid: boolean;
 }
 
 /** bar 마디에서 아직 판정되지 않은 칸 중 패드마다 가장 이른 칸 하나를 큐로 만든다 */
@@ -19,12 +21,12 @@ export function padCues(sheet: SheetModel, bar: number, notes: NoteState[]): Pad
   const cells = sheet.bars[bar]?.cells;
   if (!cells) return [];
 
-  const earliest = new Map<PadId, { step: number; noteIndex: number }>();
+  const earliest = new Map<PadId, { step: number; noteIndex: number; offGrid: boolean }>();
   for (const c of cells) {
     if (notes[c.noteIndex]?.judgement !== null) continue;
     const cur = earliest.get(c.pad);
     if (!cur || c.step < cur.step || (c.step === cur.step && c.noteIndex < cur.noteIndex)) {
-      earliest.set(c.pad, { step: c.step, noteIndex: c.noteIndex });
+      earliest.set(c.pad, { step: c.step, noteIndex: c.noteIndex, offGrid: c.offGrid });
     }
   }
   if (earliest.size === 0) return [];
@@ -36,5 +38,6 @@ export function padCues(sheet: SheetModel, bar: number, notes: NoteState[]): Pad
     noteIndex: e.noteIndex,
     timeMs: notes[e.noteIndex].note.timeMs,
     level: e.step === minStep ? 'next' : 'later',
+    offGrid: e.offGrid,
   }));
 }
