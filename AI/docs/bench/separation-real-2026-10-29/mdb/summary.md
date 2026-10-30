@@ -6,13 +6,13 @@ run: sep-quality-mdb, sep-quality-mdbu · 데이터셋: mdb_drums, mdb_drums_uns
 
 | 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) | 가중치 라이선스 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bs_roformer_sw | 34/0 | -0.94 | 0.795 | 2.27 | 12.17 | 0.067 | 1905.45 | CC BY-NC-SA 4.0 (unblend 메타데이터 기준. 원 저장소 삭제로 미확인, 미러는 unknown 표기) |
+| bs_roformer_sw | 34/0 | -0.94 | 0.949 | 2.03 | 12.17 | 0.067 | 1905.45 | CC BY-NC-SA 4.0 (unblend 메타데이터 기준. 원 저장소 삭제로 미확인, 미러는 unknown 표기) |
 
 ## 보조값
 
 | 모델 | 체크포인트 | 파라미터 수 | 장치 | F1 (±25ms) | 온셋 정밀도 | 온셋 재현율 | 드럼 SI-SDR (dB) | 반주 SDR (dB) | 반주 SAR (dB) | 드럼 SIR (dB) | 드럼 SAR (dB) | 분리 시간 (s) | 로드 시간 (s) | 피크 RAM (MB) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bs_roformer_sw | BS-Rofo-SW-Fixed.ckpt | 174.7M | cuda | 0.792 | 1.000 | 0.663 | -2.72 | 8.05 | 15.97 | 7.55 | 8.92 | 3.36 | 34.29 | 2937.50 |
+| bs_roformer_sw | BS-Rofo-SW-Fixed.ckpt | 174.7M | cuda | 0.936 | 1.000 | 0.909 | -2.72 | 8.05 | 15.97 | 7.55 | 8.92 | 3.36 | 34.29 | 2937.50 |
 
 ## 데이터셋별
 
@@ -22,10 +22,10 @@ run: sep-quality-mdb, sep-quality-mdbu · 데이터셋: mdb_drums, mdb_drums_uns
 
 | 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| bs_roformer_sw | 23/0 | -1.82 | 0.795 | 2.38 | 11.57 | 0.073 | 1905.45 |
+| bs_roformer_sw | 23/0 | -1.82 | 0.950 | 2.06 | 11.57 | 0.073 | 1905.45 |
 
 ### mdb_drums_unseen
 
 | 모델 | 곡/실패 | 드럼 SDR (dB) | 타격 보존율 F1 (±50ms) | attack slope 왜곡 | 반주 SIR (dB) | RTF | 피크 GPU 메모리 (MB) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| bs_roformer_sw | 11/0 | 2.08 | 0.807 | 2.14 | 16.43 | 0.061 | 1905.45 |
+| bs_roformer_sw | 11/0 | 2.08 | 0.946 | 1.90 | 16.43 | 0.061 | 1905.45 |
