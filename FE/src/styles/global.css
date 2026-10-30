@@ -275,6 +275,10 @@ p {
 .stick-batt.low {
   color: var(--stick-low);
 }
+.stick-batt.critical {
+  color: var(--stick-off);
+  font-weight: 600;
+}
 .stick-batt.unknown {
   color: var(--ink-faint);
 }
@@ -1412,6 +1416,23 @@ a.my-list-row:focus-visible {
 }
 .setup-page .return-banner {
   top: 57px;
+}
+.dongle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.dongle-row .stick-dot {
+  flex: none;
+}
+.dongle-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dongle-row-text.dim {
+  color: var(--ink-dim);
 }
 .stick-cards {
   display: grid;

@@ -14,8 +14,6 @@ export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
 /** batteryPct는 STATUS 패킷이 알려 준 값(%). 모르면 undefined */
 export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind, batteryPct?: number) => void;
-/** 센서 소스에서 HIT·POSE가 하나 도착했다(스틱이 살아 있다는 증거). 키보드는 오지 않는다 */
-export type ActivityListener = (stickId: StickId, source: InputSourceKind) => void;
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -23,7 +21,6 @@ export class InputManager {
   private hitListeners = new Set<HitListener>();
   private poseListeners = new Set<PoseListener>();
   private statusListeners = new Set<StatusListener>();
-  private activityListeners = new Set<ActivityListener>();
   private resetPoseListeners = new Set<() => void>();
   private profile: CalibrationProfile | null = null;
   private keyMap: KeyMap = {};
@@ -137,26 +134,14 @@ export class InputManager {
     return () => this.statusListeners.delete(l);
   }
 
-  /** 센서 HIT·POSE 수신을 알린다. 스틱별 무응답 끊김 판정(stickLiveness)이 쓴다 */
-  onActivity(l: ActivityListener): () => void {
-    this.activityListeners.add(l);
-    return () => this.activityListeners.delete(l);
-  }
-
   /** 캘리브레이션 화면 등에서 자세를 패드로 미리 보여줄 때 */
   previewPad(pose: Pose): ReturnType<typeof resolvePad> {
     return resolvePad(this.profile, pose);
   }
 
-  private notifyActivity(stickId: StickId, source: InputSourceKind): void {
-    if (source === 'keyboard') return;
-    for (const l of this.activityListeners) l(stickId, source);
-  }
-
   private handle(e: StickEvent, source: InputSourceKind): void {
     if (e.kind === 'pose') {
       this.lastPose[e.stickId] = { pitch: e.pitch, yaw: e.yaw };
-      this.notifyActivity(e.stickId, source);
       for (const l of this.poseListeners) l(e.stickId, this.lastPose[e.stickId], source);
       return;
     }
@@ -164,7 +149,6 @@ export class InputManager {
       for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct);
       return;
     }
-    this.notifyActivity(e.stickId, source);
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };
     const tHit = source === 'keyboard' ? e.timestamp : e.timestamp + this.sensorOffsetMs;
     const m = mapHit(e, source, {

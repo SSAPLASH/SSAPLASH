@@ -27,12 +27,14 @@ import { readiness } from '@/domain/readiness';
 import {
   SETUP_BAR_DIRTY_TEXT,
   SETUP_BAR_NO_PRESET_TEXT,
+  dongleLine,
   returnBannerText,
   returnButtonText,
   returnTargetName,
   setupBarCleanText,
   setupSteps,
   unsavedLeaveText,
+  type SetupDongleState,
   type SetupStepId,
 } from '@/domain/setupSteps';
 import { collapse, initialOpen, isExpanded, openByUser, openOnFirstNeededChange } from '@/domain/setupExpand';
@@ -41,7 +43,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { SOUND_SET_LABELS, type SoundSetId } from '@/audio/soundSets';
 import { ReferenceCapture, type ReferenceSnapshot } from '@/engine/ReferenceCapture';
 import { sensorRegistry } from '@/app/sensorRegistry';
-import { bindSensorSurface, previewHit, setSoundOnHit } from '@/app/bootstrap';
+import { bindSensorSurface, connectSensor, previewHit, setSoundOnHit } from '@/app/bootstrap';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 
 const PRESET_IDS: KitLayoutPresetId[] = ['basic', 'wide', 'tight'];
@@ -108,6 +110,7 @@ export function SetupPage() {
   const lastHit = useLive((l) => l.lastHit);
   const sourceState = useLive((l) => l.sourceState);
   const sourceMessage = useLive((l) => l.sourceMessage);
+  const dongle = useLive((l) => l.dongle);
   const padTable = useLive((l) => l.padTable);
   const yawDrift = useLive((l) => l.yawDrift);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
@@ -174,7 +177,13 @@ export function SetupPage() {
     activePresetId: s.activePresetId,
   };
   const { ready, missing } = readiness(readinessInput);
-  const stepsResult = setupSteps({ ...readinessInput, referenceSetAt, activePresetName: activePreset?.name ?? null, battery }, now);
+  // 동글 상태는 동글 소스(Web Serial)일 때만. 포트가 열렸는데 LINK 전이면 waiting(예전 동글 펌웨어 포함)
+  const dongleState: SetupDongleState | undefined =
+    s.sensorKind !== 'webserial' ? undefined : sourceState !== 'connected' ? 'closed' : (dongle ?? 'waiting');
+  const stepsResult = setupSteps(
+    { ...readinessInput, referenceSetAt, activePresetName: activePreset?.name ?? null, battery, dongle: dongleState },
+    now,
+  );
   const stepOf = (id: SetupStepId) => stepsResult.steps.find((st) => st.id === id)!;
 
   // 센서를 쓰는 화면에서 준비가 처음 갖춰지면 최초 설정 완료로 기록한다(옛 [설정 완료] 버튼의 역할).
@@ -422,6 +431,7 @@ export function SetupPage() {
           onCollapse={() => collapseStep('stick')}
         >
           <div className="col">
+            {dongleState !== undefined && <DongleRow state={dongleState} connected={connected} busy={sourceState === 'connecting'} />}
             {sensorMode && (
               <div className="stick-cards">
                 <StickCard hand={0} connected={connected[0]} batteryPct={battery[0]} />
@@ -741,5 +751,28 @@ export function SetupPage() {
         onCancel={cancelNameDialog}
       />
     </main>
+  );
+}
+
+/** ① 본문 동글 줄: 포트가 안 열렸으면 [동글 연결], 열렸으면 상태 + [다른 동글 연결]. 클릭 안에서 포트 선택 창을 연다 */
+function DongleRow({ state, connected, busy }: { state: SetupDongleState; connected: [boolean, boolean]; busy: boolean }) {
+  const line = dongleLine(state, connected);
+  const onClick = () => void connectSensor();
+  return (
+    <div className="dongle-row">
+      {line.dot === null ? (
+        <button type="button" className="btn-primary" onClick={onClick} disabled={busy}>
+          {line.action}
+        </button>
+      ) : (
+        <span className={`stick-dot ${line.dot}`} />
+      )}
+      <span className={`dongle-row-text ${line.dot === null ? 'dim' : ''}`}>{line.text}</span>
+      {line.dot !== null && (
+        <button type="button" className="btn-ghost small" onClick={onClick} disabled={busy}>
+          {line.action}
+        </button>
+      )}
+    </div>
   );
 }
