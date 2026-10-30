@@ -184,3 +184,110 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
     await src.disconnect();
   });
 });
+
+describe('WebSerialStickSource LINK 연결 판정', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function open() {
+    const live = livePort();
+    const serial = stubSerial([live.port]);
+    const src = new WebSerialStickSource();
+    const dongle: Array<string | null> = [];
+    src.onDongle((d) => dongle.push(d));
+    const status: Array<[number, boolean, number | undefined]> = [];
+    src.subscribe((e) => {
+      if (e.kind === 'status') status.push([e.stickId, e.connected, e.batteryPct]);
+    });
+    await src.autoConnect();
+    await tick();
+    return { src, serial, dongle, status, ...live };
+  }
+  const link = (mask: number) => new Uint8Array([0x07, 0, mask, 2, 0]);
+  const statusBytes = (role: number, battery: number) => new Uint8Array([0x03, role, battery, 0, 1, 2]);
+
+  it('포트가 열리면 waiting, LINK를 받으면 ok, 닫히면 null', async () => {
+    const { src, feed, dongle } = await open();
+    expect(dongle).toEqual(['waiting']);
+    feed(link(0));
+    await tick();
+    expect(dongle).toEqual(['waiting', 'ok']);
+    await src.disconnect();
+    expect(dongle.at(-1)).toBeNull();
+  });
+
+  it('첫 LINK는 양손을 다 알리고, 그 뒤엔 바뀐 손만 알린다', async () => {
+    const { src, feed, status } = await open();
+    feed(link(0b01));
+    await tick();
+    expect(status).toEqual([
+      [0, true, undefined],
+      [1, false, undefined],
+    ]);
+    feed(link(0b01)); // 하트비트: 같으면 조용
+    feed(link(0b11));
+    feed(link(0b10));
+    await tick();
+    expect(status.slice(2)).toEqual([
+      [1, true, undefined],
+      [0, false, undefined],
+    ]);
+    await src.disconnect();
+  });
+
+  it('LINK 뒤 STATUS는 연결을 바꾸지 않고 배터리만, 안 붙은 손 배터리는 붙을 때 함께 알린다', async () => {
+    const { src, feed, status } = await open();
+    feed(link(0b01));
+    await tick();
+    status.length = 0;
+    feed(statusBytes(0, 82));
+    feed(statusBytes(1, 64)); // 오른손은 아직 LINK상 끊김 → 들고 있는다
+    await tick();
+    expect(status).toEqual([[0, true, 82]]);
+    feed(link(0b11));
+    await tick();
+    expect(status.at(-1)).toEqual([1, true, 64]);
+    await src.disconnect();
+  });
+
+  it('첫 LINK 전(예전 동글 펌웨어)에는 STATUS를 연결로 본다', async () => {
+    const { src, feed, status } = await open();
+    feed(statusBytes(1, 50));
+    await tick();
+    expect(status).toEqual([[1, true, 50]]);
+    await src.disconnect();
+  });
+
+  it('LINK가 3초 넘게 끊기면 stale + 양손 끊김, 다시 오면 마스크대로 복구', async () => {
+    const { src, feed, status, dongle } = await open();
+    feed(link(0b11));
+    await tick();
+    status.length = 0;
+    src.checkLinkTimeout(performance.now() + 1000);
+    expect(dongle.at(-1)).toBe('ok');
+    src.checkLinkTimeout(performance.now() + 3500);
+    expect(dongle.at(-1)).toBe('stale');
+    expect(status).toEqual([
+      [0, false, undefined],
+      [1, false, undefined],
+    ]);
+    feed(link(0b10));
+    await tick();
+    expect(dongle.at(-1)).toBe('ok');
+    expect(status.slice(2)).toEqual([
+      [0, false, undefined],
+      [1, true, undefined],
+    ]);
+    await src.disconnect();
+  });
+
+  it('다른 동글 연결: 포트 선택을 취소하면 열린 포트를 그대로 둔다', async () => {
+    const { src, serial, port } = await open();
+    serial.requestPort.mockRejectedValueOnce(new Error('No port selected'));
+    await expect(src.connect()).resolves.toBeUndefined();
+    expect(src.state).toBe('connected');
+    expect(port.close).not.toHaveBeenCalled();
+    await src.disconnect();
+  });
+});
