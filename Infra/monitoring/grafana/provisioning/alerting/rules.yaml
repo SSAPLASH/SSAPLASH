@@ -1,0 +1,123 @@
+# Grafana 알림 규칙. 조건을 넘으면 Grafana의 Alerting 화면에 표시된다.
+# 알림을 밖으로 보내는 채널(메신저 웹훅 등)은 비밀 값이 필요해서 후속으로 붙인다.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: 서버 자원
+    folder: 인프라
+    interval: 1m
+    rules:
+      - uid: disk-usage-high
+        title: 디스크 사용률 85% 초과
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 100 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} * 100)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+              datasource: { type: __expr__, uid: __expr__ }
+        annotations:
+          summary: 서버 루트 디스크 사용률이 85%를 넘었습니다. 로그·이미지·볼륨을 정리하거나 용량을 확인하세요.
+        labels:
+          severity: warning
+
+      - uid: memory-low
+        title: 사용 가능 메모리 10% 미만
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [10] }
+              datasource: { type: __expr__, uid: __expr__ }
+        annotations:
+          summary: 사용 가능한 메모리가 10% 미만입니다. 컨테이너별 메모리 사용량을 확인하세요.
+        labels:
+          severity: warning
+
+  - orgId: 1
+    name: 컨테이너
+    folder: 인프라
+    interval: 1m
+    rules:
+      - uid: core-container-down
+        title: 핵심 컨테이너 중단
+        condition: C
+        for: 5m
+        # 지표가 아예 사라진 경우(컨테이너가 없어진 경우)도 경보로 본다.
+        noDataState: Alerting
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: count(container_last_seen{name=~"infra-(api|postgres|redis|nginx)-1"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [4] }
+              datasource: { type: __expr__, uid: __expr__ }
+        annotations:
+          summary: 앱·DB·Redis·Nginx 중 하나 이상이 5분 넘게 보이지 않습니다. docker compose ps로 상태를 확인하세요.
+        labels:
+          severity: critical
