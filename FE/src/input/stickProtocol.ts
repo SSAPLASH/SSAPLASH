@@ -17,6 +17,8 @@ export const PacketType = {
   SYNC_ACK: 0x04,
   SWING: 0x05,
   PARAM_ACK: 0x06,
+  /** 동글이 만드는 스틱 연결 마스크(1초마다 + 바뀔 때). 스틱은 보내지 않는다 */
+  LINK: 0x07,
   BRIDGE_STATS: 0x7e,
   LOG: 0x7f,
 } as const;
@@ -30,6 +32,8 @@ export const CommandType = {
   SET_PAD_TABLE: 0x15,
   SET_YAW_OFFSET: 0x16,
   GET_PARAMS: 0x17,
+  /** 동글 전용: [0x70][역할 비트마스크][원래 명령]. 동글이 해당 역할 스틱에만 넘긴다 */
+  ROUTE: 0x70,
 } as const;
 
 /** PARAM_ACK 예약 paramId: GET_PARAMS 끝 표시(value = 보낸 개수) */
@@ -150,6 +154,16 @@ export interface DecodedSyncAck extends FlaggedBase {
   t1Us: number;
 }
 
+export interface DecodedLink extends PacketBase {
+  kind: 'link';
+  flags: number;
+  /** 연결 마스크: bit0 왼손, bit1 오른손, bit2 왼발, bit3 오른발 (1 = 연결) */
+  linkMask: number;
+  /** 동글 펌웨어 (2 = XIAO 동글) */
+  fwMajor: number;
+  fwMinor: number;
+}
+
 export interface DecodedBridgeStats extends PacketBase {
   kind: 'bridgeStats';
   okFrames: number;
@@ -192,6 +206,7 @@ export type DecodedPacket =
   | DecodedPose
   | DecodedStatus
   | DecodedSyncAck
+  | DecodedLink
   | DecodedBridgeStats
   | DecodedLog
   | DecodedParamAck
@@ -208,6 +223,7 @@ const MIN_LEN: Record<number, number> = {
   [PacketType.LOG]: 2,
   [PacketType.SWING]: 5,
   [PacketType.PARAM_ACK]: 5,
+  [PacketType.LINK]: 5,
 };
 
 /**
@@ -267,6 +283,8 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
     }
     case PacketType.SYNC_ACK:
       return { kind: 'syncAck', ...base, t0Ms: v.getUint32(2, true), t1Us: v.getUint32(6, true) };
+    case PacketType.LINK:
+      return { kind: 'link', recvTime, flags, linkMask: v.getUint8(2), fwMajor: v.getUint8(3), fwMinor: v.getUint8(4) };
     case PacketType.PARAM_ACK:
       return { kind: 'paramAck', ...base, paramId: v.getUint8(2), value: v.getInt16(3, true) };
     case PacketType.SWING: {
@@ -303,7 +321,7 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 export type ParsedPacket = StickEvent | SyncAck | null;
 
 /**
- * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·bridgeStats·log·paramAck·swing)은 null.
+ * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·link·bridgeStats·log·paramAck·swing)은 null.
  * hit·pose의 timestamp와 syncAck의 t1은 ms로 환산한다(ClockSync 단위).
  */
 export function parsePacket(data: Uint8Array | DataView, recvTime: number): ParsedPacket {
@@ -384,6 +402,15 @@ export function encodeSetParam(id: number, value: number): Uint8Array<ArrayBuffe
   v.setUint8(0, CommandType.SET_PARAM);
   v.setUint8(1, id & 0xff);
   v.setInt16(2, clampI16(value), true);
+  return buf;
+}
+
+/** ROUTE(동글 전용): [0x70][1 << stickId][원래 명령]. 한 손 스틱에만 보낼 명령을 감싼다 */
+export function encodeRoute(stickId: StickId, command: Uint8Array): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(2 + command.length);
+  buf[0] = CommandType.ROUTE;
+  buf[1] = 1 << stickId;
+  buf.set(command, 2);
   return buf;
 }
 
