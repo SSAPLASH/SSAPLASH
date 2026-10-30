@@ -99,9 +99,9 @@ class WorkerResults {
     private static boolean nonnegative(JsonNode n) { return n.isNumber() && Double.isFinite(n.doubleValue()) && n.doubleValue()>=0; }
     private void separationMetadata(JsonNode n,int duration) {
         require(n.path("durationMs").isIntegralNumber() && n.path("durationMs").canConvertToInt() && n.path("durationMs").asInt()==duration
-                && "SOURCE_START".equals(n.path("audioTimeOrigin").asString()));
+                && n.path("audioTimeOrigin").isString() && "SOURCE_START".equals(n.path("audioTimeOrigin").asString()));
         var model=n.path("model");
-        require("bs_roformer_sw".equals(model.path("name").asString()) && model.path("version").isString()
+        require(model.isObject() && model.path("name").isString() && "bs_roformer_sw".equals(model.path("name").asString()) && model.path("version").isString()
                 && model.path("version").asString().matches("[A-Za-z0-9_.-]{1,100}@[0-9a-f]{12}"));
         var m=n.path("metrics");
         require(m.isObject() && m.path("loadMs").isIntegralNumber() && nonnegative(m.path("loadMs"))
@@ -176,18 +176,18 @@ class WorkerResults {
             java.math.BigDecimal bpm,int offset,String timeSignature,String metrics) {}
     private ChartData chart(JsonNode n,int duration) {
         require(n.path("schemaVersion").isIntegralNumber() && n.path("schemaVersion").canConvertToInt() && n.path("schemaVersion").asInt()==1
-                && "ADT_MODEL".equals(n.path("generator").asString()) && n.path("generatorVersion").isString()
+                && n.path("generator").isString() && "ADT_MODEL".equals(n.path("generator").asString()) && n.path("generatorVersion").isString()
                 && !n.path("generatorVersion").asString().isBlank() && n.path("generatorVersion").asString().length()<=50
                 && n.path("metrics").isObject() && n.path("charts").isArray() && n.path("charts").size()==1);
         var c=n.path("charts").get(0);
-        require("NORMAL".equals(c.path("difficulty").asString()) && c.path("notes").isArray()
+        require(c.isObject() && c.path("difficulty").isString() && "NORMAL".equals(c.path("difficulty").asString()) && c.path("notes").isArray()
                 && c.path("notes").size()<=50000 && c.path("timing").isObject()
-                && Set.of("READY","PENDING","UNAVAILABLE").contains(c.path("notationStatus").asString()) && !c.has("sheetPages"));
+                && c.path("notationStatus").isString() && Set.of("READY","PENDING","UNAVAILABLE").contains(c.path("notationStatus").asString()) && !c.has("sheetPages"));
         int count=c.path("notes").size();
         for(var note:c.path("notes")) {
-            require(note.path("timeMs").isIntegralNumber() && note.path("timeMs").canConvertToLong()
+            require(note.isObject() && note.path("timeMs").isIntegralNumber() && note.path("timeMs").canConvertToLong()
                     && note.path("timeMs").asLong()>=0 && note.path("timeMs").asLong()<=duration
-                    && PADS.contains(note.path("pad").asString()));
+                    && note.path("pad").isString() && PADS.contains(note.path("pad").asString()));
             if("READY".equals(c.path("notationStatus").asString())) require(note.path("notation").isObject());
         }
         if("READY".equals(c.path("notationStatus").asString())) require(count>0
