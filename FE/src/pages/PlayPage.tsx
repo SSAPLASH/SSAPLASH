@@ -509,7 +509,7 @@ export function PlayPage() {
               <p className="dim">
                 {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
               </p>
-              <ReadinessNotice returnTo={returnTo} compact />
+              <ReadinessNotice returnTo={returnTo} returnLabel={`리듬 게임 · ${chart.title}`} compact />
               <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
                 시작 (Enter)
               </button>

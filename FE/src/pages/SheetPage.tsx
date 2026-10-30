@@ -626,7 +626,7 @@ export function SheetPage() {
               />
               {sensorMode && referenceStale && <CheckItem ok={false} name="기준 자세" value="재연결 후 다시 맞추세요" />}
             </ul>
-            <Link to="/setup" state={{ returnTo }} className="sm-btn" style={{ alignSelf: 'flex-start', color: 'var(--sm-text)' }}>
+            <Link to="/setup" state={{ returnTo, returnLabel: `악보 연습 · ${chart.title}` }} className="sm-btn" style={{ alignSelf: 'flex-start', color: 'var(--sm-text)' }}>
               세팅에서 맞추기
             </Link>
             <div className="sm-options">
