@@ -47,7 +47,7 @@ class WorkerCleanup {
                     WHERE j.id=t.job_id AND a.id=t.attempt_id AND j.status IN ('SEPARATING','TRANSCRIBING')
                       AND a.finished_at IS NULL AND a.lease_expires_at>clock_timestamp() AND j.stage_deadline_at>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j WHERE j.drum_stem_key=t.object_key)
-                  AND NOT EXISTS(SELECT 1 FROM songs s JOIN users u ON u.id=s.owner_id WHERE s.cover_key=t.object_key AND s.deleted_at IS NULL AND u.status='ACTIVE')
+                  AND NOT EXISTS(SELECT 1 FROM songs s LEFT JOIN users u ON u.id=s.owner_id WHERE s.cover_key=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
                   AND NOT EXISTS(SELECT 1 FROM songs s LEFT JOIN users u ON u.id=s.owner_id WHERE s.accompaniment_key=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
                 AND NOT EXISTS(SELECT 1 FROM chart_versions v JOIN charts c ON c.id=v.chart_id JOIN songs s ON s.id=c.song_id
                     LEFT JOIN users u ON u.id=s.owner_id CROSS JOIN LATERAL jsonb_array_elements(coalesce(v.sheet_pages,'[]'::jsonb)) p

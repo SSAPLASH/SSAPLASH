@@ -379,6 +379,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
 | V20 | `V20__widen_hits_pad.sql` | `hits` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL 저장 실패 수정) | -142 |
 | V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
+| V22 | `V22__add_songs_published.sql` | `songs.published`(기본 true) 공용 곡 공개 여부, CHECK `songs_published_builtin_check`(개인 곡은 항상 true) | -156 |
 
 규칙:
 
@@ -867,6 +868,45 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 
 테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다.
 
+
+## 공용 곡 관리 (156번)
+
+CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을 MIDI로 등록하고 정보·채보·커버·반주를 고치며 공개 여부를 바꾼다.
+모든 경로는 `/api/v1/admin/songs`이고 Bearer 인증 + **ADMIN 역할**(`@PreAuthorize`)이 필요하다. 미인증·탈퇴 401, USER 403 `FORBIDDEN`.
+없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 아직 없어 Swagger의 `Admin Songs` 묶음으로 호출한다.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false` | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
+| `GET /` | `published`(생략 시 전체), `q`, `page`, `size`(곡 목록과 같은 범위) | 비공개 포함 목록, 삭제 곡 제외, 생성 내림차순 |
+| `GET /{id}` | — | 관리자 곡 상세 |
+| `PATCH /{id}` | JSON `title`·`artist`·`license`·`published` 중 1개 이상. 빈 `artist`는 null | 관리자 곡 상세 |
+| `PUT /{id}/charts/midi` | multipart `file`만 | 난이도별 새 버전이 반영된 상세 |
+| `PUT /{id}/cover`, `DELETE /{id}/cover` | 187번 커버와 같은 이미지 규칙 | `{coverUrl}` / 204 |
+| `PUT /{id}/accompaniment`, `DELETE /{id}/accompaniment` | multipart `file` WAV·MP3, 50 MiB·10분 이하 | `{accompanimentUrl, expiresAt}` / 204 |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다.
+
+- **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
+- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
+- **커버:** 키 `cover/builtin/{songId}/{uuid}.{jpg|png|webp}`(악보 버킷). 공개된 공용 곡 커버는 모든 회원의 곡 목록·상세 `coverUrl`에 1시간 서명으로 온다.
+- **반주:** ffprobe(`AudioProbe`)로 실제 바이트를 검사한다. 키 `accompaniment/{songId}/{uuid}.{wav|mp3}`(반주 버킷), 같은 키에 덮어쓰지 않고 교체마다 새 키를 만든다. 쓰기는 워커의 반주 버킷 쓰기 자격증명을 쓰므로 운영 자격증명에 PutObject 권한이 있어야 한다. 82번 도구가 등록한 `accompaniment/{songId}.wav`도 그대로 재생된다.
+- **정리:** 커버·반주 업로드 전에 임시 정리 작업(`user_id` NULL, 5분 뒤)을 등록하고 저장소 쓰기 뒤 곡을 다시 잠가 연결한다. 교체·삭제·곡 삭제 때 이전 객체는 기존 정리 큐가 지운다. 정리 큐는 살아 있는 공용 곡이 참조하는 커버·반주를 지우지 않는다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `SONG_INVALID` | 제목·아티스트·라이선스·`published` 형식, 모르는 필드, PATCH 본문 규칙 위반 |
+| 400·413·422 | `MIDI_*` | 151번과 같음 |
+| 400·413·415·503 | `COVER_*` | 187번과 같음 |
+| 400 | `ACCOMPANIMENT_INVALID` | 파일 없음·빈 파일·필드 형태 위반 |
+| 413 | `ACCOMPANIMENT_TOO_LARGE` | 50 MiB 초과 |
+| 422 | `ACCOMPANIMENT_UNSUPPORTED` | WAV·MP3가 아니거나 10분 초과 |
+| 503 | `ACCOMPANIMENT_UNAVAILABLE` | 저장소 비활성·쓰기 실패, ffprobe 실행 불가 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.admin.*' --tests '*SongPublishedVisibilityTest'
+```
 
 ## 채보 작업 진행 조회·알림 (172번)
 

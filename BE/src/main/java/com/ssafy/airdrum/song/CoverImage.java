@@ -7,10 +7,10 @@ import org.springframework.stereotype.Component;
 import com.ssafy.airdrum.common.error.BusinessException;
 
 @Component
-class CoverImage {
-    static final int MAX_BYTES=2*1024*1024;
-    record Image(byte[] bytes,String extension,String contentType) {}
-    Image decode(byte[] data) {
+public class CoverImage {
+    public static final int MAX_BYTES=2*1024*1024;
+    public record Image(byte[] bytes,String extension,String contentType) {}
+    public Image decode(byte[] data) {
         if(data.length==0) throw new BusinessException(SongManagementError.COVER_INVALID);
         if(data.length>MAX_BYTES) throw new BusinessException(SongManagementError.COVER_TOO_LARGE);
         try(var input=new MemoryCacheImageInputStream(new ByteArrayInputStream(data))) {
