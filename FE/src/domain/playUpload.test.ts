@@ -135,6 +135,12 @@ describe('buildUploadBody', () => {
     expect(b.calibration).toEqual({ audioOffsetMs: 12, pads: null });
     expect(b.consent).toBe(false);
     expect(b.clientMeta).toMatchObject({ endReason: 'COMPLETED', lastSongTimeMs: 2800, elapsedActiveMs: 4800 });
+  });
+
+  it('clientMeta는 서버 허용 5필드뿐이고 padCountGuide는 본문 어디에도 없다(알 수 없는 필드는 400)', () => {
+    const b = body(log({ presetId: '5' }));
+    expect(Object.keys(b.clientMeta ?? {}).sort()).toEqual(['appVersion', 'elapsedActiveMs', 'endReason', 'firmwareVersion', 'lastSongTimeMs']);
+    expect(JSON.stringify(b)).not.toContain('padCountGuide');
     expect(body(log({ presetId: 'local-1' })).kitPresetId).toBeNull();
   });
 
