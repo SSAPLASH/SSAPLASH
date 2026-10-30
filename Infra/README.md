@@ -19,12 +19,15 @@ CI는 EC2의 GitLab Runner에서 실행한다. 개인 PC에 러너를 두지 않
 
 | job | 단계 | 내용 |
 | --- | --- | --- |
-| `lint`, `test`, `build` | lint / test / build | 파트별 스택이 확정되기 전의 골격 |
+| `lint`, `test`, `build` | lint / test / build | 파트별 스택이 확정되기 전의 골격(`echo`만 한다. AI는 아래 `ai-lint`가 대신한다) |
+| `ai-lint` | lint | `AI`에서 `ruff check .`와 `ruff format --check .`. ruff 버전은 `AI/uv.lock`에서 읽는다(`python:3.11-slim`) |
+| `ai-lock` | lint | `AI/uv.lock`이 `AI/pyproject.toml`과 맞는지 `uv lock --check`. uv 버전은 `AI/Dockerfile`에서 읽는다(`python:3.11-slim`, 의존성은 받지 않아 몇 초) |
 | `be-test` | test | `BE`에서 `./gradlew --no-daemon test` |
 | `be-build` | build | `BE`에서 `./gradlew --no-daemon bootJar` |
 | `be-timescale-test` | test | 일회용 TimescaleDB(service)를 붙여 `./gradlew --no-daemon timescaleTest` |
 
 - BE job은 `BE/**/*`, `Infra/docker-compose.yml`, `.gitlab-ci.yml`이 바뀐 경우에만 돈다.
+- `ai-lint`는 `AI/**/*`, `.gitlab-ci.yml`이 바뀐 경우에만, `ai-lock`은 `AI/pyproject.toml`·`AI/uv.lock`·`AI/Dockerfile`·`.gitlab-ci.yml`이 바뀐 경우에만 돈다. `ai-lock`이 없으면 lock을 안 고친 채 병합돼 배포 때 서버의 AI 이미지 빌드(`uv sync --frozen`)에서 실패한다. AI 테스트(`pytest`)는 아직 CI에 없다. 기존 시험 일부가 ffmpeg 등 환경에 의존해 CI에서 어떻게 되는지 확인이 먼저다(`allow_failure`로 시작할 계획).
 - `be-timescale-test`의 TimescaleDB 이미지 버전은 `Infra/docker-compose.yml`의 `postgres` 이미지와 같아야 한다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
 - 로컬(Windows)에서 같은 검증을 하려면 `BE/scripts/Test-TimescaleSchema.ps1`을 쓴다. 이 스크립트는 CI에서 호출하지 않는다.
 
