@@ -3,6 +3,7 @@
 import type { Chart } from './chart';
 import { JUDGEMENT_SCORE } from './judgement';
 import { ALL_PADS, PAD_META, type PadId } from './pads';
+import { gridOriginMs, gridTimeOf, type GridChart } from './sheet';
 import type { PlayLog } from '@/engine/playLog';
 
 /** 1. 패드의 MISS 비율 하한과 그 판단에 필요한 최소 노트 수 */
@@ -109,10 +110,12 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
   });
 }
 
-export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPerBar'>): FeedbackItem[] {
+export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPerBar'> & Partial<Pick<Chart, 'offsetMs'>>): FeedbackItem[] {
   const notes = log.notes;
   const barMs = chart ? (60_000 / chart.bpm) * chart.beatsPerBar : 0;
-  const barOf = (n: LogNote) => (barMs ? Math.max(0, Math.floor((n.timeMs + 1) / barMs)) : -1);
+  // 마디는 격자 원점(offsetMs)을 뺀 격자 시각으로 센다 — 악보 화면의 마디 번호와 같아야 한다
+  const originMs = chart ? gridOriginMs(chart) : 0;
+  const barOf = (n: LogNote) => (barMs ? Math.max(0, Math.floor((gridTimeOf(n.timeMs, originMs) + 1) / barMs)) : -1);
   const items: FeedbackItem[] = [];
 
   if (!notes.length) return [fallback(log)];
@@ -230,12 +233,13 @@ function fallback(log: PlayLog): FeedbackItem {
   };
 }
 
-/** 결과 페이지 미니 악보용: 로그의 노트·BPM·박자만으로 `layoutBar`가 읽는 채보 모양을 만든다. 이전 로그(bpm 없음)는 null */
-export function chartFromLog(log: PlayLog): Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> | null {
+/** 결과 페이지 미니 악보용: 로그의 노트·BPM·박자·격자 원점만으로 `layoutBar`가 읽는 채보 모양을 만든다. 이전 로그(bpm 없음)는 null */
+export function chartFromLog(log: PlayLog): GridChart | null {
   if (!log.bpm) return null;
   return {
     bpm: log.bpm,
     beatsPerBar: log.beatsPerBar,
+    offsetMs: log.offsetMs ?? 0,
     notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })),
   };
 }

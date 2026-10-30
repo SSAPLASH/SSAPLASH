@@ -77,6 +77,8 @@ export interface PlayLog {
   /** 채보 BPM·박자(마디 단위 피드백용). 이전 로그에는 없을 수 있다 */
   bpm: number;
   beatsPerBar: number;
+  /** 채보 격자 원점(1마디 1박, ms). 결과 화면 약점 마디·미니 악보가 쓴다. 이전 로그에는 없고 0으로 읽는다 */
+  offsetMs?: number;
   hits: LoggedHit[];
   notes: LogNote[];
   summary: {
@@ -135,6 +137,7 @@ export function buildPlayLog(args: {
     durationMs: number;
     bpm: number;
     beatsPerBar: number;
+    offsetMs?: number;
     sourceNoteCount?: number;
   };
   inputSource: InputSourceKind;
@@ -172,6 +175,7 @@ export function buildPlayLog(args: {
     presetId: args.presetId,
     bpm: args.chart.bpm,
     beatsPerBar: args.chart.beatsPerBar,
+    offsetMs: args.chart.offsetMs ?? 0,
     hits: args.hits,
     notes: args.notes.map((n) => ({
       index: n.index,
