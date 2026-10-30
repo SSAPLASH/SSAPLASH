@@ -21,6 +21,21 @@ public class SongAssetCleanup {
         catch(IllegalStateException ex) { LoggerFactory.getLogger(getClass()).warn("커버 자산 귀속 오류 userId={} songId={}",user,song); return; }
         db.update("INSERT INTO file_cleanup_tasks(object_key,file_role,user_id) VALUES(?,'COVER',?) ON CONFLICT(object_key) DO UPDATE SET next_attempt_at=least(file_cleanup_tasks.next_attempt_at,clock_timestamp())",key,user);
     }
+    /** 공용 곡(156번). 소유자가 없어 user_id는 NULL이다. */
+    public void registerBuiltin(long song,String accompaniment,String cover) {
+        if(accompaniment!=null) builtinAccompaniment(song,accompaniment);
+        if(cover!=null) builtinCover(song,cover);
+    }
+    public void builtinCover(long song,String key) {
+        try { keys.builtinCover(song,key); }
+        catch(IllegalStateException ex) { LoggerFactory.getLogger(getClass()).warn("공용 곡 커버 귀속 오류 songId={}",song); return; }
+        db.update("INSERT INTO file_cleanup_tasks(object_key,file_role) VALUES(?,'COVER') ON CONFLICT(object_key) DO UPDATE SET next_attempt_at=least(file_cleanup_tasks.next_attempt_at,clock_timestamp())",key);
+    }
+    public void builtinAccompaniment(long song,String key) {
+        try { keys.accompaniment(song,key); }
+        catch(IllegalStateException ex) { LoggerFactory.getLogger(getClass()).warn("공용 곡 반주 귀속 오류 songId={}",song); return; }
+        db.update("INSERT INTO file_cleanup_tasks(object_key,file_role) VALUES(?,'ACCOMPANIMENT') ON CONFLICT(object_key) DO UPDATE SET next_attempt_at=least(file_cleanup_tasks.next_attempt_at,clock_timestamp())",key);
+    }
     private void register(long user,long song,Long version,String key) {
         try { if(version==null) keys.accompaniment(song,key); else keys.sheet(version,key); }
         catch(IllegalStateException ex) { LoggerFactory.getLogger(getClass()).warn("곡 자산 귀속 오류 userId={} songId={} versionId={}",user,song,version); return; }
