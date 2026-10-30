@@ -1,8 +1,8 @@
-"""정답 시각을 합쳐 타격 보존율을 다시 계산 (S15P31A307-166).
+"""정답 드럼·원곡·분리 드럼 세 입력의 타격 보존율 비교 (S15P31A307-166).
 
-MDB·ENST 주석은 동시에 친 타격을 줄마다 따로 적어 같은 시각이 여러 번 나옴. 벤치마크의 온셋 검출기는 한 시각에
-하나만 내므로 주석 그대로 채점하면 재현율이 막힘. 30ms 안에 붙은 정답 시각을 하나로 합친 뒤 정답 드럼·원곡·분리 드럼
-세 입력에 벤치마크와 같은 검출기를 돌려 F1을 냄. 분리 드럼은 `ssaplash-bench run --save-wav`로 저장한 폴더에서 읽음.
+벤치마크는 분리 드럼 하나만 채점함. 이 스크립트는 같은 검출기·같은 정답으로 정답 드럼과 분리 안 한 원곡도 채점해
+분리 드럼 점수를 어디에 비춰 읽을지 기준값을 냄. 정답은 벤치마크처럼 30ms 안 시각을 합친 것(merge_onsets)과
+주석 그대로인 것(Raw 열) 둘 다 냄. 분리 드럼은 `ssaplash-bench run --save-wav`로 저장한 폴더에서 읽음.
 
   uv run python scripts/check_onset_merged.py configs/bench/datasets/mdb_drums_unseen.yaml \
       --separated data/results/sep-quality-mdbu/separated/bs_roformer_sw \
@@ -19,18 +19,7 @@ import numpy as np
 
 from ssaplash_ai.bench.datasets import load_dataset
 from ssaplash_ai.bench.datasets.base import read_audio
-from ssaplash_ai.bench.metrics.onset_preservation import detect_onsets, onset_scores
-
-MERGE_GAP_SEC = 0.03
-
-
-def merge_onsets(times: np.ndarray, gap_sec: float = MERGE_GAP_SEC) -> np.ndarray:
-    """앞 시각과 gap_sec 안으로 붙은 시각은 버리고 첫 시각만 남김."""
-    out: list[float] = []
-    for t in np.sort(np.asarray(times, dtype=np.float64)):
-        if not out or t - out[-1] > gap_sec:
-            out.append(float(t))
-    return np.array(out, dtype=np.float64)
+from ssaplash_ai.bench.metrics.onset_preservation import detect_onsets, merge_onsets, onset_scores
 
 
 def song_row(song, separated_dir: Path | None) -> dict[str, object]:

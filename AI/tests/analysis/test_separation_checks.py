@@ -18,17 +18,12 @@ def _load(name: str):
     return module
 
 
-onset = _load("check_onset_merged")
 stems = _load("compare_mdb_musdb_stems")
 
 
-def test_30ms_안에_붙은_정답_시각은_첫_시각만_남는다():
-    times = np.array([0.5, 0.0, 0.01, 0.02, 0.1, 0.131])
-    assert onset.merge_onsets(times).tolist() == [0.0, 0.1, 0.131, 0.5]
-
-
-def test_빈_정답은_빈_배열():
-    assert onset.merge_onsets(np.array([])).size == 0
+def test_세_입력_비교_스크립트가_불러와진다():
+    onset = _load("check_onset_merged")
+    assert callable(onset.song_row) and callable(onset.main)
 
 
 @pytest.mark.parametrize("offset", [0, 137, -64])
