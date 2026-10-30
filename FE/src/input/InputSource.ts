@@ -23,6 +23,8 @@ export interface InputSource {
   /** 사용자 제스처 안에서 호출해야 하는 소스(BLE)가 있다 */
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  /** 사용자 제스처 없이 이전에 허락받은 연결만 조용히 다시 연다. 열 게 없거나 실패하면 끊김으로 두고 던지지 않는다. 지원 안 하면 없음 */
+  autoConnect?(): Promise<void>;
   subscribe(listener: StickEventListener): () => void;
   onState(listener: StateListener): () => void;
   /** 자세 스트림 켜기/끄기. 캘리브레이션·자유 모드에서 켠다. 지원 안 하면 무시 */
