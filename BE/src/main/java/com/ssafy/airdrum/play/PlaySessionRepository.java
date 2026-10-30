@@ -17,6 +17,30 @@ public class PlaySessionRepository {
 	private final NamedParameterJdbcTemplate named;
 	private final PlayJson json;
 	public PlaySessionRepository(JdbcTemplate db, PlayJson json) { this.db = db; this.named = new NamedParameterJdbcTemplate(db); this.json = json; }
+	public long countForUser(long userId) {
+		return db.queryForObject("SELECT count(*) FROM play_sessions WHERE user_id=?", Long.class, userId);
+	}
+	public List<PlaySummaryResponse> pageForUser(long userId, int size, long offset) {
+		var args = new MapSqlParameterSource().addValue("userId", userId).addValue("size", size).addValue("offset", offset);
+		return named.query("""
+			SELECT p.id,p.started_at,p.ended_at,p.mode,p.input_source,p.song_id,s.title,p.chart_version_id,
+			       c.difficulty,(s.id IS NOT NULL) AS accessible,p.score,p.accuracy,p.max_combo,
+			       (p.mode IN ('RHYTHM','SHEET') AND r.id IS NOT NULL) AS has_report
+			FROM (SELECT id,started_at,ended_at,mode,input_source,song_id,chart_version_id,score,accuracy,max_combo
+			      FROM play_sessions WHERE user_id=:userId ORDER BY ended_at DESC,id DESC LIMIT :size OFFSET :offset) p
+			LEFT JOIN songs s ON s.id=p.song_id AND
+			""" + com.ssafy.airdrum.song.SongRepository.VISIBLE + """
+			LEFT JOIN chart_versions v ON v.id=p.chart_version_id
+			LEFT JOIN charts c ON c.id=v.chart_id AND c.song_id=p.song_id
+			LEFT JOIN reports r ON r.play_session_id=p.id
+			ORDER BY p.ended_at DESC,p.id DESC
+			""", args, (r,n) -> new PlaySummaryResponse(r.getObject("id", UUID.class),
+				r.getTimestamp("started_at").toInstant(),r.getTimestamp("ended_at").toInstant(),
+				r.getString("mode"),r.getString("input_source"),r.getObject("song_id", Long.class),
+				r.getString("title"),r.getObject("chart_version_id", Long.class),r.getString("difficulty"),
+				r.getBoolean("accessible"),r.getObject("score", Integer.class),r.getBigDecimal("accuracy"),
+				r.getObject("max_combo", Integer.class),r.getBoolean("has_report")));
+	}
 	public record Session(UUID id, long userId, String hash, String rawStatus, String rawKey, String inputSource) {}
 	public record ChartData(String notes, int noteCount, int schemaVersion, String versionToken, String chartToken) {}
 	public Optional<Session> find(UUID id, boolean lock) {
