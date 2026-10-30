@@ -16,6 +16,10 @@ class WorkerPayloadTest {
         assertThat(hash("{\"result\":{\"b\":[true,null],\"a\":1.00}}"))
                 .isEqualTo(hash("{\"result\":{\"a\":1,\"b\":[true,null]}}"));
     }
+    @Test void crossLanguageUnicodeAndDecimalVector() {
+        assertThat(hash("{\"result\":{\"😀\":-0.00,\"\\uE000\":1.2300,\"제어\":\"x\\u001f\\n\",\"prec\":0.12345678901234567890123456789012345}}"))
+                .isEqualTo("a6385d023ac91b8d496887d40c7f840cf7790eb20ddc16ae866e0a080c541921");
+    }
     @Test void duplicateKeysAndTrailingObjectsAreRejected() {
         assertThatThrownBy(()->hash("{\"result\":{\"a\":1,\"a\":2}}"))
                 .isInstanceOf(com.ssafy.airdrum.common.error.BusinessException.class);
