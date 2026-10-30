@@ -8,7 +8,8 @@ interface ChipProps {
   battery: readonly [number | null, number | null];
 }
 
-/** 칩 본체(표시만). 스토어는 StickStatusIndicator가 읽는다 */
+/** 칩 본체(표시만, Figma Shell / StickStatus 262:1270: h32 · px12 · gap10 · 점 6). 스토어는 StickStatusIndicator가 읽는다.
+ *  6상태(ok/left-off/right-off/low/unknown/both-off)는 stickStatus() 결과(점 on/off · 배터리 low/unknown)의 조합으로 그려진다 */
 export function StickStatusChip({ connected, battery }: ChipProps) {
   return (
     <NavLink to="/setup" className="stick-status" aria-label="스틱 연결 상태">
