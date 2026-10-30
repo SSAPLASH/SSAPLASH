@@ -16,6 +16,7 @@ import { layoutToProfile } from '@/domain/kitJudge';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
+import { isPacketStreamSource, STICK_LIVENESS_ENABLED, StickLivenessTracker } from '@/input/stickLiveness';
 import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
 
 let currentSensor: SensorId = 'none';
@@ -50,7 +51,7 @@ function currentProfile(): CalibrationProfile {
 }
 
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
-export async function activateSensor(id: SensorId): Promise<void> {
+export async function activateSensor(id: SensorId, auto = false): Promise<void> {
   if (currentSensor === id) return;
   if (activeInstance) await inputManager.detach(activeInstance.kind);
   unsubState?.();
@@ -59,7 +60,7 @@ export async function activateSensor(id: SensorId): Promise<void> {
   padTableSync.setSource(null);
   yawDriftMonitor.setSource(null);
   currentSensor = id;
-  useLive.setState({ activeSensor: id, connected: [false, false], sourceState: 'disconnected', sourceMessage: null });
+  useLive.setState({ activeSensor: id, connected: [false, false], battery: [null, null], sourceState: 'disconnected', sourceMessage: null });
   if (id === 'none') return;
   try {
     const src = sensorRegistry.instance(id);
@@ -69,7 +70,7 @@ export async function activateSensor(id: SensorId): Promise<void> {
     applySensorOptions();
     src.setSurface?.(lastSurface);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
-    await inputManager.attach(src);
+    await inputManager.attach(src, auto);
   } catch (e) {
     useLive.setState({ sourceState: 'error', sourceMessage: (e as Error).message });
   }
@@ -171,18 +172,47 @@ export function bootstrapInput(): void {
   useSettings.subscribe(applySettings);
 
   // 연결 표시는 센서 기준. 키보드는 항상 켜져 있으므로 표시하지 않는다
-  inputManager.onStatus((stickId, connected, source) => {
-    if (source === 'keyboard') return;
-    const c = [...useLive.getState().connected] as [boolean, boolean];
+  const liveness = new StickLivenessTracker();
+  /** 손 하나의 연결 상태 반영. battery: undefined면 건드리지 않고, null이면 지운다 */
+  const applyStatus = (stickId: 0 | 1, connected: boolean, battery?: number | null) => {
+    const live = useLive.getState();
+    const c = [...live.connected] as [boolean, boolean];
     c[stickId] = connected;
-    useLive.setState({ connected: c });
+    const patch: Partial<Pick<typeof live, 'connected' | 'battery'>> = { connected: c };
+    if (battery !== undefined) {
+      const b = [...live.battery] as [number | null, number | null];
+      b[stickId] = battery;
+      patch.battery = b;
+    }
+    useLive.setState(patch);
     // 센서가 연결되면 현재 패드 표를 스틱에 보낸다(같은 표를 이미 보냈으면 무동작)
     if (connected) padTableSync.push(currentProfile());
     // 연결 직후 스틱 방위각 오프셋을 0으로 맞춰 FE 기억과 일치시킨다
     if (connected) yawDriftMonitor.onConnected(stickId);
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
     if (!connected && useLive.getState().referenceSetAt !== null) useLive.setState({ referenceStale: true });
+  };
+  inputManager.onStatus((stickId, connected, source, batteryPct) => {
+    if (source === 'keyboard') return;
+    // 소스가 직접 알린 상태. 끊김이면 배터리도 지운다(포트가 닫힌 경우). 연결 STATUS에 배터리가 없으면 알 수 없음
+    if (connected) liveness.touch(stickId, performance.now());
+    else liveness.clear(stickId);
+    applyStatus(stickId, connected, connected ? (batteryPct ?? null) : null);
   });
+  // 스틱별 무응답 끊김(U9 임시안, 판정은 input/stickLiveness 한 곳). 끊긴 손은 배터리 마지막 값을 남긴다
+  inputManager.onActivity((stickId, source) => {
+    if (!isPacketStreamSource(source)) return;
+    liveness.touch(stickId, performance.now());
+    if (!useLive.getState().connected[stickId]) applyStatus(stickId, true);
+  });
+  if (STICK_LIVENESS_ENABLED) {
+    setInterval(() => {
+      if (!isPacketStreamSource(useLive.getState().activeSensor)) return;
+      for (const id of liveness.expire(performance.now())) {
+        if (useLive.getState().connected[id]) applyStatus(id, false);
+      }
+    }, 1000);
+  }
   inputManager.onPose((stickId, pose) => {
     const p = [...useLive.getState().pose] as [typeof pose, typeof pose];
     p[stickId] = pose;
@@ -206,7 +236,7 @@ export function bootstrapInput(): void {
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
   // 모니터 따라보기 창(/monitor/stick?follow=1)은 센서를 열지 않는다 — 연결은 연주 창이 가진다
-  if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind);
+  if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind, true);
   useSettings.subscribe((s, prev) => {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();

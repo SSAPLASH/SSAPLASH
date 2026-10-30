@@ -18,6 +18,8 @@ interface SerialPortLike {
 }
 interface SerialLike {
   requestPort(): Promise<SerialPortLike>;
+  /** 사용자가 이미 허락한 포트 목록 */
+  getPorts(): Promise<SerialPortLike[]>;
   addEventListener(type: 'disconnect', listener: (ev: Event) => void): void;
   removeEventListener(type: 'disconnect', listener: (ev: Event) => void): void;
 }
@@ -132,6 +134,46 @@ export class WebSerialStickSource extends BaseInputSource {
     if (this.state !== 'error') this.setState('disconnected');
   }
 
+  /** 포트를 열고 읽기 루프·동기화를 시작한다. connect와 autoConnect가 같이 쓴다 */
+  private async openPort(serial: SerialLike, port: SerialPortLike): Promise<void> {
+    await port.open({ baudRate: SERIAL_BAUD_RATE, dataBits: 8, stopBits: 1, parity: 'none' });
+    if (!port.readable || !port.writable) throw new Error('포트 스트림을 열 수 없습니다');
+    this.closing = false;
+    this.port = port;
+    this.decoder.reset();
+    this.clock.reset();
+    this.connectCount++;
+    const reader = port.readable.getReader();
+    this.reader = reader;
+    this.writer = port.writable.getWriter();
+    serial.addEventListener('disconnect', this.onPortDisconnect);
+    this.setState('connected');
+    void this.readLoop(reader);
+    for (let i = 0; i < 5; i++) setTimeout(() => this.sync(), i * 50);
+    this.syncTimer = window.setInterval(() => this.sync(), SYNC_INTERVAL_MS);
+  }
+
+  /**
+   * 이미 허락받은 포트가 있으면 클릭 없이 연다(페이지 로드 시). 허락한 포트가 없거나 열기에 실패하면
+   * 조용히 끊김으로 둔다 — 그때는 사용자가 connect()(포트 선택 버튼)로 연다.
+   */
+  async autoConnect(): Promise<void> {
+    const serial = getSerial();
+    if (!serial) return;
+    try {
+      const [port] = await serial.getPorts();
+      if (!port) {
+        this.setState('disconnected');
+        return;
+      }
+      this.setState('connecting');
+      await this.openPort(serial, port);
+    } catch {
+      await this.cleanup();
+      this.setState('disconnected');
+    }
+  }
+
   async connect(): Promise<void> {
     const serial = getSerial();
     if (!serial) {
@@ -141,21 +183,7 @@ export class WebSerialStickSource extends BaseInputSource {
     this.setState('connecting', '포트 선택 창에서 스틱(또는 동글)을 고르세요. 사용자 클릭 안에서만 열립니다.');
     try {
       const port = await serial.requestPort();
-      await port.open({ baudRate: SERIAL_BAUD_RATE, dataBits: 8, stopBits: 1, parity: 'none' });
-      if (!port.readable || !port.writable) throw new Error('포트 스트림을 열 수 없습니다');
-      this.closing = false;
-      this.port = port;
-      this.decoder.reset();
-      this.clock.reset();
-      this.connectCount++;
-      const reader = port.readable.getReader();
-      this.reader = reader;
-      this.writer = port.writable.getWriter();
-      serial.addEventListener('disconnect', this.onPortDisconnect);
-      this.setState('connected');
-      void this.readLoop(reader);
-      for (let i = 0; i < 5; i++) setTimeout(() => this.sync(), i * 50);
-      this.syncTimer = window.setInterval(() => this.sync(), SYNC_INTERVAL_MS);
+      await this.openPort(serial, port);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.setState('error', `Web Serial 연결 실패: ${msg}`);
