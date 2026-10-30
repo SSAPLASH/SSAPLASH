@@ -23,7 +23,7 @@
 
 ```
 AI/
-├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart 명령 진입점
+├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart·ssaplash-worker 명령 진입점
 ├─ uv.lock               의존성 잠금
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
@@ -48,6 +48,9 @@ AI/
 │   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
 │   │                    separation(음원 분리 SeparationModule), transcription(드럼 채보 TranscriptionModule),
 │   │                    chart_json(채보 JSON 만들기·검증), tempo(bpm 추정), cli(ssaplash-chart 명령)
+│   ├─ worker/           채보 워커. config(환경 변수), payload(정규 JSON·payloadHash), api(BE 워커 API 호출부),
+│   │                    transfer(서명 URL 내려받기·올리기), heartbeat(10초 heartbeat 스레드), job(작업 하나 실행기),
+│   │                    loop(claim 폴링 루프), cli(ssaplash-worker 명령), fake_be(테스트·로컬 확인용 BE 대역)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
 │   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
 │   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
@@ -194,6 +197,82 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 ```bash
 uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config configs/chart/transcription_mock.yaml
+```
+
+`separate`·`run`에 `--duration-ms <원곡 길이 ms>`를 주면 분리 출력 두 파일의 끝을 그 길이에 맞춰 자르거나 무음을 채우고(샘플 수 `길이 × 44100 // 1000`), 채보 노트 시각 상한에도 같은 값을 쓴다. BE가 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사하므로 워커가 BE claim의 `input.durationMs`를 여기에 넘긴다. 실측 길이와 1000ms 넘게 다르면 입력 오류다.
+
+## 채보 워커 실행 (S15P31A307-171)
+
+BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
+
+흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
+
+| 환경 변수 | 필수 | 기본값 | 뜻 |
+| --- | --- | --- | --- |
+| `SSAPLASH_WORKER_BASE_URL` | 예 | — | BE 주소. 뒤에 `/internal/v1/chart-jobs`를 붙여 부른다 |
+| `SSAPLASH_WORKER_ID` | 예 | — | BE `CHART_WORKER_CREDENTIALS`에 등록된 workerId |
+| `SSAPLASH_WORKER_TOKEN` | 예 | — | 그 workerId의 토큰. UTF-8 32바이트 이상 |
+| `SSAPLASH_WORK_DIR` | 예 | — | 작업 파일 부모. `<WORK_DIR>/worker/<jobId>-<attempt 앞 8자>/`에 원곡·flac·chart.json을 두고 끝나면 지운다 |
+| `SSAPLASH_WORKER_POLL_SEC` | | 5 | 대기 작업이 없을 때(204) 다음 claim까지 |
+| `SSAPLASH_WORKER_HEARTBEAT_SEC` | | 10 | heartbeat 주기 |
+| `SSAPLASH_WORKER_KEEP_FILES` | | false | 참이면 작업 폴더를 지우지 않는다(문제 추적용) |
+| `SSAPLASH_CHART_DEVICE`, `SSAPLASH_MODELS_DIR` | | | 추론 모듈이 읽는 기존 변수 |
+
+```bash
+# 환경 변수·설정 yaml 검사, 모델 두 개 올려 보기. BE는 부르지 않는다
+uv run ssaplash-worker check
+# 상시 실행. --once는 작업 하나만 처리하고 종료, --max-jobs N은 N개
+uv run ssaplash-worker run
+```
+
+종료 코드는 0 정상, 1 설정·모델 오류, 2 인증 실패(401)다. 로그는 표준 오류로 나가며 토큰과 서명 URL은 남기지 않는다. 종료 신호(Ctrl+C, SIGTERM)를 한 번 받으면 처리 중인 작업을 끝내고 멈추고, 두 번 받으면 바로 끝낸다(임대가 만료되면 BE가 다시 배정한다). 분리 모델 설정(`configs/chart/separation.yaml`)의 출력은 BE 계약대로 flac 44,100Hz여야 하며 아니면 시작하지 않는다.
+
+| 실패 | BE 보고 `code` | `retryable` | 뒤처리 |
+| --- | --- | --- | --- |
+| 입력 파일 못 읽음·길이 초과·무음, 내려받은 파일의 크기·sha256 불일치, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | BE가 FAILED |
+| 모델 올리기·추론 예외 | `MODEL_FAILED` | GPU 메모리 부족일 때만 참 | 참이면 BE가 다시 배정(단계별 최대 2회) |
+| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | BE가 FAILED |
+| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패 | 보고 안 함 | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+
+결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### 모델 없이 전체 흐름 확인 (fake BE)
+
+BE 접속 정보가 없어도 혼자 끝까지 돌려 볼 수 있게 BE 대역을 넣어 뒀다. 6개 API와 저장소 GET/PUT을 흉내 내고, 토큰·attempt·임대·payloadHash·flac 길이·채보 JSON을 BE처럼 검사한다. 개발용이라 운영 코드가 아니다.
+
+```bash
+# 터미널 1: 곡을 작업으로 넣고 BE 대역을 띄운다. 작업이 다 끝나면 요약을 찍고 종료한다
+uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
+# 터미널 2: 터미널 1이 출력한 환경 변수 3개와 SSAPLASH_WORK_DIR을 넣고 워커를 돌린다
+uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml
+uv run pytest tests/worker
+```
+
+실제 모델로 같은 흐름을 보려면 두 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
+
+### GPU 서버에서 띄우기
+
+워커는 사내 GPU 서버(`~/ssaplash/S15P31A307/AI`, git 체크아웃)에서 `nohup`으로 상시 가동하고 EC2의 BE를 pull한다. 재부팅 뒤 자동 재시작은 없으므로 같은 순서로 다시 띄운다. 비밀 값은 저장소가 아니라 `~/ssaplash/worker.env`(권한 600)에 둔다.
+
+서버 주의 두 가지. 서버 드라이버는 570(CUDA 12.8)인데 `uv sync`는 lock의 기본 PyPI torch(CUDA 13 휠)를 깔아 `libcusparseLt.so.0` 오류로 import가 깨진다. `uv sync` 뒤에는 아래처럼 torch를 CUDA 12.8 휠로 다시 깔고, 그다음부터는 `uv run --no-sync`로 실행해 `uv run`이 다시 lock에 맞추지 않게 한다. 작업 폴더에는 `separation.json`·`transcription.json`(시간·메모리)이 남으며 `SSAPLASH_WORKER_KEEP_FILES=1`일 때만 보존된다.
+
+```bash
+cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers
+uv pip install --reinstall "torch==2.8.0" "torchaudio==2.8.0" --index-url https://download.pytorch.org/whl/cu128
+uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.8.0+cu128 True
+# ~/ssaplash/worker.env 내용 (값은 BE·인프라에게 받음):
+#   SSAPLASH_WORKER_BASE_URL=https://k15a307.p.ssafy.io
+#   SSAPLASH_WORKER_ID=worker1
+#   SSAPLASH_WORKER_TOKEN=<토큰>
+#   SSAPLASH_WORK_DIR=$HOME/ssaplash/work
+#   SSAPLASH_CHART_DEVICE=cuda
+#   CUDA_VISIBLE_DEVICES=6
+chmod 600 ~/ssaplash/worker.env && set -a && source ~/ssaplash/worker.env && set +a
+uv run --no-sync ssaplash-worker check
+mkdir -p ~/ssaplash/results && nohup uv run --no-sync ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
+echo $! > ~/ssaplash/worker.pid
+tail -f ~/ssaplash/results/worker.log        # 상태
+kill $(cat ~/ssaplash/worker.pid)            # 멈추기. 처리 중인 작업을 끝내고 종료
 ```
 
 ## 약점 구간 분석 (COACH-003, S15P31A307-138)
