@@ -135,7 +135,8 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
     const right = src.clockOffsetOf(1);
     expect(left).not.toBeNull();
     expect(right).not.toBeNull();
-    expect(left! - right!).toBeCloseTo(899_000, 0);
+    // 두 패킷을 받은 실제 시각이 달라 오차가 생긴다. 느린 러너에서도 시계가 ~899초 벌어졌는지만 본다
+    expect(Math.abs(left! - right! - 899_000)).toBeLessThan(50);
 
     const events: { stickId: number; timestamp: number }[] = [];
     src.subscribe((e) => {
@@ -146,7 +147,7 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
     await tick();
     // 같은 순간을 가리키는 두 손의 시각이 같은 브라우저 시각으로 바뀐다
     expect(events).toHaveLength(2);
-    expect(events[0].timestamp).toBeCloseTo(events[1].timestamp, 0);
+    expect(Math.abs(events[0].timestamp - events[1].timestamp)).toBeLessThan(50);
     await src.disconnect();
   });
 
