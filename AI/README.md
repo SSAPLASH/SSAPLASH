@@ -101,7 +101,7 @@ uv run ruff format .     # 포맷 (커밋 전)
 uv run pytest            # 테스트
 ```
 
-커밋 전에 `ruff check`와 `pytest`가 모두 통과해야 한다 (CLAUDE.md 규칙). GitLab CI의 AI lint·test 단계도 같은 명령을 쓴다.
+커밋 전에 `ruff check`와 `pytest`가 모두 통과해야 한다 (CLAUDE.md 규칙). GitLab CI의 `ai-lint` job이 `ruff check .`와 `ruff format --check .`를 같은 ruff 버전(`AI/uv.lock`)으로 돌리고(AI 파일이 바뀐 MR·병합에서만), `ai-lock` job이 `uv lock --check`로 `uv.lock`이 `pyproject.toml`과 맞는지 본다(의존성을 바꿀 때 `uv lock`을 잊으면 여기서 실패한다). **AI 테스트(`pytest`)는 아직 CI에 없다.**
 
 데이터 점검. 곡 수, 길이 합, 빠진 파일을 출력하고 문제가 있으면 종료 코드 1을 돌려준다.
 
