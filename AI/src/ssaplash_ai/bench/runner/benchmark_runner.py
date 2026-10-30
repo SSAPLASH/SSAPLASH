@@ -36,6 +36,7 @@ from ssaplash_ai.bench.metrics import (
     bss_metrics,
     detect_onsets,
     measure_resources,
+    merge_onsets,
     onset_metrics,
 )
 from ssaplash_ai.bench.metrics.resource_usage import gpu_name
@@ -184,9 +185,12 @@ def load_resume_rows(csv_path: Path) -> tuple[list[dict], int]:
 
 
 def true_onsets(song: SongItem) -> np.ndarray:
-    """정답 온셋. 합성곡은 MIDI, MUSDB는 정답 드럼 스템에 검출기 적용 (설계 3-5절)."""
+    """정답 온셋. 합성곡은 MIDI, MUSDB는 정답 드럼 스템에 검출기 적용 (설계 3-5절).
+
+    MIDI·사람 주석 정답은 동시 타격이 같은 시각으로 여러 번 들어 있어 30ms 안 시각을 하나로 합침.
+    """
     if song.onsets_true is not None:
-        return np.asarray(song.onsets_true, dtype=np.float64)
+        return merge_onsets(song.onsets_true)
     return detect_onsets(song.drums_true, song.sample_rate)
 
 

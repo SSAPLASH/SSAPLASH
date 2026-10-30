@@ -371,6 +371,23 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
 ```
 
+### 실제 곡 분리 품질 평가 (S15P31A307-166)
+
+음원 분리 모델을 실제 드러머 녹음에 돌린 결과와 해석은 `docs/bench/separation-real-2026-10-29/evaluation.md`에 있다. 드럼 SDR은 ENST-Drums minus-one 64곡으로 재고, MDB Drums는 드럼 단독 트랙이 완성곡 속 드럼과 달라 타격 보존율만 본다. ENST 로더와 `enst_minus_one.yaml`은 S15P31A307-164에서 들어온다.
+
+GPU 서버에서는 `notebooks/separation_quality_server.ipynb`를 위에서부터 실행한다. ENST 드럼과 반주를 녹음된 음량 그대로 더한 조건과 확인 스크립트는 로컬에서 돌린다.
+
+```bash
+# ENST 드럼과 반주를 녹음된 음량 그대로 더해 분리, 분리 wav 64곡 저장
+uv run ssaplash-bench run --models configs/bench/models/msst/bs_roformer_sw.yaml --dataset configs/bench/datasets/enst_minus_one_gain1.yaml --save-wav 64 --run-id sep-enst-gain1 --mlflow-uri none
+
+# 정답 드럼 파일·분리하지 않은 완성곡·분리한 드럼 세 입력의 타격 보존율을 같은 정답으로 비교
+uv run python scripts/check_onset_merged.py configs/bench/datasets/enst_minus_one_gain1.yaml --separated data/results/sep-enst-gain1/separated/bs_roformer_sw --out data/results/onset_merged_enst_gain1.csv
+
+# MDB 드럼 단독 트랙과 같은 녹음의 MUSDB18 train 드럼 스템 비교 (MUSDB18-HQ train이 data/musdb18hq/train에 있어야 함)
+uv run python scripts/compare_mdb_musdb_stems.py --out data/results/mdb_musdb_stems.csv
+```
+
 ## 채보 벤치마크 실행 (S15P31A307-109)
 
 채보 모델은 드럼 소리를 넣으면 "몇 초에 어느 드럼을 쳤는지" 목록을 적어 주는 모델이다. 이 하네스는 채보 모델 여러 개를 같은 곡으로 돌려 정답 타격(위 "채보 벤치마크 정답 데이터")과 맞춰 보고 점수표를 만든다. 분리 벤치마크와 같은 뼈대(모델 yaml × 데이터셋 yaml → 곡마다 CSV 한 줄 → 보고서 → MLflow)이고, 다른 점은 세 가지다.
@@ -528,7 +545,7 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 | `sdrDrums`, `sdrAccomp` | 분리 품질 (dB). 정답과 예측이 얼마나 가까운지 | museval(BSS Eval v4)에 정답·예측 드럼과 반주 2소스를 넣고 1초 프레임 값의 중앙값. 예측 반주 = 원곡 − 예측 드럼 |
 | `sirAccomp`, `sarAccomp` | 반주에 남은 드럼 누설, 인공음 (dB) | 같은 museval 호출. 드럼 쪽 `sirDrums`·`sarDrums`도 보조로 기록 |
 | `siSdrDrums`, `siSdrAccomp` | 배율 불변 SDR (dB) | 곡 전체 1회 |
-| `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MUSDB면 정답 드럼 스템에 같은 검출기 적용 |
+| `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MDB·ENST면 사람 주석, MUSDB면 정답 드럼 스템에 같은 검출기 적용. MIDI·주석 정답은 동시에 친 타격이 같은 시각으로 여러 줄 들어 있어 30ms 안 시각을 하나로 합친 뒤 채점한다 (S15P31A307-166) |
 | `onsetF1Tight` | 같은 것, ±25ms | |
 | `attackSlopeDistortion` | attack slope는 드럼을 친 직후 10ms 동안 소리가 커지는 기울기(Beyond SDR 논문 용어). 분리한 드럼의 이 기울기가 정답 드럼과 얼마나 달라졌는지를 잼. 0이면 원음 그대로, 클수록 타격 앞머리가 뭉개진 것. 뭉개지면 채보 모델이 타격 시각을 늦게 잡거나 놓치므로 봄 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
 | `separateSec`, `rtf` | 분리 시간(초), RTF = 분리 시간 / 곡 길이 | 벽시계. 모델 로드 제외. 로드 직후 첫 곡을 한 번 분리하고 버려(워밍업, `--no-warmup`으로 생략) GPU 커널 준비 시간을 뺀다 |
