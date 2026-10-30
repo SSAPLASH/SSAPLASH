@@ -173,11 +173,46 @@ class TelemetryApiTest {
 		var r = postBatch(batch(SENSOR_HIT, KEYBOARD_HIT, STATUS.replace("\"batteryPct\":80", "\"batteryPct\":101")), admin);
 		problem(r, 400, "TELEMETRY_EVENT_INVALID");
 		assertThat(body(r).path("detail").asString()).contains("events[2].batteryPct");
-		problem(postBatch(batch(SENSOR_HIT.replace("\"SNARE\"", "\"SMALL_TOM\"")), admin), 400, "INVALID_INPUT");
+		problem(postBatch(batch(KEYBOARD_HIT, SENSOR_HIT.replace("\"SNARE\"", "\"UNKNOWN_PAD\""), STATUS), admin), 400, "INVALID_INPUT");
 		problem(postBatch(batch(SENSOR_HIT).replace("\"schemaVersion\":1", "\"schemaVersion\":2"), admin), 400, "TELEMETRY_SCHEMA_UNSUPPORTED");
 		problem(postBatch("{", admin), 400, "INVALID_INPUT");
 		problem(send(post(BATCHES).contentType(MediaType.TEXT_PLAIN).content(batch(SENSOR_HIT)), admin), 415, "UNSUPPORTED_MEDIA_TYPE");
 		assertThat(stored()).isZero();
+	}
+
+	@Test
+	void smallTomBatchIsStoredAndReturnedWithOtherEvents() throws Exception {
+		String smallTom = SENSOR_HIT.replace("\"SNARE\"", "\"SMALL_TOM\"")
+				.replace("\"predictedPad\":null", "\"predictedPad\":\"SMALL_TOM\"");
+		var response = postBatch(batch(smallTom, KEYBOARD_HIT, STATUS), admin);
+		assertThat(response.getResponse().getStatus()).as(response.getResponse().getContentAsString()).isEqualTo(200);
+		assertThat(body(response).path("acceptedCount").intValue()).isEqualTo(3);
+		assertThat(stored()).isEqualTo(3);
+		var row = db.queryForMap("SELECT pad,baseline_pad,predicted_pad FROM telemetry_events WHERE session_id=? AND stick_id=0 AND kind='HIT'", session);
+		assertThat(row.values()).containsOnly("SMALL_TOM");
+		var items = items(ok(get(SESSIONS + "/" + session + "/events").param("userId", String.valueOf(admin))));
+		assertThat(items).hasSize(3);
+		for (var field : List.of("pad", "baselinePad", "predictedPad"))
+			assertThat(items.getFirst().path(field).asString()).as(field).isEqualTo("SMALL_TOM");
+		assertThat(items.get(1).path("pad").asString()).isEqualTo("HIHAT_PEDAL");
+		assertThat(items.get(2).path("pad").isNull()).isTrue();
+	}
+
+	@Test
+	void legacyTomInputIsStoredAsCanonicalAndOldRowsAreNormalizedOnlyOnRead() throws Exception {
+		String legacy = SENSOR_HIT.replace("\"SNARE\"", "\"HI_TOM\"")
+				.replace("\"predictedPad\":null", "\"predictedPad\":\"HI_TOM\"");
+		var response = postBatch(batch(legacy), admin);
+		assertThat(response.getResponse().getStatus()).as(response.getResponse().getContentAsString()).isEqualTo(200);
+		assertThat(body(response).path("acceptedCount").intValue()).isEqualTo(1);
+		assertThat(db.queryForMap("SELECT pad,baseline_pad,predicted_pad FROM telemetry_events WHERE session_id=?", session).values())
+				.containsOnly("SMALL_TOM");
+		db.update("UPDATE telemetry_events SET pad='HI_TOM',baseline_pad='HI_TOM',predicted_pad='HI_TOM' WHERE session_id=?", session);
+		var row = items(ok(get(SESSIONS + "/" + session + "/events").param("userId", String.valueOf(admin)))).getFirst();
+		for (var field : List.of("pad", "baselinePad", "predictedPad"))
+			assertThat(row.path(field).asString()).as(field).isEqualTo("SMALL_TOM");
+		assertThat(db.queryForMap("SELECT pad,baseline_pad,predicted_pad FROM telemetry_events WHERE session_id=?", session).values())
+				.containsOnly("HI_TOM");
 	}
 
 	@Test
