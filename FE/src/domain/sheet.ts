@@ -1,12 +1,53 @@
 // 악보 모드의 격자 모델 (MODE-sheet-practice 3-2). 채보를 마디 × 16분음 칸으로 양자화한다.
+// 격자 원점은 chart.offsetMs(1마디 1박 시각)이고, 칸·마디는 모두 "격자 시각 = timeMs − originMs"로 센다 (MODE-003-sheet-grid-origin 3장).
 import type { Chart } from './chart';
 import { ALL_PADS, type PadId } from './pads';
+
+/** 격자 원점·격자 밖 판정에 필요한 채보 필드. offsetMs가 없으면(이전 플레이 로그) 0으로 본다 */
+export type GridChart = Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> & Partial<Pick<Chart, 'offsetMs'>>;
+
+/** 격자 원점(ms, 반주 기준). 원점 정의를 이 한 곳에 둔다 */
+export function gridOriginMs(chart: Partial<Pick<Chart, 'offsetMs'>>): number {
+  return chart.offsetMs ?? 0;
+}
+
+/** 반주 기준 시각 → 격자 시각. 음수면 리드인(카운트인·인트로) 구간 */
+export function gridTimeOf(songTimeMs: number, originMs: number): number {
+  return songTimeMs - originMs;
+}
+
+/**
+ * 노트 시각을 곡 전체 칸 번호로 양자화한다.
+ * offGrid: 가장 가까운 칸 중심에서 stepMs/4(32분음의 절반, BE 솎기 허용 오차와 같음)보다 멀거나 원점보다 앞선 노트.
+ * 원점 앞 노트는 0칸으로 모은다(못갖춘마디 표시는 후속).
+ */
+export function stepIndexOf(timeMs: number, originMs: number, stepMs: number): { idx: number; offGrid: boolean } {
+  const grid = gridTimeOf(timeMs, originMs);
+  const idx = Math.max(0, Math.round(grid / stepMs));
+  const offGrid = grid < 0 || Math.abs(grid - idx * stepMs) > stepMs / 4;
+  return { idx, offGrid };
+}
+
+/** durationMs가 마디 길이의 정수배에서 반올림 오차만큼 벗어나도 마디가 하나 늘지 않게 하는 여유(ms) */
+const BAR_COUNT_EPS_MS = 1;
+
+/** 마디 수: 원점을 뺀 길이로 세고, 마지막 노트가 그 뒤에 있으면 그 마디까지 포함한다 */
+export function barCountOf(chart: GridChart & Pick<Chart, 'durationMs'>, stepsPerBar = chart.beatsPerBar * 4): number {
+  const barMs = (60_000 / chart.bpm) * chart.beatsPerBar;
+  const stepMs = barMs / stepsPerBar;
+  const originMs = gridOriginMs(chart);
+  const byDuration = Math.max(1, Math.ceil((chart.durationMs - originMs - BAR_COUNT_EPS_MS) / barMs));
+  const maxBar = chart.notes.reduce((m, n) => Math.max(m, Math.floor(stepIndexOf(n.timeMs, originMs, stepMs).idx / stepsPerBar)), 0);
+  return Math.max(byDuration, maxBar + 1);
+}
 
 export interface SheetCell {
   pad: PadId;
   /** 마디 안 칸 번호 0..stepsPerBar-1 */
   step: number;
   noteIndex: number;
+  /** 칸 중심에서 stepMs/4보다 먼 노트(배지·글리프에 점 표시) */
+  offGrid: boolean;
 }
 
 export interface SheetBar {
@@ -23,40 +64,51 @@ export interface SheetModel {
   stepMs: number;
   beatMs: number;
   barMs: number;
+  /** 모델이 쓴 격자 원점(ms, 반주 기준). 호출자는 chart.offsetMs를 다시 읽지 않는다 */
+  originMs: number;
 }
-
-/** durationMs가 마디 길이의 정수배에서 반올림 오차만큼 벗어나도 마디가 하나 늘지 않게 하는 여유(ms) */
-const BAR_COUNT_EPS_MS = 1;
 
 export function buildSheet(chart: Chart, stepsPerBar = 16): SheetModel {
   const beatMs = 60_000 / chart.bpm;
   const barMs = beatMs * chart.beatsPerBar;
   const stepMs = barMs / stepsPerBar;
+  const originMs = gridOriginMs(chart);
 
   const present = new Set(chart.notes.map((n) => n.pad));
   const rows = ALL_PADS.filter((p) => present.has(p));
 
   const placed = chart.notes.map((n, noteIndex) => {
-    const idx = Math.max(0, Math.round(n.timeMs / stepMs));
-    return { bar: Math.floor(idx / stepsPerBar), cell: { pad: n.pad, step: idx % stepsPerBar, noteIndex } };
+    const { idx, offGrid } = stepIndexOf(n.timeMs, originMs, stepMs);
+    return { bar: Math.floor(idx / stepsPerBar), cell: { pad: n.pad, step: idx % stepsPerBar, noteIndex, offGrid } };
   });
 
-  const byDuration = Math.max(1, Math.ceil((chart.durationMs - BAR_COUNT_EPS_MS) / barMs));
-  const maxBar = placed.reduce((m, p) => Math.max(m, p.bar), 0);
-  const barCount = Math.max(byDuration, maxBar + 1);
+  const barCount = barCountOf(chart, stepsPerBar);
 
   const bars: SheetBar[] = Array.from({ length: barCount }, (_, index) => ({ index, cells: [] }));
   for (const p of placed) bars[p.bar].cells.push(p.cell);
 
-  return { bars, rows, stepsPerBar, beatsPerBar: chart.beatsPerBar, stepMs, beatMs, barMs };
+  return { bars, rows, stepsPerBar, beatsPerBar: chart.beatsPerBar, stepMs, beatMs, barMs, originMs };
+}
+
+export type CountSub = '' | 'e' | '&' | 'a';
+
+const COUNT_SUBS: CountSub[] = ['', 'e', '&', 'a'];
+
+/**
+ * 마디 안 칸 번호를 드러머가 세는 박 위치(1, 1e, 1&, 1a …)로 바꾼다.
+ * 한 박 = stepsPerBar / beatsPerBar 칸(보통 4). 박 안 칸 위치 0/1/2/3 → ''/'e'/'&'/'a'.
+ */
+export function countLabel(step: number, stepsPerBar: number, beatsPerBar: number): { beat: number; sub: CountSub } {
+  const stepsPerBeat = stepsPerBar / beatsPerBar;
+  const beat = Math.floor(step / stepsPerBeat);
+  const inBeat = step - beat * stepsPerBeat;
+  return { beat: beat + 1, sub: COUNT_SUBS[Math.min(3, Math.max(0, Math.round(inBeat)))] };
 }
 
 /* ---------- 5선 악보 글리프 배치 (MODE-003-sheet-strip 3-1·3-2) ---------- */
 
-/** 스트립 마디 폭(px). 마디당 고정, 곡 BPM과 무관 (설계 U4) */
+/** 결과 페이지 미니 악보의 마디 폭 상한(px) */
 export const SHEET_BAR_PX = 320;
-/** 고정 기준선의 x 위치 비율(화면 폭 대비) */
-export const SHEET_BASE_RATIO = 0.35;
 
 export type NoteHead = 'normal' | 'cross' | 'circle-cross';
 
@@ -90,6 +142,8 @@ export interface NoteGlyph {
   line: number;
   head: NoteHead;
   stem: boolean;
+  /** 칸 중심에서 stepMs/4보다 먼 노트(머리 옆에 점 표시) */
+  offGrid: boolean;
 }
 
 export interface BeamGroup {
@@ -104,19 +158,20 @@ export interface BarLayout {
   beams: BeamGroup[];
 }
 
-export function layoutBar(chart: Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'>, barIndex: number, opts: { stepsPerBar?: number } = {}): BarLayout {
+export function layoutBar(chart: GridChart, barIndex: number, opts: { stepsPerBar?: number } = {}): BarLayout {
   const stepsPerBar = opts.stepsPerBar ?? chart.beatsPerBar * 4;
   const stepMs = ((60_000 / chart.bpm) * chart.beatsPerBar) / stepsPerBar;
   const stepsPerBeat = stepsPerBar / chart.beatsPerBar;
+  const originMs = gridOriginMs(chart);
 
   const glyphs: NoteGlyph[] = [];
   const steps: number[] = []; // glyphs와 같은 인덱스의 마디 안 step
   chart.notes.forEach((n, noteIndex) => {
-    const idx = Math.max(0, Math.round(n.timeMs / stepMs));
+    const { idx, offGrid } = stepIndexOf(n.timeMs, originMs, stepMs);
     if (Math.floor(idx / stepsPerBar) !== barIndex) return;
     const step = idx % stepsPerBar;
     const pos = STAFF_POS[n.pad];
-    glyphs.push({ noteIndex, pad: n.pad, xRatio: step / stepsPerBar, line: pos.line, head: pos.head, stem: true });
+    glyphs.push({ noteIndex, pad: n.pad, xRatio: step / stepsPerBar, line: pos.line, head: pos.head, stem: true, offGrid });
     steps.push(step);
   });
 

@@ -119,6 +119,12 @@ export interface ResolvedHit {
 /** 입력 소스 연결 상태 (센서 소스 기준. 키보드는 항상 connected) */
 export type SourceState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+/**
+ * 동글 링크 상태(Web Serial 동글만). waiting: 포트는 열렸고 LINK를 아직 못 받음(예전 동글 펌웨어 포함),
+ * ok: LINK 수신 중(1초 하트비트), stale: LINK가 3초 넘게 끊김(동글 문제)
+ */
+export type DongleLink = 'waiting' | 'ok' | 'stale';
+
 /** 패드 타격 이펙트 입력. 화면이 타격마다 채우고 KitCanvas가 읽기만 한다 */
 export interface HitFx {
   /** performance.now() */

@@ -20,9 +20,10 @@ describe('validatePresetName', () => {
   it('공백뿐이면 EMPTY', () => {
     expect(validatePresetName('   ', [])).toBe('EMPTY');
   });
-  it('trim 뒤 50자 초과면 TOO_LONG, 50자는 통과', () => {
+  it('trim 뒤 20자 초과면 TOO_LONG, 20자는 통과', () => {
     expect(validatePresetName('a'.repeat(PRESET_NAME_MAX + 1), [])).toBe('TOO_LONG');
     expect(validatePresetName(` ${'a'.repeat(PRESET_NAME_MAX)} `, [])).toBeNull();
+    expect(PRESET_NAME_MAX).toBe(20);
   });
   it('같은 이름은 DUPLICATE(대소문자 구분), exceptId 자신은 제외', () => {
     const list = [preset({ id: 'a', name: 'Rock' })];

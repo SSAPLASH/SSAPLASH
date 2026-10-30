@@ -12,7 +12,8 @@ import type { InputSource } from './InputSource';
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
-export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind) => void;
+/** batteryPct는 STATUS 패킷이 알려 준 값(%). 모르면 undefined */
+export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind, batteryPct?: number) => void;
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -63,15 +64,19 @@ export class InputManager {
     this.candidateProvider = fn;
   }
 
-  /** 같은 kind는 하나만. 이미 있으면 교체 */
-  async attach(source: InputSource): Promise<void> {
+  /**
+   * 같은 kind는 하나만. 이미 있으면 교체.
+   * auto가 참이고 소스가 autoConnect를 지원하면 사용자 제스처 없이 다시 열 수 있는 경우만 연다(페이지 로드 시 U10)
+   */
+  async attach(source: InputSource, auto = false): Promise<void> {
     await this.detach(source.kind);
     this.sources.set(source.kind, source);
     this.unsubs.set(
       source.kind,
       source.subscribe((e) => this.handle(e, source.kind)),
     );
-    await source.connect();
+    if (auto && source.autoConnect) await source.autoConnect();
+    else await source.connect();
   }
 
   async detach(kind: InputSourceKind): Promise<void> {
@@ -141,7 +146,7 @@ export class InputManager {
       return;
     }
     if (e.kind === 'status') {
-      for (const l of this.statusListeners) l(e.stickId, e.connected, source);
+      for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct);
       return;
     }
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };

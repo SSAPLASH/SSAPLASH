@@ -193,6 +193,7 @@ p {
 }
 .nav a {
   text-decoration: none;
+  white-space: nowrap;
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   color: var(--ink-dim);
@@ -207,6 +208,14 @@ p {
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* 좁으면 센서 이름만 줄여 스틱 칩·프로필이 밀려나지 않게 한다 */
+.topbar-sensor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .main {
   flex: 1;
@@ -220,33 +229,91 @@ p {
   padding: 12px 16px 20px;
 }
 
-/* 스틱 상태 */
-.sticks {
-  display: flex;
-  gap: 6px;
+/* 스틱 상태: 셸 칩 + 세팅 ① 손별 카드 */
+.stick-status,
+.stick-card {
+  --stick-on: #67d58a;
+  --stick-off: var(--miss);
+  --stick-low: var(--ember);
 }
-.stick {
+.stick-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--stick-off);
+}
+.stick-dot.on {
+  background: var(--stick-on);
+  box-shadow: 0 0 8px var(--stick-on);
+}
+.stick-status {
   display: inline-flex;
+  flex-shrink: 0;
+  text-decoration: none;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 12px;
+  padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.stick-status:hover {
+  background: var(--surface);
+}
+.stick-status-hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stick-status-hand.off,
+.stick-card.off .stick-card-battery {
+  opacity: 0.55;
+}
+.stick-batt.low {
+  color: var(--stick-low);
+}
+.stick-batt.critical {
+  color: var(--stick-off);
+  font-weight: 600;
+}
+.stick-batt.unknown {
+  color: var(--ink-faint);
+}
+.stick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.stick-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.stick-card-state {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--ink-dim);
 }
-.stick .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-faint);
+.stick-card.on .stick-card-state {
+  color: var(--stick-on);
 }
-.stick.on .dot {
-  background: #67d58a;
-  box-shadow: 0 0 8px #67d58a;
+.stick-card-battery {
+  font-size: 13px;
+  color: var(--ink-dim);
 }
-.stick.on {
-  color: var(--ink);
+.stick-card-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-dim);
 }
 
 /* ---- 카드·레이아웃 ---- */
@@ -1330,25 +1397,87 @@ a.my-list-row:focus-visible {
 }
 
 /* ---- 통합 설정(/setup) ---- */
-.setup-grid {
+.setup-head {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 880px;
+}
+.setup-steps .step-card + .step-card {
+  margin-top: 0;
+}
+/* 상단바(sticky)와 복귀 띠 아래로 스크롤 위치를 잡는다 */
+.setup-page .step-card {
+  scroll-margin-top: 148px;
+}
+.setup-page .return-banner {
+  top: 57px;
+}
+.dongle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.dongle-row .stick-dot {
+  flex: none;
+}
+.dongle-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dongle-row-text.dim {
+  color: var(--ink-dim);
+}
+.stick-cards {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-  gap: 20px;
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
-@media (max-width: 960px) {
-  .setup-grid {
-    grid-template-columns: 1fr;
-  }
+.setup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 880px;
+  margin-top: 28px;
 }
-.setup-leave {
-  position: fixed;
-  z-index: 50;
+.setup-section > h2 {
+  margin: 0;
+  font-size: 18px;
 }
-.ref-status {
+.setup-advanced {
+  max-width: 880px;
+  margin-top: 20px;
+}
+.setup-advanced > summary {
+  cursor: pointer;
   font-weight: 700;
 }
-.ref-need {
+.setup-advanced-body {
+  margin-top: 14px;
+}
+.setup-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 880px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.setup-bar-dirty {
   color: var(--brass);
 }
 .ref-progress {
@@ -1390,9 +1519,6 @@ a.my-list-row:focus-visible {
 }
 .preset-saved {
   color: var(--brass);
-}
-.preset-name-error {
-  color: var(--miss);
 }
 
 /* ---- 준비 조건 안내 ---- */
@@ -2323,9 +2449,63 @@ a.my-list-row:focus-visible {
 .studio-main > .card > h3 {
   margin-bottom: 4px;
 }
-/* 다시 올리기로 스크롤할 때 상단 바 아래에 카드 머리가 보이게 */
-.studio-main > .card {
-  scroll-margin-top: 72px;
+/* 헤더: 제목 오른쪽에 [+ 곡 올리기], 그 아래 요약 */
+.studio-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.studio-summary {
+  margin-top: 6px;
+}
+/* 곡 올리기 창 */
+.dialog.upload-dialog {
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.upload-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.upload-dialog-head h2 {
+  margin: 0;
+}
+.upload-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.upload-tabs button {
+  padding: 8px 16px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.upload-tabs button.active {
+  color: var(--ink);
+  border-bottom-color: var(--brass);
+}
+.upload-tabs button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+/* 목록 행 제목 옆 출처 칩 */
+.studio-chip {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  vertical-align: middle;
 }
 
 /* 내 곡 목록(/studio) */
@@ -2401,3 +2581,491 @@ a.my-list-row:focus-visible {
 .weak-badge.severe { border-color: var(--miss); color: var(--miss); }
 .weak-spinner { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--brass); border-radius: 50%; animation: weak-spin 0.9s linear infinite; }
 @keyframes weak-spin { to { transform: rotate(360deg); } }
+
+/* 내 곡 카드 보기 (CHART-001) */
+.studio-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.view-toggle button {
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.view-toggle button[aria-pressed='true'] {
+  background: var(--brass);
+  color: #1a1408;
+  font-weight: 700;
+}
+.song-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.song-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+.song-card.wide {
+  grid-column: 1 / -1;
+  border-color: var(--brass);
+}
+.song-card.just-done {
+  animation: studio-just-done 2s ease-out;
+}
+.song-card-cover {
+  position: relative;
+}
+.song-card.wide .song-card-cover {
+  max-width: 160px;
+}
+.song-card.failed .song-cover {
+  opacity: 0.45;
+}
+.song-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--stage-deep);
+}
+.song-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.song-cover.default {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 120% at 30% 20%, var(--surface-2) 0%, var(--surface) 45%, var(--stage-deep) 100%);
+}
+/* 기본 커버 CD (v0.4): 모든 곡 공통 */
+.song-cover-disc {
+  width: 86%;
+  height: 86%;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.song-cover-disc .disc-body {
+  fill: #b9c0cf;
+}
+.song-cover-disc .disc-groove {
+  fill: none;
+  stroke: rgba(14, 19, 32, 0.18);
+  stroke-width: 0.6;
+}
+.song-cover-disc .disc-label {
+  fill: var(--brass);
+}
+.song-cover-disc .disc-hole {
+  fill: var(--stage-deep);
+}
+/* 완료 곡 ▶ 플레이 (D4-2): 커버 오른쪽 아래. 마우스 기기는 카드 hover·focus 때, 터치 기기는 항상 보인다 */
+.song-card-play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--brass);
+  color: #1a1408;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.song-card-play svg {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+.song-card-play:hover {
+  background: var(--perfect);
+}
+.song-card:hover .song-card-play,
+.song-card:focus-within .song-card-play {
+  opacity: 1;
+  transform: none;
+}
+@media (hover: none) {
+  .song-card-play {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-card-play {
+    transition: none;
+  }
+}
+.song-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.song-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+}
+.song-card-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.song-card-meta .studio-chip {
+  margin-left: 0;
+}
+.song-card-actions,
+.song-card-fail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 900px) {
+  .song-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .song-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .song-card.wide .song-card-cover {
+    max-width: none;
+  }
+}
+/* ⋯ 메뉴 */
+.song-menu {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.song-menu-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: rgba(14, 19, 32, 0.72);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.song-menu-btn:hover,
+.song-menu-btn[aria-expanded='true'] {
+  background: var(--surface-2);
+}
+.song-menu-list {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  z-index: 5;
+  min-width: 140px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.song-menu-list [role='menuitem'] {
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.song-menu-list [role='menuitem']:hover,
+.song-menu-list [role='menuitem']:focus-visible {
+  background: var(--surface-2);
+}
+.song-menu-list [role='menuitem'].danger {
+  color: var(--miss);
+}
+/* 편집 창 */
+.dialog.edit-dialog {
+  max-width: 440px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.dialog-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dialog-close:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.dialog-close:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.field-help {
+  margin: 0;
+}
+.delete-dialog-question {
+  margin: 0;
+  font-weight: 600;
+}
+.delete-dialog-detail {
+  margin: 0;
+}
+/* 삭제된 곡 표시 (CHART-001 U7·U11): 제목은 그대로 두고 옆에 흐린 배지 */
+.deleted-song-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.my-list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* 내 곡 알림 (U8) */
+.studio-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.studio-toast {
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: studio-toast-in 0.18s ease-out;
+}
+@keyframes studio-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-toast {
+    animation: none;
+  }
+}
+.cover-dialog-preview {
+  width: 220px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* ---- 악보 연주 2단 배치 (MODE-003 악보 위·드럼 아래) ---- */
+.sheet-mode .sheet-pager {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+/* 격자 높이를 뷰포트 기준으로 정해야 fr 행이 캔버스 내용 크기(되먹임)로 늘어나지 않는다. 330px ≈ 셸·머리·진행 줄·칩·푸터 */
+.sheet-mode .sm-play-grid {
+  display: grid;
+  grid-template-rows: minmax(240px, 55fr) minmax(220px, 45fr);
+  gap: 12px;
+  height: max(560px, calc(100vh - 300px));
+}
+.sheet-mode .sm-play-sheet {
+  min-height: 0;
+}
+.sheet-mode .sm-play-sheet .sm-strip-body {
+  flex: 1;
+  height: auto;
+  min-height: 230px;
+}
+.sheet-mode .sm-kit-panel {
+  border-radius: 8px;
+  border: 1px solid var(--sm-hairline);
+  background: var(--sm-sunken);
+  overflow: hidden;
+  min-height: 0;
+}
+.sheet-mode .sm-kit-panel .kit-guide {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+}
+/* 캔버스를 흐름에서 빼야 canvas.height 속성이 부모 높이를 다시 키우지 않는다 */
+.sheet-mode .sm-kit-panel .kit-guide canvas {
+  position: absolute;
+  inset: 0;
+}
+.sheet-mode .sm-judge-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.sheet-mode .sm-judge-chip {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .sheet-mode .sm-play-grid {
+    grid-template-rows: minmax(220px, 50fr) minmax(200px, 50fr);
+  }
+}
+
+/* ---- 드럼 세팅: 단계 카드·복귀 띠·이름 대화상자 ---- */
+.return-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid rgba(230, 184, 92, 0.4);
+}
+.return-banner.ready {
+  border-color: var(--good);
+}
+.return-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.step-card + .step-card {
+  margin-top: 10px;
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--brass);
+  color: var(--brass);
+  font-weight: 700;
+  font-size: 14px;
+}
+.step-card.done .step-mark {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--stage-deep);
+}
+.step-card.skipped .step-mark {
+  border-color: var(--line);
+  color: var(--ink-faint);
+}
+.step-main {
+  flex: 1;
+  min-width: 0;
+}
+.step-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-title-row h3 {
+  margin: 0;
+}
+.step-summary {
+  margin: 2px 0 0;
+}
+.step-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+}
+.step-badge.needed {
+  color: var(--brass);
+  border-color: rgba(230, 184, 92, 0.5);
+}
+.step-badge.done {
+  color: var(--good);
+  border-color: rgba(95, 184, 174, 0.5);
+}
+.step-body {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.preset-name-dialog input {
+  width: 100%;
+}
+.preset-name-dialog input.input-error {
+  border-color: var(--miss);
+}
+.preset-name-dialog .field-error {
+  color: var(--miss);
+}

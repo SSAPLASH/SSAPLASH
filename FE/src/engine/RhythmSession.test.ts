@@ -83,6 +83,16 @@ describe('시작·카운트인', () => {
     expect(beats.map((b) => b.accent)).toEqual([true, false, false, false]);
   });
 
+  it('offsetMs > 0이면 카운트인 박이 원점(1마디 1박) 직전 1마디에 놓인다', () => {
+    // 원점 1250ms: 카운트인은 곡 시각 −750ms부터 4박, 마지막 박 다음 박이 1250ms
+    const s = new RhythmSession({ ...chart(NOTES), offsetMs: 1250 }, OPTS);
+    s.start(12000);
+    expect(s.originMs).toBe(1250);
+    expect(s.countInBeats().map((b) => b.at)).toEqual([11250, 11750, 12250, 12750]);
+    // 곡 0ms·판정 기준은 그대로(원점과 무관)
+    expect(s.songTime(T0 + 300)).toBe(300);
+  });
+
   it('카운트인 중에도 창 안의 노트는 판정된다', () => {
     const s = new RhythmSession(chart([{ timeMs: 30, pad: 'RIDE' }]), OPTS);
     s.start(12000);

@@ -104,10 +104,14 @@ export class PlayClock {
     return this.session.songTime(now);
   }
 
-  /** 카운트인 → 반주 0초 = 세션 0ms. 반주 0초는 now + lead + 카운트인 시각에 울린다 */
+  /**
+   * 카운트인 → 1마디 1박(originMs) = 세션 originMs. 반주 0초 = 세션 0ms.
+   * 카운트인이 원점에서 끝나도록 반주 0초는 now + lead + max(0, 카운트인 − originMs)에 울린다.
+   * originMs가 카운트인보다 길면 반주(인트로)가 먼저 시작되고 1마디 직전에 카운트인 클릭이 난다.
+   */
   begin(): void {
     const now = this.now();
-    const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + this.session.countInMs;
+    const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.countInMs - this.session.originMs);
     this.nextBeat = 0;
     this._sync = { begin: null, resume: null };
     this.session.start(at);
@@ -148,15 +152,16 @@ export class PlayClock {
     const beatMs = this.session.beatMs;
     const beatsPerBar = this.session.chart.beatsPerBar;
     const duration = this.session.chart.durationMs;
+    const originMs = this.session.originMs;
     const ahead = this.lookahead();
-    // 박 i의 곡 시각 = −카운트인 + i×박. 카운트인 클릭은 항상, 곡 중은 clickOn()
+    // 박 i의 곡 시각 = 원점 − 카운트인 + i×박. 원점 전(카운트인) 클릭은 항상, 곡 중은 clickOn()
     for (;;) {
-      const bt = -this.session.countInMs + this.nextBeat * beatMs;
+      const bt = originMs - this.session.countInMs + this.nextBeat * beatMs;
       if (bt > t + ahead || bt > duration) break;
       if (bt >= t - 50) {
         const atMs = now + (bt - t);
         const beatInBar = this.nextBeat % beatsPerBar;
-        if (bt < 0 || this.deps.clickOn()) this.deps.click(atMs, beatInBar === 0);
+        if (bt < originMs || this.deps.clickOn()) this.deps.click(atMs, beatInBar === 0);
         this.deps.onBeat?.(beatInBar, atMs);
       }
       this.nextBeat += 1;

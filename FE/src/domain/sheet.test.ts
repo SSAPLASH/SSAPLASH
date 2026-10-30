@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSheet, layoutBar } from './sheet';
+import { barCountOf, buildSheet, countLabel, gridOriginMs, gridTimeOf, layoutBar, stepIndexOf } from './sheet';
 import { BUILTIN_CHARTS, CHART_8_FILL, CHART_BASIC_8, type Chart } from './chart';
 
 function chartOf(notes: Chart['notes'], durationMs: number): Chart {
@@ -34,7 +34,7 @@ describe('buildSheet', () => {
       ['SNARE', 0],
       ['SNARE', 1],
     ]);
-    expect(m.bars[1].cells).toEqual([{ pad: 'HIHAT', step: 2, noteIndex: 3 }]);
+    expect(m.bars[1].cells).toEqual([{ pad: 'HIHAT', step: 2, noteIndex: 3, offGrid: false }]);
     expect(m.stepMs).toBe(125);
   });
 
@@ -66,6 +66,83 @@ describe('buildSheet', () => {
     }
     expect(buildSheet(CHART_BASIC_8).rows).toEqual(['HIHAT', 'SNARE', 'KICK']);
     expect(buildSheet(CHART_8_FILL).rows).toContain('CRASH');
+  });
+
+  it('offsetMs = 0이면 originMs 0, 내장 곡 노트는 모두 격자 위다', () => {
+    for (const c of BUILTIN_CHARTS) {
+      const m = buildSheet(c);
+      expect(m.originMs).toBe(0);
+      expect(m.bars.every((b) => b.cells.every((cell) => !cell.offGrid))).toBe(true);
+    }
+  });
+
+  it('offsetMs > 0이면 offsetMs 시각이 1마디 1박, offsetMs + barMs가 2마디 1박이다', () => {
+    const m = buildSheet({
+      ...chartOf(
+        [
+          { timeMs: 1250, pad: 'KICK' }, // 1마디 1
+          { timeMs: 1250 + 250, pad: 'HIHAT' }, // 1마디 1&(2칸)
+          { timeMs: 1250 + 2000, pad: 'SNARE' }, // 2마디 1
+        ],
+        5250,
+      ),
+      offsetMs: 1250,
+    });
+    expect(m.originMs).toBe(1250);
+    expect(m.bars[0].cells.map((c) => [c.pad, c.step, c.offGrid])).toEqual([
+      ['KICK', 0, false],
+      ['HIHAT', 2, false],
+    ]);
+    expect(m.bars[1].cells.map((c) => [c.pad, c.step, c.offGrid])).toEqual([['SNARE', 0, false]]);
+    expect(m.bars).toHaveLength(2);
+  });
+
+  it('원점 앞 노트는 0마디 0칸에 모이고 offGrid다', () => {
+    const m = buildSheet({ ...chartOf([{ timeMs: 900, pad: 'KICK' }], 3250), offsetMs: 1250 });
+    expect(m.bars[0].cells).toEqual([{ pad: 'KICK', step: 0, noteIndex: 0, offGrid: true }]);
+  });
+});
+
+describe('격자 시각 함수', () => {
+  it('gridOriginMs는 offsetMs, 없으면 0', () => {
+    expect(gridOriginMs({ offsetMs: 1250 })).toBe(1250);
+    expect(gridOriginMs({})).toBe(0);
+  });
+
+  it('gridTimeOf는 원점을 뺀 값이고 리드인은 음수', () => {
+    expect(gridTimeOf(1250, 1250)).toBe(0);
+    expect(gridTimeOf(0, 1250)).toBe(-1250);
+    expect(gridTimeOf(500, 0)).toBe(500);
+  });
+
+  it('stepIndexOf: 칸 중심에서 stepMs/4(31.25ms) 이내면 격자 위, 넘으면 offGrid', () => {
+    // 칸 125ms, 허용 31.25ms
+    expect(stepIndexOf(0, 0, 125)).toEqual({ idx: 0, offGrid: false });
+    expect(stepIndexOf(125 + 31, 0, 125)).toEqual({ idx: 1, offGrid: false });
+    expect(stepIndexOf(125 - 31, 0, 125)).toEqual({ idx: 1, offGrid: false });
+    expect(stepIndexOf(125 + 32, 0, 125)).toEqual({ idx: 1, offGrid: true });
+    expect(stepIndexOf(125 - 32, 0, 125)).toEqual({ idx: 1, offGrid: true });
+    // 셋잇단 8분(박 500ms의 1/3 = 166.7ms → 1.33칸)은 걸린다
+    expect(stepIndexOf(500 / 3, 0, 125)).toEqual({ idx: 1, offGrid: true });
+  });
+
+  it('stepIndexOf: 원점을 뺀 뒤 양자화하고 원점 앞은 0칸 offGrid', () => {
+    expect(stepIndexOf(1250, 1250, 125)).toEqual({ idx: 0, offGrid: false });
+    expect(stepIndexOf(1250 + 2000, 1250, 125)).toEqual({ idx: 16, offGrid: false });
+    expect(stepIndexOf(1200, 1250, 125)).toEqual({ idx: 0, offGrid: true });
+    expect(stepIndexOf(1250 - 10, 1250, 125)).toEqual({ idx: 0, offGrid: true });
+  });
+
+  it('barCountOf: offsetMs를 뺀 길이로 세고 마지막 노트 마디까지 포함한다', () => {
+    const base = chartOf([{ timeMs: 0, pad: 'KICK' }], 4000);
+    expect(barCountOf(base)).toBe(2);
+    // 1250 + 2마디(4000) = 5250 → 2마디. offsetMs를 안 빼면 3마디가 돼 버린다
+    expect(barCountOf({ ...base, offsetMs: 1250, durationMs: 5250, notes: [{ timeMs: 1250, pad: 'KICK' }] })).toBe(2);
+    // 마지막 노트가 duration 뒤 3마디에 있으면 3마디
+    expect(barCountOf({ ...base, offsetMs: 1250, durationMs: 5250, notes: [{ timeMs: 1250 + 4000, pad: 'KICK' }] })).toBe(3);
+    // 반올림 여유: 2001ms는 1마디
+    expect(barCountOf({ ...base, durationMs: 2001 })).toBe(1);
+    expect(barCountOf({ ...base, offsetMs: 0, durationMs: 0, notes: [] })).toBe(1);
   });
 });
 
@@ -150,9 +227,51 @@ describe('layoutBar', () => {
     expect(l).toEqual({ bar: 1, glyphs: [], beams: [] });
   });
 
+  it('offsetMs를 원점으로 배치하고 격자 밖 글리프에 offGrid를 단다', () => {
+    const l = layoutBar(
+      {
+        ...chartOf(
+          [
+            { timeMs: 1250, pad: 'KICK' }, // 1마디 1
+            { timeMs: 1250 + 500 + 40, pad: 'SNARE' }, // 2박 +40ms → 격자 밖
+            { timeMs: 1250 + 2000, pad: 'HIHAT' }, // 2마디
+          ],
+          5250,
+        ),
+        offsetMs: 1250,
+      },
+      0,
+    );
+    expect(l.glyphs.map((g) => [g.noteIndex, g.xRatio, g.offGrid])).toEqual([
+      [0, 0, false],
+      [1, 0.25, true],
+    ]);
+    // offsetMs 없는 채보(이전 로그)는 0으로 본다
+    expect(layoutBar({ bpm: 120, beatsPerBar: 4, notes: [{ timeMs: 250, pad: 'KICK' }] }, 0).glyphs[0].xRatio).toBe(2 / 16);
+  });
+
   it('stepsPerBar를 바꾸면 3/4 같은 박자도 일반화된다', () => {
     const c: Chart = { ...chartOf([{ timeMs: 750, pad: 'KICK' }], 1500), beatsPerBar: 3 }; // 마디 1500ms, 칸 125ms
     expect(layoutBar(c, 0).glyphs[0].xRatio).toBe(6 / 12);
     expect(layoutBar(c, 0, { stepsPerBar: 6 }).glyphs[0].xRatio).toBe(3 / 6);
+  });
+});
+
+describe('countLabel', () => {
+  it('박 안 칸 위치 0/1/2/3을 박 번호·e·&·a로 바꾼다', () => {
+    expect(countLabel(4, 16, 4)).toEqual({ beat: 2, sub: '' });
+    expect(countLabel(5, 16, 4)).toEqual({ beat: 2, sub: 'e' });
+    expect(countLabel(6, 16, 4)).toEqual({ beat: 2, sub: '&' });
+    expect(countLabel(7, 16, 4)).toEqual({ beat: 2, sub: 'a' });
+  });
+
+  it('마디 처음과 끝', () => {
+    expect(countLabel(0, 16, 4)).toEqual({ beat: 1, sub: '' });
+    expect(countLabel(15, 16, 4)).toEqual({ beat: 4, sub: 'a' });
+  });
+
+  it('3/4박자(12칸)도 한 박 4칸이다', () => {
+    expect(countLabel(8, 12, 3)).toEqual({ beat: 3, sub: '' });
+    expect(countLabel(11, 12, 3)).toEqual({ beat: 3, sub: 'a' });
   });
 });
