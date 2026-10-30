@@ -152,10 +152,12 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
 
   it('한 손 명령은 LINK를 받은 뒤부터 ROUTE로 감싼다', async () => {
     const { src, feed, written } = await open();
+    // 연결 직후 50ms 간격 SYNC가 끼어들 수 있어 SYNC는 빼고 본다
+    const commands = () => written.filter((w) => w[0] !== 0x10);
     src.sendCommand(new Uint8Array([0x16, 0xc8, 0x00]), 1);
     await tick();
     // 동글 확인 전(예전 동글·직결)에는 그대로 보낸다
-    expect(written.at(-1)).toEqual([0x16, 0xc8, 0x00]);
+    expect(commands().at(-1)).toEqual([0x16, 0xc8, 0x00]);
 
     feed(new Uint8Array([0x07, 0, 0b11, 2, 0]));
     await tick();
@@ -163,7 +165,7 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
     src.haptic(0, 200, 30);
     src.sendCommand(new Uint8Array([0x13]));
     await tick();
-    expect(written.slice(-3)).toEqual([
+    expect(commands().slice(-3)).toEqual([
       [0x70, 0b10, 0x16, 0xc8, 0x00],
       [0x70, 0b01, 0x12, 200, 3],
       [0x13],
