@@ -39,6 +39,8 @@ export const LIVE_COACH_CONFIG = {
   /** 특정 패드만 늦음·빠름 */
   pad: {
     minPadHits: 4,
+    /** 그 패드 타격 중 평균과 같은 방향인 비율. 우연히 흔들린 평균을 걸러낸다 */
+    sameSign: 1,
     /** 패드 평균 − 창 평균의 절댓값 ≥ diffCoef × goodMs */
     diffCoef: 0.45,
     releaseCoef: 0.25,
