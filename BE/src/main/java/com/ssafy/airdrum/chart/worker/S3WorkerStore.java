@@ -94,6 +94,11 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
         } catch (BusinessException e) { if (!existed) throw unavailable(); throw e; }
         catch (Exception e) { throw unavailable(); }
     }
+    void putAccompaniment(String key,Path file,long size,String contentType) {
+        available(Bucket.ACCOMPANIMENT);
+        try { accompaniment.putObject(PutObjectRequest.builder().bucket(accompanimentBucket).key(key).contentType(contentType).contentLength(size).ifNoneMatch("*").build(),RequestBody.fromFile(file)); }
+        catch(RuntimeException ex) { throw unavailable(); }
+    }
     void putCover(String key,byte[] data,String contentType) {
         available(Bucket.SHEET);
         try { sheet.putObject(PutObjectRequest.builder().bucket(sheetBucket).key(key).contentType(contentType).ifNoneMatch("*").build(),RequestBody.fromBytes(data)); }
