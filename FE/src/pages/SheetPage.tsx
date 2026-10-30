@@ -13,6 +13,7 @@ import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { formatDuration, formatSongTime } from '@/components/formatTime';
 import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
+import { barCountOf, gridOriginMs, gridTimeOf } from '@/domain/sheet';
 import { LANE_PADS, PAD_META } from '@/domain/pads';
 import type { Judgement } from '@/domain/judgement';
 import type { PadId } from '@/domain/pads';
@@ -50,10 +51,6 @@ const DIFF_LABEL: Record<Chart['difficulty'], string> = { EASY: '쉬움', NORMAL
 
 /** HUD 갱신 간격(ms) */
 const HUD_INTERVAL_MS = 250;
-
-function barsOf(c: Chart): number {
-  return Math.round(c.durationMs / ((60_000 / c.bpm) * c.beatsPerBar));
-}
 
 /** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
 interface AccResult {
@@ -523,8 +520,10 @@ export function SheetPage() {
 
   const snap = hud ?? activeSession.snapshot();
   const hasAcc = acc.state === 'ready' || acc.state === 'playing' || acc.state === 'paused';
-  const barMs = (60_000 / chart.bpm) * chart.beatsPerBar;
-  const bars = barsOf(chart);
+  const beatMs = 60_000 / chart.bpm;
+  const barMs = beatMs * chart.beatsPerBar;
+  const bars = barCountOf(chart);
+  const originMs = gridOriginMs(chart);
   const diffTone = chart.difficulty === 'HARD' ? 'danger' : 'neutral';
   const metaChips = (
     <>
@@ -537,6 +536,10 @@ export function SheetPage() {
         {stage === 'ready' && ` · 노트 ${chart.notes.length}`}
       </span>
       <span className={`sm-chip ${hasAcc ? 'info' : 'neutral'}`}>{hasAcc ? '반주 있음' : '반주 없음'}</span>
+      {stage === 'ready' && originMs >= beatMs && (
+        // 인트로가 1박 이상인 곡: 커서가 바로 움직이지 않는 이유를 미리 알린다
+        <span className="sm-chip neutral">첫 박 {(originMs / 1000).toFixed(1)}초</span>
+      )}
     </>
   );
   const strip = (
@@ -661,7 +664,7 @@ export function SheetPage() {
     );
   }
 
-  const barNow = Math.min(bars, Math.max(1, Math.floor(Math.max(0, songMs) / barMs) + 1));
+  const barNow = Math.min(bars, Math.max(1, Math.floor(Math.max(0, gridTimeOf(songMs, originMs)) / barMs) + 1));
   const ratio = chart.durationMs > 0 ? Math.min(1, Math.max(0, songMs / chart.durationMs)) : 0;
   const paused = pauseReason !== null;
 

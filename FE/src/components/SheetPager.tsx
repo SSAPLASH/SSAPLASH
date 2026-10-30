@@ -1,9 +1,10 @@
 // 악보 페이저 — 마디를 화면에 고정하고 커서가 왼쪽에서 오른쪽으로 움직인다 (Canvas 2D).
 // 슬롯마다 drawSheet를 한 번씩 clip해서 부르고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지 마디로 바꿔 끼운다.
+// 슬롯·커서·박 라벨은 격자 시각(곡 시각 − chart.offsetMs)으로 계산한다. 격자 시각이 0보다 작으면(카운트인·인트로) 커서는 첫 슬롯 왼쪽에 선다.
 import { useEffect, useMemo, useRef } from 'react';
 import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
-import { buildSheet, layoutBar, type BarLayout } from '@/domain/sheet';
+import { buildSheet, gridTimeOf, layoutBar, type BarLayout } from '@/domain/sheet';
 import { barsPerPage, cursorPos, pagerSlots, snapToBeat } from './sheetPagerMath';
 import { drawBeatLabel, drawCursor, drawSheet, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y } from './sheetStripDraw';
 
@@ -50,7 +51,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
     const colors = readColors(canvas);
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const { sheet, cache } = model;
-    const { barMs, beatMs } = sheet;
+    const { barMs, beatMs, originMs } = sheet;
     const totalBars = sheet.bars.length;
     let width = wrap.clientWidth;
     let height = wrap.clientHeight;
@@ -86,7 +87,8 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       const inner = Math.max(1, width - GUTTER_X);
 
       const raw = p.getSongTime() ?? 0;
-      const t = reduced ? snapToBeat(raw, beatMs) : raw;
+      const grid = gridTimeOf(raw, originMs);
+      const t = reduced ? snapToBeat(grid, beatMs) : grid;
       const perPage = barsPerPage(inner);
       const slotW = inner / perPage;
       const slots = pagerSlots(t, barMs, beatMs, perPage, totalBars);
@@ -106,8 +108,9 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
           chart,
           noteStates: p.noteStates,
           strayHits: p.strayHits,
-          songTime: slot.bar * barMs,
+          songTime: originMs + slot.bar * barMs,
           rawSongTime: raw,
+          originMs,
           width,
           height,
           barPx: slotW,
@@ -126,7 +129,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       const { slot, ratio } = cursorPos(t, barMs, perPage);
       const x = GUTTER_X + slot * slotW + ratio * slotW;
       drawCursor(ctx, x, STAFF_TOP_Y - 30, STAFF_BOTTOM_Y + 40, colors);
-      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, raw, beatMs, chart.beatsPerBar, colors, p.countInMs);
+      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors, p.countInMs);
     };
     draw();
     return () => {

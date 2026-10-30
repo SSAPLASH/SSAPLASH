@@ -7,7 +7,7 @@ import type { HitFx } from '@/domain/events';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
 import { padCues, type PadCue } from '@/domain/padCue';
-import { buildSheet } from '@/domain/sheet';
+import { buildSheet, gridTimeOf } from '@/domain/sheet';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { FONT, paintHitFx, paintPad } from './kitPadPaint';
 
@@ -70,6 +70,13 @@ function paintBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: nu
     ctx.font = `800 ${smallPx}px ${FONT}`;
     ctx.fillText(sub, x + padX + bigW + 1, y + h / 2 + bigPx * 0.06);
   }
+  // 격자 밖 노트: 배지 오른쪽 위 작은 점(라벨은 가장 가까운 칸)
+  if (cue.offGrid) {
+    ctx.fillStyle = 'rgba(243,239,230,0.75)';
+    ctx.beginPath();
+    ctx.arc(x + w - 1, y + 1, Math.max(1.5, bigPx * 0.12), 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -125,7 +132,8 @@ export function KitGuideView(props: KitGuideViewProps) {
 
       const reduced = reducedMotionRef.current;
       const t = p.getSongTime() ?? 0;
-      const bar = Math.floor(Math.max(t, 0) / sheet.barMs);
+      // 마디는 격자 시각으로, "지금" 링은 원본 timeMs와 곡 시각으로 비교한다(원점과 무관)
+      const bar = Math.floor(Math.max(gridTimeOf(t, sheet.originMs), 0) / sheet.barMs);
       const cues = new Map<PadId, PadCue>(padCues(sheet, bar, p.session.notes).map((c) => [c.pad, c]));
       // 배치 비율은 세팅 화면(16:10) 기준이므로 패널 안에 16:10 상자를 맞춰(레터박스) 그 안에 그린다. 폭 기준으로 그리면 납작한 패널에서 패드가 겹친다
       const bw = Math.min(W, H * KIT_ASPECT) * KIT_FIT;
