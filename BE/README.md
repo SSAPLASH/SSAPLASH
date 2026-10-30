@@ -882,7 +882,7 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 
 ## AI 워커 내부 작업 API (160번)
 
-`/internal/v1/chart-jobs/`는 HTTPS Nginx에서 지정한 AI 워커 IP `222.107.238.74`만 접근할 수 있다. 그 밖의 `/internal/`은 404이며 HTTP의 `/internal/`도 404다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다. Nginx는 해당 워커 API와 서명 URL 경로의 접근·오류 로그를 끄며 BE·저장소 메트릭으로 진단한다.
+`/internal/v1/chart-jobs/`는 HTTPS Nginx에서 지정한 AI 워커 IP `222.107.238.74`만 접근할 수 있다. 그 밖의 `/internal/`은 404이며 HTTP의 `/internal/`도 404다. Nginx 요청 본문 한도는 8 MiB이고 BE 결과 JSON 한도는 5 MiB다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다. Nginx는 해당 워커 API와 서명 URL 경로의 접근·오류 로그를 끄며 BE·저장소 메트릭으로 진단한다.
 
 `AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 일반 설정의 기본은 BE 내부 음원 endpoint이며 Infra Compose에서는 `OBJECT_STORAGE_PUBLIC_URL`을 기본으로 사용한다. 외부 GPU에서는 `https://k15a307.p.ssafy.io`처럼 워커가 접근 가능한 공개 주소를 사용한다. BE의 내부 저장소 endpoint는 그대로 유지한다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
 
