@@ -67,6 +67,15 @@ describe('padCues', () => {
     expect(padCues(sheet, 99, states())).toEqual([]);
   });
 
+  it('offGrid는 대상 칸의 값을 그대로 옮긴다', () => {
+    expect(byPad(padCues(sheet, 0, states())).HIHAT.offGrid).toBe(false);
+    // 1박 +50ms(0.4칸) → 라벨은 1, offGrid
+    const off: Chart = { ...chart, notes: [{ timeMs: 50, pad: 'SNARE' }, { timeMs: 500, pad: 'KICK' }] };
+    const cues = byPad(padCues(buildSheet(off), 0, off.notes.map((note, index) => ({ index, note, judgement: null, deltaMs: null, hitId: null }))));
+    expect(cues.SNARE).toMatchObject({ label: { beat: 1, sub: '' }, offGrid: true, level: 'next' });
+    expect(cues.KICK.offGrid).toBe(false);
+  });
+
   it('마디가 바뀌면 그 마디 기준으로 계산한다', () => {
     const cues = padCues(sheet, 1, states());
     expect(cues).toHaveLength(1);

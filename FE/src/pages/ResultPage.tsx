@@ -72,7 +72,7 @@ export function ResultPage() {
   const isSheet = log?.mode === 'SHEET';
   // 로컬 피드백 카드·미니 악보·패드 요약 표를 보일지. 업로드 대상이면 만들지 않는다
   const showLocalFeedback = isSheet && !uploadTarget;
-  const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : undefined) : []), [log, showLocalFeedback]);
+  const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs } : undefined) : []), [log, showLocalFeedback]);
   const summary = useMemo(() => (log && showLocalFeedback ? summarizeByPad(log) : []), [log, showLocalFeedback]);
   // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
   const snippetChart = useMemo(() => (log && showLocalFeedback ? chartFromLog(log) : null), [log, showLocalFeedback]);

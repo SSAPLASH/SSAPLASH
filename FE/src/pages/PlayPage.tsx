@@ -13,6 +13,7 @@ import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { useReadiness } from '@/components/useReadiness';
 import { useHitFx } from '@/components/useHitFx';
 import type { Chart } from '@/domain/chart';
+import { barCountOf } from '@/domain/sheet';
 import type { PadId } from '@/domain/pads';
 import type { HitFx, InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
@@ -41,10 +42,6 @@ const GAME_VIEWS: { id: GameView; label: string }[] = [
 ];
 
 const DIFF_LABEL: Record<Chart['difficulty'], string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
-
-function barsOf(c: Chart): number {
-  return Math.round(c.durationMs / ((60_000 / c.bpm) * c.beatsPerBar));
-}
 
 export function PlayPage() {
   const navigate = useNavigate();
@@ -507,7 +504,7 @@ export function PlayPage() {
             <div className="overlay">
               <h2>{chart.title}</h2>
               <p className="dim">
-                {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
+                {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barCountOf(chart)}마디
               </p>
               <ReadinessNotice returnTo={returnTo} returnLabel={`리듬 게임 · ${chart.title}`} compact />
               <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
