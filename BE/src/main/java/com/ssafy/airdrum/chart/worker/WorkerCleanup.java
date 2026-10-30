@@ -31,7 +31,7 @@ class WorkerCleanup {
         for(int i=0;i<100;i++) {
             Claim c=claim(); if(c==null) break;
             try {
-                var bucket=switch(c.role()) { case "ACCOMPANIMENT" -> WorkerStore.Bucket.ACCOMPANIMENT; case "SHEET_PAGE" -> WorkerStore.Bucket.SHEET; default -> WorkerStore.Bucket.AUDIO; };
+                var bucket=switch(c.role()) { case "ACCOMPANIMENT" -> WorkerStore.Bucket.ACCOMPANIMENT; case "SHEET_PAGE", "COVER", "SHEET_MUSIC" -> WorkerStore.Bucket.SHEET; default -> WorkerStore.Bucket.AUDIO; };
                 if(store.exists(bucket,c.key())) store.delete(bucket,c.key());
                 finish(c,true);
             } catch(RuntimeException x) { finish(c,false); }
@@ -41,13 +41,16 @@ class WorkerCleanup {
         return tx.execute(s -> {
             var rows=db.query("""
                 SELECT t.id,t.object_key,t.file_role,t.retry_count FROM file_cleanup_tasks t
-                WHERE t.file_role IN ('STAGING','DRUM_STEM','ACCOMPANIMENT','SHEET_PAGE') AND t.next_attempt_at<=clock_timestamp()
+                WHERE t.file_role IN ('STAGING','DRUM_STEM','ACCOMPANIMENT','SHEET_PAGE','COVER','SHEET_MUSIC') AND t.next_attempt_at<=clock_timestamp()
                   AND (t.status<>'DELETED' OR t.created_at+interval '1 day'>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j JOIN chart_job_attempts a ON a.id=j.current_attempt_id
                     WHERE j.id=t.job_id AND a.id=t.attempt_id AND j.status IN ('SEPARATING','TRANSCRIBING')
                       AND a.finished_at IS NULL AND a.lease_expires_at>clock_timestamp() AND j.stage_deadline_at>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j WHERE j.drum_stem_key=t.object_key)
+                  AND NOT EXISTS(SELECT 1 FROM songs s LEFT JOIN users u ON u.id=s.owner_id WHERE s.cover_key=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
                   AND NOT EXISTS(SELECT 1 FROM songs s LEFT JOIN users u ON u.id=s.owner_id WHERE s.accompaniment_key=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))
+                  AND NOT EXISTS(SELECT 1 FROM sheet_music_pages p JOIN sheet_music m ON m.id=p.sheet_id JOIN users u ON u.id=m.owner_id
+                    WHERE p.object_key=t.object_key AND m.deleted_at IS NULL AND u.status='ACTIVE')
                 AND NOT EXISTS(SELECT 1 FROM chart_versions v JOIN charts c ON c.id=v.chart_id JOIN songs s ON s.id=c.song_id
                     LEFT JOIN users u ON u.id=s.owner_id CROSS JOIN LATERAL jsonb_array_elements(coalesce(v.sheet_pages,'[]'::jsonb)) p
                     WHERE p->>'imageKey'=t.object_key AND s.deleted_at IS NULL AND (s.source='BUILTIN' OR u.status='ACTIVE'))

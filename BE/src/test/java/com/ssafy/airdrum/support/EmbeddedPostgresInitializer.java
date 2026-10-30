@@ -34,7 +34,7 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 				"spring.datasource.password", USER,
 				// 임베디드 PG에는 확장이 없다. V8은 별도 timescaleTest에서 실제 컨테이너로 검증한다.
 				"spring.flyway.locations", "classpath:db/test-migration",
-				"spring.flyway.target", "18",
+				"spring.flyway.target", "23",
 				// @DataJpaTest가 DataSource를 내장 DB(H2 등)로 바꾸지 않게 한다.
 				"spring.test.database.replace", "none")));
 	}
@@ -48,6 +48,8 @@ public class EmbeddedPostgresInitializer implements ApplicationContextInitialize
 			try {
 				var postgres = EmbeddedPostgres.builder()
 						.setServerConfig("listen_addresses", "127.0.0.1")
+						// 캐시된 컨텍스트(최대 32개)마다 Hikari가 10개씩 연결을 잡는다. 기본 100이면 컨텍스트 10개를 넘을 때 접속이 거절된다.
+						.setServerConfig("max_connections", "400")
 						.start();
 				Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 					try {

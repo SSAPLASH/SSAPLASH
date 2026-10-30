@@ -121,8 +121,9 @@ services:
       # 음원 원본은 별도로 확인한 비공개 비버전 버킷에 저장한다. 기본 비활성이다.
       AUDIO_STORAGE_ENABLED: ${AUDIO_STORAGE_ENABLED:-false}
       AUDIO_STORAGE_ENDPOINT: http://seaweedfs:8333
-      AUDIO_STORAGE_PUBLIC_ENDPOINT: ${AUDIO_STORAGE_PUBLIC_ENDPOINT:-http://seaweedfs:8333}
+      AUDIO_STORAGE_PUBLIC_ENDPOINT: ${AUDIO_STORAGE_PUBLIC_ENDPOINT:-${OBJECT_STORAGE_PUBLIC_URL:?Infra/.env에 OBJECT_STORAGE_PUBLIC_URL을 지정하세요}}
       CHART_WORKER_CREDENTIALS: ${CHART_WORKER_CREDENTIALS:-}
+      CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS: ${CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       AUDIO_STORAGE_REGION: us-east-1
       AUDIO_STORAGE_BUCKET: ${AUDIO_STORAGE_BUCKET:-}
       AUDIO_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:-}
@@ -477,6 +478,52 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+    logging: *default-logging
+
+  # 약점 분석 실측 보정 배치(COACH-003). 동의한 사용자의 비식별 기록(DB 뷰 coach_export_v)으로 임계값 후보를 만들어
+  # MLflow에 기록한다. 임계값을 자동으로 바꾸지 않는다. 설명은 AI/docs/coach-calibration.md.
+  # 평소에는 뜨지 않는다(profiles). 예약 실행이나 사람이 docker compose run --rm coach-calibration [--force]로 부른다.
+  # DB 접속은 뷰만 읽을 수 있는 읽기 전용 계정(coach_export)이고, 계정·비밀번호·소금은 서버에서 직접 만든다(Infra/SECURITY.md).
+  coach-calibration:
+    build:
+      context: ../AI
+    profiles: ["calibration"]
+    # 시작 직후와 종료 직전에 15초씩 기다린다. Alloy가 컨테이너를 찾는 주기(5초) 안에 로그 수집이 붙어서
+    # 끝에 남기는 상태 줄(coach-calibration status=...)이 Loki에 들어가게 하려는 것이다. 사라지면 알림이 못 본다.
+    # run에 붙인 인자(예: --force)는 "$@"로 배치에 전달된다.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sleep 15
+        case "$$SSAPLASH_COACH_EXPORT_DSN" in
+          *:@*) echo "coach-calibration status=FAIL error=MissingExportPassword"; sleep 15; exit 1 ;;
+        esac
+        python -m ssaplash_ai.coach_calibration.cli "$$@"
+        code=$$?
+        sleep 15
+        exit $$code
+      - coach-calibration
+    command: []
+    environment:
+      # 읽기 전용 계정. 비밀번호가 비어 있으면(.env에 없으면) 위 검사가 접속 전에 멈춘다.
+      SSAPLASH_COACH_EXPORT_DSN: postgresql://coach_export:${COACH_EXPORT_PASSWORD:-}@postgres:5432/${POSTGRES_DB}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      # 정책 파일은 서버 이미지에 들어가지 않으므로 마운트한다. 경로를 줬는데 파일이 없으면 배치가 실패한다.
+      SSAPLASH_CALIBRATION_POLICY: /config/calibration_policy.yaml
+    volumes:
+      - ../AI/configs/coach:/config:ro
+    networks:
+      - internal
+    mem_limit: 1g
+    # 이미지의 HEALTHCHECK는 AI 서버(8000번 포트)용이라 일회성 배치에는 맞지 않는다.
+    healthcheck:
+      disable: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
     logging: *default-logging
 
   # 인증서 발급·갱신 도구. 평소에는 실행하지 않고(profiles) 필요할 때만 docker compose run으로 쓴다.

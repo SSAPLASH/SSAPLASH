@@ -95,17 +95,25 @@ class AnalysisIntegrationTest {
             assertThat(result.success()).isTrue(); assertThat(result.segments()).isEqualTo("[]");
         } finally { server.stop(0); }
     }
-    @Test void broken400BodyDoesNotBecomeRetryable() throws Exception {
-        var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
-        server.createContext("/analysis/weak-segments",exchange -> {
-            exchange.getRequestBody().readAllBytes();
-            exchange.sendResponseHeaders(400,100); exchange.getResponseBody().write(1); exchange.close();
-        });
-        server.start();
-        try {
-            var client=new AnalysisClient("http://127.0.0.1:"+server.getAddress().getPort(),json);
+    @Test void transportFailureAfter400HeadersDoesNotBecomeRetryable() {
+        var builder=org.mockito.Mockito.mock(java.net.http.HttpClient.Builder.class);
+        var http=org.mockito.Mockito.mock(java.net.http.HttpClient.class);
+        var info=org.mockito.Mockito.mock(java.net.http.HttpResponse.ResponseInfo.class);
+        org.mockito.Mockito.when(builder.version(org.mockito.ArgumentMatchers.any())).thenReturn(builder);
+        org.mockito.Mockito.when(builder.connectTimeout(org.mockito.ArgumentMatchers.any())).thenReturn(builder);
+        org.mockito.Mockito.when(builder.build()).thenReturn(http);
+        org.mockito.Mockito.when(info.statusCode()).thenReturn(400);
+        org.mockito.Mockito.when(http.sendAsync(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.<java.net.http.HttpResponse.BodyHandler<byte[]>>any()))
+            .thenAnswer(invocation -> {
+                java.net.http.HttpResponse.BodyHandler<byte[]> handler=invocation.getArgument(1);
+                handler.apply(info);
+                return java.util.concurrent.CompletableFuture.failedFuture(new java.io.IOException("transport failed"));
+            });
+        try (var factory=org.mockito.Mockito.mockStatic(java.net.http.HttpClient.class)) {
+            factory.when(java.net.http.HttpClient::newBuilder).thenReturn(builder);
+            var client=new AnalysisClient("http://127.0.0.1:1",json);
             assertThat(client.analyze(json.createObjectNode()).retryable()).isFalse();
-        } finally { server.stop(0); }
+        }
     }
 
     @Test void stalledBodyKeepsStatusBasedRetryPolicy() throws Exception {
@@ -126,4 +134,64 @@ class AnalysisIntegrationTest {
         } finally { server.stop(0); pool.shutdownNow(); }
     }
 
+
+    @Test void transientRequestFailureRetriesAndCompletes() throws Exception {
+        transientFailureRetries(false);
+    }
+    @Test void recoverableDoneFailureRetriesAndCompletes() throws Exception {
+        transientFailureRetries(true);
+    }
+    private void transientFailureRetries(boolean duringDone) throws Exception {
+        uploadScored();
+        var repo=org.mockito.Mockito.spy(new AnalysisRepository(db,json));
+        var client=org.mockito.Mockito.mock(AnalysisClient.class);
+        org.mockito.Mockito.when(client.analyze(org.mockito.ArgumentMatchers.any())).thenReturn(new AnalysisClient.Result(true,false,"test","[]"));
+        if (duringDone) {
+            org.mockito.Mockito.doThrow(new org.springframework.dao.RecoverableDataAccessException("temporary"))
+                .doCallRealMethod().when(repo).done(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+        } else {
+            org.mockito.Mockito.doThrow(new org.springframework.dao.TransientDataAccessResourceException("temporary"))
+                .doCallRealMethod().when(repo).request(play);
+        }
+        var dispatch=new AnalysisDispatch(repo,client);
+        try {
+            dispatch.afterCommit(new AnalysisRequested(play));
+            awaitAnalysis("PENDING",1);
+            db.update("UPDATE reports SET analysis_next_attempt_at=now()-interval '1 second' WHERE play_session_id=?",play);
+            dispatch.recover();
+            awaitAnalysis("DONE",2);
+        } finally { dispatch.stop(); }
+    }
+    @Test void secondTransientFailureAndPermanentFailureAreFinal() throws Exception {
+        uploadScored();
+        var repo=org.mockito.Mockito.spy(new AnalysisRepository(db,json));
+        var client=org.mockito.Mockito.mock(AnalysisClient.class);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.TransientDataAccessResourceException("temporary")).when(repo).request(play);
+        var dispatch=new AnalysisDispatch(repo,client);
+        try {
+            dispatch.afterCommit(new AnalysisRequested(play));
+            awaitAnalysis("PENDING",1);
+            db.update("UPDATE reports SET analysis_next_attempt_at=now()-interval '1 second' WHERE play_session_id=?",play);
+            dispatch.recover();
+            awaitAnalysis("FAILED",2);
+        } finally { dispatch.stop(); }
+        db.update("UPDATE reports SET analysis_status='PENDING',analysis_attempt_count=0,analysis_next_attempt_at=NULL WHERE play_session_id=?",play);
+        var permanentRepo=org.mockito.Mockito.spy(new AnalysisRepository(db,json));
+        org.mockito.Mockito.doThrow(new IllegalStateException("permanent")).when(permanentRepo).request(play);
+        var permanentDispatch=new AnalysisDispatch(permanentRepo,client);
+        try {
+            permanentDispatch.afterCommit(new AnalysisRequested(play));
+            awaitAnalysis("FAILED",1);
+        } finally { permanentDispatch.stop(); }
+    }
+    private void awaitAnalysis(String state,int attempts) throws Exception {
+        long until=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(8);
+        while(System.nanoTime()<until) {
+            var row=db.queryForMap("SELECT analysis_status,analysis_attempt_count,analysis_lease_token FROM reports WHERE play_session_id=?",play);
+            if(state.equals(row.get("analysis_status")) && ((Number)row.get("analysis_attempt_count")).intValue()==attempts && row.get("analysis_lease_token")==null) return;
+            if ("FAILED".equals(row.get("analysis_status")) && !"FAILED".equals(state)) throw new AssertionError("Expected "+state+", got "+row);
+            Thread.sleep(30);
+        }
+        throw new AssertionError("Expected "+state+", got "+db.queryForMap("SELECT analysis_status,analysis_attempt_count,analysis_lease_token FROM reports WHERE play_session_id=?",play));
+    }
 }

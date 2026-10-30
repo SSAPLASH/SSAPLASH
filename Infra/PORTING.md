@@ -190,9 +190,9 @@ sudo docker compose -p infra exec -T nginx nginx -s reload
 ### 남은 것
 HSTS 적용 시점 결정, 외부 검증(SSL Labs, 폰·다른 브라우저 접속), 로그인 동작 확인(콜백 등록 후).
 
-## 6. 백업과 복구 (최소 절차, **서버 시험 전**)
+## 6. 백업과 복구 (최소 절차, 2026-10-30 서버 시험함)
 
-> 아래 명령은 서버에서 아직 실행해 보지 않았다. 시험하면서 명령과 결과를 고치고, 이 절의 상태를 "확인함"으로 바꾼다.
+> 앱 DB·MLflow DB·SeaweedFS 볼륨을 서버에서 백업하고 **별도의 시험용 DB·볼륨에 복원**해 확인했다(S15P31A307-133). 시험 결과와 한계는 아래 "서버 시험 결과"에 있다. 명령은 `/srv/airdrum/Infra`에서 `sudo`로 실행한다.
 
 ### 무엇을 백업하나
 
@@ -216,40 +216,48 @@ HSTS 적용 시점 결정, 외부 검증(SSL Labs, 폰·다른 브라우저 접�
 
 백업(서버에서, 컨테이너가 실행 중일 때):
 ```
-mkdir -p ~/backup && cd ~/backup
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml exec -T postgres \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > app_$(date +%F).dump
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml exec -T postgres \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -Fc mlflow' > mlflow_$(date +%F).dump
-chmod 600 *.dump
+cd /srv/airdrum/Infra
+sudo mkdir -p /srv/airdrum/backup && sudo chmod 700 /srv/airdrum/backup
+sudo touch /srv/airdrum/backup/app_$(date +%F).dump && sudo chmod 600 /srv/airdrum/backup/app_$(date +%F).dump
+sudo docker compose -p infra exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' | sudo tee /srv/airdrum/backup/app_$(date +%F).dump > /dev/null
+sudo touch /srv/airdrum/backup/mlflow_$(date +%F).dump && sudo chmod 600 /srv/airdrum/backup/mlflow_$(date +%F).dump
+sudo docker compose -p infra exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d mlflow -Fc' | sudo tee /srv/airdrum/backup/mlflow_$(date +%F).dump > /dev/null
 ```
 - `-Fc`는 복원 도구(`pg_restore`)가 쓰는 압축 형식이다. 컨테이너 안의 환경변수(`POSTGRES_USER`)를 쓰므로 비밀번호를 명령에 쓰지 않는다.
+- 파일을 먼저 `touch`로 만들고 `chmod 600`한 뒤 내용을 쓴다. 쓴 뒤에 권한을 바꾸면 그 사이에 다른 사용자가 읽을 수 있다.
+- 앱 DB의 `pg_dump`는 `continuous_agg` 테이블의 순환 외래키 경고(`circular foreign-key constraints`)를 낸다. TimescaleDB 내부 카탈로그에서 나오는 것으로 백업은 정상이다. 경고를 보려면 `2>/dev/null`을 빼고 실행한다.
+- 백업이 읽히는지는 `sudo cat <파일> | sudo docker compose -p infra exec -T postgres pg_restore -l | head`로 확인한다(목록이 나오면 읽히는 것).
 
-복원(비어 있는 DB에 한다):
+복원(**비어 있는 DB**에 한다. 운영 DB에 바로 복원하지 않는다):
 ```
-# 앱 DB. TimescaleDB는 복원 전후에 확장 전용 함수를 호출해야 한다.
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml exec -T postgres \
-  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT timescaledb_pre_restore();"'
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml exec -T postgres \
-  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' < app_<날짜>.dump
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml exec -T postgres \
-  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT timescaledb_post_restore();"'
+cd /srv/airdrum/Infra
+# 1. 빈 DB를 만든다. 새 DB는 template1을 복사하므로 timescaledb 확장이 이미 들어 있다.
+sudo docker compose -p infra exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE restore_test"'
+sudo docker compose -p infra exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "CREATE EXTENSION IF NOT EXISTS timescaledb"'
+# 2. TimescaleDB는 복원 전후에 확장 전용 함수를 호출해야 한다.
+sudo docker compose -p infra exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "SELECT timescaledb_pre_restore()"'
+sudo cat /srv/airdrum/backup/app_<날짜>.dump | sudo docker compose -p infra exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d restore_test --no-owner' 2>&1 | tail -20
+sudo docker compose -p infra exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "SELECT timescaledb_post_restore()"'
 ```
-- TimescaleDB 복원 절차(`pre_restore`/`post_restore`)는 공식 문서 기준이며 이 서버에서 시험해야 한다. 앱이 Flyway 등으로 스키마를 만든다면, 복원 대상 DB는 스키마가 없는 빈 DB여야 하는지 BE와 확인한다.
-- `docker-compose.yml`의 주석도 "운영 전환 전 백업·복원 검증이 필요하다"고 적고 있다.
+- `-d` 뒤의 DB 이름을 틀리지 않는다. 운영 DB 이름을 쓰면 운영 DB에 복원이 시도된다.
+- MLflow DB는 TimescaleDB를 쓰지 않아 `pre_restore`/`post_restore` 없이 `pg_restore`만 한다.
+- 시험이 끝나면 시험용 DB를 지운다(`DROP DATABASE restore_test`).
+- 복원 결과 확인은 아래 "서버 시험 결과"의 비교 쿼리를 쓴다.
+- 앱이 Flyway로 스키마를 만든다. 복원한 DB의 `flyway_schema_history`가 원본과 같으면(행 수와 마지막 순번) 앱이 마이그레이션을 이미 적용된 것으로 인식한다. 앱을 복원본에 실제로 붙여 본 것은 아니다.
 
 ### SeaweedFS 볼륨
 
 일관성을 위해 쓰기를 멈추고 복사한다(앱이 잠깐 스토리지에 접근하지 못한다).
 ```
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml stop seaweedfs
-docker run --rm -v infra_seaweeddata:/data:ro -v ~/backup:/backup alpine \
+cd /srv/airdrum/Infra
+sudo docker compose -p infra stop seaweedfs
+sudo docker run --rm -v infra_seaweeddata:/data:ro -v /srv/airdrum/backup:/backup alpine \
   tar czf /backup/seaweed_$(date +%F).tgz -C /data .
-docker compose -p infra -f /srv/airdrum/Infra/docker-compose.yml start seaweedfs
-chmod 600 ~/backup/seaweed_*.tgz
+sudo docker compose -p infra start seaweedfs
+sudo chmod 600 /srv/airdrum/backup/seaweed_*.tgz
 ```
-- 볼륨 이름(`infra_seaweeddata`)은 `docker volume ls`로 확인한다.
-- 복원은 새 서버에서 볼륨을 만들고 같은 방식으로 `tar xzf`로 푼 뒤 `seaweedfs`를 시작한다.
+- 볼륨 이름(`infra_seaweeddata`)은 `docker volume ls`로 확인한다. 멈추는 데 약 10초 걸렸다. 그동안 악보·음원 접근이 안 된다.
+- 복원은 새 서버에서 볼륨을 만들고 같은 방식으로 `tar xzf`로 푼 뒤 `seaweedfs`를 시작한다. 시험은 임시 볼륨(`restore_test_seaweed`)에 풀어 파일 목록을 비교했다. 임시 볼륨은 이름을 확인한 뒤 `docker volume rm`으로 지운다.
 
 ### 인증서 볼륨 (39번 이후)
 ```
@@ -258,6 +266,25 @@ docker run --rm -v infra_letsencrypt:/data:ro -v ~/backup:/backup alpine \
 chmod 600 ~/backup/letsencrypt_*.tgz
 ```
 - 개인 키가 들어 있다. 반드시 서버 밖의 안전한 곳에 보관하고 저장소·채팅에 올리지 않는다.
+
+### 서버 시험 결과 (2026-10-30, S15P31A307-133)
+
+| 대상 | 방법 | 결과 |
+| --- | --- | --- |
+| 앱 DB (`app`) | 새 백업 → 빈 `restore_test`에 `pre_restore` → `pg_restore` → `post_restore` | 복원 오류 없음. 테이블 19개 행 수가 원본과 모두 같음. `flyway_schema_history` 18행, 마지막 순번 18로 같음 |
+| MLflow DB (`mlflow`) | 새 백업 → 빈 `restore_test_mlflow`에 `pg_restore` | 복원 오류 없음. 테이블별 행 수 해시가 원본과 같음 |
+| SeaweedFS 볼륨 | `seaweedfs` 정지 → `tar` → 시작 → 임시 볼륨에 풀어 비교 | 용량 같음(328K). 파일 목록 차이는 `filerldb2`(메타데이터 LevelDB)의 로그·매니페스트 파일 이름뿐이며 재시작 때 교체된 것으로 사용자 데이터 파일 차이는 없음 |
+
+행 수 비교 쿼리(두 DB에서 같은 쿼리를 실행해 결과를 비교한다):
+```
+SELECT table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text AS n FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY 1;
+```
+
+한계(시험하지 못한 것)
+- `telemetry_events`(hypertable)에 데이터가 없어 청크(`num_chunks = 0`)가 든 상태의 복원은 시험하지 못했다. 데이터가 쌓이면 다시 시험한다.
+- 복원한 DB·볼륨에 서비스를 실제로 붙여 기동해 보지 않았다. 행 수·이력·파일 목록 비교까지만 했다.
+- SeaweedFS에는 지금 파일이 거의 없다(328K). 데이터가 쌓였을 때의 백업 시간과 정지 시간은 모른다.
+- **서버 밖 보관은 하지 않았다.** 백업은 서버의 `/srv/airdrum/`(루트 소유, 권한 600/700)에만 있어서 서버가 사라지면 같이 사라진다. 보관 위치와 접근 제한(6절 "원칙")은 정하지 못했다. 자동화와 주기도 정하지 않았다(범위 밖).
 
 ### 새 서버에 전체 복구하는 순서
 1. 2절 "서버 최초 준비"를 한다(Docker, ufw, 러너).

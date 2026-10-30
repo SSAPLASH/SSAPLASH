@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V18을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V21을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -377,6 +377,10 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V14 | `V14__add_report_analysis_status.sql` | 저장된 리포트 분석 상태와 허용값 CHECK 추가 | -158 |
 | V17 | `V17__widen_telemetry_pad_and_clock_offset.sql` | `telemetry_events` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL), `clock_offset_ms` `double precision`과 CHECK `ck_telemetry_events_clock_offset_ms` | -152 |
 | V18 | `V18__add_report_analysis_dispatch.sql` | 리포트 약점 분석 시도 수·임대·재시도 시각 | -158 |
+| V20 | `V20__widen_hits_pad.sql` | `hits` 패드 3컬럼 `varchar(16)`(HIHAT_PEDAL 저장 실패 수정) | -142 |
+| V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
+| V22 | `V22__add_songs_published.sql` | `songs.published`(기본 true) 공용 곡 공개 여부, CHECK `songs_published_builtin_check`(개인 곡은 항상 true) | -156 |
+| V23 | `V23__create_sheet_music.sql` | 내 악보 `sheet_music`·`sheet_music_pages`, 정리 역할 `SHEET_MUSIC` 추가 | -155 |
 
 규칙:
 
@@ -403,7 +407,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V18까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V21까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -790,12 +794,180 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
 
+## 개인 곡 관리·커버 (187번)
+
+모든 요청에 Bearer access 토큰이 필요하다. `PATCH /api/v1/songs/{id}`는 `title`·`artist` 중 보낸 문자열만 바꾸며 앞뒤 공백을 제거한다. 제목은 1~100자, 아티스트는 100자 이하이고 빈 아티스트는 null로 지운다. 빈 객체·null·모르는 필드·중복 키·후행 JSON은 400 `SONG_INVALID`다. 성공 응답은 곡 상세와 같다. 처리 중인 곡의 메타 변경과 `DELETE /api/v1/songs/{id}`는 409 `SONG_BUSY`다. 다른 사용자의 곡과 공용 곡 변경은 403 `SONG_FORBIDDEN`, 없는 곡과 삭제된 곡은 404 `SONG_NOT_FOUND`다. 기존 읽기 API는 타인 곡을 계속 404로 처리한다.
+
+`PUT /api/v1/songs/{id}/cover`는 multipart의 `file` 한 개만 받는다. JPEG·PNG·WebP는 실제 바이트와 디코딩으로 검사하며 확장자·MIME을 신뢰하지 않는다. 파일 상한 2MiB, 요청 전체 상한은 2MiB+64KiB, 파트 헤더는 8KiB, 동시 처리 슬롯은 인스턴스당 2개다. 이미지 크기는 가로·세로 각각 4096 이하이면서 전체 400만 픽셀 이하다. 빈 파일·손상·이미지가 아님은 400 `COVER_INVALID`, 다른 이미지 형식은 415 `COVER_UNSUPPORTED`, 크기 초과는 413 `COVER_TOO_LARGE`, 저장소 또는 슬롯 장애는 503 `COVER_UNAVAILABLE`이다. 파일명은 저장 키에 사용하지 않는다. 서버는 이미지 원본을 비공개 저장하므로 메타데이터를 제거하지 않는다. 성공은 200 `{ "coverUrl": "..." }`다. `DELETE /api/v1/songs/{id}/cover`는 없어도 204다. 커버 PUT·DELETE는 처리 중인 곡에도 허용한다.
+
+곡 목록·상세는 기존 필드와 함께 `coverUrl`(없으면 null)을 제공한다. 개인 커버만 1시간 서명하며 서명은 저장소에 HEAD를 호출하지 않고 로컬에서 수행한다. URL은 만료 전 재사용 가능하며 저장소 객체의 현재 가용성을 보장하지 않는다. 커버가 없는 곡은 저장소가 비활성이어도 정상 조회된다. 커버는 기존 비공개 악보 버킷의 `cover/{userId}/{songId}/{uuid}.{ext}`에 저장하고, 쓰기·삭제에는 기존 워커의 악보 버킷 쓰기 자격증명(`WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY`·`WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY`, 미설정 시 음원 저장소 쓰기 키)을 쓴다. 읽기 서명은 기존 chart.assets 읽기 자격증명을 쓴다. 반주·악보 서명 유효 시간은 기존 1~10분 설정을 유지한다.
+
+업로드 전 임시 정리 작업을 등록하고 저장소 작업 뒤 회원·곡 상태를 다시 확인한다. 커버 교체·삭제, 곡 삭제와 탈퇴 시 객체 삭제는 기존 영속 정리 큐가 재시도한다. 곡 삭제는 소프트 삭제이며 채보 버전과 플레이·리포트 참조를 보존한다. 곡 제목의 과거 스냅샷을 새로 만들지 않는다. 현재 리포트 API는 곡 제목을 자체 필드로 반환하지 않으며 이후 곡 상세를 조회하는 화면은 변경된 제목을 볼 수 있다. 운영 저장소의 비공개 설정과 읽기·쓰기·삭제 권한은 배포 환경에서 별도 확인해야 한다.
+
+## 본인 연주 기록 목록 (161번)
+
+`GET /api/v1/plays`는 활성 Bearer 인증 회원의 모든 모드를 종료 시각·playId 내림차순으로 반환한다. `page`는 0~100000(기본 0), `size`는 1~100(기본 20)이며 응답은 `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext`다. 범위를 벗어난 페이지는 빈 배열이며 전체 0건이면 totalPages는 0이다. 인증 실패는 401, 잘못된 페이지 입력은 400이고 서비스 직접 호출에도 같은 범위 검증을 적용한다. 응답은 `Cache-Control: no-cache, no-store`를 포함한다. offset 페이지 조회 도중 기록이 추가·삭제되면 페이지 간 중복이나 누락이 생길 수 있다.
+
+각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `difficulty`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
+
+`hasReport`는 RHYTHM/SHEET 기록에 리포트가 존재하는지를 뜻하며 AI 코칭 상태와 무관하다. 리포트가 없어도 과거 기록은 목록에 남는다. 곡 제목이 없을 때의 대체 문구와 날짜 표시 형식은 FE에서 별도로 정한다. FE는 true인 항목에서 `/result/{playId}/report`로 이동할 수 있으며 데이터는 기존 `/api/v1/plays/{playId}/report`와 `/notes`에서 조회한다.
+
+## MIDI 업로드 → 채보 변환 (151번)
+
+CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안에서 채보 3난이도로 바꿔 **내 곡**(`source=MIDI`)으로 저장한다.
+음원과 달리 작업 큐·워커 없이 바로 응답하며, 마이그레이션은 없다(V2의 `MIDI`·`MIDI_RULE` 값을 쓴다).
+MIDI는 소리가 아니라 연주 지시 데이터라 반주가 없고, 원본 파일은 변환 후 보관하지 않는다.
+
+`POST /api/v1/songs/midi`: Bearer 인증, multipart `file`(1 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
+다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, 본문은 `GET /api/v1/songs/{songId}`와 같은 곡 상세다.
+같은 파일을 다시 올리면 새 곡이 하나 더 생긴다(멱등 키 없음).
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `MIDI_INVALID` | 요청 형태 위반, 제목 없음·100자 초과, 빈 파일 |
+| 401 | `UNAUTHORIZED` | 토큰 없음·무효, ACTIVE가 아닌 회원 |
+| 413 | `MIDI_TOO_LARGE` | 파일 1 MiB 초과(선언 크기를 믿지 않고 읽은 바이트로도 확인) |
+| 422 | `MIDI_UNSUPPORTED` | MIDI 아님·손상, format 2, SMPTE 시간 단위, 템포 1~999 BPM 밖, 5자 넘는 박자표, 곡 길이 30분 초과, 드럼 노트 50,000개 초과. detail에 이유 한 줄 |
+| 422 | `MIDI_NO_DRUM_NOTES` | 드럼 채널(10)에 패드로 바꿀 노트가 없음 |
+| 500 | `INTERNAL_ERROR` | 저장 실패. 곡·채보 행을 하나도 남기지 않는다 |
+
+변환 규칙:
+
+- JDK `javax.sound.midi`로 파일만 읽는다(소리 장치·외부 라이브러리 없음). format 0·1, PPQ 분해능만 받는다.
+- GM 규격대로 **채널 10의 note-on(velocity > 0)** 만 드럼으로 본다. 다른 채널은 무시한다.
+- GM 피치 → 패드는 AI 파트 `gmd.py`의 표와 맞추되 44(페달 하이햇)는 `HIHAT_PEDAL`로 따로 저장한다.
+
+| 패드 | GM 피치 |
+| --- | --- |
+| `KICK` | 35, 36 |
+| `SNARE` | 37, 38, 40 |
+| `HIHAT` | 22, 26, 42, 46 |
+| `HIHAT_PEDAL` | 44 |
+| `SMALL_TOM` | 48, 50 |
+| `MID_TOM` | 45, 47 |
+| `FLOOR_TOM` | 41, 43, 58 |
+| `CRASH` | 49, 52, 55, 57 |
+| `RIDE` | 51, 53, 59 |
+| 제외 | 그 밖의 피치(클랩·탬버린·카우벨 등) |
+
+- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.1`):
+
+| 규칙 | HARD | NORMAL | EASY |
+| --- | --- | --- | --- |
+| 패드 | 전체 | 전체 | `HIHAT_PEDAL` 제외 |
+| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 4분 격자만 |
+| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 전부 제외 |
+| 같은 시각 상한 | 없음 | 2개 | 2개 |
+| 최소 간격(기준의 3/4 미만이면 충돌) | 없음 | 16분 | 8분 |
+
+  상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
+  EASY가 비면 NORMAL을, NORMAL이 비면 HARD를 그대로 쓴다. 규칙을 바꾸면 버전을 올린다.
+- 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, `offsetMs=0`)를
+  `ChartDocumentReader.milliseconds`와 같은 식으로 계산한다. 그래서 악보 페이지 ms와 노트 시각이 어긋나지 않는다.
+- `notation`은 tick·note-off까지 길이(없으면 16분음표)·voice(`KICK`·`HIHAT_PEDAL` 2, 나머지 1), `timing`에는 `ppq`·`tempoMap`·`timeSignatureMap`을 항상 넣는다.
+  저장 전에 조회 리더로 다시 읽어 검증한다.
+- 곡 `duration_ms`는 마지막 노트에서 한 마디 뒤와 시퀀스 길이 중 긴 쪽이다. `songs.bpm`·`time_signature`는 첫 템포·박자표다.
+- 채보 버전은 난이도마다 version 1, `notation_status=PENDING`, `sheet_pages=NULL`이다. 악보 이미지는 FE가 채보 데이터로 그려 별도 API(155번)로 올린다.
+
+FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는다. 조회 응답에는 포함되므로 FE가 레인 표시 여부를 정한다.
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.midi.*'
+```
+
+테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다. 노트 JSON은 저장 전 조회 리더로 검증하며, 난이도별 출력과 로케일별 노트 ID를 기존 직렬화 결과와 비교한다.
+
+
+## 공용 곡 관리 (156번)
+
+CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을 MIDI로 등록하고 정보·채보·커버·반주를 고치며 공개 여부를 바꾼다.
+모든 경로는 `/api/v1/admin/songs`이고 Bearer 인증 + **ADMIN 역할**(`@PreAuthorize`)이 필요하다. 미인증·탈퇴 401, USER 403 `FORBIDDEN`.
+없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 아직 없어 Swagger의 `Admin Songs` 묶음으로 호출한다.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false` | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
+| `GET /` | `published`(생략 시 전체), `q`, `page`, `size`(곡 목록과 같은 범위) | 비공개 포함 목록, 삭제 곡 제외, 생성 내림차순 |
+| `GET /{id}` | — | 관리자 곡 상세 |
+| `PATCH /{id}` | JSON `title`·`artist`·`license`·`published` 중 1개 이상. 빈 `artist`는 null | 관리자 곡 상세 |
+| `PUT /{id}/charts/midi` | multipart `file`만 | 난이도별 새 버전이 반영된 상세 |
+| `PUT /{id}/cover`, `DELETE /{id}/cover` | 187번 커버와 같은 이미지 규칙 | `{coverUrl}` / 204 |
+| `PUT /{id}/accompaniment`, `DELETE /{id}/accompaniment` | multipart `file` WAV·MP3, 50 MiB·10분 이하 | `{accompanimentUrl, expiresAt}` / 204 |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다.
+
+- **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
+- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
+- **커버:** 키 `cover/builtin/{songId}/{uuid}.{jpg|png|webp}`(악보 버킷). 공개된 공용 곡 커버는 모든 회원의 곡 목록·상세 `coverUrl`에 1시간 서명으로 온다.
+- **반주:** ffprobe(`AudioProbe`)로 실제 바이트를 검사한다. 키 `accompaniment/{songId}/{uuid}.{wav|mp3}`(반주 버킷), 같은 키에 덮어쓰지 않고 교체마다 새 키를 만든다. 쓰기는 워커의 반주 버킷 쓰기 자격증명을 쓰므로 운영 자격증명에 PutObject 권한이 있어야 한다. 82번 도구가 등록한 `accompaniment/{songId}.wav`도 그대로 재생된다.
+- **정리:** 커버·반주 업로드 전에 임시 정리 작업(`user_id` NULL, 5분 뒤)을 등록하고 저장소 쓰기 뒤 곡을 다시 잠가 연결한다. 교체·삭제·곡 삭제 때 이전 객체는 기존 정리 큐가 지운다. 정리 큐는 살아 있는 공용 곡이 참조하는 커버·반주를 지우지 않는다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `SONG_INVALID` | 제목·아티스트·라이선스·`published` 형식, 모르는 필드, PATCH 본문 규칙 위반 |
+| 400·413·422 | `MIDI_*` | 151번과 같음 |
+| 400·413·415·503 | `COVER_*` | 187번과 같음 |
+| 400 | `ACCOMPANIMENT_INVALID` | 파일 없음·빈 파일·필드 형태 위반 |
+| 413 | `ACCOMPANIMENT_TOO_LARGE` | 50 MiB 초과 |
+| 422 | `ACCOMPANIMENT_UNSUPPORTED` | WAV·MP3가 아니거나 10분 초과 |
+| 503 | `ACCOMPANIMENT_UNAVAILABLE` | 저장소 비활성·쓰기 실패, ffprobe 실행 불가 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.admin.*' --tests '*SongPublishedVisibilityTest'
+```
+
+## 내 악보 보관 (155번)
+
+CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 곡·채보와 연결하지 않는다. FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
+모든 경로는 `/api/v1/sheets`이고 Bearer 인증이 필요하다. 미인증·탈퇴 401, 남의 악보·없는 악보·삭제된 악보는 404 `SHEET_NOT_FOUND`. 응답은 `Cache-Control: private, no-store`.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED` | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
+| `GET /` | `q`(제목 부분 검색), `page` 0~100000, `size` 1~100 | `PageResponse<SheetSummary>`, 최신순 |
+| `GET /{id}` | — | 악보 상세 |
+| `PATCH /{id}` | JSON `{"title": "..."}`만 | 악보 상세 |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+- **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`. 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
+- **파일 규칙:** 한 악보는 JPG·PNG·WEBP 이미지 1~20장 또는 PDF 1개. 이미지는 장당 10 MiB, 가로·세로 8000px·4000만 화소 이하, PDF는 20 MiB 이하. 요청 전체는 전역 multipart 상한 50 MiB. 회원당 악보 100개·합계 500 MiB. 실제 바이트를 검사한다(이미지 디코드와 끝 표시, PDF `%PDF-` 머리와 끝 1 KiB 안 `%%EOF`). 확장자·Content-Type은 보지 않는다.
+- **메모리:** 본문은 multipart 임시 파일에서 다시 임시 파일로 옮겨 저장소에도 파일에서 바로 올린다. 이미지는 400만 화소 이하로 줄여 읽는다(운영 힙 약 460MB 보호). 검사·저장 단계는 서버 전체 동시 2건이며 넘으면 503이다.
+- **저장:** 악보 버킷(`CHART_ASSET_SHEET_BUCKET`)의 `sheet-music/{userId}/{sheetId}/{uuid}.{jpg|png|webp|pdf}`. 커버와 같은 악보 버킷 쓰기 자격증명으로 조건부 PUT(`If-None-Match: *`)하고, 서명은 `chart.assets` 읽기 자격증명을 쓴다. `CHART_ASSET_ENABLED=false`면 등록·조회 서명이 503이다.
+- **정리:** 업로드 전에 임시 정리 작업(`SHEET_MUSIC`, 5분 뒤)을 등록하고 저장 뒤 페이지를 연결한다. 실패하면 악보 행을 소프트 삭제하고 503, 올라간 파일은 정리 작업자가 지운다. 삭제·탈퇴(`UserWithdrawnEvent` 커밋 뒤) 때 페이지 키를 바로 실행되도록 등록한다. 정리 작업자는 삭제되지 않은 악보·활성 회원의 페이지 키는 지우지 않는다.
+- **Nginx:** `/api/v1/sheets` 요청 전체는 51 MiB까지 허용하며 개별 이미지 10 MiB·PDF 20 MiB 검증은 BE가 수행한다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `SHEET_INVALID` | 제목·`source` 형식, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
+| 413 | `SHEET_TOO_LARGE` | 이미지 10 MiB·PDF 20 MiB 초과 |
+| 413 | `SHEET_QUOTA_EXCEEDED` | 회원당 100개 또는 500 MiB 초과 |
+| 415 | `SHEET_UNSUPPORTED` | JPG·PNG·WEBP·PDF가 아님(GIF·BMP·HEIC 등) |
+| 503 | `SHEET_UNAVAILABLE` | 저장소 비활성·쓰기 실패, 동시 처리 초과 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
+```
+
+## 채보 작업 진행 조회·알림 (172번)
+
+`GET /api/v1/jobs/{jobId}`는 Bearer access 토큰으로 본인의 최신 작업 상태를 반환한다. 타인·삭제된 곡·없는 작업은 404, 미인증·비활성 회원은 401이다. `GET /api/v1/jobs?status=QUEUED&page=0&size=20`은 본인 작업 목록을 `PageResponse`로 반환한다. `status`는 선택이며 `QUEUED`, `SEPARATING`, `TRANSCRIBING`, `DONE`, `FAILED` 중 하나다. page는 0~100000, size는 1~100이다. 다른 브라우저에서 jobId를 모르면 목록으로 복구할 수 있다.
+
+두 GET과 WS는 동일한 DB 상태를 사용한다. JobSnapshot은 숫자 `jobId`, `songId`, `progress`(0~100), `revision`, 문자열 `status`, `error`(null 또는 안전한 `code`·`message`), UTC 시각 `createdAt`, `startedAt`, `finishedAt`으로 구성된다. 오류 원문·파일 키는 노출하지 않는다. 재시도에서는 progress가 감소할 수 있으므로 FE는 revision이 증가한 상태만 적용한다.
+
+브라우저는 `wss://<호스트>/ws/jobs/{jobId}`를 연결하고 **5초 안에 첫 텍스트 프레임**으로 `{"type":"AUTH","accessToken":"<access token>"}`을 보낸다. 인증 전 데이터는 전송하지 않는다. URL 쿼리와 추가 필드·중복 키·후행 JSON은 허용하지 않으며 텍스트·바이너리 프레임 한도는 4096바이트다. 서버는 토큰·ACTIVE·본인 소유·곡 삭제를 확인하고 현재 JobSnapshot을 먼저 보낸 뒤 revision이 커진 커밋 상태만 보낸다. DONE·FAILED는 최종 스냅샷을 보낸 후 1000으로 닫는다. 이미 끝난 작업에 접속하면 현재 스냅샷 한 개를 받은 뒤 닫힌다. 인증 실패·만료·접근 불가·잘못된 인증 프레임은 1008, 프레임 한도 초과는 1009, 연결 한도 초과는 1013, 서버 오류는 1011이다. 소켓이 닫히거나 느리면 FE는 GET으로 현재 상태를 복구하고 필요할 때 재연결한다. 연결 불가 중에는 3초 간격의 GET 복구를 사용할 수 있으며 DONE·FAILED 또는 401·404에서 중단한다.
+
+연결은 인스턴스 전체 200개, 인증 회원당 4개로 제한한다. 활성 구독만 약 1초마다 DB 상태를 확인하고, 매 전송 전 토큰 만료·회원 상태·작업 접근을 다시 검사한다. 무변경 연결도 확인하며 30초마다 WebSocket ping을 전송한다. 이 간격과 연결 한도는 초기 설정이며 성능 측정 결과가 아니다. Nginx는 `/ws/jobs/`만 BE로 전달하고 read timeout을 120초로 둔다. WS 접근 로그는 URL 토큰 노출 방지를 위해 끈다.
+
+`CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS`는 쉼표로 구분한 정확한 Origin 목록이다. 개발 기본값은 `http://localhost:5173,http://127.0.0.1:5173`이며 누락 Origin과 와일드카드는 허용하지 않는다. 운영 Compose에서 실제 FE HTTPS Origin을 명시해야 한다. Nginx 설정·Origin 값은 배포 환경에 반영하고 직접 연결을 확인해야 하며 이번 로컬 검증이 실제 배포 성공을 뜻하지 않는다.
 
 ## AI 워커 내부 작업 API (160번)
 
-`/internal/v1/chart-jobs`는 보호된 내부 네트워크에서만 사용한다. 공개 Nginx는 `/internal/`을 404로 차단한다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다.
+`/internal/v1/chart-jobs/`는 HTTPS Nginx에서 지정한 AI 워커 IP `222.107.238.74`만 접근할 수 있다. 그 밖의 `/internal/`은 404이며 HTTP의 `/internal/`도 404다. Nginx 요청 본문 한도는 8 MiB이고 BE 결과 JSON 한도는 5 MiB다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다. Nginx는 해당 워커 API와 서명 URL 경로의 접근·오류 로그를 끄며 BE·저장소 메트릭으로 진단한다.
 
-`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 기본은 BE 내부 음원 endpoint이고 Compose 내부 워커에는 `http://seaweedfs:8333`을 쓴다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
+`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 일반 설정의 기본은 BE 내부 음원 endpoint이며 Infra Compose에서는 `OBJECT_STORAGE_PUBLIC_URL`을 기본으로 사용한다. 외부 GPU에서는 `https://k15a307.p.ssafy.io`처럼 워커가 접근 가능한 공개 주소를 사용한다. BE의 내부 저장소 endpoint는 그대로 유지한다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
+
+반주 쓰기 자격증명에는 반주 버킷의 `s3:GetBucketVersioning`과 반주 객체의 `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` 권한이 필요하다. 반주 승격·공용 반주 업로드·정리 조회·삭제 전에 매번 버전 상태를 확인하며, 버전 상태가 미기재이거나 비어 있는 버킷만 허용한다(공백도 빈 상태로 취급한다). `Enabled`, `Suspended` 및 알 수 없는 비공백 상태는 거절한다. 조회 권한 부족·저장소 장애도 작업 실패로 처리하고 정리는 기존 방식대로 재시도한다. 상태 확인과 객체 작업은 원자적이지 않으므로 운영자가 버킷의 버전 설정을 변경하지 않도록 관리해야 한다. 서비스는 버전 상태를 바꾸거나 기존 버전 객체를 삭제하지 않으며 상태 변경 권한이 필요 없다. 자격증명·서명 URL·저장소 오류 원문을 로그에 남기지 않는다.
 
 | 요청 | 주요 입력과 동작 |
 | --- | --- |
@@ -805,6 +977,8 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 | `POST /{jobId}/results/separation` | 공통 결과 봉투와 `drumStem`, `accompaniment` manifest, `durationMs`, `audioTimeOrigin`, `model`, `metrics`를 제출한다. 분리 파일은 FLAC 16비트·44,100Hz·스테레오, 시간축은 `SOURCE_START`다. |
 | `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
 | `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
+
+원곡 길이가 없거나 0 또는 600,000ms를 넘는 대기 작업은 `INPUT_INVALID`로 실패하고 입력 정리 대상이 된다. 동일 요청 재조회 중 길이가 유효하지 않으면 409를 반환한다. 새 작업 배정과 만료 작업 복구는 회원·곡·작업 행 중 잠긴 후보를 건너뛰고 다른 후보를 처리한다. 건너뛴 후보는 이후 배정 또는 복구 주기에 다시 확인한다.
 
 claim의 `input` 예시(파일 ID·크기·해시는 설명용):
 
@@ -825,7 +999,13 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 결과 봉투는 `contractVersion: 1`, `jobId`, `attemptId`, UUID `resultId`, 소문자 `payloadHash`, `result`다. `payloadHash`는 **result 객체만** 다음 규칙으로 정규화한 UTF-8 바이트의 SHA-256이다. 객체 키는 Java 문자열의 UTF-16 코드 단위 사전순으로 정렬하고 배열 순서는 유지한다. 공백 없이 JSON을 쓰며 문자열은 Jackson의 일반 JSON 이스케이프(제어 문자·역슬래시·따옴표 이스케이프, 그 외 유니코드 그대로)를 쓴다. 숫자는 십진수 값의 후행 0을 없애고 지수 표기 없이 쓰며 모든 0은 `0`이다. null·true·false는 그대로 쓴다. 중복 키, JSON 후행 데이터, 24단계 초과 중첩 및 과도한 숫자는 거부한다. 예를 들어 입력 result `{"b":[true,null],"a":1.00}`의 정규 바이트는 `{"a":1,"b":[true,null]}`다. 원래 바이트 전체나 envelope의 해시가 아니다.
 
-인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
+교차 언어 검증 입력 result는 `{"😀":-0.00,"\uE000":1.2300,"제어":"x\u001f\n","prec":0.12345678901234567890123456789012345}`이며 SHA-256은 `a6385d023ac91b8d496887d40c7f840cf7790eb20ddc16ae866e0a080c541921`이다. `\uE000`은 빈 키가 아니라 U+E000 문자 키다. 복사 과정에서 해당 문자가 누락되지 않도록 이스케이프 표기를 사용한다.
+
+워커 결과의 필수 문자열과 객체 형태를 검사하며 유효 시도의 잘못된 타입에는 422 `WORKER_RESULT_INVALID`를 반환하고 작업을 `OUTPUT_INVALID`로 실패 처리해 기존 정리 경로에 등록한다. 잘못된 요청 봉투는 400, 오래된 시도는 409다.
+
+인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 전송 오류의 워커 측 재시도를 소진해 heartbeat를 중단하면 임대 만료 후 복구될 수 있지만 단계 마감과 단계별 최대 2회 재시도 범위 안에서만 재배정된다. 409·422 또는 이미 DONE인 경우 재배정을 보장하지 않는다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
+
+음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 BPM·offsetMs와 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. 일정 템포 환산이므로 변속 곡의 격자 판단은 어긋날 수 있다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
@@ -841,8 +1021,45 @@ AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트
 `analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을
 뜻하며 표본 부족도 포함한다. 실패는 null이다. `generatorVersion`에는 기존 BE 버전과 분석기 버전을
 함께 기록한다. 이전 NOT_REQUESTED 리포트는 자동 재분석하지 않는다. V18은 처리 시도 수와 임대를
-저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
+저장하므로 프로세스 종료 후 잔류 작업을 회수하며, 전체 시도는 최대 2회다. 명확한 일시적·복구 가능한 DB 예외도 같은 재시도 예산을 사용하며 그 밖의 런타임 오류는 실패 처리한다. 재시도는 최소 2초 후 다음 회수 주기(기본 10초)에 시작한다. 타임아웃 이후 늦게 도착한
 결과는 임대 토큰이 일치할 때만 반영한다. 요청 본문·playId는 분석 로그에 남기지 않는다.
+
+## 약점 분석 보정용 비식별 내보내기 뷰 (142번)
+
+AI 약점 분석 임계값 보정 배치가 원본 테이블 대신 읽는 읽기 전용 뷰 `coach_export_v`(V21)와, 이 뷰만 읽을 수 있는
+로그인 불가 그룹 역할 `coach_export_reader`다. 뷰의 열 목록이 곧 비식별 허용 목록이며, 열을 늘리려면 AI와 먼저 합의한다.
+앱은 이 뷰를 조회하지 않는다.
+
+행 조건:
+
+- `consent = true`, `mode`가 RHYTHM/SHEET인 세션만. 타격(`hits`)이 없는 세션은 행이 없다.
+- `users.role = 'ADMIN'`인 회원(팀원)의 세션은 뺀다. 팀원은 운영 `ADMIN_EMAILS`에 등록해 다음 로그인부터 ADMIN이 된다.
+- 탈퇴 회원의 동의 세션은 포함한다. 탈퇴 시 `consent=true` 세션을 남기는 목적이 분석 활용이다.
+- 위 조건을 만족하는 세션 중 회원별 최근 10개(`ended_at` 내림차순). 회원 ID는 순위 계산에만 쓰고 내보내지 않는다.
+
+열(이 순서): `session_key`, `mode`, `input_source`, `song_ref`, `song_origin`, `perfect_ms`, `good_ms`, `difficulty`,
+`played_date`, `payload_schema_version`, `seq`, `t_ms`, `stick_id`, `pad`, `velocity`, `peak_accel`, `judgement`,
+`matched_note_id`, `delta_ms`. 한 행이 타격 한 건이다.
+
+- `session_key`는 세션 UUID와 세션 설정 `app.export_salt`를 이어 붙인 SHA-256 hex다. 소금이 없는 세션에서는 어떤 열을
+  조회하든 `unrecognized configuration parameter`(SQLState 42704)로 실패하고, 빈 문자열이면 행이 나오지 않는다.
+- 개인 곡(`songs.owner_id`가 있는 MIDI·AUDIO)은 `song_ref`가 NULL, `song_origin`이 `PRIVATE`다. 공용 곡은 곡 ID와 `PUBLIC`.
+- `difficulty`는 채보 버전의 난이도, `played_date`는 `created_at`의 KST 날짜다.
+- 뷰는 소유자 권한으로 원본을 읽고 `security_barrier`다. 그룹 역할에는 스키마 USAGE와 뷰 SELECT만 있다.
+
+운영 적용(Infra, 비밀 값은 저장소에 두지 않는다):
+
+1. 배포 시 Flyway가 V20·V21을 적용한다. 그룹 역할 생성에는 앱 DB 계정의 `CREATEROLE`(현재는 슈퍼유저)이 필요하다.
+2. 접속 계정을 만든다. `CREATE ROLE coach_export LOGIN PASSWORD '…'`(이름은 자유).
+3. `GRANT coach_export_reader TO coach_export`.
+4. `ALTER ROLE coach_export SET app.export_salt = '…'`. 빈 문자열은 쓰지 않는다. 소금을 바꾸면 `session_key`가 모두 바뀐다.
+5. 운영 `.env`의 `ADMIN_EMAILS`에 팀원 로그인 이메일을 넣고 재기동한다.
+
+배치는 `SELECT * FROM coach_export_v ORDER BY session_key, seq`를 한 번 서버 커서로 읽는다. 뷰는 조회마다 다시 계산하며,
+동의가 바뀌거나 탈퇴로 세션이 지워지면 다음 조회부터 빠진다.
+
+`CoachExportViewMigrationTest`가 V20(기존 행 보존·길이 16·HIHAT_PEDAL 저장)과 V21(열 목록, 행 조건, 최근 10개, 개인 곡,
+KST 날짜, 소금 변경·부재, 그룹 역할의 원본 접근 거부, 같은 클러스터 재적용)을 검사한다.
 
 ## 탈퇴 후 곡·파일 정리 (37번)
 
@@ -871,7 +1088,7 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | --- | --- | --- |
 | `time`(ISO-8601 문자열), `kind`, `tags` | 필수 | 필수 |
 | `stickId`(0·1) | `tags.source`가 `keyboard`가 아니면 필수 | 필수 |
-| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `HI_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL`, 그대로 저장 | null |
+| `pad`·`baselinePad`·`predictedPad` | 선택. wire 9종 `CRASH` `HIHAT` `SNARE` `SMALL_TOM` `MID_TOM` `FLOOR_TOM` `RIDE` `KICK` `HIHAT_PEDAL` | null |
 | `judgement`·`deltaMs` | PERFECT·GOOD이면 deltaMs 필수, 판정 없음·MISS이면 deltaMs null | null |
 | `velocity`(0~127 정수), `tRecv`·`tJudge`(ms) | 필수 | null |
 | `tAudio`(ms) | 선택 | null |
@@ -881,7 +1098,8 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
   `firmware`(1~64자)만 받는다.
 - 선택 필드의 부재와 null은 같다. BE는 null을 0으로 채우거나 계산하지 않는다(동기화 전 `clockOffsetMs`=null 등).
 - 숫자는 JSON 숫자 토큰만 받는다. 정수 자리의 소수(`96.0`), 문자열 숫자, 유한하지 않은 값(`1e999`), 서버 시각보다 5분 넘게 미래인 `time`은 거절한다.
-- 계약 밖 필드(`rawWindow` 등)·중복 키·FE 내부 이름 `SMALL_TOM`은 거절한다.
+- 이전 `HI_TOM` 입력도 받으며 새 행에는 `SMALL_TOM`으로 저장한다. 기존 `HI_TOM` 행은 변경하지 않고 세 패드 필드 조회 시 `SMALL_TOM`으로 반환한다.
+- 계약 밖 필드(`rawWindow` 등)·중복 키·목록 밖 패드는 거절한다.
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
