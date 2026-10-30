@@ -7,10 +7,12 @@ import { useLive } from '@/store/liveStore';
 interface Props {
   /** 설정 완료 뒤 돌아올 경로(pathname + search) */
   returnTo: string;
+  /** 설정 화면 띠에 보일 돌아갈 곳 이름(예: "악보 연습 · 별빛 산책"). 없으면 설정이 경로로 이름을 짓는다 */
+  returnLabel?: string;
   compact?: boolean;
 }
 
-export function ReadinessNotice({ returnTo, compact }: Props) {
+export function ReadinessNotice({ returnTo, returnLabel, compact }: Props) {
   const navigate = useNavigate();
   const { ready, missing } = useReadiness();
   const connected = useLive((l) => l.connected);
@@ -23,7 +25,7 @@ export function ReadinessNotice({ returnTo, compact }: Props) {
           <li key={m}>{m === 'stick' ? stickMissingText(connected) : READINESS_MESSAGES[m]}</li>
         ))}
       </ul>
-      <button className="btn-primary small" onClick={() => navigate('/setup', { state: { returnTo } })}>
+      <button className="btn-primary small" onClick={() => navigate('/setup', { state: returnLabel ? { returnTo, returnLabel } : { returnTo } })}>
         설정으로
       </button>
     </div>
