@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -18,8 +19,8 @@ public record TelemetryBatchRequest(Integer schemaVersion, UUID sessionId, Mode 
 
 	public enum Judgement { PERFECT, GOOD, MISS }
 
-	/** 텔레메트리 wire 패드 9종. FE의 SMALL_TOM은 HI_TOM으로 바꿔 보낸다. 플레이 업로드 enum과 별개다. */
-	public enum Pad { CRASH, HIHAT, SNARE, HI_TOM, MID_TOM, FLOOR_TOM, RIDE, KICK, HIHAT_PEDAL }
+	/** 텔레메트리 패드 9종. 이전 HI_TOM 입력도 SMALL_TOM으로 정규화한다. */
+	public enum Pad { CRASH, HIHAT, SNARE, @JsonAlias("HI_TOM") SMALL_TOM, MID_TOM, FLOOR_TOM, RIDE, KICK, HIHAT_PEDAL }
 
 	/**
 	 * @param tSensor 랩 보정한 센서 시각(정수 µs)
