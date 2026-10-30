@@ -1,0 +1,180 @@
+"""서비스 설정 읽기 (설계 3장 "서비스 설정").
+
+`configs/chart/separation.yaml` → SeparationConfig, `configs/chart/transcription.yaml` → TranscriptionConfig
+(S15P31A307-169). 둘 다 공통 부분(ChartConfig)을 상속. yaml의 상대 경로는 벤치마크 yaml과 같이
+AI/ 폴더(현재 작업 폴더) 기준.
+
+환경 변수(`SSAPLASH_` 접두사, 인프라 -125 회신과 같은 규칙)가 yaml 값을 덮어씀.
+- SSAPLASH_CHART_DEVICE: 장치(cuda / cpu)
+- SSAPLASH_MODELS_DIR: 가중치 폴더. 벤치마크 어댑터(`SeparatorConfig.model_dir`)가 읽음. 기본 data/models
+- SSAPLASH_WORK_DIR: 중간 파일 폴더. 명령줄 --out이 없을 때 cli가 씀
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+
+ENV_DEVICE = "SSAPLASH_CHART_DEVICE"
+ENV_MODELS_DIR = "SSAPLASH_MODELS_DIR"
+ENV_WORK_DIR = "SSAPLASH_WORK_DIR"
+
+DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
+DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
+OUTPUT_FORMATS = ("flac", "wav")
+# beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
+TEMPO_METHODS = ("beat_this", "librosa")
+# BE WorkerResults가 schemaVersion 1만 받음
+SCHEMA_VERSIONS = (1,)
+
+
+@dataclass
+class OutputConfig:
+    """드럼 트랙·반주 파일 형식. flac은 16비트 무손실(설계 U2), wav는 PCM_16."""
+
+    sample_rate: int = 44100
+    format: str = "flac"
+
+    @classmethod
+    def from_dict(cls, raw: dict | None) -> OutputConfig:
+        raw = raw or {}
+        unknown = sorted(set(raw) - {"sample_rate", "format"})
+        if unknown:
+            raise ValueError(f"모르는 output 필드: {unknown}")
+        fmt = str(raw.get("format", cls.format)).lower()
+        if fmt not in OUTPUT_FORMATS:
+            raise ValueError(f"output.format은 {OUTPUT_FORMATS} 중 하나: {fmt!r}")
+        sample_rate = int(raw.get("sample_rate", cls.sample_rate))
+        if sample_rate <= 0:
+            raise ValueError(f"output.sample_rate는 양수: {sample_rate}")
+        return cls(sample_rate=sample_rate, format=fmt)
+
+
+@dataclass
+class ChartConfig:
+    """`configs/chart/*.yaml` 공통 부분. 모델 yaml 경로와 장치."""
+
+    model_config: Path
+    device: str = "cuda"
+    source_path: Path | None = field(default=None, repr=False)
+
+
+@dataclass
+class SeparationConfig(ChartConfig):
+    """`configs/chart/separation.yaml` 한 파일."""
+
+    output: OutputConfig = field(default_factory=OutputConfig)
+    max_duration_sec: float = 600.0
+
+    @classmethod
+    def from_yaml(cls, path: str | Path = DEFAULT_SEPARATION_CONFIG) -> SeparationConfig:
+        path = Path(path)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"분리 설정이 비어 있음: {path}")
+        return cls.from_dict(raw, source_path=path)
+
+    @classmethod
+    def from_dict(cls, raw: dict, source_path: Path | None = None) -> SeparationConfig:
+        known = {"model_config", "device", "output", "max_duration_sec"}
+        unknown = sorted(set(raw) - known)
+        if unknown:
+            raise ValueError(f"모르는 분리 설정 필드: {unknown}")
+        if not raw.get("model_config"):
+            raise ValueError("분리 설정에 model_config(모델 yaml 경로)가 필요")
+        max_duration = float(raw.get("max_duration_sec", cls.max_duration_sec))
+        if max_duration <= 0:
+            raise ValueError(f"max_duration_sec는 양수: {max_duration}")
+        return cls(
+            model_config=Path(str(raw["model_config"])),
+            device=resolve_device_setting(str(raw.get("device", cls.device))),
+            source_path=source_path,
+            output=OutputConfig.from_dict(raw.get("output")),
+            max_duration_sec=max_duration,
+        )
+
+
+@dataclass
+class TempoConfig:
+    """bpm 추정 설정 (설계 U4·U15). 추정값이 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음."""
+
+    method: str = "beat_this"
+    min_bpm: float = 60.0
+    max_bpm: float = 200.0
+    time_signature: str = "4/4"
+
+    @classmethod
+    def from_dict(cls, raw: dict | None) -> TempoConfig:
+        raw = raw or {}
+        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature"})
+        if unknown:
+            raise ValueError(f"모르는 tempo 필드: {unknown}")
+        method = str(raw.get("method", cls.method)).lower()
+        if method not in TEMPO_METHODS:
+            raise ValueError(f"tempo.method는 {TEMPO_METHODS} 중 하나: {method!r}")
+        min_bpm = float(raw.get("min_bpm", cls.min_bpm))
+        max_bpm = float(raw.get("max_bpm", cls.max_bpm))
+        # 2배·절반 접기가 항상 범위 안에 떨어지려면 상한이 하한의 2배 이상이어야 함
+        if min_bpm <= 0 or max_bpm < 2 * min_bpm:
+            raise ValueError(
+                f"tempo 범위는 0 < min_bpm, max_bpm >= 2 * min_bpm: {min_bpm}, {max_bpm}"
+            )
+        time_signature = str(raw.get("time_signature", cls.time_signature))
+        if not re.fullmatch(r"[1-9][0-9]?/(1|2|4|8|16|32)", time_signature):
+            raise ValueError(f"tempo.time_signature 형식 오류 (예: 4/4): {time_signature!r}")
+        return cls(method=method, min_bpm=min_bpm, max_bpm=max_bpm, time_signature=time_signature)
+
+
+@dataclass
+class TranscriptionConfig(ChartConfig):
+    """`configs/chart/transcription.yaml` 한 파일. 채보 모델은 model_config 경로로만 고름."""
+
+    schema_version: int = 1
+    tempo: TempoConfig = field(default_factory=TempoConfig)
+    max_duration_sec: float = 600.0
+
+    @classmethod
+    def from_yaml(cls, path: str | Path = DEFAULT_TRANSCRIPTION_CONFIG) -> TranscriptionConfig:
+        path = Path(path)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"채보 설정이 비어 있음: {path}")
+        return cls.from_dict(raw, source_path=path)
+
+    @classmethod
+    def from_dict(cls, raw: dict, source_path: Path | None = None) -> TranscriptionConfig:
+        known = {"model_config", "device", "schema_version", "tempo", "max_duration_sec"}
+        unknown = sorted(set(raw) - known)
+        if unknown:
+            raise ValueError(f"모르는 채보 설정 필드: {unknown}")
+        if not raw.get("model_config"):
+            raise ValueError("채보 설정에 model_config(채보 모델 yaml 경로)가 필요")
+        schema_version = int(raw.get("schema_version", cls.schema_version))
+        if schema_version not in SCHEMA_VERSIONS:
+            raise ValueError(f"schema_version은 {SCHEMA_VERSIONS} 중 하나: {schema_version}")
+        max_duration = float(raw.get("max_duration_sec", cls.max_duration_sec))
+        if max_duration <= 0:
+            raise ValueError(f"max_duration_sec는 양수: {max_duration}")
+        return cls(
+            model_config=Path(str(raw["model_config"])),
+            device=resolve_device_setting(str(raw.get("device", cls.device))),
+            source_path=source_path,
+            schema_version=schema_version,
+            tempo=TempoConfig.from_dict(raw.get("tempo")),
+            max_duration_sec=max_duration,
+        )
+
+
+def resolve_device_setting(device: str) -> str:
+    """환경 변수 SSAPLASH_CHART_DEVICE가 있으면 그 값, 없으면 yaml 값."""
+    return os.environ.get(ENV_DEVICE) or device
+
+
+def work_dir_from_env() -> Path | None:
+    """SSAPLASH_WORK_DIR이 있으면 그 경로, 없으면 None."""
+    value = os.environ.get(ENV_WORK_DIR)
+    return Path(value) if value else None

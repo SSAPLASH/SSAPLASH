@@ -1,0 +1,13 @@
+# 도커 이미지에 넣지 않는 것. 데이터·모델·별도 가상환경·실험 결과가 여기 있다.
+data/
+mlruns/
+ext/
+.venv*/
+notebooks/
+docs/
+tests/
+scripts/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/

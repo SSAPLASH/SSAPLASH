@@ -1,0 +1,13 @@
+songId,offsetSamples,mixSnrDb,drumSnrDb,drumLeftInAccomp
+MusicDelta_80sRock,-1,10.6,0.01,0.206
+MusicDelta_Beatles,0,6.08,2.64,0.214
+MusicDelta_Britpop,0,17.15,0.26,0.052
+MusicDelta_Country1,0,20.06,1.07,0.197
+MusicDelta_Disco,0,57.86,0.8,0.341
+MusicDelta_Gospel,1,5.6,1.12,0.183
+MusicDelta_Grunge,0,39.41,0.0,0.539
+MusicDelta_Hendrix,-4,6.84,0.07,0.157
+MusicDelta_Punk,0,77.04,0.81,0.259
+MusicDelta_Reggae,0,42.57,2.42,0.348
+MusicDelta_Rock,0,18.69,2.29,0.13
+MusicDelta_Rockabilly,0,18.25,1.22,0.323

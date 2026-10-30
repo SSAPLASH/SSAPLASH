@@ -1,0 +1,20 @@
+# MDB Drums 중 MUSDB18 train에 없는 11곡. 분리 모델이 학습 때 못 본 곡이라
+# "분리 후 F1 변화"(-107 지표 3)는 이 묶음으로만 잰다. 목록은 mdb.MDB_IN_MUSDB_TRAIN의 여집합.
+name: mdb_drums_unseen
+kind: mdb
+root: data/mdb_drums/MDB Drums
+expected_songs: 11
+sample_rate: 44100
+clip: null
+songs:
+  - MusicDelta_BebopJazz
+  - MusicDelta_CoolJazz
+  - MusicDelta_FreeJazz
+  - MusicDelta_FunkJazz
+  - MusicDelta_FusionJazz
+  - MusicDelta_LatinJazz
+  - MusicDelta_ModalJazz
+  - MusicDelta_Shadows
+  - MusicDelta_SpeedMetal
+  - MusicDelta_SwingJazz
+  - MusicDelta_Zeppelin

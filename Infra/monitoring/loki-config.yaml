@@ -1,0 +1,41 @@
+# Loki 단일 프로세스 설정. 로그는 서버 디스크(loki-data 볼륨)에 저장한다.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# 로그 보관 기간은 7일이다. 서비스 규모가 커지면 조정한다.
+limits_config:
+  retention_period: 168h
+
+# 보관 기간이 지난 로그를 지우는 정리 작업이다. 이 설정이 없으면 보관 기간이 적용되지 않는다.
+compactor:
+  working_directory: /loki/retention
+  retention_enabled: true
+  delete_request_store: filesystem
+  retention_delete_delay: 2h
+
+analytics:
+  reporting_enabled: false

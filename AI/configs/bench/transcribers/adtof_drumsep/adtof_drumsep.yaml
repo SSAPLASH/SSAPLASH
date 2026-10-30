@@ -1,0 +1,33 @@
+# ADTOF + 드럼 킷 분리 (drum2midi 방식을 하네스 안에서 다시 구현). 5가지 → 8패드.
+# 탐 음높이 경계(tom_bands)는 GMD(TD-11 킷) 정답 탐의 기본 주파수(플로어 97·미드 129·하이 160Hz 중앙값)로 맞춘 값
+# (설계 U8). 실제 킷은 음높이가 달라 MDB에서는 틀릴 수 있다. S15P31A307-163에서 MDB 23곡으로 경계를 다시 찾았으나
+# 드럼 세트마다 음높이가 달라(곡별 플로어탐 중앙값 78~203Hz) GMD를 깎지 않고 MDB를 올리는 고정 경계가 없어 그대로 둠.
+# 대신 탐 음높이 구간(window_ms)을 80 → 120ms로 늘려 GMD 탐 F1 0.876 → 0.880, MDB 0.175 → 0.213. 심벌 구간은
+# cymbal_window_ms 80ms 그대로(늘리면 크래시가 조금 떨어짐). 분석: AI/docs/chart-rules/tom-bands-2026-10-26/
+name: adtof_drumsep
+adapter: adtof_drumsep
+velocity: false
+input_sample_rate: 44100
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep.yaml
+rules:
+  window_ms: 120
+  cymbal_window_ms: 80
+  tom_fmin: 50
+  tom_fmax: 400
+  tom_bands: [113, 142]
+  stems:
+    toms: toms
+    crash: crash
+    ride: ride
+license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치) + 미명시 (MDX23C DrumSep 가중치, aufr33·jarredou 공개)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  SMALL_TOM: SMALL_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE
