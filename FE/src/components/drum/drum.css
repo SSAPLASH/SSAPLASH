@@ -1,0 +1,96 @@
+/* 드럼 킷 SVG 스타일. 토큰은 tokens.css의 새 이름만 쓴다 */
+.drum-kit {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+  user-select: none;
+}
+.drum-kit.fit {
+  width: 100%;
+  height: auto;
+}
+
+.drum-pad-label {
+  fill: var(--text-2);
+  font-family: var(--font);
+  font-weight: 400;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.drum-pad-judge {
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 16px;
+  text-anchor: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  /* 그림자(0 1px 4px rgba(0,0,0,.6)) 근사 */
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
+}
+
+.drum-pad.clickable {
+  cursor: pointer;
+}
+
+/* 링 글로우: drop-shadow 2겹(값은 실기기 확인 뒤 조정) */
+.drum-pad-ring {
+  fill: none;
+  pointer-events: none;
+}
+.drum-pad-ring.armed {
+  stroke: var(--brand);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--brand) 50%, transparent))
+    drop-shadow(0 0 8px color-mix(in srgb, var(--brand) 25%, transparent));
+}
+.drum-pad-ring.hit {
+  stroke: var(--brand);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--brand) 90%, transparent))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--brand) 55%, transparent));
+}
+.drum-pad-ring.perfect {
+  stroke: var(--perfect);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--perfect) 90%, transparent))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--perfect) 55%, transparent));
+}
+.drum-pad-ring.good {
+  stroke: var(--good);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--good) 90%, transparent))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--good) 55%, transparent));
+}
+.drum-pad-ring.miss {
+  stroke: var(--miss);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--miss) 90%, transparent))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--miss) 55%, transparent));
+}
+.drum-pad-judge.perfect { fill: var(--perfect); }
+.drum-pad-judge.good { fill: var(--good); }
+.drum-pad-judge.miss { fill: var(--miss); }
+
+.drum-pad-flash {
+  fill: var(--brand);
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+/* 배지(다음 박 번호): 패드 위쪽 가운데 알약 */
+.drum-pad-badge-bg {
+  fill: var(--surface-3);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.drum-pad-badge-bg.highlight {
+  fill: var(--brand);
+  stroke: var(--brand);
+}
+.drum-pad-badge-text {
+  fill: var(--text-1);
+  font-family: var(--font-num);
+  font-weight: 500;
+  font-size: 14px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.drum-pad-badge-text.highlight {
+  fill: var(--brand-on);
+}
