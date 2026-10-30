@@ -24,6 +24,8 @@ export interface PadStat {
   pad: PadId;
   count: number;
   meanDelta: number;
+  /** 이 패드 타격 중 평균과 같은 부호인 비율. 평균이 0이면 0 */
+  sameSignRatio: number;
 }
 
 export interface HandStat {
@@ -106,11 +108,16 @@ export class JudgedWindow {
       if (list) list.push(v.deltaMs);
       else byPad.set(v.pad, [v.deltaMs]);
     }
-    const pads: PadStat[] = [...byPad].map(([pad, ds]) => ({
-      pad,
-      count: ds.length,
-      meanDelta: ds.reduce((s, d) => s + d, 0) / ds.length,
-    }));
+    const pads: PadStat[] = [...byPad].map(([pad, ds]) => {
+      const mean = ds.reduce((s, d) => s + d, 0) / ds.length;
+      const sign = Math.sign(mean);
+      return {
+        pad,
+        count: ds.length,
+        meanDelta: mean,
+        sameSignRatio: sign === 0 ? 0 : ds.filter((d) => Math.sign(d) === sign).length / ds.length,
+      };
+    });
 
     const handSums: [number, number] = [0, 0];
     const handCounts: [number, number] = [0, 0];
