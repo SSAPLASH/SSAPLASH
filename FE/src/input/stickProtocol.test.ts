@@ -18,6 +18,7 @@ import {
   encodeResetPose,
   encodeSetMode,
   encodeSync,
+  encodeRoute,
   padFromCode,
   parsePacket,
 } from './stickProtocol';
@@ -123,6 +124,18 @@ describe('decodePacket 그 외', () => {
     v.setUint32(2, 123456, true);
     v.setUint32(6, 7_000_000, true);
     expect(decodePacket(b, 0)).toMatchObject({ kind: 'syncAck', t0Ms: 123456, t1Us: 7_000_000 });
+  });
+
+  it('LINK 5B: 연결 마스크·동글 fw, 4B는 error short', () => {
+    expect(decodePacket(new Uint8Array([0x07, 0, 0b0011, 2, 1]), 7)).toEqual({
+      kind: 'link',
+      recvTime: 7,
+      flags: 0,
+      linkMask: 0b0011,
+      fwMajor: 2,
+      fwMinor: 1,
+    });
+    expect(decodePacket(new Uint8Array([0x07, 0, 1, 2]), 0)).toMatchObject({ kind: 'error', reason: 'short', type: 7 });
   });
 
   it('BRIDGE_STATS 14B', () => {
@@ -288,6 +301,10 @@ describe('인코더', () => {
   });
   it('GET_PARAMS', () => {
     expect([...encodeGetParams()]).toEqual([0x17]);
+  });
+  it('ROUTE: [0x70][1 << 손][원래 명령]', () => {
+    expect([...encodeRoute(0, encodeSetYawOffset(2))]).toEqual([0x70, 0b01, 0x16, 0xc8, 0x00]);
+    expect([...encodeRoute(1, encodeHaptic(200, 30))]).toEqual([0x70, 0b10, ...encodeHaptic(200, 30)]);
   });
 });
 
