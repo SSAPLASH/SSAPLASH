@@ -44,17 +44,23 @@ describe('StickStatusIndicator', () => {
 });
 
 describe('StickCard', () => {
-  it('끊겼으면 연결 버튼 안내를 보인다', () => {
+  it('끊겼으면 스틱을 켜 달라는 안내를 보인다', () => {
     const html = renderToStaticMarkup(<StickCard hand={1} connected={false} batteryPct={40} />);
     expect(html).toContain('오른손');
     expect(html).toContain('연결 안 됨');
-    expect(html).toContain('스틱의 연결 버튼을 눌러 주세요');
+    expect(html).toContain('스틱 버튼을 눌러 켜 주세요');
     expect(html).not.toContain('<button');
   });
   it('연결되면 안내 없이 배터리를 보인다', () => {
     const html = renderToStaticMarkup(<StickCard hand={0} connected batteryPct={82} />);
     expect(html).toContain('연결됨');
     expect(html).toContain('82%');
-    expect(html).not.toContain('연결 버튼');
+    expect(html).not.toContain('스틱 버튼');
+    expect(html).not.toContain('곧 꺼짐');
+  });
+  it('10% 이하면 빨간 배터리와 "곧 꺼짐"', () => {
+    const html = renderToStaticMarkup(<StickCard hand={0} connected batteryPct={8} />);
+    expect(html).toContain('stick-batt critical');
+    expect(html).toContain('곧 꺼짐');
   });
 });
