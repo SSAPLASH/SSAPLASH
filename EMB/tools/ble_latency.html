@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스틱 지연 측정</title>
+<!--
+  EMB/tools/ble_latency.html - 스틱 지연 측정 + 소리 (BLE / USB 시리얼 / WS 브리지)
+  크롬/엣지에서 파일을 직접 열고 연결 방식을 고른다.
+    BLE 연결      : Web Bluetooth → SSAPLASH-STICK
+    시리얼 연결   : Web Serial 직결 (펌웨어 SERIAL_MODE = SERIAL_BINARY, 0xA5 LEN payload CRC8)
+    WS 연결       : python EMB/tools/ws_bridge.py COMx 실행 후 ws://localhost:8765
+  같은 계산으로 경로별 비교 (BLE − 시리얼 = 순수 BLE 비용)
+  - 왕복(RTT): SYNC를 0.2초마다 보내 SYNC_ACK까지 시간. 편도 ≈ RTT/2
+  - 정지 대비 도착: HIT 도착 시각 − 스틱이 멈춘 시각(패킷 timestamp를 시계 동기화로 변환)
+      음수면 스틱이 멈추기 전에 브라우저에 도착한 것
+  - 정지 → 소리 예상: 위 값 + 오디오 출력 지연(outputLatency)
+  프로토콜: 스틱 통신 프로토콜 v0.7
+-->
+<style>
+  :root { --bg:#16181d; --panel:#1f2229; --line:#2c303a; --text:#e8e6e1; --dim:#9aa0ab; --acc:#6c8cff; --good:#5fc28a; --warn:#e6b85c; --bad:#e0675a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, "Malgun Gothic", sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { margin:0 0 4px; font-size:24px; }
+  .sub { color:var(--dim); margin-bottom:18px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  #state { color:var(--dim); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card .k { color:var(--dim); font-size:13px; }
+  .card .v { font-size:24px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .card .s { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .pads { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:16px; }
+  .pad { background:var(--panel); border:2px solid var(--line); border-radius:12px; padding:16px 8px; text-align:center; transition:background .08s; }
+  .pad b { display:block; font-size:18px; }
+  .pad span { color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
+  .pad.on { background:var(--c); color:#111; }
+  .pad.target { border-color:var(--acc); box-shadow:0 0 0 2px var(--acc) inset; }
+  .calib { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:10px; }
+  .calib b { font-weight:600; }
+  #calibMsg { color:var(--text); }
+  .vol { display:inline-flex; align-items:center; gap:6px; color:var(--dim); font-size:14px; }
+  .vol input[type=range] { width:110px; }
+  #padTable { color:var(--dim); font-size:13px; font-variant-numeric:tabular-nums; }
+  .pad.on span { color:#222; }
+  .cols { display:grid; grid-template-columns:3fr 2fr; gap:12px; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } .pads { grid-template-columns:repeat(2, 1fr); } }
+  pre { background:#111317; border:1px solid var(--line); border-radius:10px; padding:10px 12px; height:300px; overflow:auto; margin:0; font:12.5px/1.45 ui-monospace, Consolas, monospace; white-space:pre; }
+  .h { font-size:13px; color:var(--dim); margin:0 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>스틱 지연 측정</h1>
+  <div class="sub">Feather nRF52840 Sense → BLE / USB 시리얼 / WS 브리지 → Web Audio · 프로토콜 v0.7</div>
+
+  <div class="row">
+    <button class="primary" id="btnConnect">BLE 연결</button>
+    <button class="primary" id="btnSerial">시리얼 연결</button>
+    <button class="primary" id="btnWs">WS 연결</button>
+    <button id="btnDisconnect" disabled>끊기</button>
+    <button id="btnReset" disabled>정면 보정</button>
+    <button id="btnParams" disabled>파라미터 읽기</button>
+    <button id="btnClear">통계 초기화</button>
+    <button id="btnCsv">CSV 저장</button>
+    <label class="vol">음량 <input type="range" id="vol" min="1" max="8" step="0.5" value="4"><span id="volV">×4</span></label>
+    <label class="vol"><input type="checkbox" id="clickMode"> 측정용 클릭</label>
+    <span id="state">연결 안 됨</span>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">왕복 (RTT)</div><div class="v" id="rttMed">-</div><div class="s" id="rttSub">최소 - · p95 -</div></div>
+    <div class="card"><div class="k">편도 추정 (RTT/2)</div><div class="v" id="oneWay">-</div><div class="s" id="syncN">동기화 0회</div></div>
+    <div class="card"><div class="k">정지 대비 도착</div><div class="v" id="latMed">-</div><div class="s" id="latSub">p95 - · 타격 0</div></div>
+    <div class="card"><div class="k">정지 → 소리 예상</div><div class="v" id="soundMed">-</div><div class="s" id="audioLat">오디오 출력 -</div></div>
+    <div class="card"><div class="k">유실 (HIT seq)</div><div class="v" id="lost">0</div><div class="s" id="fw">펌웨어 -</div><div class="s" id="bridge"></div></div>
+  </div>
+
+  <div class="calib">
+    <b>패드 위치</b>
+    <button id="btnCalib" disabled>설정 시작</button>
+    <button id="btnCalibCancel" disabled>취소</button>
+    <button id="btnCalibResend" disabled>저장된 위치 보내기</button>
+    <span id="calibMsg">연결 후 [설정 시작] → 스틱을 정면으로 들고 안내대로 패드마다 2번씩</span>
+    <span id="padTable"></span>
+  </div>
+
+  <div class="pads">
+    <div class="pad" id="p-HIHAT" style="--c:#e6b85c"><b>하이햇</b><span>-</span></div>
+    <div class="pad" id="p-SNARE" style="--c:#f2e8d5"><b>스네어</b><span>-</span></div>
+    <div class="pad" id="p-SMALL_TOM" style="--c:#e0875a"><b>스몰탐</b><span>-</span></div>
+    <div class="pad" id="p-FLOOR_TOM" style="--c:#c5563f"><b>플로어탐</b><span>-</span></div>
+  </div>
+
+  <div class="cols">
+    <div><p class="h">타격 (seq · 패드 · 세기 · 정지 대비 도착 ms)</p><pre id="hits"></pre></div>
+    <div><p class="h">LOG · 상태</p><pre id="log"></pre></div>
+  </div>
+</main>
+
+<script>
+const SVC    = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const NOTIFY = 'a7d50002-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const CTRL   = 'a7d50003-9a3c-4f2e-b1c8-5f0e2d7c0001';
+const PADS = ['CRASH','HIHAT','SNARE','SMALL_TOM','MID_TOM','FLOOR_TOM','RIDE','KICK','HIHAT_PEDAL'];
+
+const $ = (id) => document.getElementById(id);
+let dev = null, ctrl = null, ac = null, syncTimer = null;
+let transport = null, lastTransport = 'ble';             // 'ble' | 'serial' | 'ws'
+let port = null, writer = null, reading = false, ws = null;
+let pending = new Map();          // t0 키(u32) → t0(ms, 소수)
+let syncs = [];                   // {t0, t1us, t2, rtt}
+let hits = [];                    // {seq, pad, vel, lat, recv}
+let lastSeq = {}, lost = 0;       // 역할별 마지막 HIT seq
+/* 스틱 2대: 패킷 [1] flags 비트 0–1 = 역할(0 왼손, 1 오른손). 동글 하나로 두 대가 같이 들어온다 */
+const ROLE_NAME = ['왼손', '오른손', '왼발', '오른발'];
+const ROLE_CH = ['L', 'R', 'l', 'r'];
+let seen = {};
+let bat = {}, batLog = [];       // 역할 → 배터리 %, 30초마다 LOG "BAT 3987mV 82%" 기록                    // 역할 → 마지막으로 스틱 패킷을 받은 시각(ms)
+function activeRoles() { const now = performance.now(); return Object.keys(seen).map(Number).filter((r) => now - seen[r] < 3000).sort(); }
+
+function median(a) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; }
+function pct(a, p) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; }
+const f1 = (x) => Number.isFinite(x) ? x.toFixed(1) : '-';
+function log(s) { const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
+
+/* 시계: 최근 동기화 중 왕복이 가장 짧은 샘플로 offset = 브라우저ms − 센서ms */
+function offset(role) {             // 스틱마다 시계가 따로라 역할별로 구한다
+  const recent = syncs.filter((x) => role === undefined || x.role === role).slice(-40);
+  if (!recent.length) return null;
+  const best = recent.reduce((a, b) => (b.rtt < a.rtt ? b : a));
+  return (best.t0 + best.t2) / 2 - best.t1us / 1000;
+}
+
+/* ---------- 소리 ---------- */
+function noise(t, gain, dur, type, freq, q = 1) {
+  const n = ac.sampleRate * dur, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + dur);
+}
+function tone(t, gain, dur, f0, f1v) {
+  const o = ac.createOscillator(); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1v, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur);
+}
+function play(pad, vel) {
+  if (!ac) return;
+  const t = ac.currentTime, v = 0.25 + 0.75 * vel / 127;
+  /* 측정용 클릭: 녹음에서 시작점이 바로 보이게 짧고 큰 소리 하나 (패드 무관) */
+  if ($('clickMode').checked) { noise(t, 1.0, 0.01, 'highpass', 300); return; }
+  switch (pad) {
+    case 'HIHAT':     noise(t, 0.5 * v, 0.06, 'highpass', 7000); break;
+    case 'SNARE':     noise(t, 0.7 * v, 0.18, 'bandpass', 1800, 0.8); tone(t, 0.5 * v, 0.12, 220, 160); break;
+    case 'SMALL_TOM': tone(t, 0.9 * v, 0.28, 240, 140); break;
+    case 'MID_TOM':   tone(t, 0.95 * v, 0.32, 180, 105); break;
+    case 'FLOOR_TOM': tone(t, 1.0 * v, 0.40, 130, 70); break;
+    case 'CRASH': case 'RIDE': noise(t, 0.4 * v, 0.6, 'highpass', 5000); break;
+    default:          noise(t, 0.25 * v, 0.03, 'highpass', 2000);       // 판정 없음: 짧은 클릭
+  }
+}
+function audioOut() { return ac ? ((ac.outputLatency || 0) + (ac.baseLatency || 0)) * 1000 : NaN; }
+
+/* ---------- 수신 ---------- */
+function onPacket(ev) { handle(ev.target.value, performance.now()); }   // BLE notify
+function handle(dv, recv) {
+  const b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  if (!b.length) return;
+  const role = b.length > 1 ? (b[1] & 3) : 0;
+  if (b[0] !== 0x7f && b[0] !== 0x7e) seen[role] = recv;     // 동글 LOG·브리지 통계는 스틱이 아님
+  switch (b[0]) {
+    case 0x04: {                                   // SYNC_ACK
+      const t0k = dv.getUint32(2, true), t1us = dv.getUint32(6, true);
+      const t0 = pending.get(t0k);                 // 두 스틱이 같은 SYNC에 각자 답하므로 지우지 않는다
+      if (t0 === undefined) return;
+      syncs.push({ t0, t1us, t2: recv, rtt: recv - t0, role });
+      if (syncs.length > 2000) syncs.shift();
+      break;
+    }
+    case 0x01: {                                   // HIT
+      const seq = b[2], ts = dv.getUint32(3, true), pad = PADS[b[7]] || '-';
+      const el = dv.getInt16(9, true) / 100, az = dv.getInt16(11, true) / 100, vel = b[15];
+      if (lastSeq[role] !== undefined) { const gap = (seq - lastSeq[role] - 1 + 256) & 0xff; if (gap < 128) lost += gap; }
+      lastSeq[role] = seq;
+      let shown = pad;                               // 설정 중엔 지금 치라고 한 패드 소리·불
+      const near = pad === '-' ? nearestInfo(el, az, role) : '';
+      if (anchor && anchor.left.has(role)) { shown = 'SNARE'; anchorHit(el, az, role); }
+      else if (calib && calib.step < CALIB_ORDER.length) { shown = CALIB_ORDER[calib.step].name; calibHit(el, az, role); }
+      play(shown, vel);
+      const off = offset(role);
+      const lat = off === null ? NaN : recv - (ts / 1000 + off);
+      hits.push({ seq, pad, vel, el, az, lat, recv, role });
+      $('hits').textContent += `${ROLE_CH[role]} ${String(seq).padStart(3)}  ${pad.padEnd(9)} ${String(vel).padStart(3)}  ${f1(lat).padStart(6)} ms   el ${el.toFixed(0)} az ${az.toFixed(0)}${near}\n`;
+      $('hits').scrollTop = $('hits').scrollHeight;
+      const tile = $('p-' + shown);
+      if (tile) {
+        tile.querySelector('span').textContent = `세기 ${vel} · ${f1(lat)}ms`;
+        tile.classList.add('on'); setTimeout(() => tile.classList.remove('on'), 90);
+      }
+      break;
+    }
+    case 0x03: {                                   // STATUS: [2] 배터리 % (0xFF 모름)
+      if (b[2] !== 0xff) bat[role] = b[2];
+      const bs = Object.keys(bat).sort().map((r) => `${ROLE_NAME[r]} ${bat[r]}%`).join(' · ');
+      $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}` + (bs ? ` · 배터리 ${bs}` : '');
+      break;
+    }
+    case 0x06: {
+      const pid = b[2], val = dv.getInt16(3, true);
+      log(`PARAM 0x${pid.toString(16).padStart(2, '0')} = ${val}`);
+      if (pid === 0x20) {
+        padAck[role] = val;
+        $('calibMsg').textContent = Object.keys(padAck).sort().map((r) => `${ROLE_NAME[r]} 패드 ${padAck[r]}개`).join(' · ') + ' 적용됨';
+      }
+      break;
+    }
+    case 0x7f: {
+      const txt = String.fromCharCode(...b.slice(2));
+      const m = /^BAT (\d+)mV/.exec(txt);
+      if (m) batLog.push({ recv, role, mv: Number(m[1]) });
+      log(txt.startsWith('DONGLE') ? 'LOG ' + txt : `LOG ${ROLE_CH[role]} ${txt}`);
+      break;
+    }
+    case 0x7e: $('bridge').textContent = `브리지 ok ${dv.getUint32(2, true)} · CRC ${dv.getUint32(6, true)}`; break;
+  }
+}
+
+/* ---------- 송신 ---------- */
+function crc8(a) {
+  let c = 0;
+  for (const x of a) { c ^= x; for (let i = 0; i < 8; i++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff; }
+  return c;
+}
+/* role을 주면 그 스틱에만. 스틱이 2대 이상 들어올 때(= 동글)만 동글 전용 ROUTE(0x70) [0x70, 역할 비트마스크, 명령...]로 감싼다.
+ * 1대일 땐 감싸지 않아서 BLE·WS·USB 직결도 그대로 된다 */
+const CMD_ROUTE = 0x70;
+const routed = (role) => role !== undefined && activeRoles().length > 1;
+async function write(bytes, role) {
+  if (routed(role)) bytes = [CMD_ROUTE, 1 << role, ...bytes];
+  const p = new Uint8Array(bytes);
+  if (transport === 'ble' && ctrl) await ctrl.writeValueWithoutResponse(p);
+  else if (transport === 'serial' && writer) await writer.write(new Uint8Array([0xa5, p.length, ...p, crc8(p)]));
+  else if (transport === 'ws' && ws && ws.readyState === 1) ws.send(p);
+}
+async function sendSync() {
+  const t0 = performance.now(), k = Math.floor(t0) >>> 0;
+  pending.set(k, t0);
+  if (pending.size > 50) pending.delete(pending.keys().next().value);
+  try { await write([0x10, k & 0xff, (k >> 8) & 0xff, (k >> 16) & 0xff, (k >>> 24) & 0xff]); } catch (e) { /* 연결 끊김 */ }
+}
+
+/* ---------- 화면 ---------- */
+function render() {
+  const rtt = syncs.slice(-300).map((s) => s.rtt);
+  $('rttMed').textContent = rtt.length ? f1(median(rtt)) + ' ms' : '-';
+  $('rttSub').textContent = `최소 ${f1(Math.min(...rtt))} · p95 ${f1(pct(rtt, 0.95))}`;
+  $('oneWay').textContent = rtt.length ? f1(median(rtt) / 2) + ' ms' : '-';
+  $('syncN').textContent = `동기화 ${syncs.length}회`;
+  const lat = hits.map((h) => h.lat).filter(Number.isFinite);
+  $('latMed').textContent = lat.length ? f1(median(lat)) + ' ms' : '-';
+  $('latSub').textContent = `p95 ${f1(pct(lat, 0.95))} · 타격 ${hits.length}`;
+  const out = audioOut();
+  $('audioLat').textContent = `오디오 출력 ${f1(out)} ms`;
+  $('soundMed').textContent = lat.length && Number.isFinite(out) ? f1(median(lat) + out) + ' ms' : '-';
+  $('lost').textContent = lost;
+}
+
+/* ---------- 패드 위치 설정 ----------
+ * 정면 보정(RESET_POSE) → 패드마다 2번 치기 → HIT의 고도·방위각을 방향 벡터로 평균
+ * → 반경 = 가장 가까운 패드까지 각도 × 0.6 (15~35°, 펌웨어 pad_table_autoradius와 같음)
+ * → SET_PAD_TABLE(0x15)로 전송, PARAM_ACK 0x20으로 적용 확인. 펌웨어 수정 없음 */
+const CALIB_ORDER = [
+  { id: 1, name: 'HIHAT', label: '하이햇' },
+  { id: 3, name: 'SMALL_TOM', label: '스몰탐' },
+  { id: 2, name: 'SNARE', label: '스네어' },
+  { id: 5, name: 'FLOOR_TOM', label: '플로어탐' },
+];
+const CALIB_HITS = 2;
+let calib = null;                 // { step, acc: [{x,y,z,n}] }
+const D2R = Math.PI / 180;
+const vec = (el, az) => [Math.cos(el * D2R) * Math.cos(az * D2R), Math.cos(el * D2R) * Math.sin(az * D2R), Math.sin(el * D2R)];
+const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) / D2R;
+
+function calibShow() {
+  for (const c of CALIB_ORDER) { const t = $('p-' + c.name); if (t) t.classList.remove('target'); }
+  if (!calib) return;
+  const c = CALIB_ORDER[calib.step], acc = calib.acc[calib.step];
+  $('p-' + c.name).classList.add('target');
+  const cnt = calib.roles.map((r) => `${ROLE_NAME[r]} ${(acc[r] && acc[r].n) || 0}/${CALIB_HITS}`).join(' · ');
+  $('calibMsg').textContent = `${c.label}를 ${calib.roles.length > 1 ? '양손으로 ' : ''}${CALIB_HITS}번씩 치세요 (${cnt || `0/${CALIB_HITS}`})`;
+}
+async function calibStart() {
+  anchor = null;
+  calib = { step: 0, roles: activeRoles(), acc: CALIB_ORDER.map(() => ({})) };   // acc[패드][역할] = {x,y,z,n}
+  await write([0x13]);                                   // RESET_POSE: 연결된 스틱 모두, 지금 방향 = 방위각 0
+  $('btnCalibCancel').disabled = false;
+  calibShow();
+}
+function calibCancel() { calib = null; calibShow(); $('btnCalibCancel').disabled = true; $('calibMsg').textContent = '취소됨'; }
+/* 설정 중인 HIT. 지금 패드를 모든 스틱이 CALIB_HITS번씩 채우면 다음 패드로 */
+function calibHit(el, az, role) {
+  if (!calib || calib.step >= CALIB_ORDER.length) return false;
+  if (!calib.roles.includes(role)) { calib.roles.push(role); calib.roles.sort(); }
+  const acc = calib.acc[calib.step], a = acc[role] || (acc[role] = { x: 0, y: 0, z: 0, n: 0 });
+  if (a.n < CALIB_HITS) { const v = vec(el, az); a.x += v[0]; a.y += v[1]; a.z += v[2]; a.n++; }
+  if (calib.roles.every((r) => acc[r] && acc[r].n >= CALIB_HITS)) {
+    calib.step++;
+    if (calib.step >= CALIB_ORDER.length) { calibFinish(); return true; }
+  }
+  calibShow();
+  return true;
+}
+function padsFrom(accs) {                                // 패드별 방향 벡터 평균 → 고도·방위, 반경 = 가장 가까운 패드 × 0.6
+  const pads = CALIB_ORDER.map((c, i) => {
+    const a = accs[i], n = Math.hypot(a.x, a.y, a.z);
+    const el = Math.asin(a.z / n) / D2R, az = Math.atan2(a.y, a.x) / D2R;
+    return { id: c.id, name: c.name, label: c.label, el, az, v: vec(el, az) };
+  });
+  for (const p of pads) {
+    const near = Math.min(...pads.filter((q) => q !== p).map((q) => angle(p.v, q.v)));
+    p.r = Math.max(15, Math.min(35, near * 0.6));
+  }
+  return pads.map(({ v, ...p }) => p);
+}
+async function calibFinish() {
+  const byRole = {};
+  for (const r of calib.roles) byRole[r] = padsFrom(calib.acc.map((acc) => acc[r]));
+  calib = null; calibShow(); $('btnCalibCancel').disabled = true;
+  const old = storedPads() || {};
+  try { localStorage.setItem('stickPads', JSON.stringify({ ...old, ...byRole })); } catch (e) { /* 저장 안 돼도 진행 */ }
+  padAck = {};
+  for (const r of Object.keys(byRole)) await sendPads(byRole[r], Number(r));
+}
+async function sendPads(pads, role) {
+  curPads[role] = pads;
+  const entry = (p) => {
+    const e = new DataView(new ArrayBuffer(6));
+    e.setUint8(0, p.id); e.setInt16(1, Math.round(p.el * 100), true); e.setInt16(3, Math.round(p.az * 100), true);
+    e.setUint8(5, Math.round(p.r * 2));                  // 반경 0.5° 단위
+    return [...new Uint8Array(e.buffer)];
+  };
+  const per = routed(role) ? 2 : 3;                      // 감싸면 2바이트 늘어서 패킷당 2개 (최대 20바이트)
+  for (let i = 0; i < pads.length; i += per) {           // 첫 패킷은 지우기 비트
+    const part = pads.slice(i, i + per);
+    await write([0x15, (i === 0 ? 0x80 : 0) | part.length, ...part.flatMap(entry)], role);
+  }
+  padTxt[role] = `${ROLE_NAME[role]}: ` + pads.map((p) => `${p.label} ${p.el.toFixed(0)}°/${p.az.toFixed(0)}° r${p.r.toFixed(0)}`).join(' · ');
+  $('padTable').textContent = Object.keys(padTxt).sort().map((r) => padTxt[r]).join('  |  ');
+  $('calibMsg').textContent = `패드 전송, 적용 확인 기다리는 중...`;
+  log(`SET_PAD_TABLE ${ROLE_NAME[role]} ` + pads.map((p) => `${p.name}(${p.el.toFixed(1)}, ${p.az.toFixed(1)}, r${p.r.toFixed(1)})`).join(' '));
+}
+/* 저장된 위치 다시 쓰기: 스틱엔 지자기 센서가 없어서 방위각 0이 켤 때마다 달라진다.
+ * 스틱마다 스네어를 한 번 쳐서 그 방위각 차이만큼 그 스틱의 표를 돌려서 보낸다 (고도는 중력 기준이라 그대로) */
+let anchor = null, curPads = {}, padAck = {}, padTxt = {};
+const wrap180 = (x) => ((x % 360) + 540) % 360 - 180;
+function anchorShow() {
+  const t = $('p-SNARE'); if (t) t.classList.toggle('target', !!anchor);
+  if (anchor) $('calibMsg').textContent = `기준 맞추기: 스네어를 한 번씩 치세요 (남은 스틱: ${[...anchor.left].map((r) => ROLE_NAME[r]).join(', ')})`;
+}
+function anchorHit(el, az, role) {
+  anchor.left.delete(role);
+  const p = anchor.pads[role];
+  const s = p.find((q) => q.id === 2) || p[0];
+  const d = wrap180(az - s.az);
+  log(`기준 맞춤 ${ROLE_NAME[role]}: 방위각 ${d >= 0 ? '+' : ''}${d.toFixed(1)}° 이동 (스네어 고도 차 ${(el - s.el).toFixed(1)}°)`);
+  if (!anchor.left.size) anchor = null;
+  anchorShow();
+  sendPads(p.map((q) => ({ ...q, az: wrap180(q.az + d) })), role);
+}
+function nearestInfo(el, az, role) {
+  const pads = curPads[role];
+  if (!pads) return '';
+  const v = vec(el, az);
+  let best = null, d = 1e9;
+  for (const q of pads) { const a = angle(v, vec(q.el, q.az)); if (a < d) { d = a; best = q; } }
+  return best ? `   <- ${best.label}까지 ${d.toFixed(0)}° (범위 ${best.r.toFixed(0)}°)` : '';
+}
+/* 저장 형식 {역할: 패드표}. 예전(스틱 1대) 배열은 오른손 표로 읽는다 */
+function storedPads() {
+  try {
+    const v = JSON.parse(localStorage.getItem('stickPads') || 'null');
+    return Array.isArray(v) ? { 1: v } : v;
+  } catch (e) { return null; }
+}
+
+const CONN_BTNS = ['btnConnect', 'btnSerial', 'btnWs'];
+function onConnected(kind, label) {
+  transport = kind; lastTransport = kind;
+  $('state').textContent = `연결됨 · ${label}`;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib']) $(b).disabled = false;
+  for (const b of CONN_BTNS) $(b).disabled = true;
+  $('btnCalibResend').disabled = !storedPads();
+  syncs = []; pending.clear(); seen = {}; lastSeq = {}; curPads = {}; padAck = {}; padTxt = {};
+  syncTimer = setInterval(sendSync, 200);
+  log(`연결됨 (${label})`);
+}
+function onDisconnected() {
+  $('state').textContent = '끊김'; clearInterval(syncTimer);
+  ctrl = null; writer = null; ws = null; reading = false; transport = null;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib', 'btnCalibCancel', 'btnCalibResend']) $(b).disabled = true;
+  for (const b of CONN_BTNS) $(b).disabled = false;
+  calib = null; anchor = null; calibShow();
+}
+/* 마스터 음량: 컴프레서는 미리보기 지연이 있어 측정을 흐리므로 쓰지 않는다 (커지면 찌그러지는 건 감수) */
+let master = null;
+async function audioStart() {
+  if (!ac) {
+    ac = new AudioContext({ latencyHint: 'interactive' });
+    master = ac.createGain(); master.gain.value = Number($('vol').value); master.connect(ac.destination);
+  }
+  await ac.resume();
+}
+$('vol').oninput = () => { $('volV').textContent = '×' + $('vol').value; if (master) master.gain.value = Number($('vol').value); };
+
+/* 시리얼: 0xA5 LEN payload CRC8 프레임 해제 (청크 도착 시각을 그 안 패킷의 수신 시각으로) */
+async function serialLoop(reader) {
+  let buf = [];
+  while (reading) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const recv = performance.now();
+    for (const x of value) buf.push(x);
+    for (;;) {
+      const i = buf.indexOf(0xa5);
+      if (i < 0) { buf = []; break; }
+      if (i > 0) buf.splice(0, i);
+      if (buf.length < 2) break;
+      const n = buf[1];
+      if (n === 0 || n > 20) { buf.shift(); continue; }
+      if (buf.length < n + 3) break;
+      const p = new Uint8Array(buf.slice(2, 2 + n));
+      if (crc8(p) === buf[2 + n]) { handle(new DataView(p.buffer), recv); buf.splice(0, n + 3); }
+      else buf.shift();
+    }
+  }
+  reader.releaseLock();
+}
+$('btnSerial').onclick = async () => {
+  if (!navigator.serial) { alert('Web Serial을 지원하지 않는 브라우저입니다. 크롬이나 엣지를 쓰세요.'); return; }
+  try {
+    await audioStart();
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 921600 });            // USB CDC라 속도 값은 의미 없음
+    await port.setSignals({ dataTerminalReady: true });  // 펌웨어가 PC 연결을 알아채게
+    writer = port.writable.getWriter();
+    reading = true;
+    serialLoop(port.readable.getReader()).catch(() => {}).finally(onDisconnected);
+    onConnected('serial', 'USB 시리얼');
+  } catch (e) { $('state').textContent = '시리얼 연결 실패: ' + e.message; }
+};
+$('btnWs').onclick = async () => {
+  try {
+    await audioStart();
+    ws = new WebSocket('ws://localhost:8765');
+    ws.binaryType = 'arraybuffer';
+    let opened = false;
+    $('state').textContent = 'WS 연결 중...';
+    ws.onopen = () => { opened = true; onConnected('ws', 'WS 브리지'); };
+    ws.onmessage = (m) => { if (m.data instanceof ArrayBuffer) handle(new DataView(m.data), performance.now()); };
+    ws.onclose = () => {                                   // 연결 실패도 onclose로 끝나서 여기서 안내를 남긴다
+      onDisconnected();
+      if (!opened) { $('state').textContent = 'WS 연결 실패: ws_bridge.py가 켜져 있는지 확인'; log('WS 연결 실패 (ws://localhost:8765 응답 없음)'); }
+    };
+  } catch (e) { $('state').textContent = 'WS 연결 실패: ' + e.message; }
+};
+
+$('btnConnect').onclick = async () => {
+  if (!navigator.bluetooth) { alert('Web Bluetooth를 지원하지 않는 브라우저입니다. 크롬이나 엣지를 쓰세요.'); return; }
+  try {
+    await audioStart();
+    $('state').textContent = '장치 선택...';
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+    dev.addEventListener('gattserverdisconnected', onDisconnected);
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    const nch = await svc.getCharacteristic(NOTIFY);
+    ctrl = await svc.getCharacteristic(CTRL);
+    nch.addEventListener('characteristicvaluechanged', onPacket);
+    await nch.startNotifications();
+    onConnected('ble', `BLE ${dev.name || ''}`);
+  } catch (e) {
+    $('state').textContent = '연결 실패: ' + e.message;
+  }
+};
+$('btnDisconnect').onclick = async () => {
+  if (transport === 'ble' && dev) dev.gatt.disconnect();
+  else if (transport === 'ws' && ws) ws.close();
+  else if (transport === 'serial' && port) {
+    reading = false;
+    try { writer.releaseLock(); } catch (e) {}
+    try { await port.readable.cancel(); } catch (e) {}
+    try { await port.close(); } catch (e) {}
+    onDisconnected();
+  }
+};
+$('btnReset').onclick = () => write([0x13]);
+$('btnCalib').onclick = calibStart;
+$('btnCalibCancel').onclick = calibCancel;
+$('btnCalibResend').onclick = async () => {
+  const p = storedPads();
+  if (!p) return;
+  calib = null; calibShow();
+  const act = activeRoles();
+  let roles = act.filter((r) => p[r]);
+  if (!roles.length && act.length === 1 && Object.keys(p).length) { p[act[0]] = p[Object.keys(p)[0]]; roles = act; }  // 표가 없는 손 1대면 있는 표로
+  if (!roles.length) { $('calibMsg').textContent = '연결된 스틱의 저장된 위치가 없음. [설정 시작]부터'; return; }
+  padAck = {};
+  anchor = { pads: p, left: new Set(roles) };
+  anchorShow();
+};
+$('btnParams').onclick = () => write([0x17]);
+$('btnClear').onclick = () => { syncs = []; hits = []; lost = 0; lastSeq = {}; batLog = []; $('hits').textContent = ''; };
+$('btnCsv').onclick = () => {
+  let s = `# transport,${lastTransport}\nkind,seq,pad,vel,el,az,lat_ms,rtt_ms,recv_ms,role,bat_mv\n`;
+  for (const h of hits) s += `hit,${h.seq},${h.pad},${h.vel},${h.el},${h.az},${h.lat.toFixed(2)},,${h.recv.toFixed(2)},${h.role}\n`;
+  for (const x of syncs) s += `sync,,,,,,,${x.rtt.toFixed(2)},${x.t2.toFixed(2)},${x.role}\n`;
+  for (const x of batLog) s += `bat,,,,,,,,${x.recv.toFixed(2)},${x.role},${x.mv}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([s], { type: 'text/csv' }));
+  a.download = `${lastTransport}_latency_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`;
+  a.click();
+};
+setInterval(render, 250);
+</script>
+</body>
+</html>
