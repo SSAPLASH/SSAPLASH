@@ -41,6 +41,13 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
     private S3Presigner signer(Bucket b) { return b == Bucket.AUDIO ? audioSigner : accompanimentSigner; }
     private String bucket(Bucket b) { return switch (b) { case AUDIO -> audioBucket; case ACCOMPANIMENT -> accompanimentBucket; case SHEET -> sheetBucket; }; }
     private void available(Bucket b) { if (client(b) == null || (b != Bucket.SHEET && signer(b) == null)) throw unavailable(); }
+    private void nonVersionedAccompaniment(Bucket b) {
+        if (b != Bucket.ACCOMPANIMENT) return;
+        try {
+            var state = accompaniment.getBucketVersioning(GetBucketVersioningRequest.builder().bucket(accompanimentBucket).build()).statusAsString();
+            if (state != null && !state.isBlank()) throw unavailable();
+        } catch (RuntimeException e) { throw unavailable(); }
+    }
     public Signed signGet(Bucket b, String key) {
         if (b == Bucket.SHEET) throw unavailable();
         available(b);
@@ -79,6 +86,7 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
     }
     public void promote(Verified file, Bucket b, String key) {
         available(b);
+        nonVersionedAccompaniment(b);
         boolean existed = false;
         try {
             client(b).putObject(PutObjectRequest.builder().bucket(bucket(b)).key(key).contentType("audio/flac").ifNoneMatch("*").build(), RequestBody.fromFile(file.path()));
@@ -96,6 +104,7 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
     }
     void putAccompaniment(String key,Path file,long size,String contentType) {
         available(Bucket.ACCOMPANIMENT);
+        nonVersionedAccompaniment(Bucket.ACCOMPANIMENT);
         try { accompaniment.putObject(PutObjectRequest.builder().bucket(accompanimentBucket).key(key).contentType(contentType).contentLength(size).ifNoneMatch("*").build(),RequestBody.fromFile(file)); }
         catch(RuntimeException ex) { throw unavailable(); }
     }
@@ -106,12 +115,14 @@ final class S3WorkerStore implements WorkerStore, AutoCloseable {
     }
     public boolean exists(Bucket b, String key) {
         available(b);
+        nonVersionedAccompaniment(b);
         try { client(b).headObject(r -> r.bucket(bucket(b)).key(key)); return true; }
         catch (S3Exception e) { if (e.statusCode() == 404) return false; throw unavailable(); }
         catch (RuntimeException e) { throw unavailable(); }
     }
     public void delete(Bucket b, String key) {
         available(b);
+        nonVersionedAccompaniment(b);
         try { client(b).deleteObject(r -> r.bucket(bucket(b)).key(key)); }
         catch (RuntimeException e) { throw unavailable(); }
     }
