@@ -126,11 +126,17 @@ describe('격자 시각 함수', () => {
     expect(stepIndexOf(500 / 3, 0, 125)).toEqual({ idx: 1, offGrid: true });
   });
 
-  it('stepIndexOf: 원점을 뺀 뒤 양자화하고 원점 앞은 0칸 offGrid', () => {
+  it('stepIndexOf: 원점을 뺀 뒤 양자화하고 원점 앞은 0칸에 모은다', () => {
     expect(stepIndexOf(1250, 1250, 125)).toEqual({ idx: 0, offGrid: false });
     expect(stepIndexOf(1250 + 2000, 1250, 125)).toEqual({ idx: 16, offGrid: false });
     expect(stepIndexOf(1200, 1250, 125)).toEqual({ idx: 0, offGrid: true });
-    expect(stepIndexOf(1250 - 10, 1250, 125)).toEqual({ idx: 0, offGrid: true });
+    expect(stepIndexOf(1250 - 125, 1250, 125)).toEqual({ idx: 0, offGrid: true });
+  });
+
+  it('stepIndexOf: 원점보다 stepMs/4 안에서 앞선 노트는 1박 타격(격자 위)', () => {
+    expect(stepIndexOf(1250 - 10, 1250, 125)).toEqual({ idx: 0, offGrid: false });
+    expect(stepIndexOf(1250 - 31, 1250, 125)).toEqual({ idx: 0, offGrid: false });
+    expect(stepIndexOf(1250 - 32, 1250, 125)).toEqual({ idx: 0, offGrid: true });
   });
 
   it('barCountOf: offsetMs를 뺀 길이로 세고 마지막 노트 마디까지 포함한다', () => {
