@@ -115,7 +115,7 @@ export class JudgedWindow {
     const handSums: [number, number] = [0, 0];
     const handCounts: [number, number] = [0, 0];
     for (const v of this.buf.slice(-handSize)) {
-      if (!isValid(v) || v.stickId === null || v.velocity === null || !Number.isFinite(v.velocity)) continue;
+      if (!isValid(v) || (v.stickId !== 0 && v.stickId !== 1) || v.velocity === null || !Number.isFinite(v.velocity)) continue;
       handSums[v.stickId] += v.velocity;
       handCounts[v.stickId] += 1;
     }

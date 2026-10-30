@@ -77,7 +77,7 @@ describe('LIVE_LATE / LIVE_EARLY', () => {
 });
 
 describe('LIVE_PAD_LATE / LIVE_PAD_EARLY', () => {
-  it('한 패드만 전체보다 27ms 이상 늦으면 그 패드 키로 뜬다', () => {
+  it('한 패드가 나머지 패드보다 27ms 이상 늦으면 그 패드 키로 뜬다', () => {
     const r = evaluateRules(metrics({ meanDelta: 5, pads: [{ pad: 'SNARE', count: 4, meanDelta: 40 }] }), th);
     const e = find(r, 'LIVE_PAD_LATE:SNARE');
     expect(e.trigger).toBe(true);
@@ -87,8 +87,14 @@ describe('LIVE_PAD_LATE / LIVE_PAD_EARLY', () => {
     expect(find(r, 'LIVE_PAD_EARLY:SNARE').trigger).toBe(false);
   });
 
-  it('차이가 27ms 미만이면 뜨지 않는다', () => {
-    const r = evaluateRules(metrics({ meanDelta: 5, pads: [{ pad: 'SNARE', count: 5, meanDelta: 30 }] }), th);
+  it('나머지와의 차이가 27ms 미만이면 뜨지 않는다', () => {
+    // 나머지 평균 = (12×5 − 5×15) ÷ 7 ≈ -2.1, 차이 ≈ 17
+    const r = evaluateRules(metrics({ meanDelta: 5, pads: [{ pad: 'SNARE', count: 5, meanDelta: 15 }] }), th);
+    expect(find(r, 'LIVE_PAD_LATE:SNARE').trigger).toBe(false);
+  });
+
+  it('나머지 패드 표본이 4개 미만이면 비교하지 않는다 (창 대부분이 그 패드)', () => {
+    const r = evaluateRules(metrics({ validCount: 8, meanDelta: 40, pads: [{ pad: 'SNARE', count: 5, meanDelta: 60 }] }), th);
     expect(find(r, 'LIVE_PAD_LATE:SNARE').trigger).toBe(false);
   });
 
@@ -110,7 +116,8 @@ describe('LIVE_PAD_LATE / LIVE_PAD_EARLY', () => {
   });
 
   it('차이가 15ms 미만으로 줄면 거둔다', () => {
-    const r = evaluateRules(metrics({ meanDelta: 20, pads: [{ pad: 'SNARE', count: 5, meanDelta: 30 }] }), th);
+    // 나머지 평균 = (12×20 − 5×25) ÷ 7 ≈ 16.4, 차이 ≈ 8.6
+    const r = evaluateRules(metrics({ meanDelta: 20, pads: [{ pad: 'SNARE', count: 5, meanDelta: 25 }] }), th);
     expect(find(r, 'LIVE_PAD_LATE:SNARE').release).toBe(true);
     const still = evaluateRules(metrics({ meanDelta: 5, pads: [{ pad: 'SNARE', count: 5, meanDelta: 30 }] }), th);
     expect(find(still, 'LIVE_PAD_LATE:SNARE').release).toBe(false);
