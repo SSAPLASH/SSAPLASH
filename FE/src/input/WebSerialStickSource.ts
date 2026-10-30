@@ -1,13 +1,22 @@
 // Web Serial 스틱 소스. 스틱(또는 수신 동글)을 USB로 직결해 921600 8N1로 받는다.
 // 프레이밍은 serialFraming(SOF·LEN·CRC8), payload는 stickProtocol 패킷이다.
 // 동글 하나에 두 스틱이 붙으면 포트는 하나지만 스틱마다 시계가 달라, 시계 동기화는 손별로 한다(flags role).
+// 한 손에만 보낼 명령은 동글이 확인된 뒤(LINK 수신)부터 ROUTE로 감싼다 — 예전 동글·스틱 직결은 ROUTE를 모른다.
 // 사용자 제스처 안에서 connect()를 불러야 포트 선택 창이 열린다.
 import type { StickEvent, StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { FrameDecoder, frame } from './serialFraming';
 import { packetTap } from './packetTap';
-import { encodeHaptic, encodeResetPose, encodeSetMode, encodeSync, parsePacket } from './stickProtocol';
+import {
+  encodeHaptic,
+  encodeResetPose,
+  encodeRoute,
+  encodeSetMode,
+  encodeSync,
+  PacketType,
+  parsePacket,
+} from './stickProtocol';
 import type { SourceDescriptor } from './SourceDescriptor';
 
 // @types/w3c-web-serial이 없어 쓰는 멤버만 최소 선언한다
@@ -44,6 +53,8 @@ export class WebSerialStickSource extends BaseInputSource {
   /** 손별 시계·SYNC 대기 목록 (index = StickId) */
   private clocks: [ClockSync, ClockSync] = [new ClockSync(), new ClockSync()];
   private pending: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
+  /** LINK를 받아 동글 아래 연결임이 확인됐는지. 확인돼야 ROUTE를 쓴다 */
+  private dongle = false;
   private syncTimer: number | null = null;
   private connectCount = 0;
   /** 쓰기를 순서대로 직렬화한다 */
@@ -91,6 +102,7 @@ export class WebSerialStickSource extends BaseInputSource {
 
   private handlePayload(payload: Uint8Array, recvTime: number): void {
     packetTap.publish({ dir: 'in', transport: 'serial', stickId: null, bytes: payload, recvTime });
+    if (payload[0] === PacketType.LINK) this.dongle = true;
     const p = parsePacket(payload, recvTime);
     if (!p) return;
     if (p.kind === 'syncAck') this.addSyncSample(p.stickId, p.t0, p.t1, recvTime);
@@ -137,6 +149,7 @@ export class WebSerialStickSource extends BaseInputSource {
     this.writer = null;
     this.reader = null;
     this.resetClocks();
+    this.dongle = false;
     this.decoder.reset();
     getSerial()?.removeEventListener('disconnect', this.onPortDisconnect);
     try {
@@ -157,6 +170,7 @@ export class WebSerialStickSource extends BaseInputSource {
     this.port = port;
     this.decoder.reset();
     this.resetClocks();
+    this.dongle = false;
     this.connectCount++;
     const reader = port.readable.getReader();
     this.reader = reader;
@@ -217,11 +231,14 @@ export class WebSerialStickSource extends BaseInputSource {
     this.closing = false;
   }
 
-  /** payload를 프레이밍해 쓰고, 성공하면 탭에 송신 기록을 남긴다 */
-  sendCommand(bytes: Uint8Array): void {
+  /**
+   * payload를 프레이밍해 쓰고, 성공하면 탭에 송신 기록을 남긴다.
+   * stickId가 있고 동글이 확인됐으면 ROUTE로 감싸 그 손에만 보낸다. 없으면 붙은 스틱 모두에 간다.
+   */
+  sendCommand(bytes: Uint8Array, stickId?: StickId): void {
     const writer = this.writer;
     if (!writer) return;
-    const payload = new Uint8Array(bytes);
+    const payload = stickId !== undefined && this.dongle ? encodeRoute(stickId, bytes) : new Uint8Array(bytes);
     let framed: Uint8Array;
     try {
       framed = frame(payload);
@@ -246,9 +263,8 @@ export class WebSerialStickSource extends BaseInputSource {
     this.sendCommand(encodeResetPose());
   }
 
-  /** 직결은 포트 하나라 stickId를 쓰지 않는다 */
-  haptic(_stickId: StickId, strength: number, durationMs: number): void {
-    this.sendCommand(encodeHaptic(strength, durationMs));
+  haptic(stickId: StickId, strength: number, durationMs: number): void {
+    this.sendCommand(encodeHaptic(strength, durationMs), stickId);
   }
 
   /** 손을 안 주면 먼저 맞춰진 쪽(왼손 우선)을 돌려준다 */
