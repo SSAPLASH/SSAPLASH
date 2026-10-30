@@ -76,11 +76,16 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     text: '계속 조금 빨라요. 박을 더 기다려 보세요.',
   });
 
-  // 특정 패드만 늦음·빠름. 창 전체 평균과 비교하되, 그 패드가 실제로 그 방향이어야 한다
-  // (전체가 빠른데 한 패드만 정시인 경우를 "늦다"고 하지 않기 위해)
+  // 특정 패드만 늦음·빠름. "나머지 패드의 평균"과 비교한다. 창 전체 평균과 비교하면 그 패드 자신이
+  // 평균을 끌어당겨 차이가 희석된다(노트의 절반이 그 패드면 차이가 절반으로 줄어든다).
+  // 나머지 표본이 모자라면 비교하지 않는다(창 대부분이 그 패드면 전체 늦음·빠름 규칙이 맡는다).
+  // 그 패드가 실제로 그 방향이어야 한다(나머지가 빠른데 정시인 패드를 "늦다"고 하지 않기 위해).
   for (const pad of ALL_PADS) {
     const s = m.pads.find((p) => p.pad === pad);
-    const diff = s && mean !== null && s.count >= c.pad.minPadHits ? s.meanDelta - mean : null;
+    const othersCount = s ? m.validCount - s.count : 0;
+    const othersMean =
+      s && mean !== null && othersCount >= c.pad.minPadHits ? (m.validCount * mean - s.count * s.meanDelta) / othersCount : null;
+    const diff = s && s.count >= c.pad.minPadHits && othersMean !== null ? s.meanDelta - othersMean : null;
     const label = PAD_META[pad].label;
     const severity = s ? clamp01(Math.abs(s.meanDelta) / (1.2 * th.goodMs)) : 0;
     const release = diff !== null && Math.abs(diff) < th.padReleaseMs;
