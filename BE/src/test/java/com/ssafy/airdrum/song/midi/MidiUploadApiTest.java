@@ -28,6 +28,7 @@ import com.ssafy.airdrum.user.UserRole;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -214,7 +215,7 @@ class MidiUploadApiTest {
 			var id = i.callRealMethod();
 			if (++calls[0] == 3) throw new IllegalStateException("주입한 실패");
 			return id;
-		}).when(repository).insertVersion(anyLong(), any());
+		}).when(repository).insertVersion(anyLong(), anyInt(), any());
 
 		var r = send(upload(groove()).param("title", "롤백"), user);
 
