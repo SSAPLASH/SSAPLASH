@@ -1,6 +1,7 @@
 // setupSteps 단위 테스트: 센서/키보드, 조건 조합, 한 손/양손, 문구, 조사.
 import { describe, expect, it } from 'vitest';
 import {
+  dongleLine,
   returnBannerText,
   returnButtonText,
   returnTargetName,
@@ -40,6 +41,17 @@ describe('setupSteps', () => {
   it('한 손만 연결되면 스틱은 필요이고 요약이 그 손을 말한다', () => {
     expect(setupSteps({ ...base, connected: [true, false] }, NOW).steps[0]).toMatchObject({ status: 'needed', summary: '왼손만 연결됨' });
     expect(setupSteps({ ...base, connected: [false, true] }, NOW).steps[0].summary).toBe('오른손만 연결됨');
+  });
+
+  it('동글 상태에 따라 스틱 요약이 바뀐다(Figma 264:8805·264:8855)', () => {
+    const summary = (dongle: SetupStepsInput['dongle'], connected: [boolean, boolean] = [false, false]) =>
+      setupSteps({ ...base, sensorKind: 'webserial', connected, dongle }, NOW).steps[0].summary;
+    expect(summary('closed')).toBe('동글을 연결하면 스틱 상태가 보여요');
+    expect(summary('ok')).toBe('동글이 연결됐어요 · 스틱 버튼을 눌러 켜 주세요');
+    expect(summary('waiting')).toBe('동글이 연결됐어요 · 스틱 버튼을 눌러 켜 주세요');
+    expect(summary('stale')).toBe('동글 응답이 없어요 · 동글을 다시 꽂아 주세요');
+    // 한 손이라도 붙었으면 손을 짚는 요약이 우선
+    expect(summary('ok', [false, true])).toBe('오른손만 연결됨');
   });
 
   it('전부 충족하면 완료 요약 문구', () => {
@@ -124,5 +136,22 @@ describe('하단 바·이탈 문구', () => {
     expect(setupBarCleanText('기본 배치')).toBe('「기본 배치」 사용 중');
     expect(unsavedLeaveText('기본 배치')).toContain('「기본 배치」의 패드 위치를 바꿨어요');
     expect(unsavedLeaveText(null)).toContain('프리셋으로 남지 않아요');
+  });
+});
+
+describe('dongleLine', () => {
+  it('포트가 안 열렸으면 [동글 연결]과 처음 한 번 안내, 점 없음', () => {
+    expect(dongleLine('closed', [false, false])).toEqual({
+      dot: null,
+      text: '처음 한 번만 동글이 꽂힌 포트를 골라요',
+      action: '동글 연결',
+    });
+  });
+  it('스틱 0개면 켜 달라는 안내, 붙어 있으면 연결됨만', () => {
+    expect(dongleLine('ok', [false, false])).toMatchObject({ dot: 'on', text: '동글이 연결됐어요 · 스틱 버튼을 눌러 켜 주세요', action: '다른 동글 연결' });
+    expect(dongleLine('ok', [true, false])).toMatchObject({ dot: 'on', text: '동글이 연결됐어요' });
+  });
+  it('LINK가 끊기면 빨간 점과 다시 꽂기 안내', () => {
+    expect(dongleLine('stale', [false, false])).toMatchObject({ dot: 'off', action: '다른 동글 연결' });
   });
 });
