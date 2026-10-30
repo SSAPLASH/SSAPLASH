@@ -115,7 +115,7 @@ describe('JudgedWindow 패드별', () => {
     ]).metrics();
     const hh = m.pads.find((p) => p.pad === 'HIHAT');
     const sn = m.pads.find((p) => p.pad === 'SNARE');
-    expect(hh).toEqual({ pad: 'HIHAT', count: 2, meanDelta: 45 });
+    expect(hh).toEqual({ pad: 'HIHAT', count: 2, meanDelta: 45, sameSignRatio: 1 });
     expect(sn?.count).toBe(2);
     expect(sn?.meanDelta).toBeCloseTo(-5);
     // MISS뿐인 패드는 통계에 없다
