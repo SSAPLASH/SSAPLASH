@@ -90,8 +90,8 @@ public class TelemetryEventRepository {
 				FROM telemetry_events WHERE user_id=? AND session_id=? %s
 				ORDER BY time,stick_id NULLS LAST LIMIT ? OFFSET ?
 				""".formatted(kind == null ? "" : "AND kind=?"), (r, n) -> new EventItem(r.getTimestamp("time").toInstant(),
-				r.getString("kind"), r.getObject("stick_id", Integer.class), r.getString("pad"), r.getString("baseline_pad"),
-				r.getString("predicted_pad"), r.getString("judgement"), r.getObject("delta_ms", Double.class),
+				r.getString("kind"), r.getObject("stick_id", Integer.class), pad(r.getString("pad")), pad(r.getString("baseline_pad")),
+				pad(r.getString("predicted_pad")), r.getString("judgement"), r.getObject("delta_ms", Double.class),
 				r.getObject("velocity", Integer.class), r.getObject("t_sensor", Long.class), r.getObject("t_recv", Double.class),
 				r.getObject("t_judge", Double.class), r.getObject("t_audio", Double.class), r.getObject("clock_offset_ms", Double.class),
 				packetLoss(r.getObject("packet_loss", Float.class)), r.getObject("battery_pct", Integer.class),
@@ -128,6 +128,10 @@ public class TelemetryEventRepository {
 
 	private static String name(Enum<?> value) {
 		return value == null ? null : value.name();
+	}
+
+	private static String pad(String value) {
+		return "HI_TOM".equals(value) ? "SMALL_TOM" : value;
 	}
 
 }
