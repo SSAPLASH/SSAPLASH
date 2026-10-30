@@ -253,7 +253,30 @@ describe('parsePacket', () => {
     b[0] = 0x04;
     v.setUint32(2, 100, true);
     v.setUint32(6, 2_500_000, true);
-    expect(parsePacket(b, 0)).toEqual({ kind: 'syncAck', t0: 100, t1: 2500 });
+    expect(parsePacket(b, 0)).toEqual({ kind: 'syncAck', stickId: 0, t0: 100, t1: 2500 });
+  });
+
+  it('syncAck stickId는 flags role에서 온다(동글 아래 두 스틱이 각자 답함)', () => {
+    const b = new Uint8Array(10);
+    b[0] = 0x04;
+    b[1] = 1;
+    expect(parsePacket(b, 0)).toMatchObject({ kind: 'syncAck', stickId: 1 });
+  });
+
+  it('발 역할(role 2·3) 패킷은 손 이벤트로 읽지 않는다', () => {
+    expect(parsePacket(hitBytes({ flags: 2 }), 0)).toBeNull();
+    expect(parsePacket(hitBytes({ flags: 3 }), 0)).toBeNull();
+    expect(parsePacket(new Uint8Array([0x03, 2, 80, 0, 1, 2]), 0)).toBeNull();
+    const ack = new Uint8Array(10);
+    ack[0] = 0x04;
+    ack[1] = 3;
+    expect(parsePacket(ack, 0)).toBeNull();
+    // role 외 비트가 켜져 있어도 손이면 그대로
+    expect(parsePacket(hitBytes({ flags: 0x10 | 1 }), 0)).toMatchObject({ kind: 'hit', stickId: 1 });
+  });
+
+  it('link는 이벤트가 아니라 null', () => {
+    expect(parsePacket(new Uint8Array([0x07, 0, 3, 2, 0]), 0)).toBeNull();
   });
 
   it('bridgeStats·log·paramAck·swing·error는 null', () => {
