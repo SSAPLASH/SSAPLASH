@@ -18,13 +18,14 @@ export function gridTimeOf(songTimeMs: number, originMs: number): number {
 
 /**
  * 노트 시각을 곡 전체 칸 번호로 양자화한다.
- * offGrid: 가장 가까운 칸 중심에서 stepMs/4(32분음의 절반, BE 솎기 허용 오차와 같음)보다 멀거나 원점보다 앞선 노트.
- * 원점 앞 노트는 0칸으로 모은다(못갖춘마디 표시는 후속).
+ * offGrid: 가장 가까운 칸 중심에서 stepMs/4(32분음의 절반, BE 솎기 허용 오차와 같음)보다 먼 노트.
+ * 원점 앞 노트는 0칸으로 모은다(못갖춘마디 표시는 후속). 원점보다 허용 폭 안에서 앞선 노트는 1박 타격으로 보고,
+ * 그보다 앞선 노트만 offGrid다(AI 박 시각 해상도 20ms 때문에 첫 박 타격이 원점보다 조금 앞설 수 있다).
  */
 export function stepIndexOf(timeMs: number, originMs: number, stepMs: number): { idx: number; offGrid: boolean } {
   const grid = gridTimeOf(timeMs, originMs);
   const idx = Math.max(0, Math.round(grid / stepMs));
-  const offGrid = grid < 0 || Math.abs(grid - idx * stepMs) > stepMs / 4;
+  const offGrid = Math.abs(grid - idx * stepMs) > stepMs / 4;
   return { idx, offGrid };
 }
 
