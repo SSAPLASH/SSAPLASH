@@ -15,7 +15,7 @@
 | 실험 기록 | MLflow (로컬 파일 모드) | 팀 MLflow 서버(S15P31A307-45)가 생기면 tracking URI만 바꾼다 |
 | 보고서 | pandas, matplotlib | CSV 집계, 마크다운 표, PNG 그래프 |
 | 모델 실행 | PyTorch + ZFTurbo MSST(msst), demucs, openunmix | 선택 extra `models`. 단위 테스트·CI에는 필요 없다 |
-| 채보 모델 실행 | ADTOF-pytorch(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart·YourMT3+) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
+| 채보 모델 실행 | ADTOF-pytorch·Beat This!(extra `transcribers`), 별도 가상환경(ADT_STR·Inverse Drum Machine·Omnizart·YourMT3+) | 지금 환경과 의존성이 맞지 않는 모델은 `scripts/transcribers_ext/`의 스크립트를 별도 환경에서 돌린다 |
 
 이 스택은 2026-10-19 기준 잠정 확정이다. 팀 전체 기술 스택이 확정되면 바뀔 수 있다.
 
@@ -23,7 +23,7 @@
 
 ```
 AI/
-├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart 명령 진입점
+├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart·ssaplash-worker 명령 진입점
 ├─ uv.lock               의존성 잠금
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
@@ -46,14 +46,24 @@ AI/
 │   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
 │   │                    build_report(파일 생성)
 │   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
-│   │                    separation(음원 분리 SeparationModule), cli(ssaplash-chart 명령)
+│   │                    separation(음원 분리 SeparationModule), transcription(드럼 채보 TranscriptionModule),
+│   │                    chart_json(채보 JSON 만들기·검증), tempo(bpm 추정), cli(ssaplash-chart 명령)
+│   ├─ worker/           채보 워커. config(환경 변수), payload(정규 JSON·payloadHash), api(BE 워커 API 호출부),
+│   │                    transfer(서명 URL 내려받기·올리기), heartbeat(10초 heartbeat 스레드), job(작업 하나 실행기),
+│   │                    loop(claim 폴링 루프), cli(ssaplash-worker 명령), fake_be(테스트·로컬 확인용 BE 대역)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
 │   │                    patterns/(패턴별 규칙), select(후보 선택), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
+│   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
+│   ├─ coach_calibration/ 약점 분석 실측 보정 배치(서버가 import하지 않음). source(비식별 뷰 읽기·허용 열 검증), filters(이상치 제외),
+│   │                    profile(걸림 비율·분포), candidates(what-if·후보), policy(정책 파일), register(MLflow 기록·실행 판단),
+│   │                    summary, pipeline, cli. 설명은 docs/coach-calibration.md
 │   └─ server/           AI 서버 진입점 app.py (FastAPI, /health), weak_segments.py (POST /analysis/weak-segments)
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
-├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml, 모델 없이 흐름만 확인하는 separation_mock.yaml)
+├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml·transcription.yaml, 모델 없이 흐름만 확인하는
+│                        separation_mock.yaml·transcription_mock.yaml)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py, pack_server_upload.py), 별도 환경 채보 스크립트 (transcribers_ext/)
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
@@ -94,7 +104,7 @@ uv run ruff format .     # 포맷 (커밋 전)
 uv run pytest            # 테스트
 ```
 
-커밋 전에 `ruff check`와 `pytest`가 모두 통과해야 한다 (CLAUDE.md 규칙). GitLab CI의 AI lint·test 단계도 같은 명령을 쓴다.
+커밋 전에 `ruff check`와 `pytest`가 모두 통과해야 한다 (CLAUDE.md 규칙). GitLab CI의 `ai-lint` job이 `ruff check .`와 `ruff format --check .`를 같은 ruff 버전(`AI/uv.lock`)으로 돌리고(AI 파일이 바뀐 MR·병합에서만), `ai-lock` job이 `uv lock --check`로 `uv.lock`이 `pyproject.toml`과 맞는지 본다(의존성을 바꿀 때 `uv lock`을 잊으면 여기서 실패한다). **AI 테스트(`pytest`)는 아직 CI에 없다.**
 
 데이터 점검. 곡 수, 길이 합, 빠진 파일을 출력하고 문제가 있으면 종료 코드 1을 돌려준다.
 
@@ -145,6 +155,126 @@ uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/cha
 uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/chart/separation_mock.yaml
 ```
 
+## 드럼 채보 실행 (서비스 추론 모듈, S15P31A307-169)
+
+드럼 트랙 파일 하나로 채보 JSON을 만든다. 채보 모델은 벤치마크 어댑터를 그대로 쓰므로 모델 실행 패키지가 필요하다 (`uv sync --extra models --extra transcribers`). 기본 모델은 ADTOF + 드럼 킷 분리(MDX23C DrumSep)이고, 드럼 킷 분리 가중치는 첫 실행 때 `data/models/mdx23c_drumsep/`에 받는다. bpm 추정에 쓰는 Beat This! 가중치(81MB)도 첫 실행 때 `data/models/beat_this/`에 받고 md5로 확인한다. 공식 서버가 안 되면 개발자 사이트에서 받는다.
+
+```bash
+# 드럼 트랙 → 채보
+uv run ssaplash-chart transcribe data/chart/funk_108/drums.flac --out data/chart/funk_108
+# 원곡 → 분리 → 채보. 마지막에 단계별 시간·메모리를 찍는다
+uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
+```
+
+| 파일 | 내용 |
+| --- | --- |
+| `chart.json` | 채보. BE 채보 결과 형식 schemaVersion 1 그대로라 워커가 `result`에 넣어 보내면 된다 |
+| `transcription.json` | 결과 메타. 노트 수·패드별 수, 길이 ms, bpm, 첫 박 시각 ms, 모델 이름·버전, 올리기·채보 시간 ms, 최대 GPU 메모리·RAM MB |
+
+`chart.json`에서 정해진 값은 다음과 같다.
+
+- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<yaml 해시 12자리>`로 남는다
+- 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
+- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE)다
+- bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고, 박 간격 평균으로 계산한다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. `offsetMs`는 0, 박자는 `4/4` 고정이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
+- 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
+
+채보 모델이나 탐·심벌 규칙을 바꿀 때는 `configs/chart/transcription.yaml`의 `model_config` 경로만 바꾼다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
+
+| 키 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `model_config` | `configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml` | 채보 모델 yaml |
+| `device` | `cuda` | 없으면 `cpu`로 내려간다 |
+| `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
+| `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
+| `tempo.min_bpm`, `tempo.max_bpm` | 60, 200 | 이 범위 밖이면 2배·절반으로 접는다. 상한은 하한의 2배 이상 |
+| `tempo.time_signature` | `4/4` | 박자. 추정하지 않는다 |
+| `max_duration_sec` | 600 | 이보다 긴 드럼 트랙은 입력 오류 |
+
+환경 변수와 종료 코드는 음원 분리와 같다. 파이썬에서 쓸 때는 `ssaplash_ai.chart.transcription.TranscriptionModule`을 만들고 `load()` 한 번, `transcribe_file()` 곡마다, `close()` 순서로 부른다. 워커는 BE가 준 원곡 길이를 `transcribe_file(..., duration_ms=)`로 넘기면 노트 시각 상한과 `metrics.durationMs`에 그 값을 쓴다.
+
+모델 없이 흐름만 확인할 때는 mock 설정을 쓴다. 온셋 검출로 시각만 찾고 패드는 전부 KICK이 나온다.
+
+```bash
+uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config configs/chart/transcription_mock.yaml
+```
+
+`separate`·`run`에 `--duration-ms <원곡 길이 ms>`를 주면 분리 출력 두 파일의 끝을 그 길이에 맞춰 자르거나 무음을 채우고(샘플 수 `길이 × 44100 // 1000`), 채보 노트 시각 상한에도 같은 값을 쓴다. BE가 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사하므로 워커가 BE claim의 `input.durationMs`를 여기에 넘긴다. 실측 길이와 1000ms 넘게 다르면 입력 오류다.
+
+## 채보 워커 실행 (S15P31A307-171)
+
+BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
+
+흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
+
+| 환경 변수 | 필수 | 기본값 | 뜻 |
+| --- | --- | --- | --- |
+| `SSAPLASH_WORKER_BASE_URL` | 예 | — | BE 주소. 뒤에 `/internal/v1/chart-jobs`를 붙여 부른다 |
+| `SSAPLASH_WORKER_ID` | 예 | — | BE `CHART_WORKER_CREDENTIALS`에 등록된 workerId |
+| `SSAPLASH_WORKER_TOKEN` | 예 | — | 그 workerId의 토큰. UTF-8 32바이트 이상 |
+| `SSAPLASH_WORK_DIR` | 예 | — | 작업 파일 부모. `<WORK_DIR>/worker/<jobId>-<attempt 앞 8자>/`에 원곡·flac·chart.json을 두고 끝나면 지운다 |
+| `SSAPLASH_WORKER_POLL_SEC` | | 5 | 대기 작업이 없을 때(204) 다음 claim까지 |
+| `SSAPLASH_WORKER_HEARTBEAT_SEC` | | 10 | heartbeat 주기 |
+| `SSAPLASH_WORKER_KEEP_FILES` | | false | 참이면 작업 폴더를 지우지 않는다(문제 추적용) |
+| `SSAPLASH_CHART_DEVICE`, `SSAPLASH_MODELS_DIR` | | | 추론 모듈이 읽는 기존 변수 |
+
+```bash
+# 환경 변수·설정 yaml 검사, 모델 두 개 올려 보기. BE는 부르지 않는다
+uv run ssaplash-worker check
+# 상시 실행. --once는 작업 하나만 처리하고 종료, --max-jobs N은 N개
+uv run ssaplash-worker run
+```
+
+종료 코드는 0 정상, 1 설정·모델 오류, 2 인증 실패(401)다. 로그는 표준 오류로 나가며 토큰과 서명 URL은 남기지 않는다. 종료 신호(Ctrl+C, SIGTERM)를 한 번 받으면 처리 중인 작업을 끝내고 멈추고, 두 번 받으면 바로 끝낸다(임대가 만료되면 BE가 다시 배정한다). 분리 모델 설정(`configs/chart/separation.yaml`)의 출력은 BE 계약대로 flac 44,100Hz여야 하며 아니면 시작하지 않는다.
+
+| 실패 | BE 보고 `code` | `retryable` | 뒤처리 |
+| --- | --- | --- | --- |
+| 입력 파일 못 읽음·길이 초과·무음, 내려받은 파일의 크기·sha256 불일치, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | BE가 FAILED |
+| 모델 올리기·추론 예외 | `MODEL_FAILED` | GPU 메모리 부족일 때만 참 | 참이면 BE가 다시 배정(단계별 최대 2회) |
+| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | BE가 FAILED |
+| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패 | 보고 안 함 | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+
+결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### 모델 없이 전체 흐름 확인 (fake BE)
+
+BE 접속 정보가 없어도 혼자 끝까지 돌려 볼 수 있게 BE 대역을 넣어 뒀다. 6개 API와 저장소 GET/PUT을 흉내 내고, 토큰·attempt·임대·payloadHash·flac 길이·채보 JSON을 BE처럼 검사한다. 개발용이라 운영 코드가 아니다.
+
+```bash
+# 터미널 1: 곡을 작업으로 넣고 BE 대역을 띄운다. 작업이 다 끝나면 요약을 찍고 종료한다
+uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
+# 터미널 2: 터미널 1이 출력한 환경 변수 3개와 SSAPLASH_WORK_DIR을 넣고 워커를 돌린다
+uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml
+uv run pytest tests/worker
+```
+
+실제 모델로 같은 흐름을 보려면 두 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
+
+### GPU 서버에서 띄우기
+
+워커는 사내 GPU 서버(`~/ssaplash/S15P31A307/AI`, git 체크아웃)에서 `nohup`으로 상시 가동하고 EC2의 BE를 pull한다. 재부팅 뒤 자동 재시작은 없으므로 같은 순서로 다시 띄운다. 비밀 값은 저장소가 아니라 `~/ssaplash/worker.env`(권한 600)에 둔다.
+
+서버 주의 두 가지. 서버 드라이버는 570(CUDA 12.8)인데 `uv sync`는 lock의 기본 PyPI torch(CUDA 13 휠)를 깔아 `libcusparseLt.so.0` 오류로 import가 깨진다. `uv sync` 뒤에는 아래처럼 torch를 CUDA 12.8 휠로 다시 깔고, 그다음부터는 `uv run --no-sync`로 실행해 `uv run`이 다시 lock에 맞추지 않게 한다. 작업 폴더에는 `separation.json`·`transcription.json`(시간·메모리)이 남으며 `SSAPLASH_WORKER_KEEP_FILES=1`일 때만 보존된다.
+
+```bash
+cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers
+uv pip install --reinstall "torch==2.8.0" "torchaudio==2.8.0" --index-url https://download.pytorch.org/whl/cu128
+uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.8.0+cu128 True
+# ~/ssaplash/worker.env 내용 (값은 BE·인프라에게 받음):
+#   SSAPLASH_WORKER_BASE_URL=https://k15a307.p.ssafy.io
+#   SSAPLASH_WORKER_ID=worker1
+#   SSAPLASH_WORKER_TOKEN=<토큰>
+#   SSAPLASH_WORK_DIR=$HOME/ssaplash/work
+#   SSAPLASH_CHART_DEVICE=cuda
+#   CUDA_VISIBLE_DEVICES=6
+chmod 600 ~/ssaplash/worker.env && set -a && source ~/ssaplash/worker.env && set +a
+uv run --no-sync ssaplash-worker check
+mkdir -p ~/ssaplash/results && nohup uv run --no-sync ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
+echo $! > ~/ssaplash/worker.pid
+tail -f ~/ssaplash/results/worker.log        # 상태
+kill $(cat ~/ssaplash/worker.pid)            # 멈추기. 처리 중인 작업을 끝내고 종료
+```
+
 ## 약점 구간 분석 (COACH-003, S15P31A307-138)
 
 BE가 플레이 후 호출하는 통계 규칙 엔진이다(학습 모델 없음). `POST /analysis/weak-segments`로 `hits[]`를 받아
@@ -154,6 +284,38 @@ BE가 플레이 후 호출하는 통계 규칙 엔진이다(학습 모델 없음
 uv run uvicorn ssaplash_ai.server.app:app --port 8000
 uv run pytest tests/coach tests/server/test_weak_segments.py
 ```
+
+### 약점 분석 합성 평가 (S15P31A307-139)
+
+실제 플레이 로그가 없는 동안 규칙을 검증하는 도구다. 약점을 심은 가짜 플레이 로그를 만들어 `analyze()`가 찾는지(탐지율),
+약점 없는 로그에서 잘못 찾는지(오탐률)를 잰다. 개발·평가 전용 패키지(`src/ssaplash_ai/coach_eval/`)다. 서버 이미지에는 소스 파일로 들어가지만 서버가 가져다 쓰지 않는다.
+결과와 해석은 [docs/coach-eval/weak-segments-2026-10-29/summary.md](docs/coach-eval/weak-segments-2026-10-29/summary.md)에 있다.
+합성 데이터 기준이라 "규칙이 설계대로 동작하는가"의 근거이지 정확도 주장이 아니다.
+
+```bash
+uv run python -m ssaplash_ai.coach_eval.cli --out docs/coach-eval/weak-segments-2026-10-29 --mlflow
+uv run pytest tests/coach_eval
+```
+
+- 같은 `--base-seed`면 결과가 같다. 규칙·임계값을 바꾼 뒤에는 같은 명령으로 다시 돌려 비교한다(날짜 폴더를 새로 만든다).
+- `--mlflow`는 실험 `coach-weak-segments-eval`에 기록한다. 주소는 `--tracking-uri`나 환경 변수 `MLFLOW_TRACKING_URI`이고 없으면 로컬 `mlruns/`(git 미추적)다.
+- 시나리오(심는 약점)와 강도는 `coach_eval/scenarios.py`, 연주 모델은 `player.py`에 있다. 새 패턴을 켜면 시나리오를 하나 추가한다.
+
+### 약점 분석 실측 보정 (COACH-003)
+
+동의한 사용자의 **비식별** 연주 기록(BE 뷰 `coach_export_v`)으로 임계값 **후보**를 만들어 MLflow에 기록하는 배치다. 임계값을 자동으로 바꾸지 않고,
+사람이 기록을 검토·승인한 뒤 `config.py`를 고치는 MR로만 바뀐다. 데이터 출처·제외 규칙·정책 파일·기록 규약·승인 절차는
+[docs/coach-calibration.md](docs/coach-calibration.md)에 있다.
+
+```bash
+uv run pytest tests/coach_calibration
+uv run python -m ssaplash_ai.coach_calibration.cli --help
+```
+
+- 접속 문자열은 환경 변수 `SSAPLASH_COACH_EXPORT_DSN`(읽기 전용 계정)으로만 받는다. 명령줄에 쓰지 않는다.
+- 실행 끝에 `coach-calibration status=OK|SKIPPED|FAIL ...` 한 줄을 남긴다(알림이 이 줄을 본다).
+- 정책 파일(`configs/coach/calibration_policy.yaml`)은 서버 이미지에 들어가지 않는다. 컨테이너에서는 마운트하고 `SSAPLASH_CALIBRATION_POLICY`로 경로를 준다.
+- 뷰와 읽기 전용 계정이 서버에 적용되기 전에는 실제 DB 연결을 시험하지 못했다. 모든 시험은 뷰를 모사한 메모리 행으로 한다.
 
 ## 벤치마크 실행
 
@@ -207,6 +369,23 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 
 ```bash
 git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
+```
+
+### 실제 곡 분리 품질 평가 (S15P31A307-166)
+
+음원 분리 모델을 실제 드러머 녹음에 돌린 결과와 해석은 `docs/bench/separation-real-2026-10-29/evaluation.md`에 있다. 드럼 SDR은 ENST-Drums minus-one 64곡으로 재고, MDB Drums는 드럼 단독 트랙이 완성곡 속 드럼과 달라 타격 보존율만 본다. ENST 로더와 `enst_minus_one.yaml`은 S15P31A307-164에서 들어온다.
+
+GPU 서버에서는 `notebooks/separation_quality_server.ipynb`를 위에서부터 실행한다. ENST 드럼과 반주를 녹음된 음량 그대로 더한 조건과 확인 스크립트는 로컬에서 돌린다.
+
+```bash
+# ENST 드럼과 반주를 녹음된 음량 그대로 더해 분리, 분리 wav 64곡 저장
+uv run ssaplash-bench run --models configs/bench/models/msst/bs_roformer_sw.yaml --dataset configs/bench/datasets/enst_minus_one_gain1.yaml --save-wav 64 --run-id sep-enst-gain1 --mlflow-uri none
+
+# 정답 드럼 파일·분리하지 않은 완성곡·분리한 드럼 세 입력의 타격 보존율을 같은 정답으로 비교
+uv run python scripts/check_onset_merged.py configs/bench/datasets/enst_minus_one_gain1.yaml --separated data/results/sep-enst-gain1/separated/bs_roformer_sw --out data/results/onset_merged_enst_gain1.csv
+
+# MDB 드럼 단독 트랙과 같은 녹음의 MUSDB18 train 드럼 스템 비교 (MUSDB18-HQ train이 data/musdb18hq/train에 있어야 함)
+uv run python scripts/compare_mdb_musdb_stems.py --out data/results/mdb_musdb_stems.csv
 ```
 
 ## 채보 벤치마크 실행 (S15P31A307-109)
@@ -366,7 +545,7 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 | `sdrDrums`, `sdrAccomp` | 분리 품질 (dB). 정답과 예측이 얼마나 가까운지 | museval(BSS Eval v4)에 정답·예측 드럼과 반주 2소스를 넣고 1초 프레임 값의 중앙값. 예측 반주 = 원곡 − 예측 드럼 |
 | `sirAccomp`, `sarAccomp` | 반주에 남은 드럼 누설, 인공음 (dB) | 같은 museval 호출. 드럼 쪽 `sirDrums`·`sarDrums`도 보조로 기록 |
 | `siSdrDrums`, `siSdrAccomp` | 배율 불변 SDR (dB) | 곡 전체 1회 |
-| `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MUSDB면 정답 드럼 스템에 같은 검출기 적용 |
+| `onsetF1`, `onsetPrecision`, `onsetRecall` | 타격 보존율. 정답 타격 시각을 예측 드럼에서 얼마나 되찾는지 | librosa 스펙트럼 플럭스 온셋 검출(hop 512 샘플)을 예측 드럼에 적용, mir_eval로 ±50ms 매칭. 정답 온셋은 합성곡이면 MIDI, MDB·ENST면 사람 주석, MUSDB면 정답 드럼 스템에 같은 검출기 적용. MIDI·주석 정답은 동시에 친 타격이 같은 시각으로 여러 줄 들어 있어 30ms 안 시각을 하나로 합친 뒤 채점한다 (S15P31A307-166) |
 | `onsetF1Tight` | 같은 것, ±25ms | |
 | `attackSlopeDistortion` | attack slope는 드럼을 친 직후 10ms 동안 소리가 커지는 기울기(Beyond SDR 논문 용어). 분리한 드럼의 이 기울기가 정답 드럼과 얼마나 달라졌는지를 잼. 0이면 원음 그대로, 클수록 타격 앞머리가 뭉개진 것. 뭉개지면 채보 모델이 타격 시각을 늦게 잡거나 놓치므로 봄 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
 | `separateSec`, `rtf` | 분리 시간(초), RTF = 분리 시간 / 곡 길이 | 벽시계. 모델 로드 제외. 로드 직후 첫 곡을 한 번 분리하고 버려(워밍업, `--no-warmup`으로 생략) GPU 커널 준비 시간을 뺀다 |
