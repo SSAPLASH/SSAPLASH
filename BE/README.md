@@ -866,7 +866,7 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 .\gradlew.bat test --tests 'com.ssafy.airdrum.song.midi.*'
 ```
 
-테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다.
+테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다. 노트 JSON은 저장 전 조회 리더로 검증하며, 난이도별 출력과 로케일별 노트 ID를 기존 직렬화 결과와 비교한다.
 
 
 ## 공용 곡 관리 (156번)
@@ -922,9 +922,9 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 ## AI 워커 내부 작업 API (160번)
 
-`/internal/v1/chart-jobs`는 보호된 내부 네트워크에서만 사용한다. 공개 Nginx는 `/internal/`을 404로 차단한다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다.
+`/internal/v1/chart-jobs/`는 HTTPS Nginx에서 지정한 AI 워커 IP `222.107.238.74`만 접근할 수 있다. 그 밖의 `/internal/`은 404이며 HTTP의 `/internal/`도 404다. Nginx 요청 본문 한도는 8 MiB이고 BE 결과 JSON 한도는 5 MiB다. 사용자 access JWT는 사용할 수 없다. `CHART_WORKER_CREDENTIALS`에 `worker1=토큰,worker2=토큰` 형태로 등록하며 각 토큰은 UTF-8 32바이트 이상이고 서로 달라야 한다. 빈 설정은 모든 요청을 401로 거부한다. 값에는 쉼표를 쓰지 않고 충분한 난수로 생성해 비밀 관리 경로로 주입한다. 워커는 자기 토큰을 Bearer로 전송한다. 전송 경로를 TLS 또는 이에 준하는 보호된 내부 연결로 구성한다. 토큰·서명 URL을 로그에 남기지 않는다. Nginx는 해당 워커 API와 서명 URL 경로의 접근·오류 로그를 끄며 BE·저장소 메트릭으로 진단한다.
 
-`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 기본은 BE 내부 음원 endpoint이고 Compose 내부 워커에는 `http://seaweedfs:8333`을 쓴다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
+`AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 일반 설정의 기본은 BE 내부 음원 endpoint이며 Infra Compose에서는 `OBJECT_STORAGE_PUBLIC_URL`을 기본으로 사용한다. 외부 GPU에서는 `https://k15a307.p.ssafy.io`처럼 워커가 접근 가능한 공개 주소를 사용한다. BE의 내부 저장소 endpoint는 그대로 유지한다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
 
 | 요청 | 주요 입력과 동작 |
 | --- | --- |
@@ -935,7 +935,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 | `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
 | `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
 
-새 작업 배정과 만료 작업 복구는 회원·곡·작업 행 중 잠긴 후보를 건너뛰고 다른 후보를 처리한다. 건너뛴 후보는 이후 배정 또는 복구 주기에 다시 확인한다.
+원곡 길이가 없거나 0 또는 600,000ms를 넘는 대기 작업은 `INPUT_INVALID`로 실패하고 입력 정리 대상이 된다. 동일 요청 재조회 중 길이가 유효하지 않으면 409를 반환한다. 새 작업 배정과 만료 작업 복구는 회원·곡·작업 행 중 잠긴 후보를 건너뛰고 다른 후보를 처리한다. 건너뛴 후보는 이후 배정 또는 복구 주기에 다시 확인한다.
 
 claim의 `input` 예시(파일 ID·크기·해시는 설명용):
 
@@ -956,7 +956,9 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 결과 봉투는 `contractVersion: 1`, `jobId`, `attemptId`, UUID `resultId`, 소문자 `payloadHash`, `result`다. `payloadHash`는 **result 객체만** 다음 규칙으로 정규화한 UTF-8 바이트의 SHA-256이다. 객체 키는 Java 문자열의 UTF-16 코드 단위 사전순으로 정렬하고 배열 순서는 유지한다. 공백 없이 JSON을 쓰며 문자열은 Jackson의 일반 JSON 이스케이프(제어 문자·역슬래시·따옴표 이스케이프, 그 외 유니코드 그대로)를 쓴다. 숫자는 십진수 값의 후행 0을 없애고 지수 표기 없이 쓰며 모든 0은 `0`이다. null·true·false는 그대로 쓴다. 중복 키, JSON 후행 데이터, 24단계 초과 중첩 및 과도한 숫자는 거부한다. 예를 들어 입력 result `{"b":[true,null],"a":1.00}`의 정규 바이트는 `{"a":1,"b":[true,null]}`다. 원래 바이트 전체나 envelope의 해시가 아니다.
 
-인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
+교차 언어 검증 입력 result는 `{"😀":-0.00,"\uE000":1.2300,"제어":"x\u001f\n","prec":0.12345678901234567890123456789012345}`이며 SHA-256은 `a6385d023ac91b8d496887d40c7f840cf7790eb20ddc16ae866e0a080c541921`이다. `\uE000`은 빈 키가 아니라 U+E000 문자 키다. 복사 과정에서 해당 문자가 누락되지 않도록 이스케이프 표기를 사용한다.
+
+인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 전송 오류의 워커 측 재시도를 소진해 heartbeat를 중단하면 임대 만료 후 복구될 수 있지만 단계 마감과 단계별 최대 2회 재시도 범위 안에서만 재배정된다. 409·422 또는 이미 DONE인 경우 재배정을 보장하지 않는다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
 음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 BPM·offsetMs와 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. 일정 템포 환산이므로 변속 곡의 격자 판단은 어긋날 수 있다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 

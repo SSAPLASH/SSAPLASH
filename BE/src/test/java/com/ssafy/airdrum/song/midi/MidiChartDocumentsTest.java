@@ -1,6 +1,8 @@
 package com.ssafy.airdrum.song.midi;
 
 import java.math.BigDecimal;
+import java.text.DecimalFormat;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -138,12 +140,56 @@ class MidiChartDocumentsTest {
 	@Test
 	void noteId는_4자리를_넘으면_자릿수가_늘어난다() {
 		var notes = new ArrayList<DrumNote>();
-		for (int i = 0; i < 10_000; i++) notes.add(new DrumNote(i * 10L, KICK, 100, 0));
-		var song = documents.build(seq(480, List.of(), List.of(), 0), same(notes));
+		for (int i = 0; i < 20_000; i++) notes.add(new DrumNote(i * 10L, KICK, 100, 0));
+		var charts = new EnumMap<Difficulty, List<DrumNote>>(Difficulty.class);
+		charts.put(Difficulty.HARD, notes);
+		charts.put(Difficulty.NORMAL, List.of());
+		charts.put(Difficulty.EASY, List.of());
+		var song = documents.build(seq(480, List.of(), List.of(), 0), charts);
 
 		var out = notes(song, Difficulty.HARD);
+		assertThat(out.get(0).get("noteId").asString()).isEqualTo("n0001");
 		assertThat(out.get(9_998).get("noteId").asString()).isEqualTo("n9999");
 		assertThat(out.get(9_999).get("noteId").asString()).isEqualTo("n10000");
+		assertThat(out.get(19_999).get("noteId").asString()).isEqualTo("n20000");
+	}
+
+	private record ReferenceNotation(long tick, long durationTicks, int voice) {}
+	private record ReferenceNote(String noteId, long timeMs, String pad, int velocityHint, ReferenceNotation notation) {}
+
+	@Test
+	void 서로_다른_난이도와_로케일의_노트_JSON은_기존_직렬화와_같다() {
+		Locale previous = Locale.getDefault(Locale.Category.FORMAT);
+		try {
+			for (Locale locale : List.of(Locale.ENGLISH, Locale.KOREAN, Locale.forLanguageTag("ar"),
+					Locale.forLanguageTag("fa"), Locale.forLanguageTag("th-TH-u-nu-thai"))) {
+				Locale.setDefault(Locale.Category.FORMAT, locale);
+				var all = new ArrayList<DrumNote>();
+				for (int i = DrumPad.values().length - 1; i >= 0; i--)
+					all.add(new DrumNote(i * 240L, DrumPad.values()[i], 90 + i, i == 0 ? 0 : 30));
+				var charts = new EnumMap<Difficulty, List<DrumNote>>(Difficulty.class);
+				charts.put(Difficulty.HARD, all);
+				charts.put(Difficulty.NORMAL, new ArrayList<>(all.subList(0, 6)));
+				charts.put(Difficulty.EASY, new ArrayList<>(all.subList(3, 6)));
+				var song = documents.build(seq(480, List.of(new Tempo(0, 500_000)), List.of(), 0), charts);
+				var formatter = new DecimalFormat("'n'0000");
+				for (var difficulty : Difficulty.values()) {
+					var sorted = new ArrayList<>(charts.get(difficulty));
+					sorted.sort(DifficultyThinner.ORDER);
+					var timing = reader.timing(song.charts().get(difficulty).timing());
+					var expected = new ArrayList<ReferenceNote>();
+					for (int i = 0; i < sorted.size(); i++) {
+						var n = sorted.get(i);
+						expected.add(new ReferenceNote(formatter.format(i + 1), Math.round(reader.milliseconds(timing, n.tick())),
+								n.pad().name(), n.velocity(), new ReferenceNotation(n.tick(), n.durationTicks() > 0 ? n.durationTicks() : 120, n.pad().voice())));
+					}
+					assertThat(song.charts().get(difficulty).notes()).as("locale=%s difficulty=%s", locale, difficulty)
+							.isEqualTo(json.writeValueAsString(expected));
+				}
+			}
+		} finally {
+			Locale.setDefault(Locale.Category.FORMAT, previous);
+		}
 	}
 
 	@Test
