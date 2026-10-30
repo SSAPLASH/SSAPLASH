@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * {@link ChartDocumentReader#milliseconds}를 그대로 써서 악보 페이지 시간과 어긋나지 않게 한다.
  */
 @Component
-class MidiChartDocuments {
+public class MidiChartDocuments {
 
 	/** MIDI 규격 기본값. 템포·박자표 메타가 없으면 tick 0에 넣는다. */
 	private static final int DEFAULT_TEMPO_US = 500_000;
@@ -41,8 +41,8 @@ class MidiChartDocuments {
 		this.reader = reader;
 	}
 
-	record Built(String notes, String timing, int noteCount) {}
-	record Song(BigDecimal bpm, String timeSignature, int durationMs, Map<Difficulty, Built> charts) {}
+	public record Built(String notes, String timing, int noteCount) {}
+	public record Song(BigDecimal bpm, String timeSignature, int durationMs, Map<Difficulty, Built> charts) {}
 
 	private record Notation(long tick, long durationTicks, int voice) {}
 	private record Note(String noteId, long timeMs, String pad, int velocityHint, Notation notation) {}
