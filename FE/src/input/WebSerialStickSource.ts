@@ -1,12 +1,22 @@
 // Web Serial 스틱 소스. 스틱(또는 수신 동글)을 USB로 직결해 921600 8N1로 받는다.
-// 프레이밍은 serialFraming(SOF·LEN·CRC8), payload는 stickProtocol 패킷이다. 링크가 하나라 시계 오프셋도 공용이다.
+// 프레이밍은 serialFraming(SOF·LEN·CRC8), payload는 stickProtocol 패킷이다.
+// 동글 하나에 두 스틱이 붙으면 포트는 하나지만 스틱마다 시계가 달라, 시계 동기화는 손별로 한다(flags role).
+// 한 손에만 보낼 명령은 동글이 확인된 뒤(LINK 수신)부터 ROUTE로 감싼다 — 예전 동글·스틱 직결은 ROUTE를 모른다.
 // 사용자 제스처 안에서 connect()를 불러야 포트 선택 창이 열린다.
 import type { StickEvent, StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { FrameDecoder, frame } from './serialFraming';
 import { packetTap } from './packetTap';
-import { encodeHaptic, encodeResetPose, encodeSetMode, encodeSync, parsePacket } from './stickProtocol';
+import {
+  encodeHaptic,
+  encodeResetPose,
+  encodeRoute,
+  encodeSetMode,
+  encodeSync,
+  PacketType,
+  parsePacket,
+} from './stickProtocol';
 import type { SourceDescriptor } from './SourceDescriptor';
 
 // @types/w3c-web-serial이 없어 쓰는 멤버만 최소 선언한다
@@ -26,6 +36,8 @@ interface SerialLike {
 
 export const SERIAL_BAUD_RATE = 921600;
 const SYNC_INTERVAL_MS = 10_000;
+/** 손별 SYNC 대기 목록 최대 크기 */
+const MAX_PENDING_SYNC = 16;
 
 function getSerial(): SerialLike | null {
   return 'serial' in navigator ? (navigator as unknown as { serial: SerialLike }).serial : null;
@@ -38,8 +50,11 @@ export class WebSerialStickSource extends BaseInputSource {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private decoder = new FrameDecoder();
-  private clock = new ClockSync();
-  private pending = new Map<number, number>();
+  /** 손별 시계·SYNC 대기 목록 (index = StickId) */
+  private clocks: [ClockSync, ClockSync] = [new ClockSync(), new ClockSync()];
+  private pending: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
+  /** LINK를 받아 동글 아래 연결임이 확인됐는지. 확인돼야 ROUTE를 쓴다 */
+  private dongle = false;
   private syncTimer: number | null = null;
   private connectCount = 0;
   /** 쓰기를 순서대로 직렬화한다 */
@@ -51,23 +66,35 @@ export class WebSerialStickSource extends BaseInputSource {
     return getSerial() !== null;
   }
 
+  /** SYNC는 감싸지 않고 보내 두 스틱이 각자 답하게 한다. 대기 목록은 손마다 둔다 */
   private sync(): void {
     const t0 = performance.now();
-    this.pending.set(Math.floor(t0) >>> 0, t0);
+    const key = Math.floor(t0) >>> 0;
+    for (const p of this.pending) {
+      p.set(key, t0);
+      // 한 손만 붙어 있으면 다른 손 목록은 답이 없어 쌓이므로 오래된 것부터 버린다
+      if (p.size > MAX_PENDING_SYNC) p.delete(p.keys().next().value!);
+    }
     this.sendCommand(encodeSync(t0));
   }
 
-  private addSyncSample(t0Key: number, t1: number, recvTime: number): void {
-    const t0 = this.pending.get(t0Key);
+  private addSyncSample(stickId: StickId, t0Key: number, t1: number, recvTime: number): void {
+    const pending = this.pending[stickId];
+    const t0 = pending.get(t0Key);
     if (t0 !== undefined) {
-      this.pending.delete(t0Key);
-      this.clock.addSample(t0, t1, recvTime);
+      pending.delete(t0Key);
+      this.clocks[stickId].addSample(t0, t1, recvTime);
     }
+  }
+
+  private resetClocks(): void {
+    for (const c of this.clocks) c.reset();
+    for (const p of this.pending) p.clear();
   }
 
   private emitMapped(e: StickEvent, recvTime: number): void {
     if (e.kind === 'hit' || e.kind === 'pose') {
-      this.emit({ ...e, timestamp: this.clock.toBrowserTime(e.timestamp, recvTime) });
+      this.emit({ ...e, timestamp: this.clocks[e.stickId].toBrowserTime(e.timestamp, recvTime) });
     } else {
       this.emit(e);
     }
@@ -75,9 +102,10 @@ export class WebSerialStickSource extends BaseInputSource {
 
   private handlePayload(payload: Uint8Array, recvTime: number): void {
     packetTap.publish({ dir: 'in', transport: 'serial', stickId: null, bytes: payload, recvTime });
+    if (payload[0] === PacketType.LINK) this.dongle = true;
     const p = parsePacket(payload, recvTime);
     if (!p) return;
-    if (p.kind === 'syncAck') this.addSyncSample(p.t0, p.t1, recvTime);
+    if (p.kind === 'syncAck') this.addSyncSample(p.stickId, p.t0, p.t1, recvTime);
     else this.emitMapped(p, recvTime);
   }
 
@@ -120,8 +148,8 @@ export class WebSerialStickSource extends BaseInputSource {
     }
     this.writer = null;
     this.reader = null;
-    this.pending.clear();
-    this.clock.reset();
+    this.resetClocks();
+    this.dongle = false;
     this.decoder.reset();
     getSerial()?.removeEventListener('disconnect', this.onPortDisconnect);
     try {
@@ -141,7 +169,8 @@ export class WebSerialStickSource extends BaseInputSource {
     this.closing = false;
     this.port = port;
     this.decoder.reset();
-    this.clock.reset();
+    this.resetClocks();
+    this.dongle = false;
     this.connectCount++;
     const reader = port.readable.getReader();
     this.reader = reader;
@@ -202,11 +231,14 @@ export class WebSerialStickSource extends BaseInputSource {
     this.closing = false;
   }
 
-  /** payload를 프레이밍해 쓰고, 성공하면 탭에 송신 기록을 남긴다 */
-  sendCommand(bytes: Uint8Array): void {
+  /**
+   * payload를 프레이밍해 쓰고, 성공하면 탭에 송신 기록을 남긴다.
+   * stickId가 있고 동글이 확인됐으면 ROUTE로 감싸 그 손에만 보낸다. 없으면 붙은 스틱 모두에 간다.
+   */
+  sendCommand(bytes: Uint8Array, stickId?: StickId): void {
     const writer = this.writer;
     if (!writer) return;
-    const payload = new Uint8Array(bytes);
+    const payload = stickId !== undefined && this.dongle ? encodeRoute(stickId, bytes) : new Uint8Array(bytes);
     let framed: Uint8Array;
     try {
       framed = frame(payload);
@@ -231,14 +263,14 @@ export class WebSerialStickSource extends BaseInputSource {
     this.sendCommand(encodeResetPose());
   }
 
-  /** 직결은 포트 하나라 stickId를 쓰지 않는다 */
-  haptic(_stickId: StickId, strength: number, durationMs: number): void {
-    this.sendCommand(encodeHaptic(strength, durationMs));
+  haptic(stickId: StickId, strength: number, durationMs: number): void {
+    this.sendCommand(encodeHaptic(strength, durationMs), stickId);
   }
 
-  /** 포트 하나라 공용 오프셋을 돌려준다 */
-  clockOffsetOf(_stickId?: StickId): number | null {
-    return this.clock.offset;
+  /** 손을 안 주면 먼저 맞춰진 쪽(왼손 우선)을 돌려준다 */
+  clockOffsetOf(stickId?: StickId): number | null {
+    if (stickId !== undefined) return this.clocks[stickId].offset;
+    return this.clocks[0].offset ?? this.clocks[1].offset;
   }
 
   transportStats(): TransportStats {
