@@ -926,6 +926,8 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 `AUDIO_STORAGE_PUBLIC_ENDPOINT`는 AI 워커가 접근할 수 있는 S3 주소다. 일반 설정의 기본은 BE 내부 음원 endpoint이며 Infra Compose에서는 `OBJECT_STORAGE_PUBLIC_URL`을 기본으로 사용한다. 외부 GPU에서는 `https://k15a307.p.ssafy.io`처럼 워커가 접근 가능한 공개 주소를 사용한다. BE의 내부 저장소 endpoint는 그대로 유지한다. 워커용 임시 음원 버킷과 반주 버킷은 비공개·비버전이어야 한다. 최종 반주 쓰기 자격증명은 기본적으로 `AUDIO_STORAGE_ACCESS_KEY/SECRET_KEY`이며 필요하면 `WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY/SECRET_KEY`로 별도 지정한다. 최종 반주와 드럼 체크포인트 생성에 S3 조건부 PUT(`If-None-Match: *`) 지원이 필요하다. SeaweedFS의 서명된 청크 처리 호환을 위해 음원·워커 쓰기 클라이언트는 청크 인코딩을 끄되 SDK의 기본 CRC32 요청 체크섬은 유지한다. `WORKER_STORAGE_URL_TTL`은 1~10분이며 기본 10분이다. 음원 다운로드와 FLAC 검증에 `ffprobe`가 필요하다.
 
+반주 쓰기 자격증명에는 반주 버킷의 `s3:GetBucketVersioning`과 반주 객체의 `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` 권한이 필요하다. 반주 승격·공용 반주 업로드·정리 조회·삭제 전에 매번 버전 상태를 확인하며, 버전 상태가 미기재이거나 비어 있는 버킷만 허용한다(공백도 빈 상태로 취급한다). `Enabled`, `Suspended` 및 알 수 없는 비공백 상태는 거절한다. 조회 권한 부족·저장소 장애도 작업 실패로 처리하고 정리는 기존 방식대로 재시도한다. 상태 확인과 객체 작업은 원자적이지 않으므로 운영자가 버킷의 버전 설정을 변경하지 않도록 관리해야 한다. 서비스는 버전 상태를 바꾸거나 기존 버전 객체를 삭제하지 않으며 상태 변경 권한이 필요 없다. 자격증명·서명 URL·저장소 오류 원문을 로그에 남기지 않는다.
+
 | 요청 | 주요 입력과 동작 |
 | --- | --- |
 | `POST /claim` | `workerId`, UUID `claimRequestId`. 배정은 200, 대기 작업 없음은 204. `input.durationMs`는 BE가 원곡 접수 때 저장한 길이이며 SOURCE_AUDIO와 DRUM_STEM 모두 같은 값이다. 같은 요청 ID의 유효 배정은 복구되며 만료된 ID는 409다. |
