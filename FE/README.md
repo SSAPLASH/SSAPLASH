@@ -73,6 +73,7 @@ src/
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
+├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach). 순수 TypeScript, domain만 import
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
@@ -89,10 +90,10 @@ src/
 | 층 | 폴더 | import 허용 |
 | --- | --- | --- |
 | 조립 | `app`, `main.tsx` | 전부 |
-| 화면 | `pages` | hooks · components · store · engine · audio · domain · monitor · app(인스턴스·언락) |
+| 화면 | `pages` | hooks · components · store · engine · audio · coach · domain · monitor · app(인스턴스·언락) |
 | 공용 UI | `components`, `hooks` | store · engine · audio · domain (+ `app/sensorRegistry` 조회만: AppShell · SensorOptionsPanel) |
 | 상태 | `store` | domain · api |
-| 코어 | `input`, `engine`, `audio`, `api` | domain |
+| 코어 | `input`, `engine`, `audio`, `api`, `coach` | domain |
 | 모니터 | `monitor` | input · domain (판정 경로와 분리. `pages/monitor`만 읽는다) |
 | 도메인 | `domain` | 없음 |
 
@@ -232,6 +233,18 @@ src/
 - **AI 약점 구간(COACH-003, `components/report/WeakSegments`):** 리포트의 `weakSegments`를 `api/reports.toWeakSegments`가 화면 타입으로 바꾼다. 배열이 아니면 null(미분석·실패), `[]`는 "약점 없음". `description`은 서버 한국어 문장을 그대로 보여 주고 `pattern`으로 분기하지 않는다(모르는 패턴·`metrics` 키는 통과). 카드는 서버 순서 그대로 `scope: WHOLE`("연주 전체") 그룹을 위에, `SEGMENT`를 아래에 두고, 구간 머리글의 초는 AI 문장과 같은 규칙(`domain/report.formatSeconds`: 정수 초면 소수점 없이, 아니면 한 자리. 악보 모드는 `segmentBars`로 마디 병기), `severity ≥ 0.7`은 "주의" 강조. 상태별 안내: `PENDING`은 "분석 중" + 재조회, `DONE`+`[]`는 판정 수 합이 20 미만이면 "곡이 짧아 분석하지 않았어요"(`isTooShortForAnalysis`, 분모는 PERFECT+GOOD+MISS로 AI와 합의. BE가 사유를 저장하지 않아 FE가 추정) 아니면 "뚜렷한 약점 없음", `FAILED`는 실패 안내(나머지 리포트는 정상), `NOT_REQUESTED`는 "분석 대상이 아니에요". 추천 연습(`recommendedDrills`)은 아직 해석하지 않는다.
 - **PENDING 재조회:** 리포트 페이지가 `app/analysisPoller`로 2초 간격 최대 5회 `GET /report`만 다시 받는다(`playSync.refreshReport`, 프리패치 캐시의 리포트만 교체하고 노트는 유지). 5회 뒤에도 PENDING이면 "잠시 뒤 다시 확인" 안내와 **새로고침** 버튼(5회 재시작). 결과 화면은 재조회하지 않는다.
 - **결과 화면 분석 일원화:** 플레이마다 분석 생성기는 하나다. 업로드 대상 플레이(`domain/report.isUploadTarget`: 서버 형식 로그이고 SKIPPED·재시도 불가 FAILED가 아님)는 결과 화면에 로컬 피드백 카드·미니 악보·패드 요약 표를 보이지 않고, **상세 분석 보기** 버튼 설명이 프리패치 리포트의 분석 상태를 보여 준다(`domain/report.analysisTeaser`: "분석 중" / "AI가 약점 n곳을 찾았어요" / "뚜렷한 약점 없음" / "분석 실패"). 업로드가 생략되거나 재시도 불가로 실패한 플레이만 "간단 피드백" 제목으로 로컬 카드를 보여 준다.
+
+## 실시간 코칭 (COACH-001, `src/coach/live`)
+
+플레이 중 최근 판정 흐름에서 경향(계속 늦음, 한쪽 손 약함 등)을 뽑아 짧은 문구로 알리는 **규칙 모듈**이다. 서버를 거치지 않고 브라우저에서만 동작한다. 이 모듈은 판정 한 건을 받아 문구 후보를 돌려줄 뿐이고, **화면 표시와 `PlayPage` 연결은 아직 없다**(연결·HUD·설정 토글·`PlayLog.liveCoachEvents`는 FE 작업).
+
+- **쓰는 법:** `new LiveCoach({ goodMs, enabled? })`로 만들고, 판정(`onJudgement`)마다 `push({songTimeMs, noteTimeMs, judgement, deltaMs, pad, stickId, velocity})`를 부른다. 문구를 띄울 때만 `{tag, text, severity, tMs, displayMs}`를 돌려주고 아니면 `null`이다. `events()`는 업로드 본문 `liveCoachEvents[]`에 그대로 담을 `{tMs, tag, text}` 목록이다. 재시작(다시 하기)에서 `reset()`. 일시정지 중에는 `push`를 부르지 않는다. 코칭 오류로 플레이가 멈추지 않도록 `push`는 예외를 던지지 않는다.
+- **손·세기:** `RhythmSession.onJudgement`의 `JudgementEvent`에는 `stickId`·`velocity`가 없다. 두 값은 `inputManager.onHit`의 `ResolvedHit`에 있어서 연결하는 쪽이 판정과 짝지어 넘긴다. 손 정보가 없으면(MISS·키보드) 손별 규칙만 제외된다.
+- **규칙 5종**(`rules.ts`): `LIVE_MISS_STREAK`(연속 3번 또는 최근 6개 중 4개 놓침) · `LIVE_LATE`/`LIVE_EARLY`(최근 12개 평균이 `0.3 × goodMs` 이상이고 같은 부호가 75% 이상) · `LIVE_PAD_LATE`/`LIVE_PAD_EARLY`(한 패드가 나머지 패드보다 `0.45 × goodMs` 이상 늦거나 빠름) · `LIVE_HAND_WEAK`(한 손 평균 세기가 다른 손의 70% 미만) · `LIVE_UNSTEADY`(편차가 `0.5 × goodMs` 이상).
+- **표시 정책**(`policy.ts`): 판정 8개 전에는 띄우지 않고, 문구 사이 8초, 같은 키는 25초, 플레이당 10개, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자). 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
+- **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다.
+- **수치 고치는 곳:** 모든 임계값은 `coach/live/config.ts` 한 곳에 있다. 판정 폭에 비례하는 값은 `goodMs`에 곱하는 계수라서 사용자가 판정 폭(30~150ms)을 바꿔도 같은 비율로 따라간다. 수치는 가정값이므로 직접 플레이해 보며 여기서 고친다.
+- **검증:** `npm test`(합성 플레이 시험 포함: 계속 늦음에서 `LIVE_LATE`, 경향 없는 100플레이에서 평균 0.5개 이하, 간격·상한 준수, 계산 시간 중앙값 0.2ms 이하).
 
 ## 반주 재생
 
