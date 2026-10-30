@@ -1,11 +1,17 @@
-// 통합 설정 페이지(/setup). 스틱 연결·시작 위치 보정·프리셋·배치·타격 확인·저장·설정 완료를 한 화면에 둔다.
-// 판정은 배치(kitLayout)에서 유도되므로 편집 중 배치가 곧 판정이다. 저장은 presetStore, 보정은 ReferenceCapture가 맡고
-// 이 페이지는 조립과 표시만 한다. 디자인은 Figma 이후 교체 예정이라 기존 클래스로 둔다.
+// 통합 설정 페이지(/setup). 단계 카드 3장(스틱 연결·시작 위치 보정·프리셋) → 드럼 배치 절 → 접힌 고급 설정 → 하단 저장 바.
+// 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
+// 단계 판정·문구는 domain/setupSteps, 펼침 규칙은 domain/setupExpand, 저장은 presetStore, 보정은 ReferenceCapture가 맡고
+// 이 페이지는 조립과 표시만 한다. 판정은 배치(kitLayout)에서 유도되므로 편집 중 배치가 곧 판정이다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { KitCanvas } from '@/components/KitCanvas';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { useHitFx } from '@/components/useHitFx';
+import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
+import { ReturnBanner } from '@/components/setup/ReturnBanner';
+import { StepCard } from '@/components/setup/StepCard';
+import { StickCard } from '@/components/setup/StickCard';
+import { UnsavedLeaveDialog } from '@/components/setup/UnsavedLeaveDialog';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
@@ -14,10 +20,22 @@ import type { HitFx } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { layoutToProfile } from '@/domain/kitJudge';
 import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
-import { PRESET_NAME_MAX, validatePresetName, type PresetErrorCode } from '@/domain/preset';
+import type { PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
-import { READINESS_MESSAGES, readiness } from '@/domain/readiness';
+import { readiness } from '@/domain/readiness';
+import {
+  SETUP_BAR_DIRTY_TEXT,
+  SETUP_BAR_NO_PRESET_TEXT,
+  returnBannerText,
+  returnButtonText,
+  returnTargetName,
+  setupBarCleanText,
+  setupSteps,
+  unsavedLeaveText,
+  type SetupStepId,
+} from '@/domain/setupSteps';
+import { collapse, initialOpen, isExpanded, openByUser, openOnFirstNeededChange } from '@/domain/setupExpand';
 import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { SOUND_SET_LABELS, type SoundSetId } from '@/audio/soundSets';
@@ -43,13 +61,11 @@ const ERROR_TEXT: Record<PresetErrorCode, string> = {
   NETWORK: '저장하지 못했습니다. 다시 시도해 주세요',
 };
 
-const NAME_TEXT = {
-  EMPTY: '이름을 입력하세요',
-  TOO_LONG: `이름은 ${PRESET_NAME_MAX}자 이하여야 합니다`,
-  DUPLICATE: '같은 이름의 프리셋이 있습니다',
-} as const;
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+const STEP_DOM_ID: Record<SetupStepId, string> = {
+  stick: 'step-stick',
+  calibration: 'step-calibration',
+  preset: 'step-preset',
+};
 
 /** 스틱별 방위각 보정 문구. 보일 게 없으면 null. 쿨다운 경과는 1초 tick 리렌더로 갱신된다 */
 function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], connected: [boolean, boolean]): string | null {
@@ -80,10 +96,14 @@ function padTableText(t: PadTableStatus): string {
   return '스틱에 패드 표 전송 중…';
 }
 
+/** 이름 창을 연 이유: leave = 미저장 이탈 확인에서 [저장하고 나가기], save = 일반 저장(③·하단 바) */
+type NamePurpose = 'leave' | 'save';
+
 export function SetupPage() {
   const s = useSettings();
   const presets = usePresets();
   const connected = useLive((l) => l.connected);
+  const battery = useLive((l) => l.battery);
   const pose = useLive((l) => l.pose);
   const lastHit = useLive((l) => l.lastHit);
   const sourceState = useLive((l) => l.sourceState);
@@ -96,11 +116,12 @@ export function SetupPage() {
   const soundSetMissing = useLive((l) => l.soundSetMissing);
   const navigate = useNavigate();
   const location = useLocation();
-  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? null;
+  const navState = location.state as { returnTo?: string; returnLabel?: string } | null;
+  const returnTo = navState?.returnTo ? sanitizeReturnTo(navState.returnTo) : null;
+  const returnLabel = typeof navState?.returnLabel === 'string' ? navState.returnLabel : undefined;
 
-  const [tick, setTick] = useState(0);
-  const [newName, setNewName] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
+  // 1초마다 갱신하는 현재 시각. 리렌더 tick이자 "오늘 HH:MM" 판단 기준이다
+  const [now, setNow] = useState(() => Date.now());
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
 
@@ -118,7 +139,7 @@ export function SetupPage() {
   }, []);
 
   useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -137,7 +158,6 @@ export function SetupPage() {
   );
 
   const lat = audioEngine.latency();
-  void tick;
 
   // 타격 이펙트. 톡 치기·키보드·센서 타격 모두 live의 hitSeq로 들어온다
   const hits = useRef(new Map<PadId, HitFx>());
@@ -145,6 +165,40 @@ export function SetupPage() {
   const testPad = (pad: PadId) => {
     void previewHit(pad, s.testVelocity);
   };
+
+  // ---- 단계 판정(설정 화면에선 "이 세션에서 보정했는가"를 묻는다: firstSetupDone 대신 referenceSetAt) ----
+  const readinessInput = {
+    sensorKind: s.sensorKind,
+    connected,
+    firstSetupDone: referenceSetAt !== null,
+    activePresetId: s.activePresetId,
+  };
+  const { ready, missing } = readiness(readinessInput);
+  const stepsResult = setupSteps({ ...readinessInput, referenceSetAt, activePresetName: activePreset?.name ?? null, battery }, now);
+  const stepOf = (id: SetupStepId) => stepsResult.steps.find((st) => st.id === id)!;
+
+  // 센서를 쓰는 화면에서 준비가 처음 갖춰지면 최초 설정 완료로 기록한다(옛 [설정 완료] 버튼의 역할).
+  // 키보드 전용은 보정을 거치지 않았으니 여기선 켜지 않고, 복귀할 때 켠다
+  useEffect(() => {
+    if (sensorMode && ready && !s.firstSetupDone) s.setFirstSetupDone(true);
+  }, [sensorMode, ready, s]);
+
+  // ---- 펼침: 사용자가 연 단계 ∪ 모자란 첫 단계(모자란 첫 단계가 바뀌면 새로 더한다) ----
+  const [open, setOpen] = useState(() => initialOpen(stepsResult.firstNeeded));
+  const [prevFirstNeeded, setPrevFirstNeeded] = useState(stepsResult.firstNeeded);
+  if (prevFirstNeeded !== stepsResult.firstNeeded) {
+    setPrevFirstNeeded(stepsResult.firstNeeded);
+    setOpen(openOnFirstNeededChange(open, stepsResult.firstNeeded));
+  }
+
+  // 진입 시 한 번만 모자란 첫 단계로 스크롤(띠 높이만큼의 여백은 CSS scroll-margin-top)
+  const entryStep = useRef(stepsResult.firstNeeded);
+  useEffect(() => {
+    const id = entryStep.current;
+    if (!id) return;
+    const raf = requestAnimationFrame(() => document.getElementById(STEP_DOM_ID[id])?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // ---- ② 시작 위치 보정 (capturing 모드) ----
   const [capturing, setCapturing] = useState(false);
@@ -198,7 +252,9 @@ export function SetupPage() {
   // 언마운트 시 구독 해제. 자세 스트림은 다른 화면의 자세 마커가 쓰므로 켠 채 둔다
   useEffect(() => () => capCleanup.current?.(), []);
 
-  // ---- ⑦ 저장 ----
+  // ---- 저장·이름 창 ----
+  const [nameOpen, setNameOpen] = useState<NamePurpose | null>(null);
+
   const flashSaved = () => {
     setSavedFlash(true);
     if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
@@ -209,42 +265,92 @@ export function SetupPage() {
     void presets.saveChanges().then((ok) => ok && flashSaved());
   };
 
-  const onSaveAs = () => {
-    const verdict = validatePresetName(newName, presets.items);
-    if (verdict) {
-      setNameError(NAME_TEXT[verdict]);
-      return;
-    }
-    setNameError(null);
-    void presets.saveAs(newName).then((ok) => {
-      if (ok) {
-        setNewName('');
-        flashSaved();
-      }
-    });
+  const openNameDialog = (purpose: NamePurpose) => {
+    presets.clearError();
+    setNameOpen(purpose);
   };
 
-  // ---- ⑧ 설정 완료 ----
-  // 설정 페이지에서는 "이 세션에서 보정했는가"를 묻는다(firstSetupDone 대신 referenceSetAt)
-  const { ready: canFinish, missing } = readiness({
-    sensorKind: s.sensorKind,
-    connected,
-    firstSetupDone: referenceSetAt !== null,
-    activePresetId: s.activePresetId,
-  });
-  const leaving = useRef(false);
-
-  const finish = () => {
-    s.setFirstSetupDone(true);
-    leaving.current = true;
-    navigate(sanitizeReturnTo(returnTo));
+  const cancelNameDialog = () => {
+    presets.clearError();
+    setNameOpen(null);
   };
 
-  // 미저장 변경이 있으면 다른 화면으로 가기 전에 확인한다(보정 중이거나 설정 완료 이동은 제외)
+  // ---- 복귀·이탈 ----
+  const leaving = useRef(false); // 확인을 마친 이동은 blocker가 다시 막지 않게 한다
+  const [returnConfirm, setReturnConfirm] = useState(false); // 복귀 버튼에서 연 이탈 확인
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  // 메뉴 이동·뒤로 가기: 미저장 변경이 있으면 확인한다(보정 중이거나 확인을 마친 이동은 제외)
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       dirty && !capturing && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
   );
+  const leaveOpen = (blocker.state === 'blocked' || returnConfirm) && nameOpen === null;
+
+  const doReturn = () => {
+    s.setFirstSetupDone(true);
+    leaving.current = true;
+    navigate(returnTo ?? '/');
+  };
+
+  /** 확인을 마치고 실제로 나간다: 복귀 버튼에서 왔으면 returnTo로, 메뉴·뒤로 가기였으면 막았던 이동을 이어 간다 */
+  const proceedLeave = () => {
+    setLeaveError(null);
+    if (returnConfirm) {
+      setReturnConfirm(false);
+      doReturn();
+    } else if (blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+  };
+
+  const onReturn = () => {
+    if (dirty && !capturing) setReturnConfirm(true);
+    else doReturn();
+  };
+
+  const cancelLeave = () => {
+    presets.clearError();
+    setLeaveError(null);
+    setReturnConfirm(false);
+    if (blocker.state === 'blocked') blocker.reset();
+  };
+
+  // [저장 안 함]: 적용 프리셋이 있으면 그 값으로 배치·사운드를 되돌린 뒤 나간다(없으면 되돌릴 기준이 없어 그대로)
+  const discardAndLeave = () => {
+    if (s.activePresetId) usePresets.getState().apply(s.activePresetId);
+    proceedLeave();
+  };
+
+  const saveAndLeave = () => {
+    if (!s.activePresetId) {
+      openNameDialog('leave');
+      return;
+    }
+    setLeaveError(null);
+    presets.clearError(); // 앞선 오류가 이번 저장 결과로 오인되지 않게
+    void usePresets
+      .getState()
+      .saveChanges()
+      .then((ok) => {
+        const { status, error } = usePresets.getState();
+        if (!ok && status === 'error') setLeaveError(ERROR_TEXT[error ?? 'NETWORK']);
+        else proceedLeave(); // 저장 성공(또는 이미 변경 없음)
+      });
+  };
+
+  const saveNewName = (name: string) => {
+    const purpose = nameOpen;
+    void usePresets
+      .getState()
+      .saveAs(name)
+      .then((ok) => {
+        if (!ok) return; // 오류 문구는 이름 창이 presets.error로 보인다
+        setNameOpen(null);
+        if (purpose === 'leave') proceedLeave();
+        else flashSaved();
+      });
+  };
 
   // ---- ① 연결 상태 문구(자유 연주와 같은 표현) ----
   const sensorDesc = sensorRegistry.get(s.sensorKind);
@@ -260,102 +366,68 @@ export function SetupPage() {
     ? `${lastHit.pad ? PAD_META[lastHit.pad].label : '판정 없음'} · 세기 ${lastHit.velocity} · ${lastHit.source}`
     : '아직 없음';
 
+  // ---- 단계 카드 공통 ----
+  const expandedOf = (id: SetupStepId) => isExpanded(open, id, stepOf(id).status) || (id === 'calibration' && capturing);
+  const openStep = (id: SetupStepId) => setOpen((o) => openByUser(o, id));
+  const collapseStep = (id: SetupStepId) => {
+    if (id === 'calibration') stopCapture();
+    setOpen((o) => collapse(o, id));
+  };
+  const actionLabelOf = (id: SetupStepId): string | undefined => {
+    const { status } = stepOf(id);
+    if (id === 'calibration') return status === 'skipped' ? undefined : status === 'done' ? '다시 하기' : '열기';
+    // 스틱은 키보드 전용(skipped)이어도 센서를 고르려면 펼칠 수 있어야 한다
+    return status === 'needed' ? '열기' : '변경';
+  };
+  const onActionOf = (id: SetupStepId) => () => {
+    openStep(id);
+    // 보정 [다시 하기]는 펼치고 바로 시작한다
+    if (id === 'calibration' && stepOf(id).status === 'done' && anyConnected) startCapture();
+  };
+
+  const barText = !activePreset ? SETUP_BAR_NO_PRESET_TEXT : dirty ? SETUP_BAR_DIRTY_TEXT : setupBarCleanText(activePreset.name);
+  const nameDialogError = presets.status === 'error' && presets.error ? ERROR_TEXT[presets.error] : null;
+  const showPresetError = presets.status === 'error' && presets.error !== null && nameOpen === null;
+
   return (
-    <main className="main wide">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
+    <main className="main wide setup-page">
+      {returnTo && (
+        <ReturnBanner
+          {...returnBannerText(missing, connected, returnTargetName(returnTo, returnLabel))}
+          buttonText={returnButtonText(returnTo, returnLabel)}
+          ready={ready}
+          enterEnabled={!leaveOpen && nameOpen === null && !capturing}
+          onReturn={onReturn}
+        />
+      )}
+
+      <div className="row setup-head">
         <h1>설정</h1>
-        <span className="small dim">연결 → 시작 위치 → 배치 → 쳐 보기 → 저장 → 설정 완료</span>
+        <span className="small dim">
+          {stepsResult.total}단계 중 {stepsResult.doneCount}단계 완료
+        </span>
       </div>
 
-      <div className="setup-grid">
-        {/* 좌: ④ 드럼 배치 + ⑤ 타격 확인 */}
-        <div className="col">
-          <div className="card col">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>드럼 배치</h3>
-              <button className="btn-ghost small" onClick={s.resetLayout}>
-                기본 배치로
-              </button>
-            </div>
-            <p className="small dim">
-              패드를 끌어 원하는 자리에 둡니다. 배치가 곧 판정 영역이라 바로 쳐 보며 확인할 수 있습니다. 패드를 톡 치면 소리와 이펙트가
-              나고, 끌면 위치만 바뀝니다.
-            </p>
-            <div className="chips">
-              {PRESET_IDS.map((id) => (
-                <button key={id} className="chip" onClick={() => s.applyLayoutPreset(id)}>
-                  {KIT_LAYOUT_PRESET_LABELS[id]}
-                </button>
-              ))}
-              <span className="small dim" style={{ marginLeft: 8 }}>
-                세기
-              </span>
-              {VELOCITY_CHOICES.map((c) => (
-                <button
-                  key={c.v}
-                  className={`chip ${s.testVelocity === c.v ? 'active' : ''}`}
-                  onClick={() => s.setTestVelocity(c.v)}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            <KitCanvas
-              layout={s.kitLayout}
-              draggable
-              onMovePad={s.movePad}
-              onTapPad={testPad}
-              hits={hits}
-              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-              anchors={anchors}
-              angleRange={s.tuning.angleRange}
-              poses={pose}
-              showPoses={sensorMode}
-              surfaceRef={bindSensorSurface}
-            />
-            <div className="field">
-              <label>사운드 세트</label>
-              <select value={s.soundSetId} onChange={(e) => s.setSoundSetId(e.target.value as SoundSetId)}>
-                {(['ssaplash', 'synth'] as SoundSetId[]).map((id) => (
-                  <option key={id} value={id}>
-                    {SOUND_SET_LABELS[id]}
-                  </option>
-                ))}
-              </select>
-              <p className="small faint">
-                {s.soundSetId === 'synth'
-                  ? '합성음을 씁니다.'
-                  : soundSetState === 'loading'
-                    ? '샘플 불러오는 중… (그동안은 합성음)'
-                    : soundSetState === 'error'
-                      ? '샘플을 불러오지 못해 합성음을 씁니다.'
-                      : soundSetState === 'ready'
-                        ? soundSetMissing.length > 0
-                          ? `샘플 준비됨 · 합성음으로 대체: ${soundSetMissing.map((p) => PAD_META[p].label).join(', ')}`
-                          : '샘플 준비됨'
-                        : '소리를 한 번 내면 샘플을 불러옵니다.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="card col">
-            <h3>타격 확인</h3>
-            {sensorMode && !anyConnected && <div className="notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div>}
-            <p className="small dim">마지막 타격: {lastHitText}</p>
-            <div className="chips">
-              {LANE_PADS.map((pad) => (
-                <button key={pad} className="chip" onClick={() => testPad(pad)}>
-                  {PAD_META[pad].label} 소리
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 우: ① ② ③ ⑦ ⑧ 카드(⑥은 ② 카드의 버튼) */}
-        <div className="col">
-          <div className="card col">
-            <h3>스틱 연결</h3>
+      <div className="setup-steps">
+        {/* ① 스틱 연결 */}
+        <StepCard
+          id={STEP_DOM_ID.stick}
+          index={1}
+          title="스틱 연결"
+          status={stepOf('stick').status}
+          summary={stepOf('stick').summary}
+          actionLabel={actionLabelOf('stick')}
+          onAction={onActionOf('stick')}
+          expanded={expandedOf('stick')}
+          onCollapse={() => collapseStep('stick')}
+        >
+          <div className="col">
+            {sensorMode && (
+              <div className="stick-cards">
+                <StickCard hand={0} connected={connected[0]} batteryPct={battery[0]} />
+                <StickCard hand={1} connected={connected[1]} batteryPct={battery[1]} />
+              </div>
+            )}
             <p className="small dim">키보드는 항상 켜져 있습니다. 센서를 고르면 센서 타격은 가상 키트 배치로 판정됩니다.</p>
             {[NO_SENSOR, ...sensorRegistry.list()].map((i) => (
               <label key={i.id} className="row sensor-choice">
@@ -386,53 +458,81 @@ export function SetupPage() {
               <div className="notice">다시 연결됐습니다. 쳐 보고 필요하면 시작 위치를 다시 맞추세요</div>
             )}
           </div>
+        </StepCard>
 
-          <div className="card col">
-            <h3>시작 위치 보정</h3>
-            {!sensorMode ? (
-              <p className="small dim">키보드 입력은 보정이 필요 없습니다.</p>
-            ) : (
-              <>
-                <p className={referenceSetAt === null ? 'ref-status ref-need' : 'ref-status'}>
-                  {referenceSetAt === null ? '최초 설정 필요' : `보정됨 ${clock(referenceSetAt)}`}
-                </p>
-                {capturing ? (
-                  <div className="col">
-                    <p className="small">스틱을 들고 3초간 자세를 유지하세요</p>
-                    <div className="progress ref-progress">
-                      <div style={{ width: `${Math.round(snap.progress * 100)}%` }} />
-                    </div>
-                    <p className="small dim">
-                      {snap.phase === 'holding' ? `유지 중 ${(snap.progress * 3).toFixed(1)}초` : '자세가 흔들리면 처음부터 다시 셉니다'}
-                      {' · '}퍼짐 {snap.spread.toFixed(1)}°
-                    </p>
-                    {!anyConnected && <div className="notice error">스틱 연결이 끊겼습니다. 다시 연결되면 처음부터 진행합니다</div>}
-                    <div className="row">
-                      <button onClick={stopCapture}>취소</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="col">
-                    {capNote && <div className="notice">{capNote}</div>}
-                    <div className="row">
-                      <button className={referenceSetAt === null ? 'btn-primary' : ''} onClick={startCapture} disabled={!anyConnected}>
-                        {referenceSetAt === null ? '시작 위치 맞추기' : '다시 맞추기'}
-                      </button>
-                    </div>
-                    {!anyConnected && <p className="small faint">스틱을 연결하면 보정할 수 있습니다.</p>}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+        {/* ② 시작 위치 보정 */}
+        <StepCard
+          id={STEP_DOM_ID.calibration}
+          index={2}
+          title="시작 위치 보정"
+          status={stepOf('calibration').status}
+          summary={stepOf('calibration').summary}
+          actionLabel={actionLabelOf('calibration')}
+          onAction={onActionOf('calibration')}
+          expanded={expandedOf('calibration')}
+          onCollapse={() => collapseStep('calibration')}
+        >
+          {!sensorMode ? (
+            <p className="small dim">키보드 입력은 보정이 필요 없습니다.</p>
+          ) : capturing ? (
+            <div className="col">
+              <p className="small">스틱을 들고 3초간 자세를 유지하세요</p>
+              <div className="progress ref-progress">
+                <div style={{ width: `${Math.round(snap.progress * 100)}%` }} />
+              </div>
+              <p className="small dim">
+                {snap.phase === 'holding' ? `유지 중 ${(snap.progress * 3).toFixed(1)}초` : '자세가 흔들리면 처음부터 다시 셉니다'}
+                {' · '}퍼짐 {snap.spread.toFixed(1)}°
+              </p>
+              {!anyConnected && <div className="notice error">스틱 연결이 끊겼습니다. 다시 연결되면 처음부터 진행합니다</div>}
+              <div className="row">
+                <button onClick={stopCapture}>취소</button>
+              </div>
+            </div>
+          ) : (
+            <div className="col">
+              {capNote && <div className="notice">{capNote}</div>}
+              <div className="row">
+                <button className={referenceSetAt === null ? 'btn-primary' : ''} onClick={startCapture} disabled={!anyConnected}>
+                  {referenceSetAt === null ? '시작 위치 맞추기' : '다시 맞추기'}
+                </button>
+              </div>
+              {!anyConnected && <p className="small faint">스틱을 연결하면 보정할 수 있습니다.</p>}
+            </div>
+          )}
+        </StepCard>
 
-          <div className="card col">
+        {/* ③ 프리셋 */}
+        <StepCard
+          id={STEP_DOM_ID.preset}
+          index={3}
+          title="프리셋"
+          status={stepOf('preset').status}
+          summary={stepOf('preset').summary}
+          actionLabel={actionLabelOf('preset')}
+          onAction={onActionOf('preset')}
+          expanded={expandedOf('preset')}
+          onCollapse={() => collapseStep('preset')}
+        >
+          <div className="col">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>프리셋</h3>
+              <span className="small">
+                {activePreset ? (
+                  <>
+                    적용 중: <strong>{activePreset.name}</strong>
+                    {dirty && <span className="preset-badge preset-dirty">변경됨</span>}
+                  </>
+                ) : (
+                  <>
+                    적용된 프리셋 없음
+                    {dirty && <span className="preset-badge preset-dirty">저장 안 됨</span>}
+                  </>
+                )}
+              </span>
               {presets.status === 'loading' && <span className="spinner" aria-label="불러오는 중" />}
             </div>
             {presets.items.length === 0 && presets.status !== 'loading' && (
-              <p className="small dim">저장된 프리셋이 없습니다. 배치를 정하고 아래에서 이름을 붙여 저장하세요.</p>
+              <p className="small dim">저장된 프리셋이 없습니다. 아래 드럼 배치를 정하고 [새 프리셋으로 저장]으로 이름을 붙여 저장하세요.</p>
             )}
             <div className="preset-list">
               {presets.items.map((p) => (
@@ -460,128 +560,186 @@ export function SetupPage() {
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="card col">
-            <h3>저장·적용</h3>
-            <p className="small">
-              {activePreset ? (
-                <>
-                  적용 중: <strong>{activePreset.name}</strong>
-                  {dirty && <span className="preset-badge preset-dirty">변경됨</span>}
-                </>
-              ) : (
-                <>
-                  적용된 프리셋 없음
-                  {dirty && <span className="preset-badge preset-dirty">저장 안 됨</span>}
-                </>
-              )}
-            </p>
             <div className="row">
-              <button className="btn-primary" disabled={!s.activePresetId || !dirty || saving} onClick={onSaveChanges}>
-                변경사항 저장
-              </button>
-              {saving && <span className="spinner" aria-label="저장 중" />}
-              {savedFlash && <span className="small preset-saved">저장됨</span>}
-            </div>
-            <div className="row">
-              <input
-                type="text"
-                placeholder="새 프리셋 이름"
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                  setNameError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onSaveAs();
-                }}
-                style={{ width: 180 }}
-              />
-              <button disabled={saving} onClick={onSaveAs}>
-                다른 이름으로 저장
+              <button disabled={saving} onClick={() => openNameDialog('save')}>
+                새 프리셋으로 저장
               </button>
             </div>
-            {nameError && <p className="small preset-name-error">{nameError}</p>}
-            {presets.status === 'error' && presets.error && (
+            {showPresetError && (
               <div className="notice error row" style={{ justifyContent: 'space-between' }}>
-                <span>{ERROR_TEXT[presets.error]}</span>
+                <span>{ERROR_TEXT[presets.error!]}</span>
                 <button className="small" onClick={presets.clearError}>
                   닫기
                 </button>
               </div>
             )}
           </div>
+        </StepCard>
+      </div>
 
-          <div className="card col">
-            <h3>설정 완료</h3>
-            <button className="btn-primary" disabled={!canFinish} onClick={finish}>
-              설정 완료
+      {/* 드럼 배치 절: 배치 편집기·사운드 세트·타격 확인(준비 조건이 아니라 단계가 아니다) */}
+      <section className="setup-section" aria-labelledby="setup-kit-title">
+        <h2 id="setup-kit-title">드럼 배치</h2>
+        <div className="card col">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h3>배치 편집</h3>
+            <button className="btn-ghost small" onClick={s.resetLayout}>
+              기본 배치로
             </button>
-            {!canFinish && <p className="small faint">남은 조건: {missing.map((m) => READINESS_MESSAGES[m]).join(' · ')}</p>}
           </div>
-
-          <div className="card col">
-            <h3>판정 반경</h3>
-            <div className="field">
-              <label>판정 반경 상한 {s.tuning.maxRadiusDeg}°</label>
-              <input type="range" min={TUNING_RANGES.maxRadiusDeg.min} max={TUNING_RANGES.maxRadiusDeg.max} step={TUNING_RANGES.maxRadiusDeg.step} value={s.tuning.maxRadiusDeg} onChange={(e) => s.setTuning({ maxRadiusDeg: +e.target.value })} />
-            </div>
+          <p className="small dim">
+            패드를 끌어 원하는 자리에 둡니다. 배치가 곧 판정 영역이라 바로 쳐 보며 확인할 수 있습니다. 패드를 톡 치면 소리와 이펙트가
+            나고, 끌면 위치만 바뀝니다.
+          </p>
+          <div className="chips">
+            {PRESET_IDS.map((id) => (
+              <button key={id} className="chip" onClick={() => s.applyLayoutPreset(id)}>
+                {KIT_LAYOUT_PRESET_LABELS[id]}
+              </button>
+            ))}
+            <span className="small dim" style={{ marginLeft: 8 }}>
+              세기
+            </span>
+            {VELOCITY_CHOICES.map((c) => (
+              <button key={c.v} className={`chip ${s.testVelocity === c.v ? 'active' : ''}`} onClick={() => s.setTestVelocity(c.v)}>
+                {c.label}
+              </button>
+            ))}
           </div>
-
-          <div className="card col">
-            <h3>연주 환경</h3>
-            <div className="field">
-              <label>
-                판정 폭 Perfect ±{s.timing.perfectMs}ms · Good ±{s.timing.goodMs}ms
-              </label>
-              <input type="range" min={10} max={60} step={5} value={s.timing.perfectMs} onChange={(e) => s.setTiming({ ...s.timing, perfectMs: +e.target.value })} />
-              <input type="range" min={30} max={150} step={5} value={s.timing.goodMs} onChange={(e) => s.setTiming({ ...s.timing, goodMs: +e.target.value })} />
-            </div>
-            <div className="field">
-              <label>오디오 오프셋 {s.audioOffsetMs}ms (양수 = 소리가 늦게 들릴 때)</label>
-              <input type="range" min={-100} max={200} step={5} value={s.audioOffsetMs} onChange={(e) => s.setAudioOffsetMs(+e.target.value)} />
-            </div>
-            <div className="field">
-              <label>노트 낙하 시간 {s.scrollMs}ms</label>
-              <input type="range" min={600} max={3000} step={100} value={s.scrollMs} onChange={(e) => s.setScrollMs(+e.target.value)} />
-            </div>
-            <div className="field">
-              <label>볼륨 {Math.round(s.volume * 100)}%</label>
-              <input type="range" min={0} max={1} step={0.05} value={s.volume} onChange={(e) => s.setVolume(+e.target.value)} />
-            </div>
-            <label className="row">
-              <input type="checkbox" checked={s.metronome} onChange={(e) => s.setMetronome(e.target.checked)} /> 플레이 중 메트로놈
-            </label>
-            <div className="field">
-              <label>카운트인 마디</label>
-              <select value={s.countInBars} onChange={(e) => s.setCountInBars(+e.target.value)}>
-                <option value={0}>없음</option>
-                <option value={1}>1마디</option>
-                <option value={2}>2마디</option>
-              </select>
-            </div>
+          <KitCanvas
+            layout={s.kitLayout}
+            draggable
+            onMovePad={s.movePad}
+            onTapPad={testPad}
+            hits={hits}
+            keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
+            anchors={anchors}
+            angleRange={s.tuning.angleRange}
+            poses={pose}
+            showPoses={sensorMode}
+            surfaceRef={bindSensorSurface}
+          />
+          <div className="field">
+            <label>사운드 세트</label>
+            <select value={s.soundSetId} onChange={(e) => s.setSoundSetId(e.target.value as SoundSetId)}>
+              {(['ssaplash', 'synth'] as SoundSetId[]).map((id) => (
+                <option key={id} value={id}>
+                  {SOUND_SET_LABELS[id]}
+                </option>
+              ))}
+            </select>
             <p className="small faint">
-              오디오 지연 실측: {lat ? `base ${lat.baseLatencyMs.toFixed(1)}ms · output ${lat.outputLatencyMs.toFixed(1)}ms · ${lat.sampleRate}Hz` : '소리를 한 번 내면 표시됩니다'}
+              {s.soundSetId === 'synth'
+                ? '합성음을 씁니다.'
+                : soundSetState === 'loading'
+                  ? '샘플 불러오는 중… (그동안은 합성음)'
+                  : soundSetState === 'error'
+                    ? '샘플을 불러오지 못해 합성음을 씁니다.'
+                    : soundSetState === 'ready'
+                      ? soundSetMissing.length > 0
+                        ? `샘플 준비됨 · 합성음으로 대체: ${soundSetMissing.map((p) => PAD_META[p].label).join(', ')}`
+                        : '샘플 준비됨'
+                      : '소리를 한 번 내면 샘플을 불러옵니다.'}
             </p>
           </div>
         </div>
-      </div>
 
-      {blocker.state === 'blocked' && (
-        <div className="overlay setup-leave" role="alertdialog" aria-modal="true" aria-label="저장하지 않은 변경">
-          <h2>저장하지 않은 변경이 있습니다</h2>
-          <p className="dim">나갈까요?</p>
-          <div className="row">
-            <button className="btn-danger" onClick={() => blocker.proceed()}>
-              나가기
-            </button>
-            <button className="btn-primary" onClick={() => blocker.reset()}>
-              계속 편집
-            </button>
+        <div className="card col">
+          <h3>타격 확인</h3>
+          {sensorMode && !anyConnected && <div className="notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div>}
+          <p className="small dim">마지막 타격: {lastHitText}</p>
+          <div className="chips">
+            {LANE_PADS.map((pad) => (
+              <button key={pad} className="chip" onClick={() => testPad(pad)}>
+                {PAD_META[pad].label} 소리
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </section>
+
+      {/* 고급 설정: 판정 반경·연주 환경(설정 스토어에 즉시 저장되어 미저장 판정 대상이 아니다) */}
+      <details className="card setup-advanced">
+        <summary>고급 설정</summary>
+        <div className="col setup-advanced-body">
+          <h3>판정 반경</h3>
+          <div className="field">
+            <label>판정 반경 상한 {s.tuning.maxRadiusDeg}°</label>
+            <input type="range" min={TUNING_RANGES.maxRadiusDeg.min} max={TUNING_RANGES.maxRadiusDeg.max} step={TUNING_RANGES.maxRadiusDeg.step} value={s.tuning.maxRadiusDeg} onChange={(e) => s.setTuning({ maxRadiusDeg: +e.target.value })} />
+          </div>
+
+          <h3>연주 환경</h3>
+          <div className="field">
+            <label>
+              판정 폭 Perfect ±{s.timing.perfectMs}ms · Good ±{s.timing.goodMs}ms
+            </label>
+            <input type="range" min={10} max={60} step={5} value={s.timing.perfectMs} onChange={(e) => s.setTiming({ ...s.timing, perfectMs: +e.target.value })} />
+            <input type="range" min={30} max={150} step={5} value={s.timing.goodMs} onChange={(e) => s.setTiming({ ...s.timing, goodMs: +e.target.value })} />
+          </div>
+          <div className="field">
+            <label>오디오 오프셋 {s.audioOffsetMs}ms (양수 = 소리가 늦게 들릴 때)</label>
+            <input type="range" min={-100} max={200} step={5} value={s.audioOffsetMs} onChange={(e) => s.setAudioOffsetMs(+e.target.value)} />
+          </div>
+          <div className="field">
+            <label>노트 낙하 시간 {s.scrollMs}ms</label>
+            <input type="range" min={600} max={3000} step={100} value={s.scrollMs} onChange={(e) => s.setScrollMs(+e.target.value)} />
+          </div>
+          <div className="field">
+            <label>볼륨 {Math.round(s.volume * 100)}%</label>
+            <input type="range" min={0} max={1} step={0.05} value={s.volume} onChange={(e) => s.setVolume(+e.target.value)} />
+          </div>
+          <label className="row">
+            <input type="checkbox" checked={s.metronome} onChange={(e) => s.setMetronome(e.target.checked)} /> 플레이 중 메트로놈
+          </label>
+          <div className="field">
+            <label>카운트인 마디</label>
+            <select value={s.countInBars} onChange={(e) => s.setCountInBars(+e.target.value)}>
+              <option value={0}>없음</option>
+              <option value={1}>1마디</option>
+              <option value={2}>2마디</option>
+            </select>
+          </div>
+          <p className="small faint">
+            오디오 지연 실측: {lat ? `base ${lat.baseLatencyMs.toFixed(1)}ms · output ${lat.outputLatencyMs.toFixed(1)}ms · ${lat.sampleRate}Hz` : '소리를 한 번 내면 표시됩니다'}
+          </p>
+        </div>
+      </details>
+
+      {/* 하단 고정 바: 저장 안내 + 저장 */}
+      <div className="setup-bar">
+        <span className={`small ${dirty ? 'setup-bar-dirty' : 'dim'}`}>{barText}</span>
+        <span className="row">
+          {saving && <span className="spinner" aria-label="저장 중" />}
+          {savedFlash && <span className="small preset-saved">저장됨</span>}
+          {activePreset ? (
+            <button className="btn-primary" disabled={!dirty || saving} onClick={onSaveChanges}>
+              저장
+            </button>
+          ) : (
+            <button className="btn-primary" disabled={saving} onClick={() => openNameDialog('save')}>
+              새 프리셋으로 저장
+            </button>
+          )}
+        </span>
+      </div>
+
+      <UnsavedLeaveDialog
+        open={leaveOpen}
+        message={unsavedLeaveText(activePreset?.name ?? null)}
+        busy={saving}
+        error={leaveError}
+        onCancel={cancelLeave}
+        onDiscard={discardAndLeave}
+        onSave={saveAndLeave}
+      />
+      <PresetNameDialog
+        open={nameOpen !== null}
+        existing={presets.items}
+        busy={saving}
+        error={nameDialogError}
+        onSave={saveNewName}
+        onCancel={cancelNameDialog}
+      />
     </main>
   );
 }
