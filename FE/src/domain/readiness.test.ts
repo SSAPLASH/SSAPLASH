@@ -1,0 +1,46 @@
+// readiness 단위 테스트: 키보드 면제, 누락 조합, 전부 충족.
+import { describe, expect, it } from 'vitest';
+import { READINESS_MESSAGES, readiness, stickMissingText } from './readiness';
+
+const base = { sensorKind: 'pointer', connected: [false, false] as [boolean, boolean], firstSetupDone: false, activePresetId: null };
+
+describe('readiness', () => {
+  it('키보드 전용이면 아무것도 없어도 준비됨', () => {
+    expect(readiness({ ...base, sensorKind: 'none' })).toEqual({ ready: true, missing: [] });
+  });
+
+  it('아무것도 없으면 세 조건이 순서대로 누락', () => {
+    expect(readiness(base)).toEqual({ ready: false, missing: ['stick', 'firstSetup', 'preset'] });
+  });
+
+  it('한 손만 연결돼도 스틱 누락(양손 모두 필요)', () => {
+    expect(readiness({ ...base, connected: [false, true] }).missing).toEqual(['stick', 'firstSetup', 'preset']);
+    expect(readiness({ ...base, connected: [true, false], firstSetupDone: true }).missing).toEqual(['stick', 'preset']);
+  });
+
+  it('양손·최초 설정이 충족되면 프리셋만 누락', () => {
+    expect(readiness({ ...base, connected: [true, true], firstSetupDone: true }).missing).toEqual(['preset']);
+  });
+
+  it('프리셋만 적용되면 스틱·최초 설정 누락', () => {
+    expect(readiness({ ...base, activePresetId: 'p1' }).missing).toEqual(['stick', 'firstSetup']);
+  });
+
+  it('전부 충족하면 준비됨', () => {
+    expect(readiness({ ...base, connected: [true, true], firstSetupDone: true, activePresetId: 'p1' })).toEqual({
+      ready: true,
+      missing: [],
+    });
+  });
+});
+
+describe('stickMissingText', () => {
+  it('빠진 손을 짚는다', () => {
+    expect(stickMissingText([false, false])).toBe('왼손·오른손 스틱을 연결하세요');
+    expect(stickMissingText([true, false])).toBe('오른손 스틱을 연결하세요');
+    expect(stickMissingText([false, true])).toBe('왼손 스틱을 연결하세요');
+  });
+  it('둘 다 연결이면 일반형', () => {
+    expect(stickMissingText([true, true])).toBe(READINESS_MESSAGES.stick);
+  });
+});
