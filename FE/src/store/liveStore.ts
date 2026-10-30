@@ -21,6 +21,8 @@ export interface MetronomeLive {
 
 interface LiveState {
   connected: [boolean, boolean];
+  /** 스틱별 배터리(%). 모르거나 포트가 닫히면 null. 무응답 끊김일 때는 마지막 값을 남긴다 */
+  battery: [number | null, number | null];
   pose: [Pose, Pose];
   lastHit: ResolvedHit | null;
   sourceState: SourceState;
@@ -49,6 +51,7 @@ interface LiveState {
 
 export const useLive = create<LiveState>(() => ({
   connected: [false, false],
+  battery: [null, null],
   pose: [
     { pitch: 0, yaw: 0 },
     { pitch: 0, yaw: 0 },

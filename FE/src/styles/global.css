@@ -193,6 +193,7 @@ p {
 }
 .nav a {
   text-decoration: none;
+  white-space: nowrap;
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   color: var(--ink-dim);
@@ -207,6 +208,14 @@ p {
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* 좁으면 센서 이름만 줄여 스틱 칩·프로필이 밀려나지 않게 한다 */
+.topbar-sensor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .main {
   flex: 1;
@@ -220,33 +229,87 @@ p {
   padding: 12px 16px 20px;
 }
 
-/* 스틱 상태 */
-.sticks {
-  display: flex;
-  gap: 6px;
+/* 스틱 상태: 셸 칩 + 세팅 ① 손별 카드 */
+.stick-status,
+.stick-card {
+  --stick-on: #67d58a;
+  --stick-off: var(--miss);
+  --stick-low: var(--ember);
 }
-.stick {
+.stick-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--stick-off);
+}
+.stick-dot.on {
+  background: var(--stick-on);
+  box-shadow: 0 0 8px var(--stick-on);
+}
+.stick-status {
   display: inline-flex;
+  flex-shrink: 0;
+  text-decoration: none;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 12px;
+  padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.stick-status:hover {
+  background: var(--surface);
+}
+.stick-status-hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stick-status-hand.off,
+.stick-card.off .stick-card-battery {
+  opacity: 0.55;
+}
+.stick-batt.low {
+  color: var(--stick-low);
+}
+.stick-batt.unknown {
+  color: var(--ink-faint);
+}
+.stick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.stick-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.stick-card-state {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--ink-dim);
 }
-.stick .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-faint);
+.stick-card.on .stick-card-state {
+  color: var(--stick-on);
 }
-.stick.on .dot {
-  background: #67d58a;
-  box-shadow: 0 0 8px #67d58a;
+.stick-card-battery {
+  font-size: 13px;
+  color: var(--ink-dim);
 }
-.stick.on {
-  color: var(--ink);
+.stick-card-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-dim);
 }
 
 /* ---- 카드·레이아웃 ---- */
