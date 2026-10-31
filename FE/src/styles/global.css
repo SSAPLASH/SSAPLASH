@@ -157,6 +157,18 @@ p {
   display: flex;
   flex-direction: column;
 }
+/* 라우트 래퍼(AppShell). 화면이 예전처럼 workarea의 flex 열 자식으로 놓이도록 같은 배치를 이어받는다 */
+.route-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 경로 전환 뒤 프로그램 포커스(D14)를 받는 요소는 외곽선을 그리지 않는다 */
+.route-view:focus,
+.topbar-title:focus {
+  outline: none;
+}
 
 /* 사이드바 */
 .sidebar {
