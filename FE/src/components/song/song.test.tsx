@@ -1,21 +1,28 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DifficultyChip } from './DifficultyChip';
+import { LevelBadge } from './LevelBadge';
 import { SongMeta } from './SongMeta';
 
-describe('DifficultyChip', () => {
+describe('LevelBadge', () => {
   it.each([
-    ['EASY', '쉬움', 'ui-pill-ok'],
-    ['NORMAL', '보통', 'ui-pill-accent'],
-    ['HARD', '어려움', 'ui-pill-amber'],
-  ] as const)('%s → %s·%s', (difficulty, label, cls) => {
-    const html = renderToStaticMarkup(<DifficultyChip difficulty={difficulty} />);
-    expect(html).toContain(label);
+    ['EASY', 'EASY', 'song-level-easy'],
+    ['NORMAL', 'NORM', 'song-level-normal'],
+    ['HARD', 'HARD', 'song-level-hard'],
+  ] as const)('%s → %s·%s', (level, label, cls) => {
+    const html = renderToStaticMarkup(<LevelBadge level={level} />);
+    expect(html).toContain(`>${label}<`);
     expect(html).toContain(cls);
+    expect(html).toMatch(/^<span/);
   });
 
-  it('className을 덧붙인다', () => {
-    expect(renderToStaticMarkup(<DifficultyChip difficulty="EASY" className="extra" />)).toContain('extra');
+  it('onClick이 있으면 버튼이고 선택되지 않으면 흐리다', () => {
+    const off = renderToStaticMarkup(<LevelBadge level="EASY" onClick={() => {}} />);
+    expect(off).toMatch(/^<button/);
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain('song-level-dim');
+    const on = renderToStaticMarkup(<LevelBadge level="EASY" selected onClick={() => {}} />);
+    expect(on).toContain('aria-pressed="true"');
+    expect(on).not.toContain('song-level-dim');
   });
 });
 
