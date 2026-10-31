@@ -53,6 +53,8 @@ transcribers = [
 ssaplash-bench = "ssaplash_ai.bench.cli:main"
 # 서비스 추론 모듈 (S15P31A307-167). `uv run ssaplash-chart separate <원곡> --out <폴더>`
 ssaplash-chart = "ssaplash_ai.chart.cli:main"
+# 채보 모델 파인튜닝 (S15P31A307-164). `uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_5cls.yaml --out …`
+ssaplash-train = "ssaplash_ai.train.cli:main"
 
 [dependency-groups]
 dev = [
