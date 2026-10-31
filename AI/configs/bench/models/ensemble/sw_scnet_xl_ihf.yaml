@@ -1,0 +1,9 @@
+# 드럼리스 MR 개선 후보 D. BS Roformer SW와 SCNet XL IHF의 드럼 트랙 평균 (S15P31A307-165).
+# SCNet XL IHF는 -105 드럼 SDR 2위. 두 모델을 다 올리므로 GPU 메모리는 둘의 합
+name: sw_scnet_xl_ihf
+adapter: ensemble
+members:
+  - configs/bench/models/msst/bs_roformer_sw.yaml
+  - configs/bench/models/msst/scnet_xl_ihf.yaml
+license_code: MIT (MSST)
+license_weights: 멤버 두 모델의 가중치 라이선스를 따름 (bs_roformer_sw CC BY-NC-SA 4.0, scnet_xl_ihf 미명시)
