@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { PadId } from '@/domain/pads';
-import { DRUM_KIT_H, DRUM_KIT_PADS, DRUM_KIT_W, fitScale, kitSizeAt, type PadVisualState } from '@/domain/drumKit';
+import { DRUM_KIT_H, DRUM_KIT_PADS, DRUM_KIT_W, fitScale, kitSizeAt, type PadBadge, type PadVisualState } from '@/domain/drumKit';
 import { Pad, PadDefs } from './Pad';
 import './drum.css';
 
@@ -11,8 +11,9 @@ export interface DrumKitProps {
   fitWidth?: boolean;
   states?: Partial<Record<PadId, PadVisualState>>;
   labels?: boolean;
-  badges?: Partial<Record<PadId, string>>;
-  /** 배지를 강조할 패드 */
+  /** 문자열은 next 배지. PadBadge로 now·later·격자 밖 점을 지정한다(now 배지는 여러 개여도 각자 강조) */
+  badges?: Partial<Record<PadId, string | PadBadge>>;
+  /** 배지를 강조할 패드(PadBadge level now와 같은 모양) */
   highlight?: PadId;
   onPadClick?: (pad: PadId) => void;
 }

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { PadShape, PadVisualState } from '@/domain/drumKit';
+import type { PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
 import './drum.css';
 
 /** 원본 패드 폭(px). 모든 좌표는 이 폭 기준이고 w에 맞춰 균등 확대·축소한다 */
@@ -68,7 +68,7 @@ interface PadProps {
   label: string;
   labelVisible?: boolean;
   /** 패드 위쪽 가운데 알약 배지(예: 다음 박 번호) */
-  badge?: string;
+  badge?: string | PadBadge;
   badgeHighlight?: boolean;
   /** PadDefs와 같은 id */
   defsId: string;
@@ -133,6 +133,12 @@ export const Pad = memo(function Pad({
   // 헤드 flash는 drum·cymbal의 hit에만
   const flash = state === 'hit' && shape !== 'kick';
   const judge = JUDGE_TEXT[state];
+  // 문자열 배지는 next. now이거나 badgeHighlight면 강조 모양
+  const badgeObj: PadBadge | undefined = typeof badge === 'string' ? { text: badge, level: 'next' } : badge;
+  const badgeText = badgeObj?.text;
+  const badgeLevel = badgeHighlight ? 'now' : badgeObj?.level;
+  const badgeNow = badgeLevel === 'now';
+  const badgeOffGrid = badgeObj?.offGrid === true;
 
   return (
     <g
@@ -166,16 +172,17 @@ export const Pad = memo(function Pad({
         </text>
       )}
       {badge && (
-        <g transform="translate(80 12)">
+        <g transform="translate(80 12)" className={badgeLevel === 'later' ? 'drum-pad-badge later' : 'drum-pad-badge'}>
           <rect
-            className={badgeHighlight ? 'drum-pad-badge-bg highlight' : 'drum-pad-badge-bg'}
+            className={badgeNow ? 'drum-pad-badge-bg highlight' : 'drum-pad-badge-bg'}
             x="-18"
             y="-11"
             width="36"
             height="22"
             rx="11"
           />
-          <text className={badgeHighlight ? 'drum-pad-badge-text highlight' : 'drum-pad-badge-text'}>{badge}</text>
+          <text className={badgeNow ? 'drum-pad-badge-text highlight' : 'drum-pad-badge-text'}>{badgeText}</text>
+          {badgeOffGrid && <circle className="drum-pad-badge-dot" cx="17" cy="-10" r="2.5" />}
         </g>
       )}
     </g>
