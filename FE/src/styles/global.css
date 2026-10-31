@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './motion.css';
 
 * {
   box-sizing: border-box;
@@ -39,7 +40,11 @@ button {
   border-radius: var(--radius-control);
   min-height: 44px;
   padding: 8px 16px;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
 }
 button.small {
   min-height: 32px;
@@ -48,8 +53,34 @@ button.small {
 button:hover {
   background: var(--surface-2);
 }
-button:active {
-  transform: translateY(1px);
+/* 눌림: 모든 버튼류가 scale(0.98). 칩·카드는 아래에서 뺀다 */
+button:active:not(:disabled),
+.sm-btn:active:not(:disabled),
+.dock-icon-btn:active:not(:disabled),
+.side-foot-btn:active,
+a.btn-primary:active,
+a.btn-ghost.as-button:active {
+  transform: scale(0.98);
+}
+/* 버튼이 아닌 요소(링크·NavLink)도 같은 hover 색·눌림 시간을 따른다 */
+a.btn-primary,
+a.btn-ghost.as-button,
+.sm-btn,
+.sm-diff-chip,
+.side-item,
+.side-foot-btn {
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
+}
+/* 칩·알약·카드는 눌림 이동이 없다(hover 색만) */
+.chip:active:not(:disabled),
+.dock-pill:active:not(:disabled),
+.sm-diff-chip:active:not(:disabled),
+.sheet-card.clickable:active:not(:disabled) {
+  transform: none;
 }
 button:disabled {
   opacity: 0.45;
@@ -156,6 +187,18 @@ p {
   display: flex;
   flex-direction: column;
 }
+/* 라우트 래퍼(AppShell). 화면이 예전처럼 workarea의 flex 열 자식으로 놓이도록 같은 배치를 이어받는다 */
+.route-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 경로 전환 뒤 프로그램 포커스(D14)를 받는 요소는 외곽선을 그리지 않는다 */
+.route-view:focus,
+.topbar-title:focus {
+  outline: none;
+}
 
 /* 사이드바 */
 .sidebar {
@@ -172,24 +215,39 @@ p {
   align-items: center;
   gap: var(--space-xl);
   background: var(--bg-base);
+  overflow-x: hidden; /* 접는 동안 라벨이 줄바꿈·삐져나오지 않게 */
   overflow-y: auto;
+  container-type: inline-size; /* 헤더 배치를 폭 기준으로 바꾸기 위해(.side-header 아래 @container) */
   z-index: 20;
-  transition: width 0.2s ease, padding 0.2s ease; /* 접힘 전환. CSS만이라 오디오·판정에 영향 없음 */
+  transition:
+    width var(--motion-move) var(--ease-in-out),
+    padding var(--motion-move) var(--ease-in-out); /* 접힘 전환. width는 본문 레이아웃이 실제로 바뀌어야 해 transform 원칙의 유일한 예외(D5). CSS만이라 오디오·판정에 영향 없음 */
 }
 .sidebar.collapsed {
   width: 80px;
-  padding: var(--space-m);
+  padding: var(--space-m) 14px; /* 안쪽 52px = 아이콘(20) 양옆 16 — 항목 padding을 그대로 두고 아이콘이 가운데에 오게 */
 }
 .side-header {
   width: 100%;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
+  transition: height var(--motion-move) var(--ease-in-out); /* 세로 배치로 바뀌어도 아래 메뉴가 튀지 않게 높이를 폭 전환과 함께 옮긴다 */
 }
 .sidebar.collapsed .side-header {
-  flex-direction: column;
-  justify-content: flex-start;
+  height: 68px; /* 로고 28 + 간격 8 + 토글 32 */
+}
+.sidebar.collapsed .side-header:not(:has(.side-toggle)) {
+  height: 28px; /* 태블릿: 토글 없이 로고만 */
+}
+/* 가로 ↔ 세로 배치는 사이드바 폭이 거의 접혔을 때만 세로로 둔다 — 접을 땐 폭 전환 끝에, 펼칠 땐 시작에 바뀐다 */
+@container (max-width: 60px) {
+  .side-header {
+    flex-direction: column;
+    justify-content: flex-start;
+  }
 }
 .side-toggle {
   min-height: 0;
@@ -209,35 +267,69 @@ p {
   border-color: var(--brand);
   color: var(--text-1);
 }
+/* 토글 화살표(SidebarToggleIcon): 접힘이면 제자리에서 180° 회전(D11). 회전은 transform, hover 이동은 개별 translate 속성으로 나눠
+ * 회전한 좌표계에 끌려가지 않고 화면 기준으로 움직인다 */
+.side-toggle-arrow {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform var(--motion-move) var(--ease-in-out),
+    translate var(--motion-fast);
+}
+.side-toggle-arrow.collapsed {
+  transform: rotate(180deg);
+}
 /* 호버 시 꺾쇠가 패널 쪽으로 살짝 움직인다(레퍼런스 영상의 미세 모션) */
-.side-toggle svg path:last-child {
-  transition: transform 0.15s ease;
+.side-toggle:hover .side-toggle-arrow {
+  translate: -2px 0;
 }
-.side-toggle:hover svg path:last-child {
-  transform: translateX(-2px);
+.sidebar.collapsed .side-toggle:hover .side-toggle-arrow {
+  translate: 2px 0;
 }
-.sidebar.collapsed .side-toggle:hover svg path:last-child {
-  transform: translateX(2px);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sidebar,
-  .side-toggle svg path:last-child {
-    transition: none;
-  }
-}
+/* 로고: SSAPLASH와 S를 같은 칸에 겹쳐 두고 교차 페이드한다. 접을 땐 SSAPLASH가 먼저 사라지고 S는 폭 전환 끝에 나타난다.
+ * 시간은 라벨과 같은 규칙(숨김은 즉시, 나타남은 --motion-fast 지연 뒤 --motion-press) */
 .side-logo {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  overflow: hidden;
+  line-height: 28px;
+  text-decoration: none;
+}
+.side-logo-full,
+.side-logo-short {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+.side-logo-full {
   font-family: var(--font-num);
   font-size: 20px;
   font-weight: 500;
-  line-height: 28px;
   color: var(--text-1);
-  text-decoration: none;
+  transition: opacity var(--motion-press) var(--ease-out) var(--motion-fast);
 }
-.sidebar.collapsed .side-logo {
+.side-logo-short {
+  justify-self: center;
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 400;
   color: var(--brand-text);
+  opacity: 0;
+  transition: opacity var(--motion-press) var(--ease-out) 0s;
+}
+.sidebar.collapsed .side-logo-full {
+  opacity: 0;
+  transition-delay: 0s;
+}
+.sidebar.collapsed .side-logo-short {
+  opacity: 1;
+  transition-delay: var(--motion-fast);
+}
+@container (max-width: 60px) {
+  .side-logo {
+    flex: none;
+    width: 100%;
+  }
 }
 .side-menu {
   width: 100%;
@@ -258,6 +350,7 @@ p {
   font-size: 14px;
   text-decoration: none;
   white-space: nowrap;
+  overflow: hidden; /* 접힌 동안 숨은 라벨이 항목 밖으로 나가지 않게 */
 }
 .side-item:hover {
   color: var(--text-1);
@@ -275,8 +368,14 @@ p {
   height: 46px;
   background: var(--brand);
 }
-.sidebar.collapsed .side-item {
-  justify-content: center;
+/* 라벨: 항상 그리고 opacity로 숨긴다(aria-hidden은 마크업). 펼칠 땐 폭이 먼저 늘고 라벨이 --motion-fast 뒤에 --motion-press 동안 나타나며,
+ * 접을 땐 지연 없이 곧바로 사라진다. 시간이 이동 계열 토큰이라 모션 줄이기에서는 즉시 바뀐다 */
+.side-label {
+  transition: opacity var(--motion-press) var(--ease-out) var(--motion-fast);
+}
+.sidebar.collapsed .side-label {
+  opacity: 0;
+  transition-delay: 0s;
 }
 .side-icon {
   flex: none;
@@ -298,10 +397,10 @@ p {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: padding-bottom var(--motion-move) var(--ease-in-out);
 }
 .sidebar.collapsed .side-footer {
-  padding: 0 0 var(--space-xl);
-  align-items: center;
+  padding-bottom: var(--space-xl); /* 왼쪽 padding을 그대로 둬 접힘에서도 아이콘이 가운데(안쪽 52px) */
 }
 .side-foot-btn {
   display: flex;
@@ -316,6 +415,7 @@ p {
   font: inherit;
   font-size: 14px;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
 }
 .side-foot-btn:hover,
@@ -356,8 +456,10 @@ p {
 .shell-dock {
   position: fixed;
   top: 4px;
-  left: calc(var(--side-w) + (100% - var(--side-w)) / 2);
-  transform: translateX(-50%);
+  left: 50%;
+  /* 본문(사이드바 오른쪽) 가운데로 left 대신 transform으로 옮겨 전환이 레이아웃을 건드리지 않는다(D5). immersive면 --side-w가 0 */
+  transform: translateX(calc(-50% + var(--side-w) / 2));
+  transition: transform var(--motion-move) var(--ease-in-out);
   z-index: 30;
 }
 .shell.immersive .shell-dock {
@@ -546,6 +648,10 @@ p {
   background: transparent;
   color: var(--ink-dim);
 }
+.chip:hover:not(.active) {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
 .chip.active {
   background: var(--brass);
   border-color: var(--brass);
@@ -595,7 +701,9 @@ p {
   padding: 22px;
   min-height: 190px;
   text-decoration: none;
-  transition: border-color 0.12s, transform 0.12s;
+  transition:
+    border-color var(--motion-fast),
+    transform var(--motion-fast);
 }
 .step:hover {
   border-color: var(--brass);
@@ -742,7 +850,7 @@ p {
 .progress > div {
   height: 100%;
   background: var(--brass);
-  transition: width 0.05s linear;
+  transition: width var(--motion-press) linear; /* 진행률 추종 */
 }
 
 /* ---- 플레이 ---- */
@@ -1020,12 +1128,6 @@ table.plain th {
   gap: 4px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-  }
-}
-
 /* 입력 방식 라디오 한 줄 (세팅 화면) */
 .sensor-choice {
   align-items: flex-start;
@@ -1053,6 +1155,21 @@ table.plain th {
 }
 .sheet-card.clickable:hover {
   border-color: var(--brass);
+}
+/* 눌러 볼 수 있는 카드는 hover 시 떠오른다(.motion-lift와 같은 값. hover 가능한 기기만) */
+.card.clickable,
+.sheet-card.clickable {
+  transition:
+    transform var(--motion-move) var(--ease-out),
+    box-shadow var(--motion-move) var(--ease-out),
+    border-color var(--motion-fast);
+}
+@media (hover: hover) {
+  .card.clickable:hover,
+  .sheet-card.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
 }
 .sheet-card .no {
   color: var(--brass);
@@ -1188,7 +1305,7 @@ table.plain th {
   height: 14px;
   border-radius: 50%;
   background: var(--text-3);
-  transition: transform 120ms;
+  transition: transform var(--motion-fast);
 }
 .dock-switch.on {
   background: var(--brand);
@@ -1402,8 +1519,11 @@ table.plain th {
     transform: rotate(360deg);
   }
 }
+/* 무한 반복 애니메이션은 모션 줄이기에서 멈춘다(토큰으로는 끌 수 없다) */
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .spinner,
+  .weak-spinner,
+  .studio-steps li.active .studio-step-dot {
     animation: none;
   }
 }
@@ -1508,6 +1628,8 @@ table.plain th {
   justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.6);
+  /* 진입만(퇴장 없음). 역할 클래스 .motion-overlay/.motion-dialog와 같은 효과 — 마크업을 건드리지 않으려 선택자에 직접 둔다 */
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
 }
 .dialog {
   width: 100%;
@@ -1516,6 +1638,9 @@ table.plain th {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-pop-in var(--motion-move) var(--ease-out);
 }
 .dialog h2 {
   margin: 0 0 12px;
@@ -2538,7 +2663,7 @@ a.my-list-row:focus-visible {
   background: var(--stage-deep);
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--motion-fast);
 }
 .studio-drop:hover,
 .studio-drop:focus-visible,
@@ -2584,7 +2709,7 @@ a.my-list-row:focus-visible {
 .studio-steps li.active .studio-step-dot {
   background: var(--brass);
   box-shadow: 0 0 8px var(--brass);
-  animation: studio-pulse 1.2s ease-in-out infinite;
+  animation: studio-pulse 1.2s var(--ease-in-out) infinite;
 }
 .studio-steps li.done {
   color: var(--ink-dim);
@@ -2739,7 +2864,7 @@ a.my-list-row:focus-visible {
   border-color: var(--brass);
 }
 .studio-row.just-done {
-  animation: studio-just-done 2s ease-out;
+  animation: studio-just-done 2s var(--ease-out);
 }
 @keyframes studio-just-done {
   from {
@@ -2839,7 +2964,7 @@ a.my-list-row:focus-visible {
   border-color: var(--brass);
 }
 .song-card.just-done {
-  animation: studio-just-done 2s ease-out;
+  animation: studio-just-done 2s var(--ease-out);
 }
 .song-card-cover {
   position: relative;
@@ -2906,7 +3031,10 @@ a.my-list-row:focus-visible {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  transition:
+    opacity var(--motion-fade),
+    transform var(--motion-move),
+    background var(--motion-fast);
 }
 .song-card-play svg {
   width: 22px;
@@ -2926,11 +3054,6 @@ a.my-list-row:focus-visible {
   .song-card-play {
     opacity: 1;
     transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .song-card-play {
-    transition: none;
   }
 }
 .song-card-body {
@@ -3108,18 +3231,9 @@ a.my-list-row:focus-visible {
   color: var(--ink);
   font-size: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  animation: studio-toast-in 0.18s ease-out;
-}
-@keyframes studio-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .studio-toast {
-    animation: none;
-  }
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-rise-in var(--motion-move) var(--ease-out); /* motion-toast와 같은 효과. 198 묶음 0의 ui/Toast가 역할 클래스로 대체한다 */
 }
 .cover-dialog-preview {
   width: 220px;

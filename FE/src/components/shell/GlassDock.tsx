@@ -79,7 +79,8 @@ export function GlassDock() {
 
   if (collapsed) {
     return (
-      <div className={`glass-dock collapsed ${mode}`} role="toolbar" aria-label="Dock">
+      // 두 트리에 다른 key를 줘 접힘↔펼침 때 다시 마운트되게 한다(같은 div면 React가 재사용해 진입 애니메이션이 안 걸린다)
+      <div key="collapsed" className={`glass-dock motion-dialog collapsed ${mode}`} role="toolbar" aria-label="Dock">
         <button type="button" className="dock-pill" aria-label="Dock 펼치기" onClick={() => setCollapsed(false)}>
           <span className={`dock-pill-metro${running ? ' on' : ''}`}>
             <MetroIcon size={16} />
@@ -95,7 +96,7 @@ export function GlassDock() {
   }
 
   return (
-    <div className={`glass-dock ${mode}`} role="toolbar" aria-label="Dock">
+    <div key="expanded" className={`glass-dock motion-dialog ${mode}`} role="toolbar" aria-label="Dock">
       <SoundToggle />
       <span className="dock-divider" />
       <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>

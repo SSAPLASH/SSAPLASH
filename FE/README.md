@@ -81,7 +81,7 @@ src/
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
 │   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
-└─ styles/     tokens.css(디자인 토큰·폰트·텍스트 유틸) · global.css(전역·셸 레이아웃)
+└─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
 ├─ fonts/      Space Grotesk · Bebas Neue 로컬 폰트(OFL 라이선스 파일 동봉)
@@ -119,13 +119,16 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **옛 이름**(`--stage`·`--brass`·`--ink`·`--sm-*` 등)은 옛 CSS가 새 팔레트를 따라가도록 `tokens.css` 맨 아래에 둔 **임시 별칭**이다. 묶음 8에서 삭제하므로 새 코드에서 쓰지 않고, 옛 이름을 만나는 화면은 그때 새 이름으로 바꾼다.
 - **텍스트 유틸 클래스 7종:** `.t-display-64`(Bebas Neue)·`.t-display-20`(Space Grotesk, 숫자)·`.t-title-24`·`.t-title-20`·`.t-body-16`·`.t-body-14`·`.t-caption-12`(Pretendard).
 - **폰트:** Pretendard는 `index.html`의 CDN 링크, Space Grotesk·Bebas Neue는 `public/fonts/`의 로컬 파일(OFL, 라이선스 파일 동봉)을 `tokens.css`의 `@font-face`로 불러온다.
+- **모션 토큰·역할 클래스:** 시간·이징은 `tokens.css`의 `--motion-press`(80ms)·`--motion-fast`(120ms)·`--motion-base`(200ms)·`--ease-out`·`--ease-in-out`과, 용도별 별칭 `--motion-move`(이동·확대·회전)·`--motion-fade`(투명도)만 쓰고 규칙에 ms·s·`ease`를 직접 쓰지 않는다. `styles/motion.css`는 키프레임 4종(`motion-fade-in`·`pop-in`·`drop-in`·`rise-in`)과 역할 이름 클래스 `.motion-overlay`(배경 페이드)·`.motion-dialog`(페이드+확대)·`.motion-menu`(페이드+아래로 드롭)·`.motion-toast`(페이드+위로 라이즈)·`.motion-lift`(hover 시 2px 떠오름, hover 가능한 기기만)를 둔다. 화면 코드는 효과가 아니라 역할 클래스만 붙인다. 진입 애니메이션만 있고 퇴장은 없다. 전역 `button`·`.btn-*`·`.sm-btn`은 hover 색(`--motion-fast`)·눌림 `scale(0.98)`(`--motion-press`)·키보드 포커스 외곽선을 공통으로 따른다.
+- **모션 줄이기(`prefers-reduced-motion: reduce`):** `tokens.css`가 `--motion-press`·`--motion-fast`·`--motion-move`를 0ms로 다시 정의해 이동·확대·회전은 즉시 적용하고 투명도 페이드(`--motion-fade`)만 남긴다. 새 규칙은 토큰만 쓰면 자동으로 따른다. 토큰으로 끌 수 없는 무한 반복 애니메이션(스피너·단계 점 펄스 등)은 규칙마다 `animation: none`을 둔다. 옛 전역 `* { transition: none !important }`는 없다.
 
 ## 앱 셸
 
 `components/AppShell`이 사이드바 + workarea(TopBar + 본문)를 짜고, Dock·StickStatus·아바타는 셸 루트에 `fixed`로 한 인스턴스만 둔다(전체 화면 전환 때 언마운트되지 않는다).
 
-- **Sidebar:** 펼침 240px · 접힘 80px(아이콘만, `title` 툴팁). 실제 접힘 = 설정 `sidebarCollapsed` 또는 태블릿 폭(≤1024px, `useSidebarCollapsed`)이라 ≤1024에서는 강제로 접히고 펼치기 버튼이 없다. 본문 여백은 40, 태블릿은 24.
+- **Sidebar:** 펼침 240px · 접힘 80px(아이콘만, `title` 툴팁). 실제 접힘 = 설정 `sidebarCollapsed` 또는 태블릿 폭(≤1024px, `useSidebarCollapsed`)이라 ≤1024에서는 강제로 접히고 펼치기 버튼이 없다. 본문 여백은 40, 태블릿은 24. 접을 때는 라벨·로고 글자(`SSAPLASH`↔`S`)가 먼저 사라지고(opacity) 폭이 200ms 줄며, 펼칠 때는 폭이 먼저 늘고 라벨이 뒤따른다(라벨·글자는 항상 렌더하고 `aria-hidden`). 토글 아이콘(`SidebarToggleIcon`)은 하나이고 화살표만 접힘에서 오른쪽을 가리키도록 180° 회전한다. 하단에는 설정만 있고 로그아웃은 프로필 메뉴에 있다. Dock은 `left` 대신 `transform`으로 본문 가운데를 따라간다.
 - **TopBar:** 높이 56. 제목은 페이지가 알린 값, 없으면 `defaultTitles`의 라우트별 기본값(예: `/studio` "내 곡", `/setup` "드럼 세팅").
+- **라우트 전환:** 본문(`<Outlet/>`)은 `key={pathname}`의 `.route-view.route-fade` 래퍼 안에서 200ms 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼이고 immersive 전환(사이드바·TopBar 언마운트)은 즉시다. 경로가 바뀐 뒤에는 스크롤을 맨 위로 올리고 포커스를 옮긴다 — 셸 화면은 TopBar 제목 `h1`, immersive 화면은 본문 래퍼(둘 다 `tabIndex={-1}`, 외곽선 없음). 첫 로드에는 옮기지 않는다.
 - **GlassDock:** 상단 가운데 글래스 Dock(음량 토글·메트로놈 칩·BPM ±·프리셋 이름). 모드는 `shell`(일반) / `play`(전체 화면 연주, 일시정지 버튼 추가) × 접힘 여부 4변이다. 메트로놈 패널(탭 템포·박자)은 아직 없고 칩 본체는 `shellStore.dockPanel`만 토글한다.
 - **StickStatusIndicator·ProfileMenu:** 오른쪽 위 고정.
 - **페이지 선언:** 페이지는 `useShell({ title, immersive })`로 제목과 전체 화면 여부를 알린다. `immersive`면 Sidebar·TopBar가 사라지고 본문이 전폭이 된다. 언마운트하면 자기가 바꾼 필드만 기본값으로 돌아간다. 이 상태는 `store/shellStore`에 있고 영속하지 않는다(현재 `/settings`·`/history`가 사용, 나머지 화면은 아직 기본 제목).
@@ -345,7 +348,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
 - **화면:** `/login`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다.
-- **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다.
+- **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·설정·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다.
 
 ## 디버그
 
