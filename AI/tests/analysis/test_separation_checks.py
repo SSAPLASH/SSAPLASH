@@ -45,3 +45,10 @@ def test_이득만_다르면_SNR이_아주_크고_이득을_돌려준다():
 def test_MDB_곡_이름을_MUSDB_폴더_키로_바꾼다():
     assert stems.musdb_name("MusicDelta_80sRock") == "80srock"
     assert stems.musdb_name("MusicDelta_Country1") == "country1"
+
+
+def test_ENST_곡_id를_MUSDB_곡_폴더_이름으로_바꾼다():
+    export = _load("export_enst_as_musdb")
+    assert export.folder_name("drummer_1/107_minus-one_salsa_sticks") == (
+        "drummer_1__107_minus-one_salsa_sticks"
+    )
