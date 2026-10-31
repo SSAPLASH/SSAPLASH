@@ -9,6 +9,8 @@
 - rule-features: ADTOF + 드럼 킷 분리 특징(타격 시각·분리 트랙)을 곡마다 npz로 저장 (S15P31A307-163)
 - rule-eval: 저장한 특징 + 규칙 후보 yaml → 패드별 F1·탐/심벌 배정 정확도·혼동표, MLflow run
 - tom-pitch: 정답 탐 타격의 음높이 분포와 고정 경계 후보, 곡 하나 빼고 확인
+- relog: 지난 결과 폴더(벤치마크·규칙 채점·파인튜닝·체크포인트 평가)나 로컬 mlruns를 MLflow에 다시 기록
+  (설계 CHART-003-mlflow-relog)
 
 예
   uv run ssaplash-bench check-data configs/bench/datasets/musdb18hq_test.yaml
@@ -210,6 +212,7 @@ def rule_features_cmd(args: argparse.Namespace) -> int:
             root=Path(args.out),
             device=args.device,
             overwrite=args.overwrite,
+            stems_from=Path(args.stems_from) if args.stems_from else None,
         )
         print(
             f"{Path(dataset).stem}: 저장 {len(result.paths)}개, 건너뜀 {result.n_skipped}개, "
@@ -274,6 +277,29 @@ def report_transcription(args: argparse.Namespace) -> int:
     for p in paths.all():
         print(p)
     return 0
+
+
+def relog_cmd(args: argparse.Namespace) -> int:
+    from ssaplash_ai.bench.runner.relog import copy_mlruns, outcome_table, relog
+
+    if not args.folders and not args.from_mlruns:
+        print("결과 폴더나 --from-mlruns 중 하나는 있어야 함")
+        return 2
+    outcomes = []
+    if args.from_mlruns:
+        outcomes += copy_mlruns(
+            Path(args.from_mlruns), args.mlflow_uri, dry_run=args.dry_run, force=args.force
+        )
+    if args.folders:
+        outcomes += relog(
+            [Path(f) for f in args.folders],
+            args.mlflow_uri,
+            dry_run=args.dry_run,
+            force=args.force,
+            recursive=args.recursive,
+        )
+    print(outcome_table(outcomes))
+    return 1 if any(o.status == "실패" for o in outcomes) else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -381,6 +407,11 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument("--out", default="data/rule_features", help="특징 폴더. 아래에 데이터셋 폴더")
     rf.add_argument("--device", default="cuda", help="cuda 또는 cpu")
     rf.add_argument("--overwrite", action="store_true", help="이미 있는 npz도 다시 계산")
+    rf.add_argument(
+        "--stems-from",
+        default=None,
+        help="이 폴더의 같은 곡 특징에서 분리 트랙을 복사하고 채보 모델만 다시 돌림 (파인튜닝 가중치 평가용)",
+    )
 
     re_p = sub.add_parser(
         "rule-eval", help="저장한 특징 + 규칙 후보 yaml → 패드별 F1·배정 정확도·혼동표 (CPU)"
@@ -429,6 +460,24 @@ def build_parser() -> argparse.ArgumentParser:
     tp.add_argument(
         "--loo-dataset", default=None, help="곡 하나 빼고 확인할 데이터셋 이름. 기본은 첫 번째"
     )
+
+    rl = sub.add_parser(
+        "relog", help="지난 결과 폴더나 로컬 mlruns를 MLflow에 다시 기록 (같은 runId는 건너뜀)"
+    )
+    rl.add_argument("folders", nargs="*", help="결과 폴더 (여러 개)")
+    rl.add_argument(
+        "--recursive",
+        action="store_true",
+        help="준 폴더 아래에서 결과 폴더를 찾음(확인용 폴더 제외)",
+    )
+    rl.add_argument("--from-mlruns", default=None, help="run을 그대로 복사할 로컬 파일 저장소 폴더")
+    rl.add_argument(
+        "--mlflow-uri",
+        default=None,
+        help="기록할 주소. 팀 서버는 터널을 열고 http://localhost:5000. 생략하면 MLFLOW_TRACKING_URI → mlruns",
+    )
+    rl.add_argument("--dry-run", action="store_true", help="기록하지 않고 목록·개수·중복만 출력")
+    rl.add_argument("--force", action="store_true", help="같은 runId가 있어도 새로 기록")
     return parser
 
 
@@ -452,6 +501,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return rule_eval_cmd(args)
     if args.command == "tom-pitch":
         return tom_pitch_cmd(args)
+    if args.command == "relog":
+        return relog_cmd(args)
     return 2
 
 
