@@ -1,0 +1,12 @@
+# 모델 없이 흐름만 확인하는 설정 (CI·컨테이너 확인용). 온셋 검출기로 시각만 찾고 패드는 전부 KICK.
+# 예: uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config configs/chart/transcription_mock.yaml
+model_config: configs/bench/transcribers/mock/mock_clicks.yaml
+device: cpu
+schema_version: 1
+tempo:
+  # torch 없이 돌게 librosa
+  method: librosa
+  min_bpm: 60
+  max_bpm: 200
+  time_signature: 4/4
+max_duration_sec: 600

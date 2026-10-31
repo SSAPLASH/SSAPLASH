@@ -32,6 +32,64 @@ build:
   script:
     - echo "build 단계 - 스택 확정 후 빌드 명령을 넣는다"
 
+# AI 검사 job(ai-lint, ai-lock)의 공통 설정. 러너의 컨테이너는 root가 아니고 홈이 `/`라서 pip이 시스템·홈 폴더에 설치하지 못한다
+# (`Permission denied: '/.local'`). 그래서 쓰기 가능한 프로젝트 폴더 안에 가상환경을 만들어 거기에 설치하고, pip·uv 캐시도 프로젝트 폴더로 돌린다.
+# before_script와 script는 같은 셸에서 이어서 실행되므로 여기서 활성화한 가상환경이 script에서도 유지된다.
+.ai-check-job:
+  stage: lint
+  image: python:3.11-slim
+  variables:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PIP_NO_CACHE_DIR: "1"
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+    UV_PYTHON_DOWNLOADS: "never"
+  before_script:
+    - python -m venv "$CI_PROJECT_DIR/.ci-venv"
+    - . "$CI_PROJECT_DIR/.ci-venv/bin/activate"
+
+# AI 코드 검사. AI/ 아래나 이 파일이 바뀐 MR·병합에서만 돈다. AI/README.md의 `ruff check .`·`ruff format --check .`와 같은 검사다.
+# ruff 버전은 AI/uv.lock에서 읽어서 로컬(uv run ruff)과 항상 같게 맞춘다. 버전을 이 파일에 따로 적지 않는다.
+# AI 테스트(pytest)는 아직 CI에 없다. 기존 시험 일부가 ffmpeg 등 환경에 의존해서 CI에서 어떻게 되는지 확인이 먼저다.
+# 첫 규칙은 보정 배치(COACH-003)만 도는 예약·수동 파이프라인에서 이 job을 만들지 않게 한다. main에서 develop-BE의 `.calibration-guard`와
+# 합쳐져도 같은 뜻이 되도록 job 안에 직접 적었다(develop-AI에는 `.calibration-guard` 정의가 없어 참조할 수 없다).
+ai-lint:
+  extends: .ai-check-job
+  rules:
+    - if: $COACH_CALIBRATION == "true" || $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes:
+        - AI/**/*
+        - .gitlab-ci.yml
+  script:
+    - RUFF_VERSION="$(grep -A1 '^name = "ruff"$' AI/uv.lock | sed -n 's/^version = "\(.*\)"$/\1/p')"
+    - '[ -n "$RUFF_VERSION" ] || { echo "AI/uv.lock에서 ruff 버전을 읽지 못했습니다."; exit 1; }'
+    - pip install --quiet "ruff==${RUFF_VERSION}"
+    - ruff --version
+    - cd AI
+    - ruff check .
+    - ruff format --check .
+
+# AI 의존성 잠금 파일 검사. pyproject.toml을 바꿨는데 uv.lock을 안 고친 경우를 병합 전에 잡는다.
+# 놓치면 배포 때 서버에서 AI 이미지를 빌드하다(`uv sync --frozen`) 실패한다. uv 버전은 이미지를 만드는 AI/Dockerfile과 같게 거기서 읽는다.
+# AI 의존성(torch 등)을 받지 않고 uv만 설치해서 몇 초면 끝난다. 첫 규칙은 위 ai-lint와 같은 이유다.
+ai-lock:
+  extends: .ai-check-job
+  rules:
+    - if: $COACH_CALIBRATION == "true" || $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes:
+        - AI/pyproject.toml
+        - AI/uv.lock
+        - AI/Dockerfile
+        - .gitlab-ci.yml
+  script:
+    - UV_VERSION="$(grep -o 'uv==[0-9][0-9.]*' AI/Dockerfile | head -1 | cut -d= -f3)"
+    - '[ -n "$UV_VERSION" ] || { echo "AI/Dockerfile에서 uv 버전을 읽지 못했습니다."; exit 1; }'
+    - pip install --quiet "uv==${UV_VERSION}"
+    - uv --version
+    - cd AI
+    - uv lock --check
+
 # BE 초기화 이후의 실제 검증. 기존 공통 골격은 다른 파트가 연결할 때까지 유지한다.
 .be-job:
   image: eclipse-temurin:21-jdk
