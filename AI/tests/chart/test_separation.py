@@ -23,6 +23,7 @@ from ssaplash_ai.chart.separation import (
     DURATION_TOLERANCE_MS,
     SeparationModule,
     SeparationOutput,
+    headroom_gain,
     target_samples,
 )
 
@@ -38,6 +39,8 @@ META_KEYS = {
     "peak_vram_mb",
     "peak_ram_mb",
     "audio_time_origin",
+    "drums_gain_db",
+    "accompaniment_limit_db",
 }
 
 
@@ -117,6 +120,7 @@ def test_결과_메타(tmp_path: Path, module: SeparationModule):
     assert out.peak_vram_mb is None  # cpu
     assert out.peak_ram_mb is not None and out.peak_ram_mb > 0
     assert out.audio_time_origin == AUDIO_TIME_ORIGIN == "SOURCE_START"
+    assert out.drums_gain_db == 0.0 and out.accompaniment_limit_db == 0.0  # 작은 소리라 줄이지 않음
     d = out.to_dict()
     assert set(d) == META_KEYS
     assert d["drum_stem_path"] == str(out.drum_stem_path)
@@ -305,3 +309,32 @@ def test_가중치_폴더_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert cfg.model_dir == Path("data/models") / "m"
     monkeypatch.setenv("SSAPLASH_MODELS_DIR", str(tmp_path / "weights"))
     assert cfg.model_dir == tmp_path / "weights" / "m"
+
+
+def test_피크가_0dB를_넘는_원곡도_잘리지_않고_반주는_넘는_곳만_누른다(tmp_path: Path):
+    # 크게 마스터링된 곡처럼 앞 0.5초만 피크 2.4, 뒤 1.5초는 0.4인 원곡. mock이 절반씩 나눠 앞부분은 두 파일 모두
+    # 피크 1.2라 그대로 저장하면 잘림 (S15P31A307-165)
+    song, audio = _song(tmp_path, 2.0)
+    loud = (audio / np.max(np.abs(audio)) * 0.4).astype(np.float32)
+    loud[:, : SR // 2] *= 6.0
+    sf.write(str(song), loud.T, SR, subtype="FLOAT")
+    m = SeparationModule(_config(tmp_path))
+    m.load()
+    out = m.separate_file(song, tmp_path / "out")
+    m.close()
+    drums, accomp = _read(out.drum_stem_path), _read(out.accompaniment_path)
+    limit = 10 ** (-1 / 20)
+    assert max(np.max(np.abs(drums)), np.max(np.abs(accomp))) <= limit + 1e-3
+    # 드럼 파일은 전체에 이득 하나
+    assert out.drums_gain_db == pytest.approx(20 * np.log10(limit / 1.2), abs=0.01)
+    np.testing.assert_allclose(drums, 0.5 * loud * 10 ** (out.drums_gain_db / 20), atol=1e-3)
+    # 반주는 큰 소리가 끝나고 1초 지난 곳부터 원래 음량 그대로
+    assert out.accompaniment_limit_db < 0
+    tail = slice(int(1.5 * SR), None)
+    np.testing.assert_allclose(accomp[:, tail], 0.5 * loud[:, tail], atol=1e-3)
+
+
+def test_headroom_gain은_상한_아래면_1():
+    x = np.full((2, 10), 0.5, dtype=np.float32)
+    assert headroom_gain(x, x) == 1.0
+    assert headroom_gain(x * 4) == pytest.approx(10 ** (-1 / 20) / 2.0)

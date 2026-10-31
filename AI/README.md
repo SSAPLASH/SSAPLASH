@@ -129,11 +129,18 @@ uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/cha
 
 출력 폴더에 세 파일이 생긴다. 반주는 원곡에서 드럼 트랙을 샘플 단위로 뺀 것이라 세 파일의 샘플 수와 시간축이 원곡과 같다.
 
+크게 마스터링된 원곡은 드럼을 빼면 반주 일부가 파일에 담을 수 있는 최대 크기(0dBFS)를 넘어, 16비트로 저장할 때 잘려 찌그러진다. 그래서 저장 전에 두 파일의 볼륨을 처리한다 (S15P31A307-165).
+
+- 반주: 리미터를 건다. -1dBFS를 넘는 순간에만 볼륨을 낮추고 나머지 구간은 그대로 둔다. 낮추기는 5ms 전부터 시작하고, 낮춘 볼륨은 시간 상수 100ms로 천천히 되돌리며, 좌우 채널을 같은 양만큼 낮춘다. 코드는 `bench/separators/postprocess.py`의 `limit_peaks`
+- 드럼 트랙: 피크가 -1dBFS를 넘으면 파일 전체 볼륨을 같은 양만큼 낮춘다. 채보 입력이라 파형 모양은 바꾸지 않는다
+
+이 처리 때문에 드럼 트랙 + 반주가 원곡과 정확히 같지 않을 수 있다. 처음에는 두 파일 전체 볼륨을 같은 양만큼 낮췄는데, 데모 곡 반주가 원곡보다 3.6~6.1dB 작아져 리미터로 바꿨다. 리미터를 쓰면 원곡과의 차이가 0.9~3.0dB다.
+
 | 파일 | 내용 |
 | --- | --- |
 | `drums.flac` | 드럼 트랙. 16비트 44.1kHz 스테레오 |
-| `accompaniment.flac` | 반주. 원곡 − 드럼 트랙 |
-| `separation.json` | 결과 메타. 길이 ms, 모델 이름·버전, 올리기·분리 시간 ms, 최대 GPU 메모리·RAM MB, `audio_time_origin` |
+| `accompaniment.flac` | 반주. 원곡 − 드럼 트랙에 리미터 |
+| `separation.json` | 결과 메타. 길이 ms, 모델 이름·버전, 올리기·분리 시간 ms, 최대 GPU 메모리·RAM MB, `audio_time_origin`, `drums_gain_db`(드럼 트랙 전체를 낮춘 양 dB, 안 낮췄으면 0), `accompaniment_limit_db`(리미터가 반주를 가장 많이 낮춘 양 dB, 안 낮췄으면 0) |
 
 설정은 `configs/chart/separation.yaml`에 있고 상대 경로는 `AI/` 기준이다.
 
@@ -390,6 +397,33 @@ uv run python scripts/check_onset_merged.py configs/bench/datasets/enst_minus_on
 
 # MDB 드럼 단독 트랙과 같은 녹음의 MUSDB18 train 드럼 스템 비교 (MUSDB18-HQ train이 data/musdb18hq/train에 있어야 함)
 uv run python scripts/compare_mdb_musdb_stems.py --out data/results/mdb_musdb_stems.csv
+```
+
+### 드럼리스 MR 품질 비교 (S15P31A307-165)
+
+드럼리스 MR(반주)이 원곡보다 작고 먹먹하게 들리는 원인을 찾고 개선 후보를 비교한 결과는 `docs/bench/mr-quality-2026-10-31/summary.md`에 있다. 정답 MR이 정확한 ENST 64곡(드럼과 반주를 녹음된 음량 그대로 더함)과 MUSDB18-HQ test 50곡(곡마다 30~60초)으로 잰다. MR 지표는 아래 "지표 정의" 표의 `mr*` 열이다.
+
+후보는 모델 yaml 필드로 만든다. 서비스 기본값은 모두 첫 줄의 기본값이다.
+
+| 필드 | 뜻 | 기본 |
+| --- | --- | --- |
+| `accomp_mode` | 반주 만드는 방식. `subtract`는 원곡 − 드럼, `sum_others`는 드럼 외 스템의 합 | `subtract` |
+| `accomp_drum_ratio` | `subtract`일 때 원곡에서 뺄 드럼 비율. 드럼 트랙은 그대로 | 1.0 |
+| `output_limiter` | 반주에 서비스 저장과 같은 리미터를 걸고 잼 | false |
+| `high_return_hz` | 이 주파수 위 드럼 트랙에서 길게 이어지는 소리를 반주로 되돌림 | 없음 |
+| `use_tta` | 극성을 뒤집은 입력과 좌우를 바꾼 입력을 더 분리해 평균 (msst). 분리 시간 약 3배 | false |
+| `weights_name` | 같은 가중치를 설정만 바꿔 쓸 때 원래 모델 이름 | `name` |
+
+두 모델 드럼 평균은 `configs/bench/models/ensemble/`의 `ensemble` 어댑터(`members`에 모델 yaml 목록)로 만든다.
+
+GPU 서버에서는 `notebooks/mr_quality_server.ipynb`를 위에서부터 실행한다. 로컬에서 후보 하나를 돌리는 명령은 아래와 같다.
+
+```bash
+# ENST를 MUSDB 폴더 모양으로 한 번 내보냄. ENST 로더(S15P31A307-164)가 있는 코드에서 실행
+uv run python scripts/export_enst_as_musdb.py configs/bench/datasets/enst_minus_one.yaml data/enst_gain1_musdb/test --accomp-gain 1.0
+
+# 후보 하나 × ENST 64곡, 결과는 data/results/mrq-enst-limit/
+uv run ssaplash-bench run --models configs/bench/models/msst/bs_roformer_sw_limit.yaml --dataset configs/bench/datasets/enst_gain1_musdb.yaml --run-id mrq-enst-limit --mlflow-uri none
 ```
 
 ## 채보 벤치마크 실행 (S15P31A307-109)
@@ -668,6 +702,11 @@ uv run ssaplash-bench relog data/results data/models/adtof_ft --recursive --mlfl
 | `attackSlopeDistortion` | attack slope는 드럼을 친 직후 10ms 동안 소리가 커지는 기울기(Beyond SDR 논문 용어). 분리한 드럼의 이 기울기가 정답 드럼과 얼마나 달라졌는지를 잼. 0이면 원음 그대로, 클수록 타격 앞머리가 뭉개진 것. 뭉개지면 채보 모델이 타격 시각을 늦게 잡거나 놓치므로 봄 | 정답 온셋마다 온셋 후 10ms 구간을 1ms 블록 최댓값 포락선으로 만들고 최소제곱 기울기를 구해 \|ln(예측 기울기 / 정답 기울기)\|를 평균. Beyond SDR 논문의 attack slope를 단순화한 것이라 논문 수치와 직접 비교하지 않는다 |
 | `separateSec`, `rtf` | 분리 시간(초), RTF = 분리 시간 / 곡 길이 | 벽시계. 모델 로드 제외. 로드 직후 첫 곡을 한 번 분리하고 버려(워밍업, `--no-warmup`으로 생략) GPU 커널 준비 시간을 뺀다 |
 | `loadSec` | 모델 로드 시간 | 가중치 다운로드 제외. 곡마다 같은 값 반복 |
+| `mrFullness` | 드럼리스 MR에서 있어야 할 소리가 덜 빠졌을수록 높음 (0~100) | 정답 MR과 예측 MR을 STFT(n_fft 4096, hop 1024) → mel 512칸 → dB로 바꿔 칸마다 예측 − 정답을 구함. 예측이 더 작은 칸의 평균 a(음수)로 100 / (1 − a). 분리 커뮤니티(MVSEP, MSST `bleed_full`)와 같은 계산 (S15P31A307-165) |
+| `mrBleedless` | 드럼리스 MR에 드럼 같은 남는 소리가 적을수록 높음 (0~100) | 같은 차이에서 예측이 더 큰 칸의 평균 b로 100 / (1 + b) |
+| `mrFullnessHigh` | `mrFullness`를 5kHz 위 mel 칸에서만 계산 | 고음이 빠졌는지만 따로 보려고 붙인 값 |
+| `mrLufsDiff` | 예측 MR 음량 − 정답 MR 음량 (LUFS). 0에 가까울수록 좋음 | ITU-R BS.1770 적분 음량, pyloudnorm |
+| `mrClipRatio` | 예측 MR에서 절댓값 1 이상이라 16비트 저장 때 잘릴 샘플 비율 | |
 | `peakRamMb`, `peakVramMb` | 분리 중 최대 메모리 (MB) | RAM은 50ms마다 프로세스 RSS 표본의 최댓값, VRAM은 torch 최대 할당량. CPU 실행이면 VRAM은 nan |
 
 무음 예측의 BSS 값은 정의되지 않으므로 `-inf`로 적는다. 비교표에는 ADR-011의 6개 지표와 가중치 라이선스만 올리고 나머지는 보조값 표에 둔다.
