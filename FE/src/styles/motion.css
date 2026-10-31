@@ -1,0 +1,72 @@
+/* 공통 모션 — 키프레임과 역할 클래스 (설계 TECH-motion-interaction 3-2).
+ * 시간·곡선은 tokens.css의 --motion-*·--ease-*만 쓴다. 화면 코드는 "이건 다이얼로그다"처럼 역할 클래스만 안다.
+ * 투명도(--motion-fade)와 이동·확대(--motion-move)는 모션 줄이기에서 시간이 갈리므로 animation을 두 개로 나누어 건다.
+ * 그래서 fade-in은 투명도만, pop-in·drop-in·rise-in은 transform만 맡고 역할 클래스가 둘을 조합한다.
+ * 퇴장 애니메이션은 없다(진입만). 끝나면 애니메이션이 해제돼 합성 레이어가 남지 않는다.
+ */
+
+/* opacity 0 → 1 */
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* scale 0.96 → 1 */
+@keyframes motion-pop-in {
+  from {
+    transform: scale(0.96);
+  }
+}
+/* translateY -4px → 0 */
+@keyframes motion-drop-in {
+  from {
+    transform: translateY(-4px);
+  }
+}
+/* translateY 8px → 0 */
+@keyframes motion-rise-in {
+  from {
+    transform: translateY(8px);
+  }
+}
+
+/* 라우트 래퍼 전용(AppShell). 페이드만 건다 — transform이 없어 안쪽 position: fixed 요소가 어긋나지 않는다 */
+.route-fade {
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+}
+
+/* 다이얼로그 배경 */
+.motion-overlay {
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+}
+/* 다이얼로그·Dock 등 떠 있는 패널 */
+.motion-dialog {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-pop-in var(--motion-move) var(--ease-out);
+}
+/* 드롭다운 메뉴 */
+.motion-menu {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-drop-in var(--motion-move) var(--ease-out);
+}
+/* 토스트 */
+.motion-toast {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-rise-in var(--motion-move) var(--ease-out);
+}
+/* 눌러 볼 수 있는 카드. hover 시 2px 떠오르고 그림자가 생긴다(터치 기기 제외) */
+.motion-lift {
+  transition:
+    transform var(--motion-move) var(--ease-out),
+    box-shadow var(--motion-move) var(--ease-out),
+    border-color var(--motion-fast);
+}
+@media (hover: hover) {
+  .motion-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
+}

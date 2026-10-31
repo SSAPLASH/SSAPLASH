@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/store/authStore';
 import { useShellStore } from '@/store/shellStore';
@@ -27,7 +27,12 @@ export function AppShell({ authRequired }: Props) {
   const sideCollapsed = useSidebarCollapsed();
   const authStatus = useAuth((s) => s.status);
   const [debug, setDebug] = useState(false);
-  const inMonitor = useLocation().pathname.startsWith('/monitor');
+  const { pathname } = useLocation();
+  const inMonitor = pathname.startsWith('/monitor');
+  const workareaRef = useRef<HTMLDivElement>(null);
+  const routeRef = useRef<HTMLDivElement>(null);
+  const lastPath = useRef(pathname);
+  const pendingFocus = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,12 +42,29 @@ export function AppShell({ authRequired }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // 경로가 바뀐 뒤: 스크롤 맨 위 + 포커스 이동(D14). 첫 로드·쿼리만 바뀐 경우는 건드리지 않는다.
+  // immersive 여부는 페이지의 useShell 효과가 store에 먼저 쓰고 렌더는 한 박자 늦으므로, 렌더 값이 store와 맞을 때까지 기다린다
+  useEffect(() => {
+    if (lastPath.current !== pathname) {
+      lastPath.current = pathname;
+      pendingFocus.current = true;
+      window.scrollTo(0, 0);
+    }
+    if (!pendingFocus.current || useShellStore.getState().immersive !== immersive) return;
+    pendingFocus.current = false;
+    const target = immersive ? routeRef.current : workareaRef.current?.querySelector<HTMLElement>('.topbar-title');
+    target?.focus({ preventScroll: true });
+  }, [pathname, immersive]);
+
   return (
     <div className={`shell${immersive ? ' immersive' : ''}`} style={{ '--side-w': immersive ? '0px' : sideCollapsed ? '80px' : '240px' } as CSSProperties}>
       {!immersive && <Sidebar />}
-      <div className="workarea">
+      <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
-        <Outlet />
+        {/* 경로가 바뀌면 key로 다시 마운트되어 .route-fade가 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼 */}
+        <div key={pathname} ref={routeRef} className="route-view route-fade" tabIndex={-1}>
+          <Outlet />
+        </div>
       </div>
 
       <div className="shell-dock">

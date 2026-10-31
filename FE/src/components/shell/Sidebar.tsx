@@ -1,10 +1,10 @@
-// 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁).
+// 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
 import type { ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/store/authStore';
+import { NavLink } from 'react-router-dom';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
+import { SidebarToggleIcon } from './SidebarToggleIcon';
 import { TABLET_QUERY, useMediaQuery, useSidebarCollapsed } from './useMediaQuery';
 
 /** 선 아이콘 공통 틀(20px, 현재 글자색) */
@@ -71,27 +71,6 @@ const ICONS = {
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
     </Icon>
   ),
-  logout: (
-    <Icon>
-      <path d="M9 4H5v16h4" />
-      <path d="M16 8l4 4-4 4M20 12H9" />
-    </Icon>
-  ),
-  // Lucide panel-left-close / panel-left-open (MIT). Figma Icons / 접기·펼치기와 같은 모양
-  collapse: (
-    <Icon>
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-      <path d="m16 15-3-3 3-3" />
-    </Icon>
-  ),
-  expand: (
-    <Icon>
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-      <path d="m14 9 3 3-3 3" />
-    </Icon>
-  ),
 };
 
 interface MenuItem {
@@ -107,19 +86,16 @@ export function Sidebar() {
   const setStored = useSettings((s) => s.setSidebarCollapsed);
   const tablet = useMediaQuery(TABLET_QUERY);
   const collapsed = useSidebarCollapsed();
-  const logout = useAuth((s) => s.logout);
-  const navigate = useNavigate();
   // 채보 변환 작업이 진행 중일 때 라이브러리에 점을 단다
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
-
-  const onLogout = () => {
-    void logout().then(() => navigate('/login', { replace: true }));
-  };
 
   const item = (m: MenuItem) => (
     <NavLink key={m.to} to={m.to} className="side-item" title={collapsed ? m.label : undefined} aria-label={m.label}>
       {m.icon}
-      {!collapsed && <span className="side-label">{m.label}</span>}
+      {/* 라벨은 항상 그리고 접힘 때 opacity로 숨긴다(폭 전환과 시점을 맞추려고, CSS .side-label) */}
+      <span className="side-label" aria-hidden={collapsed}>
+        {m.label}
+      </span>
       {m.badge && <span className="side-badge" aria-label="처리 중" />}
     </NavLink>
   );
@@ -129,8 +105,14 @@ export function Sidebar() {
       {/* 헤더: 로고 + 접기/펼치기(UX-19, 2026-10-30). 태블릿은 강제 접힘이라 버튼을 숨긴다 */}
       <div className="side-header">
         {/* 로고는 링크가 아니다(Figma). 접기 버튼 옆에서 잘못 눌려 이동하는 것을 막는다 */}
+        {/* 두 글자를 겹쳐 두고 접힘 때 교차 페이드한다(CSS .side-logo-full/.side-logo-short) */}
         <span className="side-logo" aria-label="SSAPLASH">
-          {collapsed ? 'S' : 'SSAPLASH'}
+          <span className="side-logo-full" aria-hidden="true">
+            SSAPLASH
+          </span>
+          <span className="side-logo-short" aria-hidden="true">
+            S
+          </span>
         </span>
         {!tablet && (
           <button
@@ -140,7 +122,7 @@ export function Sidebar() {
             aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
             onClick={() => setStored(!stored)}
           >
-            {collapsed ? ICONS.expand : ICONS.collapse}
+            <SidebarToggleIcon collapsed={collapsed} />
           </button>
         )}
       </div>
@@ -157,14 +139,10 @@ export function Sidebar() {
       <div className="side-footer">
         <NavLink to="/settings" className="side-foot-btn" title={collapsed ? '설정' : undefined} aria-label="설정">
           {ICONS.settings}
-          {!collapsed && <span>설정</span>}
+          <span className="side-label" aria-hidden={collapsed}>
+            설정
+          </span>
         </NavLink>
-        {!collapsed && (
-          <button type="button" className="side-foot-btn" onClick={onLogout}>
-            {ICONS.logout}
-            <span>로그아웃</span>
-          </button>
-        )}
       </div>
     </aside>
   );
