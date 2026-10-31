@@ -1,0 +1,76 @@
+/* 연결 끊김 카드: 420, surface-2, brand-sub 1px, padding 28, gap 20, 가운데 정렬 */
+.stick-disconnect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 420px;
+  max-width: 100%;
+  padding: 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--brand-sub);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  text-align: center;
+  font-family: var(--font);
+}
+.stick-dots {
+  display: flex;
+  gap: 40px;
+}
+.stick-dot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.stick-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  box-sizing: border-box;
+  border: 2px solid var(--good);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--good);
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+}
+.stick-dot.off {
+  border-style: dashed;
+  border-color: var(--miss);
+  color: var(--miss);
+}
+.stick-dot-label {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.stick-disconnect-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.stick-disconnect-status {
+  margin: 0;
+  color: var(--brand-sub);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.stick-disconnect-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-s);
+}
+.stick-disconnect-btn {
+  width: 150px;
+}
+/* 긴 문구 버튼은 폭만 늘린다 */
+.stick-disconnect-btn.wide {
+  width: auto;
+  min-width: 150px;
+}
