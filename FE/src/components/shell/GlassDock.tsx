@@ -1,13 +1,18 @@
 // 상단 글래스 Dock(Figma Navigation / GlassDock 148:2288). mode(shell|play) × collapsed 4변이.
 // 상태는 liveStore.metronome·settingsStore, 조작은 engine 싱글턴 메서드만 쓴다. 셸 루트에 fixed로 한 인스턴스만 둔다(D3).
-// 메트로놈 패널(탭 템포·박자·슬라이더)은 묶음 4에서 만든다 — 칩 본체 클릭은 shellStore.dockPanel만 토글한다.
-import { useNavigate } from 'react-router-dom';
+// 메트로놈 패널(MetronomePanel)은 이 컴포넌트가 .shell-dock 안에 같이 마운트한다 — 칩 본체 클릭은 shellStore.dockPanel만 토글한다.
+// 프리셋 칩은 스틱 연결이 필요한데 한 손이라도 끊기면 「준비 필요」(domain/dockChip).
+import { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { sensorRegistry } from '@/app/sensorRegistry';
+import { dockPresetChipView } from '@/domain/dockChip';
 import { BPM_STEP } from '@/domain/metronome';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
+import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
 
 const svgProps = {
@@ -58,12 +63,26 @@ export function GlassDock() {
   const immersive = useShellStore((s) => s.immersive);
   const dockPanel = useShellStore((s) => s.dockPanel);
   const setDockPanel = useShellStore((s) => s.setDockPanel);
+  const sensorKind = useSettings((s) => s.sensorKind);
+  const connected = useLive((s) => s.connected);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const mode = immersive ? 'play' : 'shell';
   const locked = m.locked;
   const running = locked ? clickOn : m.playing;
   const presetName = presets.find((p) => p.id === activePresetId)?.name ?? '프리셋 없음';
+  const chip = dockPresetChipView({
+    sensorKind,
+    hasUsageGuide: !!sensorRegistry.get(sensorKind)?.usageGuide,
+    connected,
+    presetName,
+  });
+
+  // 라우트가 바뀌거나 Dock이 접히면 메트로놈 패널을 닫는다
+  useEffect(() => {
+    setDockPanel(null);
+  }, [pathname, collapsed, setDockPanel]);
 
   // 잠금(곡 연주) 중 on/off는 세션 클릭 on/off, 아니면 메트로놈 재생·정지
   const toggle = (e: React.MouseEvent) => {
@@ -96,55 +115,72 @@ export function GlassDock() {
   }
 
   return (
-    <div key="expanded" className={`glass-dock motion-dialog ${mode}`} role="toolbar" aria-label="Dock">
-      <SoundToggle />
-      <span className="dock-divider" />
-      <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
-        <button
-          type="button"
-          className="dock-metro-body"
-          aria-label="메트로놈 설정"
-          aria-expanded={dockPanel === 'metronome'}
-          title="메트로놈 설정"
-          onClick={() => setDockPanel(dockPanel === 'metronome' ? null : 'metronome')}
-        >
-          <MetroIcon />
-          <span className="dock-bpm">{m.bpm}</span>
+    <>
+      <div key="expanded" className={`glass-dock motion-dialog ${mode}`} role="toolbar" aria-label="Dock">
+        <SoundToggle />
+        <span className="dock-divider" />
+        <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
+          <button
+            type="button"
+            className="dock-metro-body"
+            aria-label="메트로놈 설정"
+            aria-expanded={dockPanel === 'metronome'}
+            title="메트로놈 설정"
+            onClick={() => setDockPanel(dockPanel === 'metronome' ? null : 'metronome')}
+          >
+            <MetroIcon />
+            <span className="dock-bpm">{m.bpm}</span>
+          </button>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={running}
+            className={`dock-switch${running ? ' on' : ''}`}
+            aria-label={locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : m.playing ? '메트로놈 정지' : '메트로놈 재생'}
+            title="메트로놈 켜기 / 끄기"
+            onClick={toggle}
+          >
+            <span className="dock-switch-knob" />
+          </button>
+        </div>
+        <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}>
+          <svg {...svgProps}>
+            <path d="M6 12h12" />
+          </svg>
         </button>
+        <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}>
+          <svg {...svgProps}>
+            <path d="M6 12h12M12 6v12" />
+          </svg>
+        </button>
+        <span className="dock-divider" />
         <button
           type="button"
-          role="switch"
-          aria-checked={running}
-          className={`dock-switch${running ? ' on' : ''}`}
-          aria-label={locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : m.playing ? '메트로놈 정지' : '메트로놈 재생'}
-          title="메트로놈 켜기 / 끄기"
-          onClick={toggle}
+          className={`dock-preset${chip.kind === 'needsReady' ? ' needs-ready' : ''}`}
+          title="드럼 세팅으로 이동"
+          onClick={() => navigate('/setup')}
         >
-          <span className="dock-switch-knob" />
+          {chip.kind === 'needsReady' ? (
+            <>
+              <span className={`dock-hand-dot${chip.hands[0] ? ' on' : ''}`} aria-hidden="true" />
+              L
+              <span className={`dock-hand-dot${chip.hands[1] ? ' on' : ''}`} aria-hidden="true" />
+              R {chip.label}
+            </>
+          ) : (
+            chip.label
+          )}
+        </button>
+        {mode === 'play' && (
+          <button type="button" className="dock-icon-btn" aria-label="일시정지" title="일시정지" onClick={pause}>
+            <PauseIcon />
+          </button>
+        )}
+        <button type="button" className="dock-icon-btn dock-collapse" aria-label="Dock 접기" title="접기" onClick={() => setCollapsed(true)}>
+          <Chevron up />
         </button>
       </div>
-      <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}>
-        <svg {...svgProps}>
-          <path d="M6 12h12" />
-        </svg>
-      </button>
-      <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}>
-        <svg {...svgProps}>
-          <path d="M6 12h12M12 6v12" />
-        </svg>
-      </button>
-      <span className="dock-divider" />
-      <button type="button" className="dock-preset" title="드럼 세팅으로 이동" onClick={() => navigate('/setup')}>
-        {presetName}
-      </button>
-      {mode === 'play' && (
-        <button type="button" className="dock-icon-btn" aria-label="일시정지" title="일시정지" onClick={pause}>
-          <PauseIcon />
-        </button>
-      )}
-      <button type="button" className="dock-icon-btn dock-collapse" aria-label="Dock 접기" title="접기" onClick={() => setCollapsed(true)}>
-        <Chevron up />
-      </button>
-    </div>
+      {dockPanel === 'metronome' && <MetronomePanel />}
+    </>
   );
 }
