@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './motion.css';
 
 * {
   box-sizing: border-box;
@@ -595,7 +596,9 @@ p {
   padding: 22px;
   min-height: 190px;
   text-decoration: none;
-  transition: border-color 0.12s, transform 0.12s;
+  transition:
+    border-color var(--motion-fast),
+    transform var(--motion-fast);
 }
 .step:hover {
   border-color: var(--brass);
@@ -742,7 +745,7 @@ p {
 .progress > div {
   height: 100%;
   background: var(--brass);
-  transition: width 0.05s linear;
+  transition: width var(--motion-press) linear; /* 진행률 추종 */
 }
 
 /* ---- 플레이 ---- */
@@ -1020,12 +1023,6 @@ table.plain th {
   gap: 4px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-  }
-}
-
 /* 입력 방식 라디오 한 줄 (세팅 화면) */
 .sensor-choice {
   align-items: flex-start;
@@ -1188,7 +1185,7 @@ table.plain th {
   height: 14px;
   border-radius: 50%;
   background: var(--text-3);
-  transition: transform 120ms;
+  transition: transform var(--motion-fast);
 }
 .dock-switch.on {
   background: var(--brand);
@@ -1402,8 +1399,11 @@ table.plain th {
     transform: rotate(360deg);
   }
 }
+/* 무한 반복 애니메이션은 모션 줄이기에서 멈춘다(토큰으로는 끌 수 없다) */
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .spinner,
+  .weak-spinner,
+  .studio-steps li.active .studio-step-dot {
     animation: none;
   }
 }
@@ -2538,7 +2538,7 @@ a.my-list-row:focus-visible {
   background: var(--stage-deep);
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--motion-fast);
 }
 .studio-drop:hover,
 .studio-drop:focus-visible,
@@ -2584,7 +2584,7 @@ a.my-list-row:focus-visible {
 .studio-steps li.active .studio-step-dot {
   background: var(--brass);
   box-shadow: 0 0 8px var(--brass);
-  animation: studio-pulse 1.2s ease-in-out infinite;
+  animation: studio-pulse 1.2s var(--ease-in-out) infinite;
 }
 .studio-steps li.done {
   color: var(--ink-dim);
@@ -2739,7 +2739,7 @@ a.my-list-row:focus-visible {
   border-color: var(--brass);
 }
 .studio-row.just-done {
-  animation: studio-just-done 2s ease-out;
+  animation: studio-just-done 2s var(--ease-out);
 }
 @keyframes studio-just-done {
   from {
@@ -2839,7 +2839,7 @@ a.my-list-row:focus-visible {
   border-color: var(--brass);
 }
 .song-card.just-done {
-  animation: studio-just-done 2s ease-out;
+  animation: studio-just-done 2s var(--ease-out);
 }
 .song-card-cover {
   position: relative;
@@ -2906,7 +2906,10 @@ a.my-list-row:focus-visible {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  transition:
+    opacity var(--motion-fade),
+    transform var(--motion-move),
+    background var(--motion-fast);
 }
 .song-card-play svg {
   width: 22px;
@@ -2926,11 +2929,6 @@ a.my-list-row:focus-visible {
   .song-card-play {
     opacity: 1;
     transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .song-card-play {
-    transition: none;
   }
 }
 .song-card-body {
@@ -3108,18 +3106,9 @@ a.my-list-row:focus-visible {
   color: var(--ink);
   font-size: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  animation: studio-toast-in 0.18s ease-out;
-}
-@keyframes studio-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .studio-toast {
-    animation: none;
-  }
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-rise-in var(--motion-move) var(--ease-out); /* motion-toast와 같은 효과. 198 묶음 0의 ui/Toast가 역할 클래스로 대체한다 */
 }
 .cover-dialog-preview {
   width: 220px;
