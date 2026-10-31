@@ -19,6 +19,8 @@ dependencies = [
     "mir-eval>=0.8",
     "museval>=0.4.1",
     "psutil>=5.9",
+    # 드럼리스 MR 음량 차이 ITU-R BS.1770 (S15P31A307-165)
+    "pyloudnorm>=0.1.1",
     # 기록·보고서 (#5·#6)
     "matplotlib>=3.9",
     "mlflow>=3.0",
