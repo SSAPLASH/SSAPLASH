@@ -7,6 +7,7 @@ import { FeedbackCards } from '@/components/FeedbackCards';
 import { ReportEntry } from '@/components/ReportEntry';
 import { checkSongAvailability } from '@/api/songs';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
@@ -108,10 +109,11 @@ export function ResultPage() {
   // Enter = 다시 하기(지운 곡이면 하지 않는다)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Enter' && log && !songDeleted) {
-        e.preventDefault();
-        navigate(retryPath(log));
-      }
+      if (e.code !== 'Enter' || !log || songDeleted) return;
+      // D1: 링크·버튼·입력 칸이 소유한 Enter는 가로채지 않는다
+      if (e.isComposing || e.defaultPrevented || isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
+      e.preventDefault();
+      navigate(retryPath(log));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
