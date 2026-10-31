@@ -84,14 +84,14 @@ describe('Input', () => {
     expect(html).toContain(`id="${forId}"`);
   });
 
-  it('error면 aria-invalid·오류 문구·aria-describedby(도움말은 숨김)', () => {
+  it('error면 aria-invalid·오류 문구, 도움말도 함께 보이고 둘 다 describedby로 건다', () => {
     const html = renderToStaticMarkup(<Input label="이름" id="nm" help="도움" error="필수입니다" />);
     expect(html).toContain('aria-invalid="true"');
-    expect(html).toContain('aria-describedby="nm-error"');
+    expect(html).toContain('aria-describedby="nm-help nm-error"');
     expect(html).toContain('id="nm-error"');
     expect(html).toContain('필수입니다');
     expect(html).toContain('role="alert"');
-    expect(html).not.toContain('도움');
+    expect(html).toContain('<span id="nm-help" class="ui-input-help">도움</span>');
     expect(html).toMatch(/class="[^"]*\berror\b/);
   });
 
