@@ -1,8 +1,10 @@
 // 악보 연주 일시정지 다이얼로그 (MODE-003 설계 4-3, Claude Design Pause 보드). 사유 문구 + 재개·처음부터·나가기.
 // 재개는 준비 조건이 충족될 때만 활성이다(canResume). 아니면 미비 안내 띠를 함께 보인다.
 // 스크림·다이얼로그 색은 .sheet-mode 밖에서도 보이도록 클래스에 직접 둔다.
+import { useRef } from 'react';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { formatSongTime } from '@/components/formatTime';
+import { useDialogFocus } from '@/components/useDialogFocus';
 
 export type PauseReason = 'user' | 'disconnected' | 'menu';
 
@@ -56,9 +58,19 @@ function Icon({ reason }: { reason: PauseReason }) {
 }
 
 export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo, pausedAtMs }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const resumeRef = useRef<HTMLButtonElement>(null);
+  // 닫힐 때 body로 보낸다(D3): 이전 버튼으로 복원하면 Space(킥)가 그 버튼을 눌러 다시 멈춘다
+  useDialogFocus({
+    open: true,
+    dialogRef,
+    initialRef: resumeRef,
+    onEscape: canResume ? onResume : undefined,
+    returnFocus: 'blur',
+  });
   return (
     <div className="sm-scrim">
-      <div className="sm-dialog pause-dialog" role="dialog" aria-label="일시정지">
+      <div ref={dialogRef} className="sm-dialog pause-dialog" role="dialog" aria-modal="true" aria-label="일시정지">
         <div>
           <div className="pause-title">
             <span className={`pause-ico ${reason === 'disconnected' ? 'danger' : 'info'}`} aria-hidden="true">
@@ -75,7 +87,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
           </div>
         )}
         <div className="pause-actions">
-          <button className="sm-btn primary lg" onClick={onResume} disabled={!canResume}>
+          <button ref={resumeRef} className="sm-btn primary lg" onClick={onResume} disabled={!canResume}>
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path d="M6 4l10 6-10 6z" />
             </svg>

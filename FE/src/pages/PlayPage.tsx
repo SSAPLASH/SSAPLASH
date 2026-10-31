@@ -3,6 +3,7 @@
 // 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
@@ -337,21 +338,26 @@ export function PlayPage() {
   // Enter / Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
+      if (e.isComposing || e.defaultPrevented) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
+      if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
       if (st === 'ready') {
         if (e.code === 'Enter') void begin();
         else toSelect();
       } else if (st === 'play') {
-        if (pauseRef.current !== null) resume();
-        else if (e.code === 'Escape') pauseTo('user');
+        // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
+        if (pauseRef.current !== null || e.code !== 'Escape') return;
+        pauseTo('user');
+      } else {
+        return;
       }
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, resume, pauseTo]);
+  }, [begin, toSelect, pauseTo]);
 
   if (stage === 'loading' && !chart) {
     return (
