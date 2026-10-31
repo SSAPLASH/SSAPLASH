@@ -58,12 +58,13 @@ src/
 ├─ pages/      라우트 단위 화면 — Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Settings(설정) · History(연주 기록) · Login · AuthCallback (`HomePage` 삭제, `MyPage`는 `/me`가 `/settings`로 이동해 라우트 없음)
 ├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · KitGuideView(악보 연주 드럼 가이드) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지, 포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·JobStageStrip·MySongRow·MySongCard·MySongList·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·dateLabel, 내 곡 화면) · mypage/(RecentPlays, 마이페이지)
 │   ├─ ui/           도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState · Toggle · Segmented · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
-│   ├─ song/         곡 표시 공통 — SongCover · DifficultyChip · SongMeta(아티스트·BPM·길이 한 줄)
+│   ├─ song/         곡 표시 공통 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄)
+│   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, [다시 연결]은 `store/reconnectStore`)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · WeakSegments(AI 약점 구간·상태 안내)
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
 │   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
-│   └─ play/         연주 화면 공용 조각 — GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · play.css
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행)
+│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
@@ -82,7 +83,7 @@ src/
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
 └─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
@@ -311,11 +312,11 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 
 자유 연주 화면은 치면 바로 울리고 최근 타격과 패드별 횟수를 보여준다. 배치가 판정에 맞게 반영됐는지 확인하는 화면이기도 하다.
 
-리듬 게임은 내장 채보 3곡을 고른 뒤 Enter로 시작한다(1마디 카운트인). 일시정지는 Esc·스틱 연결 끊김·메뉴 요청 3종이고(`PauseOverlay`, 악보 연주와 같은 정책) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 계정별 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
+리듬 게임(`/play`)은 곡 선택(`SongPicker`) → 연주 준비(`play/ReadyPanel`, 연습 단계 EASY·NORM·HARD 선택·기기 준비 확인) → Enter로 시작 → 카운트다운(`play/Countdown`, 카운트인 마디의 남은 박 수를 화면 가운데 숫자로, 끝나면 「시작!」 0.4초) → 연주 순이다. 연주 중(`play` 단계)은 셸(사이드바·TopBar)을 숨긴 전체 화면이고 `PlayStage`(HUD·하이웨이·미니 킷)로 그린다. 일시정지는 Esc·스틱 연결 끊김·메뉴 요청(Dock ‖) 3종이고(`PauseOverlay`, 악보 연주와 같은 정책, HUD에는 일시정지 버튼이 없다) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 계정별 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
 
 **키보드 규칙(리듬 게임·악보 연습·결과):** 전역 keydown 핸들러(`PlayPage`·`SheetPage`·`ResultPage`·`KeyboardPadSource`)는 포커스된 조작 요소가 소유한 키를 가로채지 않고, `preventDefault`는 실제로 처리했을 때만 한다. 소유 판정은 `domain/keyTarget.isKeyOwnedByTarget(target, code)` 하나로 통일한다 — 입력 칸·`[role=dialog]` 안은 모든 키, button·a·`role=button|tab|link`는 Enter·NumpadEnter·Space만 소유하고 Esc 같은 그 밖의 키는 전역이 받는다. 새 전역 핸들러는 `e.isComposing`·`e.defaultPrevented`·이 함수를 먼저 확인한다. 연주 중(일시정지 아님)에는 포커스가 `body`여야 Space(킥)가 버튼 클릭으로 새지 않는다. 일시정지 다이얼로그(`PauseOverlay`)는 `components/ui/useDialogFocus`로 열릴 때 [재개]에 초점을 주고 Tab·Shift+Tab을 다이얼로그 안에서 순환시키며(계산은 `components/ui/focusCycle`) Esc는 재개이고 Enter·Space는 포커스된 버튼의 기본 동작이다. 닫힐 때는 이전 요소로 복원하지 않고 `body`로 보낸다(`returnFocus: 'blur'`, 기본값은 `'restore'`). 새 다이얼로그는 `components/ui/Dialog`로 감싼다(이 훅이 들어 있다). 내장 곡 결과의 [다시 하기]는 로그에 id가 없어도 `domain/playRetry.retryPathOf`가 `songId`로 내장 음수 id를 복구해 같은 곡 준비 화면으로 보낸다.
 
-게임 뷰는 곡 선택 화면에서 고른다(설정에 저장). **노트 하이웨이**는 노트가 레인을 따라 판정선으로 떨어지는 기본 뷰, **킷 위 연주**는 세팅한 킷 배치의 패드 위로 링이 줄어들어 판정 시각에 패드 테두리에 닿는 뷰다. 두 뷰 모두 같은 `RhythmSession`을 읽으므로 판정·점수·결과 저장은 같다.
+연주 화면은 항상 노트 하이웨이 + 미니 킷이다. `gameView` 설정값과 `KitPlayView`(킷 위 연주)는 코드로 남아 있지만 고르는 화면이 없다(설계 D5).
 
 악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 마디가 고정된 5선 악보를 커서가 지나가는 것을 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
 

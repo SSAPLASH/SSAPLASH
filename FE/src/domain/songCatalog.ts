@@ -48,6 +48,8 @@ export interface SongPage {
 export const DIFFICULTY_ORDER: Difficulty[] = ['EASY', 'NORMAL', 'HARD'];
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
+/** 연습 단계 배지 표기(설계 U17: 곡 난이도와 구분해 EASY·NORM·HARD로 쓴다) */
+export const LEVEL_LABEL: Record<Difficulty, string> = { EASY: 'EASY', NORMAL: 'NORM', HARD: 'HARD' };
 
 function rank(d: Difficulty): number {
   const i = DIFFICULTY_ORDER.indexOf(d);

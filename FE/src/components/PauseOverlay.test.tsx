@@ -1,0 +1,65 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { setReconnectHandler } from '@/store/reconnectStore';
+import { PauseOverlay, type PauseReason } from './PauseOverlay';
+
+const noop = () => {};
+
+function render(reason: PauseReason, canResume: boolean) {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <PauseOverlay reason={reason} canResume={canResume} onResume={noop} onRestart={noop} onLeave={noop} returnTo="/play" />
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => setReconnectHandler(null));
+
+describe('PauseOverlay 일시정지', () => {
+  it('제목·부제', () => {
+    const html = render('user', true);
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('>일시정지</h2>');
+    expect(html).toContain('잠시 쉬어가도 괜찮아요');
+  });
+
+  it('버튼 3개가 계속 → 다시 시작 → 나가기 순서', () => {
+    const html = render('user', true);
+    expect(html.match(/<button/g)).toHaveLength(3);
+    const a = html.indexOf('계속</button>');
+    const b = html.indexOf('다시 시작</button>');
+    const c = html.indexOf('나가기</button>');
+    expect(a).toBeGreaterThan(-1);
+    expect(a).toBeLessThan(b);
+    expect(b).toBeLessThan(c);
+  });
+
+  it('canResume이면 [계속]이 활성이고 준비 문구가 없다', () => {
+    const html = render('user', true);
+    expect(html).not.toContain('disabled');
+    expect(html).not.toContain('play-pause-warn');
+  });
+
+  // 준비 문구 내용(ReadinessNotice)은 스토어 의존이라 마크업 테스트에서 비어 있다 — 경고 영역 존재만 확인
+  it('canResume=false면 [계속]이 비활성이고 준비 문구 영역을 함께 보인다', () => {
+    const html = render('menu', false);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>계속<\/button>/);
+    expect(html).toContain('play-pause-warn');
+  });
+});
+
+describe('PauseOverlay 연결 끊김', () => {
+  it('reason=disconnected면 DisconnectNotice 마크업', () => {
+    const html = render('disconnected', false);
+    expect(html).toContain('role="alertdialog"');
+    expect(html).toContain('stick-disconnect');
+    expect(html).not.toContain('잠시 쉬어가도 괜찮아요');
+  });
+
+  it('재연결 핸들러가 없으면 [다시 연결]이 없다', () => {
+    expect(render('disconnected', false)).not.toContain('다시 연결</button>');
+  });
+
+  // renderToStaticMarkup은 zustand 서버 스냅샷(초기 상태)을 읽어 available=true를 반영하지 못한다 — 건너뜀
+});
