@@ -61,13 +61,39 @@ export interface SetupStepsInput extends ReadinessInput {
 
 // ---- 문구 상수 ----
 
-/** 하단 바: 저장하지 않은 변경이 있을 때(U4) */
+/** 하단 바: 나가려는데 저장하지 않은 변경이 있을 때(복귀 버튼·메뉴 이동, 4-5절 빨강) */
 export const SETUP_BAR_DIRTY_TEXT = '저장하지 않은 변경 사항이 있어요 · 저장하지 않고 나가면 원래대로 돌아가요';
 /** 하단 바: 적용 프리셋이 없을 때(되돌릴 기준이 없어 편집값은 그대로 남는다, U1) */
-export const SETUP_BAR_NO_PRESET_TEXT = '아직 프리셋으로 저장하지 않았어요 · 저장하면 다음에도 이 배치를 쓸 수 있어요';
+export const SETUP_BAR_NO_PRESET_TEXT = '아직 프리셋으로 저장하지 않았어요';
 /** 하단 바: 변경이 없을 때 */
 export function setupBarCleanText(presetName: string): string {
   return `「${presetName}」 사용 중`;
+}
+/** 하단 바: 변경이 있을 때(노랑 점) */
+export function setupBarChangedText(presetName: string): string {
+  return `「${presetName}」 변경 있음 · 저장하지 않으면 다음에 사라져요`;
+}
+
+/** 하단 바 4상태(설계 4-5). tone: caption = 보조 글자색, changed = 노랑 점, leaving = 빨강 */
+export type SetupBarTone = 'caption' | 'changed' | 'leaving';
+export interface SetupBarView {
+  text: string;
+  tone: SetupBarTone;
+  /** 오른쪽 버튼: save = [저장], saveNew = [새 프리셋으로 저장] */
+  button: 'save' | 'saveNew';
+  /** 버튼 활성(저장 중 잠금은 호출자가 따로 건다) */
+  buttonEnabled: boolean;
+}
+
+/** 하단 바 상태. leaving = 변경이 있는 채로 나가려 해서 이탈 확인이 열려 있다 */
+export function setupBarView(input: { activePresetName: string | null; dirty: boolean; leaving: boolean }): SetupBarView {
+  const { activePresetName, dirty, leaving } = input;
+  if (dirty && leaving) {
+    return { text: SETUP_BAR_DIRTY_TEXT, tone: 'leaving', button: activePresetName === null ? 'saveNew' : 'save', buttonEnabled: true };
+  }
+  if (activePresetName === null) return { text: SETUP_BAR_NO_PRESET_TEXT, tone: 'caption', button: 'saveNew', buttonEnabled: true };
+  if (dirty) return { text: setupBarChangedText(activePresetName), tone: 'changed', button: 'save', buttonEnabled: true };
+  return { text: setupBarCleanText(activePresetName), tone: 'caption', button: 'save', buttonEnabled: false };
 }
 
 /** 이탈 확인 문구: 적용 프리셋이 있을 때(4-4) */

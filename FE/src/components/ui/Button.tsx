@@ -1,5 +1,5 @@
 // Figma Controls / Button 126:1875 — 기본 버튼(primary·secondary·text·danger × md·sm).
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { buttonClassName, type ButtonSize, type ButtonVariant } from './buttonStyle';
 import './Button.css';
 
@@ -8,6 +8,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize;
   fullWidth?: boolean;
   leadingIcon?: ReactNode;
+  /** React 19는 함수 컴포넌트도 ref를 props로 받는다(초점 대상 지정용) */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({
