@@ -5,7 +5,7 @@
 - transient: attack slope 왜곡 (온셋 직후 10ms 포락선 기울기의 로그 비율)
 - resource: 처리 시간·피크 RAM·피크 VRAM 측정
 - mr_quality: 드럼리스 MR fullness·bleedless·고음 fullness·음량 차이·잘림 비율 (S15P31A307-165)
-- hit_f1: 채보 타격 F1 (라벨별 짝짓기, SUM 집계, 5가지·8패드·라벨 무시 기준, 시각 오차·세기 상관)
+- hit_f1: 채보 타격 F1 (라벨별 짝짓기, SUM 집계, 5가지·8패드·9패드·라벨 무시 기준, 시각 오차·세기 상관, 페달 혼동 수)
 """
 
 from ssaplash_ai.bench.metrics.attack_slope_distortion import (
@@ -17,8 +17,10 @@ from ssaplash_ai.bench.metrics.hit_f1 import (
     HitEvaluation,
     HitScores,
     MatchCounts,
+    PedalConfusion,
     evaluate_hits,
     f1_from_counts,
+    pedal_confusion,
     score_hits,
 )
 from ssaplash_ai.bench.metrics.mr_quality import MrQuality, bleed_full, mr_quality
@@ -38,6 +40,7 @@ __all__ = [
     "MatchCounts",
     "MrQuality",
     "OnsetResult",
+    "PedalConfusion",
     "ResourceUsage",
     "TransientResult",
     "attack_slope_distortion",
@@ -51,6 +54,7 @@ __all__ = [
     "mr_quality",
     "onset_metrics",
     "onset_scores",
+    "pedal_confusion",
     "score_hits",
     "si_sdr",
 ]

@@ -84,6 +84,12 @@ def test_거친_라벨은_출력_오류():
         build_notes(_hits([(0.1, "tom", -1)]), 3000)
 
 
+def test_페달_하이햇은_채보_출력에서_오류():
+    # 정답·채점에는 HIHAT_PEDAL이 있지만 BE가 받는 패드는 8종
+    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
+        build_notes(_hits([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+
+
 def test_노트가_없어도_통과():
     chart = _chart([])
     assert chart["charts"][0]["notes"] == []
