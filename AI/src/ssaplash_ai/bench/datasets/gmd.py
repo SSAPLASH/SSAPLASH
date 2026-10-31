@@ -3,7 +3,7 @@
 폴더 규칙은 `{root}/info.csv`와 그 안의 midi_filename·audio_filename. 연주 하나가 곡 하나이며
 드럼만 있으므로 mixture = drums_true, accomp_true = 무음. 타격 정답은 MIDI에서 추출.
 GMD MIDI 피치는 Roland TD-11 매핑. synth_build.GMD_PITCH_CLASS(9분류)와 같은 출처이며
-여기서는 패드 8종으로 묶음. 합성곡 onsets.csv의 gmd_class 열도 GMD_CLASS_PAD로 변환.
+여기서는 패드 9종으로 묶음(44번 페달 하이햇은 HIHAT_PEDAL). 합성곡 onsets.csv의 gmd_class 열도 GMD_CLASS_PAD로 변환.
 
 E-GMD(S15P31A307-164 재연구, 작업 12)는 GMD 연주를 Roland TD-17 킷 43개로 다시 녹음한 것(CC BY 4.0,
 Zenodo 10.5281/zenodo.4300943). 목록 csv `e-gmd-v1.0.0.csv`는 GMD info.csv와 열이 같고 kit_name 열이 더 있으며,
@@ -44,7 +44,7 @@ GMD_PITCH_PAD: dict[int, str] = {
     40: "SNARE",
     42: "HIHAT",
     22: "HIHAT",
-    44: "HIHAT",
+    44: "HIHAT_PEDAL",
     46: "HIHAT",
     26: "HIHAT",
     48: "SMALL_TOM",
@@ -68,6 +68,26 @@ GMD_PITCH_PAD: dict[int, str] = {
     70: DROP,  # 마라카스
     75: DROP,  # 클라베
 }
+
+
+BEAT_TYPES: tuple[str, ...] = ("beat", "fill")
+
+
+def beat_types_of(value: object) -> set[str]:
+    """yaml `extra.beat_type` → 연주 종류 집합. 'beat'·'fill'·'all' 또는 목록. (파인튜닝 학습 분할은 둘 다 씀)"""
+    if value is None:
+        return {"beat"}
+    items = [value] if isinstance(value, str) else list(value)
+    out: set[str] = set()
+    for item in items:
+        s = str(item)
+        if s == "all":
+            out.update(BEAT_TYPES)
+        elif s in BEAT_TYPES:
+            out.add(s)
+        else:
+            raise ValueError(f"beat_type은 {BEAT_TYPES} 또는 all: {item!r}")
+    return out
 
 
 def load_gmd_info(gmd_root: Path) -> dict[str, dict[str, str]]:
@@ -113,13 +133,17 @@ class GmdDataset(BaseDataset):
         return self._info
 
     def song_ids(self) -> list[str]:
-        """설정 songs가 있으면 그 목록. 없으면 test split·beat·오디오 있는 연주 전부."""
+        """설정 songs가 있으면 그 목록. 없으면 subset(기본 test)·extra.beat_type(기본 beat)·오디오 있는 연주 전부."""
         if self.config.songs:
             return list(self.config.songs)
+        split = self.config.subset or "test"
+        beat_types = beat_types_of(self.config.extra.get("beat_type", "beat"))
         return sorted(
             row["id"]
             for row in self.info.values()
-            if row.get("audio_filename") and row["split"] == "test" and row["beat_type"] == "beat"
+            if row.get("audio_filename")
+            and row["split"] == split
+            and row["beat_type"] in beat_types
         )
 
     def _row(self, song_id: str) -> dict[str, str]:
@@ -193,7 +217,8 @@ class EgmdDataset(GmdDataset):
     """E-GMD 로더. 곡 id = 오디오 파일 이름(확장자 뺀 것, 예 `drummer1/eval_session/1_funk-groove1_138_beat_4-4_10`).
 
     설정: `subset`은 split(test·validation·train, 기본 test). `extra.perf_ids`는 GMD 연주 id 목록(없으면 전부),
-    `extra.kits`는 kit_name 목록(없으면 43개 전부), `extra.beat_type`은 beat·fill(기본 beat). `songs`가 있으면 그대로.
+    `extra.kits`는 kit_name 목록(없으면 43개 전부), `extra.beat_type`은 beat·fill·all 또는 목록(기본 beat).
+    `songs`가 있으면 그대로. GMD 로더도 같은 subset·beat_type 키를 받음(파인튜닝 학습 분할용, S15P31A307-164).
     """
 
     kind = "egmd"
@@ -222,14 +247,14 @@ class EgmdDataset(GmdDataset):
         if self.config.songs:
             return list(self.config.songs)
         split = self.config.subset or "test"
-        beat_type = str(self.config.extra.get("beat_type", "beat"))
+        beat_types = beat_types_of(self.config.extra.get("beat_type", "beat"))
         perf_ids = self.config.extra.get("perf_ids")
         kits = self.config.extra.get("kits")
         return sorted(
             sid
             for sid, row in self.info.items()
             if row["split"] == split
-            and row["beat_type"] == beat_type
+            and row["beat_type"] in beat_types
             and row.get("audio_filename")
             and (perf_ids is None or row["id"] in set(perf_ids))
             and (kits is None or row["kit_name"] in set(kits))
