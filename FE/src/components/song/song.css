@@ -4,3 +4,44 @@
   color: var(--text-2);
   font-size: 14px;
 }
+
+/* 연습 단계 배지 (Figma Play / LevelBadge 372:1325) */
+.song-level {
+  --song-level-color: var(--level-normal);
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  padding: 3px 8px;
+  border: 1.5px solid var(--song-level-color);
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--song-level-color);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--song-level-color) 45%, transparent);
+  transition:
+    opacity var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.song-level-easy {
+  --song-level-color: var(--level-easy);
+}
+.song-level-normal {
+  --song-level-color: var(--level-normal);
+}
+.song-level-hard {
+  --song-level-color: var(--level-hard);
+}
+button.song-level {
+  cursor: pointer;
+}
+.song-level-dim {
+  opacity: 0.45;
+  box-shadow: none;
+}
+.song-level-dim:hover:not(:disabled) {
+  opacity: 0.8;
+}
