@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -83,6 +83,8 @@ class DatasetConfig:
     songs: list[str] | None = None
     clip: tuple[float, float] | None = None
     expected_songs: int | None = None
+    # 로더 종류별 추가 설정 (yaml `extra`). 예: E-GMD의 연주 목록·킷 목록
+    extra: dict = field(default_factory=dict)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> DatasetConfig:
@@ -103,6 +105,7 @@ class DatasetConfig:
             songs=[str(s) for s in raw["songs"]] if raw.get("songs") else None,
             clip=(float(clip[0]), float(clip[1])) if clip else None,
             expected_songs=raw.get("expected_songs"),
+            extra=dict(raw.get("extra") or {}),
         )
 
 

@@ -79,9 +79,21 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--out", type=Path, default=Path("data/upload/server"), help="zip을 둘 폴더")
+    p.add_argument(
+        "--code-only",
+        action="store_true",
+        help="코드 zip만 만듦 (데이터·분리 결과는 서버에 이미 있을 때. S15P31A307-164 재연구)",
+    )
     args = p.parse_args(argv)
     ai_root = Path.cwd()
     repo_root = ai_root.parent
+
+    if args.code_only:
+        write_zip(
+            args.out / "S15P31A307_code.zip",
+            [(repo_root / f, f"S15P31A307/{f.as_posix()}") for f in code_files(repo_root)],
+        )
+        return 0
 
     missing = missing_separated(ai_root)
     if missing:

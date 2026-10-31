@@ -23,7 +23,7 @@
 
 ```
 AI/
-├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart·ssaplash-worker 명령 진입점
+├─ pyproject.toml        패키지·의존성·ruff·pytest 설정, ssaplash-bench·ssaplash-chart·ssaplash-train·ssaplash-worker 명령 진입점
 ├─ uv.lock               의존성 잠금
 ├─ .python-version       3.11
 ├─ src/ssaplash_ai/      패키지 본체
@@ -45,6 +45,8 @@ AI/
 │   │   │                run_support(둘이 같이 쓰는 CSV 쓰기·이어하기), mlflow_tracking(MLflow 기록)
 │   │   └─ report/       결과 보고서. summary_table·charts(분리), transcription_summary·transcription_charts(채보),
 │   │                    build_report(파일 생성)
+│   ├─ train/            채보 모델 파인튜닝. adtof_data(학습 윈도·특징·프레임 정답), adtof_finetune(학습 루프·체크포인트),
+│   │                    adtof_eval(클래스별 F1·문턱값 맞추기), cli(ssaplash-train 명령)
 │   ├─ chart/            서비스 추론 모듈. config(설정 yaml·환경 변수), audio_io(원곡 읽기·트랙 쓰기), errors(예외 분류),
 │   │                    separation(음원 분리 SeparationModule), transcription(드럼 채보 TranscriptionModule),
 │   │                    chart_json(채보 JSON 만들기·검증), tempo(bpm 추정), cli(ssaplash-chart 명령)
@@ -62,13 +64,15 @@ AI/
 ├─ configs/bench/datasets/  데이터셋 설정 yaml, 합성곡 레시피
 ├─ configs/bench/models/    분리 모델 설정 yaml. 어댑터별 폴더 (msst, demucs, openunmix, mock=테스트용)
 ├─ configs/bench/transcribers/  채보 모델 설정 yaml + 라벨 → 패드 대응표 (adtof, adtof_drumsep, external, mock)
+├─ configs/train/        채보 모델 파인튜닝 설정 yaml (adtof_tom_5cls, adtof_tom_6cls, adtof_tom_7cls, adtof_tom_9cls)
 ├─ configs/chart/        서비스 추론 모듈 설정 yaml (separation.yaml·transcription.yaml, 모델 없이 흐름만 확인하는
 │                        separation_mock.yaml·transcription_mock.yaml)
 ├─ scripts/              데이터 준비 스크립트 (make_synth_songs.py, pack_gmd_subset.py, pack_server_upload.py), 별도 환경 채보 스크립트 (transcribers_ext/)
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. src와 같은 폴더 구조. 실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
-├─ notebooks/            실행용 ipynb 파일 (코랩: bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보 / GPU 서버: transcription_bench_server.ipynb 채보)
+├─ notebooks/            실행용 ipynb 파일 (코랩: bench_colab.ipynb 분리, transcription_bench_colab.ipynb 채보 / GPU 서버: transcription_bench_server.ipynb 채보,
+│                        tom_newkits_server.ipynb 새 킷 규칙 검증, tom_finetune_server.ipynb 채보 모델 파인튜닝)
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
 ├─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
 └─ DESIGN.md             작업 기록·세션 인계 문서 (git 미추적, 개인 문서)
@@ -476,6 +480,7 @@ MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바
 | Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
 | Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
 | YourMT3+ | `external/yourmt3.yaml` (앱 기본값), `external/yourmt3_ps.yaml` (보조) | external | `.venv-yourmt3` + `ext/YourMT3` | 8 | 피아노·베이스까지 받아 적는 다악기 모델. 그중 드럼 노트만 쓴다. 코드는 GitHub이 아니라 HF Space에만 있어 스크립트의 `download`로 코드와 체크포인트(하나에 약 0.55GB)를 판을 고정해 받는다. 코드·가중치 Apache-2.0 |
+| drum2midi | `external/drum2midi.yaml` (세기·페달 학습 모델 끔), `external/drum2midi_learned.yaml` (세기·페달 학습 모델 켬, `--pedal auto`) | external | `.venv-drum2midi` + `ext/drum2midi` | 8 | ADTOF + 드럼 킷 분리 어댑터가 참고한 원본 프로그램(S15P31A307-164 비교용). 곡마다 `drum2midi.py`를 불러서 채보 시간에 분리 모델 로드가 섞인다. 기준값·탐 나누기를 MDB Drums로 맞춘 프로그램이라 MDB 점수는 유리할 수 있다. 코드 MIT, 가중치는 ADTOF(CC BY-NC-SA)·DrumSep(미명시) |
 
 **별도 환경 만들기.** 지금 환경(Python 3.11, torch 2.11, numpy 2)과 의존성이 맞지 않는 모델은 가상환경을 따로 만들고, 하네스가 그 환경의 python으로 `scripts/transcribers_ext/<모델>_transcribe.py`를 한 번 띄워 곡 목록을 통째로 넘긴다(스크립트가 모델을 한 번만 올리고 곡마다 시간·GPU 메모리를 재서 JSON으로 돌려준다). 폴더 이름과 python 경로는 yaml의 `python_exe`에 적혀 있다. Windows 경로이지만 그 파일이 없으면 하네스가 `.venv-<env_name>/bin/python`을 대신 찾으므로 Linux·코랩에서도 yaml을 고칠 필요가 없다.
 
@@ -511,6 +516,17 @@ uv pip install --python .venv-yourmt3/Scripts/python.exe torch==2.8.0 torchaudio
 uv pip install --python .venv-yourmt3/Scripts/python.exe "numpy==1.26.4" "transformers==4.45.1" "tokenizers==0.20.3" "huggingface-hub<1.0" "pytorch-lightning==2.5.6" "torchmetrics==1.9.0" "einops==0.8.2" "mido==1.3.3" "mir-eval==0.8.2" "scikit-learn==1.7.2" "scipy==1.15.3" "wandb==0.31.0" "soundfile==0.14.0" "deprecated==1.3.1"
 # 코드(HF Space mimbres/YourMT3의 amt/src·model_helper.py)와 체크포인트(HF 모델 저장소)를 ext/YourMT3에 받음. 판 고정, 약 1.1GB
 .venv-yourmt3/Scripts/python.exe -I scripts/transcribers_ext/yourmt3_transcribe.py download --repo-dir ext/YourMT3
+
+# drum2midi: Python 3.12 + CUDA 12.8판 torch·torchaudio·torchvision을 먼저 넣고 저장소의 setup_env.py로 나머지(ADTOF-pytorch
+# 클론 포함)를 설치. torchvision을 먼저 넣지 않으면 setup_env.py가 torchvision 최신판을 따라 torch를 CUDA 13판으로 올리고,
+# 그 뒤 torch만 되돌려도 CUDA 13판 cuDNN 파일이 남아 CUDNN_STATUS_NOT_INITIALIZED가 난다(드라이버 570 서버에서 확인).
+# FFmpeg 프로그램이 PATH에 있어야 한다. 드럼 분리 모델은 첫 실행 때 약 400MB를 받는다
+git clone --depth 1 https://github.com/miraer/drum2midi ext/drum2midi
+uv venv .venv-drum2midi --python 3.12 --seed
+uv pip install --python .venv-drum2midi/Scripts/python.exe torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+.venv-drum2midi/Scripts/python.exe ext/drum2midi/setup_env.py --no-render
+# librosa 1.0이 audioread를 같이 깔지 않아 드럼 분리 단계가 ModuleNotFoundError로 멈춘다(2026-10-28 서버에서 확인)
+uv pip install --python .venv-drum2midi/Scripts/python.exe audioread
 ```
 
 별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM·YourMT3+), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
@@ -560,7 +576,8 @@ uv run python scripts/pack_server_upload.py
 1순위 채보 모델(ADTOF + 드럼 킷 분리)은 탐 3종·크래시/라이드를 규칙으로 나눈다(`configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml`의 `rules`). 규칙값을 바꿔 가며 다시 재는 일을 빠르게 하기 위해, 무거운 계산(ADTOF·드럼 킷 분리)은 곡마다 한 번만 GPU로 돌려 저장하고 규칙 비교는 CPU로 몇 초 안에 한다.
 
 ```bash
-# 1. 특징 저장 (GPU, 한 번). 정답 드럼 트랙 입력으로 ADTOF 타격 시각과 toms·crash·ride 트랙을 data/rule_features/<데이터셋>/<곡>.npz 에 둔다. 있으면 건너뜀
+# 1. 특징 저장 (GPU, 한 번). 정답 드럼 트랙 입력으로 ADTOF 타격 시각·프레임별 확신 점수와 드럼 킷 분리 트랙 전부(kick·snare·toms·hh·ride·crash)를 data/rule_features/<데이터셋>/<곡>.npz 에 둔다. 있으면 건너뜀.
+#    2026-10-27 전에 만든 파일은 점수와 kick·snare·hh 트랙이 없으므로 --overwrite 로 다시 만든다 (탐 시각 다시 고르기·거르기 분모 옵션에 필요)
 uv run ssaplash-bench rule-features --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml
 # 2. 정답 탐 타격의 음높이 분포·경계 후보·곡 하나 빼고 확인. 후보는 candidates.yaml로 나와 3번에 바로 넣는다
 uv run ssaplash-bench tom-pitch --dataset configs/bench/datasets/mdb_drums.yaml configs/bench/datasets/gmd_test.yaml --out data/results/tom-pitch
@@ -568,7 +585,108 @@ uv run ssaplash-bench tom-pitch --dataset configs/bench/datasets/mdb_drums.yaml 
 uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml configs/bench/datasets/mdb_drums.yaml --candidates data/results/tom-pitch/candidates.yaml --out data/results/rule-eval --mlflow-uri mlruns
 ```
 
-후보 yaml은 `candidates: [{name, rules}]` 목록이거나 `{name, rules}` 하나이며 `rules`는 모델 yaml의 `rules`와 같은 키만 쓴다(없는 키는 기본값). 결과 폴더에 `candidates.csv`(후보 × 데이터셋: 패드별 F1, 탐·심벌 배정 정확도, 정답 없는 탐 수), `confusion.csv`·`summary.md`(혼동표), `by_song.csv`가 생긴다. 배정 정확도는 정답과 시각이 맞은 타격 중 패드를 맞게 붙인 비율로, 모델이 놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 본다. `run-transcription`도 이제 MLflow에 패드별 F1(`f1_KICK` 등)과 규칙값(`rules.tom_bands` 등)을 함께 남겨 run끼리 패드 단위로 비교할 수 있다.
+후보 yaml은 `candidates: [{name, rules}]` 목록이거나 `{name, rules}` 하나이며 `rules`는 모델 yaml의 `rules`와 같은 키만 쓴다(없는 키는 기본값). 결과 폴더에 `candidates.csv`(후보 × 데이터셋: 패드별 F1, 탐·심벌 배정 정확도, 정답 없는 탐 수, 버린 탐 수), `confusion.csv`·`summary.md`(혼동표), `by_song.csv`(곡마다 버린 탐 수 `tomDropped`, 묶음 수·중앙값 `tomClusters`·`tomClusterHz`)가 생긴다. `--two-tom-upper MID_TOM`을 주면 정답에 탐 패드가 둘뿐이고 하나가 플로어탐인 곡의 나머지 탐 이름을 미드로 바꿔 채점한다(전자 드럼 데이터가 탐 둘 연주의 위쪽 탐을 스몰로 적는 것을 실제 킷 표기에 맞추는 용도. 2026-10-28 결정). 배정 정확도는 정답과 시각이 맞은 타격 중 패드를 맞게 붙인 비율로, 모델이 놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 본다. `run-transcription`도 이제 MLflow에 패드별 F1(`f1_KICK` 등)과 규칙값(`rules.tom_bands` 등)을 함께 남겨 run끼리 패드 단위로 비교할 수 있다.
+
+탐 규칙에는 아래 선택 키가 있다 (S15P31A307-164 실험). 코드 기본값은 전부 꺼져 있어 안 넣으면 결과가 전과 같다. 서비스가 쓰는 `adtof_drumsep.yaml`은 2026-10-31부터 `tom_gate_ratio 0.10`·`tom_peak_mode raw`·`tom_mode relative`·`tom_relative_method peaks`·`tom_relative_naming hybrid`·`tom_relative_min_gap 3.0`·`cymbal_crash_weight 0.7`을 켠다(결과 `docs/chart-rules/tom-finetune-2026-10-31/`). 거르기를 켜려면 어댑터 입력 드럼이 필요하며, `rule-eval`·`tom-pitch`는 데이터셋의 정답 드럼 트랙을 자동으로 읽어 쓴다.
+
+| 키 | 기본값 | 뜻 |
+| --- | --- | --- |
+| `tom_mode` | `fixed` | `fixed`: 고정 Hz 경계 `tom_bands`. `relative`: 곡 안의 탐 타격 음높이를 모아 큰 틈에서 1~3묶음으로 나누고 낮은 순서로 FLOOR·MID·SMALL |
+| `tom_relative_k` / `tom_relative_min_gap` / `tom_relative_min_hits` | 3 / 2.0 / 2 | 최대 묶음 수, 묶음을 가르는 최소 틈(반음), 묶음 하나의 최소 타격 수(작으면 이웃에 합침) |
+| `tom_relative_naming` | `bands` | 묶음이 3개보다 적을 때 이름. `bands`는 묶음 중앙값을 고정 경계로 정하고 둘이 같으면 순서로 벌림, `order`는 1개 MID·2개 FLOOR·MID. `hybrid`는 묶음 수와 절대 음높이를 같이 봄: 1개면 `tom_hybrid_floor_max_hz`(120) 아래 FLOOR·`tom_hybrid_small_min_hz`(200) 위 SMALL·사이 MID, 2개면 낮은 쪽은 120 아래일 때만 FLOOR 아니면 MID, 높은 쪽은 200 위일 때만 SMALL 아니면 MID. 실제 킷은 탐이 둘인 경우가 많고 그 랙탐이 160~180Hz라 MID로 두는 쪽이 정답 표기와 맞음 |
+| `tom_relative_method` | `gap` | 곡 안 음높이를 묶는 법. `gap`은 반음으로 정렬해 이웃 사이 틈이 `tom_relative_min_gap` 이상인 곳에서 자름(타격이 수백 개면 틈이 안 생겨 한 묶음이 됨). `peaks`는 반음 히스토그램(칸 `tom_relative_bin` 0.25, 부드럽게 `tom_relative_smooth` 0.5)의 피크를 찾아 가장 가까운 피크에 붙임. 피크 사이 최소 거리는 `tom_relative_min_gap`. `tom_relative_min_frac`(0)은 묶음 하나의 최소 타격 비율로, `tom_relative_min_hits`와 둘 중 큰 쪽을 씀 |
+| `tom_f0_method` | `peak` | 음높이 재는 법. `peak`는 구간 전체 스펙트럼의 가장 큰 피크 하나, `median`은 구간을 `tom_f0_frame_ms`(40) 길이·`tom_f0_hop_ms`(20) 간격 프레임으로 잘라 프레임마다 재고 중앙값. 킥 겹침이 한 프레임에만 있을 때 흔들리지 않음. `tom_f0_start_ms`(0)는 타격 뒤 얼마부터 잴지 |
+| `tom_gate_ratio` | 없음 | 켜면 타격 직후 toms 트랙 에너지 / 입력 드럼 에너지가 이 값 아래인 탐 타격을 거른다(탐이 아닌 소리를 탐으로 잡은 것). 재는 구간은 `tom_gate_window_ms`, 없으면 `window_ms` |
+| `tom_gate_action` | `drop` | 거른 탐을 어떻게 할지. `drop`은 버림, `snare`는 50ms 안에 ADTOF 스네어 타격이 없으면 SNARE로 돌리고 있으면 버림 |
+| `cymbal_crash_weight` | 1.0 | 심벌 판정에서 crash 트랙 에너지에 곱하는 값. 1보다 크면 크래시 쪽으로 기움. 크래시·라이드를 따로 내는 체크포인트(`five_pedal_cym`)면 이 규칙 대신 모델 출력을 씀 |
+| `tom_threshold` | 없음 = 0.32 | ADTOF 탐 확신 점수의 기준값. 저장 특징에 프레임별 점수가 있을 때만 적용 |
+| `tom_peak_mode` | `madmom` | 탐 타격 시각 고르기. `madmom`은 저장소 방식(100ms 이동평균을 뺀 뒤 기준값 비교), `raw`는 이동평균을 빼지 않음. 50~70ms 간격 더블·롤의 두 번째 타격이 살아남는다 |
+| `tom_gate_mode` | `input` | 거르기 비율의 분모. `input`은 입력 드럼 전체, `others`는 snare·hh·crash·ride 트랙 합 |
+| `tom_kick_drop_ms` | 없음 | 켜면 탐 이름을 붙인 뒤 `tom_kick_drop_pads`(기본 FLOOR_TOM)에 든 탐이 ADTOF 킥 타격과 이 거리(ms) 안이면 버린다. `tom_kick_drop_max_score`를 주면 탐 확신 점수가 그 값 미만인 것만 버린다. 파인튜닝 모델이 실제 킥을 킥과 플로어탐으로 함께 내는 경우를 보려고 넣었고 채택하지 않았다. 버린 수는 `tomKickDropped` 열 |
+| `tom_gate_low_rescue` | 없음 | 켜면 거르기 기준 아래여도 (toms+kick 트랙)/분모가 이 값 이상이고 확신 점수가 `tom_gate_low_min_score`(0.5) 이상이며 음높이가 `tom_low_hz`(60~130Hz) 안인 타격을 탐으로 남긴다. 분리 모델이 낮은 플로어탐을 kick 트랙에 넣는 경우 대응 |
+
+`by_song.csv`의 `tomRescued`가 그렇게 남긴 수다. `tomConsistentAcc`·`f1TomConsistent`는 곡 안에서 탐 이름만 서로 바뀐 것(탐 둘인 킷의 위쪽 탐을 MID로 적을지 SMALL로 적을지)을 맞은 것으로 친 보조 지표로, 곡마다 정답 패드와 붙인 패드를 가장 잘 맞춰 주는 일대일 대응으로 센다. 2026-10-28 비교 결과는 `docs/chart-rules/tom-detect-2026-10-28/`.
+
+`tom-pitch`는 ADTOF가 탐으로 잡은 타격마다 음높이·거르기 비율·짝지은 정답 탐·근처 정답 패드를 `pred_tom.csv`에 남기고, 거르기 비율 분포(`tom_gate_ratio.png`)와 문턱값별로 버려지는 정답 탐·정답 없는 탐 수를 `summary.md`에 적는다.
+
+drum2midi 원본(`external/drum2midi.yaml`)과 우리 규칙 후보는 `scripts/compare_drum2midi.py`로 같은 표에 놓는다. run-transcription 결과 폴더와 rule-eval 결과 폴더를 받아 8패드·탐 3종·크래시와 라이드·킥과 스네어와 하이햇·탐 검출 F1을 50ms 기준으로 세고, 곡 단위로 2,000번 다시 뽑은 95% 구간과 같은 곡끼리 짝지은 탐 3종 F1 차이 구간을 붙인다. 구간이 0을 포함하면 그 데이터로는 어느 쪽이 나은지 판정할 수 없다는 뜻이다. rule-eval은 `--two-tom-upper` 없이 돌린 결과를 써야 정답 표기가 같다.
+
+```bash
+uv run python scripts/compare_drum2midi.py --run d2m=data/results/d2m-drums-mdb --run d2m=data/results/d2m-drums-gmd --rule-eval fixed=data/results/rule-eval-tom-detect --rule-eval pk_gap30=data/results/rule-eval-tom-final --out data/results/compare-drum2midi.md
+```
+
+정답 탐과 짝이 안 된 탐 예측이 어느 악기 자리에서 나오는지는 `scripts/check_false_toms.py`로 센다. rule-eval과 같은 특징·규칙 후보로 탐 예측을 다시 만들고, 짝이 안 된 탐마다 ±50ms 안 정답 주석(ENST는 `bd`·`sd`·`chh` 같은 원래 라벨, 다른 데이터는 정답 패드)과 같은 자리의 ADTOF 킥 타격 여부, 탐 확신 점수를 적는다. 특징 폴더를 여럿 주면 같은 곡끼리 나란히 놓는다.
+
+```bash
+uv run python scripts/check_false_toms.py --features base=data/rule_features --features tom_6cls=data/rule_features_ft_tom_6cls --dataset configs/bench/datasets/enst_minus_one.yaml --song-prefix drummer_1 --candidates docs/chart-rules/tom-newkits-2026-10-29/candidates.yaml --candidate pk_gap30 --out data/results/false-toms-enst-drummer_1.md
+```
+
+### 채보 모델 파인튜닝 (S15P31A307-164)
+
+1순위 채보 모델 ADTOF Frame_RNN(파라미터 45만 개)을 E-GMD·STAR Drums의 정답 드럼 트랙으로 더 학습시켜 탐 검출을 올린다. 2026-10-31 결과로 파인튜닝 가중치는 채택하지 않았다. MDB 탐은 올랐지만 학습에 안 쓴 실제 녹음 ENST에서 탐이 떨어졌다(`docs/chart-rules/tom-finetune-2026-10-31/summary.md`). 서비스는 기본 가중치 그대로이고 아래 도구는 재시도용으로 남긴다. 모델 구조·입력 특징은 그대로이고 가중치 파일만 바뀌므로 어댑터·벤치마크·서비스 추론은 yaml의 `checkpoint_path`만 바꾸면 그대로 돈다. 원본 ADTOF 학습 코드는 Keras이고 학습 데이터는 신청제라 학습 코드를 새로 썼다(`src/ssaplash_ai/train/`). 학습은 GPU 서버에서 `notebooks/tom_finetune_server.ipynb`로 돌리고, 로컬은 pytest의 합성 데이터 몇 스텝(CPU)까지만 한다.
+
+```bash
+# 1. 학습. best.pth·last.pth·log.csv(에폭별 손실·검증 F1)·config.yaml 복사본이 --out에 생긴다
+uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_5cls.yaml --out data/models/adtof_ft/tom_5cls
+# 페달 하이햇 출력을 더한 학습 (5가지 + HIHAT_PEDAL)
+uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_6cls.yaml --out data/models/adtof_ft/tom_6cls
+# 심벌을 크래시·라이드로 나눈 7출력 학습 (킥·스네어·탐·하이햇·크래시·페달·라이드)
+uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_7cls.yaml --out data/models/adtof_ft/tom_7cls
+# 2. 기본 가중치와 파인튜닝 가중치를 같은 데이터셋에서 5가지(킥·스네어·탐·하이햇·심벌) F1로 비교. --checkpoint를 비우면 기본 가중치
+uv run ssaplash-train adtof-eval --checkpoint data/models/adtof_ft/tom_5cls/best.pth --dataset configs/bench/datasets/mdb_drums.yaml configs/bench/datasets/enst_minus_one.yaml --out data/results/adtof-eval-ft
+# 3. 규칙까지 포함한 8패드 점수. 분리 트랙은 기존 특징에서 복사하고 채보 모델 점수만 다시 계산한 뒤 rule-eval
+uv run ssaplash-bench rule-features --model configs/bench/transcribers/adtof_drumsep/adtof_drumsep_ft.yaml --dataset configs/bench/datasets/mdb_drums.yaml --out data/rule_features_ft --stems-from data/rule_features
+uv run ssaplash-bench rule-eval --features data/rule_features_ft --dataset configs/bench/datasets/mdb_drums.yaml --candidates docs/chart-rules/tom-newkits-2026-10-29/candidates.yaml --out data/results/rule-eval-ft
+# 4. 페달 하이햇 비교표. rule-eval 결과(이름=폴더@후보)와 run-transcription 결과(이름=폴더)를 같은 기준으로 셈
+uv run python scripts/score_pedal.py --rule-eval base=data/results/rule-eval-base-pedal@pk_gap30 --rule-eval tom_6cls=data/results/rule-eval-ft-tom_6cls@pk_gap30 --run d2m_learned=data/results/d2m-learned-mdb --baseline base --out data/results/pedal-compare.md
+# 5. 크래시·라이드 비교표. rule-eval 결과(이름=폴더@후보)마다 크래시·라이드 F1, 심벌 혼동, 다른 패드 F1과 채택 판정
+uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-base-cymbal@pk_gap30 --rule-eval cw150=data/results/rule-eval-base-cymbal@cw150 --rule-eval tom_7cls=data/results/rule-eval-ft-tom_7cls@pk_gap30 --baseline now --out data/results/cymbal-compare.md
+```
+
+학습 설정 yaml의 주요 키. 기본값은 ADTOF 원본 Frame_RNN 설정(윈도 412프레임, 배치 32, 이진 교차 엔트로피, 정답 앞뒤 1프레임 번짐, 클래스 가중치 킥 1.078·스네어 1.353·탐 3.414·하이햇 1.144·심벌 1.768)이고 학습률만 파인튜닝이라 원본의 1/5인 0.0001이다.
+
+| 키 | 뜻 |
+| --- | --- |
+| `classes` | `five`: 5가지 그대로(페달 하이햇은 하이햇으로 학습). `five_pedal`: 5가지 + 페달 하이햇 출력(GM 44번), 페달 출력층은 하이햇에서 복사. `five_pedal_cym`: five_pedal에서 심벌을 크래시(49)·라이드(51)로 나눈 7출력, 크래시·라이드 출력층은 심벌에서 복사. 이 체크포인트를 드럼 킷 분리 어댑터에 쓰면 crash·ride 트랙 에너지 비교 대신 모델 출력을 그대로 씀. `pads`: 패드 9종을 직접 내는 변형. 출력층 9개를 5클래스 가중치에서 복사해 초기화(탐 3개 ← 탐, 크래시·라이드 ← 심벌, 페달 ← 하이햇) |
+| `train_datasets` / `val_datasets` | 데이터셋 yaml과 뽑을 비율(`weight`) / 검증에 쓸 yaml과 곡 수(`n_songs`, 고정 시드). 검증은 E-GMD validation·STAR validation 20곡씩이고 MDB·ENST·GMD test·E-GMD test·STAR test는 학습 뒤 한 번만 본다 |
+| `tom_window_frac` / `tom_weight_mult` | 탐 강조 둘. 윈도 중 정답 탐 타격을 가운데 두고 자르는 비율(0.5) / 탐 클래스 가중치 배수(2.0). 안 쓰려면 0과 1 |
+| `pedal_weight_mult` | 페달 클래스 가중치 = 하이햇 가중치 × 이 값(2.0). `five_pedal`·`pads`만 |
+| `accomp_mix_prob` / `accomp_gain_range` | 반주가 있는 곡(STAR)에서 반주를 섞을 확률(0.3)과 게인(0.05~0.3). 분리 결과에 남는 반주 소리를 흉내 냄 |
+| `select_metric` | 검증에서 best.pth를 고르는 기준. 기본 `tom_f1`(탐 검출 F1). `f1`은 5가지 합계, `tom_pedal_f1`은 탐 F1과 페달 F1의 평균, `focus_f1`은 탐·페달·크래시·라이드 F1의 평균(`five_pedal_cym`) |
+| `guard_drop` | 학습 시작 전에 기본 가중치를 5클래스로 검증한 점수가 기준값. 5가지 클래스 F1 중 하나라도 기준값보다 이만큼(0.02) 넘게 떨어진 에폭은 best.pth로 고르지 않음. log.csv의 `guard` 열과 에폭 -1 줄(학습 시작 가중치 점수)로 확인. 조건을 넘는 에폭이 없으면 마지막 가중치를 저장하고 경고 |
+| `fit_thresholds` | 학습 끝에 검증 곡으로 클래스별 문턱값(0.10~0.60, 0.02 간격)을 맞춰 체크포인트 `model_info.thresholds`에 저장. 어댑터가 그 값을 읽고, yaml `thresholds`가 있으면 그것이 우선 |
+| `freeze_cnn` | 켜면 CNN 블록은 고정하고 GRU·출력층만 학습 |
+
+끊긴 학습은 같은 명령에 `--resume`을 붙이면 `--out`의 `last.pth`·`log.csv`에서 이어 간다. 최고점·안 오른 에폭 수·학습률은 `log.csv`로 다시 계산하고, 옵티마이저 상태는 저장하지 않아 새로 시작한다. GPU 서버에서는 학습을 하나씩 돌리는 `scripts/train_queue.py`(`start`·`status`·`stop`)를 노트북 5·6번 셀이 부른다. 학습마다 실행 폴더에 코드 사본을 풀어 돌리므로, 학습 중에 공유 코드 폴더를 다시 풀어도 도는 학습은 바뀌지 않는다.
+
+체크포인트는 기본 가중치 파일과 같은 `{'model_weights': state_dict, 'model_info': {...}}`이고 `model_info`에 `class_set`(five·five_pedal·five_pedal_cym·pads)·`classes`(원래 라벨: five 계열은 MIDI 피치, 9패드는 패드 이름)·`thresholds`·학습 설정·검증 점수가 들어간다. `adtof` 어댑터는 `checkpoint_path`의 이 정보를 읽어 출력 수·라벨·문턱값을 정하고, 정보가 없는 옛 파일은 지금처럼 5클래스·저장소 기본 문턱값으로 돈다. 9패드 체크포인트는 `configs/bench/transcribers/adtof/adtof_ft_9cls.yaml`처럼 `labels`에 `KICK: KICK`으로 적는다. 페달 출력이 있는 체크포인트를 드럼 킷 분리 어댑터에 쓸 때는 `adtof_drumsep_ft6.yaml`처럼 `labels`에 `HIHAT_PEDAL: HIHAT_PEDAL`을 더한다. 파인튜닝한 가중치의 라이선스는 원본과 같은 CC BY-NC-SA 4.0이다.
+
+## 팀 MLflow에 기록하기
+
+팀 MLflow 서버는 SSH 터널로만 붙는다(`Infra/mlflow/README.md`). 터널을 연 PC에서 벤치마크를 돌리면 `--mlflow-uri http://localhost:5000`으로 바로 기록한다. 코랩·학교 GPU 서버는 팀 서버에 못 붙으므로 `--mlflow-uri none`으로 돌리고, 결과 폴더를 PC로 가져와 `relog`로 올린다. 결과 파일이 원본이고 MLflow 기록은 거기서 다시 만든다.
+
+```bash
+# 터널 (창 하나를 열어 둔다)
+ssh -i <키 파일> -L 5000:localhost:5000 ubuntu@k15a307.p.ssafy.io
+# 1. 로컬 파일 저장소(mlruns/)의 run을 먼저 그대로 복사 (확인용 local-*·check-* run은 뺌).
+#    같은 runId가 CSV 폴더에도 있으면 규칙값 파라미터까지 있는 이쪽이 남도록 먼저 올린다
+uv run ssaplash-bench relog --from-mlruns mlruns --mlflow-uri http://localhost:5000 --dry-run
+uv run ssaplash-bench relog --from-mlruns mlruns --mlflow-uri http://localhost:5000
+# 2. 결과 폴더. 먼저 --dry-run으로 폴더마다 종류·실험·runId·지표 개수, 이미 올라간 것은 '건너뜀(중복)'
+uv run ssaplash-bench relog data/results data/models/adtof_ft --recursive --mlflow-uri http://localhost:5000 --dry-run
+# 3. 올리기. 여러 번 쳐도 같은 runId는 한 번만 올라간다
+uv run ssaplash-bench relog data/results data/models/adtof_ft --recursive --mlflow-uri http://localhost:5000
+```
+
+| 폴더 종류 (판별 기준) | 실험 | run 단위·runId | 지표 |
+| --- | --- | --- | --- |
+| 분리 벤치마크 (`results.csv`에 `sdrDrums`) | `separation-bench` | 폴더, CSV `runId` | `run`과 같음 |
+| 채보 벤치마크 (`results.csv`에 `f1Five50`) | `transcription-bench` | 폴더, CSV `runId` | `run-transcription`과 같음 (패드별 F1 포함) |
+| 규칙 채점 (`candidates.csv`) | `chart-rules` | 후보, `폴더 이름/후보 이름` | `{데이터셋}/{열}` |
+| 파인튜닝 학습 (`log.csv`·`config.yaml`·`best.pth`) | `adtof-finetune` | 학습 폴더 이름 | `log.csv` 열을 에폭 단위 이력으로(step = 에폭 + 1), `best/*`, `reference/*` |
+| 체크포인트 평가 (`summary.csv`가 `checkpoint,dataset`로 시작) | `adtof-eval` | 폴더 이름 | `{체크포인트}/{데이터셋}/{열}` |
+
+`--recursive`는 `check-*`·`local-*`·`*-check`·`combined*`·`tom-pitch*`·`tom-detect-*`·`smoke_*` 폴더와 분리 wav·MIDI 폴더에 들어가지 않는다. 다시 올린 run에는 `relogged=true`·`sourceDir` 태그가 붙고, 원래 실행 때만 알 수 있던 `clip`·`nSkipped`는 비어 있다. `dataset` 파라미터는 yaml 이름이 아니라 CSV의 `dataset` 값이다. `rule-eval`은 이제 후보 yaml을 결과 폴더에 `candidates.yaml`로 남겨, 다시 올릴 때도 규칙값이 `rules.*` 파라미터로 붙는다(그 전 결과 폴더는 후보 이름만).
 
 ## 지표 정의
 
@@ -659,7 +777,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 
 ### 채보 벤치마크 정답 데이터 (S15P31A307-108)
 
-채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 스틱 통신 프로토콜 v0.7과 같은 이름의 8종 `KICK, SNARE, HIHAT, SMALL_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE`이고(`bench/datasets/pads.py`. 옛 `HI_TOM`은 2026-10-26부터 `SMALL_TOM`이며, 9번째 패드 `HIHAT_PEDAL`은 채보 모델이 못 내서 어휘에 없다), 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
+채보 모델은 "몇 초에 어느 패드를 쳤는지"를 맞혀야 하므로 타격 시각과 패드가 적힌 정답이 필요하다. 패드는 스틱 통신 프로토콜 v0.7과 같은 이름의 9종 `KICK, SNARE, HIHAT, SMALL_TOM, MID_TOM, FLOOR_TOM, CRASH, RIDE, HIHAT_PEDAL`이고(`bench/datasets/pads.py`. 옛 `HI_TOM`은 2026-10-26부터 `SMALL_TOM`). `HIHAT_PEDAL`은 페달만 밟아 난 하이햇 소리(GMD·E-GMD 44번, MDB·STAR `PHH`)로 2026-10-30부터 정답에서 따로 읽는다. 8패드 점수(`pads` 기준)는 지금까지와 같게 정답·예측의 `HIHAT_PEDAL`을 `HIHAT`에 합쳐 내고, 페달 점수는 `pads9` 기준(`hits_by_class.csv`의 `scheme` 열, 혼동 수 `PEDAL_AS_HIHAT`·`HIHAT_AS_PEDAL` 행은 짝 수를 `tp` 칸에)과 rule-eval의 `f1Pedal`·`pedalAsHihat` 등 열에 따로 낸다, 카우벨·클랩·탬버린처럼 패드에 없는 타격은 정답에서 빼고 개수만 센다. 세 묶음을 쓰며 묶음마다 점수를 따로 낸다.
 
 | 설정 | 내용 | 역할 |
 | --- | --- | --- |
@@ -667,6 +785,10 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 | `gmd_test.yaml` | GMD test split 드럼 연주 45개(52분). 드럼만 있는 전자 드럼 녹음 + MIDI 타격 정답 | 드럼 트랙 입력 채보, 8패드별 점수 |
 | `mdb_drums.yaml` | MDB Drums 23곡(22분). 실제 밴드 녹음, 원곡·드럼 트랙·사람이 적은 타격 정답 | 논문 수치와 검산 |
 | `mdb_drums_unseen.yaml` | 위 23곡 중 MUSDB18 train에 없는 11곡 | 분리 모델을 거치는 평가는 이 묶음만 (아래 참고) |
+| `egmd_test_acoustic.yaml` | E-GMD(GMD 연주를 Roland TD-17 킷 43개로 다시 녹음, CC BY 4.0) test 분할 중 `gmd_test.yaml`의 연주 45개 × 어쿠스틱 음색 킷 26개 = 1170개(22.7시간). 로더는 `bench/datasets/gmd.py`의 `EgmdDataset`, 곡 id는 오디오 파일 이름 | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 96GB 전체는 GPU 서버에 받고 목록 csv 9.6MB만 로컬에 둬도 곡 목록은 뽑힘 |
+| `star_drums_test.yaml`, `star_drums_validation.yaml` | STAR Drums(Weber 외 2025) test·validation 분할. 실제 반주에 샘플 킷 20개(어쿠스틱 15·전자 5)로 합성한 드럼, 탐 3종(HT·MT·LT) 정답. 미리보기 1곡은 `star_drums_preview.yaml` | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 오디오는 CC BY-NC-SA·개별 라이선스라 평가·연구용. 181GB 전체는 GPU 서버에 받고 로더는 `bench/datasets/star.py` |
+| `enst_minus_one.yaml` | ENST-Drums(Gillet & Richard 2006) 중 반주가 있는 minus-one·MIDI-minus-one 64곡. 실제 드러머 3명 녹음, 탐 약 2,600타. 입력 드럼은 `wet_mix`, mixture는 `wet_mix` + 반주 × `extra.accomp_gain`(0.5). 드러머 3은 탐 넷이라 `extra.tom4`로 패드 3개에 대응(랙탐 둘은 스몰·미드, 플로어탐 둘은 플로어). 로더는 `bench/datasets/enst.py` | 실제 녹음에서 탐 규칙·파인튜닝 전후 비교 (S15P31A307-164). 이용 조건은 본인만·연구용·변형물 금지이고, 2026-10-31 제공 측 회신으로 학생 학업용 학습은 허락받음. 학습한 가중치는 실험 전용. 데이터는 공유하지 않음. 주석에 페달 하이햇 라벨이 없음. 결과 공개 시 Gillet & Richard ISMIR 2006 인용. 서버에만 있음 |
+| `gmd_train.yaml`, `egmd_train_acoustic.yaml`, `egmd_validation_acoustic.yaml`, `star_drums_training_ismir04.yaml`, `star_drums_training_mtg.yaml` | 채보 모델 탐 파인튜닝의 학습·검증 분할. GMD train 846개(beat+fill), E-GMD train 어쿠스틱 26킷 21,294개(206시간)·validation 3,042개, STAR training ISMIR04 약 1,228곡·MTG-Jamendo 약 4,807곡. GMD·E-GMD 로더는 `subset`(train·validation·test)과 `extra.beat_type`(beat·fill·all·목록)으로 분할을 고름. `gmd_train.yaml`은 학습 설정에서 뺐다(GPU 서버에는 GMD test 분할만 있고, 같은 연주를 26킷으로 친 것이 E-GMD train에 있음. 2026-10-30) | 파인튜닝 학습 (S15P31A307-164). 평가 분할(GMD test·MDB·ENST·E-GMD test·STAR test)과 겹치지 않음. 서버에만 있음 |
 
 GMD 연주는 `list-gmd --split test --min-sec 30 --hits`로 패드별 타격 수를 보고 골랐다. test split만 쓰는 이유는 채보 후보 중 셋(OaF Drums·YourMT3+·Inverse Drum Machine)이 GMD를 다시 녹음·렌더링한 E-GMD·StemGMD의 train split로 학습했기 때문이다. 밴드 장르만 고르면 크래시 73개·미드탐 34개뿐이라 재즈 2개·라틴 3개 연주를 더해 탐·심벌이 각 100개 이상 되게 했다. 합성곡에 쓴 연주 5개는 뺐다.
 

@@ -30,8 +30,8 @@ from ssaplash_ai.bench.datasets.pads import (
     COARSE,
     DROP,
     HITS_DTYPE,
-    PADS,
     PRED_LABELS,
+    SCORED_PADS,
     empty_hits,
     make_hits,
     validate_pred_hits,
@@ -119,9 +119,9 @@ class TranscriberConfig:
 
     @property
     def eight_pad(self) -> bool:
-        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참 (설계 1-1절 결정)."""
+        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참 (설계 1-1절 결정). HIHAT_PEDAL은 없어도 됨."""
         values = set(self.labels.values())
-        return not (values & set(COARSE)) and set(PADS) <= values
+        return not (values & set(COARSE)) and set(SCORED_PADS) <= values
 
     @property
     def config_hash(self) -> str:
