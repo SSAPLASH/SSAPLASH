@@ -1,4 +1,4 @@
-/* 연주 HUD: 높이 96. game은 배경 없음, sheet는 surface-1 패널 */
+/* 연주 HUD: 높이 96, 배경 없음. game·sheet 같은 배치이고 폭만 연주 영역을 따른다(10/31 결정 ①) */
 .play-hud {
   display: flex;
   align-items: center;
@@ -7,11 +7,6 @@
   height: 96px;
   box-sizing: border-box;
   font-family: var(--font);
-}
-.play-hud.sheet {
-  padding: 0 20px;
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
 }
 .play-hud-info {
   display: flex;

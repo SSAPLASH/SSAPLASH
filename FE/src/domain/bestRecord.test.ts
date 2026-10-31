@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayLog } from '@/engine/playLog';
-import { bestAccuracyByChart, bestScoreBySong } from './bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestScoreBySong } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */
 function log(p: {
@@ -90,5 +90,42 @@ describe('bestAccuracyByChart', () => {
   it('유한하지 않은 정확도는 건너뛴다', () => {
     const m = bestAccuracyByChart([log({ chart: 1, accuracy: Number.NaN }), log({ chart: 1, accuracy: 0.2 })], 'RHYTHM');
     expect(m.get(1)).toBe(0.2);
+  });
+});
+
+describe('bestAccuracyBySong', () => {
+  it('빈 입력이면 빈 Map', () => {
+    expect(bestAccuracyBySong([], 'SHEET').size).toBe(0);
+  });
+
+  it('같은 곡의 여러 연습 단계 중 가장 높은 정확도가 곡 최고', () => {
+    const m = bestAccuracyBySong(
+      [
+        log({ mode: 'SHEET', song: 1, chart: 10, accuracy: 0.6 }),
+        log({ mode: 'SHEET', song: 1, chart: 11, accuracy: 0.92 }),
+        log({ mode: 'SHEET', song: 1, chart: 12, accuracy: 0.8 }),
+        log({ mode: 'SHEET', song: 2, chart: 20, accuracy: 0.3 }),
+      ],
+      'SHEET',
+    );
+    expect(m.get(1)).toBe(0.92);
+    expect(m.get(2)).toBe(0.3);
+  });
+
+  it('SHEET·RHYTHM을 분리한다', () => {
+    const logs = [log({ mode: 'RHYTHM', song: 1, accuracy: 0.5 }), log({ mode: 'SHEET', song: 1, accuracy: 0.97 })];
+    expect(bestAccuracyBySong(logs, 'RHYTHM').get(1)).toBe(0.5);
+    expect(bestAccuracyBySong(logs, 'SHEET').get(1)).toBe(0.97);
+  });
+
+  it('곡 id 없는 로그는 건너뛴다', () => {
+    const m = bestAccuracyBySong([log({ mode: 'SHEET', song: null, accuracy: 1 }), log({ mode: 'SHEET', song: 4, accuracy: 0.1 })], 'SHEET');
+    expect([...m.keys()]).toEqual([4]);
+  });
+
+  it('유한하지 않은 정확도는 건너뛰고 0도 기록으로 센다', () => {
+    const m = bestAccuracyBySong([log({ mode: 'SHEET', song: 1, accuracy: Number.NaN }), log({ mode: 'SHEET', song: 2, accuracy: 0 })], 'SHEET');
+    expect(m.has(1)).toBe(false);
+    expect(m.get(2)).toBe(0);
   });
 });

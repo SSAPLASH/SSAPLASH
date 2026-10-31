@@ -98,3 +98,37 @@ describe('ReadyPanel 최고 정확도', () => {
     expect(render()).toContain('리듬 게임 · BPM 120 · 3:05');
   });
 });
+
+describe('ReadyPanel 슬롯·악보 읽는 법', () => {
+  const opt = <div className="test-options">옵션슬롯</div>;
+
+  it('options 슬롯은 기기 준비 아래, 시작 줄 위에 그려진다', () => {
+    const html = render({ options: opt });
+    const i = html.indexOf('기기 준비</h3>');
+    const j = html.indexOf('test-options');
+    const k = html.indexOf('play-rp-start"');
+    expect(i).toBeGreaterThan(-1);
+    expect(j).toBeGreaterThan(i);
+    expect(k).toBeGreaterThan(j);
+  });
+
+  it('options가 없으면 슬롯 마크업이 없다', () => {
+    expect(render()).not.toContain('test-options');
+  });
+
+  it('staffLegend면 오른쪽 열에서 StaffLegend가 미리 쳐 보기보다 먼저', () => {
+    const html = render({ staffLegend: true });
+    const side = html.indexOf('play-rp-side');
+    const legend = html.indexOf('악보 읽는 법</h3>');
+    const preview = html.indexOf('미리 쳐 보기');
+    expect(side).toBeGreaterThan(-1);
+    expect(legend).toBeGreaterThan(side);
+    expect(preview).toBeGreaterThan(legend);
+  });
+
+  it('staffLegend가 꺼져 있으면 악보 읽는 법 카드가 없다', () => {
+    const html = render();
+    expect(html).not.toContain('악보 읽는 법');
+    expect(html).toContain('미리 쳐 보기');
+  });
+});

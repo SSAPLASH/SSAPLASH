@@ -30,3 +30,16 @@ export function bestAccuracyByChart(logs: readonly PlayLog[], mode: LogMode): Ma
   }
   return best;
 }
+
+/** 곡별(BE 곡 id) 최고 정확도(0~1). 모든 연습 단계 중 가장 높은 값. 곡 숫자 id 없는 내장 채보는 건너뛴다(악보 연습 곡 선택용) */
+export function bestAccuracyBySong(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
+  const best = new Map<number, number>();
+  for (const l of logs) {
+    if (l.mode !== mode || l.songNumericId == null) continue;
+    const acc = l.summary.accuracy;
+    if (!Number.isFinite(acc)) continue;
+    const prev = best.get(l.songNumericId);
+    if (prev === undefined || acc > prev) best.set(l.songNumericId, acc);
+  }
+  return best;
+}
