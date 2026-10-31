@@ -1,0 +1,81 @@
+/* Controls / Button 126:1875 */
+.ui-btn {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 아래 값으로 정한다 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
+}
+.ui-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.ui-btn-md {
+  height: 44px;
+  padding: 8px var(--space-m);
+  font-size: 16px;
+}
+.ui-btn-sm {
+  height: 32px;
+  padding: 8px var(--space-m);
+  font-size: 14px;
+}
+.ui-btn-full {
+  display: flex;
+  width: 100%;
+}
+.ui-btn-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.ui-btn-primary {
+  background: var(--brand);
+  border-color: var(--line);
+  color: var(--brand-on);
+}
+.ui-btn-primary:hover:not(:disabled) {
+  background: var(--brand-text);
+}
+.ui-btn-secondary {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text-1);
+}
+.ui-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+}
+.ui-btn-text {
+  background: transparent;
+  color: var(--brand-text);
+}
+.ui-btn-text:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.ui-btn-danger {
+  background: var(--miss);
+  border-color: var(--miss);
+  color: var(--brand-on);
+}
+.ui-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.ui-btn:disabled,
+.ui-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -18,6 +18,8 @@ interface Options {
   onEscape?: () => void;
   /** 닫힐 때 처리. 'restore'는 이전 요소(문서에 남아 있을 때만), 'blur'는 body로 보낸다 */
   returnFocus?: 'restore' | 'blur';
+  /** 열릴 때 초점을 옮길지(기본 true). false면 호출자가 초기 초점을 직접 정한다 */
+  autoFocus?: boolean;
 }
 
 function focusables(root: HTMLElement): HTMLElement[] {
@@ -35,13 +37,13 @@ function focusInitial(root: HTMLElement, initialRef?: RefObject<HTMLElement | nu
   if (idx >= 0) items[idx].focus();
 }
 
-export function useDialogFocus({ open, dialogRef, initialRef, onEscape, returnFocus = 'restore' }: Options): void {
+export function useDialogFocus({ open, dialogRef, initialRef, onEscape, returnFocus = 'restore', autoFocus = true }: Options): void {
   // 열림·닫힘: 초점 이동과 복원
   useEffect(() => {
     const root = dialogRef.current;
     if (!open || !root) return;
     const previous = document.activeElement as HTMLElement | null;
-    focusInitial(root, initialRef);
+    if (autoFocus) focusInitial(root, initialRef);
     return () => {
       if (returnFocus === 'blur') {
         (document.activeElement as HTMLElement | null)?.blur();

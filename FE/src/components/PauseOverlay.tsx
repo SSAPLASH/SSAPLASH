@@ -4,7 +4,7 @@
 import { useRef } from 'react';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { formatSongTime } from '@/components/formatTime';
-import { useDialogFocus } from '@/components/useDialogFocus';
+import { useDialogFocus } from '@/components/ui/useDialogFocus';
 
 export type PauseReason = 'user' | 'disconnected' | 'menu';
 
