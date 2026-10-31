@@ -67,7 +67,7 @@ export function ProfileMenu() {
       </button>
 
       {open && (
-        <div className="profile-menu" role="menu" aria-label="프로필">
+        <div className="profile-menu motion-menu" role="menu" aria-label="프로필">
           <div className="profile-name">{user.nickname}</div>
           <span className="profile-badge">{PROVIDER_LABEL[user.provider] ?? user.provider}</span>
           <hr />
