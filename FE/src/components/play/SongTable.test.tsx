@@ -23,14 +23,23 @@ function song(id: number, over: Partial<SongSummary> = {}): SongSummary {
 
 const songs = (n: number) => Array.from({ length: n }, (_, i) => song(i + 1));
 
-function render(p: { songs: SongSummary[]; selectedId?: number | null; best?: Map<number, number>; isLocked?: (s: SongSummary) => boolean }) {
+function render(p: {
+  songs: SongSummary[];
+  selectedId?: number | null;
+  best?: Map<number, number>;
+  accuracy?: Map<number, number>;
+  mode?: 'play' | 'sheet';
+  isLocked?: (s: SongSummary) => boolean;
+}) {
   return renderToStaticMarkup(
     <SongTable
       songs={p.songs}
       selectedId={p.selectedId ?? null}
       onSelect={() => {}}
       onOpen={() => {}}
+      mode={p.mode}
       bestScores={p.best ?? new Map()}
+      bestAccuracies={p.accuracy ?? new Map()}
       isLocked={p.isLocked}
     />,
   );
@@ -96,5 +105,32 @@ describe('SongTable', () => {
     const html = render({ songs: [] });
     expect(html).toContain('총 0곡');
     expect(html.match(/class="play-st-pg/g)).toHaveLength(3);
+  });
+});
+
+describe('SongTable sheet 모드', () => {
+  it('열 머리가 「정확도」이고 「최고 점수」는 없다', () => {
+    const html = render({ songs: songs(1), mode: 'sheet' });
+    expect(html).toContain('>정확도</th>');
+    expect(html).not.toContain('최고 점수');
+    expect(html.match(/<th /g)).toHaveLength(5);
+  });
+
+  it('최고 정확도는 퍼센트, 없으면 "—"', () => {
+    const html = render({ songs: songs(2), mode: 'sheet', accuracy: new Map([[1, 0.9876]]) });
+    expect(html).toContain('<td class="play-st-num">98.8%</td>');
+    expect(html).toContain('<td class="play-st-num">—</td>');
+  });
+
+  it('sheet 모드는 최고 점수 Map을 쓰지 않는다', () => {
+    const html = render({ songs: songs(1), mode: 'sheet', best: new Map([[1, 1234567]]) });
+    expect(html).not.toContain('1,234,567');
+  });
+
+  it('play 모드는 최고 점수 그대로(정확도 Map 무시)', () => {
+    const html = render({ songs: songs(1), best: new Map([[1, 4200]]), accuracy: new Map([[1, 0.5]]) });
+    expect(html).toContain('>최고 점수</th>');
+    expect(html).toContain('4,200');
+    expect(html).not.toContain('50.0%');
   });
 });
