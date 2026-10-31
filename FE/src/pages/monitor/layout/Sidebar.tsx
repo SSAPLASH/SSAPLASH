@@ -22,7 +22,7 @@ export const Sidebar = memo(function Sidebar({
   return (
     <nav className="mon-side" aria-label="모니터 단계">
       {SECTION_ITEMS.map((it) => {
-        const hasDot = it.key !== 'control' && it.key !== 'overview' && it.key !== 'trace';
+        const hasDot = it.key !== 'control' && it.key !== 'overview' && it.key !== 'trace' && it.key !== 'free';
         const level = sectionLevel(it.key, health);
         const reason = sectionReason(it.key, health);
         return (
