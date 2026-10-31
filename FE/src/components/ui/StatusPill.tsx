@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react';
 import './StatusPill.css';
 
 export interface StatusPillProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: 'ok' | 'accent' | 'neutral' | 'amber';
+  variant?: 'ok' | 'accent' | 'neutral' | 'amber' | 'danger';
 }
 
 export function StatusPill({ variant = 'neutral', className, children, ...rest }: StatusPillProps) {

@@ -45,3 +45,9 @@
 .ui-pill-amber .ui-pill-dot {
   background: var(--brand-sub);
 }
+.ui-pill-danger {
+  color: var(--miss);
+}
+.ui-pill-danger .ui-pill-dot {
+  background: var(--miss);
+}
