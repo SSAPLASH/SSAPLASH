@@ -12,6 +12,8 @@ hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 
   tom_gate_ratio가 있으면 타격 직후 toms 트랙 에너지가 입력 드럼 에너지의 그 비율보다 작은 탐 타격은 버림
   (탐이 아닌 소리를 탐으로 잡은 것 거르기, S15P31A307-164 실험). 입력 드럼(mixture)이 필요함.
 - 심벌: 타격 직후 cymbal_window_ms(없으면 window_ms) 구간에서 crash 스템과 ride 스템의 에너지를 비교해 큰 쪽.
+  crash 에너지에는 cymbal_crash_weight(기본 1.0)를 곱함. 크래시·라이드를 따로 내는 파인튜닝 체크포인트
+  (출력에 51번이 있음, S15P31A307-164 v0.3)면 이 규칙을 안 쓰고 49 → CRASH, 51 → RIDE 그대로.
 킥·스네어·하이햇은 ADTOF 결과 그대로. 세기 없음. 채보 시간에는 ADTOF + 분리 + 규칙이 다 들어감.
 """
 
@@ -44,6 +46,8 @@ DEFAULT_RULES: dict = {
         "hh": "hh",
     },
     "cymbal_min_energy": 1e-8,
+    # crash 스템 에너지에 곱하는 값. 1보다 크면 크래시 쪽으로 기움 (S15P31A307-164 v0.3 후보)
+    "cymbal_crash_weight": 1.0,
     # 심벌 판정 구간. None이면 window_ms와 같음 (탐 구간만 따로 바꿀 수 있게, S15P31A307-163)
     "cymbal_window_ms": None,
     # 탐 방식 (S15P31A307-164). fixed: 고정 Hz 경계. relative: 곡 안에서 탐 음높이를 모아 순서로 나눔
@@ -94,19 +98,34 @@ DEFAULT_RULES: dict = {
     # 묶음 하나의 최소 타격 비율(곡 안 탐 타격 수 대비). tom_relative_min_hits와 둘 중 큰 쪽을 씀.
     # 실제 드럼은 같은 탐도 세기에 따라 음높이가 3반음쯤 흔들려 작은 곁가지 묶음이 생기므로 비율로 합침
     "tom_relative_min_frac": 0.0,
+    # 킥과 겹친 탐 지우기 (S15P31A307-164 파인튜닝 뒤 ENST drummer_1 분석). None이면 끔. 이름을 붙인 뒤
+    # tom_kick_drop_pads에 든 탐이 ADTOF 킥 타격과 이 거리(ms) 안이면 버림. 파인튜닝 모델이 실제 킥을 킥과
+    # 플로어탐으로 함께 내는 경우 대응. tom_kick_drop_max_score를 주면 탐 확신 점수가 그 값 미만인 것만 버림
+    "tom_kick_drop_ms": None,
+    "tom_kick_drop_pads": ["FLOOR_TOM"],
+    "tom_kick_drop_max_score": None,
 }
 TOM_F0_METHODS = ("peak", "median")
 TOM_RELATIVE_METHODS = ("gap", "peaks")
-ADTOF_LABELS: tuple[int, ...] = (35, 38, 47, 42, 49)  # ADTOF 출력 열 순서
+ADTOF_LABELS: tuple[int, ...] = (
+    35,
+    38,
+    47,
+    42,
+    49,
+)  # ADTOF 출력 열 순서 (페달 체크포인트는 끝에 44가 더 붙음)
 ADTOF_DEFAULT_THRESHOLDS: tuple[float, ...] = (0.22, 0.24, 0.32, 0.22, 0.30)
 ADTOF_FPS = 100
 TOM_PEAK_MODES = ("madmom", "raw")
 TOM_GATE_MODES = ("input", "others")
 GATE_OTHER_STEMS = ("snare", "hh", "crash", "ride")
+ADTOF_KICK = 35
 ADTOF_SNARE = 38
 ADTOF_TOM = 47
 ADTOF_CYMBAL = 49
-LABEL_BY_PITCH = {35: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT"}
+ADTOF_PEDAL = 44  # 페달 출력을 더한 파인튜닝 체크포인트(S15P31A307-164 v0.2)만 냄
+ADTOF_RIDE = 51  # 크래시·라이드를 나눈 파인튜닝 체크포인트(v0.3)만 냄. 이때 49는 크래시만
+LABEL_BY_PITCH = {ADTOF_KICK: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT", ADTOF_PEDAL: "HIHAT_PEDAL"}
 TOM_MODES = ("fixed", "relative")
 TOM_NAMINGS = ("bands", "order", "hybrid")
 TOM_GATE_ACTIONS = ("drop", "snare")
@@ -208,13 +227,16 @@ def tom_scores(act: np.ndarray, times: Sequence[float], fps: int = ADTOF_FPS) ->
 def pick_tom_times(
     activations: np.ndarray, rules: dict, fps: int = ADTOF_FPS
 ) -> tuple[list[float], np.ndarray]:
-    """ADTOF 프레임별 점수 (프레임, 5) → 규칙(tom_threshold·tom_peak_mode)대로 고른 탐 시각과 확신 점수."""
+    """ADTOF 프레임별 점수 (프레임, 5 이상) → 규칙(tom_threshold·tom_peak_mode)대로 고른 탐 시각과 확신 점수.
+
+    앞 5열이 ADTOF 원래 순서이면 됨. 페달 체크포인트의 6번째 열(44)은 여기서 안 씀.
+    """
     r = rules_with_defaults(rules)
     col = ADTOF_LABELS.index(ADTOF_TOM)
     th = r["tom_threshold"] if r["tom_threshold"] is not None else ADTOF_DEFAULT_THRESHOLDS[col]
     act = np.asarray(activations, dtype=np.float32)
-    if act.ndim != 2 or act.shape[1] != len(ADTOF_LABELS):
-        raise ValueError(f"활성값 모양이 (프레임, 5)가 아님: {act.shape}")
+    if act.ndim != 2 or act.shape[1] < len(ADTOF_LABELS):
+        raise ValueError(f"활성값 모양이 (프레임, 5 이상)이 아님: {act.shape}")
     raw = r["tom_peak_mode"] == "raw"
     times = pick_peaks(
         act[:, col],
@@ -314,9 +336,11 @@ def tom_pad(f0: float, bands: Sequence[float]) -> str:
     return "SMALL_TOM"
 
 
-def cymbal_pad(crash_seg: np.ndarray, ride_seg: np.ndarray, min_energy: float) -> str:
-    """두 스템 구간의 에너지 비교. 둘 다 거의 무음이면 CRASH(ADTOF 심벌 타격은 크래시가 더 흔함)."""
-    e_crash = _energy(crash_seg)
+def cymbal_pad(
+    crash_seg: np.ndarray, ride_seg: np.ndarray, min_energy: float, crash_weight: float = 1.0
+) -> str:
+    """두 스템 구간의 에너지 비교(crash 쪽은 crash_weight배). 둘 다 거의 무음이면 CRASH(ADTOF 심벌 타격은 크래시가 더 흔함)."""
+    e_crash = _energy(crash_seg) * crash_weight
     e_ride = _energy(ride_seg)
     if max(e_crash, e_ride) < min_energy:
         return "CRASH"
@@ -501,6 +525,8 @@ class TomAssignment:
     scores: np.ndarray | None = None
     # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 타격 (tom_gate_low_rescue)
     rescued: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
+    # 이름을 붙인 뒤 킥과 겹쳐 버린 타격 (tom_kick_drop_ms)
+    kick_dropped: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     @property
     def n_dropped(self) -> int:
@@ -509,6 +535,10 @@ class TomAssignment:
     @property
     def n_rescued(self) -> int:
         return int(self.rescued.sum()) if self.rescued.size else 0
+
+    @property
+    def n_kick_dropped(self) -> int:
+        return int(self.kick_dropped.sum()) if self.kick_dropped.size else 0
 
     @property
     def n_relabeled(self) -> int:
@@ -591,10 +621,12 @@ def assign_toms(
     snare_times: Sequence[float] | None = None,
     stems: dict[str, np.ndarray] | None = None,
     scores: Sequence[float] | None = None,
+    kick_times: Sequence[float] | None = None,
 ) -> TomAssignment:
-    """ADTOF 탐 타격 시각 → 음높이 → (거르기) → 고정 경계 또는 곡별 상대 방식으로 패드.
+    """ADTOF 탐 타격 시각 → 음높이 → (거르기) → 고정 경계 또는 곡별 상대 방식으로 패드 → (킥과 겹친 탐 지우기).
 
     snare_times는 ADTOF 스네어 타격 시각. tom_gate_action이 snare일 때 이미 스네어가 있는 타격은 돌리지 않음.
+    kick_times는 ADTOF 킥 타격 시각. tom_kick_drop_ms를 켰을 때만 씀.
     stems는 분리 트랙 전부(거르기 분모 others·낮은 탐 되살리기에 kick·snare·hh가 필요). 없으면 toms만 씀.
     scores는 타격마다 ADTOF 탐 확신 점수. 없으면 되살리기의 점수 조건은 통과한 것으로 봄.
     """
@@ -673,6 +705,22 @@ def assign_toms(
             near = snares.size and np.min(np.abs(snares - times[i])) <= GATE_SNARE_SEC
             if not near:
                 pads[i] = "SNARE"
+    kick_dropped = np.zeros(len(times), dtype=bool)
+    if r["tom_kick_drop_ms"] is not None:
+        kicks = np.asarray(list(kick_times or []), dtype=np.float64)
+        drop_pads = set(r["tom_kick_drop_pads"])
+        max_score = r["tom_kick_drop_max_score"]
+        limit = float(r["tom_kick_drop_ms"]) / 1000.0
+        for i in kept_idx:
+            if pads[i] not in drop_pads or not kicks.size:
+                continue
+            if np.min(np.abs(kicks - times[i])) > limit:
+                continue
+            # 점수가 없으면 점수 조건은 통과한 것으로 봄
+            if max_score is not None and score_arr is not None and score_arr[i] >= float(max_score):
+                continue
+            pads[i] = None
+            kick_dropped[i] = True
     return TomAssignment(
         times=times,
         f0=f0,
@@ -684,6 +732,7 @@ def assign_toms(
         pads=pads,
         scores=score_arr,
         rescued=rescued,
+        kick_dropped=kick_dropped,
     )
 
 
@@ -711,7 +760,7 @@ def assign_pads(
     """ADTOF 피치별 시각 + 분리 스템 (+ 입력 드럼, 프레임별 점수) → (시각, 패드 이름, None) 목록.
 
     mixture는 tom_gate_ratio(탐 아닌 소리 거르기)를 켰을 때 필요한 입력 드럼 (채널, 샘플).
-    activations는 ADTOF 프레임별 점수 (프레임, 5). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
+    activations는 ADTOF 프레임별 점수 (프레임, 5 또는 6). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
     낮은 탐 되살리기의 점수 조건에 씀. 없으면 peaks의 탐 시각 그대로.
     """
     r = rules_with_defaults(rules)
@@ -732,18 +781,23 @@ def assign_pads(
             snare_times=peaks.get(ADTOF_SNARE, []),
             stems=stems,
             scores=scores,
+            kick_times=peaks.get(ADTOF_KICK, []),
         )
         out.extend(
             (t, pad, None)
             for t, pad in zip(toms_result.times, toms_result.pads, strict=True)
             if pad is not None
         )
+    # 모델이 크래시·라이드를 따로 냈으면(51번 출력) 규칙 없이 그대로
+    split_cymbal = ADTOF_RIDE in peaks
     for pitch, times in peaks.items():
         if pitch == ADTOF_TOM:
             continue
         for t in times:
             if pitch in LABEL_BY_PITCH:
                 out.append((t, LABEL_BY_PITCH[pitch], None))
+            elif split_cymbal and pitch in (ADTOF_CYMBAL, ADTOF_RIDE):
+                out.append((t, "CRASH" if pitch == ADTOF_CYMBAL else "RIDE", None))
             elif pitch == ADTOF_CYMBAL:
                 c = (
                     _window(crash, sample_rate, t, cymbal_window)
@@ -755,7 +809,9 @@ def assign_pads(
                     if ride is not None
                     else np.zeros(0)
                 )
-                out.append((t, cymbal_pad(c, d, r["cymbal_min_energy"]), None))
+                out.append(
+                    (t, cymbal_pad(c, d, r["cymbal_min_energy"], r["cymbal_crash_weight"]), None)
+                )
             else:
                 out.append((t, str(pitch), None))
     return sorted(out, key=lambda h: h[0])
