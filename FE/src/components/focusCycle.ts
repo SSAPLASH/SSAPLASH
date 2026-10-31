@@ -13,3 +13,8 @@ export function initialFocusIndex(enabled: boolean[], preferred: number | null):
   if (preferred !== null && enabled[preferred]) return preferred;
   return enabled.indexOf(true);
 }
+
+/** 재초점 필요 여부. 안쪽 요소에 있던 포커스가 그 요소가 문서에서 사라진 탓에 body로 떨어졌을 때만 true */
+export function needsRefocus(hadFocusInside: boolean, stillConnected: boolean, activeIsBody: boolean): boolean {
+  return hadFocusInside && !stillConnected && activeIsBody;
+}
