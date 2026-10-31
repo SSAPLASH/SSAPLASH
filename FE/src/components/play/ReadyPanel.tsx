@@ -1,7 +1,10 @@
 // 연주 준비 (Figma 223:3812 준비 완료 · 223:4163 준비 필요 · ReadyCheck 222:856). 곡 카드(커버 120·연습 단계 고르기) · 기기 준비 카드 · 시작 줄 · 오른쪽 미리 쳐 보기.
 // props만 받는다 — 준비 조건 계산(useReadiness)·스토어 구독·이동은 페이지가 한다. 동의 카드는 없다(설계 U19).
 // Enter = 시작은 페이지 전역 핸들러가 맡는다(여기서 중복 처리하지 않는다).
+import { useState, type ReactNode } from 'react';
 import type { Difficulty } from '@/domain/chart';
+import type { PadId } from '@/domain/pads';
+import type { PadVisualState } from '@/domain/drumKit';
 import type { ReadinessMissing } from '@/domain/readiness';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +12,7 @@ import { SongCover } from '@/components/song/SongCover';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { StaffLegend } from './StaffLegend';
 import { usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
@@ -39,6 +43,10 @@ export interface ReadyPanelProps {
   /** 있을 때만 [다시 연결]을 보인다 */
   onReconnect?: () => void;
   onStart: () => void;
+  /** 기기 준비 카드 아래·시작 줄 위에 그대로 넣는 슬롯(악보 연습의 「연주 중 옵션」 카드) */
+  options?: ReactNode;
+  /** true면 오른쪽 열 맨 위에 「악보 읽는 법」 카드를 보인다(악보 연습) */
+  staffLegend?: boolean;
 }
 
 function Dot({ ok }: { ok: boolean }) {
@@ -78,8 +86,15 @@ export function ReadyPanel({
   onSetup,
   onReconnect,
   onStart,
+  options,
+  staffLegend = false,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
+  // 악보 읽는 법 줄에 올린 패드는 킷에서 예고(armed) 링으로, 타격(hit)한 패드는 그 줄을 강조한다
+  const [hoverPad, setHoverPad] = useState<PadId | null>(null);
+  const kitStates: Partial<Record<PadId, PadVisualState>> =
+    staffLegend && hoverPad && !padStates[hoverPad] ? { ...padStates, [hoverPad]: 'armed' } : padStates;
+  const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
   const stickOk = !missing.includes('stick');
   const calOk = !missing.includes('firstSetup');
   const presetOk = !missing.includes('preset');
@@ -168,6 +183,8 @@ export function ReadyPanel({
             )}
           </Card>
 
+          {options}
+
           <div className="play-rp-start">
             <Button className="play-rp-start-btn" disabled={!ready} onClick={onStart}>
               시작 (Enter)
@@ -180,12 +197,15 @@ export function ReadyPanel({
           </div>
         </div>
 
-        <Card padding="md" className="play-rp-preview" title="미리 쳐 보기">
-          <div className="play-rp-kit">
-            <DrumKit fitWidth states={padStates} />
-          </div>
-          <p className="play-rp-caption">쳐 보면 소리만 나요. 기록은 남지 않아요.</p>
-        </Card>
+        <div className="play-rp-side">
+          {staffLegend && <StaffLegend activePad={hitPad} onHoverPad={setHoverPad} />}
+          <Card padding="md" className="play-rp-preview" title="미리 쳐 보기">
+            <div className="play-rp-kit">
+              <DrumKit fitWidth states={kitStates} />
+            </div>
+            <p className="play-rp-caption">쳐 보면 소리만 나요. 기록은 남지 않아요.</p>
+          </Card>
+        </div>
       </div>
     </section>
   );
