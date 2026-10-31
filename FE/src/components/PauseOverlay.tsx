@@ -1,10 +1,16 @@
-// 악보 연주 일시정지 다이얼로그 (MODE-003 설계 4-3, Claude Design Pause 보드). 사유 문구 + 재개·처음부터·나가기.
-// 재개는 준비 조건이 충족될 때만 활성이다(canResume). 아니면 미비 안내 띠를 함께 보인다.
-// 스크림·다이얼로그 색은 .sheet-mode 밖에서도 보이도록 클래스에 직접 둔다.
+// 일시정지 다이얼로그 (Figma PauseDialog 112:592) · 연결 끊김 카드 (사유 disconnected, stick/DisconnectNotice 228:1138).
+// 재개는 준비 조건이 충족될 때만 활성이다(canResume). 아니면 다이얼로그 안에 준비 미비 문구(ReadinessNotice)를 함께 보인다.
+// 포커스 규칙(D3·D4): 열릴 때 주 버튼, Tab 순환, Esc = 계속, 닫힐 때 body로(returnFocus 'blur' — 연주 중 Space 킥 보호).
 import { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
-import { formatSongTime } from '@/components/formatTime';
+import { DisconnectNotice } from '@/components/stick/DisconnectNotice';
+import { buttonClassName } from '@/components/ui/buttonStyle';
+import '@/components/ui/Button.css';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { useLive } from '@/store/liveStore';
+import { useReconnect } from '@/store/reconnectStore';
+import './PauseOverlay.css';
 
 export type PauseReason = 'user' | 'disconnected' | 'menu';
 
@@ -16,95 +22,76 @@ interface Props {
   onLeave: () => void;
   /** 설정으로 갔다 돌아올 경로(pathname + search) */
   returnTo: string;
-  /** 멈춘 곡 시각(ms). 주어지면 설명에 m:ss.d로 보인다 */
+  /** 멈춘 곡 시각(ms). 지금 화면에는 쓰지 않지만 호출부 계약을 유지한다 */
   pausedAtMs?: number;
 }
 
-const TITLE: Record<PauseReason, string> = {
-  user: '일시정지',
-  disconnected: '스틱 연결이 끊겼습니다',
-  menu: '메뉴를 열어 일시정지했습니다',
-};
-
-function describe(reason: PauseReason, pausedAtMs?: number): string {
-  const at = pausedAtMs !== undefined ? `${formatSongTime(pausedAtMs)}에서 ` : '';
-  const stop = `연주·반주·클릭을 ${at}멈췄습니다.`;
-  if (reason === 'disconnected') return `${stop} 다시 연결되면 그 자리에서 이어집니다.`;
-  return `${stop} 재개하면 그 자리에서 이어집니다.`;
-}
-
-function Icon({ reason }: { reason: PauseReason }) {
-  if (reason === 'disconnected') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M10 4l7.5 13h-15z" />
-        <path d="M10 9v3.5M10 14.5v.5" />
-      </svg>
-    );
-  }
-  if (reason === 'menu') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M4 6h12M4 10h12M4 14h12" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-      <rect x="5" y="4" width="3.5" height="12" rx="1" />
-      <rect x="11.5" y="4" width="3.5" height="12" rx="1" />
-    </svg>
-  );
-}
-
-export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo, pausedAtMs }: Props) {
+export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const resumeRef = useRef<HTMLButtonElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
+  const connected = useLive((l) => l.connected);
+  const reconnectState = useReconnect((s) => s.status);
+  const attempt = useReconnect((s) => s.attempt);
+  const max = useReconnect((s) => s.max);
+  const available = useReconnect((s) => s.available);
+  const reconnect = useReconnect((s) => s.reconnect);
+
   // 닫힐 때 body로 보낸다(D3): 이전 버튼으로 복원하면 Space(킥)가 그 버튼을 눌러 다시 멈춘다
   useDialogFocus({
     open: true,
     dialogRef,
-    initialRef: resumeRef,
+    initialRef: primaryRef,
     onEscape: canResume ? onResume : undefined,
     returnFocus: 'blur',
   });
+
+  const disconnected = reason === 'disconnected';
   return (
-    <div className="sm-scrim">
-      <div ref={dialogRef} className="sm-dialog pause-dialog" role="dialog" aria-modal="true" aria-label="일시정지">
-        <div>
-          <div className="pause-title">
-            <span className={`pause-ico ${reason === 'disconnected' ? 'danger' : 'info'}`} aria-hidden="true">
-              <Icon reason={reason} />
-            </span>
-            <h2>{TITLE[reason]}</h2>
-          </div>
-          <p className="pause-desc">{describe(reason, pausedAtMs)}</p>
-        </div>
-        {!canResume && (
-          <div className="pause-warn">
-            <span className="pause-dot" aria-hidden="true" />
-            <ReadinessNotice returnTo={returnTo} compact />
+    <div className="play-pause-scrim motion-overlay">
+      <div ref={dialogRef} className="play-pause-wrap">
+        {disconnected ? (
+          <DisconnectNotice
+            left={connected[0]}
+            right={connected[1]}
+            status={{ status: reconnectState, attempt, max }}
+            onExit={onLeave}
+            onReconnect={available ? () => void reconnect() : undefined}
+            onOpenSetup={() => navigate('/setup', { state: { returnTo } })}
+            primaryRef={primaryRef}
+          />
+        ) : (
+          <div className="play-pause motion-dialog" role="dialog" aria-modal="true" aria-labelledby="play-pause-title">
+            <div className="play-pause-head">
+              <h2 id="play-pause-title" className="play-pause-title">
+                일시정지
+              </h2>
+              <p className="play-pause-sub">잠시 쉬어가도 괜찮아요</p>
+            </div>
+            {!canResume && (
+              <div className="play-pause-warn">
+                <ReadinessNotice returnTo={returnTo} compact />
+              </div>
+            )}
+            <div className="play-pause-actions">
+              <button
+                ref={primaryRef}
+                type="button"
+                className={buttonClassName({ fullWidth: true })}
+                onClick={onResume}
+                disabled={!canResume}
+              >
+                계속
+              </button>
+              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onRestart}>
+                다시 시작
+              </button>
+              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onLeave}>
+                나가기
+              </button>
+            </div>
           </div>
         )}
-        <div className="pause-actions">
-          <button ref={resumeRef} className="sm-btn primary lg" onClick={onResume} disabled={!canResume}>
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path d="M6 4l10 6-10 6z" />
-            </svg>
-            재개 <span className="sm-key">Enter</span>
-          </button>
-          <button className="sm-btn lg" style={{ fontWeight: 400 }} onClick={onRestart}>
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-              <path d="M4 10a6 6 0 1 1 1.8 4.3" />
-              <path d="M4 15v-5h5" />
-            </svg>
-            처음부터
-          </button>
-          <button className="sm-btn danger-outline lg pause-leave" style={{ fontWeight: 400 }} onClick={onLeave}>
-            나가기
-          </button>
-        </div>
-        <span className="pause-foot">나가면 이번 연주는 기록되지 않습니다. 처음부터는 카운트인부터 다시 시작합니다.</span>
       </div>
     </div>
   );
