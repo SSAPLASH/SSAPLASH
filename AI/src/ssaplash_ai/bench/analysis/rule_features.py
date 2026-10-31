@@ -5,9 +5,12 @@ ADTOF + 드럼 킷 분리 어댑터의 무거운 계산(ADTOF 활성값 → 피�
 읽어 CPU로 몇 초 안에 끝남.
 
 저장 내용 (곡 하나 = npz 하나)
-- peaks_{피치}: ADTOF가 잡은 시각(초). 피치 35 킥·38 스네어·42 하이햇·47 탐·49 심벌
-- stem_{이름}: 드럼 킷 분리 트랙 중 규칙이 쓰는 toms·crash·ride. 모노 float16, 샘플레이트는 입력과 같음(44.1kHz).
-  float16은 float32의 절반 크기이고 규칙(스펙트럼 봉우리·에너지 비교)에는 차이가 거의 없음
+- peaks_{피치}: ADTOF가 잡은 시각(초). 피치 35 킥·38 스네어·42 하이햇·47 탐·49 심벌(페달 체크포인트는 44 페달 하이햇, 크래시·라이드 체크포인트는 49가 크래시만이고 51 라이드도)
+- activations: ADTOF가 프레임(100fps)마다 내는 5가지 확신 점수 (프레임, 5) float16. 페달 체크포인트는 (프레임, 6), 끝 열이 44번. 크래시·라이드 체크포인트는 (프레임, 7), 끝 열이 51번. 탐 기준값·타격 시각
+  고르기를 규칙으로 바꿔 다시 돌리기 위해 저장 (S15P31A307-164 재연구). 옛 파일에는 없을 수 있음
+- stem_{이름}: 드럼 킷 분리 트랙 전부(kick·snare·toms·hh·ride·crash). 모노 float16, 샘플레이트는 입력과 같음(44.1kHz).
+  float16은 float32의 절반 크기이고 규칙(스펙트럼 봉우리·에너지 비교)에는 차이가 거의 없음.
+  옛 파일은 toms·crash·ride 셋만 있음
 - sample_rate, duration_sec, meta(json: 모델·checkpoint·설정 해시·기본 규칙)
 경로 `data/rule_features/{데이터셋}/{곡}.npz`. 이미 있으면 건너뜀. `data/`는 git 미추적.
 """
@@ -34,13 +37,20 @@ STEM_DTYPE = np.float16
 
 @dataclass
 class RuleFeatures:
-    """곡 하나의 저장 특징. stems 값은 (1, 샘플) float32로 돌려줌 (규칙 함수가 (채널, 샘플)을 받음)."""
+    """곡 하나의 저장 특징. stems 값은 (1, 샘플) float32로 돌려줌 (규칙 함수가 (채널, 샘플)을 받음).
+
+    input_audio는 어댑터에 넣은 드럼 입력(모노 (1, 샘플) float16). npz에는 없고 rule_eval이 데이터셋에서
+    읽어 채움. 탐 아닌 소리 거르기(tom_gate_ratio, S15P31A307-164)가 toms 트랙과 비교할 기준.
+    """
 
     peaks: dict[int, np.ndarray]
     stems: dict[str, np.ndarray]
     sample_rate: int
     duration_sec: float
     meta: dict = field(default_factory=dict)
+    input_audio: np.ndarray | None = None
+    # ADTOF 프레임별 확신 점수 (프레임, 5) float32. 없으면 None (옛 파일)
+    activations: np.ndarray | None = None
 
     def peaks_as_lists(self) -> dict[int, list[float]]:
         """assign_pads가 받는 {피치: 시각 목록} 형태."""
@@ -55,20 +65,27 @@ def feature_path(root: Path, dataset_name: str, song_id: str) -> Path:
     return Path(root) / dataset_name / f"{_safe_name(song_id)}.npz"
 
 
+def input_as_feature(audio: np.ndarray) -> np.ndarray:
+    """어댑터 입력 (채널, 샘플) → RuleFeatures.input_audio 형태 (1, 샘플) float16."""
+    return to_mono(np.asarray(audio)).astype(STEM_DTYPE)[None, :]
+
+
 def make_features(
     peaks: dict[int, Sequence[float]],
     stems: dict[str, np.ndarray],
     sample_rate: int,
     duration_sec: float,
     meta: dict | None = None,
+    activations: np.ndarray | None = None,
 ) -> RuleFeatures:
-    """어댑터 출력(피치별 시각, 스템 (채널, 샘플))을 저장 형태로. 스템은 모노 float16."""
+    """어댑터 출력(피치별 시각, 스템 (채널, 샘플), 프레임별 점수)을 저장 형태로. 스템은 모노 float16."""
     return RuleFeatures(
         peaks={int(p): np.asarray(list(t), dtype=np.float64) for p, t in peaks.items()},
         stems={name: to_mono(np.asarray(a)).astype(STEM_DTYPE) for name, a in stems.items()},
         sample_rate=int(sample_rate),
         duration_sec=float(duration_sec),
         meta=dict(meta or {}),
+        activations=None if activations is None else np.asarray(activations, dtype=np.float32),
     )
 
 
@@ -84,6 +101,8 @@ def save_features(path: Path, f: RuleFeatures) -> Path:
         arrays[f"peaks_{int(pitch)}"] = np.asarray(times, dtype=np.float64)
     for name, audio in f.stems.items():
         arrays[f"stem_{name}"] = np.asarray(audio, dtype=STEM_DTYPE)
+    if f.activations is not None:
+        arrays["activations"] = np.asarray(f.activations, dtype=STEM_DTYPE)
     tmp = path.with_suffix(".npz.part")
     with open(tmp, "wb") as fh:
         np.savez(fh, **arrays)
@@ -109,29 +128,42 @@ def load_features(path: Path) -> RuleFeatures:
             sample_rate=int(z["sample_rate"]),
             duration_sec=float(z["duration_sec"]),
             meta=json.loads(str(z["meta"])),
+            activations=(
+                np.asarray(z["activations"], dtype=np.float32) if "activations" in z.files else None
+            ),
         )
 
 
-def features_from_adapter(tr, audio: np.ndarray, sample_rate: int) -> RuleFeatures:
-    """ADTOF + 드럼 킷 분리 어댑터(로드된 상태)로 곡 하나의 특징 계산. 벤치마크와 같은 타격·트랙."""
+def features_from_adapter(
+    tr, audio: np.ndarray, sample_rate: int, stems: dict[str, np.ndarray] | None = None
+) -> RuleFeatures:
+    """ADTOF + 드럼 킷 분리 어댑터(로드된 상태)로 곡 하나의 특징 계산. 벤치마크와 같은 타격·트랙.
+
+    stems를 주면 드럼 킷 분리를 돌리지 않고 그것을 씀 (채보 모델 가중치만 바꿔 다시 저장할 때, 작업 18).
+    """
     audio = np.ascontiguousarray(audio, dtype=np.float32)
     if audio.ndim == 1:
         audio = np.stack([audio, audio])
-    peaks = tr._adtof.peaks(tr._adtof.activations(audio, sample_rate))
-    all_stems = tr.stems(audio, sample_rate)
+    activations = tr._adtof.activations(audio, sample_rate)
+    peaks = tr._adtof.peaks(activations)
+    all_stems = dict(stems) if stems is not None else tr.stems(audio, sample_rate)
     names = tr.rules["stems"]
     wanted = {names["toms"], names["crash"], names["ride"]}
     missing = sorted(wanted - set(all_stems))
     if missing:
         raise KeyError(f"드럼 킷 분리 출력에 스템이 없음: {missing} (있는 것: {sorted(all_stems)})")
-    stems = {n: all_stems[n] for n in sorted(wanted)}
+    # 규칙이 쓰는 셋뿐 아니라 분리 트랙 전부 저장 (거르기 분모·낮은 탐 판단에 kick·snare·hh가 필요)
+    stems = {n: all_stems[n] for n in sorted(all_stems)}
     meta = {
         "model": tr.name,
         "checkpoint": tr._checkpoint_id(),
         "configHash": tr.config.config_hash,
         "rulesDefault": tr.rules,
+        "stemsReused": stems is not None,
     }
-    return make_features(peaks, stems, sample_rate, audio.shape[1] / sample_rate, meta)
+    return make_features(
+        peaks, stems, sample_rate, audio.shape[1] / sample_rate, meta, activations=activations
+    )
 
 
 @dataclass
@@ -142,6 +174,18 @@ class BuildResult:
     errors: dict[str, str] = field(default_factory=dict)
 
 
+def reusable_stems(
+    stems_from: Path | None, dataset_name: str, song_id: str
+) -> dict[str, np.ndarray] | None:
+    """stems_from 폴더에 같은 곡의 특징 파일이 있으면 그 분리 트랙을 돌려줌. 없으면 None."""
+    if stems_from is None:
+        return None
+    path = feature_path(stems_from, dataset_name, song_id)
+    if not path.is_file():
+        return None
+    return load_features(path).stems
+
+
 def build_features(
     model_config: Path,
     dataset_config: Path,
@@ -149,8 +193,13 @@ def build_features(
     device: str = "cuda",
     overwrite: bool = False,
     log: Logger = print,
+    stems_from: Path | None = None,
 ) -> BuildResult:
-    """데이터셋의 모든 곡에 대해 정답 드럼 트랙 입력으로 특징을 계산해 저장. 있으면 건너뜀."""
+    """데이터셋의 모든 곡에 대해 정답 드럼 트랙 입력으로 특징을 계산해 저장. 있으면 건너뜀.
+
+    stems_from을 주면 그 폴더의 같은 곡 특징에서 분리 트랙을 복사하고 채보 모델만 다시 돌림
+    (파인튜닝 가중치 평가용. 분리 결과는 채보 모델과 무관하게 같으므로 GPU 시간을 아낌).
+    """
     from ssaplash_ai.bench.runner.run_support import format_error
 
     config = TranscriberConfig.from_yaml(model_config)
@@ -176,13 +225,15 @@ def build_features(
             start = time.perf_counter()
             try:
                 song = dataset.load(song_id)
-                f = features_from_adapter(tr, song.drums_true, song.sample_rate)
+                reuse = reusable_stems(stems_from, dataset.name, song_id)
+                f = features_from_adapter(tr, song.drums_true, song.sample_rate, stems=reuse)
                 save_features(path, f)
                 result.paths.append(path)
                 n_tom = len(f.peaks.get(47, ()))
                 n_cym = len(f.peaks.get(49, ()))
+                note = " 분리 트랙 재사용" if reuse is not None else ""
                 log(
-                    f"[rule-features] {song_id}: 탐 {n_tom}·심벌 {n_cym} "
+                    f"[rule-features] {song_id}: 탐 {n_tom}·심벌 {n_cym}{note} "
                     f"({time.perf_counter() - start:.1f}s)"
                 )
             except Exception as exc:
@@ -204,5 +255,6 @@ __all__ = [
     "features_from_adapter",
     "load_features",
     "make_features",
+    "reusable_stems",
     "save_features",
 ]

@@ -1,0 +1,61 @@
+# S15P31A307-164 재연구 작업 9·11 후보. 전부 탐 구간 120ms·심벌 80ms(지금 기본값) 위에서 비교.
+# 이름 규칙: g=거르기 비율, th=탐 기준값, raw=이동평균 안 뺌, oth=거르기 분모 다른 트랙 합, res=낮은 탐 되살리기,
+# hyb=묶음 수·절대 음높이 혼합 이름, med=프레임 중앙값 음높이
+candidates:
+- name: fixed
+  rules: {window_ms: 120, cymbal_window_ms: 80}
+- name: g010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10}
+# ---- 검출 (작업 9) ----
+- name: g010_th024
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_threshold: 0.24}
+- name: g010_raw032
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw}
+- name: g010_raw024
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.24}
+- name: g010_raw016
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.16}
+- name: g010_oth
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_gate_mode: others}
+- name: g030_oth
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.30, tom_gate_mode: others}
+- name: g010_res050
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_gate_low_rescue: 0.5}
+- name: g010_res030
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_gate_low_rescue: 0.3}
+- name: g010_raw032_res050
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5}
+- name: g010_raw024_res050
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.24, tom_gate_low_rescue: 0.5}
+# ---- 배정 (작업 11). 검출은 raw032+res050 위에서 ----
+- name: det_hyb
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid}
+- name: det_hyb_gap1
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_min_gap: 1.0}
+- name: det_hyb_gap3
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_min_gap: 3.0}
+- name: det_hyb_med
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_f0_method: median}
+- name: det_hyb_med_s30
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_f0_method: median, tom_f0_start_ms: 30}
+- name: det_fixed_med
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_f0_method: median}
+- name: det_hyb_f110_s190
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_hybrid_floor_max_hz: 110, tom_hybrid_small_min_hz: 190}
+- name: det_hyb_f130_s210
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_hybrid_floor_max_hz: 130, tom_hybrid_small_min_hz: 210}
+# ---- 묶는 법: 히스토그램 피크 (pk) ----
+- name: det_hyb_pk
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks}
+- name: det_hyb_pk_gap15
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 1.5}
+- name: det_hyb_pk_gap3
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: det_hyb_pk_hits5
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_hits: 5}
+- name: det_hyb_pk_med
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_f0_method: median}
+- name: det_bands_pk
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: bands, tom_relative_method: peaks}
+- name: det_order_pk
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: order, tom_relative_method: peaks}
