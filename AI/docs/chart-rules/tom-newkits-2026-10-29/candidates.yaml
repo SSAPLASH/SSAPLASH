@@ -1,0 +1,13 @@
+# 새 킷 데이터(E-GMD test 어쿠스틱 26킷·STAR test·ENST)에서 채택 후보가 버티는지 보는 후보 5개 (S15P31A307-164).
+# fixed: 지금 기본값(고정 경계). g010: 거르기만. g010_raw032: 거르기 + 이동평균 안 뺌. pk_gap30/35: 채택 후보(피크 묶기 + hybrid 이름)
+candidates:
+- name: fixed
+  rules: {window_ms: 120, cymbal_window_ms: 80}
+- name: g010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10}
+- name: g010_raw032
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw}
+- name: pk_gap30
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: pk_gap35
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5}

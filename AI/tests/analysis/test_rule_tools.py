@@ -27,7 +27,7 @@ from ssaplash_ai.bench.analysis.rule_eval import NONE_LABEL, group_confusion
 from ssaplash_ai.bench.analysis.rule_features import input_as_feature, make_features
 from ssaplash_ai.bench.analysis.tom_pitch import leave_one_song_out, pitch_stats
 from ssaplash_ai.bench.cli import main, rules_params
-from ssaplash_ai.bench.datasets.pads import PADS, make_hits
+from ssaplash_ai.bench.datasets.pads import PADS, SCORED_PADS, make_hits
 from ssaplash_ai.bench.report import transcription_summary as ts
 
 IDENTITY = {p: p for p in PADS}
@@ -105,7 +105,9 @@ def test_기본_규칙이면_합성_정답을_전부_맞힌다(tmp_path: Path):
     assert [str(p) for p in pred["pad"]] == [p for _, p, _ in HITS]
     res = eval_candidate(RuleCandidate("base"), "ds", [("s", g, hits_true)])
     m = res.metrics()
-    assert all(m[f"f1{p}"] == 1.0 for p in PADS)
+    assert all(m[f"f1{p}"] == 1.0 for p in SCORED_PADS)
+    # 정답에 페달이 없고 예측도 안 내면 페달 개수 0, 혼동 0
+    assert m["pedalAsHihat"] == 0.0 and m["hihatAsPedal"] == 0.0
     assert m["tomAssignAcc"] == 1.0 and m["cymbalAssignAcc"] == 1.0
     assert m["tomFalseKept"] == 0 and m["tomMissed"] == 0
     assert res.tom.confusion == {
@@ -315,9 +317,20 @@ def test_rule_eval과_tom_pitch_명령이_끝까지_돈다(
             str(cands),
             "--out",
             str(out),
+            "--mlflow-uri",
+            str(tmp_path / "mlruns"),
         ]
     )
     assert code == 0
+    # 후보 yaml을 결과 폴더에 남기고, MLflow runId는 `폴더 이름/후보 이름` (relog 설계 3장)
+    saved = yaml.safe_load((out / "candidates.yaml").read_text(encoding="utf-8"))
+    assert saved["candidates"][1] == {"name": "high", "rules": {"tom_bands": [300, 350]}}
+    import mlflow
+
+    mlflow.set_tracking_uri((tmp_path / "mlruns").resolve().as_uri())
+    exp = mlflow.get_experiment_by_name("chart-rules")
+    runs = mlflow.search_runs(experiment_ids=[exp.experiment_id], output_format="list")
+    assert sorted(r.data.tags["runId"] for r in runs) == ["eval/base", "eval/high"]
     df = pd.read_csv(out / "candidates.csv")
     assert df["candidate"].tolist() == ["base", "high"]
     base, high = df.iloc[0], df.iloc[1]
@@ -505,3 +518,45 @@ def test_탐_둘인_곡의_위쪽_탐_정답_이름을_통일한다():
     assert rename_two_tom_upper(no_floor, "MID_TOM") is no_floor
     with pytest.raises(ValueError, match="two_tom_upper"):
         rename_two_tom_upper(two, "KICK")
+
+
+def test_분리_트랙을_재사용하면_분리를_부르지_않는다(tmp_path: Path):
+    """파인튜닝 가중치 평가용 --stems-from: 기존 특징의 분리 트랙을 복사하고 ADTOF만 다시 돌림 (작업 18)."""
+    from types import SimpleNamespace
+
+    from ssaplash_ai.bench.analysis.rule_features import features_from_adapter, reusable_stems
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import rules_with_defaults
+
+    old, _ = synthetic_features()
+    path = save_features(feature_path(tmp_path, "ds", "song"), old)
+    assert reusable_stems(None, "ds", "song") is None
+    assert reusable_stems(tmp_path, "ds", "없는곡") is None
+    stems = reusable_stems(tmp_path, "ds", "song")
+    assert stems is not None and set(stems) == set(old.stems)
+
+    class FakeAdtof:
+        def activations(self, audio, sr):
+            return np.full((int(SECONDS * 100), 5), 0.1, dtype=np.float32)
+
+        def peaks(self, act):
+            return {35: [0.1], 38: [], 42: [], 47: [0.7], 49: []}
+
+    def no_separation(audio, sr):
+        raise AssertionError("분리 트랙을 재사용할 때는 분리를 부르면 안 됨")
+
+    tr = SimpleNamespace(
+        name="fake",
+        rules=rules_with_defaults({}),
+        _adtof=FakeAdtof(),
+        stems=no_separation,
+        config=SimpleNamespace(config_hash="h"),
+        _checkpoint_id=lambda: "ck",
+    )
+    audio = make_tone(SECONDS, SR, 220.0)
+    f = features_from_adapter(tr, audio, SR, stems=stems)
+    assert f.meta["stemsReused"] is True and f.peaks[47].tolist() == [0.7]
+    np.testing.assert_array_equal(f.stems["toms"], old.stems["toms"])
+    assert f.activations.shape == (int(SECONDS * 100), 5)
+    with pytest.raises(AssertionError, match="분리"):
+        features_from_adapter(tr, audio, SR)
+    assert path.is_file()

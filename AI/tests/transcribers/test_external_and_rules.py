@@ -686,4 +686,41 @@ def test_drum2midi_대응표는_탐_묶음_음번호를_플로어_미드_스몰�
         # 원본 TOM_LADDER: 1묶음 47, 2묶음 43·47, 3묶음 43·47·50
         assert [cfg.labels[p] for p in (43, 47, 50)] == ["FLOOR_TOM", "MID_TOM", "SMALL_TOM"]
         assert cfg.labels[36] == "KICK" and cfg.labels[49] == "CRASH" and cfg.labels[51] == "RIDE"
-        assert {cfg.labels[p] for p in (42, 44, 46)} == {"HIHAT"}
+        assert {cfg.labels[p] for p in (42, 46)} == {"HIHAT"}
+        assert cfg.labels[44] == "HIHAT_PEDAL"
+
+
+def test_킥과_겹친_플로어탐만_지운다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import assign_pads, assign_toms
+
+    # 0.2·0.5초는 90Hz 플로어탐, 0.8초는 170Hz 하이탐. ADTOF 킥은 0.21·0.81초
+    times = [0.2, 0.5, 0.8]
+    toms = _toms_track([(0.2, 90, 1), (0.5, 90, 1), (0.8, 170, 1)])
+    kicks = [0.21, 0.81]
+    off = assign_toms(times, toms, SR, {}, kick_times=kicks)
+    assert off.pads == ["FLOOR_TOM", "FLOOR_TOM", "SMALL_TOM"] and off.n_kick_dropped == 0
+    rules = {"tom_kick_drop_ms": 30}
+    on = assign_toms(times, toms, SR, rules, kick_times=kicks)
+    # 킥과 겹친 플로어탐만 버리고, 킥과 겹쳐도 하이탐은 남김
+    assert on.pads == [None, "FLOOR_TOM", "SMALL_TOM"]
+    assert on.kick_dropped.tolist() == [True, False, False] and on.n_dropped == 1
+    # 거리가 기준보다 멀면 안 지움
+    assert (
+        assign_toms(times, toms, SR, {"tom_kick_drop_ms": 5}, kick_times=kicks).n_kick_dropped == 0
+    )
+    # 지울 패드를 넓히면 하이탐도 지움
+    both = {"tom_kick_drop_ms": 30, "tom_kick_drop_pads": ["FLOOR_TOM", "SMALL_TOM"]}
+    assert assign_toms(times, toms, SR, both, kick_times=kicks).pads == [None, "FLOOR_TOM", None]
+    # 점수 조건: 확신 점수가 기준 미만인 것만 지움
+    scored = {"tom_kick_drop_ms": 30, "tom_kick_drop_max_score": 0.9}
+    high = assign_toms(times, toms, SR, scored, kick_times=kicks, scores=[0.95, 0.5, 0.5])
+    low = assign_toms(times, toms, SR, scored, kick_times=kicks, scores=[0.85, 0.5, 0.5])
+    assert high.n_kick_dropped == 0 and low.n_kick_dropped == 1
+    # assign_pads는 ADTOF 35번 시각을 킥으로 넘기고, 킥 타격 자체는 그대로 둠
+    hits = assign_pads({47: times, 35: kicks}, {"toms": toms}, SR, rules)
+    assert [(round(t, 2), p) for t, p, _ in hits] == [
+        (0.21, "KICK"),
+        (0.5, "FLOOR_TOM"),
+        (0.8, "SMALL_TOM"),
+        (0.81, "KICK"),
+    ]

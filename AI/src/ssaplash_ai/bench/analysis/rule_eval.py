@@ -29,10 +29,25 @@ from ssaplash_ai.bench.analysis.rule_features import (
     load_features,
 )
 from ssaplash_ai.bench.datasets import DatasetConfig, load_dataset
-from ssaplash_ai.bench.datasets.pads import HITS_DTYPE, PADS, make_hits, to_five_groups
-from ssaplash_ai.bench.metrics.hit_f1 import WINDOW_SEC, MatchCounts, f1_from_counts, score_hits
+from ssaplash_ai.bench.datasets.pads import (
+    HITS_DTYPE,
+    PADS,
+    PEDAL,
+    SCORED_PADS,
+    make_hits,
+    to_five_groups,
+)
+from ssaplash_ai.bench.metrics.hit_f1 import (
+    WINDOW_SEC,
+    MatchCounts,
+    PedalConfusion,
+    f1_from_counts,
+    pedal_confusion,
+    score_hits,
+)
 from ssaplash_ai.bench.runner.run_support import Logger
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
+    ADTOF_KICK,
     ADTOF_SNARE,
     TomAssignment,
     assign_pads,
@@ -82,7 +97,7 @@ def load_candidates(paths: Sequence[Path]) -> list[RuleCandidate]:
 
 
 def predict_hits(features: RuleFeatures, rules: dict) -> np.ndarray:
-    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 8종).
+    """저장 특징 + 규칙 → 예측 타격 표(HITS_DTYPE, 패드 9종. 페달은 체크포인트가 낼 때만).
 
     입력 드럼이 있으면 거르기(tom_gate_ratio)에, 프레임별 점수가 있으면 탐 시각 다시 고르기에 씀.
     """
@@ -115,6 +130,7 @@ def tom_summary(features: RuleFeatures, rules: dict) -> TomAssignment:
         snare_times=peaks.get(ADTOF_SNARE, []),
         stems=features.stems,
         scores=scores,
+        kick_times=peaks.get(ADTOF_KICK, []),
     )
 
 
@@ -211,13 +227,19 @@ class SongEval:
     tom_cluster_hz: str = ""
     # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 수 (S15P31A307-164 재연구)
     tom_rescued: int = 0
+    # 이름을 붙인 뒤 킥과 겹쳐 버린 탐 수 (tom_kick_drop_ms)
+    tom_kick_dropped: int = 0
     # 곡 안 일대일 대응으로 셌을 때 맞는 탐 수 (이름이 서로 바뀐 것은 맞은 것으로)
     tom_consistent: int = 0
+    # 패드 9종 기준(페달을 HIHAT에 안 합침) 개수와 하이햇·페달 혼동 수 (S15P31A307-164 v0.2)
+    pads9: dict[str, MatchCounts] = field(default_factory=dict)
+    pedal: PedalConfusion = field(default_factory=PedalConfusion)
 
 
 def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules: dict) -> SongEval:
     hits_pred = predict_hits(features, rules)
     pads = score_hits(hits_true, hits_pred, "pads")
+    pads9 = score_hits(hits_true, hits_pred, "pads9")
     five = score_hits(hits_true, hits_pred, "five")
     toms = tom_summary(features, rules)
     tom_group = group_confusion(hits_true, hits_pred, TOM_PADS)
@@ -234,6 +256,9 @@ def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules
         tom_clusters=toms.n_clusters,
         tom_cluster_hz="/".join(f"{m:.0f}" for m in toms.cluster_medians),
         tom_rescued=toms.n_rescued,
+        tom_kick_dropped=toms.n_kick_dropped,
+        pads9=dict(pads9.by_label),
+        pedal=pedal_confusion(hits_true, hits_pred),
     )
 
 
@@ -249,7 +274,10 @@ class CandidateResult:
     cymbal: GroupResult = field(default_factory=GroupResult)
     tom_dropped: int = 0
     tom_rescued: int = 0
+    tom_kick_dropped: int = 0
     tom_consistent: int = 0
+    pads9: dict[str, MatchCounts] = field(default_factory=dict)
+    pedal: PedalConfusion = field(default_factory=PedalConfusion)
     songs: list[SongEval] = field(default_factory=list)
 
     def f1(self, label: str) -> float:
@@ -287,7 +315,16 @@ class CandidateResult:
 
     def metrics(self) -> dict[str, float]:
         """CSV 한 행 · MLflow 지표."""
-        out: dict[str, float] = {f"f1{p}": self.f1(p) for p in PADS}
+        out: dict[str, float] = {f"f1{p}": self.f1(p) for p in SCORED_PADS}
+        pedal = self.pads9.get(PEDAL, MatchCounts())
+        out.update(
+            f1Pedal=pedal.f1,
+            precPedal=pedal.precision,
+            recPedal=pedal.recall,
+            f1HihatSep=self.pads9.get("HIHAT", MatchCounts()).f1,
+            pedalAsHihat=float(self.pedal.pedal_as_hihat),
+            hihatAsPedal=float(self.pedal.hihat_as_pedal),
+        )
         out.update(
             f1Pads=self.f1_pads,
             f1Five=self.f1_five,
@@ -299,6 +336,7 @@ class CandidateResult:
             tomMissed=float(self.tom.missed),
             tomDropped=float(self.tom_dropped),
             tomRescued=float(self.tom_rescued),
+            tomKickDropped=float(self.tom_kick_dropped),
             tomConsistentAcc=self.tom_consistent_acc,
             f1TomConsistent=self.f1_tom_consistent,
             cymbalAssignAcc=self.cymbal.assign_acc,
@@ -335,10 +373,13 @@ def eval_candidate(
         res.songs.append(s)
         _add_counts(res.pads, s.pads)
         _add_counts(res.five, s.five)
+        _add_counts(res.pads9, s.pads9)
+        res.pedal = res.pedal + s.pedal
         res.tom = res.tom + s.tom
         res.cymbal = res.cymbal + s.cymbal
         res.tom_dropped += s.tom_dropped
         res.tom_rescued += s.tom_rescued
+        res.tom_kick_dropped += s.tom_kick_dropped
         res.tom_consistent += s.tom_consistent
     return res
 
@@ -460,7 +501,8 @@ def summary_markdown(
     results: Sequence[CandidateResult], candidates: Sequence[RuleCandidate]
 ) -> str:
     cols = ["f1Tom", "f1SMALL_TOM", "f1MID_TOM", "f1FLOOR_TOM", "tomAssignAcc", "tomFalseKept"]
-    cols += ["tomMissed", "tomDropped", "tomRescued", "tomConsistentAcc", "f1TomConsistent"]
+    cols += ["tomMissed", "tomDropped", "tomRescued", "tomKickDropped"]
+    cols += ["tomConsistentAcc", "f1TomConsistent"]
     cols += [
         "f1Cymbal",
         "f1CRASH",
@@ -545,6 +587,15 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
             )
     out_dir = Path(opts.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # 나중에 relog가 규칙값을 파라미터로 올릴 수 있게 후보를 결과 폴더에 같이 남김
+    (out_dir / "candidates.yaml").write_text(
+        yaml.safe_dump(
+            {"candidates": [{"name": c.name, "rules": c.rules} for c in candidates]},
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
     metric_cols = list(results[0].metrics().keys()) if results else []
     csv_path = out_dir / "candidates.csv"
     w = CsvWriter(csv_path, ["candidate", "dataset", *metric_cols])
@@ -568,6 +619,7 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
         "tomFalseKept",
         "tomDropped",
         "tomRescued",
+        "tomKickDropped",
         "tomConsistent",
         "tomClusters",
         "tomClusterHz",
@@ -575,7 +627,12 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
         "cymbalCorrect",
         "cymbalFalseKept",
     ]
-    song_cols += [f"tp{p}" for p in PADS] + [f"fp{p}" for p in PADS] + [f"fn{p}" for p in PADS]
+    song_cols += [f"tp{p}" for p in SCORED_PADS] + [f"fp{p}" for p in SCORED_PADS]
+    song_cols += [f"fn{p}" for p in SCORED_PADS]
+    # 패드 9종 기준 하이햇·페달 개수와 혼동 수 (페달 표·곡 단위 구간용)
+    sep_pads = ("HIHAT", PEDAL)
+    song_cols += [f"{k}{p}9" for p in sep_pads for k in ("tp", "fp", "fn")]
+    song_cols += ["pedalAsHihat", "hihatAsPedal"]
     w = CsvWriter(by_song_path, song_cols)
     for r in results:
         for s in r.songs:
@@ -590,6 +647,7 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
                 "tomFalseKept": s.tom.false_kept,
                 "tomDropped": s.tom_dropped,
                 "tomRescued": s.tom_rescued,
+                "tomKickDropped": s.tom_kick_dropped,
                 "tomConsistent": s.tom_consistent,
                 "tomClusters": s.tom_clusters,
                 "tomClusterHz": s.tom_cluster_hz,
@@ -597,9 +655,14 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
                 "cymbalCorrect": s.cymbal.correct,
                 "cymbalFalseKept": s.cymbal.false_kept,
             }
-            for p in PADS:
+            for p in SCORED_PADS:
                 c = s.pads.get(p, MatchCounts())
                 row[f"tp{p}"], row[f"fp{p}"], row[f"fn{p}"] = c.tp, c.fp, c.fn
+            for p in sep_pads:
+                c = s.pads9.get(p, MatchCounts())
+                row[f"tp{p}9"], row[f"fp{p}9"], row[f"fn{p}9"] = c.tp, c.fp, c.fn
+            row["pedalAsHihat"] = s.pedal.pedal_as_hihat
+            row["hihatAsPedal"] = s.pedal.hihat_as_pedal
             w.write(row)
     w.close()
     summary_md = out_dir / "summary.md"
@@ -612,11 +675,12 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
             params = {f"rules.{k}": v for k, v in cand.full_rules.items()}
             params["candidate"] = cand.name
             params["datasets"] = ",".join(per_dataset)
+            # 후보 이름이 여러 결과 폴더에 겹쳐 나와서 runId는 `폴더 이름/후보 이름` (relog와 같은 규칙)
             run_id = log_run(
-                run_id=cand.name,
+                run_id=f"{out_dir.name}/{cand.name}",
                 params=params,
                 summary_metrics=per_dataset,
-                artifacts=[csv_path, conf_path, summary_md],
+                artifacts=[csv_path, conf_path, summary_md, out_dir / "candidates.yaml"],
                 tags={"candidate": cand.name},
                 tracking_uri=opts.mlflow_uri,
                 experiment_name=RULES_EXPERIMENT,
