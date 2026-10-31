@@ -1,6 +1,6 @@
 // 포커스 순환 계산 테스트
 import { describe, expect, it } from 'vitest';
-import { cycleIndex, initialFocusIndex } from './focusCycle';
+import { cycleIndex, initialFocusIndex, needsRefocus } from './focusCycle';
 
 describe('cycleIndex', () => {
   it('요소가 없으면 -1', () => {
@@ -32,5 +32,18 @@ describe('initialFocusIndex', () => {
   it('전부 비활성이면 -1', () => {
     expect(initialFocusIndex([false, false], 0)).toBe(-1);
     expect(initialFocusIndex([], null)).toBe(-1);
+  });
+});
+
+describe('needsRefocus', () => {
+  it('안쪽 요소가 사라져 body로 떨어졌을 때만 true', () => {
+    expect(needsRefocus(true, false, true)).toBe(true);
+  });
+  it('요소가 문서에 남아 있으면(스크림 클릭) false', () => {
+    expect(needsRefocus(true, true, true)).toBe(false);
+  });
+  it('포커스가 다른 요소로 옮겨졌거나 안쪽에 없었으면 false', () => {
+    expect(needsRefocus(true, false, false)).toBe(false);
+    expect(needsRefocus(false, false, true)).toBe(false);
   });
 });
