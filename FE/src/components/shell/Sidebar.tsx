@@ -1,8 +1,7 @@
-// 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁).
+// 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
 import type { ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/store/authStore';
+import { NavLink } from 'react-router-dom';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
 import { TABLET_QUERY, useMediaQuery, useSidebarCollapsed } from './useMediaQuery';
@@ -71,12 +70,6 @@ const ICONS = {
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
     </Icon>
   ),
-  logout: (
-    <Icon>
-      <path d="M9 4H5v16h4" />
-      <path d="M16 8l4 4-4 4M20 12H9" />
-    </Icon>
-  ),
   // Lucide panel-left-close / panel-left-open (MIT). Figma Icons / 접기·펼치기와 같은 모양
   collapse: (
     <Icon>
@@ -107,14 +100,8 @@ export function Sidebar() {
   const setStored = useSettings((s) => s.setSidebarCollapsed);
   const tablet = useMediaQuery(TABLET_QUERY);
   const collapsed = useSidebarCollapsed();
-  const logout = useAuth((s) => s.logout);
-  const navigate = useNavigate();
   // 채보 변환 작업이 진행 중일 때 라이브러리에 점을 단다
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
-
-  const onLogout = () => {
-    void logout().then(() => navigate('/login', { replace: true }));
-  };
 
   const item = (m: MenuItem) => (
     <NavLink key={m.to} to={m.to} className="side-item" title={collapsed ? m.label : undefined} aria-label={m.label}>
@@ -159,12 +146,6 @@ export function Sidebar() {
           {ICONS.settings}
           {!collapsed && <span>설정</span>}
         </NavLink>
-        {!collapsed && (
-          <button type="button" className="side-foot-btn" onClick={onLogout}>
-            {ICONS.logout}
-            <span>로그아웃</span>
-          </button>
-        )}
       </div>
     </aside>
   );
