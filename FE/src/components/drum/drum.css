@@ -94,3 +94,14 @@
 .drum-pad-badge-text.highlight {
   fill: var(--brand-on);
 }
+
+/* 배지 변이: later = 흐리게, offGrid 점 = 오른쪽 위 */
+.drum-pad-badge.later {
+  opacity: 0.55;
+}
+.drum-pad-badge-dot {
+  fill: var(--text-1);
+  stroke: var(--surface-1);
+  stroke-width: 1;
+  pointer-events: none;
+}

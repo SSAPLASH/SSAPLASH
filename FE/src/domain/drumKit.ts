@@ -7,6 +7,13 @@ export type PadShape = 'drum' | 'cymbal' | 'kick';
 /** armed(예고)는 타입에만 두고 1차 범위에서는 쓰지 않는다 */
 export type PadVisualState = 'idle' | 'armed' | 'hit' | 'perfect' | 'good' | 'miss';
 
+/** 패드 위 알약 배지. level: now = 지금 강조, next = 기본, later = 흐리게. offGrid = 오른쪽 위 작은 점(격자 밖 노트) */
+export interface PadBadge {
+  text: string;
+  level: 'now' | 'next' | 'later';
+  offGrid?: boolean;
+}
+
 export interface DrumKitPad {
   pad: PadId;
   shape: PadShape;
