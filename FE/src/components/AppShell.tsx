@@ -32,6 +32,7 @@ export function AppShell({ authRequired }: Props) {
   const workareaRef = useRef<HTMLDivElement>(null);
   const routeRef = useRef<HTMLDivElement>(null);
   const lastPath = useRef(pathname);
+  const lastImmersive = useRef(immersive);
   const pendingFocus = useRef(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function AppShell({ authRequired }: Props) {
   }, []);
 
   // 경로가 바뀐 뒤: 스크롤 맨 위 + 포커스 이동(D14). 첫 로드·쿼리만 바뀐 경우는 건드리지 않는다.
+  // 같은 경로 안에서 전체 화면으로 들어가거나 나올 때(/play 준비 → 연주)도 포커스를 옮긴다(UX-24)
   // immersive 여부는 페이지의 useShell 효과가 store에 먼저 쓰고 렌더는 한 박자 늦으므로, 렌더 값이 store와 맞을 때까지 기다린다
   useEffect(() => {
     if (lastPath.current !== pathname) {
@@ -50,9 +52,16 @@ export function AppShell({ authRequired }: Props) {
       pendingFocus.current = true;
       window.scrollTo(0, 0);
     }
+    if (lastImmersive.current !== immersive) {
+      lastImmersive.current = immersive;
+      pendingFocus.current = true;
+    }
     if (!pendingFocus.current || useShellStore.getState().immersive !== immersive) return;
     pendingFocus.current = false;
-    const target = immersive ? routeRef.current : workareaRef.current?.querySelector<HTMLElement>('.topbar-title');
+    // immersive(전체 화면 연주)는 화면 안의 [data-focus-title](연주 HUD 제목)로, 없으면 본문 래퍼로 옮긴다
+    const target = immersive
+      ? (routeRef.current?.querySelector<HTMLElement>('[data-focus-title]') ?? routeRef.current)
+      : workareaRef.current?.querySelector<HTMLElement>('.topbar-title');
     target?.focus({ preventScroll: true });
   }, [pathname, immersive]);
 
