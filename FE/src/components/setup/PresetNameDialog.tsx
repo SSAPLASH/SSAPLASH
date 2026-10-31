@@ -1,8 +1,12 @@
-// 새 프리셋 이름 입력 대화상자. 입력마다 validatePresetName으로 검증하고, 저장 실행은 호출자(onSave)가 한다.
+// Figma PresetNameDialog 228:1197(폭 400) — 새 프리셋 이름 입력 대화상자.
+// 입력마다 validatePresetName으로 검증하고, 저장 실행은 호출자(onSave)가 한다.
 import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
 import { PRESET_NAME_MAX, normalizePresetName, validatePresetName, type KitPreset } from '@/domain/preset';
 import { PRESET_NAME_ERROR_TEXT } from '@/domain/setupSteps';
+import './setup.css';
 
 interface Props {
   open: boolean;
@@ -34,7 +38,7 @@ function PresetNameDialogBody({ existing, busy, error, onSave, onCancel, initial
   return (
     <Dialog
       as="form"
-      className="preset-name-dialog"
+      className="setup-name-dialog"
       labelledBy="preset-name-title"
       initialFocusRef={inputRef}
       closeOnBackdrop={false}
@@ -45,29 +49,27 @@ function PresetNameDialogBody({ existing, busy, error, onSave, onCancel, initial
         if (valid && !busy) onSave(normalizePresetName(raw));
       }}
     >
-      <h2 id="preset-name-title">새 프리셋 이름</h2>
-      <input
+      <h2 id="preset-name-title">새 프리셋</h2>
+      <Input
         ref={inputRef}
+        label="프리셋 이름"
         type="text"
-        className={message ? 'input-error' : undefined}
         value={raw}
         disabled={busy}
-        aria-invalid={message ? true : undefined}
-        aria-describedby="preset-name-hint"
         placeholder="예: 연습용 배치"
+        help={`1~${PRESET_NAME_MAX}자`}
+        error={message ?? undefined}
+        counter={{ value: Array.from(raw).length, max: PRESET_NAME_MAX }}
         onChange={(e) => setRaw(e.target.value)}
       />
-      <p id="preset-name-hint" className={`small ${message ? 'field-error' : 'faint'}`}>
-        {message ?? `1~${PRESET_NAME_MAX}자`}
-      </p>
       {error && <p className="notice error">{error}</p>}
-      <div className="dialog-actions">
-        <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
+      <div className="setup-dialog-actions">
+        <Button variant="secondary" onClick={onCancel} disabled={busy}>
           취소
-        </button>
-        <button type="submit" className="btn-primary" disabled={!valid || busy}>
+        </Button>
+        <Button type="submit" variant="primary" disabled={!valid || busy}>
           {busy ? '저장 중…' : '저장'}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );
