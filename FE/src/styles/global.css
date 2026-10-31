@@ -40,7 +40,11 @@ button {
   border-radius: var(--radius-control);
   min-height: 44px;
   padding: 8px 16px;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
 }
 button.small {
   min-height: 32px;
@@ -49,8 +53,34 @@ button.small {
 button:hover {
   background: var(--surface-2);
 }
-button:active {
-  transform: translateY(1px);
+/* 눌림: 모든 버튼류가 scale(0.98). 칩·카드는 아래에서 뺀다 */
+button:active:not(:disabled),
+.sm-btn:active:not(:disabled),
+.dock-icon-btn:active:not(:disabled),
+.side-foot-btn:active,
+a.btn-primary:active,
+a.btn-ghost.as-button:active {
+  transform: scale(0.98);
+}
+/* 버튼이 아닌 요소(링크·NavLink)도 같은 hover 색·눌림 시간을 따른다 */
+a.btn-primary,
+a.btn-ghost.as-button,
+.sm-btn,
+.sm-diff-chip,
+.side-item,
+.side-foot-btn {
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
+}
+/* 칩·알약·카드는 눌림 이동이 없다(hover 색만) */
+.chip:active:not(:disabled),
+.dock-pill:active:not(:disabled),
+.sm-diff-chip:active:not(:disabled),
+.sheet-card.clickable:active:not(:disabled) {
+  transform: none;
 }
 button:disabled {
   opacity: 0.45;
@@ -618,6 +648,10 @@ p {
   background: transparent;
   color: var(--ink-dim);
 }
+.chip:hover:not(.active) {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
 .chip.active {
   background: var(--brass);
   border-color: var(--brass);
@@ -1122,6 +1156,21 @@ table.plain th {
 .sheet-card.clickable:hover {
   border-color: var(--brass);
 }
+/* 눌러 볼 수 있는 카드는 hover 시 떠오른다(.motion-lift와 같은 값. hover 가능한 기기만) */
+.card.clickable,
+.sheet-card.clickable {
+  transition:
+    transform var(--motion-move) var(--ease-out),
+    box-shadow var(--motion-move) var(--ease-out),
+    border-color var(--motion-fast);
+}
+@media (hover: hover) {
+  .card.clickable:hover,
+  .sheet-card.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
+}
 .sheet-card .no {
   color: var(--brass);
   font-weight: 700;
@@ -1579,6 +1628,8 @@ table.plain th {
   justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.6);
+  /* 진입만(퇴장 없음). 역할 클래스 .motion-overlay/.motion-dialog와 같은 효과 — 마크업을 건드리지 않으려 선택자에 직접 둔다 */
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
 }
 .dialog {
   width: 100%;
@@ -1587,6 +1638,9 @@ table.plain th {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-pop-in var(--motion-move) var(--ease-out);
 }
 .dialog h2 {
   margin: 0 0 12px;
