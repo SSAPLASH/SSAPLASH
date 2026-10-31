@@ -1,6 +1,9 @@
-// 연주 준비에서 설정으로 온 사용자에게 상단에 고정하는 복귀 띠. 이동 자체는 하지 않는다(onReturn 콜백).
+// Figma ReturnBanner 236:1306 — 연주 준비에서 설정으로 온 사용자에게 상단에 고정하는 복귀 띠. 이동 자체는 하지 않는다(onReturn 콜백).
+// blocked(준비 중) = brand 10% 배경·60% 테두리, ready = good 계열.
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/Button';
 import { shouldReturnOnEnter } from './enterKey';
+import './setup.css';
 
 interface Props {
   title: string;
@@ -26,14 +29,14 @@ export function ReturnBanner({ title, line, buttonText, ready, enterEnabled, onR
   }, [ready, enterEnabled, onReturn]);
 
   return (
-    <div className={`return-banner${ready ? ' ready' : ''}`} role="status">
-      <div className="return-banner-text">
+    <div className={`setup-banner ${ready ? 'ready' : 'blocked'}`} role="status">
+      <div className="setup-banner-text">
         <strong>{title}</strong>
-        <span className="small faint">{line}</span>
+        <span>{line}</span>
       </div>
-      <button type="button" className="btn-primary" disabled={!ready} onClick={onReturn}>
+      <Button variant="primary" className="setup-banner-action" disabled={!ready} onClick={onReturn}>
         {buttonText}
-      </button>
+      </Button>
     </div>
   );
 }
