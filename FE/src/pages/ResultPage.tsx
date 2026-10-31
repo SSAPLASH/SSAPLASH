@@ -7,6 +7,9 @@ import { FeedbackCards } from '@/components/FeedbackCards';
 import { ReportEntry } from '@/components/ReportEntry';
 import { checkSongAvailability } from '@/api/songs';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
+import { pickPathOf, retryPathOf } from '@/domain/playRetry';
+import { SONGS_SOURCE } from '@/store/songStore';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
@@ -43,13 +46,7 @@ function histogram(log: PlayLog, bins = 12): { counts: number[]; perfectIdx: boo
 }
 
 /** 모드별 선택 화면 경로 */
-const pickPath = (l: PlayLog): string => (l.mode === 'SHEET' ? '/sheet' : '/play');
-
-/** 같은 곡 준비 화면. BE 곡이면 URL로 복원하고, 로그에 id가 없으면(내장·이전 로그) 모드별 선택 화면으로 간다 */
-const retryPath = (l: PlayLog): string =>
-  l.songNumericId != null && l.chartId != null
-    ? `${pickPath(l)}?song=${l.songNumericId}&chart=${l.chartId}`
-    : pickPath(l);
+const pickPath = (l: PlayLog): string => pickPathOf(l.mode);
 
 export function ResultPage() {
   const { playId } = useParams();
@@ -102,16 +99,17 @@ export function ResultPage() {
   const songDeleted = availability !== null && availability.playId === log?.playId && availability.value === 'deleted';
 
   const retry = () => {
-    if (log && !songDeleted) navigate(retryPath(log));
+    if (log && !songDeleted) navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }));
   };
 
   // Enter = 다시 하기(지운 곡이면 하지 않는다)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Enter' && log && !songDeleted) {
-        e.preventDefault();
-        navigate(retryPath(log));
-      }
+      if (e.code !== 'Enter' || !log || songDeleted) return;
+      // D1: 링크·버튼·입력 칸이 소유한 Enter는 가로채지 않는다
+      if (e.isComposing || e.defaultPrevented || isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
+      e.preventDefault();
+      navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
