@@ -179,9 +179,14 @@
   color: var(--brand-sub);
 }
 
-.play-rp-preview {
+.play-rp-side {
+  display: flex;
   flex: none;
+  flex-direction: column;
+  gap: var(--space-m);
   width: 380px;
+}
+.play-rp-preview {
   gap: var(--space-m);
 }
 .play-rp-kit {
