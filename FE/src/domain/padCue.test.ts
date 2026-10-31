@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { NoteState } from '@/engine/RhythmSession';
 import type { Chart } from './chart';
 import type { Judgement } from './judgement';
-import { padCues, type PadCue } from './padCue';
+import { cueLabelText, nextBeatBadges, NOW_TOLERANCE_MS, padCues, type PadCue } from './padCue';
 import { buildSheet } from './sheet';
 
 // 120 BPM 4/4: 칸 125ms, 마디 2000ms
@@ -80,5 +80,80 @@ describe('padCues', () => {
     const cues = padCues(sheet, 1, states());
     expect(cues).toHaveLength(1);
     expect(cues[0]).toMatchObject({ pad: 'HIHAT', noteIndex: 6, level: 'next', label: { beat: 1, sub: '' } });
+  });
+});
+
+describe('cueLabelText', () => {
+  it('박 번호 + 박 안 위치(1·1e·1&·1a)', () => {
+    expect(cueLabelText({ beat: 1, sub: '' })).toBe('1');
+    expect(cueLabelText({ beat: 1, sub: 'e' })).toBe('1e');
+    expect(cueLabelText({ beat: 1, sub: '&' })).toBe('1&');
+    expect(cueLabelText({ beat: 4, sub: 'a' })).toBe('4a');
+  });
+});
+
+describe('nextBeatBadges', () => {
+  const cue = (over: Partial<PadCue>): PadCue => ({
+    pad: 'SNARE',
+    label: { beat: 1, sub: '' },
+    noteIndex: 0,
+    timeMs: 1000,
+    level: 'next',
+    offGrid: false,
+    ...over,
+  });
+
+  it('곡 시각이 칠 시각 ±17ms 안이면 now, 밖이면 큐의 next·later를 그대로 쓴다', () => {
+    const cues = [
+      cue({ pad: 'SNARE', timeMs: 1000, level: 'next' }),
+      cue({ pad: 'KICK', timeMs: 1017, level: 'later' }),
+      cue({ pad: 'HIHAT', timeMs: 1018, level: 'later' }),
+      cue({ pad: 'CRASH', timeMs: 983, level: 'next' }),
+      cue({ pad: 'RIDE', timeMs: 982, level: 'next' }),
+    ];
+    const { badges, nowPads } = nextBeatBadges(cues, 1000);
+    expect(NOW_TOLERANCE_MS).toBe(17);
+    expect(badges.SNARE?.level).toBe('now');
+    expect(badges.KICK?.level).toBe('now'); // 경계 포함
+    expect(badges.CRASH?.level).toBe('now');
+    expect(badges.HIHAT?.level).toBe('later');
+    expect(badges.RIDE?.level).toBe('next');
+    expect(nowPads).toEqual(['SNARE', 'KICK', 'CRASH']);
+  });
+
+  it('now가 없으면 nowPads는 비고 level은 큐 그대로', () => {
+    const r = nextBeatBadges([cue({ pad: 'SNARE', level: 'next' }), cue({ pad: 'KICK', level: 'later', timeMs: 1500 })], 0);
+    expect(r.nowPads).toEqual([]);
+    expect(r.badges.SNARE?.level).toBe('next');
+    expect(r.badges.KICK?.level).toBe('later');
+  });
+
+  it('배지 text는 cueLabelText, offGrid는 그대로 전달', () => {
+    const r = nextBeatBadges(
+      [cue({ pad: 'SNARE', label: { beat: 2, sub: '&' }, offGrid: true }), cue({ pad: 'KICK', label: { beat: 3, sub: 'a' }, offGrid: false })],
+      0,
+    );
+    expect(r.badges.SNARE).toEqual({ text: '2&', level: 'next', offGrid: true });
+    expect(r.badges.KICK).toEqual({ text: '3a', level: 'next', offGrid: false });
+  });
+
+  it('highlight: now 패드가 있으면 첫 now, 없으면 가장 먼저 칠 next 패드', () => {
+    const cues = [cue({ pad: 'KICK', level: 'later', timeMs: 500 }), cue({ pad: 'SNARE', level: 'next', timeMs: 1000 })];
+    expect(nextBeatBadges(cues, 500).highlight).toBe('KICK');
+    expect(nextBeatBadges(cues, 0).highlight).toBe('SNARE');
+  });
+
+  it('큐가 없으면 빈 결과', () => {
+    const r = nextBeatBadges([], 0);
+    expect(r.badges).toEqual({});
+    expect(r.nowPads).toEqual([]);
+    expect(r.highlight).toBeUndefined();
+  });
+
+  it('padCues와 이어 쓰기: 동시타는 둘 다 now', () => {
+    const r = nextBeatBadges(padCues(sheet, 0, states()), 0);
+    expect([...r.nowPads].sort()).toEqual(['HIHAT', 'KICK']);
+    expect(r.badges.MID_TOM).toMatchObject({ text: '2', level: 'later' });
+    expect(r.badges.SNARE).toMatchObject({ text: '3', level: 'later' });
   });
 });
