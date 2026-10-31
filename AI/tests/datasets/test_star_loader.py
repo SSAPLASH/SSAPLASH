@@ -93,6 +93,8 @@ def test_check는_패드별_타격_수를_세고_누락을_잡는다(star_root: 
 
 def test_대응표는_18종이고_모르는_클래스는_오류(star_root: Path):
     assert len(STAR_CLASS_PAD) == 18
+    assert STAR_CLASS_PAD["PHH"] == "HIHAT_PEDAL"
+    assert STAR_CLASS_PAD["CHH"] == STAR_CLASS_PAD["OHH"] == "HIHAT"
     assert {STAR_CLASS_PAD[c] for c in ("HT", "MT", "LT")} == {"SMALL_TOM", "MID_TOM", "FLOOR_TOM"}
     ann = star_root / "test" / "annotation" / f"Song_A_mix_{KIT}.txt"
     ann.write_text("0.1\tGONG\t100\n", encoding="utf-8")

@@ -27,7 +27,7 @@ STAR_CLASS_PAD: dict[str, str] = {
     "SD": "SNARE",
     "SS": "SNARE",  # 사이드 스틱
     "CHH": "HIHAT",
-    "PHH": "HIHAT",  # 페달
+    "PHH": "HIHAT_PEDAL",
     "OHH": "HIHAT",  # 오픈
     "HT": "SMALL_TOM",
     "MT": "MID_TOM",

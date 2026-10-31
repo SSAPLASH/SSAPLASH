@@ -312,9 +312,29 @@ def evaluation_columns(ev: HitEvaluation, result: TranscriptionResult, song: Son
 
 
 def hits_by_class_rows(ev: HitEvaluation, base: dict) -> list[dict]:
-    """라벨별 개수 긴 형식 행. pads는 계산됐을 때만."""
+    """라벨별 개수 긴 형식 행. pads·pads9는 계산됐을 때만.
+
+    pads9 기준에는 페달 혼동 수 행 두 개가 붙음: label PEDAL_AS_HIHAT(정답 페달을 HIHAT으로 냄)과
+    HIHAT_AS_PEDAL(정답 HIHAT을 페달로 냄). 이 두 행은 짝 수를 tp 칸에 적고 fp·fn은 0.
+    """
     rows: list[dict] = []
-    for scheme, scores in (("five", ev.five), ("pads", ev.pads)):
+    if ev.pedal is not None:
+        for label, n in (
+            ("PEDAL_AS_HIHAT", ev.pedal.pedal_as_hihat),
+            ("HIHAT_AS_PEDAL", ev.pedal.hihat_as_pedal),
+        ):
+            rows.append(
+                {
+                    **base,
+                    "scheme": "pads9",
+                    "label": label,
+                    "windowMs": 50,
+                    "tp": n,
+                    "fp": 0,
+                    "fn": 0,
+                }
+            )
+    for scheme, scores in (("five", ev.five), ("pads", ev.pads), ("pads9", ev.pads9)):
         if scores is None:
             continue
         for window_ms, by_label in ((50, scores.by_label), (25, scores.by_label_tight)):

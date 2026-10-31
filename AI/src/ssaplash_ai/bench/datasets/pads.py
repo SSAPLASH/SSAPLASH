@@ -1,8 +1,10 @@
 """패드 어휘와 타격 정답 표 (채보 벤치마크 설계 3-2절).
 
-패드 8종은 스틱 통신 프로토콜 v0.7 패드 9종에서 HIHAT_PEDAL을 뺀 것. 채보 모델이 하이햇 페달을
-따로 못 내므로 어휘에 두지 않음. 옛 HI_TOM은 2026-10-26부터 SMALL_TOM (S15P31A307-170).
-타격 표는 numpy 구조화 배열: time_sec(초), pad(8종 중 하나), velocity(1~127, 없으면 -1).
+패드 9종은 스틱 통신 프로토콜 v0.7 패드 9종과 같음. HIHAT_PEDAL(페달만 밟아 난 하이햇 소리, GM 44번)은
+2026-10-30부터 정답에서 따로 읽음(S15P31A307-164). 순서는 기존 8종 뒤에 HIHAT_PEDAL을 붙인 것이고,
+8패드 점수(SCORED_PADS)는 지금처럼 HIHAT_PEDAL을 HIHAT에 합쳐 냄. 페달 점수는 따로.
+옛 HI_TOM은 2026-10-26부터 SMALL_TOM (S15P31A307-170).
+타격 표는 numpy 구조화 배열: time_sec(초), pad(9종 중 하나), velocity(1~127, 없으면 -1).
 데이터셋별 라벨 → 패드 대응표는 각 로더가 가지고, 여기서는 표를 만들고 검사하는 함수만 제공.
 모델 예측 표(채보 설계 3-8절)는 pad 자리에 거친 라벨 COARSE(tom = 탐 중 하나, cymbal = 심벌 중
 하나)도 올 수 있음. 5가지만 내는 모델용이며, 거친 라벨이 있으면 8패드 점수는 매기지 않음.
@@ -23,7 +25,12 @@ PADS: tuple[str, ...] = (
     "FLOOR_TOM",
     "CRASH",
     "RIDE",
+    "HIHAT_PEDAL",
 )
+
+# 8패드 점수에 쓰는 패드. HIHAT_PEDAL은 HIHAT에 합쳐 채점 (지난 결과와 같은 조건)
+SCORED_PADS: tuple[str, ...] = PADS[:8]
+PEDAL = "HIHAT_PEDAL"
 
 # 5가지 묶음 (-107 공통 규칙): 논문 수치와 비교하는 용도
 FIVE_GROUPS: dict[str, str] = {
@@ -35,6 +42,7 @@ FIVE_GROUPS: dict[str, str] = {
     "FLOOR_TOM": "tom",
     "CRASH": "cymbal",
     "RIDE": "cymbal",
+    "HIHAT_PEDAL": "hihat",
 }
 
 # 모델 예측에만 쓰는 거친 라벨. 탐 3종을 못 나누면 tom, 크래시·라이드를 못 나누면 cymbal
@@ -49,7 +57,7 @@ DROP = "__drop__"
 
 NO_VELOCITY = -1
 
-HITS_DTYPE = np.dtype([("time_sec", np.float64), ("pad", "U9"), ("velocity", np.int16)])
+HITS_DTYPE = np.dtype([("time_sec", np.float64), ("pad", "U11"), ("velocity", np.int16)])
 
 
 def empty_hits() -> np.ndarray:
@@ -111,7 +119,7 @@ def validate_hits(hits: np.ndarray, allowed: tuple[str, ...] = PADS) -> None:
 
 
 def validate_pred_hits(hits: np.ndarray) -> None:
-    """모델 예측 표 검사. 패드 8종에 더해 거친 라벨 tom·cymbal 허용."""
+    """모델 예측 표 검사. 패드 9종에 더해 거친 라벨 tom·cymbal 허용."""
     validate_hits(hits, PRED_LABELS)
 
 
@@ -129,12 +137,19 @@ def clip_hits(hits: np.ndarray, start_sec: float, end_sec: float) -> np.ndarray:
 
 
 def count_by_pad(hits: np.ndarray) -> dict[str, int]:
-    """패드 8종 전부를 키로 하는 개수 dict (없는 패드는 0)."""
+    """패드 9종 전부를 키로 하는 개수 dict (없는 패드는 0)."""
     counts = dict.fromkeys(PADS, 0)
     pads, n = np.unique(hits["pad"], return_counts=True)
     for pad, k in zip(pads.tolist(), n.tolist(), strict=True):
         counts[pad] = k
     return counts
+
+
+def merge_pedal(hits: np.ndarray) -> np.ndarray:
+    """HIHAT_PEDAL을 HIHAT으로 바꾼 복사본. 8패드 점수용."""
+    out = hits.copy()
+    out["pad"][out["pad"] == PEDAL] = "HIHAT"
+    return out
 
 
 def to_five_groups(hits: np.ndarray) -> np.ndarray:
