@@ -16,6 +16,7 @@ from ssaplash_ai.bench.datasets.base import (
     read_audio,
     write_audio,
 )
+from ssaplash_ai.bench.datasets.enst import EnstDataset
 from ssaplash_ai.bench.datasets.gmd import EgmdDataset, GmdDataset
 from ssaplash_ai.bench.datasets.mdb import MdbDataset
 from ssaplash_ai.bench.datasets.musdb import MusdbDataset
@@ -25,11 +26,14 @@ from ssaplash_ai.bench.datasets.pads import (
     FIVE_GROUPS,
     HITS_DTYPE,
     PADS,
+    PEDAL,
     PRED_LABELS,
+    SCORED_PADS,
     clip_hits,
     count_by_pad,
     has_coarse,
     make_hits,
+    merge_pedal,
     to_five_groups,
     validate_hits,
     validate_pred_hits,
@@ -44,6 +48,7 @@ LOADERS: dict[str, type[BaseDataset]] = {
     MdbDataset.kind: MdbDataset,
     StarDataset.kind: StarDataset,
     EgmdDataset.kind: EgmdDataset,
+    EnstDataset.kind: EnstDataset,
 }
 
 
@@ -64,12 +69,15 @@ __all__ = [
     "FIVE_GROUPS",
     "HITS_DTYPE",
     "PADS",
+    "PEDAL",
     "PRED_LABELS",
+    "SCORED_PADS",
     "SAMPLE_RATE",
     "BaseDataset",
     "CheckReport",
     "DatasetConfig",
     "EgmdDataset",
+    "EnstDataset",
     "GmdDataset",
     "MdbDataset",
     "MusdbDataset",
@@ -81,6 +89,7 @@ __all__ = [
     "has_coarse",
     "load_dataset",
     "make_hits",
+    "merge_pedal",
     "read_audio",
     "to_five_groups",
     "validate_hits",
