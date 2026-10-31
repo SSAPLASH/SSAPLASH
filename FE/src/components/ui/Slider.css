@@ -1,0 +1,78 @@
+/* Controls / Slider 126:1942 */
+.ui-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  color: var(--text-1);
+  font-size: 14px;
+}
+.ui-slider-label {
+  flex: none;
+  color: var(--text-2);
+}
+.ui-slider-value {
+  flex: none;
+  min-width: 3ch;
+  color: var(--text-1);
+  font-size: 20px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ui-slider-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.ui-slider-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ui-slider-input::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    var(--brand) var(--ui-slider-fill, 0%),
+    var(--surface-3) var(--ui-slider-fill, 0%)
+  );
+}
+.ui-slider-input::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  -webkit-appearance: none;
+  transition: transform var(--motion-fast);
+}
+.ui-slider-input:hover:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.ui-slider-input::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.ui-slider-input::-moz-range-progress {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--brand);
+}
+.ui-slider-input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  transition: transform var(--motion-fast);
+}
+.ui-slider-input:hover:not(:disabled)::-moz-range-thumb {
+  transform: scale(1.15);
+}

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
 import { songStatusView, type SongSummary } from '@/domain/songCatalog';
 import { JobStageStrip } from './JobStageStrip';
-import { SongCover } from './SongCover';
+import { SongCover } from '@/components/song/SongCover';
 import { SongMenu, type SongEditKind } from './SongMenu';
 
 interface Props {

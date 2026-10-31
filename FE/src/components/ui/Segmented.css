@@ -1,0 +1,37 @@
+/* Studio / ViewToggle 203:682 */
+.ui-seg {
+  display: inline-flex;
+  gap: 2px;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+}
+.ui-seg-item {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 아래 값으로 정한다 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast);
+}
+.ui-seg-item:hover {
+  color: var(--text-1);
+}
+.ui-seg-item.selected {
+  background: var(--surface-3);
+  color: var(--text-1);
+}

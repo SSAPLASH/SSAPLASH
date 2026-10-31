@@ -3223,18 +3223,6 @@ a.my-list-row:focus-visible {
   max-width: calc(100vw - 32px);
   pointer-events: none;
 }
-.studio-toast {
-  padding: 10px 18px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  animation:
-    motion-fade-in var(--motion-fade) var(--ease-out),
-    motion-rise-in var(--motion-move) var(--ease-out); /* motion-toast와 같은 효과. 198 묶음 0의 ui/Toast가 역할 클래스로 대체한다 */
-}
 .cover-dialog-preview {
   width: 220px;
   max-width: 100%;
