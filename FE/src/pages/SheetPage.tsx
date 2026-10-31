@@ -3,6 +3,7 @@
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
 import { SheetPager } from '@/components/SheetPager';
@@ -372,15 +373,18 @@ export function SheetPage() {
   // Enter / Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
+      if (e.isComposing || e.defaultPrevented) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
+      if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
       if (st === 'ready') {
         if (e.code === 'Enter') void begin();
         else toSelect();
       } else if (st === 'play') {
-        if (pauseRef.current !== null) resume();
-        else if (e.code === 'Escape') pauseTo('user');
+        // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
+        if (pauseRef.current !== null || e.code !== 'Escape') return;
+        pauseTo('user');
       } else {
         return;
       }
@@ -388,7 +392,7 @@ export function SheetPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, resume, pauseTo]);
+  }, [begin, toSelect, pauseTo]);
 
   // 스트립이 매 프레임 읽는 곡 시각. 연주 전·후에는 null(정지)
   const getSongTime = useCallback(
