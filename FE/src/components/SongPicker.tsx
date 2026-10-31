@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { isPlayableStatus, sortCharts, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
-import { bestScoreBySong } from '@/domain/bestRecord';
+import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useSongs } from '@/store/songStore';
 import { useSettings } from '@/store/settingsStore';
@@ -30,7 +30,7 @@ const COPY: Record<Props['mode'], { title: string; desc: string }> = {
     desc: '곡을 고르면 연주 준비로 넘어가요. 라이브러리 탭에는 완료된 곡만 고를 수 있어요.',
   },
   sheet: {
-    title: '악보를 보며 연습해요',
+    title: '악보로 차근차근 연습해요',
     desc: '곡을 고르면 연주 준비로 넘어가요. 라이브러리 탭에는 완료된 곡만 고를 수 있어요.',
   },
 };
@@ -69,8 +69,13 @@ export function SongPicker({ onSelect, mode }: Props) {
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
-  // 곡별 최고 점수: 마운트 시점의 로컬 플레이 로그(U18)
-  const bestScores = useMemo(() => bestScoreBySong(loadPlayLogs(), mode === 'play' ? 'RHYTHM' : 'SHEET'), [mode]);
+  // 곡별 최고 기록: 마운트 시점의 로컬 플레이 로그(U18). play는 최고 점수, sheet는 최고 정확도
+  const bests = useMemo(() => {
+    const logs = loadPlayLogs();
+    return mode === 'play'
+      ? { scores: bestScoreBySong(logs, 'RHYTHM'), accuracies: undefined }
+      : { scores: undefined, accuracies: bestAccuracyBySong(logs, 'SHEET') };
+  }, [mode]);
 
   // 탭·검색어가 바뀌면 목록을 다시 읽는다. 첫 로드는 즉시, 검색어 변경은 디바운스
   useEffect(() => {
@@ -209,7 +214,9 @@ export function SongPicker({ onSelect, mode }: Props) {
                 setManualId(id);
                 prepare(id);
               }}
-              bestScores={bestScores}
+              mode={mode}
+              bestScores={bests.scores}
+              bestAccuracies={bests.accuracies}
               isLocked={(s) => isLocked(tab, s)}
             />
             {hasUnplayable && (
@@ -220,7 +227,9 @@ export function SongPicker({ onSelect, mode }: Props) {
           </div>
           <SongDetailPane
             song={selectedSong}
-            bestScore={selectedId === null ? undefined : bestScores.get(selectedId)}
+            mode={mode}
+            bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
+            bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
             presetName={presetName}
             connected={connected}
             keyboardOnly={sensorKind === 'none'}

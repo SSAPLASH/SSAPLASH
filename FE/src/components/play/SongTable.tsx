@@ -1,8 +1,9 @@
-// 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 최고 점수.
+// 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 최고 점수(sheet 모드는 최고 정확도).
 // 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡. 곡 로딩은 호출자가 한다(props만 받는다).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { songStatusView, type SongSummary } from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
+import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
 import '@/components/ui/table.css';
 import './song-table.css';
@@ -13,13 +14,30 @@ interface Column {
   key: string;
   header: string;
   className?: string;
-  render: (song: SongSummary, ctx: { bestScore: number | undefined; locked: boolean }) => ReactNode;
+  render: (song: SongSummary, ctx: { best: number | undefined; locked: boolean }) => ReactNode;
 }
 
 const DASH = '—';
 
+/** 기록 열: play는 최고 점수, sheet는 최고 정확도(0~1) */
+function bestColumn(mode: 'play' | 'sheet'): Column {
+  return mode === 'sheet'
+    ? {
+        key: 'best',
+        header: '정확도',
+        className: 'play-st-num',
+        render: (_s, { best }) => (best === undefined ? DASH : formatAccuracy(best)),
+      }
+    : {
+        key: 'best',
+        header: '최고 점수',
+        className: 'play-st-num',
+        render: (_s, { best }) => (best === undefined ? DASH : best.toLocaleString('ko-KR')),
+      };
+}
+
 /** 열 정의. 나중에 「곡 난이도」 칸을 추가하려면 배열에 한 줄만 넣는다(설계 U17) */
-const COLUMNS: Column[] = [
+const BASE_COLUMNS: Column[] = [
   {
     key: 'cover',
     header: '커버',
@@ -47,13 +65,12 @@ const COLUMNS: Column[] = [
     className: 'play-st-num',
     render: (s) => (s.durationMs === null ? DASH : formatDuration(s.durationMs)),
   },
-  {
-    key: 'best',
-    header: '최고 점수',
-    className: 'play-st-num',
-    render: (_s, { bestScore }) => (bestScore === undefined ? DASH : bestScore.toLocaleString('ko-KR')),
-  },
 ];
+
+const COLUMNS_BY_MODE = {
+  play: [...BASE_COLUMNS, bestColumn('play')],
+  sheet: [...BASE_COLUMNS, bestColumn('sheet')],
+};
 
 interface Props {
   songs: SongSummary[];
@@ -61,13 +78,19 @@ interface Props {
   onSelect: (id: number) => void;
   /** 더블클릭·Enter */
   onOpen: (id: number) => void;
-  /** 곡 id → 최고 점수(없으면 "—") */
-  bestScores: ReadonlyMap<number, number>;
+  /** play(기본)는 최고 점수, sheet는 최고 정확도 열을 보인다 */
+  mode?: 'play' | 'sheet';
+  /** 곡 id → 최고 점수(play 모드, 없으면 "—") */
+  bestScores?: ReadonlyMap<number, number>;
+  /** 곡 id → 최고 정확도 0~1(sheet 모드, 없으면 "—") */
+  bestAccuracies?: ReadonlyMap<number, number>;
   /** true면 고를 수 없는 곡(처리 중·실패) */
   isLocked?: (song: SongSummary) => boolean;
 }
 
-export function SongTable({ songs, selectedId, onSelect, onOpen, bestScores, isLocked }: Props) {
+export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked }: Props) {
+  const columns = COLUMNS_BY_MODE[mode];
+  const bests = mode === 'sheet' ? bestAccuracies : bestScores;
   const [rawPage, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(songs.length / SONG_TABLE_PAGE_SIZE));
   const page = Math.min(rawPage, pageCount - 1);
@@ -114,7 +137,7 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, bestScores, isL
       <table className="ui-table play-st-table" role="grid" aria-label="곡 목록">
         <thead>
           <tr>
-            {COLUMNS.map((c) => (
+            {columns.map((c) => (
               <th key={c.key} scope="col" className={c.className}>
                 {c.header}
               </th>
@@ -142,9 +165,9 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, bestScores, isL
                   }
                 }}
               >
-                {COLUMNS.map((c) => (
+                {columns.map((c) => (
                   <td key={c.key} className={c.className}>
-                    {c.render(song, { bestScore: bestScores.get(song.id), locked: isLock })}
+                    {c.render(song, { best: bests?.get(song.id), locked: isLock })}
                   </td>
                 ))}
               </tr>
