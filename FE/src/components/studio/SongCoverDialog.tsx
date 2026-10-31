@@ -5,7 +5,7 @@ import type { SongSummary } from '@/domain/songCatalog';
 import { COVER_ACCEPT, COVER_PRECHECK_TEXT, precheckCover, type CoverChange } from '@/domain/songCover';
 import { makeCoverBlob } from '@/media/coverImage';
 import { EditDialog } from './EditDialog';
-import { SongCover } from './SongCover';
+import { SongCover } from '@/components/song/SongCover';
 
 interface Props {
   song: SongSummary;
