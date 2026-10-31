@@ -30,6 +30,8 @@ interface SettingsState {
   metronome: boolean;
   countInBars: number;
   volume: number;
+  /** 메트로놈 클릭 음량(0~1). 1 = 기존 클릭 크기. 전체 음량(volume)과 곱해진다 */
+  metronomeVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
   soundSetId: SoundSetId;
   /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
@@ -70,6 +72,7 @@ interface SettingsState {
   setMetronome: (v: boolean) => void;
   setCountInBars: (v: number) => void;
   setVolume: (v: number) => void;
+  setMetronomeVolume: (v: number) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
@@ -87,7 +90,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 12;
+export const SETTINGS_VERSION = 13;
 
 /**
  * 저장된 설정 이행.
@@ -102,6 +105,7 @@ export const SETTINGS_VERSION = 12;
  * v9 → v10: 패드 이름 `HI_TOM` → `SMALL_TOM`, 없는 패드(MID_TOM·HIHAT_PEDAL 등)는 기본 배치로 보충. 최상위 kitLayout과 presets[].layout에 적용(객체가 아닌 layout의 프리셋은 버림).
  * v10 → v11: sheetPadCount(기본 true) 추가.
  * v11 → v12: sidebarCollapsed(false)·dockCollapsed(false)·liveCoach(true)·statsConsent(false) 추가. 기존 값은 보존하고 boolean이 아닌 값만 기본값으로.
+ * v12 → v13: metronomeVolume(기본 1, 0~1 밖이거나 숫자가 아니면 1) 추가.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -177,6 +181,10 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     if (typeof p.liveCoach !== 'boolean') p.liveCoach = true;
     if (typeof p.statsConsent !== 'boolean') p.statsConsent = false;
   }
+  if (version < 13) {
+    const v = p.metronomeVolume;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) p.metronomeVolume = 1;
+  }
   return p as unknown as SettingsState;
 }
 
@@ -202,6 +210,7 @@ export const useSettings = create<SettingsState>()(
       metronome: true,
       countInBars: 1,
       volume: 0.8,
+      metronomeVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
       gameView: 'highway',
@@ -232,6 +241,7 @@ export const useSettings = create<SettingsState>()(
       setMetronome: (metronome) => set({ metronome }),
       setCountInBars: (countInBars) => set({ countInBars }),
       setVolume: (volume) => set({ volume }),
+      setMetronomeVolume: (v) => set({ metronomeVolume: Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1)) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
       setGameView: (gameView) => set({ gameView }),
