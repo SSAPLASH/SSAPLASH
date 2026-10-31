@@ -4,7 +4,7 @@
 - generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
 - charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
 - notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
-  PADS 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
+  패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
 
 validate_chart는 BE `WorkerResults.java`의 검사를 그대로 옮긴 것. 실패하면 ChartOutputError.
 """
@@ -15,7 +15,7 @@ import math
 
 import numpy as np
 
-from ssaplash_ai.bench.datasets.pads import PADS
+from ssaplash_ai.bench.datasets.pads import SCORED_PADS
 from ssaplash_ai.chart.errors import ChartOutputError
 from ssaplash_ai.chart.tempo import TempoEstimate
 
@@ -30,7 +30,8 @@ BPM_MAX = 9999.99
 TIME_SIGNATURE_MAX = 5
 NOTE_ID_WIDTH = 4
 
-_PAD_ORDER = {pad: i for i, pad in enumerate(PADS)}
+# BE 결과 검증이 받는 패드 8종. 정답·채점용 PADS에는 HIHAT_PEDAL이 있지만 채보 출력에서는 내지 않음
+_PAD_ORDER = {pad: i for i, pad in enumerate(SCORED_PADS)}
 
 
 def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
@@ -155,8 +156,8 @@ def validate_chart(chart: dict, duration_ms: int) -> None:
 
 
 def notes_by_pad(chart: dict) -> dict[str, int]:
-    """패드별 노트 수. PADS 순서, 0개인 패드도 포함."""
-    counts = dict.fromkeys(PADS, 0)
+    """패드별 노트 수. 패드 8종 순서, 0개인 패드도 포함."""
+    counts = dict.fromkeys(SCORED_PADS, 0)
     for note in chart["charts"][0]["notes"]:
         counts[note["pad"]] += 1
     return counts
