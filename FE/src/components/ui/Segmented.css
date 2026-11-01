@@ -2,7 +2,7 @@
 .ui-seg {
   display: inline-flex;
   gap: 2px;
-  height: 40px;
+  height: 44px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
@@ -14,11 +14,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-s);
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--text-2);
+  color: var(--text-3);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1;
