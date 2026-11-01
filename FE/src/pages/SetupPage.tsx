@@ -664,7 +664,7 @@ export function SetupPage() {
             <h2 id="setup-adv-title" className="setup-card-title">
               고급 설정
             </h2>
-            <p className="setup-card-desc">판정 반경 · 판정 폭 · 노트 낙하 · 카운트인 · 메트로놈 · 볼륨 · 오디오 오프셋</p>
+            <p className="setup-card-desc">판정 반경 · 판정 폭 · 노트 낙하 · 카운트인 · 메트로놈</p>
           </div>
           <Button variant="text" className="setup-step-action" aria-expanded={advOpen} aria-controls="setup-adv-body" onClick={() => setAdvOpen((v) => !v)}>
             {advOpen ? '접기' : '펼치기'}
@@ -707,24 +707,6 @@ export function SetupPage() {
               value={s.scrollMs}
               valueText={`${s.scrollMs}ms`}
               onChange={(v) => s.setScrollMs(v)}
-            />
-            <Slider
-              label="오디오 오프셋(양수 = 소리가 늦게 들릴 때)"
-              min={-100}
-              max={200}
-              step={5}
-              value={s.audioOffsetMs}
-              valueText={`${s.audioOffsetMs}ms`}
-              onChange={(v) => s.setAudioOffsetMs(v)}
-            />
-            <Slider
-              label="볼륨"
-              min={0}
-              max={1}
-              step={0.05}
-              value={s.volume}
-              valueText={`${Math.round(s.volume * 100)}%`}
-              onChange={(v) => s.setVolume(v)}
             />
             <div className="setup-adv-item">
               <span className="setup-adv-label">카운트인 마디</span>
