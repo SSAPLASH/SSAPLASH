@@ -345,11 +345,6 @@
 .song-menu {
   position: relative;
 }
-.song-menu-btn {
-  border-color: transparent;
-  border-radius: var(--space-m);
-  background: transparent;
-}
 .song-menu-list {
   position: absolute;
   top: 36px;
@@ -775,11 +770,6 @@
   font-size: 20px;
   font-weight: 600;
   line-height: 1.45;
-}
-.studio-dialog-close {
-  border-color: transparent;
-  border-radius: var(--space-m);
-  background: transparent;
 }
 .studio-dialog-form {
   display: flex;
