@@ -1,54 +1,44 @@
-// 연주 결과 (리듬 게임 설계 4-2 · 악보 연주 설계 D11). localStorage 플레이 로그를 읽어 보여준다.
-// 악보 연주(mode SHEET)는 점수·콤보 대신 정확도·판정 분포를 앞에 두고 피드백 카드·패드 요약을 붙인다.
-// 곡이 삭제됐으면(곡 상세 404, CHART-001 U7) 결과는 그대로 보이고 "삭제된 곡" 표시와 함께 [다시 하기]·Enter만 숨긴다.
+// 연주 결과 (리듬 게임 설계 4-2 · 악보 연주 설계 D11 · Figma 결과 112:1194). localStorage 플레이 로그를 읽어 보여준다.
+// 요약 카드 → [서버 분석 진입] → 판정 분포·타이밍 분포 → (악보 모드) 피드백 카드·약점 마디 미니 악보 → 패드별 표 → 버튼 행.
+// 악보 연주(mode SHEET)는 점수·콤보 대신 정확도 중심이라 요약 카드에 점수 블록이 없다.
+// 곡이 삭제됐으면(곡 상세 404, CHART-001 U7) 결과는 그대로 보이고 「삭제된 곡」 칩과 함께 [다시 하기]·Enter만 숨긴다.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { FeedbackCards } from '@/components/FeedbackCards';
 import { ReportEntry } from '@/components/ReportEntry';
-import { checkSongAvailability } from '@/api/songs';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { pickPathOf, retryPathOf } from '@/domain/playRetry';
 import { SONGS_SOURCE } from '@/store/songStore';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
+import { formatDuration } from '@/components/formatTime';
+import { FeedbackCard } from '@/components/result/FeedbackCard';
+import { JudgeBars } from '@/components/result/JudgeBars';
+import { PadSummaryTable } from '@/components/result/PadSummaryTable';
+import { ResultSummaryCard } from '@/components/result/ResultSummaryCard';
+import { TimingHistogram } from '@/components/result/TimingHistogram';
+import '@/components/result/result.css';
+import { useShell } from '@/components/shell/useShell';
+import { DeletedSongChip } from '@/components/song/DeletedSongChip';
+import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { buttonClassName } from '@/components/ui/buttonStyle';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { formatPlayDate } from '@/domain/playLogView';
+import { timingHistogram } from '@/domain/timingHistogram';
 import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
-import { DELETED_SONG_LABEL, type SongAvailability } from '@/domain/songAvailability';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
-
-const DIFF_LABEL: Record<string, string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
-
-/** Δms 분포. −goodMs~+goodMs를 bins칸으로 나눈다 */
-function histogram(log: PlayLog, bins = 12): { counts: number[]; perfectIdx: boolean[]; early: number | null; late: number | null } {
-  const g = log.timing.goodMs;
-  const p = log.timing.perfectMs;
-  const counts = new Array<number>(bins).fill(0);
-  const width = (2 * g) / bins;
-  const perfectIdx = counts.map((_, i) => Math.abs(-g + (i + 0.5) * width) <= p);
-  let eSum = 0;
-  let eN = 0;
-  let lSum = 0;
-  let lN = 0;
-  for (const n of log.notes) {
-    if (n.deltaMs === null) continue;
-    const i = Math.min(bins - 1, Math.max(0, Math.floor((n.deltaMs + g) / width)));
-    counts[i] += 1;
-    if (n.deltaMs < 0) {
-      eSum += n.deltaMs;
-      eN += 1;
-    } else if (n.deltaMs > 0) {
-      lSum += n.deltaMs;
-      lN += 1;
-    }
-  }
-  return { counts, perfectIdx, early: eN ? eSum / eN : null, late: lN ? lSum / lN : null };
-}
 
 /** 모드별 선택 화면 경로 */
 const pickPath = (l: PlayLog): string => pickPathOf(l.mode);
 
+/** 요약 카드 메타의 모드 표기 */
+const MODE_LABEL: Record<string, string> = { RHYTHM: '게임 모드', SHEET: '악보 모드' };
+
 export function ResultPage() {
+  useShell({ title: '결과' });
   const { playId } = useParams();
   const navigate = useNavigate();
   const log = useMemo(() => (playId ? getPlayLog(playId) : null), [playId]);
@@ -70,7 +60,8 @@ export function ResultPage() {
   // 로컬 피드백 카드·미니 악보·패드 요약 표를 보일지. 업로드 대상이면 만들지 않는다
   const showLocalFeedback = isSheet && !uploadTarget;
   const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs } : undefined) : []), [log, showLocalFeedback]);
-  const summary = useMemo(() => (log && showLocalFeedback ? summarizeByPad(log) : []), [log, showLocalFeedback]);
+  // 패드별 표는 통계라 모든 모드에서 보인다(업로드 대상이어도)
+  const summary = useMemo(() => (log ? summarizeByPad(log) : []), [log]);
   // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
   const snippetChart = useMemo(() => (log && showLocalFeedback ? chartFromLog(log) : null), [log, showLocalFeedback]);
   const noteStates = useMemo(() => (log ? log.notes.map((n) => n.judgement) : []), [log]);
@@ -84,19 +75,8 @@ export function ResultPage() {
     snippetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   // 이 기록의 BE 곡이 아직 있는지(U7). 확인 전·확인 실패는 지금처럼 다시 하기를 둔다
-  const [availability, setAvailability] = useState<{ playId: string; value: SongAvailability } | null>(null);
-  useEffect(() => {
-    const id = log?.songNumericId;
-    if (!log || typeof id !== 'number') return;
-    const ctrl = new AbortController();
-    const owner = log.playId;
-    checkSongAvailability(id, ctrl.signal).then(
-      (value) => setAvailability({ playId: owner, value }),
-      () => {},
-    );
-    return () => ctrl.abort();
-  }, [log]);
-  const songDeleted = availability !== null && availability.playId === log?.playId && availability.value === 'deleted';
+  const deletedIds = useDeletedSongIds(log ? [log] : []);
+  const songDeleted = log?.songNumericId != null && deletedIds.has(log.songNumericId);
 
   const retry = () => {
     if (log && !songDeleted) navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }));
@@ -118,142 +98,98 @@ export function ResultPage() {
   if (!log) {
     return (
       <main className="main">
-        <section className="hero">
-          <h1>결과를 찾을 수 없습니다</h1>
-          <p>이 브라우저에 저장된 최근 20건에 없는 기록입니다.</p>
-          <Link to="/play">곡 선택으로</Link>
-        </section>
+        <EmptyState
+          title="결과를 찾을 수 없어요"
+          description="이 브라우저에 저장된 최근 20건에 없는 기록이에요."
+          action={
+            <Link to="/history" className={buttonClassName({ variant: 'primary', size: 'md' })}>
+              연주 기록 보기
+            </Link>
+          }
+        />
       </main>
     );
   }
 
-  const h = histogram(log);
-  const maxCount = Math.max(1, ...h.counts);
+  const h = timingHistogram(log);
   const s = log.summary;
-  const total = s.counts.PERFECT + s.counts.GOOD + s.counts.MISS;
+  const metaParts = [
+    log.bpm ? `BPM ${Math.round(log.bpm)}` : null,
+    log.durationMs > 0 ? formatDuration(log.durationMs) : null,
+    MODE_LABEL[log.mode] ?? log.mode,
+    formatPlayDate(log.startedAt),
+  ].filter((x): x is string => x !== null);
+  const timingDetail = `빠름 평균 ${h.early === null ? '–' : `${h.early.toFixed(0)}ms`} · 늦음 평균 ${h.late === null ? '–' : `+${h.late.toFixed(0)}ms`} · 판정 폭 ±${log.timing.perfectMs}/±${log.timing.goodMs}ms`;
 
   return (
     <main className="main">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-            <h1>{log.title}</h1>
-            {songDeleted && <span className="deleted-song-badge">{DELETED_SONG_LABEL}</span>}
-          </div>
-          <div className="small dim">
-            {DIFF_LABEL[log.difficulty] ?? log.difficulty} · 입력 {log.inputSource} · {new Date(log.startedAt).toLocaleString('ko-KR')}
-          </div>
+      <div className="result-page">
+        <ResultSummaryCard
+          title={log.title}
+          meta={metaParts.join(' · ')}
+          titleBadge={songDeleted ? <DeletedSongChip /> : undefined}
+          scoreText={isSheet ? undefined : `${s.score.toLocaleString('ko-KR')} / ${s.maxCombo}`}
+          accuracyText={`${(s.accuracy * 100).toFixed(1)}%`}
+        />
+
+        <ReportEntry
+          playId={log.playId}
+          legacy={legacy}
+          state={uploadState}
+          report={prefetchedReport}
+          onRetry={() => void startPlaySync(log.playId)}
+        />
+
+        <div className="result-cols">
+          <JudgeBars counts={s.counts} strayHits={s.strayHits} />
+          <TimingHistogram
+            counts={h.counts}
+            perfectIdx={h.perfectIdx}
+            goodMs={log.timing.goodMs}
+            meanDeltaMs={h.meanDeltaMs}
+            detail={timingDetail}
+          />
         </div>
-        <div className="row">
+
+        {showLocalFeedback && feedback.length > 0 && (
+          <section className="result-fb-section" aria-label="간단 피드백">
+            <div className="result-fb-list">
+              {feedback.map((it) => (
+                <FeedbackCard
+                  key={it.id}
+                  item={it}
+                  active={!!it.bars && !!focusBars && it.bars[0] === focusBars[0] && it.bars[1] === focusBars[1]}
+                  onFocusBars={snippetChart ? focus : undefined}
+                />
+              ))}
+            </div>
+            {snippetChart && focusBars && (
+              <div ref={snippetRef}>
+                <Card title={focusBars[0] === focusBars[1] ? `약점 ${focusBars[0] + 1}마디` : `약점 마디 ${focusBars[0] + 1}~${focusBars[1] + 1}`}>
+                  <SheetSnippet chart={snippetChart} noteStates={noteStates} bars={focusBars} />
+                  <p className="result-caption">카드를 누르면 구간이 바뀝니다</p>
+                </Card>
+              </div>
+            )}
+          </section>
+        )}
+
+        {summary.length > 0 && <PadSummaryTable summary={summary} />}
+
+        <div className="result-actions">
           {!songDeleted && (
-            <button className="btn-primary" onClick={retry}>
-              {isSheet ? '같은 곡 다시 (Enter)' : '다시 하기 (Enter)'}
-            </button>
+            <Button variant="primary" size="md" onClick={retry} aria-keyshortcuts="Enter">
+              다시 하기
+            </Button>
           )}
-          <Link to={pickPath(log)} className={songDeleted ? 'btn-primary' : 'btn-ghost'}>
+          <Link to={pickPath(log)} className={buttonClassName({ variant: 'secondary', size: 'md' })}>
             다른 곡
           </Link>
-          <Link to="/free" className="btn-ghost">
+          <Link to="/free" className={buttonClassName({ variant: 'secondary', size: 'md' })}>
             자유 연습
           </Link>
         </div>
       </div>
-
-      <ReportEntry
-        playId={log.playId}
-        legacy={legacy}
-        state={uploadState}
-        report={prefetchedReport}
-        onRetry={() => void startPlaySync(log.playId)}
-      />
-
-      <div className="result-grid">
-        {!isSheet && (
-          <div className="card stat">
-            <span className="v">{s.score}</span>
-            <span className="k">점수 / {s.maxScore}</span>
-          </div>
-        )}
-        <div className="card stat">
-          <span className="v">{(s.accuracy * 100).toFixed(1)}%</span>
-          <span className="k">정확도</span>
-        </div>
-        {isSheet ? (
-          <div className="card stat">
-            <span className="v">
-              {s.counts.PERFECT} / {s.counts.GOOD} / {s.counts.MISS}
-            </span>
-            <span className="k">Perfect / Good / Miss</span>
-          </div>
-        ) : (
-          <div className="card stat">
-            <span className="v">{s.maxCombo}</span>
-            <span className="k">최대 콤보</span>
-          </div>
-        )}
-        <div className="card stat">
-          <span className="v">{s.strayHits}</span>
-          <span className="k">채보 외 타격 (감점 없음)</span>
-        </div>
-      </div>
-
-      <div className="grid-2" style={{ marginTop: 16 }}>
-        <div className="card col">
-          <h3>판정 분포</h3>
-          <table className="plain">
-            <tbody>
-              <tr>
-                <td>Perfect</td>
-                <td style={{ textAlign: 'right' }}>{s.counts.PERFECT}</td>
-              </tr>
-              <tr>
-                <td>Good</td>
-                <td style={{ textAlign: 'right' }}>{s.counts.GOOD}</td>
-              </tr>
-              <tr>
-                <td>Miss</td>
-                <td style={{ textAlign: 'right' }}>{s.counts.MISS}</td>
-              </tr>
-              <tr>
-                <td className="dim">노트 합계</td>
-                <td style={{ textAlign: 'right' }}>{total}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="card col">
-          <h3>타이밍</h3>
-          <div className="hist" aria-label="타이밍 히스토그램">
-            {h.counts.map((c, i) => (
-              <div key={i} className={h.perfectIdx[i] ? 'p' : ''} style={{ height: `${(c / maxCount) * 100}%` }} title={`${c}`} />
-            ))}
-          </div>
-          <div className="hist-axis">
-            <span>빠름 −{log.timing.goodMs}ms</span>
-            <span>0</span>
-            <span>늦음 +{log.timing.goodMs}ms</span>
-          </div>
-          <div className="small dim">
-            빠름 평균 {h.early === null ? '–' : `${h.early.toFixed(0)}ms`} · 늦음 평균 {h.late === null ? '–' : `+${h.late.toFixed(0)}ms`} · 판정 폭 ±
-            {log.timing.perfectMs}/±{log.timing.goodMs}ms
-          </div>
-        </div>
-      </div>
-
-      {showLocalFeedback && snippetChart && focusBars && (
-        <div className="card col" ref={snippetRef} style={{ marginTop: 16 }}>
-          <h3>{focusBars[0] === focusBars[1] ? `약점 ${focusBars[0] + 1}마디` : `약점 마디 ${focusBars[0] + 1}~${focusBars[1] + 1}`}</h3>
-          <SheetSnippet chart={snippetChart} noteStates={noteStates} bars={focusBars} />
-          <div className="small dim">카드를 누르면 구간이 바뀝니다</div>
-        </div>
-      )}
-
-      {showLocalFeedback && (
-        <div style={{ marginTop: 16 }}>
-          <h3>간단 피드백</h3>
-          <FeedbackCards items={feedback} summary={summary} onFocusBars={snippetChart ? focus : undefined} />
-        </div>
-      )}
     </main>
   );
 }
