@@ -23,30 +23,20 @@ export interface Colors {
   judge: Record<Judgement, string>;
 }
 
-/**
- * 색을 읽는다. 캔버스 요소에서 읽어 .sheet-mode 스코프 변수(--sm-*)를 상속받고,
- * 없으면(결과 페이지 등) 앱 공통 변수로 돌아간다.
- */
+/** 색을 읽는다. 캔버스 요소의 계산된 스타일에서 디자인 토큰(tokens.css)을 읽고, 없으면 기본값을 쓴다 */
 export function readColors(el: Element = document.documentElement): Colors {
   const s = getComputedStyle(el);
-  const v = (names: string[], fallback: string) => {
-    for (const n of names) {
-      const x = s.getPropertyValue(n).trim();
-      if (x) return x;
-    }
-    return fallback;
-  };
-  const scoped = s.getPropertyValue('--sm-accent').trim() !== '';
+  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback;
   return {
-    ink: v(['--sm-text', '--ink'], '#f3efe6'),
-    inkDim: v(['--sm-text-2', '--ink-dim'], '#a9b0c2'),
-    inkFaint: v(['--sm-text-3', '--ink-faint'], '#6e778d'),
-    base: v(['--sm-accent-text', '--brass'], '#e6b85c'),
-    baseGlow: scoped ? v(['--sm-accent'], '#35a3d4') : v(['--brass'], '#e6b85c'),
+    ink: v('--text-1', '#f2f5f8'),
+    inkDim: v('--text-2', '#98a2b1'),
+    inkFaint: v('--text-3', '#828d9e'),
+    base: v('--brand-text', '#52b2dd'),
+    baseGlow: v('--brand', '#35a3d4'),
     judge: {
-      PERFECT: v(['--sm-perfect', '--perfect'], '#ffd166'),
-      GOOD: v(['--sm-good', '--good'], '#5fb8ae'),
-      MISS: v(['--sm-miss', '--miss'], '#e05a5a'),
+      PERFECT: v('--perfect', '#8fceea'),
+      GOOD: v('--good', '#4cd07d'),
+      MISS: v('--miss', '#ff6b70'),
     },
   };
 }
