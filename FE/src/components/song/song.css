@@ -45,3 +45,17 @@ button.song-level {
 .song-level-dim:hover:not(:disabled) {
   opacity: 0.8;
 }
+
+/* 「삭제된 곡」 칩 (Figma Navigation / HistoryRow song=deleted): 결과 요약 카드·연주 기록 행 공용 */
+.song-deleted-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: var(--space-xs) var(--space-s);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
