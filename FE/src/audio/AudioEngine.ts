@@ -29,6 +29,8 @@ export class AudioEngine {
   /** 반주 전용 버스(master 직결). 패드 음소거와 무관 */
   private accBus: GainNode | null = null;
   private padMuted = false;
+  /** 메트로놈 클릭 음량(0~1) */
+  private clickVolume = 1;
   private stateListeners = new Set<(state: string) => void>();
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
@@ -260,7 +262,7 @@ export class AudioEngine {
     const g = ctx.createGain();
     o.type = 'square';
     o.frequency.value = accent ? 1600 : 1100;
-    g.gain.setValueAtTime(accent ? 0.35 : 0.2, at);
+    g.gain.setValueAtTime(Math.max(0.001, (accent ? 0.35 : 0.2) * this.clickVolume), at);
     g.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
     o.connect(g).connect(this.master);
     o.start(at);
@@ -278,6 +280,11 @@ export class AudioEngine {
   onStateChange(listener: (state: string) => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  /** 메트로놈 클릭 음량(0~1). 다음 클릭부터 적용 */
+  setClickVolume(v: number): void {
+    this.clickVolume = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1));
   }
 
   setVolume(v: number): void {
