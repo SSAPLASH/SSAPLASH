@@ -1,26 +1,26 @@
 /* Controls / Slider 126:1942 */
 .ui-slider {
   display: flex;
-  align-items: center;
-  gap: var(--space-m);
+  flex-direction: column;
+  gap: var(--space-s);
   color: var(--text-1);
   font-size: 14px;
 }
 .ui-slider-label {
-  flex: none;
-  color: var(--text-2);
+  align-self: flex-start;
+  color: var(--text-1);
 }
 .ui-slider-value {
-  flex: none;
-  min-width: 3ch;
   color: var(--text-1);
   font-size: 20px;
+  font-weight: 500;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  line-height: 1.2;
+  text-align: center;
 }
 .ui-slider-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   height: 20px;
   margin: 0;

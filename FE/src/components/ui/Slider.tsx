@@ -1,4 +1,4 @@
-// Figma Controls / Slider 126:1942 — 네이티브 range 입력을 감싼 슬라이더(음량·오프셋). valueText는 오른쪽 값 표시.
+// Figma Controls / Slider 126:1942 — 네이티브 range 입력을 감싼 슬라이더(음량·오프셋). 세로 배치(라벨 → 값 → 트랙). valueText가 없으면 값 줄이 없다.
 import { useId } from 'react';
 import type { CSSProperties, InputHTMLAttributes } from 'react';
 import './Slider.css';
@@ -23,6 +23,7 @@ export function Slider({ label, value, min, max, step = 1, onChange, valueText, 
       <label className="ui-slider-label" htmlFor={inputId}>
         {label}
       </label>
+      {valueText !== undefined ? <span className="ui-slider-value">{valueText}</span> : null}
       <input
         {...rest}
         id={inputId}
@@ -35,7 +36,6 @@ export function Slider({ label, value, min, max, step = 1, onChange, valueText, 
         style={{ '--ui-slider-fill': `${pct}%` } as CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      {valueText !== undefined ? <span className="ui-slider-value">{valueText}</span> : null}
     </div>
   );
 }
