@@ -12,6 +12,7 @@ import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
+import { IconButton } from '@/components/ui/IconButton';
 import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
 
@@ -143,16 +144,16 @@ export function GlassDock() {
             <span className="dock-switch-knob" />
           </button>
         </div>
-        <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}>
+        <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}>
           <svg {...svgProps}>
             <path d="M6 12h12" />
           </svg>
-        </button>
-        <button type="button" className="dock-icon-btn" disabled={locked} aria-label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}>
+        </IconButton>
+        <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}>
           <svg {...svgProps}>
             <path d="M6 12h12M12 6v12" />
           </svg>
-        </button>
+        </IconButton>
         <span className="dock-divider" />
         <button
           type="button"
@@ -172,13 +173,13 @@ export function GlassDock() {
           )}
         </button>
         {mode === 'play' && (
-          <button type="button" className="dock-icon-btn" aria-label="일시정지" title="일시정지" onClick={pause}>
+          <IconButton size="sm" label="일시정지" onClick={pause}>
             <PauseIcon />
-          </button>
+          </IconButton>
         )}
-        <button type="button" className="dock-icon-btn dock-collapse" aria-label="Dock 접기" title="접기" onClick={() => setCollapsed(true)}>
+        <IconButton size="sm" className="dock-collapse" label="Dock 접기" title="접기" onClick={() => setCollapsed(true)}>
           <Chevron up />
-        </button>
+        </IconButton>
       </div>
       {dockPanel === 'metronome' && <MetronomePanel />}
     </>
