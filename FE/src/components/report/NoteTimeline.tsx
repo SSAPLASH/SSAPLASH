@@ -20,7 +20,7 @@ export function NoteTimeline({ notes }: { notes: ReportNote[] }) {
         {pads.map((p, i) => (
           <g key={p}>
             <line x1={LABEL} x2={W - 8} y1={i * LANE + LANE / 2 + 4} y2={i * LANE + LANE / 2 + 4} stroke="var(--line)" />
-            <text x={0} y={i * LANE + LANE / 2 + 8} fill="var(--ink-dim)" fontSize={12}>
+            <text x={0} y={i * LANE + LANE / 2 + 8} fill="var(--text-2)" fontSize={12}>
               {PAD_META[p].label}
             </text>
           </g>
