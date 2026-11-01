@@ -1221,6 +1221,24 @@ table.plain th {
 .dock-preset:hover {
   border-color: var(--line-strong);
 }
+/* 준비 필요: ● L ● R 준비 필요 (amber 테두리) */
+.dock-preset.needs-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: none;
+  border-color: var(--brand-sub);
+}
+.dock-hand-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--miss);
+}
+.dock-hand-dot.on {
+  background: var(--good);
+}
 /* 접힘 알약: ♩ BPM · 점 · (‖) · ⌄ */
 .dock-pill {
   min-height: 0;
