@@ -1,3 +1,77 @@
+/* 곡 커버 (공용 SongCover: 라이브러리·연주 준비 등) */
+.song-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--bg-canvas);
+}
+.song-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 기본 커버 (Figma Studio / DefaultCover 202:492, 236 기준 비율): 모든 곡 공통 */
+.song-cover.default {
+  position: relative;
+  background: var(--surface-2);
+}
+.song-cover-disc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 74.58%; /* 176 / 236 */
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 0%,
+      color-mix(in srgb, var(--text-1) 10%, transparent) 45%,
+      color-mix(in srgb, var(--text-1) 2%, transparent) 55%,
+      transparent 100%
+    ),
+    var(--surface-3);
+}
+.song-cover-groove,
+.song-cover-label,
+.song-cover-hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: border-box;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.song-cover-groove {
+  border: 1px solid color-mix(in srgb, var(--text-1) 60%, transparent);
+}
+.song-cover-groove-1 {
+  width: 85.2%; /* 150 / 176 */
+}
+.song-cover-groove-2 {
+  width: 71.6%; /* 126 / 176 */
+}
+.song-cover-groove-3 {
+  width: 58%; /* 102 / 176 */
+}
+.song-cover-label {
+  width: 36.36%; /* 64 / 176 */
+  background: color-mix(in srgb, var(--brand) 90%, transparent);
+}
+.song-cover-hole {
+  width: 10.23%; /* 18 / 176 */
+  border: 1px solid var(--line-strong);
+  background: var(--bg-canvas);
+}
+
 /* 곡 메타 한 줄: 글자 14, --text-2 */
 .song-meta {
   margin: 0;

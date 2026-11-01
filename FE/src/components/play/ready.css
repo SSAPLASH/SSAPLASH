@@ -37,9 +37,6 @@
   flex: none;
   width: 120px;
 }
-.play-rp .play-rp-cover .song-cover-disc {
-  height: 80%;
-}
 .play-rp-song-info {
   display: flex;
   flex-direction: column;
