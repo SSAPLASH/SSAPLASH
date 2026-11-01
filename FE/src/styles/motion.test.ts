@@ -9,6 +9,8 @@ const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 const tokens = read('./tokens.css')
 const globalCss = read('./global.css')
 const motionCss = read('./motion.css')
+// 라이브러리 화면 CSS는 components/studio/studio.css로 옮겼다(펄스·하이라이트 허용 항목이 그쪽에 있다)
+const studioCss = read('../components/studio/studio.css')
 
 /** reduced-motion 미디어 블록 본문(중괄호 짝을 세어 잘라낸다) */
 function reducedBlock(css: string): string {
@@ -107,8 +109,12 @@ describe('하드코딩 시간 금지', () => {
     expect(offenders(motionCss)).toEqual([])
   })
 
-  it('허용 목록 항목이 실제로 global.css에 남아 있다(죽은 허용 항목 방지)', () => {
-    const css = stripComments(globalCss)
+  it('studio.css에 토큰 밖 시간 리터럴이 없다', () => {
+    expect(offenders(studioCss)).toEqual([])
+  })
+
+  it('허용 목록 항목이 실제로 global.css·studio.css에 남아 있다(죽은 허용 항목 방지)', () => {
+    const css = stripComments(globalCss) + stripComments(studioCss)
     for (const a of ALLOWED) expect(css).toContain(a)
   })
 })

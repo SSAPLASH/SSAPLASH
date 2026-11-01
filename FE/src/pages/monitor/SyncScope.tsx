@@ -43,7 +43,7 @@ export const SyncScope = memo(function SyncScope({ snap, loss }: { snap: Snap; l
     const { ctx, w, h } = c;
     const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--right', '#ffa07c')];
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
+    const faint = cssVar(el, '--text-3', '#6e778d');
     const from = snap.now - spanMs;
     const plotW = w - PAD_L - PAD_R;
     const xOf = (t: number) => PAD_L + ((t - from) / spanMs) * plotW;

@@ -26,7 +26,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
 function card(s: SongSummary, withEdit = true): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <MySongCard song={s} job={null} progress={null} justDone={false} onReupload={() => {}} onEdit={withEdit ? () => {} : undefined} />
+      <MySongCard song={s} justDone={false} onReupload={() => {}} onEdit={withEdit ? () => {} : undefined} />
     </MemoryRouter>,
   );
 }
@@ -56,11 +56,11 @@ describe('MySongCard (v0.4)', () => {
     expect(card(song({ coverUrl: 'https://x/c.jpg' }))).toContain('src="https://x/c.jpg"');
   });
 
-  it('실패 곡: ▶ 없음, 사유 문장 없이 [다시 올리기]만, ⋯ 메뉴 있음', () => {
+  it('실패 곡: ▶ 없음, 사유 한 줄과 [다시 올리기], ⋯ 메뉴 있음', () => {
     const html = card(song({ status: 'FAILED' }));
     expect(html).not.toContain('song-card-play');
     expect(html).toContain('다시 올리기');
-    expect(html).not.toContain('채보를 만들지 못했습니다');
+    expect(html).toContain('채보를 만들지 못했어요');
     expect(html).toContain('aria-label="별빛 산책 메뉴"');
   });
 
@@ -76,14 +76,14 @@ describe('MySongCard (v0.4)', () => {
 });
 
 describe('MySongRow 완료 행', () => {
-  it('[악보 연습]·[리듬 게임]으로 카드 보기와 같은 이름을 쓴다', () => {
+  it('[악보 연습]·[플레이] 버튼을 둔다(Figma SongListRow)', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <MySongRow song={song()} job={null} progress={null} justDone={false} onReupload={() => {}} />
+        <MySongRow song={song()} justDone={false} onReupload={() => {}} />
       </MemoryRouter>,
     );
     expect(html).toContain('악보 연습');
-    expect(html).toContain('리듬 게임');
+    expect(html).toContain('플레이');
     expect(html).not.toContain('악보 확인');
   });
 });
@@ -97,7 +97,7 @@ describe('SongDeleteDialog', () => {
 
     const busy = renderToStaticMarkup(<SongDeleteDialog song={song()} busy error={null} onDelete={() => {}} onClose={() => {}} />);
     expect(busy).toContain('삭제 중…');
-    expect(busy).toMatch(/aria-label="닫기" disabled=""/);
+    expect(busy).toMatch(/aria-label="닫기"[^>]*disabled=""/);
   });
 });
 
