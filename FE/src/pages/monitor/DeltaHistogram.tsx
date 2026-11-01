@@ -30,9 +30,9 @@ export function DeltaHistogram({
     if (!c || !el) return;
     const { ctx, w, h } = c;
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
-    const ink = cssVar(el, '--ink', '#e8ecf5');
-    const brass = cssVar(el, '--brass', '#d4a24c');
+    const faint = cssVar(el, '--text-3', '#6e778d');
+    const ink = cssVar(el, '--text-1', '#e8ecf5');
+    const brass = cssVar(el, '--brand', '#d4a24c');
     const good = cssVar(el, '--good', '#5fb8ae');
     const perfect = cssVar(el, '--perfect', '#e0b84c');
 

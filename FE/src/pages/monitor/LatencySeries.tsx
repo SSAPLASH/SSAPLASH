@@ -18,8 +18,8 @@ export function LatencySeries({ points, tick }: { points: readonly LatencyPoint[
     if (!c || !el) return;
     const { ctx, w, h } = c;
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
-    const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--brass', '#d4a24c'), cssVar(el, '--right', '#ffa07c')];
+    const faint = cssVar(el, '--text-3', '#6e778d');
+    const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--brand', '#d4a24c'), cssVar(el, '--right', '#ffa07c')];
     const miss = cssVar(el, '--miss', '#e05a5a');
 
     // 구간 값이 음수(시계 어긋남)여도 막대는 0부터 쌓는다
