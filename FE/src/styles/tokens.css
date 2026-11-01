@@ -1,6 +1,5 @@
 /* SSAPLASH 디자인 토큰 — Figma 01 Design System(126:2) 변수·텍스트 스타일.
- * 새 화면 코드는 이 파일의 새 이름만 쓴다. 맨 아래 "옛 토큰 별칭"은 옛 이름을 쓰는
- * 기존 CSS가 새 팔레트를 따라가도록 두는 임시 절이다(D1, 묶음 8에서 삭제).
+ * 화면 코드는 이 파일의 이름만 쓴다(옛 이름 별칭은 묶음 8에서 삭제).
  */
 
 /* ---- 폰트 (Pretendard는 index.html의 CDN 링크) ---- */
@@ -150,45 +149,4 @@
     --motion-fast: 0ms;
     --motion-move: 0ms;
   }
-}
-
-/* ---- 옛 토큰 별칭 (D1, 묶음 8에서 삭제) ----
- * 옛 이름을 새 토큰으로 연결한다. 화면 작업마다 옛 이름 참조를 새 이름으로 바꾸고,
- * 마지막 작업에서 이 절을 지운다. --line은 위에서 새 값으로 재정의했다.
- */
-:root {
-  --stage: var(--bg-base);
-  --stage-deep: var(--bg-canvas);
-  --surface: var(--surface-1);
-  /* --surface-2는 새 토큰과 이름이 같아 별도 별칭이 필요 없다 */
-  --ink: var(--text-1);
-  --ink-dim: var(--text-2);
-  --ink-faint: var(--text-3);
-  --brass: var(--brand);
-  --brass-deep: var(--brand-text);
-  --head: var(--text-1);
-  --ember: var(--brand-sub);
-  --radius: var(--radius-panel);
-  --radius-sm: var(--radius-control);
-
-  /* 악보 화면 전용 --sm-* (옛 .sheet-mode 블록에 있던 정의) */
-  --sm-bg: var(--bg-base);
-  --sm-panel: var(--surface-1);
-  --sm-card: var(--surface-2);
-  --sm-control: var(--surface-3);
-  --sm-stroke: var(--line-strong);
-  /* 새 토큰에 대응 값이 없어 가장 가까운 표면 3으로 둔다 */
-  --sm-select: var(--surface-3);
-  --sm-sunken: var(--bg-canvas);
-  --sm-hairline: var(--line);
-  --sm-text: var(--text-1);
-  --sm-text-2: var(--text-2);
-  --sm-text-3: var(--text-3);
-  /* text-4에 대응하는 새 토큰이 없어 가장 흐린 text-3으로 둔다 */
-  --sm-text-4: var(--text-3);
-  --sm-accent: var(--brand);
-  --sm-accent-text: var(--brand-text);
-  --sm-perfect: var(--perfect);
-  --sm-good: var(--good);
-  --sm-miss: var(--miss);
 }
