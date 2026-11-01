@@ -1,4 +1,4 @@
-// 회원 탈퇴 확인 대화상자. 상태를 갖지 않는다 — 열림·진행·오류는 호출자(MyPage)가 정한다.
+// 회원 탈퇴 확인 대화상자. 상태를 갖지 않는다 — 열림·진행·오류는 호출자(SettingsPage)가 정한다.
 import { useRef } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 
