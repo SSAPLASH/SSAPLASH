@@ -55,7 +55,6 @@ button:hover {
 }
 /* 눌림: 모든 버튼류가 scale(0.98). 칩·카드는 아래에서 뺀다 */
 button:active:not(:disabled),
-.dock-icon-btn:active:not(:disabled),
 .side-foot-btn:active,
 a.btn-primary:active,
 a.btn-ghost.as-button:active {
@@ -1036,35 +1035,10 @@ a.btn-ghost.as-button {
 .dock-divider.short {
   height: 14px;
 }
-.dock-icon-btn {
-  min-height: 0; /* 전역 button min-height 44 무효화 */
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--space-m);
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.dock-icon-btn:hover:not(:disabled) {
-  background: var(--surface-3);
-  color: var(--text-1);
-}
-.dock-icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.dock-icon-btn.sound-toggle.on {
-  color: var(--text-1);
-}
-.dock-icon-btn.sound-toggle:not(.on) {
+.ui-icon-btn.sound-toggle:not(.on) {
   color: var(--text-3);
 }
-.dock-collapse {
+.ui-icon-btn.dock-collapse {
   width: 24px;
 }
 .dock-metro-chip {
