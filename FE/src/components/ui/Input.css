@@ -5,22 +5,22 @@
   gap: var(--space-s);
 }
 .ui-input-label {
-  color: var(--text-2);
+  color: var(--text-1);
   font-size: 14px;
 }
 .ui-input-field {
   height: 44px;
-  padding: 0 12px;
+  padding: 0 var(--space-s);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface-2);
   color: var(--text-1);
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 14px;
   transition: border-color var(--motion-fast);
 }
 .ui-input-field::placeholder {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .ui-input-field:hover:not(:disabled) {
   border-color: var(--line-strong);
