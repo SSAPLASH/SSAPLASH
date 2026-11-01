@@ -225,7 +225,7 @@ function HitStrip({ rows, tick }: { rows: readonly LogRow[]; tick: number }) {
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
     if (hits.length < 2) return;
     const series: { key: 'peak' | 'decel' | 'vel'; color: string }[] = [
-      { key: 'peak', color: cssVar(el, '--brass', '#e6b85c') },
+      { key: 'peak', color: cssVar(el, '--brand', '#e6b85c') },
       { key: 'decel', color: cssVar(el, '--miss', '#e05a5a') },
       { key: 'vel', color: cssVar(el, '--good', '#5fb8ae') },
     ];

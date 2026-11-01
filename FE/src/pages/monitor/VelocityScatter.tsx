@@ -83,8 +83,8 @@ export const VelocityScatter = memo(function VelocityScatter({
     const { ctx, w, h } = c;
     const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--right', '#ffa07c')];
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
-    const ink = cssVar(el, '--ink', '#e8ecf5');
+    const faint = cssVar(el, '--text-3', '#6e778d');
+    const ink = cssVar(el, '--text-1', '#e8ecf5');
     const plotW = w - PAD_L - PAD_R;
     const plotH = h - PAD_T - PAD_B;
     const xMax = Math.max(axisMeta.minMax, ...points.map((p) => p[axis]));
