@@ -54,8 +54,8 @@ function plot(canvas: HTMLCanvasElement | null, o: PlotOpts): void {
   if (!c || !canvas) return;
   const { ctx, w, h } = c;
   const line = cssVar(canvas, '--line', '#34405c');
-  const faint = cssVar(canvas, '--ink-faint', '#6e778d');
-  const brass = cssVar(canvas, '--brass', '#e6b85c');
+  const faint = cssVar(canvas, '--text-3', '#6e778d');
+  const brass = cssVar(canvas, '--brand', '#e6b85c');
   const miss = cssVar(canvas, '--miss', '#e05a5a');
   const n = o.tMs.length;
   const top = 8;
@@ -148,7 +148,7 @@ function plot(canvas: HTMLCanvasElement | null, o: PlotOpts): void {
     ctx.textAlign = 'start';
   }
   // 오른쪽 끝 = 추정 정지 시각(HIT timestampUs)
-  ctx.strokeStyle = cssVar(canvas, '--ink', '#e8e4da');
+  ctx.strokeStyle = cssVar(canvas, '--text-1', '#e8e4da');
   ctx.beginPath();
   ctx.moveTo(px(0) - 0.5, top);
   ctx.lineTo(px(0) - 0.5, top + ph);
