@@ -44,6 +44,10 @@ export interface PadSummary {
   miss: number;
   /** 타격이 있었던 노트의 Δ 평균(ms). 없으면 null */
   meanDeltaMs: number | null;
+  /** 패드 정확도(0~1). 판정된 노트의 점수 평균 — `accuracyOf`와 같은 기준 */
+  accuracy: number;
+  /** 평균 타격 세기(0~100). 판정된 노트에 매칭된 타격 velocity(1~127) 평균. 로그에 hits가 없으면 null */
+  meanVelocity: number | null;
 }
 
 type LogNote = PlayLog['notes'][number];
@@ -97,6 +101,11 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
     const notes = log.notes.filter((n) => n.pad === pad && n.judgement !== null);
     if (!notes.length) return [];
     const deltas = notes.flatMap((n) => (n.deltaMs === null ? [] : [n.deltaMs]));
+    // 판정된 이 패드 노트에 매칭된 타격의 세기. matchedNoteIndex는 log.notes의 배열 위치(playUpload와 같은 해석)
+    const velocities = (log.hits ?? []).flatMap((h) => {
+      const note = h.judgement && h.matchedNoteIndex !== undefined ? log.notes[h.matchedNoteIndex] : undefined;
+      return note && note.pad === pad && note.judgement !== null ? [h.velocity] : [];
+    });
     return [
       {
         pad,
@@ -105,6 +114,8 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
         good: notes.filter((n) => n.judgement === 'GOOD').length,
         miss: notes.filter((n) => n.judgement === 'MISS').length,
         meanDeltaMs: deltas.length ? mean(deltas) : null,
+        accuracy: accuracyOf(notes),
+        meanVelocity: velocities.length ? Math.round((mean(velocities) / 127) * 100) : null,
       },
     ];
   });
