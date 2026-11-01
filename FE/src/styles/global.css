@@ -1567,72 +1567,7 @@ table.plain th {
   gap: 8px;
 }
 
-/* ---- 마이페이지(/me) ---- */
-.my-profile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.my-avatar {
-  width: 56px;
-  height: 56px;
-  flex: none;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  object-fit: cover;
-}
-.my-avatar-initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  color: var(--brass);
-  font-size: 22px;
-  font-weight: 700;
-}
-.my-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.my-list-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  text-decoration: none;
-}
-a.my-list-row:hover,
-a.my-list-row:focus-visible {
-  background: var(--surface-2);
-}
-.my-list-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.my-list-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-.my-list-num {
-  flex: none;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-dim);
-}
-.my-list-note {
-  margin: 4px 2px 0;
-}
+/* ---- 곡 상태 배지(내 곡 카드·행) ---- */
 .my-badge {
   flex: none;
   padding: 2px 8px;
@@ -1648,9 +1583,6 @@ a.my-list-row:focus-visible {
 .my-badge.danger {
   border-color: var(--miss);
   color: var(--miss);
-}
-.my-danger {
-  border-color: rgba(224, 90, 90, 0.4);
 }
 
 /* ---- 준비 조건 안내 ---- */
@@ -2257,12 +2189,6 @@ a.my-list-row:focus-visible {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-}
-.my-list-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
 }
 /* 내 곡 알림 (U8) */
 .studio-toast-region {
