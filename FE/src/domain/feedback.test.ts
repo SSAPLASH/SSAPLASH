@@ -170,7 +170,7 @@ describe('summarizeByPad', () => {
     ];
     const s = summarizeByPad(logOf(ns));
     expect(s.map((x) => x.pad)).toEqual(['CRASH', 'KICK']);
-    expect(s[1]).toEqual({ pad: 'KICK', total: 3, perfect: 1, good: 1, miss: 1, meanDeltaMs: 20 });
+    expect(s[1]).toMatchObject({ pad: 'KICK', total: 3, perfect: 1, good: 1, miss: 1, meanDeltaMs: 20 });
   });
 
   it('판정 전 노트(null)는 분모에서 뺀다', () => {

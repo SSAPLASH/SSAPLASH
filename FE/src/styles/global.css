@@ -74,8 +74,7 @@ a.btn-ghost.as-button,
 }
 /* 칩·알약·카드는 눌림 이동이 없다(hover 색만) */
 .chip:active:not(:disabled),
-.dock-pill:active:not(:disabled),
-.sheet-card.clickable:active:not(:disabled) {
+.dock-pill:active:not(:disabled) {
   transform: none;
 }
 button:disabled {
@@ -960,23 +959,6 @@ a.btn-ghost.as-button {
   border-radius: 50%;
   vertical-align: middle;
 }
-table.plain {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-table.plain th,
-table.plain td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-}
-table.plain th {
-  color: var(--ink-dim);
-  font-weight: 600;
-}
-
 /* ---- 디버그 오버레이 ---- */
 .debug {
   position: fixed;
@@ -1020,52 +1002,6 @@ table.plain th {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-/* ---- 악보 연주 결과 (피드백 카드) ---- */
-.sheet-wrap {
-  position: relative;
-}
-.sheet-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-}
-.sheet-card {
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  cursor: default;
-}
-.sheet-card.clickable {
-  cursor: pointer;
-}
-.sheet-card.clickable:hover {
-  border-color: var(--brass);
-}
-/* 눌러 볼 수 있는 카드는 hover 시 떠오른다(.motion-lift와 같은 값. hover 가능한 기기만) */
-.card.clickable,
-.sheet-card.clickable {
-  transition:
-    transform var(--motion-move) var(--ease-out),
-    box-shadow var(--motion-move) var(--ease-out),
-    border-color var(--motion-fast);
-}
-@media (hover: hover) {
-  .card.clickable:hover,
-  .sheet-card.clickable:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lift);
-  }
-}
-.sheet-card .no {
-  color: var(--brass);
-  font-weight: 700;
-  font-size: 13px;
-}
-.sheet-card h3 {
-  font-size: 17px;
 }
 
 /* ---- 상단 글래스 Dock (Figma GlassDock 148:2288) ---- */
@@ -2176,19 +2112,6 @@ table.plain th {
 }
 .delete-dialog-detail {
   margin: 0;
-}
-/* 삭제된 곡 표시 (CHART-001 U7·U11): 제목은 그대로 두고 옆에 흐린 배지 */
-.deleted-song-badge {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--ink-faint);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
 }
 /* 내 곡 알림 (U8) */
 .studio-toast-region {
