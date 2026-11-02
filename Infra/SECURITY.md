@@ -46,7 +46,7 @@
 | TLS | 인증서 발급·적용(https 접속, http→https 리다이렉트, TLS 1.2·1.3) | 확인함(2026-10-27) |
 | TLS | 갱신 경로(`--dry-run`) | 확인함. 자동 갱신은 안 함(수동 갱신으로 대체, 만료 2027-01-25) |
 | TLS | 오래된 TLS 거부, SSL Labs 등급, HSTS | 미확인(HSTS 누락은 ZAP으로 확인함, 16절) |
-| 웹 보안 | ZAP 수동 분석(로그인 상태 포함): High 0건, 우리 서비스 응답 기준 보안 헤더 누락 5종 | 확인함(2026-11-02, 16절). 조치는 전 |
+| 웹 보안 | ZAP 수동 분석(로그인 상태 포함): High 0건, 우리 서비스 응답 기준 보안 헤더 누락 5종 | 확인함(2026-11-02, 16절). 헤더 조치는 설정 반영·로컬 시험함, 서버 적용 전. CSP는 Report-Only로 화면 확인 전 |
 | 접근 제어 | SSH 키 전용(확인함), root 로그인(`PermitRootLogin no` 적용, 확인함), 열린 포트(확인함) | 일부 확인함(48번 진행 중) |
 | 패치 | 자동 보안 업데이트 동작(확인함), 재부팅 필요 패치 적용(확인함), 재부팅 후 자동 복구(확인함) | 확인함 |
 
@@ -460,7 +460,7 @@ AI 채보 워커가 GPU가 필요해 EC2 밖(교내 GPU 서버)에서 돌게 되
 
 ## 16. ZAP 웹 취약점 분석 (2026-11-02)
 
-OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수동 탐색(passive)** 으로 분석했다. 직접 화면을 눌러 보며 오간 요청과 응답만 검사했고, 공격 요청을 보내는 스캔(active, fuzz)은 하지 않았다. 점검 대상은 **v2.0 배포 전의 운영 버전**이다. 점검 이후 `main`에는 v2.0이 들어갔으므로 배포 뒤에 같은 방법으로 다시 본다. 이 절의 조치는 모두 **적용 전**이다.
+OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수동 탐색(passive)** 으로 분석했다. 직접 화면을 눌러 보며 오간 요청과 응답만 검사했고, 공격 요청을 보내는 스캔(active, fuzz)은 하지 않았다. 점검 대상은 **v2.0 배포 전의 운영 버전**이다. 점검 이후 `main`에는 v2.0이 들어갔으므로 배포 뒤에 같은 방법으로 다시 본다. 아래 헤더 조치는 `Infra/nginx/default.conf`에 **설정으로 반영**했고 로컬 시험으로 확인했지만, **운영 서버에는 아직 적용하지 않았다**(배포 뒤 응답 헤더로 확인한다).
 
 **방법과 범위**
 - 본인 소셜 로그인 계정으로 로그인한 상태를 포함해 화면을 직접 사용했다. 로그인 자체는 프록시를 거치지 않는 창에서 먼저 하고, 로그인된 브라우저 프로필을 ZAP 프록시를 켜고 다시 열었다. 소셜 계정 비밀번호가 ZAP 기록에 남지 않게 하려는 것이다. 소셜 제공자 쪽 로그인 구간은 우리 소관이 아니라 범위 밖이다.
@@ -488,7 +488,16 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
 | 정보 | Modern Web Application, Retrieved from Cache(5), Session Management Response Identified(`/api/auth/refresh`) | 참고용. 세션 응답 식별은 갱신 API가 세션 쿠키를 내려 주는 것을 알려 줄 뿐이다 |
 | 정보 | Cache-control 재검토 | 공개 조회 API(`/api/v1/songs`, `/api/v1/charts/1` 등)에 캐시 지시가 없다는 알림. 공개 데이터라 우선순위 낮음. 조회 API의 캐시 정책은 BE와 정할 일이다 |
 
-**조치 계획 (적용 전, 순서)**
+**조치 (설정 반영, 서버 적용 전)**
+
+헤더 조치 1~3은 `Infra/nginx/default.conf`에 반영했다. 4는 FE 요청 대상이라 아직 요청 전이다.
+
+**로컬 시험(2026-11-02):** 앞단 Nginx 설정을 그대로 쓰고 뒤쪽을 스텁 컨테이너로 바꿔 응답 헤더를 확인했다. `web` 스텁은 `FE/nginx.conf`를, `api` 스텁은 Spring처럼 `nosniff`·`X-Frame-Options`를 보내게 했다.
+- `/`, `/api/*`, `/health`, 정적 파일에서 `Server: nginx`(버전 없음), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS(`max-age=300`)가 **각각 한 번씩** 나간다. 뒤쪽이 같은 헤더를 보내도 `proxy_hide_header`가 지워서 값이 겹치지 않는다.
+- `/models/*`는 `add_header`를 가진 location이라 상속이 끊겨 헤더를 따로 적었고, 시험에서 같은 헤더가 나가는 것을 확인했다.
+- CSP는 `Content-Security-Policy-Report-Only`로 `/`와 `/api/*` 응답에 나가고, HTML이 아닌 `/models/*`에는 붙이지 않았다. 이 시험은 **헤더가 붙는지**만 본 것이다. CSP 위반 여부(실제 화면이 정책에 걸리는지)는 브라우저에서 화면을 눌러 보며 콘솔을 봐야 하고, 아직 하지 않았다.
+
+**조치 계획 (순서)**
 1. 부작용이 거의 없는 헤더부터: `server_tokens off`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`. 한 파일(`include`)로 모아 각 location에 넣는다. **Nginx는 location에 `add_header`가 하나라도 있으면 상위(server) 블록의 `add_header`를 상속하지 않는다.** `Infra/nginx/default.conf`의 `/models/`(Cache-Control을 붙이는 location)처럼 이미 `add_header`가 있는 곳은 공통 헤더를 따로 넣어야 한다. 이 상속 규칙을 몰라서 헤더가 빠지는 실수가 흔하다.
 2. HSTS는 `max-age`를 짧게(5분~1일) 시작해 점차 늘린다. **`includeSubDomains`와 `preload`는 쓰지 않는다.** `ssafy.io`는 우리가 소유한 도메인이 아니라 같은 도메인의 다른 서비스에 영향을 줄 수 있다. 한 번 길게 건 HSTS는 브라우저에서 되돌리기 어렵다.
 3. CSP는 바로 강제하지 않고 `Content-Security-Policy-Report-Only`로 먼저 넣어 위반을 본다. 웹 오디오·ONNX 모델(WASM)·블롭·웹 시리얼을 쓰는 앱이라 정책이 거칠면 화면이 깨질 수 있다. FE와 같이 본다.
