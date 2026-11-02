@@ -9,6 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ssafy.airdrum.withdrawal.WithdrawalService;
 
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -29,7 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @SpringBootTest(
         properties = {
             "auth.jwt.secret=test-only-jwt-secret-0123456789ab",
-            "auth.refresh-token.store=memory"
+            "auth.refresh-token.store=memory",
+            "chart.worker.credentials=worker1=01234567890123456789012345678901"
         })
 @AutoConfigureMockMvc
 class AudioUploadApiTest {
@@ -109,6 +113,40 @@ class AudioUploadApiTest {
                 .andExpect(jsonPath("$.status").value("FAILED"));
         db.update("UPDATE songs SET deleted_at=now() WHERE owner_id=?", user);
         request(key, "song", bytes).andExpect(status().isNotFound());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"sample-aac.m4a, audio/mp4", "sample-opus.opus, audio/ogg"})
+    void storesDetectedMimeAndPassesItToWorker(String resource, String mime) throws Exception {
+        byte[] bytes;
+        try (var in = getClass().getResourceAsStream("/audio-formats/" + resource)) {
+            bytes = java.util.Objects.requireNonNull(in).readAllBytes();
+        }
+        try {
+            request(UUID.randomUUID().toString(), "song", bytes).andExpect(status().isAccepted());
+            assertThat(db.queryForObject("SELECT content_type FROM audio_uploads WHERE user_id=?", String.class, user)).isEqualTo(mime);
+            verify(store).put(anyString(), any(), eq((long) bytes.length), eq(mime));
+            mvc.perform(post("/internal/v1/chart-jobs/claim")
+                            .header("Authorization", "Bearer 01234567890123456789012345678901")
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content("{\"workerId\":\"worker1\",\"claimRequestId\":\"" + UUID.randomUUID() + "\"}"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.input.contentType").value(mime));
+        } finally {
+            db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE user_id=?", user);
+            db.update("DELETE FROM chart_job_attempts WHERE job_id IN (SELECT id FROM chart_jobs WHERE user_id=?)", user);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sample-vorbis.ogg", "sample-webm.webm", "sample-video.mp4", "sample-video-only.mp4"})
+    void rejectsUnsupportedRealFilesBeforeStoring(String resource) throws Exception {
+        byte[] bytes;
+        try (var in = getClass().getResourceAsStream("/audio-formats/" + resource)) {
+            bytes = java.util.Objects.requireNonNull(in).readAllBytes();
+        }
+        request(UUID.randomUUID().toString(), "song", bytes).andExpect(status().isUnprocessableEntity());
+        assertThat(db.queryForObject("SELECT count(*) FROM audio_uploads WHERE user_id=?", Integer.class, user)).isZero();
+        verify(store, never()).put(anyString(), any(), anyLong(), anyString());
     }
 
     @Test

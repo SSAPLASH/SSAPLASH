@@ -31,6 +31,30 @@ class AudioProbeTest {
     }
 
     @Test
+    void acceptsRealMpeg4AudioAndOggOpusButRejectsOtherContainersAndVideo() throws Exception {
+        var probe = new AudioProbe(System.getenv().getOrDefault("AUDIO_FFPROBE_PATH", "ffprobe"), JsonMapper.builder().build());
+        // fixture는 FFmpeg 8.1의 sine(440Hz, 1초)·color 소스로 직접 생성한 합성 음원이다.
+        for (var entry : java.util.Map.of("sample-aac.m4a", "audio/mp4", "sample-alac.m4a", "audio/mp4",
+                "sample-cover.m4a", "audio/mp4", "sample-opus.opus", "audio/ogg").entrySet()) {
+            Path file = fixture(entry.getKey(), "misleading.wav");
+            assertThat(probe.inspect(file).mime()).as(entry.getKey()).isEqualTo(entry.getValue());
+        }
+        for (String name : java.util.List.of("sample-vorbis.ogg", "sample-webm.webm", "sample-video.mp4", "sample-video-only.mp4")) {
+            Path file = fixture(name, "misleading.m4a");
+            assertThatThrownBy(() -> probe.inspect(file)).as(name)
+                    .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode()).isEqualTo(AudioErrorCode.UNSUPPORTED));
+        }
+    }
+
+    private Path fixture(String resource, String filename) throws Exception {
+        Path file = dir.resolve(filename);
+        try (var in = getClass().getResourceAsStream("/audio-formats/" + resource)) {
+            Files.copy(java.util.Objects.requireNonNull(in), file, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return file;
+    }
+
+    @Test
     void readsExactDecimalMillisecondsFromReal48KhzInputs() throws Exception {
         var probe = new AudioProbe(System.getenv().getOrDefault("AUDIO_FFPROBE_PATH", "ffprobe"), JsonMapper.builder().build());
         Path wav = dir.resolve("4.001.wav");

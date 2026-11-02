@@ -32,7 +32,7 @@ public class AudioUploadController {
 
     @Operation(
             summary = "음원 접수",
-            description = "MP3/WAV, 최대 50MiB와 10분. 같은 UUID 요청 키·내용은 기존 작업을 반환합니다.")
+            description = "MP3/WAV, MPEG-4 오디오(AAC/ALAC), Ogg Opus, 최대 50MiB와 10분. 같은 UUID 요청 키·내용은 기존 작업을 반환합니다.")
     @ApiResponse(responseCode = "202", description = "접수 또는 동일 요청 재전송")
     @ApiResponse(responseCode = "409", description = "같은 키에 다른 내용")
     @ApiResponse(responseCode = "413", description = "파일 또는 요청 크기 초과")
