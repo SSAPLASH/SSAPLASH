@@ -23,6 +23,10 @@ export interface JudgementEvent {
   pad: PadId;
   noteIndex: number;
   at: number;
+  /** 타격한 손. MISS·키보드 타격은 null (키보드는 손 구분이 자리값이라 뜻이 없다) */
+  stickId: 0 | 1 | null;
+  /** 타격 세기 0~127. MISS·키보드 타격은 null */
+  velocity: number | null;
 }
 
 export interface SessionSnapshot {
@@ -195,10 +199,10 @@ export class RhythmSession {
       return null;
     }
     const j = judgeDelta(bestDelta, this.opts.windows);
-    return this.apply(best, j, bestDelta, hit.id, hit.tResolved);
+    return this.apply(best, j, bestDelta, hit.id, hit.tResolved, hit);
   }
 
-  private apply(n: NoteState, j: Judgement, delta: number | null, hitId: number | null, at: number): JudgementEvent {
+  private apply(n: NoteState, j: Judgement, delta: number | null, hitId: number | null, at: number, hit: ResolvedHit | null): JudgementEvent {
     n.judgement = j;
     n.deltaMs = delta;
     n.hitId = hitId;
@@ -211,7 +215,17 @@ export class RhythmSession {
       this.maxCombo = Math.max(this.maxCombo, this.combo);
     }
     while (this.cursor < this.notes.length && this.notes[this.cursor].judgement !== null) this.cursor++;
-    const ev: JudgementEvent = { judgement: j, deltaMs: delta, pad: n.note.pad, noteIndex: n.index, at };
+    // 손·세기는 센서 타격만 채운다(MISS는 hit 없음, 키보드는 값이 뜻 없음)
+    const sensor = hit !== null && hit.source !== 'keyboard';
+    const ev: JudgementEvent = {
+      judgement: j,
+      deltaMs: delta,
+      pad: n.note.pad,
+      noteIndex: n.index,
+      at,
+      stickId: sensor ? hit.stickId : null,
+      velocity: sensor ? hit.velocity : null,
+    };
     this.last = ev;
     for (const l of this.judgementListeners) l(ev);
     return ev;
@@ -226,7 +240,7 @@ export class RhythmSession {
     for (let i = this.cursor; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.note.timeMs + w >= t) break;
-      if (n.judgement === null) this.apply(n, 'MISS', null, null, now);
+      if (n.judgement === null) this.apply(n, 'MISS', null, null, now, null);
     }
     if (t > this.chart.durationMs + 800) this.status = 'finished';
   }
