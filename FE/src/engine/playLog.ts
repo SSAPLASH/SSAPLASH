@@ -55,6 +55,13 @@ export interface PlayUploadState {
   updatedAt: string;
 }
 
+/** 실시간 코칭이 띄운 문구 기록. coach 모듈의 로그 항목과 모양이 같다(engine은 coach를 import하지 않는다) */
+export interface LiveCoachEvent {
+  tMs: number;
+  tag: string;
+  text: string;
+}
+
 export interface PlayLog {
   playId: string;
   songId: string;
@@ -98,6 +105,8 @@ export interface PlayLog {
   elapsedActiveMs?: number;
   /** BE 채보 전체 노트 수. notes.length와 다르면 변환에서 버린 노트가 있다 */
   sourceNoteCount?: number | null;
+  /** 실시간 코칭 기록. 이전 로그에는 없다(업로드 본문은 빈 배열) */
+  liveCoachEvents?: LiveCoachEvent[];
   upload?: PlayUploadState;
 }
 
@@ -155,6 +164,8 @@ export function buildPlayLog(args: {
   /** 카운트인 길이(ms). 경과 시간 계산용 */
   countInMs?: number;
   endedAt?: Date;
+  /** 실시간 코칭 기록. 넘기지 않으면 필드를 넣지 않는다 */
+  liveCoachEvents?: LiveCoachEvent[];
 }): PlayLog {
   const { snapshot: s } = args;
   return {
@@ -199,6 +210,7 @@ export function buildPlayLog(args: {
     lastSongTimeMs: s.songTimeMs,
     elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
     sourceNoteCount: args.chart.sourceNoteCount ?? null,
+    ...(args.liveCoachEvents ? { liveCoachEvents: args.liveCoachEvents } : {}),
   };
 }
 
