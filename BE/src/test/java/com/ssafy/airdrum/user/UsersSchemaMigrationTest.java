@@ -42,7 +42,9 @@ class UsersSchemaMigrationTest {
 				column("status", "character varying", 10, "NO", "'ACTIVE'::character varying", null),
 				column("created_at", "timestamp with time zone", null, "NO", "now()", null),
 				column("updated_at", "timestamp with time zone", null, "NO", "now()", null),
-				column("withdrawn_at", "timestamp with time zone", null, "YES", null, null));
+				column("withdrawn_at", "timestamp with time zone", null, "YES", null, null),
+				column("data_consent", "boolean", null, "YES", null, null),
+				column("data_consent_at", "timestamp with time zone", null, "YES", null, null));
 	}
 
 	@Test
@@ -59,7 +61,7 @@ class UsersSchemaMigrationTest {
 	@Test
 	void constraintsFollowNamingRule() {
 		assertThat(constraints("users")).containsExactlyInAnyOrder(
-				"p:pk_users", "c:ck_users_role", "c:ck_users_status", "c:ck_users_withdrawn_at");
+				"p:pk_users", "c:ck_users_role", "c:ck_users_status", "c:ck_users_withdrawn_at", "c:ck_users_data_consent");
 		assertThat(constraints("social_accounts")).containsExactlyInAnyOrder(
 				"p:pk_social_accounts", "f:fk_social_accounts_user_id", "u:uq_social_accounts_provider_user");
 		assertThat(jdbc.queryForList(
@@ -107,6 +109,32 @@ class UsersSchemaMigrationTest {
 		int inserted = jdbc.update(
 				"INSERT INTO users (nickname, status, withdrawn_at) VALUES ('탈퇴한 사용자', 'WITHDRAWN', now())");
 		assertThat(inserted).isEqualTo(1);
+	}
+
+	@Test
+	void newUserHasNoDataConsent() {
+		long id = insertUser("드러머");
+		var row = jdbc.queryForMap("SELECT data_consent, data_consent_at FROM users WHERE id = ?", id);
+		assertThat(row).containsEntry("data_consent", null).containsEntry("data_consent_at", null);
+	}
+
+	@Test
+	void dataConsentWithoutTimestampIsRejected() {
+		assertSqlState(() -> jdbc.update("INSERT INTO users (nickname, data_consent) VALUES ('a', true)"), "23514");
+	}
+
+	@Test
+	void dataConsentTimestampWithoutValueIsRejected() {
+		assertSqlState(() -> jdbc.update("INSERT INTO users (nickname, data_consent_at) VALUES ('a', now())"), "23514");
+	}
+
+	@Test
+	void dataConsentValueAndTimestampTogetherAreAccepted() {
+		assertThat(jdbc.update("INSERT INTO users (nickname, data_consent, data_consent_at) VALUES ('a', false, now())"))
+				.isEqualTo(1);
+		assertThat(jdbc.update("INSERT INTO users (nickname, data_consent, data_consent_at) VALUES ('b', true, now())"))
+				.isEqualTo(1);
+		assertThat(jdbc.update("INSERT INTO users (nickname) VALUES ('c')")).isEqualTo(1);
 	}
 
 	@Test

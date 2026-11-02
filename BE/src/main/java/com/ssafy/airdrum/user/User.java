@@ -18,7 +18,7 @@ import jakarta.persistence.Table;
 /**
  * 회원 ({@code users}). 스키마는 V1 마이그레이션이 정의하고 이 매핑은 그것과 맞아야 한다(Hibernate validate).
  *
- * <p>세터를 두지 않는다. 상태는 전이 메서드({@link #withdraw})로만 바꾼다.
+ * <p>세터를 두지 않는다(동의 값은 저장소의 조건부 UPDATE가 바꾼다). 상태는 전이 메서드({@link #withdraw})로만 바꾼다.
  */
 @Entity
 @Table(name = "users")
@@ -55,6 +55,12 @@ public class User {
 	private Instant updatedAt;
 
 	private Instant withdrawnAt;
+
+	/** 연주 기록 활용 동의(V24). null은 아직 답하지 않음. 저장은 {@link UserRepository#updateDataConsent}가 한다. */
+	private Boolean dataConsent;
+
+	/** 현재 동의 값을 선택한 시각. {@link #dataConsent}가 null이면 null이다. */
+	private Instant dataConsentAt;
 
 	protected User() {
 		// JPA 전용
@@ -156,6 +162,14 @@ public class User {
 
 	public Instant getWithdrawnAt() {
 		return withdrawnAt;
+	}
+
+	public Boolean getDataConsent() {
+		return dataConsent;
+	}
+
+	public Instant getDataConsentAt() {
+		return dataConsentAt;
 	}
 
 }

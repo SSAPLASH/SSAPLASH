@@ -9,6 +9,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -45,5 +46,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("select u.id from User u where u.status = com.ssafy.airdrum.user.UserStatus.WITHDRAWN "
 			+ "and u.withdrawnAt >= :withdrawnAfter order by u.withdrawnAt, u.id")
 	List<Long> findWithdrawnIds(@Param("withdrawnAfter") Instant withdrawnAfter, Pageable page);
+
+	/**
+	 * ACTIVE 회원의 데이터 활용 동의를 한 문장으로 저장한다. 탈퇴 트랜잭션({@code FOR UPDATE})과 겹쳐도 탈퇴한 행에는 쓰이지 않는다.
+	 *
+	 * <p>값이 실제로 바뀔 때만 {@code data_consent_at}·{@code updated_at}을 {@code now}로 바꾸고, 같은 값이면 그대로 둔다
+	 * (멱등). 영속성 컨텍스트는 비워 다음 조회가 DB 값을 읽게 한다.
+	 *
+	 * @return 바뀐(매칭된) 행 수. 0이면 ACTIVE가 아니거나 없는 회원이다
+	 */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query(value = """
+			UPDATE users SET
+			  data_consent_at = CASE WHEN data_consent IS DISTINCT FROM CAST(:agreed AS boolean)
+			                         THEN CAST(:now AS timestamptz) ELSE data_consent_at END,
+			  updated_at = CASE WHEN data_consent IS DISTINCT FROM CAST(:agreed AS boolean)
+			                    THEN CAST(:now AS timestamptz) ELSE updated_at END,
+			  data_consent = CAST(:agreed AS boolean)
+			WHERE id = :id AND status = 'ACTIVE'
+			""", nativeQuery = true)
+	int updateDataConsent(@Param("id") long id, @Param("agreed") boolean agreed, @Param("now") Instant now);
 
 }
