@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.play.PlayFixtures;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 import tools.jackson.databind.JsonNode;
@@ -43,7 +44,9 @@ class ReportQueryApiTest {
 
     @BeforeEach void seed() {
         user = db.queryForObject("INSERT INTO users(nickname) VALUES('리포트 본인') RETURNING id", Long.class);
+        SignupConsentFixtures.complete(db, user);
         other = db.queryForObject("INSERT INTO users(nickname) VALUES('리포트 타인') RETURNING id", Long.class);
+        SignupConsentFixtures.complete(db, other);
         token = tokens.issue(new AuthUser(user, UserRole.USER), Instant.now()).token();
         otherToken = tokens.issue(new AuthUser(other, UserRole.USER), Instant.now()).token();
         play = UUID.randomUUID();

@@ -21,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.ssafy.airdrum.chart.asset.ChartAssetStore;
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 import static org.assertj.core.api.Assertions.*;
@@ -357,7 +358,11 @@ class ChartQueryApiTest {
 			assertThat(operation.path("parameters").toString()).doesNotContain("userId");
 		}
 	}
-	private long user(String name) { return db.queryForObject("INSERT INTO users(nickname) VALUES (?) RETURNING id", Long.class, name); }
+	private long user(String name) {
+		long id = db.queryForObject("INSERT INTO users(nickname) VALUES (?) RETURNING id", Long.class, name);
+		SignupConsentFixtures.complete(db, id);
+		return id;
+	}
 	private long song(Long user, String title, String source, String status) {
 		return db.queryForObject("INSERT INTO songs(owner_id,title,source,status,bpm,time_signature,duration_ms,license) VALUES (?,?,?,?,120,'4/4',3000,?) RETURNING id",
 				Long.class, user, title, source, status, user == null ? "CC0" : null);

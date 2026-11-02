@@ -21,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.chart.asset.ChartAssetStore;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -53,6 +54,7 @@ class BuiltinPracticeChartSeedTest {
 	@BeforeEach
 	void authenticate() {
 		long user = db.queryForObject("INSERT INTO users(nickname) VALUES (?) RETURNING id", Long.class, "내장 채보 검증 회원");
+		SignupConsentFixtures.complete(db, user);
 		token = tokens.issue(new AuthUser(user, UserRole.USER), Instant.now()).token();
 	}
 
