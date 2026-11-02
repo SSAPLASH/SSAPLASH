@@ -2,6 +2,7 @@ package com.ssafy.airdrum.chart;
 
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
@@ -17,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.ssafy.airdrum.chart.asset.ChartAssetService;
 import com.ssafy.airdrum.chart.asset.ChartAssetStore;
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.song.SongAccompanimentService;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -25,6 +27,7 @@ import static org.mockito.Mockito.*;
 @SpringBootTest
 class ChartAssetRaceTest {
 	@Autowired ChartAssetService service;
+	@Autowired SongAccompanimentService accompaniment;
 	@Autowired JdbcTemplate db;
 	@Autowired PlatformTransactionManager transactions;
 	@MockitoBean ChartAssetStore store;
@@ -47,12 +50,19 @@ class ChartAssetRaceTest {
 		if (user != 0) db.update("DELETE FROM users WHERE id=?", user);
 	}
 	@Test void committedWithdrawalDuringStorageCallRejectsResponse() throws Exception {
-		race(() -> db.update("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=?", user), "UNAUTHORIZED");
+		race(() -> db.update("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=?", user), "UNAUTHORIZED", () -> service.assets(user, version));
 	}
 	@Test void committedSongDeletionDuringStorageCallRejectsResponse() throws Exception {
-		race(() -> db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song), "CHART_VERSION_NOT_FOUND");
+		race(() -> db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song), "CHART_VERSION_NOT_FOUND", () -> service.assets(user, version));
 	}
-	void race(Runnable mutation, String expectedCode) throws Exception {
+	@Test void committedDeletionDuringSongAccompanimentSigningRejectsResponse() throws Exception {
+		race(() -> db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song), "SONG_NOT_FOUND", () -> accompaniment.get(user, song));
+	}
+	@Test void committedKeyChangeDuringSongAccompanimentSigningRejectsResponse() throws Exception {
+		race(() -> db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/" + song + ".mp3", song),
+				"CHART_ASSET_UNAVAILABLE", () -> accompaniment.get(user, song));
+	}
+	void race(Runnable mutation, String expectedCode, Callable<?> action) throws Exception {
 		var signing = new CountDownLatch(1);
 		var committed = new CountDownLatch(1);
 		when(store.sign(any(), anyString())).thenAnswer(call -> {
@@ -62,7 +72,7 @@ class ChartAssetRaceTest {
 			return new ChartAssetStore.SignedAsset("https://asset.test/private", Instant.now().plusSeconds(600));
 		});
 		try (var executor = Executors.newSingleThreadExecutor()) {
-			var response = executor.submit(() -> service.assets(user, version));
+			var response = executor.submit(action);
 			try {
 				assertThat(signing.await(10, TimeUnit.SECONDS)).isTrue();
 				new TransactionTemplate(transactions).executeWithoutResult(status -> mutation.run());
