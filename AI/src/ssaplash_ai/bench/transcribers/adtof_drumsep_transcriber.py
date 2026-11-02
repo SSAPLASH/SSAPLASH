@@ -15,13 +15,18 @@ hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 
   crash 에너지에는 cymbal_crash_weight(기본 1.0)를 곱함. 크래시·라이드를 따로 내는 파인튜닝 체크포인트
   (출력에 51번이 있음, S15P31A307-164 v0.3)면 이 규칙을 안 쓰고 49 → CRASH, 51 → RIDE 그대로.
 킥·스네어·하이햇은 ADTOF 결과 그대로. 세기 없음. 채보 시간에는 ADTOF + 분리 + 규칙이 다 들어감.
+- 탐 전용 가중치(tom_checkpoint_path, S15P31A307-164 작업 11): 있으면 ADTOF를 그 가중치로 한 번 더 돌려 같은
+  분리 트랙·규칙으로 패드를 붙이고, 탐 3종은 그 결과에서, 나머지는 checkpoint_path 결과에서 가져옴. 실제 녹음으로
+  학습한 가중치가 처음 보는 드럼 세트의 킥을 탐으로 적는 것을 원래 가중치 탐으로 막으려는 것. "default"면 패키지 기본 가중치.
+- 심벌 전용 가중치(cymbal_checkpoint_path, S15P31A307-241): 같은 방식으로 크래시·라이드만 그 가중치 결과에서 가져옴.
+  크래시·라이드를 직접 나눠 내는 7클래스 가중치를 쓰면 스템 에너지 비교 규칙 대신 모델 출력으로 정해짐.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -138,6 +143,8 @@ ADTOF_TOM = 47
 ADTOF_CYMBAL = 49
 ADTOF_PEDAL = 44  # 페달 출력을 더한 파인튜닝 체크포인트(S15P31A307-164 v0.2)만 냄
 ADTOF_RIDE = 51  # 크래시·라이드를 나눈 파인튜닝 체크포인트(v0.3)만 냄. 이때 49는 크래시만
+TOM_PAD_NAMES = ("SMALL_TOM", "MID_TOM", "FLOOR_TOM")
+CYMBAL_PAD_NAMES = ("CRASH", "RIDE")
 LABEL_BY_PITCH = {ADTOF_KICK: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT", ADTOF_PEDAL: "HIHAT_PEDAL"}
 TOM_MODES = ("fixed", "relative")
 TOM_NAMINGS = ("bands", "order", "hybrid")
@@ -931,6 +938,19 @@ def assign_pads(
     return sorted(out, key=lambda h: h[0])
 
 
+def merge_pad_hits(
+    hits: Sequence[RawHit], other: Sequence[RawHit], pads: Sequence[str]
+) -> list[RawHit]:
+    """hits에서 pads를 빼고 other의 pads를 넣음. 시각순"""
+    out = [h for h in hits if h[1] not in pads] + [h for h in other if h[1] in pads]
+    return sorted(out, key=lambda h: h[0])
+
+
+def merge_tom_hits(hits: Sequence[RawHit], tom_hits: Sequence[RawHit]) -> list[RawHit]:
+    """hits에서 탐 3종을 빼고 tom_hits의 탐 3종을 넣음. 시각순"""
+    return merge_pad_hits(hits, tom_hits, TOM_PAD_NAMES)
+
+
 class AdtofDrumsepTranscriber(BaseTranscriber):
     adapter = "adtof_drumsep"
 
@@ -941,8 +961,25 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
                 f"{config.name}: adtof_drumsep 어댑터에는 drumsep_config(분리 모델 yaml)가 필요"
             )
         self._adtof = AdtofTranscriber(config, device)
+        self._tom_adtof = self._extra_adtof(config.tom_checkpoint_path, device)
+        self._cym_adtof = self._extra_adtof(config.cymbal_checkpoint_path, device)
         self._sep = None
         self.rules = rules_with_defaults(config.rules)
+
+    def _extra_adtof(self, path: str | None, device: str) -> AdtofTranscriber | None:
+        """탐·심벌 전용 ADTOF. "default"면 패키지 기본 가중치, 없으면 None"""
+        if not path:
+            return None
+        ck = None if path == "default" else path
+        return AdtofTranscriber(replace(self.config, checkpoint_path=ck, thresholds=None), device)
+
+    def _extras(self) -> list[tuple[AdtofTranscriber, tuple[str, ...]]]:
+        """(전용 ADTOF, 가져올 패드). 없는 것은 뺌"""
+        return [
+            (a, pads)
+            for a, pads in ((self._tom_adtof, TOM_PAD_NAMES), (self._cym_adtof, CYMBAL_PAD_NAMES))
+            if a is not None
+        ]
 
     def prepare(self) -> None:
         from ssaplash_ai.bench.separators import SeparatorConfig, create_separator
@@ -953,8 +990,10 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         self._sep.prepare()
 
     def _load(self) -> None:
-        self._adtof._load()
-        self._adtof.loaded = True
+        for adtof in (self._adtof, self._tom_adtof, self._cym_adtof):
+            if adtof is not None:
+                adtof._load()
+                adtof.loaded = True
         self._sep._load()
         self._sep.loaded = True
 
@@ -982,20 +1021,33 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         ]
         if missing:
             raise KeyError(f"드럼 킷 분리 출력에 스템이 없음: {missing} (있는 것: {sorted(stems)})")
-        return assign_pads(
+        hits = assign_pads(
             peaks, stems, sample_rate, self.rules, mixture=audio, activations=activations
         )
+        for adtof, pads in self._extras():
+            act = adtof.activations(audio, sample_rate)
+            other = assign_pads(
+                adtof.peaks(act), stems, sample_rate, self.rules, mixture=audio, activations=act
+            )
+            hits = merge_pad_hits(hits, other, pads)
+        return hits
 
     def _checkpoint_id(self) -> str:
         sep_ckpt = self._sep.info().checkpoint if self._sep is not None and self._sep.loaded else ""
-        return f"{self._adtof._checkpoint_id()}+{sep_ckpt}"
+        names = {id(self._tom_adtof): "tom", id(self._cym_adtof): "cymbal"}
+        extra = "".join(f"+{names[id(a)]}:{a._checkpoint_id()}" for a, _ in self._extras())
+        return f"{self._adtof._checkpoint_id()}{extra}+{sep_ckpt}"
 
     def _n_params(self) -> int | None:
         a = self._adtof._n_params()
+        for adtof, _ in self._extras():
+            a = (a or 0) + (adtof._n_params() or 0)
         b = self._sep._n_params() if self._sep is not None and self._sep.loaded else None
         return (a or 0) + (b or 0) if (a is not None or b is not None) else None
 
     def _close(self) -> None:
         self._adtof.close()
+        for adtof, _ in self._extras():
+            adtof.close()
         if self._sep is not None:
             self._sep.close()

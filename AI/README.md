@@ -194,7 +194,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 | 키 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `model_config` | `configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml` | 채보 모델 yaml |
+| `model_config` | `configs/bench/transcribers/adtof_drumsep/adtof_drumsep_realrec.yaml` | 채보 모델 yaml. 2026-11-02부터 패드별로 가중치를 골라 쓰는 조합(아래 "서비스 채보 모델" 참고). 되돌릴 때는 `adtof_drumsep.yaml` |
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
@@ -663,6 +663,8 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 #### 실제 녹음 학습 확인 실험
 
 학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
+
+서비스 채보 모델(2026-11-02 교체, `adtof_drumsep_realrec.yaml`)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 하이햇 페달은 하이햇으로 합쳐 채보 JSON은 8패드다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830. 서비스 워커는 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 뜬다.
 
 서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
 

@@ -24,9 +24,12 @@ from ssaplash_ai.bench.transcribers import (
     write_truth_csv,
 )
 from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
+    AdtofDrumsepTranscriber,
     assign_pads,
     cymbal_pad,
     estimate_f0,
+    merge_pad_hits,
+    merge_tom_hits,
     rules_with_defaults,
     tom_pad,
 )
@@ -243,6 +246,61 @@ def test_assign_pads는_ADTOF_피치를_패드_이름으로():
         (0.8, "CRASH"),
     ]
     assert seconds == 1.0
+
+
+def test_merge_pad_hits는_고른_패드만_다른_결과로_바꾼다():
+    hits = [(0.1, "KICK", None), (0.2, "CRASH", None), (0.3, "MID_TOM", None)]
+    other = [(0.1, "KICK", None), (0.2, "RIDE", None), (0.5, "CRASH", None)]
+    out = merge_pad_hits(hits, other, ("CRASH", "RIDE"))
+    assert [(t, p) for t, p, _ in out] == [
+        (0.1, "KICK"),
+        (0.2, "RIDE"),
+        (0.3, "MID_TOM"),
+        (0.5, "CRASH"),
+    ]
+
+
+def test_merge_tom_hits는_탐_3종만_탐_전용_결과로_바꾼다():
+    hits = [(0.1, "KICK", None), (0.2, "FLOOR_TOM", None), (0.3, "HIHAT_PEDAL", None)]
+    tom_hits = [(0.1, "KICK", None), (0.25, "MID_TOM", None), (0.4, "SMALL_TOM", None)]
+    assert [(t, p) for t, p, _ in merge_tom_hits(hits, tom_hits)] == [
+        (0.1, "KICK"),
+        (0.25, "MID_TOM"),
+        (0.3, "HIHAT_PEDAL"),
+        (0.4, "SMALL_TOM"),
+    ]
+
+
+def test_서비스_조합_어댑터는_탐_전용_ADTOF는_기본_가중치로_심벌_전용은_7클래스로_만든다():
+    cfg = TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep_realrec.yaml")
+    tr = AdtofDrumsepTranscriber(cfg, device="cpu")
+    assert cfg.checkpoint_path == "data/models/adtof_ft/tom_6cls_real_full/best.pth"
+    assert tr._tom_adtof is not None and tr._tom_adtof.config.checkpoint_path is None
+    assert tr._cym_adtof is not None
+    assert (
+        tr._cym_adtof.config.checkpoint_path == "data/models/adtof_ft/tom_7cls_real_full/best.pth"
+    )
+    assert [pads for _, pads in tr._extras()] == [
+        ("SMALL_TOM", "MID_TOM", "FLOOR_TOM"),
+        ("CRASH", "RIDE"),
+    ]
+    assert tr._adtof.config.checkpoint_path == cfg.checkpoint_path
+    assert cfg.labels["HIHAT_PEDAL"] == "HIHAT"  # 채보 JSON 8패드 유지
+    plain = TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep.yaml")
+    assert AdtofDrumsepTranscriber(plain, device="cpu")._tom_adtof is None
+
+
+def test_파인튜닝_가중치_상대_경로는_SSAPLASH_MODELS_DIR_기준으로_찾는다(
+    monkeypatch, tmp_path: Path
+):
+    from ssaplash_ai.bench.transcribers.adtof_transcriber import resolve_checkpoint
+
+    path = "data/models/adtof_ft/x/best.pth"
+    monkeypatch.delenv("SSAPLASH_MODELS_DIR", raising=False)
+    assert resolve_checkpoint(path) == Path(path)
+    monkeypatch.setenv("SSAPLASH_MODELS_DIR", str(tmp_path))
+    assert resolve_checkpoint(path) == tmp_path / "adtof_ft" / "x" / "best.pth"
+    assert resolve_checkpoint("other/best.pth") == Path("other/best.pth")
 
 
 def test_cluster_pitches는_큰_틈에서_자르고_작은_묶음은_합친다():
