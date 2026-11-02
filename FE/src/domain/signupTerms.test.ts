@@ -4,6 +4,7 @@ import {
   allAgreed,
   allRequiredAgreed,
   currentConsentVersions,
+  dataConsentVersion,
   toggleAll,
   toggleOne,
   type SignupTerm,
@@ -35,6 +36,17 @@ describe('currentConsentVersions', () => {
 
   it('항목이 빠지면 빈 문자열', () => {
     expect(currentConsentVersions([SIGNUP_TERMS[0]])).toEqual({ termsVersion: SIGNUP_TERMS[0].version, privacyVersion: '', dataConsentVersion: '' });
+  });
+});
+
+describe('dataConsentVersion', () => {
+  it('연주 기록 활용 항목의 판이며 묶음의 dataConsentVersion과 같다', () => {
+    expect(dataConsentVersion()).toBe(SIGNUP_TERMS[2].version);
+    expect(dataConsentVersion()).toBe(currentConsentVersions().dataConsentVersion);
+  });
+
+  it('항목이 없으면 빈 문자열', () => {
+    expect(dataConsentVersion([])).toBe('');
   });
 });
 
