@@ -150,6 +150,18 @@ describe('buildUploadBody', () => {
     expect(body(l).hits.map((h) => h.seq)).toEqual([0, 1, 2, 3]);
   });
 
+  it('liveCoachEvents: 켠 플레이는 항목을 그대로, 끈 플레이는 LIVE_OFF 한 건, 이전 로그는 빈 배열', () => {
+    const on = [
+      { tMs: 12000, tag: 'LIVE_LATE', text: '계속 늦게 치고 있어요' },
+      { tMs: 31000, tag: 'LIVE_RECOVERED', text: '경향 해소: late' },
+    ];
+    expect(body(log({ liveCoachEvents: on })).liveCoachEvents).toEqual(on);
+    const off = [{ tMs: 0, tag: 'LIVE_OFF', text: '코칭 꺼짐' }];
+    expect(body(log({ liveCoachEvents: off })).liveCoachEvents).toEqual(off);
+    expect(log().liveCoachEvents).toBeUndefined();
+    expect(body(log()).liveCoachEvents).toEqual([]);
+  });
+
   it('업로드하지 않는 경우와 사유', () => {
     const reason = (l: PlayLog) => {
       const r = buildUploadBody(l, ctx);

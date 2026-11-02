@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { STICK_PADS } from '@/domain/pads';
 import { liveThresholds } from './config';
 import { evaluateRules, type RuleEvaluation } from './rules';
 import type { HandStat, WindowMetrics } from './window';
@@ -126,6 +127,24 @@ describe('LIVE_PAD_LATE / LIVE_PAD_EARLY', () => {
     expect(find(r, 'LIVE_PAD_LATE:SNARE').release).toBe(true);
     const still = evaluateRules(metrics({ meanDelta: 5, pads: [{ pad: 'SNARE', count: 5, meanDelta: 30, sameSignRatio: 1 }] }), th);
     expect(find(still, 'LIVE_PAD_LATE:SNARE').release).toBe(false);
+  });
+});
+
+describe('target과 페달 제외', () => {
+  it('패드 규칙에 킥·하이햇 페달 항목이 없고 스틱 패드마다 늦음·빠름 두 항목이 있다', () => {
+    const r = evaluateRules(metrics(), th);
+    expect(r.some((e) => e.key.includes('KICK') || e.key.includes('HIHAT_PEDAL'))).toBe(false);
+    expect(r.filter((e) => e.tag === 'LIVE_PAD_LATE')).toHaveLength(STICK_PADS.length);
+    expect(r.filter((e) => e.tag === 'LIVE_PAD_EARLY')).toHaveLength(STICK_PADS.length);
+  });
+
+  it('패드·손 규칙만 target을 채우고 나머지는 null이다', () => {
+    const r = evaluateRules(metrics(), th);
+    expect(find(r, 'LIVE_PAD_LATE:SNARE').target).toEqual({ kind: 'pad', pad: 'SNARE' });
+    expect(find(r, 'LIVE_PAD_EARLY:RIDE').target).toEqual({ kind: 'pad', pad: 'RIDE' });
+    expect(find(r, 'LIVE_HAND_WEAK:0').target).toEqual({ kind: 'hand', hand: 0 });
+    expect(find(r, 'LIVE_HAND_WEAK:1').target).toEqual({ kind: 'hand', hand: 1 });
+    for (const key of ['LIVE_MISS_STREAK', 'LIVE_LATE', 'LIVE_EARLY', 'LIVE_UNSTEADY']) expect(find(r, key).target).toBeNull();
   });
 });
 
