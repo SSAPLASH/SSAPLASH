@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -195,6 +197,71 @@ class ChartQueryApiTest {
 		assertThat(charts.get(1).path("difficulty").asString()).isEqualTo("NORMAL");
 		assertThat(charts.get(2).path("difficulty").asString()).isEqualTo("HARD");
 	}
+	@Test void songAccompanimentSignsPublicAndOwnWithoutRequiringChartAndRenews() throws Exception {
+		String publicKey = "accompaniment/" + builtin + ".wav", ownKey = "accompaniment/" + ownSong + ".wav";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", publicKey, builtin);
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", ownKey, ownSong);
+		Instant expires = Instant.now().plusSeconds(600);
+		when(store.sign(eq(ChartAssetStore.Kind.ACCOMPANIMENT), anyString()))
+				.thenReturn(new ChartAssetStore.SignedAsset("https://asset.test/audio", expires));
+		var publicResult = ok("/api/v1/songs/" + builtin + "/accompaniment");
+		assertThat(publicResult.path("accompanimentUrl").asString()).isEqualTo("https://asset.test/audio");
+		assertThat(publicResult.path("expiresAt").asString()).isEqualTo(expires.toString());
+		assertThat(publicResult.toString()).doesNotContain(publicKey, "ownerId");
+		ok("/api/v1/songs/" + ownSong + "/accompaniment");
+		ok("/api/v1/songs/" + ownSong + "/accompaniment");
+		verify(store).sign(ChartAssetStore.Kind.ACCOMPANIMENT, publicKey);
+		verify(store, times(2)).sign(ChartAssetStore.Kind.ACCOMPANIMENT, ownKey);
+	}
+	@Test void songAccompanimentNullAccessAndReadyRules() throws Exception {
+		var path = "/api/v1/songs/" + ownSong + "/accompaniment";
+		var absent = ok(path);
+		assertThat(absent.has("accompanimentUrl") && absent.path("accompanimentUrl").isNull()).isTrue();
+		assertThat(absent.has("expiresAt") && absent.path("expiresAt").isNull()).isTrue();
+		verifyNoInteractions(store);
+		problem("/api/v1/songs/" + hiddenSong + "/accompaniment", 404, "SONG_NOT_FOUND");
+		problem("/api/v1/songs/9223372036854775807/accompaniment", 404, "SONG_NOT_FOUND");
+		unauthenticated(MockMvcRequestBuilders.get(path));
+		problem("/api/v1/songs/0/accompaniment", 400, "VALIDATION_FAILED");
+		db.update("UPDATE songs SET status='PROCESSING' WHERE id=?", ownSong);
+		problem(path, 409, "SONG_NOT_READY");
+		db.update("UPDATE songs SET published=false WHERE id=?", builtin);
+		problem("/api/v1/songs/" + builtin + "/accompaniment", 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=now() WHERE id=?", ownSong);
+		problem(path, 404, "SONG_NOT_FOUND");
+		verifyNoInteractions(store);
+	}
+	@Test void songAccompanimentRejectsBadKeysAndPropagatesStorageFailures() throws Exception {
+		String path = "/api/v1/songs/" + ownSong + "/accompaniment";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/999999.wav", ownSong);
+		problem(path, 500, "INTERNAL_ERROR");
+		verifyNoInteractions(store);
+		String key = "accompaniment/" + ownSong + ".wav";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", key, ownSong);
+		when(store.sign(ChartAssetStore.Kind.ACCOMPANIMENT, key)).thenThrow(new BusinessException(ChartErrorCode.CHART_ASSET_NOT_FOUND));
+		problem(path, 404, "CHART_ASSET_NOT_FOUND");
+		doThrow(new BusinessException(ChartErrorCode.CHART_ASSET_UNAVAILABLE)).when(store).sign(ChartAssetStore.Kind.ACCOMPANIMENT, key);
+		problem(path, 503, "CHART_ASSET_UNAVAILABLE");
+	}
+	@ParameterizedTest @ValueSource(strings={"withdrawal", "deleted", "unpublished", "statusChanged", "keyChanged"})
+	void songAccompanimentRechecksAccessAndKeyAfterSigning(String change) throws Exception {
+		long songId = change.equals("unpublished") ? builtin : ownSong;
+		String key = "accompaniment/" + songId + ".wav";
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", key, songId);
+		when(store.sign(ChartAssetStore.Kind.ACCOMPANIMENT, key)).thenAnswer(call -> {
+			switch (change) {
+				case "withdrawal" -> db.update("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=?", owner);
+				case "deleted" -> db.update("UPDATE songs SET deleted_at=now() WHERE id=?", songId);
+				case "unpublished" -> db.update("UPDATE songs SET published=false WHERE id=?", songId);
+				case "statusChanged" -> db.update("UPDATE songs SET status='FAILED' WHERE id=?", songId);
+				case "keyChanged" -> db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/" + songId + ".mp3", songId);
+			}
+			return new ChartAssetStore.SignedAsset("https://asset.test/secret", Instant.now().plusSeconds(600));
+		});
+		int status = change.equals("withdrawal") ? 401 : change.equals("statusChanged") ? 409 : change.equals("keyChanged") ? 503 : 404;
+		String code = change.equals("withdrawal") ? "UNAUTHORIZED" : change.equals("statusChanged") ? "SONG_NOT_READY" : change.equals("keyChanged") ? "CHART_ASSET_UNAVAILABLE" : "SONG_NOT_FOUND";
+		assertThat(problem("/api/v1/songs/" + songId + "/accompaniment", status, code).toString()).doesNotContain("https://asset.test");
+	}
 	@Test void absentAssetsAreExplicitNullAndDoNotCallStorage() throws Exception {
 		db.update("UPDATE chart_versions SET notation_status='READY' WHERE id=?", version);
 		var assets = ok("/api/v1/chart-versions/" + version + "/assets");
@@ -280,9 +347,9 @@ class ChartQueryApiTest {
 		});
 		problem("/api/v1/chart-versions/" + version + "/assets", 404, "CHART_VERSION_NOT_FOUND");
 	}
-	@Test void openApiDocumentsAllFivePathsSecurityAndNoIdentityParameter() throws Exception {
+	@Test void openApiDocumentsQueryPathsSecurityAndNoIdentityParameter() throws Exception {
 		var api = body(mvc.perform(get("/v3/api-docs")).andReturn());
-		for (String path : List.of("/api/v1/songs", "/api/v1/songs/{songId}", "/api/v1/charts/{chartId}",
+		for (String path : List.of("/api/v1/songs", "/api/v1/songs/{songId}", "/api/v1/songs/{songId}/accompaniment", "/api/v1/charts/{chartId}",
 				"/api/v1/chart-versions/{chartVersionId}", "/api/v1/chart-versions/{chartVersionId}/assets")) {
 			var operation = api.path("paths").path(path).path("get");
 			assertThat(operation.path("security").get(0).has("bearerAuth")).isTrue();

@@ -35,8 +35,11 @@ public interface SongRepository extends Repository<Song, Long> {
 	long count(@Param("userId") long userId, @Param("scope") String scope, @Param("pattern") String pattern);
 	@Query(value = COLUMNS + " WHERE s.id = :id AND " + VISIBLE, nativeQuery = true)
 	Optional<View> visible(@Param("id") long id, @Param("userId") long userId);
+	@Query(value = "SELECT s.source, s.status, s.accompaniment_key AS \"accompanimentKey\" FROM songs s WHERE s.id = :id AND " + VISIBLE, nativeQuery = true)
+	Optional<AccompanimentView> visibleAccompaniment(@Param("id") long id, @Param("userId") long userId);
 	@Query(value = "SELECT EXISTS(SELECT 1 FROM users WHERE id = :id AND status = 'ACTIVE')", nativeQuery = true)
 	boolean isActive(@Param("id") long id);
+	interface AccompanimentView { String getSource(); String getStatus(); String getAccompanimentKey(); }
 
 	interface View {
 		Long getId(); String getTitle(); String getArtist(); String getSource(); String getStatus();
