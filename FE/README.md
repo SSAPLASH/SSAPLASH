@@ -53,6 +53,7 @@ src/
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
 │   ├─ dataConsent.ts     플레이 시작 시점 동의 읽기(서버 dataConsent 기준)
+│   ├─ signupGate.ts      403 SIGNUP_INCOMPLETE 알림 → /me 재조회 연결(bindSignupIncomplete)
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
 │   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
@@ -68,7 +69,7 @@ src/
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
 │   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -86,7 +87,7 @@ src/
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
 └─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
@@ -362,10 +363,15 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
-- **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
+- **보호 라우트:** `/login`·`/auth/callback`·`/signup`을 뺀 모든 화면은 `RequireAuth` 아래다. 로그인했어도 `domain/signupGate.needsSignup`이 true인 회원은 `/signup`으로 보낸다(원래 경로는 `state.from`). `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
 - **화면:** `/login`·`/signup`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 Figma 로그인 카드대로 로고 + 「Google로 계속하기」·「SSAFY로 계속하기」(둘 다 `ui/Button` secondary, 카드 폭)이며 가입·로그인 버튼을 나누지 않는다. `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다. 게스트·둘러보기 진입은 없다.
-- **가입 동의(`/signup`, 1단계 화면만):** 신규 회원이 첫 소셜 인증 뒤 거치는 화면(Figma 440:20166). 로그인과 같은 2분할에 `components/auth/SignupConsentCard` — 「모두 동의합니다」 + 서비스 이용약관·개인정보 수집·이용·연주 기록 활용 세 항목(각 체크박스·[필수]·96 높이 스크롤 상자). 문구·판 문자열은 `domain/signupTerms.ts` 한 곳에 있고 이용약관·개인정보는 시안 문구다. 「모두 동의」는 세 항목이 전부 켜졌는지의 파생값이고, 필수 항목을 다 켜기 전에는 [동의하고 시작하기]가 비활성이다. 지금은 누르면 자유 연습으로만 간다 — 콜백 뒤 신규 회원 분기(`GET /api/users/me`의 `signupCompleted`), 동의 저장 `POST /api/users/me/signup-consent`, 403 `SIGNUP_INCOMPLETE`, 약관 판 비교 재동의는 BE 회신(`ACCT-001_가입-동의-단계`) 뒤 2단계에서 붙인다. 연주 기록 활용은 **필수** 동의로 확정됐다(ACCT-001 회신 2). 철회는 탈퇴로만 한다.
+- **가입 동의(`/signup`):** 첫 소셜 인증 뒤(그리고 약관 개정 뒤) 거치는 화면(Figma 440:20166). 로그인과 같은 2분할에 `components/auth/SignupConsentCard` — 「모두 동의합니다」 + 서비스 이용약관·개인정보 수집·연주 기록 활용 세 항목(각 체크박스·[필수]·96 높이 스크롤 상자). 문구·판 문자열은 `domain/signupTerms.ts` 한 곳(이용약관·개인정보는 시안 문구)이고, 「모두 동의」는 세 항목이 전부 켜졌는지의 파생값이며, 필수 항목을 다 켜기 전에는 [동의하고 시작하기]가 비활성이다. 연주 기록 활용은 **필수** 동의로 확정됐고(ACCT-001 회신 2) 철회는 탈퇴로만 한다.
+  - **분기:** 콜백(`AuthCallbackPage`) 뒤 `/me`의 `signupCompleted`·`consents`·`dataConsent`를 `domain/signupGate.needsSignup`으로 판단해 `/signup` 또는 원래 목적지로 보낸다. 보호 라우트(`RequireAuth`)도 같은 판단으로 `/signup`에 보낸다(`signupGateDecision`). `/signup`은 비로그인이면 `/login`, 가입이 끝난 회원이면 원래 목적지(`state.from`, 없으면 `/`). 기존 회원도 배포 뒤 첫 로그인에 동의 화면을 본다. 약관 개정은 `signupTerms`의 판 상수만 올리면 재동의가 뜬다.
+  - **제출:** `POST /api/users/me/signup-consent { termsVersion, privacyVersion, dataConsent: { agreed: true, version } }` → 응답(`/me` 본문)으로 `authStore.user`를 바꾸고 원래 목적지로 간다. 실패하면 카드 안(버튼 위) 오류 문구 — `ApiError.detail`, 네트워크면 「서버에 연결할 수 없습니다…」, 그 밖은 기본 문구 — 를 보이고 다시 시도할 수 있다.
+  - **403 `SIGNUP_INCOMPLETE`:** 동의 전 회원이 다른 API를 부르면 `api/http`가 알리고(`subscribeSignupIncomplete`), `app/signupGate`가 `authStore.refreshMe`로 `/me`를 한 번 다시 읽어 `signupCompleted=false`가 되면 `RequireAuth`가 `/signup`으로 보낸다. 이미 가입이 필요한 상태면 무시하고 `/me`가 실패해도 한 번으로 끝난다.
+  - **전환기 규칙:** `/me`에 `signupCompleted` 필드가 없으면(BE 가입 동의 단계 미병합) 가입 완료로 보고 아무것도 검사하지 않는다. 필드가 있고 false일 때만 막는다.
+  - `VITE_AUTH_REQUIRED=false`면 세 곳(콜백·보호 라우트·`/signup`) 모두 검사하지 않고, 제출하면 `/`로만 간다. 가입 취소 버튼은 없다 — 동의 없이 떠난 계정은 BE가 7일 뒤 삭제한다.
 - **연주 기록 활용 동의(ACCT-002·ACCT-001 회신 2):** 가입 때 **필수** 동의로 확정됐고 철회는 회원 탈퇴로만 한다. 설정 화면에 토글이 없고 FE는 `PUT /api/users/me/data-consent`를 부르지 않는다. 동의의 진실은 `GET /api/users/me`의 `dataConsent { agreed, version, updatedAt }`(답한 적 없으면 셋 다 null)이고, 플레이 시작(`begin`·`restart`·악보 `resetRun`)에서 `app/dataConsent.readCurrentConsent()`가 `agreed === true && version === domain/signupTerms.dataConsentVersion()`을 읽어 `PlayLog.consent`에 저장하며 업로드 `consent`가 그 값이다(비로그인·null·판 불일치·필드 없는 옛 로그는 false). 동의 저장과 판이 바뀐 회원의 재동의는 가입 동의 화면(2단계-B, `POST /api/users/me/signup-consent`)이 맡는다. 연주 기록 활용 본문의 「동의 철회는 회원 탈퇴로 할 수 있어요.」는 배포 전에 넣어 판은 그대로다.
 - **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·설정·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다(`ui/Menu`, Esc면 아바타로 초점을 돌려준다).
 
