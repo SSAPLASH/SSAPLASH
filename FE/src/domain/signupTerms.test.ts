@@ -95,3 +95,11 @@ describe('toggleOne', () => {
     expect(ids(base)).toEqual(['terms']);
   });
 });
+
+describe('연주 기록 활용 본문', () => {
+  it('필수 항목이며 철회는 탈퇴로만 한다는 줄이 있다', () => {
+    const t = SIGNUP_TERMS[2];
+    expect(t.required).toBe(true);
+    expect(t.body).toContain('동의 철회는 회원 탈퇴로 할 수 있어요.');
+  });
+});

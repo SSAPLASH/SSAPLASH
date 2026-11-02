@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DataConsent } from './auth';
-import { isConsentCurrent, legacyConsentAction, logConsent } from './dataConsent';
+import { isConsentCurrent, logConsent } from './dataConsent';
 import { dataConsentVersion } from './signupTerms';
 
 const dc = (agreed: boolean | null, version: string | null): DataConsent => ({
@@ -31,25 +31,6 @@ describe('isConsentCurrent', () => {
   it('비교할 판을 직접 줄 수 있다', () => {
     expect(isConsentCurrent(dc(true, 'v9'), 'v9')).toBe(true);
     expect(isConsentCurrent(dc(true, 'v9'), 'v8')).toBe(false);
-  });
-});
-
-describe('legacyConsentAction', () => {
-  it('브라우저 값이 false면 서버 값과 상관없이 none', () => {
-    expect(legacyConsentAction(undefined, false)).toBe('none');
-    expect(legacyConsentAction(dc(null, null), false)).toBe('none');
-    expect(legacyConsentAction(dc(true, 'v'), false)).toBe('none');
-  });
-
-  it('브라우저 true + 서버가 없거나 답한 적 없으면 upload', () => {
-    expect(legacyConsentAction(undefined, true)).toBe('upload');
-    expect(legacyConsentAction(null, true)).toBe('upload');
-    expect(legacyConsentAction(dc(null, null), true)).toBe('upload');
-  });
-
-  it('브라우저 true + 서버에 값이 있으면 덮지 않고 clear', () => {
-    expect(legacyConsentAction(dc(true, dataConsentVersion()), true)).toBe('clear');
-    expect(legacyConsentAction(dc(false, dataConsentVersion()), true)).toBe('clear');
   });
 });
 
