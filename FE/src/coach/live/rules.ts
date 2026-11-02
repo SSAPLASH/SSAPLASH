@@ -1,6 +1,6 @@
 // 실시간 코칭 규칙 5종. 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 한다.
 // 실제로 띄울지(간격·쿨다운·상한)는 policy가 정한다. 상태를 갖지 않는 순수 함수다.
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import type { WindowMetrics } from './window';
 
@@ -12,6 +12,9 @@ export type LiveTag =
   | 'LIVE_PAD_EARLY'
   | 'LIVE_HAND_WEAK'
   | 'LIVE_UNSTEADY';
+
+/** 문구의 대상. 패드 규칙은 패드, 손 규칙은 손(0 왼손·1 오른손), 그 외는 null */
+export type CoachTarget = { kind: 'pad'; pad: PadId } | { kind: 'hand'; hand: 0 | 1 };
 
 export interface RuleEvaluation {
   /** 상태를 구분하는 키. 패드·손 규칙은 대상까지 포함한다(예: LIVE_PAD_LATE:SNARE) */
@@ -28,11 +31,12 @@ export interface RuleEvaluation {
   severity: number;
   /** 한국어 완성 문장, FE가 그대로 표시 */
   text: string;
+  /** 패드·손 규칙만 채운다. 화면 문구가 "{패드}만 늦어요"를 만들 때 쓴다 */
+  target: CoachTarget | null;
 }
 
 const PRIORITY = { miss: 0, trend: 1, pad: 2, hand: 3, unsteady: 4 } as const;
 const HAND_NAME = ['왼', '오른'] as const;
-const ALL_PADS = Object.keys(PAD_META) as PadId[];
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
@@ -50,6 +54,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     release: m.missInRelease <= c.miss.releaseMax,
     severity: clamp01(missRate / 0.6),
     text: '놓치고 있어요. 박자에 맞춰 천천히 다시 따라와 보세요.',
+    target: null,
   });
 
   // 계속 늦음·빠름. 거두는 조건은 부호를 본다(방향이 뒤집힌 뒤 같은 방향이 다시 오면 새로 띄울 수 있게)
@@ -65,6 +70,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     release: mean !== null && mean <= th.trendReleaseMs,
     severity: trendSeverity,
     text: '계속 조금 늦어요. 살짝 앞서서 쳐 보세요.',
+    target: null,
   });
   out.push({
     key: 'LIVE_EARLY',
@@ -74,13 +80,15 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     release: mean !== null && mean >= -th.trendReleaseMs,
     severity: trendSeverity,
     text: '계속 조금 빨라요. 박을 더 기다려 보세요.',
+    target: null,
   });
 
   // 특정 패드만 늦음·빠름. "나머지 패드의 평균"과 비교한다. 창 전체 평균과 비교하면 그 패드 자신이
   // 평균을 끌어당겨 차이가 희석된다(노트의 절반이 그 패드면 차이가 절반으로 줄어든다).
   // 나머지 표본이 모자라면 비교하지 않는다(창 대부분이 그 패드면 전체 늦음·빠름 규칙이 맡는다).
   // 그 패드가 실제로 그 방향이어야 한다(나머지가 빠른데 정시인 패드를 "늦다"고 하지 않기 위해).
-  for (const pad of ALL_PADS) {
+  // 페달(킥·하이햇 페달)은 입력 기준이 정해지기 전이라 평가하지 않는다(STICK_PADS만)
+  for (const pad of STICK_PADS) {
     const s = m.pads.find((p) => p.pad === pad);
     const othersCount = s ? m.validCount - s.count : 0;
     const othersMean =
@@ -97,6 +105,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
       release,
       severity,
       text: `${label}에서 유독 늦어요.`,
+      target: { kind: 'pad', pad },
     });
     out.push({
       key: `LIVE_PAD_EARLY:${pad}`,
@@ -106,6 +115,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
       release,
       severity,
       text: `${label}에서 유독 빨라요.`,
+      target: { kind: 'pad', pad },
     });
   }
 
@@ -124,6 +134,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
       release: ratio !== null && ratio >= c.hand.releaseRatio,
       severity: ratio === null ? 0 : clamp01((1 - ratio) / 0.5),
       text: `${HAND_NAME[hand]}손이 약해요. 양손 세기를 맞춰 보세요.`,
+      target: { kind: 'hand', hand },
     });
   }
 
@@ -137,6 +148,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     release: std !== null && std < th.unsteadyReleaseMs,
     severity: std === null ? 0 : clamp01(std / (0.8 * th.goodMs)),
     text: '박자가 들쭉날쭉해요. 일정한 속도를 유지해 보세요.',
+    target: null,
   });
 
   return out;
