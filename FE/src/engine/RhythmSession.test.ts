@@ -270,6 +270,36 @@ describe('일시정지 (중단 확인 팝업)', () => {
   });
 });
 
+describe('판정 이벤트의 손·세기', () => {
+  it('센서 타격 판정에는 타격한 손과 세기가 실린다', () => {
+    const s = playing();
+    const ev = s.handleHit({ ...hit('HIHAT', T0 + 1000), source: 'ble', stickId: 1, velocity: 87 });
+    expect(ev?.stickId).toBe(1);
+    expect(ev?.velocity).toBe(87);
+    expect(s.snapshot(T0 + 1000).last).toMatchObject({ stickId: 1, velocity: 87 });
+  });
+
+  it('키보드 타격 판정은 손·세기가 null이다', () => {
+    const ev = playing().handleHit(hit('HIHAT', T0 + 1000));
+    expect(ev?.judgement).toBe('PERFECT');
+    expect(ev?.stickId).toBeNull();
+    expect(ev?.velocity).toBeNull();
+  });
+
+  it('MISS 판정은 손·세기가 null이고 리스너에도 그대로 간다', () => {
+    const s = playing();
+    const got: Array<[number | null, number | null]> = [];
+    s.onJudgement((e) => {
+      if (e.judgement === 'MISS') got.push([e.stickId, e.velocity]);
+    });
+    s.tick(T0 + 1100); // 1000ms 노트 둘이 창(60ms)을 지났다
+    expect(got).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+  });
+});
+
 describe('reset', () => {
   it('판정·점수·시계를 비우고 idle로 돌아간다', () => {
     const s = playing();
