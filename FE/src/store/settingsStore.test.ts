@@ -276,7 +276,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(13);
+    expect(SETTINGS_VERSION).toBe(14);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -289,31 +289,36 @@ describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
 describe('migrateSettings v11 → v12 (셸 설정)', () => {
   const run = (p: Record<string, unknown>) => migrateSettings(p, 11) as unknown as Record<string, unknown>;
 
-  it('새 키 4개를 기본값으로 채운다', () => {
+  it('새 키 3개를 기본값으로 채운다', () => {
     const out = run({});
     expect(out.sidebarCollapsed).toBe(false);
     expect(out.dockCollapsed).toBe(false);
     expect(out.liveCoach).toBe(true);
-    expect(out.statsConsent).toBe(false);
   });
 
   it('이미 있는 boolean 값은 보존한다', () => {
-    const out = run({ sidebarCollapsed: true, dockCollapsed: true, liveCoach: false, statsConsent: true });
+    const out = run({ sidebarCollapsed: true, dockCollapsed: true, liveCoach: false });
     expect(out.sidebarCollapsed).toBe(true);
     expect(out.dockCollapsed).toBe(true);
     expect(out.liveCoach).toBe(false);
-    expect(out.statsConsent).toBe(true);
   });
 
   it('boolean이 아닌 저장값은 기본값으로 되돌린다', () => {
-    const out = run({ liveCoach: 'no', statsConsent: 1 });
+    const out = run({ liveCoach: 'no' });
     expect(out.liveCoach).toBe(true);
-    expect(out.statsConsent).toBe(false);
   });
 
   it('다른 기존 키는 유지한다', () => {
     const out = run({ sheetPadCount: false, volume: 0.3 });
     expect(out.sheetPadCount).toBe(false);
     expect(out.volume).toBe(0.3);
+  });
+});
+
+describe('migrateSettings v13 → v14 (statsConsent 삭제)', () => {
+  it('저장돼 있던 statsConsent를 버린다', () => {
+    const out = migrateSettings({ statsConsent: true, liveCoach: false }, 13) as unknown as Record<string, unknown>;
+    expect('statsConsent' in out).toBe(false);
+    expect(out.liveCoach).toBe(false);
   });
 });
