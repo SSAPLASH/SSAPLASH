@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
@@ -27,6 +28,9 @@ class UserWithdrawalPersistenceTest {
 
 	@Autowired
 	private EntityManager em;
+
+	@Autowired
+	private JdbcTemplate jdbc;
 
 	@Test
 	void withdrawRecordsStatusAndTimeWithinCheckConstraint() {
@@ -55,6 +59,38 @@ class UserWithdrawalPersistenceTest {
 		assertThat(found.getEmail()).isNull();
 		assertThat(found.getProfileImageUrl()).isNull();
 		assertThat(found.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+	}
+
+	/** 가입 동의 설계 4-5(U1): 탈퇴하면 동의 컬럼 7개를 같은 UPDATE로 비우고, 그 행은 CHECK를 통과한다. */
+	@Test
+	void withdrawClearsAllConsentColumns() {
+		var user = users.save(User.create("드러머", null, null));
+		em.flush();
+		jdbc.update("""
+				UPDATE users SET terms_version = 't1', terms_agreed_at = now(), privacy_version = 'p1',
+				  privacy_agreed_at = now(), data_consent = true, data_consent_at = now(), data_consent_version = 'd1'
+				WHERE id = ?
+				""", user.getId());
+		em.clear();
+		var consented = users.findById(user.getId()).orElseThrow();
+		assertThat(consented.isSignupCompleted()).isTrue();
+
+		consented.withdraw(NOW);
+		em.flush();
+		em.clear();
+
+		var row = jdbc.queryForMap("""
+				SELECT terms_version, terms_agreed_at, privacy_version, privacy_agreed_at,
+				  data_consent, data_consent_at, data_consent_version
+				FROM users WHERE id = ?
+				""", user.getId());
+		assertThat(row).hasSize(7);
+		assertThat(row.values()).containsOnlyNulls();
+		var found = users.findById(user.getId()).orElseThrow();
+		assertThat(found.isSignupCompleted()).isFalse();
+		assertThat(found.getTermsVersion()).isNull();
+		assertThat(found.getPrivacyAgreedAt()).isNull();
+		assertThat(found.getDataConsentVersion()).isNull();
 	}
 
 	@Test
