@@ -93,6 +93,19 @@ describe('startPlaySync', () => {
     expect(fn.mock.calls.some(([u]) => String(u).includes(`/plays/${ID}/report/notes`))).toBe(true);
   });
 
+  it('업로드 본문의 consent는 로그에 저장된 시작 시점 값을 따른다', async () => {
+    stubStorage([log({ consent: true })]);
+    let fn = mockFetch(() => json(201, { playId: ID, rawLogStatus: 'PENDING' }));
+    await startPlaySync(ID);
+    expect(JSON.parse(String(uploadCalls(fn)[0][1]?.body)).consent).toBe(true);
+
+    resetPlaySyncForTest();
+    stubStorage([log()]);
+    fn = mockFetch(() => json(201, { playId: ID, rawLogStatus: 'PENDING' }));
+    await startPlaySync(ID);
+    expect(JSON.parse(String(uploadCalls(fn)[0][1]?.body)).consent).toBe(false);
+  });
+
   it('네트워크 실패는 재시도 가능, 재전송은 처음 본문 그대로', async () => {
     stubStorage([log()]);
     const fn = mockFetch(

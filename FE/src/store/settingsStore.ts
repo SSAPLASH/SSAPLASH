@@ -51,8 +51,6 @@ interface SettingsState {
   dockCollapsed: boolean;
   /** 실시간 코칭 사용(COACH-001) */
   liveCoach: boolean;
-  /** 연주 기록 활용 동의. 저장만 하고 업로드에는 아직 싣지 않는다 */
-  statsConsent: boolean;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -84,13 +82,12 @@ interface SettingsState {
   setSidebarCollapsed: (v: boolean) => void;
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
-  setStatsConsent: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 13;
+export const SETTINGS_VERSION = 14;
 
 /**
  * 저장된 설정 이행.
@@ -106,6 +103,7 @@ export const SETTINGS_VERSION = 13;
  * v10 → v11: sheetPadCount(기본 true) 추가.
  * v11 → v12: sidebarCollapsed(false)·dockCollapsed(false)·liveCoach(true)·statsConsent(false) 추가. 기존 값은 보존하고 boolean이 아닌 값만 기본값으로.
  * v12 → v13: metronomeVolume(기본 1, 0~1 밖이거나 숫자가 아니면 1) 추가.
+ * v13 → v14: statsConsent 삭제(연주 기록 활용 동의는 가입 때 필수, 서버 값만 쓴다). 저장돼 있던 값은 버린다.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -179,12 +177,12 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     if (typeof p.sidebarCollapsed !== 'boolean') p.sidebarCollapsed = false;
     if (typeof p.dockCollapsed !== 'boolean') p.dockCollapsed = false;
     if (typeof p.liveCoach !== 'boolean') p.liveCoach = true;
-    if (typeof p.statsConsent !== 'boolean') p.statsConsent = false;
   }
   if (version < 13) {
     const v = p.metronomeVolume;
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) p.metronomeVolume = 1;
   }
+  if (version < 14) delete p.statsConsent;
   return p as unknown as SettingsState;
 }
 
@@ -221,7 +219,6 @@ export const useSettings = create<SettingsState>()(
       sidebarCollapsed: false,
       dockCollapsed: false,
       liveCoach: true,
-      statsConsent: false,
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -252,7 +249,6 @@ export const useSettings = create<SettingsState>()(
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
-      setStatsConsent: (statsConsent) => set({ statsConsent }),
     }),
     {
       name: 'ssaplash.settings',

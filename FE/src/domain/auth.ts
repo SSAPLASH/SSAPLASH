@@ -7,6 +7,19 @@ export type UserRole = 'USER' | 'ADMIN';
 /** BE 경로 값. `GET /api/auth/{provider}/login` */
 export type ProviderKey = 'google' | 'ssafy';
 
+/** `GET /api/users/me`의 dataConsent. 답한 적 없으면 셋 다 null (메일 ACCT-002 회신) */
+export interface DataConsent {
+  agreed: boolean | null;
+  version: string | null;
+  updatedAt: string | null;
+}
+
+/** 약관·개인정보 동의 기록. 어느 판에 언제 동의했는지 (메일 ACCT-001 회신) */
+export interface ConsentRecord {
+  version: string;
+  agreedAt: string;
+}
+
 /** `GET /api/users/me` 응답. 시각은 ISO-8601 UTC 문자열 그대로 둔다 */
 export interface UserMe {
   id: number;
@@ -16,6 +29,11 @@ export interface UserMe {
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+  dataConsent: DataConsent;
+  /** 가입 동의 완료 여부. 이용약관·개인정보 둘 다 동의 기록이 있으면 true (메일 ACCT-001 회신). 전환기(D28)에는 필드가 없는 응답을 완료로 본다 — 판단은 domain/signupGate */
+  signupCompleted: boolean;
+  /** 이용약관·개인정보 동의 기록. 동의한 적 없으면 null (메일 ACCT-001 회신) */
+  consents: { terms: ConsentRecord | null; privacy: ConsentRecord | null };
 }
 
 export interface LoginProvider {
@@ -26,7 +44,7 @@ export interface LoginProvider {
 /** 로그인 화면이 이 순서로 버튼을 그린다. BE에 그 제공자 키가 없으면 BE가 404를 돌려준다 */
 export const LOGIN_PROVIDERS: readonly LoginProvider[] = [
   { key: 'google', label: 'Google로 계속하기' },
-  { key: 'ssafy', label: 'SSAFY 계정으로 계속하기' },
+  { key: 'ssafy', label: 'SSAFY로 계속하기' },
 ];
 
 /**
