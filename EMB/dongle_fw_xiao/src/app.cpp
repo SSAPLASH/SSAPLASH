@@ -9,7 +9,12 @@
  * 스틱 2대: 연결은 최대 MAX_STICKS개까지 받는다. 스틱 → PC 패킷은 flags 비트 0–1(역할)로 구분된다.
  * PC → 스틱 명령은 기본으로 연결된 스틱 모두에 보낸다.
  * 한 스틱에만 보낼 땐 동글 전용 ROUTE: [0x70, 역할 비트마스크, 명령...] → 마스크에 맞는 스틱에만 [명령...]을 쓴다.
- * 동글은 스틱마다 마지막으로 받은 패킷의 flags로 역할을 기억한다 (148, 프로토콜 v0.8 후보)
+ * 동글은 스틱마다 마지막으로 받은 패킷의 flags로 역할을 기억한다 (148)
+ *
+ * v0.8 LINK (S15P31A307-230): 동글 → PC [0x07][0][연결 마스크][fwMajor 2][fwMinor].
+ * 마스크 bit = 역할(0 왼손, 1 오른손, 2 왼발, 3 오른발). 바뀌는 즉시 + 1초마다(하트비트).
+ * 역할은 스틱이 연결 직후 보내는 STATUS로 알게 되므로 붙은 뒤 수십 ms 안에 비트가 선다.
+ * 끊김은 supervision timeout(2초) 뒤 disconnect 콜백에서 비트가 내려간다
  */
 #include <Arduino.h>
 #include <bluefruit.h>
@@ -20,6 +25,9 @@
 #define CONN_ITV    6          /* 1.25ms 단위 → 7.5ms */
 #define CMD_ROUTE   0x70       /* 동글 전용: [0x70, 역할 마스크, 명령...] */
 #define SCAN_2ND_S  10         /* 첫 스틱 연결 뒤 두 번째 스틱을 찾는 시간 (초) */
+#define DONGLE_FW_MAJOR 2      /* 2 = XIAO 동글 */
+#define DONGLE_FW_MINOR 1      /* 1 = LINK (v0.8) */
+#define LINK_PERIOD_MS  1000
 
 /* a7d5000X-9a3c-4f2e-b1c8-5f0e2d7c0001, 바이트 역순 (스틱 펌웨어와 같음) */
 static const uint8_t UUID_SVC[16]    = {0x01,0x00,0x7c,0x2d,0x0e,0x5f,0xc8,0xb1,0x2e,0x4f,0x3c,0x9a,0x01,0x00,0xd5,0xa7};
@@ -124,6 +132,24 @@ static void disconnect_cb(uint16_t h, uint8_t reason)
     Bluefruit.Scanner.start(0);                         /* 다시 붙을 때까지 찾기 (붙으면 위 규칙대로 꺼짐) */
 }
 
+/* ---------- LINK (v0.8) ---------- */
+static uint8_t link_mask()
+{
+    uint8_t m = 0;
+    for (auto &s : sticks) if (s.ready && s.role >= 0) m |= (uint8_t)(1 << s.role);
+    return m;
+}
+static void link_poll()
+{
+    static uint8_t last = 0xFF;
+    static uint32_t t_last = 0;
+    uint8_t m = link_mask();
+    if (m == last && millis() - t_last < LINK_PERIOD_MS) return;
+    last = m; t_last = millis();
+    uint8_t b[5] = {PKT_LINK, 0, m, DONGLE_FW_MAJOR, DONGLE_FW_MINOR};
+    out_push(b, sizeof b);
+}
+
 /* ---------- PC → 스틱 ---------- */
 static void to_sticks(const uint8_t *p, uint8_t n)
 {
@@ -178,6 +204,8 @@ void app_setup()
 
 void app_loop()
 {
+    link_poll();
+
     /* 스틱 → PC */
     out_t o;
     bool wrote = false;
