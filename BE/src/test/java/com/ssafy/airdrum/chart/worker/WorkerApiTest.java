@@ -37,6 +37,7 @@ class WorkerApiTest {
     @Autowired MockMvc mvc;
     @Autowired JsonMapper json;
     @Autowired WorkerPayload payload;
+    @Autowired com.ssafy.airdrum.chart.ChartQueryService charts;
     @MockitoSpyBean WorkerQueue queue;
     @Autowired WorkerResults results;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -319,6 +320,26 @@ class WorkerApiTest {
         db.update("UPDATE chart_job_attempts SET lease_expires_at=created_at+interval '1 microsecond' WHERE id=?",id);
         raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),malformedResult),409);
         assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+    }
+    @Test void transcriptionAcceptsPedalAndPreservesThreeDifficultyVersions() throws Exception {
+        UUID id=prepareTranscription();
+        var pedal=Map.of("noteId","pedal","timeMs",0,"pad","HIHAT_PEDAL","velocityHint",100);
+        var snare=Map.of("noteId","snare","timeMs",500,"pad","SNARE","velocityHint",100);
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",List.of(pedal,snare),
+                        "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
+        var receipt=json.readTree(raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200));
+        assertThat(receipt.path("chartVersionIds").size()).isEqualTo(3);
+        var returned=new HashMap<String,com.ssafy.airdrum.chart.ChartResponses.ChartDetail>();
+        for (var version:receipt.path("chartVersionIds")) {
+            var detail=charts.version(user,version.asLong());
+            returned.put(detail.difficulty(),detail);
+        }
+        assertThat(returned.keySet()).containsExactlyInAnyOrder("HARD","NORMAL","EASY");
+        assertThat(returned.get("HARD").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
+        assertThat(returned.get("HARD").notes()).extracting("noteId").containsExactly("pedal","snare");
+        assertThat(returned.get("NORMAL").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
+        assertThat(returned.get("EASY").notes()).extracting("pad").containsExactly("SNARE");
     }
     @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
         UUID id=prepareTranscription();
