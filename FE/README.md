@@ -52,7 +52,7 @@ src/
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
-│   ├─ dataConsent.ts     플레이 시작 시점 동의 읽기·옛 브라우저 값 서버 이관
+│   ├─ dataConsent.ts     플레이 시작 시점 동의 읽기(서버 dataConsent 기준)
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
 │   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
@@ -68,7 +68,7 @@ src/
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
 │   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·data-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
@@ -139,7 +139,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **GlassDock:** 상단 가운데 글래스 Dock(음량 토글·메트로놈 칩·BPM ±·프리셋 이름). 모드는 `shell`(일반) / `play`(전체 화면 연주, 일시정지 버튼 추가) × 접힘 여부 4변이다. 칩 본체를 누르면 `MetronomePanel`(Dock 아래 오른쪽 360, `shellStore.dockPanel`)이 열린다. 스틱 연결이 필요한 센서인데 한 손이라도 끊기면 프리셋 칩이 「● L ● R 준비 필요」(amber)로 바뀐다(`domain/dockChip`, 키보드 전용·포인터 모의 IMU는 제외).
 - **StickStatusIndicator·ProfileMenu:** 오른쪽 위 고정.
 - **페이지 선언:** 페이지는 `useShell({ title, immersive })`로 제목과 전체 화면 여부를 알린다. `immersive`면 Sidebar·TopBar가 사라지고 본문이 전폭이 된다. 언마운트하면 자기가 바꾼 필드만 기본값으로 돌아간다. 이 상태는 `store/shellStore`에 있고 영속하지 않는다(현재 `/settings`·`/history`가 사용, 나머지 화면은 아직 기본 제목).
-- **영속 설정 키:** `sidebarCollapsed`·`dockCollapsed`. 같은 settings v12에 `liveCoach`(실시간 코칭, 기본 켬)·`statsConsent`도 추가됐다 — 지금은 옛 브라우저 저장 동의 값이라, 로그인 뒤 서버(`dataConsent`)로 한 번 옮기고 false로 비운다(필드 삭제는 다음 마이그레이션).
+- **영속 설정 키:** `sidebarCollapsed`·`dockCollapsed`. 같은 settings v12에 `liveCoach`(실시간 코칭, 기본 켬)도 추가됐다. v12의 `statsConsent`(브라우저 저장 동의)는 v14에서 삭제했다 — 연주 기록 활용 동의는 가입 때 필수라 서버 값만 쓴다.
 
 ## 드럼 컴포넌트
 
@@ -358,15 +358,15 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주 기록 활용(선택, `components/settings/DataConsentCard` — 서버 값 토글. `GET /api/users/me`의 `dataConsent`가 `agreed=true`이고 `version`이 `domain/signupTerms` 연주 기록 활용 판과 같을 때만 켜짐, 누르면 `PUT /api/users/me/data-consent`, 저장 중에는 비활성, 실패하면 원래 값으로 돌아가고 오류 문장을 보인다)·연주(실시간 코칭 `liveCoach`, 기본 켬, 값만 저장)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬, 값만 저장)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
 - **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
 - **화면:** `/login`·`/signup`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 Figma 로그인 카드대로 로고 + 「Google로 계속하기」·「SSAFY로 계속하기」(둘 다 `ui/Button` secondary, 카드 폭)이며 가입·로그인 버튼을 나누지 않는다. `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다. 게스트·둘러보기 진입은 없다.
-- **가입 동의(`/signup`, 1단계 화면만):** 신규 회원이 첫 소셜 인증 뒤 거치는 화면(Figma 440:20166). 로그인과 같은 2분할에 `components/auth/SignupConsentCard` — 「모두 동의합니다」 + 서비스 이용약관·개인정보 수집·이용·연주 기록 활용 세 항목(각 체크박스·[필수]·96 높이 스크롤 상자). 문구·판 문자열은 `domain/signupTerms.ts` 한 곳에 있고 이용약관·개인정보는 시안 문구다. 「모두 동의」는 세 항목이 전부 켜졌는지의 파생값이고, 필수 항목을 다 켜기 전에는 [동의하고 시작하기]가 비활성이다. 지금은 누르면 자유 연습으로만 간다 — 콜백 뒤 신규 회원 분기(`GET /api/users/me`의 `signupCompleted`), 동의 저장 `POST /api/users/me/signup-consent`, 403 `SIGNUP_INCOMPLETE`, 약관 판 비교 재동의는 BE 회신(`ACCT-001_가입-동의-단계`) 뒤 2단계에서 붙인다. 연주 기록 활용 **필수** 동의의 법적 허용은 팀 확인 중이라, 선택으로 바뀌면 `SIGNUP_TERMS`의 `required`만 바꾼다.
-- **연주 기록 활용 동의 저장(ACCT-002, BE 199):** 동의의 진실은 서버 값이다. `GET /api/users/me`의 `dataConsent { agreed, version, updatedAt }`(답한 적 없으면 셋 다 null)과 `PUT /api/users/me/data-consent { agreed, version }`을 쓰며, 보내는 `version`은 `domain/signupTerms.dataConsentVersion()` 하나다. 저장은 `authStore.setDataConsent`만 부른다(성공하면 `user.dataConsent`를 응답으로 교체, 실패는 던짐). 옛 브라우저 값 `settingsStore.statsConsent`는 `app/dataConsent.bindLegacyConsentUpload`가 로그인이 확정될 때 한 번 정리한다 — 서버가 null이고 브라우저가 true면 `PUT {agreed:true}` 뒤 false로 비우고, 서버에 값이 있으면 올리지 않고 비우며, 실패하면 그대로 두어 다음 로그인에 다시 시도한다. 플레이 시작(`begin`·`restart`·악보 `resetRun`)에서 `readCurrentConsent()`를 읽어 `PlayLog.consent`에 저장하고 업로드 `consent`가 그 값이다(비로그인·서버 null·판 불일치·옛 로그는 false). 판이 달라진 회원은 설정 토글이 꺼져 보이고 「동의 문구가 바뀌어 다시 켜야 해요.」 안내가 붙는다. 가입 동의 화면 쪽 저장·분기(2단계-B, ACCT-001)는 아직 붙이지 않았다.
+- **가입 동의(`/signup`, 1단계 화면만):** 신규 회원이 첫 소셜 인증 뒤 거치는 화면(Figma 440:20166). 로그인과 같은 2분할에 `components/auth/SignupConsentCard` — 「모두 동의합니다」 + 서비스 이용약관·개인정보 수집·이용·연주 기록 활용 세 항목(각 체크박스·[필수]·96 높이 스크롤 상자). 문구·판 문자열은 `domain/signupTerms.ts` 한 곳에 있고 이용약관·개인정보는 시안 문구다. 「모두 동의」는 세 항목이 전부 켜졌는지의 파생값이고, 필수 항목을 다 켜기 전에는 [동의하고 시작하기]가 비활성이다. 지금은 누르면 자유 연습으로만 간다 — 콜백 뒤 신규 회원 분기(`GET /api/users/me`의 `signupCompleted`), 동의 저장 `POST /api/users/me/signup-consent`, 403 `SIGNUP_INCOMPLETE`, 약관 판 비교 재동의는 BE 회신(`ACCT-001_가입-동의-단계`) 뒤 2단계에서 붙인다. 연주 기록 활용은 **필수** 동의로 확정됐다(ACCT-001 회신 2). 철회는 탈퇴로만 한다.
+- **연주 기록 활용 동의(ACCT-002·ACCT-001 회신 2):** 가입 때 **필수** 동의로 확정됐고 철회는 회원 탈퇴로만 한다. 설정 화면에 토글이 없고 FE는 `PUT /api/users/me/data-consent`를 부르지 않는다. 동의의 진실은 `GET /api/users/me`의 `dataConsent { agreed, version, updatedAt }`(답한 적 없으면 셋 다 null)이고, 플레이 시작(`begin`·`restart`·악보 `resetRun`)에서 `app/dataConsent.readCurrentConsent()`가 `agreed === true && version === domain/signupTerms.dataConsentVersion()`을 읽어 `PlayLog.consent`에 저장하며 업로드 `consent`가 그 값이다(비로그인·null·판 불일치·필드 없는 옛 로그는 false). 동의 저장과 판이 바뀐 회원의 재동의는 가입 동의 화면(2단계-B, `POST /api/users/me/signup-consent`)이 맡는다. 연주 기록 활용 본문의 「동의 철회는 회원 탈퇴로 할 수 있어요.」는 배포 전에 넣어 판은 그대로다.
 - **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·설정·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다(`ui/Menu`, Esc면 아바타로 초점을 돌려준다).
 
 ## 디버그
