@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.common.error.CommonErrorCode;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 import tools.jackson.databind.JsonNode;
@@ -38,7 +39,9 @@ class PlayQueryApiTest {
     final List<Long> songs = new ArrayList<>();
     @BeforeEach void setup() {
         user=db.queryForObject("INSERT INTO users(nickname) VALUES ('기록 본인') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, user);
         other=db.queryForObject("INSERT INTO users(nickname) VALUES ('기록 타인') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, other);
         token=token(user, UserRole.USER, Instant.now()); otherToken=token(other, UserRole.USER, Instant.now());
     }
     String token(long id,UserRole role,Instant when) { return tokens.issue(new AuthUser(id,role),when).token(); }

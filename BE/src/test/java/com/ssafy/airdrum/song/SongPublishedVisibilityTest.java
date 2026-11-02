@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -39,6 +40,7 @@ class SongPublishedVisibilityTest {
 	@BeforeEach
 	void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('공개 확인 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 		song = db.queryForObject("INSERT INTO songs(title,source,status,license,bpm,time_signature) VALUES('공개 확인 곡','BUILTIN','READY','test',120,'4/4') RETURNING id", Long.class);
 		chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'EASY') RETURNING id", Long.class, song);
 		version = db.queryForObject("""

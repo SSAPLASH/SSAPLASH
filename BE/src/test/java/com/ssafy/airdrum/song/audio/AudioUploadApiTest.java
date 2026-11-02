@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.withdrawal.WithdrawalService;
 
 import org.junit.jupiter.api.*;
@@ -53,6 +54,7 @@ class AudioUploadApiTest {
                 db.queryForObject(
                         "INSERT INTO users(nickname) VALUES('audio test') RETURNING id",
                         Long.class);
+        SignupConsentFixtures.complete(db, user);
         token = jwt(user);
         objects = ConcurrentHashMap.newKeySet();
         doAnswer(

@@ -28,6 +28,7 @@ import com.ssafy.airdrum.play.raw.PlayRawValidator;
 import com.ssafy.airdrum.storage.cleanup.RawLogCleanupWorker;
 import com.ssafy.airdrum.report.ReportAggregator;
 import com.ssafy.airdrum.report.ReportRepository;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -56,7 +57,9 @@ class PlayUploadApiTest {
 	Set<String> objects;
 	@BeforeEach void seed() {
 		user=db.queryForObject("INSERT INTO users(nickname) VALUES('플레이 테스트') RETURNING id",Long.class);
+		SignupConsentFixtures.complete(db, user);
 		other=db.queryForObject("INSERT INTO users(nickname) VALUES('플레이 타인') RETURNING id",Long.class);
+		SignupConsentFixtures.complete(db, other);
 		token=jwt(user,Instant.now().plusSeconds(1800));
 		otherToken=jwt(other,Instant.now().plusSeconds(1800));
 		play=UUID.randomUUID(); objects=ConcurrentHashMap.newKeySet();

@@ -29,6 +29,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -56,6 +57,7 @@ class AdminSongApiTest {
 	void seed() {
 		admin = db.queryForObject("INSERT INTO users(nickname,role) VALUES('곡 관리자','ADMIN') RETURNING id", Long.class);
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('일반 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 	}
 
 	@AfterEach
