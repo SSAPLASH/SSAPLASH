@@ -56,6 +56,7 @@ describe('LiveCoach 경향이 있는 플레이', () => {
     expect(out[7]?.tag).toBe('LIVE_LATE');
     expect(out[7]?.text).toBe('계속 조금 늦어요. 살짝 앞서서 쳐 보세요.');
     expect(out[7]?.displayMs).toBe(3_000);
+    expect(out[7]?.target).toBeNull();
   });
 
   it('계속 -25ms 빠르면 LIVE_EARLY가 뜬다', () => {
@@ -70,6 +71,7 @@ describe('LiveCoach 경향이 있는 플레이', () => {
     const out = play(coach, notes);
     expect(out.map((m) => m.tag)).toContain('LIVE_HAND_WEAK');
     expect(out.find((m) => m.tag === 'LIVE_HAND_WEAK')?.text.startsWith('왼손')).toBe(true);
+    expect(out.find((m) => m.tag === 'LIVE_HAND_WEAK')?.target).toEqual({ kind: 'hand', hand: 0 });
   });
 
   it('잘 치다가 3번 연속 놓치면 LIVE_MISS_STREAK가 뜬다', () => {
@@ -87,6 +89,7 @@ describe('LiveCoach 경향이 있는 플레이', () => {
     const out = play(coach, notes);
     const pad = out.find((m) => m.tag === 'LIVE_PAD_LATE');
     expect(pad?.text).toBe('스네어에서 유독 늦어요.');
+    expect(pad?.target).toEqual({ kind: 'pad', pad: 'SNARE' });
   });
 
   it('goodMs가 30·60·150이어도 판정 폭의 절반만큼 늦으면 모두 LIVE_LATE가 뜬다', () => {
