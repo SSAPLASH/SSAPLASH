@@ -51,7 +51,7 @@ interface SettingsState {
   dockCollapsed: boolean;
   /** 실시간 코칭 사용(COACH-001) */
   liveCoach: boolean;
-  /** 연주 기록 활용 동의. 저장만 하고 업로드에는 아직 싣지 않는다 */
+  /** 옛 브라우저 저장 동의 값. 서버 저장(ACCT-002)으로 한 번 옮긴 뒤 false로 비운다(app/dataConsent). 화면·업로드는 읽지 않는다 */
   statsConsent: boolean;
 
   setSensorKind: (k: SensorId) => void;
