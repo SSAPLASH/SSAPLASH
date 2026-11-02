@@ -171,7 +171,7 @@ class WorkerResults {
     private void save(Envelope e,String stage,Receipt receipt) {
         db.update("INSERT INTO chart_job_results(result_id,job_id,attempt_id,stage,payload_hash,receipt) VALUES(?,?,?,?,?,?::jsonb)",e.resultId(),e.jobId(),e.attemptId(),stage,e.payloadHash(),payload.write(receipt));
     }
-    private static final Set<String> PADS=Set.of("KICK","SNARE","HIHAT","SMALL_TOM","MID_TOM","FLOOR_TOM","CRASH","RIDE");
+    private static final Set<String> PADS=Set.of("KICK","SNARE","HIHAT","HIHAT_PEDAL","SMALL_TOM","MID_TOM","FLOOR_TOM","CRASH","RIDE");
     record ChartData(String notes,String normalNotes,String easyNotes,String timing,String notationStatus,int noteCount,int normalCount,int easyCount,String generatorVersion,
             java.math.BigDecimal bpm,int offset,String timeSignature,String metrics) {}
     private ChartData chart(JsonNode n,int duration) {
