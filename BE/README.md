@@ -788,9 +788,11 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 ## 음원 접수 (159번)
 
-`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
+`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV, MPEG-4 오디오(AAC·ALAC), Ogg Opus 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 새 형식은 실제 바이트와 스트림을 검사하며 파일명·클라이언트 MIME을 신뢰하지 않는다. MPEG-4는 `audio/mp4`, Ogg Opus는 `audio/ogg`로 저장해 워커에 전달한다. 실제 동영상이나 다른 Ogg 코덱은 거절하며, 첨부 표지 이미지는 허용한다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
 
 실제 형식과 길이는 `ffprobe`로 검사한다. 운영 이미지에 FFmpeg가 포함되며 로컬에서는 `AUDIO_FFPROBE_PATH`로 실행 파일을 지정할 수 있다. 실행 파일이 없거나 저장소가 설정되지 않으면 503이다. 비공개 비버전 S3 호환 버킷 설정은 `AUDIO_STORAGE_ENABLED`, `AUDIO_STORAGE_ENDPOINT`, `AUDIO_STORAGE_REGION`, `AUDIO_STORAGE_BUCKET`, `AUDIO_STORAGE_ACCESS_KEY`, `AUDIO_STORAGE_SECRET_KEY`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED`로 제공한다. 원본 키는 서버에서 생성하며 접수 전에 기록하고 실패·중단된 PUT은 재시도 정리한다. 활성화는 실제 저장소 권한과 버킷의 비공개 설정을 확인한 환경에서만 한다.
+
+V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장한다. 관리자 반주 업로드의 WAV·MP3 제한은 그대로다. 롤백 시 앱을 이전 버전으로 되돌리더라도 확장된 DB 제약과 새 음원 행은 유지한다. 실제 AI 워커의 새 MIME 입력 처리는 별도 통합 검증이 필요하다.
 
 159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
 
