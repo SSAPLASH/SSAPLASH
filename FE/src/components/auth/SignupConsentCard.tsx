@@ -24,11 +24,13 @@ interface Props {
   terms?: readonly SignupTerm[];
   /** 필수 항목을 모두 켜고 [동의하고 시작하기]를 눌렀을 때. 현재 약관 판을 BE 저장 본문 모양으로 준다 */
   onSubmit: (versions: ConsentVersions) => void;
-  /** 2단계(서버 저장 중)용. true면 버튼을 잠근다 */
+  /** 서버 저장 중이면 true. 버튼을 잠근다 */
   submitting?: boolean;
+  /** 제출 실패 문구. 버튼 위에 보인다 */
+  error?: string | null;
 }
 
-export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting = false }: Props) {
+export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting = false, error = null }: Props) {
   const [agreed, setAgreed] = useState<ReadonlySet<SignupTermId>>(() => new Set());
   const canSubmit = allRequiredAgreed(agreed, terms) && !submitting;
 
@@ -49,6 +51,11 @@ export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting =
       {terms.map((term) => (
         <TermsItem key={term.id} term={term} checked={agreed.has(term.id)} onChange={() => setAgreed((prev) => toggleOne(prev, term.id))} />
       ))}
+      {error && (
+        <p className="signup-card-error t-body-14" role="alert">
+          {error}
+        </p>
+      )}
       <Button fullWidth disabled={!canSubmit} onClick={() => onSubmit(currentConsentVersions(terms))}>
         동의하고 시작하기
       </Button>
