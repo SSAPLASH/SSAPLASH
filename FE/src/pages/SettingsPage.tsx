@@ -1,10 +1,9 @@
-// 설정 화면(/settings, ACCT-001, Figma 03 Screens / 설정). 계정·기기·오디오 / 연주 기록 활용·연주·회원 탈퇴 카드.
-// 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 서버 값(authStore user.dataConsent)을 DataConsentCard가 다룬다.
+// 설정 화면(/settings, ACCT-001, Figma 03 Screens / 설정). 계정·기기·오디오 / 연주·회원 탈퇴 카드.
+// 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 가입 때 필수이고 철회는 탈퇴뿐이라 토글이 없다.
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
-import { DataConsentCard } from '@/components/settings/DataConsentCard';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import { useShell } from '@/components/shell/useShell';
@@ -97,7 +96,7 @@ export function SettingsPage() {
     <main className="main">
       <header className="settings-head">
         <h1>설정</h1>
-        <p>계정, 기기, 오디오, 연주 기록 활용을 관리해요.</p>
+        <p>계정, 기기, 오디오, 연주 설정을 관리해요.</p>
       </header>
 
       <div className="settings-cols">
@@ -183,8 +182,6 @@ export function SettingsPage() {
         </div>
 
         <div className="settings-col">
-          <DataConsentCard />
-
           <Card padding="lg" title="연주">
             <SettingRow label="실시간 코칭" help="연주 중 늦음·빠름·연속 MISS 같은 신호를 드럼 옆 안내 칸에 3초간 띄워요.">
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}

@@ -1,6 +1,5 @@
 // 로그인 상태 접착 (설계 4-A). main.tsx에서 bootstrapInput 뒤 한 번 부른다.
 import { subscribeSession } from '@/api/auth';
-import { bindLegacyConsentUpload } from '@/app/dataConsent';
 import { clearPlayLogs, setPlayLogOwner } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 
@@ -26,8 +25,6 @@ export function bindPlayLogOwner(): () => void {
 
 export function bootstrapAuth(): void {
   bindPlayLogOwner();
-  // 옛 브라우저 동의 값을 로그인 뒤 서버로 한 번 옮긴다
-  bindLegacyConsentUpload();
   // 토큰이 없어지면(refresh 실패, 다른 경로의 로그아웃) 로그인 상태를 내린다. restoring·anonymous면 무시된다
   subscribeSession((token) => {
     if (token === null) useAuth.getState().sessionLost();
