@@ -26,7 +26,7 @@ export interface LoginProvider {
 /** 로그인 화면이 이 순서로 버튼을 그린다. BE에 그 제공자 키가 없으면 BE가 404를 돌려준다 */
 export const LOGIN_PROVIDERS: readonly LoginProvider[] = [
   { key: 'google', label: 'Google로 계속하기' },
-  { key: 'ssafy', label: 'SSAFY 계정으로 계속하기' },
+  { key: 'ssafy', label: 'SSAFY로 계속하기' },
 ];
 
 /**

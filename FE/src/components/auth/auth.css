@@ -1,0 +1,14 @@
+/* 로그인·가입 동의 전용 — Auth / TermsItem 440:19746, Auth / SignupConsentCard 440:19890 */
+
+/* 로그인 버튼의 왼쪽 로고 — Button leadingIcon 자리. 글자는 가운데, 로고는 왼쪽 끝에 둔다 */
+.login-provider-btn {
+  position: relative;
+  padding-left: 44px;
+  padding-right: 44px;
+}
+.login-provider-btn .ui-btn-icon {
+  position: absolute;
+  left: var(--space-m);
+  top: 50%;
+  transform: translateY(-50%);
+}
