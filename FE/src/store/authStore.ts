@@ -2,9 +2,10 @@
 import { create } from 'zustand';
 import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
-import { fetchMe, withdrawMe } from '@/api/users';
+import { fetchMe, postSignupConsent, withdrawMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
 import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
+import type { ConsentVersions } from '@/domain/signupTerms';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';
@@ -24,6 +25,13 @@ interface AuthState {
    * 401은 탈퇴 근거가 아니라 인증 만료다: 토큰을 비우고 session_expired로 내린 뒤 던진다(로컬 데이터 유지). 그 밖의 오류는 상태를 두고 던진다
    */
   withdraw: () => Promise<void>;
+  /**
+   * `/me`를 다시 읽어 user를 바꾼다(403 SIGNUP_INCOMPLETE 뒤 상태 갱신). authenticated일 때만 동작하고 단일 실행이다.
+   * 실패하면 가입 미완료로 내려(signupCompleted=false) 더 부르지 않는다(D27). 던지지 않는다
+   */
+  refreshMe: () => Promise<void>;
+  /** 가입 동의 저장. 성공 응답(`/me` 본문)으로 user를 통째로 바꾼다. 실패는 그대로 던진다(D29) */
+  submitSignupConsent: (body: ConsentVersions) => Promise<void>;
   /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
   clearLostReason: () => void;
@@ -56,6 +64,8 @@ type Set = (partial: Partial<AuthState>) => void;
 
 /** 진행 중인 복원. 모듈 변수라 테스트는 resetAuthStoreForTest로 지운다 */
 let restoring: Promise<void> | null = null;
+/** 진행 중인 /me 재조회(단일 실행). 테스트는 resetAuthStoreForTest로 지운다 */
+let refreshingMe: Promise<void> | null = null;
 
 async function runRestore(set: Set): Promise<void> {
   set({ status: 'restoring' });
@@ -127,6 +137,28 @@ export const useAuth = create<AuthState>()((set, get) => ({
     set({ status: 'anonymous', user: null, lostReason: 'withdrawn' });
     clearAccessToken();
   },
+  refreshMe: () => {
+    if (refreshingMe) return refreshingMe;
+    const s = get();
+    if (s.status !== 'authenticated' || !s.user) return Promise.resolve();
+    const user = s.user;
+    refreshingMe = (async () => {
+      try {
+        const fresh = await fetchMe();
+        if (get().status === 'authenticated') set({ user: fresh });
+      } catch {
+        if (get().status === 'authenticated') set({ user: { ...user, signupCompleted: false } });
+      } finally {
+        refreshingMe = null;
+      }
+    })();
+    return refreshingMe;
+  },
+  submitSignupConsent: async (body) => {
+    if (get().status !== 'authenticated') return;
+    const user = await postSignupConsent(body);
+    if (get().status === 'authenticated') set({ user });
+  },
   sessionLost: () => {
     if (get().status !== 'authenticated') return;
     set({ status: 'anonymous', user: null, lostReason: 'session_expired' });
@@ -142,5 +174,6 @@ export const useAuth = create<AuthState>()((set, get) => ({
 /** 테스트 전용. 진행 중 복원과 상태를 초기화한다 */
 export function resetAuthStoreForTest(): void {
   restoring = null;
+  refreshingMe = null;
   useAuth.setState({ status: 'unknown', user: null, lostReason: null });
 }
