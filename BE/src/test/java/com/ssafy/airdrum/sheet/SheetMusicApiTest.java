@@ -28,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -61,7 +62,9 @@ class SheetMusicApiTest {
 	@BeforeEach
 	void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 		other = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 다른 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, other);
 		when(storage.sign(anyString())).thenAnswer(i -> "https://objects.test/" + i.getArgument(0));
 	}
 

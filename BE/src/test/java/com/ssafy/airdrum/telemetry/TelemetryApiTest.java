@@ -26,6 +26,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -66,8 +67,10 @@ class TelemetryApiTest {
 	@BeforeEach
 	void seed() {
 		admin = db.queryForObject("INSERT INTO users(nickname,role) VALUES('텔레메트리 관리자','ADMIN') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, admin);
 		otherAdmin = db.queryForObject("INSERT INTO users(nickname,role) VALUES('다른 관리자','ADMIN') RETURNING id", Long.class);
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('일반 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 		session = UUID.randomUUID();
 	}
 
