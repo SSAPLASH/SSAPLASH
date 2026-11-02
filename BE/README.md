@@ -455,6 +455,7 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 | --- | --- |
 | `/api/v1/songs` | `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext` |
 | `/api/v1/songs/{songId}` | 곡 메타데이터와 난이도별 최신 `chartVersionId` 요약 |
+| `/api/v1/songs/{songId}/accompaniment` | 곡 단위 반주 URL 발급 및 갱신(채보 버전 불필요) |
 | `/api/v1/charts/{chartId}` | 해당 채보의 가장 큰 `version`에 해당하는 노트·시간 정보 |
 | `/api/v1/chart-versions/{chartVersionId}` | 지정 버전의 노트·시간 정보 |
 | `/api/v1/chart-versions/{chartVersionId}/assets` | 같은 버전의 이미지·반주 URL 발급 및 갱신 |
@@ -478,6 +479,7 @@ ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 �
 
 ### FE 소비 계약
 
+- 곡 단위 반주 조회는 `accompanimentUrl`과 `expiresAt`을 반환하며 반주가 없으면 둘 다 null이다. 같은 경로를 재호출하면 다시 서명한다. URL은 메모리에서만 쓰고 만료 전 재발급한다. 서명 중 반주가 교체되면 503 `CHART_ASSET_UNAVAILABLE`이므로 같은 경로를 재시도할 수 있다.
 - 곡 상세에서 난이도와 `chartVersionId`를 고르고, 플레이 시작 이후에는 버전 조회와 assets 갱신에 그 ID를 사용한다.
   최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
 - `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.

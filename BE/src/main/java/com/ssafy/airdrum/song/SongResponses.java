@@ -15,4 +15,5 @@ public final class SongResponses {
 			List<ChartSummary> charts, String coverUrl) {}
 	public record ChartSummary(Long id, String difficulty, Long chartVersionId, int version,
 			int noteCount, String notationStatus) {}
+	public record Accompaniment(String accompanimentUrl, Instant expiresAt) {}
 }
