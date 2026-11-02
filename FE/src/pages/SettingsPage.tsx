@@ -1,9 +1,10 @@
 // 설정 화면(/settings, ACCT-001, Figma 03 Screens / 설정). 계정·기기·오디오 / 연주 기록 활용·연주·회원 탈퇴 카드.
-// 값은 settingsStore에 바로 저장한다(statsConsent는 저장만 — 업로드 본문에는 아직 싣지 않는다).
+// 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 서버 값(authStore user.dataConsent)을 DataConsentCard가 다룬다.
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
+import { DataConsentCard } from '@/components/settings/DataConsentCard';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import { useShell } from '@/components/shell/useShell';
@@ -44,8 +45,6 @@ export function SettingsPage() {
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
   const liveCoach = useSettings((s) => s.liveCoach);
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
-  const statsConsent = useSettings((s) => s.statsConsent);
-  const setStatsConsent = useSettings((s) => s.setStatsConsent);
 
   const connected = useLive((l) => l.connected);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
@@ -184,15 +183,7 @@ export function SettingsPage() {
         </div>
 
         <div className="settings-col">
-          <Card padding="lg" title="연주 기록 활용 (선택)">
-            <SettingRow
-              label="약점 분석 기준 개선에 연주 기록 쓰기"
-              help="타격 기록만 비식별 처리해 통계에 써요. 꺼도 모든 기능을 그대로 쓸 수 있어요."
-            >
-              {(aria) => <Toggle {...aria} label="연주 기록 활용" checked={statsConsent} onChange={setStatsConsent} />}
-            </SettingRow>
-            <p className="settings-note">끄면 다음 연주부터 쓰지 않아요. 이미 통계에 반영된 값은 개인별로 지울 수 없어요.</p>
-          </Card>
+          <DataConsentCard />
 
           <Card padding="lg" title="연주">
             <SettingRow label="실시간 코칭" help="연주 중 늦음·빠름·연속 MISS 같은 신호를 드럼 옆 안내 칸에 3초간 띄워요.">
