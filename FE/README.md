@@ -67,7 +67,7 @@ src/
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
 │   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
-│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
+│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
@@ -83,7 +83,7 @@ src/
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
-├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach). 순수 TypeScript, domain만 import
+├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach · copy(화면 문구 표)). 순수 TypeScript, domain만 import
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
@@ -285,15 +285,18 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 실시간 코칭 (COACH-001, `src/coach/live`)
 
-플레이 중 최근 판정 흐름에서 경향(계속 늦음, 한쪽 손 약함 등)을 뽑아 짧은 문구로 알리는 **규칙 모듈**이다. 서버를 거치지 않고 브라우저에서만 동작한다. 이 모듈은 판정 한 건을 받아 문구 후보를 돌려줄 뿐이고, **화면 표시와 `PlayPage` 연결은 아직 없다**(연결·HUD·설정 토글·`PlayLog.liveCoachEvents`는 FE 작업).
+플레이 중 최근 판정 흐름에서 경향(계속 늦음, 한쪽 손 약함 등)을 뽑아 짧은 문구로 알리는 **규칙 모듈**이다. 서버를 거치지 않고 브라우저에서만 동작한다. 모듈은 판정 한 건을 받아 문구 후보(`tag`+대상)를 돌려주고, 리듬 게임(`PlayPage`)이 이를 받아 연주 안내 칸(`GuideSlot`)에 띄우고 플레이 로그에 남긴다. 1차는 **RHYTHM만** 연결했다(`SheetPage`는 같은 판정 형식이라 2차에 같은 방식으로 붙일 수 있다). 모듈 폴더(`coach/`)는 FE가 관리하고, 고치면 AI 파트에 알린다.
 
 - **쓰는 법:** `new LiveCoach({ goodMs, enabled? })`로 만들고, 판정(`onJudgement`)마다 `push({songTimeMs, noteTimeMs, judgement, deltaMs, pad, stickId, velocity})`를 부른다. 문구를 띄울 때만 `{tag, text, severity, tMs, displayMs}`를 돌려주고 아니면 `null`이다. `events()`는 업로드 본문 `liveCoachEvents[]`에 그대로 담을 `{tMs, tag, text}` 목록이다. 재시작(다시 하기)에서 `reset()`. 일시정지 중에는 `push`를 부르지 않는다. 코칭 오류로 플레이가 멈추지 않도록 `push`는 예외를 던지지 않는다.
-- **손·세기:** `RhythmSession.onJudgement`의 `JudgementEvent`에는 `stickId`·`velocity`가 없다. 두 값은 `inputManager.onHit`의 `ResolvedHit`에 있어서 연결하는 쪽이 판정과 짝지어 넘긴다. 손 정보가 없으면(MISS·키보드) 손별 규칙만 제외된다.
+- **연결(`PlayPage`):** 곡 선택 시점에 `new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach })`를 만들어 설정값을 고정한다(도중 설정 변경은 다음 플레이부터). `onJudgement`에서 기록·팝업·HUD 갱신 뒤에 `push`하고, 문구가 나오면 `coachCopy`로 화면 문구를 만들어 `useCoachLine`(`components/play`, 타이머 규칙은 순수 모듈 `coachLineTimer`)에 `displayMs`(3초) 동안 올린다. 다시 하기에서 `reset()`과 문구 비움, 종료 시 `events()`를 `buildPlayLog`의 `liveCoachEvents`로 넘긴다. 변환·표시는 try/catch로 감싸 코칭 오류가 플레이를 막지 않는다.
+- **화면 문구(`coach/live/copy.ts`):** 모듈의 `text`는 로그 전용이고 화면은 `coachCopy(message)`가 돌려주는 짧은 제목(≤10자)·보조(≤16자)·모드를 쓴다. 대상이 있는 태그는 `message.target`(패드 또는 손)으로 "{패드}만 늦어요"·"{왼손/오른손}이 약해요"를 만든다. `GuideSlot` 모드는 태그로 정한다 — `LIVE_MISS_STREAK`만 `coach-warn`, 나머지는 `coach-info`(`severity`는 아직 화면에 쓰지 않는다). 안내 칸(220×51)은 코칭 모드에서 라벨("실시간 코칭")+제목 두 줄만 보인다 — 보조까지 세 줄이면 넘친다. 문구·톤은 이 파일에서만 고친다.
+- **손·세기:** `RhythmSession`의 `JudgementEvent`에 `stickId`·`velocity`가 있다. `handleHit`이 `ResolvedHit`에서 채우고, MISS(`tick`)와 키보드 타격(`source === 'keyboard'`, 손이 자리값이고 세기가 고정이라 뜻이 없음)은 둘 다 null이다. 손 정보가 없으면 손별 규칙만 제외된다.
+- **패드 규칙 대상:** `STICK_PADS`(스틱 7개)만 평가한다. 킥·하이햇 페달은 페달 입력 기준(EMB)이 정해진 뒤 넣는다.
 - **규칙 5종**(`rules.ts`): `LIVE_MISS_STREAK`(연속 3번 또는 최근 6개 중 4개 놓침) · `LIVE_LATE`/`LIVE_EARLY`(최근 12개 평균이 `0.3 × goodMs` 이상이고 같은 부호가 75% 이상) · `LIVE_PAD_LATE`/`LIVE_PAD_EARLY`(한 패드가 나머지 패드보다 `0.45 × goodMs` 이상 늦거나 빠름) · `LIVE_HAND_WEAK`(한 손 평균 세기가 다른 손의 70% 미만) · `LIVE_UNSTEADY`(편차가 `0.5 × goodMs` 이상).
 - **표시 정책**(`policy.ts`): 판정 8개 전에는 띄우지 않고, 문구 사이 8초, 같은 키는 25초, 플레이당 10개, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자). 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
-- **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다.
+- **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다. `PlayLog.liveCoachEvents`(`engine/playLog`의 `LiveCoachEvent`, `coach`를 import하지 않는 구조적 타입)에 저장되고 업로드 본문(`domain/playUpload`)에는 `log.liveCoachEvents ?? []`로 실린다 — 기능 도입 전 로그는 빈 배열이라 "코칭 켬·문구 0개"와 구분되지 않으니 효과 평가는 `clientMeta.appVersion`·업로드 날짜로 거른다(AI에 회신함).
 - **수치 고치는 곳:** 모든 임계값은 `coach/live/config.ts` 한 곳에 있다. 판정 폭에 비례하는 값은 `goodMs`에 곱하는 계수라서 사용자가 판정 폭(30~150ms)을 바꿔도 같은 비율로 따라간다. 수치는 가정값이므로 직접 플레이해 보며 여기서 고친다.
-- **검증:** `npm test`(합성 플레이 시험 포함: 계속 늦음에서 `LIVE_LATE`, 경향 없는 100플레이에서 평균 0.5개 이하, 간격·상한 준수, 계산 시간 중앙값 0.2ms 이하).
+- **검증:** `npm test`(합성 플레이 시험·문구 표·타이머 규칙 포함: 계속 늦음에서 `LIVE_LATE`, 경향 없는 100플레이에서 평균 0.5개 이하, 간격·상한 준수, 계산 시간 중앙값 0.2ms 이하).
 
 ## 반주 재생
 
@@ -359,7 +362,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬, 값만 저장)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬 — 리듬 게임이 곡 선택 시점 값으로 읽는다)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.

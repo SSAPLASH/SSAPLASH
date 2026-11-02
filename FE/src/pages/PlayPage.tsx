@@ -14,6 +14,7 @@ import { PlayStage } from '@/components/play/PlayStage';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
 import { GuideSlot } from '@/components/play/GuideSlot';
+import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { DrumKit } from '@/components/drum/DrumKit';
@@ -31,6 +32,7 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
+import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
 import { startPlaySync } from '@/app/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
@@ -115,6 +117,9 @@ export function PlayPage() {
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
   const recorder = useRef(new PlayRecorder());
+  // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
+  const coachRef = useRef<LiveCoach | null>(null);
+  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
@@ -196,10 +201,30 @@ export function PlayPage() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
+      const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
+      coachRef.current = coach;
+      clearCoachLine();
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
+        // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
+        const message = coach.push({
+          songTimeMs: ss.songTime(e.at),
+          noteTimeMs: ss.notes[e.noteIndex].note.timeMs,
+          judgement: e.judgement,
+          deltaMs: e.deltaMs,
+          pad: e.pad,
+          stickId: e.stickId,
+          velocity: e.velocity,
+        });
+        if (!message) return;
+        try {
+          const copy = coachCopy(message);
+          if (copy) showCoachLine(copy, message.displayMs);
+        } catch {
+          // 코칭 오류는 무시한다
+        }
       });
       flashes.current.clear();
       popups.current = [];
@@ -212,7 +237,7 @@ export function PlayPage() {
       setPauseReason(null);
       setStage('ready');
     },
-    [settings.timing, settings.countInBars, settings.audioOffsetMs, resetCountdown],
+    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine],
   );
 
   // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
@@ -327,13 +352,15 @@ export function PlayPage() {
     flashes.current.clear();
     popups.current = [];
     recorder.current.reset();
+    coachRef.current?.reset();
+    clearCoachLine();
     finishing.current = false;
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
     resetCountdown();
     setHud(ss.snapshot());
     setPauseReason(null);
-  }, [resetCountdown]);
+  }, [resetCountdown, clearCoachLine]);
 
   // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
   const leave = useCallback(() => {
@@ -370,6 +397,7 @@ export function PlayPage() {
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
         consent: consentAtStart.current,
+        liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
@@ -590,7 +618,14 @@ export function PlayPage() {
             onFrame={onFrame}
           />
         }
-        guide={<GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />}
+        // 코칭 모드는 라벨+제목 두 줄만 — 보조까지 세 줄이면 51px 칸을 넘친다(설계 U1 결정, 브라우저 확인 64px)
+        guide={
+          coachLine ? (
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+          ) : (
+            <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
+          )
+        }
         kit={<DrumKit scale={0.7} states={padStates} labels={false} />}
         readout={
           <HitReadout
