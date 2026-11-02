@@ -603,6 +603,7 @@ uv run ssaplash-bench rule-eval --dataset configs/bench/datasets/gmd_test.yaml c
 | `tom_peak_mode` | `madmom` | 탐 타격 시각 고르기. `madmom`은 저장소 방식(100ms 이동평균을 뺀 뒤 기준값 비교), `raw`는 이동평균을 빼지 않음. 50~70ms 간격 더블·롤의 두 번째 타격이 살아남는다 |
 | `tom_gate_mode` | `input` | 거르기 비율의 분모. `input`은 입력 드럼 전체, `others`는 snare·hh·crash·ride 트랙 합 |
 | `tom_kick_drop_ms` | 없음 | 켜면 탐 이름을 붙인 뒤 `tom_kick_drop_pads`(기본 FLOOR_TOM)에 든 탐이 ADTOF 킥 타격과 이 거리(ms) 안이면 버린다. `tom_kick_drop_max_score`를 주면 탐 확신 점수가 그 값 미만인 것만 버린다. 파인튜닝 모델이 실제 킥을 킥과 플로어탐으로 함께 내는 경우를 보려고 넣었고 채택하지 않았다. 버린 수는 `tomKickDropped` 열 |
+| `tom_kick_exclude_st` | 없음 | 켜면 곡의 킥 음높이를 재서, 탐 음높이의 가장 큰 피크가 킥 음높이 ±이 반음 안이면 그 밖의 가장 큰 피크가 최대의 `tom_kick_exclude_ratio`(0.2)배 이상일 때 그쪽을 쓴다. `tom_kick_cluster_st`(1.0)가 있으면 곡 안 탐 묶음 중 중앙값이 킥 음높이 ±1반음 안인 묶음의 타격만 다시 재고 다시 묶는다. 킥 음높이는 ADTOF 킥 시각에서 `tom_kick_pitch_source`(`kick` 트랙 또는 `input`)의 피크 중앙값, `tomKickHz` 열. 킥을 높게 조율한 세트(ENST 드러머 1, 킥 101Hz)에서 킥 울림이 탐 묶음으로 잡혀 이름이 밀리는 경우 대응 |
 | `tom_gate_low_rescue` | 없음 | 켜면 거르기 기준 아래여도 (toms+kick 트랙)/분모가 이 값 이상이고 확신 점수가 `tom_gate_low_min_score`(0.5) 이상이며 음높이가 `tom_low_hz`(60~130Hz) 안인 타격을 탐으로 남긴다. 분리 모델이 낮은 플로어탐을 kick 트랙에 넣는 경우 대응 |
 
 `by_song.csv`의 `tomRescued`가 그렇게 남긴 수다. `tomConsistentAcc`·`f1TomConsistent`는 곡 안에서 탐 이름만 서로 바뀐 것(탐 둘인 킷의 위쪽 탐을 MID로 적을지 SMALL로 적을지)을 맞은 것으로 친 보조 지표로, 곡마다 정답 패드와 붙인 패드를 가장 잘 맞춰 주는 일대일 대응으로 센다. 2026-10-28 비교 결과는 `docs/chart-rules/tom-detect-2026-10-28/`.
@@ -648,7 +649,7 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 | 키 | 뜻 |
 | --- | --- |
 | `classes` | `five`: 5가지 그대로(페달 하이햇은 하이햇으로 학습). `five_pedal`: 5가지 + 페달 하이햇 출력(GM 44번), 페달 출력층은 하이햇에서 복사. `five_pedal_cym`: five_pedal에서 심벌을 크래시(49)·라이드(51)로 나눈 7출력, 크래시·라이드 출력층은 심벌에서 복사. 이 체크포인트를 드럼 킷 분리 어댑터에 쓰면 crash·ride 트랙 에너지 비교 대신 모델 출력을 그대로 씀. `pads`: 패드 9종을 직접 내는 변형. 출력층 9개를 5클래스 가중치에서 복사해 초기화(탐 3개 ← 탐, 크래시·라이드 ← 심벌, 페달 ← 하이햇) |
-| `train_datasets` / `val_datasets` | 데이터셋 yaml과 뽑을 비율(`weight`) / 검증에 쓸 yaml과 곡 수(`n_songs`, 고정 시드). 검증은 E-GMD validation·STAR validation 20곡씩이고 MDB·ENST·GMD test·E-GMD test·STAR test는 학습 뒤 한 번만 본다 |
+| `train_datasets` / `val_datasets` | 데이터셋 yaml과 뽑을 비율(`weight`) / 검증에 쓸 yaml과 곡 수(`n_songs`, 고정 시드). 검증은 E-GMD validation·STAR validation 20곡씩이고 MDB·ENST·GMD test·E-GMD test·STAR test는 학습 뒤 한 번만 본다. 학습 항목에 `ignore_classes: [pedal]`처럼 적으면 그 데이터셋 윈도에서 해당 클래스 손실을 뺀다(주석에 페달 표시가 없는 ENST용) |
 | `tom_window_frac` / `tom_weight_mult` | 탐 강조 둘. 윈도 중 정답 탐 타격을 가운데 두고 자르는 비율(0.5) / 탐 클래스 가중치 배수(2.0). 안 쓰려면 0과 1 |
 | `pedal_weight_mult` | 페달 클래스 가중치 = 하이햇 가중치 × 이 값(2.0). `five_pedal`·`pads`만 |
 | `accomp_mix_prob` / `accomp_gain_range` | 반주가 있는 곡(STAR)에서 반주를 섞을 확률(0.3)과 게인(0.05~0.3). 분리 결과에 남는 반주 소리를 흉내 냄 |
@@ -657,7 +658,23 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 | `fit_thresholds` | 학습 끝에 검증 곡으로 클래스별 문턱값(0.10~0.60, 0.02 간격)을 맞춰 체크포인트 `model_info.thresholds`에 저장. 어댑터가 그 값을 읽고, yaml `thresholds`가 있으면 그것이 우선 |
 | `freeze_cnn` | 켜면 CNN 블록은 고정하고 GRU·출력층만 학습 |
 
-끊긴 학습은 같은 명령에 `--resume`을 붙이면 `--out`의 `last.pth`·`log.csv`에서 이어 간다. 최고점·안 오른 에폭 수·학습률은 `log.csv`로 다시 계산하고, 옵티마이저 상태는 저장하지 않아 새로 시작한다. GPU 서버에서는 학습을 하나씩 돌리는 `scripts/train_queue.py`(`start`·`status`·`stop`)를 노트북 5·6번 셀이 부른다. 학습마다 실행 폴더에 코드 사본을 풀어 돌리므로, 학습 중에 공유 코드 폴더를 다시 풀어도 도는 학습은 바뀌지 않는다.
+끊긴 학습은 같은 명령에 `--resume`을 붙이면 `--out`의 `last.pth`·`log.csv`에서 이어 간다. 최고점·안 오른 에폭 수·학습률은 `log.csv`로 다시 계산하고, 옵티마이저 상태는 저장하지 않아 새로 시작한다. GPU 서버에서는 학습을 하나씩 돌리는 `scripts/train_queue.py`(`start`·`status`·`stop`)를 노트북 5·6번 셀이 부른다. 학습마다 실행 폴더에 코드 사본을 풀어 돌리므로, 학습 중에 공유 코드 폴더를 다시 풀어도 도는 학습은 바뀌지 않는다. `start`에 `--parallel 4`를 주면 넷까지 같이 돌리고, `--cpus 0-95`를 주면 학습과 데이터 읽기 작업을 그 코어에만 묶어 Jupyter가 쓸 코어를 남긴다.
+
+#### 실제 녹음 학습 확인 실험
+
+학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
+
+서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
+
+```bash
+uv run python scripts/score_sep_compare.py --results data/results/sep_compare --out data/results/sep_compare/compare.md
+```
+
+```bash
+uv run python scripts/score_heldout.py --run tom_6cls_real_no_d1=data/results/real_check/rule-eval-tom_6cls_real_no_d1 --run tom_6cls_real_no_d2=data/results/real_check/rule-eval-tom_6cls_real_no_d2 --run tom_6cls_real_no_d3=data/results/real_check/rule-eval-tom_6cls_real_no_d3 --compare base=data/results/finetune_results_new/rule-eval-base-pedal --compare tom_6cls=data/results/finetune_results_new/rule-eval-ft-tom_6cls --compare tom_6cls_plain=data/results/real_check/rule-eval-tom_6cls_plain --folds configs/train/real_check/folds.yaml --out data/results/real_check/heldout.md
+```
+
+ENST 64곡·MDB 23곡의 탐 3종 F1, 정답에 없는 탐 수, MDB 페달 정밀도·재현율·F1을 비교 모델과 같은 곡으로 나란히 놓고, `tom_6cls` 대비 차이에 곡 단위 95% 구간과 판정 줄을 붙인다. MDB는 모두 MusicDelta 녹음이라 묶음끼리 같은 킷일 수 있어, MDB 결과는 처음 보는 곡 기준으로 읽는다.
 
 체크포인트는 기본 가중치 파일과 같은 `{'model_weights': state_dict, 'model_info': {...}}`이고 `model_info`에 `class_set`(five·five_pedal·five_pedal_cym·pads)·`classes`(원래 라벨: five 계열은 MIDI 피치, 9패드는 패드 이름)·`thresholds`·학습 설정·검증 점수가 들어간다. `adtof` 어댑터는 `checkpoint_path`의 이 정보를 읽어 출력 수·라벨·문턱값을 정하고, 정보가 없는 옛 파일은 지금처럼 5클래스·저장소 기본 문턱값으로 돈다. 9패드 체크포인트는 `configs/bench/transcribers/adtof/adtof_ft_9cls.yaml`처럼 `labels`에 `KICK: KICK`으로 적는다. 페달 출력이 있는 체크포인트를 드럼 킷 분리 어댑터에 쓸 때는 `adtof_drumsep_ft6.yaml`처럼 `labels`에 `HIHAT_PEDAL: HIHAT_PEDAL`을 더한다. 파인튜닝한 가중치의 라이선스는 원본과 같은 CC BY-NC-SA 4.0이다.
 
@@ -788,6 +805,7 @@ uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_
 | `egmd_test_acoustic.yaml` | E-GMD(GMD 연주를 Roland TD-17 킷 43개로 다시 녹음, CC BY 4.0) test 분할 중 `gmd_test.yaml`의 연주 45개 × 어쿠스틱 음색 킷 26개 = 1170개(22.7시간). 로더는 `bench/datasets/gmd.py`의 `EgmdDataset`, 곡 id는 오디오 파일 이름 | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 96GB 전체는 GPU 서버에 받고 목록 csv 9.6MB만 로컬에 둬도 곡 목록은 뽑힘 |
 | `star_drums_test.yaml`, `star_drums_validation.yaml` | STAR Drums(Weber 외 2025) test·validation 분할. 실제 반주에 샘플 킷 20개(어쿠스틱 15·전자 5)로 합성한 드럼, 탐 3종(HT·MT·LT) 정답. 미리보기 1곡은 `star_drums_preview.yaml` | 킷이 바뀔 때 탐 규칙 검증 (S15P31A307-164). 오디오는 CC BY-NC-SA·개별 라이선스라 평가·연구용. 181GB 전체는 GPU 서버에 받고 로더는 `bench/datasets/star.py` |
 | `enst_minus_one.yaml` | ENST-Drums(Gillet & Richard 2006) 중 반주가 있는 minus-one·MIDI-minus-one 64곡. 실제 드러머 3명 녹음, 탐 약 2,600타. 입력 드럼은 `wet_mix`, mixture는 `wet_mix` + 반주 × `extra.accomp_gain`(0.5). 드러머 3은 탐 넷이라 `extra.tom4`로 패드 3개에 대응(랙탐 둘은 스몰·미드, 플로어탐 둘은 플로어). 로더는 `bench/datasets/enst.py` | 실제 녹음에서 탐 규칙·파인튜닝 전후 비교 (S15P31A307-164). 이용 조건은 본인만·연구용·변형물 금지이고, 2026-10-31 제공 측 회신으로 학생 학업용 학습은 허락받음. 학습한 가중치는 실험 전용. 데이터는 공유하지 않음. 주석에 페달 하이햇 라벨이 없음. 결과 공개 시 Gillet & Richard ISMIR 2006 인용. 서버에만 있음 |
+| `real_check/*.yaml` | 실제 녹음 학습 확인 실험용 분할. ENST 학습용 `enst_train_no_d{N}`(드러머 N을 뺀 둘의 hits·phrase·solo·minus-one 전체)·`enst_train_all`(드러머 셋 전체), 평가용 `enst_minus_one_d{N}`, 반주 없는 연주만 `enst_practice_d{N}`(subset `practice`), MDB 학습용 `mdb_train_no_f{N}`·평가용 `mdb_fold{N}`(묶음 표 `configs/train/real_check/folds.yaml`) | 탐·페달 하락이 데이터 때문인지 확인 (S15P31A307-164). 서버에만 있음 |
 | `gmd_train.yaml`, `egmd_train_acoustic.yaml`, `egmd_validation_acoustic.yaml`, `star_drums_training_ismir04.yaml`, `star_drums_training_mtg.yaml` | 채보 모델 탐 파인튜닝의 학습·검증 분할. GMD train 846개(beat+fill), E-GMD train 어쿠스틱 26킷 21,294개(206시간)·validation 3,042개, STAR training ISMIR04 약 1,228곡·MTG-Jamendo 약 4,807곡. GMD·E-GMD 로더는 `subset`(train·validation·test)과 `extra.beat_type`(beat·fill·all·목록)으로 분할을 고름. `gmd_train.yaml`은 학습 설정에서 뺐다(GPU 서버에는 GMD test 분할만 있고, 같은 연주를 26킷으로 친 것이 E-GMD train에 있음. 2026-10-30) | 파인튜닝 학습 (S15P31A307-164). 평가 분할(GMD test·MDB·ENST·E-GMD test·STAR test)과 겹치지 않음. 서버에만 있음 |
 
 GMD 연주는 `list-gmd --split test --min-sec 30 --hits`로 패드별 타격 수를 보고 골랐다. test split만 쓰는 이유는 채보 후보 중 셋(OaF Drums·YourMT3+·Inverse Drum Machine)이 GMD를 다시 녹음·렌더링한 E-GMD·StemGMD의 train split로 학습했기 때문이다. 밴드 장르만 고르면 크래시 73개·미드탐 34개뿐이라 재즈 2개·라틴 3개 연주를 더해 탐·심벌이 각 100개 이상 되게 했다. 합성곡에 쓴 연주 5개는 뺐다.
