@@ -30,6 +30,7 @@ import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
+import { readCurrentConsent } from '@/app/dataConsent';
 import { startPlaySync } from '@/app/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
@@ -115,6 +116,7 @@ export function PlayPage() {
   const popups = useRef<Popup[]>([]);
   const recorder = useRef(new PlayRecorder());
   const startedAt = useRef<Date | null>(null);
+  const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
   // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
@@ -264,6 +266,7 @@ export function PlayPage() {
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
@@ -326,6 +329,7 @@ export function PlayPage() {
     recorder.current.reset();
     finishing.current = false;
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
     resetCountdown();
     setHud(ss.snapshot());
     setPauseReason(null);
@@ -365,6 +369,7 @@ export function PlayPage() {
         songNumericId: ss.chart.songNumericId ?? null,
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
+        consent: consentAtStart.current,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)

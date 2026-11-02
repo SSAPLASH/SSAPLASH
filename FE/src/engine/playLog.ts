@@ -74,6 +74,8 @@ export interface PlayLog {
   chartId: number | null;
   /** 연주 당시 적용 중이던 프리셋 */
   presetId: string | null;
+  /** 플레이 시작 시점의 연주 기록 활용 동의(설계 COACH-003 D18). 이전 로그에는 없다 → 업로드는 false */
+  consent?: boolean;
   /** 채보 BPM·박자(마디 단위 피드백용). 이전 로그에는 없을 수 있다 */
   bpm: number;
   beatsPerBar: number;
@@ -147,6 +149,8 @@ export function buildPlayLog(args: {
   songNumericId: number | null;
   chartId: number | null;
   presetId: string | null;
+  /** 플레이 시작 시점의 연주 기록 활용 동의 */
+  consent: boolean;
   /** 기본 'RHYTHM' */
   mode?: PlayLog['mode'];
   /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
@@ -173,6 +177,7 @@ export function buildPlayLog(args: {
     songNumericId: args.songNumericId,
     chartId: args.chartId,
     presetId: args.presetId,
+    consent: args.consent,
     bpm: args.chart.bpm,
     beatsPerBar: args.chart.beatsPerBar,
     offsetMs: args.chart.offsetMs ?? 0,
