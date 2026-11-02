@@ -16,11 +16,11 @@ export interface SignupTerm {
   body: string;
 }
 
-/** `POST /api/users/me/signup-consent` 본문과 같은 이름 (ACCT-001 가입 동의 단계 요청안) */
+/** `POST /api/users/me/signup-consent` 본문 그대로. 연주 기록 활용은 필수라 agreed는 항상 true (메일 ACCT-001 회신 2) */
 export interface ConsentVersions {
   termsVersion: string;
   privacyVersion: string;
-  dataConsentVersion: string;
+  dataConsent: { agreed: true; version: string };
 }
 
 /** 가입 동의 카드 머리의 설명 문구 (Figma 440:19794) */
@@ -73,15 +73,23 @@ export const SIGNUP_TERMS: readonly SignupTerm[] = [
   },
 ];
 
+/** 약관 항목 하나의 판. 항목이 없으면 빈 문자열 */
+export function termVersion(id: SignupTermId, terms: readonly SignupTerm[] = SIGNUP_TERMS): string {
+  return terms.find((t) => t.id === id)?.version ?? '';
+}
+
 /** 현재 약관 판을 BE 저장 본문 모양으로 묶는다 */
 export function currentConsentVersions(terms: readonly SignupTerm[] = SIGNUP_TERMS): ConsentVersions {
-  const version = (id: SignupTermId) => terms.find((t) => t.id === id)?.version ?? '';
-  return { termsVersion: version('terms'), privacyVersion: version('privacy'), dataConsentVersion: version('dataConsent') };
+  return {
+    termsVersion: termVersion('terms', terms),
+    privacyVersion: termVersion('privacy', terms),
+    dataConsent: { agreed: true, version: termVersion('dataConsent', terms) },
+  };
 }
 
 /** 연주 기록 활용 항목의 판. 없으면 빈 문자열. 설정 토글·업로드 동의 판단이 이 판 하나만 쓴다(설계 D13) */
 export function dataConsentVersion(terms: readonly SignupTerm[] = SIGNUP_TERMS): string {
-  return terms.find((t) => t.id === 'dataConsent')?.version ?? '';
+  return termVersion('dataConsent', terms);
 }
 
 /** 필수 항목이 전부 동의됐는가 — [동의하고 시작하기] 활성 조건 */
