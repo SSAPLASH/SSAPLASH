@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch } from './http';
+import { ApiError, apiFetch, resetSignupIncompleteForTest, subscribeSignupIncomplete } from './http';
 import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from './auth';
 
 type Handler = (url: string, init: RequestInit | undefined, call: number) => Response | Promise<Response>;
@@ -23,7 +23,10 @@ function header(init: RequestInit | undefined, name: string): string | null {
   return new Headers(init?.headers).get(name);
 }
 
-beforeEach(() => resetForTest());
+beforeEach(() => {
+  resetForTest();
+  resetSignupIncompleteForTest();
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -222,5 +225,45 @@ describe('apiFetch 401 처리', () => {
     await Promise.all([apiFetch('/api/a'), apiFetch('/api/b'), apiFetch('/api/c')]);
 
     expect(fetch.mock.calls.filter(([u]) => u === '/api/auth/refresh')).toHaveLength(1);
+  });
+});
+
+describe('apiFetch 가입 미완료 알림', () => {
+  it('403 SIGNUP_INCOMPLETE면 구독자에게 한 번 알리고 ApiError(403)를 그대로 던진다', async () => {
+    resetForTest('tok');
+    mockFetch(() => problem(403, 'SIGNUP_INCOMPLETE', '가입 동의가 필요합니다.'));
+    const listener = vi.fn();
+    subscribeSignupIncomplete(listener);
+
+    await expect(apiFetch('/api/songs')).rejects.toMatchObject({ status: 403, code: 'SIGNUP_INCOMPLETE' });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('다른 코드의 403·401은 알리지 않는다', async () => {
+    resetForTest('tok');
+    const listener = vi.fn();
+    subscribeSignupIncomplete(listener);
+
+    mockFetch(() => problem(403, 'FORBIDDEN', '권한이 없습니다.'));
+    await expect(apiFetch('/api/songs')).rejects.toBeInstanceOf(ApiError);
+
+    mockFetch((url) => (url === '/api/auth/refresh' ? json(401, {}) : problem(401, 'UNAUTHORIZED', '인증이 필요합니다.')));
+    vi.useFakeTimers();
+    const p = apiFetch('/api/songs').catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(REFRESH_RETRY_DELAY_MS);
+    expect(await p).toMatchObject({ status: 401 });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('해제하면 더 알리지 않는다', async () => {
+    resetForTest('tok');
+    mockFetch(() => problem(403, 'SIGNUP_INCOMPLETE', 'x'));
+    const listener = vi.fn();
+    const off = subscribeSignupIncomplete(listener);
+    off();
+
+    await expect(apiFetch('/api/songs')).rejects.toBeInstanceOf(ApiError);
+    expect(listener).not.toHaveBeenCalled();
   });
 });

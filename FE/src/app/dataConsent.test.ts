@@ -16,6 +16,8 @@ const me = (dataConsent: DataConsent): UserMe => ({
   createdAt: '2026-10-20T00:00:00Z',
   updatedAt: '2026-10-20T00:00:00Z',
   dataConsent,
+  signupCompleted: true,
+  consents: { terms: null, privacy: null },
 });
 
 beforeEach(() => resetAuthStoreForTest());
