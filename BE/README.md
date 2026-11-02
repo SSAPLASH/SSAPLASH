@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V25를 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V26을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -330,7 +330,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
 | `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
 | `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
-| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다) |
+| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다). 가입 동의 전 회원의 차단은 도메인 코드 `SIGNUP_INCOMPLETE`(403, [인증과 토큰](#인증과-토큰)) |
 | `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
 | `METHOD_NOT_ALLOWED` | 405 | |
 | `NOT_ACCEPTABLE` | 406 | |
@@ -383,6 +383,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V23 | `V23__create_sheet_music.sql` | 내 악보 `sheet_music`·`sheet_music_pages`, 정리 역할 `SHEET_MUSIC` 추가 | -155 |
 | V24 | `V24__allow_mpeg4_and_ogg_audio.sql` | 음원 MIME 확장(`audio/mp4`·`audio/ogg`), 기존 행 보존 | -267 |
 | V25 | `V25__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
+| V26 | `V26__add_users_signup_consents.sql` | 가입 동의 `users.data_consent_version`·`terms_version`·`terms_agreed_at`·`privacy_version`·`privacy_agreed_at`(판 `varchar(50)`, 시각 `timestamptz`, 모두 NULL 허용). `ck_users_data_consent`를 값·시각·판 셋이 함께 있거나 함께 없게 교체, `ck_users_terms_consent`·`ck_users_privacy_consent`(판·시각 함께, 판은 공백만 불가) 추가. 판 없이 값만 있던 행은 세 값 모두 NULL로 되돌린다. 기존 행은 채우지 않는다(동의 전으로 시작) | -199 |
 
 규칙:
 
@@ -409,12 +410,14 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V21까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V26까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
   `@SpringBootTest`에서 데이터를 쓰면 `@Transactional`로 롤백하거나 직접 지운다.
 - 최초 실행 때 PostgreSQL 바이너리 jar를 Gradle 캐시로 받는다.
+- 테스트 회원으로 보호 API를 부를 때는 가입 게이트에 막히지 않도록 `support.SignupConsentFixtures`로 가입 완료 상태를 만든다.
+  JPA로 만들면 저장 전에 `users.save(SignupConsentFixtures.completed(User.create(...)))`, SQL로 넣었으면 `SignupConsentFixtures.complete(db, id)`.
 
 ## 소셜 로그인
 
@@ -590,9 +593,11 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 | --- | --- | --- |
 | `POST /api/auth/refresh` | `refresh_token` 쿠키 | 200 `{accessToken, tokenType: "Bearer", expiresIn: 1800}` + 새 `refresh_token` 쿠키. 실패는 401 `UNAUTHORIZED` "다시 로그인해 주세요." |
 | `POST /api/auth/logout` | 쿠키(없어도 됨) | 204. 서버의 refresh 토큰을 지우고 쿠키를 만료시킨다. 여러 번 불러도 같다 |
-| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt, dataConsent}`. `dataConsent`는 항상 객체 `{agreed, updatedAt}`이고, 아직 답하지 않았으면 둘 다 null이다. 이메일·상태는 내보내지 않는다 |
-| `PUT /api/users/me/data-consent` | Bearer | 본문 `{agreed: boolean}`(필수) → 200 `{agreed, updatedAt}`. 값이 바뀔 때만 `updatedAt`이 갱신되고 같은 값 재저장도 200이다. 본문 누락·`agreed` null은 400, 토큰 없음·저장 순간 탈퇴는 401. 플레이 업로드 `consent`는 바꾸지 않는다 |
-| `DELETE /api/users/me` | Bearer | 204(본문 없음) + `refresh_token` 쿠키 만료. 본인만 탈퇴하며 되돌릴 수 없다. 동시에 두 번 부르면 늦은 쪽은 401 |
+| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt, signupCompleted, consents, dataConsent}`. `signupCompleted`는 이용약관·개인정보 동의가 둘 다 있으면 true(역할과 무관, ADMIN도 사실대로). `consents`는 항상 객체 `{terms, privacy}`이고 각 항목은 `{version, agreedAt}` 또는 동의 전 null. `dataConsent`는 항상 객체 `{agreed, version, updatedAt}`이고 동의 전이면 셋 다 null. 이메일·상태는 내보내지 않는다. 가입 동의 전에도 부를 수 있다 |
+| `POST /api/users/me/signup-consent` | Bearer | 본문 `{termsVersion, privacyVersion, dataConsent: {agreed, version}}` → 200 + `/me` 본문(`signupCompleted: true`). 판 3개는 필수(누락·null·빈 값·공백만·51자 이상은 400 `VALIDATION_FAILED`), `dataConsent` 누락·null도 400. **연주 기록 활용은 필수라 `agreed`는 true만 받는다**(false·null·누락은 400, `errors[].field = dataConsent.agreed`). 본문 없음·JSON 오류는 400 `INVALID_INPUT`. 가입을 마친 회원이 다시 보내도 200(약관 개정 재동의)이며 판이 바뀐 항목만 동의 시각과 회원 `updatedAt`이 갱신되고 같으면 그대로다. 서버는 판을 비교·해석하지 않는다. 토큰 없음·저장 순간 탈퇴는 401. 가입 동의 전에도 부를 수 있다 |
+| `DELETE /api/users/me` | Bearer | 204(본문 없음) + `refresh_token` 쿠키 만료. 본인만 탈퇴하며 되돌릴 수 없다. 동시에 두 번 부르면 늦은 쪽은 401. 가입 동의 전에도 부를 수 있다(가입 취소) |
+
+연주 기록 활용 동의는 가입 동의 `POST`로만 저장하며, 철회는 탈퇴다(199의 `PUT /api/users/me/data-consent`는 삭제했다).
 
 | 항목 | access 토큰 | refresh 토큰 |
 | --- | --- | --- |
@@ -610,6 +615,25 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 - **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
   `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰과
   학습 데이터 사용에 동의하지 않은 플레이 기록은 지우고, 동의한 플레이 기록은 남긴다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
+  가입 동의 기록(이용약관·개인정보·연주 기록 활용의 판·시각·값 7개 컬럼)도 같은 UPDATE로 비운다.
+
+### 가입 동의와 접근 제한
+
+소셜 인증 콜백은 지금처럼 회원을 바로 만든다(ACTIVE). 이용약관·개인정보 동의 시각이 둘 다 있어야 **가입 완료**이며, 기존 회원도
+V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 false면 가입 동의 화면을 띄우고 `POST /api/users/me/signup-consent`로 저장한다.
+
+- **가입 게이트**(`auth.SignupGateFilter`, 인증 필터 바로 뒤): 인증된 `USER`가 가입 미완료면 아래 허용 목록 밖 요청을
+  403 `SIGNUP_INCOMPLETE` "가입 동의가 필요합니다."로 끝낸다. 메서드와 경로가 정확히 같아야 통과한다.
+  - 허용: `GET /api/users/me`, `POST /api/users/me/signup-consent`, `DELETE /api/users/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`, 모든 `OPTIONS`
+- 토큰이 없거나 무효면 게이트를 거치지 않고 지금처럼 401이 먼저다. 게이트는 인증된 요청만 본다.
+- `ADMIN`은 게이트를 면제한다. 단 `/me`의 `signupCompleted`는 사실대로 내려간다.
+- 동의를 저장하면 같은 access 토큰의 다음 요청부터 통과한다(가입 완료 여부는 토큰이 아니라 매 요청 DB 조회 값).
+- `/ws/jobs/**`(BE2 WebSocket)는 막지 않는다. 인증 결과 `AuthUser.signupCompleted()`로 막을 수 있다.
+- **정리 배치**(`withdrawal.PendingSignupCleanup`): 동의 없이 떠난 신규 계정을 지운다. 대상은 V26 적용 시각
+  (`flyway_schema_history`, 처음 실행 때 한 번 읽음. 이력이 없으면 WARN 후 건너뜀) 이후 생성되고, 이용약관·개인정보 동의가 모두 없고,
+  생성 뒤 `user.signup.pending-ttl-days`(기본 7)일이 지난 ACTIVE 회원이다. 회원마다 `DELETE FROM users`(소셜 연동·프리셋·녹음은 FK
+  CASCADE) 후 refresh 토큰을 폐기하며, 실패(FK 위반 등)는 WARN 로그 후 다음 회원으로 넘어간다. 주기는
+  `user.signup.cleanup-interval-ms`(기본 3,600,000 = 1시간). V26 이전에 생긴 기존 회원은 지우지 않는다.
 
 공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
 `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
@@ -622,10 +646,11 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 | 서명·형식·발급자 불일치, `Bearer` 아닌 헤더 | 401 | `UNAUTHORIZED` | 액세스 토큰이 올바르지 않습니다. |
 | 탈퇴·없는 회원 | 401 | `UNAUTHORIZED` | 사용할 수 없는 계정입니다. |
 | ADMIN 전용에 USER | 403 | `FORBIDDEN` | 권한이 없습니다. |
+| 가입 동의 전 USER가 허용 목록 밖 API 호출 | 403 | `SIGNUP_INCOMPLETE` | 가입 동의가 필요합니다. |
 
 ### 다른 모듈에서 인증 쓰기
 
-- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
+- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`, `signupCompleted`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
   클라이언트가 보낸 회원 ID는 믿지 않는다. 문서에는 파라미터로 나오지 않는다. 클래스에 `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`를 붙인다.
 - **ADMIN 전용**: `@PreAuthorize("hasRole('ADMIN')")`. USER는 403이다.
 - **컨트롤러 밖**(인터셉터·연결 어댑터): `auth.CurrentAuthUser.find()`로 현재 요청의 `AuthUser`를 꺼낸다. 예: `chart.web.AuthenticatedChartQueryUserResolver`.

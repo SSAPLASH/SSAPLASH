@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.support.TestPropertyDefaultsInitializer;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.User;
@@ -99,7 +100,7 @@ class SecurityConfigTest {
 
 	@Test
 	void validTokenOfActiveUserReachesController() throws Exception {
-		var user = users.saveAndFlush(User.create("드러머", null, null));
+		var user = users.saveAndFlush(SignupConsentFixtures.completed(User.create("드러머", null, null)));
 
 		mvc.perform(get(ME).header(HttpHeaders.AUTHORIZATION, bearer(user, Instant.now())))
 				.andExpect(status().isOk())
@@ -157,7 +158,7 @@ class SecurityConfigTest {
 
 	@Test
 	void adminOnlyEndpointForbidsUser(CapturedOutput output) throws Exception {
-		var user = users.saveAndFlush(User.create("드러머", null, null));
+		var user = users.saveAndFlush(SignupConsentFixtures.completed(User.create("드러머", null, null)));
 
 		mvc.perform(get(ADMIN).header(HttpHeaders.AUTHORIZATION, bearer(user, Instant.now())))
 				.andExpect(status().isForbidden())

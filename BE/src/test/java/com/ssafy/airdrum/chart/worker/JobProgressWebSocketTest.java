@@ -27,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -48,7 +49,9 @@ class JobProgressWebSocketTest {
     static final String HASH="a".repeat(64);
     @BeforeEach void setup() {
         user=db.queryForObject("INSERT INTO users(nickname) VALUES('ws owner') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, user);
         other=db.queryForObject("INSERT INTO users(nickname) VALUES('ws other') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, other);
         song=db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,'ws song','AUDIO','PROCESSING',60000) RETURNING id",Long.class,user);
         String key="source-audio/"+UUID.randomUUID();
         job=db.queryForObject("INSERT INTO chart_jobs(song_id,user_id,source_key,idempotency_key,request_hash) VALUES(?,?,?,?,?) RETURNING id",Long.class,song,user,key,UUID.randomUUID().toString(),HASH);

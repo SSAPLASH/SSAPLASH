@@ -20,6 +20,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.User;
 import com.ssafy.airdrum.user.UserRepository;
@@ -69,8 +70,8 @@ class KitPresetApiTest {
 
 	@BeforeEach
 	void seed() {
-		owner = users.saveAndFlush(User.create("프리셋 주인", null, null)).getId();
-		other = users.saveAndFlush(User.create("다른 회원", null, null)).getId();
+		owner = users.saveAndFlush(SignupConsentFixtures.completed(User.create("프리셋 주인", null, null))).getId();
+		other = users.saveAndFlush(SignupConsentFixtures.completed(User.create("다른 회원", null, null))).getId();
 		ownerToken = token(owner, UserRole.USER);
 		otherToken = token(other, UserRole.USER);
 	}

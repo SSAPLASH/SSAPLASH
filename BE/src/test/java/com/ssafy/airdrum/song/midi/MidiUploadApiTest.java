@@ -23,6 +23,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -59,6 +60,7 @@ class MidiUploadApiTest {
 	@BeforeEach
 	void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('MIDI 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 	}
 
 	@AfterEach
