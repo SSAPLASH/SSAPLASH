@@ -84,6 +84,18 @@ DEFAULT_RULES: dict = {
     "tom_f0_frame_ms": 40.0,
     "tom_f0_hop_ms": 20.0,
     "tom_f0_start_ms": 0.0,
+    # 탐 음높이 잴 때 킥 울림 빼기 (S15P31A307-164 ENST 드러머 1 분석). None이면 끔. 탐 구간의 가장 큰 피크가 곡의
+    # 킥 음높이 ±이 반음 안이면, 그 밖의 가장 큰 피크가 최대의 tom_kick_exclude_ratio배 이상일 때 그쪽을 음높이로 씀.
+    # 킥을 다른 세트의 플로어탐 높이로 조율한 세트(킥 101Hz)에서 킥 울림이 탐 묶음 하나로 잡혀 이름이 밀리는 경우 대응.
+    # 곡의 킥 음높이는 ADTOF 킥 시각에서 tom_kick_pitch_source 트랙의 스펙트럼 피크 중앙값
+    "tom_kick_exclude_st": None,
+    "tom_kick_exclude_ratio": 0.2,
+    # 킥 울림 빼기를 어느 타격에 쓸지. 숫자면 곡 안 묶음 중 중앙값이 킥 음높이 ±이 반음 안인 묶음의 타격만 다시 재고
+    # 다시 묶음(relative 모드, 묶음이 둘 이상일 때). None이면 모든 탐 타격을 처음부터 빼고 잼. 킥 트랙에 탐이 새어
+    # 킥 음높이가 탐 높이로 재지는 곡(GMD 113Hz)에서 멀쩡한 탐까지 바꾸지 않게
+    "tom_kick_cluster_st": 1.0,
+    # 킥 음높이를 잴 트랙. kick: 분리한 kick 트랙. input: 입력 드럼
+    "tom_kick_pitch_source": "kick",
     # tom_relative_naming이 hybrid일 때 묶음 수에 따른 이름 규칙의 절대 음높이 기준.
     # 1묶음: floor_max 아래 FLOOR, small_min 위 SMALL, 사이 MID. 2묶음: 낮은 쪽은 floor_max 아래면 FLOOR 아니면 MID,
     # 높은 쪽은 small_min 위면 SMALL 아니면 MID. 둘이 같아지면 순서로 벌림. 3묶음: 순서
@@ -106,6 +118,7 @@ DEFAULT_RULES: dict = {
     "tom_kick_drop_max_score": None,
 }
 TOM_F0_METHODS = ("peak", "median")
+TOM_KICK_PITCH_SOURCES = ("kick", "input")
 TOM_RELATIVE_METHODS = ("gap", "peaks")
 ADTOF_LABELS: tuple[int, ...] = (
     35,
@@ -150,6 +163,10 @@ def rules_with_defaults(rules: dict | None) -> dict:
     if out["tom_relative_method"] not in TOM_RELATIVE_METHODS:
         raise ValueError(
             f"tom_relative_method는 {TOM_RELATIVE_METHODS} 중 하나: {out['tom_relative_method']!r}"
+        )
+    if out["tom_kick_pitch_source"] not in TOM_KICK_PITCH_SOURCES:
+        raise ValueError(
+            f"tom_kick_pitch_source는 {TOM_KICK_PITCH_SOURCES} 중 하나: {out['tom_kick_pitch_source']!r}"
         )
     if out["tom_f0_method"] not in TOM_F0_METHODS:
         raise ValueError(f"tom_f0_method는 {TOM_F0_METHODS} 중 하나: {out['tom_f0_method']!r}")
@@ -268,8 +285,20 @@ def _energy(segment: np.ndarray) -> float:
     return float(np.sum(segment.astype(np.float64) ** 2)) if segment.size else 0.0
 
 
-def estimate_f0(segment: np.ndarray, sample_rate: int, fmin: float, fmax: float) -> float:
-    """구간의 스펙트럼 최대 피크 주파수(Hz). 구간이 비거나 무음이면 nan. 4배 zero-pad로 해상도 확보."""
+def estimate_f0(
+    segment: np.ndarray,
+    sample_rate: int,
+    fmin: float,
+    fmax: float,
+    exclude_hz: float | None = None,
+    exclude_st: float | None = None,
+    exclude_ratio: float = 0.0,
+) -> float:
+    """구간의 스펙트럼 최대 피크 주파수(Hz). 구간이 비거나 무음이면 nan. 4배 zero-pad로 해상도 확보.
+
+    exclude_hz·exclude_st를 주면 최대 피크가 exclude_hz ±exclude_st 반음 안일 때, 그 밖의 최대 피크가
+    최대의 exclude_ratio배 이상이면 그 주파수를 돌려줌 (킥 울림 빼기).
+    """
     if segment.size == 0 or not np.any(segment):
         return math.nan
     n = int(2 ** math.ceil(math.log2(max(segment.size * 4, 2048))))
@@ -279,8 +308,18 @@ def estimate_f0(segment: np.ndarray, sample_rate: int, fmin: float, fmax: float)
     mask = (freqs >= fmin) & (freqs <= fmax)
     if not np.any(mask):
         return math.nan
-    idx = int(np.argmax(spec[mask]))
-    return float(freqs[mask][idx])
+    spec, freqs = spec[mask], freqs[mask]
+    idx = int(np.argmax(spec))
+    if exclude_hz is None or exclude_st is None or not exclude_hz > 0:
+        return float(freqs[idx])
+    with np.errstate(divide="ignore"):
+        away = np.abs(12.0 * np.log2(freqs / exclude_hz)) > float(exclude_st)
+    if away[idx] or not np.any(away):
+        return float(freqs[idx])
+    alt = int(np.argmax(np.where(away, spec, -1.0)))
+    if spec[alt] >= float(exclude_ratio) * spec[idx]:
+        return float(freqs[alt])
+    return float(freqs[idx])
 
 
 def estimate_f0_median(
@@ -290,28 +329,48 @@ def estimate_f0_median(
     fmax: float,
     frame_ms: float = 40.0,
     hop_ms: float = 20.0,
+    **exclude,
 ) -> float:
-    """구간을 프레임으로 잘라 프레임마다 스펙트럼 피크를 재고 그 중앙값. 프레임이 하나도 안 나오면 구간 전체로."""
+    """구간을 프레임으로 잘라 프레임마다 스펙트럼 피크를 재고 그 중앙값. 프레임이 하나도 안 나오면 구간 전체로.
+
+    exclude는 estimate_f0의 exclude_hz·exclude_st·exclude_ratio.
+    """
     frame = max(1, int(round(frame_ms / 1000 * sample_rate)))
     hop = max(1, int(round(hop_ms / 1000 * sample_rate)))
     values = []
     start = 0
     while start + frame <= segment.size:
-        v = estimate_f0(segment[start : start + frame], sample_rate, fmin, fmax)
+        v = estimate_f0(segment[start : start + frame], sample_rate, fmin, fmax, **exclude)
         if not math.isnan(v):
             values.append(v)
         start += hop
     if not values:
-        return estimate_f0(segment, sample_rate, fmin, fmax)
+        return estimate_f0(segment, sample_rate, fmin, fmax, **exclude)
     return float(np.median(values))
 
 
-def tom_f0_at(toms: np.ndarray | None, sample_rate: int, t: float, rules: dict) -> float:
-    """타격 시각 t의 탐 음높이(Hz)를 규칙대로 잼. toms가 없거나 무음이면 nan. 규칙 함수와 분석 도구가 같이 씀."""
+def tom_f0_at(
+    toms: np.ndarray | None,
+    sample_rate: int,
+    t: float,
+    rules: dict,
+    kick_hz: float | None = None,
+) -> float:
+    """타격 시각 t의 탐 음높이(Hz)를 규칙대로 잼. toms가 없거나 무음이면 nan. 규칙 함수와 분석 도구가 같이 씀.
+
+    kick_hz는 곡의 킥 음높이. tom_kick_exclude_st를 켰을 때만 씀.
+    """
     if toms is None:
         return math.nan
     r = rules_with_defaults(rules)
     seg = _window(toms, sample_rate, t + r["tom_f0_start_ms"] / 1000.0, r["window_ms"])
+    exclude = {}
+    if r["tom_kick_exclude_st"] is not None and kick_hz is not None and math.isfinite(kick_hz):
+        exclude = {
+            "exclude_hz": float(kick_hz),
+            "exclude_st": float(r["tom_kick_exclude_st"]),
+            "exclude_ratio": float(r["tom_kick_exclude_ratio"]),
+        }
     if r["tom_f0_method"] == "median":
         return estimate_f0_median(
             seg,
@@ -320,8 +379,40 @@ def tom_f0_at(toms: np.ndarray | None, sample_rate: int, t: float, rules: dict) 
             r["tom_fmax"],
             r["tom_f0_frame_ms"],
             r["tom_f0_hop_ms"],
+            **exclude,
         )
-    return estimate_f0(seg, sample_rate, r["tom_fmin"], r["tom_fmax"])
+    return estimate_f0(seg, sample_rate, r["tom_fmin"], r["tom_fmax"], **exclude)
+
+
+def song_kick_hz(
+    kick_times: Sequence[float] | None,
+    stems: dict[str, np.ndarray] | None,
+    mixture: np.ndarray | None,
+    sample_rate: int,
+    rules: dict,
+) -> float:
+    """곡의 킥 음높이(Hz). ADTOF 킥 시각마다 tom_kick_pitch_source 트랙의 window_ms 구간 스펙트럼 피크를 재고 중앙값.
+
+    킥 시각이나 트랙이 없거나 전부 무음이면 nan.
+    """
+    r = rules_with_defaults(rules)
+    if r["tom_kick_pitch_source"] == "input":
+        audio = mixture
+    else:
+        audio = (stems or {}).get(r["stems"]["kick"])
+    if audio is None or not kick_times:
+        return math.nan
+    values = [
+        estimate_f0(
+            _window(audio, sample_rate, float(t), r["window_ms"]),
+            sample_rate,
+            r["tom_fmin"],
+            r["tom_fmax"],
+        )
+        for t in kick_times
+    ]
+    values = [v for v in values if not math.isnan(v)]
+    return float(np.median(values)) if values else math.nan
 
 
 def tom_pad(f0: float, bands: Sequence[float]) -> str:
@@ -527,6 +618,8 @@ class TomAssignment:
     rescued: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
     # 이름을 붙인 뒤 킥과 겹쳐 버린 타격 (tom_kick_drop_ms)
     kick_dropped: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
+    # 곡의 킥 음높이(Hz). tom_kick_exclude_st를 껐거나 못 재면 nan
+    kick_hz: float = math.nan
 
     @property
     def n_dropped(self) -> int:
@@ -626,7 +719,7 @@ def assign_toms(
     """ADTOF 탐 타격 시각 → 음높이 → (거르기) → 고정 경계 또는 곡별 상대 방식으로 패드 → (킥과 겹친 탐 지우기).
 
     snare_times는 ADTOF 스네어 타격 시각. tom_gate_action이 snare일 때 이미 스네어가 있는 타격은 돌리지 않음.
-    kick_times는 ADTOF 킥 타격 시각. tom_kick_drop_ms를 켰을 때만 씀.
+    kick_times는 ADTOF 킥 타격 시각. tom_kick_drop_ms·tom_kick_exclude_st를 켰을 때만 씀.
     stems는 분리 트랙 전부(거르기 분모 others·낮은 탐 되살리기에 kick·snare·hh가 필요). 없으면 toms만 씀.
     scores는 타격마다 ADTOF 탐 확신 점수. 없으면 되살리기의 점수 조건은 통과한 것으로 봄.
     """
@@ -635,7 +728,13 @@ def assign_toms(
     stems = dict(stems or {})
     if toms is not None:
         stems.setdefault(r["stems"]["toms"], toms)
-    f0 = np.array([tom_f0_at(toms, sample_rate, t, r) for t in times], dtype=np.float64)
+    kick_hz = math.nan
+    if r["tom_kick_exclude_st"] is not None:
+        kick_hz = song_kick_hz(kick_times, stems, mixture, sample_rate, r)
+    # 묶음 단위로 빼면 처음에는 그대로 재고, 킥 음높이에 앉은 묶음만 아래에서 다시 잼
+    by_cluster = r["tom_kick_cluster_st"] is not None and r["tom_mode"] != "fixed"
+    f0_kick = None if by_cluster else kick_hz
+    f0 = np.array([tom_f0_at(toms, sample_rate, t, r, f0_kick) for t in times], dtype=np.float64)
     kept = np.ones(len(times), dtype=bool)
     rescued = np.zeros(len(times), dtype=bool)
     ratios: np.ndarray | None = None
@@ -671,25 +770,39 @@ def assign_toms(
             int(r["tom_relative_min_hits"]),
             int(math.ceil(float(r["tom_relative_min_frac"]) * n_ok)),
         )
-        if r["tom_relative_method"] == "peaks":
-            sub = cluster_pitches_peaks(
-                f0[kept_idx],
-                int(r["tom_relative_k"]),
-                float(r["tom_relative_min_gap"]),
-                min_hits,
-                float(r["tom_relative_bin"]),
-                float(r["tom_relative_smooth"]),
-            )
-        else:
-            sub = cluster_pitches(
-                f0[kept_idx],
-                int(r["tom_relative_k"]),
-                float(r["tom_relative_min_gap"]),
-                min_hits,
-            )
+
+        def cluster(values: np.ndarray) -> tuple[np.ndarray, list[float]]:
+            if r["tom_relative_method"] == "peaks":
+                out = cluster_pitches_peaks(
+                    values,
+                    int(r["tom_relative_k"]),
+                    float(r["tom_relative_min_gap"]),
+                    min_hits,
+                    float(r["tom_relative_bin"]),
+                    float(r["tom_relative_smooth"]),
+                )
+            else:
+                out = cluster_pitches(
+                    values,
+                    int(r["tom_relative_k"]),
+                    float(r["tom_relative_min_gap"]),
+                    min_hits,
+                )
+            n = int(out.max()) + 1 if out.size and out.max() >= 0 else 0
+            return out, [float(np.median(values[out == c])) for c in range(n)]
+
+        sub, medians = cluster(f0[kept_idx])
+        if by_cluster and math.isfinite(kick_hz) and len(medians) >= 2:
+            on_kick = [
+                c
+                for c, m in enumerate(medians)
+                if abs(12.0 * math.log2(m / kick_hz)) <= float(r["tom_kick_cluster_st"])
+            ]
+            if on_kick:
+                for i in kept_idx[np.isin(sub, on_kick)]:
+                    f0[i] = tom_f0_at(toms, sample_rate, times[i], r, kick_hz)
+                sub, medians = cluster(f0[kept_idx])
         labels[kept_idx] = sub
-        n_clusters = int(sub.max()) + 1 if sub.size and sub.max() >= 0 else 0
-        medians = [float(np.median(f0[kept_idx][sub == c])) for c in range(n_clusters)]
         names = name_clusters(
             medians,
             r["tom_relative_naming"],
@@ -733,6 +846,7 @@ def assign_toms(
         scores=score_arr,
         rescued=rescued,
         kick_dropped=kick_dropped,
+        kick_hz=kick_hz,
     )
 
 

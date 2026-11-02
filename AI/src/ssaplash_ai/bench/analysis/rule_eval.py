@@ -225,6 +225,8 @@ class SongEval:
     tom_dropped: int = 0
     tom_clusters: int = 0
     tom_cluster_hz: str = ""
+    # 곡의 킥 음높이(Hz). 킥 울림 빼기(tom_kick_exclude_st)를 껐으면 빈 문자열
+    tom_kick_hz: str = ""
     # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 수 (S15P31A307-164 재연구)
     tom_rescued: int = 0
     # 이름을 붙인 뒤 킥과 겹쳐 버린 탐 수 (tom_kick_drop_ms)
@@ -255,6 +257,7 @@ def eval_song(song_id: str, features: RuleFeatures, hits_true: np.ndarray, rules
         tom_dropped=toms.n_dropped,
         tom_clusters=toms.n_clusters,
         tom_cluster_hz="/".join(f"{m:.0f}" for m in toms.cluster_medians),
+        tom_kick_hz="" if math.isnan(toms.kick_hz) else f"{toms.kick_hz:.0f}",
         tom_rescued=toms.n_rescued,
         tom_kick_dropped=toms.n_kick_dropped,
         pads9=dict(pads9.by_label),
@@ -623,6 +626,7 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
         "tomConsistent",
         "tomClusters",
         "tomClusterHz",
+        "tomKickHz",
         "cymbalMatched",
         "cymbalCorrect",
         "cymbalFalseKept",
@@ -651,6 +655,7 @@ def run_rule_eval(opts: RuleEvalOptions, log: Logger = print) -> RuleEvalResult:
                 "tomConsistent": s.tom_consistent,
                 "tomClusters": s.tom_clusters,
                 "tomClusterHz": s.tom_cluster_hz,
+                "tomKickHz": s.tom_kick_hz,
                 "cymbalMatched": s.cymbal.matched,
                 "cymbalCorrect": s.cymbal.correct,
                 "cymbalFalseKept": s.cymbal.false_kept,

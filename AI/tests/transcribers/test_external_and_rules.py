@@ -724,3 +724,63 @@ def test_킥과_겹친_플로어탐만_지운다():
         (0.8, "SMALL_TOM"),
         (0.81, "KICK"),
     ]
+
+
+def test_킥_울림_빼기는_킥_음높이_근처_피크_대신_다음_피크를_쓴다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import assign_toms, song_kick_hz
+
+    # 100Hz 킥 울림(진폭 1)에 200Hz 탐(진폭 0.5)이 섞인 구간
+    seg = (_sine(100) + 0.5 * _sine(200))[0]
+    assert abs(estimate_f0(seg, SR, 50, 400) - 100) < 6
+    assert abs(estimate_f0(seg, SR, 50, 400, 100.0, 3.0, 0.2) - 200) < 6
+    # 다음 피크가 기준 비율보다 작으면 원래 피크 그대로
+    assert abs(estimate_f0(seg, SR, 50, 400, 100.0, 3.0, 0.8) - 100) < 6
+    # 최대 피크가 킥 음높이에서 멀면 그대로
+    assert abs(estimate_f0(_sine(150)[0], SR, 50, 400, 100.0, 3.0, 0.2) - 150) < 6
+
+    # 곡: 킥은 100Hz(0.1·0.4·1.0초), 탐은 150Hz 플로어탐과 200Hz 미드탐. 미드탐 두 번에 킥 울림이 더 크게 섞임
+    kick = _toms_track([(0.1, 100, 1), (0.4, 100, 1), (1.0, 100, 1)])
+    toms = _toms_track([(0.2, 150, 1), (0.5, 150, 1), (0.7, 200, 1), (1.3, 200, 1)])
+    for t in (0.7, 1.3):
+        s = int(t * SR)
+        toms[:, s : s + int(0.1 * SR)] += _sine(100) * 2
+    times = [0.2, 0.5, 0.7, 1.3]
+    kicks = [0.1, 0.4, 1.0]
+    stems = {"kick": kick, "toms": toms}
+    assert abs(song_kick_hz(kicks, stems, None, SR, {}) - 100) < 6
+    assert np.isnan(song_kick_hz([], stems, None, SR, {}))
+    rel = {
+        "tom_mode": "relative",
+        "tom_relative_naming": "hybrid",
+        "tom_hybrid_floor_max_hz": 160.0,
+    }
+    off = assign_toms(times, toms, SR, rel, stems=stems, kick_times=kicks)
+    # 끄면 미드탐이 100Hz로 재져 플로어탐보다 낮은 묶음이 됨
+    assert off.pads == ["MID_TOM", "MID_TOM", "FLOOR_TOM", "FLOOR_TOM"] and np.isnan(off.kick_hz)
+    on = assign_toms(
+        times, toms, SR, {**rel, "tom_kick_exclude_st": 3.0}, stems=stems, kick_times=kicks
+    )
+    assert on.pads == ["FLOOR_TOM", "FLOOR_TOM", "MID_TOM", "MID_TOM"]
+    assert abs(on.kick_hz - 100) < 6
+    # 킥 시각이 없으면 킥 음높이를 못 재서 끈 것과 같음
+    none = assign_toms(times, toms, SR, {**rel, "tom_kick_exclude_st": 3.0}, stems=stems)
+    assert none.pads == off.pads
+    # 모든 타격에서 빼도(tom_kick_cluster_st None) 이 곡은 같음
+    every = {**rel, "tom_kick_exclude_st": 3.0, "tom_kick_cluster_st": None}
+    assert assign_toms(times, toms, SR, every, stems=stems, kick_times=kicks).pads == on.pads
+    # 킥 음높이(113Hz)에 앉은 묶음이 없으면 묶음 단위는 음높이를 안 바꿈. 모든 타격에서 빼면 97·129Hz 탐 음높이가 바뀜
+    kick2 = _toms_track([(0.1, 113, 1), (0.4, 113, 1), (1.0, 113, 1)])
+    toms2 = _toms_track([(0.2, 97, 1), (0.5, 97, 1), (0.7, 129, 1), (1.3, 129, 1)])
+    for t, f in ((0.2, 154), (0.5, 154), (0.7, 205), (1.3, 205)):
+        s = int(t * SR)
+        toms2[:, s : s + int(0.1 * SR)] += _sine(f) * 0.5
+    stems2 = {"kick": kick2, "toms": toms2}
+    base2 = assign_toms(times, toms2, SR, rel, stems=stems2, kick_times=kicks)
+    kx2 = {**rel, "tom_kick_exclude_st": 3.0}
+    same = assign_toms(times, toms2, SR, kx2, stems=stems2, kick_times=kicks)
+    assert np.allclose(same.f0, base2.f0) and abs(same.kick_hz - 113) < 6
+    every2 = {**kx2, "tom_kick_cluster_st": None}
+    moved = assign_toms(times, toms2, SR, every2, stems=stems2, kick_times=kicks)
+    assert np.max(np.abs(moved.f0 - base2.f0)) > 3
+    with pytest.raises(ValueError, match="tom_kick_pitch_source"):
+        rules_with_defaults({"tom_kick_pitch_source": "toms"})
