@@ -56,7 +56,7 @@ public class User {
 
 	private Instant withdrawnAt;
 
-	/** 연주 기록 활용 동의(V24). null은 아직 답하지 않음. 저장은 {@link UserRepository#updateDataConsent}가 한다. */
+	/** 연주 기록 활용 동의(V25). null은 아직 답하지 않음. 저장은 {@link UserRepository#updateDataConsent}가 한다. */
 	private Boolean dataConsent;
 
 	/** 현재 동의 값을 선택한 시각. {@link #dataConsent}가 null이면 null이다. */
