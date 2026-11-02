@@ -31,7 +31,7 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
-        {/* 가입 동의 — 1단계는 화면만. 신규 회원 분기·저장은 BE 회신 뒤(설계 COACH-003-signup-consent) */}
+        {/* 가입 동의 — 페이지가 서버 가입 상태를 스스로 확인한다(설계 COACH-003-signup-consent v0.4) */}
         <Route path="signup" element={<SignupPage />} />
       </Route>
       <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
