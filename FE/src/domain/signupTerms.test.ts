@@ -5,6 +5,7 @@ import {
   allRequiredAgreed,
   currentConsentVersions,
   dataConsentVersion,
+  termVersion,
   toggleAll,
   toggleOne,
   type SignupTerm,
@@ -30,19 +31,19 @@ describe('currentConsentVersions', () => {
     expect(currentConsentVersions()).toEqual({
       termsVersion: SIGNUP_TERMS[0].version,
       privacyVersion: SIGNUP_TERMS[1].version,
-      dataConsentVersion: SIGNUP_TERMS[2].version,
+      dataConsent: { agreed: true, version: SIGNUP_TERMS[2].version },
     });
   });
 
   it('항목이 빠지면 빈 문자열', () => {
-    expect(currentConsentVersions([SIGNUP_TERMS[0]])).toEqual({ termsVersion: SIGNUP_TERMS[0].version, privacyVersion: '', dataConsentVersion: '' });
+    expect(currentConsentVersions([SIGNUP_TERMS[0]])).toEqual({ termsVersion: SIGNUP_TERMS[0].version, privacyVersion: '', dataConsent: { agreed: true, version: '' } });
   });
 });
 
 describe('dataConsentVersion', () => {
-  it('연주 기록 활용 항목의 판이며 묶음의 dataConsentVersion과 같다', () => {
+  it('연주 기록 활용 항목의 판이며 묶음의 dataConsent.version과 같다', () => {
     expect(dataConsentVersion()).toBe(SIGNUP_TERMS[2].version);
-    expect(dataConsentVersion()).toBe(currentConsentVersions().dataConsentVersion);
+    expect(dataConsentVersion()).toBe(currentConsentVersions().dataConsent.version);
   });
 
   it('항목이 없으면 빈 문자열', () => {
@@ -101,5 +102,17 @@ describe('연주 기록 활용 본문', () => {
     const t = SIGNUP_TERMS[2];
     expect(t.required).toBe(true);
     expect(t.body).toContain('동의 철회는 회원 탈퇴로 할 수 있어요.');
+  });
+});
+
+describe('termVersion', () => {
+  it('항목 id의 판을 돌려준다', () => {
+    expect(termVersion('terms')).toBe(SIGNUP_TERMS[0].version);
+    expect(termVersion('privacy')).toBe(SIGNUP_TERMS[1].version);
+    expect(termVersion('dataConsent')).toBe(SIGNUP_TERMS[2].version);
+  });
+
+  it('항목이 없으면 빈 문자열', () => {
+    expect(termVersion('privacy', [SIGNUP_TERMS[0]])).toBe('');
   });
 });

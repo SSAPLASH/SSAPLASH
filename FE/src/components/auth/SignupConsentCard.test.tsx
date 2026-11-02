@@ -24,6 +24,16 @@ describe('SignupConsentCard', () => {
     expect(html).toContain('ui-btn-full');
   });
 
+  it('error가 있으면 버튼 앞에 role=alert 문구가 보인다', () => {
+    const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} error="동의를 저장하지 못했습니다." />);
+    expect(h).toContain('<p class="signup-card-error t-body-14" role="alert">동의를 저장하지 못했습니다.</p>');
+    expect(h.indexOf('signup-card-error')).toBeLessThan(h.indexOf('동의하고 시작하기'));
+  });
+
+  it('error가 없으면 오류 문구가 없다', () => {
+    expect(html).not.toContain('signup-card-error');
+  });
+
   it('submitting이면 버튼을 잠근다', () => {
     const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} submitting />);
     expect(h).toMatch(/<button[^>]*disabled=""[^>]*>동의하고 시작하기/);
