@@ -2,9 +2,10 @@
 import { create } from 'zustand';
 import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
-import { fetchMe, withdrawMe } from '@/api/users';
+import { fetchMe, putDataConsent, withdrawMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
 import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
+import { dataConsentVersion } from '@/domain/signupTerms';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';
@@ -27,6 +28,11 @@ interface AuthState {
   /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
   clearLostReason: () => void;
+  /**
+   * 연주 기록 활용 동의 저장(PUT /api/users/me/data-consent, 현재 판). 성공하면 user.dataConsent를 응답으로 바꾼다.
+   * 로그인 상태가 아니면 아무것도 하지 않는다. 실패는 그대로 던진다(설계 D15)
+   */
+  setDataConsent: (agreed: boolean) => Promise<void>;
   /** 돌아갈 경로를 sessionStorage에 두고 BE 로그인 시작 주소로 브라우저를 통째로 보낸다(fetch 아님) */
   startLogin: (provider: ProviderKey, returnTo: string | null) => void;
   /** 로그인 뒤 돌아갈 경로를 꺼내고 지운다. 없거나 쓸 수 없으면 홈 */
@@ -132,6 +138,14 @@ export const useAuth = create<AuthState>()((set, get) => ({
     set({ status: 'anonymous', user: null, lostReason: 'session_expired' });
   },
   clearLostReason: () => set({ lostReason: null }),
+  setDataConsent: async (agreed) => {
+    const { status, user } = get();
+    if (status !== 'authenticated' || !user) return;
+    const res = await putDataConsent({ agreed, version: dataConsentVersion() });
+    // 요청 중 로그아웃·계정 전환이 있었으면 응답을 버린다
+    const now = get().user;
+    if (now && now.id === user.id) set({ user: { ...now, dataConsent: res } });
+  },
   startLogin: (provider, returnTo) => {
     saveReturnTo(sanitizeReturnTo(returnTo));
     window.location.assign(loginUrl(provider));
