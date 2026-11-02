@@ -15,7 +15,7 @@
   - 정지 대비 도착: HIT 도착 시각 − 스틱이 멈춘 시각(패킷 timestamp를 시계 동기화로 변환)
       음수면 스틱이 멈추기 전에 브라우저에 도착한 것
   - 정지 → 소리 예상: 위 값 + 오디오 출력 지연(outputLatency)
-  프로토콜: 스틱 통신 프로토콜 v0.7
+  프로토콜: 스틱 통신 프로토콜 v0.8
 -->
 <style>
   :root { --bg:#16181d; --panel:#1f2229; --line:#2c303a; --text:#e8e6e1; --dim:#9aa0ab; --acc:#6c8cff; --good:#5fc28a; --warn:#e6b85c; --bad:#e0675a; }
@@ -56,7 +56,7 @@
 <body>
 <main>
   <h1>스틱 지연 측정</h1>
-  <div class="sub">Feather nRF52840 Sense → BLE / USB 시리얼 / WS 브리지 → Web Audio · 프로토콜 v0.7</div>
+  <div class="sub">Feather nRF52840 Sense → BLE / USB 시리얼 / WS 브리지 → Web Audio · 프로토콜 v0.8</div>
 
   <div class="row">
     <button class="primary" id="btnConnect">BLE 연결</button>
@@ -65,6 +65,11 @@
     <button id="btnDisconnect" disabled>끊기</button>
     <button id="btnReset" disabled>정면 보정</button>
     <button id="btnParams" disabled>파라미터 읽기</button>
+    <button id="btnHaptic" disabled>진동 테스트</button>
+    <label class="vol">파형 <input type="number" id="hapEff" min="1" max="123" value="1" style="width:56px"></label>
+    <button id="btnHapEff" disabled>파형 재생</button>
+    <button id="btnHapSet" disabled>타격에 쓰기</button>
+    <button id="btnHapLat" disabled>진동 지연 측정</button>
     <button id="btnClear">통계 초기화</button>
     <button id="btnCsv">CSV 저장</button>
     <label class="vol">음량 <input type="range" id="vol" min="1" max="8" step="0.5" value="4"><span id="volV">×4</span></label>
@@ -120,6 +125,8 @@ let lastSeq = {}, lost = 0;       // 역할별 마지막 HIT seq
 const ROLE_NAME = ['왼손', '오른손', '왼발', '오른발'];
 const ROLE_CH = ['L', 'R', 'l', 'r'];
 let seen = {};
+let lastLink = -1;
+let unconf = {};                   // 역할 → STATUS의 '설정 전' 플래그                 // LINK 마스크 (v0.8) 바뀔 때만 로그
 let bat = {}, batLog = [];       // 역할 → 배터리 %, 30초마다 LOG "BAT 3987mV 82%" 기록                    // 역할 → 마지막으로 스틱 패킷을 받은 시각(ms)
 function activeRoles() { const now = performance.now(); return Object.keys(seen).map(Number).filter((r) => now - seen[r] < 3000).sort(); }
 
@@ -207,8 +214,9 @@ function handle(dv, recv) {
     }
     case 0x03: {                                   // STATUS: [2] 배터리 % (0xFF 모름)
       if (b[2] !== 0xff) bat[role] = b[2];
+      unconf[role] = !!(b[1] & 0x20);             // v0.8: 부팅 뒤 웹 설정 못 받음
       const bs = Object.keys(bat).sort().map((r) => `${ROLE_NAME[r]} ${bat[r]}%`).join(' · ');
-      $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}` + (bs ? ` · 배터리 ${bs}` : '');
+      $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}` + (bs ? ` · 배터리 ${bs}` : '') + (Object.keys(unconf).some((r) => unconf[r]) ? ` · 설정 전: ${Object.keys(unconf).sort().filter((r) => unconf[r]).map((r) => ROLE_NAME[r]).join(', ')}` : '');
       break;
     }
     case 0x06: {
@@ -225,6 +233,12 @@ function handle(dv, recv) {
       const m = /^BAT (\d+)mV/.exec(txt);
       if (m) batLog.push({ recv, role, mv: Number(m[1]) });
       log(txt.startsWith('DONGLE') ? 'LOG ' + txt : `LOG ${ROLE_CH[role]} ${txt}`);
+      break;
+    }
+    case 0x07: {                                   // LINK (v0.8, 동글): [2] 연결 마스크, [3].[4] 동글 펌웨어
+      const m = b[2];
+      $('bridge').textContent = `동글 ${b[3]}.${b[4]} · ` + ROLE_NAME.map((n, i) => `${n} ${m & (1 << i) ? '●' : '○'}`).join(' ');
+      if (m !== lastLink) { log(`LINK ${ROLE_NAME.filter((_, i) => m & (1 << i)).join(', ') || '없음'}`); lastLink = m; }
       break;
     }
     case 0x7e: $('bridge').textContent = `브리지 ok ${dv.getUint32(2, true)} · CRC ${dv.getUint32(6, true)}`; break;
@@ -393,7 +407,7 @@ const CONN_BTNS = ['btnConnect', 'btnSerial', 'btnWs'];
 function onConnected(kind, label) {
   transport = kind; lastTransport = kind;
   $('state').textContent = `연결됨 · ${label}`;
-  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib']) $(b).disabled = false;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnHaptic', 'btnHapEff', 'btnHapSet', 'btnHapLat', 'btnCalib']) $(b).disabled = false;
   for (const b of CONN_BTNS) $(b).disabled = true;
   $('btnCalibResend').disabled = !storedPads();
   syncs = []; pending.clear(); seen = {}; lastSeq = {}; curPads = {}; padAck = {}; padTxt = {};
@@ -403,7 +417,7 @@ function onConnected(kind, label) {
 function onDisconnected() {
   $('state').textContent = '끊김'; clearInterval(syncTimer);
   ctrl = null; writer = null; ws = null; reading = false; transport = null;
-  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib', 'btnCalibCancel', 'btnCalibResend']) $(b).disabled = true;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnHaptic', 'btnHapEff', 'btnHapSet', 'btnHapLat', 'btnCalib', 'btnCalibCancel', 'btnCalibResend']) $(b).disabled = true;
   for (const b of CONN_BTNS) $(b).disabled = false;
   calib = null; anchor = null; calibShow();
 }
@@ -515,6 +529,12 @@ $('btnCalibResend').onclick = async () => {
   anchorShow();
 };
 $('btnParams').onclick = () => write([0x17]);
+$('btnHaptic').onclick = () => write([0x12, 200, 5]);   // HAPTIC: 세기 200, 50ms (연결된 스틱 모두)
+// 개발용: HAPTIC [1]=파형 번호, [2]=0 재생 / 0xFF 타격 파형으로 설정 (TI LRA 라이브러리 1~123)
+$('btnHapEff').onclick = () => write([0x12, Number($('hapEff').value) & 0xff, 0]);
+// 개발용: HAPTIC [파형, 0xFE] → 스틱이 IMU로 진동 시작까지 시간을 재서 LOG "VIB x.xms" (모터를 스틱에 붙이고 가만히)
+$('btnHapLat').onclick = () => write([0x12, Number($('hapEff').value) & 0xff, 0xfe]);
+$('btnHapSet').onclick = () => { write([0x12, Number($('hapEff').value) & 0xff, 0xff]); log(`타격 진동 파형 = ${$('hapEff').value}`); };
 $('btnClear').onclick = () => { syncs = []; hits = []; lost = 0; lastSeq = {}; batLog = []; $('hits').textContent = ''; };
 $('btnCsv').onclick = () => {
   let s = `# transport,${lastTransport}\nkind,seq,pad,vel,el,az,lat_ms,rtt_ms,recv_ms,role,bat_mv\n`;
