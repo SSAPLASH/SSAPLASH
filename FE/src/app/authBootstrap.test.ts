@@ -17,6 +17,7 @@ const ME: UserMe = {
   role: 'USER',
   createdAt: '2026-10-21T00:00:00Z',
   updatedAt: '2026-10-21T00:00:00Z',
+  dataConsent: { agreed: null, version: null, updatedAt: null },
 };
 
 beforeEach(() => {

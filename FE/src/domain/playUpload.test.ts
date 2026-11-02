@@ -134,6 +134,8 @@ describe('buildUploadBody', () => {
     expect(b.kitPresetId).toBe(5);
     expect(b.calibration).toEqual({ audioOffsetMs: 12, pads: null });
     expect(b.consent).toBe(false);
+    const agreed = buildUploadBody(log(), { ...ctx, consent: true });
+    expect(agreed.ok && agreed.body.consent).toBe(true);
     expect(b.clientMeta).toMatchObject({ endReason: 'COMPLETED', lastSongTimeMs: 2800, elapsedActiveMs: 4800 });
   });
 

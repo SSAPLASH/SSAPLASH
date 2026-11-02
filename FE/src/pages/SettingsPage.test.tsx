@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { UserMe } from '@/domain/auth';
+import { dataConsentVersion } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
@@ -16,6 +17,7 @@ const user: UserMe = {
   role: 'USER',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  dataConsent: { agreed: null, version: null, updatedAt: null },
 };
 
 function render(): string {
@@ -60,7 +62,6 @@ beforeEach(() => {
     volume: 0.8,
     audioOffsetMs: 0,
     liveCoach: true,
-    statsConsent: false,
   });
   put(useLive, { connected: [false, false], referenceSetAt: null });
   put(usePresets, { items: [] });
@@ -94,10 +95,25 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
     let html = render();
     expect(switchChecked(html, '실시간 코칭')).toBe('true');
     expect(switchChecked(html, '연주 기록 활용')).toBe('false');
-    put(useSettings, { liveCoach: false, statsConsent: true });
+    put(useSettings, { liveCoach: false });
     html = render();
     expect(switchChecked(html, '실시간 코칭')).toBe('false');
-    expect(switchChecked(html, '연주 기록 활용')).toBe('true');
+  });
+
+  it('연주 기록 활용 토글은 서버 dataConsent와 판을 따른다', () => {
+    // 답한 적 없음 → 꺼짐
+    expect(switchChecked(render(), '연주 기록 활용')).toBe('false');
+    // 동의 + 현재 판 → 켜짐
+    const agreed = { agreed: true, version: dataConsentVersion(), updatedAt: '2026-11-02T00:00:00Z' };
+    put(useAuth, { user: { ...user, dataConsent: agreed } });
+    const on = render();
+    expect(switchChecked(on, '연주 기록 활용')).toBe('true');
+    expect(on).not.toContain('동의 문구가 바뀌어 다시 켜야 해요.');
+    // 동의했지만 판 불일치 → 꺼짐 + 안내
+    put(useAuth, { user: { ...user, dataConsent: { ...agreed, version: '1999-01-01' } } });
+    const stale = render();
+    expect(switchChecked(stale, '연주 기록 활용')).toBe('false');
+    expect(stale).toContain('동의 문구가 바뀌어 다시 켜야 해요.');
   });
 
   it('음량 %와 지연 보정 표시', () => {

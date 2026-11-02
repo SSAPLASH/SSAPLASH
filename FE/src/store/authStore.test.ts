@@ -23,6 +23,7 @@ const ME: UserMe = {
   role: 'USER',
   createdAt: '2026-10-20T03:00:00Z',
   updatedAt: '2026-10-20T03:00:00Z',
+  dataConsent: { agreed: null, version: null, updatedAt: null },
 };
 const tokenOk = () => json(200, { accessToken: 'tok', tokenType: 'Bearer', expiresIn: 1800 });
 const problem = (status: number, code: string) => json(status, { status, code, detail: 'x' }, 'application/problem+json');
@@ -291,5 +292,32 @@ describe('clearLostReason', () => {
     useAuth.setState({ status: 'anonymous', lostReason: 'session_expired' });
     useAuth.getState().clearLostReason();
     expect(useAuth.getState()).toMatchObject({ status: 'anonymous', lostReason: null });
+  });
+});
+
+describe('setDataConsent', () => {
+  const SAVED = { agreed: true, version: '2026-11-02', updatedAt: '2026-11-02T01:00:00Z' };
+
+  it('로그인 상태가 아니면 요청하지 않는다', async () => {
+    const fn = mockFetch(() => json(200, SAVED));
+    await useAuth.getState().setDataConsent(true);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('성공하면 user.dataConsent를 응답으로 바꾼다', async () => {
+    useAuth.setState({ status: 'authenticated', user: ME });
+    const fn = mockFetch(() => json(200, SAVED));
+    await useAuth.getState().setDataConsent(true);
+    const [url, init] = fn.mock.calls[0];
+    expect(url).toBe('/api/users/me/data-consent');
+    expect(init?.method).toBe('PUT');
+    expect(useAuth.getState().user).toEqual({ ...ME, dataConsent: SAVED });
+  });
+
+  it('실패하면 던지고 user.dataConsent는 그대로', async () => {
+    useAuth.setState({ status: 'authenticated', user: ME });
+    mockFetch(() => problem(500, 'INTERNAL_ERROR'));
+    await expect(useAuth.getState().setDataConsent(true)).rejects.toBeTruthy();
+    expect(useAuth.getState().user?.dataConsent).toEqual(ME.dataConsent);
   });
 });
