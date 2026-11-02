@@ -77,6 +77,11 @@ export function currentConsentVersions(terms: readonly SignupTerm[] = SIGNUP_TER
   return { termsVersion: version('terms'), privacyVersion: version('privacy'), dataConsentVersion: version('dataConsent') };
 }
 
+/** 연주 기록 활용 항목의 판. 없으면 빈 문자열. 설정 토글·업로드 동의 판단이 이 판 하나만 쓴다(설계 D13) */
+export function dataConsentVersion(terms: readonly SignupTerm[] = SIGNUP_TERMS): string {
+  return terms.find((t) => t.id === 'dataConsent')?.version ?? '';
+}
+
 /** 필수 항목이 전부 동의됐는가 — [동의하고 시작하기] 활성 조건 */
 export function allRequiredAgreed(agreed: ReadonlySet<SignupTermId>, terms: readonly SignupTerm[] = SIGNUP_TERMS): boolean {
   return terms.every((t) => !t.required || agreed.has(t.id));

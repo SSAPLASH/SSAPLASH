@@ -7,6 +7,13 @@ export type UserRole = 'USER' | 'ADMIN';
 /** BE 경로 값. `GET /api/auth/{provider}/login` */
 export type ProviderKey = 'google' | 'ssafy';
 
+/** `GET /api/users/me`의 dataConsent. 답한 적 없으면 셋 다 null (메일 ACCT-002 회신) */
+export interface DataConsent {
+  agreed: boolean | null;
+  version: string | null;
+  updatedAt: string | null;
+}
+
 /** `GET /api/users/me` 응답. 시각은 ISO-8601 UTC 문자열 그대로 둔다 */
 export interface UserMe {
   id: number;
@@ -16,6 +23,7 @@ export interface UserMe {
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+  dataConsent: DataConsent;
 }
 
 export interface LoginProvider {
