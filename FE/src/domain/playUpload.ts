@@ -71,7 +71,7 @@ export type UploadSkipReason =
 export type BuildUploadResult = { ok: true; body: PlayUploadBody } | { ok: false; reason: UploadSkipReason };
 
 export interface UploadContext {
-  /** 데이터 활용 동의. 정책이 정해지기 전까지 false (설계 U1) */
+  /** 플레이 시작 시점의 연주 기록 활용 동의(로그 consent). 없으면 false */
   consent: boolean;
   appVersion: string | null;
 }
