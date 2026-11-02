@@ -51,7 +51,7 @@ export const PoseScope = memo(function PoseScope({
     const pts = collectPose(snap.rows, snap.now);
     const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--right', '#ffa07c')];
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
+    const faint = cssVar(el, '--text-3', '#6e778d');
 
     // 위 절반 = 고도각, 아래 절반 = 방위각
     const half = h / 2;

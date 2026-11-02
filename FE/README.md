@@ -24,10 +24,11 @@ npm run dev        # http://localhost:5173
 
 로그인이 필요하므로 BE도 함께 켠다(`BE/README.md` 로컬 실행: PostgreSQL·Redis·`.env`). 개발 서버는 `/api` 요청을 `VITE_API_PROXY_TARGET`(기본 `http://localhost:8080`)으로 넘겨 운영처럼 같은 출처가 된다.
 
-BE 없이 게임 화면만 만질 때는 `.env.local`(git 무시)에 한 줄 둔다. 모든 화면이 로그인 없이 열리고 상단바에 로그인 표시가 사라진다.
+BE 없이 게임 화면만 만질 때는 `.env.local`(git 무시)에 두 줄 둔다. 모든 화면이 로그인 없이 열리고(상단바에 로그인 표시도 사라진다) 곡은 내장 3곡만 쓴다.
 
 ```bash
 VITE_AUTH_REQUIRED=false
+VITE_SONGS_SOURCE=builtin
 ```
 
 ## 검증 (커밋 전 모두 통과)
@@ -44,7 +45,7 @@ npm run build      # tsc 타입 검사 + vite 번들
 src/
 ├─ main.tsx     Vite 엔트리. app/bootstrap·app/presetBootstrap·app/authBootstrap을 부르고 렌더
 ├─ app/        앱 조립 — 아래 전부를 알아도 되는 유일한 곳
-│   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래
+│   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래. `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`
 │   ├─ sources.ts         키보드 소스 · inputManager 단일 인스턴스
 │   ├─ features.ts        빌드 기능 스위치(SONG_EDIT_ENABLED)
 │   ├─ sensorRegistry.ts  센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
@@ -54,11 +55,17 @@ src/
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
 │   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
-├─ pages/      라우트 단위 화면 — Home · Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · My(마이페이지) · Login · AuthCallback
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · KitGuideView(악보 연주 드럼 가이드) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·JobStageStrip·MySongRow·MySongCard·MySongList·SongCover·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·dateLabel, 내 곡 화면) · mypage/(RecentPlays, 마이페이지)
+├─ pages/      라우트 단위 화면 — Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Settings(설정) · History(연주 기록) · Login · AuthCallback (`HomePage`·`MyPage` 삭제 — `/me`는 `/settings`로 이동)
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지, 포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·ActiveJobCard·HowtoPanel·SongStatusBadge·StudioIcons·MySongRow·MySongCard·MySongList·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·StudioToast·dateLabel·studio.css, 라이브러리 화면) · settings/(SettingRow, 설정 화면) · result/(ResultSummaryCard·JudgeBars·TimingHistogram·FeedbackCard·PadSummaryTable, 결과 화면 전용) · history/(HistoryTable, 연주 기록 화면 전용)
+│   ├─ ui/           도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState · Toggle · Segmented · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
+│   ├─ song/         곡 표시 공통 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄) · DeletedSongChip(삭제된 곡 칩) · useDeletedSongIds(삭제된 BE 곡 id 집합 훅)
+│   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · WeakSegments(AI 약점 구간·상태 안내)
-│   └─ shell/        상단 바 공용 위젯 — Metronome(칩·팝오버) · SoundToggle · PublicLayout · ProfileMenu · WithdrawDialog(회원 탈퇴 확인)
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행)
+│   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
+│   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
+│   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
+│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
@@ -77,8 +84,12 @@ src/
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
-└─ styles/     전역 CSS
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
+└─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
+
+public/
+├─ fonts/      Space Grotesk · Bebas Neue 로컬 폰트(OFL 라이선스 파일 동봉)
+└─ sounds/     사운드 세트
 ```
 
 예약 폴더(첫 파일이 생길 때 만든다): `hooks/` 페이지 공유 훅, `assets/` 이미지·샘플.
@@ -97,12 +108,42 @@ src/
 | 모니터 | `monitor` | input · domain (판정 경로와 분리. `pages/monitor`만 읽는다) |
 | 도메인 | `domain` | 없음 |
 
+- **공용 UI 안의 세분(설계 TECH-MODE-SETUP-figma-ui 2-6):** `components/ui/`는 props만 받고 store·domain·api를 import하지 않는다. 도메인 공유 폴더(`song/`·`drum/`·`play/`·`shell/`)는 domain을 쓰고, 화면 전용 폴더(`setup/`·`studio/`·`report/` 등)는 공유 폴더를 쓰되 반대 방향과 화면 폴더끼리는 import하지 않는다. 두 화면 이상에서 쓰는 부품은 공유 폴더로 올리고, 파일 이름은 Figma 컴포넌트 이름을 따른다. 부품 CSS는 옆 파일(클래스 접두사 = 폴더, 예 `ui-btn`)로 두고 `global.css`에 새 규칙을 추가하지 않는다. 폴더별 `index.ts`는 두지 않는다.
 - store 내부: `presetStore` → `settingsStore` 단방향은 허용한다(같은 줄끼리 import 금지의 예외). `localPresetSource`도 `settingsStore`를 읽는다.
 
 - `types/`·`utils/`는 두지 않는다. 타입은 쓰는 도메인 파일 옆에 둔다(`domain/keyMap.ts`, `domain/events.ts`). 전용 타입 폴더는 "어디 있는지 찾기"와 순환 import를 만들고, 범용 유틸은 아직 없다.
 - 경로 별칭 `@/` = `src/` (`tsconfig.app.json` · `vite.config.ts` · `vitest.config.ts`에 같이 설정). 다른 폴더는 `@/`, 같은 폴더는 `./`로 가져온다.
 - `inputManager`·키보드 소스는 `app/sources.ts`에서, 센서 소스 인스턴스는 `app/sensorRegistry.ts`가 디스크립터의 `create`로 만든다. 화면은 `input/` 클래스를 직접 new 하거나 소스 id 문자열을 비교하지 않고, 레지스트리의 디스크립터(라벨·가용성·설정 항목)를 읽는다.
 - BE는 `api/http`의 `apiFetch`로만 부른다. 화면·store는 401을 직접 처리하지 않는다(아래 [로그인](#로그인)). `api/` 안에서 `http`가 `auth`를 쓰고 `auth`는 `fetch`를 직접 쓴다 — 순환 없음. 로그인 시작·복귀 경로 같은 브라우저 동작은 `store/authStore`의 액션으로 두어 화면이 `api/`를 모른다.
+
+## 디자인 토큰
+
+Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`에 옮겼다(`global.css`가 맨 위에서 `@import`한다).
+
+- **새 화면 코드는 새 이름만 쓴다:** `--bg-canvas·base`, `--surface-1..3`, `--line`·`--line-strong`, `--text-1..3`, `--brand`·`--brand-text`·`--brand-on`·`--brand-sub`, `--perfect`·`--good`·`--miss`, `--radius-control·panel·dock`, `--space-xs·s·m·l·xl`, `--font`·`--font-num`·`--font-display`. 손 색은 `--left`(sub)·`--right`(brand).
+- **옛 이름**(`--stage`·`--brass`·`--ink`·`--sm-*`·`--surface`·`--radius` 등)의 임시 별칭은 삭제했다. CSS와 Canvas 색 읽기(`readColors`·모니터 `cssVar`) 모두 `tokens.css`의 이름만 쓴다.
+- **텍스트 유틸 클래스 7종:** `.t-display-64`(Bebas Neue)·`.t-display-20`(Space Grotesk, 숫자)·`.t-title-24`·`.t-title-20`·`.t-body-16`·`.t-body-14`·`.t-caption-12`(Pretendard).
+- **폰트:** Pretendard는 `index.html`의 CDN 링크, Space Grotesk·Bebas Neue는 `public/fonts/`의 로컬 파일(OFL, 라이선스 파일 동봉)을 `tokens.css`의 `@font-face`로 불러온다.
+- **모션 토큰·역할 클래스:** 시간·이징은 `tokens.css`의 `--motion-press`(80ms)·`--motion-fast`(120ms)·`--motion-base`(200ms)·`--ease-out`·`--ease-in-out`과, 용도별 별칭 `--motion-move`(이동·확대·회전)·`--motion-fade`(투명도)만 쓰고 규칙에 ms·s·`ease`를 직접 쓰지 않는다. `styles/motion.css`는 키프레임 4종(`motion-fade-in`·`pop-in`·`drop-in`·`rise-in`)과 역할 이름 클래스 `.motion-overlay`(배경 페이드)·`.motion-dialog`(페이드+확대)·`.motion-menu`(페이드+아래로 드롭)·`.motion-toast`(페이드+위로 라이즈)·`.motion-lift`(hover 시 2px 떠오름, hover 가능한 기기만)를 둔다. 화면 코드는 효과가 아니라 역할 클래스만 붙인다. 진입 애니메이션만 있고 퇴장은 없다. 전역 `button`·`.btn-*`·`.sm-btn`은 hover 색(`--motion-fast`)·눌림 `scale(0.98)`(`--motion-press`)·키보드 포커스 외곽선을 공통으로 따른다.
+- **모션 줄이기(`prefers-reduced-motion: reduce`):** `tokens.css`가 `--motion-press`·`--motion-fast`·`--motion-move`를 0ms로 다시 정의해 이동·확대·회전은 즉시 적용하고 투명도 페이드(`--motion-fade`)만 남긴다. 새 규칙은 토큰만 쓰면 자동으로 따른다. 토큰으로 끌 수 없는 무한 반복 애니메이션(스피너·단계 점 펄스 등)은 규칙마다 `animation: none`을 둔다. 옛 전역 `* { transition: none !important }`는 없다.
+
+## 앱 셸
+
+`components/AppShell`이 사이드바 + workarea(TopBar + 본문)를 짜고, Dock·StickStatus·아바타는 셸 루트에 `fixed`로 한 인스턴스만 둔다(전체 화면 전환 때 언마운트되지 않는다).
+
+- **Sidebar:** 펼침 240px · 접힘 80px(아이콘만, `title` 툴팁). 실제 접힘 = 설정 `sidebarCollapsed` 또는 태블릿 폭(≤1024px, `useSidebarCollapsed`)이라 ≤1024에서는 강제로 접히고 펼치기 버튼이 없다. 본문 여백은 40, 태블릿은 24. 접을 때는 라벨·로고 글자(`SSAPLASH`↔`S`)가 먼저 사라지고(opacity) 폭이 200ms 줄며, 펼칠 때는 폭이 먼저 늘고 라벨이 뒤따른다(라벨·글자는 항상 렌더하고 `aria-hidden`). 토글 아이콘(`SidebarToggleIcon`)은 하나이고 화살표만 접힘에서 오른쪽을 가리키도록 180° 회전한다. 하단에는 설정만 있고 로그아웃은 프로필 메뉴에 있다. Dock은 `left` 대신 `transform`으로 본문 가운데를 따라간다.
+- **TopBar:** 높이 56. 제목은 페이지가 알린 값, 없으면 `defaultTitles`의 라우트별 기본값(예: `/studio` "내 곡", `/setup` "드럼 세팅").
+- **라우트 전환:** 본문(`<Outlet/>`)은 `key={pathname}`의 `.route-view.route-fade` 래퍼 안에서 200ms 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼이고 immersive 전환(사이드바·TopBar 언마운트)은 즉시다. 경로가 바뀐 뒤에는 스크롤을 맨 위로 올리고 포커스를 옮긴다 — 셸 화면은 TopBar 제목 `h1`, immersive 화면은 본문 래퍼(둘 다 `tabIndex={-1}`, 외곽선 없음). 첫 로드에는 옮기지 않는다.
+- **GlassDock:** 상단 가운데 글래스 Dock(음량 토글·메트로놈 칩·BPM ±·프리셋 이름). 모드는 `shell`(일반) / `play`(전체 화면 연주, 일시정지 버튼 추가) × 접힘 여부 4변이다. 칩 본체를 누르면 `MetronomePanel`(Dock 아래 오른쪽 360, `shellStore.dockPanel`)이 열린다. 스틱 연결이 필요한 센서인데 한 손이라도 끊기면 프리셋 칩이 「● L ● R 준비 필요」(amber)로 바뀐다(`domain/dockChip`, 키보드 전용·포인터 모의 IMU는 제외).
+- **StickStatusIndicator·ProfileMenu:** 오른쪽 위 고정.
+- **페이지 선언:** 페이지는 `useShell({ title, immersive })`로 제목과 전체 화면 여부를 알린다. `immersive`면 Sidebar·TopBar가 사라지고 본문이 전폭이 된다. 언마운트하면 자기가 바꾼 필드만 기본값으로 돌아간다. 이 상태는 `store/shellStore`에 있고 영속하지 않는다(현재 `/settings`·`/history`가 사용, 나머지 화면은 아직 기본 제목).
+- **영속 설정 키:** `sidebarCollapsed`·`dockCollapsed`. 같은 settings v12에 `liveCoach`(실시간 코칭, 기본 켬)·`statsConsent`(통계 동의, 기본 끔)도 추가됐다.
+
+## 드럼 컴포넌트
+
+- **`components/drum/DrumKit`:** 연주 화면용 드럼 킷 SVG. 배치는 `domain/drumKit`의 **고정 8패드**(`DRUM_KIT_PADS`, 760×300 × `scale`, 하이햇 페달 제외)다. `fitWidth`면 부모 폭에 맞춰 `scale`까지 줄인다. 패드별 `states`(`idle`·`hit`·`perfect`·`good`·`miss`)와 `badges`(+`highlight`)를 받고 `labels`·`onPadClick`을 쓴다. 세팅 편집기의 `KitCanvas`(사용자 배치를 Canvas로 그리고 드래그)와 역할이 다르다 — 판정 배치(`kitLayout`)와 무관한 표시 전용이다.
+- **`usePadStates(session?)`:** `liveStore.hitSeq`마다 해당 패드를 hit으로 220ms(`HIT_MS`) 켜고, `RhythmSession` 판정마다 perfect/good/miss를 400ms(`JUDGE_MS`) 보인다(판정이 hit보다 우선). 타이머 규칙은 순수 모듈 `padStateMachine`이 맡는다.
+- **`components/play`:** `GuideSlot`(드럼 영역 왼쪽 안내·코칭 칸)·`HitReadout`(최근 타격, 연주용 `stack`·자유 연습용 `row`).
 
 ## 패드
 
@@ -168,16 +209,16 @@ src/
 
 ## 통합 설정(프리셋·캘리브레이션)
 
-`/setup` 한 페이지에서 연결·보정·프리셋·배치를 끝낸다. 위에서 아래로 (연주 준비에서 왔을 때만) 복귀 띠 → 머리("3단계 중 n단계 완료") → 단계 카드 3장 → 드럼 배치 절 → 접힌 고급 설정 → 하단 고정 저장 바 순이다. 순서를 강제하지 않아 어느 영역이든 언제나 조작할 수 있다.
+`/setup` 한 페이지에서 연결·보정·프리셋·배치를 끝낸다. 위에서 아래로 (연주 준비에서 왔을 때만) 복귀 띠 → 머리("연주 환경 설정 · 3단계 중 n단계 완료") → 단계 카드 3장 → 드럼 배치 카드 → 접힌 고급 설정 → 하단 고정 바 순이다. 순서를 강제하지 않아 어느 영역이든 언제나 조작할 수 있다.
 
-- **단계 카드**(`components/setup/StepCard`) — 번호/체크, 상태 배지(필요·완료·필요 없음), 한 줄 요약, 접힌 동안의 동작 버튼. 판정·요약 문구는 `domain/setupSteps.setupSteps()`가 `readiness()`의 `missing`에서 유도한다(규칙 중복 없음).
+- **단계 카드**(`components/setup/StepCard`) — 번호/체크 원, `ui/StatusPill` 상태(완료·진행 중·필요·필요 없음 — 필요한 단계를 펼쳐 두면 「진행 중」, 복귀 띠가 떠 있으면 「필요」(빨강 테두리) 유지), 한 줄 요약, 오른쪽 텍스트 버튼(160×44). 판정·요약 문구는 `domain/setupSteps.setupSteps()`가 `readiness()`의 `missing`에서 유도한다(규칙 중복 없음).
   - ① **스틱 연결** — 왼손·오른손 `StickCard` 2장(연결 점·배터리), 입력 소스 선택, 소스 옵션 패널, 패드 표·방위각 문구. 센서를 쓰면 **양손이 모두 연결**돼야 완료다. 연결이 끊겼다 돌아오면(`referenceStale`) 시작 위치를 다시 맞추라는 안내만 낸다. 스틱은 버튼으로 켜면 동글에 자동으로 붙고, 동글↔브라우저는 한 번 허락한 포트를 페이지를 열 때 자동으로 다시 연다. Web Serial이면 맨 위에 동글 줄을 둔다: 포트가 안 열렸으면 [동글 연결](처음 한 번 포트 선택), 열렸으면 "동글이 연결됐어요"(스틱 0개면 "스틱 버튼을 눌러 켜 주세요")와 [다른 동글 연결], LINK가 3초 넘게 끊기면 "동글 응답이 없어요". 키보드만 쓰면 "필요 없음"이지만 [변경]으로 펼쳐 센서를 고를 수 있다.
   - ② **시작 위치 보정** — 3초 자세 유지(`ReferenceCapture`, 진행 바·퍼짐 표시). 완료하면 `resetPose()`와 함께 `referenceSetAt`을 기록한다. 완료 뒤 [다시 하기]는 펼치고 바로 보정을 시작한다. 보정 중 연결이 끊기면 처음부터 다시 센다. 키보드만 쓰면 "필요 없음".
   - ③ **프리셋** — 목록(이름·기본 ★·"적용 중" 배지, 적용·기본으로·삭제)과 [새 프리셋으로 저장](이름 창 `PresetNameDialog`, 1~20자·중복 검사가 입력 중 반영).
 - **펼침 규칙**(`domain/setupExpand`) — 펼침 = 사용자가 연 단계 ∪ 모자란 첫 단계. 모자란 첫 단계가 바뀌면 그 단계를 새로 펼치고, 자동으로 펼친 단계는 끝나면 접힌다. 진입 때 한 번만 모자란 첫 단계 카드로 스크롤한다. 다 끝났으면 아무것도 펼치지 않는다.
-- **드럼 배치 절** — 패드 드래그, 배치 칩 3개, 사운드 세트, 세기 선택(캔버스가 포인터 기준면 `bindSensorSurface`, 배치가 곧 판정). 타격 확인(마지막 타격, 연결이 끊기면 "스틱 입력 중단").
-- **고급 설정**(`<details>`, 접힘이 기본) — 판정 반경 상한과 판정 폭·오디오 오프셋·낙하 시간·볼륨·메트로놈·카운트인. 설정 스토어에 즉시 저장되므로 미저장 판정 대상이 아니다.
-- **하단 고정 바** — 변경이 있으면 "저장하지 않은 변경 사항이 있어요…", 없으면 「프리셋 이름」 사용 중. 적용 프리셋이 있으면 [저장](변경이 있을 때만 활성), 없으면 [새 프리셋으로 저장].
+- **드럼 배치 카드** — 편집기(폭 720, 비율은 배치 좌표계와 같은 16:10 — Figma 720×320으로 자르면 킥·하이햇 페달이 잘려 끌 수 없다, `KitCanvas` 그대로: 마우스는 패드 고르기·끌기만(소리·타격 기록 없음, 포인터 모의 IMU의 클릭 타격도 `data-no-pointer-strike`로 막음), 캔버스가 포인터 기준면 `bindSensorSurface`, 배치가 곧 판정)와 오른쪽 정보 패널(선택 패드 이름·위치 X·Y·반지름 값, [기본 배치로] = 전체 배치 초기화). 반지름 편집은 없다(값만 표시). 편집기 아래에 배치 칩 3개. 사운드 세트 선택 UI는 없고 값은 `ssaplash` 고정이다. **타격 확인**(`HitLog`) — 최근 5행(패드·손·세기·경과 시각, 새 타격이 위, 손은 센서 타격만), 구독은 `components/drum/useRecentHits(n)`. 연결이 끊기면 "스틱 입력 중단".
+- **고급 설정**(카드 + [펼치기], 접힘이 기본) — 판정 반경 상한·판정 폭·노트 낙하·카운트인·메트로놈(볼륨·오디오 오프셋은 설정 화면에 있다). 설정 스토어에 즉시 저장되므로 미저장 판정 대상이 아니다.
+- **하단 고정 바** — 4상태(`domain/setupSteps.setupBarView`): 변경 없음 「이름」 사용 중 + [저장] 비활성 / 변경 있음 노랑 점 + "「이름」 변경 있음 · 저장하지 않으면 다음에 사라져요" + [저장] / 프리셋 없음 "아직 프리셋으로 저장하지 않았어요" + [새 프리셋으로 저장] / 변경이 있는 채로 나가려 해 이탈 확인이 열린 동안 빨강 "저장하지 않은 변경 사항이 있어요…". 화면 아래에 sticky로 붙는다.
 
 [설정 완료] 버튼은 없다. 센서를 쓰는 화면에서 준비 조건이 처음 갖춰지면 `firstSetupDone = true`로 기록하고, 복귀 띠로 돌아갈 때도 켠다.
 
@@ -189,7 +230,7 @@ src/
 
 **스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다. role 2·3(발)은 아직 무시한다.
 
-연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈과 자유 연주는 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
+연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈은 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
 
 ## 곡·채보 조회
 
@@ -202,24 +243,29 @@ src/
 
 ## 곡 작업실(음원 업로드·채보 생성)
 
-- **화면:** `/studio`(상단 메뉴·제목 "라이브러리"). 본문은 라이브러리 목록(`songStore` MINE)과 오른쪽 "어떻게 되나요" 안내(폰 폭에서는 아래로)다. 제목 오른쪽 [+ 곡 올리기]가 **업로드 창**(모달)을 열고, 제목 아래에 요약 "곡 n개 · 생성 중 n"이 있다. 창에는 탭 "음원"(기본)·"MIDI"가 있고 마지막에 고른 탭을 다시 열 때 유지한다. 음원 탭은 MP3·WAV(50 MiB·10분 이내, `POST /api/v1/songs/audio` 202 `{jobId, songId, status}`)이고 회원당 활성 작업은 하나다(초과 시 429 `AUDIO_BUSY`). 업로드 중에는 탭 전환·닫기·Esc·배경 클릭이 잠긴다. 음원 202를 받으면 창이 닫히고 목록을 다시 읽는다.
-- **MIDI 업로드:** MIDI 탭은 파일(`.mid`·`.midi`, 1 MiB 이하)·제목(파일명 기본값)·아티스트로 `POST /api/v1/songs/midi`(multipart `title`·`artist`(비면 생략)·`file`)를 한 번 보낸다. 작업(job) 없이 동기 처리라 음원 생성 중에도 올릴 수 있다(그동안 음원 탭은 "「제목」 생성이 끝나면 올릴 수 있어요" 안내). 중복 방지 키가 없어 자동 재시도하지 않는다. 사전 검사는 빈 파일·크기 초과만 하고 내용 판별은 BE에 맡긴다(`domain/midiUpload`). 201이면 창을 닫고 이동 없이 목록을 다시 읽어 새 곡 행을 2초 강조한다. 오류는 400 `MIDI_INVALID`·413 `MIDI_TOO_LARGE`·422 `MIDI_UNSUPPORTED`(BE `detail`)·422 `MIDI_NO_DRUM_NOTES` 문구를 창 안에 보이고, 네트워크·5xx는 "업로드 결과를 확인하지 못했습니다" 안내와 함께 목록을 다시 읽는다([다시 시도] 없음, 목록을 보고 직접 다시 올린다). MIDI 곡은 행 제목 옆에 "MIDI" 칩이 붙고 반주가 없다. 상태는 `midiUploadStore`(`idle`·`uploading`·`done`·`failed`).
-- **목록 행:** 처리 중 → 실패 → 완료 순, 같은 상태 안에서는 최신순. 활성 작업은 202 직후 목록에 아직 없어도 임시 행으로 맨 위에 보이고, 그 행에만 4칸 단계 띠가 있다. 완료 행은 [악보 연습](`/sheet?scope=MINE&song=`)·[리듬 게임](`/play?scope=MINE&song=`), 실패 행은 [다시 올리기]. 활성 작업이 도는 동안에도 [+ 곡 올리기]는 켜 두고 창의 음원 탭만 안내로 바뀐다. 곡도 작업도 없으면(첫 방문) 버튼 없이 본문에 같은 탭 양식(큰 드롭 영역)과 가로 4단계 안내만 보인다.
+- **화면:** `/studio`(상단 메뉴·제목 "라이브러리"). 본문은 라이브러리 목록(`songStore` MINE)이고, 카드 보기에서는 오른쪽에 300 폭 "어떻게 되나요" 안내 패널이 붙는다(목록 보기·로딩·오류는 본문 전체 폭, 폰 폭에서는 패널이 아래로). 제목 오른쪽 [곡 올리기](primary md)가 **업로드 창**(모달)을 열고, 제목 아래에 요약 "곡 n개 · 생성 중 n"이 있다. 창에는 탭 "음원"(기본)·"MIDI"가 있고 마지막에 고른 탭을 다시 열 때 유지한다. 음원 탭은 MP3·WAV(50 MiB·10분 이내, `POST /api/v1/songs/audio` 202 `{jobId, songId, status}`)이고 회원당 활성 작업은 하나다(초과 시 429 `AUDIO_BUSY`). 업로드 중에는 탭 전환·닫기·Esc·배경 클릭이 잠긴다. 음원 202를 받으면 창이 닫히고 목록을 다시 읽는다.
+- **MIDI 업로드:** MIDI 탭은 파일(`.mid`·`.midi`, 1 MiB 이하)·제목(파일명 기본값)·아티스트로 `POST /api/v1/songs/midi`(multipart `title`·`artist`(비면 생략)·`file`)를 한 번 보낸다. 작업(job) 없이 동기 처리라 음원 생성 중에도 올릴 수 있다(그동안 음원 탭은 "「제목」 생성이 끝나면 올릴 수 있어요" 안내). 중복 방지 키가 없어 자동 재시도하지 않는다. 사전 검사는 빈 파일·크기 초과만 하고 내용 판별은 BE에 맡긴다(`domain/midiUpload`). 201이면 창을 닫고 이동 없이 목록을 다시 읽어 새 곡 행을 2초 강조한다. 오류는 400 `MIDI_INVALID`·413 `MIDI_TOO_LARGE`·422 `MIDI_UNSUPPORTED`(BE `detail`)·422 `MIDI_NO_DRUM_NOTES` 문구를 창 안에 보이고, 네트워크·5xx는 "업로드 결과를 확인하지 못했습니다" 안내와 함께 목록을 다시 읽는다([다시 시도] 없음, 목록을 보고 직접 다시 올린다). MIDI 곡은 카드의 배지 행에 "MIDI" 칩이 붙고(목록 행에는 없다) 반주가 없다. 상태는 `midiUploadStore`(`idle`·`uploading`·`done`·`failed`).
+- **목록 행:** 처리 중 → 실패 → 완료 순, 같은 상태 안에서는 최신순. 활성 작업은 202 직후 목록에 아직 없어도 맨 위 `ActiveJobCard`(커버·제목·4칸 단계 띠·경과 시간, 한 줄 전체 폭)로 보이고 카드·행 목록에서는 빠진다. 완료 행은 [악보 연습](`/sheet?scope=MINE&song=`)·[플레이](`/play?scope=MINE&song=`), 실패 행은 [다시 올리기]. 목록 보기 행에도 ⋯ 메뉴가 있다(기능 스위치 켜짐일 때). 활성 작업이 도는 동안에도 [+ 곡 올리기]는 켜 두고 창의 음원 탭만 안내로 바뀐다. 곡도 작업도 없으면(첫 방문) 버튼 없이 본문에 같은 탭 양식(큰 드롭 영역)과 가로 4단계 안내만 보인다.
 - **완료 시 이동:** `chartJobStore.doneSource`로 갈린다. 이 화면에서 폴링하다 완료를 보면(`live`) `/sheet?scope=MINE&song={id}`로 이동한다. 복원(`resume`·429 복원) 뒤 **첫 조회**에서 완료를 보면(`restored`) 이동하지 않고 목록을 다시 읽어 그 행을 2초 강조한다. 곡 생성 실패(`JOB_FAILED`)는 목록을 다시 읽어 실패 행으로 보이고, 업로드 단계 실패·404는 창의 음원 탭 안에 오류가 보인다.
 - **실패 재업로드:** 실패 행의 [다시 올리기]는 업로드 창을 음원 탭으로 열고 제목·아티스트를 미리 채운다(파일만 다시 고른다). 양식 위 "「제목」 다시 올리기" 줄의 [취소]로 되돌린다.
 - **사전 검사:** `domain/chartJob.precheckAudio`가 빈 파일·크기 초과·확장자(MIME)를 전송 전에 거른다. 제목 기본값은 파일명(확장자 제거, 100자).
 - **멱등 키:** 파일·제목·아티스트 조합마다 UUID 하나를 `Idempotency-Key` 헤더로 보낸다. 네트워크·503 실패의 **다시 시도**는 같은 키, 내용이 바뀌면 새 키. 같은 키에 다른 내용(409)은 새 키로 한 번 자동 재전송한다.
 - **진행 표시:** BE 진행 WebSocket(161)이 아직 없어 `GET /api/v1/songs/{id}`의 `status`(PROCESSING→READY/FAILED)를 폴링한다(30초까지 3초, 10분까지 5초, 그 뒤 15초. 탭이 숨겨지면 멈추고 다시 보이면 즉시 1회). 4칸(접수·드럼 분리·채보 생성·완료) 중 폴링만으로는 분리·생성을 구분할 수 없어 두 칸을 함께 "처리 중"으로 칠한다(`JobProgress.stageKnown=false`). WS가 붙으면 `chartJobStore`에 소스만 추가한다.
 - **복원:** 활성 작업 하나를 `localStorage`(`ssaplash.chartJob.v1`)에 두고 새로고침·재방문 때 이어서 폴링한다. 429인데 기록이 없으면(다른 브라우저) 라이브러리의 PROCESSING 곡으로 복원한다. 끝난 작업 기록은 이 화면이 `clear`로 지운다. 실패 사유는 BE가 주지 않아 기본 문구만 보인다.
-- **카드 보기·목록 보기:** 목록 위 오른쪽 [카드 | 목록] 토글로 바꾸고(기본 카드) 고른 값은 `localStorage`(`airdrum.studio.view`)에 기억한다(접근이 막히면 기본값). 카드는 큰 정사각 커버 아래 제목(굵게, 1줄 말줄임)·아티스트(흐리게), 그 아래 한 줄에 상태 배지·MIDI 칩, 맨 아래 동작(완료 [악보 연습], 실패 [다시 올리기] 버튼만 — 카드 높이를 맞추려고 사유 문장은 두지 않는다)이다. 카드에는 날짜가 없다(목록 보기에만). 완료 곡의 리듬 게임은 커버 오른쪽 아래 둥근 ▶(`aria-label` "「제목」 리듬 게임", `/play`)로, 마우스 기기는 카드 hover·`focus-within` 때, 터치 기기(`@media (hover: none)`)는 항상 보인다. 그리드는 데스크톱 3열·≤900px 2열·≤560px 1열이고, 활성 작업 카드는 한 줄 전체(`grid-column: 1 / -1`)에 단계 띠를 품는다. 실패 카드는 커버가 흐리다. 커버(`SongSummary.coverUrl`, 서명 URL 1시간)가 없거나 불러오지 못하면 모든 곡에 같은 CD 기본 커버(`SongCover`의 SVG)를 그린다. 직접 올린 커버만 이미지로 보인다. 커버 이미지를 못 불러오면(서명 URL 만료) 목록을 다시 읽어 새 URL을 받는다(카드 여럿이 실패해도 1분에 한 번, `songCover.coverRefreshDue`). 목록 보기는 기존 행 그대로다.
-- **내 곡 편집(기능 스위치 `VITE_SONG_EDIT=true`, 기본 꺼짐):** 켜면 카드 오른쪽 위에 ⋯ 메뉴(`aria-haspopup="menu"`, Esc·바깥 클릭으로 닫힘)가 생긴다. 완료 곡 = [커버 변경] [곡 정보 수정] [곡 삭제], 실패 곡 = [곡 삭제]만, 처리 중 곡은 메뉴가 없다(`songEdit.menuKinds`, BE는 처리 중 곡의 커버 변경을 허용하지만 FE는 열지 않는다). 꺼져 있으면 카드 보기·기본 커버만 나가고 메뉴는 없다(BE 187 배포 전 404 방지). 항목마다 작은 창(머리에 제목과 ✕)이 따로 열리고 저장·삭제 중에는 입력·✕·Esc·배경 클릭이 잠긴다. 오류는 창 안 문구로 보인다.
+- **카드 보기·목록 보기:** 목록 위 오른쪽 [카드 | 목록] 토글로 바꾸고(기본 카드) 고른 값은 `localStorage`(`airdrum.studio.view`)에 기억한다(접근이 막히면 기본값). 카드는 큰 정사각 커버 아래 제목(굵게, 1줄 말줄임)·아티스트(흐리게), 그 아래 한 줄에 상태 배지·MIDI 칩, 맨 아래 동작(완료 [악보 연습], 실패 사유 한 줄("채보를 만들지 못했어요", BE가 사유를 주지 않아 고정 문구)과 [다시 올리기])이다. 카드에는 날짜가 없다(목록 보기에만). 완료 곡의 리듬 게임은 커버 오른쪽 아래 둥근 ▶(`aria-label` "「제목」 리듬 게임", `/play`)로, 마우스 기기는 카드 hover·`focus-within` 때, 터치 기기(`@media (hover: none)`)는 항상 보인다. 그리드는 `repeat(auto-fill, minmax(240px, 1fr))`이라 데스크톱 3열·태블릿(안내 패널 옆) 2열·폰 1열이다. 실패 카드는 커버가 흐리다. 커버(`SongSummary.coverUrl`, 서명 URL 1시간)가 없거나 불러오지 못하면 모든 곡에 같은 CD 기본 커버(`SongCover`의 SVG)를 그린다. 직접 올린 커버만 이미지로 보인다. 커버 이미지를 못 불러오면(서명 URL 만료) 목록을 다시 읽어 새 URL을 받는다(카드 여럿이 실패해도 1분에 한 번, `songCover.coverRefreshDue`). 목록 보기는 한 패널 안의 64 높이 행(커버 44·제목·보조 줄·상태 배지·날짜·동작·⋯)이다. 로딩은 스켈레톤 카드, 목록 오류는 안내 카드와 [다시 시도]다. 스타일은 `components/studio/studio.css`에 있다.
+- **내 곡 편집(기능 스위치 `VITE_SONG_EDIT=true`, 기본 꺼짐):** 켜면 카드 커버 오른쪽 위(목록 보기는 행 끝)에 ⋯ 메뉴(`aria-haspopup="menu"`, Esc·바깥 클릭으로 닫힘)가 생긴다. 완료 곡 = [커버 변경] [곡 정보 수정] [곡 삭제], 실패 곡 = [곡 삭제]만, 처리 중 곡은 메뉴가 없다(`songEdit.menuKinds`, BE는 처리 중 곡의 커버 변경을 허용하지만 FE는 열지 않는다). 꺼져 있으면 카드 보기·기본 커버만 나가고 메뉴는 없다(BE 187 배포 전 404 방지). 항목마다 작은 창(머리에 제목과 ✕)이 따로 열리고 저장·삭제 중에는 입력·✕·Esc·배경 클릭이 잠긴다. 오류는 창 안 문구로 보인다.
   - **커버 변경:** 지금 커버(없으면 기본 커버) 미리보기 · [이미지 고르기](JPG·PNG·WebP, 원본 10 MiB 이하) · [커버 지우기](기본 커버일 때 비활성) · [취소] [저장]. 고르면 가운데를 정사각형으로 잘라 512×512 JPEG(품질 0.85)로 줄여 미리본다(`media/coverImage`, 크기 계산은 `songCover.centerSquareCrop`). 바뀐 게 없으면 저장이 꺼진다.
   - **곡 정보 수정:** 제목(1~100자, trim 후)·아티스트(0~100자), 칸 아래 글자 수 안내. 바뀐 필드만 PATCH로 보내고 아티스트를 비우면 `""`를 보낸다(`domain/songEdit`).
   - **곡 삭제:** "「제목」을 삭제할까요?" + "채보·반주·커버가 함께 지워지고 되돌릴 수 없습니다. 연주 기록과 결과는 남아요." 확인 후 [삭제](위험 버튼, 진행 중 "삭제 중…"). 끝나면 화면 아래 알림 "「제목」을 삭제했습니다."(3초, `StudioToast`, `role="status"`)를 띄우고 목록을 다시 읽는다. 지운 곡이 `chartJobStore`의 활성 작업이면 그 기록도 `clear`한다.
-  - **삭제된 곡의 기록:** BE는 곡을 소프트 삭제해 연주·리포트를 남기고, 지운 곡의 상세는 404 `SONG_NOT_FOUND`다. 결과 화면은 BE 곡 로그면 곡 상세를 한 번 조회해 404일 때만 제목 옆에 "삭제된 곡"을 붙이고 [다시 하기]·Enter를 숨긴다([다른 곡]·[자유 연습]·상세 분석은 그대로). 마이페이지 최근 플레이도 곡마다 한 번 조회해 같은 표시를 붙인다. 다른 실패(네트워크·5xx·401)는 삭제로 보지 않는다(`api/songs.checkSongAvailability`, `domain/songAvailability`).
+  - **삭제된 곡의 기록:** BE는 곡을 소프트 삭제해 연주·리포트를 남기고, 지운 곡의 상세는 404 `SONG_NOT_FOUND`다. 결과 화면은 BE 곡 로그면 곡 상세를 한 번 조회해 404일 때만 제목 옆에 "삭제된 곡"을 붙이고 [다시 하기]·Enter를 숨긴다([다른 곡]·[자유 연습]·상세 분석은 그대로). 다른 실패(네트워크·5xx·401)는 삭제로 보지 않는다(`api/songs.checkSongAvailability`, `domain/songAvailability`).
   - **성공 후:** 창 닫기 → `songEditStore.reset` → 목록 다시 읽기 → 편집한 카드 2초 강조(삭제는 강조 없음). 403 `SONG_FORBIDDEN`·409 `SONG_BUSY`·400·413·415·503 `COVER_UNAVAILABLE`(저장소 장애)는 창 안에 문구, 404 `SONG_NOT_FOUND`는 문구와 함께 목록을 다시 읽고, 네트워크·5xx·알 수 없는 코드는 "결과를 확인하지 못했습니다. 목록을 확인해 주세요."와 함께 목록을 다시 읽는다. 상태는 `songEditStore`(`idle`·`saving`·`done`·`failed`, 실행 중 재호출 무시).
   - **API(BE 187 합의, develop-BE 병합·운영 반영 전. 반영되면 스위치를 켠다):** `PATCH /api/v1/songs/{id}` JSON `{title?, artist?}` → 200 상세 · `PUT /api/v1/songs/{id}/cover` multipart `file`(≤ 2 MiB) → 200 `{coverUrl}` · `DELETE /api/v1/songs/{id}/cover` → 204 · `DELETE /api/v1/songs/{id}` → 204. 오류 코드는 `SONG_INVALID`·`SONG_FORBIDDEN`·`SONG_NOT_FOUND`·`SONG_BUSY`·`COVER_INVALID`·`COVER_TOO_LARGE`·`COVER_UNSUPPORTED`·`COVER_UNAVAILABLE`. 목록·상세 응답에는 `coverUrl: string | null`(서명 URL, 1시간)이 더해진다. 커버는 2 MiB·4096px·400만 픽셀 이하. 곡 삭제는 소프트 삭제다.
-- **제외(후속):** 곡 선택 창·마이페이지의 커버 표시, 진행 WebSocket(BE 161).
+- **제외(후속):** 곡 선택 창의 커버 표시, 진행 WebSocket(BE 161).
+
+## 결과·연주 기록
+
+- **결과(`/result/:playId`, Figma 112:1194):** 로컬 로그(`engine/playLog.getPlayLog`)를 읽어 요약 카드(`result/ResultSummaryCard` — 제목·메타·점수/최고 콤보·정확도 64) → 상세 분석 진입(`ReportEntry`) → 판정 분포(`JudgeBars`)·타이밍 분포(`TimingHistogram`, 계산 `domain/timingHistogram`) → 피드백 카드 최대 3장(`FeedbackCard`, 악보 모드 + 업로드 대상 아님만)·약점 마디 미니 악보 → 패드별 표(`PadSummaryTable`, 모든 모드) → 버튼 행 순으로 그린다. 악보 모드는 요약 카드에 점수 블록이 없다. 패드별 표의 정확도·평균 세기는 `domain/feedback.summarizeByPad`가 계산하고(평균 세기 = 판정된 노트에 매칭된 타격 velocity 평균 → 0~100, 로그에 hits가 없으면 「—」), 평균 타이밍 열은 ≤1024px에서 숨긴다. 기록이 없는 id는 `ui/EmptyState`로 안내한다. 삭제된 곡이면 제목 옆에 `song/DeletedSongChip`을 붙이고 [다시 하기]·Enter를 숨긴다.
+- **연주 기록(`/history`, Figma 112:1351, 설계 U16):** 이 브라우저(로그인 계정별)에 저장된 최근 20건(`loadPlayLogs`)을 모드 필터(전체·게임·악보, 저장 안 함)와 10행 페이지로 보여 준다. 필터·페이지 계산은 `domain/playLogView`, 표는 `history/HistoryTable`, 삭제된 곡 표시는 `song/useDeletedSongIds`(곡마다 상세 1회 조회, 404만 삭제로 본다)다. 행의 [결과 보기]는 `/result/:playId`로 간다. 기록이 없으면 [리듬 게임 시작] 안내, 필터 결과만 없으면 표 자리에 한 줄 안내.
 
 ## 플레이 기록 업로드·상세 분석
 
@@ -270,27 +316,34 @@ src/
 
 Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매핑이며 `domain/keyMap.ts`의 `KEY_MAP` 상수로만 정의한다.
 
-자유 연주 화면은 치면 바로 울리고 최근 타격과 패드별 횟수를 보여준다. 배치가 판정에 맞게 반영됐는지 확인하는 화면이기도 하다.
+자유 연습(`/free`)은 치면 바로 울린다. 화면은 반주 바 → 캔버스 카드(`DrumKit` `fitWidth` 최대 1.25, ≤1024는 1.1) → 정보 띠(최근 타격 패드·손·세기 · 세션 통계 타격 수·평균 세기) 순이다.
 
-리듬 게임은 내장 채보 3곡을 고른 뒤 Enter로 시작한다(1마디 카운트인). 일시정지는 Esc·스틱 연결 끊김·메뉴 요청 3종이고(`PauseOverlay`, 악보 연주와 같은 정책) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 계정별 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
+- **반주 바**(`components/free/AccompanimentBar`)는 반주 없음 상태와 [반주 고르기](비활성, 「곧 지원」)만 있다. 반주 재생은 `S15P31A307-201`.
+- **화면 상태**는 `domain/freeStage`가 정한다: 스틱 센서 + 양손 미연결이면 흐린 킷 위 빈 상태 카드와 [드럼 세팅에서 연결하기](복귀 띠로 돌아옴), 한 손만 끊기면 캔버스 위 `DisconnectBand`(연주 계속, [다시 연결]은 `reconnectStore`). 키보드 전용·포인터 모의 IMU는 항상 연주 상태다.
+- 준비 안내(`ReadinessNotice`)는 이 화면에 두지 않는다 — 빈 상태·끊김 띠가 대신한다.
+- 앵커 거리·패드별 횟수 같은 실측 표는 모니터 빌드의 「자유 연습 실측」 섹션(`pages/monitor/sections/FreeMeasureSection`)으로 옮겼다.
 
-게임 뷰는 곡 선택 화면에서 고른다(설정에 저장). **노트 하이웨이**는 노트가 레인을 따라 판정선으로 떨어지는 기본 뷰, **킷 위 연주**는 세팅한 킷 배치의 패드 위로 링이 줄어들어 판정 시각에 패드 테두리에 닿는 뷰다. 두 뷰 모두 같은 `RhythmSession`을 읽으므로 판정·점수·결과 저장은 같다.
+리듬 게임(`/play`)은 곡 선택(`SongPicker`) → 연주 준비(`play/ReadyPanel`, 연습 단계 EASY·NORM·HARD 선택·기기 준비 확인) → Enter로 시작 → 카운트다운(`play/Countdown`, 카운트인 마디의 남은 박 수를 화면 가운데 숫자로, 끝나면 「시작!」 0.4초) → 연주 순이다. 연주 중(`play` 단계)은 셸(사이드바·TopBar)을 숨긴 전체 화면이고 `PlayStage`(HUD·하이웨이·미니 킷)로 그린다. 일시정지는 Esc·스틱 연결 끊김·메뉴 요청(Dock ‖) 3종이고(`PauseOverlay`, 악보 연주와 같은 정책, HUD에는 일시정지 버튼이 없다) 그동안 노트가 멈추며 재개·처음부터·나가기(준비 화면)를 고른다. 곡이 끝나면 결과 화면으로 가며 플레이 로그는 localStorage에 계정별 최근 20건 남는다. 결과에서 Enter는 같은 곡 다시 하기.
+
+**키보드 규칙(리듬 게임·악보 연습·결과):** 전역 keydown 핸들러(`PlayPage`·`SheetPage`·`ResultPage`·`KeyboardPadSource`)는 포커스된 조작 요소가 소유한 키를 가로채지 않고, `preventDefault`는 실제로 처리했을 때만 한다. 소유 판정은 `domain/keyTarget.isKeyOwnedByTarget(target, code)` 하나로 통일한다 — 입력 칸·`[role=dialog]` 안은 모든 키, button·a·`role=button|tab|link`는 Enter·NumpadEnter·Space만 소유하고 Esc 같은 그 밖의 키는 전역이 받는다. 새 전역 핸들러는 `e.isComposing`·`e.defaultPrevented`·이 함수를 먼저 확인한다. 연주 중(일시정지 아님)에는 포커스가 `body`여야 Space(킥)가 버튼 클릭으로 새지 않는다. 일시정지 다이얼로그(`PauseOverlay`)는 `components/ui/useDialogFocus`로 열릴 때 [재개]에 초점을 주고 Tab·Shift+Tab을 다이얼로그 안에서 순환시키며(계산은 `components/ui/focusCycle`) Esc는 재개이고 Enter·Space는 포커스된 버튼의 기본 동작이다. 닫힐 때는 이전 요소로 복원하지 않고 `body`로 보낸다(`returnFocus: 'blur'`, 기본값은 `'restore'`). 새 다이얼로그는 `components/ui/Dialog`로 감싼다(이 훅이 들어 있다). 내장 곡 결과의 [다시 하기]는 로그에 id가 없어도 `domain/playRetry.retryPathOf`가 `songId`로 내장 음수 id를 복구해 같은 곡 준비 화면으로 보낸다.
+
+연주 화면은 항상 노트 하이웨이 + 미니 킷이다. `gameView` 설정값과 `KitPlayView`(킷 위 연주)는 코드로 남아 있지만 고르는 화면이 없다(설계 D5).
 
 악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 마디가 고정된 5선 악보를 커서가 지나가는 것을 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
 
-화면은 Claude Design 「악보 연주 화면」(https://claude.ai/artifact/AFPSrCXxQsZULivgY5FsZE)의 4개 보드(곡 선택·준비·연주 중·일시정지)를 따른다. 페이지 루트에 `.sheet-mode`를 붙여 `--sm-*` 변수와 `.sm-*` 클래스(`styles/global.css` 끝 블록)를 그 안에서만 쓰고, 앱 셸·다른 페이지의 `--ink`·`--brass` 계열 테마는 건드리지 않는다. 악보 Canvas는 `readColors(canvas)`로 `--sm-*`를 상속받아 읽고(없으면 앱 공통 변수) 기준선은 사이언 2px + 글로우다. 일시정지 다이얼로그(`PauseOverlay`)는 `.sheet-mode` 밖에서도 보이도록 자체 클래스(`.sm-scrim`·`.sm-dialog`·`.pause-dialog`)에 색을 직접 둔다. 곡 선택 표의 "최근 정확도"와 준비 화면의 "최근 기록"은 로컬 플레이 로그(`latestSheetLog`)에서 읽는다.
+화면은 Figma 05 악보 연습 흐름을 리듬 게임과 같은 공유 부품으로 조립한다(`SheetPage`가 `PlayPage` 구조를 따른다). 곡 선택은 `SongPicker mode="sheet"`(제목·최고 정확도), 준비는 `play/ReadyPanel`(`modeLabel="악보 연습"`·`staffLegend`로 「악보 읽는 법」 카드와 킷 연동, `options` 슬롯에 `play/PlayOptions`의 「연주 중 옵션」 카드), 연주는 `PlayStage variant="sheet"`(`PlayHud sheet`·`SheetPager`·`DrumKit`)다. 준비 화면에는 악보 미리보기가 없다(악보 읽는 법 카드가 대신한다). 연주 중은 셸을 숨긴 전체 화면이다. 악보 Canvas의 색은 `readColors(canvas)`가 `tokens.css`의 글자·브랜드·판정 토큰을 읽는다. 준비 화면 최고 정확도는 로컬 플레이 로그(`bestAccuracyByChart(…, 'SHEET')`)에서 읽는다.
 
 - **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
-- **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 반주 0초 = 세션 0ms이고 카운트인은 격자 원점 `offsetMs`에서 끝난다. HUD 아래 작은 글씨로 동기 Δ(시작·재개)를 보인다. 준비 화면 칩은 `offsetMs`가 1박 이상이면 "첫 박 n.n초"를 덧붙여 인트로 동안 커서가 서 있는 이유를 알린다.
-- **화면(연주 중):** 위에서부터 머리, 진행 행(시간·진행 바·마디), 판정 수 칩(노트·P·G·M·채보 밖·최근 Δ), 악보(`SheetPager`, 약 55%)와 드럼(`KitGuideView`, 약 45%), 푸터다. 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetPager`에 넘기고, 드럼 가이드는 `RhythmSession.notes`를 매 프레임 직접 읽는다.
+- **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 반주 0초 = 세션 0ms이고 카운트인은 격자 원점 `offsetMs`에서 끝난다. 준비 화면 칩은 `offsetMs`가 1박 이상이면 "첫 박 n.n초"를 덧붙여 인트로 동안 커서가 서 있는 이유를 알린다.
+- **화면(연주 중):** `PlayStage`가 위에서부터 HUD(`PlayHud sheet` — PERFECT·GOOD·MISS 수·경과/길이·연습 단계·BPM), 악보(`SheetPager`, 높이 420·전폭), 드럼 영역(안내 `GuideSlot`·`DrumKit` 0.7배·최근 타격 `HitReadout`)을 놓는다. 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetPager`에 넘기고, 패드 위 다음 박 배지는 `play/useNextBeatLabels`가 `RhythmSession.notes`를 매 프레임 읽어 `DrumKit badges`로 낸다. 카운트인은 `Countdown` 숫자(남은 박 수, 끝나면 「시작!」 0.4초)다.
 - **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`에서 어느 한 손이라도 true→false가 되고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
 - **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 업로드가 생략된 플레이(내장 곡 등)에 한해 규칙 기반 "간단 피드백" 카드(최대 3개)와 패드별 요약을 보여 준다(업로드 대상 플레이는 리포트의 AI 약점 분석으로 일원화 — 위 "플레이 기록 업로드·상세 분석" 절). "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
 
 피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다. 서버 AI 분석이 붙은 뒤로는 업로드가 안 되는 플레이의 폴백으로만 쓴다. 패드 Δ 표준편차 규칙의 기준은 35ms 고정이 아니라 `0.5 × goodMs`(goodMs 50이면 25ms)다 — 오차가 판정 폭 안에 갇혀 있어 고르게 흩어져도 표준편차가 약 0.58×goodMs라 고정값은 거의 걸리지 않았다(AI 쪽과 같은 수정). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
-악보 렌더(`components/SheetPager`)는 클라이언트 Canvas 5선이며 마디가 화면에 고정되고 커서가 왼쪽에서 오른쪽으로 곡 시각에 맞춰 지나간다. 한 페이지는 악보 영역 폭 900px 미만이면 2마디, 이상이면 4마디이고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지의 마디로 흐리게 바뀌어 항상 앞을 읽을 수 있다(커서가 다음 페이지로 넘어가면 모두 정상으로 돌아온다). 연주 화면 아래의 드럼 킷(`KitGuideView`)은 세팅한 배치를 축소해 그리고, 패드 위에 그 패드를 칠 다음 박 라벨(`1`·`1e`·`1&`·`1a`)을 보인다. 그 음이 판정(Perfect·Good·Miss)되면 다음 라벨로 바뀌고, 음표가 커서에 닿는 순간 해당 패드에 "지금" 링이 뜬다. 라벨은 준비 화면 "연주 중 옵션"(설정 `sheetPadCount`)에서 끌 수 있고, `prefers-reduced-motion`이면 커서가 박 단위로 이동한다. 계산은 순수 함수로 분리했다: 박 라벨 `domain/sheet.countLabel`, 패드 큐 `domain/padCue.padCues`, 페이지·슬롯·커서 `components/sheetPagerMath`.
+악보 렌더(`components/SheetPager`)는 클라이언트 Canvas 5선이며 마디가 화면에 고정되고 커서가 왼쪽에서 오른쪽으로 곡 시각에 맞춰 지나간다. 한 페이지는 악보 영역 폭 900px 미만이면 2마디, 이상이면 4마디이고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지의 마디로 흐리게 바뀌어 항상 앞을 읽을 수 있다(커서가 다음 페이지로 넘어가면 모두 정상으로 돌아온다). 연주 화면 아래의 드럼 킷(`DrumKit` + `useNextBeatLabels`)은 패드 위에 그 패드를 칠 다음 박 라벨(`1`·`1e`·`1&`·`1a`)을 보인다. 그 음이 판정(Perfect·Good·Miss)되면 다음 라벨로 바뀌고, 음표가 커서에 닿는 순간 해당 패드에 "지금" 링이 뜬다. 라벨은 준비 화면 "연주 중 옵션"(설정 `sheetPadCount`)에서 끌 수 있고, `prefers-reduced-motion`이면 커서가 박 단위로 이동한다. 계산은 순수 함수로 분리했다: 박 라벨 `domain/sheet.countLabel`, 패드 큐 `domain/padCue.padCues`, 페이지·슬롯·커서 `components/sheetPagerMath`.
 
 **격자 원점(`offsetMs`):** BE 채보의 `notes[].timeMs`는 반주 0ms 기준 절대값이고 BE는 양자화하지 않는다. FE는 `timeMs − offsetMs`(격자 시각)로 16분 칸·마디 번호·커서·박 라벨·마디 수를 계산한다(`domain/sheet`의 `gridOriginMs`·`gridTimeOf`·`stepIndexOf`·`barCountOf`, `SheetModel.originMs`). 음원 곡만 `offsetMs`가 0이 아니다(MIDI·내장 곡은 0이라 결과가 같다). 격자 시각이 0보다 작은 동안(카운트인·인트로) 커서는 첫 슬롯 왼쪽에 서고 박 라벨은 남은 박 수를 센다. 가장 가까운 칸 중심에서 `stepMs / 4`(32분음의 절반, BE 솎기 허용 오차와 같음)보다 먼 노트는 `offGrid`로 표시해 라벨은 가장 가까운 칸을 쓰되 패드 배지 오른쪽 위와 악보 머리 옆에 작은 점을 찍는다(라벨을 끄면 점도 없다). 원점보다 앞선 노트는 0마디 0칸에 모으고 `offGrid`다(못갖춘마디 표시는 AI의 `offsetMs` 정의 회신 뒤 후속). 판정·업로드는 원본 `timeMs`를 그대로 써 점수에는 영향이 없다. 변박 곡(`variableTempo`)은 지원하지 않고 안내만 한다. 플레이 업로드 본문에 `padCountGuide`는 넣지 않는다(서버가 400으로 거부, `playUpload.test.ts`로 고정). 마디 그리기는 `drawSheet`를 슬롯마다 clip해 한 번씩 호출해 재사용하고, 패드 그리기는 리듬 게임 킷 뷰와 같은 `components/kitPadPaint`를 쓴다. 글리프 배치(보표 위치·머리·빔)는 `domain/sheet.layoutBar`다.
-결과 페이지(로컬 카드가 보이는 경우)는 피드백 카드가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetPager`와 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 플레이 로그에는 `offsetMs`가 남아 약점 마디 번호(`buildFeedback`)와 미니 악보가 악보 화면과 같은 격자 원점을 쓴다(`offsetMs`가 없는 이전 로그는 0). 카드를 누르면 구간이 바뀐다.
+결과 페이지(로컬 카드가 보이는 경우)는 피드백 카드(`result/FeedbackCard`)가 가리키는 약점 마디를 `components/SheetSnippet`(정지 Canvas, 마디 폭 180~320px)으로 보여 준다. 그리기는 `components/sheetStripDraw`의 `drawSheet`를 `SheetPager`와 공유하고, 채보는 다시 조회하지 않고 로그에서 `domain/feedback.chartFromLog`로 만든다(`bpm`이 없는 이전 로그는 스니펫 없음). 플레이 로그에는 `offsetMs`가 남아 약점 마디 번호(`buildFeedback`)와 미니 악보가 악보 화면과 같은 격자 원점을 쓴다(`offsetMs`가 없는 이전 로그는 0). 카드를 누르면 구간이 바뀐다.
 
 포인터 모의 IMU를 켜면 마우스 위치가 스틱 자세가 되고, F(왼손)/J(오른손) 또는 좌/우클릭이 타격이다. 이 두 키는 그동안 고정 키에서 제외된다. 방향키로도 자세를 움직일 수 있다.
 
@@ -303,14 +356,14 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **마이페이지(`/me`):** 아바타 메뉴의 "마이페이지". 프로필(닉네임·로그인 제공자·가입일), 이 계정의 최근 플레이 5건(→ 결과 화면), 회원 탈퇴를 둔다. 라이브러리 요약은 두지 않는다(상단 메뉴 "라이브러리"가 맡는다).
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주 기록 활용(선택, `statsConsent`, 기본 끔 — 저장만 하고 업로드에는 싣지 않는다)·연주(실시간 코칭 `liveCoach`, 기본 켬, 값만 저장)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
-- **회원 탈퇴:** 마이페이지 하단 "회원 탈퇴" → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
+- **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
 - **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
 - **화면:** `/login`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다.
-- **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다.
+- **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·설정·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다(`ui/Menu`, Esc면 아바타로 초점을 돌려준다).
 
 ## 디버그
 
@@ -378,6 +431,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 | ⑥ 출력 | 구간 지연 p50/p95(센서→수신·수신→판정·판정→오디오·전체) · 오디오 base·output latency | 구간 지연 시계열 |
 | 타격 추적 | 왼쪽 최근 타격 목록(최신순), 오른쪽에 고른 타격의 ① 전송 ~ ⑥ 출력 카드(없는 단계는 이유 표시), 같은 seq의 SWING 파형 | — |
 | 제어 | 파라미터 표 · 명령 바 | — |
+| 자유 연습 실측 | 최근 타격 상세(소스·가장 가까운 패드·앵커 거리) · 패드별 횟수·판정 없음·합계·센서 타격 평균 앵커 거리 · [초기화](섹션을 오가도 이어짐) | — |
 
 - ④ 판정·⑤ 채점·⑥ 출력은 `engine/diagTap`(진단 탭)을 같은 창에서 구독해 채운다. 판정·채점 결과는 연주 화면(`/play`·`/sheet`)이 `engine/diagReport`로 내고, 입력 소스가 낸 타격(resolved)은 `app/bootstrap`이 낸다. 구독자가 없으면 publish는 즉시 반환해 운영 빌드에 영향이 없다. 모니터와 연주 화면이 같은 창이 아니면 ⑤는 비어 있다 — 아래 "연주 창 따라보기"로 채운다.
 - 상태 기준(임계값)은 `monitor/health.ts` 맨 위 `HEALTH_THRESHOLDS` 한 곳에 있다. 지금 값은 가정값이고 실기 기록을 보고 조정한다.
@@ -468,6 +522,8 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 
 ## 메트로놈·사운드 토글
 
+> 셸 개편으로 칩·BPM 조작은 상단 GlassDock으로, 옛 팝오버는 Dock 칩을 누르면 열리는 `components/shell/MetronomePanel`(Figma 228:5712)로 옮겼다. 패널: 켜기 토글 · BPM −/+ · 박자(4/4·3/4, 엔진이 지원하는 것만) · 탭 템포 · 메트로놈 음량(0~100%, 설정 `metronomeVolume`, 클릭 게인에 곱함). 바깥 클릭·Esc로 닫히고(Esc면 칩으로 초점 복귀) Dock 접기·라우트 이동 때도 닫힌다. 연주는 멈추지 않는다. 아래 「칩」·「팝오버」는 각각 Dock 칩·패널로 읽는다(슬라이더 BPM 조절은 없음).
+
 상단 바에 전역 메트로놈 칩(비트 점 · BPM · 재생/정지)과 "패드 소리" 스위치가 있다. 스케줄러는 `engine/Metronome` 싱글턴이고, 칩(`components/shell/Metronome`)은 `liveStore.metronome`을 읽고 엔진 메서드만 부른다.
 
 - 칩의 ▶/■는 재생·정지, 칩 본체를 누르면 팝오버가 열린다(바깥 클릭·Esc로 닫힘). 팝오버: BPM 슬라이더(40~240)·`-5/+5`·박자(4/4 · 3/4)·탭 템포.
@@ -476,7 +532,7 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 - 리듬 게임·악보 연습에서 세션을 시작하면 메트로놈이 곡에 잠긴다(`Metronome.lock`): 칩이 곡 BPM·박자와 "곡" 배지를 보이고 슬라이더·박자·탭 템포는 비활성이며, 점은 세션이 `pulse`로 알리는 박에 깜빡이고 ▶/■는 세션 클릭(`settings.metronome`)을 켜고 끈다.
 - 세션이 끝나거나 나가면 `unlock`으로 사용자 BPM·박자(정지 상태)로 돌아온다. 잠금 중 값은 설정에 저장되지 않는다.
 - 사운드 토글은 패드 소리만 음소거한다. 메트로놈 클릭은 계속 난다.
-- 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`soundOn`이 localStorage에 저장된다.
+- 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`metronomeVolume`·`soundOn`이 localStorage에 저장된다.
 - 개발 모드에서는 콘솔에서 `window.__metronome.stats`(`scheduled`·`late`·`maxDriftMs`)로 예약 지터를 읽을 수 있다.
 
 ## 키보드 입력(임시)

@@ -1,0 +1,30 @@
+/* 토스트 (Figma Feedback / Toast 126:3908): 최대 400 폭, 높이 64, 패딩 16, 반지름 14, 왼쪽 상태 점 */
+.ui-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 400px;
+  min-height: 64px;
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.ui-toast-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.ui-toast-success .ui-toast-dot {
+  background: var(--good);
+}
+.ui-toast-error .ui-toast-dot {
+  background: var(--miss);
+}

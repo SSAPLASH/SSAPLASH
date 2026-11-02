@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
 import { getSong, listSongs } from '@/api/songs';
-import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
+import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
 import type { SongDetail, SongScope, SongSummary } from '@/domain/songCatalog';
 
@@ -13,8 +13,7 @@ export type SongsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export const SONGS_SOURCE: SongsSource = import.meta.env.VITE_SONGS_SOURCE === 'builtin' ? 'builtin' : 'api';
 
-/** 내장 채보 인덱스 → 곡·채보 공용 음수 id */
-export const builtinId = (index: number): number => -(index + 1);
+export { builtinId };
 const builtinIndex = (id: number): number => -id - 1;
 
 function builtinChart(id: number): Chart | null {

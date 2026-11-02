@@ -1,6 +1,11 @@
-// 단계 카드 한 장: 번호/체크 원, 제목, 상태 배지, 요약, 오른쪽 동작 버튼, 펼침 본문. 단계 판정은 하지 않는다.
+// Figma StepHeader 236:1287 — 단계 카드 한 장: 번호/체크 원 32, 제목 + 상태 알약, 한 줄 요약, 오른쪽 텍스트 버튼 160×44, 펼침 본문.
+// 단계 판정은 하지 않는다(상태는 호출자가 정한다).
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { StatusPill } from '@/components/ui/StatusPill';
 import type { SetupStepStatus } from '@/domain/setupSteps';
+import './setup.css';
 
 interface Props {
   /** 페이지가 scrollIntoView로 찾을 DOM id */
@@ -14,38 +19,65 @@ interface Props {
   onAction?: () => void;
   expanded: boolean;
   onCollapse: () => void;
+  /** 연주 준비에서 돌아가려고 꼭 채워야 하는 단계(복귀 띠가 떠 있을 때). 펼쳐도 「진행 중」이 아니라 「필요」로 둔다 */
+  urgent?: boolean;
   children?: ReactNode;
 }
 
-const BADGE: Record<SetupStepStatus, string> = { needed: '필요', done: '완료', skipped: '필요 없음' };
+/** 화면에 보이는 상태: 필요한 단계를 펼쳐 둔 동안은 「진행 중」(복귀 중이면 「필요」 유지) */
+type Shown = 'done' | 'progress' | 'needed' | 'skipped';
 
-export function StepCard({ id, index, title, status, summary, actionLabel, onAction, expanded, onCollapse, children }: Props) {
+function shownOf(status: SetupStepStatus, expanded: boolean, urgent: boolean): Shown {
+  if (status === 'needed') return expanded && !urgent ? 'progress' : 'needed';
+  return status;
+}
+
+const PILL: Record<Shown, { variant: 'ok' | 'accent' | 'neutral' | 'danger'; text: string }> = {
+  done: { variant: 'ok', text: '완료' },
+  progress: { variant: 'accent', text: '진행 중' },
+  needed: { variant: 'danger', text: '필요' },
+  skipped: { variant: 'neutral', text: '필요 없음' },
+};
+
+export function StepCard({ id, index, title, status, summary, actionLabel, onAction, expanded, onCollapse, urgent = false, children }: Props) {
+  const shown = shownOf(status, expanded, urgent);
+  const pill = PILL[shown];
   return (
-    <section id={id} className={`card step-card ${status}${expanded ? ' expanded' : ''}`} aria-labelledby={`${id}-title`}>
-      <header className="step-head">
-        <span className="step-mark" aria-hidden="true">
+    <Card
+      padding="md"
+      id={id}
+      role="group"
+      aria-labelledby={`${id}-title`}
+      className={`setup-step is-${shown}${expanded ? ' expanded' : ''}`}
+    >
+      <header className="setup-step-head">
+        <span className="setup-step-mark" aria-hidden="true">
           {status === 'done' ? '✓' : index}
         </span>
-        <div className="step-main">
-          <div className="step-title-row">
-            <h3 id={`${id}-title`}>{title}</h3>
-            <span className={`step-badge ${status}`}>{BADGE[status]}</span>
+        <div className="setup-step-main">
+          <div className="setup-step-title-row">
+            <h3 id={`${id}-title`} className="setup-step-title">
+              {title}
+            </h3>
+            <StatusPill variant={pill.variant}>
+              {pill.text}
+            </StatusPill>
           </div>
-          <p className="step-summary small faint">{summary}</p>
+          <p className="setup-step-summary">{summary}</p>
         </div>
         {expanded ? (
-          <button type="button" className="btn-ghost small" onClick={onCollapse}>
+          <Button variant="text" className="setup-step-action" onClick={onCollapse}>
             접기
-          </button>
+          </Button>
         ) : (
           actionLabel && (
-            <button type="button" className="btn-ghost small" onClick={onAction}>
+            <Button variant="text" className="setup-step-action" onClick={onAction}>
               {actionLabel}
-            </button>
+            </Button>
           )
         )}
       </header>
-      {expanded && <div className="step-body">{children}</div>}
-    </section>
+      {expanded && <div className="setup-step-body">{children}</div>}
+    </Card>
   );
 }
