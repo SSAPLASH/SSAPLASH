@@ -147,3 +147,6 @@ export const CHART_RIDE_16: Chart = make('demo-ride-16', '라이드 16비트', '
 });
 
 export const BUILTIN_CHARTS: Chart[] = [CHART_BASIC_8, CHART_8_FILL, CHART_RIDE_16];
+
+/** 내장 채보 인덱스 → 곡·채보 공용 음수 id */
+export const builtinId = (index: number): number => -(index + 1);

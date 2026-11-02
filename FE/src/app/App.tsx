@@ -3,14 +3,14 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
-import { HomePage } from '@/pages/HomePage';
+import { SettingsPage } from '@/pages/SettingsPage';
+import { HistoryPage } from '@/pages/HistoryPage';
 import { SetupPage } from '@/pages/SetupPage';
 import { PlayPage } from '@/pages/PlayPage';
 import { FreePlayPage } from '@/pages/FreePlayPage';
 import { ResultPage } from '@/pages/ResultPage';
 import { ReportPage } from '@/pages/ReportPage';
 import { SheetPage } from '@/pages/SheetPage';
-import { MyPage } from '@/pages/MyPage';
 import { StudioPage } from '@/pages/StudioPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
@@ -34,14 +34,16 @@ export default function App() {
       <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
         {/* 나머지는 로그인 필요 (VITE_AUTH_REQUIRED=false면 통과) */}
         <Route element={<RequireAuth required={AUTH_REQUIRED} />}>
-          <Route index element={<HomePage />} />
+          <Route index element={<Navigate to="/free" replace />} />
           <Route path="setup" element={<SetupPage />} />
           <Route path="calibration" element={<Navigate to="/setup" replace />} />
           <Route path="play" element={<PlayPage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
           <Route path="studio" element={<StudioPage />} />
-          <Route path="me" element={<MyPage />} />
+          <Route path="me" element={<Navigate to="/settings" replace />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="history" element={<HistoryPage />} />
           <Route path="result/:playId" element={<ResultPage />} />
           <Route path="result/:playId/report" element={<ReportPage />} />
           {StickMonitorPage && (

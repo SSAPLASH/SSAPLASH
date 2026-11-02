@@ -1,6 +1,8 @@
 // 곡 작업실의 음원 선택·제목 입력 (설계 CHART-ACCT 2절). 파일을 고르면 사전 검사와 제목 기본값을 채우고,
 // 업로드 호출은 하지 않는다 — 완성된 UploadDraft를 onSubmit으로 넘긴다. 파일·제목·아티스트가 바뀌면 멱등 키를 새로 만든다.
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import {
   MAX_AUDIO_BYTES,
   MAX_TITLE_LEN,
@@ -11,6 +13,8 @@ import {
   type PrecheckResult,
   type UploadDraft,
 } from '@/domain/chartJob';
+import { UploadIcon } from './StudioIcons';
+import './studio.css';
 
 interface Props {
   /** 업로드 진행 중이면 입력을 잠근다 */
@@ -26,13 +30,17 @@ interface Props {
   onCancelPrefill: () => void;
   /** 첫 방문(곡도 작업도 없음)의 큰 드롭존 */
   emphasis: boolean;
+  /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
+  onCancel?: () => void;
 }
 
 function mib(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, emphasis }: Props) {
+const limitMib = Math.round(MAX_AUDIO_BYTES / 1024 / 1024);
+
+export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, emphasis, onCancel }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<PrecheckResult | null>(null);
   const [title, setTitle] = useState(prefill?.title ?? '');
@@ -41,8 +49,8 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
   // 파일·제목·아티스트 조합마다 키 하나. 바뀌면 null로 두고 제출 때 새로 만든다
   const keyRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // 파일 입력은 hidden이라 포커스를 받지 못한다. 키보드로 파일 선택을 여는 드롭 영역에 둔다
-  const dropRef = useRef<HTMLDivElement>(null);
+  // 파일 입력은 hidden이라 포커스를 받지 못한다. 키보드로 파일 선택을 여는 [파일 고르기] 버튼에 둔다
+  const dropRef = useRef<HTMLButtonElement>(null);
 
   // 프리필은 마운트 시 초기값으로 받는다. 값이 바뀌면 부모가 key를 바꿔 새로 마운트한다(파일·검사 결과·멱등 키도 초기화)
   useEffect(() => {
@@ -80,17 +88,16 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
   };
 
   return (
-    <div className="studio-form col">
+    <div className="studio-form">
       {prefill && (
-        <div className="studio-reupload row">
+        <div className="studio-reupload">
           <span>「{prefill.title}」 다시 올리기 — 파일만 다시 골라 주세요</span>
-          <button type="button" className="btn-ghost small" onClick={onCancelPrefill}>
+          <Button variant="text" size="sm" onClick={onCancelPrefill}>
             취소
-          </button>
+          </Button>
         </div>
       )}
       <div
-        ref={dropRef}
         className={`studio-drop${emphasis ? ' large' : ''}${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
@@ -99,38 +106,44 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         onClick={() => !busy && inputRef.current?.click()}
-        role="button"
-        tabIndex={busy ? -1 : 0}
-        onKeyDown={(e) => {
-          if (!busy && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        aria-label="음원 파일 선택"
       >
         <input ref={inputRef} type="file" accept=".mp3,.wav,audio/mpeg,audio/wav,audio/x-wav" hidden onChange={onInput} disabled={busy} />
-        {file ? (
-          <>
-            <strong>{file.name}</strong>
-            <span className="small dim">{mib(file.size)}</span>
-          </>
-        ) : (
-          <>
-            <strong>MP3 · WAV 파일을 여기에 놓거나 클릭해서 고르세요</strong>
-            <span className="small dim">최대 {mib(MAX_AUDIO_BYTES)} · 10분 이내 · 드럼이 들어 있는 곡</span>
-          </>
-        )}
+        <span className="studio-drop-icon">
+          <UploadIcon size={emphasis ? 40 : 32} />
+        </span>
+        <span className={`studio-drop-title${emphasis ? ' large' : ''}`}>
+          {file ? `${file.name} · ${mib(file.size)}` : '음원 파일을 여기에 끌어다 놓으세요'}
+        </span>
+        <Button
+          ref={dropRef}
+          variant="secondary"
+          size={emphasis ? 'md' : 'sm'}
+          className="studio-drop-btn"
+          disabled={busy}
+          aria-label="음원 파일 선택"
+          onClick={(e) => {
+            e.stopPropagation();
+            inputRef.current?.click();
+          }}
+        >
+          {file ? '다른 파일 고르기' : '파일 고르기'}
+        </Button>
+        <span className="studio-drop-limits">MP3·WAV · {limitMib}MiB 이하 · 10분 이하</span>
       </div>
+      {/* 보관 정책 안내(CHART 설계) — Figma 양식에는 없지만 개인정보 안내라 유지한다 */}
+      <p className="studio-policy-note">
+        올린 음원과 분리한 드럼 트랙은 채보를 만든 뒤 지워요. 드럼을 뺀 반주는 본인만 들을 수 있게 보관하고, 다운로드·공유는 제공하지 않아요.
+      </p>
       {check && !check.ok && (
         <p className="notice error" role="alert">
           {PRECHECK_TEXT[check.reason]}
         </p>
       )}
 
-      <label className="col" style={{ gap: 4 }}>
-        <span className="small dim">곡 제목</span>
-        <input
+      <div className="studio-fields">
+        <Input
+          label="곡 제목 *"
+          help={`1~${MAX_TITLE_LEN}자`}
           type="text"
           value={title}
           maxLength={MAX_TITLE_LEN}
@@ -139,12 +152,11 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
             keyRef.current = null;
             setTitle(e.target.value);
           }}
-          placeholder="제목"
+          placeholder="파일 이름으로 채워져요"
         />
-      </label>
-      <label className="col" style={{ gap: 4 }}>
-        <span className="small dim">아티스트 (선택)</span>
-        <input
+        <Input
+          label="아티스트 (선택)"
+          help={`${MAX_TITLE_LEN}자까지`}
           type="text"
           value={artist}
           maxLength={MAX_TITLE_LEN}
@@ -153,29 +165,31 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
             keyRef.current = null;
             setArtist(e.target.value);
           }}
-          placeholder="아티스트"
+          placeholder="아티스트 이름"
         />
-      </label>
+      </div>
 
       {error && (
         <div className="notice error row" role="alert" style={{ justifyContent: 'space-between' }}>
           <span>{error}</span>
           {retryable && (
-            <button className="btn-ghost small" onClick={onRetry} disabled={busy}>
+            <Button variant="text" size="sm" onClick={onRetry} disabled={busy}>
               다시 시도
-            </button>
+            </Button>
           )}
         </div>
       )}
 
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn-primary" onClick={submit} disabled={!canSubmit}>
+      <div className="studio-form-footer">
+        {onCancel && (
+          <Button variant="secondary" size="md" className="studio-footer-btn" onClick={onCancel} disabled={busy}>
+            취소
+          </Button>
+        )}
+        <Button variant="primary" size="md" className="studio-footer-btn" onClick={submit} disabled={!canSubmit}>
           {busy ? '업로드 중…' : '채보 만들기'}
-        </button>
+        </Button>
       </div>
-      <p className="small faint">
-        올린 음원과 분리한 드럼 트랙은 채보를 만든 뒤 지웁니다. 드럼을 뺀 반주는 본인만 들을 수 있게 보관합니다.
-      </p>
     </div>
   );
 }

@@ -1,0 +1,28 @@
+/* Controls / Card 126:1955 */
+.ui-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.ui-card-md {
+  padding: var(--space-m);
+}
+.ui-card-lg {
+  padding: var(--space-l);
+}
+.ui-card-clickable {
+  cursor: pointer;
+}
+.ui-card-clickable:hover {
+  border-color: var(--line-strong);
+}
+.ui-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}

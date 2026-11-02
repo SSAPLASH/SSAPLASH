@@ -6,6 +6,7 @@ import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
 import { useLive, type MetronomeLive } from '@/store/liveStore';
+import { setReconnectHandler } from '@/store/reconnectStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
@@ -66,6 +67,8 @@ export async function activateSensor(id: SensorId, auto = false): Promise<void> 
   padTableSync.setSource(null);
   yawDriftMonitor.setSource(null);
   currentSensor = id;
+  // 이전 소스의 재연결 동작은 내린다. 새 소스가 준비되면 아래에서 다시 등록한다
+  setReconnectHandler(null);
   useLive.setState({
     activeSensor: id,
     connected: [false, false],
@@ -84,6 +87,7 @@ export async function activateSensor(id: SensorId, auto = false): Promise<void> 
     src.setSurface?.(lastSurface);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
     unsubDongle = src.onDongle?.((link) => useLive.setState({ dongle: link })) ?? null;
+    setReconnectHandler(() => reconnectActive(src));
     await inputManager.attach(src, auto);
   } catch (e) {
     useLive.setState({ sourceState: 'error', sourceMessage: (e as Error).message });
@@ -97,6 +101,13 @@ export async function connectSensor(): Promise<void> {
   } catch {
     // 실패 사유는 소스가 sourceState·sourceMessage로 남긴다
   }
+}
+
+/** 재연결 기본 구현: 활성 센서의 connect를 다시 부르고 연결되지 않았으면 실패로 알린다(U21). 클릭 처리 안에서 불려야 한다 */
+async function reconnectActive(src: InputSource): Promise<void> {
+  if (activeInstance !== src) throw new Error('입력 소스가 바뀌었습니다');
+  await src.connect();
+  if (src.state !== 'connected') throw new Error('연결하지 못했습니다');
 }
 
 /**
@@ -190,6 +201,7 @@ export function bootstrapInput(): void {
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
     audioEngine.setVolume(s.volume);
+    audioEngine.setClickVolume(s.metronomeVolume);
   };
   applySettings();
   useSettings.subscribe(applySettings);

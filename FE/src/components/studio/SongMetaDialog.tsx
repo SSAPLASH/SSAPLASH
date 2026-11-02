@@ -1,8 +1,11 @@
-// 곡 정보 수정 창 (설계 CHART-001 4-2, v0.3 명칭). 제목(1~100자)·아티스트(0~100자). 바뀐 필드만 onSave로 넘긴다.
+// 곡 정보 수정 창 (Figma Studio / SongInfoDialog 204:860, 폭 480; 설계 CHART-001 4-2, v0.3 명칭). 제목(1~100자)·아티스트(0~100자). 바뀐 필드만 onSave로 넘긴다.
 import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import type { SongSummary } from '@/domain/songCatalog';
 import { META_CHECK_TEXT, MAX_NAME_LEN, diffMeta, validateMeta, type SongMetaPatch } from '@/domain/songEdit';
 import { EditDialog } from './EditDialog';
+import './studio.css';
 
 interface Props {
   song: SongSummary;
@@ -22,25 +25,32 @@ export function SongMetaDialog({ song, busy, error, onSave, onClose }: Props) {
   const canSave = !busy && check.ok && changed;
 
   return (
-    <EditDialog title="곡 정보 수정" locked={busy} onClose={onClose}>
+    <EditDialog title="곡 정보 수정" size="info" locked={busy} onClose={onClose}>
       <form
-        className="col"
-        style={{ gap: 12 }}
+        className="studio-dialog-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (canSave) onSave(patch);
         }}
       >
-        <label className="col" style={{ gap: 4 }}>
-          <span className="small dim">곡 제목 *</span>
-          <input type="text" value={title} maxLength={MAX_NAME_LEN + 20} disabled={busy} onChange={(e) => setTitle(e.target.value)} />
-          <span className="field-help small faint">1~{MAX_NAME_LEN}자</span>
-        </label>
-        <label className="col" style={{ gap: 4 }}>
-          <span className="small dim">아티스트 (선택)</span>
-          <input type="text" value={artist} maxLength={MAX_NAME_LEN + 20} disabled={busy} onChange={(e) => setArtist(e.target.value)} />
-          <span className="field-help small faint">{MAX_NAME_LEN}자까지</span>
-        </label>
+        <Input
+          label="곡 제목 *"
+          help={`1~${MAX_NAME_LEN}자`}
+          type="text"
+          value={title}
+          maxLength={MAX_NAME_LEN + 20}
+          disabled={busy}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <Input
+          label="아티스트 (선택)"
+          help={`${MAX_NAME_LEN}자까지`}
+          type="text"
+          value={artist}
+          maxLength={MAX_NAME_LEN + 20}
+          disabled={busy}
+          onChange={(e) => setArtist(e.target.value)}
+        />
         {!check.ok && (
           <p className="small" style={{ color: 'var(--miss)' }}>
             {META_CHECK_TEXT[check.reason]}
@@ -51,13 +61,13 @@ export function SongMetaDialog({ song, busy, error, onSave, onClose }: Props) {
             {error}
           </div>
         )}
-        <div className="dialog-actions">
-          <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
+        <div className="studio-dialog-footer">
+          <Button variant="secondary" size="md" className="studio-footer-btn" onClick={onClose} disabled={busy}>
             취소
-          </button>
-          <button type="submit" className="btn-primary" disabled={!canSave}>
+          </Button>
+          <Button type="submit" variant="primary" size="md" className="studio-footer-btn" disabled={!canSave}>
             {busy ? '저장 중…' : '저장'}
-          </button>
+          </Button>
         </div>
       </form>
     </EditDialog>

@@ -1,7 +1,12 @@
-// 새 프리셋 이름 입력 대화상자. 입력마다 validatePresetName으로 검증하고, 저장 실행은 호출자(onSave)가 한다.
-import { useEffect, useRef, useState } from 'react';
+// Figma PresetNameDialog 228:1197(폭 400) — 새 프리셋 이름 입력 대화상자.
+// 입력마다 validatePresetName으로 검증하고, 저장 실행은 호출자(onSave)가 한다.
+import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
 import { PRESET_NAME_MAX, normalizePresetName, validatePresetName, type KitPreset } from '@/domain/preset';
 import { PRESET_NAME_ERROR_TEXT } from '@/domain/setupSteps';
+import './setup.css';
 
 interface Props {
   open: boolean;
@@ -29,56 +34,43 @@ function PresetNameDialogBody({ existing, busy, error, onSave, onCancel, initial
   const valid = code === null;
   const message = code === 'TOO_LONG' || code === 'DUPLICATE' ? PRESET_NAME_ERROR_TEXT[code] : null;
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // Esc로 취소. 저장 중에는 닫지 않는다
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onCancel]);
-
+  // 열릴 때 입력 칸에 초점. Esc로 취소(저장 중에는 닫지 않는다). 배경 클릭은 기존처럼 닫지 않는다
   return (
-    <div className="dialog-backdrop">
-      <form
-        className="dialog preset-name-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="preset-name-title"
-        onSubmit={(e) => {
-          e.preventDefault(); // Enter = 유효할 때만 저장
-          if (valid && !busy) onSave(normalizePresetName(raw));
-        }}
-      >
-        <h2 id="preset-name-title">새 프리셋 이름</h2>
-        <input
-          ref={inputRef}
-          type="text"
-          className={message ? 'input-error' : undefined}
-          value={raw}
-          disabled={busy}
-          aria-invalid={message ? true : undefined}
-          aria-describedby="preset-name-hint"
-          placeholder="예: 연습용 배치"
-          onChange={(e) => setRaw(e.target.value)}
-        />
-        <p id="preset-name-hint" className={`small ${message ? 'field-error' : 'faint'}`}>
-          {message ?? `1~${PRESET_NAME_MAX}자`}
-        </p>
-        {error && <p className="notice error">{error}</p>}
-        <div className="dialog-actions">
-          <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
-            취소
-          </button>
-          <button type="submit" className="btn-primary" disabled={!valid || busy}>
-            {busy ? '저장 중…' : '저장'}
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog
+      as="form"
+      className="setup-name-dialog"
+      labelledBy="preset-name-title"
+      initialFocusRef={inputRef}
+      closeOnBackdrop={false}
+      closeOnEscape={!busy}
+      onClose={onCancel}
+      onSubmit={(e) => {
+        e.preventDefault(); // Enter = 유효할 때만 저장
+        if (valid && !busy) onSave(normalizePresetName(raw));
+      }}
+    >
+      <h2 id="preset-name-title">새 프리셋</h2>
+      <Input
+        ref={inputRef}
+        label="프리셋 이름"
+        type="text"
+        value={raw}
+        disabled={busy}
+        placeholder="예: 연습용 배치"
+        help={`1~${PRESET_NAME_MAX}자`}
+        error={message ?? undefined}
+        counter={{ value: Array.from(raw).length, max: PRESET_NAME_MAX }}
+        onChange={(e) => setRaw(e.target.value)}
+      />
+      {error && <p className="notice error">{error}</p>}
+      <div className="setup-dialog-actions">
+        <Button variant="secondary" onClick={onCancel} disabled={busy}>
+          취소
+        </Button>
+        <Button type="submit" variant="primary" disabled={!valid || busy}>
+          {busy ? '저장 중…' : '저장'}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
