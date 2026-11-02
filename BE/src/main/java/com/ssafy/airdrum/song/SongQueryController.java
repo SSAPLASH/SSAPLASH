@@ -23,7 +23,8 @@ import static com.ssafy.airdrum.song.SongResponses.*;
 @ApiResponse(responseCode = "404", description = "없는 곡·타인 곡·삭제된 곡", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 public class SongQueryController {
 	private final SongQueryService songs;
-	public SongQueryController(SongQueryService songs) { this.songs = songs; }
+	private final SongAccompanimentService accompaniment;
+	public SongQueryController(SongQueryService songs, SongAccompanimentService accompaniment) { this.songs = songs; this.accompaniment = accompaniment; }
 	@InitBinder
 	void trim(WebDataBinder binder) { binder.registerCustomEditor(String.class, new StringTrimmerEditor(false)); }
 
@@ -43,5 +44,15 @@ public class SongQueryController {
 			@Parameter(hidden = true) @RequestAttribute(ChartQueryWebConfiguration.USER_ID) long userId,
 			@PathVariable @Positive(message = "곡 ID는 양수여야 합니다") long songId) {
 		return songs.detail(userId, songId);
+	}
+	@GetMapping("/{songId}/accompaniment")
+	@Operation(summary = "곡 반주 URL 발급·갱신", description = "채보 버전과 무관합니다. 반주가 없으면 URL과 만료 시각은 null입니다.")
+	@ApiResponse(responseCode = "404", description = "없는 곡·타인 곡·삭제된 곡: SONG_NOT_FOUND, 반주 객체 부재: CHART_ASSET_NOT_FOUND", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "409", description = "곡이 아직 준비되지 않음", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "503", description = "스토리지 장애 또는 반주 교체 중", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	public Accompaniment accompaniment(
+			@Parameter(hidden = true) @RequestAttribute(ChartQueryWebConfiguration.USER_ID) long userId,
+			@PathVariable @Positive(message = "곡 ID는 양수여야 합니다") long songId) {
+		return accompaniment.get(userId, songId);
 	}
 }
