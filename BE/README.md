@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V24를 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V25를 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -381,7 +381,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
 | V22 | `V22__add_songs_published.sql` | `songs.published`(기본 true) 공용 곡 공개 여부, CHECK `songs_published_builtin_check`(개인 곡은 항상 true) | -156 |
 | V23 | `V23__create_sheet_music.sql` | 내 악보 `sheet_music`·`sheet_music_pages`, 정리 역할 `SHEET_MUSIC` 추가 | -155 |
-| V24 | `V24__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
+| V24 | `V24__allow_mpeg4_and_ogg_audio.sql` | 음원 MIME 확장(`audio/mp4`·`audio/ogg`), 기존 행 보존 | -267 |
+| V25 | `V25__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
 
 규칙:
 
