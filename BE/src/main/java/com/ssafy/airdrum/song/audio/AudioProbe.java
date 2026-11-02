@@ -48,9 +48,9 @@ public class AudioProbe {
                                     "-protocol_whitelist",
                                     "file",
                                     "-format_whitelist",
-                                    "mp3,wav",
+                                    "mp3,wav,mov,ogg",
                                     "-show_entries",
-                                    "format=format_name,duration:stream=codec_type,codec_name",
+                                    "format=format_name,duration:stream=codec_type,codec_name:stream_disposition=attached_pic",
                                     "-of",
                                     "json",
                                     file.toAbsolutePath().toString()));
@@ -72,16 +72,28 @@ public class AudioProbe {
                     switch (name) {
                         case "mp3" -> "audio/mpeg";
                         case "wav" -> "audio/wav";
+                        case "mov,mp4,m4a,3gp,3g2,mj2" -> "audio/mp4";
+                        case "ogg" -> "audio/ogg";
                         default -> throw new BusinessException(AudioErrorCode.UNSUPPORTED);
                     };
             boolean audio = false;
+            boolean newFormat = mime.equals("audio/mp4") || mime.equals("audio/ogg");
             for (var stream : root.path("streams")) {
                 var codec = stream.path("codec_name");
-                if ("audio".equals(stream.path("codec_type").asText())
+                String type = stream.path("codec_type").asText();
+                if ("audio".equals(type)
                         && codec.isTextual()
                         && !codec.asText().isBlank()
                         && !"unknown".equalsIgnoreCase(codec.asText())) {
+                    if (newFormat && !(mime.equals("audio/mp4")
+                            ? java.util.Set.of("aac", "alac").contains(codec.asText())
+                            : "opus".equals(codec.asText()))) {
+                        throw new BusinessException(AudioErrorCode.UNSUPPORTED);
+                    }
                     audio = true;
+                } else if (newFormat && !("video".equals(type)
+                        && stream.path("disposition").path("attached_pic").asInt() == 1)) {
+                    throw new BusinessException(AudioErrorCode.UNSUPPORTED);
                 }
             }
             if (!audio) throw new BusinessException(AudioErrorCode.UNSUPPORTED);
