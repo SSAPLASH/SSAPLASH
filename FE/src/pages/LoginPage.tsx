@@ -1,16 +1,19 @@
 // 로그인 화면 (설계 3-7). 버튼은 BE 로그인 시작 주소로 브라우저를 통째로 보낸다(fetch 아님) — BE가 제공자 동의 화면으로 302.
 // PublicLayout 안에서 2분할(좌 브랜드·우 카드)로 그린다. 표시할 제공자는 VITE_LOGIN_PROVIDERS로 거른다.
-import { useEffect } from 'react';
+// 버튼은 Figma 로그인 카드 134:2733대로 로고 + 「…로 계속하기」, 둘 다 secondary 카드 폭(가입·로그인을 나누지 않는다).
+import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/authStore';
-import { enabledProviders, loginErrorMessage } from '@/domain/auth';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { KitCanvas } from '@/components/KitCanvas';
+import { enabledProviders, loginErrorMessage, type ProviderKey } from '@/domain/auth';
+import { AuthBrandPane } from '@/components/auth/AuthBrandPane';
+import { GoogleIcon, SsafyIcon } from '@/components/auth/ProviderIcons';
+import { Button } from '@/components/ui/Button';
+import '@/components/auth/auth.css';
 
 /** 키 없는 제공자는 FE 환경변수로 숨긴다 (빌드 시 고정) */
 const PROVIDERS = enabledProviders(import.meta.env.VITE_LOGIN_PROVIDERS);
-/** 제공자 버튼 왼쪽의 글자 마크 (외부 로고 에셋 없음) */
-const PROVIDER_MARK: Record<string, string> = { google: 'G', ssafy: 'S' };
+/** 제공자 버튼 왼쪽 로고 (Figma Icons / Google · Icons / SSAFY) */
+const PROVIDER_ICON: Record<ProviderKey, ReactNode> = { google: <GoogleIcon />, ssafy: <SsafyIcon /> };
 
 export function LoginPage() {
   const status = useAuth((s) => s.status);
@@ -32,25 +35,23 @@ export function LoginPage() {
 
   return (
     <div className="login">
-      <section className="login-brand">
-        <div className="login-wordmark">SSAPLASH</div>
-        <p className="login-slogan">스틱 하나로 시작하는 나의 첫 드럼</p>
-        <div className="login-kit" aria-hidden="true">
-          <KitCanvas layout={DEFAULT_KIT_LAYOUT} />
-        </div>
-      </section>
+      <AuthBrandPane />
       <section className="login-card">
         <h1>로그인</h1>
         <p className="dim">소셜 계정으로 로그인하면 세팅·프리셋과 플레이 기록이 계정에 저장됩니다. 이메일·비밀번호 가입은 없습니다.</p>
         {message && <p className={params.get('error') === 'withdrawn' ? 'notice' : 'notice error'}>{message}</p>}
         <div className="col login-buttons">
-          {PROVIDERS.map((p, i) => (
-            <button key={p.key} className={i === 0 ? 'btn-primary login-btn' : 'login-btn'} onClick={() => startLogin(p.key, from)}>
-              <span className="login-mark" aria-hidden="true">
-                {PROVIDER_MARK[p.key]}
-              </span>
+          {PROVIDERS.map((p) => (
+            <Button
+              key={p.key}
+              variant="secondary"
+              fullWidth
+              leadingIcon={PROVIDER_ICON[p.key]}
+              className="login-provider-btn"
+              onClick={() => startLogin(p.key, from)}
+            >
               {p.label}
-            </button>
+            </Button>
           ))}
         </div>
         <p className="login-caption">계정은 Google 또는 SSAFY 계정으로만 만들 수 있습니다.</p>
