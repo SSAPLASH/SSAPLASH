@@ -89,7 +89,9 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv(ENV_DEVICE, raising=False)
     cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
-    assert cfg.model_config == Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
+    assert cfg.model_config == Path(
+        "configs/bench/transcribers/adtof_drumsep/adtof_drumsep_realrec.yaml"
+    )
     assert (AI_DIR / cfg.model_config).is_file()
     assert cfg.device == "cuda"
     assert cfg.schema_version == 1
