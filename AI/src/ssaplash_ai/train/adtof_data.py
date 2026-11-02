@@ -12,6 +12,7 @@
 - 탐 강조: 윈도의 `tom_window_frac` 비율은 그 곡의 정답 탐 타격 하나를 가운데 두고 자름
 - 반주가 있는 곡(STAR·ENST)은 `accomp_mix_prob` 확률로 반주를 낮은 게인으로 섞음
 - 입력 전체 게인을 `gain_db_range` 안에서 바꿈
+- 데이터셋마다 `ignore_classes`로 손실에서 뺄 클래스를 지정(주석에 그 악기 표시가 없는 데이터용)
 
 모델·손실은 여기 없음(adtof_finetune).
 """
@@ -219,10 +220,21 @@ def cut_window(
 
 @dataclass
 class DatasetSpec:
-    """학습 설정의 train_datasets 항목 하나."""
+    """학습 설정의 train_datasets 항목 하나. ignore_classes는 이 데이터셋 윈도에서 손실을 뺄 클래스 이름
+    (주석에 없는 클래스, 예: 페달 표시가 없는 ENST의 `pedal`)."""
 
     path: Path
     weight: float = 1.0
+    ignore_classes: tuple[str, ...] = ()
+
+
+def loss_mask(classes: str, ignore: Sequence[str] = ()) -> np.ndarray:
+    """(클래스,) 1/0. ignore에 든 클래스 채널만 0. 모르는 이름이면 오류."""
+    names = class_names(classes)
+    unknown = [c for c in ignore if c not in names]
+    if unknown:
+        raise ValueError(f"ignore_classes {unknown}는 {classes} 클래스가 아님 (가능: {names})")
+    return np.array([0.0 if n in ignore else 1.0 for n in names], dtype=np.float32)
 
 
 @dataclass
@@ -233,6 +245,7 @@ class SongPool:
     weights: np.ndarray
     song_ids: list[list[str]]
     names: list[str] = field(default_factory=list)
+    ignore: list[tuple[str, ...]] = field(default_factory=list)
 
     @classmethod
     def from_specs(cls, specs: Sequence[DatasetSpec]) -> SongPool:
@@ -244,7 +257,11 @@ class SongPool:
         w = np.array([max(0.0, float(s.weight)) for s in specs], dtype=np.float64)
         if w.sum() <= 0:
             raise ValueError("train_datasets의 weight 합이 0")
-        return cls(loaders, w / w.sum(), ids, [ld.name for ld in loaders])
+        ignore = [tuple(s.ignore_classes) for s in specs]
+        return cls(loaders, w / w.sum(), ids, [ld.name for ld in loaders], ignore)
+
+    def ignore_of(self, k: int) -> tuple[str, ...]:
+        return self.ignore[k] if k < len(self.ignore) else ()
 
     @property
     def n_songs(self) -> int:
@@ -260,13 +277,20 @@ class SongPool:
         return h.hexdigest()[:12]
 
     def draw(self, rng: np.random.Generator) -> tuple[BaseDataset, str]:
+        k, song_id = self.draw_index(rng)
+        return self.loaders[k], song_id
+
+    def draw_index(self, rng: np.random.Generator) -> tuple[int, str]:
+        """(데이터셋 번호, 곡 id). draw와 같은 순서로 난수를 씀."""
         k = int(rng.choice(len(self.loaders), p=self.weights))
-        return self.loaders[k], str(rng.choice(self.song_ids[k]))
+        return k, str(rng.choice(self.song_ids[k]))
 
 
 class WindowDataset(IterableDataset):
     """무한히 윈도를 내는 데이터셋. 곡 하나를 읽으면 windows_per_song개를 뽑고 다음 곡으로.
 
+    윈도마다 (입력 (프레임, 84, 1), 정답 (프레임, 클래스), 손실 마스크 (클래스,))를 냄.
+    마스크는 그 곡 데이터셋의 ignore_classes 채널만 0.
     DataLoader 워커마다 시드가 달라야 하므로 워커 번호를 시드에 더함.
     """
 
@@ -282,17 +306,21 @@ class WindowDataset(IterableDataset):
         self.seed = seed
         self.windows_per_song = windows_per_song
 
-    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         info = torch.utils.data.get_worker_info()
         worker = info.id if info is not None else 0
         rng = np.random.default_rng(self.seed * 1000 + worker)
+        masks = [
+            torch.from_numpy(loss_mask(self.cfg.classes, self.pool.ignore_of(k)))
+            for k in range(len(self.pool.loaders))
+        ]
         while True:
-            loader, song_id = self.pool.draw(rng)
-            song = loader.load(song_id)
+            k, song_id = self.pool.draw_index(rng)
+            song = self.pool.loaders[k].load(song_id)
             for _ in range(self.windows_per_song):
                 start, _ = choose_start(song, rng, self.cfg)
                 feat, target = cut_window(song, start, rng, self.cfg)
-                yield torch.from_numpy(feat).unsqueeze(-1), torch.from_numpy(target)
+                yield torch.from_numpy(feat).unsqueeze(-1), torch.from_numpy(target), masks[k]
 
 
 def song_features(song: SongItem, processor: AudioProcessor | None = None) -> np.ndarray:

@@ -62,6 +62,39 @@ def test_대기열은_하나씩_돌리고_DONE은_건너뛰고_실패를_표시�
     assert Q.run_state(st, "tom_7cls").startswith("실패")
 
 
+def test_동시_실행은_정한_수만큼_같이_돌고_빈자리에_다음_것을_띄운다(tmp_path: Path):
+    st = _queue(tmp_path, ["a", "b", "c"])
+    queue = json.loads((st / "queue.json").read_text(encoding="utf-8"))
+    queue["parallel"] = 2
+    (st / "queue.json").write_text(json.dumps(queue), encoding="utf-8")
+
+    def make_cmd(queue: dict, run: dict) -> list[str]:
+        # 시작·끝 시각을 로그에 남김
+        code = (
+            "import time; print('start', time.time()); time.sleep(0.5); print('end', time.time()); "
+            "print('[train] 끝. x')"
+        )
+        return [sys.executable, "-c", code]
+
+    assert Q.run_queue(tmp_path, make_cmd, SRC, poll_sec=0.05) == 0
+    t = {}
+    for n in ("a", "b", "c"):
+        rows = dict(
+            line.split() for line in (st / f"{n}.log").read_text(encoding="utf-8").splitlines()[:2]
+        )
+        t[n] = (float(rows["start"]), float(rows["end"]))
+    assert t["a"][0] < t["b"][1] and t["b"][0] < t["a"][1]  # a·b는 겹쳐 돎
+    assert t["c"][0] >= min(t["a"][1], t["b"][1])  # c는 자리가 난 뒤 시작
+    assert all((st / f"{n}.DONE").is_file() for n in ("a", "b", "c"))
+
+
+def test_코어를_정하면_명령_앞에_taskset이_붙는다():
+    queue = {"python": "py", "out_root": "o", "num_workers": 8}
+    run = {"name": "a", "config": "c.yaml"}
+    assert Q.train_command(queue, run)[0] == "py"
+    assert Q.train_command({**queue, "cpus": "0-95"}, run)[:4] == ["taskset", "-c", "0-95", "py"]
+
+
 def test_종료_코드가_0이어도_끝_표시가_없으면_실패(tmp_path: Path):
     st = _queue(tmp_path, ["tom_5cls"])
 
