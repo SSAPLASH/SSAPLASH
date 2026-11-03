@@ -1,5 +1,6 @@
 // 연결 끊김 카드 (Figma Play / DisconnectNotice 228:1138, 10/31 재구성). 420 카드 안에 L·R 연결 점, 제목, 재연결 상태 문구, 버튼 둘.
-// 시도 중에는 초점을 잃지 않게 disabled 대신 aria-disabled(스토어가 중복 호출을 무시한다).
+// 시도 중 [다시 연결]은 눌러도 된다(다음 시도를 바로 시작). 시도 중에는 끊긴 손 점이 맥동하고 문구 앞에 스피너가 돈다.
+// 복귀(reconnected)하면 점 둘이 초록, 제목 「재연결 성공!」, 버튼 없음.
 // 버튼은 ref가 필요해 ui/Button 대신 buttonClassName 모양을 입힌 button을 쓴다.
 // 재연결 상태(status)는 store/reconnectStore가 정한 값을 호출부가 넘긴다. 이 컴포넌트는 props만 받는다.
 import type { Ref } from 'react';
@@ -8,9 +9,11 @@ import '@/components/ui/Button.css';
 import './DisconnectNotice.css';
 
 export interface ReconnectInfo {
-  status: 'idle' | 'trying' | 'failed';
+  status: 'idle' | 'trying' | 'failed' | 'reconnected';
   attempt: number;
   max: number;
+  /** failed일 때 문구 뒤 줄에 보일 소스별 안내(예: 동글을 뺐다 다시 꽂아 주세요) */
+  hint?: string;
 }
 
 interface Props {
@@ -34,14 +37,15 @@ function titleText(left: boolean, right: boolean): string {
 
 function statusText(status: ReconnectInfo): string {
   if (status.status === 'trying') return `연주를 멈췄어요. 다시 연결하는 중… (${status.attempt}/${status.max})`;
-  if (status.status === 'failed') return '연결하지 못했어요. 드럼 세팅에서 연결해 주세요.';
+  if (status.status === 'reconnected') return '3초 뒤 이어서 연주해요';
+  if (status.status === 'failed') return '연결하지 못했어요.';
   return '연주를 멈췄어요. 다시 연결되면 이어서 할 수 있어요.';
 }
 
-function Dot({ hand, connected }: { hand: 'L' | 'R'; connected: boolean }) {
+function Dot({ hand, connected, pulse }: { hand: 'L' | 'R'; connected: boolean; pulse?: boolean }) {
   return (
     <div className="stick-dot-wrap">
-      <span className={`stick-dot ${connected ? 'on' : 'off'}`} aria-hidden="true">
+      <span className={`stick-dot ${connected ? 'on' : 'off'}${pulse && !connected ? ' pulse' : ''}`} aria-hidden="true">
         {hand}
       </span>
       <span className="stick-dot-label">{connected ? '연결됨' : '끊김'}</span>
@@ -52,45 +56,61 @@ function Dot({ hand, connected }: { hand: 'L' | 'R'; connected: boolean }) {
 export function DisconnectNotice({ left, right, status, onExit, onReconnect, onOpenSetup, primaryRef }: Props) {
   const failed = status.status === 'failed';
   const trying = status.status === 'trying';
+  const reconnected = status.status === 'reconnected';
   return (
-    <div className="stick-disconnect motion-dialog" role="alertdialog" aria-modal="true" aria-labelledby="stick-disconnect-title">
+    <div
+      className="stick-disconnect motion-dialog"
+      role={reconnected ? 'status' : 'alertdialog'}
+      aria-modal={reconnected ? undefined : 'true'}
+      aria-labelledby="stick-disconnect-title"
+    >
       <div className="stick-dots">
-        <Dot hand="L" connected={left} />
-        <Dot hand="R" connected={right} />
+        <Dot hand="L" connected={reconnected || left} pulse={trying} />
+        <Dot hand="R" connected={reconnected || right} pulse={trying} />
       </div>
-      <h2 id="stick-disconnect-title" className="stick-disconnect-title">
-        {titleText(left, right)}
+      <h2 id="stick-disconnect-title" className={`stick-disconnect-title${reconnected ? ' good' : ''}`}>
+        {reconnected ? '재연결 성공!' : titleText(left, right)}
       </h2>
-      <p className="stick-disconnect-status" role="status">
-        {statusText(status)}
+      <p className="stick-disconnect-status" role={reconnected ? undefined : 'status'}>
+        {trying && <span className="stick-spinner" aria-hidden="true" />}
+        <span>
+          {statusText(status)}
+          {failed && (
+            <>
+              <br />
+              {status.hint ?? '드럼 세팅에서 연결해 주세요.'}
+            </>
+          )}
+        </span>
       </p>
-      <div className="stick-disconnect-actions">
-        <button type="button" className={buttonClassName({ variant: 'secondary', className: 'stick-disconnect-btn' })} onClick={onExit}>
-          나가기
-        </button>
-        {failed && onOpenSetup ? (
-          <button
-            ref={primaryRef}
-            type="button"
-            className={buttonClassName({ className: 'stick-disconnect-btn wide' })}
-            onClick={onOpenSetup}
-          >
-            드럼 세팅에서 연결하기
+      {!reconnected && (
+        <div className="stick-disconnect-actions">
+          <button type="button" className={buttonClassName({ variant: 'secondary', className: 'stick-disconnect-btn' })} onClick={onExit}>
+            나가기
           </button>
-        ) : (
-          onReconnect && (
+          {failed && onOpenSetup ? (
             <button
               ref={primaryRef}
               type="button"
-              className={buttonClassName({ className: 'stick-disconnect-btn' })}
-              onClick={onReconnect}
-              aria-disabled={trying}
+              className={buttonClassName({ className: 'stick-disconnect-btn wide' })}
+              onClick={onOpenSetup}
             >
-              다시 연결
+              드럼 세팅에서 연결하기
             </button>
-          )
-        )}
-      </div>
+          ) : (
+            onReconnect && (
+              <button
+                ref={primaryRef}
+                type="button"
+                className={buttonClassName({ className: 'stick-disconnect-btn' })}
+                onClick={onReconnect}
+              >
+                다시 연결
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

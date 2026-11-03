@@ -55,7 +55,14 @@
   font-weight: 600;
   line-height: 1.45;
 }
+.stick-disconnect-title.good {
+  color: var(--good);
+}
 .stick-disconnect-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin: 0;
   color: var(--brand-sub);
   font-size: 14px;
@@ -73,4 +80,43 @@
 .stick-disconnect-btn.wide {
   width: auto;
   min-width: 150px;
+}
+
+/* 시도 중: 끊긴 손 점 맥동 + 문구 앞 스피너 (PLAY-002 D11) */
+.stick-dot.pulse {
+  animation: stick-dot-pulse 1.2s ease-in-out infinite;
+}
+@keyframes stick-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.stick-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--brand-sub) 30%, transparent);
+  border-top-color: var(--brand-sub);
+  border-radius: 50%;
+  animation: stick-spin 0.9s linear infinite;
+}
+@keyframes stick-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 감소 모션: 회전 없이 점 깜빡임만 느리게 */
+@media (prefers-reduced-motion: reduce) {
+  .stick-spinner {
+    animation: none;
+    display: none;
+  }
+  .stick-dot.pulse {
+    animation-duration: 2s;
+  }
 }

@@ -9,6 +9,7 @@ import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
+import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
 import { PlayStage } from '@/components/play/PlayStage';
 import { PlayHud } from '@/components/play/PlayHud';
@@ -187,6 +188,8 @@ export function PlayPage() {
         ss &&
         stageRef.current === 'play' &&
         pauseRef.current === null &&
+        // 복귀 카운트다운 중에는 pauseReason이 null이지만 시계는 멈춰 있다 — 그 사이 타격을 판정하지 않는다
+        clockRef.current?.state.phase === 'running' &&
         (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
       if (active) recorder.current.hit(hit, ev, ss);
@@ -324,8 +327,10 @@ export function PlayPage() {
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
+    // 복귀 카운트다운 중(clock은 이미 정지)에 다시 끊겨도 pause 진단 기록이 두 번 남지 않게 한다
+    const wasRunning = clock.state.phase === 'running';
     clock.pause(reason);
-    diagSessionPhase('pause');
+    if (wasRunning) diagSessionPhase('pause');
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
     setPauseReason(reason);
@@ -336,11 +341,15 @@ export function PlayPage() {
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
-    if (!clock || pauseRef.current === null || !readyRef.current) return;
+    // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
+    if (!clock || clock.state.phase !== 'paused' || !readyRef.current) return;
     clock.resume();
     diagSessionPhase('resume');
     setPauseReason(null);
   }, []);
+
+  // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
+  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
 
   // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
   const restart = useCallback(() => {
@@ -453,7 +462,8 @@ export function PlayPage() {
         else toSelect();
       } else if (st === 'play') {
         // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
-        if (pauseRef.current !== null || e.code !== 'Escape') return;
+        // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
+        if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
         pauseTo('user');
       } else {
         return;
@@ -462,7 +472,7 @@ export function PlayPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, pauseTo]);
+  }, [begin, toSelect, pauseTo, isResuming]);
 
   // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그, U18)
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
