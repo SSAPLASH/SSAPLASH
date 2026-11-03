@@ -46,7 +46,7 @@ class TimescaleMigrationTest {
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
 			assertThat(latest.migrate().migrationsExecuted).isEqualTo(20);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28')"))
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
