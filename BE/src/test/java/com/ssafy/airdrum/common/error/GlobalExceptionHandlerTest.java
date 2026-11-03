@@ -147,6 +147,14 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	void multipartParsingFailureIsInvalidInputNotInternalError() throws Exception {
+		var result = mockMvc.perform(post("/probe/multipart")).andReturn();
+
+		assertProblem(result, 400, "INVALID_INPUT", "/probe/multipart");
+		assertThat(body(result).path("detail").asString()).isEqualTo("요청 본문(파일 업로드)을 읽을 수 없습니다.");
+	}
+
+	@Test
 	void unexpectedExceptionIsInternalErrorWithoutLeakingDetails(CapturedOutput output) throws Exception {
 		var result = mockMvc.perform(get("/probe/boom")).andReturn();
 
