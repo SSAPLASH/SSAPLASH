@@ -88,7 +88,7 @@ def format_transcription_summary(output: TranscriptionOutput) -> str:
         f"채보: {output.chart_json_path}",
         f"노트 {output.n_notes}개 ({pads or '없음'})",
         f"길이 {output.duration_ms} ms, bpm {bpm}, "
-        f"격자 원점(offsetMs) {output.chart['charts'][0]['timing']['offsetMs']} ms",
+        f"첫 마디 첫 박(offsetMs) {output.chart['charts'][0]['timing']['offsetMs']} ms",
         f"모델 {output.model_name} ({output.model_version})",
         f"올리기 {output.load_ms} ms, 채보 {output.transcribe_ms} ms, "
         f"최대 GPU 메모리 {vram} MB, 최대 RAM {ram} MB",
