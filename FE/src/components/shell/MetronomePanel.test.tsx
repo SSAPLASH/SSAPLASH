@@ -20,4 +20,12 @@ describe('MetronomePanel 마크업', () => {
     expect(html).toContain('메트로놈 음량');
     expect(html).toContain('탭 템포');
   });
+
+  it('BPM ± 는 IconButton sm, 탭 템포는 secondary sm 버튼', () => {
+    expect(html).toMatch(/ui-icon-btn ui-icon-btn-sm[^>]*aria-label="BPM 5 감소"/);
+    expect(html).toMatch(/ui-icon-btn ui-icon-btn-sm[^>]*aria-label="BPM 5 증가"/);
+    expect(html).toMatch(/ui-btn ui-btn-secondary ui-btn-sm[^>]*>탭 템포</);
+    expect(html).not.toContain('metro-panel-step');
+    expect(html).not.toContain('metro-panel-tap');
+  });
 });

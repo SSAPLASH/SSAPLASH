@@ -23,9 +23,6 @@
   width: 100%;
   margin: var(--space-xs) 0;
 }
-.play-sd .play-sd-cover .song-cover-disc {
-  height: 60%;
-}
 .play-sd-head {
   display: flex;
   flex-direction: column;

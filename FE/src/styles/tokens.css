@@ -70,7 +70,7 @@
   --space-dock-gap: 12px;
 
   /* 그림자 */
-  --shadow-dock: 0 12px 16px rgba(0, 0, 0, 0.45);
+  --shadow-dock: 0 12px 32px rgba(0, 0, 0, 0.45);
   --shadow-lift: 0 8px 20px rgba(0, 0, 0, 0.35); /* 눌러 볼 수 있는 카드 hover */
 
   /* 모션 (설계 TECH-motion-interaction 3-1). 이동·확대·회전은 --motion-move, 투명도는 --motion-fade */
