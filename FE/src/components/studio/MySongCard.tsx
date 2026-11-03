@@ -9,6 +9,7 @@ import { SongCover } from '@/components/song/SongCover';
 import type { SongSummary } from '@/domain/songCatalog';
 import { PlayIcon } from './StudioIcons';
 import { SongMenu, type SongEditKind } from './SongMenu';
+import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
 import './studio.css';
 
@@ -51,6 +52,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onCoverError }:
       <span className="studio-card-artist">{song.artist || ' '}</span>
       <div className="studio-card-badges">
         <SongStatusBadge status={song.status} />
+        <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
         {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
       </div>
 

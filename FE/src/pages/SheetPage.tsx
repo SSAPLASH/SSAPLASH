@@ -589,6 +589,7 @@ export function SheetPage() {
               padCount={settings.sheetPadCount}
               onPadCount={settings.setSheetPadCount}
               hasAccompaniment={hasAcc}
+              accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
               />
             </>
           }
