@@ -63,6 +63,7 @@ class AdminSongApiTest {
 	@AfterEach
 	void cleanup() {
 		String songs = "SELECT id FROM songs WHERE (owner_id IS NULL AND title LIKE '관리 테스트%') OR owner_id=" + user;
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id IN (" + songs + ")");
 		db.update("DELETE FROM file_cleanup_tasks WHERE object_key LIKE 'cover/builtin/%' OR object_key LIKE 'accompaniment/%/%'");
 		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id IN (" + songs + "))");
 		db.update("DELETE FROM charts WHERE song_id IN (" + songs + ")");
@@ -156,6 +157,10 @@ class AdminSongApiTest {
 		assertThat(row.get("owner_id")).isNull();
 		assertThat(row.get("source")).isEqualTo("BUILTIN");
 		assertThat(row.get("status")).isEqualTo("READY");
+		var levelRow=db.queryForMap("SELECT song_level,level_chart_version_id,level_duration_ms,duration_ms FROM songs WHERE id=?",id);
+		assertThat(levelRow.get("song_level")).isNotNull();
+		assertThat(levelRow.get("level_duration_ms")).isEqualTo(levelRow.get("duration_ms"));
+		assertThat(levelRow.get("level_chart_version_id")).isEqualTo(db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD' AND v.version=1",Long.class,id));
 
 		assertThat(listedForUser(id)).isTrue();
 		var detail = send(get("/api/v1/songs/" + id), user);
@@ -253,6 +258,7 @@ class AdminSongApiTest {
 	void MIDI를_다시_올리면_난이도별_새_버전이_생기고_기존_버전은_남는다() throws Exception {
 		long id = registered(true);
 		var before = db.queryForList("SELECT v.id FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", Long.class, id);
+		db.update("UPDATE songs SET duration_ms=60000 WHERE id=?",id);
 
 		var r = send(multipart(BASE + "/" + id + "/charts/midi").file(new MockMultipartFile("file", "fixed.mid", "audio/midi", midi(true)))
 				.with(req -> { req.setMethod("PUT"); return req; }), admin);
@@ -261,6 +267,10 @@ class AdminSongApiTest {
 		assertThat(body(r).path("charts")).hasSize(3).allSatisfy(c -> assertThat(c.path("version").asInt()).isEqualTo(2));
 		assertThat(db.queryForObject("SELECT count(*) FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", Integer.class, id)).isEqualTo(6);
 		assertThat(db.queryForObject("SELECT count(*) FROM charts WHERE song_id=?", Integer.class, id)).isEqualTo(3);
+		var level = db.queryForMap("SELECT song_level,level_chart_version_id,level_duration_ms,duration_ms FROM songs WHERE id=?",id);
+		assertThat(level.get("song_level")).isNotNull();
+		assertThat(level.get("level_duration_ms")).isEqualTo(level.get("duration_ms")).isNotEqualTo(60000);
+		assertThat(level.get("level_chart_version_id")).isEqualTo(db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD' AND v.version=2",Long.class,id));
 
 		long chartId = body(r).path("charts").get(2).path("id").asLong();
 		var latest = send(get("/api/v1/charts/" + chartId), user);

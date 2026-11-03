@@ -41,6 +41,7 @@ class ChartQueryApiTest {
 	@Autowired JdbcTemplate db;
 	@Autowired JsonMapper json;
 	@Autowired AccessTokenService tokens;
+	@Autowired com.ssafy.airdrum.song.SongLevelService levels;
 	@MockitoBean ChartAssetStore store;
 	long owner, other, builtin, ownSong, hiddenSong, chart, version;
 	String ownerToken;
@@ -82,6 +83,144 @@ class ChartQueryApiTest {
 		assertThat(ok("/api/v1/songs?source=MINE&q=타인").path("totalElements").longValue()).isZero();
 		assertThat(ok("/api/v1/songs?source=MINE&page=9").path("items").size()).isZero();
 		assertThat(ok("/api/v1/songs?source=MINE&page=9").path("totalElements").longValue()).isEqualTo(1);
+	}
+	@Test void levelsFilterBeforePaginationAndKeepNonReadyMine() throws Exception {
+		long hard = chart(ownSong, "HARD");
+		long hardVersion = version(hard,1,NOTES,TIMING,"PENDING");
+		levels.process(ownSong,true);
+		long pending = song(owner,"대기", "AUDIO", "PROCESSING");
+		assertThat(ok("/api/v1/songs?source=MINE").path("totalElements").asLong()).isEqualTo(2);
+		var rated = ok("/api/v1/songs?source=MINE&songLevel=BEGINNER&playableOnly=true&size=1");
+		assertThat(rated.path("totalElements").asLong()).isEqualTo(1);
+		assertThat(rated.path("items").get(0).path("id").asLong()).isEqualTo(ownSong);
+		assertThat(rated.path("items").get(0).path("songLevel").asString()).isEqualTo("BEGINNER");
+		assertThat(ok("/api/v1/songs?source=MINE&playableOnly=true&page=9").path("totalElements").asLong()).isEqualTo(1);
+		assertThat(ok("/api/v1/songs/"+pending).path("songLevel").isNull()).isTrue();
+		assertThat(db.queryForObject("SELECT level_chart_version_id FROM songs WHERE id=?",Long.class,ownSong)).isEqualTo(hardVersion);
+		for (String query : List.of("?songLevel=", "?songLevel=beginner", "?songLevel=UNKNOWN", "?playableOnly=no"))
+			problem("/api/v1/songs"+query,400,"INVALID_INPUT");
+	}
+	@Test void failureIsOwnerOnlySafeAndLatestJobWins() throws Exception {
+		db.update("UPDATE songs SET status='FAILED' WHERE id=?",ownSong);
+		db.update("INSERT INTO chart_jobs(song_id,user_id,status,error_code,error_message,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED',NULL,'https://secret',now(),'old',?)",ownSong,owner,"a".repeat(64));
+		var first = ok("/api/v1/songs/"+ownSong);
+		assertThat(first.path("chartFailure").path("code").asString()).isEqualTo("JOB_FAILED");
+		assertThat(first.toString()).doesNotContain("https://secret");
+		db.update("INSERT INTO chart_jobs(song_id,user_id,status,error_code,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED','INPUT_INVALID',now(),'foreign',?)",ownSong,other,"c".repeat(64));
+		assertThat(ok("/api/v1/songs/"+ownSong).path("chartFailure").path("code").asString()).isEqualTo("JOB_FAILED");
+		db.update("INSERT INTO chart_jobs(song_id,user_id,status,idempotency_key,request_hash) VALUES(?,?,'QUEUED','new',?)",ownSong,owner,"b".repeat(64));
+		assertThat(ok("/api/v1/songs/"+ownSong).path("chartFailure").isNull()).isTrue();
+		problem("/api/v1/songs/"+hiddenSong,404,"SONG_NOT_FOUND");
+	}
+	@Test void eachFailureCodeIsSafelyMappedInListAndDetail() throws Exception {
+		db.update("UPDATE songs SET status='FAILED' WHERE id=?",ownSong);
+		long job=db.queryForObject("INSERT INTO chart_jobs(song_id,user_id,status,error_code,error_message,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED','INPUT_INVALID','secret/path',now(),'failure-mapping',?) RETURNING id",Long.class,ownSong,owner,"d".repeat(64));
+		var expected=java.util.Map.of("INPUT_INVALID","입력 파일을 처리할 수 없습니다.", "OUTPUT_INVALID","채보 결과를 처리할 수 없습니다.",
+				"MODEL_FAILED","채보 생성에 실패했습니다.", "JOB_CANCELLED","작업이 취소되었습니다.", "UNKNOWN_INTERNAL","작업을 완료할 수 없습니다.");
+		for (var entry:expected.entrySet()) {
+			db.update("UPDATE chart_jobs SET error_code=? WHERE id=?",entry.getKey(),job);
+			String code=entry.getKey().equals("UNKNOWN_INTERNAL") ? "JOB_FAILED" : entry.getKey();
+			var detail=ok("/api/v1/songs/"+ownSong).path("chartFailure");
+			var list=ok("/api/v1/songs?source=MINE").path("items").get(0).path("chartFailure");
+			for (var result:List.of(detail,list)) {
+				assertThat(result.path("code").asString()).isEqualTo(code);
+				assertThat(result.path("message").asString()).isEqualTo(entry.getValue());
+				assertThat(result.toString()).doesNotContain("secret/path", "UNKNOWN_INTERNAL");
+			}
+		}
+	}
+	@Test void filtersUseMatchingRowsBeforePageAndCountAcrossOwnersAndStatuses() throws Exception {
+		long beginnerA=ratedSong(owner,"입문 A","READY","BEGINNER");
+		long beginnerB=ratedSong(owner,"입문 B","READY","BEGINNER");
+		long advanced=ratedSong(owner,"고급","READY","ADVANCED");
+		ratedSong(owner,"입문 실패","FAILED","BEGINNER");
+		ratedSong(other,"타인 입문","READY","BEGINNER");
+		assertThat(ok("/api/v1/songs?source=MINE&songLevel=BEGINNER").path("totalElements").asLong()).isEqualTo(3);
+		var first=ok("/api/v1/songs?source=MINE&songLevel=BEGINNER&playableOnly=true&size=1&page=0");
+		var second=ok("/api/v1/songs?source=MINE&songLevel=BEGINNER&playableOnly=true&size=1&page=1");
+		assertThat(first.path("totalElements").asLong()).isEqualTo(2);
+		assertThat(second.path("totalElements").asLong()).isEqualTo(2);
+		assertThat(first.path("items").get(0).path("id").asLong()).isEqualTo(beginnerB);
+		assertThat(second.path("items").get(0).path("id").asLong()).isEqualTo(beginnerA);
+		var high=ok("/api/v1/songs?source=MINE&songLevel=ADVANCED&playableOnly=true");
+		assertThat(high.path("totalElements").asLong()).isEqualTo(1);
+		assertThat(high.path("items").get(0).path("id").asLong()).isEqualTo(advanced);
+	}
+	private long ratedSong(long user,String title,String status,String level) {
+		long id=song(user,title,"AUDIO",status);
+		long v=version(chart(id,"HARD"),1,NOTES,TIMING,"PENDING");
+		db.update("UPDATE songs SET song_level=?,level_chart_version_id=?,level_rule_version='song-level-1',level_duration_ms=3000 WHERE id=?",level,v,id);
+		return id;
+	}
+	@Test void invalidNewestInputClearsEveryStoredLevelField() {
+		long hard=chart(ownSong,"HARD"); long v=version(hard,1,NOTES,TIMING,"PENDING");
+		for (String kind:List.of("empty","malformed","missing-duration","zero-duration","outside-duration")) {
+			db.update("UPDATE songs SET duration_ms=3000 WHERE id=?",ownSong);
+			db.update("UPDATE chart_versions SET notes=CAST(? AS jsonb),note_count=1 WHERE id=?",NOTES,v);
+			assertThat(levels.process(ownSong,true).level()).as(kind).isNotNull();
+			switch (kind) {
+				case "empty" -> db.update("UPDATE chart_versions SET notes='[]'::jsonb,note_count=0 WHERE id=?",v);
+				case "malformed" -> db.update("UPDATE chart_versions SET notes='[{\"noteId\":\"n\",\"timeMs\":250}]'::jsonb WHERE id=?",v);
+				case "missing-duration" -> db.update("UPDATE songs SET duration_ms=NULL WHERE id=?",ownSong);
+				case "zero-duration" -> db.update("UPDATE songs SET duration_ms=0 WHERE id=?",ownSong);
+				case "outside-duration" -> db.update("UPDATE chart_versions SET notes=CAST(? AS jsonb) WHERE id=?",NOTES.replace("\"timeMs\":250","\"timeMs\":3001"),v);
+				default -> throw new AssertionError(kind);
+			}
+			assertThat(levels.process(ownSong,true).reason()).as(kind).isEqualTo("INVALID");
+			var fields=db.queryForMap("SELECT song_level,level_chart_version_id,level_rule_version,level_duration_ms FROM songs WHERE id=?",ownSong);
+			assertThat(fields.values()).as(kind).containsOnlyNulls();
+		}
+	}
+	@Test void onlyLegacyUsesHighestStageAndLatestVersionUntilHardAppears() {
+		long easy=chart(ownSong,"EASY"); version(easy,1,NOTES,TIMING,"PENDING");
+		long normalV2=version(chart,2,NOTES,TIMING,"PENDING");
+		assertThat(levels.process(ownSong,true).reason()).isEqualTo("NO_CHART");
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,ownSong)).isNull();
+		db.update("UPDATE songs SET level_legacy_fallback=true WHERE id=?",ownSong);
+		assertThat(levels.process(ownSong,true).versionId()).isEqualTo(normalV2);
+		long hard=chart(ownSong,"HARD");
+		assertThat(levels.process(ownSong,true).reason()).isEqualTo("NO_CHART");
+		assertThat(db.queryForObject("SELECT level_legacy_fallback FROM songs WHERE id=?",Boolean.class,ownSong)).isFalse();
+		long hardV1=version(hard,1,NOTES,TIMING,"PENDING");
+		assertThat(levels.process(ownSong,true).versionId()).isEqualTo(hardV1);
+	}
+	@Test void malformedTimingAndSheetMetadataDoNotAffectRatingButDetailStillFails() throws Exception {
+		long hard=chart(ownSong,"HARD"); long v=version(hard,1,NOTES,TIMING,"PENDING");
+		db.update("UPDATE chart_versions SET timing='{}'::jsonb,sheet_pages='[{\"unexpected\":true}]'::jsonb WHERE id=?",v);
+		assertThat(levels.process(ownSong,true).versionId()).isEqualTo(v);
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,ownSong)).isEqualTo("BEGINNER");
+		problem("/api/v1/charts/"+hard,500,"INTERNAL_ERROR");
+	}
+	@Test void legacySelectionDryRunAndDurationChangesAreConsistent() {
+		db.update("UPDATE songs SET level_legacy_fallback=true WHERE id=?",ownSong);
+		assertThat(levels.process(ownSong,false).versionId()).isEqualTo(version);
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,ownSong)).isNull();
+		levels.process(ownSong,true);
+		assertThat(db.queryForObject("SELECT level_duration_ms FROM songs WHERE id=?",Integer.class,ownSong)).isEqualTo(3000);
+		db.update("UPDATE songs SET duration_ms=5000 WHERE id=?",ownSong);
+		levels.process(ownSong,true);
+		assertThat(db.queryForObject("SELECT level_duration_ms FROM songs WHERE id=?",Integer.class,ownSong)).isEqualTo(5000);
+		long hard = chart(ownSong,"HARD");
+		assertThat(levels.process(ownSong,true).reason()).isEqualTo("NO_CHART");
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,ownSong)).isNull();
+		long latest = version(hard,1,NOTES,TIMING,"PENDING");
+		levels.process(ownSong,true);
+		assertThat(db.queryForObject("SELECT level_chart_version_id FROM songs WHERE id=?",Long.class,ownSong)).isEqualTo(latest);
+		long invalid = version(hard,2,NOTES,TIMING,"PENDING");
+		db.update("UPDATE chart_versions SET schema_version=2 WHERE id=?",invalid);
+		assertThat(levels.process(ownSong,true).reason()).isEqualTo("INVALID");
+		assertThat(db.queryForObject("SELECT level_chart_version_id FROM songs WHERE id=?",Long.class,ownSong)).isNull();
+	}
+	@Test void storedLevelRestrictsVersionDeletionUntilAllFieldsAreCleared() {
+		long hard = chart(ownSong,"HARD");
+		long hardVersion = version(hard,1,NOTES,TIMING,"PENDING");
+		levels.process(ownSong,true);
+		db.execute("SAVEPOINT before_restricted_delete");
+		assertThatThrownBy(() -> db.update("DELETE FROM chart_versions WHERE id=?",hardVersion)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+		db.execute("ROLLBACK TO SAVEPOINT before_restricted_delete");
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?",ownSong);
+		assertThat(db.update("DELETE FROM chart_versions WHERE id=?",hardVersion)).isEqualTo(1);
+		assertThat(db.update("DELETE FROM charts WHERE id=?",hard)).isEqualTo(1);
 	}
 	@Test void searchTreatsWildcardAndEscapeAsLiteralAndTrimsBeforeValidation() throws Exception {
 		song(owner, "100%_! Beat", "MIDI", "READY");

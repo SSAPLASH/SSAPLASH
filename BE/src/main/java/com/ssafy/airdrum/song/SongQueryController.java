@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import com.ssafy.airdrum.chart.web.ChartQueryWebConfiguration;
 import com.ssafy.airdrum.common.error.ApiErrorResponse;
+import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.common.error.CommonErrorCode;
 import com.ssafy.airdrum.common.response.PageResponse;
 import com.ssafy.airdrum.config.OpenApiConfig;
 import static com.ssafy.airdrum.song.SongResponses.*;
@@ -34,9 +36,17 @@ public class SongQueryController {
 			@Parameter(hidden = true) @RequestAttribute(ChartQueryWebConfiguration.USER_ID) long userId,
 			@RequestParam(defaultValue = "BUILTIN") SongScope source,
 			@RequestParam(required = false) @Size(max = 100, message = "검색어는 100자 이하여야 합니다") String q,
+			@Parameter(description = "곡 난이도 필터. 생략하면 전체", schema = @Schema(allowableValues = {"BEGINNER", "INTERMEDIATE", "ADVANCED"})) @RequestParam(required = false) String songLevel,
+			@Parameter(description = "READY이고 곡 난이도가 산정된 곡만 조회", schema = @Schema(allowableValues = {"true", "false"}, defaultValue = "false")) @RequestParam(required = false) String playableOnly,
 			@RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지는 0 이상이어야 합니다") @Max(value = 100000, message = "페이지는 100000 이하여야 합니다") int page,
 			@RequestParam(defaultValue = "20") @Min(value = 1, message = "크기는 1 이상이어야 합니다") @Max(value = 100, message = "크기는 100 이하여야 합니다") int size) {
-		return songs.list(userId, source, q, page, size);
+		if (songLevel != null) {
+			try { SongLevelService.Level.valueOf(songLevel); }
+			catch (IllegalArgumentException ex) { throw new BusinessException(CommonErrorCode.INVALID_INPUT); }
+		}
+		if (playableOnly != null && !java.util.Set.of("true", "false").contains(playableOnly))
+			throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+		return songs.list(userId, source, q, songLevel, "true".equals(playableOnly), page, size);
 	}
 	@GetMapping("/{songId}")
 	@Operation(summary = "곡 상세", description = "난이도별 최신 버전 요약. 파일 URL과 notes는 포함하지 않습니다.")
