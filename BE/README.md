@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V26을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V27을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -384,6 +384,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V24 | `V24__allow_mpeg4_and_ogg_audio.sql` | 음원 MIME 확장(`audio/mp4`·`audio/ogg`), 기존 행 보존 | -267 |
 | V25 | `V25__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
 | V26 | `V26__add_users_signup_consents.sql` | 가입 동의 `users.data_consent_version`·`terms_version`·`terms_agreed_at`·`privacy_version`·`privacy_agreed_at`(판 `varchar(50)`, 시각 `timestamptz`, 모두 NULL 허용). `ck_users_data_consent`를 값·시각·판 셋이 함께 있거나 함께 없게 교체, `ck_users_terms_consent`·`ck_users_privacy_consent`(판·시각 함께, 판은 공백만 불가) 추가. 판 없이 값만 있던 행은 세 값 모두 NULL로 되돌린다. 기존 행은 채우지 않는다(동의 전으로 시작) | -199 |
+| V27 | `V27__add_recording_hits.sql` | `recordings`에 녹음 시퀀스 `hits`(jsonb 배열)·`hit_count`(1~50,000, 배열 길이와 같음)·`client_key`(uuid)·`mode`·`input_source`·`schema_version`·`started_at`·`payload_hash`·`updated_at` 추가(모두 NOT NULL), `duration_ms` NOT NULL. 부분 유일 인덱스 `recordings_user_client_key_idx`(user_id, client_key) WHERE deleted_at IS NULL. 기존 행이 있으면 실패한다(쓰는 코드가 없었음) | -256 |
 
 규칙:
 
@@ -410,7 +411,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V26까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V27까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -979,6 +980,45 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 
 ```powershell
 .\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
+```
+
+## 연주 녹음 저장 (256번)
+
+REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(시각·패드·세기)를 플레이 기록과 따로 저장한다. 자유 모드는 플레이 기록이 없어도 저장된다.
+경로는 `POST /api/v1/recordings`(JSON, Bearer 인증)다. 미인증·탈퇴 401, 가입 동의 전 403 `SIGNUP_INCOMPLETE`. 응답은 `Cache-Control: private, no-store`.
+보관함 조회·제목 변경·삭제·탈퇴 정리는 257번에서 추가한다.
+
+| 필드 | 계약 |
+| --- | --- |
+| `schemaVersion` | 필수 `1` |
+| `clientKey` | 필수 UUID. 녹음 시작 때 만들고 재전송 때 유지 |
+| `title` | 필수 문자열, 앞뒤 공백 제거 후 1~100자(이모지도 한 글자) |
+| `mode` / `inputSource` | 플레이 로그와 같은 `RHYTHM`·`FREE`·`TEMPO`·`SHEET` / `KEYBOARD`·`STICK` |
+| `playId` | 선택. 본인 플레이이고 다른 녹음과 연결된 적 없어야 한다 |
+| `startedAt` | 필수 ISO-8601 문자열(숫자 epoch 거부), 소수초 6자리까지, 2020-01-01 이상 2100-01-01 미만 |
+| `durationMs` | 필수 0~7,200,000, 마지막 타격 `tMs` 이상 |
+| `hits[]` | 필수 1~50,000개. `tMs`(0 이상 유한 실수), `pad`(플레이 로그 9종, `HI_TOM`은 `SMALL_TOM`으로 저장), `velocity`(0~127), 선택 `stickId`(0 왼손·1 오른손, `KEYBOARD`면 보낼 수 없음) |
+
+- **정렬:** 타격 순서는 자유다. 서버가 `tMs`로 안정 정렬(같은 시각은 받은 순서 유지)해 저장하므로 저장된 시퀀스는 항상 시간순이다. `-0.0`은 `0`으로 저장한다.
+- **중복 저장:** 같은 회원의 살아 있는 녹음에 같은 `clientKey`가 있으면 저장하지 않는다. 정규화한 내용(정렬·별칭·제목 다듬기 뒤, 키 순서·공백·숫자 표기·시간대와 무관)의 SHA-256이 같으면 200과 기존 녹음, 다르면 409. 지운 녹음의 키로 다시 보내면 새 녹음이다.
+- **엄격 파싱:** 플레이 로그와 같은 규칙. 모르는 필드(판정·노트 ID 포함)·중복 키·후행 JSON·숫자 enum·문자열/소수 숫자 강제 변환·HTTP 본문 압축을 거부한다.
+- **저장:** `recordings.hits` jsonb 한 컬럼(행 테이블 없음). 회원 행을 잠가 같은 회원의 저장을 한 줄로 세운다. 플레이가 지워지면 연결만 끊기고 시퀀스는 남는다.
+- **응답:** `id`, `clientKey`, `title`, `mode`, `inputSource`, `playId`, `hitCount`, `durationMs`, `startedAt`, `createdAt`, `updatedAt`. 시퀀스는 돌려주지 않는다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 201 | — | 최초 저장, `Location: /api/v1/recordings/{id}` |
+| 200 | — | 같은 키·같은 내용 재전송 |
+| 400 | `RECORDING_INVALID` | 필수·범위·형식, 마지막 타격이 길이보다 늦음, 모르는 필드, 압축 본문 |
+| 404 | `RECORDING_PLAY_NOT_FOUND` | `playId`가 없거나 남의 것, 이미 다른 녹음과 연결됨 |
+| 409 | `RECORDING_CONFLICT` | 같은 키, 다른 내용 |
+| 409 | `RECORDING_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
+| 413 | `RECORDING_TOO_LARGE` | 본문 5 MiB, 타격 50,000개, 2시간 초과 |
+| 413 | `RECORDING_QUOTA_EXCEEDED` | 살아 있는 녹음 회원당 200개 |
+| 503 | `RECORDING_BUSY` | 잠금 대기 3초·문장 10초 초과(PostgreSQL 55P03·57014). 같은 요청을 다시 보낸다 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.recording.*'
 ```
 
 ## 채보 작업 진행 조회·알림 (172번)
