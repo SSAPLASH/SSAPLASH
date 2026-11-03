@@ -1,0 +1,19 @@
+# 탐 음높이 잴 때 킥 울림 빼기·플로어 상한 후보 (S15P31A307-164, ENST 드러머 1 탐 이름 분석).
+# pk_gap30: 지금 기본값. fl160: hybrid 플로어 상한 120 → 160Hz.
+# kx3: 묶음 중앙값이 킥 음높이 ±1반음 안인 묶음의 타격만, 킥 음높이 ±3반음 피크를 빼고 다시 잼(다음 피크 0.2배 이상).
+# kx3all: 모든 탐 타격에서 뺌. kx3_r04: 다음 피크 0.4배 이상. kx3c2: 묶음 판정 ±2반음
+candidates:
+- name: pk_gap30
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: fl160
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_hybrid_floor_max_hz: 160.0}
+- name: kx3
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_kick_exclude_st: 3.0}
+- name: kx3_fl160
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_kick_exclude_st: 3.0, tom_hybrid_floor_max_hz: 160.0}
+- name: kx3all_fl160
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_kick_exclude_st: 3.0, tom_kick_cluster_st: null, tom_hybrid_floor_max_hz: 160.0}
+- name: kx3_r04_fl160
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_kick_exclude_st: 3.0, tom_kick_exclude_ratio: 0.4, tom_hybrid_floor_max_hz: 160.0}
+- name: kx3c2_fl160
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_kick_exclude_st: 3.0, tom_kick_cluster_st: 2.0, tom_hybrid_floor_max_hz: 160.0}

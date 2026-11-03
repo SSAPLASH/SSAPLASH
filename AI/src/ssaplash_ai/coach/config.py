@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.1"
+ANALYZER_VERSION = "weak-rules-0.2"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
@@ -21,6 +21,9 @@ MIN_NOTES = 20
 # 응답에 담는 최대 개수와 같은 pattern의 최대 개수
 MAX_RESULTS = 5
 MAX_PER_PATTERN = 2
+
+# 연습 조언(`tip`) 한 항목의 최대 글자 수. 화면 폭에 맞는지는 FE와 확인한다
+MAX_TIP_CHARS = 100
 
 # 켜져 있는 패턴. 나머지(TEMPO_DRIFT_*, VELOCITY_FADE, PAD_CONFUSION, DENSE_WEAK)는 후속이다.
 ENABLED_PATTERNS = frozenset(

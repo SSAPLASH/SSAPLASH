@@ -11,10 +11,13 @@ from ssaplash_ai.bench.datasets import (
     FIVE_GROUPS,
     HITS_DTYPE,
     PADS,
+    PEDAL,
+    SCORED_PADS,
     clip_hits,
     count_by_pad,
     has_coarse,
     make_hits,
+    merge_pedal,
     to_five_groups,
     validate_hits,
     validate_pred_hits,
@@ -24,8 +27,19 @@ TABLE = {36: "KICK", 38: "SNARE", 42: "HIHAT", 49: "CRASH", 56: DROP}
 
 
 def test_pads_vocabulary():
-    assert len(PADS) == 8
-    assert set(FIVE_GROUPS) == set(PADS)
+    assert len(PADS) == 9 and PADS[-1] == PEDAL == "HIHAT_PEDAL"
+    # 기존 8종 순서는 그대로, 8패드 점수용 목록은 페달 뺀 8종
+    assert SCORED_PADS == (
+        "KICK",
+        "SNARE",
+        "HIHAT",
+        "SMALL_TOM",
+        "MID_TOM",
+        "FLOOR_TOM",
+        "CRASH",
+        "RIDE",
+    )
+    assert set(FIVE_GROUPS) == set(PADS) and FIVE_GROUPS[PEDAL] == "hihat"
     assert set(FIVE_GROUPS.values()) == {"kick", "snare", "hihat", "tom", "cymbal"}
 
 
@@ -108,3 +122,13 @@ def test_거친_라벨도_5가지로_바뀐다():
     assert five["pad"].tolist() == ["tom", "kick"]
     assert set(COARSE) == {"tom", "cymbal"}
     assert not has_coarse(to_five_groups(make_hits([0.1], ["kick"], None, PRED_TABLE)[0]))
+
+
+def test_merge_pedal은_페달만_하이햇으로():
+    hits = np.array(
+        [(0.1, "HIHAT_PEDAL", -1), (0.2, "HIHAT", -1), (0.3, "KICK", -1)], dtype=HITS_DTYPE
+    )
+    validate_hits(hits)
+    assert merge_pedal(hits)["pad"].tolist() == ["HIHAT", "HIHAT", "KICK"]
+    assert hits["pad"].tolist()[0] == "HIHAT_PEDAL"  # 원본은 안 바뀜
+    assert to_five_groups(hits)["pad"].tolist() == ["hihat", "hihat", "kick"]

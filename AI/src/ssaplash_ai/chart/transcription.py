@@ -7,8 +7,8 @@ model_config가 가리키는 벤치마크 yaml로 고르고(기본 ADTOF + 드�
 흐름: TranscriptionModule(config).load() 한 번 → transcribe_file() 곡마다 → close().
 진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·TRANSCRIBE·JSON, fraction은 단계 시작 0·끝 1.
 bpm은 설정 tempo.method의 추정기(서비스는 Beat This!, 설계 U15)로 구하고, 채보 모델과 같이 load()에서 올림.
-generatorVersion은 `<모델 yaml name>@<해시 12자리>`. 해시에 모델 yaml과 bpm 방법·설정이 들어가서 채보 모델·규칙 값·
-bpm 방법 중 하나만 바뀌어도 같이 바뀜(설계 U5·U15).
+generatorVersion은 `<모델 yaml name>@<해시 12자리>`. 해시에 모델 yaml, bpm 방법·설정, offsetMs·bpm 계산 규칙 버전이
+들어가서 채보 모델·규칙 값·bpm 방법·시각 규칙 중 하나만 바뀌어도 같이 바뀜(설계 U5·U15).
 """
 
 from __future__ import annotations
@@ -26,7 +26,12 @@ from ssaplash_ai.bench.metrics.resource_usage import measure_resources
 from ssaplash_ai.bench.transcribers import BaseTranscriber, TranscriberConfig, create_transcriber
 from ssaplash_ai.chart.audio_io import duration_ms as samples_to_ms
 from ssaplash_ai.chart.audio_io import read_audio_file
-from ssaplash_ai.chart.chart_json import build_chart, notes_by_pad, validate_chart
+from ssaplash_ai.chart.chart_json import (
+    TIMING_RULES_VERSION,
+    build_chart,
+    notes_by_pad,
+    validate_chart,
+)
 from ssaplash_ai.chart.config import TranscriptionConfig
 from ssaplash_ai.chart.errors import (
     ChartError,
@@ -101,7 +106,7 @@ class TranscriptionModule:
 
     @property
     def model_version(self) -> str:
-        """모델 yaml name + 해시 12자리(모델 yaml·bpm 방법·tempo 설정). 채보 JSON generatorVersion (설계 U5)."""
+        """모델 yaml name + 해시 12자리(모델 yaml·bpm 방법·tempo 설정·시각 규칙 버전). 채보 JSON generatorVersion (설계 U5)."""
         self._require_loaded()
         tempo = self.config.tempo
         key = "|".join(
@@ -110,6 +115,8 @@ class TranscriptionModule:
                 self._tempo.version_id,
                 f"{tempo.min_bpm:g}-{tempo.max_bpm:g}",
                 tempo.time_signature,
+                TIMING_RULES_VERSION,
+                tempo.origin,
             )
         )
         return f"{self._model_config.name}@{hashlib.sha256(key.encode()).hexdigest()[:12]}"
@@ -183,6 +190,7 @@ class TranscriptionModule:
             self.model_version,
             transcribe_ms,
             schema_version=self.config.schema_version,
+            origin=self.config.tempo.origin,
         )
         validate_chart(chart, length_ms)
         chart_path = _write_json(Path(out_dir) / CHART_FILENAME, chart)

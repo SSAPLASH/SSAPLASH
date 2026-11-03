@@ -22,12 +22,16 @@ import yaml
 ENV_DEVICE = "SSAPLASH_CHART_DEVICE"
 ENV_MODELS_DIR = "SSAPLASH_MODELS_DIR"
 ENV_WORK_DIR = "SSAPLASH_WORK_DIR"
+# 채보 모델 이름. 있으면 transcription.yaml의 model 값 대신 씀 (models 목록 안의 이름)
+ENV_CHART_MODEL = "SSAPLASH_CHART_MODEL"
 
 DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
 DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
 OUTPUT_FORMATS = ("flac", "wav")
 # beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
 TEMPO_METHODS = ("beat_this", "librosa")
+# offsetMs 원점 방식(설계 v0.5). downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
+ORIGIN_MODES = ("downbeat", "notes")
 # BE WorkerResults가 schemaVersion 1만 받음
 SCHEMA_VERSIONS = (1,)
 
@@ -106,11 +110,13 @@ class TempoConfig:
     min_bpm: float = 60.0
     max_bpm: float = 200.0
     time_signature: str = "4/4"
+    # offsetMs 원점 방식. ORIGIN_MODES 중 하나
+    origin: str = "downbeat"
 
     @classmethod
     def from_dict(cls, raw: dict | None) -> TempoConfig:
         raw = raw or {}
-        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature"})
+        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature", "origin"})
         if unknown:
             raise ValueError(f"모르는 tempo 필드: {unknown}")
         method = str(raw.get("method", cls.method)).lower()
@@ -126,14 +132,31 @@ class TempoConfig:
         time_signature = str(raw.get("time_signature", cls.time_signature))
         if not re.fullmatch(r"[1-9][0-9]?/(1|2|4|8|16|32)", time_signature):
             raise ValueError(f"tempo.time_signature 형식 오류 (예: 4/4): {time_signature!r}")
-        return cls(method=method, min_bpm=min_bpm, max_bpm=max_bpm, time_signature=time_signature)
+        origin = str(raw.get("origin", cls.origin)).lower()
+        if origin not in ORIGIN_MODES:
+            raise ValueError(f"tempo.origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
+        return cls(
+            method=method,
+            min_bpm=min_bpm,
+            max_bpm=max_bpm,
+            time_signature=time_signature,
+            origin=origin,
+        )
 
 
 @dataclass
 class TranscriptionConfig(ChartConfig):
-    """`configs/chart/transcription.yaml` 한 파일. 채보 모델은 model_config 경로로만 고름."""
+    """`configs/chart/transcription.yaml` 한 파일.
+
+    채보 모델은 `models`(이름 → 모델 yaml 경로) 중 `model` 이름으로 고름. 환경 변수 SSAPLASH_CHART_MODEL이
+    있으면 그 이름이 우선. `models` 없이 `model_config` 경로를 바로 적는 옛 형식도 받음.
+    """
 
     schema_version: int = 1
+    # 고른 모델 이름. 옛 형식(model_config만)이면 None
+    model_name: str | None = None
+    # 고를 수 있는 모델 이름 → 모델 yaml 경로
+    models: dict[str, Path] = field(default_factory=dict)
     tempo: TempoConfig = field(default_factory=TempoConfig)
     max_duration_sec: float = 600.0
 
@@ -147,12 +170,34 @@ class TranscriptionConfig(ChartConfig):
 
     @classmethod
     def from_dict(cls, raw: dict, source_path: Path | None = None) -> TranscriptionConfig:
-        known = {"model_config", "device", "schema_version", "tempo", "max_duration_sec"}
+        known = {
+            "model",
+            "models",
+            "model_config",
+            "device",
+            "schema_version",
+            "tempo",
+            "max_duration_sec",
+        }
         unknown = sorted(set(raw) - known)
         if unknown:
             raise ValueError(f"모르는 채보 설정 필드: {unknown}")
-        if not raw.get("model_config"):
-            raise ValueError("채보 설정에 model_config(채보 모델 yaml 경로)가 필요")
+        models = {str(k): Path(str(v)) for k, v in (raw.get("models") or {}).items()}
+        name = os.environ.get(ENV_CHART_MODEL) or raw.get("model")
+        if models:
+            if raw.get("model_config"):
+                raise ValueError("채보 설정에 models와 model_config를 같이 쓸 수 없음")
+            if not name:
+                raise ValueError(f"채보 설정에 model(쓸 모델 이름)이 필요. 가능: {sorted(models)}")
+            if str(name) not in models:
+                raise ValueError(f"모르는 채보 모델 이름 {name!r}. 가능: {sorted(models)}")
+            model_config = models[str(name)]
+        elif raw.get("model_config"):
+            model_config, name = Path(str(raw["model_config"])), None
+        else:
+            raise ValueError(
+                "채보 설정에 models·model이나 model_config(채보 모델 yaml 경로)가 필요"
+            )
         schema_version = int(raw.get("schema_version", cls.schema_version))
         if schema_version not in SCHEMA_VERSIONS:
             raise ValueError(f"schema_version은 {SCHEMA_VERSIONS} 중 하나: {schema_version}")
@@ -160,10 +205,12 @@ class TranscriptionConfig(ChartConfig):
         if max_duration <= 0:
             raise ValueError(f"max_duration_sec는 양수: {max_duration}")
         return cls(
-            model_config=Path(str(raw["model_config"])),
+            model_config=model_config,
             device=resolve_device_setting(str(raw.get("device", cls.device))),
             source_path=source_path,
             schema_version=schema_version,
+            model_name=str(name) if name else None,
+            models=models,
             tempo=TempoConfig.from_dict(raw.get("tempo")),
             max_duration_sec=max_duration,
         )

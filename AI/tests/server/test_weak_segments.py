@@ -198,6 +198,44 @@ def test_타격_2만건_요청이_3초_안에_처리된다():
     assert elapsed < 3.0, f"요청 처리에 {elapsed:.2f}초"
 
 
+def test_모든_약점_항목에_연습_조언이_붙고_버전이_올라간다():
+    status, body = _call(SAMPLES["A"]["request"])
+
+    assert status == 200
+    assert body["analyzerVersion"] == "weak-rules-0.2"
+    assert body["weakSegments"]
+    for segment in body["weakSegments"]:
+        assert segment["tip"]
+
+
+def test_문구가_없는_pattern은_응답에서_tip_키가_빠진다(monkeypatch):
+    # 새 규칙이 문구보다 먼저 들어와도 응답이 깨지지 않고, tip 키만 없어야 한다(구버전 BE·FE와 같은 모양)
+    from ssaplash_ai.coach import analyzer
+    from ssaplash_ai.coach.patterns import Candidate
+
+    def detect_new(notes, th):
+        return [
+            Candidate(
+                pattern="SOMETHING_NEW",
+                from_ms=0.0,
+                to_ms=1000.0,
+                description="새 패턴이에요.",
+                cause_tags=["NEW"],
+                pads=["SNARE"],
+                severity=0.5,
+                metrics={"severity": 0.0, "scope": "WHOLE"},
+            )
+        ]
+
+    monkeypatch.setattr(analyzer, "DETECTORS", [detect_new])
+
+    status, body = _call(SAMPLES["A"]["request"])
+
+    assert status == 200
+    assert [s["pattern"] for s in body["weakSegments"]] == ["SOMETHING_NEW"]
+    assert "tip" not in body["weakSegments"][0]
+
+
 # ---------- 라우팅 연결 (TestClient) ----------
 
 

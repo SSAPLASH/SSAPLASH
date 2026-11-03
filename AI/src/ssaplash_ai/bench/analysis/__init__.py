@@ -13,6 +13,7 @@ from ssaplash_ai.bench.analysis.rule_eval import (
     load_candidates,
     predict_hits,
     run_rule_eval,
+    tom_summary,
 )
 from ssaplash_ai.bench.analysis.rule_features import (
     FEATURES_ROOT,
@@ -25,6 +26,7 @@ from ssaplash_ai.bench.analysis.rule_features import (
 from ssaplash_ai.bench.analysis.tom_pitch import (
     band_accuracy,
     collect_true_tom_f0,
+    predicted_tom_table,
     run_tom_pitch,
     search_bands,
 )
@@ -41,8 +43,10 @@ __all__ = [
     "load_candidates",
     "load_features",
     "predict_hits",
+    "predicted_tom_table",
     "run_rule_eval",
     "run_tom_pitch",
     "save_features",
     "search_bands",
+    "tom_summary",
 ]

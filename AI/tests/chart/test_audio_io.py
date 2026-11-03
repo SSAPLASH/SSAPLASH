@@ -8,8 +8,10 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from helpers import SR, make_tone, write_wav
+from helpers import SR, make_tone, write_m4a, write_wav
 from ssaplash_ai.chart.audio_io import (
+    DECODER_PYAV,
+    DECODER_SOUNDFILE,
     duration_ms,
     fit_length,
     probe,
@@ -61,6 +63,73 @@ def test_mp3도_읽고_길이가_1ms_안이다(tmp_path: Path):
     got = read_audio_file(path)
     assert got.shape[0] == 2
     assert abs(got.shape[1] - audio.shape[1]) <= SR // 1000
+
+
+@pytest.mark.parametrize("codec", ["aac", "alac"])
+def test_m4a를_읽으면_wav와_길이가_같고_시작이_안_밀린다(tmp_path: Path, codec: str):
+    audio = _stereo(1.0)
+    write_m4a(tmp_path / "a.m4a", audio, codec=codec)
+    got = read_audio_file(tmp_path / "a.m4a")
+    assert got.shape == audio.shape and got.dtype == np.float32
+    if codec == "alac":  # 16비트 무손실
+        np.testing.assert_allclose(got, audio, atol=1e-4)
+    else:  # 손실 압축이라 샘플 값 대신 신호 대 잡음비로 봄. 테스트 소리는 약 22dB
+        snr = 10 * np.log10(np.sum(audio**2) / np.sum((got - audio) ** 2))
+        assert snr > 15
+
+
+@pytest.mark.parametrize("codec", ["aac", "alac"])
+def test_m4a는_시작이_밀리지_않는다(tmp_path: Path, codec: str):
+    # 0.2초 간격 딸깍 소리. 상호상관 최대 위치로 원본과 어긋난 샘플 수를 잼
+    audio = np.zeros((2, SR), dtype=np.float32)
+    for start in (0.1, 0.3, 0.6):
+        i = int(start * SR)
+        audio[:, i : i + 200] = 0.8 * np.hanning(200)
+    write_m4a(tmp_path / "a.m4a", audio, codec=codec)
+    got = read_audio_file(tmp_path / "a.m4a")
+    lag = int(np.argmax(np.correlate(got[0], audio[0], "full"))) - (audio.shape[1] - 1)
+    # AAC 앞쪽 인코더 지연은 1024샘플. 이게 안 빠지면 lag가 1024 근처로 나옴
+    assert abs(lag) <= 2
+
+
+def test_확장자가_없는_m4a도_읽는다(tmp_path: Path):
+    write_m4a(tmp_path / "source.audio", _stereo(0.5))
+    got = read_audio_file(tmp_path / "source.audio")
+    assert got.shape == (2, SR // 2)
+
+
+def test_m4a_probe는_pyav로_헤더를_읽는다(tmp_path: Path):
+    write_m4a(tmp_path / "a.m4a", _stereo(1.0))
+    info = probe(tmp_path / "a.m4a")
+    assert info.decoder == DECODER_PYAV and info.format.endswith("/aac")
+    assert info.sample_rate == SR and info.channels == 2 and info.frames == SR
+
+
+def test_m4a도_길이_상한을_디코딩_전에_본다(tmp_path: Path):
+    write_m4a(tmp_path / "a.m4a", _stereo(1.0))
+    with pytest.raises(ChartInputError, match="너무 긺"):
+        read_audio_file(tmp_path / "a.m4a", max_duration_sec=0.5)
+
+
+def test_손상된_m4a는_입력_오류(tmp_path: Path):
+    write_m4a(tmp_path / "a.m4a", _stereo(1.0))
+    data = (tmp_path / "a.m4a").read_bytes()
+    (tmp_path / "bad.m4a").write_bytes(data[: len(data) // 3])  # 뒤쪽 2/3 잘림
+    (tmp_path / "junk.m4a").write_bytes(b"not audio at all " * 100)
+    with pytest.raises(ChartInputError):
+        read_audio_file(tmp_path / "bad.m4a")
+    with pytest.raises(ChartInputError, match="읽지 못함"):
+        read_audio_file(tmp_path / "junk.m4a")
+
+
+def test_ogg_opus는_soundfile로_읽고_길이가_1ms_안이다(tmp_path: Path):
+    audio = make_tone(1.0, 48000, 220.0)
+    path = tmp_path / "a.opus"
+    sf.write(str(path), audio.T, 48000, format="OGG", subtype="OPUS")
+    assert probe(path).decoder == DECODER_SOUNDFILE
+    got = read_audio_file(path)
+    assert got.shape[0] == 2
+    assert abs(got.shape[1] - SR) <= SR // 1000
 
 
 def test_없는_파일은_입력_오류(tmp_path: Path):
