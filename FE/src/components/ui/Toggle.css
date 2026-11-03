@@ -1,4 +1,4 @@
-/* Controls / Toggle 126:1936 — 52×28, 노브 22 */
+/* Controls / Toggle 126:1936 — 52×28, 노브 20 */
 .ui-toggle {
   min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 아래 값으로 정한다 */
   position: relative;
@@ -20,16 +20,16 @@
 }
 .ui-toggle-knob {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 22px;
-  height: 22px;
+  top: 3px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--text-1);
   transition: transform var(--motion-fast) var(--ease-out);
 }
 .ui-toggle.on .ui-toggle-knob {
-  transform: translateX(24px);
+  transform: translateX(22px);
   background: var(--brand-on);
 }
 .ui-toggle:disabled {

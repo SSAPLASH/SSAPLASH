@@ -1,5 +1,6 @@
 // 회원 탈퇴 확인 대화상자. 상태를 갖지 않는다 — 열림·진행·오류는 호출자(SettingsPage)가 정한다.
 import { useRef } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 
 interface Props {
@@ -28,12 +29,12 @@ export function WithdrawDialog({ open, busy, error, onCancel, onConfirm }: Props
       </ul>
       {error && <p className="notice error">{error}</p>}
       <div className="dialog-actions">
-        <button type="button" className="btn-ghost" ref={cancelRef} onClick={onCancel} disabled={busy}>
+        <Button variant="secondary" ref={cancelRef} onClick={onCancel} disabled={busy}>
           취소
-        </button>
-        <button type="button" className="btn-danger" onClick={onConfirm} disabled={busy}>
+        </Button>
+        <Button variant="danger" onClick={onConfirm} disabled={busy}>
           {busy ? '탈퇴 중…' : '탈퇴'}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );

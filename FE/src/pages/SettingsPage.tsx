@@ -115,7 +115,7 @@ export function SettingsPage() {
                   <span className="settings-account-name">{user.nickname}</span>
                   <span className="settings-account-sub">{PROVIDER_LABEL[user.provider] ?? user.provider} 계정으로 로그인</span>
                 </div>
-                <Button variant="secondary" className="settings-btn" onClick={onLogout}>
+                <Button variant="secondary" size="sm" onClick={onLogout}>
                   로그아웃
                 </Button>
               </div>
@@ -140,7 +140,7 @@ export function SettingsPage() {
               {() => (
                 <>
                   <span className="settings-value">{presetValue}</span>
-                  <Button variant="text" className="settings-btn" onClick={openSetup}>
+                  <Button variant="text" size="sm" onClick={openSetup}>
                     드럼 세팅 열기
                   </Button>
                 </>
@@ -195,7 +195,7 @@ export function SettingsPage() {
                 계정과 라이브러리, 연주 기록이 삭제되고 되돌릴 수 없어요. 동의한 연주 기록은 신원 정보 없이 남아요.
               </p>
               <div>
-                <Button variant="danger" className="settings-btn" onClick={openWithdraw}>
+                <Button variant="danger" size="sm" onClick={openWithdraw}>
                   회원 탈퇴
                 </Button>
               </div>
