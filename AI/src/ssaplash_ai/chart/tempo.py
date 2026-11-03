@@ -6,7 +6,8 @@
 - librosa: `beat.beat_track`. torch 없이 돌아서 mock 설정과 테스트용으로 남김
 
 박 시각에서 bpm을 계산하는 방법은 둘이 같음. 박 간격 중앙값에서 15% 넘게 벗어난 간격(박을 건너뛰거나
-두 번 잡은 곳)에서 박을 구간으로 나누고, 구간마다 박 번호·시각에 직선을 맞춰 기울기 하나로 bpm을 구함.
+두 번 잡은 곳)에서 박을 구간으로 나누고, 구간마다 몇 번째 박인지와 울린 시각을 짝지어 박들이 몇 초에 걸쳐
+나왔는지로 한 박 길이를 구함. 구간들은 합쳐 한 박 길이 하나로 냄.
 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음. 템포가 바뀌는 곡도 bpm 하나로 냄(가변 템포는 범위 밖).
 
 박을 못 찾으면(타격이 거의 없는 드럼 트랙) BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
@@ -72,9 +73,9 @@ def fold_bpm(bpm: float, min_bpm: float, max_bpm: float) -> float:
 
 
 def _beat_period_from_runs(beats: np.ndarray, even: np.ndarray) -> float | None:
-    """고른 간격이 MIN_INTERVALS개 이상 이어지는 구간마다 박 번호·시각 직선을 맞춘 공통 기울기(초/박).
+    """한 박 길이(초). 고른 간격이 MIN_INTERVALS개 이상 이어지는 구간마다 박 번호와 시각을 짝지어 구함.
 
-    구간마다 절편은 따로, 기울기는 하나로 합쳐 최소제곱. 쓸 구간이 없으면 None.
+    구간마다 시작 시각은 따로 두고 한 박 길이는 모든 구간에 같은 값 하나로 최소제곱 계산. 쓸 구간이 없으면 None.
     """
     num = den = 0.0
     start = 0
@@ -97,7 +98,7 @@ def _beat_period_from_runs(beats: np.ndarray, even: np.ndarray) -> float | None:
 def bpm_from_beats(beats: np.ndarray) -> float | None:
     """박 시각(초) → bpm. 고른 간격(중앙값 ±15%)이 MIN_INTERVALS 미만이면 None.
 
-    고른 간격이 이어지는 구간들에 직선을 맞춰 기울기로 계산함. 박 시각이 20ms 단위라 간격 평균은
+    고른 간격이 이어지는 구간마다 박 번호와 시각을 짝지어 한 박 길이를 구함. 박 시각이 20ms 단위라 간격 평균은
     0.03~0.06bpm 오차가 남아 3분 곡 끝에서 16분 격자를 벗어남(설계 "격자 원점·bpm 계산 수정").
     그런 구간이 없으면 고른 간격 평균.
     """
