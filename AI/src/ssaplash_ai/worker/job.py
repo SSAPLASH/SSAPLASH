@@ -79,6 +79,9 @@ EXTENSIONS = {
     "audio/mp3": ".mp3",
     "audio/flac": ".flac",
     "audio/x-flac": ".flac",
+    # BE가 받는 MPEG-4 오디오(AAC·ALAC)와 Ogg Opus (S15P31A307-244)
+    "audio/mp4": ".m4a",
+    "audio/ogg": ".ogg",
 }
 STATUS_DONE = "DONE"
 STATUS_FAILED_REPORTED = "FAILED_REPORTED"
