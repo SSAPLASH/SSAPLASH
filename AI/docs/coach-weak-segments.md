@@ -46,12 +46,13 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 
 ```json
 {
-  "analyzerVersion": "weak-rules-0.1",
+  "analyzerVersion": "weak-rules-0.2",
   "reason": "OK",
   "weakSegments": [
     {
       "fromMs": 7000.0, "toMs": 12000.0, "pattern": "MISS_CLUSTER",
       "description": "7~12초 구간에서 노트의 40%를 놓쳤어요.",
+      "tip": "놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.",
       "causeTags": ["MISS", "CLUSTER"], "pads": ["SNARE"],
       "metrics": { "severity": 0.67, "missRate": 0.4, "missCount": 4, "noteCount": 10, "scope": "SEGMENT" }
     }
@@ -63,6 +64,7 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 - BE 저장 규칙: `weakSegments` 배열 그대로 저장한다. **null = 미분석·실패, `[]` = 분석했으나 약점 없음.**
 - `fromMs`/`toMs`: 시작 포함·끝 미포함. 전체 플레이 패턴(`scope: WHOLE`)은 첫 노트 시각 ~ 마지막 노트 시각 + 1.
 - `description`은 FE가 그대로 표시하는 한국어 문장이다. `metrics`는 근거 수치(자유 객체)이며 `severity`(0~1)가 항상 있다.
+- `tip`(`weak-rules-0.2`부터)은 연습 방법 한두 문장이다. **선택 필드**라서 문구가 없는 `pattern`이면 키 자체가 없다. FE가 그대로 표시한다. 아래 "연습 조언" 참고.
 - 최대 5개(같은 `pattern`은 2개까지), `fromMs` 오름차순.
 
 ### 오류
@@ -100,7 +102,23 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 ### 정의만 해 두고 아직 켜지 않은 4종
 
 `TEMPO_DRIFT_FAST/SLOW`, `VELOCITY_FADE`, `PAD_CONFUSION`, `DENSE_WEAK`. 응답 형식과 `pattern` 이름은 같은 규칙을 따른다.
-구현은 후속이며, 실제 로그로 오탐률을 본 뒤 설정으로 켠다.
+구현은 후속이며, 실제 로그로 오탐률을 본 뒤 설정으로 켠다. 연습 조언 문구는 켜질 때 바로 붙도록 미리 정해 두었다.
+
+### 연습 조언 (`tip`, `weak-rules-0.2`)
+
+`description`이 "무슨 일이 있었는지"를 말한다면 `tip`은 "어떻게 연습할지"를 말한다. `src/ssaplash_ai/coach/advice.py`가
+`pattern`으로 문장을 고르고 패드 이름만 채운다. 새 숫자를 만들지 않고 타격 데이터를 읽지 않아서 같은 입력은 항상 같은 문장이다.
+
+- **문구 원칙:** 초보자 눈높이(전문 용어를 풀어 쓰고 BPM 대신 "느린 템포"), 박·템포·마디·반복 구간·손목 반동 같은 실제 연습 방법,
+  "~해 보세요/~좋아요" 말투, 사용자의 실수를 단정하지 않는다. 실시간 코칭 문구(FE `coach/live/copy.ts`)와 어휘를 맞춘다.
+- **길이:** 한 항목 100자 이하(`config.MAX_TIP_CHARS`). 화면 폭에 맞는지는 FE와 확인한다.
+- **패드 이름과 조사:** 패드 한글 이름은 `config.PAD_LABELS_KO`를 쓰고, `로/으로`·`을/를`은 받침으로 고른다(예: "스몰탐으로", "킥을").
+- **`HAND_WEAK`:** 왼손/오른손을 단정하지 않고 "약한 쪽 손"이라고 쓴다(`description`과 같은 이유).
+- **새 규칙을 켤 때:** `config.ENABLED_PATTERNS`에 넣는 `pattern`마다 `advice.py`에 문구가 있어야 한다(없으면 시험이 실패한다).
+  문구가 없는 `pattern`이 응답에 나가면 `tip` 키만 빠지고 응답은 정상이다.
+- **하위 호환:** 요청 형식과 기존 필드는 그대로다. BE는 `weakSegments` 항목의 모르는 필드를 거르지 않고 그대로 저장·전달한다
+  (`AnalysisClient.valid()`는 필수 필드의 존재와 타입만 본다). 이 왕복은 아직 BE·DB를 붙인 통합 시험으로 확인하지 않았다.
+- 문구는 가정이다. 첫 배포 뒤 사용자 반응을 보고 `advice.py`에서만 고친다.
 
 ## 한계 (QA 때 함께 본다)
 
