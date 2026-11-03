@@ -13,9 +13,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile as sf
+import soxr
 from worker_helpers import Rig
 
-from helpers import HITS, SR, make_hits, write_wav
+from helpers import HITS, SR, make_hits, write_m4a, write_wav
 from ssaplash_ai.chart.errors import ChartOutputError
 from ssaplash_ai.worker.fake_be import FAKE_TOKEN, FakeBackend, Faults
 from ssaplash_ai.worker.job import (
@@ -256,6 +258,30 @@ def test_keep_files면_작업_폴더를_남긴다(tmp_path: Path):
         tr = json.loads((dirs[0] / "transcription.json").read_text(encoding="utf-8"))
         assert sep["duration_ms"] == 2200 and "separate_ms" in sep and "peak_vram_mb" in sep
         assert tr["duration_ms"] == 2200 and "transcribe_ms" in tr and "chart" not in tr
+
+
+@pytest.mark.parametrize(
+    ("name", "content_type", "source_name"),
+    [("song.m4a", "audio/mp4", "source.m4a"), ("song.opus", "audio/ogg", "source.ogg")],
+)
+def test_m4a_opus_원곡도_DONE까지_간다(
+    tmp_path: Path, name: str, content_type: str, source_name: str
+):
+    path = tmp_path / name
+    if name.endswith(".m4a"):
+        write_m4a(path, make_hits(2.2))
+    else:
+        # Opus는 48kHz 등 몇 가지 샘플레이트만 받음
+        audio = soxr.resample(make_hits(2.2).T, SR, 48000)
+        sf.write(str(path), audio, 48000, format="OGG", subtype="OPUS")
+    with Rig(tmp_path, keep_files=True) as rig:
+        job_id = rig.backend.enqueue(path)
+        assert rig.backend.jobs[job_id].source.content_type == content_type
+        out = rig.run_one()
+        assert out.status == STATUS_DONE and out.n_notes == len(HITS)
+        assert rig.backend.jobs[job_id].separation_result["durationMs"] == 2200
+        dirs = list((tmp_path / "work" / "worker").iterdir())
+        assert source_name in {p.name for p in dirs[0].iterdir()}
 
 
 def test_mib_to_mb():

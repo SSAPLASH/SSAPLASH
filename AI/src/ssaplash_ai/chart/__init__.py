@@ -5,7 +5,7 @@
 쓰고 다시 구현하지 않음. 입출력은 파일 경로 + 결과 메타(dataclass), numpy 배열은 모듈 안에서만.
 
 - config: `configs/chart/*.yaml` 읽기와 환경 변수(`SSAPLASH_` 접두사) 덮어쓰기
-- audio_io: 원곡 읽기(mp3·wav·flac → 44.1kHz 스테레오 float32), 트랙 쓰기(flac 16비트·wav)
+- audio_io: 원곡 읽기(mp3·wav·flac·opus·m4a → 44.1kHz 스테레오 float32), 트랙 쓰기(flac 16비트·wav)
 - errors: 예외 분류(입력·모델·출력). 워커가 실패 보고의 code·retryable로 바꿈
 - separation: SeparationModule. 원곡 파일 → 드럼 트랙·반주 파일 + SeparationOutput
 - transcription: TranscriptionModule. 드럼 트랙 파일 → chart.json + TranscriptionOutput
