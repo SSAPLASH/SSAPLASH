@@ -54,6 +54,8 @@ export interface StickStatusEvent {
   batteryPct?: number;
   rssi?: number;
   firmware?: string;
+  /** 그 기기가 부팅 뒤 웹 설정을 못 받았다(STATUS 비트 5). connected: true일 때만 의미. 없으면 모름 */
+  unconfigured?: boolean;
 }
 
 export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
