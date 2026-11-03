@@ -24,13 +24,18 @@
   border-color: var(--line-strong);
   color: var(--text-1);
 }
+/* 선택된 칩은 hover에도 선택 색을 유지한다 */
+.ui-chip.selected:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
 .ui-chip:active:not(:disabled) {
   transform: scale(0.97);
 }
 .ui-chip.selected {
   background: var(--surface-3);
   border-color: var(--brand);
-  color: var(--text-1);
+  color: var(--brand-text);
 }
 .ui-chip:disabled {
   opacity: 0.4;
