@@ -189,10 +189,12 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 `chart.json`에서 정해진 값은 다음과 같다.
 
-- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<yaml 해시 12자리>`로 남는다
+- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<해시 12자리>`로 남는다. 해시에는 모델 yaml, bpm 방법·설정, `offsetMs`·bpm 계산 규칙 버전(`chart_json.TIMING_RULES_VERSION`)이 들어간다
 - 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
 - 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE)다
-- bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고, 박 간격 평균으로 계산한다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. `offsetMs`는 0, 박자는 `4/4` 고정이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
+- bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고 계산한다. 박마다 몇 번째 박인지와 울린 시각을 짝지어, 박들이 모두 몇 초에 걸쳐 나왔는지로 한 박 길이를 구하고 bpm으로 바꾼다. Beat This! 박 시각은 0.02초 단위로 반올림돼 있어서, 이웃한 두 박 간격을 하나씩 재서 평균 내면 이 오차가 남는다. 박을 놓치거나 두 번 잡은 곳, 즉 간격이 중앙값에서 15% 넘게 벗어난 곳에서는 구간을 끊어 따로 계산한 뒤 합친다. 4박 넘게 이어지는 구간이 하나도 없으면 고른 간격의 평균을 쓴다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
+- `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 첫 마디 첫 박에서 한 마디(`60000 / bpm × 4` ms)씩 앞으로 당겨 0ms 이상인 가장 이른 마디 시작을 넣는다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
+- bpm·`offsetMs`를 다시 재려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
 
 채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=combo`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.

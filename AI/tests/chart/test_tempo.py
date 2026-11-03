@@ -49,6 +49,22 @@ def test_박_간격_계산은_튀는_간격을_뺌():
     assert bpm_from_beats(np.array([0.0, 0.5])) is None
 
 
+@pytest.mark.parametrize("bpm", [84.0, 110.0, 178.0])
+def test_20ms_단위_박에서_bpm이_0점01_안(bpm: float):
+    # Beat This! 박 시각처럼 20ms 단위로 끊고, 박 5%를 무작위로 빼서 구간을 끊음 (설계 인수 조건 13)
+    rng = np.random.default_rng(int(bpm))
+    beats = 0.37 + np.arange(int(180 * bpm / 60)) * 60.0 / bpm
+    beats = np.round(beats / 0.02) * 0.02
+    beats = beats[rng.random(beats.size) >= 0.05]
+    assert bpm_from_beats(beats) == pytest.approx(bpm, abs=0.01)
+
+
+def test_이어진_구간이_없으면_고른_간격_평균():
+    # 고른 간격 0.5초가 두 개씩만 이어짐 → 직선을 맞출 구간이 없어 고른 간격 평균
+    beats = np.cumsum([0.0, 0.5, 0.5, 1.0, 0.5, 0.5, 1.0, 0.5])
+    assert bpm_from_beats(beats) == pytest.approx(120.0)
+
+
 def test_박_시각에서_결과를_만듦():
     beats = np.arange(0.25, 10.0, 0.25)  # 240bpm → 120으로 접힘
     est = estimate_from_beats(beats, np.array([1.25, 3.25]), TempoConfig(), "beat_this")
