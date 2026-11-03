@@ -108,6 +108,17 @@ class RecordingSchemaTest {
 		assertThat(db.queryForObject("SELECT play_session_id IS NULL AND hit_count=2 FROM recordings WHERE id=?", Boolean.class, id)).isTrue();
 	}
 
+	/** 257 v0.7 V28: 녹음이 플레이와 별개로 채보 버전을 기억한다. NULL 허용, 없는 버전은 FK 위반. */
+	@Test
+	void 채보_버전은_선택이고_있는_버전만_가리킨다() {
+		long version = db.queryForObject("SELECT min(id) FROM chart_versions", Long.class);
+		long free = insert(user, UUID.randomUUID(), "FREE", "STICK", 2, HITS, 300, HASH);
+		assertThat(db.queryForObject("SELECT chart_version_id IS NULL FROM recordings WHERE id=?", Boolean.class, free)).isTrue();
+		db.update("UPDATE recordings SET chart_version_id=? WHERE id=?", version, free);
+		assertThat(db.queryForObject("SELECT chart_version_id FROM recordings WHERE id=?", Long.class, free)).isEqualTo(version);
+		assertThatThrownBy(() -> db.update("UPDATE recordings SET chart_version_id=999999999 WHERE id=?", free)).isInstanceOf(DataIntegrityViolationException.class);
+	}
+
 	private long insert(long owner, UUID key, String mode, String input, int count, String hits, int duration, String hash) {
 		return db.queryForObject("INSERT INTO recordings(user_id,title,client_key,mode,input_source,schema_version,started_at,duration_ms,hit_count,hits,payload_hash) "
 				+ "VALUES(?,'녹음',?,?,?,1,now(),?,?,?::jsonb,?) RETURNING id", Long.class, owner, key, mode, input, duration, count, hits, hash);
