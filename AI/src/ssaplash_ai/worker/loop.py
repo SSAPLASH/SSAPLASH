@@ -72,6 +72,12 @@ class WorkerLoop:
         separation = SeparationModule(sep_config)
         transcription = TranscriptionModule(tr_config)
         logger.info("장치: 분리 %s, 채보 %s", separation.device, transcription.device)
+        # 서버에서 어느 채보 모델이 도는지 헷갈리지 않게 고른 이름과 yaml 경로를 남김
+        logger.info(
+            "채보 모델 선택: %s (%s)",
+            tr_config.model_name or "이름 없음",
+            tr_config.model_config.as_posix(),
+        )
         sep_sec = separation.load()
         logger.info(
             "분리 모델 올림 %.1f초 (%s %s)",
