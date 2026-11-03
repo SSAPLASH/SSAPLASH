@@ -16,7 +16,7 @@
 
 `song-level-1`은 선택된 채보의 유효 노트 수를 곡 길이로 나눈 초당 평균과, 2초 반열린 구간의 최대 노트 수를 2로 나눈 초당 피크를 사용한다.
 평균이 5 미만 / 5 이상 7 미만 / 7 이상이면 각각 입문 / 중급 / 고급이다. 피크는 6 / 8을 같은 방식으로 나누고 두 결과 중 높은 등급을 쓴다.
-동시 노트는 각각 센다. 신규 곡은 최신 HARD 버전이고, V28 적용 시 이미 READY이며 HARD chart 행이 없던 기존 곡은 최고 보유 단계의 최신 버전을 사용한다.
+동시 노트는 각각 센다. 신규 곡은 최신 HARD 버전이고, V29 적용 시 이미 READY이며 HARD chart 행이 없던 기존 곡은 최고 보유 단계의 최신 버전을 사용한다.
 HARD 행이 생기면 HARD로 전환하며 해당 행에 버전이 없거나 최신 버전이 유효하지 않으면 미산정이다. 산정 입력의 버전·규칙·곡 길이를 기록하고 입력 변경 시 재산정한다.
 
 이 경계는 내장 연습곡 3개, 합성 패턴 7개, 소수 노트 MIDI 테스트 fixture로 확인한 MVP 휴리스틱이다. 사용자 체감이나 교육적 난이도를 검증한 값이 아니며
@@ -448,7 +448,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V28까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V29까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,

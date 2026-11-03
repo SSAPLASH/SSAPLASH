@@ -45,8 +45,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(19);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(20);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -122,7 +122,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(28);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(29);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
@@ -157,7 +157,9 @@ class TimescaleMigrationTest {
 					  SELECT id,'자유',gen_random_uuid(),'FREE','KEYBOARD',1,now(),1,1,'[{"tMs":0,"pad":"SNARE","velocity":1}]',repeat('c',64) FROM users;
 					""");
 		}
-		var latest = Flyway.configure().dataSource(url() + "_v28", "postgres", password()).locations("classpath:db/migration").load();
+		// 이 시험은 V28만 검증한다. 최신(V29 곡 난이도 이후)까지 적용하면 개수가 늘어나므로 목표를 28로 고정한다.
+		var latest = Flyway.configure().dataSource(url() + "_v28", "postgres", password())
+				.locations("classpath:db/migration").target("28").load();
 		assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
 		try (var connection = DriverManager.getConnection(url() + "_v28", "postgres", password())) {
 			assertThat(scalar(connection, "SELECT r.chart_version_id = p.chart_version_id FROM recordings r JOIN play_sessions p ON p.id=r.play_session_id WHERE r.title='리듬'")).isEqualTo("t");
