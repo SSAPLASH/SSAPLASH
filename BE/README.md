@@ -841,9 +841,17 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 
 `GET /api/v1/plays`는 활성 Bearer 인증 회원의 모든 모드를 종료 시각·playId 내림차순으로 반환한다. `page`는 0~100000(기본 0), `size`는 1~100(기본 20)이며 응답은 `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext`다. 범위를 벗어난 페이지는 빈 배열이며 전체 0건이면 totalPages는 0이다. 인증 실패는 401, 잘못된 페이지 입력은 400이고 서비스 직접 호출에도 같은 범위 검증을 적용한다. 응답은 `Cache-Control: no-cache, no-store`를 포함한다. offset 페이지 조회 도중 기록이 추가·삭제되면 페이지 간 중복이나 누락이 생길 수 있다.
 
-각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `difficulty`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
+각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `chartId`, `difficulty`, `endReason`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. `chartId`는 고정 버전이 속한 연습 단계이며 참조가 없으면 null이다. `endReason`은 `COMPLETED`, `ABORTED`, `DISCONNECTED` 또는 미기록을 뜻하는 null이다. 종료 사유와 관계없이 목록에 유지한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
 
 `hasReport`는 RHYTHM/SHEET 기록에 리포트가 존재하는지를 뜻하며 AI 코칭 상태와 무관하다. 리포트가 없어도 과거 기록은 목록에 남는다. 곡 제목이 없을 때의 대체 문구와 날짜 표시 형식은 FE에서 별도로 정한다. FE는 true인 항목에서 `/result/{playId}/report`로 이동할 수 있으며 데이터는 기존 `/api/v1/plays/{playId}/report`와 `/notes`에서 조회한다.
+
+## 곡·연습 단계별 최고 기록 (268번)
+
+`GET /api/v1/plays/best-records?songIds=1,2`는 활성 Bearer 인증 회원의 기록만 조회한다. `songIds`는 양의 64비트 정수 1~100개를 쉼표로 구분한 필수 값이다. 중복 제거 전 100개를 초과하거나 빈 항목·잘못된 값이 있으면 400이다. 중복은 제거한다. 접근 불가·삭제·없는 곡과 기록 없는 곡은 결과에서 생략하며 구분하지 않는다.
+
+응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
+
+곡 선택 화면은 모드에 맞는 전체 단계 중 최고 점수 또는 정확도를 선택하고 연주 준비 화면은 선택한 `chartId`를 쓴다. `bestAccuracy`는 0~100이므로 FE의 0~1 비율로 쓰려면 100으로 나눈다. 이 API 제공은 FE 연동 완료를 뜻하지 않는다.
 
 ## MIDI 업로드 → 채보 변환 (151번)
 
