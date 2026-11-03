@@ -29,14 +29,17 @@ export function GoogleIcon({ size = 20 }: Props) {
   );
 }
 
-/** SSAFY 자리표시(파란 사각 + S). 공식 로고 파일을 받으면 이 내용만 교체한다(설계 U3) */
+/** SSAFY 로고 이미지(public/images/ssafy-logo.png). 가로로 긴 로고를 size×size 칸 안에 비율 유지로 넣는다. 버튼 문구가 이름을 읽어 주므로 장식 이미지다 */
 export function SsafyIcon({ size = 20 }: Props) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" {...base}>
-      <rect width="20" height="20" rx="4" fill="#1E6FFF" />
-      <text x="10" y="14.5" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="12" fontWeight="700" fill="#FFFFFF">
-        S
-      </text>
-    </svg>
+    <img
+      src="/images/ssafy-logo.png"
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      style={{ objectFit: 'contain' }}
+    />
   );
 }
