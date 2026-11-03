@@ -157,14 +157,15 @@ class TimescaleMigrationTest {
 					  SELECT id,'자유',gen_random_uuid(),'FREE','KEYBOARD',1,now(),1,1,'[{"tMs":0,"pad":"SNARE","velocity":1}]',repeat('c',64) FROM users;
 					""");
 		}
+		// 녹음 V28을 먼저 확인하고 곡 난이도 V29 적용 뒤에도 녹음 데이터가 보존되는지 확인한다.
 		var v28 = Flyway.configure().dataSource(url() + "_v28", "postgres", password()).locations("classpath:db/migration").target("28").load();
 		assertThat(v28.migrate().migrationsExecuted).isEqualTo(1);
 		try (var connection = DriverManager.getConnection(url() + "_v28", "postgres", password())) {
 			assertThat(scalar(connection, "SELECT r.chart_version_id = p.chart_version_id FROM recordings r JOIN play_sessions p ON p.id=r.play_session_id WHERE r.title='리듬'")).isEqualTo("t");
 			assertThat(scalar(connection, "SELECT chart_version_id IS NULL FROM recordings WHERE title='자유'")).isEqualTo("t");
 		}
-		var latest = Flyway.configure().dataSource(url() + "_v28", "postgres", password()).locations("classpath:db/migration").load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+		var v29 = Flyway.configure().dataSource(url() + "_v28", "postgres", password()).locations("classpath:db/migration").target("29").load();
+		assertThat(v29.migrate().migrationsExecuted).isEqualTo(1);
 		try (var connection = DriverManager.getConnection(url() + "_v28", "postgres", password())) {
 			assertThat(scalar(connection, "SELECT r.chart_version_id = p.chart_version_id FROM recordings r JOIN play_sessions p ON p.id=r.play_session_id WHERE r.title='리듬'")).isEqualTo("t");
 			assertThat(scalar(connection, "SELECT chart_version_id IS NULL FROM recordings WHERE title='자유'")).isEqualTo("t");
