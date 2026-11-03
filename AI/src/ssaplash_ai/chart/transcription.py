@@ -116,6 +116,7 @@ class TranscriptionModule:
                 f"{tempo.min_bpm:g}-{tempo.max_bpm:g}",
                 tempo.time_signature,
                 TIMING_RULES_VERSION,
+                tempo.origin,
             )
         )
         return f"{self._model_config.name}@{hashlib.sha256(key.encode()).hexdigest()[:12]}"
@@ -189,6 +190,7 @@ class TranscriptionModule:
             self.model_version,
             transcribe_ms,
             schema_version=self.config.schema_version,
+            origin=self.config.tempo.origin,
         )
         validate_chart(chart, length_ms)
         chart_path = _write_json(Path(out_dir) / CHART_FILENAME, chart)

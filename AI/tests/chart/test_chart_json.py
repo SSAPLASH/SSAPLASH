@@ -11,6 +11,7 @@ import pytest
 from ssaplash_ai.bench.datasets.pads import HITS_DTYPE
 from ssaplash_ai.chart.chart_json import (
     GENERATOR,
+    align_origin_to_notes,
     build_chart,
     build_notes,
     grid_origin_ms,
@@ -82,6 +83,54 @@ def test_offsetMs는_bpm_추정_실패나_박이_없으면_0():
     # 박이 모자라 librosa 템포 값만 쓴 경우
     hinted = replace(TEMPO, first_beat_ms=None, first_downbeat_ms=None)
     assert grid_origin_ms(hinted) == 0
+
+
+# ---- 원점을 킥·스네어 노트에 맞추기 (설계 v0.5, 인수 조건 22) ----
+
+TEMPO_120 = replace(TEMPO, bpm=120.0, first_beat_ms=1880, first_downbeat_ms=1880)
+
+
+def _beat_notes(origin_ms: float, shift_ms: float, n: int, pad: str = "KICK") -> list[dict]:
+    """120bpm 격자 박마다 shift_ms만큼 어긋난 노트 n개 (박 길이 500ms)"""
+    return [{"timeMs": int(round(origin_ms + i * 500 + shift_ms)), "pad": pad} for i in range(n)]
+
+
+def test_원점_보정은_노트가_몰린_만큼_당김():
+    notes = _beat_notes(1880, -40, 32)
+    assert align_origin_to_notes(1880, TEMPO_120, notes) == 1840
+    # 스네어도 씀. 박 사이 8분 위치 노트(250ms)는 창 밖이라 안 셈
+    notes = _beat_notes(1880, 20, 16, "SNARE") + _beat_notes(2130, 0, 40)
+    assert align_origin_to_notes(1880, TEMPO_120, notes) == 1900
+
+
+def test_원점_보정은_킥_스네어가_16개보다_적으면_그대로():
+    notes = _beat_notes(1880, -40, 15) + _beat_notes(1880, -40, 40, "HIHAT")
+    assert align_origin_to_notes(1880, TEMPO_120, notes) == 1880
+
+
+def test_원점_보정_뒤에도_0ms_이상이고_첫_마디_안():
+    # 원점 10ms, 노트 30ms 앞 → −20이라 한 마디(2000ms) 뒤로
+    assert align_origin_to_notes(10, TEMPO_120, _beat_notes(10, -30, 32)) == 1980
+    # 원점 1990ms, 노트 30ms 뒤 → 2020이라 한 마디 앞으로
+    assert align_origin_to_notes(1990, TEMPO_120, _beat_notes(1990, 30, 32)) == 20
+
+
+def test_원점_보정은_bpm_추정_실패면_그대로():
+    failed = replace(TEMPO_120, estimated=False)
+    assert align_origin_to_notes(0, failed, _beat_notes(0, 40, 32)) == 0
+
+
+def test_build_chart_origin_방식():
+    rows = [(n["timeMs"] / 1000, "KICK", -1) for n in _beat_notes(1880, -40, 32)]
+    hits = _hits(rows)
+    downbeat = build_chart(hits, 60_000, TEMPO_120, "v@0123456789ab", 0)
+    notes = build_chart(hits, 60_000, TEMPO_120, "v@0123456789ab", 0, origin="notes")
+    assert downbeat["charts"][0]["timing"]["offsetMs"] == grid_origin_ms(TEMPO_120) == 1880
+    assert notes["charts"][0]["timing"]["offsetMs"] == 1840
+    assert notes["charts"][0]["notes"] == downbeat["charts"][0]["notes"]
+    validate_chart(notes, 60_000)
+    with pytest.raises(ValueError, match="origin"):
+        build_chart(hits, 60_000, TEMPO_120, "v@0123456789ab", 0, origin="beat")
 
 
 def test_시각순_정렬_같은_시각은_패드_순서():
