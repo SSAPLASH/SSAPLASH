@@ -1,15 +1,23 @@
 // Web Serial 스틱 소스. 스틱(또는 수신 동글)을 USB로 직결해 921600 8N1로 받는다.
 // 프레이밍은 serialFraming(SOF·LEN·CRC8), payload는 stickProtocol 패킷이다.
-// 동글 하나에 두 스틱이 붙으면 포트는 하나지만 스틱마다 시계가 달라, 시계 동기화는 손별로 한다(flags role).
+// 기기별 상태(deviceState)는 role 0~3 네 칸이다: 시계·SYNC 대기·연결·배터리/설정 전 보류를 칸마다 두고,
+// 이벤트로 내보내는 것은 손(role 0·1)뿐이다(handOf). 동글 하나에 두 스틱이 붙어도 스틱마다 시계가 달라 손별로 맞춘다.
 // 한 손에만 보낼 명령은 동글이 확인된 뒤(LINK 수신)부터 ROUTE로 감싼다 — 예전 동글·스틱 직결은 ROUTE를 모른다.
-// 손별 연결은 LINK 마스크가 기준이다(1초 하트비트 + 바뀔 때). LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다.
+// 손별 연결은 LINK 마스크가 기준이다(1초 하트비트 + 바뀔 때). LINK를 한 번 받은 뒤엔 STATUS는 배터리·설정 전만 바꾼다.
+// 동글 순서상 STATUS(비트 5 설정 전)가 LINK보다 먼저 올 수 있어, 안 붙은 손의 배터리·비트 5는 보류했다가 붙을 때 함께 알린다.
+// 시계 초기화(D6): LINK 0→1 또는 STATUS 비트 5를 받은 기기는 시계·대기를 지우고 SYNC를 50ms 간격 5회 보낸다
+// (2초 안의 두 번째 신호는 건너뜀). 포트를 열 때도 전체 초기화 + SYNC 5회.
+// reopen()은 연결이 살아 있어도 같은 포트를 닫고 다시 연다(재연결 시도). navigator.serial의 connect 이벤트
+// (허락된 동글을 다시 꽂음)가 오면 포트가 닫혀 있을 때 autoConnect()로 클릭 없이 다시 연다.
 // 첫 LINK 전(예전 동글 펌웨어)에는 지금처럼 STATUS가 오면 연결로 본다.
 // 사용자 제스처 안에서 connect()를 불러야 포트 선택 창이 열린다.
 import type { DongleLink, StickEvent, StickId } from '@/domain/events';
-import { BaseInputSource, ClockSync } from './InputSource';
+import { BaseInputSource } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { FrameDecoder, frame } from './serialFraming';
 import { packetTap } from './packetTap';
+import { addPending, createDeviceStates, resetClockIfDue, resetDevice } from './deviceState';
+import type { DeviceRole } from './deviceState';
 import {
   decodePacket,
   encodeHaptic,
@@ -17,9 +25,11 @@ import {
   encodeRoute,
   encodeSetMode,
   encodeSync,
+  handOf,
   PacketType,
   parsePacket,
 } from './stickProtocol';
+import type { DecodedStatus } from './stickProtocol';
 import type { SourceDescriptor } from './SourceDescriptor';
 
 // @types/w3c-web-serial이 없어 쓰는 멤버만 최소 선언한다
@@ -33,14 +43,15 @@ interface SerialLike {
   requestPort(): Promise<SerialPortLike>;
   /** 사용자가 이미 허락한 포트 목록 */
   getPorts(): Promise<SerialPortLike[]>;
-  addEventListener(type: 'disconnect', listener: (ev: Event) => void): void;
-  removeEventListener(type: 'disconnect', listener: (ev: Event) => void): void;
+  addEventListener(type: 'disconnect' | 'connect', listener: (ev: Event) => void): void;
+  removeEventListener(type: 'disconnect' | 'connect', listener: (ev: Event) => void): void;
 }
 
 export const SERIAL_BAUD_RATE = 921600;
 const SYNC_INTERVAL_MS = 10_000;
-/** 손별 SYNC 대기 목록 최대 크기 */
-const MAX_PENDING_SYNC = 16;
+/** 시계 초기화 뒤 SYNC 연속 송신 횟수·간격 */
+const SYNC_BURST_COUNT = 5;
+const SYNC_BURST_GAP_MS = 50;
 /** LINK가 이 시간(ms) 넘게 안 오면 동글 문제로 본다(EMB 회신 Q3: 하트비트 1초) */
 export const LINK_STALE_MS = 3000;
 
@@ -55,15 +66,12 @@ export class WebSerialStickSource extends BaseInputSource {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private decoder = new FrameDecoder();
-  /** 손별 시계·SYNC 대기 목록 (index = StickId) */
-  private clocks: [ClockSync, ClockSync] = [new ClockSync(), new ClockSync()];
-  private pending: [Map<number, number>, Map<number, number>] = [new Map(), new Map()];
+  /** 기기별 시계·SYNC 대기·연결·보류 상태 (index = role 0~3) */
+  private devices = createDeviceStates();
+  /** serial connect 이벤트 리스너를 등록했는지(인스턴스당 1회) */
+  private connectListening = false;
   /** LINK를 받아 동글 아래 연결임이 확인됐는지. 확인돼야 ROUTE를 쓰고 LINK로 연결을 판정한다 */
   private dongle = false;
-  /** 마지막 LINK 마스크의 손별 연결 */
-  private linked: [boolean, boolean] = [false, false];
-  /** LINK 끊김 중 받은 STATUS 배터리. 그 손이 붙으면 함께 알린다 */
-  private heldBattery: [number | undefined, number | undefined] = [undefined, undefined];
   private lastLinkAt: number | null = null;
   private linkTimer: number | null = null;
   private dongleState: DongleLink | null = null;
@@ -79,35 +87,41 @@ export class WebSerialStickSource extends BaseInputSource {
     return getSerial() !== null;
   }
 
-  /** SYNC는 감싸지 않고 보내 두 스틱이 각자 답하게 한다. 대기 목록은 손마다 둔다 */
+  /** SYNC는 감싸지 않고 보내 붙은 스틱이 각자 답하게 한다. 대기 목록은 네 칸 모두에 넣는다 */
   private sync(): void {
     const t0 = performance.now();
     const key = Math.floor(t0) >>> 0;
-    for (const p of this.pending) {
-      p.set(key, t0);
-      // 한 손만 붙어 있으면 다른 손 목록은 답이 없어 쌓이므로 오래된 것부터 버린다
-      if (p.size > MAX_PENDING_SYNC) p.delete(p.keys().next().value!);
-    }
+    // 답이 없는 기기의 목록은 addPending이 오래된 것부터 버린다
+    for (const dev of this.devices) addPending(dev, key, t0);
     this.sendCommand(encodeSync(t0));
   }
 
-  private addSyncSample(stickId: StickId, t0Key: number, t1: number, recvTime: number): void {
-    const pending = this.pending[stickId];
-    const t0 = pending.get(t0Key);
+  /** SYNC를 50ms 간격으로 5회 예약한다 */
+  private scheduleSyncBurst(): void {
+    for (let i = 0; i < SYNC_BURST_COUNT; i++) setTimeout(() => this.sync(), i * SYNC_BURST_GAP_MS);
+  }
+
+  /** 시계 초기화 트리거(LINK 0→1·비트 5). 2초 안 중복이 아니면 초기화하고 SYNC 5회를 예약한다 */
+  private restartClock(role: DeviceRole, now: number): void {
+    if (resetClockIfDue(this.devices[role], now)) this.scheduleSyncBurst();
+  }
+
+  private addSyncSample(role: DeviceRole, t0Key: number, t1: number, recvTime: number): void {
+    const dev = this.devices[role];
+    const t0 = dev.pending.get(t0Key);
     if (t0 !== undefined) {
-      pending.delete(t0Key);
-      this.clocks[stickId].addSample(t0, t1, recvTime);
+      dev.pending.delete(t0Key);
+      dev.clock.addSample(t0, t1, recvTime);
     }
   }
 
-  private resetClocks(): void {
-    for (const c of this.clocks) c.reset();
-    for (const p of this.pending) p.clear();
+  private resetDevices(): void {
+    for (const dev of this.devices) resetDevice(dev);
   }
 
   private emitMapped(e: StickEvent, recvTime: number): void {
     if (e.kind === 'hit' || e.kind === 'pose') {
-      this.emit({ ...e, timestamp: this.clocks[e.stickId].toBrowserTime(e.timestamp, recvTime) });
+      this.emit({ ...e, timestamp: this.devices[e.stickId].clock.toBrowserTime(e.timestamp, recvTime) });
     } else {
       this.emit(e);
     }
@@ -124,14 +138,27 @@ export class WebSerialStickSource extends BaseInputSource {
     for (const l of this.dongleListeners) l(link);
   }
 
-  /** 손별 연결을 바꾸고 바뀐 손만 알린다. force면 같아도 알린다(첫 LINK·동글 복구) */
-  private applyLinked(next: [boolean, boolean], force: boolean): void {
+  /** 손별 연결을 바꾸고 바뀐 손만 알린다. force면 같아도 알린다(첫 LINK·동글 복구). 붙는 손은 보류한 배터리·설정 전을 함께 알린다 */
+  private applyLinked(next: [boolean, boolean], force: boolean, recvTime: number): void {
     for (const id of [0, 1] as const) {
-      if (!force && next[id] === this.linked[id]) continue;
-      this.linked[id] = next[id];
-      const batteryPct = next[id] ? this.heldBattery[id] : undefined;
-      if (next[id]) this.heldBattery[id] = undefined;
-      this.emit({ kind: 'status', stickId: id, connected: next[id], batteryPct });
+      const dev = this.devices[id];
+      if (!force && next[id] === dev.linked) continue;
+      const wasLinked = dev.linked;
+      dev.linked = next[id];
+      if (next[id]) {
+        const batteryPct = dev.heldBattery;
+        const unconfigured = dev.heldUnconfigured;
+        dev.heldBattery = undefined;
+        dev.heldUnconfigured = false;
+        this.emit({ kind: 'status', stickId: id, connected: true, batteryPct, unconfigured });
+        if (!wasLinked) this.restartClock(id, recvTime);
+      } else {
+        if (wasLinked) {
+          dev.heldBattery = undefined;
+          dev.heldUnconfigured = false;
+        }
+        this.emit({ kind: 'status', stickId: id, connected: false });
+      }
     }
   }
 
@@ -142,7 +169,7 @@ export class WebSerialStickSource extends BaseInputSource {
     this.dongle = true;
     this.lastLinkAt = recvTime;
     this.setDongle('ok');
-    this.applyLinked([(d.linkMask & 0b01) !== 0, (d.linkMask & 0b10) !== 0], first);
+    this.applyLinked([(d.linkMask & 0b01) !== 0, (d.linkMask & 0b10) !== 0], first, recvTime);
   }
 
   /** LINK 하트비트가 끊겼는지 본다. 끊겼으면 동글 문제로 두고 양손을 끊김으로 둔다(어느 손이 붙었는지 모름) */
@@ -150,7 +177,7 @@ export class WebSerialStickSource extends BaseInputSource {
     if (!this.dongle || this.lastLinkAt === null || this.dongleState === 'stale') return;
     if (now - this.lastLinkAt <= LINK_STALE_MS) return;
     this.setDongle('stale');
-    this.applyLinked([false, false], false);
+    this.applyLinked([false, false], false, now);
   }
 
   private handlePayload(payload: Uint8Array, recvTime: number): void {
@@ -159,17 +186,41 @@ export class WebSerialStickSource extends BaseInputSource {
       this.handleLink(payload, recvTime);
       return;
     }
+    const d = decodePacket(payload, recvTime);
+    // 기기 칸은 role 0~3 모두 갱신하고, 이벤트는 손(0·1)만 내보낸다
+    if (d.kind === 'syncAck') {
+      this.addSyncSample((d.role & 3) as DeviceRole, d.t0Ms, d.t1Us / 1000, recvTime);
+      return;
+    }
+    if (d.kind === 'status') {
+      this.handleStatus(d, payload, recvTime);
+      return;
+    }
     const p = parsePacket(payload, recvTime);
-    if (!p) return;
-    if (p.kind === 'syncAck') this.addSyncSample(p.stickId, p.t0, p.t1, recvTime);
-    else if (p.kind === 'status' && this.dongle) this.handleStatusUnderDongle(p.stickId, p.batteryPct);
-    else this.emitMapped(p, recvTime);
+    if (p && p.kind !== 'syncAck') this.emitMapped(p, recvTime);
   }
 
-  /** 동글 아래 STATUS는 배터리만 쓴다. 연결은 LINK가 정하고, 아직 안 붙은 손이면 배터리를 들고 있다가 붙을 때 알린다 */
-  private handleStatusUnderDongle(stickId: StickId, batteryPct: number | undefined): void {
-    if (this.linked[stickId]) this.emit({ kind: 'status', stickId, connected: true, batteryPct });
-    else this.heldBattery[stickId] = batteryPct;
+  /**
+   * STATUS. 비트 5(설정 전)면 그 기기의 시계를 초기화한다. 동글 아래에선 연결을 LINK가 정하므로 아직 안 붙은 손은
+   * 배터리·설정 전을 보류하고(붙을 때 알림), 붙은 손은 바로 알린다. 동글이 아니면 STATUS가 곧 연결이다.
+   */
+  private handleStatus(d: DecodedStatus, payload: Uint8Array, recvTime: number): void {
+    const role = (d.role & 3) as DeviceRole;
+    const dev = this.devices[role];
+    if (d.unconfigured) this.restartClock(role, recvTime);
+    if (this.dongle) {
+      const batteryPct = d.batteryPct ?? undefined;
+      if (dev.linked) {
+        const stickId = handOf(role);
+        if (stickId !== null) this.emit({ kind: 'status', stickId, connected: true, batteryPct, unconfigured: d.unconfigured });
+      } else {
+        dev.heldBattery = batteryPct;
+        dev.heldUnconfigured = d.unconfigured;
+      }
+      return;
+    }
+    const p = parsePacket(payload, recvTime);
+    if (p && p.kind !== 'syncAck') this.emitMapped(p, recvTime);
   }
 
   /** 읽기 루프. 스트림이 끝나거나 오류가 나면 끊김 처리한다 */
@@ -190,7 +241,8 @@ export class WebSerialStickSource extends BaseInputSource {
       } catch {
         // 이미 해제됨
       }
-      if (!this.closing) await this.cleanup();
+      // reopen 중 옛 읽기 루프가 새 연결을 정리하지 않도록 지금 읽기 루프일 때만 정리한다
+      if (!this.closing && this.reader === reader) await this.cleanup();
     }
   }
 
@@ -213,7 +265,7 @@ export class WebSerialStickSource extends BaseInputSource {
     }
     this.writer = null;
     this.reader = null;
-    this.resetClocks();
+    this.resetDevices();
     this.resetLink();
     this.decoder.reset();
     getSerial()?.removeEventListener('disconnect', this.onPortDisconnect);
@@ -235,7 +287,7 @@ export class WebSerialStickSource extends BaseInputSource {
     this.closing = false;
     this.port = port;
     this.decoder.reset();
-    this.resetClocks();
+    this.resetDevices();
     this.resetLink();
     this.connectCount++;
     const reader = port.readable.getReader();
@@ -244,7 +296,7 @@ export class WebSerialStickSource extends BaseInputSource {
     serial.addEventListener('disconnect', this.onPortDisconnect);
     this.setState('connected');
     void this.readLoop(reader);
-    for (let i = 0; i < 5; i++) setTimeout(() => this.sync(), i * 50);
+    this.scheduleSyncBurst();
     this.syncTimer = window.setInterval(() => this.sync(), SYNC_INTERVAL_MS);
     this.linkTimer = window.setInterval(() => this.checkLinkTimeout(), 1000);
     this.setDongle('waiting');
@@ -252,8 +304,6 @@ export class WebSerialStickSource extends BaseInputSource {
 
   private resetLink(): void {
     this.dongle = false;
-    this.linked = [false, false];
-    this.heldBattery = [undefined, undefined];
     this.lastLinkAt = null;
   }
 
@@ -264,6 +314,9 @@ export class WebSerialStickSource extends BaseInputSource {
   async autoConnect(): Promise<void> {
     const serial = getSerial();
     if (!serial) return;
+    this.listenConnect(serial);
+    // 이미 열려 있거나 여는 중이면 아무것도 안 한다(같은 포트를 두 번 열면 InvalidStateError로 살아 있는 연결이 끊긴다)
+    if (this.port !== null || this.state === 'connecting') return;
     try {
       const [port] = await serial.getPorts();
       if (!port) {
@@ -278,12 +331,48 @@ export class WebSerialStickSource extends BaseInputSource {
     }
   }
 
+  /** 허락된 동글을 다시 꽂으면(serial connect) 포트가 닫혀 있을 때만 클릭 없이 다시 연다. 인스턴스당 1회 등록 */
+  private listenConnect(serial: SerialLike): void {
+    if (this.connectListening) return;
+    this.connectListening = true;
+    serial.addEventListener('connect', () => {
+      if (this.port === null && this.state !== 'connecting') void this.autoConnect();
+    });
+  }
+
+  /**
+   * 연결이 살아 있어도 같은 포트를 닫고 다시 연다(재연결 시도). 양손 끊김을 알린 뒤 다시 열어 SYNC 5회를 보내고
+   * LINK를 기다린다. 포트가 안 열려 있으면 autoConnect와 같다. 실패해도 던지지 않고 끊김으로 둔다.
+   */
+  async reopen(): Promise<void> {
+    const serial = getSerial();
+    if (!serial) return;
+    // 여는 중(다른 시도의 reopen·autoConnect)이면 겹치지 않게 돌아간다
+    if (this.state === 'connecting') return;
+    // disconnect가 포트 참조를 비우므로 먼저 잡아 둔다
+    const port = this.port;
+    if (!port) {
+      await this.autoConnect();
+      return;
+    }
+    // disconnect가 읽기 취소 → cleanup(port.close 대기)까지 마친 뒤에 열어야 "already open"이 안 난다
+    await this.disconnect();
+    try {
+      this.setState('connecting');
+      await this.openPort(serial, port);
+    } catch {
+      await this.cleanup();
+      this.setState('disconnected');
+    }
+  }
+
   async connect(): Promise<void> {
     const serial = getSerial();
     if (!serial) {
       this.setState('error', '이 브라우저는 Web Serial을 지원하지 않습니다(Chrome/Edge)');
       throw new Error('web serial unsupported');
     }
+    this.listenConnect(serial);
     // 이미 열린 포트가 있으면(다른 동글 연결) 새 포트를 고른 뒤에만 닫는다 — 선택을 취소하면 그대로 둔다
     const wasOpen = this.port !== null;
     this.setState('connecting', '포트 선택 창에서 스틱(또는 동글)을 고르세요. 사용자 클릭 안에서만 열립니다.');
@@ -359,8 +448,8 @@ export class WebSerialStickSource extends BaseInputSource {
 
   /** 손을 안 주면 먼저 맞춰진 쪽(왼손 우선)을 돌려준다 */
   clockOffsetOf(stickId?: StickId): number | null {
-    if (stickId !== undefined) return this.clocks[stickId].offset;
-    return this.clocks[0].offset ?? this.clocks[1].offset;
+    if (stickId !== undefined) return this.devices[stickId].clock.offset;
+    return this.devices[0].clock.offset ?? this.devices[1].clock.offset;
   }
 
   transportStats(): TransportStats {
