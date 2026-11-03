@@ -2,7 +2,7 @@
 // 상태는 liveStore.metronome·settingsStore, 조작은 engine 싱글턴 메서드만 쓴다. 셸 루트에 fixed로 한 인스턴스만 둔다(D3).
 // 메트로놈 패널(MetronomePanel)은 이 컴포넌트가 .shell-dock 안에 같이 마운트한다 — 칩 본체 클릭은 shellStore.dockPanel만 토글한다.
 // 프리셋 칩은 스틱 연결이 필요한데 한 손이라도 끊기면 「준비 필요」(domain/dockChip).
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { dockPresetChipView } from '@/domain/dockChip';
@@ -13,6 +13,7 @@ import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
 import { IconButton } from '@/components/ui/IconButton';
+import { createDockAutoCollapse } from './dockAutoCollapse';
 import './glass-dock.css';
 import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
@@ -58,19 +59,27 @@ export function GlassDock() {
   const m = useLive((s) => s.metronome);
   const clickOn = useSettings((s) => s.metronome);
   const setClickOn = useSettings((s) => s.setMetronome);
-  const collapsed = useSettings((s) => s.dockCollapsed);
-  const setCollapsed = useSettings((s) => s.setDockCollapsed);
+  const savedCollapsed = useSettings((s) => s.dockCollapsed);
+  const setSavedCollapsed = useSettings((s) => s.setDockCollapsed);
   const activePresetId = useSettings((s) => s.activePresetId);
   const presets = usePresets((s) => s.items);
   const immersive = useShellStore((s) => s.immersive);
   const dockPanel = useShellStore((s) => s.dockPanel);
   const setDockPanel = useShellStore((s) => s.setDockPanel);
+  const playRunning = useShellStore((s) => s.playRunning);
   const sensorKind = useSettings((s) => s.sensorKind);
   const connected = useLive((s) => s.connected);
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
   const mode = immersive ? 'play' : 'shell';
+  // 연주 중(카운트인 이후·일시정지 아님)에는 저장된 설정 대신 로컬 자동 접힘 상태를 쓴다(UX-41)
+  const autoMode = mode === 'play' && playRunning;
+  const [auto] = useState(() => createDockAutoCollapse());
+  const [autoCollapsed, setAutoCollapsed] = useState(true);
+  const collapsed = autoMode ? autoCollapsed : savedCollapsed;
+  const expand = () => (autoMode ? auto.expand() : setSavedCollapsed(false));
+  const collapse = () => (autoMode ? auto.collapse() : setSavedCollapsed(true));
   const locked = m.locked;
   const running = locked ? clickOn : m.playing;
   const presetName = presets.find((p) => p.id === activePresetId)?.name ?? '프리셋 없음';
@@ -80,6 +89,14 @@ export function GlassDock() {
     connected,
     presetName,
   });
+
+  useEffect(() => auto.subscribe(setAutoCollapsed), [auto]);
+  useEffect(() => {
+    auto.setActive(autoMode);
+  }, [auto, autoMode]);
+  useEffect(() => {
+    auto.setPanelOpen(dockPanel === 'metronome');
+  }, [auto, dockPanel]);
 
   // 라우트가 바뀌거나 Dock이 접히면 메트로놈 패널을 닫는다
   useEffect(() => {
@@ -102,7 +119,7 @@ export function GlassDock() {
     return (
       // 두 트리에 다른 key를 줘 접힘↔펼침 때 다시 마운트되게 한다(같은 div면 React가 재사용해 진입 애니메이션이 안 걸린다)
       <div key="collapsed" className={`glass-dock motion-dialog collapsed ${mode}`} role="toolbar" aria-label="Dock">
-        <button type="button" className="dock-pill" aria-label="Dock 펼치기" onClick={() => setCollapsed(false)}>
+        <button type="button" className="dock-pill" aria-label="Dock 펼치기" onClick={expand}>
           <span className={`dock-pill-metro${running ? ' on' : ''}`}>
             <MetroIcon size={16} />
           </span>
@@ -118,7 +135,15 @@ export function GlassDock() {
 
   return (
     <>
-      <div key="expanded" className={`glass-dock motion-dialog ${mode}`} role="toolbar" aria-label="Dock">
+      <div
+        key="expanded"
+        className={`glass-dock motion-dialog ${mode}`}
+        role="toolbar"
+        aria-label="Dock"
+        onPointerDownCapture={auto.touch}
+        onKeyDownCapture={auto.touch}
+        onFocusCapture={auto.touch}
+      >
         <SoundToggle />
         <span className="dock-divider" />
         <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
@@ -178,7 +203,7 @@ export function GlassDock() {
             <PauseIcon />
           </IconButton>
         )}
-        <IconButton size="sm" className="dock-collapse" label="Dock 접기" title="접기" onClick={() => setCollapsed(true)}>
+        <IconButton size="sm" className="dock-collapse" label="Dock 접기" title="접기" onClick={collapse}>
           <Chevron up />
         </IconButton>
       </div>
