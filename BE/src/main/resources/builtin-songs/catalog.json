@@ -1,0 +1,17 @@
+[
+  {
+    "title": "기본 8비트",
+    "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
+    "midi": "basic-8beat.mid"
+  },
+  {
+    "title": "8비트 + 필인",
+    "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
+    "midi": "8beat-fill.mid"
+  },
+  {
+    "title": "라이드 16비트",
+    "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
+    "midi": "ride-16beat.mid"
+  }
+]
