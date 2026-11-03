@@ -79,4 +79,6 @@ def test_모르는_라벨은_오류(mdb_root: Path):
 
 def test_대응표는_21종이고_MUSDB_겹침은_12곡():
     assert len(MDB_SUBCLASS_PAD) == 21
+    assert MDB_SUBCLASS_PAD["PHH"] == "HIHAT_PEDAL"
+    assert MDB_SUBCLASS_PAD["CHH"] == MDB_SUBCLASS_PAD["OHH"] == "HIHAT"
     assert len(MDB_IN_MUSDB_TRAIN) == 12

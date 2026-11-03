@@ -68,6 +68,23 @@ def test_songs가_없으면_test_split_beat만(gmd_root: Path):
     assert GmdDataset(_config(gmd_root)).song_ids() == ["drummer1/s1/1", "drummer1/s1/2"]
 
 
+def test_subset과_beat_type으로_학습_분할을_고른다(gmd_root: Path):
+    from ssaplash_ai.bench.datasets.gmd import beat_types_of
+
+    assert GmdDataset(_config(gmd_root, subset="train")).song_ids() == ["drummer1/s1/4"]
+    assert GmdDataset(_config(gmd_root, extra={"beat_type": "all"})).song_ids() == [
+        "drummer1/s1/1",
+        "drummer1/s1/2",
+        "drummer1/s1/3",
+    ]
+    assert GmdDataset(_config(gmd_root, extra={"beat_type": ["fill"]})).song_ids() == [
+        "drummer1/s1/3"
+    ]
+    assert beat_types_of(None) == {"beat"} and beat_types_of(["beat", "all"]) == {"beat", "fill"}
+    with pytest.raises(ValueError, match="beat_type"):
+        GmdDataset(_config(gmd_root, extra={"beat_type": "solo"})).song_ids()
+
+
 def test_load는_드럼_트랙과_MIDI_타격을_준다(gmd_root: Path):
     item = GmdDataset(_config(gmd_root, songs=["drummer1/s1/1"])).load("drummer1/s1/1")
     assert item.mixture.shape == (2, 2 * SR)
@@ -126,3 +143,10 @@ def test_export_subset은_빠진_파일이면_오류(gmd_root: Path, tmp_path: P
     ds = GmdDataset(_config(gmd_root, songs=["drummer1/s1/2"]))
     with pytest.raises(FileNotFoundError, match="drummer1/s1/2"):
         export_subset(ds, tmp_path / "out")
+
+
+def test_GMD_44번은_페달_하이햇_나머지_하이햇은_HIHAT():
+    from ssaplash_ai.bench.datasets.gmd import GMD_PITCH_PAD
+
+    assert GMD_PITCH_PAD[44] == "HIHAT_PEDAL"
+    assert {GMD_PITCH_PAD[p] for p in (42, 22, 46, 26)} == {"HIHAT"}

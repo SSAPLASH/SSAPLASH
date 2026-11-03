@@ -1,6 +1,6 @@
 """서비스 추론 명령줄 진입점 (설계 3장 "명령줄"). AI/ 폴더에서 실행.
 
-- separate: 원곡(mp3·wav) → 드럼 트랙·반주 파일 + separation.json(결과 메타) (S15P31A307-167)
+- separate: 원곡(mp3·wav·flac·opus·m4a) → 드럼 트랙·반주 파일 + separation.json(결과 메타) (S15P31A307-167)
 - transcribe: 드럼 트랙(flac·wav) → chart.json(채보) + transcription.json(결과 메타) (S15P31A307-169)
 - run: separate와 transcribe를 이어서. 마지막에 단계별 시간·메모리 요약
 
@@ -87,7 +87,8 @@ def format_transcription_summary(output: TranscriptionOutput) -> str:
     lines = [
         f"채보: {output.chart_json_path}",
         f"노트 {output.n_notes}개 ({pads or '없음'})",
-        f"길이 {output.duration_ms} ms, bpm {bpm}",
+        f"길이 {output.duration_ms} ms, bpm {bpm}, "
+        f"첫 마디 첫 박(offsetMs) {output.chart['charts'][0]['timing']['offsetMs']} ms",
         f"모델 {output.model_name} ({output.model_version})",
         f"올리기 {output.load_ms} ms, 채보 {output.transcribe_ms} ms, "
         f"최대 GPU 메모리 {vram} MB, 최대 RAM {ram} MB",
@@ -237,7 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sep = sub.add_parser("separate", help="원곡 → 드럼 트랙·반주 파일 + separation.json")
-    sep.add_argument("input", help="원곡 파일 (mp3·wav)")
+    sep.add_argument("input", help="원곡 파일 (mp3·wav·flac·opus·m4a)")
     _add_common(sep)
     sep.add_argument(
         "--config",
@@ -257,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     tr.set_defaults(func=transcribe_cmd)
 
     run = sub.add_parser("run", help="원곡 → 분리 → 채보. 단계별 시간·메모리 요약")
-    run.add_argument("input", help="원곡 파일 (mp3·wav)")
+    run.add_argument("input", help="원곡 파일 (mp3·wav·flac·opus·m4a)")
     _add_common(run)
     run.add_argument(
         "--separation-config",

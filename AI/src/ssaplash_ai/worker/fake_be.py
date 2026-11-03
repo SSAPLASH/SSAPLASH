@@ -35,6 +35,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from ssaplash_ai.chart.audio_io import probe
 from ssaplash_ai.chart.chart_json import validate_chart
 from ssaplash_ai.chart.errors import ChartError
 from ssaplash_ai.worker.payload import payload_hash
@@ -156,8 +157,8 @@ class FakeBackend:
         path = Path(path)
         data = path.read_bytes()
         if duration_ms is None:
-            info = sf.info(str(path))
-            duration_ms = -(-info.frames * 1000 // info.samplerate)
+            info = probe(path)  # m4a처럼 soundfile이 못 여는 형식도 길이를 읽음
+            duration_ms = -(-info.frames * 1000 // info.sample_rate)
         with self._lock:
             job_id = self._next_job
             self._next_job += 1
@@ -794,6 +795,11 @@ def _plain(value: Any) -> Any:
 
 
 def _content_type(path: Path) -> str:
-    return {".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac"}.get(
-        path.suffix.lower(), "application/octet-stream"
-    )
+    return {
+        ".wav": "audio/wav",
+        ".mp3": "audio/mpeg",
+        ".flac": "audio/flac",
+        ".m4a": "audio/mp4",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/ogg",
+    }.get(path.suffix.lower(), "application/octet-stream")

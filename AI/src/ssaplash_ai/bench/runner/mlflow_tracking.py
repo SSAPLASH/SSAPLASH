@@ -12,6 +12,7 @@ MLFLOW_ALLOW_FILE_STORE=true를 켜고 씀 (코랩 드라이브에서 sqlite보�
 - 태그: runId, 모델별 configHash(`config_hash.{model}`)
 - 지표: 모델별 요약값 `{model}/{열}` (report.summarize의 중앙값). -inf·nan은 건너뜀
 - 산출물: 결과 CSV, 요약 표(md), 곡별 CSV, 그래프 PNG
+- 지난 결과 폴더를 다시 올리는 것은 runner.relog (설계 CHART-003-mlflow-relog). 같은 runId 태그가 있으면 건너뜀
 """
 
 from __future__ import annotations
@@ -47,10 +48,12 @@ def log_run(
     tags: dict[str, str] | None = None,
     tracking_uri: str | None = None,
     experiment_name: str = EXPERIMENT_NAME,
+    step_metrics: Sequence[tuple[int, dict[str, float]]] = (),
 ) -> str:
     """run 1개를 만들고 파라미터·모델별 지표·산출물을 기록. mlflow run id 반환.
 
     summary_metrics: {모델 이름: {열 이름: 값}}. 유한한 값만 기록.
+    step_metrics: [(step, {지표 이름: 값}), ...]. 학습 에폭처럼 이력이 있는 지표 (유한한 값만).
     """
     import mlflow
 
@@ -64,12 +67,35 @@ def log_run(
         metrics: dict[str, float] = {}
         for model, values in summary_metrics.items():
             for column, value in values.items():
-                if isinstance(value, int | float) and math.isfinite(value):
+                if _finite(value):
                     metrics[f"{model}/{column}"] = float(value)
         if metrics:
             mlflow.log_metrics(metrics)
+        for step, values in step_metrics:
+            finite = {k: float(v) for k, v in values.items() if _finite(v)}
+            if finite:
+                mlflow.log_metrics(finite, step=step)
         for path in artifacts:
             path = Path(path)
             if path.is_file():
                 mlflow.log_artifact(str(path))
         return run.info.run_id
+
+
+def _finite(value: object) -> bool:
+    return isinstance(value, int | float) and math.isfinite(value)
+
+
+def find_run(run_id: str, experiment_name: str, tracking_uri: str | None = None) -> str | None:
+    """실험 안에서 runId 태그가 run_id인 MLflow run id. 실험이나 run이 없으면 None."""
+    from mlflow.tracking import MlflowClient
+
+    client = MlflowClient(tracking_uri=_as_uri(tracking_uri or default_tracking_uri()))
+    exp = client.get_experiment_by_name(experiment_name)
+    if exp is None:
+        return None
+    escaped = run_id.replace("'", "\\'")
+    runs = client.search_runs(
+        [exp.experiment_id], filter_string=f"tags.runId = '{escaped}'", max_results=1
+    )
+    return runs[0].info.run_id if runs else None

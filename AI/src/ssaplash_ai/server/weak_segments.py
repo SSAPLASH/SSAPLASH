@@ -107,7 +107,8 @@ def process_body(body: bytes) -> JSONResponse:
         notes.good_ms,
         elapsed_ms,
     )
-    return JSONResponse(content=response.model_dump())
+    # tip이 없는 항목은 키를 생략한다(구버전 BE·FE와 같은 모양을 유지)
+    return JSONResponse(content=response.model_dump(exclude_none=True))
 
 
 @router.post("/analysis/weak-segments")

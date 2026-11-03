@@ -1,0 +1,13 @@
+# 실제 녹음 학습 확인 실험의 묶음 표 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 3-3절).
+# 학습 이름 → 그 학습이 안 본 ENST 드러머·MDB 곡. scripts/score_heldout.py가 이 표로 곡을 골라 합침.
+# MDB 묶음은 탐(90타)·페달(523타)이 비슷하게 가도록 나눔: 묶음 1 탐 40·페달 177, 2 탐 25·페달 176, 3 탐 25·페달 170.
+# 묶음 k는 ENST 드러머 k와 짝. 데이터셋 yaml(configs/bench/datasets/real_check/)의 곡 목록도 이 표와 같음.
+mdb_folds:
+  1: [MusicDelta_Beatles, MusicDelta_Punk, MusicDelta_LatinJazz, MusicDelta_ModalJazz, MusicDelta_80sRock, MusicDelta_Hendrix, MusicDelta_Rock, MusicDelta_Shadows]
+  2: [MusicDelta_FreeJazz, MusicDelta_FunkJazz, MusicDelta_BebopJazz, MusicDelta_Gospel, MusicDelta_Britpop, MusicDelta_Reggae, MusicDelta_Rockabilly]
+  3: [MusicDelta_FusionJazz, MusicDelta_Grunge, MusicDelta_SwingJazz, MusicDelta_CoolJazz, MusicDelta_SpeedMetal, MusicDelta_Country1, MusicDelta_Disco, MusicDelta_Zeppelin]
+# 학습 이름 → 안 본 묶음 번호(ENST 드러머 번호와 같음)
+runs:
+  tom_6cls_real_no_d1: 1
+  tom_6cls_real_no_d2: 2
+  tom_6cls_real_no_d3: 3
