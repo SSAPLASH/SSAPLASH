@@ -4,6 +4,7 @@
 import { packetTap } from '@/input/packetTap';
 import {
   CommandType,
+  FLAG_UNCONFIGURED,
   PAD_CODE,
   PacketType,
   PARAM_ACK_END,
@@ -17,7 +18,8 @@ import {
 } from '@/input/stickProtocol';
 import { STICK_PADS } from '@/domain/pads';
 
-type Role = 0 | 1;
+/** flags role. 모의 스틱이 실제로 내는 것은 손(0·1)뿐이고 2·3은 빌더만 받는다(페달 대비) */
+type Role = 0 | 1 | 2 | 3;
 
 const clampI16 = (n: number): number => Math.max(-32768, Math.min(32767, Math.round(n)));
 const clampU8 = (n: number): number => Math.max(0, Math.min(255, Math.round(n)));
@@ -91,15 +93,28 @@ export function buildStatus(f: {
   rssi: number;
   fwMajor: number;
   fwMinor: number;
+  /** flags 비트 5: 부팅 뒤 웹 설정을 못 받음 */
+  unconfigured?: boolean;
 }): Uint8Array<ArrayBuffer> {
   const buf = new Uint8Array(6);
   const v = new DataView(buf.buffer);
   v.setUint8(0, PacketType.STATUS);
-  v.setUint8(1, (f.role ?? 0) & 3);
+  v.setUint8(1, ((f.role ?? 0) & 3) | (f.unconfigured ? FLAG_UNCONFIGURED : 0));
   v.setUint8(2, f.batteryPct === null ? 0xff : clampU8(f.batteryPct));
   v.setInt8(3, Math.max(-128, Math.min(127, Math.round(f.rssi))));
   v.setUint8(4, f.fwMajor & 0xff);
   v.setUint8(5, f.fwMinor & 0xff);
+  return buf;
+}
+
+/** LINK 5바이트(동글이 만든다). flags 0, linkMask bit0 왼손·bit1 오른손·bit2 왼발·bit3 오른발 */
+export function buildLink(f: { linkMask: number; fwMajor?: number; fwMinor?: number }): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(5);
+  buf[0] = PacketType.LINK;
+  buf[1] = 0;
+  buf[2] = f.linkMask & 0xff;
+  buf[3] = (f.fwMajor ?? 2) & 0xff;
+  buf[4] = (f.fwMinor ?? 1) & 0xff;
   return buf;
 }
 
@@ -166,6 +181,8 @@ export interface MockStartOptions {
   poseHz?: number;
   /** HIT 간격(ms). 기본 1000 */
   hitIntervalMs?: number;
+  /** true면 동글 모사: start 시와 1초마다 LINK, 손이 끊기거나 붙으면 즉시 LINK 1회 */
+  dongle?: boolean;
 }
 
 export interface MockDeps {
@@ -175,6 +192,7 @@ export interface MockDeps {
 /** 모의 시계 시작값: 5초 뒤 u32 µs 랩어라운드가 실제로 일어나게 한다 */
 const CLOCK_START_US = 2 ** 32 - 5_000_000;
 const STATUS_INTERVAL_MS = 5000;
+const LINK_INTERVAL_MS = 1000;
 const POSE_SEQ_SKIP_EVERY = 100;
 const HIT_SEQ_SKIP_EVERY = 10;
 const HIT_AMBIGUOUS_EVERY = 20;
@@ -205,15 +223,25 @@ export class MockStick {
   private intervals: ReturnType<typeof setInterval>[] = [];
   private _running = false;
   private startNow = 0;
+  /** 손별 모의 시계 시작 시각. 재부팅하면 그 손만 0부터 다시 시작한다 */
+  private clockStartNow: number[] = [0, 0, 0, 0];
+  /** 손별 모의 시계 시작값(µs). 처음엔 CLOCK_START_US(5초 뒤 랩어라운드), 재부팅한 손은 실제 스틱처럼 0부터 */
+  private clockBaseUs: number[] = [CLOCK_START_US, CLOCK_START_US, CLOCK_START_US, CLOCK_START_US];
+  /** 손이 붙어 있는지(dropHand로 끊으면 false) */
+  private attached: boolean[] = [true, true, true, true];
+  /** STATUS 비트 5. 재부팅 뒤 SET_PAD_TABLE을 받을 때까지 1 */
+  private unconfigured: boolean[] = [false, false, false, false];
+  private dongle = false;
   private sticks: 1 | 2 = 1;
-  private poseSeq: [number, number] = [0, 0];
-  private poseCount: [number, number] = [0, 0];
-  private hitSeq: [number, number] = [0, 0];
+  private poseSeq: number[] = [0, 0, 0, 0];
+  private poseCount: number[] = [0, 0, 0, 0];
+  private hitSeq: number[] = [0, 0, 0, 0];
   private hitCount = 0;
   private bridgeOk = 0;
   private bridgeCrc = 0;
   private bridgeTick = 0;
-  private padCount = 0;
+  /** 손별로 스틱이 가진 패드 개수 */
+  private padCount: number[] = [0, 0, 0, 0];
   private lastElevationDeg = 0;
   /** SET_MODE로 정한 스트림 모드. 기본 HIT_AND_POSE */
   private mode: number = StreamMode.HIT_AND_POSE;
@@ -231,8 +259,8 @@ export class MockStick {
   }
 
   /** 모의 시계 µs (u32 범위로 접는다) */
-  private clockUs(): number {
-    return (Math.round((this.now() - this.startNow) * 1000) + CLOCK_START_US) % 2 ** 32;
+  private clockUs(role: Role = 0): number {
+    return (Math.round((this.now() - this.clockStartNow[role]) * 1000) + this.clockBaseUs[role]) % 2 ** 32;
   }
 
   private publish(bytes: Uint8Array, dir: 'in' | 'out' = 'in'): void {
@@ -251,23 +279,32 @@ export class MockStick {
     if (this._running) return;
     this._running = true;
     this.startNow = this.now();
+    this.clockStartNow = [this.startNow, this.startNow, this.startNow, this.startNow];
+    this.clockBaseUs = [CLOCK_START_US, CLOCK_START_US, CLOCK_START_US, CLOCK_START_US];
+    this.attached = [true, true, true, true];
+    this.unconfigured = [false, false, false, false];
+    this.dongle = opts.dongle ?? false;
     this.sticks = opts.sticks ?? 1;
     const poseHz = opts.poseHz ?? 50;
     const hitMs = opts.hitIntervalMs ?? 1000;
-    this.poseSeq = [0, 0];
-    this.poseCount = [0, 0];
-    this.hitSeq = [0, 0];
+    this.poseSeq = [0, 0, 0, 0];
+    this.poseCount = [0, 0, 0, 0];
+    this.hitSeq = [0, 0, 0, 0];
     this.hitCount = 0;
     this.bridgeOk = 0;
     this.bridgeCrc = 0;
     this.bridgeTick = 0;
-    this.padCount = 0;
+    this.padCount = [0, 0, 0, 0];
     this.mode = StreamMode.HIT_AND_POSE;
 
     // Feather fw 1.0 모사: BOOT 뒤 스틱마다 부팅 바이어스(0.1°/s) 로그
     this.publish(buildLog('BOOT 1.0 nrf52'));
     for (const role of this.roles()) this.publish(buildLog(`BIAS ${3 + role} -2 4`, role));
     this.emitStatus();
+    if (this.dongle) {
+      this.emitLink();
+      this.intervals.push(setInterval(() => this.emitLink(), LINK_INTERVAL_MS));
+    }
     this.intervals.push(setInterval(() => this.emitStatus(), STATUS_INTERVAL_MS));
     this.intervals.push(setInterval(() => this.emitPose(), 1000 / poseHz));
     this.intervals.push(setInterval(() => this.emitHit(hitMs), hitMs));
@@ -286,23 +323,67 @@ export class MockStick {
     return this.sticks === 2 ? [0, 1] : [0];
   }
 
+  /** 붙어 있는 손(끊긴 손은 아무 패킷도 내지 않는다) */
+  private activeRoles(): Role[] {
+    return this.roles().filter((r) => this.attached[r]);
+  }
+
+  private emitStatusOf(role: Role): void {
+    this.publish(buildStatus({ role, batteryPct: null, rssi: -60, fwMajor: 1, fwMinor: 0, unconfigured: this.unconfigured[role] }));
+  }
+
   private emitStatus(): void {
-    for (const role of this.roles()) {
-      this.publish(buildStatus({ role, batteryPct: null, rssi: -60, fwMajor: 1, fwMinor: 0 }));
+    for (const role of this.activeRoles()) this.emitStatusOf(role);
+  }
+
+  /** 동글 LINK. 마스크 = 지금 붙은 손 비트 */
+  private emitLink(): void {
+    if (!this._running) return;
+    const linkMask = this.activeRoles().reduce<number>((m, r) => m | (1 << r), 0);
+    this.publish(buildLink({ linkMask }));
+  }
+
+  /** 시나리오: 그 손을 끊김으로 만든다. 그 손의 STATUS·POSE·HIT·SYNC_ACK가 멈추고, 동글이면 LINK가 즉시 나간다 */
+  dropHand(role: 0 | 1): void {
+    if (!this._running || !this.roles().includes(role) || !this.attached[role]) return;
+    this.attached[role] = false;
+    if (this.dongle) this.emitLink();
+  }
+
+  /**
+   * 시나리오: 끊긴 손을 다시 붙인다. 연결 직후 STATUS 1회를 먼저 내고(동글 순서) 그다음 동글이면 LINK.
+   * reboot면 그 손의 모의 시계를 0부터 다시 시작하고, STATUS 비트 5를 SET_PAD_TABLE을 받을 때까지 1로 유지한다.
+   */
+  restoreHand(role: 0 | 1, opts: { reboot?: boolean } = {}): void {
+    if (!this._running || !this.roles().includes(role)) return;
+    this.attached[role] = true;
+    if (opts.reboot) {
+      this.clockStartNow[role] = this.now();
+      this.clockBaseUs[role] = 0;
+      this.unconfigured[role] = true;
+      this.padCount[role] = 0;
     }
+    this.emitStatusOf(role);
+    if (this.dongle) this.emitLink();
+  }
+
+  /** 시나리오: 스틱 재부팅 = 끊김 + 재부팅 복귀 */
+  reboot(role: 0 | 1): void {
+    this.dropHand(role);
+    this.restoreHand(role, { reboot: true });
   }
 
   /** 스틱마다 poseHz로 13바이트 POSE. 100번째마다 seq를 1 건너뛴다 */
   private emitPose(): void {
     const sec = (this.now() - this.startNow) / 1000;
-    for (const role of this.roles()) {
+    for (const role of this.activeRoles()) {
       this.poseCount[role]++;
       this.poseSeq[role] = (this.poseSeq[role] + (this.poseCount[role] % POSE_SEQ_SKIP_EVERY === 0 ? 2 : 1)) & 0xff;
       const elevationDeg = 20 * Math.sin((2 * Math.PI * sec) / 4 + role);
       const azimuthDeg = 30 * Math.sin((2 * Math.PI * sec) / 6 + role);
       if (role === 0) this.lastElevationDeg = elevationDeg;
       this.publish(
-        buildPose({ role, timestampUs: this.clockUs(), elevationDeg, azimuthDeg, rollDeg: 5 * Math.sin(sec), seq: this.poseSeq[role] }),
+        buildPose({ role, timestampUs: this.clockUs(role), elevationDeg, azimuthDeg, rollDeg: 5 * Math.sin(sec), seq: this.poseSeq[role] }),
       );
     }
   }
@@ -311,13 +392,14 @@ export class MockStick {
   private emitHit(hitMs: number): void {
     this.hitCount++;
     const role = this.roles()[(this.hitCount - 1) % this.sticks];
+    if (!this.attached[role]) return;
     this.hitSeq[role] = (this.hitSeq[role] + (this.hitCount % HIT_SEQ_SKIP_EVERY === 0 ? 2 : 1)) & 0xff;
     const pad = STICK_PADS[Math.floor(Math.random() * STICK_PADS.length)];
     const peakSpeedDps = rand(500, 750);
     const bytes = buildHit({
       role,
       seq: this.hitSeq[role],
-      timestampUs: this.clockUs(),
+      timestampUs: this.clockUs(role),
       pad: PAD_CODE[pad],
       marginDeg: rand(1, 8),
       elevationDeg: this.lastElevationDeg,
@@ -377,18 +459,39 @@ export class MockStick {
     this.publish(buildBridgeStats({ okFrames: this.bridgeOk, crcErrors: this.bridgeCrc, resyncCount: 0 }));
   }
 
-  /** 명령 바가 보낸 바이트를 dir:'out'으로 publish한 뒤 해당 응답을 흘린다 */
+  /**
+   * 명령 바가 보낸 바이트를 dir:'out'으로 publish한 뒤 해당 응답을 흘린다.
+   * ROUTE(0x70)는 풀어서 마스크에 맞는 손에만 안쪽 명령을 적용한다. 감싸지 않은 명령은 붙은 손 전부에 적용한다.
+   */
   handleCommand(bytes: Uint8Array): void {
     if (!this._running || bytes.length === 0) return;
     this.publish(bytes, 'out');
+    if (bytes[0] === CommandType.ROUTE) {
+      if (bytes.length < 3) return;
+      const mask = bytes[1];
+      this.dispatch(
+        bytes.subarray(2),
+        this.activeRoles().filter((r) => (mask & (1 << r)) !== 0),
+      );
+      return;
+    }
+    this.dispatch(bytes, this.activeRoles());
+  }
+
+  /** 안쪽 명령 하나를 대상 손들에 적용하고 응답한다. 대상이 없으면(끊긴 손) 응답도 없다 */
+  private dispatch(bytes: Uint8Array, targets: Role[]): void {
+    if (bytes.length === 0 || targets.length === 0) return;
+    const first = targets[0];
     const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     switch (bytes[0]) {
       case CommandType.GET_PARAMS: {
         STICK_PARAMS.forEach((p, i) => {
-          this.later(REPLY_GAP_MS * (i + 1), () => this.publish(buildParamAck({ paramId: p.id, value: stickParamDefault(p, 'feather') })));
+          this.later(REPLY_GAP_MS * (i + 1), () =>
+            this.publish(buildParamAck({ role: first, paramId: p.id, value: stickParamDefault(p, 'feather') })),
+          );
         });
         this.later(REPLY_GAP_MS * (STICK_PARAMS.length + 1), () =>
-          this.publish(buildParamAck({ paramId: PARAM_ACK_END, value: STICK_PARAMS.length })),
+          this.publish(buildParamAck({ role: first, paramId: PARAM_ACK_END, value: STICK_PARAMS.length })),
         );
         break;
       }
@@ -399,35 +502,44 @@ export class MockStick {
         const meta = stickParamById(id);
         // 범위 밖 값은 잘라서 되돌려 "잘림" 표시를 볼 수 있게 한다
         const applied = meta ? Math.max(meta.min, Math.min(meta.max, value)) : value;
-        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ paramId: id, value: applied })));
+        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role: first, paramId: id, value: applied })));
         break;
       }
       case CommandType.SET_PAD_TABLE: {
         if (bytes.length < 2) break;
         const ctrl = bytes[1];
-        this.padCount = (ctrl & 0x80 ? 0 : this.padCount) + (ctrl & 0x0f);
-        const total = this.padCount;
-        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ paramId: PARAM_ACK_PAD_TABLE, value: total })));
+        for (const role of targets) {
+          this.padCount[role] = (ctrl & 0x80 ? 0 : this.padCount[role]) + (ctrl & 0x0f);
+          // 설정을 받았으니 STATUS 비트 5가 내려간다
+          this.unconfigured[role] = false;
+          const total = this.padCount[role];
+          this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role, paramId: PARAM_ACK_PAD_TABLE, value: total })));
+        }
         break;
       }
       case CommandType.SET_YAW_OFFSET: {
         if (bytes.length < 3) break;
         const value = v.getInt16(1, true);
-        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ paramId: PARAM_ACK_YAW_OFFSET, value })));
+        for (const role of targets) {
+          this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role, paramId: PARAM_ACK_YAW_OFFSET, value })));
+        }
         break;
       }
       case CommandType.RESET_POSE: {
         const value = Math.round(this.lastElevationDeg * 100);
-        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ paramId: PARAM_ACK_RESET_POSE, value })));
+        this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role: first, paramId: PARAM_ACK_RESET_POSE, value })));
         break;
       }
       case CommandType.SYNC: {
         if (bytes.length < 5) break;
         const t0Ms = v.getUint32(1, true);
         // 스틱마다 ACK를 되돌린다. R은 L보다 조금 늦게 보내 rtt가 서로 다르게 보이게 한다
-        for (const role of this.roles()) {
+        for (const role of targets) {
           const delay = REPLY_GAP_MS / 4 + (role === 1 ? 3 : 0);
-          this.later(delay, () => this.publish(buildSyncAck({ role, t0Ms, t1Us: this.clockUs() })));
+          this.later(delay, () => {
+            // 답하기 전에 끊긴 손은 답하지 않는다
+            if (this.attached[role]) this.publish(buildSyncAck({ role, t0Ms, t1Us: this.clockUs(role) }));
+          });
         }
         break;
       }
