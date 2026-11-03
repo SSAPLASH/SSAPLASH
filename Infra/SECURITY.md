@@ -210,7 +210,7 @@
 
 ### 6.2 비공개 버킷
 - 플레이 원본 버킷은 Nginx가 전달하지 않아 외부에서 접근되지 않는다(**확인함**). 앱만 내부 주소로 접근한다.
-- 앱이 쓰는 비공개 버킷 조건: 외부 접근 차단, 버전 관리 꺼짐(버전 관리 여부는 **미확인**, 서버에서 확인 후 기록).
+- 앱이 쓰는 비공개 버킷 조건: 외부 접근 차단, 버전 관리 꺼짐. 음원 임시 버킷 `airdrum-tmp-audio`는 서버에서 확인했다(2026-11-03): `s3.bucket.versioning`이 `Unconfigured`(한 번도 켠 적 없음, 켰다가 멈춘 `Suspended`와 다름)이고 서명 없는 요청은 403이다. 다른 버킷의 버전 관리는 확인 전이다.
 
 ### 6.3 개인정보·저작권
 - 기획이 "사용자 음원 원본은 처리 후 즉시 폐기"를 확정했다. 임시 음원 버킷에 보관 기간(1일, 보험)을 걸었고, 즉시 폐기는 처리 끝에 BE·AI가 삭제하는 것으로 합의했다.
@@ -446,7 +446,7 @@ AI 채보 워커가 GPU가 필요해 EC2 밖(교내 GPU 서버)에서 돌게 되
 - **교내 공인 IP가 바뀌면 워커가 403을 받아 멈춘다.** 알림이 없다. 워커 쪽에서 오류를 알아차려야 한다. IP는 `Infra/nginx/default.conf`에 있고 바꾸려면 MR과 배포가 필요하다.
 - **403이 경로의 존재를 알려 준다**(다른 `/internal/`은 404). 알려져도 인증이 막는다.
 - **요청 수 제한이 없다.** 같은 IP에서 다량의 잘못된 토큰을 보내는 시도는 막지 않는다(토큰 길이가 추측을 막고 BE는 상수 시간 비교를 쓴다). 필요해지면 `limit_req`를 이 location에 더한다.
-- **음원이 공개 도메인을 지난다.** 서명 URL(서명·만료)이 보호하고 URL은 워커에만 간다. 단 **음원 버킷의 버전 관리 여부가 아직 미확인**이다(6.2). 버전 관리가 켜져 있으면 "처리 후 즉시 폐기"가 지켜지지 않으므로 `AUDIO_STORAGE_ENABLED`를 켜기 **전에** 비공개·버전 관리 꺼짐을 확인한다.
+- **음원이 공개 도메인을 지난다.** 서명 URL(서명·만료)이 보호하고 URL은 워커에만 간다. 단 음원 버킷의 버전 관리가 켜져 있으면 "처리 후 즉시 폐기"가 지켜지지 않으므로 `AUDIO_STORAGE_ENABLED`를 켜기 **전에** 비공개·버전 관리 꺼짐을 확인했다(2026-11-03, 6.2). 그 뒤 서버 `.env`에 `AUDIO_STORAGE_ENABLED=true`, `AUDIO_STORAGE_BUCKET=airdrum-tmp-audio`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED=true`를 넣고 `api`를 다시 만들어 `healthy`를 확인했다. `worker1` 토큰도 같은 날 서버에서 난수로 만들어 등록하고(컨테이너 환경에서 설정됨 확인) AI 담당자에게 직접 전달했다. 토큰 없는 `claim`은 401이다. **이 경로는 접근 로그를 끄고 있어(`access_log off`) 출발지 IP를 Nginx 로그로는 볼 수 없다.** 허용 IP와 출발지가 맞는지는 워커의 첫 요청이 403이 아닌지로 확인한다.
 
 **토큰 운영 (3.6과 같은 원칙)**
 - 토큰은 **서버에서 직접**, 화면에 출력하지 않고 만든다: `umask 077` 후 `openssl rand -hex 32 > /안전한/경로/worker-token`, `chmod 600 /안전한/경로/worker-token`(64자, 특수문자가 없어 `.env`에서 안전). 다른 파트가 만든 값을 채팅·메일로 받지 않는다. BE는 `.env`의 값을 읽을 뿐이라 값을 알 필요가 없다.
@@ -492,7 +492,7 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
 
 **조치 (설정 반영, 서버 적용 전)**
 
-헤더 조치 1~3은 `Infra/nginx/default.conf`에 반영했다. 4는 FE 요청 대상이라 아직 요청 전이다.
+헤더 조치 1~3과 5(Permissions-Policy)는 `Infra/nginx/default.conf`에 반영했다. 4(폰트)는 FE에 `mail`로 요청해 2026-11-03에 회신을 받았고, 합의 내용은 아래 "조치 계획"에 적었다. 폰트 관련 설정(CSP의 `cdn.jsdelivr.net` 제거, `font-src 'self'`, `/fonts/` 캐시)은 FE 이전이 배포되기 전까지 넣지 않는다.
 
 **로컬 시험(2026-11-02):** 앞단 Nginx 설정을 그대로 쓰고 뒤쪽을 스텁 컨테이너로 바꿔 응답 헤더를 확인했다. `web` 스텁은 `FE/nginx.conf`를, `api` 스텁은 Spring처럼 `nosniff`·`X-Frame-Options`를 보내게 했다.
 - `/`, `/api/*`, `/health`, 정적 파일에서 `Server: nginx`(버전 없음), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS(`max-age=300`)가 **각각 한 번씩** 나간다. 뒤쪽이 같은 헤더를 보내도 `proxy_hide_header`가 지워서 값이 겹치지 않는다.
@@ -503,7 +503,9 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
 1. 부작용이 거의 없는 헤더부터: `server_tokens off`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`. 한 파일(`include`)로 모아 각 location에 넣는다. **Nginx는 location에 `add_header`가 하나라도 있으면 상위(server) 블록의 `add_header`를 상속하지 않는다.** `Infra/nginx/default.conf`의 `/models/`(Cache-Control을 붙이는 location)처럼 이미 `add_header`가 있는 곳은 공통 헤더를 따로 넣어야 한다. 이 상속 규칙을 몰라서 헤더가 빠지는 실수가 흔하다.
 2. HSTS는 `max-age`를 짧게(5분~1일) 시작해 점차 늘린다. **`includeSubDomains`와 `preload`는 쓰지 않는다.** `ssafy.io`는 우리가 소유한 도메인이 아니라 같은 도메인의 다른 서비스에 영향을 줄 수 있다. 한 번 길게 건 HSTS는 브라우저에서 되돌리기 어렵다.
 3. CSP는 바로 강제하지 않고 `Content-Security-Policy-Report-Only`로 먼저 넣어 위반을 본다. 웹 오디오·ONNX 모델(WASM)·블롭·웹 시리얼을 쓰는 앱이라 정책이 거칠면 화면이 깨질 수 있다. FE와 같이 본다.
-4. FE에 요청: Pretendard 폰트를 `public/fonts/`의 다른 폰트처럼 **자체 호스팅**한다. 외부 CDN 의존을 없애면 SRI·CORS 경고가 사라지고 CSP 허용 목록(`cdn.jsdelivr.net`)이 필요 없어진다. 라이선스(SIL OFL) 파일 동봉은 FE가 확인한다. 이 작업은 `mail`로 요청한다.
+4. **폰트 자체 호스팅(FE 회신, 2026-11-03 합의).** 폰트를 하나씩 옮기는 대신 규약을 정했다: 폰트는 전부 같은 출처에서만 서빙하고, 경로는 `/fonts/{패밀리}/{버전}/`, 내용이 바뀌면 버전 경로를 바꾼다(같은 URL의 내용은 고치지 않는다). Pretendard는 빌드 때 `node_modules`에서 복사하고 git에는 넣지 않는다. FE 이전은 다음 스프린트 초(`[EXTRA] 추가 작업` S15P31A307-289의 서브 작업)다. **Infra는 FE 변경이 배포된 뒤에** 한 번에 적용한다: CSP의 `https://cdn.jsdelivr.net` 제거와 `font-src 'self'`, `/fonts/`의 `Cache-Control: public, max-age=31536000, immutable`. 순서가 거꾸로면(버전 없는 기존 폰트에 장기 캐시가 먼저 걸리면) 파일을 바꿔도 브라우저가 1년간 옛 파일을 쓸 수 있다. 앞단 Nginx에서 `/fonts/`에 `add_header`를 쓰면 server 블록의 보안 헤더를 상속하지 못하므로 다시 적고, 뒤쪽(`FE/nginx.conf`의 `location /`)이 보내는 `Cache-Control: no-cache`와 겹치지 않게 `proxy_hide_header Cache-Control`을 함께 쓴다. `font-src`의 `data:`는 Report-Only에서 위반이 없는 것을 본 뒤 뺀다.
+5. **Permissions-Policy:** `camera=(), microphone=(), geolocation=(), payment=(), usb=()`에 FE가 동의했다. 스틱 연결에 쓰는 **Web Bluetooth(`bluetooth`)와 Web Serial(`serial`)은 목록에 넣지 않고 앞으로도 막지 않는다**(이 둘이 없으면 센서가 연결되지 않는다. `usb`는 Web Serial과 별개 기능이다). `default.conf`의 server 블록에 추가했다(2026-11-03). `/models/*`는 HTML이 아니라 따로 적지 않았다. 문법 검사(`nginx -t`)와 응답 헤더(`/health`)는 로컬 컨테이너에서 확인했다.
+6. **CSP 사전 정보(FE 실측):** 인라인 스타일이 31개 `.tsx` 파일(`style={...}`)에 있어 `style-src 'unsafe-inline'`은 유지한다. 반주 음원은 BE가 준 서명 URL을 `fetch`로 받으므로 그 도메인이 `connect-src`에 있어야 한다. 운영 음원 서명 URL의 공개 주소는 `https://k15a307.p.ssafy.io`(같은 출처, `connect-src 'self'`로 충분)로 확인했다(2026-11-03). 반주 음원용 `CHART_ASSET_PUBLIC_ENDPOINT`도 서버에서 확인했고(2026-11-03) `https://k15a307.p.ssafy.io`로 같은 출처다. 그래서 CSP에 추가할 외부 도메인은 없다.
 
 **공격 스캔 (로컬, 2026-11-02)**
 
@@ -515,7 +517,7 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
   - 업로드 API(`songs/audio`, `songs/midi`, `admin/songs/*/cover·charts/midi·accompaniment`, `plays/*/raw`)에서 **본문이 끊기거나 형식이 깨진 multipart**가 `MultipartException`으로 `500`이 된다(`400`이어야 한다).
   - **검색어(`q`)에 NUL 문자(`%00`)** 를 넣으면 `GET /api/v1/sheets`·`/api/v1/songs`가 DB 오류(`invalid byte sequence`)로 `500`이 된다. 재현했다.
   - 영향: 오류 로그가 불어나고 모니터링 `5xx` 알림이 거짓으로 울릴 수 있다.
-- **CSP 없음(5)·Permissions-Policy 없음·CORP 없음(낮음):** 대상이 `/internal/v1/chart-jobs/*` 같은 API 응답이다. CSP는 `Report-Only`로 넣어 ZAP의 "CSP 없음" 규칙(강제 CSP만 인정)에는 계속 걸린다. Permissions-Policy와 CORP는 웹 오디오·시리얼 같은 기능과 충돌할 수 있어 FE 확인 전에는 넣지 않았다.
+- **CSP 없음(5)·Permissions-Policy 없음·CORP 없음(낮음):** 대상이 `/internal/v1/chart-jobs/*` 같은 API 응답이다. CSP는 `Report-Only`로 넣어 ZAP의 "CSP 없음" 규칙(강제 CSP만 인정)에는 계속 걸린다. Permissions-Policy와 CORP는 웹 오디오·시리얼 같은 기능과 충돌할 수 있어 FE 확인 전에는 넣지 않았다(이후 Permissions-Policy는 FE와 값을 합의해 추가했다. 조치 계획 5. CORP는 FE 답을 받은 뒤 정한다).
 - **Unexpected Content-Type(39), 4xx 응답, 캐시 지시:** 스캐너가 없는 경로를 불러 SPA의 HTML이 돌아온 것 등으로 조치 대상이 아니다.
 - **URL에 `userId` 파라미터(정보):** 텔레메트리 API(`/api/telemetry/sessions`)의 `userId`는 관리자만 쓸 수 있고 일반 사용자는 `403`이다(아래 수동 점검).
 
@@ -588,5 +590,5 @@ ZAP 자동 스캔과 별개로, 같은 로컬 환경(`victim`/`attacker`/`admin`
 
 **후속**
 - 변경 적용 뒤 같은 방법(수동 탐색, 로그인 포함)으로 다시 분석해 경고가 줄었는지 본다. 보안 헤더가 실제로 붙었는지는 응답 헤더로 직접 확인한다.
-- CORP 헤더는 FE 회신(폰트 자체 호스팅·Permissions-Policy)과 함께 처리한다. `Permissions-Policy`·`Cross-Origin-Resource-Policy: same-origin`을 같이 넣을지 FE 확인 후 결정한다.
+- Permissions-Policy는 FE와 값을 합의해 추가했다(조치 계획 5). CORP는 다른 출처가 우리 응답을 태그로 끌어 쓰는 기능이 없는지 FE 답을 받은 뒤, `/api/`에 `same-origin`을 넣을지 정한다.
 - 이번 분석은 **운영에서 확인한 사실(수동 분석)** 과 **로컬에서 확인한 사실(공격 스캔·수동 공격 재현·재검증)** 을 나눠 적었다. 위 헤더 조치는 설정만 바뀌고 아직 서버에 반영되지 않았으므로 "적용함"으로 쓰지 않는다.
