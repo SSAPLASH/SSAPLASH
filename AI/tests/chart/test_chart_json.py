@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -12,6 +13,7 @@ from ssaplash_ai.chart.chart_json import (
     GENERATOR,
     build_chart,
     build_notes,
+    grid_origin_ms,
     notes_by_pad,
     validate_chart,
 )
@@ -47,9 +49,39 @@ def test_모양이_BE_예시와_같음():
     (c,) = chart["charts"]
     assert c["difficulty"] == "NORMAL" and c["notationStatus"] == "UNAVAILABLE"
     assert "sheetPages" not in c
-    assert c["timing"] == {"bpm": 118.5, "offsetMs": 0, "timeSignature": "4/4"}
+    assert c["timing"] == {"bpm": 118.5, "offsetMs": 500, "timeSignature": "4/4"}
     assert c["notes"] == [{"noteId": "n0001", "timeMs": 100, "pad": "SNARE"}]
     validate_chart(chart, 3000)
+
+
+@pytest.mark.parametrize(
+    ("bpm", "downbeat_ms", "expected"),
+    [
+        (120.0, 240, 240),  # 첫 마디 첫 박이 1마디 안이면 그대로
+        (120.0, 30_000, 0),  # 드럼이 30초에 들어옴 → 한 마디 2초씩 당겨 0
+        (84.0, 6_430, 716),  # 한 마디 2857.14ms씩 두 번 당김
+    ],
+)
+def test_offsetMs는_마디_첫_박을_한_마디씩_당긴_가장_이른_마디(
+    bpm: float, downbeat_ms: int, expected: int
+):
+    tempo = replace(TEMPO, bpm=bpm, first_beat_ms=downbeat_ms - 200, first_downbeat_ms=downbeat_ms)
+    assert grid_origin_ms(tempo) == expected
+    chart = build_chart(_hits([(0.1, "KICK", -1)]), 60_000, tempo, "v@0123456789ab", 0)
+    assert chart["charts"][0]["timing"]["offsetMs"] == expected
+    validate_chart(chart, 60_000)
+
+
+def test_offsetMs는_마디_첫_박이_없으면_첫_박():
+    assert grid_origin_ms(replace(TEMPO, first_beat_ms=730, first_downbeat_ms=None)) == 730
+
+
+def test_offsetMs는_bpm_추정_실패나_박이_없으면_0():
+    failed = replace(TEMPO, bpm=120.0, estimated=False, first_beat_ms=None, first_downbeat_ms=None)
+    assert grid_origin_ms(failed) == 0
+    # 박이 모자라 librosa 템포 값만 쓴 경우
+    hinted = replace(TEMPO, first_beat_ms=None, first_downbeat_ms=None)
+    assert grid_origin_ms(hinted) == 0
 
 
 def test_시각순_정렬_같은_시각은_패드_순서():

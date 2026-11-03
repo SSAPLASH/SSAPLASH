@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from helpers import HITS, SR, make_hits, write_wav
+from ssaplash_ai.chart import transcription as transcription_module
 from ssaplash_ai.chart.chart_json import validate_chart
 from ssaplash_ai.chart.config import TempoConfig, TranscriptionConfig
 from ssaplash_ai.chart.errors import ChartInputError, ChartModelError, ChartOutputError
@@ -93,6 +94,8 @@ def test_드럼_트랙에서_채보_JSON과_메타(tmp_path: Path):
     assert out.n_notes == len(HITS) and out.notes_by_pad["KICK"] == len(HITS)
     assert saved["metrics"] == {"transcribeMs": out.transcribe_ms, "durationMs": 2200}
     assert saved["charts"][0]["timing"]["bpm"] == out.bpm > 0
+    # librosa는 마디 첫 박이 없어 첫 박 시각이 격자 원점
+    assert saved["charts"][0]["timing"]["offsetMs"] == out.first_beat_ms
 
     assert out.model_name == "mock_clicks"
     assert re.fullmatch(r"mock_clicks@[0-9a-f]{12}", out.model_version)
@@ -113,6 +116,16 @@ def test_같은_입력이면_같은_JSON(tmp_path: Path):
     a["metrics"].pop("transcribeMs")
     b["metrics"].pop("transcribeMs")
     assert a == b
+
+
+def test_시각_규칙_버전이_바뀌면_generatorVersion도_바뀜(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    module = _module(_config(tmp_path))
+    current = module.model_version
+    monkeypatch.setattr(transcription_module, "TIMING_RULES_VERSION", "timing1")
+    assert module.model_version != current
+    assert module.model_version.split("@")[0] == current.split("@")[0]
 
 
 def test_원곡_길이를_주면_그_값을_씀(tmp_path: Path):

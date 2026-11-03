@@ -3,6 +3,7 @@
 모양: {schemaVersion, generator, generatorVersion, metrics, charts: [{difficulty, notationStatus, notes, timing}]}.
 - generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
 - charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
+- timing.offsetMs: 1마디 1박 시각(격자 원점). grid_origin_ms 참고
 - notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
   패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
 
@@ -29,6 +30,8 @@ BPM_MIN = 0.01
 BPM_MAX = 9999.99
 TIME_SIGNATURE_MAX = 5
 NOTE_ID_WIDTH = 4
+# offsetMs·bpm 계산 규칙 버전. 규칙이 바뀌면 올려서 generatorVersion이 바뀌게 함(transcription.model_version)
+TIMING_RULES_VERSION = "timing2"
 
 # BE 결과 검증이 받는 패드 8종. 정답·채점용 PADS에는 HIHAT_PEDAL이 있지만 채보 출력에서는 내지 않음
 _PAD_ORDER = {pad: i for i, pad in enumerate(SCORED_PADS)}
@@ -58,6 +61,25 @@ def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
     return notes
 
 
+def grid_origin_ms(tempo: TempoEstimate) -> int:
+    """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(1마디 1박, 설계 U14·U16).
+
+    - 마디 첫 박이 있으면(Beat This!) 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
+      마디 시작. 드럼 없는 인트로가 있어도 1마디가 곡 처음 한 마디 안에서 시작함
+    - 마디 첫 박이 없으면(librosa) 첫 박 시각
+    - bpm 추정 실패나 박이 없으면 0
+    """
+    if not tempo.estimated:
+        return 0
+    if tempo.first_downbeat_ms is not None:
+        beats_per_bar = int(tempo.time_signature.split("/")[0])
+        bar_ms = 60_000.0 / tempo.bpm * beats_per_bar
+        return int(round(tempo.first_downbeat_ms % bar_ms))
+    if tempo.first_beat_ms is not None:
+        return tempo.first_beat_ms
+    return 0
+
+
 def build_chart(
     hits: np.ndarray,
     duration_ms: int,
@@ -79,7 +101,7 @@ def build_chart(
                 "notes": build_notes(hits, duration_ms),
                 "timing": {
                     "bpm": tempo.bpm,
-                    "offsetMs": 0,
+                    "offsetMs": grid_origin_ms(tempo),
                     "timeSignature": tempo.time_signature,
                 },
             }
