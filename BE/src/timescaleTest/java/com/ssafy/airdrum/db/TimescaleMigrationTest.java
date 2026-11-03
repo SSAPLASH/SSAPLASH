@@ -45,8 +45,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(18);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(19);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -57,6 +57,8 @@ class TimescaleMigrationTest {
 			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("4");
 			assertThat(scalar(connection, "SELECT id FROM songs WHERE id=" + existingSong)).isEqualTo(existingSong);
 			assertThat(scalar(connection, "SELECT license FROM songs WHERE id=" + existingSong)).isEqualTo("기존 권리 메타");
+			assertThat(scalar(connection, "SELECT level_legacy_fallback FROM songs WHERE id=" + existingSong)).isEqualTo("t");
+			assertThat(scalar(connection, "SELECT song_level IS NULL FROM songs WHERE id=" + existingSong)).isEqualTo("t");
 			assertThat(scalar(connection, "SELECT id FROM charts WHERE id=" + existingChart)).isEqualTo(existingChart);
 			assertThat(scalar(connection, "SELECT notes->0->>'noteId' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("legacy-1");
 			assertThat(scalar(connection, "SELECT timing->>'offsetMs' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("11");
@@ -120,7 +122,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(27);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(28);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {

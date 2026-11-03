@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.SongQueryService;
+import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.SongResponses.SongDetail;
 import com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty;
 
@@ -22,13 +23,15 @@ class MidiUploadService {
 	private final MidiChartConverter converter;
 	private final MidiChartRepository repository;
 	private final SongQueryService songs;
+	private final SongLevelService levels;
 	private final TransactionTemplate tx;
 
-	MidiUploadService(MidiChartConverter converter, MidiChartRepository repository, SongQueryService songs,
+	MidiUploadService(MidiChartConverter converter, MidiChartRepository repository, SongQueryService songs, SongLevelService levels,
 			PlatformTransactionManager manager) {
 		this.converter = converter;
 		this.repository = repository;
 		this.songs = songs;
+		this.levels = levels;
 		this.tx = new TransactionTemplate(manager);
 		this.tx.setTimeout(15);
 	}
@@ -45,6 +48,7 @@ class MidiUploadService {
 			long id = repository.insertSong(userId, cleanTitle, cleanArtist, song);
 			for (var difficulty : Difficulty.values())
 				repository.insertVersion(repository.insertChart(id, difficulty), 1, song.charts().get(difficulty));
+			levels.process(id, true);
 			return id;
 		});
 		return songs.detail(userId, songId);

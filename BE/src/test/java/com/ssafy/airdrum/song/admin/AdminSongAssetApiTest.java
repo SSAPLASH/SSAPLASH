@@ -84,6 +84,7 @@ class AdminSongAssetApiTest {
 	@AfterEach
 	void cleanup() {
 		db.update("DELETE FROM file_cleanup_tasks WHERE object_key LIKE ? OR object_key LIKE ?", "cover/builtin/" + song + "/%", "accompaniment/" + song + "/%");
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?", song);
 		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)", song);
 		db.update("DELETE FROM charts WHERE song_id=?", song);
 		db.update("DELETE FROM songs WHERE id=?", song);

@@ -18,6 +18,7 @@ import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.midi.DifficultyThinner;
 import com.ssafy.airdrum.song.midi.DrumNote;
 import com.ssafy.airdrum.song.midi.DrumPad;
+import com.ssafy.airdrum.song.SongLevelService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,10 +33,11 @@ class WorkerResults {
     private final WorkerStore store;
     private final WorkerPayload payload;
     private final ChartDocumentReader documents;
+    private final SongLevelService levels;
     WorkerResults(JdbcTemplate db, PlatformTransactionManager manager, WorkerQueue queue,
-            WorkerStore store, WorkerPayload payload, ChartDocumentReader documents) {
+            WorkerStore store, WorkerPayload payload, ChartDocumentReader documents, SongLevelService levels) {
         this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(15); this.queue=queue;
-        this.store=store; this.payload=payload; this.documents=documents;
+        this.store=store; this.payload=payload; this.documents=documents; this.levels=levels;
     }
     record Envelope(long jobId,UUID attemptId,UUID resultId,String payloadHash,JsonNode result) {}
     record Receipt(UUID resultId,boolean accepted,String jobStatus,long revision,List<Long> chartVersionIds) {}
@@ -288,6 +290,7 @@ class WorkerResults {
                 versionIds.add(db.queryForObject("INSERT INTO chart_versions(chart_id,version,schema_version,notes,timing,notation_status,note_count,generator,generator_version) VALUES(?,1,1,?::jsonb,?::jsonb,?,?,'ADT_MODEL',?) RETURNING id",Long.class,chartId,selectedNotes,chart.timing(),chart.notationStatus(),selectedCount,version));
             }
             db.update("UPDATE songs SET status='READY',bpm=?,offset_ms=?,time_signature=?,updated_at=clock_timestamp() WHERE id=? AND deleted_at IS NULL",chart.bpm(),chart.offset(),chart.timeSignature(),l.songId());
+            levels.process(l.songId(),true);
             db.update("UPDATE chart_job_attempts SET finished_at=clock_timestamp() WHERE id=?",e.attemptId());
             queue.cleanupInputs(l);
             Long revision=db.queryForObject("UPDATE chart_jobs SET status='DONE',progress=100,transcription_model='ADT_MODEL',metrics=jsonb_build_object('separation',metrics,'transcription',?::jsonb),finished_at=clock_timestamp(),revision=revision+1 WHERE id=? RETURNING revision",Long.class,chart.metrics(),job);
