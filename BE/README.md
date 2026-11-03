@@ -16,7 +16,7 @@
 
 `song-level-1`은 선택된 채보의 유효 노트 수를 곡 길이로 나눈 초당 평균과, 2초 반열린 구간의 최대 노트 수를 2로 나눈 초당 피크를 사용한다.
 평균이 5 미만 / 5 이상 7 미만 / 7 이상이면 각각 입문 / 중급 / 고급이다. 피크는 6 / 8을 같은 방식으로 나누고 두 결과 중 높은 등급을 쓴다.
-동시 노트는 각각 센다. 신규 곡은 최신 HARD 버전이고, V28 적용 시 이미 READY이며 HARD chart 행이 없던 기존 곡은 최고 보유 단계의 최신 버전을 사용한다.
+동시 노트는 각각 센다. 신규 곡은 최신 HARD 버전이고, V29 적용 시 이미 READY이며 HARD chart 행이 없던 기존 곡은 최고 보유 단계의 최신 버전을 사용한다.
 HARD 행이 생기면 HARD로 전환하며 해당 행에 버전이 없거나 최신 버전이 유효하지 않으면 미산정이다. 산정 입력의 버전·규칙·곡 길이를 기록하고 입력 변경 시 재산정한다.
 
 이 경계는 내장 연습곡 3개, 합성 패턴 7개, 소수 노트 MIDI 테스트 fixture로 확인한 MVP 휴리스틱이다. 사용자 체감이나 교육적 난이도를 검증한 값이 아니며
@@ -283,7 +283,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V28을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V29를 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -422,6 +422,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V26 | `V26__add_users_signup_consents.sql` | 가입 동의 `users.data_consent_version`·`terms_version`·`terms_agreed_at`·`privacy_version`·`privacy_agreed_at`(판 `varchar(50)`, 시각 `timestamptz`, 모두 NULL 허용). `ck_users_data_consent`를 값·시각·판 셋이 함께 있거나 함께 없게 교체, `ck_users_terms_consent`·`ck_users_privacy_consent`(판·시각 함께, 판은 공백만 불가) 추가. 판 없이 값만 있던 행은 세 값 모두 NULL로 되돌린다. 기존 행은 채우지 않는다(동의 전으로 시작) | -199 |
 | V27 | `V27__add_recording_hits.sql` | `recordings`에 녹음 시퀀스 `hits`(jsonb 배열)·`hit_count`(1~50,000, 배열 길이와 같음)·`client_key`(uuid)·`mode`·`input_source`·`schema_version`·`started_at`·`payload_hash`·`updated_at` 추가(모두 NOT NULL), `duration_ms` NOT NULL. 부분 유일 인덱스 `recordings_user_client_key_idx`(user_id, client_key) WHERE deleted_at IS NULL. 기존 행이 있으면 실패한다(쓰는 코드가 없었음) | -256 |
 | V28 | `V28__add_recording_chart_version.sql` | `recordings.chart_version_id`(bigint, NULL 허용, FK `chart_versions`) 추가. 녹음이 플레이와 별개로 채보 버전을 기억해 목록 `song`·상세 `timing`이 플레이 삭제 뒤에도 남는다. 기존 행은 연결된 플레이의 `chart_version_id`로 채운다 | -257 |
+| V29 | `V29__add_song_level.sql` | 곡 난이도·산정 채보 버전·규칙·곡 길이와 기존 곡 예외 대상을 저장한다 | -269 |
 
 규칙:
 
@@ -448,7 +449,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V28까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V29까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
