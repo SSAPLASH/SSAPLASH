@@ -30,6 +30,8 @@ DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
 OUTPUT_FORMATS = ("flac", "wav")
 # beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
 TEMPO_METHODS = ("beat_this", "librosa")
+# offsetMs 원점 방식(설계 v0.5). downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
+ORIGIN_MODES = ("downbeat", "notes")
 # BE WorkerResults가 schemaVersion 1만 받음
 SCHEMA_VERSIONS = (1,)
 
@@ -108,11 +110,13 @@ class TempoConfig:
     min_bpm: float = 60.0
     max_bpm: float = 200.0
     time_signature: str = "4/4"
+    # offsetMs 원점 방식. ORIGIN_MODES 중 하나
+    origin: str = "downbeat"
 
     @classmethod
     def from_dict(cls, raw: dict | None) -> TempoConfig:
         raw = raw or {}
-        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature"})
+        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature", "origin"})
         if unknown:
             raise ValueError(f"모르는 tempo 필드: {unknown}")
         method = str(raw.get("method", cls.method)).lower()
@@ -128,7 +132,16 @@ class TempoConfig:
         time_signature = str(raw.get("time_signature", cls.time_signature))
         if not re.fullmatch(r"[1-9][0-9]?/(1|2|4|8|16|32)", time_signature):
             raise ValueError(f"tempo.time_signature 형식 오류 (예: 4/4): {time_signature!r}")
-        return cls(method=method, min_bpm=min_bpm, max_bpm=max_bpm, time_signature=time_signature)
+        origin = str(raw.get("origin", cls.origin)).lower()
+        if origin not in ORIGIN_MODES:
+            raise ValueError(f"tempo.origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
+        return cls(
+            method=method,
+            min_bpm=min_bpm,
+            max_bpm=max_bpm,
+            time_signature=time_signature,
+            origin=origin,
+        )
 
 
 @dataclass

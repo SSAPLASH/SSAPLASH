@@ -3,7 +3,8 @@
 모양: {schemaVersion, generator, generatorVersion, metrics, charts: [{difficulty, notationStatus, notes, timing}]}.
 - generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
 - charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
-- timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고
+- timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고. origin이 notes면 align_origin_to_notes로
+  킥·스네어 노트에 맞춰 박 안 위치를 보정
 - notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
   패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
 
@@ -17,6 +18,7 @@ import math
 import numpy as np
 
 from ssaplash_ai.bench.datasets.pads import SCORED_PADS
+from ssaplash_ai.chart.config import ORIGIN_MODES
 from ssaplash_ai.chart.errors import ChartOutputError
 from ssaplash_ai.chart.tempo import TempoEstimate
 
@@ -31,7 +33,13 @@ BPM_MAX = 9999.99
 TIME_SIGNATURE_MAX = 5
 NOTE_ID_WIDTH = 4
 # offsetMs·bpm 계산 규칙 버전. 규칙이 바뀌면 올려서 generatorVersion이 바뀌게 함(transcription.model_version)
-TIMING_RULES_VERSION = "timing2"
+TIMING_RULES_VERSION = "timing3"
+# 원점 보정에 쓰는 노트. 8분·16분에 많은 하이햇·심벌은 빼고 4분 박에 주로 오는 패드만
+ORIGIN_ALIGN_PADS = ("KICK", "SNARE")
+# 격자 박에서 이 거리 안의 노트만 보정에 씀
+ORIGIN_ALIGN_WINDOW_MS = 60.0
+# 쓸 노트가 이보다 적으면 보정하지 않음
+ORIGIN_ALIGN_MIN_NOTES = 16
 
 # BE 결과 검증이 받는 패드 8종. 정답·채점용 PADS에는 HIHAT_PEDAL이 있지만 채보 출력에서는 내지 않음
 _PAD_ORDER = {pad: i for i, pad in enumerate(SCORED_PADS)}
@@ -80,6 +88,30 @@ def grid_origin_ms(tempo: TempoEstimate) -> int:
     return 0
 
 
+def align_origin_to_notes(origin_ms: int, tempo: TempoEstimate, notes: list[dict]) -> int:
+    """grid_origin_ms 값을 킥·스네어 노트로 박 안 위치만 보정한 원점(설계 v0.5 "보정 규칙").
+
+    노트마다 원점 격자에서 가장 가까운 박까지의 차이를 구해 ORIGIN_ALIGN_WINDOW_MS 안의 것만 모으고, 그 중앙값만큼
+    원점을 옮김. 보정량이 창 안이라 마디 첫 박이 다른 박으로 바뀌지 않음. 결과는 0ms 이상이고, 원점이 첫 마디
+    안이었으면 계속 첫 마디 안. bpm 추정 실패이거나 쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적으면 그대로
+    """
+    if not tempo.estimated:
+        return origin_ms
+    beat_ms = 60_000.0 / tempo.bpm
+    bar_ms = beat_ms * int(tempo.time_signature.split("/")[0])
+    times = np.array([n["timeMs"] for n in notes if n["pad"] in ORIGIN_ALIGN_PADS], dtype=float)
+    d = (times - origin_ms + beat_ms / 2) % beat_ms - beat_ms / 2
+    d = d[np.abs(d) <= ORIGIN_ALIGN_WINDOW_MS]
+    if len(d) < ORIGIN_ALIGN_MIN_NOTES:
+        return origin_ms
+    aligned = origin_ms + int(round(float(np.median(d))))
+    if aligned < 0:
+        aligned += bar_ms
+    elif origin_ms < bar_ms <= aligned:
+        aligned -= bar_ms
+    return int(round(aligned))
+
+
 def build_chart(
     hits: np.ndarray,
     duration_ms: int,
@@ -87,8 +119,15 @@ def build_chart(
     generator_version: str,
     transcribe_ms: int,
     schema_version: int = 1,
+    origin: str = "downbeat",
 ) -> dict:
-    """채보 JSON dict. 검증은 validate_chart를 따로 부름."""
+    """채보 JSON dict. 검증은 validate_chart를 따로 부름. origin은 ORIGIN_MODES 중 하나."""
+    if origin not in ORIGIN_MODES:
+        raise ValueError(f"origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
+    notes = build_notes(hits, duration_ms)
+    offset_ms = grid_origin_ms(tempo)
+    if origin == "notes":
+        offset_ms = align_origin_to_notes(offset_ms, tempo, notes)
     return {
         "schemaVersion": schema_version,
         "generator": GENERATOR,
@@ -98,10 +137,10 @@ def build_chart(
             {
                 "difficulty": DIFFICULTY,
                 "notationStatus": NOTATION_STATUS,
-                "notes": build_notes(hits, duration_ms),
+                "notes": notes,
                 "timing": {
                     "bpm": tempo.bpm,
-                    "offsetMs": grid_origin_ms(tempo),
+                    "offsetMs": offset_ms,
                     "timeSignature": tempo.time_signature,
                 },
             }

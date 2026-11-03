@@ -26,5 +26,8 @@ tempo:
   max_bpm: 200
   # 박자 추정은 안 함. 고정값
   time_signature: 4/4
+  # offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 격자 박에서 60ms 안의 킥·스네어 노트
+  # 중앙값만큼 박 안 위치를 옮김. Beat This! 박이 드럼보다 늦게 잡혀 메트로놈 클릭이 킥보다 늦게 울리던 것을 줄임
+  origin: notes
 # 이보다 긴 드럼 트랙은 입력 오류
 max_duration_sec: 600

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -126,6 +127,15 @@ def test_시각_규칙_버전이_바뀌면_generatorVersion도_바뀜(
     monkeypatch.setattr(transcription_module, "TIMING_RULES_VERSION", "timing1")
     assert module.model_version != current
     assert module.model_version.split("@")[0] == current.split("@")[0]
+
+
+def test_원점_방식이_바뀌면_generatorVersion도_바뀜(tmp_path: Path):
+    config = _config(tmp_path)
+    downbeat = _module(config).model_version
+    config.tempo = replace(config.tempo, origin="notes")
+    notes = _module(config).model_version
+    assert notes != downbeat
+    assert notes.split("@")[0] == downbeat.split("@")[0]
 
 
 def test_원곡_길이를_주면_그_값을_씀(tmp_path: Path):
