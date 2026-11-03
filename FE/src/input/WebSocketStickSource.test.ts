@@ -307,6 +307,28 @@ describe('WebSocketStickSource', () => {
     });
   });
 
+  describe('autoConnect', () => {
+    it('이미 열려 있으면 무동작, 끊긴 뒤에는 connect로 다시 연다', async () => {
+      await connectAll(src);
+      await src.autoConnect();
+      expect(FakeWS.instances).toHaveLength(1);
+      FakeWS.instances[0].drop();
+      expect(src.state).toBe('disconnected');
+      const p = src.autoConnect();
+      FakeWS.instances[1].open();
+      await p;
+      expect(FakeWS.instances).toHaveLength(2);
+      expect(src.state).toBe('connected');
+    });
+
+    it('연결 실패해도 던지지 않고 상태는 connect가 남긴 error', async () => {
+      const p = src.autoConnect();
+      FakeWS.instances[0].fail();
+      await expect(p).resolves.toBeUndefined();
+      expect(src.state).toBe('error');
+    });
+  });
+
   describe('디스크립터', () => {
     it('url2 옵션을 반영한다', () => {
       const keys = webSocketDescriptor.options?.map((o) => o.key);

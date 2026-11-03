@@ -12,7 +12,8 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import './PauseOverlay.css';
 
-export type PauseReason = 'user' | 'disconnected' | 'menu';
+// reconnected: 끊김에서 복귀한 직후 약 1초(「재연결 성공!」). 페이지가 정하고, 버튼이 없다(useReconnectResume)
+export type PauseReason = 'user' | 'disconnected' | 'reconnected' | 'menu';
 
 interface Props {
   reason: PauseReason;
@@ -36,17 +37,20 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
   const max = useReconnect((s) => s.max);
   const available = useReconnect((s) => s.available);
   const reconnect = useReconnect((s) => s.reconnect);
+  const hint = useReconnect((s) => s.hint);
 
   // 닫힐 때 body로 보낸다(D3): 이전 버튼으로 복원하면 Space(킥)가 그 버튼을 눌러 다시 멈춘다
   useDialogFocus({
     open: true,
     dialogRef,
     initialRef: primaryRef,
-    onEscape: canResume ? onResume : undefined,
+    onEscape: canResume && reason !== 'reconnected' ? onResume : undefined,
     returnFocus: 'blur',
   });
 
-  const disconnected = reason === 'disconnected';
+  // reconnected 카드는 페이지가 정한 reason을 따른다(스토어의 reconnected는 1초 뒤 idle로 돌아간다)
+  const reconnected = reason === 'reconnected';
+  const disconnected = reason === 'disconnected' || reconnected;
   return (
     <div className="play-pause-scrim motion-overlay">
       <div ref={dialogRef} className="play-pause-wrap">
@@ -54,7 +58,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
           <DisconnectNotice
             left={connected[0]}
             right={connected[1]}
-            status={{ status: reconnectState, attempt, max }}
+            status={reconnected ? { status: 'reconnected', attempt: 0, max } : { status: reconnectState, attempt, max, hint }}
             onExit={onLeave}
             onReconnect={available ? () => void reconnect() : undefined}
             onOpenSetup={() => navigate('/setup', { state: { returnTo } })}

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSerialStickSource } from './WebSerialStickSource';
 import { frame } from './serialFraming';
+import { buildLink, buildStatus, buildSyncAck } from '@/monitor/mockStick';
 
 function fakePort(open: () => Promise<void>) {
   return {
@@ -46,6 +47,17 @@ describe('WebSerialStickSource.autoConnect', () => {
     await expect(src.autoConnect()).resolves.toBeUndefined();
     expect(src.state).toBe('disconnected');
     expect(serial.requestPort).not.toHaveBeenCalled();
+  });
+
+  it('이미 열려 있으면 다시 열지 않는다(같은 포트 이중 open 방지)', async () => {
+    const port = fakePort(async () => {});
+    stubSerial([port]);
+    const src = new WebSerialStickSource();
+    await src.autoConnect();
+    await src.autoConnect();
+    expect(port.open).toHaveBeenCalledOnce();
+    expect(src.state).toBe('connected');
+    await src.disconnect();
   });
 
   it('열기에 실패해도 던지지 않고 끊김으로 둔다', async () => {
@@ -289,6 +301,192 @@ describe('WebSerialStickSource LINK 연결 판정', () => {
     await expect(src.connect()).resolves.toBeUndefined();
     expect(src.state).toBe('connected');
     expect(port.close).not.toHaveBeenCalled();
+    await src.disconnect();
+  });
+});
+
+describe('WebSerialStickSource 재연결(비트 5·시계 초기화·reopen·connect 이벤트)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function open() {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'] });
+    const live = livePort();
+    const serial = stubSerial([live.port]);
+    const src = new WebSerialStickSource();
+    const status: Array<{ stickId: number; connected: boolean; batteryPct?: number; unconfigured?: boolean }> = [];
+    src.subscribe((e) => {
+      if (e.kind === 'status') status.push({ stickId: e.stickId, connected: e.connected, batteryPct: e.batteryPct, unconfigured: e.unconfigured });
+    });
+    await src.autoConnect();
+    await vi.advanceTimersByTimeAsync(300); // 포트를 연 직후 SYNC 5회가 끝나게 둔다
+    return { src, serial, status, ...live };
+  }
+  const syncCount = (written: number[][]) => written.filter((w) => w[0] === 0x10).length;
+  const settle = (ms: number) => vi.advanceTimersByTimeAsync(ms);
+  const feedAndSettle = async (feed: (p: Uint8Array) => void, p: Uint8Array, ms = 300) => {
+    feed(p);
+    await settle(ms);
+  };
+
+  it('동글 순서: LINK 0b01 → STATUS(role 1, 비트 5) → LINK 0b11이면 오른손 연결을 설정 전과 함께 한 번 알리고 SYNC 5회', async () => {
+    const { src, feed, written, status } = await open();
+    await feedAndSettle(feed, buildLink({ linkMask: 0b01 }));
+    const base = syncCount(written);
+    status.length = 0;
+    await feedAndSettle(feed, buildStatus({ role: 1, batteryPct: 64, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    expect(status).toEqual([]); // 안 붙은 손은 보류
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    expect(status).toEqual([{ stickId: 1, connected: true, batteryPct: 64, unconfigured: true }]);
+    // 비트 5와 LINK 0→1이 2초 안에 겹쳐도 SYNC는 한 묶음(5회)
+    expect(syncCount(written) - base).toBe(5);
+    await src.disconnect();
+  });
+
+  it('비트 5가 LINK 뒤에 오면 즉시 unconfigured를 실어 알리고 SYNC 5회', async () => {
+    const { src, feed, written, status } = await open();
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    await settle(2500); // LINK 0→1 초기화와 2초 이상 떨어뜨린다
+    const base = syncCount(written);
+    status.length = 0;
+    await feedAndSettle(feed, buildStatus({ role: 1, batteryPct: 70, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    expect(status).toEqual([{ stickId: 1, connected: true, batteryPct: 70, unconfigured: true }]);
+    expect(syncCount(written) - base).toBe(5);
+    await src.disconnect();
+  });
+
+  it('비트 5 = 0인 LINK 0→1은 unconfigured false, 시계 초기화와 SYNC 5회', async () => {
+    const { src, feed, written, status } = await open();
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    // 재연결 전에 SYNC_ACK로 offset을 잡아 둔다
+    const t0 = written.filter((w) => w[0] === 0x10).at(-1)!;
+    const key = new DataView(new Uint8Array(t0).buffer).getUint32(1, true);
+    await feedAndSettle(feed, buildSyncAck({ role: 1, t0Ms: key, t1Us: 5_000_000 }), 0);
+    expect(src.clockOffsetOf(1)).not.toBeNull();
+    await settle(2500);
+    await feedAndSettle(feed, buildLink({ linkMask: 0b01 }));
+    const base = syncCount(written);
+    status.length = 0;
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }), 0);
+    expect(status).toEqual([{ stickId: 1, connected: true, batteryPct: undefined, unconfigured: false }]);
+    expect(src.clockOffsetOf(1)).toBeNull();
+    await settle(300);
+    expect(syncCount(written) - base).toBe(5);
+    await src.disconnect();
+  });
+
+  it('2초 안의 두 번째 트리거는 SYNC를 다시 보내지 않는다', async () => {
+    const { src, feed, written } = await open();
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    await settle(2500);
+    const base = syncCount(written);
+    await feedAndSettle(feed, buildStatus({ role: 0, batteryPct: 70, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    await feedAndSettle(feed, buildStatus({ role: 0, batteryPct: 70, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    expect(syncCount(written) - base).toBe(5);
+    await src.disconnect();
+  });
+
+  it('재부팅한 손은 새 SYNC_ACK로 offset이 바뀐다(옛 bestRtt·랩 상태가 남지 않는다)', async () => {
+    const { src, feed, written } = await open();
+    const lastKey = () => new DataView(new Uint8Array(written.filter((w) => w[0] === 0x10).at(-1)!).buffer).getUint32(1, true);
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }), 300);
+    // 가동 1시간이 넘은 스틱 시계로 offset 설정
+    await feedAndSettle(feed, buildSyncAck({ role: 0, t0Ms: lastKey(), t1Us: 3_600_000_000 }), 0);
+    const before = src.clockOffsetOf(0)!;
+    expect(before).not.toBeNull();
+    await settle(2500);
+    await feedAndSettle(feed, buildLink({ linkMask: 0b10 })); // 왼손 끊김
+    await settle(2500);
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }), 300); // 복귀(재부팅): 시계 0부터
+    await settle(60); // 지연이 이전보다 큰 응답
+    await feedAndSettle(feed, buildSyncAck({ role: 0, t0Ms: lastKey(), t1Us: 100 }), 0);
+    const after = src.clockOffsetOf(0)!;
+    expect(after).not.toBeNull();
+    expect(Math.abs(after - before)).toBeGreaterThan(3_000_000);
+    await src.disconnect();
+  });
+
+  it('예전 동글(LINK 없음): STATUS가 오면 그 손 연결을 알린다', async () => {
+    const { src, feed, status } = await open();
+    await feedAndSettle(feed, buildStatus({ role: 1, batteryPct: 50, rssi: -50, fwMajor: 2, fwMinor: 1 }));
+    expect(status).toEqual([{ stickId: 1, connected: true, batteryPct: 50, unconfigured: false }]);
+    await src.disconnect();
+  });
+
+  it('role 2·3 STATUS·SYNC_ACK는 이벤트를 내지 않는다', async () => {
+    const { src, feed, status } = await open();
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    await settle(2000);
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 })); // 하트비트: 3초 넘게 끊겨 stale이 되지 않게
+    status.length = 0;
+    const events: unknown[] = [];
+    src.subscribe((e) => events.push(e));
+    await feedAndSettle(feed, buildStatus({ role: 2, batteryPct: 50, rssi: -50, fwMajor: 2, fwMinor: 1 }));
+    await feedAndSettle(feed, buildStatus({ role: 3, batteryPct: 50, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    await feedAndSettle(feed, buildSyncAck({ role: 2, t0Ms: 1, t1Us: 1000 }));
+    expect(events).toEqual([]);
+    expect(status).toEqual([]);
+    await src.disconnect();
+  });
+
+  it('reopen: 포트를 닫고 같은 포트를 다시 열며 양손 끊김을 알린다', async () => {
+    const { src, port, status } = await open();
+    status.length = 0;
+    await src.reopen();
+    expect(port.close).toHaveBeenCalledTimes(1);
+    expect(port.open).toHaveBeenCalledTimes(2);
+    expect(status.slice(0, 2)).toEqual([
+      { stickId: 0, connected: false, batteryPct: undefined, unconfigured: undefined },
+      { stickId: 1, connected: false, batteryPct: undefined, unconfigured: undefined },
+    ]);
+    expect(src.state).toBe('connected');
+    expect(src.transportStats().reconnects).toBe(1);
+    await src.disconnect();
+
+  });
+
+  it('reopen: 포트가 안 열려 있으면 autoConnect와 같다', async () => {
+    const live = livePort();
+    const serial = stubSerial([live.port]);
+    const src = new WebSerialStickSource();
+    await src.reopen();
+    expect(serial.getPorts).toHaveBeenCalled();
+    expect(live.port.open).toHaveBeenCalledOnce();
+    expect(src.state).toBe('connected');
+    await src.disconnect();
+  });
+
+  it('reopen: 다시 열기에 실패해도 던지지 않고 끊김으로 둔다', async () => {
+    const { src, port } = await open();
+    port.open.mockRejectedValueOnce(new Error('busy'));
+    await expect(src.reopen()).resolves.toBeUndefined();
+    expect(src.state).toBe('disconnected');
+  });
+
+  it('serial connect 이벤트: 포트가 닫혀 있으면 autoConnect로 연다', async () => {
+    const live = livePort();
+    const serial = stubSerial([]);
+    const src = new WebSerialStickSource();
+    await src.autoConnect(); // 허락한 포트 없음 → 끊김
+    const call = serial.addEventListener.mock.calls.find((c) => c[0] === 'connect');
+    expect(call).toBeDefined();
+    const handler = call![1] as () => void;
+    // 동글을 꽂으면 getPorts가 포트를 돌려준다
+    serial.getPorts.mockResolvedValue([live.port]);
+    serial.getPorts.mockClear();
+    handler();
+    await tick();
+    expect(serial.getPorts).toHaveBeenCalled();
+    expect(live.port.open).toHaveBeenCalledOnce();
+    expect(src.state).toBe('connected');
+    // 이미 열려 있으면 무시
+    handler();
+    await tick();
+    expect(live.port.open).toHaveBeenCalledOnce();
+    // 리스너는 인스턴스당 한 번만 등록한다
+    expect(serial.addEventListener.mock.calls.filter((c) => c[0] === 'connect')).toHaveLength(1);
     await src.disconnect();
   });
 });

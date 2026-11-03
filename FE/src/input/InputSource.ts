@@ -25,6 +25,8 @@ export interface InputSource {
   disconnect(): Promise<void>;
   /** 사용자 제스처 없이 이전에 허락받은 연결만 조용히 다시 연다. 열 게 없거나 실패하면 끊김으로 두고 던지지 않는다. 지원 안 하면 없음 */
   autoConnect?(): Promise<void>;
+  /** 연결이 살아 있어도 전송 계층을 닫고 다시 연다(재연결 시도). 실패해도 던지지 않는다. Web Serial만 구현 */
+  reopen?(): Promise<void>;
   subscribe(listener: StickEventListener): () => void;
   onState(listener: StateListener): () => void;
   /** 자세 스트림 켜기/끄기. 캘리브레이션·자유 모드에서 켠다. 지원 안 하면 무시 */
