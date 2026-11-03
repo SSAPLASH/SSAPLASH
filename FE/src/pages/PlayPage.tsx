@@ -18,7 +18,7 @@ import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadStates } from '@/components/drum/usePadStates';
-import { useShell } from '@/components/shell/useShell';
+import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
@@ -90,6 +90,8 @@ export function PlayPage() {
 
   // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
+  // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
+  usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
 
   const connected = useLive((l) => l.connected);
   const reconnectAvailable = useReconnect((r) => r.available);

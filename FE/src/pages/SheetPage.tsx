@@ -20,7 +20,7 @@ import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadStates } from '@/components/drum/usePadStates';
-import { useShell } from '@/components/shell/useShell';
+import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
@@ -392,6 +392,8 @@ export function SheetPage() {
 
   // 연주 중(play)은 셸을 숨긴 전체 화면. 곡 선택·준비는 TopBar 제목 "악보 연습"
   useShell({ title: '악보 연습', immersive: stage === 'play' });
+  // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
+  usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
 
   // 연주 중 프레임: 세션 tick·종료 감지는 PlayClock, HUD는 4Hz
   useEffect(() => {

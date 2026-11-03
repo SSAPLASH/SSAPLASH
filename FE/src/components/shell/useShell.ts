@@ -21,3 +21,12 @@ export function useShell({ title, immersive }: ShellOptions): void {
     return () => useShellStore.getState().setShell({ immersive: false });
   }, [immersive]);
 }
+
+/** 곡이 실제로 진행 중인지 셸에 알린다(Dock 자동 접힘용). 언마운트·값 변경 전에는 false로 되돌린다. */
+export function usePlayRunning(running: boolean): void {
+  useEffect(() => {
+    if (!running) return;
+    useShellStore.getState().setPlayRunning(true);
+    return () => useShellStore.getState().setPlayRunning(false);
+  }, [running]);
+}
