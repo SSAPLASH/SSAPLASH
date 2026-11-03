@@ -2,6 +2,7 @@
 // PARAM_ACK_PAD_TABLE(적용 후 패드 개수)로 적용을 확인한다. 센서가 연결된 동안만 동작한다.
 // input → store 직접 import는 금지라 상태는 onStatus 콜백으로 밖에 알린다(bootstrap이 liveStore에 연결).
 import type { CalibrationProfile, PadTableStatus } from '@/domain/calibration';
+import type { StickId } from '@/domain/events';
 import { STICK_PADS } from '@/domain/pads';
 import type { InputSource } from './InputSource';
 import { packetTap } from './packetTap';
@@ -18,7 +19,8 @@ class PadTableSync {
   private source: InputSource | null = null;
   private offState: (() => void) | null = null;
   private offTap: (() => void) | null = null;
-  private lastHash: string | null = null;
+  /** 대상(전체 'all'·손별)마다 마지막으로 보낸 표의 해시. 전체 전송은 세 키를 모두 채운다 */
+  private lastHash = new Map<'all' | StickId, string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private windowOpen = false;
   private status: PadTableStatus | null = null;
@@ -56,7 +58,7 @@ class PadTableSync {
 
   /** 연결이 끊기거나 소스가 바뀌면 보낸 표를 잊는다 */
   private forget(): void {
-    this.lastHash = null;
+    this.lastHash.clear();
     this.clearWindow();
     if (this.status !== null) this.report(null);
   }
@@ -72,8 +74,11 @@ class PadTableSync {
     });
   }
 
-  /** 프로필의 스틱 패드 앵커를 스틱에 보낸다. 직전과 같은 표(소수 2자리 기준)면 보내지 않는다 */
-  push(profile: CalibrationProfile): void {
+  /**
+   * 프로필의 스틱 패드 앵커를 스틱에 보낸다. 직전과 같은 표(소수 2자리 기준)면 보내지 않는다.
+   * stickId가 있으면 그 손에만(ROUTE로 감싸져 패킷당 2개), force면 같은 표여도 보낸다. 해시는 대상별로 기억한다
+   */
+  push(profile: CalibrationProfile, opts?: { stickId?: StickId; force?: boolean }): void {
     const src = this.source;
     if (!src || !src.sendCommand || src.state !== 'connected') return;
     const entries: PadTableEntry[] = [];
@@ -82,12 +87,21 @@ class PadTableSync {
       if (a) entries.push({ pad, elevationDeg: a.pitch, azimuthDeg: a.yaw, radiusDeg: a.radius });
     }
     const hash = JSON.stringify(entries.map((e) => [e.pad, round2(e.elevationDeg), round2(e.azimuthDeg), round2(e.radiusDeg)]));
-    if (hash === this.lastHash) return;
-    this.lastHash = hash;
-    for (const bytes of encodeSetPadTable(entries, true)) src.sendCommand(bytes);
+    const stickId = opts?.stickId;
+    const key = stickId ?? 'all';
+    if (!opts?.force && this.lastHash.get(key) === hash) return;
+    if (stickId === undefined) {
+      // 전체 전송은 붙은 손 모두에 닿으므로 손별 키도 같이 채운다
+      for (const k of ['all', 0, 1] as const) this.lastHash.set(k, hash);
+      for (const bytes of encodeSetPadTable(entries, true)) src.sendCommand(bytes);
+    } else {
+      this.lastHash.set(stickId, hash);
+      // ROUTE로 감싸면 2바이트가 늘어 20바이트 상한이라 패킷당 2개로 보낸다
+      for (const bytes of encodeSetPadTable(entries, true, 2)) src.sendCommand(bytes, stickId);
+    }
     this.clearWindow();
     this.windowOpen = true;
-    this.report({ sent: entries.length, acked: null, at: performance.now() });
+    this.report({ sent: entries.length, acked: null, at: performance.now(), target: stickId ?? null });
     this.timer = globalThis.setTimeout(() => {
       this.timer = null;
       this.windowOpen = false;
@@ -99,7 +113,7 @@ class PadTableSync {
     this.offState?.();
     this.offState = null;
     this.source = null;
-    this.lastHash = null;
+    this.lastHash.clear();
     this.clearWindow();
     this.status = null;
     this.statusCb = null;
