@@ -174,8 +174,19 @@
   font-weight: 500;
 }
 .free-band-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--brand-sub);
   font-size: 12px;
+}
+.free-band-dot.pulse {
+  animation: stick-dot-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .free-band-dot.pulse {
+    animation-duration: 2s;
+  }
 }
 
 /* ---- 정보 띠 ---- */
