@@ -247,6 +247,16 @@ export class WebSocketStickSource extends BaseInputSource {
     }
   }
 
+  /** 재연결용. 이미 열려 있으면 무동작, 아니면 connect()를 부르되 던지지 않는다(실패 상태는 connect가 남긴 대로) */
+  async autoConnect(): Promise<void> {
+    if (this.anyOpen()) return;
+    try {
+      await this.connect();
+    } catch {
+      // 상태는 connect가 이미 error로 남겼다
+    }
+  }
+
   /** 이전 연결을 이벤트 없이 정리한다(connect를 다시 부를 때) */
   private teardown(): void {
     for (const l of this.links) {

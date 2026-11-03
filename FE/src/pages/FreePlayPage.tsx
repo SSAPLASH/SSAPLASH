@@ -75,6 +75,7 @@ export function FreePlayPage() {
   const reconnect = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);
+  const reconnectHint = useReconnect((s) => s.hint);
   const reconnectAvailable = useReconnect((s) => s.available);
   const doReconnect = useReconnect((s) => s.reconnect);
 
@@ -125,7 +126,7 @@ export function FreePlayPage() {
           <DisconnectBand
             left={connected[0]}
             right={connected[1]}
-            reconnect={{ status: reconnect, attempt, max }}
+            reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
             onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
           />
         )}
