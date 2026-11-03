@@ -68,16 +68,17 @@ src/
 │   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
 │   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
+│   ├─ deviceState         기기별 상태(role 0~3 네 칸: 시계·SYNC 대기·연결·배터리/설정 전 보류). 이벤트는 손(0·1)만 — 페달 대비
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
 │   ├─ KeyboardPadSource   키 코드 타격 (항상 켜짐)
 │   ├─ PointerStickSource  마우스 위치 → 자세, 키/클릭 → 타격 (모의 IMU) + 디스크립터
 │   ├─ BleStickSource      Web Bluetooth GATT + 디스크립터
 │   ├─ WebSocketStickSource  허브 · PC 브리지 + 디스크립터
-│   ├─ WebSerialStickSource  USB 직결(Web Serial) + 디스크립터
+│   ├─ WebSerialStickSource  USB 직결·동글(Web Serial) + 디스크립터. LINK·STATUS 비트 5 처리, reopen, 재장착(connect 이벤트) 자동 재열기
 │   ├─ serialFraming       직결 프레이밍(SOF·LEN·CRC8) 인코더·디코더
 │   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
@@ -231,7 +232,11 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 준비 조건
 
-**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다. role 2·3(발)은 아직 무시한다.
+**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동·패드 표 재전송)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다(감싼 SET_PAD_TABLE은 패킷당 패드 2개). 기기별 상태는 `input/deviceState`의 role 0~3 네 칸이고, role 2·3(발)은 칸만 갱신하고 이벤트는 내지 않는다(페달은 232 확정 뒤).
+
+**재연결·설정 재전송(S15P31A307-281, 설계 `.claude/plans/PLAY-002-stick-reconnect.md`):** 설정 원본은 웹 하나이고 스틱 플래시에 저장하지 않는다. 재부팅한 스틱은 STATUS `flags` 비트 5(설정 전)를 보내고, FE는 그 손에만 ROUTE로 패드 표를 강제 재전송(같은 표여도)하고 방위각 오프셋을 0으로 맞춘다(비트 5가 1인 STATUS마다, 손별 1초 쿨다운). 동글 순서상 비트 5 STATUS가 LINK보다 먼저 오므로 안 붙은 손의 배터리·비트 5는 보류했다가 LINK로 붙는 순간 함께 올린다. LINK 비트 0→1이거나 비트 5를 본 기기는 시계 보정(`ClockSync`)을 초기화하고 SYNC를 50ms 간격 5회 보낸다(2초 안 중복은 건너뜀) — 재부팅한 스틱은 시계가 0부터라 옛 offset을 쓰면 안 된다. 비트 5 = 0인 재연결(잠깐 끊김)은 시계만 초기화하고 패드 표·오프셋은 보내지 않는다. SET_PARAM은 게임 화면이 보내지 않으므로 재전송 대상이 아니다.
+
+연주 중 한 손이 끊기면(리듬 게임·악보 연습은 자동 일시정지, 자유 연주는 띠) `app/bootstrap`이 `reconnectStore.start()`로 자동 재연결을 시작한다. 시도 하나 = 웹 쪽 재연결 동작 + 양손 복귀 3초 대기(`app/reconnectPolicy`): Web Serial 동글은 포트를 닫고 다시 열고(`reopen`), 포트가 닫혔으면 허락된 포트를 다시 열고(`autoConnect`), BLE 직결은 보관한 기기에 `gatt.connect()`, WS는 재접속한다. 모두 사용자 제스처가 필요 없는 동작이다. 최대 3회(약 10초) 뒤 `failed`가 되고 끊김 카드는 소스별 안내(`hint`: 동글 "동글을 뺐다 다시 꽂아 주세요")와 [드럼 세팅에서 연결하기]를 보인다. 시도 중 [다시 연결]을 누르면 대기를 끊고 다음 시도로 간다. 동글을 뺐다 꽂으면 `navigator.serial`의 `connect` 이벤트로 클릭 없이 포트를 다시 연다. 양손이 돌아오면 `settle()` → `reconnected`(약 1초, 카드에 「재연결 성공!」·「3초 뒤 이어서 연주해요」) → 리듬 게임·악보 연습은 카운트다운 3·2·1·시작! 뒤 자동으로 이어 연주한다(사용자 클릭 없음). 실기기 확인은 11/6 통합 테스트(239)에서 한다.
 
 연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈은 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
 
@@ -417,7 +422,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
    ```
 3. 브리지 실행(다른 터미널): `pip install pyserial websockets` → `python EMB/tools/ws_bridge.py COM5` (기본 921600, `ws://localhost:8765`)
 4. `npm run dev` → 브라우저에서 **세팅**(`/setup`) → 스틱 연결 "WebSocket 브리지" 선택 → `/monitor/stick`
-5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`).
+5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`). 모의 스틱은 `dongle` 옵션으로 LINK(1초 + 변화 시)를 흉내 내고, `dropHand`·`restoreHand`·`reboot`로 한 손 끊김→복귀·재부팅(STATUS 비트 5 + 시계 0부터, SET_PAD_TABLE을 받으면 비트 5 해제)을 흉내 낸다. ROUTE로 감싼 명령은 마스크의 손에만 적용한다. 단위 테스트가 이 빌더·시나리오를 쓴다.
 
 ### 2스틱 WS 연동
 
