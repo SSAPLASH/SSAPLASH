@@ -21,8 +21,18 @@ public class ChartDocumentReader {
 	public ChartDetail detail(ChartVersionRepository.Detail row) {
 		requireSchema(row.getSchemaVersion());
 		Timing timing = timing(row.getTiming());
-		var array = parse(row.getNotes());
-		check(array.isArray() && array.size() == row.getNoteCount());
+		var notes = notes(row.getNotes(), row.getNoteCount());
+		return new ChartDetail(row.getChartId(), row.getSongId(), row.getTitle(), row.getSource(),
+				row.getDifficulty(), row.getChartVersionId(), row.getVersion(), row.getSchemaVersion(),
+				timing.bpm(), timing.offsetMs(), timing.timeSignature(), signature(timing.timeSignature())[0],
+				row.getDurationMs(), timing, row.getNoteCount(), notes, row.getNotationStatus(),
+				hasImages(row.getSheetPages()));
+	}
+
+	/** 상세 조회와 난이도 산정이 같은 노트 유효성 규칙을 사용한다. */
+	public List<Note> notes(String raw, int noteCount) {
+		var array = parse(raw);
+		check(array.isArray() && array.size() == noteCount);
 		var ids = new HashSet<String>();
 		var notes = new ArrayList<Note>();
 		double previous = -1;
@@ -47,11 +57,7 @@ public class ChartDocumentReader {
 			}
 			notes.add(new Note(id, time, pad, velocity, notation));
 		}
-		return new ChartDetail(row.getChartId(), row.getSongId(), row.getTitle(), row.getSource(),
-				row.getDifficulty(), row.getChartVersionId(), row.getVersion(), row.getSchemaVersion(),
-				timing.bpm(), timing.offsetMs(), timing.timeSignature(), signature(timing.timeSignature())[0],
-				row.getDurationMs(), timing, row.getNoteCount(), List.copyOf(notes), row.getNotationStatus(),
-				hasImages(row.getSheetPages()));
+		return List.copyOf(notes);
 	}
 
 	public Timing timing(String raw) {

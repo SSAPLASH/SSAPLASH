@@ -26,18 +26,9 @@ public class JobQueryService {
     private static Instant instant(Timestamp value) { return value==null ? null : value.toInstant(); }
     private JobSnapshot map(ResultSet row,int index) throws SQLException {
         String code=row.getString(6);
-        JobSnapshot.JobError error=code==null ? null : safeError(code);
+        JobSnapshot.JobError error=code==null ? null : JobErrors.safe(code);
         return new JobSnapshot(row.getLong(1),row.getLong(2),JobSnapshot.Status.valueOf(row.getString(3)),row.getInt(4),row.getLong(5),error,
                 instant(row.getTimestamp(7)),instant(row.getTimestamp(8)),instant(row.getTimestamp(9)));
-    }
-    private JobSnapshot.JobError safeError(String code) {
-        return switch(code) {
-            case "INPUT_INVALID" -> new JobSnapshot.JobError(code,"입력 파일을 처리할 수 없습니다.");
-            case "OUTPUT_INVALID" -> new JobSnapshot.JobError(code,"채보 결과를 처리할 수 없습니다.");
-            case "MODEL_FAILED" -> new JobSnapshot.JobError(code,"채보 생성에 실패했습니다.");
-            case "JOB_CANCELLED" -> new JobSnapshot.JobError(code,"작업이 취소되었습니다.");
-            default -> new JobSnapshot.JobError("JOB_FAILED","작업을 완료할 수 없습니다.");
-        };
     }
     public Optional<JobSnapshot> visible(long userId,long jobId) {
         var rows=db.query("SELECT "+COLUMNS+VISIBLE+" AND j.id=?",this::map,userId,jobId);

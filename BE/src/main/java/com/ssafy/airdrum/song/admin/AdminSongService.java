@@ -25,6 +25,7 @@ import com.ssafy.airdrum.song.AccompanimentStorage;
 import com.ssafy.airdrum.song.CoverImage;
 import com.ssafy.airdrum.song.CoverStorage;
 import com.ssafy.airdrum.song.SongManagementError;
+import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.audio.AudioErrorCode;
 import com.ssafy.airdrum.song.audio.AudioProbe;
 import com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty;
@@ -62,12 +63,14 @@ class AdminSongService {
 	private final ChartAssetStore assets;
 	private final SpoolDirectory spool;
 	private final TransactionTemplate tx;
+	private final SongLevelService levels;
 
 	AdminSongService(AdminSongRepository songs, MidiChartConverter converter, MidiChartRepository charts,
 			CoverStorage covers, ChartAssetKeyPolicy keys, SongAssetCleanup cleanup, CoverImage images,
 			AccompanimentStorage backings, AudioProbe probe, ChartAssetStore assets, SpoolDirectory spool,
-			PlatformTransactionManager manager) {
+			PlatformTransactionManager manager, SongLevelService levels) {
 		this.songs = songs;
+		this.levels = levels;
 		this.converter = converter;
 		this.charts = charts;
 		this.covers = covers;
@@ -88,6 +91,7 @@ class AdminSongService {
 			long songId = songs.insertSong(title, artist, license, published, song);
 			for (var difficulty : Difficulty.values())
 				charts.insertVersion(charts.insertChart(songId, difficulty), 1, song.charts().get(difficulty));
+			levels.process(songId, true);
 			return songId;
 		});
 		return detail(id);
@@ -105,6 +109,7 @@ class AdminSongService {
 				charts.insertVersion(chartId, next == null ? 1 : next.getValue(), song.charts().get(difficulty));
 			}
 			songs.updateTiming(id, song);
+			levels.process(id, true);
 		});
 		return detail(id);
 	}
