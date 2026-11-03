@@ -66,6 +66,7 @@ class WorkerApiTest {
         db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",job);
         db.update("DELETE FROM chart_job_attempts WHERE job_id=?",job);
         db.update("DELETE FROM chart_jobs WHERE id=?",job);
+        db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?",song);
         db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
         db.update("DELETE FROM charts WHERE song_id=?",song);
         db.update("DELETE FROM songs WHERE id=?",song);
@@ -347,6 +348,9 @@ class WorkerApiTest {
         var envelope=envelope(id,UUID.randomUUID(),input);
         String receipt=raw(path("/results/transcription"),T1,envelope,200);
         assertThat(json.readTree(receipt).path("chartVersionIds").size()).isEqualTo(3);
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,song)).isNotBlank();
+		assertThat(db.queryForObject("SELECT level_chart_version_id FROM songs WHERE id=?",Long.class,song))
+				.isEqualTo(db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD'",Long.class,song));
         assertThat(raw(path("/results/transcription"),T1,envelope,200)).isEqualTo(receipt);
         var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.note_count,v.generator_version,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
         assertThat(rows).hasSize(3);

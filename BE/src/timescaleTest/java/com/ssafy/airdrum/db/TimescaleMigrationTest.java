@@ -57,6 +57,8 @@ class TimescaleMigrationTest {
 			assertThat(scalar(connection, "SELECT count(*) FROM chart_versions")).isEqualTo("4");
 			assertThat(scalar(connection, "SELECT id FROM songs WHERE id=" + existingSong)).isEqualTo(existingSong);
 			assertThat(scalar(connection, "SELECT license FROM songs WHERE id=" + existingSong)).isEqualTo("기존 권리 메타");
+			assertThat(scalar(connection, "SELECT level_legacy_fallback FROM songs WHERE id=" + existingSong)).isEqualTo("t");
+			assertThat(scalar(connection, "SELECT song_level IS NULL FROM songs WHERE id=" + existingSong)).isEqualTo("t");
 			assertThat(scalar(connection, "SELECT id FROM charts WHERE id=" + existingChart)).isEqualTo(existingChart);
 			assertThat(scalar(connection, "SELECT notes->0->>'noteId' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("legacy-1");
 			assertThat(scalar(connection, "SELECT timing->>'offsetMs' FROM chart_versions WHERE id=" + existingVersion)).isEqualTo("11");
