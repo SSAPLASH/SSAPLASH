@@ -97,7 +97,7 @@ def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyP
     assert cfg.device == "cuda"
     assert cfg.schema_version == 1
     assert cfg.tempo == TempoConfig(
-        method="beat_this", min_bpm=60, max_bpm=200, time_signature="4/4"
+        method="beat_this", min_bpm=60, max_bpm=200, time_signature="4/4", origin="notes"
     )
     assert cfg.max_duration_sec == 600
 
@@ -130,6 +130,7 @@ def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatc
         ({"model_config": "m.yaml", "tempo": {"min_bpm": 80, "max_bpm": 150}}, "tempo 범위"),
         ({"model_config": "m.yaml", "tempo": {"time_signature": "4-4"}}, "time_signature"),
         ({"model_config": "m.yaml", "tempo": {"bpm": 120}}, "모르는 tempo 필드"),
+        ({"model_config": "m.yaml", "tempo": {"origin": "first_beat"}}, "tempo.origin"),
     ],
 )
 def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
