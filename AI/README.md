@@ -127,6 +127,10 @@ uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/cha
 # GPU가 없으면 cpu로 내려간다. 강제로 바꾸려면 --device cpu
 ```
 
+원곡은 mp3·wav·flac·Ogg Opus(`.opus`·`.ogg`)·m4a(AAC·ALAC)를 받는다. BE 업로드가 받는 형식과 같다 (S15P31A307-244). m4a 말고는 soundfile이 읽고, soundfile이 못 여는 m4a만 PyAV(`av` 패키지)로 읽는다. 형식은 확장자가 아니라 파일 내용으로 알아내므로 확장자가 없거나 틀려도 된다. PyAV 휠에 FFmpeg 라이브러리가 들어 있어서 ffmpeg 프로그램을 따로 깔 필요가 없다.
+
+PyAV 라이선스: PyAV는 BSD-3이고, 휠에 든 FFmpeg는 LGPL 3 이상으로 빌드돼 있다. 휠에는 x264·x265 영상 인코더(GPL)도 같이 들어 있지만 우리는 오디오 디코딩만 하고 휠을 서버 안에서만 쓰며 따로 배포하지 않는다.
+
 출력 폴더에 세 파일이 생긴다. 반주는 원곡에서 드럼 트랙을 샘플 단위로 뺀 것이라 세 파일의 샘플 수와 시간축이 원곡과 같다.
 
 크게 마스터링된 원곡은 드럼을 빼면 반주 일부가 파일에 담을 수 있는 최대 크기(0dBFS)를 넘어, 16비트로 저장할 때 잘려 찌그러진다. 그래서 저장 전에 두 파일의 볼륨을 처리한다 (S15P31A307-165).
