@@ -3,7 +3,7 @@
 모양: {schemaVersion, generator, generatorVersion, metrics, charts: [{difficulty, notationStatus, notes, timing}]}.
 - generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
 - charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
-- timing.offsetMs: 1마디 1박 시각(격자 원점). grid_origin_ms 참고
+- timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고
 - notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
   패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
 
@@ -62,10 +62,10 @@ def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
 
 
 def grid_origin_ms(tempo: TempoEstimate) -> int:
-    """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(1마디 1박, 설계 U14·U16).
+    """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(곡의 첫 마디 첫 박, 설계 U14·U16).
 
     - 마디 첫 박이 있으면(Beat This!) 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
-      마디 시작. 드럼 없는 인트로가 있어도 1마디가 곡 처음 한 마디 안에서 시작함
+      마디 시작. 드럼 없는 인트로가 있어도 첫 마디가 곡 맨 앞 한 마디 길이 안에서 시작함
     - 마디 첫 박이 없으면(librosa) 첫 박 시각
     - bpm 추정 실패나 박이 없으면 0
     """
