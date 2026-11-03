@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from ssaplash_ai.chart.config import (
+    ENV_CHART_MODEL,
     ENV_DEVICE,
     ENV_WORK_DIR,
     OutputConfig,
@@ -88,9 +89,11 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
 def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv(ENV_DEVICE, raising=False)
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
     cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
+    assert cfg.model_name == "original"
     assert cfg.model_config == Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
-    assert (AI_DIR / cfg.model_config).is_file()
+    assert all((AI_DIR / p).is_file() for p in cfg.models.values())
     assert cfg.device == "cuda"
     assert cfg.schema_version == 1
     assert cfg.tempo == TempoConfig(
@@ -132,3 +135,37 @@ def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatc
 def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
     with pytest.raises(ValueError, match=문구):
         TranscriptionConfig.from_dict(raw)
+
+
+# ---- 채보 모델 이름으로 고르기 (S15P31A307-243) ----
+
+MODELS_RAW = {"model": "original", "models": {"original": "a.yaml", "combo": "b.yaml"}}
+
+
+def test_채보_모델을_이름으로_고른다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_dict(MODELS_RAW)
+    assert (cfg.model_name, cfg.model_config) == ("original", Path("a.yaml"))
+    cfg = TranscriptionConfig.from_dict({**MODELS_RAW, "model": "combo"})
+    assert (cfg.model_name, cfg.model_config) == ("combo", Path("b.yaml"))
+
+
+def test_채보_모델_환경_변수가_우선(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_CHART_MODEL, "combo")
+    assert TranscriptionConfig.from_dict(MODELS_RAW).model_config == Path("b.yaml")
+
+
+def test_채보_모델_이름_오류(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    with pytest.raises(ValueError, match="모르는 채보 모델 이름"):
+        TranscriptionConfig.from_dict({**MODELS_RAW, "model": "nope"})
+    with pytest.raises(ValueError, match="model"):
+        TranscriptionConfig.from_dict({"models": MODELS_RAW["models"]})
+    with pytest.raises(ValueError, match="같이 쓸 수 없음"):
+        TranscriptionConfig.from_dict({**MODELS_RAW, "model_config": "c.yaml"})
+
+
+def test_옛_형식_model_config도_받는다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_dict({"model_config": "c.yaml"})
+    assert (cfg.model_name, cfg.model_config) == (None, Path("c.yaml"))

@@ -69,6 +69,9 @@ class TranscriberConfig:
     # adtof_drumsep
     drumsep_config: str | None = None
     rules: dict = field(default_factory=dict)
+    # 탐·심벌만 다른 ADTOF 가중치로 고를 때. "default"면 패키지 기본 가중치. 없으면 checkpoint_path 하나로 전부
+    tom_checkpoint_path: str | None = None
+    cymbal_checkpoint_path: str | None = None
     # mock
     mock_mode: str = "truth"
     truth_dir: str | None = None
@@ -283,6 +286,7 @@ GM_PAD_PITCH: dict[str, int] = {
     "FLOOR_TOM": 43,
     "CRASH": 49,
     "RIDE": 51,
+    "HIHAT_PEDAL": 44,
     "tom": 47,
     "cymbal": 49,
 }

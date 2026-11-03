@@ -1,7 +1,9 @@
 """GPU 서버에서 파인튜닝 학습을 하나씩 차례로 돌리는 대기열 (S15P31A307-164 설계 v0.4 3-4·4-3절).
 
 학습 셋을 동시에 띄우면 데이터 읽기 작업이 많아 Jupyter가 버벅여서(10/30), 대기열 하나가 학습을
-하나씩 `nice`로 돌림. 실행 폴더 하나에 코드 사본과 상태 파일을 모아 둠.
+`nice`로 돌림. 기본은 하나씩이고, `--parallel N`이면 N개까지 같이 돌리며 `--cpus`로 정한 코어에만 묶어
+Jupyter 몫을 남김(실제 녹음 확인 실험, 설계 CHART-003-real-drum-data-check 4-3절).
+실행 폴더 하나에 코드 사본과 상태 파일을 모아 둠.
 
   <run-dir>/S15P31A307/AI   코드 사본. 학습은 PYTHONPATH로 이 사본의 src를 읽음. data는 공유 폴더 링크
   <run-dir>/status/         queue.json(학습 목록)·queue.pid·queue.log, 학습별 <이름>.log·.pid·.DONE·.FAILED
@@ -111,6 +113,8 @@ def cmd_start(args: argparse.Namespace) -> int:
         "out_root": args.out_root,
         "num_workers": args.num_workers,
         "python": args.python,
+        "parallel": args.parallel,
+        "cpus": args.cpus,
     }
     (st / "queue.json").write_text(
         json.dumps(queue, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -126,29 +130,38 @@ def cmd_start(args: argparse.Namespace) -> int:
     (st / "queue.pid").write_text(str(proc.pid))
     order = " → ".join(r["name"] for r in runs)
     print(
-        f"대기열 시작 pid {proc.pid}: {order}, 데이터 읽기 작업 {args.num_workers}개, nice {args.nice}"
+        f"대기열 시작 pid {proc.pid}: {order}, 동시 {args.parallel}개, "
+        f"데이터 읽기 작업 학습마다 {args.num_workers}개, nice {args.nice}"
+        + (f", 코어 {args.cpus}" if args.cpus else "")
     )
     return 0
 
 
 def train_command(queue: dict, run: dict) -> list[str]:
-    return [
+    cmd = [
         queue["python"], "-m", "ssaplash_ai.train.cli", "adtof-finetune",
         "--config", run["config"],
         "--out", f"{queue['out_root']}/{run['name']}",
         "--num-workers", str(queue["num_workers"]),
         "--resume",
     ]  # fmt: skip
+    # 학습과 데이터 읽기 작업을 정한 코어에만 묶음(자식 프로세스도 같은 코어를 물려받음). Jupyter 몫을 남기려는 것
+    if queue.get("cpus"):
+        cmd = ["taskset", "-c", str(queue["cpus"]), *cmd]
+    return cmd
 
 
 def run_queue(
     run_dir: Path,
     make_cmd: Callable[[dict, dict], list[str]] = train_command,
     code_src: Path | None = None,
+    poll_sec: float = 10.0,
 ) -> int:
-    """queue.json의 학습을 차례로 돌림. 실패해도 다음 학습으로 넘어감. 실패 수를 돌려줌."""
+    """queue.json의 학습을 적힌 순서로 parallel개까지 동시에 돌림. 하나가 끝나면 다음 것을 띄움.
+    실패해도 다음 학습으로 넘어감. 실패 수를 돌려줌."""
     st = status_dir(run_dir)
     queue = json.loads((st / "queue.json").read_text(encoding="utf-8"))
+    parallel = max(1, int(queue.get("parallel", 1)))
     src = code_src or run_dir / CODE_SUBDIR / "src"
     import ssaplash_ai
 
@@ -158,18 +171,28 @@ def run_queue(
         print(f"[queue] {msg}", flush=True)
         (st / "queue.FAILED").write_text(msg, encoding="utf-8")
         return 1
-    print(f"[queue] 시작 {time.strftime('%m-%d %H:%M')}, 코드 {loaded.parent}", flush=True)
+    print(
+        f"[queue] 시작 {time.strftime('%m-%d %H:%M')}, 코드 {loaded.parent}, 동시 {parallel}개"
+        + (f", 코어 {queue['cpus']}" if queue.get("cpus") else ""),
+        flush=True,
+    )
 
-    failed = 0
+    pending = []
     for run in queue["runs"]:
-        name = run["name"]
-        if (st / f"{name}.DONE").is_file():
-            print(f"[queue] {name} 이미 끝남, 건너뜀", flush=True)
-            continue
-        (st / f"{name}.FAILED").unlink(missing_ok=True)
-        log_path = st / f"{name}.log"
-        print(f"[queue] {name} 시작 {time.strftime('%m-%d %H:%M')}", flush=True)
-        with log_path.open("a", encoding="utf-8") as log:
+        if (st / f"{run['name']}.DONE").is_file():
+            print(f"[queue] {run['name']} 이미 끝남, 건너뜀", flush=True)
+        else:
+            pending.append(run)
+    # 이름 → (프로세스, 로그 파일)
+    running: dict[str, tuple[subprocess.Popen, object]] = {}
+    failed = 0
+    while pending or running:
+        while pending and len(running) < parallel:
+            run = pending.pop(0)
+            name = run["name"]
+            (st / f"{name}.FAILED").unlink(missing_ok=True)
+            print(f"[queue] {name} 시작 {time.strftime('%m-%d %H:%M')}", flush=True)
+            log = (st / f"{name}.log").open("a", encoding="utf-8")
             proc = subprocess.Popen(
                 make_cmd(queue, run),
                 stdout=log,
@@ -179,20 +202,28 @@ def run_queue(
                 ),  # 로그를 utf-8로 읽어 끝 표시를 찾음
             )
             (st / f"{name}.pid").write_text(str(proc.pid))
-            rc = proc.wait()
-        finished = DONE_MARK in log_path.read_text(encoding="utf-8", errors="replace")
-        if rc == 0 and finished:
-            (st / f"{name}.DONE").write_text(time.strftime("%m-%d %H:%M"), encoding="utf-8")
-        else:
-            failed += 1
-            (st / f"{name}.FAILED").write_text(f"종료 코드 {rc}", encoding="utf-8")
-        print(
-            f"[queue] {name} {'끝남' if rc == 0 and finished else f'실패 (종료 코드 {rc})'}",
-            flush=True,
-        )
+            running[name] = (proc, log)
+        for name in [n for n, (p, _) in running.items() if p.poll() is not None]:
+            proc, log = running.pop(name)
+            log.close()
+            failed += not _finish(st, name, proc.returncode)
+        if running:
+            time.sleep(poll_sec)
     (st / "queue.DONE").write_text(time.strftime("%m-%d %H:%M"), encoding="utf-8")
     print(f"[queue] 전부 끝. 실패 {failed}개", flush=True)
     return failed
+
+
+def _finish(st: Path, name: str, rc: int) -> bool:
+    """끝난 학습의 DONE·FAILED 표시. 종료 코드 0이고 로그에 끝 표시가 있어야 성공."""
+    log_path = st / f"{name}.log"
+    ok = rc == 0 and DONE_MARK in log_path.read_text(encoding="utf-8", errors="replace")
+    if ok:
+        (st / f"{name}.DONE").write_text(time.strftime("%m-%d %H:%M"), encoding="utf-8")
+    else:
+        (st / f"{name}.FAILED").write_text(f"종료 코드 {rc}", encoding="utf-8")
+    print(f"[queue] {name} {'끝남' if ok else f'실패 (종료 코드 {rc})'}", flush=True)
+    return ok
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -293,6 +324,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("--num-workers", type=int, default=8, help="학습 하나의 데이터 읽기 작업 수")
     s.add_argument("--nice", type=int, default=19, help="우선순위 낮추기 (19가 가장 낮음)")
+    s.add_argument(
+        "--parallel", type=int, default=1, help="동시에 돌릴 학습 수 (1이면 하나씩, 적은 순서대로)"
+    )
+    s.add_argument(
+        "--cpus",
+        default=None,
+        help="학습을 묶을 코어 목록, taskset -c 형식 (예: 0-95). 없으면 안 묶음",
+    )
     s.add_argument("--python", default=sys.executable, help="학습에 쓸 파이썬 (공유 .venv)")
     s.set_defaults(func=cmd_start)
 

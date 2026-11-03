@@ -22,6 +22,8 @@ import yaml
 ENV_DEVICE = "SSAPLASH_CHART_DEVICE"
 ENV_MODELS_DIR = "SSAPLASH_MODELS_DIR"
 ENV_WORK_DIR = "SSAPLASH_WORK_DIR"
+# 채보 모델 이름. 있으면 transcription.yaml의 model 값 대신 씀 (models 목록 안의 이름)
+ENV_CHART_MODEL = "SSAPLASH_CHART_MODEL"
 
 DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
 DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
@@ -131,9 +133,17 @@ class TempoConfig:
 
 @dataclass
 class TranscriptionConfig(ChartConfig):
-    """`configs/chart/transcription.yaml` 한 파일. 채보 모델은 model_config 경로로만 고름."""
+    """`configs/chart/transcription.yaml` 한 파일.
+
+    채보 모델은 `models`(이름 → 모델 yaml 경로) 중 `model` 이름으로 고름. 환경 변수 SSAPLASH_CHART_MODEL이
+    있으면 그 이름이 우선. `models` 없이 `model_config` 경로를 바로 적는 옛 형식도 받음.
+    """
 
     schema_version: int = 1
+    # 고른 모델 이름. 옛 형식(model_config만)이면 None
+    model_name: str | None = None
+    # 고를 수 있는 모델 이름 → 모델 yaml 경로
+    models: dict[str, Path] = field(default_factory=dict)
     tempo: TempoConfig = field(default_factory=TempoConfig)
     max_duration_sec: float = 600.0
 
@@ -147,12 +157,34 @@ class TranscriptionConfig(ChartConfig):
 
     @classmethod
     def from_dict(cls, raw: dict, source_path: Path | None = None) -> TranscriptionConfig:
-        known = {"model_config", "device", "schema_version", "tempo", "max_duration_sec"}
+        known = {
+            "model",
+            "models",
+            "model_config",
+            "device",
+            "schema_version",
+            "tempo",
+            "max_duration_sec",
+        }
         unknown = sorted(set(raw) - known)
         if unknown:
             raise ValueError(f"모르는 채보 설정 필드: {unknown}")
-        if not raw.get("model_config"):
-            raise ValueError("채보 설정에 model_config(채보 모델 yaml 경로)가 필요")
+        models = {str(k): Path(str(v)) for k, v in (raw.get("models") or {}).items()}
+        name = os.environ.get(ENV_CHART_MODEL) or raw.get("model")
+        if models:
+            if raw.get("model_config"):
+                raise ValueError("채보 설정에 models와 model_config를 같이 쓸 수 없음")
+            if not name:
+                raise ValueError(f"채보 설정에 model(쓸 모델 이름)이 필요. 가능: {sorted(models)}")
+            if str(name) not in models:
+                raise ValueError(f"모르는 채보 모델 이름 {name!r}. 가능: {sorted(models)}")
+            model_config = models[str(name)]
+        elif raw.get("model_config"):
+            model_config, name = Path(str(raw["model_config"])), None
+        else:
+            raise ValueError(
+                "채보 설정에 models·model이나 model_config(채보 모델 yaml 경로)가 필요"
+            )
         schema_version = int(raw.get("schema_version", cls.schema_version))
         if schema_version not in SCHEMA_VERSIONS:
             raise ValueError(f"schema_version은 {SCHEMA_VERSIONS} 중 하나: {schema_version}")
@@ -160,10 +192,12 @@ class TranscriptionConfig(ChartConfig):
         if max_duration <= 0:
             raise ValueError(f"max_duration_sec는 양수: {max_duration}")
         return cls(
-            model_config=Path(str(raw["model_config"])),
+            model_config=model_config,
             device=resolve_device_setting(str(raw.get("device", cls.device))),
             source_path=source_path,
             schema_version=schema_version,
+            model_name=str(name) if name else None,
+            models=models,
             tempo=TempoConfig.from_dict(raw.get("tempo")),
             max_duration_sec=max_duration,
         )
