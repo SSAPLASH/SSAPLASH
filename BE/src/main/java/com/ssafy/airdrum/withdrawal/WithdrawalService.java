@@ -20,7 +20,7 @@ import com.ssafy.airdrum.user.UserWithdrawnEvent;
 
 /**
  * 회원 탈퇴 트랜잭션(탈퇴 설계 4장 흐름 A). {@code users} 행을 {@code FOR UPDATE}로 잠근 뒤 상태 전이·개인정보 비우기,
- * 소셜 연동·키트 프리셋·비동의 플레이 로그 삭제, refresh 토큰 폐기, {@link UserWithdrawnEvent} 발행까지 한 트랜잭션에서 한다.
+ * 소셜 연동·키트 프리셋·연주 녹음·비동의 플레이 로그 삭제, refresh 토큰 폐기, {@link UserWithdrawnEvent} 발행까지 한 트랜잭션에서 한다.
  *
  * <p>곡·파일·채보 작업 정리는 이벤트를 받는 쪽(BE2)이 커밋 뒤에 한다. 이 클래스가 {@code user}·{@code auth}·{@code preset}을
  * 모두 알아야 해서 {@code user} 패키지에 두지 않는다(순환 의존 방지). 플레이 로그는 {@code play} 클래스를 쓰지 않고 SQL로 지운다.
@@ -63,10 +63,19 @@ public class WithdrawalService {
 		// 벌크 삭제가 먼저 flush하므로 위 전이도 여기서 DB에 반영된다
 		socialAccounts.deleteAllByUserId(userId);
 		presets.deleteAllByUserId(userId);
+		int deletedRecordings = deleteRecordings(userId);
 		int deletedPlays = deleteNonConsentedPlays(userId);
 		revokeRefreshTokens(userId);
 		events.publishEvent(new UserWithdrawnEvent(userId));
-		log.info("회원 탈퇴 userId={} deletedPlays={}", userId, deletedPlays);
+		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedPlays={}", userId, deletedRecordings, deletedPlays);
+	}
+
+	/**
+	 * 연주 녹음(살아 있는 것·지운 것)을 지운다(257 U7). 파일이 없어 정리 큐가 필요 없다. 비동의 세션 삭제보다 먼저 지워
+	 * {@code play_session_id}의 SET NULL 갱신을 줄인다. {@code recording} 클래스를 쓰지 않고 SQL로 지운다.
+	 */
+	private int deleteRecordings(long userId) {
+		return db.update("DELETE FROM recordings WHERE user_id = ?", userId);
 	}
 
 	/**

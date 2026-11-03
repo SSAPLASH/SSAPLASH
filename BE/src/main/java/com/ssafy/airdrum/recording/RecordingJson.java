@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.TreeSet;
 
 import org.springframework.stereotype.Component;
@@ -80,6 +81,18 @@ class RecordingJson {
 	String hitsJson(RecordingRequest normalized) {
 		return mapper.writeValueAsString(normalized.hits());
 	}
+
+	/**
+	 * 저장된 타격 배열을 읽는다. 요청 매퍼의 숫자 길이 제한(64자)을 쓰면 안 된다: jsonb는 1e-70 같은 아주 작은 수를
+	 * 지수 없이 긴 소수로 풀어 저장해(4.9e-324는 약 330자) 받아들인 녹음을 다시 읽지 못하게 된다(257 검증 D7).
+	 * 우리가 쓴 데이터만 읽으므로 제한을 넉넉히 둔다. Hit의 stickId 생략 규칙은 어노테이션이라 그대로 적용된다.
+	 */
+	List<RecordingRequest.Hit> readHits(String stored) {
+		return STORED.readValue(stored, STORED.getTypeFactory().constructCollectionType(List.class, RecordingRequest.Hit.class));
+	}
+
+	private static final JsonMapper STORED = JsonMapper.builder(JsonFactory.builder()
+			.streamReadConstraints(StreamReadConstraints.builder().maxNumberLength(1000).build()).build()).build();
 
 	/** 정규화된 요청의 SHA-256. 키 순서·공백·숫자 표기·시간대 표기와 무관하고, 회원이 다르면 다르다. */
 	String hash(long user, RecordingRequest normalized) {

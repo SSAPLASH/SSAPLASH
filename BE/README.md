@@ -210,7 +210,7 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
   recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
-  같은 트랜잭션에서 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
+  같은 트랜잭션에서 그 회원의 녹음(257번)과 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
   `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
@@ -247,7 +247,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V27을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V28을 적용하고, V8 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -385,6 +385,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V25 | `V25__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
 | V26 | `V26__add_users_signup_consents.sql` | 가입 동의 `users.data_consent_version`·`terms_version`·`terms_agreed_at`·`privacy_version`·`privacy_agreed_at`(판 `varchar(50)`, 시각 `timestamptz`, 모두 NULL 허용). `ck_users_data_consent`를 값·시각·판 셋이 함께 있거나 함께 없게 교체, `ck_users_terms_consent`·`ck_users_privacy_consent`(판·시각 함께, 판은 공백만 불가) 추가. 판 없이 값만 있던 행은 세 값 모두 NULL로 되돌린다. 기존 행은 채우지 않는다(동의 전으로 시작) | -199 |
 | V27 | `V27__add_recording_hits.sql` | `recordings`에 녹음 시퀀스 `hits`(jsonb 배열)·`hit_count`(1~50,000, 배열 길이와 같음)·`client_key`(uuid)·`mode`·`input_source`·`schema_version`·`started_at`·`payload_hash`·`updated_at` 추가(모두 NOT NULL), `duration_ms` NOT NULL. 부분 유일 인덱스 `recordings_user_client_key_idx`(user_id, client_key) WHERE deleted_at IS NULL. 기존 행이 있으면 실패한다(쓰는 코드가 없었음) | -256 |
+| V28 | `V28__add_recording_chart_version.sql` | `recordings.chart_version_id`(bigint, NULL 허용, FK `chart_versions`) 추가. 녹음이 플레이와 별개로 채보 버전을 기억해 목록 `song`·상세 `timing`이 플레이 삭제 뒤에도 남는다. 기존 행은 연결된 플레이의 `chart_version_id`로 채운다 | -257 |
 
 규칙:
 
@@ -411,7 +412,7 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V27까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V28까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
@@ -990,11 +991,23 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 .\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
 ```
 
-## 연주 녹음 저장 (256번)
+## 연주 녹음 (256·257번)
 
 REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(시각·패드·세기)를 플레이 기록과 따로 저장한다. 자유 모드는 플레이 기록이 없어도 저장된다.
-경로는 `POST /api/v1/recordings`(JSON, Bearer 인증)다. 미인증·탈퇴 401, 가입 동의 전 403 `SIGNUP_INCOMPLETE`. 응답은 `Cache-Control: private, no-store`.
-보관함 조회·제목 변경·삭제·탈퇴 정리는 257번에서 추가한다.
+모든 경로는 `/api/v1/recordings` 아래이고 Bearer 인증이 필요하다. 미인증·탈퇴 401, 가입 동의 전 403 `SIGNUP_INCOMPLETE`. 응답은 `Cache-Control: private, no-store`.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /` | 아래 저장 본문(JSON) | 201 `Location: /api/v1/recordings/{id}`, 같은 키·같은 내용 재전송 200. 녹음 요약 |
+| `GET /` | `q`(제목 부분 검색, 앞뒤 공백 제거 뒤 100자까지, `%`·`_`는 글자 그대로), `mode`(선택, `FREE`·`RHYTHM`·`SHEET`·`TEMPO` 중 하나), `sort`(`NEWEST` 기본·`OLDEST`), `page` 0~100000, `size` 1~100 | `PageResponse<RecordingSummary>`, 본인의 살아 있는 녹음만, `startedAt` 기준 정렬(같으면 id). 시퀀스·`timing` 없음 |
+| `GET /{id}` | — | 녹음 상세: 요약 + `timing` + `hits[]` |
+| `PATCH /{id}` | JSON `{"title": "..."}`만(4 KiB 이하, 모르는 필드·중복 키·후행 JSON 400). 제목 규칙은 저장과 같다 | 녹음 요약(`updatedAt` 갱신) |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+남의 녹음·지운 녹음·없는 녹음은 상세·수정·삭제 모두 404 `RECORDING_NOT_FOUND`이고 목록에도 없다.
+
+### 저장 본문 (256번)
+
 
 | 필드 | 계약 |
 | --- | --- |
@@ -1011,7 +1024,21 @@ REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(
 - **중복 저장:** 같은 회원의 살아 있는 녹음에 같은 `clientKey`가 있으면 저장하지 않는다. 정규화한 내용(정렬·별칭·제목 다듬기 뒤, 키 순서·공백·숫자 표기·시간대와 무관)의 SHA-256이 같으면 200과 기존 녹음, 다르면 409. 지운 녹음의 키로 다시 보내면 새 녹음이다.
 - **엄격 파싱:** 플레이 로그와 같은 규칙. 모르는 필드(판정·노트 ID 포함)·중복 키·후행 JSON·숫자 enum·문자열/소수 숫자 강제 변환·HTTP 본문 압축을 거부한다.
 - **저장:** `recordings.hits` jsonb 한 컬럼(행 테이블 없음). 회원 행을 잠가 같은 회원의 저장을 한 줄로 세운다. 플레이가 지워지면 연결만 끊기고 시퀀스는 남는다.
-- **응답:** `id`, `clientKey`, `title`, `mode`, `inputSource`, `playId`, `hitCount`, `durationMs`, `startedAt`, `createdAt`, `updatedAt`. 시퀀스는 돌려주지 않는다.
+- **응답:** `id`, `clientKey`, `title`, `mode`, `inputSource`, `playId`, `song`, `hitCount`, `durationMs`, `startedAt`, `createdAt`, `updatedAt`. 시퀀스는 돌려주지 않는다.
+- **채보 버전 기록(V28):** `playId`가 있으면 그 플레이의 `chart_version_id`를 녹음에 함께 저장한다. 목록 `song`과 상세 `timing`은 이 값에서 나오므로 플레이가 지워져도 남는다.
+
+### 보관함 (257번)
+
+- **상세 `hits`:** 저장된 jsonb를 그대로 돌려준다(`tMs` 오름차순, `stickId` 없는 타격은 키 생략). 타격 50,000개면 약 3.5 MB다(검증 실측 3.55 MB). 응답 gzip은 앞단 Nginx가 맡는다.
+- **`song`(요약·상세):** 리듬·악보 녹음이면 `{songId, title, difficulty}`, 자유·박자 녹음과 `playId` 없이 저장한 녹음은 null. 녹음이 기억한 채보 버전(V28) → `charts` → `songs` 조인이다. 녹음 `mode`가 아니라 연결한 플레이의 채보 버전을 따르며, 녹음 모드와 플레이 모드가 달라도 저장을 막지 않는다(FE는 같은 모드로 보낸다). `title`은 곡의 현재 제목이라 이름을 바꾸면 새 이름이고, 곡을 지워도(소프트 삭제) 보인다. `difficulty`는 `EASY`·`NORMAL`·`HARD`.
+- **목록 `sort`·`mode`:** `sort`는 `startedAt` 기준 `NEWEST`(기본)·`OLDEST`, `mode`는 한 모드만 거른다. 다른 값(소문자·빈 값 포함)은 400 `RECORDING_INVALID`.
+- **상세 `timing`:** MIDI 내보내기용 템포. 녹음이 기억한 채보 버전(V28 `recordings.chart_version_id`, 저장 때 플레이에서 복사)의 `timing`을 채보 API와 같은 이름으로 준다: `songId`, `chartVersionId`, `bpm`, `offsetMs`(곡 0ms 기준 첫 박), `timeSignature`, `ppq`, `tempoMap`, `timeSignatureMap`. 곡의 현재 BPM이 아니라 녹음 당시 버전 값이라 곡 BPM이 나중에 바뀌어도 같다(`chart.ChartDocumentReader.timing` 재사용). 채보 버전이 없으면(자유·박자) null. 플레이가 지워져도 남는다. 목록에는 없다.
+- **제목 변경:** 저장 때 계산한 `payload_hash`는 다시 계산하지 않는다. 그래서 제목을 바꾼 뒤 원래 저장 요청을 재전송해도 200(바뀐 제목의 요약)이고, 다른 내용으로 보내면 409다.
+- **삭제:** `deleted_at`을 찍는 소프트 삭제이며 **`play_session_id`도 비운다.** `play_session_id`는 지운 녹음까지 전체에서 유일해서, 비우지 않으면 지운 녹음이 플레이를 붙들어 같은 플레이의 새 녹음이 404가 된다. 지운 뒤 같은 `clientKey`·같은 `playId`로 저장하면 새 녹음이다. 회원당 200개 상한은 살아 있는 녹음만 센다.
+- **탈퇴:** `withdrawal.WithdrawalService` 트랜잭션 안에서 그 회원의 녹음 행을 모두(지운 것 포함) 지운다. 파일이 없어 정리 큐는 쓰지 않는다. 가입 미완료 계정 정리는 `users` 행 삭제의 FK CASCADE로 함께 지워진다.
+- 수정·삭제의 잠금 대기 초과도 저장과 같이 503 `RECORDING_BUSY`다. 상세·목록은 잠그지 않는다.
+- **저장값 읽기:** jsonb는 `1e-70` 같은 아주 작은 수를 긴 소수로 풀어 저장하므로, 상세는 숫자 길이 제한을 넉넉히 둔 별도 매퍼로 읽는다.
+- **제목:** 짝이 맞지 않는 서로게이트(이모지 반쪽)는 DB에 `?`로 바뀌어 저장되므로 저장·변경 모두 400이다.
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
@@ -1019,6 +1046,7 @@ REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(
 | 200 | — | 같은 키·같은 내용 재전송 |
 | 400 | `RECORDING_INVALID` | 필수·범위·형식, 마지막 타격이 길이보다 늦음, 모르는 필드, 압축 본문 |
 | 404 | `RECORDING_PLAY_NOT_FOUND` | `playId`가 없거나 남의 것, 이미 다른 녹음과 연결됨 |
+| 404 | `RECORDING_NOT_FOUND` | 상세·수정·삭제에서 없는·지운·남의 녹음 |
 | 409 | `RECORDING_CONFLICT` | 같은 키, 다른 내용 |
 | 409 | `RECORDING_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
 | 413 | `RECORDING_TOO_LARGE` | 본문 5 MiB, 타격 50,000개, 2시간 초과 |
@@ -1026,7 +1054,7 @@ REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(
 | 503 | `RECORDING_BUSY` | 잠금 대기 3초·문장 10초 초과(PostgreSQL 55P03·57014). 같은 요청을 다시 보낸다 |
 
 ```powershell
-.\gradlew.bat test --tests 'com.ssafy.airdrum.recording.*'
+.\gradlew.bat test --tests 'com.ssafy.airdrum.recording.*' --tests 'com.ssafy.airdrum.withdrawal.*'
 ```
 
 ## 채보 작업 진행 조회·알림 (172번)
