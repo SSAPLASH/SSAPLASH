@@ -90,6 +90,7 @@ class WithdrawalServiceTest {
 	void cleanUp() {
 		reset(refreshStore);
 		for (var id : created) {
+			jdbc.update("delete from recordings where user_id = ?", id);
 			jdbc.update("delete from kit_presets where user_id = ?", id);
 			jdbc.update("delete from social_accounts where user_id = ?", id);
 			jdbc.update("delete from users where id = ?", id);
@@ -109,11 +110,14 @@ class WithdrawalServiceTest {
 		assertThat(found.getWithdrawnAt()).isNotNull();
 		assertThat(socialAccounts.findByUserIdOrderByConnectedAtAsc(user.getId())).isEmpty();
 		assertThat(presets.countByUserId(user.getId())).isZero();
+		// 257 U7: 살아 있는 녹음·지운 녹음 모두 탈퇴 트랜잭션에서 지운다
+		assertThat(recordings(user.getId())).isZero();
 		assertThat(refreshTokens.rotate(token).outcome()).isEqualTo(Outcome.UNKNOWN);
 		assertThat(events.committed).containsExactly(user.getId());
 		// 다른 회원 데이터는 그대로
 		assertThat(socialAccounts.findByUserIdOrderByConnectedAtAsc(other.getId())).hasSize(1);
 		assertThat(presets.countByUserId(other.getId())).isEqualTo(1);
+		assertThat(recordings(other.getId())).isEqualTo(2);
 	}
 
 	@Test
@@ -137,6 +141,7 @@ class WithdrawalServiceTest {
 		assertThat(users.findById(user.getId()).orElseThrow().getStatus()).isEqualTo(UserStatus.ACTIVE);
 		assertThat(socialAccounts.findByUserIdOrderByConnectedAtAsc(user.getId())).hasSize(1);
 		assertThat(presets.countByUserId(user.getId())).isEqualTo(1);
+		assertThat(recordings(user.getId())).isEqualTo(2);
 	}
 
 	@Test
@@ -193,7 +198,16 @@ class WithdrawalServiceTest {
 		created.add(user.getId());
 		socialAccounts.save(SocialAccount.connect(user, SocialProvider.GOOGLE, providerUserId, null));
 		presets.save(KitPreset.create(user.getId(), "연습용", LAYOUT, SOUNDS, 1));
+		// 녹음: 살아 있는 것 하나, 지운 것 하나
+		for (String deleted : new String[] {"NULL", "now()"})
+			jdbc.update("INSERT INTO recordings(user_id,title,client_key,mode,input_source,schema_version,started_at,duration_ms,hit_count,hits,payload_hash,deleted_at) "
+					+ "VALUES(?,'녹음',gen_random_uuid(),'FREE','KEYBOARD',1,now(),1,1,'[{\"tMs\":0,\"pad\":\"SNARE\",\"velocity\":1}]',?," + deleted + ")",
+					user.getId(), "d".repeat(64));
 		return user;
+	}
+
+	private int recordings(long userId) {
+		return jdbc.queryForObject("SELECT count(*) FROM recordings WHERE user_id = ?", Integer.class, userId);
 	}
 
 	@TestConfiguration
