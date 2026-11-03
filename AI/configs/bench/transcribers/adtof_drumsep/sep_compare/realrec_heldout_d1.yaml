@@ -1,0 +1,38 @@
+# 드럼 분리 입력 비교용 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 10). 실제 녹음 학습 모델의 채점용 버전 d1
+# (학습에서 뺀 것: ENST 드러머 1, MDB 묶음 1). 규칙을 현재 사용 중 모델(adtof_drumsep.yaml)과 같게 맞추려고 cymbal_crash_weight 0.7만 더함
+name: realrec_heldout_d1
+adapter: adtof_drumsep
+velocity: false
+input_sample_rate: 44100
+checkpoint_path: data/models/adtof_ft/tom_6cls_real_no_d1/best.pth
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep.yaml
+rules:
+  window_ms: 120
+  cymbal_window_ms: 80
+  tom_fmin: 50
+  tom_fmax: 400
+  tom_bands: [113, 142]
+  tom_gate_ratio: 0.10
+  tom_peak_mode: raw
+  tom_mode: relative
+  tom_relative_naming: hybrid
+  tom_relative_method: peaks
+  tom_relative_min_gap: 3.0
+  cymbal_crash_weight: 0.7
+  stems:
+    toms: toms
+    crash: crash
+    ride: ride
+license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치를 E-GMD·STAR·ENST·MDB로 파인튜닝, 페달 출력 추가. ENST는 학생 학업용 허락, 실험 전용) + 미명시 (MDX23C DrumSep 가중치)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  SMALL_TOM: SMALL_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE
+  HIHAT_PEDAL: HIHAT_PEDAL

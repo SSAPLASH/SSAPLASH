@@ -61,9 +61,10 @@ DEFAULT_TOM4: dict[str, str] = {
 FOUR_TOM_DRUMMERS: tuple[int, ...] = (3,)
 KINDS: tuple[str, ...] = ("hits", "phrase", "solo", "minus-one", "MIDI-minus-one")
 ACCOMP_KINDS: tuple[str, ...] = ("minus-one", "MIDI-minus-one")
-# subset 값 → 종류 집합. minus-one은 반주 있는 둘 다(64곡)
+# subset 값 → 종류 집합. minus-one은 반주 있는 둘 다(64곡), practice는 반주 없는 연주 셋
 SUBSET_KINDS: dict[str, tuple[str, ...]] = {
     "minus-one": ACCOMP_KINDS,
+    "practice": ("hits", "phrase", "solo"),
     "all": KINDS,
     **{k: (k,) for k in KINDS if k != "minus-one"},
 }

@@ -7,13 +7,15 @@
 
 checkpoint_path(파인튜닝 가중치, S15P31A307-164)가 있으면 그 파일의 model_info를 읽음: class_set이
 pads면 출력 8개·원래 라벨은 패드 이름, thresholds가 있으면 그 문턱값. 없으면 지금처럼 5클래스·저장소 기본값.
-yaml의 thresholds가 있으면 그것이 우선.
+yaml의 thresholds가 있으면 그것이 우선. checkpoint_path가 `data/models/`로 시작하는 상대 경로이고 환경 변수
+SSAPLASH_MODELS_DIR이 있으면 그 폴더 기준으로 찾음(서비스 컨테이너는 가중치를 /models로 받음).
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 
@@ -26,6 +28,15 @@ from ssaplash_ai.bench.transcribers.transcriber_base import (
 ADTOF_SAMPLE_RATE = 44100
 ADTOF_FPS = 100
 ADTOF_LABELS_5: tuple[int, ...] = (35, 38, 47, 42, 49)
+
+
+def resolve_checkpoint(path: str) -> Path:
+    """`data/models/…` 상대 경로는 SSAPLASH_MODELS_DIR이 있으면 그 아래로 바꿈. 그 밖은 그대로"""
+    root = os.environ.get("SSAPLASH_MODELS_DIR")
+    parts = PurePosixPath(Path(path).as_posix()).parts
+    if root and not Path(path).is_absolute() and parts[:2] == ("data", "models"):
+        return Path(root).joinpath(*parts[2:])
+    return Path(path)
 
 
 def checkpoint_info(path: Path) -> dict:
@@ -55,7 +66,8 @@ class AdtofTranscriber(BaseTranscriber):
         import adtof_pytorch as adtof
         import torch
 
-        weights = self.config.checkpoint_path or adtof.get_default_weights_path()
+        path = self.config.checkpoint_path
+        weights = resolve_checkpoint(path) if path else adtof.get_default_weights_path()
         if not weights or not Path(weights).is_file():
             raise FileNotFoundError(f"ADTOF 가중치 파일이 없음: {weights}")
         self._weights = Path(weights)

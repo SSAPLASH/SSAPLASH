@@ -138,8 +138,52 @@ def test_곡_모음은_비율대로_뽑는다(synth_yaml: Path):
 def test_윈도_데이터셋은_배치_모양을_낸다(synth_yaml: Path):
     pool = D.SongPool.from_specs([D.DatasetSpec(synth_yaml)])
     ds = D.WindowDataset(pool, D.WindowConfig(classes="pads"), seed=0, windows_per_song=2)
-    x, y = next(iter(ds))
+    x, y, m = next(iter(ds))
     assert tuple(x.shape) == (412, 84, 1) and tuple(y.shape) == (412, 9)
+    assert m.tolist() == [1.0] * 9
+
+
+def test_윈도_데이터셋은_데이터셋별_손실_마스크를_낸다(synth_yaml: Path):
+    pool = D.SongPool.from_specs([D.DatasetSpec(synth_yaml, ignore_classes=("pedal",))])
+    ds = D.WindowDataset(pool, D.WindowConfig(classes="five_pedal"), seed=0, windows_per_song=1)
+    _, y, m = next(iter(ds))
+    assert tuple(y.shape) == (412, 6) and m.tolist() == [1.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+    with pytest.raises(ValueError, match="ignore_classes"):
+        D.loss_mask("five", ("pedal",))
+
+
+def test_손실_마스크가_없거나_전부_1이면_손실이_같다():
+    torch.manual_seed(0)
+    pred = torch.rand(2, 10, 6).clamp(0.01, 0.99)
+    target = (torch.rand(2, 10, 6) > 0.7).float()
+    pw = torch.tensor([1.0, 2.0, 3.0, 1.0, 1.5, 2.0])
+    plain = T.weighted_bce(pred, target, pw)
+    ones = T.weighted_bce(pred, target, pw, torch.ones(2, 6))
+    torch.testing.assert_close(plain, ones)
+
+
+def test_손실_마스크_0인_채널은_기울기가_0이다():
+    torch.manual_seed(0)
+    pred = torch.rand(2, 10, 6).clamp(0.01, 0.99).requires_grad_(True)
+    target = (torch.rand(2, 10, 6) > 0.5).float()
+    mask = torch.tensor([[1.0, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1]])
+    T.weighted_bce(pred, target, torch.ones(6), mask).backward()
+    assert torch.all(pred.grad[0, :, 5] == 0)
+    assert torch.any(pred.grad[1, :, 5] != 0) and torch.any(pred.grad[0, :, 0] != 0)
+
+
+def test_학습_설정의_ignore_classes는_클래스_이름이어야_한다():
+    cfg = T.TrainConfig.from_dict(
+        {
+            "classes": "five_pedal",
+            "train_datasets": [{"path": "x", "weight": 0.2, "ignore_classes": ["pedal"]}],
+        }
+    )
+    assert cfg.train_datasets[0].ignore_classes == ("pedal",)
+    with pytest.raises(ValueError, match="ignore_classes"):
+        T.TrainConfig.from_dict(
+            {"classes": "five", "train_datasets": [{"path": "x", "ignore_classes": ["pedal"]}]}
+        )
 
 
 # ---------- 모델·체크포인트 ----------

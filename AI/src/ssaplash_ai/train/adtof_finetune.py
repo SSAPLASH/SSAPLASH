@@ -4,7 +4,7 @@
 - 6클래스(five_pedal)·7클래스(five_pedal_cym)·9클래스(pads)는 5클래스 가중치에서 출력층을 복사해 초기화
   (탐 3개 ← 탐, 크래시·라이드 ← 심벌, 페달 ← 하이햇)
 - 손실: 프레임·클래스별 이진 교차 엔트로피. 양성 가중치 = 클래스 가중치(탐은 × tom_weight_mult,
-  페달은 × pedal_weight_mult)
+  페달은 × pedal_weight_mult). 데이터셋의 ignore_classes 채널은 그 윈도에서 손실에서 뺌
 - 학습 전에 기본 가중치를 5클래스로 한 번 검증해 기준값으로 둠. 시작 가중치도 한 번 검증해 log.csv 에폭 -1 줄
 - 에폭 = steps_per_epoch 스텝. 에폭마다 검증 F1을 재서 select_metric이 오르고, 5가지 클래스 F1이 모두
   기준값보다 guard_drop 넘게 떨어지지 않았으면 best.pth. 그런 에폭이 하나도 없으면 마지막 가중치를 best.pth로(경고)
@@ -43,6 +43,7 @@ from ssaplash_ai.train.adtof_data import (
     WindowConfig,
     WindowDataset,
     class_names,
+    loss_mask,
     pedal_indices,
     tom_indices,
 )
@@ -145,7 +146,12 @@ class TrainConfig:
             raise ValueError(f"학습 설정에 모르는 키: {sorted(unknown)}")
         kw = dict(raw)
         kw["train_datasets"] = [
-            DatasetSpec(Path(d["path"]), float(d.get("weight", 1.0))) for d in raw["train_datasets"]
+            DatasetSpec(
+                Path(d["path"]),
+                float(d.get("weight", 1.0)),
+                tuple(str(c) for c in d.get("ignore_classes") or ()),
+            )
+            for d in raw["train_datasets"]
         ]
         kw["val_datasets"] = [
             ValSpec(Path(d["path"]), d.get("n_songs")) for d in raw.get("val_datasets", [])
@@ -155,6 +161,8 @@ class TrainConfig:
                 kw[key] = (float(kw[key][0]), float(kw[key][1]))
         cfg = cls(**kw, raw=dict(raw))
         class_names(cfg.classes)
+        for spec in cfg.train_datasets:
+            loss_mask(cfg.classes, spec.ignore_classes)
         return cfg
 
     def window_config(self) -> WindowConfig:
@@ -298,11 +306,21 @@ def save_checkpoint(path: Path, model: torch.nn.Module, info: dict) -> None:
 
 
 def weighted_bce(
-    pred: torch.Tensor, target: torch.Tensor, pos_weight: torch.Tensor
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pos_weight: torch.Tensor,
+    mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """sigmoid 출력에 대한 이진 교차 엔트로피. 양성 프레임의 가중치가 pos_weight, 음성은 1."""
+    """sigmoid 출력에 대한 이진 교차 엔트로피. 양성 프레임의 가중치가 pos_weight, 음성은 1.
+
+    mask (배치, 클래스)가 있으면 0인 채널의 손실을 빼고, 남은 원소 수로 나눈 평균.
+    """
     weight = 1.0 + (pos_weight - 1.0) * target
-    return F.binary_cross_entropy(pred, target, weight=weight)
+    if mask is None:
+        return F.binary_cross_entropy(pred, target, weight=weight)
+    m = mask[:, None, :].to(pred.dtype).expand_as(pred)
+    total = F.binary_cross_entropy(pred, target, weight=weight * m, reduction="sum")
+    return total / m.sum().clamp_min(1.0)
 
 
 def set_freeze_cnn(model: ADTOFFrameRNN, freeze: bool) -> None:
@@ -541,10 +559,10 @@ def train(
         model.train()
         losses = []
         for _ in range(cfg.steps_per_epoch):
-            x, y = next(it)
-            x, y = x.to(device), y.to(device)
+            x, y, m = next(it)
+            x, y, m = x.to(device), y.to(device), m.to(device)
             pred = model(x)
-            loss = weighted_bce(pred, y, pos_weight)
+            loss = weighted_bce(pred, y, pos_weight, m)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
