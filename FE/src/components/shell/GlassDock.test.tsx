@@ -22,3 +22,17 @@ describe('GlassDock 마크업', () => {
     expect((html.match(/aria-checked="/g) ?? []).length).toBe(2);
   });
 });
+
+// 정적 렌더(서버 스냅샷)는 초기 스토어 값만 읽으므로 셸 모드·재생 전(playRunning=false)에는 저장 설정대로 펼쳐진다.
+// 자동 접힘 타이머 동작은 dockAutoCollapse.test.ts에서 가짜 타이머로 검증한다.
+describe('GlassDock 기본 상태', () => {
+  it('playRunning 기본값 false면 펼친 Dock(셸 모드)', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <GlassDock />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('glass-dock motion-dialog shell');
+    expect(html).not.toContain('collapsed');
+  });
+});
