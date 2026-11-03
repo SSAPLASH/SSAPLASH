@@ -35,6 +35,7 @@ import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
 import { startPlaySync } from '@/app/playSync';
+import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
@@ -183,6 +184,8 @@ export function SheetPage() {
       metronome.unlock();
       acc.unload();
       if (goTimer.current !== null) window.clearTimeout(goTimer.current);
+      // 녹음 스위치 해제(armed였으면 idle로, 잠금도 푼다)
+      disarm();
     };
   }, [acc]);
 
@@ -293,6 +296,8 @@ export function SheetPage() {
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);
+      // 곡 시작 시각은 로그와 녹음이 같은 값을 쓴다
+      const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         mode: 'SHEET',
         snapshot: ss.snapshot(),
@@ -304,7 +309,7 @@ export function SheetPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        startedAt: startedAt.current ?? new Date(),
+        startedAt: songStartedAt,
         chartVersionId: ss.chart.chartVersionId ?? null,
         songNumericId: ss.chart.songNumericId ?? null,
         chartId: ss.chart.chartId ?? null,
@@ -314,6 +319,18 @@ export function SheetPage() {
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
+      // 녹음이 켜져 있으면 스토어가 저장 대기로 넘기고, 꺼져 있으면 무시한다. 실패해도 결과 이동은 막지 않는다
+      try {
+        finishSong({
+          mode: 'SHEET',
+          hits: recorder.current.hits,
+          chart: { title: ss.chart.title, durationMs: ss.chart.durationMs },
+          startedAt: songStartedAt,
+          playId: log.playId,
+        });
+      } catch (e) {
+        console.warn('녹음 확정에 실패했습니다.', e);
+      }
       navigate(`/result/${log.playId}`, { replace: true });
     },
     [navigate, inputSource, settings.timing],
@@ -407,6 +424,10 @@ export function SheetPage() {
   useShell({ title: '악보 연습', immersive: stage === 'play' });
   // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
+  // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
+  useEffect(() => {
+    setLocked(stage === 'play');
+  }, [stage]);
 
   // 연주 중 프레임: 세션 tick·종료 감지는 PlayClock, HUD는 4Hz
   useEffect(() => {
