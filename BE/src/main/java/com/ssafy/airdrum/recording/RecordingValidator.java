@@ -2,6 +2,7 @@ package com.ssafy.airdrum.recording;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.play.PlayUploadRequest.InputSource;
+import com.ssafy.airdrum.play.PlayUploadRequest.Mode;
 
 /**
  * 녹음 요청 검사와 정규화(256번 설계 3-2절). 제목을 다듬고 타격을 {@code tMs}로 안정 정렬한 새 요청을 돌려준다(설계 U4 c).
@@ -54,11 +56,34 @@ class RecordingValidator {
 				p.startedAt(), p.durationMs(), List.copyOf(hits));
 	}
 
-	private static String title(String value) {
+	/** 목록 검색어. 비었으면 전체, 앞뒤 공백 제거 뒤 100자(코드 포인트)까지. ILIKE용으로 ! % _를 escape한 패턴을 돌려준다. */
+	static String searchPattern(String q) {
+		String stripped = q == null ? "" : q.strip();
+		check(stripped.codePointCount(0, stripped.length()) <= MAX_TITLE);
+		return "%" + stripped.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+	}
+
+	/** 목록 정렬. null이면 NEWEST. NEWEST면 true, OLDEST면 false, 그 밖은 400. */
+	static boolean newest(String sort) {
+		if (sort == null || sort.equals("NEWEST")) return true;
+		check(sort.equals("OLDEST"));
+		return false;
+	}
+
+	/** 목록 모드 필터. null이면 전체(null), 그 밖에는 플레이 로그와 같은 4개 값만. 빈 문자열도 400. */
+	static String modeFilter(String mode) {
+		if (mode == null) return null;
+		check(Arrays.stream(Mode.values()).anyMatch(m -> m.name().equals(mode)));
+		return mode;
+	}
+
+	static String title(String value) {
 		check(value != null);
 		String stripped = value.strip();
 		// DB varchar(100)과 같이 코드 포인트로 센다(검증 D4).
 		check(!stripped.isEmpty() && stripped.codePointCount(0, stripped.length()) <= MAX_TITLE && stripped.indexOf(0) < 0);
+		// 짝 없는 서로게이트는 UTF-8로 못 바꿔 DB에 ?로 저장된다(257 검증 D8). 짝이 맞으면 한 코드 포인트로 묶여 걸리지 않는다.
+		check(stripped.codePoints().noneMatch(cp -> cp >= Character.MIN_SURROGATE && cp <= Character.MAX_SURROGATE));
 		return stripped;
 	}
 
