@@ -140,6 +140,15 @@ describe('InputManager 상태·활동 알림', () => {
     ]);
   });
 
+  it('status 이벤트의 unconfigured를 리스너 다섯째 인자로 넘긴다', async () => {
+    const { im, src } = await setup('webserial');
+    const got: Array<boolean | undefined> = [];
+    im.onStatus((_id, _c, _s, _b, u) => got.push(u));
+    src.fire({ kind: 'status', stickId: 1, connected: true, batteryPct: 64, unconfigured: true });
+    src.fire({ kind: 'status', stickId: 0, connected: true });
+    expect(got).toEqual([true, undefined]);
+  });
+
   it('attach(auto)는 autoConnect를 지원하면 connect 대신 그걸 부른다', async () => {
     const calls: string[] = [];
     class AutoSource extends MockSource {
