@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ssaplash_ai.coach.advice import tip_for
 from ssaplash_ai.coach.config import (
     ANALYZER_VERSION,
     DEFAULT_THRESHOLDS,
@@ -49,6 +50,7 @@ def _to_segment(c: Candidate) -> WeakSegment:
         toMs=c.to_ms,
         pattern=c.pattern,
         description=c.description,
+        tip=tip_for(c.pattern, c.pads),
         causeTags=c.cause_tags,
         pads=c.pads,
         metrics=metrics,

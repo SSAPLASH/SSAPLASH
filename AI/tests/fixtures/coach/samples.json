@@ -366,7 +366,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.1",
+   "analyzerVersion": "weak-rules-0.2",
    "reason": "OK",
    "weakSegments": [
     {
@@ -374,6 +374,7 @@
      "toMs": 14501.0,
      "pattern": "TIMING_LATE",
      "description": "전체적으로 평균 22ms 늦게 치고 있어요.",
+     "tip": "스틱을 미리 올려 두고, 박 소리가 들리는 순간 내려쳐 보세요. 느린 템포부터 시작하면 감이 빨리 와요.",
      "causeTags": [
       "LATE",
       "OVERALL"
@@ -394,6 +395,7 @@
      "toMs": 12000.0,
      "pattern": "MISS_CLUSTER",
      "description": "7~12초 구간에서 노트의 40%를 놓쳤어요.",
+     "tip": "놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.",
      "causeTags": [
       "MISS",
       "CLUSTER"
@@ -739,7 +741,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.1",
+   "analyzerVersion": "weak-rules-0.2",
    "reason": "NO_WEAKNESS",
    "weakSegments": []
   }
@@ -915,7 +917,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.1",
+   "analyzerVersion": "weak-rules-0.2",
    "reason": "INSUFFICIENT_HITS",
    "weakSegments": []
   }
