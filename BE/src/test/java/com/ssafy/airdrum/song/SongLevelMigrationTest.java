@@ -15,12 +15,12 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest
 class SongLevelMigrationTest {
     @Autowired DataSource source;
-    @Test void v28PreservesRowsEnforcesAllFieldsAndRestrictsDeletion() throws Exception {
-        String schema="level28_"+UUID.randomUUID().toString().replace("-","");
+    @Test void v29PreservesRowsEnforcesAllFieldsAndRestrictsDeletion() throws Exception {
+        String schema="level29_"+UUID.randomUUID().toString().replace("-","");
         var pool=(HikariDataSource)source;
         DataSource isolated=new DriverManagerDataSource(pool.getJdbcUrl(),pool.getUsername(),pool.getPassword());
         try {
-            flyway(isolated,schema,"27").migrate();
+            flyway(isolated,schema,"28").migrate();
             try (Connection c=isolated.getConnection(); var s=c.createStatement()) {
                 s.execute("SET search_path TO "+schema);
                 try {
@@ -29,7 +29,7 @@ class SongLevelMigrationTest {
                     s.execute("INSERT INTO chart_versions(id,chart_id,version,notes,timing,notation_status,note_count,generator) OVERRIDING SYSTEM VALUE VALUES(999999,999999,1,'[]','{}','PENDING',0,'BUILTIN')");
                 } finally { s.execute("RESET search_path"); }
             }
-            flyway(isolated,schema,"29").migrate();
+            assertThat(flyway(isolated,schema,"29").migrate().migrationsExecuted).isEqualTo(1);
             try (Connection c=isolated.getConnection(); var s=c.createStatement()) {
                 s.execute("SET search_path TO "+schema);
                 try {
