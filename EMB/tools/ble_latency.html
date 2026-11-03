@@ -169,6 +169,8 @@ function play(pad, vel) {
     case 'MID_TOM':   tone(t, 0.95 * v, 0.32, 180, 105); break;
     case 'FLOOR_TOM': tone(t, 1.0 * v, 0.40, 130, 70); break;
     case 'CRASH': case 'RIDE': noise(t, 0.4 * v, 0.6, 'highpass', 5000); break;
+    case 'KICK':      tone(t, 1.2 * v, 0.35, 110, 45); break;
+    case 'HIHAT_PEDAL': noise(t, 0.4 * v, 0.04, 'highpass', 6000); break;
     default:          noise(t, 0.25 * v, 0.03, 'highpass', 2000);       // 판정 없음: 짧은 클릭
   }
 }
@@ -239,6 +241,10 @@ function handle(dv, recv) {
       const m = b[2];
       $('bridge').textContent = `동글 ${b[3]}.${b[4]} · ` + ROLE_NAME.map((n, i) => `${n} ${m & (1 << i) ? '●' : '○'}`).join(' ');
       if (m !== lastLink) { log(`LINK ${ROLE_NAME.filter((_, i) => m & (1 << i)).join(', ') || '없음'}`); lastLink = m; }
+      break;
+    }
+    case 0x08: {                                   // PEDAL (v0.8 초안, 페달 보드): [2] 0 뗌 / 1 밟음
+      log(`PEDAL ${ROLE_NAME[role]} ${b[2] ? '밟음' : '뗌'}`);
       break;
     }
     case 0x7e: $('bridge').textContent = `브리지 ok ${dv.getUint32(2, true)} · CRC ${dv.getUint32(6, true)}`; break;
