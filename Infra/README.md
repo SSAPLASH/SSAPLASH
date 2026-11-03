@@ -84,7 +84,8 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - 공개 주소(`OBJECT_STORAGE_PUBLIC_URL`)는 도메인 루트이며 경로 접두사를 붙이지 않는다. 서명에는 호스트와 경로가 들어 있어 Nginx가 경로를 자르거나 `Host`를 바꾸면 서명이 틀어진다.
 - SeaweedFS에 `-s3.externalUrl`로 같은 주소를 지정해 프록시 뒤에서도 서명을 검증한다. 허용 출처(CORS)도 이 주소로 좁힌다.
 - HTTPS(S15P31A307-39) 적용 후에는 `OBJECT_STORAGE_PUBLIC_URL`을 `https` 주소로 바꾸고 다시 확인한다.
-- Nginx는 경로별 요청 전체 크기를 제한한다: 일반·관리자 MIDI 1088 KiB, 일반·관리자 커버 2112 KiB, 관리자 반주와 `/api/v1/sheets` 51 MiB, `/api/v1/plays` 5 MiB다. 기존 음원 51 MiB, raw 21 MiB, 워커 결과 8 MiB, 워커 staging 128 MiB와 그 외 API 기본 1 MiB도 유지한다. 일반 스토리지 프록시는 50 MiB다. 해당 API 경로의 초과 응답은 기존 `*_TOO_LARGE` 코드의 413 Problem JSON이다. 파일 형식·개별 파일 크기는 BE에서 별도로 검사한다.
+- Nginx는 경로별 요청 전체 크기를 제한한다: 일반·관리자 MIDI 1088 KiB, 일반·관리자 커버 2112 KiB, 관리자 반주와 `/api/v1/sheets` 51 MiB, `/api/v1/plays`와 `/api/v1/recordings`(녹음 저장) 5 MiB다. 기존 음원 51 MiB, raw 21 MiB, 워커 결과 8 MiB, 워커 staging 128 MiB와 그 외 API 기본 1 MiB도 유지한다. 일반 스토리지 프록시는 50 MiB다. 해당 API 경로의 초과 응답은 기존 `*_TOO_LARGE` 코드의 413 Problem JSON이다. 파일 형식·개별 파일 크기는 BE에서 별도로 검사한다.
+- 앞단 Nginx는 API JSON 응답(`application/json`, `application/problem+json`)만 1 KiB 이상일 때 gzip으로 압축한다(압축 수준 5, `Vary: Accept-Encoding`). BE는 응답 압축을 하지 않고, 프론트 정적 파일은 FE 컨테이너(`FE/nginx.conf`)가 압축하며, 음원·이미지·모델은 이미 압축된 형식이라 제외했다. 요청 본문 압축은 지원하지 않는다.
 - 로컬 Docker에서 `python Infra/nginx/test_upload_limits.py`를 실행하면 실제 Nginx TLS 설정의 문법·경로별 한도와 내부 경로 차단을 확인한다. 임시 upstream은 본문 전달만 확인하며 BE 검증이나 실제 GPU 접근 검사가 아니다. 초과 요청은 선언된 Content-Length로 거절하므로 전체 본문을 보내지 않는다. 내부 8 MiB 경계만 허용 IP를 완화한 임시 설정 사본으로 검사한다.
 - 앱이 스토리지를 쓰는 스위치(`CHART_ASSET_ENABLED`, `PLAY_RAW_ENABLED`)는 기본 꺼짐이다. 켜는 시점은 BE와 확인한다.
 
