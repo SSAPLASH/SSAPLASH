@@ -247,6 +247,24 @@ class ReportQueryApiTest {
         assertThat(before.get("analysisStatus").asText()).isEqualTo("DONE");
         assertThat(read("/notes").get("items").size()).isEqualTo(2);
     }
+    /** AI가 항목에 더한 선택 필드(tip)는 BE가 모르는 필드여도 저장된 그대로 응답에 나온다. */
+    @Test void segmentTipStoredByAiIsReturnedUnchanged() throws Exception {
+        upload();
+        String tip = "놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.";
+        db.update("""
+                UPDATE reports SET analysis_status='DONE',generator_version='BE_REPORT_V1+weak-rules-0.2',
+                weak_segments='[{"fromMs":7000,"toMs":12000,"pattern":"MISS_CLUSTER","description":"7~12초 구간에서 노트의 40%%를 놓쳤어요.",
+                "tip":"%s","causeTags":["MISS","CLUSTER"],"pads":["SNARE"],"metrics":{"severity":0.67,"scope":"SEGMENT"}},
+                {"fromMs":0,"toMs":100,"pattern":"SOMETHING_NEW","description":"새 패턴이에요.","causeTags":[],"pads":[],"metrics":{"severity":0.1}}]'
+                WHERE play_session_id=?
+                """.formatted(tip), play);
+        var report = read("");
+        assertThat(report.get("weakSegments").size()).isEqualTo(2);
+        assertThat(report.get("weakSegments").get(0).get("tip").asText()).isEqualTo(tip);
+        assertThat(report.get("weakSegments").get(0).get("description").asText()).isEqualTo("7~12초 구간에서 노트의 40%를 놓쳤어요.");
+        assertThat(report.get("weakSegments").get(1).has("tip")).isFalse();
+        assertThat(report.get("generatorVersion").asText()).isEqualTo("BE_REPORT_V1+weak-rules-0.2");
+    }
     @ParameterizedTest
     @ValueSource(strings = {"", "/notes"})
     void deletionBetweenAccessCheckAndDataReadUsesOneSnapshot(String suffix) throws Exception {
