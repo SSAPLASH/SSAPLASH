@@ -57,6 +57,13 @@ describe('PauseOverlay 연결 끊김', () => {
     expect(html).not.toContain('잠시 쉬어가도 괜찮아요');
   });
 
+  it('reason=reconnected면 「재연결 성공!」 카드(버튼 없음)', () => {
+    const html = render('reconnected', true);
+    expect(html).toContain('재연결 성공!');
+    expect(html).toContain('3초 뒤 이어서 연주해요');
+    expect(html).not.toContain('<button');
+  });
+
   it('재연결 핸들러가 없으면 [다시 연결]이 없다', () => {
     expect(render('disconnected', false)).not.toContain('다시 연결</button>');
   });
