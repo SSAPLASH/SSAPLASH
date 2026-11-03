@@ -45,7 +45,10 @@
 | 데이터 보호 | `docker volume prune` 금지(볼륨·인증서 손실) | 확인함(사고 경험) |
 | TLS | 인증서 발급·적용(https 접속, http→https 리다이렉트, TLS 1.2·1.3) | 확인함(2026-10-27) |
 | TLS | 갱신 경로(`--dry-run`) | 확인함. 자동 갱신은 안 함(수동 갱신으로 대체, 만료 2027-01-25) |
-| TLS | 오래된 TLS 거부, SSL Labs 등급, HSTS | 미확인 |
+| TLS | 오래된 TLS 거부, SSL Labs 등급, HSTS | 미확인(HSTS 누락은 ZAP으로 확인함, 16절) |
+| 웹 보안 | ZAP 수동 분석(운영, 로그인 상태 포함): High 0건, 우리 서비스 응답 기준 보안 헤더 누락 5종 | 확인함(2026-11-02, 16절). 헤더 조치는 설정 반영·로컬 시험함, 서버 적용 전. CSP는 Report-Only로 화면 확인 전 |
+| 웹 보안 | ZAP 공격 스캔(로컬, 일반·관리자 토큰): 실패 0건, SQL Injection 2~3건은 오탐. 검증 누락으로 `500`이 나는 입력(깨진 multipart, 검색어의 NUL 문자) | 확인·수정·재검증 완료(로컬, 2026-11-02~03, 16절). `500`은 0건으로, CORP 헤더 없음이 재검증에서 신규 발견 |
+| 접근 제어 | 프리셋 IDOR, 텔레메트리 `userId`, 관리자 API, 토큰 위조(서명·`alg=none`·발급자) | 확인함(로컬, 2026-11-02·03, 16절). 모두 막힘. curl로 직접 재현해 재확인 |
 | 접근 제어 | SSH 키 전용(확인함), root 로그인(`PermitRootLogin no` 적용, 확인함), 열린 포트(확인함) | 일부 확인함(48번 진행 중) |
 | 패치 | 자동 보안 업데이트 동작(확인함), 재부팅 필요 패치 적용(확인함), 재부팅 후 자동 복구(확인함) | 확인함 |
 
@@ -454,3 +457,136 @@ AI 채보 워커가 GPU가 필요해 EC2 밖(교내 GPU 서버)에서 돌게 되
 - 다른 IP에서 같은 요청 → **403**
 - 어디서든 `/internal/` 아래의 다른 경로 → **404**
 - 워커 경로의 접근 로그는 비활성화되어 있다. GPU 서버에서 토큰·쿼리 없이 `/health`를 요청하고 일반 접근 로그에 실제 공인 출발지 IP가 표시되는지 확인한다. 허용 IP의 워커 요청이 BE 인증까지 도달하는지는 응답 코드로 확인한다.
+
+---
+
+## 16. ZAP 웹 취약점 분석 (2026-11-02)
+
+OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수동 탐색(passive)** 으로 분석했다. 직접 화면을 눌러 보며 오간 요청과 응답만 검사했고, 공격 요청을 보내는 스캔(active, fuzz)은 하지 않았다. 점검 대상은 **v2.0 배포 전의 운영 버전**이다. 점검 이후 `main`에는 v2.0이 들어갔으므로 배포 뒤에 같은 방법으로 다시 본다. 아래 헤더 조치는 `Infra/nginx/default.conf`에 **설정으로 반영**했고 로컬 시험으로 확인했지만, **운영 서버에는 아직 적용하지 않았다**(배포 뒤 응답 헤더로 확인한다).
+
+**방법과 범위**
+- 본인 소셜 로그인 계정으로 로그인한 상태를 포함해 화면을 직접 사용했다. 로그인 자체는 프록시를 거치지 않는 창에서 먼저 하고, 로그인된 브라우저 프로필을 ZAP 프록시를 켜고 다시 열었다. 소셜 계정 비밀번호가 ZAP 기록에 남지 않게 하려는 것이다. 소셜 제공자 쪽 로그인 구간은 우리 소관이 아니라 범위 밖이다.
+- ZAP은 세션을 저장하지 않고 닫았고, 사용한 임시 브라우저 프로필은 지웠다. 보고서는 저장소 밖에 둔다. 로그인한 요청의 쿠키·토큰이 근거에 섞일 수 있어 저장소에 올리지 않는다.
+- **이 수동 분석에서 확인하지 않은 것:** 공격 스캔과 권한이 다른 계정으로의 접근 제어(IDOR), 로그인 구간의 취약점. 운영 서버에 공격 스캔을 돌리면 실제 DB에 데이터가 쌓이고 서비스에 부하가 걸려, 공격 스캔은 **로컬에 띄운 환경에서 따로 했다**(아래 "공격 스캔").
+
+**결과 요약:** 경고 11종. 위험 높음 0, 중간 4, 낮음 3, 정보 4.
+
+**우리 서비스 응답에서 나온 것 (조치 대상)**
+
+| 위험 | 경고 | 근거 | 조치 위치 |
+| --- | --- | --- | --- |
+| 중간 | CSP(`Content-Security-Policy`) 헤더 없음 | `/` | 앞단 Nginx + FE 확인 |
+| 중간 | 클릭재킹 방지 헤더 없음(`X-Frame-Options`·CSP `frame-ancestors`) | `/` | 앞단 Nginx |
+| 중간 | SRI(`integrity` 속성) 없음 | `FE/index.html`의 Pretendard CSS 링크(외부 CDN) | FE |
+| 낮음 | `Server` 헤더에 Nginx 버전 노출(`nginx/1.27.5`) | `/`, `/api/users/me`, `/api/auth/refresh`, `/fonts/*` 등 응답 전반 | 앞단 Nginx(`server_tokens off`) |
+| 낮음 | HSTS(`Strict-Transport-Security`) 없음 | 같은 응답 전반 | 앞단 Nginx |
+
+**조치 대상이 아닌 것 (사유 기록)**
+
+| 위험 | 경고 | 판단 |
+| --- | --- | --- |
+| 중간 | Cross-Domain Misconfiguration(5건) | 5건 모두 `cdn.jsdelivr.net`의 Pretendard 폰트 파일. 공개 CDN의 정상적인 CORS 응답이고 우리 서버 설정이 아니다. 폰트를 자체 호스팅하면 사라진다 |
+| 낮음 | `X-Content-Type-Options` 없음(4건) | 4건의 출처가 브라우저 자체 통신(`clientservices.googleapis.com` 등)이다. 우리 도메인 응답에서는 나오지 않았다 |
+| 정보 | Modern Web Application, Retrieved from Cache(5), Session Management Response Identified(`/api/auth/refresh`) | 참고용. 세션 응답 식별은 갱신 API가 세션 쿠키를 내려 주는 것을 알려 줄 뿐이다 |
+| 정보 | Cache-control 재검토 | 공개 조회 API(`/api/v1/songs`, `/api/v1/charts/1` 등)에 캐시 지시가 없다는 알림. 공개 데이터라 우선순위 낮음. 조회 API의 캐시 정책은 BE와 정할 일이다 |
+
+**조치 (설정 반영, 서버 적용 전)**
+
+헤더 조치 1~3은 `Infra/nginx/default.conf`에 반영했다. 4는 FE 요청 대상이라 아직 요청 전이다.
+
+**로컬 시험(2026-11-02):** 앞단 Nginx 설정을 그대로 쓰고 뒤쪽을 스텁 컨테이너로 바꿔 응답 헤더를 확인했다. `web` 스텁은 `FE/nginx.conf`를, `api` 스텁은 Spring처럼 `nosniff`·`X-Frame-Options`를 보내게 했다.
+- `/`, `/api/*`, `/health`, 정적 파일에서 `Server: nginx`(버전 없음), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS(`max-age=300`)가 **각각 한 번씩** 나간다. 뒤쪽이 같은 헤더를 보내도 `proxy_hide_header`가 지워서 값이 겹치지 않는다.
+- `/models/*`는 `add_header`를 가진 location이라 상속이 끊겨 헤더를 따로 적었고, 시험에서 같은 헤더가 나가는 것을 확인했다.
+- CSP는 `Content-Security-Policy-Report-Only`로 `/`와 `/api/*` 응답에 나가고, HTML이 아닌 `/models/*`에는 붙이지 않았다. 이 시험은 **헤더가 붙는지**만 본 것이다. CSP 위반 여부(실제 화면이 정책에 걸리는지)는 브라우저에서 화면을 눌러 보며 콘솔을 봐야 하고, 아직 하지 않았다.
+
+**조치 계획 (순서)**
+1. 부작용이 거의 없는 헤더부터: `server_tokens off`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`. 한 파일(`include`)로 모아 각 location에 넣는다. **Nginx는 location에 `add_header`가 하나라도 있으면 상위(server) 블록의 `add_header`를 상속하지 않는다.** `Infra/nginx/default.conf`의 `/models/`(Cache-Control을 붙이는 location)처럼 이미 `add_header`가 있는 곳은 공통 헤더를 따로 넣어야 한다. 이 상속 규칙을 몰라서 헤더가 빠지는 실수가 흔하다.
+2. HSTS는 `max-age`를 짧게(5분~1일) 시작해 점차 늘린다. **`includeSubDomains`와 `preload`는 쓰지 않는다.** `ssafy.io`는 우리가 소유한 도메인이 아니라 같은 도메인의 다른 서비스에 영향을 줄 수 있다. 한 번 길게 건 HSTS는 브라우저에서 되돌리기 어렵다.
+3. CSP는 바로 강제하지 않고 `Content-Security-Policy-Report-Only`로 먼저 넣어 위반을 본다. 웹 오디오·ONNX 모델(WASM)·블롭·웹 시리얼을 쓰는 앱이라 정책이 거칠면 화면이 깨질 수 있다. FE와 같이 본다.
+4. FE에 요청: Pretendard 폰트를 `public/fonts/`의 다른 폰트처럼 **자체 호스팅**한다. 외부 CDN 의존을 없애면 SRI·CORS 경고가 사라지고 CSP 허용 목록(`cdn.jsdelivr.net`)이 필요 없어진다. 라이선스(SIL OFL) 파일 동봉은 FE가 확인한다. 이 작업은 `mail`로 요청한다.
+
+**공격 스캔 (로컬, 2026-11-02)**
+
+`main` 코드로 `Infra/docker-compose.yml`의 최소 구성(`nginx`, `web`, `api`, `postgres`, `redis`, `seaweedfs`)을 로컬에 띄우고 ZAP(`zap-api-scan`, 공식 Docker 이미지)으로 공격 스캔했다. **운영 서버에는 어떤 요청도 보내지 않았다.** 환경은 로컬 전용 난수 비밀값을 쓰고 끝난 뒤 볼륨까지 지웠다. 소셜 로그인은 로컬에서 쓸 수 없어, 로컬 DB에 테스트 사용자를 넣고 로컬 `JWT_SECRET`으로 서명한 토큰(일반 2명, 관리자 1명)을 썼다. 대상 API는 BE의 OpenAPI 문서에서 가져온 53개다(로컬 `api`만 문서를 켰고 운영은 `SWAGGER_ENABLED=false`).
+
+- **결과: 실패(FAIL) 0건.** 일반 사용자·관리자 각 1회, 경고 종류는 같다(높음 2건은 아래 오탐, 낮음·정보 위주).
+- **SQL Injection 경고 2건: 오탐.** `POST /api/presets`의 `layout`·`sounds`에 대한 불리언 기반 탐지였다. ZAP이 이 필드를 객체가 아니라 문자열로 보내면 `1=1`, `1=2`, 원본이 모두 같은 `400`이었고, 올바른 형식으로 `' OR 1=1 --`를 이름에 넣으면 그 글자 그대로 저장됐다. 코드(`KitPresetRepository`)도 JPA 파생 쿼리와 파라미터 바인딩만 쓴다.
+- **서버 오류(500)가 약 1,170건: 입력 검증 누락(BE에 알림).** 보안 취약점은 아니지만(응답 본문에 스택·내부 정보 없음) 클라이언트 오류가 서버 오류로 나간다.
+  - 업로드 API(`songs/audio`, `songs/midi`, `admin/songs/*/cover·charts/midi·accompaniment`, `plays/*/raw`)에서 **본문이 끊기거나 형식이 깨진 multipart**가 `MultipartException`으로 `500`이 된다(`400`이어야 한다).
+  - **검색어(`q`)에 NUL 문자(`%00`)** 를 넣으면 `GET /api/v1/sheets`·`/api/v1/songs`가 DB 오류(`invalid byte sequence`)로 `500`이 된다. 재현했다.
+  - 영향: 오류 로그가 불어나고 모니터링 `5xx` 알림이 거짓으로 울릴 수 있다.
+- **CSP 없음(5)·Permissions-Policy 없음·CORP 없음(낮음):** 대상이 `/internal/v1/chart-jobs/*` 같은 API 응답이다. CSP는 `Report-Only`로 넣어 ZAP의 "CSP 없음" 규칙(강제 CSP만 인정)에는 계속 걸린다. Permissions-Policy와 CORP는 웹 오디오·시리얼 같은 기능과 충돌할 수 있어 FE 확인 전에는 넣지 않았다.
+- **Unexpected Content-Type(39), 4xx 응답, 캐시 지시:** 스캐너가 없는 경로를 불러 SPA의 HTML이 돌아온 것 등으로 조치 대상이 아니다.
+- **URL에 `userId` 파라미터(정보):** 텔레메트리 API(`/api/telemetry/sessions`)의 `userId`는 관리자만 쓸 수 있고 일반 사용자는 `403`이다(아래 수동 점검).
+
+**수동 점검 (같은 로컬 환경)**
+
+| 점검 | 결과 |
+| --- | --- |
+| 일반 사용자 A가 B의 프리셋 조회·수정·기본지정·삭제 | 모두 `404`(존재를 숨김). B의 프리셋은 그대로 |
+| 일반 사용자가 텔레메트리 목록(`userId=타인`) | `403`. 관리자만 `200` |
+| 일반 사용자가 관리자 API | `403`. 관리자는 `200` |
+| 토큰 없이 보호 API(`presets`, `plays`, `sheets`, `admin`, `telemetry`) | 모두 `401` |
+| 서명이 틀린 토큰, `alg=none`으로 관리자 사칭, 다른 발급자(`iss`) 토큰 | 모두 `401` |
+
+**한계와 교훈**
+- 스캔은 OpenAPI 문서에 있는 API만 다룬다. 문서에 없는 경로, WebSocket(`/ws/jobs/`), 워커 API(IP 허용 한 겹이라 로컬에서는 `403`)와 소셜 로그인 흐름, 업로드 **정상 파일의 내용 검증**(악성 파일·거대 파일의 실제 처리)은 점검하지 않았다.
+- **첫 시도는 무효였다.** 탈퇴 API(`DELETE /api/users/me`)를 스캔 설정(`globalexcludeurl`)으로 제외하려 했지만 적용되지 않았고, ZAP이 테스트 사용자를 탈퇴시켜 이후 요청 약 2만 건이 `401`로 끝났다. 이 결과는 버리고 **문서에서 그 작업을 빼서** 다시 돌렸다. 교훈은 두 가지다. 파괴적인 API는 설정 제외에 의존하지 말고 입력(문서)에서 뺀다. 그리고 **"실패 0건·통과 N개"만 보지 말고 응답 코드 분포(`401` 비율)와 테스트 계정의 상태를 확인해 스캔이 실제로 인증된 요청이었는지 본다.**
+- 로컬 환경은 `ssaplash-local` 프로젝트로 분리했고 끝난 뒤 `docker compose down -v`로 지웠다. 보고서는 저장소 밖에 둔다.
+
+**수동 공격 재현 (로컬, 2026-11-03, curl로 직접 실습)**
+
+ZAP 자동 스캔과 별개로, 같은 로컬 환경(`victim`/`attacker`/`admin` 3계정, 로컬 `JWT_SECRET`으로 서명한 토큰)에서 대표 공격을 curl로 하나씩 직접 보내 응답을 확인했다. 목적은 자동 스캔 결과를 손으로 재현해 어느 코드가 막는지 이해하는 것이다.
+
+| 번호 | 공격 | 명령 요지 | 결과 | 판정 |
+| --- | --- | --- | --- | --- |
+| 1 | 토큰 없이 보호 API 호출 | `GET /api/presets` (Authorization 없음) | `401` | 정상 방어 |
+| 2 | IDOR (`presets/1`) | `attacker` 토큰으로 `victim` 소유 프리셋 조회 | `403`/`404` | 정상 방어 |
+| 3 | 토큰 payload 변조(권한상승) | `sub`를 `3`(admin)으로 바꾸고 원래 서명을 그대로 붙여 전송 | `401` | 정상 방어(서명 불일치 검출) |
+| 4 | `alg=none` 위조 | 헤더를 `{"alg":"none"}`로, 서명 칸을 비워 전송 | `401` | 정상 방어 |
+| 5 | SQL Injection 시도 | `GET /api/v1/songs?q=' OR 1=1 --` vs `q=a` | 둘 다 `200`, `totalElements` 동일 | 정상 방어(파라미터 바인딩) |
+| 6 | 검색어 NUL 문자 | `GET /api/v1/sheets?q=a%00b` | `500` | **결함 재현** (13절 "서버 오류" 항목과 동일 원인) |
+| 6-2 | 경계(boundary) 없는 멀티파트 | `Content-Type: multipart/form-data`(boundary 파라미터 없음)로 `plays/{id}/raw`에 전송 | `500` | **결함 재현** (같은 원인군) |
+| 6-3 (대조) | 경계는 있지만 서로 불일치하는 멀티파트 | 헤더 `boundary=AAAA`, 본문 경계 `BBBB`로 전송 | `400` (`Required part 'file' is not present`) | 정상 — 파싱은 끝내고 필수 파트 누락으로 정상 거절 |
+| 7 | 응답 헤더 확인 | `curl -skI https://127.0.0.1:18443/` | `nosniff`·`DENY`·`Referrer-Policy`·`HSTS`·`CSP-Report-Only` 모두 확인, `Server: nginx`(버전 없음) | 위 ①~⑤ 조치가 로컬에서 실제로 적용됨을 확인 |
+
+6과 6-2가 왜 500이고 6-3은 왜 400인지의 경계가 핵심이다: **멀티파트 파싱이 끝나는 지점까지 간 요청(경계는 맞지만 내용이 모자람)은 `400`으로 정상 거절되지만, 파싱 자체가 시작조차 안 되는 입력(경계 없음, DB가 못 받는 NUL 바이트)은 잡아주는 예외 처리기가 없어 `500`으로 샌다.** 13절의 "서버 오류(500)" 항목과 같은 결함을, 이번에는 직접 공격을 만들어 재현해 확인한 것이다.
+
+**수동 점검 (같은 로컬 환경)**
+
+| 점검 | 결과 |
+| --- | --- |
+| 일반 사용자 A가 B의 프리셋 조회·수정·기본지정·삭제 | 모두 `404`(존재를 숨김). B의 프리셋은 그대로 |
+| 일반 사용자가 텔레메트리 목록(`userId=타인`) | `403`. 관리자만 `200` |
+| 일반 사용자가 관리자 API | `403`. 관리자는 `200` |
+| 토큰 없이 보호 API(`presets`, `plays`, `sheets`, `admin`, `telemetry`) | 모두 `401` |
+| 서명이 틀린 토큰, `alg=none`으로 관리자 사칭, 다른 발급자(`iss`) 토큰 | 모두 `401` |
+
+**BE 수정 (로컬, 2026-11-03) — 완료**
+
+깨진 multipart와 NUL 문자 입력이 `500`이 되던 결함을 고쳤다. 이번 주 BE 파트를 겸임하는 담당자(정인웅)가 직접 처리했고, 다른 파트 작업이 아니므로 `mail` 요청 문서는 만들지 않았다.
+
+- `NulParameterFilter`(신규, `common/error`): 요청 파라미터에 NUL 문자(`\u0000`)가 있으면 컨트롤러·DB 전에 `400 INVALID_INPUT`으로 거절한다. multipart 요청은 검사하지 않는다(멀티파트 파싱 전에 `getParameterMap()`을 부르면 본문 스트림을 먼저 소모해 이후 파싱이 깨질 수 있어서).
+- `GlobalExceptionHandler`에 `MultipartException`(경계 없음·크기 초과 포함) 핸들러를 추가해 `500` 대신 `400 INVALID_INPUT`으로 매핑했다.
+- **검증:** curl 재현(위 6·6-2번)이 `400`으로 바뀐 것을 확인했고, 정상 검색어는 그대로 `200`(회귀 없음). 신규 테스트(`NulParameterFilterTest` 4개, `GlobalExceptionHandlerTest`의 멀티파트 케이스)가 통과한다. 전체 테스트는 수정 전후로 같은 4개 클래스만 실패하며, 이는 이 PC의 외부 자원(ffprobe·소켓 바인딩) 제약으로 이번 수정과 무관함을 수정 전 코드로 같은 테스트를 돌려 확인했다.
+
+**재검증 — ZAP Active Scan 재실행 (로컬, 2026-11-03)**
+
+위 BE 수정이 반영된 `api`를 재빌드하고, 같은 로컬 환경에서 Active Scan을 일반 사용자(attacker, id 2)·관리자(admin, id 3) 토큰으로 각각 다시 돌렸다. OpenAPI 문서는 실행 중인 `api`에서 새로 받았고, 탈퇴 API(`DELETE /api/users/me`)는 지난번 교훈대로 다시 입력 문서에서 뺐다.
+
+| 항목 | 2026-11-02(수정 전) | 2026-11-03(수정 후) |
+| --- | --- | --- |
+| 서버 오류(500) | 약 1,170건 | **0건** |
+| FAIL-NEW | 0 | 0 |
+| SQL Injection 경고 | 2건(오탐) | 3건(같은 오탐, `POST /api/presets`) |
+| CSP·Permissions-Policy 없음 | 있음(`/internal/*` 응답) | 그대로(FE 확인 대기, 변화 없음) |
+| Cross-Origin-Resource-Policy(CORP) 없음 | 기록 안 함 | **신규 발견**: `/api/v1/sheets`·`/api/v1/plays`·`/api/auth/logout`·`/api/presets`·`/api/v1/songs` 등 7~8건 |
+
+- **500이 완전히 사라졌다.** NUL 문자·멀티파트 깨짐을 ZAP이 자동으로 수천 번 변형해 두드려도 서버가 더 이상 죽지 않는다는 걸 자동 스캔으로도 확인했다.
+- **관리자 토큰 스캔에서도 추가 경고 없음.** 일반 사용자와 같은 5종, 수가 조금 늘어난 건(7→8) 관리자만 호출 가능한 API가 스캔 대상에 하나 더 포함된 정도다.
+- **CORP 헤더 없음은 새로 짚힌 항목이다.** 다른 출처가 우리 API 응답을 가져다 쓰는 걸 브라우저 단에서 막는 2차 방어 헤더(Spectre류 사이드채널 완화 목적)다. 지금 CORS가 1차로 막고 있어 긴급하지 않으나, Permissions-Policy와 같은 이유로 FE가 다른 출처에서 이 응답을 끌어다 쓰는 경우(iframe, 다른 서브도메인 등)가 없는지 확인한 뒤 `same-origin`으로 넣는다.
+
+**후속**
+- 변경 적용 뒤 같은 방법(수동 탐색, 로그인 포함)으로 다시 분석해 경고가 줄었는지 본다. 보안 헤더가 실제로 붙었는지는 응답 헤더로 직접 확인한다.
+- CORP 헤더는 FE 회신(폰트 자체 호스팅·Permissions-Policy)과 함께 처리한다. `Permissions-Policy`·`Cross-Origin-Resource-Policy: same-origin`을 같이 넣을지 FE 확인 후 결정한다.
+- 이번 분석은 **운영에서 확인한 사실(수동 분석)** 과 **로컬에서 확인한 사실(공격 스캔·수동 공격 재현·재검증)** 을 나눠 적었다. 위 헤더 조치는 설정만 바뀌고 아직 서버에 반영되지 않았으므로 "적용함"으로 쓰지 않는다.
