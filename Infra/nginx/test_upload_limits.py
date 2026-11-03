@@ -23,6 +23,7 @@ CASES = [
     ("PUT", "/api/v1/admin/songs/42/cover", 2112*K, "COVER_TOO_LARGE", "multipart"),
     ("PUT", "/api/v1/admin/songs/42/accompaniment", 51*M, "ACCOMPANIMENT_TOO_LARGE", "multipart"),
     ("POST", "/api/v1/plays", 5*M, "PLAY_UPLOAD_TOO_LARGE", "json"),
+    ("POST", "/api/v1/recordings", 5*M, "RECORDING_TOO_LARGE", "json"),
     ("POST", "/api/v1/sheets", 51*M, "SHEET_TOO_LARGE", "multipart"),
     ("POST", "/api/v1/songs/audio", 51*M, None, "multipart"),
     ("POST", "/api/v1/plays/42/raw", 21*M, None, "multipart"),
