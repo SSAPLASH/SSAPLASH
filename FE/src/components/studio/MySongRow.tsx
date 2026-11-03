@@ -9,6 +9,7 @@ import type { SongSummary } from '@/domain/songCatalog';
 import { dateLabel } from './dateLabel';
 import { FAILED_REASON } from './MySongCard';
 import { SongMenu, type SongEditKind } from './SongMenu';
+import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
 import './studio.css';
 
@@ -42,6 +43,7 @@ export function MySongRow({ song, justDone, onReupload, onEdit, onCoverError }: 
         <span className="studio-row-sub">{sub || ' '}</span>
       </span>
       <SongStatusBadge status={song.status} />
+      <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
       <span className="studio-row-date">{dateLabel(song.createdAt)}</span>
       <span className="studio-row-actions">
         {ready && (
