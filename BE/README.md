@@ -996,6 +996,23 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 .\gradlew.bat test --tests 'com.ssafy.airdrum.song.admin.*' --tests '*SongPublishedVisibilityTest'
 ```
 
+## 공용 곡 카탈로그 (254번)
+
+CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 **앱이 켜질 때 자동으로 등록**한다. 배포만 하면 로컬·dev·운영에 같은 공용 곡이 들어가며, 사람이 ADMIN API를 호출할 필요가 없다.
+
+- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
+- **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
+- **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
+- **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
+- **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
+- **시드 3곡:** V10의 「기본 8비트」·「8비트 + 필인」·「라이드 16비트」는 난이도가 1개씩이라, 같은 패턴을 MIDI로 옮겨(`scripts/seed_midi_from_v10.py`, 1회용·재현용) 카탈로그에 넣었다. 첫 시작 때 3난이도로 채워진다. 「기본 8비트」 EASY 최신 버전은 전체 패턴(96노트)에서 솎은 패턴으로 바뀐다(기존 버전과 플레이 기록은 그대로). MIDI 변환기가 마지막 노트 뒤에 한 마디를 붙이는 규칙(사용자 MIDI 곡과 같음) 때문에 곡 길이(`songs.duration_ms`)가 한 마디 늘어난다: 「기본 8비트」 21333→23667, 「8비트 + 필인」 19200→21300, 「라이드 16비트」 16000→17875 ms. 82번 반주 도구(`registerBasic8Backing`)는 「기본 8비트」의 채보가 V10 원본 그대로(EASY 하나, 버전 1개, 96노트)일 때만 동작하므로 **이 등록 뒤에는 거부된다**. 82번 반주를 아직 연결하지 않은 환경이라면 이 변경을 배포하기 전에 82번 도구를 먼저 실행하거나, 이후에는 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`로 반주를 올린다.
+- **운영 주의:** 카탈로그에 있는 곡은 ADMIN으로 지우거나 제목을 바꿔도 다음 앱 시작 때 카탈로그 제목으로 다시 등록된다. 공용 곡을 없애려면 카탈로그에서 빼서 배포한 뒤 ADMIN으로 지운다.
+- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가 → MR에서 라이선스 리뷰 → 배포. 반주는 MIDI 반주 합성(274번) 방식이 정해지면 붙인다.
+
+```powershell
+.\gradlew.bat test --tests '*BuiltinSong*'
+```
+
 ## 내 악보 보관 (155번)
 
 CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 곡·채보와 연결하지 않는다. FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
