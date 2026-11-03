@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -57,6 +58,12 @@ public class ErrorProbeController {
 	@GetMapping("/status")
 	public void springStatusError() {
 		throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 있음");
+	}
+
+	/** 경계(boundary) 없음·크기 초과 등 멀티파트 파싱 실패를 흉내낸다. 실제 재현은 NulParameterFilterTest 및 수동 curl로 확인했다. */
+	@PostMapping("/multipart")
+	public void multipartParsingFailure() {
+		throw new MultipartException("요청 본문이 올바른 멀티파트 형식이 아닙니다.");
 	}
 
 }
