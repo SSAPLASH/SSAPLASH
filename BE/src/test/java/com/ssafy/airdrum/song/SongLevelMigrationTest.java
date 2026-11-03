@@ -29,7 +29,7 @@ class SongLevelMigrationTest {
                     s.execute("INSERT INTO chart_versions(id,chart_id,version,notes,timing,notation_status,note_count,generator) OVERRIDING SYSTEM VALUE VALUES(999999,999999,1,'[]','{}','PENDING',0,'BUILTIN')");
                 } finally { s.execute("RESET search_path"); }
             }
-            flyway(isolated,schema,"28").migrate();
+            flyway(isolated,schema,"29").migrate();
             try (Connection c=isolated.getConnection(); var s=c.createStatement()) {
                 s.execute("SET search_path TO "+schema);
                 try {
@@ -46,7 +46,7 @@ class SongLevelMigrationTest {
                     s.execute("DELETE FROM chart_versions WHERE id=999999"); s.execute("DELETE FROM charts WHERE id=999999"); s.execute("DELETE FROM songs WHERE id=999999");
                 } finally { s.execute("RESET search_path"); }
             }
-            assertThat(flyway(isolated,schema,"28").migrate().migrationsExecuted).isZero();
+            assertThat(flyway(isolated,schema,"29").migrate().migrationsExecuted).isZero();
         } finally {
             try (Connection c=isolated.getConnection(); var s=c.createStatement()) { s.execute("DROP SCHEMA IF EXISTS "+schema+" CASCADE"); }
         }
