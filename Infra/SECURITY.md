@@ -590,3 +590,14 @@ ZAP 자동 스캔과 별개로, 같은 로컬 환경(`victim`/`attacker`/`admin`
 - 변경 적용 뒤 같은 방법(수동 탐색, 로그인 포함)으로 다시 분석해 경고가 줄었는지 본다. 보안 헤더가 실제로 붙었는지는 응답 헤더로 직접 확인한다.
 - CORP 헤더는 FE 회신(폰트 자체 호스팅·Permissions-Policy)과 함께 처리한다. `Permissions-Policy`·`Cross-Origin-Resource-Policy: same-origin`을 같이 넣을지 FE 확인 후 결정한다.
 - 이번 분석은 **운영에서 확인한 사실(수동 분석)** 과 **로컬에서 확인한 사실(공격 스캔·수동 공격 재현·재검증)** 을 나눠 적었다. 위 헤더 조치는 설정만 바뀌고 아직 서버에 반영되지 않았으므로 "적용함"으로 쓰지 않는다.
+
+---
+
+## 17. API 응답 압축(gzip)과 녹음 저장 한도 (2026-11-03)
+
+BE의 녹음 상세 응답이 최대 약 3.5MB(타격 배열 JSON)라 앞단 Nginx에 응답 압축을 넣었다(REC-001, `Infra/nginx/default.conf`). 같은 변경에서 `POST /api/v1/recordings`의 본문 한도 5 MiB와 413 응답도 추가했다.
+
+- **압축 범위:** API JSON(`application/json`, `application/problem+json`)이 1 KiB 이상일 때만, 압축 수준 5. 프론트 정적 파일은 FE 컨테이너(`FE/nginx.conf`)가 이미 압축하고, 프록시 응답에 `Content-Encoding`이 있으면 앞단은 다시 압축하지 않는다. 음원·이미지·모델은 이미 압축된 형식이라 제외했다. 요청 본문 압축은 BE가 받지 않는다(400).
+- **BREACH(압축을 이용한 정보 추출) 검토:** HTTPS 응답을 압축하면, 같은 응답에 비밀 값(토큰 등)과 공격자가 넣은 입력이 함께 반사되고 공격자가 응답 크기를 관찰할 수 있을 때 비밀 값을 한 글자씩 추정할 수 있다. BE의 설명으로는 사용자 입력을 그대로 되돌리는 응답이 토큰 응답과 겹치지 않는다. 토큰 응답(`/api/auth/*`)은 JWT 한 개 수준이라 1 KiB보다 작아 압축되지 않을 것으로 보지만, **실제 크기는 확인하지 않았다.** 그래서 별도 location으로 제외하지 않았다. 토큰 응답이 커지거나 입력을 반사하는 필드가 생기면 `/api/auth/`에 `gzip off`를 넣는다.
+- **로컬 시험(포트를 열지 않고 컨테이너 안에서 확인):** 합성 JSON 278,172바이트가 압축 요청에서 31,497바이트로 줄었다. 합성 데이터는 반복이 많아 실제 녹음은 이보다 압축률이 낮을 수 있다. `Content-Encoding: gzip`과 `Vary: Accept-Encoding`이 붙고, 1 KiB 미만 응답과 `/health`는 압축되지 않으며, 보안 헤더는 그대로다. 녹음 저장은 5 MiB는 200, 5 MiB + 1바이트는 413 `RECORDING_TOO_LARGE`(`application/problem+json`)이고, `/api/v1/recordings/{id}`는 기본 1 MB 한도를 유지한다. `Infra/nginx/test_upload_limits.py`에 케이스를 추가했지만 이 PC에서는 Python이 없고 포트 바인딩이 막혀 스크립트 자체는 돌리지 못했다.
+- **운영에서는 아직 확인하지 않았다.** 병합과 배포 뒤 실제 녹음 상세 응답의 크기 감소와 `Content-Encoding`을 `curl`로 확인한다.
