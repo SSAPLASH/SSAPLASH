@@ -6,11 +6,12 @@
 - librosa: `beat.beat_track`. torch 없이 돌아서 mock 설정과 테스트용으로 남김
 
 박 시각에서 bpm을 계산하는 방법은 둘이 같음. 박 간격 중앙값에서 15% 넘게 벗어난 간격(박을 건너뛰거나
-두 번 잡은 곳)을 빼고 나머지 평균으로 bpm을 구하고, [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음.
-템포가 바뀌는 곡도 bpm 하나로 냄(가변 템포는 범위 밖).
+두 번 잡은 곳)에서 박을 구간으로 나누고, 구간마다 몇 번째 박인지와 울린 시각을 짝지어 박들이 몇 초에 걸쳐
+나왔는지로 한 박 길이를 구함. 구간들은 합쳐 한 박 길이 하나로 냄.
+[min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음. 템포가 바뀌는 곡도 bpm 하나로 냄(가변 템포는 범위 밖).
 
 박을 못 찾으면(타격이 거의 없는 드럼 트랙) BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
-첫 박·첫 마디 시각은 결과 메타에만 남김. 채보 JSON의 offsetMs는 0(U14).
+채보 JSON의 offsetMs는 첫 박·첫 마디 시각으로 chart_json이 정함(U14·U16).
 
 Beat This! 가중치는 SSAPLASH_MODELS_DIR(기본 data/models)/beat_this/에 두고 md5로 확인함. 없으면 공식 서버,
 안 되면 개발자 사이트에서 받음(2026-10 공식 서버 고장, GitHub 이슈 #20·#23).
@@ -71,18 +72,49 @@ def fold_bpm(bpm: float, min_bpm: float, max_bpm: float) -> float:
     return bpm
 
 
+def _beat_period_from_runs(beats: np.ndarray, even: np.ndarray) -> float | None:
+    """한 박 길이(초). 고른 간격이 MIN_INTERVALS개 이상 이어지는 구간마다 박 번호와 시각을 짝지어 구함.
+
+    구간마다 시작 시각은 따로 두고 한 박 길이는 모든 구간에 같은 값 하나로 최소제곱 계산. 쓸 구간이 없으면 None.
+    """
+    num = den = 0.0
+    start = 0
+    while start < even.size:
+        if not even[start]:
+            start += 1
+            continue
+        end = start
+        while end < even.size and even[end]:
+            end += 1
+        if end - start >= MIN_INTERVALS:
+            run = beats[start : end + 1]
+            index = np.arange(run.size) - (run.size - 1) / 2
+            num += float(np.sum(index * (run - run.mean())))
+            den += float(np.sum(index * index))
+        start = end
+    return num / den if den > 0 else None
+
+
 def bpm_from_beats(beats: np.ndarray) -> float | None:
-    """박 시각(초) → 박 간격으로 계산한 bpm. 쓸 간격이 MIN_INTERVALS 미만이면 None."""
+    """박 시각(초) → bpm. 고른 간격(중앙값 ±15%)이 MIN_INTERVALS 미만이면 None.
+
+    고른 간격이 이어지는 구간마다 박 번호와 시각을 짝지어 한 박 길이를 구함. 박 시각이 20ms 단위라 간격 평균은
+    0.03~0.06bpm 오차가 남아 3분 곡 끝에서 16분 격자를 벗어남(설계 "격자 원점·bpm 계산 수정").
+    그런 구간이 없으면 고른 간격 평균.
+    """
     if beats.size < 2:
         return None
     intervals = np.diff(beats)
     median = float(np.median(intervals))
     if median <= 0:
         return None
-    kept = intervals[np.abs(intervals - median) <= INTERVAL_TOLERANCE * median]
-    if kept.size < MIN_INTERVALS:
+    even = np.abs(intervals - median) <= INTERVAL_TOLERANCE * median
+    if int(np.sum(even)) < MIN_INTERVALS:
         return None
-    return 60.0 / float(np.mean(kept))
+    period = _beat_period_from_runs(beats, even)
+    if period is None:
+        period = float(np.mean(intervals[even]))
+    return 60.0 / period
 
 
 def _ms(seconds: np.ndarray) -> int | None:
