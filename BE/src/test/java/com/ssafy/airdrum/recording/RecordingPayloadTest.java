@@ -197,6 +197,24 @@ class RecordingPayloadTest {
 		rejected(free(KEY).replace("  즉흥 연주 1 ", drum.repeat(101)), RecordingError.RECORDING_INVALID);
 	}
 
+	/** 검증 D8(257): 짝 없는 서로게이트는 DB에 ?로 바뀌어 저장되므로 거부한다. 짝이 맞는 이모지는 받는다. */
+	@Test
+	void 제목에_짝_없는_서로게이트는_안된다() {
+		for (String bad : new String[] {"\\ud83e", "a\\ud83eb", "\\udd41", "\\udd41\\ud83e"})
+			rejected(free(KEY).replace("  즉흥 연주 1 ", bad), RecordingError.RECORDING_INVALID);
+		assertThat(normalized(free(KEY).replace("  즉흥 연주 1 ", "\\ud83e\\udd41")).title()).isEqualTo("🥁");
+	}
+
+	/** 검증 D7(257): jsonb가 아주 작은 수를 긴 소수로 풀어 저장해도 다시 읽을 수 있다. */
+	@Test
+	void 저장된_긴_소수_표기도_다시_읽는다() {
+		String longZero = "0." + "0".repeat(323) + "49";
+		var hits = json.readHits("[{\"tMs\":" + longZero + ",\"pad\":\"SNARE\",\"velocity\":1},{\"tMs\":1e-70,\"pad\":\"KICK\",\"velocity\":2}]");
+		assertThat(hits).hasSize(2);
+		assertThat(hits.get(0).tMs()).isEqualTo(Double.MIN_VALUE);
+		assertThat(hits.get(1).tMs()).isEqualTo(1e-70);
+	}
+
 	@Test
 	void 네_모드를_받는다() {
 		for (String mode : new String[] {"RHYTHM", "FREE", "TEMPO", "SHEET"})
