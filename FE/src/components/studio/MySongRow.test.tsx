@@ -125,3 +125,12 @@ describe('MySongCard 보강', () => {
     expect(card(song({ source: 'AUDIO' }))).not.toContain('studio-chip');
   });
 });
+
+describe('반주 배지 (CHART-002 반주 상태)', () => {
+  it('완료 행의 반주 생성 중·실패만 배지를 붙인다', () => {
+    expect(row(song({ accompanimentStatus: 'GENERATING' }))).toContain('반주 생성 중');
+    expect(row(song({ accompanimentStatus: 'FAILED' }))).toContain('반주 생성 실패');
+    expect(row(song({ accompanimentStatus: 'READY' }))).not.toContain('반주 생성');
+    expect(row(song({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' }))).not.toContain('반주 생성');
+  });
+});
