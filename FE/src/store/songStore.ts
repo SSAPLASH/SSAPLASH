@@ -31,6 +31,7 @@ function builtinSummary(c: Chart, index: number): SongSummary {
     timeSignature: `${c.beatsPerBar}/4`,
     durationMs: c.durationMs,
     hasAccompaniment: false,
+    accompanimentStatus: 'NONE',
     difficulties: [c.difficulty],
     createdAt: '',
     coverUrl: null,
