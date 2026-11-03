@@ -13,6 +13,7 @@ import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
 import { IconButton } from '@/components/ui/IconButton';
+import './glass-dock.css';
 import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
 
