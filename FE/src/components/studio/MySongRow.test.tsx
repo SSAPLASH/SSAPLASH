@@ -16,6 +16,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   timeSignature: '4/4',
   durationMs: 60000,
   hasAccompaniment: false,
+  accompanimentStatus: 'NONE',
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,
@@ -122,5 +123,14 @@ describe('MySongCard 보강', () => {
   it('MIDI 곡은 MIDI 칩, 음원 곡은 칩 없음', () => {
     expect(card(song())).toContain('studio-chip">MIDI');
     expect(card(song({ source: 'AUDIO' }))).not.toContain('studio-chip');
+  });
+});
+
+describe('반주 배지 (CHART-002 반주 상태)', () => {
+  it('완료 행의 반주 생성 중·실패만 배지를 붙인다', () => {
+    expect(row(song({ accompanimentStatus: 'GENERATING' }))).toContain('반주 생성 중');
+    expect(row(song({ accompanimentStatus: 'FAILED' }))).toContain('반주 생성 실패');
+    expect(row(song({ accompanimentStatus: 'READY' }))).not.toContain('반주 생성');
+    expect(row(song({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' }))).not.toContain('반주 생성');
   });
 });

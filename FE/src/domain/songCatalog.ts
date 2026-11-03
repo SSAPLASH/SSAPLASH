@@ -6,6 +6,11 @@ export type SongScope = 'BUILTIN' | 'MINE';
 
 export type NotationStatus = 'PENDING' | 'READY' | 'UNAVAILABLE' | string;
 
+/** 반주 생성 상태(메일 CHART-002 MIDI 반주 합성 회신 3). 곡 `status`(채보 기준)와 따로 움직인다 */
+export type AccompanimentStatus = 'GENERATING' | 'READY' | 'FAILED' | 'NONE';
+
+const ACCOMPANIMENT_STATUSES: readonly AccompanimentStatus[] = ['GENERATING', 'READY', 'FAILED', 'NONE'];
+
 export interface SongSummary {
   id: number;
   title: string;
@@ -17,6 +22,8 @@ export interface SongSummary {
   timeSignature: string;
   durationMs: number | null;
   hasAccompaniment: boolean;
+  /** 반주 상태. 응답에 없으면 hasAccompaniment로 추정한 값 */
+  accompanimentStatus: AccompanimentStatus;
   difficulties: Difficulty[];
   createdAt: string;
   /** 커버 이미지 서명 URL. 없으면 null(기본 커버) */
@@ -85,6 +92,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     timeSignature: String(d.timeSignature ?? '4/4'),
     durationMs: d.durationMs == null ? null : toNumber(d.durationMs),
     hasAccompaniment: d.hasAccompaniment === true,
+    accompanimentStatus: accompanimentStatusOf(d),
     difficulties: sortCharts(((d.difficulties as Difficulty[] | undefined) ?? []).map((difficulty) => ({ difficulty }))).map(
       (x) => x.difficulty,
     ),
@@ -110,6 +118,33 @@ export function songDetailFromDto(d: Record<string, unknown>): SongDetail {
     updatedAt: d.updatedAt == null ? null : String(d.updatedAt),
     charts: sortCharts(charts),
   };
+}
+
+/** 응답의 반주 상태. 4값이 아니거나 없으면(BE 병합 전·구버전) hasAccompaniment로 READY/NONE을 정한다 */
+export function accompanimentStatusOf(d: Record<string, unknown>): AccompanimentStatus {
+  const v = d.accompanimentStatus;
+  if (typeof v === 'string' && (ACCOMPANIMENT_STATUSES as readonly string[]).includes(v)) return v as AccompanimentStatus;
+  return d.hasAccompaniment === true ? 'READY' : 'NONE';
+}
+
+/** 내 곡 반주 배지. 채보가 READY인 곡의 생성 중·실패만 보이고, 나머지는 null(배지 없음) */
+export function accompanimentView(songStatus: string, acc: AccompanimentStatus): SongStatusView | null {
+  if (songStatus !== 'READY') return null;
+  if (acc === 'GENERATING') return { label: '반주 생성 중', tone: 'active' };
+  if (acc === 'FAILED') return { label: '반주 생성 실패', tone: 'danger' };
+  return null;
+}
+
+/** 곡 옵션 「반주 재생」 괄호 문구. 반주가 있으면 빈 문자열. 상태를 모르면 「반주 없음」 */
+export function accompanimentOptionText(acc: AccompanimentStatus | null | undefined): string {
+  if (acc === 'READY') return '';
+  if (acc === 'GENERATING') return '반주 생성 중';
+  return '반주 없음';
+}
+
+/** 반주 폴링 대상: 채보는 READY인데 반주가 아직 생성 중인 곡 */
+export function isAccompanimentPending(song: Pick<SongSummary, 'status' | 'accompanimentStatus'>): boolean {
+  return song.status === 'READY' && song.accompanimentStatus === 'GENERATING';
 }
 
 /** 곡 처리 상태 표기(설계 ACCT-001 마이페이지 3-2). tone은 배지 색, 모르는 값은 원문 그대로 */
