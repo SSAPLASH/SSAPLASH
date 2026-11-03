@@ -20,6 +20,7 @@ extern "C" {
 #define PKT_SYNC_ACK   0x04
 #define PKT_PARAM_ACK  0x06
 #define PKT_LINK       0x07   /* v0.8, 동글만 보냄: [0x07][flags=0][연결 마스크 bit=역할][fwMajor][fwMinor] */
+#define PKT_PEDAL      0x08   /* v0.8 초안, 페달만: [0x08][flags role][state 0 뗌/1 밟음][t_us u32] */
 #define PKT_LOG        0x7F
 
 /* 브라우저 → 스틱 */

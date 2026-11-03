@@ -21,12 +21,12 @@
 #include "app.h"
 #include "stick_proto.h"
 
-#define MAX_STICKS  2
+#define MAX_STICKS  3          /* 스틱 2 + 페달 보드 1 (S15P31A307-232) */
 #define CONN_ITV    6          /* 1.25ms 단위 → 7.5ms */
 #define CMD_ROUTE   0x70       /* 동글 전용: [0x70, 역할 마스크, 명령...] */
 #define SCAN_2ND_S  10         /* 첫 스틱 연결 뒤 두 번째 스틱을 찾는 시간 (초) */
 #define DONGLE_FW_MAJOR 2      /* 2 = XIAO 동글 */
-#define DONGLE_FW_MINOR 1      /* 1 = LINK (v0.8) */
+#define DONGLE_FW_MINOR 2      /* 1 = LINK (v0.8), 2 = 연결 3개·연결당 역할 여러 개(페달 보드) */
 #define LINK_PERIOD_MS  1000
 
 /* a7d5000X-9a3c-4f2e-b1c8-5f0e2d7c0001, 바이트 역순 (스틱 펌웨어와 같음) */
@@ -40,7 +40,7 @@ struct stick_link_t {
     BLEClientCharacteristic chr_ctrl{BLEUuid(UUID_CTRL)};
     uint16_t conn = BLE_CONN_HANDLE_INVALID;
     bool     ready = false;
-    int8_t   role = -1;        /* 스틱 패킷 flags 비트 0–1, 아직 모르면 -1 */
+    uint8_t  roles = 0;        /* 이 연결에서 본 역할 비트마스크 (스틱 1개 비트, 페달 보드는 bit2·bit3 둘 다) */
 };
 static stick_link_t sticks[MAX_STICKS];
 
@@ -91,7 +91,7 @@ static void notify_cb(BLEClientCharacteristic *chr, uint8_t *data, uint16_t len)
 {
     if (len >= 2)
         for (auto &s : sticks)
-            if (&s.chr_notify == chr) s.role = data[1] & 0x03;
+            if (&s.chr_notify == chr) s.roles |= (uint8_t)(1 << (data[1] & 0x03));
     out_push(data, len);
 }
 
@@ -127,7 +127,7 @@ static void disconnect_cb(uint16_t h, uint8_t reason)
 {
     (void)reason;
     stick_link_t *s = by_conn(h);
-    if (s) { s->conn = BLE_CONN_HANDLE_INVALID; s->ready = false; s->role = -1; }
+    if (s) { s->conn = BLE_CONN_HANDLE_INVALID; s->ready = false; s->roles = 0; }
     out_log("DONGLE lost");
     Bluefruit.Scanner.start(0);                         /* 다시 붙을 때까지 찾기 (붙으면 위 규칙대로 꺼짐) */
 }
@@ -136,7 +136,7 @@ static void disconnect_cb(uint16_t h, uint8_t reason)
 static uint8_t link_mask()
 {
     uint8_t m = 0;
-    for (auto &s : sticks) if (s.ready && s.role >= 0) m |= (uint8_t)(1 << s.role);
+    for (auto &s : sticks) if (s.ready) m |= s.roles;
     return m;
 }
 static void link_poll()
@@ -159,7 +159,7 @@ static void to_sticks(const uint8_t *p, uint8_t n)
     bool sent = false;
     for (auto &s : sticks) {
         if (!s.ready) continue;
-        if (mask != 0xFF && (s.role < 0 || !(mask & (1 << s.role)))) continue;
+        if (mask != 0xFF && !(mask & s.roles)) continue;
         s.chr_ctrl.write(p, n);                         /* write without response */
         sent = true;
     }
@@ -178,7 +178,9 @@ void app_setup()
 
     /* BANDWIDTH_MAX는 연결 하나가 이벤트를 길게(최대 125ms) 잡을 수 있어서, 2대면 서로 번갈아 밀려 간격이 사실상 15ms가 된다
      * (10/28 실측: 1대 왕복 16ms → 2대 28ms). 패킷이 20바이트라 NORMAL(3.75ms)이면 두 연결이 한 간격에 들어간다 */
-    Bluefruit.configCentralBandwidth(BANDWIDTH_NORMAL);
+    /* 연결 3개(스틱 2 + 페달)는 NORMAL(3.75ms)이면 3 × 3.75 = 11.25ms로 7.5ms 간격을 넘는다.
+     * LOW(2.5ms)면 3개가 한 간격에 들어간다. 20바이트 패킷 하나 주고받는 데는 1ms 안쪽 (232, 실측으로 확인 필요) */
+    Bluefruit.configCentralBandwidth(BANDWIDTH_LOW);
     Bluefruit.begin(0, MAX_STICKS);                     /* peripheral 0, central MAX_STICKS */
     Bluefruit.setName("SSAPLASH-DONGLE");
     Bluefruit.setTxPower(4);
