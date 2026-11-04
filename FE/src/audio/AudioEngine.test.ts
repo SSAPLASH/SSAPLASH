@@ -118,6 +118,56 @@ describe('AudioEngine trigger·click 반환', () => {
   });
 });
 
+describe('AudioEngine 드럼·노래 음량', () => {
+  const ts = { contextTime: 9.9, performanceTime: 4950 };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+  // 패드 버스는 비공개라 테스트에서만 꺼내 본다
+  const padGain = (e: AudioEngine) => (e as unknown as { padBus: { gain: { value: number } } }).padBus.gain.value;
+  const accGain = (e: AudioEngine) => e.accompanimentBus?.gain.value;
+
+  it('ensure 전에 setDrumVolume하면 ensure 뒤 패드 버스에 반영된다', async () => {
+    installMock({ state: 'running', currentTime: 10, ts });
+    const e = new AudioEngine();
+    e.setDrumVolume(1.5);
+    await e.ensure();
+    expect(padGain(e)).toBe(1.5);
+  });
+
+  it('음소거는 0, 풀면 1이 아니라 드럼 음량으로 돌아온다', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts });
+    e.setDrumVolume(1.5);
+    e.setPadMuted(true);
+    expect(padGain(e)).toBe(0);
+    e.setDrumVolume(0.7);
+    expect(padGain(e)).toBe(0);
+    e.setPadMuted(false);
+    expect(padGain(e)).toBe(0.7);
+  });
+
+  it('setSongVolume은 반주 버스 게인에 반영된다(ensure 전 호출 포함)', async () => {
+    installMock({ state: 'running', currentTime: 10, ts });
+    const e = new AudioEngine();
+    e.setSongVolume(0.4);
+    await e.ensure();
+    expect(accGain(e)).toBe(0.4);
+    e.setSongVolume(0.9);
+    expect(accGain(e)).toBe(0.9);
+  });
+
+  it('유한수가 아닌 값은 무시한다', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts });
+    e.setDrumVolume(1.2);
+    e.setDrumVolume(Number.NaN);
+    expect(padGain(e)).toBe(1.2);
+    e.setSongVolume(0.5);
+    e.setSongVolume(Number.POSITIVE_INFINITY);
+    expect(accGain(e)).toBe(0.5);
+  });
+});
+
 describe('softLimitCurve', () => {
   const at = (c: Float32Array, x: number) => c[Math.round(((x / 4 + 1) / 2) * (c.length - 1))];
   it('문턱(0.8) 아래는 그대로 통과한다', () => {

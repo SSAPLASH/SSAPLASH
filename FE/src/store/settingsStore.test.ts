@@ -276,7 +276,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(14);
+    expect(SETTINGS_VERSION).toBe(15);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
