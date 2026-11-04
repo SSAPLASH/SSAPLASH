@@ -426,6 +426,7 @@ AI 채보 워커가 GPU가 필요해 EC2 밖(교내 GPU 서버)에서 돌게 되
 
 **설정에서 무엇을 허용하나**
 - Nginx 443에서 `^~ /internal/v1/chart-jobs/` **하나만** 열고, 다른 `/internal/` 경로는 계속 404다(80 포트는 `/internal/`을 계속 404로 막아 평문 HTTP로는 닿지 않는다).
+- **(2026-11-04 추가)** LLM 총평 작업을 GPU 서버의 로컬 오픈소스 모델이 맡으면서 같은 방식(GPU 서버가 BE에서 작업을 가져가는 pull)의 경로 `^~ /internal/v1/coach-narratives/`를 하나 더 열었다. 같은 허용 IP·같은 BE 워커 토큰으로 지키고, 요청·응답이 작아 본문 한도는 64 KiB, 접근·오류 로그는 같은 이유로 끈다. 새로 열린 인터넷 경로는 이 하나뿐이며 외부 유료 LLM으로 나가는 통신은 없다. 서버 적용 전이다(`develop-BE → main` 배포 뒤 `nginx -t` 통과와 403/401 확인).
 - 허용 출발지 IP는 GPU 서버가 바깥으로 나갈 때 쓰는 교내 공인 IP 하나다. 그 밖의 IP는 403이다.
 - 요청 본문 상한 8MiB는 **이 경로에만** 적용한다(BE 결과 JSON 상한 5MiB). 서버 전체의 기본값은 바꾸지 않는다.
 - 워커가 받는 음원 서명 URL을 공개 도메인으로 만들도록 `AUDIO_STORAGE_PUBLIC_ENDPOINT`를 `https://k15a307.p.ssafy.io`로 둔다. 서명 URL 경로(`airdrum-tmp-audio`)는 이미 Nginx가 스토리지로 넘기고 있어 Nginx에 더 추가한 것이 없다.
