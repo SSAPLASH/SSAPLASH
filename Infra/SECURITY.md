@@ -426,6 +426,7 @@ AI 채보 워커가 GPU가 필요해 EC2 밖(교내 GPU 서버)에서 돌게 되
 
 **설정에서 무엇을 허용하나**
 - Nginx 443에서 `^~ /internal/v1/chart-jobs/` **하나만** 열고, 다른 `/internal/` 경로는 계속 404다(80 포트는 `/internal/`을 계속 404로 막아 평문 HTTP로는 닿지 않는다).
+- **(2026-11-04 추가)** LLM 총평 작업을 GPU 서버의 로컬 오픈소스 모델이 맡으면서 같은 방식(GPU 서버가 BE에서 작업을 가져가는 pull)의 경로 `^~ /internal/v1/coach-narratives/`를 하나 더 열었다. 같은 허용 IP·같은 BE 워커 토큰으로 지키고, 요청·응답이 작아 본문 한도는 64 KiB, 접근·오류 로그는 같은 이유로 끈다. 새로 열린 인터넷 경로는 이 하나뿐이며 외부 유료 LLM으로 나가는 통신은 없다. 서버 적용 전이다(`develop-BE → main` 배포 뒤 `nginx -t` 통과와 403/401 확인).
 - 허용 출발지 IP는 GPU 서버가 바깥으로 나갈 때 쓰는 교내 공인 IP 하나다. 그 밖의 IP는 403이다.
 - 요청 본문 상한 8MiB는 **이 경로에만** 적용한다(BE 결과 JSON 상한 5MiB). 서버 전체의 기본값은 바꾸지 않는다.
 - 워커가 받는 음원 서명 URL을 공개 도메인으로 만들도록 `AUDIO_STORAGE_PUBLIC_ENDPOINT`를 `https://k15a307.p.ssafy.io`로 둔다. 서명 URL 경로(`airdrum-tmp-audio`)는 이미 Nginx가 스토리지로 넘기고 있어 Nginx에 더 추가한 것이 없다.
@@ -507,6 +508,13 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
 4. **폰트 자체 호스팅(FE 회신, 2026-11-03 합의).** 폰트를 하나씩 옮기는 대신 규약을 정했다: 폰트는 전부 같은 출처에서만 서빙하고, 경로는 `/fonts/{패밀리}/{버전}/`, 내용이 바뀌면 버전 경로를 바꾼다(같은 URL의 내용은 고치지 않는다). Pretendard는 빌드 때 `node_modules`에서 복사하고 git에는 넣지 않는다. FE 이전은 다음 스프린트 초(`[EXTRA] 추가 작업` S15P31A307-289의 서브 작업)다. **Infra는 FE 변경이 배포된 뒤에** 한 번에 적용한다: CSP의 `https://cdn.jsdelivr.net` 제거와 `font-src 'self'`, `/fonts/`의 `Cache-Control: public, max-age=31536000, immutable`. 순서가 거꾸로면(버전 없는 기존 폰트에 장기 캐시가 먼저 걸리면) 파일을 바꿔도 브라우저가 1년간 옛 파일을 쓸 수 있다. 앞단 Nginx에서 `/fonts/`에 `add_header`를 쓰면 server 블록의 보안 헤더를 상속하지 못하므로 다시 적고, 뒤쪽(`FE/nginx.conf`의 `location /`)이 보내는 `Cache-Control: no-cache`와 겹치지 않게 `proxy_hide_header Cache-Control`을 함께 쓴다. `font-src`의 `data:`는 Report-Only에서 위반이 없는 것을 본 뒤 뺀다.
 5. **Permissions-Policy:** `camera=(), microphone=(), geolocation=(), payment=(), usb=()`에 FE가 동의했다. 스틱 연결에 쓰는 **Web Bluetooth(`bluetooth`)와 Web Serial(`serial`)은 목록에 넣지 않고 앞으로도 막지 않는다**(이 둘이 없으면 센서가 연결되지 않는다. `usb`는 Web Serial과 별개 기능이다). `default.conf`의 server 블록에 추가했다(2026-11-03). `/models/*`는 HTML이 아니라 따로 적지 않았다. 문법 검사(`nginx -t`)와 응답 헤더(`/health`)는 로컬 컨테이너에서 확인했다.
 6. **CSP 사전 정보(FE 실측):** 인라인 스타일이 31개 `.tsx` 파일(`style={...}`)에 있어 `style-src 'unsafe-inline'`은 유지한다. 반주 음원은 BE가 준 서명 URL을 `fetch`로 받으므로 그 도메인이 `connect-src`에 있어야 한다. 운영 음원 서명 URL의 공개 주소는 `https://k15a307.p.ssafy.io`(같은 출처, `connect-src 'self'`로 충분)로 확인했다(2026-11-03). 반주 음원용 `CHART_ASSET_PUBLIC_ENDPOINT`도 서버에서 확인했고(2026-11-03) `https://k15a307.p.ssafy.io`로 같은 출처다. 그래서 CSP에 추가할 외부 도메인은 없다.
+   **CSP 차단 모드 전환 (2026-11-04):** `Content-Security-Policy-Report-Only`를 `Content-Security-Policy`로 바꿨다.
+   - XSS로 주입된 인라인 스크립트를 브라우저가 실행하지 않는다(`script-src 'self'`에 `'unsafe-inline'` 없음). 가입 동의 API를 화면 없이 부른 시험에서 보았듯(18절) 쿠키가 붙은 대리 호출은 `HttpOnly`로 막을 수 없어 이 방어가 필요하다.
+   - **CSP로 막히지 않는 것:** 개발자 도구 콘솔에 사용자가 직접 입력한 코드. 사용자가 본인 계정으로 API를 부르는 것은 막을 수 없고 막는 목표도 아니다. CSP가 막는 대상은 **다른 사람이 심은 스크립트**다.
+   - 스틱 브리지(`ws://localhost:8765`, FE `WebSocketStickSource` 기본 주소)가 `connect-src 'self'`에 막히지 않게 `ws://localhost:*`, `ws://127.0.0.1:*`를 더했다.
+   - **병합 전 FE 확인 목록** — 운영 화면에서 개발자 도구 콘솔을 열고 `[Report Only]` 위반 메시지가 없는지 본다(지금 운영은 Report-Only라 위반이 콘솔에 남는다): ① 로그인·가입 동의 ② 곡 목록·반주 재생 ③ 연주 화면·리포트 ④ 악보·내 곡 업로드 ⑤ 폰트(`cdn.jsdelivr.net`) ⑥ 채보 진행 WebSocket ⑦ **스틱 브리지**: 기본 주소가 아닌 다른 PC·다른 주소로 연결하는 설정이 있으면 그 주소가 `connect-src`에 막힌다(허용 주소를 더하거나 정책을 넓혀야 한다).
+   - 위반이 있으면 병합하지 않고 정책을 고친다. 병합 뒤 문제가 생기면 `default.conf`의 헤더 이름을 `Content-Security-Policy-Report-Only`로 되돌려 배포한다(차단만 풀린다).
+   - 확인하지 못한 것: 로그인한 상태의 실제 화면 전체. 이 PC에서는 열어 보지 못했다.
 
 **공격 스캔 (로컬, 2026-11-02)**
 
@@ -604,3 +612,31 @@ BE의 녹음 상세 응답이 최대 약 3.5MB(타격 배열 JSON)라 앞단 Ngi
 - **BREACH(압축을 이용한 정보 추출) 검토:** HTTPS 응답을 압축하면, 같은 응답에 비밀 값(토큰 등)과 공격자가 넣은 입력이 함께 반사되고 공격자가 응답 크기를 관찰할 수 있을 때 비밀 값을 한 글자씩 추정할 수 있다. BE의 설명으로는 사용자 입력을 그대로 되돌리는 응답이 토큰 응답과 겹치지 않는다. 토큰 응답(`/api/auth/*`)은 JWT 한 개 수준이라 1 KiB보다 작아 압축되지 않을 것으로 보지만, **실제 크기는 확인하지 않았다.** 그래서 별도 location으로 제외하지 않았다. 토큰 응답이 커지거나 입력을 반사하는 필드가 생기면 `/api/auth/`에 `gzip off`를 넣는다.
 - **로컬 시험(포트를 열지 않고 컨테이너 안에서 확인):** 합성 JSON 278,172바이트가 압축 요청에서 31,497바이트로 줄었다. 합성 데이터는 반복이 많아 실제 녹음은 이보다 압축률이 낮을 수 있다. `Content-Encoding: gzip`과 `Vary: Accept-Encoding`이 붙고, 1 KiB 미만 응답과 `/health`는 압축되지 않으며, 보안 헤더는 그대로다. 녹음 저장은 5 MiB는 200, 5 MiB + 1바이트는 413 `RECORDING_TOO_LARGE`(`application/problem+json`)이고, `/api/v1/recordings/{id}`는 기본 1 MB 한도를 유지한다. `Infra/nginx/test_upload_limits.py`에 케이스를 추가했지만 이 PC에서는 Python이 없고 포트 바인딩이 막혀 스크립트 자체는 돌리지 못했다.
 - **운영에서는 아직 확인하지 않았다.** 병합과 배포 뒤 실제 녹음 상세 응답의 크기 감소와 `Content-Encoding`을 `curl`로 확인한다.
+
+---
+
+## 18. 가입 동의 API의 화면 우회와 XSS 영향 (2026-11-04)
+
+**발견:** 로그인한 브라우저의 개발자 도구 콘솔에서 두 요청만으로 동의 화면 없이 가입을 완료할 수 있었다.
+1. `POST /api/auth/refresh`(`credentials: same-origin`)로 액세스 토큰을 받는다. 로그인 쿠키는 `HttpOnly`라 스크립트가 읽지는 못하지만, 같은 출처에서 `fetch`하면 **브라우저가 쿠키를 대신 실어 보낸다.**
+2. 그 토큰으로 `POST /api/users/me/signup-consent`를 직접 부르면 서버가 저장하고 `signupCompleted`가 `true`가 된다.
+
+**원인 (코드를 읽어 확인, develop-BE):**
+- `SignupGateFilter`의 허용 목록(가입 미완료 회원도 부를 수 있는 요청)에 `POST /api/users/me/signup-consent`와 `POST /api/auth/refresh`가 들어 있다. 가입 동의는 화면이 아니라 이 API로 끝나도록 설계돼 있다.
+- `SignupConsentRequest`는 약관·개인정보 판(`termsVersion`, `privacyVersion`, `dataConsent.version`)에 `@NotBlank @Size(max=50)`만 검사하고, `SignupConsentService`는 "판은 비교·해석하지 않고 저장만 한다"고 주석에 적은 대로 **어떤 문자열이든 저장한다.**
+
+**영향 (정직하게):**
+- **권한 상승·타인 계정 접근은 아니다.** 본인 계정에 본인이 동의를 저장한 것이다.
+- **동의의 증거 가치가 약하다.** 서버는 사용자가 약관 화면을 보았는지 알 수 없고, 현재 판이 아닌 값이나 존재하지 않는 판으로도 저장된다. 나중에 "어떤 약관에 동의했는가"를 서버 기록만으로 입증하기 어렵다.
+- **XSS 피해의 크기를 보여 준다.** 같은 코드를 XSS로 주입하면 피해자 몰래 피해자 계정으로 그 계정이 할 수 있는 모든 API를 부를 수 있다. `HttpOnly`는 쿠키를 읽는 것을 막을 뿐 **쿠키가 붙은 요청을 보내는 것은 막지 못한다.** 가입 동의는 그 한 예일 뿐이다.
+- 시험한 환경(로컬·운영)과 운영 계정에 동의가 저장됐는지는 **아직 확인하지 못했다.**
+
+**대응 방안 (우선순위):**
+| 순서 | 대응 | 막는 것 | 상태 |
+| --- | --- | --- | --- |
+| 1 | **CSP를 차단 모드로 전환**(`script-src 'self'`): 주입된 인라인 스크립트를 브라우저가 실행하지 않는다 | XSS로 인한 대리 호출 전반 | 현재 `Content-Security-Policy-Report-Only`. FE 화면 확인 후 전환(16절) |
+| 2 | **서버가 약관·개인정보 판을 검증**: 허용된 현재 판만 저장한다 | 존재하지 않는 판·옛 판으로 저장되는 것 | 설계 중. 허용 판 목록을 설정으로 두면 FE 판 변경 때 배포 순서를 맞춰야 한다 |
+| 3 | 재인증이 필요한 동작(탈퇴 등)을 더 좁게 보호 | 한 번의 XSS로 계정 파괴 | 소셜 로그인이라 이번 범위 밖 |
+
+**한계:** 서버 검증(2)은 사용자가 스스로 스크립트로 부르는 것을 막지 못한다. 본인 계정에 대한 호출을 막을 방법은 없고, 막는 목표도 아니다. 이 항목의 목적은 (가) 저장되는 판 값이 유효하게 하는 것과 (나) 다른 사람이 심은 스크립트의 영향을 줄이는 것이다.
+

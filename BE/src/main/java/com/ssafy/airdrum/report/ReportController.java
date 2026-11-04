@@ -33,10 +33,11 @@ public class ReportController {
     }
 
     @GetMapping("/notes")
-    @Operation(summary = "노트 그래프 페이지", description = "판정된 hits만 seq 오름차순. nextAfterSeq=null이면 끝입니다. seq는 시간순이 아니며 MISS의 deltaMs·velocity는 null입니다.")
+    @Operation(summary = "노트 그래프 페이지", description = "판정된 hits만 seq 오름차순. nextAfterSeq=null이면 끝입니다. seq는 시간순이 아니며 MISS의 deltaMs·velocity는 null입니다. fromMs·toMs를 주면 그 구간(fromMs 이상 toMs 미만)의 노트만 돌려줍니다(약점 구간 재생용).")
     public ReportNotesResponse notes(@Parameter(hidden = true) AuthUser me, @PathVariable UUID playId,
             @RequestParam(required = false) @Min(0) Integer afterSeq,
-            @RequestParam(defaultValue = "500") @Min(1) @Max(1000) int limit) {
-        return reports.notes(me.id(), playId, afterSeq, limit);
+            @RequestParam(defaultValue = "500") @Min(1) @Max(1000) int limit,
+            @RequestParam(required = false) Double fromMs, @RequestParam(required = false) Double toMs) {
+        return reports.notes(me.id(), playId, afterSeq, limit, fromMs, toMs);
     }
 }

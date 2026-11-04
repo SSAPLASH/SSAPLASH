@@ -22,7 +22,7 @@ public class SongAccompanimentService {
 		var song = authorized(userId, songId);
 		String key = song.getAccompanimentKey();
 		if (key == null) return new SongResponses.Accompaniment(null, null);
-		if (!"AUDIO".equals(song.getSource()) && !"BUILTIN".equals(song.getSource()))
+		if (!"AUDIO".equals(song.getSource()) && !"BUILTIN".equals(song.getSource()) && !"MIDI".equals(song.getSource()))
 			throw new IllegalStateException("반주 출처가 올바르지 않습니다.");
 		keys.accompaniment(songId, key);
 		var signed = store.sign(ChartAssetStore.Kind.ACCOMPANIMENT, key);

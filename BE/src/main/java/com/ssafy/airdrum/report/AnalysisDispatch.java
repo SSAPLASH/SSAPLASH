@@ -43,7 +43,10 @@ public class AnalysisDispatch {
             var request=repository.request(id);
             if(request==null) { repository.failure(lease,false); return; }
             var result=client.analyze(request);
-            if(result.success()) repository.done(lease,result.segments(),result.version());
+            if(result.success()) {
+                repository.done(lease,result.segments(),result.version());
+                if(result.summary()!=null) saveSummary(id,result.summary());
+            }
             else {
                 repository.failure(lease,result.retryable());
             }
@@ -51,6 +54,11 @@ public class AnalysisDispatch {
             log.warn("weak-segments processing failed: {}",ex.getClass().getSimpleName());
             if(lease!=null) try { repository.failure(lease,ex instanceof TransientDataAccessException || ex instanceof RecoverableDataAccessException); } catch(RuntimeException ignored) { /* 임대 만료 시 복구 */ }
         }
+    }
+    /** 총평은 부가 정보라 저장에 실패해도 약점 분석 결과에는 영향이 없다. */
+    private void saveSummary(UUID id,String summary) {
+        try { repository.saveSummary(id,summary); }
+        catch(RuntimeException ex) { log.warn("coach summary save failed: {}",ex.getClass().getSimpleName()); }
     }
     @PreDestroy public void stop() { executor.shutdown(); }
 }

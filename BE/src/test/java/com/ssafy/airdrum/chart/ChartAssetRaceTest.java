@@ -10,11 +10,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.user.AuthUser;
+import com.ssafy.airdrum.user.UserRole;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.chart.asset.ChartAssetService;
 import com.ssafy.airdrum.chart.asset.ChartAssetStore;
 import com.ssafy.airdrum.common.error.BusinessException;
@@ -25,15 +31,19 @@ import static org.mockito.Mockito.*;
 
 /** 테스트 자체에 트랜잭션을 두지 않아 다른 스레드의 변경 커밋을 최종 권한 조회가 확인한다. */
 @SpringBootTest
+@AutoConfigureMockMvc
 class ChartAssetRaceTest {
 	@Autowired ChartAssetService service;
 	@Autowired SongAccompanimentService accompaniment;
 	@Autowired JdbcTemplate db;
 	@Autowired PlatformTransactionManager transactions;
+	@Autowired MockMvc mvc;
+	@Autowired AccessTokenService tokens;
 	@MockitoBean ChartAssetStore store;
 	long user, song, version;
 	@BeforeEach void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES ('경합 테스트') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db,user);
 		song = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES (?,'경합 테스트','AUDIO','READY') RETURNING id", Long.class, user);
 		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES (?,'EASY') RETURNING id", Long.class, song);
 		version = db.queryForObject("INSERT INTO chart_versions(chart_id,version,notes,timing,note_count,generator,notation_status) VALUES (?,1,CAST(? AS jsonb),CAST(? AS jsonb),1,'MANUAL','PENDING') RETURNING id",
@@ -61,6 +71,34 @@ class ChartAssetRaceTest {
 	@Test void committedKeyChangeDuringSongAccompanimentSigningRejectsResponse() throws Exception {
 		race(() -> db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/" + song + ".mp3", song),
 				"CHART_ASSET_UNAVAILABLE", () -> accompaniment.get(user, song));
+	}
+	@Test void midiKeyChangeDuringSongSigningRejectsStaleUrl() throws Exception {
+		db.update("UPDATE songs SET source='MIDI' WHERE id=?",song);
+		apiRace("/api/v1/songs/"+song+"/accompaniment");
+	}
+	@Test void midiKeyChangeDuringVersionAssetSigningRejectsStaleUrl() throws Exception {
+		db.update("UPDATE songs SET source='MIDI' WHERE id=?",song);
+		apiRace("/api/v1/chart-versions/"+version+"/assets");
+	}
+	void apiRace(String path) throws Exception {
+		var signing=new CountDownLatch(1); var committed=new CountDownLatch(1);
+		when(store.sign(any(),anyString())).thenAnswer(call->{
+			assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+			signing.countDown(); assertThat(committed.await(10,TimeUnit.SECONDS)).isTrue();
+			return new ChartAssetStore.SignedAsset("https://asset.test/stale",Instant.now().plusSeconds(600));
+		});
+		String token=tokens.issue(new AuthUser(user,UserRole.USER),Instant.now()).token();
+		try (var executor=Executors.newSingleThreadExecutor()) {
+			var response=executor.submit(()->mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+					.header("Authorization","Bearer "+token)).andReturn());
+			try {
+				assertThat(signing.await(10,TimeUnit.SECONDS)).isTrue();
+				new TransactionTemplate(transactions).executeWithoutResult(s->db.update("UPDATE songs SET accompaniment_key=? WHERE id=?","accompaniment/"+song+".mp3",song));
+			} finally { committed.countDown(); }
+			var result=response.get(10,TimeUnit.SECONDS).getResponse();
+			assertThat(result.getStatus()).isEqualTo(503);
+			assertThat(result.getContentAsString()).contains("CHART_ASSET_UNAVAILABLE").doesNotContain("https://asset.test/stale");
+		}
 	}
 	void race(Runnable mutation, String expectedCode, Callable<?> action) throws Exception {
 		var signing = new CountDownLatch(1);

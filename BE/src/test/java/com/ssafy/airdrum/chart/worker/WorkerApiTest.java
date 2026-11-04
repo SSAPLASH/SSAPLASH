@@ -192,6 +192,35 @@ class WorkerApiTest {
         assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE job_id=? AND file_role='DRUM_STEM'",Integer.class,job)).isEqualTo(1);
         claim("worker1",T1,request,409);
     }
+    @Test void transientStorageOutageThenSameResultReachesDone() throws Exception {
+        UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        var files=outputs(id);
+        var result=envelope(id,UUID.randomUUID(),separation(files.get(0),files.get(1)));
+        when(store.inspectFlac(anyString(),anyLong(),anyString(),anyInt()))
+            .thenThrow(new BusinessException(WorkerError.UNAVAILABLE))
+            .thenAnswer(i->new WorkerStore.Verified(Files.createTempFile("worker-probe-",".flac"),i.getArgument(1),i.getArgument(2),i.getArgument(3)));
+        raw(path("/results/separation"),T1,result,503);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+        assertThat(db.queryForObject("SELECT count(*) FROM chart_job_results WHERE job_id=?",Integer.class,job)).isZero();
+        raw(path("/results/separation"),T1,result,200);
+        String done=raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),transcription()),200);
+        assertThat(json.readTree(done).path("jobStatus").asString()).isEqualTo("DONE");
+        assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?",String.class,song)).isEqualTo("READY");
+    }
+    @Test void retryAfterFailureReachesDoneAndRejectsStaleCallback() throws Exception {
+        UUID old=prepareTranscription();
+        var stale=envelope(old,UUID.randomUUID(),transcription());
+        raw(path("/failure"),T1,Map.of("attemptId",old,"eventSeq",1,"stage","TRANSCRIBING","code","MODEL_FAILED","retryable",true,"summary","OOM"),200);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("QUEUED");
+        db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
+        var next=claim("worker2",T2,UUID.randomUUID(),200);
+        assertThat(next.path("resumeStage").asString()).isEqualTo("TRANSCRIBING");
+        raw(path("/results/transcription"),T1,stale,409);
+        UUID current=attempt(next);
+        String done=raw(path("/results/transcription"),T2,envelope(current,UUID.randomUUID(),transcription()),200);
+        assertThat(json.readTree(done).path("jobStatus").asString()).isEqualTo("DONE");
+        assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?",String.class,song)).isEqualTo("READY");
+    }
     @Test void minimumPositiveDurationIsClaimed() throws Exception {
         db.update("UPDATE songs SET duration_ms=1 WHERE id=?",song);
         assertThat(claim("worker1",T1,UUID.randomUUID(),200).path("input").path("durationMs").asInt()).isEqualTo(1);

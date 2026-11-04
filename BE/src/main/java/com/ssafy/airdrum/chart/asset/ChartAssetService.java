@@ -3,6 +3,7 @@ package com.ssafy.airdrum.chart.asset;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import com.ssafy.airdrum.chart.*;
 import com.ssafy.airdrum.common.error.BusinessException;
@@ -41,7 +42,7 @@ public class ChartAssetService {
 			bounds.add(new double[] {from, to});
 		}
 		if (row.getAccompanimentKey() != null) {
-			if (!"AUDIO".equals(row.getSource()) && !"BUILTIN".equals(row.getSource()))
+			if (!"AUDIO".equals(row.getSource()) && !"BUILTIN".equals(row.getSource()) && !"MIDI".equals(row.getSource()))
 				throw new IllegalStateException("반주 출처가 올바르지 않습니다.");
 			keys.accompaniment(row.getSongId(), row.getAccompanimentKey());
 		}
@@ -59,7 +60,9 @@ public class ChartAssetService {
 			accompaniment = signed.url();
 			expiration = earliest(expiration, signed.expiresAt());
 		}
-		authorized(userId, versionId);
+		var current = authorized(userId, versionId);
+		if (!Objects.equals(row.getAccompanimentKey(), current.getAccompanimentKey()))
+			throw new BusinessException(ChartErrorCode.CHART_ASSET_UNAVAILABLE);
 		return new ChartAssets(versionId, row.getNotationStatus(), List.copyOf(responsePages), accompaniment, expiration);
 	}
 	private ChartVersionRepository.Assets authorized(long userId, long versionId) {
