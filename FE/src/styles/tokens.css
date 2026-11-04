@@ -46,6 +46,7 @@
   --perfect: #8fceea;
   --good: #4cd07d;
   --miss: #ff6b70;
+  --warn: #e6b85c;
   /* 연습 단계 배지(Figma Play / LevelBadge 372:1325) — 네온 테두리·글자 + 회색 면 */
   --level-easy: #3df5a0;
   --level-normal: #3db8ff;
