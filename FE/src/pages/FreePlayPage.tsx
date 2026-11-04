@@ -21,11 +21,12 @@ import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { freeStage } from '@/domain/freeStage';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
-import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources';
 import { stopFree } from '@/app/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
-import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
+import { bindSensorSurface, setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import type { PadId } from '@/domain/pads';
 
 /** 킷 최대 배율(Figma 1.25, 태블릿 ≤1024는 1.1) */
 const KIT_SCALE = 1.25;
@@ -118,6 +119,12 @@ export function FreePlayPage() {
   else if (desc?.usageGuide) guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
   else guide = '스틱을 움직여 자유롭게 연주하세요';
 
+  // 터치 연주(MODE-002). 오디오가 깨어 있으면 동기 경로로 바로 친다. 첫 터치만 깨운 뒤 친다
+  const onPadDown = (pad: PadId) => {
+    if (useLive.getState().audioReady) touchSource.strike(pad);
+    else void unlockAudio().then(() => touchSource.strike(pad));
+  };
+
   const openSetup = () => navigate('/setup', { state: { returnTo: '/free', returnLabel: '자유 연습' } });
 
   return (
@@ -141,7 +148,7 @@ export function FreePlayPage() {
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} />
+            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={onPadDown} />
           </div>
         </div>
 

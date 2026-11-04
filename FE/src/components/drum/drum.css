@@ -75,6 +75,18 @@
   cursor: pointer;
 }
 
+/* 터치 연주 킷(onPadDown): 스크롤·확대·길게 누름 메뉴·글자 선택·탭 하이라이트를 막고 패드를 누르는 즉시 친다 */
+.drum-kit.touchable {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.drum-kit.touchable .drum-pad {
+  cursor: pointer;
+}
+
 /* 링 글로우: drop-shadow 2겹(값은 실기기 확인 뒤 조정) */
 .drum-pad-ring {
   fill: none;
