@@ -427,6 +427,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V29 | `V29__add_song_level.sql` | 곡 난이도·산정 채보 버전·규칙·곡 길이와 기존 곡 예외 대상을 저장한다 | -269 |
 | V30 | `V30__add_telemetry_retention_policy.sql` | `telemetry_events`에 TimescaleDB 보관 정책 `add_retention_policy(90 days, if_not_exists)` 등록. 확장 전용이라 V8처럼 일반 테스트 복사본에서 제외하고 `timescaleTest`에서 검증한다 | -258 |
 | V31 | `V31__midi_accompaniment.sql` | MIDI 원본 접수·비동기 반주 작업·시도와 객체 정리 참조를 추가하고 MIDI 곡의 반주 키를 허용한다 | -274 |
+| V32 | `V32__add_coach_narrative.sql` | `reports.coach_summary`(AI 종합 총평 jsonb)와 LLM 총평 작업 큐 `coach_narrative_jobs`를 추가한다 | COACH-003 후속 |
 
 규칙:
 
@@ -798,8 +799,8 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 | API | 응답·규칙 |
 | --- | --- |
-| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt |
-| `GET /api/v1/plays/{playId}/report/notes?afterSeq=4&limit=1000` | items, nextAfterSeq. limit 기본 500·범위 1~1000. afterSeq 생략 시 처음부터, 명시 시 0~2147483647. seq 오름차순·커서 초과 행을 limit+1개 읽어 다음 페이지 판별 |
+| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt, coachSummary |
+| `GET /api/v1/plays/{playId}/report/notes?afterSeq=4&limit=1000&fromMs=7000&toMs=12000` | items, nextAfterSeq. `fromMs`·`toMs`(선택)를 주면 노트 시각이 fromMs 이상 toMs 미만인 노트만 돌려준다(노트 시각은 PERFECT·GOOD이 tMs−deltaMs, MISS가 tMs). 약점 구간 재생용이다. 둘의 순서가 뒤바뀌거나 유한하지 않으면 `VALIDATION_FAILED`. limit 기본 500·범위 1~1000. afterSeq 생략 시 처음부터, 명시 시 0~2147483647. seq 오름차순·커서 초과 행을 limit+1개 읽어 다음 페이지 판별 |
 
 notes.items는 seq, matchedNoteId, tMs, pad, judgement, deltaMs, velocity다. PERFECT·GOOD·MISS만 반환하고
 미매칭 타격은 제외한다. MISS의 deltaMs·velocity는 null이다. seq가 0·4·9, limit=2이면 첫 커서는 4이고
@@ -1208,6 +1209,31 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
+
+## 리포트 종합 총평과 LLM 총평 작업 (COACH-003 후속)
+
+AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`focusPattern`·`strengthPad`·`source`)를 `reports.coach_summary`(V32)에 저장하고
+리포트 응답에 `coachSummary`로 내려 준다. 계약과 가드레일은 `AI/docs/coach-narrative.md`.
+
+- **저장:** `AnalysisClient`가 `summary`를 검증한다(`level`은 GOOD·FAIR·NEEDS_WORK, `text` 1~500자·제어 문자 없음, `focusPattern`·`strengthPad`는 `[A-Z0-9_]{1,40}`,
+  `source`는 RULE·LLM). 알려진 필드만 저장하고, **틀리면 총평만 버리고 약점 분석은 그대로 성공**으로 둔다(총평은 부가 정보다). 약점 분석이 DONE일 때만 저장한다.
+  이미 만들어진 리포트는 소급하지 않는다(`coachSummary`가 null).
+- **응답:** `INSUFFICIENT_HITS`나 분석 실패면 `coachSummary`는 null이다. `source`가 `RULE`이면 규칙 문장, `LLM`이면 GPU 서버의 모델이 쓴 문장이다.
+- **LLM 총평 작업:** 총평이 저장되면 리포트마다 작업 하나(`coach_narrative_jobs`, `report_id` 유일)가 대기열에 생긴다. 교내 GPU 서버의 워커가 가져가(pull) 로컬 오픈소스 모델이 쓴 문장을 제출하면
+  `coach_summary.text`를 그 문장으로 덮어쓰고 `source`를 `LLM`으로 바꾼다(`level`·`focusPattern`은 그대로). 실패하거나 임대가 끝나면 규칙 총평이 그대로 남는다.
+
+워커 API(채보 워커와 같은 Bearer 토큰 인증, `/internal/**`):
+
+| 호출 | 요청 | 응답 |
+| --- | --- | --- |
+| `POST /internal/v1/coach-narratives/claim` | `{workerId, claimRequestId}` | 작업이 없으면 204. 있으면 `{jobId, attemptId, leaseExpiresAt, facts}`. 같은 워커·같은 `claimRequestId`는 같은 배정을 돌려준다 |
+| `POST /internal/v1/coach-narratives/{jobId}/result` | `{attemptId, text, model, generationMs}` | `{status: DONE}`. `text` 1~500자·제어 문자 없음, `model` 37자 이하, `generationMs` 0~3,600,000 |
+| `POST /internal/v1/coach-narratives/{jobId}/failure` | `{attemptId, code, retryable, summary}` | `{status: QUEUED 또는 FAILED}`. `code`는 INPUT_INVALID·MODEL_FAILED·OUTPUT_INVALID, `retryable`은 MODEL_FAILED만 가능, `summary` 200자 이하 한 줄 |
+
+- 임대는 120초이고 heartbeat는 없다. 임대가 끝난 작업은 다음 `claim`에서 대기열로 돌아가고(시도 2번까지) 시도를 다 쓰면 FAILED로 닫힌다. 임대가 끝난 뒤의 제출이나 다른 워커·다른 시도의 제출은 409 `WORKER_CONFLICT`, 형식 오류는 400 `WORKER_INVALID`.
+- `facts`에는 타격 원본·회원 번호·`playId`·`songId`가 없다: `level`, `focusPattern`, `counts`(판정 개수), `strengthPad`, `segments`(최대 5개), 같은 사용자·같은 곡의 바로 직전 플레이를 요약한 `history`(없으면 키 없음).
+- Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
+- 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
 
 ## 리포트 약점 분석 (158번 후속)
 
