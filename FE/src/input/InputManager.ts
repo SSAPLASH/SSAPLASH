@@ -3,7 +3,7 @@
 // 소스 종류에 맞는 매퍼(padMapper: 키 매퍼 / 자세 매퍼)로 패드를 정한다 (설계 D8·D9, PLAY-03 기준선).
 // 판정 경로는 동기 함수만 쓴다 (지연 예산 안에서 끝나야 한다).
 import type { PadId } from '@/domain/pads';
-import type { InputSourceKind, Pose, ResolvedHit, StickEvent, StickId } from '@/domain/events';
+import type { FootId, InputSourceKind, Pose, ResolvedHit, StickEvent, StickHitEvent, StickId } from '@/domain/events';
 import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
 import { mapHit } from './padMapper';
 import type { KeyMap } from '@/domain/keyMap';
@@ -22,12 +22,19 @@ export type StatusListener = (
   unconfigured?: boolean,
 ) => void;
 
+/** 페달 연결·배터리. 손 status와 분리한다(PLAY-002 D2) */
+export type PedalStatusListener = (foot: FootId, connected: boolean, batteryPct?: number) => void;
+/** 하이햇 페달 밟힘 상태. closed = 밟음 */
+export type PedalListener = (closed: boolean) => void;
+
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
   private unsubs = new Map<InputSourceKind, () => void>();
   private hitListeners = new Set<HitListener>();
   private poseListeners = new Set<PoseListener>();
   private statusListeners = new Set<StatusListener>();
+  private pedalStatusListeners = new Set<PedalStatusListener>();
+  private pedalListeners = new Set<PedalListener>();
   private resetPoseListeners = new Set<() => void>();
   private profile: CalibrationProfile | null = null;
   private keyMap: KeyMap = {};
@@ -97,6 +104,11 @@ export class InputManager {
       l(0, false, kind);
       l(1, false, kind);
     }
+    // 소스가 내려가면 페달도 끊긴 것으로 알린다(손 status와 같은 방식)
+    for (const l of this.pedalStatusListeners) {
+      l(2, false);
+      l(3, false);
+    }
   }
 
   get(kind: InputSourceKind): InputSource | undefined {
@@ -141,6 +153,16 @@ export class InputManager {
     return () => this.statusListeners.delete(l);
   }
 
+  onPedalStatus(l: PedalStatusListener): () => void {
+    this.pedalStatusListeners.add(l);
+    return () => this.pedalStatusListeners.delete(l);
+  }
+
+  onPedal(l: PedalListener): () => void {
+    this.pedalListeners.add(l);
+    return () => this.pedalListeners.delete(l);
+  }
+
   /** 캘리브레이션 화면 등에서 자세를 패드로 미리 보여줄 때 */
   previewPad(pose: Pose): ReturnType<typeof resolvePad> {
     return resolvePad(this.profile, pose);
@@ -156,6 +178,19 @@ export class InputManager {
       for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct, e.unconfigured);
       return;
     }
+    if (e.kind === 'pedalStatus') {
+      for (const l of this.pedalStatusListeners) l(e.foot, e.connected, e.batteryPct);
+      return;
+    }
+    if (e.kind === 'pedal') {
+      for (const l of this.pedalListeners) l(e.closed);
+      return;
+    }
+    if (e.foot !== undefined) {
+      this.handleFootHit(e, e.foot, source);
+      return;
+    }
+    if (e.stickId === null) return;
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };
     const tHit = isSensorSource(source) ? e.timestamp + this.sensorOffsetMs : e.timestamp;
     const m = mapHit(e, source, {
@@ -194,6 +229,31 @@ export class InputManager {
       inside: m.inside,
     };
     if (m.distanceDeg !== undefined) this.lastPose[stickId] = pose;
+    for (const l of this.hitListeners) l(hit);
+  }
+
+  /** 페달 타격: 매퍼를 거치지 않고 패킷의 pad·velocity를 그대로 쓴다(PLAY-002 D4). 손 정보는 없다 */
+  private handleFootHit(e: StickHitEvent, foot: FootId, source: InputSourceKind): void {
+    const clockOffsetMs = this.sources.get(source)?.clockOffsetOf?.(foot) ?? null;
+    const hit: ResolvedHit = {
+      id: ++this.seq,
+      stickId: null,
+      foot,
+      pad: e.pad ?? null,
+      velocity: Math.min(127, Math.max(1, Math.round(e.velocity ?? 100))),
+      tHit: e.timestamp + this.sensorOffsetMs,
+      tRecv: e.recvTime,
+      tResolved: performance.now(),
+      source,
+      pose: { pitch: e.pitch, yaw: e.yaw },
+      peakAccel: e.peakAccel,
+      peakSpeedDps: e.peakSpeedDps,
+      seq: e.seq,
+      firmwarePad: e.pad,
+      tSensorMs: clockOffsetMs === null ? undefined : e.timestamp - clockOffsetMs,
+      clockOffsetMs,
+      judgedBy: 'stick',
+    };
     for (const l of this.hitListeners) l(hit);
   }
 }

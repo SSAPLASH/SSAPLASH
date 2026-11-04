@@ -2,7 +2,7 @@
 // 하드웨어가 없는 동안은 미검증 — 프로토콜(stickProtocol.ts)과 흐름만 맞춰 둔다.
 // 페어링한 BluetoothDevice는 끊겨도 보관한다. 끊기면 autoConnect()가 선택 창 없이 gatt.connect()로 다시 붙는다
 // (재연결 시도는 사용자 제스처가 필요 없는 동작만 쓴다). 끊김 리스너는 기기당 한 번만 단다.
-import type { StickId } from '@/domain/events';
+import type { DeviceRole, StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { packetTap } from './packetTap';
@@ -128,6 +128,8 @@ export class BleStickSource extends BaseInputSource {
       }
       return;
     }
+    // 페달(role 2·3) 이벤트는 동글 소스만 쓴다
+    if (p.kind === 'pedal' || p.kind === 'pedalStatus' || (p.kind === 'hit' && p.foot !== undefined)) return;
     // 패킷의 stickId보다 페어링 때 사용자가 고른 손을 신뢰한다
     if (p.kind === 'hit') {
       this.emit({ ...p, stickId: link.stickId, timestamp: link.clock.toBrowserTime(p.timestamp, recvTime) });
@@ -162,8 +164,9 @@ export class BleStickSource extends BaseInputSource {
     return this.links.get(stickId)?.clock.offset ?? null;
   }
 
-  clockOffsetOf(stickId: StickId): number | null {
-    return this.clockOffset(stickId);
+  clockOffsetOf(role: DeviceRole): number | null {
+    // 발(role 2·3)은 BLE 직결에 없다
+    return role === 0 || role === 1 ? this.clockOffset(role) : null;
   }
 
   transportStats(): TransportStats {
