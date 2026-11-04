@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -37,7 +38,9 @@ class SongManagementApiTest {
     long owner,other,song,builtin; String token,otherToken;
     @BeforeEach void setup() {
         owner=db.queryForObject("INSERT INTO users(nickname) VALUES('cover owner') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, owner);
         other=db.queryForObject("INSERT INTO users(nickname) VALUES('cover other') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, other);
         song=db.queryForObject("INSERT INTO songs(owner_id,title,artist,source,status) VALUES(?,'original','artist','MIDI','READY') RETURNING id",Long.class,owner);
         builtin=db.queryForObject("INSERT INTO songs(title,source,status,license) VALUES('builtin','BUILTIN','READY','test') RETURNING id",Long.class);
         token=tokens.issue(new AuthUser(owner,UserRole.USER),Instant.now()).token(); otherToken=tokens.issue(new AuthUser(other,UserRole.USER),Instant.now()).token();

@@ -24,9 +24,9 @@ public class PlaySessionRepository {
 		var args = new MapSqlParameterSource().addValue("userId", userId).addValue("size", size).addValue("offset", offset);
 		return named.query("""
 			SELECT p.id,p.started_at,p.ended_at,p.mode,p.input_source,p.song_id,s.title,p.chart_version_id,
-			       c.difficulty,(s.id IS NOT NULL) AS accessible,p.score,p.accuracy,p.max_combo,
+			       c.id AS chart_id,c.difficulty,p.client_meta->>'endReason' AS end_reason,(s.id IS NOT NULL) AS accessible,p.score,p.accuracy,p.max_combo,
 			       (p.mode IN ('RHYTHM','SHEET') AND r.id IS NOT NULL) AS has_report
-			FROM (SELECT id,started_at,ended_at,mode,input_source,song_id,chart_version_id,score,accuracy,max_combo
+			FROM (SELECT id,started_at,ended_at,mode,input_source,song_id,chart_version_id,client_meta,score,accuracy,max_combo
 			      FROM play_sessions WHERE user_id=:userId ORDER BY ended_at DESC,id DESC LIMIT :size OFFSET :offset) p
 			LEFT JOIN songs s ON s.id=p.song_id AND
 			""" + com.ssafy.airdrum.song.SongRepository.VISIBLE + """
@@ -37,9 +37,24 @@ public class PlaySessionRepository {
 			""", args, (r,n) -> new PlaySummaryResponse(r.getObject("id", UUID.class),
 				r.getTimestamp("started_at").toInstant(),r.getTimestamp("ended_at").toInstant(),
 				r.getString("mode"),r.getString("input_source"),r.getObject("song_id", Long.class),
-				r.getString("title"),r.getObject("chart_version_id", Long.class),r.getString("difficulty"),
+				r.getString("title"),r.getObject("chart_version_id", Long.class),r.getObject("chart_id", Long.class),r.getString("difficulty"),r.getString("end_reason"),
 				r.getBoolean("accessible"),r.getObject("score", Integer.class),r.getBigDecimal("accuracy"),
 				r.getObject("max_combo", Integer.class),r.getBoolean("has_report")));
+	}
+	public List<BestRecordsResponse.Item> bestForUser(long userId, List<Long> songIds) {
+		var args = new MapSqlParameterSource().addValue("userId", userId).addValue("songIds", songIds);
+		return named.query("""
+			SELECT p.song_id,c.id AS chart_id,c.difficulty,p.mode,MAX(p.score) AS best_score,MAX(p.accuracy) AS best_accuracy
+			FROM play_sessions p
+			JOIN songs s ON s.id=p.song_id AND
+			""" + com.ssafy.airdrum.song.SongRepository.VISIBLE + """
+			JOIN chart_versions v ON v.id=p.chart_version_id
+			JOIN charts c ON c.id=v.chart_id AND c.song_id=p.song_id
+			WHERE p.user_id=:userId AND p.song_id IN (:songIds) AND p.mode IN ('RHYTHM','SHEET')
+			  AND p.client_meta->>'endReason'='COMPLETED'
+			GROUP BY p.song_id,c.id,c.difficulty,p.mode ORDER BY p.song_id,c.id,p.mode
+			""", args, (r,n) -> new BestRecordsResponse.Item(r.getLong("song_id"),r.getLong("chart_id"),
+				r.getString("difficulty"),r.getString("mode"),r.getObject("best_score", Integer.class),r.getBigDecimal("best_accuracy")));
 	}
 	public record Session(UUID id, long userId, String hash, String rawStatus, String rawKey, String inputSource) {}
 	public record ChartData(String notes, int noteCount, int schemaVersion, String versionToken, String chartToken) {}

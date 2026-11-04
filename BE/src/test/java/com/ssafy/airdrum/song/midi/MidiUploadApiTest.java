@@ -23,6 +23,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -59,10 +60,12 @@ class MidiUploadApiTest {
 	@BeforeEach
 	void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('MIDI 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 	}
 
 	@AfterEach
 	void cleanup() {
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE owner_id=?", user);
 		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT c.id FROM charts c JOIN songs s ON s.id=c.song_id WHERE s.owner_id=?)", user);
 		db.update("DELETE FROM charts WHERE song_id IN (SELECT id FROM songs WHERE owner_id=?)", user);
 		db.update("DELETE FROM songs WHERE owner_id=?", user);
@@ -117,6 +120,7 @@ class MidiUploadApiTest {
 		assertThat(song.path("artist").isNull()).isTrue();
 		assertThat(song.path("source").asString()).isEqualTo("MIDI");
 		assertThat(song.path("status").asString()).isEqualTo("READY");
+		assertThat(song.path("songLevel").asString()).isNotBlank();
 		assertThat(song.path("bpm").decimalValue()).isEqualByComparingTo("100.00");
 		assertThat(song.path("timeSignature").asString()).isEqualTo("3/4");
 		assertThat(song.path("hasAccompaniment").asBoolean()).isFalse();

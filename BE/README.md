@@ -1,5 +1,41 @@
 # BE API 서버
 
+## 곡 난이도와 채보 실패 사유 (269번)
+
+`GET /api/v1/songs`와 `GET /api/v1/songs/{songId}`는 곡별 `songLevel`을 제공한다.
+값은 `BEGINNER`, `INTERMEDIATE`, `ADVANCED`, 미산정이면 `null`이다. MIDI 업로드의 201 응답에도 같은 상세가 나온다.
+기존 `difficulties`의 `EASY` / `NORMAL` / `HARD`는 연습 단계이며 곡 난이도와 별개다.
+목록 쿼리 `songLevel`은 세 값 중 하나로 서버 필터링한다. `playableOnly=true`는 READY이면서 곡 난이도가 있는 곡만 반환한다.
+두 필터는 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
+
+본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message}`가 들어간다. 공개 가능한 기존 코드는
+`INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
+워커가 보낸 메시지·스토리지 정보는 반환하지 않는다. AI 246의 세부 실패 코드 계약은 아직 확정되지 않아 추측해 매핑하지 않았다.
+
+### 산정 방식과 한계
+
+`song-level-1`은 선택된 채보의 유효 노트 수를 곡 길이로 나눈 초당 평균과, 2초 반열린 구간의 최대 노트 수를 2로 나눈 초당 피크를 사용한다.
+평균이 5 미만 / 5 이상 7 미만 / 7 이상이면 각각 입문 / 중급 / 고급이다. 피크는 6 / 8을 같은 방식으로 나누고 두 결과 중 높은 등급을 쓴다.
+동시 노트는 각각 센다. 신규 곡은 최신 HARD 버전이고, V29 적용 시 이미 READY이며 HARD chart 행이 없던 기존 곡은 최고 보유 단계의 최신 버전을 사용한다.
+HARD 행이 생기면 HARD로 전환하며 해당 행에 버전이 없거나 최신 버전이 유효하지 않으면 미산정이다. 산정 입력의 버전·규칙·곡 길이를 기록하고 입력 변경 시 재산정한다.
+
+이 경계는 내장 연습곡 3개, 합성 패턴 7개, 소수 노트 MIDI 테스트 fixture로 확인한 MVP 휴리스틱이다. 사용자 체감이나 교육적 난이도를 검증한 값이 아니며
+짧은 고밀도 구간이나 동시 타격이 곡 전체 등급을 높일 수 있다. FE와 변경된 경계를 확인해야 한다.
+
+### 기존 곡 backfill
+
+마이그레이션은 기존 데이터를 보존하고 예외 대상을 기록하며 곡 난이도를 자동으로 채우지 않는다. 별도 운영 도구는 `DB_URL`, `DB_USERNAME`,
+`DB_PASSWORD`를 환경변수로 받는다. 비밀번호를 명령줄이나 저장소에 적지 않는다. `BE` 디렉터리에서 다음 명령은 읽기 전용 dry-run이다.
+
+```sh
+./gradlew --no-daemon backfillSongLevel
+```
+
+대상과 결과를 확인한 뒤 적용을 명시하려면 `./gradlew --no-daemon backfillSongLevel --args='--apply'`를 사용한다.
+시작 시 ID 상한을 고정하고 100개씩 조회하며 각 곡을 별도 트랜잭션에서 처리한다. 실패한 항목은 ID와 범주만 출력하고 다음 항목으로 진행한다.
+재실행은 동일 입력에 멱등이다. 구버전 앱이 쓰기를 마친 뒤 backfill을 실행하고 최신 버전·곡 길이·규칙·기존 예외 정합성을 확인한 후
+등급 기반 필터를 사용한다. 구버전이 쓰는 동안에는 결과가 오래될 수 있다. 운영 실행은 실제 데이터에 적용하는 별도 작업이다.
+
 관련 작업: [S15P31A307-93 프로젝트 초기화·앱 컨테이너 실행 정의](https://ssafy.atlassian.net/browse/S15P31A307-93),
 [S15P31A307-85 공통 응답·예외 처리·Swagger 설정](https://ssafy.atlassian.net/browse/S15P31A307-85),
 [S15P31A307-86 회원·소셜 연동 정보 스키마·마이그레이션](https://ssafy.atlassian.net/browse/S15P31A307-86),
@@ -210,14 +246,14 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
   recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
-  같은 트랜잭션에서 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
+  같은 트랜잭션에서 그 회원의 녹음(257번)과 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
   `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
 텔레메트리는 V7에서 일반 테이블로 만든 뒤 V8에서 **1일 청크의 TimescaleDB hypertable**로 전환한다.
-요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. 자동 보관 기간 삭제·압축 정책은
-적용하지 않았다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
+요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. V30에서 **90일 보관 정책**을 등록해
+오래된 청크를 자동으로 지운다(압축 정책은 없음, [텔레메트리 보관·탈퇴](#보관탈퇴-258번)). `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
 음수 아닌 값만 검사한다. 원시 IMU 배열은 이 테이블에 저장하지 않는다.
 
 `DatabaseSchemaMigrationTest`는 빈 DB의 V1→V7, V2 기존 데이터·이력 보존 업그레이드,
@@ -247,7 +283,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V21을 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 V1~V29를 적용하고(`spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다), V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -264,7 +300,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSche
 스크립트는 Compose에 선언된 이미지를 사용해 임시 DB를 띄우고 `timescaleTest`를 실행한 뒤 종료한다.
 기존 볼륨을 쓰지 않고 tmpfs 및 임의의 루프백 포트만 사용한다. 빈 DB V1→V8,
 데이터가 있는 V7→V8, 이력·행·인덱스 보존, 날짜별 청크 생성, CHECK 제약 및
-재실행 0건·자동 삭제 정책 미등록을 검사한다.
+재실행 0건, V30 보관 정책(90일 `policy_retention` job 1개)과 그 정책을 실제로 실행했을 때 90일 넘은 청크만
+지워지는지, 같은 정책을 다시 등록해도 실패하지 않는지를 검사한다. 보관 정책이 상대 시각으로 동작하므로 테스트 데이터는
+고정 날짜가 아니라 "오늘 기준 N일 전"으로 넣는다.
 
 근거: [공식 2.30.2 릴리스](https://github.com/timescale/timescaledb/releases/tag/2.30.2),
 [기존 테이블 전환 API](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable).
@@ -330,7 +368,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | `INVALID_INPUT` | 400 | 본문 파싱 실패, 필수 파라미터 누락, 타입 불일치, 분류되지 않은 4xx |
 | `VALIDATION_FAILED` | 400 | `@Valid`·파라미터 제약 실패. `errors` 동반 |
 | `UNAUTHORIZED` | 401 | 토큰 없음·만료·무효, 탈퇴 회원, refresh 실패. 사유는 `detail`로만 구분 |
-| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다) |
+| `FORBIDDEN` | 403 | ADMIN 전용 API에 USER가 접근. 소유자 검사 실패는 403이 아니라 도메인 `*_NOT_FOUND` 404다(다른 회원 자원의 존재를 드러내지 않는다). 가입 동의 전 회원의 차단은 도메인 코드 `SIGNUP_INCOMPLETE`(403, [인증과 토큰](#인증과-토큰)) |
 | `NOT_FOUND` | 404 | 없는 경로. 도메인 자원이 없을 때는 도메인 코드 |
 | `METHOD_NOT_ALLOWED` | 405 | |
 | `NOT_ACCEPTABLE` | 406 | |
@@ -381,6 +419,13 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V21 | `V21__create_coach_export_view.sql` | 약점 분석 보정용 비식별 뷰 `coach_export_v`, 그룹 역할 `coach_export_reader` | -142 |
 | V22 | `V22__add_songs_published.sql` | `songs.published`(기본 true) 공용 곡 공개 여부, CHECK `songs_published_builtin_check`(개인 곡은 항상 true) | -156 |
 | V23 | `V23__create_sheet_music.sql` | 내 악보 `sheet_music`·`sheet_music_pages`, 정리 역할 `SHEET_MUSIC` 추가 | -155 |
+| V24 | `V24__allow_mpeg4_and_ogg_audio.sql` | 음원 MIME 확장(`audio/mp4`·`audio/ogg`), 기존 행 보존 | -267 |
+| V25 | `V25__add_users_data_consent.sql` | `users.data_consent`(boolean, null=미응답)·`data_consent_at`, CHECK `ck_users_data_consent`(둘 다 null이거나 둘 다 값) | -199 |
+| V26 | `V26__add_users_signup_consents.sql` | 가입 동의 `users.data_consent_version`·`terms_version`·`terms_agreed_at`·`privacy_version`·`privacy_agreed_at`(판 `varchar(50)`, 시각 `timestamptz`, 모두 NULL 허용). `ck_users_data_consent`를 값·시각·판 셋이 함께 있거나 함께 없게 교체, `ck_users_terms_consent`·`ck_users_privacy_consent`(판·시각 함께, 판은 공백만 불가) 추가. 판 없이 값만 있던 행은 세 값 모두 NULL로 되돌린다. 기존 행은 채우지 않는다(동의 전으로 시작) | -199 |
+| V27 | `V27__add_recording_hits.sql` | `recordings`에 녹음 시퀀스 `hits`(jsonb 배열)·`hit_count`(1~50,000, 배열 길이와 같음)·`client_key`(uuid)·`mode`·`input_source`·`schema_version`·`started_at`·`payload_hash`·`updated_at` 추가(모두 NOT NULL), `duration_ms` NOT NULL. 부분 유일 인덱스 `recordings_user_client_key_idx`(user_id, client_key) WHERE deleted_at IS NULL. 기존 행이 있으면 실패한다(쓰는 코드가 없었음) | -256 |
+| V28 | `V28__add_recording_chart_version.sql` | `recordings.chart_version_id`(bigint, NULL 허용, FK `chart_versions`) 추가. 녹음이 플레이와 별개로 채보 버전을 기억해 목록 `song`·상세 `timing`이 플레이 삭제 뒤에도 남는다. 기존 행은 연결된 플레이의 `chart_version_id`로 채운다 | -257 |
+| V29 | `V29__add_song_level.sql` | 곡 난이도·산정 채보 버전·규칙·곡 길이와 기존 곡 예외 대상을 저장한다 | -269 |
+| V30 | `V30__add_telemetry_retention_policy.sql` | `telemetry_events`에 TimescaleDB 보관 정책 `add_retention_policy(90 days, if_not_exists)` 등록. 확장 전용이라 V8처럼 일반 테스트 복사본에서 제외하고 `timescaleTest`에서 검증한다 | -258 |
 
 규칙:
 
@@ -407,12 +452,14 @@ PK는 `bigint GENERATED ALWAYS AS IDENTITY`와 `GenerationType.IDENTITY`다. 문
 일반 `test`는 임베디드 PostgreSQL 16을 자동으로 받는다. 이 검사에는 Docker나 로컬 DB가 필요 없다.
 `src/test/resources/META-INF/spring.factories`에 등록된 `support.EmbeddedPostgresInitializer`가
 테스트 JVM당 서버를 한 번 띄우고 모든 테스트 컨텍스트의 DataSource로 넣는다. 각 컨텍스트가 뜰 때
-Flyway가 V21까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
+Flyway가 V29까지 적용한다(V8은 확장 없는 임베디드 DB에서 제외). V8 확장 의존 검증은 위 TimescaleDB 전용 검사에서 수행한다.
 
 - 리포지토리·스키마 테스트는 `@DataJpaTest`를 쓴다. 내장 DB로 바꾸지 않도록 설정돼 있어 같은 PostgreSQL을 쓴다.
 - 모든 테스트가 같은 DB를 공유하므로 데이터를 남기지 않는다. `@DataJpaTest`는 테스트마다 롤백되고,
   `@SpringBootTest`에서 데이터를 쓰면 `@Transactional`로 롤백하거나 직접 지운다.
 - 최초 실행 때 PostgreSQL 바이너리 jar를 Gradle 캐시로 받는다.
+- 테스트 회원으로 보호 API를 부를 때는 가입 게이트에 막히지 않도록 `support.SignupConsentFixtures`로 가입 완료 상태를 만든다.
+  JPA로 만들면 저장 전에 `users.save(SignupConsentFixtures.completed(User.create(...)))`, SQL로 넣었으면 `SignupConsentFixtures.complete(db, id)`.
 
 ## 소셜 로그인
 
@@ -453,6 +500,7 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 | --- | --- |
 | `/api/v1/songs` | `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext` |
 | `/api/v1/songs/{songId}` | 곡 메타데이터와 난이도별 최신 `chartVersionId` 요약 |
+| `/api/v1/songs/{songId}/accompaniment` | 곡 단위 반주 URL 발급 및 갱신(채보 버전 불필요) |
 | `/api/v1/charts/{chartId}` | 해당 채보의 가장 큰 `version`에 해당하는 노트·시간 정보 |
 | `/api/v1/chart-versions/{chartVersionId}` | 지정 버전의 노트·시간 정보 |
 | `/api/v1/chart-versions/{chartVersionId}/assets` | 같은 버전의 이미지·반주 URL 발급 및 갱신 |
@@ -476,6 +524,7 @@ ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 �
 
 ### FE 소비 계약
 
+- 곡 단위 반주 조회는 `accompanimentUrl`과 `expiresAt`을 반환하며 반주가 없으면 둘 다 null이다. 같은 경로를 재호출하면 다시 서명한다. URL은 메모리에서만 쓰고 만료 전 재발급한다. 서명 중 반주가 교체되면 503 `CHART_ASSET_UNAVAILABLE`이므로 같은 경로를 재시도할 수 있다.
 - 곡 상세에서 난이도와 `chartVersionId`를 고르고, 플레이 시작 이후에는 버전 조회와 assets 갱신에 그 ID를 사용한다.
   최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
 - `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.
@@ -586,8 +635,11 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 | --- | --- | --- |
 | `POST /api/auth/refresh` | `refresh_token` 쿠키 | 200 `{accessToken, tokenType: "Bearer", expiresIn: 1800}` + 새 `refresh_token` 쿠키. 실패는 401 `UNAUTHORIZED` "다시 로그인해 주세요." |
 | `POST /api/auth/logout` | 쿠키(없어도 됨) | 204. 서버의 refresh 토큰을 지우고 쿠키를 만료시킨다. 여러 번 불러도 같다 |
-| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt}`. 이메일·상태는 내보내지 않는다 |
-| `DELETE /api/users/me` | Bearer | 204(본문 없음) + `refresh_token` 쿠키 만료. 본인만 탈퇴하며 되돌릴 수 없다. 동시에 두 번 부르면 늦은 쪽은 401 |
+| `GET /api/users/me` | Bearer | 200 `{id, provider, nickname, profileImageUrl, role, createdAt, updatedAt, signupCompleted, consents, dataConsent}`. `signupCompleted`는 이용약관·개인정보 동의가 둘 다 있으면 true(역할과 무관, ADMIN도 사실대로). `consents`는 항상 객체 `{terms, privacy}`이고 각 항목은 `{version, agreedAt}` 또는 동의 전 null. `dataConsent`는 항상 객체 `{agreed, version, updatedAt}`이고 동의 전이면 셋 다 null. 이메일·상태는 내보내지 않는다. 가입 동의 전에도 부를 수 있다 |
+| `POST /api/users/me/signup-consent` | Bearer | 본문 `{termsVersion, privacyVersion, dataConsent: {agreed, version}}` → 200 + `/me` 본문(`signupCompleted: true`). 판 3개는 필수(누락·null·빈 값·공백만·51자 이상은 400 `VALIDATION_FAILED`), `dataConsent` 누락·null도 400. **연주 기록 활용은 필수라 `agreed`는 true만 받는다**(false·null·누락은 400, `errors[].field = dataConsent.agreed`). 본문 없음·JSON 오류는 400 `INVALID_INPUT`. 가입을 마친 회원이 다시 보내도 200(약관 개정 재동의)이며 판이 바뀐 항목만 동의 시각과 회원 `updatedAt`이 갱신되고 같으면 그대로다. 서버는 판을 비교·해석하지 않는다. 토큰 없음·저장 순간 탈퇴는 401. 가입 동의 전에도 부를 수 있다 |
+| `DELETE /api/users/me` | Bearer | 204(본문 없음) + `refresh_token` 쿠키 만료. 본인만 탈퇴하며 되돌릴 수 없다. 동시에 두 번 부르면 늦은 쪽은 401. 가입 동의 전에도 부를 수 있다(가입 취소) |
+
+연주 기록 활용 동의는 가입 동의 `POST`로만 저장하며, 철회는 탈퇴다(199의 `PUT /api/users/me/data-consent`는 삭제했다).
 
 | 항목 | access 토큰 | refresh 토큰 |
 | --- | --- | --- |
@@ -603,8 +655,27 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
 - 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
 - **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
-  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰과
+  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰·연주 녹음·텔레메트리와
   학습 데이터 사용에 동의하지 않은 플레이 기록은 지우고, 동의한 플레이 기록은 남긴다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
+  가입 동의 기록(이용약관·개인정보·연주 기록 활용의 판·시각·값 7개 컬럼)도 같은 UPDATE로 비운다.
+
+### 가입 동의와 접근 제한
+
+소셜 인증 콜백은 지금처럼 회원을 바로 만든다(ACTIVE). 이용약관·개인정보 동의 시각이 둘 다 있어야 **가입 완료**이며, 기존 회원도
+V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 false면 가입 동의 화면을 띄우고 `POST /api/users/me/signup-consent`로 저장한다.
+
+- **가입 게이트**(`auth.SignupGateFilter`, 인증 필터 바로 뒤): 인증된 `USER`가 가입 미완료면 아래 허용 목록 밖 요청을
+  403 `SIGNUP_INCOMPLETE` "가입 동의가 필요합니다."로 끝낸다. 메서드와 경로가 정확히 같아야 통과한다.
+  - 허용: `GET /api/users/me`, `POST /api/users/me/signup-consent`, `DELETE /api/users/me`, `POST /api/auth/refresh`, `POST /api/auth/logout`, 모든 `OPTIONS`
+- 토큰이 없거나 무효면 게이트를 거치지 않고 지금처럼 401이 먼저다. 게이트는 인증된 요청만 본다.
+- `ADMIN`은 게이트를 면제한다. 단 `/me`의 `signupCompleted`는 사실대로 내려간다.
+- 동의를 저장하면 같은 access 토큰의 다음 요청부터 통과한다(가입 완료 여부는 토큰이 아니라 매 요청 DB 조회 값).
+- `/ws/jobs/**`(BE2 WebSocket)는 막지 않는다. 인증 결과 `AuthUser.signupCompleted()`로 막을 수 있다.
+- **정리 배치**(`withdrawal.PendingSignupCleanup`): 동의 없이 떠난 신규 계정을 지운다. 대상은 V26 적용 시각
+  (`flyway_schema_history`, 처음 실행 때 한 번 읽음. 이력이 없으면 WARN 후 건너뜀) 이후 생성되고, 이용약관·개인정보 동의가 모두 없고,
+  생성 뒤 `user.signup.pending-ttl-days`(기본 7)일이 지난 ACTIVE 회원이다. 회원마다 `DELETE FROM users`(소셜 연동·프리셋·녹음은 FK
+  CASCADE) 후 refresh 토큰을 폐기하며, 실패(FK 위반 등)는 WARN 로그 후 다음 회원으로 넘어간다. 주기는
+  `user.signup.cleanup-interval-ms`(기본 3,600,000 = 1시간). V26 이전에 생긴 기존 회원은 지우지 않는다.
 
 공개 경로(토큰 없이 통과): `GET /api/auth/*/login`, `GET /api/auth/*/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout`,
 `/actuator/health/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `/internal/**`(BE2가 별도 체인으로 인증), `OPTIONS`.
@@ -617,10 +688,11 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 | 서명·형식·발급자 불일치, `Bearer` 아닌 헤더 | 401 | `UNAUTHORIZED` | 액세스 토큰이 올바르지 않습니다. |
 | 탈퇴·없는 회원 | 401 | `UNAUTHORIZED` | 사용할 수 없는 계정입니다. |
 | ADMIN 전용에 USER | 403 | `FORBIDDEN` | 권한이 없습니다. |
+| 가입 동의 전 USER가 허용 목록 밖 API 호출 | 403 | `SIGNUP_INCOMPLETE` | 가입 동의가 필요합니다. |
 
 ### 다른 모듈에서 인증 쓰기
 
-- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
+- **컨트롤러**: 메서드 인자에 `user.AuthUser me`를 선언하면 인증된 회원(`id`, `role`, `signupCompleted`)이 들어온다. 소유자 판단은 항상 `me.id()`로 하고
   클라이언트가 보낸 회원 ID는 믿지 않는다. 문서에는 파라미터로 나오지 않는다. 클래스에 `@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)`를 붙인다.
 - **ADMIN 전용**: `@PreAuthorize("hasRole('ADMIN')")`. USER는 403이다.
 - **컨트롤러 밖**(인터셉터·연결 어댑터): `auth.CurrentAuthUser.find()`로 현재 요청의 `AuthUser`를 꺼낸다. 예: `chart.web.AuthenticatedChartQueryUserResolver`.
@@ -632,7 +704,7 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·`consent=false` 플레이 세션 삭제,
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258) 삭제,
   `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
@@ -788,9 +860,11 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 ## 음원 접수 (159번)
 
-`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
+`POST /api/v1/songs/audio`는 Bearer 인증과 UUID `Idempotency-Key`, multipart `file`, `title`, 선택적 `artist`를 사용한다. MP3/WAV, MPEG-4 오디오(AAC·ALAC), Ogg Opus 음원 파일은 최대 50MiB(52,428,800바이트), 길이는 0초 초과 10분 이하이며 전체 multipart 요청은 51MiB까지다. 새 형식은 실제 바이트와 스트림을 검사하며 파일명·클라이언트 MIME을 신뢰하지 않는다. MPEG-4는 `audio/mp4`, Ogg Opus는 `audio/ogg`로 저장해 워커에 전달한다. 실제 동영상이나 다른 Ogg 코덱은 거절하며, 첨부 표지 이미지는 허용한다. 플레이 원본 로그 gzip 파일은 기존 20MiB 제한을 유지한다. 원본 multipart 요청은 전체 21MiB 상한을 지키기 위해 길이가 알려져야 하며 길이 미상(chunked 포함)은 411로 거절한다. 브라우저 FormData에서는 길이를 브라우저가 처리한다. 동일 키·정규화된 제목과 아티스트·동일 파일 SHA-256은 기존 작업 상태와 ID를 반환하며 다른 내용은 409, 다른 키의 활성 작업은 429다.
 
 실제 형식과 길이는 `ffprobe`로 검사한다. 운영 이미지에 FFmpeg가 포함되며 로컬에서는 `AUDIO_FFPROBE_PATH`로 실행 파일을 지정할 수 있다. 실행 파일이 없거나 저장소가 설정되지 않으면 503이다. 비공개 비버전 S3 호환 버킷 설정은 `AUDIO_STORAGE_ENABLED`, `AUDIO_STORAGE_ENDPOINT`, `AUDIO_STORAGE_REGION`, `AUDIO_STORAGE_BUCKET`, `AUDIO_STORAGE_ACCESS_KEY`, `AUDIO_STORAGE_SECRET_KEY`, `AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED`로 제공한다. 원본 키는 서버에서 생성하며 접수 전에 기록하고 실패·중단된 PUT은 재시도 정리한다. 활성화는 실제 저장소 권한과 버킷의 비공개 설정을 확인한 환경에서만 한다.
+
+V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장한다. 관리자 반주 업로드의 WAV·MP3 제한은 그대로다. 롤백 시 앱을 이전 버전으로 되돌리더라도 확장된 DB 제약과 새 음원 행은 유지한다. 실제 AI 워커의 새 MIME 입력 처리는 별도 통합 검증이 필요하다.
 
 159번은 접수만 구현한다. 워커 처리·진행 조회·분리 모델은 후속 작업이다.
 
@@ -808,9 +882,17 @@ DB를 쓰는 일반 요청도 장애 중에는 5초 안에 500으로 끝난다. 
 
 `GET /api/v1/plays`는 활성 Bearer 인증 회원의 모든 모드를 종료 시각·playId 내림차순으로 반환한다. `page`는 0~100000(기본 0), `size`는 1~100(기본 20)이며 응답은 `items`, `page`, `size`, `totalElements`, `totalPages`, `hasNext`다. 범위를 벗어난 페이지는 빈 배열이며 전체 0건이면 totalPages는 0이다. 인증 실패는 401, 잘못된 페이지 입력은 400이고 서비스 직접 호출에도 같은 범위 검증을 적용한다. 응답은 `Cache-Control: no-cache, no-store`를 포함한다. offset 페이지 조회 도중 기록이 추가·삭제되면 페이지 간 중복이나 누락이 생길 수 있다.
 
-각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `difficulty`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
+각 항목은 `playId`, `startedAt`, `endedAt`, `mode`, `inputSource`, `songId`, `songTitle`, `chartVersionId`, `chartId`, `difficulty`, `endReason`, `songAccessible`, `score`, `accuracy`, `maxCombo`, `hasReport`를 제공한다. `chartId`는 고정 버전이 속한 연습 단계이며 참조가 없으면 null이다. `endReason`은 `COMPLETED`, `ABORTED`, `DISCONNECTED` 또는 미기록을 뜻하는 null이다. 종료 사유와 관계없이 목록에 유지한다. accuracy는 0~100 백분율이므로 0~1 비율이 필요한 화면은 100으로 나눈다. FREE/TEMPO의 곡·채보·점수 정보는 null이다. `songAccessible`은 현재 곡 조회 조건을 뜻하며 공용 곡은 READY와 published, 개인 곡은 본인 소유여야 한다. 삭제됐거나 참조가 없으면 false이고, 재생 가능성까지 보장하지 않는다. 접근할 수 없는 곡의 현재 제목은 null이지만 과거 곡·고정 채보 ID는 유지한다.
 
 `hasReport`는 RHYTHM/SHEET 기록에 리포트가 존재하는지를 뜻하며 AI 코칭 상태와 무관하다. 리포트가 없어도 과거 기록은 목록에 남는다. 곡 제목이 없을 때의 대체 문구와 날짜 표시 형식은 FE에서 별도로 정한다. FE는 true인 항목에서 `/result/{playId}/report`로 이동할 수 있으며 데이터는 기존 `/api/v1/plays/{playId}/report`와 `/notes`에서 조회한다.
+
+## 곡·연습 단계별 최고 기록 (268번)
+
+`GET /api/v1/plays/best-records?songIds=1,2`는 활성 Bearer 인증 회원의 기록만 조회한다. `songIds`는 양의 64비트 정수 1~100개를 쉼표로 구분한 필수 값이다. 중복 제거 전 100개를 초과하거나 빈 항목·잘못된 값이 있으면 400이다. 중복은 제거한다. 접근 불가·삭제·없는 곡과 기록 없는 곡은 결과에서 생략하며 구분하지 않는다.
+
+응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
+
+곡 선택 화면은 모드에 맞는 전체 단계 중 최고 점수 또는 정확도를 선택하고 연주 준비 화면은 선택한 `chartId`를 쓴다. `bestAccuracy`는 0~100이므로 FE의 0~1 비율로 쓰려면 100으로 나눈다. 이 API 제공은 FE 연동 완료를 뜻하지 않는다.
 
 ## MIDI 업로드 → 채보 변환 (151번)
 
@@ -917,6 +999,23 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 .\gradlew.bat test --tests 'com.ssafy.airdrum.song.admin.*' --tests '*SongPublishedVisibilityTest'
 ```
 
+## 공용 곡 카탈로그 (254번)
+
+CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 **앱이 켜질 때 자동으로 등록**한다. 배포만 하면 로컬·dev·운영에 같은 공용 곡이 들어가며, 사람이 ADMIN API를 호출할 필요가 없다.
+
+- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
+- **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
+- **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
+- **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
+- **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
+- **시드 3곡:** V10의 「기본 8비트」·「8비트 + 필인」·「라이드 16비트」는 난이도가 1개씩이라, 같은 패턴을 MIDI로 옮겨(`scripts/seed_midi_from_v10.py`, 1회용·재현용) 카탈로그에 넣었다. 첫 시작 때 3난이도로 채워진다. 「기본 8비트」 EASY 최신 버전은 전체 패턴(96노트)에서 솎은 패턴으로 바뀐다(기존 버전과 플레이 기록은 그대로). MIDI 변환기가 마지막 노트 뒤에 한 마디를 붙이는 규칙(사용자 MIDI 곡과 같음) 때문에 곡 길이(`songs.duration_ms`)가 한 마디 늘어난다: 「기본 8비트」 21333→23667, 「8비트 + 필인」 19200→21300, 「라이드 16비트」 16000→17875 ms. 82번 반주 도구(`registerBasic8Backing`)는 「기본 8비트」의 채보가 V10 원본 그대로(EASY 하나, 버전 1개, 96노트)일 때만 동작하므로 **이 등록 뒤에는 거부된다**. 82번 반주를 아직 연결하지 않은 환경이라면 이 변경을 배포하기 전에 82번 도구를 먼저 실행하거나, 이후에는 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`로 반주를 올린다.
+- **운영 주의:** 카탈로그에 있는 곡은 ADMIN으로 지우거나 제목을 바꿔도 다음 앱 시작 때 카탈로그 제목으로 다시 등록된다. 공용 곡을 없애려면 카탈로그에서 빼서 배포한 뒤 ADMIN으로 지운다.
+- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가 → MR에서 라이선스 리뷰 → 배포. 반주는 MIDI 반주 합성(274번) 방식이 정해지면 붙인다.
+
+```powershell
+.\gradlew.bat test --tests '*BuiltinSong*'
+```
+
 ## 내 악보 보관 (155번)
 
 CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 곡·채보와 연결하지 않는다. FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
@@ -947,6 +1046,72 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 
 ```powershell
 .\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
+```
+
+## 연주 녹음 (256·257번)
+
+REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(시각·패드·세기)를 플레이 기록과 따로 저장한다. 자유 모드는 플레이 기록이 없어도 저장된다.
+모든 경로는 `/api/v1/recordings` 아래이고 Bearer 인증이 필요하다. 미인증·탈퇴 401, 가입 동의 전 403 `SIGNUP_INCOMPLETE`. 응답은 `Cache-Control: private, no-store`.
+
+| 메서드·경로 | 요청 | 성공 |
+| --- | --- | --- |
+| `POST /` | 아래 저장 본문(JSON) | 201 `Location: /api/v1/recordings/{id}`, 같은 키·같은 내용 재전송 200. 녹음 요약 |
+| `GET /` | `q`(제목 부분 검색, 앞뒤 공백 제거 뒤 100자까지, `%`·`_`는 글자 그대로), `mode`(선택, `FREE`·`RHYTHM`·`SHEET`·`TEMPO` 중 하나), `sort`(`NEWEST` 기본·`OLDEST`), `page` 0~100000, `size` 1~100 | `PageResponse<RecordingSummary>`, 본인의 살아 있는 녹음만, `startedAt` 기준 정렬(같으면 id). 시퀀스·`timing` 없음 |
+| `GET /{id}` | — | 녹음 상세: 요약 + `timing` + `hits[]` |
+| `PATCH /{id}` | JSON `{"title": "..."}`만(4 KiB 이하, 모르는 필드·중복 키·후행 JSON 400). 제목 규칙은 저장과 같다 | 녹음 요약(`updatedAt` 갱신) |
+| `DELETE /{id}` | — | 204, 소프트 삭제 |
+
+남의 녹음·지운 녹음·없는 녹음은 상세·수정·삭제 모두 404 `RECORDING_NOT_FOUND`이고 목록에도 없다.
+
+### 저장 본문 (256번)
+
+
+| 필드 | 계약 |
+| --- | --- |
+| `schemaVersion` | 필수 `1` |
+| `clientKey` | 필수 UUID. 녹음 시작 때 만들고 재전송 때 유지 |
+| `title` | 필수 문자열, 앞뒤 공백 제거 후 1~100자(이모지도 한 글자) |
+| `mode` / `inputSource` | 플레이 로그와 같은 `RHYTHM`·`FREE`·`TEMPO`·`SHEET` / `KEYBOARD`·`STICK` |
+| `playId` | 선택. 본인 플레이이고 다른 녹음과 연결된 적 없어야 한다 |
+| `startedAt` | 필수 ISO-8601 문자열(숫자 epoch 거부), 소수초 6자리까지, 2020-01-01 이상 2100-01-01 미만 |
+| `durationMs` | 필수 0~7,200,000, 마지막 타격 `tMs` 이상 |
+| `hits[]` | 필수 1~50,000개. `tMs`(0 이상 유한 실수), `pad`(플레이 로그 9종, `HI_TOM`은 `SMALL_TOM`으로 저장), `velocity`(0~127), 선택 `stickId`(0 왼손·1 오른손, `KEYBOARD`면 보낼 수 없음) |
+
+- **정렬:** 타격 순서는 자유다. 서버가 `tMs`로 안정 정렬(같은 시각은 받은 순서 유지)해 저장하므로 저장된 시퀀스는 항상 시간순이다. `-0.0`은 `0`으로 저장한다.
+- **중복 저장:** 같은 회원의 살아 있는 녹음에 같은 `clientKey`가 있으면 저장하지 않는다. 정규화한 내용(정렬·별칭·제목 다듬기 뒤, 키 순서·공백·숫자 표기·시간대와 무관)의 SHA-256이 같으면 200과 기존 녹음, 다르면 409. 지운 녹음의 키로 다시 보내면 새 녹음이다.
+- **엄격 파싱:** 플레이 로그와 같은 규칙. 모르는 필드(판정·노트 ID 포함)·중복 키·후행 JSON·숫자 enum·문자열/소수 숫자 강제 변환·HTTP 본문 압축을 거부한다.
+- **저장:** `recordings.hits` jsonb 한 컬럼(행 테이블 없음). 회원 행을 잠가 같은 회원의 저장을 한 줄로 세운다. 플레이가 지워지면 연결만 끊기고 시퀀스는 남는다.
+- **응답:** `id`, `clientKey`, `title`, `mode`, `inputSource`, `playId`, `song`, `hitCount`, `durationMs`, `startedAt`, `createdAt`, `updatedAt`. 시퀀스는 돌려주지 않는다.
+- **채보 버전 기록(V28):** `playId`가 있으면 그 플레이의 `chart_version_id`를 녹음에 함께 저장한다. 목록 `song`과 상세 `timing`은 이 값에서 나오므로 플레이가 지워져도 남는다.
+
+### 보관함 (257번)
+
+- **상세 `hits`:** 저장된 jsonb를 그대로 돌려준다(`tMs` 오름차순, `stickId` 없는 타격은 키 생략). 타격 50,000개면 약 3.5 MB다(검증 실측 3.55 MB). 응답 gzip은 앞단 Nginx가 맡는다.
+- **`song`(요약·상세):** 리듬·악보 녹음이면 `{songId, title, difficulty}`, 자유·박자 녹음과 `playId` 없이 저장한 녹음은 null. 녹음이 기억한 채보 버전(V28) → `charts` → `songs` 조인이다. 녹음 `mode`가 아니라 연결한 플레이의 채보 버전을 따르며, 녹음 모드와 플레이 모드가 달라도 저장을 막지 않는다(FE는 같은 모드로 보낸다). `title`은 곡의 현재 제목이라 이름을 바꾸면 새 이름이고, 곡을 지워도(소프트 삭제) 보인다. `difficulty`는 `EASY`·`NORMAL`·`HARD`.
+- **목록 `sort`·`mode`:** `sort`는 `startedAt` 기준 `NEWEST`(기본)·`OLDEST`, `mode`는 한 모드만 거른다. 다른 값(소문자·빈 값 포함)은 400 `RECORDING_INVALID`.
+- **상세 `timing`:** MIDI 내보내기용 템포. 녹음이 기억한 채보 버전(V28 `recordings.chart_version_id`, 저장 때 플레이에서 복사)의 `timing`을 채보 API와 같은 이름으로 준다: `songId`, `chartVersionId`, `bpm`, `offsetMs`(곡 0ms 기준 첫 박), `timeSignature`, `ppq`, `tempoMap`, `timeSignatureMap`. 곡의 현재 BPM이 아니라 녹음 당시 버전 값이라 곡 BPM이 나중에 바뀌어도 같다(`chart.ChartDocumentReader.timing` 재사용). 채보 버전이 없으면(자유·박자) null. 플레이가 지워져도 남는다. 목록에는 없다.
+- **제목 변경:** 저장 때 계산한 `payload_hash`는 다시 계산하지 않는다. 그래서 제목을 바꾼 뒤 원래 저장 요청을 재전송해도 200(바뀐 제목의 요약)이고, 다른 내용으로 보내면 409다.
+- **삭제:** `deleted_at`을 찍는 소프트 삭제이며 **`play_session_id`도 비운다.** `play_session_id`는 지운 녹음까지 전체에서 유일해서, 비우지 않으면 지운 녹음이 플레이를 붙들어 같은 플레이의 새 녹음이 404가 된다. 지운 뒤 같은 `clientKey`·같은 `playId`로 저장하면 새 녹음이다. 회원당 200개 상한은 살아 있는 녹음만 센다.
+- **탈퇴:** `withdrawal.WithdrawalService` 트랜잭션 안에서 그 회원의 녹음 행을 모두(지운 것 포함) 지운다. 파일이 없어 정리 큐는 쓰지 않는다. 가입 미완료 계정 정리는 `users` 행 삭제의 FK CASCADE로 함께 지워진다.
+- 수정·삭제의 잠금 대기 초과도 저장과 같이 503 `RECORDING_BUSY`다. 상세·목록은 잠그지 않는다.
+- **저장값 읽기:** jsonb는 `1e-70` 같은 아주 작은 수를 긴 소수로 풀어 저장하므로, 상세는 숫자 길이 제한을 넉넉히 둔 별도 매퍼로 읽는다.
+- **제목:** 짝이 맞지 않는 서로게이트(이모지 반쪽)는 DB에 `?`로 바뀌어 저장되므로 저장·변경 모두 400이다.
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 201 | — | 최초 저장, `Location: /api/v1/recordings/{id}` |
+| 200 | — | 같은 키·같은 내용 재전송 |
+| 400 | `RECORDING_INVALID` | 필수·범위·형식, 마지막 타격이 길이보다 늦음, 모르는 필드, 압축 본문 |
+| 404 | `RECORDING_PLAY_NOT_FOUND` | `playId`가 없거나 남의 것, 이미 다른 녹음과 연결됨 |
+| 404 | `RECORDING_NOT_FOUND` | 상세·수정·삭제에서 없는·지운·남의 녹음 |
+| 409 | `RECORDING_CONFLICT` | 같은 키, 다른 내용 |
+| 409 | `RECORDING_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
+| 413 | `RECORDING_TOO_LARGE` | 본문 5 MiB, 타격 50,000개, 2시간 초과 |
+| 413 | `RECORDING_QUOTA_EXCEEDED` | 살아 있는 녹음 회원당 200개 |
+| 503 | `RECORDING_BUSY` | 잠금 대기 3초·문장 10초 초과(PostgreSQL 55P03·57014). 같은 요청을 다시 보낸다 |
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.recording.*' --tests 'com.ssafy.airdrum.withdrawal.*'
 ```
 
 ## 채보 작업 진행 조회·알림 (172번)
@@ -1007,7 +1172,7 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 BPM·offsetMs와 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. 일정 템포 환산이므로 변속 곡의 격자 판단은 어긋날 수 있다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 
-채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 8개 패드 KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
+채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
 
 ## 리포트 약점 분석 (158번 후속)
@@ -1111,8 +1276,37 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
 
 한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
-요청 횟수 제한(429)은 MVP에서 구현하지 않는다. 보관 기간·삭제 정책과 탈퇴 시 처리는 Infra 포함 별도 합의 대상이다
-(행에는 이름·이메일이 없고 회원 번호만 있다).
+요청 횟수 제한(429)은 MVP에서 구현하지 않는다(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+### 보관·탈퇴 (258번)
+
+MONITOR-002. 기준은 Infra와 합의했다(`MONITOR-002_텔레메트리-보관-정책`, 2026-11-04).
+
+| 항목 | 기준 |
+| --- | --- |
+| 보관 기간 | **90일.** V30의 TimescaleDB 보관 정책이 매일 1회, 범위 끝이 90일보다 오래된 1일 청크를 통째로 지운다. 실제 보관 상한은 90일 + 최대 하루 |
+| 탈퇴 | 탈퇴 트랜잭션(`withdrawal.WithdrawalService`) 안에서 그 회원의 행을 모두 지운다(`DELETE … WHERE user_id = ?`). 실패하면 탈퇴 전체가 롤백된다. 탈퇴 로그에 `deletedTelemetry` 건수가 남는다 |
+| 압축 | 두지 않는다. 용량이 작아(팀 테스트 4주 0.5 GB 안팎) 관리 부담이 더 크다. 운영 크기가 예상보다 크면 다시 정한다 |
+| `user_id` 인덱스 | 두지 않는다. 탈퇴 삭제는 청크 순차 스캔이지만 보관 상한·탈퇴 빈도가 작고, 인덱스는 청크마다 생겨 수집 쓰기 비용을 늘린다 |
+| 백업 | 이미 만든 `pg_dump` 파일 안의 데이터는 이 정책이 지우지 않는다. 백업 보관 기간은 Infra 백업 정책(133번)에서 정한다 |
+
+**운영 적용:** 따로 SQL을 실행하지 않는다. 릴리즈 배포 때 Flyway가 V30을 한 번 실행해 정책을 등록한다.
+TimescaleDB 백그라운드 작업이 켜져 있어야 정책이 돈다(`SHOW timescaledb.max_background_workers;`가 1 이상, 2026-11-04 운영 16).
+배포 뒤 확인:
+
+```sql
+-- 정책 job 1개, drop_after 90 days
+SELECT job_id, proc_name, schedule_interval, config FROM timescaledb_information.jobs
+WHERE hypertable_name = 'telemetry_events';
+-- 마지막 실행 시각·결과
+SELECT job_id, last_run_started_at, last_run_status, next_start FROM timescaledb_information.job_stats
+WHERE hypertable_name = 'telemetry_events';
+-- 남아 있는 가장 오래된 데이터
+SELECT min(time), max(time), count(*) FROM telemetry_events;
+```
+
+**되돌리기·변경:** 앱만 롤백해도 정책은 DB에 남는다. 기간을 바꾸거나 정책을 없애려면 운영에서 직접 SQL을 쓰지 않고
+Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다시 등록)으로 한다.
 
 `TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
 `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.

@@ -9,15 +9,20 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** 회원 저장소. */
 public interface UserRepository extends JpaRepository<User, Long> {
 
-	/** 인증이 매 요청 호출한다. ACTIVE 회원만 id·현재 권한으로 돌려주고 엔티티는 읽지 않는다. */
-	@Query("select new com.ssafy.airdrum.user.AuthUser(u.id, u.role) from User u "
-			+ "where u.id = :id and u.status = com.ssafy.airdrum.user.UserStatus.ACTIVE")
+	/**
+	 * 인증이 매 요청 호출한다. ACTIVE 회원만 id·현재 권한·가입 완료 여부로 돌려주고 엔티티는 읽지 않는다.
+	 * 가입 완료 기준은 {@link User#isSignupCompleted()}와 같다.
+	 */
+	@Query("select new com.ssafy.airdrum.user.AuthUser(u.id, u.role, "
+			+ "case when u.termsAgreedAt is not null and u.privacyAgreedAt is not null then true else false end) "
+			+ "from User u where u.id = :id and u.status = com.ssafy.airdrum.user.UserStatus.ACTIVE")
 	Optional<AuthUser> findActiveAuthUser(@Param("id") Long id);
 
 	/**
@@ -45,5 +50,40 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("select u.id from User u where u.status = com.ssafy.airdrum.user.UserStatus.WITHDRAWN "
 			+ "and u.withdrawnAt >= :withdrawnAfter order by u.withdrawnAt, u.id")
 	List<Long> findWithdrawnIds(@Param("withdrawnAfter") Instant withdrawnAfter, Pageable page);
+
+	/**
+	 * ACTIVE 회원의 가입 동의(이용약관·개인정보·연주 기록 활용)를 한 문장으로 저장한다(가입 동의 설계 3-6).
+	 * 탈퇴 트랜잭션({@code FOR UPDATE})과 겹쳐도 탈퇴한 행에는 쓰이지 않는다.
+	 *
+	 * <p>항목마다 판(연주 기록 활용은 값과 판)이 실제로 바뀔 때만 그 항목의 시각을 {@code now}로 바꾸고, 하나라도 바뀌면
+	 * {@code updated_at}도 바꾼다. 모두 같으면 아무 시각도 바뀌지 않는다(멱등). 영속성 컨텍스트는 비워 다음 조회가 DB 값을
+	 * 읽게 한다.
+	 *
+	 * @return 매칭된 행 수. 0이면 ACTIVE가 아니거나 없는 회원이다
+	 */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query(value = """
+			UPDATE users SET
+			  terms_agreed_at = CASE WHEN terms_version IS DISTINCT FROM CAST(:termsVersion AS varchar)
+			                         THEN CAST(:now AS timestamptz) ELSE terms_agreed_at END,
+			  privacy_agreed_at = CASE WHEN privacy_version IS DISTINCT FROM CAST(:privacyVersion AS varchar)
+			                           THEN CAST(:now AS timestamptz) ELSE privacy_agreed_at END,
+			  data_consent_at = CASE WHEN (data_consent, data_consent_version)
+			                              IS DISTINCT FROM (CAST(:agreed AS boolean), CAST(:dataVersion AS varchar))
+			                         THEN CAST(:now AS timestamptz) ELSE data_consent_at END,
+			  updated_at = CASE WHEN terms_version IS DISTINCT FROM CAST(:termsVersion AS varchar)
+			                      OR privacy_version IS DISTINCT FROM CAST(:privacyVersion AS varchar)
+			                      OR (data_consent, data_consent_version)
+			                         IS DISTINCT FROM (CAST(:agreed AS boolean), CAST(:dataVersion AS varchar))
+			                    THEN CAST(:now AS timestamptz) ELSE updated_at END,
+			  terms_version = CAST(:termsVersion AS varchar),
+			  privacy_version = CAST(:privacyVersion AS varchar),
+			  data_consent = CAST(:agreed AS boolean),
+			  data_consent_version = CAST(:dataVersion AS varchar)
+			WHERE id = :id AND status = 'ACTIVE'
+			""", nativeQuery = true)
+	int updateSignupConsent(@Param("id") long id, @Param("termsVersion") String termsVersion,
+			@Param("privacyVersion") String privacyVersion, @Param("agreed") boolean agreed,
+			@Param("dataVersion") String dataVersion, @Param("now") Instant now);
 
 }

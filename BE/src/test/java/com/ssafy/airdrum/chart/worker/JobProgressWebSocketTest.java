@@ -27,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -48,7 +49,9 @@ class JobProgressWebSocketTest {
     static final String HASH="a".repeat(64);
     @BeforeEach void setup() {
         user=db.queryForObject("INSERT INTO users(nickname) VALUES('ws owner') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, user);
         other=db.queryForObject("INSERT INTO users(nickname) VALUES('ws other') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, other);
         song=db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,'ws song','AUDIO','PROCESSING',60000) RETURNING id",Long.class,user);
         String key="source-audio/"+UUID.randomUUID();
         job=db.queryForObject("INSERT INTO chart_jobs(song_id,user_id,source_key,idempotency_key,request_hash) VALUES(?,?,?,?,?) RETURNING id",Long.class,song,user,key,UUID.randomUUID().toString(),HASH);
@@ -64,6 +67,7 @@ class JobProgressWebSocketTest {
         db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",job);
         db.update("DELETE FROM chart_job_attempts WHERE job_id=?",job);
         db.update("DELETE FROM chart_jobs WHERE id=?",job);
+        db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?",song);
         db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
         db.update("DELETE FROM charts WHERE song_id=?",song);
         db.update("DELETE FROM songs WHERE id=?",song);

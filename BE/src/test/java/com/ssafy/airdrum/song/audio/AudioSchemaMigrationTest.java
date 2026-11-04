@@ -56,6 +56,51 @@ class AudioSchemaMigrationTest {
         }
     }
 
+    @Test
+    void v24ExpandsMimeConstraintWithoutChangingExistingRows() throws Exception {
+        String schema = "audio_" + UUID.randomUUID().toString().replace("-", "");
+        try {
+            var before = flyway(schema, "23");
+            assertThat(before.migrate().migrationsExecuted).isEqualTo(22);
+            var originalIds = new java.util.HashMap<String, String>();
+            try (var c = source.getConnection(); var st = c.createStatement()) {
+                c.setSchema(schema);
+                st.execute("INSERT INTO users(nickname) VALUES('existing')");
+                for (String mime : new String[] {"audio/mpeg", "audio/wav"}) originalIds.put(mime, insertAudio(st, mime));
+            }
+            var after = flyway(schema, "24");
+            assertThat(after.migrate().migrationsExecuted).isEqualTo(1);
+            after.validate();
+            assertThat(after.migrate().migrationsExecuted).isZero();
+            try (var c = source.getConnection(); var st = c.createStatement()) {
+                c.setSchema(schema);
+                for (String mime : new String[] {"audio/mp4", "audio/ogg"}) insertAudio(st, mime);
+                try (var rows = st.executeQuery("SELECT id, content_type FROM audio_uploads")) {
+                    var types = new java.util.ArrayList<String>();
+                    while (rows.next()) {
+                        String mime = rows.getString("content_type");
+                        types.add(mime);
+                        if (originalIds.containsKey(mime)) assertThat(rows.getString("id")).isEqualTo(originalIds.get(mime));
+                    }
+                    assertThat(types).containsExactlyInAnyOrder("audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav");
+                }
+                assertThatThrownBy(() -> insertAudio(st, "video/mp4")).isInstanceOf(java.sql.SQLException.class);
+            }
+        } finally {
+            try (var c = source.getConnection(); var st = c.createStatement()) {
+                st.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+            }
+        }
+    }
+
+    private String insertAudio(java.sql.Statement st, String mime) throws java.sql.SQLException {
+        String id = UUID.randomUUID().toString();
+        st.execute("INSERT INTO audio_uploads(id,user_id,object_key,content_type,size_bytes,sha256,duration_ms,status,expires_at) "
+                + "VALUES('" + id + "',(SELECT id FROM users WHERE nickname='existing'),'source-audio/" + id
+                + "','" + mime + "',1,'" + "a".repeat(64) + "',1000,'UPLOADING',now()+interval '1 hour')");
+        return id;
+    }
+
     Flyway flyway(String schema, String target) {
         return Flyway.configure()
                 .dataSource(source)

@@ -37,6 +37,7 @@ class WorkerApiTest {
     @Autowired MockMvc mvc;
     @Autowired JsonMapper json;
     @Autowired WorkerPayload payload;
+    @Autowired com.ssafy.airdrum.chart.ChartQueryService charts;
     @MockitoSpyBean WorkerQueue queue;
     @Autowired WorkerResults results;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -65,6 +66,7 @@ class WorkerApiTest {
         db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",job);
         db.update("DELETE FROM chart_job_attempts WHERE job_id=?",job);
         db.update("DELETE FROM chart_jobs WHERE id=?",job);
+        db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?",song);
         db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
         db.update("DELETE FROM charts WHERE song_id=?",song);
         db.update("DELETE FROM songs WHERE id=?",song);
@@ -320,12 +322,35 @@ class WorkerApiTest {
         raw(path("/results/separation"),T1,envelope(id,UUID.randomUUID(),malformedResult),409);
         assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
     }
+    @Test void transcriptionAcceptsPedalAndPreservesThreeDifficultyVersions() throws Exception {
+        UUID id=prepareTranscription();
+        var pedal=Map.of("noteId","pedal","timeMs",0,"pad","HIHAT_PEDAL","velocityHint",100);
+        var snare=Map.of("noteId","snare","timeMs",500,"pad","SNARE","velocityHint",100);
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",List.of(pedal,snare),
+                        "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
+        var receipt=json.readTree(raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200));
+        assertThat(receipt.path("chartVersionIds").size()).isEqualTo(3);
+        var returned=new HashMap<String,com.ssafy.airdrum.chart.ChartResponses.ChartDetail>();
+        for (var version:receipt.path("chartVersionIds")) {
+            var detail=charts.version(user,version.asLong());
+            returned.put(detail.difficulty(),detail);
+        }
+        assertThat(returned.keySet()).containsExactlyInAnyOrder("HARD","NORMAL","EASY");
+        assertThat(returned.get("HARD").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
+        assertThat(returned.get("HARD").notes()).extracting("noteId").containsExactly("pedal","snare");
+        assertThat(returned.get("NORMAL").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
+        assertThat(returned.get("EASY").notes()).extracting("pad").containsExactly("SNARE");
+    }
     @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
         UUID id=prepareTranscription();
         var input=chartResult("READY",true,"x".repeat(50));
         var envelope=envelope(id,UUID.randomUUID(),input);
         String receipt=raw(path("/results/transcription"),T1,envelope,200);
         assertThat(json.readTree(receipt).path("chartVersionIds").size()).isEqualTo(3);
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?",String.class,song)).isNotBlank();
+		assertThat(db.queryForObject("SELECT level_chart_version_id FROM songs WHERE id=?",Long.class,song))
+				.isEqualTo(db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD'",Long.class,song));
         assertThat(raw(path("/results/transcription"),T1,envelope,200)).isEqualTo(receipt);
         var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.note_count,v.generator_version,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
         assertThat(rows).hasSize(3);

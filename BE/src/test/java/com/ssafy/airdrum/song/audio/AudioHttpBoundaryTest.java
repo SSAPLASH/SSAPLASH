@@ -1,5 +1,7 @@
 package com.ssafy.airdrum.song.audio;
 
+import com.ssafy.airdrum.support.SignupConsentFixtures;
+
 import static org.assertj.core.api.Assertions.*;
 
 import org.junit.jupiter.api.*;
@@ -37,6 +39,7 @@ class AudioHttpBoundaryTest {
                 db.queryForObject(
                         "INSERT INTO users(nickname) VALUES('http boundary') RETURNING id",
                         Long.class);
+        SignupConsentFixtures.complete(db, user);
         token = AudioUploadApiTest.jwt(user);
         play = UUID.randomUUID();
         db.update(

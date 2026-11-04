@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.User;
 import com.ssafy.airdrum.user.UserRepository;
@@ -55,7 +56,7 @@ class TokenControllerTest {
 
 	@Test
 	void refreshIssuesAccessTokenAndRotatesCookie() throws Exception {
-		var user = users.saveAndFlush(User.create("드러머", null, null));
+		var user = users.saveAndFlush(SignupConsentFixtures.completed(User.create("드러머", null, null)));
 		var token = refreshTokens.issue(new AuthUser(user.getId(), UserRole.USER));
 
 		var result = mvc.perform(post(REFRESH).cookie(refreshCookie(token)))

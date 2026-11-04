@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.ssafy.airdrum.auth.AccessTokenService;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.common.error.CommonErrorCode;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 import tools.jackson.databind.JsonNode;
@@ -38,7 +39,9 @@ class PlayQueryApiTest {
     final List<Long> songs = new ArrayList<>();
     @BeforeEach void setup() {
         user=db.queryForObject("INSERT INTO users(nickname) VALUES ('기록 본인') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, user);
         other=db.queryForObject("INSERT INTO users(nickname) VALUES ('기록 타인') RETURNING id",Long.class);
+        SignupConsentFixtures.complete(db, other);
         token=token(user, UserRole.USER, Instant.now()); otherToken=token(other, UserRole.USER, Instant.now());
     }
     String token(long id,UserRole role,Instant when) { return tokens.issue(new AuthUser(id,role),when).token(); }
@@ -99,7 +102,7 @@ class PlayQueryApiTest {
         assertThat(items.get(1).path("mode").asString()).isEqualTo("FREE");
         for (int i=0;i<2;i++) {
             var item=items.get(i);
-            for (String field:List.of("songId","songTitle","chartVersionId","difficulty","score","accuracy","maxCombo"))
+            for (String field:List.of("songId","songTitle","chartVersionId","chartId","difficulty","endReason","score","accuracy","maxCombo"))
                 assertThat(item.path(field).isNull()).as(field).isTrue();
             assertThat(item.path("songAccessible").asBoolean()).isFalse();
             assertThat(item.path("hasReport").asBoolean()).isFalse();
@@ -114,6 +117,7 @@ class PlayQueryApiTest {
             assertThat(item.has("userId")).isFalse(); assertThat(item.has("hits")).isFalse();
         }
         assertThat(items.get(6).path("difficulty").asString()).isEqualTo("NORMAL");
+        assertThat(items.get(6).path("chartId").asLong()).isEqualTo(db.queryForObject("SELECT chart_id FROM chart_versions WHERE id=?",Long.class,ownOld));
         var first=list(token,"?page=0&size=3",200); var second=list(token,"?page=1&size=3",200);
         assertThat(first.path("totalPages").asInt()).isEqualTo(3); assertThat(first.path("hasNext").asBoolean()).isTrue();
         assertThat(second.path("totalPages").asInt()).isEqualTo(3); assertThat(second.path("hasNext").asBoolean()).isTrue();
@@ -161,7 +165,7 @@ class PlayQueryApiTest {
     @Test void openApiDescribesNullableFieldsAndVisibility() throws Exception {
         var result=mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn().getResponse();
         var props=json.readTree(result.getContentAsString()).path("components").path("schemas").path("PlaySummaryResponse").path("properties");
-        for(String field:List.of("songId","songTitle","chartVersionId","difficulty","score","accuracy","maxCombo")) {
+        for(String field:List.of("songId","songTitle","chartVersionId","chartId","difficulty","endReason","score","accuracy","maxCombo")) {
             assertThat(props.path(field).path("type").isArray()).as(field).isTrue();
             assertThat(props.path(field).path("type").toString()).as(field).contains("\"null\"");
             assertThat(props.path(field).path("description").asString()).as(field).isNotBlank();
@@ -170,6 +174,82 @@ class PlayQueryApiTest {
         assertThat(props.path("accuracy").path("maximum").asInt()).isEqualTo(100);
         assertThat(props.path("songAccessible").path("description").asString()).isNotBlank();
         assertThat(props.path("hasReport").path("description").asString()).contains("AI");
+    }
+    UUID scored(long owner, String mode, long song, long version, Integer score, String accuracy, String reason) {
+        UUID id=UUID.randomUUID();
+        insert(id,owner,mode,song,version,"2026-01-01T00:00:00Z");
+        db.update("UPDATE play_sessions SET score=?,accuracy=?::numeric,client_meta=CASE WHEN ?::text IS NULL THEN NULL ELSE jsonb_build_object('endReason',?::text) END WHERE id=?",score,accuracy,reason,reason,id);
+        return id;
+    }
+    JsonNode best(String auth, String ids, int expected) throws Exception {
+        var request=get("/api/v1/plays/best-records");
+        if(ids!=null) request.param("songIds",ids);
+        if(auth!=null) request.header("Authorization","Bearer "+auth);
+        var response=mvc.perform(request).andExpect(status().is(expected)).andReturn().getResponse();
+        return response.getContentAsString().isEmpty()?null:json.readTree(response.getContentAsString());
+    }
+    @Test void bestRecordsGroupVersionsModesVisibilityAndCompletion() throws Exception {
+        long own=song(user,"MIDI","내 곡",true), visible=song(null,"BUILTIN","공개",true), foreign=song(other,"MIDI","타인",true), hidden=song(null,"BUILTIN","비공개",false), deleted=song(user,"MIDI","삭제",true), empty=song(user,"MIDI","기록 없음",true);
+        long easy=version(own,"EASY",1), easyNext=version(own,"EASY",2), hard=version(own,"HARD",1);
+        long pub=version(visible,"NORMAL",1), foreignV=version(foreign,"EASY",1), hiddenV=version(hidden,"EASY",1), deletedV=version(deleted,"EASY",1);
+        db.update("UPDATE songs SET deleted_at=now() WHERE id=?",deleted);
+        UUID finished=scored(user,"RHYTHM",own,easy,100,"20.00","COMPLETED");
+        scored(user,"RHYTHM",own,easyNext,80,"90.00","COMPLETED");
+        scored(user,"SHEET",own,easy,30,"40.00","COMPLETED");
+        scored(user,"RHYTHM",own,hard,0,"0.00","COMPLETED");
+        scored(user,"RHYTHM",visible,pub,null,null,"COMPLETED");
+        scored(other,"RHYTHM",own,easy,9999,"99.00","COMPLETED");
+        for(String reason:List.of("ABORTED","DISCONNECTED")) scored(user,"RHYTHM",own,easy,9000,"99.00",reason);
+        scored(user,"RHYTHM",own,easy,9000,"99.00",null);
+        scored(user,"RHYTHM",foreign,foreignV,100,"50.00","COMPLETED");
+        scored(user,"RHYTHM",hidden,hiddenV,100,"50.00","COMPLETED");
+        scored(user,"RHYTHM",deleted,deletedV,100,"50.00","COMPLETED");
+        scored(user,"RHYTHM",own,pub,9000,"99.00","COMPLETED"); // 곡과 버전 불일치
+        String ids=own+","+visible+","+foreign+","+hidden+","+deleted+","+empty+","+own;
+        var items=best(token,ids,200).path("items"); assertThat(items.size()).isEqualTo(4);
+        long easyChart=db.queryForObject("SELECT chart_id FROM chart_versions WHERE id=?",Long.class,easy);
+        assertThat(items.get(0).path("songId").asLong()).isEqualTo(own);
+        assertThat(items.get(0).path("chartId").asLong()).isEqualTo(easyChart);
+        assertThat(items.get(0).path("difficulty").asString()).isEqualTo("EASY");
+        assertThat(items.get(0).path("mode").asString()).isEqualTo("RHYTHM");
+        assertThat(items.get(0).path("bestScore").asInt()).isEqualTo(100);
+        assertThat(items.get(0).path("bestAccuracy").asDouble()).isEqualTo(90);
+        assertThat(items.get(1).path("mode").asString()).isEqualTo("SHEET");
+        assertThat(items.get(1).path("bestAccuracy").asDouble()).isEqualTo(40);
+        assertThat(items.get(2).path("difficulty").asString()).isEqualTo("HARD");
+        assertThat(items.get(2).path("bestScore").asInt()).isZero();
+        assertThat(items.get(2).path("bestAccuracy").asDouble()).isZero();
+        assertThat(items.get(3).path("songId").asLong()).isEqualTo(visible);
+        assertThat(items.get(3).path("bestScore").isNull()).isTrue();
+        assertThat(items.get(3).path("bestAccuracy").isNull()).isTrue();
+        assertThat(best(otherToken,Long.toString(own),200).path("items").size()).isZero();
+        assertThat(best(token,Long.toString(empty),200).path("items").size()).isZero();
+        var page=list(token,"?size=100",200).path("items");
+        assertThat(page.size()).isEqualTo(12);
+        var reasons=new ArrayList<String>();
+        page.forEach(item->{ if(!item.path("endReason").isNull()) reasons.add(item.path("endReason").asString()); });
+        assertThat(reasons).contains("COMPLETED","ABORTED","DISCONNECTED");
+        assertThat(page.toString()).contains(finished.toString());
+    }
+    @Test void bestRecordsValidateIdsAndAuthentication() throws Exception {
+        best(null,"1",401); best(token(user,UserRole.USER,Instant.now().minusSeconds(86400)),"1",401);
+        for(String invalid:List.of("", "0", "-1", "1,,2", ",1", "1,", "abc", "1, 2", "9223372036854775808", String.join(",",Collections.nCopies(101,"1")))) best(token,invalid,400);
+        best(token,null,400);
+        assertThat(best(token,String.join(",",Collections.nCopies(100,"1")),200).path("items").size()).isZero();
+        db.update("UPDATE users SET status='WITHDRAWN',withdrawn_at=now() WHERE id=?",user);
+        best(token,"1",401);
+        assertThatThrownBy(()->service.bestRecords(user,"1")).isInstanceOfSatisfying(BusinessException.class,e->assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED));
+    }
+    @Test void bestRecordsOpenApiAndReportPathsCoexist() throws Exception {
+        var result=mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn().getResponse();
+        var api=json.readTree(result.getContentAsString());
+        assertThat(api.path("paths").path("/api/v1/plays/best-records").path("get").isMissingNode()).isFalse();
+        assertThat(api.path("paths").path("/api/v1/plays/{playId}/report").path("get").isMissingNode()).isFalse();
+        assertThat(api.path("paths").path("/api/v1/plays/{playId}/report/notes").path("get").isMissingNode()).isFalse();
+        var schemas=api.path("components").path("schemas");
+        assertThat(schemas.path("BestRecordsResponse").path("properties").path("items").path("items").path("$ref").asString()).isEqualTo("#/components/schemas/BestRecordItem");
+        assertThat(schemas.path("BestRecordItem").path("properties").path("bestAccuracy").path("description").asString()).contains("0~100");
+        assertThat(schemas.path("BestRecordItem").path("properties").has("seq")).isFalse();
     }
     @Test void countAndPageShareSnapshotWhenAnotherTransactionInserts() throws Exception { snapshot(false); }
     @Test void countAndPageShareSnapshotWhenAnotherTransactionDeletes() throws Exception { snapshot(true); }

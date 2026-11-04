@@ -45,6 +45,7 @@ class WorkerCleanupAndSchemaTest {
         db.update("UPDATE chart_jobs SET status='FAILED',finished_at=coalesce(finished_at,now()),current_attempt_id=NULL WHERE id=?",job);
         db.update("DELETE FROM chart_job_attempts WHERE job_id=?",job);
         db.update("DELETE FROM chart_jobs WHERE id=?",job);
+        db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?",song);
         db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
         db.update("DELETE FROM charts WHERE song_id=?",song);
         db.update("DELETE FROM songs WHERE id=?",song);

@@ -32,6 +32,7 @@ import com.ssafy.airdrum.song.AccompanimentStorage;
 import com.ssafy.airdrum.song.CoverStorage;
 import com.ssafy.airdrum.song.audio.AudioErrorCode;
 import com.ssafy.airdrum.song.audio.AudioProbe;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
@@ -68,6 +69,7 @@ class AdminSongAssetApiTest {
 	void seed() {
 		admin = db.queryForObject("INSERT INTO users(nickname,role) VALUES('자산 관리자','ADMIN') RETURNING id", Long.class);
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('자산 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
 		song = db.queryForObject("INSERT INTO songs(title,source,status,license,bpm,time_signature) VALUES('관리 테스트 자산','BUILTIN','READY','x',120,'4/4') RETURNING id", Long.class);
 		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'EASY') RETURNING id", Long.class, song);
 		version = db.queryForObject("""
@@ -82,6 +84,7 @@ class AdminSongAssetApiTest {
 	@AfterEach
 	void cleanup() {
 		db.update("DELETE FROM file_cleanup_tasks WHERE object_key LIKE ? OR object_key LIKE ?", "cover/builtin/" + song + "/%", "accompaniment/" + song + "/%");
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?", song);
 		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)", song);
 		db.update("DELETE FROM charts WHERE song_id=?", song);
 		db.update("DELETE FROM songs WHERE id=?", song);
