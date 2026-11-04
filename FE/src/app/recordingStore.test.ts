@@ -397,3 +397,26 @@ describe('저장', () => {
     expect(state().phase).toBe('armed');
   });
 });
+
+describe('페달만 친 자유 녹음 (PLAY-002)', () => {
+  // 인수 조건: 페달 타격이 녹음에 들어가고 stickId 키가 없다. 페달만이어도 STICK
+  it('stickId null 센서 타격만 있어도 hasSensor이고 저장 본문은 STICK, stickId 키가 없다', async () => {
+    api.mockResolvedValue(SUMMARY);
+    startFree();
+    bus.__emit(hit({ source: 'webserial' as never, stickId: null, foot: 3, pad: 'KICK' }));
+    stopFree('user');
+    expect(state().pending?.hasSensor).toBe(true);
+    expect('stickId' in state().pending!.hits[0]).toBe(false);
+    await save('페달');
+    const body = api.mock.calls[0][0] as RecordingBody;
+    expect(body.inputSource).toBe('STICK');
+    expect(body.hits.every((h) => !('stickId' in h))).toBe(true);
+  });
+
+  it('키보드 타격만이면 KEYBOARD', async () => {
+    api.mockResolvedValue(SUMMARY);
+    freeToPending();
+    await save('키보드');
+    expect((api.mock.calls[0][0] as RecordingBody).inputSource).toBe('KEYBOARD');
+  });
+});

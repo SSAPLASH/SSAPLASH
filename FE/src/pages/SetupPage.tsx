@@ -34,6 +34,7 @@ import type { PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { readiness } from '@/domain/readiness';
+import { pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
   dongleLine,
   returnBannerText,
@@ -117,6 +118,8 @@ export function SetupPage() {
   const s = useSettings();
   const presets = usePresets();
   const connected = useLive((l) => l.connected);
+  const pedal = useLive((l) => l.pedal.connected);
+  const pedalBattery = useLive((l) => l.pedal.battery);
   const battery = useLive((l) => l.battery);
   const pose = useLive((l) => l.pose);
   const sourceState = useLive((l) => l.sourceState);
@@ -187,6 +190,7 @@ export function SetupPage() {
   const readinessInput = {
     sensorKind: s.sensorKind,
     connected,
+    pedal,
     firstSetupDone: referenceSetAt !== null,
     activePresetId: s.activePresetId,
   };
@@ -448,6 +452,9 @@ export function SetupPage() {
                 <StickCard hand={0} connected={connected[0]} batteryPct={battery[0]} />
                 <StickCard hand={1} connected={connected[1]} batteryPct={battery[1]} />
               </div>
+            )}
+            {sensorMode && dongleState !== undefined && (
+              <PedalRow pedal={{ connected: pedal, battery: pedalBattery }} dongle={dongleState} />
             )}
             <p className="setup-note">키보드는 항상 켜져 있습니다. 센서를 고르면 센서 타격은 가상 키트 배치로 판정됩니다.</p>
             {[NO_SENSOR, ...sensorRegistry.list()].map((i) => (
@@ -767,6 +774,17 @@ export function SetupPage() {
         onCancel={cancelNameDialog}
       />
     </main>
+  );
+}
+
+/** ① 두 손 카드 아래 페달 한 줄(동글 소스만). 점은 두 발이 모두 붙었을 때만 켜진다 */
+function PedalRow({ pedal, dongle }: { pedal: { connected: [boolean, boolean]; battery: number | null }; dongle: SetupDongleState }) {
+  const v = pedalStatus(pedal);
+  return (
+    <div className="setup-dongle setup-pedal">
+      <span className={`stick-dot ${v.dot}`} />
+      <span className="setup-dongle-text">{pedalSetupLine(pedal, dongle)}</span>
+    </div>
   );
 }
 

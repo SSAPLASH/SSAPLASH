@@ -9,6 +9,8 @@ import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
 import { useLive } from '@/store/liveStore';
+import { useSettings } from '@/store/settingsStore';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { useReconnect } from '@/store/reconnectStore';
 import './PauseOverlay.css';
 
@@ -32,6 +34,10 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
   const primaryRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
+  const sensorKind = useSettings((s) => s.sensorKind);
+  // 동글 소스만 페달을 본다(undefined면 끊김 카드가 P 점을 그리지 않는다)
+  const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
   const reconnectState = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);
@@ -58,6 +64,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
           <DisconnectNotice
             left={connected[0]}
             right={connected[1]}
+            pedal={pedal}
             status={reconnected ? { status: 'reconnected', attempt: 0, max } : { status: reconnectState, attempt, max, hint }}
             onExit={onLeave}
             onReconnect={available ? () => void reconnect() : undefined}

@@ -6,7 +6,7 @@
 // 송신: 모두 바이너리 프레임(stickProtocol 인코더).
 // 브리지는 스틱 1개당 1개(포트 따로)라서, 주소를 둘 주면 링크 2개(첫째 왼손·둘째 오른손)로 연결한다.
 // 둘째 주소가 비면 링크 1개를 두 손이 함께 쓴다(기존 동작).
-import type { StickEvent, StickId } from '@/domain/events';
+import type { DeviceRole, StickEvent, StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { packetTap } from './packetTap';
@@ -96,6 +96,8 @@ export class WebSocketStickSource extends BaseInputSource {
       const p = parsePacket(bytes, recvTime);
       if (!p) return;
       if (p.kind === 'syncAck') this.addSyncSample(link, p.t0, p.t1, recvTime);
+      // 페달(role 2·3) 이벤트는 동글 소스만 쓴다
+      else if (p.kind === 'pedal' || p.kind === 'pedalStatus' || (p.kind === 'hit' && p.foot !== undefined)) return;
       else this.emitMapped(link, p, recvTime);
       return;
     }
@@ -129,7 +131,7 @@ export class WebSocketStickSource extends BaseInputSource {
   }
 
   private emitMapped(link: BridgeLink, e: StickEvent, recvTime: number): void {
-    this.checkRole(link, e.stickId);
+    if ('stickId' in e && e.stickId !== null) this.checkRole(link, e.stickId);
     if (e.kind === 'hit' || e.kind === 'pose') {
       this.emit({ ...e, timestamp: link.clock.toBrowserTime(e.timestamp, recvTime) });
     } else {
@@ -156,8 +158,10 @@ export class WebSocketStickSource extends BaseInputSource {
   }
 
   /** 그 손 링크의 오프셋. 링크 1개를 공용하면 공용 오프셋 */
-  clockOffsetOf(stickId?: StickId): number | null {
-    return this.linksFor(stickId)[0]?.clock.offset ?? null;
+  clockOffsetOf(role?: DeviceRole): number | null {
+    // 발(role 2·3)은 WebSocket 브리지에 없다
+    if (role === 2 || role === 3) return null;
+    return this.linksFor(role)[0]?.clock.offset ?? null;
   }
 
   transportStats(): TransportStats {

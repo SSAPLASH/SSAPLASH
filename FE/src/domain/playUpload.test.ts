@@ -177,3 +177,28 @@ describe('buildUploadBody', () => {
     expect(reason(log({ notes: [note(0, { noteId: null })] , sourceNoteCount: 1 }))).toBe('CHART_MISMATCH');
   });
 });
+
+describe('페달 타격 업로드 (PLAY-002)', () => {
+  // 인수 조건: 업로드 본문 stickId null(STICK 모드), 키보드 모드도 null
+  it('스틱 세션: stickId null 센서 타격은 stickId null로 나가고 자세 필드는 그대로 허용', () => {
+    const l = log({
+      inputSource: 'webserial',
+      hits: [
+        hit(0, { judgement: 'PERFECT', matchedNoteIndex: 0, deltaMs: 5, source: 'webserial', stickId: null, pad: 'KICK', velocity: 100 }),
+        hit(2, { pad: 'HIHAT_PEDAL', tSongMs: 700, source: 'webserial', stickId: null }),
+        hit(3, { judgement: 'GOOD', matchedNoteIndex: 2, deltaMs: -40, source: 'webserial', stickId: 1 }),
+      ],
+    });
+    const b = body(l);
+    expect(b.inputSource).toBe('STICK');
+    expect(b.hits[0]).toMatchObject({ stickId: null, pad: 'KICK', velocity: 100 });
+    expect(b.hits[2]).toMatchObject({ stickId: null, pad: 'HIHAT_PEDAL' });
+    expect(b.hits[3]).toMatchObject({ stickId: 1 });
+  });
+
+  it('키보드 세션에 stickId null 타격이 있어도 null', () => {
+    const base = log();
+    const l = log({ hits: base.hits.map((h, i) => (i === 0 ? { ...h, stickId: null } : h)) });
+    expect(body(l).hits[0].stickId).toBeNull();
+  });
+});

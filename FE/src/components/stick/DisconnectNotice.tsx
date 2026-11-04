@@ -1,4 +1,4 @@
-// 연결 끊김 카드 (Figma Play / DisconnectNotice 228:1138, 10/31 재구성). 420 카드 안에 L·R 연결 점, 제목, 재연결 상태 문구, 버튼 둘.
+// 연결 끊김 카드 (Figma Play / DisconnectNotice 228:1138, 10/31 재구성). 420 카드 안에 L·R(동글이면 P) 연결 점, 제목, 재연결 상태 문구, 버튼 둘.
 // 시도 중 [다시 연결]은 눌러도 된다(다음 시도를 바로 시작). 시도 중에는 끊긴 손 점이 맥동하고 문구 앞에 스피너가 돈다.
 // 복귀(reconnected)하면 점 둘이 초록, 제목 「재연결 성공!」, 버튼 없음.
 // 버튼은 ref가 필요해 ui/Button 대신 buttonClassName 모양을 입힌 button을 쓴다.
@@ -20,6 +20,8 @@ interface Props {
   /** 왼손·오른손 스틱 연결 여부 */
   left: boolean;
   right: boolean;
+  /** 페달 연결 여부. undefined면 P 점·문구를 그리지 않는다(동글이 아닌 소스) */
+  pedal?: boolean;
   status: ReconnectInfo;
   onExit: () => void;
   /** 없으면 [다시 연결] 버튼을 숨긴다(연결 동작이 없는 소스) */
@@ -30,7 +32,8 @@ interface Props {
   primaryRef?: Ref<HTMLButtonElement>;
 }
 
-function titleText(left: boolean, right: boolean): string {
+function titleText(left: boolean, right: boolean, pedal?: boolean): string {
+  if (pedal === false) return left && right ? '페달 연결이 끊겼어요' : '스틱·페달 연결이 끊겼어요';
   if (!left && !right) return '양손 스틱 연결이 끊겼어요';
   return `${left ? '오른손' : '왼손'} 스틱 연결이 끊겼어요`;
 }
@@ -42,7 +45,7 @@ function statusText(status: ReconnectInfo): string {
   return '연주를 멈췄어요. 다시 연결되면 이어서 할 수 있어요.';
 }
 
-function Dot({ hand, connected, pulse }: { hand: 'L' | 'R'; connected: boolean; pulse?: boolean }) {
+function Dot({ hand, connected, pulse }: { hand: 'L' | 'R' | 'P'; connected: boolean; pulse?: boolean }) {
   return (
     <div className="stick-dot-wrap">
       <span className={`stick-dot ${connected ? 'on' : 'off'}${pulse && !connected ? ' pulse' : ''}`} aria-hidden="true">
@@ -53,7 +56,7 @@ function Dot({ hand, connected, pulse }: { hand: 'L' | 'R'; connected: boolean; 
   );
 }
 
-export function DisconnectNotice({ left, right, status, onExit, onReconnect, onOpenSetup, primaryRef }: Props) {
+export function DisconnectNotice({ left, right, pedal, status, onExit, onReconnect, onOpenSetup, primaryRef }: Props) {
   const failed = status.status === 'failed';
   const trying = status.status === 'trying';
   const reconnected = status.status === 'reconnected';
@@ -67,9 +70,10 @@ export function DisconnectNotice({ left, right, status, onExit, onReconnect, onO
       <div className="stick-dots">
         <Dot hand="L" connected={reconnected || left} pulse={trying} />
         <Dot hand="R" connected={reconnected || right} pulse={trying} />
+        {pedal !== undefined && <Dot hand="P" connected={reconnected || pedal} pulse={trying} />}
       </div>
       <h2 id="stick-disconnect-title" className={`stick-disconnect-title${reconnected ? ' good' : ''}`}>
-        {reconnected ? '재연결 성공!' : titleText(left, right)}
+        {reconnected ? '재연결 성공!' : titleText(left, right, pedal)}
       </h2>
       <p className="stick-disconnect-status" role={reconnected ? undefined : 'status'}>
         {trying && <span className="stick-spinner" aria-hidden="true" />}

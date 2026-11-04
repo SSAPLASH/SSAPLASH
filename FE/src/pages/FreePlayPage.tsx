@@ -21,6 +21,7 @@ import { usePresets } from '@/store/presetStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { freeStage } from '@/domain/freeStage';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources';
 import { stopFree } from '@/app/recordingStore';
@@ -75,6 +76,7 @@ export function FreePlayPage() {
   const activePresetId = useSettings((s) => s.activePresetId);
   const presetItems = usePresets((s) => s.items);
   const connected = useLive((s) => s.connected);
+  const pedalPair = useLive((s) => s.pedal.connected);
   const reconnect = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);
@@ -111,6 +113,9 @@ export function FreePlayPage() {
   const desc = sensorKind === 'none' ? undefined : sensorRegistry.get(sensorKind);
   const stage = freeStage({ sensorKind, hasUsageGuide: !!desc?.usageGuide, connected });
   const empty = stage === 'empty';
+  // 동글 소스만 페달을 본다. 손은 멀쩡한데 페달만 끊겨도 띠를 보인다(연주는 계속)
+  const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
+  const showBand = stage === 'oneHand' || (stage === 'ready' && pedal === false);
   const mean = meanVelocity(stats);
   const preset = presetItems.find((p) => p.id === activePresetId);
 
@@ -139,10 +144,11 @@ export function FreePlayPage() {
           <span className="free-canvas-meta">프리셋: {preset?.name ?? '없음'} · 8패드</span>
         </div>
 
-        {stage === 'oneHand' && (
+        {showBand && (
           <DisconnectBand
             left={connected[0]}
             right={connected[1]}
+            pedal={pedal}
             reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
             onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
           />
