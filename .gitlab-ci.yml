@@ -92,10 +92,20 @@ be-build:
   extends: .be-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootJar bootMidiWorkerJar
+    - ./gradlew --no-daemon bootJar
   artifacts:
     paths:
       - BE/build/libs/app.jar
+    expire_in: 1 week
+
+# 두 실행 JAR은 각각 별도 아티팩트로 보관해 업로드 크기 제한을 피한다.
+be-midi-worker-build:
+  extends: .be-job
+  stage: build
+  script:
+    - ./gradlew --no-daemon bootMidiWorkerJar
+  artifacts:
+    paths:
       - BE/build/libs/midi-worker.jar
     expire_in: 1 week
 
