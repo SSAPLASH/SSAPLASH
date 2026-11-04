@@ -97,6 +97,7 @@ const SAMPLE_A = [
     toMs: 14501,
     pattern: 'TIMING_LATE',
     description: '전체적으로 평균 22ms 늦게 치고 있어요.',
+    tip: '스틱을 미리 올려 두고, 박 소리가 들리는 순간 내려쳐 보세요. 느린 템포부터 시작하면 감이 빨리 와요.',
     causeTags: ['LATE', 'OVERALL'],
     pads: ['HIHAT', 'SNARE'],
     metrics: { severity: 0.36, meanDeltaMs: 21.7, hitCount: 22, scope: 'WHOLE' },
@@ -106,6 +107,7 @@ const SAMPLE_A = [
     toMs: 12000,
     pattern: 'MISS_CLUSTER',
     description: '7~12초 구간에서 노트의 40%를 놓쳤어요.',
+    tip: '놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.',
     causeTags: ['MISS', 'CLUSTER'],
     pads: ['SNARE'],
     metrics: { severity: 0.67, missRate: 0.4, missCount: 4, noteCount: 10, scope: 'SEGMENT' },
@@ -124,6 +126,21 @@ describe('toWeakSegments', () => {
     expect(r[0].metrics).toEqual({ meanDeltaMs: 21.7, hitCount: 22 });
     expect(r[1]).toMatchObject({ fromMs: 7000, toMs: 12000, pattern: 'MISS_CLUSTER', scope: 'SEGMENT', severity: 0.67, pads: ['SNARE'] });
     expect(r[1].metrics).toEqual({ missRate: 0.4, missCount: 4, noteCount: 10 });
+  });
+
+  it('tip은 비어 있지 않은 문자열이면 그대로 보관하고, 없거나 빈 문자열·숫자면 필드 자체가 없다', () => {
+    const r = toWeakSegments(SAMPLE_A)!;
+    expect(r[0].tip).toBe(SAMPLE_A[0].tip);
+    expect(r[1].tip).toBe(SAMPLE_A[1].tip);
+    const noTip = { ...SAMPLE_A[1] } as Record<string, unknown>;
+    delete noTip.tip;
+    for (const el of [noTip, seg({ tip: '' }), seg({ tip: 5 }), seg({ tip: null })]) {
+      const [s] = toWeakSegments([el])!;
+      expect('tip' in s).toBe(false);
+    }
+    // 자르거나 다듬지 않는다
+    const [t] = toWeakSegments([seg({ tip: '  앞뒤 공백 유지  ' })])!;
+    expect(t.tip).toBe('  앞뒤 공백 유지  ');
   });
 
   it('샘플 B·C(빈 배열)는 빈 배열, null은 null, 배열이 아니면 null', () => {
