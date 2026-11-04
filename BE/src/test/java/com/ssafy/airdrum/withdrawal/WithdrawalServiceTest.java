@@ -80,6 +80,9 @@ class WithdrawalServiceTest {
 
 	private final List<Long> created = new ArrayList<>();
 
+	/** 회원 번호가 없는 텔레메트리 행을 구분하는 세션. 탈퇴는 이 행을 지우지 않는다. */
+	private static final String ANONYMOUS_SESSION = "00000000-0000-0000-0000-0000000258aa";
+
 	@BeforeEach
 	void resetRecorder() {
 		events.committed.clear();
@@ -89,8 +92,10 @@ class WithdrawalServiceTest {
 	@AfterEach
 	void cleanUp() {
 		reset(refreshStore);
+		jdbc.update("delete from telemetry_events where session_id = ?::uuid", ANONYMOUS_SESSION);
 		for (var id : created) {
 			jdbc.update("delete from recordings where user_id = ?", id);
+			jdbc.update("delete from telemetry_events where user_id = ?", id);
 			jdbc.update("delete from kit_presets where user_id = ?", id);
 			jdbc.update("delete from social_accounts where user_id = ?", id);
 			jdbc.update("delete from users where id = ?", id);
@@ -101,6 +106,7 @@ class WithdrawalServiceTest {
 	void withdrawCommitsStateRemovesOwnedDataAndPublishesOnceAfterCommit() {
 		var user = memberWithData("g-withdraw");
 		var other = memberWithData("g-bystander");
+		jdbc.update("INSERT INTO telemetry_events(time,session_id,user_id,kind) VALUES(now(),?::uuid,NULL,'STATUS')", ANONYMOUS_SESSION);
 		var token = refreshTokens.issue(new AuthUser(user.getId(), user.getRole()));
 
 		withdrawals.withdraw(user.getId());
@@ -112,12 +118,18 @@ class WithdrawalServiceTest {
 		assertThat(presets.countByUserId(user.getId())).isZero();
 		// 257 U7: 살아 있는 녹음·지운 녹음 모두 탈퇴 트랜잭션에서 지운다
 		assertThat(recordings(user.getId())).isZero();
+		// 258: 그 회원의 텔레메트리도 탈퇴 트랜잭션에서 지운다
+		assertThat(telemetry(user.getId())).isZero();
 		assertThat(refreshTokens.rotate(token).outcome()).isEqualTo(Outcome.UNKNOWN);
 		assertThat(events.committed).containsExactly(user.getId());
 		// 다른 회원 데이터는 그대로
 		assertThat(socialAccounts.findByUserIdOrderByConnectedAtAsc(other.getId())).hasSize(1);
 		assertThat(presets.countByUserId(other.getId())).isEqualTo(1);
 		assertThat(recordings(other.getId())).isEqualTo(2);
+		assertThat(telemetry(other.getId())).isEqualTo(2);
+		// 258: user_id가 NULL인 행은 탈퇴와 무관하다
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM telemetry_events WHERE session_id = ?::uuid AND user_id IS NULL",
+				Integer.class, ANONYMOUS_SESSION)).isEqualTo(1);
 	}
 
 	@Test
@@ -142,6 +154,7 @@ class WithdrawalServiceTest {
 		assertThat(socialAccounts.findByUserIdOrderByConnectedAtAsc(user.getId())).hasSize(1);
 		assertThat(presets.countByUserId(user.getId())).isEqualTo(1);
 		assertThat(recordings(user.getId())).isEqualTo(2);
+		assertThat(telemetry(user.getId())).isEqualTo(2);
 	}
 
 	@Test
@@ -203,7 +216,14 @@ class WithdrawalServiceTest {
 			jdbc.update("INSERT INTO recordings(user_id,title,client_key,mode,input_source,schema_version,started_at,duration_ms,hit_count,hits,payload_hash,deleted_at) "
 					+ "VALUES(?,'녹음',gen_random_uuid(),'FREE','KEYBOARD',1,now(),1,1,'[{\"tMs\":0,\"pad\":\"SNARE\",\"velocity\":1}]',?," + deleted + ")",
 					user.getId(), "d".repeat(64));
+		// 텔레메트리: 타격·상태 이벤트 하나씩(임베디드 PG에서는 hypertable이 아닌 일반 테이블)
+		for (String kind : new String[] {"HIT", "STATUS"})
+			jdbc.update("INSERT INTO telemetry_events(time,session_id,user_id,kind) VALUES(now(),gen_random_uuid(),?,?)", user.getId(), kind);
 		return user;
+	}
+
+	private int telemetry(long userId) {
+		return jdbc.queryForObject("SELECT count(*) FROM telemetry_events WHERE user_id = ?", Integer.class, userId);
 	}
 
 	private int recordings(long userId) {
