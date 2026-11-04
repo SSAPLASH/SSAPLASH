@@ -8,6 +8,7 @@ import {
   defaultRecordingTitle,
   hitFromFreeInput,
   hitsFromPlayLog,
+  isRecordedSensor,
   normalizeRecordingTitle,
   type RecordingBody,
   type RecordingHit,
@@ -104,7 +105,8 @@ export function startFree(): void {
     const h = hitFromFreeInput(hit, cur.startPerfMs);
     if (!h) return;
     freeHits.push(h);
-    if (h.stickId !== undefined) freeHasSensor = true;
+    // 페달 타격은 stickId 키가 없어도 센서 타격이다(설계 D11)
+    if (isRecordedSensor(hit.source)) freeHasSensor = true;
     set({ free: { ...cur, hitCount: freeHits.length } });
     if (freeHits.length >= MAX_RECORDING_HITS) stopFree('limit');
   });

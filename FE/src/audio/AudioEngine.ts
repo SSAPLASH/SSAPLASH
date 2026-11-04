@@ -1,7 +1,7 @@
 // PLAY-06 저지연 사운드. Web Audio로 패드 소리를 낸다.
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
-import { SAMPLE_FALLBACK, type SoundSet } from './soundSets';
+import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -60,6 +60,8 @@ export class AudioEngine {
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
   private set: SoundSet | null = null;
+  /** 하이햇 페달이 떼어진(열림) 상태. 상태 추론은 호출자가 하고 여기는 값만 받는다 */
+  private hihatOpen = false;
 
   constructor() {
     this.voices = {
@@ -132,6 +134,23 @@ export class AudioEngine {
       CRASH: (ctx, out, t, v) => this.cymbal(ctx, out, t, v, 5000, 1.4),
       RIDE: (ctx, out, t, v) => this.cymbal(ctx, out, t, v, 7000, 0.6, 0.5),
     };
+  }
+
+  /** 합성 하이햇 열림 보이스: 닫힘과 같은 대역 노이즈에 감쇠를 길게(0.3초 안팎) */
+  private hihatOpenVoice(ctx: AudioContext, out: AudioNode, t: number, v: number): void {
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise!;
+    n.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 9000;
+    f.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.4 * v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25 + v * 0.1);
+    n.connect(f).connect(g).connect(out);
+    n.start(t);
+    n.stop(t + 0.45);
   }
 
   private tom(ctx: AudioContext, out: AudioNode, t: number, v: number, f0: number, f1: number): void {
@@ -294,23 +313,42 @@ export class AudioEngine {
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     // 샘플이 없으면 폴백 패드의 샘플(게인 0.7배), 그것도 없으면 합성음
+    // 하이햇이 열림이면 열림 샘플 → 없으면 합성 열림 보이스(키트 닫힘 샘플로 대신하지 않는다)
+    if (pad === 'HIHAT' && this.hihatOpen) {
+      const open = this.set?.variants?.HIHAT_OPEN;
+      if (open) {
+        this.playSample(ctx, out, open, this.set!.masterTrim * v, at);
+      } else {
+        this.hihatOpenVoice(ctx, out, at, v);
+      }
+      return { perfMs: this.contextToPerfTime(at), ctxAt: at };
+    }
     const own = this.set?.pads[pad];
     const fb = SAMPLE_FALLBACK[pad];
     const sample = own ?? (fb ? this.set?.pads[fb] : undefined);
     const gainMul = own ? 1 : 0.7;
     if (sample && this.set) {
       // 타격마다 새 소스·게인 노드. 게인 = 패드 게인 × 키트 트림 × 세기 곡선
-      const src = ctx.createBufferSource();
-      src.buffer = sample.buffer;
-      src.playbackRate.value = sample.playbackRate;
-      const g = ctx.createGain();
-      g.gain.value = sample.gain * this.set.masterTrim * v * gainMul;
-      src.connect(g).connect(out);
-      src.start(at);
+      this.playSample(ctx, out, sample, this.set.masterTrim * v * gainMul, at);
     } else {
       this.voices[pad](ctx, out, at, v);
     }
     return { perfMs: this.contextToPerfTime(at), ctxAt: at };
+  }
+
+  private playSample(ctx: AudioContext, out: AudioNode, sample: SamplePad, mul: number, at: number): void {
+    const src = ctx.createBufferSource();
+    src.buffer = sample.buffer;
+    src.playbackRate.value = sample.playbackRate;
+    const g = ctx.createGain();
+    g.gain.value = sample.gain * mul;
+    src.connect(g).connect(out);
+    src.start(at);
+  }
+
+  /** 하이햇 열림 여부. 다음 HIHAT 타격부터 반영된다(울리는 소리는 끊지 않는다) */
+  setHihatOpen(open: boolean): void {
+    this.hihatOpen = open;
   }
 
   /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */

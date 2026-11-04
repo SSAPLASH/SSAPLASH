@@ -1,7 +1,7 @@
 // 스틱 ↔ 브라우저 바이너리 프로토콜. BLE와 WebSocket(바이너리 프레임)이 공유한다.
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
-// 현재 구현 기준: v0.8(2026-11-02) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전) 반영
-import type { StickEvent, StickId } from '@/domain/events';
+// 현재 구현 기준: v0.8.1(2026-11-03) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전)·PEDAL(0x08)·role 2·3(페달) 반영
+import type { FootId, StickEvent, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
 export const STICK_SERVICE_UUID = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
@@ -19,6 +19,8 @@ export const PacketType = {
   PARAM_ACK: 0x06,
   /** 동글이 만드는 스틱 연결 마스크(1초마다 + 바뀔 때). 스틱은 보내지 않는다 */
   LINK: 0x07,
+  /** 하이햇 페달 밟힘 상태(role 2). 동글이 페달 보드에서 받아 그대로 올린다 */
+  PEDAL: 0x08,
   BRIDGE_STATS: 0x7e,
   LOG: 0x7f,
 } as const;
@@ -160,6 +162,16 @@ export interface DecodedSyncAck extends FlaggedBase {
   t1Us: number;
 }
 
+export interface DecodedPedal extends FlaggedBase {
+  kind: 'pedal';
+  /** flags 비트 0–1: 2 왼발(하이햇), 3 오른발. 하이햇(role 2)만 온다 */
+  role: number;
+  /** 0 뗌(열림), 1 밟음(닫힘). 그 밖의 값은 원시값 그대로 */
+  state: number;
+  /** 페달 보드 시계 µs 원시값 (u32, 펼치기·ms 환산은 호출자) */
+  timestampUs: number;
+}
+
 export interface DecodedLink extends PacketBase {
   kind: 'link';
   flags: number;
@@ -212,6 +224,7 @@ export type DecodedPacket =
   | DecodedPose
   | DecodedStatus
   | DecodedSyncAck
+  | DecodedPedal
   | DecodedLink
   | DecodedBridgeStats
   | DecodedLog
@@ -230,6 +243,7 @@ const MIN_LEN: Record<number, number> = {
   [PacketType.SWING]: 5,
   [PacketType.PARAM_ACK]: 5,
   [PacketType.LINK]: 5,
+  [PacketType.PEDAL]: 7,
 };
 
 /**
@@ -290,6 +304,8 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
     }
     case PacketType.SYNC_ACK:
       return { kind: 'syncAck', ...base, t0Ms: v.getUint32(2, true), t1Us: v.getUint32(6, true) };
+    case PacketType.PEDAL:
+      return { kind: 'pedal', ...base, state: v.getUint8(2), timestampUs: v.getUint32(3, true) };
     case PacketType.LINK:
       return { kind: 'link', recvTime, flags, linkMask: v.getUint8(2), fwMajor: v.getUint8(3), fwMinor: v.getUint8(4) };
     case PacketType.PARAM_ACK:
@@ -327,14 +343,20 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 
 export type ParsedPacket = StickEvent | SyncAck | null;
 
-/** flags role → 손. 발(2·3)은 아직 쓰지 않아 null — 손 이벤트로 읽히지 않게 한다 */
+/** flags role → 손. 발(2·3)은 null — 손 이벤트로 읽히지 않게 한다 */
 export function handOf(role: number): StickId | null {
   return role === 0 || role === 1 ? role : null;
 }
 
+/** flags role → 발. 손(0·1)은 null */
+export function footOf(role: number): FootId | null {
+  return role === 2 || role === 3 ? role : null;
+}
+
 /**
  * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·link·bridgeStats·log·paramAck·swing)과
- * 발 역할(role 2·3) 패킷은 null.
+ * 발 역할(role 2·3)의 pose·syncAck, role 3·손의 PEDAL은 null.
+ * 발 HIT는 hit{ stickId: null, foot }, 발 STATUS는 pedalStatus, role 2 PEDAL은 pedal 이벤트로 낸다.
  * hit·pose의 timestamp와 syncAck의 t1은 ms로 환산한다(ClockSync 단위).
  */
 export function parsePacket(data: Uint8Array | DataView, recvTime: number): ParsedPacket {
@@ -342,6 +364,37 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
   const d = decodePacket(bytes, recvTime);
   if (!('role' in d)) return null;
   const stickId = handOf(d.role);
+  const foot = footOf(d.role);
+  if (d.kind === 'pedal') {
+    // 하이햇(role 2)만 쓴다. role 3·손 role의 PEDAL은 받아서 버린다
+    if (d.role !== 2) return null;
+    return { kind: 'pedal', foot: 2, closed: d.state === 1, timestamp: d.timestampUs / 1000, recvTime };
+  }
+  if (stickId === null && foot !== null) {
+    // 발: 타격은 손 없이(stickId null) foot으로, STATUS는 연결·배터리 이벤트로
+    if (d.kind === 'hit') {
+      return {
+        kind: 'hit',
+        stickId: null,
+        foot,
+        timestamp: d.timestampUs / 1000,
+        recvTime,
+        peakAccel: d.peakSpeedDps / 100,
+        pitch: d.elevationDeg,
+        yaw: d.azimuthDeg,
+        pad: d.pad,
+        velocity: d.velocity,
+        marginDeg: d.marginDeg,
+        ambiguous: d.ambiguous,
+        peakSpeedDps: d.peakSpeedDps,
+        seq: d.seq,
+      };
+    }
+    if (d.kind === 'status') {
+      return { kind: 'pedalStatus', foot, connected: true, batteryPct: d.batteryPct ?? undefined };
+    }
+    return null;
+  }
   if (stickId === null) return null;
   switch (d.kind) {
     case 'hit':

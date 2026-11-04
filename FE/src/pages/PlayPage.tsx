@@ -18,8 +18,9 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -103,6 +104,7 @@ export function PlayPage() {
   }, [stage]);
 
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const lastHit = useLive((l) => l.lastHit);
@@ -111,6 +113,7 @@ export function PlayPage() {
   const selectSong = useSongs((s) => s.selectSong);
   // 킷 미니 뷰: 타격(hit)·판정 색
   const padStates = usePadStates(session);
+  const hitSeq = usePadHitSeq();
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -189,7 +192,8 @@ export function PlayPage() {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
         flashes.current.set(hit.pad, performance.now());
       }
       const ss = sessionRef.current;
@@ -586,6 +590,7 @@ export function PlayPage() {
           missing={missing}
           connected={connected}
           keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           presetName={presetName}
           countInBars={settings.countInBars}
           onBack={toSelect}
@@ -659,7 +664,7 @@ export function PlayPage() {
             <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
           )
         }
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} />}
+        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"

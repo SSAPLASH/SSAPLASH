@@ -17,9 +17,10 @@ import {
   stickParamById,
 } from '@/input/stickProtocol';
 import { STICK_PADS } from '@/domain/pads';
+import type { DeviceRole } from '@/domain/events';
 
-/** flags role. 모의 스틱이 실제로 내는 것은 손(0·1)뿐이고 2·3은 빌더만 받는다(페달 대비) */
-type Role = 0 | 1 | 2 | 3;
+/** flags role. 모의 스틱이 실제로 내는 것은 손(0·1)뿐이고 2·3(페달)은 빌더만 받는다 */
+type Role = DeviceRole;
 
 const clampI16 = (n: number): number => Math.max(-32768, Math.min(32767, Math.round(n)));
 const clampU8 = (n: number): number => Math.max(0, Math.min(255, Math.round(n)));
@@ -104,6 +105,17 @@ export function buildStatus(f: {
   v.setInt8(3, Math.max(-128, Math.min(127, Math.round(f.rssi))));
   v.setUint8(4, f.fwMajor & 0xff);
   v.setUint8(5, f.fwMinor & 0xff);
+  return buf;
+}
+
+/** PEDAL 7바이트(v0.8.1). role 2 왼발(하이햇)·3 오른발, state 0 뗌·1 밟음, 페달 보드 시계 µs */
+export function buildPedal(role: 2 | 3, state: 0 | 1, timestampUs: number): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(7);
+  const v = new DataView(buf.buffer);
+  v.setUint8(0, PacketType.PEDAL);
+  v.setUint8(1, role & 3);
+  v.setUint8(2, state);
+  v.setUint32(3, u32(timestampUs), true);
   return buf;
 }
 

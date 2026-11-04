@@ -15,6 +15,7 @@ const NOW = new Date(2026, 9, 30, 15, 0).getTime();
 const base: SetupStepsInput = {
   sensorKind: 'pointer',
   connected: [false, false],
+  pedal: [true, true],
   firstSetupDone: false,
   activePresetId: null,
   referenceSetAt: null,

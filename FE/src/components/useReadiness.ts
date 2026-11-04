@@ -8,5 +8,6 @@ export function useReadiness(): ReadinessResult {
   const firstSetupDone = useSettings((s) => s.firstSetupDone);
   const activePresetId = useSettings((s) => s.activePresetId);
   const connected = useLive((l) => l.connected);
-  return readiness({ sensorKind, connected, firstSetupDone, activePresetId });
+  const pedal = useLive((l) => l.pedal.connected);
+  return readiness({ sensorKind, connected, pedal, firstSetupDone, activePresetId });
 }

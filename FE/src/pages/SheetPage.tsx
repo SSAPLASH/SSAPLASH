@@ -17,10 +17,11 @@ import { Countdown } from '@/components/play/Countdown';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -103,6 +104,7 @@ export function SheetPage() {
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
   const lastHit = useLive((l) => l.lastHit);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
@@ -250,7 +252,8 @@ export function SheetPage() {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
       }
       const ss = sessionRef.current;
       const active =
@@ -495,6 +498,7 @@ export function SheetPage() {
   );
   // 킷: 타격(hit)·판정 색, 패드 위 다음 박 배지(highlight는 넘기지 않는다 — 넘기면 next 패드까지 강조된다)
   const padStates = usePadStates(activeSession);
+  const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
   // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그)
@@ -587,6 +591,7 @@ export function SheetPage() {
           missing={missing}
           connected={connected}
           keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           presetName={presetName}
           countInBars={settings.countInBars}
           onBack={toSelect}
@@ -667,7 +672,7 @@ export function SheetPage() {
           />
         }
         guide={<GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />}
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} badges={badges} />}
+        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"

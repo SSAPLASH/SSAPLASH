@@ -70,3 +70,50 @@ describe('loadSampleSet', () => {
     await expect(loadSampleSet(mockCtx(), 'ssaplash')).rejects.toThrow();
   });
 });
+
+describe('loadSampleSet 하이햇 열림 변형 (PLAY-002)', () => {
+  function mockFetchWith(pads: Record<string, unknown>, failing: string[] = []) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('kit-config.json')) return { ok: true, status: 200, json: async () => ({ ...CONFIG, pads }) };
+        if (failing.some((f) => url.endsWith(f))) return { ok: false, status: 404 };
+        return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8) };
+      }),
+    );
+  }
+
+  // 인수 조건: hihat_open이 있으면 variants.HIHAT_OPEN, missing에는 안 넣는다
+  it('hihat_open이 있으면 variants.HIHAT_OPEN을 싣고 pads에는 넣지 않는다', async () => {
+    mockFetchWith({ ...CONFIG.pads, hihat_open: { file: 'audio/hihat_open.wav', gain: 0.9, playbackRate: 1.1 } });
+    const set = await loadSampleSet(mockCtx(), 'ssaplash');
+    expect(set.variants.HIHAT_OPEN).toMatchObject({ gain: 0.9, playbackRate: 1.1 });
+    expect(Object.keys(set.pads).sort()).toEqual(['HIHAT', 'KICK', 'MID_TOM', 'SNARE']);
+    expect(set.missing).toEqual([]);
+  });
+
+  it('hihat_open이 없으면 variants는 빈 객체, missing에도 없다', async () => {
+    mockFetchWith(CONFIG.pads);
+    const set = await loadSampleSet(mockCtx(), 'ssaplash');
+    expect(set.variants).toEqual({});
+    expect(set.missing).toEqual([]);
+  });
+
+  it('hihat_open 파일이 404여도 missing에 넣지 않고 변형만 빠진다(합성 열림 폴백)', async () => {
+    mockFetchWith({ ...CONFIG.pads, hihat_open: { file: 'audio/hihat_open.wav', gain: 1, playbackRate: 1 } }, ['hihat_open.wav']);
+    const set = await loadSampleSet(mockCtx(), 'ssaplash');
+    expect(set.variants.HIHAT_OPEN).toBeUndefined();
+    expect(set.missing).toEqual([]);
+  });
+
+  it('hihat_pedal이 있으면 pads.HIHAT_PEDAL로 싣는다(폴백 대신 페달 소리)', async () => {
+    mockFetchWith({ ...CONFIG.pads, hihat_pedal: { file: 'audio/hihat-pedal.wav', gain: 1, playbackRate: 1 } });
+    const set = await loadSampleSet(mockCtx(), 'ssaplash');
+    expect(set.pads.HIHAT_PEDAL).toMatchObject({ gain: 1, playbackRate: 1 });
+    expect(set.missing).toEqual([]);
+  });
+
+  it('synth 세트에는 변형이 없다', () => {
+    expect(SYNTH_SET.variants).toEqual({});
+  });
+});

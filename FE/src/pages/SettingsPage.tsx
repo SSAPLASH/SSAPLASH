@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
+import { KitSkinCarousel } from '@/components/settings/KitSkinCarousel';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import { useShell } from '@/components/shell/useShell';
@@ -46,6 +47,8 @@ export function SettingsPage() {
   const setSongVolume = useSettings((s) => s.setSongVolume);
   const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
+  const kitSkin = useSettings((s) => s.kitSkin);
+  const setKitSkin = useSettings((s) => s.setKitSkin);
   const liveCoach = useSettings((s) => s.liveCoach);
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
 
@@ -215,6 +218,9 @@ export function SettingsPage() {
 
         <div className="settings-col">
           <Card padding="lg" title="연주">
+            <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
+              {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}
+            </SettingRow>
             <SettingRow label="실시간 코칭" help="연주 중 늦음·빠름·연속 MISS 같은 신호를 드럼 옆 안내 칸에 3초간 띄워요.">
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>

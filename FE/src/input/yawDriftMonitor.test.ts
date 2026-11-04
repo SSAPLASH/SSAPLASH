@@ -229,3 +229,13 @@ describe('yawDriftMonitor', () => {
     expect(last[0]).toBeNull();
   });
 });
+
+describe('yawDriftMonitor 페달(stickId null, PLAY-002)', () => {
+  // 인수 조건: 손 없는 타격은 방위각 보정 샘플에서 제외
+  it('observe는 stickId null 타격을 무시한다(샘플·송신 없음)', () => {
+    const src = connected();
+    for (let k = 0; k < 12; k++) yawDriftMonitor.observe(hit(6, { stickId: null, foot: 3 }), profile);
+    expect(src.sent).toHaveLength(0);
+    expect(last).toEqual([null, null]);
+  });
+});

@@ -242,3 +242,96 @@ describe('softLimitCurve', () => {
     expect(at(c, -4)).toBeGreaterThanOrEqual(-1);
   });
 });
+
+describe('AudioEngine 하이햇 열림/닫힘 선택 (PLAY-002)', () => {
+  /** createBufferSource로 만든 소스에 실린 buffer를 모으는 컨텍스트 모의 */
+  const started: unknown[] = [];
+  function installRecording() {
+    class RecCtx {
+      state = 'running';
+      currentTime = 10;
+      sampleRate = 48000;
+      destination = makeNode();
+      addEventListener = vi.fn();
+      resume = vi.fn(async () => {});
+      getOutputTimestamp = () => ({ contextTime: 9.9, performanceTime: 4950 });
+      createGain = () => makeNode();
+      createOscillator = () => makeNode();
+      createWaveShaper = () => makeNode();
+      createBiquadFilter = () => ({ ...makeNode(), Q: makeParam() });
+      createBuffer = (_ch: number, len: number) => ({ getChannelData: () => new Float32Array(len) });
+      createBufferSource = () => {
+        const n = makeNode();
+        n.playbackRate = { value: 1 };
+        (n.start as ReturnType<typeof vi.fn>).mockImplementation(() => started.push(n.buffer));
+        return n;
+      };
+    }
+    vi.stubGlobal('AudioContext', RecCtx);
+  }
+  const buf = (tag: string) => ({ tag }) as unknown as AudioBuffer;
+  const sample = (tag: string) => ({ buffer: buf(tag), gain: 1, playbackRate: 1 });
+  const soundSet = (withOpen: boolean) => ({
+    id: 'ssaplash' as const,
+    label: 't',
+    kind: 'sample' as const,
+    masterTrim: 1,
+    pads: { HIHAT: sample('closed') },
+    variants: withOpen ? { HIHAT_OPEN: sample('open') } : {},
+    missing: [],
+  });
+  const tagsOf = () => started.map((b) => (b as { tag?: string } | undefined)?.tag);
+
+  beforeEach(() => {
+    started.length = 0;
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+    installRecording();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // 인수 조건: state 0이면 열림 샘플, state 1·미연결이면 닫힘 소리
+  it('기본은 닫힘(closed 샘플), setHihatOpen(true) 뒤 HIHAT은 HIHAT_OPEN 샘플', async () => {
+    const e = new AudioEngine();
+    await e.ensure();
+    e.setSoundSet(soundSet(true));
+    e.trigger('HIHAT', 100);
+    e.setHihatOpen(true);
+    e.trigger('HIHAT', 100);
+    e.setHihatOpen(false);
+    e.trigger('HIHAT', 100);
+    expect(tagsOf()).toEqual(['closed', 'open', 'closed']);
+  });
+
+  it('열림이어도 HIHAT 외 패드·HIHAT_PEDAL은 영향이 없다', async () => {
+    const e = new AudioEngine();
+    await e.ensure();
+    e.setSoundSet({ ...soundSet(true), pads: { HIHAT: sample('closed'), KICK: sample('kick') } });
+    e.setHihatOpen(true);
+    e.trigger('KICK', 100);
+    expect(tagsOf()).toEqual(['kick']);
+  });
+
+  it('HIHAT_PEDAL은 키트 페달 샘플을 쓰고, 없으면 하이햇 닫힘 샘플로 대신한다', async () => {
+    const e = new AudioEngine();
+    await e.ensure();
+    e.setSoundSet({ ...soundSet(true), pads: { HIHAT: sample('closed'), HIHAT_PEDAL: sample('pedal') } });
+    e.trigger('HIHAT_PEDAL', 100);
+    e.setSoundSet(soundSet(true));
+    e.trigger('HIHAT_PEDAL', 100);
+    expect(tagsOf()).toEqual(['pedal', 'closed']);
+  });
+
+  it('열림인데 변형 샘플이 없으면 닫힘 샘플로 대신하지 않고 합성 열림 보이스를 낸다', async () => {
+    const e = new AudioEngine();
+    await e.ensure();
+    e.setSoundSet(soundSet(false));
+    e.setHihatOpen(true);
+    const t = e.trigger('HIHAT', 100);
+    expect(t).not.toBeNull();
+    expect(tagsOf()).not.toContain('closed');
+    expect(started).toHaveLength(1); // 합성 노이즈 보이스 하나
+  });
+});

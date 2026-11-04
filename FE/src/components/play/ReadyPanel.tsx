@@ -13,9 +13,10 @@ import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { StaffLegend } from './StaffLegend';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
+import { useSettings } from '@/store/settingsStore';
 import './ready.css';
 
 export interface ReadyPanelProps {
@@ -33,6 +34,8 @@ export interface ReadyPanelProps {
   /** 왼손·오른손 스틱 연결. keyboardOnly면 연결 줄을 키보드 입력으로 보인다 */
   connected: [boolean, boolean];
   keyboardOnly?: boolean;
+  /** 페달 연결 여부. undefined면 P 점·문구를 그리지 않는다(동글이 아닌 소스·키보드 전용) */
+  pedal?: boolean;
   presetName: string | null;
   /** 시작 뒤 카운트인 마디 수(안내 문구용) */
   countInBars: number;
@@ -53,7 +56,7 @@ function Dot({ ok }: { ok: boolean }) {
   return <span className={`play-rp-dot ${ok ? 'ok' : 'need'}`} aria-hidden="true" />;
 }
 
-function HandDot({ label, on, hand }: { label: string; on: boolean; hand: 'l' | 'r' }) {
+function HandDot({ label, on, hand }: { label: string; on: boolean; hand: 'l' | 'r' | 'p' }) {
   return (
     <span className="play-rp-hand">
       <span className={`play-rp-hand-dot ${hand}${on ? ' on' : ''}`} aria-hidden="true" />
@@ -62,11 +65,12 @@ function HandDot({ label, on, hand }: { label: string; on: boolean; hand: 'l' | 
   );
 }
 
-function stickText(connected: [boolean, boolean], keyboardOnly: boolean): string {
+function stickText(connected: [boolean, boolean], keyboardOnly: boolean, pedal?: boolean): string {
   if (keyboardOnly) return '키보드 입력';
-  if (connected[0] && connected[1]) return '왼손·오른손 연결됨';
-  if (!connected[0] && !connected[1]) return '왼손·오른손 연결 안 됨';
-  return connected[0] ? '오른손 연결 안 됨' : '왼손 연결 안 됨';
+  const names = ['왼손', '오른손', ...(pedal === undefined ? [] : ['페달'])];
+  const states = [connected[0], connected[1], ...(pedal === undefined ? [] : [pedal])];
+  if (states.every(Boolean)) return `${names.join('·')} 연결됨`;
+  return `${names.filter((_, i) => !states[i]).join('·')} 연결 안 됨`;
 }
 
 export function ReadyPanel({
@@ -79,6 +83,7 @@ export function ReadyPanel({
   missing,
   connected,
   keyboardOnly = false,
+  pedal,
   presetName,
   countInBars,
   onBack,
@@ -90,12 +95,14 @@ export function ReadyPanel({
   staffLegend = false,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
+  const hitSeq = usePadHitSeq();
+  const kitSkin = useSettings((s) => s.kitSkin);
   // 악보 읽는 법 줄에 올린 패드는 킷에서 예고(armed) 링으로, 타격(hit)한 패드는 그 줄을 강조한다
   const [hoverPad, setHoverPad] = useState<PadId | null>(null);
   const kitStates: Partial<Record<PadId, PadVisualState>> =
     staffLegend && hoverPad && !padStates[hoverPad] ? { ...padStates, [hoverPad]: 'armed' } : padStates;
   const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
-  const stickOk = !missing.includes('stick');
+  const stickOk = !missing.includes('stick') && !missing.includes('pedal');
   const calOk = !missing.includes('firstSetup');
   const presetOk = !missing.includes('preset');
   const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
@@ -147,9 +154,10 @@ export function ReadyPanel({
                     <span className="play-rp-hands">
                       <HandDot label="L" on={connected[0]} hand="l" />
                       <HandDot label="R" on={connected[1]} hand="r" />
+                      {pedal !== undefined && <HandDot label="P" on={pedal} hand="p" />}
                     </span>
                   )}
-                  <span className={stickOk ? '' : 'need'}>{stickText(connected, keyboardOnly)}</span>
+                  <span className={stickOk ? '' : 'need'}>{stickText(connected, keyboardOnly, pedal)}</span>
                 </span>
               </li>
               <li className="play-rp-row">
@@ -201,7 +209,7 @@ export function ReadyPanel({
           {staffLegend && <StaffLegend activePad={hitPad} onHoverPad={setHoverPad} />}
           <Card padding="md" className="play-rp-preview" title="미리 쳐 보기">
             <div className="play-rp-kit">
-              <DrumKit fitWidth states={kitStates} />
+              <DrumKit fitWidth states={kitStates} skin={kitSkin} hitSeq={hitSeq} />
             </div>
             <p className="play-rp-caption">쳐 보면 소리만 나요. 기록은 남지 않아요.</p>
           </Card>
