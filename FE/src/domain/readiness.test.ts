@@ -2,7 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import { READINESS_MESSAGES, readiness, stickMissingText } from './readiness';
 
-const base = { sensorKind: 'pointer', connected: [false, false] as [boolean, boolean], firstSetupDone: false, activePresetId: null };
+const base = {
+  sensorKind: 'pointer',
+  connected: [false, false] as [boolean, boolean],
+  pedal: [true, true] as [boolean, boolean],
+  firstSetupDone: false,
+  activePresetId: null,
+};
 
 describe('readiness', () => {
   it('키보드 전용이면 아무것도 없어도 준비됨', () => {
@@ -24,6 +30,26 @@ describe('readiness', () => {
 
   it('프리셋만 적용되면 스틱·최초 설정 누락', () => {
     expect(readiness({ ...base, activePresetId: 'p1' }).missing).toEqual(['stick', 'firstSetup']);
+  });
+
+  it('포인터·BLE 등 동글이 아닌 소스는 페달을 보지 않는다(D3: 페달은 동글로만 붙는다)', () => {
+    const ok = { ...base, connected: [true, true] as [boolean, boolean], firstSetupDone: true, activePresetId: 'p1' };
+    expect(readiness({ ...ok, pedal: [false, false] })).toEqual({ ready: true, missing: [] });
+    expect(readiness({ ...ok, sensorKind: 'ble', pedal: [false, false] })).toEqual({ ready: true, missing: [] });
+  });
+
+  it('동글 소스에서 발이 빠지면 pedal 누락(한 발만이어도), 손과 별개로 판정한다', () => {
+    const dongle = { ...base, sensorKind: 'webserial' };
+    const ok = { ...dongle, connected: [true, true] as [boolean, boolean], firstSetupDone: true, activePresetId: 'p1' };
+    expect(readiness({ ...ok, pedal: [false, true] }).missing).toEqual(['pedal']);
+    expect(readiness({ ...ok, pedal: [true, false] }).missing).toEqual(['pedal']);
+    expect(readiness({ ...ok, pedal: [false, false] })).toEqual({ ready: false, missing: ['pedal'] });
+    expect(readiness({ ...dongle, pedal: [false, false] }).missing).toEqual(['stick', 'pedal', 'firstSetup', 'preset']);
+    expect(READINESS_MESSAGES.pedal).toBe('페달을 연결하세요');
+  });
+
+  it('키보드 전용은 페달이 없어도 면제', () => {
+    expect(readiness({ ...base, sensorKind: 'none', pedal: [false, false] })).toEqual({ ready: true, missing: [] });
   });
 
   it('전부 충족하면 준비됨', () => {

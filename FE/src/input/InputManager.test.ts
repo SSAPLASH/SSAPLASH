@@ -165,3 +165,83 @@ describe('InputManager 상태·활동 알림', () => {
     expect(calls).toEqual(['auto', 'connect']);
   });
 });
+
+describe('InputManager 페달(foot)', () => {
+  /** role별 시계 오프셋을 돌려주는 모의 소스 */
+  class FootSource extends MockSource {
+    offsets: Record<number, number | null> = { 0: 10, 1: 20, 2: 300, 3: 400 };
+    clockOffsetOf(role?: number): number | null {
+      return this.offsets[role ?? 0] ?? null;
+    }
+  }
+  async function footSetup() {
+    const im = new InputManager();
+    im.setProfile(profile());
+    im.setKeyMap(KEY_MAP);
+    im.setSensorOffsetMs(7);
+    const src = new FootSource('webserial');
+    await im.attach(src);
+    const hits: ResolvedHit[] = [];
+    im.onHit((h) => hits.push(h));
+    return { im, src, hits };
+  }
+
+  // 인수 조건: role 3 HIT pad 7이 ResolvedHit{KICK, stickId null, foot 3, velocity 100, stick}으로 나온다
+  it('foot 타격은 매퍼 없이 pad 그대로, stickId null·foot·velocity 100·tHit에 sensorOffsetMs를 더한다', async () => {
+    const { src, hits } = await footSetup();
+    // 프로파일상 KICK 위치가 아닌 자세(yaw 20 = HIHAT 쪽)여도 패킷 pad를 바꾸지 않는다
+    src.fire(hit({ stickId: null, foot: 3, pad: 'KICK', velocity: 100, timestamp: 1000, pitch: 0, yaw: 20 }));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      pad: 'KICK',
+      stickId: null,
+      foot: 3,
+      judgedBy: 'stick',
+      velocity: 100,
+      tHit: 1007,
+      clockOffsetMs: 400,
+      tSensorMs: 600,
+    });
+  });
+
+  it('role 2 pad 8은 HIHAT_PEDAL, clockOffsetMs는 clockOffsetOf(2)', async () => {
+    const { src, hits } = await footSetup();
+    src.fire(hit({ stickId: null, foot: 2, pad: 'HIHAT_PEDAL', velocity: 100, timestamp: 500 }));
+    expect(hits[0]).toMatchObject({ pad: 'HIHAT_PEDAL', foot: 2, stickId: null, clockOffsetMs: 300, tHit: 507 });
+  });
+
+  // 인수 조건: 시계를 모르면 tSensorMs 없음(손과 같은 규칙)
+  it('foot 시계 오프셋이 null이면 tSensorMs는 없다', async () => {
+    const { src, hits } = await footSetup();
+    src.offsets[3] = null;
+    src.fire(hit({ stickId: null, foot: 3, pad: 'KICK', velocity: 100 }));
+    expect(hits[0].tSensorMs).toBeUndefined();
+    expect(hits[0].clockOffsetMs).toBeNull();
+  });
+
+  // 인수 조건: onPedalStatus·onPedal 중계
+  it('pedalStatus·pedal 이벤트를 리스너에 중계한다', async () => {
+    const { im, src } = await footSetup();
+    const statuses: unknown[] = [];
+    const pedals: boolean[] = [];
+    im.onPedalStatus((foot, connected, battery) => statuses.push([foot, connected, battery]));
+    im.onPedal((closed) => pedals.push(closed));
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true, batteryPct: 80 });
+    src.fire({ kind: 'pedal', foot: 2, closed: false, timestamp: 1, recvTime: 1 });
+    src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 2, recvTime: 2 });
+    expect(statuses).toEqual([[2, true, 80]]);
+    expect(pedals).toEqual([false, true]);
+  });
+
+  // 인수 조건: 소스가 내려가면 두 발 끊김
+  it('detach(소스 교체)에서 두 발 false를 알린다', async () => {
+    const { im } = await footSetup();
+    const statuses: unknown[] = [];
+    im.onPedalStatus((foot, connected) => statuses.push([foot, connected]));
+    await im.attach(new FootSource('webserial')); // 같은 kind 교체 → detach
+    expect(statuses).toEqual([
+      [2, false],
+      [3, false],
+    ]);
+  });
+});

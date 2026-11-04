@@ -318,3 +318,31 @@ describe('TelemetryCollector 연결 상태 알림', () => {
     expect(pushed[1].event.packetLoss).toBe(0);
   });
 });
+
+describe('TelemetryCollector 페달(손 없는 타격, PLAY-002)', () => {
+  // 인수 조건: 페달 타격이 텔레메트리에 들어간다(firmware null)
+  it('stickId null 센서 타격은 firmware null·stickId null로 큐에 들어간다', () => {
+    const { c, pushed, packet, diag } = setup();
+    c.start();
+    packet(statusPacket({ fwMajor: 1, fwMinor: 2 }), 0); // 손 펌웨어가 있어도 페달에는 실리지 않는다
+    diag({ type: 'resolved', hit: hit(1, { stickId: null, foot: 3, pad: 'KICK', source: 'webserial', judgedBy: 'stick' }) });
+    diag(judged(1, 'PERFECT', 0));
+    const ev = pushed.at(-1)!.event;
+    expect(ev).toMatchObject({ kind: 'HIT', stickId: null, pad: 'KICK' });
+    expect(ev.tags.firmware ?? null).toBeNull();
+  });
+
+  // 인수 조건: 손 통계 제외
+  it('role 2·3 HIT·STATUS 패킷은 손 seq 통계·STATUS 이벤트에 들어가지 않는다', () => {
+    const { c, pushed, packet } = setup();
+    c.start();
+    packet(hitPacket(10), null);
+    packet(hitPacket(40, 3), null); // 킥: 손 seq 집계에서 제외
+    packet(hitPacket(50, 2), null);
+    packet(statusPacket({ flags: 3 }), null); // 발 STATUS는 이벤트 없음
+    expect(pushed).toHaveLength(0);
+    packet(hitPacket(11), null);
+    packet(statusPacket(), null);
+    expect(pushed[0].event.packetLoss).toBe(0); // 손 seq 10→11만 센다
+  });
+});

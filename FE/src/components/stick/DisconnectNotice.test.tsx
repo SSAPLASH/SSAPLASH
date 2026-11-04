@@ -6,11 +6,12 @@ const idle: ReconnectInfo = { status: 'idle', attempt: 0, max: 3 };
 const failed: ReconnectInfo = { status: 'failed', attempt: 3, max: 3 };
 const noop = () => {};
 
-function render(p: { left?: boolean; right?: boolean; status?: ReconnectInfo; onReconnect?: () => void; onOpenSetup?: () => void }) {
+function render(p: { left?: boolean; right?: boolean; pedal?: boolean; status?: ReconnectInfo; onReconnect?: () => void; onOpenSetup?: () => void }) {
   return renderToStaticMarkup(
     <DisconnectNotice
       left={p.left ?? false}
       right={p.right ?? false}
+      pedal={p.pedal}
       status={p.status ?? idle}
       onExit={noop}
       onReconnect={p.onReconnect}
@@ -114,5 +115,43 @@ describe('DisconnectNotice 버튼', () => {
   });
   it('idle이면 [드럼 세팅에서 연결하기]가 없다', () => {
     expect(render({ onReconnect: noop, onOpenSetup: noop })).not.toContain('드럼 세팅에서 연결하기');
+  });
+});
+
+describe('DisconnectNotice 페달', () => {
+  // 인수 조건: pedal이 undefined면 P 점·"페달" 문구가 없다
+  it('pedal이 없으면 P 점과 페달 문구가 없다', () => {
+    const html = render({ left: true, right: false });
+    expect(html).not.toContain('>P<');
+    expect(html).not.toContain('페달');
+  });
+
+  // 인수 조건: 페달만 끊기면(손 둘 연결) "페달 연결이 끊겼어요"와 꺼진 P 점
+  it('손이 모두 연결이고 페달만 끊기면 페달 제목', () => {
+    const html = render({ left: true, right: true, pedal: false });
+    expect(html).toContain('페달 연결이 끊겼어요');
+    expect(html).not.toContain('스틱·페달');
+    expect(html).toContain('stick-dot off');
+    expect(html).toContain('>P<');
+  });
+
+  // 인수 조건: 손이 하나라도 끊기면 "스틱·페달 연결이 끊겼어요"
+  it('손도 끊겼으면 스틱·페달 제목', () => {
+    expect(render({ left: false, right: true, pedal: false })).toContain('스틱·페달 연결이 끊겼어요');
+    expect(render({ left: false, right: false, pedal: false })).toContain('스틱·페달 연결이 끊겼어요');
+  });
+
+  // 인수 조건: 페달이 붙어 있으면 P 점이 on이고 손 제목은 그대로
+  it('페달이 연결이면 P 점이 on', () => {
+    const html = render({ left: true, right: false, pedal: true });
+    expect(html).toContain('오른손 스틱 연결이 끊겼어요');
+    expect(html.match(/stick-dot on/g)).toHaveLength(2);
+  });
+
+  // 인수 조건: reconnected면 점 셋 모두 on
+  it('reconnected면 P 점도 on', () => {
+    const html = render({ left: false, right: false, pedal: false, status: { status: 'reconnected', attempt: 0, max: 3 } });
+    expect(html.match(/stick-dot on/g)).toHaveLength(3);
+    expect(html).not.toContain('stick-dot off');
   });
 });
