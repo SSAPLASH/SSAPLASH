@@ -259,7 +259,7 @@ def write_samples(out_dir: Path) -> list[dict]:
             "strength": strength,
             "strengthUnit": scenario.strength_unit,
             "request": play.request,
-            "response": response.model_dump(),
+            "response": response.model_dump(exclude_none=True),
         }
         (out_dir / f"{name.lower()}.json").write_text(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8"
