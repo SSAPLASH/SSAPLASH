@@ -125,3 +125,23 @@ def test_같은_입력은_같은_총평이다():
     second = analyze(AnalysisRequest.model_validate(request)).summary
 
     assert first == second
+
+
+def test_잘한_점_패드가_strengthPad로_나가고_문장과_같다():
+    notes = [N(pad="SNARE", delta=3.0) for _ in range(20)] + [
+        N(pad="KICK", delta=3.0) for _ in range(20)
+    ]
+    summary = _run(notes).summary
+
+    assert summary.strengthPad in ("SNARE", "KICK")
+    label = {"SNARE": "스네어", "KICK": "킥"}[summary.strengthPad]
+    assert label in summary.text
+
+
+def test_패드마다_노트가_적으면_strengthPad가_없고_칭찬하지_않는다():
+    pads = ["SNARE", "KICK", "HIHAT", "CRASH"]
+    notes = [N(pad=pads[i % 4], delta=3.0) for i in range(28)]  # 패드당 7개 (기준 8개 미만)
+    summary = _run(notes).summary
+
+    assert summary.strengthPad is None
+    assert "특히 안정적" not in summary.text
