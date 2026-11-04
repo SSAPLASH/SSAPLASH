@@ -40,6 +40,10 @@ export function SettingsPage() {
   const activePresetId = useSettings((s) => s.activePresetId);
   const volume = useSettings((s) => s.volume);
   const setVolume = useSettings((s) => s.setVolume);
+  const drumVolume = useSettings((s) => s.drumVolume);
+  const setDrumVolume = useSettings((s) => s.setDrumVolume);
+  const songVolume = useSettings((s) => s.songVolume);
+  const setSongVolume = useSettings((s) => s.setSongVolume);
   const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
   const liveCoach = useSettings((s) => s.liveCoach);
@@ -163,6 +167,34 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
+            <SettingRow label="드럼 음량" help="패드 소리만. 100%가 기본" wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="드럼 음량"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={drumVolume}
+                  valueText={`${Math.round(drumVolume * 100)}%`}
+                  onChange={setDrumVolume}
+                />
+              )}
+            </SettingRow>
+            <SettingRow label="노래 음량" help="게임·악보 반주만" wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="노래 음량"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={songVolume}
+                  valueText={`${Math.round(songVolume * 100)}%`}
+                  onChange={setSongVolume}
+                />
+              )}
+            </SettingRow>
             <SettingRow label="타격음 지연 보정" help="치는 순간보다 소리가 늦게 들리면 값을 올리세요" wideControl>
               {(aria) => (
                 <Slider
@@ -177,7 +209,7 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <p className="settings-help">음량과 메트로놈은 상단 Dock에서도 바꿀 수 있어요.</p>
+            <p className="settings-help">메트로놈은 상단 Dock에서도 바꿀 수 있어요.</p>
           </Card>
         </div>
 
