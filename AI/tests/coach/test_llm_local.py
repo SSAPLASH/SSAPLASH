@@ -9,9 +9,10 @@ from ssaplash_ai.coach.llm_local import GeneratorError, LocalServerGenerator
 
 
 class _Response:
-    def __init__(self, status: int, body: object = None) -> None:
+    def __init__(self, status: int, body: object = None, text: str = "") -> None:
         self.status_code = status
         self._body = body
+        self.text = text
 
     def json(self):
         if self._body is None:
@@ -20,19 +21,20 @@ class _Response:
 
 
 class _Session:
-    def __init__(self, item) -> None:
-        self.item = item
+    def __init__(self, *items) -> None:
+        self.items = list(items)
         self.calls: list[dict] = []
 
     def post(self, url, json, timeout):
-        self.calls.append({"url": url, "json": json, "timeout": timeout})
-        if isinstance(self.item, Exception):
-            raise self.item
-        return self.item
+        self.calls.append({"url": url, "json": dict(json), "timeout": timeout})
+        item = self.items.pop(0) if len(self.items) > 1 else self.items[0]
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
-def _gen(item, api="ollama", **kwargs):
-    session = _Session(item)
+def _gen(*items, api="ollama", **kwargs):
+    session = _Session(*items)
     gen = LocalServerGenerator("http://127.0.0.1:11434/", "m1", api=api, session=session, **kwargs)  # type: ignore[arg-type]
     return gen, session
 
@@ -48,7 +50,11 @@ def test_ollama_형식으로_부르고_내용을_꺼낸다():
         {"role": "system", "content": "시스템"},
         {"role": "user", "content": "사용자"},
     ]
-    assert call["json"]["options"] == {"temperature": 0.3, "num_predict": 400}
+    assert call["json"]["options"] == {
+        "temperature": 0.3,
+        "num_predict": 400,
+        "num_ctx": 4096,
+    }
 
 
 def test_openai_호환_형식으로_부르고_내용을_꺼낸다():
@@ -90,3 +96,36 @@ def test_모르는_형식과_빈_모델_이름은_거절한다():
         LocalServerGenerator("http://x", "m", api="gpt")
     with pytest.raises(ValueError, match="비어"):
         LocalServerGenerator("http://x", " ")
+
+
+def test_생각_모드를_기본으로_끄고_보낸다():
+    gen, session = _gen(_Response(200, {"message": {"content": "좋아요."}}))
+
+    gen("s", "u")
+
+    assert session.calls[0]["json"]["think"] is False
+
+
+def test_생각_모드를_모르는_모델이면_그_항목_없이_한_번_더_보낸다():
+    gen, session = _gen(
+        _Response(400, text='{"error":"model does not support thinking"}'),
+        _Response(200, {"message": {"content": "좋아요."}}),
+    )
+
+    assert gen("s", "u") == "좋아요."
+    assert "think" in session.calls[0]["json"] and "think" not in session.calls[1]["json"]
+
+
+def test_think가_None이면_보내지_않는다():
+    gen, session = _gen(_Response(200, {"message": {"content": "좋아요."}}), think=None)
+
+    gen("s", "u")
+
+    assert "think" not in session.calls[0]["json"]
+
+
+def test_답이_비어_오면_GeneratorError이다():
+    gen, _ = _gen(_Response(200, {"message": {"content": "  "}}))
+
+    with pytest.raises(GeneratorError, match="비어"):
+        gen("s", "u")

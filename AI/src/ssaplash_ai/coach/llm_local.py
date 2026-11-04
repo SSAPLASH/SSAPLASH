@@ -16,6 +16,8 @@ import requests
 API_OLLAMA = "ollama"
 API_OPENAI = "openai"
 SUPPORTED_APIS = (API_OLLAMA, API_OPENAI)
+# 프롬프트(수백 토큰)와 답(400토큰 이하)이 들어가면 충분하다
+DEFAULT_NUM_CTX = 4096
 
 
 class GeneratorError(Exception):
@@ -31,6 +33,8 @@ class LocalServerGenerator:
         timeout_sec: float = 60.0,
         temperature: float = 0.3,
         max_tokens: int = 400,
+        num_ctx: int = DEFAULT_NUM_CTX,
+        think: bool | None = False,
         session: requests.Session | None = None,
     ) -> None:
         if api not in SUPPORTED_APIS:
@@ -43,6 +47,9 @@ class LocalServerGenerator:
         self.timeout_sec = timeout_sec
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.num_ctx = num_ctx
+        # 생각(추론) 모드를 끈다. 켜 두면 최신 모델이 토큰 상한을 생각에 다 써서 답이 비어 올 수 있다. None이면 보내지 않는다
+        self.think = think
         self.session = session or requests.Session()
 
     def __call__(self, system: str, user: str) -> str:
@@ -53,7 +60,12 @@ class LocalServerGenerator:
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": self.temperature, "num_predict": self.max_tokens},
+                # 문맥 길이를 정해 주지 않으면 서버가 VRAM 크기에 맞춰 아주 크게(수십만 토큰) 잡아 메모리를 낭비한다
+                "options": {
+                    "temperature": self.temperature,
+                    "num_predict": self.max_tokens,
+                    "num_ctx": self.num_ctx,
+                },
             }
         else:
             url = f"{self.base_url}/v1/chat/completions"
@@ -63,10 +75,13 @@ class LocalServerGenerator:
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
             }
-        try:
-            response = self.session.post(url, json=body, timeout=self.timeout_sec)
-        except (requests.ConnectionError, requests.Timeout) as exc:
-            raise GeneratorError(f"모델 서버에 닿지 못함: {type(exc).__name__}") from exc
+        if self.api == API_OLLAMA and self.think is not None:
+            body["think"] = self.think
+        response = self._post(url, body)
+        if response.status_code == 400 and "think" in body and "think" in _error_text(response):
+            # 생각 모드를 모르는 모델이면 그 항목 없이 한 번 더 보낸다
+            del body["think"]
+            response = self._post(url, body)
         if response.status_code != 200:
             raise GeneratorError(f"모델 서버 응답 {response.status_code}")
         try:
@@ -78,6 +93,16 @@ class LocalServerGenerator:
             )
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise GeneratorError("모델 서버 응답 모양이 다름") from exc
-        if not isinstance(text, str):
-            raise GeneratorError("모델 서버 응답 모양이 다름")
+        if not isinstance(text, str) or not text.strip():
+            raise GeneratorError("모델 서버 응답 모양이 다름(내용이 비어 있음)")
         return text
+
+    def _post(self, url: str, body: dict[str, Any]) -> requests.Response:
+        try:
+            return self.session.post(url, json=body, timeout=self.timeout_sec)
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            raise GeneratorError(f"모델 서버에 닿지 못함: {type(exc).__name__}") from exc
+
+
+def _error_text(response: requests.Response) -> str:
+    return str(getattr(response, "text", "")).lower()
