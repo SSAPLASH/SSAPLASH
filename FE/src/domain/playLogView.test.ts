@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterPlayLogs, formatPlayDate, HISTORY_PAGE_SIZE, pageInfo, playModeName, searchPlayLogs, sortPlayLogs } from './playLogView';
+import { filterPlayLogs, formatPlayDate, historyRowLevel, HISTORY_PAGE_SIZE, pageInfo, playModeName, searchPlayLogs, sortPlayLogs } from './playLogView';
 
 describe('formatPlayDate', () => {
   it('YYYY.MM.DD HH:mm 형식(로컬 시간, 0 채움)', () => {
@@ -125,5 +125,18 @@ describe('sortPlayLogs', () => {
   it('원본은 바뀌지 않는다', () => {
     sortPlayLogs(logs, 'OLDEST');
     expect(logs.map((l) => l.id)).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe('historyRowLevel', () => {
+  it('게임 행은 난이도, 악보 행은 null', () => {
+    expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'EASY' })).toBe('EASY');
+    expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'HARD' })).toBe('HARD');
+    expect(historyRowLevel({ mode: 'SHEET', difficulty: 'EASY' })).toBeNull();
+  });
+
+  it('EASY·NORMAL·HARD가 아니면 null', () => {
+    expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'weird' })).toBeNull();
+    expect(historyRowLevel({ mode: 'RHYTHM', difficulty: '' })).toBeNull();
   });
 });

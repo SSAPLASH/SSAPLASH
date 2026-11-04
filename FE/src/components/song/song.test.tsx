@@ -29,6 +29,13 @@ describe("LevelBadge", () => {
     expect(on).toContain('aria-pressed="true"');
     expect(on).not.toContain("song-level-dim");
   });
+
+  it("기본 크기는 md라 song-level-sm이 없고, size=sm이면 붙는다", () => {
+    expect(renderToStaticMarkup(<LevelBadge level="NORMAL" />)).not.toContain("song-level-sm");
+    const sm = renderToStaticMarkup(<LevelBadge level="NORMAL" size="sm" />);
+    expect(sm).toContain("song-level song-level-normal song-level-sm");
+    expect(sm).toContain(">NORM<");
+  });
 });
 
 describe("SongMeta", () => {

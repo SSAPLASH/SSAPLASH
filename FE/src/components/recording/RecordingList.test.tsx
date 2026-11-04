@@ -81,6 +81,7 @@ describe('RecordingBoard', () => {
     });
     expect(html).toContain('곡 제목');
     expect(html).toContain('song-level-hard');
+    expect(html).toContain('song-level-sm');
     expect(html).toContain('리듬 게임');
   });
 

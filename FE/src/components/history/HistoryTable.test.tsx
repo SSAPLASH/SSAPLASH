@@ -116,3 +116,29 @@ describe('DeletedSongChip', () => {
     expect(renderToStaticMarkup(<DeletedSongChip className="x" />)).toContain('class="song-deleted-chip x"');
   });
 });
+
+describe('HistoryTable 난이도 배지(UX-53)', () => {
+  it('게임 행에는 곡 이름 오른쪽에 작은 배지가 있고 악보 행에는 없다', () => {
+    const game = render([log({ playId: 'a', mode: 'RHYTHM', difficulty: 'NORMAL' })]);
+    expect(game).toContain('song-level-normal');
+    expect(game).toContain('song-level-sm');
+    expect(game.indexOf('history-song-title')).toBeLessThan(game.indexOf('song-level'));
+    const sheet = render([log({ playId: 'b', mode: 'SHEET', difficulty: 'NORMAL' })]);
+    expect(sheet).not.toContain('song-level');
+  });
+
+  it('삭제된 곡 행은 곡 이름 → 배지 → 삭제된 곡 칩 순서', () => {
+    const html = render([log({ playId: 'a', songNumericId: 7, difficulty: 'HARD' })], [7]);
+    const title = html.indexOf('history-song-title deleted');
+    const badge = html.indexOf('song-level-hard');
+    const chip = html.indexOf('song-deleted-chip');
+    expect(title).toBeGreaterThan(-1);
+    expect(badge).toBeGreaterThan(title);
+    expect(chip).toBeGreaterThan(badge);
+  });
+
+  it('알 수 없는 난이도면 배지를 생략한다', () => {
+    const html = render([log({ playId: 'a', difficulty: 'WEIRD' })]);
+    expect(html).not.toContain('song-level');
+  });
+});
