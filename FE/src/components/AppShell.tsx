@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { RECORDING_ENABLED } from '@/app/features';
 import { useAuth } from '@/store/authStore';
 import { useShellStore } from '@/store/shellStore';
 import { DebugOverlay } from './DebugOverlay';
+import { RecordingToast } from './recording/RecordingToast';
+import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { Sidebar } from './shell/Sidebar';
@@ -79,6 +82,12 @@ export function AppShell({ authRequired }: Props) {
       <div className="shell-dock">
         <GlassDock />
       </div>
+      {RECORDING_ENABLED && (
+        <>
+          <SaveRecordingDialog />
+          <RecordingToast />
+        </>
+      )}
       <div className="shell-right">
         {MONITOR_ENABLED && !inMonitor && (
           <button
