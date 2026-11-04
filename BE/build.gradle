@@ -82,6 +82,19 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('bootJar') {
 	archiveFileName = 'app.jar'
+	mainClass = 'com.ssafy.airdrum.AirDrumApiApplication'
+}
+
+tasks.register('bootMidiWorkerJar', org.springframework.boot.gradle.tasks.bundling.BootJar) {
+	archiveFileName = 'midi-worker.jar'
+	mainClass = 'com.ssafy.airdrum.song.midi.MidiWorkerMain'
+	classpath = sourceSets.main.runtimeClasspath
+	targetJavaVersion = JavaVersion.VERSION_21
+	includeTools = false
+}
+
+tasks.named('test') {
+	if (System.getenv('MIDI_TEST_WORKER_JAR')) dependsOn tasks.named('bootMidiWorkerJar')
 }
 
 tasks.named('jar') {

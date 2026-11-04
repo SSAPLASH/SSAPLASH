@@ -34,7 +34,8 @@ class SongManagementApiTest {
     @Autowired JdbcTemplate db; @Autowired AccessTokenService tokens; @Autowired JsonMapper json;
     @Autowired com.ssafy.airdrum.withdrawal.WithdrawalService withdrawal;
     @MockitoBean CoverStorage storage;
-    final HttpClient client=HttpClient.newHttpClient();
+    // 내장 서버의 HTTP/1.1 본문 검증에서 JDK 클라이언트의 h2c 업그레이드를 제외한다.
+    final HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     long owner,other,song,builtin; String token,otherToken;
     @BeforeEach void setup() {
         owner=db.queryForObject("INSERT INTO users(nickname) VALUES('cover owner') RETURNING id",Long.class);
@@ -47,14 +48,16 @@ class SongManagementApiTest {
         when(storage.sign(anyString())).thenAnswer(i->"https://example.test/signed/"+i.getArgument(0));
     }
     @AfterEach void cleanup() {
-        db.update("DELETE FROM file_cleanup_tasks WHERE user_id IN (?,?)",owner,other);
-        db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
-        db.update("DELETE FROM charts WHERE song_id=?",song);
-        db.update("DELETE FROM songs WHERE id IN (?,?)",song,builtin);
-        db.update("DELETE FROM users WHERE id IN (?,?)",owner,other);
+        try {
+            db.update("DELETE FROM file_cleanup_tasks WHERE user_id IN (?,?)",owner,other);
+            db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=?)",song);
+            db.update("DELETE FROM charts WHERE song_id=?",song);
+            db.update("DELETE FROM songs WHERE id IN (?,?)",song,builtin);
+            db.update("DELETE FROM users WHERE id IN (?,?)",owner,other);
+        } finally { client.shutdownNow(); }
     }
     HttpResponse<String> call(String method,String path,String tok,String contentType,HttpRequest.BodyPublisher body) throws Exception {
-        var b=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).method(method,body);
+        var b=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).timeout(java.time.Duration.ofSeconds(20)).method(method,body);
         if(tok!=null) b.header("Authorization","Bearer "+tok); if(contentType!=null) b.header("Content-Type",contentType);
         return client.send(b.build(),HttpResponse.BodyHandlers.ofString());
     }
