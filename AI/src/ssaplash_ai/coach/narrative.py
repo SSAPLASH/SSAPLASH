@@ -24,6 +24,19 @@ TextGenerator = Callable[[str, str], str]
 
 SEVERITY_KO = {"LOW": "조금", "MEDIUM": "보통", "HIGH": "많이"}
 LEVEL_KO = {"GOOD": "좋음", "FAIR": "보통", "NEEDS_WORK": "더 연습이 필요함"}
+METRIC_KO = {
+    "meanDeltaMs": "평균 오차(ms, 양수는 늦음)",
+    "overallMeanDeltaMs": "전체 평균 오차(ms)",
+    "hitCount": "유효 타격 수",
+    "missRate": "놓침 비율",
+    "missCount": "놓친 개수",
+    "noteCount": "노트 수",
+    "transitionCount": "전환 횟수",
+    "velocityRatio": "약한 손 세기 비율",
+    "weakHitCount": "약한 손 타격 수",
+    "strongHitCount": "센 손 타격 수",
+    "stdDeltaMs": "오차 표준편차(ms)",
+}
 PATTERN_KO = {
     "TIMING_LATE": "곡 전체에서 박보다 늦게 침",
     "TIMING_EARLY": "곡 전체에서 박보다 빠르게 침",
@@ -52,8 +65,22 @@ FORBIDDEN_WORDS = (
     "실력이 없",
 )
 _PREVIOUS_WORDS = ("지난번", "저번", "이전", "예전", "전보다", "지난 연주", "지난 플레이")
-_BETTER_WORDS = ("나아졌", "좋아졌", "줄었", "개선", "향상", "발전")
-_WORSE_WORDS = ("나빠졌", "늘었", "악화", "떨어졌")
+_BETTER_WORDS = ("나아", "나은", "좋아졌", "줄었", "줄어", "감소", "개선", "향상", "발전", "호전")
+_WORSE_WORDS = ("나빠", "늘었", "늘어", "악화", "떨어", "증가", "퇴보")
+# 칭찬하는 말. 약점으로 지목된 패드를 이런 말과 같은 문장에서 칭찬하면 사실과 어긋난다
+_PRAISE_WORDS = (
+    "훌륭",
+    "좋았",
+    "돋보",
+    "인상적",
+    "멋졌",
+    "칭찬",
+    "잘 쳤",
+    "잘했",
+    "안정적으로 쳤",
+    "안정적이었",
+)
+_EMOJI = re.compile("[\U0001f000-\U0001ffff☀-➿️‍]")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 # 모델이 답에 섞어 내보내는 전용 토큰과 생각 블록(EXAONE `[|endofturn|]`, Qwen `<|im_end|>`·`<think>`, Gemma `<end_of_turn>`)
 _SPECIAL_TOKENS = re.compile(
@@ -138,6 +165,7 @@ SYSTEM_PROMPT = (
     "2. 점수와 정확도는 말하지 마세요.\n"
     "3. 비난하거나 단정하지 말고 격려하는 '~해요' 말투로 쓰세요.\n"
     "4. 순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → (지난 연주와의 비교가 사실에 있을 때만) 비교.\n"
+    "   '잘한 패드'로 적힌 패드만 칭찬하고, 약점에 나온 패드는 칭찬하지 마세요. 비교는 '비교 결과' 한 가지만 말하세요.\n"
     f"5. {MAX_NARRATIVE_CHARS}자 이하의 한 문단. 목록·마크다운·이모지·영어를 쓰지 마세요.\n"
     "총평 문장만 출력하세요."
 )
@@ -169,7 +197,8 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
             else f"{round(s.fromMs / 1000)}~{round(s.toMs / 1000)}초 구간"
         )
         pads = ", ".join(_pad_ko(p) for p in s.pads) or "패드 지정 없음"
-        nums = ", ".join(f"{k}={v}" for k, v in s.metrics.items() if k not in ("severity", "scope"))
+        # 영어 항목 이름(meanDeltaMs 등)이 문장에 그대로 나오지 않게 한국어 이름으로 보여 준다. 모르는 항목은 뺀다
+        nums = ", ".join(f"{METRIC_KO[k]} {v}" for k, v in s.metrics.items() if k in METRIC_KO)
         label = PATTERN_KO.get(s.pattern, s.pattern)
         lines.append(
             f"- 약점: {label} / 심각도 {SEVERITY_KO[s.severityLevel]} / {where} / 패드 {pads} / {nums}"
@@ -184,13 +213,20 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
             f"- 지난 연주(같은 곡 이전 {facts.history.sameSongPlays}번 중 바로 직전): "
             f"완벽 {p.perfect}개, 좋음 {p.good}개, 놓침 {p.miss}개 (놓침 {_pct(p.miss_rate)}%)"
         )
-        tops = [PATTERN_KO.get(t, t) for t in facts.history.previous.topPatterns]
-        if tops:
-            lines.append(f"- 지난 연주의 약점: {', '.join(tops)}")
+        # 모델이 지난 연주의 약점이 나아졌는지를 짐작해 쓰지 않게, 비교는 놓침 비율 하나로 정해서 준다
+        trend = {"BETTER": "줄었음(좋아짐)", "WORSE": "늘었음(나빠짐)", "SAME": "비슷함"}[
+            _trend(facts)
+        ]
+        lines.append(
+            f"- 비교 결과(비교는 이것만 말하세요): 놓침 비율이 지난번 {_pct(p.miss_rate)}%에서 "
+            f"이번 {_pct(c.miss_rate)}%로 {trend}"
+        )
     else:
         lines.append("- 지난 연주 기록 없음 (비교하지 마세요)")
     if hint:
-        lines.append(f"\n이전 시도의 문제: {hint}\n이 문제를 고쳐서 다시 쓰세요.")
+        lines.append(
+            f"\n이전 시도의 문제(이 내용을 문장에서 말하지 말고 고치기만 하세요): {hint}\n문제를 고쳐서 총평만 다시 쓰세요."
+        )
     return "\n".join(lines)
 
 
@@ -256,6 +292,8 @@ def _trend(facts: NarrativeFacts) -> Literal["BETTER", "WORSE", "SAME", "NONE"]:
 def clean(text: str) -> str:
     """모델 출력에서 전용 토큰·생각 블록을 지우고 줄바꿈을 공백 하나로 합친다. 문장 내용은 바꾸지 않는다."""
     text = _SPECIAL_TOKENS.sub(" ", text)
+    # 이모지는 문장 뜻을 바꾸지 않으니 지운다(작은 모델이 규칙을 어기고 자주 붙인다)
+    text = _EMOJI.sub("", text)
     text = re.sub(r"\s*\n+\s*", " ", text)
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
@@ -274,7 +312,9 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
         problems.append("마크다운·목록 표시가 있음")
     if _FOREIGN.search(body):
         problems.append("한글이 아닌 글자(영어·한자·가나·이모지)가 섞임")
-    if not re.search(r"[가-힣]", body) or not body.endswith(("요.", "요", "다.", "다")):
+    if not re.search(r"[가-힣]", body) or not body.endswith(
+        ("요.", "요!", "요", "다.", "다!", "다")
+    ):
         problems.append("한국어 완성 문장이 아님")
     for word in FORBIDDEN_WORDS:
         if word in body:
@@ -291,6 +331,17 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     for label in PAD_LABELS_KO.values():
         if label in body and label not in known:
             problems.append(f"사실에 없는 패드 '{label}'")
+
+    # 약점으로 지목된 패드를 칭찬하는 문장("스네어 연주가 좋았어요")은 사실과 어긋난다. 잘한 패드로 꼽힌 것은 제외
+    weak_labels = {_pad_ko(p) for s in facts.segments for p in s.pads}
+    if facts.strengthPad:
+        weak_labels.discard(_pad_ko(facts.strengthPad))
+    for sentence in _SENTENCE_SPLIT.split(body):
+        if any(w in sentence for w in _PRAISE_WORDS):
+            praised = sorted(label for label in weak_labels if label in sentence)
+            if praised:
+                problems.append(f"약점 패드를 칭찬함 '{praised[0]}'")
+                break
 
     trend = _trend(facts)
     # 비교는 "지난번·이전" 같은 말이 들어 있는 문장 안에서만 본다. "실력이 향상돼요"처럼 비교가 아닌 평범한 문장은 오탐이다

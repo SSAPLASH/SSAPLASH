@@ -325,3 +325,86 @@ def test_거절돼도_마지막_원문을_남긴다():
     outcome = write_narrative(_facts(), lambda s, u: "점수가 낮아요.")
 
     assert outcome.text is None and outcome.last_text == "점수가 낮아요."
+
+
+# ---------- 실제 모델 출력에서 본 허점 (gemma3·exaone 비교, 2026-11-04) ----------
+
+
+def test_이모지는_지우고_느낌표로_끝나는_문장도_통과한다():
+    from ssaplash_ai.coach.narrative import clean
+
+    assert clean("잘 쳤어요! 🎶 연습해 보세요! 💪") == "잘 쳤어요! 연습해 보세요!"
+    text = "기본기가 잘 잡혀 있어요. 7~12초 구간을 느린 템포로 반복해 보세요! 🎶💪"
+    outcome = write_narrative(_facts(), lambda s, u: text)
+
+    assert outcome.text is not None and "🎶" not in outcome.text
+
+
+def test_줄어들었지만_같은_활용형도_비교_방향으로_본다():
+    facts = _facts(history=_history(miss=1))  # 직전 1개, 이번 4개: 놓침이 늘었다
+
+    problems = check("지난 연주에 비해 놓침이 줄어들었지만 여전히 연습이 필요해요.", facts)
+
+    assert any("나아졌다고" in p for p in problems)
+
+
+def test_늘어났다_증가했다도_좋아진_경우엔_걸린다():
+    facts = _facts(history=_history(miss=18))  # 놓침이 줄었다
+
+    assert any(
+        "나빠졌다고" in p for p in check("이전보다 놓침이 늘어났어요. 연습해 보세요.", facts)
+    )
+    assert any(
+        "나빠졌다고" in p for p in check("이전보다 놓침이 증가했어요. 연습해 보세요.", facts)
+    )
+
+
+def test_약점으로_지목된_패드를_칭찬하면_걸린다():
+    problems = check("스네어 연주가 특히 좋았어요. 7~12초 구간을 반복해 보세요.", _facts())
+
+    assert any("약점 패드를 칭찬함" in p for p in problems)
+
+
+def test_잘한_패드로_꼽힌_패드는_칭찬해도_된다():
+    facts = _facts(
+        strengthPad="SNARE",
+        segments=[
+            {
+                "pattern": "MISS_CLUSTER",
+                "severityLevel": "MEDIUM",
+                "pads": ["SNARE"],
+                "fromMs": 7000.0,
+                "toMs": 12000.0,
+                "scope": "SEGMENT",
+                "metrics": {"severity": 0.67, "missRate": 0.4, "missCount": 4, "noteCount": 10},
+            }
+        ],
+    )
+
+    assert check("스네어 연주가 특히 좋았어요. 7~12초 구간을 반복해 보세요.", facts) == []
+
+
+def test_약점_패드가_칭찬_문장이_아닌_곳에_나오면_걸리지_않는다():
+    assert check("스네어로 7~12초 구간을 느린 템포로 반복해 보세요.", _facts()) == []
+
+
+def test_프롬프트에는_영어_항목_이름이_없고_한국어_이름이_있다():
+    prompt = build_user_prompt(_facts())
+
+    assert "meanDeltaMs" not in prompt and "missRate" not in prompt
+    assert "놓침 비율 0.4" in prompt and "놓친 개수 4" in prompt
+
+
+def test_프롬프트는_비교_결과를_한_가지로_정해_준다():
+    better = build_user_prompt(_facts(history=_history(miss=18)))
+    worse = build_user_prompt(_facts(history=_history(miss=1)))
+
+    assert "비교 결과" in better and "38%에서 이번 25%로 줄었음(좋아짐)" in better
+    assert "늘었음(나빠짐)" in worse
+    assert "지난 연주의 약점" not in better  # 약점이 나아졌는지 모델이 짐작하지 않게 뺀다
+
+
+def test_재시도_안내는_그_내용을_문장에서_말하지_말라고_알린다():
+    prompt = build_user_prompt(_facts(), hint="점수 금지")
+
+    assert "이전 시도의 문제" in prompt and "말하지 말고" in prompt
