@@ -98,7 +98,7 @@ function RecordingRow({ item, playing, loading, progress, onToggle, onRename, on
           {item.song ? (
             <span className="rec-list-song">
               <span className="rec-list-song-title">{item.song.title}</span>
-              {level ? <LevelBadge level={level} /> : null}
+              {level ? <LevelBadge level={level} size="sm" /> : null}
             </span>
           ) : null}
           {playing ? (

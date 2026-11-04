@@ -1,9 +1,11 @@
 // Figma Controls / TableHeader 134:2686 + Navigation / HistoryRow 220:3964 — 연주 기록 표. 열: 날짜 · 모드 · 곡 · 정확도 / 점수 · 결과 보기.
 // 삭제된 곡 행(song=deleted)은 제목을 --text-3로 흐리게 하고 「삭제된 곡」 칩을 붙인다. 결과 보기는 그대로 열린다.
+// 게임(리듬) 행은 곡 이름 오른쪽에 난이도 배지(LevelBadge sm)를 둔다 — 순서: 곡 이름 → 배지 → 삭제된 곡 칩(UX-53).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
-import { formatPlayDate, playModeName } from '@/domain/playLogView';
+import { LevelBadge } from '@/components/song/LevelBadge';
+import { formatPlayDate, historyRowLevel, playModeName } from '@/domain/playLogView';
 import type { PlayLog } from '@/engine/playLog';
 import '@/components/ui/table.css';
 import './history.css';
@@ -49,6 +51,7 @@ export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) 
         <tbody>
           {logs.map((l) => {
             const deleted = l.songNumericId != null && deletedIds.has(l.songNumericId);
+            const level = historyRowLevel(l);
             return (
               <tr key={l.playId}>
                 <td>{formatPlayDate(l.startedAt)}</td>
@@ -56,6 +59,7 @@ export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) 
                 <td>
                   <div className="history-song">
                     <span className={deleted ? 'history-song-title deleted' : 'history-song-title'}>{l.title}</span>
+                    {level ? <LevelBadge level={level} size="sm" /> : null}
                     {deleted ? <DeletedSongChip /> : null}
                   </div>
                 </td>

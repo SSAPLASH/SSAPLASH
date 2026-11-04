@@ -1,5 +1,5 @@
-// 녹음 삭제 확인 창 (설계 REC-001 4-5·6-6 U10 ①: Studio DeleteDialog 패턴, 폭 420).
-// 질문 16 + 안내 14, 하단 [취소] secondary md + [삭제] danger md.
+// 녹음 삭제 확인 창 (Figma 03 Screens / 연주 기록 · 녹음 삭제 571:29597, Studio / DeleteDialog 폭 420. 설계 REC-001 U10 v0.5).
+// 본문 첫 줄은 녹음 제목(16 Medium, 말줄임), 둘째 줄은 안내(14 text-2). 하단 [취소] secondary + [삭제] danger가 폭을 반씩 채운다.
 import { useEffect, useRef, useState } from 'react';
 import { deleteRecording } from '@/api/recordings';
 import { Button } from '@/components/ui/Button';
@@ -74,8 +74,8 @@ export function RecordingDeleteDialog({ item, onDeleted, onMissing, onClose }: P
         </IconButton>
       </div>
       <div className="rec-list-dialog-body">
-        <p className="rec-list-delete-question">「{item.title}」을 삭제할까요?</p>
-        <p className="rec-list-delete-detail">되돌릴 수 없어요.</p>
+        <p className="rec-list-delete-question">{item.title}</p>
+        <p className="rec-list-delete-detail">이 녹음을 삭제할까요? 녹음 파일이 지워지고 되돌릴 수 없어요.</p>
       </div>
       {error && (
         <div className="notice error" role="alert">
