@@ -117,42 +117,6 @@
   background: var(--brand-on);
   transform: translateX(12px);
 }
-.dock-preset {
-  min-height: 0;
-  flex: none;
-  max-width: 140px;
-  height: 32px;
-  padding: 0 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text-1);
-  font-size: 12px;
-  cursor: pointer;
-}
-.dock-preset:hover {
-  border-color: var(--line-strong);
-}
-/* 준비 필요: ● L ● R 준비 필요 (amber 테두리) */
-.dock-preset.needs-ready {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  max-width: none;
-  border-color: var(--brand-sub);
-}
-.dock-hand-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--miss);
-}
-.dock-hand-dot.on {
-  background: var(--good);
-}
 /* 접힘 알약: ♩ BPM · 점 · (‖) · ⌄ */
 .dock-pill {
   min-height: 0;

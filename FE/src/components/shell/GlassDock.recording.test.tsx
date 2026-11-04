@@ -40,13 +40,14 @@ describe('GlassDock 녹음 슬롯(스위치 켜짐)', () => {
   it('/free에서 [BPM +] 다음에 구분선과 녹음 버튼', () => {
     const html = render('/free');
     expect(html).toMatch(/aria-label="BPM 5 증가".*?<span class="dock-divider"><\/span><button[^>]*class="rec-btn idle"/s);
-    expect((html.match(/dock-divider/g) ?? []).length).toBe(3);
+    // 사운드 뒤·녹음 앞 2개(프리셋 칩과 그 앞 구분선은 11/04 Dock에서 뺐다)
+    expect((html.match(/dock-divider/g) ?? []).length).toBe(2);
   });
 
   it('/history에서는 버튼도 추가 구분선도 없다', () => {
     const html = render('/history');
     expect(html).not.toContain('rec-btn');
-    expect((html.match(/dock-divider/g) ?? []).length).toBe(2);
+    expect((html.match(/dock-divider/g) ?? []).length).toBe(1);
   });
 
   it('접힘: 자유 녹음 중이면 녹음 점, 아니면 없음', () => {

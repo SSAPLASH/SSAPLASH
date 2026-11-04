@@ -1,17 +1,14 @@
 // 상단 글래스 Dock(Figma Navigation / GlassDock 148:2288). mode(shell|play) × collapsed 4변이.
 // 상태는 liveStore.metronome·settingsStore, 조작은 engine 싱글턴 메서드만 쓴다. 셸 루트에 fixed로 한 인스턴스만 둔다(D3).
 // 메트로놈 패널(MetronomePanel)은 이 컴포넌트가 .shell-dock 안에 같이 마운트한다 — 칩 본체 클릭은 shellStore.dockPanel만 토글한다.
-// 프리셋 칩은 스틱 연결이 필요한데 한 손이라도 끊기면 「준비 필요」(domain/dockChip).
+// 프리셋 칩은 두지 않는다(11/04 결정, 연결 상태는 상단 바 스틱 상태 표시가 보여 준다).
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { useRecordingStore } from '@/app/recordingStore';
-import { sensorRegistry } from '@/app/sensorRegistry';
-import { dockPresetChipView } from '@/domain/dockChip';
 import { BPM_STEP } from '@/domain/metronome';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
-import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
 import { RecordButton } from '@/components/recording/RecordButton';
@@ -65,15 +62,10 @@ export function GlassDock() {
   const setClickOn = useSettings((s) => s.setMetronome);
   const savedCollapsed = useSettings((s) => s.dockCollapsed);
   const setSavedCollapsed = useSettings((s) => s.setDockCollapsed);
-  const activePresetId = useSettings((s) => s.activePresetId);
-  const presets = usePresets((s) => s.items);
   const immersive = useShellStore((s) => s.immersive);
   const dockPanel = useShellStore((s) => s.dockPanel);
   const setDockPanel = useShellStore((s) => s.setDockPanel);
   const playRunning = useShellStore((s) => s.playRunning);
-  const sensorKind = useSettings((s) => s.sensorKind);
-  const connected = useLive((s) => s.connected);
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   // 접힘 Dock의 녹음 점: 자유 녹음 중, 또는 게임·악보에서 녹음을 켠 채 연주 중
   const recordingDot = useRecordingStore((s) => RECORDING_ENABLED && (s.phase === 'recording' || (s.phase === 'armed' && s.locked)));
@@ -88,13 +80,6 @@ export function GlassDock() {
   const collapse = () => (autoMode ? auto.collapse() : setSavedCollapsed(true));
   const locked = m.locked;
   const running = locked ? clickOn : m.playing;
-  const presetName = presets.find((p) => p.id === activePresetId)?.name ?? '프리셋 없음';
-  const chip = dockPresetChipView({
-    sensorKind,
-    hasUsageGuide: !!sensorRegistry.get(sensorKind)?.usageGuide,
-    connected,
-    presetName,
-  });
 
   useEffect(() => auto.subscribe(setAutoCollapsed), [auto]);
   useEffect(() => {
@@ -193,24 +178,6 @@ export function GlassDock() {
             <RecordButton />
           </>
         )}
-        <span className="dock-divider" />
-        <button
-          type="button"
-          className={`dock-preset${chip.kind === 'needsReady' ? ' needs-ready' : ''}`}
-          title="드럼 세팅으로 이동"
-          onClick={() => navigate('/setup')}
-        >
-          {chip.kind === 'needsReady' ? (
-            <>
-              <span className={`dock-hand-dot${chip.hands[0] ? ' on' : ''}`} aria-hidden="true" />
-              L
-              <span className={`dock-hand-dot${chip.hands[1] ? ' on' : ''}`} aria-hidden="true" />
-              R {chip.label}
-            </>
-          ) : (
-            chip.label
-          )}
-        </button>
         {mode === 'play' && (
           <IconButton size="sm" label="일시정지" onClick={pause}>
             <PauseIcon />
