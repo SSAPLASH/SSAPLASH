@@ -29,12 +29,12 @@ export interface DrumKitProps {
   effects?: boolean;
 }
 
-/** 이 세기 이상으로 친 드럼 계열 패드만 그 패드가 짧게 흔들린다(E4) */
+/** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
 export const PAD_SHAKE_VELOCITY = 100;
 
 /**
- * 패드별 진동 횟수(E4). 킷 전체가 아니라 친 패드만 흔든다 — 어디를 쳤는지가 분명해야 한다.
- * 심벌은 이미 회전 흔들림이 있어 제외한다. enabled가 아니거나 동작 줄이기면 구독하지 않는다
+ * 진동 횟수(E4). 킥은 몸으로 느끼는 저음이라 킷 전체를, 스네어·탐은 친 패드만 흔든다(어디를 쳤는지가 분명하게).
+ * 심벌은 이미 회전 흔들림이 있어 제외한다. enabled가 아니거나 동작 줄이기면 세지 않는다
  */
 function usePadShakeCounts(enabled: boolean, shapeOf: (pad: PadId) => string | undefined) {
   const pulse = usePadHitPulse();
@@ -51,8 +51,8 @@ function usePadShakeCounts(enabled: boolean, shapeOf: (pad: PadId) => string | u
   return counts;
 }
 
-/** 패드 하나를 감싸 count가 오를 때마다 좌우로 80ms 흔든다 */
-function PadShake({ count, children }: { count: number | undefined; children: ReactNode }) {
+/** 감싼 내용(패드 하나 또는 킷 전체)을 count가 오를 때마다 좌우로 80ms 흔든다 */
+function Shake({ count, className, children }: { count: number | undefined; className: string; children: ReactNode }) {
   const ref = useRef<SVGGElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -65,7 +65,7 @@ function PadShake({ count, children }: { count: number | undefined; children: Re
     );
   }, [count]);
   return (
-    <g ref={ref} className="pad-shake" data-shake={count || undefined}>
+    <g ref={ref} className={className} data-shake={count || undefined}>
       {children}
     </g>
   );
@@ -105,6 +105,15 @@ export function DrumKit({
 
   const pads = kitPadsFor(skin);
   const shakes = usePadShakeCounts(effects, (pad) => pads.find((p) => p.pad === pad)?.shape);
+  // 킥 진동은 킷 전체(패드와 이펙트 레이어)를 흔든다. 이펙트가 꺼진 킷은 감싸지 않는다
+  const withKitShake = (kids: ReactNode) =>
+    effects ? (
+      <Shake className="kit-shake" count={shakes.KICK}>
+        {kids}
+      </Shake>
+    ) : (
+      kids
+    );
 
   const svg = (
     <svg
@@ -118,6 +127,8 @@ export function DrumKit({
       data-skin={skin === 'acoustic' ? undefined : skin}
     >
       <PadDefs id={defsId} />
+      {withKitShake(
+        <>
       {pads.map((p) => {
         const pad = (
         <Pad
@@ -148,17 +159,19 @@ export function DrumKit({
           }
         />
         );
-        // 이펙트가 켜진 킷만 패드별 진동 그룹으로 감싼다(꺼진 킷은 마크업 불변)
+        // 이펙트가 켜진 킷만 패드별 진동 그룹으로 감싼다(꺼진 킷은 마크업 불변). 킥은 킷 전체 그룹이 흔든다
         return effects ? (
-          <PadShake key={p.pad} count={shakes[p.pad]}>
+          <Shake key={p.pad} className="pad-shake" count={p.pad === 'KICK' ? undefined : shakes[p.pad]}>
             {pad}
-          </PadShake>
+          </Shake>
         ) : (
           <Fragment key={p.pad}>{pad}</Fragment>
         );
       })}
       {/* 이펙트는 effects일 때만 마운트한다 */}
       {effects && <HitEffects skin={skin} />}
+        </>,
+      )}
     </svg>
   );
 
