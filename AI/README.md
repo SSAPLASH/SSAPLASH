@@ -54,7 +54,7 @@ AI/
 │   │                    transfer(서명 URL 내려받기·올리기), heartbeat(10초 heartbeat 스레드), job(작업 하나 실행기),
 │   │                    loop(claim 폴링 루프), cli(ssaplash-worker 명령), fake_be(테스트·로컬 확인용 BE 대역)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
-│   │                    patterns/(패턴별 규칙), select(후보 선택), advice(연습 조언 문장), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   │                    patterns/(패턴별 규칙), select(후보 선택), advice(연습 조언·상세 설명·심각도 단계), summary(종합 총평), analyzer(진입점). 설명은 docs/coach-weak-segments.md
 │   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
 │   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
 │   ├─ coach_calibration/ 약점 분석 실측 보정 배치(서버가 import하지 않음). source(비식별 뷰 읽기·허용 열 검증), filters(이상치 제외),
