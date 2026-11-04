@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSerialStickSource } from './WebSerialStickSource';
 import { frame } from './serialFraming';
-import { buildLink, buildStatus, buildSyncAck } from '@/monitor/mockStick';
+import { buildHit, buildLink, buildPedal, buildStatus, buildSyncAck } from '@/monitor/mockStick';
 
 function fakePort(open: () => Promise<void>) {
   return {
@@ -186,14 +186,36 @@ describe('WebSerialStickSource 동글(두 스틱 한 포트)', () => {
     await src.disconnect();
   });
 
-  it('발 역할 패킷은 이벤트로 내보내지 않는다', async () => {
+  it('발 역할 pose는 내보내지 않고, 동글 전 발 STATUS는 연결로 본다(손과 같은 규칙)', async () => {
     const { src, feed } = await open();
     const events: unknown[] = [];
     src.subscribe((e) => events.push(e));
     feed(poseBytes(2, 1000));
     feed(new Uint8Array([0x03, 3, 80, 0, 1, 2]));
     await tick();
-    expect(events).toEqual([]);
+    expect(events).toEqual([{ kind: 'pedalStatus', foot: 3, connected: true, batteryPct: 80 }]);
+    await src.disconnect();
+  });
+
+  it('LINK bit2·3로 발 연결·끊김을 pedalStatus로 알리고, STATUS 배터리는 붙기 전 보류한다', async () => {
+    const { src, feed } = await open();
+    const events: { kind: string; foot?: number; connected?: boolean; batteryPct?: number }[] = [];
+    src.subscribe((e) => {
+      if (e.kind === 'pedalStatus') events.push(e);
+    });
+    feed(new Uint8Array([0x07, 0, 0b0000, 2, 0]));
+    feed(new Uint8Array([0x03, 2, 70, 0, 1, 2]));
+    await tick();
+    expect(events.filter((e) => e.connected).length).toBe(0);
+    feed(new Uint8Array([0x07, 0, 0b0100, 2, 0]));
+    await tick();
+    expect(events.at(-1)).toEqual({ kind: 'pedalStatus', foot: 2, connected: true, batteryPct: 70 });
+    feed(new Uint8Array([0x03, 2, 65, 0, 1, 2]));
+    await tick();
+    expect(events.at(-1)).toEqual({ kind: 'pedalStatus', foot: 2, connected: true, batteryPct: 65 });
+    feed(new Uint8Array([0x07, 0, 0b0000, 2, 0]));
+    await tick();
+    expect(events.at(-1)).toEqual({ kind: 'pedalStatus', foot: 2, connected: false });
     await src.disconnect();
   });
 });
@@ -488,5 +510,165 @@ describe('WebSerialStickSource 재연결(비트 5·시계 초기화·reopen·con
     // 리스너는 인스턴스당 한 번만 등록한다
     expect(serial.addEventListener.mock.calls.filter((c) => c[0] === 'connect')).toHaveLength(1);
     await src.disconnect();
+  });
+});
+
+describe('WebSerialStickSource 페달(role 2·3)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function open() {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'] });
+    const live = livePort();
+    stubSerial([live.port]);
+    const src = new WebSerialStickSource();
+    const events: Array<Record<string, unknown>> = [];
+    src.subscribe((e) => events.push(e as unknown as Record<string, unknown>));
+    await src.autoConnect();
+    await vi.advanceTimersByTimeAsync(300); // 포트를 연 직후 SYNC 5회가 끝나게 둔다
+    const feedAndSettle = async (p: Uint8Array, ms = 300) => {
+      live.feed(p);
+      await vi.advanceTimersByTimeAsync(ms);
+    };
+    const pedalEvents = () =>
+      events
+        .filter((e) => e.kind === 'pedalStatus')
+        .map((e) => ({ foot: e.foot, connected: e.connected, batteryPct: e.batteryPct }));
+    return { src, events, feedAndSettle, pedalEvents, ...live };
+  }
+  const syncCount = (written: number[][]) => written.filter((w) => w[0] === 0x10).length;
+  const lastKey = (written: number[][]) =>
+    new DataView(new Uint8Array(written.filter((w) => w[0] === 0x10).at(-1)!).buffer).getUint32(1, true);
+  const stat = (role: 2 | 3, battery: number, unconfigured = false) =>
+    buildStatus({ role, batteryPct: battery, rssi: -50, fwMajor: 3, fwMinor: 0, unconfigured });
+
+  // 인수 조건: LINK bit2·bit3 → pedalStatus 연결·끊김
+  it('LINK 마스크 0b1111 → 0b1100 → 0b0011 전이에 따라 pedalStatus를 낸다', async () => {
+    const { src, feedAndSettle, pedalEvents } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1111 }));
+    expect(pedalEvents()).toEqual([
+      { foot: 2, connected: true, batteryPct: undefined },
+      { foot: 3, connected: true, batteryPct: undefined },
+    ]);
+    await feedAndSettle(buildLink({ linkMask: 0b1100 })); // 양손만 빠지면 발은 그대로 → 알림 없음
+    expect(pedalEvents()).toHaveLength(2);
+    await feedAndSettle(buildLink({ linkMask: 0b0011 })); // 발 둘 끊김
+    expect(pedalEvents().slice(2)).toEqual([
+      { foot: 2, connected: false, batteryPct: undefined },
+      { foot: 3, connected: false, batteryPct: undefined },
+    ]);
+    await feedAndSettle(buildLink({ linkMask: 0b1100 })); // 발 복귀
+    expect(pedalEvents().slice(4)).toEqual([
+      { foot: 2, connected: true, batteryPct: undefined },
+      { foot: 3, connected: true, batteryPct: undefined },
+    ]);
+    await src.disconnect();
+  });
+
+  // 인수 조건: LINK 0→1 때 그 칸 시계 초기화 + SYNC 5회
+  it('발 칸 LINK 0→1에서 그 칸 시계가 초기화되고 SYNC 5회가 나간다', async () => {
+    const { src, feedAndSettle, written } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b0100 }));
+    await feedAndSettle(buildSyncAck({ role: 2, t0Ms: lastKey(written), t1Us: 5_000_000 }), 0);
+    expect(src.clockOffsetOf(2)).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(2500); // 2초 중복 방지 창 밖
+    await feedAndSettle(buildLink({ linkMask: 0b0000 }));
+    const base = syncCount(written);
+    await feedAndSettle(buildLink({ linkMask: 0b0100 }), 0);
+    expect(src.clockOffsetOf(2)).toBeNull();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(syncCount(written) - base).toBe(5);
+    await src.disconnect();
+  });
+
+  // 인수 조건: 페달 STATUS 배터리 보류 후 붙을 때 알림
+  it('발 STATUS가 LINK 전에 오면 보류했다가 붙을 때 배터리와 함께 emit한다', async () => {
+    const { src, feedAndSettle, pedalEvents } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b0000 }));
+    await feedAndSettle(stat(3, 77));
+    expect(pedalEvents().filter((e) => e.connected)).toEqual([]);
+    await feedAndSettle(buildLink({ linkMask: 0b1000 }));
+    expect(pedalEvents().at(-1)).toEqual({ foot: 3, connected: true, batteryPct: 77 });
+    await src.disconnect();
+  });
+
+  // 인수 조건: 비트 5는 설정 재전송을 일으키지 않는다
+  it('비트 5=1이어도 pedalStatus에 unconfigured가 없고 설정 재전송이 없다', async () => {
+    const { src, events, feedAndSettle, written } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1100 }));
+    await vi.advanceTimersByTimeAsync(2500);
+    events.length = 0;
+    const before = written.length;
+    await feedAndSettle(stat(2, 60, true));
+    const ped = events.filter((e) => e.kind === 'pedalStatus');
+    expect(ped).toHaveLength(1);
+    expect(ped[0]).toEqual({ kind: 'pedalStatus', foot: 2, connected: true, batteryPct: 60 });
+    expect('unconfigured' in ped[0]).toBe(false);
+    // 새로 나간 쓰기는 SYNC(0x10)뿐이다
+    expect(written.slice(before).every((w) => w[0] === 0x10)).toBe(true);
+    await src.disconnect();
+  });
+
+  // 인수 조건: role 2·3 SYNC_ACK가 각 칸 시계 샘플
+  it('role 2·3 SYNC_ACK 뒤 clockOffsetOf(2)·clockOffsetOf(3)가 null이 아니다', async () => {
+    const { src, feedAndSettle, written } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1100 }));
+    expect(src.clockOffsetOf(2)).toBeNull();
+    expect(src.clockOffsetOf(3)).toBeNull();
+    const key = lastKey(written);
+    await feedAndSettle(buildSyncAck({ role: 2, t0Ms: key, t1Us: 2_000_000 }), 0);
+    await feedAndSettle(buildSyncAck({ role: 3, t0Ms: key, t1Us: 2_000_000 }), 0);
+    expect(src.clockOffsetOf(2)).not.toBeNull();
+    expect(src.clockOffsetOf(3)).not.toBeNull();
+    await src.disconnect();
+  });
+
+  // 인수 조건: 발 HIT·PEDAL 시각을 그 칸 시계로 환산
+  it('발 HIT·PEDAL timestamp가 그 칸 시계 offset으로 환산된다', async () => {
+    const { src, events, feedAndSettle, written } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1100 }));
+    const key = lastKey(written);
+    await feedAndSettle(buildSyncAck({ role: 3, t0Ms: key, t1Us: 900_000_000 }), 0);
+    await feedAndSettle(buildSyncAck({ role: 2, t0Ms: key, t1Us: 1_000_000 }), 0);
+    const off3 = src.clockOffsetOf(3)!;
+    const off2 = src.clockOffsetOf(2)!;
+    expect(off3).not.toBeNull();
+    events.length = 0;
+    await feedAndSettle(buildHit({ role: 3, seq: 1, timestampUs: 900_500_000, pad: 7, velocity: 100, marginDeg: 25.5 }), 0);
+    await feedAndSettle(buildPedal(2, 1, 1_500_000), 0);
+    const hit = events.find((e) => e.kind === 'hit')!;
+    const pedal = events.find((e) => e.kind === 'pedal')!;
+    expect(hit).toMatchObject({ stickId: null, foot: 3, pad: 'KICK' });
+    // 환산값 = 보드 ms + 그 칸 offset(ClockSync 오차 허용)
+    expect(Math.abs((hit.timestamp as number) - (900_500 + off3))).toBeLessThan(50);
+    expect(Math.abs((pedal.timestamp as number) - (1_500 + off2))).toBeLessThan(50);
+    await src.disconnect();
+  });
+
+  // 인수 조건: LINK 3초 무수신이면 두 발 끊김
+  it('LINK 3초 stale에서 pedalStatus{connected:false} 두 발이 나간다', async () => {
+    const { src, feedAndSettle, pedalEvents } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1100 }));
+    const n = pedalEvents().length;
+    src.checkLinkTimeout(performance.now() + 3500);
+    expect(pedalEvents().slice(n)).toEqual([
+      { foot: 2, connected: false, batteryPct: undefined },
+      { foot: 3, connected: false, batteryPct: undefined },
+    ]);
+    await src.disconnect();
+  });
+
+  // 인수 조건: 포트 닫힘이면 두 발 끊김
+  it('cleanup(disconnect)에서 pedalStatus{connected:false} 두 발이 나간다', async () => {
+    const { src, feedAndSettle, pedalEvents } = await open();
+    await feedAndSettle(buildLink({ linkMask: 0b1100 }));
+    const n = pedalEvents().length;
+    await src.disconnect();
+    expect(pedalEvents().slice(n)).toEqual([
+      { foot: 2, connected: false, batteryPct: undefined },
+      { foot: 3, connected: false, batteryPct: undefined },
+    ]);
   });
 });

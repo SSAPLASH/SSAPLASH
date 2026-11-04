@@ -8,6 +8,7 @@ import {
   defaultRecordingTitle,
   hitFromFreeInput,
   hitsFromPlayLog,
+  isRecordedSensor,
   normalizeRecordingTitle,
 } from './recording';
 
@@ -58,6 +59,14 @@ describe('hitsFromPlayLog', () => {
     expect(hits).toHaveLength(3);
     for (const h of hits) expect('stickId' in h).toBe(false);
     expect(hasSensor).toBe(false);
+  });
+
+  it('화면 터치 타격은 센서가 아니다(stickId 없음, hasSensor false → KEYBOARD)', () => {
+    const { hits, hasSensor } = hitsFromPlayLog([logged({ source: 'touch', stickId: 1 })]);
+    expect('stickId' in hits[0]).toBe(false);
+    expect(hasSensor).toBe(false);
+    expect(decideInputSource(hasSensor)).toBe('KEYBOARD');
+    expect('stickId' in hitFromFreeInput(resolved({ source: 'touch', stickId: 1 }), 0)!).toBe(false);
   });
 
   it('센서 타격에는 stickId 0·1이 들어가고 hasSensor가 true다', () => {
@@ -179,5 +188,33 @@ describe('buildRecordingBody', () => {
   it('durationMs는 마지막 tMs 이상의 정수로 보정한다', () => {
     expect(buildRecordingBody({ ...base, baseDurationMs: 500, hits: [{ ...hit, tMs: 800.2 }] }).durationMs).toBe(801);
     expect(buildRecordingBody({ ...base, baseDurationMs: 1000.4, hits: [hit] }).durationMs).toBe(1001);
+  });
+});
+
+describe('페달 타격(stickId null, PLAY-002)', () => {
+  // 인수 조건: 녹음 stickId 키 없음(null이면 서버가 400)
+  it('hitsFromPlayLog: stickId null 센서 타격은 stickId 키가 없고 hasSensor는 true', () => {
+    const { hits, hasSensor } = hitsFromPlayLog([
+      logged({ source: 'webserial', stickId: null, pad: 'KICK', tSongMs: 1 }),
+      logged({ source: 'webserial', stickId: 0, tSongMs: 2 }),
+    ]);
+    expect('stickId' in hits[0]).toBe(false);
+    expect(hits[1].stickId).toBe(0);
+    expect(hasSensor).toBe(true);
+  });
+
+  it('hitFromFreeInput: stickId null 센서 타격은 stickId 키가 없다', () => {
+    const h = hitFromFreeInput(resolved({ source: 'webserial', stickId: null, pad: 'KICK' }), 0)!;
+    expect(h.pad).toBe('KICK');
+    expect('stickId' in h).toBe(false);
+  });
+
+  it('isRecordedSensor: 센서 소스만 true(키보드·톡 치기·터치·포인터·없음 제외)', () => {
+    expect(isRecordedSensor('webserial')).toBe(true);
+    expect(isRecordedSensor('keyboard')).toBe(false);
+    expect(isRecordedSensor('preview')).toBe(false);
+    expect(isRecordedSensor('touch')).toBe(false);
+    expect(isRecordedSensor('pointer')).toBe(false);
+    expect(isRecordedSensor(undefined)).toBe(false);
   });
 });

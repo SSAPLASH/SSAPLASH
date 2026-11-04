@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PadBadge } from '@/domain/drumKit';
 import { DrumKit, type DrumKitProps } from './DrumKit';
-import { Pad } from './Pad';
+import { Pad, PadDefs } from './Pad';
 
 function pad(badge?: string | PadBadge, badgeHighlight = false) {
   return renderToStaticMarkup(
@@ -72,5 +72,40 @@ describe('DrumKit 배지 전달', () => {
   it('highlight 패드의 배지는 now 모양', () => {
     const html = kit({ badges: { SNARE: '1', KICK: '2' }, highlight: 'SNARE' });
     expect(html.match(/drum-pad-badge-bg highlight/g)).toHaveLength(1);
+  });
+});
+
+describe('Pad 질감·모션 구조', () => {
+  const render = (shape: 'drum' | 'cymbal' | 'kick') =>
+    renderToStaticMarkup(
+      <svg>
+        <Pad shape={shape} left={0} top={0} w={160} label="x" state="hit" defsId="t" />
+      </svg>,
+    );
+
+  it.each(['drum', 'cymbal', 'kick'] as const)('%s는 drum-pad-body 그룹을 가진다', (shape) => {
+    expect(render(shape)).toContain('class="drum-pad-body"');
+  });
+
+  it('cymbal은 원판을 drum-pad-cymbal 그룹으로 묶고 스탠드는 그 밖에 있다', () => {
+    const html = render('cymbal');
+    const start = html.indexOf('class="drum-pad-cymbal"');
+    expect(start).toBeGreaterThan(-1);
+    const standAt = html.indexOf('t-stand');
+    expect(standAt).toBeGreaterThan(-1);
+    expect(standAt).toBeLessThan(start);
+    expect(render('drum')).not.toContain('drum-pad-cymbal');
+  });
+
+  it('PadDefs에 새 그라디언트 id가 있다', () => {
+    const html = renderToStaticMarkup(
+      <svg>
+        <PadDefs id="t" />
+      </svg>,
+    );
+    for (const name of ['drum-head', 'drum-rim', 'kick-rim', 'cymbal']) {
+      expect(html).toContain(`id="t-${name}"`);
+    }
+    expect(html).toContain('<radialGradient id="t-drum-head"');
   });
 });

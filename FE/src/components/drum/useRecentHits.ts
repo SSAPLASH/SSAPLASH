@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useLive } from '@/store/liveStore';
 import type { PadId } from '@/domain/pads';
+import { isSensorSource } from '@/domain/events';
 
 export interface RecentHit {
   /** 타격 id(미리보기는 음수). 목록 key로 쓴다 */
@@ -23,7 +24,7 @@ export function useRecentHits(n: number): RecentHit[] {
     return useLive.subscribe((s, prev) => {
       const hit = s.lastHit;
       if (s.hitSeq === prev.hitSeq || !hit) return;
-      const known = hit.source !== 'keyboard' && hit.source !== 'preview';
+      const known = isSensorSource(hit.source);
       const next: RecentHit = { id: hit.id, pad: hit.pad, hand: known ? hit.stickId : null, velocity: hit.velocity, at: Date.now() };
       setHits((list) => [next, ...list].slice(0, n));
     });

@@ -3,6 +3,7 @@
 // 판정 반경 상수(미결 U6)와 앵커 밖 타격 처리(미결 U11)를 하드웨어 실측으로 정할 때 쓰는 임시 집계다.
 import type { ResolvedHit } from './events';
 import { ALL_PADS, type PadId } from './pads';
+import { isSensorSource } from '@/domain/events';
 
 export interface HitStats {
   total: number;
@@ -31,7 +32,7 @@ export function addHit(stats: HitStats, hit: HitStatsInput): HitStats {
   next.total += 1;
   if (hit.pad) next.byPad[hit.pad] += 1;
   else next.unresolved += 1;
-  if (hit.source !== 'keyboard' && hit.distanceDeg !== undefined) {
+  if (isSensorSource(hit.source) && hit.distanceDeg !== undefined) {
     next.sensorDistanceSum += hit.distanceDeg;
     next.sensorDistanceCount += 1;
   }

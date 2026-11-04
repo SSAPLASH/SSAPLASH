@@ -16,14 +16,16 @@ interface Props {
   children: (aria: RowAria) => ReactNode;
   /** control이 넓은 행(슬라이더)은 오른쪽 폭을 고정한다 */
   wideControl?: boolean;
+  /** control을 라벨·도움말 아래 전체 폭으로 둔다(캐러셀). 라벨 id는 aria-labelledby로 넘어간다 */
+  stacked?: boolean;
 }
 
-export function SettingRow({ label, help, children, wideControl = false }: Props) {
+export function SettingRow({ label, help, children, wideControl = false, stacked = false }: Props) {
   const id = useId();
   const labelId = `${id}-label`;
   const helpId = `${id}-help`;
   return (
-    <div className="settings-row">
+    <div className={`settings-row${stacked ? ' stacked' : ''}`}>
       <div className="settings-row-text">
         <span id={labelId} className="settings-row-label">
           {label}

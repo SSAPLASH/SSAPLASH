@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setReconnectHandler } from '@/store/reconnectStore';
+import { useSettings } from '@/store/settingsStore';
 import { PauseOverlay, type PauseReason } from './PauseOverlay';
 
 const noop = () => {};
@@ -69,4 +70,40 @@ describe('PauseOverlay 연결 끊김', () => {
   });
 
   // renderToStaticMarkup은 zustand 서버 스냅샷(초기 상태)을 읽어 available=true를 반영하지 못한다 — 건너뜀
+});
+
+// zustand v5는 서버 렌더에서 getInitialState()를 읽으므로(setState가 반영되지 않는다) 초기 상태 객체에도 값을 넣고 끝나면 되돌린다
+const restores: Array<() => void> = [];
+function putSettings(patch: Record<string, unknown>): void {
+  const initial = useSettings.getInitialState() as unknown as Record<string, unknown>;
+  for (const key of Object.keys(patch)) {
+    const prev = initial[key];
+    restores.push(() => {
+      initial[key] = prev;
+    });
+  }
+  Object.assign(initial, patch);
+  useSettings.setState(patch);
+}
+afterEach(() => {
+  while (restores.length) restores.pop()?.();
+});
+
+describe('PauseOverlay 페달 점', () => {
+  // 인수 조건: 동글(webserial) 소스일 때만 끊김 카드에 P 점
+  it('webserial이면 끊김 카드에 P 점이 있다', () => {
+    putSettings({ sensorKind: 'webserial' });
+    const html = render('disconnected', false);
+    expect(html).toContain('>P<');
+  });
+
+  // 인수 조건: 동글이 아닌 소스(키보드 전용·BLE)는 P 점·페달 문구가 없다
+  it('webserial이 아니면 P 점과 페달 문구가 없다', () => {
+    for (const kind of ['none', 'ble']) {
+      putSettings({ sensorKind: kind });
+      const html = render('disconnected', false);
+      expect(html).not.toContain('>P<');
+      expect(html).not.toContain('페달');
+    }
+  });
 });

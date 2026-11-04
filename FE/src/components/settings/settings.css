@@ -91,6 +91,14 @@
   flex-direction: column;
   gap: 2px;
 }
+.settings-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.settings-row.stacked .settings-row-control {
+  flex: 1;
+  display: block;
+}
 .settings-row-label {
   color: var(--text-1);
   font-size: 16px;

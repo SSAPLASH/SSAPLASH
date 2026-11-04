@@ -3,6 +3,7 @@
 import type { ResolvedHit, StickId } from '@/domain/events';
 import type { Judgement } from '@/domain/judgement';
 import { PAD_META, type PadId } from '@/domain/pads';
+import { isSensorSource } from '@/domain/events';
 
 export const SCHEMA_VERSION = 1;
 
@@ -114,7 +115,7 @@ export function hitToEvent(input: HitEventInput): HitEvent | null {
   const velocity = finiteOrNull(hit.velocity);
   if (time === null || tRecv === null || tJudge === null || velocity === null) return null;
 
-  const isSensor = hit.source !== 'keyboard';
+  const isSensor = isSensorSource(hit.source);
   const stickPad = hit.pad === null || PAD_META[hit.pad].stick;
   const clockOffsetMs = isSensor ? finiteOrNull(hit.clockOffsetMs) : null;
   const tSensorMs = clockOffsetMs === null ? null : finiteOrNull(hit.tSensorMs);

@@ -152,6 +152,10 @@
   border-color: var(--right);
   background: var(--right);
 }
+.play-rp-hand-dot.on.p {
+  border-color: var(--good);
+  background: var(--good);
+}
 .play-rp-actions {
   display: flex;
   align-items: center;

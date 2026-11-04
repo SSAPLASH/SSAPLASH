@@ -168,3 +168,17 @@ describe('buildBatch', () => {
     expect(buildBatch('abc', null, [ev])).toEqual({ schemaVersion: 1, sessionId: 'abc', mode: null, events: [ev] });
   });
 });
+
+describe('hitToEvent 페달 (PLAY-002)', () => {
+  // 인수 조건: 페달 타격이 텔레메트리 wire에 stickId null로 들어간다
+  it('센서 KICK·HIHAT_PEDAL(stickId null)은 stickId null', () => {
+    for (const pad of ['KICK', 'HIHAT_PEDAL'] as const) {
+      const ev = hitToEvent(input(hit({ stickId: null, foot: pad === 'KICK' ? 3 : 2, pad, velocity: 100 })))!;
+      expect(ev).toMatchObject({ kind: 'HIT', stickId: null, pad, velocity: 100 });
+    }
+  });
+
+  it('센서 패드가 없는 타격(pad null)이어도 stickId null이면 null', () => {
+    expect(hitToEvent(input(hit({ stickId: null, pad: null })))!.stickId).toBeNull();
+  });
+});

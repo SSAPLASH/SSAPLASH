@@ -22,6 +22,21 @@ export interface DrumKitPad {
   w: number;
   h: number;
   label: string;
+  /** 영문 약어(2D 스킨 표시용). 실물 스킨은 쓰지 않는다 */
+  tag?: string;
+}
+
+/** 드럼 모양(스킨). 소리·배치와 별개로 기기별 로컬 설정이다 */
+export type KitSkin = 'acoustic' | 'electronic' | 'neon';
+export const KIT_SKINS: readonly KitSkin[] = ['acoustic', 'electronic', 'neon'];
+export const KIT_SKIN_LABELS: Record<KitSkin, string> = {
+  acoustic: '실물 드럼',
+  electronic: '전자 드럼',
+  neon: '네온',
+};
+
+export function isKitSkin(v: unknown): v is KitSkin {
+  return typeof v === 'string' && (KIT_SKINS as readonly string[]).includes(v);
 }
 
 /** 킷 원본 크기(px). scale 1일 때 렌더 크기 */
@@ -44,6 +59,28 @@ export const DRUM_KIT_PADS: readonly DrumKitPad[] = [
   { pad: 'SNARE', shape: 'drum', left: 180, top: 140, w: 150, h: 140.6, label: '스네어' },
   { pad: 'FLOOR_TOM', shape: 'drum', left: 520, top: 130, w: 170, h: 159.4, label: '플로어탐' },
 ];
+
+/** 원 중심(cx, cy)·지름 d → 좌상단 left/top, w = h = d */
+function flatPad(pad: PadId, shape: PadShape, label: string, tag: string, cx: number, cy: number, d: number): DrumKitPad {
+  return { pad, shape, left: cx - d / 2, top: cy - d / 2, w: d, h: d, label, tag };
+}
+
+/** 전자·네온 공용 평면 배치(2D라 겹침 없음, 순서는 DRUM_KIT_PADS와 같다). 원본 760×300 기준 */
+export const DRUM_KIT_FLAT_PADS: readonly DrumKitPad[] = [
+  flatPad('CRASH', 'cymbal', '크래시', 'CR', 140, 70, 136),
+  flatPad('RIDE', 'cymbal', '라이드', 'RD', 670, 95, 168),
+  flatPad('SMALL_TOM', 'drum', '탐1', 'T1', 300, 65, 116),
+  flatPad('MID_TOM', 'drum', '탐2', 'T2', 440, 65, 116),
+  flatPad('HIHAT', 'cymbal', '하이햇', 'HH', 75, 200, 128),
+  flatPad('KICK', 'kick', '킥', 'KK', 390, 215, 156),
+  flatPad('SNARE', 'drum', '스네어', 'SN', 240, 210, 148),
+  flatPad('FLOOR_TOM', 'drum', '플로어탐', 'FT', 545, 205, 156),
+];
+
+/** 스킨에 맞는 8패드 배치표. 실물은 기존 표 그대로 */
+export function kitPadsFor(skin: KitSkin): readonly DrumKitPad[] {
+  return skin === 'acoustic' ? DRUM_KIT_PADS : DRUM_KIT_FLAT_PADS;
+}
 
 /** 라벨 글자 크기(원본 px). 12px × (패드 폭 / 160) */
 export function labelFontSize(w: number): number {

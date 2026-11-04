@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, fillLayout, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
+import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { normalizePadKeys, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
@@ -34,6 +35,8 @@ interface SettingsState {
   metronomeVolume: number;
   /** 드럼(패드) 소리 음량(0~2). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   drumVolume: number;
+  /** 드럼 모양(기기별 로컬) */
+  kitSkin: KitSkin;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -77,6 +80,7 @@ interface SettingsState {
   setMetronomeVolume: (v: number) => void;
   setDrumVolume: (v: number) => void;
   setSongVolume: (v: number) => void;
+  setKitSkin: (s: KitSkin) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
@@ -93,7 +97,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 15;
+export const SETTINGS_VERSION = 16;
 
 /**
  * 저장된 설정 이행.
@@ -111,6 +115,7 @@ export const SETTINGS_VERSION = 15;
  * v12 → v13: metronomeVolume(기본 1, 0~1 밖이거나 숫자가 아니면 1) 추가.
  * v13 → v14: statsConsent 삭제(연주 기록 활용 동의는 가입 때 필수, 서버 값만 쓴다). 저장돼 있던 값은 버린다.
  * v14 → v15: drumVolume(기본 1, 0~2)·songVolume(기본 1, 0~1) 추가. 없거나 숫자가 아니면 1, 범위 밖은 잘라 채운다.
+ * v15 → v16: kitSkin(기본 'acoustic') 추가. 없거나 모르는 값이면 'acoustic'.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -194,6 +199,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.drumVolume = clampVolume(p.drumVolume, 2);
     p.songVolume = clampVolume(p.songVolume, 1);
   }
+  if (version < 16) p.kitSkin = isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic';
   return p as unknown as SettingsState;
 }
 
@@ -226,6 +232,7 @@ export const useSettings = create<SettingsState>()(
       volume: 0.8,
       metronomeVolume: 1,
       drumVolume: 1,
+      kitSkin: 'acoustic',
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -258,6 +265,9 @@ export const useSettings = create<SettingsState>()(
       setVolume: (volume) => set({ volume }),
       setMetronomeVolume: (v) => set({ metronomeVolume: Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1)) }),
       setDrumVolume: (v) => set({ drumVolume: clampVolume(v, 2) }),
+      setKitSkin: (s) => {
+        if (isKitSkin(s)) set({ kitSkin: s });
+      },
       setSongVolume: (v) => set({ songVolume: clampVolume(v, 1) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
@@ -286,6 +296,7 @@ export const useSettings = create<SettingsState>()(
           // 저장분에 없거나 범위 밖인 음량은 기본값·범위로 보정한다
           drumVolume: clampVolume(p.drumVolume, 2),
           songVolume: clampVolume(p.songVolume, 1),
+          kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
         };
       },
     },
