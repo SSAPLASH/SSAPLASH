@@ -3,7 +3,7 @@
 // 선택 결과는 페이지가 URL로 옮긴다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { isPlayableStatus, sortCharts, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
+import { defaultChartId, isPlayableStatus, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useSongs } from '@/store/songStore';
@@ -45,11 +45,6 @@ function isLocked(tab: SongScope, song: SongSummary): boolean {
   return tab === 'MINE' && !isPlayableStatus(song.status);
 }
 
-/** 기본 연습 단계: NORMAL, 없으면 첫 채보 */
-function defaultChartId(detail: SongDetail): number | null {
-  const charts = sortCharts(detail.charts);
-  return (charts.find((c) => c.difficulty === 'NORMAL') ?? charts[0])?.id ?? null;
-}
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 

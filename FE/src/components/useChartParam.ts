@@ -45,11 +45,11 @@ export function useChartParam() {
   const current = fetched && fetched.key === key ? fetched : null;
   const status: ChartParamStatus = key === null ? 'none' : current === null ? 'loading' : current.error ? 'error' : 'ready';
 
-  /** 곡·난이도를 URL에 싣는다 */
+  /** 곡·난이도를 URL에 싣는다. replace면 방문 기록을 쌓지 않는다(숨긴 채보 보정처럼 사용자가 고르지 않은 변경) */
   const select = useCallback(
-    (song: number, chart: number) => {
+    (song: number, chart: number, options?: { replace?: boolean }) => {
       setFetched(null); // 같은 곡을 다시 골라도(오류 재시도 포함) 새로 읽는다
-      setParams({ song: String(song), chart: String(chart) });
+      setParams({ song: String(song), chart: String(chart) }, options?.replace ? { replace: true } : undefined);
     },
     [setParams],
   );

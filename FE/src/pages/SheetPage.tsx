@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
-import { sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
@@ -577,6 +577,15 @@ function SheetPageBody() {
     () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
     [stage, selectedChartId],
   );
+
+  // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
+  // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
+  const selectParam = param.select;
+  useEffect(() => {
+    if (stage !== 'ready' || songIdParam === null || chartIdParam === null || detail === null || detail.id !== songIdParam) return;
+    const fallback = chartFallback(detail, chartIdParam);
+    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
+  }, [stage, songIdParam, chartIdParam, detail, selectParam]);
   const presetName = presetItems.find((p) => p.id === settings.activePresetId)?.name ?? null;
 
   if (stage === 'loading') {

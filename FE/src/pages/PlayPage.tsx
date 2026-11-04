@@ -27,7 +27,7 @@ import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
-import { sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
 import type { PadId } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
@@ -543,6 +543,15 @@ function PlayPageBody() {
     () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'RHYTHM').get(selectedChartId) : undefined),
     [stage, selectedChartId],
   );
+
+  // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
+  // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
+  const selectParam = param.select;
+  useEffect(() => {
+    if (stage !== 'ready' || songIdParam === null || chartIdParam === null || detail === null || detail.id !== songIdParam) return;
+    const fallback = chartFallback(detail, chartIdParam);
+    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
+  }, [stage, songIdParam, chartIdParam, detail, selectParam]);
 
   // 불러오는 중·오류. 연습 단계를 바꿔 다시 불러올 때도 이 카드로 돌아온다
   if (stage === 'loading') {
