@@ -41,6 +41,7 @@ function tempSong(job: ActiveJob): SongSummary {
     timeSignature: '4/4',
     durationMs: null,
     hasAccompaniment: false,
+    accompanimentStatus: 'NONE',
     difficulties: [],
     createdAt: job.startedAt,
     coverUrl: null,

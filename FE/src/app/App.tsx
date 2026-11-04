@@ -13,6 +13,7 @@ import { ReportPage } from '@/pages/ReportPage';
 import { SheetPage } from '@/pages/SheetPage';
 import { StudioPage } from '@/pages/StudioPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { SignupPage } from '@/pages/SignupPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
 
@@ -30,6 +31,8 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
+        {/* 가입 동의 — 페이지가 서버 가입 상태를 스스로 확인한다(설계 COACH-003-signup-consent v0.4) */}
+        <Route path="signup" element={<SignupPage />} />
       </Route>
       <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
         {/* 나머지는 로그인 필요 (VITE_AUTH_REQUIRED=false면 통과) */}

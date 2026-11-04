@@ -28,6 +28,8 @@ describe('uploadMidi', () => {
     expect(form.getAll('file')).toHaveLength(1);
     expect(song.id).toBe(7);
     expect(song.source).toBe('MIDI');
+    // 응답에 반주 상태가 없으면 hasAccompaniment(false)로 NONE
+    expect(song.accompanimentStatus).toBe('NONE');
   });
 
   it('artist가 비면 보내지 않는다', async () => {

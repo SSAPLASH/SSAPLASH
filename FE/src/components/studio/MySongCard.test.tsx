@@ -17,6 +17,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   timeSignature: '4/4',
   durationMs: 60000,
   hasAccompaniment: false,
+  accompanimentStatus: 'NONE',
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,
@@ -67,11 +68,11 @@ describe('MySongCard (v0.4)', () => {
   it('처리 중 곡: ▶·⋯ 메뉴 없음', () => {
     const html = card(song({ status: 'PROCESSING' }));
     expect(html).not.toContain('song-card-play');
-    expect(html).not.toContain('song-menu');
+    expect(html).not.toContain('ui-more-menu');
   });
 
   it('기능 스위치 꺼짐(onEdit 없음)이면 ⋯ 메뉴가 없다', () => {
-    expect(card(song(), false)).not.toContain('song-menu');
+    expect(card(song(), false)).not.toContain('ui-more-menu');
   });
 });
 
@@ -105,5 +106,26 @@ describe('StudioToast', () => {
   it('문구가 있으면 보이고 없으면 빈 알림 영역만 둔다', () => {
     expect(renderToStaticMarkup(<StudioToast text="「곡」을 삭제했습니다." />)).toContain('「곡」을 삭제했습니다.');
     expect(renderToStaticMarkup(<StudioToast text={null} />)).not.toContain('studio-toast"');
+  });
+});
+
+describe('반주 배지 (CHART-002 반주 상태)', () => {
+  it('완료 곡의 반주 생성 중·실패는 배지를 붙인다', () => {
+    const gen = card(song({ accompanimentStatus: 'GENERATING' }));
+    expect(gen).toContain('반주 생성 중');
+    expect(gen).toContain('studio-badge-active');
+    const failed = card(song({ accompanimentStatus: 'FAILED' }));
+    expect(failed).toContain('반주 생성 실패');
+    expect(failed).toContain('studio-badge-danger');
+  });
+
+  it('반주 READY·NONE이면 배지가 없다', () => {
+    expect(card(song({ accompanimentStatus: 'READY' }))).not.toContain('반주 생성');
+    expect(card(song({ accompanimentStatus: 'NONE' }))).not.toContain('반주 생성');
+  });
+
+  it('채보 생성 중·실패 곡에는 반주 배지를 붙이지 않는다', () => {
+    expect(card(song({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' }))).not.toContain('반주 생성');
+    expect(card(song({ status: 'FAILED', accompanimentStatus: 'FAILED' }))).not.toContain('반주 생성');
   });
 });

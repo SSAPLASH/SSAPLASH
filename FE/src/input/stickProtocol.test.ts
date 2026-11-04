@@ -21,6 +21,8 @@ import {
   encodeRoute,
   padFromCode,
   parsePacket,
+  FLAG_UNCONFIGURED,
+  handOf,
 } from './stickProtocol';
 
 /** HIT 20바이트 만들기 */
@@ -244,6 +246,7 @@ describe('parsePacket', () => {
       batteryPct: undefined,
       rssi: 5,
       firmware: '1.2',
+      unconfigured: false,
     });
   });
 
@@ -415,5 +418,64 @@ describe('decodeSetPadTable', () => {
   it('타입이 다르거나 길이가 안 맞으면 null', () => {
     expect(decodeSetPadTable(new Uint8Array([0x14, 0x01, 0, 0, 0, 0, 0, 0]))).toBeNull();
     expect(decodeSetPadTable(new Uint8Array([0x15, 0x02, 0, 0, 0, 0, 0, 0]))).toBeNull();
+  });
+});
+
+describe('v0.8 STATUS 비트 5(설정 전)', () => {
+  it('FLAG_UNCONFIGURED는 0x20', () => {
+    expect(FLAG_UNCONFIGURED).toBe(0x20);
+  });
+
+  it('decodePacket: 비트 5가 서면 unconfigured true, role은 그대로', () => {
+    expect(decodePacket(new Uint8Array([0x03, 0x21, 80, 0, 1, 0]), 0)).toMatchObject({ kind: 'status', role: 1, unconfigured: true });
+    expect(decodePacket(new Uint8Array([0x03, 0x01, 80, 0, 1, 0]), 0)).toMatchObject({ role: 1, unconfigured: false });
+  });
+
+  it('parsePacket: unconfigured가 이벤트에 실린다', () => {
+    expect(parsePacket(new Uint8Array([0x03, 0x20, 50, 0, 1, 0]), 0)).toMatchObject({ kind: 'status', stickId: 0, unconfigured: true });
+    expect(parsePacket(new Uint8Array([0x03, 0x00, 50, 0, 1, 0]), 0)).toMatchObject({ unconfigured: false });
+  });
+
+  it('role 2·3은 비트 5와 무관하게 이벤트 없음', () => {
+    expect(parsePacket(new Uint8Array([0x03, 0x22, 50, 0, 1, 0]), 0)).toBeNull();
+  });
+
+  it('handOf: 0·1만 손, 그 밖은 null', () => {
+    expect([handOf(0), handOf(1), handOf(2), handOf(3)]).toEqual([0, 1, null, null]);
+  });
+});
+
+describe('encodeSetPadTable perPacket', () => {
+  const e = (pad: keyof typeof PAD_CODE) => ({ pad, elevationDeg: 0, azimuthDeg: 0, radiusDeg: 10 });
+  const pads = ['CRASH', 'HIHAT', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE'] as const;
+
+  it('perPacket 2: 7개 → 4패킷(2·2·2·1), 길이 ≤ 14바이트, ctrl 0x82·0x02·0x02·0x01', () => {
+    const p = encodeSetPadTable(pads.map(e), true, 2);
+    expect(p.map((x) => x[1])).toEqual([0x82, 0x02, 0x02, 0x01]);
+    expect(p.map((x) => x.length)).toEqual([14, 14, 14, 8]);
+    // ROUTE(2바이트)로 감싸도 16바이트 이하
+    expect(p.every((x) => encodeRoute(1, x).length <= 20)).toBe(true);
+  });
+
+  it('perPacket 1: 패킷마다 패드 1개', () => {
+    const p = encodeSetPadTable(pads.slice(0, 3).map(e), false, 1);
+    expect(p.map((x) => x[1])).toEqual([1, 1, 1]);
+  });
+
+  it('기본값은 3(기존 동작)', () => {
+    expect(encodeSetPadTable(pads.map(e), true).map((x) => x.length)).toEqual([20, 20, 8]);
+  });
+
+  it('범위 밖(0·4·소수)은 RangeError', () => {
+    expect(() => encodeSetPadTable(pads.map(e), true, 0)).toThrow(RangeError);
+    expect(() => encodeSetPadTable(pads.map(e), true, 4)).toThrow(RangeError);
+    expect(() => encodeSetPadTable(pads.map(e), true, 1.5)).toThrow(RangeError);
+  });
+
+  it('왕복: 2개씩 나눈 패킷도 decodeSetPadTable로 읽힌다', () => {
+    const p = encodeSetPadTable(pads.slice(0, 3).map(e), true, 2);
+    expect(decodeSetPadTable(p[0])).toMatchObject({ clear: true });
+    expect(decodeSetPadTable(p[0])!.entries.length).toBe(2);
+    expect(decodeSetPadTable(p[1])).toMatchObject({ clear: false });
   });
 });

@@ -341,51 +341,6 @@
   }
 }
 
-/* ---- ⋯ 메뉴 (Studio / MoreMenu 212:757) ---- */
-.song-menu {
-  position: relative;
-}
-.song-menu-btn {
-  border-color: transparent;
-  border-radius: var(--space-m);
-  background: transparent;
-}
-.song-menu-list {
-  position: absolute;
-  top: 36px;
-  right: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  width: 180px;
-  padding: var(--space-xs) 0;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
-  box-shadow: var(--shadow-dock);
-}
-.song-menu-item {
-  min-height: 0;
-  padding: var(--space-s) var(--space-m);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-1);
-  font-size: 14px;
-  line-height: 1.45;
-  text-align: left;
-}
-.song-menu-item:hover,
-.song-menu-item:focus-visible {
-  background: var(--surface-3);
-}
-.song-menu-item.danger {
-  color: var(--miss);
-}
-.song-menu-item.danger:not(:first-child) {
-  border-top: 1px solid var(--line);
-}
-
 /* ---- 목록 보기 (Studio / SongListRow 224:1144) ---- */
 .studio-list {
   margin: 0;
@@ -775,11 +730,6 @@
   font-size: 20px;
   font-weight: 600;
   line-height: 1.45;
-}
-.studio-dialog-close {
-  border-color: transparent;
-  border-radius: var(--space-m);
-  background: transparent;
 }
 .studio-dialog-form {
   display: flex;

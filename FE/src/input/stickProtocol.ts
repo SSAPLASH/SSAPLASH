@@ -1,6 +1,6 @@
 // 스틱 ↔ 브라우저 바이너리 프로토콜. BLE와 WebSocket(바이너리 프레임)이 공유한다.
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
-// 현재 구현 기준: v0.7 원문(develop-EMB `Docs/Service Design/스틱 통신 프로토콜.md`) 대조 완료
+// 현재 구현 기준: v0.8(2026-11-02) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전) 반영
 import type { StickEvent, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
@@ -38,6 +38,8 @@ export const CommandType = {
 
 /** PARAM_ACK 예약 paramId: GET_PARAMS 끝 표시(value = 보낸 개수) */
 export const PARAM_ACK_END = 0x00;
+/** STATUS flags 비트 5: 부팅 뒤 웹 설정(패드 표 등)을 아직 못 받았다 */
+export const FLAG_UNCONFIGURED = 0x20;
 /** SET_PAD_TABLE 적용됨(value = 적용 후 패드 개수, 지우기 패킷이면 0부터) */
 export const PARAM_ACK_PAD_TABLE = 0x20;
 /** SET_YAW_OFFSET 적용됨(value = 적용된 오프셋, 0.01°) */
@@ -141,6 +143,8 @@ export interface DecodedPose extends FlaggedBase {
 
 export interface DecodedStatus extends FlaggedBase {
   kind: 'status';
+  /** flags 비트 5: 부팅 뒤 웹 설정을 못 받음(설정 전) */
+  unconfigured: boolean;
   /** 0xFF(측정 불가)면 null */
   batteryPct: number | null;
   rssi: number;
@@ -277,6 +281,7 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
       return {
         kind: 'status',
         ...base,
+        unconfigured: (flags & FLAG_UNCONFIGURED) !== 0,
         batteryPct: battery === 0xff ? null : battery,
         rssi: v.getInt8(3),
         fwMajor: v.getUint8(4),
@@ -323,7 +328,7 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 export type ParsedPacket = StickEvent | SyncAck | null;
 
 /** flags role → 손. 발(2·3)은 아직 쓰지 않아 null — 손 이벤트로 읽히지 않게 한다 */
-function handOf(role: number): StickId | null {
+export function handOf(role: number): StickId | null {
   return role === 0 || role === 1 ? role : null;
 }
 
@@ -372,6 +377,7 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
         batteryPct: d.batteryPct ?? undefined,
         rssi: d.rssi,
         firmware: `${d.fwMajor}.${d.fwMinor}`,
+        unconfigured: d.unconfigured,
       };
     case 'syncAck':
       return { kind: 'syncAck', stickId, t0: d.t0Ms, t1: d.t1Us / 1000 };
@@ -449,19 +455,24 @@ export interface PadTableEntry {
 }
 
 /**
- * SET_PAD_TABLE: 3개씩 나눈 패킷 배열. [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
+ * SET_PAD_TABLE: perPacket(기본 3)개씩 나눈 패킷 배열. ROUTE로 감싸면 2바이트가 늘어 20바이트 상한이므로 호출자가 2를 준다.
+ * perPacket은 1~3의 정수여야 하며 아니면 RangeError.
+ * [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
  * ctrl 비트 7 = 지우고 시작(첫 패킷만, clearFirst일 때), 비트 0–3 = 이 패킷의 패드 수.
  * 빈 배열이면 clearFirst일 때만 지우기 전용 1패킷([0x15, 0x80]), 아니면 패킷 없음.
  * 적용 확인은 PARAM_ACK_PAD_TABLE(value = 적용 후 패드 개수).
  */
-export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean): Uint8Array<ArrayBuffer>[] {
+export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean, perPacket = 3): Uint8Array<ArrayBuffer>[] {
+  if (!Number.isInteger(perPacket) || perPacket < 1 || perPacket > 3) {
+    throw new RangeError(`perPacket은 1~3이어야 한다: ${perPacket}`);
+  }
   for (const e of entries) {
     if (PAD_CODE[e.pad] >= 7) throw new Error(`SET_PAD_TABLE은 스틱 패드만 보낼 수 있다: ${e.pad}`);
   }
   if (entries.length === 0) return clearFirst ? [new Uint8Array([CommandType.SET_PAD_TABLE, 0x80])] : [];
   const packets: Uint8Array<ArrayBuffer>[] = [];
-  for (let i = 0; i < entries.length; i += 3) {
-    const chunk = entries.slice(i, i + 3);
+  for (let i = 0; i < entries.length; i += perPacket) {
+    const chunk = entries.slice(i, i + perPacket);
     const buf = new Uint8Array(2 + chunk.length * 6);
     const v = new DataView(buf.buffer);
     v.setUint8(0, CommandType.SET_PAD_TABLE);

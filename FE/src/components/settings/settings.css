@@ -71,10 +71,6 @@
   color: var(--text-2);
   font-size: 13px;
 }
-.settings-btn {
-  flex: none;
-  width: 160px;
-}
 
 /* 행 */
 .settings-row {
@@ -124,10 +120,6 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-.settings-row-control .ui-slider-value {
-  font-size: 16px;
-  min-width: 5ch;
 }
 .settings-value {
   color: var(--text-1);

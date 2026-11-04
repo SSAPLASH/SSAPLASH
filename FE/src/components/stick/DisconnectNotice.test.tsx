@@ -51,10 +51,45 @@ describe('DisconnectNotice 상태 문구', () => {
   it('trying n/max', () => {
     const html = render({ status: { status: 'trying', attempt: 2, max: 3 }, onReconnect: noop });
     expect(html).toContain('다시 연결하는 중… (2/3)');
-    expect(html).toContain('aria-disabled="true"');
+    // 시도 중 [다시 연결]은 눌러도 된다(다음 시도를 바로 시작)
+    expect(html).not.toContain('aria-disabled');
   });
-  it('failed', () => {
-    expect(render({ status: failed })).toContain('연결하지 못했어요. 드럼 세팅에서 연결해 주세요.');
+  it('trying: 스피너와 끊긴 손 점 맥동', () => {
+    const html = render({ left: true, right: false, status: { status: 'trying', attempt: 2, max: 3 }, onReconnect: noop });
+    expect(html).toContain('stick-spinner');
+    expect(html).toContain('stick-dot off pulse');
+    // 연결된 손은 맥동하지 않는다
+    expect(html).not.toContain('stick-dot on pulse');
+  });
+  it('trying이 아니면 스피너·맥동 없음', () => {
+    expect(render({})).not.toContain('stick-spinner');
+    expect(render({ status: failed })).not.toContain('pulse');
+  });
+  it('failed: hint가 없으면 기존 안내', () => {
+    const html = render({ status: failed });
+    expect(html).toContain('연결하지 못했어요.');
+    expect(html).toContain('드럼 세팅에서 연결해 주세요.');
+  });
+  it('failed: hint가 있으면 그 문구', () => {
+    const html = render({ status: { ...failed, hint: '동글을 뺐다 다시 꽂아 주세요' } });
+    expect(html).toContain('연결하지 못했어요.');
+    expect(html).toContain('동글을 뺐다 다시 꽂아 주세요');
+    expect(html).not.toContain('드럼 세팅에서 연결해 주세요.');
+  });
+});
+
+describe('DisconnectNotice reconnected', () => {
+  const reconnected: ReconnectInfo = { status: 'reconnected', attempt: 0, max: 3 };
+  it('제목·문구, 점 둘 모두 on(props와 무관), 버튼 없음, role=status', () => {
+    const html = render({ left: false, right: false, status: reconnected, onReconnect: noop, onOpenSetup: noop });
+    expect(html).toContain('재연결 성공!');
+    expect(html).toContain('3초 뒤 이어서 연주해요');
+    expect(html).not.toContain('stick-dot off');
+    expect(html.match(/stick-dot on/g)).toHaveLength(2);
+    expect(html).not.toContain('<button');
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('alertdialog');
+    expect(html).not.toContain('스틱 연결이 끊겼어요');
   });
 });
 

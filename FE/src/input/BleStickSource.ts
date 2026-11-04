@@ -1,5 +1,7 @@
 // PLAY-01 Web Bluetooth 스틱 연결. 스틱 하나 = BLE 주변기기 하나. 두 개를 각각 연결한다.
 // 하드웨어가 없는 동안은 미검증 — 프로토콜(stickProtocol.ts)과 흐름만 맞춰 둔다.
+// 페어링한 BluetoothDevice는 끊겨도 보관한다. 끊기면 autoConnect()가 선택 창 없이 gatt.connect()로 다시 붙는다
+// (재연결 시도는 사용자 제스처가 필요 없는 동작만 쓴다). 끊김 리스너는 기기당 한 번만 단다.
 import type { StickId } from '@/domain/events';
 import { BaseInputSource, ClockSync } from './InputSource';
 import type { TransportStats } from './InputSource';
@@ -30,6 +32,10 @@ export class BleStickSource extends BaseInputSource {
   readonly kind = 'ble' as const;
   readonly label = 'BLE 스틱';
   private links = new Map<StickId, StickLink>();
+  /** 페어링한 기기. 끊겨도 지우지 않고 disconnect()에서만 비운다 */
+  private devices = new Map<StickId, BluetoothDevice>();
+  /** gattserverdisconnected 리스너를 이미 단 기기(다시 페어링해도 누적하지 않는다) */
+  private listening = new WeakSet<BluetoothDevice>();
   private syncTimer: number | null = null;
 
   static isSupported(): boolean {
@@ -47,26 +53,62 @@ export class BleStickSource extends BaseInputSource {
       filters: [{ services: [STICK_SERVICE_UUID] }],
       optionalServices: [STICK_SERVICE_UUID],
     });
+    const prev = this.devices.get(stickId);
+    if (prev && prev !== device) this.links.delete(stickId);
+    this.devices.set(stickId, device);
+    this.listenDisconnect(device);
+    await this.attach(device, stickId);
+  }
+
+  /** 기기당 한 번만 끊김 리스너를 단다. 어느 손의 기기인지는 끊길 때 devices에서 찾는다 */
+  private listenDisconnect(device: BluetoothDevice): void {
+    if (this.listening.has(device)) return;
+    this.listening.add(device);
+    device.addEventListener('gattserverdisconnected', () => {
+      for (const [stickId, d] of this.devices) {
+        if (d !== device) continue;
+        this.links.delete(stickId);
+        this.emit({ kind: 'status', stickId, connected: false });
+      }
+      if (this.links.size === 0) this.setState('disconnected', '스틱 연결이 끊어졌습니다');
+    });
+  }
+
+  /** GATT 연결 → 서비스·특성 얻기 → notify 시작 → 링크 등록 → 연결 이벤트·SYNC. pair·autoConnect가 공용 */
+  private async attach(device: BluetoothDevice, stickId: StickId): Promise<void> {
     const server = await device.gatt!.connect();
     const service = await server.getPrimaryService(STICK_SERVICE_UUID);
     const notify = await service.getCharacteristic(STICK_NOTIFY_UUID);
     const control = await service.getCharacteristic(STICK_CONTROL_UUID);
     const link: StickLink = { stickId, device, notify, control, clock: new ClockSync(), pendingSync: new Map() };
+    // 특성 객체는 attach마다 새로 얻으므로 이 리스너는 누적되지 않는다
     notify.addEventListener('characteristicvaluechanged', (ev) => {
       const target = ev.target as BluetoothRemoteGATTCharacteristic;
       if (target.value) this.onPacket(link, target.value);
     });
     await notify.startNotifications();
-    device.addEventListener('gattserverdisconnected', () => {
-      this.links.delete(stickId);
-      this.emit({ kind: 'status', stickId, connected: false });
-      if (this.links.size === 0) this.setState('disconnected', '스틱 연결이 끊어졌습니다');
-      // TODO PLAY-01: 3회 자동 재연결
-    });
     this.links.set(stickId, link);
     this.setState('connected');
     this.emit({ kind: 'status', stickId, connected: true });
     await this.syncClock(link);
+  }
+
+  /**
+   * 재연결용. 보관한 기기 중 끊긴 것마다 선택 창 없이 gatt.connect()를 시도한다.
+   * 보관 기기가 없거나 모두 연결돼 있으면 무동작. 실패해도 던지지 않는다
+   */
+  async autoConnect(): Promise<void> {
+    const targets = [...this.devices].filter(([stickId]) => !this.links.has(stickId));
+    if (targets.length === 0) return;
+    await Promise.all(
+      targets.map(async ([stickId, device]) => {
+        try {
+          await this.attach(device, stickId);
+        } catch {
+          // 스틱이 꺼져 있으면 실패한다. 다음 시도에서 다시 붙는다
+        }
+      }),
+    );
   }
 
   private onPacket(link: StickLink, data: DataView): void {
@@ -165,6 +207,7 @@ export class BleStickSource extends BaseInputSource {
     this.syncTimer = null;
     for (const l of this.links.values()) l.device.gatt?.disconnect();
     this.links.clear();
+    this.devices.clear();
     this.setState('disconnected');
   }
 }

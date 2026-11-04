@@ -12,8 +12,14 @@ import type { InputSource } from './InputSource';
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
-/** batteryPct는 STATUS 패킷이 알려 준 값(%). 모르면 undefined */
-export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind, batteryPct?: number) => void;
+/** batteryPct는 STATUS 패킷이 알려 준 값(%). unconfigured는 부팅 뒤 설정을 못 받았다는 비트 5. 둘 다 모르면 undefined */
+export type StatusListener = (
+  stickId: StickId,
+  connected: boolean,
+  source: InputSourceKind,
+  batteryPct?: number,
+  unconfigured?: boolean,
+) => void;
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -146,7 +152,7 @@ export class InputManager {
       return;
     }
     if (e.kind === 'status') {
-      for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct);
+      for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct, e.unconfigured);
       return;
     }
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };

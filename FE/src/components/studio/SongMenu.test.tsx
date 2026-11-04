@@ -1,13 +1,19 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { SongMenu } from './SongMenu';
+import { MoreMenu } from '@/components/ui/MoreMenu';
+import { SongMenu, type SongEditKind } from './SongMenu';
 
 type MenuEl = ReactElement<{ children: (api: { close: () => void }) => ReactNode }>;
 
-// Menu는 닫힌 채 렌더되므로 SSR로는 항목이 보이지 않는다. SongMenu가 돌려준 Menu 요소의 children 함수를 직접 불러 항목만 그린다.
+// Menu는 닫힌 채 렌더되므로 SSR로는 항목이 보이지 않는다. SongMenu → MoreMenu가 돌려준 Menu 요소의 children 함수를 직접 불러 항목만 그린다.
+function menuEl(status: string, onPick: (kind: SongEditKind) => void = () => {}): MenuEl {
+  const more = SongMenu({ title: '별빛 산책', status, onPick }) as ReactElement<ComponentProps<typeof MoreMenu>>;
+  return MoreMenu(more.props) as MenuEl;
+}
+
 function items(status: string): string {
-  const el = SongMenu({ title: '별빛 산책', status, onPick: () => {} }) as MenuEl;
+  const el = menuEl(status);
   return renderToStaticMarkup(<>{el.props.children({ close: () => {} })}</>);
 }
 
@@ -25,8 +31,8 @@ describe('SongMenu', () => {
     const html = items('READY');
     const labels = [...html.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((m) => m[1]);
     expect(labels).toEqual(['커버 변경', '곡 정보 수정', '곡 삭제']);
-    expect(html.match(/song-menu-item danger/g)).toHaveLength(1);
-    expect(html).toMatch(/song-menu-item danger"[^>]*>곡 삭제/);
+    expect(html.match(/ui-more-menu-item danger/g)).toHaveLength(1);
+    expect(html).toMatch(/ui-more-menu-item danger"[^>]*>곡 삭제/);
   });
 
   it('실패 곡: 곡 삭제만', () => {
@@ -43,7 +49,7 @@ describe('SongMenu', () => {
   it('항목을 누르면 메뉴를 닫고 종류를 알린다', () => {
     const onPick = vi.fn();
     const close = vi.fn();
-    const el = SongMenu({ title: 'a', status: 'FAILED', onPick }) as MenuEl;
+    const el = menuEl('FAILED', onPick);
     const btn = (el.props.children({ close }) as ReactElement<{ onClick: () => void }>[])[0];
     btn.props.onClick();
     expect(close).toHaveBeenCalledOnce();

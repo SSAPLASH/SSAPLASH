@@ -8,7 +8,7 @@
   padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
-  background: var(--surface-2);
+  background: var(--surface-1);
   color: var(--text-1);
   cursor: pointer;
   transition:
@@ -21,13 +21,22 @@
   width: 44px;
   height: 44px;
 }
+/* sm: 원형(r16) · 배경·테두리 없음 */
 .ui-icon-btn-sm {
   width: 32px;
   height: 32px;
+  border-color: transparent;
+  border-radius: 16px;
+  background: transparent;
 }
 .ui-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+.ui-icon-btn-md:active:not(:disabled) {
   background: var(--surface-3);
-  border-color: var(--line-strong);
+}
+.ui-icon-btn-sm:active:not(:disabled) {
+  background: var(--surface-2);
 }
 .ui-icon-btn:active:not(:disabled) {
   transform: scale(0.96);
@@ -36,6 +45,9 @@
   background: var(--surface-3);
   border-color: var(--brand);
   color: var(--brand-text);
+}
+.ui-icon-btn.active:hover:not(:disabled) {
+  background: var(--surface-3);
 }
 .ui-icon-btn:disabled {
   opacity: 0.4;

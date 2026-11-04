@@ -11,16 +11,21 @@ interface ShellState {
   immersive: boolean;
   /** 열려 있는 Dock 패널. 한 번에 하나 */
   dockPanel: DockPanel;
+  /** 카운트인이 끝나 곡이 실제로 진행 중인지(일시정지·종료 때 false). Dock 자동 접힘(UX-41)이 읽는다 */
+  playRunning: boolean;
 
   setShell: (partial: { title?: string; immersive?: boolean }) => void;
   setDockPanel: (p: DockPanel) => void;
+  setPlayRunning: (running: boolean) => void;
 }
 
 export const useShellStore = create<ShellState>()((set) => ({
   title: '',
   immersive: false,
   dockPanel: null,
+  playRunning: false,
 
   setShell: (partial) => set(partial),
   setDockPanel: (dockPanel) => set({ dockPanel }),
+  setPlayRunning: (playRunning) => set({ playRunning }),
 }));

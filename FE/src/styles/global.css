@@ -55,7 +55,6 @@ button:hover {
 }
 /* 눌림: 모든 버튼류가 scale(0.98). 칩·카드는 아래에서 뺀다 */
 button:active:not(:disabled),
-.dock-icon-btn:active:not(:disabled),
 .side-foot-btn:active,
 a.btn-primary:active,
 a.btn-ghost.as-button:active {
@@ -73,8 +72,7 @@ a.btn-ghost.as-button,
     transform var(--motion-press);
 }
 /* 칩·알약·카드는 눌림 이동이 없다(hover 색만) */
-.chip:active:not(:disabled),
-.dock-pill:active:not(:disabled) {
+.chip:active:not(:disabled) {
   transform: none;
 }
 button:disabled {
@@ -1004,217 +1002,6 @@ a.btn-ghost.as-button {
   gap: 4px;
 }
 
-/* ---- 상단 글래스 Dock (Figma GlassDock 148:2288) ---- */
-.glass-dock {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-dock-gap);
-  height: 48px;
-  box-sizing: border-box;
-  padding: 0 var(--space-m);
-  background: color-mix(in srgb, var(--surface-1) 72%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-dock);
-  box-shadow: var(--shadow-dock);
-  color: var(--text-1);
-  white-space: nowrap;
-}
-.glass-dock.collapsed {
-  height: 36px;
-  padding: 0;
-  border-radius: 18px;
-}
-.dock-divider {
-  flex: none;
-  width: 1px;
-  height: 28px;
-  background: var(--line);
-}
-.dock-divider.short {
-  height: 14px;
-}
-.dock-icon-btn {
-  min-height: 0; /* 전역 button min-height 44 무효화 */
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--space-m);
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.dock-icon-btn:hover:not(:disabled) {
-  background: var(--surface-3);
-  color: var(--text-1);
-}
-.dock-icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.dock-icon-btn.sound-toggle.on {
-  color: var(--text-1);
-}
-.dock-icon-btn.sound-toggle:not(.on) {
-  color: var(--text-3);
-}
-.dock-collapse {
-  width: 24px;
-}
-.dock-metro-chip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  width: 120px;
-  height: 32px;
-}
-.dock-metro-body {
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  width: 80px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.dock-metro-body:hover {
-  background: var(--surface-3);
-}
-.dock-metro-body svg {
-  flex: none;
-  margin: 0 6px;
-}
-.dock-bpm {
-  width: 40px;
-  font-family: var(--font-num);
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.1;
-  font-variant-numeric: lining-nums tabular-nums;
-  text-align: center;
-  color: var(--text-1);
-}
-.dock-metro-chip.locked .dock-bpm {
-  color: var(--brand-text);
-}
-.dock-switch {
-  min-height: 0;
-  position: relative;
-  flex: none;
-  width: 32px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-3);
-  cursor: pointer;
-}
-.dock-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text-3);
-  transition: transform var(--motion-fast);
-}
-.dock-switch.on {
-  background: var(--brand);
-  border-color: var(--brand);
-}
-.dock-switch.on .dock-switch-knob {
-  background: var(--brand-on);
-  transform: translateX(12px);
-}
-.dock-preset {
-  min-height: 0;
-  flex: none;
-  max-width: 140px;
-  height: 32px;
-  padding: 0 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text-1);
-  font-size: 12px;
-  cursor: pointer;
-}
-.dock-preset:hover {
-  border-color: var(--line-strong);
-}
-/* 준비 필요: ● L ● R 준비 필요 (amber 테두리) */
-.dock-preset.needs-ready {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  max-width: none;
-  border-color: var(--brand-sub);
-}
-.dock-hand-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--miss);
-}
-.dock-hand-dot.on {
-  background: var(--good);
-}
-/* 접힘 알약: ♩ BPM · 점 · (‖) · ⌄ */
-.dock-pill {
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  height: 100%;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 18px;
-  background: transparent;
-  color: var(--text-1);
-  cursor: pointer;
-}
-.dock-pill:hover {
-  background: var(--surface-3);
-}
-.dock-pill-metro {
-  display: flex;
-  color: var(--text-2);
-}
-.dock-pill-metro.on {
-  color: var(--brand-text);
-}
-.dock-pill-bpm {
-  font-family: var(--font-num);
-  font-size: 14px;
-  font-weight: 500;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-.dock-pill-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-3);
-}
-.dock-pill-dot.on {
-  background: var(--brand);
-}
-
 /* ---- 공개 화면 (로그인·콜백) ---- */
 .public {
   min-height: 100%;
@@ -1290,31 +1077,6 @@ a.btn-ghost.as-button {
 }
 .login-buttons {
   gap: 10px;
-}
-.login-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 44px;
-  padding: 0 16px 0 44px;
-  font-size: 15px;
-}
-.login-mark {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  margin-top: -11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(14, 19, 32, 0.18);
-  font-size: 13px;
-  font-weight: 800;
 }
 .login-caption {
   margin: 16px 0 0;
@@ -1579,44 +1341,3 @@ a.btn-ghost.as-button {
 .weak-spinner { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: weak-spin 0.9s linear infinite; }
 @keyframes weak-spin { to { transform: rotate(360deg); } }
 
-/* 곡 커버 (공용 SongCover: 라이브러리·연주 준비 등) */
-.song-cover {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  border-radius: var(--radius-control);
-  background: var(--bg-canvas);
-}
-.song-cover img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.song-cover.default {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(120% 120% at 30% 20%, var(--surface-2) 0%, var(--surface-1) 45%, var(--bg-canvas) 100%);
-}
-/* 기본 커버 CD (v0.4): 모든 곡 공통 */
-.song-cover-disc {
-  width: 86%;
-  height: 86%;
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
-}
-.song-cover-disc .disc-body {
-  fill: #b9c0cf;
-}
-.song-cover-disc .disc-groove {
-  fill: none;
-  stroke: rgba(14, 19, 32, 0.18);
-  stroke-width: 0.6;
-}
-.song-cover-disc .disc-label {
-  fill: var(--brand);
-}
-.song-cover-disc .disc-hole {
-  fill: var(--bg-canvas);
-}

@@ -7,10 +7,24 @@ import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { Segmented } from '@/components/ui/Segmented';
 import { Slider } from '@/components/ui/Slider';
 import { Toggle } from '@/components/ui/Toggle';
 import './metronome-panel.css';
+
+const iconProps = {
+  width: 20,
+  height: 20,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const;
 
 const BEAT_OPTIONS = [
   { value: '4', label: '4/4' },
@@ -72,30 +86,22 @@ export function MetronomePanel() {
       </div>
 
       <div className="metro-panel-bpm">
-        <button
-          type="button"
-          className="metro-panel-step"
-          disabled={locked}
-          aria-label={`BPM ${BPM_STEP} 감소`}
-          onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}
-        >
-          −
-        </button>
+        <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(m.bpm - BPM_STEP)}>
+          <svg {...iconProps}>
+            <path d="M6 12h12" />
+          </svg>
+        </IconButton>
         <div className="metro-panel-bpm-value">
           <span className="metro-panel-bpm-num" aria-live="polite">
             {m.bpm}
           </span>
           <span className="metro-panel-bpm-unit">BPM</span>
         </div>
-        <button
-          type="button"
-          className="metro-panel-step"
-          disabled={locked}
-          aria-label={`BPM ${BPM_STEP} 증가`}
-          onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}
-        >
-          +
-        </button>
+        <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(m.bpm + BPM_STEP)}>
+          <svg {...iconProps}>
+            <path d="M6 12h12M12 6v12" />
+          </svg>
+        </IconButton>
       </div>
 
       <div className="metro-panel-row">
@@ -108,9 +114,9 @@ export function MetronomePanel() {
             if (!locked) metronome.setBeatsPerBar(Number(v) as BeatsPerBar);
           }}
         />
-        <button type="button" className="metro-panel-tap" disabled={locked} onClick={() => metronome.tap()}>
+        <Button variant="secondary" size="sm" disabled={locked} onClick={() => metronome.tap()}>
           탭 템포
-        </button>
+        </Button>
       </div>
       {locked && <p className="metro-panel-note">곡 연주 중에는 곡의 BPM·박자로 고정돼요</p>}
 

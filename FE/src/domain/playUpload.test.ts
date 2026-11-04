@@ -134,6 +134,8 @@ describe('buildUploadBody', () => {
     expect(b.kitPresetId).toBe(5);
     expect(b.calibration).toEqual({ audioOffsetMs: 12, pads: null });
     expect(b.consent).toBe(false);
+    const agreed = buildUploadBody(log(), { ...ctx, consent: true });
+    expect(agreed.ok && agreed.body.consent).toBe(true);
     expect(b.clientMeta).toMatchObject({ endReason: 'COMPLETED', lastSongTimeMs: 2800, elapsedActiveMs: 4800 });
   });
 
@@ -148,6 +150,18 @@ describe('buildUploadBody', () => {
     const l = log();
     l.hits.splice(1, 0, hit(1.5, { pad: null }));
     expect(body(l).hits.map((h) => h.seq)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('liveCoachEvents: 켠 플레이는 항목을 그대로, 끈 플레이는 LIVE_OFF 한 건, 이전 로그는 빈 배열', () => {
+    const on = [
+      { tMs: 12000, tag: 'LIVE_LATE', text: '계속 늦게 치고 있어요' },
+      { tMs: 31000, tag: 'LIVE_RECOVERED', text: '경향 해소: late' },
+    ];
+    expect(body(log({ liveCoachEvents: on })).liveCoachEvents).toEqual(on);
+    const off = [{ tMs: 0, tag: 'LIVE_OFF', text: '코칭 꺼짐' }];
+    expect(body(log({ liveCoachEvents: off })).liveCoachEvents).toEqual(off);
+    expect(log().liveCoachEvents).toBeUndefined();
+    expect(body(log()).liveCoachEvents).toEqual([]);
   });
 
   it('업로드하지 않는 경우와 사유', () => {

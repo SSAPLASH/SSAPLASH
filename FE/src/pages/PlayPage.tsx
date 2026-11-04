@@ -9,16 +9,18 @@ import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
+import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
 import { PlayStage } from '@/components/play/PlayStage';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
 import { GuideSlot } from '@/components/play/GuideSlot';
+import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadStates } from '@/components/drum/usePadStates';
-import { useShell } from '@/components/shell/useShell';
+import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
@@ -30,7 +32,10 @@ import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
+import { readCurrentConsent } from '@/app/dataConsent';
+import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
 import { startPlaySync } from '@/app/playSync';
+import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
@@ -90,6 +95,12 @@ export function PlayPage() {
 
   // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
+  // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
+  usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
+  // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
+  useEffect(() => {
+    setLocked(stage === 'play');
+  }, [stage]);
 
   const connected = useLive((l) => l.connected);
   const reconnectAvailable = useReconnect((r) => r.available);
@@ -114,7 +125,11 @@ export function PlayPage() {
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
   const recorder = useRef(new PlayRecorder());
+  // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
+  const coachRef = useRef<LiveCoach | null>(null);
+  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   const startedAt = useRef<Date | null>(null);
+  const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
   // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
@@ -146,6 +161,8 @@ export function PlayPage() {
       metronome.unlock();
       acc.unload();
       if (goTimer.current !== null) window.clearTimeout(goTimer.current);
+      // 녹음 스위치 해제(armed였으면 idle로, 잠금도 푼다)
+      disarm();
     };
   }, [acc]);
 
@@ -180,6 +197,8 @@ export function PlayPage() {
         ss &&
         stageRef.current === 'play' &&
         pauseRef.current === null &&
+        // 복귀 카운트다운 중에는 pauseReason이 null이지만 시계는 멈춰 있다 — 그 사이 타격을 판정하지 않는다
+        clockRef.current?.state.phase === 'running' &&
         (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
       if (active) recorder.current.hit(hit, ev, ss);
@@ -194,10 +213,30 @@ export function PlayPage() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
+      const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
+      coachRef.current = coach;
+      clearCoachLine();
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
+        // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
+        const message = coach.push({
+          songTimeMs: ss.songTime(e.at),
+          noteTimeMs: ss.notes[e.noteIndex].note.timeMs,
+          judgement: e.judgement,
+          deltaMs: e.deltaMs,
+          pad: e.pad,
+          stickId: e.stickId,
+          velocity: e.velocity,
+        });
+        if (!message) return;
+        try {
+          const copy = coachCopy(message);
+          if (copy) showCoachLine(copy, message.displayMs);
+        } catch {
+          // 코칭 오류는 무시한다
+        }
       });
       flashes.current.clear();
       popups.current = [];
@@ -210,7 +249,7 @@ export function PlayPage() {
       setPauseReason(null);
       setStage('ready');
     },
-    [settings.timing, settings.countInBars, settings.audioOffsetMs, resetCountdown],
+    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine],
   );
 
   // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
@@ -264,6 +303,7 @@ export function PlayPage() {
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
@@ -296,8 +336,10 @@ export function PlayPage() {
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
+    // 복귀 카운트다운 중(clock은 이미 정지)에 다시 끊겨도 pause 진단 기록이 두 번 남지 않게 한다
+    const wasRunning = clock.state.phase === 'running';
     clock.pause(reason);
-    diagSessionPhase('pause');
+    if (wasRunning) diagSessionPhase('pause');
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
     setPauseReason(reason);
@@ -308,11 +350,15 @@ export function PlayPage() {
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
-    if (!clock || pauseRef.current === null || !readyRef.current) return;
+    // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
+    if (!clock || clock.state.phase !== 'paused' || !readyRef.current) return;
     clock.resume();
     diagSessionPhase('resume');
     setPauseReason(null);
   }, []);
+
+  // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
+  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
 
   // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
   const restart = useCallback(() => {
@@ -324,12 +370,15 @@ export function PlayPage() {
     flashes.current.clear();
     popups.current = [];
     recorder.current.reset();
+    coachRef.current?.reset();
+    clearCoachLine();
     finishing.current = false;
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
     resetCountdown();
     setHud(ss.snapshot());
     setPauseReason(null);
-  }, [resetCountdown]);
+  }, [resetCountdown, clearCoachLine]);
 
   // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
   const leave = useCallback(() => {
@@ -350,6 +399,8 @@ export function PlayPage() {
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);
+      // 곡 시작 시각은 로그와 녹음이 같은 값을 쓴다
+      const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         snapshot: ss.snapshot(),
         notes: ss.notes,
@@ -360,15 +411,29 @@ export function PlayPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        startedAt: startedAt.current ?? new Date(),
+        startedAt: songStartedAt,
         chartVersionId: ss.chart.chartVersionId ?? null,
         songNumericId: ss.chart.songNumericId ?? null,
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
+        consent: consentAtStart.current,
+        liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
+      // 녹음이 켜져 있으면 스토어가 저장 대기로 넘기고, 꺼져 있으면 무시한다. 실패해도 결과 이동은 막지 않는다
+      try {
+        finishSong({
+          mode: 'RHYTHM',
+          hits: recorder.current.hits,
+          chart: { title: ss.chart.title, durationMs: ss.chart.durationMs },
+          startedAt: songStartedAt,
+          playId: log.playId,
+        });
+      } catch (e) {
+        console.warn('녹음 확정에 실패했습니다.', e);
+      }
       navigate(`/result/${log.playId}`);
     },
     [navigate, inputSource, settings.timing],
@@ -420,7 +485,8 @@ export function PlayPage() {
         else toSelect();
       } else if (st === 'play') {
         // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
-        if (pauseRef.current !== null || e.code !== 'Escape') return;
+        // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
+        if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
         pauseTo('user');
       } else {
         return;
@@ -429,7 +495,7 @@ export function PlayPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, pauseTo]);
+  }, [begin, toSelect, pauseTo, isResuming]);
 
   // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그, U18)
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
@@ -585,7 +651,14 @@ export function PlayPage() {
             onFrame={onFrame}
           />
         }
-        guide={<GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />}
+        // 코칭 모드는 라벨+제목 두 줄만 — 보조까지 세 줄이면 51px 칸을 넘친다(설계 U1 결정, 브라우저 확인 64px)
+        guide={
+          coachLine ? (
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+          ) : (
+            <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
+          )
+        }
         kit={<DrumKit scale={0.7} states={padStates} labels={false} />}
         readout={
           <HitReadout

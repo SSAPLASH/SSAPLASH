@@ -52,39 +52,43 @@ src/
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
 │   ├─ authBootstrap.ts   앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결, AUTH_REQUIRED 상수
+│   ├─ dataConsent.ts     플레이 시작 시점 동의 읽기(서버 dataConsent 기준)
+│   ├─ signupGate.ts      403 SIGNUP_INCOMPLETE 알림 → /me 재조회 연결(bindSignupIncomplete)
 │   ├─ presetBootstrap.ts 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
 │   ├─ playSync.ts        플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
 │   └─ analysisPoller.ts  PENDING 리포트 재조회 타이머(React 무관, 2초 × 5회)
-├─ pages/      라우트 단위 화면 — Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Settings(설정) · History(연주 기록) · Login · AuthCallback (`HomePage`·`MyPage` 삭제 — `/me`는 `/settings`로 이동)
-├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지, 포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·ActiveJobCard·HowtoPanel·SongStatusBadge·StudioIcons·MySongRow·MySongCard·MySongList·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·StudioToast·dateLabel·studio.css, 라이브러리 화면) · settings/(SettingRow, 설정 화면) · result/(ResultSummaryCard·JudgeBars·TimingHistogram·FeedbackCard·PadSummaryTable, 결과 화면 전용) · history/(HistoryTable, 연주 기록 화면 전용)
-│   ├─ ui/           도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState · Toggle · Segmented · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
+├─ pages/      라우트 단위 화면 — Setup · Play · FreePlay · Result · Report(상세 분석) · Studio(곡 작업실) · Settings(설정) · History(연주 기록) · Login · Signup(가입 동의) · AuthCallback (`HomePage`·`MyPage` 삭제 — `/me`는 `/settings`로 이동)
+├─ components/ 공용 UI — AppShell · RequireAuth · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지, 포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·ActiveJobCard·HowtoPanel·SongStatusBadge·StudioIcons·MySongRow·MySongCard·MySongList·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·StudioToast·dateLabel·studio.css, 라이브러리 화면) · settings/(SettingRow · DataConsentCard, 설정 화면) · result/(ResultSummaryCard·JudgeBars·TimingHistogram·FeedbackCard·PadSummaryTable, 결과 화면 전용) · history/(HistoryTable·PlayLogTab, 연주 기록 화면 전용) · recording/(RecordButton·SaveRecordingDialog·RecordingToast·RecordingList·RecordingTitleDialog·RecordingDeleteDialog·useRecordingList·useRecordingPlayback, 녹음 UI)
+│   ├─ ui/           도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState · Toggle · Checkbox(네이티브 input + label) · Segmented · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
+│   ├─ auth/         로그인·가입 동의 — AuthBrandPane(왼쪽 브랜드 영역) · ProviderIcons(Google 공식 4색 고정·SSAFY 자리표시) · TermsItem(약관 한 항목, 96 높이 스크롤 상자) · SignupConsentCard(가입 동의 카드, 동의 상태 보관) · auth.css
 │   ├─ song/         곡 표시 공통 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄) · DeletedSongChip(삭제된 곡 칩) · useDeletedSongIds(삭제된 BE 곡 id 집합 훅)
 │   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · WeakSegments(AI 약점 구간·상태 안내)
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
 │   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
-│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
-├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태·액션, 실제 동작은 `app/bootstrap`이 끼운다)
-├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
+│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
+├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
+├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
+│   ├─ deviceState         기기별 상태(role 0~3 네 칸: 시계·SYNC 대기·연결·배터리/설정 전 보류). 이벤트는 손(0·1)만 — 페달 대비
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
 │   ├─ KeyboardPadSource   키 코드 타격 (항상 켜짐)
 │   ├─ PointerStickSource  마우스 위치 → 자세, 키/클릭 → 타격 (모의 IMU) + 디스크립터
 │   ├─ BleStickSource      Web Bluetooth GATT + 디스크립터
 │   ├─ WebSocketStickSource  허브 · PC 브리지 + 디스크립터
-│   ├─ WebSerialStickSource  USB 직결(Web Serial) + 디스크립터
+│   ├─ WebSerialStickSource  USB 직결·동글(Web Serial) + 디스크립터. LINK·STATUS 비트 5 처리, reopen, 재장착(connect 이벤트) 자동 재열기
 │   ├─ serialFraming       직결 프레이밍(SOF·LEN·CRC8) 인코더·디코더
 │   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
-├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach). 순수 TypeScript, domain만 import
+├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach · copy(화면 문구 표)). 순수 TypeScript, domain만 import
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
 └─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
@@ -137,7 +141,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **GlassDock:** 상단 가운데 글래스 Dock(음량 토글·메트로놈 칩·BPM ±·프리셋 이름). 모드는 `shell`(일반) / `play`(전체 화면 연주, 일시정지 버튼 추가) × 접힘 여부 4변이다. 칩 본체를 누르면 `MetronomePanel`(Dock 아래 오른쪽 360, `shellStore.dockPanel`)이 열린다. 스틱 연결이 필요한 센서인데 한 손이라도 끊기면 프리셋 칩이 「● L ● R 준비 필요」(amber)로 바뀐다(`domain/dockChip`, 키보드 전용·포인터 모의 IMU는 제외).
 - **StickStatusIndicator·ProfileMenu:** 오른쪽 위 고정.
 - **페이지 선언:** 페이지는 `useShell({ title, immersive })`로 제목과 전체 화면 여부를 알린다. `immersive`면 Sidebar·TopBar가 사라지고 본문이 전폭이 된다. 언마운트하면 자기가 바꾼 필드만 기본값으로 돌아간다. 이 상태는 `store/shellStore`에 있고 영속하지 않는다(현재 `/settings`·`/history`가 사용, 나머지 화면은 아직 기본 제목).
-- **영속 설정 키:** `sidebarCollapsed`·`dockCollapsed`. 같은 settings v12에 `liveCoach`(실시간 코칭, 기본 켬)·`statsConsent`(통계 동의, 기본 끔)도 추가됐다.
+- **영속 설정 키:** `sidebarCollapsed`·`dockCollapsed`. 같은 settings v12에 `liveCoach`(실시간 코칭, 기본 켬)도 추가됐다. v12의 `statsConsent`(브라우저 저장 동의)는 v14에서 삭제했다 — 연주 기록 활용 동의는 가입 때 필수라 서버 값만 쓴다.
 
 ## 드럼 컴포넌트
 
@@ -228,7 +232,11 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 준비 조건
 
-**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다. role 2·3(발)은 아직 무시한다.
+**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동·패드 표 재전송)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다(감싼 SET_PAD_TABLE은 패킷당 패드 2개). 기기별 상태는 `input/deviceState`의 role 0~3 네 칸이고, role 2·3(발)은 칸만 갱신하고 이벤트는 내지 않는다(페달은 232 확정 뒤).
+
+**재연결·설정 재전송(S15P31A307-281, 설계 `.claude/plans/PLAY-002-stick-reconnect.md`):** 설정 원본은 웹 하나이고 스틱 플래시에 저장하지 않는다. 재부팅한 스틱은 STATUS `flags` 비트 5(설정 전)를 보내고, FE는 그 손에만 ROUTE로 패드 표를 강제 재전송(같은 표여도)하고 방위각 오프셋을 0으로 맞춘다(비트 5가 1인 STATUS마다, 손별 1초 쿨다운). 동글 순서상 비트 5 STATUS가 LINK보다 먼저 오므로 안 붙은 손의 배터리·비트 5는 보류했다가 LINK로 붙는 순간 함께 올린다. LINK 비트 0→1이거나 비트 5를 본 기기는 시계 보정(`ClockSync`)을 초기화하고 SYNC를 50ms 간격 5회 보낸다(2초 안 중복은 건너뜀) — 재부팅한 스틱은 시계가 0부터라 옛 offset을 쓰면 안 된다. 비트 5 = 0인 재연결(잠깐 끊김)은 시계만 초기화하고 패드 표·오프셋은 보내지 않는다. SET_PARAM은 게임 화면이 보내지 않으므로 재전송 대상이 아니다.
+
+연주 중 한 손이 끊기면(리듬 게임·악보 연습은 자동 일시정지, 자유 연주는 띠) `app/bootstrap`이 `reconnectStore.start()`로 자동 재연결을 시작한다. 시도 하나 = 웹 쪽 재연결 동작 + 양손 복귀 3초 대기(`app/reconnectPolicy`): Web Serial 동글은 포트를 닫고 다시 열고(`reopen`), 포트가 닫혔으면 허락된 포트를 다시 열고(`autoConnect`), BLE 직결은 보관한 기기에 `gatt.connect()`, WS는 재접속한다. 모두 사용자 제스처가 필요 없는 동작이다. 최대 3회(약 10초) 뒤 `failed`가 되고 끊김 카드는 소스별 안내(`hint`: 동글 "동글을 뺐다 다시 꽂아 주세요")와 [드럼 세팅에서 연결하기]를 보인다. 시도 중 [다시 연결]을 누르면 대기를 끊고 다음 시도로 간다. 동글을 뺐다 꽂으면 `navigator.serial`의 `connect` 이벤트로 클릭 없이 포트를 다시 연다. 양손이 돌아오면 `settle()` → `reconnected`(약 1초, 카드에 「재연결 성공!」·「3초 뒤 이어서 연주해요」) → 리듬 게임·악보 연습은 카운트다운 3·2·1·시작! 뒤 자동으로 이어 연주한다(사용자 클릭 없음). 실기기 확인은 11/6 통합 테스트(239)에서 한다.
 
 연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈은 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
 
@@ -244,7 +252,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 곡 작업실(음원 업로드·채보 생성)
 
 - **화면:** `/studio`(상단 메뉴·제목 "라이브러리"). 본문은 라이브러리 목록(`songStore` MINE)이고, 카드 보기에서는 오른쪽에 300 폭 "어떻게 되나요" 안내 패널이 붙는다(목록 보기·로딩·오류는 본문 전체 폭, 폰 폭에서는 패널이 아래로). 제목 오른쪽 [곡 올리기](primary md)가 **업로드 창**(모달)을 열고, 제목 아래에 요약 "곡 n개 · 생성 중 n"이 있다. 창에는 탭 "음원"(기본)·"MIDI"가 있고 마지막에 고른 탭을 다시 열 때 유지한다. 음원 탭은 MP3·WAV(50 MiB·10분 이내, `POST /api/v1/songs/audio` 202 `{jobId, songId, status}`)이고 회원당 활성 작업은 하나다(초과 시 429 `AUDIO_BUSY`). 업로드 중에는 탭 전환·닫기·Esc·배경 클릭이 잠긴다. 음원 202를 받으면 창이 닫히고 목록을 다시 읽는다.
-- **MIDI 업로드:** MIDI 탭은 파일(`.mid`·`.midi`, 1 MiB 이하)·제목(파일명 기본값)·아티스트로 `POST /api/v1/songs/midi`(multipart `title`·`artist`(비면 생략)·`file`)를 한 번 보낸다. 작업(job) 없이 동기 처리라 음원 생성 중에도 올릴 수 있다(그동안 음원 탭은 "「제목」 생성이 끝나면 올릴 수 있어요" 안내). 중복 방지 키가 없어 자동 재시도하지 않는다. 사전 검사는 빈 파일·크기 초과만 하고 내용 판별은 BE에 맡긴다(`domain/midiUpload`). 201이면 창을 닫고 이동 없이 목록을 다시 읽어 새 곡 행을 2초 강조한다. 오류는 400 `MIDI_INVALID`·413 `MIDI_TOO_LARGE`·422 `MIDI_UNSUPPORTED`(BE `detail`)·422 `MIDI_NO_DRUM_NOTES` 문구를 창 안에 보이고, 네트워크·5xx는 "업로드 결과를 확인하지 못했습니다" 안내와 함께 목록을 다시 읽는다([다시 시도] 없음, 목록을 보고 직접 다시 올린다). MIDI 곡은 카드의 배지 행에 "MIDI" 칩이 붙고(목록 행에는 없다) 반주가 없다. 상태는 `midiUploadStore`(`idle`·`uploading`·`done`·`failed`).
+- **MIDI 업로드:** MIDI 탭은 파일(`.mid`·`.midi`, 1 MiB 이하)·제목(파일명 기본값)·아티스트로 `POST /api/v1/songs/midi`(multipart `title`·`artist`(비면 생략)·`file`)를 한 번 보낸다. 작업(job) 없이 동기 처리라 음원 생성 중에도 올릴 수 있다(그동안 음원 탭은 "「제목」 생성이 끝나면 올릴 수 있어요" 안내). 중복 방지 키가 없어 자동 재시도하지 않는다. 사전 검사는 빈 파일·크기 초과만 하고 내용 판별은 BE에 맡긴다(`domain/midiUpload`). 201이면 창을 닫고 이동 없이 목록을 다시 읽어 새 곡 행을 2초 강조한다. 오류는 400 `MIDI_INVALID`·413 `MIDI_TOO_LARGE`·422 `MIDI_UNSUPPORTED`(BE `detail`)·422 `MIDI_NO_DRUM_NOTES` 문구를 창 안에 보이고, 네트워크·5xx는 "업로드 결과를 확인하지 못했습니다" 안내와 함께 목록을 다시 읽는다([다시 시도] 없음, 목록을 보고 직접 다시 올린다). MIDI 곡은 카드의 배지 행에 "MIDI" 칩이 붙는다(목록 행에는 없다). 반주는 BE가 드럼 외 트랙으로 비동기 합성한다(아래 "반주 상태"). 상태는 `midiUploadStore`(`idle`·`uploading`·`done`·`failed`).
+- **반주 상태:** 곡 목록·상세·MIDI 업로드 201의 `accompanimentStatus`(`GENERATING`·`READY`·`FAILED`·`NONE`)를 `SongSummary.accompanimentStatus`로 읽는다. 필드가 없거나 모르는 값이면 `hasAccompaniment`로 `READY`/`NONE`을 정한다(`domain/songCatalog.accompanimentStatusOf`). 채보 `READY` 곡 중 `GENERATING`은 "반주 생성 중", `FAILED`는 "반주 생성 실패" 배지를 상태 배지 옆에 붙인다(`AccompanimentBadge`, Figma `SongStatusBadge`의 processing·failed 모양). 내 곡 화면은 생성 중 곡만 3초 간격·화면 진입당 최대 20회 곡 상세를 한 곡씩 다시 읽어 상태 필드만 반영한다(`useAccompanimentPolling` → `AccompanimentPoller`, `songStore.patchItem`, 목록 스켈레톤 없음). 탭이 숨겨지면 멈추고 보이면 남은 횟수로 이어가며, 404 곡은 빼고 다른 실패는 그 회차만 건너뛴다. 상한 뒤에도 생성 중이면 배지를 두고 재진입·새로고침 때 다시 읽는다. 악보 연습 준비 화면의 "반주 재생" 줄은 반주를 못 쓰면 `GENERATING`이면 "(반주 생성 중)", 나머지는 "(반주 없음)"이다.
 - **목록 행:** 처리 중 → 실패 → 완료 순, 같은 상태 안에서는 최신순. 활성 작업은 202 직후 목록에 아직 없어도 맨 위 `ActiveJobCard`(커버·제목·4칸 단계 띠·경과 시간, 한 줄 전체 폭)로 보이고 카드·행 목록에서는 빠진다. 완료 행은 [악보 연습](`/sheet?scope=MINE&song=`)·[플레이](`/play?scope=MINE&song=`), 실패 행은 [다시 올리기]. 목록 보기 행에도 ⋯ 메뉴가 있다(기능 스위치 켜짐일 때). 활성 작업이 도는 동안에도 [+ 곡 올리기]는 켜 두고 창의 음원 탭만 안내로 바뀐다. 곡도 작업도 없으면(첫 방문) 버튼 없이 본문에 같은 탭 양식(큰 드롭 영역)과 가로 4단계 안내만 보인다.
 - **완료 시 이동:** `chartJobStore.doneSource`로 갈린다. 이 화면에서 폴링하다 완료를 보면(`live`) `/sheet?scope=MINE&song={id}`로 이동한다. 복원(`resume`·429 복원) 뒤 **첫 조회**에서 완료를 보면(`restored`) 이동하지 않고 목록을 다시 읽어 그 행을 2초 강조한다. 곡 생성 실패(`JOB_FAILED`)는 목록을 다시 읽어 실패 행으로 보이고, 업로드 단계 실패·404는 창의 음원 탭 안에 오류가 보인다.
 - **실패 재업로드:** 실패 행의 [다시 올리기]는 업로드 창을 음원 탭으로 열고 제목·아티스트를 미리 채운다(파일만 다시 고른다). 양식 위 "「제목」 다시 올리기" 줄의 [취소]로 되돌린다.
@@ -253,7 +262,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **진행 표시:** BE 진행 WebSocket(161)이 아직 없어 `GET /api/v1/songs/{id}`의 `status`(PROCESSING→READY/FAILED)를 폴링한다(30초까지 3초, 10분까지 5초, 그 뒤 15초. 탭이 숨겨지면 멈추고 다시 보이면 즉시 1회). 4칸(접수·드럼 분리·채보 생성·완료) 중 폴링만으로는 분리·생성을 구분할 수 없어 두 칸을 함께 "처리 중"으로 칠한다(`JobProgress.stageKnown=false`). WS가 붙으면 `chartJobStore`에 소스만 추가한다.
 - **복원:** 활성 작업 하나를 `localStorage`(`ssaplash.chartJob.v1`)에 두고 새로고침·재방문 때 이어서 폴링한다. 429인데 기록이 없으면(다른 브라우저) 라이브러리의 PROCESSING 곡으로 복원한다. 끝난 작업 기록은 이 화면이 `clear`로 지운다. 실패 사유는 BE가 주지 않아 기본 문구만 보인다.
 - **카드 보기·목록 보기:** 목록 위 오른쪽 [카드 | 목록] 토글로 바꾸고(기본 카드) 고른 값은 `localStorage`(`airdrum.studio.view`)에 기억한다(접근이 막히면 기본값). 카드는 큰 정사각 커버 아래 제목(굵게, 1줄 말줄임)·아티스트(흐리게), 그 아래 한 줄에 상태 배지·MIDI 칩, 맨 아래 동작(완료 [악보 연습], 실패 사유 한 줄("채보를 만들지 못했어요", BE가 사유를 주지 않아 고정 문구)과 [다시 올리기])이다. 카드에는 날짜가 없다(목록 보기에만). 완료 곡의 리듬 게임은 커버 오른쪽 아래 둥근 ▶(`aria-label` "「제목」 리듬 게임", `/play`)로, 마우스 기기는 카드 hover·`focus-within` 때, 터치 기기(`@media (hover: none)`)는 항상 보인다. 그리드는 `repeat(auto-fill, minmax(240px, 1fr))`이라 데스크톱 3열·태블릿(안내 패널 옆) 2열·폰 1열이다. 실패 카드는 커버가 흐리다. 커버(`SongSummary.coverUrl`, 서명 URL 1시간)가 없거나 불러오지 못하면 모든 곡에 같은 CD 기본 커버(`SongCover`의 SVG)를 그린다. 직접 올린 커버만 이미지로 보인다. 커버 이미지를 못 불러오면(서명 URL 만료) 목록을 다시 읽어 새 URL을 받는다(카드 여럿이 실패해도 1분에 한 번, `songCover.coverRefreshDue`). 목록 보기는 한 패널 안의 64 높이 행(커버 44·제목·보조 줄·상태 배지·날짜·동작·⋯)이다. 로딩은 스켈레톤 카드, 목록 오류는 안내 카드와 [다시 시도]다. 스타일은 `components/studio/studio.css`에 있다.
-- **내 곡 편집(기능 스위치 `VITE_SONG_EDIT=true`, 기본 꺼짐):** 켜면 카드 커버 오른쪽 위(목록 보기는 행 끝)에 ⋯ 메뉴(`aria-haspopup="menu"`, Esc·바깥 클릭으로 닫힘)가 생긴다. 완료 곡 = [커버 변경] [곡 정보 수정] [곡 삭제], 실패 곡 = [곡 삭제]만, 처리 중 곡은 메뉴가 없다(`songEdit.menuKinds`, BE는 처리 중 곡의 커버 변경을 허용하지만 FE는 열지 않는다). 꺼져 있으면 카드 보기·기본 커버만 나가고 메뉴는 없다(BE 187 배포 전 404 방지). 항목마다 작은 창(머리에 제목과 ✕)이 따로 열리고 저장·삭제 중에는 입력·✕·Esc·배경 클릭이 잠긴다. 오류는 창 안 문구로 보인다.
+- **내 곡 편집(기능 스위치 `VITE_SONG_EDIT`, 기본 켜짐, `false`로 빌드하면 숨김):** 켜져 있으면 카드 커버 오른쪽 위(목록 보기는 행 끝)에 ⋯ 메뉴(`aria-haspopup="menu"`, Esc·바깥 클릭으로 닫힘)가 생긴다. 완료 곡 = [커버 변경] [곡 정보 수정] [곡 삭제], 실패 곡 = [곡 삭제]만, 처리 중 곡은 메뉴가 없다(`songEdit.menuKinds`, BE는 처리 중 곡의 커버 변경을 허용하지만 FE는 열지 않는다). `VITE_SONG_EDIT=false`면 카드 보기·기본 커버만 나가고 메뉴는 없다(BE 187 배포 전에는 404 방지로 기본 꺼짐이었다). 항목마다 작은 창(머리에 제목과 ✕)이 따로 열리고 저장·삭제 중에는 입력·✕·Esc·배경 클릭이 잠긴다. 오류는 창 안 문구로 보인다.
   - **커버 변경:** 지금 커버(없으면 기본 커버) 미리보기 · [이미지 고르기](JPG·PNG·WebP, 원본 10 MiB 이하) · [커버 지우기](기본 커버일 때 비활성) · [취소] [저장]. 고르면 가운데를 정사각형으로 잘라 512×512 JPEG(품질 0.85)로 줄여 미리본다(`media/coverImage`, 크기 계산은 `songCover.centerSquareCrop`). 바뀐 게 없으면 저장이 꺼진다.
   - **곡 정보 수정:** 제목(1~100자, trim 후)·아티스트(0~100자), 칸 아래 글자 수 안내. 바뀐 필드만 PATCH로 보내고 아티스트를 비우면 `""`를 보낸다(`domain/songEdit`).
   - **곡 삭제:** "「제목」을 삭제할까요?" + "채보·반주·커버가 함께 지워지고 되돌릴 수 없습니다. 연주 기록과 결과는 남아요." 확인 후 [삭제](위험 버튼, 진행 중 "삭제 중…"). 끝나면 화면 아래 알림 "「제목」을 삭제했습니다."(3초, `StudioToast`, `role="status"`)를 띄우고 목록을 다시 읽는다. 지운 곡이 `chartJobStore`의 활성 작업이면 그 기록도 `clear`한다.
@@ -265,14 +274,23 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 결과·연주 기록
 
 - **결과(`/result/:playId`, Figma 112:1194):** 로컬 로그(`engine/playLog.getPlayLog`)를 읽어 요약 카드(`result/ResultSummaryCard` — 제목·메타·점수/최고 콤보·정확도 64) → 상세 분석 진입(`ReportEntry`) → 판정 분포(`JudgeBars`)·타이밍 분포(`TimingHistogram`, 계산 `domain/timingHistogram`) → 피드백 카드 최대 3장(`FeedbackCard`, 악보 모드 + 업로드 대상 아님만)·약점 마디 미니 악보 → 패드별 표(`PadSummaryTable`, 모든 모드) → 버튼 행 순으로 그린다. 악보 모드는 요약 카드에 점수 블록이 없다. 패드별 표의 정확도·평균 세기는 `domain/feedback.summarizeByPad`가 계산하고(평균 세기 = 판정된 노트에 매칭된 타격 velocity 평균 → 0~100, 로그에 hits가 없으면 「—」), 평균 타이밍 열은 ≤1024px에서 숨긴다. 기록이 없는 id는 `ui/EmptyState`로 안내한다. 삭제된 곡이면 제목 옆에 `song/DeletedSongChip`을 붙이고 [다시 하기]·Enter를 숨긴다.
-- **연주 기록(`/history`, Figma 112:1351, 설계 U16):** 이 브라우저(로그인 계정별)에 저장된 최근 20건(`loadPlayLogs`)을 모드 필터(전체·게임·악보, 저장 안 함)와 10행 페이지로 보여 준다. 필터·페이지 계산은 `domain/playLogView`, 표는 `history/HistoryTable`, 삭제된 곡 표시는 `song/useDeletedSongIds`(곡마다 상세 1회 조회, 404만 삭제로 본다)다. 행의 [결과 보기]는 `/result/:playId`로 간다. 기록이 없으면 [리듬 게임 시작] 안내, 필터 결과만 없으면 표 자리에 한 줄 안내.
+- **연주 기록(`/history`, Figma 112:1351, 설계 U16):** 머리 아래 [플레이 기록 | 녹음] 탭(`ui/Segmented`, 녹음 기능 스위치가 켜졌을 때만, URL 쿼리 `?tab=recordings`)과 탭 본문. 플레이 기록 탭(`history/PlayLogTab`)은 이 브라우저(로그인 계정별)에 저장된 최근 20건(`loadPlayLogs`)을 모드 토글(전체·게임·악보) → 곡 제목 검색(로컬, 즉시) → 정렬(머리글 마지막 열의 최신·오래된 토글) → 10행 페이지 순으로 보여 준다. 필터·검색·정렬·페이지 계산은 `domain/playLogView`, 표는 `history/HistoryTable`(머리글 56px·16px, `sortSlot`), 삭제된 곡 표시는 `song/useDeletedSongIds`(곡마다 상세 1회 조회, 404만 삭제로 본다)다. 행의 [결과 보기]는 `/result/:playId`로 간다. 기록이 없으면 [리듬 게임 시작] 안내, 조건 결과만 없으면 표 자리에 한 줄 안내.
+
+## 연주 녹음·녹음 보관함 (REC-001, `src/components/recording`)
+
+- **기능 스위치 `VITE_RECORDING`:** 기본 켜짐. `false`로 빌드하면 Dock 녹음 버튼·저장 창·토스트·연주 기록의 [녹음] 탭을 숨긴다(`app/features.RECORDING_ENABLED`). 꺼져 있으면 Dock·AppShell·연주 기록 마크업은 녹음 기능 이전과 같다. UI 완료·로컬 BE 검증 뒤 11/4에 켜짐으로 전환했다(설계 U6).
+- **녹음이란:** 타격 시퀀스(`tMs`·`pad`·`velocity`·`stickId`)만 저장한다. 소리·화면 녹화가 아니고 재생은 FE가 드럼 소리로 다시 연주한다. 타입·본문 조립·기본 제목(`{곡 제목} · {M월 D일 HH:mm}`, 자유 연습은 `자유 연습 · …`, 100자 자르기)은 `domain/recording`, 화면 문구(모드명·요약·경과·타격 수)는 `domain/recordingView`.
+- **Dock 녹음 버튼(`recording/RecordButton`, Figma Navigation / DockRecord 523:31016):** `/free`·`/play`·`/sheet`에서만 [BPM +] 오른쪽에 보인다(`recordButtonRoute.recordButtonVisible`). 자유 연습은 누를 때마다 시작·정지(`녹음 중 · mm:ss` 경과 표시), 리듬 게임·악보 연습은 연주 전에 켜 두는 스위치(`녹음 켬`)로 연주 단계(카운트인 포함)에는 잠긴다(`locked-on` "녹음 중" / `locked-off` 흐림). 저장 창이 열린 동안도 잠긴다. 점은 모든 상태에서 같은 빨간 원이고 상태는 글자·테두리·흐림으로만 구분한다. 접힘 Dock은 녹음 중일 때만 BPM 점 옆에 작은 빨간 점. 상태 기계(idle → armed/recording → pendingSave → saving → idle/failed)는 `app/recordingStore`.
+- **저장 흐름:** 자유 연습은 정지 때, 게임·악보는 곡이 끝난 뒤 플레이 로그 타격(`PlayRecorder.hits`의 `tSongMs`)에서 본문을 만들어 결과 화면 위에 저장 창(`recording/SaveRecordingDialog`, AppShell에 한 번 마운트, 폭 560, Esc·배경 클릭으로 닫히지 않음)이 뜬다. 제목 입력칸은 기본 제목이 전체 선택된 채 열리고, 비우면 기본 제목. [저장] → `POST /api/v1/recordings`(`app/recordingSync`: 503은 같은 본문·같은 `clientKey`로 1·2·4초 최대 3회 자동 재시도, 네트워크·5xx·401은 [다시 시도], 409·400·404·413은 [닫기]만, 코드 없는 Nginx 413은 "너무 길어 저장하지 못했어요"). 게임·악보는 플레이 로그 업로드가 `DONE`일 때만 `playId`를 싣는다. 타격 0개면 저장 창 대신 토스트. 자유 연습은 50,000타·2시간에 닿으면 자동 정지. 저장 완료 토스트(`recording/RecordingToast`, 하단 중앙 4초)의 [보관함]은 `/history?tab=recordings`로 간다. 미전송 녹음은 메모리에만 있어 새로고침하면 사라진다(설계 U4).
+- **녹음 보관함(연주 기록 [녹음] 탭, `recording/RecordingList`, Figma 524:32144):** `GET /api/v1/recordings`를 모드 토글(전체·자유·게임·악보)·제목 검색(300ms 디바운스)·정렬(최신·오래된)로 20건씩 받고 [더 보기]로 이어 붙인다(`useRecordingList`). 행(Figma Recording / RecordingRow 523:31333)은 [재생]·제목(곡 녹음은 아래에 곡 제목 + 난이도 배지)·모드·녹음 시각·길이·타격·⋯. [재생]은 그때 상세(`GET /recordings/{id}`)를 받아 `engine/recordingPlayer`가 100ms 창 look-ahead로 드럼 소리를 예약해 재연주하고 진행 바를 그린다(`useRecordingPlayback`, 한 번에 한 행, 정지는 0.1초 안). ⋯ 메뉴(`ui/MoreMenu`)는 [제목 변경](`RecordingTitleDialog`, 1~100자, `PATCH`)·[삭제](`RecordingDeleteDialog`, 확인 창, `DELETE`). 404 `RECORDING_NOT_FOUND`면 "이미 지워진 녹음이에요" 토스트 뒤 목록을 다시 받는다. 보관함은 계정당 200개(저장 413 `RECORDING_QUOTA_EXCEEDED`).
+- **로컬 확인:** BE(256·257 포함)를 띄운 뒤, 자유 연습에서 녹음 → 저장(201) → 연주 기록 [녹음] 탭에서 목록·재생·제목 변경·삭제를 확인한다.
 
 ## 플레이 기록 업로드·상세 분석
 
 - **흐름:** 연주 종료 → 로컬 저장 → 결과 화면(로컬 값, 기다리지 않음). 동시에 `app/playSync.startPlaySync`가 `POST /api/v1/plays`(ACCT-002 요약)를 보낸다. 성공하면 리포트 요약과 노트 첫 페이지를 미리 받아 두고 결과 화면의 **상세 분석 보기**가 `/result/:playId/report`로 열린다.
 - **playId:** 연주마다 UUID(`newPlayId`). 이전 로그(`play-…`)는 업로드하지 않는다.
 - **seq:** `engine/playRecorder`가 활성 타격과 MISS 판정에 처리 순서대로 번호를 매긴다. 서버가 seq 순서로 maxCombo를 다시 계산하므로 이 순서가 어긋나면 400이다.
-- **본문 조립:** `domain/playUpload.buildUploadBody`. 판정 타격 `tMs` = 노트 시각 + Δ, MISS `tMs` = 노트 시각, 정확도는 `score / 전체 노트 수` 백분율 소수 둘째 자리 HALF_UP. 입력은 실제 스틱(ble·webserial·websocket)만 `STICK`, 키보드·포인터는 `KEYBOARD`(센서 필드 null). `consent`는 정책이 정해질 때까지 `false`.
+- **본문 조립:** `domain/playUpload.buildUploadBody`. 판정 타격 `tMs` = 노트 시각 + Δ, MISS `tMs` = 노트 시각, 정확도는 `score / 전체 노트 수` 백분율 소수 둘째 자리 HALF_UP. 입력은 실제 스틱(ble·webserial·websocket)만 `STICK`, 키보드·포인터는 `KEYBOARD`(센서 필드 null). `consent`는 플레이 시작 시점에 로그에 저장해 둔 값(`PlayLog.consent`)을 `domain/dataConsent.logConsent`로 싣는다. 필드가 없는 옛 로그는 `false`.
 - **업로드하지 않는 경우(SKIPPED):** 내장 곡, 이전 로그, 변환에서 버린 노트가 있는 채보, 자유 연주, 50,000행 초과. 결과 화면 버튼에 사유가 나온다.
 - **실패·재전송:** 상태는 로그의 `upload`(UPLOADING·DONE·FAILED·SKIPPED)에 저장한다. 처음 조립한 본문을 보관해 같은 playId로 그대로 다시 보낸다(같은 UUID에 다른 내용은 409). 네트워크·5xx·401·`PLAY_STATE_CHANGED`는 재시도 가능, 400·404·그 밖의 409·413은 불가. 결과 화면에 들어올 때 한 번 자동 재전송하고 이후는 **다시 시도** 버튼.
 - **상세 분석:** 서버 데이터만 쓴다. `api/reports`가 정확도(0~100 → 0~1)·패드 옛 이름·null을 변환하고, 노트는 `limit` 1000으로 `nextAfterSeq`가 null일 때까지 받아 시간순으로 정렬한다(seq는 시간순이 아니다).
@@ -282,15 +300,18 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 실시간 코칭 (COACH-001, `src/coach/live`)
 
-플레이 중 최근 판정 흐름에서 경향(계속 늦음, 한쪽 손 약함 등)을 뽑아 짧은 문구로 알리는 **규칙 모듈**이다. 서버를 거치지 않고 브라우저에서만 동작한다. 이 모듈은 판정 한 건을 받아 문구 후보를 돌려줄 뿐이고, **화면 표시와 `PlayPage` 연결은 아직 없다**(연결·HUD·설정 토글·`PlayLog.liveCoachEvents`는 FE 작업).
+플레이 중 최근 판정 흐름에서 경향(계속 늦음, 한쪽 손 약함 등)을 뽑아 짧은 문구로 알리는 **규칙 모듈**이다. 서버를 거치지 않고 브라우저에서만 동작한다. 모듈은 판정 한 건을 받아 문구 후보(`tag`+대상)를 돌려주고, 리듬 게임(`PlayPage`)이 이를 받아 연주 안내 칸(`GuideSlot`)에 띄우고 플레이 로그에 남긴다. 1차는 **RHYTHM만** 연결했다(`SheetPage`는 같은 판정 형식이라 2차에 같은 방식으로 붙일 수 있다). 모듈 폴더(`coach/`)는 FE가 관리하고, 고치면 AI 파트에 알린다.
 
 - **쓰는 법:** `new LiveCoach({ goodMs, enabled? })`로 만들고, 판정(`onJudgement`)마다 `push({songTimeMs, noteTimeMs, judgement, deltaMs, pad, stickId, velocity})`를 부른다. 문구를 띄울 때만 `{tag, text, severity, tMs, displayMs}`를 돌려주고 아니면 `null`이다. `events()`는 업로드 본문 `liveCoachEvents[]`에 그대로 담을 `{tMs, tag, text}` 목록이다. 재시작(다시 하기)에서 `reset()`. 일시정지 중에는 `push`를 부르지 않는다. 코칭 오류로 플레이가 멈추지 않도록 `push`는 예외를 던지지 않는다.
-- **손·세기:** `RhythmSession.onJudgement`의 `JudgementEvent`에는 `stickId`·`velocity`가 없다. 두 값은 `inputManager.onHit`의 `ResolvedHit`에 있어서 연결하는 쪽이 판정과 짝지어 넘긴다. 손 정보가 없으면(MISS·키보드) 손별 규칙만 제외된다.
+- **연결(`PlayPage`):** 곡 선택 시점에 `new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach })`를 만들어 설정값을 고정한다(도중 설정 변경은 다음 플레이부터). `onJudgement`에서 기록·팝업·HUD 갱신 뒤에 `push`하고, 문구가 나오면 `coachCopy`로 화면 문구를 만들어 `useCoachLine`(`components/play`, 타이머 규칙은 순수 모듈 `coachLineTimer`)에 `displayMs`(3초) 동안 올린다. 다시 하기에서 `reset()`과 문구 비움, 종료 시 `events()`를 `buildPlayLog`의 `liveCoachEvents`로 넘긴다. 변환·표시는 try/catch로 감싸 코칭 오류가 플레이를 막지 않는다.
+- **화면 문구(`coach/live/copy.ts`):** 모듈의 `text`는 로그 전용이고 화면은 `coachCopy(message)`가 돌려주는 짧은 제목(≤10자)·보조(≤16자)·모드를 쓴다. 대상이 있는 태그는 `message.target`(패드 또는 손)으로 "{패드}만 늦어요"·"{왼손/오른손}이 약해요"를 만든다. `GuideSlot` 모드는 태그로 정한다 — `LIVE_MISS_STREAK`만 `coach-warn`, 나머지는 `coach-info`(`severity`는 아직 화면에 쓰지 않는다). 안내 칸(220×51)은 코칭 모드에서 라벨("실시간 코칭")+제목 두 줄만 보인다 — 보조까지 세 줄이면 넘친다. 문구·톤은 이 파일에서만 고친다.
+- **손·세기:** `RhythmSession`의 `JudgementEvent`에 `stickId`·`velocity`가 있다. `handleHit`이 `ResolvedHit`에서 채우고, MISS(`tick`)와 키보드 타격(`source === 'keyboard'`, 손이 자리값이고 세기가 고정이라 뜻이 없음)은 둘 다 null이다. 손 정보가 없으면 손별 규칙만 제외된다.
+- **패드 규칙 대상:** `STICK_PADS`(스틱 7개)만 평가한다. 킥·하이햇 페달은 페달 입력 기준(EMB)이 정해진 뒤 넣는다.
 - **규칙 5종**(`rules.ts`): `LIVE_MISS_STREAK`(연속 3번 또는 최근 6개 중 4개 놓침) · `LIVE_LATE`/`LIVE_EARLY`(최근 12개 평균이 `0.3 × goodMs` 이상이고 같은 부호가 75% 이상) · `LIVE_PAD_LATE`/`LIVE_PAD_EARLY`(한 패드가 나머지 패드보다 `0.45 × goodMs` 이상 늦거나 빠름) · `LIVE_HAND_WEAK`(한 손 평균 세기가 다른 손의 70% 미만) · `LIVE_UNSTEADY`(편차가 `0.5 × goodMs` 이상).
 - **표시 정책**(`policy.ts`): 판정 8개 전에는 띄우지 않고, 문구 사이 8초, 같은 키는 25초, 플레이당 10개, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자). 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
-- **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다.
+- **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다. `PlayLog.liveCoachEvents`(`engine/playLog`의 `LiveCoachEvent`, `coach`를 import하지 않는 구조적 타입)에 저장되고 업로드 본문(`domain/playUpload`)에는 `log.liveCoachEvents ?? []`로 실린다 — 기능 도입 전 로그는 빈 배열이라 "코칭 켬·문구 0개"와 구분되지 않으니 효과 평가는 `clientMeta.appVersion`·업로드 날짜로 거른다(AI에 회신함).
 - **수치 고치는 곳:** 모든 임계값은 `coach/live/config.ts` 한 곳에 있다. 판정 폭에 비례하는 값은 `goodMs`에 곱하는 계수라서 사용자가 판정 폭(30~150ms)을 바꿔도 같은 비율로 따라간다. 수치는 가정값이므로 직접 플레이해 보며 여기서 고친다.
-- **검증:** `npm test`(합성 플레이 시험 포함: 계속 늦음에서 `LIVE_LATE`, 경향 없는 100플레이에서 평균 0.5개 이하, 간격·상한 준수, 계산 시간 중앙값 0.2ms 이하).
+- **검증:** `npm test`(합성 플레이 시험·문구 표·타이머 규칙 포함: 계속 늦음에서 `LIVE_LATE`, 경향 없는 100플레이에서 평균 0.5개 이하, 간격·상한 준수, 계산 시간 중앙값 0.2ms 이하).
 
 ## 반주 재생
 
@@ -356,13 +377,20 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주 기록 활용(선택, `statsConsent`, 기본 끔 — 저장만 하고 업로드에는 싣지 않는다)·연주(실시간 코칭 `liveCoach`, 기본 켬, 값만 저장)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬 — 리듬 게임이 곡 선택 시점 값으로 읽는다)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
-- **보호 라우트:** `/login`·`/auth/callback`을 뺀 모든 화면은 `RequireAuth` 아래다. `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
+- **보호 라우트:** `/login`·`/auth/callback`·`/signup`을 뺀 모든 화면은 `RequireAuth` 아래다. 로그인했어도 `domain/signupGate.needsSignup`이 true인 회원은 `/signup`으로 보낸다(원래 경로는 `state.from`). `VITE_AUTH_REQUIRED=false`면 검사 없이 통과한다([실행](#실행)).
 - **주의:** BE `.env`에 그 제공자의 키가 없으면 버튼을 눌렀을 때 BE의 404(problem+json)가 그대로 보인다 — 브라우저 이동이라 FE가 가로챌 수 없다. Safari는 `http://localhost`의 Secure 쿠키를 거부할 수 있어 로컬에서는 Chrome·Firefox로 확인한다.
-- **화면:** `/login`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다.
+- **화면:** `/login`·`/signup`·`/auth/callback`은 `components/shell/PublicLayout` 아래 셸(nav·메트로놈·연결 상태) 없는 전체 화면이다. 로그인 화면은 2분할 카드이고, 제공자 버튼은 Figma 로그인 카드대로 로고 + 「Google로 계속하기」·「SSAFY로 계속하기」(둘 다 `ui/Button` secondary, 카드 폭)이며 가입·로그인 버튼을 나누지 않는다. `VITE_LOGIN_PROVIDERS`(쉼표 구분, 예 `google`)로 거른다. 미설정이면 google·ssafy 전부 보이므로 BE에 키가 없는 제공자는 빼 둔다. 게스트·둘러보기 진입은 없다.
+- **가입 동의(`/signup`):** 첫 소셜 인증 뒤(그리고 약관 개정 뒤) 거치는 화면(Figma 440:20166). 로그인과 같은 2분할에 `components/auth/SignupConsentCard` — 「모두 동의합니다」 + 서비스 이용약관·개인정보 수집·연주 기록 활용 세 항목(각 체크박스·[필수]·96 높이 스크롤 상자). 문구·판 문자열은 `domain/signupTerms.ts` 한 곳(이용약관·개인정보는 시안 문구)이고, 「모두 동의」는 세 항목이 전부 켜졌는지의 파생값이며, 필수 항목을 다 켜기 전에는 [동의하고 시작하기]가 비활성이다. 연주 기록 활용은 **필수** 동의로 확정됐고(ACCT-001 회신 2) 철회는 탈퇴로만 한다.
+  - **분기:** 콜백(`AuthCallbackPage`) 뒤 `/me`의 `signupCompleted`·`consents`·`dataConsent`를 `domain/signupGate.needsSignup`으로 판단해 `/signup` 또는 원래 목적지로 보낸다. 보호 라우트(`RequireAuth`)도 같은 판단으로 `/signup`에 보낸다(`signupGateDecision`). `/signup`은 비로그인이면 `/login`, 가입이 끝난 회원이면 원래 목적지(`state.from`, 없으면 `/`). 기존 회원도 배포 뒤 첫 로그인에 동의 화면을 본다. 약관 개정은 `signupTerms`의 판 상수만 올리면 재동의가 뜬다.
+  - **제출:** `POST /api/users/me/signup-consent { termsVersion, privacyVersion, dataConsent: { agreed: true, version } }` → 응답(`/me` 본문)으로 `authStore.user`를 바꾸고 원래 목적지로 간다. 실패하면 카드 안(버튼 위) 오류 문구 — `ApiError.detail`, 네트워크면 「서버에 연결할 수 없습니다…」, 그 밖은 기본 문구 — 를 보이고 다시 시도할 수 있다.
+  - **403 `SIGNUP_INCOMPLETE`:** 동의 전 회원이 다른 API를 부르면 `api/http`가 알리고(`subscribeSignupIncomplete`), `app/signupGate`가 `authStore.refreshMe`로 `/me`를 한 번 다시 읽어 `signupCompleted=false`가 되면 `RequireAuth`가 `/signup`으로 보낸다. 이미 가입이 필요한 상태면 무시하고 `/me`가 실패해도 한 번으로 끝난다.
+  - **전환기 규칙:** `/me`에 `signupCompleted` 필드가 없으면(BE 가입 동의 단계 미병합) 가입 완료로 보고 아무것도 검사하지 않는다. 필드가 있고 false일 때만 막는다.
+  - `VITE_AUTH_REQUIRED=false`면 세 곳(콜백·보호 라우트·`/signup`) 모두 검사하지 않고, 제출하면 `/`로만 간다. 가입 취소 버튼은 없다 — 동의 없이 떠난 계정은 BE가 7일 뒤 삭제한다.
+- **연주 기록 활용 동의(ACCT-002·ACCT-001 회신 2):** 가입 때 **필수** 동의로 확정됐고 철회는 회원 탈퇴로만 한다. 설정 화면에 토글이 없고 FE는 `PUT /api/users/me/data-consent`를 부르지 않는다. 동의의 진실은 `GET /api/users/me`의 `dataConsent { agreed, version, updatedAt }`(답한 적 없으면 셋 다 null)이고, 플레이 시작(`begin`·`restart`·악보 `resetRun`)에서 `app/dataConsent.readCurrentConsent()`가 `agreed === true && version === domain/signupTerms.dataConsentVersion()`을 읽어 `PlayLog.consent`에 저장하며 업로드 `consent`가 그 값이다(비로그인·null·판 불일치·필드 없는 옛 로그는 false). 동의 저장과 판이 바뀐 회원의 재동의는 가입 동의 화면(2단계-B, `POST /api/users/me/signup-consent`)이 맡는다. 연주 기록 활용 본문의 「동의 철회는 회원 탈퇴로 할 수 있어요.」는 배포 전에 넣어 판은 그대로다.
 - **프로필:** 상단바 우측 아바타(`components/shell/ProfileMenu`)를 누르면 닉네임·제공자 배지·설정·로그아웃 메뉴가 열린다. 프로필 이미지가 없으면 닉네임 첫 글자를 보인다. 바깥 클릭·Esc로 닫힌다(`ui/Menu`, Esc면 아바타로 초점을 돌려준다).
 
 ## 디버그
@@ -404,7 +432,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
    ```
 3. 브리지 실행(다른 터미널): `pip install pyserial websockets` → `python EMB/tools/ws_bridge.py COM5` (기본 921600, `ws://localhost:8765`)
 4. `npm run dev` → 브라우저에서 **세팅**(`/setup`) → 스틱 연결 "WebSocket 브리지" 선택 → `/monitor/stick`
-5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`).
+5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`). 모의 스틱은 `dongle` 옵션으로 LINK(1초 + 변화 시)를 흉내 내고, `dropHand`·`restoreHand`·`reboot`로 한 손 끊김→복귀·재부팅(STATUS 비트 5 + 시계 0부터, SET_PAD_TABLE을 받으면 비트 5 해제)을 흉내 낸다. ROUTE로 감싼 명령은 마스크의 손에만 적용한다. 단위 테스트가 이 빌더·시나리오를 쓴다.
 
 ### 2스틱 WS 연동
 

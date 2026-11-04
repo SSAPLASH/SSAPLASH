@@ -16,6 +16,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   timeSignature: '4/4',
   durationMs: 60000,
   hasAccompaniment: false,
+  accompanimentStatus: 'NONE',
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,
@@ -67,14 +68,14 @@ describe('MySongRow', () => {
     expect(html).toContain('studio-row-stage');
     expect(html).toContain('처리 중');
     expect(html).not.toContain('ui-btn');
-    expect(html).not.toContain('song-menu');
+    expect(html).not.toContain('ui-more-menu');
     expect(html).toContain('studio-badge-active');
   });
 
   it('⋯ 메뉴는 onEdit이 있을 때만(완료·실패 행)', () => {
     expect(row(song())).toContain('aria-label="별빛 산책 메뉴"');
-    expect(row(song({ status: 'FAILED' }))).toContain('song-menu');
-    expect(row(song(), false, false)).not.toContain('song-menu');
+    expect(row(song({ status: 'FAILED' }))).toContain('ui-more-menu');
+    expect(row(song(), false, false)).not.toContain('ui-more-menu');
   });
 
   it('날짜 칸은 dateLabel 결과', () => {
@@ -115,12 +116,21 @@ describe('MySongCard 보강', () => {
 
   it('⋯ 메뉴 트리거는 IconButton sm', () => {
     const html = card(song());
-    expect(html).toContain('ui-icon-btn ui-icon-btn-sm song-menu-btn');
+    expect(html).toContain('ui-icon-btn ui-icon-btn-sm ui-more-menu-btn');
     expect(html).toContain('studio-card-menu');
   });
 
   it('MIDI 곡은 MIDI 칩, 음원 곡은 칩 없음', () => {
     expect(card(song())).toContain('studio-chip">MIDI');
     expect(card(song({ source: 'AUDIO' }))).not.toContain('studio-chip');
+  });
+});
+
+describe('반주 배지 (CHART-002 반주 상태)', () => {
+  it('완료 행의 반주 생성 중·실패만 배지를 붙인다', () => {
+    expect(row(song({ accompanimentStatus: 'GENERATING' }))).toContain('반주 생성 중');
+    expect(row(song({ accompanimentStatus: 'FAILED' }))).toContain('반주 생성 실패');
+    expect(row(song({ accompanimentStatus: 'READY' }))).not.toContain('반주 생성');
+    expect(row(song({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' }))).not.toContain('반주 생성');
   });
 });

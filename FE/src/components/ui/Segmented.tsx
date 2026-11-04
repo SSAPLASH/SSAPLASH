@@ -1,4 +1,4 @@
-// Figma Studio / ViewToggle 203:682 — 세그먼트 선택(보기 전환·탭·필터). role="radiogroup", 좌우 화살표 이동.
+// Figma Studio / ViewToggle 203:682 · Controls / Segmented 477:28471(같은 치수) — 세그먼트 선택(보기 전환·탭·필터). role="radiogroup", 좌우 화살표 이동.
 import type { KeyboardEvent, ReactNode } from 'react';
 import './Segmented.css';
 

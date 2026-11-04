@@ -22,6 +22,7 @@ import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { freeStage } from '@/domain/freeStage';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { stopFree } from '@/app/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
 import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
@@ -75,6 +76,7 @@ export function FreePlayPage() {
   const reconnect = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);
+  const reconnectHint = useReconnect((s) => s.hint);
   const reconnectAvailable = useReconnect((s) => s.available);
   const doReconnect = useReconnect((s) => s.reconnect);
 
@@ -86,6 +88,11 @@ export function FreePlayPage() {
   useEffect(() => {
     setSoundOnHit(true);
     inputManager.setCandidateProvider(null);
+  }, []);
+
+  // 떠날 때 녹음 중이면 정지해 저장 창으로 넘긴다(녹음 중이 아니면 스토어가 무시한다)
+  useEffect(() => {
+    return () => stopFree('leave');
   }, []);
 
   // 세션 통계. 자세(60Hz)와 분리하려고 store를 직접 구독한다. 페이지를 떠나면 사라진다
@@ -125,7 +132,7 @@ export function FreePlayPage() {
           <DisconnectBand
             left={connected[0]}
             right={connected[1]}
-            reconnect={{ status: reconnect, attempt, max }}
+            reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
             onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
           />
         )}

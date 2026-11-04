@@ -2,7 +2,7 @@
 .ui-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-m);
+  gap: var(--space-s);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
