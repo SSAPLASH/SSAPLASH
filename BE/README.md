@@ -763,6 +763,7 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와
 `eclipse-temurin:21-jdk`를 사용하며 `./gradlew --no-daemon test`, `./gradlew --no-daemon bootJar`를 실행한다.
+필수 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
 필수 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
 `./gradlew --no-daemon timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
 사용하고 기존 루프백·테스트 JVM IPv4 설정을 유지한다. 로컬 통과와 실제 CI 통과는 구분한다.
