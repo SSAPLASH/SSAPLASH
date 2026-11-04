@@ -55,6 +55,8 @@ public class UserController {
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "401", description = "토큰 없음·만료·무효·탈퇴 회원 (UNAUTHORIZED)",
 			content = @Content(mediaType = "application/problem+json"))
+	@ApiResponse(responseCode = "422", description = "서버에 설정된 허용 판에 없는 약관·개인정보·데이터 활용 안내의 판 (SIGNUP_CONSENT_VERSION_INVALID)",
+			content = @Content(mediaType = "application/problem+json"))
 	@PostMapping("/me/signup-consent")
 	public UserMeResponse saveSignupConsent(AuthUser me, @Valid @RequestBody SignupConsentRequest request) {
 		try {
