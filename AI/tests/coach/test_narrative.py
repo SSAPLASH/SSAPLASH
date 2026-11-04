@@ -71,7 +71,7 @@ def test_백분율과_구간_길이_같은_파생_숫자는_허용한다():
     assert check(text, _facts()) == []
 
 
-@pytest.mark.parametrize("word", ["점수", "정확도", "못해요", "형편없", "최악"])
+@pytest.mark.parametrize("word", ["점수", "못해요", "형편없", "최악"])
 def test_점수와_비난_표현은_걸린다(word):
     assert any(word in p for p in check(f"{word}이 눈에 띄어요. 연습해 보세요.", _facts()))
 
@@ -162,8 +162,11 @@ def test_프롬프트는_약점과_판정과_지난_연주를_담는다():
     assert "지난 연주" in prompt and "비교하지 마세요" not in prompt
 
 
-def test_이력이_없으면_비교하지_말라고_알린다():
-    assert "비교하지 마세요" in build_user_prompt(_facts())
+def test_이력이_없으면_지난_연주_줄을_두지_않는다():
+    # "비교하지 마세요" 같은 부정 지시는 모델이 그 말을 답에 흘리므로 아예 쓰지 않는다
+    prompt = build_user_prompt(_facts())
+
+    assert "지난 연주" not in prompt and "비교" not in prompt
 
 
 def test_시스템_프롬프트는_규칙을_담는다():
@@ -430,3 +433,84 @@ def test_숫자_뒤의_단위_ms는_영어_글자로_치지_않는다():
     assert check("평균 21.7ms 늦게 치고 있어요. 박 소리를 듣고 제때 쳐 보세요.", facts) == []
     assert check("평균 21.7 ms로 늦게 치고 있어요. 박 소리를 듣고 제때 쳐 보세요.", facts) == []
     assert check("평균 21.7ms 늦게 쳐요. good job이에요.", facts)  # 다른 영어는 여전히 걸린다
+
+
+# ---------- 위반 문장만 덜어내는 보정 ----------
+
+SNARE_PRAISE = "특히 스네어 연주가 좋았어요."
+
+
+def test_약점_패드를_칭찬한_문장만_덜어내고_통과한다():
+    text = (
+        "전체적으로 기본기는 잘 잡혀 있어요. "
+        + SNARE_PRAISE
+        + " 7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
+    )
+
+    outcome = write_narrative(_facts(), lambda s, u: text)
+
+    assert outcome.repaired is True and outcome.attempts == 1
+    assert (
+        SNARE_PRAISE not in outcome.text
+        and "기본기" in outcome.text
+        and "반복해 보세요" in outcome.text
+    )
+    assert check(outcome.text, _facts()) == []
+
+
+def test_사실에_없는_숫자가_든_문장도_덜어낸다():
+    text = (
+        "전체적으로 기본기는 잘 잡혀 있어요. 노트 99개 중 77개를 놓쳤어요. "
+        "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
+    )
+
+    outcome = write_narrative(_facts(), lambda s, u: text)
+
+    assert outcome.repaired and "99" not in outcome.text and "77" not in outcome.text
+
+
+def test_덜어낸_뒤_연습_안내가_없으면_보정하지_않고_다시_쓰게_한다():
+    from ssaplash_ai.coach.narrative import repair
+
+    text = "기본기는 잘 잡혀 있어요. 스네어 연주가 훌륭했어요. 전체적으로 안정적이에요."
+
+    assert repair(text, _facts()) is None
+
+
+def test_덜어낸_뒤_문장이_한_개만_남으면_보정하지_않는다():
+    from ssaplash_ai.coach.narrative import repair
+
+    text = "스네어 연주가 훌륭했어요. 7~12초 구간을 느린 템포로 반복해 보세요."
+
+    assert repair(text, _facts()) is None
+
+
+def test_문제가_없으면_보정하지_않는다():
+    from ssaplash_ai.coach.narrative import repair
+
+    assert repair(GOOD_TEXT, _facts()) is None
+    assert write_narrative(_facts(), lambda s, u: GOOD_TEXT).repaired is False
+
+
+def test_보정해도_문장_단위_위반이_아니면_그대로_다시_쓰게_한다():
+    # 영어 한 문장이 섞였지만 나머지가 충분하면 그 문장만 덜어낸다
+    text = (
+        "기본기는 잘 잡혀 있어요. Good job everyone. "
+        "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
+    )
+
+    outcome = write_narrative(_facts(), lambda s, u: text)
+
+    assert outcome.repaired and "Good" not in outcome.text
+
+
+def test_굵게_표시는_지우고_정확도_말은_숫자가_없으면_허용한다():
+    from ssaplash_ai.coach.narrative import clean
+
+    assert clean("**특정 구간**을 `반복`해 보세요.") == "특정 구간을 반복해 보세요."
+    assert check("정확도를 높이려면 7~12초 구간을 느린 템포로 반복해 보세요.", _facts()) == []
+    assert any("정확도" in p for p in check("정확도 85%를 목표로 반복해 보세요.", _facts()))
+
+
+def test_물음표로_끝나는_문장도_허용한다():
+    assert check("7~12초 구간을 느린 템포로 반복해 보는 건 어떨까요?", _facts()) == []

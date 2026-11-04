@@ -77,7 +77,7 @@ def run_model(
     rows: list[dict] = []
     times: list[float] = []
     violations: Counter[str] = Counter()
-    passed = first_try = 0
+    passed = first_try = repaired = 0
     for case, facts in cases.items():
         for i in range(repeats):
             started = time.perf_counter()
@@ -86,7 +86,8 @@ def run_model(
             times.append(elapsed)
             ok = outcome.text is not None
             passed += ok
-            first_try += ok and outcome.attempts == 1
+            first_try += ok and outcome.attempts == 1 and not outcome.repaired
+            repaired += outcome.repaired
             for v in outcome.violations:
                 violations[re.sub(r"['\d].*", "", v).strip()] += 1
             rows.append(
@@ -95,6 +96,7 @@ def run_model(
                     "case": case,
                     "repeat": i + 1,
                     "ok": ok,
+                    "repaired": outcome.repaired,
                     "attempts": outcome.attempts,
                     "seconds": round(elapsed, 3),
                     "text": outcome.text,
@@ -109,6 +111,7 @@ def run_model(
         "total": total,
         "passed": passed,
         "first_try": first_try,
+        "repaired": repaired,
         "median_sec": statistics.median(times) if times else 0.0,
         "max_sec": max(times) if times else 0.0,
         "violations": violations.most_common(5),
@@ -121,14 +124,14 @@ def render(results: list[dict]) -> str:
     lines = [
         "# LLM 총평 후보 모델 비교",
         "",
-        "| 모델 | 통과 | 첫 시도 통과 | 시간 중앙값(초) | 최대(초) | 가장 흔한 위반 |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| 모델 | 통과 | 그대로 통과 | 문장 덜어내고 통과 | 시간 중앙값(초) | 최대(초) | 가장 흔한 위반 |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in results:
         top = ", ".join(f"{v}({n})" for v, n in r["violations"]) or "-"
         lines.append(
             f"| {r['model']} | {r['passed']}/{r['total']} | {r['first_try']}/{r['total']} "
-            f"| {r['median_sec']:.1f} | {r['max_sec']:.1f} | {top} |"
+            f"| {r['repaired']}/{r['total']} | {r['median_sec']:.1f} | {r['max_sec']:.1f} | {top} |"
         )
     lines += [
         "",
@@ -138,7 +141,7 @@ def render(results: list[dict]) -> str:
     for r in results:
         lines += [f"## {r['model']}", ""]
         for row in r["rows"]:
-            mark = "통과" if row["ok"] else "거절"
+            mark = ("덜어내고 통과" if row["repaired"] else "통과") if row["ok"] else "거절"
             lines.append(
                 f"- **{row['case']} #{row['repeat']}** "
                 f"({mark}, 시도 {row['attempts']}, {row['seconds']:.1f}초)"
@@ -199,6 +202,7 @@ def log_to_mlflow(
             key: {
                 "passRate": r["passed"] / total,
                 "firstTryRate": r["first_try"] / total,
+                "repairedRate": r["repaired"] / total,
                 "medianSec": r["median_sec"],
                 "maxSec": r["max_sec"],
                 "nViolations": float(r["n_violations"]),
