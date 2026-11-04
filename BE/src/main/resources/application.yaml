@@ -92,6 +92,16 @@ worker:
     accompaniment-write-access-key: ${WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY:${AUDIO_STORAGE_ACCESS_KEY:}}
     accompaniment-write-secret-key: ${WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY:${AUDIO_STORAGE_SECRET_KEY:}}
 
+midi:
+  storage:
+    enabled: ${MIDI_STORAGE_ENABLED:false}
+    endpoint: ${MIDI_STORAGE_ENDPOINT:}
+    region: ${MIDI_STORAGE_REGION:us-east-1}
+    bucket: ${MIDI_STORAGE_BUCKET:}
+    access-key: ${MIDI_STORAGE_ACCESS_KEY:}
+    secret-key: ${MIDI_STORAGE_SECRET_KEY:}
+    private-bucket-confirmed: ${MIDI_STORAGE_PRIVATE_BUCKET_CONFIRMED:false}
+
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8080}

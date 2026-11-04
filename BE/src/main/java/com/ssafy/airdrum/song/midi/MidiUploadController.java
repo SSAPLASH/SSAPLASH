@@ -45,13 +45,15 @@ public class MidiUploadController {
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@Operation(summary = "MIDI 업로드 → 채보 변환",
 			description = "표준 MIDI(format 0·1) 1 MiB 이하. 드럼 채널(10)의 GM 노트를 패드로 바꿔 EASY·NORMAL·HARD 채보를 만들고 "
-					+ "내 곡으로 저장한다. 응답은 곡 상세와 같다. 악보 이미지는 없으며(notationStatus=PENDING) 원본 파일은 보관하지 않는다.")
+					+ "내 곡으로 저장한다. 응답은 곡 상세와 같다. 원본은 비공개로 보관하며 드럼 외 노트가 있으면 반주를 별도로 비동기 생성한다.")
 	@ApiResponse(responseCode = "201", description = "곡·채보 생성")
 	@ApiResponse(responseCode = "400", description = "요청 형태·제목 오류: MIDI_INVALID",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "413", description = "파일 1 MiB 초과: MIDI_TOO_LARGE",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "422", description = "변환 불가: MIDI_UNSUPPORTED, 드럼 노트 없음: MIDI_NO_DRUM_NOTES",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "503", description = "원본 저장소 장애 또는 접수 시간 초과: MIDI_STORAGE_UNAVAILABLE",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	public ResponseEntity<SongDetail> upload(@Parameter(hidden = true) AuthUser me,
 			@Parameter(description = "곡 제목, 1~100자") @RequestParam(value = "title", required = false) String title,

@@ -47,7 +47,7 @@ public class MidiChartConverter {
 	}
 
 	/** 선언 크기를 믿지 않고 상한 + 1바이트까지만 읽는다. */
-	private static byte[] read(MultipartFile file) {
+	static byte[] read(MultipartFile file) {
 		if (file.getSize() > LIMIT) throw new BusinessException(MidiErrorCode.TOO_LARGE);
 		byte[] bytes;
 		try (var in = file.getInputStream()) {

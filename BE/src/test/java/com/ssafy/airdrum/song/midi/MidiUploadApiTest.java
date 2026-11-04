@@ -14,6 +14,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 
@@ -53,6 +55,8 @@ class MidiUploadApiTest {
 	AccessTokenService tokens;
 	@MockitoSpyBean
 	MidiChartRepository repository;
+	@MockitoBean
+	MidiOriginalStore midiOriginalStore;
 
 	final JsonMapper json = new JsonMapper();
 	long user;
@@ -65,6 +69,10 @@ class MidiUploadApiTest {
 
 	@AfterEach
 	void cleanup() {
+		db.update("DELETE FROM file_cleanup_tasks WHERE user_id=?", user);
+		db.update("DELETE FROM midi_accompaniment_attempts WHERE job_id IN (SELECT id FROM midi_accompaniment_jobs WHERE user_id=?)", user);
+		db.update("DELETE FROM midi_accompaniment_jobs WHERE user_id=?", user);
+		db.update("DELETE FROM midi_original_uploads WHERE user_id=?", user);
 		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE owner_id=?", user);
 		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT c.id FROM charts c JOIN songs s ON s.id=c.song_id WHERE s.owner_id=?)", user);
 		db.update("DELETE FROM charts WHERE song_id IN (SELECT id FROM songs WHERE owner_id=?)", user);
@@ -124,6 +132,7 @@ class MidiUploadApiTest {
 		assertThat(song.path("bpm").decimalValue()).isEqualByComparingTo("100.00");
 		assertThat(song.path("timeSignature").asString()).isEqualTo("3/4");
 		assertThat(song.path("hasAccompaniment").asBoolean()).isFalse();
+		assertThat(song.path("accompanimentStatus").asString()).isEqualTo("NONE");
 		// 마지막 노트(하이햇 2640 tick)에서 3/4 한 마디(1440 tick) 뒤 = 4080 tick, 100BPM이면 5100ms
 		assertThat(song.path("durationMs").asInt()).isEqualTo(5100);
 		var charts = song.path("charts");
@@ -139,6 +148,41 @@ class MidiUploadApiTest {
 			assertThat(row.get("version")).isEqualTo(1);
 			assertThat(row.get("no_pages")).isEqualTo(true);
 		});
+	}
+
+	@Test
+	void 멜로디가_있으면_반주_상태는_최신_작업과_기존_키를_따른다() throws Exception {
+		var bytes=MidiFixtures.ppq(480).format0().drum(0,36).note(480,0,60,100,120).bytes();
+		var result=send(upload(bytes).param("title","반주 곡"),user);
+		assertThat(result.getResponse().getStatus()).isEqualTo(201);
+		var detail=body(result);
+		long id=detail.path("id").asLong();
+		assertThat(detail.path("accompanimentStatus").asString()).isEqualTo("GENERATING");
+		assertThat(db.queryForObject("SELECT count(*) FROM midi_original_uploads WHERE song_id=? AND status='ACCEPTED'",Integer.class,id)).isEqualTo(1);
+		db.update("UPDATE midi_accompaniment_jobs SET status='FAILED',finished_at=clock_timestamp() WHERE song_id=?",id);
+		assertThat(body(send(get("/api/v1/songs/"+id),user)).path("accompanimentStatus").asString()).isEqualTo("FAILED");
+		db.update("""
+				INSERT INTO midi_accompaniment_jobs(song_id,user_id,original_id,timing,duration_ms,status)
+				SELECT song_id,user_id,original_id,timing,duration_ms,'QUEUED' FROM midi_accompaniment_jobs WHERE song_id=?
+				""",id);
+		assertThat(body(send(get("/api/v1/songs/"+id),user)).path("accompanimentStatus").asString()).isEqualTo("GENERATING");
+		var page=body(send(get("/api/v1/songs").param("source","MINE").param("size","1"),user));
+		assertThat(page.path("totalElements").asInt()).isEqualTo(1);
+		assertThat(page.path("items")).hasSize(1);
+		assertThat(page.path("items").get(0).path("accompanimentStatus").asString()).isEqualTo("GENERATING");
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?","accompaniment/"+id+".flac",id);
+		detail=body(send(get("/api/v1/songs/"+id),user));
+		assertThat(detail.path("accompanimentStatus").asString()).isEqualTo("READY");
+		assertThat(detail.path("hasAccompaniment").asBoolean()).isTrue();
+	}
+
+	@Test
+	void 원본_저장에_실패하면_503과_정리_예약을_남긴다() throws Exception {
+		doThrow(new com.ssafy.airdrum.common.error.BusinessException(MidiErrorCode.STORAGE_UNAVAILABLE))
+				.when(midiOriginalStore).putAndVerify(any(),any(),any());
+		problem(send(upload(groove()).param("title","곡"),user),503,"MIDI_STORAGE_UNAVAILABLE");
+		assertThat(db.queryForObject("SELECT count(*) FROM midi_original_uploads WHERE user_id=? AND status='RETIRED'",Integer.class,user)).isEqualTo(1);
+		assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=? AND file_role='MIDI_ORIGINAL'",Integer.class,user)).isEqualTo(1);
 	}
 
 	@Test

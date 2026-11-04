@@ -8,7 +8,8 @@ public enum MidiErrorCode implements ErrorCode {
 	INVALID(HttpStatus.BAD_REQUEST, "MIDI 업로드 요청이 올바르지 않습니다."),
 	TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "MIDI 파일의 허용 크기를 초과했습니다."),
 	UNSUPPORTED(HttpStatus.UNPROCESSABLE_ENTITY, "변환할 수 없는 MIDI 파일입니다."),
-	NO_DRUM_NOTES(HttpStatus.UNPROCESSABLE_ENTITY, "MIDI 파일에 변환할 드럼 노트가 없습니다.");
+	NO_DRUM_NOTES(HttpStatus.UNPROCESSABLE_ENTITY, "MIDI 파일에 변환할 드럼 노트가 없습니다."),
+	STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "MIDI 원본 저장소를 사용할 수 없습니다.");
 
 	private final HttpStatus status;
 	private final String title;

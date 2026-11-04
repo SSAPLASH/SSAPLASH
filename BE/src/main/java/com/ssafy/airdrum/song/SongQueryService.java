@@ -32,7 +32,7 @@ public class SongQueryService {
 						.stream().collect(Collectors.groupingBy(ChartVersionRepository.Summary::getSongId));
 		var coverUrls=covers.forSongs(userId,rows);
 		var items = rows.stream().map(s -> new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
-				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(),
+				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
 				summaries.getOrDefault(s.getId(), List.of()).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
 				s.getCreatedAt(),coverUrls.get(s.getId()),s.getSongLevel(),failure(s))).toList();
 		return PageResponse.of(items, page, size, total);
@@ -44,7 +44,7 @@ public class SongQueryService {
 				.map(v -> new ChartSummary(v.getChartId(), v.getDifficulty(), v.getChartVersionId(), v.getVersion(),
 						v.getNoteCount(), v.getNotationStatus())).toList();
 		return new SongDetail(s.getId(), s.getTitle(), s.getArtist(), s.getSource(), s.getStatus(), s.getBpm(),
-				s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(),
+				s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
 				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts,covers.forSongs(userId,List.of(s)).get(s.getId()),s.getSongLevel(),failure(s));
 	}
 	private JobError failure(SongRepository.View song) {
