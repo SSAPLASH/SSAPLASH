@@ -7,7 +7,8 @@ import type { NoteState, SessionSnapshot } from './RhythmSession';
 
 export interface LoggedHit {
   hitId: number;
-  stickId: 0 | 1;
+  /** null = 손 없음(페달 타격) */
+  stickId: 0 | 1 | null;
   pad: PadId | null;
   velocity: number;
   tHit: number;
