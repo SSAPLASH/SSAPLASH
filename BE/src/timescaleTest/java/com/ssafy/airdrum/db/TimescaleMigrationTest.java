@@ -3,6 +3,8 @@ package com.ssafy.airdrum.db;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -21,9 +23,9 @@ class TimescaleMigrationTest {
 			execute(connection, """
 					INSERT INTO users(nickname) VALUES ('전환 전 회원');
 					INSERT INTO telemetry_events(time,session_id,user_id,kind,t_recv,tags)
-					VALUES ('2026-10-01T12:00:00Z','00000000-0000-0000-0000-000000000001',1,'HIT',12.5,'{"origin":"v7"}'),
-					       ('2026-10-03T12:00:00Z','00000000-0000-0000-0000-000000000001',1,'STATUS',20.25,'{}');
-					""");
+					VALUES ('%s','00000000-0000-0000-0000-000000000001',1,'HIT',12.5,'{"origin":"v7"}'),
+					       ('%s','00000000-0000-0000-0000-000000000001',1,'STATUS',20.25,'{}');
+					""".formatted(daysAgo(9, 12), daysAgo(7, 12)));
 			var throughV9 = flyway("9");
 			assertThat(throughV9.migrate().migrationsExecuted).isEqualTo(2);
 			execute(connection, """
@@ -45,8 +47,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(20);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(21);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -79,8 +81,8 @@ class TimescaleMigrationTest {
 					.isEqualTo("2");
 			execute(connection, """
 					INSERT INTO telemetry_events(time,session_id,kind)
-					VALUES('2026-10-05T12:00:00Z','00000000-0000-0000-0000-000000000002','STATUS')
-					""");
+					VALUES('%s','00000000-0000-0000-0000-000000000002','STATUS')
+					""".formatted(daysAgo(5, 12)));
 			assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name='telemetry_events'"))
 					.isEqualTo("3");
 			assertThatThrownBy(() -> execute(connection, """
@@ -91,13 +93,13 @@ class TimescaleMigrationTest {
 			// V17: hypertable에서도 패드 varchar(16)·clock_offset_ms double precision이 적용된다.
 			execute(connection, """
 					INSERT INTO telemetry_events(time,session_id,kind,pad,baseline_pad,predicted_pad,clock_offset_ms)
-					VALUES('2026-10-05T13:00:00Z','00000000-0000-0000-0000-000000000002','HIT','HIHAT_PEDAL','HIHAT_PEDAL','HIHAT_PEDAL',1234567.891)
-					""");
+					VALUES('%s','00000000-0000-0000-0000-000000000002','HIT','HIHAT_PEDAL','HIHAT_PEDAL','HIHAT_PEDAL',1234567.891)
+					""".formatted(daysAgo(5, 13)));
 			assertThat(scalar(connection, "SELECT clock_offset_ms FROM telemetry_events WHERE pad='HIHAT_PEDAL'")).isEqualTo("1234567.891");
 			assertThatThrownBy(() -> execute(connection, """
 					INSERT INTO telemetry_events(time,session_id,kind,clock_offset_ms)
-					VALUES('2026-10-05T14:00:00Z','00000000-0000-0000-0000-000000000003','STATUS','Infinity')
-					""")).isInstanceOfSatisfying(SQLException.class,
+					VALUES('%s','00000000-0000-0000-0000-000000000003','STATUS','Infinity')
+					""".formatted(daysAgo(5, 14)))).isInstanceOfSatisfying(SQLException.class,
 							error -> assertThat(error.getSQLState()).isEqualTo("23514"));
 			latest.validate();
 			assertThat(latest.migrate().migrationsExecuted).isZero();
@@ -122,7 +124,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(29);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(30);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
@@ -172,6 +174,53 @@ class TimescaleMigrationTest {
 		}
 	}
 
+	/** 258 V30: 정책을 실행하면 90일 넘은 청크만 지워지고, 같은 정책을 다시 등록해도 실패하지 않는다. */
+	@Test
+	void v30RetentionPolicyDropsOnlyChunksOlderThan90Days() throws Exception {
+		try (var connection = connect()) {
+			execute(connection, "CREATE DATABASE timescale_test_v30");
+		}
+		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
+			execute(connection, "DROP EXTENSION IF EXISTS timescaledb");
+		}
+		var v29 = Flyway.configure().dataSource(url() + "_v30", "postgres", password())
+				.locations("classpath:db/migration").target("29").load();
+		assertThat(v29.migrate().migrationsExecuted).isEqualTo(29);
+		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
+			assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.jobs WHERE hypertable_name='telemetry_events'"))
+					.isEqualTo("0");
+			execute(connection, """
+					INSERT INTO telemetry_events(time,session_id,user_id,kind,tags)
+					VALUES ('%s','00000000-0000-0000-0000-0000000000b1',1,'STATUS','{"age":"old"}'),
+					       ('%s','00000000-0000-0000-0000-0000000000b1',1,'STATUS','{"age":"recent"}');
+					""".formatted(daysAgo(100, 12), daysAgo(10, 12)));
+			assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name='telemetry_events'"))
+					.isEqualTo("2");
+		}
+		var v30 = Flyway.configure().dataSource(url() + "_v30", "postgres", password())
+				.locations("classpath:db/migration").load();
+		assertThat(v30.migrate().migrationsExecuted).isEqualTo(1);
+		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
+			verifyRetentionPolicy(connection);
+			String job = scalar(connection, "SELECT job_id FROM timescaledb_information.jobs WHERE hypertable_name='telemetry_events'");
+			execute(connection, "CALL run_job(" + job + ")");
+			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events WHERE tags->>'age'='old'")).isEqualTo("0");
+			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events WHERE tags->>'age'='recent'")).isEqualTo("1");
+			assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name='telemetry_events'"))
+					.isEqualTo("1");
+			// if_not_exists: 이미 정책이 있는 DB에서 같은 등록을 다시 실행해도 실패하지 않고 job이 늘지 않는다
+			execute(connection, "SELECT add_retention_policy('telemetry_events', INTERVAL '90 days', if_not_exists => true)");
+			verifyRetentionPolicy(connection);
+		}
+		v30.validate();
+		assertThat(v30.migrate().migrationsExecuted).isZero();
+	}
+
+	/** 오늘(UTC) 기준 days일 전 hour시. 보관 정책이 상대 시각으로 동작하므로 테스트 데이터도 고정 날짜를 쓰지 않는다. */
+	private static String daysAgo(int days, int hour) {
+		return LocalDate.now(ZoneOffset.UTC).minusDays(days).atTime(hour, 0).toInstant(ZoneOffset.UTC).toString();
+	}
+
 	private void verifyHypertable(Connection connection) throws SQLException {
 		assertThat(scalar(connection, "SELECT count(*) FROM information_schema.columns WHERE table_name='songs' AND column_name='cover_key' AND is_nullable='YES'")).isEqualTo("1");
 			assertThat(scalar(connection, "SELECT extversion FROM pg_extension WHERE extname='timescaledb'")).isEqualTo("2.30.2");
@@ -179,8 +228,17 @@ class TimescaleMigrationTest {
 				.isEqualTo("1");
 		assertThat(scalar(connection, "SELECT extract(epoch FROM time_interval)::bigint FROM timescaledb_information.dimensions WHERE hypertable_name='telemetry_events' AND column_name='time'"))
 				.isEqualTo("86400");
+		verifyRetentionPolicy(connection);
+	}
+
+	/** 258 V30: telemetry_events에 90일 보관 정책 job이 정확히 하나 있다. */
+	private void verifyRetentionPolicy(Connection connection) throws SQLException {
 		assertThat(scalar(connection, "SELECT count(*) FROM timescaledb_information.jobs WHERE hypertable_name='telemetry_events'"))
-				.isEqualTo("0");
+				.isEqualTo("1");
+		assertThat(scalar(connection, "SELECT proc_name FROM timescaledb_information.jobs WHERE hypertable_name='telemetry_events'"))
+				.isEqualTo("policy_retention");
+		assertThat(scalar(connection, "SELECT (config->>'drop_after')::interval = INTERVAL '90 days' FROM timescaledb_information.jobs WHERE hypertable_name='telemetry_events'"))
+				.isEqualTo("t");
 	}
 
 	private Flyway flyway(String target) {
