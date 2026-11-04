@@ -69,7 +69,7 @@ static const float TIP_AXIS[3] = {1.0f, 0.0f, 0.0f};
 #define BIAS_SAMPLES     1666          /* 부팅 시 바이어스 측정 1초 */
 #define BIAS_MAX_SD_DPS  3.0f          /* 이보다 흔들리면 측정 실패 → 기본값 */
 static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 실측 (보드 1개 값. 플래시에 저장값이 없을 때만) */
-#define BIAS_SAVE_SD_DPS 0.8f          /* 부팅 측정이 이만큼 조용하면(책상 위) 이 보드 값으로 플래시에 저장 */
+#define BIAS_SAVE_SD_DPS 0.5f          /* 부팅 측정이 이만큼 조용하면(책상 위) 이 보드 값으로 플래시에 저장. 11/4 손에 쥔 부팅이 sd 0.6으로 저장돼 0.8 → 0.5 */
 #define BIAS_FILE        "/gyro_bias.bin"
 
 /* 정지 중 자이로 바이어스 재추정 (S15P31A307-234)
@@ -160,6 +160,7 @@ static uint8_t        role = STICK_ROLE;               /* 0 왼손, 1 오른손 
 static uint8_t        mode = 0;                        /* 0 연주, 1 설정(+POSE) */
 static int16_t        pose_rate_hz = 50;
 static int16_t        haptic_enable = 1, haptic_strength = 200;
+static int16_t        lat_log = 0;                    /* SET_PARAM 0x10 = 1: 타격마다 펌웨어 구간 지연 LOG "LT" (233, 측정용) */
 static uint8_t        hit_seq = 0, pose_seq = 0;
 static uint32_t       n_samples = 0, n_missed = 0;
 
@@ -398,6 +399,7 @@ static int16_t param_get(uint8_t id)
     case 0x0D: return (int16_t)hp.rearm_idle_ms;
     case 0x0E: return hp.ts_corr_us;
     case 0x0F: return hp.vel_max_dps;
+    case 0x10: return lat_log;
     }
     return 0;
 }
@@ -419,12 +421,13 @@ static bool param_set(uint8_t id, int16_t v)
     case 0x0D: hp.rearm_idle_ms = (uint16_t)clampi(v, 0, 1000); break;
     case 0x0E: hp.ts_corr_us = clampi(v, -20000, 20000); break;
     case 0x0F: hp.vel_max_dps = clampi(v, 200, 2000); break;
+    case 0x10: lat_log = clampi(v, 0, 1); return true;   /* 검출기와 무관 */
     default: return false;
     }
     hd.p = hp;                                          /* 검출기 상태는 유지하고 파라미터만 교체 */
     return true;
 }
-static const uint8_t PARAM_IDS[] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F};
+static const uint8_t PARAM_IDS[] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10};
 
 /* ===================== 명령 처리 ===================== */
 /* BLE 콜백은 다른 태스크에서 돌기 때문에 큐에 넣고 loop()에서 처리한다. SYNC 수신 시각만 콜백에서 바로 찍는다 */
@@ -779,6 +782,7 @@ void app_loop()
     st_prev = hd.st;
 
     if (fired) {
+        uint32_t t_det = now_us();                      /* 233: 샘플(DRDY 인터럽트 시각 t) → 검출 끝 */
         float el, az;
         pose_angles(&pose, &el, &az);
         pad_result_t pr = pad_classify(&pads, el, az);
@@ -805,6 +809,12 @@ void app_loop()
         uint32_t t_sent = now_us();
         if (haptic_enable)                              /* 세기: hapticStrength × (0.6 + 0.4 × 타격 세기) → 클릭 3단계 */
             haptic_click((uint8_t)(haptic_strength * (77 + 51 * ev.velocity / 127) / 128));
+        if (lat_log) {                                  /* 233: 샘플 시각 t 기준 µs. 검출 끝 / 전송 끝 / 진동 GO 쓰기 끝 */
+            uint32_t t_hap = now_us();
+            char m[20];
+            snprintf(m, sizeof m, "LT %lu %lu %lu", (unsigned long)(t_det - t), (unsigned long)(t_sent - t), (unsigned long)(t_hap - t));
+            send_log(m);
+        }
 #if SERIAL_MODE == SERIAL_TEXT
         if (Serial)
             Serial.printf("%3u %8lu %-9s%c %4d %4d %3u %4u %3u %3u %4.1f | %4lu | %lu\r\n",
