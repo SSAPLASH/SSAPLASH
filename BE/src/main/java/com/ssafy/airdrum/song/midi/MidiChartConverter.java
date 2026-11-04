@@ -33,8 +33,16 @@ public class MidiChartConverter {
 		return convert(read(file));
 	}
 
-	/** 이미 읽은 MIDI 바이트를 변환한다. 공용 곡 카탈로그 등록(254번)이 저장소 리소스로 부른다. 크기 규칙은 업로드와 같다. */
+	/** 이미 읽은 MIDI 바이트를 변환한다. 첫 박은 0틱(사용자 MIDI 업로드). 크기 규칙은 업로드와 같다. */
 	public MidiChartDocuments.Song convert(byte[] bytes) {
+		return convert(bytes, 0);
+	}
+
+	/**
+	 * 0틱 = 원본 음원 0초인 MIDI를 첫 박 {@code offsetMs} 기준으로 변환한다. 공용 곡 카탈로그 등록(254·260번)이 저장소 리소스로 부른다.
+	 * 첫 박보다 앞선 노트가 있으면 {@link MidiErrorCode#UNSUPPORTED}다.
+	 */
+	public MidiChartDocuments.Song convert(byte[] bytes, int offsetMs) {
 		if (bytes == null || bytes.length == 0) throw new BusinessException(MidiErrorCode.INVALID);
 		if (bytes.length > LIMIT) throw new BusinessException(MidiErrorCode.TOO_LARGE);
 		var sequence = reader.read(bytes);
@@ -43,7 +51,8 @@ public class MidiChartConverter {
 		if (notes.size() > MAX_NOTES) throw new BusinessException(MidiErrorCode.UNSUPPORTED, "드럼 노트는 50,000개 이하여야 합니다.");
 		if (log.isDebugEnabled()) log.debug("MIDI 드럼 노트 {}개 중 패드에 없는 {}개 제외", sequence.events().size(),
 				sequence.events().size() - notes.size());
-		return documents.build(sequence, DifficultyThinner.thin(notes, sequence.ppq()));
+		var rebased = documents.rebase(sequence, notes, offsetMs);
+		return documents.build(rebased.sequence(), offsetMs, DifficultyThinner.thin(rebased.notes(), sequence.ppq()));
 	}
 
 	/** 선언 크기를 믿지 않고 상한 + 1바이트까지만 읽는다. */

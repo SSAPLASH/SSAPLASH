@@ -43,11 +43,70 @@ public class MidiChartDocuments {
 	}
 
 	public record Built(String notes, String timing, int noteCount) {}
-	public record Song(BigDecimal bpm, String timeSignature, int durationMs, Map<Difficulty, Built> charts) {}
+	/** {@code offsetMs}는 원본 음원 0초 기준 첫 박 시각이다. 사용자 MIDI 업로드는 0(260번 설계 3-3절). */
+	public record Song(BigDecimal bpm, String timeSignature, int durationMs, int offsetMs, Map<Difficulty, Built> charts) {}
+	/** 첫 박을 0틱으로 옮긴 시퀀스와 노트. */
+	record Rebased(DrumSequence sequence, List<DrumNote> notes) {}
 
 	Song build(DrumSequence sequence, Map<Difficulty, List<DrumNote>> charts) {
+		return build(sequence, 0, charts);
+	}
+
+	/**
+	 * 첫 박(원본 음원 {@code offsetMs})을 0틱으로 옮긴다(260번 설계 4-1·4-2절). 노트·템포·박자표·길이 tick에서 첫 박 tick을 빼고,
+	 * 첫 박에 걸린 템포·박자표를 0틱에 둔다. 그래서 솎기 격자와 notation.tick이 첫 박에서 시작하고, timeMs는 offsetMs + tick의 ms가 된다.
+	 * 첫 박보다 32분음표 절반(ppq/8) 넘게 앞선 노트가 있으면 변환하지 않는다(설계 U1). 그 안쪽은 0틱으로 본다.
+	 */
+	Rebased rebase(DrumSequence sequence, List<DrumNote> notes, int offsetMs) {
+		if (offsetMs == 0) return new Rebased(sequence, notes);
+		var original = timing(sequence, 0);
+		long first = tickAt(original, offsetMs);
+		long tolerance = sequence.ppq() / 8;
+		long earliest = Long.MAX_VALUE;
+		var moved = new ArrayList<DrumNote>(notes.size());
+		for (var n : notes) {
+			long tick = n.tick() - first;
+			if (tick < -tolerance) earliest = Math.min(earliest, n.tick());
+			moved.add(new DrumNote(Math.max(0, tick), n.pad(), n.velocity(), n.durationTicks()));
+		}
+		if (earliest != Long.MAX_VALUE)
+			throw new BusinessException(MidiErrorCode.UNSUPPORTED, "offsetMs(" + offsetMs + "ms)보다 앞선 드럼 노트가 있습니다(첫 노트 "
+					+ Math.round(reader.milliseconds(original, earliest)) + "ms). offsetMs는 첫 노트와 같거나 앞이어야 합니다.");
+		var tempos = new ArrayList<Tempo>();
+		for (var t : sequence.tempos()) {
+			if (t.tick() <= first) tempos.clear();
+			tempos.add(new Tempo(Math.max(0, t.tick() - first), t.microsPerQuarter()));
+		}
+		var signatures = new ArrayList<Signature>();
+		for (var sig : sequence.signatures()) {
+			if (sig.tick() <= first) signatures.clear();
+			signatures.add(new Signature(Math.max(0, sig.tick() - first), sig.numerator(), sig.denominator()));
+		}
+		var events = new ArrayList<MidiSequenceReader.DrumEvent>(sequence.events().size());
+		for (var e : sequence.events())
+			events.add(new MidiSequenceReader.DrumEvent(Math.max(0, e.tick() - first), e.pitch(), e.velocity(), e.durationTicks()));
+		var shifted = new DrumSequence(sequence.ppq(), List.copyOf(tempos), List.copyOf(signatures), List.copyOf(events),
+				Math.max(0, sequence.lengthTicks() - first));
+		return new Rebased(shifted, List.copyOf(moved));
+	}
+
+	/** {@code ms}(offset 0 기준)에 해당하는 가장 가까운 tick. 템포 맵을 앞에서부터 적분한다. */
+	private static long tickAt(ChartResponses.Timing timing, double ms) {
+		var map = timing.tempoMap();
+		double at = 0;
+		for (int i = 0; i < map.size(); i++) {
+			var tempo = map.get(i);
+			double span = i + 1 < map.size() ? (map.get(i + 1).tick() - tempo.tick()) * 60000.0 / timing.ppq() / tempo.bpm()
+					: Double.POSITIVE_INFINITY;
+			if (ms <= at + span) return Math.round(tempo.tick() + (ms - at) * tempo.bpm() * timing.ppq() / 60000.0);
+			at += span;
+		}
+		throw new IllegalStateException("템포 맵이 비어 있습니다.");
+	}
+
+	Song build(DrumSequence sequence, int offsetMs, Map<Difficulty, List<DrumNote>> charts) {
 		int ppq = sequence.ppq();
-		var timing = timing(sequence);
+		var timing = timing(sequence, offsetMs);
 		String timingJson = json.writeValueAsString(timing);
 		var hard = charts.get(Difficulty.HARD);
 		long lastTick = hard.isEmpty() ? 0 : hard.stream().mapToLong(DrumNote::tick).max().getAsLong();
@@ -88,10 +147,10 @@ public class MidiChartDocuments {
 			built.put(entry.getKey(), result);
 		}
 		return new Song(BigDecimal.valueOf(timing.bpm()).setScale(2, RoundingMode.HALF_UP), timing.timeSignature(), duration,
-				built);
+				offsetMs, built);
 	}
 
-	private static ChartResponses.Timing timing(DrumSequence sequence) {
+	private static ChartResponses.Timing timing(DrumSequence sequence, int offsetMs) {
 		var tempos = new ArrayList<ChartResponses.Tempo>();
 		if (sequence.tempos().isEmpty() || sequence.tempos().getFirst().tick() != 0)
 			tempos.add(new ChartResponses.Tempo(0, bpm(DEFAULT_TEMPO_US)));
@@ -101,7 +160,7 @@ public class MidiChartDocuments {
 			signatures.add(signature(DEFAULT_SIGNATURE));
 		for (Signature s : sequence.signatures()) signatures.add(signature(s));
 		var first = signatures.getFirst();
-		return new ChartResponses.Timing(tempos.getFirst().bpm(), 0, first.numerator() + "/" + first.denominator(),
+		return new ChartResponses.Timing(tempos.getFirst().bpm(), offsetMs, first.numerator() + "/" + first.denominator(),
 				sequence.ppq(), List.copyOf(tempos), List.copyOf(signatures));
 	}
 
