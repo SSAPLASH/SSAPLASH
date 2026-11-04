@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useRecentHits } from '@/components/drum/useRecentHits';
 import { AccompanimentBar } from '@/components/free/AccompanimentBar';
 import { DisconnectBand } from '@/components/free/DisconnectBand';
@@ -81,6 +81,8 @@ export function FreePlayPage() {
   const doReconnect = useReconnect((s) => s.reconnect);
 
   const padStates = usePadStates();
+  const hitSeq = usePadHitSeq();
+  const kitSkin = useSettings((s) => s.kitSkin);
   const lastHit = useRecentHits(1)[0];
   const [stats, setStats] = useState(emptyHitStats);
 
@@ -139,7 +141,7 @@ export function FreePlayPage() {
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} />
+            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} />
           </div>
         </div>
 

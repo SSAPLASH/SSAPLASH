@@ -111,6 +111,15 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   });
 });
 
+describe('SettingsPage 드럼 모양', () => {
+  it('연주 카드에 드럼 모양 행과 캐러셀이 실시간 코칭 위에 있다', () => {
+    const html = render();
+    expect(html).toContain('드럼 모양');
+    expect(html).toContain('aria-roledescription="carousel"');
+    expect(html.indexOf('드럼 모양')).toBeLessThan(html.indexOf('실시간 코칭'));
+  });
+});
+
 describe('SettingsPage 드럼·노래 음량', () => {
   it('슬라이더 두 개와 도움말을 렌더한다', () => {
     const html = render();
