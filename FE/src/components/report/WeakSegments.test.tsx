@@ -1,7 +1,8 @@
 // WeakSegments 상태별 렌더 (COACH-003 4-1·4-2). @testing-library 없이 정적 마크업 문자열로 검사한다.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { AnalysisStatus, WeakSegment } from '@/domain/report';
+import type { AnalysisStatus, ReportNote, WeakSegment } from '@/domain/report';
+import type { UseSegmentPlayer } from './useSegmentPlayer';
 import { WeakSegments, type WeakSegmentsProps } from './WeakSegments';
 
 const WHOLE: WeakSegment = {
@@ -30,9 +31,21 @@ const SEG: WeakSegment = {
 const BIG = { PERFECT: 20, GOOD: 5, MISS: 2 };
 const SMALL = { PERFECT: 10, GOOD: 5, MISS: 4 };
 
+const NOTES: ReportNote[] = [];
+const PLAYER: UseSegmentPlayer = {
+  playingKey: null,
+  rate: 1,
+  loop: false,
+  play: () => {},
+  stop: () => {},
+  toggleRate: () => {},
+  toggleLoop: () => {},
+};
+const PLAYBACK: WeakSegmentsProps['playback'] = { notes: NOTES, durationMs: 32000, accompanimentUrl: null };
+
 function render(over: Partial<WeakSegmentsProps> & { status: AnalysisStatus }): string {
   return renderToStaticMarkup(
-    <WeakSegments segments={null} counts={BIG} bars={null} polling="idle" onRefresh={() => {}} {...over} />,
+    <WeakSegments segments={null} counts={BIG} bars={null} polling="idle" playback={PLAYBACK} player={PLAYER} onRefresh={() => {}} {...over} />,
   );
 }
 
@@ -74,33 +87,74 @@ describe('WeakSegments 상태 안내', () => {
 });
 
 describe('WeakSegments 목록', () => {
-  it('샘플 A: WHOLE 카드가 먼저, 구간 카드는 7~12초·스네어 칩, 0.67은 비강조', () => {
+  it('WHOLE 카드가 먼저, 「연주 전체」 머리 줄·칩 없음·「전체 재생」, 0.67은 뱃지 없음', () => {
     const h = render({ status: 'DONE', segments: [SEG, WHOLE] });
-    expect(h.indexOf('연주 전체')).toBeGreaterThan(-1);
-    expect(h.indexOf('연주 전체')).toBeLessThan(h.indexOf('7~12초</strong>'));
-    expect(h).toContain('전체적으로 평균 22ms 늦게 치고 있어요.');
-    expect(h).toContain('7~12초 구간에서 노트의 40%를 놓쳤어요.');
+    expect(h.indexOf('전체적으로 평균 22ms')).toBeGreaterThan(-1);
+    expect(h.indexOf('전체적으로 평균 22ms')).toBeLessThan(h.indexOf('7~12초 구간에서'));
+    expect(h).toContain('연주 전체</strong>');
+    expect(h).toContain('전체 재생');
+    expect(h).toContain('처음부터 재생');
+    expect(h).not.toContain('하이햇');
     expect(h).toContain('스네어');
-    expect(h).not.toContain('주의');
-    expect(h).not.toContain('weak-card severe');
-    expect(h).not.toContain('마디');
+    expect(h).not.toContain('weak-badge');
+    expect(h).toContain('weak-card level-low');
+    expect(h).not.toContain('7~12초</strong>');
   });
-  it('severity 0.8은 주의 뱃지와 강조', () => {
+  it('severityLevel 없이 severity 0.8은 주의 뱃지와 high 강조', () => {
     const h = render({ status: 'DONE', segments: [{ ...SEG, severity: 0.8 }] });
     expect(h).toContain('주의');
-    expect(h).toContain('weak-card severe');
+    expect(h).toContain('tone-miss');
+    expect(h).toContain('weak-card level-high');
   });
-  it('악보 모드는 마디를 병기한다(bpm 100·4박, 7000~12000ms → 3~5마디)', () => {
-    const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 100, beatsPerBar: 4 } });
-    expect(h).toContain('7~12초 · 3~5마디');
+  it('severityLevel MEDIUM은 보통 뱃지, HIGH는 주의, LOW는 뱃지 없음(severity보다 우선)', () => {
+    const m = render({ status: 'DONE', segments: [{ ...SEG, severityLevel: 'MEDIUM' }] });
+    expect(m).toContain('보통');
+    expect(m).toContain('tone-warn');
+    expect(m).toContain('level-medium');
+    expect(render({ status: 'DONE', segments: [{ ...SEG, severityLevel: 'HIGH' }] })).toContain('주의');
+    const low = render({ status: 'DONE', segments: [{ ...SEG, severity: 0.9, severityLevel: 'LOW' }] });
+    expect(low).not.toContain('weak-badge');
   });
-  it('머리글 초는 description과 같은 규칙: 정수가 아니면 소수 한 자리', () => {
-    const h = render({
-      status: 'DONE',
-      segments: [{ ...SEG, fromMs: 2400, toMs: 7400, description: '2.4~7.4초 구간에서 노트의 40%를 놓쳤어요.' }],
-    });
-    expect(h).toContain('2.4~7.4초</strong>');
-    expect(h).not.toContain('2~7초');
+  it('detail이 있을 때만 상세 줄', () => {
+    expect(render({ status: 'DONE', segments: [{ ...SEG, detail: '스네어가 자꾸 빨라요.' }] })).toContain(
+      'weak-detail">스네어가 자꾸 빨라요.',
+    );
+    expect(render({ status: 'DONE', segments: [SEG] })).not.toContain('weak-detail');
+  });
+  it('패널 구간 문구와 막대 위치', () => {
+    const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 120, beatsPerBar: 4 } });
+    expect(h).toContain('4~6마디 · 0:07 – 0:12');
+    expect(h).toContain('left:21.875%');
+    expect(h).toContain('width:15.625%');
+    expect(h).toContain('구간 재생');
+    expect(h).not.toContain('disabled');
+  });
+  it('마디가 없으면 시계만, WHOLE 막대는 전체', () => {
+    const h = render({ status: 'DONE', segments: [WHOLE, SEG] });
+    expect(h).toContain('곡 전체 · 0:00 – 0:32');
+    expect(h).toContain('left:0%;width:100%');
+    expect(h).toContain('>0:07 – 0:12<');
+  });
+  it('노트가 null이면 재생 버튼 비활성', () => {
+    const h = render({ status: 'DONE', segments: [SEG], playback: { ...PLAYBACK, notes: null } });
+    expect(h).toContain('disabled');
+  });
+  it('재생 중인 카드는 정지 버튼, 0.75×·반복은 aria-pressed', () => {
+    const key = 'SEGMENT:7000:12000:0';
+    const h = render({ status: 'DONE', segments: [SEG], player: { ...PLAYER, playingKey: key, rate: 0.75, loop: true } });
+    expect(h).toContain('정지');
+    expect(h).toContain('aria-pressed="true"');
+    expect(h).toContain('active');
+    expect(render({ status: 'DONE', segments: [SEG] })).toContain('aria-pressed="false"');
+  });
+  it('bpm 120·4박, 7000~12000ms → 4~6마디가 머리 줄에 보인다', () => {
+    const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 120, beatsPerBar: 4 } });
+    expect(h).toContain('4~6마디</strong>');
+    expect(h).not.toContain('7~12초</strong>');
+  });
+  it('bars가 null이면 마디 텍스트가 없다', () => {
+    const h = render({ status: 'DONE', segments: [SEG], bars: null });
+    expect(h).not.toContain('마디');
   });
   it('같은 마디면 한 마디만 쓴다', () => {
     const h = render({
@@ -108,7 +162,24 @@ describe('WeakSegments 목록', () => {
       segments: [{ ...SEG, fromMs: 2100, toMs: 3900 }],
       bars: { bpm: 120, beatsPerBar: 4 },
     });
-    expect(h).toContain('2.1~3.9초 · 2마디');
+    expect(h).toContain('2마디</strong>');
+  });
+  it('tip이 있으면 연습 방법 라벨과 문구가 보이고, 없으면 연습 방법이 없다', () => {
+    const withTip = render({ status: 'DONE', segments: [{ ...SEG, tip: '느린 템포로 반복해 보세요.' }] });
+    expect(withTip).toContain('weak-tip');
+    expect(withTip).toContain('연습 방법');
+    expect(withTip).toContain('느린 템포로 반복해 보세요.');
+    const noTip = render({ status: 'DONE', segments: [SEG] });
+    expect(noTip).not.toContain('연습 방법');
+    expect(noTip).not.toContain('weak-tip');
+  });
+  it('마디 없는 구간은 머리 줄에 칩만, WHOLE은 칩 없이 연주 전체', () => {
+    const h = render({ status: 'DONE', segments: [SEG] });
+    const head = h.slice(h.indexOf('weak-head'), h.indexOf('weak-desc'));
+    expect(head).not.toContain('<strong');
+    expect(head).toContain('스네어');
+    const w = render({ status: 'DONE', segments: [{ ...WHOLE, tip: '조언이에요.' }] });
+    expect(w).toContain('조언이에요.');
   });
   it('모르는 pattern도 description을 표시한다', () => {
     const h = render({

@@ -79,6 +79,21 @@ export function loginErrorMessage(code: string | null): string | null {
   return LOGIN_ERROR_MESSAGES[code as LoginErrorCode];
 }
 
+/** 가입 동의 판이 서버 허용 목록과 어긋났을 때 BE가 주는 오류 코드(422, 메일 INFRA_보안헤더-CSP-화면확인 회신 4) */
+export const SIGNUP_CONSENT_VERSION_INVALID = 'SIGNUP_CONSENT_VERSION_INVALID';
+
+/**
+ * 가입 동의 저장 실패 문구(D31). 페이지가 api를 import하지 않도록 오류를 구조(`code`·`detail`)로 읽는다.
+ * 판 불일치는 서버 `detail`(어긋난 필드 이름)을 보이지 않고 새로고침을 안내한다.
+ */
+export function signupErrorMessage(e: unknown): string {
+  const { code, detail } = e instanceof Error ? (e as { code?: unknown; detail?: unknown }) : ({} as { code?: unknown; detail?: unknown });
+  if (code === 'NETWORK') return loginErrorMessage('network') ?? '서버에 연결할 수 없습니다.';
+  if (code === SIGNUP_CONSENT_VERSION_INVALID) return '약관이 갱신되었어요. 새로고침한 뒤 다시 동의해 주세요.';
+  if (typeof detail === 'string' && detail) return detail;
+  return '동의를 저장하지 못했습니다. 다시 시도해 주세요.';
+}
+
 /** 로그인 뒤 돌아갈 경로를 두는 sessionStorage 키. 토큰이 아니라 경로 문자열만 저장한다 */
 export const RETURN_TO_KEY = 'ssaplash.auth.returnTo';
 

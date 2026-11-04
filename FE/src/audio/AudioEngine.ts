@@ -260,8 +260,37 @@ export class AudioEngine {
    * 컨텍스트가 없거나 running이 아니면 소리가 나지 않으므로 예약하지 않고 null.
    */
   trigger(pad: PadId, velocity: number, whenMs?: number): number | null {
+    return this.fire(pad, velocity, whenMs, null)?.perfMs ?? null;
+  }
+
+  /**
+   * trigger와 같되 예약을 취소할 수 있는 핸들을 돌려준다(구간 재생 정지용).
+   * cancel: 아직 울리지 않았으면 출력 경로를 끊어 소리를 막고, 이미 울렸으면 아무것도 하지 않는다. 예외 없음.
+   */
+  triggerScheduled(pad: PadId, velocity: number, whenMs: number): { at: number; cancel: () => void } | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.padBus || ctx.state !== 'running') return null;
+    const gate = ctx.createGain();
+    gate.connect(this.padBus);
+    const r = this.fire(pad, velocity, whenMs, gate);
+    if (!r) return null;
+    return {
+      at: r.perfMs,
+      cancel: () => {
+        try {
+          if (ctx.currentTime < r.ctxAt) gate.disconnect();
+        } catch {
+          // 이미 끊긴 노드
+        }
+      },
+    };
+  }
+
+  /** gate가 있으면 padBus 대신 그 노드로 소리를 보낸다(취소용 관문) */
+  private fire(pad: PadId, velocity: number, whenMs: number | undefined, gate: AudioNode | null): { perfMs: number; ctxAt: number } | null {
     if (!this.ctx || !this.padBus || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
+    const out = gate ?? this.padBus;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     // 샘플이 없으면 폴백 패드의 샘플(게인 0.7배), 그것도 없으면 합성음
@@ -276,12 +305,12 @@ export class AudioEngine {
       src.playbackRate.value = sample.playbackRate;
       const g = ctx.createGain();
       g.gain.value = sample.gain * this.set.masterTrim * v * gainMul;
-      src.connect(g).connect(this.padBus);
+      src.connect(g).connect(out);
       src.start(at);
     } else {
-      this.voices[pad](ctx, this.padBus, at, v);
+      this.voices[pad](ctx, out, at, v);
     }
-    return this.contextToPerfTime(at);
+    return { perfMs: this.contextToPerfTime(at), ctxAt: at };
   }
 
   /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */
