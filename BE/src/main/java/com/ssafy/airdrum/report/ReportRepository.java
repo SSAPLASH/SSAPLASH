@@ -31,7 +31,8 @@ public class ReportRepository {
 		return db.query("""
 			SELECT r.id,s.id AS play_id,s.score,s.accuracy,s.max_combo,s.judgement_counts::text,
 				r.timing_histogram::text,r.pad_stats::text,s.mode,s.input_source,s.client_meta->>'endReason' AS end_reason,
-				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at
+				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at,
+				r.coach_summary::text
 			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id WHERE s.id=? AND s.user_id=?
 			""", (r,n) -> new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
 				r.getInt("score"), r.getBigDecimal("accuracy"), r.getInt("max_combo"),
@@ -43,18 +44,26 @@ public class ReportRepository {
 				ReportResponse.AnalysisStatus.valueOf(r.getString("analysis_status")),
 				r.getString("weak_segments") == null ? null : json.readTree(r.getString("weak_segments")),
 				r.getString("recommended_drills") == null ? null : json.readTree(r.getString("recommended_drills")),
-				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant()), playId, userId)
+				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant(),
+				r.getString("coach_summary") == null ? null : json.readTree(r.getString("coach_summary"))), playId, userId)
 				.stream().findFirst().orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
 	}
 	public List<ReportNotesResponse.Item> notes(long userId, UUID playId, int afterSeq, int fetchSize) {
+		return notes(userId, playId, afterSeq, fetchSize, null, null);
+	}
+	/** fromMs 이상 toMs 미만인 노트만. 노트 시각은 PERFECT·GOOD이 t_ms-delta_ms, MISS가 t_ms다. 둘 다 null이면 전체. */
+	public List<ReportNotesResponse.Item> notes(long userId, UUID playId, int afterSeq, int fetchSize, Double fromMs, Double toMs) {
 		return db.query("""
 			SELECT h.seq,h.matched_note_id,h.t_ms,h.pad,h.judgement,h.delta_ms,h.velocity
 			FROM hits h JOIN play_sessions s ON s.id=h.play_session_id
 			WHERE s.id=? AND s.user_id=? AND h.judgement IS NOT NULL AND h.seq>?
+				AND (?::double precision IS NULL OR h.t_ms-COALESCE(h.delta_ms,0)>=?::double precision)
+				AND (?::double precision IS NULL OR h.t_ms-COALESCE(h.delta_ms,0)<?::double precision)
 			ORDER BY h.seq LIMIT ?
 			""", (r,n) -> new ReportNotesResponse.Item(r.getInt(1),r.getString(2),r.getDouble(3),
 					"HI_TOM".equals(r.getString(4)) ? "SMALL_TOM" : r.getString(4),
-					r.getString(5),r.getObject(6,Double.class),r.getObject(7,Integer.class)), playId,userId,afterSeq,fetchSize);
+					r.getString(5),r.getObject(6,Double.class),r.getObject(7,Integer.class)), playId,userId,afterSeq,
+				fromMs,fromMs,toMs,toMs,fetchSize);
 	}
 	/** 세션·hits와 동일 트랜잭션에서만 저장한다. 재전송은 이 경로에 진입하지 않는다. */
 	@Transactional(propagation = Propagation.MANDATORY)
