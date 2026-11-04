@@ -122,6 +122,8 @@ interface PadProps {
   /** PadDefs와 같은 id */
   defsId: string;
   onClick?: () => void;
+  /** 누르는 즉시(click보다 빠르게) 반응할 때 쓴다. onClick과 별개 */
+  onPointerDown?: (e: React.PointerEvent<SVGGElement>) => void;
   /** 드럼 모양. 기본 acoustic(실물). 전자·네온은 정사각 원형 패드로 그린다 */
   skin?: KitSkin;
   /** 영문 약어(2D 스킨 전용) */
@@ -204,6 +206,7 @@ export const Pad = memo(function Pad({
   badgeHighlight = false,
   defsId,
   onClick,
+  onPointerDown,
   skin = 'acoustic',
   tag,
   hitKey,
@@ -233,6 +236,7 @@ export const Pad = memo(function Pad({
       data-skin={flat ? skin : undefined}
       transform={`translate(${left} ${top}) scale(${s})`}
       onClick={onClick}
+      onPointerDown={onPointerDown}
     >
       {flat ? (
         skin === 'electronic' ? (

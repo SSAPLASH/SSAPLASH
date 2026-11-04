@@ -146,6 +146,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 드럼 컴포넌트
 
 - **`components/drum/DrumKit`:** 연주 화면용 드럼 킷 SVG. 배치는 `domain/drumKit`의 **고정 8패드**(`DRUM_KIT_PADS`, 760×300 × `scale`, 하이햇 페달 제외)다. `fitWidth`면 부모 폭에 맞춰 `scale`까지 줄인다. 패드별 `states`(`idle`·`hit`·`perfect`·`good`·`miss`)와 `badges`(+`highlight`)를 받고 `labels`·`onPadClick`을 쓴다. 세팅 편집기의 `KitCanvas`(사용자 배치를 Canvas로 그리고 드래그)와 역할이 다르다 — 판정 배치(`kitLayout`)와 무관한 표시 전용이다.
+- **드럼 모양:** 설정 › 연주의 "드럼 모양"(실물 `acoustic` / 전자 `electronic` / 네온 `neon`)을 `DrumKit`의 `skin`이 받는다. 값은 설정 스토어 `kitSkin`에 기기별로 로컬 저장하고 서버 동기화 대상이 아니다. `hitSeq`는 패드별 타격 모션 재생용이다. `onPadDown`이 있으면 킷이 터치 표면이 되어 `touch-action: none`을 쓰고 포인터 모의 IMU는 이 킷을 무시한다(`data-no-pointer-strike`).
 - **`usePadStates(session?)`:** `liveStore.hitSeq`마다 해당 패드를 hit으로 220ms(`HIT_MS`) 켜고, `RhythmSession` 판정마다 perfect/good/miss를 400ms(`JUDGE_MS`) 보인다(판정이 hit보다 우선). 타이머 규칙은 순수 모듈 `padStateMachine`이 맡는다.
 - **`components/play`:** `GuideSlot`(드럼 영역 왼쪽 안내·코칭 칸)·`HitReadout`(최근 타격, 연주용 `stack`·자유 연습용 `row`).
 
@@ -166,6 +167,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
 - **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(배치에서 유도한 판정 프로필).
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket · Web Serial). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
+- **터치 입력(`TouchPadSource`, `kind: 'touch'`)**: 자유 연습의 드럼 킷만 켠다(`DrumKit`의 `onPadDown`). 패드를 누르는 즉시(pointerdown) `strike(pad)`가 이벤트를 내고, 자세 매퍼가 이벤트의 `pad`를 그대로 쓴다. 세기는 100 고정, `stickId`는 0·1 교대다. 화면 터치로 실제 스틱을 진동시키지 않는다(햅틱 없음). 키보드처럼 항상 붙어 있다.
+- **센서 판정은 `domain/events`의 `isSensorSource`로만 한다**: keyboard·preview·touch는 센서가 아니다. `source !== 'keyboard'`처럼 직접 비교하지 않는다(센서 시각 오프셋·드리프트 보정·센서 통계가 오염된다). `'touch'`는 `sensorRegistry` 예약어다.
 - **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 명령 0x14~0x17·파라미터 표(`STICK_PARAMS`)도 같은 파일에 있다.
 - **스틱 판정 우선 규칙**: HIT `pad`가 있으면 자세 매퍼보다 우선해 그 패드로 재생한다(`judgedBy: 'stick'`). `pad`가 0xFF면 자세 매퍼(`'pose'`).
   채보 후보가 있고 `pad`가 후보 밖일 때만, 스틱이 애매하다고 했거나(`ambiguous`) `marginDeg`가 `AMBIGUOUS_MARGIN_DEG`(10°) 미만이면 가장 가까운 후보로 보정한다(`'chart'`). 확신 있는 오타는 그대로 두어 리듬 세션이 MISS 처리한다.

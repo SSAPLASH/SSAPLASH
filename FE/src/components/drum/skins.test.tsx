@@ -89,3 +89,17 @@ describe('DrumKit 스킨', () => {
     }
   });
 });
+
+describe('DrumKit 터치 연주(onPadDown)', () => {
+  it('없으면 터치 관련 속성·클래스가 없다', () => {
+    const html = renderToStaticMarkup(<DrumKit />);
+    expect(html).not.toContain('data-no-pointer-strike');
+    expect(html).not.toContain('touchable');
+  });
+
+  it('있으면 svg에 data-no-pointer-strike와 touchable 클래스가 붙는다', () => {
+    const html = renderToStaticMarkup(<DrumKit onPadDown={() => {}} />);
+    expect(html).toContain('data-no-pointer-strike');
+    expect(html).toContain('class="drum-kit touchable"');
+  });
+});
