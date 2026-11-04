@@ -99,6 +99,8 @@ def run_model(
                     "seconds": round(elapsed, 3),
                     "text": outcome.text,
                     "violations": outcome.violations,
+                    # 거절된 문장도 눈으로 볼 수 있게 마지막 시도의 원문을 남긴다
+                    "lastText": outcome.last_text,
                 }
             )
     total = len(cases) * repeats
@@ -142,6 +144,8 @@ def render(results: list[dict]) -> str:
                 f"({mark}, 시도 {row['attempts']}, {row['seconds']:.1f}초)"
             )
             lines.append(f"  - {row['text'] if row['ok'] else '; '.join(row['violations'])}")
+            if not row["ok"] and row.get("lastText"):
+                lines.append(f"  - (거절된 원문) {row['lastText']}")
         lines.append("")
     return "\n".join(lines)
 

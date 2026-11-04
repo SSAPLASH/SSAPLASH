@@ -269,3 +269,59 @@ def test_표본이_부족해_총평이_없으면_사실도_없다():
     )
 
     assert facts_from_analysis(response, Counts(perfect=1, good=0, miss=0)) is None
+
+
+# ---------- 출력 정리와 오탐 줄이기 ----------
+
+
+def test_모델_전용_토큰과_생각_블록과_줄바꿈을_정리한다():
+    from ssaplash_ai.coach.narrative import clean
+
+    assert clean("<think>\n\n</think>\n\n잘 쳤어요.\n연습해 보세요.[|endofturn|]") == (
+        "잘 쳤어요. 연습해 보세요."
+    )
+    assert clean("잘 쳤어요.<|im_end|><end_of_turn>") == "잘 쳤어요."
+    assert clean("<think>생각 중</think>좋아요.") == "좋아요."
+
+
+def test_전용_토큰이_섞여_와도_문장이_통과한다():
+    outcome = write_narrative(_facts(), lambda s, u: GOOD_TEXT + "[|endofturn|]")
+
+    assert outcome.text == GOOD_TEXT and outcome.attempts == 1
+
+
+def test_줄바꿈이_섞여도_한_문단으로_합쳐_통과한다():
+    outcome = write_narrative(_facts(), lambda s, u: GOOD_TEXT.replace(". ", ".\n"))
+
+    assert outcome.text == GOOD_TEXT
+
+
+def test_비교가_아닌_평범한_문장의_향상_개선은_걸리지_않는다():
+    # 직전보다 놓침이 늘어도 "실력이 향상돼요"는 지난번과의 비교가 아니다
+    facts = _facts(history=_history(miss=2))
+
+    assert (
+        check("꾸준히 연습하면 실력이 향상돼요. 7~12초 구간을 느린 템포로 개선해 보세요.", facts)
+        == []
+    )
+
+
+def test_기록이_없을_때_지난번_말이_없으면_늘었다_줄었다는_걸리지_않는다():
+    assert (
+        check("놓침이 줄도록 7~12초 구간을 반복해 보세요. 기본기는 늘 수 있어요.", _facts()) == []
+    )
+
+
+def test_비교_문장_안에서만_방향을_본다():
+    facts = _facts(history=_history(miss=2))  # 놓침이 늘었다
+
+    assert any(
+        "나아졌다고" in p for p in check("이전보다 박자가 개선됐어요. 연습해 보세요.", facts)
+    )
+    assert check("연습하면 개선돼요. 이전보다 놓침이 늘었어요.", facts) == []
+
+
+def test_거절돼도_마지막_원문을_남긴다():
+    outcome = write_narrative(_facts(), lambda s, u: "점수가 낮아요.")
+
+    assert outcome.text is None and outcome.last_text == "점수가 낮아요."
