@@ -11,7 +11,9 @@
 | 화면 | Canvas 2D (키트·노트 레인), Web Audio (발음) |
 | 센서 연결 | Web Bluetooth (BLE 직접), WebSocket (브리지 대안) |
 | BE 연동 | `fetch` 공통 래퍼(`api/http`). 로그인은 BE OAuth + refresh 쿠키, access 토큰은 메모리 |
-| 검사 | oxlint, vitest |
+| 모션 | motion — `LazyMotion`(features 지연 로드, `strict`)이라 컴포넌트는 `m.*`만 쓴다(`motion.*` 금지). 공급자는 `app/MotionProvider`, 모션 줄이기 설정도 여기서 처리 |
+| 팝오버 등 | Radix UI(`@radix-ui/react-popover`) — 스타일 없는(headless) 라이브러리. 모양은 기존 토큰 CSS로 입힌다 |
+| 검사 | oxlint, vitest, testing-library(상호작용 테스트, happy-dom) |
 
 Node 20 이상, npm 사용.
 
@@ -38,6 +40,16 @@ npm run lint       # oxlint
 npm test           # vitest — domain·input 순수 로직 단위 테스트
 npm run build      # tsc 타입 검사 + vite 번들
 ```
+
+### 상호작용 테스트
+
+기본 테스트 환경은 node(`renderToStaticMarkup` 스타일)다. 클릭·포커스 같은 상호작용은 파일 단위로 happy-dom을 쓴다.
+
+- 파일명은 `*.interaction.test.tsx`, 첫 줄은 `// @vitest-environment happy-dom`.
+- `@testing-library/react`(`render`·`screen`)와 `@testing-library/user-event`(`userEvent.setup()`)를 쓴다.
+- vitest globals를 켜지 않았으므로 자동 cleanup이 없다. 파일마다 `afterEach(cleanup)`을 둔다.
+- happy-dom은 Web Animations를 완전히 지원하지 않는다. `animate` 등으로 실제 애니메이션을 돌리는 컴포넌트를 테스트하면 cleanup 시 `AbortError`(unhandled rejection)가 날 수 있으니, 애니메이션 값이 아니라 상태·DOM 결과를 검증한다.
+- 예시: `src/app/MotionProvider.interaction.test.tsx`
 
 ## 폴더 구조
 

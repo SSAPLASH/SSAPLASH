@@ -660,7 +660,7 @@ export function PlayPage() {
             <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
           )
         }
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
+        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"

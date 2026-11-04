@@ -141,3 +141,13 @@
 .play-hud-stat.miss .play-hud-value {
   color: var(--miss);
 }
+
+/* E5 콤보 10의 배수 강조: 브랜드색으로 번쩍였다가 원래 색으로 돌아온다 */
+.play-hud-value.combo-flash {
+  animation: combo-flash 160ms ease-out;
+}
+@keyframes combo-flash {
+  from {
+    color: var(--brand);
+  }
+}
