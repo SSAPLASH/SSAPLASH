@@ -52,7 +52,6 @@ PATTERN_KO = {
 # 점수·정확도는 BE가 따로 계산해 보여 주고, 비난·단정은 쓰지 않는다
 FORBIDDEN_WORDS = (
     "점수",
-    "정확도",
     "랭킹",
     "못해요",
     "못 쳐",
@@ -88,6 +87,7 @@ _SPECIAL_TOKENS = re.compile(
     re.DOTALL,
 )
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_ACCURACY_NUMBER = re.compile(r"정확도\D{0,6}\d")
 _UNIT_MS = re.compile(r"(?<=\d)\s*ms(?![A-Za-z])")
 # 한글·숫자·기본 문장부호·공백·% 외의 글자(한자, 가나, 영어 단어, 이모지)가 섞였는지 본다
 _FOREIGN = re.compile(r"[A-Za-z぀-ヿ㐀-鿿\U0001F000-\U0001FFFF☀-➿]")
@@ -165,7 +165,7 @@ SYSTEM_PROMPT = (
     "1. 사실에 없는 숫자·패드·곡 정보를 만들지 마세요. 숫자는 사실에 나온 값만 그대로 쓰세요.\n"
     "2. 점수와 정확도는 말하지 마세요.\n"
     "3. 비난하거나 단정하지 말고 격려하는 '~해요' 말투로 쓰세요.\n"
-    "4. 순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → (지난 연주와의 비교가 사실에 있을 때만) 비교.\n"
+    "4. 순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → ('비교 결과' 줄이 사실에 있을 때만) 비교.\n"
     "   '잘한 패드'로 적힌 패드만 칭찬하고, 약점에 나온 패드는 칭찬하지 마세요. 비교는 '비교 결과' 한 가지만 말하세요.\n"
     f"5. {MAX_NARRATIVE_CHARS}자 이하의 한 문단. 목록·마크다운·이모지·영어를 쓰지 마세요.\n"
     "총평 문장만 출력하세요."
@@ -222,8 +222,6 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
             f"- 비교 결과(비교는 이것만 말하세요): 놓침 비율이 지난번 {_pct(p.miss_rate)}%에서 "
             f"이번 {_pct(c.miss_rate)}%로 {trend}"
         )
-    else:
-        lines.append("- 지난 연주 기록 없음 (비교하지 마세요)")
     if hint:
         lines.append(
             f"\n이전 시도의 문제(이 내용을 문장에서 말하지 말고 고치기만 하세요): {hint}\n문제를 고쳐서 총평만 다시 쓰세요."
@@ -295,6 +293,8 @@ def clean(text: str) -> str:
     text = _SPECIAL_TOKENS.sub(" ", text)
     # 이모지는 문장 뜻을 바꾸지 않으니 지운다(작은 모델이 규칙을 어기고 자주 붙인다)
     text = _EMOJI.sub("", text)
+    # **굵게**·`코드` 같은 강조 표시는 문장 뜻을 바꾸지 않으니 표시만 지운다(문장 전체를 버리지 않는다)
+    text = re.sub(r"[*`]+", "", text)
     text = re.sub(r"\s*\n+\s*", " ", text)
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
@@ -315,12 +315,15 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     if _FOREIGN.search(_UNIT_MS.sub("", body)):
         problems.append("한글이 아닌 글자(영어·한자·가나·이모지)가 섞임")
     if not re.search(r"[가-힣]", body) or not body.endswith(
-        ("요.", "요!", "요", "다.", "다!", "다")
+        ("요.", "요!", "요?", "요", "다.", "다!", "다?", "다")
     ):
         problems.append("한국어 완성 문장이 아님")
     for word in FORBIDDEN_WORDS:
         if word in body:
             problems.append(f"금지 표현 '{word}'")
+    # 정확도는 BE가 계산해 보여 주는 값이라 숫자와 함께 말하면 어긋날 수 있다. 숫자 없는 평범한 쓰임은 괜찮다
+    if _ACCURACY_NUMBER.search(body):
+        problems.append("금지 표현 '정확도' 수치")
 
     allowed = _allowed_numbers(facts)
     strange = sorted({n for n in _NUMBER.findall(body) if n not in allowed})
@@ -362,6 +365,30 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     return problems
 
 
+# ---------- 보정 ----------
+
+
+def repair(text: str, facts: NarrativeFacts) -> str | None:
+    """규칙을 어긴 **문장만 덜어내고** 나머지로 총평을 만든다. 덜어낼 게 없거나 덜어낸 뒤에도 쓸 수 없으면 None.
+
+    문장 전체를 버리면 한 문장의 위반 때문에 멀쩡한 문장까지 사라진다. 덜어내는 것은 거짓 주장을 지우는 쪽이라
+    안전하다. 연습 안내 문장이 하나도 남지 않거나 문장이 2개 미만이면 쓰지 않는다.
+    """
+    sentences = [s for s in _SENTENCE_SPLIT.split(text.strip()) if s]
+    # 문장 하나를 따로 볼 때 "완성 문장이 아님"은 문장 끝 모양 때문이라 문장 단위 판정에서 뺀다
+    kept = [
+        s
+        for s in sentences
+        if not [p for p in check(s, facts) if not p.startswith("한국어 완성 문장")]
+    ]
+    if len(kept) == len(sentences) or len(kept) < 2:
+        return None
+    repaired = " ".join(kept)
+    if not re.search(r"연습|반복|해 보", repaired) or check(repaired, facts):
+        return None
+    return repaired
+
+
 # ---------- 생성 ----------
 
 
@@ -374,6 +401,8 @@ class NarrativeOutcome:
     violations: list[str] = field(default_factory=list)
     # 마지막 시도의 (정리한) 원문. 거절 이유를 눈으로 확인하는 용도라 운영 로그에는 남기지 않는다
     last_text: str | None = None
+    # 규칙을 어긴 문장을 덜어내고 통과한 경우
+    repaired: bool = False
 
 
 def write_narrative(
@@ -396,6 +425,9 @@ def write_narrative(
         problems = check(text, facts)
         if not problems:
             return NarrativeOutcome(text, attempts, last_text=text)
+        fixed = repair(text, facts)
+        if fixed is not None:
+            return NarrativeOutcome(fixed, attempts, problems, last_text=text, repaired=True)
         last = text
         hint = "; ".join(problems)
     return NarrativeOutcome(None, attempts, problems, last_text=last)
