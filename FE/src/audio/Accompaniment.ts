@@ -111,11 +111,6 @@ export class Accompaniment {
     if (this._state === 'playing' || this._state === 'paused') this._state = 'ready';
   }
 
-  setGain(v: number): void {
-    const bus = this.engine.accompanimentBus;
-    if (bus) bus.gain.value = v;
-  }
-
   /** perfMs 시점의 반주 위치(ms). 재생 중이면 계산, 일시정지면 멈춘 위치, 그 외 0 */
   positionAt(perfMs: number): number {
     if (this._state === 'playing') return playbackPosition(this.startPerf, this.fromMs, perfMs, this.durationMs);
