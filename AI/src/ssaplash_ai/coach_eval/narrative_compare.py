@@ -19,6 +19,7 @@ import json
 import re
 import statistics
 import subprocess
+import sys
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -77,7 +78,7 @@ def run_model(
     rows: list[dict] = []
     times: list[float] = []
     violations: Counter[str] = Counter()
-    passed = first_try = repaired = 0
+    passed = first_try = repaired = errors = 0
     for case, facts in cases.items():
         for i in range(repeats):
             started = time.perf_counter()
@@ -88,6 +89,7 @@ def run_model(
             passed += ok
             first_try += ok and outcome.attempts == 1 and not outcome.repaired
             repaired += outcome.repaired
+            errors += bool(outcome.violations) and outcome.violations[0].startswith("생성기 오류")
             for v in outcome.violations:
                 violations[re.sub(r"['\d].*", "", v).strip()] += 1
             rows.append(
@@ -112,6 +114,7 @@ def run_model(
         "passed": passed,
         "first_try": first_try,
         "repaired": repaired,
+        "errors": errors,
         "median_sec": statistics.median(times) if times else 0.0,
         "max_sec": max(times) if times else 0.0,
         "violations": violations.most_common(5),
@@ -264,6 +267,16 @@ def main(
             args.url, model, api=args.api, timeout_sec=args.timeout, temperature=args.temperature
         )
         results.append(run_model(model, cases, args.repeats, generator))
+    # 모델 서버가 꺼져 있거나 이름이 틀려 한 건도 못 쓴 모델이 있으면 표나 MLflow에 0%를 남기지 않고 멈춘다.
+    # 쓰레기 기록이 팀 서버에 쌓이는 것을 막는다
+    dead = [r["model"] for r in results if r["total"] and r["errors"] == r["total"]]
+    if dead:
+        print(
+            f"모델 서버 오류로 한 건도 쓰지 못함: {', '.join(dead)}. 서버 주소({args.url})와 "
+            "모델 이름, 서버가 켜져 있는지 확인하세요. 표와 MLflow에는 기록하지 않았습니다.",
+            file=sys.stderr,
+        )
+        return 2
     text = render(results)
     artifacts: list[Path] = []
     if out:
