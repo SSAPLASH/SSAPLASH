@@ -1,7 +1,7 @@
 // 입력 소스 공통 인터페이스.
 // 키보드·포인터 모의 IMU·BLE 스틱·WebSocket 허브가 모두 같은 StickEvent를 낸다.
 // 상위(InputManager)는 소스 종류를 모른 채 이벤트만 받는다.
-import type { DongleLink, InputSourceKind, SourceState, StickEvent, StickId } from '@/domain/events';
+import type { DeviceRole, DongleLink, InputSourceKind, SourceState, StickEvent, StickId } from '@/domain/events';
 
 export type { SourceState };
 
@@ -39,8 +39,8 @@ export interface InputSource {
   setSurface?(el: HTMLElement | null): void;
   /** 명령 바이트를 그대로 스틱에 보낸다. stickId를 생략하면 연결된 전부. 센서 소스만 구현 */
   sendCommand?(bytes: Uint8Array, stickId?: StickId): void;
-  /** 센서 시계 → 브라우저 시계 오프셋(ms). 동기화 전이면 null */
-  clockOffsetOf?(stickId: StickId): number | null;
+  /** 센서 시계 → 브라우저 시계 오프셋(ms). 동기화 전이면 null. role 2·3(발)은 동글 소스만 값을 가진다 */
+  clockOffsetOf?(role: DeviceRole): number | null;
   /** 전송 계층 통계 */
   transportStats?(): TransportStats;
   /** 동글 링크 상태 구독. 포트가 닫히면 null. 동글을 쓰는 소스(Web Serial)만 구현 */

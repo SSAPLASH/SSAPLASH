@@ -1,9 +1,10 @@
-// 기기별 상태. role 0~3 네 칸(왼손·오른손·왼발·오른발)을 두고, 이벤트로 내보내는 것은 손(0·1)만이다 — 페달 대비.
-// 시계 보정·SYNC 대기·연결·배터리 보류·"설정 전" 보류는 role 2·3에도 이미 동작한다.
+// 기기별 상태. role 0~3 네 칸(왼손·오른손·왼발·오른발)을 두고, 손(0·1)은 status·hit·pose, 발(2·3)은 pedalStatus·hit(foot)·pedal 이벤트로 내보낸다(소스가 한다).
+// 시계 보정·SYNC 대기·연결·배터리 보류·"설정 전" 보류는 네 칸 모두 같은 규칙이다.
 // 패킷 해석과 이벤트 발행은 하지 않는다(소스가 한다).
+import type { DeviceRole } from '@/domain/events';
 import { ClockSync } from './InputSource';
 
-export type DeviceRole = 0 | 1 | 2 | 3;
+export type { DeviceRole };
 
 /** SYNC 대기 목록 상한. 답이 없는 기기의 목록이 쌓이지 않게 오래된 것부터 버린다 */
 export const MAX_PENDING_SYNC = 16;

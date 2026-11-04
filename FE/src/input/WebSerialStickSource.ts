@@ -1,7 +1,7 @@
 // Web Serial 스틱 소스. 스틱(또는 수신 동글)을 USB로 직결해 921600 8N1로 받는다.
 // 프레이밍은 serialFraming(SOF·LEN·CRC8), payload는 stickProtocol 패킷이다.
 // 기기별 상태(deviceState)는 role 0~3 네 칸이다: 시계·SYNC 대기·연결·배터리/설정 전 보류를 칸마다 두고,
-// 이벤트로 내보내는 것은 손(role 0·1)뿐이다(handOf). 동글 하나에 두 스틱이 붙어도 스틱마다 시계가 달라 손별로 맞춘다.
+// 이벤트는 손(role 0·1)은 status·hit·pose, 발(role 2·3)은 pedalStatus·hit(foot)·pedal이다(handOf·footOf). 동글 하나에 두 스틱이 붙어도 스틱마다 시계가 달라 손별로 맞춘다.
 // 한 손에만 보낼 명령은 동글이 확인된 뒤(LINK 수신)부터 ROUTE로 감싼다 — 예전 동글·스틱 직결은 ROUTE를 모른다.
 // 손별 연결은 LINK 마스크가 기준이다(1초 하트비트 + 바뀔 때). LINK를 한 번 받은 뒤엔 STATUS는 배터리·설정 전만 바꾼다.
 // 동글 순서상 STATUS(비트 5 설정 전)가 LINK보다 먼저 올 수 있어, 안 붙은 손의 배터리·비트 5는 보류했다가 붙을 때 함께 알린다.
@@ -11,7 +11,7 @@
 // (허락된 동글을 다시 꽂음)가 오면 포트가 닫혀 있을 때 autoConnect()로 클릭 없이 다시 연다.
 // 첫 LINK 전(예전 동글 펌웨어)에는 지금처럼 STATUS가 오면 연결로 본다.
 // 사용자 제스처 안에서 connect()를 불러야 포트 선택 창이 열린다.
-import type { DongleLink, StickEvent, StickId } from '@/domain/events';
+import type { DongleLink, FootId, StickEvent, StickId } from '@/domain/events';
 import { BaseInputSource } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { FrameDecoder, frame } from './serialFraming';
@@ -120,8 +120,14 @@ export class WebSerialStickSource extends BaseInputSource {
   }
 
   private emitMapped(e: StickEvent, recvTime: number): void {
-    if (e.kind === 'hit' || e.kind === 'pose') {
-      this.emit({ ...e, timestamp: this.devices[e.stickId].clock.toBrowserTime(e.timestamp, recvTime) });
+    if (e.kind === 'pedal') {
+      // 하이햇 페달(role 2)의 보드 시각을 그 칸 시계로 브라우저 시각으로 환산한다
+      this.emit({ ...e, timestamp: this.devices[e.foot].clock.toBrowserTime(e.timestamp, recvTime) });
+    } else if (e.kind === 'hit' || e.kind === 'pose') {
+      // 발 타격(stickId null)은 foot 칸의 시계로 환산한다
+      const role = e.kind === 'hit' ? (e.foot ?? e.stickId) : e.stickId;
+      if (role === null) return;
+      this.emit({ ...e, timestamp: this.devices[role].clock.toBrowserTime(e.timestamp, recvTime) });
     } else {
       this.emit(e);
     }
@@ -138,28 +144,35 @@ export class WebSerialStickSource extends BaseInputSource {
     for (const l of this.dongleListeners) l(link);
   }
 
-  /** 손별 연결을 바꾸고 바뀐 손만 알린다. force면 같아도 알린다(첫 LINK·동글 복구). 붙는 손은 보류한 배터리·설정 전을 함께 알린다 */
-  private applyLinked(next: [boolean, boolean], force: boolean, recvTime: number): void {
-    for (const id of [0, 1] as const) {
-      const dev = this.devices[id];
-      if (!force && next[id] === dev.linked) continue;
+  /** 칸별 연결을 바꾸고 바뀐 칸만 알린다(손은 status, 발은 pedalStatus). force면 같아도 알린다(첫 LINK·동글 복구). 붙는 칸은 보류한 배터리·설정 전을 함께 알린다 */
+  private applyLinked(next: [boolean, boolean, boolean, boolean], force: boolean, recvTime: number): void {
+    for (const role of [0, 1, 2, 3] as const) {
+      const dev = this.devices[role];
+      if (!force && next[role] === dev.linked) continue;
       const wasLinked = dev.linked;
-      dev.linked = next[id];
-      if (next[id]) {
+      dev.linked = next[role];
+      if (next[role]) {
         const batteryPct = dev.heldBattery;
         const unconfigured = dev.heldUnconfigured;
         dev.heldBattery = undefined;
         dev.heldUnconfigured = false;
-        this.emit({ kind: 'status', stickId: id, connected: true, batteryPct, unconfigured });
-        if (!wasLinked) this.restartClock(id, recvTime);
+        if (role < 2) this.emit({ kind: 'status', stickId: role as StickId, connected: true, batteryPct, unconfigured });
+        else this.emit({ kind: 'pedalStatus', foot: role as FootId, connected: true, batteryPct });
+        if (!wasLinked) this.restartClock(role, recvTime);
       } else {
         if (wasLinked) {
           dev.heldBattery = undefined;
           dev.heldUnconfigured = false;
         }
-        this.emit({ kind: 'status', stickId: id, connected: false });
+        this.emitDisconnected(role);
       }
     }
+  }
+
+  /** 그 칸의 끊김을 알린다(손은 status, 발은 pedalStatus) */
+  private emitDisconnected(role: DeviceRole): void {
+    if (role < 2) this.emit({ kind: 'status', stickId: role as StickId, connected: false });
+    else this.emit({ kind: 'pedalStatus', foot: role as FootId, connected: false });
   }
 
   private handleLink(payload: Uint8Array, recvTime: number): void {
@@ -169,15 +182,19 @@ export class WebSerialStickSource extends BaseInputSource {
     this.dongle = true;
     this.lastLinkAt = recvTime;
     this.setDongle('ok');
-    this.applyLinked([(d.linkMask & 0b01) !== 0, (d.linkMask & 0b10) !== 0], first, recvTime);
+    this.applyLinked(
+      [(d.linkMask & 0b0001) !== 0, (d.linkMask & 0b0010) !== 0, (d.linkMask & 0b0100) !== 0, (d.linkMask & 0b1000) !== 0],
+      first,
+      recvTime,
+    );
   }
 
-  /** LINK 하트비트가 끊겼는지 본다. 끊겼으면 동글 문제로 두고 양손을 끊김으로 둔다(어느 손이 붙었는지 모름) */
+  /** LINK 하트비트가 끊겼는지 본다. 끊겼으면 동글 문제로 두고 네 칸(양손·두 발)을 끊김으로 둔다(어느 칸이 붙었는지 모름) */
   checkLinkTimeout(now: number = performance.now()): void {
     if (!this.dongle || this.lastLinkAt === null || this.dongleState === 'stale') return;
     if (now - this.lastLinkAt <= LINK_STALE_MS) return;
     this.setDongle('stale');
-    this.applyLinked([false, false], false, now);
+    this.applyLinked([false, false, false, false], false, now);
   }
 
   private handlePayload(payload: Uint8Array, recvTime: number): void {
@@ -187,7 +204,7 @@ export class WebSerialStickSource extends BaseInputSource {
       return;
     }
     const d = decodePacket(payload, recvTime);
-    // 기기 칸은 role 0~3 모두 갱신하고, 이벤트는 손(0·1)만 내보낸다
+    // 기기 칸은 role 0~3 모두 갱신하고, 이벤트는 손은 status·hit·pose, 발은 pedalStatus·hit(foot)·pedal로 낸다
     if (d.kind === 'syncAck') {
       this.addSyncSample((d.role & 3) as DeviceRole, d.t0Ms, d.t1Us / 1000, recvTime);
       return;
@@ -213,6 +230,8 @@ export class WebSerialStickSource extends BaseInputSource {
       if (dev.linked) {
         const stickId = handOf(role);
         if (stickId !== null) this.emit({ kind: 'status', stickId, connected: true, batteryPct, unconfigured: d.unconfigured });
+        // 발은 설정 전(비트 5)을 싣지 않는다 — 시계 초기화만 하고 설정 재전송은 없다
+        else this.emit({ kind: 'pedalStatus', foot: role as FootId, connected: true, batteryPct });
       } else {
         dev.heldBattery = batteryPct;
         dev.heldUnconfigured = d.unconfigured;
@@ -274,8 +293,7 @@ export class WebSerialStickSource extends BaseInputSource {
     } catch {
       // 이미 분리된 포트
     }
-    this.emit({ kind: 'status', stickId: 0, connected: false });
-    this.emit({ kind: 'status', stickId: 1, connected: false });
+    for (const role of [0, 1, 2, 3] as const) this.emitDisconnected(role);
     this.setDongle(null);
     if (this.state !== 'error') this.setState('disconnected');
   }
@@ -446,9 +464,9 @@ export class WebSerialStickSource extends BaseInputSource {
     this.sendCommand(encodeHaptic(strength, durationMs), stickId);
   }
 
-  /** 손을 안 주면 먼저 맞춰진 쪽(왼손 우선)을 돌려준다 */
-  clockOffsetOf(stickId?: StickId): number | null {
-    if (stickId !== undefined) return this.devices[stickId].clock.offset;
+  /** role을 안 주면 먼저 맞춰진 손(왼손 우선)을 돌려준다. 발(2·3)은 그 칸 시계 */
+  clockOffsetOf(role?: DeviceRole): number | null {
+    if (role !== undefined) return this.devices[role].clock.offset;
     return this.devices[0].clock.offset ?? this.devices[1].clock.offset;
   }
 
