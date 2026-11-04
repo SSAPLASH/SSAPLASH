@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AudioEngine } from './AudioEngine';
+import { AudioEngine, softLimitCurve } from './AudioEngine';
 
 // getOutputTimestamp·state만 바꿔 가며 쓰는 최소 AudioContext 모의
 interface MockOpts {
@@ -36,6 +36,7 @@ function installMock(opts: MockOpts) {
     getOutputTimestamp = () => opts.ts;
     createGain = () => makeNode();
     createOscillator = () => makeNode();
+    createWaveShaper = () => makeNode();
     createBuffer = (_ch: number, len: number) => ({ getChannelData: () => new Float32Array(len) });
   }
   vi.stubGlobal('AudioContext', MockAudioContext);
@@ -114,5 +115,19 @@ describe('AudioEngine trigger·click 반환', () => {
     const c = e.click(undefined, true);
     expect(c).not.toBeNull();
     expect(Math.abs((c as number) - 5000)).toBeLessThan(100);
+  });
+});
+
+describe('softLimitCurve', () => {
+  const at = (c: Float32Array, x: number) => c[Math.round(((x / 4 + 1) / 2) * (c.length - 1))];
+  it('문턱(0.8) 아래는 그대로 통과한다', () => {
+    const c = softLimitCurve();
+    for (const x of [0, 0.1, 0.5, 0.79, -0.5]) expect(at(c, x)).toBeCloseTo(x, 2);
+  });
+  it('문턱 위는 1을 넘지 않고 단조 증가한다', () => {
+    const c = softLimitCurve();
+    expect(at(c, 4)).toBeLessThanOrEqual(1);
+    expect(at(c, 1.5)).toBeGreaterThan(at(c, 1));
+    expect(at(c, -4)).toBeGreaterThanOrEqual(-1);
   });
 });
