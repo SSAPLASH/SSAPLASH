@@ -15,7 +15,7 @@
   - 정지 대비 도착: HIT 도착 시각 − 스틱이 멈춘 시각(패킷 timestamp를 시계 동기화로 변환)
       음수면 스틱이 멈추기 전에 브라우저에 도착한 것
   - 정지 → 소리 예상: 위 값 + 오디오 출력 지연(outputLatency)
-  프로토콜: 스틱 통신 프로토콜 v0.7
+  프로토콜: 스틱 통신 프로토콜 v0.8
 -->
 <style>
   :root { --bg:#16181d; --panel:#1f2229; --line:#2c303a; --text:#e8e6e1; --dim:#9aa0ab; --acc:#6c8cff; --good:#5fc28a; --warn:#e6b85c; --bad:#e0675a; }
@@ -56,7 +56,7 @@
 <body>
 <main>
   <h1>스틱 지연 측정</h1>
-  <div class="sub">Feather nRF52840 Sense → BLE / USB 시리얼 / WS 브리지 → Web Audio · 프로토콜 v0.7</div>
+  <div class="sub">Feather nRF52840 Sense → BLE / USB 시리얼 / WS 브리지 → Web Audio · 프로토콜 v0.8</div>
 
   <div class="row">
     <button class="primary" id="btnConnect">BLE 연결</button>
@@ -65,6 +65,12 @@
     <button id="btnDisconnect" disabled>끊기</button>
     <button id="btnReset" disabled>정면 보정</button>
     <button id="btnParams" disabled>파라미터 읽기</button>
+    <button id="btnPose" disabled>자세 기록 시작</button>
+    <button id="btnHaptic" disabled>진동 테스트</button>
+    <label class="vol">파형 <input type="number" id="hapEff" min="1" max="123" value="1" style="width:56px"></label>
+    <button id="btnHapEff" disabled>파형 재생</button>
+    <button id="btnHapSet" disabled>타격에 쓰기</button>
+    <button id="btnHapLat" disabled>진동 지연 측정</button>
     <button id="btnClear">통계 초기화</button>
     <button id="btnCsv">CSV 저장</button>
     <label class="vol">음량 <input type="range" id="vol" min="1" max="8" step="0.5" value="4"><span id="volV">×4</span></label>
@@ -77,6 +83,7 @@
     <div class="card"><div class="k">편도 추정 (RTT/2)</div><div class="v" id="oneWay">-</div><div class="s" id="syncN">동기화 0회</div></div>
     <div class="card"><div class="k">정지 대비 도착</div><div class="v" id="latMed">-</div><div class="s" id="latSub">p95 - · 타격 0</div></div>
     <div class="card"><div class="k">정지 → 소리 예상</div><div class="v" id="soundMed">-</div><div class="s" id="audioLat">오디오 출력 -</div></div>
+    <div class="card"><div class="k">방위각 밀림 (자세 기록)</div><div class="v" id="drift">-</div><div class="s" id="driftSub">[자세 기록 시작] 후 가만히</div><div class="s" id="biasNow"></div></div>
     <div class="card"><div class="k">유실 (HIT seq)</div><div class="v" id="lost">0</div><div class="s" id="fw">펌웨어 -</div><div class="s" id="bridge"></div></div>
   </div>
 
@@ -114,12 +121,19 @@ let transport = null, lastTransport = 'ble';             // 'ble' | 'serial' | '
 let port = null, writer = null, reading = false, ws = null;
 let pending = new Map();          // t0 키(u32) → t0(ms, 소수)
 let syncs = [];                   // {t0, t1us, t2, rtt}
+let poseLog = [];                 // {recv, role, el, az} 설정 모드 POSE (234 정지 드리프트 측정)
+let logRows = [];                 // {recv, role, txt} BT·BIAS 로그 (CSV용)
+let poseOn = false;
+let poseSeg = 0;                  // [자세 기록 시작]마다 +1. 앞 구간은 지우지 않는다 (CSV seq 칸)
+const lastBT = {};
 let hits = [];                    // {seq, pad, vel, lat, recv}
 let lastSeq = {}, lost = 0;       // 역할별 마지막 HIT seq
 /* 스틱 2대: 패킷 [1] flags 비트 0–1 = 역할(0 왼손, 1 오른손). 동글 하나로 두 대가 같이 들어온다 */
 const ROLE_NAME = ['왼손', '오른손', '왼발', '오른발'];
 const ROLE_CH = ['L', 'R', 'l', 'r'];
 let seen = {};
+let lastLink = -1;
+let unconf = {};                   // 역할 → STATUS의 '설정 전' 플래그                 // LINK 마스크 (v0.8) 바뀔 때만 로그
 let bat = {}, batLog = [];       // 역할 → 배터리 %, 30초마다 LOG "BAT 3987mV 82%" 기록                    // 역할 → 마지막으로 스틱 패킷을 받은 시각(ms)
 function activeRoles() { const now = performance.now(); return Object.keys(seen).map(Number).filter((r) => now - seen[r] < 3000).sort(); }
 
@@ -162,6 +176,8 @@ function play(pad, vel) {
     case 'MID_TOM':   tone(t, 0.95 * v, 0.32, 180, 105); break;
     case 'FLOOR_TOM': tone(t, 1.0 * v, 0.40, 130, 70); break;
     case 'CRASH': case 'RIDE': noise(t, 0.4 * v, 0.6, 'highpass', 5000); break;
+    case 'KICK':      tone(t, 1.2 * v, 0.35, 110, 45); break;
+    case 'HIHAT_PEDAL': noise(t, 0.4 * v, 0.04, 'highpass', 6000); break;
     default:          noise(t, 0.25 * v, 0.03, 'highpass', 2000);       // 판정 없음: 짧은 클릭
   }
 }
@@ -205,10 +221,16 @@ function handle(dv, recv) {
       }
       break;
     }
+    case 0x02: {                                   // POSE (설정 모드): [2-5] t_us [6-7] el×100 [8-9] az×100
+      if (!poseOn) break;
+      poseLog.push({ recv, role, seg: poseSeg, el: dv.getInt16(6, true) / 100, az: dv.getInt16(8, true) / 100 });
+      break;
+    }
     case 0x03: {                                   // STATUS: [2] 배터리 % (0xFF 모름)
       if (b[2] !== 0xff) bat[role] = b[2];
+      unconf[role] = !!(b[1] & 0x20);             // v0.8: 부팅 뒤 웹 설정 못 받음
       const bs = Object.keys(bat).sort().map((r) => `${ROLE_NAME[r]} ${bat[r]}%`).join(' · ');
-      $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}` + (bs ? ` · 배터리 ${bs}` : '');
+      $('fw').textContent = `펌웨어 ${b[4]}.${b[5]}` + (bs ? ` · 배터리 ${bs}` : '') + (Object.keys(unconf).some((r) => unconf[r]) ? ` · 설정 전: ${Object.keys(unconf).sort().filter((r) => unconf[r]).map((r) => ROLE_NAME[r]).join(', ')}` : '');
       break;
     }
     case 0x06: {
@@ -224,7 +246,20 @@ function handle(dv, recv) {
       const txt = String.fromCharCode(...b.slice(2));
       const m = /^BAT (\d+)mV/.exec(txt);
       if (m) batLog.push({ recv, role, mv: Number(m[1]) });
+      if (/^(BT|BIAS|BOOT)/.test(txt)) logRows.push({ recv, role, txt });
+      const bt = /^BT (-?\d+) (-?\d+) (-?\d+)/.exec(txt);
+      if (bt) { lastBT[role] = bt.slice(1).map((x) => Number(x) / 100); break; }   // BT는 10초마다 와서 로그 창 대신 카드에 표시
       log(txt.startsWith('DONGLE') ? 'LOG ' + txt : `LOG ${ROLE_CH[role]} ${txt}`);
+      break;
+    }
+    case 0x07: {                                   // LINK (v0.8, 동글): [2] 연결 마스크, [3].[4] 동글 펌웨어
+      const m = b[2];
+      $('bridge').textContent = `동글 ${b[3]}.${b[4]} · ` + ROLE_NAME.map((n, i) => `${n} ${m & (1 << i) ? '●' : '○'}`).join(' ');
+      if (m !== lastLink) { log(`LINK ${ROLE_NAME.filter((_, i) => m & (1 << i)).join(', ') || '없음'}`); lastLink = m; }
+      break;
+    }
+    case 0x08: {                                   // PEDAL (v0.8 초안, 페달 보드): [2] 0 뗌 / 1 밟음
+      log(`PEDAL ${ROLE_NAME[role]} ${b[2] ? '밟음' : '뗌'}`);
       break;
     }
     case 0x7e: $('bridge').textContent = `브리지 ok ${dv.getUint32(2, true)} · CRC ${dv.getUint32(6, true)}`; break;
@@ -269,6 +304,36 @@ function render() {
   $('audioLat').textContent = `오디오 출력 ${f1(out)} ms`;
   $('soundMed').textContent = lat.length && Number.isFinite(out) ? f1(median(lat) + out) + ' ms' : '-';
   $('lost').textContent = lost;
+  renderDrift();
+}
+/* 자세 기록: 역할별로 방위각을 펼쳐서(±180 넘어가도 이어지게) 처음 대비 변화와 최근 60초 기울기(°/분) */
+function unwrapAz(arr) {
+  const out = []; let prev = null, acc = 0;
+  for (const x of arr) { if (prev !== null) { let d = x - prev; if (d > 180) d -= 360; if (d < -180) d += 360; acc += d; } else acc = x; out.push(acc); prev = x; }
+  return out;
+}
+function slope(ts, ys) {
+  const n = ts.length; if (n < 2) return NaN;
+  const mt = ts.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+  let num = 0, den = 0; for (let i = 0; i < n; i++) { num += (ts[i] - mt) * (ys[i] - my); den += (ts[i] - mt) ** 2; }
+  return den ? num / den : NaN;
+}
+function renderDrift() {
+  const bs = Object.keys(lastBT).sort().map((r) => `${ROLE_CH[r]} ${lastBT[r].map((x) => x.toFixed(2)).join(' ')}`).join(' · ');
+  $('biasNow').textContent = bs ? `바이어스 °/s ${bs}` : '';
+  const cur = poseLog.filter((p) => p.seg === poseSeg);   // 카드는 지금(마지막) 구간만
+  if (!cur.length) return;
+  const parts = [], subs = [];
+  for (const r of [...new Set(cur.map((p) => p.role))].sort()) {
+    const ps = cur.filter((p) => p.role === r);
+    const az = unwrapAz(ps.map((p) => p.az)), t = ps.map((p) => p.recv / 60000);
+    const t1 = t[t.length - 1], k = t.findIndex((x) => x > t1 - 1);
+    const rate = slope(t.slice(k), az.slice(k));
+    parts.push(`${ROLE_CH[r]} ${(az[az.length - 1] - az[0]).toFixed(1)}°`);
+    subs.push(`${ROLE_CH[r]} 최근 1분 ${Number.isFinite(rate) ? rate.toFixed(1) : '-'}°/분 · ${((t1 - t[0])).toFixed(1)}분`);
+  }
+  $('drift').textContent = `#${poseSeg}  ` + parts.join('  ');
+  $('driftSub').textContent = subs.join(' · ');
 }
 
 /* ---------- 패드 위치 설정 ----------
@@ -393,7 +458,7 @@ const CONN_BTNS = ['btnConnect', 'btnSerial', 'btnWs'];
 function onConnected(kind, label) {
   transport = kind; lastTransport = kind;
   $('state').textContent = `연결됨 · ${label}`;
-  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib']) $(b).disabled = false;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnPose', 'btnHaptic', 'btnHapEff', 'btnHapSet', 'btnHapLat', 'btnCalib']) $(b).disabled = false;
   for (const b of CONN_BTNS) $(b).disabled = true;
   $('btnCalibResend').disabled = !storedPads();
   syncs = []; pending.clear(); seen = {}; lastSeq = {}; curPads = {}; padAck = {}; padTxt = {};
@@ -403,7 +468,8 @@ function onConnected(kind, label) {
 function onDisconnected() {
   $('state').textContent = '끊김'; clearInterval(syncTimer);
   ctrl = null; writer = null; ws = null; reading = false; transport = null;
-  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnCalib', 'btnCalibCancel', 'btnCalibResend']) $(b).disabled = true;
+  for (const b of ['btnDisconnect', 'btnReset', 'btnParams', 'btnPose', 'btnHaptic', 'btnHapEff', 'btnHapSet', 'btnHapLat', 'btnCalib', 'btnCalibCancel', 'btnCalibResend']) $(b).disabled = true;
+  poseOn = false; $('btnPose').textContent = '자세 기록 시작';
   for (const b of CONN_BTNS) $(b).disabled = false;
   calib = null; anchor = null; calibShow();
 }
@@ -515,12 +581,34 @@ $('btnCalibResend').onclick = async () => {
   anchorShow();
 };
 $('btnParams').onclick = () => write([0x17]);
-$('btnClear').onclick = () => { syncs = []; hits = []; lost = 0; lastSeq = {}; batLog = []; $('hits').textContent = ''; };
+/* 자세 기록 (234 정지 드리프트): SET_PARAM poseRateHz(0x09)=10 → SET_MODE 1. 끝내면 모드 0, 50Hz로 되돌림 */
+$('btnPose').onclick = async () => {
+  if (!poseOn) {
+    poseSeg++; poseOn = true;
+    await write([0x14, 0x09, 10, 0]); await write([0x11, 1]);
+    $('btnPose').textContent = '자세 기록 끝';
+    log(`자세 기록 ${poseSeg} 시작 (POSE 10Hz)`);
+  } else {
+    poseOn = false;
+    await write([0x11, 0]); await write([0x14, 0x09, 50, 0]);
+    $('btnPose').textContent = '자세 기록 시작';
+    log(`자세 기록 ${poseSeg} 끝 (${poseLog.filter((p) => p.seg === poseSeg).length}개)`);
+  }
+};
+$('btnHaptic').onclick = () => write([0x12, 200, 5]);   // HAPTIC: 세기 200, 50ms (연결된 스틱 모두)
+// 개발용: HAPTIC [1]=파형 번호, [2]=0 재생 / 0xFF 타격 파형으로 설정 (TI LRA 라이브러리 1~123)
+$('btnHapEff').onclick = () => write([0x12, Number($('hapEff').value) & 0xff, 0]);
+// 개발용: HAPTIC [파형, 0xFE] → 스틱이 IMU로 진동 시작까지 시간을 재서 LOG "VIB x.xms" (모터를 스틱에 붙이고 가만히)
+$('btnHapLat').onclick = () => write([0x12, Number($('hapEff').value) & 0xff, 0xfe]);
+$('btnHapSet').onclick = () => { write([0x12, Number($('hapEff').value) & 0xff, 0xff]); log(`타격 진동 파형 = ${$('hapEff').value}`); };
+$('btnClear').onclick = () => { syncs = []; hits = []; lost = 0; lastSeq = {}; batLog = []; poseLog = []; poseSeg = 0; logRows = []; $('hits').textContent = ''; };
 $('btnCsv').onclick = () => {
   let s = `# transport,${lastTransport}\nkind,seq,pad,vel,el,az,lat_ms,rtt_ms,recv_ms,role,bat_mv\n`;
   for (const h of hits) s += `hit,${h.seq},${h.pad},${h.vel},${h.el},${h.az},${h.lat.toFixed(2)},,${h.recv.toFixed(2)},${h.role}\n`;
   for (const x of syncs) s += `sync,,,,,,,${x.rtt.toFixed(2)},${x.t2.toFixed(2)},${x.role}\n`;
   for (const x of batLog) s += `bat,,,,,,,,${x.recv.toFixed(2)},${x.role},${x.mv}\n`;
+  for (const x of poseLog) s += `pose,${x.seg},,,${x.el},${x.az},,,${x.recv.toFixed(2)},${x.role}\n`;
+  for (const x of logRows) s += `log,,${x.txt.replace(/,/g, ' ')},,,,,,${x.recv.toFixed(2)},${x.role}\n`;
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([s], { type: 'text/csv' }));
   a.download = `${lastTransport}_latency_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`;

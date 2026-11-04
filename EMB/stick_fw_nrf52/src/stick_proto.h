@@ -1,5 +1,5 @@
 /*
- * stick_proto.h - 스틱 ↔ 브라우저 패킷 (통신 프로토콜 v0.7, 원문은 GitLab Wiki)
+ * stick_proto.h - 스틱 ↔ 브라우저 패킷 (통신 프로토콜 v0.8, 원문은 GitLab Wiki)
  *
  * 패킷 내용만 만든다. 운반(BLE notify 1회 = 패킷 1개 / 시리얼 0xA5 LEN payload CRC8)은 호출 쪽.
  * 모든 값 리틀 엔디언, 시각 µs u32, 각도 0.01° i16.
@@ -19,6 +19,8 @@ extern "C" {
 #define PKT_STATUS     0x03
 #define PKT_SYNC_ACK   0x04
 #define PKT_PARAM_ACK  0x06
+#define PKT_LINK       0x07   /* v0.8, 동글만 보냄: [0x07][flags=0][연결 마스크 bit=역할][fwMajor][fwMinor] */
+#define PKT_PEDAL      0x08   /* v0.8 초안, 페달만: [0x08][flags role][state 0 뗌/1 밟음][t_us u32] */
 #define PKT_LOG        0x7F
 
 /* 브라우저 → 스틱 */
@@ -41,6 +43,7 @@ extern "C" {
 #define FLAG_ROLE_MASK   0x03
 #define FLAG_MAG_BAD     0x08
 #define FLAG_AMBIGUOUS   0x10
+#define FLAG_UNCONFIGURED 0x20  /* v0.8, STATUS만: 부팅 뒤 웹 설정(SET_PARAM·SET_PAD_TABLE·SET_YAW_OFFSET)을 아직 못 받음 */
 
 #define PKT_MAX 20
 
