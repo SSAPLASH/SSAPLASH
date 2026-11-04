@@ -19,12 +19,27 @@ export interface MetronomeLive {
   locked: boolean;
 }
 
+/** 페달 보드 상태(PLAY-002 3-4). 동글이 role 2·3으로 알린다 */
+export interface PedalLive {
+  /** [왼발 하이햇, 오른발 킥]. LINK bit2·bit3 */
+  connected: [boolean, boolean];
+  /** 페달 STATUS 배터리(%, 최근 3개 평균). 모르거나 둘 다 끊기면 null */
+  battery: number | null;
+  /** 하이햇 페달 밟힘(PEDAL state). 왼발이 끊기면 true로 되돌린다 */
+  hihatClosed: boolean;
+}
+
+export function initialPedal(): PedalLive {
+  return { connected: [false, false], battery: null, hihatClosed: true };
+}
+
 interface LiveState {
   connected: [boolean, boolean];
   /** 스틱별 배터리(%, 최근 몇 개 평균). 모르거나 그 손이 끊기면 null */
   battery: [number | null, number | null];
   /** 동글 링크 상태. 동글 소스가 아니거나 포트가 닫혀 있으면 null */
   dongle: DongleLink | null;
+  pedal: PedalLive;
   pose: [Pose, Pose];
   lastHit: ResolvedHit | null;
   sourceState: SourceState;
@@ -55,6 +70,7 @@ export const useLive = create<LiveState>(() => ({
   connected: [false, false],
   battery: [null, null],
   dongle: null,
+  pedal: initialPedal(),
   pose: [
     { pitch: 0, yaw: 0 },
     { pitch: 0, yaw: 0 },
