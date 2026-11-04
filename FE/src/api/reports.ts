@@ -91,6 +91,7 @@ export function toWeakSegments(raw: unknown): WeakSegment[] | null {
         toMs,
         pattern: typeof el.pattern === 'string' ? el.pattern : '',
         description: el.description,
+        ...(typeof el.tip === 'string' && el.tip !== '' ? { tip: el.tip } : {}),
         causeTags: Array.isArray(el.causeTags) ? el.causeTags.filter((t): t is string => typeof t === 'string') : [],
         pads,
         severity: sev === null ? 0 : Math.min(1, Math.max(0, sev)),
