@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getAllReportNotes, toReport, toReportNote, toWeakSegments, type ReportDto, type ReportNoteDto } from './reports';
+import { getAllReportNotes, toReport, toCoachSummary, toReportNote, toWeakSegments, type ReportDto, type ReportNoteDto } from './reports';
 
 const DTO: ReportDto = {
   id: 1,
@@ -98,6 +98,8 @@ const SAMPLE_A = [
     pattern: 'TIMING_LATE',
     description: '전체적으로 평균 22ms 늦게 치고 있어요.',
     tip: '스틱을 미리 올려 두고, 박 소리가 들리는 순간 내려쳐 보세요. 느린 템포부터 시작하면 감이 빨리 와요.',
+    detail: '박마다 평균 22ms씩 늦게 들어가고 있어요.',
+    severityLevel: 'LOW',
     causeTags: ['LATE', 'OVERALL'],
     pads: ['HIHAT', 'SNARE'],
     metrics: { severity: 0.36, meanDeltaMs: 21.7, hitCount: 22, scope: 'WHOLE' },
@@ -108,6 +110,8 @@ const SAMPLE_A = [
     pattern: 'MISS_CLUSTER',
     description: '7~12초 구간에서 노트의 40%를 놓쳤어요.',
     tip: '놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.',
+    detail: '이 구간에서 4개를 놓쳤어요.',
+    severityLevel: 'HIGH',
     causeTags: ['MISS', 'CLUSTER'],
     pads: ['SNARE'],
     metrics: { severity: 0.67, missRate: 0.4, missCount: 4, noteCount: 10, scope: 'SEGMENT' },
@@ -141,6 +145,18 @@ describe('toWeakSegments', () => {
     // 자르거나 다듬지 않는다
     const [t] = toWeakSegments([seg({ tip: '  앞뒤 공백 유지  ' })])!;
     expect(t.tip).toBe('  앞뒤 공백 유지  ');
+  });
+
+  it('detail·severityLevel을 보관하고, 모르는 단계·숫자·빈 detail은 키 자체가 없다', () => {
+    const r = toWeakSegments(SAMPLE_A)!;
+    expect(r[0]).toMatchObject({ detail: SAMPLE_A[0].detail, severityLevel: 'LOW' });
+    expect(r[1]).toMatchObject({ detail: SAMPLE_A[1].detail, severityLevel: 'HIGH' });
+    for (const el of [seg({ severityLevel: 'SEVERE' }), seg({ severityLevel: 3 }), seg({ severityLevel: null })]) {
+      expect('severityLevel' in toWeakSegments([el])![0]).toBe(false);
+    }
+    for (const el of [seg({ detail: '' }), seg({ detail: 5 }), seg({ detail: null })]) {
+      expect('detail' in toWeakSegments([el])![0]).toBe(false);
+    }
   });
 
   it('샘플 B·C(빈 배열)는 빈 배열, null은 null, 배열이 아니면 null', () => {
@@ -187,5 +203,34 @@ describe('toWeakSegments', () => {
     expect(toReport({ ...DTO, weakSegments: SAMPLE_A }).weakSegments).toHaveLength(2);
     expect(toReport({ ...DTO, weakSegments: [] }).weakSegments).toEqual([]);
     expect(toReport({ ...DTO, weakSegments: null }).weakSegments).toBeNull();
+  });
+});
+
+describe('toCoachSummary', () => {
+  const ok = { level: 'FAIR', text: '박자는 안정적이에요.', focusPattern: 'TIMING_LATE', source: 'RULE' };
+
+  it('정상 객체를 그대로 변환한다', () => {
+    expect(toCoachSummary(ok)).toEqual(ok);
+  });
+
+  it('null·없음·객체 아님·text 비었거나 문자열 아님은 null', () => {
+    expect(toCoachSummary(null)).toBeNull();
+    expect(toCoachSummary(undefined)).toBeNull();
+    expect(toCoachSummary('총평')).toBeNull();
+    expect(toCoachSummary([ok])).toBeNull();
+    expect(toCoachSummary({ ...ok, text: '' })).toBeNull();
+    expect(toCoachSummary({ ...ok, text: 3 })).toBeNull();
+  });
+
+  it('level이 없으면 빈 문자열, 모르는 level은 그대로, focusPattern·source가 문자열이 아니면 null', () => {
+    expect(toCoachSummary({ text: 'a' })).toEqual({ level: '', text: 'a', focusPattern: null, source: null });
+    expect(toCoachSummary({ ...ok, level: 'EXCELLENT' })!.level).toBe('EXCELLENT');
+    expect(toCoachSummary({ ...ok, focusPattern: 1, source: null })).toMatchObject({ focusPattern: null, source: null });
+  });
+
+  it('toReport가 coachSummary를 변환하고, 없으면 null', () => {
+    expect(toReport({ ...DTO, coachSummary: ok }).coachSummary).toEqual(ok);
+    expect(toReport(DTO).coachSummary).toBeNull();
+    expect(toReport({ ...DTO, coachSummary: null }).coachSummary).toBeNull();
   });
 });

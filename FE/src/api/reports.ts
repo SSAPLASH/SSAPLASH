@@ -4,7 +4,7 @@
 // - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
 import type { Judgement } from '@/domain/judgement';
 import { normalizePadId, type PadId } from '@/domain/pads';
-import type { AnalysisStatus, Report, ReportNote, WeakScope, WeakSegment } from '@/domain/report';
+import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/report';
 import { apiFetch } from './http';
 
 type Num = number | string;
@@ -36,6 +36,7 @@ export interface ReportDto {
   endReason: string | null;
   analysisStatus: AnalysisStatus;
   weakSegments: unknown;
+  coachSummary?: unknown;
   recommendedDrills: unknown;
   generatorVersion: string;
   generatedAt: string;
@@ -69,6 +70,19 @@ function finite(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const isSeverityLevel = (v: unknown): v is SeverityLevel => v === 'LOW' || v === 'MEDIUM' || v === 'HIGH';
+
+/** 총평 응답 변환. 객체이고 text가 비어 있지 않은 문자열일 때만, 아니면 null. level·source는 문자열 그대로 보관 */
+export function toCoachSummary(raw: unknown): CoachSummary | null {
+  if (!isObj(raw) || typeof raw.text !== 'string' || raw.text === '') return null;
+  return {
+    level: typeof raw.level === 'string' ? raw.level : '',
+    text: raw.text,
+    focusPattern: typeof raw.focusPattern === 'string' ? raw.focusPattern : null,
+    source: typeof raw.source === 'string' ? raw.source : null,
+  };
+}
+
 /** 약점 구간 응답 변환(설계 3-1). 배열이 아니면 null, 깨진 요소만 버리고 서버 순서는 유지한다 */
 export function toWeakSegments(raw: unknown): WeakSegment[] | null {
   if (!Array.isArray(raw)) return null;
@@ -92,6 +106,8 @@ export function toWeakSegments(raw: unknown): WeakSegment[] | null {
         pattern: typeof el.pattern === 'string' ? el.pattern : '',
         description: el.description,
         ...(typeof el.tip === 'string' && el.tip !== '' ? { tip: el.tip } : {}),
+        ...(typeof el.detail === 'string' && el.detail !== '' ? { detail: el.detail } : {}),
+        ...(isSeverityLevel(el.severityLevel) ? { severityLevel: el.severityLevel } : {}),
         causeTags: Array.isArray(el.causeTags) ? el.causeTags.filter((t): t is string => typeof t === 'string') : [],
         pads,
         severity: sev === null ? 0 : Math.min(1, Math.max(0, sev)),
@@ -129,6 +145,7 @@ export function toReport(dto: ReportDto): Report {
     inputSource: dto.inputSource,
     analysisStatus: dto.analysisStatus,
     weakSegments: toWeakSegments(dto.weakSegments),
+    coachSummary: toCoachSummary(dto.coachSummary),
     recommendedDrills: dto.recommendedDrills,
     generatedAt: dto.generatedAt,
   };
