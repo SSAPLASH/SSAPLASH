@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { PlayLogTab } from '@/components/history/PlayLogTab';
 import '@/components/history/history.css';
+import { RecordingList } from '@/components/recording/RecordingList';
 import { useShell } from '@/components/shell/useShell';
 import { Segmented } from '@/components/ui/Segmented';
 
@@ -40,7 +41,7 @@ export function HistoryPage() {
           </div>
         ) : null}
 
-        {tab === 'recordings' ? <div className="history-tab-recordings" /> : <PlayLogTab />}
+        {tab === 'recordings' ? <RecordingList /> : <PlayLogTab />}
       </div>
     </main>
   );
