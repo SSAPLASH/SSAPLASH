@@ -28,6 +28,49 @@
   filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
 }
 
+/* 타격 모션(D7). 몸체 g에만 건다. 지속 시간은 HIT_MS(220ms)와 맞춘다 */
+.drum-pad-body,
+.drum-pad-cymbal {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.drum-pad-glint {
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+.drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
+.drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body {
+  animation: drum-pad-press 220ms ease-out;
+}
+.drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
+  animation: drum-pad-sway 450ms ease-out;
+}
+@keyframes drum-pad-press {
+  0% { transform: scale(1); filter: brightness(1); }
+  18% { transform: scale(0.96); filter: brightness(1.15); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+@keyframes drum-pad-sway {
+  0% { transform: rotate(0deg); filter: brightness(1); }
+  10% { transform: rotate(-4deg); filter: brightness(1.15); }
+  40% { transform: rotate(3deg); }
+  70% { transform: rotate(-1.5deg); }
+  100% { transform: rotate(0deg); filter: brightness(1); }
+}
+@keyframes drum-pad-bright {
+  0% { filter: brightness(1); }
+  18% { filter: brightness(1.15); }
+  100% { filter: brightness(1); }
+}
+/* 모션 줄이기: scale·회전 없이 밝기 변화만 */
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
+  .drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body,
+  .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
+    animation: drum-pad-bright 220ms ease-out;
+  }
+}
+
 .drum-pad.clickable {
   cursor: pointer;
 }
