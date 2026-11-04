@@ -32,7 +32,7 @@ describe('GlassDock 기본 상태', () => {
         <GlassDock />
       </MemoryRouter>,
     );
-    expect(html).toContain('glass-dock motion-dialog shell');
+    expect(html).toContain('glass-dock shell');
     expect(html).not.toContain('collapsed');
   });
 });
