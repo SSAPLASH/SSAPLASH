@@ -4,6 +4,8 @@
 // 프리셋 칩은 스틱 연결이 필요한데 한 손이라도 끊기면 「준비 필요」(domain/dockChip).
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { RECORDING_ENABLED } from '@/app/features';
+import { useRecordingStore } from '@/app/recordingStore';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { dockPresetChipView } from '@/domain/dockChip';
 import { BPM_STEP } from '@/domain/metronome';
@@ -12,6 +14,8 @@ import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';
+import { RecordButton } from '@/components/recording/RecordButton';
+import { recordButtonVisible } from '@/components/recording/recordButtonRoute';
 import { IconButton } from '@/components/ui/IconButton';
 import { createDockAutoCollapse } from './dockAutoCollapse';
 import './glass-dock.css';
@@ -71,6 +75,8 @@ export function GlassDock() {
   const connected = useLive((s) => s.connected);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // 접힘 Dock의 녹음 점: 자유 녹음 중, 또는 게임·악보에서 녹음을 켠 채 연주 중
+  const recordingDot = useRecordingStore((s) => RECORDING_ENABLED && (s.phase === 'recording' || (s.phase === 'armed' && s.locked)));
 
   const mode = immersive ? 'play' : 'shell';
   // 연주 중(카운트인 이후·일시정지 아님)에는 저장된 설정 대신 로컬 자동 접힘 상태를 쓴다(UX-41)
@@ -125,6 +131,7 @@ export function GlassDock() {
           </span>
           <span className="dock-pill-bpm">{m.bpm}</span>
           <span className={`dock-pill-dot${running ? ' on' : ''}`} />
+          {recordingDot && <span className="dock-pill-rec" aria-hidden="true" />}
           {mode === 'play' && <PauseIcon size={16} />}
           <span className="dock-divider short" />
           <Chevron />
@@ -180,6 +187,12 @@ export function GlassDock() {
             <path d="M6 12h12M12 6v12" />
           </svg>
         </IconButton>
+        {RECORDING_ENABLED && recordButtonVisible(pathname) && (
+          <>
+            <span className="dock-divider" />
+            <RecordButton />
+          </>
+        )}
         <span className="dock-divider" />
         <button
           type="button"
