@@ -64,3 +64,30 @@ export function usePadStates(session?: RhythmSession | null): States {
 
   return states;
 }
+
+/**
+ * 패드별 타격 횟수 카운터. liveStore 타격(hitSeq)마다 `visualPadOf(hit.pad)` 패드의 값을 1 올린다.
+ * DrumKit의 hitSeq로 넘기면 연타마다 타격 모션(CSS 애니메이션)이 다시 시작된다.
+ */
+export function usePadHitSeq(): Partial<Record<PadId, number>> {
+  const [seq, setSeq] = useState<Partial<Record<PadId, number>>>({});
+
+  useEffect(() => {
+    let lastSeq = useLive.getState().hitSeq;
+    const unsub = useLive.subscribe((s) => {
+      if (s.hitSeq === lastSeq) return;
+      lastSeq = s.hitSeq;
+      const hit = s.lastHit;
+      if (!hit || !hit.pad) return;
+      const pad = visualPadOf(hit.pad);
+      if (!pad) return;
+      setSeq((prev) => ({ ...prev, [pad]: (prev[pad] ?? 0) + 1 }));
+    });
+    return () => {
+      unsub();
+      setSeq({});
+    };
+  }, []);
+
+  return seq;
+}
