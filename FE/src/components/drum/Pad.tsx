@@ -264,7 +264,7 @@ export const Pad = memo(function Pad({
             />
           )}
           {judge && (
-            <text className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
+            <text key={state} className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
               {judge}
             </text>
           )}

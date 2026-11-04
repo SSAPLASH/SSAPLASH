@@ -1,5 +1,7 @@
 // 연주 HUD (Figma PlayHUD 126:3352, 10/31 재구성). 높이 96, 세션 접근 없이 스냅샷을 props로 받는다.
 // 일시정지 버튼은 없다(U20, Dock ‖·Esc). 각 수치는 data-stat 요소로 분리해 카운트업 같은 이펙트를 나중에 얹을 수 있게 한다.
+import { useState } from 'react';
+import { m, useReducedMotion } from 'motion/react';
 import type { Difficulty } from '@/domain/chart';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongCover } from '@/components/song/SongCover';
@@ -69,6 +71,38 @@ function stats(p: PlayHudProps): Stat[] {
   ];
 }
 
+/** 콤보 범프 크기·시간(E5) */
+const BUMP_SCALE = [1, 1.18, 1];
+const BUMP_SEC = 0.16;
+
+/** E5 콤보 숫자: 값이 오를 때만 범프(scale 1→1.18→1). 10의 배수로 오르면 브랜드색으로 번쩍. 내려가면(0 포함) 없음 */
+function ComboValue({ combo }: { combo: number }) {
+  const reduced = useReducedMotion();
+  const [prev, setPrev] = useState(combo);
+  const [bump, setBump] = useState(0);
+  const [flash, setFlash] = useState(false);
+  if (combo !== prev) {
+    setPrev(combo);
+    const up = combo > prev;
+    if (up) setBump(bump + 1);
+    setFlash(up && combo % 10 === 0);
+  }
+  const active = bump > 0 && !reduced;
+  return (
+    <m.span
+      // key가 바뀌면 재마운트돼 연속 상승마다 처음부터 다시 재생한다
+      key={bump}
+      className={flash && !reduced ? 'play-hud-value combo-flash' : 'play-hud-value'}
+      data-bump={active ? bump : undefined}
+      data-stat="combo"
+      animate={active ? { scale: BUMP_SCALE } : undefined}
+      transition={{ duration: BUMP_SEC, ease: 'easeOut' }}
+    >
+      {combo}
+    </m.span>
+  );
+}
+
 export function PlayHud(props: PlayHudProps) {
   const { variant, title, artist, coverUrl = null, level, bpm, elapsedMs, durationMs } = props;
   const ratio = progressRatio(elapsedMs, durationMs);
@@ -108,9 +142,13 @@ export function PlayHud(props: PlayHudProps) {
         {stats(props).map((s) => (
           <div key={s.key} className={`play-hud-stat ${s.tone}`}>
             <span className="play-hud-label">{s.label}</span>
-            <span className="play-hud-value" data-stat={s.key}>
-              {s.value}
-            </span>
+            {s.key === 'combo' && props.variant === 'game' ? (
+              <ComboValue combo={props.combo} />
+            ) : (
+              <span className="play-hud-value" data-stat={s.key}>
+                {s.value}
+              </span>
+            )}
           </div>
         ))}
       </div>

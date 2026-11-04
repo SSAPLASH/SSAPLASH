@@ -668,7 +668,7 @@ export function SheetPage() {
           />
         }
         guide={<GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />}
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
+        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"
