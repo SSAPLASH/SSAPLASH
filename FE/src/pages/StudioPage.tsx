@@ -14,6 +14,7 @@ import { SongCoverDialog } from '@/components/studio/SongCoverDialog';
 import { SongDeleteDialog } from '@/components/studio/SongDeleteDialog';
 import { SongMetaDialog } from '@/components/studio/SongMetaDialog';
 import { StudioToast } from '@/components/studio/StudioToast';
+import { useAccompanimentPolling } from '@/components/studio/useAccompanimentPolling';
 import type { SongEditKind } from '@/components/studio/SongMenu';
 import { PlusIcon } from '@/components/studio/StudioIcons';
 import { UploadDialog } from '@/components/studio/UploadDialog';
@@ -236,6 +237,8 @@ export function StudioPage() {
   const isMine = scope === 'MINE';
   const items = isMine ? rawItems : [];
   const status = isMine ? rawStatus : 'loading';
+  // 채보는 READY인데 반주가 생성 중인 곡만 짧게 다시 읽어 배지를 갱신한다(설계 CHART-002 반주 상태 4-2)
+  useAccompanimentPolling(items, status === 'ready');
 
   // store가 이미 사용자용 문장으로 만들어 둔다
   const errorText = error?.detail ?? null;

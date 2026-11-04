@@ -14,6 +14,7 @@ function song(id: number, over: Partial<SongSummary> = {}): SongSummary {
     timeSignature: '4/4',
     durationMs: 185_000,
     hasAccompaniment: false,
+    accompanimentStatus: 'NONE',
     difficulties: ['EASY', 'NORMAL', 'HARD'],
     createdAt: '2026-10-01T00:00:00Z',
     coverUrl: null,

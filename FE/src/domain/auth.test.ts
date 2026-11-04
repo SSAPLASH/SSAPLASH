@@ -49,7 +49,7 @@ describe('loginErrorMessage', () => {
 describe('LOGIN_PROVIDERS', () => {
   it('google, ssafy 순서로 BE 경로 값과 라벨을 가진다', () => {
     expect(LOGIN_PROVIDERS.map((p) => p.key)).toEqual(['google', 'ssafy']);
-    for (const p of LOGIN_PROVIDERS) expect(p.label.length).toBeGreaterThan(0);
+    expect(LOGIN_PROVIDERS.map((p) => p.label)).toEqual(['Google로 계속하기', 'SSAFY로 계속하기']);
   });
 });
 

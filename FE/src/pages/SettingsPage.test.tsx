@@ -16,6 +16,9 @@ const user: UserMe = {
   role: 'USER',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  dataConsent: { agreed: null, version: null, updatedAt: null },
+  signupCompleted: true,
+  consents: { terms: null, privacy: null },
 };
 
 function render(): string {
@@ -60,7 +63,6 @@ beforeEach(() => {
     volume: 0.8,
     audioOffsetMs: 0,
     liveCoach: true,
-    statsConsent: false,
   });
   put(useLive, { connected: [false, false], referenceSetAt: null });
   put(usePresets, { items: [] });
@@ -93,11 +95,9 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   it('토글 aria-checked가 store 값을 따른다', () => {
     let html = render();
     expect(switchChecked(html, '실시간 코칭')).toBe('true');
-    expect(switchChecked(html, '연주 기록 활용')).toBe('false');
-    put(useSettings, { liveCoach: false, statsConsent: true });
+    put(useSettings, { liveCoach: false });
     html = render();
     expect(switchChecked(html, '실시간 코칭')).toBe('false');
-    expect(switchChecked(html, '연주 기록 활용')).toBe('true');
   });
 
   it('음량 %와 지연 보정 표시', () => {

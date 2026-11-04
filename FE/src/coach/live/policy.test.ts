@@ -12,6 +12,7 @@ function ev(key: string, over: Partial<RuleEvaluation> = {}): RuleEvaluation {
     release: false,
     severity: 0.5,
     text: key,
+    target: null,
     ...over,
   };
 }
