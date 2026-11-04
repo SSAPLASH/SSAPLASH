@@ -90,9 +90,9 @@ class AdminSongService {
 		return register(title, artist, license, published, converter.convert(file));
 	}
 
-	/** 공용 곡 카탈로그(254번)가 저장소의 MIDI 바이트로 등록한다. 규칙은 업로드 등록과 같다. */
-	AdminSongDetail register(String title, String artist, String license, boolean published, byte[] midi) {
-		return register(title, artist, license, published, converter.convert(midi));
+	/** 공용 곡 카탈로그(254번)가 저장소의 MIDI 바이트로 등록한다. 규칙은 업로드 등록과 같고, 카탈로그 offsetMs를 첫 박으로 쓴다(260번). */
+	AdminSongDetail register(String title, String artist, String license, boolean published, byte[] midi, int offsetMs) {
+		return register(title, artist, license, published, converter.convert(midi, offsetMs));
 	}
 
 	private AdminSongDetail register(String title, String artist, String license, boolean published, MidiChartDocuments.Song song) {
@@ -112,10 +112,10 @@ class AdminSongService {
 		return regenerate(id, converter.convert(file));
 	}
 
-	/** 공용 곡 카탈로그(254번)가 난이도가 모자란 곡을 채울 때 쓴다. */
-	AdminSongDetail regenerate(long id, byte[] midi) {
+	/** 공용 곡 카탈로그(254번)가 난이도가 모자란 곡을 채울 때 쓴다. offsetMs는 카탈로그 값(260번). */
+	AdminSongDetail regenerate(long id, byte[] midi, int offsetMs) {
 		tx.executeWithoutResult(s -> songs.lock(id));
-		return regenerate(id, converter.convert(midi));
+		return regenerate(id, converter.convert(midi, offsetMs));
 	}
 
 	private AdminSongDetail regenerate(long id, MidiChartDocuments.Song song) {

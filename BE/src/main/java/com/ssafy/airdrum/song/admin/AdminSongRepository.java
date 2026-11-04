@@ -53,8 +53,8 @@ class AdminSongRepository {
 	long insertSong(String title, String artist, String license, boolean published, MidiChartDocuments.Song song) {
 		return db.queryForObject("""
 				INSERT INTO songs(owner_id,title,artist,source,status,bpm,offset_ms,time_signature,duration_ms,license,published)
-				VALUES (NULL,?,?,'BUILTIN','READY',?,0,?,?,?,?) RETURNING id
-				""", Long.class, title, artist, song.bpm(), song.timeSignature(), song.durationMs(), license, published);
+				VALUES (NULL,?,?,'BUILTIN','READY',?,?,?,?,?,?) RETURNING id
+				""", Long.class, title, artist, song.bpm(), song.offsetMs(), song.timeSignature(), song.durationMs(), license, published);
 	}
 
 	/** 개인 곡·없는 곡·삭제 곡은 존재를 드러내지 않고 404다. 트랜잭션 안에서 호출한다. */
@@ -71,9 +71,10 @@ class AdminSongRepository {
 		db.update("UPDATE songs SET " + column + "=?,updated_at=clock_timestamp() WHERE id=?", value, id);
 	}
 
+	/** ADMIN MIDI 재업로드는 offsetMs가 0이라 카탈로그 곡의 offset이 0으로 돌아간다(260번 설계 U4, README). */
 	void updateTiming(long id, MidiChartDocuments.Song song) {
-		db.update("UPDATE songs SET bpm=?,time_signature=?,duration_ms=?,updated_at=clock_timestamp() WHERE id=?",
-				song.bpm(), song.timeSignature(), song.durationMs(), id);
+		db.update("UPDATE songs SET bpm=?,offset_ms=?,time_signature=?,duration_ms=?,updated_at=clock_timestamp() WHERE id=?",
+				song.bpm(), song.offsetMs(), song.timeSignature(), song.durationMs(), id);
 	}
 
 	void updateKey(long id, String column, String key) {
