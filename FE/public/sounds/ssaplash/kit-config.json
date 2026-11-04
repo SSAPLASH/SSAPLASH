@@ -6,7 +6,7 @@
     "kick": {
       "file": "audio/kick.wav",
       "label": "Yamaha Custom Birch 22\" FF",
-      "gain": 1.0,
+      "gain": 1.8,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -18,7 +18,7 @@
     "snare": {
       "file": "audio/snare.wav",
       "label": "Polmuz 스네어 F",
-      "gain": 1.0,
+      "gain": 0.9,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -30,7 +30,7 @@
     "hihat": {
       "file": "audio/hihat.wav",
       "label": "닫힌 타격 (페달 밟은 상태)",
-      "gain": 1.0,
+      "gain": 2.4,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -42,7 +42,7 @@
     "hihat_open": {
       "file": "audio/hihat-open.wav",
       "label": "열린 타격 (페달 뗀 상태)",
-      "gain": 1.0,
+      "gain": 1.6,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -55,7 +55,7 @@
     "hihat_pedal": {
       "file": "audio/hihat-pedal.wav",
       "label": "페달 닫기 (chick)",
-      "gain": 1.0,
+      "gain": 1.6,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "Theriavirra",
@@ -68,7 +68,7 @@
     "high": {
       "file": "audio/high.wav",
       "label": "Polmuz 탐 1 F",
-      "gain": 1.0,
+      "gain": 1.2,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -80,7 +80,7 @@
     "mid": {
       "file": "audio/mid.wav",
       "label": "Polmuz 탐 2 FF",
-      "gain": 1.0,
+      "gain": 0.8,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -92,7 +92,7 @@
     "floor": {
       "file": "audio/floor.wav",
       "label": "Polmuz 탐 3 FF",
-      "gain": 1.0,
+      "gain": 1.1,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -104,7 +104,7 @@
     "crash": {
       "file": "audio/crash.wav",
       "label": "Zildjian A Custom 16\" FF",
-      "gain": 1.0,
+      "gain": 1.2,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
@@ -116,7 +116,7 @@
     "ride": {
       "file": "audio/ride.wav",
       "label": "Zildjian K Custom Session F",
-      "gain": 1.3,
+      "gain": 5,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
