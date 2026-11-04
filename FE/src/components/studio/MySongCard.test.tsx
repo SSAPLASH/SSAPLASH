@@ -68,11 +68,11 @@ describe('MySongCard (v0.4)', () => {
   it('처리 중 곡: ▶·⋯ 메뉴 없음', () => {
     const html = card(song({ status: 'PROCESSING' }));
     expect(html).not.toContain('song-card-play');
-    expect(html).not.toContain('song-menu');
+    expect(html).not.toContain('ui-more-menu');
   });
 
   it('기능 스위치 꺼짐(onEdit 없음)이면 ⋯ 메뉴가 없다', () => {
-    expect(card(song(), false)).not.toContain('song-menu');
+    expect(card(song(), false)).not.toContain('ui-more-menu');
   });
 });
 
