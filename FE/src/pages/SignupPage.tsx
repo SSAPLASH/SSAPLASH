@@ -7,18 +7,10 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AUTH_REQUIRED } from '@/app/authBootstrap';
 import { AuthBrandPane } from '@/components/auth/AuthBrandPane';
 import { SignupConsentCard } from '@/components/auth/SignupConsentCard';
-import { loginErrorMessage, sanitizeReturnTo } from '@/domain/auth';
+import { sanitizeReturnTo, signupErrorMessage } from '@/domain/auth';
 import { signupGateDecision } from '@/domain/signupGate';
 import type { ConsentVersions } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
-
-/** 저장 실패 문구(D31). 페이지는 api를 import하지 않으므로 오류를 구조로 읽는다 */
-function signupErrorMessage(e: unknown): string {
-  const { code, detail } = e instanceof Error ? (e as { code?: unknown; detail?: unknown }) : ({} as { code?: unknown; detail?: unknown });
-  if (code === 'NETWORK') return loginErrorMessage('network') ?? '서버에 연결할 수 없습니다.';
-  if (typeof detail === 'string' && detail) return detail;
-  return '동의를 저장하지 못했습니다. 다시 시도해 주세요.';
-}
 
 export function SignupPage() {
   const status = useAuth((s) => s.status);
