@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { PadId } from '@/domain/pads';
-import { DRUM_KIT_H, DRUM_KIT_PADS, DRUM_KIT_W, fitScale, kitSizeAt, type PadBadge, type PadVisualState } from '@/domain/drumKit';
+import { DRUM_KIT_H, DRUM_KIT_W, fitScale, kitPadsFor, kitSizeAt, type KitSkin, type PadBadge, type PadVisualState } from '@/domain/drumKit';
 import { Pad, PadDefs } from './Pad';
 import './drum.css';
 
@@ -16,6 +16,12 @@ export interface DrumKitProps {
   /** 배지를 강조할 패드(PadBadge level now와 같은 모양) */
   highlight?: PadId;
   onPadClick?: (pad: PadId) => void;
+  /** 패드를 누르는 즉시 부른다(터치 연주). 있으면 킷은 터치 표면이 된다: 스크롤·길게 누름·선택을 막고 포인터 모의 IMU는 이 킷을 무시한다 */
+  onPadDown?: (pad: PadId, pointerType: string) => void;
+  /** 드럼 모양. 기본 'acoustic'(실물) */
+  skin?: KitSkin;
+  /** 패드별 타격 횟수 카운터. 값이 바뀔 때마다 타격 모션을 처음부터 다시 재생한다(usePadHitSeq) */
+  hitSeq?: Partial<Record<PadId, number>>;
 }
 
 /** 드럼 킷(고정 배치 8패드). 렌더 크기는 760×300 × scale(CSS px) */
@@ -27,6 +33,9 @@ export function DrumKit({
   badges,
   highlight,
   onPadClick,
+  onPadDown,
+  skin = 'acoustic',
+  hitSeq,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -48,15 +57,17 @@ export function DrumKit({
 
   const svg = (
     <svg
-      className="drum-kit"
+      className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
+      data-no-pointer-strike={onPadDown ? '' : undefined}
       viewBox={`0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
       width={width}
       height={height}
       role="img"
       aria-label="드럼 킷"
+      data-skin={skin === 'acoustic' ? undefined : skin}
     >
       <PadDefs id={defsId} />
-      {DRUM_KIT_PADS.map((p) => (
+      {kitPadsFor(skin).map((p) => (
         <Pad
           key={p.pad}
           shape={p.shape}
@@ -69,7 +80,20 @@ export function DrumKit({
           badge={badges?.[p.pad]}
           badgeHighlight={highlight === p.pad}
           defsId={defsId}
+          skin={skin}
+          tag={p.tag}
+          hitKey={hitSeq?.[p.pad]}
           onClick={onPadClick ? () => onPadClick(p.pad) : undefined}
+          onPointerDown={
+            onPadDown
+              ? (e) => {
+                  // 마우스는 왼쪽 버튼만. 터치·펜은 button 0
+                  if (e.pointerType === 'mouse' && e.button !== 0) return;
+                  e.preventDefault();
+                  onPadDown(p.pad, e.pointerType);
+                }
+              : undefined
+          }
         />
       ))}
     </svg>

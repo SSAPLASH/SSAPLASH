@@ -1,5 +1,5 @@
 // 연주 녹음 도메인 (설계 REC-001). 타입·변환·본문 조립·제목 규칙만 둔다. 순수 함수라 네트워크·스토어·시계에 접근하지 않는다(시각은 인자로 받는다).
-import type { ResolvedHit } from './events';
+import { isSensorSource, type ResolvedHit } from './events';
 import type { PadId } from './pads';
 import type { LoggedHit } from '@/engine/playLog';
 
@@ -77,9 +77,12 @@ export interface RecordingDetail extends RecordingSummary {
 const codePoints = (s: string): string[] => [...s];
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-/** 센서 타격인지. 키보드·포인터(마우스 스틱 흉내)와 source가 없는 이전 기록은 센서가 아니다 */
-function isSensorSource(source: string | undefined): boolean {
-  return source !== undefined && source !== 'keyboard' && source !== 'pointer';
+/**
+ * 녹음에 스틱 정보를 남길 센서 타격인지. 공용 판정(키보드·톡 치기·화면 터치·source 없음 제외)에
+ * 더해 포인터(마우스 스틱 흉내)도 뺀다
+ */
+function isRecordedSensor(source: string | undefined): boolean {
+  return isSensorSource(source) && source !== 'pointer';
 }
 
 /** 입력 경로 결정. 센서 타격이 하나라도 있으면 STICK (U7) */
@@ -90,7 +93,7 @@ export function decideInputSource(hasSensor: boolean): RecordingInputSource {
 /**
  * 플레이 로그 타격 → 녹음 타격 (설계 3-1).
  * tSongMs가 없거나 0 미만이거나 pad가 null이면 뺀다. tMs 오름차순 안정 정렬, 50,000개 초과면 앞에서 자른다.
- * 센서 타격(키보드·포인터·source 없음 제외)만 stickId를 넣고, 하나라도 있으면 hasSensor.
+ * 센서 타격(키보드·포인터·화면 터치·source 없음 제외)만 stickId를 넣고, 하나라도 있으면 hasSensor.
  */
 export function hitsFromPlayLog(hits: LoggedHit[]): { hits: RecordingHit[]; hasSensor: boolean } {
   const out: RecordingHit[] = [];
@@ -98,7 +101,7 @@ export function hitsFromPlayLog(hits: LoggedHit[]): { hits: RecordingHit[]; hasS
   for (const h of hits) {
     if (h.tSongMs === undefined || !Number.isFinite(h.tSongMs) || h.tSongMs < 0 || h.pad === null) continue;
     const hit: RecordingHit = { tMs: h.tSongMs, pad: h.pad, velocity: clamp(Math.round(h.velocity), 0, 127) };
-    if (isSensorSource(h.source)) {
+    if (isRecordedSensor(h.source)) {
       hit.stickId = h.stickId;
       hasSensor = true;
     }
@@ -111,7 +114,7 @@ export function hitsFromPlayLog(hits: LoggedHit[]): { hits: RecordingHit[]; hasS
 
 /**
  * 자유 연습 입력 → 녹음 타격. pad가 null이면 null, tMs = tHit − 녹음 시작(0 미만이면 0).
- * 센서 입력이면 stickId를 넣고 키보드·포인터(마우스 스틱 흉내)면 키를 생략한다.
+ * 센서 입력이면 stickId를 넣고 키보드·포인터(마우스 스틱 흉내)·화면 터치면 키를 생략한다.
  */
 export function hitFromFreeInput(hit: ResolvedHit, startPerfMs: number): RecordingHit | null {
   if (hit.pad === null) return null;
@@ -120,7 +123,7 @@ export function hitFromFreeInput(hit: ResolvedHit, startPerfMs: number): Recordi
     pad: hit.pad,
     velocity: clamp(Math.round(hit.velocity), 0, 127),
   };
-  if (isSensorSource(hit.source)) out.stickId = hit.stickId;
+  if (isRecordedSensor(hit.source)) out.stickId = hit.stickId;
   return out;
 }
 

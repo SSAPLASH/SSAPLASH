@@ -60,6 +60,14 @@ describe('hitsFromPlayLog', () => {
     expect(hasSensor).toBe(false);
   });
 
+  it('화면 터치 타격은 센서가 아니다(stickId 없음, hasSensor false → KEYBOARD)', () => {
+    const { hits, hasSensor } = hitsFromPlayLog([logged({ source: 'touch', stickId: 1 })]);
+    expect('stickId' in hits[0]).toBe(false);
+    expect(hasSensor).toBe(false);
+    expect(decideInputSource(hasSensor)).toBe('KEYBOARD');
+    expect('stickId' in hitFromFreeInput(resolved({ source: 'touch', stickId: 1 }), 0)!).toBe(false);
+  });
+
   it('센서 타격에는 stickId 0·1이 들어가고 hasSensor가 true다', () => {
     const { hits, hasSensor } = hitsFromPlayLog([
       logged({ source: 'ble', stickId: 0, tSongMs: 1 }),

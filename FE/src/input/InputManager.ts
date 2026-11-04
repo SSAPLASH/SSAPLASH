@@ -9,6 +9,7 @@ import { mapHit } from './padMapper';
 import type { KeyMap } from '@/domain/keyMap';
 import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
+import { isSensorSource } from '@/domain/events';
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
@@ -156,7 +157,7 @@ export class InputManager {
       return;
     }
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };
-    const tHit = source === 'keyboard' ? e.timestamp : e.timestamp + this.sensorOffsetMs;
+    const tHit = isSensorSource(source) ? e.timestamp + this.sensorOffsetMs : e.timestamp;
     const m = mapHit(e, source, {
       keyMap: this.keyMap,
       profile: this.profile,
@@ -166,7 +167,7 @@ export class InputManager {
     const stickId = m.stickId ?? e.stickId;
     // 센서 소스는 소스가 timestamp를 이미 브라우저 시계로 환산해 넘기므로, 센서 시각은 오프셋을 되빼서 얻는다.
     // 오프셋을 모르면(동기화 전·모의 소스) tSensorMs도 채우지 않는다. 텔레메트리 전용이라 판정에는 쓰지 않는다
-    const isSensor = source !== 'keyboard';
+    const isSensor = isSensorSource(source);
     const clockOffsetMs = isSensor ? (this.sources.get(source)?.clockOffsetOf?.(stickId) ?? null) : null;
     const hit: ResolvedHit = {
       id: ++this.seq,

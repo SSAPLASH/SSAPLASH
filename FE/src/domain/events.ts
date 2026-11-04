@@ -62,15 +62,27 @@ export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
 
 /**
  * 센서 소스 식별자. 입력 소스 디스크립터의 id와 같다(예: 'pointer', 'ble').
- * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)·'keyboard'·'preview'(세팅 화면 톡 치기)는 예약어.
+ * 열린 문자열이라 소스를 추가해도 이 타입은 바뀌지 않는다. 'none'(센서 없음)·'keyboard'·'preview'(세팅 화면 톡 치기)·'touch'(화면 패드 터치)는 예약어.
  */
 export type SensorId = string;
 
 /**
  * 입력 경로 식별 — 플레이 로그 input_source, 텔레메트리 tags에 기록.
  * 'keyboard'는 리터럴로 남겨 자동완성·비교에 쓴다(매퍼 선택은 이것만 본다). 나머지는 SensorId.
+ * 센서가 아닌 예약어: 'keyboard'(키보드), 'preview'(세팅 화면 톡 치기), 'touch'(화면 패드 터치). 판정은 isSensorSource.
  */
 export type InputSourceKind = 'keyboard' | (SensorId & Record<never, never>);
+
+/** 센서(IMU 스틱)가 아닌 입력 소스. 센서 시각 오프셋·드리프트 보정·센서 통계·연결 진단의 대상이 아니다 */
+export const NON_SENSOR_SOURCES = ['keyboard', 'preview', 'touch'] as const;
+
+/**
+ * 센서(IMU 스틱) 소스인가. 키보드·톡 치기·화면 터치와 source가 없는 기록은 센서가 아니다.
+ * 'pointer'(마우스 스틱 흉내) 등 그 외 소스는 센서로 본다.
+ */
+export function isSensorSource(source: InputSourceKind | string | undefined): boolean {
+  return source !== undefined && !(NON_SENSOR_SOURCES as readonly string[]).includes(source);
+}
 
 /** 소스별 설정값 하나. 항목 스키마는 입력 소스 디스크립터가 선언한다 */
 export type OptionValue = string | number | boolean;
