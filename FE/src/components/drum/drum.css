@@ -148,3 +148,100 @@
   stroke-width: 1;
   pointer-events: none;
 }
+
+/* ---- 2D 스킨(전자·네온). 글자 ---- */
+.drum-pad[data-skin] .drum-pad-tag {
+  font-family: var(--font-hud);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.drum-pad[data-skin] .drum-pad-label {
+  font-weight: 700;
+  font-size: 13px;
+}
+.drum-pad[data-skin] .drum-pad-judge {
+  font-family: var(--font-hud);
+  font-size: 15px;
+  letter-spacing: 2px;
+}
+.drum-pad[data-skin='electronic'] .drum-pad-tag { fill: #9aa3ad; }
+.drum-pad[data-skin='electronic'] .drum-pad-label { fill: #f2f4f7; }
+.drum-pad[data-skin='neon'] .drum-pad-tag { fill: var(--neon); }
+.drum-pad[data-skin='neon'] .drum-pad-label { fill: #e8f7ff; }
+
+/* ---- 전자 드럼 ---- */
+.el-hoop {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+}
+.drum-pad-flash.el-flash {
+  fill: #fff;
+  opacity: 0.12;
+}
+/* LED 링: hit = 강한 글로우, armed = 약하게. idle·판정에는 렌더하지 않는다 */
+.drum-pad-led {
+  fill: none;
+  stroke: var(--brand);
+  pointer-events: none;
+}
+.drum-pad[data-state='hit'] .drum-pad-led {
+  filter: drop-shadow(0 0 14px var(--brand)) drop-shadow(0 0 28px color-mix(in srgb, var(--brand) 60%, transparent));
+}
+.drum-pad[data-state='armed'] .drum-pad-led {
+  opacity: 0.55;
+  filter: drop-shadow(0 0 8px var(--brand));
+}
+
+/* ---- 네온: 모양별 네온색 ---- */
+.drum-pad[data-skin='neon'] { --neon: #22e4ff; }
+.drum-pad[data-skin='neon'][data-shape='cymbal'] { --neon: #ffc24a; }
+.drum-pad[data-skin='neon'][data-shape='kick'] { --neon: #ff3ec8; }
+
+.neon-body {
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--neon) 40%, transparent));
+}
+.drum-pad[data-state='idle'] .neon-body {
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--neon) 25%, transparent));
+}
+.neon-cross {
+  stroke: var(--neon);
+  stroke-opacity: 0.1;
+  stroke-width: 1;
+  pointer-events: none;
+}
+.neon-bell {
+  fill: var(--neon);
+  filter: drop-shadow(0 0 10px var(--neon));
+}
+.neon-port {
+  stroke: var(--neon);
+}
+.neon-ticks {
+  stroke: var(--neon);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.drum-pad[data-state='idle'] .neon-ticks {
+  opacity: 0.45;
+}
+.neon-rim {
+  fill: none;
+  stroke: var(--neon);
+  pointer-events: none;
+  /* 이중 글로우 r·2r: armed·판정 r=16 */
+  filter: drop-shadow(0 0 16px var(--neon)) drop-shadow(0 0 32px color-mix(in srgb, var(--neon) 60%, transparent));
+}
+/* idle은 8패드 성능을 위해 한 겹만 */
+.drum-pad[data-state='idle'] .neon-rim {
+  filter: drop-shadow(0 0 10px var(--neon));
+}
+.drum-pad[data-state='hit'] .neon-rim {
+  stroke: #fff;
+  filter: drop-shadow(0 0 28px var(--neon)) drop-shadow(0 0 56px color-mix(in srgb, var(--neon) 60%, transparent));
+}
+.drum-pad-flash.neon-flash {
+  fill: var(--neon);
+  opacity: 0.32;
+}

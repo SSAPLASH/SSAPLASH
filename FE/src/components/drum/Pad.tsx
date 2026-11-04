@@ -1,5 +1,7 @@
 import { memo } from 'react';
-import type { PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
+import type { KitSkin, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
+import { ElectronicPad } from './ElectronicPad';
+import { NeonPad } from './NeonPad';
 import './drum.css';
 
 /** 원본 패드 폭(px). 모든 좌표는 이 폭 기준이고 w에 맞춰 균등 확대·축소한다 */
@@ -46,6 +48,36 @@ export function PadDefs({ id }: { id: string }) {
         <stop offset="0" stopColor="#1C2129" />
         <stop offset="1" stopColor="#0A0D12" />
       </linearGradient>
+      {/* 전자 드럼 스킨 */}
+      <linearGradient id={`${id}-el-hoop`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#FAFBFC" />
+        <stop offset="0.5" stopColor="#DDE0E4" />
+        <stop offset="1" stopColor="#B8BDC4" />
+      </linearGradient>
+      <radialGradient id={`${id}-el-mesh`} cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stopColor="#43474E" />
+        <stop offset="0.6" stopColor="#2E3137" />
+        <stop offset="1" stopColor="#202328" />
+      </radialGradient>
+      <linearGradient id={`${id}-el-edge`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#F3D58A" />
+        <stop offset="0.45" stopColor="#C9973A" />
+        <stop offset="0.7" stopColor="#E8C46A" />
+        <stop offset="1" stopColor="#9C6E22" />
+      </linearGradient>
+      <radialGradient id={`${id}-el-rubber`} cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stopColor="#2C2E33" />
+        <stop offset="0.7" stopColor="#191B1E" />
+        <stop offset="1" stopColor="#0F1012" />
+      </radialGradient>
+      <radialGradient id={`${id}-el-bell`} cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stopColor="#34373C" />
+        <stop offset="1" stopColor="#1C1E21" />
+      </radialGradient>
+      <linearGradient id={`${id}-el-bolt`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#E9ECEF" />
+        <stop offset="1" stopColor="#8A9099" />
+      </linearGradient>
     </defs>
   );
 }
@@ -90,6 +122,12 @@ interface PadProps {
   /** PadDefs와 같은 id */
   defsId: string;
   onClick?: () => void;
+  /** 드럼 모양. 기본 acoustic(실물). 전자·네온은 정사각 원형 패드로 그린다 */
+  skin?: KitSkin;
+  /** 영문 약어(2D 스킨 전용) */
+  tag?: string;
+  /** 연타마다 바뀌는 값. hit일 때 모션 그룹의 key가 되어 CSS 애니메이션을 재시작한다 */
+  hitKey?: number;
 }
 
 /** 심벌 광택 부채꼴(원뿔 그라디언트 근사). 중심 (80,70)에서 원판 가장자리까지, 각도는 도 단위 */
@@ -107,7 +145,7 @@ const CYMBAL_GLINTS: Array<[number, number]> = [
   [190, 215],
 ];
 
-function PadBody({ shape, defsId }: { shape: PadShape; defsId: string }) {
+function PadBody({ shape, defsId, motionKey }: { shape: PadShape; defsId: string; motionKey: string }) {
   if (shape === 'drum') {
     return (
       <>
@@ -127,7 +165,7 @@ function PadBody({ shape, defsId }: { shape: PadShape; defsId: string }) {
       <>
         <rect x="77" y="70" width="6" height="80" fill={`url(#${defsId}-stand)`} />
         {/* 원판만 흔들리도록 스탠드와 분리 */}
-        <g className="drum-pad-cymbal">
+        <g key={motionKey} className="drum-pad-cymbal">
           <ellipse cx="80" cy="70" rx="79" ry="39" fill={`url(#${defsId}-cymbal)`} stroke="#8A6420" strokeWidth="2" />
           <ellipse cx="80" cy="70" rx="72" ry="36" fill="none" stroke="#7A5A1C" strokeOpacity="0.35" strokeWidth="0.75" />
           <ellipse cx="80" cy="70" rx="64" ry="32" fill="none" stroke="#8A6420" strokeOpacity="0.45" />
@@ -166,6 +204,9 @@ export const Pad = memo(function Pad({
   badgeHighlight = false,
   defsId,
   onClick,
+  skin = 'acoustic',
+  tag,
+  hitKey,
 }: PadProps) {
   const s = w / BASE_W;
   const ring = RING[shape];
@@ -180,41 +221,55 @@ export const Pad = memo(function Pad({
   const badgeLevel = badgeHighlight ? 'now' : badgeObj?.level;
   const badgeNow = badgeLevel === 'now';
   const badgeOffGrid = badgeObj?.offGrid === true;
+  // hit이면 hitKey가 바뀔 때마다 모션 그룹을 새로 마운트해 애니메이션을 재시작한다
+  const motionKey = state === 'hit' ? `hit${hitKey ?? 0}` : 'rest';
+  const flat = skin !== 'acoustic';
 
   return (
     <g
       className={onClick ? 'drum-pad clickable' : 'drum-pad'}
       data-state={state}
       data-shape={shape}
+      data-skin={flat ? skin : undefined}
       transform={`translate(${left} ${top}) scale(${s})`}
       onClick={onClick}
     >
-      {/* 타격 모션은 몸체에만 건다(바깥 g의 transform 속성과 충돌 방지) */}
-      <g className="drum-pad-body">
-        <PadBody shape={shape} defsId={defsId} />
-        {flash && (
-          <ellipse className="drum-pad-flash" cx="80" cy={ring.cy} rx="80" ry={shape === 'drum' ? 48 : 40} />
-        )}
-      </g>
-      {showRing && (
-        <ellipse
-          className={`drum-pad-ring ${state}`}
-          cx={ring.cx}
-          cy={ring.cy}
-          rx={ring.rx - ringWidth / 2}
-          ry={ring.ry - ringWidth / 2}
-          strokeWidth={ringWidth}
-        />
-      )}
-      {judge && (
-        <text className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
-          {judge}
-        </text>
-      )}
-      {labelVisible && (
-        <text className="drum-pad-label" x="80" y={LABEL_Y[shape]} fontSize="12" dominantBaseline="central">
-          {label}
-        </text>
+      {flat ? (
+        skin === 'electronic' ? (
+          <ElectronicPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} />
+        ) : (
+          <NeonPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} />
+        )
+      ) : (
+        <>
+          {/* 타격 모션은 몸체에만 건다(바깥 g의 transform 속성과 충돌 방지) */}
+          <g key={motionKey} className="drum-pad-body">
+            <PadBody shape={shape} defsId={defsId} motionKey={motionKey} />
+            {flash && (
+              <ellipse className="drum-pad-flash" cx="80" cy={ring.cy} rx="80" ry={shape === 'drum' ? 48 : 40} />
+            )}
+          </g>
+          {showRing && (
+            <ellipse
+              className={`drum-pad-ring ${state}`}
+              cx={ring.cx}
+              cy={ring.cy}
+              rx={ring.rx - ringWidth / 2}
+              ry={ring.ry - ringWidth / 2}
+              strokeWidth={ringWidth}
+            />
+          )}
+          {judge && (
+            <text className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
+              {judge}
+            </text>
+          )}
+          {labelVisible && (
+            <text className="drum-pad-label" x="80" y={LABEL_Y[shape]} fontSize="12" dominantBaseline="central">
+              {label}
+            </text>
+          )}
+        </>
       )}
       {badge && (
         <g transform="translate(80 12)" className={badgeLevel === 'later' ? 'drum-pad-badge later' : 'drum-pad-badge'}>

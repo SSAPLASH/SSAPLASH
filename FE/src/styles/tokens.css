@@ -18,6 +18,20 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* 배경·표면 */
@@ -88,6 +102,8 @@
     'Noto Sans KR', sans-serif;
   --font-num: 'Space Grotesk', var(--font);
   --font-display: 'Bebas Neue', var(--font);
+  /* 전자·네온 드럼 스킨의 태그·판정 글자 */
+  --font-hud: 'Chakra Petch', var(--font);
 
   /* 손 색 (Figma 노트 색 규칙: 왼손 sub · 오른손 main) */
   --left: var(--brand-sub);
