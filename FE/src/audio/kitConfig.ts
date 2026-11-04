@@ -54,3 +54,31 @@ export function resolveKitPads(config: KitConfig): ResolvedKitPad[] {
   }
   return out;
 }
+
+/** 키트 선택 항목 id → 변형 키. pads 안에 이 키가 있을 때만 읽는다(없으면 변형 없음) */
+export const KIT_VARIANT_KEYS = { hihat_open: 'HIHAT_OPEN' } as const;
+export type KitVariantId = (typeof KIT_VARIANT_KEYS)[keyof typeof KIT_VARIANT_KEYS];
+
+export interface ResolvedKitVariant {
+  variant: KitVariantId;
+  file: string;
+  gain: number;
+  playbackRate: number;
+}
+
+/** 설정의 선택 항목(hihat_open 등)을 골라 게인·재생 속도를 정한다. 패드 항목과 같은 형식이다 */
+export function resolveKitVariants(config: KitConfig): ResolvedKitVariant[] {
+  const out: ResolvedKitVariant[] = [];
+  const baked = config.adjustmentsBakedIntoWav === true;
+  for (const [key, variant] of Object.entries(KIT_VARIANT_KEYS)) {
+    const cfg = config.pads[key];
+    if (!cfg || typeof cfg.file !== 'string') continue;
+    out.push({
+      variant,
+      file: cfg.file,
+      gain: baked ? 1 : cfg.gain,
+      playbackRate: baked ? 1 : cfg.playbackRate,
+    });
+  }
+  return out;
+}
