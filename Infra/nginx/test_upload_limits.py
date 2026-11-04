@@ -118,6 +118,8 @@ def main():
             response.read(); plain.close()
             status, _, _ = request(port,"POST","/internal/v1/chart-jobs/test",16,"json",{"X-Forwarded-For":"222.107.238.74"},reject=True)
             assert status == 403, ("internal original deny",status)
+            status, _, _ = request(port,"POST","/internal/v1/coach-narratives/test",16,"json",{"X-Forwarded-For":"222.107.238.74"},reject=True)
+            assert status == 403, ("coach-narratives original deny",status)
             status, _, _ = request(port,"POST","/internal/other",16,"json",reject=True)
             assert status == 404, ("other internal",status)
             print("PASS 원본 internal 차단 및 X-Forwarded-For 위조 거부")
@@ -134,7 +136,7 @@ def main():
                             assert content_type.startswith("application/problem+json"),(path,content_type)
                             assert json.loads(body)["code"] == code,(path,body[:200])
                 print(f"PASS {method} {path} {limit} / {limit+1}")
-            variant=(ROOT / "default.conf").read_text(encoding="utf-8").replace("allow 222.107.238.74;", "allow all;", 1)
+            variant=(ROOT / "default.conf").read_text(encoding="utf-8").replace("allow 222.107.238.74;", "allow all;")
             variant_file=temp / "allow-test.conf"; variant_file.write_text(variant,encoding="utf-8",newline="\n")
             docker("cp",str(variant_file),nginx+":/etc/nginx/conf.d/default.conf")
             docker("exec",nginx,"nginx","-t"); docker("exec",nginx,"nginx","-s","reload")
@@ -147,6 +149,10 @@ def main():
                 status,_,_ = request(port,"POST","/internal/v1/chart-jobs/test",8*M+delta,"json",reject=(delta==1))
                 assert status == (200 if delta == 0 else 413),("internal limit",status)
             print("PASS 내부 경로 8 MiB 경계 (테스트 복제본에서만 allow all)")
+            for delta in (0,1):
+                status,_,_ = request(port,"POST","/internal/v1/coach-narratives/test",64*1024+delta,"json",reject=(delta==1))
+                assert status == (200 if delta == 0 else 413),("coach-narratives limit",status)
+            print("PASS 총평 작업 경로 64 KiB 경계 (테스트 복제본에서만 allow all)")
         finally:
             for name in (nginx,mock): subprocess.run(["docker","rm","-f",name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             subprocess.run(["docker","network","rm",network],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
