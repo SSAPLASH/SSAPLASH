@@ -198,14 +198,16 @@ def test_타격_2만건_요청이_3초_안에_처리된다():
     assert elapsed < 3.0, f"요청 처리에 {elapsed:.2f}초"
 
 
-def test_모든_약점_항목에_연습_조언이_붙고_버전이_올라간다():
+def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단계가_붙고_버전이_올라간다():
     status, body = _call(SAMPLES["A"]["request"])
 
     assert status == 200
-    assert body["analyzerVersion"] == "weak-rules-0.2"
+    assert body["analyzerVersion"] == "weak-rules-0.3"
     assert body["weakSegments"]
     for segment in body["weakSegments"]:
         assert segment["tip"]
+        assert segment["detail"]
+        assert segment["severityLevel"] in ("LOW", "MEDIUM", "HIGH")
 
 
 def test_문구가_없는_pattern은_응답에서_tip_키가_빠진다(monkeypatch):
