@@ -44,7 +44,7 @@ class BuiltinSongSeederTest {
 	}
 
 	BuiltinSongCatalog.Entry entry(String title, byte[] midi) {
-		return new BuiltinSongCatalog.Entry(prefix + title, "A307", "자작 (테스트)", true, midi);
+		return new BuiltinSongCatalog.Entry(prefix + title, "A307", "자작 (테스트)", true, midi, 0);
 	}
 
 	private Map<String, Object> song(String title) {
@@ -89,6 +89,55 @@ class BuiltinSongSeederTest {
 		assertThat(((Number) rows.get(0).get("latest")).intValue()).isEqualTo(2);
 		assertThat(((Number) rows.get(1).get("latest")).intValue()).isEqualTo(1);
 		assertThat(seeder.seed(List.of(e))).containsEntry(e.title(), Outcome.SKIPPED);
+	}
+
+	/** 260번 설계 4-1절: 0틱 = 음원 0초인 MIDI(첫 박 1693틱 = 1840ms, 115 BPM). */
+	static byte[] offsetMidi() throws Exception {
+		var sequence = new javax.sound.midi.Sequence(javax.sound.midi.Sequence.PPQ, 480);
+		var track = sequence.createTrack();
+		int us = (int) Math.round(60_000_000 / 115.0);
+		track.add(new javax.sound.midi.MidiEvent(new javax.sound.midi.MetaMessage(0x51, new byte[] {(byte) (us >> 16), (byte) (us >> 8), (byte) us}, 3), 0));
+		for (int beat = 0; beat < 8; beat++) {
+			long tick = 1693 + beat * 480L;
+			track.add(new javax.sound.midi.MidiEvent(new javax.sound.midi.ShortMessage(javax.sound.midi.ShortMessage.NOTE_ON, 9, beat % 2 == 0 ? 36 : 38, 100), tick));
+			track.add(new javax.sound.midi.MidiEvent(new javax.sound.midi.ShortMessage(javax.sound.midi.ShortMessage.NOTE_OFF, 9, beat % 2 == 0 ? 36 : 38, 0), tick + 120));
+		}
+		var out = new java.io.ByteArrayOutputStream();
+		javax.sound.midi.MidiSystem.write(sequence, 0, out);
+		return out.toByteArray();
+	}
+
+	private List<Integer> timingOffsets(long songId) {
+		return db.queryForList("SELECT CAST(v.timing->>'offsetMs' AS int) FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? ORDER BY v.id",
+				Integer.class, songId);
+	}
+
+	@Test
+	void 카탈로그_offsetMs는_곡과_채보_timing에_저장되고_난이도를_채울_때도_유지된다() throws Exception {
+		var e = new BuiltinSongCatalog.Entry(prefix + "오프셋 곡", null, "자작 (테스트)", true, offsetMidi(), 1840);
+		assertThat(seeder.seed(List.of(e))).containsEntry(e.title(), Outcome.REGISTERED);
+		long id = ((Number) song("오프셋 곡").get("id")).longValue();
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).isEqualTo(1840);
+		assertThat(timingOffsets(id)).hasSize(3).containsOnly(1840);
+		assertThat(db.queryForObject("SELECT CAST(v.notes->0->'notation'->>'tick' AS int) FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD'",
+				Integer.class, id)).isZero();
+
+		// 난이도가 모자란 곡을 채우는 경로(regenerate)도 같은 offsetMs로 만든다.
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL,offset_ms=0 WHERE id=?", id);
+		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=? AND difficulty<>'EASY')", id);
+		db.update("DELETE FROM charts WHERE song_id=? AND difficulty<>'EASY'", id);
+		assertThat(seeder.seed(List.of(e))).containsEntry(e.title(), Outcome.FILLED);
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).isEqualTo(1840);
+		assertThat(timingOffsets(id)).hasSize(4).containsOnly(1840);
+	}
+
+	@Test
+	void 첫_박보다_앞선_노트가_있으면_그_곡만_실패하고_다음_곡은_등록한다() throws Exception {
+		// test-8beat은 0틱부터 노트가 있으므로 offsetMs를 주면 첫 박보다 앞선 노트가 생긴다.
+		var early = new BuiltinSongCatalog.Entry(prefix + "앞선 노트 곡", null, "자작 (테스트)", true, midi("/builtin-songs-test/midi/test-8beat.mid"), 500);
+		var good = entry("뒤 곡", midi("/builtin-songs-test/midi/test-8beat.mid"));
+		assertThat(seeder.seed(List.of(early, good))).containsEntry(early.title(), Outcome.FAILED).containsEntry(good.title(), Outcome.REGISTERED);
+		assertThat(db.queryForObject("SELECT count(*) FROM songs WHERE title=?", Integer.class, early.title())).isZero();
 	}
 
 	@Test
@@ -140,9 +189,11 @@ class BuiltinSongSeederTest {
 		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/");
 		assertThat(entries).extracting(BuiltinSongCatalog.Entry::title).contains("기본 8비트", "8비트 + 필인", "라이드 16비트");
 		for (var entry : entries) {
-			var renamed = new BuiltinSongCatalog.Entry(prefix + entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi());
+			// 260번: 각 곡의 offsetMs로 변환한다. 첫 박보다 앞선 노트가 있는 곡을 카탈로그에 넣으면 여기서 실패한다(설계 U1).
+			var renamed = new BuiltinSongCatalog.Entry(prefix + entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi(), entry.offsetMs());
 			assertThat(seeder.seed(List.of(renamed))).as(entry.title()).containsEntry(renamed.title(), Outcome.REGISTERED);
 			long id = db.queryForObject("SELECT id FROM songs WHERE title=? AND deleted_at IS NULL", Long.class, renamed.title());
+			assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).as(entry.title()).isEqualTo(entry.offsetMs());
 			assertThat(db.queryForObject("SELECT count(*) FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND v.note_count>0",
 					Integer.class, id)).as(entry.title()).isEqualTo(3);
 			assertThat(entry.license()).isNotBlank();

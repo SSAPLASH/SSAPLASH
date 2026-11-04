@@ -28,7 +28,9 @@ public class AnalysisClient {
     private final HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(1)).build();
     private final URI endpoint;
     private final JsonMapper json;
-    public record Result(boolean success, boolean retryable, String version, String segments) {}
+    public record Result(boolean success, boolean retryable, String version, String segments, String summary) {
+        public Result(boolean success, boolean retryable, String version, String segments) { this(success,retryable,version,segments,null); }
+    }
     public AnalysisClient(@Value("${AI_ANALYSIS_BASE_URL:http://ai-api:8000}") String base, JsonMapper json) {
         this.endpoint=URI.create(base.replaceAll("/+$", "")+"/analysis/weak-segments"); this.json=json;
     }
@@ -55,7 +57,7 @@ public class AnalysisClient {
             var root=json.readTree(data);
             if(!valid(root)) return fail(false);
             log.info("weak-segments reason={}",root.path("reason").asString());
-            return new Result(true,false,root.path("analyzerVersion").asString(),json.writeValueAsString(root.path("weakSegments")));
+            return new Result(true,false,root.path("analyzerVersion").asString(),json.writeValueAsString(root.path("weakSegments")),summary(root));
         } catch (TimeoutException ex) { pending.cancel(true); log.warn("weak-segments timeout status={}",statusSeen.get()); return fail(retryableStatus(statusSeen.get())); }
           catch (InterruptedException ex) { pending.cancel(true); Thread.currentThread().interrupt(); return fail(retryableStatus(statusSeen.get())); }
           catch (java.util.concurrent.ExecutionException ex) {
@@ -111,6 +113,29 @@ public class AnalysisClient {
         }
         return true;
     }
+    /** 종합 총평(summary)은 부가 정보다. 모양이 틀리면 분석 전체를 실패로 만들지 않고 총평만 버린다. 알려진 필드만 저장한다. */
+    String summary(JsonNode root) {
+        JsonNode s=root.path("summary");
+        if(!s.isObject()) return null;
+        String level=s.path("level").asString("");
+        String text=s.path("text").asString("");
+        if(!Set.of("GOOD","FAIR","NEEDS_WORK").contains(level) || !s.path("text").isString()
+            || text.isBlank() || text.length()>MAX_SUMMARY_TEXT || CONTROL.matcher(text).find()) return null;
+        String source=s.path("source").isString() ? s.path("source").asString() : "RULE";
+        if(!Set.of("RULE","LLM").contains(source)) return null;
+        ObjectNode out=json.createObjectNode();
+        out.put("level",level); out.put("text",text);
+        for(String key:List.of("focusPattern","strengthPad")) {
+            JsonNode v=s.path(key);
+            if(v.isNull() || v.isMissingNode()) continue;
+            if(!v.isString() || !v.asString().matches("[A-Z0-9_]{1,40}")) return null;
+            out.put(key,v.asString());
+        }
+        out.put("source",source);
+        return json.writeValueAsString(out);
+    }
+    private static final int MAX_SUMMARY_TEXT=500;
+    private static final java.util.regex.Pattern CONTROL=java.util.regex.Pattern.compile("\\p{Cntrl}");
     private static boolean retryableStatus(int status) { return status==0 || status>=200 && status<300 || status>=500 && status<=599; }
     private static Result fail(boolean retryable) { return new Result(false,retryable,null,null); }
 }

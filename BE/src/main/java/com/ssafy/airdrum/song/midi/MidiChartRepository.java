@@ -38,6 +38,13 @@ public class MidiChartRepository {
 				""", Long.class, ownerId, title, artist, song.bpm(), song.timeSignature(), song.durationMs());
 	}
 
+	long insertReservedSong(long id, long ownerId, String title, String artist, Song song) {
+		return db.queryForObject("""
+				INSERT INTO songs(id,owner_id,title,artist,source,status,bpm,offset_ms,time_signature,duration_ms)
+				OVERRIDING SYSTEM VALUE VALUES (?,?,?,?,'MIDI','READY',?,0,?,?) RETURNING id
+				""", Long.class, id, ownerId, title, artist, song.bpm(), song.timeSignature(), song.durationMs());
+	}
+
 	public long insertChart(long songId, Difficulty difficulty) {
 		return db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES (?,?) RETURNING id", Long.class, songId,
 				difficulty.name());

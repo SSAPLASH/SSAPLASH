@@ -40,6 +40,24 @@ class BuiltinSongCatalogTest {
 		assertThat(BuiltinSongCatalog.parse("[]".getBytes(StandardCharsets.UTF_8), FILES::get)).isEmpty();
 	}
 
+	/** 260번 설계 3-1절: offsetMs는 선택, 생략하면 0, 원본 음원 0초 기준 첫 박 시각(ms). */
+	@Test
+	void offsetMs는_선택이고_생략하면_0이다() {
+		var entries = BuiltinSongCatalog.parse("""
+				[{"title":"곡 A","license":"자작","midi":"a.mid","offsetMs":1840},
+				 {"title":"곡 B","license":"자작","midi":"b.mid"},
+				 {"title":"곡 C","license":"자작","midi":"a.mid","offsetMs":1800000}]
+				""".getBytes(StandardCharsets.UTF_8), FILES::get);
+		assertThat(entries).extracting(BuiltinSongCatalog.Entry::offsetMs).containsExactly(1840, 0, 1_800_000);
+	}
+
+	@Test
+	void offsetMs가_0_이상_30분_이하_정수가_아니면_카탈로그를_거부한다() {
+		for (String value : new String[] {"-1", "1.5", "1840.0", "\"1840\"", "null", "1800001", "1099511627776", "true", "[]"})
+			assertThat(invalid("[{\"title\":\"곡 D\",\"license\":\"자작\",\"midi\":\"a.mid\",\"offsetMs\":" + value + "}]"))
+					.as(value).hasMessageContaining("곡 D").hasMessageContaining("offsetMs");
+	}
+
 	@Test
 	void 잘못된_카탈로그는_통째로_거부한다() {
 		for (String bad : new String[] {

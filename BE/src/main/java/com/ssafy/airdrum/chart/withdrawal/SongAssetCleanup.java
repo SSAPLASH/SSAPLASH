@@ -12,6 +12,25 @@ public class SongAssetCleanup {
     private final ChartAssetKeyPolicy keys;
     public SongAssetCleanup(JdbcTemplate db,ChartAssetKeyPolicy keys) { this.db=db; this.keys=keys; }
     public void registerAll(long user,long song,String accompaniment,String cover) {
+        // 호출자는 회원과 곡을 순서대로 잠근 상태다. MIDI 시도를 취소한 뒤 정리 예약을 앞당긴다.
+        db.query("SELECT id FROM midi_accompaniment_jobs WHERE song_id=? ORDER BY id FOR UPDATE", r -> {}, song);
+        db.update("""
+            UPDATE midi_accompaniment_jobs SET status='CANCELLED',attempt_id=NULL,lease_expires_at=NULL,
+                attempt_deadline_at=NULL,finished_at=clock_timestamp()
+            WHERE song_id=? AND status IN ('QUEUED','RUNNING')
+            """,song);
+        db.query("SELECT id FROM midi_original_uploads WHERE song_id=? FOR UPDATE", r -> {}, song);
+        db.update("""
+            UPDATE midi_original_uploads SET status='RETIRED',song_id=NULL,retired_at=clock_timestamp()
+            WHERE song_id=? AND status='ACCEPTED'
+            """,song);
+        db.update("""
+            UPDATE file_cleanup_tasks SET status='PENDING',deleted_at=NULL,next_attempt_at=clock_timestamp(),
+                midi_recheck_until=clock_timestamp()+interval '24 hours 30 seconds',
+                updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
+            WHERE midi_original_id IN (SELECT id FROM midi_original_uploads WHERE reserved_song_id=? AND user_id=?)
+               OR midi_job_id IN (SELECT id FROM midi_accompaniment_jobs WHERE song_id=?)
+            """,song,user,song);
         if(accompaniment!=null) register(user,song,null,accompaniment);
         if(cover!=null) cover(user,song,cover);
         db.query("SELECT v.id,p->>'imageKey' FROM chart_versions v JOIN charts c ON c.id=v.chart_id CROSS JOIN LATERAL jsonb_array_elements(coalesce(v.sheet_pages,'[]'::jsonb)) p WHERE c.song_id=?", r -> { register(user,song,r.getLong(1),r.getString(2)); },song);

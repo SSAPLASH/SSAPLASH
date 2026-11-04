@@ -20,7 +20,13 @@ printf '%s  %s\n' "$xzsha" "$cache/$xzjar" | sha256sum -c -
 tarfile="$cache/audio-probe.tar"
 trap 'rm -f "$tarfile"' EXIT
 java --class-path "$cache/$xzjar" ./scripts/ExtractAudioProbe.java "$cache/$archive" "$tarfile"
-tar -xf "$tarfile" -C "$cache" --wildcards '*/bin/ffprobe'
+if [ "${PREPARE_AUDIO_FFMPEG:-false}" = true ]; then
+  tar -xf "$tarfile" -C "$cache" --wildcards '*/bin/ffprobe' '*/bin/ffmpeg'
+  AUDIO_FFMPEG_PATH="$cache/ffmpeg-n8.1.3-24-g92611900bb-linux64-lgpl-8.1/bin/ffmpeg"
+  export AUDIO_FFMPEG_PATH
+else
+  tar -xf "$tarfile" -C "$cache" --wildcards '*/bin/ffprobe'
+fi
 rm -f "$tarfile"
 trap - EXIT
 AUDIO_FFPROBE_PATH="$cache/ffmpeg-n8.1.3-24-g92611900bb-linux64-lgpl-8.1/bin/ffprobe"

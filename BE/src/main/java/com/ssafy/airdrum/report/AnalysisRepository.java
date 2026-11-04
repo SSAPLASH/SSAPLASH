@@ -71,6 +71,17 @@ public class AnalysisRepository {
             """,segments,analyzerVersion,lease.playId(),lease.token(),analyzerVersion);
         if(updated==0) failure(lease,false);
     }
+    /** 분석이 DONE일 때만 총평을 저장하고 LLM 총평 작업을 하나 만든다. 이미 있으면 아무것도 하지 않는다. */
+    public void saveSummary(UUID playId, String summary) {
+        int saved=db.update("""
+            UPDATE reports SET coach_summary=?::jsonb
+            WHERE play_session_id=? AND analysis_status='DONE' AND coach_summary IS NULL
+            """,summary,playId);
+        if(saved==1) db.update("""
+            INSERT INTO coach_narrative_jobs(report_id) SELECT id FROM reports WHERE play_session_id=?
+            ON CONFLICT (report_id) DO NOTHING
+            """,playId);
+    }
     public void failure(Lease lease, boolean retryable) {
         db.update("""
             UPDATE reports SET analysis_status=CASE WHEN ? AND analysis_attempt_count<2 THEN 'PENDING' ELSE 'FAILED' END,

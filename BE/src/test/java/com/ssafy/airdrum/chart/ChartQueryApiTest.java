@@ -328,7 +328,9 @@ class ChartQueryApiTest {
 	@Test void stableOrderAndDifficultyOrderHaveNoDuplicates() throws Exception {
 		long s2 = song(owner, "둘", "MIDI", "READY");
 		db.update("UPDATE songs SET created_at='2026-01-01T00:00:00Z' WHERE owner_id=?", owner);
-		version(chart(ownSong, "HARD"), 1, NOTES, TIMING, "READY");
+		// 260번: 노트 수가 같으면 숨기므로 세 난이도의 노트 수를 다르게 둔다.
+		noteCount(version, 2);
+		noteCount(version(chart(ownSong, "HARD"), 1, NOTES, TIMING, "READY"), 3);
 		version(chart(ownSong, "EASY"), 1, NOTES, TIMING, "READY");
 		var items = ok("/api/v1/songs?source=MINE").path("items");
 		assertThat(items.get(0).path("id").longValue()).isEqualTo(s2);
@@ -336,6 +338,49 @@ class ChartQueryApiTest {
 		assertThat(charts.get(0).path("difficulty").asString()).isEqualTo("EASY");
 		assertThat(charts.get(1).path("difficulty").asString()).isEqualTo("NORMAL");
 		assertThat(charts.get(2).path("difficulty").asString()).isEqualTo("HARD");
+	}
+	/** 260번 설계 3-4절: 최신 버전 노트 수가 NORMAL과 같은 HARD·EASY는 목록·상세에서 빠지고, 채보 직접 조회는 그대로다. */
+	@Test void difficultiesWithSameNotesAsNormalAreHiddenButStayReachable() throws Exception {
+		long hard = chart(ownSong, "HARD"), easy = chart(ownSong, "EASY");
+		long hardVersion = version(hard, 1, NOTES, TIMING, "PENDING"), easyVersion = version(easy, 1, NOTES, TIMING, "PENDING");
+		// 셋 모두 같음(1·1·1) → NORMAL만
+		assertDifficulties(ownSong, "NORMAL");
+		assertThat(ok("/api/v1/charts/" + hard).path("difficulty").asString()).isEqualTo("HARD");
+		assertThat(ok("/api/v1/chart-versions/" + hardVersion).path("difficulty").asString()).isEqualTo("HARD");
+		// NORMAL = HARD(2·2), EASY 1 → EASY·NORMAL
+		noteCount(version, 2); noteCount(hardVersion, 2);
+		assertDifficulties(ownSong, "EASY", "NORMAL");
+		// EASY = NORMAL(2·2), HARD 3 → NORMAL·HARD
+		noteCount(hardVersion, 3); noteCount(easyVersion, 2);
+		assertDifficulties(ownSong, "NORMAL", "HARD");
+		// 셋 다름 → 3개
+		noteCount(easyVersion, 1);
+		assertDifficulties(ownSong, "EASY", "NORMAL", "HARD");
+		// 판정은 최신 버전 기준: HARD 새 버전이 NORMAL과 같아지면 숨긴다.
+		noteCount(version(hard, 2, NOTES, TIMING, "PENDING"), 2);
+		assertDifficulties(ownSong, "EASY", "NORMAL");
+		// NORMAL이 없는 곡은 숨기지 않는다.
+		long legacy = song(owner, "NORMAL 없는 곡", "MIDI", "READY");
+		version(chart(legacy, "HARD"), 1, NOTES, TIMING, "PENDING");
+		version(chart(legacy, "EASY"), 1, NOTES, TIMING, "PENDING");
+		assertDifficulties(legacy, "EASY", "HARD");
+	}
+	private void assertDifficulties(long song, String... expected) throws Exception {
+		var detail = ok("/api/v1/songs/" + song);
+		assertThat(detail.path("difficulties").valueStream().map(JsonNode::asString).toList()).containsExactly(expected);
+		assertThat(detail.path("charts").valueStream().map(c -> c.path("difficulty").asString()).toList()).containsExactly(expected);
+		JsonNode item = null;
+		for (var i : ok("/api/v1/songs?source=MINE&size=100").path("items")) if (i.path("id").longValue() == song) item = i;
+		assertThat(item).as("목록에 곡이 있어야 한다").isNotNull();
+		assertThat(item.path("difficulties").valueStream().map(JsonNode::asString).toList()).containsExactly(expected);
+	}
+	/** note_count는 노트 배열 길이와 같아야 하므로(체크 제약) 노트도 그 수만큼 만든다. */
+	private void noteCount(long chartVersion, int count) {
+		var notes = new StringBuilder("[");
+		for (int i = 0; i < count; i++) notes.append(i == 0 ? "" : ",").append("""
+				{"noteId":"n%04d","timeMs":%d,"pad":"SNARE","velocityHint":80,"notation":{"tick":%d,"durationTicks":480,"voice":1}}"""
+				.formatted(i + 1, 250 + i * 500, i * 480));
+		db.update("UPDATE chart_versions SET notes=CAST(? AS jsonb),note_count=? WHERE id=?", notes.append("]").toString(), count, chartVersion);
 	}
 	@Test void songAccompanimentSignsPublicAndOwnWithoutRequiringChartAndRenews() throws Exception {
 		String publicKey = "accompaniment/" + builtin + ".wav", ownKey = "accompaniment/" + ownSong + ".wav";
