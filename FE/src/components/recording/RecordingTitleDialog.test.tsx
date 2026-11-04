@@ -26,7 +26,7 @@ const render = () =>
 describe('RecordingTitleDialog', () => {
   it('제목과 입력칸: 라벨·초기 값·maxLength·안내', () => {
     const html = render();
-    expect(html).toContain('>제목 변경<');
+    expect(html).toContain('>녹음 제목 변경<');
     expect(html).toContain('>제목</label>');
     expect(html).toContain('value="내 연주"');
     expect(html).toContain('maxLength="100"');

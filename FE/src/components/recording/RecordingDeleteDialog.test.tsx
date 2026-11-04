@@ -24,11 +24,12 @@ const render = () =>
   renderToStaticMarkup(<RecordingDeleteDialog item={item} onDeleted={() => {}} onMissing={() => {}} onClose={() => {}} />);
 
 describe('RecordingDeleteDialog', () => {
-  it('제목·질문·안내', () => {
+  it('제목·녹음 이름(꺾쇠 없이)·안내 문구', () => {
     const html = render();
     expect(html).toContain('>녹음 삭제<');
-    expect(html).toContain('「내 연주」을 삭제할까요?');
-    expect(html).toContain('되돌릴 수 없어요.');
+    expect(html).toContain('class="rec-list-delete-question">내 연주<');
+    expect(html).not.toContain('「내 연주」');
+    expect(html).toContain('이 녹음을 삭제할까요? 녹음 파일이 지워지고 되돌릴 수 없어요.');
   });
 
   it('[취소] secondary와 [삭제] danger 버튼', () => {
@@ -40,5 +41,7 @@ describe('RecordingDeleteDialog', () => {
     expect(danger).toContain('>삭제<');
     expect(html).not.toContain('삭제 중…');
     expect(html).toContain('rec-list-dialog-delete');
+    // 두 버튼이 폭을 나눠 채우는 배치는 .rec-list-dialog-delete .rec-list-footer-btn 규칙이 맡는다
+    expect(html.match(/rec-list-footer-btn/g)).toHaveLength(2);
   });
 });
