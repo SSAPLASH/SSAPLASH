@@ -66,6 +66,36 @@ echo "<받은 공개 키 한 줄>" >> ~/.ssh/authorized_keys
 
 접속이 필요 없어진 팀원은 `~/.ssh/authorized_keys`에서 그 사람의 줄을 지운다. 이 방식이면 한 사람을 빼도 다른 사람의 키를 바꿀 필요가 없다.
 
+### 서버 안에서 자동으로 도는 작업용 키 (MLflow 터널 전용)
+
+GPU 서버의 평가 스크립트처럼 **사람이 없이 MLflow(`localhost:5000`)에 기록해야 하는** 작업은 그 서버에서 터널 전용 키를 따로 만든다. 사람 키와 섞지 않는다.
+
+서버(GPU 서버)에서 키를 만든다. 자동으로 쓰므로 암호는 비우고 대신 아래 제한으로 막는다.
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/mlflow_tunnel -C "<용도>-mlflow-tunnel"
+chmod 600 ~/.ssh/mlflow_tunnel
+```
+배포 서버(EC2)의 `~/.ssh/authorized_keys`에는 공개 키 앞에 **네 가지 옵션을 모두** 붙여 추가한다.
+```text
+command="/usr/sbin/nologin",restrict,port-forwarding,permitopen="localhost:5000" ssh-ed25519 AAAA… <용도>-mlflow-tunnel
+```
+| 옵션 | 하는 일 |
+| --- | --- |
+| `command="/usr/sbin/nologin"` | 어떤 명령을 요청해도 로그인 거부만 실행된다. **명령 실행을 막는 것은 이 옵션 하나다** |
+| `restrict` | 터미널 할당·에이전트 전달·X11 등을 끈다 |
+| `port-forwarding` | 포워딩을 다시 허용한다(`restrict`가 끈 것) |
+| `permitopen="localhost:5000"` | 그 포트로 가는 포워딩만 허용한다 |
+
+- **`restrict`와 `permitopen`만으로는 명령 실행이 막히지 않는다.** `command=`가 빠지면 이 키로 EC2에서 `ubuntu`로 명령을 실행할 수 있다. 2026-11-04에 이 옵션을 빼고 등록했다가 시험에서 발견해 고쳤다.
+- **등록한 뒤 반드시 시험한다.** 키를 가진 서버에서 아래를 실행해 아무것도 실행되지 않아야 한다(`This account is currently not available.`가 나오면 정상).
+```bash
+ssh -i ~/.ssh/mlflow_tunnel -o BatchMode=yes ubuntu@<배포 서버 주소> "echo 실행됨"
+```
+- 터널은 명령 없이 연다: `ssh -i ~/.ssh/mlflow_tunnel -N -L 127.0.0.1:<빈 포트>:localhost:5000 -o ExitOnForwardFailure=yes ubuntu@<배포 서버 주소>`
+- **공용 서버에서는 로컬 포트가 다른 사람과 겹칠 수 있다.** 5000, 15001처럼 이미 쓰는 포트에 연결하면 엉뚱한 서비스에 닿는다. 터널을 열기 전에 `ss -ltn | grep ':<포트> '`로 비어 있는지 보고, 열고 나서 `curl http://127.0.0.1:<포트>/health`가 `200`인지 확인한 뒤 기록한다.
+- 개인 키 파일은 서버 밖으로 옮기거나 붙여 넣지 않는다. 필요 없어지면 EC2의 줄과 서버의 파일을 함께 지운다.
+- 기록 방법: `uv run python scripts/eval_narrative.py … --mlflow --tracking-uri http://127.0.0.1:<포트>`
+
 ### 키를 잃어버렸거나 노출됐을 때
 1. 서버의 `~/.ssh/authorized_keys`에서 해당 키의 줄을 **즉시 삭제**한다.
 2. 새 키를 만들어 등록한다.
