@@ -104,14 +104,10 @@ be-midi-render-test:
   extends: .be-job
   image: eclipse-temurin:21-jdk-jammy
   stage: test
-  variables:
-    MIDI_TEST_FLUIDSYNTH: /usr/bin/fluidsynth
-    MIDI_TEST_SOUNDFONT: /usr/share/sounds/sf2/FluidR3_GM.sf2
-    MIDI_TEST_FFMPEG: /usr/bin/ffmpeg
-    MIDI_TEST_FFPROBE: /usr/bin/ffprobe
   script:
-    - apt-get update && apt-get install -y --no-install-recommends fluidsynth=2.2.5-1 fluid-soundfont-gm=3.1-5.3 ffmpeg=7:4.4.2-0ubuntu0.22.04.1
-    - echo '74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0  /usr/share/sounds/sf2/FluidR3_GM.sf2' | sha256sum -c -
+    - PREPARE_AUDIO_FFMPEG=true; export PREPARE_AUDIO_FFMPEG; . ./scripts/Prepare-AudioProbe.sh
+    - . ./scripts/Prepare-MidiRenderer.sh
+    - MIDI_TEST_FFMPEG="$AUDIO_FFMPEG_PATH"; MIDI_TEST_FFPROBE="$AUDIO_FFPROBE_PATH"; export MIDI_TEST_FFMPEG MIDI_TEST_FFPROBE
     - ./gradlew --no-daemon test --tests '*MidiRendererIntegrationTest'
   artifacts:
     when: always

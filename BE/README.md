@@ -148,7 +148,7 @@ sh ./gradlew bootRun
 `songs` → `charts` → `chart_versions` 순서로 생성한다. 86번의 실제 V1 다음에 공통 Flyway 설정으로 자동 적용된다.
 94번은 회원 테이블이나 DB 연결 설정을 별도로 도입하지 않는다. 운영 DB에 V2만 단독 적용하지 않는다.
 
-- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수다. V30부터 MIDI 반주 키도 허용한다.
+- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수다. V31부터 MIDI 반주 키도 허용한다.
 - 곡·난이도와 채보·버전 조합은 중복되지 않는다. 참조 중인 회원·곡·채보의 물리 삭제를 막는다.
 - `notes`는 배열, `timing`은 객체이며 `note_count`는 노트 배열 길이와 일치해야 한다.
 - `sheet_pages`는 선택적 이미지 페이지 배열이며 이미지 없는 JSON 전달은 SQL NULL로 저장한다.
@@ -252,8 +252,8 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
 텔레메트리는 V7에서 일반 테이블로 만든 뒤 V8에서 **1일 청크의 TimescaleDB hypertable**로 전환한다.
-요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. 자동 보관 기간 삭제·압축 정책은
-적용하지 않았다. `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
+요약 업로드 전에도 저장하도록 세션·회원 FK를 두지 않는다. V30에서 **90일 보관 정책**을 등록해
+오래된 청크를 자동으로 지운다(압축 정책은 없음, [텔레메트리 보관·탈퇴](#보관탈퇴-258번)). `packet_loss` 단위는 수집 계약에서 확정하며 DB는 유한한
 음수 아닌 값만 검사한다. 원시 IMU 배열은 이 테이블에 저장하지 않는다.
 
 `DatabaseSchemaMigrationTest`는 빈 DB의 V1→V7, V2 기존 데이터·이력 보존 업그레이드,
@@ -283,7 +283,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 V8을 제외한 V1~V29를 적용하고, V8 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 V1~V31을 적용하고(`spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다), V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -300,7 +300,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-TimescaleSche
 스크립트는 Compose에 선언된 이미지를 사용해 임시 DB를 띄우고 `timescaleTest`를 실행한 뒤 종료한다.
 기존 볼륨을 쓰지 않고 tmpfs 및 임의의 루프백 포트만 사용한다. 빈 DB V1→V8,
 데이터가 있는 V7→V8, 이력·행·인덱스 보존, 날짜별 청크 생성, CHECK 제약 및
-재실행 0건·자동 삭제 정책 미등록을 검사한다.
+재실행 0건, V30 보관 정책(90일 `policy_retention` job 1개)과 그 정책을 실제로 실행했을 때 90일 넘은 청크만
+지워지는지, 같은 정책을 다시 등록해도 실패하지 않는지를 검사한다. 보관 정책이 상대 시각으로 동작하므로 테스트 데이터는
+고정 날짜가 아니라 "오늘 기준 N일 전"으로 넣는다.
 
 근거: [공식 2.30.2 릴리스](https://github.com/timescale/timescaledb/releases/tag/2.30.2),
 [기존 테이블 전환 API](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable).
@@ -423,6 +425,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V27 | `V27__add_recording_hits.sql` | `recordings`에 녹음 시퀀스 `hits`(jsonb 배열)·`hit_count`(1~50,000, 배열 길이와 같음)·`client_key`(uuid)·`mode`·`input_source`·`schema_version`·`started_at`·`payload_hash`·`updated_at` 추가(모두 NOT NULL), `duration_ms` NOT NULL. 부분 유일 인덱스 `recordings_user_client_key_idx`(user_id, client_key) WHERE deleted_at IS NULL. 기존 행이 있으면 실패한다(쓰는 코드가 없었음) | -256 |
 | V28 | `V28__add_recording_chart_version.sql` | `recordings.chart_version_id`(bigint, NULL 허용, FK `chart_versions`) 추가. 녹음이 플레이와 별개로 채보 버전을 기억해 목록 `song`·상세 `timing`이 플레이 삭제 뒤에도 남는다. 기존 행은 연결된 플레이의 `chart_version_id`로 채운다 | -257 |
 | V29 | `V29__add_song_level.sql` | 곡 난이도·산정 채보 버전·규칙·곡 길이와 기존 곡 예외 대상을 저장한다 | -269 |
+| V30 | `V30__add_telemetry_retention_policy.sql` | `telemetry_events`에 TimescaleDB 보관 정책 `add_retention_policy(90 days, if_not_exists)` 등록. 확장 전용이라 V8처럼 일반 테스트 복사본에서 제외하고 `timescaleTest`에서 검증한다 | -258 |
+| V31 | `V31__midi_accompaniment.sql` | MIDI 원본 접수·비동기 반주 작업·시도와 객체 정리 참조를 추가하고 MIDI 곡의 반주 키를 허용한다 | -274 |
 
 규칙:
 
@@ -652,7 +656,7 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
   쿠키가 없거나 형식이 틀리거나 탈퇴 회원이면 401과 함께 쿠키를 지운다.
 - 로그아웃해도 이미 받은 access 토큰은 만료(최대 30분)까지 유효하다. FE는 메모리에서 버린다.
 - **탈퇴**하면 같은 access 토큰의 다음 요청부터 401이고 refresh도 401이다. FE는 204를 받으면 메모리 토큰을 버리고 로그인 화면으로 보낸다.
-  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰과
+  `users` 행은 WITHDRAWN으로 남되 닉네임은 "탈퇴한 사용자", 이메일·프로필 이미지는 NULL로 비운다. 소셜 연동·키트 프리셋·refresh 토큰·연주 녹음·텔레메트리와
   학습 데이터 사용에 동의하지 않은 플레이 기록은 지우고, 동의한 플레이 기록은 남긴다. 같은 소셜 계정으로 다시 로그인하면 **새 회원**이다.
   가입 동의 기록(이용약관·개인정보·연주 기록 활용의 판·시각·값 7개 컬럼)도 같은 UPDATE로 비운다.
 
@@ -701,7 +705,7 @@ V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 fa
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·`consent=false` 플레이 세션 삭제,
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258) 삭제,
   `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
@@ -894,7 +898,7 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 ## MIDI 업로드 → 채보 변환 (151번)
 
 CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안에서 채보 3난이도로 바꿔 **내 곡**(`source=MIDI`)으로 저장한다.
-채보는 계속 동기로 생성한다. 원본은 전용 비공개 버킷에 보관하고 다른 악기 노트가 있으면 별도 CPU 워커가 반주를 비동기 생성한다(V30).
+채보는 계속 동기로 생성한다. 원본은 전용 비공개 버킷에 보관하고 다른 악기 노트가 있으면 별도 CPU 워커가 반주를 비동기 생성한다(V31).
 원본 보관과 곡·채보·필요한 작업 등록이 끝나야 201이다. 반주 합성 실패는 곡·채보 사용을 막지 않는다.
 
 `POST /api/v1/songs/midi`: Bearer 인증, multipart `file`(1 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
@@ -985,6 +989,8 @@ GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tas
 운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자가 호출하는 재시도 API는 없다.
 
 워커 이미지는 Ubuntu Jammy의 [FluidSynth 2.2.5-1](https://packages.ubuntu.com/jammy/fluidsynth), [FluidR3 GM 3.1-5.3](https://packages.ubuntu.com/source/jammy/fluid-soundfont), [FFmpeg 7:4.4.2-0ubuntu0.22.04.1](https://packages.ubuntu.com/jammy-updates/ffmpeg)을 사용하며 SoundFont SHA-256 `74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0`를 빌드·시작 시 확인한다. FluidSynth는 LGPL, FluidR3 GM은 MIT이며 이미지에 패키지 저작권 고지가 포함된다. 로컬 2.4.6 실측을 운영 2.2.5의 성능 보장으로 해석하지 않는다.
+
+CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리에 검증·추출해 FluidSynth 2.2.5를 실행한다. FFmpeg·ffprobe는 기존 SHA-256 고정 준비 스크립트의 8.1.3을 사용하므로 워커 이미지의 FFmpeg 4.4.2 실행 검증과 구분한다.
 
 
 ## 공용 곡 관리 (156번)
@@ -1303,8 +1309,37 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
 
 한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
-요청 횟수 제한(429)은 MVP에서 구현하지 않는다. 보관 기간·삭제 정책과 탈퇴 시 처리는 Infra 포함 별도 합의 대상이다
-(행에는 이름·이메일이 없고 회원 번호만 있다).
+요청 횟수 제한(429)은 MVP에서 구현하지 않는다(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+### 보관·탈퇴 (258번)
+
+MONITOR-002. 기준은 Infra와 합의했다(`MONITOR-002_텔레메트리-보관-정책`, 2026-11-04).
+
+| 항목 | 기준 |
+| --- | --- |
+| 보관 기간 | **90일.** V30의 TimescaleDB 보관 정책이 매일 1회, 범위 끝이 90일보다 오래된 1일 청크를 통째로 지운다. 실제 보관 상한은 90일 + 최대 하루 |
+| 탈퇴 | 탈퇴 트랜잭션(`withdrawal.WithdrawalService`) 안에서 그 회원의 행을 모두 지운다(`DELETE … WHERE user_id = ?`). 실패하면 탈퇴 전체가 롤백된다. 탈퇴 로그에 `deletedTelemetry` 건수가 남는다 |
+| 압축 | 두지 않는다. 용량이 작아(팀 테스트 4주 0.5 GB 안팎) 관리 부담이 더 크다. 운영 크기가 예상보다 크면 다시 정한다 |
+| `user_id` 인덱스 | 두지 않는다. 탈퇴 삭제는 청크 순차 스캔이지만 보관 상한·탈퇴 빈도가 작고, 인덱스는 청크마다 생겨 수집 쓰기 비용을 늘린다 |
+| 백업 | 이미 만든 `pg_dump` 파일 안의 데이터는 이 정책이 지우지 않는다. 백업 보관 기간은 Infra 백업 정책(133번)에서 정한다 |
+
+**운영 적용:** 따로 SQL을 실행하지 않는다. 릴리즈 배포 때 Flyway가 V30을 한 번 실행해 정책을 등록한다.
+TimescaleDB 백그라운드 작업이 켜져 있어야 정책이 돈다(`SHOW timescaledb.max_background_workers;`가 1 이상, 2026-11-04 운영 16).
+배포 뒤 확인:
+
+```sql
+-- 정책 job 1개, drop_after 90 days
+SELECT job_id, proc_name, schedule_interval, config FROM timescaledb_information.jobs
+WHERE hypertable_name = 'telemetry_events';
+-- 마지막 실행 시각·결과
+SELECT job_id, last_run_started_at, last_run_status, next_start FROM timescaledb_information.job_stats
+WHERE hypertable_name = 'telemetry_events';
+-- 남아 있는 가장 오래된 데이터
+SELECT min(time), max(time), count(*) FROM telemetry_events;
+```
+
+**되돌리기·변경:** 앱만 롤백해도 정책은 DB에 남는다. 기간을 바꾸거나 정책을 없애려면 운영에서 직접 SQL을 쓰지 않고
+Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다시 등록)으로 한다.
 
 `TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
 `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.

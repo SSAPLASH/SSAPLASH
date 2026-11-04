@@ -15,8 +15,8 @@ import com.zaxxer.hikari.HikariDataSource;
 @SpringBootTest
 class MidiAccompanimentMigrationTest {
     @Autowired DataSource dataSource;
-    @Test void v30PreservesOldDataAndEnforcesNewReferencesAndActiveUniqueness() throws Exception {
-        String schema="midi30_"+UUID.randomUUID().toString().replace("-","");
+    @Test void v31PreservesOldDataAndEnforcesNewReferencesAndActiveUniqueness() throws Exception {
+        String schema="midi31_"+UUID.randomUUID().toString().replace("-","");
         var pool=(HikariDataSource)dataSource;
         DataSource isolated=new DriverManagerDataSource(pool.getJdbcUrl(),pool.getUsername(),pool.getPassword());
         try {
@@ -27,7 +27,8 @@ class MidiAccompanimentMigrationTest {
                 try (var row=sql.executeQuery("INSERT INTO songs(owner_id,title,source) VALUES("+user+",'legacy MIDI','MIDI') RETURNING id")) { row.next(); song=row.getLong(1); }
                 sql.execute("INSERT INTO songs(owner_id,title,source,accompaniment_key) VALUES("+user+",'legacy AUDIO','AUDIO','accompaniment/legacy.flac')");
             }
-            assertThat(flyway(isolated,schema,"30").migrate().migrationsExecuted).isEqualTo(1);
+            // 일반 PostgreSQL 복사본은 TimescaleDB 전용 V30을 제외한다.
+            assertThat(flyway(isolated,schema,"31").migrate().migrationsExecuted).isEqualTo(1);
             try (Connection connection=isolated.getConnection(); var sql=connection.createStatement()) {
                 sql.execute("SET search_path TO "+schema);
                 try (var row=sql.executeQuery("SELECT title,accompaniment_key FROM songs WHERE id="+song)) {
@@ -44,7 +45,7 @@ class MidiAccompanimentMigrationTest {
                 assertThatThrownBy(()->sql.execute("INSERT INTO file_cleanup_tasks(object_key,file_role,midi_job_id,midi_attempt_id) SELECT 'bad2','ACCOMPANIMENT',id,'"+UUID.randomUUID()+"' FROM midi_accompaniment_jobs WHERE song_id="+song))
                         .isInstanceOf(SQLException.class).extracting(e->((SQLException)e).getSQLState()).isEqualTo("23503");
             }
-            assertThat(flyway(isolated,schema,"30").migrate().migrationsExecuted).isZero();
+            assertThat(flyway(isolated,schema,"31").migrate().migrationsExecuted).isZero();
         } finally {
             try (Connection connection=isolated.getConnection(); var sql=connection.createStatement()) { sql.execute("DROP SCHEMA IF EXISTS "+schema+" CASCADE"); }
         }
