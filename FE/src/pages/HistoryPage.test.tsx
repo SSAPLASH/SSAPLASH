@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RECORDING_ENABLED } from '@/app/features';
 import { HistoryPage } from './HistoryPage';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -30,9 +31,9 @@ const saved = (i: number, mode: 'RHYTHM' | 'SHEET' = 'RHYTHM') => ({
   summary: { score: 1000, accuracy: 0.5, counts: { PERFECT: 0, GOOD: 0, MISS: 0 }, strayHits: 0 },
 });
 
-const render = () =>
+const render = (url = '/history') =>
   renderToStaticMarkup(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <HistoryPage />
     </MemoryRouter>,
   );
@@ -46,18 +47,39 @@ describe('HistoryPage', () => {
     expect(html).not.toContain('전체 기록');
   });
 
-  it('기록이 있으면 「전체 기록 n개」와 칩 3개(전체 selected)', () => {
+  it('기록이 있으면 「전체 기록 n개」와 모드 Segmented radio 3개(전체 선택)', () => {
     stubLogs([saved(1), saved(2, 'SHEET'), saved(3)]);
     const html = render();
     expect(html).toContain('전체 기록 3개');
-    const chips = html.match(/<button[^>]*ui-chip[^>]*>[^<]*<\/button>/g) ?? [];
-    expect(chips).toHaveLength(3);
-    expect(chips[0]).toContain('aria-pressed="true"');
-    expect(chips[0]).toContain('>전체<');
-    expect(chips[1]).toContain('aria-pressed="false"');
-    expect(chips[1]).toContain('>게임<');
-    expect(chips[2]).toContain('aria-pressed="false"');
-    expect(chips[2]).toContain('>악보<');
+    expect(html).toContain('aria-label="모드 필터"');
+    expect(html).not.toContain('ui-chip');
+    const group = html.slice(html.indexOf('aria-label="모드 필터"'));
+    const radios = group.match(/<button[^>]*role="radio"[^>]*>[^<]*<\/button>/g) ?? [];
+    expect(radios.slice(0, 3)).toHaveLength(3);
+    expect(radios[0]).toContain('aria-checked="true"');
+    expect(radios[0]).toContain('>전체<');
+    expect(radios[1]).toContain('aria-checked="false"');
+    expect(radios[1]).toContain('>게임<');
+    expect(radios[2]).toContain('aria-checked="false"');
+    expect(radios[2]).toContain('>악보<');
+  });
+
+  it('RECORDING_ENABLED 기본값은 꺼짐이라 탭 줄이 없고 ?tab=recordings도 무시한다', () => {
+    expect(RECORDING_ENABLED).toBe(false);
+    stubLogs([saved(1)]);
+    expect(render()).not.toContain('history-tabs');
+    const html = render('/history?tab=recordings');
+    expect(html).not.toContain('history-tabs');
+    expect(html).not.toContain('history-tab-recordings');
+    expect(html).toContain('전체 기록 1개');
+  });
+
+  it('검색칸과 정렬 토글이 있다', () => {
+    stubLogs([saved(1)]);
+    const html = render();
+    expect(html).toContain('placeholder="곡 제목 검색"');
+    expect(html).toContain('type="search"');
+    expect(html).toContain('aria-label="정렬"');
   });
 
   it('13건이면 첫 쪽 10행과 범위 「1–10 / 13개」', () => {

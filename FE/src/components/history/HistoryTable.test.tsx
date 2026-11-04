@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -30,10 +31,10 @@ function log(over: Partial<PlayLog> & { playId: string }): PlayLog {
   } as PlayLog;
 }
 
-const render = (logs: PlayLog[], deleted: number[] = []) =>
+const render = (logs: PlayLog[], deleted: number[] = [], sortSlot?: ReactNode) =>
   renderToStaticMarkup(
     <MemoryRouter>
-      <HistoryTable logs={logs} deletedIds={new Set(deleted)} />
+      <HistoryTable logs={logs} deletedIds={new Set(deleted)} sortSlot={sortSlot} />
     </MemoryRouter>,
   );
 
@@ -54,6 +55,17 @@ describe('HistoryTable', () => {
     const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
     expect(head.match(/<th /g)).toHaveLength(5);
     expect(head).toContain('정확도 / 점수');
+  });
+
+  it('sortSlot이 없으면 정렬 영역을 그리지 않고, 있으면 마지막 th 안에 그린다', () => {
+    expect(render([])).not.toContain('history-sort');
+    const html = render([], [], <span data-x="slot">정렬</span>);
+    const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    expect(head.match(/<th /g)).toHaveLength(5);
+    const lastTh = head.slice(head.lastIndexOf('<th '));
+    expect(lastTh).toContain('결과 보기');
+    expect(lastTh).toContain('history-sort');
+    expect(lastTh).toContain('data-x="slot"');
   });
 
   it('게임 행은 「정확도 / 점수」 표기, 날짜·모드 표기', () => {

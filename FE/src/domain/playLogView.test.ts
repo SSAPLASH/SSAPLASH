@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterPlayLogs, formatPlayDate, HISTORY_PAGE_SIZE, pageInfo, playModeName } from './playLogView';
+import { filterPlayLogs, formatPlayDate, HISTORY_PAGE_SIZE, pageInfo, playModeName, searchPlayLogs, sortPlayLogs } from './playLogView';
 
 describe('formatPlayDate', () => {
   it('YYYY.MM.DD HH:mm 형식(로컬 시간, 0 채움)', () => {
@@ -80,5 +80,50 @@ describe('pageInfo', () => {
     expect(HISTORY_PAGE_SIZE).toBe(10);
     expect(pageInfo(20, 1)).toEqual({ page: 1, pageCount: 2, from: 11, to: 20 });
     expect(pageInfo(7, 1, 3)).toEqual({ page: 1, pageCount: 3, from: 4, to: 6 });
+  });
+});
+
+describe('searchPlayLogs', () => {
+  const logs = [{ title: 'Hello World' }, { title: '봄날' }, { title: 'hello' }];
+
+  it('대소문자를 무시하고 부분 일치한다', () => {
+    expect(searchPlayLogs(logs, 'HELLO').map((l) => l.title)).toEqual(['Hello World', 'hello']);
+  });
+
+  it('앞뒤 공백은 지운다', () => {
+    expect(searchPlayLogs(logs, '  봄 ').map((l) => l.title)).toEqual(['봄날']);
+  });
+
+  it('빈 검색어는 전체 사본', () => {
+    const r = searchPlayLogs(logs, '   ');
+    expect(r).toEqual(logs);
+    expect(r).not.toBe(logs);
+  });
+
+  it('일치가 없으면 빈 배열', () => {
+    expect(searchPlayLogs(logs, 'zzz')).toEqual([]);
+  });
+});
+
+describe('sortPlayLogs', () => {
+  const at = (m: number) => new Date(2026, 10, 1, 9, m).toISOString();
+  const logs = [
+    { id: 1, startedAt: at(5) },
+    { id: 2, startedAt: at(1) },
+    { id: 3, startedAt: at(5) },
+    { id: 4, startedAt: at(9) },
+  ];
+
+  it('NEWEST는 최신 먼저, 같은 시각은 원래 순서', () => {
+    expect(sortPlayLogs(logs, 'NEWEST').map((l) => l.id)).toEqual([4, 1, 3, 2]);
+  });
+
+  it('OLDEST는 오래된 것 먼저, 같은 시각은 원래 순서', () => {
+    expect(sortPlayLogs(logs, 'OLDEST').map((l) => l.id)).toEqual([2, 1, 3, 4]);
+  });
+
+  it('원본은 바뀌지 않는다', () => {
+    sortPlayLogs(logs, 'OLDEST');
+    expect(logs.map((l) => l.id)).toEqual([1, 2, 3, 4]);
   });
 });
