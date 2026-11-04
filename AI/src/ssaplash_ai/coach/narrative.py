@@ -51,10 +51,16 @@ FORBIDDEN_WORDS = (
     "재능",
     "실력이 없",
 )
-_PREVIOUS_WORDS = ("지난번", "저번", "이전", "지난 연주", "지난 플레이")
+_PREVIOUS_WORDS = ("지난번", "저번", "이전", "예전", "전보다", "지난 연주", "지난 플레이")
 _BETTER_WORDS = ("나아졌", "좋아졌", "줄었", "개선", "향상", "발전")
 _WORSE_WORDS = ("나빠졌", "늘었", "악화", "떨어졌")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# 모델이 답에 섞어 내보내는 전용 토큰과 생각 블록(EXAONE `[|endofturn|]`, Qwen `<|im_end|>`·`<think>`, Gemma `<end_of_turn>`)
+_SPECIAL_TOKENS = re.compile(
+    r"<think>.*?</think>|\[\|[^\]\n]{0,30}\|\]|<\|[^>\n]{0,30}\|>|</?think>|</?(?:start|end)_of_turn>",
+    re.DOTALL,
+)
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 # 한글·숫자·기본 문장부호·공백·% 외의 글자(한자, 가나, 영어 단어, 이모지)가 섞였는지 본다
 _FOREIGN = re.compile(r"[A-Za-z぀-ヿ㐀-鿿\U0001F000-\U0001FFFF☀-➿]")
 _MARKUP = re.compile(r"[*#`>|\[\]{}_]|^\s*[-•·]\s", re.MULTILINE)
@@ -247,6 +253,13 @@ def _trend(facts: NarrativeFacts) -> Literal["BETTER", "WORSE", "SAME", "NONE"]:
     return "SAME"
 
 
+def clean(text: str) -> str:
+    """모델 출력에서 전용 토큰·생각 블록을 지우고 줄바꿈을 공백 하나로 합친다. 문장 내용은 바꾸지 않는다."""
+    text = _SPECIAL_TOKENS.sub(" ", text)
+    text = re.sub(r"\s*\n+\s*", " ", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 def check(text: str, facts: NarrativeFacts) -> list[str]:
     """문장이 규칙을 어긴 곳의 목록. 비어 있으면 통과."""
     problems: list[str] = []
@@ -280,12 +293,19 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
             problems.append(f"사실에 없는 패드 '{label}'")
 
     trend = _trend(facts)
-    if trend == "NONE" and any(w in body for w in _PREVIOUS_WORDS + _BETTER_WORDS + _WORSE_WORDS):
-        problems.append("지난 연주 기록이 없는데 비교함")
-    if trend == "WORSE" and any(w in body for w in _BETTER_WORDS):
-        problems.append("지난번보다 놓침이 늘었는데 나아졌다고 씀")
-    if trend == "BETTER" and any(w in body for w in _WORSE_WORDS):
-        problems.append("지난번보다 놓침이 줄었는데 나빠졌다고 씀")
+    # 비교는 "지난번·이전" 같은 말이 들어 있는 문장 안에서만 본다. "실력이 향상돼요"처럼 비교가 아닌 평범한 문장은 오탐이다
+    for sentence in _SENTENCE_SPLIT.split(body):
+        if not any(w in sentence for w in _PREVIOUS_WORDS):
+            continue
+        if trend == "NONE":
+            problems.append("지난 연주 기록이 없는데 비교함")
+            break
+        if trend == "WORSE" and any(w in sentence for w in _BETTER_WORDS):
+            problems.append("지난번보다 놓침이 늘었는데 나아졌다고 씀")
+            break
+        if trend == "BETTER" and any(w in sentence for w in _WORSE_WORDS):
+            problems.append("지난번보다 놓침이 줄었는데 나빠졌다고 씀")
+            break
     return problems
 
 
@@ -299,6 +319,8 @@ class NarrativeOutcome:
     text: str | None
     attempts: int
     violations: list[str] = field(default_factory=list)
+    # 마지막 시도의 (정리한) 원문. 거절 이유를 눈으로 확인하는 용도라 운영 로그에는 남기지 않는다
+    last_text: str | None = None
 
 
 def write_narrative(
@@ -312,16 +334,18 @@ def write_narrative(
     hint: str | None = None
     problems: list[str] = []
     attempts = 0
+    last: str | None = None
     for attempts in range(1, max_attempts + 1):
         try:
-            text = generator(SYSTEM_PROMPT, build_user_prompt(facts, hint)).strip()
+            text = clean(generator(SYSTEM_PROMPT, build_user_prompt(facts, hint)))
         except Exception as exc:  # noqa: BLE001 - 어떤 생성기 오류도 규칙 총평으로 되돌린다
             return NarrativeOutcome(None, attempts, [f"생성기 오류 {type(exc).__name__}"])
         problems = check(text, facts)
         if not problems:
-            return NarrativeOutcome(text, attempts)
+            return NarrativeOutcome(text, attempts, last_text=text)
+        last = text
         hint = "; ".join(problems)
-    return NarrativeOutcome(None, attempts, problems)
+    return NarrativeOutcome(None, attempts, problems, last_text=last)
 
 
 def facts_from_analysis(
