@@ -512,6 +512,8 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 `source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`와 다르다.
 목록과 count에 같은 권한 조건을 적용하며, 난이도 요약은 일괄 조회한다. 목록 SQL에는 큰 노트 JSON을 넣지 않는다.
 
+**같은 채보 난이도 숨김(260번):** 목록의 `difficulties`와 상세의 `difficulties`·`charts[]`에서 최신 버전 노트 수(`noteCount`)가 NORMAL과 같은 HARD·EASY를 뺀다. NORMAL·EASY는 HARD에서 노트를 빼기만 해서 만들므로(151번 솎기, 음원 채보도 같음) NORMAL = HARD는 노트 수가 같으면 같은 채보다. EASY는 HARD에서 따로 솎으므로 노트 수만 같고 노트가 다른 경우가 이론상 있지만 받아들인다(설계 U2). NORMAL은 항상 남기고, NORMAL이 없는 곡은 숨기지 않는다. 그래서 곡마다 난이도가 1~3개다(예: 시드 3곡은 `EASY`·`NORMAL`). 채보는 세 난이도 모두 저장된 그대로이므로 `/api/v1/charts/{chartId}`·`/api/v1/chart-versions/{id}`는 숨긴 채보도 200이고, 플레이·베스트·녹음의 `difficulty`와 ADMIN 응답(`/api/v1/admin/songs*`)은 바뀌지 않는다. FE는 응답 목록대로 난이도를 그리고, URL의 `chart`가 목록에 없으면 NORMAL로 바꾼다(FE 합의 `CHART-002_중복-난이도-숨김`).
+
 모든 경로는 로그인한 ACTIVE 회원 전용이다. 공용 곡도 로그인해야 하며 타인·삭제·없는 자원은 동일한 404다.
 ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 곡은 메타데이터만 조회할 수 있고
 재생·자산 조회는 409다. 응답은 `Cache-Control: private, no-store`이며 오류는 기존 Problem Details 형식이다.
@@ -947,7 +949,7 @@ CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안
 
   상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
   EASY가 비면 NORMAL을, NORMAL이 비면 HARD를 그대로 쓴다. 규칙을 바꾸면 버전을 올린다.
-- 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, `offsetMs=0`)를
+- 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, 업로드는 `offsetMs=0`, 공용 곡 카탈로그는 254번 절의 `offsetMs`)를
   `ChartDocumentReader.milliseconds`와 같은 식으로 계산한다. 그래서 악보 페이지 ms와 노트 시각이 어긋나지 않는다.
 - `notation`은 tick·note-off까지 길이(없으면 16분음표)·voice(`KICK`·`HIHAT_PEDAL` 2, 나머지 1), `timing`에는 `ppq`·`tempoMap`·`timeSignatureMap`을 항상 넣는다.
   저장 전에 조회 리더로 다시 읽어 검증한다.
@@ -1037,8 +1039,9 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 **앱이 켜질 때 자동으로 등록**한다. 배포만 하면 로컬·dev·운영에 같은 공용 곡이 들어가며, 사람이 ADMIN API를 호출할 필요가 없다.
 
-- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
+- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
 - **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
+- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 MR CI가 먼저 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
 - **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
 - **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
 - **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
