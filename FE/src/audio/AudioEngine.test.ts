@@ -18,6 +18,7 @@ function makeNode() {
     frequency: makeParam(),
     start: vi.fn(),
     stop: vi.fn(),
+    disconnect: vi.fn(),
   };
   node.connect = vi.fn(() => node);
   return node;
@@ -165,6 +166,66 @@ describe('AudioEngine 드럼·노래 음량', () => {
     e.setSongVolume(0.5);
     e.setSongVolume(Number.POSITIVE_INFINITY);
     expect(accGain(e)).toBe(0.5);
+  });
+});
+
+describe('softLimitCurve', () => {
+  const at = (c: Float32Array, x: number) => c[Math.round(((x / 4 + 1) / 2) * (c.length - 1))];
+  it('문턱(0.8) 아래는 그대로 통과한다', () => {
+    const c = softLimitCurve();
+    for (const x of [0, 0.1, 0.5, 0.79, -0.5]) expect(at(c, x)).toBeCloseTo(x, 2);
+  });
+  it('문턱 위는 1을 넘지 않고 단조 증가한다', () => {
+    const c = softLimitCurve();
+    expect(at(c, 4)).toBeLessThanOrEqual(1);
+    expect(at(c, 1.5)).toBeGreaterThan(at(c, 1));
+    expect(at(c, -4)).toBeGreaterThanOrEqual(-1);
+  });
+});
+
+describe('AudioEngine triggerScheduled', () => {
+  const ts = { contextTime: 9.9, performanceTime: 4950 };
+  beforeEach(() => {
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  type Gate = { disconnect: ReturnType<typeof vi.fn> };
+  async function engineWithGates() {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts });
+    const ctx = e.context as unknown as { createGain: () => unknown; currentTime: number };
+    const gates: Gate[] = [];
+    const orig = ctx.createGain;
+    ctx.createGain = () => {
+      const n = orig() as Gate;
+      gates.push(n);
+      return n;
+    };
+    return { e, ctx, gates };
+  }
+
+  it('running이 아니면 null', async () => {
+    const e = await engineWith({ state: 'suspended', currentTime: 0, ts: { contextTime: 0, performanceTime: 0 } });
+    expect(e.triggerScheduled('KICK', 90, 5100)).toBeNull();
+  });
+
+  it('아직 울리기 전에 cancel하면 출력 경로를 끊는다', async () => {
+    const { e, gates } = await engineWithGates();
+    const h = e.triggerScheduled('KICK', 90, 6000);
+    expect(h).not.toBeNull();
+    h!.cancel();
+    expect(gates[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('이미 울린 뒤 cancel은 아무것도 하지 않고 던지지 않는다', async () => {
+    const { e, ctx, gates } = await engineWithGates();
+    const h = e.triggerScheduled('KICK', 90, 5100);
+    ctx.currentTime = 20;
+    expect(() => h!.cancel()).not.toThrow();
+    expect(gates[0].disconnect).not.toHaveBeenCalled();
   });
 });
 
