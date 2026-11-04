@@ -1,5 +1,6 @@
 // Figma Controls / TableHeader 134:2686 + Navigation / HistoryRow 220:3964 — 연주 기록 표. 열: 날짜 · 모드 · 곡 · 정확도 / 점수 · 결과 보기.
 // 삭제된 곡 행(song=deleted)은 제목을 --text-3로 흐리게 하고 「삭제된 곡」 칩을 붙인다. 결과 보기는 그대로 열린다.
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { formatPlayDate, playModeName } from '@/domain/playLogView';
@@ -11,6 +12,8 @@ export interface HistoryTableProps {
   logs: PlayLog[];
   /** 삭제(404)로 확인된 BE 곡 id */
   deletedIds: ReadonlySet<number>;
+  /** 머리글 마지막 열(결과 보기)에 그릴 정렬 토글 */
+  sortSlot?: ReactNode;
 }
 
 /** 「96.8% / 92,400」 — 악보 모드(점수 없음)는 점수 자리에 「—」 */
@@ -20,7 +23,7 @@ function resultText(l: PlayLog): string {
   return `${acc} / ${score}`;
 }
 
-export function HistoryTable({ logs, deletedIds }: HistoryTableProps) {
+export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) {
   return (
     <div className="history-table-wrap">
       <table className="ui-table history-table" aria-label="연주 기록">
@@ -39,6 +42,7 @@ export function HistoryTable({ logs, deletedIds }: HistoryTableProps) {
             <th scope="col">정확도 / 점수</th>
             <th scope="col">
               <span className="history-visually-hidden">결과 보기</span>
+              {sortSlot ? <div className="history-sort">{sortSlot}</div> : null}
             </th>
           </tr>
         </thead>

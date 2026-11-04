@@ -38,3 +38,23 @@ export function pageInfo(total: number, page: number, size = HISTORY_PAGE_SIZE):
   const p = Math.min(Math.max(0, page), pageCount - 1);
   return { page: p, pageCount, from: total ? p * size + 1 : 0, to: Math.min(total, (p + 1) * size) };
 }
+
+export type PlayLogSort = 'NEWEST' | 'OLDEST';
+
+/** 곡 제목 검색: 앞뒤 공백을 지우고 대소문자 무시 부분 일치. 검색어가 비면 전체 사본 */
+export function searchPlayLogs<T extends Pick<PlayLog, 'title'>>(logs: readonly T[], q: string): T[] {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return [...logs];
+  return logs.filter((l) => l.title.toLowerCase().includes(needle));
+}
+
+/** 연주 시작 시각(ISO) 기준 정렬. 같은 시각은 원래 순서를 지키고 원본은 바꾸지 않는다 */
+export function sortPlayLogs<T extends Pick<PlayLog, 'startedAt'>>(logs: readonly T[], sort: PlayLogSort): T[] {
+  const sign = sort === 'NEWEST' ? -1 : 1;
+  return [...logs].sort((a, b) => {
+    const ta = Date.parse(a.startedAt);
+    const tb = Date.parse(b.startedAt);
+    const diff = (Number.isNaN(ta) ? 0 : ta) - (Number.isNaN(tb) ? 0 : tb);
+    return diff * sign;
+  });
+}
