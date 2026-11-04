@@ -20,6 +20,9 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <bluefruit.h>
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+using namespace Adafruit_LittleFS_Namespace;
 
 extern "C" {
 #include "hit_detect.h"
@@ -34,8 +37,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 1                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그) */
-#define FW_TAG   "BOOT 1.1 nrf52"
+#define FW_MINOR 2                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234) */
+#define FW_TAG   "BOOT 1.2 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -65,7 +68,19 @@ static const float TIP_AXIS[3] = {1.0f, 0.0f, 0.0f};
 #define MARGIN_AMBIG_X10 100           /* margin 10° 미만이면 판정 애매 플래그 */
 #define BIAS_SAMPLES     1666          /* 부팅 시 바이어스 측정 1초 */
 #define BIAS_MAX_SD_DPS  3.0f          /* 이보다 흔들리면 측정 실패 → 기본값 */
-static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 실측 */
+static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 실측 (보드 1개 값. 플래시에 저장값이 없을 때만) */
+#define BIAS_SAVE_SD_DPS 0.8f          /* 부팅 측정이 이만큼 조용하면(책상 위) 이 보드 값으로 플래시에 저장 */
+#define BIAS_FILE        "/gyro_bias.bin"
+
+/* 정지 중 자이로 바이어스 재추정 (S15P31A307-234)
+ * 2026-11-04 실측: 왼손 보드는 7분 쓰는 동안 바이어스가 +0.5°/s 변해 방위각이 분당 약 17° 밀렸다 (칩 온도 변화).
+ * 부팅 때 한 번 잰 값으로는 못 따라가서, 스틱이 멈춰 있을 때마다 그 순간의 자이로 평균으로 천천히 다시 잡는다.
+ * 기준값은 swing_1026·nohit_1026 녹화로 확인: 스윙 중에는 정지로 잡히지 않아 바이어스가 0.1°/s 넘게 흔들리지 않음 */
+#define STILL_DPS         4.0f         /* 바이어스 뺀 각속도 크기가 이보다 작고 */
+#define STILL_ACC_MS2     0.6f         /* | |a| − g | 가 이보다 작은 샘플이 */
+#define STILL_MIN_SAMPLES 500          /* 0.3초(1.66kHz) 이상 이어지면 정지 */
+#define BIAS_TAU_S        2.0f         /* 정지 중 바이어스를 따라가는 시간 상수 */
+#define BIAS_MAX_DEV_DPS  4.0f         /* 부팅 값에서 이보다 멀어지지 않게 (오판정 방어) */
 
 /* ===================== µs 시계 (TIMER4, 1MHz, 32비트) =====================
  * 프로토콜 시각이 µs u32(약 71.6분 랩어라운드)이므로 하드웨어 타이머를 그대로 쓴다.
@@ -139,6 +154,8 @@ static hit_detector_t hd;
 static pose_t         pose;
 static pad_table_t    pads;
 static float          bias_dps[3];
+static float          bias_boot[3];                   /* 부팅 때 정한 값 (재추정 한계의 기준) */
+static uint32_t       still_updates = 0;              /* 정지 재추정이 적용된 샘플 수 */
 static uint8_t        role = STICK_ROLE;               /* 0 왼손, 1 오른손 */
 static uint8_t        mode = 0;                        /* 0 연주, 1 설정(+POSE) */
 static int16_t        pose_rate_hz = 50;
@@ -537,6 +554,31 @@ static void ble_init()
 }
 
 /* ===================== 부팅 ===================== */
+static bool bias_load(float b[3])
+{
+    File f(InternalFS);
+    if (!f.open(BIAS_FILE, FILE_O_READ)) return false;
+    bool ok = f.read((uint8_t *)b, 12) == 12;
+    f.close();
+    for (int i = 0; i < 3 && ok; i++) if (!(fabsf(b[i]) < 20.0f)) ok = false;   /* 쓰레기 값 거르기 (NaN 포함) */
+    return ok;
+}
+
+static void bias_save(const float b[3])
+{
+    InternalFS.remove(BIAS_FILE);
+    File f(InternalFS);
+    if (f.open(BIAS_FILE, FILE_O_WRITE)) { f.write((const uint8_t *)b, 12); f.close(); }
+}
+
+/* 현재 바이어스 (0.01°/s). 연결 직후와 10초마다 보낸다 → 쓰는 동안 바이어스가 얼마나 변하는지 측정 페이지에서 본다 */
+static void send_bias()
+{
+    char m[20];
+    snprintf(m, sizeof m, "BT %d %d %d", (int)lroundf(bias_dps[0] * 100), (int)lroundf(bias_dps[1] * 100), (int)lroundf(bias_dps[2] * 100));
+    send_log(m);
+}
+
 static void measure_bias(float acc_mean_ms2[3])
 {
     double s[3] = {0}, q[3] = {0}, a[3] = {0};
@@ -555,17 +597,32 @@ static void measure_bias(float acc_mean_ms2[3])
         n++;
     }
     bool ok = n > BIAS_SAMPLES / 2;
+    double sd_max = 0;
     for (int i = 0; i < 3 && ok; i++) {
         double m = s[i] / n, sd = sqrt(q[i] / n - m * m);
-        if (sd > BIAS_MAX_SD_DPS) ok = false;
+        if (sd > sd_max) sd_max = sd;
     }
-    for (int i = 0; i < 3; i++) {
-        bias_dps[i] = ok ? (float)(s[i] / n) : BIAS_DEFAULT_DPS[i];
-        acc_mean_ms2[i] = n ? (float)(a[i] / n) : (i == 2 ? G_MS2 : 0);
+    if (sd_max > BIAS_MAX_SD_DPS) ok = false;
+    for (int i = 0; i < 3; i++) acc_mean_ms2[i] = n ? (float)(a[i] / n) : (i == 2 ? G_MS2 : 0);
+
+    /* 우선순위: 이번 측정 → 이 보드에 저장된 값 → 공용 기본값. 흔들려서 실패해도 정지 재추정이 곧 바로잡는다 */
+    const char *src = "meas";
+    if (ok) {
+        for (int i = 0; i < 3; i++) bias_dps[i] = (float)(s[i] / n);
+        if (sd_max < BIAS_SAVE_SD_DPS) { bias_save(bias_dps); src = "saved"; }
+    } else if (bias_load(bias_dps)) {
+        src = "flash";
+    } else {
+        for (int i = 0; i < 3; i++) bias_dps[i] = BIAS_DEFAULT_DPS[i];
+        src = "default";
     }
+    for (int i = 0; i < 3; i++) bias_boot[i] = bias_dps[i];
     char msg[20];
-    snprintf(msg, sizeof msg, ok ? "BIAS %d %d %d" : "BIAS default", (int)(bias_dps[0] * 10), (int)(bias_dps[1] * 10), (int)(bias_dps[2] * 10));
+    if (ok) snprintf(msg, sizeof msg, "BIAS %d %d %d", (int)(bias_dps[0] * 10), (int)(bias_dps[1] * 10), (int)(bias_dps[2] * 10));
+    else    snprintf(msg, sizeof msg, "BIAS %s", src);   /* "BIAS flash" | "BIAS default" */
     send_log(msg);
+    if (ok) { snprintf(msg, sizeof msg, "BIAS %s sd%d", src, (int)(sd_max * 10)); send_log(msg); }
+    send_bias();
 }
 
 void app_setup()
@@ -586,6 +643,7 @@ void app_setup()
     Wire.begin();
     Wire.setClock(400000);
     ble_init();
+    InternalFS.begin();                                 /* 보드별 바이어스 저장 (Bluefruit 본딩과 같은 파일시스템) */
 
     if (!imu_init()) {
         while (1) { send_log("IMU FAIL"); delay(1000); }
@@ -653,7 +711,8 @@ void app_loop()
     btn_prev = btn;
 
     /* 상태 5초마다 */
-    if (status_due) { status_due = false; t_status = millis(); send_status(); }   /* 연결 직후 1회 */
+    if (status_due) { status_due = false; t_status = millis(); send_status(); send_bias(); }   /* 연결 직후 1회 */
+    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); } }
     if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 
     /* IMU 새 샘플 */
@@ -679,6 +738,26 @@ void app_loop()
     float g[3], dt = t_prev ? (t - t_prev) * 1e-6f : 0.0006f;
     t_prev = t;
     for (int i = 0; i < 3; i++) g[i] = v[i] * GYRO_DPS_PER_LSB - bias_dps[i];
+
+    /* 정지 중 바이어스 재추정 (234): 멈춰 있는 동안 자이로 원값의 평균 = 바이어스 */
+    {
+        static uint32_t still_n = 0;
+        float ax = v[3] * ACC_G_PER_LSB * G_MS2, ay = v[4] * ACC_G_PER_LSB * G_MS2, az = v[5] * ACC_G_PER_LSB * G_MS2;
+        float am = sqrtf(ax * ax + ay * ay + az * az);
+        float gm2 = g[0] * g[0] + g[1] * g[1] + g[2] * g[2];
+        if (gm2 < STILL_DPS * STILL_DPS && fabsf(am - G_MS2) < STILL_ACC_MS2) still_n++;
+        else still_n = 0;
+        if (still_n >= STILL_MIN_SAMPLES) {
+            float k = dt / BIAS_TAU_S;
+            for (int i = 0; i < 3; i++) {
+                float nb = bias_dps[i] + k * (v[i] * GYRO_DPS_PER_LSB - bias_dps[i]);
+                if (nb > bias_boot[i] + BIAS_MAX_DEV_DPS) nb = bias_boot[i] + BIAS_MAX_DEV_DPS;
+                if (nb < bias_boot[i] - BIAS_MAX_DEV_DPS) nb = bias_boot[i] - BIAS_MAX_DEV_DPS;
+                bias_dps[i] = nb;
+            }
+            still_updates++;
+        }
+    }
 
     /* 자세 */
     float a[3], *ap = NULL;
