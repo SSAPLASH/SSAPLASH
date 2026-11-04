@@ -74,12 +74,14 @@ describe('WeakSegments 상태 안내', () => {
 });
 
 describe('WeakSegments 목록', () => {
-  it('샘플 A: WHOLE 카드가 먼저, 구간 카드는 7~12초·스네어 칩, 0.67은 비강조', () => {
+  it('샘플 A: WHOLE 카드가 먼저, 연주 전체·초 머리글 없음, 스네어 칩, 0.67은 비강조', () => {
     const h = render({ status: 'DONE', segments: [SEG, WHOLE] });
-    expect(h.indexOf('연주 전체')).toBeGreaterThan(-1);
-    expect(h.indexOf('연주 전체')).toBeLessThan(h.indexOf('7~12초</strong>'));
-    expect(h).toContain('전체적으로 평균 22ms 늦게 치고 있어요.');
+    expect(h.indexOf('전체적으로 평균 22ms')).toBeGreaterThan(-1);
+    expect(h.indexOf('전체적으로 평균 22ms')).toBeLessThan(h.indexOf('7~12초 구간에서'));
     expect(h).toContain('7~12초 구간에서 노트의 40%를 놓쳤어요.');
+    expect(h).not.toContain('연주 전체');
+    expect(h).not.toContain('7~12초</strong>');
+    expect(h).toContain('ui-chip');
     expect(h).toContain('스네어');
     expect(h).not.toContain('주의');
     expect(h).not.toContain('weak-card severe');
@@ -90,17 +92,14 @@ describe('WeakSegments 목록', () => {
     expect(h).toContain('주의');
     expect(h).toContain('weak-card severe');
   });
-  it('악보 모드는 마디를 병기한다(bpm 100·4박, 7000~12000ms → 3~5마디)', () => {
-    const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 100, beatsPerBar: 4 } });
-    expect(h).toContain('7~12초 · 3~5마디');
+  it('bpm 120·4박, 7000~12000ms → 4~6마디가 머리 줄에 보인다', () => {
+    const h = render({ status: 'DONE', segments: [SEG], bars: { bpm: 120, beatsPerBar: 4 } });
+    expect(h).toContain('4~6마디</strong>');
+    expect(h).not.toContain('7~12초</strong>');
   });
-  it('머리글 초는 description과 같은 규칙: 정수가 아니면 소수 한 자리', () => {
-    const h = render({
-      status: 'DONE',
-      segments: [{ ...SEG, fromMs: 2400, toMs: 7400, description: '2.4~7.4초 구간에서 노트의 40%를 놓쳤어요.' }],
-    });
-    expect(h).toContain('2.4~7.4초</strong>');
-    expect(h).not.toContain('2~7초');
+  it('bars가 null이면 마디 텍스트가 없다', () => {
+    const h = render({ status: 'DONE', segments: [SEG], bars: null });
+    expect(h).not.toContain('마디');
   });
   it('같은 마디면 한 마디만 쓴다', () => {
     const h = render({
@@ -108,7 +107,26 @@ describe('WeakSegments 목록', () => {
       segments: [{ ...SEG, fromMs: 2100, toMs: 3900 }],
       bars: { bpm: 120, beatsPerBar: 4 },
     });
-    expect(h).toContain('2.1~3.9초 · 2마디');
+    expect(h).toContain('2마디</strong>');
+  });
+  it('tip이 있으면 연습 방법 라벨과 문구가 보이고, 없으면 연습 방법이 없다', () => {
+    const withTip = render({ status: 'DONE', segments: [{ ...SEG, tip: '느린 템포로 반복해 보세요.' }] });
+    expect(withTip).toContain('weak-tip');
+    expect(withTip).toContain('연습 방법');
+    expect(withTip).toContain('느린 템포로 반복해 보세요.');
+    const noTip = render({ status: 'DONE', segments: [SEG] });
+    expect(noTip).not.toContain('연습 방법');
+    expect(noTip).not.toContain('weak-tip');
+  });
+  it('머리 줄은 왼쪽 내용이나 칩이 있을 때만 그리고, 칩은 머리 줄 안에 있다', () => {
+    const bare = render({ status: 'DONE', segments: [{ ...WHOLE, pads: [], tip: '조언이에요.' }] });
+    expect(bare).not.toContain('weak-head');
+    expect(bare).toContain('전체적으로 평균 22ms 늦게 치고 있어요.');
+    expect(bare).toContain('조언이에요.');
+    const withPads = render({ status: 'DONE', segments: [WHOLE] });
+    const head = withPads.slice(withPads.indexOf('weak-head'), withPads.indexOf('weak-desc'));
+    expect(head).toContain('chips');
+    expect(head).toContain('하이햇');
   });
   it('모르는 pattern도 description을 표시한다', () => {
     const h = render({
