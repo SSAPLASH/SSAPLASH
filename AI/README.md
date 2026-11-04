@@ -221,6 +221,28 @@ uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config
 
 `separate`·`run`에 `--duration-ms <원곡 길이 ms>`를 주면 분리 출력 두 파일의 끝을 그 길이에 맞춰 자르거나 무음을 채우고(샘플 수 `길이 × 44100 // 1000`), 채보 노트 시각 상한에도 같은 값을 쓴다. BE가 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사하므로 워커가 BE claim의 `input.durationMs`를 여기에 넘긴다. 실측 길이와 1000ms 넘게 다르면 입력 오류다.
 
+### 드럼 악보 → 채보 (S15P31A307-292)
+
+MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. 워커 연결은 BE 악보 입력 작업 형식(S15P31A307-293)이 정해진 뒤 붙인다.
+
+```bash
+uv run ssaplash-chart sheet score.mxl --out data/chart/score
+```
+
+- 드럼 파트는 음높이 없는 음표가 있거나 MIDI 채널 10인 파트다. 음표의 악기 id → `midi-unpitched` GM 번호 → 패드로 바꾸고, 패드 표는 BE `GmDrumMapping`과 같다(`chart/sheet/drum_map.py`). 표에 없는 타악기(탬버린·콩가 등)는 빼고 `sheet.json`의 `dropped`에 개수를 남긴다
+- 첫 파트의 도돌이표·1/2번 괄호·D.C.·D.S.·Fine·Coda를 펼친 순서와 템포 표기로 시각을 정한다. 마디 반복 기호(`measure-repeat`)는 앞 마디를 복사한다
+- `timing.bpm`·`timeSignature`는 첫 템포·첫 박자다(템포가 없으면 120). `offsetMs`는 못갖춘마디 길이다
+- `velocityHint`는 음표 셈여림 × 0.9, 없으면 90, 괄호 친 고스트 노트는 40이다
+- 하이햇 페달(44)은 채보 출력이 8패드라 `HIHAT`으로 합친다. 열린 하이햇(46·26, 또는 `<technical><open/>`)은 `configs/chart/sheet.yaml`의 `emit_hihat_open`이 참일 때만 노트에 `hihatOpen: true`를 붙인다. BE·FE와 필드를 맞추기 전이라 기본값은 거짓이다
+- `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`이 `sheet-musicxml-1`이다
+- 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
+
+정확도는 PDMX 공개 악보와 MuseScore가 같은 악보를 재생해 내보낸 MIDI를 비교해 측정한다. 악보·MIDI는 저장소에 넣지 않는다.
+
+```bash
+uv run python scripts/sheet_pdmx_eval.py --list <곡 목록.csv> --pdmx <PDMX 압축 푼 폴더> --out data/results/sheet_pdmx
+```
+
 ## 채보 워커 실행 (S15P31A307-171)
 
 BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
