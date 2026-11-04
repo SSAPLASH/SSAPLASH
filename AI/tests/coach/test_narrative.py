@@ -1,11 +1,16 @@
-"""LLM 총평의 사실→프롬프트. 모델 없이 가짜 생성기로 본다."""
+"""LLM 총평의 사실→프롬프트→가드레일→폴백. 모델 없이 가짜 생성기로 본다."""
 
 from __future__ import annotations
 
+import pytest
+
+from ssaplash_ai.coach.config import MAX_NARRATIVE_CHARS
 from ssaplash_ai.coach.narrative import (
     SYSTEM_PROMPT,
     NarrativeFacts,
     build_user_prompt,
+    check,
+    write_narrative,
 )
 
 GOOD_TEXT = (
@@ -47,6 +52,89 @@ def _history(miss: int, perfect: int = 20, good: int = 10, plays: int = 3) -> di
     }
 
 
+# ---------- 가드레일 ----------
+
+
+def test_사실에_맞는_코치_문장은_통과한다():
+    assert check(GOOD_TEXT, _facts()) == []
+
+
+def test_사실에_없는_숫자는_걸린다():
+    problems = check(GOOD_TEXT.replace("4개를", "7개를").replace("10개 중", "35개 중"), _facts())
+
+    assert any("사실에 없는 숫자" in p for p in problems)
+
+
+def test_백분율과_구간_길이_같은_파생_숫자는_허용한다():
+    text = "놓침이 25%예요. 5초 동안 몰려 있었어요. 느린 템포로 천천히 반복해 보세요."
+
+    assert check(text, _facts()) == []
+
+
+@pytest.mark.parametrize("word", ["점수", "정확도", "못해요", "형편없", "최악"])
+def test_점수와_비난_표현은_걸린다(word):
+    assert any(word in p for p in check(f"{word}이 눈에 띄어요. 연습해 보세요.", _facts()))
+
+
+def test_마크다운과_목록과_줄바꿈은_걸린다():
+    assert check("**잘 쳤어요.**", _facts())
+    assert check("- 스네어를 연습해 보세요.", _facts())
+    assert check("잘 쳤어요.\n더 연습해 보세요.", _facts())
+
+
+@pytest.mark.parametrize(
+    "text", ["good job 잘 쳤어요.", "잘 쳤어요 很好.", "잘 쳤어요 😀 연습해 보세요."]
+)
+def test_다른_나라_글자와_이모지는_걸린다(text):
+    assert any("한글이 아닌 글자" in p for p in check(text, _facts()))
+
+
+def test_길이를_넘으면_걸린다():
+    assert any("넘음" in p for p in check("잘 쳤어요. " * 80, _facts()))
+    assert len("잘 쳤어요. " * 80) > MAX_NARRATIVE_CHARS
+
+
+def test_사실에_없는_패드_이름은_걸린다():
+    problems = check("라이드는 특히 안정적으로 쳤어요. 연습해 보세요.", _facts())
+
+    assert any("사실에 없는 패드" in p for p in problems)
+
+
+def test_완성_문장이_아니면_걸린다():
+    assert check("전체적으로 잘 잡혀 있고", _facts())
+    assert check("", _facts())
+
+
+# ---------- 이전 플레이 비교 ----------
+
+
+def test_기록이_없는데_지난번과_비교하면_걸린다():
+    problems = check("지난번보다 좋아졌어요. 계속 연습해 보세요.", _facts())
+
+    assert any("기록이 없는데" in p for p in problems)
+
+
+def test_놓침이_줄었으면_줄었다고_쓸_수_있다():
+    facts = _facts(history=_history(miss=18))  # 직전 18/48 = 38%, 이번 10/40 = 25%
+
+    assert check("지난번보다 놓침이 줄었어요. 7~12초 구간을 반복해 보세요.", facts) == []
+    assert any("나빠졌다고" in p for p in check("지난번보다 나빠졌어요. 연습해 보세요.", facts))
+
+
+def test_놓침이_늘었는데_나아졌다고_하면_걸린다():
+    facts = _facts(history=_history(miss=2))  # 직전 2/32 = 6%, 이번 25%
+
+    assert any("나아졌다고" in p for p in check("지난번보다 좋아졌어요. 연습해 보세요.", facts))
+    assert check("지난번보다 놓침이 늘었어요. 7~12초 구간을 반복해 보세요.", facts) == []
+
+
+def test_놓침_비율_변화는_퍼센트포인트로_쓸_수_있다():
+    # 25% → 직전 38%: 13%p 변화. 이전 플레이 번호와 개수는 사실에 있다
+    facts = _facts(history=_history(miss=18))
+
+    assert check("지난번보다 놓침이 13% 줄었어요. 7~12초 구간을 반복해 보세요.", facts) == []
+
+
 # ---------- 프롬프트 ----------
 
 
@@ -81,3 +169,61 @@ def test_이력이_없으면_비교하지_말라고_알린다():
 def test_시스템_프롬프트는_규칙을_담는다():
     for needle in ("사실에 없는", "점수와 정확도", "400자", "총평 문장만"):
         assert needle in SYSTEM_PROMPT
+
+
+# ---------- 생성과 폴백 ----------
+
+
+def test_첫_시도가_통과하면_한_번만_부른다():
+    calls = []
+
+    def generator(system, user):
+        calls.append(user)
+        return GOOD_TEXT
+
+    outcome = write_narrative(_facts(), generator)
+
+    assert (outcome.text, outcome.attempts, outcome.violations) == (GOOD_TEXT, 1, [])
+    assert len(calls) == 1
+
+
+def test_첫_시도가_걸리면_문제를_알려_주고_다시_부른다():
+    prompts = []
+    replies = iter(["점수가 낮아요. 연습해 보세요.", GOOD_TEXT])
+
+    def generator(system, user):
+        prompts.append(user)
+        return next(replies)
+
+    outcome = write_narrative(_facts(), generator)
+
+    assert outcome.text == GOOD_TEXT and outcome.attempts == 2
+    assert "이전 시도의 문제" in prompts[1] and "점수" in prompts[1]
+    assert "이전 시도의 문제" not in prompts[0]
+
+
+def test_두_번_모두_걸리면_문장_없이_이유를_돌려준다():
+    outcome = write_narrative(_facts(), lambda s, u: "good job")
+
+    assert outcome.text is None and outcome.attempts == 2
+    assert outcome.violations
+
+
+def test_생성기가_예외를_던지면_재시도하지_않고_실패로_돌려준다():
+    calls = []
+
+    def generator(system, user):
+        calls.append(1)
+        raise RuntimeError("모델 적재 실패")
+
+    outcome = write_narrative(_facts(), generator)
+
+    assert outcome.text is None and outcome.attempts == 1 and len(calls) == 1
+    assert outcome.violations == ["생성기 오류 RuntimeError"]
+
+
+def test_같은_사실과_같은_생성기는_같은_결과다():
+    first = write_narrative(_facts(), lambda s, u: GOOD_TEXT)
+    second = write_narrative(_facts(), lambda s, u: GOOD_TEXT)
+
+    assert first == second

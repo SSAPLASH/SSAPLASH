@@ -1,4 +1,4 @@
-"""LLM 총평 문장(`summary.source=LLM`)의 사실 → 프롬프트 (설계 v0.6).
+"""LLM 총평 문장(`summary.source=LLM`)의 사실 → 프롬프트 → 가드레일 → 폴백 (설계 v0.6).
 
 로컬 오픈소스 모델이 쓴 문장을 그대로 믿지 않는다. 사실(`NarrativeFacts`)에 없는 숫자·패드·비교를 만들거나,
 점수·비난 표현, 다른 나라 글자가 섞이면 버리고 호출한 쪽이 규칙 총평을 그대로 쓰게 한다.
@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +34,29 @@ PATTERN_KO = {
     "MISS_CLUSTER": "특정 구간에서 놓침이 몰림",
     "UNSTEADY": "박자가 들쭉날쭉함",
 }
+
+# 점수·정확도는 BE가 따로 계산해 보여 주고, 비난·단정은 쓰지 않는다
+FORBIDDEN_WORDS = (
+    "점수",
+    "정확도",
+    "랭킹",
+    "못해요",
+    "못 쳐",
+    "못 치",
+    "틀렸",
+    "최악",
+    "형편없",
+    "쓰레기",
+    "재능",
+    "실력이 없",
+)
+_PREVIOUS_WORDS = ("지난번", "저번", "이전", "지난 연주", "지난 플레이")
+_BETTER_WORDS = ("나아졌", "좋아졌", "줄었", "개선", "향상", "발전")
+_WORSE_WORDS = ("나빠졌", "늘었", "악화", "떨어졌")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# 한글·숫자·기본 문장부호·공백·% 외의 글자(한자, 가나, 영어 단어, 이모지)가 섞였는지 본다
+_FOREIGN = re.compile(r"[A-Za-z぀-ヿ㐀-鿿\U0001F000-\U0001FFFF☀-➿]")
+_MARKUP = re.compile(r"[*#`>|\[\]{}_]|^\s*[-•·]\s", re.MULTILINE)
 
 
 class Counts(BaseModel):
@@ -160,3 +185,139 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
     if hint:
         lines.append(f"\n이전 시도의 문제: {hint}\n이 문제를 고쳐서 다시 쓰세요.")
     return "\n".join(lines)
+
+
+# ---------- 가드레일 ----------
+
+
+def _variants(value: float) -> set[str]:
+    """숫자 하나가 문장에 나올 수 있는 모양들: 정수, 소수 한·두 자리, 비율이면 백분율."""
+    out = {str(round(value)), _trim(f"{value:.1f}"), _trim(f"{value:.2f}")}
+    if 0 <= abs(value) <= 1:
+        out.add(str(round(abs(value) * 100)))
+    out.add(str(round(abs(value))))
+    return out
+
+
+def _trim(text: str) -> str:
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _allowed_numbers(facts: NarrativeFacts) -> set[str]:
+    allowed: set[str] = set()
+
+    def add(value: float) -> None:
+        allowed.update(_variants(float(value)))
+
+    c = facts.counts
+    for v in (c.perfect, c.good, c.miss, c.total):
+        add(v)
+    add(_pct(c.miss_rate))
+    add(_pct(c.perfect_share))
+    for s in facts.segments:
+        add(s.fromMs / 1000)
+        add(s.toMs / 1000)
+        add((s.toMs - s.fromMs) / 1000)
+        numeric = {k: v for k, v in s.metrics.items() if isinstance(v, (int, float))}
+        for v in numeric.values():
+            add(v)
+        # 패드가 다른 패드보다 얼마나 늦은지: 두 평균의 차이
+        mean, overall = numeric.get("meanDeltaMs"), numeric.get("overallMeanDeltaMs")
+        if mean is not None and overall is not None:
+            add(abs(mean - overall))
+    if facts.history:
+        p = facts.history.previous.counts
+        for v in (p.perfect, p.good, p.miss, p.total, facts.history.sameSongPlays):
+            add(v)
+        add(_pct(p.miss_rate))
+        add(abs(_pct(c.miss_rate) - _pct(p.miss_rate)))  # 놓침 비율 변화(퍼센트포인트)
+        add(abs(c.miss - p.miss))
+    return allowed
+
+
+def _trend(facts: NarrativeFacts) -> Literal["BETTER", "WORSE", "SAME", "NONE"]:
+    if facts.history is None:
+        return "NONE"
+    diff = facts.counts.miss_rate - facts.history.previous.counts.miss_rate
+    if diff <= -0.02:
+        return "BETTER"
+    if diff >= 0.02:
+        return "WORSE"
+    return "SAME"
+
+
+def check(text: str, facts: NarrativeFacts) -> list[str]:
+    """문장이 규칙을 어긴 곳의 목록. 비어 있으면 통과."""
+    problems: list[str] = []
+    body = text.strip()
+    if not body:
+        return ["빈 문장"]
+    if len(body) > MAX_NARRATIVE_CHARS:
+        problems.append(f"{MAX_NARRATIVE_CHARS}자를 넘음({len(body)}자)")
+    if "\n" in body:
+        problems.append("한 문단이 아님(줄바꿈)")
+    if _MARKUP.search(body):
+        problems.append("마크다운·목록 표시가 있음")
+    if _FOREIGN.search(body):
+        problems.append("한글이 아닌 글자(영어·한자·가나·이모지)가 섞임")
+    if not re.search(r"[가-힣]", body) or not body.endswith(("요.", "요", "다.", "다")):
+        problems.append("한국어 완성 문장이 아님")
+    for word in FORBIDDEN_WORDS:
+        if word in body:
+            problems.append(f"금지 표현 '{word}'")
+
+    allowed = _allowed_numbers(facts)
+    strange = sorted({n for n in _NUMBER.findall(body) if n not in allowed})
+    if strange:
+        problems.append("사실에 없는 숫자 " + ", ".join(strange))
+
+    known = {_pad_ko(p) for s in facts.segments for p in s.pads}
+    if facts.strengthPad:
+        known.add(_pad_ko(facts.strengthPad))
+    for label in PAD_LABELS_KO.values():
+        if label in body and label not in known:
+            problems.append(f"사실에 없는 패드 '{label}'")
+
+    trend = _trend(facts)
+    if trend == "NONE" and any(w in body for w in _PREVIOUS_WORDS + _BETTER_WORDS + _WORSE_WORDS):
+        problems.append("지난 연주 기록이 없는데 비교함")
+    if trend == "WORSE" and any(w in body for w in _BETTER_WORDS):
+        problems.append("지난번보다 놓침이 늘었는데 나아졌다고 씀")
+    if trend == "BETTER" and any(w in body for w in _WORSE_WORDS):
+        problems.append("지난번보다 놓침이 줄었는데 나빠졌다고 씀")
+    return problems
+
+
+# ---------- 생성 ----------
+
+
+@dataclass(frozen=True)
+class NarrativeOutcome:
+    """`text`가 None이면 가드레일을 통과한 문장이 없다 → 호출한 쪽이 규칙 총평을 그대로 쓴다."""
+
+    text: str | None
+    attempts: int
+    violations: list[str] = field(default_factory=list)
+
+
+def write_narrative(
+    facts: NarrativeFacts, generator: TextGenerator, max_attempts: int = 2
+) -> NarrativeOutcome:
+    """생성기를 최대 `max_attempts`번 불러 가드레일을 통과한 첫 문장을 돌려준다.
+
+    두 번째 시도에는 첫 시도의 문제를 알려 준다. 생성기가 예외를 던지면 재시도하지 않고 실패로 돌려준다
+    (모델 적재 실패 같은 환경 문제는 다시 해도 같다).
+    """
+    hint: str | None = None
+    problems: list[str] = []
+    attempts = 0
+    for attempts in range(1, max_attempts + 1):
+        try:
+            text = generator(SYSTEM_PROMPT, build_user_prompt(facts, hint)).strip()
+        except Exception as exc:  # noqa: BLE001 - 어떤 생성기 오류도 규칙 총평으로 되돌린다
+            return NarrativeOutcome(None, attempts, [f"생성기 오류 {type(exc).__name__}"])
+        problems = check(text, facts)
+        if not problems:
+            return NarrativeOutcome(text, attempts)
+        hint = "; ".join(problems)
+    return NarrativeOutcome(None, attempts, problems)
