@@ -162,7 +162,7 @@ function ReportView({ playId, onRetry }: { playId: string; onRetry: () => void }
           status={r.analysisStatus}
           segments={r.weakSegments}
           counts={r.counts}
-          bars={log?.mode === 'SHEET' && log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : null}
+          bars={log?.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : null}
           polling={polling}
           onRefresh={() => {
             setPolling('polling');
