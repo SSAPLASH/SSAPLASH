@@ -174,6 +174,7 @@ class WorkerApi:
         self.settings = settings
         self.session = session or requests.Session()
         self._sleep = sleep
+        self._base_url = settings.api_url  # 하위 클래스가 다른 경로 접두어로 바꿈
         self._headers = {
             "Authorization": f"Bearer {settings.token}",
             "Content-Type": "application/json",
@@ -241,7 +242,7 @@ class WorkerApi:
         return self._post_bytes(path, encode(body), retry=retry)
 
     def _post_bytes(self, path: str, body: bytes, retry: bool = True) -> dict | None:
-        url = self.settings.api_url + path
+        url = self._base_url + path
         delays: tuple[float, ...] = (0.0, *RETRY_DELAYS_SEC) if retry else (0.0,)
         last: ApiError | None = None
         for delay in delays:
