@@ -278,12 +278,12 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 연주 녹음·녹음 보관함 (REC-001, `src/components/recording`)
 
-- **기능 스위치 `VITE_RECORDING`:** 기본 꺼짐. `true`로 빌드할 때만 Dock 녹음 버튼·저장 창·토스트·연주 기록의 [녹음] 탭이 생긴다(`app/features.RECORDING_ENABLED`). 꺼져 있으면 Dock·AppShell·연주 기록 마크업은 이전과 같다. BE 보관함 API(257)가 운영에 배포되고 UI 확인이 끝나면 켜짐으로 바꾼다(설계 U6).
+- **기능 스위치 `VITE_RECORDING`:** 기본 켜짐. `false`로 빌드하면 Dock 녹음 버튼·저장 창·토스트·연주 기록의 [녹음] 탭을 숨긴다(`app/features.RECORDING_ENABLED`). 꺼져 있으면 Dock·AppShell·연주 기록 마크업은 녹음 기능 이전과 같다. UI 완료·로컬 BE 검증 뒤 11/4에 켜짐으로 전환했다(설계 U6).
 - **녹음이란:** 타격 시퀀스(`tMs`·`pad`·`velocity`·`stickId`)만 저장한다. 소리·화면 녹화가 아니고 재생은 FE가 드럼 소리로 다시 연주한다. 타입·본문 조립·기본 제목(`{곡 제목} · {M월 D일 HH:mm}`, 자유 연습은 `자유 연습 · …`, 100자 자르기)은 `domain/recording`, 화면 문구(모드명·요약·경과·타격 수)는 `domain/recordingView`.
 - **Dock 녹음 버튼(`recording/RecordButton`, Figma Navigation / DockRecord 523:31016):** `/free`·`/play`·`/sheet`에서만 [BPM +] 오른쪽에 보인다(`recordButtonRoute.recordButtonVisible`). 자유 연습은 누를 때마다 시작·정지(`녹음 중 · mm:ss` 경과 표시), 리듬 게임·악보 연습은 연주 전에 켜 두는 스위치(`녹음 켬`)로 연주 단계(카운트인 포함)에는 잠긴다(`locked-on` "녹음 중" / `locked-off` 흐림). 저장 창이 열린 동안도 잠긴다. 점은 모든 상태에서 같은 빨간 원이고 상태는 글자·테두리·흐림으로만 구분한다. 접힘 Dock은 녹음 중일 때만 BPM 점 옆에 작은 빨간 점. 상태 기계(idle → armed/recording → pendingSave → saving → idle/failed)는 `app/recordingStore`.
 - **저장 흐름:** 자유 연습은 정지 때, 게임·악보는 곡이 끝난 뒤 플레이 로그 타격(`PlayRecorder.hits`의 `tSongMs`)에서 본문을 만들어 결과 화면 위에 저장 창(`recording/SaveRecordingDialog`, AppShell에 한 번 마운트, 폭 560, Esc·배경 클릭으로 닫히지 않음)이 뜬다. 제목 입력칸은 기본 제목이 전체 선택된 채 열리고, 비우면 기본 제목. [저장] → `POST /api/v1/recordings`(`app/recordingSync`: 503은 같은 본문·같은 `clientKey`로 1·2·4초 최대 3회 자동 재시도, 네트워크·5xx·401은 [다시 시도], 409·400·404·413은 [닫기]만, 코드 없는 Nginx 413은 "너무 길어 저장하지 못했어요"). 게임·악보는 플레이 로그 업로드가 `DONE`일 때만 `playId`를 싣는다. 타격 0개면 저장 창 대신 토스트. 자유 연습은 50,000타·2시간에 닿으면 자동 정지. 저장 완료 토스트(`recording/RecordingToast`, 하단 중앙 4초)의 [보관함]은 `/history?tab=recordings`로 간다. 미전송 녹음은 메모리에만 있어 새로고침하면 사라진다(설계 U4).
 - **녹음 보관함(연주 기록 [녹음] 탭, `recording/RecordingList`, Figma 524:32144):** `GET /api/v1/recordings`를 모드 토글(전체·자유·게임·악보)·제목 검색(300ms 디바운스)·정렬(최신·오래된)로 20건씩 받고 [더 보기]로 이어 붙인다(`useRecordingList`). 행(Figma Recording / RecordingRow 523:31333)은 [재생]·제목(곡 녹음은 아래에 곡 제목 + 난이도 배지)·모드·녹음 시각·길이·타격·⋯. [재생]은 그때 상세(`GET /recordings/{id}`)를 받아 `engine/recordingPlayer`가 100ms 창 look-ahead로 드럼 소리를 예약해 재연주하고 진행 바를 그린다(`useRecordingPlayback`, 한 번에 한 행, 정지는 0.1초 안). ⋯ 메뉴(`ui/MoreMenu`)는 [제목 변경](`RecordingTitleDialog`, 1~100자, `PATCH`)·[삭제](`RecordingDeleteDialog`, 확인 창, `DELETE`). 404 `RECORDING_NOT_FOUND`면 "이미 지워진 녹음이에요" 토스트 뒤 목록을 다시 받는다. 보관함은 계정당 200개(저장 413 `RECORDING_QUOTA_EXCEEDED`).
-- **로컬 확인:** `.env.local`에 `VITE_RECORDING=true`를 넣고 BE(256·257 포함)를 띄운 뒤, 자유 연습에서 녹음 → 저장(201) → 연주 기록 [녹음] 탭에서 목록·재생·제목 변경·삭제를 확인한다.
+- **로컬 확인:** BE(256·257 포함)를 띄운 뒤, 자유 연습에서 녹음 → 저장(201) → 연주 기록 [녹음] 탭에서 목록·재생·제목 변경·삭제를 확인한다.
 
 ## 플레이 기록 업로드·상세 분석
 

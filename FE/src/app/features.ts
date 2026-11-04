@@ -7,7 +7,7 @@
 export const SONG_EDIT_ENABLED = import.meta.env.VITE_SONG_EDIT !== 'false';
 
 /**
- * 연주 녹음(녹음 버튼·저장 창·녹음 보관함) 사용 여부. 기본은 꺼짐이고 VITE_RECORDING=true로 빌드할 때만 켠다.
- * BE 보관함 API(257)가 운영에 배포되고 UI가 끝난 뒤 켜짐으로 바꾼다(설계 REC-001 U6).
+ * 연주 녹음(녹음 버튼·저장 창·녹음 보관함) 사용 여부. 기본은 켜짐이고 VITE_RECORDING=false로 빌드할 때만 숨긴다.
+ * UI 완료·로컬 BE 검증 뒤 2026-11-04 켜짐으로 전환(설계 REC-001 U6).
  */
-export const RECORDING_ENABLED = import.meta.env.VITE_RECORDING === 'true';
+export const RECORDING_ENABLED = import.meta.env.VITE_RECORDING !== 'false';
