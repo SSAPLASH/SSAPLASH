@@ -55,3 +55,15 @@
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
+/* compact: 라벨은 화면 읽기 프로그램용으로만 남긴다 */
+.ui-input-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

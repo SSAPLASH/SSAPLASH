@@ -1,0 +1,119 @@
+/* 녹음 UI 스타일: Dock 녹음 버튼·저장 창·토스트 (설계 REC-001 6-3). 접두사 rec-.
+   지금은 Dock 녹음 버튼 블록만 있고, 저장 창·토스트 블록은 작업 6d가 덧붙인다. */
+
+/* Navigation / DockRecord 523:31016 — 점은 모든 변형이 같은 채운 원, 변형은 글자색·테두리·흐림만 바꾼다 */
+.rec-btn {
+  min-height: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.rec-btn:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.rec-btn:disabled {
+  cursor: default;
+}
+.rec-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--miss);
+}
+.rec-btn.recording {
+  color: var(--text-1);
+}
+.rec-btn.armed {
+  color: var(--text-1);
+  border-color: var(--miss);
+}
+.rec-btn.armed:hover:not(:disabled) {
+  border-color: var(--miss);
+}
+.rec-btn.locked-on {
+  color: var(--text-2);
+}
+.rec-btn.locked-off {
+  color: var(--text-3);
+  opacity: 0.5;
+}
+
+/* Recording / SaveRecordingDialog 523:31268 */
+.dialog.rec-save-dialog {
+  max-width: 560px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-color: var(--line-strong);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.rec-save-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.rec-save-bottom {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.rec-save-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.rec-save-limit {
+  color: var(--text-2);
+}
+.rec-save-help {
+  color: var(--text-3);
+}
+.rec-save-summary {
+  color: var(--text-1);
+}
+.rec-save-error {
+  color: var(--miss);
+}
+.rec-save-footer {
+  flex: none;
+  width: 172px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 녹음 알림 토스트: 하단 중앙 고정, 저장 창(.dialog-backdrop z-index 50)보다 위 */
+.rec-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-l);
+  z-index: 70;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.rec-toast-region a {
+  pointer-events: auto;
+  margin-left: 8px;
+  color: inherit;
+  text-decoration: underline;
+}
+/* 저장 창 입력칸은 도움말·카운터가 없으므로 빈 foot 줄을 없애 Figma 간격(24)을 맞춘다 */
+.dialog.rec-save-dialog .ui-input-foot {
+  display: none;
+}
