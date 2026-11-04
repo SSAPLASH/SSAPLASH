@@ -10,10 +10,11 @@ function sector(from: number, to: number): string {
   return `M80,80 L${pt(from)} A70,70 0 0 1 ${pt(to)} Z`;
 }
 const GLINTS = Array.from({ length: 8 }, (_, i) => ({
-  d: sector(i * 45 - 15, i * 45 + 15),
+  d: sector(i * 45 - 12, i * 45 + 12),
   // 짝수 = 골드, 홀수 = 시안
   fill: i % 2 === 0 ? '#FFC24A' : '#22E4FF',
-  opacity: i % 2 === 0 ? 0.35 : 0.15,
+  // Figma의 은은한 angular 광택에 맞춰 옅게(진하면 바람개비처럼 보인다)
+  opacity: i % 2 === 0 ? 0.14 : 0.07,
 }));
 
 export function NeonPad({ shape, state, tag, label, labelVisible, hitKey }: FlatSkinProps) {
