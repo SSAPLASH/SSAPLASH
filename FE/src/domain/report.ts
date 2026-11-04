@@ -17,6 +17,12 @@ export interface PadStat {
 
 export type WeakScope = 'WHOLE' | 'SEGMENT';
 
+/** AI 약점 심각도 단계 (COACH-003). 없으면 severity로 폴백한다 */
+export type SeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+/** severityLevel이 없을 때 이 값 이상이면 HIGH로 본다 */
+export const SEVERE_THRESHOLD = 0.7;
+
 /** AI 약점 구간 한 건 (COACH-003). description을 그대로 표시하고 pattern으로 분기하지 않는다 */
 export interface WeakSegment {
   /** 노트 시각 기준 ms, 시작 포함·끝 미포함 */
@@ -28,6 +34,10 @@ export interface WeakSegment {
   pads: PadId[];
   /** AI 연습 조언(선택). 문구를 고치지 않고 그대로 표시한다 */
   tip?: string;
+  /** AI 상세 설명(선택). 문구를 고치지 않고 그대로 표시한다 */
+  detail?: string;
+  /** AI 심각도 단계(선택). 없으면 segmentLevel이 severity로 폴백한다 */
+  severityLevel?: SeverityLevel;
   /** 0~1 */
   severity: number;
   scope: WeakScope;
@@ -46,6 +56,48 @@ export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerB
   const fromBar = Math.max(0, Math.floor((fromMs + 1) / barMs));
   const toBar = Math.max(fromBar, Math.floor((toMs - 1) / barMs));
   return [fromBar, toBar];
+}
+
+/** 약점의 심각도 단계. severityLevel이 있으면 그대로, 없으면 severity ≥ 0.7이 HIGH, 아니면 LOW */
+export function segmentLevel(seg: WeakSegment): SeverityLevel {
+  if (seg.severityLevel) return seg.severityLevel;
+  return seg.severity >= SEVERE_THRESHOLD ? 'HIGH' : 'LOW';
+}
+
+/** 심각도 뱃지. LOW는 뱃지 없음 */
+export function levelBadge(level: SeverityLevel): { text: string; tone: 'miss' | 'warn' } | null {
+  if (level === 'HIGH') return { text: '주의', tone: 'miss' };
+  if (level === 'MEDIUM') return { text: '보통', tone: 'warn' };
+  return null;
+}
+
+/** 총평 레벨 뱃지. 모르는 값은 null(본문만 표시) */
+export function summaryBadge(level: string): { text: string; tone: 'perfect' | 'good' | 'miss' } | null {
+  switch (level) {
+    case 'GOOD':
+      return { text: '좋아요', tone: 'perfect' };
+    case 'FAIR':
+      return { text: '괜찮아요', tone: 'good' };
+    case 'NEEDS_WORK':
+      return { text: '연습이 필요해요', tone: 'miss' };
+    default:
+      return null;
+  }
+}
+
+/** ms → 「m:ss」(초 내림). 음수·NaN은 「0:00」 */
+export function formatClock(ms: number): string {
+  const total = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** 약점 카드 패널의 구간 문구. 마디는 0부터라 +1해서 보인다 */
+export function segmentRangeText(seg: WeakSegment, bars: [number, number] | null, durationMs: number | null): string {
+  if (seg.scope === 'WHOLE') return `곡 전체 · 0:00 – ${formatClock(durationMs ?? seg.toMs)}`;
+  const clock = `${formatClock(seg.fromMs)} – ${formatClock(seg.toMs)}`;
+  if (!bars) return clock;
+  const [from, to] = bars;
+  return `${from === to ? `${from + 1}마디` : `${from + 1}~${to + 1}마디`} · ${clock}`;
 }
 
 /** 판정 수 합이 분석 최소 노트 수 미만인지 */
@@ -83,6 +135,14 @@ export function isUploadTarget(legacy: boolean, state: { status: string; retryab
   return !(state?.status === 'FAILED' && !state.retryable);
 }
 
+/** AI 총평 (COACH-003). level·source는 문자열 그대로 보관하고 검증은 화면에서 한다 */
+export interface CoachSummary {
+  level: string;
+  text: string;
+  focusPattern: string | null;
+  source: string | null;
+}
+
 export interface Report {
   playId: string;
   score: number;
@@ -98,6 +158,8 @@ export interface Report {
   analysisStatus: AnalysisStatus;
   /** AI 약점 구간. null = 미분석·실패, [] = 분석했으나 약점 없음 */
   weakSegments: WeakSegment[] | null;
+  /** AI 총평. null = 없음(미분석·구버전 응답) */
+  coachSummary: CoachSummary | null;
   recommendedDrills: unknown;
   generatedAt: string;
 }
