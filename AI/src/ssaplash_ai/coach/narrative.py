@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ssaplash_ai.coach.config import MAX_NARRATIVE_CHARS, PAD_LABELS_KO
+from ssaplash_ai.coach.schema import AnalysisResponse
 
 # 시스템 프롬프트와 사용자 프롬프트를 받아 문장을 돌려주는 함수. 실제 모델은 이 모양으로 끼운다.
 TextGenerator = Callable[[str, str], str]
@@ -321,3 +322,35 @@ def write_narrative(
             return NarrativeOutcome(text, attempts)
         hint = "; ".join(problems)
     return NarrativeOutcome(None, attempts, problems)
+
+
+def facts_from_analysis(
+    response: AnalysisResponse, counts: Counts, history: History | None = None
+) -> NarrativeFacts | None:
+    """약점 분석 응답(규칙 총평 포함)과 판정 개수로 사실을 만든다. 총평이 없으면(표본 부족) None.
+
+    운영에서는 BE가 저장된 값으로 같은 모양을 만든다. 이 함수는 평가 스크립트와 통합 시험이 쓴다.
+    """
+    summary = response.summary
+    if summary is None:
+        return None
+    segments = [
+        FactSegment(
+            pattern=s.pattern,
+            severityLevel=s.severityLevel or "LOW",
+            pads=s.pads,
+            fromMs=s.fromMs,
+            toMs=s.toMs,
+            scope="SEGMENT" if s.metrics.get("scope") == "SEGMENT" else "WHOLE",
+            metrics={k: v for k, v in s.metrics.items() if k != "scope"},
+        )
+        for s in response.weakSegments
+    ]
+    return NarrativeFacts(
+        level=summary.level,
+        focusPattern=summary.focusPattern,
+        counts=counts,
+        strengthPad=summary.strengthPad,
+        segments=segments,
+        history=history,
+    )

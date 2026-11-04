@@ -227,3 +227,45 @@ def test_같은_사실과_같은_생성기는_같은_결과다():
     second = write_narrative(_facts(), lambda s, u: GOOD_TEXT)
 
     assert first == second
+
+
+# ---------- 분석 응답 → 사실 ----------
+
+
+def test_분석_응답에서_사실을_만들고_가드레일을_통과하는_문장이_나온다():
+    import json
+    from pathlib import Path
+
+    from ssaplash_ai.coach import AnalysisRequest, analyze
+    from ssaplash_ai.coach.narrative import Counts, facts_from_analysis
+
+    samples = json.loads(
+        (Path(__file__).parent.parent / "fixtures" / "coach" / "samples.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    response = analyze(AnalysisRequest.model_validate(samples["A"]["request"]))
+
+    facts = facts_from_analysis(response, Counts(perfect=14, good=8, miss=4))
+
+    assert facts is not None and facts.focusPattern == "MISS_CLUSTER"
+    assert [s.scope for s in facts.segments] == ["WHOLE", "SEGMENT"]
+    assert all("scope" not in s.metrics for s in facts.segments)
+    assert (
+        check(
+            "7~12초 구간에서 노트 10개 중 4개를 놓쳤어요. 그 부분만 느린 템포로 반복해 보세요.",
+            facts,
+        )
+        == []
+    )
+
+
+def test_표본이_부족해_총평이_없으면_사실도_없다():
+    from ssaplash_ai.coach.narrative import Counts, facts_from_analysis
+    from ssaplash_ai.coach.schema import AnalysisResponse
+
+    response = AnalysisResponse(
+        analyzerVersion="x", reason="INSUFFICIENT_HITS", weakSegments=[], summary=None
+    )
+
+    assert facts_from_analysis(response, Counts(perfect=1, good=0, miss=0)) is None
