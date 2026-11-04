@@ -91,3 +91,37 @@ export function usePadHitSeq(): Partial<Record<PadId, number>> {
 
   return seq;
 }
+
+/** 타격 한 번의 이펙트용 정보. seq는 liveStore hitSeq라 타격마다 유일하다 */
+export interface HitPulse {
+  pad: PadId;
+  seq: number;
+  velocity: number;
+}
+
+/**
+ * 가장 최근 타격(없으면 null). liveStore hitSeq가 바뀔 때마다 새 객체를 낸다(HitEffects가 이펙트를 만든다).
+ * 하이햇 페달은 하이햇 패드로 옮기고, 패드가 없는 타격은 무시한다.
+ */
+export function usePadHitPulse(): HitPulse | null {
+  const [pulse, setPulse] = useState<HitPulse | null>(null);
+
+  useEffect(() => {
+    let lastSeq = useLive.getState().hitSeq;
+    const unsub = useLive.subscribe((s) => {
+      if (s.hitSeq === lastSeq) return;
+      lastSeq = s.hitSeq;
+      const hit = s.lastHit;
+      if (!hit || !hit.pad) return;
+      const pad = visualPadOf(hit.pad);
+      if (!pad) return;
+      setPulse({ pad, seq: s.hitSeq, velocity: hit.velocity });
+    });
+    return () => {
+      unsub();
+      setPulse(null);
+    };
+  }, []);
+
+  return pulse;
+}

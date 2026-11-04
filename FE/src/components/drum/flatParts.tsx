@@ -65,7 +65,7 @@ export function FlatTexts({
   return (
     <>
       {judge && (
-        <text className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
+        <text key={state} className={`drum-pad-judge ${state}`} x="80" y={JUDGE_Y[shape]} dominantBaseline="central">
           {judge}
         </text>
       )}
