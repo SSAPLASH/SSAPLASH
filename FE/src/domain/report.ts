@@ -26,6 +26,8 @@ export interface WeakSegment {
   description: string;
   causeTags: string[];
   pads: PadId[];
+  /** AI 연습 조언(선택). 문구를 고치지 않고 그대로 표시한다 */
+  tip?: string;
   /** 0~1 */
   severity: number;
   scope: WeakScope;
