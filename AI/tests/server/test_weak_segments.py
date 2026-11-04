@@ -226,6 +226,7 @@ def test_약점이_없으면_총평의_focusPattern_키가_빠진다():
 
     assert body["reason"] == "NO_WEAKNESS"
     assert "focusPattern" not in body["summary"]
+    assert body["summary"]["strengthPad"] == "HIHAT"
 
 
 def test_문구가_없는_pattern은_응답에서_tip_키가_빠진다(monkeypatch):

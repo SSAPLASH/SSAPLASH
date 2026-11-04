@@ -112,6 +112,8 @@ class Summary(BaseModel):
     text: str
     # 가장 심한 약점의 pattern. 약점이 없으면 None (연습·곡 추천이 생기면 이 값으로 잇는다)
     focusPattern: str | None = None
+    # 잘한 점으로 꼽은 패드(정식 이름). 없으면 None. LLM 총평 작업의 사실로 쓰인다
+    strengthPad: str | None = None
     # RULE = 규칙 템플릿. 나중에 LLM 문장이 오면 LLM
     source: Literal["RULE", "LLM"] = "RULE"
 

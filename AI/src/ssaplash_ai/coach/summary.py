@@ -127,5 +127,6 @@ def build_summary(notes: NoteTable, segments: Sequence[WeakSegment]) -> Summary:
         level=level,  # type: ignore[arg-type]
         text=" ".join(parts),
         focusPattern=focus.pattern if focus else None,
+        strengthPad=strength,
         source="RULE",
     )
