@@ -95,6 +95,41 @@ class AnalysisIntegrationTest {
             assertThat(result.success()).isTrue(); assertThat(result.segments()).isEqualTo("[]");
         } finally { server.stop(0); }
     }
+    /** AI 응답의 항목에 BE가 모르는 선택 필드(tip)가 있어도 거절·삭제 없이 저장된다(weak-rules-0.2). */
+    @Test void tipFieldFromAiSurvivesClientValidationAndStorage() throws Exception {
+        String tip="스틱을 미리 올려 두고, 박 소리가 들리는 순간 내려쳐 보세요. 느린 템포부터 시작하면 감이 빨리 와요.";
+        String aiResponse="""
+            {"analyzerVersion":"weak-rules-0.2","reason":"OK","weakSegments":[
+              {"fromMs":2000.0,"toMs":14501.0,"pattern":"TIMING_LATE","description":"전체적으로 평균 22ms 늦게 치고 있어요.",
+               "tip":"%s","causeTags":["LATE","OVERALL"],"pads":["HIHAT","SNARE"],
+               "metrics":{"severity":0.36,"meanDeltaMs":21.7,"hitCount":22,"scope":"WHOLE"}},
+              {"fromMs":7000.0,"toMs":12000.0,"pattern":"SOMETHING_NEW","description":"새 패턴이에요.",
+               "causeTags":["NEW"],"pads":["SNARE"],"metrics":{"severity":0.5,"scope":"SEGMENT"}}]}
+            """.formatted(tip);
+        uploadScored();
+        var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/analysis/weak-segments",exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes=aiResponse.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
+        });
+        server.start();
+        try {
+            var client=new AnalysisClient("http://127.0.0.1:"+server.getAddress().getPort(),json);
+            var result=client.analyze(repository.request(play));
+            assertThat(result.success()).isTrue();
+            assertThat(result.version()).isEqualTo("weak-rules-0.2");
+            var lease=repository.claim(play); assertThat(lease).isNotNull();
+            repository.done(lease,result.segments(),result.version());
+        } finally { server.stop(0); }
+        var stored=json.readTree(db.queryForObject("SELECT weak_segments::text FROM reports WHERE play_session_id=?",String.class,play));
+        assertThat(stored.size()).isEqualTo(2);
+        assertThat(stored.get(0).path("tip").asString()).isEqualTo(tip);
+        assertThat(stored.get(0).path("description").asString()).isEqualTo("전체적으로 평균 22ms 늦게 치고 있어요.");
+        assertThat(stored.get(1).has("tip")).isFalse();
+        assertThat(db.queryForObject("SELECT generator_version FROM reports WHERE play_session_id=?",String.class,play))
+            .isEqualTo("BE_REPORT_V1+weak-rules-0.2");
+    }
     @Test void transportFailureAfter400HeadersDoesNotBecomeRetryable() {
         var builder=org.mockito.Mockito.mock(java.net.http.HttpClient.Builder.class);
         var http=org.mockito.Mockito.mock(java.net.http.HttpClient.class);

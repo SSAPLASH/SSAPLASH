@@ -74,9 +74,11 @@ class LoginSessionFlowTest {
 		var accessToken = new tools.jackson.databind.json.JsonMapper()
 				.readTree(refreshed.getResponse().getContentAsString()).path("accessToken").asString();
 
-		mvc.perform(get(SecurityConfigTest.ME).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+		// 갓 가입한 회원은 가입 동의 전이라, 가입 게이트 허용 목록의 /me로 확인한다(가입 동의 설계 4-1)
+		mvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.role").value("USER"));
+				.andExpect(jsonPath("$.role").value("USER"))
+				.andExpect(jsonPath("$.signupCompleted").value(false));
 	}
 
 }

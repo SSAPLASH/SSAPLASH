@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.support.SqlCapture;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +38,29 @@ class UserAuthQueryTest {
 		em.flush();
 		em.clear();
 
-		assertThat(users.findActiveAuthUser(user.getId())).contains(new AuthUser(user.getId(), UserRole.ADMIN));
+		assertThat(users.findActiveAuthUser(user.getId())).contains(new AuthUser(user.getId(), UserRole.ADMIN, false));
+	}
+
+	/** 가입 동의 설계 3-6: 이용약관·개인정보 동의 시각이 둘 다 있어야 가입 완료다. 하나만 있으면 미완료다. */
+	@Test
+	void activeAuthUserCarriesSignupCompletion() {
+		var completed = users.saveAndFlush(SignupConsentFixtures.completed(User.create("완료", null, null)));
+		var termsOnly = users.saveAndFlush(User.create("약관만", null, null));
+		em.createNativeQuery("update users set terms_version = 't', terms_agreed_at = now() where id = :id")
+				.setParameter("id", termsOnly.getId())
+				.executeUpdate();
+		em.clear();
+
+		assertThat(users.findActiveAuthUser(completed.getId()))
+				.contains(new AuthUser(completed.getId(), UserRole.USER, true));
+		assertThat(users.findActiveAuthUser(termsOnly.getId()))
+				.contains(new AuthUser(termsOnly.getId(), UserRole.USER, false));
+	}
+
+	/** 기존 호출(2인자)은 가입 완료로 본다. */
+	@Test
+	void twoArgumentAuthUserIsSignupCompleted() {
+		assertThat(new AuthUser(1L, UserRole.USER).signupCompleted()).isTrue();
 	}
 
 	@Test

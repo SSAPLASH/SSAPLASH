@@ -30,7 +30,14 @@ public class MidiChartConverter {
 
 	public MidiChartDocuments.Song convert(MultipartFile file) {
 		if (file == null) throw new BusinessException(MidiErrorCode.INVALID);
-		var sequence = reader.read(read(file));
+		return convert(read(file));
+	}
+
+	/** 이미 읽은 MIDI 바이트를 변환한다. 공용 곡 카탈로그 등록(254번)이 저장소 리소스로 부른다. 크기 규칙은 업로드와 같다. */
+	public MidiChartDocuments.Song convert(byte[] bytes) {
+		if (bytes == null || bytes.length == 0) throw new BusinessException(MidiErrorCode.INVALID);
+		if (bytes.length > LIMIT) throw new BusinessException(MidiErrorCode.TOO_LARGE);
+		var sequence = reader.read(bytes);
 		var notes = GmDrumMapping.notes(sequence.events());
 		if (notes.isEmpty()) throw new BusinessException(MidiErrorCode.NO_DRUM_NOTES, "드럼 채널(10)에 변환할 드럼 노트가 없습니다.");
 		if (notes.size() > MAX_NOTES) throw new BusinessException(MidiErrorCode.UNSUPPORTED, "드럼 노트는 50,000개 이하여야 합니다.");

@@ -30,6 +30,7 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -55,6 +56,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest request) {
 		var body = ApiErrorResponse.of(ex.getErrorCode(), ex.getDetail(), request.getRequestURI());
+		logResult(request.getMethod(), request.getRequestURI(), body, ex);
+		return respond(body);
+	}
+
+	/**
+	 * 본문 경계(boundary)가 없거나 형식이 깨진 multipart 요청. 컨테이너·Spring이 파싱 중 던지는
+	 * {@link MultipartException}(크기 초과 포함)은 업로드를 보낸 쪽의 잘못이므로 400으로 본다.
+	 * ZAP 공격 스캔에서 이 요청들이 처리되지 않아 500으로 나간 것을 확인했다(SECURITY.md 16절).
+	 */
+	@ExceptionHandler(MultipartException.class)
+	public ResponseEntity<ApiErrorResponse> handleMultipart(MultipartException ex, HttpServletRequest request) {
+		var body = ApiErrorResponse.of(CommonErrorCode.INVALID_INPUT, "요청 본문(파일 업로드)을 읽을 수 없습니다.",
+				request.getRequestURI());
 		logResult(request.getMethod(), request.getRequestURI(), body, ex);
 		return respond(body);
 	}

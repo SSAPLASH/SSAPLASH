@@ -18,7 +18,7 @@ import jakarta.persistence.Table;
 /**
  * 회원 ({@code users}). 스키마는 V1 마이그레이션이 정의하고 이 매핑은 그것과 맞아야 한다(Hibernate validate).
  *
- * <p>세터를 두지 않는다. 상태는 전이 메서드({@link #withdraw})로만 바꾼다.
+ * <p>세터를 두지 않는다(동의 값은 저장소의 조건부 UPDATE가 바꾼다). 상태는 전이 메서드({@link #withdraw})로만 바꾼다.
  */
 @Entity
 @Table(name = "users")
@@ -56,6 +56,30 @@ public class User {
 
 	private Instant withdrawnAt;
 
+	/** 연주 기록 활용 동의(V25). null은 아직 답하지 않음. 저장은 {@link UserRepository#updateSignupConsent}가 한다. */
+	private Boolean dataConsent;
+
+	/** 현재 동의 값을 선택한 시각. {@link #dataConsent}가 null이면 null이다. */
+	private Instant dataConsentAt;
+
+	/** 동의한 연주 기록 활용 안내문의 판(V26). {@link #dataConsent}와 함께 있거나 함께 없다. */
+	@Column(length = 50)
+	private String dataConsentVersion;
+
+	/** 동의한 이용약관의 판(V26). 서버는 비교·해석하지 않고 저장만 한다. */
+	@Column(length = 50)
+	private String termsVersion;
+
+	/** 현재 이용약관 판에 동의한 시각. {@link #termsVersion}과 함께 있거나 함께 없다. */
+	private Instant termsAgreedAt;
+
+	/** 동의한 개인정보 수집·이용 안내의 판(V26). */
+	@Column(length = 50)
+	private String privacyVersion;
+
+	/** 현재 개인정보 판에 동의한 시각. {@link #privacyVersion}과 함께 있거나 함께 없다. */
+	private Instant privacyAgreedAt;
+
 	protected User() {
 		// JPA 전용
 	}
@@ -88,7 +112,7 @@ public class User {
 	}
 
 	/**
-	 * 탈퇴 전이(ACTIVE → WITHDRAWN, 되돌리지 않는다). 개인정보 컬럼도 같은 UPDATE로 비워 상태만 바뀐 채 개인정보가 남는 순간이 없게 한다.
+	 * 탈퇴 전이(ACTIVE → WITHDRAWN, 되돌리지 않는다). 개인정보·동의 컬럼도 같은 UPDATE로 비워 상태만 바뀐 채 개인정보가 남는 순간이 없게 한다.
 	 * 호출자는 행을 {@code FOR UPDATE}로 잠근 뒤 상태를 먼저 확인한다.
 	 *
 	 * @throws IllegalStateException 이미 탈퇴한 회원
@@ -103,6 +127,19 @@ public class User {
 		nickname = WITHDRAWN_NICKNAME;
 		email = null;
 		profileImageUrl = null;
+		// 가입 동의 기록도 함께 비운다(가입 동의 설계 U1). 7개가 모두 null이라 동의 CHECK를 통과한다
+		dataConsent = null;
+		dataConsentAt = null;
+		dataConsentVersion = null;
+		termsVersion = null;
+		termsAgreedAt = null;
+		privacyVersion = null;
+		privacyAgreedAt = null;
+	}
+
+	/** 이용약관·개인정보 동의 시각이 둘 다 있으면 가입 완료다. 연주 기록 활용 값·역할과는 무관하다. */
+	public boolean isSignupCompleted() {
+		return termsAgreedAt != null && privacyAgreedAt != null;
 	}
 
 	@PrePersist
@@ -156,6 +193,34 @@ public class User {
 
 	public Instant getWithdrawnAt() {
 		return withdrawnAt;
+	}
+
+	public Boolean getDataConsent() {
+		return dataConsent;
+	}
+
+	public Instant getDataConsentAt() {
+		return dataConsentAt;
+	}
+
+	public String getDataConsentVersion() {
+		return dataConsentVersion;
+	}
+
+	public String getTermsVersion() {
+		return termsVersion;
+	}
+
+	public Instant getTermsAgreedAt() {
+		return termsAgreedAt;
+	}
+
+	public String getPrivacyVersion() {
+		return privacyVersion;
+	}
+
+	public Instant getPrivacyAgreedAt() {
+		return privacyAgreedAt;
 	}
 
 }

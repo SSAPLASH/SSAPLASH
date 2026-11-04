@@ -25,10 +25,12 @@ import com.ssafy.airdrum.song.AccompanimentStorage;
 import com.ssafy.airdrum.song.CoverImage;
 import com.ssafy.airdrum.song.CoverStorage;
 import com.ssafy.airdrum.song.SongManagementError;
+import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.audio.AudioErrorCode;
 import com.ssafy.airdrum.song.audio.AudioProbe;
 import com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty;
 import com.ssafy.airdrum.song.midi.MidiChartConverter;
+import com.ssafy.airdrum.song.midi.MidiChartDocuments;
 import com.ssafy.airdrum.song.midi.MidiChartRepository;
 import com.ssafy.airdrum.song.admin.AdminSongRepository.ChartRow;
 import com.ssafy.airdrum.song.admin.AdminSongRepository.SongRow;
@@ -62,12 +64,14 @@ class AdminSongService {
 	private final ChartAssetStore assets;
 	private final SpoolDirectory spool;
 	private final TransactionTemplate tx;
+	private final SongLevelService levels;
 
 	AdminSongService(AdminSongRepository songs, MidiChartConverter converter, MidiChartRepository charts,
 			CoverStorage covers, ChartAssetKeyPolicy keys, SongAssetCleanup cleanup, CoverImage images,
 			AccompanimentStorage backings, AudioProbe probe, ChartAssetStore assets, SpoolDirectory spool,
-			PlatformTransactionManager manager) {
+			PlatformTransactionManager manager, SongLevelService levels) {
 		this.songs = songs;
+		this.levels = levels;
 		this.converter = converter;
 		this.charts = charts;
 		this.covers = covers;
@@ -83,11 +87,20 @@ class AdminSongService {
 	}
 
 	AdminSongDetail register(String title, String artist, String license, boolean published, MultipartFile file) {
-		var song = converter.convert(file);
+		return register(title, artist, license, published, converter.convert(file));
+	}
+
+	/** 공용 곡 카탈로그(254번)가 저장소의 MIDI 바이트로 등록한다. 규칙은 업로드 등록과 같다. */
+	AdminSongDetail register(String title, String artist, String license, boolean published, byte[] midi) {
+		return register(title, artist, license, published, converter.convert(midi));
+	}
+
+	private AdminSongDetail register(String title, String artist, String license, boolean published, MidiChartDocuments.Song song) {
 		Long id = tx.execute(s -> {
 			long songId = songs.insertSong(title, artist, license, published, song);
 			for (var difficulty : Difficulty.values())
 				charts.insertVersion(charts.insertChart(songId, difficulty), 1, song.charts().get(difficulty));
+			levels.process(songId, true);
 			return songId;
 		});
 		return detail(id);
@@ -96,7 +109,16 @@ class AdminSongService {
 	/** 고친 MIDI로 난이도별 새 버전을 만든다(U3). 기존 버전 행은 그대로 둔다. 빠진 난이도는 version 1로 채운다. */
 	AdminSongDetail regenerate(long id, MultipartFile file) {
 		tx.executeWithoutResult(s -> songs.lock(id));
-		var song = converter.convert(file);
+		return regenerate(id, converter.convert(file));
+	}
+
+	/** 공용 곡 카탈로그(254번)가 난이도가 모자란 곡을 채울 때 쓴다. */
+	AdminSongDetail regenerate(long id, byte[] midi) {
+		tx.executeWithoutResult(s -> songs.lock(id));
+		return regenerate(id, converter.convert(midi));
+	}
+
+	private AdminSongDetail regenerate(long id, MidiChartDocuments.Song song) {
 		tx.executeWithoutResult(s -> {
 			songs.lock(id);
 			for (var difficulty : Difficulty.values()) {
@@ -105,6 +127,7 @@ class AdminSongService {
 				charts.insertVersion(chartId, next == null ? 1 : next.getValue(), song.charts().get(difficulty));
 			}
 			songs.updateTiming(id, song);
+			levels.process(id, true);
 		});
 		return detail(id);
 	}
