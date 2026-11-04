@@ -1,4 +1,7 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { ALL_PADS } from '@/domain/pads';
 import { KIT_PAD_TO_PAD_ID, resolveKitPads, resolveKitVariants, type KitConfig } from './kitConfig';
 
 const config = (baked: boolean): KitConfig => ({
@@ -25,6 +28,7 @@ describe('kitConfig', () => {
       crash: 'CRASH',
       ride: 'RIDE',
       mid: 'MID_TOM',
+      hihat_pedal: 'HIHAT_PEDAL',
     });
     const pads = resolveKitPads(config(false)).map((p) => p.pad);
     expect(pads).toEqual(['KICK', 'SNARE', 'SMALL_TOM', 'MID_TOM']);
@@ -68,5 +72,26 @@ describe('resolveKitVariants (PLAY-002 하이햇 열림 선택 항목)', () => {
 
   it('hihat_open은 일반 패드 목록에 들어가지 않는다', () => {
     expect(resolveKitPads(withOpen(false)).map((p) => p.pad)).toEqual(['KICK', 'SNARE', 'SMALL_TOM', 'MID_TOM']);
+  });
+});
+
+describe('기본 키트 public/sounds/ssaplash (하이햇 닫힘·열림·페달 소리)', () => {
+  const kitUrl = new URL('../../public/sounds/ssaplash/', import.meta.url);
+  const kit = JSON.parse(readFileSync(fileURLToPath(new URL('kit-config.json', kitUrl)), 'utf8')) as KitConfig;
+
+  it('패드 9개 모두 샘플 항목이 있고 하이햇 열림 변형도 있다', () => {
+    expect(resolveKitPads(kit).map((p) => p.pad).sort()).toEqual([...ALL_PADS].sort());
+    expect(resolveKitVariants(kit).map((v) => v.variant)).toEqual(['HIHAT_OPEN']);
+  });
+
+  it('설정이 가리키는 WAV가 모두 있다', () => {
+    for (const e of [...resolveKitPads(kit), ...resolveKitVariants(kit)]) {
+      expect(existsSync(fileURLToPath(new URL(e.file, kitUrl))), e.file).toBe(true);
+    }
+  });
+
+  it('하이햇 닫힘·열림·페달은 서로 다른 파일이다', () => {
+    const files = [kit.pads.hihat.file, kit.pads.hihat_open.file, kit.pads.hihat_pedal.file];
+    expect(new Set(files).size).toBe(3);
   });
 });

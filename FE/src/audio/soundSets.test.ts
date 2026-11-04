@@ -106,6 +106,13 @@ describe('loadSampleSet 하이햇 열림 변형 (PLAY-002)', () => {
     expect(set.missing).toEqual([]);
   });
 
+  it('hihat_pedal이 있으면 pads.HIHAT_PEDAL로 싣는다(폴백 대신 페달 소리)', async () => {
+    mockFetchWith({ ...CONFIG.pads, hihat_pedal: { file: 'audio/hihat-pedal.wav', gain: 1, playbackRate: 1 } });
+    const set = await loadSampleSet(mockCtx(), 'ssaplash');
+    expect(set.pads.HIHAT_PEDAL).toMatchObject({ gain: 1, playbackRate: 1 });
+    expect(set.missing).toEqual([]);
+  });
+
   it('synth 세트에는 변형이 없다', () => {
     expect(SYNTH_SET.variants).toEqual({});
   });

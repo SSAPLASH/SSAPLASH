@@ -314,6 +314,16 @@ describe('AudioEngine 하이햇 열림/닫힘 선택 (PLAY-002)', () => {
     expect(tagsOf()).toEqual(['kick']);
   });
 
+  it('HIHAT_PEDAL은 키트 페달 샘플을 쓰고, 없으면 하이햇 닫힘 샘플로 대신한다', async () => {
+    const e = new AudioEngine();
+    await e.ensure();
+    e.setSoundSet({ ...soundSet(true), pads: { HIHAT: sample('closed'), HIHAT_PEDAL: sample('pedal') } });
+    e.trigger('HIHAT_PEDAL', 100);
+    e.setSoundSet(soundSet(true));
+    e.trigger('HIHAT_PEDAL', 100);
+    expect(tagsOf()).toEqual(['pedal', 'closed']);
+  });
+
   it('열림인데 변형 샘플이 없으면 닫힘 샘플로 대신하지 않고 합성 열림 보이스를 낸다', async () => {
     const e = new AudioEngine();
     await e.ensure();
