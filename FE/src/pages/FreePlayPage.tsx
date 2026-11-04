@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import '@/components/free/free.css';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
+import { audioEngine } from '@/audio/AudioEngine';
 import { usePresets } from '@/store/presetStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
@@ -121,7 +122,8 @@ export function FreePlayPage() {
 
   // 터치 연주(MODE-002). 오디오가 깨어 있으면 동기 경로로 바로 친다. 첫 터치만 깨운 뒤 친다
   const onPadDown = (pad: PadId) => {
-    if (useLive.getState().audioReady) touchSource.strike(pad);
+    // audioReady는 첫 해제 때만 바뀌므로, 통화·백그라운드로 멈춘 뒤에도 다시 깨우도록 엔진 상태를 직접 본다
+    if (audioEngine.ready) touchSource.strike(pad);
     else void unlockAudio().then(() => touchSource.strike(pad));
   };
 
@@ -148,7 +150,7 @@ export function FreePlayPage() {
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={onPadDown} />
+            <DrumKit fitWidth scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
           </div>
         </div>
 
