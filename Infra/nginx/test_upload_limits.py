@@ -87,6 +87,15 @@ def request(port, method, path, size, kind, extra=None, reject=False):
     conn.close()
     return result
 
+def response_headers(port, method, path):
+    context = ssl._create_unverified_context()
+    conn = http.client.HTTPSConnection("127.0.0.1", port, timeout=30, context=context)
+    conn.request(method, path)
+    response = conn.getresponse(); response.read()
+    result = (response.status, response.getheaders())
+    conn.close()
+    return result
+
 def main():
     suffix = uuid.uuid4().hex[:12]
     network, mock, nginx = ["upload-173-"+x+"-"+suffix for x in ("net","mock","nginx")]
@@ -123,6 +132,11 @@ def main():
             status, _, _ = request(port,"POST","/internal/other",16,"json",reject=True)
             assert status == 404, ("other internal",status)
             print("PASS 원본 internal 차단 및 X-Forwarded-For 위조 거부")
+            for method, path in (("GET", "/health"), ("GET", "/models/manifest.json"), ("GET", "/models/x.onnx"), ("GET", "/api/probe")):
+                status, headers = response_headers(port, method, path)
+                values = [value for name, value in headers if name.lower() == "cross-origin-resource-policy"]
+                assert values == ["same-origin"], ("CORP", path, status, values)
+            print("PASS Cross-Origin-Resource-Policy: same-origin (고정 응답·모델·프록시 경로, 한 번만)")
             for method,path,limit,code,kind in CASES:
                 for delta in (0,1):
                     status, content_type, body = request(port,method,path+"?probe=1",limit+delta,kind,reject=(delta==1))
