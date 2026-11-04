@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './app/App';
+import MotionProvider from './app/MotionProvider';
 import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
 import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap';
 import { bootstrapAuth } from './app/authBootstrap';
@@ -26,6 +27,8 @@ const router = createBrowserRouter([{ path: '*', element: <App /> }]);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <MotionProvider>
+      <RouterProvider router={router} />
+    </MotionProvider>
   </StrictMode>,
 );
