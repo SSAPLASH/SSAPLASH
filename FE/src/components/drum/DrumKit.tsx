@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { PadId } from '@/domain/pads';
 import { DRUM_KIT_H, DRUM_KIT_W, fitScale, kitPadsFor, kitSizeAt, type KitSkin, type PadBadge, type PadVisualState } from '@/domain/drumKit';
+import { HitEffects } from './HitEffects';
 import { Pad, PadDefs } from './Pad';
 import './drum.css';
 
@@ -22,6 +23,8 @@ export interface DrumKitProps {
   skin?: KitSkin;
   /** 패드별 타격 횟수 카운터. 값이 바뀔 때마다 타격 모션을 처음부터 다시 재생한다(usePadHitSeq) */
   hitSeq?: Partial<Record<PadId, number>>;
+  /** 타격 이펙트(충격파 링·심벌 스파크) 표시. 기본 false — 연주 화면에서만 켠다 */
+  effects?: boolean;
 }
 
 /** 드럼 킷(고정 배치 8패드). 렌더 크기는 760×300 × scale(CSS px) */
@@ -36,6 +39,7 @@ export function DrumKit({
   onPadDown,
   skin = 'acoustic',
   hitSeq,
+  effects = false,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -96,6 +100,8 @@ export function DrumKit({
           }
         />
       ))}
+      {/* 이펙트는 effects일 때만 마운트해 타격 구독도 하지 않는다 */}
+      {effects && <HitEffects skin={skin} />}
     </svg>
   );
 
