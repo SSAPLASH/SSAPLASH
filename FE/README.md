@@ -377,7 +377,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → `/login`.
-- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`audioOffsetMs`에 바로 저장), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬 — 리듬 게임이 곡 선택 시점 값으로 읽는다)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 2열 카드. 왼쪽 계정(아바타·닉네임·로그인 제공자·[로그아웃])·기기(스틱 L·R 점과 연결 문구, 프리셋·보정 요약과 [드럼 세팅 열기] → `/setup`, 복귀 띠 「설정」)·오디오(전체 음량·드럼 음량(0~200%)·노래 음량(0~100%)·타격음 지연 보정 슬라이더, 값은 `settingsStore.volume`·`drumVolume`·`songVolume`·`audioOffsetMs`에 바로 저장. 안내 문구는 메트로놈만 Dock에서도 바꿀 수 있다고 적는다 — Dock에 음량 슬라이더는 없다), 오른쪽 연주(실시간 코칭 `liveCoach`, 기본 켬 — 리듬 게임이 곡 선택 시점 값으로 읽는다)·회원 탈퇴. 최근 플레이는 연주 기록(`/history`)이 맡는다. 라이브러리 요약은 두지 않는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **회원 탈퇴:** 설정 화면의 "회원 탈퇴" 카드 → 확인 대화상자(`components/shell/WithdrawDialog`) → `DELETE /api/users/me`(204, BE가 refresh 쿠키를 지운다) → 메모리 토큰·활성 채보 작업 기록(`ssaplash.chartJob.v1`, 로그아웃 때도 지운다)·그 계정의 로컬 플레이 로그 폐기 → `/login?error=withdrawn`. 안내 문구: 학습 활용에 동의한 플레이 기록만 식별 정보를 제거해 보관(BE 153). 204만 탈퇴로 본다. 401은 탈퇴 근거가 아니라 인증 만료로 처리한다 — 토큰을 비우고 `/login?error=session_expired`로 가며 로컬 기록은 지우지 않는다. 네트워크·5xx는 대화상자에 문구를 보이고 다시 시도할 수 있다. 되돌릴 수 없고 같은 소셜 계정으로 다시 로그인하면 새 회원이다.
 - **오류 코드(`/login?error=`):** BE가 붙이는 `access_denied`(동의 취소)·`oauth_failed`, FE가 붙이는 `no_session`(콜백 뒤 refresh 실패)·`session_expired`·`network`(서버 연결 실패)·`withdrawn`(탈퇴 완료 안내, 오류 색 없이 표시). 문구는 `domain/auth.ts`에 있다.
@@ -545,7 +545,9 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 
 - 샘플 세트는 `public/sounds/<id>/kit-config.json`과 `audio/*.wav`를 읽는다. 패드별 게인·재생 속도는 코드가 아니라 이 JSON이 정한다. 키트를 교체하려면 파일과 JSON만 바꾼다. 키트 항목 → 패드 매핑표는 `src/audio/kitConfig.ts`에 있다(`high`=스몰탐, `mid`=미드탐). 샘플이 없는 패드는 `audio/soundSets`의 폴백표를 따라 다른 패드 샘플을 작게 쓴다(하이햇 페달 → 하이햇 0.7배), 폴백도 없으면 합성음.
 - 첫 소리(오디오 언락) 이후에 샘플을 불러온다. 불러오는 동안과 파일 하나가 실패한 패드는 합성음으로 울린다. 한 번 불러온 세트는 다시 고를 때 재다운로드하지 않는다.
-- 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 사용자 볼륨 슬라이더는 마스터 게인에 따로 곱해진다.
+- 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 그 뒤 버스·마스터 게인이 곱해진다.
+- **음량 3단 구조(설정 화면 오디오 카드, 11/4 hotfix 294):** 타격 게인 → 패드 버스(`soundOn ? drumVolume : 0`, 드럼 음량 0~2) → 마스터(`volume`, 전체 음량) → 소프트 리미터 → 출력. 반주는 반주 버스(`songVolume`, 노래 음량 0~1) → 마스터. 메트로놈 클릭은 마스터 직결이라 전체 음량과 `metronomeVolume`만 받는다. `bootstrap.applySettings`가 설정 변경마다 `AudioEngine.setVolume / setDrumVolume / setSongVolume`을 부르고, 버스 게인이라 울리는 소리에도 즉시 반영된다. 패드 소리 끄기를 풀면 1이 아니라 `drumVolume`으로 돌아온다. 세팅 화면 톡 치기도 패드 버스를 지나므로 드럼 음량 시험에 쓸 수 있다. 저장 설정 v15에서 두 필드가 추가됐고(기본 1) 이전 설정은 마이그레이션이 채운다.
+- **키트 gain 재조정(11/4):** minorr 키트 교체 때 샘플이 이전 키트보다 패드마다 5~13dB 작아지고 패드별 gain도 1.0으로 리셋돼 드럼이 작게 들렸다. 첫 100ms RMS를 재서 이전 키트의 실효 음량에 맞춘 gain(킥 1.8·하이햇 2.4·라이드 5 등)을 `kit-config.json`에 넣었다. 출력단 리미터가 있어 gain이 1을 넘어도 클리핑은 나지 않는다. 키트를 바꿀 때는 샘플 크기를 재서 gain을 같이 맞춘다.
 - 세팅 화면에서 패드를 톡 치면(이동 6px 이내) 소리와 타격 이펙트가 나온다. 이 타격(`source: 'preview'`)은 텔레메트리·통계에 남지 않는다.
 
 ## 메트로놈·사운드 토글

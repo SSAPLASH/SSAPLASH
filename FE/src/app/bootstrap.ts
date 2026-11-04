@@ -214,6 +214,8 @@ export function bootstrapInput(): void {
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
     audioEngine.setVolume(s.volume);
+    audioEngine.setDrumVolume(s.drumVolume);
+    audioEngine.setSongVolume(s.songVolume);
     audioEngine.setClickVolume(s.metronomeVolume);
   };
   applySettings();
