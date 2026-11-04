@@ -86,6 +86,12 @@ Nginx는 `^~ /internal/v1/chart-jobs/`처럼 이 경로 하나를 같은 IP 허�
 문장의 숫자는 `facts`의 숫자나 그 산술(백분율, 구간 길이, 두 평균의 차이, 놓침 비율의 변화)만, `facts`에 없는 패드 이름 없음,
 기록이 없는데 지난번과 비교하지 않음, 지난번보다 놓침이 늘었는데 나아졌다고(또는 그 반대로) 쓰지 않음.
 
+## 워커 설정 (GPU 서버)
+
+환경 변수 `SSAPLASH_NARRATIVE_ENABLED`(기본 꺼짐), `SSAPLASH_NARRATIVE_MODEL`, `SSAPLASH_NARRATIVE_LLM_URL`(기본 `http://127.0.0.1:11434`),
+`SSAPLASH_NARRATIVE_LLM_API`(`ollama` 또는 `openai`). 표와 순서는 `README.md`의 "LLM 총평 작업". 코드는 `coach/llm_local.py`(모델 서버 호출),
+`worker/narrative_job.py`(BE 호출·실행). 채보 작업이 없을 때만 총평 작업을 가져가며, BE가 404를 주면 5분 동안 묻지 않는다.
+
 ## 미결
 
 - 모델 확정: 후보를 같은 골든 샘플로 비교한 뒤 정한다(GPU 서버에서 실행, 라이선스 확인).

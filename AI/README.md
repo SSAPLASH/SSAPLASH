@@ -235,6 +235,10 @@ BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작
 | `SSAPLASH_WORKER_POLL_SEC` | | 5 | 대기 작업이 없을 때(204) 다음 claim까지 |
 | `SSAPLASH_WORKER_HEARTBEAT_SEC` | | 10 | heartbeat 주기 |
 | `SSAPLASH_WORKER_KEEP_FILES` | | false | 참이면 작업 폴더를 지우지 않는다(문제 추적용) |
+| `SSAPLASH_NARRATIVE_ENABLED` | | false | 참이면 채보 작업이 없을 때 LLM 총평 작업을 가져간다(아래 "LLM 총평 작업") |
+| `SSAPLASH_NARRATIVE_MODEL` | 켰을 때 | — | 같은 서버의 모델 서버에 올라 있는 모델 이름(Ollama는 `ollama list`) |
+| `SSAPLASH_NARRATIVE_LLM_URL` | | `http://127.0.0.1:11434` | 모델 서버 주소. 같은 서버를 가리킨다 |
+| `SSAPLASH_NARRATIVE_LLM_API` | | `ollama` | `ollama` 또는 `openai`(OpenAI 호환: vLLM, llama.cpp 서버) |
 | `SSAPLASH_CHART_DEVICE`, `SSAPLASH_MODELS_DIR`, `SSAPLASH_CHART_MODEL` | | | 추론 모듈이 읽는 기존 변수. `SSAPLASH_CHART_MODEL`로 채보 모델을 고름 |
 
 ```bash
@@ -254,6 +258,17 @@ uv run ssaplash-worker run
 | heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패 | 보고 안 함 | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### LLM 총평 작업 (선택, COACH-003 후속)
+
+규칙 총평을 같은 GPU 서버의 **로컬 오픈소스 모델**이 쓴 코치 문장으로 바꾼다(외부 유료 API 없음). 워커가 채보 작업이 없을 때
+BE의 `/internal/v1/coach-narratives`에서 작업을 가져와 모델 서버에 문장을 부탁하고, 가드레일(`coach/narrative.py`)을 통과하면 제출한다.
+실패하거나 BE에 이 API가 아직 없으면(404) 규칙 총평이 그대로 남고 채보 작업에는 영향이 없다. 계약과 가드레일은 `docs/coach-narrative.md`.
+
+1. 같은 서버에 모델 서버를 띄우고 후보 모델을 받는다(예: Ollama). 모델 라이선스는 고를 때 확인한다.
+2. 후보를 같은 사실로 비교한다(문장은 사람이 읽어 고른다):
+   `uv run python scripts/eval_narrative.py --model <후보1> --model <후보2> --repeats 5 --out data/results/narrative-compare.md`
+3. 모델을 정하면 워커 환경에 `SSAPLASH_NARRATIVE_ENABLED=true`, `SSAPLASH_NARRATIVE_MODEL=<이름>`을 넣고 워커를 다시 띄운다.
 
 ### 모델 없이 전체 흐름 확인 (fake BE)
 
