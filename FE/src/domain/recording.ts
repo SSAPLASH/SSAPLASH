@@ -78,10 +78,10 @@ const codePoints = (s: string): string[] => [...s];
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /**
- * 녹음에 스틱 정보를 남길 센서 타격인지. 공용 판정(키보드·톡 치기·화면 터치·source 없음 제외)에
+ * 녹음에 스틱 정보를 남길 센서 타격인지(스틱·페달 모두 true, stickId 유무와 무관). 공용 판정(키보드·톡 치기·화면 터치·source 없음 제외)에
  * 더해 포인터(마우스 스틱 흉내)도 뺀다
  */
-function isRecordedSensor(source: string | undefined): boolean {
+export function isRecordedSensor(source: string | undefined): boolean {
   return isSensorSource(source) && source !== 'pointer';
 }
 
@@ -102,7 +102,7 @@ export function hitsFromPlayLog(hits: LoggedHit[]): { hits: RecordingHit[]; hasS
     if (h.tSongMs === undefined || !Number.isFinite(h.tSongMs) || h.tSongMs < 0 || h.pad === null) continue;
     const hit: RecordingHit = { tMs: h.tSongMs, pad: h.pad, velocity: clamp(Math.round(h.velocity), 0, 127) };
     if (isRecordedSensor(h.source)) {
-      hit.stickId = h.stickId;
+      if (h.stickId !== null) hit.stickId = h.stickId;
       hasSensor = true;
     }
     out.push(hit);
@@ -123,7 +123,8 @@ export function hitFromFreeInput(hit: ResolvedHit, startPerfMs: number): Recordi
     pad: hit.pad,
     velocity: clamp(Math.round(hit.velocity), 0, 127),
   };
-  if (isRecordedSensor(hit.source)) out.stickId = hit.stickId;
+  // 손 없는 타격(페달, stickId null)은 키를 생략한다
+  if (isRecordedSensor(hit.source) && hit.stickId !== null) out.stickId = hit.stickId;
   return out;
 }
 

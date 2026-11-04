@@ -44,7 +44,7 @@ export function DebugOverlay({ onClose }: { onClose: () => void }) {
           {rows.map((r) => (
             <tr key={r.hitId}>
               <td>{r.pad ?? '(없음)'}</td>
-              <td>{r.stickId === 0 ? 'L' : 'R'}</td>
+              <td>{r.stickId === null ? '-' : r.stickId === 0 ? 'L' : 'R'}</td>
               <td>{r.velocity}</td>
               <td>{r.peakAccel.toFixed(1)}</td>
               <td>{r.judgedBy}</td>

@@ -57,7 +57,7 @@ export function FreeMeasureSection() {
               </tr>
               <tr>
                 <td>손</td>
-                <td className="num">{lastHit.stickId === 0 ? 'L' : 'R'}</td>
+                <td className="num">{lastHit.stickId === null ? '-' : lastHit.stickId === 0 ? 'L' : 'R'}</td>
               </tr>
               <tr>
                 <td>벨로시티</td>
