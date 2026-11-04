@@ -1,4 +1,6 @@
 // 연주 로그를 화면에 보여 줄 때 쓰는 순수 함수(결과·연주 기록 공용): 날짜·모드 표기, 모드 필터, 페이지 계산.
+import type { Difficulty } from '@/domain/chart';
+import { songDifficulty } from '@/domain/recordingView';
 import type { PlayLog } from '@/engine/playLog';
 
 /** ISO 시각 → `YYYY.MM.DD HH:mm`(브라우저 로컬 시간). 해석 못 하면 '-' */
@@ -57,4 +59,9 @@ export function sortPlayLogs<T extends Pick<PlayLog, 'startedAt'>>(logs: readonl
     const diff = (Number.isNaN(ta) ? 0 : ta) - (Number.isNaN(tb) ? 0 : tb);
     return diff * sign;
   });
+}
+
+/** 연주 기록 행의 난이도 배지(UX-53). 게임(리듬) 행만 보이고, EASY·NORMAL·HARD가 아니면 생략한다 */
+export function historyRowLevel(log: Pick<PlayLog, 'mode' | 'difficulty'>): Difficulty | null {
+  return log.mode === 'RHYTHM' ? songDifficulty(log.difficulty) : null;
 }
