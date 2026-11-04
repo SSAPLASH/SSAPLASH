@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion } from 'motion/react';
 import type { PadId } from '@/domain/pads';
 import { DRUM_KIT_H, DRUM_KIT_W, fitScale, kitPadsFor, kitSizeAt, type KitSkin, type PadBadge, type PadVisualState } from '@/domain/drumKit';
@@ -29,35 +29,43 @@ export interface DrumKitProps {
   effects?: boolean;
 }
 
-/** 킥 진동감 기준 세기(velocity 이상이면 킷 전체가 흔들린다) */
-export const KICK_SHAKE_VELOCITY = 100;
+/** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
+export const PAD_SHAKE_VELOCITY = 100;
 
-/** E4 킥 진동감: 센 킥 타격마다 자식 전체를 x 0→2→−2→1→0px, 80ms로 흔든다(연타마다 재시작). 모션 줄이기면 하지 않는다 */
-function KickShake({ children }: { children: ReactNode }) {
+/**
+ * 진동 횟수(E4). 킥은 몸으로 느끼는 저음이라 킷 전체를, 스네어·탐은 친 패드만 흔든다(어디를 쳤는지가 분명하게).
+ * 심벌은 이미 회전 흔들림이 있어 제외한다. enabled가 아니거나 동작 줄이기면 세지 않는다
+ */
+function usePadShakeCounts(enabled: boolean, shapeOf: (pad: PadId) => string | undefined) {
   const pulse = usePadHitPulse();
   const reduced = useReducedMotion();
-  const ref = useRef<SVGGElement>(null);
-  const [count, setCount] = useState(0);
+  const [counts, setCounts] = useState<Partial<Record<PadId, number>>>({});
   const [seen, setSeen] = useState(pulse);
-  const hit = pulse !== seen && !!pulse && !reduced && pulse.pad === 'KICK' && pulse.velocity >= KICK_SHAKE_VELOCITY;
   if (pulse !== seen) {
     setSeen(pulse);
-    if (hit) setCount((c) => c + 1);
+    if (enabled && !reduced && pulse && pulse.velocity >= PAD_SHAKE_VELOCITY && shapeOf(pulse.pad) !== 'cymbal') {
+      const pad = pulse.pad;
+      setCounts((c) => ({ ...c, [pad]: (c[pad] ?? 0) + 1 }));
+    }
   }
+  return counts;
+}
 
+/** 감싼 내용(패드 하나 또는 킷 전체)을 count가 오를 때마다 좌우로 80ms 흔든다 */
+function Shake({ count, className, children }: { count: number | undefined; className: string; children: ReactNode }) {
+  const ref = useRef<SVGGElement>(null);
   useEffect(() => {
     const el = ref.current;
     // useAnimate는 애니메이션 엔진 전체를 메인 청크에 끌어와(+41kB gzip) Web Animations로 직접 재생한다
-    if (count === 0 || !el || typeof el.animate !== 'function') return;
+    if (!count || !el || typeof el.animate !== 'function') return;
     // 새 애니메이션이 이전 것을 덮어쓰므로(연타 재시작) 정리 단계에서 취소하지 않는다
     el.animate(
       [0, 2, -2, 1, 0].map((x) => ({ transform: `translateX(${x}px)` })),
       { duration: 80, easing: 'linear' },
     );
   }, [count]);
-
   return (
-    <g ref={ref} className="kit-shake" data-shake={count > 0 ? count : undefined}>
+    <g ref={ref} className={className} data-shake={count || undefined}>
       {children}
     </g>
   );
@@ -95,8 +103,17 @@ export function DrumKit({
   const eff = fitWidth ? (fit ?? scale) : scale;
   const { width, height } = kitSizeAt(eff);
 
-  // 이펙트가 켜진 킷만 킥 진동 그룹으로 감싼다(꺼진 킷은 구조·구독 불변)
-  const wrapShake = (kids: ReactNode) => (effects ? <KickShake>{kids}</KickShake> : kids);
+  const pads = kitPadsFor(skin);
+  const shakes = usePadShakeCounts(effects, (pad) => pads.find((p) => p.pad === pad)?.shape);
+  // 킥 진동은 킷 전체(패드와 이펙트 레이어)를 흔든다. 이펙트가 꺼진 킷은 감싸지 않는다
+  const withKitShake = (kids: ReactNode) =>
+    effects ? (
+      <Shake className="kit-shake" count={shakes.KICK}>
+        {kids}
+      </Shake>
+    ) : (
+      kids
+    );
 
   const svg = (
     <svg
@@ -110,9 +127,10 @@ export function DrumKit({
       data-skin={skin === 'acoustic' ? undefined : skin}
     >
       <PadDefs id={defsId} />
-      {wrapShake(
+      {withKitShake(
         <>
-      {kitPadsFor(skin).map((p) => (
+      {pads.map((p) => {
+        const pad = (
         <Pad
           key={p.pad}
           shape={p.shape}
@@ -140,8 +158,17 @@ export function DrumKit({
               : undefined
           }
         />
-      ))}
-      {/* 이펙트는 effects일 때만 마운트해 타격 구독도 하지 않는다 */}
+        );
+        // 이펙트가 켜진 킷만 패드별 진동 그룹으로 감싼다(꺼진 킷은 마크업 불변). 킥은 킷 전체 그룹이 흔든다
+        return effects ? (
+          <Shake key={p.pad} className="pad-shake" count={p.pad === 'KICK' ? undefined : shakes[p.pad]}>
+            {pad}
+          </Shake>
+        ) : (
+          <Fragment key={p.pad}>{pad}</Fragment>
+        );
+      })}
+      {/* 이펙트는 effects일 때만 마운트한다 */}
       {effects && <HitEffects skin={skin} />}
         </>,
       )}
