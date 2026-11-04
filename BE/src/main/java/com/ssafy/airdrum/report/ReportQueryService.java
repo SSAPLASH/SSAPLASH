@@ -22,11 +22,17 @@ public class ReportQueryService {
         return reports.find(userId, playId);
     }
     public ReportNotesResponse notes(long userId, UUID playId, Integer afterSeq, int limit) {
+        return notes(userId, playId, afterSeq, limit, null, null);
+    }
+    public ReportNotesResponse notes(long userId, UUID playId, Integer afterSeq, int limit, Double fromMs, Double toMs) {
         requireActive(userId);
+        if ((fromMs != null && !Double.isFinite(fromMs)) || (toMs != null && !Double.isFinite(toMs))
+                || (fromMs != null && toMs != null && fromMs > toMs))
+            throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
         if ((afterSeq != null && afterSeq < 0) || limit < 1 || limit > 1000)
             throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
         reports.requireReport(userId, playId);
-        var rows = reports.notes(userId, playId, afterSeq == null ? -1 : afterSeq, limit + 1);
+        var rows = reports.notes(userId, playId, afterSeq == null ? -1 : afterSeq, limit + 1, fromMs, toMs);
         boolean more = rows.size() > limit;
         var items = more ? rows.subList(0, limit) : rows;
         return new ReportNotesResponse(items, more ? items.getLast().seq() : null);
