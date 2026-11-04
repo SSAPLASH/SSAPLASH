@@ -33,19 +33,29 @@ public class SongQueryService {
 		var coverUrls=covers.forSongs(userId,rows);
 		var items = rows.stream().map(s -> new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
 				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
-				summaries.getOrDefault(s.getId(), List.of()).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
+				distinct(summaries.getOrDefault(s.getId(), List.of())).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
 				s.getCreatedAt(),coverUrls.get(s.getId()),s.getSongLevel(),failure(s))).toList();
 		return PageResponse.of(items, page, size, total);
 	}
 	public SongDetail detail(long userId, long songId) {
 		access.requireActive(userId);
 		var s = songs.visible(songId, userId).orElseThrow(() -> new BusinessException(ChartErrorCode.SONG_NOT_FOUND));
-		var charts = versions.summaries(List.of(songId), userId).stream()
+		var charts = distinct(versions.summaries(List.of(songId), userId)).stream()
 				.map(v -> new ChartSummary(v.getChartId(), v.getDifficulty(), v.getChartVersionId(), v.getVersion(),
 						v.getNoteCount(), v.getNotationStatus())).toList();
 		return new SongDetail(s.getId(), s.getTitle(), s.getArtist(), s.getSource(), s.getStatus(), s.getBpm(),
 				s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
 				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts,covers.forSongs(userId,List.of(s)).get(s.getId()),s.getSongLevel(),failure(s));
+	}
+	/**
+	 * 노트가 NORMAL과 같은 HARD·EASY를 뺀다(260번 설계 3-4절). NORMAL·EASY는 HARD에서 노트를 빼기만 해서 만들므로
+	 * 최신 버전 노트 수가 같으면 같은 채보로 본다. NORMAL은 항상 남기고, NORMAL이 없는 곡은 그대로 둔다.
+	 * 저장된 채보는 지우지 않으므로 채보 직접 조회·플레이 기록·ADMIN 응답에는 영향이 없다.
+	 */
+	static List<ChartVersionRepository.Summary> distinct(List<ChartVersionRepository.Summary> charts) {
+		var normal = charts.stream().filter(c -> "NORMAL".equals(c.getDifficulty())).findFirst().orElse(null);
+		if (normal == null) return charts;
+		return charts.stream().filter(c -> c == normal || c.getNoteCount() != normal.getNoteCount()).toList();
 	}
 	private JobError failure(SongRepository.View song) {
 		return "FAILED".equals(song.getStatus()) && "FAILED".equals(song.getJobStatus()) ? JobErrors.safe(song.getJobErrorCode()) : null;

@@ -24,8 +24,11 @@ import tools.jackson.databind.json.JsonMapper;
  */
 final class BuiltinSongCatalog {
 
-	/** 카탈로그 한 곡. MIDI는 이미 읽은 바이트다. */
-	record Entry(String title, String artist, String license, boolean published, byte[] midi) {
+	/**
+	 * 카탈로그 한 곡. MIDI는 이미 읽은 바이트다. {@code offsetMs}는 원본 음원 0초 기준 첫 마디 첫 박 시각(ms)으로,
+	 * MIDI 0틱 = 음원 0초인 곡에서 솎기 격자의 원점이 된다(260번 설계 3-1절). 생략하면 0.
+	 */
+	record Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs) {
 	}
 
 	/** 카탈로그 규칙 위반. 메시지에 원인 곡 제목을 적는다. */
@@ -35,7 +38,9 @@ final class BuiltinSongCatalog {
 		}
 	}
 
-	private static final Set<String> FIELDS = Set.of("title", "artist", "license", "midi", "published");
+	private static final Set<String> FIELDS = Set.of("title", "artist", "license", "midi", "published", "offsetMs");
+	/** 곡 길이 상한(30분, MIDI 변환 규칙)과 같다. */
+	static final int MAX_OFFSET_MS = 30 * 60 * 1000;
 	private static final Pattern MIDI_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,99}\\.mid");
 	private static final JsonMapper JSON = JsonMapper.builder(JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
 			.enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -82,10 +87,17 @@ final class BuiltinSongCatalog {
 				if (!node.get("published").isBoolean()) throw new Invalid(where + ": published는 true·false여야 합니다.");
 				published = node.get("published").asBoolean();
 			}
+			int offsetMs = 0;
+			if (node.has("offsetMs")) {
+				var offset = node.get("offsetMs");
+				if (!offset.isIntegralNumber() || !offset.canConvertToInt() || offset.asInt() < 0 || offset.asInt() > MAX_OFFSET_MS)
+					throw new Invalid(where + ": offsetMs는 0 이상 " + MAX_OFFSET_MS + " 이하 정수(ms)여야 합니다.");
+				offsetMs = offset.asInt();
+			}
 			if (!titles.add(title)) throw new Invalid(where + ": 제목이 중복됩니다.");
 			byte[] midi = files.apply(midiName);
 			if (midi == null) throw new Invalid(where + ": MIDI 파일이 없습니다(" + midiName + ").");
-			entries.add(new Entry(title, artist, license, published, midi));
+			entries.add(new Entry(title, artist, license, published, midi, offsetMs));
 		}
 		return List.copyOf(entries);
 	}

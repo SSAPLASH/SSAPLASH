@@ -69,12 +69,12 @@ class BuiltinSongSeeder {
 		try {
 			var existing = find(entry.title());
 			if (existing == null) {
-				songs.register(entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi());
+				songs.register(entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi(), entry.offsetMs());
 				log.info("공용 곡 등록: {}", entry.title());
 				return Outcome.REGISTERED;
 			}
 			if (existing.difficulties() >= 3) return Outcome.SKIPPED;
-			songs.regenerate(existing.id(), entry.midi());
+			songs.regenerate(existing.id(), entry.midi(), entry.offsetMs());
 			log.info("공용 곡 난이도 채움: {} (기존 난이도 {}개)", entry.title(), existing.difficulties());
 			return Outcome.FILLED;
 		} catch (RuntimeException e) {
