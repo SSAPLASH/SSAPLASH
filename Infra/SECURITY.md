@@ -508,6 +508,13 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
 4. **폰트 자체 호스팅(FE 회신, 2026-11-03 합의).** 폰트를 하나씩 옮기는 대신 규약을 정했다: 폰트는 전부 같은 출처에서만 서빙하고, 경로는 `/fonts/{패밀리}/{버전}/`, 내용이 바뀌면 버전 경로를 바꾼다(같은 URL의 내용은 고치지 않는다). Pretendard는 빌드 때 `node_modules`에서 복사하고 git에는 넣지 않는다. FE 이전은 다음 스프린트 초(`[EXTRA] 추가 작업` S15P31A307-289의 서브 작업)다. **Infra는 FE 변경이 배포된 뒤에** 한 번에 적용한다: CSP의 `https://cdn.jsdelivr.net` 제거와 `font-src 'self'`, `/fonts/`의 `Cache-Control: public, max-age=31536000, immutable`. 순서가 거꾸로면(버전 없는 기존 폰트에 장기 캐시가 먼저 걸리면) 파일을 바꿔도 브라우저가 1년간 옛 파일을 쓸 수 있다. 앞단 Nginx에서 `/fonts/`에 `add_header`를 쓰면 server 블록의 보안 헤더를 상속하지 못하므로 다시 적고, 뒤쪽(`FE/nginx.conf`의 `location /`)이 보내는 `Cache-Control: no-cache`와 겹치지 않게 `proxy_hide_header Cache-Control`을 함께 쓴다. `font-src`의 `data:`는 Report-Only에서 위반이 없는 것을 본 뒤 뺀다.
 5. **Permissions-Policy:** `camera=(), microphone=(), geolocation=(), payment=(), usb=()`에 FE가 동의했다. 스틱 연결에 쓰는 **Web Bluetooth(`bluetooth`)와 Web Serial(`serial`)은 목록에 넣지 않고 앞으로도 막지 않는다**(이 둘이 없으면 센서가 연결되지 않는다. `usb`는 Web Serial과 별개 기능이다). `default.conf`의 server 블록에 추가했다(2026-11-03). `/models/*`는 HTML이 아니라 따로 적지 않았다. 문법 검사(`nginx -t`)와 응답 헤더(`/health`)는 로컬 컨테이너에서 확인했다.
 6. **CSP 사전 정보(FE 실측):** 인라인 스타일이 31개 `.tsx` 파일(`style={...}`)에 있어 `style-src 'unsafe-inline'`은 유지한다. 반주 음원은 BE가 준 서명 URL을 `fetch`로 받으므로 그 도메인이 `connect-src`에 있어야 한다. 운영 음원 서명 URL의 공개 주소는 `https://k15a307.p.ssafy.io`(같은 출처, `connect-src 'self'`로 충분)로 확인했다(2026-11-03). 반주 음원용 `CHART_ASSET_PUBLIC_ENDPOINT`도 서버에서 확인했고(2026-11-03) `https://k15a307.p.ssafy.io`로 같은 출처다. 그래서 CSP에 추가할 외부 도메인은 없다.
+   **CSP 차단 모드 전환 (2026-11-04):** `Content-Security-Policy-Report-Only`를 `Content-Security-Policy`로 바꿨다.
+   - XSS로 주입된 인라인 스크립트를 브라우저가 실행하지 않는다(`script-src 'self'`에 `'unsafe-inline'` 없음). 가입 동의 API를 화면 없이 부른 시험에서 보았듯(18절) 쿠키가 붙은 대리 호출은 `HttpOnly`로 막을 수 없어 이 방어가 필요하다.
+   - **CSP로 막히지 않는 것:** 개발자 도구 콘솔에 사용자가 직접 입력한 코드. 사용자가 본인 계정으로 API를 부르는 것은 막을 수 없고 막는 목표도 아니다. CSP가 막는 대상은 **다른 사람이 심은 스크립트**다.
+   - 스틱 브리지(`ws://localhost:8765`, FE `WebSocketStickSource` 기본 주소)가 `connect-src 'self'`에 막히지 않게 `ws://localhost:*`, `ws://127.0.0.1:*`를 더했다.
+   - **병합 전 FE 확인 목록** — 운영 화면에서 개발자 도구 콘솔을 열고 `[Report Only]` 위반 메시지가 없는지 본다(지금 운영은 Report-Only라 위반이 콘솔에 남는다): ① 로그인·가입 동의 ② 곡 목록·반주 재생 ③ 연주 화면·리포트 ④ 악보·내 곡 업로드 ⑤ 폰트(`cdn.jsdelivr.net`) ⑥ 채보 진행 WebSocket ⑦ **스틱 브리지**: 기본 주소가 아닌 다른 PC·다른 주소로 연결하는 설정이 있으면 그 주소가 `connect-src`에 막힌다(허용 주소를 더하거나 정책을 넓혀야 한다).
+   - 위반이 있으면 병합하지 않고 정책을 고친다. 병합 뒤 문제가 생기면 `default.conf`의 헤더 이름을 `Content-Security-Policy-Report-Only`로 되돌려 배포한다(차단만 풀린다).
+   - 확인하지 못한 것: 로그인한 상태의 실제 화면 전체. 이 PC에서는 열어 보지 못했다.
 
 **공격 스캔 (로컬, 2026-11-02)**
 
