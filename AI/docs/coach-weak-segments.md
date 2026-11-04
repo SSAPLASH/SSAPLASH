@@ -46,17 +46,25 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 
 ```json
 {
-  "analyzerVersion": "weak-rules-0.2",
+  "analyzerVersion": "weak-rules-0.3",
   "reason": "OK",
   "weakSegments": [
     {
       "fromMs": 7000.0, "toMs": 12000.0, "pattern": "MISS_CLUSTER",
       "description": "7~12초 구간에서 노트의 40%를 놓쳤어요.",
+      "detail": "이 5초 동안 노트 10개 중 4개를 놓쳤어요. 곡의 다른 부분은 괜찮을 수 있으니 이 구간에 집중해 보세요.",
       "tip": "놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. 한 번에 한 마디씩 익히면 곡 전체가 쉬워져요.",
+      "severityLevel": "MEDIUM",
       "causeTags": ["MISS", "CLUSTER"], "pads": ["SNARE"],
       "metrics": { "severity": 0.67, "missRate": 0.4, "missCount": 4, "noteCount": 10, "scope": "SEGMENT" }
     }
-  ]
+  ],
+  "summary": {
+    "level": "FAIR",
+    "text": "기본기는 잘 잡혀 있어요. 조금만 다듬으면 훨씬 좋아질 거예요. 먼저 7~12초 구간부터 연습해 보세요.",
+    "focusPattern": "MISS_CLUSTER",
+    "source": "RULE"
+  }
 }
 ```
 
@@ -65,6 +73,7 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 - `fromMs`/`toMs`: 시작 포함·끝 미포함. 전체 플레이 패턴(`scope: WHOLE`)은 첫 노트 시각 ~ 마지막 노트 시각 + 1.
 - `description`은 FE가 그대로 표시하는 한국어 문장이다. `metrics`는 근거 수치(자유 객체)이며 `severity`(0~1)가 항상 있다.
 - `tip`(`weak-rules-0.2`부터)은 연습 방법 한두 문장이다. **선택 필드**라서 문구가 없는 `pattern`이면 키 자체가 없다. FE가 그대로 표시한다. 아래 "연습 조언" 참고.
+- `detail`·`severityLevel`·`summary`(`weak-rules-0.3`부터)는 모두 **선택 필드**다. 아래 "상세 설명·심각도 단계·종합 총평" 참고.
 - 최대 5개(같은 `pattern`은 2개까지), `fromMs` 오름차순.
 
 ### 오류
@@ -119,6 +128,35 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 - **하위 호환:** 요청 형식과 기존 필드는 그대로다. BE는 `weakSegments` 항목의 모르는 필드를 거르지 않고 그대로 저장·전달한다
   (`AnalysisClient.valid()`는 필수 필드의 존재와 타입만 본다). 이 왕복은 아직 BE·DB를 붙인 통합 시험으로 확인하지 않았다.
 - 문구는 가정이다. 첫 배포 뒤 사용자 반응을 보고 `advice.py`에서만 고친다.
+
+### 상세 설명·심각도 단계·종합 총평 (`weak-rules-0.3`)
+
+드럼 코치가 초보 연주자에게 직접 이야기해 주는 느낌으로 쓴 규칙 문장이다. 학습 모델·LLM을 쓰지 않으며 같은 입력은
+항상 같은 문장이다. 문구와 임계값은 가정이고 첫 배포 뒤 피드백으로 `advice.py`·`summary.py`·`config.py`에서만 고친다.
+
+| 필드 | 위치 | 내용 |
+| --- | --- | --- |
+| `severityLevel` | 약점 항목 | `metrics.severity`(0~1)를 `LOW`(0.4 미만)·`MEDIUM`(0.7 미만)·`HIGH`로 옮긴 값. 경계값은 윗단계. FE는 "조금/보통/많이" |
+| `detail` | 약점 항목 | 그 약점이 무슨 뜻이고 얼마나 넓게 나타나는지 한두 문장(120자 이하). 숫자는 `metrics` 값이나 그 산술만 쓴다. 전체 경향(`scope: WHOLE`)이면 "곡 전체" 경향임을 밝힌다. 문구가 없는 `pattern`이거나 `metrics`가 없으면 키 생략 |
+| `summary` | 응답 루트 | 종합 총평. `INSUFFICIENT_HITS`이면 키가 없다 |
+
+`summary` 객체
+
+| 필드 | 내용 |
+| --- | --- |
+| `level` | `GOOD`·`FAIR`·`NEEDS_WORK`. 놓침 비율 30% 이상이거나 `HIGH` 약점이 있으면 NEEDS_WORK, 놓침 10% 미만이고 PERFECT가 절반 이상이면 GOOD, 나머지 FAIR (가정값, `config.py`) |
+| `text` | 200자 이하. 전체 인상 → 잘한 점 하나(노트 8개 이상·적중률 90% 이상인 패드 중 가장 높은 것, 약점으로 지목된 패드는 제외) → 먼저 연습할 것 하나. **점수·정확도 숫자는 쓰지 않는다**(BE 집계 값과 어긋날 수 있다) |
+| `focusPattern` | 가장 심한 약점의 `pattern`. 약점이 없으면 키 생략. 연습·곡 추천이 생기면 이 값으로 연결한다(지금은 표시용이 아니다) |
+| `source` | `RULE`(규칙 문장). 나중에 LLM 문장이 오면 `LLM` |
+
+약점이 없는 경우(`NO_WEAKNESS`)도 총평이 온다. 놓침이 많은데 약점으로 잡히지 않은 경우에는 "눈에 띄는 약점은 없었어요"라고 쓰지 않고
+"놓친 노트가 한 곳에 몰려 있지는 않아요. 곡 전체를 느린 템포로…"라고 쓴다.
+
+**BE 저장:** BE는 응답 루트에서 `analyzerVersion`·`reason`·`weakSegments`만 읽으므로 `summary`는 BE가 저장·노출을 반영하기 전까지
+버려진다(요청 문서 `COACH-003_리포트-총평-저장`). `severityLevel`·`detail`은 항목 안 필드라 BE 변경 없이 저장·전달된다.
+
+**등급 분포 메모(QA 때 확인):** `MISS_CLUSTER`는 걸리는 조건이 놓침 40%이고 이때 `severity`가 0.67이라, 조건을 막 넘긴 몰림은 `MEDIUM`이고
+42% 이상이어야 `HIGH`다. 전체 지연(`TIMING_*`)은 평균 15ms에서 `severity` 0.25(`LOW`), 약 42ms에서 `HIGH`다. 실제 로그로 분포를 본 뒤 조정한다.
 
 ## 한계 (QA 때 함께 본다)
 

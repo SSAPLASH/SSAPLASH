@@ -210,6 +210,24 @@ def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단
         assert segment["severityLevel"] in ("LOW", "MEDIUM", "HIGH")
 
 
+def test_총평은_표본이_충분하면_붙고_부족하면_키가_빠진다():
+    _, enough = _call(SAMPLES["A"]["request"])
+    _, few = _call(SAMPLES["C"]["request"])
+
+    assert set(enough["summary"]) == {"level", "text", "focusPattern", "source"}
+    assert enough["summary"]["focusPattern"] == "MISS_CLUSTER"
+    assert few["reason"] == "INSUFFICIENT_HITS"
+    assert "summary" not in few
+
+
+def test_약점이_없으면_총평의_focusPattern_키가_빠진다():
+    # None 필드는 응답에서 키를 생략한다(구버전 BE·FE와 같은 모양)
+    _, body = _call(SAMPLES["B"]["request"])
+
+    assert body["reason"] == "NO_WEAKNESS"
+    assert "focusPattern" not in body["summary"]
+
+
 def test_문구가_없는_pattern은_응답에서_tip_키가_빠진다(monkeypatch):
     # 새 규칙이 문구보다 먼저 들어와도 응답이 깨지지 않고, tip 키만 없어야 한다(구버전 BE·FE와 같은 모양)
     from ssaplash_ai.coach import analyzer
