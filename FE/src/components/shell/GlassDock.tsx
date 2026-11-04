@@ -1,9 +1,10 @@
 // 상단 글래스 Dock(Figma Navigation / GlassDock 148:2288). mode(shell|play) × collapsed 4변이.
 // 상태는 liveStore.metronome·settingsStore, 조작은 engine 싱글턴 메서드만 쓴다. 셸 루트에 fixed로 한 인스턴스만 둔다(D3).
-// 메트로놈 패널(MetronomePanel)은 이 컴포넌트가 .shell-dock 안에 같이 마운트한다 — 칩 본체 클릭은 shellStore.dockPanel만 토글한다.
+// 메트로놈 패널(MetronomePanel)은 Radix Popover(비모달)로 연다 — 열림 상태는 shellStore.dockPanel이 쥐고(제어 모드), 내용은 포털로 body에 붙는다.
 // 프리셋 칩은 두지 않는다(11/04 결정, 연결 상태는 상단 바 스틱 상태 표시가 보여 준다).
+import * as Popover from '@radix-ui/react-popover';
 import { AnimatePresence, m } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { useRecordingStore } from '@/app/recordingStore';
@@ -16,7 +17,7 @@ import { RecordButton } from '@/components/recording/RecordButton';
 import { recordButtonVisible } from '@/components/recording/recordButtonRoute';
 import { IconButton } from '@/components/ui/IconButton';
 import { createDockAutoCollapse } from './dockAutoCollapse';
-import { DOCK_RADIUS_COLLAPSED, DOCK_RADIUS_EXPANDED, DOCK_TRANSITION } from './dockMotion';
+import { DOCK_RADIUS_COLLAPSED, DOCK_RADIUS_EXPANDED, DOCK_TRANSITION, PANEL_TRANSITION } from './dockMotion';
 import './glass-dock.css';
 import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
@@ -106,10 +107,12 @@ export function GlassDock() {
     if (met.playing) metronome.stop();
     else void metronome.start().catch(() => {});
   };
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panelOpen = dockPanel === 'metronome';
   const pause = () => useLive.setState({ pauseRequested: 'menu' });
 
   return (
-    <>
+    <Popover.Root open={panelOpen} onOpenChange={(o) => setDockPanel(o ? 'metronome' : null)} modal={false}>
       {/* 바깥 틀은 하나로 유지해 알약 ↔ 막대가 이어서 변한다(D3). 모서리 반경은 style로 motion이 보간한다
           (layout 애니메이션 중 크기 scale에 모서리가 늘어나는 왜곡을 motion이 보정한다) */}
       <m.div
@@ -142,30 +145,27 @@ export function GlassDock() {
             <m.div key="expanded" className="dock-inner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={DOCK_TRANSITION}>
               <SoundToggle />
               <span className="dock-divider" />
-              <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
-                <button
-                  type="button"
-                  className="dock-metro-body"
-                  aria-label="메트로놈 설정"
-                  aria-expanded={dockPanel === 'metronome'}
-                  title="메트로놈 설정"
-                  onClick={() => setDockPanel(dockPanel === 'metronome' ? null : 'metronome')}
-                >
-                  <MetroIcon />
-                  <span className="dock-bpm">{met.bpm}</span>
-                </button>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={running}
-                  className={`dock-switch${running ? ' on' : ''}`}
-                  aria-label={locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : met.playing ? '메트로놈 정지' : '메트로놈 재생'}
-                  title="메트로놈 켜기 / 끄기"
-                  onClick={toggle}
-                >
-                  <span className="dock-switch-knob" />
-                </button>
-              </div>
+              <Popover.Anchor asChild>
+                <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
+                  <Popover.Trigger asChild>
+                    <button type="button" className="dock-metro-body" aria-label="메트로놈 설정" title="메트로놈 설정">
+                      <MetroIcon />
+                      <span className="dock-bpm">{met.bpm}</span>
+                    </button>
+                  </Popover.Trigger>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={running}
+                    className={`dock-switch${running ? ' on' : ''}`}
+                    aria-label={locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : met.playing ? '메트로놈 정지' : '메트로놈 재생'}
+                    title="메트로놈 켜기 / 끄기"
+                    onClick={toggle}
+                  >
+                    <span className="dock-switch-knob" />
+                  </button>
+                </div>
+              </Popover.Anchor>
               <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(met.bpm - BPM_STEP)}>
                 <svg {...svgProps}>
                   <path d="M6 12h12" />
@@ -194,7 +194,43 @@ export function GlassDock() {
           )}
         </AnimatePresence>
       </m.div>
-      {dockPanel === 'metronome' && <MetronomePanel />}
-    </>
+      {/* key로 접힘 ↔ 펼침 때 AnimatePresence를 새로 만든다 — 앵커(칩)가 사라질 때 패널이 닫힘 애니메이션 중 엉뚱한 위치로 튀지 않고 즉시 언마운트된다.
+          라우트 변경 등 다른 이유로 닫힐 때는 페이드 아웃 후 언마운트 */}
+      <AnimatePresence key={collapsed ? 'collapsed' : 'expanded'}>
+        {panelOpen && !collapsed && (
+          <Popover.Portal key="metronome-panel" forceMount>
+            <Popover.Content
+              asChild
+              forceMount
+              side="bottom"
+              align="start"
+              sideOffset={8}
+              collisionPadding={12}
+              aria-label="메트로놈 설정"
+              onOpenAutoFocus={(e) => {
+                // 열릴 때 첫 조작(켜기 토글)으로 초점 — 닫힐 때는 Radix 기본대로 칩으로 돌아간다
+                e.preventDefault();
+                panelRef.current?.querySelector<HTMLElement>('[role="switch"]')?.focus();
+              }}
+              // 칩 안의 켜기 스위치 클릭은 패널을 닫지 않는다(기존 동작). 칩 본체는 트리거가 직접 토글한다
+              onInteractOutside={(e) => {
+                if ((e.target as Element | null)?.closest('.dock-metro-chip')) e.preventDefault();
+              }}
+            >
+              <m.div
+                ref={panelRef}
+                className="metro-popover"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={PANEL_TRANSITION}
+              >
+                <MetronomePanel />
+              </m.div>
+            </Popover.Content>
+          </Popover.Portal>
+        )}
+      </AnimatePresence>
+    </Popover.Root>
   );
 }

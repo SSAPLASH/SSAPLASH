@@ -1,9 +1,10 @@
-/* Navigation / MetronomePanel 228:5712 — Dock 아래 오른쪽 360 */
-.metro-panel {
-  position: absolute;
-  top: calc(100% + var(--space-s));
-  right: 0;
+/* Navigation / MetronomePanel 228:5712 — Dock 칩 아래 360. 위치는 Radix Popper가 잡는다(포털로 body에 붙음) */
+.metro-popover {
+  /* Dock(.shell-dock z 30) 위, 대화상자(50) 아래. Radix가 이 값을 위치 래퍼에 복사한다 */
   z-index: 31;
+  outline: none;
+}
+.metro-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-m);
