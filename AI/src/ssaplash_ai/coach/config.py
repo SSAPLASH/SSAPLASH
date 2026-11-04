@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.2"
+ANALYZER_VERSION = "weak-rules-0.3"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
