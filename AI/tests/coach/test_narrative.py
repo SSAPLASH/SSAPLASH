@@ -408,3 +408,25 @@ def test_재시도_안내는_그_내용을_문장에서_말하지_말라고_알�
     prompt = build_user_prompt(_facts(), hint="점수 금지")
 
     assert "이전 시도의 문제" in prompt and "말하지 말고" in prompt
+
+
+def test_숫자_뒤의_단위_ms는_영어_글자로_치지_않는다():
+    facts = _facts(
+        segments=[
+            {
+                "pattern": "TIMING_LATE",
+                "severityLevel": "LOW",
+                "pads": [],
+                "fromMs": 1000.0,
+                "toMs": 20000.0,
+                "scope": "WHOLE",
+                "metrics": {"severity": 0.36, "meanDeltaMs": 21.7, "hitCount": 22},
+            }
+        ],
+        strengthPad=None,
+        focusPattern="TIMING_LATE",
+    )
+
+    assert check("평균 21.7ms 늦게 치고 있어요. 박 소리를 듣고 제때 쳐 보세요.", facts) == []
+    assert check("평균 21.7 ms로 늦게 치고 있어요. 박 소리를 듣고 제때 쳐 보세요.", facts) == []
+    assert check("평균 21.7ms 늦게 쳐요. good job이에요.", facts)  # 다른 영어는 여전히 걸린다

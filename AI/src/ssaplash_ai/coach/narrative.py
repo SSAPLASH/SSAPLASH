@@ -88,6 +88,7 @@ _SPECIAL_TOKENS = re.compile(
     re.DOTALL,
 )
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_UNIT_MS = re.compile(r"(?<=\d)\s*ms(?![A-Za-z])")
 # 한글·숫자·기본 문장부호·공백·% 외의 글자(한자, 가나, 영어 단어, 이모지)가 섞였는지 본다
 _FOREIGN = re.compile(r"[A-Za-z぀-ヿ㐀-鿿\U0001F000-\U0001FFFF☀-➿]")
 _MARKUP = re.compile(r"[*#`>|\[\]{}_]|^\s*[-•·]\s", re.MULTILINE)
@@ -310,7 +311,8 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
         problems.append("한 문단이 아님(줄바꿈)")
     if _MARKUP.search(body):
         problems.append("마크다운·목록 표시가 있음")
-    if _FOREIGN.search(body):
+    # 숫자 뒤의 단위 ms는 정당한 표기라 영어 글자로 치지 않는다
+    if _FOREIGN.search(_UNIT_MS.sub("", body)):
         problems.append("한글이 아닌 글자(영어·한자·가나·이모지)가 섞임")
     if not re.search(r"[가-힣]", body) or not body.endswith(
         ("요.", "요!", "요", "다.", "다!", "다")
