@@ -20,6 +20,7 @@ import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { smoothBattery } from '@/domain/stickStatus';
 import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
+import { isSensorSource } from '@/domain/events';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -225,7 +226,7 @@ export function bootstrapInput(): void {
   // 손별 연결은 소스가 알린다(동글은 LINK 마스크, 그 외는 STATUS·포트 닫힘). STATUS는 5초마다 와서 같은 연결이 반복된다.
   // 끊김 → 자동 재연결 시작, 양손 복귀 → settle, 비트 5(설정 전) → 설정 재전송(설계 PLAY-002 4-1).
   inputManager.onStatus((stickId, connected, source, batteryPct, unconfigured) => {
-    if (source === 'keyboard') return;
+    if (!isSensorSource(source)) return;
     const live = useLive.getState();
     const wasConnected = live.connected[stickId];
     const c = [...live.connected] as [boolean, boolean];
@@ -284,7 +285,7 @@ export function bootstrapInput(): void {
     // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
-    if (hit.source !== 'keyboard') yawDriftMonitor.observe(hit, currentProfile());
+    if (isSensorSource(hit.source)) yawDriftMonitor.observe(hit, currentProfile());
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);

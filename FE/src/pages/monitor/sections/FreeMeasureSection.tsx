@@ -6,6 +6,7 @@ import { inputManager } from '@/app/sources';
 import { addHit, emptyHitStats, meanSensorDistance, type HitStats } from '@/domain/hitStats';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { useLive } from '@/store/liveStore';
+import { isSensorSource } from '@/domain/events';
 
 let tally: HitStats = emptyHitStats();
 const listeners = new Set<() => void>();
@@ -31,7 +32,7 @@ export function FreeMeasureSection() {
     });
   }, []);
 
-  const nearest = lastHit && lastHit.source !== 'keyboard' ? inputManager.previewPad(lastHit.pose) : null;
+  const nearest = lastHit && isSensorSource(lastHit.source) ? inputManager.previewPad(lastHit.pose) : null;
   const meanDist = meanSensorDistance(stats);
 
   return (
