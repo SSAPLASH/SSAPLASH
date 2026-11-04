@@ -165,9 +165,13 @@ class AdminSongApiTest {
 		assertThat(listedForUser(id)).isTrue();
 		var detail = send(get("/api/v1/songs/" + id), user);
 		status(detail, 200);
-		assertThat(body(detail).path("charts")).hasSize(3);
+		// 260번: 이 MIDI는 NORMAL과 HARD의 노트가 같아(10개) 회원 응답에서는 HARD가 빠진다. ADMIN 응답(위)은 3난이도 그대로다.
+		assertThat(body(detail).path("charts").valueStream().map(c -> c.path("difficulty").asString()).toList()).containsExactly("EASY", "NORMAL");
 		long chartId = body(detail).path("charts").get(0).path("id").asLong();
 		status(send(get("/api/v1/charts/" + chartId), user), 200);
+		// 숨긴 HARD도 채보 id로는 그대로 조회된다(과거 플레이 기록에서 다시 열기).
+		long hardId = song.path("charts").valueStream().filter(c -> "HARD".equals(c.path("difficulty").asString())).findFirst().orElseThrow().path("id").asLong();
+		status(send(get("/api/v1/charts/" + hardId), user), 200);
 	}
 
 	@Test
