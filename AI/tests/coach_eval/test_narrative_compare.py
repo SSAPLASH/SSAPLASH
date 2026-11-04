@@ -121,3 +121,36 @@ def test_MLflow_없이도_표만_저장한다(tmp_path):
     )
 
     assert code == 0 and "| m |" in out.read_text(encoding="utf-8")
+
+
+def _down(system, user):
+    raise ConnectionError("모델 서버 꺼짐")
+
+
+def test_모델_서버에_닿지_못하면_표와_MLflow에_기록하지_않고_멈춘다(tmp_path, capsys):
+    out = tmp_path / "x.md"
+    uri = str(tmp_path / "mlruns")
+
+    code = nc.main(
+        ["--model", "m", "--repeats", "1", "--out", str(out), "--mlflow", "--tracking-uri", uri],
+        generator_factory=lambda url, model, **kw: _down,
+    )
+
+    assert code == 2
+    assert not out.exists() and not (tmp_path / "mlruns").exists()
+    assert "한 건도 쓰지 못함" in capsys.readouterr().err
+
+
+def test_일부_모델만_서버_오류면_그_모델만_알리고_멈춘다(tmp_path, capsys):
+    out = tmp_path / "x.md"
+
+    def factory(url, model, **kw):
+        return _down if model == "dead:1b" else _good
+
+    code = nc.main(
+        ["--model", "ok:1b", "--model", "dead:1b", "--repeats", "1", "--out", str(out)],
+        generator_factory=factory,
+    )
+
+    assert code == 2 and not out.exists()
+    assert "dead:1b" in capsys.readouterr().err
