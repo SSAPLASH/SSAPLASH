@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KIT_PAD_TO_PAD_ID, resolveKitPads, type KitConfig } from './kitConfig';
+import { KIT_PAD_TO_PAD_ID, resolveKitPads, resolveKitVariants, type KitConfig } from './kitConfig';
 
 const config = (baked: boolean): KitConfig => ({
   name: 't',
@@ -42,5 +42,31 @@ describe('kitConfig', () => {
       expect(p.gain).toBe(1);
       expect(p.playbackRate).toBe(1);
     }
+  });
+});
+
+describe('resolveKitVariants (PLAY-002 하이햇 열림 선택 항목)', () => {
+  const withOpen = (baked: boolean): KitConfig => ({
+    ...config(baked),
+    pads: { ...config(baked).pads, hihat_open: { file: 'audio/hihat_open.wav', gain: 0.9, playbackRate: 1.1 } },
+  });
+
+  // 인수 조건: hihat_open 키가 있을 때만 변형 항목, 게인·재생 속도는 설정대로
+  it('pads.hihat_open이 있으면 HIHAT_OPEN 항목을 낸다', () => {
+    expect(resolveKitVariants(withOpen(false))).toEqual([
+      { variant: 'HIHAT_OPEN', file: 'audio/hihat_open.wav', gain: 0.9, playbackRate: 1.1 },
+    ]);
+  });
+
+  it('adjustmentsBakedIntoWav면 gain·rate를 1로 취급한다', () => {
+    expect(resolveKitVariants(withOpen(true))[0]).toMatchObject({ gain: 1, playbackRate: 1 });
+  });
+
+  it('hihat_open이 없으면 빈 배열', () => {
+    expect(resolveKitVariants(config(false))).toEqual([]);
+  });
+
+  it('hihat_open은 일반 패드 목록에 들어가지 않는다', () => {
+    expect(resolveKitPads(withOpen(false)).map((p) => p.pad)).toEqual(['KICK', 'SNARE', 'SMALL_TOM', 'MID_TOM']);
   });
 });
