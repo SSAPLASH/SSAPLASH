@@ -1,6 +1,6 @@
 {
   "name": "SSAPLASH selected kit",
-  "masterVolume": 0.21,
+  "masterVolume": 1,
   "adjustmentsBakedIntoWav": false,
   "pads": {
     "kick": {
@@ -17,7 +17,7 @@
       "file": "audio/snare.wav",
       "label": "강한 중앙 타격",
       "sampleId": "snare-2",
-      "gain": 1.2,
+      "gain": 1.5,
       "semitones": 0,
       "playbackRate": 1.0,
       "source": "snare_14/center/top/sn_center_vl10_rr1.flac",
@@ -27,7 +27,7 @@
       "file": "audio/hihat.wav",
       "label": "페달 닫기",
       "sampleId": "hihat-5",
-      "gain": 0.8,
+      "gain": 1.2,
       "semitones": 0,
       "playbackRate": 1.0,
       "source": "hihat_14/chik/cl/ht_chik_vl4_rr1.flac",
@@ -67,7 +67,7 @@
       "file": "audio/crash.wav",
       "label": "Virtuosity · 룸 마이크",
       "sampleId": "crash-12",
-      "gain": 1,
+      "gain": 0.6,
       "semitones": 0,
       "playbackRate": 1.0,
       "source": "Virtuosity / Samples/room/crash/room_crash_crash_vl2_rr1.flac",
@@ -77,7 +77,7 @@
       "file": "audio/ride.wav",
       "label": "22인치 · 벨",
       "sampleId": "ride-2",
-      "gain": 1,
+      "gain": 2,
       "semitones": 0,
       "playbackRate": 1.0,
       "source": "ride_22/bl/cl/rd_bl_vl3_rr1.flac",

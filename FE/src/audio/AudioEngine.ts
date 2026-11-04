@@ -12,6 +12,27 @@ export interface LatencyInfo {
 /** getOutputTimestamp 짝이 현재 시각과 이만큼 넘게 어긋나면 무효로 본다(수십 초 오류만 거르는 폭) */
 const ANCHOR_MAX_SKEW_MS = 1000;
 
+/** 안전 리미터: 이 크기(약 −2dBFS)까지는 그대로 통과시키고, 그 위만 1.0 아래로 부드럽게 눌러 클리핑을 막는다 */
+const LIMIT_KNEE = 0.8;
+/** 리미터가 받는 입력 범위(±배). 그 밖은 1.0으로 고정된다(+12dB까지 부드럽게 처리) */
+const LIMIT_RANGE = 4;
+
+/**
+ * 소프트 리미터 곡선(WaveShaper용). WaveShaper는 입력 −1..1을 곡선 양 끝에 대응시키므로
+ * 앞단에서 1/LIMIT_RANGE로 줄인 신호를 받아 원래 크기로 되돌린 값을 낸다.
+ * DynamicsCompressorNode는 Chrome에서 6ms 지연과 문턱 아래 3~4dB 감쇠가 있어 쓰지 않는다(2026-11-03 측정).
+ */
+export function softLimitCurve(n = 4097): Float32Array<ArrayBuffer> {
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = ((i / (n - 1)) * 2 - 1) * LIMIT_RANGE;
+    const a = Math.abs(x);
+    const y = a <= LIMIT_KNEE ? a : LIMIT_KNEE + (1 - LIMIT_KNEE) * Math.tanh((a - LIMIT_KNEE) / (1 - LIMIT_KNEE));
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
+}
+
 type Voice = (ctx: AudioContext, out: AudioNode, when: number, vel: number) => void;
 
 function noiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
@@ -143,7 +164,13 @@ export class AudioEngine {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.8;
-      this.master.connect(this.ctx.destination);
+      // master → 입력 축소 → 소프트 리미터(지연 0) → 출력
+      const limitIn = this.ctx.createGain();
+      limitIn.gain.value = 1 / LIMIT_RANGE;
+      const limiter = this.ctx.createWaveShaper();
+      limiter.curve = softLimitCurve();
+      limiter.oversample = 'none';
+      this.master.connect(limitIn).connect(limiter).connect(this.ctx.destination);
       this.padBus = this.ctx.createGain();
       this.padBus.gain.value = this.padMuted ? 0 : 1;
       this.padBus.connect(this.master);
