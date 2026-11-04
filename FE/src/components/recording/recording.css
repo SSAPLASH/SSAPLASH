@@ -48,3 +48,72 @@
   opacity: 0.5;
 }
 
+/* Recording / SaveRecordingDialog 523:31268 */
+.dialog.rec-save-dialog {
+  max-width: 560px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-color: var(--line-strong);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.rec-save-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.rec-save-bottom {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.rec-save-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.rec-save-limit {
+  color: var(--text-2);
+}
+.rec-save-help {
+  color: var(--text-3);
+}
+.rec-save-summary {
+  color: var(--text-1);
+}
+.rec-save-error {
+  color: var(--miss);
+}
+.rec-save-footer {
+  flex: none;
+  width: 172px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 녹음 알림 토스트: 하단 중앙 고정, 저장 창(.dialog-backdrop z-index 50)보다 위 */
+.rec-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-l);
+  z-index: 70;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.rec-toast-region a {
+  pointer-events: auto;
+  margin-left: 8px;
+  color: inherit;
+  text-decoration: underline;
+}
+/* 저장 창 입력칸은 도움말·카운터가 없으므로 빈 foot 줄을 없애 Figma 간격(24)을 맞춘다 */
+.dialog.rec-save-dialog .ui-input-foot {
+  display: none;
+}
