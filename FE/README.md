@@ -74,25 +74,25 @@ src/
 │   ├─ ui/           도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState · Toggle · Checkbox(네이티브 input + label) · Segmented · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
 │   ├─ auth/         로그인·가입 동의 — AuthBrandPane(왼쪽 브랜드 영역) · ProviderIcons(Google 공식 4색 고정·SSAFY 자리표시) · TermsItem(약관 한 항목, 96 높이 스크롤 상자) · SignupConsentCard(가입 동의 카드, 동의 상태 보관) · auth.css
 │   ├─ song/         곡 표시 공통 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄) · DeletedSongChip(삭제된 곡 칩) · useDeletedSongIds(삭제된 BE 곡 id 집합 훅)
-│   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행)
+│   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, 동글 소스면 P 점 추가, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · CoachSummaryCard(총평) · WeakSegments(AI 약점 구간·상태 안내) · SegmentPlaybackPanel(구간 재생 UI) · useSegmentPlayer(구간 재생 상태)
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
 │   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
-│   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손 끊김 띠) · free.css
+│   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손·페달 끊김 띠) · free.css
 │   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
 │   ├─ InputSource         공통 인터페이스 · ClockSync
-│   ├─ deviceState         기기별 상태(role 0~3 네 칸: 시계·SYNC 대기·연결·배터리/설정 전 보류). 이벤트는 손(0·1)만 — 페달 대비
+│   ├─ deviceState         기기별 상태(role 0~3 네 칸: 시계·SYNC 대기·연결·배터리/설정 전 보류). 이벤트는 손(0·1)은 status·hit·pose, 발(2·3)은 pedalStatus·hit(foot)·pedal
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
 │   ├─ KeyboardPadSource   키 코드 타격 (항상 켜짐)
 │   ├─ PointerStickSource  마우스 위치 → 자세, 키/클릭 → 타격 (모의 IMU) + 디스크립터
 │   ├─ BleStickSource      Web Bluetooth GATT + 디스크립터
 │   ├─ WebSocketStickSource  허브 · PC 브리지 + 디스크립터
-│   ├─ WebSerialStickSource  USB 직결·동글(Web Serial) + 디스크립터. LINK·STATUS 비트 5 처리, reopen, 재장착(connect 이벤트) 자동 재열기
+│   ├─ WebSerialStickSource  USB 직결·동글(Web Serial) + 디스크립터. LINK 네 비트(손 2 + 발 2)·STATUS 비트 5 처리, 페달(role 2·3) 수신, reopen, 재장착(connect 이벤트) 자동 재열기
 │   ├─ serialFraming       직결 프레이밍(SOF·LEN·CRC8) 인코더·디코더
-│   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷
+│   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷(v0.8.1: PEDAL 0x08, role 2·3 해석)
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
@@ -100,7 +100,7 @@ src/
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입)
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입) · pedalStatus(페달 연결·배터리 표시 문구, 페달 필수 기기 판정)
 └─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
@@ -172,6 +172,15 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 | `LANE_PADS` | 9 | 노트 레인·킷 보기·칩 목록. 레인 순서는 크래시 · 하이햇 페달 · 하이햇 · 스네어 · 스몰탐 · 미드탐 · 플로어탐 · 라이드 · 킥(페달은 하이햇 왼쪽). 킷 보기는 이 순서가 아니라 배치 좌표로 그린다. 레인에 없는 패드 노트는 노트 하이웨이에 그리지 않는다 |
 | `STICK_PADS` | 7 | 캘리브레이션·스틱 패드 테이블(`stick: true`) |
 
+페달 두 패드는 센서 모드에서 동글에 붙은 페달 보드로 들어온다. 키보드 Space(킥)·B(하이햇 페달)는 키보드 전용 모드(`sensorKind === 'none'`)의 입력이고 개발·시연용으로 센서 모드에서도 눌리지만, 페달 보드와 동시에 쓰면 두 타격이 된다.
+
+| 패드 | 센서 입력(동글, 프로토콜 v0.8.1) | 키보드 |
+| --- | --- | --- |
+| `KICK` | role 3(오른발) `HIT` pad 7 | Space |
+| `HIHAT_PEDAL` | role 2(왼발) `HIT` pad 8, 같은 순간 `0x08 PEDAL` state 1 | B |
+
+페달 타격은 자세 매퍼·채보 후보 보정을 거치지 않고 패킷의 pad·velocity(100) 그대로 `judgedBy: 'stick'`으로 나간다. 손이 아니므로 `ResolvedHit.stickId`는 `null`이고 `foot: 2 | 3`이 기기를 나타낸다(`0 | 1`이던 `stickId` 타입이 `StickId | null`로 넓어졌다). 햅틱(HAPTIC)은 `stickId`가 null이면 보내지 않는다 — 페달에는 모터가 없다. 타격 시각에는 스틱과 같은 `sensorOffsetMs`를 더한다(페달 전용 보정값은 통합 테스트 실측 뒤 정한다).
+
 옛 이름(`HI_TOM` → `SMALL_TOM`)은 `normalizePadId`·`normalizePadKeys`가 한 곳에서 변환한다. 서버 채보(`chartMapping`)·서버 프리셋(`api/presets`)·설정 마이그레이션(v10)·플레이 로그 로드가 이 함수를 거치므로 BE·AI 데이터가 옛 이름이어도 깨지지 않는다. 부족한 패드 배치는 `kitLayout.fillLayout`이 기본값으로 채운다. 프로토콜 패드 번호(0~8, EMB v0.7)는 화면 순서와 별개로 `input/stickProtocol`에 둔다(`PAD_CODE`·`padFromCode`, 0xFF·9 이상은 null).
 
 ## 입력 구조
@@ -182,6 +191,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **터치 입력(`TouchPadSource`, `kind: 'touch'`)**: 자유 연습의 드럼 킷만 켠다(`DrumKit`의 `onPadDown`). 패드를 누르는 즉시(pointerdown) `strike(pad)`가 이벤트를 내고, 자세 매퍼가 이벤트의 `pad`를 그대로 쓴다. 세기는 100 고정, `stickId`는 0·1 교대다. 화면 터치로 실제 스틱을 진동시키지 않는다(햅틱 없음). 키보드처럼 항상 붙어 있다.
 - **센서 판정은 `domain/events`의 `isSensorSource`로만 한다**: keyboard·preview·touch는 센서가 아니다. `source !== 'keyboard'`처럼 직접 비교하지 않는다(센서 시각 오프셋·드리프트 보정·센서 통계가 오염된다). `'touch'`는 `sensorRegistry` 예약어다.
 - **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 명령 0x14~0x17·파라미터 표(`STICK_PARAMS`)도 같은 파일에 있다.
+- **페달 타격**: role 2·3 HIT는 `InputManager`의 별도 경로(`handleFootHit`)로 매퍼를 건너뛰고 `ResolvedHit`이 된다([패드](#패드)). 플레이 로그·업로드 본문(`stickId: null`)·텔레메트리·이펙트(`hand` null)에는 손 없음으로 남고, 녹음은 `stickId` 키 자체를 생략한다(서버가 null을 400으로 거부).
 - **스틱 판정 우선 규칙**: HIT `pad`가 있으면 자세 매퍼보다 우선해 그 패드로 재생한다(`judgedBy: 'stick'`). `pad`가 0xFF면 자세 매퍼(`'pose'`).
   채보 후보가 있고 `pad`가 후보 밖일 때만, 스틱이 애매하다고 했거나(`ambiguous`) `marginDeg`가 `AMBIGUOUS_MARGIN_DEG`(10°) 미만이면 가장 가까운 후보로 보정한다(`'chart'`). 확신 있는 오타는 그대로 두어 리듬 세션이 MISS 처리한다.
   세기는 스틱 `velocity`를 그대로 쓰고(펌웨어 곡선), 없을 때만 FE 가속도 곡선을 쓴다. 판정 출처는 `ResolvedHit.judgedBy`·텔레메트리에 남는다.
@@ -231,7 +241,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 `/setup` 한 페이지에서 연결·보정·프리셋·배치를 끝낸다. 위에서 아래로 (연주 준비에서 왔을 때만) 복귀 띠 → 머리("연주 환경 설정 · 3단계 중 n단계 완료") → 단계 카드 3장 → 드럼 배치 카드 → 접힌 고급 설정 → 하단 고정 바 순이다. 순서를 강제하지 않아 어느 영역이든 언제나 조작할 수 있다.
 
 - **단계 카드**(`components/setup/StepCard`) — 번호/체크 원, `ui/StatusPill` 상태(완료·진행 중·필요·필요 없음 — 필요한 단계를 펼쳐 두면 「진행 중」, 복귀 띠가 떠 있으면 「필요」(빨강 테두리) 유지), 한 줄 요약, 오른쪽 텍스트 버튼(160×44). 판정·요약 문구는 `domain/setupSteps.setupSteps()`가 `readiness()`의 `missing`에서 유도한다(규칙 중복 없음).
-  - ① **스틱 연결** — 왼손·오른손 `StickCard` 2장(연결 점·배터리), 입력 소스 선택, 소스 옵션 패널, 패드 표·방위각 문구. 센서를 쓰면 **양손이 모두 연결**돼야 완료다. 연결이 끊겼다 돌아오면(`referenceStale`) 시작 위치를 다시 맞추라는 안내만 낸다. 스틱은 버튼으로 켜면 동글에 자동으로 붙고, 동글↔브라우저는 한 번 허락한 포트를 페이지를 열 때 자동으로 다시 연다. Web Serial이면 맨 위에 동글 줄을 둔다: 포트가 안 열렸으면 [동글 연결](처음 한 번 포트 선택), 열렸으면 "동글이 연결됐어요"(스틱 0개면 "스틱 버튼을 눌러 켜 주세요")와 [다른 동글 연결], LINK가 3초 넘게 끊기면 "동글 응답이 없어요". 키보드만 쓰면 "필요 없음"이지만 [변경]으로 펼쳐 센서를 고를 수 있다.
+  - ① **스틱 연결** — 왼손·오른손 `StickCard` 2장(연결 점·배터리), 입력 소스 선택, 소스 옵션 패널, 패드 표·방위각 문구. 센서를 쓰면 **양손이 모두 연결**돼야 완료다. 연결이 끊겼다 돌아오면(`referenceStale`) 시작 위치를 다시 맞추라는 안내만 낸다. 스틱은 버튼으로 켜면 동글에 자동으로 붙고, 동글↔브라우저는 한 번 허락한 포트를 페이지를 열 때 자동으로 다시 연다. 센서가 Web Serial이면 두 손 카드 아래에 페달 줄이 붙고("페달 연결됨 · 82%" / "페달 연결 안 됨 · 페달을 켰다면 동글을 다시 꽂아 주세요") 페달도 완료 조건이다. Web Serial이면 맨 위에 동글 줄을 둔다: 포트가 안 열렸으면 [동글 연결](처음 한 번 포트 선택), 열렸으면 "동글이 연결됐어요"(스틱 0개면 "스틱 버튼을 눌러 켜 주세요")와 [다른 동글 연결], LINK가 3초 넘게 끊기면 "동글 응답이 없어요". 키보드만 쓰면 "필요 없음"이지만 [변경]으로 펼쳐 센서를 고를 수 있다.
   - ② **시작 위치 보정** — 3초 자세 유지(`ReferenceCapture`, 진행 바·퍼짐 표시). 완료하면 `resetPose()`와 함께 `referenceSetAt`을 기록한다. 완료 뒤 [다시 하기]는 펼치고 바로 보정을 시작한다. 보정 중 연결이 끊기면 처음부터 다시 센다. 키보드만 쓰면 "필요 없음".
   - ③ **프리셋** — 목록(이름·기본 ★·"적용 중" 배지, 적용·기본으로·삭제)과 [새 프리셋으로 저장](이름 창 `PresetNameDialog`, 1~20자·중복 검사가 입력 중 반영).
 - **펼침 규칙**(`domain/setupExpand`) — 펼침 = 사용자가 연 단계 ∪ 모자란 첫 단계. 모자란 첫 단계가 바뀌면 그 단계를 새로 펼치고, 자동으로 펼친 단계는 끝나면 접힌다. 진입 때 한 번만 모자란 첫 단계 카드로 스크롤한다. 다 끝났으면 아무것도 펼치지 않는다.
@@ -247,13 +257,21 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 ## 준비 조건
 
-**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동·패드 표 재전송)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다(감싼 SET_PAD_TABLE은 패킷당 패드 2개). 기기별 상태는 `input/deviceState`의 role 0~3 네 칸이고, role 2·3(발)은 칸만 갱신하고 이벤트는 내지 않는다(페달은 232 확정 뒤).
+**스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동·패드 표 재전송)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다(감싼 SET_PAD_TABLE은 패킷당 패드 2개). 기기별 상태는 `input/deviceState`의 role 0~3 네 칸이고, role 2·3(발)도 같은 네 칸을 쓰며 이벤트는 `pedalStatus`·`pedal`로 낸다(아래 "페달 보드").
+
+**페달 보드(PLAY-002, 설계 `.claude/plans/PLAY-002-pedal-input.md`, 프로토콜 v0.8.1):** 킥·하이햇 페달은 동글에 붙은 페달 보드 하나지만 프로토콜이 role 2(왼발 하이햇)·3(오른발 킥) 두 기기처럼 보내므로 FE도 두 칸으로 둔다. `0x07 LINK` 마스크는 bit0~1 손, bit2 왼발, bit3 오른발이고, role 2·3 STATUS는 배터리만 싣는다(비트 5 없음 — 발은 설정 재전송 대상이 아니고 시계 초기화만 한다). SYNC_ACK는 role별로 와서 각 칸 시계가 따로 맞는다(LINK 0→1 때 그 칸 시계 초기화 + SYNC 5회는 손과 같다). `0x08 PEDAL`(state 0 뗌·1 밟음)은 하이햇(role 2)만 오고 시각을 그 칸 시계로 환산해 `pedal` 이벤트로 낸다. 상태는 `liveStore.pedal { connected: [왼발, 오른발], battery, hihatClosed }`에 둔다(배터리는 최근 3개 평균, 왼발이 끊기면 `hihatClosed`는 true로 되돌린다).
+
+- **필수 기기:** 페달은 동글(`webserial`) 소스에서만 필수다(`domain/pedalStatus.pedalRequired`). 페달 보드가 동글로만 붙으므로 포인터·BLE·WebSocket 소스는 요구하지 않는다(올 수 없어 영구 미준비가 된다). 키보드 전용도 면제다.
+- **준비 조건:** 동글 소스는 손 둘에 더해 두 발이 모두 붙어야 하고(`pedalConnected`), 빠지면 `readiness.missing`에 `'pedal'`("페달을 연결하세요")이 들어간다.
+- **끊김:** 센서 모드에서 발이 연결→끊김이 되면 손과 같이 자동 일시정지(`usePauseTriggers.pedalDropped`)·자동 재연결이 시작되고, 손·발 네 칸이 모두 돌아와야 `settle()`한다.
+- **동글 탐색 제약:** 동글은 첫 기기가 붙은 뒤 10초만 새 기기를 찾는다(EMB 231). 페달을 나중에 켜면 붙지 않으므로 페달 끊김 상태의 세팅 화면이 "동글을 다시 꽂아 주세요"로 안내한다.
+- **화면:** 셸 칩 오른쪽에 "페달 ● 82%"(동글 소스면 항상, 끊김은 빨간 점, `StickStatusIndicator`), 세팅 ① 카드의 두 손 카드 아래 페달 줄(`pedalSetupLine`), 연주 준비 패널의 P 점(`ReadyPanel`, 문구 "왼손·오른손·페달 연결됨"), 끊김 카드(`DisconnectNotice`)·자유 연습 띠(`DisconnectBand`)의 P 점과 "페달 연결이 끊겼어요" 제목. 왼발·오른발을 따로 보이지 않고 "페달" 하나로 묶는다. 실기기 확인은 11/6 통합 테스트(239).
 
 **재연결·설정 재전송(S15P31A307-281, 설계 `.claude/plans/PLAY-002-stick-reconnect.md`):** 설정 원본은 웹 하나이고 스틱 플래시에 저장하지 않는다. 재부팅한 스틱은 STATUS `flags` 비트 5(설정 전)를 보내고, FE는 그 손에만 ROUTE로 패드 표를 강제 재전송(같은 표여도)하고 방위각 오프셋을 0으로 맞춘다(비트 5가 1인 STATUS마다, 손별 1초 쿨다운). 동글 순서상 비트 5 STATUS가 LINK보다 먼저 오므로 안 붙은 손의 배터리·비트 5는 보류했다가 LINK로 붙는 순간 함께 올린다. LINK 비트 0→1이거나 비트 5를 본 기기는 시계 보정(`ClockSync`)을 초기화하고 SYNC를 50ms 간격 5회 보낸다(2초 안 중복은 건너뜀) — 재부팅한 스틱은 시계가 0부터라 옛 offset을 쓰면 안 된다. 비트 5 = 0인 재연결(잠깐 끊김)은 시계만 초기화하고 패드 표·오프셋은 보내지 않는다. SET_PARAM은 게임 화면이 보내지 않으므로 재전송 대상이 아니다.
 
-연주 중 한 손이 끊기면(리듬 게임·악보 연습은 자동 일시정지, 자유 연주는 띠) `app/bootstrap`이 `reconnectStore.start()`로 자동 재연결을 시작한다. 시도 하나 = 웹 쪽 재연결 동작 + 양손 복귀 3초 대기(`app/reconnectPolicy`): Web Serial 동글은 포트를 닫고 다시 열고(`reopen`), 포트가 닫혔으면 허락된 포트를 다시 열고(`autoConnect`), BLE 직결은 보관한 기기에 `gatt.connect()`, WS는 재접속한다. 모두 사용자 제스처가 필요 없는 동작이다. 최대 3회(약 10초) 뒤 `failed`가 되고 끊김 카드는 소스별 안내(`hint`: 동글 "동글을 뺐다 다시 꽂아 주세요")와 [드럼 세팅에서 연결하기]를 보인다. 시도 중 [다시 연결]을 누르면 대기를 끊고 다음 시도로 간다. 동글을 뺐다 꽂으면 `navigator.serial`의 `connect` 이벤트로 클릭 없이 포트를 다시 연다. 양손이 돌아오면 `settle()` → `reconnected`(약 1초, 카드에 「재연결 성공!」·「3초 뒤 이어서 연주해요」) → 리듬 게임·악보 연습은 카운트다운 3·2·1·시작! 뒤 자동으로 이어 연주한다(사용자 클릭 없음). 실기기 확인은 11/6 통합 테스트(239)에서 한다.
+연주 중 한 손이 끊기면(리듬 게임·악보 연습은 자동 일시정지, 자유 연주는 띠) `app/bootstrap`이 `reconnectStore.start()`로 자동 재연결을 시작한다. 시도 하나 = 웹 쪽 재연결 동작 + 기기 복귀 3초 대기(`app/reconnectPolicy`, 손 둘, 동글이면 발 둘까지 네 칸): Web Serial 동글은 포트를 닫고 다시 열고(`reopen`), 포트가 닫혔으면 허락된 포트를 다시 열고(`autoConnect`), BLE 직결은 보관한 기기에 `gatt.connect()`, WS는 재접속한다. 모두 사용자 제스처가 필요 없는 동작이다. 최대 3회(약 10초) 뒤 `failed`가 되고 끊김 카드는 소스별 안내(`hint`: 동글 "동글을 뺐다 다시 꽂아 주세요")와 [드럼 세팅에서 연결하기]를 보인다. 시도 중 [다시 연결]을 누르면 대기를 끊고 다음 시도로 간다. 동글을 뺐다 꽂으면 `navigator.serial`의 `connect` 이벤트로 클릭 없이 포트를 다시 연다. 필요한 기기가 모두 돌아오면 `settle()` → `reconnected`(약 1초, 카드에 「재연결 성공!」·「3초 뒤 이어서 연주해요」) → 리듬 게임·악보 연습은 카운트다운 3·2·1·시작! 뒤 자동으로 이어 연주한다(사용자 클릭 없음). 실기기 확인은 11/6 통합 테스트(239)에서 한다.
 
-연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈은 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
+연주 전 준비 조건은 세 가지다: 스틱 연결(`connected[0] && connected[1]`, 왼손·오른손 모두, 동글 소스는 두 발 `pedal.connected`도), 최초 설정 완료(`settings.firstSetupDone`), 적용된 프리셋(`activePresetId`). 판정은 `domain/readiness.ts`의 `readiness()`가 하고, 키보드 전용(`sensorKind === 'none'`)은 면제라 안내가 뜨지 않는다. 홈은 `ReadinessNotice`로 미비 항목과 "설정으로" 버튼만 보여주고 진입은 막지 않는다. 리듬 게임·악보 연습은 곡을 고른 준비 단계에서 같은 안내를 보여주고 조건이 모자라면 시작 버튼과 Enter를 막는다. "설정으로"는 `returnTo`를 넘겨 복귀 띠로 그 화면으로 돌아온다(곡 선택이 URL에 있어 같은 곡의 준비 화면으로 돌아온다).
 
 ## 곡·채보 조회
 
@@ -321,7 +339,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **연결(`PlayPage`):** 곡 선택 시점에 `new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach })`를 만들어 설정값을 고정한다(도중 설정 변경은 다음 플레이부터). `onJudgement`에서 기록·팝업·HUD 갱신 뒤에 `push`하고, 문구가 나오면 `coachCopy`로 화면 문구를 만들어 `useCoachLine`(`components/play`, 타이머 규칙은 순수 모듈 `coachLineTimer`)에 `displayMs`(3초) 동안 올린다. 다시 하기에서 `reset()`과 문구 비움, 종료 시 `events()`를 `buildPlayLog`의 `liveCoachEvents`로 넘긴다. 변환·표시는 try/catch로 감싸 코칭 오류가 플레이를 막지 않는다.
 - **화면 문구(`coach/live/copy.ts`):** 모듈의 `text`는 로그 전용이고 화면은 `coachCopy(message)`가 돌려주는 짧은 제목(≤10자)·보조(≤16자)·모드를 쓴다. 대상이 있는 태그는 `message.target`(패드 또는 손)으로 "{패드}만 늦어요"·"{왼손/오른손}이 약해요"를 만든다. `GuideSlot` 모드는 태그로 정한다 — `LIVE_MISS_STREAK`만 `coach-warn`, 나머지는 `coach-info`(`severity`는 아직 화면에 쓰지 않는다). 안내 칸(220×51)은 코칭 모드에서 라벨("실시간 코칭")+제목 두 줄만 보인다 — 보조까지 세 줄이면 넘친다. 문구·톤은 이 파일에서만 고친다.
 - **손·세기:** `RhythmSession`의 `JudgementEvent`에 `stickId`·`velocity`가 있다. `handleHit`이 `ResolvedHit`에서 채우고, MISS(`tick`)와 키보드 타격(`source === 'keyboard'`, 손이 자리값이고 세기가 고정이라 뜻이 없음)은 둘 다 null이다. 손 정보가 없으면 손별 규칙만 제외된다.
-- **패드 규칙 대상:** `STICK_PADS`(스틱 7개)만 평가한다. 킥·하이햇 페달은 페달 입력 기준(EMB)이 정해진 뒤 넣는다.
+- **패드 규칙 대상:** `STICK_PADS`(스틱 7개)만 평가한다. 킥·하이햇 페달은 평가하지 않는다(COACH-001 D5). 페달 판정은 손·세기가 null이라 손별 규칙에서도 자연히 빠진다.
 - **규칙 5종**(`rules.ts`): `LIVE_MISS_STREAK`(연속 3번 또는 최근 6개 중 4개 놓침) · `LIVE_LATE`/`LIVE_EARLY`(최근 12개 평균이 `0.3 × goodMs` 이상이고 같은 부호가 75% 이상) · `LIVE_PAD_LATE`/`LIVE_PAD_EARLY`(한 패드가 나머지 패드보다 `0.45 × goodMs` 이상 늦거나 빠름) · `LIVE_HAND_WEAK`(한 손 평균 세기가 다른 손의 70% 미만) · `LIVE_UNSTEADY`(편차가 `0.5 × goodMs` 이상).
 - **표시 정책**(`policy.ts`): 판정 8개 전에는 띄우지 않고, 문구 사이 8초, 같은 키는 25초, 플레이당 10개, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자). 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
 - **로그 태그:** 위 규칙 태그 + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다. `PlayLog.liveCoachEvents`(`engine/playLog`의 `LiveCoachEvent`, `coach`를 import하지 않는 구조적 타입)에 저장되고 업로드 본문(`domain/playUpload`)에는 `log.liveCoachEvents ?? []`로 실린다 — 기능 도입 전 로그는 빈 배열이라 "코칭 켬·문구 0개"와 구분되지 않으니 효과 평가는 `clientMeta.appVersion`·업로드 날짜로 거른다(AI에 회신함).
@@ -350,7 +368,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 | 킥 | — | Space |
 | 하이햇 페달 | — | B |
 
-Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매핑이며 `domain/keyMap.ts`의 `KEY_MAP` 상수로만 정의한다.
+Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 페달 보드다([패드](#패드)). 사용자가 바꿀 수 없는 고정 매핑이며 `domain/keyMap.ts`의 `KEY_MAP` 상수로만 정의한다.
 
 자유 연습(`/free`)은 치면 바로 울린다. 화면은 반주 바 → 캔버스 카드(`DrumKit` `fitWidth` 최대 1.25, ≤1024는 1.1) → 정보 띠(최근 타격 패드·손·세기 · 세션 통계 타격 수·평균 세기) 순이다.
 
@@ -372,7 +390,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
 - **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
 - **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 반주 0초 = 세션 0ms이고 카운트인은 격자 원점 `offsetMs`에서 끝난다. 준비 화면 칩은 `offsetMs`가 1박 이상이면 "첫 박 n.n초"를 덧붙여 인트로 동안 커서가 서 있는 이유를 알린다.
 - **화면(연주 중):** `PlayStage`가 위에서부터 HUD(`PlayHud sheet` — PERFECT·GOOD·MISS 수·경과/길이·연습 단계·BPM), 악보(`SheetPager`, 높이 420·전폭), 드럼 영역(안내 `GuideSlot`·`DrumKit` 0.7배·최근 타격 `HitReadout`)을 놓는다. 판정 색은 `noteStates` 배열을 판정마다 새 배열로 갱신해 `SheetPager`에 넘기고, 패드 위 다음 박 배지는 `play/useNextBeatLabels`가 `RhythmSession.notes`를 매 프레임 읽어 `DrumKit badges`로 낸다. 카운트인은 `Countdown` 숫자(남은 박 수, 끝나면 「시작!」 0.4초)다.
-- **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱 연결 끊김(`disconnected` — `liveStore.connected`에서 어느 한 손이라도 true→false가 되고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
+- **일시정지 3종(`components/PauseOverlay`):** Esc(`user`), 스틱·페달 연결 끊김(`disconnected` — `liveStore.connected`에서 어느 한 손, 또는 `liveStore.pedal.connected`의 어느 한 발이 true→false가 되고 센서 모드일 때만), `liveStore.pauseRequested === 'menu'`(E0 사이드바가 올리는 자리. 페이지가 일시정지 후 `null`로 되돌림). 재개는 준비 조건이 충족될 때만 활성(미충족이면 `ReadinessNotice`), 처음부터는 카운트인부터 다시(메트로놈 잠금 유지), 나가기는 기록 없이 준비 화면으로 돌아간다. 오버레이가 열린 동안 타격은 소리만 나고 세션에는 들어가지 않는다.
 - **종료:** 곡이 끝나면 `mode: 'SHEET'` 로그(`chartVersionId`·`presetId` 포함)를 저장하고 `/result/:playId`로 이동한다. 결과 페이지는 SHEET 로그에서 점수·콤보 대신 정확도·판정 분포를 앞에 두고, 업로드가 생략된 플레이(내장 곡 등)에 한해 규칙 기반 "간단 피드백" 카드(최대 3개)와 패드별 요약을 보여 준다(업로드 대상 플레이는 리포트의 AI 약점 분석으로 일원화 — 위 "플레이 기록 업로드·상세 분석" 절). "같은 곡 다시"(Enter)는 `/sheet?song=&chart=`로 간다.
 
 피드백 규칙과 임계값 상수는 `src/domain/feedback.ts`에 있다. 서버 AI 분석이 붙은 뒤로는 업로드가 안 되는 플레이의 폴백으로만 쓴다. 패드 Δ 표준편차 규칙의 기준은 35ms 고정이 아니라 `0.5 × goodMs`(goodMs 50이면 25ms)다 — 오차가 판정 폭 안에 갇혀 있어 고르게 흩어져도 표준편차가 약 0.58×goodMs라 고정값은 거의 걸리지 않았다(AI 쪽과 같은 수정). 로그에 BPM·박자가 없어 결과 페이지는 채보 없이 피드백을 만들므로 마디 범위가 필요한 규칙은 나오지 않는다.
@@ -447,7 +465,7 @@ Shift를 같이 누르면 악센트. 사용자가 바꿀 수 없는 고정 매�
    ```
 3. 브리지 실행(다른 터미널): `pip install pyserial websockets` → `python EMB/tools/ws_bridge.py COM5` (기본 921600, `ws://localhost:8765`)
 4. `npm run dev` → 브라우저에서 **세팅**(`/setup`) → 스틱 연결 "WebSocket 브리지" 선택 → `/monitor/stick`
-5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`). 모의 스틱은 `dongle` 옵션으로 LINK(1초 + 변화 시)를 흉내 내고, `dropHand`·`restoreHand`·`reboot`로 한 손 끊김→복귀·재부팅(STATUS 비트 5 + 시계 0부터, SET_PAD_TABLE을 받으면 비트 5 해제)을 흉내 낸다. ROUTE로 감싼 명령은 마스크의 손에만 적용한다. 단위 테스트가 이 빌더·시나리오를 쓴다.
+5. 하드웨어가 없으면 모니터 상단 바의 **모의 스틱** 토글로 가짜 패킷을 흘려 화면을 확인한다(`monitor/mockStick`). 모의 스틱은 `dongle` 옵션으로 LINK(1초 + 변화 시)를 흉내 내고, `dropHand`·`restoreHand`·`reboot`로 한 손 끊김→복귀·재부팅(STATUS 비트 5 + 시계 0부터, SET_PAD_TABLE을 받으면 비트 5 해제)을 흉내 낸다. ROUTE로 감싼 명령은 마스크의 손에만 적용한다. 페달 패킷(role 2·3 HIT·STATUS, `0x08 PEDAL`, LINK bit2·3)은 빌더(`buildPedal` 등)로 만들어 단위 테스트에서 쓴다 — 모의 스틱이 흘리는 것은 손뿐이다. 단위 테스트가 이 빌더·시나리오를 쓴다.
 
 ### 2스틱 WS 연동
 
@@ -559,6 +577,7 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 패드 소리는 사운드 세트가 정한다. 세팅 화면의 "사운드 세트"에서 `SSAPLASH 키트`(샘플)와 `합성음(임시)`을 고르며 선택은 설정(`soundSetId`)에 저장된다.
 
 - 샘플 세트는 `public/sounds/<id>/kit-config.json`과 `audio/*.wav`를 읽는다. 패드별 게인·재생 속도는 코드가 아니라 이 JSON이 정한다. 키트를 교체하려면 파일과 JSON만 바꾼다. 키트 항목 → 패드 매핑표는 `src/audio/kitConfig.ts`에 있다(`high`=스몰탐, `mid`=미드탐). 샘플이 없는 패드는 `audio/soundSets`의 폴백표를 따라 다른 패드 샘플을 작게 쓴다(하이햇 페달 → 하이햇 0.7배), 폴백도 없으면 합성음.
+- **하이햇 열림/닫힘:** 왼발 페달이 연결돼 있고 뗀 상태(`liveStore.pedal.connected[0] && !hihatClosed`)면 스틱 `HIHAT` 타격이 열림 소리다. 페달이 없거나 끊기면 닫힘(지금 소리)이다. `bootstrap`이 `pedal` 이벤트·연결 변화마다 `AudioEngine.setHihatOpen(open)`으로 알리고, 다음 `HIHAT` 타격부터 반영된다(울리는 열림 소리를 끊는 초크는 없다). 열림 소리는 `kit-config.json`의 선택 항목 `pads.hihat_open`(`file`·`gain`·`playbackRate`, 패드 항목과 같은 형식)이 있으면 그 샘플(`SoundSet.variants.HIHAT_OPEN`), 없으면 합성 열림 보이스(대역 노이즈, 감쇠를 길게)다. 샘플이 없어도 `missing`에 넣지 않는다. 지금 키트 JSON에는 `hihat_open`이 없어 합성 열림 보이스가 난다 — 샘플을 구하면 JSON에 한 항목만 더한다. `HIHAT_PEDAL`(밟는 소리)은 그대로다.
 - 첫 소리(오디오 언락) 이후에 샘플을 불러온다. 불러오는 동안과 파일 하나가 실패한 패드는 합성음으로 울린다. 한 번 불러온 세트는 다시 고를 때 재다운로드하지 않는다.
 - 세기는 게인으로 반영한다(`패드 게인 × 키트 masterVolume × v^1.4`). 그 뒤 버스·마스터 게인이 곱해진다.
 - **음량 3단 구조(설정 화면 오디오 카드, 11/4 hotfix 294):** 타격 게인 → 패드 버스(`soundOn ? drumVolume : 0`, 드럼 음량 0~2) → 마스터(`volume`, 전체 음량) → 소프트 리미터 → 출력. 반주는 반주 버스(`songVolume`, 노래 음량 0~1) → 마스터. 메트로놈 클릭은 마스터 직결이라 전체 음량과 `metronomeVolume`만 받는다. `bootstrap.applySettings`가 설정 변경마다 `AudioEngine.setVolume / setDrumVolume / setSongVolume`을 부르고, 버스 게인이라 울리는 소리에도 즉시 반영된다. 패드 소리 끄기를 풀면 1이 아니라 `drumVolume`으로 돌아온다. 세팅 화면 톡 치기도 패드 버스를 지나므로 드럼 음량 시험에 쓸 수 있다. 저장 설정 v15에서 두 필드가 추가됐고(기본 1) 이전 설정은 마이그레이션이 채운다.
