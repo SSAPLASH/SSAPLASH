@@ -516,6 +516,13 @@ OWASP ZAP 2.17.0으로 운영 도메인(`https://k15a307.p.ssafy.io`)을 **수�
    - 위반이 있으면 병합하지 않고 정책을 고친다. 병합 뒤 문제가 생기면 `default.conf`의 헤더 이름을 `Content-Security-Policy-Report-Only`로 되돌려 배포한다(차단만 풀린다).
    - 확인하지 못한 것: 로그인한 상태의 실제 화면 전체. 이 PC에서는 열어 보지 못했다.
 
+   **CORP 적용 (2026-11-04):** 모든 응답에 `Cross-Origin-Resource-Policy: same-origin`을 붙였다(ZAP 재검증의 "CORP 없음" 경고 대응).
+   - 다른 사이트가 우리 응답을 `<img>`·`<audio>`·`<script>` 태그로 끌어가는 것을 브라우저가 거절한다. 다른 출처의 페이지가 그 응답을 자기 프로세스 메모리에 올리지 못하므로 Spectre 같은 부채널로 읽히는 위험도 줄인다.
+   - **영향 없는 것:** 같은 출처의 `fetch`, `fetch`+CORS 요청(CORP와 별개), 브라우저가 아닌 클라이언트(GPU 워커 등). FE가 다른 사이트·서브도메인의 임베드, 공유 링크 미리보기(OG 이미지), `iframe`, `navigator.share`가 없음을 코드로 확인했다(`INFRA_보안헤더-CSP-화면확인` 회신 5).
+   - 뒤쪽 서버가 같은 헤더를 보내 두 번 나가지 않게 `proxy_hide_header`로 먼저 지웠다. `/models/` 두 위치는 server 블록의 헤더를 물려받지 못해 따로 적었다.
+   - 다른 사이트에 우리 이미지·음원을 보여 주는 기능(공유 미리보기, 임베드)이 생기면 그 경로만 `same-site` 또는 `cross-origin`으로 범위를 다시 정한다.
+   - 시험: `test_upload_limits.py`가 고정 응답(`/health`), 모델 경로, 프록시 경로의 응답에 헤더가 정확히 한 번 있는지 본다. 이 PC에서는 포트를 열 수 없어 실행하지 못했고 `nginx -t`만 통과했다.
+
 **공격 스캔 (로컬, 2026-11-02)**
 
 `main` 코드로 `Infra/docker-compose.yml`의 최소 구성(`nginx`, `web`, `api`, `postgres`, `redis`, `seaweedfs`)을 로컬에 띄우고 ZAP(`zap-api-scan`, 공식 Docker 이미지)으로 공격 스캔했다. **운영 서버에는 어떤 요청도 보내지 않았다.** 환경은 로컬 전용 난수 비밀값을 쓰고 끝난 뒤 볼륨까지 지웠다. 소셜 로그인은 로컬에서 쓸 수 없어, 로컬 DB에 테스트 사용자를 넣고 로컬 `JWT_SECRET`으로 서명한 토큰(일반 2명, 관리자 1명)을 썼다. 대상 API는 BE의 OpenAPI 문서에서 가져온 53개다(로컬 `api`만 문서를 켰고 운영은 `SWAGGER_ENABLED=false`).
