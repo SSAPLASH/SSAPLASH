@@ -16,6 +16,8 @@ export class Accompaniment {
   private positionMs = 0;
   private zeroPerf: number | null = null;
   private _state: AccompanimentState = 'idle';
+  /** 소스 재생 배속(구간 재생 0.75× 등). 다음 start부터 적용 */
+  private rate = 1;
 
   constructor(engine: AudioEngine) {
     this.engine = engine;
@@ -72,6 +74,7 @@ export class Accompaniment {
     }
     const src = ctx.createBufferSource();
     src.buffer = this.buffer;
+    src.playbackRate.value = this.rate;
     src.connect(bus);
     // 이미 지난 시각이면 AudioContext가 즉시 시작한다. 실제 시작 시각을 기록해 동기 Δ에 드러낸다
     const when = Math.max(ctx.currentTime, this.engine.perfToContextTime(atPerfMs));
@@ -109,6 +112,12 @@ export class Accompaniment {
     this.detach();
     this.positionMs = 0;
     if (this._state === 'playing' || this._state === 'paused') this._state = 'ready';
+  }
+
+  /** 재생 배속. 다음 start부터 적용하고, 재생 중이면 현재 소스에도 바로 적용한다(위치 계산은 1배 기준) */
+  setRate(rate: number): void {
+    this.rate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    if (this.source) this.source.playbackRate.value = this.rate;
   }
 
   /** perfMs 시점의 반주 위치(ms). 재생 중이면 계산, 일시정지면 멈춘 위치, 그 외 0 */
