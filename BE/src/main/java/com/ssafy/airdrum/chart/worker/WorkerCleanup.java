@@ -42,6 +42,7 @@ class WorkerCleanup {
             var rows=db.query("""
                 SELECT t.id,t.object_key,t.file_role,t.retry_count FROM file_cleanup_tasks t
                 WHERE t.file_role IN ('STAGING','DRUM_STEM','ACCOMPANIMENT','SHEET_PAGE','COVER','SHEET_MUSIC') AND t.next_attempt_at<=clock_timestamp()
+                  AND t.midi_job_id IS NULL
                   AND (t.status<>'DELETED' OR t.created_at+interval '1 day'>clock_timestamp())
                   AND NOT EXISTS(SELECT 1 FROM chart_jobs j JOIN chart_job_attempts a ON a.id=j.current_attempt_id
                     WHERE j.id=t.job_id AND a.id=t.attempt_id AND j.status IN ('SEPARATING','TRANSCRIBING')

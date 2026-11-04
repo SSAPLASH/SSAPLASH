@@ -92,10 +92,33 @@ be-build:
   extends: .be-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootJar
+    - ./gradlew --no-daemon bootJar bootMidiWorkerJar
   artifacts:
     paths:
       - BE/build/libs/app.jar
+      - BE/build/libs/midi-worker.jar
+    expire_in: 1 week
+
+# 실제 FluidSynth/FFmpeg 실행 경로를 일반 단위 테스트와 별도로 검증한다.
+be-midi-render-test:
+  extends: .be-job
+  image: eclipse-temurin:21-jdk-jammy
+  stage: test
+  variables:
+    MIDI_TEST_FLUIDSYNTH: /usr/bin/fluidsynth
+    MIDI_TEST_SOUNDFONT: /usr/share/sounds/sf2/FluidR3_GM.sf2
+    MIDI_TEST_FFMPEG: /usr/bin/ffmpeg
+    MIDI_TEST_FFPROBE: /usr/bin/ffprobe
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends fluidsynth=2.2.5-1 fluid-soundfont-gm=3.1-5.3 ffmpeg=7:4.4.2-0ubuntu0.22.04.1
+    - echo '74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0  /usr/share/sounds/sf2/FluidR3_GM.sf2' | sha256sum -c -
+    - ./gradlew --no-daemon test --tests '*MidiRendererIntegrationTest'
+  artifacts:
+    when: always
+    reports:
+      junit: BE/build/test-results/test/TEST-*.xml
+    paths:
+      - BE/build/reports/tests/test/
     expire_in: 1 week
 
 # 일회용 TimescaleDB 컨테이너를 service로 붙여 Flyway 이력 전체를 검증한다. 실패를 허용하거나 건너뛰지 않는다.

@@ -148,7 +148,7 @@ sh ./gradlew bootRun
 `songs` → `charts` → `chart_versions` 순서로 생성한다. 86번의 실제 V1 다음에 공통 Flyway 설정으로 자동 적용된다.
 94번은 회원 테이블이나 DB 연결 설정을 별도로 도입하지 않는다. 운영 DB에 V2만 단독 적용하지 않는다.
 
-- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수이며 반주 키는 AUDIO 또는 자체 합성 BUILTIN에만 허용한다.
+- 공용 곡은 소유자가 없고 출처 메타데이터가 필수다. MIDI·AUDIO는 소유자 필수다. V30부터 MIDI 반주 키도 허용한다.
 - 곡·난이도와 채보·버전 조합은 중복되지 않는다. 참조 중인 회원·곡·채보의 물리 삭제를 막는다.
 - `notes`는 배열, `timing`은 객체이며 `note_count`는 노트 배열 길이와 일치해야 한다.
 - `sheet_pages`는 선택적 이미지 페이지 배열이며 이미지 없는 JSON 전달은 SQL NULL로 저장한다.
@@ -557,7 +557,7 @@ AWS SDK의 SigV4, path-style URL을 사용한다. 활성화 시 필수 설정이
 파일은 조회 요청에서 업로드하지 않는다. 저장 키는 92번 경계에 맞춰 다음 형식을 검사한다.
 
 - 이미지: `sheet/{chartVersionId}/{파일명}.png|jpg|jpeg|webp` (파일명은 영문·숫자·`_`·`-`)
-- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a`, 소유자 AUDIO 또는 자체 합성 BUILTIN 곡에 허용
+- 반주: `accompaniment/{songId}.wav|mp3|ogg|flac|m4a` 또는 곡별 불변 UUID 경로. AUDIO·MIDI 또는 자체 합성 BUILTIN 곡에 허용
 
 생성·저장 담당자는 이 키 규칙에 맞춰 연결해야 한다. 임의 URL, 타인 버전, 임시 원본·드럼 트랙,
 경로 이동 문자열은 서명하지 않는다. 객체 부재는 `CHART_ASSET_NOT_FOUND`(404), 미설정·저장소 장애는
@@ -894,8 +894,8 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 ## MIDI 업로드 → 채보 변환 (151번)
 
 CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안에서 채보 3난이도로 바꿔 **내 곡**(`source=MIDI`)으로 저장한다.
-음원과 달리 작업 큐·워커 없이 바로 응답하며, 마이그레이션은 없다(V2의 `MIDI`·`MIDI_RULE` 값을 쓴다).
-MIDI는 소리가 아니라 연주 지시 데이터라 반주가 없고, 원본 파일은 변환 후 보관하지 않는다.
+채보는 계속 동기로 생성한다. 원본은 전용 비공개 버킷에 보관하고 다른 악기 노트가 있으면 별도 CPU 워커가 반주를 비동기 생성한다(V30).
+원본 보관과 곡·채보·필요한 작업 등록이 끝나야 201이다. 반주 합성 실패는 곡·채보 사용을 막지 않는다.
 
 `POST /api/v1/songs/midi`: Bearer 인증, multipart `file`(1 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
 다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, 본문은 `GET /api/v1/songs/{songId}`와 같은 곡 상세다.
@@ -908,6 +908,7 @@ MIDI는 소리가 아니라 연주 지시 데이터라 반주가 없고, 원본 
 | 413 | `MIDI_TOO_LARGE` | 파일 1 MiB 초과(선언 크기를 믿지 않고 읽은 바이트로도 확인) |
 | 422 | `MIDI_UNSUPPORTED` | MIDI 아님·손상, format 2, SMPTE 시간 단위, 템포 1~999 BPM 밖, 5자 넘는 박자표, 곡 길이 30분 초과, 드럼 노트 50,000개 초과. detail에 이유 한 줄 |
 | 422 | `MIDI_NO_DRUM_NOTES` | 드럼 채널(10)에 패드로 바꿀 노트가 없음 |
+| 503 | `MIDI_STORAGE_UNAVAILABLE` | 원본 저장소 미설정·저장/확인 실패·접수 시간 초과 |
 | 500 | `INTERNAL_ERROR` | 저장 실패. 곡·채보 행을 하나도 남기지 않는다 |
 
 변환 규칙:
@@ -955,6 +956,35 @@ FE 리듬게임 레인(`LANE_PADS`)은 아직 `HIHAT_PEDAL`을 그리지 않는�
 ```
 
 테스트용 MIDI는 `MidiFixtures`가 JDK API로 만든다. 외부 MIDI 파일은 저장소에 넣지 않는다. 노트 JSON은 저장 전 조회 리더로 검증하며, 난이도별 출력과 로케일별 노트 ID를 기존 직렬화 결과와 비교한다.
+
+### MIDI 반주 합성 및 운영 (274번)
+
+곡 목록·상세 및 업로드 상세의 `accompanimentStatus`는 `GENERATING`·`READY`·`FAILED`·`NONE`이다. 기존 반주 키가 있으면 재합성 중이거나 실패해도 `READY`와 `hasAccompaniment=true`다. 키가 없는 MIDI의 최신 작업이 대기·진행 중이면 `GENERATING`, 최종 실패면 `FAILED`, 드럼 외 note-on이 없거나 기존 원본 없는 곡은 `NONE`이다. AUDIO·BUILTIN도 키 유무에 따라 `READY` 또는 `NONE`을 반환한다. 반주가 없을 때 기존 곡별 조회의 URL·만료 시각은 모두 null이다.
+
+원본 `midi-original/{userId}/{songId}/{uuid}.mid`는 비공개 비버전 `airdrum-midi-originals`에 보관한다. `MIDI_STORAGE_ENABLED`, `MIDI_STORAGE_ENDPOINT`, `MIDI_STORAGE_REGION`, `MIDI_STORAGE_BUCKET`, `MIDI_STORAGE_ACCESS_KEY`, `MIDI_STORAGE_SECRET_KEY`, `MIDI_STORAGE_PRIVATE_BUCKET_CONFIRMED`를 설정한다. 기본 비활성이고 비공개 버킷 확인 없이 활성화하지 않는다. 원본 접수는 조건부 PUT·HEAD·원본 GET 해시 확인에 합계 5초, 접수 임대에 30초를 사용하며 실패 시 503이다. 삭제·탈퇴 시 원본과 반주를 정리하고 지연 PUT은 마지막 쓰기 가능 시점 이후 24시간 동안 재확인한다. 그보다 늦게 완료되는 저장소 쓰기는 지원 범위 밖이다.
+
+독립 `midi-worker.jar`는 1작업씩 2초마다 큐를 확인한다. 임대 60초, 갱신 10초, 시도 전체 300초, 최대 3회(5초·30초 대기), 대기 최대 24시간이다. 작업당 임시 공간 1GiB와 결과 384MiB를 제한한다. 고정 템포 MIDI의 이벤트를 채보 시간에 0.1ms 간격으로 배치하고, FluidSynth가 채널 10을 제외한 파트를 합성한다. 출력은 시작 무음을 유지한 FLAC 16bit·44.1kHz·스테레오이며 끝부분만 잘라내거나 무음으로 채워 샘플 수를 맞춘다. 재합성 성공은 새 키로 교체하고 기존 키는 최대 서명 URL 10분과 다운로드 여유 2분이 지난 뒤 정리한다. 이미 발급된 URL의 전체 재생 완료를 보장하지는 않는다.
+
+합성·인코딩 프로세스가 0이 아닌 코드로 끝나거나 입력·출력 검증에 실패하면 영구 실패로 처리한다. 임대·시간 초과와 저장소 등 일시 I/O 장애는 남은 횟수 안에서 재시도한다.
+
+빌드는 `./gradlew bootJar bootMidiWorkerJar`다. `Infra/docker-compose.yml`의 `midi-worker` profile은 CPU 1개·메모리 2GiB·1GiB tmpfs를 사용한다. 원본·반주 저장소와 별도 DB 계정의 최소 권한을 운영에서 확인한 뒤 활성화한다. 스토리지 계정에는 원본 읽기와 반주 쓰기·확인만 부여한다. 환경 변수 `MIDI_WORKER_DB_USERNAME`, `MIDI_WORKER_DB_PASSWORD`, `MIDI_WORKER_STORAGE_ACCESS_KEY`, `MIDI_WORKER_STORAGE_SECRET_KEY`는 운영 비밀 관리 경로로 주입한다.
+
+DB 계정은 다음 권한이 필요하다. `users`의 SHARE 잠금과 `midi_original_uploads`의 UPDATE 잠금에도 해당 테이블의 UPDATE 권한이 필요하므로 예시에서는 `id` 열에만 부여한다. 계정명 `midi_worker`는 예시이며 서버 관리자가 실제 계정을 별도로 만든다. 다음 SQL은 자동 실행하지 않는다.
+
+```sql
+GRANT SELECT ON users, songs, midi_original_uploads, midi_accompaniment_jobs,
+  midi_accompaniment_attempts, file_cleanup_tasks, charts, chart_versions TO midi_worker;
+GRANT UPDATE (id) ON users, midi_original_uploads TO midi_worker;
+GRANT UPDATE (accompaniment_key, updated_at) ON songs TO midi_worker;
+GRANT INSERT, UPDATE ON midi_accompaniment_jobs TO midi_worker;
+GRANT INSERT ON midi_accompaniment_attempts TO midi_worker;
+GRANT INSERT, UPDATE ON file_cleanup_tasks TO midi_worker;
+GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tasks_id_seq TO midi_worker;
+```
+
+운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자가 호출하는 재시도 API는 없다.
+
+워커 이미지는 Ubuntu Jammy의 [FluidSynth 2.2.5-1](https://packages.ubuntu.com/jammy/fluidsynth), [FluidR3 GM 3.1-5.3](https://packages.ubuntu.com/source/jammy/fluid-soundfont), [FFmpeg 7:4.4.2-0ubuntu0.22.04.1](https://packages.ubuntu.com/jammy-updates/ffmpeg)을 사용하며 SoundFont SHA-256 `74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0`를 빌드·시작 시 확인한다. FluidSynth는 LGPL, FluidR3 GM은 MIT이며 이미지에 패키지 저작권 고지가 포함된다. 로컬 2.4.6 실측을 운영 2.2.5의 성능 보장으로 해석하지 않는다.
 
 
 ## 공용 곡 관리 (156번)

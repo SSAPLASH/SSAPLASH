@@ -1,0 +1,17 @@
+FROM eclipse-temurin:21-jdk-jammy AS build
+WORKDIR /workspace
+COPY gradlew settings.gradle build.gradle ./
+COPY gradle ./gradle
+COPY src ./src
+RUN sh ./gradlew --no-daemon bootMidiWorkerJar
+
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends fluidsynth=2.2.5-1 fluid-soundfont-gm=3.1-5.3 ffmpeg=7:4.4.2-0ubuntu0.22.04.1 \
+    && echo '74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0  /usr/share/sounds/sf2/FluidR3_GM.sf2' | sha256sum -c - \
+    && rm -rf /var/lib/apt/lists/*
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
+COPY --from=build --chown=app:app /workspace/build/libs/midi-worker.jar ./midi-worker.jar
+ENV MIDI_SOUNDFONT_PATH=/usr/share/sounds/sf2/FluidR3_GM.sf2 MIDI_TEMP_DIR=/tmp/midi
+USER app
+ENTRYPOINT ["java", "-jar", "/app/midi-worker.jar"]

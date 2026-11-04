@@ -13,6 +13,12 @@ public interface SongRepository extends Repository<Song, Long> {
 		SELECT s.id, s.title, s.artist, s.source, s.status, s.bpm,
 		 s.time_signature AS "timeSignature", s.duration_ms AS "durationMs",
 		 (s.accompaniment_key IS NOT NULL) AS "hasAccompaniment",
+		 CASE WHEN s.accompaniment_key IS NOT NULL THEN 'READY'
+		      WHEN s.source = 'MIDI' THEN COALESCE((SELECT CASE
+		        WHEN m.status IN ('QUEUED','RUNNING') THEN 'GENERATING'
+		        WHEN m.status = 'FAILED' THEN 'FAILED' ELSE 'NONE' END
+		        FROM midi_accompaniment_jobs m WHERE m.song_id=s.id ORDER BY m.id DESC LIMIT 1), 'NONE')
+		      ELSE 'NONE' END AS "accompanimentStatus",
 		 s.created_at AS "createdAt", s.license, s.updated_at AS "updatedAt", s.cover_key AS "coverKey", s.owner_id AS "ownerId",
 		 s.song_level AS "songLevel",
 		 (SELECT j.status FROM chart_jobs j WHERE j.song_id=s.id AND j.user_id=:userId AND s.owner_id=:userId ORDER BY j.created_at DESC,j.id DESC LIMIT 1) AS "jobStatus",
@@ -49,7 +55,7 @@ public interface SongRepository extends Repository<Song, Long> {
 	interface View {
 		Long getId(); String getTitle(); String getArtist(); String getSource(); String getStatus();
 		BigDecimal getBpm(); String getTimeSignature(); Integer getDurationMs();
-		boolean getHasAccompaniment(); Instant getCreatedAt(); String getLicense(); Instant getUpdatedAt(); String getCoverKey(); Long getOwnerId();
+		boolean getHasAccompaniment(); String getAccompanimentStatus(); Instant getCreatedAt(); String getLicense(); Instant getUpdatedAt(); String getCoverKey(); Long getOwnerId();
 		String getSongLevel(); String getJobStatus(); String getJobErrorCode();
 	}
 }
