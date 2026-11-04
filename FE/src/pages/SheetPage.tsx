@@ -17,6 +17,7 @@ import { Countdown } from '@/components/play/Countdown';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
@@ -103,6 +104,7 @@ export function SheetPage() {
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
   const lastHit = useLive((l) => l.lastHit);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
@@ -250,7 +252,8 @@ export function SheetPage() {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
       }
       const ss = sessionRef.current;
       const active =
@@ -588,6 +591,7 @@ export function SheetPage() {
           missing={missing}
           connected={connected}
           keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           presetName={presetName}
           countInBars={settings.countInBars}
           onBack={toSelect}
