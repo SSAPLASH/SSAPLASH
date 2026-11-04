@@ -5,6 +5,7 @@ import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
 import { gridOriginMs } from '@/domain/sheet';
+import { isSensorSource } from '@/domain/events';
 
 export interface NoteState {
   index: number;
@@ -216,7 +217,7 @@ export class RhythmSession {
     }
     while (this.cursor < this.notes.length && this.notes[this.cursor].judgement !== null) this.cursor++;
     // 손·세기는 센서 타격만 채운다(MISS는 hit 없음, 키보드는 값이 뜻 없음)
-    const sensor = hit !== null && hit.source !== 'keyboard';
+    const sensor = hit !== null && isSensorSource(hit.source);
     const ev: JudgementEvent = {
       judgement: j,
       deltaMs: delta,
