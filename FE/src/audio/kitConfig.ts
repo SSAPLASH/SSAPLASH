@@ -19,11 +19,15 @@ export interface KitConfig {
   pads: Record<string, KitPadConfig>;
 }
 
-/** 키트 패드 id → PadId. 대응하는 패드가 없는 항목은 null이라 무시한다(현재는 없음) */
+/**
+ * 키트 패드 id → PadId. 대응하는 패드가 없는 항목은 null이라 무시한다(현재는 없음).
+ * hihat은 페달 밟은 상태의 닫힌 타격, hihat_pedal은 페달 밟는 소리(chick)다. 열린 타격은 아래 KIT_VARIANT_KEYS.
+ */
 export const KIT_PAD_TO_PAD_ID: Record<string, PadId | null> = {
   kick: 'KICK',
   snare: 'SNARE',
   hihat: 'HIHAT',
+  hihat_pedal: 'HIHAT_PEDAL',
   high: 'SMALL_TOM',
   mid: 'MID_TOM',
   floor: 'FLOOR_TOM',
