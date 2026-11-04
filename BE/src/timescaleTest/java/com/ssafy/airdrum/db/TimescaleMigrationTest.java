@@ -124,7 +124,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(31);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(32);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
