@@ -68,14 +68,14 @@ describe('MySongRow', () => {
     expect(html).toContain('studio-row-stage');
     expect(html).toContain('처리 중');
     expect(html).not.toContain('ui-btn');
-    expect(html).not.toContain('song-menu');
+    expect(html).not.toContain('ui-more-menu');
     expect(html).toContain('studio-badge-active');
   });
 
   it('⋯ 메뉴는 onEdit이 있을 때만(완료·실패 행)', () => {
     expect(row(song())).toContain('aria-label="별빛 산책 메뉴"');
-    expect(row(song({ status: 'FAILED' }))).toContain('song-menu');
-    expect(row(song(), false, false)).not.toContain('song-menu');
+    expect(row(song({ status: 'FAILED' }))).toContain('ui-more-menu');
+    expect(row(song(), false, false)).not.toContain('ui-more-menu');
   });
 
   it('날짜 칸은 dateLabel 결과', () => {
@@ -116,7 +116,7 @@ describe('MySongCard 보강', () => {
 
   it('⋯ 메뉴 트리거는 IconButton sm', () => {
     const html = card(song());
-    expect(html).toContain('ui-icon-btn ui-icon-btn-sm song-menu-btn');
+    expect(html).toContain('ui-icon-btn ui-icon-btn-sm ui-more-menu-btn');
     expect(html).toContain('studio-card-menu');
   });
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -30,10 +31,10 @@ function log(over: Partial<PlayLog> & { playId: string }): PlayLog {
   } as PlayLog;
 }
 
-const render = (logs: PlayLog[], deleted: number[] = []) =>
+const render = (logs: PlayLog[], deleted: number[] = [], sortSlot?: ReactNode) =>
   renderToStaticMarkup(
     <MemoryRouter>
-      <HistoryTable logs={logs} deletedIds={new Set(deleted)} />
+      <HistoryTable logs={logs} deletedIds={new Set(deleted)} sortSlot={sortSlot} />
     </MemoryRouter>,
   );
 
@@ -54,6 +55,17 @@ describe('HistoryTable', () => {
     const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
     expect(head.match(/<th /g)).toHaveLength(5);
     expect(head).toContain('정확도 / 점수');
+  });
+
+  it('sortSlot이 없으면 정렬 영역을 그리지 않고, 있으면 마지막 th 안에 그린다', () => {
+    expect(render([])).not.toContain('history-sort');
+    const html = render([], [], <span data-x="slot">정렬</span>);
+    const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    expect(head.match(/<th /g)).toHaveLength(5);
+    const lastTh = head.slice(head.lastIndexOf('<th '));
+    expect(lastTh).toContain('결과 보기');
+    expect(lastTh).toContain('history-sort');
+    expect(lastTh).toContain('data-x="slot"');
   });
 
   it('게임 행은 「정확도 / 점수」 표기, 날짜·모드 표기', () => {
@@ -102,5 +114,31 @@ describe('DeletedSongChip', () => {
 
   it('className을 합친다', () => {
     expect(renderToStaticMarkup(<DeletedSongChip className="x" />)).toContain('class="song-deleted-chip x"');
+  });
+});
+
+describe('HistoryTable 난이도 배지(UX-53)', () => {
+  it('게임 행에는 곡 이름 오른쪽에 작은 배지가 있고 악보 행에는 없다', () => {
+    const game = render([log({ playId: 'a', mode: 'RHYTHM', difficulty: 'NORMAL' })]);
+    expect(game).toContain('song-level-normal');
+    expect(game).toContain('song-level-sm');
+    expect(game.indexOf('history-song-title')).toBeLessThan(game.indexOf('song-level'));
+    const sheet = render([log({ playId: 'b', mode: 'SHEET', difficulty: 'NORMAL' })]);
+    expect(sheet).not.toContain('song-level');
+  });
+
+  it('삭제된 곡 행은 곡 이름 → 배지 → 삭제된 곡 칩 순서', () => {
+    const html = render([log({ playId: 'a', songNumericId: 7, difficulty: 'HARD' })], [7]);
+    const title = html.indexOf('history-song-title deleted');
+    const badge = html.indexOf('song-level-hard');
+    const chip = html.indexOf('song-deleted-chip');
+    expect(title).toBeGreaterThan(-1);
+    expect(badge).toBeGreaterThan(title);
+    expect(chip).toBeGreaterThan(badge);
+  });
+
+  it('알 수 없는 난이도면 배지를 생략한다', () => {
+    const html = render([log({ playId: 'a', difficulty: 'WEIRD' })]);
+    expect(html).not.toContain('song-level');
   });
 });

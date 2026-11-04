@@ -168,4 +168,22 @@ describe("Input", () => {
     );
     expect(html).toContain('<span class="ui-input-counter">3/20</span>');
   });
+
+  it("compact면 라벨을 시각 숨김 클래스로 남기고 foot·오류 줄을 그리지 않는다", () => {
+    const html = renderToStaticMarkup(
+      <Input label="제목 검색" id="q" compact help="도움" error="오류" counter={{ value: 1, max: 5 }} />,
+    );
+    expect(html).toMatch(/class="ui-input compact/);
+    expect(html).toContain('class="ui-input-label ui-input-label-hidden" for="q"');
+    expect(html).not.toContain("ui-input-foot");
+    expect(html).not.toContain("ui-input-error");
+    expect(html).not.toContain("aria-describedby");
+  });
+
+  it("compact가 아니면 라벨 숨김 클래스와 compact 클래스가 없다", () => {
+    const html = renderToStaticMarkup(<Input label="이름" id="nm" />);
+    expect(html).not.toContain("compact");
+    expect(html).not.toContain("ui-input-label-hidden");
+    expect(html).toContain("ui-input-foot");
+  });
 });

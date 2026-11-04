@@ -109,6 +109,19 @@
 .song-level-hard {
   --song-level-color: var(--level-hard);
 }
+/* 작은 배지(Figma LevelBadge size=sm 577:30466): 표 행 안. 외곽선·글로우 없이 난이도색 18% 바탕 */
+.song-level-sm {
+  height: 16px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--song-level-color) 18%, var(--surface-3));
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 12px;
+  box-shadow: none;
+}
 button.song-level {
   cursor: pointer;
 }
