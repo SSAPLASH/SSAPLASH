@@ -64,13 +64,11 @@ describe('HistoryPage', () => {
     expect(radios[2]).toContain('>악보<');
   });
 
-  it('RECORDING_ENABLED 기본값은 꺼짐이라 탭 줄이 없고 ?tab=recordings도 무시한다', () => {
-    expect(RECORDING_ENABLED).toBe(false);
+  it('RECORDING_ENABLED 기본값은 켜짐이라 탭 줄이 있고 기본 탭은 플레이 기록이다', () => {
+    expect(RECORDING_ENABLED).toBe(true);
     stubLogs([saved(1)]);
-    expect(render()).not.toContain('history-tabs');
-    const html = render('/history?tab=recordings');
-    expect(html).not.toContain('history-tabs');
-    expect(html).not.toContain('history-tab-recordings');
+    const html = render();
+    expect(html).toContain('history-tabs');
     expect(html).toContain('전체 기록 1개');
   });
 
