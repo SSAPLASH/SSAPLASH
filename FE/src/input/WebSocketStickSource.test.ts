@@ -1,6 +1,6 @@
 // WebSocketStickSource: 링크 1개(기존 동작)와 스틱별 브리지 2링크.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SourceState, StickEvent } from '@/domain/events';
+import type { SourceState, StickEvent, StickStatusEvent } from '@/domain/events';
 import { packetTap } from './packetTap';
 import type { PacketRecord } from './packetTap';
 import { encodeHaptic } from './stickProtocol';
@@ -152,7 +152,7 @@ describe('WebSocketStickSource', () => {
     it('끊기면 두 손 모두 disconnected status를 낸다', async () => {
       await connectAll(src);
       FakeWS.instances[0].drop();
-      const st = events.filter((e) => e.kind === 'status' && !e.connected).map((e) => e.stickId);
+      const st = events.filter((e): e is StickStatusEvent => e.kind === 'status' && !e.connected).map((e) => e.stickId);
       expect(st.sort()).toEqual([0, 1]);
       expect(src.state).toBe('disconnected');
     });
@@ -247,7 +247,7 @@ describe('WebSocketStickSource', () => {
     it('한 링크가 끊기면 그 손만 disconnected, 소스는 connected 유지', async () => {
       await connectAll(src);
       FakeWS.instances[1].drop();
-      const down = events.filter((e) => e.kind === 'status' && !e.connected).map((e) => e.stickId);
+      const down = events.filter((e): e is StickStatusEvent => e.kind === 'status' && !e.connected).map((e) => e.stickId);
       expect(down).toEqual([1]);
       expect(src.state).toBe('connected');
       FakeWS.instances[0].drop();

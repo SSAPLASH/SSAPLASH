@@ -81,3 +81,37 @@ describe('DisconnectBand', () => {
     expect(renderToStaticMarkup(<DisconnectBand left right={false} reconnect={idle} onReconnect={noop} />)).toContain('다시 연결');
   });
 });
+
+describe('DisconnectBand 페달', () => {
+  const band = (p: { left: boolean; right: boolean; pedal?: boolean; reconnect?: BandReconnect }) =>
+    renderToStaticMarkup(<DisconnectBand left={p.left} right={p.right} pedal={p.pedal} reconnect={p.reconnect ?? idle} />);
+
+  // 인수 조건: pedal이 undefined면 P 점·"페달" 문구가 없다
+  it('pedal이 없으면 P 점과 페달 문구가 없다', () => {
+    const html = band({ left: true, right: false });
+    expect(html).not.toContain('>P<');
+    expect(html).not.toContain('페달');
+  });
+
+  // 인수 조건: 페달만 끊기면 "페달 연결이 끊겼어요", 부제는 "스틱은 계속 칠 수 있어요"
+  it('손이 모두 연결이고 페달만 끊기면 페달 제목과 스틱 부제', () => {
+    const html = band({ left: true, right: true, pedal: false });
+    expect(html).toContain('페달 연결이 끊겼어요');
+    expect(html).not.toContain('스틱·페달');
+    expect(html).toContain('스틱은 계속 칠 수 있어요');
+    expect(html).toContain('>P<');
+    expect(html).toContain('free-band-dot off');
+  });
+
+  // 인수 조건: 손이 하나라도 끊기면 "스틱·페달 연결이 끊겼어요"
+  it('손도 끊겼으면 스틱·페달 제목', () => {
+    expect(band({ left: true, right: false, pedal: false })).toContain('스틱·페달 연결이 끊겼어요');
+  });
+
+  // 인수 조건: reconnected면 P 점 on, off 없음
+  it('reconnected면 P 점도 on', () => {
+    const html = band({ left: true, right: true, pedal: false, reconnect: { status: 'reconnected', attempt: 0, max: 3 } });
+    expect(html.match(/free-band-dot on/g)).toHaveLength(3);
+    expect(html).not.toContain('free-band-dot off');
+  });
+});

@@ -59,6 +59,46 @@ describe('ReadyPanel 준비 상태', () => {
   });
 });
 
+describe('ReadyPanel 페달', () => {
+  // 인수 조건: pedal이 undefined면 P 점·"페달" 문구가 없다(동글이 아닌 소스)
+  it('pedal이 없으면 P 점과 페달 문구가 없다', () => {
+    const html = render();
+    expect(html).not.toContain('play-rp-hand-dot p');
+    expect(html).not.toContain('페달');
+    expect(html).toContain('왼손·오른손 연결됨');
+  });
+
+  // 인수 조건: 손 둘 + 페달이 모두 붙으면 "왼손·오른손·페달 연결됨"과 켜진 P 점
+  it('모두 연결이면 한 문구와 켜진 P 점', () => {
+    const html = render({ pedal: true });
+    expect(html).toContain('왼손·오른손·페달 연결됨');
+    expect(html).toContain('play-rp-hand-dot p on');
+  });
+
+  // 인수 조건: 페달만 빠지면 "페달 연결 안 됨"과 꺼진 P 점, missing 'pedal'이면 need 스타일
+  it('페달만 끊기면 "페달 연결 안 됨"이고 need 스타일', () => {
+    const html = need(['pedal'], { pedal: false });
+    expect(html).toContain('페달 연결 안 됨');
+    expect(html).not.toContain('왼손·페달');
+    expect(html).toContain('play-rp-hand-dot p"');
+    expect(html).toContain('<span class="need">페달 연결 안 됨</span>');
+    expect(html).toContain('play-rp-dot need');
+  });
+
+  // 인수 조건: 왼손과 페달이 빠지면 "왼손·페달 연결 안 됨"
+  it('왼손과 페달이 끊기면 둘을 함께 짚는다', () => {
+    const html = need(['stick', 'pedal'], { connected: [false, true], pedal: false });
+    expect(html).toContain('왼손·페달 연결 안 됨');
+  });
+
+  // 인수 조건: 키보드 전용이면 "키보드 입력", 점 없음
+  it('키보드 전용이면 페달이 있어도 "키보드 입력"', () => {
+    const html = render({ keyboardOnly: true, pedal: false });
+    expect(html).toContain('키보드 입력');
+    expect(html).not.toContain('play-rp-hand-dot');
+  });
+});
+
 describe('ReadyPanel 연습 단계', () => {
   it('채보마다 LevelBadge 버튼, 선택만 aria-pressed', () => {
     const html = render();

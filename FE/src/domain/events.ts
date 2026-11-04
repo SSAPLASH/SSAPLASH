@@ -4,6 +4,12 @@ import type { PadId } from './pads';
 /** 0 = 왼손, 1 = 오른손 */
 export type StickId = 0 | 1;
 
+/** 2 = 왼발(하이햇 페달), 3 = 오른발(킥). 페달 보드가 동글에 role 2·3으로 붙는다 */
+export type FootId = 2 | 3;
+
+/** 동글 기기 칸(flags role). 손 0·1, 발 2·3 */
+export type DeviceRole = StickId | FootId;
+
 /** 스틱 자세. 기준 자세 대비 상대 각도(도). pitch: 위(+)/아래(-), yaw: 왼쪽(-)/오른쪽(+) */
 export interface Pose {
   pitch: number;
@@ -12,7 +18,10 @@ export interface Pose {
 
 export interface StickHitEvent {
   kind: 'hit';
-  stickId: StickId;
+  /** 타격한 손. 페달 타격은 null(손 없음) */
+  stickId: StickId | null;
+  /** 페달 타격만: 어느 발인지. 있으면 stickId는 null */
+  foot?: FootId;
   /** 센서 시계 기준 타격 시각(ms). 키보드·모의 입력은 performance.now() */
   timestamp: number;
   /** 브라우저가 이벤트를 받은 시각 performance.now() */
@@ -58,7 +67,26 @@ export interface StickStatusEvent {
   unconfigured?: boolean;
 }
 
-export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent;
+/** 페달 연결·배터리. 손 status와 분리한다. Web Serial 동글 소스만 낸다 */
+export interface PedalStatusEvent {
+  kind: 'pedalStatus';
+  foot: FootId;
+  connected: boolean;
+  batteryPct?: number;
+}
+
+/** 하이햇 페달 밟힘 상태(PEDAL 0x08). closed = 밟음 */
+export interface PedalStateEvent {
+  kind: 'pedal';
+  foot: 2;
+  closed: boolean;
+  /** 페달 보드 시계 기준(ms). 소스가 브라우저 시계로 환산한다 */
+  timestamp: number;
+  /** 브라우저가 이벤트를 받은 시각 performance.now() */
+  recvTime: number;
+}
+
+export type StickEvent = StickHitEvent | StickPoseEvent | StickStatusEvent | PedalStatusEvent | PedalStateEvent;
 
 /**
  * 센서 소스 식별자. 입력 소스 디스크립터의 id와 같다(예: 'pointer', 'ble').
@@ -99,7 +127,10 @@ export type HitJudgedBy = 'key' | 'stick' | 'chart' | 'pose';
  */
 export interface ResolvedHit {
   id: number;
-  stickId: StickId;
+  /** null = 손 없음(페달 타격) */
+  stickId: StickId | null;
+  /** 페달 타격만: 어느 발인지 */
+  foot?: FootId;
   pad: PadId | null;
   /** 0~127 */
   velocity: number;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hintFor, shouldResend, waitForHands } from './reconnectPolicy';
+import { hintFor, shouldResend, waitForDevices } from './reconnectPolicy';
 
 describe('hintFor', () => {
   it('소스별 안내 문구를 돌려준다', () => {
@@ -18,7 +18,7 @@ describe('shouldResend', () => {
   });
 });
 
-describe('waitForHands', () => {
+describe('waitForDevices', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
@@ -40,15 +40,25 @@ describe('waitForHands', () => {
     };
   }
 
+  it('네 칸(손 둘·발 둘)이 모두 와야 resolve한다', async () => {
+    const s = makeStore([true, true, false, false]);
+    const p = waitForDevices(s.get, s.subscribe, 3000, new AbortController().signal);
+    s.set([true, true, true, false]);
+    expect(s.size()).toBe(1);
+    s.set([true, true, true, true]);
+    await expect(p).resolves.toBeUndefined();
+    expect(s.size()).toBe(0);
+  });
+
   it('이미 양손이 연결돼 있으면 즉시 resolve한다', async () => {
     const s = makeStore([true, true]);
-    await expect(waitForHands(s.get, s.subscribe, 3000, new AbortController().signal)).resolves.toBeUndefined();
+    await expect(waitForDevices(s.get, s.subscribe, 3000, new AbortController().signal)).resolves.toBeUndefined();
     expect(s.size()).toBe(0);
   });
 
   it('한 손만 오면 계속 기다리다 양손이 되면 resolve하고 구독을 푼다', async () => {
     const s = makeStore([false, false]);
-    const p = waitForHands(s.get, s.subscribe, 3000, new AbortController().signal);
+    const p = waitForDevices(s.get, s.subscribe, 3000, new AbortController().signal);
     s.set([true, false]);
     expect(s.size()).toBe(1);
     s.set([true, true]);
@@ -58,7 +68,7 @@ describe('waitForHands', () => {
 
   it('시간이 지나면 reject하고 구독을 푼다', async () => {
     const s = makeStore([true, false]);
-    const p = waitForHands(s.get, s.subscribe, 3000, new AbortController().signal);
+    const p = waitForDevices(s.get, s.subscribe, 3000, new AbortController().signal);
     const assertion = expect(p).rejects.toThrow();
     await vi.advanceTimersByTimeAsync(3000);
     await assertion;
@@ -68,7 +78,7 @@ describe('waitForHands', () => {
   it('signal이 취소되면 즉시 reject하고 구독을 푼다', async () => {
     const s = makeStore([false, false]);
     const ctrl = new AbortController();
-    const p = waitForHands(s.get, s.subscribe, 3000, ctrl.signal);
+    const p = waitForDevices(s.get, s.subscribe, 3000, ctrl.signal);
     const assertion = expect(p).rejects.toThrow();
     ctrl.abort();
     await assertion;
@@ -79,6 +89,6 @@ describe('waitForHands', () => {
     const s = makeStore([true, true]);
     const ctrl = new AbortController();
     ctrl.abort();
-    await expect(waitForHands(s.get, s.subscribe, 3000, ctrl.signal)).rejects.toThrow();
+    await expect(waitForDevices(s.get, s.subscribe, 3000, ctrl.signal)).rejects.toThrow();
   });
 });

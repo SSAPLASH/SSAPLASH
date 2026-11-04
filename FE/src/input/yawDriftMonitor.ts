@@ -186,6 +186,8 @@ class YawDriftMonitor {
     const anchor = profile?.anchors[hit.pad];
     if (!anchor) return;
 
+    // 손 없는 타격(페달)은 방위각 오차가 없다
+    if (hit.stickId === null) return;
     const i = hit.stickId;
     const s = this.sticks[i];
     s.ring.push(wrap180(hit.pose.yaw - anchor.yaw));

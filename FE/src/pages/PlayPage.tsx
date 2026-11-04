@@ -18,6 +18,7 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
@@ -103,6 +104,7 @@ export function PlayPage() {
   }, [stage]);
 
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const lastHit = useLive((l) => l.lastHit);
@@ -190,7 +192,8 @@ export function PlayPage() {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
         flashes.current.set(hit.pad, performance.now());
       }
       const ss = sessionRef.current;
@@ -587,6 +590,7 @@ export function PlayPage() {
           missing={missing}
           connected={connected}
           keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           presetName={presetName}
           countInBars={settings.countInBars}
           onBack={toSelect}

@@ -26,10 +26,10 @@ export function shouldResend(lastAt: number | null, now: number, cooldownMs = RE
 }
 
 /**
- * 양손이 모두 연결될 때까지 기다린다. 이미 연결돼 있으면 즉시 resolve.
+ * 필요한 기기(손 둘 + 발 둘, 네 칸)가 모두 연결될 때까지 기다린다. 이미 연결돼 있으면 즉시 resolve.
  * 시간이 지나거나 signal이 취소되면 구독을 풀고 reject한다.
  */
-export function waitForHands(
+export function waitForDevices(
   getConnected: () => readonly boolean[],
   subscribe: (listener: () => void) => () => void,
   timeoutMs: number,
@@ -37,7 +37,7 @@ export function waitForHands(
 ): Promise<void> {
   const ready = () => {
     const c = getConnected();
-    return c[0] === true && c[1] === true;
+    return c.length > 0 && c.every((v) => v === true);
   };
   if (signal.aborted) return Promise.reject(new Error('취소됨'));
   if (ready()) return Promise.resolve();
@@ -50,7 +50,7 @@ export function waitForHands(
       else resolve();
     };
     const onAbort = () => finish(new Error('취소됨'));
-    const timer = setTimeout(() => finish(new Error('손이 돌아오지 않았습니다')), timeoutMs);
+    const timer = setTimeout(() => finish(new Error('기기가 돌아오지 않았습니다')), timeoutMs);
     const unsubscribe = subscribe(() => {
       if (ready()) finish();
     });
