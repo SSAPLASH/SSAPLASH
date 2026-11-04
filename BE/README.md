@@ -126,6 +126,7 @@ sh ./gradlew bootRun
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 빈 값 | Google OAuth 클라이언트. 둘 중 하나라도 비면 Google 로그인 비활성(404) |
 | `SSAFY_CLIENT_ID`, `SSAFY_CLIENT_SECRET` | 빈 값 | SSAFY 로그인 클라이언트. 비면 SSAFY 로그인 비활성(404) |
 | `ADMIN_EMAILS` | 빈 값 | ADMIN으로 판정할 로그인 계정 이메일. 쉼표 구분, 공백·대소문자 무시 |
+| `SIGNUP_CONSENT_TERMS_VERSIONS`, `SIGNUP_CONSENT_PRIVACY_VERSIONS`, `SIGNUP_CONSENT_DATA_VERSIONS` | 빈 값 | 가입 동의로 저장할 수 있는 이용약관·개인정보·데이터 활용 안내의 **허용 판**. 쉼표로 여러 판을 줄 수 있다(판을 바꾸는 배포 중에는 옛 판과 새 판을 함께 둔다). **빈 값이면 그 항목은 검사하지 않는다**(기존 동작). 값을 주면 목록에 없는 판은 422 `SIGNUP_CONSENT_VERSION_INVALID` |
 | `FRONTEND_BASE_URL` | `http://localhost:5173` | 로그인 후 돌아갈 FE 주소. 운영은 서비스 도메인 |
 | `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8080` | 제공자에 보내는 콜백 URI의 앞부분. 콘솔에 등록한 리다이렉트 URI와 맞아야 한다 |
 | `COOKIE_SECURE` | `true` | state·refresh 쿠키의 `Secure` 속성. Safari로 로컬 테스트할 때만 `false` |
@@ -666,6 +667,7 @@ mail(`PLAN_곡채보-접근정책`, `CHART-003_채보결과-탈퇴-경합`)에�
 
 소셜 인증 콜백은 지금처럼 회원을 바로 만든다(ACTIVE). 이용약관·개인정보 동의 시각이 둘 다 있어야 **가입 완료**이며, 기존 회원도
 V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 false면 가입 동의 화면을 띄우고 `POST /api/users/me/signup-consent`로 저장한다.
+- **허용 판 검증:** 가입 동의 API는 화면 없이도 직접 부를 수 있다(개발자 도구 콘솔에서 `/api/auth/refresh`로 토큰을 받아 호출하면 된다). 그래서 서버가 허용 판 목록(`SIGNUP_CONSENT_*_VERSIONS`)이 설정된 항목의 판만 저장한다. 응답과 로그에는 보낸 판 값을 담지 않고 어느 항목인지(`termsVersion`·`privacyVersion`·`dataConsent.version`)만 알린다. 이 검사는 사용자가 본인 계정으로 API를 부르는 것을 막지는 못하고 **유효한 판만 기록에 남게** 한다. XSS로 심은 스크립트의 대리 호출은 CSP(`Infra/nginx/default.conf`)가 막는다(`Infra/SECURITY.md` 18절). 판을 바꿀 때 배포 순서는 ① 서버 설정에 새 판을 **추가**(옛 판 유지) ② FE 배포 ③ 옛 판 제거다.
 
 - **가입 게이트**(`auth.SignupGateFilter`, 인증 필터 바로 뒤): 인증된 `USER`가 가입 미완료면 아래 허용 목록 밖 요청을
   403 `SIGNUP_INCOMPLETE` "가입 동의가 필요합니다."로 끝낸다. 메서드와 경로가 정확히 같아야 통과한다.
