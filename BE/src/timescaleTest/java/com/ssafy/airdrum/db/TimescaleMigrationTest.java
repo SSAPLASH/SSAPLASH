@@ -47,8 +47,8 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(21);
-			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version NOT IN ('10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30')"))
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(22);
+			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version IN ('1','2','3','4','5','6','7','8','9')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
 			assertThat(scalar(connection, "SELECT t_recv FROM telemetry_events WHERE tags->>'origin'='v7'")).isEqualTo("12.5");
@@ -124,7 +124,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(30);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(31);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {
@@ -198,7 +198,7 @@ class TimescaleMigrationTest {
 					.isEqualTo("2");
 		}
 		var v30 = Flyway.configure().dataSource(url() + "_v30", "postgres", password())
-				.locations("classpath:db/migration").load();
+				.locations("classpath:db/migration").target("30").load();
 		assertThat(v30.migrate().migrationsExecuted).isEqualTo(1);
 		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
 			verifyRetentionPolicy(connection);
@@ -214,6 +214,21 @@ class TimescaleMigrationTest {
 		}
 		v30.validate();
 		assertThat(v30.migrate().migrationsExecuted).isZero();
+		// V30 보관 정책을 유지하면서 기존 MIDI 곡에 V31을 적용한다.
+		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
+			execute(connection, "INSERT INTO users(id,nickname) OVERRIDING SYSTEM VALUE VALUES(900001,'기존 MIDI 회원')");
+			execute(connection, "INSERT INTO songs(id,owner_id,title,source) OVERRIDING SYSTEM VALUE VALUES(900001,900001,'기존 MIDI 곡','MIDI')");
+		}
+		var v31 = Flyway.configure().dataSource(url() + "_v30", "postgres", password())
+				.locations("classpath:db/migration").target("31").load();
+		assertThat(v31.migrate().migrationsExecuted).isEqualTo(1);
+		try (var connection = DriverManager.getConnection(url() + "_v30", "postgres", password())) {
+			verifyRetentionPolicy(connection);
+			assertThat(scalar(connection, "SELECT title FROM songs WHERE id=900001 AND owner_id=900001 AND accompaniment_key IS NULL"))
+					.isEqualTo("기존 MIDI 곡");
+		}
+		v31.validate();
+		assertThat(v31.migrate().migrationsExecuted).isZero();
 	}
 
 	/** 오늘(UTC) 기준 days일 전 hour시. 보관 정책이 상대 시각으로 동작하므로 테스트 데이터도 고정 날짜를 쓰지 않는다. */
