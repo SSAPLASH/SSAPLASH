@@ -15,10 +15,14 @@ public class SignupConsentService {
 	private final UserQueryService queries;
 	private final Clock clock;
 
-	public SignupConsentService(UserRepository users, UserQueryService queries, Clock clock) {
+	private final SignupConsentVersions versions;
+
+	public SignupConsentService(UserRepository users, UserQueryService queries, Clock clock,
+			SignupConsentVersions versions) {
 		this.users = users;
 		this.queries = queries;
 		this.clock = clock;
+		this.versions = versions;
 	}
 
 	/**
@@ -26,9 +30,11 @@ public class SignupConsentService {
 	 *
 	 * @param request 검증을 통과한 요청({@code dataConsent.agreed}는 true)
 	 * @throws UserNotActiveException ACTIVE 회원 행이 없을 때(탈퇴와 겹친 경우). 아무것도 기록되지 않는다
+	 * @throws com.ssafy.airdrum.common.error.BusinessException 허용 판 목록이 설정돼 있고 보낸 판이 그 목록에 없을 때(422). 아무것도 기록되지 않는다
 	 */
 	@Transactional
 	public UserMeResponse save(long userId, SignupConsentRequest request) {
+		versions.check(request);
 		// PostgreSQL timestamptz 정밀도(마이크로초)에 맞춘다
 		Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 		var data = request.dataConsent();
