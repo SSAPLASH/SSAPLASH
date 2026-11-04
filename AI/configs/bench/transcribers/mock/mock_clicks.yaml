@@ -1,0 +1,8 @@
+# 정답 파일 없이 아무 곡에나 돌리는 mock. 온셋 검출기로 시각만 찾고 라벨은 전부 킥.
+name: mock_clicks
+adapter: mock
+mock_mode: clicks
+license_code: 없음 (테스트용)
+license_weights: 없음 (테스트용)
+labels:
+  kick: KICK

@@ -27,7 +27,10 @@ public class UserQueryService {
 				.map(SocialAccount::getProvider)
 				.orElseThrow(() -> new IllegalStateException("회원 " + userId + "의 소셜 연동이 없습니다."));
 		return new UserMeResponse(user.getId(), provider, user.getNickname(), user.getProfileImageUrl(),
-				user.getRole(), user.getCreatedAt(), user.getUpdatedAt());
+				user.getRole(), user.getCreatedAt(), user.getUpdatedAt(), user.isSignupCompleted(),
+				new ConsentsResponse(ConsentRecord.of(user.getTermsVersion(), user.getTermsAgreedAt()),
+						ConsentRecord.of(user.getPrivacyVersion(), user.getPrivacyAgreedAt())),
+				new DataConsentResponse(user.getDataConsent(), user.getDataConsentVersion(), user.getDataConsentAt()));
 	}
 
 }

@@ -52,7 +52,7 @@ class UserControllerTest {
 
 		var body = new JsonMapper().readTree(result.getResponse().getContentAsString());
 		assertThat(body.propertyNames()).containsExactlyInAnyOrder("id", "provider", "nickname", "profileImageUrl",
-				"role", "createdAt", "updatedAt");
+				"role", "createdAt", "updatedAt", "signupCompleted", "consents", "dataConsent");
 		assertThat(body.path("createdAt").asString()).matches("\\d{4}-\\d{2}-\\d{2}T.*Z");
 		assertThat(result.getResponse().getContentAsString()).doesNotContain("secret@example.com")
 				.doesNotContain("ACTIVE");

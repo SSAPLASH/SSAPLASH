@@ -25,6 +25,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.ssafy.airdrum.common.error.ErrorResponseWriter;
+
 /**
  * API 보안 구성(설계 문서(88) 3-6). 세션 없이 Bearer access 토큰으로 인증하고, 공개 경로 외에는 모두 인증이 필요하다.
  * ADMIN 전용 API는 경로 규칙이 아니라 {@code @PreAuthorize("hasRole('ADMIN')")}로 표시한다.
@@ -43,7 +45,7 @@ class SecurityConfig {
 	@Order(API_CHAIN_ORDER)
 	@ConditionalOnWebApplication(type = Type.SERVLET)
 	SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, AuthenticationService authentication,
-			SecurityProblemHandlers problems) throws Exception {
+			SecurityProblemHandlers problems, ErrorResponseWriter errorWriter) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
@@ -57,7 +59,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/refresh", "/api/auth/logout").permitAll()
 						.requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
 						.permitAll()
-						.requestMatchers("/internal/**").permitAll()
+						.requestMatchers("/internal/**", "/ws/jobs/**").permitAll()
 						// 공개 경로 처리 중 오류가 오류 페이지로 넘어가도 401로 바뀌지 않게 한다.
 						.requestMatchers("/error").permitAll()
 						.anyRequest().authenticated())
@@ -65,7 +67,9 @@ class SecurityConfig {
 						.authenticationEntryPoint(problems)
 						.accessDeniedHandler(problems))
 				.addFilterBefore(new AccessTokenAuthenticationFilter(authentication),
-						UsernamePasswordAuthenticationFilter.class);
+						UsernamePasswordAuthenticationFilter.class)
+				// 인증 바로 뒤에서 가입 동의 전 USER를 막는다(가입 동의 설계 3-4). 미인증 요청은 그대로 넘겨 401이 먼저다
+				.addFilterAfter(new SignupGateFilter(errorWriter), AccessTokenAuthenticationFilter.class);
 		return http.build();
 	}
 

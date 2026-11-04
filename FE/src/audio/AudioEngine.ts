@@ -50,6 +50,10 @@ export class AudioEngine {
   /** 반주 전용 버스(master 직결). 패드 음소거와 무관 */
   private accBus: GainNode | null = null;
   private padMuted = false;
+  /** 드럼 음량 배수(0~2). 패드 버스 게인에 쓴다 */
+  private drumVolume = 1;
+  /** 노래 음량 배수(0~1). 반주 버스 게인에 쓴다 */
+  private songVolume = 1;
   /** 메트로놈 클릭 음량(0~1) */
   private clickVolume = 1;
   private stateListeners = new Set<(state: string) => void>();
@@ -172,10 +176,10 @@ export class AudioEngine {
       limiter.oversample = 'none';
       this.master.connect(limitIn).connect(limiter).connect(this.ctx.destination);
       this.padBus = this.ctx.createGain();
-      this.padBus.gain.value = this.padMuted ? 0 : 1;
+      this.padBus.gain.value = this.padMuted ? 0 : this.drumVolume;
       this.padBus.connect(this.master);
       this.accBus = this.ctx.createGain();
-      this.accBus.gain.value = 1;
+      this.accBus.gain.value = this.songVolume;
       this.accBus.connect(this.master);
       this.ctx.addEventListener('statechange', () => {
         for (const l of this.stateListeners) l(this.ctx!.state);
@@ -300,7 +304,21 @@ export class AudioEngine {
   /** 패드 소리 음소거. ensure 전에 불러도 값을 기억했다가 컨텍스트 생성 때 적용한다 */
   setPadMuted(muted: boolean): void {
     this.padMuted = muted;
-    if (this.padBus) this.padBus.gain.value = muted ? 0 : 1;
+    if (this.padBus) this.padBus.gain.value = muted ? 0 : this.drumVolume;
+  }
+
+  /** 드럼 음량 배수. 음소거 중이면 0을 유지하고 풀 때 이 값으로 돌아온다. ensure 전에 불러도 기억했다가 적용한다 */
+  setDrumVolume(v: number): void {
+    if (!Number.isFinite(v)) return;
+    this.drumVolume = v;
+    if (this.padBus) this.padBus.gain.value = this.padMuted ? 0 : v;
+  }
+
+  /** 노래(반주) 음량 배수. ensure 전에 불러도 기억했다가 적용한다 */
+  setSongVolume(v: number): void {
+    if (!Number.isFinite(v)) return;
+    this.songVolume = v;
+    if (this.accBus) this.accBus.gain.value = v;
   }
 
   /** AudioContext 상태(running·suspended·interrupted 등) 변경 구독. 해제 함수를 돌려준다 */

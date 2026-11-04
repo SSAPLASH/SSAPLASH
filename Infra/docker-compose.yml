@@ -13,14 +13,25 @@ services:
     image: nginx:1.27-alpine
     ports:
       - "80:80"
+      # https. 인증서는 letsencrypt 볼륨에서 읽는다(서버에서 먼저 발급해야 nginx가 시작한다).
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       # 게시된 모델 파일과 매니페스트. nginx는 읽기만 하고 쓰기는 mlflow의 게시 도구가 한다.
       - models:/usr/share/nginx/models:ro
+      - certbot-www:/var/www/certbot:ro
+      - letsencrypt:/etc/letsencrypt:ro
     networks:
       - public
       - internal
     mem_limit: 64m
+    # 안에서 /health를 호출한다. 서비스의 유일한 입구라 상태를 보이게 한다.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     logging: *default-logging
 
@@ -47,14 +58,20 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    # 비밀번호를 명령줄 인자(--requirepass)로 넘기면 `docker top`·`ps`에 그대로 보인다. 설정 파일(권한 600)에 쓰고 파일 경로만 넘긴다.
+    # 이미지의 시작 스크립트를 거쳐야 redis 사용자로 내려가 실행되므로(root 방지) `exec docker-entrypoint.sh`로 호출한다.
+    command:
+      - sh
+      - -c
+      - umask 077 && printf 'requirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec docker-entrypoint.sh redis-server /tmp/redis.conf
     volumes:
       - redisdata:/data
     networks:
       - internal
     mem_limit: 128m
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      # `-a 비밀번호`는 명령줄에 남으므로 환경변수 REDISCLI_AUTH로 넘긴다.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -101,10 +118,23 @@ services:
       PLAY_RAW_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:-}
       PLAY_RAW_SECRET_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:-}
       PLAY_RAW_PRIVATE_BUCKET_CONFIRMED: "true"
+      # 음원 원본은 별도로 확인한 비공개 비버전 버킷에 저장한다. 기본 비활성이다.
+      AUDIO_STORAGE_ENABLED: ${AUDIO_STORAGE_ENABLED:-false}
+      AUDIO_STORAGE_ENDPOINT: http://seaweedfs:8333
+      AUDIO_STORAGE_PUBLIC_ENDPOINT: ${AUDIO_STORAGE_PUBLIC_ENDPOINT:-${OBJECT_STORAGE_PUBLIC_URL:?Infra/.env에 OBJECT_STORAGE_PUBLIC_URL을 지정하세요}}
+      CHART_WORKER_CREDENTIALS: ${CHART_WORKER_CREDENTIALS:-}
+      CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS: ${CHART_JOBS_WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      AUDIO_STORAGE_REGION: us-east-1
+      AUDIO_STORAGE_BUCKET: ${AUDIO_STORAGE_BUCKET:-}
+      AUDIO_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:-}
+      AUDIO_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:-}
+      AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED: ${AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED:-false}
       # 운영에서는 API 문서를 닫는다.
       SWAGGER_ENABLED: "false"
       # 컨테이너 메모리(768m)의 일부만 힙으로 쓰도록 비율로 지정한다.
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60"
+      # 약점 구간 분석(AI 서버) 주소. 내부 네트워크에서만 호출한다. BE는 호출 실패 시 리포트를 정상 제공한다.
+      AI_ANALYSIS_BASE_URL: ${AI_ANALYSIS_BASE_URL:-http://ai-api:8000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -204,6 +234,12 @@ services:
     networks:
       - internal
     mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging: *default-logging
     restart: unless-stopped
 
@@ -218,6 +254,13 @@ services:
     networks:
       - internal
     mem_limit: 64m
+    # /metrics는 수집이 무거워서 안내 화면(/)으로 확인한다.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9100/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     logging: *default-logging
     restart: unless-stopped
 
@@ -240,6 +283,8 @@ services:
     restart: unless-stopped
 
   # 로그 저장소. 포트를 열지 않는다. 보관 기간은 설정 파일에서 7일이다.
+  # 헬스체크가 없다: 이 이미지는 쉘과 wget·curl이 없어서 컨테이너 안에서 실행하는 헬스체크를 만들 수 없다.
+  # Loki 상태는 Grafana의 로그 조회와 알림으로 본다(Infra/monitoring/README.md).
   loki:
     image: grafana/loki:3.7.9
     command:
@@ -272,6 +317,13 @@ services:
     networks:
       - internal
     mem_limit: 256m
+    # 이미지에 wget·curl이 없어서 bash의 /dev/tcp로 12345번에 접속해 /-/ready 응답(200)을 확인한다.
+    healthcheck:
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/12345; printf "GET /-/ready HTTP/1.0\r\n\r\n" >&3; head -1 <&3 | grep -q " 200 "']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging: *default-logging
     restart: unless-stopped
 
@@ -346,13 +398,20 @@ services:
       - 0.0.0.0
       - --port
       - "5000"
-      - --backend-store-uri
-      - postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      # DB 주소(비밀번호 포함)는 명령줄이 아니라 아래 environment의 MLFLOW_BACKEND_STORE_URI로 넘긴다.
+      # 명령줄에 두면 `docker top`·`ps`에 비밀번호가 그대로 보인다.
       - --artifacts-destination
       - s3://airdrum-mlflow
       - --serve-artifacts
+      # 웹 서버 워커는 1개로 충분하다(트래픽이 적다).
+      - --workers
+      - "1"
     environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://seaweedfs:8333
+      # MLflow 3.x의 작업 실행기(huey 프로세스 약 120개, 메모리 1.6GiB)를 끈다. 이 서버는 실험 기록과 모델 저장만 하고 작업 큐가 필요 없다.
+      # 켜 두면 시작 직후 자원을 몰아 쓰며 컨테이너가 11초마다 재시작을 반복했다(Infra/TROUBLESHOOTING.md C10).
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
       AWS_ACCESS_KEY_ID: ${OBJECT_STORAGE_WRITE_ACCESS_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_ACCESS_KEY를 지정하세요}
       AWS_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_WRITE_SECRET_KEY:?Infra/.env에 OBJECT_STORAGE_WRITE_SECRET_KEY를 지정하세요}
       AWS_DEFAULT_REGION: us-east-1
@@ -382,6 +441,103 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # ---- FE·AI (이미지 정의는 각 파트 폴더의 Dockerfile) ----
+  # 웹 화면(정적 파일). 포트를 공개하지 않는다. 앞단 nginx가 `/`를 이 컨테이너(8080)로 넘긴다.
+  # 빌드 때 고정되는 FE 환경 변수는 .env의 FE_VITE_*로 바꾼다(비워 두면 FE 기본값).
+  web:
+    build:
+      context: ../FE
+      args:
+        VITE_KEYBOARD_INPUT: ${FE_VITE_KEYBOARD_INPUT:-}
+        VITE_LOGIN_PROVIDERS: ${FE_VITE_LOGIN_PROVIDERS:-}
+        VITE_MONITOR: ${FE_VITE_MONITOR:-}
+    networks:
+      - internal
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # AI 서버(FastAPI). 포트를 공개하지 않는다. BE만 내부 네트워크(ai-api:8000)로 호출한다.
+  # 채보 워커(GPU)는 이 서비스가 아니라 별도 구성이다.
+  ai-api:
+    build:
+      context: ../AI
+    networks:
+      - internal
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # 약점 분석 실측 보정 배치(COACH-003). 동의한 사용자의 비식별 기록(DB 뷰 coach_export_v)으로 임계값 후보를 만들어
+  # MLflow에 기록한다. 임계값을 자동으로 바꾸지 않는다. 설명은 AI/docs/coach-calibration.md.
+  # 평소에는 뜨지 않는다(profiles). 예약 실행이나 사람이 docker compose run --rm coach-calibration [--force]로 부른다.
+  # DB 접속은 뷰만 읽을 수 있는 읽기 전용 계정(coach_export)이고, 계정·비밀번호·소금은 서버에서 직접 만든다(Infra/SECURITY.md).
+  coach-calibration:
+    build:
+      context: ../AI
+    profiles: ["calibration"]
+    # 시작 직후와 종료 직전에 15초씩 기다린다. Alloy가 컨테이너를 찾는 주기(5초) 안에 로그 수집이 붙어서
+    # 끝에 남기는 상태 줄(coach-calibration status=...)이 Loki에 들어가게 하려는 것이다. 사라지면 알림이 못 본다.
+    # run에 붙인 인자(예: --force)는 "$@"로 배치에 전달된다.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sleep 15
+        case "$$SSAPLASH_COACH_EXPORT_DSN" in
+          *:@*) echo "coach-calibration status=FAIL error=MissingExportPassword"; sleep 15; exit 1 ;;
+        esac
+        python -m ssaplash_ai.coach_calibration.cli "$$@"
+        code=$$?
+        sleep 15
+        exit $$code
+      - coach-calibration
+    command: []
+    environment:
+      # 읽기 전용 계정. 비밀번호가 비어 있으면(.env에 없으면) 위 검사가 접속 전에 멈춘다.
+      SSAPLASH_COACH_EXPORT_DSN: postgresql://coach_export:${COACH_EXPORT_PASSWORD:-}@postgres:5432/${POSTGRES_DB}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      # 정책 파일은 서버 이미지에 들어가지 않으므로 마운트한다. 경로를 줬는데 파일이 없으면 배치가 실패한다.
+      SSAPLASH_CALIBRATION_POLICY: /config/calibration_policy.yaml
+    volumes:
+      - ../AI/configs/coach:/config:ro
+    networks:
+      - internal
+    mem_limit: 1g
+    # 이미지의 HEALTHCHECK는 AI 서버(8000번 포트)용이라 일회성 배치에는 맞지 않는다.
+    healthcheck:
+      disable: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    logging: *default-logging
+
+  # 인증서 발급·갱신 도구. 평소에는 실행하지 않고(profiles) 필요할 때만 docker compose run으로 쓴다.
+  certbot:
+    image: certbot/certbot:v5.8.0
+    profiles: ["tools"]
+    entrypoint: ["certbot"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    networks:
+      - public
+    logging: *default-logging
+
 networks:
   public: {}
   internal:
@@ -396,3 +552,5 @@ volumes:
   loki-data:
   grafana-data:
   alloy-data:
+  certbot-www:
+  letsencrypt:

@@ -1,0 +1,62 @@
+# S15P31A307-164 후보 27개. rule-eval에 바로 넣을 수 있음 (기본값 탐 구간 120ms·심벌 80ms를 전부 같이 넣음).
+candidates:
+- name: fixed
+  rules: {window_ms: 120, cymbal_window_ms: 80}
+- name: fixed_gate002
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.02}
+- name: fixed_gate005
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.05}
+- name: fixed_gate010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.1}
+- name: fixed_gate020
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.2}
+- name: fixed_gate030
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.3}
+- name: fixed_gate050
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.5}
+- name: fixed_gate005_w40
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.05, tom_gate_window_ms: 40}
+- name: fixed_gate005_w250
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.05, tom_gate_window_ms: 250}
+- name: relative_bands
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative}
+- name: relative_order
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_naming: order}
+- name: relative_bands_gap1
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_gap: 1.0}
+- name: relative_bands_gap3
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_gap: 3.0}
+- name: relative_bands_hits1
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_hits: 1}
+- name: relative_bands_hits4
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_hits: 4}
+- name: relative_bands_gate005
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_gate_ratio: 0.05}
+- name: relative_bands_gate010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_gate_ratio: 0.1}
+- name: relative_order_gate005
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_naming: order,
+    tom_gate_ratio: 0.05}
+- name: relative_bands_gap3_gate005
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_gap: 3.0,
+    tom_gate_ratio: 0.05}
+- name: fixed_gate010_w40
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.1, tom_gate_window_ms: 40}
+- name: relative_bands_gap1_gate010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_gap: 1.0,
+    tom_gate_ratio: 0.1}
+- name: relative_bands_gap1_hits4_gate010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_min_gap: 1.0,
+    tom_relative_min_hits: 4, tom_gate_ratio: 0.1}
+- name: relative_bands_k2_gate010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_mode: relative, tom_relative_k: 2,
+    tom_gate_ratio: 0.1}
+- name: fixed_gate005_snare
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.05, tom_gate_action: snare}
+- name: fixed_gate010_snare
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.1, tom_gate_action: snare}
+- name: fixed_gate020_snare
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.2, tom_gate_action: snare}
+- name: fixed_gate010_w40_snare
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.1, tom_gate_window_ms: 40,
+    tom_gate_action: snare}

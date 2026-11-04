@@ -111,6 +111,30 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   });
 });
 
+describe('SettingsPage 드럼·노래 음량', () => {
+  it('슬라이더 두 개와 도움말을 렌더한다', () => {
+    const html = render();
+    expect(html).toContain('드럼 음량');
+    expect(html).toContain('노래 음량');
+    expect(html).toContain('패드 소리만. 100%가 기본');
+    expect(html).toContain('게임·악보 반주만');
+  });
+
+  it('값 표시는 퍼센트로, 드럼은 200%까지', () => {
+    put(useSettings, { drumVolume: 1.5, songVolume: 0.4 });
+    const html = render();
+    expect(html).toContain('150%');
+    expect(html).toContain('40%');
+    expect(html).toContain('max="2"');
+  });
+
+  it('안내 문구는 메트로놈만 Dock에 있다고 말한다', () => {
+    const html = render();
+    expect(html).toContain('메트로놈은 상단 Dock에서도 바꿀 수 있어요.');
+    expect(html).not.toContain('음량과 메트로놈은');
+  });
+});
+
 describe('SettingsPage 기기 행', () => {
   it('키보드 전용', () => {
     expect(render()).toContain('키보드 전용');

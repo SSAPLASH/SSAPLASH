@@ -61,7 +61,7 @@ public class KitPresetService {
 			throw new BusinessException(PresetErrorCode.PRESET_NAME_DUPLICATE);
 		}
 		var preset = KitPreset.create(userId, request.name(), write(request.layout()), write(request.sounds()),
-				writeOrNull(request.calibration()), request.schemaVersionOrDefault());
+				request.schemaVersionOrDefault());
 		try {
 			return toResponse(presets.saveAndFlush(preset));
 		}
@@ -79,7 +79,7 @@ public class KitPresetService {
 			throw new BusinessException(PresetErrorCode.PRESET_NAME_DUPLICATE);
 		}
 		preset.replace(request.name(), write(request.layout()), write(request.sounds()),
-				writeOrNull(request.calibration()), request.schemaVersionOrDefault());
+				request.schemaVersionOrDefault());
 		flush();
 		return toResponse(preset);
 	}
@@ -140,16 +140,11 @@ public class KitPresetService {
 
 	private PresetResponse toResponse(KitPreset p) {
 		return new PresetResponse(p.getId(), p.getName(), p.isDefault(), read(p.getLayout()), read(p.getSounds()),
-				p.getCalibration() == null ? null : read(p.getCalibration()), p.getSchemaVersion(), p.getCreatedAt(),
-				p.getUpdatedAt());
+				p.getSchemaVersion(), p.getCreatedAt(), p.getUpdatedAt());
 	}
 
 	private String write(JsonNode node) {
 		return json.writeValueAsString(node);
-	}
-
-	private String writeOrNull(JsonNode node) {
-		return node == null ? null : write(node);
 	}
 
 	/** 저장된 값은 DB CHECK가 객체임을 보장한다. 읽지 못하면 데이터 불변식 위반이라 500으로 둔다. */

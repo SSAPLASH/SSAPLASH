@@ -26,6 +26,9 @@ springBoot {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'com.twelvemonkeys.imageio:imageio-webp:3.15.3'
+	implementation 'org.apache.commons:commons-fileupload2-jakarta-servlet6:2.0.0-M5'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	// Boot 4 전용 라인(3.x). 2.x는 Boot 3까지만 지원한다. 버전은 Boot BOM이 관리하지 않으므로 명시한다.
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
@@ -64,11 +67,12 @@ tasks.named('test') {
 	systemProperty 'java.net.preferIPv4Stack', 'true'
 }
 
-// 일반 PG 테스트에는 확장 전용 V8만 제외한 실제 SQL을 복사한다.
-// V8을 포함한 전체 이력은 필수 timescaleTest에서 별도로 검증한다.
+// 일반 PG 테스트에는 TimescaleDB 확장 전용 V8(hypertable 전환)·V30(보관 정책)을 제외한 실제 SQL을 복사한다.
+// 둘을 포함한 전체 이력은 필수 timescaleTest에서 별도로 검증한다.
 tasks.named('processTestResources') {
 	from('src/main/resources/db/migration') {
 		exclude 'V8__convert_telemetry_to_hypertable.sql'
+		exclude 'V30__add_telemetry_retention_policy.sql'
 		into 'db/test-migration'
 	}
 }
@@ -116,6 +120,13 @@ tasks.register('registerBasic8Backing', JavaExec) {
 	dependsOn tasks.named('toolsClasses')
 	classpath = sourceSets.tools.runtimeClasspath
 	mainClass = 'com.ssafy.airdrum.chart.asset.RegisterBasic8Backing'
+}
+tasks.register('backfillSongLevel', JavaExec) {
+	description = '곡 난이도 backfill. 기본은 dry-run, 적용은 --apply를 명시한다.'
+	group = 'application'
+	dependsOn tasks.named('toolsClasses')
+	classpath = sourceSets.tools.runtimeClasspath
+	mainClass = 'com.ssafy.airdrum.song.SongLevelBackfill'
 }
 tasks.register('timescaleTest', Test) {
 	description = '실제 TimescaleDB에서 Flyway V8과 데이터 보존을 검증한다.'

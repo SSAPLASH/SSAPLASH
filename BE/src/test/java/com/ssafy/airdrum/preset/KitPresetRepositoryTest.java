@@ -28,7 +28,6 @@ class KitPresetRepositoryTest {
 
 	private static final String LAYOUT = "{\"SNARE\":{\"x\":0.42,\"y\":0.68,\"r\":0.095}}";
 	private static final String SOUNDS = "{\"soundSetId\":\"ssaplash\"}";
-	private static final String CALIBRATION = "{\"id\":\"cal-1\",\"anchors\":{\"SNARE\":{\"pitch\":-12.5,\"yaw\":3}},\"maxRadiusDeg\":22}";
 
 	@Autowired
 	private KitPresetRepository presets;
@@ -55,7 +54,7 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void savesAllFieldsWithDefaultsAndTimestamps() {
-		var saved = presets.save(KitPreset.create(owner, "연습용", LAYOUT, SOUNDS, CALIBRATION, 1));
+		var saved = presets.save(KitPreset.create(owner, "연습용", LAYOUT, SOUNDS, 1));
 		em.flush();
 		em.clear();
 
@@ -65,35 +64,25 @@ class KitPresetRepositoryTest {
 		assertThat(found.isDefault()).isFalse();
 		assertThat(json.readTree(found.getLayout())).isEqualTo(json.readTree(LAYOUT));
 		assertThat(json.readTree(found.getSounds())).isEqualTo(json.readTree(SOUNDS));
-		assertThat(json.readTree(found.getCalibration())).isEqualTo(json.readTree(CALIBRATION));
 		assertThat(found.getSchemaVersion()).isEqualTo(1);
 		assertThat(found.getCreatedAt()).isNotNull();
 		assertThat(found.getUpdatedAt()).isEqualTo(found.getCreatedAt());
 	}
 
 	@Test
-	void calibrationIsOptional() {
-		var saved = presets.saveAndFlush(KitPreset.create(owner, "캘리브레이션 전", LAYOUT, SOUNDS, null, 1));
-		em.clear();
-		assertThat(presets.findById(saved.getId()).orElseThrow().getCalibration()).isNull();
-		assertThat(db.queryForObject("SELECT calibration IS NULL FROM kit_presets WHERE id=?", Boolean.class, saved.getId()))
-				.isTrue();
-	}
-
-	@Test
 	void factoryRejectsBlankNameAndInvalidSchemaVersion() {
-		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, " ", LAYOUT, SOUNDS, null, 1));
-		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, null, LAYOUT, SOUNDS, null, 1));
-		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", LAYOUT, SOUNDS, null, 0));
-		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", null, SOUNDS, null, 1));
-		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", LAYOUT, null, null, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, " ", LAYOUT, SOUNDS, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, null, LAYOUT, SOUNDS, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", LAYOUT, SOUNDS, 0));
+		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", null, SOUNDS, 1));
+		assertThatIllegalArgumentException().isThrownBy(() -> KitPreset.create(owner, "a", LAYOUT, null, 1));
 	}
 
 	@Test
 	void replaceChangesContentButKeepsDefaultAndOwner() {
-		var preset = presets.saveAndFlush(KitPreset.create(owner, "원래", LAYOUT, SOUNDS, CALIBRATION, 1));
+		var preset = presets.saveAndFlush(KitPreset.create(owner, "원래", LAYOUT, SOUNDS, 1));
 		preset.markDefault();
-		preset.replace("바꿈", "{\"KICK\":{\"x\":0.5,\"y\":0.9,\"r\":0.06}}", "{\"soundSetId\":\"synth\"}", null, 2);
+		preset.replace("바꿈", "{\"KICK\":{\"x\":0.5,\"y\":0.9,\"r\":0.06}}", "{\"soundSetId\":\"synth\"}", 2);
 		presets.flush();
 		em.clear();
 
@@ -101,17 +90,16 @@ class KitPresetRepositoryTest {
 		assertThat(found.getName()).isEqualTo("바꿈");
 		assertThat(found.isDefault()).isTrue();
 		assertThat(found.getUserId()).isEqualTo(owner);
-		assertThat(found.getCalibration()).isNull();
 		assertThat(found.getSchemaVersion()).isEqualTo(2);
 		assertThat(json.readTree(found.getSounds()).path("soundSetId").asString()).isEqualTo("synth");
 	}
 
 	@Test
 	void listsDefaultFirstThenNewestAndOnlyOwn() {
-		var first = presets.saveAndFlush(KitPreset.create(owner, "첫째", LAYOUT, SOUNDS, null, 1));
-		var second = presets.saveAndFlush(KitPreset.create(owner, "둘째", LAYOUT, SOUNDS, null, 1));
-		var third = presets.saveAndFlush(KitPreset.create(owner, "셋째", LAYOUT, SOUNDS, null, 1));
-		presets.saveAndFlush(KitPreset.create(other, "남의 것", LAYOUT, SOUNDS, null, 1));
+		var first = presets.saveAndFlush(KitPreset.create(owner, "첫째", LAYOUT, SOUNDS, 1));
+		var second = presets.saveAndFlush(KitPreset.create(owner, "둘째", LAYOUT, SOUNDS, 1));
+		var third = presets.saveAndFlush(KitPreset.create(owner, "셋째", LAYOUT, SOUNDS, 1));
+		presets.saveAndFlush(KitPreset.create(other, "남의 것", LAYOUT, SOUNDS, 1));
 		first.markDefault();
 		presets.flush();
 
@@ -123,34 +111,34 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void findsOnlyOwnPresetById() {
-		var mine = presets.saveAndFlush(KitPreset.create(owner, "내 것", LAYOUT, SOUNDS, null, 1));
+		var mine = presets.saveAndFlush(KitPreset.create(owner, "내 것", LAYOUT, SOUNDS, 1));
 		assertThat(presets.findByIdAndUserId(mine.getId(), owner)).isPresent();
 		assertThat(presets.findByIdAndUserId(mine.getId(), other)).isEmpty();
 	}
 
 	@Test
 	void nameExistenceChecksAreScopedToOwnerAndCanExcludeSelf() {
-		var mine = presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, null, 1));
+		var mine = presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, 1));
 		assertThat(presets.existsByUserIdAndName(owner, "같은 이름")).isTrue();
 		assertThat(presets.existsByUserIdAndName(other, "같은 이름")).isFalse();
 		assertThat(presets.existsByUserIdAndNameAndIdNot(owner, "같은 이름", mine.getId())).isFalse();
-		var another = presets.saveAndFlush(KitPreset.create(owner, "다른 이름", LAYOUT, SOUNDS, null, 1));
+		var another = presets.saveAndFlush(KitPreset.create(owner, "다른 이름", LAYOUT, SOUNDS, 1));
 		assertThat(presets.existsByUserIdAndNameAndIdNot(owner, "같은 이름", another.getId())).isTrue();
 	}
 
 	@Test
 	void sameNameIsUniquePerOwnerOnly() {
-		presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, null, 1));
-		presets.saveAndFlush(KitPreset.create(other, "같은 이름", LAYOUT, SOUNDS, null, 1));
-		assertThatThrownBy(() -> presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, null, 1)))
+		presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, 1));
+		presets.saveAndFlush(KitPreset.create(other, "같은 이름", LAYOUT, SOUNDS, 1));
+		assertThatThrownBy(() -> presets.saveAndFlush(KitPreset.create(owner, "같은 이름", LAYOUT, SOUNDS, 1)))
 				.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	@Test
 	void onlyOneDefaultPerOwner() {
-		var a = presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, null, 1));
-		var b = presets.saveAndFlush(KitPreset.create(owner, "나", LAYOUT, SOUNDS, null, 1));
-		var others = presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, null, 1));
+		var a = presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, 1));
+		var b = presets.saveAndFlush(KitPreset.create(owner, "나", LAYOUT, SOUNDS, 1));
+		var others = presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, 1));
 		a.markDefault();
 		others.markDefault();
 		presets.flush();
@@ -160,8 +148,8 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void clearDefaultClearsOnlyOwnersDefault() {
-		var mine = presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, null, 1));
-		var others = presets.saveAndFlush(KitPreset.create(other, "나", LAYOUT, SOUNDS, null, 1));
+		var mine = presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, 1));
+		var others = presets.saveAndFlush(KitPreset.create(other, "나", LAYOUT, SOUNDS, 1));
 		mine.markDefault();
 		others.markDefault();
 		presets.flush();
@@ -173,9 +161,9 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void newestRemainingIsFoundForDefaultSuccession() {
-		presets.saveAndFlush(KitPreset.create(owner, "오래된", LAYOUT, SOUNDS, null, 1));
-		var newest = presets.saveAndFlush(KitPreset.create(owner, "최신", LAYOUT, SOUNDS, null, 1));
-		presets.saveAndFlush(KitPreset.create(other, "남의 최신", LAYOUT, SOUNDS, null, 1));
+		presets.saveAndFlush(KitPreset.create(owner, "오래된", LAYOUT, SOUNDS, 1));
+		var newest = presets.saveAndFlush(KitPreset.create(owner, "최신", LAYOUT, SOUNDS, 1));
+		presets.saveAndFlush(KitPreset.create(other, "남의 최신", LAYOUT, SOUNDS, 1));
 		assertThat(presets.findFirstByUserIdOrderByCreatedAtDescIdDesc(owner)).get()
 				.extracting(KitPreset::getId).isEqualTo(newest.getId());
 		assertThat(presets.findFirstByUserIdOrderByCreatedAtDescIdDesc(Long.MAX_VALUE)).isEmpty();
@@ -183,10 +171,8 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void jsonColumnsMustBeObjects() {
-		var id = presets.saveAndFlush(KitPreset.create(owner, "제약", LAYOUT, SOUNDS, CALIBRATION, 1)).getId();
+		var id = presets.saveAndFlush(KitPreset.create(owner, "제약", LAYOUT, SOUNDS, 1)).getId();
 		for (var sql : new String[] {
-				"UPDATE kit_presets SET calibration='[]' WHERE id=?",
-				"UPDATE kit_presets SET calibration='null' WHERE id=?",
 				"UPDATE kit_presets SET layout='[]' WHERE id=?",
 				"UPDATE kit_presets SET sounds='\"x\"' WHERE id=?" }) {
 			// 위반 하나가 테스트 트랜잭션을 중단시키지 않도록 문장마다 savepoint로 되돌린다.
@@ -194,15 +180,23 @@ class KitPresetRepositoryTest {
 			assertThatThrownBy(() -> db.update(sql, id)).as(sql).isInstanceOf(DataIntegrityViolationException.class);
 			db.execute("ROLLBACK TO SAVEPOINT ck");
 		}
+	}
+
+	/** 128: 캘리브레이션은 기기·세션 값이라 프리셋에 저장하지 않는다(명세 미결 #23). V13이 컬럼과 CHECK를 함께 지운다. */
+	@Test
+	void calibrationColumnAndConstraintAreDropped() {
+		assertThat(db.queryForObject("SELECT count(*) FROM information_schema.columns "
+				+ "WHERE table_schema = current_schema() AND table_name = 'kit_presets' AND column_name = 'calibration'",
+				Long.class)).isZero();
 		assertThat(db.queryForObject(
-				"SELECT count(*) FROM pg_constraint WHERE conname='ck_kit_presets_calibration'", Long.class)).isEqualTo(1);
+				"SELECT count(*) FROM pg_constraint WHERE conname = 'ck_kit_presets_calibration'", Long.class)).isZero();
 	}
 
 	@Test
 	void deleteAllByUserIdRemovesOnlyThatOwnersPresets() {
-		presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, null, 1));
-		presets.saveAndFlush(KitPreset.create(owner, "나", LAYOUT, SOUNDS, null, 1));
-		presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, null, 1));
+		presets.saveAndFlush(KitPreset.create(owner, "가", LAYOUT, SOUNDS, 1));
+		presets.saveAndFlush(KitPreset.create(owner, "나", LAYOUT, SOUNDS, 1));
+		presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, 1));
 
 		presets.deleteAllByUserId(owner);
 		presets.flush();
@@ -213,7 +207,7 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void deletingUserRowCascadesToPresets() {
-		presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, null, 1));
+		presets.saveAndFlush(KitPreset.create(other, "다", LAYOUT, SOUNDS, 1));
 		em.clear();
 		db.update("DELETE FROM users WHERE id=?", other);
 		assertThat(db.queryForObject("SELECT count(*) FROM kit_presets WHERE user_id=?", Long.class, other)).isZero();
@@ -221,7 +215,7 @@ class KitPresetRepositoryTest {
 
 	@Test
 	void deletingPresetNullsPlaySessionReference() {
-		var preset = presets.saveAndFlush(KitPreset.create(owner, "플레이에 쓴", LAYOUT, SOUNDS, null, 1));
+		var preset = presets.saveAndFlush(KitPreset.create(owner, "플레이에 쓴", LAYOUT, SOUNDS, 1));
 		var playId = UUID.randomUUID();
 		db.update("""
 				INSERT INTO play_sessions(id,user_id,mode,input_source,kit_preset_id,payload_schema_version,payload_hash,
