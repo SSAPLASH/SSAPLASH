@@ -1,8 +1,9 @@
 // AI 약점 구간 목록과 분석 상태 안내 (COACH-003 4-1·4-2). 데이터 요청·타이머는 페이지가 맡는다.
 import type { ReactNode } from 'react';
 import type { Judgement } from '@/domain/judgement';
+import { Chip } from '@/components/ui/Chip';
 import { PAD_META } from '@/domain/pads';
-import { formatSeconds, isTooShortForAnalysis, segmentBars, type AnalysisStatus, type WeakSegment } from '@/domain/report';
+import { isTooShortForAnalysis, segmentBars, type AnalysisStatus, type WeakSegment } from '@/domain/report';
 
 /** 이 값 이상이면 강조선·"주의" 뱃지 */
 const SEVERE_THRESHOLD = 0.7;
@@ -13,39 +14,47 @@ export interface WeakSegmentsProps {
   status: AnalysisStatus;
   segments: WeakSegment[] | null;
   counts: Record<Judgement, number>;
-  /** 악보 모드만. 아니면 null */
+  /** 로그에 bpm·박자가 있으면(게임·악보 모두). 아니면 null */
   bars: { bpm: number; beatsPerBar: number } | null;
   polling: PollingState;
   onRefresh: () => void;
 }
 
-/** 시간 범위 문구. SEGMENT는 `7~12초`(초 표기는 AI description과 같은 규칙), 악보 모드면 ` · 3~5마디` 병기. WHOLE은 "연주 전체" */
-function formatRange(seg: WeakSegment, bars: WeakSegmentsProps['bars']): string {
-  if (seg.scope === 'WHOLE') return '연주 전체';
-  const text = `${formatSeconds(seg.fromMs)}~${formatSeconds(seg.toMs)}초`;
-  const b = bars ? segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar) : null;
-  if (!b) return text;
+/** 머리 줄 왼쪽 마디 문구. 연주 전체이거나 마디를 환산할 수 없으면 null */
+function formatBars(seg: WeakSegment, bars: WeakSegmentsProps['bars']): string | null {
+  if (seg.scope === 'WHOLE' || !bars) return null;
+  const b = segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar);
+  if (!b) return null;
   const [from, to] = [b[0] + 1, b[1] + 1];
-  return `${text} · ${from === to ? `${from}마디` : `${from}~${to}마디`}`;
+  return from === to ? `${from}마디` : `${from}~${to}마디`;
 }
 
 function SegmentCard({ seg, bars }: { seg: WeakSegment; bars: WeakSegmentsProps['bars'] }) {
   const severe = seg.severity >= SEVERE_THRESHOLD;
+  const barsText = formatBars(seg, bars);
   return (
     <li className={severe ? 'weak-card severe' : 'weak-card'}>
-      <div className="row">
-        {seg.scope === 'WHOLE' ? <span className="weak-badge">연주 전체</span> : <strong>{formatRange(seg, bars)}</strong>}
-        {severe && <span className="weak-badge severe">주의</span>}
-      </div>
-      <p>{seg.description}</p>
-      {seg.pads.length > 0 && (
-        <div className="chips">
-          {seg.pads.map((p) => (
-            <span key={p} className="chip small">
-              {PAD_META[p].label}
-            </span>
-          ))}
+      {(barsText || severe || seg.pads.length > 0) && (
+        <div className="weak-head">
+          <div className="weak-head-left">
+            {barsText && <strong>{barsText}</strong>}
+            {severe && <span className="weak-badge severe">주의</span>}
+          </div>
+          {seg.pads.length > 0 && (
+            <div className="chips">
+              {seg.pads.map((p) => (
+                <Chip key={p}>{PAD_META[p].label}</Chip>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+      <p className="weak-desc">{seg.description}</p>
+      {seg.tip && (
+        <p className="weak-tip">
+          <span className="weak-tip-label">연습 방법</span>
+          {seg.tip}
+        </p>
       )}
     </li>
   );

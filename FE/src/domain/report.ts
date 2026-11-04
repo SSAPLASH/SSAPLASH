@@ -48,23 +48,6 @@ export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerB
   return [fromBar, toBar];
 }
 
-/**
- * 문구용 초 표기. AI `coach/patterns/base.py`의 `seconds_text`와 같은 규칙이라 머리글과 `description`의 숫자가 같다.
- * 정수 초에서 0.05 미만이면 소수점 없이(2960 → "3"), 아니면 소수 한 자리(2400 → "2.4").
- * 정확히 .x5인 값(ms가 250·750으로 끝남)은 파이썬 format처럼 짝수 쪽으로 반올림한다(7250 → "7.2", 7750 → "7.8").
- */
-export function formatSeconds(ms: number): string {
-  const sec = ms / 1000;
-  const nearest = Math.round(sec);
-  if (Math.abs(sec - nearest) < 0.05) return String(nearest);
-  // toFixed는 배정밀도 값 그대로 반올림하므로 2.35(실제로는 2.35보다 큼) → "2.4", 2.55 → "2.5"로 파이썬과 같다.
-  // 정확한 동률(k + 0.25 / 0.75, ms가 250·750으로 끝남)만 toFixed가 큰 쪽을 골라 짝수 쪽으로 바꾼다.
-  const exactTie = ms % 500 === 250 || ms % 500 === -250;
-  if (!exactTie) return sec.toFixed(1);
-  const floor = Math.floor(sec * 10);
-  return ((floor % 2 === 0 ? floor : floor + 1) / 10).toFixed(1);
-}
-
 /** 판정 수 합이 분석 최소 노트 수 미만인지 */
 export function isTooShortForAnalysis(counts: Record<Judgement, number>): boolean {
   return counts.PERFECT + counts.GOOD + counts.MISS < MIN_NOTES_FOR_ANALYSIS;
