@@ -13,9 +13,10 @@ import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { StaffLegend } from './StaffLegend';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
+import { useSettings } from '@/store/settingsStore';
 import './ready.css';
 
 export interface ReadyPanelProps {
@@ -90,6 +91,8 @@ export function ReadyPanel({
   staffLegend = false,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
+  const hitSeq = usePadHitSeq();
+  const kitSkin = useSettings((s) => s.kitSkin);
   // 악보 읽는 법 줄에 올린 패드는 킷에서 예고(armed) 링으로, 타격(hit)한 패드는 그 줄을 강조한다
   const [hoverPad, setHoverPad] = useState<PadId | null>(null);
   const kitStates: Partial<Record<PadId, PadVisualState>> =
@@ -201,7 +204,7 @@ export function ReadyPanel({
           {staffLegend && <StaffLegend activePad={hitPad} onHoverPad={setHoverPad} />}
           <Card padding="md" className="play-rp-preview" title="미리 쳐 보기">
             <div className="play-rp-kit">
-              <DrumKit fitWidth states={kitStates} />
+              <DrumKit fitWidth states={kitStates} skin={kitSkin} hitSeq={hitSeq} />
             </div>
             <p className="play-rp-caption">쳐 보면 소리만 나요. 기록은 남지 않아요.</p>
           </Card>
