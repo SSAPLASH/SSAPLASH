@@ -20,7 +20,7 @@ import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -495,6 +495,7 @@ export function SheetPage() {
   );
   // 킷: 타격(hit)·판정 색, 패드 위 다음 박 배지(highlight는 넘기지 않는다 — 넘기면 next 패드까지 강조된다)
   const padStates = usePadStates(activeSession);
+  const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
   // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그)
@@ -667,7 +668,7 @@ export function SheetPage() {
           />
         }
         guide={<GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />}
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} badges={badges} />}
+        kit={<DrumKit scale={0.7} states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"

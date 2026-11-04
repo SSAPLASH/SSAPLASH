@@ -19,7 +19,7 @@ import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { usePadStates } from '@/components/drum/usePadStates';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -111,6 +111,7 @@ export function PlayPage() {
   const selectSong = useSongs((s) => s.selectSong);
   // 킷 미니 뷰: 타격(hit)·판정 색
   const padStates = usePadStates(session);
+  const hitSeq = usePadHitSeq();
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -659,7 +660,7 @@ export function PlayPage() {
             <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
           )
         }
-        kit={<DrumKit scale={0.7} states={padStates} labels={false} />}
+        kit={<DrumKit scale={0.7} states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
             variant="stack"

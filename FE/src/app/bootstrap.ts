@@ -1,7 +1,7 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import type { InputSource } from '@/input/InputSource';
-import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources';
+import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
@@ -20,6 +20,7 @@ import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { smoothBattery } from '@/domain/stickStatus';
 import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
+import { isSensorSource } from '@/domain/events';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -225,7 +226,7 @@ export function bootstrapInput(): void {
   // 손별 연결은 소스가 알린다(동글은 LINK 마스크, 그 외는 STATUS·포트 닫힘). STATUS는 5초마다 와서 같은 연결이 반복된다.
   // 끊김 → 자동 재연결 시작, 양손 복귀 → settle, 비트 5(설정 전) → 설정 재전송(설계 PLAY-002 4-1).
   inputManager.onStatus((stickId, connected, source, batteryPct, unconfigured) => {
-    if (source === 'keyboard') return;
+    if (!isSensorSource(source)) return;
     const live = useLive.getState();
     const wasConnected = live.connected[stickId];
     const c = [...live.connected] as [boolean, boolean];
@@ -277,17 +278,20 @@ export function bootstrapInput(): void {
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
       if (tAudio !== null) hit.tAudio = tAudio;
       // PLAY-07: 브라우저 측 진동 명령. 실제 지연 없는 진동은 MCU 로컬 트리거가 맡는다
-      inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+      // 화면 터치는 실제 스틱을 진동시키지 않는다
+      if (hit.source !== 'touch') inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
     if (soundOnHit) pushTelemetry(hit);
     // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
-    if (hit.source !== 'keyboard') yawDriftMonitor.observe(hit, currentProfile());
+    if (isSensorSource(hit.source)) yawDriftMonitor.observe(hit, currentProfile());
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
+  // 화면 터치는 키보드 사용 여부와 무관하게 항상 붙인다(터치 연주를 켜는 화면만 strike를 부른다)
+  void inputManager.attach(touchSource);
   // 모니터 따라보기 창(/monitor/stick?follow=1)은 센서를 열지 않는다 — 연결은 연주 창이 가진다
   if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind, true);
   useSettings.subscribe((s, prev) => {

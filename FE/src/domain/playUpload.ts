@@ -3,6 +3,7 @@
 import type { LiveCoachEvent, LoggedHit, PlayLog } from '@/engine/playLog';
 import { JUDGEMENT_SCORE, type Judgement } from './judgement';
 import type { PadId } from './pads';
+import { isSensorSource } from '@/domain/events';
 
 export type UploadInputSource = 'KEYBOARD' | 'STICK';
 
@@ -108,7 +109,7 @@ export function buildUploadBody(log: PlayLog, ctx: UploadContext): BuildUploadRe
   if (noteCount !== log.notes.length || log.notes.some((n) => !n.noteId)) return { ok: false, reason: 'CHART_MISMATCH' };
 
   const inputSource = uploadInputSource(log.inputSource);
-  const sensorHit = (h: LoggedHit) => inputSource === 'STICK' && h.source !== undefined && h.source !== 'keyboard';
+  const sensorHit = (h: LoggedHit) => inputSource === 'STICK' && isSensorSource(h.source);
 
   const rows: Omit<UploadHit, 'seq'>[] = [];
   const order: number[] = [];

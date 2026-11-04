@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   DRUM_KIT_H,
+  DRUM_KIT_FLAT_PADS,
   DRUM_KIT_PADS,
+  KIT_SKINS,
+  isKitSkin,
+  kitPadsFor,
   DRUM_KIT_W,
   fitScale,
   kitSizeAt,
@@ -86,5 +90,44 @@ describe('visualPadOf', () => {
   it('그 외 패드는 그대로', () => {
     expect(visualPadOf('SNARE')).toBe('SNARE');
     expect(visualPadOf('KICK')).toBe('KICK');
+  });
+});
+
+describe('kitPadsFor · DRUM_KIT_FLAT_PADS', () => {
+  it('세 스킨 모두 8패드를 돌려주고 실물은 기존 표다', () => {
+    for (const skin of KIT_SKINS) expect(kitPadsFor(skin)).toHaveLength(8);
+    expect(kitPadsFor('acoustic')).toBe(DRUM_KIT_PADS);
+    expect(kitPadsFor('electronic')).toBe(DRUM_KIT_FLAT_PADS);
+    expect(kitPadsFor('neon')).toBe(DRUM_KIT_FLAT_PADS);
+  });
+
+  it('평면 표는 760×300 안에 있고 원끼리 겹치지 않는다(4px 허용)', () => {
+    for (const p of DRUM_KIT_FLAT_PADS) {
+      expect(p.w).toBe(p.h);
+      expect(p.left).toBeGreaterThanOrEqual(0);
+      expect(p.top).toBeGreaterThanOrEqual(0);
+      expect(p.left + p.w).toBeLessThanOrEqual(DRUM_KIT_W);
+      expect(p.top + p.h).toBeLessThanOrEqual(DRUM_KIT_H);
+    }
+    for (let i = 0; i < DRUM_KIT_FLAT_PADS.length; i++) {
+      for (let j = i + 1; j < DRUM_KIT_FLAT_PADS.length; j++) {
+        const a = DRUM_KIT_FLAT_PADS[i];
+        const b = DRUM_KIT_FLAT_PADS[j];
+        const dist = Math.hypot(a.left + a.w / 2 - (b.left + b.w / 2), a.top + a.h / 2 - (b.top + b.h / 2));
+        expect(dist).toBeGreaterThanOrEqual(a.w / 2 + b.w / 2 - 4);
+      }
+    }
+  });
+
+  it('HIHAT_PEDAL이 없고 태그가 모두 있다', () => {
+    expect(DRUM_KIT_FLAT_PADS.some((p) => (p.pad as string) === 'HIHAT_PEDAL')).toBe(false);
+    expect(DRUM_KIT_FLAT_PADS.every((p) => !!p.tag)).toBe(true);
+    expect(DRUM_KIT_FLAT_PADS.map((p) => p.pad)).toEqual(DRUM_KIT_PADS.map((p) => p.pad));
+  });
+
+  it('isKitSkin', () => {
+    expect(isKitSkin('neon')).toBe(true);
+    expect(isKitSkin('weird')).toBe(false);
+    expect(isKitSkin(undefined)).toBe(false);
   });
 });
