@@ -20,6 +20,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.User;
 import com.ssafy.airdrum.user.UserRepository;
@@ -43,7 +44,8 @@ class KitPresetApiTest {
 			{"SNARE":{"x":0.42,"y":0.68,"r":0.095},"KICK":{"x":0.58,"y":0.9,"r":0.065}}""";
 	private static final String SOUNDS = """
 			{"soundSetId":"ssaplash"}""";
-	private static final String CALIBRATION = """
+	/** 옛 FE 빌드·요청서 표가 보내던 캘리브레이션 본문. 이제 서버는 이 필드를 모르고 무시해야 한다(128). */
+	private static final String LEGACY_CALIBRATION = """
 			{"id":"cal-1","name":"내 스틱","source":"ble","anchors":{"SNARE":{"pad":"SNARE","pitch":-12.25,"yaw":3.5,
 			"radius":8.1,"samples":12,"spread":1.2}},"maxRadiusDeg":22,"audioOffsetMs":-15,"메모":{"깊이":[1,2.5,"셋"]}}""";
 
@@ -68,8 +70,8 @@ class KitPresetApiTest {
 
 	@BeforeEach
 	void seed() {
-		owner = users.saveAndFlush(User.create("프리셋 주인", null, null)).getId();
-		other = users.saveAndFlush(User.create("다른 회원", null, null)).getId();
+		owner = users.saveAndFlush(SignupConsentFixtures.completed(User.create("프리셋 주인", null, null))).getId();
+		other = users.saveAndFlush(SignupConsentFixtures.completed(User.create("다른 회원", null, null))).getId();
 		ownerToken = token(owner, UserRole.USER);
 		otherToken = token(other, UserRole.USER);
 	}
@@ -79,7 +81,7 @@ class KitPresetApiTest {
 	@Test
 	void createReturns201WithLocationAndExactContractFields() throws Exception {
 		var result = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, ownerToken)
-				.contentType(MediaType.APPLICATION_JSON).content(body("  연습용  ", LAYOUT, SOUNDS, CALIBRATION, null)))
+				.contentType(MediaType.APPLICATION_JSON).content(body("  연습용  ", LAYOUT, SOUNDS, null)))
 				.andReturn();
 
 		assertThat(result.getResponse().getStatus()).isEqualTo(201);
@@ -87,7 +89,7 @@ class KitPresetApiTest {
 		long id = created.path("id").longValue();
 		assertThat(result.getResponse().getHeader(HttpHeaders.LOCATION)).endsWith("/api/presets/" + id);
 		assertThat(created.propertyNames()).containsExactlyInAnyOrder("id", "name", "isDefault", "layout", "sounds",
-				"calibration", "schemaVersion", "createdAt", "updatedAt");
+				"schemaVersion", "createdAt", "updatedAt");
 		assertThat(created.path("id").isIntegralNumber()).isTrue();
 		assertThat(created.path("name").asString()).isEqualTo("연습용");
 		assertThat(created.path("isDefault").booleanValue()).isFalse();
@@ -98,19 +100,18 @@ class KitPresetApiTest {
 
 	@Test
 	void fullCrudFlow() throws Exception {
-		long id = create("처음", LAYOUT, SOUNDS, null);
+		long id = create("처음", LAYOUT, SOUNDS);
 
 		var fetched = ok(get("/api/presets/" + id));
 		assertThat(fetched.path("name").asString()).isEqualTo("처음");
 
 		var replaced = ok(put("/api/presets/" + id).contentType(MediaType.APPLICATION_JSON)
 				.content(body("바꾼 이름", "{\"CRASH\":{\"x\":0.2,\"y\":0.2,\"r\":0.1}}", "{\"soundSetId\":\"synth\"}",
-						CALIBRATION, 2)));
+						2)));
 		assertThat(replaced.path("id").longValue()).isEqualTo(id);
 		assertThat(replaced.path("name").asString()).isEqualTo("바꾼 이름");
 		assertThat(replaced.path("sounds").path("soundSetId").asString()).isEqualTo("synth");
 		assertThat(replaced.path("schemaVersion").intValue()).isEqualTo(2);
-		assertThat(replaced.path("calibration").isObject()).isTrue();
 
 		var list = ok(get("/api/presets"));
 		assertThat(list.isArray()).isTrue();
@@ -123,45 +124,42 @@ class KitPresetApiTest {
 		assertThat(ok(get("/api/presets"))).isEmpty();
 	}
 
-	// --- 인수 조건 7·8: 캘리브레이션 선택, JSON 왕복 ---
+	// --- 인수 조건 8: JSON 왕복 · 128: 옛 calibration 필드 무시 ---
 
 	@Test
-	void calibrationMissingOrNullIsStoredAsNullAndReturnedAsNull() throws Exception {
-		long missing = create("없음", LAYOUT, SOUNDS, null);
-		var explicitNull = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, ownerToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\":\"널\",\"layout\":" + LAYOUT + ",\"sounds\":" + SOUNDS + ",\"calibration\":null}"))
-				.andReturn();
-		assertThat(explicitNull.getResponse().getStatus()).isEqualTo(201);
-		long nullId = read(explicitNull).path("id").longValue();
+	void legacyCalibrationFieldIsIgnoredOnCreateAndUpdate() throws Exception {
+		for (String value : List.of(LEGACY_CALIBRATION, "null", "[]")) {
+			String legacy = "{\"name\":" + json.writeValueAsString("옛 빌드 " + value.length()) + ",\"layout\":" + LAYOUT
+					+ ",\"sounds\":" + SOUNDS + ",\"calibration\":" + value + "}";
+			var created = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, ownerToken)
+					.contentType(MediaType.APPLICATION_JSON).content(legacy)).andReturn();
+			assertThat(created.getResponse().getStatus()).as(value + " " + created.getResponse().getContentAsString())
+					.isEqualTo(201);
+			var preset = read(created);
+			assertThat(preset.has("calibration")).as(value).isFalse();
 
-		for (long id : List.of(missing, nullId)) {
-			var preset = ok(get("/api/presets/" + id));
-			assertThat(preset.has("calibration")).isTrue();
-			assertThat(preset.path("calibration").isNull()).isTrue();
-			assertThat(db.queryForObject("SELECT calibration IS NULL FROM kit_presets WHERE id=?", Boolean.class, id))
-					.isTrue();
+			long id = preset.path("id").longValue();
+			var updated = ok(put("/api/presets/" + id).contentType(MediaType.APPLICATION_JSON).content(legacy));
+			assertThat(updated.has("calibration")).as(value).isFalse();
+			assertThat(ok(get("/api/presets/" + id)).has("calibration")).as(value).isFalse();
 		}
 	}
 
 	@Test
 	void jsonContentRoundTripsSemantically() throws Exception {
-		long id = create("왕복", LAYOUT, SOUNDS, CALIBRATION);
+		long id = create("왕복", LAYOUT, SOUNDS);
 		var preset = ok(get("/api/presets/" + id));
 		assertThat(preset.path("layout")).isEqualTo(json.readTree(LAYOUT));
 		assertThat(preset.path("sounds")).isEqualTo(json.readTree(SOUNDS));
-		assertThat(preset.path("calibration")).isEqualTo(json.readTree(CALIBRATION));
-		assertThat(db.queryForObject("SELECT jsonb_typeof(calibration) FROM kit_presets WHERE id=?", String.class, id))
-				.isEqualTo("object");
 	}
 
 	// --- 인수 조건 2·3·10-1: 기본 프리셋 ---
 
 	@Test
 	void listPutsDefaultFirstAndOnlyOneDefault() throws Exception {
-		long a = create("가", LAYOUT, SOUNDS, null);
-		long b = create("나", LAYOUT, SOUNDS, null);
-		long c = create("다", LAYOUT, SOUNDS, null);
+		long a = create("가", LAYOUT, SOUNDS);
+		long b = create("나", LAYOUT, SOUNDS);
+		long c = create("다", LAYOUT, SOUNDS);
 
 		var none = ok(get("/api/presets"));
 		assertThat(ids(none)).containsExactly(c, b, a);
@@ -183,18 +181,18 @@ class KitPresetApiTest {
 
 	@Test
 	void updateKeepsDefaultFlag() throws Exception {
-		long a = create("가", LAYOUT, SOUNDS, null);
+		long a = create("가", LAYOUT, SOUNDS);
 		ok(put("/api/presets/" + a + "/default"));
 		var replaced = ok(put("/api/presets/" + a).contentType(MediaType.APPLICATION_JSON)
-				.content(body("가2", LAYOUT, SOUNDS, null, null)));
+				.content(body("가2", LAYOUT, SOUNDS, null)));
 		assertThat(replaced.path("isDefault").booleanValue()).isTrue();
 	}
 
 	@Test
 	void deletingDefaultPromotesNewestRemaining() throws Exception {
-		long oldest = create("오래된", LAYOUT, SOUNDS, null);
-		long middle = create("중간", LAYOUT, SOUNDS, null);
-		long newest = create("최신", LAYOUT, SOUNDS, null);
+		long oldest = create("오래된", LAYOUT, SOUNDS);
+		long middle = create("중간", LAYOUT, SOUNDS);
+		long newest = create("최신", LAYOUT, SOUNDS);
 		ok(put("/api/presets/" + middle + "/default"));
 
 		deleteOk(middle);
@@ -206,8 +204,8 @@ class KitPresetApiTest {
 
 	@Test
 	void deletingNonDefaultKeepsDefaultAndDeletingLastLeavesEmpty() throws Exception {
-		long a = create("가", LAYOUT, SOUNDS, null);
-		long b = create("나", LAYOUT, SOUNDS, null);
+		long a = create("가", LAYOUT, SOUNDS);
+		long b = create("나", LAYOUT, SOUNDS);
 		ok(put("/api/presets/" + a + "/default"));
 
 		deleteOk(b);
@@ -221,10 +219,10 @@ class KitPresetApiTest {
 
 	@Test
 	void succession_ignoresOtherOwnersPresets() throws Exception {
-		long mine = create("내 기본", LAYOUT, SOUNDS, null);
+		long mine = create("내 기본", LAYOUT, SOUNDS);
 		ok(put("/api/presets/" + mine + "/default"));
 		mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, otherToken)
-				.contentType(MediaType.APPLICATION_JSON).content(body("남의 최신", LAYOUT, SOUNDS, null, null)));
+				.contentType(MediaType.APPLICATION_JSON).content(body("남의 최신", LAYOUT, SOUNDS, null)));
 
 		deleteOk(mine);
 		assertThat(ok(get("/api/presets"))).isEmpty();
@@ -243,7 +241,7 @@ class KitPresetApiTest {
 			for (long id : List.of(foreign, Long.MAX_VALUE)) {
 				problem(get("/api/presets/" + id), token, 404, "PRESET_NOT_FOUND");
 				problem(put("/api/presets/" + id).contentType(MediaType.APPLICATION_JSON)
-						.content(body("가로채기", LAYOUT, SOUNDS, null, null)), token, 404, "PRESET_NOT_FOUND");
+						.content(body("가로채기", LAYOUT, SOUNDS, null)), token, 404, "PRESET_NOT_FOUND");
 				problem(put("/api/presets/" + id + "/default"), token, 404, "PRESET_NOT_FOUND");
 				problem(delete("/api/presets/" + id), token, 404, "PRESET_NOT_FOUND");
 			}
@@ -255,8 +253,8 @@ class KitPresetApiTest {
 	@Test
 	void everyEndpointRequiresToken() throws Exception {
 		var requests = List.<MockHttpServletRequestBuilder>of(get("/api/presets"), get("/api/presets/1"),
-				post("/api/presets").contentType(MediaType.APPLICATION_JSON).content(body("가", LAYOUT, SOUNDS, null, null)),
-				put("/api/presets/1").contentType(MediaType.APPLICATION_JSON).content(body("가", LAYOUT, SOUNDS, null, null)),
+				post("/api/presets").contentType(MediaType.APPLICATION_JSON).content(body("가", LAYOUT, SOUNDS, null)),
+				put("/api/presets/1").contentType(MediaType.APPLICATION_JSON).content(body("가", LAYOUT, SOUNDS, null)),
 				put("/api/presets/1/default"), delete("/api/presets/1"));
 		for (var request : requests) {
 			var r = mvc.perform(request).andReturn();
@@ -272,17 +270,16 @@ class KitPresetApiTest {
 		String big = "{\"blob\":\"" + "가".repeat(6000) + "\"}";
 		record Case(String body, String field) {}
 		var cases = List.of(
-				new Case(body("   ", LAYOUT, SOUNDS, null, null), "name"),
-				new Case(body("가".repeat(51), LAYOUT, SOUNDS, null, null), "name"),
+				new Case(body("   ", LAYOUT, SOUNDS, null), "name"),
+				new Case(body("가".repeat(51), LAYOUT, SOUNDS, null), "name"),
 				new Case("{\"layout\":" + LAYOUT + ",\"sounds\":" + SOUNDS + "}", "name"),
-				new Case(body("가", "[1,2]", SOUNDS, null, null), "layout"),
-				new Case(body("가", "\"문자열\"", SOUNDS, null, null), "layout"),
+				new Case(body("가", "[1,2]", SOUNDS, null), "layout"),
+				new Case(body("가", "\"문자열\"", SOUNDS, null), "layout"),
 				new Case("{\"name\":\"가\",\"sounds\":" + SOUNDS + "}", "layout"),
 				new Case("{\"name\":\"가\",\"layout\":null,\"sounds\":" + SOUNDS + "}", "layout"),
 				new Case("{\"name\":\"가\",\"layout\":" + LAYOUT + "}", "sounds"),
-				new Case(body("가", LAYOUT, SOUNDS, "[]", null), "calibration"),
-				new Case(body("가", LAYOUT, SOUNDS, null, 0), "schemaVersion"),
-				new Case(body("가", big, SOUNDS, null, null), "layout"));
+				new Case(body("가", LAYOUT, SOUNDS, 0), "schemaVersion"),
+				new Case(body("가", big, SOUNDS, null), "layout"));
 		for (var c : cases) {
 			var r = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, ownerToken)
 					.contentType(MediaType.APPLICATION_JSON).content(c.body())).andReturn();
@@ -298,9 +295,9 @@ class KitPresetApiTest {
 
 	@Test
 	void sameValidationAppliesToUpdateAndPathIdMustBePositive() throws Exception {
-		long id = create("가", LAYOUT, SOUNDS, null);
+		long id = create("가", LAYOUT, SOUNDS);
 		problem(put("/api/presets/" + id).contentType(MediaType.APPLICATION_JSON)
-				.content(body("가", "[]", SOUNDS, null, null)), ownerToken, 400, "VALIDATION_FAILED");
+				.content(body("가", "[]", SOUNDS, null)), ownerToken, 400, "VALIDATION_FAILED");
 		problem(get("/api/presets/0"), ownerToken, 400, "VALIDATION_FAILED");
 		problem(delete("/api/presets/-1"), ownerToken, 400, "VALIDATION_FAILED");
 	}
@@ -309,15 +306,15 @@ class KitPresetApiTest {
 
 	@Test
 	void duplicateNamesAreRejectedPerOwner() throws Exception {
-		long a = create("같은 이름", LAYOUT, SOUNDS, null);
-		long b = create("다른 이름", LAYOUT, SOUNDS, null);
+		long a = create("같은 이름", LAYOUT, SOUNDS);
+		long b = create("다른 이름", LAYOUT, SOUNDS);
 
 		problem(post("/api/presets").contentType(MediaType.APPLICATION_JSON)
-				.content(body(" 같은 이름 ", LAYOUT, SOUNDS, null, null)), ownerToken, 409, "PRESET_NAME_DUPLICATE");
+				.content(body(" 같은 이름 ", LAYOUT, SOUNDS, null)), ownerToken, 409, "PRESET_NAME_DUPLICATE");
 		problem(put("/api/presets/" + b).contentType(MediaType.APPLICATION_JSON)
-				.content(body("같은 이름", LAYOUT, SOUNDS, null, null)), ownerToken, 409, "PRESET_NAME_DUPLICATE");
+				.content(body("같은 이름", LAYOUT, SOUNDS, null)), ownerToken, 409, "PRESET_NAME_DUPLICATE");
 		ok(put("/api/presets/" + a).contentType(MediaType.APPLICATION_JSON)
-				.content(body("같은 이름", LAYOUT, "{\"soundSetId\":\"synth\"}", null, null)));
+				.content(body("같은 이름", LAYOUT, "{\"soundSetId\":\"synth\"}", null)));
 		assertThat(createAs(otherToken, "같은 이름")).isPositive();
 	}
 
@@ -325,17 +322,17 @@ class KitPresetApiTest {
 	void eleventhPresetIsRejectedUntilOneIsDeleted() throws Exception {
 		long first = 0;
 		for (int i = 1; i <= 10; i++) {
-			long id = create("프리셋 " + i, LAYOUT, SOUNDS, null);
+			long id = create("프리셋 " + i, LAYOUT, SOUNDS);
 			if (i == 1) {
 				first = id;
 			}
 		}
 		problem(post("/api/presets").contentType(MediaType.APPLICATION_JSON)
-				.content(body("열한 번째", LAYOUT, SOUNDS, null, null)), ownerToken, 409, "PRESET_LIMIT_EXCEEDED");
+				.content(body("열한 번째", LAYOUT, SOUNDS, null)), ownerToken, 409, "PRESET_LIMIT_EXCEEDED");
 		assertThat(createAs(otherToken, "남은 별개")).isPositive();
 
 		deleteOk(first);
-		assertThat(create("열한 번째", LAYOUT, SOUNDS, null)).isPositive();
+		assertThat(create("열한 번째", LAYOUT, SOUNDS)).isPositive();
 	}
 
 	// --- 인수 조건 15: 문서 ---
@@ -354,20 +351,30 @@ class KitPresetApiTest {
 		assertThat(create.path("tags").get(0).asString()).isEqualTo("Presets");
 		assertThat(create.path("security").get(0).has("bearerAuth")).isTrue();
 		assertThat(create.path("parameters").toString()).doesNotContain("AuthUser");
+
+		var schemas = docs.path("components").path("schemas");
+		assertThat(schemas.path("PresetRequest").path("properties").propertyNames())
+				.containsExactlyInAnyOrder("name", "layout", "sounds", "schemaVersion");
+		assertThat(schemas.path("PresetResponse").path("properties").propertyNames())
+				.containsExactlyInAnyOrder("id", "name", "isDefault", "layout", "sounds", "schemaVersion", "createdAt",
+						"updatedAt");
+		assertThat(paths.path("/api/presets/{id}").path("put").path("description").asString())
+				.doesNotContain("캘리브레이션");
+		assertThat(docs.path("tags").toString()).doesNotContain("캘리브레이션");
 	}
 
 	// --- 도우미 ---
 
-	private long create(String name, String layout, String sounds, String calibration) throws Exception {
+	private long create(String name, String layout, String sounds) throws Exception {
 		var r = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, ownerToken)
-				.contentType(MediaType.APPLICATION_JSON).content(body(name, layout, sounds, calibration, null))).andReturn();
+				.contentType(MediaType.APPLICATION_JSON).content(body(name, layout, sounds, null))).andReturn();
 		assertThat(r.getResponse().getStatus()).as(r.getResponse().getContentAsString()).isEqualTo(201);
 		return read(r).path("id").longValue();
 	}
 
 	private long createAs(String token, String name) throws Exception {
 		var r = mvc.perform(post("/api/presets").header(HttpHeaders.AUTHORIZATION, token)
-				.contentType(MediaType.APPLICATION_JSON).content(body(name, LAYOUT, SOUNDS, null, null))).andReturn();
+				.contentType(MediaType.APPLICATION_JSON).content(body(name, LAYOUT, SOUNDS, null))).andReturn();
 		assertThat(r.getResponse().getStatus()).isEqualTo(201);
 		return read(r).path("id").longValue();
 	}
@@ -410,12 +417,9 @@ class KitPresetApiTest {
 		return n;
 	}
 
-	private String body(String name, String layout, String sounds, String calibration, Integer schemaVersion) {
+	private String body(String name, String layout, String sounds, Integer schemaVersion) {
 		var sb = new StringBuilder("{\"name\":").append(json.writeValueAsString(name))
 				.append(",\"layout\":").append(layout).append(",\"sounds\":").append(sounds);
-		if (calibration != null) {
-			sb.append(",\"calibration\":").append(calibration);
-		}
 		if (schemaVersion != null) {
 			sb.append(",\"schemaVersion\":").append(schemaVersion);
 		}

@@ -1,0 +1,9 @@
+# STAR Drums validation 분할. star_drums_test.yaml과 같은 규칙
+name: star_drums_validation
+kind: star
+root: data/star_drums/full/data
+subset: validation
+expected_songs: null
+sample_rate: 44100
+clip: null
+songs: null

@@ -31,7 +31,7 @@ ssh -i <키 파일> -L 3000:localhost:3000 ubuntu@k15a307.p.ssafy.io
 
 - **대시보드:** `인프라` 폴더의 `인프라 개요`. CPU·메모리·디스크 사용률, 실행 중인 컨테이너 수, 컨테이너별 CPU·메모리, 컨테이너 로그가 있다.
 - **로그 검색:** 대시보드 위쪽 `서비스` 선택(여러 개 가능)으로 서비스별 로그를 본다. 더 자세히는 Explore에서 Loki를 선택하고 `{service="api"}`처럼 검색한다. 라벨은 `service`(Compose 서비스 이름), `container`다.
-- **알림:** Alerting → Alert rules의 `인프라` 폴더. 현재 규칙은 세 가지이고 조건을 넘으면 이 화면에 표시된다. 알림을 밖으로 보내는 채널(메신저 웹훅 등)은 비밀 값이 필요해 후속으로 붙인다.
+- **알림:** Alerting → Alert rules의 `인프라` 폴더. 서버 자원 규칙 세 가지(`rules.yaml`)와 보정 배치 규칙 두 가지(`rules-calibration.yaml`, `Infra/README.md`의 "약점 분석 보정 배치")가 있고 조건을 넘으면 이 화면에 표시된다. 알림을 밖으로 보내는 채널(메신저 웹훅 등)은 비밀 값이 필요해 후속으로 붙인다.
 
 | 규칙 | 조건 |
 | --- | --- |
@@ -48,6 +48,7 @@ ssh -i <키 파일> -L 3000:localhost:3000 ubuntu@k15a307.p.ssafy.io
 | `alloy/config.alloy` | 로그 수집, 서비스 라벨, **비밀·개인정보 가림 규칙** |
 | `grafana/provisioning/` | 데이터 소스, 대시보드 위치, 알림 규칙. 서버를 다시 만들어도 같은 화면이 복원된다 |
 | `grafana/dashboards/infra-overview.json` | 대시보드 원본. 화면에서 고쳐도 저장되지 않으므로 이 파일을 고친다 |
+| `grafana/dashboards/coach-weak-segments.json` | "약점 분석 연동" 대시보드. 업로드 → BE → ai-api 흐름의 요청 수·결과 종류·처리 시간·패턴별 횟수·실패와 로그 |
 
 설정 파일을 고친 뒤에는 해당 서비스를 다시 시작해야 반영된다(파일 하나를 컨테이너에 연결한 방식이라 Compose가 변경을 감지하지 못한다).
 

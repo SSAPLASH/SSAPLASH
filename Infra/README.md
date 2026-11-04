@@ -1,6 +1,13 @@
 # Infra
 
-배포 구성과 CI 러너 운영 안내. 서버 전체 구성과 포팅 매뉴얼은 S15P31A307-46에서 이 문서에 이어 쓴다.
+배포 구성과 CI 러너 운영 안내. 서버 전체 구성과 새 서버 구축 절차는 [포팅 매뉴얼](./PORTING.md)에 있다.
+
+## 관련 문서
+
+- [포팅 매뉴얼과 인프라 구성](./PORTING.md) ([구성도](./architecture.svg))
+- [서버 접속 가이드와 키·시크릿 보관 규칙](./ACCESS.md)
+- [보안 점검 기록](./SECURITY.md)
+- [트러블슈팅 기록](./TROUBLESHOOTING.md)
 
 ## CI 러너
 
@@ -19,12 +26,16 @@ CI는 EC2의 GitLab Runner에서 실행한다. 개인 PC에 러너를 두지 않
 
 | job | 단계 | 내용 |
 | --- | --- | --- |
-| `lint`, `test`, `build` | lint / test / build | 파트별 스택이 확정되기 전의 골격 |
+| `lint`, `test`, `build` | lint / test / build | 파트별 스택이 확정되기 전의 골격(`echo`만 한다. AI는 아래 `ai-lint`가 대신한다) |
+| `ai-lint` | lint | `AI`에서 `ruff check .`와 `ruff format --check .`. ruff 버전은 `AI/uv.lock`에서 읽는다(`python:3.11-slim`) |
+| `ai-lock` | lint | `AI/uv.lock`이 `AI/pyproject.toml`과 맞는지 `uv lock --check`. uv 버전은 `AI/Dockerfile`에서 읽는다(`python:3.11-slim`, 의존성은 받지 않아 몇 초) |
 | `be-test` | test | `BE`에서 `./gradlew --no-daemon test` |
 | `be-build` | build | `BE`에서 `./gradlew --no-daemon bootJar` |
 | `be-timescale-test` | test | 일회용 TimescaleDB(service)를 붙여 `./gradlew --no-daemon timescaleTest` |
 
 - BE job은 `BE/**/*`, `Infra/docker-compose.yml`, `.gitlab-ci.yml`이 바뀐 경우에만 돈다.
+- `ai-lint`는 `AI/**/*`, `.gitlab-ci.yml`이 바뀐 경우에만, `ai-lock`은 `AI/pyproject.toml`·`AI/uv.lock`·`AI/Dockerfile`·`.gitlab-ci.yml`이 바뀐 경우에만 돈다. `ai-lock`이 없으면 lock을 안 고친 채 병합돼 배포 때 서버의 AI 이미지 빌드(`uv sync --frozen`)에서 실패한다. AI 테스트(`pytest`)는 아직 CI에 없다. 기존 시험 일부가 ffmpeg 등 환경에 의존해 CI에서 어떻게 되는지 확인이 먼저다(`allow_failure`로 시작할 계획).
+- **러너 컨테이너는 root가 아니고 홈이 `/`다.** 그래서 `pip install`이 `Permission denied: '/.local'`로 실패한다(`ai-lint`·`ai-lock`의 첫 실행에서 겪었다). 새 job에서 도구를 설치할 때는 쓰기 가능한 프로젝트 폴더(`$CI_PROJECT_DIR`) 안에 가상환경을 만들어 설치하고, 캐시 위치(`PIP_NO_CACHE_DIR`, `UV_CACHE_DIR`)도 거기로 돌린다. `.ai-check-job`이 그 설정이고, BE job이 `GRADLE_USER_HOME`을 프로젝트 폴더로 돌리는 것과 같은 이유다.
 - `be-timescale-test`의 TimescaleDB 이미지 버전은 `Infra/docker-compose.yml`의 `postgres` 이미지와 같아야 한다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
 - 로컬(Windows)에서 같은 검증을 하려면 `BE/scripts/Test-TimescaleSchema.ps1`을 쓴다. 이 스크립트는 CI에서 호출하지 않는다.
 
@@ -60,6 +71,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 | `airdrum-tmp-audio` | 임시 음원(업로드 원본, 드럼 트랙) | 서명 URL | 1일 |
 
 - 버킷은 `seaweedfs-init` 서비스가 만든다. 이미 있으면 건너뛰므로 다시 실행해도 결과가 같다.
+- 워커 분리 결과의 `/airdrum-tmp-audio/worker-staging/` PUT은 최대 128MiB를 허용하며, 다른 스토리지 경로는 기존 50MiB 제한을 유지한다.
 - 임시 음원은 처리 후 즉시 폐기가 원칙이다(기획 확정). 1일 TTL은 지우지 못했을 때를 위한 보험이다.
 - 만료는 S3 수명주기 API가 아니라 SeaweedFS **경로 TTL**을 쓴다. 이 버전에서는 수명주기 API로 규칙을 저장해도 객체에 만료가 붙지 않아 삭제되지 않는다.
 
@@ -76,8 +88,17 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - 공개 주소(`OBJECT_STORAGE_PUBLIC_URL`)는 도메인 루트이며 경로 접두사를 붙이지 않는다. 서명에는 호스트와 경로가 들어 있어 Nginx가 경로를 자르거나 `Host`를 바꾸면 서명이 틀어진다.
 - SeaweedFS에 `-s3.externalUrl`로 같은 주소를 지정해 프록시 뒤에서도 서명을 검증한다. 허용 출처(CORS)도 이 주소로 좁힌다.
 - HTTPS(S15P31A307-39) 적용 후에는 `OBJECT_STORAGE_PUBLIC_URL`을 `https` 주소로 바꾸고 다시 확인한다.
-- Nginx의 업로드 크기 한도는 50MB다. BE·AI와 정한 뒤 조정한다.
+- Nginx는 경로별 요청 전체 크기를 제한한다: 일반·관리자 MIDI 1088 KiB, 일반·관리자 커버 2112 KiB, 관리자 반주와 `/api/v1/sheets` 51 MiB, `/api/v1/plays`와 `/api/v1/recordings`(녹음 저장) 5 MiB다. 기존 음원 51 MiB, raw 21 MiB, 워커 결과 8 MiB, 워커 staging 128 MiB와 그 외 API 기본 1 MiB도 유지한다. 일반 스토리지 프록시는 50 MiB다. 해당 API 경로의 초과 응답은 기존 `*_TOO_LARGE` 코드의 413 Problem JSON이다. 파일 형식·개별 파일 크기는 BE에서 별도로 검사한다.
+- 앞단 Nginx는 API JSON 응답(`application/json`, `application/problem+json`)만 1 KiB 이상일 때 gzip으로 압축한다(압축 수준 5, `Vary: Accept-Encoding`). BE는 응답 압축을 하지 않고, 프론트 정적 파일은 FE 컨테이너(`FE/nginx.conf`)가 압축하며, 음원·이미지·모델은 이미 압축된 형식이라 제외했다. 요청 본문 압축은 지원하지 않는다.
+- 로컬 Docker에서 `python Infra/nginx/test_upload_limits.py`를 실행하면 실제 Nginx TLS 설정의 문법·경로별 한도와 내부 경로 차단을 확인한다. 임시 upstream은 본문 전달만 확인하며 BE 검증이나 실제 GPU 접근 검사가 아니다. 초과 요청은 선언된 Content-Length로 거절하므로 전체 본문을 보내지 않는다. 내부 8 MiB 경계만 허용 IP를 완화한 임시 설정 사본으로 검사한다.
 - 앱이 스토리지를 쓰는 스위치(`CHART_ASSET_ENABLED`, `PLAY_RAW_ENABLED`)는 기본 꺼짐이다. 켜는 시점은 BE와 확인한다.
+
+### 외부 AI 워커 연결
+
+- Compose의 `AUDIO_STORAGE_PUBLIC_ENDPOINT` 기본값은 `OBJECT_STORAGE_PUBLIC_URL`이다. 외부 GPU에서 접근할 수 있는 `https://k15a307.p.ssafy.io`를 사용하고 BE의 내부 저장소 주소는 유지한다. 실제 DNS·TLS·서명 URL 접근은 배포 환경에서 확인한다.
+- HTTPS의 `/internal/v1/chart-jobs/`는 `222.107.238.74`만 허용하고 Nginx의 최대 본문은 8 MiB이며 BE 결과 JSON 상한은 5 MiB다. 워커 API와 서명 URL 스토리지 경로의 접근·오류 로그는 URL의 query 노출을 막기 위해 끄고 BE·저장소 메트릭으로 진단한다. 나머지 `/internal/`과 HTTP의 `/internal/`은 404다. 추가 EC2 포트는 열지 않는다.
+- 서버에서 새 워커마다 별도 난수를 화면에 출력하지 않고 비밀 파일로 생성한다(예: `umask 077` 후 `openssl rand -hex 32 > /안전한/경로/worker-token`, `chmod 600 /안전한/경로/worker-token`). 기존 워커와 다른 토큰을 사용한다. 서버의 `Infra/.env`도 권한 600으로 제한하고, 비밀 편집기에서 기존 항목을 보존하며 `CHART_WORKER_CREDENTIALS=기존ID=기존토큰,새ID=새토큰` 형식으로 등록한다. 파일·토큰을 로그나 채팅에 붙이지 않고 AI 담당자에게 승인된 비밀 전달 경로로 전달한다. 반영 시 API 컨테이너를 재생성하고 기존 워커와 새 워커 인증을 확인한다.
+- 전송 재시도를 소진한 워커가 heartbeat를 중단하면 임대 만료 후 단계 마감 및 단계별 최대 2회 재시도 안에서만 복구된다. 409·422 또는 이미 DONE이면 재배정을 보장하지 않는다.
 
 ### 운영 메모
 
@@ -106,3 +127,56 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - 서명 URL이 프록시 뒤에서 맞지 않으면 먼저 `OBJECT_STORAGE_PUBLIC_URL`, Nginx의 `Host` 전달, SeaweedFS의 `-s3.externalUrl`을 점검한다.
 - SeaweedFS가 요구에 맞지 않으면 다른 S3 호환 스토리지(예: MinIO)로 바꾼다. BE는 접속 주소와 키만 바뀌므로 코드 변경이 없다.
 - 스토리지 없이 임시로 쓰려면 서버 로컬 볼륨에 저장하는 방식이 있으나, 서명 URL이 없어 BE 변경이 필요하다. 최후의 수단이다.
+
+## 약점 분석 보정 배치 (coach-calibration, COACH-003)
+
+동의한 사용자의 비식별 연주 기록으로 약점 분석 임계값 **후보**를 만들어 MLflow에 기록하는 일회성 배치다. 임계값을 자동으로 바꾸지 않는다.
+동작·정책·승인 절차는 [AI/docs/coach-calibration.md](../AI/docs/coach-calibration.md)에 있고, 여기에는 운영에 필요한 것만 적는다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 서비스 | `docker-compose.yml`의 `coach-calibration`. `profiles: ["calibration"]`라서 `up -d`로는 뜨지 않는다 |
+| 실행 | `docker compose -p infra run --rm coach-calibration` (`--force` 등 인자는 배치에 그대로 전달된다) |
+| 읽는 곳 | DB 뷰 `coach_export_v`만. 전용 읽기 전용 계정 `coach_export`로 접속하고 원본 테이블 권한은 없다 |
+| 쓰는 곳 | MLflow(`http://mlflow:5000`, 내부 네트워크). DB에는 쓰지 않는다 |
+| 정책 파일 | `AI/configs/coach/`를 `/config`에 읽기 전용으로 마운트한다(서버 이미지에는 정책 파일이 없다). 파일이 없으면 배치가 실패한다 |
+| 권한 | 내부 네트워크만, `cap_drop: ALL`, `no-new-privileges`, 메모리 1GiB |
+| 상태 줄 | 끝에 `coach-calibration status=OK\|SKIPPED\|FAIL ...` 한 줄. 알림과 점검이 이 줄을 본다 |
+
+**선행 조건 (모두 갖춰져야 의미 있게 돈다)**
+1. AI 쪽 배치 코드(`ssaplash_ai.coach_calibration`)가 서버에 배포돼 있다. 아직 배포 전에는 이 서비스를 실행하면 모듈이 없어 실패한다.
+2. BE가 뷰 `coach_export_v`와 그룹 역할 `coach_export_reader`(마이그레이션 V21, BE MR !166)를 서버 DB에 적용했다.
+3. 서버에서 읽기 전용 로그인 계정을 만들고 그룹 역할에 넣고 소금을 설정했다(비밀 값은 저장소에 없다). 비밀번호는 `.env`의 `COACH_EXPORT_PASSWORD`에 둔다.
+4. `.env`의 `ADMIN_EMAILS`에 팀원 로그인 이메일을 모두 넣었다(뷰가 `role = 'ADMIN'` 계정을 제외한다. ADMIN 권한이 같이 부여되는 점은 알고 하는 선택이다).
+5. Alloy가 5초 주기 설정으로 다시 떴다. 설정 파일을 마운트해서 쓰므로 `up -d`로는 다시 읽지 않는다: `docker compose -p infra restart alloy`.
+
+`COACH_EXPORT_PASSWORD`가 비어 있으면 배치는 DB에 접속하기 전에 `status=FAIL error=MissingExportPassword`를 남기고 멈춘다. 다른 서비스에는 영향이 없다.
+
+**로그 수집을 위한 대기**: Alloy의 컨테이너 탐색 기본 주기가 1분이라 일회성 컨테이너의 로그를 놓칠 수 있다. 탐색 주기를 5초로 줄였고
+(`monitoring/alloy/config.alloy`), 컨테이너가 시작 직후와 종료 직전에 15초씩 기다린 뒤 끝난다. 그래서 한 번 실행에 최소 30초가 걸린다.
+첫 실행 뒤 Grafana Explore에서 `{service="coach-calibration"}`로 상태 줄이 실제로 조회되는지 확인한다(서버에서 확인하기 전이다).
+
+### 예약 실행과 알림
+
+**예약 (GitLab 화면에서 한 번 만든다)**
+1. Build → Pipeline schedules → New schedule.
+2. 설명 `보정 배치`, 간격 `0 4 * * *`(매일 새벽 4시, 시간대는 Seoul), 대상 브랜치 `main`.
+3. 변수 `COACH_CALIBRATION` = `true`를 이 예약에만 넣는다. **프로젝트 CI/CD 변수로는 등록하지 않는다**(등록하면 모든 파이프라인이 보정 전용이 되어 다른 job이 빠진다).
+4. 예약을 만든 사람이 실패 알림을 받는다. 배포용 보호 러너를 쓰므로 만든 사람이 `main`에서 보호된 러너를 쓸 권한(Maintainer)이 있어야 한다.
+
+이 파이프라인에는 `coach-calibration` job 하나만 생긴다(`.gitlab-ci.yml`의 `.calibration-guard`가 기존 job을 막는다). 서버에 배포된 소스와 `.env`로 실행하고
+배포·롤백과 같은 `resource_group`이라 겹쳐 돌지 않는다. 한 번에 최소 30초가 걸린다.
+
+**수동 실행**: Build → Pipelines → Run pipeline, 브랜치 `main`, 변수 `COACH_CALIBRATION=true`. 새 세션이 기준(50개)에 못 미쳐도 돌리려면(예: 정책 파일을 채운 뒤)
+`COACH_CALIBRATION_FORCE=true`를 더한다. 서버에서 직접 실행해도 된다: `cd /srv/airdrum/Infra && docker compose -p infra --profile calibration run --build --rm coach-calibration --force`.
+
+**알림 규칙** (`monitoring/grafana/provisioning/alerting/rules-calibration.yaml`, 배치의 상태 줄을 Loki에서 본다)
+
+| 규칙 | 조건 | 처음 상태 |
+| --- | --- | --- |
+| 약점 분석 보정 배치 실패 | 최근 26시간에 `status=FAIL` 줄이 있다 | 켜짐 |
+| 약점 분석 보정 배치 36시간 넘게 실행 기록 없음 | 최근 36시간에 `status=OK` 또는 `SKIPPED` 줄이 없다(로그가 아예 없어도) | **꺼 둠**(`isPaused: true`) |
+
+두 번째 규칙은 예약을 만들고 첫 상태 줄이 Grafana Explore의 `{service="coach-calibration"}`에서 조회되는 것을 확인한 뒤 `isPaused`를 `false`로 바꾸는 MR을 올려 켠다.
+켜 두면 예약 전에는 항상 울린다. 알림을 밖으로 보내는 채널은 후속이라 지금은 Alerting 화면에 표시된다.
+알림 규칙 파일을 처음 반영한 배포 뒤에는 Grafana 로그에 프로비저닝 오류가 없는지 확인한다(`docker compose -p infra logs grafana`).

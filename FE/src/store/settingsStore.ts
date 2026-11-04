@@ -32,6 +32,10 @@ interface SettingsState {
   volume: number;
   /** 메트로놈 클릭 음량(0~1). 1 = 기존 클릭 크기. 전체 음량(volume)과 곱해진다 */
   metronomeVolume: number;
+  /** 드럼(패드) 소리 음량(0~2). 1 = 기본. 전체 음량(volume)과 곱해진다 */
+  drumVolume: number;
+  /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
+  songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
   soundSetId: SoundSetId;
   /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
@@ -71,6 +75,8 @@ interface SettingsState {
   setCountInBars: (v: number) => void;
   setVolume: (v: number) => void;
   setMetronomeVolume: (v: number) => void;
+  setDrumVolume: (v: number) => void;
+  setSongVolume: (v: number) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
@@ -87,7 +93,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 14;
+export const SETTINGS_VERSION = 15;
 
 /**
  * 저장된 설정 이행.
@@ -104,6 +110,7 @@ export const SETTINGS_VERSION = 14;
  * v11 → v12: sidebarCollapsed(false)·dockCollapsed(false)·liveCoach(true)·statsConsent(false) 추가. 기존 값은 보존하고 boolean이 아닌 값만 기본값으로.
  * v12 → v13: metronomeVolume(기본 1, 0~1 밖이거나 숫자가 아니면 1) 추가.
  * v13 → v14: statsConsent 삭제(연주 기록 활용 동의는 가입 때 필수, 서버 값만 쓴다). 저장돼 있던 값은 버린다.
+ * v14 → v15: drumVolume(기본 1, 0~2)·songVolume(기본 1, 0~1) 추가. 없거나 숫자가 아니면 1, 범위 밖은 잘라 채운다.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -183,7 +190,16 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) p.metronomeVolume = 1;
   }
   if (version < 14) delete p.statsConsent;
+  if (version < 15) {
+    p.drumVolume = clampVolume(p.drumVolume, 2);
+    p.songVolume = clampVolume(p.songVolume, 1);
+  }
   return p as unknown as SettingsState;
+}
+
+/** 음량 값을 0~max로 자른다. 숫자가 아니면 기본값 1 */
+function clampVolume(v: unknown, max: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(0, v)) : 1;
 }
 
 /** 저장된 배치의 옛 패드 이름을 바꾸고 빠진 패드를 기본 배치로 채운다. 객체가 아니면 null */
@@ -209,6 +225,8 @@ export const useSettings = create<SettingsState>()(
       countInBars: 1,
       volume: 0.8,
       metronomeVolume: 1,
+      drumVolume: 1,
+      songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
       gameView: 'highway',
@@ -239,6 +257,8 @@ export const useSettings = create<SettingsState>()(
       setCountInBars: (countInBars) => set({ countInBars }),
       setVolume: (volume) => set({ volume }),
       setMetronomeVolume: (v) => set({ metronomeVolume: Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1)) }),
+      setDrumVolume: (v) => set({ drumVolume: clampVolume(v, 2) }),
+      setSongVolume: (v) => set({ songVolume: clampVolume(v, 1) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
       setGameView: (gameView) => set({ gameView }),
@@ -263,6 +283,9 @@ export const useSettings = create<SettingsState>()(
           // 저장분에 패드 키가 빠져 있어도 런타임이 깨지지 않게 채운다
           kitLayout: fillLayout(p.kitLayout ?? {}),
           tuning: mergeTuning(DEFAULT_SENSOR_TUNING, p.tuning ?? {}),
+          // 저장분에 없거나 범위 밖인 음량은 기본값·범위로 보정한다
+          drumVolume: clampVolume(p.drumVolume, 2),
+          songVolume: clampVolume(p.songVolume, 1),
         };
       },
     },

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -13,14 +14,25 @@ import static com.ssafy.airdrum.chart.ChartResponses.*;
 /** 저장 JSON을 공개 DTO로 제한해 매핑한다. 원문·내부 키를 예외 메시지에 넣지 않는다. */
 @Component
 public class ChartDocumentReader {
+	private static final Pattern PAD_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]{0,31}");
 	private final JsonMapper json;
 	public ChartDocumentReader(JsonMapper json) { this.json = json; }
 
 	public ChartDetail detail(ChartVersionRepository.Detail row) {
 		requireSchema(row.getSchemaVersion());
 		Timing timing = timing(row.getTiming());
-		var array = parse(row.getNotes());
-		check(array.isArray() && array.size() == row.getNoteCount());
+		var notes = notes(row.getNotes(), row.getNoteCount());
+		return new ChartDetail(row.getChartId(), row.getSongId(), row.getTitle(), row.getSource(),
+				row.getDifficulty(), row.getChartVersionId(), row.getVersion(), row.getSchemaVersion(),
+				timing.bpm(), timing.offsetMs(), timing.timeSignature(), signature(timing.timeSignature())[0],
+				row.getDurationMs(), timing, row.getNoteCount(), notes, row.getNotationStatus(),
+				hasImages(row.getSheetPages()));
+	}
+
+	/** 상세 조회와 난이도 산정이 같은 노트 유효성 규칙을 사용한다. */
+	public List<Note> notes(String raw, int noteCount) {
+		var array = parse(raw);
+		check(array.isArray() && array.size() == noteCount);
 		var ids = new HashSet<String>();
 		var notes = new ArrayList<Note>();
 		double previous = -1;
@@ -31,7 +43,7 @@ public class ChartDocumentReader {
 			check(time >= 0 && time >= previous);
 			previous = time;
 			String pad = text(node, "pad");
-			check(pad.matches("[A-Z][A-Z0-9_]{0,31}"));
+			check(PAD_PATTERN.matcher(pad).matches());
 			Integer velocity = optionalInt(node, "velocityHint");
 			check(velocity == null || (velocity >= 0 && velocity <= 127));
 			Notation notation = null;
@@ -45,11 +57,7 @@ public class ChartDocumentReader {
 			}
 			notes.add(new Note(id, time, pad, velocity, notation));
 		}
-		return new ChartDetail(row.getChartId(), row.getSongId(), row.getTitle(), row.getSource(),
-				row.getDifficulty(), row.getChartVersionId(), row.getVersion(), row.getSchemaVersion(),
-				timing.bpm(), timing.offsetMs(), timing.timeSignature(), signature(timing.timeSignature())[0],
-				row.getDurationMs(), timing, row.getNoteCount(), List.copyOf(notes), row.getNotationStatus(),
-				hasImages(row.getSheetPages()));
+		return List.copyOf(notes);
 	}
 
 	public Timing timing(String raw) {

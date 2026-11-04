@@ -16,6 +16,7 @@ import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.MapperFeature;
 import tools.jackson.databind.ValueDeserializer;
 import tools.jackson.databind.cfg.EnumFeature;
@@ -51,15 +52,53 @@ public class PlayJson {
 		try {
 			byte[] bytes = input.readNBytes(SUMMARY_BYTES + 1);
 			if (bytes.length > SUMMARY_BYTES) throw new BusinessException(PlayErrorCode.PLAY_UPLOAD_TOO_LARGE);
+			var tree = mapper.readTree(bytes);
+			rejectAliasCollision(tree.path("calibration").path("pads"));
+			rejectAliasCollision(tree.path("kitPresetSnapshot").path("pads"));
+			// 원본 숫자를 직접 역직렬화해 트리의 실수 정밀도 변환을 피한다.
 			return mapper.readValue(bytes, PlayUploadRequest.class);
 		} catch (BusinessException ex) { throw ex; }
 		catch (Exception ex) { throw new BusinessException(PlayErrorCode.PLAY_PAYLOAD_INVALID); }
 	}
 	public String write(Object value) { return value == null ? null : mapper.writeValueAsString(value); }
 	public String hash(long userId, PlayUploadRequest request) {
+		return hash(userId, mapper.valueToTree(request));
+	}
+	/** 기존 v1 해시는 패드의 이전 이름을 사용했다. 다른 문자열 필드는 건드리지 않는다. */
+	public String legacyHash(long userId, PlayUploadRequest request) {
+		ObjectNode tree = mapper.valueToTree(request);
+		for (var hit : tree.path("hits")) {
+			legacyValue(hit, "pad"); legacyValue(hit, "baselinePad"); legacyValue(hit, "predictedPad");
+		}
+		legacyKeys(tree.path("calibration").path("pads"));
+		legacyKeys(tree.path("kitPresetSnapshot").path("pads"));
+		legacyMapping(tree.path("kitPresetSnapshot").path("keyBindings"));
+		legacyMapping(tree.path("judgementContext").path("padMapping"));
+		return hash(userId, tree);
+	}
+	private void rejectAliasCollision(JsonNode node) {
+		if (node.isObject() && node.has("HI_TOM") && node.has("SMALL_TOM"))
+			throw new BusinessException(PlayErrorCode.PLAY_PAYLOAD_INVALID);
+	}
+	private void legacyKeys(JsonNode node) {
+		if (node instanceof ObjectNode object && object.has("SMALL_TOM")) {
+			var value = object.remove("SMALL_TOM"); object.set("HI_TOM", value);
+		}
+	}
+	private void legacyMapping(JsonNode node) {
+		if (node instanceof ObjectNode object) {
+			var keys = new java.util.ArrayList<String>();
+			object.properties().forEach(e -> keys.add(e.getKey()));
+			keys.forEach(key -> legacyValue(object, key));
+		}
+	}
+	private void legacyValue(JsonNode node, String key) {
+		if (node instanceof ObjectNode object && "SMALL_TOM".equals(object.path(key).asString())) object.put(key, "HI_TOM");
+	}
+	private String hash(long userId, JsonNode tree) {
 		var digest = sha256();
 		digest.update(("play:1:" + userId + ":").getBytes(StandardCharsets.UTF_8));
-		canonical(mapper.valueToTree(request), digest);
+		canonical(tree, digest);
 		return HexFormat.of().formatHex(digest.digest());
 	}
 	private void canonical(JsonNode node, MessageDigest digest) {

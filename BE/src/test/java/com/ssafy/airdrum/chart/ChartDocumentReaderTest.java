@@ -8,6 +8,16 @@ import static org.mockito.Mockito.*;
 
 class ChartDocumentReaderTest {
 	final ChartDocumentReader reader = new ChartDocumentReader(JsonMapper.builder().build());
+	@Test void ratingNotesDoNotDependOnDamagedSheetPagesButDetailStillFails() {
+		var row = mock(ChartVersionRepository.Detail.class);
+		when(row.getSchemaVersion()).thenReturn(1);
+		when(row.getTiming()).thenReturn(ChartQueryApiTest.TIMING);
+		when(row.getNotes()).thenReturn(ChartQueryApiTest.NOTES);
+		when(row.getNoteCount()).thenReturn(1);
+		when(row.getSheetPages()).thenReturn("{}");
+		assertThat(reader.notes(row.getNotes(),row.getNoteCount())).hasSize(1);
+		assertThatThrownBy(() -> reader.detail(row)).isInstanceOf(IllegalStateException.class);
+	}
 	@Test void compoundMeterOptionalFieldsAndSimultaneousNotesRemainUnchanged() {
 		var row = mock(ChartVersionRepository.Detail.class);
 		when(row.getSchemaVersion()).thenReturn(1);

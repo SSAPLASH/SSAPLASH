@@ -21,5 +21,13 @@
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+
 # 로컬 반주 동기 검증용 임시 음원(설계 MODE-003-sheet-play)
 FE/public/dev-*.wav
+
+# 개인 작업 폴더 (김호준 · AI) — 명세서 사본·개인 메모
+KHJ/
+
+# 파트별 무시 규칙은 각 파트 폴더의 .gitignore에 둔다 (예: AI/.gitignore)

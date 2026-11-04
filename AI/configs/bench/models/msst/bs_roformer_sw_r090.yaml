@@ -1,0 +1,13 @@
+# 드럼리스 MR 개선 후보 I. 원곡에서 드럼을 90%만 뺀 MR. 드럼과 같이 빠지던 반주가 덜 빠지는 대신 드럼이 10% 남음.
+# 드럼 트랙은 그대로 (S15P31A307-165).
+# 가중치는 bs_roformer_sw와 같은 것을 씀 (weights_name).
+name: bs_roformer_sw_r090
+weights_name: bs_roformer_sw
+adapter: msst
+model_type: bs_roformer
+config_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.yaml
+checkpoint_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.ckpt
+license_code: MIT (MSST)
+license_weights: CC BY-NC-SA 4.0 (unblend 메타데이터 기준. 원 저장소 삭제로 미확인, 미러는 unknown 표기)
+source_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem
+accomp_drum_ratio: 0.90

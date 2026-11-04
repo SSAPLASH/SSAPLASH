@@ -45,6 +45,8 @@ spring:
 
 # 파일이 존재할 때만 사용한다. 미설정 상태에서는 자산 URL 요청에 503을 반환한다.
 chart:
+  worker:
+    credentials: ${CHART_WORKER_CREDENTIALS:}
   assets:
     enabled: ${CHART_ASSET_ENABLED:false}
     endpoint: ${CHART_ASSET_ENDPOINT:}
@@ -71,6 +73,24 @@ play:
     secret-key: ${PLAY_RAW_SECRET_KEY:}
     private-bucket-confirmed: ${PLAY_RAW_PRIVATE_BUCKET_CONFIRMED:false}
     concurrent-uploads: ${PLAY_RAW_CONCURRENT_UPLOADS:2}
+
+audio:
+  ffprobe-path: ${AUDIO_FFPROBE_PATH:ffprobe}
+  storage:
+    enabled: ${AUDIO_STORAGE_ENABLED:false}
+    endpoint: ${AUDIO_STORAGE_ENDPOINT:}
+    public-endpoint: ${AUDIO_STORAGE_PUBLIC_ENDPOINT:${AUDIO_STORAGE_ENDPOINT:}}
+    region: ${AUDIO_STORAGE_REGION:us-east-1}
+    bucket: ${AUDIO_STORAGE_BUCKET:}
+    access-key: ${AUDIO_STORAGE_ACCESS_KEY:}
+    secret-key: ${AUDIO_STORAGE_SECRET_KEY:}
+    private-bucket-confirmed: ${AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED:false}
+
+worker:
+  storage:
+    url-ttl: ${WORKER_STORAGE_URL_TTL:10m}
+    accompaniment-write-access-key: ${WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY:${AUDIO_STORAGE_ACCESS_KEY:}}
+    accompaniment-write-secret-key: ${WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY:${AUDIO_STORAGE_SECRET_KEY:}}
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}

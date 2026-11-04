@@ -25,7 +25,10 @@ public class TestPropertyDefaultsInitializer implements ApplicationContextInitia
 				"auth.refresh-token.store", "memory",
 				"management.health.redis.enabled", "false")));
 		sources.addLast(new MapPropertySource("testFallbackDefaults", Map.of(
-				"JWT_SECRET", TEST_JWT_SECRET)));
+				"JWT_SECRET", TEST_JWT_SECRET,
+				"report.analysis.dispatch-enabled", "false",
+				// 254번: 시작 시 공용 곡 등록은 테스트 DB의 공용 곡 수를 바꾸므로 기본으로 끈다(검사하는 테스트만 켠다).
+				"builtin-songs.seed.enabled", "false")));
 	}
 
 }

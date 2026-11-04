@@ -1,0 +1,643 @@
+{
+  "uid": "coach-weak-segments",
+  "title": "약점 분석 연동",
+  "description": "플레이 업로드 → BE → ai-api 약점 분석 흐름의 건강 상태와 패턴 분포. 로그는 요약만 있고 요청 본문·playId는 없다.",
+  "tags": [
+    "coach",
+    "ai-api"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "분석 요청 수(선택한 기간)",
+      "description": "ai-api가 남긴 요약 로그 줄 수. 요청 한 건당 한 줄이다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "분석 처리 시간 p95",
+      "description": "BE는 3초 안에 응답이 없으면 실패로 본다. 1초 넘으면 주황, 3초 넘으면 빨강.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(quantile_over_time(0.95, {service=\"ai-api\"} |= \"weak-segments reason=\" | regexp `elapsedMs=(?P<ms>[0-9.]+)` | unwrap ms [$__range]))",
+          "editorMode": "code",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 3000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "BE→AI 호출 실패",
+      "description": "BE 로그에 남은 호출 실패 건수(시간 초과, 전송 오류, 400 검증 오류, 처리 실패). 0이 정상.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service=\"api\"} |~ `weak-segments (timeout|transport error|invalid fields|processing failed|recovery failed)` [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "업로드 오류(4xx·5xx)",
+      "description": "플레이 업로드 요청(POST /api/v1/plays 등) 중 오류 응답 건수. 401은 로그인 만료일 수 있다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service=\"nginx\"} |= \"POST /api/v1/plays\" | regexp `\" (?P<status>\\d{3}) ` | status >= 400 [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "분석 결과 종류",
+      "description": "OK = 약점 발견, NO_WEAKNESS = 약점 없음, INSUFFICIENT_HITS = 노트 20개 미만이라 분석 안 함.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" | regexp `reason=(?P<reason>\\w+)` [$__auto]))",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "분석 처리 시간(평균·p95)",
+      "description": "ai-api 안에서 분석에 걸린 시간(요청 수신·응답 전송 제외).",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg(avg_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" | regexp `elapsedMs=(?P<ms>[0-9.]+)` | unwrap ms [$__auto]))",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "평균"
+        },
+        {
+          "refId": "B",
+          "expr": "max(quantile_over_time(0.95, {service=\"ai-api\"} |= \"weak-segments reason=\" | regexp `elapsedMs=(?P<ms>[0-9.]+)` | unwrap ms [$__auto]))",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "bargauge",
+      "title": "걸린 패턴별 횟수(요청 수 기준)",
+      "description": "각 패턴이 걸린 분석 요청 수. 임계값 조정의 근거로 쓴다(어떤 패턴이 거의 안 걸리거나 너무 자주 걸리는지).",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"TIMING_LATE:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "TIMING_LATE"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"TIMING_EARLY:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "TIMING_EARLY"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"PAD_LATE:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "PAD_LATE"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"PAD_EARLY:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "PAD_EARLY"
+        },
+        {
+          "refId": "E",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"TRANSITION_LATE:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "TRANSITION_LATE"
+        },
+        {
+          "refId": "F",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"TRANSITION_MISS:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "TRANSITION_MISS"
+        },
+        {
+          "refId": "G",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"HAND_WEAK:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "HAND_WEAK"
+        },
+        {
+          "refId": "H",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"MISS_CLUSTER:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "MISS_CLUSTER"
+        },
+        {
+          "refId": "I",
+          "expr": "sum(count_over_time({service=\"ai-api\"} |= \"weak-segments reason=\" |= \"UNSTEADY:\" [$__range])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "instant",
+          "legendFormat": "UNSTEADY"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "업로드 요청 상태 코드",
+      "description": "201/200 성공, 400 본문 검증 오류, 401 로그인 필요, 409 같은 playId에 다른 내용, 5xx 서버 오류.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (count_over_time({service=\"nginx\"} |= \"POST /api/v1/plays\" | regexp `\" (?P<status>\\d{3}) ` [$__auto]))",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "BE→AI 호출 실패 종류",
+      "description": "시간 초과·전송 오류는 BE가 1회 재시도한다. 400은 재시도하지 않고 오류 필드 이름만 로그에 남긴다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service=\"api\"} |= \"weak-segments timeout\" [$__auto])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "시간 초과"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({service=\"api\"} |= \"weak-segments transport error\" [$__auto])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "전송 오류"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(count_over_time({service=\"api\"} |= \"weak-segments invalid fields\" [$__auto])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "검증 오류(400)"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(count_over_time({service=\"api\"} |= \"weak-segments processing failed\" [$__auto])) or vector(0)",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "처리 실패"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "ai-api 메모리(한도 1GiB)",
+      "description": "큰 요청(본문 5MiB·타격 5만 건 상한)에서 올라가는지 본다. 15초 간격 수집이라 짧은 순간은 놓칠 수 있다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "container_memory_working_set_bytes{name=\"infra-ai-api-1\"}",
+          "legendFormat": "사용량"
+        },
+        {
+          "refId": "B",
+          "expr": "container_spec_memory_limit_bytes{name=\"infra-ai-api-1\"}",
+          "legendFormat": "한도"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "ai-api CPU(코어 1개 = 100%)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{name=\"infra-ai-api-1\"}[1m])) * 100",
+          "legendFormat": "CPU"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "logs",
+      "title": "AI 분석 요약 로그(요약만, 요청 본문·playId 없음)",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"ai-api\"} |= \"weak-segments reason=\"",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 13,
+      "type": "logs",
+      "title": "BE 약점 분석 호출 로그",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"api\"} |= \"weak-segments\"",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    }
+  ]
+}

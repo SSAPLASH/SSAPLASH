@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import com.ssafy.airdrum.auth.AccessTokenException.Reason;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.User;
 import com.ssafy.airdrum.user.UserRepository;
@@ -46,8 +47,22 @@ class AuthenticationServiceTest {
 
 		var authenticated = service.authenticate(issued.token());
 
-		assertThat(authenticated.user()).isEqualTo(new AuthUser(user.getId(), UserRole.USER));
+		assertThat(authenticated.user()).isEqualTo(new AuthUser(user.getId(), UserRole.USER, false));
 		assertThat(authenticated.expiresAt()).isEqualTo(issued.expiresAt());
+	}
+
+	/** 가입 동의 설계 3-6: 가입 완료 여부도 토큰이 아니라 DB에서 읽어 인증 결과에 싣는다(추가 조회 없음). */
+	@Test
+	void signupCompletionComesFromDatabase() {
+		var pending = users.saveAndFlush(User.create("동의전", null, null));
+		var completed = users.saveAndFlush(SignupConsentFixtures.completed(User.create("동의후", null, null)));
+
+		assertThat(service.authenticate(tokens.issue(new AuthUser(pending.getId(), UserRole.USER),
+				java.time.Instant.now()).token()).user().signupCompleted()).isFalse();
+		assertThat(service.authenticate(tokens.issue(new AuthUser(completed.getId(), UserRole.USER),
+				java.time.Instant.now()).token()).user().signupCompleted()).isTrue();
+		assertThat(service.findActive(completed.getId()))
+				.contains(new AuthUser(completed.getId(), UserRole.USER, true));
 	}
 
 	@Test
@@ -85,7 +100,7 @@ class AuthenticationServiceTest {
 		var withdrawn = users.saveAndFlush(User.create("탈퇴", null, null));
 		withdraw(withdrawn.getId());
 
-		assertThat(service.findActive(active.getId())).contains(new AuthUser(active.getId(), UserRole.USER));
+		assertThat(service.findActive(active.getId())).contains(new AuthUser(active.getId(), UserRole.USER, false));
 		assertThat(service.findActive(withdrawn.getId())).isEmpty();
 		assertThat(service.findActive(Long.MAX_VALUE)).isEmpty();
 	}

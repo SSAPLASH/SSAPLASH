@@ -1,0 +1,91 @@
+# 약점 분석 보정 배치(coach-calibration, COACH-003) 알림 규칙. 배치가 끝에 남기는 한 줄 상태를 Loki에서 본다.
+#   coach-calibration status=OK|SKIPPED|FAIL ...
+# 서버 자원 규칙(rules.yaml)과 파일을 나눴다. 알림을 밖으로 보내는 채널은 후속이고, 지금은 Grafana의 Alerting 화면에 표시된다.
+# 배치가 실패하면 GitLab 예약 job도 실패해서 GitLab이 알린다. 이 규칙은 로그로 한 번 더 보는 안전망이다.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: 약점 분석 보정 배치
+    folder: 인프라
+    interval: 5m
+    rules:
+      - uid: coach-calibration-failed
+        title: 약점 분석 보정 배치 실패
+        condition: C
+        for: 0s
+        # 실패 줄이 없으면 조회 결과가 비는 것이 정상이다.
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              editorMode: code
+              # 하루 한 번 도는 배치라 실패 줄이 다음 실행 때까지(+약간) 보이도록 창을 26시간으로 둔다.
+              expr: sum(count_over_time({service="coach-calibration"} |= "status=FAIL" [26h])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+              datasource: { type: __expr__, uid: __expr__ }
+        annotations:
+          summary: 약점 분석 보정 배치가 실패했습니다. Grafana Explore에서 {service="coach-calibration"} 로그의 error= 값(예외 종류, 열 이름)을 확인하세요.
+        labels:
+          severity: warning
+
+      - uid: coach-calibration-stale
+        title: 약점 분석 보정 배치 36시간 넘게 실행 기록 없음
+        condition: C
+        for: 0s
+        # 로그가 아예 없으면(예약이 멈췄거나 컨테이너 로그가 수집되지 않으면) 경보로 본다.
+        noDataState: Alerting
+        execErrState: Error
+        # 예약 실행을 만들고 첫 상태 줄이 Loki에서 확인될 때까지는 항상 울리므로 처음에는 꺼 둔다.
+        # 첫 실행의 상태 줄이 {service="coach-calibration"}로 조회되는 것을 확인한 뒤 false로 바꾸는 MR을 올린다.
+        isPaused: true
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              editorMode: code
+              expr: sum(count_over_time({service="coach-calibration"} |~ "status=(OK|SKIPPED)" [36h])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              datasource: { type: __expr__, uid: __expr__ }
+        annotations:
+          summary: 약점 분석 보정 배치의 정상(OK·SKIPPED) 실행 기록이 36시간 넘게 없습니다. GitLab 예약 파이프라인과 컨테이너 로그 수집을 확인하세요.
+        labels:
+          severity: warning
