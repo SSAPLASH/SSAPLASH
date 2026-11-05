@@ -1,7 +1,9 @@
 import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
+import { needsRecommendationPrompt } from '@/domain/recommendationConsent';
 import { useAuth } from '@/store/authStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
 import { DebugOverlay } from './DebugOverlay';
 import { LazyChartAutoplayToggle } from './diag/lazyChartAutoplay';
@@ -9,6 +11,7 @@ import { RecordingToast } from './recording/RecordingToast';
 import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
 import { ProfileMenu } from './shell/ProfileMenu';
+import { RecommendationConsentDialog } from './shell/RecommendationConsentDialog';
 import { Sidebar } from './shell/Sidebar';
 import { StickStatusIndicator } from './shell/StickStatusIndicator';
 import { TopBar } from './shell/TopBar';
@@ -30,6 +33,11 @@ export function AppShell({ authRequired }: Props) {
   const immersive = useShellStore((s) => s.immersive);
   const sideCollapsed = useSidebarCollapsed();
   const authStatus = useAuth((s) => s.status);
+  const signupCompleted = useAuth((s) => s.user?.signupCompleted);
+  const userId = useAuth((s) => s.user?.id);
+  const consent = useRecommendationConsent((s) => s.consent);
+  const consentDismissed = useRecommendationConsent((s) => s.dismissed);
+  const consentSaving = useRecommendationConsent((s) => s.saving);
   const [debug, setDebug] = useState(false);
   const { pathname } = useLocation();
   const inMonitor = pathname.startsWith('/monitor');
@@ -38,6 +46,22 @@ export function AppShell({ authRequired }: Props) {
   const lastPath = useRef(pathname);
   const lastImmersive = useRef(immersive);
   const pendingFocus = useRef(false);
+
+  // 맞춤 곡 추천 학습 동의 상태(설계 COACH-004 D6): 로그인 복원 뒤 한 번 읽는다(store가 세션당 1회).
+  // 가입 전 회원은 GET이 403 SIGNUP_INCOMPLETE라 읽지 않는다. 로그아웃하면 이전 계정의 상태를 버린다. 인증 끔(authenticated 아님)에서는 아무것도 하지 않는다
+  // 마지막으로 읽은 계정. 로그아웃을 거치지 않고 계정이 바뀌면 이전 상태를 버리고 다시 읽는다(StrictMode 이중 실행에서는 같은 계정이라 한 번만 읽는다)
+  const consentUserRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const st = useRecommendationConsent.getState();
+    if (authStatus === 'authenticated' && signupCompleted !== false) {
+      if (consentUserRef.current !== undefined && consentUserRef.current !== userId) st.reset();
+      consentUserRef.current = userId;
+      void st.load();
+    } else if (authStatus === 'anonymous') {
+      consentUserRef.current = undefined;
+      st.reset();
+    }
+  }, [authStatus, signupCompleted, userId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -68,6 +92,17 @@ export function AppShell({ authRequired }: Props) {
       : workareaRef.current?.querySelector<HTMLElement>('.topbar-title');
     target?.focus({ preventScroll: true });
   }, [pathname, immersive]);
+
+  // 한 번도 답하지 않은 기존 사용자에게만 1회 안내. 가입 화면·연주 중에는 띄우지 않고 벗어난 뒤 다음 렌더에 띄운다.
+  // PUT이 실패하면 이번 세션만 다시 띄우지 않는다
+  const showConsentDialog =
+    authStatus === 'authenticated' && signupCompleted !== false && !immersive && pathname !== '/signup' && !consentDismissed && needsRecommendationPrompt(consent);
+  const answerConsent = (agreed: boolean) => {
+    useRecommendationConsent
+      .getState()
+      .set(agreed)
+      .catch(() => useRecommendationConsent.getState().dismissForSession());
+  };
 
   return (
     <div className={`shell${immersive ? ' immersive' : ''}`} style={{ '--side-w': immersive ? '0px' : sideCollapsed ? '80px' : '240px' } as CSSProperties}>
@@ -112,6 +147,9 @@ export function AppShell({ authRequired }: Props) {
         <StickStatusIndicator />
         <ProfileMenu />
       </div>
+      {showConsentDialog && (
+        <RecommendationConsentDialog busy={consentSaving} onAgree={() => answerConsent(true)} onDecline={() => answerConsent(false)} />
+      )}
       {debug && <DebugOverlay onClose={() => setDebug(false)} />}
     </div>
   );
