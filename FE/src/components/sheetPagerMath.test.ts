@@ -1,5 +1,6 @@
 // SheetPager 순수 계산 테스트 (페이지당 마디 수, 슬롯 교체, 커서, 박 스냅)
 import { describe, expect, it } from 'vitest';
+import { xInBar } from './sheetStripMath';
 import { barsPerPage, cursorPos, pagerSlots, snapToBeat } from './sheetPagerMath';
 
 // 120 BPM 4/4: 박 500ms, 마디 2000ms
@@ -61,6 +62,22 @@ describe('cursorPos', () => {
   });
   it('카운트인이면 슬롯 0, 비율 0', () => {
     expect(cursorPos(-300, BAR_MS, 4)).toEqual({ slot: 0, ratio: 0 });
+  });
+});
+
+describe('커서와 머리 중심 x', () => {
+  it('노트 시각에서 커서 x가 그 노트 머리 중심 x와 같다', () => {
+    const slotW = 200;
+    const gutter = 44;
+    // 마디 6(0부터 5)의 2번째 박 노트: 4마디/페이지라 슬롯 1
+    const bar = 5;
+    const ratio = 0.25;
+    const t = bar * BAR_MS + ratio * BAR_MS;
+    const { slot, ratio: r } = cursorPos(t, BAR_MS, 4);
+    const cursorX = xInBar(gutter + slot * slotW, slotW, r);
+    const headX = xInBar(gutter + (bar % 4) * slotW, slotW, ratio);
+    expect(slot).toBe(bar % 4);
+    expect(cursorX).toBeCloseTo(headX);
   });
 });
 

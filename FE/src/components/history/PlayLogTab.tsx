@@ -1,9 +1,9 @@
-// 연주 기록 화면의 [플레이 기록] 탭 본문(Figma 연주 기록 112:1351). 이 브라우저에 저장된 최근 20건을
-// 모드 필터 → 곡 제목 검색 → 정렬 → 10행 페이지 순서로 보여 준다. 검색은 로컬이라 디바운스 없이 즉시 적용한다(설계 U12).
-// 삭제된 곡 판정은 components/song/useDeletedSongIds가 맡고, 이 컴포넌트는 조립과 상태(필터·검색·정렬·페이지)만 가진다.
-import { useMemo, useState } from 'react';
+// 서버 기록과 이 기기에만 남은 기록을 합쳐 필터·검색·정렬·10행 페이지를 적용한다.
+// 로컬 기록의 곡 삭제 판정은 useDeletedSongIds, 서버 기록은 목록의 접근 가능 여부를 쓴다.
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { HistoryTable } from '@/components/history/HistoryTable';
+import { listAllPlays, type PlaySummary } from '@/api/plays';
+import { HistoryTable, type HistoryServerRow } from '@/components/history/HistoryTable';
 import '@/components/history/history.css';
 import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +21,7 @@ import {
   type PlayLogSort,
 } from '@/domain/playLogView';
 import { loadPlayLogs } from '@/engine/playLog';
+import { useAuth } from '@/store/authStore';
 
 const FILTERS: { value: HistoryFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },
@@ -40,7 +41,33 @@ export interface PlayLogTabProps {
 }
 
 export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLogTabProps = {}) {
-  const logs = useMemo(() => loadPlayLogs(), []);
+  const status = useAuth((s) => s.status);
+  const userId = useAuth((s) => s.user?.id ?? null);
+  const [attempt, setAttempt] = useState(0);
+  const [loaded, setLoaded] = useState<{ key: string; plays: PlaySummary[] | null } | null>(null);
+  const key = `${status}:${userId}:${attempt}`;
+  const localLogs = useMemo(() => status === 'anonymous' || (status === 'authenticated' && userId != null) ? loadPlayLogs() : [], [status, userId]);
+  const current = loaded?.key === key ? loaded : null;
+  useEffect(() => {
+    if (status !== 'authenticated' || userId == null) return;
+    const controller = new AbortController();
+    void listAllPlays(controller.signal).then(
+      (plays) => { if (!controller.signal.aborted) setLoaded({ key, plays }); },
+      () => { if (!controller.signal.aborted) setLoaded({ key, plays: null }); },
+    );
+    return () => controller.abort();
+  }, [key, status, userId]);
+  const logs = useMemo(() => {
+    const plays = current?.plays ?? [];
+    const ids = new Set(plays.map((p) => p.playId));
+    const localIds = new Set(localLogs.map((log) => log.playId));
+    const server: HistoryServerRow[] = plays.map((play) => ({
+      source: 'server', play, playId: play.playId,
+      title: play.songTitle ?? '제목 없는 연주',
+      mode: play.mode, difficulty: play.difficulty ?? '', startedAt: play.startedAt, hasLocal: localIds.has(play.playId),
+    }));
+    return [...server, ...localLogs.filter((log) => !ids.has(log.playId))];
+  }, [current, localLogs]);
   const [filter, setFilter] = useState<HistoryFilter>('ALL');
   const [q, setQ] = useState(initialQuery);
   const [sort, setSort] = useState<PlayLogSort>(initialSort);
@@ -52,9 +79,17 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
   );
   const info = pageInfo(visible.length, rawPage);
   const rows = visible.slice(info.page * HISTORY_PAGE_SIZE, (info.page + 1) * HISTORY_PAGE_SIZE);
-  const deletedIds = useDeletedSongIds(logs);
+  const deletedIds = useDeletedSongIds(localLogs);
+
+  if (status === 'unknown' || status === 'restoring' || (status === 'authenticated' && (!userId || !current))) {
+    return <p role="status">연주 기록을 불러오는 중…</p>;
+  }
+
+  const error = status === 'authenticated' && current?.plays === null;
+  const errorNotice = error ? <div role="alert">서버 기록을 불러오지 못했어요. <button onClick={() => setAttempt((n) => n + 1)}>다시 시도</button></div> : null;
 
   if (logs.length === 0) {
+    if (error) return errorNotice;
     return (
       <EmptyState
         title="아직 연주 기록이 없어요"
@@ -84,6 +119,7 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
 
   return (
     <>
+      {errorNotice}
       <div className="history-toolbar">
         <p className="history-count">전체 기록 {visible.length}개</p>
         <div className="history-tools">
