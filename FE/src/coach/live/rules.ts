@@ -1,5 +1,6 @@
-// 실시간 코칭 규칙 5종. 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 한다.
-// 실제로 띄울지(간격·쿨다운·상한)는 policy가 정한다. 상태를 갖지 않는 순수 함수다.
+// 실시간 코칭 규칙. 지적 5종은 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 하고,
+// 칭찬은 지금 연주 상태에 맞는 후보 하나를 고른다. 실제로 띄울지(간격·쿨다운)는 policy가 정한다.
+// 상태를 갖지 않는 순수 함수다.
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import type { WindowMetrics } from './window';
@@ -11,7 +12,15 @@ export type LiveTag =
   | 'LIVE_PAD_LATE'
   | 'LIVE_PAD_EARLY'
   | 'LIVE_HAND_WEAK'
-  | 'LIVE_UNSTEADY';
+  | 'LIVE_UNSTEADY'
+  | 'LIVE_GOOD_RECOVERED'
+  | 'LIVE_GOOD_STEADY'
+  | 'LIVE_GOOD_KEEP';
+
+/** 칭찬 태그인가. 효과 평가와 방식 비교는 지적 태그만 본다 */
+export function isPraiseTag(tag: string): boolean {
+  return tag.startsWith('LIVE_GOOD_');
+}
 
 /** 문구의 대상. 패드 규칙은 패드, 손 규칙은 손(0 왼손·1 오른손), 그 외는 null */
 export type CoachTarget = { kind: 'pad'; pad: PadId } | { kind: 'hand'; hand: 0 | 1 };
@@ -35,10 +44,31 @@ export interface RuleEvaluation {
   target: CoachTarget | null;
 }
 
-const PRIORITY = { miss: 0, trend: 1, pad: 2, hand: 3, unsteady: 4 } as const;
+const PRIORITY = { miss: 0, trend: 1, pad: 2, hand: 3, unsteady: 4, praise: 5 } as const;
 const HAND_NAME = ['왼', '오른'] as const;
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+function praise(tag: LiveTag, text: string): RuleEvaluation {
+  return { key: tag, tag, priority: PRIORITY.praise, trigger: true, release: false, severity: 0, text, target: null };
+}
+
+/** 띄웠던 지적의 경향이 사라졌을 때 쓰는 칭찬 */
+export const RECOVERED_PRAISE = praise('LIVE_GOOD_RECOVERED', '좋아요! 지적한 경향이 고쳐졌어요.');
+
+/** 지금 연주에 맞는 칭찬 후보. 놓침이 많으면 null(잘 못 치는데 칭찬하지 않는다) */
+export function evaluatePraise(m: WindowMetrics, th: LiveThresholds): RuleEvaluation | null {
+  const c = LIVE_COACH_CONFIG.praise;
+  if (m.missInWindow > c.keepMaxMiss) return null;
+  const steady =
+    m.missInWindow === 0 &&
+    m.validCount >= c.minValid &&
+    m.meanDelta !== null &&
+    Math.abs(m.meanDelta) < th.trendReleaseMs &&
+    m.stdDelta !== null &&
+    m.stdDelta < th.unsteadyReleaseMs;
+  return steady ? praise('LIVE_GOOD_STEADY', '좋아요! 이대로만 치세요.') : praise('LIVE_GOOD_KEEP', '잘 따라오고 있어요.');
+}
 
 export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluation[] {
   const c = LIVE_COACH_CONFIG;

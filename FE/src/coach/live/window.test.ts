@@ -102,6 +102,11 @@ describe('JudgedWindow 놓침', () => {
     // 최근 4개 = hit, miss, hit, miss → MISS 2
     expect(m.missInRelease).toBe(2);
   });
+
+  it('창 12개 안의 MISS 수를 세고 창 밖의 MISS는 뺀다', () => {
+    const hits = Array.from({ length: 11 }, () => hit(0));
+    expect(windowOf([miss(), miss(), ...hits, miss()]).metrics().missInWindow).toBe(1);
+  });
 });
 
 describe('JudgedWindow 패드별', () => {
