@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.2"
+ANALYZER_VERSION = "weak-rules-0.3"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
@@ -24,6 +24,24 @@ MAX_PER_PATTERN = 2
 
 # 연습 조언(`tip`) 한 항목의 최대 글자 수. 화면 폭에 맞는지는 FE와 확인한다
 MAX_TIP_CHARS = 100
+
+# 약점 상세 설명(`detail`)과 종합 총평(`summary.text`)의 최대 글자 수
+MAX_DETAIL_CHARS = 120
+MAX_SUMMARY_CHARS = 200
+# LLM이 쓴 총평(summary.source=LLM)의 최대 글자 수. 규칙 총평(200자)보다 길게 쓸 수 있다
+MAX_NARRATIVE_CHARS = 400
+
+# 심각도 단계: severity(0~1)가 MEDIUM 미만이면 LOW, HIGH 미만이면 MEDIUM, 그 이상이면 HIGH (가정값)
+SEVERITY_MEDIUM = 0.4
+SEVERITY_HIGH = 0.7
+
+# 종합 총평 등급 기준 (가정값). 골든 샘플과 실제 로그로 분포를 본 뒤 이 파일에서만 고친다.
+SUMMARY_GOOD_MISS_RATE = 0.10  # 놓침 비율이 이보다 낮고
+SUMMARY_GOOD_PERFECT_SHARE = 0.5  # PERFECT 비율이 이 이상이며 HIGH 약점이 없으면 GOOD
+SUMMARY_NEEDS_WORK_MISS_RATE = 0.30  # 놓침 비율이 이 이상이거나 HIGH 약점이 있으면 NEEDS_WORK
+# 잘한 점으로 꼽는 패드: 노트가 이만큼 이상이고 적중률(놓치지 않은 비율)이 이 이상인 패드 중 가장 높은 것
+STRENGTH_MIN_NOTES = 8
+STRENGTH_MIN_RATE = 0.9
 
 # 켜져 있는 패턴. 나머지(TEMPO_DRIFT_*, VELOCITY_FADE, PAD_CONFUSION, DENSE_WEAK)는 후속이다.
 ENABLED_PATTERNS = frozenset(

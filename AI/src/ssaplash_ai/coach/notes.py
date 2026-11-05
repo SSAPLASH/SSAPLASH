@@ -22,6 +22,7 @@ class NoteTable:
     time: np.ndarray  # 노트 시각(ms)
     pad: list[str]  # 노트 패드 (정식 이름)
     miss: np.ndarray  # 놓친 노트면 True
+    perfect: np.ndarray  # PERFECT 판정이면 True
     delta: np.ndarray  # 오차(ms, 양수 늦음). 놓친 노트는 NaN
     velocity: np.ndarray  # 세기(0~127). 없으면 NaN
     stick: np.ndarray  # 스틱 번호(0/1). 없으면 -1
@@ -42,6 +43,7 @@ def build_notes(request: AnalysisRequest) -> NoteTable:
     time: list[float] = []
     pad: list[str] = []
     miss: list[bool] = []
+    perfect: list[bool] = []
     delta: list[float] = []
     velocity: list[float] = []
     stick: list[int] = []
@@ -55,6 +57,7 @@ def build_notes(request: AnalysisRequest) -> NoteTable:
         time.append(hit.tMs if is_miss else hit.tMs - (hit.deltaMs or 0.0))
         pad.append(hit.pad)
         miss.append(is_miss)
+        perfect.append(hit.judgement == "PERFECT")
         delta.append(np.nan if is_miss or hit.deltaMs is None else hit.deltaMs)
         velocity.append(np.nan if is_miss or hit.velocity is None else hit.velocity)
         stick.append(hit.stickId if hit.stickId in (0, 1) and not is_miss else -1)
@@ -66,6 +69,7 @@ def build_notes(request: AnalysisRequest) -> NoteTable:
         time=time_arr[order],
         pad=[pad[i] for i in order],
         miss=np.asarray(miss, dtype=bool)[order],
+        perfect=np.asarray(perfect, dtype=bool)[order],
         delta=np.asarray(delta, dtype=float)[order],
         velocity=np.asarray(velocity, dtype=float)[order],
         stick=np.asarray(stick, dtype=int)[order],
