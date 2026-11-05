@@ -185,6 +185,18 @@ def test_실패_보고_본문(tmp_path: Path):
     }
 
 
+def test_reason은_설정이_켜져_있을_때만_본문에_넣는다(tmp_path: Path):
+    ok = {"status": "FAILED", "revision": 1}
+    api, session, _ = _api(tmp_path, _Response(200, ok), _Response(200, ok), _Response(200, ok))
+    api.report_failure(42, "a", 1, "TRANSCRIBING", "INPUT_INVALID", False, "x", "NOT_TRANSCRIBABLE")
+    assert "reason" not in json.loads(session.calls[0]["data"])
+    api.settings.send_reason = True
+    api.report_failure(42, "a", 2, "TRANSCRIBING", "INPUT_INVALID", False, "x", "NOT_TRANSCRIBABLE")
+    assert json.loads(session.calls[1]["data"])["reason"] == "NOT_TRANSCRIBABLE"
+    api.report_failure(42, "a", 3, "TRANSCRIBING", "INPUT_INVALID", False, "x")
+    assert "reason" not in json.loads(session.calls[2]["data"])
+
+
 def test_one_line은_한_줄_200자():
     assert one_line("a\nb\r\n  c") == "a b c"
     assert len(one_line("x" * 500)) == 200 and one_line("x" * 500).endswith("...")
