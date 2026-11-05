@@ -33,6 +33,8 @@ import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -124,6 +126,7 @@ function SheetPageBody() {
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const selectSong = useSongs((s) => s.selectSong);
+  const songsSource = useSongs((s) => s.source);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -570,12 +573,17 @@ function SheetPageBody() {
   const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
-  // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그)
+  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  const bestAccuracy = useMemo(
-    () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
-    [stage, selectedChartId],
+  const records = useBestRecords(
+    stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
+    'SHEET', stage === 'ready' && detail?.id === songIdParam, songsSource,
   );
+  const localBestAccuracy = useMemo(
+    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
+    [songsSource, stage, selectedChartId],
+  );
+  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
@@ -658,6 +666,7 @@ function SheetPageBody() {
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
       <main className="main">
+        <BestRecordsNotice status={records.status} retry={records.retry} />
         <ReadyPanel
           song={song}
           modeLabel="악보 연습"
