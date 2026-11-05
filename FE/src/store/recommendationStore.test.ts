@@ -49,11 +49,20 @@ describe('load', () => {
     expect(status()).toBe('ready');
   });
 
-  it('끝난 키는 다시 load하면 새로 요청한다(재마운트)', async () => {
+  it('ready·hidden인 키의 load는 무시하고 clear 뒤에는 다시 요청한다', async () => {
     vi.mocked(fetchRecommendations).mockResolvedValue(page([item]));
     await useRecommendations.getState().load(KEY, PARAMS);
     await useRecommendations.getState().load(KEY, PARAMS);
+    expect(fetchRecommendations).toHaveBeenCalledTimes(1);
+    useRecommendations.getState().clear(KEY);
+    await useRecommendations.getState().load(KEY, PARAMS);
     expect(fetchRecommendations).toHaveBeenCalledTimes(2);
+
+    vi.mocked(fetchRecommendations).mockResolvedValue(page([]));
+    await useRecommendations.getState().load('H', PARAMS);
+    await useRecommendations.getState().load('H', PARAMS);
+    expect(fetchRecommendations).toHaveBeenCalledTimes(3);
+    expect(useRecommendations.getState().entries.H?.status).toBe('hidden');
   });
 
   it('5초가 지나면 요청을 끊고 hidden', async () => {
@@ -112,5 +121,16 @@ describe('clear', () => {
   it('없는 키는 무시한다', () => {
     useRecommendations.getState().clear('none');
     expect(useRecommendations.getState().entries).toEqual({});
+  });
+});
+
+describe('ready 항목', () => {
+  it('R1은 requestId와 카드(line = 첫 이유 문구)를 든다', async () => {
+    const r = { ...item, reasons: [{ code: 'STARTER', text: 'x' }] } as unknown as RecommendationItem;
+    vi.mocked(fetchRecommendations).mockResolvedValue(page([r]));
+    await useRecommendations.getState().load(KEY, PARAMS);
+    const e = useRecommendations.getState().entries[KEY];
+    expect(e).toMatchObject({ status: 'ready', requestId: 'r1' });
+    expect(e?.status === 'ready' && e.cards[0]).toMatchObject({ chartId: 34, line: '처음 시작하기 좋은 쉬운 곡이에요' });
   });
 });
