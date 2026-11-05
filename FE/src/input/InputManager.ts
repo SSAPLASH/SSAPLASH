@@ -10,6 +10,10 @@ import type { KeyMap } from '@/domain/keyMap';
 import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
 import { isSensorSource } from '@/domain/events';
+import { encodeHapticWave, encodeSetParam, STICK_PARAMS } from './stickProtocol';
+
+/** 스틱 로컬 진동 사용(hapticEnable) 파라미터 id. 표에서 찾아 id 중복 정의를 피한다 */
+const HAPTIC_ENABLE_PARAM_ID = STICK_PARAMS.find((p) => p.key === 'hapticEnable')!.id;
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
@@ -136,6 +140,18 @@ export class InputManager {
 
   haptic(stickId: StickId, strength: number, durationMs: number): void {
     for (const s of this.sources.values()) s.haptic?.(stickId, strength, durationMs);
+  }
+
+  /** 그 손에만 라이브러리 파형 진동 1회(판정 진동). sendCommand가 없는 소스(키보드·터치)는 무시된다 */
+  hapticWave(stickId: StickId, wave: number): void {
+    const bytes = encodeHapticWave(wave);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
+  }
+
+  /** 스틱 로컬 진동(hapticEnable)을 켜고 끈다. stickId가 없으면 붙은 손 전부 */
+  setLocalHaptic(enabled: boolean, stickId?: StickId): void {
+    const bytes = encodeSetParam(HAPTIC_ENABLE_PARAM_ID, enabled ? 1 : 0);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
   }
 
   onHit(l: HitListener): () => void {
