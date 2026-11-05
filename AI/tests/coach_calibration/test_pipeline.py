@@ -238,3 +238,77 @@ def test_force_does_not_run_on_an_empty_view(uri):
 
     assert outcome.status == STATUS_SKIPPED
     assert _client(uri).get_experiment_by_name(EXPERIMENT_NAME) is None
+
+
+# --- 날짜·모드 선택(--since, --mode) ---
+
+
+def _relabel(rows, old_until: int, **old_fields):
+    """세션 키 순서대로 앞의 `old_until`개 세션의 행 값을 바꾼다(played_date, mode 등)."""
+    keys = sorted({r["session_key"] for r in rows})
+    old = set(keys[:old_until])
+    for r in rows:
+        if r["session_key"] in old:
+            r.update(old_fields)
+    return rows
+
+
+def test_since보다_이전_플레이는_빼고_빠진_수를_기록한다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-10")
+
+    outcome = _run(rows, uri, since="2026-10-20")
+
+    assert outcome.status == STATUS_OK and outcome.valid_sessions == 60
+    (run,) = _runs(uri)
+    assert run.data.params["since"] == "2026-10-20" and run.data.params["modes"] == "ALL"
+    assert run.data.metrics["count/PRE_SELECTED_OUT"] == 30.0
+    assert run.data.params["viewSessionCount"] == "90"  # 뷰 전체 수는 그대로(새로 쌓였는지 판단용)
+
+
+def test_since가_없으면_모두_쓰고_빠진_수는_0이다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-10")
+
+    outcome = _run(rows, uri)
+
+    assert outcome.valid_sessions == 90
+    (run,) = _runs(uri)
+    assert run.data.params["since"] == "" and run.data.metrics["count/PRE_SELECTED_OUT"] == 0.0
+
+
+def test_모드를_고르면_그_모드만_쓴다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+
+    outcome = _run(rows, uri, modes=frozenset({"RHYTHM"}))
+
+    assert outcome.valid_sessions == 60
+    (run,) = _runs(uri)
+    assert (
+        run.data.params["modes"] == "RHYTHM" and run.data.metrics["count/PRE_SELECTED_OUT"] == 30.0
+    )
+
+
+def test_두_모드를_따로_돌려_비교할_수_있다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+
+    assert _run(rows, uri, modes=frozenset({"SHEET"}), force=True).valid_sessions == 30
+    assert _run(rows, uri, modes=frozenset({"RHYTHM"}), force=True).valid_sessions == 60
+
+
+def test_날짜를_알_수_없는_세션은_since가_있으면_뺀다():
+    from types import SimpleNamespace
+
+    from ssaplash_ai.coach_calibration.pipeline import select_sessions
+
+    def s(date, mode="RHYTHM"):
+        return SimpleNamespace(played_date=date, mode=mode)
+
+    sessions = [s("2026-10-19"), s("2026-10-20"), s(None), s("2026-10-25", "SHEET")]
+    assert select_sessions(sessions) == sessions  # 아무 조건도 없으면 전부
+    assert select_sessions(sessions, since="2026-10-20") == [
+        sessions[1],
+        sessions[3],
+    ]  # 이상(포함), 날짜 없음은 제외
+    assert select_sessions(sessions, modes=frozenset({"SHEET"})) == [sessions[3]]
+    assert select_sessions(sessions, since="2026-10-20", modes=frozenset({"RHYTHM"})) == [
+        sessions[1]
+    ]
