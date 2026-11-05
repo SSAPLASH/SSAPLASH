@@ -57,6 +57,9 @@ class Report:
     n_cold_songs: int
     results: dict[str, ModelResult]
     model_params: dict[str, dict[str, object]] = field(default_factory=dict)
+    data_summary: dict[str, object] = field(
+        default_factory=dict
+    )  # 입력의 집계 수치(사용자·곡·연주 수 등)
 
     def table(self) -> pd.DataFrame:
         """행은 방법, 열은 지표. 신뢰구간 열은 뺀다."""
@@ -79,6 +82,7 @@ class Report:
             "n_songs": self.n_songs,
             "n_cold_songs": self.n_cold_songs,
             "models": {n: _clean(r.metrics) for n, r in self.results.items()},
+            "data": {k: v for k, v in self.data_summary.items()},
             "params": {
                 n: {k: _plain(v) for k, v in p.items()} for n, p in self.model_params.items()
             },
@@ -237,6 +241,7 @@ def evaluate(
         len(cold_songs),
         results,
         model_params,
+        data.summary(),
     )
 
 
