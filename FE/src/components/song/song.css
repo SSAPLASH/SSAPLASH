@@ -146,3 +146,66 @@ button.song-level {
   line-height: 1.45;
   white-space: nowrap;
 }
+
+/* 추천 곡 줄 (설계 COACH-004-song-recommend-picker D9·U2): 폭 160 카드, 넘치면 가로 스크롤. 임시 배치 */
+.song-reco {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.song-reco-caption {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+.song-reco-list {
+  display: flex;
+  gap: var(--space-m);
+  overflow-x: auto;
+  padding-bottom: var(--space-xs);
+}
+.song-reco-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 160px;
+  padding: var(--space-s);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.song-reco-card:hover {
+  border-color: var(--line-strong);
+}
+.song-reco-card .song-cover {
+  width: 100%;
+}
+.song-reco-title {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-reco-artist {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-reco-reason {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
