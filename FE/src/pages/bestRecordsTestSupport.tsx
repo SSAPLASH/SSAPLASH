@@ -14,6 +14,8 @@ import type { SongDetail } from '@/domain/songCatalog';
 import * as playLogs from '@/engine/playLog';
 
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+// 준비 단계의 비슷한 곡 줄이 실제 네트워크로 나가지 않게 막는다(이 시나리오는 비슷한 곡을 검증하지 않는다)
+vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/components/screenFit', () => ({ useScreenFits: () => true }));
@@ -86,6 +88,8 @@ export function testReadyBestRecords(Page: ComponentType, mode: 'RHYTHM' | 'SHEE
       vi.mocked(getBestRecords).mockReturnValueOnce(new Promise((yes) => { resolve = yes; }));
       const view = show();
       await screen.findByText('최고 기록을 불러오는 중…');
+      // 로딩 문구는 렌더에서, 요청은 그 뒤 패시브 effect에서 나간다. 느린 환경에서는 문구가 먼저 보일 수 있어 호출을 기다린다
+      await waitFor(() => expect(getBestRecords).toHaveBeenCalledTimes(1));
       const signal = vi.mocked(getBestRecords).mock.calls[0][1];
       view.unmount();
       expect(signal.aborted).toBe(true);
