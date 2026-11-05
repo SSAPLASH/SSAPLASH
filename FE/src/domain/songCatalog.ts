@@ -68,6 +68,21 @@ export function sortCharts<T extends { difficulty: Difficulty }>(charts: readonl
   return [...charts].sort((a, b) => rank(a.difficulty) - rank(b.difficulty));
 }
 
+/** 기본 연습 단계: NORMAL, 없으면 쉬운 순서로 첫 채보. 채보가 없으면 null */
+export function defaultChartId(detail: Pick<SongDetail, 'charts'>): number | null {
+  const charts = sortCharts(detail.charts);
+  return (charts.find((c) => c.difficulty === 'NORMAL') ?? charts[0])?.id ?? null;
+}
+
+/**
+ * URL의 채보가 곡 응답 목록에 없을 때 바꿀 채보 id. 바꿀 필요가 없으면 null.
+ * BE는 노트가 NORMAL과 같은 HARD·EASY를 곡 응답에서 빼므로(260번), 예전 링크로 들어온 숨긴 채보는 기본 단계로 옮긴다
+ */
+export function chartFallback(detail: Pick<SongDetail, 'charts'>, chartId: number): number | null {
+  if (detail.charts.some((c) => c.id === chartId)) return null;
+  return defaultChartId(detail);
+}
+
 /** 응답 id는 JSON 숫자다. 안전한 정수가 아니면 거부한다(BE README FE 소비 계약) */
 export function toSafeId(v: unknown, what = 'id'): number {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
