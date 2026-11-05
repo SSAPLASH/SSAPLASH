@@ -2,7 +2,8 @@
 
 음원 채보와 같은 `build_chart`·`validate_chart`를 써서 BE가 같은 경로로 저장·솎기·재생함.
 - 패드: GM 번호를 BE `GmDrumMapping`과 같은 표로 바꿈. 표에 없는 타악기는 빼고 개수만 셈
-- 하이햇 페달(44): 채보 JSON 출력이 아직 8패드라 HIHAT으로 합침(-249에서 9패드). 개수는 결과 메타에 남김
+- 하이햇 페달(44): 설정 emit_hihat_pedal이 참이면 HIHAT_PEDAL 노트로 냄(S15P31A307-249), 거짓이면 HIHAT으로 합침.
+  코드 기본값은 거짓이고 서비스 설정 configs/chart/sheet.yaml은 참. 개수는 결과 메타에 남김
 - 열린 하이햇: 설정 emit_hihat_open이 참이면 열린 하이햇 노트에 hihat_open_field 필드를 붙임. 필드 이름·값은
   BE·FE 합의 전이라(설계 U3) 기본값은 거짓이고, 그때는 출력이 음원 채보와 같은 모양
 - timing: bpm은 첫 템포, timeSignature는 첫 박자, offsetMs는 못갖춘마디 길이(첫 정마디 시작)
@@ -39,6 +40,7 @@ class SheetConfig:
     generator_version: str = "sheet-musicxml-1"
     default_bpm: float = 120.0
     max_duration_sec: float = 1800.0
+    emit_hihat_pedal: bool = False
     emit_hihat_open: bool = False
     hihat_open_field: str = "hihatOpen"
     schema_version: int = 1
@@ -91,8 +93,12 @@ class SheetOutput:
         return d
 
 
-def score_to_hits(score: SheetScore) -> tuple[np.ndarray, list[float], dict[str, int], int]:
-    """드럼 음표 → (타격 표, 열린 하이햇 시각 초 목록, 뺀 GM 번호 개수, 페달 개수). 페달은 HIHAT으로 합침."""
+def score_to_hits(
+    score: SheetScore, emit_pedal: bool = False
+) -> tuple[np.ndarray, list[float], dict[str, int], int]:
+    """드럼 음표 → (타격 표, 열린 하이햇 시각 초 목록, 뺀 GM 번호 개수, 페달 개수).
+
+    emit_pedal이 거짓이면 페달은 HIHAT으로 합침."""
     rows: list[tuple[float, str, int]] = []
     open_sec: list[float] = []
     dropped: dict[str, int] = {}
@@ -104,7 +110,8 @@ def score_to_hits(score: SheetScore) -> tuple[np.ndarray, list[float], dict[str,
             continue
         if pad == "HIHAT_PEDAL":
             n_pedal += 1
-            pad = "HIHAT"
+            if not emit_pedal:
+                pad = "HIHAT"
         elif pad == "HIHAT" and n.is_open:
             open_sec.append(n.onset_sec)
         rows.append((n.onset_sec, pad, n.velocity))
@@ -159,7 +166,7 @@ def convert_sheet(
         raise ChartInputError(
             f"반복을 펼친 길이 {score.duration_sec:.0f}초가 {config.max_duration_sec:.0f}초를 넘음"
         )
-    hits, open_sec, dropped, n_pedal = score_to_hits(score)
+    hits, open_sec, dropped, n_pedal = score_to_hits(score, config.emit_hihat_pedal)
     if len(hits) == 0:
         raise ChartInputError("드럼 파트에 패드로 바꿀 음표가 없음")
     duration_ms = int(round(score.duration_sec * 1000))
