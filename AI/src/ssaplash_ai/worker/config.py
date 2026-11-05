@@ -23,6 +23,8 @@ ENV_TOKEN = "SSAPLASH_WORKER_TOKEN"
 ENV_POLL_SEC = "SSAPLASH_WORKER_POLL_SEC"
 ENV_HEARTBEAT_SEC = "SSAPLASH_WORKER_HEARTBEAT_SEC"
 ENV_KEEP_FILES = "SSAPLASH_WORKER_KEEP_FILES"
+# 실패 보고 본문에 reason을 넣을지 (S15P31A307-246). BE 저장·노출 연동을 확인하기 전까지 기본 꺼짐
+ENV_SEND_REASON = "SSAPLASH_WORKER_SEND_REASON"
 
 REQUIRED_ENV = (ENV_BASE_URL, ENV_WORKER_ID, ENV_TOKEN, ENV_WORK_DIR)
 # BE README: 토큰은 UTF-8 32바이트 이상
@@ -50,6 +52,7 @@ class WorkerSettings:
     poll_sec: float = 5.0
     heartbeat_sec: float = 10.0
     keep_files: bool = False
+    send_reason: bool = False
     separation_config: Path = DEFAULT_SEPARATION_CONFIG
     transcription_config: Path = DEFAULT_TRANSCRIPTION_CONFIG
     # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기 (설계 3-2·3-6절)
@@ -107,6 +110,7 @@ class WorkerSettings:
             poll_sec=_positive_float(source, ENV_POLL_SEC, cls.poll_sec),
             heartbeat_sec=_positive_float(source, ENV_HEARTBEAT_SEC, cls.heartbeat_sec),
             keep_files=source.get(ENV_KEEP_FILES, "").strip().lower() in TRUE_WORDS,
+            send_reason=source.get(ENV_SEND_REASON, "").strip().lower() in TRUE_WORDS,
             narrative_enabled=source.get(ENV_NARRATIVE_ENABLED, "").strip().lower() in TRUE_WORDS,
             narrative_llm_url=source.get(ENV_NARRATIVE_LLM_URL, "").strip()
             or DEFAULT_NARRATIVE_LLM_URL,

@@ -31,3 +31,9 @@ tempo:
   origin: notes
 # 이보다 긴 드럼 트랙은 입력 오류
 max_duration_sec: 600
+# 채보 가능 검사 (S15P31A307-246). 걸리면 실패 사유 NOT_TRANSCRIBABLE로 보고함
+drum_check:
+  # 곡 1분당 노트 수가 이보다 적으면 실패. 비워 두면 검사 안 함. 실제 곡 분포를 측정한 뒤 정함
+  min_notes_per_minute:
+  # 박 추적 실패(bpm 기본값 120)를 실패로 볼지. 틀린 bpm으로 메트로놈이 나가지 않게 함
+  fail_on_unknown_tempo: true
