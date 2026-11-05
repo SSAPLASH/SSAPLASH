@@ -54,6 +54,16 @@ uv run python -m ssaplash_ai.coach_calibration.cli
 | `--view` | 뷰 이름(기본 `coach_export_v`) |
 | `--skip-reeval` | 후보의 합성 재평가를 건너뜀 |
 | `--force` | 새 세션이 모자라도 돌린다(뷰가 비어 있으면 돌지 않음). 정책을 바꾼 뒤 후보를 바로 보고 싶을 때 쓴다 |
+| `--since YYYY-MM-DD` | 뷰의 `played_date`가 이 날짜 이후인 플레이만 쓴다(그날 포함). 날짜를 알 수 없는 세션은 뺀다. 형식이 틀리면 실행 전에 거절한다 |
+| `--mode RHYTHM\|SHEET` | 쓸 모드(여러 번 지정 가능). 없으면 둘 다. 악보 연습은 멈추고 악보를 보는 시간이 길어 합치면 리듬 게임 분포가 왜곡될 수 있어, 모드별로 따로 돌려 비교한다 |
+
+**`--since`를 쓰는 때.** FE가 기록을 바로잡은 배포일 이전의 로그를 빼기 위해서다. 예: 같은 패드 노트가 촘촘할 때 타격이 뒤 노트에 붙어
+오차 부호가 뒤집히고 앞 노트가 MISS가 되던 매칭 오류(FE `[S15P31A307-290]`)를 고치기 전의 플레이는 `TIMING_*`·`MISS_CLUSTER`가
+부풀려져 있다. 비식별 뷰에는 앱 버전이 없어 **날짜로만** 거른다. 배포일은 FE에게 확인해 적용한다. 빠진 세션 수는 MLflow에
+`count/PRE_SELECTED_OUT`으로, 선택은 params `since`·`modes`와 `summary.md`로 남고, run 이름에도 붙는다(예: `calib-2026-11-05-n60-since2026-10-20-RHYTHM`).
+
+**일부만 고른 실행은 다음 실행의 기준이 되지 않는다.** `viewSessionCount`는 고르기 전의 전체 수라서, 기준으로 잡으면 다음 정기 실행이 "새 세션 부족"으로 건너뛴다.
+그래서 "새로 쌓였는지" 판단은 `--since`·`--mode` 없이 돈 최근 실행을 기준으로 한다.
 
 끝에 **한 줄 상태**를 표준 출력에 남긴다. 알림이 이 줄을 본다.
 
@@ -131,7 +141,7 @@ what-if는 (격자 21점 × 7그룹) × 세션 수번의 분석이라 세션이 
 | 종류 | 이름 |
 | --- | --- |
 | 태그 | `approval`, `sampleStatus`(`OK`/`INSUFFICIENT_SAMPLE`), `runDecision`, `analyzerVersion`, `filterVersion`, `profileVersion`, `candidatesVersion`, `dataSnapshot`(`마지막 날짜:세션 수`) |
-| 파라미터 | `dataMaxDate`, `viewSessionCount`(다음 실행의 기준), `newSessions`, `minNew`, `validDrumSessions`, `validKeyboardSessions`, `maxChange`, `minSample`, `policyTargets`, `thresholds`(실행 때의 임계값 전체), `countDecreased` |
+| 파라미터 | `dataMaxDate`, `viewSessionCount`(다음 실행의 기준), `newSessions`, `minNew`, `validDrumSessions`, `validKeyboardSessions`, `maxChange`, `minSample`, `policyTargets`, `thresholds`(실행 때의 임계값 전체), `countDecreased`, `since`, `modes` |
 | 지표 | `flagRate/{DRUM\|KEYBOARD}/{ANY\|pattern}`, `dist/{그룹}/{이름}/q05…q95`(이름: `sessionNotes`, `goodMs`, `missRate`, `strayRate`, `deltaNorm`, `sessionDeltaMean`, `sessionDeltaStd`, `velocity`, `handRatio`), `sessions/{그룹}`, `notes/{그룹}`, `meanSegments/{그룹}`, `current/{TIMING 등}`, `threshold/{…}`, `candidateThreshold/{…}`, `candidateRate/{…}`, `excluded/{이유}`, `count/{TOTAL\|KEPT_DRUM\|KEPT_KEYBOARD}`, `reeval/worstRecallDrop`, `reeval/worstFpRise` |
 | 산출물 | `summary.md`(사람이 읽는 요약), `profile.json`, `candidates.json`(what-if 포함), `reeval.json`(후보가 있을 때) |
 
@@ -161,6 +171,9 @@ what-if는 (격자 21점 × 7그룹) × 세션 수번의 분석이라 세션이 
 - 표본이 작으면(50개 안팎) 비율의 구간이 넓다. 후보는 점추정으로 고른다.
 - 한 임계값을 바꿔도 다른 그룹의 걸림이 변할 수 있다(후보 선택과 중복 줄이기 때문). 후보를 여러 그룹에 동시에 적용한 효과는 합성 재평가로만 본다.
 - 키보드(시험용) 세션은 후보 계산에 쓰지 않는다.
+- 뷰에는 앱 버전과 실시간 코칭 켬·끔 표시가 없다. 그래서 **앱 버전별 구분과 코칭 효과 평가(켬 대 끔)는 지금 뷰로 할 수 없다.**
+  날짜(`--since`)와 모드(`--mode`)로만 가를 수 있다. 효과 평가에는 BE에 뷰 열 추가를 요청해야 한다.
+- 임계값 기준은 고정 기준 폭 60ms(`weak-rules-0.4`)다. 이전 로그의 `goodMs`는 임계값에 영향을 주지 않고 기록용이다.
 
 ## 11. 시험
 

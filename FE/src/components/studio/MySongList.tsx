@@ -42,6 +42,7 @@ function tempSong(job: ActiveJob): SongSummary {
     durationMs: null,
     hasAccompaniment: false,
     accompanimentStatus: 'NONE',
+    songLevel: null,
     difficulties: [],
     createdAt: job.startedAt,
     coverUrl: null,

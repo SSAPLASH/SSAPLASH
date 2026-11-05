@@ -3,6 +3,7 @@
 - separate: 원곡(mp3·wav·flac·opus·m4a) → 드럼 트랙·반주 파일 + separation.json(결과 메타) (S15P31A307-167)
 - transcribe: 드럼 트랙(flac·wav) → chart.json(채보) + transcription.json(결과 메타) (S15P31A307-169)
 - run: separate와 transcribe를 이어서. 마지막에 단계별 시간·메모리 요약
+- sheet: MusicXML 드럼 악보 → chart.json + sheet.json(결과 메타). 모델 없이 CPU (S15P31A307-292)
 
 예
   uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
@@ -10,6 +11,7 @@
   uv run ssaplash-chart transcribe data/chart/funk_108/drums.flac --out data/chart/funk_108
   uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
   uv run ssaplash-chart run song.mp3 --out out/song --duration-ms 183450   # BE가 준 원곡 길이에 맞춤
+  uv run ssaplash-chart sheet score.mxl --out out/score
 
 종료 코드: 0 정상, 1 설정·인자 오류, 2 입력 오류(INPUT_INVALID), 3 모델 오류(MODEL_FAILED),
 4 출력 오류(OUTPUT_INVALID). 진행 상황은 표준 오류, 결과 요약은 표준 출력.
@@ -32,11 +34,13 @@ from ssaplash_ai.chart.config import (
 )
 from ssaplash_ai.chart.errors import ChartError
 from ssaplash_ai.chart.separation import SeparationModule, SeparationOutput
+from ssaplash_ai.chart.sheet import DEFAULT_SHEET_CONFIG, SheetConfig, SheetOutput, convert_sheet
 from ssaplash_ai.chart.transcription import TranscriptionModule, TranscriptionOutput
 
 EXIT_CODES = {"INPUT_INVALID": 2, "MODEL_FAILED": 3, "OUTPUT_INVALID": 4}
 META_FILENAME = "separation.json"
 TRANSCRIPTION_META_FILENAME = "transcription.json"
+SHEET_META_FILENAME = "sheet.json"
 
 
 def _log(message: str) -> None:
@@ -57,7 +61,7 @@ def _resolve_out_dir(out: str | None, input_path: Path) -> Path | None:
     return work_dir / input_path.stem
 
 
-def write_meta(path: Path, output: SeparationOutput | TranscriptionOutput) -> Path:
+def write_meta(path: Path, output: SeparationOutput | TranscriptionOutput | SheetOutput) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(output.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -92,6 +96,27 @@ def format_transcription_summary(output: TranscriptionOutput) -> str:
         f"모델 {output.model_name} ({output.model_version})",
         f"올리기 {output.load_ms} ms, 채보 {output.transcribe_ms} ms, "
         f"최대 GPU 메모리 {vram} MB, 최대 RAM {ram} MB",
+    ]
+    return "\n".join(lines)
+
+
+def format_sheet_summary(output: SheetOutput) -> str:
+    pads = ", ".join(f"{pad} {n}" for pad, n in output.notes_by_pad.items() if n)
+    bpm = (
+        f"{output.bpm:.2f}"
+        if output.tempo_found
+        else f"{output.bpm:.2f} (악보에 템포 없음, 기본값)"
+    )
+    dropped = ", ".join(f"GM {k} {v}개" for k, v in output.dropped.items()) or "없음"
+    lines = [
+        f"채보: {output.chart_json_path}",
+        f"노트 {output.n_notes}개 ({pads or '없음'})",
+        f"길이 {output.duration_ms} ms, bpm {bpm}, 박자 {output.time_signature}, "
+        f"첫 마디 첫 박(offsetMs) {output.offset_ms} ms",
+        f"마디 {output.measures_written} → 반복 펼쳐 {output.measures_played}",
+        f"열린 하이햇 {output.n_open_hihat}개, 하이햇 페달 {output.n_hihat_pedal}개(HIHAT으로 합침), "
+        f"패드에 없어 뺀 타악기: {dropped}",
+        f"변환 {output.convert_ms} ms ({output.generator_version})",
     ]
     return "\n".join(lines)
 
@@ -222,6 +247,30 @@ def run_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def sheet_cmd(args: argparse.Namespace) -> int:
+    input_path = Path(args.input)
+    out_dir = _resolve_out_dir(args.out, input_path)
+    if out_dir is None:
+        _log("--out 또는 환경 변수 SSAPLASH_WORK_DIR이 필요")
+        return 1
+    try:
+        config = SheetConfig.from_yaml(args.config)
+    except (OSError, ValueError, TypeError) as e:
+        _log(f"설정을 읽지 못함: {args.config} ({e})")
+        return 1
+
+    _log(f"입력: {input_path}")
+    try:
+        output = convert_sheet(input_path, config, out_dir)
+    except ChartError as e:
+        return _report_error(e)
+
+    meta_path = write_meta(out_dir / SHEET_META_FILENAME, output)
+    print(format_sheet_summary(output))
+    print(f"결과 메타: {meta_path}")
+    return 0
+
+
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", help="출력 폴더. 없으면 SSAPLASH_WORK_DIR/<입력 파일 이름>/")
     parser.add_argument("--device", help="cuda 또는 cpu. 없으면 설정값(없으면 cpu로 내려감)")
@@ -271,6 +320,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"채보 설정 yaml (기본 {DEFAULT_TRANSCRIPTION_CONFIG.as_posix()})",
     )
     run.set_defaults(func=run_cmd)
+
+    sh = sub.add_parser("sheet", help="MusicXML 드럼 악보 → chart.json + sheet.json")
+    sh.add_argument("input", help="MusicXML 파일 (.musicxml·.xml·.mxl)")
+    sh.add_argument("--out", help="출력 폴더. 없으면 SSAPLASH_WORK_DIR/<파일 이름>")
+    sh.add_argument(
+        "--config",
+        default=str(DEFAULT_SHEET_CONFIG),
+        help=f"악보 설정 yaml (기본 {DEFAULT_SHEET_CONFIG.as_posix()})",
+    )
+    sh.set_defaults(func=sheet_cmd)
     return parser
 
 

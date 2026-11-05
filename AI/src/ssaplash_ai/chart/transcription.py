@@ -7,6 +7,8 @@ model_config가 가리키는 벤치마크 yaml로 고르고(기본 ADTOF + 드�
 흐름: TranscriptionModule(config).load() 한 번 → transcribe_file() 곡마다 → close().
 진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·TRANSCRIBE·JSON, fraction은 단계 시작 0·끝 1.
 bpm은 설정 tempo.method의 추정기(서비스는 Beat This!, 설계 U15)로 구하고, 채보 모델과 같이 load()에서 올림.
+채보 가능 검사(S15P31A307-246): 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패면
+ChartNotTranscribableError. 노트 수 기준은 설정 drum_check에 값이 있을 때만 봄.
 generatorVersion은 `<모델 yaml name>@<해시 12자리>`. 해시에 모델 yaml, bpm 방법·설정, offsetMs·bpm 계산 규칙 버전이
 들어가서 채보 모델·규칙 값·bpm 방법·시각 규칙 중 하나만 바뀌어도 같이 바뀜(설계 U5·U15).
 """
@@ -22,6 +24,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ssaplash_ai.bench.datasets.base import SAMPLE_RATE
+from ssaplash_ai.bench.datasets.pads import merge_pedal
 from ssaplash_ai.bench.metrics.resource_usage import measure_resources
 from ssaplash_ai.bench.transcribers import BaseTranscriber, TranscriberConfig, create_transcriber
 from ssaplash_ai.chart.audio_io import duration_ms as samples_to_ms
@@ -32,16 +35,18 @@ from ssaplash_ai.chart.chart_json import (
     notes_by_pad,
     validate_chart,
 )
-from ssaplash_ai.chart.config import TranscriptionConfig
+from ssaplash_ai.chart.config import DrumCheckConfig, TranscriptionConfig
 from ssaplash_ai.chart.errors import (
     ChartError,
     ChartModelError,
+    ChartNotTranscribableError,
     ChartOutputError,
+    ChartSilentError,
     model_error_from,
     summarize_exception,
 )
 from ssaplash_ai.chart.separation import resolve_device
-from ssaplash_ai.chart.tempo import TempoEstimator, create_tempo_estimator
+from ssaplash_ai.chart.tempo import TempoEstimate, TempoEstimator, create_tempo_estimator
 
 STAGES = ("LOAD_INPUT", "TRANSCRIBE", "JSON")
 CHART_FILENAME = "chart.json"
@@ -161,7 +166,10 @@ class TranscriptionModule:
         notify = on_progress or _no_progress
 
         notify("LOAD_INPUT", 0.0)
-        audio = read_audio_file(drum_stem_path, SAMPLE_RATE, self.config.max_duration_sec)
+        try:
+            audio = read_audio_file(drum_stem_path, SAMPLE_RATE, self.config.max_duration_sec)
+        except ChartSilentError as e:
+            raise ChartNotTranscribableError("드럼 트랙 무음") from e
         length_ms = (
             duration_ms if duration_ms is not None else samples_to_ms(audio.shape[1], SAMPLE_RATE)
         )
@@ -183,8 +191,9 @@ class TranscriptionModule:
             tempo = self._tempo.estimate(audio, SAMPLE_RATE)
         except Exception as e:
             raise model_error_from(e, "bpm 추정") from e
+        # 노래 파일 채보는 하이햇 페달을 따로 내지 않음(페달 예측 정확도 기준 미달). 모델이 내도 HIHAT으로 합침
         chart = build_chart(
-            result.hits_pred,
+            merge_pedal(result.hits_pred),
             length_ms,
             tempo,
             self.model_version,
@@ -192,11 +201,12 @@ class TranscriptionModule:
             schema_version=self.config.schema_version,
             origin=self.config.tempo.origin,
         )
+        counts = notes_by_pad(chart)
+        check_transcribable(sum(counts.values()), length_ms, tempo, self.config.drum_check)
         validate_chart(chart, length_ms)
         chart_path = _write_json(Path(out_dir) / CHART_FILENAME, chart)
         notify("JSON", 1.0)
 
-        counts = notes_by_pad(chart)
         return TranscriptionOutput(
             chart_json_path=chart_path,
             chart=chart,
@@ -230,6 +240,23 @@ class TranscriptionModule:
     def _require_loaded(self) -> None:
         if not self.loaded:
             raise ChartModelError("load()를 먼저 호출")
+
+
+def check_transcribable(
+    n_notes: int, length_ms: int, tempo: TempoEstimate, check: DrumCheckConfig
+) -> None:
+    """채보를 만들 수 있는지. 노트 수를 먼저 보고, 통과하면 박 추적 결과를 봄 (설계 4-1절 5~6번).
+
+    걸리면 ChartNotTranscribableError. 메시지는 실패 보고 summary로 나가므로 어느 경우인지 적음.
+    """
+    if check.min_notes_per_minute is not None and length_ms > 0:
+        per_minute = n_notes * 60_000 / length_ms
+        if per_minute < check.min_notes_per_minute:
+            raise ChartNotTranscribableError(
+                f"1분당 노트 {per_minute:.1f}개, 기준 {check.min_notes_per_minute:g}개"
+            )
+    if check.fail_on_unknown_tempo and not tempo.estimated:
+        raise ChartNotTranscribableError(f"박 추적 실패, 박 {tempo.n_beats}개")
 
 
 def _write_json(path: Path, data: dict) -> Path:

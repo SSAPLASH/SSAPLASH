@@ -40,6 +40,8 @@ def render_summary(
     reeval: dict[str, Any] | None,
     policy_targets: dict[str, Any],
     approval: str,
+    since: str | None = None,
+    modes: frozenset[str] | None = None,
 ) -> str:
     out = [
         f"# 약점 분석 실측 보정 요약 ({date})",
@@ -53,6 +55,8 @@ def render_summary(
         "| --- | --- |",
         f"| 실행 이유 | {decision_reason} (새로 쌓인 세션 {new_sessions}) |",
         f"| 뷰의 세션 수 | {view_sessions} |",
+        f"| 기간 | {f'{since} 이후' if since else '전체'} |",
+        f"| 모드 | {', '.join(sorted(modes)) if modes else '전체'} |",
         f"| 표본 상태 | {candidates['status']} |",
         f"| 승인 상태 | `{approval}` |",
         "",

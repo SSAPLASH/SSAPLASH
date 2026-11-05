@@ -103,11 +103,11 @@ describe('시작·카운트인', () => {
 });
 
 describe('노트 배정과 판정', () => {
-  it('같은 패드 노트가 여럿이면 가장 가까운 노트에 배정한다', () => {
+  it('같은 패드 노트가 여럿이면 판정 폭 안의 가장 이른 노트에 배정한다(설계 3-1, 이전 규칙은 가장 가까운 노트)', () => {
     const s = playing();
     const ev = s.handleHit(hit('SNARE', T0 + 1060));
-    expect(ev?.noteIndex).toBe(2);
-    expect(ev?.deltaMs).toBe(-40);
+    expect(ev?.noteIndex).toBe(0);
+    expect(ev?.deltaMs).toBe(60);
     expect(ev?.judgement).toBe('GOOD');
   });
 
@@ -311,5 +311,66 @@ describe('reset', () => {
     expect(s.notes.every((n) => n.judgement === null)).toBe(true);
     s.start(20000);
     expect(s.songTime(20000)).toBe(0);
+  });
+});
+
+describe('촘촘한 같은 패드 노트 매칭 (MODE-001-judge-window 3-1)', () => {
+  const kicks = (gap: number, n = 3) => Array.from({ length: n }, (_, i) => i).map((i) => ({ timeMs: 1000 + i * gap, pad: 'KICK' as PadId }));
+  const run = (notes: ChartNote[], hits: number[]) => {
+    const s = playing(notes);
+    const evs = hits.map((t) => s.handleHit(hit('KICK', T0 + t)));
+    s.tick(T0 + 1600);
+    return { s, evs, snap: s.snapshot(T0 + 1600) };
+  };
+
+  it('1-2 재현: 100ms 간격, 매번 +55 -> 세 노트 모두 GOOD +55', () => {
+    const { s, evs, snap } = run(kicks(100), [1055, 1155, 1255]);
+    expect(evs.map((e) => [e?.noteIndex, e?.judgement, e?.deltaMs])).toEqual([
+      [0, 'GOOD', 55],
+      [1, 'GOOD', 55],
+      [2, 'GOOD', 55],
+    ]);
+    expect(snap.counts.MISS).toBe(0);
+    expect(snap.strayHits).toBe(0);
+    expect(snap.contestedHits).toBeGreaterThanOrEqual(2);
+    expect(s.lastContestedMatch?.rule).toBe('earliest');
+  });
+
+  it('매번 -55 -> 세 노트 모두 GOOD -55', () => {
+    const { evs } = run(kicks(100), [945, 1045, 1145]);
+    expect(evs.map((e) => [e?.noteIndex, e?.judgement, e?.deltaMs])).toEqual([
+      [0, 'GOOD', -55],
+      [1, 'GOOD', -55],
+      [2, 'GOOD', -55],
+    ]);
+  });
+
+  it('1번 건너뛰고 2번을 +0 -> 2번 PERFECT', () => {
+    const { evs } = run(kicks(100), [1100]);
+    expect(evs[0]).toMatchObject({ noteIndex: 1, judgement: 'PERFECT', deltaMs: 0 });
+  });
+
+  it('간격 50ms, 1번 건너뛰고 2번 +10 -> 예외로 2번 PERFECT', () => {
+    const { s, evs } = run(kicks(50, 2), [1060]);
+    expect(evs[0]).toMatchObject({ noteIndex: 1, judgement: 'PERFECT', deltaMs: 10 });
+    expect(s.lastContestedMatch?.rule).toBe('perfect-exception');
+  });
+
+  it('간격 50ms, 2번 +30 -> 2번 GOOD +30', () => {
+    const { evs } = run(kicks(50, 2), [1080]);
+    expect(evs[0]).toMatchObject({ noteIndex: 1, judgement: 'GOOD', deltaMs: 30 });
+  });
+
+  it('간격 40ms, 2번 -30 -> 1번 PERFECT +10', () => {
+    const { evs } = run(kicks(40, 2), [1010]);
+    expect(evs[0]).toMatchObject({ noteIndex: 0, judgement: 'PERFECT', deltaMs: 10 });
+  });
+
+  it('경합 한 번 세고 reset하면 경합 수가 비워진다', () => {
+    const { s } = run(kicks(100), [1050]);
+    expect(s.snapshot(T0 + 1600).contestedHits).toBe(1);
+    s.reset();
+    expect(s.snapshot().contestedHits).toBe(0);
+    expect(s.lastContestedMatch).toBeNull();
   });
 });

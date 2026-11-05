@@ -1,11 +1,13 @@
 // 녹화 요약(순수 함수). 녹화 JSONL을 되읽은 결과(meta·패킷 행·진단 이벤트)에서 구간 지연·SYNC rtt·채점 delta의 분위수를 내고,
 // 현재 HEALTH_THRESHOLDS의 대응 기준값을 옆에 붙인다. R1(임계값 재설정)·체감 지연 측정의 근거 표를 만드는 도구다.
+import type { CoachBasis } from '@/domain/coachBasis';
 import type { DiagEvent } from '@/engine/diagTap';
 import { CommandType } from '@/input/stickProtocol';
 import { HEALTH_THRESHOLDS } from './health';
 import { percentile } from './latencyStats';
 import { hexToBytes, type RecordedRow, type RecordingMeta } from './recorder';
 import { SyncPairer, syncKeyOf } from './syncPair';
+import { timingReport, type SessionTiming } from './timingReport';
 
 /** 지표 옆에 보여줄 현재 기준값 */
 export interface ThresholdRef {
@@ -31,7 +33,22 @@ export interface SessionSummary {
   title: string;
   mode: 'RHYTHM' | 'SHEET';
   audioOffsetMs: number;
+  /** 이 세션에서 후보 노트가 둘 이상이었던 타격 수(매칭 경합) */
+  contested: number;
+  /** 코칭 기준 방식별 그림자 평가 문구(coachEval). 이벤트가 없으면 두 방식 모두 0 */
+  coach: Record<CoachBasis, CoachBasisSummary>;
 }
+
+/** 한 방식이 띄웠을(띄운) 문구 수와 tag별 수 */
+export interface CoachBasisSummary {
+  total: number;
+  byTag: Record<string, number>;
+}
+
+const emptyCoach = (): Record<CoachBasis, CoachBasisSummary> => ({
+  fixed: { total: 0, byTag: {} },
+  window: { total: 0, byTag: {} },
+});
 
 export interface RecordingSummary {
   meta: RecordingMeta;
@@ -55,7 +72,11 @@ export interface RecordingSummary {
   stray: number;
   /** 연결된 타격 없이 MISS가 된 노트 */
   missed: number;
+  /** 매칭 경합 타격 수(전체) */
+  contested: number;
   sessions: SessionSummary[];
+  /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
+  timing: SessionTiming[];
 }
 
 function metric(xs: number[], threshold: ThresholdRef | null, withMean = false): MetricSummary {
@@ -119,6 +140,7 @@ export function summarizeRecording(input: {
   const judgements = { PERFECT: 0, GOOD: 0, MISS: 0 };
   let stray = 0;
   let missed = 0;
+  let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
     if (ev.type === 'resolved') {
@@ -136,7 +158,19 @@ export function summarizeRecording(input: {
     } else if (ev.type === 'missed') {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
-      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs });
+      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
+    } else if (ev.type === 'matchContested') {
+      contested++;
+      const cur = sessions[sessions.length - 1];
+      if (cur) cur.contested++;
+    } else if (ev.type === 'coachEval') {
+      // 세션 시작 전 이벤트는 건너뛴다(표는 세션별)
+      const cur = sessions[sessions.length - 1];
+      if (cur) {
+        const b = cur.coach[ev.basis];
+        b.total++;
+        b.byTag[ev.tag] = (b.byTag[ev.tag] ?? 0) + 1;
+      }
     }
   }
 
@@ -156,7 +190,9 @@ export function summarizeRecording(input: {
     judgements,
     stray,
     missed,
+    contested,
     sessions,
+    timing: timingReport(diags),
   };
 }
 
@@ -171,6 +207,9 @@ function thresholdText(t: ThresholdRef | null): string {
 }
 
 const INPUT_MODE_LABEL = { direct: '직접 연결', follow: '따라보기' } as const;
+
+/** 부호 붙인 1자리 소수(delta·기울기용). 없으면 '–' */
+const sf1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`);
 
 /** Wiki에 붙여넣을 Markdown 표. 숫자는 1자리 소수, 값이 없으면 '–' */
 export function summaryToMarkdown(s: RecordingSummary): string {
@@ -197,13 +236,51 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     '',
     `채점 delta 평균: ${f1(s.delta.mean)}ms`,
     '',
-    '| PERFECT | GOOD | MISS | stray(채보 밖) | 무타격 MISS |',
-    '| --- | --- | --- | --- | --- |',
-    `| ${s.judgements.PERFECT} | ${s.judgements.GOOD} | ${s.judgements.MISS} | ${s.stray} | ${s.missed} |`,
+    '| PERFECT | GOOD | MISS | stray(채보 밖) | 무타격 MISS | 매칭 경합 |',
+    '| --- | --- | --- | --- | --- | --- |',
+    `| ${s.judgements.PERFECT} | ${s.judgements.GOOD} | ${s.judgements.MISS} | ${s.stray} | ${s.missed} | ${s.contested} |`,
   ];
   if (s.sessions.length > 0) {
-    lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) |', '| --- | --- | --- |');
-    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} |`);
+    lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) | 매칭 경합 |', '| --- | --- | --- | --- |');
+    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} | ${x.contested} |`);
+  }
+  // 세션별 타이밍 분석(T1). 채보 vs FE 판별표(설계 4-2)의 수치 열
+  if (s.timing.length > 0) {
+    lines.push(
+      '',
+      '## 타이밍 분석 (delta +늦음)',
+      '',
+      '| 곡 | 채보 버전 | 모드 | 시작(s) | 판정 | MISS | 평균 | 중앙값 | 표준편차 | 기울기(ms/분) | 앞·중·뒤 | accDrift 시작→끝(기울기) | 힌트 |',
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    );
+    for (const x of s.timing) {
+      const acc = x.accDrift ? `${sf1(x.accDrift.startMs)}→${sf1(x.accDrift.endMs)} (${sf1(x.accDrift.slopeMsPerMin)}/분)` : '–';
+      const judged = `${x.judged}${x.outliers ? `(창 밖 ${x.outliers})` : ''}`;
+      lines.push(
+        `| ${x.title} | ${x.chartVersionId ?? '–'} | ${x.mode} | ${(x.startedAt / 1000).toFixed(0)} | ${judged} | ${x.miss} | ${sf1(x.meanMs)} | ${sf1(x.medianMs)} | ${f1(x.stdMs)} | ${sf1(x.slopeMsPerMin)} | ${x.thirds.map(sf1).join(' / ')} | ${acc} | ${x.verdictHint} |`,
+      );
+    }
+    const withInputs = s.timing.filter((x) => x.byInput.length > 0);
+    if (withInputs.length > 0) {
+      lines.push('', '| 곡 | 시작(s) | 입력 | n | 평균 | 기울기(ms/분) |', '| --- | --- | --- | --- | --- | --- |');
+      for (const x of withInputs) {
+        for (const b of x.byInput) {
+          lines.push(`| ${x.title} | ${(x.startedAt / 1000).toFixed(0)} | ${b.input} | ${b.n} | ${sf1(b.meanMs)} | ${sf1(b.slopeMsPerMin)} |`);
+        }
+      }
+    }
+  }
+  // 코칭 기준 방식 비교(진단 빌드 녹화에만 있다). 세션마다 방식별 문구 수와 tag별 수를 나란히 보인다
+  const withCoach = s.sessions.filter((x) => x.coach.fixed.total + x.coach.window.total > 0);
+  if (withCoach.length > 0) {
+    lines.push('', '## 코칭 기준 비교 (고정 vs 판정 폭 비례)', '');
+    for (const x of withCoach) {
+      const tags = [...new Set([...Object.keys(x.coach.fixed.byTag), ...Object.keys(x.coach.window.byTag)])].sort();
+      lines.push(`### ${x.title}`, '', '| 구분 | 고정(fixed) | 비례(window) |', '| --- | --- | --- |');
+      lines.push(`| 문구 수 | ${x.coach.fixed.total} | ${x.coach.window.total} |`);
+      for (const t of tags) lines.push(`| ${t} | ${x.coach.fixed.byTag[t] ?? 0} | ${x.coach.window.byTag[t] ?? 0} |`);
+      lines.push('');
+    }
   }
   return lines.join('\n') + '\n';
 }

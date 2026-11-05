@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { useAuth } from '@/store/authStore';
 import { useShellStore } from '@/store/shellStore';
 import { DebugOverlay } from './DebugOverlay';
+import { LazyChartAutoplayToggle } from './diag/lazyChartAutoplay';
 import { RecordingToast } from './recording/RecordingToast';
 import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
@@ -96,6 +97,12 @@ export function AppShell({ authRequired }: Props) {
           >
             모니터 새 창
           </button>
+        )}
+        {/* 채보 확인 재생 토글(T2). 진단 빌드에서만 존재한다 */}
+        {LazyChartAutoplayToggle && !inMonitor && (
+          <Suspense fallback={null}>
+            <LazyChartAutoplayToggle />
+          </Suspense>
         )}
         {authRequired && authStatus === 'anonymous' && (
           <NavLink to="/login" className="small">

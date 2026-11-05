@@ -1,0 +1,42 @@
+/* 세로·좁은 화면 차단 안내: 전면 불투명 스크림. 일시정지(50)·저장 토스트(70)보다 위 */
+.screen-gate-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+  background: var(--bg-canvas);
+}
+.screen-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  width: 400px;
+  max-width: 100%;
+  padding: var(--space-l);
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  text-align: center;
+  font-family: var(--font);
+  outline: none;
+}
+.screen-gate-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.screen-gate-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+/* 페이지 본문 래퍼: 레이아웃에 끼지 않고 inert만 건다 */
+.screen-gate-host {
+  display: contents;
+}

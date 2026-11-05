@@ -22,8 +22,10 @@ from collections.abc import Sequence
 
 from ssaplash_ai.chart.config import DEFAULT_SEPARATION_CONFIG, DEFAULT_TRANSCRIPTION_CONFIG
 from ssaplash_ai.chart.errors import ChartModelError
+from ssaplash_ai.coach.llm_local import LocalServerGenerator
 from ssaplash_ai.worker.config import WorkerSettings
 from ssaplash_ai.worker.loop import EXIT_CONFIG, EXIT_OK, WorkerLoop
+from ssaplash_ai.worker.narrative_job import NarrativeApi, NarrativeRunner
 
 logger = logging.getLogger("ssaplash_ai.worker.cli")
 
@@ -50,6 +52,24 @@ def _settings(args: argparse.Namespace) -> WorkerSettings | None:
         return None
 
 
+def _narrative_runner(settings: WorkerSettings) -> NarrativeRunner | None:
+    """LLM 총평 작업이 켜져 있으면 로컬 모델 서버를 부르는 실행기를 만든다. 꺼져 있으면 None."""
+    if not settings.narrative_enabled:
+        return None
+    generator = LocalServerGenerator(
+        settings.narrative_llm_url, settings.narrative_model, settings.narrative_llm_api
+    )
+    return NarrativeRunner(NarrativeApi(settings), generator, settings.narrative_model)
+
+
+def _make_loop(settings: WorkerSettings) -> WorkerLoop | None:
+    try:
+        return WorkerLoop(settings, narrative=_narrative_runner(settings))
+    except ValueError as e:
+        logger.error("총평 작업 설정 오류: %s", e)
+        return None
+
+
 def _load(loop: WorkerLoop) -> bool:
     try:
         loop.load_models()
@@ -66,8 +86,8 @@ def run_cmd(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if settings is None:
         return EXIT_CONFIG
-    loop = WorkerLoop(settings)
-    if not _load(loop):
+    loop = _make_loop(settings)
+    if loop is None or not _load(loop):
         return EXIT_CONFIG
     return loop.run(once=args.once, max_jobs=args.max_jobs)
 
@@ -76,8 +96,8 @@ def check_cmd(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if settings is None:
         return EXIT_CONFIG
-    loop = WorkerLoop(settings)
-    if not _load(loop):
+    loop = _make_loop(settings)
+    if loop is None or not _load(loop):
         return EXIT_CONFIG
     try:
         assert loop.separation is not None and loop.transcription is not None

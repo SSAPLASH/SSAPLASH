@@ -101,3 +101,85 @@ def test_advice는_patterns를_가져오지_않는다():
     source = Path(advice.__file__).read_text(encoding="utf-8")
 
     assert not re.search(r"^\s*(from|import)\s+ssaplash_ai\.coach\.patterns", source, re.MULTILINE)
+
+
+# ---------- 약점 상세 설명(detail)과 심각도 단계(severityLevel) ----------
+
+from ssaplash_ai.coach.advice import detail_for, level_for  # noqa: E402
+from ssaplash_ai.coach.config import MAX_DETAIL_CHARS  # noqa: E402
+
+# pattern별로 detail이 요구하는 metrics (analyzer가 실제로 채우는 키)
+DETAIL_METRICS = {
+    "TIMING_LATE": {"hitCount": 40, "meanDeltaMs": 31.2},
+    "TIMING_EARLY": {"hitCount": 40, "meanDeltaMs": -31.2},
+    "PAD_LATE": {"meanDeltaMs": 32.0, "overallMeanDeltaMs": 5.0, "hitCount": 12},
+    "PAD_EARLY": {"meanDeltaMs": -32.0, "overallMeanDeltaMs": -5.0, "hitCount": 12},
+    "TRANSITION_LATE": {"meanDeltaMs": 40.0, "hitCount": 8, "transitionCount": 9},
+    "TRANSITION_MISS": {"missRate": 0.5, "missCount": 5, "transitionCount": 10},
+    "HAND_WEAK": {"velocityRatio": 0.62, "weakHitCount": 20, "strongHitCount": 24},
+    "MISS_CLUSTER": {"missRate": 0.4, "missCount": 4, "noteCount": 10},
+    "UNSTEADY": {"stdDeltaMs": 31.0, "hitCount": 30},
+}
+
+
+def test_경계값은_윗단계에_속한다():
+    assert level_for(0.0) == "LOW"
+    assert level_for(0.39) == "LOW"
+    assert level_for(0.4) == "MEDIUM"
+    assert level_for(0.69) == "MEDIUM"
+    assert level_for(0.7) == "HIGH"
+    assert level_for(1.0) == "HIGH"
+
+
+def test_켜진_pattern마다_상세_설명이_있다():
+    assert set(DETAIL_METRICS) == set(ENABLED_PATTERNS)
+    for pattern, metrics in DETAIL_METRICS.items():
+        assert detail_for(pattern, ["SNARE", "HIHAT"], metrics, 7000.0, 12000.0)
+
+
+@pytest.mark.parametrize("pattern", sorted(DETAIL_METRICS))
+def test_상세_설명은_한국어_완성_문장이고_길이_제한을_지킨다(pattern):
+    for pads in itertools.product(PADS, repeat=2):
+        detail = detail_for(pattern, list(pads), DETAIL_METRICS[pattern], 7000.0, 12000.0)
+
+        assert detail is not None
+        assert re.search(r"[가-힣]", detail)
+        assert detail.endswith(("요.", "요"))
+        assert len(detail) <= MAX_DETAIL_CHARS, (pattern, pads, len(detail))
+        assert "None" not in detail
+
+
+def test_상세_설명의_숫자는_metrics_값이거나_그_산술이다():
+    # 입력에 없던 숫자가 문장에 나오지 않는지 본다
+    cases = {
+        "TIMING_LATE": {"40"},
+        "PAD_LATE": {"27"},  # |32.0 − 5.0|
+        "TRANSITION_LATE": {"9"},
+        "TRANSITION_MISS": {"5", "10"},
+        "HAND_WEAK": {"62", "20", "24"},
+        "MISS_CLUSTER": {"5", "10", "4"},  # 5 = (12000 − 7000) ÷ 1000
+        "UNSTEADY": {"31", "30"},
+    }
+    for pattern, allowed in cases.items():
+        detail = detail_for(pattern, ["SNARE", "HIHAT"], DETAIL_METRICS[pattern], 7000.0, 12000.0)
+
+        assert set(re.findall(r"\d+", detail)) == allowed, (pattern, detail)
+
+
+def test_전체_경향_pattern의_상세_설명은_곡_전체라고_밝힌다():
+    for pattern in ("TIMING_LATE", "TIMING_EARLY"):
+        detail = detail_for(pattern, [], DETAIL_METRICS[pattern], 0.0, 1.0)
+
+        assert "곡 전체" in detail
+
+
+def test_필요한_metrics가_없거나_꺼진_pattern이면_None이다():
+    assert detail_for("MISS_CLUSTER", [], {}, 0.0, 5000.0) is None
+    assert detail_for("TEMPO_DRIFT_FAST", [], {}, 0.0, 5000.0) is None
+    assert detail_for("SOMETHING_NEW", [], {"hitCount": 3}, 0.0, 5000.0) is None
+
+
+def test_같은_입력은_같은_상세_설명이다():
+    args = ("PAD_LATE", ["SNARE"], DETAIL_METRICS["PAD_LATE"], 0.0, 1.0)
+
+    assert detail_for(*args) == detail_for(*args)

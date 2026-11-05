@@ -6,6 +6,7 @@ import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import { buildSheet, gridTimeOf, layoutBar, type BarLayout } from '@/domain/sheet';
 import { barsPerPage, cursorPos, pagerSlots, snapToBeat } from './sheetPagerMath';
+import { xInBar } from './sheetStripMath';
 import { drawBeatLabel, drawCursor, drawSheet, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y } from './sheetStripDraw';
 
 export interface SheetPagerProps {
@@ -127,7 +128,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       });
 
       const { slot, ratio } = cursorPos(t, barMs, perPage);
-      const x = GUTTER_X + slot * slotW + ratio * slotW;
+      const x = xInBar(GUTTER_X + slot * slotW, slotW, ratio); // 노트 시각에 그 머리 중심을 지난다
       drawCursor(ctx, x, STAFF_TOP_Y - 30, STAFF_BOTTOM_Y + 40, colors);
       drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors, p.countInMs);
     };

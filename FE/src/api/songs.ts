@@ -3,7 +3,7 @@ import type { UploadDraft } from '@/domain/chartJob';
 import type { MidiDraft } from '@/domain/midiUpload';
 import { availabilityFromFailure, type SongAvailability } from '@/domain/songAvailability';
 import type { SongMetaPatch } from '@/domain/songEdit';
-import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongPage, type SongScope } from '@/domain/songCatalog';
+import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongLevel, type SongPage, type SongScope } from '@/domain/songCatalog';
 import { ApiError } from './error';
 import { apiFetch } from './http';
 
@@ -12,6 +12,10 @@ export interface ListSongsParams {
   q?: string;
   page?: number;
   size?: number;
+  /** 곡 난이도 서버 필터. 없으면 전체 */
+  songLevel?: SongLevel;
+  /** true면 READY이면서 곡 난이도가 있는 곡만(곡 선택·추천). false·생략이면 쿼리를 보내지 않는다 */
+  playableOnly?: boolean;
 }
 
 /** `GET /api/v1/songs` */
@@ -21,6 +25,8 @@ export async function listSongs(params: ListSongsParams, signal?: AbortSignal): 
   if (q) qs.set('q', q);
   if (params.page !== undefined) qs.set('page', String(params.page));
   if (params.size !== undefined) qs.set('size', String(params.size));
+  if (params.songLevel) qs.set('songLevel', params.songLevel);
+  if (params.playableOnly) qs.set('playableOnly', 'true');
   const body = await apiFetch<{ items?: Record<string, unknown>[]; hasNext?: boolean }>(`/api/v1/songs?${qs}`, { signal });
   return { items: (body.items ?? []).map(songFromDto), hasNext: body.hasNext === true };
 }

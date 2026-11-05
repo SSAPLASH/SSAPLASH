@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { checkSongAvailability, deleteSong, deleteSongCover, updateSongMeta, uploadMidi, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, listSongs, updateSongMeta, uploadMidi, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -112,5 +112,41 @@ describe('checkSongAvailability', () => {
     const ctrl = new AbortController();
     ctrl.abort();
     await expect(checkSongAvailability(7, ctrl.signal)).rejects.toBeTruthy();
+  });
+});
+
+describe('listSongs 목록 조건', () => {
+  function stubList() {
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ items: [{ ...body, songLevel: 'INTERMEDIATE' }], hasNext: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  }
+  const query = (fn: ReturnType<typeof stubList>) => new URL(String(fn.mock.calls[0][0]), 'http://x').searchParams;
+
+  it('조건이 없으면 songLevel·playableOnly를 보내지 않는다(내 곡)', async () => {
+    const fn = stubList();
+    await listSongs({ source: 'MINE' });
+    expect(query(fn).has('songLevel')).toBe(false);
+    expect(query(fn).has('playableOnly')).toBe(false);
+  });
+
+  it('난이도와 플레이 후보 조건을 쿼리로 보낸다', async () => {
+    const fn = stubList();
+    const page = await listSongs({ source: 'BUILTIN', songLevel: 'ADVANCED', playableOnly: true, size: 50 });
+    expect(query(fn).get('songLevel')).toBe('ADVANCED');
+    expect(query(fn).get('playableOnly')).toBe('true');
+    expect(query(fn).get('source')).toBe('BUILTIN');
+    expect(page.items[0].songLevel).toBe('INTERMEDIATE');
+  });
+
+  it('playableOnly=false는 생략한다', async () => {
+    const fn = stubList();
+    await listSongs({ source: 'MINE', playableOnly: false });
+    expect(query(fn).has('playableOnly')).toBe(false);
   });
 });

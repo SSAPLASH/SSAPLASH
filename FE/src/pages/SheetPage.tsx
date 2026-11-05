@@ -2,7 +2,7 @@
 // PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이다. 화면은 Figma 악보 연습 흐름을 조립한다:
 // 곡 선택 SongPicker · 준비 ReadyPanel(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
@@ -12,9 +12,13 @@ import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { PlayStage } from '@/components/play/PlayStage';
+import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { ScreenGate } from '@/components/ScreenGate';
+import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
+import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
@@ -27,7 +31,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
 import type { Chart } from '@/domain/chart';
-import { sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
@@ -49,6 +53,10 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
+import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import type { CoachShadow } from '@/coach/live/shadowCoach';
+import { COACH_BASIS } from '@/domain/coachBasis';
+import { diagTap } from '@/engine/diagTap';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = 'select' | 'loading' | 'ready' | 'play';
@@ -58,6 +66,8 @@ const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPAN
 
 /** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
 const GO_MS = 400;
+/** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
+const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 
 function parseId(raw: string | null): number | null {
   if (raw === null || !/^-?\d+$/.test(raw)) return null;
@@ -75,7 +85,7 @@ interface AccResult {
   error?: string;
 }
 
-export function SheetPage() {
+function SheetPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
@@ -100,6 +110,11 @@ export function SheetPage() {
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
   const [strays, setStrays] = useState<{ timeMs: number }[]>([]);
   const clockRef = useRef<PlayClock | null>(null);
+  // 실시간 코칭(COACH-001). 연주 시작 시점 설정값으로 고정하고 문구는 안내 칸에 3초 띄운다 — 리듬 게임과 같은 연결
+  const coachRef = useRef<LiveCoach | null>(null);
+  // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교, MODE-001 D6)
+  const shadowRef = useRef<CoachShadow | null>(null);
+  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
@@ -147,11 +162,15 @@ export function SheetPage() {
   const stageRef = useRef<Stage>(stage);
   const sessionRef = useRef<RhythmSession | null>(null);
   const pauseRef = useRef<PauseReason | null>(null);
+  // 세로·좁은 화면 안내(ScreenGate)가 열려 있는지. 키 핸들러가 최신 값을 본다
+  const screenOk = useScreenFits();
+  const gateOpenRef = useRef(!screenOk);
   useEffect(() => {
     stageRef.current = stage;
     sessionRef.current = activeSession;
     pauseRef.current = pauseReason;
-  }, [stage, activeSession, pauseReason]);
+    gateOpenRef.current = !screenOk;
+  }, [stage, activeSession, pauseReason, screenOk]);
 
   const recorder = useRef(new PlayRecorder());
   const startedAt = useRef<Date | null>(null);
@@ -243,17 +262,36 @@ export function SheetPage() {
         return next;
       });
       setHud(activeSession.snapshot());
+      // 코칭은 기록·노트 색·HUD 뒤에 한다. 변환·표시가 실패해도 연주를 막지 않는다
+      const coach = coachRef.current;
+      if (!coach) return;
+      const judged = {
+        songTimeMs: activeSession.songTime(e.at),
+        noteTimeMs: activeSession.notes[e.noteIndex].note.timeMs,
+        judgement: e.judgement,
+        deltaMs: e.deltaMs,
+        pad: e.pad,
+        stickId: e.stickId,
+        velocity: e.velocity,
+      };
+      const message = coach.push(judged);
+      shadowRef.current?.push(judged);
+      if (!message) return;
+      try {
+        const copy = coachCopy(message);
+        if (copy) showCoachLine(copy, message.displayMs);
+      } catch {
+        // 코칭 오류는 무시한다
+      }
     });
-  }, [activeSession]);
+  }, [activeSession, showCoachLine]);
 
-  // 타격: 즉시 발음 → 햅틱 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다
+  // 타격: 즉시 발음 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다. 타격 진동은 스틱이 직접 울린다(PLAY-006)
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
-        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
       }
       const ss = sessionRef.current;
       const active =
@@ -291,6 +329,12 @@ export function SheetPage() {
   // 연결 끊김·메뉴 요청 → 자동 일시정지 (공용 훅)
   usePauseTriggers(pauseTo);
 
+  // 연주 중(카운트다운 포함) 화면 조건이 깨지면 먼저 일시정지한다. 다시 맞아도 자동 재개하지 않는다.
+  // pauseTo가 이미 멈춘 상태(pauseRef 있음)는 무시하므로 중복 호출에 안전하다
+  useEffect(() => {
+    if (!screenOk && stage === 'play' && pauseReason === null) pauseTo('user');
+  }, [screenOk, stage, pauseReason, pauseTo]);
+
   const finish = useCallback(
     (ss: RhythmSession) => {
       if (finishing.current) return;
@@ -318,6 +362,7 @@ export function SheetPage() {
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
         consent: consentAtStart.current,
+        liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
@@ -361,6 +406,23 @@ export function SheetPage() {
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     resetRun(ss);
+    const st = useSettings.getState();
+    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    coachRef.current = coach;
+    shadowRef.current = null;
+    // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
+    if (MONITOR_ENABLED) {
+      const goodMs = st.timing.goodMs;
+      void import('@/coach/live/shadowCoach').then((m) => {
+        if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
+        shadowRef.current = m.createCoachShadow({
+          goodMs,
+          activeBasis: COACH_BASIS,
+          publish: (b) => diagTap.publish({ type: 'coachEval', ...b }),
+        });
+      });
+    }
+    clearCoachLine();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
@@ -375,7 +437,7 @@ export function SheetPage() {
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setPlaySession(ss);
-  }, [acc, resetRun]);
+  }, [acc, resetRun, clearCoachLine]);
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
@@ -397,7 +459,10 @@ export function SheetPage() {
     clock.restart();
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     resetRun(ss);
-  }, [resetRun]);
+    coachRef.current?.reset();
+    shadowRef.current?.reset();
+    clearCoachLine();
+  }, [resetRun, clearCoachLine]);
 
   /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
   const leave = useCallback(() => {
@@ -406,6 +471,9 @@ export function SheetPage() {
     metronome.unlock();
     inputManager.setCandidateProvider(null);
     sessionRef.current?.reset();
+    coachRef.current = null;
+    shadowRef.current = null;
+    clearCoachLine();
     resetCountdown();
     setPauseReason(null);
     setNoteStates([]);
@@ -413,7 +481,7 @@ export function SheetPage() {
     setHud(null);
     setPlaySession(null);
     navigate(returnTo, { replace: true });
-  }, [navigate, returnTo, resetCountdown]);
+  }, [navigate, returnTo, resetCountdown, clearCoachLine]);
 
   const toSelect = useCallback(() => {
     diagSessionEnd('left');
@@ -471,6 +539,7 @@ export function SheetPage() {
     const onKey = (e: KeyboardEvent) => {
       // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
       if (e.isComposing || e.defaultPrevented) return;
+      if (gateOpenRef.current) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
       if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
@@ -507,6 +576,15 @@ export function SheetPage() {
     () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
     [stage, selectedChartId],
   );
+
+  // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
+  // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
+  const selectParam = param.select;
+  useEffect(() => {
+    if (stage !== 'ready' || songIdParam === null || chartIdParam === null || detail === null || detail.id !== songIdParam) return;
+    const fallback = chartFallback(detail, chartIdParam);
+    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
+  }, [stage, songIdParam, chartIdParam, detail, selectParam]);
   const presetName = presetItems.find((p) => p.id === settings.activePresetId)?.name ?? null;
 
   if (stage === 'loading') {
@@ -671,7 +749,13 @@ export function SheetPage() {
             countInMs={activeSession.countInMs}
           />
         }
-        guide={<GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />}
+        guide={
+          coachLine ? (
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+          ) : (
+            <GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />
+          )
+        }
         kit={<DrumKit scale={0.7} effects states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
@@ -683,6 +767,25 @@ export function SheetPage() {
         }
         overlay={overlay}
       />
+      {/* 진단 빌드 전용: 채보 확인 재생(T2) */}
+      {LazyChartAutoplayRunner && (
+        <Suspense fallback={null}>
+          <LazyChartAutoplayRunner clockRef={clockRef} session={playSession} />
+        </Suspense>
+      )}
     </main>
+  );
+}
+
+export function SheetPage() {
+  const screenOk = useScreenFits();
+  return (
+    <>
+      {/* 안내가 열린 동안 뒤 화면 전체(일시정지 다이얼로그 포함)를 inert로 — 가려진 버튼에 초점·Enter가 가지 않게 */}
+      <div className="screen-gate-host" inert={!screenOk}>
+        <SheetPageBody />
+      </div>
+      <ScreenGate open={!screenOk} />
+    </>
   );
 }

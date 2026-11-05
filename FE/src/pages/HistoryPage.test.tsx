@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RECORDING_ENABLED } from '@/app/features';
 import { HistoryPage } from './HistoryPage';
 
+vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
+
 afterEach(() => vi.unstubAllGlobals());
 
 /** node 환경에는 localStorage가 없어 메모리 스텁을 끼운다(엔진 playLog.test와 같은 방식) */

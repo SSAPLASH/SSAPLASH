@@ -18,6 +18,7 @@ from ssaplash_ai.worker.config import (
     ENV_HEARTBEAT_SEC,
     ENV_KEEP_FILES,
     ENV_POLL_SEC,
+    ENV_SEND_REASON,
     ENV_TOKEN,
     ENV_WORKER_ID,
     WorkerSettings,
@@ -72,7 +73,11 @@ class Rig:
     """fake BE 서버 + 설정 + 모델 두 개 + JobRunner. with 문으로 씀."""
 
     def __init__(
-        self, tmp_path: Path, backend: FakeBackend | None = None, keep_files: bool = False
+        self,
+        tmp_path: Path,
+        backend: FakeBackend | None = None,
+        keep_files: bool = False,
+        send_reason: bool = False,
     ) -> None:
         self.tmp_path = tmp_path
         self.backend = backend if backend is not None else FakeBackend(out_dir=tmp_path / "be_out")
@@ -81,6 +86,8 @@ class Rig:
         self.env = worker_env(self.server.base_url, tmp_path / "work")
         if keep_files:
             self.env[ENV_KEEP_FILES] = "1"
+        if send_reason:
+            self.env[ENV_SEND_REASON] = "1"
         self.settings = WorkerSettings.from_env(
             self.env, separation_config=self.sep_cfg, transcription_config=self.tr_cfg
         )

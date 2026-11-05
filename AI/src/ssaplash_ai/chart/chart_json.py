@@ -17,7 +17,7 @@ import math
 
 import numpy as np
 
-from ssaplash_ai.bench.datasets.pads import SCORED_PADS
+from ssaplash_ai.bench.datasets.pads import PADS
 from ssaplash_ai.chart.config import ORIGIN_MODES
 from ssaplash_ai.chart.errors import ChartOutputError
 from ssaplash_ai.chart.tempo import TempoEstimate
@@ -41,17 +41,19 @@ ORIGIN_ALIGN_WINDOW_MS = 60.0
 # 쓸 노트가 이보다 적으면 보정하지 않음
 ORIGIN_ALIGN_MIN_NOTES = 16
 
-# BE 결과 검증이 받는 패드 8종. 정답·채점용 PADS에는 HIHAT_PEDAL이 있지만 채보 출력에서는 내지 않음
-_PAD_ORDER = {pad: i for i, pad in enumerate(SCORED_PADS)}
+# BE 결과 검증이 받는 패드 9종(HIHAT_PEDAL 포함). 같은 시각 노트는 이 순서로 정렬
+_PAD_ORDER = {pad: i for i, pad in enumerate(PADS)}
 
 
 def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
-    """타격 표(HITS_DTYPE) → notes 목록. 패드 8종 밖의 값(거친 라벨 tom·cymbal)이 있으면 ChartOutputError."""
+    """타격 표(HITS_DTYPE) → notes 목록. 패드 9종 밖의 값(거친 라벨 tom·cymbal)이 있으면 ChartOutputError."""
     rows: set[tuple[int, str, int]] = set()
     for row in hits:
         pad = str(row["pad"])
         if pad not in _PAD_ORDER:
-            raise ChartOutputError(f"패드 8종 밖의 값이 나옴: {pad} (채보 모델이 8패드를 내야 함)")
+            raise ChartOutputError(
+                f"패드 9종 밖의 값이 나옴: {pad} (채보 모델이 9패드 안에서 내야 함)"
+            )
         time_ms = min(max(int(round(float(row["time_sec"]) * 1000)), 0), duration_ms)
         rows.add((time_ms, pad, int(row["velocity"])))
     # 같은 시각·같은 패드는 세기가 큰 것 하나만
@@ -194,7 +196,7 @@ def validate_chart(chart: dict, duration_ms: int) -> None:
             f"timeMs는 0~{duration_ms} 정수이고 오름차순: {time_ms!r}",
         )
         previous = time_ms
-        _require(note.get("pad") in _PAD_ORDER, f"pad는 8종 중 하나: {note.get('pad')!r}")
+        _require(note.get("pad") in _PAD_ORDER, f"pad는 9종 중 하나: {note.get('pad')!r}")
         if "velocityHint" in note:
             v = note["velocityHint"]
             _require(_is_int(v) and 0 <= v <= 127, f"velocityHint는 0~127 정수: {v!r}")
@@ -214,11 +216,68 @@ def validate_chart(chart: dict, duration_ms: int) -> None:
         isinstance(signature, str) and 0 < len(signature) <= TIME_SIGNATURE_MAX,
         f"timeSignature는 {TIME_SIGNATURE_MAX}자 이하: {signature!r}",
     )
+    _validate_tempo_map(timing)
+
+
+def _validate_tempo_map(timing: dict) -> None:
+    """빠르기가 바뀌는 곡의 ppq·tempoMap·timeSignatureMap. BE ChartDocumentReader.timing과 같은 조건.
+    셋 다 선택 필드이고, 있으면 tempoMap 첫 값은 tick 0·bpm == timing.bpm, tick은 계속 커짐."""
+    if "ppq" in timing:
+        _require(
+            _is_int(timing["ppq"]) and timing["ppq"] > 0, f"ppq는 양의 정수: {timing['ppq']!r}"
+        )
+    if "tempoMap" in timing:
+        tempo_map = timing["tempoMap"]
+        _require(
+            isinstance(tempo_map, list) and len(tempo_map) > 0, "tempoMap은 비어 있지 않은 목록"
+        )
+        previous = -1
+        for t in tempo_map:
+            tick, bpm = t.get("tick"), t.get("bpm")
+            _require(
+                _is_int(tick)
+                and tick > previous
+                and isinstance(bpm, (int, float))
+                and not isinstance(bpm, bool)
+                and math.isfinite(bpm)
+                and bpm > 0,
+                f"tempoMap 항목은 커지는 tick과 양수 bpm: {t!r}",
+            )
+            previous = tick
+        _require(
+            tempo_map[0]["tick"] == 0 and tempo_map[0]["bpm"] == timing["bpm"],
+            "tempoMap 첫 항목은 tick 0, bpm은 timing.bpm과 같음",
+        )
+    if "timeSignatureMap" in timing:
+        sig_map = timing["timeSignatureMap"]
+        _require(
+            isinstance(sig_map, list) and len(sig_map) > 0, "timeSignatureMap은 비어 있지 않은 목록"
+        )
+        previous = -1
+        for t in sig_map:
+            tick, num, den = t.get("tick"), t.get("numerator"), t.get("denominator")
+            _require(
+                _is_int(tick)
+                and tick > previous
+                and _is_int(num)
+                and num > 0
+                and _is_int(den)
+                and den > 0
+                and den & (den - 1) == 0,
+                f"timeSignatureMap 항목은 커지는 tick, 양수 박자, 2의 거듭제곱 음표: {t!r}",
+            )
+            previous = tick
+        first = sig_map[0]
+        _require(
+            first["tick"] == 0
+            and f"{first['numerator']}/{first['denominator']}" == timing["timeSignature"],
+            "timeSignatureMap 첫 항목은 tick 0, timeSignature와 같음",
+        )
 
 
 def notes_by_pad(chart: dict) -> dict[str, int]:
-    """패드별 노트 수. 패드 8종 순서, 0개인 패드도 포함."""
-    counts = dict.fromkeys(SCORED_PADS, 0)
+    """패드별 노트 수. 패드 9종 순서, 0개인 패드도 포함."""
+    counts = dict.fromkeys(PADS, 0)
     for note in chart["charts"][0]["notes"]:
         counts[note["pad"]] += 1
     return counts

@@ -18,7 +18,7 @@ import soxr
 from worker_helpers import Rig
 
 from helpers import HITS, SR, make_hits, write_m4a, write_wav
-from ssaplash_ai.chart.errors import ChartOutputError
+from ssaplash_ai.chart.errors import ChartNotTranscribableError, ChartOutputError
 from ssaplash_ai.worker.fake_be import FAKE_TOKEN, FakeBackend, Faults
 from ssaplash_ai.worker.job import (
     STATUS_ABANDONED,
@@ -174,7 +174,10 @@ def test_채보_단계_출력_오류는_TRANSCRIBING_OUTPUT_INVALID(
         assert job.separation_result is not None and job.status == "FAILED"
 
 
-def test_내려받은_입력의_해시가_다르면_INPUT_INVALID_모델_안_돌림(tmp_path: Path):
+def test_내려받은_입력의_해시가_3번_다르면_보고_없이_놓고_모델_안_돌림(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.WARNING, logger="ssaplash_ai.worker")
     with Rig(tmp_path) as rig:
         job_id = rig.backend.enqueue(_song(tmp_path))
         assignment = rig.api.claim("c-1")
@@ -183,10 +186,110 @@ def test_내려받은_입력의_해시가_다르면_INPUT_INVALID_모델_안_돌
             assignment, input=dataclasses.replace(assignment.input, sha256="0" * 64)
         )
         out = rig.runner.run(wrong, "c-1")
-        assert out.status == STATUS_FAILED_REPORTED and out.failure_code == "INPUT_INVALID"
-        assert "해시" in out.detail
+        assert out.status == STATUS_ABANDONED and out.failure_code is None
+        assert "불일치 3번" in out.detail
         assert rig.separation._separator.calls == 0
-        assert _events(rig.backend, job_id, "FAILURE")[0]["code"] == "INPUT_INVALID"
+        assert _events(rig.backend, job_id, "FAILURE") == []
+        gets = [f for e in _events(rig.backend, job_id, "FILE_ACCESS") for f in e["files"]]
+        assert gets == ["SOURCE_AUDIO:GET"]  # 같은 URL로 3번 받음
+        mismatch = [r for r in caplog.records if "/3: attempt" in r.getMessage()]
+        assert [r.levelno for r in mismatch] == [logging.WARNING] * 3
+        text = mismatch[0].getMessage()
+        assert assignment.attempt_id in text and "SOURCE_AUDIO" in text
+        assert "sha256 " in text and "(배정 000000000000)" in text and "1/3" in text
+        assert any(
+            r.levelno == logging.ERROR and "작업을 놓음" in r.getMessage() for r in caplog.records
+        )
+        assert "storage" not in caplog.text  # 서명 URL 없음
+
+
+def test_내려받기가_한_번_잘려도_다시_받아_DONE(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    caplog.set_level(logging.WARNING, logger="ssaplash_ai.worker")
+    backend = FakeBackend(out_dir=None, faults=Faults(get_truncated_once=True))
+    with Rig(tmp_path, backend=backend) as rig:
+        job_id = backend.enqueue(_song(tmp_path))
+        out = rig.run_one()
+        assert out.status == STATUS_DONE
+        assert backend.jobs[job_id].status == "DONE"
+        mismatch = [r for r in caplog.records if "파일 불일치" in r.getMessage()]
+        assert len(mismatch) == 1 and "1/3" in mismatch[0].getMessage()
+
+
+def _reason_events(rig: Rig, job_id: int) -> list[tuple[str, bool, str | None]]:
+    return [
+        (e["code"], e["retryable"], e["reason"]) for e in _events(rig.backend, job_id, "FAILURE")
+    ]
+
+
+def test_reason_설정이_꺼져_있으면_본문에_reason이_없다(tmp_path: Path):
+    silent = tmp_path / "silent.wav"
+    write_wav(silent, np.zeros((2, SR), dtype=np.float32))
+    with Rig(tmp_path) as rig:
+        assert rig.settings.send_reason is False
+        job_id = rig.backend.enqueue(silent)
+        out = rig.run_one()
+        assert out.failure_reason == "SOURCE_INVALID"  # 워커 안에서는 분류함
+        assert _reason_events(rig, job_id) == [("INPUT_INVALID", False, None)]
+
+
+def test_원곡_입력_오류는_SOURCE_INVALID(tmp_path: Path):
+    silent = tmp_path / "silent.wav"
+    write_wav(silent, np.zeros((2, SR), dtype=np.float32))
+    with Rig(tmp_path, send_reason=True) as rig:
+        job_id = rig.backend.enqueue(silent)
+        rig.run_one()
+        assert _reason_events(rig, job_id) == [("INPUT_INVALID", False, "SOURCE_INVALID")]
+
+
+def test_채보_불가는_NOT_TRANSCRIBABLE(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    with Rig(tmp_path, send_reason=True) as rig:
+        job_id = rig.backend.enqueue(_song(tmp_path))
+
+        def no_beat(*args, **kwargs):
+            raise ChartNotTranscribableError("박 추적 실패, 박 0개")
+
+        monkeypatch.setattr(rig.transcription, "transcribe_file", no_beat)
+        out = rig.run_one()
+        assert out.status == STATUS_FAILED_REPORTED
+        assert _reason_events(rig, job_id) == [("INPUT_INVALID", False, "NOT_TRANSCRIBABLE")]
+        event = _events(rig.backend, job_id, "FAILURE")[0]
+        assert event["stage"] == "TRANSCRIBING" and event["summary"] == "박 추적 실패, 박 0개"
+        assert rig.backend.jobs[job_id].status == "FAILED"
+
+
+def test_GPU_메모리_부족은_GPU_OUT_OF_MEMORY이고_재시도_소진_뒤에도_남는다(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    with Rig(tmp_path, send_reason=True) as rig:
+        job_id = rig.backend.enqueue(_song(tmp_path))
+
+        def boom(mixture, sample_rate):
+            raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+        monkeypatch.setattr(rig.separation._separator, "_separate", boom)
+        for i in range(3):  # 처음 1번 + BE 재시도 2번
+            rig.run_one(f"c-{i}")
+        assert _reason_events(rig, job_id) == [("MODEL_FAILED", True, "GPU_OUT_OF_MEMORY")] * 3
+        job = rig.backend.jobs[job_id]
+        assert job.status == "FAILED" and job.failure_reason == "GPU_OUT_OF_MEMORY"
+
+
+def test_출력_오류와_워커_내부_예외는_INTERNAL_ERROR(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    with Rig(tmp_path, send_reason=True) as rig:
+        first = rig.backend.enqueue(_song(tmp_path))
+        second = rig.backend.enqueue(_song(tmp_path, "song2.wav"))
+        errors = iter([ChartOutputError("채보 JSON 검증 실패"), KeyError("버그")])
+
+        def bad(*args, **kwargs):
+            raise next(errors)
+
+        monkeypatch.setattr(rig.transcription, "transcribe_file", bad)
+        rig.run_one("c-1")
+        rig.run_one("c-2")
+        assert _reason_events(rig, first) == [("OUTPUT_INVALID", False, "INTERNAL_ERROR")]
+        assert _reason_events(rig, second) == [("MODEL_FAILED", False, "INTERNAL_ERROR")]
 
 
 def test_결과_제출_503은_같은_봉투를_다시_보내_인수된다(tmp_path: Path):

@@ -10,6 +10,7 @@ const msg = (over: Partial<CoachMessage>): CoachMessage => ({
   tMs: 1000,
   displayMs: 3000,
   target: null,
+  repeat: 0,
   ...over,
 });
 
@@ -41,19 +42,39 @@ describe('coachCopy', () => {
     }
   });
 
-  it('제목은 10자, 보조는 16자 이내다(모든 스틱 패드 라벨 포함)', () => {
+  it('제목은 10자, 보조는 16자 이내다(모든 스틱 패드 라벨과 돌려 쓰는 문구 포함)', () => {
     const all: CoachMessage[] = [msg({ tag: 'LIVE_MISS_STREAK' }), msg({ tag: 'LIVE_LATE' }), msg({ tag: 'LIVE_EARLY' }), msg({ tag: 'LIVE_UNSTEADY' })];
     for (const pad of STICK_PADS) {
       all.push(msg({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad } }), msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad } }));
     }
     for (const hand of [0, 1] as const) all.push(msg({ tag: 'LIVE_HAND_WEAK', target: { kind: 'hand', hand } }));
     for (const m of all) {
-      const c = coachCopy(m);
-      expect(c, `${m.tag}`).not.toBeNull();
-      expect(c!.title.length, c!.title).toBeLessThanOrEqual(10);
-      expect(c!.sub.length, c!.sub).toBeLessThanOrEqual(16);
+      for (const repeat of [0, 1]) {
+        const c = coachCopy({ ...m, repeat });
+        expect(c, `${m.tag}`).not.toBeNull();
+        expect(c!.title.length, c!.title).toBeLessThanOrEqual(10);
+        expect(c!.sub.length, c!.sub).toBeLessThanOrEqual(16);
+      }
     }
     expect(PAD_META.HIHAT.label).toBe('하이햇');
+  });
+
+  it('칭찬은 coach-good이고 제목은 13자, 보조는 16자 이내다', () => {
+    for (const tag of ['LIVE_GOOD_RECOVERED', 'LIVE_GOOD_STEADY', 'LIVE_GOOD_KEEP'] as const) {
+      for (let repeat = 0; repeat < 12; repeat++) {
+        const c = coachCopy(msg({ tag, repeat }));
+        expect(c?.mode).toBe('coach-good');
+        expect(c!.title.length, c!.title).toBeLessThanOrEqual(13);
+        expect(c!.sub.length, c!.sub).toBeLessThanOrEqual(16);
+      }
+    }
+    expect(coachCopy(msg({ tag: 'LIVE_GOOD_STEADY' }))?.title).toBe('좋아요! 이대로만 치세요');
+  });
+
+  it('같은 태그가 다시 뜨면 문구를 차례로 돌려 쓴다', () => {
+    const titles = [0, 1, 2].map((repeat) => coachCopy(msg({ tag: 'LIVE_LATE', repeat }))?.title);
+    expect(titles[1]).not.toBe(titles[0]);
+    expect(titles[2]).toBe(titles[0]);
   });
 
   it('대상이 필요한 태그에 target이 없거나 종류가 다르면 null', () => {
