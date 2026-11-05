@@ -84,18 +84,18 @@ class Thresholds:
 
     # --- TIMING_* : 전체적으로 늦거나 빠르다 ---
     timing_min_valid: int = 20  # 유효 타격(PERFECT/GOOD) 수
-    timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × goodMs (15ms)
+    timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × 기준 폭 (18ms)
     timing_same_sign: float = 0.65  # 평균과 같은 부호인 타격 비율
 
     # --- PAD_* : 특정 패드에서 늦거나 빠르다 ---
     pad_min_valid: int = 8
-    pad_mean_ratio: float = 0.4  # 그 패드 평균 |오차| ≥ 0.4 × goodMs (20ms)
-    pad_gap_ratio: float = 0.24  # 전체 평균과의 차이 ≥ 0.24 × goodMs (12ms)
+    pad_mean_ratio: float = 0.4  # 그 패드 평균 |오차| ≥ 0.4 × 기준 폭 (24ms)
+    pad_gap_ratio: float = 0.24  # 전체 평균과의 차이 ≥ 0.24 × 기준 폭 (14.4ms)
 
     # --- TRANSITION_* : 패드가 바뀔 때 늦거나 놓친다 ---
     transition_min_count: int = 6  # 같은 A→B 전환 횟수
     transition_min_valid: int = 3  # 평균 오차를 계산할 최소 유효 타격 (구현 보완: 1~2개 평균 방지)
-    transition_late_ratio: float = 0.5  # 평균 오차 ≥ 0.5 × goodMs (25ms)
+    transition_late_ratio: float = 0.5  # 평균 오차 ≥ 0.5 × 기준 폭 (30ms)
     transition_miss_rate: float = 0.30
 
     # --- HAND_WEAK : 한쪽 손 세기가 약하다 ---
@@ -110,13 +110,13 @@ class Thresholds:
 
     # --- UNSTEADY : 박자가 불안정하다 ---
     unsteady_min_valid: int = 20
-    unsteady_std_ratio: float = 0.5  # 오차 표준편차 ≥ 0.5 × goodMs (25ms)
+    unsteady_std_ratio: float = 0.5  # 오차 표준편차 ≥ 0.5 × 기준 폭 (30ms)
 
     # --- severity(0~1) 분모 ---
-    severity_delta_ratio: float = 1.2  # min(1, |평균 오차| ÷ (1.2 × goodMs))
+    severity_delta_ratio: float = 1.2  # min(1, |평균 오차| ÷ (1.2 × 기준 폭))
     severity_miss_rate: float = 0.6  # min(1, 놓침 비율 ÷ 0.6)
     severity_hand_span: float = 0.4  # min(1, (0.75 − 비율) ÷ 0.4)
-    severity_unsteady_ratio: float = 0.8  # min(1, 표준편차 ÷ (0.8 × goodMs))
+    severity_unsteady_ratio: float = 0.8  # min(1, 표준편차 ÷ (0.8 × 기준 폭))
 
 
 DEFAULT_THRESHOLDS = Thresholds()
