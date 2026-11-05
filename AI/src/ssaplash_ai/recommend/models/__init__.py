@@ -3,14 +3,20 @@
 from ssaplash_ai.recommend.models.base import Recommender, ScoreRecommender
 from ssaplash_ai.recommend.models.cooccur import CoPlay
 from ssaplash_ai.recommend.models.itemknn import SimilarToRecent
+from ssaplash_ai.recommend.models.lightgcn import LightGCN
+from ssaplash_ai.recommend.models.node2vec import Node2Vec
 from ssaplash_ai.recommend.models.popularity import Popularity
+from ssaplash_ai.recommend.models.rerank import Reranked
 from ssaplash_ai.recommend.models.rules import R1Rules
 
 __all__ = [
     "CoPlay",
+    "LightGCN",
+    "Node2Vec",
     "Popularity",
     "R1Rules",
     "Recommender",
+    "Reranked",
     "ScoreRecommender",
     "SimilarToRecent",
 ]
