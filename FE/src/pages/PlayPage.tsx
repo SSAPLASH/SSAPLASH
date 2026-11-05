@@ -1,7 +1,7 @@
 // 리듬 게임 (MODE-01, 설계 4-2). 곡 선택 → 준비 → 카운트인 → 플레이 → (일시정지) → 종료 → 결과.
 // 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD 값, 로그 저장을 맡는다.
 // 화면은 Figma 연주 흐름을 조립한다: 곡 선택 SongPicker · 준비 ReadyPanel · 연주 PlayStage(HUD·하이웨이·킷). 연주 중은 셸을 숨긴 전체 화면이다(D2).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
@@ -12,6 +12,7 @@ import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
 import { PlayStage } from '@/components/play/PlayStage';
+import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
 import { ScreenGate } from '@/components/ScreenGate';
@@ -720,6 +721,12 @@ function PlayPageBody() {
         }
         overlay={overlay}
       />
+      {/* 진단 빌드 전용: 채보 확인 재생(T2) */}
+      {LazyChartAutoplayRunner && (
+        <Suspense fallback={null}>
+          <LazyChartAutoplayRunner clockRef={clockRef} session={session} />
+        </Suspense>
+      )}
     </main>
   );
 }
