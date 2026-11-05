@@ -1,6 +1,39 @@
 // 플레이 로그 요약 업로드 (ACCT-002 v1, BE 98). 본문 조립은 domain/playUpload.
 import type { PlayUploadBody } from '@/domain/playUpload';
 import { apiFetch } from './http';
+import type { PageResponse } from './recordings';
+
+export interface PlaySummary {
+  playId: string;
+  startedAt: string;
+  endedAt: string;
+  mode: string;
+  inputSource: string;
+  songId: number | null;
+  songTitle: string | null;
+  chartVersionId: number | null;
+  chartId: number | null;
+  difficulty: string | null;
+  endReason: string | null;
+  songAccessible: boolean;
+  score: number | null;
+  accuracy: number | null;
+  maxCombo: number | null;
+  hasReport: boolean;
+}
+
+/** 필터와 정렬이 클라이언트에서 전체 기록에 적용되도록 모든 페이지를 읽는다. */
+export async function listAllPlays(signal: AbortSignal): Promise<PlaySummary[]> {
+  const plays = new Map<string, PlaySummary>();
+  for (let page = 0; page <= 100000; page += 1) {
+    const result = await apiFetch<PageResponse<PlaySummary>>(`/api/v1/plays?page=${page}&size=100`, { signal });
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    for (const play of result.items) if (!plays.has(play.playId)) plays.set(play.playId, play);
+    if (!result.hasNext) return [...plays.values()];
+    if (result.items.length === 0) throw new Error('Invalid play page');
+  }
+  throw new Error('Too many play pages');
+}
 
 export interface PlayUploadResponse {
   playId: string;
