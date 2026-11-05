@@ -100,7 +100,7 @@ describe("RecommendRow", () => {
 
   it("카드 수·제목·아티스트·배지·첫 이유 문구를 그린다", () => {
     const html = renderToStaticMarkup(<RecommendRow items={[cardOf(item(1, "STARTER")), cardOf(item(2, "NEW_CODE", "BE 문구"))]} onPick={() => {}} />);
-    expect(html).toContain('aria-label="추천 곡"');
+    expect(html).toContain('aria-label="추천곡"');
     expect(html.match(/<button type="button" class="song-reco-card"/g)?.length).toBe(2);
     expect(html).toContain(">곡1<");
     expect(html).toContain(">가수2<");

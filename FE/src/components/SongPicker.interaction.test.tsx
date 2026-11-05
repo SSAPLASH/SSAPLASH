@@ -92,11 +92,11 @@ describe('SongPicker 추천 줄', () => {
 
   it('라이브러리 탭에서는 숨고 기본 곡 탭으로 돌아오면 재요청 없이 다시 보인다', async () => {
     show();
-    await screen.findByRole('region', { name: '추천 곡' });
+    await screen.findByRole('region', { name: '추천곡' });
     fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
-    await waitFor(() => expect(screen.queryByRole('region', { name: '추천 곡' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull());
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
-    await screen.findByRole('region', { name: '추천 곡' });
+    await screen.findByRole('region', { name: '추천곡' });
     expect(fetchRecommendations).toHaveBeenCalledTimes(1);
   });
 
@@ -105,7 +105,7 @@ describe('SongPicker 추천 줄', () => {
     show();
     await screen.findByText('리듬에 맞춰 도전해요');
     expect(fetchRecommendations).not.toHaveBeenCalled();
-    expect(screen.queryByRole('region', { name: '추천 곡' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull();
   });
 
   it('로그인하지 않았으면 요청도 줄도 없다', async () => {
@@ -113,6 +113,6 @@ describe('SongPicker 추천 줄', () => {
     show();
     await screen.findByText('리듬에 맞춰 도전해요');
     expect(fetchRecommendations).not.toHaveBeenCalled();
-    expect(screen.queryByRole('region', { name: '추천 곡' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull();
   });
 });
