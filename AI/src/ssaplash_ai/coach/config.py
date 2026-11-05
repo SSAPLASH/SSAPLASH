@@ -1,15 +1,17 @@
-"""약점 분석 설정. 임계값은 모두 이 파일 한 곳에 두고 판정 폭 `goodMs`의 비율로 정의한다.
+"""약점 분석 설정. 임계값은 모두 이 파일 한 곳에 두고 기준 폭 `basis_ms`의 비율로 정의한다.
 
-비율로 두는 이유: `goodMs`는 사용자가 30~150ms로 바꿀 수 있어서 "15ms 늦다"가 사람마다 다른 크기다.
+비율로 두는 이유: 사용자마다 판정 폭이 달라도 같은 박 오차에는 같은 말을 하려는 것이다. 기준 폭은 기본이 고정 60ms로,
+FE 실시간 코칭과 같다(판정 폭은 게임 난이도이고 코칭은 실제 박 오차를 보기 때문. FE `coachBasis`의 fixed 방식).
+`basis_ms=None`이면 이전처럼 플레이의 `timingWindows.goodMs`를 쓴다.
 수치는 가정값이며 QA(합성 평가, 이후 실제 로그) 뒤에 이 파일만 고쳐 조정한다.
-아래 `ms` 주석은 `goodMs = 50` 기준 값이다.
+아래 `ms` 주석은 기준 폭 50ms로 계산한 값이다(기준 60ms면 1.2배).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.3"
+ANALYZER_VERSION = "weak-rules-0.4"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
@@ -74,6 +76,12 @@ PAD_LABELS_KO = {
 
 @dataclass(frozen=True)
 class Thresholds:
+    # --- 기준 폭: 아래 비율(×)을 곱하는 ms 기준 ---
+    # 판정 폭(goodMs)은 게임 난이도이고, 코칭은 실제 박 오차를 본다. 그래서 기본은 FE 실시간 코칭과 같은 고정 60ms다
+    # (FE `domain/coachBasis.ts`의 fixed 방식. 판정 폭 60을 쓰는 사용자는 이전과 임계값이 같다).
+    # None이면 플레이마다 `timingWindows.goodMs`를 쓴다(이전 동작. 보정·비교용).
+    basis_ms: float | None = 60.0
+
     # --- TIMING_* : 전체적으로 늦거나 빠르다 ---
     timing_min_valid: int = 20  # 유효 타격(PERFECT/GOOD) 수
     timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × goodMs (15ms)

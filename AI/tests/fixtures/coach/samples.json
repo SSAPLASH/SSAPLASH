@@ -366,7 +366,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.3",
+   "analyzerVersion": "weak-rules-0.4",
    "reason": "OK",
    "weakSegments": [
     {
@@ -386,7 +386,7 @@
       "SNARE"
      ],
      "metrics": {
-      "severity": 0.36,
+      "severity": 0.3,
       "meanDeltaMs": 21.7,
       "hitCount": 22,
       "scope": "WHOLE"
@@ -751,7 +751,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.3",
+   "analyzerVersion": "weak-rules-0.4",
    "reason": "NO_WEAKNESS",
    "weakSegments": [],
    "summary": {
@@ -933,7 +933,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.3",
+   "analyzerVersion": "weak-rules-0.4",
    "reason": "INSUFFICIENT_HITS",
    "weakSegments": []
   }
