@@ -75,6 +75,12 @@
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
+/* 곡 난이도 열(Figma 481:30711 폭 74) */
+.play-st-table .play-st-level {
+  width: 82px;
+  text-align: left;
+  white-space: nowrap;
+}
 .play-st-foot {
   display: flex;
   align-items: center;
