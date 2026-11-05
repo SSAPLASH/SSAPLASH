@@ -1418,3 +1418,22 @@ Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다�
 
 `TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
 `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.
+
+## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
+
+AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 규칙으로 거르고 섞는다. 요청 경로에서 AI를 부르지 않는다. **기본은 꺼져 있고, 꺼져 있으면 응답과 기록이 R1과 같다.**
+
+| 호출 | 설명 |
+| --- | --- |
+| `POST /api/users/me/signup-consent` | 선택 항목 `recommendationConsent: { agreed, version }` 추가. 생략하면 이전 응답을 바꾸지 않는다 |
+| `GET /api/users/me/recommendation-consent` | `{ agreed, version, updatedAt }`. 응답한 적 없으면 `agreed=false` |
+| `PUT /api/users/me/recommendation-consent` | 본문 `{ agreed, version }`. 끄면 그 사용자의 후보를 같은 트랜잭션에서 지운다 |
+| `POST /internal/v1/recommend-candidates` | 워커 토큰. 후보 적재. 응답 `{ accepted, droppedUnknown, droppedNoConsent }` |
+| `GET /internal/v1/recommend-candidates/status` | 워커 토큰. `{ modelVersion, generatedAt, usersWithCandidates }` |
+
+- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
+- **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
+- **읽기 뷰(V37):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
+- **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
+- **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
+- **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다.
