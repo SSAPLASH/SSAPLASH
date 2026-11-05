@@ -14,6 +14,8 @@ import { useReadiness } from '@/components/useReadiness';
 import { PlayStage } from '@/components/play/PlayStage';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { ScreenGate } from '@/components/ScreenGate';
+import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
@@ -65,7 +67,7 @@ function parseId(raw: string | null): number | null {
   return Number.isSafeInteger(n) ? n : null;
 }
 
-export function PlayPage() {
+function PlayPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
@@ -119,11 +121,15 @@ export function PlayPage() {
   const stageRef = useRef<Stage>(stage);
   const sessionRef = useRef<RhythmSession | null>(null);
   const pauseRef = useRef<PauseReason | null>(null);
+  // 세로·좁은 화면 안내(ScreenGate)가 열려 있는지. 키 핸들러가 최신 값을 본다
+  const screenOk = useScreenFits();
+  const gateOpenRef = useRef(!screenOk);
   useEffect(() => {
     stageRef.current = stage;
     sessionRef.current = session;
     pauseRef.current = pauseReason;
-  }, [stage, session, pauseReason]);
+    gateOpenRef.current = !screenOk;
+  }, [stage, session, pauseReason, screenOk]);
 
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
@@ -352,6 +358,12 @@ export function PlayPage() {
   // 연결 끊김·메뉴 요청 → 자동 일시정지 (설계 4-3, 8절)
   usePauseTriggers(pauseTo);
 
+  // 연주 중(카운트다운 포함) 화면 조건이 깨지면 먼저 일시정지한다. 다시 맞아도 자동 재개하지 않는다.
+  // pauseTo가 이미 멈춘 상태(pauseRef 있음)는 무시하므로 중복 호출에 안전하다
+  useEffect(() => {
+    if (!screenOk && stage === 'play' && pauseReason === null) pauseTo('user');
+  }, [screenOk, stage, pauseReason, pauseTo]);
+
   const resume = useCallback(() => {
     const clock = clockRef.current;
     // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
@@ -481,6 +493,7 @@ export function PlayPage() {
     const onKey = (e: KeyboardEvent) => {
       // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
       if (e.isComposing || e.defaultPrevented) return;
+      if (gateOpenRef.current) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
       if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
@@ -676,5 +689,18 @@ export function PlayPage() {
         overlay={overlay}
       />
     </main>
+  );
+}
+
+export function PlayPage() {
+  const screenOk = useScreenFits();
+  return (
+    <>
+      {/* 안내가 열린 동안 뒤 화면 전체(일시정지 다이얼로그 포함)를 inert로 — 가려진 버튼에 초점·Enter가 가지 않게 */}
+      <div className="screen-gate-host" inert={!screenOk}>
+        <PlayPageBody />
+      </div>
+      <ScreenGate open={!screenOk} />
+    </>
   );
 }
