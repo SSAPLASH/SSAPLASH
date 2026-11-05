@@ -2,9 +2,9 @@
 // 창(window) → 규칙(rules) → 정책(policy)을 묶고, 플레이 로그에 넣을 liveCoachEvents를 쌓는다.
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
-import { LIVE_COACH_CONFIG, type LiveThresholds, liveThresholds } from './config';
+import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { CoachPolicy } from './policy';
-import { evaluateRules, type CoachTarget, type LiveTag } from './rules';
+import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
 import { JudgedWindow, type JudgedNote } from './window';
 
 export interface LiveCoachOptions {
@@ -12,6 +12,8 @@ export interface LiveCoachOptions {
   goodMs: number;
   /** false면 문구를 띄우지 않고 로그에 LIVE_OFF 한 건만 남긴다(대조군 구분용). 기본 true */
   enabled?: boolean;
+  /** 임계값 기준 방식. 생략하면 config의 COACH_BASIS(기본 fixed) */
+  basis?: CoachBasis;
 }
 
 export interface CoachMessage {
@@ -25,6 +27,8 @@ export interface CoachMessage {
   displayMs: number;
   /** 패드·손 규칙의 대상. 그 외 태그는 null */
   target: CoachTarget | null;
+  /** 이 플레이에서 같은 태그가 앞서 뜬 횟수. 화면 문구를 돌려 쓰는 데 쓴다 */
+  repeat: number;
 }
 
 /** 플레이 로그 liveCoachEvents[] 한 항목. BE 검증: tMs 유한 수, tag ≤ 64자, text ≤ 2048자, 최대 1,000개 */
@@ -49,7 +53,7 @@ export class LiveCoach {
 
   constructor(opts: LiveCoachOptions) {
     this.enabled = opts.enabled ?? true;
-    this.thresholds = liveThresholds(opts.goodMs);
+    this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     this.resetLog();
   }
 
@@ -59,14 +63,19 @@ export class LiveCoach {
     try {
       if (!Number.isFinite(note.songTimeMs)) return null;
       this.window.push(note);
-      const evals = evaluateRules(this.window.metrics(), this.thresholds);
-      const { show, recovered } = this.policy.decide(evals, { songTimeMs: note.songTimeMs, judged: this.window.total });
+      const metrics = this.window.metrics();
+      const evals = evaluateRules(metrics, this.thresholds);
+      const { show, recovered, repeat } = this.policy.decide(
+        evals,
+        { songTimeMs: note.songTimeMs, judged: this.window.total },
+        evaluatePraise(metrics, this.thresholds),
+      );
 
       for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, `경향 해소: ${r.key}`);
       if (!show) return null;
 
       this.append(note.songTimeMs, show.tag, show.text);
-      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target };
+      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat };
     } catch {
       // 코칭 오류로 플레이를 멈추지 않는다. 이 판정은 건너뛰고 다음 판정부터 다시 계산한다
       return null;

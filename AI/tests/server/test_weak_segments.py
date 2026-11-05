@@ -137,7 +137,7 @@ def test_분석_요약만_로그에_남고_요청_값은_남지_않는다(caplog
         _call(sample)
 
     assert "weak-segments reason=OK" in caplog.text
-    assert "TIMING_LATE:0.36" in caplog.text
+    assert "TIMING_LATE:0.3" in caplog.text
     assert sample["playId"] not in caplog.text
     assert "n0001" not in caplog.text  # 노트 ID 같은 타격 데이터가 없다
 
@@ -165,7 +165,7 @@ def test_uvicorn_로깅_설정에서도_분석_요약이_표준_출력으로_나
 
     out = capsys.readouterr().out
     assert "weak-segments reason=OK" in out
-    assert "TIMING_LATE:0.36" in out
+    assert "TIMING_LATE:0.3" in out
     assert SAMPLES["A"]["request"]["playId"] not in out
 
 
@@ -198,14 +198,35 @@ def test_타격_2만건_요청이_3초_안에_처리된다():
     assert elapsed < 3.0, f"요청 처리에 {elapsed:.2f}초"
 
 
-def test_모든_약점_항목에_연습_조언이_붙고_버전이_올라간다():
+def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단계가_붙고_버전이_올라간다():
     status, body = _call(SAMPLES["A"]["request"])
 
     assert status == 200
-    assert body["analyzerVersion"] == "weak-rules-0.2"
+    assert body["analyzerVersion"] == "weak-rules-0.4"
     assert body["weakSegments"]
     for segment in body["weakSegments"]:
         assert segment["tip"]
+        assert segment["detail"]
+        assert segment["severityLevel"] in ("LOW", "MEDIUM", "HIGH")
+
+
+def test_총평은_표본이_충분하면_붙고_부족하면_키가_빠진다():
+    _, enough = _call(SAMPLES["A"]["request"])
+    _, few = _call(SAMPLES["C"]["request"])
+
+    assert set(enough["summary"]) == {"level", "text", "focusPattern", "source"}
+    assert enough["summary"]["focusPattern"] == "MISS_CLUSTER"
+    assert few["reason"] == "INSUFFICIENT_HITS"
+    assert "summary" not in few
+
+
+def test_약점이_없으면_총평의_focusPattern_키가_빠진다():
+    # None 필드는 응답에서 키를 생략한다(구버전 BE·FE와 같은 모양)
+    _, body = _call(SAMPLES["B"]["request"])
+
+    assert body["reason"] == "NO_WEAKNESS"
+    assert "focusPattern" not in body["summary"]
+    assert body["summary"]["strengthPad"] == "HIHAT"
 
 
 def test_문구가_없는_pattern은_응답에서_tip_키가_빠진다(monkeypatch):

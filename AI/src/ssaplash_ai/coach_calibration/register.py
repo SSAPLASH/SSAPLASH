@@ -5,6 +5,7 @@
 - 태그 `approval`: `pending`(제안한 후보가 있어 사람의 승인을 기다림) / `approved` / `rejected` / `superseded`(새 실행으로 대체됨) /
   `NOT_APPLICABLE`(제안한 후보가 없어 승인할 것이 없음). `approved`·`rejected`는 사람이 MLflow에서 직접 바꾼다.
 - 태그 `sampleStatus`(`OK`/`INSUFFICIENT_SAMPLE`), 파라미터 `dataMaxDate`·`viewSessionCount`가 다음 실행의 기준이 된다.
+  `--since`·`--mode`로 일부만 고른 실행은 기준에서 뺀다(`viewSessionCount`는 전체 수라서 정기 실행을 막게 된다).
 - **행 단위 데이터를 올리지 않는다.** 지표와 산출물은 집계값이며 작은 셀(5개 미만)은 가려진 값만 쓴다.
 
 임계값을 자동으로 바꾸는 코드는 없다. 이 모듈은 기록만 한다.
@@ -31,6 +32,9 @@ RUN_FIRST = "FIRST_RUN"
 RUN_GROWTH = "ENOUGH_NEW_SESSIONS"
 SKIP_NOT_ENOUGH = "NOT_ENOUGH_NEW_SESSIONS"
 RUN_FORCED = "FORCED"  # 정책을 바꾼 뒤 등, 사람이 새 세션과 상관없이 돌리라고 한 경우
+
+# 기준 실행을 찾을 때 볼 최근 실행 수. 일부만 고른 실행이 그 앞에 쌓여 있어도 찾을 수 있게 넉넉히 둔다
+LAST_RUN_SEARCH = 100
 
 
 def resolve_tracking_uri(uri: str | None = None) -> str:
@@ -92,7 +96,7 @@ def _experiment_id(client, create: bool) -> str | None:
 
 
 def find_last_run(tracking_uri: str | None = None) -> LastRun | None:
-    """가장 최근에 정상 종료된 실행. 실험이 아직 없으면 None."""
+    """일부만 고른 실행을 뺀, 가장 최근에 정상 종료된 실행. 실험이 아직 없으면 None."""
     client = _client(tracking_uri)
     experiment_id = _experiment_id(client, create=False)
     if experiment_id is None:
@@ -101,16 +105,22 @@ def find_last_run(tracking_uri: str | None = None) -> LastRun | None:
         [experiment_id],
         filter_string="attributes.status = 'FINISHED'",
         order_by=["attributes.start_time DESC"],
-        max_results=1,
+        max_results=LAST_RUN_SEARCH,
     )
-    if not runs:
+    run = next((r for r in runs if not _is_partial(r.data.params)), None)
+    if run is None:
         return None
-    params = runs[0].data.params
+    params = run.data.params
     try:
         count = int(params["viewSessionCount"])
     except (KeyError, ValueError):
         return None
-    return LastRun(runs[0].info.run_id, params.get("dataMaxDate"), count)
+    return LastRun(run.info.run_id, params.get("dataMaxDate"), count)
+
+
+def _is_partial(params: dict[str, str]) -> bool:
+    """`--since`·`--mode`로 일부만 고른 실행인가. 두 파라미터가 없던 때의 실행은 전체 실행이다."""
+    return bool(params.get("since")) or params.get("modes", "ALL") != "ALL"
 
 
 def metrics_from_records(

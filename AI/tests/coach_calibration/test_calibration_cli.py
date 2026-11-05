@@ -107,3 +107,33 @@ def test_force_option_runs_without_new_sessions(uri, capsys):
 
     (line,) = _status_lines(capsys)
     assert code == 0 and line.startswith("coach-calibration status=OK ")
+
+
+def test_since와_mode_옵션이_보정에_전달된다(uri, capsys):
+    rows = late_gradient_rows(90)
+    keys = sorted({r["session_key"] for r in rows})
+    for r in rows:
+        if r["session_key"] in set(keys[:30]):
+            r["played_date"] = "2026-10-10"
+
+    code = main(
+        ["--tracking-uri", uri, "--skip-reeval", "--since", "2026-10-20", "--mode", "RHYTHM"],
+        source=ListSource(rows, columns=ALLOWED_COLUMNS),
+    )
+
+    (line,) = _status_lines(capsys)
+    assert code == 0 and "sessions=90" in line and "valid=60" in line
+
+
+@pytest.mark.parametrize(
+    "args", [["--since", "2026-13-40"], ["--since", "어제"], ["--mode", "FREE"]]
+)
+def test_잘못된_since와_mode는_실행_전에_거절한다(uri, args, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(
+            ["--tracking-uri", uri, *args],
+            source=ListSource(late_gradient_rows(60), columns=ALLOWED_COLUMNS),
+        )
+
+    assert exc.value.code == 2
+    assert not _status_lines(capsys)

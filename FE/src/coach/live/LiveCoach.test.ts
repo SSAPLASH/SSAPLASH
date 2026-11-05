@@ -1,8 +1,9 @@
-// 합성 플레이로 설계의 인수 조건을 확인한다: 경향이 있으면 뜨고, 없으면 거의 안 뜨고, 간격·상한을 지킨다.
+// 합성 플레이로 설계의 인수 조건을 확인한다: 경향이 있으면 지적이 뜨고, 없으면 칭찬만 뜨고, 간격을 지킨다.
 import { describe, expect, it } from 'vitest';
 import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
 import { LIVE_OFF_TAG, LIVE_RECOVERED_TAG, LiveCoach, type CoachMessage } from './LiveCoach';
+import { isPraiseTag } from './rules';
 import type { JudgedNote } from './window';
 
 /** 재현 가능한 난수(mulberry32) */
@@ -47,6 +48,9 @@ function play(coach: LiveCoach, notes: JudgedNote[]): CoachMessage[] {
   return out;
 }
 
+/** 칭찬을 뺀 지적 문구만 */
+const corrections = (list: CoachMessage[]): CoachMessage[] => list.filter((m) => !isPraiseTag(m.tag));
+
 describe('LiveCoach 경향이 있는 플레이', () => {
   it('계속 +25ms 늦으면 8번째 판정에서 LIVE_LATE가 뜬다', () => {
     const coach = new LiveCoach({ goodMs: 60 });
@@ -77,7 +81,7 @@ describe('LiveCoach 경향이 있는 플레이', () => {
   it('잘 치다가 3번 연속 놓치면 LIVE_MISS_STREAK가 뜬다', () => {
     const coach = new LiveCoach({ goodMs: 60 });
     const good = Array.from({ length: 8 }, (_, i) => hit(i, 0));
-    expect(play(coach, good)).toEqual([]);
+    expect(corrections(play(coach, good))).toEqual([]);
     expect(coach.push(miss(8))).toBeNull();
     expect(coach.push(miss(9))).toBeNull();
     expect(coach.push(miss(10))?.tag).toBe('LIVE_MISS_STREAK');
@@ -92,22 +96,22 @@ describe('LiveCoach 경향이 있는 플레이', () => {
     expect(pad?.target).toEqual({ kind: 'pad', pad: 'SNARE' });
   });
 
-  it('goodMs가 30·60·150이어도 판정 폭의 절반만큼 늦으면 모두 LIVE_LATE가 뜬다', () => {
+  it('window 방식: goodMs가 30·60·150이어도 판정 폭의 절반만큼 늦으면 모두 LIVE_LATE가 뜬다', () => {
     for (const g of [30, 60, 150]) {
-      const coach = new LiveCoach({ goodMs: g });
+      const coach = new LiveCoach({ goodMs: g, basis: 'window' });
       const out = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, g / 2)));
       expect(out[0]?.tag, `goodMs=${g}`).toBe('LIVE_LATE');
     }
   });
 
-  it('같은 지연(+25ms)이어도 goodMs 150이면 판정 폭 대비 작아서 뜨지 않는다', () => {
-    const coach = new LiveCoach({ goodMs: 150 });
-    expect(play(coach, Array.from({ length: 16 }, (_, i) => hit(i, 25)))).toEqual([]);
+  it('window 방식: 같은 지연(+25ms)이어도 goodMs 150이면 판정 폭 대비 작아서 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 150, basis: 'window' });
+    expect(corrections(play(coach, Array.from({ length: 16 }, (_, i) => hit(i, 25))))).toEqual([]);
   });
 });
 
 describe('LiveCoach 경향이 없는 플레이', () => {
-  it('deltaMs ±10ms 무작위, 세기 동일, 놓침 3%인 200노트 100플레이에서 문구가 평균 0.5개 이하다', () => {
+  it('deltaMs ±10ms 무작위, 세기 동일, 놓침 3%인 200노트 100플레이에서 지적이 평균 0.5개 이하다', () => {
     let total = 0;
     const pads: PadId[] = ['SNARE', 'HIHAT', 'KICK', 'MID_TOM'];
     for (let seed = 1; seed <= 100; seed++) {
@@ -116,38 +120,54 @@ describe('LiveCoach 경향이 없는 플레이', () => {
       for (let i = 0; i < 200; i++) {
         const pad = pads[Math.floor(r() * pads.length)];
         const n = r() < 0.03 ? miss(i, pad) : hit(i, (r() * 2 - 1) * 10, { pad, velocity: 88 + Math.floor(r() * 5) });
-        if (coach.push(n)) total++;
+        const m = coach.push(n);
+        if (m && !isPraiseTag(m.tag)) total++;
       }
     }
     expect(total / 100).toBeLessThanOrEqual(0.5);
   });
+
+  it('고르게 치면 칭찬이 8초 안쪽 간격으로 곡 끝까지 이어진다', () => {
+    const r = rng(11);
+    const coach = new LiveCoach({ goodMs: 60 });
+    const out = play(coach, Array.from({ length: 360 }, (_, i) => hit(i, (r() * 2 - 1) * 10, { velocity: 90 })));
+    expect(out.every((m) => isPraiseTag(m.tag))).toBe(true);
+    expect(out[0].tag).toBe('LIVE_GOOD_STEADY');
+    for (let i = 1; i < out.length; i++) expect(out[i].tMs - out[i - 1].tMs).toBeLessThanOrEqual(8_000);
+    expect(out[out.length - 1].tMs).toBeGreaterThan(4_000 + 359 * NOTE_GAP_MS - 8_000);
+  });
 });
 
 describe('LiveCoach 표시 정책', () => {
-  it('엉망인 플레이에서도 문구 사이 8초, 플레이당 10개를 지킨다', () => {
+  it('엉망인 플레이에서도 지적 사이 4초를 지키고, 놓침이 많은 창에서는 칭찬하지 않는다', () => {
     const r = rng(7);
     const coach = new LiveCoach({ goodMs: 60 });
     const out: CoachMessage[] = [];
+    const recent: JudgedNote[] = [];
     for (let i = 0; i < 600; i++) {
       const n = r() < 0.3 ? miss(i) : hit(i, (r() * 2 - 1) * 90, { stickId: r() < 0.5 ? 0 : 1, velocity: 20 + Math.floor(r() * 100) });
       const m = coach.push(n);
       if (m) out.push(m);
+      recent.push(n);
+      if (m && isPraiseTag(m.tag)) {
+        expect(recent.slice(-12).filter((x) => x.judgement === 'MISS').length).toBeLessThanOrEqual(LIVE_COACH_CONFIG.praise.keepMaxMiss);
+      }
     }
     expect(out.length).toBeGreaterThan(0);
-    expect(out.length).toBeLessThanOrEqual(LIVE_COACH_CONFIG.policy.maxPerPlay);
-    for (let i = 1; i < out.length; i++) {
-      expect(out[i].tMs - out[i - 1].tMs).toBeGreaterThanOrEqual(LIVE_COACH_CONFIG.policy.minGapMs);
+    const shown = corrections(out);
+    for (let i = 1; i < shown.length; i++) {
+      expect(shown[i].tMs - shown[i - 1].tMs).toBeGreaterThanOrEqual(LIVE_COACH_CONFIG.policy.minGapMs);
     }
   });
 
-  it('늦다가 정시로 돌아오면 LIVE_RECOVERED만 로그에 남고 문구는 띄우지 않는다', () => {
+  it('늦다가 정시로 돌아오면 LIVE_RECOVERED를 로그에 남기고 고쳐졌다는 칭찬을 띄운다', () => {
     const coach = new LiveCoach({ goodMs: 60 });
     const late = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, 25)));
     expect(late.map((m) => m.tag)).toEqual(['LIVE_LATE']);
     const back = play(coach, Array.from({ length: 12 }, (_, i) => hit(10 + i, 0)));
-    expect(back).toEqual([]);
+    expect(back.map((m) => m.tag)).toEqual(['LIVE_GOOD_RECOVERED']);
     const tags = coach.events().map((e) => e.tag);
-    expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG]);
+    expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG, 'LIVE_GOOD_RECOVERED']);
     expect(coach.events()[1].text).toBe('경향 해소: LIVE_LATE');
   });
 });
@@ -175,10 +195,12 @@ describe('LiveCoach 로그와 설정', () => {
   it('reset하면 상태와 로그를 비우고 같은 플레이에서 다시 문구가 뜬다', () => {
     const coach = new LiveCoach({ goodMs: 60 });
     const notes = Array.from({ length: 10 }, (_, i) => hit(i, 25));
-    expect(play(coach, notes)).toHaveLength(1);
+    expect(corrections(play(coach, notes))).toHaveLength(1);
     coach.reset();
     expect(coach.events()).toEqual([]);
-    expect(play(coach, notes)).toHaveLength(1);
+    const again = corrections(play(coach, notes));
+    expect(again).toHaveLength(1);
+    expect(again[0].repeat).toBe(0);
   });
 
   it('잘못된 입력(NaN 시각, 손 번호 2)은 던지지 않고 무시하며 다음 판정부터 정상 동작한다', () => {
@@ -206,5 +228,13 @@ describe('LiveCoach 계산 시간', () => {
     times.sort((a, b) => a - b);
     expect(times[Math.floor(times.length / 2)]).toBeLessThanOrEqual(0.2);
     expect(times[Math.floor(times.length * 0.99)]).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('LiveCoach 기준 방식', () => {
+  it('fixed(기본): goodMs가 150이어도 +25ms 지연이면 60 기준으로 LIVE_LATE가 뜬다', () => {
+    const coach = new LiveCoach({ goodMs: 150 });
+    const out = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, 25)));
+    expect(out[0]?.tag).toBe('LIVE_LATE');
   });
 });

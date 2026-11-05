@@ -23,6 +23,7 @@ from ssaplash_ai.chart.transcription import TranscriptionModule
 from ssaplash_ai.worker.api import ApiError, WorkerApi
 from ssaplash_ai.worker.config import WorkerSettings
 from ssaplash_ai.worker.job import JobOutcome, JobRunner
+from ssaplash_ai.worker.narrative_job import NarrativeJobOutcome, NarrativeRunner
 
 logger = logging.getLogger("ssaplash_ai.worker.loop")
 
@@ -43,8 +44,12 @@ class WorkerLoop:
         session: requests.Session | None = None,
         api: WorkerApi | None = None,
         sleep: Callable[[float], None] | None = None,
+        narrative: NarrativeRunner | None = None,
     ) -> None:
         self.settings = settings
+        # LLM 총평 작업(선택). 채보 작업이 없을 때만 가져간다
+        self.narrative = narrative
+        self.narrative_outcomes: list[NarrativeJobOutcome] = []
         self.session = session or requests.Session()
         self.api = api or WorkerApi(settings, session=self.session)
         self.separation: SeparationModule | None = None
@@ -148,7 +153,15 @@ class WorkerLoop:
                     self._wait(self.settings.poll_sec)
                     continue
                 if assignment is None:
-                    self._wait(self.settings.poll_sec)
+                    try:
+                        worked = self._narrative_once()
+                    except ApiError as e:
+                        if e.status == 401:
+                            logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
+                            return EXIT_AUTH
+                        raise
+                    if not worked:
+                        self._wait(self.settings.poll_sec)
                     continue
                 try:
                     outcome = self.runner.run(assignment, claim_request_id)
@@ -166,6 +179,16 @@ class WorkerLoop:
             self.close()
         logger.info("워커 종료: 처리 %d건", processed)
         return EXIT_OK
+
+    def _narrative_once(self) -> bool:
+        """총평 작업 하나를 가져와 처리. 일을 했으면 True (바로 다음 claim으로 간다)."""
+        if self.narrative is None:
+            return False
+        outcome = self.narrative.poll()
+        if outcome is None:
+            return False
+        self.narrative_outcomes.append(outcome)
+        return True
 
     def _wait(self, seconds: float) -> None:
         if self._sleep is not None:

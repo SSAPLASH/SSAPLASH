@@ -1,8 +1,12 @@
 // 실시간 코칭(COACH-001) 임계값. 수치는 모두 이 파일에만 둔다.
-// 판정 폭(goodMs)에 비례하는 값은 계수로 적고, ms 값은 liveThresholds(goodMs)로 얻는다.
-// 사용자가 goodMs를 30~150ms로 바꿀 수 있어서(설정) 고정 ms를 쓰지 않는다.
+// 판정 폭(goodMs)에 비례하는 값은 계수로 적고, ms 값은 liveThresholds(폭)로 얻는다.
+// 곱하는 폭은 coachBasisMs가 고른다(기본: 고정 기준 폭 60, 사용자 판정 폭과 분리).
+// 사용자가 goodMs를 30~150ms로 바꿀 수 있어서 ms를 직접 적지 않고 기준 폭에 비례시킨다.
 // 수치는 가정값이다. 직접 플레이해 보며 여기서 고친다.
+import { type CoachBasis, COACH_BASIS, coachBasisMs } from '@/domain/coachBasis';
 import { DEFAULT_TIMING } from '@/domain/judgement';
+
+export { type CoachBasis, COACH_BASIS, coachBasisMs };
 
 export const LIVE_COACH_CONFIG = {
   /** 지표를 계산하는 창 크기(판정 개수) */
@@ -17,14 +21,21 @@ export const LIVE_COACH_CONFIG = {
   /** 이 개수만큼 판정이 쌓이기 전에는 문구를 띄우지 않는다 */
   warmupJudgements: 8,
   policy: {
-    /** 문구와 문구 사이 최소 간격(곡 시각 ms) */
-    minGapMs: 8_000,
+    /** 문구와 문구 사이 최소 간격(곡 시각 ms). 표시 3초 + 빈 칸 1초 */
+    minGapMs: 4_000,
     /** 같은 tag를 다시 띄우기까지의 시간. 거두는 조건을 한 번 만족하면 건너뛴다 */
-    tagCooldownMs: 25_000,
-    /** 플레이당 문구 상한 */
-    maxPerPlay: 10,
+    tagCooldownMs: 10_000,
     /** 권장 표시 시간 */
     displayMs: 3_000,
+  },
+  /** 칭찬. 지적 후보가 없을 때만 뜬다. 안정 판단은 늦음·빠름과 박자 규칙의 거두는 문턱을 그대로 쓴다 */
+  praise: {
+    /** 직전 문구에서 이만큼 지나야 칭찬을 띄운다. 경향 해소 칭찬은 policy.minGapMs를 쓴다 */
+    minGapMs: 6_000,
+    /** 안정 칭찬에 필요한 유효 타격 수 */
+    minValid: 8,
+    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다 */
+    keepMaxMiss: 2,
   },
   /** 계속 늦음·빠름 */
   trend: {
@@ -94,4 +105,9 @@ export function liveThresholds(goodMs: number): LiveThresholds {
     unsteadyStdMs: c.unsteady.stdCoef * g,
     unsteadyReleaseMs: c.unsteady.releaseCoef * g,
   };
+}
+
+/** 사용자 판정 폭과 방식으로 임계값을 만든다. basis를 인자로 받아 전역 설정에만 의존하지 않는다 */
+export function coachThresholds(userGoodMs: number, basis: CoachBasis = COACH_BASIS): LiveThresholds {
+  return liveThresholds(coachBasisMs(basis, userGoodMs));
 }

@@ -112,7 +112,7 @@ def server_smoke(play_requests: list[dict]) -> list[dict]:
 
     rows = []
     for request in play_requests:
-        direct = analyze(AnalysisRequest.model_validate(request)).model_dump()
+        direct = analyze(AnalysisRequest.model_validate(request)).model_dump(exclude_none=True)
         reply = process_body(json.dumps(request).encode("utf-8"))
         rows.append(
             {

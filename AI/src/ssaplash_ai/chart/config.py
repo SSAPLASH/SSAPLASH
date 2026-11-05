@@ -145,6 +145,33 @@ class TempoConfig:
 
 
 @dataclass
+class DrumCheckConfig:
+    """채보 가능 검사 (S15P31A307-246 설계 3-3절). 걸리면 NOT_TRANSCRIBABLE 실패.
+
+    min_notes_per_minute가 None이면 노트 수 검사를 하지 않음. 기준값은 실제 곡 분포를 측정한 뒤 정함.
+    """
+
+    min_notes_per_minute: float | None = None
+    fail_on_unknown_tempo: bool = True
+
+    @classmethod
+    def from_dict(cls, raw: dict | None) -> DrumCheckConfig:
+        raw = raw or {}
+        unknown = sorted(set(raw) - {"min_notes_per_minute", "fail_on_unknown_tempo"})
+        if unknown:
+            raise ValueError(f"모르는 drum_check 필드: {unknown}")
+        min_notes = raw.get("min_notes_per_minute")
+        if min_notes is not None:
+            min_notes = float(min_notes)
+            if min_notes <= 0:
+                raise ValueError(f"drum_check.min_notes_per_minute는 양수 또는 비움: {min_notes}")
+        fail_on_unknown = raw.get("fail_on_unknown_tempo", cls.fail_on_unknown_tempo)
+        if not isinstance(fail_on_unknown, bool):
+            raise ValueError(f"drum_check.fail_on_unknown_tempo는 true/false: {fail_on_unknown!r}")
+        return cls(min_notes_per_minute=min_notes, fail_on_unknown_tempo=fail_on_unknown)
+
+
+@dataclass
 class TranscriptionConfig(ChartConfig):
     """`configs/chart/transcription.yaml` 한 파일.
 
@@ -159,6 +186,7 @@ class TranscriptionConfig(ChartConfig):
     models: dict[str, Path] = field(default_factory=dict)
     tempo: TempoConfig = field(default_factory=TempoConfig)
     max_duration_sec: float = 600.0
+    drum_check: DrumCheckConfig = field(default_factory=DrumCheckConfig)
 
     @classmethod
     def from_yaml(cls, path: str | Path = DEFAULT_TRANSCRIPTION_CONFIG) -> TranscriptionConfig:
@@ -178,6 +206,7 @@ class TranscriptionConfig(ChartConfig):
             "schema_version",
             "tempo",
             "max_duration_sec",
+            "drum_check",
         }
         unknown = sorted(set(raw) - known)
         if unknown:
@@ -213,6 +242,7 @@ class TranscriptionConfig(ChartConfig):
             models=models,
             tempo=TempoConfig.from_dict(raw.get("tempo")),
             max_duration_sec=max_duration,
+            drum_check=DrumCheckConfig.from_dict(raw.get("drum_check")),
         )
 
 

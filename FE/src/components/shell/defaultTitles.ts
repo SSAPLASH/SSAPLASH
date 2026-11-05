@@ -10,6 +10,7 @@ export const DEFAULT_TITLES: ReadonlyArray<readonly [string, string]> = [
   ['/setup', '드럼 세팅'],
   ['/settings', '설정'],
   ['/result', '결과'],
+  ['/admin/songs', '공용 곡 관리'],
 ];
 
 export function defaultTitle(pathname: string): string {

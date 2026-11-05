@@ -126,9 +126,9 @@ describe('buildFeedback', () => {
     expect(f[0]).toMatchObject({ id: 'pad-jitter', title: '하이햇 타이밍이 들쭉날쭉해요', pads: ['HIHAT'] });
   });
 
-  it('규칙 4: goodMs 50이면 표준편차 26ms는 걸리고 24ms는 안 걸린다', () => {
+  it('규칙 4: window 방식에서 goodMs 50이면 표준편차 26ms는 걸리고 24ms는 안 걸린다', () => {
     const jitterOf = (d: number) =>
-      buildFeedback(logOf([-d, d, -d, d, -d, d].map((x, i) => good(i % 4, 'HIHAT', x)), 0, 50), chart).some(
+      buildFeedback(logOf([-d, d, -d, d, -d, d].map((x, i) => good(i % 4, 'HIHAT', x)), 0, 50), chart, 'window').some(
         (x) => x.id === 'pad-jitter',
       );
     expect(jitterOf(26)).toBe(true);
@@ -198,5 +198,27 @@ describe('chartFromLog', () => {
     const log = logOf([perfect(0, 'KICK')]);
     expect(chartFromLog({ ...log, offsetMs: 1250 })!.offsetMs).toBe(1250);
     expect(chartFromLog(log)!.offsetMs).toBe(0);
+  });
+});
+
+describe('패드 표준편차 기준 방식(코칭 기준 폭)', () => {
+  const jitterOf = (d: number, goodMs: number, basis?: 'fixed' | 'window') =>
+    buildFeedback(
+      logOf([-d, d, -d, d, -d, d].map((x, i) => good(i % 4, 'HIHAT', x)), 0, goodMs),
+      chart,
+      basis,
+    ).some((x) => x.id === 'pad-jitter');
+
+  it('fixed(기본): 사용자 goodMs와 무관하게 60 기준(30ms)이다', () => {
+    for (const g of [50, 60, 150]) {
+      expect(jitterOf(31, g), `goodMs=${g}`).toBe(true);
+      expect(jitterOf(29, g), `goodMs=${g}`).toBe(false);
+    }
+  });
+
+  it('window: goodMs에 비례한다(이전 동작)', () => {
+    expect(jitterOf(26, 50, 'window')).toBe(true);
+    expect(jitterOf(24, 50, 'window')).toBe(false);
+    expect(jitterOf(31, 150, 'window')).toBe(false);
   });
 });

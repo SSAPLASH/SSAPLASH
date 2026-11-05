@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ssaplash_ai.coach.advice import tip_for
+from ssaplash_ai.coach.advice import detail_for, level_for, tip_for
 from ssaplash_ai.coach.config import (
     ANALYZER_VERSION,
     DEFAULT_THRESHOLDS,
@@ -13,6 +13,7 @@ from ssaplash_ai.coach.notes import NoteTable, build_notes
 from ssaplash_ai.coach.patterns import DETECTORS, Candidate
 from ssaplash_ai.coach.schema import AnalysisRequest, AnalysisResponse, WeakSegment
 from ssaplash_ai.coach.select import select_candidates
+from ssaplash_ai.coach.summary import build_summary
 
 
 def analyze(
@@ -39,6 +40,7 @@ def analyze_notes(
         analyzerVersion=ANALYZER_VERSION,
         reason="OK" if segments else "NO_WEAKNESS",
         weakSegments=segments,
+        summary=build_summary(notes, segments),
     )
 
 
@@ -51,6 +53,8 @@ def _to_segment(c: Candidate) -> WeakSegment:
         pattern=c.pattern,
         description=c.description,
         tip=tip_for(c.pattern, c.pads),
+        detail=detail_for(c.pattern, c.pads, metrics, c.from_ms, c.to_ms),
+        severityLevel=level_for(float(metrics["severity"])),  # type: ignore[arg-type]
         causeTags=c.cause_tags,
         pads=c.pads,
         metrics=metrics,

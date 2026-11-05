@@ -43,6 +43,8 @@ export interface WindowMetrics {
   sameSignRatio: number | null;
   /** 모집단 표준편차 */
   stdDelta: number | null;
+  /** 창(size개) 안의 MISS 개수 */
+  missInWindow: number;
   /** 최근 missSize개 중 MISS 개수 */
   missInRecent: number;
   /** 끝에서부터 이어진 MISS 개수 */
@@ -137,6 +139,7 @@ export class JudgedWindow {
       meanDelta,
       sameSignRatio,
       stdDelta,
+      missInWindow: recent.filter((v) => v.judgement === 'MISS').length,
       missInRecent: missRecent.filter((v) => v.judgement === 'MISS').length,
       trailingMisses: trailing,
       missInRelease: releaseRecent.filter((v) => v.judgement === 'MISS').length,

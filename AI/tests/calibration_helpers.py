@@ -13,7 +13,7 @@ from ssaplash_ai.coach_eval.player import PlayerModel, simulate
 
 
 def synthetic_request(
-    seed: int = 0, n_notes: int = 60, model: PlayerModel | None = None, good_ms: float = 50.0
+    seed: int = 0, n_notes: int = 60, model: PlayerModel | None = None, good_ms: float = 60.0
 ) -> dict[str, Any]:
     chart = make_chart(n_notes, "random", seed=seed)
     play = simulate(chart, model or PlayerModel(), good_ms=good_ms, seed=seed)
@@ -69,6 +69,6 @@ def late_gradient_rows(count: int = 60, start: int = 0, n_notes: int = 80) -> li
         )
         seed = start + i
         chart = make_chart(n_notes, "rock", seed=seed)
-        request = simulate(chart, model, good_ms=50.0, seed=seed).request
+        request = simulate(chart, model, good_ms=60.0, seed=seed).request
         rows += view_rows(request, session_key=f"sess{seed:05d}")
     return rows

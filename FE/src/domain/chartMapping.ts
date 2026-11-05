@@ -2,6 +2,7 @@
 import type { Chart, ChartNote, ChartSource, Difficulty } from './chart';
 import { normalizePadId } from './pads';
 import { toSafeId } from './songCatalog';
+import { tempoSegmentsFrom } from './tempo';
 
 export interface ChartNoteDto {
   noteId: string;
@@ -63,7 +64,8 @@ export interface ChartAssetsDto {
  * BE 채보를 FE Chart로 바꾼다.
  * - 옛 이름은 normalizePadId로 변환하고, 알 수 없는 pad 노트는 버리고 경고를 한 번만 남긴다.
  * - `timeMs`는 반주 시작 기준 절대값이라 offsetMs를 더하지 않는다.
- * - tempoMap·timeSignatureMap이 둘 이상이면 고정 bpm으로 그리고 `variableTempo`로 표시한다.
+ * - tempoMap·timeSignatureMap이 둘 이상이면 `variableTempo`로 표시한다(악보 화면은 고정 bpm).
+ * - tempoMap이 둘 이상이고 ppq가 있으면 `tempoSegments`를 만든다(메트로놈·연주 화면 마디선용).
  * - `hasAccompaniment`는 곡 상세 값(또는 자산 확인 결과)을 호출자가 넘긴다.
  */
 export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolean): Chart {
@@ -111,5 +113,7 @@ export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolea
     sourceNoteCount: detail.noteCount,
   };
   if (tempoCount > 1 || sigCount > 1) chart.variableTempo = true;
+  const segments = tempoSegmentsFrom(detail.offsetMs, detail.timing?.ppq, detail.timing?.tempoMap);
+  if (segments) chart.tempoSegments = segments;
   return chart;
 }

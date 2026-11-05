@@ -117,6 +117,20 @@ describe('chartFromDetail', () => {
     expect(sig.variableTempo).toBe(true);
   });
 
+  it('tempoMap이 둘 이상이고 ppq가 있으면 tempoSegments를 만든다', () => {
+    const t = dto().timing!;
+    const plain = chartFromDetail(dto(), false);
+    expect(plain.tempoSegments).toBeUndefined();
+    const c = chartFromDetail(
+      dto({ timing: { ...t, ppq: 480, tempoMap: [{ tick: 0, bpm: t.bpm }, { tick: 1920, bpm: t.bpm / 2 }] } }),
+      false,
+    );
+    expect(c.tempoSegments).toHaveLength(2);
+    expect(c.tempoSegments![0].startMs).toBe(dto().offsetMs);
+    expect(c.tempoSegments![1].beat).toBe(4);
+    expect(c.tempoSegments![1].startMs).toBeCloseTo(dto().offsetMs + (4 * 60_000) / t.bpm, 9);
+  });
+
   it('timing이 없어도 변환된다', () => {
     const c = chartFromDetail(dto({ timing: null }), false);
     expect(c.variableTempo).toBeUndefined();
