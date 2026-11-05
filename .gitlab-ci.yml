@@ -8,6 +8,9 @@ stages:
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # develop-BE의 열린 MR이 같은 커밋을 검증하면 중복 push 파이프라인을 만들지 않는다.
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop-BE" && $CI_OPEN_MERGE_REQUESTS
+      when: never
     - if: $CI_COMMIT_BRANCH =~ /^(main|develop-.*)$/
 
 # 모든 job은 EC2의 Docker Runner(태그 docker)에서 실행한다.
@@ -32,8 +35,12 @@ pipeline-fallback:
     - !reference [.calibration-guard, rules]
     - changes: &be_changes
         - BE/**/*
-        - Infra/docker-compose.yml
-        - .gitlab-ci.yml
+        - Infra/**/*
+        - Docs/API/**/*
+        - .gitlab/**/*
+        - .claude/**/*
+        - tools/**/*
+        - '*'
       when: never
     - when: on_success
   script:
@@ -58,14 +65,40 @@ pipeline-fallback:
       - BE/.cache/audio-ffprobe/
   rules:
     - !reference [.calibration-guard, rules]
+    # main 통합 및 develop-BE 출발 MR은 변경 경로와 무관하게 전체 검사한다.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME == "develop-BE"
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop-BE"
     - changes: *be_changes
+  dependencies:
+    - be-test-scope
+
+# base가 없거나 분류할 수 없으면 scope는 FULL이다. 후속 job은 한 결과만 사용한다.
+be-test-scope:
+  stage: lint
+  image:
+    name: alpine/git:v2.45.2
+    entrypoint: [""]
+  rules:
+    - !reference [.be-job, rules]
+  dependencies: []
+  script:
+    - sh BE/scripts/Test-CiScope.sh
+    - cd BE
+    - sh scripts/CiScope.sh classify > .ci-scope
+    - sh scripts/CiScope.sh describe
+  artifacts:
+    paths:
+      - BE/.ci-scope
+    expire_in: 1 day
 
 be-test:
   extends: .be-job
   stage: test
   script:
+    - if [ "$(sh scripts/CiScope.sh mode)" = NONE ]; then echo "BE 변경이 없어 검사를 생략합니다."; exit 0; fi
     - . ./scripts/Prepare-AudioProbe.sh
-    - ./gradlew --no-daemon test
+    - sh scripts/CiScope.sh test
   artifacts:
     when: always
     reports:
@@ -78,7 +111,8 @@ be-build:
   extends: .be-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootJar
+    - if [ "$(sh scripts/CiScope.sh mode)" = NONE ]; then echo "BE 변경이 없어 앱 빌드를 생략합니다."; exit 0; fi
+    - ./gradlew --no-daemon --build-cache bootJar
   artifacts:
     paths:
       - BE/build/libs/app.jar
@@ -89,7 +123,13 @@ be-midi-worker-build:
   extends: .be-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootMidiWorkerJar
+    - |
+      set +e
+      sh scripts/CiScope.sh midi
+      result=$?
+      set -e
+      case "$result" in 0) ;; 1) echo "MIDI 관련 변경이 없어 워커 빌드를 생략합니다."; exit 0;; *) exit "$result";; esac
+    - ./gradlew --no-daemon --build-cache bootMidiWorkerJar
   artifacts:
     paths:
       - BE/build/libs/midi-worker.jar
@@ -101,10 +141,16 @@ be-midi-render-test:
   image: eclipse-temurin:21-jdk-jammy
   stage: test
   script:
+    - |
+      set +e
+      sh scripts/CiScope.sh midi
+      result=$?
+      set -e
+      case "$result" in 0) ;; 1) echo "MIDI 합성 관련 변경이 없어 렌더 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
     - PREPARE_AUDIO_FFMPEG=true; export PREPARE_AUDIO_FFMPEG; . ./scripts/Prepare-AudioProbe.sh
     - . ./scripts/Prepare-MidiRenderer.sh
     - MIDI_TEST_FFMPEG="$AUDIO_FFMPEG_PATH"; MIDI_TEST_FFPROBE="$AUDIO_FFPROBE_PATH"; export MIDI_TEST_FFMPEG MIDI_TEST_FFPROBE
-    - ./gradlew --no-daemon test --tests '*MidiRendererIntegrationTest'
+    - ./gradlew --no-daemon --build-cache test --tests '*MidiRendererIntegrationTest'
   artifacts:
     when: always
     reports:
@@ -129,9 +175,15 @@ be-timescale-test:
     TIMESCALE_TEST_URL: "jdbc:postgresql://timescaledb:5432/timescale_test"
     TIMESCALE_TEST_PASSWORD: "ci-$CI_PIPELINE_ID"
   script:
+    - |
+      set +e
+      sh scripts/CiScope.sh timescale
+      result=$?
+      set -e
+      case "$result" in 0) ;; 1) echo "Timescale 관련 변경이 없어 확장 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
     # service가 연결을 받을 때까지 최대 60초 기다린다.
     - bash -c 'for i in $(seq 1 60); do (echo > /dev/tcp/timescaledb/5432) 2>/dev/null && exit 0; sleep 1; done; echo "TimescaleDB가 60초 안에 준비되지 않았습니다."; exit 1'
-    - ./gradlew --no-daemon timescaleTest
+    - ./gradlew --no-daemon --build-cache timescaleTest
   artifacts:
     when: always
     reports:
