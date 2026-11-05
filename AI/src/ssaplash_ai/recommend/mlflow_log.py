@@ -12,6 +12,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ssaplash_ai.recommend.data import Dataset
 from ssaplash_ai.recommend.evaluate import Report
 
 EXPERIMENT_NAME = "song-recommend"
@@ -30,6 +31,38 @@ def git_commit() -> str:
         return out.stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
         return "unknown"
+
+
+def log_batch(
+    batch_id: str,
+    model_version: str,
+    data: Dataset,
+    stats: dict[str, int],
+    upload: dict[str, object] | None,
+    *,
+    tracking_uri: str | None = None,
+    experiment: str = EXPERIMENT_NAME,
+) -> str:
+    """운영 배치 한 번을 기록한다. 개수와 해시만 남긴다."""
+    from ssaplash_ai.bench.runner.mlflow_tracking import log_run
+
+    counts = {k: float(v) for k, v in stats.items()}
+    if upload:
+        counts.update({f"upload_{k}": float(v) for k, v in upload.items() if type(v) is int})
+    return log_run(
+        run_id=f"batch-{batch_id}",
+        params={
+            "modelVersion": model_version,
+            "stage": data.stage,
+            "dataHash": data.data_hash,
+            "uploaded": upload is not None,
+        },
+        summary_metrics={"batch": counts},
+        artifacts=[],
+        tags={"gitCommit": git_commit(), "stage": data.stage, "dataHash": data.data_hash},
+        tracking_uri=tracking_uri,
+        experiment_name=experiment,
+    )
 
 
 def log_report(
