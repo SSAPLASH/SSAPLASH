@@ -67,6 +67,7 @@ public class WithdrawalService {
 		int deletedPlays = deleteNonConsentedPlays(userId);
 		int deletedTelemetry = deleteTelemetry(userId);
 		db.update("DELETE FROM recommendation_items WHERE user_id = ?", userId);
+		db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
 		revokeRefreshTokens(userId);
 		events.publishEvent(new UserWithdrawnEvent(userId));
 		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedPlays={} deletedTelemetry={}", userId, deletedRecordings,

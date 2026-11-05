@@ -28,7 +28,7 @@ import com.ssafy.airdrum.song.recommend.RecommendationScorer.*;
  */
 @Service
 public class RecommendationService {
-	public static final String STRATEGY = "RULE_V1";
+	public static final String STRATEGY = "RULE_V1", R3_STRATEGY = "R3_V1";
 	static final int RECENT_PLAYS = 10, RECENT_REPORTS = 5;
 	private static final Map<String, String> TEXT = Map.of(
 			RecommendationScorer.CHALLENGE, "지금 실력보다 조금 어려워서 도전하기 좋아요",
@@ -42,9 +42,13 @@ public class RecommendationService {
 	private final ChartQueryAccess access;
 	private final JsonMapper json;
 	private final Clock clock;
+	private final RecommendationCandidateService candidateSongs;
+	private final RecommendationR3Settings r3;
 
-	public RecommendationService(JdbcTemplate db, SongQueryService songs, ChartQueryAccess access, JsonMapper json, Clock clock) {
+	public RecommendationService(JdbcTemplate db, SongQueryService songs, ChartQueryAccess access, JsonMapper json, Clock clock,
+			RecommendationCandidateService candidateSongs, RecommendationR3Settings r3) {
 		this.db = db; this.songs = songs; this.access = access; this.json = json; this.clock = clock;
+		this.candidateSongs = candidateSongs; this.r3 = r3;
 	}
 
 	public enum Context { SONG_PICKER, REPORT }
@@ -59,7 +63,11 @@ public class RecommendationService {
 			if (!Boolean.TRUE.equals(own)) throw new BusinessException(PlayErrorCode.PLAY_NOT_FOUND);
 		}
 		Instant now = clock.instant();
-		var ranked = RecommendationScorer.rank(candidates(mode), profile(userId, playId), now, size);
+		var pool = candidates(mode);
+		var profile = profile(userId, playId);
+		var blended = RecommendationScorer.blend(pool, profile, now, size, candidateSongs.usableSongs(userId, now), r3.relevanceWeight());
+		String strategy = blended.isEmpty() ? STRATEGY : R3_STRATEGY;
+		var ranked = blended.isEmpty() ? RecommendationScorer.rank(pool, profile, now, size) : RecommendationScorer.fill(blended, pool, profile, now, size);
 		var summaries = songs.byIds(userId, ranked.stream().map(s -> s.candidate().songId()).toList());
 		var bySong = new HashMap<Long, com.ssafy.airdrum.song.SongResponses.SongSummary>();
 		for (var s : summaries) bySong.put(s.id(), s);
@@ -74,9 +82,9 @@ public class RecommendationService {
 			rank++;
 			items.add(new Item(summary, c.chartId(), c.difficulty(),
 					scored.reasons().stream().map(code -> new Reason(code, TEXT.get(code))).toList()));
-			logExposure(requestId, rank, userId, context.name(), STRATEGY, c.songId(), c.chartId(), scored.total(), scored.reasons(), null, now);
+			logExposure(requestId, rank, userId, context.name(), strategy, c.songId(), c.chartId(), scored.total(), scored.reasons(), null, now);
 		}
-		return new Recommendations(requestId, STRATEGY, List.copyOf(items));
+		return new Recommendations(requestId, strategy, List.copyOf(items));
 	}
 
 	/** 추천 노출 한 줄을 기록한다. 비슷한 곡(R2)도 같은 테이블을 쓰며 그때만 {@code sourceSongId}가 있다. */
