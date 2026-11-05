@@ -29,8 +29,13 @@ public class MidiChartConverter {
 	}
 
 	public MidiChartDocuments.Song convert(MultipartFile file) {
+		return convert(file, 0);
+	}
+
+	/** 업로드 파일을 첫 박 {@code offsetMs} 기준으로 변환한다. 공용 곡 ADMIN 등록(262번)이 쓴다. */
+	public MidiChartDocuments.Song convert(MultipartFile file, int offsetMs) {
 		if (file == null) throw new BusinessException(MidiErrorCode.INVALID);
-		return convert(read(file));
+		return convert(read(file), offsetMs);
 	}
 
 	/** 이미 읽은 MIDI 바이트를 변환한다. 첫 박은 0틱(사용자 MIDI 업로드). 크기 규칙은 업로드와 같다. */

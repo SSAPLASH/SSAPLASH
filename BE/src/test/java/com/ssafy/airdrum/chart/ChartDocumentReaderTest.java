@@ -55,6 +55,18 @@ class ChartDocumentReaderTest {
 		assertThat(reader.milliseconds(timing, 480)).isEqualTo(400);
 		assertThat(reader.milliseconds(timing, 960)).isEqualTo(1400);
 	}
+	@Test void adtTempoMapWithoutNotationIsAcceptedAndConvertedPiecewise() {
+		// AI 공용 곡 채보(Take Me Out 형식): 노트는 timeMs만, timing에 ppq·tempoMap·timeSignatureMap
+		var timing = reader.timing("""
+			{"bpm":142.04,"offsetMs":280,"timeSignature":"4/4","ppq":480,
+			 "tempoMap":[{"tick":0,"bpm":142.04},{"tick":55680,"bpm":125.65},{"tick":59520,"bpm":113.21},{"tick":61440,"bpm":104.97}],
+			 "timeSignatureMap":[{"tick":0,"numerator":4,"denominator":4}]}
+			""");
+		assertThat(timing.tempoMap()).hasSize(4);
+		assertThat(reader.milliseconds(timing, 55680)).isCloseTo(280 + 116 * 60000.0 / 142.04, within(1e-6));
+		assertThat(reader.milliseconds(timing, 61440))
+				.isCloseTo(280 + 116 * 60000.0 / 142.04 + 8 * 60000.0 / 125.65 + 4 * 60000.0 / 113.21, within(1e-6));
+	}
 	@Test void duplicateOutOfOrderOrInvalidNotesFailInsteadOfBeingSilentlyRepaired() {
 		for (String notes : List.of(
 				"[{\"noteId\":\"a\",\"timeMs\":1,\"pad\":\"SNARE\"},{\"noteId\":\"a\",\"timeMs\":2,\"pad\":\"KICK\"}]",

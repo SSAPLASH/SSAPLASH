@@ -64,7 +64,9 @@ import static com.ssafy.airdrum.song.admin.AdminSongResponses.*;
 @ApiResponse(responseCode = "404", description = "없는 곡·삭제된 곡·개인 곡: SONG_NOT_FOUND", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 public class AdminSongController {
 
-	private static final Set<String> REGISTER_FIELDS = Set.of("title", "artist", "license", "published");
+	private static final Set<String> REGISTER_FIELDS = Set.of("title", "artist", "license", "published", "offsetMs");
+	/** offsetMs: 부호·공백·소수 없는 정수 문자열만. 범위는 카탈로그와 같다(0~30분). */
+	private static final java.util.regex.Pattern OFFSET = java.util.regex.Pattern.compile("[0-9]{1,7}");
 	private static final Set<String> PATCH_FIELDS = Set.of("title", "artist", "license", "published");
 
 	private final AdminSongService service;
@@ -83,26 +85,29 @@ public class AdminSongController {
 	@PostMapping(value = "/midi", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@Operation(summary = "MIDI로 공용 곡 등록",
 			description = "151번과 같은 규칙(midi-rule-1.1)으로 EASY·NORMAL·HARD 채보(version 1)를 만들어 공용 곡으로 저장한다. "
-					+ "license(출처·라이선스) 필수. published 기본 true이며 false면 일반 사용자에게 보이지 않는다.")
+					+ "license(출처·라이선스) 필수. published 기본 true이며 false면 일반 사용자에게 보이지 않는다. "
+					+ "offsetMs(선택, 기본 0)는 0틱 = 음원 0초인 MIDI의 첫 마디 첫 박 시각(ms)으로, 카탈로그(260번)와 같이 솎기 격자·악보 마디의 원점이 된다.")
 	@ApiResponse(responseCode = "201", description = "등록")
 	@ApiResponse(responseCode = "400", description = "필드 형식: SONG_INVALID, 파일 없음·빈 파일: MIDI_INVALID",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "413", description = "MIDI 1 MiB 초과: MIDI_TOO_LARGE",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
-	@ApiResponse(responseCode = "422", description = "MIDI_UNSUPPORTED, MIDI_NO_DRUM_NOTES",
+	@ApiResponse(responseCode = "422", description = "MIDI_UNSUPPORTED(첫 박보다 앞선 노트 포함), MIDI_NO_DRUM_NOTES",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	public ResponseEntity<AdminSongDetail> register(
 			@Parameter(description = "곡 제목, 1~100자") @RequestParam(value = "title", required = false) String title,
 			@Parameter(description = "아티스트, 0~100자") @RequestParam(value = "artist", required = false) String artist,
 			@Parameter(description = "출처·라이선스, 1~200자") @RequestParam(value = "license", required = false) String license,
 			@Parameter(description = "true(기본) 또는 false") @RequestParam(value = "published", required = false) String published,
+			@Parameter(description = "첫 마디 첫 박 시각 ms, 0~1,800,000 정수(기본 0)") @RequestParam(value = "offsetMs", required = false) String offsetMs,
 			@RequestPart(value = "file", required = false) MultipartFile file, HttpServletRequest request) {
 		if (!fields(request, REGISTER_FIELDS)) throw invalid();
 		String cleanTitle = required(title, 100);
 		String cleanArtist = optional(artist, 100);
 		String cleanLicense = required(license, 200);
 		boolean open = published == null || flag(published);
-		var detail = service.register(cleanTitle, cleanArtist, cleanLicense, open, file(request, file));
+		int offset = offsetMs == null ? 0 : offset(offsetMs);
+		var detail = service.register(cleanTitle, cleanArtist, cleanLicense, open, file(request, file), offset);
 		return ResponseEntity.created(URI.create("/api/v1/admin/songs/" + detail.id())).body(detail);
 	}
 
@@ -259,6 +264,13 @@ public class AdminSongController {
 		var stripped = value.strip();
 		if (stripped.length() > limit || stripped.indexOf(0) >= 0) throw invalid();
 		return stripped.isEmpty() ? null : stripped;
+	}
+
+	private static int offset(String value) {
+		if (!OFFSET.matcher(value).matches()) throw invalid();
+		int ms = Integer.parseInt(value);
+		if (ms > BuiltinSongCatalog.MAX_OFFSET_MS) throw invalid();
+		return ms;
 	}
 
 	private static boolean flag(String value) {

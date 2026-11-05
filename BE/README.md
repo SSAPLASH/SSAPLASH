@@ -1003,11 +1003,11 @@ CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리�
 
 CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을 MIDI로 등록하고 정보·채보·커버·반주를 고치며 공개 여부를 바꾼다.
 모든 경로는 `/api/v1/admin/songs`이고 Bearer 인증 + **ADMIN 역할**(`@PreAuthorize`)이 필요하다. 미인증·탈퇴 401, USER 403 `FORBIDDEN`.
-없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 아직 없어 Swagger의 `Admin Songs` 묶음으로 호출한다.
+없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 ADMIN에게만 보이는 「공용 곡 관리」(`/admin/songs`, 262번: 공용 곡 추가·반주 올리기)이고, 그 밖의 동작은 Swagger의 `Admin Songs` 묶음으로 호출한다(운영은 Swagger 꺼짐).
 
 | 메서드·경로 | 요청 | 성공 |
 | --- | --- | --- |
-| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false` | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
+| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false`, 선택 `offsetMs` 0~1,800,000 정수(기본 0, 262번. 첫 마디 첫 박 시각 ms로 카탈로그 260번과 같은 규칙. 부호·공백·소수는 400 `SONG_INVALID`, 첫 박보다 앞선 노트는 422 `MIDI_UNSUPPORTED`) | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
 | `GET /` | `published`(생략 시 전체), `q`, `page`, `size`(곡 목록과 같은 범위) | 비공개 포함 목록, 삭제 곡 제외, 생성 내림차순 |
 | `GET /{id}` | — | 관리자 곡 상세 |
 | `PATCH /{id}` | JSON `title`·`artist`·`license`·`published` 중 1개 이상. 빈 `artist`는 null | 관리자 곡 상세 |
@@ -1210,7 +1210,7 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 전송 오류의 워커 측 재시도를 소진해 heartbeat를 중단하면 임대 만료 후 복구될 수 있지만 단계 마감과 단계별 최대 2회 재시도 범위 안에서만 재배정된다. 409·422 또는 이미 DONE인 경우 재배정을 보장하지 않는다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
-음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 BPM·offsetMs와 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. 일정 템포 환산이므로 변속 곡의 격자 판단은 어긋날 수 있다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
+음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timing에 `tempoMap`이 둘 이상이고 `ppq`가 있으면 offsetMs부터 빠르기 구간마다 그 BPM으로 박 수를 세고(`WorkerResults.VirtualTicks`, 구간 시작은 채보마다 한 번 계산하고 노트마다 이분 탐색), 없으면 BPM 하나로 환산한다. timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
@@ -1239,6 +1239,49 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - `facts`에는 타격 원본·회원 번호·`playId`·`songId`가 없다: `level`, `focusPattern`, `counts`(판정 개수), `strengthPad`, `segments`(최대 5개), 같은 사용자·같은 곡의 바로 직전 플레이를 요약한 `history`(없으면 키 없음).
 - Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
 - 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
+
+## 곡 추천 R1: 규칙 추천 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md`)
+
+공용 곡 중 "지금 치기 좋은 채보"를 규칙 점수로 골라 이유와 함께 돌려준다. 학습·AI 호출이 없고 요청 시 DB의 본인 기록과 공용 곡만 읽는다. 추천 단위는 채보(곡+난이도)이고 응답은 곡당 하나다.
+
+### 채보 특징 (V33 `chart_features`)
+
+- 채보별 **최신 버전**의 평균 밀도(`avg_notes_per_sec`, 곡 길이 기준), 2초 창 최대 노트 수(`peak_notes_2s`, `SongLevelService`와 같은 창), 패드 비율, 상위 12개 패드 전환 비율을 미리 계산해 저장한다(`chart-features-1`).
+- `SongLevelService.process(..., apply=true)`가 난이도를 저장하면 `SongChartsChanged`를 발행하고, **커밋 뒤** `ChartFeatureListener`가 새 트랜잭션에서 계산한다. 계산이 실패해도 채보 생성·난이도 산정은 성공이고, 특징이 없는 채보는 추천 후보에서만 빠진다.
+- 앱이 준비되면 `ChartFeatureBackfillStartup`이 특징이 없는 기존 채보를 채운다(`chart-features.backfill.enabled=false`로 끈다. 테스트 기본값). 이미 현재 버전으로 저장된 채보는 건너뛰므로 여러 번 돌려도 같다.
+
+### 리듬 격자 (V35 `chart_features.rhythm_grid`, R2 비슷한 곡의 입력)
+
+- 패드 묶음(`KICK`·`SNARE`·`HAT`=HIHAT·HIHAT_PEDAL·`CYMBAL`=CRASH·RIDE·`TOM`)마다 **한 박을 12칸으로 나눈 위치별 비율**(합 1, 노트 없는 묶음은 전부 0)과 `bpm`·`timeSignature`·`unquantizedRatio`를 JSON으로 저장한다. 12칸은 8분·16분·셋잇단음표를 모두 담는다. 위치는 `(timeMs - offsetMs) / (60000 / bpm)`의 소수부를 가장 가까운 칸에 맞춰 구한다.
+- **제외 표시:** 가변 템포(`tempoMap`에 다른 BPM이 둘 이상)는 `{"excluded":"VARIABLE_TEMPO"}`, 칸에서 1/48박 넘게 벗어난 노트가 20%를 넘으면 `OFF_GRID`, 박자 정보가 망가졌으면 `INVALID_TIMING`, 아는 패드가 없으면 `NO_KNOWN_PADS`를 저장한다. 제외된 채보도 값이 저장되므로 백필이 반복 계산하지 않는다.
+- `feature_version`은 `chart-features-1` 그대로다. `rhythm_grid`가 NULL인 행(V35 이전에 저장된 행)만 백필과 난이도 저장 뒤 계산이 채우고, 기본 특징은 같은 값으로 다시 쓰이므로 R1 추천은 영향이 없다. 박자 정보가 망가진 채보도 기본 특징은 저장한다.
+- 시험: `RhythmGridTest`(칸 위치, 묶음, 오프셋, 제외 사유, 결정성)와 `ChartFeatureRhythmGridTest`(DB: 격자 저장·재호출 무계산, 제외 표시, 격자만 채우기. CI에서 돈다).
+
+### 비슷한 곡 R2 (V36, `song/similar/`)
+
+`GET /api/v1/songs/{songId}/similar?difficulty=EASY|NORMAL|HARD&size=` (Bearer 인증, `size` 1~10 기본 5, `difficulty` 기본 NORMAL). 기준 곡과 연주 느낌이 비슷한 공용 곡을 곡당 채보 하나로 돌려준다. 응답 `{requestId, strategy: "SIMILAR_V1", items[{song, chartId, difficulty, similarity(0~1), matchedOn[]}]}`. AI 서버를 부르지 않는다.
+
+- **기준 곡:** 공개된 공용 곡이거나 본인 곡. 없는 곡·타인의 개인 곡은 404 `SONG_NOT_FOUND`. 기준 채보는 요청한 난이도, 없으면 EASY·NORMAL·HARD 순서에서 가장 가까운 것(같은 거리면 쉬운 쪽). 기준 곡에 리듬 격자가 없으면(가변 템포·격자 이탈·아직 계산 전) 오류가 아니라 200과 빈 `items`다.
+- **후보:** R1과 같은 공용 곡 조건에 `rhythm_grid`가 있는 최신 버전 채보. 개인 곡은 결과에 나오지 않는다. 후보 채보 목록은 `similar.cache-ttl-seconds`(기본 300, 0이면 끔) 동안 프로세스 안에 캐시한다. 사용자와 무관한 값이다.
+- **유사도(`SimilarityEngine`, 가정값):** 리듬 격자 0.35 + 패드 구성 0.20 + 전환 0.15 + 밀도 0.15 + 템포 0.15. 박자표 분자가 다르면 ×0.5, 0.5 미만은 제외. 같은 입력이면 같은 값·순서(같은 점수는 곡 id순). 사용자 기록은 점수에 쓰지 않는다.
+- **본인 기록 필터:** R1의 기준 밀도(최근 85% 이상 연주의 밀도 최댓값)가 있으면 그 1.5배를 넘는 채보는 거른다. 기록이 없으면 거르지 않는다.
+- **메타데이터:** 곡 메타데이터(장르·분위기 등)가 양쪽 곡에 있을 때만 15%를 섞도록 엔진에 구현돼 있으나, 메타데이터 저장은 아직 없어 지금은 채보 유사도만 쓴다.
+- **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
+- 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡·격자 없는 곡 제외, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
+
+### 조회와 기록
+
+| 호출 | 설명 |
+| --- | --- |
+| `GET /api/v1/songs/recommendations?context=SONG_PICKER\|REPORT&mode=RHYTHM\|SHEET&playId=&size=` | Bearer 인증. `size` 1~10(기본 5). 응답 `{requestId, strategy: "RULE_V1", items[{song, chartId, difficulty, reasons[{code, text}]}]}`. 후보가 없으면 200과 빈 `items`. `playId`는 `context=REPORT`에서만 쓰며(아니면 400) 본인 연주가 아니면 404 `PLAY_NOT_FOUND` |
+| `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
+
+- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. `mode=SHEET`이면 `notation_status=READY`인 채보만. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
+- **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
+- **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
+- **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.
+- **기록(V34 `recommendation_items`):** 조회할 때마다 노출을 남긴다(`request_id`, `rank`, 위치, 전략, 곡·채보, 점수, 이유 코드, `shown_at`). 클릭은 `clicked_at`. 90일이 지난 기록은 `RecommendationRetention`이 하루에 한 번 지운다(`recommendation.retention-days`). **회원 탈퇴 트랜잭션에서 그 회원의 기록을 같이 지운다**(`WithdrawalService`).
+- 시험: `ChartFeaturesTest`·`RecommendationScorerTest`(순수 계산: 밀도·창·전환, 1.5배 제외, 곡당 하나, 약점 가중, 새로움·재도전, 다양성, 결정적 순서)와 `RecommendationServiceTest`(커밋 뒤 특징 저장, 개인 곡 제외, STARTER, 타인의 `playId` 404, 노출·클릭, 보관 정리. 임베디드 DB가 필요해 CI에서 돈다).
 
 ## 리포트 약점 분석 (158번 후속)
 
@@ -1375,3 +1418,22 @@ Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다�
 
 `TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
 `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.
+
+## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
+
+AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 규칙으로 거르고 섞는다. 요청 경로에서 AI를 부르지 않는다. **기본은 꺼져 있고, 꺼져 있으면 응답과 기록이 R1과 같다.**
+
+| 호출 | 설명 |
+| --- | --- |
+| `POST /api/users/me/signup-consent` | 선택 항목 `recommendationConsent: { agreed, version }` 추가. 생략하면 이전 응답을 바꾸지 않는다 |
+| `GET /api/users/me/recommendation-consent` | `{ agreed, version, updatedAt }`. 응답한 적 없으면 `agreed=false` |
+| `PUT /api/users/me/recommendation-consent` | 본문 `{ agreed, version }`. 끄면 그 사용자의 후보를 같은 트랜잭션에서 지운다 |
+| `POST /internal/v1/recommend-candidates` | 워커 토큰. 후보 적재. 응답 `{ accepted, droppedUnknown, droppedNoConsent }` |
+| `GET /internal/v1/recommend-candidates/status` | 워커 토큰. `{ modelVersion, generatedAt, usersWithCandidates }` |
+
+- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
+- **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
+- **읽기 뷰(V37):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
+- **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
+- **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
+- **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다.
