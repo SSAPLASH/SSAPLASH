@@ -67,7 +67,7 @@ public class MidiChartDocuments {
 		for (var n : notes) {
 			long tick = n.tick() - first;
 			if (tick < -tolerance) earliest = Math.min(earliest, n.tick());
-			moved.add(new DrumNote(Math.max(0, tick), n.pad(), n.velocity(), n.durationTicks()));
+			moved.add(new DrumNote(Math.max(0, tick), n.pad(), n.velocity(), n.durationTicks(), n.hihatOpen()));
 		}
 		if (earliest != Long.MAX_VALUE)
 			throw new BusinessException(MidiErrorCode.UNSUPPORTED, "offsetMs(" + offsetMs + "ms)보다 앞선 드럼 노트가 있습니다(첫 노트 "
@@ -131,6 +131,7 @@ public class MidiChartDocuments {
 					generator.writeNumberProperty("timeMs", Math.round(reader.milliseconds(timing, n.tick())));
 					generator.writeStringProperty("pad", n.pad().name());
 					generator.writeNumberProperty("velocityHint", n.velocity());
+					if (n.hihatOpen() != null) generator.writeBooleanProperty("hihatOpen", n.hihatOpen());
 					generator.writeName("notation");
 					generator.writeStartObject();
 					generator.writeNumberProperty("tick", n.tick());

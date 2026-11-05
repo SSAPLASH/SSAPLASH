@@ -9,7 +9,11 @@ public final class ChartResponses {
 			Long chartVersionId, int version, int schemaVersion, double bpm, int offsetMs,
 			String timeSignature, int beatsPerBar, Integer durationMs, Timing timing,
 			int noteCount, List<Note> notes, String notationStatus, boolean hasSheetImages) {}
-	public record Note(String noteId, double timeMs, String pad, Integer velocityHint, Notation notation) {}
+	public record Note(String noteId, double timeMs, String pad, Integer velocityHint, Notation notation, Boolean hihatOpen) {
+		public Note(String noteId, double timeMs, String pad, Integer velocityHint, Notation notation) {
+			this(noteId, timeMs, pad, velocityHint, notation, null);
+		}
+	}
 	public record Notation(long tick, long durationTicks, int voice) {}
 	public record Timing(double bpm, int offsetMs, String timeSignature, Integer ppq,
 			List<Tempo> tempoMap, List<Signature> timeSignatureMap) {}
