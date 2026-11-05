@@ -13,5 +13,222 @@
     "title": "라이드 16비트",
     "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
     "midi": "ride-16beat.mid"
+  },
+  {
+    "title": "Hail To The King",
+    "artist": "Avenged Sevenfold",
+    "license": "원곡 Avenged Sevenfold, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "a7x_hail_to_the_king.mid",
+    "offsetMs": 562
+  },
+  {
+    "title": "505",
+    "artist": "Arctic Monkeys",
+    "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "arctic_monkeys_505.mid",
+    "offsetMs": 180
+  },
+  {
+    "title": "Do I Wanna Know?",
+    "artist": "Arctic Monkeys",
+    "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "arctic_monkeys_do_i_wanna_know.mid",
+    "offsetMs": 836
+  },
+  {
+    "title": "R U Mine?",
+    "artist": "Arctic Monkeys",
+    "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "arctic_monkeys_r_u_mine.mid",
+    "offsetMs": 2109
+  },
+  {
+    "title": "Billie Jean",
+    "artist": "Michael Jackson",
+    "license": "원곡 Michael Jackson, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "billie_jean.mid",
+    "offsetMs": 1226
+  },
+  {
+    "title": "EVERYTHING",
+    "artist": "검정치마",
+    "license": "원곡 검정치마, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "black_skirts_everything.mid",
+    "offsetMs": 231
+  },
+  {
+    "title": "Congratulations",
+    "artist": "DAY6",
+    "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "day6_congratulations.mid",
+    "offsetMs": 996
+  },
+  {
+    "title": "Welcome to the Show",
+    "artist": "DAY6",
+    "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "day6_welcome_to_the_show.mid",
+    "offsetMs": 1549
+  },
+  {
+    "title": "Zombie",
+    "artist": "DAY6",
+    "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "day6_zombie.mid",
+    "offsetMs": 38
+  },
+  {
+    "title": "Sugar, We're Goin Down",
+    "artist": "Fall Out Boy",
+    "license": "원곡 Fall Out Boy, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "fall_out_boy_sugar_were_goin_down.mid",
+    "offsetMs": 241
+  },
+  {
+    "title": "The Pretender",
+    "artist": "Foo Fighters",
+    "license": "원곡 Foo Fighters, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "foo_fighters_the_pretender.mid",
+    "offsetMs": 109
+  },
+  {
+    "title": "Take Me Out",
+    "artist": "Franz Ferdinand",
+    "license": "원곡 Franz Ferdinand, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "franz_ferdinand_take_me_out.mid",
+    "offsetMs": 280
+  },
+  {
+    "title": "Feel Good Inc.",
+    "artist": "Gorillaz",
+    "license": "원곡 Gorillaz, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "gorillaz_feel_good_inc.mid",
+    "offsetMs": 16
+  },
+  {
+    "title": "거울",
+    "artist": "국카스텐",
+    "license": "원곡 국카스텐, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "guckkasten_mirror.mid",
+    "offsetMs": 273
+  },
+  {
+    "title": "TOMBOY",
+    "artist": "혁오",
+    "license": "원곡 혁오, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "hyukoh_tomboy.mid",
+    "offsetMs": 1113
+  },
+  {
+    "title": "Believer",
+    "artist": "Imagine Dragons",
+    "license": "원곡 Imagine Dragons, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "imagine_dragons_believer.mid",
+    "offsetMs": 237
+  },
+  {
+    "title": "Mr. Brightside",
+    "artist": "The Killers",
+    "license": "원곡 The Killers, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "killers_mr_brightside.mid",
+    "offsetMs": 249
+  },
+  {
+    "title": "Sex On Fire",
+    "artist": "Kings of Leon",
+    "license": "원곡 Kings of Leon, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "kings_of_leon_sex_on_fire.mid",
+    "offsetMs": 1239
+  },
+  {
+    "title": "Numb",
+    "artist": "Linkin Park",
+    "license": "원곡 Linkin Park, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "linkin_park_numb.mid",
+    "offsetMs": 1791
+  },
+  {
+    "title": "Beggin'",
+    "artist": "Måneskin",
+    "license": "원곡 Måneskin, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "maneskin_beggin.mid",
+    "offsetMs": 1324
+  },
+  {
+    "title": "I WANNA BE YOUR SLAVE",
+    "artist": "Måneskin",
+    "license": "원곡 Måneskin, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "maneskin_i_wanna_be_your_slave.mid",
+    "offsetMs": 1674
+  },
+  {
+    "title": "Welcome To The Black Parade",
+    "artist": "My Chemical Romance",
+    "license": "원곡 My Chemical Romance, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "mcr_welcome_to_the_black_parade.mid",
+    "offsetMs": 25800
+  },
+  {
+    "title": "Hysteria",
+    "artist": "Muse",
+    "license": "원곡 Muse, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "muse_hysteria.mid",
+    "offsetMs": 118
+  },
+  {
+    "title": "Uprising",
+    "artist": "Muse",
+    "license": "원곡 Muse, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "muse_uprising.mid",
+    "offsetMs": 117
+  },
+  {
+    "title": "Misery Business",
+    "artist": "Paramore",
+    "license": "원곡 Paramore, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "paramore_misery_business.mid",
+    "offsetMs": 420
+  },
+  {
+    "title": "No One Knows",
+    "artist": "Queens of the Stone Age",
+    "license": "원곡 Queens of the Stone Age, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "qotsa_no_one_knows.mid",
+    "offsetMs": 1235
+  },
+  {
+    "title": "고민중독",
+    "artist": "QWER",
+    "license": "원곡 QWER, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "qwer_gominjungdok.mid",
+    "offsetMs": 1084
+  },
+  {
+    "title": "Figure It Out",
+    "artist": "Royal Blood",
+    "license": "원곡 Royal Blood, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "royal_blood_figure_it_out.mid",
+    "offsetMs": 155
+  },
+  {
+    "title": "Reptilia",
+    "artist": "The Strokes",
+    "license": "원곡 The Strokes, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "strokes_reptilia.mid",
+    "offsetMs": 300
+  },
+  {
+    "title": "Heathens",
+    "artist": "twenty one pilots",
+    "license": "원곡 twenty one pilots, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "twenty_one_pilots_heathens.mid",
+    "offsetMs": 1742
+  },
+  {
+    "title": "Seven Nation Army",
+    "artist": "The White Stripes",
+    "license": "원곡 The White Stripes, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
+    "midi": "white_stripes_seven_nation_army.mid",
+    "offsetMs": 1310
   }
 ]
