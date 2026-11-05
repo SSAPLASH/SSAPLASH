@@ -7,8 +7,8 @@ import { TermsItem } from './TermsItem';
 describe('SignupConsentCard', () => {
   const html = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} />);
 
-  it('제목·설명·모두 동의·항목 3개·버튼이 Figma 순서로 보인다', () => {
-    const order = ['가입 동의', SIGNUP_INTRO, '모두 동의합니다', 'signup-card-divider', ...SIGNUP_TERMS.map((t) => t.title), '동의하고 시작하기'];
+  it('제목·설명·필수 모두 동의·항목 4개·버튼이 Figma 순서로 보인다', () => {
+    const order = ['가입 동의', SIGNUP_INTRO, '필수 항목에 모두 동의합니다', 'signup-card-divider', ...SIGNUP_TERMS.map((t) => t.title), '동의하고 시작하기'];
     let last = -1;
     for (const s of order) {
       const i = html.indexOf(s);
@@ -16,6 +16,12 @@ describe('SignupConsentCard', () => {
       last = i;
     }
     expect(html).toContain('ui-card-lg');
+  });
+
+  it('네 번째 항목은 [선택]이고 필수 표시는 셋뿐이다', () => {
+    expect(html.match(/\[필수\]/g)?.length).toBe(3);
+    expect(html.match(/\[선택\]/g)?.length).toBe(1);
+    expect(html.indexOf('[선택]')).toBeGreaterThan(html.indexOf(SIGNUP_TERMS[2].title));
   });
 
   it('처음에는 아무것도 체크되지 않고 버튼이 비활성이다', () => {
@@ -36,6 +42,15 @@ describe('SignupConsentCard', () => {
 
   it('submitting이면 버튼을 잠근다', () => {
     const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} submitting />);
+    expect(h).toMatch(/<button[^>]*disabled=""[^>]*>동의하고 시작하기/);
+  });
+});
+
+describe('SignupConsentCard initialAgreed', () => {
+  it('넘긴 항목만 처음부터 체크돼 있다', () => {
+    const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} initialAgreed={['recommendation']} />);
+    expect(h.match(/checked=""/g)?.length).toBe(1);
+    // 필수 항목은 꺼져 있어 버튼은 여전히 잠겨 있다
     expect(h).toMatch(/<button[^>]*disabled=""[^>]*>동의하고 시작하기/);
   });
 });
