@@ -1,10 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listAllPlays } from './plays';
+import { getBestRecords, listAllPlays } from './plays';
 import { apiFetch } from './http';
 
 vi.mock('./http', () => ({ apiFetch: vi.fn() }));
 
-beforeEach(() => vi.mocked(apiFetch).mockReset());
+beforeEach(() => { vi.mocked(apiFetch).mockReset(); });
+
+describe('getBestRecords', () => {
+  it('곡 ID와 취소 신호를 전송하고 서버 백분율을 그대로 반환한다', async () => {
+    const response = { items: [{ songId: 1, bestAccuracy: 98.76 }] };
+    vi.mocked(apiFetch).mockResolvedValue(response);
+    const signal = new AbortController().signal;
+    expect(await getBestRecords([1, 2], signal)).toBe(response);
+    expect(apiFetch).toHaveBeenCalledWith('/api/v1/plays/best-records?songIds=1,2', { signal });
+  });
+  it('유효하지 않은 요청은 보내지 않고 네트워크 오류를 전파한다', async () => {
+    const signal = new AbortController().signal;
+    for (const ids of [[], [-1], [0], [1.5], [Number.MAX_SAFE_INTEGER + 1], Array(101).fill(1)]) {
+      await expect(getBestRecords(ids, signal)).rejects.toThrow();
+    }
+    expect(apiFetch).not.toHaveBeenCalled();
+    vi.mocked(apiFetch).mockRejectedValue(new Error('network'));
+    await expect(getBestRecords([1], signal)).rejects.toThrow('network');
+  });
+});
 
 describe('listAllPlays', () => {
   it('모든 페이지를 읽고 페이지 경계에서 중복된 playId를 제거한다', async () => {
