@@ -67,7 +67,7 @@ def test_가장_심한_약점이_focusPattern이다():
 
 
 def test_HIGH_약점이_있으면_NEEDS_WORK이다():
-    response = _run(same(40, delta=45.0))  # 평균 45ms 늦음 → severity 0.75
+    response = _run(same(40, delta=55.0))  # 평균 55ms 늦음 → 기준 60ms에서 severity 0.76
 
     assert any(s.severityLevel == "HIGH" for s in response.weakSegments)
     assert response.summary.level == "NEEDS_WORK"

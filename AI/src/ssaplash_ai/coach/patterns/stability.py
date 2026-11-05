@@ -20,7 +20,7 @@ def detect_unsteady(notes: NoteTable, th: Thresholds) -> list[Candidate]:
     if delta.size < th.unsteady_min_valid:
         return []
     std = float(np.std(delta))  # 모집단 표준편차
-    if std < th.unsteady_std_ratio * notes.good_ms:
+    if std < th.unsteady_std_ratio * notes.basis(th):
         return []
 
     start, end = whole_range(notes)
@@ -33,7 +33,7 @@ def detect_unsteady(notes: NoteTable, th: Thresholds) -> list[Candidate]:
             description=f"박자가 들쭉날쭉해요(편차 {std:.0f}ms).",
             cause_tags=["UNSTEADY", "OVERALL"],
             pads=pads,
-            severity=clamp01(std / (th.severity_unsteady_ratio * notes.good_ms)),
+            severity=clamp01(std / (th.severity_unsteady_ratio * notes.basis(th))),
             metrics={
                 "severity": 0.0,
                 "stdDeltaMs": round(std, 1),

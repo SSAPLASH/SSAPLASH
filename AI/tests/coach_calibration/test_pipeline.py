@@ -21,7 +21,7 @@ from ssaplash_ai.coach_calibration.register import (
 from ssaplash_ai.coach_calibration.source import ALLOWED_COLUMNS, DisallowedColumnError, ListSource
 from ssaplash_ai.coach_eval.runner import RunConfig
 
-FAST_REEVAL = RunConfig(seeds=3, note_counts=(60,), good_ms_values=(50.0,))
+FAST_REEVAL = RunConfig(seeds=3, note_counts=(60,), good_ms_values=(60.0,))
 TARGETS = Policy(targets={"TIMING": (0.30, 0.40)})
 
 

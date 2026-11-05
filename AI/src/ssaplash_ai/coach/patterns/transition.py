@@ -37,7 +37,7 @@ def detect_transition(notes: NoteTable, th: Thresholds) -> list[Candidate]:
         if (
             "TRANSITION_LATE" in ENABLED_PATTERNS
             and valid_idx.size >= th.transition_min_valid
-            and mean_of(notes.delta[valid_idx]) >= th.transition_late_ratio * notes.good_ms
+            and mean_of(notes.delta[valid_idx]) >= th.transition_late_ratio * notes.basis(th)
         ):
             mean = mean_of(notes.delta[valid_idx])
             out.append(
@@ -48,7 +48,7 @@ def detect_transition(notes: NoteTable, th: Thresholds) -> list[Candidate]:
                     description=f"{pair} 넘어갈 때 평균 {mean:.0f}ms 늦게 쳐요.",
                     cause_tags=["LATE", "TRANSITION"],
                     pads=[prev_pad, cur_pad],
-                    severity=clamp01(mean / (th.severity_delta_ratio * notes.good_ms)),
+                    severity=clamp01(mean / (th.severity_delta_ratio * notes.basis(th))),
                     metrics={
                         "severity": 0.0,
                         "meanDeltaMs": round(mean, 1),
