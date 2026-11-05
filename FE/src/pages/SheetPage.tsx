@@ -17,6 +17,7 @@ import { Countdown } from '@/components/play/Countdown';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
+import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
@@ -51,6 +52,7 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
+import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = 'select' | 'loading' | 'ready' | 'play';
@@ -102,6 +104,9 @@ function SheetPageBody() {
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
   const [strays, setStrays] = useState<{ timeMs: number }[]>([]);
   const clockRef = useRef<PlayClock | null>(null);
+  // 실시간 코칭(COACH-001). 연주 시작 시점 설정값으로 고정하고 문구는 안내 칸에 3초 띄운다 — 리듬 게임과 같은 연결
+  const coachRef = useRef<LiveCoach | null>(null);
+  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
@@ -249,8 +254,27 @@ function SheetPageBody() {
         return next;
       });
       setHud(activeSession.snapshot());
+      // 코칭은 기록·노트 색·HUD 뒤에 한다. 변환·표시가 실패해도 연주를 막지 않는다
+      const coach = coachRef.current;
+      if (!coach) return;
+      const message = coach.push({
+        songTimeMs: activeSession.songTime(e.at),
+        noteTimeMs: activeSession.notes[e.noteIndex].note.timeMs,
+        judgement: e.judgement,
+        deltaMs: e.deltaMs,
+        pad: e.pad,
+        stickId: e.stickId,
+        velocity: e.velocity,
+      });
+      if (!message) return;
+      try {
+        const copy = coachCopy(message);
+        if (copy) showCoachLine(copy, message.displayMs);
+      } catch {
+        // 코칭 오류는 무시한다
+      }
     });
-  }, [activeSession]);
+  }, [activeSession, showCoachLine]);
 
   // 타격: 즉시 발음 → 햅틱 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다
   useEffect(() => {
@@ -330,6 +354,7 @@ function SheetPageBody() {
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
         consent: consentAtStart.current,
+        liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
@@ -373,6 +398,9 @@ function SheetPageBody() {
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     resetRun(ss);
+    const st = useSettings.getState();
+    coachRef.current = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    clearCoachLine();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
@@ -387,7 +415,7 @@ function SheetPageBody() {
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setPlaySession(ss);
-  }, [acc, resetRun]);
+  }, [acc, resetRun, clearCoachLine]);
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
@@ -409,7 +437,9 @@ function SheetPageBody() {
     clock.restart();
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     resetRun(ss);
-  }, [resetRun]);
+    coachRef.current?.reset();
+    clearCoachLine();
+  }, [resetRun, clearCoachLine]);
 
   /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
   const leave = useCallback(() => {
@@ -418,6 +448,8 @@ function SheetPageBody() {
     metronome.unlock();
     inputManager.setCandidateProvider(null);
     sessionRef.current?.reset();
+    coachRef.current = null;
+    clearCoachLine();
     resetCountdown();
     setPauseReason(null);
     setNoteStates([]);
@@ -425,7 +457,7 @@ function SheetPageBody() {
     setHud(null);
     setPlaySession(null);
     navigate(returnTo, { replace: true });
-  }, [navigate, returnTo, resetCountdown]);
+  }, [navigate, returnTo, resetCountdown, clearCoachLine]);
 
   const toSelect = useCallback(() => {
     diagSessionEnd('left');
@@ -684,7 +716,13 @@ function SheetPageBody() {
             countInMs={activeSession.countInMs}
           />
         }
-        guide={<GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />}
+        guide={
+          coachLine ? (
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+          ) : (
+            <GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />
+          )
+        }
         kit={<DrumKit scale={0.7} effects states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
         readout={
           <HitReadout
