@@ -89,6 +89,23 @@ class AdminSongApiTest {
 		return out.toByteArray();
 	}
 
+	/** midi(false)를 두 박(960틱 = 120BPM에서 1000ms) 뒤로 민 MIDI. 0틱 = 음원 0초, 첫 박 = 1000ms. */
+	static byte[] offsetMidi() throws Exception {
+		var sequence = new Sequence(Sequence.PPQ, 480);
+		var track = sequence.createTrack();
+		var notes = new java.util.ArrayList<long[]>();
+		notes.add(new long[] {960, 36});
+		notes.add(new long[] {1920, 38});
+		for (int i = 0; i < 8; i++) notes.add(new long[] {960 + i * 240L, 42});
+		for (var n : notes) {
+			track.add(new MidiEvent(new ShortMessage(ShortMessage.NOTE_ON, 9, (int) n[1], 100), n[0]));
+			track.add(new MidiEvent(new ShortMessage(ShortMessage.NOTE_OFF, 9, (int) n[1], 0), n[0] + 60));
+		}
+		var out = new ByteArrayOutputStream();
+		MidiSystem.write(sequence, 0, out);
+		return out.toByteArray();
+	}
+
 	MockMultipartHttpServletRequestBuilder register(byte[] bytes) {
 		return multipart(BASE + "/midi").file(new MockMultipartFile("file", "song.mid", "audio/midi", bytes));
 	}
@@ -184,6 +201,35 @@ class AdminSongApiTest {
 		problem(send(delete(BASE + "/" + id), user), 403, "FORBIDDEN");
 		status(send(get(BASE), null), 401);
 		assertThat(db.queryForObject("SELECT published FROM songs WHERE id=?", Boolean.class, id)).isTrue();
+	}
+
+	@Test
+	void 등록할_때_offsetMs를_주면_곡과_채보_timing에_저장되고_첫_박이_0틱이다() throws Exception {
+		// 262번: AI MIDI(0틱 = 음원 0초)를 화면에서 올릴 때 카탈로그(260번)와 같은 첫 박 기준을 쓴다.
+		var r = send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", "1000"), admin);
+		status(r, 201);
+		long id = body(r).path("id").asLong();
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).isEqualTo(1000);
+		assertThat(db.queryForList("SELECT CAST(v.timing->>'offsetMs' AS int) FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",
+				Integer.class, id)).hasSize(3).containsOnly(1000);
+		var first = db.queryForMap("SELECT CAST(v.notes->0->'notation'->>'tick' AS int) AS tick, CAST(v.notes->0->>'timeMs' AS int) AS ms "
+				+ "FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD'", id);
+		assertThat(first.get("tick")).isEqualTo(0);
+		assertThat(first.get("ms")).isEqualTo(1000);
+
+		// 생략하면 지금처럼 0이다.
+		long plain = registered(true);
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, plain)).isZero();
+	}
+
+	@Test
+	void offsetMs가_0_이상_30분_이하_정수가_아니면_400이고_첫_박보다_앞선_노트가_있으면_422다() throws Exception {
+		for (var bad : List.of("-1", "1800001", "1.5", "abc", "", " 10", "+5", "99999999999"))
+			problem(send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", bad), admin), 400, "SONG_INVALID");
+		problem(send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", "1").param("offsetMs", "2"), admin), 400, "SONG_INVALID");
+		// 첫 박(2000ms)보다 앞선 노트(1000ms)가 있으면 변환 실패(카탈로그와 같은 규칙).
+		problem(send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", "2000"), admin), 422, "MIDI_UNSUPPORTED");
+		assertThat(db.queryForObject("SELECT count(*) FROM songs WHERE owner_id IS NULL AND title LIKE '관리 테스트%'", Integer.class)).isZero();
 	}
 
 	@Test
