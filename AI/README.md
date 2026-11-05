@@ -191,7 +191,8 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 - `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<해시 12자리>`로 남는다. 해시에는 모델 yaml, bpm 방법·설정, `offsetMs`·bpm 계산 규칙 버전(`chart_json.TIMING_RULES_VERSION`)이 들어간다
 - 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
-- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE)다
+- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE·HIHAT_PEDAL)다
+- `pad`는 위 9종 중 하나다. 음원 채보는 하이햇 페달을 따로 내지 않고, 채보 모델이 `HIHAT_PEDAL`을 내도 `HIHAT`으로 합친다. 현재 사용 중 모델에 실제 녹음 학습 모델의 페달 예측을 붙여 봤으나 MDB에서 페달 F1 0.548, ENST에서 손으로 친 하이햇 836개를 페달로 바꿔 하이햇 F1이 0.852 → 0.812로 떨어졌다(`scripts/score_pedal_relabel.py`)
 - bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고 계산한다. 박마다 몇 번째 박인지와 울린 시각을 짝지어, 박들이 모두 몇 초에 걸쳐 나왔는지로 한 박 길이를 구하고 bpm으로 바꾼다. Beat This! 박 시각은 0.02초 단위로 반올림돼 있어서, 이웃한 두 박 간격을 하나씩 재서 평균 내면 이 오차가 남는다. 박을 놓치거나 두 번 잡은 곳, 즉 간격이 중앙값에서 15% 넘게 벗어난 곳에서는 구간을 끊어 따로 계산한 뒤 합친다. 4박 넘게 이어지는 구간이 하나도 없으면 고른 간격의 평균을 쓴다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
 - `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 첫 마디 첫 박에서 한 마디(`60000 / bpm × 4` ms)씩 앞으로 당겨 0ms 이상인 가장 이른 마디 시작을 넣는다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
 - 설정 `tempo.origin`이 `notes`면 위 값을 킥·스네어 노트로 한 번 더 맞춘다. 격자 박에서 60ms 안에 있는 킥·스네어 노트가 박보다 평균 몇 ms 앞뒤에 있는지 중앙값을 구해 그만큼 `offsetMs`를 옮긴다. 쓸 노트가 16개보다 적으면 옮기지 않는다. Beat This! 박 시각이 드럼 소리보다 늦게 잡히면 메트로놈 클릭이 킥보다 늦게 울리는데 이를 줄인다. 기본값은 `notes`이고, `downbeat`면 위 값을 그대로 쓴다. 측정은 `scripts/origin_alignment_eval.py`로 두 방식을 같은 Beat This! 박으로 비교한다
@@ -234,7 +235,7 @@ uv run ssaplash-chart sheet score.mxl --out data/chart/score
 - 첫 파트의 도돌이표·1/2번 괄호·D.C.·D.S.·Fine·Coda를 펼친 순서와 템포 표기로 시각을 정한다. 마디 반복 기호(`measure-repeat`)는 앞 마디를 복사한다
 - `timing.bpm`·`timeSignature`는 첫 템포·첫 박자다(템포가 없으면 120). `offsetMs`는 못갖춘마디 길이다
 - `velocityHint`는 음표 셈여림 × 0.9, 없으면 90, 괄호 친 고스트 노트는 40이다
-- 하이햇 페달(44)은 채보 출력이 8패드라 `HIHAT`으로 합친다. 열린 하이햇(46·26, 또는 `<technical><open/>`)은 `configs/chart/sheet.yaml`의 `emit_hihat_open`이 참일 때만 노트에 `hihatOpen: true`를 붙인다. BE·FE와 필드를 맞추기 전이라 기본값은 거짓이다
+- 하이햇은 세 가지로 나눌 수 있다. 하이햇 페달만 밟기(44)는 `emit_hihat_pedal`이 참이면 `HIHAT_PEDAL` 노트, 페달 안 밟고 치기(46·26, 또는 `<technical><open/>`)는 `emit_hihat_open`이 참이면 `HIHAT` 노트에 `hihatOpen: true`, 페달 밟고 치기(42·22)는 필드 없는 `HIHAT` 노트다. 두 값은 `configs/chart/sheet.yaml`에 있고, BE main이 `HIHAT_PEDAL`을 받고 BE·FE가 `hihatOpen`을 받는지 확인하기 전이라 기본값은 거짓이다. 거짓이면 셋 다 필드 없는 `HIHAT`이다. 두 값을 켤 때 `generator_version`을 `sheet-musicxml-2`로 올린다
 - `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`이 `sheet-musicxml-1`이다
 - 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
 
@@ -697,12 +698,18 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 
 학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
 
-패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 하이햇 페달은 하이햇으로 합쳐 채보 JSON은 8패드다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
+패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 채보 JSON을 만들 때 하이햇 페달은 하이햇으로 합친다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
 
 서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
 
 ```bash
 uv run python scripts/score_sep_compare.py --results data/results/sep_compare --out data/results/sep_compare/compare.md
+```
+
+같은 예측 MIDI로 현재 사용 중 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측을 붙이는 방법(가까우면 이름 바꾸기, 실제 녹음 학습 모델도 하이햇을 안 냈을 때만 바꾸기, 페달을 넣고 근처 하이햇 지우기)을 MDB·ENST에서 비교한다. ENST 정답에는 페달 표시가 없어 ENST에서 나온 페달은 모두 틀린 것으로 센다.
+
+```bash
+uv run python scripts/score_pedal_relabel.py --results data/results/sep_compare --out data/results/pedal-relabel.md
 ```
 
 ```bash
