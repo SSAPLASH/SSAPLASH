@@ -1,4 +1,3 @@
-# 파이프라인이 도는지 확인하는 골격이다. 파트별 스택이 확정되면 각 job의 script를 채운다.
 stages:
   - lint
   - test
@@ -26,31 +25,21 @@ default:
     - if: $COACH_CALIBRATION == "true" || $CI_PIPELINE_SOURCE == "schedule"
       when: never
 
-lint:
+# BE 검증 대상이 아닌 변경에도 파이프라인을 만든다. 실제 파트 검사를 대체하지 않는다.
+pipeline-fallback:
   stage: lint
   rules:
     - !reference [.calibration-guard, rules]
+    - changes: &be_changes
+        - BE/**/*
+        - Infra/docker-compose.yml
+        - .gitlab-ci.yml
+      when: never
     - when: on_success
   script:
-    - echo "lint 단계 - 스택 확정 후 린트 명령을 넣는다"
+    - echo "BE 검증 대상 변경이 없어 공통 파이프라인만 생성합니다."
 
-test:
-  stage: test
-  rules:
-    - !reference [.calibration-guard, rules]
-    - when: on_success
-  script:
-    - echo "test 단계 - 스택 확정 후 테스트 명령을 넣는다"
-
-build:
-  stage: build
-  rules:
-    - !reference [.calibration-guard, rules]
-    - when: on_success
-  script:
-    - echo "build 단계 - 스택 확정 후 빌드 명령을 넣는다"
-
-# BE 초기화 이후의 실제 검증. 기존 공통 골격은 다른 파트가 연결할 때까지 유지한다.
+# BE 실제 검증.
 .be-job:
   image: eclipse-temurin:21-jdk
   variables:
@@ -69,10 +58,7 @@ build:
       - BE/.cache/audio-ffprobe/
   rules:
     - !reference [.calibration-guard, rules]
-    - changes:
-        - BE/**/*
-        - Infra/docker-compose.yml
-        - .gitlab-ci.yml
+    - changes: *be_changes
 
 be-test:
   extends: .be-job
@@ -180,6 +166,7 @@ deploy:
 rollback:
   extends: .deploy-job
   stage: deploy
+  allow_failure: true
   variables:
     ROLLBACK_SHA: ""
   script:
