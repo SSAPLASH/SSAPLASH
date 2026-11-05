@@ -14,6 +14,8 @@ import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { PlayStage } from '@/components/play/PlayStage';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { ScreenGate } from '@/components/ScreenGate';
+import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
@@ -75,7 +77,7 @@ interface AccResult {
   error?: string;
 }
 
-export function SheetPage() {
+function SheetPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
@@ -147,11 +149,15 @@ export function SheetPage() {
   const stageRef = useRef<Stage>(stage);
   const sessionRef = useRef<RhythmSession | null>(null);
   const pauseRef = useRef<PauseReason | null>(null);
+  // 세로·좁은 화면 안내(ScreenGate)가 열려 있는지. 키 핸들러가 최신 값을 본다
+  const screenOk = useScreenFits();
+  const gateOpenRef = useRef(!screenOk);
   useEffect(() => {
     stageRef.current = stage;
     sessionRef.current = activeSession;
     pauseRef.current = pauseReason;
-  }, [stage, activeSession, pauseReason]);
+    gateOpenRef.current = !screenOk;
+  }, [stage, activeSession, pauseReason, screenOk]);
 
   const recorder = useRef(new PlayRecorder());
   const startedAt = useRef<Date | null>(null);
@@ -290,6 +296,12 @@ export function SheetPage() {
 
   // 연결 끊김·메뉴 요청 → 자동 일시정지 (공용 훅)
   usePauseTriggers(pauseTo);
+
+  // 연주 중(카운트다운 포함) 화면 조건이 깨지면 먼저 일시정지한다. 다시 맞아도 자동 재개하지 않는다.
+  // pauseTo가 이미 멈춘 상태(pauseRef 있음)는 무시하므로 중복 호출에 안전하다
+  useEffect(() => {
+    if (!screenOk && stage === 'play' && pauseReason === null) pauseTo('user');
+  }, [screenOk, stage, pauseReason, pauseTo]);
 
   const finish = useCallback(
     (ss: RhythmSession) => {
@@ -471,6 +483,7 @@ export function SheetPage() {
     const onKey = (e: KeyboardEvent) => {
       // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
       if (e.isComposing || e.defaultPrevented) return;
+      if (gateOpenRef.current) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
       if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
@@ -684,5 +697,18 @@ export function SheetPage() {
         overlay={overlay}
       />
     </main>
+  );
+}
+
+export function SheetPage() {
+  const screenOk = useScreenFits();
+  return (
+    <>
+      {/* 안내가 열린 동안 뒤 화면 전체(일시정지 다이얼로그 포함)를 inert로 — 가려진 버튼에 초점·Enter가 가지 않게 */}
+      <div className="screen-gate-host" inert={!screenOk}>
+        <SheetPageBody />
+      </div>
+      <ScreenGate open={!screenOk} />
+    </>
   );
 }
