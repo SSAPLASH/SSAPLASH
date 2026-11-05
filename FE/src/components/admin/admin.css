@@ -104,7 +104,29 @@
   width: 160px;
 }
 
+/* 일괄 추가 창 */
+.dialog.admin-bulk-dialog {
+  max-width: 880px;
+}
+.admin-bad {
+  color: var(--miss);
+}
+.admin-note {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .admin-head-actions {
   display: flex;
   gap: var(--space-s);
+}
+.admin-picked {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.admin-picked .admin-note {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
