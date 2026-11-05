@@ -50,6 +50,7 @@ npm run build      # tsc 타입 검사 + vite 번들
 - 파일명은 `*.interaction.test.tsx`, 첫 줄은 `// @vitest-environment happy-dom`.
 - `@testing-library/react`(`render`·`screen`)와 `@testing-library/user-event`(`userEvent.setup()`)를 쓴다.
 - vitest globals를 켜지 않았으므로 자동 cleanup이 없다. 파일마다 `afterEach(cleanup)`을 둔다.
+- **Node 22 이상(특히 26)에서 localStorage 테스트가 `Cannot read properties of undefined (reading 'setItem')`로 깨지면** Node의 실험적 webstorage 전역이 happy-dom의 `localStorage`를 가린 것이다. `NODE_OPTIONS=--no-experimental-webstorage npm test`로 돌린다. CI(낮은 Node)에는 없는 문제다.
 - happy-dom은 Web Animations를 완전히 지원하지 않는다. `animate` 등으로 실제 애니메이션을 돌리는 컴포넌트를 테스트하면 cleanup 시 `AbortError`(unhandled rejection)가 날 수 있으니, 애니메이션 값이 아니라 상태·DOM 결과를 검증한다.
 - 예시: `src/app/MotionProvider.interaction.test.tsx`
 
