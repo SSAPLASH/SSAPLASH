@@ -23,19 +23,31 @@ from ssaplash_ai.recommend.data import DataError, Dataset, load_dataset, tempora
 from ssaplash_ai.recommend.evaluate import EvalConfig, Report, evaluate
 from ssaplash_ai.recommend.models import (
     CoPlay,
+    LightGCN,
+    Node2Vec,
     Popularity,
     R1Rules,
     Recommender,
+    Reranked,
     SimilarToRecent,
 )
 from ssaplash_ai.recommend.simulate import SimConfig, generate
 
-# 이름 → 방법. 이후 작업의 모델(Node2Vec, LightGCN, 재정렬)이 여기에 더해진다.
+# 이름 → 방법. M5: LightGCN(특징 없음), M5F: +곡 특징 노드, M5FM: +메타데이터. M6*: 각 LightGCN 상위 50을 R1 규칙으로 재정렬. M4*: Node2Vec(같은 세 변형).
 MODEL_FACTORIES: dict[str, Callable[[], Recommender]] = {
     "M0": Popularity,
     "M1": R1Rules,
     "M2": SimilarToRecent,
     "M3": CoPlay,
+    "M4": lambda: Node2Vec("none"),
+    "M4F": lambda: Node2Vec("chart"),
+    "M4FM": lambda: Node2Vec("chart+meta"),
+    "M5": lambda: LightGCN("none"),
+    "M5F": lambda: LightGCN("chart"),
+    "M5FM": lambda: LightGCN("chart+meta"),
+    "M6": lambda: Reranked(LightGCN("none")),
+    "M6F": lambda: Reranked(LightGCN("chart")),
+    "M6FM": lambda: Reranked(LightGCN("chart+meta")),
 }
 
 

@@ -336,9 +336,16 @@ def test_실행기는_합성_데이터로_돌고_보고서를_쓴다(tmp_path: P
         "M1_r1_rules",
         "M2_similar_to_recent",
         "M3_coplay",
+        "M5_lightgcn",
+        "M5_lightgcn_feat",
+        "M5_lightgcn_feat_meta",
+        "M6_rerank_lightgcn",
     }
-    # 하이퍼파라미터가 보고서에 남는다(없는 방법은 빈 값)
-    assert report["params"]["M0_popularity"] == {}
+    # 하이퍼파라미터가 보고서에 남는다(LightGCN만)
+    assert (
+        report["params"]["M5_lightgcn_feat"]["features"] == "chart"
+        and report["params"]["M0_popularity"] == {}
+    )
     assert (out / "table.csv").is_file()
     assert "실제 성능이 아닙니다" in capsys.readouterr().out
 

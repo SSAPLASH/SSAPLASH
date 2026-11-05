@@ -864,6 +864,12 @@ rm -rf .git                  # 받은 뒤 안쪽 .git은 지운다. 남겨 두�
 
 주의: 23곡 중 12곡(80sRock·Beatles·Britpop·Country1·Disco·Gospel·Grunge·Hendrix·Punk·Reggae·Rock·Rockabilly)은 같은 MedleyDB 녹음이 MUSDB18 train에도 들어 있다. 분리 모델이 학습 때 본 곡이라, 분리 모델을 거치는 평가에는 나머지 11곡(`mdb_drums_unseen.yaml`)만 쓴다. 세부 분류를 패드로 바꾸는 표는 `bench/datasets/mdb.py`에 있고, 탬버린(TMB) 32개는 패드 밖이라 뺀다. 탐 타격이 23곡 합쳐 90개뿐이라 탐별 점수는 GMD 묶음이 맡는다.
 
+## 곡 추천 R3 PoC (오프라인 실험)
+
+그래프 임베딩이 인기·규칙·비슷한 곡보다 다음에 칠 곡을 더 잘 맞히는지 확인하는 실험이다. 운영 API·DB 접속·서빙은 하지 않는다.
+입력 파일 스키마, 데이터 출처 단계(합성·내부·일반 사용자), 로더가 멈추는 조건, 시간순 분할은 `docs/recommend-poc.md`.
+코드는 `src/ssaplash_ai/recommend/`, 시험은 `uv run pytest tests/recommend`.
+
 ## 관련 문서
 
 - 공통 명세서: `Docs/Service Design/공통 명세서.md` (11장 AI 활용 계획, 15장 기술 검증 포인트)
