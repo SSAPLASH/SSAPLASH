@@ -2,7 +2,7 @@
 // PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이다. 화면은 Figma 악보 연습 흐름을 조립한다:
 // 곡 선택 SongPicker · 준비 ReadyPanel(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
@@ -12,6 +12,7 @@ import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { PlayStage } from '@/components/play/PlayStage';
+import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
 import { ScreenGate } from '@/components/ScreenGate';
@@ -768,6 +769,12 @@ function SheetPageBody() {
         }
         overlay={overlay}
       />
+      {/* 진단 빌드 전용: 채보 확인 재생(T2) */}
+      {LazyChartAutoplayRunner && (
+        <Suspense fallback={null}>
+          <LazyChartAutoplayRunner clockRef={clockRef} session={playSession} />
+        </Suspense>
+      )}
     </main>
   );
 }
