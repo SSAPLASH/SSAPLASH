@@ -3,6 +3,7 @@
 // 화면에는 아무것도 띄우지 않는다. 호출부(PlayPage)가 VITE_MONITOR 빌드에서만 동적 import로 불러온다.
 import { type CoachBasis } from './config';
 import { LiveCoach } from './LiveCoach';
+import { isPraiseTag } from './rules';
 import type { JudgedNote } from './window';
 
 /** 진단 이벤트 coachEval의 본문(type 제외) */
@@ -38,7 +39,8 @@ export function createCoachShadow(opts: CoachShadowOptions): CoachShadow {
       for (const { basis, coach } of coaches) {
         try {
           const m = coach.push(note);
-          if (m) opts.publish({ basis, active: basis === opts.activeBasis, tag: m.tag, tMs: m.tMs });
+          // 칭찬은 두 방식의 지적을 비교하는 데 쓰지 않는다
+          if (m && !isPraiseTag(m.tag)) opts.publish({ basis, active: basis === opts.activeBasis, tag: m.tag, tMs: m.tMs });
         } catch {
           // 그림자 평가 오류로 플레이를 막지 않는다
         }
