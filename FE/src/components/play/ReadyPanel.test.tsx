@@ -172,3 +172,12 @@ describe('ReadyPanel 슬롯·악보 읽는 법', () => {
     expect(html).toContain('미리 쳐 보기');
   });
 });
+
+describe('ReadyPanel footer 슬롯', () => {
+  it('footer는 두 열 아래(body 뒤)에 그대로 들어가고, 없으면 아무것도 없다', () => {
+    const html = render({ footer: <div className="x-footer">비슷한 곡</div> });
+    expect(html).toContain('x-footer');
+    expect(html.indexOf('x-footer')).toBeGreaterThan(html.indexOf('play-rp-side'));
+    expect(render()).not.toContain('x-footer');
+  });
+});
