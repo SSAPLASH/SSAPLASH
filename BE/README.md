@@ -1250,6 +1250,25 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - `SongLevelService.process(..., apply=true)`가 난이도를 저장하면 `SongChartsChanged`를 발행하고, **커밋 뒤** `ChartFeatureListener`가 새 트랜잭션에서 계산한다. 계산이 실패해도 채보 생성·난이도 산정은 성공이고, 특징이 없는 채보는 추천 후보에서만 빠진다.
 - 앱이 준비되면 `ChartFeatureBackfillStartup`이 특징이 없는 기존 채보를 채운다(`chart-features.backfill.enabled=false`로 끈다. 테스트 기본값). 이미 현재 버전으로 저장된 채보는 건너뛰므로 여러 번 돌려도 같다.
 
+### 리듬 격자 (V35 `chart_features.rhythm_grid`, R2 비슷한 곡의 입력)
+
+- 패드 묶음(`KICK`·`SNARE`·`HAT`=HIHAT·HIHAT_PEDAL·`CYMBAL`=CRASH·RIDE·`TOM`)마다 **한 박을 12칸으로 나눈 위치별 비율**(합 1, 노트 없는 묶음은 전부 0)과 `bpm`·`timeSignature`·`unquantizedRatio`를 JSON으로 저장한다. 12칸은 8분·16분·셋잇단음표를 모두 담는다. 위치는 `(timeMs - offsetMs) / (60000 / bpm)`의 소수부를 가장 가까운 칸에 맞춰 구한다.
+- **제외 표시:** 가변 템포(`tempoMap`에 다른 BPM이 둘 이상)는 `{"excluded":"VARIABLE_TEMPO"}`, 칸에서 1/48박 넘게 벗어난 노트가 20%를 넘으면 `OFF_GRID`, 박자 정보가 망가졌으면 `INVALID_TIMING`, 아는 패드가 없으면 `NO_KNOWN_PADS`를 저장한다. 제외된 채보도 값이 저장되므로 백필이 반복 계산하지 않는다.
+- `feature_version`은 `chart-features-1` 그대로다. `rhythm_grid`가 NULL인 행(V35 이전에 저장된 행)만 백필과 난이도 저장 뒤 계산이 채우고, 기본 특징은 같은 값으로 다시 쓰이므로 R1 추천은 영향이 없다. 박자 정보가 망가진 채보도 기본 특징은 저장한다.
+- 시험: `RhythmGridTest`(칸 위치, 묶음, 오프셋, 제외 사유, 결정성)와 `ChartFeatureRhythmGridTest`(DB: 격자 저장·재호출 무계산, 제외 표시, 격자만 채우기. CI에서 돈다).
+
+### 비슷한 곡 R2 (V36, `song/similar/`)
+
+`GET /api/v1/songs/{songId}/similar?difficulty=EASY|NORMAL|HARD&size=` (Bearer 인증, `size` 1~10 기본 5, `difficulty` 기본 NORMAL). 기준 곡과 연주 느낌이 비슷한 공용 곡을 곡당 채보 하나로 돌려준다. 응답 `{requestId, strategy: "SIMILAR_V1", items[{song, chartId, difficulty, similarity(0~1), matchedOn[]}]}`. AI 서버를 부르지 않는다.
+
+- **기준 곡:** 공개된 공용 곡이거나 본인 곡. 없는 곡·타인의 개인 곡은 404 `SONG_NOT_FOUND`. 기준 채보는 요청한 난이도, 없으면 EASY·NORMAL·HARD 순서에서 가장 가까운 것(같은 거리면 쉬운 쪽). 기준 곡에 리듬 격자가 없으면(가변 템포·격자 이탈·아직 계산 전) 오류가 아니라 200과 빈 `items`다.
+- **후보:** R1과 같은 공용 곡 조건에 `rhythm_grid`가 있는 최신 버전 채보. 개인 곡은 결과에 나오지 않는다. 후보 채보 목록은 `similar.cache-ttl-seconds`(기본 300, 0이면 끔) 동안 프로세스 안에 캐시한다. 사용자와 무관한 값이다.
+- **유사도(`SimilarityEngine`, 가정값):** 리듬 격자 0.35 + 패드 구성 0.20 + 전환 0.15 + 밀도 0.15 + 템포 0.15. 박자표 분자가 다르면 ×0.5, 0.5 미만은 제외. 같은 입력이면 같은 값·순서(같은 점수는 곡 id순). 사용자 기록은 점수에 쓰지 않는다.
+- **본인 기록 필터:** R1의 기준 밀도(최근 85% 이상 연주의 밀도 최댓값)가 있으면 그 1.5배를 넘는 채보는 거른다. 기록이 없으면 거르지 않는다.
+- **메타데이터:** 곡 메타데이터(장르·분위기 등)가 양쪽 곡에 있을 때만 15%를 섞도록 엔진에 구현돼 있으나, 메타데이터 저장은 아직 없어 지금은 채보 유사도만 쓴다.
+- **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
+- 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡·격자 없는 곡 제외, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
+
 ### 조회와 기록
 
 | 호출 | 설명 |
