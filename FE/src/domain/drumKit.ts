@@ -103,3 +103,35 @@ export function visualPadOf(pad: PadId): PadId | null {
   if (pad === 'HIHAT_PEDAL') return 'HIHAT';
   return pad;
 }
+
+/** 패드 모양별 "헤드 중심"(원본 160 기준). Pad.tsx의 RING 기하와 같다 */
+export const PAD_HEAD_CENTER: Record<PadShape, { x: number; y: number }> = {
+  drum: { x: 80, y: 72 },
+  cymbal: { x: 80, y: 70 },
+  kick: { x: 80, y: 85 },
+};
+
+/** 패드의 헤드 중심(킷 좌표, 760×300) */
+export function padCenter(p: DrumKitPad): { x: number; y: number } {
+  const s = p.w / 160;
+  const c = PAD_HEAD_CENTER[p.shape];
+  return { x: p.left + c.x * s, y: p.top + c.y * s };
+}
+
+/**
+ * 패드의 헤드 중심을 정규화 좌표(0~1, 킷 760×300 기준)로 옮긴 사본. 크기는 그대로.
+ * 보정 화면이 "실제 친 위치"에 패드를 놓을 때 쓴다(PLAY-004 4-1)
+ */
+export function placePad(p: DrumKitPad, x: number, y: number): DrumKitPad {
+  const s = p.w / 160;
+  const c = PAD_HEAD_CENTER[p.shape];
+  return { ...p, left: x * DRUM_KIT_W - c.x * s, top: y * DRUM_KIT_H - c.y * s };
+}
+
+/**
+ * 배치 좌표(kitLayout, 16:10 캔버스의 0~1) → DrumKit 정규화 좌표(760×300). 가로는 그대로, 세로는 킷의 패드 띠(0.15~0.77)로 눌러
+ * 아래쪽 패드가 잘리지 않게 한다. 보정 화면이 "실제 친 위치"를 킷에 놓을 때 쓴다
+ */
+export function layoutToKitPoint(p: { x: number; y: number }): { x: number; y: number } {
+  return { x: p.x, y: 0.15 + 0.62 * p.y };
+}
