@@ -132,7 +132,23 @@ describe('summarizeRecording', () => {
     expect(s.judgements).toEqual({ PERFECT: 1, GOOD: 1, MISS: 1 });
     expect(s.stray).toBe(2);
     expect(s.missed).toBe(1);
-    expect(s.sessions).toEqual([{ title: '곡 A', mode: 'RHYTHM', audioOffsetMs: 12 }]);
+    expect(s.sessions).toEqual([{ title: '곡 A', mode: 'RHYTHM', audioOffsetMs: 12, contested: 0, coach: { fixed: { total: 0, byTag: {} }, window: { total: 0, byTag: {} } } }]);
+  });
+
+  it('매칭 경합: 세션별·전체 수를 세고 Markdown에 보인다', () => {
+    const start = (title: string): DiagEvent => ({
+      type: 'session', phase: 'start', mode: 'RHYTHM', songId: title, title, chartVersionId: 1,
+      windows: { perfectMs: 25, goodMs: 60 } as never, audioOffsetMs: 0, noteCount: 3, t: 0,
+    });
+    const c = (hitId: number): DiagEvent => ({
+      type: 'matchContested', hitId, songTimeMs: 1055, pad: 'KICK', candidates: [0, 1], picked: 0, rule: 'earliest', t: 0,
+    });
+    const s = summarizeRecording({ meta, rows: [], diags: [start('곡 A'), c(1), c(2), start('곡 B'), c(3)] });
+    expect(s.contested).toBe(3);
+    expect(s.sessions.map((x) => x.contested)).toEqual([2, 1]);
+    const md = summaryToMarkdown(s);
+    expect(md).toContain('매칭 경합');
+    expect(md).toContain('| 곡 A | RHYTHM | 0.0 | 2 |');
   });
 
   it('빈 입력도 요약된다(값은 null)', () => {
@@ -171,5 +187,28 @@ describe('summaryToMarkdown', () => {
     expect(md).toContain('| SYNC rtt | 0 | – | – | – |');
     expect(md).toContain('채점 delta 평균: –ms');
     expect(md).not.toContain('| 세션 |');
+  });
+
+  it('코칭 기준 비교: coachEval을 세션별·방식별·tag별로 세고 Markdown에 나란히 보인다', () => {
+    const start = (title: string): DiagEvent => ({
+      type: 'session', phase: 'start', mode: 'RHYTHM', songId: title, title, chartVersionId: 1,
+      windows: { perfectMs: 25, goodMs: 150 } as never, audioOffsetMs: 0, noteCount: 3, t: 0,
+    });
+    const e = (basis: 'fixed' | 'window', tag: string): DiagEvent => ({
+      type: 'coachEval', basis, active: basis === 'fixed', tag, tMs: 1000, t: 0,
+    });
+    const s = summarizeRecording({
+      meta,
+      rows: [],
+      diags: [e('fixed', 'LIVE_EARLY'), start('곡 A'), e('fixed', 'LIVE_LATE'), e('fixed', 'LIVE_LATE'), e('window', 'LIVE_UNSTEADY'), start('곡 B')],
+    });
+    expect(s.sessions[0].coach.fixed).toEqual({ total: 2, byTag: { LIVE_LATE: 2 } });
+    expect(s.sessions[0].coach.window).toEqual({ total: 1, byTag: { LIVE_UNSTEADY: 1 } });
+    expect(s.sessions[1].coach.fixed.total).toBe(0);
+    const md = summaryToMarkdown(s);
+    expect(md).toContain('| 문구 수 | 2 | 1 |');
+    expect(md).toContain('| LIVE_LATE | 2 | 0 |');
+    expect(md).toContain('| LIVE_UNSTEADY | 0 | 1 |');
+    expect(md).not.toContain('### 곡 B');
   });
 });

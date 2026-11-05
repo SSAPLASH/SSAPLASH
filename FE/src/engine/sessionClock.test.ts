@@ -5,7 +5,7 @@ import { RhythmSession } from './RhythmSession';
 import type { Chart } from '@/domain/chart';
 
 /** 120BPM(박 500ms, 마디 2000ms), 카운트인 1마디(4박) */
-function makeSession(durationMs: number, offsetMs = 0): RhythmSession {
+function makeSession(durationMs: number, offsetMs = 0, tempoSegments?: Chart['tempoSegments']): RhythmSession {
   const chart: Chart = {
     songId: 't',
     title: '테스트',
@@ -16,11 +16,20 @@ function makeSession(durationMs: number, offsetMs = 0): RhythmSession {
     notes: [],
     source: 'BUILTIN',
     durationMs,
+    ...(tempoSegments ? { tempoSegments } : {}),
   };
   return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
 }
 
-function setup(opts: { clickOn?: boolean; withAcc?: boolean; durationMs?: number; offsetMs?: number } = {}) {
+function setup(
+  opts: {
+    clickOn?: boolean;
+    withAcc?: boolean;
+    durationMs?: number;
+    offsetMs?: number;
+    tempoSegments?: Chart['tempoSegments'];
+  } = {},
+) {
   let now = 1000;
   const clicks: { at: number; accent: boolean }[] = [];
   const beats: { beatInBar: number; at: number }[] = [];
@@ -45,7 +54,7 @@ function setup(opts: { clickOn?: boolean; withAcc?: boolean; durationMs?: number
       return acc.zero;
     },
   };
-  const session = makeSession(opts.durationMs ?? 1000, opts.offsetMs ?? 0);
+  const session = makeSession(opts.durationMs ?? 1000, opts.offsetMs ?? 0, opts.tempoSegments);
   let finished = 0;
   // 가짜 타이머: 등록된 콜백을 tick으로 직접 부른다
   const timer = { fn: null as (() => void) | null, sets: 0, clears: 0 };
@@ -109,6 +118,22 @@ describe('PlayClock', () => {
     expect(t.session.songTime(3300)).toBe(0);
     expect(t.session.currentStatus).toBe('countin');
     expect(t.clock.sync.begin).toBe(0);
+  });
+
+  it('빠르기 구간이 있으면 곡 중 클릭이 구간 bpm을 따른다', () => {
+    // 0~4박 120bpm(박 500ms), 4박부터 60bpm(박 1000ms). 반주 0초 = 3300
+    const t = setup({
+      clickOn: true,
+      durationMs: 5000,
+      tempoSegments: [
+        { beat: 0, startMs: 0, bpm: 120 },
+        { beat: 4, startMs: 2000, bpm: 60 },
+      ],
+    });
+    t.clock.begin();
+    for (let n = 1000; n <= 8400; n += 50) t.frame(n);
+    expect(t.clicks.map((c) => c.at)).toEqual([1300, 1800, 2300, 2800, 3300, 3800, 4300, 4800, 5300, 6300, 7300, 8300]);
+    expect(t.clicks.map((c) => c.accent)).toEqual([true, false, false, false, true, false, false, false, true, false, false, false]);
   });
 
   it('카운트인 클릭 4개, 첫 박만 악센트(곡 중 클릭이 꺼져 있어도)', () => {

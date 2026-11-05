@@ -13,6 +13,13 @@ export interface ChartNote {
   noteId?: string;
 }
 
+/** 빠르기 구간. beat는 1마디 1박을 0으로 센 박 번호, startMs는 곡 시각(반주 0초 기준) */
+export interface TempoSegment {
+  beat: number;
+  startMs: number;
+  bpm: number;
+}
+
 export interface Chart {
   songId: string;
   title: string;
@@ -33,8 +40,10 @@ export interface Chart {
   songNumericId?: number;
   /** 반주 음원이 있는 곡인지. 내장 채보는 미설정(없음) */
   hasAccompaniment?: boolean;
-  /** 템포·박자 변화가 있는 곡. 고정 bpm으로 그린다(1단계 미지원) */
+  /** 템포·박자 변화가 있는 곡. 악보 화면은 고정 bpm으로 그린다(1단계 미지원) */
   variableTempo?: boolean;
+  /** 빠르기 구간(둘 이상일 때만). 메트로놈 클릭·연주 화면 마디선이 따른다. 첫 구간 startMs = offsetMs */
+  tempoSegments?: TempoSegment[];
   /** BE 채보의 전체 노트 수. 변환에서 버린 노트가 있으면 notes.length와 다르다. 내장 채보는 미설정 */
   sourceNoteCount?: number;
 }

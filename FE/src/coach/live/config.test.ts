@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIVE_COACH_CONFIG, liveThresholds } from './config';
+import { COACH_BASIS, coachBasisMs, coachThresholds, LIVE_COACH_CONFIG, liveThresholds } from './config';
 
 describe('liveThresholds', () => {
   it('ms 값이 goodMs에 비례한다 (30·60·150)', () => {
@@ -38,5 +38,27 @@ describe('liveThresholds', () => {
     expect(t.padReleaseMs).toBeLessThan(t.padDiffMs);
     expect(t.unsteadyReleaseMs).toBeLessThan(t.unsteadyStdMs);
     expect(LIVE_COACH_CONFIG.hand.releaseRatio).toBeGreaterThan(LIVE_COACH_CONFIG.hand.ratio);
+  });
+});
+
+describe('코칭 기준 방식(coachBasisMs·coachThresholds)', () => {
+  it('기본 방식은 fixed다', () => {
+    expect(COACH_BASIS).toBe('fixed');
+  });
+
+  it('fixed: 사용자 goodMs가 60이면 이전 임계값과 같다', () => {
+    expect(coachThresholds(60, 'fixed')).toEqual(liveThresholds(60));
+    expect(coachThresholds(60)).toEqual(liveThresholds(60));
+  });
+
+  it('fixed: goodMs가 30·150이어도 60 기준과 같다', () => {
+    for (const g of [30, 150]) expect(coachThresholds(g, 'fixed')).toEqual(liveThresholds(60));
+  });
+
+  it('window: goodMs에 비례한다(이전 동작과 같다)', () => {
+    for (const g of [30, 60, 150]) {
+      expect(coachBasisMs('window', g)).toBe(g);
+      expect(coachThresholds(g, 'window')).toEqual(liveThresholds(g));
+    }
   });
 });

@@ -20,7 +20,7 @@ export function playModeName(mode: string): string {
 
 export type HistoryFilter = 'ALL' | 'RHYTHM' | 'SHEET';
 
-export function filterPlayLogs<T extends Pick<PlayLog, 'mode'>>(logs: readonly T[], filter: HistoryFilter): T[] {
+export function filterPlayLogs<T extends { mode: string }>(logs: readonly T[], filter: HistoryFilter): T[] {
   return filter === 'ALL' ? [...logs] : logs.filter((l) => l.mode === filter);
 }
 
@@ -62,6 +62,6 @@ export function sortPlayLogs<T extends Pick<PlayLog, 'startedAt'>>(logs: readonl
 }
 
 /** 연주 기록 행의 난이도 배지(UX-53). 게임(리듬) 행만 보이고, EASY·NORMAL·HARD가 아니면 생략한다 */
-export function historyRowLevel(log: Pick<PlayLog, 'mode' | 'difficulty'>): Difficulty | null {
+export function historyRowLevel(log: { mode: string; difficulty: string }): Difficulty | null {
   return log.mode === 'RHYTHM' ? songDifficulty(log.difficulty) : null;
 }

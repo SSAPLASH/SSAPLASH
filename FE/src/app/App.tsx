@@ -2,7 +2,9 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from '@/components/AppShell';
+import { RequireAdmin } from '@/components/RequireAdmin';
 import { RequireAuth } from '@/components/RequireAuth';
+import { AdminSongsPage } from '@/pages/AdminSongsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { HistoryPage } from '@/pages/HistoryPage';
 import { SetupPage } from '@/pages/SetupPage';
@@ -49,6 +51,10 @@ export default function App() {
           <Route path="history" element={<HistoryPage />} />
           <Route path="result/:playId" element={<ResultPage />} />
           <Route path="result/:playId/report" element={<ReportPage />} />
+          {/* 관리자 전용(Jira 262). 화면만 숨기고 권한은 BE가 판단한다 */}
+          <Route element={<RequireAdmin />}>
+            <Route path="admin/songs" element={<AdminSongsPage />} />
+          </Route>
           {StickMonitorPage && (
             <Route
               path="monitor/stick"
