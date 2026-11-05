@@ -2,6 +2,7 @@
 // audio는 import하지 않는다(같은 층) — 클릭·반주 제어는 deps로 주입받는다(Metronome과 같은 방식).
 import { diagTap } from './diagTap';
 import type { RhythmSession } from './RhythmSession';
+import { beatTimeMs } from '@/domain/tempo';
 
 /** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
 export const CLICK_LOOKAHEAD_MS = 200;
@@ -157,14 +158,15 @@ export class PlayClock {
     if (this._state.phase !== 'running' || this.session.currentStatus === 'paused') return;
     const t = this.session.songTime(now);
     this.measureAccDrift(now, t);
-    const beatMs = this.session.beatMs;
+    const countInBeats = Math.round(this.session.countInMs / this.session.beatMs);
     const beatsPerBar = this.session.chart.beatsPerBar;
     const duration = this.session.chart.durationMs;
     const originMs = this.session.originMs;
     const ahead = this.lookahead();
-    // 박 i의 곡 시각 = 원점 − 카운트인 + i×박. 원점 전(카운트인) 클릭은 항상, 곡 중은 clickOn()
+    // 박 i의 곡 시각 = 원점부터 (i − 카운트인 박 수)번째 박. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/tempo).
+    // 원점 전(카운트인) 클릭은 항상, 곡 중은 clickOn()
     for (;;) {
-      const bt = originMs - this.session.countInMs + this.nextBeat * beatMs;
+      const bt = beatTimeMs(this.session.chart, this.nextBeat - countInBeats);
       if (bt > t + ahead || bt > duration) break;
       if (bt >= t - 50) {
         const atMs = now + (bt - t);
