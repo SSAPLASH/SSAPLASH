@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { usePresets, selectDirty } from './presetStore';
 import { LocalPresetSource } from './localPresetSource';
 import { useSettings } from './settingsStore';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { PresetError, type PresetSource } from '@/domain/preset';
 
 beforeEach(() => {
@@ -71,27 +72,27 @@ describe('presetStore', () => {
 
   it('saveChanges: 변경이 있으면 update하고 dirty가 풀린다', async () => {
     await usePresets.getState().saveAs('a');
-    useSettings.getState().applyLayoutPreset('wide');
+    useSettings.getState().setKitLayout(WIDE_LAYOUT);
     expect(dirty()).toBe(true);
     expect(await usePresets.getState().saveChanges()).toBe(true);
-    expect(usePresets.getState().items[0].layout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    expect(usePresets.getState().items[0].layout).toEqual(WIDE_LAYOUT);
     expect(dirty()).toBe(false);
   });
 
   it('apply: 배치·사운드를 덮어쓰고 activePresetId를 바꾼다', async () => {
-    useSettings.getState().applyLayoutPreset('tight');
+    useSettings.getState().setKitLayout(TIGHT_LAYOUT);
     await usePresets.getState().saveAs('a');
     const id = usePresets.getState().items[0].id;
     useSettings.setState({ activePresetId: null, soundSetId: 'synth' });
     useSettings.getState().resetLayout();
     usePresets.getState().apply(id);
     expect(useSettings.getState()).toMatchObject({ activePresetId: id, soundSetId: 'ssaplash' });
-    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.tight);
+    expect(useSettings.getState().kitLayout).toEqual(TIGHT_LAYOUT);
   });
 
   it('remove: 적용 중 프리셋을 지우면 activePresetId가 null, 다른 걸 지우면 유지', async () => {
     await usePresets.getState().saveAs('a');
-    useSettings.getState().applyLayoutPreset('wide');
+    useSettings.getState().setKitLayout(WIDE_LAYOUT);
     await usePresets.getState().saveAs('b');
     const a = byName('a');
     const b = byName('b');
@@ -119,10 +120,10 @@ describe('presetStore', () => {
       setDefault: () => Promise.reject(new PresetError('NOT_FOUND')),
     };
     usePresets.getState().setSource(failing);
-    useSettings.getState().applyLayoutPreset('wide');
+    useSettings.getState().setKitLayout(WIDE_LAYOUT);
     expect(await usePresets.getState().saveAs('a')).toBe(false);
     expect(usePresets.getState()).toMatchObject({ status: 'error', error: 'LIMIT_EXCEEDED' });
-    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    expect(useSettings.getState().kitLayout).toEqual(WIDE_LAYOUT);
     expect(useSettings.getState().activePresetId).toBeNull();
     await usePresets.getState().remove('x');
     expect(usePresets.getState().error).toBe('NETWORK');
