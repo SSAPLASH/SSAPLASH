@@ -8,6 +8,9 @@ stages:
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # develop-BE의 열린 MR이 같은 커밋을 검증하면 중복 push 파이프라인을 만들지 않는다.
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop-BE" && $CI_OPEN_MERGE_REQUESTS
+      when: never
     - if: $CI_COMMIT_BRANCH =~ /^(main|develop-.*)$/
 
 # 모든 job은 EC2의 Docker Runner(태그 docker)에서 실행한다.
@@ -32,8 +35,12 @@ pipeline-fallback:
     - !reference [.calibration-guard, rules]
     - changes: &be_changes
         - BE/**/*
-        - Infra/docker-compose.yml
-        - .gitlab-ci.yml
+        - Infra/**/*
+        - Docs/API/**/*
+        - .gitlab/**/*
+        - .claude/**/*
+        - tools/**/*
+        - '*'
       when: never
     - when: on_success
   script:
@@ -116,27 +123,40 @@ ai-lock:
       - BE/.cache/audio-ffprobe/
   rules:
     - !reference [.calibration-guard, rules]
+    # main 통합은 변경 경로와 무관하게 검사한다.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop-BE"
     - changes: *be_changes
+
+# 전문 통합 검사는 main 대상 MR과 main 브랜치에서만 생성한다.
+.be-full-job:
+  extends: .be-job
+  rules:
+    - !reference [.calibration-guard, rules]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_COMMIT_BRANCH == "main"
 
 be-test:
   extends: .be-job
   stage: test
   script:
-    - . ./scripts/Prepare-AudioProbe.sh
-    - ./gradlew --no-daemon test
+    - if [ "$(sh scripts/CiScope.sh mode)" = FULL ]; then . ./scripts/Prepare-AudioProbe.sh; fi
+    - sh scripts/CiScope.sh test
   artifacts:
     when: always
     reports:
       junit: BE/build/test-results/test/TEST-*.xml
     paths:
       - BE/build/reports/tests/test/
+      - BE/build/test-results/test/TEST-*.xml
+      - BE/build/libs/app.jar
     expire_in: 1 week
 
 be-build:
-  extends: .be-job
+  extends: .be-full-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootJar
+    - ./gradlew --no-daemon --build-cache bootJar
   artifacts:
     paths:
       - BE/build/libs/app.jar
@@ -144,10 +164,10 @@ be-build:
 
 # 두 실행 JAR은 각각 별도 아티팩트로 보관해 업로드 크기 제한을 피한다.
 be-midi-worker-build:
-  extends: .be-job
+  extends: .be-full-job
   stage: build
   script:
-    - ./gradlew --no-daemon bootMidiWorkerJar
+    - ./gradlew --no-daemon --build-cache bootMidiWorkerJar
   artifacts:
     paths:
       - BE/build/libs/midi-worker.jar
@@ -155,14 +175,14 @@ be-midi-worker-build:
 
 # 실제 FluidSynth/FFmpeg 실행 경로를 일반 단위 테스트와 별도로 검증한다.
 be-midi-render-test:
-  extends: .be-job
+  extends: .be-full-job
   image: eclipse-temurin:21-jdk-jammy
   stage: test
   script:
     - PREPARE_AUDIO_FFMPEG=true; export PREPARE_AUDIO_FFMPEG; . ./scripts/Prepare-AudioProbe.sh
     - . ./scripts/Prepare-MidiRenderer.sh
     - MIDI_TEST_FFMPEG="$AUDIO_FFMPEG_PATH"; MIDI_TEST_FFPROBE="$AUDIO_FFPROBE_PATH"; export MIDI_TEST_FFMPEG MIDI_TEST_FFPROBE
-    - ./gradlew --no-daemon test --tests '*MidiRendererIntegrationTest'
+    - ./gradlew --no-daemon --build-cache test --tests '*MidiRendererIntegrationTest'
   artifacts:
     when: always
     reports:
@@ -174,7 +194,7 @@ be-midi-render-test:
 # 일회용 TimescaleDB 컨테이너를 service로 붙여 Flyway 이력 전체를 검증한다. 실패를 허용하거나 건너뛰지 않는다.
 # 이미지 버전은 Infra/docker-compose.yml의 postgres 이미지와 같아야 한다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
 be-timescale-test:
-  extends: .be-job
+  extends: .be-full-job
   stage: test
   services:
     - name: timescale/timescaledb:2.30.2-pg16
@@ -189,7 +209,7 @@ be-timescale-test:
   script:
     # service가 연결을 받을 때까지 최대 60초 기다린다.
     - bash -c 'for i in $(seq 1 60); do (echo > /dev/tcp/timescaledb/5432) 2>/dev/null && exit 0; sleep 1; done; echo "TimescaleDB가 60초 안에 준비되지 않았습니다."; exit 1'
-    - ./gradlew --no-daemon timescaleTest
+    - ./gradlew --no-daemon --build-cache timescaleTest
   artifacts:
     when: always
     reports:

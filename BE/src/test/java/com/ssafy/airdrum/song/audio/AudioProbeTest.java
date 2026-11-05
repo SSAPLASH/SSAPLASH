@@ -185,6 +185,8 @@ class AudioProbeTest {
                         BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(AudioErrorCode.UNAVAILABLE));
         assertThat(java.time.Duration.ofNanos(System.nanoTime() - start))
+                .isGreaterThanOrEqualTo(java.time.Duration.ofSeconds(9));
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - start))
                 .isLessThan(java.time.Duration.ofSeconds(15));
     }
 
@@ -215,11 +217,14 @@ class AudioProbeTest {
                             }
                             children.set(process.descendants().toList());
                             return process;
-                        });
+                        }, java.time.Duration.ofSeconds(1));
+        long start = System.nanoTime();
         assertThatThrownBy(() -> probe.inspect(dir.resolve("x")))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(AudioErrorCode.UNAVAILABLE));
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - start))
+                .isLessThan(java.time.Duration.ofSeconds(8));
         assertThat(children.get()).isNotEmpty();
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(3).toNanos();
         while (children.get().stream().anyMatch(ProcessHandle::isAlive)
