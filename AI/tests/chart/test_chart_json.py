@@ -161,14 +161,19 @@ def test_시각은_0과_길이_사이로_자름():
 
 
 def test_거친_라벨은_출력_오류():
-    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
+    with pytest.raises(ChartOutputError, match="패드 9종 밖"):
         build_notes(_hits([(0.1, "tom", -1)]), 3000)
 
 
-def test_페달_하이햇은_채보_출력에서_오류():
-    # 정답·채점에는 HIHAT_PEDAL이 있지만 BE가 받는 패드는 8종
-    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
-        build_notes(_hits([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+def test_페달_하이햇은_채보_출력_패드():
+    notes = build_notes(_hits([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+    assert [n["pad"] for n in notes] == ["HIHAT_PEDAL"]
+    validate_chart(_chart([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+
+
+def test_같은_시각_하이햇과_페달은_하이햇이_먼저():
+    notes = build_notes(_hits([(0.1, "HIHAT_PEDAL", -1), (0.1, "HIHAT", -1)]), 3000)
+    assert [n["pad"] for n in notes] == ["HIHAT", "HIHAT_PEDAL"]
 
 
 def test_노트가_없어도_통과():
@@ -189,6 +194,7 @@ def test_패드별_개수():
         "FLOOR_TOM",
         "CRASH",
         "RIDE",
+        "HIHAT_PEDAL",
     ]
 
 

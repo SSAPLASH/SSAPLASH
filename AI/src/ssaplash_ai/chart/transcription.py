@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ssaplash_ai.bench.datasets.base import SAMPLE_RATE
+from ssaplash_ai.bench.datasets.pads import merge_pedal
 from ssaplash_ai.bench.metrics.resource_usage import measure_resources
 from ssaplash_ai.bench.transcribers import BaseTranscriber, TranscriberConfig, create_transcriber
 from ssaplash_ai.chart.audio_io import duration_ms as samples_to_ms
@@ -183,8 +184,9 @@ class TranscriptionModule:
             tempo = self._tempo.estimate(audio, SAMPLE_RATE)
         except Exception as e:
             raise model_error_from(e, "bpm 추정") from e
+        # 노래 파일 채보는 하이햇 페달을 따로 내지 않음(페달 예측 정확도 기준 미달). 모델이 내도 HIHAT으로 합침
         chart = build_chart(
-            result.hits_pred,
+            merge_pedal(result.hits_pred),
             length_ms,
             tempo,
             self.model_version,
