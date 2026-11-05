@@ -7,6 +7,8 @@ import {
   isPlayableStatus,
   songDetailFromDto,
   songFromDto,
+  songLevelLabel,
+  songLevelOf,
   songStatusView,
   sortMineSongs,
   summarizeMineSongs,
@@ -44,6 +46,7 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     durationMs: null,
     hasAccompaniment: false,
     accompanimentStatus: 'NONE',
+    songLevel: null,
     difficulties: [],
     createdAt,
     coverUrl: null,
@@ -161,5 +164,32 @@ describe('isAccompanimentPending', () => {
     expect(isAccompanimentPending({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'READY' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'FAILED' })).toBe(false);
+  });
+});
+
+describe('곡 난이도 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('세 값은 그대로 담는다', () => {
+    for (const v of ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as const) expect(songFromDto({ ...base, songLevel: v }).songLevel).toBe(v);
+  });
+
+  it('없거나 null·모르는 값이면 null', () => {
+    expect(songFromDto(base).songLevel).toBeNull();
+    expect(songLevelOf(null)).toBeNull();
+    expect(songLevelOf('EASY')).toBeNull();
+    expect(songLevelOf('beginner')).toBeNull();
+    expect(songLevelOf(1)).toBeNull();
+  });
+
+  it('상세(MIDI 201 포함)에도 담긴다', () => {
+    expect(songDetailFromDto({ ...base, songLevel: 'ADVANCED', charts: [] }).songLevel).toBe('ADVANCED');
+  });
+
+  it('표기: 입문/중급/고급, 없으면 「—」', () => {
+    expect(songLevelLabel('BEGINNER')).toBe('입문');
+    expect(songLevelLabel('INTERMEDIATE')).toBe('중급');
+    expect(songLevelLabel('ADVANCED')).toBe('고급');
+    expect(songLevelLabel(null)).toBe('—');
   });
 });

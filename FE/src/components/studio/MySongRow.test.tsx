@@ -17,6 +17,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   durationMs: 60000,
   hasAccompaniment: false,
   accompanimentStatus: 'NONE',
+  songLevel: null,
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,

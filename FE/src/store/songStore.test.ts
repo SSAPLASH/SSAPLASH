@@ -13,6 +13,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   durationMs: 60000,
   hasAccompaniment: false,
   accompanimentStatus: 'GENERATING',
+  songLevel: null,
   difficulties: ['EASY', 'NORMAL', 'HARD'],
   createdAt: '2026-11-03T00:00:00Z',
   coverUrl: 'https://x/c.jpg',
