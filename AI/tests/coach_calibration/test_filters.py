@@ -35,7 +35,7 @@ def _idle_session(n_notes: int, missed: int) -> Session:
         cluster=(chart[0].time_ms, chart[0].time_ms + missed * 400.0) if missed else None,
         cluster_p_miss=1.0,
     )
-    request = simulate(chart, model, good_ms=50.0, seed=1).request
+    request = simulate(chart, model, good_ms=60.0, seed=1).request
     return _session(request)
 
 

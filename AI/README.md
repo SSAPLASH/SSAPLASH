@@ -54,7 +54,7 @@ AI/
 │   │                    transfer(서명 URL 내려받기·올리기), heartbeat(10초 heartbeat 스레드), job(작업 하나 실행기),
 │   │                    loop(claim 폴링 루프), cli(ssaplash-worker 명령), fake_be(테스트·로컬 확인용 BE 대역)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
-│   │                    patterns/(패턴별 규칙), select(후보 선택), advice(연습 조언 문장), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   │                    patterns/(패턴별 규칙), select(후보 선택), advice(연습 조언·상세 설명·심각도 단계), summary(종합 총평), analyzer(진입점). 설명은 docs/coach-weak-segments.md
 │   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
 │   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
 │   ├─ coach_calibration/ 약점 분석 실측 보정 배치(서버가 import하지 않음). source(비식별 뷰 읽기·허용 열 검증), filters(이상치 제외),
@@ -191,12 +191,14 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 - `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<해시 12자리>`로 남는다. 해시에는 모델 yaml, bpm 방법·설정, `offsetMs`·bpm 계산 규칙 버전(`chart_json.TIMING_RULES_VERSION`)이 들어간다
 - 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
-- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE)다
+- 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE·HIHAT_PEDAL)다
+- `pad`는 위 9종 중 하나다. 음원 채보는 하이햇 페달을 따로 내지 않고, 채보 모델이 `HIHAT_PEDAL`을 내도 `HIHAT`으로 합친다. 페달이 따로 적힌 실제 녹음 드럼 데이터가 MDB Drums 한 묶음뿐이라, 처음 보는 드럼 세트에서도 맞는지 확인할 수 없어서다. MDB에서는 현재 사용 중 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측이 30ms 안에 있으면 페달로 바꿨을 때 페달 정밀도 0.835, F1 0.548이었다(`scripts/score_pedal_relabel.py`). ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 `chh`로 적어서 페달 채점에 쓸 수 없다
 - bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고 계산한다. 박마다 몇 번째 박인지와 울린 시각을 짝지어, 박들이 모두 몇 초에 걸쳐 나왔는지로 한 박 길이를 구하고 bpm으로 바꾼다. Beat This! 박 시각은 0.02초 단위로 반올림돼 있어서, 이웃한 두 박 간격을 하나씩 재서 평균 내면 이 오차가 남는다. 박을 놓치거나 두 번 잡은 곳, 즉 간격이 중앙값에서 15% 넘게 벗어난 곳에서는 구간을 끊어 따로 계산한 뒤 합친다. 4박 넘게 이어지는 구간이 하나도 없으면 고른 간격의 평균을 쓴다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
 - `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 첫 마디 첫 박에서 한 마디(`60000 / bpm × 4` ms)씩 앞으로 당겨 0ms 이상인 가장 이른 마디 시작을 넣는다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
 - 설정 `tempo.origin`이 `notes`면 위 값을 킥·스네어 노트로 한 번 더 맞춘다. 격자 박에서 60ms 안에 있는 킥·스네어 노트가 박보다 평균 몇 ms 앞뒤에 있는지 중앙값을 구해 그만큼 `offsetMs`를 옮긴다. 쓸 노트가 16개보다 적으면 옮기지 않는다. Beat This! 박 시각이 드럼 소리보다 늦게 잡히면 메트로놈 클릭이 킥보다 늦게 울리는데 이를 줄인다. 기본값은 `notes`이고, `downbeat`면 위 값을 그대로 쓴다. 측정은 `scripts/origin_alignment_eval.py`로 두 방식을 같은 Beat This! 박으로 비교한다
 - bpm·`offsetMs`를 다시 재려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
+- 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
 채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=combo`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
 
@@ -221,6 +223,28 @@ uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config
 
 `separate`·`run`에 `--duration-ms <원곡 길이 ms>`를 주면 분리 출력 두 파일의 끝을 그 길이에 맞춰 자르거나 무음을 채우고(샘플 수 `길이 × 44100 // 1000`), 채보 노트 시각 상한에도 같은 값을 쓴다. BE가 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사하므로 워커가 BE claim의 `input.durationMs`를 여기에 넘긴다. 실측 길이와 1000ms 넘게 다르면 입력 오류다.
 
+### 드럼 악보 → 채보 (S15P31A307-292)
+
+MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. 워커 연결은 BE 악보 입력 작업 형식(S15P31A307-293)이 정해진 뒤 붙인다.
+
+```bash
+uv run ssaplash-chart sheet score.mxl --out data/chart/score
+```
+
+- 드럼 파트는 음높이 없는 음표가 있거나 MIDI 채널 10인 파트다. 음표의 악기 id → `midi-unpitched` GM 번호 → 패드로 바꾸고, 패드 표는 BE `GmDrumMapping`과 같다(`chart/sheet/drum_map.py`). 표에 없는 타악기(탬버린·콩가 등)는 빼고 `sheet.json`의 `dropped`에 개수를 남긴다
+- 첫 파트의 도돌이표·1/2번 괄호·D.C.·D.S.·Fine·Coda를 펼친 순서와 템포 표기로 시각을 정한다. 마디 반복 기호(`measure-repeat`)는 앞 마디를 복사한다
+- `timing.bpm`·`timeSignature`는 첫 템포·첫 박자다(템포가 없으면 120). `offsetMs`는 못갖춘마디 길이다
+- `velocityHint`는 음표 셈여림 × 0.9, 없으면 90, 괄호 친 고스트 노트는 40이다
+- 하이햇은 세 가지로 나눌 수 있다. 하이햇 페달만 밟기(44)는 `emit_hihat_pedal`이 참이면 `HIHAT_PEDAL` 노트, 페달 안 밟고 치기(46·26, 또는 `<technical><open/>`)는 `emit_hihat_open`이 참이면 `HIHAT` 노트에 `hihatOpen: true`, 페달 밟고 치기(42·22)는 필드 없는 `HIHAT` 노트다. 두 값은 `configs/chart/sheet.yaml`에 있다. BE 결과 검증이 `HIHAT_PEDAL`을 받아서 `emit_hihat_pedal`은 참이다. `emit_hihat_open`은 BE 채보 조회 응답에 `hihatOpen`이 없고 FE 판정 방식이 정해지지 않아 거짓이고, 그동안 열린 하이햇은 필드 없는 `HIHAT`이다
+- `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`은 `sheet-musicxml-2`다. 페달 출력을 켜면서 1에서 올렸고, `emit_hihat_open`을 켤 때 3으로 올린다
+- 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
+
+정확도는 PDMX 공개 악보와 MuseScore가 같은 악보를 재생해 내보낸 MIDI를 비교해 측정한다. 악보·MIDI는 저장소에 넣지 않는다.
+
+```bash
+uv run python scripts/sheet_pdmx_eval.py --list <곡 목록.csv> --pdmx <PDMX 압축 푼 폴더> --out data/results/sheet_pdmx
+```
+
 ## 채보 워커 실행 (S15P31A307-171)
 
 BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
@@ -236,6 +260,11 @@ BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작
 | `SSAPLASH_WORKER_POLL_SEC` | | 5 | 대기 작업이 없을 때(204) 다음 claim까지 |
 | `SSAPLASH_WORKER_HEARTBEAT_SEC` | | 10 | heartbeat 주기 |
 | `SSAPLASH_WORKER_KEEP_FILES` | | false | 참이면 작업 폴더를 지우지 않는다(문제 추적용) |
+| `SSAPLASH_WORKER_SEND_REASON` | | false | 참이면 실패 보고 본문에 사용자에게 보여 줄 사유 `reason`을 넣는다. BE가 reason을 저장·노출하고 실제 연동을 확인한 뒤 켠다 |
+| `SSAPLASH_NARRATIVE_ENABLED` | | false | 참이면 채보 작업이 없을 때 LLM 총평 작업을 가져간다(아래 "LLM 총평 작업") |
+| `SSAPLASH_NARRATIVE_MODEL` | 켰을 때 | — | 같은 서버의 모델 서버에 올라 있는 모델 이름(Ollama는 `ollama list`) |
+| `SSAPLASH_NARRATIVE_LLM_URL` | | `http://127.0.0.1:11434` | 모델 서버 주소. 같은 서버를 가리킨다 |
+| `SSAPLASH_NARRATIVE_LLM_API` | | `ollama` | `ollama` 또는 `openai`(OpenAI 호환: vLLM, llama.cpp 서버) |
 | `SSAPLASH_CHART_DEVICE`, `SSAPLASH_MODELS_DIR`, `SSAPLASH_CHART_MODEL` | | | 추론 모듈이 읽는 기존 변수. `SSAPLASH_CHART_MODEL`로 채보 모델을 고름 |
 
 ```bash
@@ -247,14 +276,29 @@ uv run ssaplash-worker run
 
 종료 코드는 0 정상, 1 설정·모델 오류, 2 인증 실패(401)다. 로그는 표준 오류로 나가며 토큰과 서명 URL은 남기지 않는다. 종료 신호(Ctrl+C, SIGTERM)를 한 번 받으면 처리 중인 작업을 끝내고 멈추고, 두 번 받으면 바로 끝낸다(임대가 만료되면 BE가 다시 배정한다). 분리 모델 설정(`configs/chart/separation.yaml`)의 출력은 BE 계약대로 flac 44,100Hz여야 하며 아니면 시작하지 않는다.
 
-| 실패 | BE 보고 `code` | `retryable` | 뒤처리 |
-| --- | --- | --- | --- |
-| 입력 파일 못 읽음·길이 초과·무음, 내려받은 파일의 크기·sha256 불일치, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | BE가 FAILED |
-| 모델 올리기·추론 예외 | `MODEL_FAILED` | GPU 메모리 부족일 때만 참 | 참이면 BE가 다시 배정(단계별 최대 2회) |
-| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | BE가 FAILED |
-| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패 | 보고 안 함 | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+| 실패 | BE 보고 `code` | `retryable` | `reason` | 뒤처리 |
+| --- | --- | --- | --- | --- |
+| 원곡 파일 못 읽음·길이 초과·무음, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | `SOURCE_INVALID` | BE가 FAILED |
+| 분리한 드럼 트랙이 무음, 1분당 노트 수가 기준 미만, 박 추적 실패 | `INPUT_INVALID` | 거짓 | `NOT_TRANSCRIBABLE` | BE가 FAILED |
+| 모델 올리기·추론 중 GPU 메모리 부족 | `MODEL_FAILED` | 참 | `GPU_OUT_OF_MEMORY` | BE가 다시 배정(단계별 최대 2회) |
+| 모델 올리기·추론 중 그 밖의 예외, 워커 내부 예외 | `MODEL_FAILED` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
+| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
+| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패, 내려받은 파일의 크기·sha256이 3번 다 배정과 다름 | 보고 안 함 | — | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+
+`reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다.
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### LLM 총평 작업 (선택, COACH-003 후속)
+
+규칙 총평을 같은 GPU 서버의 **로컬 오픈소스 모델**이 쓴 코치 문장으로 바꾼다(외부 유료 API 없음). 워커가 채보 작업이 없을 때
+BE의 `/internal/v1/coach-narratives`에서 작업을 가져와 모델 서버에 문장을 부탁하고, 가드레일(`coach/narrative.py`)을 통과하면 제출한다.
+실패하거나 BE에 이 API가 아직 없으면(404) 규칙 총평이 그대로 남고 채보 작업에는 영향이 없다. 계약과 가드레일은 `docs/coach-narrative.md`.
+
+1. 같은 서버에 모델 서버를 띄우고 후보 모델을 받는다(예: Ollama). 모델 라이선스는 고를 때 확인한다.
+2. 후보를 같은 사실로 비교한다(문장은 사람이 읽어 고른다):
+   `uv run python scripts/eval_narrative.py --model <후보1> --model <후보2> --repeats 5 --out data/results/narrative-compare.md`
+3. 모델을 정하면 워커 환경에 `SSAPLASH_NARRATIVE_ENABLED=true`, `SSAPLASH_NARRATIVE_MODEL=<이름>`을 넣고 워커를 다시 띄운다.
 
 ### 모델 없이 전체 흐름 확인 (fake BE)
 
@@ -674,12 +718,18 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 
 학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
 
-패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 하이햇 페달은 하이햇으로 합쳐 채보 JSON은 8패드다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
+패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 채보 JSON을 만들 때 하이햇 페달은 하이햇으로 합친다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
 
 서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
 
 ```bash
 uv run python scripts/score_sep_compare.py --results data/results/sep_compare --out data/results/sep_compare/compare.md
+```
+
+같은 예측 MIDI로 현재 사용 중 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측을 붙이는 방법(가까우면 이름 바꾸기, 실제 녹음 학습 모델도 하이햇을 안 냈을 때만 바꾸기, 페달을 넣고 근처 하이햇 지우기)을 MDB·ENST에서 비교한다. ENST는 페달만 밟은 하이햇도 `chh`로 적어서 정답에 페달이 없다. ENST 표의 페달은 전부 틀린 것으로 세지만 실제 페달 소리일 수 있어, ENST는 페달을 몇 개 냈는지만 참고로 본다.
+
+```bash
+uv run python scripts/score_pedal_relabel.py --results data/results/sep_compare --out data/results/pedal-relabel.md
 ```
 
 ```bash
@@ -841,6 +891,12 @@ rm -rf .git                  # 받은 뒤 안쪽 .git은 지운다. 남겨 두�
 ```
 
 주의: 23곡 중 12곡(80sRock·Beatles·Britpop·Country1·Disco·Gospel·Grunge·Hendrix·Punk·Reggae·Rock·Rockabilly)은 같은 MedleyDB 녹음이 MUSDB18 train에도 들어 있다. 분리 모델이 학습 때 본 곡이라, 분리 모델을 거치는 평가에는 나머지 11곡(`mdb_drums_unseen.yaml`)만 쓴다. 세부 분류를 패드로 바꾸는 표는 `bench/datasets/mdb.py`에 있고, 탬버린(TMB) 32개는 패드 밖이라 뺀다. 탐 타격이 23곡 합쳐 90개뿐이라 탐별 점수는 GMD 묶음이 맡는다.
+
+## 곡 추천 R3 PoC (오프라인 실험)
+
+그래프 임베딩이 인기·규칙·비슷한 곡보다 다음에 칠 곡을 더 잘 맞히는지 확인하는 실험이다. 운영 API·DB 접속·서빙은 하지 않는다.
+입력 파일 스키마, 데이터 출처 단계(합성·내부·일반 사용자), 로더가 멈추는 조건, 시간순 분할은 `docs/recommend-poc.md`.
+코드는 `src/ssaplash_ai/recommend/`, 시험은 `uv run pytest tests/recommend`.
 
 ## 관련 문서
 

@@ -28,7 +28,12 @@ import soxr
 
 from ssaplash_ai.bench.datasets.base import SAMPLE_RATE, read_audio
 from ssaplash_ai.chart.config import OUTPUT_FORMATS
-from ssaplash_ai.chart.errors import ChartInputError, ChartOutputError, summarize_exception
+from ssaplash_ai.chart.errors import (
+    ChartInputError,
+    ChartOutputError,
+    ChartSilentError,
+    summarize_exception,
+)
 
 MIN_SAMPLE_RATE = 8000
 MAX_SAMPLE_RATE = 192000
@@ -159,7 +164,7 @@ def read_audio_file(
     if audio.shape[1] == 0:
         raise ChartInputError(f"입력 파일이 비어 있음: {path.name}")
     if float(np.max(np.abs(audio))) < SILENCE_PEAK:
-        raise ChartInputError(f"입력이 무음: {path.name}")
+        raise ChartSilentError(f"입력이 무음: {path.name}")
     return audio
 
 

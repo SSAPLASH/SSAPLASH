@@ -10,6 +10,7 @@ from ssaplash_ai.chart.config import (
     ENV_CHART_MODEL,
     ENV_DEVICE,
     ENV_WORK_DIR,
+    DrumCheckConfig,
     OutputConfig,
     SeparationConfig,
     TempoConfig,
@@ -117,6 +118,15 @@ def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatc
     assert cfg.device == "cpu"
     assert cfg.tempo == TempoConfig()
     assert cfg.schema_version == 1 and cfg.max_duration_sec == 600
+    # 채보 가능 검사: 노트 수 기준은 비어 있고(검사 안 함) 박 추적 실패는 실패로 봄
+    assert cfg.drum_check == DrumCheckConfig(min_notes_per_minute=None, fail_on_unknown_tempo=True)
+
+
+def test_drum_check_설정을_읽는다():
+    raw = {"model_config": "m.yaml", "drum_check": {"min_notes_per_minute": 12}}
+    assert TranscriptionConfig.from_dict(raw).drum_check.min_notes_per_minute == 12.0
+    raw = {"model_config": "m.yaml", "drum_check": {"fail_on_unknown_tempo": False}}
+    assert TranscriptionConfig.from_dict(raw).drum_check.fail_on_unknown_tempo is False
 
 
 @pytest.mark.parametrize(
@@ -131,6 +141,15 @@ def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatc
         ({"model_config": "m.yaml", "tempo": {"time_signature": "4-4"}}, "time_signature"),
         ({"model_config": "m.yaml", "tempo": {"bpm": 120}}, "모르는 tempo 필드"),
         ({"model_config": "m.yaml", "tempo": {"origin": "first_beat"}}, "tempo.origin"),
+        ({"model_config": "m.yaml", "drum_check": {"min_notes": 3}}, "모르는 drum_check 필드"),
+        (
+            {"model_config": "m.yaml", "drum_check": {"min_notes_per_minute": 0}},
+            "min_notes_per_minute",
+        ),
+        (
+            {"model_config": "m.yaml", "drum_check": {"fail_on_unknown_tempo": "yes"}},
+            "fail_on_unknown_tempo",
+        ),
     ],
 )
 def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):

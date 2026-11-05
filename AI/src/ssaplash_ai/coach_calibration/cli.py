@@ -15,8 +15,10 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
+from ssaplash_ai.coach_calibration import filters
 from ssaplash_ai.coach_calibration.candidates import GROUPS
 from ssaplash_ai.coach_calibration.pipeline import (
     DEFAULT_MIN_NEW,
@@ -41,6 +43,14 @@ def _line(status: str, **fields: object) -> str:
     return f"{PREFIX} status={status} {parts}".rstrip()
 
 
+def _iso_date(text: str) -> str:
+    """YYYY-MM-DD만 받는다(뷰의 played_date와 문자열로 비교하므로 형식이 어긋나면 거른다)."""
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"YYYY-MM-DD 형식의 날짜여야 합니다: {text!r}") from exc
+
+
 def main(argv: list[str] | None = None, source: RowSource | None = None) -> int:
     parser = argparse.ArgumentParser(description="약점 분석 실측 보정 배치")
     parser.add_argument(
@@ -57,6 +67,21 @@ def main(argv: list[str] | None = None, source: RowSource | None = None) -> int:
     parser.add_argument(
         "--force", action="store_true", help="새 세션이 모자라도 돌린다(정책을 바꾼 뒤 등)"
     )
+    parser.add_argument(
+        "--since",
+        type=_iso_date,
+        default=None,
+        help="이 날짜(YYYY-MM-DD, 뷰의 played_date) 이후 플레이만 쓴다. FE가 기록을 바로잡은 배포일 이전의 "
+        "로그(예: 같은 패드 노트가 촘촘할 때 오차 부호가 뒤집히던 매칭 오류)를 빼는 용도. 뷰에 앱 버전이 없어 날짜로만 거른다",
+    )
+    parser.add_argument(
+        "--mode",
+        action="append",
+        choices=sorted(filters.SUPPORTED_MODES),
+        default=None,
+        help="쓸 모드(여러 번 지정 가능). 없으면 RHYTHM·SHEET 둘 다. 악보 연습은 멈추고 악보를 보는 시간이 길어 "
+        "합치면 리듬 게임 분포가 왜곡될 수 있으니 모드별로 따로 돌려 비교한다",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -71,6 +96,8 @@ def main(argv: list[str] | None = None, source: RowSource | None = None) -> int:
             min_new=args.min_new,
             skip_reeval=args.skip_reeval,
             force=args.force,
+            since=args.since,
+            modes=frozenset(args.mode) if args.mode else None,
         )
     except ExportSchemaError as exc:
         print(_line("FAIL", error=type(exc).__name__, columns=",".join(exc.columns)), flush=True)

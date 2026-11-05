@@ -1,0 +1,128 @@
+# LLM 총평 작업 (COACH-003 후속, 오픈소스 모델)
+
+규칙 총평(`summary.source=RULE`)을 **교내 GPU 서버의 로컬 오픈소스 모델**이 쓴 코치 문장(`source=LLM`)으로 바꾸는 흐름이다.
+외부 유료 API를 쓰지 않는다. 사용자는 항상 규칙 총평을 먼저 보고, LLM 문장은 준비되면 그것을 **덮어쓴다.**
+GPU 서버가 꺼져 있거나 모델이 실패하면 규칙 총평이 그대로 남는다.
+
+- 코드: `src/ssaplash_ai/coach/narrative.py`(사실→프롬프트→가드레일→폴백). 모델은 이 모듈이 모르며 `TextGenerator` 함수로 끼운다.
+- 구조는 채보 워커(`/internal/v1/chart-jobs/`)와 같은 **pull 방식**이다: BE가 작업을 큐에 넣고 GPU 워커가 가져가 결과를 제출한다.
+  EC2에서 교내망으로 건너가는 접속 경로가 필요 없다.
+
+## 흐름
+
+```
+업로드 → BE가 weak-segments 호출(3초) → 규칙 총평 저장 (사용자에게 바로 보임)
+       → BE가 총평 작업 생성 → GPU 워커 claim → 로컬 모델이 문장 작성 → 가드레일 검사
+       → result 제출 → BE가 coach_summary.text를 LLM 문장으로 덮어씀 (source=LLM)
+                     └ 실패/가드레일 거절 → failure 제출 → BE는 규칙 총평 유지
+```
+
+## BE가 만들 API (워커용, 채보 워커와 같은 인증)
+
+경로 접두어 `/internal/v1/coach-narratives`. 인증은 채보 워커와 같다(`Authorization: Bearer 토큰`, `WorkerTokenFilter`).
+Nginx는 `^~ /internal/v1/chart-jobs/`처럼 이 경로 하나를 같은 IP 허용으로 열어야 한다(Infra가 추가한다).
+
+| 호출 | 요청 | 성공 응답 |
+| --- | --- | --- |
+| `POST /claim` | `{ "workerId": "worker1", "claimRequestId": "<uuid>" }` | 작업이 없으면 `204`. 있으면 `200` `{ "jobId": 7, "attemptId": "<uuid>", "leaseExpiresAt": "ISO-8601", "facts": { … } }` |
+| `POST /{jobId}/result` | `{ "attemptId", "text", "model", "generationMs" }` | `200` `{ "status": "DONE" }` |
+| `POST /{jobId}/failure` | `{ "attemptId", "code", "retryable", "summary" }` | `200` `{ "status": "FAILED" 또는 "QUEUED" }` |
+
+- 같은 `claimRequestId`로 다시 부르면 같은 배정을 돌려준다(채보 `claim`과 같은 멱등성).
+- 임대는 120초다. 추론이 짧아서 heartbeat는 두지 않는다. 임대가 끝나면 BE가 작업을 되돌려 다시 배정한다. 시도는 최대 2번이다.
+- `result.text`: BE가 **1~500자**, 제어 문자 없음으로 검증한다(워커는 400자 이하만 보낸다). `model`은 모델 이름 문자열(로그용, 37자 이하), `generationMs`는 0 이상 정수.
+- `failure.code`는 `INPUT_INVALID`·`MODEL_FAILED`·`OUTPUT_INVALID`(가드레일 거절 포함) 중 하나, `summary`는 200자 이하 한 줄. 입력 값은 담지 않는다.
+- 결과를 받으면 BE는 `coach_summary`에서 `level`·`focusPattern`은 **그대로 두고** `text`만 바꾸며 `source`를 `LLM`으로 바꾼다.
+  작업이 실패하거나 만료되면 아무것도 바꾸지 않는다(규칙 총평 유지).
+- 리포트 한 건에 총평 작업은 하나만 만든다. 이미 만들어진 리포트에는 소급하지 않는다.
+
+## `facts` (claim 응답에 담기는 사실)
+
+타격 원본(`hits`)·회원 번호·`playId`·`songId`·곡 제목은 **넣지 않는다.** BE가 저장된 리포트에서 만든다.
+
+```json
+{
+  "contractVersion": 1,
+  "level": "FAIR",
+  "focusPattern": "MISS_CLUSTER",
+  "counts": { "perfect": 20, "good": 10, "miss": 10 },
+  "strengthPad": "KICK",
+  "segments": [
+    {
+      "pattern": "MISS_CLUSTER", "severityLevel": "MEDIUM", "pads": ["SNARE"],
+      "fromMs": 7000.0, "toMs": 12000.0, "scope": "SEGMENT",
+      "metrics": { "severity": 0.67, "missRate": 0.4, "missCount": 4, "noteCount": 10 }
+    }
+  ],
+  "history": {
+    "sameSongPlays": 3,
+    "previous": { "counts": { "perfect": 20, "good": 10, "miss": 18 }, "topPatterns": ["TIMING_LATE"] }
+  }
+}
+```
+
+| 필드 | 출처 | 내용 |
+| --- | --- | --- |
+| `level`, `focusPattern` | 저장된 규칙 총평 | 그대로 |
+| `counts` | 리포트의 판정 개수 | `perfect`/`good`/`miss` |
+| `strengthPad` | 저장된 규칙 총평의 `strengthPad` | 규칙 총평이 "잘한 점"으로 꼽은 패드. 없으면 null |
+| `segments` | 저장된 `weakSegments` | `pattern`, `severityLevel`, `pads`, `fromMs`, `toMs`, `metrics`에서 `scope`와 수치만. 최대 5개 |
+| `history` | BE가 집계 | **같은 사용자, 같은 곡**의 이전 플레이. 없으면 null |
+
+`history` 규칙
+
+- `sameSongPlays`: 이번을 뺀 같은 곡 이전 플레이 횟수(1 이상). 없으면 `history` 전체를 null로 둔다.
+- `previous`: **바로 직전** 플레이의 판정 개수와 상위 약점 `pattern`(최대 3개). 직전 플레이에 리포트가 없으면 그 앞의 리포트 있는 플레이를 쓴다.
+- 문장은 주어진 숫자의 비교("지난번보다 놓침이 줄었어요")만 쓴다. 최근 N회 추이가 필요하면 `previous`를 배열로 늘리는 것이 다음 변경이다.
+- 개인 식별 정보(회원 번호, `playId`, 시각)는 넣지 않는다.
+
+## 워커가 하는 일
+
+1. `claim`으로 `facts`를 받는다. 모양이 맞지 않으면 `INPUT_INVALID`로 `failure`.
+2. 로컬 모델로 문장을 쓴다(`write_narrative`). 가드레일에 걸리면 이유를 알려 주고 한 번 더 쓴다.
+3. 통과하면 `result`, 둘 다 걸리면 `OUTPUT_INVALID`로 `failure`, 모델 실패는 `MODEL_FAILED`(재시도 가능)로 `failure`.
+
+가드레일(`narrative.check`): 400자 이하 한 문단, 마크다운·목록·영어·한자·가나·이모지 없음, 점수·정확도 말하지 않음, 비난·단정 표현 없음,
+문장의 숫자는 `facts`의 숫자나 그 산술(백분율, 구간 길이, 두 평균의 차이, 놓침 비율의 변화)만, `facts`에 없는 패드 이름 없음,
+기록이 없는데 지난번과 비교하지 않음, 지난번보다 놓침이 늘었는데 나아졌다고(또는 그 반대로) 쓰지 않음.
+
+## 워커 설정 (GPU 서버)
+
+환경 변수 `SSAPLASH_NARRATIVE_ENABLED`(기본 꺼짐), `SSAPLASH_NARRATIVE_MODEL`, `SSAPLASH_NARRATIVE_LLM_URL`(기본 `http://127.0.0.1:11434`),
+`SSAPLASH_NARRATIVE_LLM_API`(`ollama` 또는 `openai`). 표와 순서는 `README.md`의 "LLM 총평 작업". 코드는 `coach/llm_local.py`(모델 서버 호출),
+`worker/narrative_job.py`(BE 호출·실행). 채보 작업이 없을 때만 총평 작업을 가져가며, BE가 404를 주면 5분 동안 묻지 않는다.
+
+## 모델 선택과 평가 결과 (2026-11-04)
+
+후보 모델을 같은 사실 4가지(약점 있음, 약점 없음, 이전보다 좋아짐, 이전보다 나빠짐)로 10번씩 쓰게 해서 가드레일 통과율과 속도를 쟀다
+(`scripts/eval_narrative.py`, 코드는 `coach_eval/narrative_compare.py`). 실행은 GPU 서버의 로컬 Ollama(CUDA, GPU 1장)에서 했고 결과는
+팀 MLflow 실험 `coach-narrative`에 자동 기록했다. 각 run에 git 커밋, 프롬프트 해시, 분석기 버전이 태그로 남아 같은 조건으로 다시 잴 수 있다.
+
+| 모델 | 통과 | 그대로 통과 | 위반 문장을 덜어내고 통과 | 시간 중앙값 | 비고 |
+| --- | --- | --- | --- | --- | --- |
+| **`gemma3:4b` (선택)** | **40/40** | 34 | 6 | 1.1초 | 크기 3.4GB |
+| `exaone3.5:2.4b` | 39/40 | 24 | 12 | 1.5초 | 크기 1.6GB. 한국어 명시 모델이지만 "좋음 판정 8개의 곡" 같은 오용과 이전 기록이 없는데 "발전"이라고 쓰는 문제가 있음 |
+| `qwen3:4b` | 0/20 | 0 | 0 | — | 영어 생각 과정을 본문에 써서 제외(`think=false`를 보내도 섞여 나옴) |
+
+- 같은 조건의 재실행에서 Gemma 수치가 같게 나와 재현된다(34 + 6). EXAONE은 37과 39로 조금 달랐다.
+- 통과율은 **가드레일이 잡는 것**만 센다. 사실에 없는 칭찬("박 지연이 개선되었어요")처럼 가드레일이 못 잡는 내용 오류와 한국어 어색함은 사람이 문장을 읽어서 본다(`narrative-compare-*.md`).
+- 평가 중 고친 것: 가드레일의 오탐(비교 문장 밖의 "향상"·"개선", 숫자 없는 "정확도", 단위 `ms`, 굵게 표시), 모델 전용 토큰과 이모지 제거,
+  프롬프트의 영어 항목 이름 제거와 비교 결과를 코드가 정해 주는 방식, 위반 문장만 덜어내는 보정(`repair`).
+- 모델 서버는 실행마다 기본 문맥 길이를 크게 잡으므로 요청에 `num_ctx=4096`을 보내고, 생각 모드는 `think=false`로 끈다.
+- 서버 설정: `CUDA_VISIBLE_DEVICES`는 Vulkan 장치를 거르지 못하므로 `OLLAMA_LLM_LIBRARY=cuda_v12`로 CUDA를 고정한다(고정 전 68토큰/초, 후 185토큰/초).
+  `OLLAMA_NO_CLOUD=1`로 클라우드 기능을 끈다. 모델은 5분 안 쓰면 GPU에서 내려가며 내려간 뒤 첫 작업은 로딩에 약 14초가 더 든다.
+
+### 라이선스 확인 (Gemma, 2026-11-04)
+
+Google의 Gemma 이용 약관(ai.google.dev/gemma/terms, "Last modified: April 1, 2026", Gemma 3 대상)을 읽고 정리했다. **요약 도구를 거친 내용이라 법적 판단에는 원문을 직접 읽어야 한다.**
+- 상업 이용을 명시적으로 막지 않는다. 다만 약관은 Gemma를 API나 웹으로 제공하는 호스팅 서비스를 배포(Distribution)에 포함하고, 이때 3.1절 조건이 붙는다.
+- 사용 제한(3.2절)과 금지 사용 정책을 따른다. 모델이나 파생물을 다른 사람에게 줄 때는 이 제한을 담은 약정과 약관 사본을 함께 줘야 하고, 수정했다면 수정 표시가 필요하다.
+- 출력물에 대해 Google은 권리를 주장하지 않으며 출력물은 있는 그대로 제공된다. 출력물로 다른 모델을 학습시키면 그 모델은 파생물이 된다.
+- 위반하면 Google이 해지할 수 있고 해지되면 사본을 지우고 사용을 멈춰야 한다. 준거법은 캘리포니아 주법이다.
+- 우리 쓰임은 GPU 서버에서 모델을 직접 돌려 **생성한 문장만 서비스에 싣는 것**이고 모델 파일은 외부에 배포하지 않는다. 그래도 호스팅 조건 해당 여부는 팀이 원문으로 확인한다.
+- Ollama 라이브러리의 모델 페이지(ollama.com/library/gemma3)는 접속하지 못해 라이선스 표기를 확인하지 못했다.
+
+## 미결
+
+- 모델 확정: 후보를 같은 골든 샘플로 비교한 뒤 정한다(GPU 서버에서 실행, 라이선스 확인).
+- 총평 작업의 큐 테이블·재시도 정책의 세부는 BE가 정하고 이 문서의 API 모양만 지킨다.

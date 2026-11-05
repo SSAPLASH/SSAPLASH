@@ -6,8 +6,9 @@ TRANSCRIBING: 드럼 트랙 준비(로컬 파일 sha256이 같으면 그대로, 
 
 끝나는 방식 세 가지(JobOutcome.status):
 - DONE: 채보 결과가 인수됨
-- FAILED_REPORTED: ChartError·입력 해시 불일치 등을 `POST /failure`로 보고함
-- ABANDONED: 임대 상실·409·422·전송 계층 실패. 보고 없이 놓음. 임대가 끝나면 BE가 다시 배정함(설계 U5)
+- FAILED_REPORTED: ChartError·워커 내부 예외를 `POST /failure`로 보고함. 사유는 예외의 reason
+- ABANDONED: 임대 상실·409·422·전송 계층 실패·크기·sha256 불일치 재시도 소진. 보고 없이 놓음.
+  임대가 끝나면 BE가 다시 배정함(설계 U5, S15P31A307-246 설계 4-1절)
 401은 설정 오류라 밖(loop)으로 올림.
 """
 
@@ -24,7 +25,12 @@ from pathlib import Path
 
 import requests
 
-from ssaplash_ai.chart.errors import ChartError, ChartInputError, ChartOutputError
+from ssaplash_ai.chart.errors import (
+    REASON_INTERNAL_ERROR,
+    ChartError,
+    ChartInputError,
+    ChartOutputError,
+)
 from ssaplash_ai.chart.separation import SeparationModule, SeparationOutput
 from ssaplash_ai.chart.transcription import TranscriptionModule, TranscriptionOutput
 from ssaplash_ai.worker.api import (
@@ -69,7 +75,7 @@ MAX_DURATION_MS = 600_000
 MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 # 모듈은 MiB(resource_usage.MB = 1024²)로 재고 BE는 MB = 1,000,000바이트
 MIB_TO_MB = 1.048576
-# 서명 URL 재발급·재전송 횟수 (설계 3-6절)
+# 서명 URL 재발급·재전송 횟수 (설계 3-6절). 크기·sha256 불일치 다시 받기도 이 횟수 안에서
 URL_RETRIES = 3
 EXTENSIONS = {
     "audio/wav": ".wav",
@@ -108,6 +114,7 @@ class JobOutcome:
     n_notes: int | None = None
     elapsed_sec: float = 0.0
     failure_code: str | None = None
+    failure_reason: str | None = None
     progress_sent: list[int] = field(default_factory=list)
 
 
@@ -169,14 +176,9 @@ class JobRunner:
             hb.stop()
             outcome.status = STATUS_FAILED_REPORTED
             outcome.failure_code = e.code
+            outcome.failure_reason = e.reason
             outcome.detail = e.message
-            self._report(assignment, seq, stage, e.code, e.retryable, e.message)
-        except IntegrityError as e:
-            hb.stop()
-            outcome.status = STATUS_FAILED_REPORTED
-            outcome.failure_code = ChartInputError.code
-            outcome.detail = str(e)
-            self._report(assignment, seq, stage, ChartInputError.code, False, str(e))
+            self._report(assignment, seq, stage, e.code, e.retryable, e.message, e.reason)
         except JobAbandoned as e:
             outcome.detail = str(e)
             logger.warning("작업 %d 놓음: %s", job_id, e)
@@ -194,8 +196,11 @@ class JobRunner:
             summary = f"워커 내부 오류: {type(e).__name__}"
             outcome.status = STATUS_FAILED_REPORTED
             outcome.failure_code = "MODEL_FAILED"
+            outcome.failure_reason = REASON_INTERNAL_ERROR
             outcome.detail = summary
-            self._report(assignment, seq, stage, "MODEL_FAILED", False, summary)
+            self._report(
+                assignment, seq, stage, "MODEL_FAILED", False, summary, REASON_INTERNAL_ERROR
+            )
         finally:
             hb.stop()
             outcome.progress_sent = list(hb.sent)
@@ -375,6 +380,30 @@ class JobRunner:
                     timeout_sec=self.settings.download_timeout_sec,
                 )
                 return
+            except IntegrityError as e:
+                # 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우. 같은 URL로 다시 받음 (설계 3-4절 로그)
+                logger.warning(
+                    "작업 %d 파일 불일치 %d/%d: attempt %s, %s, 크기 %d (배정 %d), "
+                    "sha256 %s (배정 %s)",
+                    a.job_id,
+                    attempt + 1,
+                    URL_RETRIES,
+                    a.attempt_id,
+                    role,
+                    e.actual_size,
+                    e.expected_size,
+                    e.actual_sha256[:12],
+                    e.expected_sha256[:12],
+                )
+                if attempt == URL_RETRIES - 1:
+                    logger.error(
+                        "작업 %d %s 파일이 %d번 다 배정과 달라 작업을 놓음 (attempt %s)",
+                        a.job_id,
+                        role,
+                        URL_RETRIES,
+                        a.attempt_id,
+                    )
+                    raise JobAbandoned(f"{role} 파일 불일치 {URL_RETRIES}번") from e
             except TransferError as e:
                 if attempt == URL_RETRIES - 1:
                     raise
@@ -392,16 +421,18 @@ class JobRunner:
         code: str,
         retryable: bool,
         summary: str,
+        reason: str,
     ) -> None:
         try:
             outcome = self.api.report_failure(
-                a.job_id, a.attempt_id, seq.next(), stage, code, retryable, summary
+                a.job_id, a.attempt_id, seq.next(), stage, code, retryable, summary, reason
             )
             logger.warning(
-                "작업 %d 실패 보고: %s %s retryable=%s → BE %s",
+                "작업 %d 실패 보고: %s %s %s retryable=%s → BE %s",
                 a.job_id,
                 stage,
                 code,
+                reason,
                 retryable,
                 outcome.status,
             )

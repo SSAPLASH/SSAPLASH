@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ssaplash_ai.coach import AnalysisRequest, analyze
+from ssaplash_ai.coach.config import Thresholds
 
 PERFECT_MS = 25.0
 AUTO = -2  # 스틱 번호를 노트 순서(0/1 번갈아)로 정한다
@@ -80,10 +81,14 @@ def _row(t, pad, stick, velocity, judgement, note_id, delta) -> dict[str, Any]:
     }
 
 
-def run(notes: list[N], **kwargs: Any) -> dict[str, Any]:
-    """노트 목록으로 분석하고 응답을 dict로 돌려준다."""
+# 비율 경계를 ms로 검사하는 시험용: 기준 폭이 플레이의 판정 폭(이전 동작). 기본 설정(고정 60ms)은 test_basis.py가 본다.
+LEGACY = Thresholds(basis_ms=None)
+
+
+def run(notes: list[N], thresholds: Thresholds = LEGACY, **kwargs: Any) -> dict[str, Any]:
+    """노트 목록으로 분석하고 응답을 dict로 돌려준다. 기본은 `LEGACY`(기준 폭 = 판정 폭)."""
     request = AnalysisRequest.model_validate(build_request(notes, **kwargs))
-    return analyze(request).model_dump()
+    return analyze(request, thresholds).model_dump()
 
 
 def patterns_of(response: dict[str, Any]) -> list[str]:
