@@ -31,6 +31,8 @@ export interface SessionSummary {
   title: string;
   mode: 'RHYTHM' | 'SHEET';
   audioOffsetMs: number;
+  /** 이 세션에서 후보 노트가 둘 이상이었던 타격 수(매칭 경합) */
+  contested: number;
 }
 
 export interface RecordingSummary {
@@ -55,6 +57,8 @@ export interface RecordingSummary {
   stray: number;
   /** 연결된 타격 없이 MISS가 된 노트 */
   missed: number;
+  /** 매칭 경합 타격 수(전체) */
+  contested: number;
   sessions: SessionSummary[];
 }
 
@@ -119,6 +123,7 @@ export function summarizeRecording(input: {
   const judgements = { PERFECT: 0, GOOD: 0, MISS: 0 };
   let stray = 0;
   let missed = 0;
+  let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
     if (ev.type === 'resolved') {
@@ -136,7 +141,11 @@ export function summarizeRecording(input: {
     } else if (ev.type === 'missed') {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
-      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs });
+      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0 });
+    } else if (ev.type === 'matchContested') {
+      contested++;
+      const cur = sessions[sessions.length - 1];
+      if (cur) cur.contested++;
     }
   }
 
@@ -156,6 +165,7 @@ export function summarizeRecording(input: {
     judgements,
     stray,
     missed,
+    contested,
     sessions,
   };
 }
@@ -197,13 +207,13 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     '',
     `채점 delta 평균: ${f1(s.delta.mean)}ms`,
     '',
-    '| PERFECT | GOOD | MISS | stray(채보 밖) | 무타격 MISS |',
-    '| --- | --- | --- | --- | --- |',
-    `| ${s.judgements.PERFECT} | ${s.judgements.GOOD} | ${s.judgements.MISS} | ${s.stray} | ${s.missed} |`,
+    '| PERFECT | GOOD | MISS | stray(채보 밖) | 무타격 MISS | 매칭 경합 |',
+    '| --- | --- | --- | --- | --- | --- |',
+    `| ${s.judgements.PERFECT} | ${s.judgements.GOOD} | ${s.judgements.MISS} | ${s.stray} | ${s.missed} | ${s.contested} |`,
   ];
   if (s.sessions.length > 0) {
-    lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) |', '| --- | --- | --- |');
-    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} |`);
+    lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) | 매칭 경합 |', '| --- | --- | --- | --- |');
+    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} | ${x.contested} |`);
   }
   return lines.join('\n') + '\n';
 }
