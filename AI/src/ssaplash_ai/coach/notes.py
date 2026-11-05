@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ssaplash_ai.coach.config import Thresholds
 from ssaplash_ai.coach.schema import AnalysisRequest
 
 
@@ -26,7 +27,11 @@ class NoteTable:
     delta: np.ndarray  # 오차(ms, 양수 늦음). 놓친 노트는 NaN
     velocity: np.ndarray  # 세기(0~127). 없으면 NaN
     stick: np.ndarray  # 스틱 번호(0/1). 없으면 -1
-    good_ms: float  # 이 플레이의 판정 폭
+    good_ms: float  # 이 플레이의 판정 폭(게임 난이도. 임계값 기준은 `basis`)
+
+    def basis(self, th: Thresholds) -> float:
+        """임계값에 곱하는 ms 기준. 설정이 고정 기준 폭이면 그 값, 아니면 이 플레이의 판정 폭."""
+        return th.basis_ms if th.basis_ms is not None else self.good_ms
 
     @property
     def size(self) -> int:

@@ -42,7 +42,7 @@ def _cohort(models: list[PlayerModel], n_notes: int = 80) -> list[Session]:
     sessions: list[Session] = []
     for i, model in enumerate(models):
         chart = make_chart(n_notes, "rock", seed=i)
-        request = simulate(chart, model, good_ms=50.0, seed=i).request
+        request = simulate(chart, model, good_ms=60.0, seed=i).request
         request["playId"] = f"c{i:03d}"
         sessions.extend(read_sessions(ListSource(view_rows(request))))
     return sessions
@@ -221,7 +221,7 @@ def test_same_input_gives_same_report():
 # --- 합성 평가(139 도구)로 재평가 ---
 
 
-SMALL = RunConfig(seeds=4, note_counts=(60,), good_ms_values=(50.0,))
+SMALL = RunConfig(seeds=4, note_counts=(60,), good_ms_values=(60.0,))
 
 
 def test_reevaluation_shows_a_recall_drop_for_a_stricter_candidate():
