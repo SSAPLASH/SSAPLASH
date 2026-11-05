@@ -556,3 +556,18 @@ def test_프롬프트에_보이지_않는_severity가_허용_숫자에_들어가
     # 프롬프트에 보이는 지표(놓침 비율 등)는 여전히 허용한다
     assert check(GOOD_TEXT, _facts()) == []
 
+
+def test_탭_한_개도_지우고_BE가_거절하는_제어_문자는_남기지_않는다():
+    """리뷰: clean()이 탭 한 개를 남기면 BE가 400을 준다."""
+    from ssaplash_ai.coach.narrative import clean
+
+    assert clean("박을\t잘 쳤어요.") == "박을 잘 쳤어요."
+    assert clean("한 줄\n다음\t줄\x0b끝\x00.") == "한 줄 다음 줄 끝 ."
+    assert clean("\t앞뒤 탭\t") == "앞뒤 탭"
+    assert "\t" not in clean("a\tb\t\tc")
+
+
+def test_제어_문자가_남은_문장은_check가_거른다():
+    facts = _facts()
+    assert any("제어 문자" in p for p in check("기본기는 좋아요.\t다음에도 힘내요.", facts))
+    assert not any("제어 문자" in p for p in check(GOOD_TEXT, facts))
