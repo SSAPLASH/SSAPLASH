@@ -221,8 +221,59 @@ def _broken(mutate) -> dict:
         ("bpm 상한", lambda c: c["charts"][0]["timing"].update(bpm=10000)),
         ("offsetMs 실수", lambda c: c["charts"][0]["timing"].update(offsetMs=0.5)),
         ("timeSignature 6자", lambda c: c["charts"][0]["timing"].update(timeSignature="12/16x")),
+        ("ppq 0", lambda c: c["charts"][0]["timing"].update(ppq=0)),
+        ("tempoMap 빈 목록", lambda c: c["charts"][0]["timing"].update(tempoMap=[])),
+        (
+            "tempoMap 첫 tick",
+            lambda c: c["charts"][0]["timing"].update(tempoMap=[{"tick": 480, "bpm": 120.0}]),
+        ),
+        (
+            "tempoMap 첫 bpm 다름",
+            lambda c: c["charts"][0]["timing"].update(tempoMap=[{"tick": 0, "bpm": 99.0}]),
+        ),
+        (
+            "tempoMap tick 역순",
+            lambda c: c["charts"][0]["timing"].update(
+                tempoMap=[
+                    {"tick": 0, "bpm": c["charts"][0]["timing"]["bpm"]},
+                    {"tick": 0, "bpm": 100.0},
+                ]
+            ),
+        ),
+        (
+            "tempoMap bpm 0",
+            lambda c: c["charts"][0]["timing"].update(
+                tempoMap=[
+                    {"tick": 0, "bpm": c["charts"][0]["timing"]["bpm"]},
+                    {"tick": 960, "bpm": 0},
+                ]
+            ),
+        ),
+        (
+            "timeSignatureMap 다름",
+            lambda c: c["charts"][0]["timing"].update(
+                timeSignatureMap=[{"tick": 0, "numerator": 3, "denominator": 4}]
+            ),
+        ),
+        (
+            "timeSignatureMap 음표 3",
+            lambda c: c["charts"][0]["timing"].update(
+                timeSignatureMap=[{"tick": 0, "numerator": 4, "denominator": 3}]
+            ),
+        ),
     ],
 )
 def test_BE가_거절하는_값은_출력_오류(label: str, mutate):
     with pytest.raises(ChartOutputError, match="채보 JSON 검증 실패"):
         validate_chart(_broken(mutate), 3000)
+
+
+def test_빠르기_변화_목록이_있어도_통과():
+    chart = _broken(lambda c: None)
+    timing = chart["charts"][0]["timing"]
+    timing.update(
+        ppq=480,
+        tempoMap=[{"tick": 0, "bpm": timing["bpm"]}, {"tick": 57600, "bpm": 105.0}],
+        timeSignatureMap=[{"tick": 0, "numerator": 4, "denominator": 4}],
+    )
+    validate_chart(chart, 3000)
