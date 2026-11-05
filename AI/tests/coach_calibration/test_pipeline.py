@@ -312,3 +312,55 @@ def test_날짜를_알_수_없는_세션은_since가_있으면_뺀다():
     assert select_sessions(sessions, since="2026-10-20", modes=frozenset({"RHYTHM"})) == [
         sessions[1]
     ]
+
+
+def test_일부만_고른_실행은_다음_정기_실행을_막지_않는다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+    assert _run(rows, uri, modes=frozenset({"RHYTHM"})).status == STATUS_OK
+
+    assert register.find_last_run(uri) is None
+    assert _run(rows, uri).status == STATUS_OK
+
+
+def test_since로_고른_실행도_기준에서_뺀다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-01")
+    assert _run(rows, uri, since="2026-10-20").status == STATUS_OK
+
+    assert register.find_last_run(uri) is None
+
+
+def test_기준은_일부_실행_앞의_전체_실행이다(uri):
+    rows = late_gradient_rows(60)
+    full = _run(rows, uri)
+    _run(rows, uri, modes=frozenset({"RHYTHM"}), force=True)
+
+    last = register.find_last_run(uri)
+    assert last is not None and last.run_id == full.run_id
+    assert _run(rows, uri).status == STATUS_SKIPPED
+
+
+def test_since와_modes_파라미터가_없던_옛_실행은_전체_실행이다():
+    assert register._is_partial({}) is False
+    assert register._is_partial({"since": "", "modes": "ALL"}) is False
+    assert register._is_partial({"since": "2026-10-20", "modes": "ALL"}) is True
+    assert register._is_partial({"since": "", "modes": "RHYTHM"}) is True
+
+
+def test_일부만_고른_실행은_이름과_요약에_범위를_보여_준다(uri, tmp_path):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-01")
+    _run(rows, uri, since="2026-10-20", modes=frozenset({"SHEET", "RHYTHM"}))
+
+    (run,) = _runs(uri)
+    assert run.info.run_name.endswith("-since2026-10-20-RHYTHM+SHEET")
+    path = _client(uri).download_artifacts(run.info.run_id, "summary.md", str(tmp_path))
+    text = open(path, encoding="utf-8").read()
+    assert "| 기간 | 2026-10-20 이후 |" in text and "| 모드 | RHYTHM, SHEET |" in text
+
+
+def test_전체_실행의_요약은_범위를_전체로_적는다(uri, tmp_path):
+    _run(late_gradient_rows(60), uri)
+
+    (run,) = _runs(uri)
+    path = _client(uri).download_artifacts(run.info.run_id, "summary.md", str(tmp_path))
+    text = open(path, encoding="utf-8").read()
+    assert "| 기간 | 전체 |" in text and "| 모드 | 전체 |" in text
