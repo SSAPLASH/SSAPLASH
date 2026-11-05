@@ -145,3 +145,46 @@ def test_패드마다_노트가_적으면_strengthPad가_없고_칭찬하지_않
 
     assert summary.strengthPad is None
     assert "특히 안정적" not in summary.text
+
+
+def _segment(pattern: str):
+    from ssaplash_ai.coach.schema import WeakSegment
+
+    return WeakSegment(
+        fromMs=1000.0,
+        toMs=6000.0,
+        pattern=pattern,
+        description="d",
+        causeTags=[],
+        pads=["SNARE", "HIHAT"],
+        metrics={},
+    )
+
+
+def test_먼저_할_일_문구에서_연습이_두_번_나오지_않는다():
+    """리뷰: "먼저 ~치는 연습부터 연습해 보세요."처럼 연습이 겹치면 어색하다."""
+    from ssaplash_ai.coach.summary import _focus_phrase
+
+    for pattern in (
+        "TIMING_LATE",
+        "TIMING_EARLY",
+        "PAD_LATE",
+        "PAD_EARLY",
+        "TRANSITION_LATE",
+        "TRANSITION_MISS",
+        "HAND_WEAK",
+        "MISS_CLUSTER",
+        "UNSTEADY",
+        "UNKNOWN_PATTERN",
+    ):
+        phrase = _focus_phrase(_segment(pattern))
+        assert "연습" not in phrase, (pattern, phrase)
+        sentence = f"먼저 {phrase}부터 연습해 보세요."
+        assert sentence.count("연습") == 1
+
+
+def test_타이밍_손_일정함_약점의_문구는_것으로_끝난다():
+    from ssaplash_ai.coach.summary import _focus_phrase
+
+    for pattern in ("TIMING_LATE", "TIMING_EARLY", "HAND_WEAK", "UNSTEADY"):
+        assert _focus_phrase(_segment(pattern)).endswith("치는 것")
