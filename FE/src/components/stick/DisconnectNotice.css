@@ -1,0 +1,122 @@
+/* 연결 끊김 카드: 420, surface-2, brand-sub 1px, padding 28, gap 20, 가운데 정렬 */
+.stick-disconnect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 420px;
+  max-width: 100%;
+  padding: 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--brand-sub);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  text-align: center;
+  font-family: var(--font);
+}
+.stick-dots {
+  display: flex;
+  gap: 40px;
+}
+.stick-dot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.stick-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  box-sizing: border-box;
+  border: 2px solid var(--good);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--good);
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+}
+.stick-dot.off {
+  border-style: dashed;
+  border-color: var(--miss);
+  color: var(--miss);
+}
+.stick-dot-label {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.stick-disconnect-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.stick-disconnect-title.good {
+  color: var(--good);
+}
+.stick-disconnect-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--brand-sub);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.stick-disconnect-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-s);
+}
+.stick-disconnect-btn {
+  width: 150px;
+}
+/* 긴 문구 버튼은 폭만 늘린다 */
+.stick-disconnect-btn.wide {
+  width: auto;
+  min-width: 150px;
+}
+
+/* 시도 중: 끊긴 손 점 맥동 + 문구 앞 스피너 (PLAY-002 D11) */
+.stick-dot.pulse {
+  animation: stick-dot-pulse 1.2s ease-in-out infinite;
+}
+@keyframes stick-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.stick-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--brand-sub) 30%, transparent);
+  border-top-color: var(--brand-sub);
+  border-radius: 50%;
+  animation: stick-spin 0.9s linear infinite;
+}
+@keyframes stick-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 감소 모션: 회전 없이 점 깜빡임만 느리게 */
+@media (prefers-reduced-motion: reduce) {
+  .stick-spinner {
+    animation: none;
+    display: none;
+  }
+  .stick-dot.pulse {
+    animation-duration: 2s;
+  }
+}

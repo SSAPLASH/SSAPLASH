@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ssaplash_ai.bench.separators.demucs_separator import DemucsSeparator
+from ssaplash_ai.bench.separators.ensemble_separator import EnsembleSeparator
 from ssaplash_ai.bench.separators.mock_separator import MockSeparator
 from ssaplash_ai.bench.separators.msst_separator import MsstSeparator
 from ssaplash_ai.bench.separators.openunmix_separator import OpenUnmixSeparator
@@ -28,6 +29,7 @@ ADAPTERS: dict[str, type[BaseSeparator]] = {
         MsstSeparator,
         DemucsSeparator,
         OpenUnmixSeparator,
+        EnsembleSeparator,
     )
 }
 
@@ -48,6 +50,7 @@ __all__ = [
     "MODELS_DIR",
     "BaseSeparator",
     "DemucsSeparator",
+    "EnsembleSeparator",
     "MockSeparator",
     "MsstSeparator",
     "OpenUnmixSeparator",

@@ -34,6 +34,11 @@ AUXILIARY_METRICS: tuple[tuple[str, str], ...] = (
     ("sarAccomp", "반주 SAR (dB)"),
     ("sirDrums", "드럼 SIR (dB)"),
     ("sarDrums", "드럼 SAR (dB)"),
+    ("mrFullness", "MR fullness"),
+    ("mrBleedless", "MR bleedless"),
+    ("mrFullnessHigh", "MR 고음 fullness"),
+    ("mrLufsDiff", "MR 음량 차이 (LU)"),
+    ("mrClipRatio", "MR 잘림 비율"),
     ("separateSec", "분리 시간 (s)"),
     ("loadSec", "로드 시간 (s)"),
     ("peakRamMb", "피크 RAM (MB)"),
@@ -152,7 +157,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame) -> str:
             _fmt(r.get("device", "")),
         ]
         cells += [
-            _fmt(r.get(c, math.nan), 3 if c.startswith("onset") else 2)
+            _fmt(r.get(c, math.nan), 3 if c.startswith("onset") else 4 if c == "mrClipRatio" else 2)
             for c, _ in AUXILIARY_METRICS
         ]
         rows.append(cells)

@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, fillLayout, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
+import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { normalizePadKeys, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
@@ -30,6 +31,14 @@ interface SettingsState {
   metronome: boolean;
   countInBars: number;
   volume: number;
+  /** 메트로놈 클릭 음량(0~1). 1 = 기존 클릭 크기. 전체 음량(volume)과 곱해진다 */
+  metronomeVolume: number;
+  /** 드럼(패드) 소리 음량(0~2). 1 = 기본. 전체 음량(volume)과 곱해진다 */
+  drumVolume: number;
+  /** 드럼 모양(기기별 로컬) */
+  kitSkin: KitSkin;
+  /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
+  songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
   soundSetId: SoundSetId;
   /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
@@ -41,6 +50,14 @@ interface SettingsState {
   metronomeBeatsPerBar: BeatsPerBar;
   /** 패드 소리 on/off. 메트로놈 클릭은 영향 없음 */
   soundOn: boolean;
+  /** 악보 연주 드럼 가이드의 박 라벨 표시 */
+  sheetPadCount: boolean;
+  /** 사이드바 접힘(≤1024에서는 셸이 강제로 접는다) */
+  sidebarCollapsed: boolean;
+  /** 상단 Dock 접힘(알약) */
+  dockCollapsed: boolean;
+  /** 실시간 코칭 사용(COACH-001) */
+  liveCoach: boolean;
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
@@ -60,6 +77,10 @@ interface SettingsState {
   setMetronome: (v: boolean) => void;
   setCountInBars: (v: number) => void;
   setVolume: (v: number) => void;
+  setMetronomeVolume: (v: number) => void;
+  setDrumVolume: (v: number) => void;
+  setSongVolume: (v: number) => void;
+  setKitSkin: (s: KitSkin) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
@@ -67,12 +88,16 @@ interface SettingsState {
   setMetronomeBpm: (v: number) => void;
   setMetronomeBeatsPerBar: (v: BeatsPerBar) => void;
   setSoundOn: (v: boolean) => void;
+  setSheetPadCount: (v: boolean) => void;
+  setSidebarCollapsed: (v: boolean) => void;
+  setDockCollapsed: (v: boolean) => void;
+  setLiveCoach: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 10;
+export const SETTINGS_VERSION = 16;
 
 /**
  * 저장된 설정 이행.
@@ -85,6 +110,12 @@ export const SETTINGS_VERSION = 10;
  * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
  * v8 → v9: profile·calibrationMode·holdMs 삭제(판정 프로필은 배치에서 유도). firstSetupDone=false, activePresetId=presets[0]?.id ?? null 추가. 프리셋에 isDefault(첫 항목)·schemaVersion 1·updatedAt(=createdAt) 채움.
  * v9 → v10: 패드 이름 `HI_TOM` → `SMALL_TOM`, 없는 패드(MID_TOM·HIHAT_PEDAL 등)는 기본 배치로 보충. 최상위 kitLayout과 presets[].layout에 적용(객체가 아닌 layout의 프리셋은 버림).
+ * v10 → v11: sheetPadCount(기본 true) 추가.
+ * v11 → v12: sidebarCollapsed(false)·dockCollapsed(false)·liveCoach(true)·statsConsent(false) 추가. 기존 값은 보존하고 boolean이 아닌 값만 기본값으로.
+ * v12 → v13: metronomeVolume(기본 1, 0~1 밖이거나 숫자가 아니면 1) 추가.
+ * v13 → v14: statsConsent 삭제(연주 기록 활용 동의는 가입 때 필수, 서버 값만 쓴다). 저장돼 있던 값은 버린다.
+ * v14 → v15: drumVolume(기본 1, 0~2)·songVolume(기본 1, 0~1) 추가. 없거나 숫자가 아니면 1, 범위 밖은 잘라 채운다.
+ * v15 → v16: kitSkin(기본 'acoustic') 추가. 없거나 모르는 값이면 'acoustic'.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -153,7 +184,28 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
       return layout ? [{ ...x, layout }] : [];
     });
   }
+  if (version < 11) p.sheetPadCount = true;
+  if (version < 12) {
+    if (typeof p.sidebarCollapsed !== 'boolean') p.sidebarCollapsed = false;
+    if (typeof p.dockCollapsed !== 'boolean') p.dockCollapsed = false;
+    if (typeof p.liveCoach !== 'boolean') p.liveCoach = true;
+  }
+  if (version < 13) {
+    const v = p.metronomeVolume;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) p.metronomeVolume = 1;
+  }
+  if (version < 14) delete p.statsConsent;
+  if (version < 15) {
+    p.drumVolume = clampVolume(p.drumVolume, 2);
+    p.songVolume = clampVolume(p.songVolume, 1);
+  }
+  if (version < 16) p.kitSkin = isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic';
   return p as unknown as SettingsState;
+}
+
+/** 음량 값을 0~max로 자른다. 숫자가 아니면 기본값 1 */
+function clampVolume(v: unknown, max: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(0, v)) : 1;
 }
 
 /** 저장된 배치의 옛 패드 이름을 바꾸고 빠진 패드를 기본 배치로 채운다. 객체가 아니면 null */
@@ -178,12 +230,20 @@ export const useSettings = create<SettingsState>()(
       metronome: true,
       countInBars: 1,
       volume: 0.8,
+      metronomeVolume: 1,
+      drumVolume: 1,
+      kitSkin: 'acoustic',
+      songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
       gameView: 'highway',
       metronomeBpm: BPM_DEFAULT,
       metronomeBeatsPerBar: 4,
       soundOn: true,
+      sheetPadCount: true,
+      sidebarCollapsed: false,
+      dockCollapsed: false,
+      liveCoach: true,
 
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
@@ -203,12 +263,22 @@ export const useSettings = create<SettingsState>()(
       setMetronome: (metronome) => set({ metronome }),
       setCountInBars: (countInBars) => set({ countInBars }),
       setVolume: (volume) => set({ volume }),
+      setMetronomeVolume: (v) => set({ metronomeVolume: Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1)) }),
+      setDrumVolume: (v) => set({ drumVolume: clampVolume(v, 2) }),
+      setKitSkin: (s) => {
+        if (isKitSkin(s)) set({ kitSkin: s });
+      },
+      setSongVolume: (v) => set({ songVolume: clampVolume(v, 1) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
       setGameView: (gameView) => set({ gameView }),
       setMetronomeBpm: (metronomeBpm) => set({ metronomeBpm }),
       setMetronomeBeatsPerBar: (metronomeBeatsPerBar) => set({ metronomeBeatsPerBar }),
       setSoundOn: (soundOn) => set({ soundOn }),
+      setSheetPadCount: (sheetPadCount) => set({ sheetPadCount }),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
+      setLiveCoach: (liveCoach) => set({ liveCoach }),
     }),
     {
       name: 'ssaplash.settings',
@@ -223,6 +293,10 @@ export const useSettings = create<SettingsState>()(
           // 저장분에 패드 키가 빠져 있어도 런타임이 깨지지 않게 채운다
           kitLayout: fillLayout(p.kitLayout ?? {}),
           tuning: mergeTuning(DEFAULT_SENSOR_TUNING, p.tuning ?? {}),
+          // 저장분에 없거나 범위 밖인 음량은 기본값·범위로 보정한다
+          drumVolume: clampVolume(p.drumVolume, 2),
+          songVolume: clampVolume(p.songVolume, 1),
+          kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
         };
       },
     },

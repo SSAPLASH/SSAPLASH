@@ -36,6 +36,8 @@ from ssaplash_ai.bench.metrics import (
     bss_metrics,
     detect_onsets,
     measure_resources,
+    merge_onsets,
+    mr_quality,
     onset_metrics,
 )
 from ssaplash_ai.bench.metrics.resource_usage import gpu_name
@@ -87,6 +89,12 @@ CSV_COLUMNS: tuple[str, ...] = (
     # attack slope 왜곡
     "attackSlopeDistortion",
     "attackOnsetsUsed",
+    # 드럼리스 MR 품질 (S15P31A307-165)
+    "mrFullness",
+    "mrBleedless",
+    "mrFullnessHigh",
+    "mrLufsDiff",
+    "mrClipRatio",
     # 자원
     "separateSec",
     "rtf",
@@ -184,9 +192,12 @@ def load_resume_rows(csv_path: Path) -> tuple[list[dict], int]:
 
 
 def true_onsets(song: SongItem) -> np.ndarray:
-    """정답 온셋. 합성곡은 MIDI, MUSDB는 정답 드럼 스템에 검출기 적용 (설계 3-5절)."""
+    """정답 온셋. 합성곡은 MIDI, MUSDB는 정답 드럼 스템에 검출기 적용 (설계 3-5절).
+
+    MIDI·사람 주석 정답은 동시 타격이 같은 시각으로 여러 번 들어 있어 30ms 안 시각을 하나로 합침.
+    """
     if song.onsets_true is not None:
-        return np.asarray(song.onsets_true, dtype=np.float64)
+        return merge_onsets(song.onsets_true)
     return detect_onsets(song.drums_true, song.sample_rate)
 
 
@@ -194,12 +205,15 @@ def evaluate_song(
     song: SongItem,
     drums_pred: np.ndarray,
     onsets_true: np.ndarray,
+    accomp_pred: np.ndarray | None = None,
 ) -> dict:
-    """곡 하나의 지표 네 묶음을 3-3절 열 이름의 dict로. 예측 반주 = 원곡 − 예측 드럼."""
-    accomp_pred = song.mixture - drums_pred
+    """곡 하나의 지표 다섯 묶음을 3-3절 열 이름의 dict로. 예측 반주가 없으면 원곡 − 예측 드럼."""
+    if accomp_pred is None:
+        accomp_pred = song.mixture - drums_pred
     bss = bss_metrics(song.drums_true, song.accomp_true, drums_pred, accomp_pred, song.sample_rate)
     onset = onset_metrics(onsets_true, drums_pred, song.sample_rate)
     transient = attack_slope_distortion(song.drums_true, drums_pred, onsets_true, song.sample_rate)
+    mr = mr_quality(song.accomp_true, accomp_pred, song.sample_rate)
     return {
         "sdrDrums": bss.sdr_drums,
         "sdrAccomp": bss.sdr_accomp,
@@ -217,13 +231,20 @@ def evaluate_song(
         "onsetPredCount": onset.n_pred,
         "attackSlopeDistortion": transient.distortion,
         "attackOnsetsUsed": transient.n_used,
+        "mrFullness": mr.fullness,
+        "mrBleedless": mr.bleedless,
+        "mrFullnessHigh": mr.fullness_high,
+        "mrLufsDiff": mr.lufs_diff,
+        "mrClipRatio": mr.clip_ratio,
     }
 
 
-def _save_separated(run_dir: Path, model: str, song: SongItem, drums_pred: np.ndarray) -> None:
+def _save_separated(
+    run_dir: Path, model: str, song: SongItem, drums_pred: np.ndarray, accomp_pred: np.ndarray
+) -> None:
     d = run_dir / SEPARATED_DIR / model / song.song_id
     write_audio(d / "drums.wav", drums_pred, song.sample_rate)
-    write_audio(d / "accomp.wav", song.mixture - drums_pred, song.sample_rate)
+    write_audio(d / "accomp.wav", accomp_pred, song.sample_rate)
 
 
 def _dataset_with_clip(config_path: Path, clip: tuple[float, float] | None) -> BaseDataset:
@@ -326,9 +347,10 @@ def run_model(
             )
             if song_id not in onset_cache:
                 onset_cache[song_id] = true_onsets(song)
-            row.update(evaluate_song(song, out.drums, onset_cache[song_id]))
+            accomp = out.accomp if out.accomp is not None else song.mixture - out.drums
+            row.update(evaluate_song(song, out.drums, onset_cache[song_id], accomp))
             if saved < save_wav:
-                _save_separated(result.run_dir, sep.name, song, out.drums)
+                _save_separated(result.run_dir, sep.name, song, out.drums, accomp)
                 saved += 1
             log(
                 f"[{sep.name}] {song_id}: sdrDrums={row['sdrDrums']:.2f} "

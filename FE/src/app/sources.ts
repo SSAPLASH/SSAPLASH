@@ -3,9 +3,12 @@
 // 센서 소스 인스턴스는 여기가 아니라 sensorRegistry가 디스크립터의 create로 지연 생성해 보관한다.
 import { InputManager } from '@/input/InputManager';
 import { KeyboardPadSource } from '@/input/KeyboardPadSource';
+import { TouchPadSource } from '@/input/TouchPadSource';
 
 export const inputManager = new InputManager();
 export const keyboardSource = new KeyboardPadSource();
+/** 화면 터치 소스(MODE-002). 키보드처럼 항상 붙어 있고, 자유 연습의 DrumKit만 strike를 부른다 */
+export const touchSource = new TouchPadSource();
 
 /**
  * 키보드(임시 입력) 사용 여부. 빌드 시 VITE_KEYBOARD_INPUT=false면 키 매핑 카드와 키보드 소스 등록을 함께 끈다.

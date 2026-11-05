@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetAuthStoreForTest, useAuth } from './authStore';
 import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from '@/api/auth';
 import { RETURN_TO_KEY, type UserMe } from '@/domain/auth';
+import { currentConsentVersions, termVersion } from '@/domain/signupTerms';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response;
 
@@ -23,6 +24,12 @@ const ME: UserMe = {
   role: 'USER',
   createdAt: '2026-10-20T03:00:00Z',
   updatedAt: '2026-10-20T03:00:00Z',
+  dataConsent: { agreed: true, version: termVersion('dataConsent'), updatedAt: '2026-11-02T01:00:00Z' },
+  signupCompleted: true,
+  consents: {
+    terms: { version: termVersion('terms'), agreedAt: '2026-11-02T01:00:00Z' },
+    privacy: { version: termVersion('privacy'), agreedAt: '2026-11-02T01:00:00Z' },
+  },
 };
 const tokenOk = () => json(200, { accessToken: 'tok', tokenType: 'Bearer', expiresIn: 1800 });
 const problem = (status: number, code: string) => json(status, { status, code, detail: 'x' }, 'application/problem+json');
@@ -291,5 +298,69 @@ describe('clearLostReason', () => {
     useAuth.setState({ status: 'anonymous', lostReason: 'session_expired' });
     useAuth.getState().clearLostReason();
     expect(useAuth.getState()).toMatchObject({ status: 'anonymous', lostReason: null });
+  });
+});
+
+describe('refreshMe', () => {
+  const NEW_ME: UserMe = { ...ME, nickname: '새이름' };
+
+  it('로그인 상태가 아니면 /me를 부르지 않는다', async () => {
+    const fetch = server(tokenOk, () => json(200, NEW_ME));
+    await useAuth.getState().refreshMe();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('성공하면 user를 새 응답으로 바꾼다', async () => {
+    server(tokenOk, () => json(200, NEW_ME));
+    useAuth.setState({ status: 'authenticated', user: ME });
+    await useAuth.getState().refreshMe();
+    expect(useAuth.getState().user).toEqual(NEW_ME);
+  });
+
+  it('실패하면 signupCompleted=false로 내리고 던지지 않는다', async () => {
+    server(tokenOk, () => problem(500, 'INTERNAL'));
+    useAuth.setState({ status: 'authenticated', user: ME });
+    await expect(useAuth.getState().refreshMe()).resolves.toBeUndefined();
+    expect(useAuth.getState().user).toEqual({ ...ME, signupCompleted: false });
+  });
+
+  it('동시에 두 번 부르면 /me는 한 번만 간다', async () => {
+    const fetch = server(tokenOk, () => json(200, NEW_ME));
+    useAuth.setState({ status: 'authenticated', user: ME });
+    await Promise.all([useAuth.getState().refreshMe(), useAuth.getState().refreshMe()]);
+    expect(fetch.mock.calls.filter(([u]) => u === '/api/users/me')).toHaveLength(1);
+  });
+});
+
+describe('submitSignupConsent', () => {
+  const body = currentConsentVersions();
+  const FRESH: UserMe = { ...ME, nickname: '가입완료' };
+
+  it('로그인 상태가 아니면 보내지 않는다', async () => {
+    const fetch = mockFetch(() => json(200, FRESH));
+    await useAuth.getState().submitSignupConsent(body);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('성공하면 POST 본문을 보내고 user를 응답으로 바꾼다', async () => {
+    const fetch = mockFetch(() => json(200, FRESH));
+    useAuth.setState({ status: 'authenticated', user: { ...ME, signupCompleted: false } });
+
+    await useAuth.getState().submitSignupConsent(body);
+
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/users/me/signup-consent');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual(body);
+    expect(useAuth.getState().user).toEqual(FRESH);
+  });
+
+  it('실패하면 던지고 user는 그대로', async () => {
+    mockFetch(() => problem(400, 'VALIDATION_FAILED'));
+    const before = { ...ME, signupCompleted: false };
+    useAuth.setState({ status: 'authenticated', user: before });
+
+    await expect(useAuth.getState().submitSignupConsent(body)).rejects.toMatchObject({ status: 400 });
+    expect(useAuth.getState().user).toEqual(before);
   });
 });

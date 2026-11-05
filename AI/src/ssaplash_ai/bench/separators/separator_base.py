@@ -49,6 +49,21 @@ class SeparatorConfig:
     fail_on_call: int | None = None
     # 예측 드럼으로 쓸 스템 이름
     drums_stem: str = "drums"
+    # 반주 만드는 방식 (S15P31A307-165). subtract = 원곡 − 드럼, sum_others = 드럼 외 스템의 합
+    accomp_mode: str = "subtract"
+    # subtract일 때 원곡에서 뺄 드럼 비율. 1.0이면 다 뺌. 0.95면 드럼이 5% 남는 대신 드럼과 같이 빠지던 반주가
+    # 덜 빠짐 (S15P31A307-165 후보 I). 드럼 트랙은 그대로
+    accomp_drum_ratio: float = 1.0
+    # 반주에 피크 리미터(postprocess.limit_peaks)를 검. 서비스 저장 처리와 같은 조건으로 지표를 잴 때 씀 (S15P31A307-165)
+    output_limiter: bool = False
+    # 이 주파수(Hz) 위 드럼 트랙의 지속음 성분을 반주로 되돌림. None이면 안 함 (S15P31A307-165 후보 E)
+    high_return_hz: float | None = None
+    # ensemble 어댑터가 드럼을 평균할 모델 yaml 경로들 (S15P31A307-165 후보 D)
+    members: list[str] | None = None
+    # 가중치 폴더 이름. 같은 가중치를 설정만 바꿔 쓸 때 원래 모델 이름을 적음. None이면 name
+    weights_name: str | None = None
+    # 극성 반전·채널 바꿈 입력을 더 분리해 세 결과를 평균 (msst use_tta, S15P31A307-165 후보 G). 분리 시간 약 3배
+    use_tta: bool = False
     yaml_text: str = field(default="", repr=False)
     source_path: Path | None = None
 
@@ -91,7 +106,7 @@ class SeparatorConfig:
     def model_dir(self) -> Path:
         """가중치 폴더. 환경 변수 SSAPLASH_MODELS_DIR이 있으면 그 아래, 없으면 data/models 아래."""
         root = os.environ.get("SSAPLASH_MODELS_DIR")
-        return (Path(root) if root else MODELS_DIR) / self.name
+        return (Path(root) if root else MODELS_DIR) / (self.weights_name or self.name)
 
 
 @dataclass
@@ -109,10 +124,11 @@ class SeparatorInfo:
 
 @dataclass
 class SeparationResult:
-    """separate 출력. drums는 입력과 같은 (채널, 샘플) float32."""
+    """separate 출력. drums·accomp는 입력과 같은 (채널, 샘플) float32. accomp는 설정의 accomp_mode로 만듦."""
 
     drums: np.ndarray
     other_stems: dict[str, np.ndarray] = field(default_factory=dict)
+    accomp: np.ndarray | None = None
 
 
 def fit_length(audio: np.ndarray, n_samples: int) -> np.ndarray:
@@ -168,7 +184,7 @@ class BaseSeparator(abc.ABC):
         return self.load_sec
 
     def separate(self, mixture: np.ndarray, sample_rate: int) -> SeparationResult:
-        """(채널 2, 샘플) 원곡 → 같은 길이의 드럼 + 나머지 스템."""
+        """(채널 2, 샘플) 원곡 → 같은 길이의 드럼 + 나머지 스템 + 반주."""
         if not self.loaded:
             raise RuntimeError(f"{self.name}: load()를 먼저 호출")
         n = mixture.shape[1]
@@ -179,7 +195,28 @@ class BaseSeparator(abc.ABC):
             )
         drums = fit_length(stems.pop(self.config.drums_stem), n)
         others = {k: fit_length(v, n) for k, v in stems.items()}
-        return SeparationResult(drums=drums, other_stems=others)
+        returned = np.zeros_like(drums)
+        if self.config.high_return_hz:
+            from ssaplash_ai.bench.separators.postprocess import split_high_sustain
+
+            returned = split_high_sustain(drums, sample_rate, self.config.high_return_hz)
+            drums = drums - returned
+        if self.config.accomp_mode == "sum_others":
+            if not others:
+                raise ValueError(f"{self.name}: accomp_mode sum_others인데 드럼 외 스템이 없음")
+            accomp = np.sum(list(others.values()), axis=0, dtype=np.float32) + returned
+        elif self.config.accomp_mode == "subtract":
+            ratio = float(self.config.accomp_drum_ratio)
+            if not 0.0 < ratio <= 1.0:
+                raise ValueError(f"accomp_drum_ratio는 0 초과 1 이하: {ratio}")
+            accomp = mixture.astype(np.float32) - np.float32(ratio) * drums
+        else:
+            raise ValueError(f"accomp_mode는 subtract 또는 sum_others: {self.config.accomp_mode!r}")
+        if self.config.output_limiter:
+            from ssaplash_ai.bench.separators.postprocess import limit_peaks
+
+            accomp, _ = limit_peaks(accomp, sample_rate)
+        return SeparationResult(drums=drums, other_stems=others, accomp=accomp)
 
     def info(self) -> SeparatorInfo:
         return SeparatorInfo(

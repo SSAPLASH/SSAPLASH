@@ -1,0 +1,22 @@
+# 묶는 법 변형만. 검출은 raw032 + 되살리기 0.5 위에서
+candidates:
+- name: pk_frac10
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.10}
+- name: pk_frac15
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.15}
+- name: pk_frac20
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.20}
+- name: pk_frac10_sm08
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.10, tom_relative_smooth: 0.8}
+- name: pk_frac10_med
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.10, tom_f0_method: median}
+- name: pk_frac10_raw024
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.24, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_frac: 0.10}
+- name: pk_gap35
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5}
+- name: pk_gap35_frac10
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5, tom_relative_min_frac: 0.10}
+- name: pk_gap35_nores
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5}
+- name: pk_gap30_frac10
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_gate_low_rescue: 0.5, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, tom_relative_min_frac: 0.10}

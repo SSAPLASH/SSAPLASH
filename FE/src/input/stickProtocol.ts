@@ -1,7 +1,7 @@
 // 스틱 ↔ 브라우저 바이너리 프로토콜. BLE와 WebSocket(바이너리 프레임)이 공유한다.
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
-// 현재 구현 기준: v0.7 원문(develop-EMB `Docs/Service Design/스틱 통신 프로토콜.md`) 대조 완료
-import type { StickEvent, StickId } from '@/domain/events';
+// 현재 구현 기준: v0.8.1(2026-11-03) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전)·PEDAL(0x08)·role 2·3(페달) 반영
+import type { FootId, StickEvent, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
 export const STICK_SERVICE_UUID = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
@@ -17,6 +17,10 @@ export const PacketType = {
   SYNC_ACK: 0x04,
   SWING: 0x05,
   PARAM_ACK: 0x06,
+  /** 동글이 만드는 스틱 연결 마스크(1초마다 + 바뀔 때). 스틱은 보내지 않는다 */
+  LINK: 0x07,
+  /** 하이햇 페달 밟힘 상태(role 2). 동글이 페달 보드에서 받아 그대로 올린다 */
+  PEDAL: 0x08,
   BRIDGE_STATS: 0x7e,
   LOG: 0x7f,
 } as const;
@@ -30,10 +34,14 @@ export const CommandType = {
   SET_PAD_TABLE: 0x15,
   SET_YAW_OFFSET: 0x16,
   GET_PARAMS: 0x17,
+  /** 동글 전용: [0x70][역할 비트마스크][원래 명령]. 동글이 해당 역할 스틱에만 넘긴다 */
+  ROUTE: 0x70,
 } as const;
 
 /** PARAM_ACK 예약 paramId: GET_PARAMS 끝 표시(value = 보낸 개수) */
 export const PARAM_ACK_END = 0x00;
+/** STATUS flags 비트 5: 부팅 뒤 웹 설정(패드 표 등)을 아직 못 받았다 */
+export const FLAG_UNCONFIGURED = 0x20;
 /** SET_PAD_TABLE 적용됨(value = 적용 후 패드 개수, 지우기 패킷이면 0부터) */
 export const PARAM_ACK_PAD_TABLE = 0x20;
 /** SET_YAW_OFFSET 적용됨(value = 적용된 오프셋, 0.01°) */
@@ -82,6 +90,8 @@ export function padFromCode(code: number): PadId | null {
 
 export interface SyncAck {
   kind: 'syncAck';
+  /** 답한 스틱(flags role). 동글 아래에선 같은 t0에 두 스틱이 각각 답한다 */
+  stickId: StickId;
   /** 브라우저가 SYNC에 실어 보낸 t0 (ms, u32로 잘림) */
   t0: number;
   /** 센서가 SYNC를 받은 센서 시계 (ms) */
@@ -135,6 +145,8 @@ export interface DecodedPose extends FlaggedBase {
 
 export interface DecodedStatus extends FlaggedBase {
   kind: 'status';
+  /** flags 비트 5: 부팅 뒤 웹 설정을 못 받음(설정 전) */
+  unconfigured: boolean;
   /** 0xFF(측정 불가)면 null */
   batteryPct: number | null;
   rssi: number;
@@ -148,6 +160,26 @@ export interface DecodedSyncAck extends FlaggedBase {
   t0Ms: number;
   /** 스틱 시계 (µs) */
   t1Us: number;
+}
+
+export interface DecodedPedal extends FlaggedBase {
+  kind: 'pedal';
+  /** flags 비트 0–1: 2 왼발(하이햇), 3 오른발. 하이햇(role 2)만 온다 */
+  role: number;
+  /** 0 뗌(열림), 1 밟음(닫힘). 그 밖의 값은 원시값 그대로 */
+  state: number;
+  /** 페달 보드 시계 µs 원시값 (u32, 펼치기·ms 환산은 호출자) */
+  timestampUs: number;
+}
+
+export interface DecodedLink extends PacketBase {
+  kind: 'link';
+  flags: number;
+  /** 연결 마스크: bit0 왼손, bit1 오른손, bit2 왼발, bit3 오른발 (1 = 연결) */
+  linkMask: number;
+  /** 동글 펌웨어 (2 = XIAO 동글) */
+  fwMajor: number;
+  fwMinor: number;
 }
 
 export interface DecodedBridgeStats extends PacketBase {
@@ -192,6 +224,8 @@ export type DecodedPacket =
   | DecodedPose
   | DecodedStatus
   | DecodedSyncAck
+  | DecodedPedal
+  | DecodedLink
   | DecodedBridgeStats
   | DecodedLog
   | DecodedParamAck
@@ -208,6 +242,8 @@ const MIN_LEN: Record<number, number> = {
   [PacketType.LOG]: 2,
   [PacketType.SWING]: 5,
   [PacketType.PARAM_ACK]: 5,
+  [PacketType.LINK]: 5,
+  [PacketType.PEDAL]: 7,
 };
 
 /**
@@ -259,6 +295,7 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
       return {
         kind: 'status',
         ...base,
+        unconfigured: (flags & FLAG_UNCONFIGURED) !== 0,
         batteryPct: battery === 0xff ? null : battery,
         rssi: v.getInt8(3),
         fwMajor: v.getUint8(4),
@@ -267,6 +304,10 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
     }
     case PacketType.SYNC_ACK:
       return { kind: 'syncAck', ...base, t0Ms: v.getUint32(2, true), t1Us: v.getUint32(6, true) };
+    case PacketType.PEDAL:
+      return { kind: 'pedal', ...base, state: v.getUint8(2), timestampUs: v.getUint32(3, true) };
+    case PacketType.LINK:
+      return { kind: 'link', recvTime, flags, linkMask: v.getUint8(2), fwMajor: v.getUint8(3), fwMinor: v.getUint8(4) };
     case PacketType.PARAM_ACK:
       return { kind: 'paramAck', ...base, paramId: v.getUint8(2), value: v.getInt16(3, true) };
     case PacketType.SWING: {
@@ -302,18 +343,64 @@ export function decodePacket(bytes: Uint8Array, recvTime: number): DecodedPacket
 
 export type ParsedPacket = StickEvent | SyncAck | null;
 
+/** flags role → 손. 발(2·3)은 null — 손 이벤트로 읽히지 않게 한다 */
+export function handOf(role: number): StickId | null {
+  return role === 0 || role === 1 ? role : null;
+}
+
+/** flags role → 발. 손(0·1)은 null */
+export function footOf(role: number): FootId | null {
+  return role === 2 || role === 3 ? role : null;
+}
+
 /**
- * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·bridgeStats·log·paramAck·swing)은 null.
+ * 수신 패킷 파싱. 이벤트로 바꿀 수 없는 패킷(오류·모르는 타입·link·bridgeStats·log·paramAck·swing)과
+ * 발 역할(role 2·3)의 pose·syncAck, role 3·손의 PEDAL은 null.
+ * 발 HIT는 hit{ stickId: null, foot }, 발 STATUS는 pedalStatus, role 2 PEDAL은 pedal 이벤트로 낸다.
  * hit·pose의 timestamp와 syncAck의 t1은 ms로 환산한다(ClockSync 단위).
  */
 export function parsePacket(data: Uint8Array | DataView, recvTime: number): ParsedPacket {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   const d = decodePacket(bytes, recvTime);
+  if (!('role' in d)) return null;
+  const stickId = handOf(d.role);
+  const foot = footOf(d.role);
+  if (d.kind === 'pedal') {
+    // 하이햇(role 2)만 쓴다. role 3·손 role의 PEDAL은 받아서 버린다
+    if (d.role !== 2) return null;
+    return { kind: 'pedal', foot: 2, closed: d.state === 1, timestamp: d.timestampUs / 1000, recvTime };
+  }
+  if (stickId === null && foot !== null) {
+    // 발: 타격은 손 없이(stickId null) foot으로, STATUS는 연결·배터리 이벤트로
+    if (d.kind === 'hit') {
+      return {
+        kind: 'hit',
+        stickId: null,
+        foot,
+        timestamp: d.timestampUs / 1000,
+        recvTime,
+        peakAccel: d.peakSpeedDps / 100,
+        pitch: d.elevationDeg,
+        yaw: d.azimuthDeg,
+        pad: d.pad,
+        velocity: d.velocity,
+        marginDeg: d.marginDeg,
+        ambiguous: d.ambiguous,
+        peakSpeedDps: d.peakSpeedDps,
+        seq: d.seq,
+      };
+    }
+    if (d.kind === 'status') {
+      return { kind: 'pedalStatus', foot, connected: true, batteryPct: d.batteryPct ?? undefined };
+    }
+    return null;
+  }
+  if (stickId === null) return null;
   switch (d.kind) {
     case 'hit':
       return {
         kind: 'hit',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         timestamp: d.timestampUs / 1000,
         recvTime,
         // 84-c 전 임시: 피크 각속도(dps)를 기존 피크 가속도(g) 범위로 환산
@@ -330,7 +417,7 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
     case 'pose':
       return {
         kind: 'pose',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         timestamp: d.timestampUs / 1000,
         pitch: d.elevationDeg,
         yaw: d.azimuthDeg,
@@ -338,14 +425,15 @@ export function parsePacket(data: Uint8Array | DataView, recvTime: number): Pars
     case 'status':
       return {
         kind: 'status',
-        stickId: (d.role & 1) as StickId,
+        stickId,
         connected: true,
         batteryPct: d.batteryPct ?? undefined,
         rssi: d.rssi,
         firmware: `${d.fwMajor}.${d.fwMinor}`,
+        unconfigured: d.unconfigured,
       };
     case 'syncAck':
-      return { kind: 'syncAck', t0: d.t0Ms, t1: d.t1Us / 1000 };
+      return { kind: 'syncAck', stickId, t0: d.t0Ms, t1: d.t1Us / 1000 };
     default:
       return null;
   }
@@ -387,6 +475,15 @@ export function encodeSetParam(id: number, value: number): Uint8Array<ArrayBuffe
   return buf;
 }
 
+/** ROUTE(동글 전용): [0x70][1 << stickId][원래 명령]. 한 손 스틱에만 보낼 명령을 감싼다 */
+export function encodeRoute(stickId: StickId, command: Uint8Array): Uint8Array<ArrayBuffer> {
+  const buf = new Uint8Array(2 + command.length);
+  buf[0] = CommandType.ROUTE;
+  buf[1] = 1 << stickId;
+  buf.set(command, 2);
+  return buf;
+}
+
 /** SET_YAW_OFFSET: [0x16, offset i16 (0.01°)] */
 export function encodeSetYawOffset(deg: number): Uint8Array<ArrayBuffer> {
   const buf = new Uint8Array(3);
@@ -411,19 +508,24 @@ export interface PadTableEntry {
 }
 
 /**
- * SET_PAD_TABLE: 3개씩 나눈 패킷 배열. [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
+ * SET_PAD_TABLE: perPacket(기본 3)개씩 나눈 패킷 배열. ROUTE로 감싸면 2바이트가 늘어 20바이트 상한이므로 호출자가 2를 준다.
+ * perPacket은 1~3의 정수여야 하며 아니면 RangeError.
+ * [0x15, ctrl, (pad, elev i16, azim i16, radius u8) × N].
  * ctrl 비트 7 = 지우고 시작(첫 패킷만, clearFirst일 때), 비트 0–3 = 이 패킷의 패드 수.
  * 빈 배열이면 clearFirst일 때만 지우기 전용 1패킷([0x15, 0x80]), 아니면 패킷 없음.
  * 적용 확인은 PARAM_ACK_PAD_TABLE(value = 적용 후 패드 개수).
  */
-export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean): Uint8Array<ArrayBuffer>[] {
+export function encodeSetPadTable(entries: PadTableEntry[], clearFirst: boolean, perPacket = 3): Uint8Array<ArrayBuffer>[] {
+  if (!Number.isInteger(perPacket) || perPacket < 1 || perPacket > 3) {
+    throw new RangeError(`perPacket은 1~3이어야 한다: ${perPacket}`);
+  }
   for (const e of entries) {
     if (PAD_CODE[e.pad] >= 7) throw new Error(`SET_PAD_TABLE은 스틱 패드만 보낼 수 있다: ${e.pad}`);
   }
   if (entries.length === 0) return clearFirst ? [new Uint8Array([CommandType.SET_PAD_TABLE, 0x80])] : [];
   const packets: Uint8Array<ArrayBuffer>[] = [];
-  for (let i = 0; i < entries.length; i += 3) {
-    const chunk = entries.slice(i, i + 3);
+  for (let i = 0; i < entries.length; i += perPacket) {
+    const chunk = entries.slice(i, i + perPacket);
     const buf = new Uint8Array(2 + chunk.length * 6);
     const v = new DataView(buf.buffer);
     v.setUint8(0, CommandType.SET_PAD_TABLE);

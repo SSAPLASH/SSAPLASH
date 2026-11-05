@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { isPlayableStatus, songStatusView, sortMineSongs, summarizeMineSongs, type SongSummary } from './songCatalog';
+import {
+  accompanimentOptionText,
+  accompanimentStatusOf,
+  accompanimentView,
+  isAccompanimentPending,
+  isPlayableStatus,
+  songDetailFromDto,
+  songFromDto,
+  songStatusView,
+  sortMineSongs,
+  summarizeMineSongs,
+  type SongSummary,
+} from './songCatalog';
+
+describe('coverUrl 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('문자열이면 그대로 담는다', () => {
+    expect(songFromDto({ ...base, coverUrl: 'https://x/c.jpg' }).coverUrl).toBe('https://x/c.jpg');
+  });
+
+  it('없거나 null·빈 문자열·문자열이 아니면 null', () => {
+    expect(songFromDto(base).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: null }).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: '' }).coverUrl).toBeNull();
+    expect(songFromDto({ ...base, coverUrl: 123 }).coverUrl).toBeNull();
+  });
+
+  it('상세에도 담긴다', () => {
+    expect(songDetailFromDto({ ...base, coverUrl: 'https://x/c.jpg', charts: [] }).coverUrl).toBe('https://x/c.jpg');
+  });
+});
 
 function song(id: number, status: string, createdAt: string): SongSummary {
   return {
@@ -12,8 +43,10 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     timeSignature: '4/4',
     durationMs: null,
     hasAccompaniment: false,
+    accompanimentStatus: 'NONE',
     difficulties: [],
     createdAt,
+    coverUrl: null,
   };
 }
 
@@ -71,5 +104,62 @@ describe('summarizeMineSongs', () => {
 
   it('빈 목록', () => {
     expect(summarizeMineSongs([])).toEqual({ total: 0, ready: 0, processing: 0, failed: 0 });
+  });
+});
+
+describe('반주 상태 변환', () => {
+  const base = { id: 1, title: '곡', source: 'MIDI', status: 'READY' };
+
+  it('4값은 그대로 담는다', () => {
+    for (const v of ['GENERATING', 'READY', 'FAILED', 'NONE'] as const) {
+      expect(accompanimentStatusOf({ ...base, accompanimentStatus: v })).toBe(v);
+    }
+  });
+
+  it('필드가 없거나 모르는 값이면 hasAccompaniment로 READY·NONE을 정한다', () => {
+    expect(accompanimentStatusOf({ ...base, hasAccompaniment: true })).toBe('READY');
+    expect(accompanimentStatusOf({ ...base, hasAccompaniment: false })).toBe('NONE');
+    expect(accompanimentStatusOf(base)).toBe('NONE');
+    expect(accompanimentStatusOf({ ...base, accompanimentStatus: 'QUEUED', hasAccompaniment: true })).toBe('READY');
+    expect(accompanimentStatusOf({ ...base, accompanimentStatus: null })).toBe('NONE');
+  });
+
+  it('목록·상세 변환에 담긴다', () => {
+    expect(songFromDto({ ...base, accompanimentStatus: 'GENERATING' }).accompanimentStatus).toBe('GENERATING');
+    expect(songDetailFromDto({ ...base, accompanimentStatus: 'FAILED', charts: [] }).accompanimentStatus).toBe('FAILED');
+  });
+});
+
+describe('accompanimentView', () => {
+  it('채보 READY 곡의 생성 중·실패만 배지를 만든다', () => {
+    expect(accompanimentView('READY', 'GENERATING')).toEqual({ label: '반주 생성 중', tone: 'active' });
+    expect(accompanimentView('READY', 'FAILED')).toEqual({ label: '반주 생성 실패', tone: 'danger' });
+    expect(accompanimentView('READY', 'READY')).toBeNull();
+    expect(accompanimentView('READY', 'NONE')).toBeNull();
+  });
+
+  it('채보 생성 중·실패 곡에는 반주 배지를 만들지 않는다', () => {
+    expect(accompanimentView('PROCESSING', 'GENERATING')).toBeNull();
+    expect(accompanimentView('FAILED', 'FAILED')).toBeNull();
+  });
+});
+
+describe('accompanimentOptionText', () => {
+  it('반주가 있으면 빈 문자열, 생성 중이면 생성 중, 나머지는 반주 없음', () => {
+    expect(accompanimentOptionText('READY')).toBe('');
+    expect(accompanimentOptionText('GENERATING')).toBe('반주 생성 중');
+    expect(accompanimentOptionText('FAILED')).toBe('반주 없음');
+    expect(accompanimentOptionText('NONE')).toBe('반주 없음');
+    expect(accompanimentOptionText(null)).toBe('반주 없음');
+    expect(accompanimentOptionText(undefined)).toBe('반주 없음');
+  });
+});
+
+describe('isAccompanimentPending', () => {
+  it('채보 READY이고 반주 GENERATING일 때만 true', () => {
+    expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'GENERATING' })).toBe(true);
+    expect(isAccompanimentPending({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' })).toBe(false);
+    expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'READY' })).toBe(false);
+    expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'FAILED' })).toBe(false);
   });
 });

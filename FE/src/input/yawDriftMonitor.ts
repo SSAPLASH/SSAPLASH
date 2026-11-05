@@ -21,6 +21,7 @@ import {
 import type { InputSource } from './InputSource';
 import { packetTap } from './packetTap';
 import { decodePacket, encodeSetYawOffset, PARAM_ACK_YAW_OFFSET } from './stickProtocol';
+import { isSensorSource } from '@/domain/events';
 
 export type { YawDriftStatus };
 
@@ -178,13 +179,15 @@ class YawDriftMonitor {
   observe(hit: ResolvedHit, profile: CalibrationProfile | null): void {
     const src = this.usable();
     if (!src) return;
-    if (hit.source === 'keyboard' || hit.source === 'preview') return;
+    if (!isSensorSource(hit.source)) return;
     if (hit.pad === null) return;
     const trusted = hit.judgedBy === 'stick' || hit.judgedBy === 'chart' || (hit.judgedBy === 'pose' && hit.inside === true);
     if (!trusted) return;
     const anchor = profile?.anchors[hit.pad];
     if (!anchor) return;
 
+    // 손 없는 타격(페달)은 방위각 오차가 없다
+    if (hit.stickId === null) return;
     const i = hit.stickId;
     const s = this.sticks[i];
     s.ring.push(wrap180(hit.pose.yaw - anchor.yaw));

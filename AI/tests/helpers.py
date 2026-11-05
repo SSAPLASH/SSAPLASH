@@ -5,6 +5,7 @@ pytest가 tests/ 를 sys.path에 넣으므로 `from helpers import ...`로 사�
 
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,33 @@ def make_tone(seconds: float, sr: int = SR, freq: float = 440.0, channels: int =
 def write_wav(path: Path, audio: np.ndarray, sr: int = SR) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(path), audio.T, sr, subtype="PCM_16")
+
+
+def write_m4a(path: Path, audio: np.ndarray, sr: int = SR, codec: str = "aac") -> None:
+    """(2, 샘플) 배열을 PyAV로 m4a 저장. codec은 aac(손실) 또는 alac(무손실 16비트).
+
+    libsndfile은 m4a를 못 쓰므로 PyAV 인코더를 씀. 확장자가 없는 경로도 mp4 컨테이너로 씀.
+    """
+    import av
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if codec == "alac":
+        fmt = "s16p"
+        data = np.round(np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
+    else:
+        fmt = "fltp"
+        data = audio.astype(np.float32)
+    with av.open(str(path), mode="w", format="ipod") as out:
+        stream = out.add_stream(codec, rate=sr, layout="stereo")
+        frame = av.AudioFrame.from_ndarray(np.ascontiguousarray(data), format=fmt, layout="stereo")
+        frame.sample_rate = sr
+        # pts를 주면 AAC 인코더 앞쪽 지연이 음수 pts로 나와 mp4 muxer가 edit list에 적음
+        frame.pts = 0
+        frame.time_base = Fraction(1, sr)
+        for packet in stream.encode(frame):
+            out.mux(packet)
+        for packet in stream.encode(None):
+            out.mux(packet)
 
 
 def make_musdb_song(song_dir: Path, seconds: float = 1.0, sr: int = SR) -> dict[str, np.ndarray]:

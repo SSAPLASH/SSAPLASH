@@ -1,0 +1,43 @@
+/* Controls / Chip 126:1941 */
+.ui-chip {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 아래 값으로 정한다 */
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
+}
+.ui-chip:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--text-1);
+}
+/* 선택된 칩은 hover에도 선택 색을 유지한다 */
+.ui-chip.selected:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.ui-chip:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ui-chip.selected {
+  background: var(--surface-3);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.ui-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

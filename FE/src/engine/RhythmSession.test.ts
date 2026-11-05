@@ -83,6 +83,16 @@ describe('시작·카운트인', () => {
     expect(beats.map((b) => b.accent)).toEqual([true, false, false, false]);
   });
 
+  it('offsetMs > 0이면 카운트인 박이 원점(1마디 1박) 직전 1마디에 놓인다', () => {
+    // 원점 1250ms: 카운트인은 곡 시각 −750ms부터 4박, 마지막 박 다음 박이 1250ms
+    const s = new RhythmSession({ ...chart(NOTES), offsetMs: 1250 }, OPTS);
+    s.start(12000);
+    expect(s.originMs).toBe(1250);
+    expect(s.countInBeats().map((b) => b.at)).toEqual([11250, 11750, 12250, 12750]);
+    // 곡 0ms·판정 기준은 그대로(원점과 무관)
+    expect(s.songTime(T0 + 300)).toBe(300);
+  });
+
   it('카운트인 중에도 창 안의 노트는 판정된다', () => {
     const s = new RhythmSession(chart([{ timeMs: 30, pad: 'RIDE' }]), OPTS);
     s.start(12000);
@@ -257,6 +267,36 @@ describe('일시정지 (중단 확인 팝업)', () => {
     const p = playing();
     p.resume(T0 + 100);
     expect(p.songTime(T0 + 100)).toBe(100);
+  });
+});
+
+describe('판정 이벤트의 손·세기', () => {
+  it('센서 타격 판정에는 타격한 손과 세기가 실린다', () => {
+    const s = playing();
+    const ev = s.handleHit({ ...hit('HIHAT', T0 + 1000), source: 'ble', stickId: 1, velocity: 87 });
+    expect(ev?.stickId).toBe(1);
+    expect(ev?.velocity).toBe(87);
+    expect(s.snapshot(T0 + 1000).last).toMatchObject({ stickId: 1, velocity: 87 });
+  });
+
+  it('키보드 타격 판정은 손·세기가 null이다', () => {
+    const ev = playing().handleHit(hit('HIHAT', T0 + 1000));
+    expect(ev?.judgement).toBe('PERFECT');
+    expect(ev?.stickId).toBeNull();
+    expect(ev?.velocity).toBeNull();
+  });
+
+  it('MISS 판정은 손·세기가 null이고 리스너에도 그대로 간다', () => {
+    const s = playing();
+    const got: Array<[number | null, number | null]> = [];
+    s.onJudgement((e) => {
+      if (e.judgement === 'MISS') got.push([e.stickId, e.velocity]);
+    });
+    s.tick(T0 + 1100); // 1000ms 노트 둘이 창(60ms)을 지났다
+    expect(got).toEqual([
+      [null, null],
+      [null, null],
+    ]);
   });
 });
 

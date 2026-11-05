@@ -172,7 +172,7 @@ export class TelemetryCollector {
       hit: p.hit,
       judgement,
       deltaMs,
-      firmware: this.firmware[stick] ?? null,
+      firmware: stick === null ? null : (this.firmware[stick] ?? null),
       atMs: p.hit.tRecv,
       timeOrigin: this.timeOrigin,
     });

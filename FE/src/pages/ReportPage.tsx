@@ -2,12 +2,16 @@
 // 요약이 오면 바로 그리고, 노트 타임라인은 페이지를 끝까지 받아 시간순 정렬한 뒤 그린다(D8).
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { getChartAssets } from '@/api/charts';
+import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from '@/app/analysisPoller';
 import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/app/playSync';
+import { CoachSummaryCard } from '@/components/report/CoachSummaryCard';
 import { NoteTimeline } from '@/components/report/NoteTimeline';
 import { PadAccuracyChart } from '@/components/report/PadAccuracyChart';
 import { ReportSummary } from '@/components/report/ReportSummary';
 import { TimingHistogram } from '@/components/report/TimingHistogram';
+import { useSegmentPlayer } from '@/components/report/useSegmentPlayer';
 import { WeakSegments, type PollingState } from '@/components/report/WeakSegments';
 import type { Report, ReportNote } from '@/domain/report';
 import { getPlayLog } from '@/engine/playLog';
@@ -18,7 +22,7 @@ type Load<T> = { s: 'loading' } | { s: 'ok'; v: T } | { s: 'error'; e: unknown }
 const ANALYSIS_POLL_INTERVAL_MS = 2000;
 const ANALYSIS_POLL_MAX = 5;
 
-const MODE_LABEL: Record<string, string> = { RHYTHM: '리듬 게임', SHEET: '악보 연주' };
+const MODE_LABEL: Record<string, string> = { RHYTHM: '리듬 게임', SHEET: '악보 연습' };
 const INPUT_LABEL: Record<string, string> = { KEYBOARD: '키보드', STICK: '스틱' };
 
 /** 오류 → 안내 문구와 다시 시도 가능 여부 (회신 1 §4) */
@@ -51,6 +55,8 @@ function ReportView({ playId, onRetry }: { playId: string; onRetry: () => void }
   const [polling, setPolling] = useState<PollingState>('idle');
   // 새로고침 버튼이 올리면 재조회를 5회부터 다시 시작한다
   const [pollRun, setPollRun] = useState(0);
+  const player = useSegmentPlayer(audioEngine);
+  const [accompanimentUrl, setAccompanimentUrl] = useState<string | null>(null);
   const pending = report.s === 'ok' && report.v.analysisStatus === 'PENDING';
 
   useEffect(() => {
@@ -68,6 +74,18 @@ function ReportView({ playId, onRetry }: { playId: string; onRetry: () => void }
       alive = false;
     };
   }, [playId]);
+
+  // 구간 재생 반주 URL. 곡 상세에는 없고 채보 자산에 있다. 내장 곡·실패는 합성음만 재생한다
+  useEffect(() => {
+    const id = log?.chartVersionId;
+    if (id == null) return;
+    const ac = new AbortController();
+    getChartAssets(id, ac.signal).then(
+      (a) => setAccompanimentUrl(a.accompanimentUrl ?? null),
+      () => {},
+    );
+    return () => ac.abort();
+  }, [log?.chartVersionId]);
 
   // PENDING인 동안만 리포트를 다시 받는다. 노트·히스토그램은 다시 요청하지 않는다
   useEffect(() => {
@@ -132,6 +150,7 @@ function ReportView({ playId, onRetry }: { playId: string; onRetry: () => void }
   return (
     <main className="main">
       {header}
+      <CoachSummaryCard summary={r.coachSummary} />
       <ReportSummary report={r} />
 
       <div className="grid-2" style={{ marginTop: 16 }}>
@@ -162,8 +181,10 @@ function ReportView({ playId, onRetry }: { playId: string; onRetry: () => void }
           status={r.analysisStatus}
           segments={r.weakSegments}
           counts={r.counts}
-          bars={log?.mode === 'SHEET' && log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : null}
+          bars={log?.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : null}
           polling={polling}
+          playback={{ notes: notes.s === 'ok' ? notes.v : null, durationMs: log?.durationMs ?? null, accompanimentUrl }}
+          player={player}
           onRefresh={() => {
             setPolling('polling');
             setPollRun((n) => n + 1);
