@@ -51,6 +51,46 @@ final class RecommendationScorer {
 		return diversify(ranked, size);
 	}
 
+	/**
+	 * R3: AI 후보 순서를 규칙으로 걸러 다시 세운다(AI PoC의 M6, `models/rerank.py`와 같은 식).
+	 * 점수는 {@code (1 - w) · R1 점수 + w · 순위 점수}이고 순위 점수는 1위가 1, 꼴찌가 0이다. 기준 밀도의 1.5배를 넘는 채보만 있는 곡은
+	 * 점수와 무관하게 뺀다. 기준 밀도를 모르는 사용자는 거를 근거가 없어 빈 목록을 돌려준다(호출 쪽이 R1로 응답한다).
+	 */
+	static List<Scored> blend(List<Candidate> all, Profile profile, Instant now, int size, List<Long> order, double weight) {
+		if (profile.baselineDensity() == null || order.isEmpty()) return List.of();
+		double base = profile.baselineDensity();
+		var bestPerSong = new HashMap<Long, Scored>();
+		for (var c : dropDuplicateCharts(all)) {
+			double ratio = c.density() / base;
+			if (ratio > HARD_LIMIT) continue;
+			bestPerSong.merge(c.songId(), score(c, ratio, profile, now), (a, b) -> better(a, b) <= 0 ? a : b);
+		}
+		int n = order.size();
+		var blended = new ArrayList<Scored>();
+		for (int position = 0; position < n; position++) {
+			var scored = bestPerSong.get(order.get(position));
+			if (scored == null) continue;
+			double relevance = n > 1 ? 1.0 - (double) position / (n - 1) : 1.0;
+			double total = (1 - weight) * scored.total() + weight * relevance;
+			blended.add(new Scored(scored.candidate(), Math.round(total * 10000.0) / 10000.0, scored.reasons(), scored.primary()));
+		}
+		// 정렬이 안정적이라 점수가 같으면 후보 순위가 앞선 곡이 먼저다
+		blended.sort(Comparator.comparingDouble(Scored::total).reversed());
+		return List.copyOf(blended.subList(0, Math.min(size, blended.size())));
+	}
+
+	/** 안전한 후보가 모자라면 R1 순서로 남은 자리를 채운다. 이미 고른 곡은 다시 넣지 않는다. */
+	static List<Scored> fill(List<Scored> picked, List<Candidate> all, Profile profile, Instant now, int size) {
+		var out = new ArrayList<>(picked);
+		var used = new java.util.HashSet<Long>();
+		for (var s : picked) used.add(s.candidate().songId());
+		for (var s : rank(all, profile, now, size + picked.size())) {
+			if (out.size() >= size) break;
+			if (used.add(s.candidate().songId())) out.add(s);
+		}
+		return out;
+	}
+
 	/** 기록이 없으면 BEGINNER 곡의 가장 쉬운 채보를 보여 준다. */
 	private static List<Scored> starter(List<Candidate> candidates, int size) {
 		var easiest = new HashMap<Long, Candidate>();

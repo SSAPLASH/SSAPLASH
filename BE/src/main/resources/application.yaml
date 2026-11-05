@@ -86,6 +86,16 @@ audio:
     secret-key: ${AUDIO_STORAGE_SECRET_KEY:}
     private-bucket-confirmed: ${AUDIO_STORAGE_PRIVATE_BUCKET_CONFIRMED:false}
 
+# 곡 추천 R3. 기본은 모두 꺼짐이고 꺼져 있으면 R1과 같다. 비밀 값은 DB 역할 설정 app.recommend_key_secret과 같아야 한다.
+recommend:
+  r3:
+    enabled: ${RECOMMEND_R3_ENABLED:false}
+    rollout-percent: ${RECOMMEND_R3_ROLLOUT_PERCENT:0}
+    max-age-days: ${RECOMMEND_R3_MAX_AGE_DAYS:7}
+    relevance-weight: ${RECOMMEND_R3_RELEVANCE_WEIGHT:0.75}
+    accepted-model-versions: ${RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS:}
+    key-secret: ${RECOMMEND_KEY_SECRET:}
+
 worker:
   storage:
     url-ttl: ${WORKER_STORAGE_URL_TTL:10m}
