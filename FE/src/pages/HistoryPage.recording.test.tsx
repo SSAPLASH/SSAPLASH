@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HistoryPage } from './HistoryPage';
 
+vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
+
 vi.mock('@/app/features', () => ({ RECORDING_ENABLED: true, SONG_EDIT_ENABLED: true }));
 
 afterEach(() => vi.unstubAllGlobals());
