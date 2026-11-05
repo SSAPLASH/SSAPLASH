@@ -1,5 +1,6 @@
 // 설정 화면(/settings, ACCT-001, Figma 03 Screens / 설정). 계정·기기·오디오 / 연주·회원 탈퇴 카드.
 // 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 가입 때 필수이고 철회는 탈퇴뿐이라 토글이 없다.
+// "데이터 활용" 카드(설계 COACH-004-recommendation-consent D7)는 선택 동의인 맞춤 곡 추천 학습 활용만 토글로 켜고 끈다. 상태는 서버가 원본이다.
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,11 +12,14 @@ import { useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Slider } from '@/components/ui/Slider';
+import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
 import type { SocialProvider } from '@/domain/auth';
+import { consentSaveErrorMessage, consentStatusText, isRecommendationConsentCurrent, isRecommendationVersionStale } from '@/domain/recommendationConsent';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
 import '@/components/settings/settings.css';
 
@@ -23,6 +27,9 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
   GOOGLE: 'Google',
   SSAFY: 'SSAFY',
 };
+
+/** 동의 저장 결과 토스트가 보이는 시간 */
+const TOAST_MS = 3000;
 
 /** 지연 보정 표시: +20ms · 0ms · -10ms */
 function offsetText(ms: number): string {
@@ -56,6 +63,11 @@ export function SettingsPage() {
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const presetItems = usePresets((p) => p.items);
 
+  const consentStatus = useRecommendationConsent((s) => s.status);
+  const consent = useRecommendationConsent((s) => s.consent);
+  const consentSaving = useRecommendationConsent((s) => s.saving);
+  const [toast, setToast] = useState<{ variant: ToastVariant; text: string } | null>(null);
+
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -64,6 +76,32 @@ export function SettingsPage() {
   useEffect(() => {
     void usePresets.getState().refresh();
   }, []);
+
+  // 학습 동의 상태는 로그인한 계정만 읽는다(비로그인·인증 끔 개발 모드는 카드가 없다). 이미 읽었으면 재요청하지 않는다(store가 세션당 1회)
+  const loggedIn = user !== null;
+  useEffect(() => {
+    if (loggedIn) void useRecommendationConsent.getState().load();
+  }, [loggedIn]);
+
+  useEffect(() => {
+    if (toast === null) return;
+    const t = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const consentChecked = isRecommendationConsentCurrent(consent);
+  const consentStale = isRecommendationVersionStale(consent);
+  const consentLocked = consentStatus !== 'ready' || consentSaving;
+
+  const onToggleConsent = (next: boolean) => {
+    useRecommendationConsent
+      .getState()
+      .set(next)
+      .then(
+        () => setToast(next ? null : { variant: 'info', text: '이후 학습부터 제외돼요' }),
+        (e: unknown) => setToast({ variant: 'error', text: consentSaveErrorMessage(e) }),
+      );
+  };
 
   const sensorMode = sensorKind !== 'none';
   const [left, right] = connected;
@@ -133,6 +171,22 @@ export function SettingsPage() {
               </p>
             )}
           </Card>
+
+          {user && (
+            <Card padding="lg" title="데이터 활용">
+              <p className="settings-note">연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요.</p>
+              <SettingRow label="맞춤 곡 추천 학습 활용" help="동의한 연주 기록만 추천 모델 학습에 써요. 끄면 이후 학습부터 제외돼요.">
+                {(aria) => <Toggle {...aria} label="맞춤 곡 추천 학습 활용" checked={consentChecked} disabled={consentLocked} onChange={onToggleConsent} />}
+              </SettingRow>
+              <p className="settings-note">{consentStatusText(consent)}</p>
+              {consentStale && <p className="settings-note">약관이 바뀌었어요. 다시 켜면 새 판에 동의해요.</p>}
+              {consentStatus === 'error' && (
+                <p className="settings-note" role="alert">
+                  상태를 불러오지 못했어요
+                </p>
+              )}
+            </Card>
+          )}
 
           <Card padding="lg" title="기기">
             <SettingRow label="스틱 연결" help="왼손·오른손 스틱 상태">
@@ -241,6 +295,8 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      <Toast variant={toast?.variant ?? 'info'} text={toast?.text ?? null} regionClassName="settings-toast-region" />
 
       <WithdrawDialog
         open={withdrawOpen}

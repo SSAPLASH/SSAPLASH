@@ -5,7 +5,9 @@ import type { UserMe } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
+import { recommendationVersion } from '@/domain/signupTerms';
 import { SettingsPage } from './SettingsPage';
 
 const user: UserMe = {
@@ -178,5 +180,66 @@ describe('SettingsPage 기기 행', () => {
     expect(render()).toContain('프리셋 없음 · 보정 완료');
     put(useSettings, { sensorKind: 'none' });
     expect(render()).toContain('>프리셋 없음<');
+  });
+});
+
+describe('SettingsPage 데이터 활용 카드', () => {
+  const V = recommendationVersion();
+  const toggleTag = (html: string) => new RegExp(`<button[^>]*aria-label="맞춤 곡 추천 학습 활용"[^>]*>`).exec(html)?.[0] ?? '';
+
+  it('계정 카드 아래에 머리 한 줄·행·도움말이 보인다', () => {
+    const html = render();
+    expect(html).toContain('데이터 활용');
+    expect(html.indexOf('데이터 활용')).toBeGreaterThan(html.indexOf('드러머곰'));
+    expect(html.indexOf('데이터 활용')).toBeLessThan(html.indexOf('>기기<'));
+    expect(html).toContain('연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요');
+    expect(html).toContain('맞춤 곡 추천 학습 활용');
+    expect(html).toContain('동의한 연주 기록만 추천 모델 학습에 써요. 끄면 이후 학습부터 제외돼요.');
+  });
+
+  it('동의함: 토글 켜짐, 상태 줄에 판·변경일', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: true, version: V, updatedAt: '2026-11-05T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('true');
+    expect(toggleTag(html)).not.toContain('disabled');
+    expect(html).toContain(`동의함 · ${V} 판 · 11/05 변경`);
+  });
+
+  it('미동의(거부·미응답): 토글 꺼짐, 상태 줄 미동의, 잠기지 않음', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: false, version: V, updatedAt: '2026-11-05T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
+    expect(toggleTag(html)).not.toContain('disabled');
+    expect(html).toContain('>미동의<');
+    expect(html).not.toContain('약관이 바뀌었어요');
+  });
+
+  it('판 불일치: 토글 꺼짐 + 새 판 안내', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: true, version: '2026-01-01', updatedAt: '2026-01-02T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
+    expect(html).toContain('>미동의<');
+    expect(html).toContain('약관이 바뀌었어요. 다시 켜면 새 판에 동의해요.');
+  });
+
+  it('읽기 실패: 미동의로 보이고 토글이 잠기며 안내가 뜬다', () => {
+    put(useRecommendationConsent, { status: 'error', consent: null });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
+    expect(toggleTag(html)).toContain('disabled');
+    expect(html).toContain('>미동의<');
+    expect(html).toContain('상태를 불러오지 못했어요');
+  });
+
+  it('아직 읽는 중이어도 토글은 잠겨 있고 오류 문구는 없다', () => {
+    put(useRecommendationConsent, { status: 'loading', consent: null });
+    const html = render();
+    expect(toggleTag(html)).toContain('disabled');
+    expect(html).not.toContain('상태를 불러오지 못했어요');
+  });
+
+  it('로그인하지 않았으면 카드가 없다', () => {
+    put(useAuth, { status: 'anonymous', user: null });
+    expect(render()).not.toContain('데이터 활용');
   });
 });
