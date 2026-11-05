@@ -161,6 +161,16 @@ def test_두_설정을_켜면_하이햇을_세_가지로_나눈다(tmp_path: Pat
     validate_chart(out.chart, out.duration_ms)
 
 
+def test_서비스_설정은_페달만_켜고_열린_하이햇_필드는_끈다(tmp_path: Path):
+    config = SheetConfig.from_yaml(Path(__file__).resolve().parents[2] / "configs/chart/sheet.yaml")
+    out = convert_sheet(write(tmp_path, BASIC), config)
+    notes = out.chart["charts"][0]["notes"]
+    assert out.chart["generatorVersion"] == "sheet-musicxml-2"
+    assert [n["timeMs"] for n in notes if n["pad"] == "HIHAT_PEDAL"] == [500]
+    assert all("hihatOpen" not in n for n in notes)
+    validate_chart(out.chart, out.duration_ms)
+
+
 def test_technical_표시가_GM_번호보다_먼저다(tmp_path: Path):
     xml = score(
         measure(
