@@ -221,8 +221,12 @@ class WorkerApi:
         code: str,
         retryable: bool,
         summary: str,
+        reason: str | None = None,
     ) -> FailureOutcome:
-        """`POST /{jobId}/failure`. summary는 한 줄 200자로 자름."""
+        """`POST /{jobId}/failure`. summary는 한 줄 200자로 자름.
+
+        reason은 설정 send_reason이 참일 때만 본문에 넣음(S15P31A307-246, 기본 꺼짐).
+        """
         body = {
             "attemptId": attempt_id,
             "eventSeq": event_seq,
@@ -231,6 +235,8 @@ class WorkerApi:
             "retryable": bool(retryable),
             "summary": one_line(summary),
         }
+        if reason is not None and self.settings.send_reason:
+            body["reason"] = reason
         raw = self._post(f"/{job_id}/failure", body) or {}
         return FailureOutcome(
             status=str(raw.get("status", "")), revision=int(raw.get("revision", 0))

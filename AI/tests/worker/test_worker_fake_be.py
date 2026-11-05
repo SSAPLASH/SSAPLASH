@@ -133,6 +133,24 @@ def test_failure는_코드와_retryable을_검사한다(rig):
     assert final.json()["status"] == "FAILED"
 
 
+def test_failure는_reason이_있으면_네_값만_받고_기록한다(rig):
+    backend, srv, _ = rig
+    a = _post(srv, "/claim", {"workerId": "worker1", "claimRequestId": "c1"}).json()
+    base = {
+        "attemptId": a["attemptId"],
+        "stage": "TRANSCRIBING",
+        "code": "INPUT_INVALID",
+        "retryable": False,
+        "summary": "x",
+    }
+    bad = _post(srv, "/1/failure", {**base, "eventSeq": 1, "reason": "DRUM_NOT_DETECTED"})
+    assert bad.status_code == 400 and bad.json()["code"] == "REASON_INVALID"
+    ok = _post(srv, "/1/failure", {**base, "eventSeq": 2, "reason": "NOT_TRANSCRIBABLE"})
+    assert ok.status_code == 200
+    assert backend.jobs[1].events[-1]["reason"] == "NOT_TRANSCRIBABLE"
+    assert backend.jobs[1].failure_reason == "NOT_TRANSCRIBABLE"
+
+
 def test_결과_봉투의_payloadHash가_틀리면_422(rig):
     _, srv, _ = rig
     a = _post(srv, "/claim", {"workerId": "worker1", "claimRequestId": "c1"}).json()
