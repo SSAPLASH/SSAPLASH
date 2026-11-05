@@ -1,5 +1,6 @@
-// 추천 곡 R1 도메인 (설계 COACH-004-song-recommend-picker 3-2). 타입·이유 문구 표·BE 응답 변환.
+// 추천 곡 R1 도메인 (설계 COACH-004-song-recommend-picker 3-2, COACH-004-song-recommend-report 3-2). 타입·이유 문구 표·카드 모델·BE 응답 변환.
 import type { Difficulty } from './chart';
+import { pickPathOf } from './playRetry';
 import { DIFFICULTY_ORDER, songFromDto, toSafeId, type SongSummary } from './songCatalog';
 
 /** 노출 위치. 곡 선택은 SONG_PICKER, 리포트 하단은 후속 작업 */
@@ -62,4 +63,25 @@ export function recommendationFromDto(d: Record<string, unknown>): Recommendatio
     difficulty: difficultyOf(d.difficulty),
     reasons,
   };
+}
+
+/** 추천 카드 한 장(비슷한 곡과 공유할 모델). `line`은 이유·비슷한 이유 한 줄이고 빈 문자열이면 줄을 그리지 않는다 */
+export interface RecommendCard {
+  song: SongSummary;
+  chartId: number;
+  difficulty: Difficulty;
+  line: string;
+}
+
+/** R1 항목 → 카드(문구 = 첫 이유) */
+export function cardOf(item: RecommendationItem): RecommendCard {
+  return { song: item.song, chartId: item.chartId, difficulty: item.difficulty, line: primaryReason(item) };
+}
+
+/**
+ * 추천 카드를 눌렀을 때 이동할 연주 준비 경로(설계 COACH-004-song-recommend-report D5).
+ * `mode`는 리포트 모드 문자열 그대로 — SHEET만 `/sheet`, 그 밖은 `/play`.
+ */
+export function recommendationPathOf(card: { song: { id: number }; chartId: number }, mode: string): string {
+  return `${pickPathOf(mode)}?song=${card.song.id}&chart=${card.chartId}`;
 }
