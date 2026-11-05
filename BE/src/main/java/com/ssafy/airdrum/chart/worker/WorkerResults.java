@@ -210,8 +210,7 @@ class WorkerResults {
         var drumNotes=new ArrayList<DrumNote>();
         var originals=new IdentityHashMap<DrumNote,JsonNode>();
         for (var note:source) {
-            long tick=useTicks ? note.path("notation").path("tick").asLong()
-                    : Math.max(0,Math.round((note.path("timeMs").asLong()-(double)t.path("offsetMs").asInt())*bpm*ppq/60000.0));
+            long tick=useTicks ? note.path("notation").path("tick").asLong() : tickAt(note.path("timeMs").asLong(),t,bpm,ppq);
             int velocity=note.path("velocityHint").isIntegralNumber() ? note.path("velocityHint").asInt() : 100;
             var drum=new DrumNote(tick,DrumPad.valueOf(note.path("pad").asString()),velocity,0);
             drumNotes.add(drum); originals.put(drum,note);
@@ -226,6 +225,24 @@ class WorkerResults {
         return new ChartData(notes,payload.write(normal),payload.write(easy),timing,status,count,normal.size(),easy.size(),n.path("generatorVersion").asString(),
                 java.math.BigDecimal.valueOf(bpm).setScale(2,java.math.RoundingMode.HALF_UP),
                 t.path("offsetMs").asInt(),t.path("timeSignature").asString(),payload.write(n.path("metrics")));
+    }
+    /**
+     * notation이 없는 노트의 난이도 줄이기용 틱. timing.tempoMap(빠르기가 바뀌는 곡)이 있으면 구간마다 그 bpm으로,
+     * 없으면 timing.bpm 하나로 offsetMs부터 센다. tempoMap 틱은 timing.ppq 단위라 ppq로 바꿔 쓴다.
+     */
+    static long tickAt(long timeMs,JsonNode timing,double bpm,int ppq) {
+        double ms=timeMs-(double)timing.path("offsetMs").asInt();
+        var map=timing.path("tempoMap");
+        int mapPpq=timing.path("ppq").isIntegralNumber() ? timing.path("ppq").asInt() : 0;
+        if(!map.isArray() || map.size()<2 || mapPpq<=0) return Math.max(0,Math.round(ms*bpm*ppq/60000.0));
+        double beats=0, at=0;
+        for(int i=0;i<map.size();i++) {
+            double rate=map.get(i).path("bpm").doubleValue();
+            double end=i+1<map.size() ? at+(map.get(i+1).path("tick").asLong()-map.get(i).path("tick").asLong())*60000.0/mapPpq/rate : Double.POSITIVE_INFINITY;
+            if(ms<end || i+1==map.size()) { beats=map.get(i).path("tick").asLong()/(double)mapPpq+(ms-at)*rate/60000.0; break; }
+            at=end;
+        }
+        return Math.max(0,Math.round(beats*ppq));
     }
     private List<JsonNode> originalNotes(JsonNode source) {
         var result=new ArrayList<JsonNode>();
