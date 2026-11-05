@@ -104,6 +104,12 @@ services:
       SIGNUP_CONSENT_TERMS_VERSIONS: ${SIGNUP_CONSENT_TERMS_VERSIONS:-}
       SIGNUP_CONSENT_PRIVACY_VERSIONS: ${SIGNUP_CONSENT_PRIVACY_VERSIONS:-}
       SIGNUP_CONSENT_DATA_VERSIONS: ${SIGNUP_CONSENT_DATA_VERSIONS:-}
+      SIGNUP_CONSENT_RECOMMENDATION_VERSIONS: ${SIGNUP_CONSENT_RECOMMENDATION_VERSIONS:-}
+      # 곡 추천 R3. 기본은 모두 꺼짐이고 꺼져 있으면 R1과 같다. 켜는 절차는 Infra/README.md.
+      RECOMMEND_R3_ENABLED: ${RECOMMEND_R3_ENABLED:-false}
+      RECOMMEND_R3_ROLLOUT_PERCENT: ${RECOMMEND_R3_ROLLOUT_PERCENT:-0}
+      RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS: ${RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS:-}
+      RECOMMEND_KEY_SECRET: ${RECOMMEND_KEY_SECRET:-}
       # 오브젝트 스토리지(SeaweedFS). 켜는 스위치는 .env에서 정하며 기본은 꺼짐이다.
       # 악보·반주는 읽기용 키로 서명 URL을 만든다. 공개 주소는 브라우저가 접속하는 도메인 루트다.
       CHART_ASSET_ENABLED: ${CHART_ASSET_ENABLED:-false}
@@ -577,6 +583,48 @@ services:
     networks:
       - internal
     mem_limit: 1g
+    # 이미지의 HEALTHCHECK는 AI 서버(8000번 포트)용이라 일회성 배치에는 맞지 않는다.
+    healthcheck:
+      disable: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    logging: *default-logging
+
+  # 곡 추천 R3 후보 배치(COACH-004). 동의한 사용자의 가명 기록(recommend_*_v 뷰)으로 후보를 만들어 BE에 적재한다.
+  # 평소에는 뜨지 않는다(profiles). 내부 네트워크로 DB와 BE에 닿으므로 DB 포트, SSH 터널, 공개 Nginx 경로가 필요 없다.
+  # --upload를 주지 않으면 적재하지 않는다. 사용법은 Infra/README.md, 설명은 AI/docs/recommend-poc.md.
+  recommend-batch:
+    build:
+      context: ../AI
+    profiles: ["recommend"]
+    # 시작과 종료에 15초씩 기다리는 이유는 coach-calibration과 같다(상태 줄이 Loki에 들어가게).
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sleep 15
+        case "$$SSAPLASH_RECOMMEND_EXPORT_DSN" in
+          *:@*) echo "recommend-batch status=FAIL error=MissingExportPassword"; sleep 15; exit 1 ;;
+        esac
+        python -m ssaplash_ai.recommend.batch "$$@"
+        code=$$?
+        if [ "$$code" -eq 0 ]; then echo "recommend-batch status=OK"; else echo "recommend-batch status=FAIL code=$$code"; fi
+        sleep 15
+        exit $$code
+      - recommend-batch
+    command: []
+    environment:
+      # 읽기 전용 계정. 비밀번호가 비어 있으면(.env에 없으면) 위 검사가 접속 전에 멈춘다.
+      SSAPLASH_RECOMMEND_EXPORT_DSN: postgresql://recommend_export:${RECOMMEND_EXPORT_PASSWORD:-}@postgres:5432/${POSTGRES_DB}
+      SSAPLASH_WORKER_BASE_URL: http://api:8080
+      SSAPLASH_WORKER_TOKEN: ${RECOMMEND_BATCH_TOKEN:-}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    networks:
+      - internal
+    mem_limit: 2g
     # 이미지의 HEALTHCHECK는 AI 서버(8000번 포트)용이라 일회성 배치에는 맞지 않는다.
     healthcheck:
       disable: true
