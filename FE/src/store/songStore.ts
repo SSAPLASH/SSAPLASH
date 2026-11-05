@@ -32,6 +32,8 @@ function builtinSummary(c: Chart, index: number): SongSummary {
     durationMs: c.durationMs,
     hasAccompaniment: false,
     accompanimentStatus: 'NONE',
+    // 내장 곡은 BE 산정 대상이 아니고 FE는 난이도를 계산하지 않는다
+    songLevel: null,
     difficulties: [c.difficulty],
     createdAt: '',
     coverUrl: null,
