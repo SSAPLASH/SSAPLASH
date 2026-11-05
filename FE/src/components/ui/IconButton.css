@@ -1,0 +1,55 @@
+/* Controls / IconButton 126:1894 */
+.ui-icon-btn {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 아래 값으로 정한다 */
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+  color: var(--text-1);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-press);
+}
+.ui-icon-btn-md {
+  width: 44px;
+  height: 44px;
+}
+/* sm: 원형(r16) · 배경·테두리 없음 */
+.ui-icon-btn-sm {
+  width: 32px;
+  height: 32px;
+  border-color: transparent;
+  border-radius: 16px;
+  background: transparent;
+}
+.ui-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+.ui-icon-btn-md:active:not(:disabled) {
+  background: var(--surface-3);
+}
+.ui-icon-btn-sm:active:not(:disabled) {
+  background: var(--surface-2);
+}
+.ui-icon-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.ui-icon-btn.active {
+  background: var(--surface-3);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.ui-icon-btn.active:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.ui-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

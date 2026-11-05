@@ -1,11 +1,21 @@
 // AI 약점 구간 목록과 분석 상태 안내 (COACH-003 4-1·4-2). 데이터 요청·타이머는 페이지가 맡는다.
 import type { ReactNode } from 'react';
 import type { Judgement } from '@/domain/judgement';
+import { Chip } from '@/components/ui/Chip';
 import { PAD_META } from '@/domain/pads';
-import { formatSeconds, isTooShortForAnalysis, segmentBars, type AnalysisStatus, type WeakSegment } from '@/domain/report';
-
-/** 이 값 이상이면 강조선·"주의" 뱃지 */
-const SEVERE_THRESHOLD = 0.7;
+import { SegmentPlaybackPanel } from '@/components/report/SegmentPlaybackPanel';
+import type { UseSegmentPlayer } from '@/components/report/useSegmentPlayer';
+import {
+  isTooShortForAnalysis,
+  levelBadge,
+  segmentBars,
+  segmentLevel,
+  segmentRangeText,
+  type AnalysisStatus,
+  type ReportNote,
+  type WeakSegment,
+} from '@/domain/report';
+import { planSegment } from '@/domain/segmentPlayback';
 
 export type PollingState = 'idle' | 'polling' | 'exhausted';
 
@@ -13,40 +23,85 @@ export interface WeakSegmentsProps {
   status: AnalysisStatus;
   segments: WeakSegment[] | null;
   counts: Record<Judgement, number>;
-  /** 악보 모드만. 아니면 null */
+  /** 로그에 bpm·박자가 있으면(게임·악보 모두). 아니면 null */
   bars: { bpm: number; beatsPerBar: number } | null;
   polling: PollingState;
+  /** 구간 재생 재료. notes가 null이면(로딩·실패) 재생 버튼을 비활성화한다 */
+  playback: { notes: ReportNote[] | null; durationMs: number | null; accompanimentUrl: string | null };
+  /** 페이지가 useSegmentPlayer로 만들어 내려준다(컴포넌트는 재생 상태를 들지 않는다) */
+  player: UseSegmentPlayer;
   onRefresh: () => void;
 }
 
-/** 시간 범위 문구. SEGMENT는 `7~12초`(초 표기는 AI description과 같은 규칙), 악보 모드면 ` · 3~5마디` 병기. WHOLE은 "연주 전체" */
-function formatRange(seg: WeakSegment, bars: WeakSegmentsProps['bars']): string {
-  if (seg.scope === 'WHOLE') return '연주 전체';
-  const text = `${formatSeconds(seg.fromMs)}~${formatSeconds(seg.toMs)}초`;
-  const b = bars ? segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar) : null;
-  if (!b) return text;
+/** 머리 줄 왼쪽 마디 문구. 연주 전체이거나 마디를 환산할 수 없으면 null */
+function formatBars(seg: WeakSegment, bars: WeakSegmentsProps['bars']): string | null {
+  if (seg.scope === 'WHOLE' || !bars) return null;
+  const b = segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar);
+  if (!b) return null;
   const [from, to] = [b[0] + 1, b[1] + 1];
-  return `${text} · ${from === to ? `${from}마디` : `${from}~${to}마디`}`;
+  return from === to ? `${from}마디` : `${from}~${to}마디`;
 }
 
-function SegmentCard({ seg, bars }: { seg: WeakSegment; bars: WeakSegmentsProps['bars'] }) {
-  const severe = seg.severity >= SEVERE_THRESHOLD;
+function SegmentCard({
+  seg,
+  cardKey,
+  bars,
+  playback,
+  player,
+}: {
+  seg: WeakSegment;
+  cardKey: string;
+  bars: WeakSegmentsProps['bars'];
+  playback: WeakSegmentsProps['playback'];
+  player: UseSegmentPlayer;
+}) {
+  const level = segmentLevel(seg);
+  const badge = levelBadge(level);
+  const barsText = formatBars(seg, bars);
+  const whole = seg.scope === 'WHOLE';
+  const range = bars && !whole ? segmentBars(seg.fromMs, seg.toMs, bars.bpm, bars.beatsPerBar) : null;
+  const total = playback.durationMs && playback.durationMs > 0 ? playback.durationMs : Math.max(seg.toMs, 1);
+  const position = whole ? { from: 0, to: 1 } : { from: seg.fromMs / total, to: seg.toMs / total };
+  const { notes } = playback;
+  const playing = player.playingKey === cardKey;
   return (
-    <li className={severe ? 'weak-card severe' : 'weak-card'}>
-      <div className="row">
-        {seg.scope === 'WHOLE' ? <span className="weak-badge">연주 전체</span> : <strong>{formatRange(seg, bars)}</strong>}
-        {severe && <span className="weak-badge severe">주의</span>}
-      </div>
-      <p>{seg.description}</p>
-      {seg.pads.length > 0 && (
-        <div className="chips">
-          {seg.pads.map((p) => (
-            <span key={p} className="chip small">
-              {PAD_META[p].label}
-            </span>
-          ))}
+    <li className={`weak-card level-${level.toLowerCase()}`}>
+      <div className="weak-text">
+        <div className="weak-head">
+          {(whole || barsText) && <strong className="weak-range">{whole ? '연주 전체' : barsText}</strong>}
+          {badge && <span className={`weak-badge tone-${badge.tone}`}>{badge.text}</span>}
+          {!whole && seg.pads.length > 0 && (
+            <div className="chips">
+              {seg.pads.map((p) => (
+                <Chip key={p}>{PAD_META[p].label}</Chip>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        <p className="weak-desc">{seg.description}</p>
+        {seg.detail && <p className="weak-detail">{seg.detail}</p>}
+        {seg.tip && (
+          <p className="weak-tip">
+            <span className="weak-tip-label">연습 방법</span>
+            {seg.tip}
+          </p>
+        )}
+      </div>
+      <SegmentPlaybackPanel
+        seg={seg}
+        rangeText={segmentRangeText(seg, range, playback.durationMs)}
+        position={position}
+        playing={playing}
+        rate={player.rate}
+        loop={player.loop}
+        disabled={notes === null}
+        onPlay={() => {
+          if (notes) player.play(cardKey, planSegment(notes, seg.fromMs, seg.toMs, player.rate), playback.accompanimentUrl);
+        }}
+        onStop={player.stop}
+        onToggleRate={player.toggleRate}
+        onToggleLoop={player.toggleLoop}
+      />
     </li>
   );
 }
@@ -55,7 +110,7 @@ function Notice({ error, children }: { error?: boolean; children: ReactNode }) {
   return <div className={error ? 'notice error' : 'notice'}>{children}</div>;
 }
 
-function Body({ status, segments, counts, bars, polling, onRefresh }: WeakSegmentsProps) {
+function Body({ status, segments, counts, bars, polling, playback, player, onRefresh }: WeakSegmentsProps) {
   if (status === 'PENDING') {
     if (polling === 'exhausted') {
       return (
@@ -85,9 +140,10 @@ function Body({ status, segments, counts, bars, polling, onRefresh }: WeakSegmen
   const ordered = [...segments.filter((s) => s.scope === 'WHOLE'), ...segments.filter((s) => s.scope !== 'WHOLE')];
   return (
     <ul className="weak-list">
-      {ordered.map((s, i) => (
-        <SegmentCard key={`${s.scope}:${s.fromMs}:${s.toMs}:${i}`} seg={s} bars={bars} />
-      ))}
+      {ordered.map((s, i) => {
+        const key = `${s.scope}:${s.fromMs}:${s.toMs}:${i}`;
+        return <SegmentCard key={key} cardKey={key} seg={s} bars={bars} playback={playback} player={player} />;
+      })}
     </ul>
   );
 }

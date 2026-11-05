@@ -8,7 +8,14 @@ import numpy as np
 import pytest
 
 from ssaplash_ai.bench.datasets import DROP, make_hits
-from ssaplash_ai.bench.metrics import MatchCounts, evaluate_hits, f1_from_counts, score_hits
+from ssaplash_ai.bench.metrics import (
+    MatchCounts,
+    PedalConfusion,
+    evaluate_hits,
+    f1_from_counts,
+    pedal_confusion,
+    score_hits,
+)
 
 TABLE = {
     "KICK": "KICK",
@@ -19,6 +26,7 @@ TABLE = {
     "FLOOR_TOM": "FLOOR_TOM",
     "CRASH": "CRASH",
     "RIDE": "RIDE",
+    "HIHAT_PEDAL": "HIHAT_PEDAL",
     "tom": "tom",
     "cymbal": "cymbal",
     "clap": DROP,
@@ -141,3 +149,32 @@ def test_예측_하나는_정답_하나와만_짝짓는다():
 def test_dtype이_다르면_오류():
     with pytest.raises(ValueError, match="dtype"):
         score_hits(np.zeros(1), np.zeros(1), "pads")
+
+
+def test_페달은_8패드_점수에서_하이햇에_합치고_9패드에서는_따로():
+    true = _hits([0.1, 0.5, 0.9], ["HIHAT_PEDAL", "HIHAT", "KICK"])
+    # 모델이 페달 소리를 HIHAT으로 냄
+    pred = _hits([0.1, 0.5, 0.9], ["HIHAT", "HIHAT", "KICK"])
+    ev = evaluate_hits(true, pred, eight_pad=True)
+    assert ev.pads.f1 == 1.0 and ev.five.f1 == 1.0
+    assert "HIHAT_PEDAL" not in ev.pads.by_label
+    assert ev.pads9.by_label["HIHAT_PEDAL"] == MatchCounts(tp=0, fp=0, fn=1)
+    assert ev.pads9.by_label["HIHAT"] == MatchCounts(tp=1, fp=1, fn=0)
+    assert ev.pedal == PedalConfusion(pedal_as_hihat=1, hihat_as_pedal=0)
+
+
+def test_페달_혼동_수는_정답_하이햇을_페달로_낸_것도_센다():
+    true = _hits([0.1, 0.5, 0.9], ["HIHAT_PEDAL", "HIHAT", "HIHAT"])
+    pred = _hits([0.1, 0.5, 0.9], ["HIHAT_PEDAL", "HIHAT_PEDAL", "HIHAT"])
+    c = pedal_confusion(true, pred)
+    assert c == PedalConfusion(pedal_as_hihat=0, hihat_as_pedal=1)
+    assert c + c == PedalConfusion(0, 2)
+    s9 = score_hits(true, pred, "pads9")
+    assert s9.by_label["HIHAT_PEDAL"] == MatchCounts(tp=1, fp=1, fn=0)
+
+
+def test_거친_라벨이_있으면_9패드_점수는_없다():
+    true = _hits([0.1], ["HIHAT_PEDAL"])
+    pred = _hits([0.1], ["tom"], coarse=True)
+    ev = evaluate_hits(true, pred, eight_pad=True)
+    assert ev.pads is None and ev.pads9 is None and ev.pedal is None

@@ -1,0 +1,9 @@
+# STAR Drums 미리보기(97MB)의 test 분할 1곡. 로더·형식 확인용. 받는 법: .claude/plans 서버 절차 문서 4절
+name: star_drums_preview
+kind: star
+root: data/star_drums/star_drums_preview/data
+subset: test
+expected_songs: 1
+sample_rate: 44100
+clip: null
+songs: null

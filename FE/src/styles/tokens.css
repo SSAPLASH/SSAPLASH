@@ -1,0 +1,169 @@
+/* SSAPLASH 디자인 토큰 — Figma 01 Design System(126:2) 변수·텍스트 스타일.
+ * 화면 코드는 이 파일의 이름만 쓴다(옛 이름 별칭은 묶음 8에서 삭제).
+ */
+
+/* ---- 폰트 (Pretendard는 index.html의 CDN 링크) ---- */
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/fonts/SpaceGrotesk-VariableFont_wght.ttf') format('truetype');
+  /* 가변 폰트. Figma는 Medium(500)을 쓴다 */
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/fonts/BebasNeue-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* 배경·표면 */
+  --bg-canvas: #050607;
+  --bg-base: #090a0c;
+  --surface-1: #12151a;
+  --surface-2: #1a1f26;
+  --surface-3: #1f242c;
+
+  /* 선 */
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: #3a4250;
+
+  /* 글자 */
+  --text-1: #f2f5f8;
+  --text-2: #98a2b1;
+  --text-3: #828d9e;
+
+  /* 브랜드 */
+  --brand: #35a3d4;
+  --brand-text: #52b2dd;
+  --brand-on: #04141c;
+  --brand-sub: #ffc83d;
+
+  /* 판정 상태 */
+  --perfect: #8fceea;
+  --good: #4cd07d;
+  --miss: #ff6b70;
+  --warn: #e6b85c;
+  /* 연습 단계 배지(Figma Play / LevelBadge 372:1325) — 네온 테두리·글자 + 회색 면 */
+  --level-easy: #3df5a0;
+  --level-normal: #3db8ff;
+  --level-hard: #ff4d6d;
+  /* 연주 이펙트 네온(Figma color/fx/*) — 판정 팝업·판정선 하이라이트·콤보 */
+  --fx-perfect: #3de8ff;
+  --fx-good: #3df5a0;
+  --fx-miss: #ff4d6d;
+  --fx-combo: #ffd23d;
+
+  /* 모서리 */
+  --radius-control: 8px;
+  --radius-panel: 14px;
+  --radius-dock: 20px;
+
+  /* 간격 */
+  --space-xs: 4px;
+  --space-s: 8px;
+  --space-m: 16px;
+  --space-l: 24px;
+  --space-xl: 40px;
+  --space-dock-gap: 12px;
+
+  /* 그림자 */
+  --shadow-dock: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 8px 20px rgba(0, 0, 0, 0.35); /* 눌러 볼 수 있는 카드 hover */
+
+  /* 모션 (설계 TECH-motion-interaction 3-1). 이동·확대·회전은 --motion-move, 투명도는 --motion-fade */
+  --motion-press: 80ms; /* 버튼 pressed scale */
+  --motion-fast: 120ms; /* hover 색·테두리, 스위치 노브, 메뉴 */
+  --motion-base: 200ms; /* 라우트 페이드, 사이드바 접기, 다이얼로그 진입 (Figma 0.2s) */
+  --ease-out: cubic-bezier(0, 0, 0.58, 1); /* 진입·펼침 (Figma Ease out) */
+  --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1); /* 사이드바 폭처럼 양방향 전환 */
+  --motion-move: var(--motion-base); /* 이동·확대·회전. 모션 줄이기에서 0ms */
+  --motion-fade: var(--motion-base); /* 투명도. 모션 줄이기에서도 유지 */
+
+  /* 폰트 */
+  --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo',
+    'Noto Sans KR', sans-serif;
+  --font-num: 'Space Grotesk', var(--font);
+  --font-display: 'Bebas Neue', var(--font);
+  /* 전자·네온 드럼 스킨의 태그·판정 글자 */
+  --font-hud: 'Chakra Petch', var(--font);
+
+  /* 손 색 (Figma 노트 색 규칙: 왼손 sub · 오른손 main) */
+  --left: var(--brand-sub);
+  --right: var(--brand);
+}
+
+/* ---- 텍스트 스타일 유틸 (Figma 텍스트 스타일 7종) ---- */
+.t-display-64 {
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+.t-display-20 {
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.t-title-24 {
+  font-family: var(--font);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.t-title-20 {
+  font-family: var(--font);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.t-body-16 {
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.t-body-14 {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.t-caption-12 {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+/* ---- 모션 줄이기 ----
+ * 이동·확대·회전 시간을 0ms로 만들어 즉시 적용하고, 투명도 전환(--motion-fade)만 남긴다.
+ * 새 규칙은 토큰만 쓰면 이 정책을 자동으로 따른다. 무한 반복 애니메이션은 규칙마다 animation: none을 둔다.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-press: 0ms;
+    --motion-fast: 0ms;
+    --motion-move: 0ms;
+  }
+}

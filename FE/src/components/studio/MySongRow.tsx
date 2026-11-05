@@ -1,70 +1,71 @@
-// 내 곡 목록의 행 하나 (설계 4-3). 상태별 배지·보조 줄·액션을 그리고, 활성 작업 행이면 진행 띠를 품는다.
+// 내 곡 목록 보기의 행 하나 (Figma Studio / SongListRow 224:1144, 높이 64). 커버 44 · 제목·보조 줄 · 상태 배지 · 날짜(80) · 동작(220) · ⋯ 메뉴.
+// 완료 = [악보 연습] secondary sm + [플레이] primary sm, 실패 = [다시 올리기] secondary sm(보조 줄에 사유), 처리 중 = 단계 글자. ⋯ 메뉴 규칙은 카드와 같다.
+// 활성 작업은 ActiveJobCard가 맡으므로 이 행은 활성 작업이 아닌 곡만 그린다.
 import { Link } from 'react-router-dom';
-import type { ActiveJob, JobProgress } from '@/domain/chartJob';
-import { songStatusView, type SongSummary } from '@/domain/songCatalog';
-import { JobStageStrip } from './JobStageStrip';
+import { Button } from '@/components/ui/Button';
+import { buttonClassName } from '@/components/ui/buttonStyle';
+import { SongCover } from '@/components/song/SongCover';
+import type { SongSummary } from '@/domain/songCatalog';
+import { dateLabel } from './dateLabel';
+import { FAILED_REASON } from './MySongCard';
+import { SongMenu, type SongEditKind } from './SongMenu';
+import { AccompanimentBadge } from './AccompanimentBadge';
+import { SongStatusBadge } from './SongStatusBadge';
+import './studio.css';
 
 interface Props {
   song: SongSummary;
-  /** 이 행이 활성 작업이면 그 작업 */
-  job: ActiveJob | null;
-  progress: JobProgress | null;
-  /** 방금 완료돼 잠깐 강조할 행 */
+  /** 방금 완료·편집돼 잠깐 강조할 행 */
   justDone: boolean;
   onReupload: (song: SongSummary) => void;
+  /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
+  onEdit?: (kind: SongEditKind, song: SongSummary) => void;
+  onCoverError?: () => void;
 }
 
-/** 오늘이면 "방금"/"n분 전"/"n시간 전", 아니면 날짜 */
-function dateLabel(iso: string, now = Date.now()): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  const d = new Date(t);
-  if (d.toDateString() === new Date(now).toDateString()) {
-    const min = Math.floor(Math.max(0, now - t) / 60_000);
-    if (min < 1) return '방금';
-    if (min < 60) return `${min}분 전`;
-    return `${Math.floor(min / 60)}시간 전`;
-  }
-  return d.toLocaleDateString('ko-KR');
-}
-
-export function MySongRow({ song, job, progress, justDone, onReupload }: Props) {
-  const view = songStatusView(song.status);
-  const sub = [song.artist, dateLabel(song.createdAt)].filter(Boolean).join(' · ');
-  const cls = ['studio-row', job ? 'job' : '', justDone ? 'just-done' : ''].filter(Boolean).join(' ');
+export function MySongRow({ song, justDone, onReupload, onEdit, onCoverError }: Props) {
   const query = `scope=MINE&song=${song.id}`;
+  const ready = song.status === 'READY';
+  const failed = song.status === 'FAILED';
+  const processing = song.status === 'PROCESSING';
+  const sub = failed ? [song.artist, FAILED_REASON].filter(Boolean).join(' · ') : song.artist;
+  const cls = ['studio-row', failed ? 'failed' : '', justDone ? 'just-done' : ''].filter(Boolean).join(' ');
 
   return (
     <li className={cls}>
-      <div className="studio-row-head">
-        <span className="studio-row-main">
-          <span className="studio-row-title">{song.title}</span>
-          {sub && <span className="faint small">{sub}</span>}
-        </span>
-        <span className={`my-badge ${view.tone}`}>{view.label}</span>
+      <div className="studio-row-cover">
+        <SongCover coverUrl={song.coverUrl} onImageError={onCoverError} />
       </div>
-
-      {song.status === 'READY' && (
-        <div className="studio-row-actions">
-          <Link to={`/sheet?${query}`} className="btn-ghost as-button">
-            악보 확인
-          </Link>
-          <Link to={`/play?${query}`} className="btn-primary">
-            플레이
-          </Link>
-        </div>
-      )}
-
-      {song.status === 'FAILED' && (
-        <div className="studio-row-fail">
-          <p className="faint small">채보를 만들지 못했습니다. 음원을 다시 올려 주세요.</p>
-          <button type="button" className="btn-ghost" onClick={() => onReupload(song)}>
+      <span className="studio-row-info">
+        <span className="studio-row-title" title={song.title}>
+          {song.title}
+        </span>
+        <span className="studio-row-sub">{sub || ' '}</span>
+      </span>
+      <SongStatusBadge status={song.status} />
+      <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
+      <span className="studio-row-date">{dateLabel(song.createdAt)}</span>
+      <span className="studio-row-actions">
+        {ready && (
+          <>
+            <Link to={`/sheet?${query}`} className={buttonClassName({ variant: 'secondary', size: 'sm' })}>
+              악보 연습
+            </Link>
+            <Link to={`/play?${query}`} className={buttonClassName({ variant: 'primary', size: 'sm' })}>
+              플레이
+            </Link>
+          </>
+        )}
+        {failed && (
+          <Button variant="secondary" size="sm" onClick={() => onReupload(song)}>
             다시 올리기
-          </button>
-        </div>
-      )}
-
-      {song.status === 'PROCESSING' && job && progress && <JobStageStrip job={job} progress={progress} />}
+          </Button>
+        )}
+        {processing && <span className="studio-row-stage">처리 중</span>}
+      </span>
+      <span className="studio-row-more">
+        {onEdit !== undefined && <SongMenu title={song.title} status={song.status} onPick={(kind) => onEdit(kind, song)} />}
+      </span>
     </li>
   );
 }

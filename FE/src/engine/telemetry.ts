@@ -5,7 +5,8 @@ import type { HitJudgedBy, InputSourceKind, ResolvedHit } from '@/domain/events'
 import type { PadId } from '@/domain/pads';
 export interface TelemetryRow {
   hitId: number;
-  stickId: 0 | 1;
+  /** null = 손 없음(페달 타격) */
+  stickId: 0 | 1 | null;
   pad: PadId | null;
   source: InputSourceKind;
   /** 센서 → 수신 */

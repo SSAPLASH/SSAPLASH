@@ -30,6 +30,7 @@ import { SECTION_ITEMS, type Section } from './layout/sections';
 import { fmt, type SendFn, type Snap } from './monitorTypes';
 import { ClockSection } from './sections/ClockSection';
 import { ControlSection } from './sections/ControlSection';
+import { FreeMeasureSection } from './sections/FreeMeasureSection';
 import { Overview } from './sections/Overview';
 import { OutputSection } from './sections/OutputSection';
 import { ResolveSection } from './sections/ResolveSection';
@@ -608,6 +609,7 @@ export function StickMonitorPage() {
               canSend={canSend}
             />
           )}
+          {section === 'free' && <FreeMeasureSection />}
           {section === 'control' && <ControlSection store={paramStore} send={send} profile={profile} canSend={canSend} follow={follow} summary={summary} onSummary={setSummary} canReplay={!recording} onReplay={startReplay} />}
         </div>
       </div>

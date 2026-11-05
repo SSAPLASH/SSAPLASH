@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOGIN_PROVIDERS, enabledProviders, loginErrorMessage, sanitizeReturnTo } from './auth';
+import { LOGIN_PROVIDERS, SIGNUP_CONSENT_VERSION_INVALID, enabledProviders, loginErrorMessage, sanitizeReturnTo, signupErrorMessage } from './auth';
 
 describe('sanitizeReturnTo', () => {
   it('앱 안의 경로는 그대로 돌려준다', () => {
@@ -49,7 +49,7 @@ describe('loginErrorMessage', () => {
 describe('LOGIN_PROVIDERS', () => {
   it('google, ssafy 순서로 BE 경로 값과 라벨을 가진다', () => {
     expect(LOGIN_PROVIDERS.map((p) => p.key)).toEqual(['google', 'ssafy']);
-    for (const p of LOGIN_PROVIDERS) expect(p.label.length).toBeGreaterThan(0);
+    expect(LOGIN_PROVIDERS.map((p) => p.label)).toEqual(['Google로 계속하기', 'SSAFY로 계속하기']);
   });
 });
 
@@ -74,5 +74,26 @@ describe('enabledProviders', () => {
   it('모르는 키는 무시하고, 전부 모르면 전부 반환', () => {
     expect(keys('google,kakao')).toEqual(['google']);
     expect(keys('kakao')).toEqual(['google', 'ssafy']);
+  });
+});
+
+describe('signupErrorMessage', () => {
+  // ApiError와 같은 구조(code·detail)를 가진 Error
+  const apiError = (code: string, detail = ''): Error => Object.assign(new Error(detail || code), { code, detail });
+
+  it('판 불일치(422)는 서버 detail 대신 새로고침 안내를 보인다', () => {
+    expect(signupErrorMessage(apiError(SIGNUP_CONSENT_VERSION_INVALID, 'termsVersion'))).toBe(
+      '약관이 갱신되었어요. 새로고침한 뒤 다시 동의해 주세요.',
+    );
+  });
+
+  it('네트워크 오류는 로그인과 같은 연결 안내를 보인다', () => {
+    expect(signupErrorMessage(apiError('NETWORK'))).toBe(loginErrorMessage('network'));
+  });
+
+  it('그 밖의 오류는 서버 detail, 없으면 기본 문구', () => {
+    expect(signupErrorMessage(apiError('HTTP_ERROR', '잘못된 요청입니다.'))).toBe('잘못된 요청입니다.');
+    expect(signupErrorMessage(apiError('HTTP_ERROR'))).toBe('동의를 저장하지 못했습니다. 다시 시도해 주세요.');
+    expect(signupErrorMessage('문자열 오류')).toBe('동의를 저장하지 못했습니다. 다시 시도해 주세요.');
   });
 });

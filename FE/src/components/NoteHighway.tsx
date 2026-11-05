@@ -1,9 +1,12 @@
-// 리듬 게임 노트 레인 (Canvas 2D). 노트가 위에서 판정선으로 떨어진다.
+// 리듬 게임 노트 레인 (Canvas 2D, Figma Play 112:499). 노트가 위에서 판정선으로 떨어진다.
+// 레인 순서는 domain/highwayLanes, 카운트인 숫자는 play/Countdown이 그린다. 폭·높이는 부모가 정한다.
 import { useEffect, useRef } from 'react';
-import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/pads';
+import { HIGHWAY_LANES } from '@/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
+import './NoteHighway.css';
 
 export interface Popup {
   judgement: Judgement;
@@ -38,6 +41,17 @@ export function NoteHighway(props: NoteHighwayProps) {
     const canvas = canvasRef.current!;
     const wrap = wrapRef.current!;
     const ctx = canvas.getContext('2d')!;
+    // 캔버스는 CSS 변수를 못 읽으므로 토큰 값을 한 번 풀어 둔다
+    const css = getComputedStyle(document.documentElement);
+    const tok = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+    const C = {
+      lane: tok('--surface-1', '#12151a'),
+      line: tok('--line', 'rgba(255,255,255,0.08)'),
+      brand: tok('--brand', '#35a3d4'),
+      text2: tok('--text-2', '#98a2b1'),
+      text3: tok('--text-3', '#828d9e'),
+      canvas: tok('--bg-canvas', '#050607'),
+    };
     let raf = 0;
     const draw = () => {
       const p = propsRef.current;
@@ -53,10 +67,10 @@ export function NoteHighway(props: NoteHighwayProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      const lanes = LANE_PADS;
+      const lanes = HIGHWAY_LANES;
       const laneW = W / lanes.length;
       const judgeY = H - 90;
-      const top = 10;
+      const top = 30;
       const travel = judgeY - top;
       const s = p.session;
       const t = s ? s.songTime(now) : 0;
@@ -64,8 +78,13 @@ export function NoteHighway(props: NoteHighwayProps) {
       // 레인 배경 + 플래시
       lanes.forEach((pad, i) => {
         const x = i * laneW;
-        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.045)';
+        ctx.fillStyle = C.lane;
         ctx.fillRect(x, 0, laneW, H);
+        // 레인 경계 1px (맨 오른쪽은 바깥 테두리가 맡는다)
+        if (i > 0) {
+          ctx.fillStyle = C.line;
+          ctx.fillRect(x, 0, 1, H);
+        }
         const f = p.flashes.current?.get(pad);
         if (f !== undefined) {
           const a = Math.max(0, 1 - (now - f) / 200);
@@ -88,7 +107,7 @@ export function NoteHighway(props: NoteHighwayProps) {
           if (bt < 0) continue;
           const y = judgeY - ((bt - t) / p.scrollMs) * travel;
           if (y < top) continue;
-          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.strokeStyle = C.line;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(0, y);
@@ -98,34 +117,29 @@ export function NoteHighway(props: NoteHighwayProps) {
       }
 
       // 판정선
-      ctx.strokeStyle = 'rgba(243,239,230,0.75)';
+      ctx.strokeStyle = C.brand;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(0, judgeY);
       ctx.lineTo(W, judgeY);
       ctx.stroke();
 
-      // 레인 타깃 + 라벨
+      // 레인 이름(위쪽) + 키(개발용, 판정선 아래)
       lanes.forEach((pad, i) => {
         const cx = i * laneW + laneW / 2;
-        ctx.beginPath();
-        ctx.arc(cx, judgeY, Math.min(laneW * 0.32, 26), 0, Math.PI * 2);
-        ctx.strokeStyle = PAD_META[pad].color + 'aa';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(243,239,230,0.85)';
-        ctx.font = '700 13px Pretendard Variable, Pretendard, sans-serif';
+        ctx.fillStyle = C.text2;
+        ctx.font = '400 12px Pretendard Variable, Pretendard, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(PAD_META[pad].label, cx, judgeY + 40);
+        ctx.fillText(PAD_META[pad].label, cx, 16);
         if (p.keyMap) {
           const keys = Object.entries(p.keyMap)
             .filter(([, b]) => b.pad === pad)
             .map(([code]) => code.replace('Key', '').replace('Space', '␣'))
             .join(' ');
-          ctx.fillStyle = 'rgba(243,239,230,0.5)';
-          ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
-          ctx.fillText(keys, cx, judgeY + 60);
+          ctx.fillStyle = C.text3;
+          ctx.font = '400 11px Pretendard Variable, Pretendard, sans-serif';
+          ctx.fillText(keys, cx, judgeY + 20);
         }
       });
 
@@ -137,17 +151,20 @@ export function NoteHighway(props: NoteHighwayProps) {
           if (dt > p.scrollMs) break;
           if (n.judgement !== null && n.judgement !== 'MISS') continue;
           if (dt < -300) continue;
+          // 레인에 없는 패드는 그리지 않는다(첫 레인에 엉뚱하게 떨어지지 않게). 판정은 엔진이 그대로 한다
+          const li = laneIndex.get(n.note.pad);
+          if (li === undefined) continue;
           const y = judgeY - (dt / p.scrollMs) * travel;
-          const li = laneIndex.get(n.note.pad) ?? 0;
           const cx = li * laneW + laneW / 2;
-          const vel = n.note.velocityHint ?? 100;
-          const r = Math.min(laneW * 0.3, 24) * (0.75 + (vel / 127) * 0.35);
+          // Figma 노트: 레인 폭의 약 57%(132에 76) × 높이 20, radius 10인 가로 막대. 중심 y는 판정 위치 그대로
+          const nw = laneW * 0.57;
+          const nh = 20;
           ctx.beginPath();
-          ctx.arc(cx, y, r, 0, Math.PI * 2);
+          ctx.roundRect(cx - nw / 2, y - nh / 2, nw, nh, nh / 2);
           ctx.fillStyle = n.judgement === 'MISS' ? 'rgba(224,90,90,0.4)' : PAD_META[n.note.pad].color;
           ctx.fill();
           if (n.judgement !== 'MISS') {
-            ctx.strokeStyle = 'rgba(14,19,32,0.8)';
+            ctx.strokeStyle = C.canvas;
             ctx.lineWidth = 2;
             ctx.stroke();
           }
@@ -182,16 +199,6 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       }
 
-      // 카운트인
-      if (s && s.currentStatus === 'countin') {
-        const beatsLeft = Math.ceil(-t / s.beatMs);
-        ctx.fillStyle = 'rgba(243,239,230,0.9)';
-        ctx.font = '800 72px Pretendard Variable, Pretendard, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(Math.max(1, beatsLeft)), W / 2, H * 0.35);
-      }
-
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -199,7 +206,7 @@ export function NoteHighway(props: NoteHighwayProps) {
   }, []);
 
   return (
-    <div ref={wrapRef} className="highway-wrap">
+    <div ref={wrapRef} className="play-highway">
       <canvas ref={canvasRef} />
     </div>
   );

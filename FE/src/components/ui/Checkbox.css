@@ -1,0 +1,58 @@
+/* Controls / Checkbox 440:19724 — 20×20, false: surface/2 + line/strong 1.5, true: brand 채움 + on-main 체크 */
+.ui-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-s);
+  cursor: pointer;
+  color: var(--text-1);
+  user-select: none;
+}
+.ui-checkbox-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* 네이티브 입력은 보이지 않게 두되 초점·접근성은 유지한다 (display:none이면 Tab이 건너뛴다) */
+.ui-checkbox-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.ui-checkbox-box {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--brand-on);
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+.ui-checkbox-box svg {
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+.ui-checkbox-input:checked + .ui-checkbox-box {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.ui-checkbox-input:checked + .ui-checkbox-box svg {
+  opacity: 1;
+}
+.ui-checkbox-input:focus-visible + .ui-checkbox-box {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.ui-checkbox-label {
+  min-width: 0;
+}

@@ -108,7 +108,8 @@ export class PointerStickSource extends BaseInputSource {
 
   private onPointerDown = (ev: PointerEvent): void => {
     // 왼쪽 클릭 = 왼손 스틱, 오른쪽 클릭 = 오른손 스틱. 버튼·입력 요소 위에서는 무시
-    if (!(ev.target instanceof HTMLElement) || ev.target.closest('button, input, select, a, textarea')) return;
+    // 배치 편집기처럼 클릭이 편집 동작인 곳([data-no-pointer-strike])도 타격으로 치지 않는다
+    if (!(ev.target instanceof HTMLElement) || ev.target.closest('button, input, select, a, textarea, [data-no-pointer-strike]')) return;
     if (ev.button === 0) this.hit(0, 6.3);
     else if (ev.button === 2) this.hit(1, 6.3);
   };

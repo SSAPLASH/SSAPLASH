@@ -1,0 +1,10 @@
+# 고른 조합 확인용. 검출: 거르기 0.10 + 이동평균 안 뺌 0.32. 배정: 히스토그램 피크 clustering + hybrid 이름
+candidates:
+- name: g010
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10}
+- name: g010_raw032
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw}
+- name: pk_gap30
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: pk_gap35
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.5}

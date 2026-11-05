@@ -1,35 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analysisTeaser, formatSeconds, isTooShortForAnalysis, isUploadTarget, MIN_NOTES_FOR_ANALYSIS, segmentBars, type AnalysisStatus, type Report, type WeakSegment } from './report';
-
-describe('formatSeconds (AI seconds_text와 같은 규칙)', () => {
-  it('정수 초는 소수점 없이', () => {
-    expect(formatSeconds(7000)).toBe('7');
-    expect(formatSeconds(0)).toBe('0');
-  });
-  it('정수에서 0.05 미만이면 정수로, 0.05 이상이면 한 자리', () => {
-    expect(formatSeconds(2960)).toBe('3');
-    expect(formatSeconds(3040)).toBe('3');
-    // 2.95·3.05는 배정밀도 차이가 0.05보다 약간 작아 파이썬도 "3"
-    expect(formatSeconds(2950)).toBe('3');
-    expect(formatSeconds(3050)).toBe('3');
-    expect(formatSeconds(2940)).toBe('2.9');
-    expect(formatSeconds(3060)).toBe('3.1');
-  });
-  it('정수가 아니면 소수 한 자리', () => {
-    expect(formatSeconds(2400)).toBe('2.4');
-    expect(formatSeconds(7400)).toBe('7.4');
-    expect(formatSeconds(2340)).toBe('2.3');
-    expect(formatSeconds(2360)).toBe('2.4');
-  });
-  it('정확히 .x5는 파이썬처럼 짝수 쪽으로', () => {
-    expect(formatSeconds(7250)).toBe('7.2');
-    expect(formatSeconds(7750)).toBe('7.8');
-    expect(formatSeconds(2250)).toBe('2.2');
-    expect(formatSeconds(12250)).toBe('12.2');
-    expect(formatSeconds(2350)).toBe('2.4'); // 2.35는 이진수로 2.35보다 크다(파이썬 "2.4")
-    expect(formatSeconds(2550)).toBe('2.5'); // 2.55는 이진수로 2.55보다 작다(파이썬 "2.5")
-  });
-});
+import { analysisTeaser, formatClock, isTooShortForAnalysis, isUploadTarget, levelBadge, MIN_NOTES_FOR_ANALYSIS, segmentBars, segmentLevel, segmentRangeText, summaryBadge, type AnalysisStatus, type Report, type WeakSegment } from './report';
 
 describe('segmentBars', () => {
   it('bpm 120·4박에서 7000~12000ms는 [3, 5]', () => {
@@ -81,6 +51,7 @@ function makeReport(analysisStatus: AnalysisStatus, weakSegments: WeakSegment[] 
     inputSource: 'KEYBOARD',
     analysisStatus,
     weakSegments,
+    coachSummary: null,
     recommendedDrills: null,
     generatedAt: '2026-10-28T00:00:00Z',
   };
@@ -131,5 +102,67 @@ describe('isUploadTarget', () => {
   it('FAILED는 재시도 가능이면 대상, 불가면 아니다', () => {
     expect(isUploadTarget(false, st('FAILED', true))).toBe(true);
     expect(isUploadTarget(false, st('FAILED', false))).toBe(false);
+  });
+});
+
+describe('segmentLevel', () => {
+  it('severityLevel이 있으면 severity와 무관하게 그대로', () => {
+    expect(segmentLevel({ ...seg, severity: 0.9, severityLevel: 'LOW' })).toBe('LOW');
+    expect(segmentLevel({ ...seg, severity: 0.1, severityLevel: 'MEDIUM' })).toBe('MEDIUM');
+  });
+
+  it('없으면 severity 0.7 이상 HIGH, 미만 LOW', () => {
+    expect(segmentLevel({ ...seg, severity: 0.8 })).toBe('HIGH');
+    expect(segmentLevel({ ...seg, severity: 0.7 })).toBe('HIGH');
+    expect(segmentLevel({ ...seg, severity: 0.69 })).toBe('LOW');
+  });
+});
+
+describe('levelBadge', () => {
+  it('HIGH 주의(miss), MEDIUM 보통(warn), LOW 없음', () => {
+    expect(levelBadge('HIGH')).toEqual({ text: '주의', tone: 'miss' });
+    expect(levelBadge('MEDIUM')).toEqual({ text: '보통', tone: 'warn' });
+    expect(levelBadge('LOW')).toBeNull();
+  });
+});
+
+describe('summaryBadge', () => {
+  it('세 값을 문구·톤으로, 모르는 값은 null', () => {
+    expect(summaryBadge('GOOD')).toEqual({ text: '좋아요', tone: 'perfect' });
+    expect(summaryBadge('FAIR')).toEqual({ text: '괜찮아요', tone: 'good' });
+    expect(summaryBadge('NEEDS_WORK')).toEqual({ text: '연습이 필요해요', tone: 'miss' });
+    expect(summaryBadge('EXCELLENT')).toBeNull();
+    expect(summaryBadge('')).toBeNull();
+  });
+});
+
+describe('formatClock', () => {
+  it('초는 내림, 음수·NaN은 0:00', () => {
+    expect(formatClock(0)).toBe('0:00');
+    expect(formatClock(7000)).toBe('0:07');
+    expect(formatClock(12000)).toBe('0:12');
+    expect(formatClock(65000)).toBe('1:05');
+    expect(formatClock(59999)).toBe('0:59');
+    expect(formatClock(-1)).toBe('0:00');
+    expect(formatClock(Number.NaN)).toBe('0:00');
+  });
+});
+
+describe('segmentRangeText', () => {
+  const s: WeakSegment = { ...seg, fromMs: 7000, toMs: 12000 };
+
+  it('마디가 있으면 마디 + 시계, 같은 마디는 한 마디만', () => {
+    expect(segmentRangeText(s, segmentBars(7000, 12000, 120, 4), 32000)).toBe('4~6마디 · 0:07 – 0:12');
+    expect(segmentRangeText(s, [1, 1], null)).toBe('2마디 · 0:07 – 0:12');
+  });
+
+  it('마디가 없으면 시계만', () => {
+    expect(segmentRangeText(s, null, 32000)).toBe('0:07 – 0:12');
+  });
+
+  it('WHOLE은 곡 전체 · 0:00 – 곡 길이(없으면 toMs)', () => {
+    const whole: WeakSegment = { ...seg, scope: 'WHOLE', fromMs: 0, toMs: 32000 };
+    expect(segmentRangeText(whole, null, 32000)).toBe('곡 전체 · 0:00 – 0:32');
+    expect(segmentRangeText(whole, null, null)).toBe('곡 전체 · 0:00 – 0:32');
   });
 });

@@ -1,25 +1,42 @@
 // 리듬 게임 (MODE-01, 설계 4-2). 곡 선택 → 준비 → 카운트인 → 플레이 → (일시정지) → 종료 → 결과.
-// 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD, 로그 저장을 맡는다.
-// 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+// 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD 값, 로그 저장을 맡는다.
+// 화면은 Figma 연주 흐름을 조립한다: 곡 선택 SongPicker · 준비 ReadyPanel · 연주 PlayStage(HUD·하이웨이·킷). 연주 중은 셸을 숨긴 전체 화면이다(D2).
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
 import { useChartParam } from '@/components/useChartParam';
 import { NoteHighway, type Popup } from '@/components/NoteHighway';
-import { KitPlayView } from '@/components/KitPlayView';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
-import { ReadinessNotice } from '@/components/ReadinessNotice';
+import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
-import { useHitFx } from '@/components/useHitFx';
+import { PlayStage } from '@/components/play/PlayStage';
+import { PlayHud } from '@/components/play/PlayHud';
+import { Countdown } from '@/components/play/Countdown';
+import { GuideSlot } from '@/components/play/GuideSlot';
+import { useCoachLine } from '@/components/play/useCoachLine';
+import { HitReadout } from '@/components/play/HitReadout';
+import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
+import { DrumKit } from '@/components/drum/DrumKit';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
+import { usePlayRunning, useShell } from '@/components/shell/useShell';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
+import { sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { bestAccuracyByChart } from '@/domain/bestRecord';
 import type { PadId } from '@/domain/pads';
-import type { HitFx, InputSourceKind } from '@/domain/events';
+import type { InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
-import { buildPlayLog, savePlayLog } from '@/engine/playLog';
+import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
+import { readCurrentConsent } from '@/app/dataConsent';
+import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
 import { startPlaySync } from '@/app/playSync';
+import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
@@ -27,7 +44,11 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
-import { useSettings, type GameView } from '@/store/settingsStore';
+import { useSettings } from '@/store/settingsStore';
+import { usePresets } from '@/store/presetStore';
+import { useLive } from '@/store/liveStore';
+import { useReconnect } from '@/store/reconnectStore';
+import { useSongs } from '@/store/songStore';
 
 // loading: URL의 곡·채보를 불러오는 중(실패하면 같은 단계에서 오류 문구)
 type Stage = 'select' | 'loading' | 'ready' | 'play';
@@ -35,15 +56,13 @@ type Stage = 'select' | 'loading' | 'ready' | 'play';
 /** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
 const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
 
-const GAME_VIEWS: { id: GameView; label: string }[] = [
-  { id: 'highway', label: '노트 하이웨이' },
-  { id: 'kit', label: '킷 위 연주' },
-];
+/** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
+const GO_MS = 400;
 
-const DIFF_LABEL: Record<Chart['difficulty'], string> = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
-
-function barsOf(c: Chart): number {
-  return Math.round(c.durationMs / ((60_000 / c.bpm) * c.beatsPerBar));
+function parseId(raw: string | null): number | null {
+  if (raw === null || !/^-?\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
 }
 
 export function PlayPage() {
@@ -51,23 +70,50 @@ export function PlayPage() {
   const location = useLocation();
   const settings = useSettings();
   const param = useChartParam();
+  const [searchParams] = useSearchParams();
+  const songIdParam = parseId(searchParams.get('song'));
+  const chartIdParam = parseId(searchParams.get('chart'));
   const [stage, setStage] = useState<Stage>(param.status === 'none' ? 'select' : 'loading');
   const [chart, setChart] = useState<Chart | null>(null);
   const [session, setSession] = useState<RhythmSession | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
-  // 반주 디코드 단계 표시·오류, 동기 Δ 디버그 표시
+  // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
+  const [countValue, setCountValue] = useState<number | 'go' | null>(null);
+  // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
+  const [detail, setDetail] = useState<SongDetail | null>(null);
+  // 반주 디코드 단계 표시·오류
   const [accStatus, setAccStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [accError, setAccError] = useState<string | null>(null);
-  const [syncInfo, setSyncInfo] = useState<{ begin: number | null; resume: number | null } | null>(null);
   const [acc] = useState(() => new Accompaniment(audioEngine));
   const clockRef = useRef<PlayClock | null>(null);
   // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
-  const { ready } = useReadiness();
+  const { ready, missing } = useReadiness();
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
   }, [ready]);
+
+  // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
+  useShell({ title: '리듬 게임', immersive: stage === 'play' });
+  // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
+  usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
+  // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
+  useEffect(() => {
+    setLocked(stage === 'play');
+  }, [stage]);
+
+  const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
+  const reconnectAvailable = useReconnect((r) => r.available);
+  const reconnect = useReconnect((r) => r.reconnect);
+  const lastHit = useLive((l) => l.lastHit);
+  const presets = usePresets((p) => p.items);
+  const presetName = presets.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const selectSong = useSongs((s) => s.selectSong);
+  // 킷 미니 뷰: 타격(hit)·판정 색
+  const padStates = usePadStates(session);
+  const hitSeq = usePadHitSeq();
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -82,17 +128,30 @@ export function PlayPage() {
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
   const recorder = useRef(new PlayRecorder());
-  // 킷 뷰 타격 이펙트 (useHitFx가 live 스토어 타격을 기록). 하이웨이 뷰에서는 쓰지 않는다
-  const hitFx = useRef(new Map<PadId, HitFx>());
-  useHitFx(hitFx);
+  // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
+  const coachRef = useRef<LiveCoach | null>(null);
+  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   const startedAt = useRef<Date | null>(null);
+  const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
+  // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
+  const wasCountin = useRef(false);
+  const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
   const clearParam = param.clear;
 
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
+
+  const resetCountdown = useCallback(() => {
+    wasCountin.current = false;
+    if (goTimer.current !== null) {
+      window.clearTimeout(goTimer.current);
+      goTimer.current = null;
+    }
+    setCountValue(null);
+  }, []);
 
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
   useEffect(() => {
@@ -104,8 +163,28 @@ export function PlayPage() {
       clockRef.current?.stop();
       metronome.unlock();
       acc.unload();
+      if (goTimer.current !== null) window.clearTimeout(goTimer.current);
+      // 녹음 스위치 해제(armed였으면 idle로, 잠금도 푼다)
+      disarm();
     };
   }, [acc]);
+
+  // 곡 상세: URL의 곡이 바뀌면 다시 읽는다(실패해도 연주는 채보 정보만으로 진행)
+  useEffect(() => {
+    if (songIdParam === null) return;
+    let cancelled = false;
+    selectSong(songIdParam).then(
+      (d) => {
+        if (!cancelled) setDetail(d);
+      },
+      () => {
+        // 상세 없이도 준비·연주는 가능하다
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [songIdParam, selectSong]);
 
   // 타격: 즉시 발음(D6) → 햅틱 → 플래시 → 판정 → 로그·텔레메트리
   useEffect(() => {
@@ -113,7 +192,8 @@ export function PlayPage() {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
         flashes.current.set(hit.pad, performance.now());
       }
       const ss = sessionRef.current;
@@ -121,6 +201,8 @@ export function PlayPage() {
         ss &&
         stageRef.current === 'play' &&
         pauseRef.current === null &&
+        // 복귀 카운트다운 중에는 pauseReason이 null이지만 시계는 멈춰 있다 — 그 사이 타격을 판정하지 않는다
+        clockRef.current?.state.phase === 'running' &&
         (ss.currentStatus === 'playing' || ss.currentStatus === 'countin');
       const ev = active ? ss.handleHit(hit) : null;
       if (active) recorder.current.hit(hit, ev, ss);
@@ -135,23 +217,43 @@ export function PlayPage() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
+      const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
+      coachRef.current = coach;
+      clearCoachLine();
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
+        // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
+        const message = coach.push({
+          songTimeMs: ss.songTime(e.at),
+          noteTimeMs: ss.notes[e.noteIndex].note.timeMs,
+          judgement: e.judgement,
+          deltaMs: e.deltaMs,
+          pad: e.pad,
+          stickId: e.stickId,
+          velocity: e.velocity,
+        });
+        if (!message) return;
+        try {
+          const copy = coachCopy(message);
+          if (copy) showCoachLine(copy, message.displayMs);
+        } catch {
+          // 코칭 오류는 무시한다
+        }
       });
       flashes.current.clear();
-      hitFx.current.clear();
       popups.current = [];
       recorder.current.reset();
       finishing.current = false;
+      resetCountdown();
       setChart(c);
       setSession(ss);
       setHud(ss.snapshot());
       setPauseReason(null);
       setStage('ready');
     },
-    [settings.timing, settings.countInBars, settings.audioOffsetMs],
+    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine],
   );
 
   // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
@@ -205,6 +307,7 @@ export function PlayPage() {
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
@@ -215,7 +318,6 @@ export function PlayPage() {
     });
     clockRef.current = clock;
     clock.begin();
-    setSyncInfo({ ...clock.sync });
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setStage('play');
@@ -226,19 +328,22 @@ export function PlayPage() {
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
+    resetCountdown();
     setPauseReason(null);
     setSession(null);
     setChart(null);
     setHud(null);
     setStage('select');
     clearParam();
-  }, [clearParam]);
+  }, [clearParam, resetCountdown]);
 
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
     if (stageRef.current !== 'play' || !clock || pauseRef.current !== null) return;
+    // 복귀 카운트다운 중(clock은 이미 정지)에 다시 끊겨도 pause 진단 기록이 두 번 남지 않게 한다
+    const wasRunning = clock.state.phase === 'running';
     clock.pause(reason);
-    diagSessionPhase('pause');
+    if (wasRunning) diagSessionPhase('pause');
     // 같은 틱의 중복 트리거(끊김 + 메뉴)를 막기 위해 ref도 바로 갱신한다
     pauseRef.current = reason;
     setPauseReason(reason);
@@ -249,12 +354,15 @@ export function PlayPage() {
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
-    if (!clock || pauseRef.current === null || !readyRef.current) return;
+    // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
+    if (!clock || clock.state.phase !== 'paused' || !readyRef.current) return;
     clock.resume();
     diagSessionPhase('resume');
-    setSyncInfo({ ...clock.sync });
     setPauseReason(null);
   }, []);
+
+  // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
+  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
 
   // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
   const restart = useCallback(() => {
@@ -264,15 +372,17 @@ export function PlayPage() {
     clock.restart();
     diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     flashes.current.clear();
-    hitFx.current.clear();
     popups.current = [];
     recorder.current.reset();
+    coachRef.current?.reset();
+    clearCoachLine();
     finishing.current = false;
     startedAt.current = new Date();
+    consentAtStart.current = readCurrentConsent();
+    resetCountdown();
     setHud(ss.snapshot());
-    setSyncInfo({ ...clock.sync });
     setPauseReason(null);
-  }, []);
+  }, [resetCountdown, clearCoachLine]);
 
   // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
   const leave = useCallback(() => {
@@ -293,6 +403,8 @@ export function PlayPage() {
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);
+      // 곡 시작 시각은 로그와 녹음이 같은 값을 쓴다
+      const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         snapshot: ss.snapshot(),
         notes: ss.notes,
@@ -303,21 +415,35 @@ export function PlayPage() {
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
-        startedAt: startedAt.current ?? new Date(),
+        startedAt: songStartedAt,
         chartVersionId: ss.chart.chartVersionId ?? null,
         songNumericId: ss.chart.songNumericId ?? null,
         chartId: ss.chart.chartId ?? null,
         presetId: useSettings.getState().activePresetId,
+        consent: consentAtStart.current,
+        liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
+      // 녹음이 켜져 있으면 스토어가 저장 대기로 넘기고, 꺼져 있으면 무시한다. 실패해도 결과 이동은 막지 않는다
+      try {
+        finishSong({
+          mode: 'RHYTHM',
+          hits: recorder.current.hits,
+          chart: { title: ss.chart.title, durationMs: ss.chart.durationMs },
+          startedAt: songStartedAt,
+          playId: log.playId,
+        });
+      } catch (e) {
+        console.warn('녹음 확정에 실패했습니다.', e);
+      }
       navigate(`/result/${log.playId}`);
     },
     [navigate, inputSource, settings.timing],
   );
 
-  // 매 프레임: 세션 시계(Miss 처리·종료 감지·박 클릭 예약)는 PlayClock, 여기서는 HUD 4Hz 갱신
+  // 매 프레임: 세션 시계(Miss 처리·종료 감지·박 클릭 예약)는 PlayClock, 여기서는 카운트다운 값과 HUD 4Hz 갱신
   const onFrame = useCallback(
     (now: number) => {
       const ss = sessionRef.current;
@@ -328,6 +454,19 @@ export function PlayPage() {
       if (clock.state.phase === 'finished') {
         finish(ss);
         return;
+      }
+      // 카운트다운: 카운트인 동안 남은 박 수, 끝난 직후 잠깐 「시작!」(일시정지 중에는 값을 건드리지 않는다)
+      const status = ss.currentStatus;
+      if (status === 'countin') {
+        wasCountin.current = true;
+        setCountValue(Math.max(1, Math.ceil(-ss.songTime(now) / ss.beatMs)));
+      } else if (status === 'playing' && wasCountin.current) {
+        wasCountin.current = false;
+        setCountValue('go');
+        goTimer.current = window.setTimeout(() => {
+          goTimer.current = null;
+          setCountValue(null);
+        }, GO_MS);
       }
       if (now - lastHud.current > 250) {
         lastHud.current = now;
@@ -340,65 +479,80 @@ export function PlayPage() {
   // Enter / Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
+      if (e.isComposing || e.defaultPrevented) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
+      if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
       if (st === 'ready') {
         if (e.code === 'Enter') void begin();
         else toSelect();
       } else if (st === 'play') {
-        if (pauseRef.current !== null) resume();
-        else if (e.code === 'Escape') pauseTo('user');
+        // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
+        // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
+        if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
+        pauseTo('user');
+      } else {
+        return;
       }
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, resume, pauseTo]);
+  }, [begin, toSelect, pauseTo, isResuming]);
 
-  if (stage === 'loading' && !chart) {
+  // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그, U18)
+  const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
+  const bestAccuracy = useMemo(
+    () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'RHYTHM').get(selectedChartId) : undefined),
+    [stage, selectedChartId],
+  );
+
+  // 불러오는 중·오류. 연습 단계를 바꿔 다시 불러올 때도 이 카드로 돌아온다
+  if (stage === 'loading') {
     return (
       <main className="main">
-        <div className="card col" style={{ maxWidth: 480 }}>
-          {accStatus === 'error' ? (
-            <>
-              <div className="notice error" role="alert">
-                {accError ?? '반주를 불러오지 못했습니다.'}
-              </div>
-              <div className="row">
-                {param.loaded && (
-                  <button
-                    className="btn-primary"
-                    onClick={() => {
-                      acc.unload();
-                      setAccStatus('idle');
-                      if (param.loaded) choose(param.loaded.chart);
-                    }}
-                  >
-                    반주 없이 계속
-                  </button>
-                )}
-                <button className="btn-ghost" onClick={toSelect}>
+        <Card padding="md" style={{ maxWidth: 480 }}>
+          <div className="col">
+            {accStatus === 'error' ? (
+              <>
+                <div className="notice error" role="alert">
+                  {accError ?? '반주를 불러오지 못했습니다.'}
+                </div>
+                <div className="row">
+                  {param.loaded && (
+                    <Button
+                      onClick={() => {
+                        acc.unload();
+                        setAccStatus('idle');
+                        if (param.loaded) choose(param.loaded.chart);
+                      }}
+                    >
+                      반주 없이 계속
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={toSelect}>
+                    곡 선택으로
+                  </Button>
+                </div>
+              </>
+            ) : param.status === 'error' ? (
+              <>
+                <div className="notice error" role="alert">
+                  {param.error ?? '채보를 불러오지 못했습니다.'}
+                </div>
+                <Button variant="secondary" onClick={toSelect}>
                   곡 선택으로
-                </button>
+                </Button>
+              </>
+            ) : (
+              <div className="row">
+                <span className="spinner" aria-label="불러오는 중" />
+                <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
               </div>
-            </>
-          ) : param.status === 'error' ? (
-            <>
-              <div className="notice error" role="alert">
-                {param.error ?? '채보를 불러오지 못했습니다.'}
-              </div>
-              <button className="btn-ghost" onClick={toSelect}>
-                곡 선택으로
-              </button>
-            </>
-          ) : (
-            <div className="row">
-              <span className="spinner" aria-label="불러오는 중" />
-              <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Card>
       </main>
     );
   }
@@ -406,174 +560,121 @@ export function PlayPage() {
   if (stage === 'select' || !chart || !session) {
     return (
       <main className="main">
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
-          <h1>리듬 게임</h1>
-          <span className="small dim">곡을 고르면 준비 화면으로 갑니다</span>
-        </div>
-        <div className="card col" style={{ marginBottom: 16 }}>
-          <h3>게임 뷰</h3>
-          <div className="row" role="group" aria-label="게임 뷰">
-            {GAME_VIEWS.map((v) => (
-              <button
-                key={v.id}
-                className={settings.gameView === v.id ? 'btn-primary' : 'btn-ghost'}
-                aria-pressed={settings.gameView === v.id}
-                onClick={() => settings.setGameView(v.id)}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <span className="small dim">
-            {settings.gameView === 'kit'
-              ? '세팅한 킷 배치 위에서 링이 줄어들어 패드에 닿을 때 칩니다.'
-              : '노트가 레인을 따라 판정선으로 떨어집니다.'}
-          </span>
-        </div>
-        <div className="grid-2">
-          <div className="card col">
-            <h3>곡 선택</h3>
-            <SongPicker mode="play" onSelect={param.select} />
-          </div>
-          <div className="card col">
-            <h3>현재 설정</h3>
-            <table className="plain">
-              <tbody>
-                <tr>
-                  <td className="dim">판정 폭</td>
-                  <td>
-                    Perfect ±{settings.timing.perfectMs}ms · Good ±{settings.timing.goodMs}ms
-                  </td>
-                </tr>
-                <tr>
-                  <td className="dim">노트 낙하 시간</td>
-                  <td>{settings.scrollMs}ms</td>
-                </tr>
-                <tr>
-                  <td className="dim">카운트인</td>
-                  <td>{settings.countInBars}마디</td>
-                </tr>
-                <tr>
-                  <td className="dim">메트로놈</td>
-                  <td>{settings.metronome ? '켬' : '끔'}</td>
-                </tr>
-                <tr>
-                  <td className="dim">입력</td>
-                  <td>{inputSource}</td>
-                </tr>
-              </tbody>
-            </table>
-            <Link to="/setup" className="small">
-              세팅에서 바꾸기
-            </Link>
-            <p className="small faint">
-              매핑 키로 칩니다. Enter 시작 · Esc 일시정지. 채보에 없는 타격은 감점이 없습니다.
-            </p>
-          </div>
-        </div>
+        <SongPicker mode="play" onSelect={param.select} />
       </main>
     );
   }
 
+  const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
+  const song = {
+    title: chart.title,
+    artist: sameSong ? detail.artist : '',
+    coverUrl: sameSong ? detail.coverUrl : null,
+    bpm: chart.bpm,
+    durationSec: chart.durationMs / 1000,
+  };
+
+  if (stage === 'ready') {
+    const charts = sameSong
+      ? sortCharts(detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty }))
+      : [{ id: selectedChartId, difficulty: chart.difficulty }];
+    return (
+      <main className="main">
+        <ReadyPanel
+          song={song}
+          modeLabel="리듬 게임"
+          charts={charts}
+          selectedChartId={selectedChartId}
+          bestAccuracy={bestAccuracy}
+          ready={ready}
+          missing={missing}
+          connected={connected}
+          keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
+          presetName={presetName}
+          countInBars={settings.countInBars}
+          onBack={toSelect}
+          onSelectChart={(chartId) => {
+            if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
+          }}
+          onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
+          onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
+          onStart={() => void begin()}
+        />
+      </main>
+    );
+  }
+
+  // 연주 중. 정확도는 지금까지 판정한 노트 기준(곡 전체 기준 정확도는 결과 화면)
   const snap = hud ?? session.snapshot();
-  const progress = Math.min(1, Math.max(0, snap.songTimeMs / chart.durationMs));
-  const statusLabel =
-    snap.status === 'countin' ? '카운트인' : snap.status === 'paused' ? '일시정지' : snap.status === 'playing' ? '연주 중' : '준비';
+  const perfectScore = session.notes.length ? snap.maxScore / session.notes.length : 0;
+  const accuracy =
+    snap.judgedCount > 0 && perfectScore > 0 ? Math.min(100, (snap.score / (snap.judgedCount * perfectScore)) * 100) : null;
+
+  let overlay = null;
+  if (pauseReason !== null) {
+    overlay = (
+      <PauseOverlay
+        reason={pauseReason}
+        canResume={ready}
+        onResume={resume}
+        onRestart={restart}
+        onLeave={leave}
+        returnTo={returnTo}
+      />
+    );
+  } else if (countValue !== null) {
+    overlay = <Countdown value={countValue} />;
+  }
 
   return (
-    <main className="main wide">
-      <div className="play-layout">
-        <div style={{ position: 'relative', minHeight: 480 }}>
-          {settings.gameView === 'kit' ? (
-            <KitPlayView
-              session={session}
-              layout={settings.kitLayout}
-              scrollMs={settings.scrollMs}
-              hits={hitFx}
-              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-              onFrame={onFrame}
-            />
+    <main>
+      <PlayStage
+        variant="game"
+        hud={
+          <PlayHud
+            variant="game"
+            title={song.title}
+            artist={song.artist || undefined}
+            coverUrl={song.coverUrl}
+            level={chart.difficulty}
+            bpm={chart.bpm}
+            elapsedMs={snap.songTimeMs}
+            durationMs={chart.durationMs}
+            score={snap.score}
+            combo={snap.combo}
+            accuracy={accuracy}
+          />
+        }
+        area={
+          <NoteHighway
+            session={session}
+            scrollMs={settings.scrollMs}
+            flashes={flashes}
+            popups={popups}
+            keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
+            onFrame={onFrame}
+          />
+        }
+        // 코칭 모드는 라벨+제목 두 줄만 — 보조까지 세 줄이면 51px 칸을 넘친다(설계 U1 결정, 브라우저 확인 64px)
+        guide={
+          coachLine ? (
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
           ) : (
-            <NoteHighway
-              session={session}
-              scrollMs={settings.scrollMs}
-              flashes={flashes}
-              popups={popups}
-              keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-              onFrame={onFrame}
-            />
-          )}
-          {stage === 'ready' && (
-            <div className="overlay">
-              <h2>{chart.title}</h2>
-              <p className="dim">
-                {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {barsOf(chart)}마디
-              </p>
-              <ReadinessNotice returnTo={returnTo} compact />
-              <button className="btn-primary btn-lg" onClick={() => void begin()} disabled={!ready}>
-                시작 (Enter)
-              </button>
-              <button className="btn-ghost" onClick={toSelect}>
-                곡 선택으로 (Esc)
-              </button>
-              <p className="small faint">쳐 보면 소리만 납니다. 시작하면 {settings.countInBars}마디 카운트인 뒤 노트가 내려옵니다.</p>
-            </div>
-          )}
-          {stage === 'play' && pauseReason !== null && (
-            <PauseOverlay
-              reason={pauseReason}
-              canResume={ready}
-              onResume={resume}
-              onRestart={restart}
-              onLeave={leave}
-              returnTo={returnTo}
-            />
-          )}
-        </div>
-
-        <aside className="card hud">
-          <div>
-            <strong>{chart.title}</strong>
-            <div className="small dim">
-              {DIFF_LABEL[chart.difficulty]} · {chart.bpm} BPM · {statusLabel}
-            </div>
-          </div>
-          <div>
-            <div className="score">{snap.score}</div>
-            <div className="small dim">/ {snap.maxScore}</div>
-          </div>
-          <div className="combo">
-            {snap.combo} 콤보 <span className="small dim">(최대 {snap.maxCombo})</span>
-          </div>
-          <div className="counts">
-            <span>Perfect</span>
-            <span>{snap.counts.PERFECT}</span>
-            <span>Good</span>
-            <span>{snap.counts.GOOD}</span>
-            <span>Miss</span>
-            <span>{snap.counts.MISS}</span>
-            <span className="dim">채보 외</span>
-            <span>{snap.strayHits}</span>
-          </div>
-          <div className="progress" aria-label="진행">
-            <div style={{ width: `${progress * 100}%` }} />
-          </div>
-          <div className="small dim">
-            {snap.judgedCount} / {session.notes.length} 노트
-          </div>
-          {stage === 'play' && syncInfo?.begin != null && (
-            <div className="small faint">
-              반주 동기 Δ {syncInfo.begin.toFixed(1)}ms
-              {syncInfo.resume != null && <> · 재개 Δ {syncInfo.resume.toFixed(1)}ms</>}
-            </div>
-          )}
-          {stage === 'play' && pauseReason === null && (
-            <button className="btn-ghost small" onClick={() => pauseTo('user')}>
-              일시정지 (Esc)
-            </button>
-          )}
-        </aside>
-      </div>
+            <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
+          )
+        }
+        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
+        readout={
+          <HitReadout
+            variant="stack"
+            pad={lastHit?.pad ?? undefined}
+            hand={lastHit ? (lastHit.stickId === 0 ? 'L' : 'R') : undefined}
+            velocity={lastHit?.velocity}
+          />
+        }
+        overlay={overlay}
+      />
     </main>
   );
 }

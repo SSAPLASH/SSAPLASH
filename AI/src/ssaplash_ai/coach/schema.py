@@ -92,6 +92,8 @@ class WeakSegment(BaseModel):
     toMs: float
     pattern: str
     description: str
+    # 연습 방법 한두 문장. 문구가 없는 pattern이면 None이고 응답에서 키를 생략한다
+    tip: str | None = None
     causeTags: list[str]
     pads: list[str]
     metrics: dict[str, float | int | str]

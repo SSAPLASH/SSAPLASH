@@ -3,16 +3,29 @@
 // 소스 종류에 맞는 매퍼(padMapper: 키 매퍼 / 자세 매퍼)로 패드를 정한다 (설계 D8·D9, PLAY-03 기준선).
 // 판정 경로는 동기 함수만 쓴다 (지연 예산 안에서 끝나야 한다).
 import type { PadId } from '@/domain/pads';
-import type { InputSourceKind, Pose, ResolvedHit, StickEvent, StickId } from '@/domain/events';
+import type { FootId, InputSourceKind, Pose, ResolvedHit, StickEvent, StickHitEvent, StickId } from '@/domain/events';
 import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
 import { mapHit } from './padMapper';
 import type { KeyMap } from '@/domain/keyMap';
 import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
+import { isSensorSource } from '@/domain/events';
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
-export type StatusListener = (stickId: StickId, connected: boolean, source: InputSourceKind) => void;
+/** batteryPct는 STATUS 패킷이 알려 준 값(%). unconfigured는 부팅 뒤 설정을 못 받았다는 비트 5. 둘 다 모르면 undefined */
+export type StatusListener = (
+  stickId: StickId,
+  connected: boolean,
+  source: InputSourceKind,
+  batteryPct?: number,
+  unconfigured?: boolean,
+) => void;
+
+/** 페달 연결·배터리. 손 status와 분리한다(PLAY-002 D2) */
+export type PedalStatusListener = (foot: FootId, connected: boolean, batteryPct?: number) => void;
+/** 하이햇 페달 밟힘 상태. closed = 밟음 */
+export type PedalListener = (closed: boolean) => void;
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -20,6 +33,8 @@ export class InputManager {
   private hitListeners = new Set<HitListener>();
   private poseListeners = new Set<PoseListener>();
   private statusListeners = new Set<StatusListener>();
+  private pedalStatusListeners = new Set<PedalStatusListener>();
+  private pedalListeners = new Set<PedalListener>();
   private resetPoseListeners = new Set<() => void>();
   private profile: CalibrationProfile | null = null;
   private keyMap: KeyMap = {};
@@ -63,15 +78,19 @@ export class InputManager {
     this.candidateProvider = fn;
   }
 
-  /** 같은 kind는 하나만. 이미 있으면 교체 */
-  async attach(source: InputSource): Promise<void> {
+  /**
+   * 같은 kind는 하나만. 이미 있으면 교체.
+   * auto가 참이고 소스가 autoConnect를 지원하면 사용자 제스처 없이 다시 열 수 있는 경우만 연다(페이지 로드 시 U10)
+   */
+  async attach(source: InputSource, auto = false): Promise<void> {
     await this.detach(source.kind);
     this.sources.set(source.kind, source);
     this.unsubs.set(
       source.kind,
       source.subscribe((e) => this.handle(e, source.kind)),
     );
-    await source.connect();
+    if (auto && source.autoConnect) await source.autoConnect();
+    else await source.connect();
   }
 
   async detach(kind: InputSourceKind): Promise<void> {
@@ -84,6 +103,11 @@ export class InputManager {
     for (const l of this.statusListeners) {
       l(0, false, kind);
       l(1, false, kind);
+    }
+    // 소스가 내려가면 페달도 끊긴 것으로 알린다(손 status와 같은 방식)
+    for (const l of this.pedalStatusListeners) {
+      l(2, false);
+      l(3, false);
     }
   }
 
@@ -129,6 +153,16 @@ export class InputManager {
     return () => this.statusListeners.delete(l);
   }
 
+  onPedalStatus(l: PedalStatusListener): () => void {
+    this.pedalStatusListeners.add(l);
+    return () => this.pedalStatusListeners.delete(l);
+  }
+
+  onPedal(l: PedalListener): () => void {
+    this.pedalListeners.add(l);
+    return () => this.pedalListeners.delete(l);
+  }
+
   /** 캘리브레이션 화면 등에서 자세를 패드로 미리 보여줄 때 */
   previewPad(pose: Pose): ReturnType<typeof resolvePad> {
     return resolvePad(this.profile, pose);
@@ -141,11 +175,24 @@ export class InputManager {
       return;
     }
     if (e.kind === 'status') {
-      for (const l of this.statusListeners) l(e.stickId, e.connected, source);
+      for (const l of this.statusListeners) l(e.stickId, e.connected, source, e.batteryPct, e.unconfigured);
       return;
     }
+    if (e.kind === 'pedalStatus') {
+      for (const l of this.pedalStatusListeners) l(e.foot, e.connected, e.batteryPct);
+      return;
+    }
+    if (e.kind === 'pedal') {
+      for (const l of this.pedalListeners) l(e.closed);
+      return;
+    }
+    if (e.foot !== undefined) {
+      this.handleFootHit(e, e.foot, source);
+      return;
+    }
+    if (e.stickId === null) return;
     const pose: Pose = { pitch: e.pitch, yaw: e.yaw };
-    const tHit = source === 'keyboard' ? e.timestamp : e.timestamp + this.sensorOffsetMs;
+    const tHit = isSensorSource(source) ? e.timestamp + this.sensorOffsetMs : e.timestamp;
     const m = mapHit(e, source, {
       keyMap: this.keyMap,
       profile: this.profile,
@@ -155,7 +202,7 @@ export class InputManager {
     const stickId = m.stickId ?? e.stickId;
     // 센서 소스는 소스가 timestamp를 이미 브라우저 시계로 환산해 넘기므로, 센서 시각은 오프셋을 되빼서 얻는다.
     // 오프셋을 모르면(동기화 전·모의 소스) tSensorMs도 채우지 않는다. 텔레메트리 전용이라 판정에는 쓰지 않는다
-    const isSensor = source !== 'keyboard';
+    const isSensor = isSensorSource(source);
     const clockOffsetMs = isSensor ? (this.sources.get(source)?.clockOffsetOf?.(stickId) ?? null) : null;
     const hit: ResolvedHit = {
       id: ++this.seq,
@@ -182,6 +229,31 @@ export class InputManager {
       inside: m.inside,
     };
     if (m.distanceDeg !== undefined) this.lastPose[stickId] = pose;
+    for (const l of this.hitListeners) l(hit);
+  }
+
+  /** 페달 타격: 매퍼를 거치지 않고 패킷의 pad·velocity를 그대로 쓴다(PLAY-002 D4). 손 정보는 없다 */
+  private handleFootHit(e: StickHitEvent, foot: FootId, source: InputSourceKind): void {
+    const clockOffsetMs = this.sources.get(source)?.clockOffsetOf?.(foot) ?? null;
+    const hit: ResolvedHit = {
+      id: ++this.seq,
+      stickId: null,
+      foot,
+      pad: e.pad ?? null,
+      velocity: Math.min(127, Math.max(1, Math.round(e.velocity ?? 100))),
+      tHit: e.timestamp + this.sensorOffsetMs,
+      tRecv: e.recvTime,
+      tResolved: performance.now(),
+      source,
+      pose: { pitch: e.pitch, yaw: e.yaw },
+      peakAccel: e.peakAccel,
+      peakSpeedDps: e.peakSpeedDps,
+      seq: e.seq,
+      firmwarePad: e.pad,
+      tSensorMs: clockOffsetMs === null ? undefined : e.timestamp - clockOffsetMs,
+      clockOffsetMs,
+      judgedBy: 'stick',
+    };
     for (const l of this.hitListeners) l(hit);
   }
 }
