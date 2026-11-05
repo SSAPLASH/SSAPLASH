@@ -30,6 +30,8 @@ OTHER_PAD = "OTHER"
 
 Judgement = Literal["PERFECT", "GOOD", "MISS"]
 Reason = Literal["OK", "INSUFFICIENT_HITS", "NO_WEAKNESS"]
+SeverityLevel = Literal["LOW", "MEDIUM", "HIGH"]
+SummaryLevel = Literal["GOOD", "FAIR", "NEEDS_WORK"]
 
 
 def normalize_pad(value: str) -> str:
@@ -94,12 +96,31 @@ class WeakSegment(BaseModel):
     description: str
     # 연습 방법 한두 문장. 문구가 없는 pattern이면 None이고 응답에서 키를 생략한다
     tip: str | None = None
+    # 이 약점이 무슨 뜻이고 얼마나 넓게 나타나는지 한두 문장. 문구가 없는 pattern이면 None
+    detail: str | None = None
+    # metrics.severity(0~1)를 단계로 옮긴 값
+    severityLevel: SeverityLevel | None = None
     causeTags: list[str]
     pads: list[str]
     metrics: dict[str, float | int | str]
+
+
+class Summary(BaseModel):
+    """리포트 종합 총평. `text`는 코치가 직접 이야기해 주는 느낌의 규칙 문장이다."""
+
+    level: SummaryLevel
+    text: str
+    # 가장 심한 약점의 pattern. 약점이 없으면 None (연습·곡 추천이 생기면 이 값으로 잇는다)
+    focusPattern: str | None = None
+    # 잘한 점으로 꼽은 패드(정식 이름). 없으면 None. LLM 총평 작업의 사실로 쓰인다
+    strengthPad: str | None = None
+    # RULE = 규칙 템플릿. 나중에 LLM 문장이 오면 LLM
+    source: Literal["RULE", "LLM"] = "RULE"
 
 
 class AnalysisResponse(BaseModel):
     analyzerVersion: str
     reason: Reason
     weakSegments: list[WeakSegment]
+    # INSUFFICIENT_HITS이면 None(응답에서 키를 생략한다)
+    summary: Summary | None = None

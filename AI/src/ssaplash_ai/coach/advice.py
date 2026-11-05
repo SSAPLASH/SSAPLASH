@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from ssaplash_ai.coach.config import PAD_LABELS_KO
+from ssaplash_ai.coach.config import PAD_LABELS_KO, SEVERITY_HIGH, SEVERITY_MEDIUM
 
 _HANGUL_FIRST = 0xAC00
 _HANGUL_LAST = 0xD7A3
@@ -148,3 +148,93 @@ def tip_for(pattern: str, pads: Sequence[str]) -> str | None:
     """`pattern`에 맞는 연습 조언 문장. 문구가 없는 새 pattern이면 None(응답에서 `tip` 키를 생략한다)."""
     build = _TIPS.get(pattern)
     return build(pads) if build is not None else None
+
+
+def _eun(word: str) -> str:
+    """'는'/'은'을 붙인다."""
+    return f"{word}는" if _jongseong(word) in (None, 0) else f"{word}은"
+
+
+def level_for(severity: float) -> str:
+    """`metrics.severity`(0~1)를 단계로 옮긴다. 경계값은 윗단계에 속한다(0.4 → MEDIUM, 0.7 → HIGH)."""
+    if severity >= SEVERITY_HIGH:
+        return "HIGH"
+    if severity >= SEVERITY_MEDIUM:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _int(value: object) -> int | None:
+    return int(round(float(value))) if isinstance(value, (int, float)) else None
+
+
+def detail_for(
+    pattern: str,
+    pads: Sequence[str],
+    metrics: dict[str, float | int | str],
+    from_ms: float,
+    to_ms: float,
+) -> str | None:
+    """약점이 무슨 뜻이고 얼마나 넓게 나타나는지 한두 문장. 숫자는 `metrics`에 있는 값이나 그 산술만 쓴다.
+
+    `description`이 사실 한 줄이라면 `detail`은 그 사실이 곡 전체의 경향인지 특정 구간의 문제인지, 연습할 때
+    어디에 집중할지를 풀어 준다. 문구가 없는 pattern이거나 필요한 `metrics`가 없으면 None(키 생략).
+    """
+    count = _int(metrics.get("hitCount"))
+    if pattern in ("TIMING_LATE", "TIMING_EARLY") and count is not None:
+        way = (
+            ("늦게", "박 소리를 듣는 방법")
+            if pattern == "TIMING_LATE"
+            else ("빠르게", "박 소리를 기다리는 방법")
+        )
+        return (
+            f"곡 전체에서 박보다 {way[0]} 치는 경향이에요({count}번 기준). "
+            f"특정 구간이 아니라 습관이라 {way[1]}을 바꾸면 한꺼번에 좋아져요."
+        )
+    if pattern in ("PAD_LATE", "PAD_EARLY"):
+        mean, overall = metrics.get("meanDeltaMs"), metrics.get("overallMeanDeltaMs")
+        if isinstance(mean, (int, float)) and isinstance(overall, (int, float)):
+            pad = _label(pads, 0, "그 패드")
+            way = "늦게" if pattern == "PAD_LATE" else "빠르게"
+            return (
+                f"{_eun(pad)} 다른 패드보다 평균 {abs(mean - overall):.0f}ms {way} 쳐요. "
+                "나머지 패드와 비교한 차이라서 이 패드부터 연습하면 효과가 커요."
+            )
+    if pattern in ("TRANSITION_LATE", "TRANSITION_MISS"):
+        times = _int(metrics.get("transitionCount"))
+        a, b = _label(pads, 0, "앞 패드"), _label(pads, 1, "다음 패드")
+        if pattern == "TRANSITION_LATE" and times is not None:
+            return (
+                f"{a}에서 {_ro(b)} 넘어가는 {times}번을 기준으로 한 평균이에요. "
+                "손이 옮겨 가는 동작이 박보다 느려서 그 전환만 따로 연습하면 돼요."
+            )
+        missed = _int(metrics.get("missCount"))
+        if pattern == "TRANSITION_MISS" and times is not None and missed is not None:
+            return (
+                f"{a}에서 {_ro(b)} 넘어가는 {times}번 중 {missed}번을 놓쳤어요. "
+                "전환 동작이 아직 익숙하지 않다는 신호예요."
+            )
+    if pattern == "HAND_WEAK":
+        ratio = metrics.get("velocityRatio")
+        weak, strong = _int(metrics.get("weakHitCount")), _int(metrics.get("strongHitCount"))
+        if isinstance(ratio, (int, float)) and weak is not None and strong is not None:
+            return (
+                f"약한 쪽 손이 센 쪽의 {ratio * 100:.0f}% 세기로 쳤어요(각각 {weak}번, {strong}번 기준). "
+                "소리 크기가 들쭉날쭉하게 들릴 수 있어요."
+            )
+    if pattern == "MISS_CLUSTER":
+        notes, missed = _int(metrics.get("noteCount")), _int(metrics.get("missCount"))
+        if notes is not None and missed is not None:
+            seconds = round((to_ms - from_ms) / 1000)
+            return (
+                f"이 {seconds}초 동안 노트 {notes}개 중 {missed}개를 놓쳤어요. "
+                "곡의 다른 부분은 괜찮을 수 있으니 이 구간에 집중해 보세요."
+            )
+    if pattern == "UNSTEADY":
+        std = metrics.get("stdDeltaMs")
+        if isinstance(std, (int, float)) and count is not None:
+            return (
+                f"박과의 간격이 평균 {std:.0f}ms씩 흩어져요({count}번 기준). "
+                "곡 전체의 박자감을 맞추는 연습이 필요해요."
+            )
+    return None

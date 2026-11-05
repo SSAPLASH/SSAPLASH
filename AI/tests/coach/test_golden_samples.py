@@ -26,7 +26,7 @@ def test_합의_샘플의_응답이_기대와_같다(name):
 
     response = analyze(AnalysisRequest.model_validate(sample["request"]))
 
-    assert response.model_dump() == sample["response"]
+    assert response.model_dump(exclude_none=True) == sample["response"]
 
 
 def test_샘플_A는_전체_지연과_놓침_몰림을_찾는다():

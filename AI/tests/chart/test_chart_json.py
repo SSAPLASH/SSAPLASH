@@ -161,14 +161,19 @@ def test_시각은_0과_길이_사이로_자름():
 
 
 def test_거친_라벨은_출력_오류():
-    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
+    with pytest.raises(ChartOutputError, match="패드 9종 밖"):
         build_notes(_hits([(0.1, "tom", -1)]), 3000)
 
 
-def test_페달_하이햇은_채보_출력에서_오류():
-    # 정답·채점에는 HIHAT_PEDAL이 있지만 BE가 받는 패드는 8종
-    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
-        build_notes(_hits([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+def test_페달_하이햇은_채보_출력_패드():
+    notes = build_notes(_hits([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+    assert [n["pad"] for n in notes] == ["HIHAT_PEDAL"]
+    validate_chart(_chart([(0.1, "HIHAT_PEDAL", -1)]), 3000)
+
+
+def test_같은_시각_하이햇과_페달은_하이햇이_먼저():
+    notes = build_notes(_hits([(0.1, "HIHAT_PEDAL", -1), (0.1, "HIHAT", -1)]), 3000)
+    assert [n["pad"] for n in notes] == ["HIHAT", "HIHAT_PEDAL"]
 
 
 def test_노트가_없어도_통과():
@@ -189,6 +194,7 @@ def test_패드별_개수():
         "FLOOR_TOM",
         "CRASH",
         "RIDE",
+        "HIHAT_PEDAL",
     ]
 
 
@@ -221,8 +227,59 @@ def _broken(mutate) -> dict:
         ("bpm 상한", lambda c: c["charts"][0]["timing"].update(bpm=10000)),
         ("offsetMs 실수", lambda c: c["charts"][0]["timing"].update(offsetMs=0.5)),
         ("timeSignature 6자", lambda c: c["charts"][0]["timing"].update(timeSignature="12/16x")),
+        ("ppq 0", lambda c: c["charts"][0]["timing"].update(ppq=0)),
+        ("tempoMap 빈 목록", lambda c: c["charts"][0]["timing"].update(tempoMap=[])),
+        (
+            "tempoMap 첫 tick",
+            lambda c: c["charts"][0]["timing"].update(tempoMap=[{"tick": 480, "bpm": 120.0}]),
+        ),
+        (
+            "tempoMap 첫 bpm 다름",
+            lambda c: c["charts"][0]["timing"].update(tempoMap=[{"tick": 0, "bpm": 99.0}]),
+        ),
+        (
+            "tempoMap tick 역순",
+            lambda c: c["charts"][0]["timing"].update(
+                tempoMap=[
+                    {"tick": 0, "bpm": c["charts"][0]["timing"]["bpm"]},
+                    {"tick": 0, "bpm": 100.0},
+                ]
+            ),
+        ),
+        (
+            "tempoMap bpm 0",
+            lambda c: c["charts"][0]["timing"].update(
+                tempoMap=[
+                    {"tick": 0, "bpm": c["charts"][0]["timing"]["bpm"]},
+                    {"tick": 960, "bpm": 0},
+                ]
+            ),
+        ),
+        (
+            "timeSignatureMap 다름",
+            lambda c: c["charts"][0]["timing"].update(
+                timeSignatureMap=[{"tick": 0, "numerator": 3, "denominator": 4}]
+            ),
+        ),
+        (
+            "timeSignatureMap 음표 3",
+            lambda c: c["charts"][0]["timing"].update(
+                timeSignatureMap=[{"tick": 0, "numerator": 4, "denominator": 3}]
+            ),
+        ),
     ],
 )
 def test_BE가_거절하는_값은_출력_오류(label: str, mutate):
     with pytest.raises(ChartOutputError, match="채보 JSON 검증 실패"):
         validate_chart(_broken(mutate), 3000)
+
+
+def test_빠르기_변화_목록이_있어도_통과():
+    chart = _broken(lambda c: None)
+    timing = chart["charts"][0]["timing"]
+    timing.update(
+        ppq=480,
+        tempoMap=[{"tick": 0, "bpm": timing["bpm"]}, {"tick": 57600, "bpm": 105.0}],
+        timeSignatureMap=[{"tick": 0, "numerator": 4, "denominator": 4}],
+    )
+    validate_chart(chart, 3000)
