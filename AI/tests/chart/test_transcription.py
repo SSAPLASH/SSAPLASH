@@ -180,9 +180,9 @@ def test_모델_예외는_모델_오류로_감쌈(tmp_path: Path):
     assert not (tmp_path / "out" / CHART_FILENAME).exists()
 
 
-def test_패드_8종이_아니면_출력_오류이고_파일을_안_남김(tmp_path: Path):
+def test_패드_9종이_아니면_출력_오류이고_파일을_안_남김(tmp_path: Path):
     module = _module(_config(tmp_path, label="tom"))
-    with pytest.raises(ChartOutputError, match="패드 8종 밖"):
+    with pytest.raises(ChartOutputError, match="패드 9종 밖"):
         module.transcribe_file(_drums(tmp_path), tmp_path / "out")
     assert not (tmp_path / "out" / CHART_FILENAME).exists()
 
@@ -198,3 +198,11 @@ def test_load_전에_부르면_모델_오류(tmp_path: Path):
     with pytest.raises(ChartModelError, match="load"):
         module.transcribe_file(_drums(tmp_path), tmp_path / "out")
     module.close()
+
+
+def test_노래_파일_채보는_페달을_하이햇으로_합침(tmp_path: Path):
+    module = _module(_config(tmp_path, label="HIHAT_PEDAL"))
+    out = module.transcribe_file(_drums(tmp_path), tmp_path / "out")
+    pads = {n["pad"] for n in out.chart["charts"][0]["notes"]}
+    assert pads == {"HIHAT"}
+    assert out.notes_by_pad["HIHAT"] == len(HITS) and out.notes_by_pad["HIHAT_PEDAL"] == 0

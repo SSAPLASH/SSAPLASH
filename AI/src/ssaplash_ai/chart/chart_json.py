@@ -17,7 +17,7 @@ import math
 
 import numpy as np
 
-from ssaplash_ai.bench.datasets.pads import SCORED_PADS
+from ssaplash_ai.bench.datasets.pads import PADS
 from ssaplash_ai.chart.config import ORIGIN_MODES
 from ssaplash_ai.chart.errors import ChartOutputError
 from ssaplash_ai.chart.tempo import TempoEstimate
@@ -41,17 +41,19 @@ ORIGIN_ALIGN_WINDOW_MS = 60.0
 # 쓸 노트가 이보다 적으면 보정하지 않음
 ORIGIN_ALIGN_MIN_NOTES = 16
 
-# BE 결과 검증이 받는 패드 8종. 정답·채점용 PADS에는 HIHAT_PEDAL이 있지만 채보 출력에서는 내지 않음
-_PAD_ORDER = {pad: i for i, pad in enumerate(SCORED_PADS)}
+# BE 결과 검증이 받는 패드 9종(HIHAT_PEDAL 포함). 같은 시각 노트는 이 순서로 정렬
+_PAD_ORDER = {pad: i for i, pad in enumerate(PADS)}
 
 
 def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
-    """타격 표(HITS_DTYPE) → notes 목록. 패드 8종 밖의 값(거친 라벨 tom·cymbal)이 있으면 ChartOutputError."""
+    """타격 표(HITS_DTYPE) → notes 목록. 패드 9종 밖의 값(거친 라벨 tom·cymbal)이 있으면 ChartOutputError."""
     rows: set[tuple[int, str, int]] = set()
     for row in hits:
         pad = str(row["pad"])
         if pad not in _PAD_ORDER:
-            raise ChartOutputError(f"패드 8종 밖의 값이 나옴: {pad} (채보 모델이 8패드를 내야 함)")
+            raise ChartOutputError(
+                f"패드 9종 밖의 값이 나옴: {pad} (채보 모델이 9패드 안에서 내야 함)"
+            )
         time_ms = min(max(int(round(float(row["time_sec"]) * 1000)), 0), duration_ms)
         rows.add((time_ms, pad, int(row["velocity"])))
     # 같은 시각·같은 패드는 세기가 큰 것 하나만
@@ -194,7 +196,7 @@ def validate_chart(chart: dict, duration_ms: int) -> None:
             f"timeMs는 0~{duration_ms} 정수이고 오름차순: {time_ms!r}",
         )
         previous = time_ms
-        _require(note.get("pad") in _PAD_ORDER, f"pad는 8종 중 하나: {note.get('pad')!r}")
+        _require(note.get("pad") in _PAD_ORDER, f"pad는 9종 중 하나: {note.get('pad')!r}")
         if "velocityHint" in note:
             v = note["velocityHint"]
             _require(_is_int(v) and 0 <= v <= 127, f"velocityHint는 0~127 정수: {v!r}")
@@ -274,8 +276,8 @@ def _validate_tempo_map(timing: dict) -> None:
 
 
 def notes_by_pad(chart: dict) -> dict[str, int]:
-    """패드별 노트 수. 패드 8종 순서, 0개인 패드도 포함."""
-    counts = dict.fromkeys(SCORED_PADS, 0)
+    """패드별 노트 수. 패드 9종 순서, 0개인 패드도 포함."""
+    counts = dict.fromkeys(PADS, 0)
     for note in chart["charts"][0]["notes"]:
         counts[note["pad"]] += 1
     return counts
