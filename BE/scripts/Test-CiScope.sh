@@ -76,13 +76,13 @@ check() {
     printf 'PASS %s: %s\n' "$name" "$actual"
 }
 
-check preset SELECT:1001000011 preset mr
-check preset-test SELECT:1001000011 preset-test mr
-check recording SELECT:0101000011 recording mr
-check telemetry SELECT:0010000011 telemetry mr
-check song SELECT:0101111111 song mr
-check multi SELECT:1101000011 multi mr
-check spaces SELECT:1001000011 spaces mr
+check preset FAST preset mr
+check preset-test FAST preset-test mr
+check recording FAST recording mr
+check telemetry FAST telemetry mr
+check song FAST song mr
+check multi FAST multi mr
+check spaces FAST spaces mr
 check docs NONE docs mr
 check fe NONE fe mr
 check fe-target NONE fe fe-target
@@ -97,7 +97,7 @@ check unavailable-base FULL preset missing-base
 check main-target FULL preset main-target
 check develop-source FULL preset develop-source
 check merged-result FULL preset merged
-check develop-push SELECT:1001000011 preset push
+check develop-push FAST preset push
 check first-push FULL preset zero-before
 check main-push FULL preset main-push
 
@@ -110,19 +110,21 @@ EOF
 chmod +x "$tmp/runner/gradlew"
 cd "$tmp/runner"
 export CI_CAPTURE="$tmp/args"
-printf '%s\n' 'SELECT:1001000011' > .ci-scope
+printf '%s\n' FAST > .ci-scope
 sh scripts/CiScope.sh test >/dev/null
-grep -Fxq 'com.ssafy.airdrum.preset.*' "$CI_CAPTURE"
-grep -Fxq 'com.ssafy.airdrum.play.*' "$CI_CAPTURE"
-grep -Fxq 'com.ssafy.airdrum.withdrawal.*' "$CI_CAPTURE"
-! grep -Fxq 'com.ssafy.airdrum.song.*' "$CI_CAPTURE"
+grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
+grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
+[ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
 ! sh scripts/CiScope.sh midi
 ! sh scripts/CiScope.sh timescale
-printf '%s\n' 'SELECT:0101111111' > .ci-scope
-sh scripts/CiScope.sh midi
-! sh scripts/CiScope.sh timescale
-printf '%s\n' 'SELECT:0010000011' > .ci-scope
-sh scripts/CiScope.sh timescale
+sh scripts/CiScope.sh benchmark >/dev/null
+grep -Fxq -- --no-build-cache "$CI_CAPTURE"
+grep -Fxq clean "$CI_CAPTURE"
+grep -Fxq test "$CI_CAPTURE"
+grep -Fxq bootJar "$CI_CAPTURE"
+[ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
+grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
+grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
 printf '%s\n' 'invalid' > .ci-scope
 [ "$(sh scripts/CiScope.sh mode)" = FULL ]
 sh scripts/CiScope.sh midi
