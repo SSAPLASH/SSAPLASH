@@ -60,6 +60,14 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// 컴파일 결과만 캐시하고 테스트 결과는 복원하지 않는다. CI에서는 매번 테스트를 실행한다.
+tasks.withType(Test).configureEach {
+	outputs.cacheIf { false }
+	if (System.getenv('CI') == 'true') {
+		outputs.upToDateWhen { false }
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 	// Windows Runner의 DB 연결 경로를 IPv4로 고정해 localhost·IPv6 환경 차이를 줄인다.
