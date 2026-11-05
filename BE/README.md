@@ -765,12 +765,25 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 `@WebMvcTest` 슬라이스에는 우리 Security 체인이 없고 Boot 기본 체인이 붙으므로, 인증과 무관한 슬라이스는
 `@AutoConfigureMockMvc(addFilters = false)`로 필터를 뺀다. 이 경우 로그에 "generated security password"가 나오지만 슬라이스에만 해당한다.
 
-GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
-통합 브랜치 파이프라인에서 실행된다. 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와
-`eclipse-temurin:21-jdk`를 사용하며 `./gradlew --no-daemon test`, `./gradlew --no-daemon bootJar`를 실행한다.
-필수 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
-필수 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
-`./gradlew --no-daemon timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
+GitLab의 `be-test`, `be-build`는 BE·DB 문서·인프라·CI 등 공통 파일이 바뀌는 MR과 기존 workflow가 허용하는
+통합 브랜치 파이프라인에서 실행된다. 열린 MR이 있는 `develop-BE` push의 중복 파이프라인은 만들지 않으며,
+해당 브랜치에서 main을 대상으로 하는 MR은 변경 경로와 무관하게 모든 BE 필수 검사를 실행한다. 일반 MR과
+`develop-BE` push는 `be-test-scope`가 실제 이전 커밋과 현재 커밋의 Git diff를 비교해 관련 테스트와 전문 검사를 고른다.
+`preset`, `recording`, `telemetry`는 각각 연관된 연주·탈퇴·DB 검사를 함께 실행하고, 채보·음원·연주·리포트·악보는
+연결된 영역을 넓게 검사한다. 각 도메인의 테스트 변경도 같은 도메인의 전체 관련 검사를 실행한다. 루트 README·BE README·
+컨벤션 문서 또는 FE·AI·EMB만 변경되면 BE 검사를 생략한다. 다른 문서는 분류할 수 없으면 전체 검사한다. 분류 결과와
+실제 선택 패키지는 job 로그에 표시된다.
+공통 인증·회원·탈퇴·스토리지·설정·DB·의존성·CI, 알 수 없는 파일, 삭제·이름 변경, diff 기준 부재는 전체 검사로
+처리한다. `Docs/API/examples`는 테스트 입력이므로 문서 전용으로 취급하지 않는다. main push, main 대상 MR,
+develop-BE 출발 MR, merged-result/merge-train과 기타 수동 실행도 전체 검사다. 범위 artifact가 없거나 올바르지 않으면
+전체 검사로 처리한다. MIDI 관련 변경에서 실제 FluidSynth 렌더를, 텔레메트리 관련 변경에서 Timescale 검사를 실행하며
+전체 검사에서는 둘 다 실행한다. Timescale service는 무관한 job도 컨테이너가 먼저 기동될 수 있다.
+MR을 만들기 전의 push 파이프라인은 소급하여 제거하지 않는다. main 배포·예약 보정 규칙은 유지한다.
+현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와 `eclipse-temurin:21-jdk`를 사용한다.
+Gradle에 `--build-cache`를 사용해 컴파일 결과를 재사용할 수 있지만 테스트 결과는 캐시하지 않고 CI에서 매번 실행한다.
+MIDI 관련 또는 전체 검사에서 필수인 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
+텔레메트리 관련 또는 전체 검사에서 필수인 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
+`./gradlew --no-daemon --build-cache timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
 사용하고 기존 루프백·테스트 JVM IPv4 설정을 유지한다. 로컬 통과와 실제 CI 통과는 구분한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
 
