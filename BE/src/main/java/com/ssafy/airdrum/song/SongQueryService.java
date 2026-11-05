@@ -31,11 +31,23 @@ public class SongQueryService {
 				versions.summaries(rows.stream().map(SongRepository.View::getId).toList(), userId)
 						.stream().collect(Collectors.groupingBy(ChartVersionRepository.Summary::getSongId));
 		var coverUrls=covers.forSongs(userId,rows);
-		var items = rows.stream().map(s -> new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
+		var items = rows.stream().map(s -> summary(s, summaries, coverUrls)).toList();
+		return PageResponse.of(items, page, size, total);
+	}
+	/** 추천이 곡 목록과 같은 모양의 요약을 쓰도록, 보이는 곡만 주어진 순서대로 돌려준다(없거나 못 보는 곡은 건너뜀). */
+	public List<SongSummary> byIds(long userId, List<Long> ids) {
+		var rows = ids.stream().map(id -> songs.visible(id, userId)).flatMap(java.util.Optional::stream).toList();
+		if (rows.isEmpty()) return List.of();
+		Map<Long, List<ChartVersionRepository.Summary>> summaries = versions.summaries(rows.stream().map(SongRepository.View::getId).toList(), userId)
+				.stream().collect(Collectors.groupingBy(ChartVersionRepository.Summary::getSongId));
+		var coverUrls = covers.forSongs(userId, rows);
+		return rows.stream().map(s -> summary(s, summaries, coverUrls)).toList();
+	}
+	private SongSummary summary(SongRepository.View s, Map<Long, List<ChartVersionRepository.Summary>> summaries, Map<Long, String> coverUrls) {
+		return new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
 				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
 				distinct(summaries.getOrDefault(s.getId(), List.of())).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
-				s.getCreatedAt(),coverUrls.get(s.getId()),s.getSongLevel(),failure(s))).toList();
-		return PageResponse.of(items, page, size, total);
+				s.getCreatedAt(), coverUrls.get(s.getId()), s.getSongLevel(), failure(s));
 	}
 	public SongDetail detail(long userId, long songId) {
 		access.requireActive(userId);
