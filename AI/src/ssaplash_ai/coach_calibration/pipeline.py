@@ -58,7 +58,14 @@ def run_calibration(
     reeval_config: RunConfig = REEVAL_CONFIG,
     base: Thresholds = DEFAULT_THRESHOLDS,
     today: str | None = None,
+    since: str | None = None,
+    modes: frozenset[str] | None = None,
 ) -> RunOutcome:
+    """`since`(YYYY-MM-DD)는 그 날짜 이후(`played_date`)의 플레이만, `modes`는 고른 모드만 쓴다. 둘 다 없으면 전부다.
+
+    `since`는 FE가 기록을 바로잡은 날 이전의 로그를 빼는 용도다(예: 같은 패드 노트가 촘촘할 때 오차 부호가 뒤집히던
+    매칭 오류를 고친 배포). 뷰에는 앱 버전이 없어 날짜로만 거를 수 있다. 날짜를 알 수 없는 세션은 `since`가 있으면 뺀다.
+    """
     # 열 검사를 통과해야만 행을 읽는다. 허용 밖 열이 있으면 여기서 예외가 나고 아무것도 기록하지 않는다.
     sessions = read_sessions(source)
     view_count = len(sessions)
@@ -71,7 +78,8 @@ def run_calibration(
     if not decision.run:
         return RunOutcome(STATUS_SKIPPED, decision.reason, view_count, decision.new_sessions)
 
-    filtered = filters.filter_sessions(sessions)
+    selected = select_sessions(sessions, since=since, modes=modes)
+    filtered = filters.filter_sessions(selected)
     profiles = profile.build_profiles(filtered)
     report = build_report(filtered.drum, policy, base)
 
@@ -88,6 +96,7 @@ def run_calibration(
     sample_status = INSUFFICIENT_SAMPLE if report.status == INSUFFICIENT_SAMPLE else OK
     day = today or date_type.today().isoformat()
     counts = filtered.counts()
+    counts["PRE_SELECTED_OUT"] = len(sessions) - len(selected)
 
     metrics = register.metrics_from_records(profile_records, candidate_record)
     for key, value in counts.items():
@@ -112,6 +121,8 @@ def run_calibration(
         ),
         "thresholds": json.dumps(_threshold_values(base), sort_keys=True),
         "countDecreased": decision.decreased,
+        "since": since or "",
+        "modes": ",".join(sorted(modes)) if modes else "ALL",
     }
     tags = {
         "approval": approval,
@@ -162,6 +173,20 @@ def run_calibration(
         approval=approval,
         run_id=run_id,
     )
+
+
+def select_sessions(
+    sessions: list[Any], *, since: str | None = None, modes: frozenset[str] | None = None
+) -> list[Any]:
+    """날짜(`since` 이후)와 모드로 세션을 고른다. 이상치 제외(`filters`)보다 앞서 적용한다."""
+    selected = []
+    for s in sessions:
+        if modes is not None and s.mode not in modes:
+            continue
+        if since is not None and (s.played_date is None or str(s.played_date) < since):
+            continue
+        selected.append(s)
+    return selected
 
 
 def _threshold_values(base: Thresholds) -> dict[str, Any]:
