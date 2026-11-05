@@ -81,6 +81,8 @@ _PRAISE_WORDS = (
 )
 _EMOJI = re.compile("[\U0001f000-\U0001ffff☀-➿️‍]")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# 탭·줄바꿈 등 제어 문자(DEL 포함). BE가 총평에서 거절하는 문자와 같은 범위
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
 # 모델이 답에 섞어 내보내는 전용 토큰과 생각 블록(EXAONE `[|endofturn|]`, Qwen `<|im_end|>`·`<think>`, Gemma `<end_of_turn>`)
 _SPECIAL_TOKENS = re.compile(
     r"<think>.*?</think>|\[\|[^\]\n]{0,30}\|\]|<\|[^>\n]{0,30}\|>|</?think>|</?(?:start|end)_of_turn>",
@@ -302,8 +304,9 @@ def clean(text: str) -> str:
     text = _EMOJI.sub("", text)
     # **굵게**·`코드` 같은 강조 표시는 문장 뜻을 바꾸지 않으니 표시만 지운다(문장 전체를 버리지 않는다)
     text = re.sub(r"[*`]+", "", text)
-    text = re.sub(r"\s*\n+\s*", " ", text)
-    return re.sub(r"[ \t]{2,}", " ", text).strip()
+    # 줄바꿈·탭 같은 제어 문자는 하나도 남기지 않는다(BE는 제어 문자가 있는 총평을 400으로 거절한다). 탭 한 개도 포함
+    text = _CONTROL.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def check(text: str, facts: NarrativeFacts) -> list[str]:
@@ -314,6 +317,8 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
         return ["빈 문장"]
     if len(body) > MAX_NARRATIVE_CHARS:
         problems.append(f"{MAX_NARRATIVE_CHARS}자를 넘음({len(body)}자)")
+    if _CONTROL.search(body):
+        problems.append("제어 문자(탭·줄바꿈 등)가 있음")
     if "\n" in body:
         problems.append("한 문단이 아님(줄바꿈)")
     if _MARKUP.search(body):
