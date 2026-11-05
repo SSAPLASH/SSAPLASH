@@ -60,7 +60,10 @@ uv run python -m ssaplash_ai.coach_calibration.cli
 **`--since`를 쓰는 때.** FE가 기록을 바로잡은 배포일 이전의 로그를 빼기 위해서다. 예: 같은 패드 노트가 촘촘할 때 타격이 뒤 노트에 붙어
 오차 부호가 뒤집히고 앞 노트가 MISS가 되던 매칭 오류(FE `[S15P31A307-290]`)를 고치기 전의 플레이는 `TIMING_*`·`MISS_CLUSTER`가
 부풀려져 있다. 비식별 뷰에는 앱 버전이 없어 **날짜로만** 거른다. 배포일은 FE에게 확인해 적용한다. 빠진 세션 수는 MLflow에
-`count/PRE_SELECTED_OUT`으로, 선택은 params `since`·`modes`로 남는다.
+`count/PRE_SELECTED_OUT`으로, 선택은 params `since`·`modes`와 `summary.md`로 남고, run 이름에도 붙는다(예: `calib-2026-11-05-n60-since2026-10-20-RHYTHM`).
+
+**일부만 고른 실행은 다음 실행의 기준이 되지 않는다.** `viewSessionCount`는 고르기 전의 전체 수라서, 기준으로 잡으면 다음 정기 실행이 "새 세션 부족"으로 건너뛴다.
+그래서 "새로 쌓였는지" 판단은 `--since`·`--mode` 없이 돈 최근 실행을 기준으로 한다.
 
 끝에 **한 줄 상태**를 표준 출력에 남긴다. 알림이 이 줄을 본다.
 
@@ -138,7 +141,7 @@ what-if는 (격자 21점 × 7그룹) × 세션 수번의 분석이라 세션이 
 | 종류 | 이름 |
 | --- | --- |
 | 태그 | `approval`, `sampleStatus`(`OK`/`INSUFFICIENT_SAMPLE`), `runDecision`, `analyzerVersion`, `filterVersion`, `profileVersion`, `candidatesVersion`, `dataSnapshot`(`마지막 날짜:세션 수`) |
-| 파라미터 | `dataMaxDate`, `viewSessionCount`(다음 실행의 기준), `newSessions`, `minNew`, `validDrumSessions`, `validKeyboardSessions`, `maxChange`, `minSample`, `policyTargets`, `thresholds`(실행 때의 임계값 전체), `countDecreased` |
+| 파라미터 | `dataMaxDate`, `viewSessionCount`(다음 실행의 기준), `newSessions`, `minNew`, `validDrumSessions`, `validKeyboardSessions`, `maxChange`, `minSample`, `policyTargets`, `thresholds`(실행 때의 임계값 전체), `countDecreased`, `since`, `modes` |
 | 지표 | `flagRate/{DRUM\|KEYBOARD}/{ANY\|pattern}`, `dist/{그룹}/{이름}/q05…q95`(이름: `sessionNotes`, `goodMs`, `missRate`, `strayRate`, `deltaNorm`, `sessionDeltaMean`, `sessionDeltaStd`, `velocity`, `handRatio`), `sessions/{그룹}`, `notes/{그룹}`, `meanSegments/{그룹}`, `current/{TIMING 등}`, `threshold/{…}`, `candidateThreshold/{…}`, `candidateRate/{…}`, `excluded/{이유}`, `count/{TOTAL\|KEPT_DRUM\|KEPT_KEYBOARD}`, `reeval/worstRecallDrop`, `reeval/worstFpRise` |
 | 산출물 | `summary.md`(사람이 읽는 요약), `profile.json`, `candidates.json`(what-if 포함), `reeval.json`(후보가 있을 때) |
 

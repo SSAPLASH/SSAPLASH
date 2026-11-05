@@ -149,13 +149,15 @@ def run_calibration(
                 reeval=reeval_record,
                 policy_targets={k: list(v) for k, v in policy.targets.items()},
                 approval=approval,
+                since=since,
+                modes=modes,
             ),
             profile_records=profile_records,
             candidate_record=candidate_record,
             reeval_record=reeval_record,
         )
         run_id = register.record_run(
-            run_name=f"calib-{day}-n{len(filtered.drum)}",
+            run_name=_run_name(day, len(filtered.drum), since, modes),
             params=params,
             tags=tags,
             metrics=metrics,
@@ -173,6 +175,16 @@ def run_calibration(
         approval=approval,
         run_id=run_id,
     )
+
+
+def _run_name(day: str, valid: int, since: str | None, modes: frozenset[str] | None) -> str:
+    """일부만 고른 실행은 이름만 봐도 구분되게 범위를 붙인다."""
+    name = f"calib-{day}-n{valid}"
+    if since:
+        name += f"-since{since}"
+    if modes:
+        name += "-" + "+".join(sorted(modes))
+    return name
 
 
 def select_sessions(
