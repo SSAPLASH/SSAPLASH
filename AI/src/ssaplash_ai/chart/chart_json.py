@@ -214,6 +214,63 @@ def validate_chart(chart: dict, duration_ms: int) -> None:
         isinstance(signature, str) and 0 < len(signature) <= TIME_SIGNATURE_MAX,
         f"timeSignature는 {TIME_SIGNATURE_MAX}자 이하: {signature!r}",
     )
+    _validate_tempo_map(timing)
+
+
+def _validate_tempo_map(timing: dict) -> None:
+    """빠르기가 바뀌는 곡의 ppq·tempoMap·timeSignatureMap. BE ChartDocumentReader.timing과 같은 조건.
+    셋 다 선택 필드이고, 있으면 tempoMap 첫 값은 tick 0·bpm == timing.bpm, tick은 계속 커짐."""
+    if "ppq" in timing:
+        _require(
+            _is_int(timing["ppq"]) and timing["ppq"] > 0, f"ppq는 양의 정수: {timing['ppq']!r}"
+        )
+    if "tempoMap" in timing:
+        tempo_map = timing["tempoMap"]
+        _require(
+            isinstance(tempo_map, list) and len(tempo_map) > 0, "tempoMap은 비어 있지 않은 목록"
+        )
+        previous = -1
+        for t in tempo_map:
+            tick, bpm = t.get("tick"), t.get("bpm")
+            _require(
+                _is_int(tick)
+                and tick > previous
+                and isinstance(bpm, (int, float))
+                and not isinstance(bpm, bool)
+                and math.isfinite(bpm)
+                and bpm > 0,
+                f"tempoMap 항목은 커지는 tick과 양수 bpm: {t!r}",
+            )
+            previous = tick
+        _require(
+            tempo_map[0]["tick"] == 0 and tempo_map[0]["bpm"] == timing["bpm"],
+            "tempoMap 첫 항목은 tick 0, bpm은 timing.bpm과 같음",
+        )
+    if "timeSignatureMap" in timing:
+        sig_map = timing["timeSignatureMap"]
+        _require(
+            isinstance(sig_map, list) and len(sig_map) > 0, "timeSignatureMap은 비어 있지 않은 목록"
+        )
+        previous = -1
+        for t in sig_map:
+            tick, num, den = t.get("tick"), t.get("numerator"), t.get("denominator")
+            _require(
+                _is_int(tick)
+                and tick > previous
+                and _is_int(num)
+                and num > 0
+                and _is_int(den)
+                and den > 0
+                and den & (den - 1) == 0,
+                f"timeSignatureMap 항목은 커지는 tick, 양수 박자, 2의 거듭제곱 음표: {t!r}",
+            )
+            previous = tick
+        first = sig_map[0]
+        _require(
+            first["tick"] == 0
+            and f"{first['numerator']}/{first['denominator']}" == timing["timeSignature"],
+            "timeSignatureMap 첫 항목은 tick 0, timeSignature와 같음",
+        )
 
 
 def notes_by_pad(chart: dict) -> dict[str, int]:
