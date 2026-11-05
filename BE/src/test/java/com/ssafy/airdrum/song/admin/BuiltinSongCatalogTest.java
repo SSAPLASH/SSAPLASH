@@ -80,6 +80,28 @@ class BuiltinSongCatalogTest {
 	}
 
 	@Test
+	void 저장소_카탈로그에_AI_공용_곡_31곡이_곡별_offsetMs와_함께_있다() {
+		// 261번: AI(245)가 드럼리스 음원에 맞춘 MIDI 31곡. offsetMs는 AI 곡별_첫박.csv 값이다.
+		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/");
+		var seeds = java.util.Set.of("기본 8비트", "8비트 + 필인", "라이드 16비트");
+		var added = entries.stream().filter(e -> !seeds.contains(e.title())).toList();
+		assertThat(entries).hasSize(34);
+		assertThat(added).hasSize(31);
+		assertThat(added).extracting(BuiltinSongCatalog.Entry::title, BuiltinSongCatalog.Entry::artist, BuiltinSongCatalog.Entry::offsetMs)
+				.contains(
+						org.assertj.core.groups.Tuple.tuple("Billie Jean", "Michael Jackson", 1226),
+						org.assertj.core.groups.Tuple.tuple("Welcome To The Black Parade", "My Chemical Romance", 25800),
+						org.assertj.core.groups.Tuple.tuple("거울", "국카스텐", 273),
+						org.assertj.core.groups.Tuple.tuple("TOMBOY", "혁오", 1113),
+						org.assertj.core.groups.Tuple.tuple("EVERYTHING", "검정치마", 231),
+						org.assertj.core.groups.Tuple.tuple("고민중독", "QWER", 1084),
+						org.assertj.core.groups.Tuple.tuple("Congratulations", "DAY6", 996),
+						org.assertj.core.groups.Tuple.tuple("Welcome to the Show", "DAY6", 1549));
+		for (var e : added)
+			assertThat(e.license()).as(e.title()).isEqualTo("원곡 " + e.artist() + ", 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용");
+	}
+
+	@Test
 	void 오류_메시지에_원인_곡을_적는다() {
 		assertThatThrownBy(() -> BuiltinSongCatalog.parse(
 				"[{\"title\":\"곡 C\",\"license\":\"자작\",\"midi\":\"없는.mid\"}]".getBytes(StandardCharsets.UTF_8), FILES::get))
