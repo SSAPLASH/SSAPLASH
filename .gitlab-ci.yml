@@ -97,7 +97,7 @@ be-test:
   stage: test
   script:
     - if [ "$(sh scripts/CiScope.sh mode)" = NONE ]; then echo "BE 변경이 없어 검사를 생략합니다."; exit 0; fi
-    - . ./scripts/Prepare-AudioProbe.sh
+    - if [ "$(sh scripts/CiScope.sh mode)" = FULL ]; then . ./scripts/Prepare-AudioProbe.sh; fi
     - sh scripts/CiScope.sh test
   artifacts:
     when: always
@@ -118,6 +118,27 @@ be-build:
       - BE/build/libs/app.jar
     expire_in: 1 week
 
+# 개발 MR에서만 필요할 때 실행하는 비차단 cold 컴파일·FAST 측정이다.
+be-fast-benchmark:
+  extends: .be-job
+  stage: build
+  dependencies: []
+  rules:
+    - !reference [.calibration-guard, rules]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop-BE"
+      when: manual
+      allow_failure: true
+  script:
+    - sh scripts/CiScope.sh benchmark
+  artifacts:
+    when: always
+    reports:
+      junit: BE/build/test-results/test/TEST-*.xml
+    paths:
+      - BE/build/reports/tests/test/
+      - BE/build/test-results/test/
+    expire_in: 1 week
+
 # 두 실행 JAR은 각각 별도 아티팩트로 보관해 업로드 크기 제한을 피한다.
 be-midi-worker-build:
   extends: .be-job
@@ -128,7 +149,7 @@ be-midi-worker-build:
       sh scripts/CiScope.sh midi
       result=$?
       set -e
-      case "$result" in 0) ;; 1) echo "MIDI 관련 변경이 없어 워커 빌드를 생략합니다."; exit 0;; *) exit "$result";; esac
+      case "$result" in 0) ;; 1) echo "빠른 검사 범위에서는 워커 빌드를 생략합니다."; exit 0;; *) exit "$result";; esac
     - ./gradlew --no-daemon --build-cache bootMidiWorkerJar
   artifacts:
     paths:
@@ -146,7 +167,7 @@ be-midi-render-test:
       sh scripts/CiScope.sh midi
       result=$?
       set -e
-      case "$result" in 0) ;; 1) echo "MIDI 합성 관련 변경이 없어 렌더 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
+      case "$result" in 0) ;; 1) echo "빠른 검사 범위에서는 렌더 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
     - PREPARE_AUDIO_FFMPEG=true; export PREPARE_AUDIO_FFMPEG; . ./scripts/Prepare-AudioProbe.sh
     - . ./scripts/Prepare-MidiRenderer.sh
     - MIDI_TEST_FFMPEG="$AUDIO_FFMPEG_PATH"; MIDI_TEST_FFPROBE="$AUDIO_FFPROBE_PATH"; export MIDI_TEST_FFMPEG MIDI_TEST_FFPROBE
@@ -180,7 +201,7 @@ be-timescale-test:
       sh scripts/CiScope.sh timescale
       result=$?
       set -e
-      case "$result" in 0) ;; 1) echo "Timescale 관련 변경이 없어 확장 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
+      case "$result" in 0) ;; 1) echo "빠른 검사 범위에서는 Timescale 검사를 생략합니다."; exit 0;; *) exit "$result";; esac
     # service가 연결을 받을 때까지 최대 60초 기다린다.
     - bash -c 'for i in $(seq 1 60); do (echo > /dev/tcp/timescaledb/5432) 2>/dev/null && exit 0; sleep 1; done; echo "TimescaleDB가 60초 안에 준비되지 않았습니다."; exit 1'
     - ./gradlew --no-daemon --build-cache timescaleTest

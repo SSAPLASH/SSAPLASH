@@ -768,21 +768,21 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 GitLab의 `be-test`, `be-build`는 BE·DB 문서·인프라·CI 등 공통 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 열린 MR이 있는 `develop-BE` push의 중복 파이프라인은 만들지 않으며,
 해당 브랜치에서 main을 대상으로 하는 MR은 변경 경로와 무관하게 모든 BE 필수 검사를 실행한다. 일반 MR과
-`develop-BE` push는 `be-test-scope`가 실제 이전 커밋과 현재 커밋의 Git diff를 비교해 관련 테스트와 전문 검사를 고른다.
-`preset`, `recording`, `telemetry`는 각각 연관된 연주·탈퇴·DB 검사를 함께 실행하고, 채보·음원·연주·리포트·악보는
-연결된 영역을 넓게 검사한다. 각 도메인의 테스트 변경도 같은 도메인의 전체 관련 검사를 실행한다. 루트 README·BE README·
-컨벤션 문서 또는 FE·AI·EMB만 변경되면 BE 검사를 생략한다. 다른 문서는 분류할 수 없으면 전체 검사한다. 분류 결과와
-실제 선택 패키지는 job 로그에 표시된다.
+`develop-BE` push는 `be-test-scope`가 이전 커밋과 현재 커밋의 Git diff를 비교한다. 일반 기능 변경은 FAST로 전체
+소스와 테스트를 컴파일하고 인증·입력·채보·집계의 고정 단위 테스트 13개 클래스와 앱 JAR 빌드를 실행한다.
+FAST는 서버·DB·WebSocket·외부 프로세스 통합 검사를 실행하지 않으므로 이 검사는 아래 FULL에서 확인해야 한다.
+루트 README·BE README·컨벤션 문서 또는 FE·AI·EMB만 변경되면 BE 검사를 생략한다. 분류 결과는 job 로그에 표시된다.
 공통 인증·회원·탈퇴·스토리지·설정·DB·의존성·CI, 알 수 없는 파일, 삭제·이름 변경, diff 기준 부재는 전체 검사로
 처리한다. `Docs/API/examples`는 테스트 입력이므로 문서 전용으로 취급하지 않는다. main push, main 대상 MR,
 develop-BE 출발 MR, merged-result/merge-train과 기타 수동 실행도 전체 검사다. 범위 artifact가 없거나 올바르지 않으면
-전체 검사로 처리한다. MIDI 관련 변경에서 실제 FluidSynth 렌더를, 텔레메트리 관련 변경에서 Timescale 검사를 실행하며
-전체 검사에서는 둘 다 실행한다. Timescale service는 무관한 job도 컨테이너가 먼저 기동될 수 있다.
+전체 검사로 처리한다. FULL에서는 실제 FluidSynth 렌더·Timescale·워커 JAR 검사도 실행한다. FAST에서도 Timescale
+service는 job이 실행되기 전에 컨테이너가 먼저 기동될 수 있다.
 MR을 만들기 전의 push 파이프라인은 소급하여 제거하지 않는다. main 배포·예약 보정 규칙은 유지한다.
 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와 `eclipse-temurin:21-jdk`를 사용한다.
 Gradle에 `--build-cache`를 사용해 컴파일 결과를 재사용할 수 있지만 테스트 결과는 캐시하지 않고 CI에서 매번 실행한다.
-MIDI 관련 또는 전체 검사에서 필수인 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
-텔레메트리 관련 또는 전체 검사에서 필수인 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
+develop-BE 대상 MR에서 수동으로 실행할 수 있는 비차단 `be-fast-benchmark`는 컴파일 캐시를 끄고 clean·FAST 테스트·앱 JAR을 한 번에 측정한다. 필수 전체 검사를 대체하지 않는다.
+전체 검사에서 필수인 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
+전체 검사에서 필수인 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
 `./gradlew --no-daemon --build-cache timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
 사용하고 기존 루프백·테스트 JVM IPv4 설정을 유지한다. 로컬 통과와 실제 CI 통과는 구분한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
@@ -1057,7 +1057,7 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 
 - **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
 - **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
-- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 MR CI가 먼저 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
+- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 전체 검사 CI가 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
 - **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
 - **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
 - **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
