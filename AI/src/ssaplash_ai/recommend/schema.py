@@ -111,7 +111,7 @@ FILES = {
     "song_meta": FileSpec(
         "song_meta.csv",
         ("song_id",),
-        ("genre", "sub_genres", "mood", "energy", "language", "drum_style"),
+        ("genre", "sub_genres", "mood", "energy", "language", "drum_style", "release_year"),
         must_exist=False,
     ),
     "weak_summary": FileSpec(
