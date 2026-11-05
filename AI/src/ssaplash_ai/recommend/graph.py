@@ -191,6 +191,8 @@ def song_features(
                 f[f"language:{row.language}"] = total
             if not pd.isna(row.energy):
                 f[f"energy:{int(row.energy)}"] = total
+            if not pd.isna(row.release_year):
+                f[f"era:{int(row.release_year) // 10 * 10}"] = total  # 연대 구간
         out[song] = f
     return out
 

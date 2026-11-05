@@ -359,6 +359,14 @@ def _references(
         raise _bad(file, "chart_id", "채보가 다른 곡의 것입니다(chart_features의 song_id와 다름)")
 
 
+def _year(text: str) -> int | None:
+    if text == "":
+        return None
+    if re.fullmatch(r"(19|20)\d\d", text) is None:
+        raise _bad("song_meta", "release_year", "네 자리 연도(1900~2099)여야 합니다(모르면 비움)")
+    return int(text)
+
+
 def _energy(text: str) -> int | None:
     if text == "":
         return None
@@ -373,7 +381,16 @@ def _split_list(text: str) -> tuple[str, ...]:
 
 def _song_meta(df: pd.DataFrame, song_ids: set[int]) -> pd.DataFrame:
     f = "song_meta"
-    columns = ["song_id", "genre", "sub_genres", "mood", "energy", "language", "drum_style"]
+    columns = [
+        "song_id",
+        "genre",
+        "sub_genres",
+        "mood",
+        "energy",
+        "language",
+        "drum_style",
+        "release_year",
+    ]
     if df.empty:
         return pd.DataFrame({c: pd.Series(dtype="object") for c in columns})
     out = pd.DataFrame({"song_id": _int(df, "song_id", f, minimum=1)})
@@ -408,6 +425,7 @@ def _song_meta(df: pd.DataFrame, song_ids: set[int]) -> pd.DataFrame:
     out["energy"] = [_energy(t) for t in column("energy")]
     out["language"] = language
     out["drum_style"] = lists("drum_style", S.DRUM_STYLES, 3)
+    out["release_year"] = [_year(t) for t in column("release_year")]
     return out.reset_index(drop=True)
 
 
