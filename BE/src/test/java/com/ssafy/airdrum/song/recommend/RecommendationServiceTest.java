@@ -45,13 +45,16 @@ class RecommendationServiceTest {
 		midVersion = db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?", Long.class, mid);
 	}
 
-	private long builtin(String title, int notes) {
+	private long builtin(String title, int notes) { return builtin(title, notes, "HARD"); }
+	private long builtin(String title, int notes, String difficulty) {
 		long id = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license) VALUES(?,'BUILTIN','READY',100000,'CC0') RETURNING id", Long.class, title);
-		addChart(id, notes);
+		addChart(id, notes, difficulty);
 		return id;
 	}
-	private void addChart(long song, int notes) {
-		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'NORMAL') RETURNING id", Long.class, song);
+	/** 곡 난이도는 HARD 채보로 산정된다(SongLevelService). HARD가 없는 곡은 난이도도, 채보 특징도 없다. */
+	private void addChart(long song, int notes) { addChart(song, notes, "HARD"); }
+	private void addChart(long song, int notes, String difficulty) {
+		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,?) RETURNING id", Long.class, song, difficulty);
 		var json = new StringBuilder("[");
 		for (int i = 0; i < notes; i++) {
 			if (i > 0) json.append(',');
@@ -82,6 +85,14 @@ class RecommendationServiceTest {
 	}
 
 	private java.util.List<Long> songIds(RecommendationResponses.Recommendations r) { return r.items().stream().map(i -> i.song().id()).toList(); }
+
+	@Test void HARD_채보가_없는_곡은_난이도가_산정되지_않아_채보_특징도_추천_후보도_없다() {
+		long noHard = builtin("rec-normal-only", 300, "NORMAL");
+		tx.executeWithoutResult(s -> levels.process(noHard, true));
+		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?", String.class, noHard)).isNull();
+		assertThat(db.queryForObject("SELECT count(*) FROM chart_features f JOIN chart_versions v ON v.id=f.chart_version_id JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", Integer.class, noHard)).isZero();
+		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 10))).doesNotContain(noHard);
+	}
 
 	@Test void 난이도_산정이_커밋되면_채보_특징이_저장되고_같은_값으로_다시_계산해도_중복이_없다() {
 		assertThat(db.queryForObject("SELECT count(*) FROM chart_features WHERE chart_version_id=?", Integer.class, midVersion)).isEqualTo(1);
