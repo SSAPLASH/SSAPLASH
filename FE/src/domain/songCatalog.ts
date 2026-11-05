@@ -11,6 +11,14 @@ export type AccompanimentStatus = 'GENERATING' | 'READY' | 'FAILED' | 'NONE';
 
 const ACCOMPANIMENT_STATUSES: readonly AccompanimentStatus[] = ['GENERATING', 'READY', 'FAILED', 'NONE'];
 
+/** 곡 난이도(메일 CHART-001 곡 난이도 산정 합의 회신 3). 곡 하나에 하나이고 연습 단계(Difficulty)와 다른 값이다 */
+export type SongLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+
+/** 입문 → 고급. 필터 칩 순서 */
+export const SONG_LEVEL_ORDER: readonly SongLevel[] = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
+
+export const SONG_LEVEL_LABEL: Record<SongLevel, string> = { BEGINNER: '입문', INTERMEDIATE: '중급', ADVANCED: '고급' };
+
 export interface SongSummary {
   id: number;
   title: string;
@@ -24,6 +32,8 @@ export interface SongSummary {
   hasAccompaniment: boolean;
   /** 반주 상태. 응답에 없으면 hasAccompaniment로 추정한 값 */
   accompanimentStatus: AccompanimentStatus;
+  /** 곡 난이도. BE가 아직 계산하지 않았거나 모르는 값이면 null */
+  songLevel: SongLevel | null;
   difficulties: Difficulty[];
   createdAt: string;
   /** 커버 이미지 서명 URL. 없으면 null(기본 커버) */
@@ -108,6 +118,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     durationMs: d.durationMs == null ? null : toNumber(d.durationMs),
     hasAccompaniment: d.hasAccompaniment === true,
     accompanimentStatus: accompanimentStatusOf(d),
+    songLevel: songLevelOf(d.songLevel),
     difficulties: sortCharts(((d.difficulties as Difficulty[] | undefined) ?? []).map((difficulty) => ({ difficulty }))).map(
       (x) => x.difficulty,
     ),
@@ -140,6 +151,16 @@ export function accompanimentStatusOf(d: Record<string, unknown>): Accompaniment
   const v = d.accompanimentStatus;
   if (typeof v === 'string' && (ACCOMPANIMENT_STATUSES as readonly string[]).includes(v)) return v as AccompanimentStatus;
   return d.hasAccompaniment === true ? 'READY' : 'NONE';
+}
+
+/** 응답의 곡 난이도. 세 값이 아니거나 없으면(BE 배포 전·미산정) null */
+export function songLevelOf(v: unknown): SongLevel | null {
+  return typeof v === 'string' && (SONG_LEVEL_ORDER as readonly string[]).includes(v) ? (v as SongLevel) : null;
+}
+
+/** 곡 난이도 표기. null이면 「—」 */
+export function songLevelLabel(level: SongLevel | null): string {
+  return level === null ? '—' : SONG_LEVEL_LABEL[level];
 }
 
 /** 내 곡 반주 배지. 채보가 READY인 곡의 생성 중·실패만 보이고, 나머지는 null(배지 없음) */

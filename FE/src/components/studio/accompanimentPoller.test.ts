@@ -14,6 +14,7 @@ const song = (id: number, accompanimentStatus: AccompanimentStatus): SongSummary
   durationMs: 60000,
   hasAccompaniment: accompanimentStatus === 'READY',
   accompanimentStatus,
+  songLevel: null,
   difficulties: [],
   createdAt: '2026-11-03T00:00:00Z',
   coverUrl: null,

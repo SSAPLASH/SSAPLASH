@@ -66,3 +66,14 @@
     width: auto;
   }
 }
+/* 검색 400 + 곡 난이도 칩(Figma 481:30686: gap 8) */
+.play-sp-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+.play-sp-levels {
+  display: flex;
+  gap: var(--space-s);
+}
