@@ -25,6 +25,8 @@ export function reportHit(hit: ResolvedHit, ev: JudgementEvent | null, session: 
     deltaMs: ev ? ev.deltaMs : null,
     songTimeMs: session.songTime(hit.tHit),
   });
+  const c = session.lastContestedMatch;
+  if (c && c.hitId === hit.id) diagTap.publish({ type: 'matchContested', ...c });
 }
 
 interface ActiveSession {
@@ -61,6 +63,7 @@ function sessionBody(a: ActiveSession, phase: 'start' | 'pause' | 'resume' | 'en
           maxCombo: snap.maxCombo,
           counts: snap.counts,
           strayHits: snap.strayHits,
+          contestedHits: snap.contestedHits,
           judgedCount: snap.judgedCount,
         }
       : undefined,

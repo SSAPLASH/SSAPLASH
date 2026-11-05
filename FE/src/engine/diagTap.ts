@@ -13,6 +13,8 @@ export interface DiagSessionSummary {
   counts: Record<Judgement, number>;
   /** 채보에 없는 타격 수 */
   strayHits: number;
+  /** 후보 노트가 둘 이상이었던 타격 수(매칭 경합) */
+  contestedHits?: number;
   judgedCount: number;
 }
 
@@ -32,6 +34,16 @@ export type DiagBody =
       hitPad: PadId | null;
       deltaMs: number | null;
       songTimeMs: number;
+    }
+  /** 타격 하나에 후보 노트가 둘 이상이었던 경우(매칭 경합, G4). 규칙: 기본(가장 이른 노트) / 예외(뒤 노트 PERFECT) */
+  | {
+      type: 'matchContested';
+      hitId: number;
+      songTimeMs: number;
+      pad: PadId;
+      candidates: number[];
+      picked: number;
+      rule: 'earliest' | 'perfect-exception';
     }
   /** 연결된 타격 없이 시간 초과로 MISS가 된 노트 */
   | { type: 'missed'; noteIndex: number; pad: PadId; songTimeMs: number }
