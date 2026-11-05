@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
 import { getSong, listSongs } from '@/api/songs';
-import { BUILTIN_CHARTS, type Chart } from '@/domain/chart';
+import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
 import type { SongDetail, SongScope, SongSummary } from '@/domain/songCatalog';
 
@@ -13,8 +13,7 @@ export type SongsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export const SONGS_SOURCE: SongsSource = import.meta.env.VITE_SONGS_SOURCE === 'builtin' ? 'builtin' : 'api';
 
-/** 내장 채보 인덱스 → 곡·채보 공용 음수 id */
-export const builtinId = (index: number): number => -(index + 1);
+export { builtinId };
 const builtinIndex = (id: number): number => -id - 1;
 
 function builtinChart(id: number): Chart | null {
@@ -32,8 +31,10 @@ function builtinSummary(c: Chart, index: number): SongSummary {
     timeSignature: `${c.beatsPerBar}/4`,
     durationMs: c.durationMs,
     hasAccompaniment: false,
+    accompanimentStatus: 'NONE',
     difficulties: [c.difficulty],
     createdAt: '',
+    coverUrl: null,
   };
 }
 
@@ -66,6 +67,11 @@ interface SongsState {
   load: (scope: SongScope, q?: string) => Promise<void>;
   /** 곡 상세(난이도별 채보 요약 포함) */
   selectSong: (id: number) => Promise<SongDetail>;
+  /**
+   * 목록의 같은 id 곡에 다시 읽은 상세의 상태 필드(status·hasAccompaniment·accompanimentStatus)만 반영한다(설계 CHART-002 반주 상태 3-3).
+   * 상세 응답에는 difficulties 등 목록 전용 값이 비어 올 수 있어 나머지는 그대로 둔다. 로딩 상태는 바꾸지 않는다
+   */
+  patchItem: (song: SongSummary) => void;
 }
 
 let seq = 0;
@@ -107,6 +113,15 @@ export const useSongs = create<SongsState>()((set, get) => ({
     }
     return getSong(id);
   },
+
+  patchItem: (song) =>
+    set((st) => ({
+      items: st.items.map((s) =>
+        s.id === song.id
+          ? { ...s, status: song.status, hasAccompaniment: song.hasAccompaniment, accompanimentStatus: song.accompanimentStatus }
+          : s,
+      ),
+    })),
 }));
 
 export interface LoadedChart {

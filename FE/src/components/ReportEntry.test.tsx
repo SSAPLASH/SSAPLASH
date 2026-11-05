@@ -19,6 +19,7 @@ const report = (analysisStatus: Report['analysisStatus'], weakSegments: Report['
   inputSource: 'KEYBOARD',
   analysisStatus,
   weakSegments,
+  coachSummary: null,
   recommendedDrills: null,
   generatedAt: '2026-10-28T00:00:00Z',
 });

@@ -21,6 +21,9 @@
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+
 # 로컬 반주 동기 검증용 임시 음원(설계 MODE-003-sheet-play)
 FE/public/dev-*.wav
 

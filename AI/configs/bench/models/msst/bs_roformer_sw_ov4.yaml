@@ -1,0 +1,12 @@
+# 드럼리스 MR 개선 후보 B. 겹침 2 → 4. 곡을 자른 조각 경계의 뭉개짐이 줄어드는지 봄 (S15P31A307-165).
+# 가중치는 bs_roformer_sw와 같은 것을 씀 (weights_name).
+name: bs_roformer_sw_ov4
+weights_name: bs_roformer_sw
+adapter: msst
+model_type: bs_roformer
+config_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.yaml
+checkpoint_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem/resolve/main/BS-Rofo-SW-Fixed.ckpt
+license_code: MIT (MSST)
+license_weights: CC BY-NC-SA 4.0 (unblend 메타데이터 기준. 원 저장소 삭제로 미확인, 미러는 unknown 표기)
+source_url: https://huggingface.co/FractalSurfer/BS-RoFormer-SW-6stem
+overlap: 4

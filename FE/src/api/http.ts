@@ -1,6 +1,7 @@
 // BE 호출 공통 래퍼 (설계 3-4). Bearer 부착, JSON 직렬화, problem+json 해석, 401 → refresh 1회 → 같은 요청 재시도.
 // 화면·store는 이 함수만 쓰고 401을 직접 처리하지 않는다.
 import { getAccessToken, refreshAccessToken } from './auth';
+import { SIGNUP_INCOMPLETE } from '@/domain/signupGate';
 import { errorFromResponse, networkError } from './error';
 
 export { ApiError } from './error';
@@ -24,6 +25,22 @@ export interface ApiRequestInit {
    * 재전송하면 안 되는 요청(텔레메트리 배치 등)용. 기본 false(재전송)
    */
   noRetryOn401?: boolean;
+}
+
+type SignupIncompleteListener = () => void;
+const signupIncompleteListeners = new Set<SignupIncompleteListener>();
+
+/** 403 SIGNUP_INCOMPLETE(가입 동의 전 회원의 API 호출)를 받을 때 알린다. 이동은 라우트가 하고 여기서는 알리기만 한다(설계 D26) */
+export function subscribeSignupIncomplete(listener: SignupIncompleteListener): () => void {
+  signupIncompleteListeners.add(listener);
+  return () => {
+    signupIncompleteListeners.delete(listener);
+  };
+}
+
+/** 테스트 전용. 등록된 가입 미완료 리스너를 모두 지운다 */
+export function resetSignupIncompleteForTest(): void {
+  signupIncompleteListeners.clear();
 }
 
 async function send(path: string, init: ApiRequestInit): Promise<Response> {
@@ -58,7 +75,13 @@ export async function apiFetch<T = void>(path: string, init: ApiRequestInit = {}
     const token = await refreshAccessToken();
     if (token !== null && !init.noRetryOn401) res = await send(path, init);
   }
-  if (!res.ok) throw await errorFromResponse(res);
+  if (!res.ok) {
+    const err = await errorFromResponse(res);
+    if (res.status === 403 && err.code === SIGNUP_INCOMPLETE) {
+      for (const l of [...signupIncompleteListeners]) l();
+    }
+    throw err;
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   if (text.length === 0) return undefined as T;

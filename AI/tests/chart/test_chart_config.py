@@ -7,10 +7,13 @@ from pathlib import Path
 import pytest
 
 from ssaplash_ai.chart.config import (
+    ENV_CHART_MODEL,
     ENV_DEVICE,
     ENV_WORK_DIR,
     OutputConfig,
     SeparationConfig,
+    TempoConfig,
+    TranscriptionConfig,
     work_dir_from_env,
 )
 
@@ -79,3 +82,91 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert work_dir_from_env() is None
     monkeypatch.setenv(ENV_WORK_DIR, str(tmp_path / "work"))
     assert work_dir_from_env() == tmp_path / "work"
+
+
+# ---- 채보 설정 (S15P31A307-169) ----
+
+
+def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
+    assert cfg.model_name == "original"
+    assert cfg.model_config == Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
+    assert all((AI_DIR / p).is_file() for p in cfg.models.values())
+    assert cfg.device == "cuda"
+    assert cfg.schema_version == 1
+    assert cfg.tempo == TempoConfig(
+        method="beat_this", min_bpm=60, max_bpm=200, time_signature="4/4", origin="notes"
+    )
+    assert cfg.max_duration_sec == 600
+
+
+def test_채보_mock_설정은_cpu와_mock_모델(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription_mock.yaml")
+    assert cfg.device == "cpu"
+    assert cfg.model_config.name == "mock_clicks.yaml"
+    assert cfg.tempo.method == "librosa"
+    assert (AI_DIR / cfg.model_config).is_file()
+
+
+def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_DEVICE, "cpu")
+    cfg = TranscriptionConfig.from_dict({"model_config": "m.yaml", "device": "cuda"})
+    assert cfg.device == "cpu"
+    assert cfg.tempo == TempoConfig()
+    assert cfg.schema_version == 1 and cfg.max_duration_sec == 600
+
+
+@pytest.mark.parametrize(
+    ("raw", "문구"),
+    [
+        ({}, "model_config"),
+        ({"model_config": "m.yaml", "generator": "x"}, "모르는 채보 설정 필드"),
+        ({"model_config": "m.yaml", "schema_version": 2}, "schema_version"),
+        ({"model_config": "m.yaml", "max_duration_sec": 0}, "max_duration_sec"),
+        ({"model_config": "m.yaml", "tempo": {"method": "madmom"}}, "tempo.method"),
+        ({"model_config": "m.yaml", "tempo": {"min_bpm": 80, "max_bpm": 150}}, "tempo 범위"),
+        ({"model_config": "m.yaml", "tempo": {"time_signature": "4-4"}}, "time_signature"),
+        ({"model_config": "m.yaml", "tempo": {"bpm": 120}}, "모르는 tempo 필드"),
+        ({"model_config": "m.yaml", "tempo": {"origin": "first_beat"}}, "tempo.origin"),
+    ],
+)
+def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
+    with pytest.raises(ValueError, match=문구):
+        TranscriptionConfig.from_dict(raw)
+
+
+# ---- 채보 모델 이름으로 고르기 (S15P31A307-243) ----
+
+MODELS_RAW = {"model": "original", "models": {"original": "a.yaml", "combo": "b.yaml"}}
+
+
+def test_채보_모델을_이름으로_고른다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_dict(MODELS_RAW)
+    assert (cfg.model_name, cfg.model_config) == ("original", Path("a.yaml"))
+    cfg = TranscriptionConfig.from_dict({**MODELS_RAW, "model": "combo"})
+    assert (cfg.model_name, cfg.model_config) == ("combo", Path("b.yaml"))
+
+
+def test_채보_모델_환경_변수가_우선(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_CHART_MODEL, "combo")
+    assert TranscriptionConfig.from_dict(MODELS_RAW).model_config == Path("b.yaml")
+
+
+def test_채보_모델_이름_오류(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    with pytest.raises(ValueError, match="모르는 채보 모델 이름"):
+        TranscriptionConfig.from_dict({**MODELS_RAW, "model": "nope"})
+    with pytest.raises(ValueError, match="model"):
+        TranscriptionConfig.from_dict({"models": MODELS_RAW["models"]})
+    with pytest.raises(ValueError, match="같이 쓸 수 없음"):
+        TranscriptionConfig.from_dict({**MODELS_RAW, "model_config": "c.yaml"})
+
+
+def test_옛_형식_model_config도_받는다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_dict({"model_config": "c.yaml"})
+    assert (cfg.model_name, cfg.model_config) == (None, Path("c.yaml"))

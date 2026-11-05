@@ -1,0 +1,82 @@
+# 탐 기준값 0.10~0.88(0.02 간격) 비교. 나머지는 채택 후보 pk_gap30과 같음
+candidates:
+- name: th0.10
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.10, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.12
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.12, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.14
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.14, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.16
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.16, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.18
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.18, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.20
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.20, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.22
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.22, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.24
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.24, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.26
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.26, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.28
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.28, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.30
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.30, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.32
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.32, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.34
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.34, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.36
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.36, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.38
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.38, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.40
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.40, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.42
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.42, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.44
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.44, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.46
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.46, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.48
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.48, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.50
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.50, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.52
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.52, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.54
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.54, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.56
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.56, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.58
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.58, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.60
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.60, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.62
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.62, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.64
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.64, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.66
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.66, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.68
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.68, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.70
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.70, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.72
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.72, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.74
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.74, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.76
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.76, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.78
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.78, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.80
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.80, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.82
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.82, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.84
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.84, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.86
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.86, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}
+- name: th0.88
+  rules: {window_ms: 120, cymbal_window_ms: 80, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_threshold: 0.88, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0}

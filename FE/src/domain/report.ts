@@ -17,6 +17,12 @@ export interface PadStat {
 
 export type WeakScope = 'WHOLE' | 'SEGMENT';
 
+/** AI 약점 심각도 단계 (COACH-003). 없으면 severity로 폴백한다 */
+export type SeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+/** severityLevel이 없을 때 이 값 이상이면 HIGH로 본다 */
+export const SEVERE_THRESHOLD = 0.7;
+
 /** AI 약점 구간 한 건 (COACH-003). description을 그대로 표시하고 pattern으로 분기하지 않는다 */
 export interface WeakSegment {
   /** 노트 시각 기준 ms, 시작 포함·끝 미포함 */
@@ -26,6 +32,12 @@ export interface WeakSegment {
   description: string;
   causeTags: string[];
   pads: PadId[];
+  /** AI 연습 조언(선택). 문구를 고치지 않고 그대로 표시한다 */
+  tip?: string;
+  /** AI 상세 설명(선택). 문구를 고치지 않고 그대로 표시한다 */
+  detail?: string;
+  /** AI 심각도 단계(선택). 없으면 segmentLevel이 severity로 폴백한다 */
+  severityLevel?: SeverityLevel;
   /** 0~1 */
   severity: number;
   scope: WeakScope;
@@ -46,21 +58,46 @@ export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerB
   return [fromBar, toBar];
 }
 
-/**
- * 문구용 초 표기. AI `coach/patterns/base.py`의 `seconds_text`와 같은 규칙이라 머리글과 `description`의 숫자가 같다.
- * 정수 초에서 0.05 미만이면 소수점 없이(2960 → "3"), 아니면 소수 한 자리(2400 → "2.4").
- * 정확히 .x5인 값(ms가 250·750으로 끝남)은 파이썬 format처럼 짝수 쪽으로 반올림한다(7250 → "7.2", 7750 → "7.8").
- */
-export function formatSeconds(ms: number): string {
-  const sec = ms / 1000;
-  const nearest = Math.round(sec);
-  if (Math.abs(sec - nearest) < 0.05) return String(nearest);
-  // toFixed는 배정밀도 값 그대로 반올림하므로 2.35(실제로는 2.35보다 큼) → "2.4", 2.55 → "2.5"로 파이썬과 같다.
-  // 정확한 동률(k + 0.25 / 0.75, ms가 250·750으로 끝남)만 toFixed가 큰 쪽을 골라 짝수 쪽으로 바꾼다.
-  const exactTie = ms % 500 === 250 || ms % 500 === -250;
-  if (!exactTie) return sec.toFixed(1);
-  const floor = Math.floor(sec * 10);
-  return ((floor % 2 === 0 ? floor : floor + 1) / 10).toFixed(1);
+/** 약점의 심각도 단계. severityLevel이 있으면 그대로, 없으면 severity ≥ 0.7이 HIGH, 아니면 LOW */
+export function segmentLevel(seg: WeakSegment): SeverityLevel {
+  if (seg.severityLevel) return seg.severityLevel;
+  return seg.severity >= SEVERE_THRESHOLD ? 'HIGH' : 'LOW';
+}
+
+/** 심각도 뱃지. LOW는 뱃지 없음 */
+export function levelBadge(level: SeverityLevel): { text: string; tone: 'miss' | 'warn' } | null {
+  if (level === 'HIGH') return { text: '주의', tone: 'miss' };
+  if (level === 'MEDIUM') return { text: '보통', tone: 'warn' };
+  return null;
+}
+
+/** 총평 레벨 뱃지. 모르는 값은 null(본문만 표시) */
+export function summaryBadge(level: string): { text: string; tone: 'perfect' | 'good' | 'miss' } | null {
+  switch (level) {
+    case 'GOOD':
+      return { text: '좋아요', tone: 'perfect' };
+    case 'FAIR':
+      return { text: '괜찮아요', tone: 'good' };
+    case 'NEEDS_WORK':
+      return { text: '연습이 필요해요', tone: 'miss' };
+    default:
+      return null;
+  }
+}
+
+/** ms → 「m:ss」(초 내림). 음수·NaN은 「0:00」 */
+export function formatClock(ms: number): string {
+  const total = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** 약점 카드 패널의 구간 문구. 마디는 0부터라 +1해서 보인다 */
+export function segmentRangeText(seg: WeakSegment, bars: [number, number] | null, durationMs: number | null): string {
+  if (seg.scope === 'WHOLE') return `곡 전체 · 0:00 – ${formatClock(durationMs ?? seg.toMs)}`;
+  const clock = `${formatClock(seg.fromMs)} – ${formatClock(seg.toMs)}`;
+  if (!bars) return clock;
+  const [from, to] = bars;
+  return `${from === to ? `${from + 1}마디` : `${from + 1}~${to + 1}마디`} · ${clock}`;
 }
 
 /** 판정 수 합이 분석 최소 노트 수 미만인지 */
@@ -98,6 +135,14 @@ export function isUploadTarget(legacy: boolean, state: { status: string; retryab
   return !(state?.status === 'FAILED' && !state.retryable);
 }
 
+/** AI 총평 (COACH-003). level·source는 문자열 그대로 보관하고 검증은 화면에서 한다 */
+export interface CoachSummary {
+  level: string;
+  text: string;
+  focusPattern: string | null;
+  source: string | null;
+}
+
 export interface Report {
   playId: string;
   score: number;
@@ -113,6 +158,8 @@ export interface Report {
   analysisStatus: AnalysisStatus;
   /** AI 약점 구간. null = 미분석·실패, [] = 분석했으나 약점 없음 */
   weakSegments: WeakSegment[] | null;
+  /** AI 총평. null = 없음(미분석·구버전 응답) */
+  coachSummary: CoachSummary | null;
   recommendedDrills: unknown;
   generatedAt: string;
 }

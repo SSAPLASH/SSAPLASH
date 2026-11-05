@@ -1,6 +1,6 @@
 """ZFTurbo MSST(msst 패키지) 어댑터. SCNet·BS/Mel RoFormer·MDX23C 설정 공용 (설계 1장 핵심 결정).
 
-yaml 필드: model_type(msst --model_type 값), config_url, checkpoint_url.
+yaml 필드: model_type(msst --model_type 값), config_url, checkpoint_url, use_tta(선택).
 받은 파일은 data/models/{name}/ 에 둠. `uv sync --extra models` 필요.
 msst.Separator.separate는 스템 이름 → (채널, 샘플) dict를 돌려주며 입력 샘플레이트가
 모델과 다르면 내부에서 변환함.
@@ -59,6 +59,7 @@ class MsstSeparator(BaseSeparator):
             model_type=self.config.model_type,
             device_ids=0,
             force_cpu=not self.device.startswith("cuda"),
+            use_tta=bool(self.config.use_tta),
             detailed_progress=False,
         )
         self._apply_chunk_overrides()

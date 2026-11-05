@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { encodeSetMode, StreamMode, encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
+import { encodeSetMode, StreamMode, encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, encodeRoute, encodeSetYawOffset, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
 import {
   buildBridgeStats,
   buildHit,
+  buildLink,
   buildLog,
   buildParamAck,
   buildPose,
@@ -334,6 +335,240 @@ describe('MockStick', () => {
       const n = swings().length;
       vi.advanceTimersByTime(1000);
       expect(swings().length).toBe(n);
+    });
+  });
+});
+
+describe('v0.8 빌더', () => {
+  it('LINK 왕복: 5바이트, flags 0, 기본 fw 2.1', () => {
+    const b = buildLink({ linkMask: 0b0101 });
+    expect(b.length).toBe(5);
+    expect(decodePacket(b, 3)).toEqual({ kind: 'link', recvTime: 3, flags: 0, linkMask: 0b0101, fwMajor: 2, fwMinor: 1 });
+    expect(decodePacket(buildLink({ linkMask: 3, fwMajor: 3, fwMinor: 9 }), 0)).toMatchObject({ linkMask: 3, fwMajor: 3, fwMinor: 9 });
+  });
+
+  it('STATUS unconfigured는 flags 비트 5, role은 그대로(role 3 포함)', () => {
+    const f = { batteryPct: 50, rssi: -60, fwMajor: 1, fwMinor: 0 };
+    const b = buildStatus({ ...f, role: 1, unconfigured: true });
+    expect(b[1]).toBe(0x21);
+    expect(decodePacket(b, 0)).toMatchObject({ role: 1, unconfigured: true });
+    expect(buildStatus({ ...f, role: 3, unconfigured: true })[1]).toBe(0x23);
+    expect(decodePacket(buildStatus({ ...f, role: 1 }), 0)).toMatchObject({ role: 1, unconfigured: false });
+  });
+});
+
+describe('MockStick 재연결 시나리오', () => {
+  let got: PacketRecord[];
+  let off: () => void;
+  let mock: MockStick;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    got = [];
+    off = packetTap.subscribe((r) => got.push(r));
+    mock = new MockStick();
+  });
+  afterEach(() => {
+    mock.stop();
+    off();
+    vi.useRealTimers();
+  });
+
+  const ins = () => got.filter((r) => r.dir === 'in').map((r) => decodePacket(r.bytes, 0));
+  const links = () => ins().filter((d) => d.kind === 'link') as { linkMask: number }[];
+  const ofRole = (role: number) => ins().filter((d) => 'role' in d && d.role === role);
+  const start2 = (dongle = true) => mock.start({ sticks: 2, dongle, poseHz: 50, hitIntervalMs: 100000 });
+  const padTable = encodeSetPadTable([{ pad: 'SNARE', elevationDeg: 0, azimuthDeg: 0, radiusDeg: 10 }], true, 2)[0];
+
+  describe('dongle 옵션', () => {
+    it('start 시 STATUS 다음 LINK, 이후 1초마다 LINK(마스크 = 붙은 손)', () => {
+      start2();
+      const first = ins().filter((d) => d.kind === 'status' || d.kind === 'link');
+      expect(first.map((d) => d.kind)).toEqual(['status', 'status', 'link']);
+      expect(links()[0].linkMask).toBe(0b11);
+      vi.advanceTimersByTime(3000);
+      expect(links().length).toBe(4);
+    });
+
+    it('스틱 1개면 마스크 0b01', () => {
+      mock.start({ sticks: 1, dongle: true });
+      expect(links()[0].linkMask).toBe(0b01);
+    });
+
+    it('dongle을 안 주면 LINK가 없다', () => {
+      start2(false);
+      vi.advanceTimersByTime(3000);
+      expect(links().length).toBe(0);
+    });
+  });
+
+  describe('dropHand', () => {
+    it('즉시 LINK 1회(마스크에서 그 손 빠짐), 이후 그 손의 STATUS·POSE·HIT·SYNC_ACK가 없다', () => {
+      mock.start({ sticks: 2, dongle: true, poseHz: 50, hitIntervalMs: 100 });
+      got.length = 0;
+      mock.dropHand(1);
+      expect(links().map((l) => l.linkMask)).toEqual([0b01]);
+      vi.advanceTimersByTime(6000);
+      expect(ofRole(1)).toEqual([]);
+      expect(ofRole(0).some((d) => d.kind === 'pose')).toBe(true);
+      expect(ofRole(0).some((d) => d.kind === 'hit')).toBe(true);
+      expect(links().every((l) => l.linkMask === 0b01)).toBe(true);
+      got.length = 0;
+      mock.handleCommand(encodeSync(1234));
+      vi.advanceTimersByTime(100);
+      const acks = ins().filter((d) => d.kind === 'syncAck') as { role: number }[];
+      expect(acks.map((a) => a.role)).toEqual([0]);
+    });
+
+    it('dongle이 아니면 LINK 없이 조용히 끊긴다', () => {
+      start2(false);
+      got.length = 0;
+      mock.dropHand(1);
+      expect(links().length).toBe(0);
+    });
+  });
+
+  describe('restoreHand', () => {
+    it('STATUS 1회가 먼저, 그다음 LINK(마스크에 그 손 복귀)', () => {
+      start2();
+      mock.dropHand(1);
+      got.length = 0;
+      mock.restoreHand(1);
+      const seq = ins();
+      expect(seq.map((d) => d.kind)).toEqual(['status', 'link']);
+      expect(seq[0]).toMatchObject({ role: 1, unconfigured: false });
+      expect(seq[1]).toMatchObject({ linkMask: 0b11 });
+    });
+
+    it('reboot: 비트 5가 SET_PAD_TABLE을 받을 때까지 유지되고 받으면 내려간다', () => {
+      start2();
+      mock.dropHand(1);
+      got.length = 0;
+      mock.restoreHand(1, { reboot: true });
+      expect(ins()[0]).toMatchObject({ kind: 'status', role: 1, unconfigured: true });
+      // 5초 주기 STATUS에도 유지
+      vi.advanceTimersByTime(5000);
+      const st = () => ofRole(1).filter((d) => d.kind === 'status') as { unconfigured: boolean }[];
+      expect(st().every((d) => d.unconfigured)).toBe(true);
+      // 다른 손에만 보낸 SET_PAD_TABLE은 영향 없음
+      mock.handleCommand(encodeRoute(0, padTable));
+      vi.advanceTimersByTime(5000);
+      expect(st().every((d) => d.unconfigured)).toBe(true);
+      // 그 손에 ROUTE로 감싼 SET_PAD_TABLE → 내려간다
+      mock.handleCommand(encodeRoute(1, padTable));
+      vi.advanceTimersByTime(5000);
+      const all = st();
+      expect(all[all.length - 1].unconfigured).toBe(false);
+      expect(all.length).toBeGreaterThan(2);
+    });
+
+    it('reboot가 아니면 비트 5는 그대로 0', () => {
+      start2();
+      mock.dropHand(0);
+      mock.restoreHand(0);
+      vi.advanceTimersByTime(5000);
+      expect((ofRole(0).filter((d) => d.kind === 'status') as { unconfigured: boolean }[]).every((d) => !d.unconfigured)).toBe(true);
+    });
+  });
+
+  describe('reboot', () => {
+    it('dropHand 다음 restoreHand(reboot): LINK(빠짐) → STATUS(비트 5) → LINK(복귀) 순서', () => {
+      start2();
+      got.length = 0;
+      mock.reboot(1);
+      const seq = ins();
+      expect(seq.map((d) => d.kind)).toEqual(['link', 'status', 'link']);
+      expect(seq[0]).toMatchObject({ linkMask: 0b01 });
+      expect(seq[1]).toMatchObject({ role: 1, unconfigured: true });
+      expect(seq[2]).toMatchObject({ linkMask: 0b11 });
+    });
+
+    it('그 손의 모의 시계만 0부터 다시 시작한다(다른 손은 유지)', () => {
+      start2();
+      vi.advanceTimersByTime(10_000); // 5초 뒤 u32 µs 랩이 이미 일어난 시각
+      mock.reboot(1);
+      got.length = 0;
+      vi.advanceTimersByTime(100);
+      const ts = (role: number) => (ofRole(role).find((d) => d.kind === 'pose') as { timestampUs: number }).timestampUs;
+      // 재부팅한 손: 실제 스틱처럼 0부터, 약 0.02~0.1초 뒤
+      expect(ts(1)).toBeGreaterThan(0);
+      expect(ts(1)).toBeLessThan(200_000);
+      // 그대로 가동 중인 손: 랩 뒤 약 5초
+      expect(ts(0)).toBeGreaterThan(4_000_000);
+      expect(ts(0)).toBeLessThan(6_000_000);
+    });
+
+    it('시계 0부터: SYNC_ACK의 t1도 손별로 다르다', () => {
+      start2();
+      vi.advanceTimersByTime(10_000);
+      mock.reboot(1);
+      got.length = 0;
+      mock.handleCommand(encodeSync(1));
+      vi.advanceTimersByTime(100);
+      const acks = ins().filter((d) => d.kind === 'syncAck') as { role: number; t1Us: number }[];
+      const t1 = (role: number) => acks.find((a) => a.role === role)!.t1Us;
+      expect(t1(1)).toBeLessThan(200_000);
+      expect(t1(0)).toBeGreaterThan(4_000_000);
+      expect(t1(0)).toBeLessThan(6_000_000);
+    });
+  });
+
+  describe('ROUTE 풀기', () => {
+    const acks = (id: number) => ins().filter((d) => d.kind === 'paramAck' && d.paramId === id) as { role: number; value: number }[];
+
+    it('ROUTE로 감싼 SET_YAW_OFFSET은 대상 손만 응답하고 role이 대상 손이다', () => {
+      start2();
+      got.length = 0;
+      mock.handleCommand(encodeRoute(1, encodeSetYawOffset(1.5)));
+      vi.advanceTimersByTime(100);
+      expect(acks(0x21)).toMatchObject([{ role: 1, value: 150 }]);
+      // 바깥 ROUTE 바이트 그대로 out 기록
+      expect(got[0].dir).toBe('out');
+      expect(got[0].bytes[0]).toBe(0x70);
+    });
+
+    it('감싸지 않은 명령은 붙은 손 전부에 적용한다', () => {
+      start2();
+      got.length = 0;
+      mock.handleCommand(encodeSetYawOffset(0));
+      vi.advanceTimersByTime(100);
+      expect(acks(0x21).map((a) => a.role)).toEqual([0, 1]);
+    });
+
+    it('ROUTE SET_PAD_TABLE: 손별로 패드 개수를 센다', () => {
+      start2();
+      got.length = 0;
+      mock.handleCommand(encodeRoute(1, padTable));
+      mock.handleCommand(encodeRoute(0, padTable));
+      mock.handleCommand(encodeRoute(1, encodeSetPadTable([{ pad: 'HIHAT', elevationDeg: 0, azimuthDeg: 0, radiusDeg: 10 }], false, 2)[0]));
+      vi.advanceTimersByTime(100);
+      expect(acks(0x20)).toMatchObject([
+        { role: 1, value: 1 },
+        { role: 0, value: 1 },
+        { role: 1, value: 2 },
+      ]);
+    });
+
+    it('마스크가 양손이면 둘 다, 끊긴 손은 받지 못한다', () => {
+      start2();
+      got.length = 0;
+      const both = new Uint8Array([0x70, 0b11, ...encodeSetYawOffset(0)]);
+      mock.handleCommand(both);
+      vi.advanceTimersByTime(100);
+      expect(acks(0x21).map((a) => a.role)).toEqual([0, 1]);
+      mock.dropHand(1);
+      got.length = 0;
+      mock.handleCommand(both);
+      vi.advanceTimersByTime(100);
+      expect(acks(0x21).map((a) => a.role)).toEqual([0]);
+    });
+
+    it('ROUTE로 감싼 SYNC는 대상 손만 ACK', () => {
+      start2();
+      got.length = 0;
+      mock.handleCommand(encodeRoute(1, encodeSync(5)));
+      vi.advanceTimersByTime(100);
+      expect((ins().filter((d) => d.kind === 'syncAck') as { role: number }[]).map((a) => a.role)).toEqual([1]);
     });
   });
 });

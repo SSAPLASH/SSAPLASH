@@ -382,6 +382,8 @@ export class JudgeLog {
     const all = this.resolved();
     for (let i = all.length - 1; i >= 0 && out.length < limit; i--) {
       const h = all[i];
+      // 손 없는 타격(페달)은 스틱 세기 비교 대상이 아니다
+      if (h.stickId === null) continue;
       const row = findHitRow(rows, h);
       if (!row || row.decoded?.kind !== 'hit') continue;
       out.push({

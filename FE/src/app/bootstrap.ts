@@ -1,11 +1,13 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import type { InputSource } from '@/input/InputSource';
-import { inputManager, keyboardSource, KEYBOARD_INPUT_ENABLED } from './sources';
+import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
-import { useLive, type MetronomeLive } from '@/store/liveStore';
+import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
+import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';
+import { RECONNECT_WAIT_MS, hintFor, shouldResend, waitForDevices } from './reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
@@ -16,14 +18,24 @@ import { layoutToProfile } from '@/domain/kitJudge';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
+import { smoothBattery } from '@/domain/stickStatus';
+import { devicesReady, pedalRequired } from '@/domain/pedalStatus';
 import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
+import { isSensorSource } from '@/domain/events';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
 let activeInstance: InputSource | null = null;
 let unsubState: (() => void) | null = null;
+let unsubDongle: (() => void) | null = null;
+/** 손별 최근 배터리 측정값(평균용). 그 손이 끊기거나 센서가 바뀌면 비운다 */
+let batteryHistory: [number[], number[]] = [[], []];
+/** 발별 최근 배터리 측정값(평균용). 두 발이 모두 끊기거나 센서가 바뀌면 비운다 */
+let pedalBatteryHistory: [number[], number[]] = [[], []];
 /** 화면이 마지막으로 등록한 입력 표면. 센서가 바뀌어도 새 인스턴스에 다시 넘긴다 */
 let lastSurface: HTMLElement | null = null;
+/** 손별 마지막 설정 재전송 시각(비트 5 쿨다운, D5). 센서가 바뀌면 비운다 */
+const lastResendAt: [number | null, number | null] = [null, null];
 
 /** "타격이 오면 소리를 낼지"를 모드 화면이 결정한다. 리듬 게임은 자체 처리 */
 let soundOnHit = true;
@@ -50,16 +62,32 @@ function currentProfile(): CalibrationProfile {
 }
 
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
-export async function activateSensor(id: SensorId): Promise<void> {
+export async function activateSensor(id: SensorId, auto = false): Promise<void> {
   if (currentSensor === id) return;
   if (activeInstance) await inputManager.detach(activeInstance.kind);
   unsubState?.();
   unsubState = null;
+  unsubDongle?.();
+  unsubDongle = null;
+  batteryHistory = [[], []];
+  pedalBatteryHistory = [[], []];
+  lastResendAt[0] = lastResendAt[1] = null;
   activeInstance = null;
   padTableSync.setSource(null);
   yawDriftMonitor.setSource(null);
   currentSensor = id;
-  useLive.setState({ activeSensor: id, connected: [false, false], sourceState: 'disconnected', sourceMessage: null });
+  // 이전 소스의 재연결 동작은 내린다. 새 소스가 준비되면 아래에서 다시 등록한다
+  setReconnectHandler(null);
+  audioEngine.setHihatOpen(false);
+  useLive.setState({
+    activeSensor: id,
+    connected: [false, false],
+    battery: [null, null],
+    dongle: null,
+    pedal: initialPedal(),
+    sourceState: 'disconnected',
+    sourceMessage: null,
+  });
   if (id === 'none') return;
   try {
     const src = sensorRegistry.instance(id);
@@ -69,10 +97,46 @@ export async function activateSensor(id: SensorId): Promise<void> {
     applySensorOptions();
     src.setSurface?.(lastSurface);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
-    await inputManager.attach(src);
+    unsubDongle = src.onDongle?.((link) => useLive.setState({ dongle: link })) ?? null;
+    // 연결 개념이 없는 소스(포인터)는 autoConnect·reopen이 없어 핸들러를 등록하지 않는다 → [다시 연결]이 숨는다
+    if (src.autoConnect || src.reopen) {
+      setReconnectHandler((_attempt, signal) => reconnectAttempt(src, signal), hintFor(src.kind));
+    }
+    await inputManager.attach(src, auto);
   } catch (e) {
     useLive.setState({ sourceState: 'error', sourceMessage: (e as Error).message });
   }
+}
+
+/** 활성 센서를 사용자 클릭으로 다시 연다(동글 연결·다른 동글 연결). 클릭 처리 안에서 불러야 포트 선택 창이 열린다 */
+export async function connectSensor(): Promise<void> {
+  try {
+    await activeInstance?.connect();
+  } catch {
+    // 실패 사유는 소스가 sourceState·sourceMessage로 남긴다
+  }
+}
+
+/**
+ * 재연결 시도 하나(설계 4-2, D1·D3): 제스처가 필요 없는 동작을 한 번 하고, 손·발이 모두 돌아올 때까지 최대 3초 기다린다.
+ * 연결 중이면 reopen(동글: 포트 닫고 다시 열기), 끊겨 있으면 autoConnect(허락된 포트·보관 기기·재접속).
+ */
+async function reconnectAttempt(src: InputSource, signal: AbortSignal): Promise<void> {
+  if (activeInstance !== src) throw new Error('입력 소스가 바뀌었습니다');
+  if (src.state === 'connected' && src.reopen) await src.reopen();
+  else if (src.autoConnect) await src.autoConnect();
+  else await src.connect();
+  if (signal.aborted || activeInstance !== src) throw new Error('취소됨');
+  await waitForDevices(
+    () => {
+      const live = useLive.getState();
+      // 페달은 동글 소스에서만 필요한 기기다(D3)
+      return pedalRequired(live.activeSensor) ? [...live.connected, ...live.pedal.connected] : [...live.connected];
+    },
+    (l) => useLive.subscribe(l),
+    RECONNECT_WAIT_MS,
+    signal,
+  );
 }
 
 /**
@@ -166,22 +230,93 @@ export function bootstrapInput(): void {
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
     audioEngine.setVolume(s.volume);
+    audioEngine.setDrumVolume(s.drumVolume);
+    audioEngine.setSongVolume(s.songVolume);
+    audioEngine.setClickVolume(s.metronomeVolume);
   };
   applySettings();
   useSettings.subscribe(applySettings);
 
-  // 연결 표시는 센서 기준. 키보드는 항상 켜져 있으므로 표시하지 않는다
-  inputManager.onStatus((stickId, connected, source) => {
-    if (source === 'keyboard') return;
-    const c = [...useLive.getState().connected] as [boolean, boolean];
+  // 연결 표시는 센서 기준. 키보드는 항상 켜져 있으므로 표시하지 않는다.
+  // 손별 연결은 소스가 알린다(동글은 LINK 마스크, 그 외는 STATUS·포트 닫힘). STATUS는 5초마다 와서 같은 연결이 반복된다.
+  // 끊김 → 자동 재연결 시작, 양손 복귀 → settle, 비트 5(설정 전) → 설정 재전송(설계 PLAY-002 4-1).
+  inputManager.onStatus((stickId, connected, source, batteryPct, unconfigured) => {
+    if (!isSensorSource(source)) return;
+    const live = useLive.getState();
+    const wasConnected = live.connected[stickId];
+    const c = [...live.connected] as [boolean, boolean];
     c[stickId] = connected;
-    useLive.setState({ connected: c });
-    // 센서가 연결되면 현재 패드 표를 스틱에 보낸다(같은 표를 이미 보냈으면 무동작)
-    if (connected) padTableSync.push(currentProfile());
-    // 연결 직후 스틱 방위각 오프셋을 0으로 맞춰 FE 기억과 일치시킨다
-    if (connected) yawDriftMonitor.onConnected(stickId);
+    const b = [...live.battery] as [number | null, number | null];
+    if (!connected) {
+      // 끊긴 손은 배터리를 지운다(다시 붙으면 새로 잰다)
+      batteryHistory[stickId] = [];
+      b[stickId] = null;
+    } else if (batteryPct !== undefined) {
+      const sm = smoothBattery(batteryHistory[stickId], batteryPct);
+      batteryHistory[stickId] = sm.history;
+      b[stickId] = sm.value;
+    }
+    useLive.setState({ connected: c, battery: b });
+    if (!connected && wasConnected && useLive.getState().activeSensor !== 'none') {
+      // 손이 끊겼다 → 자동 재연결 시작(시도 중이면 스토어가 무시한다. reopen이 내는 끊김으로 루프가 다시 시작되지 않는다)
+      useReconnect.getState().start();
+    }
+    // 손 둘 + 발 둘이 모두 붙어야 복귀(PLAY-002 D3)
+    {
+      const after = useLive.getState();
+      if (devicesReady(after.activeSensor, c, after.pedal)) useReconnect.getState().settle();
+    }
+    if (connected) {
+      if (unconfigured === true) {
+        // 비트 5(설정 전): 그 손에만 패드 표를 강제로 보내고 방위각 오프셋을 0으로 맞춘다. 1초 쿨다운(D5)
+        const now = performance.now();
+        if (shouldResend(lastResendAt[stickId], now)) {
+          lastResendAt[stickId] = now;
+          padTableSync.push(currentProfile(), { stickId, force: true });
+          yawDriftMonitor.onConnected(stickId);
+        }
+      } else if (!wasConnected) {
+        // 새로 붙은 손에만(ROUTE) 현재 표를 보낸다 — 프로토콜 5장 "연결할 때마다 설정 재전송". 포트를 닫았다 연 뒤 첫 전송만 나가고
+        // 그 손에 같은 표를 이미 보냈으면 무동작(해시는 손별). 다른 손에는 가지 않는다.
+        // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③)
+        padTableSync.push(currentProfile(), { stickId });
+        if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
+      }
+    }
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
-    if (!connected && useLive.getState().referenceSetAt !== null) useLive.setState({ referenceStale: true });
+    if (!connected && wasConnected && live.referenceSetAt !== null) useLive.setState({ referenceStale: true });
+  });
+  // 페달 연결·배터리(PLAY-002 4-1). 소스가 내려가거나 포트가 닫히면 InputManager가 두 발 끊김을 알린다
+  inputManager.onPedalStatus((foot, connected, batteryPct) => {
+    const live = useLive.getState();
+    const i = foot - 2;
+    const wasConnected = live.pedal.connected[i];
+    const c = [...live.pedal.connected] as [boolean, boolean];
+    c[i] = connected;
+    let battery = live.pedal.battery;
+    if (!connected) {
+      pedalBatteryHistory[i] = [];
+      if (!c[0] && !c[1]) battery = null;
+    } else if (batteryPct !== undefined) {
+      const sm = smoothBattery(pedalBatteryHistory[i], batteryPct);
+      pedalBatteryHistory[i] = sm.history;
+      battery = sm.value;
+    }
+    // 왼발(하이햇)이 끊기면 닫힘으로 되돌린다(D5)
+    const hihatClosed = foot === 2 && !connected ? true : live.pedal.hihatClosed;
+    useLive.setState({ pedal: { connected: c, battery, hihatClosed } });
+    audioEngine.setHihatOpen(c[0] && !hihatClosed);
+    if (!connected && wasConnected && useLive.getState().activeSensor !== 'none') {
+      // 발이 끊겼다 → 손과 같이 자동 재연결 시작
+      useReconnect.getState().start();
+    }
+    const after = useLive.getState();
+    if (devicesReady(after.activeSensor, after.connected, after.pedal)) useReconnect.getState().settle();
+  });
+  inputManager.onPedal((closed) => {
+    const live = useLive.getState();
+    useLive.setState({ pedal: { ...live.pedal, hihatClosed: closed } });
+    audioEngine.setHihatOpen(live.pedal.connected[0] && !closed);
   });
   inputManager.onPose((stickId, pose) => {
     const p = [...useLive.getState().pose] as [typeof pose, typeof pose];
@@ -194,19 +329,22 @@ export function bootstrapInput(): void {
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
       if (tAudio !== null) hit.tAudio = tAudio;
       // PLAY-07: 브라우저 측 진동 명령. 실제 지연 없는 진동은 MCU 로컬 트리거가 맡는다
-      inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+      // 화면 터치는 실제 스틱을 진동시키지 않고, 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
+      if (hit.source !== 'touch' && hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
     if (soundOnHit) pushTelemetry(hit);
     // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
-    if (hit.source !== 'keyboard') yawDriftMonitor.observe(hit, currentProfile());
+    if (isSensorSource(hit.source)) yawDriftMonitor.observe(hit, currentProfile());
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
+  // 화면 터치는 키보드 사용 여부와 무관하게 항상 붙인다(터치 연주를 켜는 화면만 strike를 부른다)
+  void inputManager.attach(touchSource);
   // 모니터 따라보기 창(/monitor/stick?follow=1)은 센서를 열지 않는다 — 연결은 연주 창이 가진다
-  if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind);
+  if (!isFollowWindow()) void activateSensor(useSettings.getState().sensorKind, true);
   useSettings.subscribe((s, prev) => {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();

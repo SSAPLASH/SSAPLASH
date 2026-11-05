@@ -10,8 +10,11 @@ class MockSource extends BaseInputSource {
   readonly kind = 'ws' as InputSourceKind;
   readonly label = 'mock';
   sent: Uint8Array[] = [];
-  sendCommand(bytes: Uint8Array): void {
+  /** sendCommand 둘째 인자(대상 손) 기록 */
+  targets: Array<number | undefined> = [];
+  sendCommand(bytes: Uint8Array, stickId?: number): void {
     this.sent.push(bytes);
+    this.targets.push(stickId);
   }
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
@@ -151,6 +154,47 @@ describe('padTableSync', () => {
     src.set('connected');
     padTableSync.push(profile(STICK_PADS));
     expect(src.sent).toHaveLength(6);
+  });
+
+  it('stickId 지정: 패킷당 2개(7앵커 → 4패킷), sendCommand 둘째 인자로 손을 넘기고 target을 보고한다', () => {
+    const src = connected();
+    padTableSync.push(profile(STICK_PADS), { stickId: 1 });
+    expect(src.sent).toHaveLength(4);
+    expect(src.sent.map((b) => b[1])).toEqual([0x82, 0x02, 0x02, 0x01]);
+    expect(src.targets).toEqual([1, 1, 1, 1]);
+    expect(last).toMatchObject({ sent: 7, target: 1 });
+  });
+
+  it('전체 전송은 target null, stickId 없으면 sendCommand 둘째 인자도 없다', () => {
+    const src = connected();
+    padTableSync.push(profile(STICK_PADS));
+    expect(src.targets).toEqual([undefined, undefined, undefined]);
+    expect(last?.target).toBeNull();
+  });
+
+  it('force: 같은 해시여도 보내고, 이후 force 없는 같은 표는 다시 보내지 않는다', () => {
+    const src = connected();
+    padTableSync.push(profile(STICK_PADS));
+    padTableSync.push(profile(STICK_PADS), { stickId: 0, force: true });
+    expect(src.sent).toHaveLength(3 + 4);
+    padTableSync.push(profile(STICK_PADS));
+    expect(src.sent).toHaveLength(7);
+  });
+
+  it('해시는 대상별: 왼손에 보낸 표는 오른손 첫 전송을 막지 않고, 전체 전송 뒤에는 손별 전송도 생략된다', () => {
+    const src = connected();
+    padTableSync.push(profile(STICK_PADS), { stickId: 0 });
+    expect(src.sent).toHaveLength(4);
+    padTableSync.push(profile(STICK_PADS), { stickId: 0 });
+    expect(src.sent).toHaveLength(4); // 같은 손 같은 표
+    padTableSync.push(profile(STICK_PADS), { stickId: 1 });
+    expect(src.sent).toHaveLength(8); // 다른 손은 처음
+    expect(src.targets.slice(4)).toEqual([1, 1, 1, 1]);
+    padTableSync.push(profile(STICK_PADS, 1));
+    expect(src.sent).toHaveLength(11); // 바뀐 표 전체 전송
+    padTableSync.push(profile(STICK_PADS, 1), { stickId: 0 });
+    padTableSync.push(profile(STICK_PADS, 1), { stickId: 1 });
+    expect(src.sent).toHaveLength(11); // 전체 전송이 양손에 닿았으므로 생략
   });
 
   it('소스를 null로 바꾸면 상태 null', () => {

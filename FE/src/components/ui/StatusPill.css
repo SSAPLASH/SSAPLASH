@@ -1,0 +1,53 @@
+/* Controls / StatusPill 126:1964 */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-s);
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ui-pill-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.ui-pill-ok {
+  color: var(--good);
+}
+.ui-pill-ok .ui-pill-dot {
+  background: var(--good);
+}
+.ui-pill-accent {
+  color: var(--brand-text);
+}
+.ui-pill-accent .ui-pill-dot {
+  background: var(--brand);
+}
+.ui-pill-neutral {
+  color: var(--text-3);
+}
+.ui-pill-neutral .ui-pill-dot {
+  background: var(--text-3);
+}
+.ui-pill-amber {
+  color: var(--brand-sub);
+}
+.ui-pill-amber .ui-pill-dot {
+  background: var(--brand-sub);
+}
+.ui-pill-danger {
+  color: var(--miss);
+}
+.ui-pill-danger .ui-pill-dot {
+  background: var(--miss);
+}

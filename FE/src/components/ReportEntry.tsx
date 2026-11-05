@@ -10,7 +10,7 @@ const REASON_TEXT: Record<string, string> = {
   BUILTIN_CHART: '연습용 기본 곡은 상세 분석을 제공하지 않습니다.',
   CHART_MISMATCH: '채보 정보가 서버와 달라 분석할 수 없습니다.',
   TOO_LARGE: '기록이 너무 커서 저장하지 못했습니다.',
-  FREE_MODE: '자유 연주는 상세 분석을 제공하지 않습니다.',
+  FREE_MODE: '자유 연습은 상세 분석을 제공하지 않습니다.',
   NETWORK: '서버에 연결하지 못했습니다.',
   // problem+json이 아닌 응답(게이트웨이·프록시 오류)
   HTTP_ERROR: '서버에 연결하지 못했습니다.',

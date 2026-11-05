@@ -1,0 +1,19 @@
+# 크래시·라이드 규칙 후보 (S15P31A307-164 설계 v0.3 4-8절). 탐 규칙은 전부 채택 후보 pk_gap30과 같고 심벌 규칙만 바꿈.
+# pk_gap30: 지금(판정 구간 80ms, 가중치 1). cw40~cw300: crash·ride 트랙 에너지를 재는 구간 길이. cx05~cx20: crash 에너지에 곱하는 값
+candidates:
+- name: pk_gap30
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 80}
+- name: cw40
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 40}
+- name: cw150
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 150}
+- name: cw300
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 300}
+- name: cx05
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 80, cymbal_crash_weight: 0.5}
+- name: cx07
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 80, cymbal_crash_weight: 0.7}
+- name: cx14
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 80, cymbal_crash_weight: 1.4}
+- name: cx20
+  rules: {window_ms: 120, tom_gate_ratio: 0.10, tom_peak_mode: raw, tom_mode: relative, tom_relative_naming: hybrid, tom_relative_method: peaks, tom_relative_min_gap: 3.0, cymbal_window_ms: 80, cymbal_crash_weight: 2.0}

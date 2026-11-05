@@ -4,6 +4,8 @@ import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
+import { gridOriginMs } from '@/domain/sheet';
+import { isSensorSource } from '@/domain/events';
 
 export interface NoteState {
   index: number;
@@ -22,6 +24,10 @@ export interface JudgementEvent {
   pad: PadId;
   noteIndex: number;
   at: number;
+  /** 타격한 손. MISS·키보드 타격은 null (키보드는 손 구분이 자리값이라 뜻이 없다) */
+  stickId: 0 | 1 | null;
+  /** 타격 세기 0~127. MISS·키보드 타격은 null */
+  velocity: number | null;
 }
 
 export interface SessionSnapshot {
@@ -77,12 +83,17 @@ export class RhythmSession {
     return 60_000 / this.chart.bpm;
   }
 
+  /** 격자 원점(ms, 곡 시각 기준) = 1마디 1박. 카운트인은 여기서 끝난다 (MODE-003-sheet-grid-origin 3장) */
+  get originMs(): number {
+    return gridOriginMs(this.chart);
+  }
+
   onJudgement(l: (e: JudgementEvent) => void): () => void {
     this.judgementListeners.add(l);
     return () => this.judgementListeners.delete(l);
   }
 
-  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at − countInMs부터 시작한다 */
+  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at + originMs − countInMs부터 시작한다 */
   start(at: number): void {
     this.startTime = at;
     this.status = this.opts.countInBars > 0 ? 'countin' : 'playing';
@@ -108,12 +119,12 @@ export class RhythmSession {
     }
   }
 
-  /** 카운트인 클릭 스케줄용: 각 박의 performance.now() 시각 */
+  /** 카운트인 클릭 스케줄용: 각 박의 performance.now() 시각. 마지막 박 다음 박이 originMs(1마디 1박)다 */
   countInBeats(): { at: number; accent: boolean }[] {
     const out: { at: number; accent: boolean }[] = [];
     const beats = this.chart.beatsPerBar * this.opts.countInBars;
     for (let i = 0; i < beats; i++) {
-      out.push({ at: this.startTime - this.countInMs + i * this.beatMs, accent: i % this.chart.beatsPerBar === 0 });
+      out.push({ at: this.startTime + this.originMs - this.countInMs + i * this.beatMs, accent: i % this.chart.beatsPerBar === 0 });
     }
     return out;
   }
@@ -189,10 +200,10 @@ export class RhythmSession {
       return null;
     }
     const j = judgeDelta(bestDelta, this.opts.windows);
-    return this.apply(best, j, bestDelta, hit.id, hit.tResolved);
+    return this.apply(best, j, bestDelta, hit.id, hit.tResolved, hit);
   }
 
-  private apply(n: NoteState, j: Judgement, delta: number | null, hitId: number | null, at: number): JudgementEvent {
+  private apply(n: NoteState, j: Judgement, delta: number | null, hitId: number | null, at: number, hit: ResolvedHit | null): JudgementEvent {
     n.judgement = j;
     n.deltaMs = delta;
     n.hitId = hitId;
@@ -205,7 +216,17 @@ export class RhythmSession {
       this.maxCombo = Math.max(this.maxCombo, this.combo);
     }
     while (this.cursor < this.notes.length && this.notes[this.cursor].judgement !== null) this.cursor++;
-    const ev: JudgementEvent = { judgement: j, deltaMs: delta, pad: n.note.pad, noteIndex: n.index, at };
+    // 손·세기는 센서 타격만 채운다(MISS는 hit 없음, 키보드는 값이 뜻 없음)
+    const sensor = hit !== null && isSensorSource(hit.source);
+    const ev: JudgementEvent = {
+      judgement: j,
+      deltaMs: delta,
+      pad: n.note.pad,
+      noteIndex: n.index,
+      at,
+      stickId: sensor ? hit.stickId : null,
+      velocity: sensor ? hit.velocity : null,
+    };
     this.last = ev;
     for (const l of this.judgementListeners) l(ev);
     return ev;
@@ -220,7 +241,7 @@ export class RhythmSession {
     for (let i = this.cursor; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.note.timeMs + w >= t) break;
-      if (n.judgement === null) this.apply(n, 'MISS', null, null, now);
+      if (n.judgement === null) this.apply(n, 'MISS', null, null, now, null);
     }
     if (t > this.chart.durationMs + 800) this.status = 'finished';
   }

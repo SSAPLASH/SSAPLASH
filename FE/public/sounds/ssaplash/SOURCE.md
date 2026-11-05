@@ -1,47 +1,42 @@
-# SSAPLASH 드럼 키트 전달용
+# SSAPLASH 드럼 키트 출처
 
-압축을 풀고 listen.html을 Chrome 또는 Edge에서 열어 ‘소리 켜기’를 누르세요.
-HTML 안에 선택한 8개 소리가 모두 포함돼 있어 인터넷 연결 없이 연주할 수 있습니다.
-별도 프로그램 설치는 필요 없습니다. 브라우저 설정에 따라 첫 로딩은 잠시 걸릴 수 있습니다.
+팀원이 고른 minorr 키트(2026-11-04 전달)다. 하이햇은 페달 상태에 따라 소리가 달라지도록 세 가지 소리를 둔다.
 
-## 이번 설정
+## 파일과 재생 설정
 
-- 킥: 강한 킥
-- 스네어: 강한 중앙 타격, 재생 음량 1.2배
-- 하이햇: 페달 닫기, 재생 음량 0.8배
-- 하이탐: 14인치 중앙, +6 반음
-- 미들탐: 15인치 강하게, +3 반음
-- 플로어탐: 18인치 강하게, -3.5 반음
-- 크래시: Virtuosity 룸 마이크
-- 라이드: 22인치 벨
-- 전체 음량: 사진과 같은 21%. 사용자가 전체 음량을 조절할 수 있습니다.
+재생 설정은 `kit-config.json`에 있다. 게인·재생 속도는 WAV에 굽지 않았으므로 재생할 때 한 번만 적용한다.
 
-이전 미리보기와 저장 공간을 분리하여 처음 열면 위 설정으로 시작합니다.
-이 파일에서 바꾼 값은 같은 브라우저에서 저장될 수 있습니다.
+| 패드 | 파일 | 원본 | 게인 |
+|---|---|---|---|
+| 킥 | `audio/kick.wav` | Yamaha Custom Birch BASS DRUM 22'' FF | 1.0 |
+| 스네어 | `audio/snare.wav` | Snare F (Polmuz) | 1.0 |
+| 하이햇 닫힌 타격 | `audio/hihat.wav` | HHAT Paiste 302+ 14'' FF | 1.0 |
+| 하이햇 열린 타격 | `audio/hihat-open.wav` | HHAT Paiste 302+ 14'' open FF | 1.0 |
+| 하이햇 페달 닫기 | `audio/hihat-pedal.wav` | 02a_Hat_OpenClose_Cymbals_&_Snares (Theriavirra) | 1.0 |
+| 하이탐 | `audio/high.wav` | TOM 1 F (Polmuz) | 1.0 |
+| 미들탐 | `audio/mid.wav` | TOM 2 FF (Polmuz) | 1.0 |
+| 플로어탐 | `audio/floor.wav` | TOM 3 FF (Polmuz) | 1.0 |
+| 크래시 | `audio/crash.wav` | CRASH Zildian A Custom 16'' centr FF | 1.0 |
+| 라이드 | `audio/ride.wav` | RIDE Zildian K Custom Session F | 1.3 |
 
-## 프론트 연결
+- 하이햇 세 소리는 `kit-config.json`의 `pads.hihat`(닫힌 타격, `HIHAT`)·`pads.hihat_pedal`(페달 닫기, `HIHAT_PEDAL`)·`pads.hihat_open`(열린 타격, 페달 뗀 상태의 `HIHAT`)이다. 전달 원본의 `pads.hihat.variants`(basic·open·pedal)를 앱 스키마에 맞춰 이 세 키로 폈다. 지금 앱은 `hihat`만 읽고, `hihat_open`·`hihat_pedal`은 페달 입력 작업에서 연결한다(그 전까지 하이햇 페달은 `hihat`을 0.7배로 대신 낸다).
+- minorr WAV 9개는 원본 그대로다. 페달 소리는 팀원이 준 `hihat-chick.wav`(스테레오, 0.46초)를 바이트 그대로 쓴다. 하이햇을 열었다 닫는 소리를 chick 자리에 지정한 것이고, 발로만 닫는 소리를 따로 녹음한 것은 아니다.
+- 파일 해시(sha256)는 `kit-config.json`에 있다.
+- 전달 원본의 파일명(`snare-polmuz-f.wav`, `tom-*-polmuz.wav`, `hihat-chick.wav`)은 패드 id에 맞춰 바꿨다.
 
-오디오 파일은 audio/에, 재생 설정은 kit-config.json에 있습니다.
-WAV는 미리보기의 원본 샘플과 동일합니다. 위 음량과 음높이는 WAV에 굽지 않았습니다.
-파일만 재생하면 현재 선택한 튜닝과 다르므로 반드시 설정을 함께 적용하세요.
+## 출처와 라이선스
 
-1. audio 폴더와 설정 파일을 프론트 정적 파일 경로에 복사합니다.
-2. 시작 시 파일을 fetch하고 AudioContext.decodeAudioData로 미리 읽어 둡니다.
-3. 타격마다 새 AudioBufferSourceNode를 만들고 해당 버퍼를 연결합니다.
-4. source.playbackRate.value = pad.playbackRate 를 적용합니다.
-5. 악기별 GainNode에 pad.gain을 적용하고 전체 음량 GainNode를 거쳐 출력합니다.
-6. 전체 음량 초기값은 0.21입니다. 탐 높낮이/악기 음량을 중복 적용하지 마세요.
+**CC BY 소리는 제품 안에 출처를 표기해야 한다.** 스네어·탐 세 개(CC BY 3.0)와 하이햇 페달 닫기(CC BY 4.0)가 여기 해당한다.
 
-동일 패드 연타나 여러 패드 동시 타격에는 각각 별도의 소스를 사용합니다.
-센서 이벤트와 실제 앱 연결, 저장소 업로드/배포는 이 전달 파일에 포함되지 않습니다.
+- 킥 — minorr, https://freesound.org/people/minorr/sounds/104256/ — CC0 1.0
+- 스네어 — minorr, https://freesound.org/people/minorr/sounds/138378/ — **CC BY 3.0**
+- 하이햇 닫힌 타격 — minorr, https://freesound.org/people/minorr/sounds/104222/ — CC0 1.0
+- 하이햇 열린 타격 — minorr, https://freesound.org/people/minorr/sounds/104225/ — CC0 1.0
+- 하이햇 페달 닫기 — Theriavirra, https://freesound.org/people/Theriavirra/sounds/270177/ — **CC BY 4.0**
+- 하이탐 — minorr, https://freesound.org/people/minorr/sounds/138369/ — **CC BY 3.0**
+- 미들탐 — minorr, https://freesound.org/people/minorr/sounds/138368/ — **CC BY 3.0**
+- 플로어탐 — minorr, https://freesound.org/people/minorr/sounds/138372/ — **CC BY 3.0**
+- 크래시 — minorr, https://freesound.org/people/minorr/sounds/104218/ — CC0 1.0
+- 라이드 — minorr, https://freesound.org/people/minorr/sounds/104236/ — CC0 1.0
 
-## 출처
-
-크래시는 Versilian Studios의 Virtuosity Drums, 나머지는 Karoryfer의 Big Rusty Drums입니다.
-원본 배포에 동봉된 CC0 라이선스를 licenses/에 함께 제공합니다.
-각 샘플 경로와 파일 해시는 kit-config.json에 기록했습니다.
-
-- https://shop.karoryfer.com/pages/free-big-rusty-drums
-- https://github.com/sfzinstruments/karoryfer.big-rusty-drums
-- https://versilian-studios.com/virtuosity-drums/
-- https://github.com/sfzinstruments/virtuosity_drums
+라이선스 원문: CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/ · CC BY 3.0 https://creativecommons.org/licenses/by/3.0/ · CC BY 4.0 https://creativecommons.org/licenses/by/4.0/

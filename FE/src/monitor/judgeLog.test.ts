@@ -270,3 +270,20 @@ describe('findHitRow', () => {
     expect(findHitRow([hitRow(300, 9, 'SNARE'), near], h)).toBe(near);
   });
 });
+
+describe('JudgeLog 페달(stickId null, PLAY-002)', () => {
+  // 인수 조건: 손 없는 타격은 스틱 세기 비교(velocityPairs)에서 제외
+  it('velocityPairs는 stickId null 타격을 건너뛴다', () => {
+    const log = new JudgeLog();
+    log.push(ev({ type: 'resolved', hit: hit({ id: 1, seq: 3, velocity: 70 }) }));
+    log.push(ev({ type: 'resolved', hit: hit({ id: 2, seq: 4, velocity: 100, stickId: null, foot: 3, pad: 'KICK' }) }));
+    const p = log.velocityPairs([hitRow(999, 3, 'SNARE', 0, 100), hitRow(1000, 4, 'KICK', null, 100)]);
+    expect(p).toEqual([{ stick: 0, pad: 'SNARE', seq: 3, stickVelocity: 100, feVelocity: 70 }]);
+  });
+
+  it('손 없는 타격이 섞여도 stats가 던지지 않는다', () => {
+    const log = new JudgeLog();
+    log.push(ev({ type: 'resolved', hit: hit({ id: 1, stickId: null, foot: 3, pad: 'KICK' }) }));
+    expect(() => log.stats([])).not.toThrow();
+  });
+});

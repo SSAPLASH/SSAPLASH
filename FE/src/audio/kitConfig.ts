@@ -19,11 +19,15 @@ export interface KitConfig {
   pads: Record<string, KitPadConfig>;
 }
 
-/** 키트 패드 id → PadId. 대응하는 패드가 없는 항목은 null이라 무시한다(현재는 없음) */
+/**
+ * 키트 패드 id → PadId. 대응하는 패드가 없는 항목은 null이라 무시한다(현재는 없음).
+ * hihat은 페달 밟은 상태의 닫힌 타격, hihat_pedal은 페달 밟는 소리(chick)다. 열린 타격은 아래 KIT_VARIANT_KEYS.
+ */
 export const KIT_PAD_TO_PAD_ID: Record<string, PadId | null> = {
   kick: 'KICK',
   snare: 'SNARE',
   hihat: 'HIHAT',
+  hihat_pedal: 'HIHAT_PEDAL',
   high: 'SMALL_TOM',
   mid: 'MID_TOM',
   floor: 'FLOOR_TOM',
@@ -47,6 +51,34 @@ export function resolveKitPads(config: KitConfig): ResolvedKitPad[] {
     const baked = config.adjustmentsBakedIntoWav === true;
     out.push({
       pad,
+      file: cfg.file,
+      gain: baked ? 1 : cfg.gain,
+      playbackRate: baked ? 1 : cfg.playbackRate,
+    });
+  }
+  return out;
+}
+
+/** 키트 선택 항목 id → 변형 키. pads 안에 이 키가 있을 때만 읽는다(없으면 변형 없음) */
+export const KIT_VARIANT_KEYS = { hihat_open: 'HIHAT_OPEN' } as const;
+export type KitVariantId = (typeof KIT_VARIANT_KEYS)[keyof typeof KIT_VARIANT_KEYS];
+
+export interface ResolvedKitVariant {
+  variant: KitVariantId;
+  file: string;
+  gain: number;
+  playbackRate: number;
+}
+
+/** 설정의 선택 항목(hihat_open 등)을 골라 게인·재생 속도를 정한다. 패드 항목과 같은 형식이다 */
+export function resolveKitVariants(config: KitConfig): ResolvedKitVariant[] {
+  const out: ResolvedKitVariant[] = [];
+  const baked = config.adjustmentsBakedIntoWav === true;
+  for (const [key, variant] of Object.entries(KIT_VARIANT_KEYS)) {
+    const cfg = config.pads[key];
+    if (!cfg || typeof cfg.file !== 'string') continue;
+    out.push({
+      variant,
       file: cfg.file,
       gain: baked ? 1 : cfg.gain,
       playbackRate: baked ? 1 : cfg.playbackRate,

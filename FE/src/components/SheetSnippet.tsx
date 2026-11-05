@@ -1,12 +1,11 @@
 // 약점 마디 미니 악보 — 결과 페이지용 정지 화면. 마운트·props 변경·리사이즈 때만 그린다(rAF 없음).
 import { useEffect, useRef } from 'react';
-import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
-import { layoutBar, SHEET_BAR_PX, type BarLayout } from '@/domain/sheet';
+import { gridOriginMs, layoutBar, SHEET_BAR_PX, type BarLayout, type GridChart } from '@/domain/sheet';
 import { drawSheet, readColors } from './sheetStripDraw';
 
 export interface SheetSnippetProps {
-  chart: Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'>;
+  chart: GridChart;
   /** chart.notes와 같은 인덱스. 미판정은 null */
   noteStates: (Judgement | null)[];
   /** 그릴 마디 범위(0부터, 양쪽 포함) */
@@ -31,6 +30,7 @@ export function SheetSnippet({ chart, noteStates, bars }: SheetSnippetProps) {
     const beatMs = 60_000 / chart.bpm;
     const barMs = beatMs * chart.beatsPerBar;
     const stepsPerBar = chart.beatsPerBar * 4;
+    const originMs = gridOriginMs(chart);
     const layoutOf = (bar: number) => {
       let l = cache.get(bar);
       if (!l) {
@@ -56,7 +56,8 @@ export function SheetSnippet({ chart, noteStates, bars }: SheetSnippetProps) {
         chart,
         noteStates,
         strayHits: [],
-        songTime: bars[0] * barMs,
+        songTime: originMs + bars[0] * barMs,
+        originMs,
         width,
         height,
         barPx,
