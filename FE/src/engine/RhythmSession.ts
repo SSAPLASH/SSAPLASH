@@ -6,6 +6,7 @@ import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
 import { gridOriginMs } from '@/domain/sheet';
 import { isSensorSource } from '@/domain/events';
+import { hitMatch, type MatchCandidate, type MatchRule } from './hitMatch';
 
 export interface NoteState {
   index: number;
@@ -40,8 +41,20 @@ export interface SessionSnapshot {
   counts: Record<Judgement, number>;
   /** 채보에 없는 타격 (감점 없음, 리포트용) */
   strayHits: number;
+  /** 후보 노트가 둘 이상이었던 타격 수 (매칭 경합) */
+  contestedHits: number;
   last: JudgementEvent | null;
   judgedCount: number;
+}
+
+/** 후보 노트가 둘 이상이었던 타격(매칭 경합, G4)의 기록 */
+export interface ContestedMatch {
+  hitId: number;
+  songTimeMs: number;
+  pad: PadId;
+  candidates: number[];
+  picked: number;
+  rule: MatchRule;
 }
 
 export interface RhythmOptions {
@@ -62,6 +75,8 @@ export class RhythmSession {
   private maxCombo = 0;
   private counts: Record<Judgement, number> = { PERFECT: 0, GOOD: 0, MISS: 0 };
   private strayHits = 0;
+  private contestedHits = 0;
+  private lastContested: ContestedMatch | null = null;
   private last: JudgementEvent | null = null;
   private judgedCount = 0;
   private cursor = 0; // 이 인덱스 이전 노트는 모두 판정됨
@@ -73,6 +88,11 @@ export class RhythmSession {
     this.chart = chart;
     this.opts = opts;
     this.notes = chart.notes.map((note, index) => ({ index, note, judgement: null, deltaMs: null, hitId: null }));
+  }
+
+  /** 가장 최근 경합 타격 기록. 진단 발행용(타격 id로 자기 것인지 확인한다) */
+  get lastContestedMatch(): ContestedMatch | null {
+    return this.lastContested;
   }
 
   get countInMs(): number {
@@ -109,6 +129,8 @@ export class RhythmSession {
     this.maxCombo = 0;
     this.counts = { PERFECT: 0, GOOD: 0, MISS: 0 };
     this.strayHits = 0;
+    this.contestedHits = 0;
+    this.lastContested = null;
     this.last = null;
     this.judgedCount = 0;
     this.cursor = 0;
@@ -183,21 +205,30 @@ export class RhythmSession {
     if (!hit.pad || (this.status !== 'playing' && this.status !== 'countin')) return null;
     const t = this.hitSongTimeMs(hit.tHit);
     const w = this.opts.windows.goodMs;
-    let best: NoteState | null = null;
-    let bestDelta = Infinity;
+    const cands: MatchCandidate[] = [];
     for (let i = this.cursor; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.note.timeMs > t + w) break;
       if (n.judgement !== null || n.note.pad !== hit.pad) continue;
-      const d = t - n.note.timeMs;
-      if (Math.abs(d) <= w && Math.abs(d) < Math.abs(bestDelta)) {
-        best = n;
-        bestDelta = d;
-      }
+      if (Math.abs(t - n.note.timeMs) <= w) cands.push({ index: i, timeMs: n.note.timeMs });
     }
-    if (!best) {
+    const m = hitMatch(cands, t, this.opts.windows);
+    if (m.pick === null || m.rule === null) {
       this.strayHits += 1;
       return null;
+    }
+    const best = this.notes[m.pick];
+    const bestDelta = t - best.note.timeMs;
+    if (m.contested) {
+      this.contestedHits += 1;
+      this.lastContested = {
+        hitId: hit.id,
+        songTimeMs: t,
+        pad: hit.pad,
+        candidates: cands.map((c) => c.index),
+        picked: m.pick,
+        rule: m.rule,
+      };
     }
     const j = judgeDelta(bestDelta, this.opts.windows);
     return this.apply(best, j, bestDelta, hit.id, hit.tResolved, hit);
@@ -256,6 +287,7 @@ export class RhythmSession {
       maxCombo: this.maxCombo,
       counts: { ...this.counts },
       strayHits: this.strayHits,
+      contestedHits: this.contestedHits,
       last: this.last,
       judgedCount: this.judgedCount,
     };

@@ -53,6 +53,9 @@ import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import type { CoachShadow } from '@/coach/live/shadowCoach';
+import { COACH_BASIS } from '@/domain/coachBasis';
+import { diagTap } from '@/engine/diagTap';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = 'select' | 'loading' | 'ready' | 'play';
@@ -62,6 +65,8 @@ const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPAN
 
 /** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
 const GO_MS = 400;
+/** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
+const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 
 function parseId(raw: string | null): number | null {
   if (raw === null || !/^-?\d+$/.test(raw)) return null;
@@ -106,6 +111,8 @@ function SheetPageBody() {
   const clockRef = useRef<PlayClock | null>(null);
   // 실시간 코칭(COACH-001). 연주 시작 시점 설정값으로 고정하고 문구는 안내 칸에 3초 띄운다 — 리듬 게임과 같은 연결
   const coachRef = useRef<LiveCoach | null>(null);
+  // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교, MODE-001 D6)
+  const shadowRef = useRef<CoachShadow | null>(null);
   const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
@@ -257,7 +264,7 @@ function SheetPageBody() {
       // 코칭은 기록·노트 색·HUD 뒤에 한다. 변환·표시가 실패해도 연주를 막지 않는다
       const coach = coachRef.current;
       if (!coach) return;
-      const message = coach.push({
+      const judged = {
         songTimeMs: activeSession.songTime(e.at),
         noteTimeMs: activeSession.notes[e.noteIndex].note.timeMs,
         judgement: e.judgement,
@@ -265,7 +272,9 @@ function SheetPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
-      });
+      };
+      const message = coach.push(judged);
+      shadowRef.current?.push(judged);
       if (!message) return;
       try {
         const copy = coachCopy(message);
@@ -399,7 +408,21 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
-    coachRef.current = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    coachRef.current = coach;
+    shadowRef.current = null;
+    // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
+    if (MONITOR_ENABLED) {
+      const goodMs = st.timing.goodMs;
+      void import('@/coach/live/shadowCoach').then((m) => {
+        if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
+        shadowRef.current = m.createCoachShadow({
+          goodMs,
+          activeBasis: COACH_BASIS,
+          publish: (b) => diagTap.publish({ type: 'coachEval', ...b }),
+        });
+      });
+    }
     clearCoachLine();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
@@ -438,6 +461,7 @@ function SheetPageBody() {
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     resetRun(ss);
     coachRef.current?.reset();
+    shadowRef.current?.reset();
     clearCoachLine();
   }, [resetRun, clearCoachLine]);
 
@@ -449,6 +473,7 @@ function SheetPageBody() {
     inputManager.setCandidateProvider(null);
     sessionRef.current?.reset();
     coachRef.current = null;
+    shadowRef.current = null;
     clearCoachLine();
     resetCountdown();
     setPauseReason(null);
