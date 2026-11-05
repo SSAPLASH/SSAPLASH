@@ -72,6 +72,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--synthetic-users", type=int, default=2000)
     p.add_argument("--synthetic-songs", type=int, default=300)
     p.add_argument("--out", type=Path, help="report.json과 table.csv를 쓸 폴더")
+    p.add_argument(
+        "--report",
+        type=Path,
+        help="진입 판단 보고서(Markdown)를 쓸 파일. 기준선 M0~M3와 후보(M4·M5·M6)가 모두 필요하다",
+    )
+    p.add_argument(
+        "--min-warm-targets", type=int, default=500, help="판단에 필요한 최소 일반 시험 목표 수"
+    )
+    p.add_argument(
+        "--min-cold-targets", type=int, default=30, help="판단에 필요한 최소 새 곡 시험 목표 수"
+    )
     p.add_argument("--mlflow", action="store_true", help="MLflow에 기록(집계 값만)")
     p.add_argument("--tracking-uri")
     p.add_argument("--experiment", default="song-recommend")
@@ -127,6 +138,18 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
         )
         table.to_csv(args.out / "table.csv", encoding="utf-8")
+    if args.report:
+        from ssaplash_ai.recommend.report import VERDICT_KO, DecisionConfig, decide, to_markdown
+
+        cfg = DecisionConfig(args.min_warm_targets, args.min_cold_targets)
+        try:
+            decision = decide(report, cfg)
+        except ValueError as ex:
+            print(f"보고서 오류: {ex}", file=sys.stderr)
+            return 2
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(to_markdown(report, decision, cfg), encoding="utf-8")
+        print(f"진입 판단: {VERDICT_KO[decision.verdict]} → {args.report}")
     if args.mlflow:
         from ssaplash_ai.recommend.mlflow_log import log_report
 
