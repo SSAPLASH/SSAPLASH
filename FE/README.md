@@ -179,7 +179,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 | `KICK` | role 3(오른발) `HIT` pad 7 | Space |
 | `HIHAT_PEDAL` | role 2(왼발) `HIT` pad 8, 같은 순간 `0x08 PEDAL` state 1 | B |
 
-페달 타격은 자세 매퍼·채보 후보 보정을 거치지 않고 패킷의 pad·velocity(100) 그대로 `judgedBy: 'stick'`으로 나간다. 손이 아니므로 `ResolvedHit.stickId`는 `null`이고 `foot: 2 | 3`이 기기를 나타낸다(`0 | 1`이던 `stickId` 타입이 `StickId | null`로 넓어졌다). 햅틱(HAPTIC)은 `stickId`가 null이면 보내지 않는다 — 페달에는 모터가 없다. 타격 시각에는 스틱과 같은 `sensorOffsetMs`를 더한다(페달 전용 보정값은 통합 테스트 실측 뒤 정한다).
+페달 타격은 자세 매퍼·채보 후보 보정을 거치지 않고 패킷의 pad·velocity(100) 그대로 `judgedBy: 'stick'`으로 나간다. 손이 아니므로 `ResolvedHit.stickId`는 `null`이고 `foot: 2 | 3`이 기기를 나타낸다(`0 | 1`이던 `stickId` 타입이 `StickId | null`로 넓어졌다). 타격 시각에는 스틱과 같은 `sensorOffsetMs`를 더한다(페달 전용 보정값은 통합 테스트 실측 뒤 정한다).
 
 옛 이름(`HI_TOM` → `SMALL_TOM`)은 `normalizePadId`·`normalizePadKeys`가 한 곳에서 변환한다. 서버 채보(`chartMapping`)·서버 프리셋(`api/presets`)·설정 마이그레이션(v10)·플레이 로그 로드가 이 함수를 거치므로 BE·AI 데이터가 옛 이름이어도 깨지지 않는다. 부족한 패드 배치는 `kitLayout.fillLayout`이 기본값으로 채운다. 프로토콜 패드 번호(0~8, EMB v0.7)는 화면 순서와 별개로 `input/stickProtocol`에 둔다(`PAD_CODE`·`padFromCode`, 0xFF·9 이상은 null).
 
@@ -188,10 +188,11 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
 - **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(배치에서 유도한 판정 프로필).
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket · Web Serial). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
-- **터치 입력(`TouchPadSource`, `kind: 'touch'`)**: 자유 연습의 드럼 킷만 켠다(`DrumKit`의 `onPadDown`). 패드를 누르는 즉시(pointerdown) `strike(pad)`가 이벤트를 내고, 자세 매퍼가 이벤트의 `pad`를 그대로 쓴다. 세기는 100 고정, `stickId`는 0·1 교대다. 화면 터치로 실제 스틱을 진동시키지 않는다(햅틱 없음). 키보드처럼 항상 붙어 있다.
+- **터치 입력(`TouchPadSource`, `kind: 'touch'`)**: 자유 연습의 드럼 킷만 켠다(`DrumKit`의 `onPadDown`). 패드를 누르는 즉시(pointerdown) `strike(pad)`가 이벤트를 내고, 자세 매퍼가 이벤트의 `pad`를 그대로 쓴다. 세기는 100 고정, `stickId`는 0·1 교대다. 키보드처럼 항상 붙어 있다.
 - **센서 판정은 `domain/events`의 `isSensorSource`로만 한다**: keyboard·preview·touch는 센서가 아니다. `source !== 'keyboard'`처럼 직접 비교하지 않는다(센서 시각 오프셋·드리프트 보정·센서 통계가 오염된다). `'touch'`는 `sensorRegistry` 예약어다.
 - **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 명령 0x14~0x17·파라미터 표(`STICK_PARAMS`)도 같은 파일에 있다.
 - **페달 타격**: role 2·3 HIT는 `InputManager`의 별도 경로(`handleFootHit`)로 매퍼를 건너뛰고 `ResolvedHit`이 된다([패드](#패드)). 플레이 로그·업로드 본문(`stickId: null`)·텔레메트리·이펙트(`hand` null)에는 손 없음으로 남고, 녹음은 `stickId` 키 자체를 생략한다(서버가 null을 400으로 거부).
+- **타격 진동(PLAY-006)**: 스틱이 패드를 판정한 순간 직접 울린다(펌웨어 로컬 트리거, 패드 밖 타격은 진동 없음). FE는 타격마다 HAPTIC을 보내지 않는다 — 브라우저를 거친 명령이 늦게 도착해 펌웨어 진동을 끊고 한 타격에 두 번 울렸다. `InputManager.haptic`은 모니터 진동 테스트에만 쓴다.
 - **스틱 판정 우선 규칙**: HIT `pad`가 있으면 자세 매퍼보다 우선해 그 패드로 재생한다(`judgedBy: 'stick'`). `pad`가 0xFF면 자세 매퍼(`'pose'`).
   채보 후보가 있고 `pad`가 후보 밖일 때만, 스틱이 애매하다고 했거나(`ambiguous`) `marginDeg`가 `AMBIGUOUS_MARGIN_DEG`(10°) 미만이면 가장 가까운 후보로 보정한다(`'chart'`). 확신 있는 오타는 그대로 두어 리듬 세션이 MISS 처리한다.
   세기는 스틱 `velocity`를 그대로 쓰고(펌웨어 곡선), 없을 때만 FE 가속도 곡선을 쓴다. 판정 출처는 `ResolvedHit.judgedBy`·텔레메트리에 남는다.

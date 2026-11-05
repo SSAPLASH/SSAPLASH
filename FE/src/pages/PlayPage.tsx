@@ -200,14 +200,12 @@ function PlayPageBody() {
     };
   }, [songIdParam, selectSong]);
 
-  // 타격: 즉시 발음(D6) → 햅틱 → 플래시 → 판정 → 로그·텔레메트리
+  // 타격: 즉시 발음(D6) → 플래시 → 판정 → 로그·텔레메트리. 타격 진동은 스틱이 직접 울린다(PLAY-006)
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
-        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
         flashes.current.set(hit.pad, performance.now());
       }
       const ss = sessionRef.current;
