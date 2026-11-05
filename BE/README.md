@@ -767,20 +767,14 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 
 GitLab의 `be-test`, `be-build`는 BE·DB 문서·인프라·CI 등 공통 파일이 바뀌는 MR과 기존 workflow가 허용하는
 통합 브랜치 파이프라인에서 실행된다. 열린 MR이 있는 `develop-BE` push의 중복 파이프라인은 만들지 않으며,
-해당 브랜치에서 main을 대상으로 하는 MR은 변경 경로와 무관하게 모든 BE 필수 검사를 실행한다. 일반 MR과
-`develop-BE` push는 `be-test-scope`가 이전 커밋과 현재 커밋의 Git diff를 비교한다. 일반 기능 변경은 FAST로 전체
-소스와 테스트를 컴파일하고 인증·입력·채보·집계의 고정 단위 테스트 13개 클래스와 앱 JAR 빌드를 실행한다.
-FAST는 서버·DB·WebSocket·외부 프로세스 통합 검사를 실행하지 않으므로 이 검사는 아래 FULL에서 확인해야 한다.
-루트 README·BE README·컨벤션 문서 또는 FE·AI·EMB만 변경되면 BE 검사를 생략한다. 분류 결과는 job 로그에 표시된다.
-공통 인증·회원·탈퇴·스토리지·설정·DB·의존성·CI, 알 수 없는 파일, 삭제·이름 변경, diff 기준 부재는 전체 검사로
-처리한다. `Docs/API/examples`는 테스트 입력이므로 문서 전용으로 취급하지 않는다. main push, main 대상 MR,
-develop-BE 출발 MR, merged-result/merge-train과 기타 수동 실행도 전체 검사다. 범위 artifact가 없거나 올바르지 않으면
-전체 검사로 처리한다. FULL에서는 실제 FluidSynth 렌더·Timescale·워커 JAR 검사도 실행한다. FAST에서도 Timescale
-service는 job이 실행되기 전에 컨테이너가 먼저 기동될 수 있다.
+main 대상 MR과 main 브랜치 파이프라인은 변경 경로와 무관하게 모든 BE 필수 검사를 실행한다. 일반 BE 대상 MR과 `develop-BE` push는
+FAST `be-test` 한 작업에서 전체 소스와 테스트를 컴파일하고 인증·입력·채보·집계의 고정 단위 테스트 13개 클래스와 앱 JAR 빌드를 실행한다.
+공통 코드 변경도 FAST이며 서버·DB·WebSocket·외부 프로세스 통합 검사는 main 통합 시 FULL에서 확인한다.
+BE 대상 경로가 없는 일반 FE·AI·EMB MR에는 BE job을 만들지 않는다. `Docs/API/examples`는 테스트 입력이므로
+BE 대상 경로다. FULL에서만 별도 앱 JAR·실제 FluidSynth 렌더·Timescale·워커 JAR job을 생성한다.
 MR을 만들기 전의 push 파이프라인은 소급하여 제거하지 않는다. main 배포·예약 보정 규칙은 유지한다.
 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와 `eclipse-temurin:21-jdk`를 사용한다.
 Gradle에 `--build-cache`를 사용해 컴파일 결과를 재사용할 수 있지만 테스트 결과는 캐시하지 않고 CI에서 매번 실행한다.
-develop-BE 대상 MR에서 수동으로 실행할 수 있는 비차단 `be-fast-benchmark`는 컴파일 캐시를 끄고 clean·FAST 테스트·앱 JAR을 한 번에 측정한다. 필수 전체 검사를 대체하지 않는다.
 전체 검사에서 필수인 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
 전체 검사에서 필수인 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
 `./gradlew --no-daemon --build-cache timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
