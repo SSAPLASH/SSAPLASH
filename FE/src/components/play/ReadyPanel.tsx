@@ -50,6 +50,8 @@ export interface ReadyPanelProps {
   options?: ReactNode;
   /** true면 오른쪽 열 맨 위에 「악보 읽는 법」 카드를 보인다(악보 연습) */
   staffLegend?: boolean;
+  /** 두 열 아래 전체 폭에 그대로 넣는 슬롯(비슷한 곡 줄, 설계 COACH-004-similar-songs D9) */
+  footer?: ReactNode;
 }
 
 function Dot({ ok }: { ok: boolean }) {
@@ -93,6 +95,7 @@ export function ReadyPanel({
   onStart,
   options,
   staffLegend = false,
+  footer,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
@@ -215,6 +218,7 @@ export function ReadyPanel({
           </Card>
         </div>
       </div>
+      {footer}
     </section>
   );
 }

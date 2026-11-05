@@ -36,6 +36,12 @@ describe('toReport', () => {
     expect(r.recommendedDrills).toEqual([]);
   });
 
+  it('곡 정보 선택 필드가 없으면 null, 있으면 읽고 이상한 값은 null', () => {
+    expect(toReport(DTO)).toMatchObject({ songId: null, chartId: null, difficulty: null });
+    expect(toReport({ ...DTO, songId: 12, chartId: '34', difficulty: 'HARD' })).toMatchObject({ songId: 12, chartId: 34, difficulty: 'HARD' });
+    expect(toReport({ ...DTO, songId: 0, chartId: 'x', difficulty: 'EXTREME' })).toMatchObject({ songId: null, chartId: null, difficulty: null });
+  });
+
   it('숫자가 문자열로 와도 읽는다', () => {
     expect(toReport({ ...DTO, accuracy: '84.50' }).accuracy).toBeCloseTo(0.845, 6);
   });
