@@ -1,14 +1,13 @@
-// 통합 설정 페이지(/setup, Figma 03 드럼 세팅). 단계 카드 3장(스틱 연결·시작 위치 보정·프리셋) → 드럼 배치 카드(편집기·정보·타격 확인) → 접힌 고급 설정 → 하단 고정 바.
+// 통합 설정 페이지(/setup, Figma 03 드럼 세팅). 단계 카드 3장(스틱 연결·드럼 위치 보정·프리셋) → 드럼 배치 카드(배치 확인·정보·타격 확인) → 접힌 고급 설정 → 하단 고정 바.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
-// 단계 판정·문구는 domain/setupSteps, 펼침 규칙은 domain/setupExpand, 저장은 presetStore, 보정은 ReferenceCapture가 맡고
-// 이 페이지는 조립과 표시만 한다. 판정은 배치(kitLayout)에서 유도되므로 편집 중 배치가 곧 판정이다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// 단계 판정·문구는 domain/setupSteps, 펼침 규칙은 domain/setupExpand, 저장은 presetStore, 보정·재정렬은 app/calibrationSession이 맡고
+// 이 페이지는 조립과 표시만 한다. 판정은 손별 앵커(stickAnchors)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { KitCanvas } from '@/components/KitCanvas';
 import { useRecentHits } from '@/components/drum/useRecentHits';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Chip } from '@/components/ui/Chip';
 import { Segmented } from '@/components/ui/Segmented';
 import { Slider } from '@/components/ui/Slider';
 import { Toggle } from '@/components/ui/Toggle';
@@ -28,12 +27,11 @@ import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
-import { layoutToProfile } from '@/domain/kitJudge';
-import { KIT_LAYOUT_PRESET_LABELS, type KitLayoutPresetId } from '@/domain/kitLayout';
+import { anchorsToProfile } from '@/domain/kitJudge';
 import type { PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
-import { readiness } from '@/domain/readiness';
+import { anchorsReady, readiness } from '@/domain/readiness';
 import { pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
   dongleLine,
@@ -49,12 +47,12 @@ import {
 import { collapse, initialOpen, isExpanded, openByUser, openOnFirstNeededChange } from '@/domain/setupExpand';
 import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
-import { ReferenceCapture, type ReferenceSnapshot } from '@/engine/ReferenceCapture';
+import { CalibrationStage } from '@/components/calibration/CalibrationStage';
+import { useRealign } from '@/components/useRealign';
+import { calibrationSession } from '@/app/calibrationSession';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap';
-import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
-
-const PRESET_IDS: KitLayoutPresetId[] = ['basic', 'wide', 'tight'];
+import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 
 /** 편집기 표시 크기(Figma 720×320). 위치·반지름 값은 이 좌표계의 px로 보여 준다 */
 const EDITOR_W = 720;
@@ -104,11 +102,17 @@ function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], con
   return parts.length ? parts.join(' / ') : null;
 }
 
-/** 스틱에 보낸 패드 표의 적용 상태 문구. 500ms 확인 창이 지났는지는 1초 tick 리렌더로 갱신된다 */
-function padTableText(t: PadTableStatus): string {
-  if (t.acked !== null) return t.acked === t.sent ? `스틱에 패드 ${t.sent}개 적용됨` : `스틱 적용 ${t.acked}개 / 전송 ${t.sent}개`;
-  if (performance.now() - t.at > 500) return `스틱 적용 확인 없음(${t.sent}개 전송)`;
-  return '스틱에 패드 표 전송 중…';
+/** 한 손에 보낸 패드 표의 적용 상태. 500ms 확인 창이 지났는지는 1초 tick 리렌더로 갱신된다 */
+function padTableHandText(t: PadTableStatus): string {
+  if (t.acked !== null) return t.acked === t.sent ? `${t.sent}개 적용됨` : `적용 ${t.acked}개 / 전송 ${t.sent}개`;
+  if (performance.now() - t.at > 500) return `확인 없음(${t.sent}개 전송)`;
+  return '전송 중…';
+}
+
+/** 손별 패드 표 문구: "스틱 패드 표 · 왼손 7개 적용됨 · 오른손 7개 적용됨". 둘 다 없으면 null */
+function padTablesText(t: readonly [PadTableStatus | null, PadTableStatus | null]): string | null {
+  const parts = (['왼손', '오른손'] as const).flatMap((name, i) => (t[i] ? [`${name} ${padTableHandText(t[i]!)}`] : []));
+  return parts.length ? `스틱 패드 표 · ${parts.join(' · ')}` : null;
 }
 
 /** 이름 창을 연 이유: leave = 미저장 이탈 확인에서 [저장하고 나가기], save = 일반 저장(③·하단 바) */
@@ -129,6 +133,8 @@ export function SetupPage() {
   const yawDrift = useLive((l) => l.yawDrift);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const referenceStale = useLive((l) => l.referenceStale);
+  const realignNeeded = useLive((l) => l.realignNeeded);
+  const calibration = useLive((l) => l.calibration);
   const navigate = useNavigate();
   const location = useLocation();
   const navState = location.state as { returnTo?: string; returnLabel?: string } | null;
@@ -165,12 +171,16 @@ export function SetupPage() {
     [],
   );
 
-  // 판정 원은 배치에서 유도한 프로필로 그린다(판정과 같은 규칙)
-  const anchors = useMemo(
+  // 판정 원은 손별 앵커 프로필로 그린다(판정과 같은 규칙, PLAY-004 D1). 보정 안 된 손은 그리지 않는다
+  const anchorSets = useMemo(
     () =>
-      layoutToProfile(s.kitLayout, s.tuning.angleRange, { maxRadiusDeg: s.tuning.maxRadiusDeg, radiusFactor: s.tuning.radiusFactor }).anchors,
-    [s.kitLayout, s.tuning.angleRange, s.tuning.maxRadiusDeg, s.tuning.radiusFactor],
+      [
+        s.stickAnchors[0] ? anchorsToProfile(s.stickAnchors[0], s.tuning, 0).anchors : null,
+        s.stickAnchors[1] ? anchorsToProfile(s.stickAnchors[1], s.tuning, 1).anchors : null,
+      ] as const,
+    [s.stickAnchors, s.tuning],
   );
+  const hasAnchors: [boolean, boolean] = [s.stickAnchors[0] !== null, s.stickAnchors[1] !== null];
 
   const lat = audioEngine.latency();
   const recentHits = useRecentHits(HIT_LOG_ROWS);
@@ -181,17 +191,13 @@ export function SetupPage() {
   // 타격 이펙트. 키보드·센서 타격이 live의 hitSeq로 들어온다(편집기 마우스 클릭은 타격이 아니다)
   const hits = useRef(new Map<PadId, HitFx>());
   useHitFx(hits);
-  const movePad = (pad: PadId, x: number, y: number) => {
-    setSelectedPad(pad);
-    s.movePad(pad, x, y);
-  };
 
-  // ---- 단계 판정(설정 화면에선 "이 세션에서 보정했는가"를 묻는다: firstSetupDone 대신 referenceSetAt) ----
+  // ---- 단계 판정(연결된 손마다 앵커가 있는가, PLAY-004 D9) ----
   const readinessInput = {
     sensorKind: s.sensorKind,
     connected,
     pedal,
-    firstSetupDone: referenceSetAt !== null,
+    firstSetupDone: anchorsReady(connected, hasAnchors),
     activePresetId: s.activePresetId,
   };
   const { ready, missing } = readiness(readinessInput);
@@ -199,7 +205,7 @@ export function SetupPage() {
   const dongleState: SetupDongleState | undefined =
     s.sensorKind !== 'webserial' ? undefined : sourceState !== 'connected' ? 'closed' : (dongle ?? 'waiting');
   const stepsResult = setupSteps(
-    { ...readinessInput, referenceSetAt, activePresetName: activePreset?.name ?? null, battery, dongle: dongleState },
+    { ...readinessInput, referenceSetAt, realignNeeded, activePresetName: activePreset?.name ?? null, battery, dongle: dongleState },
     now,
   );
   const stepOf = (id: SetupStepId) => stepsResult.steps.find((st) => st.id === id)!;
@@ -227,57 +233,16 @@ export function SetupPage() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // ---- ② 시작 위치 보정 (capturing 모드) ----
-  const [capturing, setCapturing] = useState(false);
-  const [snap, setSnap] = useState<ReferenceSnapshot>({ phase: 'idle', progress: 0, spread: 0 });
-  const [capNote, setCapNote] = useState<string | null>(null);
-  const capRef = useRef<ReferenceCapture | null>(null);
-  const capCleanup = useRef<(() => void) | null>(null);
+  // ---- ② 드럼 위치 보정(2타, PLAY-004). 로직은 calibrationSession, 여기선 시작·취소만 ----
+  const capturing = calibration.mode === 'capture';
+  const realigning = calibration.mode === 'realign';
+  const stopCapture = () => calibrationSession.cancelCapture();
+  const startCapture = () => calibrationSession.startCapture();
+  // 스틱이 다시 켜진 손이 있으면 재정렬 세션을 자동으로 시작한다(네 진입점 공용 훅)
+  useRealign(sensorMode);
 
-  const stopCapture = useCallback(() => {
-    capCleanup.current?.();
-    capCleanup.current = null;
-    capRef.current = null;
-    setCapturing(false);
-  }, []);
-
-  const startCapture = () => {
-    stopCapture();
-    const cap = new ReferenceCapture();
-    capRef.current = cap;
-    setCapNote(null);
-    inputManager.setPoseStream(true);
-    const offSnap = cap.subscribe((sn) => {
-      setSnap(sn);
-      if (sn.phase === 'done') {
-        // 완료: 지금 자세를 기준으로 삼고 보정 시각을 남긴다
-        inputManager.resetPose();
-        useLive.setState({ referenceSetAt: Date.now(), referenceStale: false });
-        setCapNote('시작 위치를 맞췄습니다');
-        // 구독 콜백 안에서 해제하면 반복 중 변경이라 다음 틱에 정리한다
-        window.setTimeout(() => {
-          if (capRef.current === cap) stopCapture();
-        }, 0);
-      }
-    });
-    // 보정 대상은 0번 스틱 자세. 모의 IMU는 두 스틱이 같은 자세를 쓴다
-    const offPose = inputManager.onPose((stickId, p) => {
-      if (stickId === 0) cap.onPose(p, performance.now());
-    });
-    capCleanup.current = () => {
-      offSnap();
-      offPose();
-    };
-    setCapturing(true);
-  };
-
-  // 보정 중 연결이 모두 끊기면 처음부터 다시
-  useEffect(() => {
-    if (capturing && !anyConnected) capRef.current?.restart();
-  }, [capturing, anyConnected]);
-
-  // 언마운트 시 구독 해제. 자세 스트림은 다른 화면의 자세 마커가 쓰므로 켠 채 둔다
-  useEffect(() => () => capCleanup.current?.(), []);
+  // 언마운트 시 진행 중인 보정은 접는다(표를 비워 둔 채 나가지 않게)
+  useEffect(() => () => calibrationSession.cancelCapture(), []);
 
   // ---- 저장·이름 창 ----
   const [nameOpen, setNameOpen] = useState<NamePurpose | null>(null);
@@ -390,7 +355,7 @@ export function SetupPage() {
   else connText = '연결 안 됨';
 
   // ---- 단계 카드 공통 ----
-  const expandedOf = (id: SetupStepId) => isExpanded(open, id, stepOf(id).status) || (id === 'calibration' && capturing);
+  const expandedOf = (id: SetupStepId) => isExpanded(open, id, stepOf(id).status) || (id === 'calibration' && (capturing || realigning));
   const openStep = (id: SetupStepId) => setOpen((o) => openByUser(o, id));
   const collapseStep = (id: SetupStepId) => {
     if (id === 'calibration') stopCapture();
@@ -478,20 +443,20 @@ export function SetupPage() {
             <p className="setup-note">
               {sensorDesc?.label ?? '입력'} · {connText}
             </p>
-            {sensorMode && padTable && <p className="setup-note">{padTableText(padTable)}</p>}
+            {sensorMode && padTablesText(padTable) && <p className="setup-note">{padTablesText(padTable)}</p>}
             {sensorMode && yawDriftLine && <p className="setup-note">{yawDriftLine}</p>}
             {sourceMessage && <div className={`setup-notice ${sourceState === 'error' ? 'error' : ''}`}>{sourceMessage}</div>}
-            {sensorMode && referenceStale && anyConnected && (
-              <div className="setup-notice">다시 연결됐습니다. 쳐 보고 필요하면 시작 위치를 다시 맞추세요</div>
+            {sensorMode && referenceStale && anyConnected && !realignNeeded[0] && !realignNeeded[1] && (
+              <div className="setup-notice">다시 연결됐습니다. 쳐 보고 판정이 밀리면 ②에서 다시 보정하세요</div>
             )}
           </div>
         </StepCard>
 
-        {/* ② 시작 위치 보정 */}
+        {/* ② 드럼 위치 보정(2타) */}
         <StepCard
           id={STEP_DOM_ID.calibration}
           index={2}
-          title="시작 위치 보정"
+          title="드럼 위치 보정"
           status={stepOf('calibration').status}
           summary={stepOf('calibration').summary}
           actionLabel={actionLabelOf('calibration')}
@@ -502,29 +467,16 @@ export function SetupPage() {
         >
           {!sensorMode ? (
             <p className="setup-note">키보드 입력은 보정이 필요 없습니다.</p>
-          ) : capturing ? (
-            <div className="setup-col">
-              <p>스틱을 들고 3초간 자세를 유지하세요</p>
-              <div className="setup-progress-bar">
-                <div style={{ width: `${Math.round(snap.progress * 100)}%` }} />
-              </div>
-              <p className="setup-note">
-                {snap.phase === 'holding' ? `유지 중 ${(snap.progress * 3).toFixed(1)}초` : '자세가 흔들리면 처음부터 다시 셉니다'}
-                {' · '}퍼짐 {snap.spread.toFixed(1)}°
-              </p>
-              {!anyConnected && <div className="setup-notice error">스틱 연결이 끊겼습니다. 다시 연결되면 처음부터 진행합니다</div>}
-              <div className="setup-row">
-                <Button variant="secondary" onClick={stopCapture}>
-                  취소
-                </Button>
-              </div>
-            </div>
+          ) : capturing || realigning ? (
+            <CalibrationStage onRestart={anyConnected ? startCapture : undefined} />
           ) : (
             <div className="setup-col">
-              {capNote && <div className="setup-notice">{capNote}</div>}
+              <p className="setup-note">
+                스틱을 정면으로 들고 [보정 시작]을 누른 뒤, 안내하는 드럼을 양손으로 2번씩 쳐 주세요. 친 자리에 드럼이 놓여요.
+              </p>
               <div className="setup-row">
-                <Button variant={referenceSetAt === null ? 'primary' : 'secondary'} onClick={startCapture} disabled={!anyConnected}>
-                  {referenceSetAt === null ? '시작 위치 맞추기' : '다시 맞추기'}
+                <Button variant={stepOf('calibration').status === 'needed' ? 'primary' : 'secondary'} onClick={startCapture} disabled={!anyConnected}>
+                  {stepOf('calibration').status === 'needed' ? '보정 시작' : '다시 하기'}
                 </Button>
               </div>
               {!anyConnected && <p className="setup-note faint">스틱을 연결하면 보정할 수 있습니다.</p>}
@@ -603,32 +555,23 @@ export function SetupPage() {
         <h2 id="setup-kit-title" className="setup-card-title">
           드럼 배치
         </h2>
-        <p className="setup-card-desc">패드를 끌어 위치와 크기를 바꿔요. 바꾼 배치는 저장해야 프리셋에 남아요.</p>
+        <p className="setup-card-desc">보정에서 친 자리가 배치가 돼요. 점선 원은 손별 판정 범위(파랑 왼손·주황 오른손). 바뀐 배치는 저장해야 프리셋에 남아요.</p>
         <div className="setup-kit-body">
           <div className="setup-kit-left">
-            {/* 편집기에서 마우스는 고르기·끌기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
+            {/* 마우스는 고르기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
             <div className="setup-editor" data-no-pointer-strike>
               <KitCanvas
                 layout={s.kitLayout}
-                draggable
-                onMovePad={movePad}
                 onTapPad={setSelectedPad}
                 highlightPad={selectedPad}
                 hits={hits}
                 keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-                anchors={anchors}
+                anchorSets={anchorSets}
                 angleRange={s.tuning.angleRange}
                 poses={pose}
                 showPoses={sensorMode}
                 surfaceRef={bindSensorSurface}
               />
-            </div>
-            <div className="setup-chips">
-              {PRESET_IDS.map((id) => (
-                <Chip key={id} onClick={() => s.applyLayoutPreset(id)}>
-                  {KIT_LAYOUT_PRESET_LABELS[id]}
-                </Chip>
-              ))}
             </div>
           </div>
           <div className="setup-padinfo">
@@ -648,7 +591,7 @@ export function SetupPage() {
               </div>
             </dl>
             <div className="setup-padinfo-foot">
-              <p className="setup-padinfo-hint">패드를 눌러 고르고 끌어서 옮겨요. 소리와 타격 확인은 스틱이나 키보드로 쳐 볼 때만 나요.</p>
+              <p className="setup-padinfo-hint">패드를 눌러 고르면 위치를 볼 수 있어요. 위치는 ② 보정에서 친 자리로 정해져요.</p>
               {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
               <Button variant="secondary" size="sm" onClick={s.resetLayout}>
                 기본 배치로
@@ -679,6 +622,15 @@ export function SetupPage() {
         </div>
         {advOpen && (
           <div id="setup-adv-body" className="setup-adv-body">
+            <Slider
+              label="판정 반경 하한"
+              min={TUNING_RANGES.minRadiusDeg.min}
+              max={TUNING_RANGES.minRadiusDeg.max}
+              step={TUNING_RANGES.minRadiusDeg.step}
+              value={s.tuning.minRadiusDeg}
+              valueText={`${s.tuning.minRadiusDeg}°`}
+              onChange={(v) => s.setTuning({ minRadiusDeg: v })}
+            />
             <Slider
               label="판정 반경 상한"
               min={TUNING_RANGES.maxRadiusDeg.min}
