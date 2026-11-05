@@ -32,6 +32,10 @@
 .guide-slot.coach-warn .guide-slot-title {
   color: var(--brand-sub);
 }
+.guide-slot.coach-good .guide-slot-label,
+.guide-slot.coach-good .guide-slot-title {
+  color: var(--good);
+}
 
 /* HitReadout */
 .hit-readout {
