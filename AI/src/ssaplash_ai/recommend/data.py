@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -58,12 +59,7 @@ def load_dataset(directory: str | Path, stage: str, *, p2_approval: str | None =
 
     P2는 동의 범위가 정해진 뒤에만 쓸 수 있으므로 승인 근거(문서·결정 번호)를 `p2_approval`에 적어야 한다.
     """
-    if stage not in S.STAGES:
-        raise DataError(f"데이터 출처 단계는 {S.STAGES} 중 하나여야 합니다: {stage!r}")
-    if stage == S.STAGE_PRODUCTION and not (p2_approval and p2_approval.strip()):
-        raise DataError(
-            "일반 사용자 데이터(P2)는 동의 범위 승인 근거(p2_approval) 없이 사용할 수 없습니다."
-        )
+    _check_stage(stage, p2_approval)
     root = Path(directory)
     if not root.is_dir():
         raise DataError(f"데이터 폴더가 없습니다: {root}")
@@ -80,7 +76,43 @@ def load_dataset(directory: str | Path, stage: str, *, p2_approval: str | None =
         digest.update(spec.filename.encode("utf-8"))
         digest.update(path.read_bytes())
         raw[name] = _read(path, spec)
+    return _build(raw, stage, digest.hexdigest())
 
+
+def dataset_from_frames(
+    frames: Mapping[str, pd.DataFrame], stage: str, *, p2_approval: str | None = None
+) -> Dataset:
+    """메모리의 표로 만든다. 운영 배치가 내보낸 데이터를 파일로 남기지 않기 위해 쓴다.
+
+    표 이름은 `schema.FILES`의 키이고 값은 문자열이다(비어 있으면 빈 문자열). 검증은 `load_dataset`과 같다.
+    """
+    _check_stage(stage, p2_approval)
+    raw: dict[str, pd.DataFrame] = {}
+    digest = hashlib.sha256()
+    for name, spec in sorted(S.FILES.items()):
+        frame = frames.get(name)
+        if frame is None:
+            if spec.must_exist:
+                raise DataError(f"필수 입력이 없습니다: {spec.filename}")
+            raw[name] = pd.DataFrame(columns=list(spec.required + spec.optional))
+            continue
+        _check_frame(frame, spec)
+        digest.update(spec.filename.encode("utf-8"))
+        digest.update(frame.to_csv(index=False).encode("utf-8"))
+        raw[name] = frame.astype(object)
+    return _build(raw, stage, digest.hexdigest())
+
+
+def _check_stage(stage: str, p2_approval: str | None) -> None:
+    if stage not in S.STAGES:
+        raise DataError(f"데이터 출처 단계는 {S.STAGES} 중 하나여야 합니다: {stage!r}")
+    if stage == S.STAGE_PRODUCTION and not (p2_approval and p2_approval.strip()):
+        raise DataError(
+            "일반 사용자 데이터(P2)는 동의 범위 승인 근거(p2_approval) 없이 사용할 수 없습니다."
+        )
+
+
+def _build(raw: dict[str, pd.DataFrame], stage: str, data_hash: str) -> Dataset:
     users = _users(raw["users"])
     songs = _songs(raw["songs"])
     charts = _chart_features(raw["chart_features"], set(songs["song_id"]))
@@ -93,9 +125,7 @@ def load_dataset(directory: str | Path, stage: str, *, p2_approval: str | None =
     )
     song_meta = _song_meta(raw["song_meta"], set(songs["song_id"]))
     weak = _weak_summary(raw["weak_summary"], set(users["user_key"]))
-    return Dataset(
-        stage, users, songs, charts, interactions, exposures, song_meta, weak, digest.hexdigest()
-    )
+    return Dataset(stage, users, songs, charts, interactions, exposures, song_meta, weak, data_hash)
 
 
 # ---------------------------------------------------------------- 읽기와 열 검사
@@ -108,21 +138,32 @@ def _read(path: Path, spec: S.FileSpec) -> pd.DataFrame:
         raise DataError(
             f"{spec.filename}을 읽지 못했습니다(UTF-8 CSV 필요): {type(ex).__name__}"
         ) from ex
-    lowered = {c.lower(): c for c in df.columns}
+    _check_frame(df, spec)
+    return df
+
+
+def check_columns(columns: Iterable[str], spec: S.FileSpec, *, label: str | None = None) -> None:
+    """열 이름만 본다. 뷰는 행을 읽기 전에 이 검사를 먼저 통과해야 한다. 오류에는 열 이름만 담는다."""
+    label = label or spec.filename
+    names = list(columns)
+    lowered = {c.lower(): c for c in names}
     forbidden = sorted(S.FORBIDDEN_COLUMNS & set(lowered))
     if forbidden:
         raise DataError(
-            f"{spec.filename}에 개인을 가리킬 수 있는 열이 있습니다: {[lowered[c] for c in forbidden]}"
+            f"{label}에 개인을 가리킬 수 있는 열이 있습니다: {[lowered[c] for c in forbidden]}"
         )
-    missing = [c for c in spec.required if c not in df.columns]
+    missing = [c for c in spec.required if c not in names]
     if missing:
-        raise DataError(f"{spec.filename}에 필수 열이 없습니다: {missing}")
-    unknown = [c for c in df.columns if c not in spec.required and c not in spec.optional]
+        raise DataError(f"{label}에 필수 열이 없습니다: {missing}")
+    unknown = [c for c in names if c not in spec.required and c not in spec.optional]
     if unknown:
-        raise DataError(f"{spec.filename}에 스키마에 없는 열이 있습니다: {unknown}")
+        raise DataError(f"{label}에 스키마에 없는 열이 있습니다: {unknown}")
+
+
+def _check_frame(df: pd.DataFrame, spec: S.FileSpec) -> None:
+    check_columns(df.columns, spec)
     if spec.must_exist and df.empty:
         raise DataError(f"{spec.filename}에 행이 없습니다.")
-    return df
 
 
 # ---------------------------------------------------------------- 값 변환 도구

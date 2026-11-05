@@ -292,6 +292,32 @@ uv run python scripts/run_recommend_poc.py --data data/recommend/p1 --stage P1 -
 - 실데이터 실행은 **BE 내보내기와 충분한 연주 기록이 있어야** 할 수 있다. 현재 공용 곡은 연습 패턴 3개뿐이고 실곡 31곡은 등록 전이다.
 - 실데이터가 생기면: BE 내보내기 → `import_song_meta.py` → `run_recommend_poc.py --stage P1 --report` 순서로 돌리고, 시험 구간을 보지 않고 `tuning.tune`으로 하이퍼파라미터를 다시 고른 뒤 보고서를 본다.
 
+## 운영 배치 (`batch.py`, 설계 문서 부록 C)
+
+BE 읽기 뷰에서 입력을 읽어 사용자별 후보를 만들고 BE에 적재한다. 요청 경로에서 BE가 AI를 부르지 않는다. **기능은 꺼진 채로 준비만 되어 있다.** 켜는 조건은 실데이터 보고서, 동의 화면 배포, 동의 문구 확정이다.
+
+```bash
+# 합성 입력으로 끝까지 돌린다(적재하지 않음)
+uv run python scripts/run_recommend_batch.py --synthetic --stage P0
+# 운영: 뷰에서 읽어 적재한다
+uv run python scripts/run_recommend_batch.py --from-views --stage P2 --p2-approval <근거> --variant base --upload --mlflow
+```
+
+| 구성 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 입력 | `source.py` | `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`를 한 스냅숏으로 읽는다. `recommend_song_meta_v`는 있으면 읽는다. 허용 밖의 열이 있으면 행을 읽지 않는다. 파일로 남기지 않는다 |
+| 검증 | `data.dataset_from_frames` | CSV 입력과 같은 규칙으로 검증한다. 어긋나면 적재 없이 멈춘다 |
+| 후보 | `batch.generate_candidates` | 전체 연주로 LightGCN을 학습해 사용자별 상위 50개를 만든다. 이미 친 곡은 뺀다. 연주가 없는 사용자는 후보를 만들지 않는다(BE가 R1로 응답) |
+| 적재 | `candidates_client.py` | 같은 `batchId`로 4 MiB 이하씩 나눠 보낸다. 연결 오류·429·5xx는 3번까지 다시 보내고, 그 밖의 4xx는 멈춘다 |
+
+- **재정렬은 BE가 한다.** M6의 하드 제외와 규칙 점수 혼합은 서빙 때의 사용자 상태로 해야 해서, 배치는 재정렬 전 순위를 보낸다.
+- **`modelVersion`**은 `r3-{변형}-{하이퍼파라미터 해시 8자}`다. 데이터가 바뀌어도 같아서 BE 허용 목록을 배치마다 고치지 않는다. 변형을 바꾸면 값이 바뀌므로 허용 목록에 먼저 넣는다.
+- **변형**(`--variant`): `base`(특징 없음), `feat`(채보 특징), `feat_meta`(채보 특징과 메타데이터). 어떤 변형을 쓸지는 실데이터 보고서로 정한다.
+- **환경 변수:** `SSAPLASH_RECOMMEND_EXPORT_DSN`(읽기 전용 계정), `SSAPLASH_WORKER_BASE_URL`, `SSAPLASH_WORKER_TOKEN`(채보 워커와 같은 값).
+- **종료 코드:** 0 성공, 2 입력·설정 오류(적재 안 함), 3 적재 실패 또는 일부만 적재.
+- **출력과 MLflow**에는 개수와 해시만 남는다. 사용자 키와 사용자 벡터는 저장·출력하지 않는다.
+- 합성 입력은 적재할 수 없고, 뷰 입력은 출처 단계 P0로 쓸 수 없다.
+
 ## 실행·검증
 
 ```
