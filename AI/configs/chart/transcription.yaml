@@ -1,0 +1,33 @@
+# 드럼 채보 추론 모듈 설정 (S15P31A307-169). 상대 경로는 AI/ 폴더 기준.
+# 환경 변수: SSAPLASH_CHART_DEVICE(장치), SSAPLASH_MODELS_DIR(가중치 폴더, 기본 data/models),
+# SSAPLASH_WORK_DIR(--out이 없을 때 출력 폴더의 부모), SSAPLASH_CHART_MODEL(채보 모델 이름, model 값보다 우선).
+# 탐 음높이 경계 같은 규칙 값은 모델 yaml의 rules에 있음
+#
+# 채보 모델 바꾸기: 아래 model 한 줄의 이름만 바꾸거나, 파일은 두고 SSAPLASH_CHART_MODEL=<이름>으로 워커를 띄움.
+# 워커는 띄울 때 설정을 읽으므로 바꾼 뒤 워커를 다시 띄움. 워커 로그 "채보 모델 선택:" 줄과 채보 JSON의
+# generatorVersion("<모델 yaml name>@…")으로 어느 모델이 도는지 확인
+model: original
+models:
+  # 원래 ADTOF + 드럼 킷 분리. 서비스 기본. 실제 발매곡 PDO 무료 5곡 노트 단위 F1 0.647
+  original: configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml
+  # 패드별 가중치 조합 (S15P31A307-243). MDB·ENST는 올랐으나 PDO 5곡 0.608로 떨어져 2026-11-03 기본에서 내림.
+  # SSAPLASH_MODELS_DIR/adtof_ft/ 아래 tom_6cls_real_full/best.pth, tom_7cls_real_full/best.pth 필요
+  combo: configs/bench/transcribers/adtof_drumsep/adtof_drumsep_realrec.yaml
+# cuda가 없으면 cpu로 내려감
+device: cuda
+# 채보 JSON schemaVersion. BE가 1만 받음
+schema_version: 1
+tempo:
+  # 드럼 트랙에서 bpm 추정. beat_this(Beat This!, GMD 45곡 중 45곡 맞음) 또는 librosa(25곡, torch 불필요).
+  # Beat This! 가중치는 SSAPLASH_MODELS_DIR/beat_this/에 받고 md5로 확인
+  method: beat_this
+  # 추정값이 이 범위 밖이면 2배·절반으로 접음. max_bpm은 min_bpm의 2배 이상
+  min_bpm: 60
+  max_bpm: 200
+  # 박자 추정은 안 함. 고정값
+  time_signature: 4/4
+  # offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 격자 박에서 60ms 안의 킥·스네어 노트
+  # 중앙값만큼 박 안 위치를 옮김. Beat This! 박이 드럼보다 늦게 잡혀 메트로놈 클릭이 킥보다 늦게 울리던 것을 줄임
+  origin: notes
+# 이보다 긴 드럼 트랙은 입력 오류
+max_duration_sec: 600

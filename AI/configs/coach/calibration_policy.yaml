@@ -1,0 +1,17 @@
+# 약점 분석 보정 정책 (사람이 정한다. 자동으로 바뀌지 않는다)
+#
+# targets: 그룹별 "전체 플레이 중 몇 %에게 걸리면 적당한가"의 [최소, 최대] 범위(0~1).
+#   - 비워 두면 후보를 만들지 않고 분포와 what-if(임계값을 바꾸면 걸림 비율이 어떻게 변하는지)만 MLflow에 기록한다.
+#   - 첫 실행 기록의 분포를 보고 담당자가 범위를 정해 여기에 적는다.
+# 그룹 이름: TIMING, PAD, TRANSITION_LATE, TRANSITION_MISS, HAND_WEAK, MISS_CLUSTER, UNSTEADY
+#
+# max_change: 한 번의 보정으로 현재 임계값에서 움직일 수 있는 비율(±). 표본이 작을수록 작게 둔다.
+# min_sample: 이보다 적은 세션이면 후보 없이 분포만 기록한다.
+version: 1
+max_change: 0.25
+min_sample: 50
+targets: {}
+# 예시(숫자는 설명용이며 권고가 아니다):
+# targets:
+#   TIMING: [0.03, 0.20]
+#   MISS_CLUSTER: [0.02, 0.15]

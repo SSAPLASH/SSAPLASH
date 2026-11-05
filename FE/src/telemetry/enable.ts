@@ -8,6 +8,7 @@ import type { StickId } from '@/domain/events';
 import { TelemetryCollector } from './collector';
 import { TelemetryQueue } from './queue';
 import { TelemetrySender, type SenderState } from './sender';
+import { isSensorSource } from '@/domain/events';
 
 export const TELEMETRY_STORAGE_KEY = 'airdrum.monitor.telemetry';
 
@@ -273,7 +274,7 @@ export function initTelemetry(deps: InitTelemetryDeps): void {
   deps.subscribeActiveSource(syncSource);
   deps.subscribeConnection((stickId, connected, source) => {
     // 키보드는 센서 연결 진단 대상이 아니다
-    if (source !== 'keyboard') c.notifyConnection(stickId, connected, source);
+    if (isSensorSource(source)) c.notifyConnection(stickId, connected, source);
   });
   window.addEventListener('pagehide', () => c.flushNow());
   for (const l of viewListeners) l();

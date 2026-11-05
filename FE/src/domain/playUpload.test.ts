@@ -134,7 +134,15 @@ describe('buildUploadBody', () => {
     expect(b.kitPresetId).toBe(5);
     expect(b.calibration).toEqual({ audioOffsetMs: 12, pads: null });
     expect(b.consent).toBe(false);
+    const agreed = buildUploadBody(log(), { ...ctx, consent: true });
+    expect(agreed.ok && agreed.body.consent).toBe(true);
     expect(b.clientMeta).toMatchObject({ endReason: 'COMPLETED', lastSongTimeMs: 2800, elapsedActiveMs: 4800 });
+  });
+
+  it('clientMeta는 서버 허용 5필드뿐이고 padCountGuide는 본문 어디에도 없다(알 수 없는 필드는 400)', () => {
+    const b = body(log({ presetId: '5' }));
+    expect(Object.keys(b.clientMeta ?? {}).sort()).toEqual(['appVersion', 'elapsedActiveMs', 'endReason', 'firmwareVersion', 'lastSongTimeMs']);
+    expect(JSON.stringify(b)).not.toContain('padCountGuide');
     expect(body(log({ presetId: 'local-1' })).kitPresetId).toBeNull();
   });
 
@@ -142,6 +150,18 @@ describe('buildUploadBody', () => {
     const l = log();
     l.hits.splice(1, 0, hit(1.5, { pad: null }));
     expect(body(l).hits.map((h) => h.seq)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('liveCoachEvents: 켠 플레이는 항목을 그대로, 끈 플레이는 LIVE_OFF 한 건, 이전 로그는 빈 배열', () => {
+    const on = [
+      { tMs: 12000, tag: 'LIVE_LATE', text: '계속 늦게 치고 있어요' },
+      { tMs: 31000, tag: 'LIVE_RECOVERED', text: '경향 해소: late' },
+    ];
+    expect(body(log({ liveCoachEvents: on })).liveCoachEvents).toEqual(on);
+    const off = [{ tMs: 0, tag: 'LIVE_OFF', text: '코칭 꺼짐' }];
+    expect(body(log({ liveCoachEvents: off })).liveCoachEvents).toEqual(off);
+    expect(log().liveCoachEvents).toBeUndefined();
+    expect(body(log()).liveCoachEvents).toEqual([]);
   });
 
   it('업로드하지 않는 경우와 사유', () => {
@@ -155,5 +175,30 @@ describe('buildUploadBody', () => {
     expect(reason(log({ songNumericId: null }))).toBe('BUILTIN_CHART');
     expect(reason(log({ sourceNoteCount: 4 }))).toBe('CHART_MISMATCH');
     expect(reason(log({ notes: [note(0, { noteId: null })] , sourceNoteCount: 1 }))).toBe('CHART_MISMATCH');
+  });
+});
+
+describe('페달 타격 업로드 (PLAY-002)', () => {
+  // 인수 조건: 업로드 본문 stickId null(STICK 모드), 키보드 모드도 null
+  it('스틱 세션: stickId null 센서 타격은 stickId null로 나가고 자세 필드는 그대로 허용', () => {
+    const l = log({
+      inputSource: 'webserial',
+      hits: [
+        hit(0, { judgement: 'PERFECT', matchedNoteIndex: 0, deltaMs: 5, source: 'webserial', stickId: null, pad: 'KICK', velocity: 100 }),
+        hit(2, { pad: 'HIHAT_PEDAL', tSongMs: 700, source: 'webserial', stickId: null }),
+        hit(3, { judgement: 'GOOD', matchedNoteIndex: 2, deltaMs: -40, source: 'webserial', stickId: 1 }),
+      ],
+    });
+    const b = body(l);
+    expect(b.inputSource).toBe('STICK');
+    expect(b.hits[0]).toMatchObject({ stickId: null, pad: 'KICK', velocity: 100 });
+    expect(b.hits[2]).toMatchObject({ stickId: null, pad: 'HIHAT_PEDAL' });
+    expect(b.hits[3]).toMatchObject({ stickId: 1 });
+  });
+
+  it('키보드 세션에 stickId null 타격이 있어도 null', () => {
+    const base = log();
+    const l = log({ hits: base.hits.map((h, i) => (i === 0 ? { ...h, stickId: null } : h)) });
+    expect(body(l).hits[0].stickId).toBeNull();
   });
 });

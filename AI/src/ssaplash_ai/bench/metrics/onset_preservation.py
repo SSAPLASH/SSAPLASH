@@ -6,6 +6,10 @@
 
 정답 온셋은 합성곡이면 MIDI에서 온 값, MUSDB면 정답 스템에 검출기를 돌린 값.
 같은 검출기를 같은 신호에 두 번 돌리면 결과가 같으므로 정답 스템을 예측으로 넣으면 F1이 1.0.
+
+MIDI·사람 주석 정답은 동시에 친 킥·하이햇을 따로 적어 같은 시각이 여러 번 나오는데, 검출기는 한 순간에
+하나만 냄. 그대로 채점하면 남는 정답이 전부 놓친 것으로 세져 재현율이 막히므로, 러너는 이런 정답을
+merge_onsets로 MERGE_GAP_SEC 안에 붙은 시각을 하나로 합친 뒤 넘김 (S15P31A307-166).
 """
 
 from __future__ import annotations
@@ -18,6 +22,17 @@ import numpy as np
 HOP_LENGTH = 512
 WINDOW_SEC = 0.05
 WINDOW_TIGHT_SEC = 0.025
+# 검출기가 두 온셋 사이에 두는 최소 간격(약 35ms)보다 짧게 둠
+MERGE_GAP_SEC = 0.03
+
+
+def merge_onsets(times: np.ndarray, gap_sec: float = MERGE_GAP_SEC) -> np.ndarray:
+    """정렬 후, 앞에 남긴 시각과 gap_sec 안으로 붙은 시각은 버리고 첫 시각만 남김."""
+    out: list[float] = []
+    for t in np.sort(np.asarray(times, dtype=np.float64)):
+        if not out or t - out[-1] > gap_sec:
+            out.append(float(t))
+    return np.array(out, dtype=np.float64)
 
 
 @dataclass

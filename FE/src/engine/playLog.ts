@@ -7,7 +7,8 @@ import type { NoteState, SessionSnapshot } from './RhythmSession';
 
 export interface LoggedHit {
   hitId: number;
-  stickId: 0 | 1;
+  /** null = 손 없음(페달 타격) */
+  stickId: 0 | 1 | null;
   pad: PadId | null;
   velocity: number;
   tHit: number;
@@ -55,6 +56,13 @@ export interface PlayUploadState {
   updatedAt: string;
 }
 
+/** 실시간 코칭이 띄운 문구 기록. coach 모듈의 로그 항목과 모양이 같다(engine은 coach를 import하지 않는다) */
+export interface LiveCoachEvent {
+  tMs: number;
+  tag: string;
+  text: string;
+}
+
 export interface PlayLog {
   playId: string;
   songId: string;
@@ -74,9 +82,13 @@ export interface PlayLog {
   chartId: number | null;
   /** 연주 당시 적용 중이던 프리셋 */
   presetId: string | null;
+  /** 플레이 시작 시점의 연주 기록 활용 동의(설계 COACH-003 D18). 이전 로그에는 없다 → 업로드는 false */
+  consent?: boolean;
   /** 채보 BPM·박자(마디 단위 피드백용). 이전 로그에는 없을 수 있다 */
   bpm: number;
   beatsPerBar: number;
+  /** 채보 격자 원점(1마디 1박, ms). 결과 화면 약점 마디·미니 악보가 쓴다. 이전 로그에는 없고 0으로 읽는다 */
+  offsetMs?: number;
   hits: LoggedHit[];
   notes: LogNote[];
   summary: {
@@ -96,6 +108,8 @@ export interface PlayLog {
   elapsedActiveMs?: number;
   /** BE 채보 전체 노트 수. notes.length와 다르면 변환에서 버린 노트가 있다 */
   sourceNoteCount?: number | null;
+  /** 실시간 코칭 기록. 이전 로그에는 없다(업로드 본문은 빈 배열) */
+  liveCoachEvents?: LiveCoachEvent[];
   upload?: PlayUploadState;
 }
 
@@ -135,6 +149,7 @@ export function buildPlayLog(args: {
     durationMs: number;
     bpm: number;
     beatsPerBar: number;
+    offsetMs?: number;
     sourceNoteCount?: number;
   };
   inputSource: InputSourceKind;
@@ -144,6 +159,8 @@ export function buildPlayLog(args: {
   songNumericId: number | null;
   chartId: number | null;
   presetId: string | null;
+  /** 플레이 시작 시점의 연주 기록 활용 동의 */
+  consent: boolean;
   /** 기본 'RHYTHM' */
   mode?: PlayLog['mode'];
   /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
@@ -152,6 +169,8 @@ export function buildPlayLog(args: {
   /** 카운트인 길이(ms). 경과 시간 계산용 */
   countInMs?: number;
   endedAt?: Date;
+  /** 실시간 코칭 기록. 넘기지 않으면 필드를 넣지 않는다 */
+  liveCoachEvents?: LiveCoachEvent[];
 }): PlayLog {
   const { snapshot: s } = args;
   return {
@@ -170,8 +189,10 @@ export function buildPlayLog(args: {
     songNumericId: args.songNumericId,
     chartId: args.chartId,
     presetId: args.presetId,
+    consent: args.consent,
     bpm: args.chart.bpm,
     beatsPerBar: args.chart.beatsPerBar,
+    offsetMs: args.chart.offsetMs ?? 0,
     hits: args.hits,
     notes: args.notes.map((n) => ({
       index: n.index,
@@ -195,6 +216,7 @@ export function buildPlayLog(args: {
     lastSongTimeMs: s.songTimeMs,
     elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
     sourceNoteCount: args.chart.sourceNoteCount ?? null,
+    ...(args.liveCoachEvents ? { liveCoachEvents: args.liveCoachEvents } : {}),
   };
 }
 

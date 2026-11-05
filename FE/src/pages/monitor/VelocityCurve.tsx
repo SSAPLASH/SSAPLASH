@@ -20,7 +20,7 @@ export const VelocityCurve = memo(function VelocityCurve({ pairs }: { pairs: rea
     const { ctx, w, h } = c;
     const colors = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--right', '#ffa07c')];
     const line = cssVar(el, '--line', '#34405c');
-    const faint = cssVar(el, '--ink-faint', '#6e778d');
+    const faint = cssVar(el, '--text-3', '#6e778d');
     const plotW = w - PAD_L - PAD_R;
     const plotH = h - PAD_T - PAD_B;
     const xOf = (v: number) => PAD_L + (v / 127) * plotW;

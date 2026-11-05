@@ -5,8 +5,10 @@
 놓친 것(fn). 창은 50ms(기본)와 25ms(Perfect 폭).
 집계: 모든 라벨의 tp·fp·fn을 더해 F1 (논문 표의 SUM, -107 규칙). 곡 단위 값은 보조이고 묶음 단위
 F1은 보고서가 곡별 개수를 다시 더해 계산하므로 개수를 그대로 돌려줌.
-기준(scheme): five = 양쪽을 5가지 묶음으로(거친 라벨 tom·cymbal 포함), pads = 패드 8종 그대로
-(예측에 거친 라벨이 있으면 못 씀), any = 라벨 무시(시각만, 보조).
+기준(scheme): five = 양쪽을 5가지 묶음으로(거친 라벨 tom·cymbal 포함), pads = 패드 8종(양쪽의 HIHAT_PEDAL을
+HIHAT으로 합침. 지난 결과와 같은 조건, 예측에 거친 라벨이 있으면 못 씀), pads9 = 패드 9종 그대로(페달 점수용),
+any = 라벨 무시(시각만, 보조).
+페달 혼동 수(pedal_confusion): 정답 HIHAT_PEDAL과 예측 HIHAT, 정답 HIHAT과 예측 HIHAT_PEDAL을 각각 같은 창으로 1:1 짝지은 수.
 세기 상관: 50ms 창 짝 중 양쪽 세기가 있는 쌍이 MIN_VELOCITY_PAIRS개 이상일 때 피어슨 상관.
 """
 
@@ -17,12 +19,19 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ssaplash_ai.bench.datasets.pads import HITS_DTYPE, NO_VELOCITY, has_coarse, to_five_groups
+from ssaplash_ai.bench.datasets.pads import (
+    HITS_DTYPE,
+    NO_VELOCITY,
+    PEDAL,
+    has_coarse,
+    merge_pedal,
+    to_five_groups,
+)
 
 WINDOW_SEC = 0.05
 WINDOW_TIGHT_SEC = 0.025
 MIN_VELOCITY_PAIRS = 10
-SCHEMES = ("five", "pads", "any")
+SCHEMES = ("five", "pads", "pads9", "any")
 ANY_LABEL = "any"
 
 
@@ -70,10 +79,10 @@ class LabelMatch:
 def _relabel(hits: np.ndarray, scheme: str) -> np.ndarray:
     if scheme == "five":
         return to_five_groups(hits)
-    if scheme == "pads":
+    if scheme in ("pads", "pads9"):
         if has_coarse(hits):
-            raise ValueError("pads 기준은 거친 라벨(tom·cymbal)이 있는 예측에 쓸 수 없음")
-        return hits
+            raise ValueError(f"{scheme} 기준은 거친 라벨(tom·cymbal)이 있는 예측에 쓸 수 없음")
+        return merge_pedal(hits) if scheme == "pads" else hits
     if scheme == "any":
         out = hits.copy()
         out["pad"] = ANY_LABEL
@@ -194,22 +203,63 @@ def score_hits(
     )
 
 
+def _pair_count(t: np.ndarray, p: np.ndarray, window_sec: float) -> int:
+    import mir_eval
+
+    t_times = np.asarray(t["time_sec"], dtype=np.float64)
+    p_times = np.asarray(p["time_sec"], dtype=np.float64)
+    return len(mir_eval.util.match_events(t_times, p_times, window_sec))
+
+
+@dataclass
+class PedalConfusion:
+    """하이햇과 페달 하이햇 사이 혼동 수. 각각 1:1 짝지은 수."""
+
+    pedal_as_hihat: int = 0  # 정답 HIHAT_PEDAL을 HIHAT으로 냄
+    hihat_as_pedal: int = 0  # 정답 HIHAT을 HIHAT_PEDAL로 냄
+
+    def __add__(self, other: PedalConfusion) -> PedalConfusion:
+        return PedalConfusion(
+            self.pedal_as_hihat + other.pedal_as_hihat, self.hihat_as_pedal + other.hihat_as_pedal
+        )
+
+
+def pedal_confusion(
+    hits_true: np.ndarray, hits_pred: np.ndarray, window_sec: float = WINDOW_SEC
+) -> PedalConfusion:
+    """정답 페달 ↔ 예측 HIHAT, 정답 HIHAT ↔ 예측 페달 짝 수 (패드 9종 기준)."""
+    t_pedal = hits_true[hits_true["pad"] == PEDAL]
+    t_hihat = hits_true[hits_true["pad"] == "HIHAT"]
+    p_pedal = hits_pred[hits_pred["pad"] == PEDAL]
+    p_hihat = hits_pred[hits_pred["pad"] == "HIHAT"]
+    return PedalConfusion(
+        pedal_as_hihat=_pair_count(t_pedal, p_hihat, window_sec),
+        hihat_as_pedal=_pair_count(t_hihat, p_pedal, window_sec),
+    )
+
+
 @dataclass
 class HitEvaluation:
-    """곡 하나의 세 기준 점수. pads는 예측이 8패드를 다 낼 때만 (아니면 None)."""
+    """곡 하나의 기준별 점수. pads·pads9·pedal은 예측이 8패드를 다 낼 때만 (아니면 None)."""
 
     five: HitScores
     pads: HitScores | None
     any: HitScores
+    pads9: HitScores | None = None
+    pedal: PedalConfusion | None = None
 
 
 def evaluate_hits(hits_true: np.ndarray, hits_pred: np.ndarray, eight_pad: bool) -> HitEvaluation:
-    """five·any는 항상, pads는 eight_pad가 참이고 예측에 거친 라벨이 없을 때만."""
-    pads = None
+    """five·any는 항상, pads·pads9·pedal은 eight_pad가 참이고 예측에 거친 라벨이 없을 때만."""
+    pads = pads9 = pedal = None
     if eight_pad and not has_coarse(hits_pred):
         pads = score_hits(hits_true, hits_pred, "pads")
+        pads9 = score_hits(hits_true, hits_pred, "pads9")
+        pedal = pedal_confusion(hits_true, hits_pred)
     return HitEvaluation(
         five=score_hits(hits_true, hits_pred, "five"),
         pads=pads,
         any=score_hits(hits_true, hits_pred, "any"),
+        pads9=pads9,
+        pedal=pedal,
     )

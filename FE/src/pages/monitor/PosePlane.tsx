@@ -127,8 +127,8 @@ export const PosePlane = memo(function PosePlane({
       const gx = (yaw: number) => w / 2 + yaw * s;
       const gy = (pitch: number) => w / 2 - pitch * s;
       const line = cssVar(el, '--line', '#34405c');
-      const faint = cssVar(el, '--ink-faint', '#6e778d');
-      const ink = cssVar(el, '--ink', '#e8e4da');
+      const faint = cssVar(el, '--text-3', '#6e778d');
+      const ink = cssVar(el, '--text-1', '#e8e4da');
       const stickColor = [cssVar(el, '--left', '#7cc4ff'), cssVar(el, '--right', '#ffa07c')];
 
       // 격자(10° 간격, 희미하게)와 0° 축선

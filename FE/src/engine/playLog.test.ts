@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearPlayLogs, getPlayLog, loadPlayLogs, savePlayLog, setPlayLogOwner, updatePlayLog, type PlayLog } from './playLog';
+import { buildPlayLog, clearPlayLogs, getPlayLog, loadPlayLogs, savePlayLog, setPlayLogOwner, updatePlayLog, type PlayLog } from './playLog';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -82,5 +82,27 @@ describe('계정별 저장', () => {
     savePlayLog(logOf('b'));
     clearPlayLogs(7);
     expect(Object.keys(data)).toEqual(['ssaplash.playlogs.u8']);
+  });
+});
+
+describe('buildPlayLog 실시간 코칭 기록', () => {
+  const base = {
+    snapshot: { score: 0, maxScore: 0, maxCombo: 0, counts: { PERFECT: 0, GOOD: 0, MISS: 0 }, strayHits: 0, songTimeMs: 0 },
+    notes: [],
+    hits: [],
+    chart: { songId: 's', title: 't', difficulty: 'EASY', durationMs: 1000, bpm: 120, beatsPerBar: 4 },
+    inputSource: 'keyboard',
+    timing: { perfectMs: 25, goodMs: 60 },
+    startedAt: new Date(0),
+    chartVersionId: null,
+    songNumericId: null,
+    chartId: null,
+    presetId: null,
+  } as unknown as Parameters<typeof buildPlayLog>[0];
+
+  it('넘긴 liveCoachEvents를 그대로 싣고, 안 넘기면 필드가 없다', () => {
+    const events = [{ tMs: 1000, tag: 'LIVE_LATE', text: '늦어요' }];
+    expect(buildPlayLog({ ...base, liveCoachEvents: events }).liveCoachEvents).toEqual(events);
+    expect('liveCoachEvents' in buildPlayLog(base)).toBe(false);
   });
 });

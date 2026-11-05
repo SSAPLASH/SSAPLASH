@@ -1,73 +1,59 @@
-// 자유 연주 (MODE-02, 설계 4-3). 채보 없이 치면 바로 울린다.
-// 소리·텔레메트리는 bootstrap의 공용 경로가 내고, 이 페이지는 표시(플래시·최근 타격·통계)와
-// 포인터 기준면 등록만 맡는다. 화면 구조는 Claude Design UI로 교체 예정이라 최소로 둔다.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { KitCanvas } from '@/components/KitCanvas';
-import { ReadinessNotice } from '@/components/ReadinessNotice';
-import { useHitFx } from '@/components/useHitFx';
+// 자유 연습 (MODE-02, Figma 112:76·112:146·228:5881, 설계 4-4). 채보 없이 치면 바로 울린다.
+// 소리·텔레메트리는 bootstrap의 공용 경로가 내고, 이 페이지는 표시(패드 점등·최근 타격·세션 통계)와
+// 포인터 기준면 등록만 맡는다. 앵커 거리·패드별 통계 같은 실측 UI는 모니터 빌드(FreeMeasureSection)로 옮겼다.
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DrumKit } from '@/components/drum/DrumKit';
+import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
+import { useRecentHits } from '@/components/drum/useRecentHits';
+import { AccompanimentBar } from '@/components/free/AccompanimentBar';
+import { DisconnectBand } from '@/components/free/DisconnectBand';
+import { HitReadout } from '@/components/play/HitReadout';
+import { TABLET_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import '@/components/free/free.css';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
-import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
-import type { HitFx } from '@/domain/events';
-import { layoutToProfile } from '@/domain/kitJudge';
-import { addHit, emptyHitStats, meanSensorDistance } from '@/domain/hitStats';
-import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { audioEngine } from '@/audio/AudioEngine';
+import { usePresets } from '@/store/presetStore';
+import { useReconnect } from '@/store/reconnectStore';
+import { ALL_PADS, PAD_META } from '@/domain/pads';
+import { freeStage } from '@/domain/freeStage';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
+import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
+import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources';
+import { stopFree } from '@/app/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
-import { bindSensorSurface, setSoundOnHit } from '@/app/bootstrap';
+import { bindSensorSurface, setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import type { PadId } from '@/domain/pads';
 
-const keyLabel = (code: string) => code.replace('Key', '').replace('Space', 'Space').replace('Digit', '');
+/** 킷 최대 배율(Figma 1.25, 태블릿 ≤1024는 1.1) */
+const KIT_SCALE = 1.25;
+const KIT_SCALE_TABLET = 1.1;
 
-export function FreePlayPage() {
-  const kitLayout = useSettings((s) => s.kitLayout);
-  const tuning = useSettings((s) => s.tuning);
-  const sensorKind = useSettings((s) => s.sensorKind);
-  const sensorOptions = useSettings((s) => s.sensorOptions);
-  const activeSensor = useLive((s) => s.activeSensor);
-  const pose = useLive((s) => s.pose);
-  const lastHit = useLive((s) => s.lastHit);
-  const sourceState = useLive((s) => s.sourceState);
-  const sourceMessage = useLive((s) => s.sourceMessage);
-  const connected = useLive((s) => s.connected);
+const keyLabel = (code: string) => code.replace('Key', '').replace('Digit', '');
 
-  const hits = useRef(new Map<PadId, HitFx>());
-  useHitFx(hits);
-  const [stats, setStats] = useState(emptyHitStats);
-
-  // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
-  useEffect(() => {
-    setSoundOnHit(true);
-    inputManager.setCandidateProvider(null);
-  }, []);
-
-  // 타격마다 통계(이펙트는 useHitFx). 자세(60Hz)와 분리하려고 store를 직접 구독한다
-  useEffect(() => {
-    return useLive.subscribe((s, prev) => {
-      if (s.hitSeq === prev.hitSeq || !s.lastHit) return;
-      const hit = s.lastHit;
-      setStats((st) => addHit(st, hit));
-    });
-  }, []);
-
-  // 판정 원은 배치에서 유도한 프로필로 그린다(판정과 같은 규칙)
-  const anchors = useMemo(
-    () =>
-      layoutToProfile(kitLayout, tuning.angleRange, { maxRadiusDeg: tuning.maxRadiusDeg, radiusFactor: tuning.radiusFactor }).anchors,
-    [kitLayout, tuning.angleRange, tuning.maxRadiusDeg, tuning.radiusFactor],
+/** 빈 상태 조준 아이콘(Figma 112:146) */
+function TargetIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </svg>
   );
-  const sensorOn = activeSensor !== 'none';
-  const nearest = lastHit && lastHit.source !== 'keyboard' ? inputManager.previewPad(lastHit.pose) : null;
-  const meanDist = meanSensorDistance(stats);
+}
 
-  // 안내 줄 (설계 4-3 표)
-  let guide: React.ReactNode;
-  if (sensorKind === 'none') {
-    guide = (
-      <>
-        키보드로 칩니다.{' '}
-        {KEYBOARD_INPUT_ENABLED &&
-          ALL_PADS.map((pad) => (
-          <span key={pad} style={{ marginRight: 8 }}>
+/** 키보드 전용일 때 안내 줄의 패드별 키 */
+function KeyGuide() {
+  return (
+    <>
+      키보드로 칩니다.{' '}
+      {KEYBOARD_INPUT_ENABLED &&
+        ALL_PADS.map((pad) => (
+          <span key={pad} className="free-guide-pad">
             <span style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</span>{' '}
             {Object.entries(KEY_MAP)
               .filter(([, b]) => b.pad === pad)
@@ -78,125 +64,134 @@ export function FreePlayPage() {
               ))}
           </span>
         ))}
-      </>
-    );
-  } else {
-    const desc = sensorRegistry.get(sensorKind);
-    if (desc?.usageGuide) {
-      // 연결 개념이 없는 소스(포인터 모의 IMU)는 연결 상태 대신 조작 안내를 보여준다
-      guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
-    } else {
-      const conn =
-        sourceState === 'error'
-          ? `오류: ${sourceMessage ?? '알 수 없음'}`
-          : sourceState === 'connecting'
-            ? '연결 중…'
-            : connected[0] || connected[1]
-              ? `연결됨 (${connected[0] ? '왼손' : ''}${connected[0] && connected[1] ? '·' : ''}${connected[1] ? '오른손' : ''})`
-              : '연결 안 됨 — 세팅에서 연결하세요.';
-      guide = (
-        <>
-          {desc?.label ?? sensorKind} {conn}
-        </>
-      );
-    }
-  }
+    </>
+  );
+}
+
+export function FreePlayPage() {
+  const navigate = useNavigate();
+  const tablet = useMediaQuery(TABLET_QUERY);
+  const sensorKind = useSettings((s) => s.sensorKind);
+  const sensorOptions = useSettings((s) => s.sensorOptions);
+  const activePresetId = useSettings((s) => s.activePresetId);
+  const presetItems = usePresets((s) => s.items);
+  const connected = useLive((s) => s.connected);
+  const pedalPair = useLive((s) => s.pedal.connected);
+  const reconnect = useReconnect((s) => s.status);
+  const attempt = useReconnect((s) => s.attempt);
+  const max = useReconnect((s) => s.max);
+  const reconnectHint = useReconnect((s) => s.hint);
+  const reconnectAvailable = useReconnect((s) => s.available);
+  const doReconnect = useReconnect((s) => s.reconnect);
+
+  const padStates = usePadStates();
+  const hitSeq = usePadHitSeq();
+  const kitSkin = useSettings((s) => s.kitSkin);
+  const lastHit = useRecentHits(1)[0];
+  const [stats, setStats] = useState(emptyHitStats);
+
+  // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
+  useEffect(() => {
+    setSoundOnHit(true);
+    inputManager.setCandidateProvider(null);
+  }, []);
+
+  // 떠날 때 녹음 중이면 정지해 저장 창으로 넘긴다(녹음 중이 아니면 스토어가 무시한다)
+  useEffect(() => {
+    return () => stopFree('leave');
+  }, []);
+
+  // 세션 통계. 자세(60Hz)와 분리하려고 store를 직접 구독한다. 페이지를 떠나면 사라진다
+  useEffect(() => {
+    return useLive.subscribe((s, prev) => {
+      if (s.hitSeq === prev.hitSeq || !s.lastHit) return;
+      const hit = s.lastHit;
+      setStats((st) => addHit(st, hit));
+    });
+  }, []);
+
+  const desc = sensorKind === 'none' ? undefined : sensorRegistry.get(sensorKind);
+  const stage = freeStage({ sensorKind, hasUsageGuide: !!desc?.usageGuide, connected });
+  const empty = stage === 'empty';
+  // 동글 소스만 페달을 본다. 손은 멀쩡한데 페달만 끊겨도 띠를 보인다(연주는 계속)
+  const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
+  const showBand = stage === 'oneHand' || (stage === 'ready' && pedal === false);
+  const mean = meanVelocity(stats);
+  const preset = presetItems.find((p) => p.id === activePresetId);
+
+  let guide: React.ReactNode;
+  if (empty) guide = '연결 대기 중 · 스틱을 연결해 주세요';
+  else if (sensorKind === 'none') guide = <KeyGuide />;
+  else if (desc?.usageGuide) guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
+  else guide = '스틱을 움직여 자유롭게 연주하세요';
+
+  // 터치 연주(MODE-002). 오디오가 깨어 있으면 동기 경로로 바로 친다. 첫 터치만 깨운 뒤 친다
+  const onPadDown = (pad: PadId) => {
+    // audioReady는 첫 해제 때만 바뀌므로, 통화·백그라운드로 멈춘 뒤에도 다시 깨우도록 엔진 상태를 직접 본다
+    if (audioEngine.ready) touchSource.strike(pad);
+    else void unlockAudio().then(() => touchSource.strike(pad));
+  };
+
+  const openSetup = () => navigate('/setup', { state: { returnTo: '/free', returnLabel: '자유 연습' } });
 
   return (
-    <main className="main wide">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-        <h1>자유 연주</h1>
-        <span className="small dim">채보 없이 전체 패드가 바로 울립니다</span>
-      </div>
-      <p className="small dim" style={{ marginBottom: 12 }}>
-        {guide}
-      </p>
+    <main className="main free-page">
+      <AccompanimentBar />
 
-      <ReadinessNotice returnTo="/free" />
-
-      <div className="grid-2">
-        <div className="card col">
-          <KitCanvas
-            layout={kitLayout}
-            keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-            anchors={anchors}
-            angleRange={tuning.angleRange}
-            hits={hits}
-            poses={pose}
-            showPoses={sensorOn}
-            surfaceRef={bindSensorSurface}
-          />
+      <Card className="free-canvas" aria-label="연주 캔버스">
+        <div className="free-canvas-head">
+          <h2 className="free-canvas-title">드럼 킷</h2>
+          <span className="free-canvas-meta">프리셋: {preset?.name ?? '없음'} · 8패드</span>
         </div>
 
-        <div className="col">
-          <div className="card col">
-            <h3>최근 타격</h3>
-            {lastHit ? (
-              <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
-                <div className="stat">
-                  <span className="v" style={{ color: lastHit.pad ? PAD_META[lastHit.pad].color : 'inherit' }}>
-                    {lastHit.pad ? PAD_META[lastHit.pad].label : '판정 없음'}
-                  </span>
-                  <span className="k">패드</span>
-                </div>
-                <div className="stat">
-                  <span className="v">{lastHit.stickId === 0 ? 'L' : 'R'}</span>
-                  <span className="k">손</span>
-                </div>
-                <div className="stat">
-                  <span className="v">{lastHit.velocity}</span>
-                  <span className="k">벨로시티</span>
-                </div>
-                <div className="stat">
-                  <span className="v" style={{ fontSize: 20 }}>
-                    {lastHit.source}
-                  </span>
-                  <span className="k">소스</span>
-                </div>
-                {nearest && (
-                  <div className="stat">
-                    <span className="v" style={{ fontSize: 20 }}>
-                      {PAD_META[nearest.pad].label} {nearest.distanceDeg.toFixed(1)}°
-                    </span>
-                    <span className="k">{nearest.inside ? '앵커 안' : '가장 가까운 패드 (앵커 밖)'}</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="small faint">아직 타격이 없습니다. 쳐 보세요.</p>
-            )}
-          </div>
+        {showBand && (
+          <DisconnectBand
+            left={connected[0]}
+            right={connected[1]}
+            pedal={pedal}
+            reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
+            onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
+          />
+        )}
 
-          <div className="card col">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>타격 통계</h3>
-              <button className="btn-ghost small" onClick={() => setStats(emptyHitStats())}>
-                초기화
-              </button>
-            </div>
-            <table>
-              <tbody>
-                {ALL_PADS.map((pad) => (
-                  <tr key={pad}>
-                    <td style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</td>
-                    <td style={{ textAlign: 'right' }}>{stats.byPad[pad]}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="dim">판정 없음</td>
-                  <td style={{ textAlign: 'right' }}>{stats.unresolved}</td>
-                </tr>
-                <tr>
-                  <td className="dim">합계</td>
-                  <td style={{ textAlign: 'right' }}>{stats.total}</td>
-                </tr>
-                <tr>
-                  <td className="dim">센서 타격 평균 앵커 거리</td>
-                  <td style={{ textAlign: 'right' }}>{meanDist === null ? '–' : `${meanDist.toFixed(1)}°`}</td>
-                </tr>
-              </tbody>
-            </table>
-            <p className="small faint">페이지를 떠나면 사라집니다. 판정 반경(U6)·앵커 밖 처리(U11) 실측용.</p>
+        <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>
+          <div className="free-kit-inner" aria-hidden={empty || undefined}>
+            <DrumKit fitWidth effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
+          </div>
+        </div>
+
+        {empty && (
+          <div className="free-empty-wrap">
+            <EmptyState
+              icon={<TargetIcon />}
+              title="스틱을 연결하면 바로 칠 수 있어요"
+              action={<Button onClick={openSetup}>드럼 세팅에서 연결하기</Button>}
+            />
+          </div>
+        )}
+
+        <p className={`free-guide${empty ? ' is-wait' : ''}`}>{guide}</p>
+      </Card>
+
+      <div className="free-info">
+        <div className="free-info-block">
+          <span className="free-info-key">최근 타격</span>
+          <HitReadout
+            variant="row"
+            pad={lastHit?.pad ?? undefined}
+            hand={lastHit?.hand === 0 ? 'L' : lastHit?.hand === 1 ? 'R' : null}
+            velocity={lastHit?.velocity}
+          />
+        </div>
+        <div className="free-info-block">
+          <span className="free-info-key">세션 통계</span>
+          <div className="free-info-stats">
+            <span>
+              타격 <span className="num">{stats.total}</span>회
+            </span>
+            <span>
+              평균 세기 <span className="num">{mean === null ? '—' : Math.round(mean)}</span>
+            </span>
           </div>
         </div>
       </div>

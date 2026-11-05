@@ -8,8 +8,8 @@ import type { SoundSetId } from './soundSet';
 export const MAX_PRESETS = 10;
 /** 프리셋 스키마 버전(서버 저장 형식과 맞춘다) */
 export const PRESET_SCHEMA_VERSION = 1;
-/** 이름 최대 길이(trim 뒤) */
-export const PRESET_NAME_MAX = 50;
+/** 이름 최대 길이(trim 뒤). BE는 50자까지 받지만 표시 공간 때문에 FE에서 20자로 제한한다 */
+export const PRESET_NAME_MAX = 20;
 
 export interface KitPreset {
   id: string;

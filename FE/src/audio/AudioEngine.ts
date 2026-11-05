@@ -1,7 +1,7 @@
 // PLAY-06 저지연 사운드. Web Audio로 패드 소리를 낸다.
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
-import { SAMPLE_FALLBACK, type SoundSet } from './soundSets';
+import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -11,6 +11,27 @@ export interface LatencyInfo {
 
 /** getOutputTimestamp 짝이 현재 시각과 이만큼 넘게 어긋나면 무효로 본다(수십 초 오류만 거르는 폭) */
 const ANCHOR_MAX_SKEW_MS = 1000;
+
+/** 안전 리미터: 이 크기(약 −2dBFS)까지는 그대로 통과시키고, 그 위만 1.0 아래로 부드럽게 눌러 클리핑을 막는다 */
+const LIMIT_KNEE = 0.8;
+/** 리미터가 받는 입력 범위(±배). 그 밖은 1.0으로 고정된다(+12dB까지 부드럽게 처리) */
+const LIMIT_RANGE = 4;
+
+/**
+ * 소프트 리미터 곡선(WaveShaper용). WaveShaper는 입력 −1..1을 곡선 양 끝에 대응시키므로
+ * 앞단에서 1/LIMIT_RANGE로 줄인 신호를 받아 원래 크기로 되돌린 값을 낸다.
+ * DynamicsCompressorNode는 Chrome에서 6ms 지연과 문턱 아래 3~4dB 감쇠가 있어 쓰지 않는다(2026-11-03 측정).
+ */
+export function softLimitCurve(n = 4097): Float32Array<ArrayBuffer> {
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = ((i / (n - 1)) * 2 - 1) * LIMIT_RANGE;
+    const a = Math.abs(x);
+    const y = a <= LIMIT_KNEE ? a : LIMIT_KNEE + (1 - LIMIT_KNEE) * Math.tanh((a - LIMIT_KNEE) / (1 - LIMIT_KNEE));
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
+}
 
 type Voice = (ctx: AudioContext, out: AudioNode, when: number, vel: number) => void;
 
@@ -29,10 +50,18 @@ export class AudioEngine {
   /** 반주 전용 버스(master 직결). 패드 음소거와 무관 */
   private accBus: GainNode | null = null;
   private padMuted = false;
+  /** 드럼 음량 배수(0~2). 패드 버스 게인에 쓴다 */
+  private drumVolume = 1;
+  /** 노래 음량 배수(0~1). 반주 버스 게인에 쓴다 */
+  private songVolume = 1;
+  /** 메트로놈 클릭 음량(0~1) */
+  private clickVolume = 1;
   private stateListeners = new Set<(state: string) => void>();
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
   private set: SoundSet | null = null;
+  /** 하이햇 페달이 떼어진(열림) 상태. 상태 추론은 호출자가 하고 여기는 값만 받는다 */
+  private hihatOpen = false;
 
   constructor() {
     this.voices = {
@@ -107,6 +136,23 @@ export class AudioEngine {
     };
   }
 
+  /** 합성 하이햇 열림 보이스: 닫힘과 같은 대역 노이즈에 감쇠를 길게(0.3초 안팎) */
+  private hihatOpenVoice(ctx: AudioContext, out: AudioNode, t: number, v: number): void {
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise!;
+    n.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 9000;
+    f.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.4 * v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25 + v * 0.1);
+    n.connect(f).connect(g).connect(out);
+    n.start(t);
+    n.stop(t + 0.45);
+  }
+
   private tom(ctx: AudioContext, out: AudioNode, t: number, v: number, f0: number, f1: number): void {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -141,12 +187,18 @@ export class AudioEngine {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.8;
-      this.master.connect(this.ctx.destination);
+      // master → 입력 축소 → 소프트 리미터(지연 0) → 출력
+      const limitIn = this.ctx.createGain();
+      limitIn.gain.value = 1 / LIMIT_RANGE;
+      const limiter = this.ctx.createWaveShaper();
+      limiter.curve = softLimitCurve();
+      limiter.oversample = 'none';
+      this.master.connect(limitIn).connect(limiter).connect(this.ctx.destination);
       this.padBus = this.ctx.createGain();
-      this.padBus.gain.value = this.padMuted ? 0 : 1;
+      this.padBus.gain.value = this.padMuted ? 0 : this.drumVolume;
       this.padBus.connect(this.master);
       this.accBus = this.ctx.createGain();
-      this.accBus.gain.value = 1;
+      this.accBus.gain.value = this.songVolume;
       this.accBus.connect(this.master);
       this.ctx.addEventListener('statechange', () => {
         for (const l of this.stateListeners) l(this.ctx!.state);
@@ -227,28 +279,76 @@ export class AudioEngine {
    * 컨텍스트가 없거나 running이 아니면 소리가 나지 않으므로 예약하지 않고 null.
    */
   trigger(pad: PadId, velocity: number, whenMs?: number): number | null {
+    return this.fire(pad, velocity, whenMs, null)?.perfMs ?? null;
+  }
+
+  /**
+   * trigger와 같되 예약을 취소할 수 있는 핸들을 돌려준다(구간 재생 정지용).
+   * cancel: 아직 울리지 않았으면 출력 경로를 끊어 소리를 막고, 이미 울렸으면 아무것도 하지 않는다. 예외 없음.
+   */
+  triggerScheduled(pad: PadId, velocity: number, whenMs: number): { at: number; cancel: () => void } | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.padBus || ctx.state !== 'running') return null;
+    const gate = ctx.createGain();
+    gate.connect(this.padBus);
+    const r = this.fire(pad, velocity, whenMs, gate);
+    if (!r) return null;
+    return {
+      at: r.perfMs,
+      cancel: () => {
+        try {
+          if (ctx.currentTime < r.ctxAt) gate.disconnect();
+        } catch {
+          // 이미 끊긴 노드
+        }
+      },
+    };
+  }
+
+  /** gate가 있으면 padBus 대신 그 노드로 소리를 보낸다(취소용 관문) */
+  private fire(pad: PadId, velocity: number, whenMs: number | undefined, gate: AudioNode | null): { perfMs: number; ctxAt: number } | null {
     if (!this.ctx || !this.padBus || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
+    const out = gate ?? this.padBus;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     // 샘플이 없으면 폴백 패드의 샘플(게인 0.7배), 그것도 없으면 합성음
+    // 하이햇이 열림이면 열림 샘플 → 없으면 합성 열림 보이스(키트 닫힘 샘플로 대신하지 않는다)
+    if (pad === 'HIHAT' && this.hihatOpen) {
+      const open = this.set?.variants?.HIHAT_OPEN;
+      if (open) {
+        this.playSample(ctx, out, open, this.set!.masterTrim * v, at);
+      } else {
+        this.hihatOpenVoice(ctx, out, at, v);
+      }
+      return { perfMs: this.contextToPerfTime(at), ctxAt: at };
+    }
     const own = this.set?.pads[pad];
     const fb = SAMPLE_FALLBACK[pad];
     const sample = own ?? (fb ? this.set?.pads[fb] : undefined);
     const gainMul = own ? 1 : 0.7;
     if (sample && this.set) {
       // 타격마다 새 소스·게인 노드. 게인 = 패드 게인 × 키트 트림 × 세기 곡선
-      const src = ctx.createBufferSource();
-      src.buffer = sample.buffer;
-      src.playbackRate.value = sample.playbackRate;
-      const g = ctx.createGain();
-      g.gain.value = sample.gain * this.set.masterTrim * v * gainMul;
-      src.connect(g).connect(this.padBus);
-      src.start(at);
+      this.playSample(ctx, out, sample, this.set.masterTrim * v * gainMul, at);
     } else {
-      this.voices[pad](ctx, this.padBus, at, v);
+      this.voices[pad](ctx, out, at, v);
     }
-    return this.contextToPerfTime(at);
+    return { perfMs: this.contextToPerfTime(at), ctxAt: at };
+  }
+
+  private playSample(ctx: AudioContext, out: AudioNode, sample: SamplePad, mul: number, at: number): void {
+    const src = ctx.createBufferSource();
+    src.buffer = sample.buffer;
+    src.playbackRate.value = sample.playbackRate;
+    const g = ctx.createGain();
+    g.gain.value = sample.gain * mul;
+    src.connect(g).connect(out);
+    src.start(at);
+  }
+
+  /** 하이햇 열림 여부. 다음 HIHAT 타격부터 반영된다(울리는 소리는 끊지 않는다) */
+  setHihatOpen(open: boolean): void {
+    this.hihatOpen = open;
   }
 
   /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */
@@ -260,7 +360,7 @@ export class AudioEngine {
     const g = ctx.createGain();
     o.type = 'square';
     o.frequency.value = accent ? 1600 : 1100;
-    g.gain.setValueAtTime(accent ? 0.35 : 0.2, at);
+    g.gain.setValueAtTime(Math.max(0.001, (accent ? 0.35 : 0.2) * this.clickVolume), at);
     g.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
     o.connect(g).connect(this.master);
     o.start(at);
@@ -271,13 +371,32 @@ export class AudioEngine {
   /** 패드 소리 음소거. ensure 전에 불러도 값을 기억했다가 컨텍스트 생성 때 적용한다 */
   setPadMuted(muted: boolean): void {
     this.padMuted = muted;
-    if (this.padBus) this.padBus.gain.value = muted ? 0 : 1;
+    if (this.padBus) this.padBus.gain.value = muted ? 0 : this.drumVolume;
+  }
+
+  /** 드럼 음량 배수. 음소거 중이면 0을 유지하고 풀 때 이 값으로 돌아온다. ensure 전에 불러도 기억했다가 적용한다 */
+  setDrumVolume(v: number): void {
+    if (!Number.isFinite(v)) return;
+    this.drumVolume = v;
+    if (this.padBus) this.padBus.gain.value = this.padMuted ? 0 : v;
+  }
+
+  /** 노래(반주) 음량 배수. ensure 전에 불러도 기억했다가 적용한다 */
+  setSongVolume(v: number): void {
+    if (!Number.isFinite(v)) return;
+    this.songVolume = v;
+    if (this.accBus) this.accBus.gain.value = v;
   }
 
   /** AudioContext 상태(running·suspended·interrupted 등) 변경 구독. 해제 함수를 돌려준다 */
   onStateChange(listener: (state: string) => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  /** 메트로놈 클릭 음량(0~1). 다음 클릭부터 적용 */
+  setClickVolume(v: number): void {
+    this.clickVolume = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 1));
   }
 
   setVolume(v: number): void {

@@ -6,12 +6,11 @@ import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { uploadPlay } from '@/api/plays';
 import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/reports';
+import { logConsent } from '@/domain/dataConsent';
 import { buildUploadBody, type PlayUploadBody } from '@/domain/playUpload';
 import type { Report, ReportNote } from '@/domain/report';
 import { getPlayLog, updatePlayLog, type PlayUploadState } from '@/engine/playLog';
 
-/** 데이터 활용 동의 정책이 정해지기 전까지 false (설계 U1, BE 확인 예정) */
-const CONSENT = false;
 const APP_VERSION: string | null = import.meta.env.VITE_APP_VERSION || null;
 
 interface PlaySyncStore {
@@ -66,7 +65,7 @@ async function run(playId: string): Promise<PlayUploadState | null> {
 
   let body = prev?.body as PlayUploadBody | undefined;
   if (!body) {
-    const built = buildUploadBody(log, { consent: CONSENT, appVersion: APP_VERSION });
+    const built = buildUploadBody(log, { consent: logConsent(log), appVersion: APP_VERSION });
     if (!built.ok) {
       const skipped: PlayUploadState = { status: 'SKIPPED', reason: built.reason, retryable: false, attempts: 0, updatedAt: new Date().toISOString() };
       save(playId, skipped);
