@@ -37,6 +37,9 @@ import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
 import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import type { CoachShadow } from '@/coach/live/shadowCoach';
+import { COACH_BASIS } from '@/domain/coachBasis';
+import { diagTap } from '@/engine/diagTap';
 import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
@@ -60,6 +63,8 @@ const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPAN
 
 /** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
 const GO_MS = 400;
+/** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
+const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 
 function parseId(raw: string | null): number | null {
   if (raw === null || !/^-?\d+$/.test(raw)) return null;
@@ -136,6 +141,8 @@ function PlayPageBody() {
   const recorder = useRef(new PlayRecorder());
   // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
   const coachRef = useRef<LiveCoach | null>(null);
+  // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교)
+  const shadowRef = useRef<CoachShadow | null>(null);
   const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
@@ -225,13 +232,26 @@ function PlayPageBody() {
       });
       const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
       coachRef.current = coach;
+      shadowRef.current = null;
+      // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
+      if (MONITOR_ENABLED) {
+        const goodMs = settings.timing.goodMs;
+        void import('@/coach/live/shadowCoach').then((m) => {
+          if (coachRef.current !== coach) return; // 그 사이 다른 채보로 바뀐 경우
+          shadowRef.current = m.createCoachShadow({
+            goodMs,
+            activeBasis: COACH_BASIS,
+            publish: (b) => diagTap.publish({ type: 'coachEval', ...b }),
+          });
+        });
+      }
       clearCoachLine();
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
         // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
-        const message = coach.push({
+        const judged = {
           songTimeMs: ss.songTime(e.at),
           noteTimeMs: ss.notes[e.noteIndex].note.timeMs,
           judgement: e.judgement,
@@ -239,7 +259,9 @@ function PlayPageBody() {
           pad: e.pad,
           stickId: e.stickId,
           velocity: e.velocity,
-        });
+        };
+        const message = coach.push(judged);
+        shadowRef.current?.push(judged);
         if (!message) return;
         try {
           const copy = coachCopy(message);
@@ -387,6 +409,7 @@ function PlayPageBody() {
     popups.current = [];
     recorder.current.reset();
     coachRef.current?.reset();
+    shadowRef.current?.reset();
     clearCoachLine();
     finishing.current = false;
     startedAt.current = new Date();

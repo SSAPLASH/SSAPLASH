@@ -1,5 +1,6 @@
 // 녹화 요약(순수 함수). 녹화 JSONL을 되읽은 결과(meta·패킷 행·진단 이벤트)에서 구간 지연·SYNC rtt·채점 delta의 분위수를 내고,
 // 현재 HEALTH_THRESHOLDS의 대응 기준값을 옆에 붙인다. R1(임계값 재설정)·체감 지연 측정의 근거 표를 만드는 도구다.
+import type { CoachBasis } from '@/domain/coachBasis';
 import type { DiagEvent } from '@/engine/diagTap';
 import { CommandType } from '@/input/stickProtocol';
 import { HEALTH_THRESHOLDS } from './health';
@@ -33,7 +34,20 @@ export interface SessionSummary {
   audioOffsetMs: number;
   /** 이 세션에서 후보 노트가 둘 이상이었던 타격 수(매칭 경합) */
   contested: number;
+  /** 코칭 기준 방식별 그림자 평가 문구(coachEval). 이벤트가 없으면 두 방식 모두 0 */
+  coach: Record<CoachBasis, CoachBasisSummary>;
 }
+
+/** 한 방식이 띄웠을(띄운) 문구 수와 tag별 수 */
+export interface CoachBasisSummary {
+  total: number;
+  byTag: Record<string, number>;
+}
+
+const emptyCoach = (): Record<CoachBasis, CoachBasisSummary> => ({
+  fixed: { total: 0, byTag: {} },
+  window: { total: 0, byTag: {} },
+});
 
 export interface RecordingSummary {
   meta: RecordingMeta;
@@ -141,11 +155,19 @@ export function summarizeRecording(input: {
     } else if (ev.type === 'missed') {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
-      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0 });
+      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
     } else if (ev.type === 'matchContested') {
       contested++;
       const cur = sessions[sessions.length - 1];
       if (cur) cur.contested++;
+    } else if (ev.type === 'coachEval') {
+      // 세션 시작 전 이벤트는 건너뛴다(표는 세션별)
+      const cur = sessions[sessions.length - 1];
+      if (cur) {
+        const b = cur.coach[ev.basis];
+        b.total++;
+        b.byTag[ev.tag] = (b.byTag[ev.tag] ?? 0) + 1;
+      }
     }
   }
 
@@ -214,6 +236,18 @@ export function summaryToMarkdown(s: RecordingSummary): string {
   if (s.sessions.length > 0) {
     lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) | 매칭 경합 |', '| --- | --- | --- | --- |');
     for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} | ${x.contested} |`);
+  }
+  // 코칭 기준 방식 비교(진단 빌드 녹화에만 있다). 세션마다 방식별 문구 수와 tag별 수를 나란히 보인다
+  const withCoach = s.sessions.filter((x) => x.coach.fixed.total + x.coach.window.total > 0);
+  if (withCoach.length > 0) {
+    lines.push('', '## 코칭 기준 비교 (고정 vs 판정 폭 비례)', '');
+    for (const x of withCoach) {
+      const tags = [...new Set([...Object.keys(x.coach.fixed.byTag), ...Object.keys(x.coach.window.byTag)])].sort();
+      lines.push(`### ${x.title}`, '', '| 구분 | 고정(fixed) | 비례(window) |', '| --- | --- | --- |');
+      lines.push(`| 문구 수 | ${x.coach.fixed.total} | ${x.coach.window.total} |`);
+      for (const t of tags) lines.push(`| ${t} | ${x.coach.fixed.byTag[t] ?? 0} | ${x.coach.window.byTag[t] ?? 0} |`);
+      lines.push('');
+    }
   }
   return lines.join('\n') + '\n';
 }
