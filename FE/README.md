@@ -33,6 +33,8 @@ VITE_AUTH_REQUIRED=false
 VITE_SONGS_SOURCE=builtin
 ```
 
+두 플래그 모두 곡 선택의 추천 곡 줄을 끈다(요청도 나가지 않는다). 내장 곡 소스에는 추천 API가 없고, 로그인 검사를 끄면 인증 상태가 `authenticated`가 되지 않는다.
+
 ## 검증 (커밋 전 모두 통과)
 
 ```bash
@@ -279,6 +281,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **출처:** 기본은 BE(`/api/v1/songs`·`charts`·`chart-versions`). `VITE_SONGS_SOURCE=builtin`으로 빌드하면 BE 없이 내장 3곡(`BUILTIN_CHARTS`)만 쓰고 SongPicker의 "라이브러리" 탭은 숨는다. 내장 소스의 곡·채보 id는 둘 다 `-(인덱스+1)`(음수)이고 `chartVersionId`는 null이다.
 - **곡 선택은 URL:** `/play?song=12&chart=34`, `/sheet?song=…&chart=…`. SongPicker에서 난이도 칩을 누르면 `useChartParam.select`가 URL을 바꾸고, 페이지는 쿼리가 있으면 `loading` 단계에서 `loadChart`로 채보를 읽은 뒤 준비 화면으로 간다. 쿼리만으로 준비 화면이 복원되므로 통합 설정에 다녀와도 곡이 유지된다(`ReadinessNotice`의 `returnTo`는 `pathname + search`). 로드 실패는 `ApiError.detail`을 보이고 "곡 선택으로"가 쿼리를 지운다. `?scope=MINE`이면 "라이브러리" 탭에서 시작하고, `?scope=MINE&song={id}`면 그 곡(READY일 때)을 펼친 채 연다. "라이브러리" 탭에서 READY가 아닌 곡은 상태 배지와 함께 흐려지고 눌리지 않으며, 아래에 "라이브러리" 안내가 붙는다.
 - **곡 난이도·플레이 후보:** SongPicker는 목록을 `playableOnly=true`로 읽어 READY이면서 곡 난이도(`songLevel`)가 있는 곡만 받는다. 그래서 "라이브러리" 탭의 처리 중·실패 곡은 목록에 없고, 탭 아래 "라이브러리" 안내는 늘 보인다. 검색창 옆 칩(전체·입문·중급·고급, `ui/Chip`)은 서버 쿼리 `songLevel`로 거르고, 표의 「곡 난이도」 열과 선택한 곡 패널 메타 줄에 표기한다(`null`은 표 「—」, 패널은 생략). 곡 난이도는 연습 단계(EASY·NORM·HARD)와 다른 값이라 `LevelBadge`를 쓰지 않는다. 내 곡(`/studio`)은 조건 없이 읽는다. 내장 소스(`VITE_SONGS_SOURCE=builtin`)는 난이도가 없어 `playableOnly`를 무시한다. **배포 순서:** 운영 DB의 기존 곡 backfill(BE 269) 전에 배포하면 곡 선택 목록이 빈다.
+- **추천 곡 줄(COACH-004):** SongPicker 필터 아래·목록 위에 "추천 곡" 카드 줄(`components/song/RecommendRow`)이 붙는다. 마운트 시 `GET /api/v1/songs/recommendations`(`context=SONG_PICKER`, `mode`는 `/play`=RHYTHM·`/sheet`=SHEET, `size=5`)를 한 번만 부르고(`store/recommendationStore`가 진행 중 중복 호출을 무시한다), 탭·검색·칩을 바꿔도 다시 부르지 않는다. 연주 뒤 곡 선택으로 돌아오면(재마운트) 새로 부른다. **보이는 조건:** 기본 곡 탭이고 `VITE_SONGS_SOURCE`가 `builtin`이 아니며 로그인 상태(`authenticated`)이고 결과가 1개 이상일 때만이다. 빈 결과·오류·5초 시간 초과·라이브러리 탭에서는 오류 문구 없이 줄만 숨는다. 카드를 누르면 `POST /api/v1/recommendations/{requestId}/clicks`를 기다리지 않고 보내며(실패 무시) 바로 `onSelect(songId, chartId)`로 추천 채보를 연다. 이유 문구는 `domain/recommendation.REASON_COPY`의 code별 문구이고 모르는 code는 BE `text`를 쓴다. 테스트: `SongPicker.interaction.test.tsx`(클릭·탭·builtin·비로그인).
 - **변환:** `domain/chartMapping.chartFromDetail`이 BE 채보를 `Chart`로 바꾼다. 알 수 없는 pad는 버리고 경고 1회, `timeMs`에 `offsetMs`를 더하지 않으며, `durationMs`가 null이면 마지막 노트 + 1마디, `tempoMap`·`timeSignatureMap`이 둘 이상이면 `variableTempo`로 표시한다. `tempoMap`이 둘 이상이고 `ppq`가 있으면 `domain/tempo.tempoSegmentsFrom`이 tick을 곡 시각으로 바꿔 `Chart.tempoSegments`(빠르기 구간)를 채운다. 식은 BE `ChartDocumentReader.milliseconds`와 같다(tick 0 = `offsetMs`).
 - **버전 고정:** 곡 선택 직후 `getChartLatest`는 한 번만 부른다. 이후(재시작·자산 갱신)는 `chart.chartVersionId`로 `getChartVersion`·`getChartAssets`를 부른다. store는 채보를 캐시하지 않는다.
 - **assets:** `loadChart`가 채보와 함께 `getChartAssets`를 부른다. 실패해도 채보는 돌려주고 `assets`가 null이다. `accompanimentUrl`이 있으면 `chart.hasAccompaniment = true`. 서명 URL은 메모리에만 둔다(반주 재생은 아래 "반주 재생" 절).
