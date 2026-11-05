@@ -1240,6 +1240,30 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
 - 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
 
+## 곡 추천 R1: 규칙 추천 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md`)
+
+공용 곡 중 "지금 치기 좋은 채보"를 규칙 점수로 골라 이유와 함께 돌려준다. 학습·AI 호출이 없고 요청 시 DB의 본인 기록과 공용 곡만 읽는다. 추천 단위는 채보(곡+난이도)이고 응답은 곡당 하나다.
+
+### 채보 특징 (V33 `chart_features`)
+
+- 채보별 **최신 버전**의 평균 밀도(`avg_notes_per_sec`, 곡 길이 기준), 2초 창 최대 노트 수(`peak_notes_2s`, `SongLevelService`와 같은 창), 패드 비율, 상위 12개 패드 전환 비율을 미리 계산해 저장한다(`chart-features-1`).
+- `SongLevelService.process(..., apply=true)`가 난이도를 저장하면 `SongChartsChanged`를 발행하고, **커밋 뒤** `ChartFeatureListener`가 새 트랜잭션에서 계산한다. 계산이 실패해도 채보 생성·난이도 산정은 성공이고, 특징이 없는 채보는 추천 후보에서만 빠진다.
+- 앱이 준비되면 `ChartFeatureBackfillStartup`이 특징이 없는 기존 채보를 채운다(`chart-features.backfill.enabled=false`로 끈다. 테스트 기본값). 이미 현재 버전으로 저장된 채보는 건너뛰므로 여러 번 돌려도 같다.
+
+### 조회와 기록
+
+| 호출 | 설명 |
+| --- | --- |
+| `GET /api/v1/songs/recommendations?context=SONG_PICKER\|REPORT&mode=RHYTHM\|SHEET&playId=&size=` | Bearer 인증. `size` 1~10(기본 5). 응답 `{requestId, strategy: "RULE_V1", items[{song, chartId, difficulty, reasons[{code, text}]}]}`. 후보가 없으면 200과 빈 `items`. `playId`는 `context=REPORT`에서만 쓰며(아니면 400) 본인 연주가 아니면 404 `PLAY_NOT_FOUND` |
+| `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
+
+- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. `mode=SHEET`이면 `notation_status=READY`인 채보만. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
+- **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
+- **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
+- **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.
+- **기록(V34 `recommendation_items`):** 조회할 때마다 노출을 남긴다(`request_id`, `rank`, 위치, 전략, 곡·채보, 점수, 이유 코드, `shown_at`). 클릭은 `clicked_at`. 90일이 지난 기록은 `RecommendationRetention`이 하루에 한 번 지운다(`recommendation.retention-days`). **회원 탈퇴 트랜잭션에서 그 회원의 기록을 같이 지운다**(`WithdrawalService`).
+- 시험: `ChartFeaturesTest`·`RecommendationScorerTest`(순수 계산: 밀도·창·전환, 1.5배 제외, 곡당 하나, 약점 가중, 새로움·재도전, 다양성, 결정적 순서)와 `RecommendationServiceTest`(커밋 뒤 특징 저장, 개인 곡 제외, STARTER, 타인의 `playId` 404, 노출·클릭, 보관 정리. 임베디드 DB가 필요해 CI에서 돈다).
+
 ## 리포트 약점 분석 (158번 후속)
 
 신규 RHYTHM/SHEET 플레이의 세션·전체 타격·기본 리포트를 함께 저장한 뒤 별도 작업에서
