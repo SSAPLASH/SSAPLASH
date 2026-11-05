@@ -74,13 +74,39 @@ public class RecommendationService {
 			rank++;
 			items.add(new Item(summary, c.chartId(), c.difficulty(),
 					scored.reasons().stream().map(code -> new Reason(code, TEXT.get(code))).toList()));
-			db.update("""
-					INSERT INTO recommendation_items(request_id, rank, user_id, context, strategy, song_id, chart_id, score, reason_codes, shown_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-					""", requestId, rank, userId, context.name(), STRATEGY, c.songId(), c.chartId(), scored.total(), reasonJson(scored.reasons()),
-					java.sql.Timestamp.from(now));
+			logExposure(requestId, rank, userId, context.name(), STRATEGY, c.songId(), c.chartId(), scored.total(), scored.reasons(), null, now);
 		}
 		return new Recommendations(requestId, STRATEGY, List.copyOf(items));
+	}
+
+	/** 추천 노출 한 줄을 기록한다. 비슷한 곡(R2)도 같은 테이블을 쓰며 그때만 {@code sourceSongId}가 있다. */
+	public void logExposure(UUID requestId, int rank, long userId, String context, String strategy, long songId, long chartId,
+			double score, List<String> reasonCodes, Long sourceSongId, Instant shownAt) {
+		db.update("""
+				INSERT INTO recommendation_items(request_id, rank, user_id, context, strategy, song_id, chart_id, score, reason_codes, shown_at, source_song_id)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+				""", requestId, rank, userId, context, strategy, songId, chartId, score, reasonJson(reasonCodes),
+				java.sql.Timestamp.from(shownAt), sourceSongId);
+	}
+
+	/**
+	 * 본인의 기준 밀도: 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 해당하는 판이 없으면 {@code null}.
+	 * 추천(R1)의 난이도 점수와 비슷한 곡(R2)의 "너무 어려운 곡 거르기"가 같은 값을 쓴다.
+	 */
+	public Double baselineDensity(long userId) {
+		return db.query("""
+				SELECT MAX(f.avg_notes_per_sec) FROM (
+				  SELECT p.chart_version_id, p.accuracy FROM play_sessions p
+				  WHERE p.user_id = ? AND p.mode IN ('RHYTHM', 'SHEET') AND p.accuracy IS NOT NULL
+				  ORDER BY p.ended_at DESC, p.id LIMIT ?) recent
+				JOIN chart_features f ON f.chart_version_id = recent.chart_version_id
+				WHERE recent.accuracy >= ?
+				""", (ResultSetExtractor<Double>) rs -> {
+					// MAX(numeric)는 numeric이라 getObject(Double.class)로 읽으면 PostgreSQL 드라이버가 변환하지 못한다.
+					if (!rs.next()) return null;
+					var value = rs.getBigDecimal(1);
+					return value == null ? null : value.doubleValue();
+				}, userId, RECENT_PLAYS, RecommendationScorer.TARGET_ACCURACY);
 	}
 
 	/** 같은 사용자의 추천 기록만 갱신한다. 이미 눌렀다면 처음 시각을 유지한다. */
@@ -118,20 +144,7 @@ public class RecommendationService {
 	}
 
 	private Profile profile(long userId, UUID playId) {
-		Double baseline = db.query("""
-				SELECT MAX(f.avg_notes_per_sec) FROM (
-				  SELECT p.chart_version_id, p.accuracy FROM play_sessions p
-				  WHERE p.user_id = ? AND p.mode IN ('RHYTHM', 'SHEET') AND p.accuracy IS NOT NULL
-				  ORDER BY p.ended_at DESC, p.id LIMIT ?) recent
-				JOIN chart_features f ON f.chart_version_id = recent.chart_version_id
-				WHERE recent.accuracy >= ?
-				""", (ResultSetExtractor<Double>) rs -> {
-					// MAX(numeric)는 numeric이라 getObject(Double.class)로 읽으면 PostgreSQL 드라이버가 변환하지 못한다.
-					if (!rs.next()) return null;
-					var value = rs.getBigDecimal(1);
-					return value == null ? null : value.doubleValue();
-				}, userId, RECENT_PLAYS, RecommendationScorer.TARGET_ACCURACY);
-
+		Double baseline = baselineDensity(userId);
 		var lastPlayed = new HashMap<Long, Instant>();
 		var bestByChart = new HashMap<Long, Double>();
 		db.query("""
