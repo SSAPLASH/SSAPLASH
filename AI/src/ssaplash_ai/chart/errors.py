@@ -8,21 +8,41 @@
 | ChartModelError | 가중치 없음·다운로드 실패, GPU 메모리 부족, 추론 중 예외 | MODEL_FAILED | 메모리 부족만 참 |
 | ChartOutputError | JSON 검증 실패, 파일 쓰기 실패 | OUTPUT_INVALID | 거짓 |
 
+`reason`은 사용자에게 보여 줄 실패 사유 (S15P31A307-246 설계 3-1절). 워커가 실패 보고 본문 `reason`으로 보냄.
+
+| reason | 예외 |
+| --- | --- |
+| SOURCE_INVALID | ChartInputError (ChartSilentError 포함) |
+| NOT_TRANSCRIBABLE | ChartNotTranscribableError: 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패 |
+| GPU_OUT_OF_MEMORY | ChartModelError 중 retryable 참 |
+| INTERNAL_ERROR | 그 밖의 ChartModelError, ChartOutputError, 워커 내부 예외 |
+
 모델 단계 예외는 `model_error_from`으로 감싸 예외 종류와 첫 줄만 남김(긴 스택·경로를 그대로 내보내지 않음).
 """
 
 from __future__ import annotations
 
 MESSAGE_LIMIT = 200
+REASON_SOURCE_INVALID = "SOURCE_INVALID"
+REASON_NOT_TRANSCRIBABLE = "NOT_TRANSCRIBABLE"
+REASON_GPU_OUT_OF_MEMORY = "GPU_OUT_OF_MEMORY"
+REASON_INTERNAL_ERROR = "INTERNAL_ERROR"
+REASONS = (
+    REASON_SOURCE_INVALID,
+    REASON_NOT_TRANSCRIBABLE,
+    REASON_GPU_OUT_OF_MEMORY,
+    REASON_INTERNAL_ERROR,
+)
 # 메시지에 이 문구가 있으면 GPU 메모리 부족으로 봄 (torch·cuDNN·CUDA 런타임)
 OOM_MARKERS = ("out of memory", "cudnn_status_alloc_failed", "cublas_status_alloc_failed")
 
 
 class ChartError(Exception):
-    """추론 모듈 예외의 공통 조상. code·retryable은 워커 실패 보고 필드."""
+    """추론 모듈 예외의 공통 조상. code·retryable·reason은 워커 실패 보고 필드."""
 
     code: str = "CHART_FAILED"
     retryable: bool = False
+    reason: str = REASON_INTERNAL_ERROR
 
     def __init__(self, message: str, *, retryable: bool | None = None) -> None:
         super().__init__(message)
@@ -38,12 +58,28 @@ class ChartInputError(ChartError):
     """입력 오류. 모델을 돌리기 전에 남. 같은 입력을 다시 넣어도 같으므로 재시도 안 함."""
 
     code = "INPUT_INVALID"
+    reason = REASON_SOURCE_INVALID
+
+
+class ChartSilentError(ChartInputError):
+    """입력 파일이 무음. 원곡이면 SOURCE_INVALID, 채보 모듈은 드럼 트랙 무음으로 바꿔 올림."""
+
+
+class ChartNotTranscribableError(ChartInputError):
+    """채보를 만들 수 없음. 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패."""
+
+    reason = REASON_NOT_TRANSCRIBABLE
 
 
 class ChartModelError(ChartError):
     """모델 오류. 가중치 준비·올리기·추론 중 예외. GPU 메모리 부족이면 retryable 참."""
 
     code = "MODEL_FAILED"
+
+    @property
+    def reason(self) -> str:  # type: ignore[override]
+        """GPU 메모리 부족(retryable 참)이면 GPU_OUT_OF_MEMORY, 아니면 INTERNAL_ERROR."""
+        return REASON_GPU_OUT_OF_MEMORY if self.retryable else REASON_INTERNAL_ERROR
 
 
 class ChartOutputError(ChartError):
