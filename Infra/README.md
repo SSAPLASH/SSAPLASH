@@ -129,6 +129,64 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 - SeaweedFS가 요구에 맞지 않으면 다른 S3 호환 스토리지(예: MinIO)로 바꾼다. BE는 접속 주소와 키만 바뀌므로 코드 변경이 없다.
 - 스토리지 없이 임시로 쓰려면 서버 로컬 볼륨에 저장하는 방식이 있으나, 서명 URL이 없어 BE 변경이 필요하다. 최후의 수단이다.
 
+## 곡 추천 R3 후보 배치 (recommend-batch, COACH-004)
+
+동의한 사용자의 가명 연주 기록으로 곡 추천 후보를 만들어 BE에 적재하는 일회성 배치다. **기본은 꺼져 있고, 켜지 않으면 추천은 지금의 규칙 추천(R1)과 같다.**
+동작은 [AI/docs/recommend-poc.md](../AI/docs/recommend-poc.md), BE 쪽은 [BE/README.md](../BE/README.md)에 있고, 여기에는 운영에 필요한 것만 적는다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 서비스 | `docker-compose.yml`의 `recommend-batch`. `profiles: ["recommend"]`라서 `up -d`로는 뜨지 않는다 |
+| 읽는 곳 | DB 뷰 `recommend_*_v` 4개만. 전용 읽기 전용 계정 `recommend_export`로 접속한다 |
+| 쓰는 곳 | BE `http://api:8080/internal/v1/recommend-candidates`(내부 네트워크, 토큰 인증), MLflow(집계 값만). DB에는 쓰지 않는다 |
+| 실행 위치 | 앱 서버의 컨테이너. PyTorch가 필요 없어 GPU 서버로 가지 않는다. 그래서 DB 포트 개방, SSH 터널, 공개 Nginx 경로가 필요 없다. 공개 Nginx의 `/internal/`은 그대로 404다 |
+| 권한 | 내부 네트워크만, `cap_drop: ALL`, `no-new-privileges`, 메모리 2GiB |
+| 상태 줄 | 끝에 `recommend-batch status=OK` 또는 `status=FAIL ...` 한 줄 |
+
+**준비 순서 (BE MR이 서버 DB에 적용된 뒤 서버에서 직접 한다)**
+
+1. 비밀 값 세 개를 만들어 `.env`에 넣는다. 값은 화면에 출력하지 말고 파일에 바로 쓴다.
+   - `RECOMMEND_EXPORT_PASSWORD`, `RECOMMEND_KEY_SECRET`, `RECOMMEND_BATCH_TOKEN`(모두 `openssl rand -hex 32` 수준의 난수).
+   - `CHART_WORKER_CREDENTIALS`에 `,recommend-batch=<RECOMMEND_BATCH_TOKEN과 같은 값>`을 덧붙인다.
+2. DB에 로그인 계정을 만든다(`psql`을 슈퍼유저로 연다).
+
+   ```sql
+   CREATE ROLE recommend_export LOGIN PASSWORD '<RECOMMEND_EXPORT_PASSWORD>' CONNECTION LIMIT 2;
+   GRANT recommend_export_reader TO recommend_export;
+   ALTER ROLE recommend_export SET app.recommend_key_secret = '<RECOMMEND_KEY_SECRET>';
+   ALTER ROLE recommend_export SET statement_timeout = '5min';
+   ALTER ROLE recommend_export SET default_transaction_read_only = on;
+   ```
+
+3. `api`를 다시 띄워 새 환경 변수를 읽게 한다.
+4. 합성 없이 뷰만 읽어 본다(적재하지 않는다). `--stage P1`은 내부 계정 기록일 때이고, 일반 사용자 기록은 `P2`와 승인 근거가 필요하다.
+
+   ```bash
+   docker compose -p infra --profile recommend run --build --rm recommend-batch --from-views --stage P1
+   ```
+
+**켜기 전 점검**
+
+| 점검 | 방법 | 기대 |
+| --- | --- | --- |
+| 계정이 뷰 말고는 못 읽는다 | `recommend_export`로 `SELECT 1 FROM users LIMIT 1` | 권한 오류 |
+| 뷰 쓰기가 막혔다 | 같은 계정으로 쓰기 시도 | 오류 |
+| 공개 경로가 막혀 있다 | 밖에서 `curl -i https://<도메인>/internal/v1/recommend-candidates/status` | 404 |
+| 토큰 없이는 안 된다 | 서버 안에서 토큰 없이 `/internal/v1/recommend-candidates/status` | 401 |
+| 키가 일치한다 | 적재 결과의 `droppedUnknown` | 0 |
+| 비밀 값이 로그에 없다 | 배치 로그에서 키와 토큰 검색 | 없음 |
+
+**켜는 순서** (실데이터 보고서, 동의 화면 배포, 동의 문구 확정이 끝난 뒤)
+
+1. 쓸 모델 버전을 `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`에 넣는다. 비어 있으면 적재를 모두 거절한다. 값은 배치 출력의 `r3-...`이다.
+2. 그림자 단계: `RECOMMEND_R3_ENABLED=true`, `RECOMMEND_R3_ROLLOUT_PERCENT=0`으로 두고 `--upload`로 적재한다. 응답은 아직 R1이다.
+3. `RECOMMEND_R3_ROLLOUT_PERCENT`를 5부터 올린다. 노출은 `recommendation_items.strategy`로 구분한다.
+4. 문제가 생기면 `RECOMMEND_R3_ENABLED=false`로 바꾸고 `api`를 다시 띄운다. 코드 배포가 필요 없다.
+
+처음에는 사람이 수동으로 돌리고, 안정되면 GitLab 예약으로 옮긴다. 후보는 7일이 지나면 쓰이지 않으므로 그보다 자주 돌려야 한다.
+
+**비밀 값을 바꿀 때**: `RECOMMEND_KEY_SECRET`과 `app.recommend_key_secret`을 함께 바꾸고 `api`를 다시 띄운다. 어긋나면 적재가 전부 `droppedUnknown`이 된다. 후보는 다음 배치에서 다시 적재되므로 데이터는 잃지 않는다.
+
 ## 약점 분석 보정 배치 (coach-calibration, COACH-003)
 
 동의한 사용자의 비식별 연주 기록으로 약점 분석 임계값 **후보**를 만들어 MLflow에 기록하는 일회성 배치다. 임계값을 자동으로 바꾸지 않는다.

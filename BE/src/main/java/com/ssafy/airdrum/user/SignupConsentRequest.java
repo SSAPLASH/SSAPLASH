@@ -17,5 +17,11 @@ public record SignupConsentRequest(
 		@Schema(description = "동의한 개인정보 수집·이용 안내의 판(1~50자, 공백만 불가)", example = "2026-11-01")
 		@NotBlank @Size(max = 50) String privacyVersion,
 		@Schema(description = "연주 기록 활용 동의(필수)")
-		@NotNull @Valid DataConsentInput dataConsent) {
+		@NotNull @Valid DataConsentInput dataConsent,
+		@Schema(description = "맞춤 곡 추천 학습 활용 동의(선택). 생략하면 미동의이고 이전 응답을 바꾸지 않는다")
+		@Valid RecommendationConsentInput recommendationConsent) {
+
+	public SignupConsentRequest(String termsVersion, String privacyVersion, DataConsentInput dataConsent) {
+		this(termsVersion, privacyVersion, dataConsent, null);
+	}
 }

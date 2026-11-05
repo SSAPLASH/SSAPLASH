@@ -17,12 +17,15 @@ public class SignupConsentService {
 
 	private final SignupConsentVersions versions;
 
+	private final RecommendationConsentService recommendationConsents;
+
 	public SignupConsentService(UserRepository users, UserQueryService queries, Clock clock,
-			SignupConsentVersions versions) {
+			SignupConsentVersions versions, RecommendationConsentService recommendationConsents) {
 		this.users = users;
 		this.queries = queries;
 		this.clock = clock;
 		this.versions = versions;
+		this.recommendationConsents = recommendationConsents;
 	}
 
 	/**
@@ -42,6 +45,9 @@ public class SignupConsentService {
 				data.agreed(), data.version(), now);
 		if (updated == 0) {
 			throw new UserNotActiveException(userId);
+		}
+		if (request.recommendationConsent() != null) {
+			recommendationConsents.save(userId, request.recommendationConsent());
 		}
 		return queries.me(userId);
 	}

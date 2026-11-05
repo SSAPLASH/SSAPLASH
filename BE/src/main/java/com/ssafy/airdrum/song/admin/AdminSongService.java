@@ -86,8 +86,9 @@ class AdminSongService {
 		this.tx.setTimeout(15);
 	}
 
-	AdminSongDetail register(String title, String artist, String license, boolean published, MultipartFile file) {
-		return register(title, artist, license, published, converter.convert(file));
+	/** ADMIN 업로드 등록. {@code offsetMs}는 첫 마디 첫 박 시각(0이면 0틱이 첫 박, 262번). */
+	AdminSongDetail register(String title, String artist, String license, boolean published, MultipartFile file, int offsetMs) {
+		return register(title, artist, license, published, converter.convert(file, offsetMs));
 	}
 
 	/** 공용 곡 카탈로그(254번)가 저장소의 MIDI 바이트로 등록한다. 규칙은 업로드 등록과 같고, 카탈로그 offsetMs를 첫 박으로 쓴다(260번). */
