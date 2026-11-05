@@ -5,7 +5,11 @@ generator_version: sheet-musicxml-1
 default_bpm: 120
 # 반복을 펼친 곡 길이 상한(초). BE MIDI 업로드와 같은 30분
 max_duration_sec: 1800
-# 열린 하이햇 노트에 필드를 붙일지. BE·FE와 필드 형식을 맞추기 전까지 false (설계 U3)
+# 하이햇 페달(GM 44)을 HIHAT_PEDAL 노트로 낼지. false면 HIHAT으로 합침.
+# BE main이 HIHAT_PEDAL을 받기 전에 켜면 곡 생성이 실패하므로 그때까지 false
+emit_hihat_pedal: false
+# 열린 하이햇 노트에 hihatOpen: true를 붙일지. BE·FE가 필드를 받는지 확인하기 전까지 false.
+# 두 값을 켤 때 generator_version을 sheet-musicxml-2로 올림
 emit_hihat_open: false
 hihat_open_field: hihatOpen
 schema_version: 1

@@ -132,6 +132,35 @@ def test_emit_hihat_open이면_열린_하이햇에만_필드를_붙인다(tmp_pa
     validate_chart(out.chart, out.duration_ms)
 
 
+def test_emit_hihat_pedal이면_페달을_HIHAT_PEDAL로_낸다(tmp_path: Path):
+    out = convert_sheet(write(tmp_path, BASIC), SheetConfig(emit_hihat_pedal=True))
+    notes = out.chart["charts"][0]["notes"]
+    assert [(n["timeMs"], n["pad"]) for n in notes if n["timeMs"] == 500] == [
+        (500, "SNARE"),
+        (500, "HIHAT_PEDAL"),
+    ]
+    assert out.n_hihat_pedal == 1 and out.notes_by_pad["HIHAT_PEDAL"] == 1
+    validate_chart(out.chart, out.duration_ms)
+
+
+def test_두_설정을_켜면_하이햇을_세_가지로_나눈다(tmp_path: Path):
+    config = SheetConfig(emit_hihat_pedal=True, emit_hihat_open=True)
+    out = convert_sheet(write(tmp_path, BASIC), config)
+    hats = [
+        (n["timeMs"], n["pad"], n.get("hihatOpen", False))
+        for n in out.chart["charts"][0]["notes"]
+        if n["pad"] in ("HIHAT", "HIHAT_PEDAL")
+    ]
+    # 0ms 닫힘, 250ms 열림, 500ms 페달만, 750ms 닫힘
+    assert hats == [
+        (0, "HIHAT", False),
+        (250, "HIHAT", True),
+        (500, "HIHAT_PEDAL", False),
+        (750, "HIHAT", False),
+    ]
+    validate_chart(out.chart, out.duration_ms)
+
+
 def test_technical_표시가_GM_번호보다_먼저다(tmp_path: Path):
     xml = score(
         measure(
