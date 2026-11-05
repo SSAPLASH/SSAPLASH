@@ -233,11 +233,15 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
 
 
 def _variants(value: float) -> set[str]:
-    """숫자 하나가 문장에 나올 수 있는 모양들: 정수, 소수 한·두 자리, 비율이면 백분율."""
+    """숫자 하나가 문장에 나올 수 있는 모양들: 정수, 소수 한·두 자리, 비율이면 백분율.
+
+    문장에서 숫자는 부호 없이 뽑으므로(`_NUMBER`) 음수도 절댓값 모양으로 만든다. 평균 오차 -35.4ms를 모델이
+    "35.4ms 빠르게"라고 맞게 써도 통과해야 한다.
+    """
+    value = abs(value)
     out = {str(round(value)), _trim(f"{value:.1f}"), _trim(f"{value:.2f}")}
-    if 0 <= abs(value) <= 1:
-        out.add(str(round(abs(value) * 100)))
-    out.add(str(round(abs(value))))
+    if value <= 1:
+        out.add(str(round(value * 100)))
     return out
 
 
@@ -260,7 +264,10 @@ def _allowed_numbers(facts: NarrativeFacts) -> set[str]:
         add(s.fromMs / 1000)
         add(s.toMs / 1000)
         add((s.toMs - s.fromMs) / 1000)
-        numeric = {k: v for k, v in s.metrics.items() if isinstance(v, (int, float))}
+        # 프롬프트에 실제로 보여 주는 지표만 허용한다. severity(0~1)처럼 보이지 않는 값을 허용하면 "55번" 같은 숫자가 통과한다
+        numeric = {
+            k: v for k, v in s.metrics.items() if k in METRIC_KO and isinstance(v, (int, float))
+        }
         for v in numeric.values():
             add(v)
         # 패드가 다른 패드보다 얼마나 늦은지: 두 평균의 차이

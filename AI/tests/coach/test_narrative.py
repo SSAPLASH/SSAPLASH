@@ -514,3 +514,45 @@ def test_굵게_표시는_지우고_정확도_말은_숫자가_없으면_허용�
 
 def test_물음표로_끝나는_문장도_허용한다():
     assert check("7~12초 구간을 느린 템포로 반복해 보는 건 어떨까요?", _facts()) == []
+
+
+# ---------- 리뷰 반영 ----------
+
+
+def _early_facts() -> NarrativeFacts:
+    return _facts(
+        focusPattern="TIMING_EARLY",
+        segments=[
+            {
+                "pattern": "TIMING_EARLY",
+                "severityLevel": "MEDIUM",
+                "pads": ["SNARE"],
+                "fromMs": 0.0,
+                "toMs": 20000.0,
+                "scope": "WHOLE",
+                "metrics": {"severity": 0.55, "meanDeltaMs": -35.4, "hitCount": 30},
+            }
+        ],
+    )
+
+
+def test_음수_소수도_절댓값_모양으로_허용한다():
+    """리뷰: 평균 오차가 -35.4ms일 때 모델이 "35.4ms 빠르게"라고 맞게 써도 거절되면 안 된다."""
+    facts = _early_facts()
+    ok = "박보다 평균 35.4ms 빠르게 치고 있어요. 박 소리를 기다렸다 치는 연습부터 해 보세요."
+    assert check(ok, facts) == []
+    assert check("박보다 평균 35ms 빠르게 쳤어요. 천천히 쳐 보세요.", facts) == []
+    # 없는 값은 여전히 걸린다
+    assert any(
+        "사실에 없는 숫자 36.4" in p for p in check("박보다 평균 36.4ms 빠르게 쳤어요.", facts)
+    )
+
+
+def test_프롬프트에_보이지_않는_severity가_허용_숫자에_들어가지_않는다():
+    """리뷰: severity 0.55가 허용되면 "55번" 같은 숫자가 통과한다."""
+    facts = _early_facts()
+    problems = check("같은 실수가 55번 나왔어요. 박 소리를 기다려 보세요.", facts)
+    assert any("사실에 없는 숫자 55" in p for p in problems)
+    # 프롬프트에 보이는 지표(놓침 비율 등)는 여전히 허용한다
+    assert check(GOOD_TEXT, _facts()) == []
+
