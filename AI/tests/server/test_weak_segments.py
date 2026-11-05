@@ -137,7 +137,7 @@ def test_분석_요약만_로그에_남고_요청_값은_남지_않는다(caplog
         _call(sample)
 
     assert "weak-segments reason=OK" in caplog.text
-    assert "TIMING_LATE:0.36" in caplog.text
+    assert "TIMING_LATE:0.3" in caplog.text
     assert sample["playId"] not in caplog.text
     assert "n0001" not in caplog.text  # 노트 ID 같은 타격 데이터가 없다
 
@@ -165,7 +165,7 @@ def test_uvicorn_로깅_설정에서도_분석_요약이_표준_출력으로_나
 
     out = capsys.readouterr().out
     assert "weak-segments reason=OK" in out
-    assert "TIMING_LATE:0.36" in out
+    assert "TIMING_LATE:0.3" in out
     assert SAMPLES["A"]["request"]["playId"] not in out
 
 
@@ -202,7 +202,7 @@ def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단
     status, body = _call(SAMPLES["A"]["request"])
 
     assert status == 200
-    assert body["analyzerVersion"] == "weak-rules-0.3"
+    assert body["analyzerVersion"] == "weak-rules-0.4"
     assert body["weakSegments"]
     for segment in body["weakSegments"]:
         assert segment["tip"]

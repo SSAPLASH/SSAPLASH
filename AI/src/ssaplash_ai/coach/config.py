@@ -1,15 +1,17 @@
-"""약점 분석 설정. 임계값은 모두 이 파일 한 곳에 두고 판정 폭 `goodMs`의 비율로 정의한다.
+"""약점 분석 설정. 임계값은 모두 이 파일 한 곳에 두고 기준 폭 `basis_ms`의 비율로 정의한다.
 
-비율로 두는 이유: `goodMs`는 사용자가 30~150ms로 바꿀 수 있어서 "15ms 늦다"가 사람마다 다른 크기다.
+비율로 두는 이유: 사용자마다 판정 폭이 달라도 같은 박 오차에는 같은 말을 하려는 것이다. 기준 폭은 기본이 고정 60ms로,
+FE 실시간 코칭과 같다(판정 폭은 게임 난이도이고 코칭은 실제 박 오차를 보기 때문. FE `coachBasis`의 fixed 방식).
+`basis_ms=None`이면 이전처럼 플레이의 `timingWindows.goodMs`를 쓴다.
 수치는 가정값이며 QA(합성 평가, 이후 실제 로그) 뒤에 이 파일만 고쳐 조정한다.
-아래 `ms` 주석은 `goodMs = 50` 기준 값이다.
+아래 `ms` 주석은 기준 폭 50ms로 계산한 값이다(기준 60ms면 1.2배).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.3"
+ANALYZER_VERSION = "weak-rules-0.4"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
@@ -74,20 +76,26 @@ PAD_LABELS_KO = {
 
 @dataclass(frozen=True)
 class Thresholds:
+    # --- 기준 폭: 아래 비율(×)을 곱하는 ms 기준 ---
+    # 판정 폭(goodMs)은 게임 난이도이고, 코칭은 실제 박 오차를 본다. 그래서 기본은 FE 실시간 코칭과 같은 고정 60ms다
+    # (FE `domain/coachBasis.ts`의 fixed 방식. 판정 폭 60을 쓰는 사용자는 이전과 임계값이 같다).
+    # None이면 플레이마다 `timingWindows.goodMs`를 쓴다(이전 동작. 보정·비교용).
+    basis_ms: float | None = 60.0
+
     # --- TIMING_* : 전체적으로 늦거나 빠르다 ---
     timing_min_valid: int = 20  # 유효 타격(PERFECT/GOOD) 수
-    timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × goodMs (15ms)
+    timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × 기준 폭 (18ms)
     timing_same_sign: float = 0.65  # 평균과 같은 부호인 타격 비율
 
     # --- PAD_* : 특정 패드에서 늦거나 빠르다 ---
     pad_min_valid: int = 8
-    pad_mean_ratio: float = 0.4  # 그 패드 평균 |오차| ≥ 0.4 × goodMs (20ms)
-    pad_gap_ratio: float = 0.24  # 전체 평균과의 차이 ≥ 0.24 × goodMs (12ms)
+    pad_mean_ratio: float = 0.4  # 그 패드 평균 |오차| ≥ 0.4 × 기준 폭 (24ms)
+    pad_gap_ratio: float = 0.24  # 전체 평균과의 차이 ≥ 0.24 × 기준 폭 (14.4ms)
 
     # --- TRANSITION_* : 패드가 바뀔 때 늦거나 놓친다 ---
     transition_min_count: int = 6  # 같은 A→B 전환 횟수
     transition_min_valid: int = 3  # 평균 오차를 계산할 최소 유효 타격 (구현 보완: 1~2개 평균 방지)
-    transition_late_ratio: float = 0.5  # 평균 오차 ≥ 0.5 × goodMs (25ms)
+    transition_late_ratio: float = 0.5  # 평균 오차 ≥ 0.5 × 기준 폭 (30ms)
     transition_miss_rate: float = 0.30
 
     # --- HAND_WEAK : 한쪽 손 세기가 약하다 ---
@@ -102,13 +110,13 @@ class Thresholds:
 
     # --- UNSTEADY : 박자가 불안정하다 ---
     unsteady_min_valid: int = 20
-    unsteady_std_ratio: float = 0.5  # 오차 표준편차 ≥ 0.5 × goodMs (25ms)
+    unsteady_std_ratio: float = 0.5  # 오차 표준편차 ≥ 0.5 × 기준 폭 (30ms)
 
     # --- severity(0~1) 분모 ---
-    severity_delta_ratio: float = 1.2  # min(1, |평균 오차| ÷ (1.2 × goodMs))
+    severity_delta_ratio: float = 1.2  # min(1, |평균 오차| ÷ (1.2 × 기준 폭))
     severity_miss_rate: float = 0.6  # min(1, 놓침 비율 ÷ 0.6)
     severity_hand_span: float = 0.4  # min(1, (0.75 − 비율) ÷ 0.4)
-    severity_unsteady_ratio: float = 0.8  # min(1, 표준편차 ÷ (0.8 × goodMs))
+    severity_unsteady_ratio: float = 0.8  # min(1, 표준편차 ÷ (0.8 × 기준 폭))
 
 
 DEFAULT_THRESHOLDS = Thresholds()

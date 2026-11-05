@@ -30,7 +30,7 @@ def detect_timing(notes: NoteTable, th: Thresholds) -> list[Candidate]:
     pattern = "TIMING_LATE" if late else "TIMING_EARLY"
     if pattern not in ENABLED_PATTERNS:
         return []
-    if abs(mean) < th.timing_mean_ratio * notes.good_ms:
+    if abs(mean) < th.timing_mean_ratio * notes.basis(th):
         return []
     same_sign = float(np.mean(np.sign(delta) == (1 if late else -1)))
     if same_sign < th.timing_same_sign:
@@ -46,7 +46,7 @@ def detect_timing(notes: NoteTable, th: Thresholds) -> list[Candidate]:
             description=f"전체적으로 평균 {abs(mean):.0f}ms {'늦게' if late else '빠르게'} 치고 있어요.",
             cause_tags=["LATE" if late else "EARLY", "OVERALL"],
             pads=pads,
-            severity=clamp01(abs(mean) / (th.severity_delta_ratio * notes.good_ms)),
+            severity=clamp01(abs(mean) / (th.severity_delta_ratio * notes.basis(th))),
             metrics={
                 "severity": 0.0,  # 응답 조립 때 채운다
                 "meanDeltaMs": round(mean, 1),
@@ -72,9 +72,9 @@ def detect_pad_timing(notes: NoteTable, th: Thresholds) -> list[Candidate]:
             continue
         mean = mean_of(delta)
         gap = mean - overall
-        if abs(mean) < th.pad_mean_ratio * notes.good_ms:
+        if abs(mean) < th.pad_mean_ratio * notes.basis(th):
             continue
-        if abs(gap) < th.pad_gap_ratio * notes.good_ms:
+        if abs(gap) < th.pad_gap_ratio * notes.basis(th):
             continue
         # 이 패드가 다른 패드보다 더 늦거나(빠른) 경우만 낸다. 전체보다 덜 늦은 패드는 약점이 아니다.
         if (mean > 0) != (gap > 0):
@@ -93,7 +93,7 @@ def detect_pad_timing(notes: NoteTable, th: Thresholds) -> list[Candidate]:
                 ),
                 cause_tags=["LATE" if late else "EARLY", "PAD"],
                 pads=[pad],
-                severity=clamp01(abs(mean) / (th.severity_delta_ratio * notes.good_ms)),
+                severity=clamp01(abs(mean) / (th.severity_delta_ratio * notes.basis(th))),
                 metrics={
                     "severity": 0.0,
                     "meanDeltaMs": round(mean, 1),

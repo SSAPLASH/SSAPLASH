@@ -31,7 +31,7 @@ def _sessions(count: int, model: PlayerModel, layout: str = "rock", n_notes: int
     out: list[Session] = []
     for i in range(count):
         chart = make_chart(n_notes, layout, seed=i)
-        request = simulate(chart, model, good_ms=50.0, seed=i).request
+        request = simulate(chart, model, good_ms=60.0, seed=i).request
         request["playId"] = f"s{i:03d}-{model.mean}-{model.weak_stick}"
         out.extend(read_sessions(ListSource(view_rows(request, **view))))
     return out
@@ -102,7 +102,7 @@ def test_distributions_match_known_values():
     assert delta is not None and delta[50] == pytest.approx(0.2, abs=0.01)
     assert profile.quantiles("missRate")[50] == 0.0
     assert profile.quantiles("strayRate")[50] == 0.0
-    assert profile.quantiles("goodMs")[50] == 50.0
+    assert profile.quantiles("goodMs")[50] == 60.0
     assert profile.quantiles("sessionDeltaStd")[50] < 0.01
     assert profile.n_notes == 8 * 80
 
@@ -114,7 +114,7 @@ def test_miss_rate_distribution_reflects_the_missed_share():
     )
     sessions = []
     for i in range(6):
-        request = simulate(chart, model, good_ms=50.0, seed=i).request
+        request = simulate(chart, model, good_ms=60.0, seed=i).request
         request["playId"] = f"m{i}"
         sessions.extend(read_sessions(ListSource(view_rows(request))))
 

@@ -21,7 +21,7 @@ from ssaplash_ai.coach_calibration.register import (
 from ssaplash_ai.coach_calibration.source import ALLOWED_COLUMNS, DisallowedColumnError, ListSource
 from ssaplash_ai.coach_eval.runner import RunConfig
 
-FAST_REEVAL = RunConfig(seeds=3, note_counts=(60,), good_ms_values=(50.0,))
+FAST_REEVAL = RunConfig(seeds=3, note_counts=(60,), good_ms_values=(60.0,))
 TARGETS = Policy(targets={"TIMING": (0.30, 0.40)})
 
 
@@ -238,3 +238,129 @@ def test_force_does_not_run_on_an_empty_view(uri):
 
     assert outcome.status == STATUS_SKIPPED
     assert _client(uri).get_experiment_by_name(EXPERIMENT_NAME) is None
+
+
+# --- 날짜·모드 선택(--since, --mode) ---
+
+
+def _relabel(rows, old_until: int, **old_fields):
+    """세션 키 순서대로 앞의 `old_until`개 세션의 행 값을 바꾼다(played_date, mode 등)."""
+    keys = sorted({r["session_key"] for r in rows})
+    old = set(keys[:old_until])
+    for r in rows:
+        if r["session_key"] in old:
+            r.update(old_fields)
+    return rows
+
+
+def test_since보다_이전_플레이는_빼고_빠진_수를_기록한다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-10")
+
+    outcome = _run(rows, uri, since="2026-10-20")
+
+    assert outcome.status == STATUS_OK and outcome.valid_sessions == 60
+    (run,) = _runs(uri)
+    assert run.data.params["since"] == "2026-10-20" and run.data.params["modes"] == "ALL"
+    assert run.data.metrics["count/PRE_SELECTED_OUT"] == 30.0
+    assert run.data.params["viewSessionCount"] == "90"  # 뷰 전체 수는 그대로(새로 쌓였는지 판단용)
+
+
+def test_since가_없으면_모두_쓰고_빠진_수는_0이다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-10")
+
+    outcome = _run(rows, uri)
+
+    assert outcome.valid_sessions == 90
+    (run,) = _runs(uri)
+    assert run.data.params["since"] == "" and run.data.metrics["count/PRE_SELECTED_OUT"] == 0.0
+
+
+def test_모드를_고르면_그_모드만_쓴다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+
+    outcome = _run(rows, uri, modes=frozenset({"RHYTHM"}))
+
+    assert outcome.valid_sessions == 60
+    (run,) = _runs(uri)
+    assert (
+        run.data.params["modes"] == "RHYTHM" and run.data.metrics["count/PRE_SELECTED_OUT"] == 30.0
+    )
+
+
+def test_두_모드를_따로_돌려_비교할_수_있다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+
+    assert _run(rows, uri, modes=frozenset({"SHEET"}), force=True).valid_sessions == 30
+    assert _run(rows, uri, modes=frozenset({"RHYTHM"}), force=True).valid_sessions == 60
+
+
+def test_날짜를_알_수_없는_세션은_since가_있으면_뺀다():
+    from types import SimpleNamespace
+
+    from ssaplash_ai.coach_calibration.pipeline import select_sessions
+
+    def s(date, mode="RHYTHM"):
+        return SimpleNamespace(played_date=date, mode=mode)
+
+    sessions = [s("2026-10-19"), s("2026-10-20"), s(None), s("2026-10-25", "SHEET")]
+    assert select_sessions(sessions) == sessions  # 아무 조건도 없으면 전부
+    assert select_sessions(sessions, since="2026-10-20") == [
+        sessions[1],
+        sessions[3],
+    ]  # 이상(포함), 날짜 없음은 제외
+    assert select_sessions(sessions, modes=frozenset({"SHEET"})) == [sessions[3]]
+    assert select_sessions(sessions, since="2026-10-20", modes=frozenset({"RHYTHM"})) == [
+        sessions[1]
+    ]
+
+
+def test_일부만_고른_실행은_다음_정기_실행을_막지_않는다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, mode="SHEET")
+    assert _run(rows, uri, modes=frozenset({"RHYTHM"})).status == STATUS_OK
+
+    assert register.find_last_run(uri) is None
+    assert _run(rows, uri).status == STATUS_OK
+
+
+def test_since로_고른_실행도_기준에서_뺀다(uri):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-01")
+    assert _run(rows, uri, since="2026-10-20").status == STATUS_OK
+
+    assert register.find_last_run(uri) is None
+
+
+def test_기준은_일부_실행_앞의_전체_실행이다(uri):
+    rows = late_gradient_rows(60)
+    full = _run(rows, uri)
+    _run(rows, uri, modes=frozenset({"RHYTHM"}), force=True)
+
+    last = register.find_last_run(uri)
+    assert last is not None and last.run_id == full.run_id
+    assert _run(rows, uri).status == STATUS_SKIPPED
+
+
+def test_since와_modes_파라미터가_없던_옛_실행은_전체_실행이다():
+    assert register._is_partial({}) is False
+    assert register._is_partial({"since": "", "modes": "ALL"}) is False
+    assert register._is_partial({"since": "2026-10-20", "modes": "ALL"}) is True
+    assert register._is_partial({"since": "", "modes": "RHYTHM"}) is True
+
+
+def test_일부만_고른_실행은_이름과_요약에_범위를_보여_준다(uri, tmp_path):
+    rows = _relabel(late_gradient_rows(90), 30, played_date="2026-10-01")
+    _run(rows, uri, since="2026-10-20", modes=frozenset({"SHEET", "RHYTHM"}))
+
+    (run,) = _runs(uri)
+    assert run.info.run_name.endswith("-since2026-10-20-RHYTHM+SHEET")
+    path = _client(uri).download_artifacts(run.info.run_id, "summary.md", str(tmp_path))
+    text = open(path, encoding="utf-8").read()
+    assert "| 기간 | 2026-10-20 이후 |" in text and "| 모드 | RHYTHM, SHEET |" in text
+
+
+def test_전체_실행의_요약은_범위를_전체로_적는다(uri, tmp_path):
+    _run(late_gradient_rows(60), uri)
+
+    (run,) = _runs(uri)
+    path = _client(uri).download_artifacts(run.info.run_id, "summary.md", str(tmp_path))
+    text = open(path, encoding="utf-8").read()
+    assert "| 기간 | 전체 |" in text and "| 모드 | 전체 |" in text
