@@ -16,9 +16,19 @@ import pytest
 from helpers import HITS, SR, make_hits, write_wav
 from ssaplash_ai.chart import transcription as transcription_module
 from ssaplash_ai.chart.chart_json import validate_chart
-from ssaplash_ai.chart.config import TempoConfig, TranscriptionConfig
-from ssaplash_ai.chart.errors import ChartInputError, ChartModelError, ChartOutputError
-from ssaplash_ai.chart.transcription import CHART_FILENAME, TranscriptionModule
+from ssaplash_ai.chart.config import DrumCheckConfig, TempoConfig, TranscriptionConfig
+from ssaplash_ai.chart.errors import (
+    ChartInputError,
+    ChartModelError,
+    ChartNotTranscribableError,
+    ChartOutputError,
+)
+from ssaplash_ai.chart.tempo import TempoEstimate
+from ssaplash_ai.chart.transcription import (
+    CHART_FILENAME,
+    TranscriptionModule,
+    check_transcribable,
+)
 
 META_KEYS = {
     "chart_json_path",
@@ -170,6 +180,81 @@ def test_입력_오류는_모델을_안_돌림(tmp_path: Path):
     with pytest.raises(ChartInputError):
         module.transcribe_file(tmp_path / "없음.wav", tmp_path / "out")
     assert module._transcriber.calls == 0
+
+
+def test_드럼_트랙이_무음이면_채보_불가(tmp_path: Path):
+    module = _module(_config(tmp_path))
+    silent = tmp_path / "silent.wav"
+    write_wav(silent, np.zeros((2, SR), dtype=np.float32))
+    with pytest.raises(ChartNotTranscribableError, match="드럼 트랙 무음") as info:
+        module.transcribe_file(silent, tmp_path / "out")
+    assert info.value.reason == "NOT_TRANSCRIBABLE" and info.value.code == "INPUT_INVALID"
+    assert module._transcriber.calls == 0
+
+
+def test_노트_수_기준이_비어_있으면_노트_수로는_실패하지_않는다(tmp_path: Path):
+    config = _config(tmp_path)
+    assert config.drum_check.min_notes_per_minute is None
+    out = _module(config).transcribe_file(_drums(tmp_path), tmp_path / "out")
+    assert out.n_notes == len(HITS)
+
+
+def test_1분당_노트_수가_기준_미만이면_채보_불가이고_파일을_안_남김(tmp_path: Path):
+    config = replace(_config(tmp_path), drum_check=DrumCheckConfig(min_notes_per_minute=10_000))
+    with pytest.raises(ChartNotTranscribableError, match="1분당 노트 .*기준 10000개"):
+        _module(config).transcribe_file(_drums(tmp_path), tmp_path / "out")
+    assert not (tmp_path / "out" / CHART_FILENAME).exists()
+
+
+def test_1분당_노트_수가_기준_이상이면_통과(tmp_path: Path):
+    config = replace(_config(tmp_path), drum_check=DrumCheckConfig(min_notes_per_minute=1))
+    out = _module(config).transcribe_file(_drums(tmp_path), tmp_path / "out")
+    assert out.n_notes == len(HITS) and (tmp_path / "out" / CHART_FILENAME).is_file()
+
+
+def _tempo_fails(module: TranscriptionModule, monkeypatch: pytest.MonkeyPatch) -> None:
+    original = module._tempo.estimate
+
+    def failed(audio, sample_rate):
+        return replace(original(audio, sample_rate), estimated=False, bpm=120.0)
+
+    monkeypatch.setattr(module._tempo, "estimate", failed)
+
+
+def test_박_추적_실패면_채보_불가(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    module = _module(_config(tmp_path))
+    _tempo_fails(module, monkeypatch)
+    with pytest.raises(ChartNotTranscribableError, match="박 추적 실패, 박 [0-9]+개"):
+        module.transcribe_file(_drums(tmp_path), tmp_path / "out")
+    assert not (tmp_path / "out" / CHART_FILENAME).exists()
+
+
+def test_fail_on_unknown_tempo가_거짓이면_박_추적_실패도_통과(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    config = replace(_config(tmp_path), drum_check=DrumCheckConfig(fail_on_unknown_tempo=False))
+    module = _module(config)
+    _tempo_fails(module, monkeypatch)
+    out = module.transcribe_file(_drums(tmp_path), tmp_path / "out")
+    assert out.bpm_estimated is False
+
+
+def test_노트_수를_박_추적보다_먼저_본다():
+    tempo = TempoEstimate(
+        bpm=120.0,
+        raw_bpm=None,
+        first_beat_ms=None,
+        first_downbeat_ms=None,
+        n_beats=0,
+        time_signature="4/4",
+        estimated=False,
+        method="librosa",
+    )
+    with pytest.raises(ChartNotTranscribableError, match="1분당 노트 3.0개, 기준 5개"):
+        check_transcribable(3, 60_000, tempo, DrumCheckConfig(min_notes_per_minute=5))
+    with pytest.raises(ChartNotTranscribableError, match="박 추적 실패, 박 0개"):
+        check_transcribable(5, 60_000, tempo, DrumCheckConfig(min_notes_per_minute=5))
+    check_transcribable(5, 60_000, replace(tempo, estimated=True), DrumCheckConfig(5))
 
 
 def test_모델_예외는_모델_오류로_감쌈(tmp_path: Path):
