@@ -193,6 +193,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **프로토콜(v0.7)**: HIT는 20바이트이고 시각은 µs(`timestampUs`)다. 스틱이 판정한 패드가 `pad` 필드로 오며, `decodePacket`이 전체 필드를, `parsePacket`이 `StickEvent`(시각 ms)로 좁힌 값을 낸다. 명령 0x14~0x17·파라미터 표(`STICK_PARAMS`)도 같은 파일에 있다.
 - **페달 타격**: role 2·3 HIT는 `InputManager`의 별도 경로(`handleFootHit`)로 매퍼를 건너뛰고 `ResolvedHit`이 된다([패드](#패드)). 플레이 로그·업로드 본문(`stickId: null`)·텔레메트리·이펙트(`hand` null)에는 손 없음으로 남고, 녹음은 `stickId` 키 자체를 생략한다(서버가 null을 400으로 거부).
 - **타격 진동(PLAY-006)**: 스틱이 패드를 판정한 순간 직접 울린다(펌웨어 로컬 트리거, 패드 밖 타격은 진동 없음). FE는 타격마다 HAPTIC을 보내지 않는다 — 브라우저를 거친 명령이 늦게 도착해 펌웨어 진동을 끊고 한 타격에 두 번 울렸다. `InputManager.haptic`은 모니터 진동 테스트에만 쓴다.
+  - **곡 연주 판정 진동**: 리듬 게임·악보 연습은 `useJudgementHaptic` 훅 하나로 같은 규칙을 따른다. 연주 단계 전체(카운트인·일시정지·복귀 카운트다운 포함) 동안 스틱 로컬 진동을 끄고(`hapticEnable` 0x05 = 0), PERFECT·GOOD 판정 즉시 그 손에만 라이브러리 파형 1회(`InputManager.hapticWave`, HAPTIC `[0x12, 파형, 0]`)를 보낸다. MISS·키보드·터치 판정은 보내지 않는다.
+  - 로컬 진동 모드(`app/hapticMode`: `local`/`judgement`)는 진입 횟수로 관리해 마지막 이탈에서만 `local`(= 1)로 돌아가고, 손이 새로 붙거나 설정 전(비트 5)일 때마다 `bootstrap`이 `onStickLinked`로 그 손에 현재 모드 값을 다시 보낸다. 탭을 닫을 때(`pagehide`)도 `local` 전송을 시도한다. 파형 번호(`domain/haptics`의 `HIT_WAVE`)는 EMB 회신 전 임시값이다.
 - **스틱 판정 우선 규칙**: HIT `pad`가 있으면 자세 매퍼보다 우선해 그 패드로 재생한다(`judgedBy: 'stick'`). `pad`가 0xFF면 자세 매퍼(`'pose'`).
   채보 후보가 있고 `pad`가 후보 밖일 때만, 스틱이 애매하다고 했거나(`ambiguous`) `marginDeg`가 `AMBIGUOUS_MARGIN_DEG`(10°) 미만이면 가장 가까운 후보로 보정한다(`'chart'`). 확신 있는 오타는 그대로 두어 리듬 세션이 MISS 처리한다.
   세기는 스틱 `velocity`를 그대로 쓰고(펌웨어 곡선), 없을 때만 FE 가속도 곡선을 쓴다. 판정 출처는 `ResolvedHit.judgedBy`·텔레메트리에 남는다.
