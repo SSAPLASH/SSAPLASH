@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
 import type { RecommendationItem, RecommendationPage } from '@/domain/recommendation';
+import { fetchSimilarSongs } from '@/api/similarSongs';
+import type { SimilarPage } from '@/domain/recommendation';
 import { RECOMMENDATION_TIMEOUT_MS, useRecommendations } from './recommendationStore';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 
 const KEY = 'SONG_PICKER:RHYTHM';
 const PARAMS = { context: 'SONG_PICKER', mode: 'RHYTHM', size: 5 } as const;
@@ -15,6 +18,7 @@ beforeEach(() => {
   useRecommendations.getState().resetForTest();
   vi.mocked(fetchRecommendations).mockReset();
   vi.mocked(postRecommendationClick).mockReset();
+  vi.mocked(fetchSimilarSongs).mockReset();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -132,5 +136,62 @@ describe('ready 항목', () => {
     const e = useRecommendations.getState().entries[KEY];
     expect(e).toMatchObject({ status: 'ready', requestId: 'r1' });
     expect(e?.status === 'ready' && e.cards[0]).toMatchObject({ chartId: 34, line: '처음 시작하기 좋은 쉬운 곡이에요' });
+  });
+});
+
+describe('loadSimilar', () => {
+  const SK = 'SIMILAR:12';
+  const spage = (n: number): SimilarPage => ({
+    requestId: 's1', strategy: 'SIMILAR_V1',
+    items: Array.from({ length: n }, () => ({ song: { id: 5 }, chartId: 8, difficulty: 'HARD', similarity: 0.9, matchedOn: ['TEMPO'] })) as unknown as SimilarPage['items'],
+  });
+  const st = () => useRecommendations.getState().entries[SK];
+
+  it('songId를 경로 인자로, 나머지를 옵션으로 넘기고 카드(line = matchedOn 문구)를 든다', async () => {
+    vi.mocked(fetchSimilarSongs).mockResolvedValue(spage(1));
+    await useRecommendations.getState().loadSimilar(SK, { songId: 12, difficulty: 'EASY', size: 5 });
+    expect(vi.mocked(fetchSimilarSongs).mock.calls[0].slice(0, 2)).toEqual([12, { difficulty: 'EASY', size: 5 }]);
+    expect(st()).toMatchObject({ status: 'ready', requestId: 's1' });
+    const e = st();
+    expect(e?.status === 'ready' && e.cards[0].line).toBe('템포가 비슷해요');
+  });
+
+  it('키당 1회 — ready·loading이면 무시하고 clear 뒤에는 다시 요청한다', async () => {
+    vi.mocked(fetchSimilarSongs).mockResolvedValue(spage(1));
+    await useRecommendations.getState().loadSimilar(SK, { songId: 12 });
+    await useRecommendations.getState().loadSimilar(SK, { songId: 12 });
+    expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
+    useRecommendations.getState().clear(SK);
+    await useRecommendations.getState().loadSimilar(SK, { songId: 12 });
+    expect(fetchSimilarSongs).toHaveBeenCalledTimes(2);
+  });
+
+  it('빈 items·404·오류는 hidden', async () => {
+    vi.mocked(fetchSimilarSongs).mockResolvedValue(spage(0));
+    await useRecommendations.getState().loadSimilar(SK, { songId: 12 });
+    expect(st()?.status).toBe('hidden');
+    vi.mocked(fetchSimilarSongs).mockRejectedValue(new Error('404'));
+    await useRecommendations.getState().loadSimilar('SIMILAR:13', { songId: 13 });
+    expect(useRecommendations.getState().entries['SIMILAR:13']?.status).toBe('hidden');
+  });
+
+  it('5초가 지나면 hidden', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetchSimilarSongs).mockImplementation(
+      (_id, _o, signal) => new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new Error('abort')))),
+    );
+    const p = useRecommendations.getState().loadSimilar(SK, { songId: 12 });
+    await vi.advanceTimersByTimeAsync(RECOMMENDATION_TIMEOUT_MS);
+    await p;
+    expect(st()?.status).toBe('hidden');
+  });
+
+  it('R1과 같은 키 규칙을 공유한다(서로 다른 키는 독립)', async () => {
+    vi.mocked(fetchRecommendations).mockResolvedValue(page([item]));
+    vi.mocked(fetchSimilarSongs).mockResolvedValue(spage(1));
+    await useRecommendations.getState().load('REPORT:p1', { context: 'REPORT', mode: 'RHYTHM', playId: 'p1' });
+    await useRecommendations.getState().loadSimilar('SIMILAR:12', { songId: 12 });
+    expect(useRecommendations.getState().entries['REPORT:p1']?.status).toBe('ready');
+    expect(useRecommendations.getState().entries['SIMILAR:12']?.status).toBe('ready');
   });
 });
