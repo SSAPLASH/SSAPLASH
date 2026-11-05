@@ -21,6 +21,8 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { useSimilarSongs } from '@/components/play/useSimilarSongs';
+import { RecommendRow } from '@/components/song/RecommendRow';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
@@ -575,6 +577,13 @@ function SheetPageBody() {
 
   // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
+  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
+  const similar = useSimilarSongs({
+    songId: songIdParam,
+    active: stage === 'ready' && param.status === 'ready',
+    difficulty: chart?.difficulty ?? null,
+    onSelect: param.select,
+  });
   const records = useBestRecords(
     stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
     'SHEET', stage === 'ready' && detail?.id === songIdParam, songsSource,
@@ -688,6 +697,7 @@ function SheetPageBody() {
           onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
+          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
           options={
             <>
               {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}
