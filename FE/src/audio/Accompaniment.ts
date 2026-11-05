@@ -18,6 +18,9 @@ export class Accompaniment {
   private _state: AccompanimentState = 'idle';
   /** 소스 재생 배속(구간 재생 0.75× 등). 다음 start부터 적용 */
   private rate = 1;
+  /** 오디오 시계 기준 위치 계산용 앵커: 소스 시작 컨텍스트 시각(초)과 그 시각의 반주 위치(ms, 1배 기준 곡 시각 축) */
+  private ctxWhen = 0;
+  private ctxFromMs = 0;
 
   constructor(engine: AudioEngine) {
     this.engine = engine;
@@ -80,6 +83,8 @@ export class Accompaniment {
     const when = Math.max(ctx.currentTime, this.engine.perfToContextTime(atPerfMs));
     this.startPerf = this.engine.contextToPerfTime(when);
     this.zeroPerf = zeroPerfMs(this.startPerf, fromMs);
+    this.ctxWhen = when;
+    this.ctxFromMs = fromMs;
     src.onended = () => {
       if (this.source !== src) return;
       this.source = null;
@@ -116,7 +121,14 @@ export class Accompaniment {
 
   /** 재생 배속. 다음 start부터 적용하고, 재생 중이면 현재 소스에도 바로 적용한다(위치 계산은 1배 기준) */
   setRate(rate: number): void {
-    this.rate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    const next = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    // 재생 중이면 지금 위치로 오디오 시계 앵커를 옮겨 둔다(배속이 바뀌기 전 구간을 새 배속으로 계산하지 않도록)
+    const anchor = this._state === 'playing' ? this.audioPositionAt(performance.now()) : null;
+    if (anchor !== null) {
+      this.ctxWhen = this.engine.perfToContextTime(performance.now());
+      this.ctxFromMs = anchor;
+    }
+    this.rate = next;
     if (this.source) this.source.playbackRate.value = this.rate;
   }
 
@@ -125,6 +137,21 @@ export class Accompaniment {
     if (this._state === 'playing') return playbackPosition(this.startPerf, this.fromMs, perfMs, this.durationMs);
     if (this._state === 'paused') return this.positionMs;
     return 0;
+  }
+
+  /**
+   * perfMs 시점의 반주 위치(ms)를 **오디오 시계(AudioContext) 기준**으로 구한다(T2 accDrift용).
+   * positionAt은 시작 시각과 performance.now 축으로만 세므로 오디오 장치 시계 드리프트가 드러나지 않는다.
+   * 여기서는 perfToContextTime(getOutputTimestamp를 호출 때마다 다시 읽음)으로 그 시점의 컨텍스트 시각을 얻어
+   * 시작 컨텍스트 시각과의 차이로 위치를 센다. 배속은 곡 시각(1배) 축으로 환산한다.
+   * 재생 중이 아니거나 소스가 아직 시작 전이거나 끝을 넘으면 null.
+   */
+  audioPositionAt(perfMs: number): number | null {
+    if (this._state !== 'playing') return null;
+    const elapsedMs = (this.engine.perfToContextTime(perfMs) - this.ctxWhen) * 1000;
+    if (elapsedMs < 0) return null;
+    const pos = this.ctxFromMs + elapsedMs * this.rate;
+    return pos > this.durationMs ? null : pos;
   }
 
   /** 버퍼까지 버린다 */

@@ -1,5 +1,5 @@
 // 제어 섹션: 데이터가 아니라 도구(파라미터 표·명령 바). 기존 파라미터·명령 탭을 그대로 옮겼다.
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { Fragment, useRef, useState, useSyncExternalStore } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
 import type { ParamStore } from '@/monitor/params';
 import { telemetryStore } from '@/telemetry/enable';
@@ -204,6 +204,54 @@ function SummaryPanel({
             delta 평균 {fmt1(summary.delta.mean)}ms · PERFECT {summary.judgements.PERFECT} · GOOD {summary.judgements.GOOD} · MISS{' '}
             {summary.judgements.MISS} · stray {summary.stray} · 무타격 {summary.missed}
           </div>
+          {summary.timing.length > 0 && (
+            <div className="mon-table-wrap">
+              <table className="mon-table">
+                <thead>
+                  <tr>
+                    <th>곡 (채보 버전)</th>
+                    <th>시작(s)</th>
+                    <th>판정</th>
+                    <th>MISS</th>
+                    <th>평균</th>
+                    <th>기울기(ms/분)</th>
+                    <th>앞·중·뒤</th>
+                    <th>accDrift(ms/분)</th>
+                    <th>힌트</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.timing.map((x, i) => (
+                    <Fragment key={i}>
+                      <tr>
+                        <td>
+                          {x.title} ({x.chartVersionId ?? '–'})
+                        </td>
+                        <td className="num">{(x.startedAt / 1000).toFixed(0)}</td>
+                        <td className="num">{x.judged}</td>
+                        <td className="num">{x.miss}</td>
+                        <td className="num">{fmt1(x.meanMs)}</td>
+                        <td className="num">{fmt1(x.slopeMsPerMin)}</td>
+                        <td className="num">{x.thirds.map((v) => fmt1(v)).join(' / ')}</td>
+                        <td className="num">{x.accDrift ? fmt1(x.accDrift.slopeMsPerMin) : '–'}</td>
+                        <td>{x.verdictHint}</td>
+                      </tr>
+                      {x.byInput.map((b) => (
+                        <tr key={b.input}>
+                          <td colSpan={2}>└ {b.input}</td>
+                          <td className="num">{b.n}</td>
+                          <td />
+                          <td className="num">{fmt1(b.meanMs)}</td>
+                          <td className="num">{fmt1(b.slopeMsPerMin)}</td>
+                          <td colSpan={3} />
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </section>
