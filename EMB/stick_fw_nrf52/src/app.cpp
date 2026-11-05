@@ -22,6 +22,7 @@
 #include <bluefruit.h>
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
+#include <Adafruit_NeoPixel.h>             /* 상태 LED (라이브러리 매니저: "Adafruit NeoPixel") */
 using namespace Adafruit_LittleFS_Namespace;
 
 extern "C" {
@@ -37,8 +38,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 2                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234) */
-#define FW_TAG   "BOOT 1.2 nrf52"
+#define FW_MINOR 3                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237) */
+#define FW_TAG   "BOOT 1.3 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -235,6 +236,7 @@ static void send_status()
 }
 
 static void send_log(const char *s);
+static void power_off(const char *why);
 
 /* 5초마다: 전압 읽기, 30초마다 LOG "BAT 3987mV 82%" (사용 시간 측정용), 저전압이면 경고·꺼짐 */
 static void bat_update()
@@ -248,9 +250,7 @@ static void bat_update()
     if (bat_mv < BAT_WARN_MV && !warned) { warned = true; send_log("BAT LOW"); }
     n_low = bat_mv < BAT_OFF_MV ? n_low + 1 : 0;
     if (n_low >= BAT_OFF_N) {
-        send_log("BAT OFF");
-        delay(200);                                     /* 마지막 LOG가 나가도록 */
-        systemOff(PIN_USER_SW, LOW);                    /* 깊은 잠. USER 버튼 누르면 재부팅 */
+        power_off("BAT OFF");                           /* 깊은 잠. USER 버튼 누르면 재부팅 */
     }
 }
 
@@ -340,12 +340,14 @@ static uint32_t vib_t0_us = 0;
 static int16_t  vib_prev[3];
 static uint8_t  vib_n = 0;
 
+static bool    haptic_seq_dirty = false;            /* 버튼 진동이 WAVESEQ2를 썼으면 다음 진동 전에 비운다 */
 static uint8_t hit_effect[3] = {14, 48, 50};       /* 세기 상·중·하: Strong Buzz 100%, Buzz 2 80%, Buzz 4 40% (10/30 손으로 골라봄) */
 
 static void haptic_effect(uint8_t effect)
 {
     if (!drv_ok || effect == 0 || effect > 123) return;
     if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }
+    if (haptic_seq_dirty) { drv_w(0x05, 0); haptic_seq_dirty = false; }
     drv_w(0x04, effect);
     drv_w(0x0C, 0x01);
 }
@@ -355,6 +357,7 @@ static void haptic_click(uint8_t level)             /* level 0~255 */
     if (!drv_ok || level == 0) return;
     uint8_t effect = hit_effect[level > 170 ? 0 : level > 85 ? 1 : 2];
     if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }   /* RTP 테스트 중이면 끝냄 */
+    if (haptic_seq_dirty) { drv_w(0x05, 0); haptic_seq_dirty = false; }
     drv_w(0x04, effect);
     drv_w(0x0C, 0x01);                              /* GO */
 #if SERIAL_MODE == SERIAL_TEXT
@@ -379,6 +382,156 @@ static void haptic_poll()
         drv_w(0x01, 0x00);                          /* 내부 트리거 모드로 복귀 */
         haptic_off_ms = 0;
     }
+}
+
+/* ===================== 전원 버튼 · 상태 LED (S15P31A307-237) =====================
+ * 버튼 = 보드 USER 버튼(7번 핀, 뚜껑 누름 탭). LED = 보드 NeoPixel(뚜껑 LED 창).
+ *   꺼진 상태에서 누름    → 깨어나 부팅 (부팅 중 초록, 준비되면 초록 → 진동 짧게 1번)
+ *   1.5초 누름           → 누르는 동안 빨강이 밝아짐 → 꺼짐 (빨강 0.5초 + 진동 길게, 손 떼면 깊은 잠)
+ *   두 번 누름           → 정면 보정 (흰색 2번 + 진동 2번)
+ *   한 번 누름           → 배터리 표시 1초 (초록 > 50%, 주황 > 20%, 빨강)
+ *   연결 찾는 중 파랑 깜빡, 연결되면 초록 반짝 + 진동 2번 → 은은한 파랑, 끊기면 진동 길게
+ *   배터리 20% 이하 10초마다 주황 2번, 5% 이하 빨강 깜빡
+ *   BLE도 USB 시리얼도 없이 10분 → 자동으로 꺼짐
+ * 꺼져 있어도 NeoPixel 칩이 약 1mA를 먹는다 (오래 안 쓰면 배터리 커넥터를 뺀다) */
+#define LED_BRIGHT      60            /* 표시 밝기 0~255 */
+#define LED_IDLE        6             /* 연결됨 상태 파랑 (연주 중 거슬리지 않게) */
+#define LONG_PRESS_MS   1500
+#define DOUBLE_GAP_MS   400
+#define AUTO_OFF_MS     (10UL * 60UL * 1000UL)
+#define FX_SHORT        1             /* DRV2605L 라이브러리: Strong Click 100% */
+#define FX_DOUBLE       10            /* Double Click 100% */
+#define FX_LONG         47            /* Buzz 1 100% (두 번 이어서 길게) */
+
+static Adafruit_NeoPixel pix(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+enum { ANIM_NONE, ANIM_BOOT, ANIM_CONNECTED, ANIM_RESET, ANIM_BATT };
+static uint8_t  ui_anim = ANIM_NONE;
+static uint32_t ui_anim_t0 = 0, ui_link_ms = 0, ui_px = 0xFFFFFFFF;
+static bool     ui_armed = false;     /* 부팅을 깨운 누름이 떨어진 뒤부터 버튼을 받는다 */
+static uint32_t ui_hold_t0 = 0;       /* 누르고 있는 중이면 누른 시각, 아니면 0 */
+
+static void handle_cmd(const cmd_t *c);
+
+static void led_set(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint32_t c = pix.Color(r, g, b);
+    if (c == ui_px) return;
+    ui_px = c;
+    pix.setPixelColor(0, c);
+    pix.show();
+}
+
+static void haptic_seq(uint8_t a, uint8_t b)
+{
+    if (!drv_ok) return;
+    if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }
+    drv_w(0x04, a);
+    drv_w(0x05, b);
+    drv_w(0x06, 0);
+    haptic_seq_dirty = b != 0;
+    drv_w(0x0C, 0x01);
+}
+
+static void ui_start(uint8_t anim) { ui_anim = anim; ui_anim_t0 = millis(); }
+
+static void power_off(const char *why)
+{
+    send_log(why);
+    haptic_seq(FX_LONG, FX_LONG);
+    led_set(LED_BRIGHT * 2, 0, 0);
+    delay(500);
+    led_set(0, 0, 0);
+    while (!digitalRead(PIN_USER_SW)) delay(10);        /* 누른 채로 자면 바로 다시 깨어난다 */
+    delay(100);
+    imu_wr(0x10, 0x00);                                 /* IMU 가속도·자이로 끔 */
+    imu_wr(0x11, 0x00);
+    if (drv_ok) drv_w(0x01, 0x40);                      /* DRV2605L 대기 */
+    delay(20);
+    systemOff(PIN_USER_SW, LOW);                        /* 깊은 잠. USER 버튼 누르면 재부팅 */
+}
+
+static void ui_button(uint32_t now)
+{
+    static uint8_t  prev = 1, clicks = 0;
+    static uint32_t t_down = 0, t_up = 0;
+    uint8_t b = digitalRead(PIN_USER_SW);
+    if (!ui_armed) { if (b) ui_armed = true; prev = b; return; }
+    if (!b && prev) t_down = now;
+    ui_hold_t0 = b ? 0 : (t_down ? t_down : 1);
+    if (!b && now - t_down >= LONG_PRESS_MS) power_off("OFF (btn)");
+    if (b && !prev && now - t_down > 30) {              /* 30ms 미만은 튐 */
+        clicks++;
+        t_up = now;
+        if (clicks >= 2) {
+            clicks = 0;
+            cmd_t c = {1, {CMD_RESET_POSE}, 0};
+            handle_cmd(&c);
+            send_log("RESET_POSE (btn)");
+            haptic_effect(FX_DOUBLE);
+            ui_start(ANIM_RESET);
+        }
+    }
+    if (clicks == 1 && b && now - t_up > DOUBLE_GAP_MS) { clicks = 0; ui_start(ANIM_BATT); }
+    prev = b;
+}
+
+static void ui_led(uint32_t now)
+{
+    static uint32_t t_last = 0;
+    if (now - t_last < 20) return;                      /* 50Hz */
+    t_last = now;
+    uint32_t a = now - ui_anim_t0;
+    if (ui_hold_t0 && now - ui_hold_t0 > 200) {        /* 끄는 중: 빨강이 점점 (짧은 누름은 표시 그대로) */
+        uint32_t h = now - ui_hold_t0;
+        if (h > LONG_PRESS_MS) h = LONG_PRESS_MS;
+        led_set((uint8_t)(LED_BRIGHT * 2 * h / LONG_PRESS_MS), 0, 0);
+        return;
+    }
+    switch (ui_anim) {
+    case ANIM_BOOT:                                     /* 초록 0.5초 서서히 */
+        if (a < 500) { led_set(0, (uint8_t)(LED_BRIGHT * a / 500), 0); return; }
+        if (a < 800) { led_set(0, LED_BRIGHT, 0); return; }
+        break;
+    case ANIM_CONNECTED:
+        if (a < 300) { led_set(0, LED_BRIGHT, 0); return; }
+        break;
+    case ANIM_RESET:                                    /* 흰색 2번 */
+        if (a < 450) { uint8_t v = (a < 150 || a >= 300) ? LED_BRIGHT : 0; led_set(v, v, v); return; }
+        break;
+    case ANIM_BATT:
+        if (a < 1000) {
+            if (bat_pct == 0xFF || bat_pct > 50) led_set(0, LED_BRIGHT, 0);
+            else if (bat_pct > 20)               led_set(LED_BRIGHT, LED_BRIGHT / 3, 0);
+            else                                 led_set(LED_BRIGHT, 0, 0);
+            return;
+        }
+        break;
+    }
+    ui_anim = ANIM_NONE;
+    if (bat_pct != 0xFF && bat_pct <= 5) {             /* 곧 꺼짐: 빨강 깜빡 */
+        led_set((now / 500) % 2 ? LED_BRIGHT : 0, 0, 0);
+        return;
+    }
+    if (bat_pct != 0xFF && bat_pct <= 20) {            /* 10초마다 주황 2번 */
+        uint32_t k = now % 10000;
+        if (k < 450) { uint8_t v = (k < 150 || k >= 300) ? LED_BRIGHT : 0; led_set(v, v / 3, 0); return; }
+    }
+    if (ble_connected) led_set(0, 0, LED_IDLE);
+    else               led_set(0, 0, (now / 500) % 2 ? LED_BRIGHT / 2 : 0);
+}
+
+static void ui_poll()
+{
+    static bool was = false;
+    uint32_t now = millis();
+    bool c = ble_connected;
+    if (c && !was) { haptic_effect(FX_DOUBLE); ui_start(ANIM_CONNECTED); }
+    if (!c && was) haptic_seq(FX_LONG, FX_LONG);
+    was = c;
+    if (c || Serial) ui_link_ms = now;                  /* USB 시리얼(PC 측정 페이지)로 쓰는 중이어도 안 꺼짐 */
+    if (now - ui_link_ms > AUTO_OFF_MS) power_off("OFF (idle 10min)");
+    ui_button(now);
+    ui_led(now);
 }
 
 /* ===================== 파라미터 (SET_PARAM id → 값) ===================== */
@@ -641,6 +794,8 @@ void app_setup()
 #endif
 
     pinMode(PIN_USER_SW, INPUT_PULLUP);
+    pix.begin();
+    led_set(0, LED_BRIGHT / 3, 0);                      /* 깨어나자마자 초록: 켜지는 중 */
     clock_init();
     uint8_t i2c_state = i2c_recover();
     Wire.begin();
@@ -674,6 +829,9 @@ void app_setup()
     pose_start(&pose, acc0);
     bat_update();
     send_status();
+    ui_link_ms = millis();
+    haptic_effect(FX_SHORT);                            /* 준비 완료 */
+    ui_start(ANIM_BOOT);
 #if SERIAL_MODE == SERIAL_TEXT
     if (Serial) Serial.print("n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed\r\n");
 #endif
@@ -682,9 +840,8 @@ void app_setup()
 /* ===================== 루프 ===================== */
 void app_loop()
 {
-    static uint32_t last_count = 0, t_prev = 0, t_status = 0, t_pose = 0, t_btn = 0;
+    static uint32_t last_count = 0, t_prev = 0, t_status = 0, t_pose = 0;
     static uint32_t rej_prev[4] = {0};
-    static uint8_t  btn_prev = 1;
     static float    az_swing_start = 0;
     static hit_state_t st_prev = HIT_IDLE;
     static uint32_t acc_div = 0;
@@ -703,15 +860,8 @@ void app_loop()
     }
 #endif
 
-    /* 버튼: 정면 보정 */
-    uint8_t btn = digitalRead(PIN_USER_SW);
-    if (!btn && btn_prev && millis() - t_btn > 300) {
-        t_btn = millis();
-        cmd_t c = {1, {CMD_RESET_POSE}, 0};
-        handle_cmd(&c);
-        send_log("RESET_POSE (btn)");
-    }
-    btn_prev = btn;
+    /* 전원 버튼·상태 LED·자동 꺼짐 (237) */
+    ui_poll();
 
     /* 상태 5초마다 */
     if (status_due) { status_due = false; t_status = millis(); send_status(); send_bias(); }   /* 연결 직후 1회 */
