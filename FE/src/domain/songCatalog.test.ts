@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { Difficulty } from './chart';
 import {
   accompanimentOptionText,
+  chartFallback,
+  defaultChartId,
+  type ChartSummary,
   accompanimentStatusOf,
   accompanimentView,
   isAccompanimentPending,
@@ -164,6 +168,42 @@ describe('isAccompanimentPending', () => {
     expect(isAccompanimentPending({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'READY' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'FAILED' })).toBe(false);
+  });
+});
+
+// 260번: BE가 노트가 NORMAL과 같은 HARD·EASY를 곡 응답에서 뺀다. 기본 연습 단계와 URL 보정은 응답 목록만 본다.
+function chartOf(id: number, difficulty: Difficulty): ChartSummary {
+  return { id, difficulty, chartVersionId: id * 10, version: 1, noteCount: 1, notationStatus: 'PENDING' };
+}
+
+describe('defaultChartId', () => {
+  it('NORMAL을 고른다(응답 순서와 상관없이)', () => {
+    expect(defaultChartId({ charts: [chartOf(3, 'HARD'), chartOf(1, 'EASY'), chartOf(2, 'NORMAL')] })).toBe(2);
+  });
+
+  it('NORMAL이 없으면 쉬운 순서로 첫 채보를 고른다', () => {
+    expect(defaultChartId({ charts: [chartOf(3, 'HARD'), chartOf(1, 'EASY')] })).toBe(1);
+  });
+
+  it('채보가 없으면 null이다', () => {
+    expect(defaultChartId({ charts: [] })).toBeNull();
+  });
+});
+
+describe('chartFallback', () => {
+  const detail = { charts: [chartOf(1, 'EASY'), chartOf(2, 'NORMAL')] };
+
+  it('URL 채보가 목록에 있으면 바꾸지 않는다(null)', () => {
+    expect(chartFallback(detail, 1)).toBeNull();
+    expect(chartFallback(detail, 2)).toBeNull();
+  });
+
+  it('숨긴 채보(목록에 없는 id)면 기본 채보로 바꾼다', () => {
+    expect(chartFallback(detail, 3)).toBe(2);
+  });
+
+  it('목록이 비어 있으면 바꾸지 않는다', () => {
+    expect(chartFallback({ charts: [] }, 3)).toBeNull();
   });
 });
 
