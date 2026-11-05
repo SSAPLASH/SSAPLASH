@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { PAD_META, type PadId } from '@/domain/pads';
 import { HIGHWAY_LANES } from '@/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
+import { barTimeMs, beatAtMs } from '@/domain/tempo';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
 import './NoteHighway.css';
@@ -98,12 +99,11 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       });
 
-      // 마디선
+      // 마디선: 1마디 1박(offsetMs)부터 마디 시작마다. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/tempo)
       if (s) {
-        const barMs = s.beatMs * s.chart.beatsPerBar;
-        const firstBar = Math.floor(t / barMs);
-        for (let b = firstBar; b * barMs < t + p.scrollMs; b++) {
-          const bt = b * barMs;
+        const firstBar = Math.floor(beatAtMs(s.chart, t) / s.chart.beatsPerBar);
+        for (let b = firstBar; barTimeMs(s.chart, b) < t + p.scrollMs; b++) {
+          const bt = barTimeMs(s.chart, b);
           if (bt < 0) continue;
           const y = judgeY - ((bt - t) / p.scrollMs) * travel;
           if (y < top) continue;
