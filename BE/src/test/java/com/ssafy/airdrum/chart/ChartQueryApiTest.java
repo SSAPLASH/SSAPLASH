@@ -295,6 +295,15 @@ class ChartQueryApiTest {
 		var summary = ok("/api/v1/songs/" + ownSong).path("charts").get(0);
 		assertThat(summary.path("chartVersionId").longValue()).isEqualTo(v3);
 	}
+	@Test void hihatOpenIsSerializedInChartVersionResponse() throws Exception {
+		db.update("UPDATE chart_versions SET notes=CAST(? AS jsonb) WHERE id=?", """
+			[{"noteId":"open","timeMs":250,"pad":"HIHAT","hihatOpen":true}]
+			""", version);
+		var note = ok("/api/v1/chart-versions/" + version).path("notes").get(0);
+		assertThat(note.path("pad").asString()).isEqualTo("HIHAT");
+		assertThat(note.path("hihatOpen").isBoolean()).isTrue();
+		assertThat(note.path("hihatOpen").booleanValue()).isTrue();
+	}
 	@Test void emptyChartAndUnknownVersionAre404AndUnsupportedSchema409() throws Exception {
 		long empty = chart(ownSong, "HARD");
 		problem("/api/v1/charts/" + empty, 404, "CHART_NOT_FOUND");
