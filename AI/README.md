@@ -197,6 +197,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 - 설정 `tempo.origin`이 `notes`면 위 값을 킥·스네어 노트로 한 번 더 맞춘다. 격자 박에서 60ms 안에 있는 킥·스네어 노트가 박보다 평균 몇 ms 앞뒤에 있는지 중앙값을 구해 그만큼 `offsetMs`를 옮긴다. 쓸 노트가 16개보다 적으면 옮기지 않는다. Beat This! 박 시각이 드럼 소리보다 늦게 잡히면 메트로놈 클릭이 킥보다 늦게 울리는데 이를 줄인다. 기본값은 `notes`이고, `downbeat`면 위 값을 그대로 쓴다. 측정은 `scripts/origin_alignment_eval.py`로 두 방식을 같은 Beat This! 박으로 비교한다
 - bpm·`offsetMs`를 다시 재려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
+- 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
 채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=combo`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
 
