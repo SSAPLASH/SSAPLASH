@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import type { Difficulty } from './chart';
 import {
   accompanimentOptionText,
+  chartFallback,
+  defaultChartId,
+  type ChartSummary,
   accompanimentStatusOf,
   accompanimentView,
   isAccompanimentPending,
   isPlayableStatus,
   songDetailFromDto,
   songFromDto,
+  songLevelLabel,
+  songLevelOf,
   songStatusView,
   sortMineSongs,
   summarizeMineSongs,
@@ -44,6 +50,7 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     durationMs: null,
     hasAccompaniment: false,
     accompanimentStatus: 'NONE',
+    songLevel: null,
     difficulties: [],
     createdAt,
     coverUrl: null,
@@ -161,5 +168,68 @@ describe('isAccompanimentPending', () => {
     expect(isAccompanimentPending({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'READY' })).toBe(false);
     expect(isAccompanimentPending({ status: 'READY', accompanimentStatus: 'FAILED' })).toBe(false);
+  });
+});
+
+// 260번: BE가 노트가 NORMAL과 같은 HARD·EASY를 곡 응답에서 뺀다. 기본 연습 단계와 URL 보정은 응답 목록만 본다.
+function chartOf(id: number, difficulty: Difficulty): ChartSummary {
+  return { id, difficulty, chartVersionId: id * 10, version: 1, noteCount: 1, notationStatus: 'PENDING' };
+}
+
+describe('defaultChartId', () => {
+  it('NORMAL을 고른다(응답 순서와 상관없이)', () => {
+    expect(defaultChartId({ charts: [chartOf(3, 'HARD'), chartOf(1, 'EASY'), chartOf(2, 'NORMAL')] })).toBe(2);
+  });
+
+  it('NORMAL이 없으면 쉬운 순서로 첫 채보를 고른다', () => {
+    expect(defaultChartId({ charts: [chartOf(3, 'HARD'), chartOf(1, 'EASY')] })).toBe(1);
+  });
+
+  it('채보가 없으면 null이다', () => {
+    expect(defaultChartId({ charts: [] })).toBeNull();
+  });
+});
+
+describe('chartFallback', () => {
+  const detail = { charts: [chartOf(1, 'EASY'), chartOf(2, 'NORMAL')] };
+
+  it('URL 채보가 목록에 있으면 바꾸지 않는다(null)', () => {
+    expect(chartFallback(detail, 1)).toBeNull();
+    expect(chartFallback(detail, 2)).toBeNull();
+  });
+
+  it('숨긴 채보(목록에 없는 id)면 기본 채보로 바꾼다', () => {
+    expect(chartFallback(detail, 3)).toBe(2);
+  });
+
+  it('목록이 비어 있으면 바꾸지 않는다', () => {
+    expect(chartFallback({ charts: [] }, 3)).toBeNull();
+  });
+});
+
+describe('곡 난이도 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('세 값은 그대로 담는다', () => {
+    for (const v of ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as const) expect(songFromDto({ ...base, songLevel: v }).songLevel).toBe(v);
+  });
+
+  it('없거나 null·모르는 값이면 null', () => {
+    expect(songFromDto(base).songLevel).toBeNull();
+    expect(songLevelOf(null)).toBeNull();
+    expect(songLevelOf('EASY')).toBeNull();
+    expect(songLevelOf('beginner')).toBeNull();
+    expect(songLevelOf(1)).toBeNull();
+  });
+
+  it('상세(MIDI 201 포함)에도 담긴다', () => {
+    expect(songDetailFromDto({ ...base, songLevel: 'ADVANCED', charts: [] }).songLevel).toBe('ADVANCED');
+  });
+
+  it('표기: 입문/중급/고급, 없으면 「—」', () => {
+    expect(songLevelLabel('BEGINNER')).toBe('입문');
+    expect(songLevelLabel('INTERMEDIATE')).toBe('중급');
+    expect(songLevelLabel('ADVANCED')).toBe('고급');
+    expect(songLevelLabel(null)).toBe('—');
   });
 });
