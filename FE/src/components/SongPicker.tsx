@@ -17,6 +17,8 @@ import {
 } from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { loadPlayLogs } from '@/engine/playLog';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
@@ -100,13 +102,17 @@ export function SongPicker({ onSelect, mode }: Props) {
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
-  // 곡별 최고 기록: 마운트 시점의 로컬 플레이 로그(U18). play는 최고 점수, sheet는 최고 정확도
-  const bests = useMemo(() => {
-    const logs = loadPlayLogs();
+  // 내장 개발 소스만 로컬 기록을 사용한다. API 실패를 로컬값으로 대체하지 않는다.
+  const localBests = useMemo(() => {
+    const logs = source === 'builtin' ? loadPlayLogs() : [];
     return mode === 'play'
       ? { scores: bestScoreBySong(logs, 'RHYTHM'), accuracies: undefined }
       : { scores: undefined, accuracies: bestAccuracyBySong(logs, 'SHEET') };
-  }, [mode]);
+  }, [mode, source]);
+
+  const recordsReady = status === 'ready' && scope === tab;
+  const records = useBestRecords(recordsReady ? items.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
+  const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
   useEffect(() => {
     if (!recoEnabled) return;
@@ -260,6 +266,8 @@ export function SongPicker({ onSelect, mode }: Props) {
           }
         />
       )}
+
+      {ready && items.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
 
       {ready && items.length > 0 && (
         <div className="play-sp-grid">

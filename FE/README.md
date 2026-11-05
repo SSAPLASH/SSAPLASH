@@ -102,7 +102,7 @@ src/
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
-│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(로컬 플레이 로그 → 곡별 최고 점수·연습 단계별 최고 정확도) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입) · pedalStatus(페달 연결·배터리 표시 문구, 페달 필수 기기 판정) · adminSong(관리자 공용 곡 타입·입력 검사·첫 박 시각·반주 파일 검사·오류 문구) · adminBulk(CSV 파싱·인코딩 판별·양식·파일 짝 맞추기·줄별 판정)
+│   pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(내장 개발 소스 로컬 최고 기록) · serverBestRecord(서버 최고 기록 → 모드별 곡·채보 최고값) · highwayLanes(하이웨이 9레인 순서, 하이햇 페달 맨 왼쪽) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입) · pedalStatus(페달 연결·배터리 표시 문구, 페달 필수 기기 판정) · adminSong(관리자 공용 곡 타입·입력 검사·첫 박 시각·반주 파일 검사·오류 문구) · adminBulk(CSV 파싱·인코딩 판별·양식·파일 짝 맞추기·줄별 판정)
 └─ styles/     tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 public/
@@ -391,7 +391,7 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 
 악보 연주(`/sheet`, 상단 "악보 연습")는 반주에 맞춰 마디가 고정된 5선 악보를 커서가 지나가는 것을 보며 치는 모드다. 점수·콤보는 화면에 없고 판정은 리듬 게임과 같은 `RhythmSession`이 한다.
 
-화면은 Figma 05 악보 연습 흐름을 리듬 게임과 같은 공유 부품으로 조립한다(`SheetPage`가 `PlayPage` 구조를 따른다). 곡 선택은 `SongPicker mode="sheet"`(제목·최고 정확도), 준비는 `play/ReadyPanel`(`modeLabel="악보 연습"`·`staffLegend`로 「악보 읽는 법」 카드와 킷 연동, `options` 슬롯에 `play/PlayOptions`의 「연주 중 옵션」 카드), 연주는 `PlayStage variant="sheet"`(`PlayHud sheet`·`SheetPager`·`DrumKit`)다. 준비 화면에는 악보 미리보기가 없다(악보 읽는 법 카드가 대신한다). 연주 중은 셸을 숨긴 전체 화면이다. 악보 Canvas의 색은 `readColors(canvas)`가 `tokens.css`의 글자·브랜드·판정 토큰을 읽는다. 준비 화면 최고 정확도는 로컬 플레이 로그(`bestAccuracyByChart(…, 'SHEET')`)에서 읽는다.
+화면은 Figma 05 악보 연습 흐름을 리듬 게임과 같은 공유 부품으로 조립한다(`SheetPage`가 `PlayPage` 구조를 따른다). 곡 선택은 `SongPicker mode="sheet"`(제목·최고 정확도), 준비는 `play/ReadyPanel`(`modeLabel="악보 연습"`·`staffLegend`로 「악보 읽는 법」 카드와 킷 연동, `options` 슬롯에 `play/PlayOptions`의 「연주 중 옵션」 카드), 연주는 `PlayStage variant="sheet"`(`PlayHud sheet`·`SheetPager`·`DrumKit`)다. 준비 화면에는 악보 미리보기가 없다(악보 읽는 법 카드가 대신한다). 연주 중은 셸을 숨긴 전체 화면이다. 악보 Canvas의 색은 `readColors(canvas)`가 `tokens.css`의 글자·브랜드·판정 토큰을 읽는다. 준비 화면 최고 정확도는 서버 최고 기록 API의 SHEET·선택 chartId에서 읽는다(273번, 아래 참고).
 
 - **URL·단계:** `/sheet?song=&chart=`. 단계는 `select`(곡 선택) → `loading`(채보 + 반주 디코드, 반주는 `VITE_ACCOMPANIMENT_OVERRIDE ?? assets.accompanimentUrl`) → `ready`(곡 메타·준비 안내·시작) → `play`(+ 일시정지). 단계는 URL 파라미터·세션에서 렌더 중 파생한다. 반주 로드가 실패하면 "반주 없이 계속"(클릭만)과 "곡 선택으로"를 고른다. 변박 곡은 준비 화면에 "고정 템포로 표시" 안내가 뜬다.
 - **반주·시계:** `PlayClock`이 세션·반주·박 클릭을 묶는다(`begin`에서 메트로놈 잠금, 종료·나가기·언마운트에서 해제). 반주 0초 = 세션 0ms이고 카운트인은 격자 원점 `offsetMs`에서 끝난다. 박 i의 시각은 `domain/tempo.beatTimeMs`로 구해 빠르기 구간이 있는 곡은 구간마다 그 BPM으로 클릭한다(카운트인은 첫 구간 BPM). 리듬 게임 마디선(`NoteHighway`)도 `offsetMs`부터 같은 함수로 그린다. 악보 화면은 고정 BPM 그대로다. 준비 화면 칩은 `offsetMs`가 1박 이상이면 "첫 박 n.n초"를 덧붙여 인트로 동안 커서가 서 있는 이유를 알린다.
@@ -609,3 +609,11 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 ## 키보드 입력(임시)
 
 키보드는 스틱이 오기 전까지의 임시 입력이다. 키 매핑 카드는 10/22에 제거했고 매핑은 `domain/keyMap.ts` 상수 하나다. 환경변수 `VITE_KEYBOARD_INPUT=false`로 빌드하면 키 안내와 키보드 소스 등록이 함께 빠진다(기본은 켜짐, 예시는 `.env.example`). 안정화 후에는 `keyboardSource`·`domain/keyMap.ts`를 지운다.
+
+## 곡 선택·연주 준비 최고 기록 (273번)
+
+- 로그인한 API 곡 소스는 GET /api/v1/plays/best-records?songIds=…를 사용한다. 곡 선택 표·상세는 해당 모드의 전체 연습 단계 중 최고값(리듬: 점수, 악보: 정확도), 두 준비 화면은 선택 chartId의 최고 정확도를 표시한다. 여러 채보 버전은 서버에서 집계하며 COMPLETED만 포함한다. 이전 로컬 계산과 중도 종료 포함 여부가 달라 값이 낮아질 수 있다.
+- 서버 정확도 0~100을 domain/serverBestRecord에서 0~1로 한 번 변환한다. 0은 유효한 기록이고 null·생략된 기록은 —다. API 실패를 로컬 기록으로 대체하지 않는다.
+- app/useBestRecords는 현재 목록 ID를 중복 제거해 100개씩 순차 조회하고 모든 묶음 성공 후 표시한다. 빈 목록은 요청하지 않는다. 계정·곡 변경의 이전 응답을 무시하고 이탈 시 취소한다. 준비 화면의 단계 변경은 이미 받은 같은 곡 결과를 재사용한다.
+- 조회 중 안내와 실패 시 다시 시도를 제공하되 최고 기록 때문에 준비·연주 시작을 막지 않는다. 화면 진입 및 플레이 업로드 DONE 변화 시 조회한다. 다른 기기·탭에서 바뀐 기록은 화면 재진입 시 반영한다.
+- VITE_SONGS_SOURCE=builtin 개발 소스는 기존 로컬 기록 계산을 유지한다. 서버의 기본 곡(BUILTIN) 탭은 API 소스이므로 서버 기록을 사용한다.
