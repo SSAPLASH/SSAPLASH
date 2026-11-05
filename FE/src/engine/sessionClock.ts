@@ -1,5 +1,6 @@
 // 세션 시계(설계 3-4·D5·D8). RhythmSession + 반주 + 클릭 예약을 한 곳에서 묶는다.
 // audio는 import하지 않는다(같은 층) — 클릭·반주 제어는 deps로 주입받는다(Metronome과 같은 방식).
+import { diagTap } from './diagTap';
 import type { RhythmSession } from './RhythmSession';
 
 /** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
@@ -12,6 +13,8 @@ export const BEGIN_LEAD_MS = 300;
 export const SCHEDULE_TICK_MS = 25;
 /** 탭이 숨겨져 타이머가 느려질 때의 lookahead(Metronome의 HIDDEN_LOOKAHEAD_MS와 같은 규칙) */
 export const HIDDEN_LOOKAHEAD_MS = 1200;
+/** 반주 시계 드리프트(accDrift) 발행 주기 */
+export const ACC_DRIFT_INTERVAL_MS = 500;
 
 /** 반주 재생기 중 PlayClock이 쓰는 부분(Accompaniment가 만족한다) */
 export interface ClockAccompaniment {
@@ -21,6 +24,8 @@ export interface ClockAccompaniment {
   stop(): void;
   /** 마지막 start·resume의 반주 0초 시각(performance.now). 동기 Δ 측정용 */
   readonly zeroPerfMs?: number | null;
+  /** perfMs 시점의 오디오 시계 기준 반주 위치(ms, 1배 곡 시각 축). 재생 중이 아니거나 시작 전이면 null. 드리프트 측정용 */
+  audioPositionAt?(perfMs: number): number | null;
 }
 
 export interface PlayClockDeps {
@@ -57,6 +62,7 @@ export class PlayClock {
   private timer: unknown = null;
   private pausedSongTime = 0;
   private _state: ClockState = { phase: 'idle', reason: null };
+  private lastDriftAt = -Infinity;
   private _sync: { begin: number | null; resume: number | null } = { begin: null, resume: null };
 
   constructor(session: RhythmSession, deps: PlayClockDeps) {
@@ -113,6 +119,7 @@ export class PlayClock {
     const now = this.now();
     const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.countInMs - this.session.originMs);
     this.nextBeat = 0;
+    this.lastDriftAt = -Infinity;
     this._sync = { begin: null, resume: null };
     this.session.start(at);
     this.deps.accompaniment?.start(at, 0);
@@ -149,6 +156,7 @@ export class PlayClock {
   private schedule(now: number): void {
     if (this._state.phase !== 'running' || this.session.currentStatus === 'paused') return;
     const t = this.session.songTime(now);
+    this.measureAccDrift(now, t);
     const beatMs = this.session.beatMs;
     const beatsPerBar = this.session.chart.beatsPerBar;
     const duration = this.session.chart.durationMs;
@@ -168,6 +176,18 @@ export class PlayClock {
     }
   }
 
+  /**
+   * 반주 시계 드리프트를 ACC_DRIFT_INTERVAL_MS마다 진단 탭에 낸다(보정 없음).
+   * 드리프트 = 오디오 시계 기준 반주 위치 − 세션 곡 시각. 구독자가 없거나 반주가 아직 울리지 않으면 건너뛴다.
+   */
+  private measureAccDrift(now: number, songTimeMs: number): void {
+    if (!diagTap.active || now - this.lastDriftAt < ACC_DRIFT_INTERVAL_MS) return;
+    const audioPosMs = this.deps.accompaniment?.audioPositionAt?.(now);
+    if (audioPosMs === undefined || audioPosMs === null) return;
+    this.lastDriftAt = now;
+    diagTap.publish({ type: 'accDrift', songTimeMs, audioPosMs, driftMs: audioPosMs - songTimeMs });
+  }
+
   /** 세션·반주를 한 번에 멈춘다. 이미 예약된 클릭은 지난 것만(최대 lookahead) 울린다 */
   pause(reason: string): void {
     if (this._state.phase !== 'running') return;
@@ -176,6 +196,7 @@ export class PlayClock {
     this.pausedSongTime = this.session.songTime(now);
     this.session.pause(now);
     this.deps.accompaniment?.pause();
+    this.lastDriftAt = -Infinity;
     this._state = { phase: 'paused', reason };
   }
 
