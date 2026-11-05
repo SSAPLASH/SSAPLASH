@@ -259,6 +259,7 @@ BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작
 | `SSAPLASH_WORKER_POLL_SEC` | | 5 | 대기 작업이 없을 때(204) 다음 claim까지 |
 | `SSAPLASH_WORKER_HEARTBEAT_SEC` | | 10 | heartbeat 주기 |
 | `SSAPLASH_WORKER_KEEP_FILES` | | false | 참이면 작업 폴더를 지우지 않는다(문제 추적용) |
+| `SSAPLASH_WORKER_SEND_REASON` | | false | 참이면 실패 보고 본문에 사용자에게 보여 줄 사유 `reason`을 넣는다. BE가 reason을 저장·노출하고 실제 연동을 확인한 뒤 켠다 |
 | `SSAPLASH_NARRATIVE_ENABLED` | | false | 참이면 채보 작업이 없을 때 LLM 총평 작업을 가져간다(아래 "LLM 총평 작업") |
 | `SSAPLASH_NARRATIVE_MODEL` | 켰을 때 | — | 같은 서버의 모델 서버에 올라 있는 모델 이름(Ollama는 `ollama list`) |
 | `SSAPLASH_NARRATIVE_LLM_URL` | | `http://127.0.0.1:11434` | 모델 서버 주소. 같은 서버를 가리킨다 |
@@ -274,12 +275,16 @@ uv run ssaplash-worker run
 
 종료 코드는 0 정상, 1 설정·모델 오류, 2 인증 실패(401)다. 로그는 표준 오류로 나가며 토큰과 서명 URL은 남기지 않는다. 종료 신호(Ctrl+C, SIGTERM)를 한 번 받으면 처리 중인 작업을 끝내고 멈추고, 두 번 받으면 바로 끝낸다(임대가 만료되면 BE가 다시 배정한다). 분리 모델 설정(`configs/chart/separation.yaml`)의 출력은 BE 계약대로 flac 44,100Hz여야 하며 아니면 시작하지 않는다.
 
-| 실패 | BE 보고 `code` | `retryable` | 뒤처리 |
-| --- | --- | --- | --- |
-| 입력 파일 못 읽음·길이 초과·무음, 내려받은 파일의 크기·sha256 불일치, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | BE가 FAILED |
-| 모델 올리기·추론 예외 | `MODEL_FAILED` | GPU 메모리 부족일 때만 참 | 참이면 BE가 다시 배정(단계별 최대 2회) |
-| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | BE가 FAILED |
-| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패 | 보고 안 함 | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+| 실패 | BE 보고 `code` | `retryable` | `reason` | 뒤처리 |
+| --- | --- | --- | --- | --- |
+| 원곡 파일 못 읽음·길이 초과·무음, 배정 길이가 0 이하·600초 초과 | `INPUT_INVALID` | 거짓 | `SOURCE_INVALID` | BE가 FAILED |
+| 분리한 드럼 트랙이 무음, 1분당 노트 수가 기준 미만, 박 추적 실패 | `INPUT_INVALID` | 거짓 | `NOT_TRANSCRIBABLE` | BE가 FAILED |
+| 모델 올리기·추론 중 GPU 메모리 부족 | `MODEL_FAILED` | 참 | `GPU_OUT_OF_MEMORY` | BE가 다시 배정(단계별 최대 2회) |
+| 모델 올리기·추론 중 그 밖의 예외, 워커 내부 예외 | `MODEL_FAILED` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
+| 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
+| heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패, 내려받은 파일의 크기·sha256이 3번 다 배정과 다름 | 보고 안 함 | — | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+
+`reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다.
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
 
