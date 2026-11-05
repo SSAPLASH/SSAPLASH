@@ -41,6 +41,11 @@ export interface LoginProvider {
   label: string;
 }
 
+/** 관리자 화면을 보여 줄지. 표시만 정하고 권한 판단은 BE(@PreAuthorize ADMIN)가 한다 (Jira 262) */
+export function isAdmin(user: Pick<UserMe, 'role'> | null): boolean {
+  return user?.role === 'ADMIN';
+}
+
 /** 로그인 화면이 이 순서로 버튼을 그린다. BE에 그 제공자 키가 없으면 BE가 404를 돌려준다 */
 export const LOGIN_PROVIDERS: readonly LoginProvider[] = [
   { key: 'google', label: 'Google로 계속하기' },
