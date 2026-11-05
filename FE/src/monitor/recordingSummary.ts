@@ -7,6 +7,7 @@ import { HEALTH_THRESHOLDS } from './health';
 import { percentile } from './latencyStats';
 import { hexToBytes, type RecordedRow, type RecordingMeta } from './recorder';
 import { SyncPairer, syncKeyOf } from './syncPair';
+import { timingReport, type SessionTiming } from './timingReport';
 
 /** 지표 옆에 보여줄 현재 기준값 */
 export interface ThresholdRef {
@@ -74,6 +75,8 @@ export interface RecordingSummary {
   /** 매칭 경합 타격 수(전체) */
   contested: number;
   sessions: SessionSummary[];
+  /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
+  timing: SessionTiming[];
 }
 
 function metric(xs: number[], threshold: ThresholdRef | null, withMean = false): MetricSummary {
@@ -189,6 +192,7 @@ export function summarizeRecording(input: {
     missed,
     contested,
     sessions,
+    timing: timingReport(diags),
   };
 }
 
@@ -203,6 +207,9 @@ function thresholdText(t: ThresholdRef | null): string {
 }
 
 const INPUT_MODE_LABEL = { direct: '직접 연결', follow: '따라보기' } as const;
+
+/** 부호 붙인 1자리 소수(delta·기울기용). 없으면 '–' */
+const sf1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`);
 
 /** Wiki에 붙여넣을 Markdown 표. 숫자는 1자리 소수, 값이 없으면 '–' */
 export function summaryToMarkdown(s: RecordingSummary): string {
@@ -236,6 +243,32 @@ export function summaryToMarkdown(s: RecordingSummary): string {
   if (s.sessions.length > 0) {
     lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) | 매칭 경합 |', '| --- | --- | --- | --- |');
     for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} | ${x.contested} |`);
+  }
+  // 세션별 타이밍 분석(T1). 채보 vs FE 판별표(설계 4-2)의 수치 열
+  if (s.timing.length > 0) {
+    lines.push(
+      '',
+      '## 타이밍 분석 (delta +늦음)',
+      '',
+      '| 곡 | 채보 버전 | 모드 | 시작(s) | 판정 | MISS | 평균 | 중앙값 | 표준편차 | 기울기(ms/분) | 앞·중·뒤 | accDrift 시작→끝(기울기) | 힌트 |',
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    );
+    for (const x of s.timing) {
+      const acc = x.accDrift ? `${sf1(x.accDrift.startMs)}→${sf1(x.accDrift.endMs)} (${sf1(x.accDrift.slopeMsPerMin)}/분)` : '–';
+      const judged = `${x.judged}${x.outliers ? `(창 밖 ${x.outliers})` : ''}`;
+      lines.push(
+        `| ${x.title} | ${x.chartVersionId ?? '–'} | ${x.mode} | ${(x.startedAt / 1000).toFixed(0)} | ${judged} | ${x.miss} | ${sf1(x.meanMs)} | ${sf1(x.medianMs)} | ${f1(x.stdMs)} | ${sf1(x.slopeMsPerMin)} | ${x.thirds.map(sf1).join(' / ')} | ${acc} | ${x.verdictHint} |`,
+      );
+    }
+    const withInputs = s.timing.filter((x) => x.byInput.length > 0);
+    if (withInputs.length > 0) {
+      lines.push('', '| 곡 | 시작(s) | 입력 | n | 평균 | 기울기(ms/분) |', '| --- | --- | --- | --- | --- | --- |');
+      for (const x of withInputs) {
+        for (const b of x.byInput) {
+          lines.push(`| ${x.title} | ${(x.startedAt / 1000).toFixed(0)} | ${b.input} | ${b.n} | ${sf1(b.meanMs)} | ${sf1(b.slopeMsPerMin)} |`);
+        }
+      }
+    }
   }
   // 코칭 기준 방식 비교(진단 빌드 녹화에만 있다). 세션마다 방식별 문구 수와 tag별 수를 나란히 보인다
   const withCoach = s.sessions.filter((x) => x.coach.fixed.total + x.coach.window.total > 0);
