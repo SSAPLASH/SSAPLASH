@@ -28,7 +28,9 @@ public class TestPropertyDefaultsInitializer implements ApplicationContextInitia
 				"JWT_SECRET", TEST_JWT_SECRET,
 				"report.analysis.dispatch-enabled", "false",
 				// 254번: 시작 시 공용 곡 등록은 테스트 DB의 공용 곡 수를 바꾸므로 기본으로 끈다(검사하는 테스트만 켠다).
-				"builtin-songs.seed.enabled", "false")));
+				"builtin-songs.seed.enabled", "false",
+				// 곡 추천 R1: 시작 시 채보 특징 백필은 테스트 DB를 바꾸므로 기본으로 끈다.
+				"chart-features.backfill.enabled", "false")));
 	}
 
 }
