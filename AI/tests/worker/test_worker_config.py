@@ -12,6 +12,7 @@ from ssaplash_ai.worker.config import (
     ENV_HEARTBEAT_SEC,
     ENV_KEEP_FILES,
     ENV_POLL_SEC,
+    ENV_SEND_REASON,
     ENV_TOKEN,
     ENV_WORKER_ID,
     WorkerSettings,
@@ -50,6 +51,12 @@ def test_선택_값과_설정_경로():
     )
     assert s.poll_sec == 2.5 and s.heartbeat_sec == 7.0 and s.keep_files is True
     assert s.separation_config == Path("a.yaml") and s.transcription_config == Path("b.yaml")
+
+
+def test_reason_전송은_기본_꺼짐():
+    assert WorkerSettings.from_env(_env()).send_reason is False
+    assert WorkerSettings.from_env(_env(**{ENV_SEND_REASON: "1"})).send_reason is True
+    assert WorkerSettings.from_env(_env(**{ENV_SEND_REASON: "no"})).send_reason is False
 
 
 def test_빠진_변수는_이름을_모두_알려준다():

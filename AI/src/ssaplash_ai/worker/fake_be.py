@@ -15,6 +15,7 @@ BE 안내문의 형식과 검사 중 워커가 맞춰야 하는 것만 재현함
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import json
 import logging
@@ -37,7 +38,7 @@ from fastapi.responses import JSONResponse
 
 from ssaplash_ai.chart.audio_io import probe
 from ssaplash_ai.chart.chart_json import validate_chart
-from ssaplash_ai.chart.errors import ChartError
+from ssaplash_ai.chart.errors import REASONS, ChartError
 from ssaplash_ai.worker.payload import payload_hash
 
 logger = logging.getLogger("ssaplash_ai.worker.fake_be")
@@ -75,6 +76,8 @@ class Faults:
     submit_503_once: bool = False
     heartbeat_409: bool = False
     get_403_once: bool = False
+    # 내려받기 응답을 한 번 절반만 줌. 다운로드가 잘린 경우 (S15P31A307-246)
+    get_truncated_once: bool = False
 
 
 @dataclass
@@ -116,6 +119,8 @@ class FakeJob:
     separation_result: dict | None = None
     transcription_result: dict | None = None
     events: list[dict] = field(default_factory=list)
+    # 마지막 실패 보고의 reason. 재시도를 다 써 FAILED가 돼도 남김 (S15P31A307-246)
+    failure_reason: str | None = None
     chart_version_ids: list[int] = field(default_factory=list)
 
     @property
@@ -355,6 +360,9 @@ class FakeBackend:
             stored = self.files.get(file_id)
             if stored is None or stored.data is None:
                 raise Rejected(404, "NOT_FOUND")
+            if self.faults.get_truncated_once:
+                self.faults.get_truncated_once = False
+                return dataclasses.replace(stored, data=stored.data[: len(stored.data) // 2])
             return stored
 
     def storage_put(
@@ -484,6 +492,9 @@ class FakeBackend:
                 raise Rejected(400, "RETRYABLE_INVALID")
             if len(summary) > 200 or "\n" in summary:
                 raise Rejected(400, "SUMMARY_INVALID")
+            reason = body.get("reason")
+            if reason is not None and reason not in REASONS:
+                raise Rejected(400, "REASON_INVALID")
             job.events.append(
                 {
                     "type": "FAILURE",
@@ -491,8 +502,11 @@ class FakeBackend:
                     "code": code,
                     "retryable": retryable,
                     "summary": summary,
+                    "reason": reason,
                 }
             )
+            if reason is not None:
+                job.failure_reason = reason
             job.attempt_id = None
             job.claim_request_id = None
             job.revision += 1
