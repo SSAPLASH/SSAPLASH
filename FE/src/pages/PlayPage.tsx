@@ -10,6 +10,7 @@ import { NoteHighway, type Popup } from '@/components/NoteHighway';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
+import { useJudgementHaptic } from '@/components/useJudgementHaptic';
 import { useReadiness } from '@/components/useReadiness';
 import { PlayStage } from '@/components/play/PlayStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
@@ -106,6 +107,8 @@ function PlayPageBody() {
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
   // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
+  // 판정 진동(PLAY-006): 연주 단계 전체(카운트인·일시정지·복귀 카운트다운 포함)에서 로컬 진동을 끄고 판정으로 울린다
+  useJudgementHaptic(session, stage === 'play');
   // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
   useEffect(() => {
     setLocked(stage === 'play');
