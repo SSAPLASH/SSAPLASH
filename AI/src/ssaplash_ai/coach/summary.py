@@ -79,23 +79,23 @@ def _focus(segments: Sequence[WeakSegment]) -> WeakSegment | None:
 
 
 def _focus_phrase(segment: WeakSegment) -> str:
-    """ "먼저 ~부터 연습해 보세요"에 들어갈 짧은 말."""
+    """ "먼저 ~부터 연습해 보세요"에 들어갈 짧은 말. 뒤에 "연습"이 오므로 이 말에는 "연습"을 넣지 않는다."""
     pads = segment.pads
     pattern = segment.pattern
     if pattern == "TIMING_LATE":
-        return "박 소리를 듣고 제때 치는 연습"
+        return "박 소리를 듣고 제때 치는 것"
     if pattern == "TIMING_EARLY":
-        return "박 소리를 기다렸다 치는 연습"
+        return "박 소리를 기다렸다 치는 것"
     if pattern in ("PAD_LATE", "PAD_EARLY"):
         return f"{_label(pads, 0, '그 패드')} 박자 맞추기"
     if pattern in ("TRANSITION_LATE", "TRANSITION_MISS"):
         return f"{_label(pads, 0, '앞 패드')}에서 {_ro(_label(pads, 1, '다음 패드'))} 넘어가는 동작"
     if pattern == "HAND_WEAK":
-        return "약한 쪽 손으로 고르게 치는 연습"
+        return "약한 쪽 손으로 고르게 치는 것"
     if pattern == "MISS_CLUSTER":
         return f"{round(segment.fromMs / 1000)}~{round(segment.toMs / 1000)}초 구간"
     if pattern == "UNSTEADY":
-        return "일정한 간격으로 치는 연습"
+        return "일정한 간격으로 치는 것"
     return "가장 어려웠던 부분"
 
 
