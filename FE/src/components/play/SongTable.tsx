@@ -1,7 +1,7 @@
-// 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 최고 점수(sheet 모드는 최고 정확도).
+// 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 곡 난이도 · 최고 점수(sheet 모드는 최고 정확도).
 // 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡. 곡 로딩은 호출자가 한다(props만 받는다).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { songStatusView, type SongSummary } from '@/domain/songCatalog';
+import { songLevelLabel, songStatusView, type SongSummary } from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
@@ -36,7 +36,7 @@ function bestColumn(mode: 'play' | 'sheet'): Column {
       };
 }
 
-/** 열 정의. 나중에 「곡 난이도」 칸을 추가하려면 배열에 한 줄만 넣는다(설계 U17) */
+/** 열 정의. 곡 난이도는 연습 단계 배지와 섞이지 않게 글자로만 쓴다(설계 CHART-001 곡 난이도 1) */
 const BASE_COLUMNS: Column[] = [
   {
     key: 'cover',
@@ -65,6 +65,7 @@ const BASE_COLUMNS: Column[] = [
     className: 'play-st-num',
     render: (s) => (s.durationMs === null ? DASH : formatDuration(s.durationMs)),
   },
+  { key: 'level', header: '곡 난이도', className: 'play-st-level', render: (s) => songLevelLabel(s.songLevel) },
 ];
 
 const COLUMNS_BY_MODE = {

@@ -1,15 +1,26 @@
-// 곡 선택 (설계 2-1, Figma 112:381). 제목 행 · 탭(기본 곡 / 라이브러리) · 검색(300ms 디바운스) · 표(SongTable) + 선택한 곡 패널(SongDetailPane).
+// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · 탭(기본 곡 / 라이브러리) · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) + 선택한 곡 패널(SongDetailPane).
+// 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다. 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
 // 선택 결과는 페이지가 URL로 옮긴다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { isPlayableStatus, sortCharts, type SongDetail, type SongScope, type SongSummary } from '@/domain/songCatalog';
+import {
+  isPlayableStatus,
+  SONG_LEVEL_LABEL,
+  SONG_LEVEL_ORDER,
+  sortCharts,
+  type SongDetail,
+  type SongLevel,
+  type SongScope,
+  type SongSummary,
+} from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useSongs } from '@/store/songStore';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Segmented } from '@/components/ui/Segmented';
@@ -40,7 +51,19 @@ const SCOPE_OPTIONS: { value: SongScope; label: string }[] = [
   { value: 'MINE', label: '라이브러리' },
 ];
 
-/** 내 곡 탭에서 완료되지 않은 곡은 고를 수 없다 */
+type LevelFilter = SongLevel | 'ALL';
+
+const LEVEL_OPTIONS: { value: LevelFilter; label: string }[] = [
+  { value: 'ALL', label: '전체' },
+  ...SONG_LEVEL_ORDER.map((v) => ({ value: v, label: SONG_LEVEL_LABEL[v] })),
+];
+
+/** 목록 조건: 곡 선택은 항상 플레이 후보만, 난이도는 「전체」가 아닐 때만 */
+function listFilter(level: LevelFilter) {
+  return { playableOnly: true, songLevel: level === 'ALL' ? undefined : level };
+}
+
+/** 내 곡 탭에서 완료되지 않은 곡은 고를 수 없다(playableOnly 응답에는 없지만 내장 소스·구버전 응답 대비) */
 function isLocked(tab: SongScope, song: SongSummary): boolean {
   return tab === 'MINE' && !isPlayableStatus(song.status);
 }
@@ -63,6 +86,7 @@ export function SongPicker({ onSelect, mode }: Props) {
   const [params] = useSearchParams();
   const [tab, setTab] = useState<SongScope>(params.get('scope') === 'MINE' ? 'MINE' : scope);
   const [query, setQuery] = useState('');
+  const [level, setLevel] = useState<LevelFilter>('ALL');
   // undefined: 사용자가 아직 고르지 않았다(이때는 `?song=` 딥링크 곡, 없으면 첫 곡이 선택된다)
   const [manualId, setManualId] = useState<number | undefined>(undefined);
   const [details, setDetails] = useState<Record<number, DetailState>>({});
@@ -77,14 +101,14 @@ export function SongPicker({ onSelect, mode }: Props) {
       : { scores: undefined, accuracies: bestAccuracyBySong(logs, 'SHEET') };
   }, [mode]);
 
-  // 탭·검색어가 바뀌면 목록을 다시 읽는다. 첫 로드는 즉시, 검색어 변경은 디바운스
+  // 탭·검색어·난이도가 바뀌면 목록을 다시 읽는다. 검색어 변경만 디바운스하고 나머지는 즉시
   useEffect(() => {
     const delay = firstLoad.current || queryRef.current === query ? 0 : SEARCH_DEBOUNCE_MS;
     firstLoad.current = false;
     queryRef.current = query;
-    const t = setTimeout(() => void load(tab, query), delay);
+    const t = setTimeout(() => void load(tab, query, listFilter(level)), delay);
     return () => clearTimeout(t);
-  }, [tab, query, load]);
+  }, [tab, query, level, load]);
 
   const fetchDetail = useCallback(
     (id: number) => {
@@ -152,7 +176,6 @@ export function SongPicker({ onSelect, mode }: Props) {
         ? 'error'
         : 'loading';
   const presetName = presets.find((p) => p.id === activePresetId)?.name ?? null;
-  const hasUnplayable = tab === 'MINE' && items.some((s) => !isPlayableStatus(s.status));
   const copy = COPY[mode];
 
   return (
@@ -163,14 +186,23 @@ export function SongPicker({ onSelect, mode }: Props) {
       </div>
 
       {source === 'api' && <Segmented label="곡 범위" options={SCOPE_OPTIONS} value={tab} onChange={setTab} />}
-      <Input
-        className="play-sp-search"
-        type="search"
-        label="곡 검색"
-        value={query}
-        placeholder="곡 제목 또는 아티스트 검색"
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="play-sp-filter">
+        <Input
+          className="play-sp-search"
+          type="search"
+          label="곡 검색"
+          value={query}
+          placeholder="곡 제목 또는 아티스트 검색"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="play-sp-levels" role="group" aria-label="곡 난이도">
+          {LEVEL_OPTIONS.map((o) => (
+            <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
+              {o.label}
+            </Chip>
+          ))}
+        </div>
+      </div>
 
       {status === 'loading' && (
         <div className="play-sp-center">
@@ -181,13 +213,15 @@ export function SongPicker({ onSelect, mode }: Props) {
       {status === 'error' && (
         <div className="notice error col" role="alert">
           <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
-          <Button variant="secondary" size="sm" onClick={() => void load(tab, query)}>
+          <Button variant="secondary" size="sm" onClick={() => void load(tab, query, listFilter(level))}>
             다시 시도
           </Button>
         </div>
       )}
 
-      {ready && items.length === 0 && (
+      {ready && items.length === 0 && level !== 'ALL' && <EmptyState title="이 난이도의 곡이 없어요" description="다른 난이도를 골라 보세요." />}
+
+      {ready && items.length === 0 && level === 'ALL' && (
         <EmptyState
           title={tab === 'MINE' ? '아직 만든 곡이 없어요' : '곡이 없어요'}
           description={
@@ -206,7 +240,7 @@ export function SongPicker({ onSelect, mode }: Props) {
         <div className="play-sp-grid">
           <div className="play-sp-list">
             <SongTable
-              key={`${tab}|${query}`}
+              key={`${tab}|${query}|${level}`}
               songs={items}
               selectedId={selectedId}
               onSelect={setManualId}
@@ -219,7 +253,8 @@ export function SongPicker({ onSelect, mode }: Props) {
               bestAccuracies={bests.accuracies}
               isLocked={(s) => isLocked(tab, s)}
             />
-            {hasUnplayable && (
+            {/* 처리 중·실패 곡은 목록에 오지 않으므로 라이브러리 탭이면 늘 안내한다(설계 4-3) */}
+            {tab === 'MINE' && (
               <p className="play-sp-note">
                 처리 중·실패한 곡은 <Link to="/studio">라이브러리</Link>에서 확인하세요.
               </p>
