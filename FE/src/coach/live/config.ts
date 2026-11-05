@@ -21,14 +21,21 @@ export const LIVE_COACH_CONFIG = {
   /** 이 개수만큼 판정이 쌓이기 전에는 문구를 띄우지 않는다 */
   warmupJudgements: 8,
   policy: {
-    /** 문구와 문구 사이 최소 간격(곡 시각 ms) */
-    minGapMs: 8_000,
+    /** 문구와 문구 사이 최소 간격(곡 시각 ms). 표시 3초 + 빈 칸 1초 */
+    minGapMs: 4_000,
     /** 같은 tag를 다시 띄우기까지의 시간. 거두는 조건을 한 번 만족하면 건너뛴다 */
-    tagCooldownMs: 25_000,
-    /** 플레이당 문구 상한 */
-    maxPerPlay: 10,
+    tagCooldownMs: 10_000,
     /** 권장 표시 시간 */
     displayMs: 3_000,
+  },
+  /** 칭찬. 지적 후보가 없을 때만 뜬다. 안정 판단은 늦음·빠름과 박자 규칙의 거두는 문턱을 그대로 쓴다 */
+  praise: {
+    /** 직전 문구에서 이만큼 지나야 칭찬을 띄운다. 경향 해소 칭찬은 policy.minGapMs를 쓴다 */
+    minGapMs: 6_000,
+    /** 안정 칭찬에 필요한 유효 타격 수 */
+    minValid: 8,
+    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다 */
+    keepMaxMiss: 2,
   },
   /** 계속 늦음·빠름 */
   trend: {

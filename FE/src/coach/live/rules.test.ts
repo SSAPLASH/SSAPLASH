@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STICK_PADS } from '@/domain/pads';
 import { liveThresholds } from './config';
-import { evaluateRules, type RuleEvaluation } from './rules';
+import { evaluatePraise, evaluateRules, isPraiseTag, RECOVERED_PRAISE, type RuleEvaluation } from './rules';
 import type { HandStat, WindowMetrics } from './window';
 
 function metrics(over: Partial<WindowMetrics> = {}): WindowMetrics {
@@ -11,6 +11,7 @@ function metrics(over: Partial<WindowMetrics> = {}): WindowMetrics {
     meanDelta: 0,
     sameSignRatio: 0.5,
     stdDelta: 5,
+    missInWindow: 0,
     missInRecent: 0,
     trailingMisses: 0,
     missInRelease: 0,
@@ -217,5 +218,39 @@ describe('우선순위 값', () => {
     expect(p('LIVE_LATE')).toBeLessThan(p('LIVE_PAD_LATE:SNARE'));
     expect(p('LIVE_PAD_LATE:SNARE')).toBeLessThan(p('LIVE_HAND_WEAK:0'));
     expect(p('LIVE_HAND_WEAK:0')).toBeLessThan(p('LIVE_UNSTEADY'));
+  });
+});
+
+describe('evaluatePraise', () => {
+  it('놓침 없이 평균·편차가 거두는 문턱 안이면 안정 칭찬이다', () => {
+    expect(evaluatePraise(metrics({ meanDelta: 8.9, stdDelta: 20.9 }), th)?.tag).toBe('LIVE_GOOD_STEADY');
+  });
+
+  it('평균이 문턱에 닿으면 계속 칭찬으로 내려간다', () => {
+    expect(evaluatePraise(metrics({ meanDelta: -9 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  });
+
+  it('편차가 문턱에 닿으면 계속 칭찬으로 내려간다', () => {
+    expect(evaluatePraise(metrics({ stdDelta: 21 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  });
+
+  it('놓침이 하나라도 있으면 안정 칭찬이 아니다', () => {
+    expect(evaluatePraise(metrics({ missInWindow: 1 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  });
+
+  it('유효 타격이 8개 미만이면 안정 칭찬이 아니다', () => {
+    expect(evaluatePraise(metrics({ validCount: 7 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  });
+
+  it('놓침이 2개까지는 칭찬하고 3개부터는 하지 않는다', () => {
+    expect(evaluatePraise(metrics({ missInWindow: 2 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+    expect(evaluatePraise(metrics({ missInWindow: 3 }), th)).toBeNull();
+  });
+
+  it('칭찬 태그만 isPraiseTag가 참이다', () => {
+    expect(isPraiseTag(RECOVERED_PRAISE.tag)).toBe(true);
+    expect(isPraiseTag('LIVE_GOOD_KEEP')).toBe(true);
+    expect(isPraiseTag('LIVE_LATE')).toBe(false);
+    expect(isPraiseTag('LIVE_RECOVERED')).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LIVE_COACH_CONFIG } from './config';
 import { CoachPolicy } from './policy';
-import type { RuleEvaluation } from './rules';
+import { RECOVERED_PRAISE, type RuleEvaluation } from './rules';
 
 function ev(key: string, over: Partial<RuleEvaluation> = {}): RuleEvaluation {
   return {
@@ -18,7 +18,9 @@ function ev(key: string, over: Partial<RuleEvaluation> = {}): RuleEvaluation {
 }
 const on = (key: string, over: Partial<RuleEvaluation> = {}) => ev(key, { trigger: true, ...over });
 const ctx = (songTimeMs: number, judged = 20) => ({ songTimeMs, judged });
-const { minGapMs, tagCooldownMs, maxPerPlay } = LIVE_COACH_CONFIG.policy;
+const { minGapMs, tagCooldownMs } = LIVE_COACH_CONFIG.policy;
+const praiseGapMs = LIVE_COACH_CONFIG.praise.minGapMs;
+const good = ev('LIVE_GOOD_STEADY', { tag: 'LIVE_GOOD_STEADY', priority: 5, trigger: true });
 
 describe('CoachPolicy 시작 억제', () => {
   it('판정이 8개 쌓이기 전에는 띄우지 않는다', () => {
@@ -29,7 +31,7 @@ describe('CoachPolicy 시작 억제', () => {
 });
 
 describe('CoachPolicy 전역 간격', () => {
-  it('문구 사이 간격이 8초 미만이면 다른 규칙도 띄우지 않는다', () => {
+  it('문구 사이 간격이 4초 미만이면 다른 규칙도 띄우지 않는다', () => {
     const p = new CoachPolicy();
     expect(p.decide([on('A')], ctx(10_000)).show?.key).toBe('A');
     expect(p.decide([on('B')], ctx(10_000 + minGapMs - 1)).show).toBeNull();
@@ -38,7 +40,7 @@ describe('CoachPolicy 전역 간격', () => {
 });
 
 describe('CoachPolicy 키별 쿨다운과 히스테리시스', () => {
-  it('활성인 키는 25초가 지나야 다시 띄운다', () => {
+  it('활성인 키는 10초가 지나야 다시 띄운다', () => {
     const p = new CoachPolicy();
     p.decide([on('A')], ctx(10_000));
     expect(p.decide([on('A')], ctx(10_000 + minGapMs)).show).toBeNull();
@@ -51,7 +53,7 @@ describe('CoachPolicy 키별 쿨다운과 히스테리시스', () => {
     p.decide([on('A')], ctx(10_000));
     const mid = p.decide([ev('A', { release: true })], ctx(12_000));
     expect(mid.recovered.map((e) => e.key)).toEqual(['A']);
-    // 간격(8초)만 지나면 쿨다운(25초) 전이어도 다시 띄운다
+    // 간격(4초)만 지나면 쿨다운(10초) 전이어도 다시 띄운다
     expect(p.decide([on('A')], ctx(10_000 + minGapMs)).show?.key).toBe('A');
   });
 
@@ -75,16 +77,140 @@ describe('CoachPolicy 키별 쿨다운과 히스테리시스', () => {
   });
 });
 
-describe('CoachPolicy 플레이당 상한', () => {
-  it('10개를 넘기지 않는다', () => {
+describe('CoachPolicy 플레이당 개수', () => {
+  it('상한이 없어서 긴 곡 후반에도 계속 뜬다', () => {
     const p = new CoachPolicy();
     let t = 10_000;
-    for (let i = 0; i < maxPerPlay; i++) {
+    for (let i = 0; i < 100; i++) {
       expect(p.decide([on(`K${i}`)], ctx(t)).show?.key).toBe(`K${i}`);
       t += minGapMs;
     }
-    expect(p.shownCount).toBe(maxPerPlay);
-    expect(p.decide([on('K99')], ctx(t)).show).toBeNull();
+    expect(p.shownCount).toBe(100);
+  });
+});
+
+describe('CoachPolicy 칭찬', () => {
+  it('지적 후보가 없으면 칭찬을 띄우고, 다음 칭찬은 6초 뒤다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([], ctx(10_000), good).show?.key).toBe('LIVE_GOOD_STEADY');
+    expect(p.decide([], ctx(10_000 + praiseGapMs - 1), good).show).toBeNull();
+    expect(p.decide([], ctx(10_000 + praiseGapMs), good).show?.key).toBe('LIVE_GOOD_STEADY');
+  });
+
+  it('지적 후보가 있으면 칭찬보다 지적이 먼저다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([on('A')], ctx(10_000), good).show?.key).toBe('A');
+  });
+
+  it('칭찬은 지적을 늦추지 않는다', () => {
+    const p = new CoachPolicy();
+    p.decide([], ctx(10_000), good);
+    expect(p.decide([on('A')], ctx(10_500), good).show?.key).toBe('A');
+  });
+
+  it('지적 뒤 칭찬은 쿨다운이 끝나기 전에 뜨지 않고, 지적 뒤 지적은 4초 간격을 지킨다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    expect(p.decide([on('A'), on('B')], ctx(10_000 + minGapMs - 1), good).show).toBeNull();
+    expect(p.decide([on('A'), on('B')], ctx(10_000 + minGapMs), good).show?.key).toBe('B');
+  });
+
+  it('시작 억제 중에는 칭찬도 띄우지 않는다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([], ctx(5_000, 7), good).show).toBeNull();
+  });
+
+  it('후보가 null이면(놓침이 많으면) 칭찬하지 않는다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([], ctx(10_000), null).show).toBeNull();
+  });
+
+  it('칭찬은 키를 활성으로 만들지 않아 다음 칭찬을 막지 않는다', () => {
+    const p = new CoachPolicy();
+    p.decide([], ctx(10_000), good);
+    expect(p.decide([good], ctx(10_000 + praiseGapMs), good).show).not.toBeNull();
+  });
+
+  it('활성 지적이 조건을 만족하는 동안은 쿨다운 안에서도 칭찬하지 않는다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    expect(p.decide([on('A')], ctx(10_000 + praiseGapMs), good).show).toBeNull();
+  });
+
+  it('활성 지적이 쿨다운 안이면 조건을 벗어나도 칭찬하지 않는다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    expect(p.decide([ev('A')], ctx(10_000 + tagCooldownMs - 1), good).show).toBeNull();
+  });
+
+  it('거두는 판단을 못 하는 키가 쿨다운을 넘기면 칭찬을 막지 않는다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    expect(p.decide([ev('A')], ctx(10_000 + tagCooldownMs), good).show?.key).toBe('LIVE_GOOD_STEADY');
+  });
+});
+
+describe('CoachPolicy 경향 해소 칭찬', () => {
+  it('지적이 거둬지면 4초 간격을 지나 고쳐졌다는 칭찬을 한 번 띄운다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    expect(p.decide([ev('A', { release: true })], ctx(12_000), good).show).toBeNull();
+    expect(p.decide([ev('A')], ctx(10_000 + minGapMs), good).show).toBe(RECOVERED_PRAISE);
+    expect(p.decide([ev('A')], ctx(10_000 + 2 * minGapMs), good).show).toBeNull();
+  });
+
+  it('다른 지적이 활성이면 그 지적이 풀릴 때까지 기다린다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    p.decide([ev('A'), on('B')], ctx(10_000 + minGapMs));
+    const t = 10_000 + 2 * minGapMs;
+    expect(p.decide([ev('A', { release: true }), on('B')], ctx(t), good).show).toBeNull();
+    expect(p.decide([ev('A'), ev('B', { release: true })], ctx(t + minGapMs), good).show).toBe(RECOVERED_PRAISE);
+  });
+
+  it('새 지적이 뜨면 밀린 칭찬을 버린다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    p.decide([ev('A', { release: true })], ctx(12_000), good);
+    p.decide([ev('A'), on('B')], ctx(10_000 + minGapMs), good);
+    p.decide([ev('B', { release: true })], ctx(10_000 + minGapMs + 1_000), good);
+    // B가 거둬져서 생긴 칭찬 하나만 남는다
+    expect(p.decide([], ctx(10_000 + 2 * minGapMs), good).show).toBe(RECOVERED_PRAISE);
+    expect(p.decide([], ctx(10_000 + 3 * minGapMs), good).show?.key).not.toBe(RECOVERED_PRAISE.key);
+  });
+
+  it('연주가 안정되기 전에는 고쳐졌다고 하지 않고, 안정되면 띄운다', () => {
+    const keep = ev('LIVE_GOOD_KEEP', { tag: 'LIVE_GOOD_KEEP', priority: 5, trigger: true });
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    p.decide([ev('A', { release: true })], ctx(12_000));
+    expect(p.decide([], ctx(10_000 + praiseGapMs), keep).show?.key).toBe('LIVE_GOOD_KEEP');
+    expect(p.decide([], ctx(10_000 + praiseGapMs + minGapMs), good).show).toBe(RECOVERED_PRAISE);
+  });
+
+  it('놓침이 많아 후보가 없으면 미뤘다가 후보가 생기면 띄운다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    p.decide([ev('A', { release: true })], ctx(12_000));
+    expect(p.decide([], ctx(10_000 + minGapMs), null).show).toBeNull();
+    expect(p.decide([], ctx(10_000 + minGapMs + 500), good).show).toBe(RECOVERED_PRAISE);
+  });
+});
+
+describe('CoachPolicy 반복 횟수', () => {
+  it('같은 태그가 뜬 횟수를 태그별로 센다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([on('A')], ctx(10_000)).repeat).toBe(0);
+    expect(p.decide([ev('A', { release: true }), on('A')], ctx(10_000 + minGapMs)).repeat).toBe(1);
+    expect(p.decide([], ctx(30_000), good).repeat).toBe(0);
+    expect(p.decide([], ctx(30_000 + praiseGapMs), good).repeat).toBe(1);
+  });
+
+  it('reset하면 다시 0부터 센다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A')], ctx(10_000));
+    p.reset();
+    expect(p.decide([on('A')], ctx(10_000)).repeat).toBe(0);
   });
 });
 
