@@ -3,11 +3,14 @@ package com.ssafy.airdrum.song;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import com.ssafy.airdrum.chart.ChartDocumentReader;
 import com.ssafy.airdrum.chart.ChartResponses.Note;
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.song.feature.SongChartsChanged;
 
 /** songs 행 잠금을 공유하는 트랜잭션에서 최신 입력의 난이도를 저장한다. */
 @Service
@@ -16,7 +19,11 @@ public class SongLevelService {
     private static final Logger log = LoggerFactory.getLogger(SongLevelService.class);
     private final JdbcTemplate db;
     private final ChartDocumentReader reader;
+    private ApplicationEventPublisher events;
     public SongLevelService(JdbcTemplate db, ChartDocumentReader reader) { this.db = db; this.reader = reader; }
+    /** 스프링이 주입한다. 직접 만드는 도구·테스트에서는 없고, 그러면 채보 특징 신호만 건너뛴다. */
+    @Autowired(required = false)
+    void events(ApplicationEventPublisher events) { this.events = events; }
 
     public enum Level { BEGINNER, INTERMEDIATE, ADVANCED }
     public record Result(String reason, Level level, Long versionId, Integer durationMs, boolean legacyEligible, boolean legacyUsed) {}
@@ -73,6 +80,7 @@ public class SongLevelService {
                     && java.util.Objects.equals(rule,song.currentRule()) && java.util.Objects.equals(duration,song.currentDuration())
                     && (!Boolean.TRUE.equals(hard) || !song.legacy())) reason = level == null ? reason : "UNCHANGED";
             else db.update("UPDATE songs SET song_level=?,level_chart_version_id=?,level_rule_version=?,level_duration_ms=?,level_legacy_fallback=? WHERE id=?",levelValue,versionId,rule,duration,fallback,id);
+            if (events != null && level != null) events.publishEvent(new SongChartsChanged(id));
         }
         return new Result(reason,level,level == null ? null : version.id(),level == null ? null : song.duration(),song.legacy(),fallback && level != null);
     }
