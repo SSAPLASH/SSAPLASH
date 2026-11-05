@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  defaultChartId,
   isPlayableStatus,
   SONG_LEVEL_LABEL,
   SONG_LEVEL_ORDER,
-  sortCharts,
   type SongDetail,
   type SongLevel,
   type SongScope,
@@ -68,11 +68,6 @@ function isLocked(tab: SongScope, song: SongSummary): boolean {
   return tab === 'MINE' && !isPlayableStatus(song.status);
 }
 
-/** 기본 연습 단계: NORMAL, 없으면 첫 채보 */
-function defaultChartId(detail: SongDetail): number | null {
-  const charts = sortCharts(detail.charts);
-  return (charts.find((c) => c.difficulty === 'NORMAL') ?? charts[0])?.id ?? null;
-}
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
