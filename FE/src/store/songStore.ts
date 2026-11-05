@@ -6,10 +6,17 @@ import { ApiError } from '@/api/http';
 import { getSong, listSongs } from '@/api/songs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
-import type { SongDetail, SongScope, SongSummary } from '@/domain/songCatalog';
+import type { SongDetail, SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
 
 export type SongsSource = 'api' | 'builtin';
 export type SongsStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+/** 목록 조건(설계 CHART-001 곡 난이도 3-3). 생략하면 전체·필터 없음 */
+export interface SongListFilter {
+  songLevel?: SongLevel;
+  /** 곡 선택·추천만 켠다. 내 곡(/studio)은 켜지 않는다 */
+  playableOnly?: boolean;
+}
 
 export const SONGS_SOURCE: SongsSource = import.meta.env.VITE_SONGS_SOURCE === 'builtin' ? 'builtin' : 'api';
 
@@ -66,11 +73,12 @@ interface SongsState {
   error: string | null;
 
   /** 목록을 읽는다. 늦게 도착한 이전 요청 결과는 버린다 */
-  load: (scope: SongScope, q?: string) => Promise<void>;
+  load: (scope: SongScope, q?: string, filter?: SongListFilter) => Promise<void>;
   /** 곡 상세(난이도별 채보 요약 포함) */
   selectSong: (id: number) => Promise<SongDetail>;
   /**
-   * 목록의 같은 id 곡에 다시 읽은 상세의 상태 필드(status·hasAccompaniment·accompanimentStatus)만 반영한다(설계 CHART-002 반주 상태 3-3).
+   * 목록의 같은 id 곡에 다시 읽은 상세의 상태 필드(status·hasAccompaniment·accompanimentStatus·songLevel)만 반영한다(설계 CHART-002 반주 상태 3-3).
+   * 채보가 끝나면 곡 난이도가 생기므로 songLevel도 함께 옮긴다(설계 CHART-001 곡 난이도 3-3).
    * 상세 응답에는 difficulties 등 목록 전용 값이 비어 올 수 있어 나머지는 그대로 둔다. 로딩 상태는 바꾸지 않는다
    */
   patchItem: (song: SongSummary) => void;
@@ -85,19 +93,22 @@ export const useSongs = create<SongsState>()((set, get) => ({
   status: 'idle',
   error: null,
 
-  load: async (scope, q) => {
+  load: async (scope, q, filter) => {
     const my = ++seq;
     set({ scope, status: 'loading', error: null });
     try {
       let items: SongSummary[];
       if (get().source === 'builtin') {
         const needle = q?.trim().toLowerCase() ?? '';
+        // 내장 곡은 난이도가 없다(null). playableOnly는 무시하고 난이도 필터만 흉내 낸다(설계 3-3)
         items =
           scope === 'MINE'
             ? []
-            : BUILTIN_CHARTS.map(builtinSummary).filter((s) => !needle || s.title.toLowerCase().includes(needle));
+            : BUILTIN_CHARTS.map(builtinSummary).filter(
+                (s) => (!needle || s.title.toLowerCase().includes(needle)) && (!filter?.songLevel || s.songLevel === filter.songLevel),
+              );
       } else {
-        items = (await listSongs({ source: scope, q, size: 50 })).items;
+        items = (await listSongs({ source: scope, q, size: 50, songLevel: filter?.songLevel, playableOnly: filter?.playableOnly })).items;
       }
       if (my !== seq) return;
       set({ items, status: 'ready' });
@@ -120,7 +131,13 @@ export const useSongs = create<SongsState>()((set, get) => ({
     set((st) => ({
       items: st.items.map((s) =>
         s.id === song.id
-          ? { ...s, status: song.status, hasAccompaniment: song.hasAccompaniment, accompanimentStatus: song.accompanimentStatus }
+          ? {
+              ...s,
+              status: song.status,
+              hasAccompaniment: song.hasAccompaniment,
+              accompanimentStatus: song.accompanimentStatus,
+              songLevel: song.songLevel,
+            }
           : s,
       ),
     })),
