@@ -55,7 +55,9 @@ public class ChartDocumentReader {
 				check(tick >= 0 && duration > 0 && voice > 0);
 				notation = new Notation(tick, duration, voice);
 			}
-			notes.add(new Note(id, time, pad, velocity, notation));
+			var hihatOpen = node.get("hihatOpen");
+			notes.add(new Note(id, time, pad, velocity, notation,
+					hihatOpen != null && hihatOpen.isBoolean() ? hihatOpen.booleanValue() : null));
 		}
 		return List.copyOf(notes);
 	}
