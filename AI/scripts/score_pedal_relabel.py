@@ -9,7 +9,8 @@
 - 이름 바꾸기 + 하이햇 확인: 위에서 실제 녹음 학습 모델도 그 근처에 HIHAT을 안 냈을 때만 바꿈
 - 페달 넣고 하이햇 지우기: 실제 녹음 학습 모델 페달 예측을 넣고 window 안의 현재 모델 HIHAT을 지움
 
-ENST 정답에는 하이햇 페달 표시가 없어서 ENST에서 나온 페달은 모두 틀린 것으로 셈.
+ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 chh로 적어서 정답에 페달이 없음. ENST에서 나온 페달은 모두 틀린
+것으로 세지만 실제 페달 소리일 수 있어 참고용. 페달 점수는 MDB로만 봄.
 
   uv run python scripts/score_pedal_relabel.py --results data/results/sep_compare --out data/results/pedal-relabel.md
 """
@@ -142,7 +143,8 @@ def main() -> int:
         "# 노래 파일 채보 하이햇 페달 방법 비교",
         "",
         "입력 BS-Roformer SW로 뽑은 드럼 · F1 ±50ms · 9패드. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전.",
-        "ENST 정답에는 하이햇 페달 표시가 없어 ENST에서 나온 페달은 모두 틀린 것으로 셈.",
+        "ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 chh로 적어서 정답에 페달이 없음. "
+        "ENST에서 나온 페달은 모두 틀린 것으로 세지만 실제 페달 소리일 수 있어 참고용.",
         "",
     ]
     for name in DATASETS:
