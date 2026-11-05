@@ -7,22 +7,44 @@ import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { formatPlayDate, historyRowLevel, playModeName } from '@/domain/playLogView';
 import type { PlayLog } from '@/engine/playLog';
+import type { PlaySummary } from '@/api/plays';
 import '@/components/ui/table.css';
 import './history.css';
 
 export interface HistoryTableProps {
-  logs: PlayLog[];
+  logs: (PlayLog | HistoryServerRow)[];
   /** 삭제(404)로 확인된 BE 곡 id */
   deletedIds: ReadonlySet<number>;
   /** 머리글 마지막 열(결과 보기)에 그릴 정렬 토글 */
   sortSlot?: ReactNode;
 }
 
+export interface HistoryServerRow {
+  source: 'server';
+  play: PlaySummary;
+  playId: string;
+  title: string;
+  mode: string;
+  difficulty: string;
+  startedAt: string;
+  hasLocal: boolean;
+}
+
 /** 「96.8% / 92,400」 — 악보 모드(점수 없음)는 점수 자리에 「—」 */
-function resultText(l: PlayLog): string {
-  const acc = `${(l.summary.accuracy * 100).toFixed(1)}%`;
-  const score = l.mode === 'SHEET' ? '—' : l.summary.score.toLocaleString('ko-KR');
+function resultText(l: PlayLog | HistoryServerRow): string {
+  const accuracy = 'source' in l ? l.play.accuracy : l.summary.accuracy * 100;
+  const value = 'source' in l ? l.play.score : l.summary.score;
+  const acc = accuracy == null ? '—' : `${accuracy.toFixed(1)}%`;
+  const score = l.mode === 'SHEET' || value == null ? '—' : value.toLocaleString('ko-KR');
   return `${acc} / ${score}`;
+}
+
+function HistoryLink({ log }: { log: PlayLog | HistoryServerRow }) {
+  if ('source' in log && log.play.hasReport) {
+    return <Link to={`/result/${log.playId}/report`} className="history-link">리포트 보기</Link>;
+  }
+  if ('source' in log && !log.hasLocal) return <span>리포트 없음</span>;
+  return <Link to={`/result/${log.playId}`} className="history-link">결과 보기</Link>;
 }
 
 export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) {
@@ -50,7 +72,8 @@ export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) 
         </thead>
         <tbody>
           {logs.map((l) => {
-            const deleted = l.songNumericId != null && deletedIds.has(l.songNumericId);
+            const unavailable = 'source' in l && l.play.songId != null && !l.play.songAccessible;
+            const deleted = !('source' in l) && l.songNumericId != null && deletedIds.has(l.songNumericId);
             const level = historyRowLevel(l);
             return (
               <tr key={l.playId}>
@@ -58,16 +81,15 @@ export function HistoryTable({ logs, deletedIds, sortSlot }: HistoryTableProps) 
                 <td className="history-mode">{playModeName(l.mode)}</td>
                 <td>
                   <div className="history-song">
-                    <span className={deleted ? 'history-song-title deleted' : 'history-song-title'}>{l.title}</span>
+                    <span className={deleted || unavailable ? 'history-song-title deleted' : 'history-song-title'}>{l.title}</span>
                     {level ? <LevelBadge level={level} size="sm" /> : null}
                     {deleted ? <DeletedSongChip /> : null}
+                    {unavailable ? <span className="song-deleted-chip">이용할 수 없는 곡</span> : null}
                   </div>
                 </td>
                 <td className="history-result">{resultText(l)}</td>
                 <td>
-                  <Link to={`/result/${l.playId}`} className="history-link">
-                    결과 보기
-                  </Link>
+                  <HistoryLink log={l} />
                 </td>
               </tr>
             );

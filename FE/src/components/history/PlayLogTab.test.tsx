@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PlayLogTab } from './PlayLogTab';
 
+vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
+
 afterEach(() => vi.unstubAllGlobals());
 
 /** node 환경에는 localStorage가 없어 메모리 스텁을 끼운다(HistoryPage.test와 같은 방식) */

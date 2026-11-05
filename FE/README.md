@@ -307,7 +307,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 결과·연주 기록
 
 - **결과(`/result/:playId`, Figma 112:1194):** 로컬 로그(`engine/playLog.getPlayLog`)를 읽어 요약 카드(`result/ResultSummaryCard` — 제목·메타·점수/최고 콤보·정확도 64) → 상세 분석 진입(`ReportEntry`) → 판정 분포(`JudgeBars`)·타이밍 분포(`TimingHistogram`, 계산 `domain/timingHistogram`) → 피드백 카드 최대 3장(`FeedbackCard`, 악보 모드 + 업로드 대상 아님만)·약점 마디 미니 악보 → 패드별 표(`PadSummaryTable`, 모든 모드) → 버튼 행 순으로 그린다. 악보 모드는 요약 카드에 점수 블록이 없다. 패드별 표의 정확도·평균 세기는 `domain/feedback.summarizeByPad`가 계산하고(평균 세기 = 판정된 노트에 매칭된 타격 velocity 평균 → 0~100, 로그에 hits가 없으면 「—」), 평균 타이밍 열은 ≤1024px에서 숨긴다. 기록이 없는 id는 `ui/EmptyState`로 안내한다. 삭제된 곡이면 제목 옆에 `song/DeletedSongChip`을 붙이고 [다시 하기]·Enter를 숨긴다.
-- **연주 기록(`/history`, Figma 112:1351, 설계 U16):** 머리 아래 [플레이 기록 | 녹음] 탭(`ui/Segmented`, 녹음 기능 스위치가 켜졌을 때만, URL 쿼리 `?tab=recordings`)과 탭 본문. 플레이 기록 탭(`history/PlayLogTab`)은 이 브라우저(로그인 계정별)에 저장된 최근 20건(`loadPlayLogs`)을 모드 토글(전체·게임·악보) → 곡 제목 검색(로컬, 즉시) → 정렬(머리글 마지막 열의 최신·오래된 토글) → 10행 페이지 순으로 보여 준다. 필터·검색·정렬·페이지 계산은 `domain/playLogView`, 표는 `history/HistoryTable`(머리글 56px·16px, `sortSlot`), 삭제된 곡 표시는 `song/useDeletedSongIds`(곡마다 상세 1회 조회, 404만 삭제로 본다)다. 행의 [결과 보기]는 `/result/:playId`로 간다. 기록이 없으면 [리듬 게임 시작] 안내, 조건 결과만 없으면 표 자리에 한 줄 안내.
+- **연주 기록(`/history`):** 로그인 사용자는 `GET /api/v1/plays`의 모든 페이지를 읽고 이 계정의 로컬 전용 기록과 `playId`로 중복 없이 합친다. 모드·제목 검색·정렬은 전체 합친 목록에 적용하고 10행씩 표시한다. 서버에 리포트가 있으면 `/result/:playId/report`로 바로 열며, 로컬에만 있는 기록은 기존 결과 화면을 연다. 리포트도 로컬 기록도 없으면 진입 링크가 없다. 서버가 접근 불가로 반환한 곡은 제목 대신 안내하며, 로컬 기록은 기존 곡 삭제 검사를 쓴다. 조회 실패는 빈 목록과 구분하고 재시도할 수 있다. 비로그인 개발 모드는 이전처럼 로컬 기록만 쓴다. 계정 변경 시 진행 중인 이전 요청은 중단하고 결과를 버린다.
 
 ## 연주 녹음·녹음 보관함 (REC-001, `src/components/recording`)
 
