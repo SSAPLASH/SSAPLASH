@@ -2,6 +2,7 @@
 // 구독자가 없으면 즉시 반환해 판정 경로에 비용을 얹지 않는다. 저장·집계는 하지 않는다(모니터 judgeLog 몫).
 import type { ResolvedHit } from '@/domain/events';
 import type { Judgement, TimingWindows } from '@/domain/judgement';
+import type { CoachBasis } from '@/domain/coachBasis';
 import type { PadId } from '@/domain/pads';
 
 /** 세션 요약(종료 시점 스냅샷). RhythmSession.snapshot()에서 필요한 값만 */
@@ -45,6 +46,8 @@ export type DiagBody =
       picked: number;
       rule: 'earliest' | 'perfect-exception';
     }
+  /** 코칭 기준 방식별 그림자 평가(D6). 두 방식 모두 문구가 나올 때 발행한다. active는 화면에 실제로 보인 방식 */
+  | { type: 'coachEval'; basis: CoachBasis; active: boolean; tag: string; tMs: number }
   /** 연결된 타격 없이 시간 초과로 MISS가 된 노트 */
   | { type: 'missed'; noteIndex: number; pad: PadId; songTimeMs: number }
   | {
