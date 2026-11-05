@@ -38,8 +38,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 3                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237) */
-#define FW_TAG   "BOOT 1.3 nrf52"
+#define FW_MINOR 5                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지) */
+#define FW_TAG   "BOOT 1.5 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -447,7 +447,24 @@ static void power_off(const char *why)
     imu_wr(0x11, 0x00);
     if (drv_ok) drv_w(0x01, 0x40);                      /* DRV2605L 대기 */
     delay(20);
-    systemOff(PIN_USER_SW, LOW);                        /* 깊은 잠. USER 버튼 누르면 재부팅 */
+    /* systemOff로 자면 USER 버튼으로 깨어날 때 버튼이 눌린 채 리셋된다. Feather 부트로더는 USER 버튼(P1.02)이
+     * DFU 버튼이라, 그대로 DFU 모드로 들어가 빨강만 켜지고 앱이 안 돈다 (11/5 확인).
+     * 그래서 앱이 저전력으로 기다리다가, 버튼을 눌렀다 뗀 뒤에 리셋한다 → 부트로더가 바로 앱으로 넘어간다 */
+    Bluefruit.Advertising.restartOnDisconnect(false);
+    Bluefruit.Advertising.stop();
+    for (uint16_t h = 0; h < BLE_MAX_CONNECTION; h++)
+        if (Bluefruit.connected(h)) Bluefruit.disconnect(h);
+    for (;;) {
+        delay(50);                                      /* FreeRTOS 대기: CPU는 잔다 */
+        if (digitalRead(PIN_USER_SW)) continue;
+        uint32_t t = millis();
+        while (!digitalRead(PIN_USER_SW)) delay(10);    /* 뗄 때까지 */
+        if (millis() - t >= 30) {                       /* 30ms 미만은 튐 */
+            led_set(0, LED_BRIGHT / 3, 0);
+            delay(20);
+            NVIC_SystemReset();                         /* 버튼이 떼진 상태로 리셋 → 앱 부팅 */
+        }
+    }
 }
 
 static void ui_button(uint32_t now)
@@ -957,7 +974,8 @@ void app_loop()
         uint8_t n = pkt_hit(b, &h);
         send(b, n);
         uint32_t t_sent = now_us();
-        if (haptic_enable)                              /* 세기: hapticStrength × (0.6 + 0.4 × 타격 세기) → 클릭 3단계 */
+        /* 패드를 판정 못 한 타격(PAD_NONE, 패드 밖)은 울리지 않는다 (11/5 FE 지적). 세기: hapticStrength × (0.6 + 0.4 × 타격 세기) → 3단계 */
+        if (haptic_enable && pr.id != PAD_NONE)
             haptic_click((uint8_t)(haptic_strength * (77 + 51 * ev.velocity / 127) / 128));
         if (lat_log) {                                  /* 233: 샘플 시각 t 기준 µs. 검출 끝 / 전송 끝 / 진동 GO 쓰기 끝 */
             uint32_t t_hap = now_us();
