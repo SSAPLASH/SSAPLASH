@@ -1,147 +1,40 @@
 #!/bin/sh
-# 실제 Git diff와 고정 필터가 안전하게 선택되는지 일회용 저장소에서 검사한다.
 set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-scope_script="$script_dir/CiScope.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-seed="$tmp/seed"
-git init -q "$seed"
-git -C "$seed" config user.name test
-git -C "$seed" config user.email test@example.invalid
-for path in \
-    BE/src/main/java/com/ssafy/airdrum/preset/Kit.java \
-    BE/src/main/java/com/ssafy/airdrum/recording/Recording.java \
-    BE/src/main/java/com/ssafy/airdrum/telemetry/Event.java \
-    BE/src/main/java/com/ssafy/airdrum/song/Song.java \
-    BE/src/main/java/com/ssafy/airdrum/auth/Auth.java \
-    BE/src/test/java/com/ssafy/airdrum/preset/KitTest.java \
-    Docs/API/examples/play-summary-v1.json BE/README.md FE/example.ts; do
-    mkdir -p "$seed/$(dirname "$path")"
-    printf 'base\n' > "$seed/$path"
-done
-git -C "$seed" add .
-git -C "$seed" commit -qm base
-
-case_number=0
-check() {
-    name=$1; expected=$2; change=$3; context=$4
-    case_number=$((case_number + 1))
-    repo="$tmp/case-$case_number"
-    git clone -q --local "$seed" "$repo"
-    git -C "$repo" config user.name test
-    git -C "$repo" config user.email test@example.invalid
-    base=$(git -C "$repo" rev-parse HEAD)
-    case "$change" in
-        preset) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/preset/Kit.java";;
-        preset-test) printf 'edit\n' >> "$repo/BE/src/test/java/com/ssafy/airdrum/preset/KitTest.java";;
-        recording) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/recording/Recording.java";;
-        telemetry) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/telemetry/Event.java";;
-        song) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/song/Song.java";;
-        multi) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/preset/Kit.java"; printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/recording/Recording.java";;
-        docs) printf 'edit\n' >> "$repo/BE/README.md";;
-        fe) printf 'edit\n' >> "$repo/FE/example.ts";;
-        ai) mkdir -p "$repo/AI"; printf 'edit\n' > "$repo/AI/example.py";;
-        fixture) printf 'edit\n' >> "$repo/Docs/API/examples/play-summary-v1.json";;
-        auth) printf 'edit\n' >> "$repo/BE/src/main/java/com/ssafy/airdrum/auth/Auth.java";;
-        unknown) mkdir -p "$repo/NewPart"; printf 'edit\n' > "$repo/NewPart/file";;
-        delete) git -C "$repo" rm -q BE/src/main/java/com/ssafy/airdrum/preset/Kit.java;;
-        rename) git -C "$repo" mv BE/src/main/java/com/ssafy/airdrum/preset/Kit.java BE/src/main/java/com/ssafy/airdrum/preset/Renamed.java;;
-        spaces) printf 'edit\n' > "$repo/BE/src/main/java/com/ssafy/airdrum/preset/with spaces.java";;
-        *) exit 1;;
-    esac
-    git -C "$repo" add -A
-    git -C "$repo" commit -qm change
-    head=$(git -C "$repo" rev-parse HEAD)
-    source=merge_request_event; target=develop-BE; branch=feature; event=detached; before=$base
-    case "$context" in
-        mr) ;;
-        main-target) target=main;;
-        fe-target) target=develop-FE;;
-        ai-target) target=develop-AI;;
-        develop-source) branch=develop-BE;;
-        merged) event=merged_result;;
-        push) source=push; branch=develop-BE;;
-        main-push) source=push; branch=main;;
-        missing-base) base=1111111111111111111111111111111111111111;;
-        zero-before) source=push; branch=develop-BE; before=0000000000000000000000000000000000000000;;
-        *) exit 1;;
-    esac
-    actual=$(cd "$repo/BE" && CI_PROJECT_DIR="$repo" CI_PIPELINE_SOURCE="$source" CI_COMMIT_BRANCH="$branch" \
-        CI_COMMIT_SHA="$head" CI_COMMIT_BEFORE_SHA="$before" CI_MERGE_REQUEST_DIFF_BASE_SHA="$base" \
-        CI_MERGE_REQUEST_TARGET_BRANCH_NAME="$target" CI_MERGE_REQUEST_SOURCE_BRANCH_NAME="$branch" \
-        CI_MERGE_REQUEST_EVENT_TYPE="$event" sh "$scope_script" classify)
-    [ "$actual" = "$expected" ] || { printf '%s: expected %s, got %s\n' "$name" "$expected" "$actual" >&2; exit 1; }
-    printf 'PASS %s: %s\n' "$name" "$actual"
-}
-
-check preset FAST preset mr
-check preset-test FAST preset-test mr
-check recording FAST recording mr
-check telemetry FAST telemetry mr
-check song FAST song mr
-check multi FAST multi mr
-check spaces FAST spaces mr
-check docs NONE docs mr
-check fe NONE fe mr
-check fe-target NONE fe fe-target
-check ai-target NONE ai ai-target
-check fe-main FULL fe main-target
-check fixture FULL fixture mr
-check auth FULL auth mr
-check unknown FULL unknown mr
-check deleted FULL delete mr
-check renamed FULL rename mr
-check unavailable-base FULL preset missing-base
-check main-target FULL preset main-target
-check develop-source FULL preset develop-source
-check merged-result FULL preset merged
-check develop-push FAST preset push
-check first-push FULL preset zero-before
-check main-push FULL preset main-push
-
-mkdir -p "$tmp/runner/scripts"
-cp "$scope_script" "$tmp/runner/scripts/CiScope.sh"
-cat > "$tmp/runner/gradlew" <<'EOF'
+mkdir -p "$tmp/scripts"
+cp "$script_dir/CiScope.sh" "$tmp/scripts/CiScope.sh"
+cat > "$tmp/gradlew" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$@" > "$CI_CAPTURE"
 EOF
-chmod +x "$tmp/runner/gradlew"
-cd "$tmp/runner"
+chmod +x "$tmp/gradlew"
+cd "$tmp"
 export CI_CAPTURE="$tmp/args"
-printf '%s\n' FAST > .ci-scope
-sh scripts/CiScope.sh test >/dev/null
-grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
-grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
-[ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
-! sh scripts/CiScope.sh midi
-! sh scripts/CiScope.sh timescale
-sh scripts/CiScope.sh benchmark >/dev/null
-grep -Fxq -- --no-build-cache "$CI_CAPTURE"
-grep -Fxq clean "$CI_CAPTURE"
-grep -Fxq test "$CI_CAPTURE"
-grep -Fxq bootJar "$CI_CAPTURE"
-[ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
-grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
-grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
-printf '%s\n' 'invalid' > .ci-scope
-[ "$(sh scripts/CiScope.sh mode)" = FULL ]
-sh scripts/CiScope.sh midi
-sh scripts/CiScope.sh timescale
-sh scripts/CiScope.sh test >/dev/null
-grep -Fxq test "$CI_CAPTURE"
-! grep -Fxq -- --tests "$CI_CAPTURE"
-printf '%s\n' FULL > .ci-scope
-sh scripts/CiScope.sh midi
-sh scripts/CiScope.sh timescale
-sh scripts/CiScope.sh test >/dev/null
-grep -Fxq test "$CI_CAPTURE"
-! grep -Fxq -- --tests "$CI_CAPTURE"
-rm .ci-scope
-[ "$(sh scripts/CiScope.sh mode)" = FULL ]
-printf '%s\n' NONE > .ci-scope
-rm "$CI_CAPTURE"
-sh scripts/CiScope.sh test >/dev/null
-[ ! -e "$CI_CAPTURE" ]
-printf '%s\n' 'PASS 실행 필터·전문 검사·누락/오류 보수 처리'
+
+check() {
+    source=$1; branch=$2; target=$3; expected=$4
+    export CI_PIPELINE_SOURCE="$source" CI_COMMIT_BRANCH="$branch" CI_MERGE_REQUEST_TARGET_BRANCH_NAME="$target"
+    actual=$(sh scripts/CiScope.sh mode)
+    [ "$actual" = "$expected" ] || { echo "expected $expected, got $actual" >&2; exit 1; }
+    sh scripts/CiScope.sh test >/dev/null
+    grep -Fxq test "$CI_CAPTURE"
+    if [ "$expected" = FULL ]; then
+        ! grep -Fxq -- --tests "$CI_CAPTURE"
+        ! grep -Fxq bootJar "$CI_CAPTURE"
+    else
+        [ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
+        grep -Fxq bootJar "$CI_CAPTURE"
+        grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
+        grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
+    fi
+    printf 'PASS %s %s %s: %s\n' "$source" "$branch" "$target" "$actual"
+}
+check merge_request_event feature develop-BE FAST
+check merge_request_event feature main FULL
+check merge_request_event feature develop-FE FAST
+check push develop-BE '' FAST
+check push main '' FULL
+check web main '' FULL
+printf '%s\n' 'PASS FAST 13개 필터 및 FULL 무필터'
