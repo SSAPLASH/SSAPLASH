@@ -4,6 +4,7 @@ import type { InputSource } from '@/input/InputSource';
 import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
+import { onStickLinked } from './hapticMode';
 import { useSettings } from '@/store/settingsStore';
 import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
 import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';
@@ -275,12 +276,16 @@ export function bootstrapInput(): void {
           padTableSync.push(currentProfile(), { stickId, force: true });
           yawDriftMonitor.onConnected(stickId);
         }
+        // 부팅 직후라 로컬 진동 설정도 초기값이다 → 현재 모드 값을 그 손에 보낸다(PLAY-006)
+        onStickLinked(stickId);
       } else if (!wasConnected) {
         // 새로 붙은 손에만(ROUTE) 현재 표를 보낸다 — 프로토콜 5장 "연결할 때마다 설정 재전송". 포트를 닫았다 연 뒤 첫 전송만 나가고
         // 그 손에 같은 표를 이미 보냈으면 무동작(해시는 손별). 다른 손에는 가지 않는다.
         // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③)
         padTableSync.push(currentProfile(), { stickId });
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
+        // 새로 붙은 손에 현재 진동 모드 값을 보낸다(곡 연주 중이면 0, 아니면 1)
+        onStickLinked(stickId);
       }
     }
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
