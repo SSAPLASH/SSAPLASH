@@ -201,6 +201,97 @@ uv run python scripts/run_recommend_poc.py --data data/recommend/internal --stag
 `--mlflow`는 실험 `song-recommend`에 방법마다 run을 남긴다(시드·데이터 해시·코드 커밋·출처 단계·하이퍼파라미터). `MLFLOW_TRACKING_URI` 또는 `--tracking-uri`로 기록할 곳을 정한다.
 오류(데이터 규격 위반, 단계 규칙 위반, 알 수 없는 방법)는 종료 코드 2다.
 
+## 실데이터(P1) 실행 준비 (작업 8)
+
+실데이터 실행에 필요한 것은 ① 입력 CSV(BE 내보내기), ② 곡 메타데이터 변환, ③ 보고서다. ②와 ③은 이 저장소에 준비되어 있고, ①은 BE가 만들어야 한다. **음원은 필요 없다.** 추천은 채보에서 BE가 이미 계산한 특징만 쓴다.
+
+### ① BE 내보내기 명세 (입력 CSV 4개 + 곡 목록)
+
+| 파일 | 열 | 출처와 규칙 |
+| --- | --- | --- |
+| `users.csv` | `user_key`, `consent_recommendation`, `consent_version` | 추천 학습에 동의한 사용자만. `user_key`는 `user_id`를 비밀 값으로 해시한 가명(영문·숫자 8~64자, 숫자만이면 로더가 거부). 비밀 값은 저장소 밖에 둔다 |
+| `songs.csv` | `song_id`, `bpm`, `duration_ms`, `song_level`, `public` | 공개된 공용 곡(BUILTIN, READY, published, 곡 난이도 산정 완료, 미삭제)만 |
+| `chart_features.csv` | `chart_id`, `song_id`, `difficulty`, `avg_notes_per_sec`, `peak_notes_2s`, `pad_ratio`, `transition_ratio`, `rhythm_grid` | 채보별 최신 버전의 `chart_features`. JSON 열은 JSON 문자열. `chart_id`는 `charts.id`(채보 버전 id가 아님) |
+| `interactions.csv` | `user_key`, `song_id`, `chart_id`, `played_at`, `accuracy`, `completed`, `mode` | `play_sessions` 중 RHYTHM·SHEET, 위 사용자·곡만 |
+| `catalog.csv`(메타데이터 변환용) | `song_id`, `title`, `artist` | `songs`의 곡 목록. 학습 입력이 아니라 곡 맞추기용 |
+
+SQL 초안(PostgreSQL, `:secret`은 저장소 밖의 해시 비밀 값, `:users`는 동의한 사용자 목록 — 추천 동의 기능이 생기기 전 P1에서는 본인이 동의한 내부 계정 id 목록):
+
+```sql
+-- songs.csv
+SELECT s.id AS song_id, s.bpm, s.duration_ms, s.song_level, true AS public
+FROM songs s
+WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
+  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL;
+
+-- chart_features.csv (채보별 최신 버전)
+SELECT c.id AS chart_id, c.song_id, c.difficulty, f.avg_notes_per_sec, f.peak_notes_2s,
+       f.pad_ratio::text AS pad_ratio, f.transition_ratio::text AS transition_ratio, f.rhythm_grid::text AS rhythm_grid
+FROM charts c
+JOIN chart_versions v ON v.id = (SELECT x.id FROM chart_versions x WHERE x.chart_id = c.id ORDER BY x.version DESC LIMIT 1)
+JOIN chart_features f ON f.chart_version_id = v.id AND f.rhythm_grid IS NOT NULL
+WHERE c.song_id IN (SELECT id FROM songs WHERE source = 'BUILTIN' AND owner_id IS NULL AND status = 'READY' AND published AND deleted_at IS NULL AND song_level IS NOT NULL);
+
+-- users.csv
+SELECT substr(encode(sha256(convert_to(:secret || ':' || u.id, 'UTF8')), 'hex'), 1, 32) AS user_key,
+       true AS consent_recommendation, :consent_version AS consent_version
+FROM users u WHERE u.id = ANY(:users) AND u.status = 'ACTIVE';
+
+-- interactions.csv
+SELECT substr(encode(sha256(convert_to(:secret || ':' || p.user_id, 'UTF8')), 'hex'), 1, 32) AS user_key,
+       p.song_id, c.id AS chart_id, p.ended_at AS played_at, p.accuracy,
+       (p.ended_at - p.started_at) >= interval '1 millisecond' * (0.8 * s.duration_ms) AS completed, p.mode
+FROM play_sessions p
+JOIN chart_versions v ON v.id = p.chart_version_id JOIN charts c ON c.id = v.chart_id
+JOIN songs s ON s.id = p.song_id
+WHERE p.user_id = ANY(:users) AND p.mode IN ('RHYTHM', 'SHEET') AND p.accuracy IS NOT NULL
+  AND s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published AND s.deleted_at IS NULL AND s.song_level IS NOT NULL;
+```
+
+BE와 정할 것:
+- **"완주(`completed`)"의 정의.** 위 초안은 "연주 시간이 곡 길이의 80% 이상"이다. 서비스에 완주 필드가 없어 제안한 값이다.
+- **채보 버전.** 사용자가 예전 버전을 쳤어도 `chart_id`는 채보 단위라 같은 채보로 묶는다. 특징은 최신 버전 것을 쓴다(버전이 바뀌면 약간 어긋날 수 있다).
+- **동의.** 추천 학습 동의 기능이 들어가면 `:users`를 그 동의 목록으로 바꾼다. 그 전의 P1은 본인이 시험 사용에 동의한 내부 계정만이다. 내보낸 파일은 git에 넣지 않고 GPU 서버 디렉터리에 두며 PoC가 끝나면 지운다.
+- **탈퇴 사용자.** 다음 내보내기에서 자연히 빠진다(`status = 'ACTIVE'`). 이미 만든 파일은 PoC 종료 때 지운다.
+
+### ② 곡 메타데이터 변환 (`meta_import.py`)
+
+원빈의 메타데이터 초안(엑셀용 CSV: BOM, camelCase 열, `title`·`artist`로 곡 지정)을 PoC 입력 `song_meta.csv`(`song_id` 기준, `release_year` 포함)로 바꾼다.
+
+```
+cd AI
+uv run python scripts/import_song_meta.py --draft 초안.csv --catalog catalog.csv --out data/recommend/p1/song_meta.csv
+```
+
+- `(title, artist)`로 곡을 맞춘다. 먼저 글자 그대로, 안 되면 유니코드 정규화·공백·대소문자·따옴표 표기를 무시하고 맞추며 그 수를 센다. 아티스트가 비어 있는 연습 패턴은 제목만으로 맞춘다.
+- 곡이 아직 등록되지 않았거나 둘 이상과 맞으면 **그 행만 빼고** 보고서에 남긴다. 곡이 등록된 뒤 다시 돌리면 된다.
+- 허용 값 목록을 벗어난 값, `EXTERNAL_DB`인데 이용 조건이 없는 값은 모아서 보고하고 **아무것도 쓰지 않고** 멈춘다. 추측해서 고치지 않는다.
+- 현재 초안(34행)은 형식 위반이 없다. 곡 목록에 있는 연습 패턴 3곡만 맞고 실곡 31곡은 아직 등록되지 않아 "곡 없음"이다.
+- `release_year`는 연대(`era:2010`) 특징 노드가 된다(`chart+meta` 변형).
+
+### ③ 진입 판단 보고서 (`report.py`)
+
+```
+uv run python scripts/run_recommend_poc.py --data data/recommend/p1 --stage P1 --models M0,M1,M2,M3,M5FM,M6FM --report runs/recommend/p1.md
+```
+
+권고는 데이터가 충분한지부터 따진다.
+
+| 권고 | 언제 |
+| --- | --- |
+| 판단하지 않음 | 출처 단계가 P0(합성) |
+| 판단 보류 | 일반 시험 목표가 `--min-warm-targets`(기본 500) 미만이거나 새 곡 시험 목표가 `--min-cold-targets`(기본 30) 미만 |
+| R3 계속 | 표본이 충분하고 후보가 진입 기준(warm NDCG +10% 이상·신뢰구간 하한 > 0, 새 곡 Recall이 M2 이상, 위반율 1% 이하)을 모두 넘음 |
+| R3 중단 권고 | 표본이 충분한데 어떤 후보도 기준을 못 넘음. R1+R2로 간다 |
+
+보고서에는 권고와 이유, 데이터 요약, 방법별 결과(신뢰구간), 후보별 진입 판단표, 해석 주의, 재현 정보(코드 커밋·시드·하이퍼파라미터)가 담기고 집계 값만 있다.
+최소 표본 수는 가정값이다(설계 U21). 실데이터의 시험 목표가 이보다 적으면 보고서는 "판단 보류"라고 말한다.
+
+### 지금 상태와 남은 일
+
+- 실데이터 실행은 **BE 내보내기와 충분한 연주 기록이 있어야** 할 수 있다. 현재 공용 곡은 연습 패턴 3개뿐이고 실곡 31곡은 등록 전이다.
+- 실데이터가 생기면: BE 내보내기 → `import_song_meta.py` → `run_recommend_poc.py --stage P1 --report` 순서로 돌리고, 시험 구간을 보지 않고 `tuning.tune`으로 하이퍼파라미터를 다시 고른 뒤 보고서를 본다.
+
 ## 실행·검증
 
 ```
