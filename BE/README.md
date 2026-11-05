@@ -1003,11 +1003,11 @@ CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리�
 
 CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을 MIDI로 등록하고 정보·채보·커버·반주를 고치며 공개 여부를 바꾼다.
 모든 경로는 `/api/v1/admin/songs`이고 Bearer 인증 + **ADMIN 역할**(`@PreAuthorize`)이 필요하다. 미인증·탈퇴 401, USER 403 `FORBIDDEN`.
-없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 아직 없어 Swagger의 `Admin Songs` 묶음으로 호출한다.
+없는 곡·삭제된 곡·**개인 곡 ID**는 404 `SONG_NOT_FOUND`다(ADMIN도 개인 곡을 다루지 않는다). 응답은 `Cache-Control: private, no-store`. FE 관리 화면은 ADMIN에게만 보이는 「공용 곡 관리」(`/admin/songs`, 262번: 공용 곡 추가·반주 올리기)이고, 그 밖의 동작은 Swagger의 `Admin Songs` 묶음으로 호출한다(운영은 Swagger 꺼짐).
 
 | 메서드·경로 | 요청 | 성공 |
 | --- | --- | --- |
-| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false` | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
+| `POST /midi` | multipart `file`(MIDI ≤ 1 MiB), `title` 1~100자, 선택 `artist` 0~100자, `license` 1~200자 **필수**, 선택 `published` `true`(기본)/`false`, 선택 `offsetMs` 0~1,800,000 정수(기본 0, 262번. 첫 마디 첫 박 시각 ms로 카탈로그 260번과 같은 규칙. 부호·공백·소수는 400 `SONG_INVALID`, 첫 박보다 앞선 노트는 422 `MIDI_UNSUPPORTED`) | 201, `Location: /api/v1/admin/songs/{id}`, 관리자 곡 상세 |
 | `GET /` | `published`(생략 시 전체), `q`, `page`, `size`(곡 목록과 같은 범위) | 비공개 포함 목록, 삭제 곡 제외, 생성 내림차순 |
 | `GET /{id}` | — | 관리자 곡 상세 |
 | `PATCH /{id}` | JSON `title`·`artist`·`license`·`published` 중 1개 이상. 빈 `artist`는 null | 관리자 곡 상세 |
