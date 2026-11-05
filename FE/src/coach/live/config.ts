@@ -1,8 +1,12 @@
 // 실시간 코칭(COACH-001) 임계값. 수치는 모두 이 파일에만 둔다.
-// 판정 폭(goodMs)에 비례하는 값은 계수로 적고, ms 값은 liveThresholds(goodMs)로 얻는다.
-// 사용자가 goodMs를 30~150ms로 바꿀 수 있어서(설정) 고정 ms를 쓰지 않는다.
+// 판정 폭(goodMs)에 비례하는 값은 계수로 적고, ms 값은 liveThresholds(폭)로 얻는다.
+// 곱하는 폭은 coachBasisMs가 고른다(기본: 고정 기준 폭 60, 사용자 판정 폭과 분리).
+// 사용자가 goodMs를 30~150ms로 바꿀 수 있어서 ms를 직접 적지 않고 기준 폭에 비례시킨다.
 // 수치는 가정값이다. 직접 플레이해 보며 여기서 고친다.
+import { type CoachBasis, COACH_BASIS, coachBasisMs } from '@/domain/coachBasis';
 import { DEFAULT_TIMING } from '@/domain/judgement';
+
+export { type CoachBasis, COACH_BASIS, coachBasisMs };
 
 export const LIVE_COACH_CONFIG = {
   /** 지표를 계산하는 창 크기(판정 개수) */
@@ -94,4 +98,9 @@ export function liveThresholds(goodMs: number): LiveThresholds {
     unsteadyStdMs: c.unsteady.stdCoef * g,
     unsteadyReleaseMs: c.unsteady.releaseCoef * g,
   };
+}
+
+/** 사용자 판정 폭과 방식으로 임계값을 만든다. basis를 인자로 받아 전역 설정에만 의존하지 않는다 */
+export function coachThresholds(userGoodMs: number, basis: CoachBasis = COACH_BASIS): LiveThresholds {
+  return liveThresholds(coachBasisMs(basis, userGoodMs));
 }

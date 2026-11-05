@@ -1,5 +1,6 @@
 // 악보 모드 피드백 (MODE-sheet-practice 3-3). PlayLog만 보고 규칙으로 문장을 만든다.
 // AI 스코어링이 오면 이 생성기를 AI 응답으로 교체한다. 임계값은 팀 체감 후 조정(U3).
+import { COACH_BASIS, type CoachBasis, coachBasisMs } from './coachBasis';
 import type { Chart } from './chart';
 import { JUDGEMENT_SCORE } from './judgement';
 import { ALL_PADS, PAD_META, type PadId } from './pads';
@@ -16,7 +17,7 @@ export const SEGMENT_ACCURACY_GAP = 0.15;
 export const SEGMENT_BARS = 4;
 export const SEGMENT_MIN_NOTES = 4;
 /**
- * 4. 패드 Δ 표준편차 하한 비율(× log.timing.goodMs)과 최소 표본 수.
+ * 4. 패드 Δ 표준편차 하한 비율(× 코칭 기준 폭 coachBasisMs, 판정 폭과 분리: 판정=난이도·코칭=실제 박 오차, MODE-001 D2)과 최소 표본 수.
  * 오차가 판정 폭(±goodMs) 안에 갇혀 고르게 흩어져도 표준편차가 약 0.58×goodMs라 35ms 고정은 거의 걸리지 않는다(AI 쪽과 같은 수정).
  */
 export const PAD_STD_GOOD_RATIO = 0.5;
@@ -121,7 +122,11 @@ export function summarizeByPad(log: PlayLog): PadSummary[] {
   });
 }
 
-export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPerBar'> & Partial<Pick<Chart, 'offsetMs'>>): FeedbackItem[] {
+export function buildFeedback(
+  log: PlayLog,
+  chart?: Pick<Chart, 'bpm' | 'beatsPerBar'> & Partial<Pick<Chart, 'offsetMs'>>,
+  basis: CoachBasis = COACH_BASIS,
+): FeedbackItem[] {
   const notes = log.notes;
   const barMs = chart ? (60_000 / chart.bpm) * chart.beatsPerBar : 0;
   // 마디는 격자 원점(offsetMs)을 뺀 격자 시각으로 센다 — 악보 화면의 마디 번호와 같아야 한다
@@ -200,7 +205,7 @@ export function buildFeedback(log: PlayLog, chart?: Pick<Chart, 'bpm' | 'beatsPe
   }
 
   // 4. 패드별 Δ 표준편차 (가장 큰 패드 하나)
-  const padStdThresholdMs = PAD_STD_GOOD_RATIO * log.timing.goodMs;
+  const padStdThresholdMs = PAD_STD_GOOD_RATIO * coachBasisMs(basis, log.timing.goodMs);
   let jittery: { pad: PadId; sd: number } | null = null;
   for (const pad of ALL_PADS) {
     const ds = notes.flatMap((n) => (n.pad === pad && n.deltaMs !== null ? [n.deltaMs] : []));

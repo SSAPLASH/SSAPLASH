@@ -2,7 +2,7 @@
 // 창(window) → 규칙(rules) → 정책(policy)을 묶고, 플레이 로그에 넣을 liveCoachEvents를 쌓는다.
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
-import { LIVE_COACH_CONFIG, type LiveThresholds, liveThresholds } from './config';
+import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { CoachPolicy } from './policy';
 import { evaluateRules, type CoachTarget, type LiveTag } from './rules';
 import { JudgedWindow, type JudgedNote } from './window';
@@ -12,6 +12,8 @@ export interface LiveCoachOptions {
   goodMs: number;
   /** false면 문구를 띄우지 않고 로그에 LIVE_OFF 한 건만 남긴다(대조군 구분용). 기본 true */
   enabled?: boolean;
+  /** 임계값 기준 방식. 생략하면 config의 COACH_BASIS(기본 fixed) */
+  basis?: CoachBasis;
 }
 
 export interface CoachMessage {
@@ -49,7 +51,7 @@ export class LiveCoach {
 
   constructor(opts: LiveCoachOptions) {
     this.enabled = opts.enabled ?? true;
-    this.thresholds = liveThresholds(opts.goodMs);
+    this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     this.resetLog();
   }
 
