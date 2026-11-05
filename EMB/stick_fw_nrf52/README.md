@@ -11,6 +11,7 @@
 | IDE | **Arduino IDE 2.3.10** |
 | 보드 패키지 | **Adafruit nRF52 1.7.0** (Boards Manager). Preferences의 Additional boards manager URLs에 `https://adafruit.github.io/arduino-board-index/package_adafruit_index.json` |
 | 보드 선택 | Tools > Board > **Adafruit Feather nRF52840 Sense** |
+| 라이브러리 | **Adafruit NeoPixel** (Library Manager, 상태 LED) |
 | 케이블 | Micro USB **데이터** 케이블 |
 | 브라우저 | Chrome / Edge (Web Bluetooth) |
 
@@ -40,7 +41,8 @@ n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed
 | 지자기 LIS3MDL | I2C 0x1C | 아직 안 씀 |
 | 근접·습도·기압 | 0x39 / 0x44 / 0x77 | 안 씀 |
 | DRV2605L (예정) | I2C 0x5A | 3V·GND·SDA·SCL 납땜 (Feather Sense엔 STEMMA QT 포트 없음) |
-| USER 버튼 | D7 | 정면 보정 (RESET_POSE) |
+| USER 버튼 | D7 | 전원·정면 보정 (237). 꺼진 상태에서 누름 = 켜기, 1.5초 누름 = 끄기, 두 번 누름 = 정면 보정(RESET_POSE), 한 번 누름 = 배터리 표시 1초. BLE·USB 시리얼 연결 없이 10분이면 자동으로 꺼짐 |
+| 상태 LED | NeoPixel (`PIN_NEOPIXEL`) | 부팅 중 초록, 연결 찾는 중 파랑 깜빡, 연결됨 은은한 파랑, 배터리 20% 이하 10초마다 주황 2번·5% 이하 빨강 깜빡. 꺼져 있어도 약 1mA |
 | µs 시계 | TIMER4, 1MHz, 32비트 | 프로토콜 시각(µs u32) 그대로. `micros()`는 이 보드에서 약 1ms 단위라 안 씀 |
 
 IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘 다 1.66kHz. 데이터 준비 신호(INT1, 펄스 모드)를 인터럽트로 받아 그 순간의 시각을 샘플 시각으로 쓴다.
