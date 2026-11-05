@@ -154,11 +154,20 @@ button.song-level {
   gap: var(--space-s);
   min-width: 0;
 }
+/* 캡션은 Figma 「✦ AI 추천」처럼 브랜드색 + 반짝이 표식 */
 .song-reco-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
-  color: var(--text-2);
+  color: var(--brand-text);
   font-size: 14px;
   font-weight: 700;
+}
+.song-reco-spark {
+  color: var(--brand);
+  font-size: 12px;
+  line-height: 1;
 }
 .song-reco-list {
   display: flex;
