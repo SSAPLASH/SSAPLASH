@@ -8,15 +8,20 @@ import './song.css';
 interface Props {
   items: RecommendCard[];
   onPick: (card: RecommendCard) => void;
-  /** 줄 제목. 기본 "추천 곡"(리포트는 "AI 추천 연습곡", 설계 COACH-004-song-recommend-report D4) */
+  /** 줄 제목. 기본 "추천곡"(리포트는 "AI 추천 연습곡", 설계 COACH-004-song-recommend-report D4) */
   caption?: string;
 }
 
-export function RecommendRow({ items, onPick, caption = '추천 곡' }: Props) {
+export function RecommendRow({ items, onPick, caption = '추천곡' }: Props) {
   if (items.length === 0) return null;
   return (
     <section className="song-reco" aria-label={caption}>
-      <h3 className="song-reco-caption">{caption}</h3>
+      <h3 className="song-reco-caption">
+        <span className="song-reco-spark" aria-hidden="true">
+          ✦
+        </span>
+        {caption}
+      </h3>
       <div className="song-reco-list">
         {items.map((item) => (
           <button key={`${item.song.id}:${item.chartId}`} type="button" className="song-reco-card" onClick={() => onPick(item)}>
