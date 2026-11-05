@@ -371,6 +371,27 @@ class WorkerApiTest {
         assertThat(returned.get("NORMAL").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
         assertThat(returned.get("EASY").notes()).extracting("pad").containsExactly("SNARE");
     }
+    @Test void transcriptionPreservesHihatOpenThroughStorageAndDifficultySelection() throws Exception {
+        UUID id=prepareTranscription();
+        var open=Map.of("noteId","open","timeMs",0,"pad","HIHAT","velocityHint",100,"hihatOpen",true);
+        var pedal=Map.of("noteId","pedal","timeMs",500,"pad","HIHAT_PEDAL","velocityHint",100);
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",List.of(open,pedal),
+                        "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
+        var receipt=json.readTree(raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200));
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        assertThat(rows).hasSize(3);
+        for (var row:rows) {
+            var stored=json.readTree((String)row.get("notes"));
+            assertThat(stored.get(0)).isEqualTo(json.valueToTree(open));
+        }
+        assertThat(receipt.path("chartVersionIds").size()).isEqualTo(3);
+        for (var version:receipt.path("chartVersionIds")) {
+            var detail=charts.version(user,version.asLong());
+            assertThat(detail.notes().getFirst().noteId()).isEqualTo("open");
+            assertThat(detail.notes().getFirst().hihatOpen()).isTrue();
+        }
+    }
     @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
         UUID id=prepareTranscription();
         var input=chartResult("READY",true,"x".repeat(50));

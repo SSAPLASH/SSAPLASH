@@ -8,6 +8,20 @@ import static org.mockito.Mockito.*;
 
 class ChartDocumentReaderTest {
 	final ChartDocumentReader reader = new ChartDocumentReader(JsonMapper.builder().build());
+	@Test void hihatOpenPreservesOnlyBooleanValues() {
+		var notes = reader.notes("""
+			[{"noteId":"a","timeMs":0,"pad":"HIHAT","hihatOpen":true,"velocityHint":90},
+			 {"noteId":"b","timeMs":1,"pad":"HIHAT","hihatOpen":false},
+			 {"noteId":"c","timeMs":2,"pad":"HIHAT"},
+			 {"noteId":"d","timeMs":3,"pad":"HIHAT","hihatOpen":null},
+			 {"noteId":"e","timeMs":4,"pad":"HIHAT","hihatOpen":"true"},
+			 {"noteId":"f","timeMs":5,"pad":"HIHAT","hihatOpen":1},
+			 {"noteId":"g","timeMs":6,"pad":"HIHAT","hihatOpen":{}}]
+			""", 7);
+		assertThat(notes).extracting(ChartResponses.Note::hihatOpen).containsExactly(true, false, null, null, null, null, null);
+		assertThat(notes.getFirst().velocityHint()).isEqualTo(90);
+		assertThat(notes.getFirst().pad()).isEqualTo("HIHAT");
+	}
 	@Test void ratingNotesDoNotDependOnDamagedSheetPagesButDetailStillFails() {
 		var row = mock(ChartVersionRepository.Detail.class);
 		when(row.getSchemaVersion()).thenReturn(1);
