@@ -4,7 +4,7 @@ import { LevelBadge } from "./LevelBadge";
 import { SongCover } from "./SongCover";
 import { SongMeta } from "./SongMeta";
 import { RecommendRow } from "./RecommendRow";
-import type { RecommendationItem } from "@/domain/recommendation";
+import { cardOf, type RecommendationItem } from "@/domain/recommendation";
 
 describe("LevelBadge", () => {
   it.each([
@@ -99,7 +99,7 @@ describe("RecommendRow", () => {
   });
 
   it("카드 수·제목·아티스트·배지·첫 이유 문구를 그린다", () => {
-    const html = renderToStaticMarkup(<RecommendRow items={[item(1, "STARTER"), item(2, "NEW_CODE", "BE 문구")]} onPick={() => {}} />);
+    const html = renderToStaticMarkup(<RecommendRow items={[cardOf(item(1, "STARTER")), cardOf(item(2, "NEW_CODE", "BE 문구"))]} onPick={() => {}} />);
     expect(html).toContain('aria-label="추천 곡"');
     expect(html.match(/<button type="button" class="song-reco-card"/g)?.length).toBe(2);
     expect(html).toContain(">곡1<");
@@ -108,6 +108,14 @@ describe("RecommendRow", () => {
     expect(html).toContain("처음 시작하기 좋은 쉬운 곡이에요");
     expect(html).toContain(">BE 문구<");
     expect(html).not.toContain("둘째");
+  });
+
+  it("caption을 제목·aria-label로 쓰고, line이 비면 문구 줄을 그리지 않는다", () => {
+    const card = { ...cardOf(item(1, "STARTER")), line: "" };
+    const html = renderToStaticMarkup(<RecommendRow items={[card]} onPick={() => {}} caption="AI 추천 연습곡" />);
+    expect(html).toContain('aria-label="AI 추천 연습곡"');
+    expect(html).toContain(">AI 추천 연습곡<");
+    expect(html).not.toContain("song-reco-reason");
   });
 
   it("빈 목록이면 아무것도 그리지 않는다", () => {

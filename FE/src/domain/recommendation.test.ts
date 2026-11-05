@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { primaryReason, REASON_COPY, reasonText, recommendationFromDto } from './recommendation';
+import { cardOf, primaryReason, recommendationPathOf, REASON_COPY, reasonText, recommendationFromDto } from './recommendation';
 
 const songDto = {
   id: 12, title: '곡', artist: '가수', source: 'BUILTIN', status: 'READY', bpm: 120, timeSignature: '3/4', durationMs: 90000,
@@ -57,5 +57,24 @@ describe('recommendationFromDto', () => {
 
   it('reasons가 없으면 빈 배열', () => {
     expect(recommendationFromDto({ song: songDto, chartId: 1, difficulty: 'EASY' }).reasons).toEqual([]);
+  });
+});
+
+describe('recommendationPathOf', () => {
+  const card = { song: { id: 7 }, chartId: 9 };
+  it('RHYTHM은 /play, SHEET는 /sheet', () => {
+    expect(recommendationPathOf(card, 'RHYTHM')).toBe('/play?song=7&chart=9');
+    expect(recommendationPathOf(card, 'SHEET')).toBe('/sheet?song=7&chart=9');
+  });
+  it('FREE·빈 값은 /play', () => {
+    expect(recommendationPathOf(card, 'FREE')).toBe('/play?song=7&chart=9');
+    expect(recommendationPathOf(card, '')).toBe('/play?song=7&chart=9');
+  });
+});
+
+describe('카드 변환', () => {
+  const song = recommendationFromDto({ song: songDto, chartId: 1, difficulty: 'EASY', reasons: [] }).song;
+  it('cardOf는 첫 이유 문구를 line으로 쓴다', () => {
+    expect(cardOf({ song, chartId: 1, difficulty: 'EASY', reasons: [{ code: 'STARTER', text: 'a' }] }).line).toBe(REASON_COPY.STARTER);
   });
 });

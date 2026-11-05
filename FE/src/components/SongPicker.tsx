@@ -226,10 +226,10 @@ export function SongPicker({ onSelect, mode }: Props) {
 
       {recoEnabled && tab === 'BUILTIN' && recoEntry.status === 'ready' && (
         <RecommendRow
-          items={recoEntry.page.items}
+          items={recoEntry.cards}
           onPick={(item) => {
             // 기록은 기다리지 않는다(D8)
-            void clickReco(item, recoEntry.page.requestId);
+            void clickReco(item, recoEntry.requestId);
             onSelect(item.song.id, item.chartId);
           }}
         />
