@@ -92,16 +92,16 @@ describe('LiveCoach 경향이 있는 플레이', () => {
     expect(pad?.target).toEqual({ kind: 'pad', pad: 'SNARE' });
   });
 
-  it('goodMs가 30·60·150이어도 판정 폭의 절반만큼 늦으면 모두 LIVE_LATE가 뜬다', () => {
+  it('window 방식: goodMs가 30·60·150이어도 판정 폭의 절반만큼 늦으면 모두 LIVE_LATE가 뜬다', () => {
     for (const g of [30, 60, 150]) {
-      const coach = new LiveCoach({ goodMs: g });
+      const coach = new LiveCoach({ goodMs: g, basis: 'window' });
       const out = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, g / 2)));
       expect(out[0]?.tag, `goodMs=${g}`).toBe('LIVE_LATE');
     }
   });
 
-  it('같은 지연(+25ms)이어도 goodMs 150이면 판정 폭 대비 작아서 뜨지 않는다', () => {
-    const coach = new LiveCoach({ goodMs: 150 });
+  it('window 방식: 같은 지연(+25ms)이어도 goodMs 150이면 판정 폭 대비 작아서 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 150, basis: 'window' });
     expect(play(coach, Array.from({ length: 16 }, (_, i) => hit(i, 25)))).toEqual([]);
   });
 });
@@ -206,5 +206,13 @@ describe('LiveCoach 계산 시간', () => {
     times.sort((a, b) => a - b);
     expect(times[Math.floor(times.length / 2)]).toBeLessThanOrEqual(0.2);
     expect(times[Math.floor(times.length * 0.99)]).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('LiveCoach 기준 방식', () => {
+  it('fixed(기본): goodMs가 150이어도 +25ms 지연이면 60 기준으로 LIVE_LATE가 뜬다', () => {
+    const coach = new LiveCoach({ goodMs: 150 });
+    const out = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, 25)));
+    expect(out[0]?.tag).toBe('LIVE_LATE');
   });
 });
