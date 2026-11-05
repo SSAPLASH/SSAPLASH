@@ -1,0 +1,172 @@
+// 2타 보정 상태 기계 검증(PLAY-004 3-5): 순서·손별 2타·퍼짐 되돌림·손 추가/제거·redo/restart·build.
+import { describe, expect, it } from 'vitest';
+import { CAPTURE_ORDER, HitCapture } from './HitCapture';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
+
+const P = (pitch: number, yaw: number) => ({ pitch, yaw });
+
+/** 손 h가 자세 p로 두 번 친다(두 번째는 1° 옆) */
+function twice(c: HitCapture, h: 0 | 1, pitch: number, yaw: number) {
+  expect(c.onHit(h, P(pitch, yaw), 100)).toBe(true);
+  expect(c.onHit(h, P(pitch, yaw + 1), 200)).toBe(true);
+}
+
+/** 순서대로 7패드를 양손 모두 채운다. 손마다 다른 자리 */
+function fillAll(c: HitCapture) {
+  CAPTURE_ORDER.forEach((_, i) => {
+    twice(c, 0, -10 + i * 5, -40 + i * 12);
+    twice(c, 1, -10 + i * 5, -20 + i * 12);
+  });
+}
+
+describe('HitCapture 순서·카운트', () => {
+  it('시작하면 capturing·스네어가 목표, 카운트 0', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE', index: 0, counts: [0, 0], hands: [0, 1] });
+  });
+
+  it('손 목록이 비면 바로 done', () => {
+    const c = new HitCapture();
+    c.start([]);
+    expect(c.snapshot().phase).toBe('done');
+  });
+
+  it('양손 2타씩 채워야 다음 패드로 넘어간다. 한 손만 채우면 그대로', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    twice(c, 0, -10, 0);
+    expect(c.snapshot()).toMatchObject({ target: 'SNARE', counts: [2, 0] });
+    twice(c, 1, -10, 5);
+    expect(c.snapshot()).toMatchObject({ target: 'HIHAT', index: 1, counts: [0, 0] });
+    expect(c.snapshot().captured.SNARE?.[0]).toMatchObject({ pad: 'SNARE', samples: 2 });
+    expect(c.snapshot().captured.SNARE?.[0]?.yaw).toBeCloseTo(0.5);
+  });
+
+  it('이미 2타를 채운 손의 타격은 무시(false), 대상이 아닌 손도 무시', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    twice(c, 0, -10, 0);
+    expect(c.onHit(0, P(-10, 0))).toBe(false); // 왼손은 찼고 오른손을 기다리는 중
+    expect(c.snapshot().counts).toEqual([2, 0]);
+    const one = new HitCapture();
+    one.start([0]);
+    expect(one.onHit(1, P(-10, 0))).toBe(false); // 대상이 아닌 손
+    twice(one, 0, -10, 0);
+    // 한 손만 대상이면 그 손이 채우는 순간 넘어간다
+    expect(one.snapshot().target).toBe('HIHAT');
+  });
+
+  it('7패드를 다 채우면 done, 순서는 CAPTURE_ORDER', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    const seen: string[] = [];
+    c.subscribe((s) => {
+      if (s.target && seen[seen.length - 1] !== s.target) seen.push(s.target);
+    });
+    fillAll(c);
+    expect(c.snapshot()).toMatchObject({ phase: 'done', target: null });
+    expect(seen).toEqual([...CAPTURE_ORDER]);
+    expect(c.completedPads()).toEqual([...CAPTURE_ORDER]);
+  });
+
+  it('lastAccepted는 마지막 수락 타격(손·패드·시각)', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    c.onHit(1, P(0, 0), 555);
+    expect(c.snapshot().lastAccepted).toEqual({ stickId: 1, pad: 'SNARE', at: 555 });
+  });
+});
+
+describe('HitCapture 퍼짐 검사', () => {
+  it('2타 각도 차가 8°를 넘으면 그 손의 그 패드만 0으로 되돌리고 warning', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    twice(c, 1, -10, 0);
+    c.onHit(0, P(-10, 0));
+    c.onHit(0, P(-10, 12));
+    const s = c.snapshot();
+    expect(s.counts).toEqual([0, 2]);
+    expect(s.warning).toMatchObject({ pad: 'SNARE', stickId: 0 });
+    expect(s.warning?.spread).toBeCloseTo(12 * Math.cos((10 * Math.PI) / 180), 0);
+    expect(s.target).toBe('SNARE');
+    // 다시 치면 경고가 지워지고 진행된다
+    twice(c, 0, -10, 0);
+    expect(c.snapshot()).toMatchObject({ warning: null, target: 'HIHAT' });
+  });
+
+  it('정확히 8°는 통과', () => {
+    const c = new HitCapture({ maxSpreadDeg: 8 });
+    c.start([0]);
+    c.onHit(0, P(0, 0));
+    c.onHit(0, P(0, 8));
+    expect(c.snapshot().warning).toBeNull();
+    expect(c.snapshot().target).toBe('HIHAT');
+  });
+});
+
+describe('HitCapture 손 추가·제거·redo·restart', () => {
+  it('addHand: 보정 중 붙은 손은 현재 패드부터 받고, 지난 패드는 그 손에 비어 있다', () => {
+    const c = new HitCapture();
+    c.start([0]);
+    twice(c, 0, -10, 0); // SNARE 끝 → HIHAT
+    c.addHand(1);
+    expect(c.snapshot().hands).toEqual([0, 1]);
+    expect(c.snapshot().target).toBe('HIHAT');
+    twice(c, 0, 0, -30);
+    expect(c.snapshot().target).toBe('HIHAT'); // 오른손이 아직
+    twice(c, 1, 0, -35);
+    expect(c.snapshot().target).toBe('SMALL_TOM');
+    const built = c.build(DEFAULT_SENSOR_TUNING);
+    expect(built[1]?.SNARE).toBeUndefined();
+    expect(built[1]?.HIHAT).toBeDefined();
+  });
+
+  it('dropHand: 손이 빠지면 남은 손이 채운 패드는 바로 넘어가고, 다 빠지면 done', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    twice(c, 0, -10, 0);
+    c.dropHand(1);
+    expect(c.snapshot()).toMatchObject({ hands: [0], target: 'HIHAT' });
+    c.dropHand(0);
+    expect(c.snapshot().phase).toBe('done');
+  });
+
+  it('redo(pad): 그 패드의 모든 손 결과를 지우고 index를 그 패드로', () => {
+    const c = new HitCapture();
+    c.start([0, 1]);
+    fillAll(c);
+    c.redo('HIHAT');
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'HIHAT', index: 1, counts: [0, 0] });
+    expect(c.snapshot().captured.HIHAT).toBeUndefined();
+    expect(c.snapshot().captured.SNARE).toBeDefined();
+    twice(c, 0, 0, -30);
+    twice(c, 1, 0, -35);
+    expect(c.snapshot().target).toBe('SMALL_TOM');
+  });
+
+  it('restart: 손 목록은 유지하고 처음부터', () => {
+    const c = new HitCapture();
+    c.start([1]);
+    twice(c, 1, -10, 0);
+    c.restart();
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', hands: [1], target: 'SNARE', counts: [0, 0], captured: {} });
+  });
+});
+
+describe('HitCapture build', () => {
+  it('손별 앵커 7개, 반경은 튜닝 하한~상한, 대상이 아니던 손은 null', () => {
+    const c = new HitCapture();
+    c.start([0]);
+    CAPTURE_ORDER.forEach((_, i) => twice(c, 0, -10 + i * 5, -40 + i * 12));
+    const [l, r] = c.build(DEFAULT_SENSOR_TUNING);
+    expect(r).toBeNull();
+    expect(Object.keys(l!).sort()).toEqual([...CAPTURE_ORDER].sort());
+    for (const a of Object.values(l!)) {
+      expect(a!.radius).toBeGreaterThanOrEqual(DEFAULT_SENSOR_TUNING.minRadiusDeg);
+      expect(a!.radius).toBeLessThanOrEqual(DEFAULT_SENSOR_TUNING.maxRadiusDeg);
+      expect(a!.samples).toBe(2);
+    }
+    expect(l!.SNARE!.yaw).toBeCloseTo(-39.5);
+  });
+});
