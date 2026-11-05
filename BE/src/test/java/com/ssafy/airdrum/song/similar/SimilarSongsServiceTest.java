@@ -56,8 +56,9 @@ class SimilarSongsServiceTest {
 		chart(id, kind, TIMING_120);
 		return id;
 	}
+	/** 곡 난이도는 HARD 채보로 산정된다(SongLevelService). HARD가 없으면 난이도도 채보 특징도 생기지 않는다. */
 	private void chart(long song, String kind, String timing) {
-		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'NORMAL') RETURNING id", Long.class, song);
+		long chart = db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,'HARD') RETURNING id", Long.class, song);
 		var notes = notes(kind);
 		db.update("INSERT INTO chart_versions(chart_id,version,notes,timing,notation_status,note_count,generator) VALUES(?,1,?::jsonb,?::jsonb,'READY',?,'MANUAL')",
 				chart, json(notes), timing, notes.size());
