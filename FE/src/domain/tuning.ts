@@ -17,8 +17,10 @@ export interface VelocityCurve {
 export type OutsidePolicy = 'mute' | 'nearest';
 
 export interface SensorTuning {
-  /** 앵커 반경 = 가장 가까운 다른 앵커 거리 × 이 값 */
+  /** 앵커 반경 = 같은 손의 가장 가까운 다른 앵커까지 각도 × 이 값 */
   radiusFactor: number;
+  /** 반경 하한 (도). 이웃이 가까워도 이만큼은 받아 준다(PLAY-004 D8) */
+  minRadiusDeg: number;
   /** 반경 상한 (도) */
   maxRadiusDeg: number;
   velocity: VelocityCurve;
@@ -35,10 +37,11 @@ export type PartialTuning = Partial<Omit<SensorTuning, 'velocity' | 'angleRange'
   angleRange?: Partial<AngleRange>;
 };
 
-/** 센서 전 초안 [가정]. 하드웨어 실측 후 여기만 갱신한다 */
+/** 반경 기본값은 EMB 실측(2026-11-05 메일, ×0.6 · 15~35°). 11/6 7패드 통합 테스트 뒤 조정한다(PLAY-004 D8) */
 export const DEFAULT_SENSOR_TUNING: SensorTuning = {
-  radiusFactor: 0.55,
-  maxRadiusDeg: 22,
+  radiusFactor: 0.6,
+  minRadiusDeg: 15,
+  maxRadiusDeg: 35,
   velocity: { minAccelG: 0.8, maxAccelG: 8, gamma: 0.8 },
   sensorOffsetMs: 0,
   outsidePolicy: 'mute',
@@ -54,7 +57,8 @@ export interface TuningRange {
 /** 슬라이더 범위. clampTuning도 이 범위를 쓴다 */
 export const TUNING_RANGES = {
   radiusFactor: { min: 0.3, max: 0.8, step: 0.05 },
-  maxRadiusDeg: { min: 8, max: 40, step: 1 },
+  minRadiusDeg: { min: 8, max: 30, step: 1 },
+  maxRadiusDeg: { min: 8, max: 45, step: 1 },
   minAccelG: { min: 0.2, max: 4, step: 0.1 },
   maxAccelG: { min: 2, max: 32, step: 0.5 },
   gamma: { min: 0.3, max: 2, step: 0.05 },
@@ -89,6 +93,7 @@ function isNum(v: unknown): v is number {
 export function clampTuning(partial: PartialTuning): PartialTuning {
   const out: PartialTuning = {};
   if (isNum(partial.radiusFactor)) out.radiusFactor = clamp(partial.radiusFactor, TUNING_RANGES.radiusFactor);
+  if (isNum(partial.minRadiusDeg)) out.minRadiusDeg = clamp(partial.minRadiusDeg, TUNING_RANGES.minRadiusDeg);
   if (isNum(partial.maxRadiusDeg)) out.maxRadiusDeg = clamp(partial.maxRadiusDeg, TUNING_RANGES.maxRadiusDeg);
   if (isNum(partial.sensorOffsetMs)) out.sensorOffsetMs = clamp(partial.sensorOffsetMs, TUNING_RANGES.sensorOffsetMs);
   if (partial.outsidePolicy === 'mute' || partial.outsidePolicy === 'nearest') out.outsidePolicy = partial.outsidePolicy;
@@ -123,11 +128,12 @@ export function mergeTuning(base: SensorTuning, partial: PartialTuning): SensorT
   return { ...base, ...rest, velocity, angleRange };
 }
 
-/** 기본값과 다른 항목 수(값 9개 기준). 튜닝 패널 헤더 표시용 */
+/** 기본값과 다른 항목 수(값 10개 기준). 튜닝 패널 헤더 표시용 */
 export function countChangedTuning(t: SensorTuning): number {
   const d = DEFAULT_SENSOR_TUNING;
   return [
     t.radiusFactor !== d.radiusFactor,
+    t.minRadiusDeg !== d.minRadiusDeg,
     t.maxRadiusDeg !== d.maxRadiusDeg,
     t.velocity.minAccelG !== d.velocity.minAccelG,
     t.velocity.maxAccelG !== d.velocity.maxAccelG,
