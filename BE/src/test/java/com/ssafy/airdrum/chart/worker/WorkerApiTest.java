@@ -408,6 +408,56 @@ class WorkerApiTest {
         assertThat(notes.get(0).path("noteId").asString()).isEqualTo("note0");
         assertThat(easy.get("notation_status")).isEqualTo("UNAVAILABLE");
     }
+    @Test void unavailableWithTempoMapThinsBySegmentTicksAndReusesReceipt() throws Exception {
+        // offsetMs 100, 0~1920틱 120bpm(박 500ms), 1920틱(2100ms)부터 60bpm(박 1000ms). 노트에는 notation이 없다
+        UUID id=prepareTranscription();
+        int[] times={2100,2600,3100,3350}; String[] pads={"SNARE","SNARE","SNARE","HIHAT"};
+        long[] segmentTicks={1920,2160,2400,2520}; // 구간 bpm으로 센 tick
+        long[] singleBpmTicks={1920,2400,2880,3120}; // 예전처럼 120bpm 하나로 센 tick
+        var notes=new ArrayList<Map<String,Object>>();
+        for(int i=0;i<times.length;i++) notes.add(Map.of("noteId","tm"+i,"timeMs",times[i],"pad",pads[i],"velocityHint",100));
+        var timing=new LinkedHashMap<String,Object>();
+        timing.put("bpm",120); timing.put("offsetMs",100); timing.put("timeSignature","4/4"); timing.put("ppq",480);
+        timing.put("tempoMap",List.of(Map.of("tick",0,"bpm",120),Map.of("tick",1920,"bpm",60)));
+        timing.put("timeSignatureMap",List.of(Map.of("tick",0,"numerator",4,"denominator",4)));
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",notes,"timing",timing)));
+        var envelope=envelope(id,UUID.randomUUID(),input);
+        String receipt=raw(path("/results/transcription"),T1,envelope,200);
+        assertThat(raw(path("/results/transcription"),T1,envelope,200)).isEqualTo(receipt);
+        // 기대값: 구간 tick으로 솎은 noteId. 한 bpm으로 셌다면 결과가 달라야 이 테스트가 의미가 있다
+        var expected=keptIds(segmentTicks,pads); var singleBpm=keptIds(singleBpmTicks,pads);
+        assertThat(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.EASY)).containsExactly("tm0","tm2");
+        assertThat(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.NORMAL)).containsExactly("tm0","tm1","tm2");
+        assertThat(singleBpm).isNotEqualTo(expected);
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        assertThat(rows).hasSize(3);
+        JsonNode original=json.valueToTree(notes);
+        for(var row:rows) {
+            var stored=json.readTree((String)row.get("notes"));
+            var difficulty=(String)row.get("difficulty");
+            if(difficulty.equals("HARD")) { assertThat(stored).isEqualTo(original); continue; }
+            var ids=new ArrayList<String>();
+            for(var note:stored) {
+                ids.add(note.path("noteId").asString());
+                // 남은 노트는 원본 객체 그대로(timeMs 보존)
+                assertThat(note).isEqualTo(original.get(Integer.parseInt(note.path("noteId").asString().substring(2))));
+            }
+            assertThat(ids).containsExactlyElementsOf(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.valueOf(difficulty)));
+            assertThat(row.get("notation_status")).isEqualTo("UNAVAILABLE");
+        }
+    }
+    private static Map<com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty,List<String>> keptIds(long[] ticks,String[] pads) {
+        var byNote=new IdentityHashMap<com.ssafy.airdrum.song.midi.DrumNote,String>();
+        var list=new ArrayList<com.ssafy.airdrum.song.midi.DrumNote>();
+        for(int i=0;i<ticks.length;i++) {
+            var n=new com.ssafy.airdrum.song.midi.DrumNote(ticks[i],com.ssafy.airdrum.song.midi.DrumPad.valueOf(pads[i]),100,0);
+            list.add(n); byNote.put(n,"tm"+i);
+        }
+        var result=new EnumMap<com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty,List<String>>(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.class);
+        com.ssafy.airdrum.song.midi.DifficultyThinner.thin(list,480).forEach((d,kept)->result.put(d,kept.stream().map(byNote::get).toList()));
+        return result;
+    }
     @Test void pendingTicksFallbackPreservesOriginalDuplicates() throws Exception {
         UUID id=prepareTranscription();
         var timing=Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4","ppq",480);

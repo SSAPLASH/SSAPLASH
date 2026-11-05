@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.IdentityHashMap;
@@ -207,11 +208,11 @@ class WorkerResults {
         boolean useTicks=t.path("ppq").isIntegralNumber() && t.path("ppq").canConvertToInt() && t.path("ppq").asInt()>0;
         for (var note:source) useTicks &= note.path("notation").isObject();
         int ppq=useTicks ? t.path("ppq").asInt() : 480;
+        var virtualTicks=useTicks ? null : VirtualTicks.of(t,bpm,ppq);
         var drumNotes=new ArrayList<DrumNote>();
         var originals=new IdentityHashMap<DrumNote,JsonNode>();
         for (var note:source) {
-            long tick=useTicks ? note.path("notation").path("tick").asLong()
-                    : Math.max(0,Math.round((note.path("timeMs").asLong()-(double)t.path("offsetMs").asInt())*bpm*ppq/60000.0));
+            long tick=useTicks ? note.path("notation").path("tick").asLong() : virtualTicks.tick(note.path("timeMs").asLong());
             int velocity=note.path("velocityHint").isIntegralNumber() ? note.path("velocityHint").asInt() : 100;
             var drum=new DrumNote(tick,DrumPad.valueOf(note.path("pad").asString()),velocity,0);
             drumNotes.add(drum); originals.put(drum,note);
@@ -226,6 +227,44 @@ class WorkerResults {
         return new ChartData(notes,payload.write(normal),payload.write(easy),timing,status,count,normal.size(),easy.size(),n.path("generatorVersion").asString(),
                 java.math.BigDecimal.valueOf(bpm).setScale(2,java.math.RoundingMode.HALF_UP),
                 t.path("offsetMs").asInt(),t.path("timeSignature").asString(),payload.write(n.path("metrics")));
+    }
+    /**
+     * notation이 없는 노트의 난이도 줄이기용 틱. timing.tempoMap(빠르기가 바뀌는 곡)이 있으면 구간마다 그 bpm으로,
+     * 없으면 timing.bpm 하나로 offsetMs부터 센다. tempoMap 틱은 timing.ppq 단위라 박 수로 바꾼 뒤 솎기 ppq를 곱한다.
+     * 구간 시작 시각·박 수는 채보마다 한 번만 계산하고, 노트마다 이분 탐색으로 구간을 찾는다(노트 N, 구간 M에서 O(M + N log M)).
+     */
+    static final class VirtualTicks {
+        private final double offsetMs, bpm;
+        private final int ppq;
+        private final double[] startMs, startBeat, rate;
+
+        private VirtualTicks(double offsetMs,double bpm,int ppq,double[] startMs,double[] startBeat,double[] rate) {
+            this.offsetMs=offsetMs; this.bpm=bpm; this.ppq=ppq; this.startMs=startMs; this.startBeat=startBeat; this.rate=rate;
+        }
+
+        static VirtualTicks of(JsonNode timing,double bpm,int ppq) {
+            double offset=timing.path("offsetMs").asInt();
+            var map=timing.path("tempoMap");
+            int mapPpq=timing.path("ppq").isIntegralNumber() ? timing.path("ppq").asInt() : 0;
+            if(!map.isArray() || map.size()<2 || mapPpq<=0) return new VirtualTicks(offset,bpm,ppq,null,null,null);
+            int m=map.size();
+            double[] startMs=new double[m], startBeat=new double[m], rate=new double[m];
+            for(int i=0;i<m;i++) {
+                startBeat[i]=map.get(i).path("tick").asLong()/(double)mapPpq;
+                rate[i]=map.get(i).path("bpm").doubleValue();
+                startMs[i]=i==0 ? 0 : startMs[i-1]+(startBeat[i]-startBeat[i-1])*60000.0/rate[i-1];
+            }
+            return new VirtualTicks(offset,bpm,ppq,startMs,startBeat,rate);
+        }
+
+        long tick(long timeMs) {
+            double ms=timeMs-offsetMs;
+            if(startMs==null) return Math.max(0,Math.round(ms*bpm*ppq/60000.0));
+            int i=Arrays.binarySearch(startMs,ms);
+            if(i<0) i=Math.max(0,-i-2);
+            double beats=startBeat[i]+(ms-startMs[i])*rate[i]/60000.0;
+            return Math.max(0,Math.round(beats*ppq));
+        }
     }
     private List<JsonNode> originalNotes(JsonNode source) {
         var result=new ArrayList<JsonNode>();
