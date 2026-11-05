@@ -15,6 +15,7 @@ function song(id: number, over: Partial<SongSummary> = {}): SongSummary {
     durationMs: 185_000,
     hasAccompaniment: false,
     accompanimentStatus: 'NONE',
+    songLevel: 'BEGINNER',
     difficulties: ['EASY', 'NORMAL', 'HARD'],
     createdAt: '2026-10-01T00:00:00Z',
     coverUrl: null,
@@ -63,12 +64,21 @@ describe('SongTable', () => {
     expect(html.match(/class="play-st-pg/g)).toHaveLength(4); // 이전·1·2·다음
   });
 
-  it('열 머리: 커버·제목/아티스트·BPM·길이·최고 점수, 난이도 열은 없다(U17)', () => {
+  it('열 머리: 커버·제목/아티스트·BPM·길이·곡 난이도·최고 점수 순서', () => {
     const html = render({ songs: songs(1) });
-    for (const h of ['커버', '제목 / 아티스트', 'BPM', '길이', '최고 점수']) expect(html).toContain(`>${h}</th>`);
-    expect(html.match(/<th /g)).toHaveLength(5);
-    expect(html).not.toContain('난이도');
+    const heads = [...html.matchAll(/<th [^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(heads).toEqual(['커버', '제목 / 아티스트', 'BPM', '길이', '곡 난이도', '최고 점수']);
+  });
+
+  it('곡 난이도는 글자 표기이고 연습 단계 배지를 쓰지 않는다', () => {
+    const html = render({ songs: [song(1), song(2, { songLevel: 'INTERMEDIATE' }), song(3, { songLevel: 'ADVANCED' })] });
+    for (const t of ['입문', '중급', '고급']) expect(html).toContain(`>${t}</td>`);
     expect(html).not.toContain('song-level');
+  });
+
+  it('곡 난이도가 없으면 "—"', () => {
+    const html = render({ songs: [song(1, { songLevel: null, bpm: 90 })] });
+    expect(html).toMatch(/play-st-level">—<\/td>/);
   });
 
   it('선택 행 표시', () => {
@@ -114,7 +124,7 @@ describe('SongTable sheet 모드', () => {
     const html = render({ songs: songs(1), mode: 'sheet' });
     expect(html).toContain('>정확도</th>');
     expect(html).not.toContain('최고 점수');
-    expect(html.match(/<th /g)).toHaveLength(5);
+    expect(html.match(/<th /g)).toHaveLength(6);
   });
 
   it('최고 정확도는 퍼센트, 없으면 "—"', () => {
