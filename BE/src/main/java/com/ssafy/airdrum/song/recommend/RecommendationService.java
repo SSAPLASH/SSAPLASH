@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -100,7 +101,12 @@ public class RecommendationService {
 				  ORDER BY p.ended_at DESC, p.id LIMIT ?) recent
 				JOIN chart_features f ON f.chart_version_id = recent.chart_version_id
 				WHERE recent.accuracy >= ?
-				""", rs -> rs.next() ? rs.getObject(1, Double.class) : null, userId, RECENT_PLAYS, RecommendationScorer.TARGET_ACCURACY);
+				""", (ResultSetExtractor<Double>) rs -> {
+					// MAX(numeric)는 numeric이라 getObject(Double.class)로 읽으면 PostgreSQL 드라이버가 변환하지 못한다.
+					if (!rs.next()) return null;
+					var value = rs.getBigDecimal(1);
+					return value == null ? null : value.doubleValue();
+				}, userId, RECENT_PLAYS, RecommendationScorer.TARGET_ACCURACY);
 	}
 
 	/** 같은 사용자의 추천 기록만 갱신한다. 이미 눌렀다면 처음 시각을 유지한다. */
@@ -148,8 +154,8 @@ public class RecommendationService {
 				GROUP BY p.song_id, c.id
 				""", rs -> {
 					lastPlayed.merge(rs.getLong(1), rs.getTimestamp(4).toInstant(), (a, b) -> a.isAfter(b) ? a : b);
-					var accuracy = rs.getObject(3, Double.class);
-					if (accuracy != null) bestByChart.put(rs.getLong(2), accuracy);
+					var accuracy = rs.getBigDecimal(3); // numeric(5,2)의 MAX. 위와 같은 이유로 BigDecimal로 읽는다
+					if (accuracy != null) bestByChart.put(rs.getLong(2), accuracy.doubleValue());
 				}, userId);
 		return new Profile(baseline, weakPads(userId, playId), lastPlayed, bestByChart);
 	}
