@@ -21,6 +21,8 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { useSimilarSongs } from '@/components/play/useSimilarSongs';
+import { RecommendRow } from '@/components/song/RecommendRow';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
@@ -34,6 +36,8 @@ import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -125,6 +129,7 @@ function SheetPageBody() {
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const selectSong = useSongs((s) => s.selectSong);
+  const songsSource = useSongs((s) => s.source);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -289,14 +294,12 @@ function SheetPageBody() {
     });
   }, [activeSession, showCoachLine]);
 
-  // 타격: 즉시 발음 → 햅틱 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다
+  // 타격: 즉시 발음 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다. 타격 진동은 스틱이 직접 울린다(PLAY-006)
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
-        // 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
-        if (hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
       }
       const ss = sessionRef.current;
       const active =
@@ -584,12 +587,24 @@ function SheetPageBody() {
   const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
-  // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그)
+  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  const bestAccuracy = useMemo(
-    () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
-    [stage, selectedChartId],
+  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
+  const similar = useSimilarSongs({
+    songId: songIdParam,
+    active: stage === 'ready' && param.status === 'ready',
+    difficulty: chart?.difficulty ?? null,
+    onSelect: param.select,
+  });
+  const records = useBestRecords(
+    stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
+    'SHEET', stage === 'ready' && detail?.id === songIdParam, songsSource,
   );
+  const localBestAccuracy = useMemo(
+    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
+    [songsSource, stage, selectedChartId],
+  );
+  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
@@ -672,6 +687,7 @@ function SheetPageBody() {
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
       <main className="main">
+        <BestRecordsNotice status={records.status} retry={records.retry} />
         <ReadyPanel
           song={song}
           modeLabel="악보 연습"
@@ -694,6 +710,7 @@ function SheetPageBody() {
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
           realign={realign.info}
+          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
           options={
             <>
               {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}

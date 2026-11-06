@@ -2,6 +2,8 @@
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { isAdmin } from '@/domain/auth';
+import { useAuth } from '@/store/authStore';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
 import { SidebarToggleIcon } from './SidebarToggleIcon';
@@ -65,10 +67,16 @@ const ICONS = {
       <path d="M4 8v8c0 1.7 3.6 3 8 3s8-1.3 8-3V8" />
     </Icon>
   ),
+  admin: (
+    <Icon>
+      <path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </Icon>
+  ),
   settings: (
     <Icon>
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
     </Icon>
   ),
 };
@@ -88,6 +96,7 @@ export function Sidebar() {
   const collapsed = useSidebarCollapsed();
   // 채보 변환 작업이 진행 중일 때 라이브러리에 점을 단다
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
+  const admin = useAuth((s) => isAdmin(s.user));
 
   const item = (m: MenuItem) => (
     <NavLink key={m.to} to={m.to} className="side-item" title={collapsed ? m.label : undefined} aria-label={m.label}>
@@ -134,6 +143,8 @@ export function Sidebar() {
         {item({ to: '/studio', label: '라이브러리', icon: ICONS.library, badge: libraryBadge })}
         {item({ to: '/history', label: '연주 기록', icon: ICONS.history })}
         {item({ to: '/setup', label: '드럼 세팅', icon: ICONS.setup })}
+        {/* 관리자에게만 보인다. 권한 판단은 BE가 한다(Jira 262) */}
+        {admin && item({ to: '/admin/songs', label: '공용 곡 관리', icon: ICONS.admin })}
       </nav>
 
       <div className="side-footer">

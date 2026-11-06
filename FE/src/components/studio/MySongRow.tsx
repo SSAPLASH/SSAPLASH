@@ -5,9 +5,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { SongCover } from '@/components/song/SongCover';
-import type { SongSummary } from '@/domain/songCatalog';
+import { chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { dateLabel } from './dateLabel';
-import { FAILED_REASON } from './MySongCard';
 import { SongMenu, type SongEditKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
@@ -28,7 +27,7 @@ export function MySongRow({ song, justDone, onReupload, onEdit, onCoverError }: 
   const ready = song.status === 'READY';
   const failed = song.status === 'FAILED';
   const processing = song.status === 'PROCESSING';
-  const sub = failed ? [song.artist, FAILED_REASON].filter(Boolean).join(' · ') : song.artist;
+  const sub = failed ? [song.artist, chartFailureText(song.chartFailure)].filter(Boolean).join(' · ') : song.artist;
   const cls = ['studio-row', failed ? 'failed' : '', justDone ? 'just-done' : ''].filter(Boolean).join(' ');
 
   return (

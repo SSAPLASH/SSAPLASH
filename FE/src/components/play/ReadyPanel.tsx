@@ -53,6 +53,8 @@ export interface ReadyPanelProps {
   staffLegend?: boolean;
   /** 스네어 재정렬이 걸려 있으면 「보정」 행에 프롬프트를 보인다(PLAY-004 D11). 준비 완료·[시작]은 막지 않는다 */
   realign?: RealignInfo | null;
+  /** 두 열 아래 전체 폭에 그대로 넣는 슬롯(비슷한 곡 줄, 설계 COACH-004-similar-songs D9) */
+  footer?: ReactNode;
 }
 
 function Dot({ ok }: { ok: boolean }) {
@@ -97,6 +99,7 @@ export function ReadyPanel({
   options,
   staffLegend = false,
   realign,
+  footer,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
@@ -223,6 +226,7 @@ export function ReadyPanel({
           </Card>
         </div>
       </div>
+      {footer}
     </section>
   );
 }

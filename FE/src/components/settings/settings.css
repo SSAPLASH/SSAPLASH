@@ -163,3 +163,15 @@
   color: var(--text-2);
   font-size: 14px;
 }
+
+/* 동의 저장 결과 알림 위치 */
+.settings-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-l);
+  z-index: 60;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}

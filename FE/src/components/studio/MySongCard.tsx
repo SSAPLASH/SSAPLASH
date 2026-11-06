@@ -6,15 +6,12 @@ import { Link } from 'react-router-dom';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { Button } from '@/components/ui/Button';
 import { SongCover } from '@/components/song/SongCover';
-import type { SongSummary } from '@/domain/songCatalog';
+import { chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { PlayIcon } from './StudioIcons';
 import { SongMenu, type SongEditKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
 import './studio.css';
-
-/** 실패 곡 사유 줄. BE가 실패 사유를 주지 않아 고정 문구만 보인다 */
-export const FAILED_REASON = '채보를 만들지 못했어요';
 
 interface Props {
   song: SongSummary;
@@ -66,7 +63,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onCoverError }:
 
       {failed && (
         <>
-          <p className="studio-card-reason">{FAILED_REASON}</p>
+          <p className="studio-card-reason">{chartFailureText(song.chartFailure)}</p>
           <div className="studio-card-actions">
             <Button variant="secondary" size="sm" fullWidth onClick={() => onReupload(song)}>
               다시 올리기

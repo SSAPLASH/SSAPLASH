@@ -357,9 +357,7 @@ export function bootstrapInput(): void {
       // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
       if (tAudio !== null) hit.tAudio = tAudio;
-      // PLAY-07: 브라우저 측 진동 명령. 실제 지연 없는 진동은 MCU 로컬 트리거가 맡는다
-      // 화면 터치는 실제 스틱을 진동시키지 않고, 페달 타격(stickId null)에는 모터가 없어 보내지 않는다
-      if (hit.source !== 'touch' && hit.stickId !== null) inputManager.haptic(hit.stickId, hit.velocity * 2, 30);
+      // 타격 진동은 스틱이 패드를 판정한 순간 직접 울린다(PLAY-006). 브라우저 명령은 늦게 도착해 진동이 겹치므로 보내지 않는다
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
     if (soundOnHit) pushTelemetry(hit);
