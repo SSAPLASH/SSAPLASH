@@ -126,3 +126,60 @@ describe('SongPicker 추천 줄', () => {
     expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull();
   });
 });
+
+describe('SongPicker 빈 목록·선택 유지 (설계 CHART-001 곡 난이도 4-2)', () => {
+  const detailOf = (s: SongSummary, chartId: number) => ({
+    ...s, license: null, updatedAt: null,
+    charts: [{ id: chartId, difficulty: 'NORMAL' as const, chartVersionId: chartId * 10, version: 1, noteCount: 5, notationStatus: 'READY' as const }],
+  });
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'unknown' });
+    vi.mocked(getSong).mockImplementation(async (id: number) => detailOf(song(id, `곡${id}`), id * 10));
+  });
+
+  it('난이도 결과가 0곡이면 표 머리글과 「총 0곡」을 두고 본문에 안내한다', async () => {
+    vi.mocked(listSongs).mockImplementation(async (p) => ({ items: p.songLevel === 'ADVANCED' ? [] : [song(1, '목록곡')], hasNext: false }));
+    show();
+    await screen.findByText('목록곡', { selector: '.play-st-name' });
+    fireEvent.click(screen.getByRole('button', { name: '고급' }));
+    await screen.findByText('이 난이도의 곡이 없어요');
+    expect(screen.getByText('다른 난이도를 골라 보세요.')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: '곡 난이도' })).toBeTruthy();
+    expect(screen.getByText('총 0곡')).toBeTruthy();
+  });
+
+  it('라이브러리 탭 0곡이면 본문에 라이브러리 안내, 곡이 있으면 안내가 없다', async () => {
+    vi.mocked(listSongs).mockImplementation(async (p) => ({ items: p.source === 'MINE' ? [] : [song(1, '목록곡')], hasNext: false }));
+    show();
+    await screen.findByText('목록곡', { selector: '.play-st-name' });
+    expect(screen.queryByText(/처리 중·실패한 곡은/)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    await screen.findByText('아직 고를 수 있는 곡이 없어요');
+    expect(screen.getByText(/처리 중·실패한 곡은/).querySelector('a')?.getAttribute('href')).toBe('/studio');
+  });
+
+  it('고른 곡이 필터로 목록에서 빠져도 패널에 남고 [준비]가 그 곡으로 간다', async () => {
+    vi.mocked(listSongs).mockImplementation(async (p) => ({
+      items: p.songLevel === 'ADVANCED' ? [song(3, '고급곡')] : [song(1, '첫곡'), song(2, '둘째곡')],
+      hasNext: false,
+    }));
+    const onSelect = show();
+    fireEvent.click(await screen.findByText('둘째곡', { selector: '.play-st-name' }));
+    fireEvent.click(screen.getByRole('button', { name: '고급' }));
+    await screen.findByText('고급곡', { selector: '.play-st-name' });
+    const pane = screen.getByRole('complementary', { name: '선택한 곡' });
+    expect(pane.querySelector('.play-sd-title')?.textContent).toBe('둘째곡');
+    expect(document.querySelector('.play-st-row.selected')).toBeNull();
+    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '준비' }));
+    expect(onSelect).toHaveBeenCalledWith(2, 20);
+  });
+
+  it('한 번도 고르지 않았고 0곡이면 패널은 안내 문구다', async () => {
+    vi.mocked(listSongs).mockResolvedValue({ items: [], hasNext: false });
+    show();
+    await screen.findByText('곡이 없어요');
+    expect(screen.getByText('목록에서 곡을 고르면 여기에 보여요.')).toBeTruthy();
+  });
+});
