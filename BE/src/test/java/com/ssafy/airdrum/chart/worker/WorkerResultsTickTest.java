@@ -8,7 +8,7 @@ class WorkerResultsTickTest {
 	final JsonMapper json = JsonMapper.builder().build();
 
 	static long tick(long timeMs, tools.jackson.databind.JsonNode timing, double bpm, int ppq) {
-		return WorkerResults.VirtualTicks.of(timing, bpm, ppq).tick(timeMs);
+		return TranscriptionCharts.VirtualTicks.of(timing, bpm, ppq).tick(timeMs);
 	}
 
 	@Test void tempoMapWithoutNotationUsesEachSegmentBpm() {
@@ -53,7 +53,7 @@ class WorkerResultsTickTest {
 		var map = new StringBuilder("[");
 		for (int i = 0; i < 50_000; i++) map.append(i == 0 ? "" : ",").append("{\"tick\":").append(i * 480L).append(",\"bpm\":120}");
 		var timing = json.readTree("{\"bpm\":120,\"offsetMs\":0,\"timeSignature\":\"4/4\",\"ppq\":480,\"tempoMap\":" + map + "]}");
-		var ticks = WorkerResults.VirtualTicks.of(timing, 120, 480);
+		var ticks = TranscriptionCharts.VirtualTicks.of(timing, 120, 480);
 		long sum = 0;
 		for (int i = 0; i < 50_000; i++) sum += ticks.tick(i * 500L);
 		assertThat(sum).isEqualTo(480L * 50_000 * 49_999 / 2);

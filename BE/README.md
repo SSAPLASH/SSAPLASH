@@ -283,7 +283,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 43). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 46). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -441,6 +441,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
 | V44 | `V44__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
 | V45 | `V45__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
+| V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
 
 규칙:
 
@@ -523,7 +524,7 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 목록은 `source=BUILTIN`(기본) 또는 `MINE`, `q`(앞뒤 공백 제거 후 100자 이내),
 `page=0`(0~100000), `size=20`(1~100)을 받는다. 제목·아티스트를 대소문자 구분 없이 부분 검색한다.
 `%`, `_`, `!`도 문자 그대로 검색하며 생성 시각 내림차순, 동률이면 ID 내림차순이다.
-`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`와 다르다.
+`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`/`MUSICXML`(293번)과 다르다.
 목록과 count에 같은 권한 조건을 적용하며, 난이도 요약은 일괄 조회한다. 목록 SQL에는 큰 노트 JSON을 넣지 않는다.
 
 **같은 채보 난이도 숨김(260번):** 목록의 `difficulties`와 상세의 `difficulties`·`charts[]`에서 최신 버전 노트 수(`noteCount`)가 NORMAL과 같은 HARD·EASY를 뺀다. NORMAL·EASY는 HARD에서 노트를 빼기만 해서 만들므로(151번 솎기, 음원 채보도 같음) NORMAL = HARD는 노트 수가 같으면 같은 채보다. EASY는 HARD에서 따로 솎으므로 노트 수만 같고 노트가 다른 경우가 이론상 있지만 받아들인다(설계 U2). NORMAL은 항상 남기고, NORMAL이 없는 곡은 숨기지 않는다. 그래서 곡마다 난이도가 1~3개다(예: 시드 3곡은 `EASY`·`NORMAL`). 채보는 세 난이도 모두 저장된 그대로이므로 `/api/v1/charts/{chartId}`·`/api/v1/chart-versions/{id}`는 숨긴 채보도 200이고, 플레이·베스트·녹음의 `difficulty`와 ADMIN 응답(`/api/v1/admin/songs*`)은 바뀌지 않는다. FE는 응답 목록대로 난이도를 그리고, URL의 `chart`가 목록에 없으면 NORMAL로 바꾼다(FE 합의 `CHART-002_중복-난이도-숨김`).
@@ -1018,6 +1019,49 @@ GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tas
 
 CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리에 검증·추출해 FluidSynth 2.2.5를 실행한다. FFmpeg·ffprobe는 기존 SHA-256 고정 준비 스크립트의 8.1.3을 사용하므로 워커 이미지의 FFmpeg 4.4.2 실행 검증과 구분한다.
 
+
+## MusicXML 업로드 → 채보 변환 (293번)
+
+CHART-001. 사용자가 올린 **드럼 MusicXML**(`.musicxml`·`.xml`·`.mxl`)을 AI 서버가 채보 JSON으로 바꾸고, BE가 음원 채보와 같은 규칙으로 HARD·NORMAL·EASY를 만들어
+**내 곡**(`source=MUSICXML`)으로 저장한다. MIDI 업로드(151번)처럼 요청 안에서 끝나는 동기 API다. 이미지·PDF 악보 인식은 넣지 않는다(AI 측정: 악기 정확도 평균 0.49,
+곡당 크레딧 약 6,600). 설계 `.claude/plans/CHART-001-MusicXML-악보-업로드-곡-등록.md`.
+
+`POST /api/v1/songs/musicxml`: Bearer 인증, multipart `file`(5 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
+다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, `Cache-Control: private, no-store`, 본문은 곡 상세
+(`status=READY`, `hasAccompaniment=false`, `accompanimentStatus=NONE`). 채보는 세 난이도를 모두 저장하지만 응답의 `difficulties`·`charts[]`는 260번 숨김 규칙을 따르므로
+노트 수가 NORMAL과 같은 HARD·EASY는 빠져 1~3개다. 같은 파일을 다시 올리면 새 곡이 하나 더 생긴다(멱등 키 없음).
+
+흐름: 바이트 검사(`MusicXmlSniffer`: XML은 BOM·공백 뒤 `<`로 시작하고 앞 4 KiB 안에 `<score-partwise`/`<score-timewise`, mxl은 zip 머리 + `META-INF/container.xml`.
+확장자·Content-Type은 보지 않는다. UTF-16으로 저장된 XML은 `<`로 시작하지 않아 422다) → AI 서버 `POST {AI_ANALYSIS_BASE_URL}/chart/sheet?name=score.musicxml|score.mxl`에 파일 바이트를 그대로 보냄
+(`MusicXmlConvertClient`, 연결 1초·전체 10초·응답 5 MiB) → 응답 `chart`를 음원 워커 결과와 같은 검증·3난이도 파생(`chart.worker.TranscriptionCharts`,
+`WorkerResults`에서 꺼낸 공용 클래스) → 한 트랜잭션에 곡 1 + 채보 3 + 버전 3, 곡 난이도 산정. AI 호출 전에는 DB를 건드리지 않으므로 거절·장애 때 곡 행이 남지 않는다.
+
+저장: `songs.bpm`·`offset_ms`(못갖춘마디 길이)·`time_signature`는 AI `timing`, `duration_ms`는 AI `sheet.duration_ms`. `chart_versions`는 HARD = AI 원본
+(`generator_version` `sheet-musicxml-3`), NORMAL·EASY = `midi-rule-1.1` 솎기(`…+midi-rule-1.1`), `generator=MUSICXML_RULE`(V46), `notation_status=UNAVAILABLE`
+(악보 표기는 없고 FE 악보 격자는 `offsetMs`·`bpm`로 그린다). `hihatOpen` 필드는 노트 JSON에 그대로 남는다. 원본 MusicXML은 보관하지 않는다(반주 스프린트에서 다시 정한다).
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `MUSICXML_INVALID` | 요청 형태 위반, 제목 없음·100자 초과, 빈 파일 |
+| 401 | `UNAUTHORIZED` | 토큰 없음·무효, ACTIVE가 아닌 회원 |
+| 413 | `MUSICXML_TOO_LARGE` | 파일 5 MiB 초과(선언 크기를 믿지 않고 읽은 바이트로도 확인) |
+| 422 | `MUSICXML_UNSUPPORTED` | MusicXML 아님(바이트 검사), AI `INPUT_INVALID`(timewise·깨진 XML/zip·파트 없음·반복을 펼친 길이 30분 초과). detail에 AI 메시지 한 줄 |
+| 422 | `MUSICXML_NO_DRUM_NOTES` | 드럼 파트가 없거나 패드로 바꿀 음표가 없음(AI `NO_DRUM_NOTES`) |
+| 503 | `MUSICXML_UNAVAILABLE` | AI 서버 연결 불가·10초 초과·5xx·응답 5 MiB 초과·계약 밖 응답(채보 검증 실패 포함) |
+| 500 | `INTERNAL_ERROR` | DB 저장 실패. 곡·채보 행을 하나도 남기지 않는다 |
+
+로그: 악보 본문·사용자 파일 이름·AI 응답 본문은 남기지 않는다. 클라이언트는 AI 상태 코드와 예외 종류만 WARN으로 남기고, 422 `MUSICXML_UNSUPPORTED`의 detail(AI 메시지 한 줄)은
+공통 예외 처리기 WARN 로그에 포함된다. 503은 공통 정책대로 ERROR 스택트레이스다.
+
+**배포 순서:** `ai-api`에 `/chart/sheet`가 먼저 떠 있어야 한다(없으면 모두 503). nginx는 `/api/v1/songs/musicxml`의 본문 상한(`client_max_body_size 6m`)을 열어야
+1 MB 넘는 악보가 BE에 닿는다(Infra 요청). FE 업로드 폼은 마지막이다. AI 쪽 계약·설정(`configs/chart/sheet.yaml`)은 AI README 「드럼 악보 → 채보」 절.
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.musicxml.*' --tests 'com.ssafy.airdrum.chart.worker.TranscriptionChartsTest'
+```
+
+`MusicXmlSnifferTest`(바이트 검사·오류 코드), `MusicXmlConvertClientTest`(가짜 AI 서버로 상태별 분기·시간 초과·크기 초과·연결 실패), `MusicXmlSchemaTest`(V46 CHECK),
+`MusicXmlUploadApiTest`(실제 JWT·임베디드 PG·가짜 AI 서버: 201·3난이도 저장·mxl·400/413/422/503·롤백), `TranscriptionChartsTest`(검증·파생 규칙).
 
 ## 공용 곡 관리 (156번)
 
