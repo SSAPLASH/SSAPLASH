@@ -44,18 +44,21 @@ function capture(over: Partial<CaptureSnapshot> = {}, target: CalibrationSnapsho
 }
 
 describe('CalibrationStage 보정 중', () => {
-  it('목표 패드는 유령, 끝난 패드는 보이고, 안 잡은 패드는 숨긴다. 큰 안내·카드 제목·타격 줄', () => {
+  it('킷 전체는 어둡고(dim) 목표 패드만 켜진다(lit). 큰 안내·카드 제목·타격 줄', () => {
     putLive({ calibration: capture() });
     const html = renderToStaticMarkup(<CalibrationStage />);
     expect(html).toContain('data-testid="cal-stage-capture"');
-    expect(html).toContain('하이햇을 2번 타격하세요');
+    expect(html).toContain('<p class="cal-stage-headline">하이햇을 2번 타격하세요</p>');
     expect(html).toContain('하이햇 2회 타격 (2/7)');
     expect(html).toContain('왼 1/2 · 오 0/2');
-    expect(html).toContain('drum-pad-ghost');
-    expect(html).toContain('>스네어<'); // 끝난 패드
-    expect(html).not.toContain('>라이드<'); // 아직
-    expect(html).toContain('>킥<'); // 페달은 흐리게
-    expect(html).toContain('drum-pad-faded');
+    expect((html.match(/drum-pad-lit/g) ?? []).length).toBe(1);
+    const after = html.slice(html.indexOf('class="drum-pad-lit"'));
+    const nextDim = after.indexOf('drum-pad-dim');
+    expect(after.indexOf('>하이햇<')).toBeLessThan(nextDim === -1 ? Infinity : nextDim);
+    expect((html.match(/drum-pad-dim/g) ?? []).length).toBe(7); // 8패드 중 켜진 하이햇만 제외
+    expect(html).toContain('>스네어<'); // 끝난 패드도 그대로 보인다(어둡게)
+    expect(html).toContain('>라이드<');
+    expect(html).not.toContain('drum-pad-ghost');
     expect(html).toContain('보정 중');
   });
 
@@ -124,12 +127,12 @@ describe('CalibrationStage 재정렬', () => {
 });
 
 describe('CalibrationStage 패드 단위 재보정(T9)', () => {
-  it('order가 한 패드면 그 패드만 유령이고 나머지 패드는 숨기지 않는다. 진행 점은 1개, 버튼은 [저장]', () => {
+  it('order가 한 패드면 그 패드만 켜지고 나머지는 어둡다. 진행 점은 1개, 버튼은 [저장]', () => {
     putLive({ calibration: capture({ order: ['HIHAT'], index: 0, target: 'HIHAT', counts: [0, 0], captured: {} }) });
     const html = renderToStaticMarkup(<CalibrationStage />);
     expect(html).toContain('>스네어<');
     expect(html).toContain('>라이드<');
-    expect(html).toContain('drum-pad-ghost');
+    expect((html.match(/drum-pad-lit/g) ?? []).length).toBe(1);
     expect(html).toContain('0 / 1 패드 완료');
     expect(html).toContain('하이햇 2회 타격 (1/1)');
     expect(html).toContain('>저장</button>');
