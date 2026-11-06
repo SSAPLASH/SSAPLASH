@@ -61,7 +61,7 @@ beforeEach(() => {
   put(useAuth, { status: 'authenticated', user });
   put(useSettings, {
     sensorKind: 'none',
-    activePresetId: null,
+    activePresetId: 'system',
     volume: 0.8,
     audioOffsetMs: 0,
     liveCoach: true,
@@ -169,17 +169,17 @@ describe('SettingsPage 기기 행', () => {
     expect(render()).toContain('연결 안 됨');
   });
 
-  it('프리셋 값: 보정 필요·보정 완료·프리셋 없음', () => {
+  it('프리셋 값: 보정 필요·보정 완료·시스템 기본(UX-64)', () => {
     put(usePresets, { items: [{ id: 'p1', name: '내 세팅' } as never] });
     put(useSettings, { sensorKind: 'ble', activePresetId: 'p1' });
     put(useLive, { referenceSetAt: null });
     expect(render()).toContain('내 세팅 · 보정 필요');
     put(useLive, { referenceSetAt: 123 });
     expect(render()).toContain('내 세팅 · 보정 완료');
-    put(useSettings, { activePresetId: null });
-    expect(render()).toContain('프리셋 없음 · 보정 완료');
+    put(useSettings, { activePresetId: 'system' });
+    expect(render()).toContain('시스템 기본 · 보정 완료');
     put(useSettings, { sensorKind: 'none' });
-    expect(render()).toContain('>프리셋 없음<');
+    expect(render()).toContain('>시스템 기본<');
   });
 });
 
