@@ -1,8 +1,8 @@
 // 3D 드럼셋 모델(PLAY-004 D4). 패드 위치와 손 출발점을 몸 기준 미터 좌표로 두고,
 // 손마다 (패드 − 손 출발점) 방향을 고도·방위각으로 바꿔 손별 기본 앵커를 만든다.
-// 보정 전 기본 판정 표, 보정 안내용 유령 배치, 기본 화면 배치(DEFAULT_KIT_LAYOUT)가 같은 값을 쓴다.
+// 보정 전 기본 판정 표에 쓴다. 화면 기본 배치(DEFAULT_KIT_LAYOUT)는 고정값이라 여기서 유도하지 않는다(후속 T8).
 // 수치는 가정값이다(설계 U4) — 11/6 양손 보정 실측 평균으로 상수만 바꾼다.
-import type { KitLayout, PadPlacement } from './kitLayout';
+import type { KitLayout } from './kitLayout';
 import type { PadId } from './pads';
 import { STICK_PADS } from './pads';
 import type { StickId } from './events';
@@ -29,23 +29,6 @@ export const PAD_POINTS: Record<Exclude<PadId, 'KICK' | 'HIHAT_PEDAL'>, Point3> 
   FLOOR_TOM: [0.4, 0.5, -0.1],
   CRASH: [-0.3, 0.75, 0.45],
   RIDE: [0.4, 0.75, 0.4],
-};
-
-/** 페달 패드는 각도표에 들어가지 않으므로 화면 위치만 고정값으로 둔다 */
-export const PEDAL_PLACEMENTS: Record<'KICK' | 'HIHAT_PEDAL', PadPlacement> = {
-  KICK: { x: 0.32, y: 0.92, r: 0.065 },
-  HIHAT_PEDAL: { x: 0.12, y: 0.92, r: 0.055 },
-};
-
-/** 스틱 패드의 표시 반지름(정규화). 판정과 무관한 표시 전용 값(D2) */
-const PAD_SCREEN_R: Record<Exclude<PadId, 'KICK' | 'HIHAT_PEDAL'>, number> = {
-  CRASH: 0.1,
-  HIHAT: 0.085,
-  SNARE: 0.095,
-  SMALL_TOM: 0.07,
-  MID_TOM: 0.07,
-  FLOOR_TOM: 0.1,
-  RIDE: 0.11,
 };
 
 /** 손 출발점에서 패드를 보는 방향 → 고도(위 +)·방위(정면 0, 오른쪽 +) */
@@ -99,15 +82,4 @@ export function anchorsToLayout(hands: HandAnchors, base: KitLayout, angleRange:
     out[pad] = { ...base[pad], x: clamp01(s.x), y: clamp01(s.y) };
   }
   return out;
-}
-
-/** 기본 화면 배치: 3D 모델의 양손 평균 방향을 화면에 투영한 값. 페달은 고정값 */
-export function defaultLayout(): KitLayout {
-  const base = {} as KitLayout;
-  for (const pad of STICK_PADS) {
-    if (isStickPad(pad)) base[pad] = { x: 0.5, y: 0.5, r: PAD_SCREEN_R[pad] };
-  }
-  base.KICK = PEDAL_PLACEMENTS.KICK;
-  base.HIHAT_PEDAL = PEDAL_PLACEMENTS.HIHAT_PEDAL;
-  return anchorsToLayout(defaultHandAnchors(), base);
 }
