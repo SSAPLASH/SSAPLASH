@@ -17,7 +17,7 @@ vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 
 const song = (id: number, difficulties: Difficulty[]): SongSummary => ({
   id, title: `곡${id}`, artist: 'a', source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 1000,
-  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: null, difficulties, createdAt: '', coverUrl: null,
+  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: null, difficulties, createdAt: '', coverUrl: null, sheetId: null,
 });
 
 interface Props {

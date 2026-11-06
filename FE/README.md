@@ -13,6 +13,7 @@
 | BE 연동 | `fetch` 공통 래퍼(`api/http`). 로그인은 BE OAuth + refresh 쿠키, access 토큰은 메모리 |
 | 모션 | motion — `LazyMotion`(features 지연 로드, `strict`)이라 컴포넌트는 `m.*`만 쓴다(`motion.*` 금지). 공급자는 `app/MotionProvider`, 모션 줄이기 설정도 여기서 처리 |
 | 팝오버 등 | Radix UI(`@radix-ui/react-popover`) — 스타일 없는(headless) 라이브러리. 모양은 기존 토큰 CSS로 입힌다 |
+| PDF | pdf.js(`pdfjs-dist`) — 악보 뷰어 라우트에서만 지연 로드(뷰어 페이지·pdf.js·worker가 메인 번들과 따로 나뉜다) |
 | 검사 | oxlint, vitest, testing-library(상호작용 테스트, happy-dom) |
 
 Node 20 이상, npm 사용.
@@ -68,9 +69,9 @@ npm run build      # tsc 타입 검사 + vite 번들
 src/
 ├─ main.tsx     Vite 엔트리. app/bootstrap·app/presetBootstrap·app/authBootstrap을 부르고 렌더
 ├─ app/        앱 조립 — 아래 전부를 알아도 되는 유일한 곳
-│   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래. `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262)
+│   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래. `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262). 악보 뷰어 `/studio/sheets/:id`는 지연 로드(278)
 │   ├─ sources.ts         키보드 소스 · inputManager 단일 인스턴스
-│   ├─ features.ts        빌드 기능 스위치(SONG_EDIT_ENABLED)
+│   ├─ features.ts        빌드 기능 스위치(SONG_EDIT_ENABLED·RECORDING_ENABLED·SHEET_ARCHIVE_ENABLED·SHEET_SONG_LINK_ENABLED)
 │   ├─ sensorRegistry.ts  센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
@@ -325,6 +326,19 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
   - **성공 후:** 창 닫기 → `songEditStore.reset` → 목록 다시 읽기 → 편집한 카드 2초 강조(삭제는 강조 없음). 403 `SONG_FORBIDDEN`·409 `SONG_BUSY`·400·413·415·503 `COVER_UNAVAILABLE`(저장소 장애)는 창 안에 문구, 404 `SONG_NOT_FOUND`는 문구와 함께 목록을 다시 읽고, 네트워크·5xx·알 수 없는 코드는 "결과를 확인하지 못했습니다. 목록을 확인해 주세요."와 함께 목록을 다시 읽는다. 상태는 `songEditStore`(`idle`·`saving`·`done`·`failed`, 실행 중 재호출 무시).
   - **API(BE 187 합의, develop-BE 병합·운영 반영 전. 반영되면 스위치를 켠다):** `PATCH /api/v1/songs/{id}` JSON `{title?, artist?}` → 200 상세 · `PUT /api/v1/songs/{id}/cover` multipart `file`(≤ 2 MiB) → 200 `{coverUrl}` · `DELETE /api/v1/songs/{id}/cover` → 204 · `DELETE /api/v1/songs/{id}` → 204. 오류 코드는 `SONG_INVALID`·`SONG_FORBIDDEN`·`SONG_NOT_FOUND`·`SONG_BUSY`·`COVER_INVALID`·`COVER_TOO_LARGE`·`COVER_UNSUPPORTED`·`COVER_UNAVAILABLE`. 목록·상세 응답에는 `coverUrl: string | null`(서명 URL, 1시간)이 더해진다. 커버는 2 MiB·4096px·400만 픽셀 이하. 곡 삭제는 소프트 삭제다.
 - **제외(후속):** 곡 선택 창의 커버 표시, 진행 WebSocket(BE 161).
+
+## 내 악보 보관·보기 (CHART-001, 278번)
+
+회원이 드럼 악보(이미지·PDF)를 올려 두고 라이브러리에서 골라 본다. 음원 없이 악보만 보관해 합주실·연습실에서 꺼내 보는 것이 주 용도다. BE 155 `/api/v1/sheets`(`api/sheets`), 도메인은 `domain/sheetMusic`.
+
+- **기능 스위치:**
+  - `VITE_SHEET_ARCHIVE`(`SHEET_ARCHIVE_ENABLED`): 기본 켜짐, `false`로 빌드하면 [악보] 섹션·악보 항목을 숨기고 뷰어 주소는 `/studio`로 보낸다.
+  - `VITE_SHEET_SONG_LINK`(`SHEET_SONG_LINK_ENABLED`): 기본 꺼짐, `true`일 때만 곡 연결을 쓴다. 지금 BE는 `files`·`title`·`source` 외 파트를 400으로 거절하므로, BE가 곡 연결(`songId`·`sheetId`)을 배포한 뒤 켠다.
+- **올리기:** 헤더 [올리기] 창 맨 위 [음원·MIDI | 악보] 전환(마지막 섹션은 localStorage `airdrum.studio.uploadSection`). [악보]는 이미지(JPG·PNG·WEBP) 1~20장 또는 PDF 1개 + 제목(1~100자). 고른 순서가 쪽 순서다. 섞음·21장 이상·형식·크기(이미지 10 MiB, PDF 20 MiB)는 요청 전에 `validateSheetFiles`로 막고, 화소 상한·한도(100개·500 MiB)는 BE 응답 문구를 보인다(`sheetErrorText`). 헤더에서는 곡 없이 올린다. 첫 방문(곡·악보 없음)에는 본문에 음원·MIDI 패널이 있으므로 헤더 [올리기]가 [악보] 섹션으로만 열린다.
+- **라이브러리 악보 항목:** 곡에 연결되지 않은 악보는 카드·목록 보기에 곡과 섞여 한 항목으로 보인다(`mergeLibraryItems`, 정렬은 내 곡 규칙의 「그 밖」 그룹). 썸네일(이미지 1쪽, PDF는 자리표시) · 「악보 · 이미지 n쪽」/「악보 · PDF」 · 「악보만」 칩 · [악보 보기]. 리듬 게임·악보 연습은 비활성이고 「음원이 있어야 할 수 있어요」를 단다. ⋯ = [제목 수정 | 악보 삭제]. 악보 목록만 실패하면 곡은 그대로 두고 「악보를 불러오지 못했어요 [다시 시도]」 한 줄. 곡 고르기(리듬 게임·악보 연습)는 곡 API만 읽으므로 악보 항목이 나오지 않는다.
+- **곡 연결(링크 스위치 켜짐):** 완료 곡 ⋯ 메뉴에 `sheetId`가 있으면 [악보 보기], 없으면 [악보 올리기](창이 [악보] 섹션으로 열리고 `songId`를 보낸다). 409 `SHEET_ALREADY_LINKED`·404 `SONG_NOT_FOUND`는 창 안 문구. 링크가 켜져 있으면 곡에 붙은 악보는 따로 항목으로 보이지 않는다.
+- **뷰어 `/studio/sheets/:id`(`pages/SheetViewerPage`, `components/sheet`):** 셸을 숨긴 전체 화면. 이미지는 한 쪽씩(← → 키, 좌우 밀기, 좌우 25% 가장자리 탭, 다음 쪽 미리 받기), PDF는 `PdfPages`가 쪽을 화면 폭에 맞춰 세로로 그리고 화면 근처 쪽만 그린다. 바에 n/m, 가운데 탭으로 몰입 모드(바 숨김, n/m 칩만). ⋯로 제목 수정·삭제(삭제 뒤 `/studio`로 가며 토스트). 600px 이하에서는 뒤로 아이콘만 남기고 좌우 버튼·종류 배지를 숨긴다.
+- **서명 URL(1시간):** 만료 2분 전에 상세를 다시 읽어 URL만 바꾼다(보던 쪽 유지, 최소 30초 간격). 그림·PDF 읽기 실패는 상세를 1회 다시 읽고 또 실패하면 [다시 시도]. 404 `SHEET_NOT_FOUND`는 「지워졌거나 주소가 틀렸어요」 + [라이브러리로]. URL·파일은 메모리에만 둔다.
 
 ## 결과·연주 기록
 

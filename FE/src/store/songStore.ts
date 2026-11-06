@@ -44,6 +44,7 @@ function builtinSummary(c: Chart, index: number): SongSummary {
     difficulties: [c.difficulty],
     createdAt: '',
     coverUrl: null,
+    sheetId: null,
   };
 }
 
