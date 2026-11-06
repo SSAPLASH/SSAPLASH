@@ -9,10 +9,11 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AUTH_REQUIRED } from '@/app/authBootstrap';
 import { AuthBrandPane } from '@/components/auth/AuthBrandPane';
 import { SignupConsentCard } from '@/components/auth/SignupConsentCard';
+import { Button } from '@/components/ui/Button';
 import { sanitizeReturnTo, signupErrorMessage } from '@/domain/auth';
 import { isRecommendationConsentCurrent } from '@/domain/recommendationConsent';
 import { signupGateDecision } from '@/domain/signupGate';
-import type { ConsentVersions } from '@/domain/signupTerms';
+import { recommendationConsentEnabled, SIGNUP_TERMS, type ConsentVersions } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 
@@ -36,7 +37,7 @@ export function SignupPage() {
 
   const decision = signupGateDecision({ required: AUTH_REQUIRED, status, user });
   // 약관 개정 재동의: 이미 가입을 마친 회원만 추천 동의 상태가 있다
-  const reconsent = decision === 'signup' && user?.signupCompleted === true;
+  const reconsent = recommendationConsentEnabled() && decision === 'signup' && user?.signupCompleted === true;
   useEffect(() => {
     if (reconsent) void loadConsent();
   }, [reconsent, loadConsent]);
@@ -79,6 +80,8 @@ export function SignupPage() {
     <div className="login">
       <AuthBrandPane />
       <SignupConsentCard
+        notice={reconsent && consentStatus === 'error' ? <div role="alert" className="signup-card-error">동의 상태를 불러오지 못했어요. <Button variant="text" onClick={() => void loadConsent()}>다시 시도</Button></div> : undefined}
+        terms={recommendationConsentEnabled() && !(reconsent && consentStatus === 'error') ? SIGNUP_TERMS : SIGNUP_TERMS.filter((t) => t.id !== 'recommendation')}
         onSubmit={onSubmit}
         submitting={submitting}
         error={error}

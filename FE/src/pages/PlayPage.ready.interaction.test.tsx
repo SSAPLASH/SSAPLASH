@@ -70,7 +70,7 @@ afterEach(cleanup);
 const section = () => document.querySelector('section[aria-label="이 곡과 비슷한 곡"]') as HTMLElement | null;
 
 describe('연주 준비 비슷한 곡 (PlayPage 통합)', () => {
-  it('진입 1회·파라미터, 단계 변경 재요청 없음·배지 따라감, 카드 클릭 → 선택 단계 채보·새 곡 1회', async () => {
+  it('진입 1회·단계 변경 재요청 없음·서버 배지와 채보 유지', async () => {
     show('/play?song=1&chart=11', <PlayPage />);
     await waitFor(() => expect(section()).not.toBeNull());
     expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
@@ -84,15 +84,15 @@ describe('연주 준비 비슷한 곡 (PlayPage 통합)', () => {
     fireEvent.click(within(levels).getByText('EASY'));
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('?song=1&chart=10'));
     await waitFor(() => expect(section()).not.toBeNull());
-    await waitFor(() => expect(cards()[0].textContent).toContain('EASY'));
+    await waitFor(() => expect(cards()[0].textContent).toContain('NORM'));
     expect(cards()[1].textContent).toContain('HARD');
     expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
-    // 곡5 카드 클릭 → EASY 채보 51
+    // 곡5 카드 클릭 → 응답 NORMAL 채보 50
     fireEvent.click(cards()[0]);
     expect(postRecommendationClick).toHaveBeenCalledWith('s1', 5);
-    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('?song=5&chart=51'));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('?song=5&chart=50'));
     await waitFor(() => expect(fetchSimilarSongs).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(fetchSimilarSongs).mock.calls[1].slice(0, 2)).toEqual([5, { difficulty: 'EASY', size: 5 }]);
+    expect(vi.mocked(fetchSimilarSongs).mock.calls[1].slice(0, 2)).toEqual([5, { difficulty: 'NORMAL', size: 5 }]);
     expect(useRecommendations.getState().entries['SIMILAR:1']).toBeUndefined();
     await waitFor(() => expect(section()?.textContent).toContain('템포가 비슷해요'));
     // 곡 선택으로 복귀 → clear

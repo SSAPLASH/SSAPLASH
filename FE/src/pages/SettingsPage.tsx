@@ -14,8 +14,10 @@ import { Card } from '@/components/ui/Card';
 import { Slider } from '@/components/ui/Slider';
 import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
+import { Dialog } from '@/components/ui/Dialog';
+import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
-import { consentSaveErrorMessage, consentStatusText, isRecommendationConsentCurrent, isRecommendationVersionStale } from '@/domain/recommendationConsent';
+import { consentSaveErrorMessage, consentStatusText, isRecommendationVersionStale } from '@/domain/recommendationConsent';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
@@ -66,6 +68,7 @@ export function SettingsPage() {
   const consentStatus = useRecommendationConsent((s) => s.status);
   const consent = useRecommendationConsent((s) => s.consent);
   const consentSaving = useRecommendationConsent((s) => s.saving);
+  const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{ variant: ToastVariant; text: string } | null>(null);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -89,16 +92,20 @@ export function SettingsPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const consentChecked = isRecommendationConsentCurrent(consent);
+  const consentChecked = consent?.agreed === true;
   const consentStale = isRecommendationVersionStale(consent);
   const consentLocked = consentStatus !== 'ready' || consentSaving;
 
   const onToggleConsent = (next: boolean) => {
+    if (next) { setConsentConfirmOpen(true); return; }
+    saveConsent(false);
+  };
+  const saveConsent = (next: boolean) => {
     useRecommendationConsent
       .getState()
       .set(next)
       .then(
-        () => setToast(next ? null : { variant: 'info', text: '이후 학습부터 제외돼요' }),
+        () => { setConsentConfirmOpen(false); setToast(next ? null : { variant: 'info', text: '동의를 철회했어요' }); },
         (e: unknown) => setToast({ variant: 'error', text: consentSaveErrorMessage(e) }),
       );
   };
@@ -175,15 +182,18 @@ export function SettingsPage() {
           {user && (
             <Card padding="lg" title="데이터 활용">
               <p className="settings-note">연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요.</p>
-              <SettingRow label="맞춤 곡 추천 학습 활용" help="동의한 연주 기록만 추천 모델 학습에 써요. 끄면 이후 학습부터 제외돼요.">
+              {(recommendationConsentEnabled() || consentChecked) && <SettingRow label="맞춤 곡 추천 학습 활용" help="동의 상태를 확인하고 철회할 수 있어요.">
                 {(aria) => <Toggle {...aria} label="맞춤 곡 추천 학습 활용" checked={consentChecked} disabled={consentLocked} onChange={onToggleConsent} />}
-              </SettingRow>
-              <p className="settings-note">{consentStatusText(consent)}</p>
-              {consentStale && <p className="settings-note">약관이 바뀌었어요. 다시 켜면 새 판에 동의해요.</p>}
-              {consentStatus === 'error' && (
-                <p className="settings-note" role="alert">
-                  상태를 불러오지 못했어요
-                </p>
+              </SettingRow>}
+              {consentStatus === 'ready' && <p className="settings-note">{consentStatusText(consent)}</p>}
+              {consentStale && recommendationConsentEnabled() && <Button variant="text" disabled={consentLocked} onClick={() => setConsentConfirmOpen(true)}>새 동의 내용 확인</Button>}
+              {consentStatus === 'error' && <div role="alert"><p className="settings-note">동의 상태를 불러오지 못했어요</p><Button variant="text" onClick={() => void useRecommendationConsent.getState().load()}>다시 시도</Button></div>}
+              {consentConfirmOpen && recommendationConsentEnabled() && (
+                <Dialog labelledBy="settings-recommend-consent-title" onClose={() => setConsentConfirmOpen(false)}>
+                  <h2 id="settings-recommend-consent-title">맞춤 곡 추천 학습 활용 동의</h2>
+                  {(SIGNUP_TERMS.find((t) => t.id === 'recommendation')?.body ?? '').split('\n').map((line) => <p key={line}>{line}</p>)}
+                  <div className="dialog-actions"><Button variant="secondary" onClick={() => setConsentConfirmOpen(false)}>취소</Button><Button disabled={consentLocked} onClick={() => saveConsent(true)}>동의</Button></div>
+                </Dialog>
               )}
             </Card>
           )}

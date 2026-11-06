@@ -1,7 +1,7 @@
 // 연주 준비 패널의 "이 곡과 비슷한 곡" 줄 (설계 COACH-004-similar-songs D1~D3·D10·D11, 4-1). /play·/sheet가 같이 쓴다.
 // - 준비 단계(active)에 들어오면 곡당 1회만 요청한다(키 `SIMILAR:${songId}`). 연습 단계를 바꿔도 다시 요청하지 않는다
 // - 곡이 바뀌거나(songId 변경) 곡 선택으로 돌아가면(songId null) 이전 키를 clear한다
-// - 카드 배지·클릭은 지금 선택된 연습 단계를 따라간다(D11). api는 모르고 store·domain만 쓴다
+// - 카드 배지·클릭은 서버가 응답한 난이도와 채보를 사용한다.
 import { useCallback, useEffect, useRef } from 'react';
 import type { Difficulty } from '@/domain/chart';
 import type { RecommendCard } from '@/domain/recommendation';
@@ -28,9 +28,8 @@ export interface SimilarSongs {
 
 export function useSimilarSongs({ songId, active, difficulty, onSelect }: Options): SimilarSongs {
   const source = useSongs((s) => s.source);
-  const selectSong = useSongs((s) => s.selectSong);
   const authed = useAuth((a) => a.status === 'authenticated');
-  const enabled = source === 'api' && authed && songId !== null;
+  const enabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && source === 'api' && authed && songId !== null;
   const key = `SIMILAR:${songId}`;
   const entry = useRecommendations((r) => entryOf(r.entries, key));
   const loadSimilar = useRecommendations((r) => r.loadSimilar);
@@ -38,8 +37,6 @@ export function useSimilarSongs({ songId, active, difficulty, onSelect }: Option
   const clear = useRecommendations((r) => r.clear);
   // 요청 시점의 난이도를 쓰되 난이도 변경이 효과를 다시 돌리지 않게 ref로 읽는다
   const difficultyRef = useRef(difficulty);
-  // 곡 상세 조회를 기다리는 동안 같은 카드가 두 번 눌리면 이동이 두 번 나는 것을 막는다
-  const pickingRef = useRef(false);
   useEffect(() => {
     difficultyRef.current = difficulty;
   }, [difficulty]);
@@ -60,31 +57,11 @@ export function useSimilarSongs({ songId, active, difficulty, onSelect }: Option
   const requestId = entry.status === 'ready' ? entry.requestId : '';
   const visible = enabled && active && entry.status === 'ready';
   const base = visible && entry.status === 'ready' ? entry.cards : [];
-  // 선택 단계를 가진 곡은 그 단계 배지로 보인다
-  const cards = base.map((c) => (difficulty !== null && c.song.difficulties.includes(difficulty) ? { ...c, difficulty } : c));
-
-  const onPick = useCallback(
-    (card: RecommendCard) => {
-      // 기록은 기다리지 않는다
-      void click(card, requestId);
-      if (difficulty === null || !card.song.difficulties.includes(difficulty)) {
-        onSelect(card.song.id, card.chartId);
-        return;
-      }
-      // 선택 단계의 채보 id는 곡 상세에서 찾고, 실패·없으면 BE가 준 채보로 간다. 조회 중에는 추가 클릭을 무시한다
-      if (pickingRef.current) return;
-      pickingRef.current = true;
-      selectSong(card.song.id)
-        .then(
-          (detail) => onSelect(card.song.id, detail.charts.find((c) => c.difficulty === difficulty)?.id ?? card.chartId),
-          () => onSelect(card.song.id, card.chartId),
-        )
-        .finally(() => {
-          pickingRef.current = false;
-        });
-    },
-    [click, requestId, difficulty, selectSong, onSelect],
-  );
+  const cards = base;
+  const onPick = useCallback((card: RecommendCard) => {
+    void click(card, requestId);
+    onSelect(card.song.id, card.chartId);
+  }, [click, requestId, onSelect]);
 
   return { cards, onPick };
 }

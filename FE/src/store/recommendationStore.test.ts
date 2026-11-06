@@ -104,7 +104,7 @@ describe('clear', () => {
     vi.mocked(postRecommendationClick).mockReset();
   });
 
-  it('끝난 결과(ready·hidden)는 지우고 진행 중(loading)은 그대로 둔다', async () => {
+  it('끝난 결과를 지우고 진행 중이면 이탈 확정 후 지운다', async () => {
     vi.mocked(fetchRecommendations).mockResolvedValue({ requestId: 'r', strategy: 's', items: [] });
     await useRecommendations.getState().load('k1', { context: 'SONG_PICKER', mode: 'RHYTHM' });
     expect(useRecommendations.getState().entries.k1?.status).toBe('hidden');
@@ -119,7 +119,21 @@ describe('clear', () => {
     expect(useRecommendations.getState().entries.k2?.status).toBe('loading');
     resolve({ requestId: 'r', strategy: 's', items: [] });
     await p;
-    expect(useRecommendations.getState().entries.k2?.status).toBe('hidden');
+    expect(useRecommendations.getState().entries.k2).toBeUndefined();
+  });
+
+  it('이탈한 요청의 늦은 응답은 새 진입 결과를 덮지 않는다', async () => {
+    let resolveOld: (v: { requestId: string; strategy: string; items: never[] }) => void = () => {};
+    vi.mocked(fetchRecommendations).mockImplementationOnce(() => new Promise((r) => (resolveOld = r)))
+      .mockResolvedValueOnce({ requestId: 'new', strategy: 's', items: [item] });
+    const old = useRecommendations.getState().load('again', PARAMS);
+    useRecommendations.getState().clear('again');
+    await Promise.resolve();
+    await useRecommendations.getState().load('again', PARAMS);
+    resolveOld({ requestId: 'old', strategy: 's', items: [] });
+    await old;
+    expect(fetchRecommendations).toHaveBeenCalledTimes(2);
+    expect(useRecommendations.getState().entries.again).toMatchObject({ status: 'ready', requestId: 'new' });
   });
 
   it('없는 키는 무시한다', () => {
