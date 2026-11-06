@@ -235,8 +235,8 @@ uv run ssaplash-chart sheet score.mxl --out data/chart/score
 - 첫 파트의 도돌이표·1/2번 괄호·D.C.·D.S.·Fine·Coda를 펼친 순서와 템포 표기로 시각을 정한다. 마디 반복 기호(`measure-repeat`)는 앞 마디를 복사한다
 - `timing.bpm`·`timeSignature`는 첫 템포·첫 박자다(템포가 없으면 120). `offsetMs`는 못갖춘마디 길이다
 - `velocityHint`는 음표 셈여림 × 0.9, 없으면 90, 괄호 친 고스트 노트는 40이다
-- 하이햇은 세 가지로 나눌 수 있다. 하이햇 페달만 밟기(44)는 `emit_hihat_pedal`이 참이면 `HIHAT_PEDAL` 노트, 페달 안 밟고 치기(46·26, 또는 `<technical><open/>`)는 `emit_hihat_open`이 참이면 `HIHAT` 노트에 `hihatOpen: true`, 페달 밟고 치기(42·22)는 필드 없는 `HIHAT` 노트다. 두 값은 `configs/chart/sheet.yaml`에 있다. BE 결과 검증이 `HIHAT_PEDAL`을 받아서 `emit_hihat_pedal`은 참이다. `emit_hihat_open`은 BE 채보 조회 응답에 `hihatOpen`이 없고 FE 판정 방식이 정해지지 않아 거짓이고, 그동안 열린 하이햇은 필드 없는 `HIHAT`이다
-- `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`은 `sheet-musicxml-2`다. 페달 출력을 켜면서 1에서 올렸고, `emit_hihat_open`을 켤 때 3으로 올린다
+- 하이햇은 세 가지로 나눌 수 있다. 하이햇 페달만 밟기(44)는 `emit_hihat_pedal`이 참이면 `HIHAT_PEDAL` 노트, 페달 안 밟고 치기(46·26, 또는 `<technical><open/>`)는 `emit_hihat_open`이 참이면 `HIHAT` 노트에 `hihatOpen: true`, 페달 밟고 치기(42·22)는 필드 없는 `HIHAT` 노트다. 두 값은 `configs/chart/sheet.yaml`에 있다. BE 결과 검증이 `HIHAT_PEDAL`을 받아서 `emit_hihat_pedal`은 참이다. `emit_hihat_open`도 참이다. FE는 `hihatOpen`을 판정에 쓰지 않고 악보 표시와 연습 가이드에만 쓴다
+- `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`은 `sheet-musicxml-3`이다. 페달 출력을 켜면서 1에서 2로, 열린 하이햇 출력을 켜면서 3으로 올렸다. 2 이하로 만든 악보 채보에는 `hihatOpen`이 없다
 - 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
 
 정확도는 PDMX 공개 악보와 MuseScore가 같은 악보를 재생해 내보낸 MIDI를 비교해 측정한다. 악보·MIDI는 저장소에 넣지 않는다.
