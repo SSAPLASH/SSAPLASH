@@ -438,7 +438,9 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V40 | `V40__add_recommendation_drill.sql` | 연습 추천: 노출 기록 `context`에 `DRILL` 허용 |
 | V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
 | V42 | `V42__recommend_interactions_consented_plays.sql` | 추천 학습 입력에서 `consent=false` 세션 제외. 열은 그대로 |
-| V43 | `V43__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
+| V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
+| V44 | `V44__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
+| V45 | `V45__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
 
 규칙:
 
@@ -1112,7 +1114,7 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 FE 요청(2026-11-06, `CHART-001_내-악보와-개인-곡-연결`)으로 10/30 결정("곡과 연결하지 않는다")을 바꿨다. 라이브러리의 곡 ⋯ 메뉴 [악보 보기 | 악보 올리기]가 곡에 맞는 악보를 찾기 위한 연결이며, 변환은 없다.
 
 - 등록 때 선택 파트 `songId`(양의 정수 문자열)를 보내면 그 곡에 연결한다. 곡은 **본인 소유·삭제되지 않음·공용(`BUILTIN`)이 아님**이어야 하고 상태(처리 중·실패)는 보지 않는다. 아니면 모두 404 `SONG_NOT_FOUND`. `songId`가 없으면 지금처럼 곡 없는 악보다. `RENDERED`도 같은 규칙이다.
-- **곡당 살아 있는 악보는 하나다.** `sheet_music_song_live_idx`(V43)가 보장하므로 동시에 올려도 하나만 들어가고 나머지는 409 `SHEET_ALREADY_LINKED`다. 악보를 소프트 삭제하면 자리가 비어 다시 올릴 수 있다. 업로드 실패로 소프트 삭제된 행도 자리를 차지하지 않는다.
+- **곡당 살아 있는 악보는 하나다.** `sheet_music_song_live_idx`(V44)가 보장하므로 동시에 올려도 하나만 들어가고 나머지는 409 `SHEET_ALREADY_LINKED`다. 악보를 소프트 삭제하면 자리가 비어 다시 올릴 수 있다. 업로드 실패로 소프트 삭제된 행도 자리를 차지하지 않는다.
 - 악보 상세·목록 항목에 `songId`, 곡 목록·상세([187번](#개인-곡-관리커버-187번))에 `sheetId`가 나온다. 곡의 `sheetId`는 페이지가 연결된 살아 있는 악보만 가리키며(업로드 중인 행은 null), 공용 곡은 항상 null이다.
 - **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보도 같은 트랜잭션에서 소프트 삭제되고 페이지 파일이 바로 정리 대상으로 등록된다(`sheet.SheetSongLink`, 악보 DELETE와 같은 처리). 악보만 지우면 곡은 그대로다.
 - 이미 올린 악보를 나중에 곡에 연결하는 PATCH는 없다(FE가 쓰지 않음). 필요하면 `PATCH /{id}`에 `songId`를 더하는 식으로 호환되게 추가한다.
@@ -1506,11 +1508,12 @@ AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 �
 | `POST /internal/v1/recommend-candidates` | 워커 토큰. 후보 적재. 응답 `{ accepted, droppedUnknown, droppedNoConsent }` |
 | `GET /internal/v1/recommend-candidates/status` | 워커 토큰. `{ modelVersion, generatedAt, usersWithCandidates }` |
 
-- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
+- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
 - **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
-- **읽기 뷰(V37, V42):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
-- **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
+- **읽기 뷰(V37, V42, V45):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할은 서버에서 만든다.
+- **`user_key`:** 동의할 때 만드는 무작위 16진수 32자(`recommendation_user_keys`). `user_id`에서 계산되지 않고, 대응표는 뷰가 소유자 권한으로만 읽는다. 배치 계정은 표를 읽지 못한다. 철회·탈퇴하면 지우고, 다시 동의하면 새 키가 된다. BE는 표로 사용자를 찾을 수 있어 익명이 아니라 가명이다.
 - **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
 - **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다. 철회는 판 검사를 하지 않아 옛 판 화면에서도 된다. 적재는 동의 행과 회원 행을 잠가 철회·탈퇴 뒤에 후보가 남지 않게 한다.
 - **보관:** 후보는 생성 후 `RECOMMEND_R3_MAX_AGE_DAYS`(7일)가 지나면 서빙에 쓰지 않고, `RecommendationCandidateRetention`이 한 시간마다 지운다. 실패하면 다음 주기에 다시 지운다.
+- **동의 이력:** 응답마다 `user_recommendation_consent_history`에 추가한다. 탈퇴는 철회로 기록한다. 철회·탈퇴일부터 `recommend.consent-history-retention-days`(730일)가 지나면 하루 주기로 지우고, 탈퇴 회원은 현재 상태 행도 함께 지운다. 동의 중인 회원의 이력은 남긴다. 뷰로 내보내지 않는다.
 - **노출 기록:** 철회 뒤에도 `recommendation_items`는 보관 기간(90일)까지 남는다. 평가에는 철회 전 기록만 집계로 쓴다.

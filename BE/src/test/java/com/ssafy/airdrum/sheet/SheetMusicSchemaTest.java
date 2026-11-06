@@ -34,9 +34,9 @@ class SheetMusicSchemaTest {
 		db.update("DELETE FROM users WHERE id=?", user);
 	}
 
-	/** 248 V43: 곡당 살아 있는 악보는 하나다. 소프트 삭제하면 자리가 비고, 곡 없는 악보는 제한이 없다. */
+	/** 248 V44: 곡당 살아 있는 악보는 하나다. 소프트 삭제하면 자리가 비고, 곡 없는 악보는 제한이 없다. */
 	@Test
-	void V43_곡당_살아_있는_악보는_하나이고_지운_뒤에는_다시_연결된다() {
+	void V44_곡당_살아_있는_악보는_하나이고_지운_뒤에는_다시_연결된다() {
 		long first = insertLinked("첫 악보", song);
 		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, first)).isEqualTo(song);
 		assertThatThrownBy(() -> insertLinked("둘째 악보", song)).isInstanceOf(DataIntegrityViolationException.class);
