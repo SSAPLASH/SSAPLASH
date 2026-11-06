@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { checkSongAvailability, deleteSong, deleteSongCover, listSongs, updateSongMeta, uploadMidi, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, listSongs, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -37,6 +37,22 @@ describe('uploadMidi', () => {
     await uploadMidi({ file: new File(['abc'], 'a.mid'), title: '곡', artist: '  ' });
     const form = fn.mock.calls[0][1]?.body as FormData;
     expect(form.has('artist')).toBe(false);
+  });
+});
+
+describe('uploadMusicXml', () => {
+  it('MIDI와 같은 multipart를 /api/v1/songs/musicxml로 보낸다(293)', async () => {
+    const fn = stub();
+    const song = await uploadMusicXml({ file: new File(['<score-partwise/>'], 's.musicxml'), title: ' 악보 곡 ', artist: '' });
+    const [url, init] = fn.mock.calls[0];
+    expect(url).toBe('/api/v1/songs/musicxml');
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('Idempotency-Key')).toBeNull();
+    const form = init?.body as FormData;
+    expect(form.getAll('title')).toEqual(['악보 곡']);
+    expect(form.has('artist')).toBe(false);
+    expect(form.getAll('file')).toHaveLength(1);
+    expect(song.id).toBe(7);
   });
 });
 
