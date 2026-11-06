@@ -46,7 +46,7 @@ import com.ssafy.airdrum.sheet.SheetResponses.SheetDetail;
 import com.ssafy.airdrum.sheet.SheetResponses.SheetSummary;
 import com.ssafy.airdrum.user.AuthUser;
 
-/** CHART-001 내 악보 보관(155번). 곡과 연결하지 않는 회원별 악보이며 남의 악보는 404다. */
+/** CHART-001 내 악보 보관(155번). 회원별 악보이며 남의 악보는 404다. 개인 곡에는 선택적으로 하나를 연결한다(248번, songId). */
 @RestController
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/sheets")
@@ -56,7 +56,7 @@ import com.ssafy.airdrum.user.AuthUser;
 @ApiResponse(responseCode = "404", description = "없는 악보·삭제된 악보·남의 악보: SHEET_NOT_FOUND", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 public class SheetMusicController {
 
-	private static final Set<String> REGISTER_FIELDS = Set.of("title", "source");
+	private static final Set<String> REGISTER_FIELDS = Set.of("title", "source", "songId");
 
 	private final SheetMusicService service;
 	private final JsonMapper strict = JsonMapper.builder(JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
@@ -76,7 +76,11 @@ public class SheetMusicController {
 			description = "files에 JPG·PNG·WEBP 이미지 1~20장(장당 10 MiB, 가로·세로 8000px·4000만 화소 이하) 또는 PDF 1개(20 MiB 이하). "
 					+ "요청 전체 50 MiB. 회원당 악보 100개·500 MiB. source는 UPLOADED(기본) 또는 RENDERED(FE가 채보로 렌더링한 악보).")
 	@ApiResponse(responseCode = "201", description = "등록. 페이지별 보기 URL(1시간)을 포함한 상세")
-	@ApiResponse(responseCode = "400", description = "SHEET_INVALID: 제목·source 형식, 파일 없음·빈 파일·21장 이상·이미지와 PDF 섞음·PDF 2개 이상, 깨진 파일, 화소 상한",
+	@ApiResponse(responseCode = "400", description = "SHEET_INVALID: 제목·source 형식, songId가 양의 정수 문자열이 아님, 파일 없음·빈 파일·21장 이상·이미지와 PDF 섞음·PDF 2개 이상, 깨진 파일, 화소 상한",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "404", description = "SONG_NOT_FOUND: songId의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡)",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "409", description = "SHEET_ALREADY_LINKED: 그 곡에 살아 있는 악보가 이미 있음. 지우면 다시 올릴 수 있다",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "413", description = "SHEET_TOO_LARGE(파일 크기), SHEET_QUOTA_EXCEEDED(회원당 개수·용량)",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
@@ -87,6 +91,8 @@ public class SheetMusicController {
 	public ResponseEntity<SheetDetail> register(@Parameter(hidden = true) AuthUser me,
 			@Parameter(description = "악보 제목, 1~100자") @RequestParam(value = "title", required = false) String title,
 			@Parameter(description = "UPLOADED(기본) 또는 RENDERED") @RequestParam(value = "source", required = false) String source,
+			@Parameter(description = "연결할 개인 곡 id(248번). 본인의 살아 있는 개인 곡이 아니면 404 SONG_NOT_FOUND, 이미 악보가 있으면 409 SHEET_ALREADY_LINKED")
+			@RequestParam(value = "songId", required = false) String songId,
 			HttpServletRequest request) {
 		if (!fields(request)) throw invalid();
 		String cleanTitle = title(title);
@@ -94,7 +100,7 @@ public class SheetMusicController {
 			case "UPLOADED", "RENDERED" -> source;
 			default -> throw invalid();
 		};
-		var detail = service.register(me.id(), cleanTitle, cleanSource, files(request));
+		var detail = service.register(me.id(), cleanTitle, cleanSource, songId(songId), files(request));
 		return ResponseEntity.created(URI.create("/api/v1/sheets/" + detail.id())).body(detail);
 	}
 
@@ -140,7 +146,7 @@ public class SheetMusicController {
 		return ResponseEntity.noContent().build();
 	}
 
-	/** 일반 필드는 title·source만, 각 1개씩. */
+	/** 일반 필드는 title·source·songId(248)만, 각 1개씩. */
 	private static boolean fields(HttpServletRequest request) {
 		for (var entry : request.getParameterMap().entrySet())
 			if (!REGISTER_FIELDS.contains(entry.getKey()) || entry.getValue().length != 1) return false;
@@ -152,6 +158,18 @@ public class SheetMusicController {
 		var multipart = WebUtils.getNativeRequest(request, MultipartHttpServletRequest.class);
 		if (multipart == null || multipart.getMultiFileMap().size() != 1 || multipart.getFiles("files").isEmpty()) throw invalid();
 		return multipart.getFiles("files");
+	}
+
+	/** 248: 양의 정수 문자열만 받는다. 공백·부호·소수·0·앞자리 0·Long 범위 초과는 SHEET_INVALID. */
+	private static Long songId(String value) {
+		if (value == null) return null;
+		if (!value.matches("[1-9][0-9]{0,18}")) throw invalid();
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException ex) {
+			// 19자리 중 Long 최댓값(9223372036854775807)을 넘는 값
+			throw invalid();
+		}
 	}
 
 	private static String title(String value) {
