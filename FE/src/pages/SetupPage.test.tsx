@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createStaticHandler, createStaticRouter, StaticRouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useSettings } from '@/store/settingsStore';
+import { useLive } from '@/store/liveStore';
 import { SetupPage } from './SetupPage';
 
 // useBlocker가 데이터 라우터를 요구하므로 정적 데이터 라우터로 렌더한다
@@ -61,5 +62,67 @@ describe('SetupPage 페달 줄', () => {
   // 인수 조건: 키보드 전용(기본)에서도 페달 줄이 없다
   it('키보드 전용에서는 페달 줄이 없다', async () => {
     expect(await renderSetup()).not.toContain('setup-pedal');
+  });
+});
+
+describe('SetupPage ② 드럼 위치 보정(PLAY-004 4-5)', () => {
+  function putLive(patch: Record<string, unknown>): void {
+    const initial = useLive.getInitialState() as unknown as Record<string, unknown>;
+    for (const key of Object.keys(patch)) {
+      const prev = initial[key];
+      restores.push(() => {
+        initial[key] = prev;
+      });
+    }
+    Object.assign(initial, patch);
+    useLive.setState(patch);
+  }
+  const good = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };
+
+  it('앵커가 없으면 "드럼 위치를 아직 잡지 않았어요"와 [보정 시작]. 드래그 칩은 없다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null] });
+    putLive({ connected: [true, true] });
+    const html = await renderSetup();
+    expect(html).toContain('드럼 위치를 아직 잡지 않았어요');
+    expect(html).toContain('보정 시작');
+    expect(html).not.toContain('넓게');
+    expect(html).not.toContain('좁게');
+    expect(html).not.toContain('패드를 끌어');
+  });
+
+  it('양손 앵커가 있으면 완료 요약과 [다시 하기]', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, { SNARE: good }] });
+    putLive({ connected: [true, true], referenceSetAt: null });
+    const html = await renderSetup();
+    expect(html).toContain('보정했어요');
+    expect(html).toContain('다시 하기');
+  });
+
+  it('한 손만 보정한 채 다른 손이 붙으면 다시 "보정 필요"', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, null] });
+    putLive({ connected: [true, true] });
+    expect(await renderSetup()).toContain('드럼 위치를 아직 잡지 않았어요');
+  });
+
+  it('재정렬이 필요한 손이 있으면 요약이 그 손을 짚는다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, { SNARE: good }] });
+    putLive({ connected: [true, true], realignNeeded: [false, true] });
+    expect(await renderSetup()).toContain('오른손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요');
+  });
+
+  it('보정 중이면 ② 본문이 CalibrationStage', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null] });
+    putLive({
+      connected: [true, true],
+      calibration: {
+        mode: 'capture',
+        capture: { phase: 'capturing', hands: [0, 1], index: 0, target: 'SNARE', counts: [0, 0], captured: {}, warning: null, lastAccepted: null },
+        realign: null,
+        hands: [0, 1],
+      },
+    });
+    const html = await renderSetup();
+    expect(html).toContain('cal-stage-capture');
+    expect(html).toContain('스네어를 양손으로 2번씩 쳐 주세요');
   });
 });

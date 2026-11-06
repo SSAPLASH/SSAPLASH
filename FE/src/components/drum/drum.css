@@ -278,3 +278,34 @@
   fill: var(--neon);
   opacity: 0.32;
 }
+
+/* ---- 보정 화면(PLAY-004): 유령 목표 패드·흐린 페달·나타남 ---- */
+.drum-pad-ghost {
+  opacity: 0.45;
+}
+.drum-pad-ghost .drum-pad-ring.armed {
+  animation: drum-ghost-blink 0.9s ease-in-out infinite;
+}
+@keyframes drum-ghost-blink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.drum-pad-faded {
+  opacity: 0.35;
+}
+/* 나타남: motion-184 토큰(0.2s ease-out), 0.8 → 1 */
+.drum-pad-appear {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drum-pad-appear 0.2s ease-out;
+}
+@keyframes drum-pad-appear {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-ghost .drum-pad-ring.armed,
+  .drum-pad-appear {
+    animation: none;
+  }
+}

@@ -1,0 +1,129 @@
+/* 보정·재정렬 공용 조각(PLAY-004). 세팅 ② 본문(CalibrationStage)과 네 진입점의 RealignPrompt */
+
+/* ---- 재정렬 프롬프트 ---- */
+.realign-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.realign-prompt.card {
+  padding: var(--space-s) var(--space-m);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.realign-prompt.row {
+  flex: 1;
+  justify-content: flex-end;
+}
+.realign-prompt.band {
+  width: 100%;
+  justify-content: center;
+  padding: var(--space-xs) var(--space-m);
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface-1));
+  border-radius: var(--radius-control);
+}
+.realign-hands {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.realign-hand {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-1);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.realign-hand.off {
+  opacity: 0.3;
+}
+.realign-hand.wait {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.realign-hand.done {
+  background: var(--good, #4caf50);
+  border-color: var(--good, #4caf50);
+  color: #0e1320;
+}
+.realign-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-1);
+}
+.realign-prompt.row .realign-text {
+  flex: none;
+}
+.realign-skip {
+  flex: none;
+}
+
+/* ---- 세팅 ② 보정 본문 ---- */
+.cal-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.cal-stage-kit {
+  width: 100%;
+  border-radius: var(--radius-control);
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  padding: var(--space-s) 0;
+}
+.cal-stage-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+}
+.cal-stage-target {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.cal-stage-counts {
+  display: inline-flex;
+  gap: var(--space-s);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cal-stage-counts .full {
+  color: var(--good, #4caf50);
+}
+.cal-stage-warn {
+  color: var(--danger, #e5484d);
+  font-size: 13px;
+}
+.cal-stage-hint {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.cal-stage-progress {
+  display: inline-flex;
+  gap: 4px;
+}
+.cal-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.cal-stage-dot.done {
+  background: var(--good, #4caf50);
+  border-color: var(--good, #4caf50);
+}
+.cal-stage-dot.now {
+  background: var(--brand);
+  border-color: var(--brand);
+}

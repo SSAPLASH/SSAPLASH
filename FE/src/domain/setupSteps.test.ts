@@ -7,6 +7,8 @@ import {
   returnTargetName,
   setupBarCleanText,
   setupSteps,
+  realignText,
+  CALIBRATION_NEEDED_TEXT,
   unsavedLeaveText,
   type SetupStepsInput,
 } from './setupSteps';
@@ -154,5 +156,25 @@ describe('dongleLine', () => {
   });
   it('LINK가 끊기면 빨간 점과 다시 꽂기 안내', () => {
     expect(dongleLine('stale', [false, false])).toMatchObject({ dot: 'off', action: '다른 동글 연결' });
+  });
+});
+
+describe('setupSteps ② 보정 카드 문구(PLAY-004 4-5)', () => {
+  it('앵커가 없으면 "드럼 위치를 아직 잡지 않았어요"', () => {
+    expect(setupSteps({ ...allDone, firstSetupDone: false }, NOW).steps[1].summary).toBe(CALIBRATION_NEEDED_TEXT);
+  });
+
+  it('재정렬이 필요한 손이 있으면 그 손을 짚는 요약, 상태는 done', () => {
+    const r = setupSteps({ ...allDone, realignNeeded: [false, true] }, NOW).steps[1];
+    expect(r).toEqual({ id: 'calibration', status: 'done', summary: '오른손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요' });
+    expect(setupSteps({ ...allDone, realignNeeded: [true, true] }, NOW).steps[1].summary).toBe(
+      '스틱이 다시 켜졌어요 · 스네어를 왼손·오른손 한 번씩 쳐 주세요',
+    );
+  });
+
+  it('realignText 단독', () => {
+    expect(realignText(undefined)).toBeNull();
+    expect(realignText([false, false])).toBeNull();
+    expect(realignText([true, false])).toBe('왼손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요');
   });
 });

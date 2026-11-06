@@ -173,6 +173,22 @@ describe('ReadyPanel 슬롯·악보 읽는 법', () => {
   });
 });
 
+describe('ReadyPanel 재정렬 행(PLAY-004 D11)', () => {
+  it('realign이 있으면 「보정」 행에 프롬프트(row)·[건너뛰기]가 오고 준비 완료·[시작]은 그대로', () => {
+    const html = render({ realign: { hands: [0, 1], done: [true, false], onSkip: noop } });
+    expect(html).toContain('realign-prompt row');
+    expect(html).toContain('오른손으로 스네어를 한 번 쳐 주세요');
+    expect(html).toContain('건너뛰기');
+    expect(html).toContain('준비 완료');
+    expect(html).not.toContain('disabled');
+  });
+  it('보정이 필요한 상태(firstSetup 누락)면 프롬프트 대신 「필요」', () => {
+    const html = need(['firstSetup'], { realign: { hands: [0], done: [false, false], onSkip: noop } });
+    expect(html).not.toContain('realign-prompt');
+    expect(html).toContain('>필요<');
+  });
+});
+
 describe('ReadyPanel footer 슬롯', () => {
   it('footer는 두 열 아래(body 뒤)에 그대로 들어가고, 없으면 아무것도 없다', () => {
     const html = render({ footer: <div className="x-footer">비슷한 곡</div> });
