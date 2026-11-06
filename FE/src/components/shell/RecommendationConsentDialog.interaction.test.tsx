@@ -87,9 +87,9 @@ describe('기존 사용자 학습 동의 안내', () => {
   it('한 번도 답하지 않았으면 본문 요약과 두 버튼이 뜬다', async () => {
     setup();
     expect(await screen.findByRole('dialog', { name: title })).toBeTruthy();
-    expect(screen.getByText(/사용자에게 맞는 곡을 추천하는 모델을 만들고 평가하는 것/)).toBeTruthy();
+    expect(screen.getByText(/곡 추천 모델을 학습·평가하고 개선해요/)).toBeTruthy();
     expect(screen.getByText(/설정에서 언제든 철회할 수 있어요/)).toBeTruthy();
-    expect(screen.getByText(/동의하지 않아도 곡 추천을 포함한 모든 기능을 그대로 쓸 수 있어요/)).toBeTruthy();
+    expect(screen.getByText(/맞춤 모델 추천 대신 기본 추천을 제공해요/)).toBeTruthy();
     expect(screen.getByRole('button', { name: '동의하고 사용' })).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '괜찮아요' }));
     expect(getRecommendationConsent).toHaveBeenCalledTimes(1);
