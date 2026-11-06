@@ -102,20 +102,28 @@ export function setupBarCalibratingText(c: SetupBarCalibrating, presetName: stri
   return `${head} · ${c.total}개 중 ${c.index + 1}번째`;
 }
 
+/** 하단 바: 추가하기 보정을 마치고 초안을 들고 있을 때(Figma ④·⑤). slot = 고른 빈 슬롯 번호(아직 안 골랐으면 null) */
+export function setupBarDraftText(slot: number | null): string {
+  return slot === null ? '보정 완료 · 빈 슬롯을 눌러 저장해요' : `보정 완료 · 슬롯 ${slot}에 저장할 이름을 정해요`;
+}
+
 /**
  * 하단 바 상태. leaving = 변경이 있는 채로 나가려 해서 이탈 확인이 열려 있다.
- * calibrating이 있으면 보정 중 문구에 [저장] 비활성(UX-64)
+ * calibrating이 있으면 보정 중 문구에 [저장] 비활성, draft가 있으면 저장 안내에 [저장] 비활성(UX-64)
  */
 export function setupBarView(input: {
   activePresetName: string | null;
   dirty: boolean;
   leaving: boolean;
   calibrating?: SetupBarCalibrating | null;
+  /** 초안을 들고 슬롯·이름 창이 열린 동안. slot은 고른 슬롯 번호 */
+  draft?: { slot: number | null } | null;
 }): SetupBarView {
-  const { activePresetName, dirty, leaving, calibrating } = input;
+  const { activePresetName, dirty, leaving, calibrating, draft } = input;
   if (calibrating) {
     return { text: setupBarCalibratingText(calibrating, activePresetName), tone: 'caption', button: 'save', buttonEnabled: false };
   }
+  if (draft) return { text: setupBarDraftText(draft.slot), tone: 'caption', button: 'save', buttonEnabled: false };
   if (dirty && leaving) {
     return { text: SETUP_BAR_DIRTY_TEXT, tone: 'leaving', button: activePresetName === null ? 'saveNew' : 'save', buttonEnabled: true };
   }
