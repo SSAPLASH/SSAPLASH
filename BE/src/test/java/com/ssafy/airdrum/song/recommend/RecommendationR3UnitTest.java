@@ -16,7 +16,7 @@ class RecommendationR3UnitTest {
 
 	static Candidate song(long id, double density) { return new Candidate(id, id * 10, "HARD", "BEGINNER", 100, density, Map.of()); }
 	static List<Long> ids(List<RecommendationScorer.Scored> list) { return list.stream().map(s -> s.candidate().songId()).toList(); }
-	static RecommendationR3Settings settings(int percent) { return new RecommendationR3Settings(true, percent, 7, 0.75, "a, b ,", "secret"); }
+	static RecommendationR3Settings settings(int percent) { return new RecommendationR3Settings(true, percent, 7, 0.75, "a, b ,"); }
 
 	@Test void hardLimitRemovesSongsWhateverTheirRank() {
 		var all = List.of(song(1, 7.0), song(2, 4.0));
@@ -62,22 +62,16 @@ class RecommendationR3UnitTest {
 		assertThat(in50).isBetween(900, 1100);
 	}
 
-	@Test void userKeyIsTheFirst32HexOfSha256() {
-		// printf 'secret:1' | sha256sum
-		assertThat(settings(0).userKey(1)).hasSize(32).matches("[0-9a-f]{32}").isEqualTo(settings(100).userKey(1));
-		assertThat(settings(0).userKey(1)).isNotEqualTo(settings(0).userKey(2));
-	}
-
 	@Test void acceptedVersionsAreTrimmedAndEmptyMeansNone() {
 		assertThat(settings(0).accepts("b")).isTrue();
 		assertThat(settings(0).accepts("c")).isFalse();
-		assertThat(new RecommendationR3Settings(false, 0, 7, 0.75, "", "").accepts("")).isFalse();
+		assertThat(new RecommendationR3Settings(false, 0, 7, 0.75, "").accepts("")).isFalse();
 	}
 
 	@Test void badSettingsFailAtStartup() {
-		assertThatThrownBy(() -> new RecommendationR3Settings(true, 101, 7, 0.75, "", "")).isInstanceOf(IllegalStateException.class);
-		assertThatThrownBy(() -> new RecommendationR3Settings(true, 0, 0, 0.75, "", "")).isInstanceOf(IllegalStateException.class);
-		assertThatThrownBy(() -> new RecommendationR3Settings(true, 0, 7, 1.5, "", "")).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> new RecommendationR3Settings(true, 101, 7, 0.75, "")).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> new RecommendationR3Settings(true, 0, 0, 0.75, "")).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> new RecommendationR3Settings(true, 0, 7, 1.5, "")).isInstanceOf(IllegalStateException.class);
 	}
 
 	@Test void secretDoesNotAppearInToString() {
