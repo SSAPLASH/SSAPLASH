@@ -23,7 +23,7 @@ vi.mock('@/store/songStore', async (orig) => ({ ...(await orig<typeof import('@/
 
 const sum = (id: number, d: Difficulty[]): SongSummary => ({
   id, title: `곡${id}`, artist: 'a', source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 10000,
-  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: null, difficulties: d, createdAt: '', coverUrl: null,
+  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: null, difficulties: d, createdAt: '', coverUrl: null, sheetId: null,
 });
 const CH: Record<number, { song: number; d: Difficulty }> = { 10: { song: 1, d: 'EASY' }, 11: { song: 1, d: 'NORMAL' }, 12: { song: 1, d: 'HARD' }, 51: { song: 5, d: 'EASY' }, 50: { song: 5, d: 'NORMAL' }, 60: { song: 6, d: 'HARD' } };
 const detail = (id: number): SongDetail => ({
