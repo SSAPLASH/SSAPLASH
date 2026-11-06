@@ -96,6 +96,7 @@ class WithdrawalServiceTest {
 		for (var id : created) {
 			jdbc.update("delete from recordings where user_id = ?", id);
 			jdbc.update("delete from telemetry_events where user_id = ?", id);
+			jdbc.update("delete from telemetry_session_conditions where user_id = ?", id);
 			jdbc.update("delete from kit_presets where user_id = ?", id);
 			jdbc.update("delete from social_accounts where user_id = ?", id);
 			jdbc.update("delete from users where id = ?", id);
@@ -118,8 +119,9 @@ class WithdrawalServiceTest {
 		assertThat(presets.countByUserId(user.getId())).isZero();
 		// 257 U7: 살아 있는 녹음·지운 녹음 모두 탈퇴 트랜잭션에서 지운다
 		assertThat(recordings(user.getId())).isZero();
-		// 258: 그 회원의 텔레메트리도 탈퇴 트랜잭션에서 지운다
+		// 258: 그 회원의 텔레메트리도 탈퇴 트랜잭션에서 지운다. 259: 측정 조건 행도 같다
 		assertThat(telemetry(user.getId())).isZero();
+		assertThat(conditions(user.getId())).isZero();
 		assertThat(refreshTokens.rotate(token).outcome()).isEqualTo(Outcome.UNKNOWN);
 		assertThat(events.committed).containsExactly(user.getId());
 		// 다른 회원 데이터는 그대로
@@ -127,6 +129,7 @@ class WithdrawalServiceTest {
 		assertThat(presets.countByUserId(other.getId())).isEqualTo(1);
 		assertThat(recordings(other.getId())).isEqualTo(2);
 		assertThat(telemetry(other.getId())).isEqualTo(2);
+		assertThat(conditions(other.getId())).isEqualTo(1);
 		// 258: user_id가 NULL인 행은 탈퇴와 무관하다
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM telemetry_events WHERE session_id = ?::uuid AND user_id IS NULL",
 				Integer.class, ANONYMOUS_SESSION)).isEqualTo(1);
@@ -155,6 +158,7 @@ class WithdrawalServiceTest {
 		assertThat(presets.countByUserId(user.getId())).isEqualTo(1);
 		assertThat(recordings(user.getId())).isEqualTo(2);
 		assertThat(telemetry(user.getId())).isEqualTo(2);
+		assertThat(conditions(user.getId())).isEqualTo(1);
 	}
 
 	@Test
@@ -219,11 +223,18 @@ class WithdrawalServiceTest {
 		// 텔레메트리: 타격·상태 이벤트 하나씩(임베디드 PG에서는 hypertable이 아닌 일반 테이블)
 		for (String kind : new String[] {"HIT", "STATUS"})
 			jdbc.update("INSERT INTO telemetry_events(time,session_id,user_id,kind) VALUES(now(),gen_random_uuid(),?,?)", user.getId(), kind);
+		// 259 측정 조건: 세션 하나
+		jdbc.update("INSERT INTO telemetry_session_conditions(user_id,session_id,sensor_mount,received_at) VALUES(?,gen_random_uuid(),'GRIP_FRONT',now())",
+				user.getId());
 		return user;
 	}
 
 	private int telemetry(long userId) {
 		return jdbc.queryForObject("SELECT count(*) FROM telemetry_events WHERE user_id = ?", Integer.class, userId);
+	}
+
+	private int conditions(long userId) {
+		return jdbc.queryForObject("SELECT count(*) FROM telemetry_session_conditions WHERE user_id = ?", Integer.class, userId);
 	}
 
 	private int recordings(long userId) {

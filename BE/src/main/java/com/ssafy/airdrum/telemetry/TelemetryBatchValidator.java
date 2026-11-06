@@ -10,13 +10,14 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 import com.ssafy.airdrum.common.error.BusinessException;
+import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Conditions;
 import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Event;
 import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Judgement;
 import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Kind;
 
 /**
- * 파싱된 배치의 의미 규칙(설계 3-2~3-4). 첫 위반에서 멈추고 {@code events[i].필드: 이유}를 detail로 낸다.
- * 값을 보정하거나 0으로 채우지 않으며, 거부된 값은 detail에 넣지 않는다.
+ * 파싱된 배치의 의미 규칙(설계 3-2~3-4, 259 조건은 3-1). 외피 → 이벤트 → conditions 순서로 첫 위반에서 멈추고
+ * {@code events[i].필드: 이유}·{@code conditions.필드: 이유}를 detail로 낸다. 값을 보정하거나 0으로 채우지 않으며, 거부된 값은 detail에 넣지 않는다.
  */
 @Component
 public class TelemetryBatchValidator {
@@ -49,6 +50,26 @@ public class TelemetryBatchValidator {
 			if (e == null) throw invalid(at, "이벤트 객체가 필요합니다");
 			event(at, e, latest);
 		}
+		if (batch.conditions() != null) conditions(batch.conditions());
+	}
+
+	/** 259 측정 조건의 의미 규칙(설계 3-1). 타입·목록 밖 값은 파서가 먼저 거절하므로 여기서는 길이·범위만 본다. */
+	private static void conditions(Conditions c) {
+		if (c.firmware() != null) {
+			length("conditions.firmware.0", c.firmware().stick0(), 1, 64);
+			length("conditions.firmware.1", c.firmware().stick1(), 1, 64);
+		}
+		length("conditions.dongleFirmware", c.dongleFirmware(), 1, 64);
+		if (c.linkMask() != null && (c.linkMask() < 0 || c.linkMask() > 15)) throw invalid("conditions.linkMask", "0~15 정수여야 합니다");
+		length("conditions.appBuild", c.appBuild(), 1, 64);
+		length("conditions.note", c.note(), 0, 200);
+	}
+
+	/** 길이는 Java 문자 수 기준. U+0000은 PG text가 거절해 500이 되므로 여기서 400으로 막는다. */
+	private static void length(String at, String value, int min, int max) {
+		if (value == null) return;
+		if (value.length() < min || value.length() > max) throw invalid(at, min + "~" + max + "자 문자열이어야 합니다");
+		if (value.indexOf('\0') >= 0) throw invalid(at, "U+0000을 포함할 수 없습니다");
 	}
 
 	private static void event(String at, Event e, java.time.Instant latest) {

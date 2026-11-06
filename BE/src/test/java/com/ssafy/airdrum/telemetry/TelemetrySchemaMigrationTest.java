@@ -68,6 +68,42 @@ class TelemetrySchemaMigrationTest {
 		}
 	}
 
+	/** 259 V39: 세션 조건은 (user_id, session_id)당 한 행이고 범위·목록·길이 CHECK를 DB가 막는다. */
+	@Test
+	void v39CreatesSessionConditionsWithPrimaryKeyAndChecks() throws Exception {
+		schema = "tm_" + UUID.randomUUID().toString().replace("-", "");
+		// 테스트 복사본은 V8·V30이 빠져 V1~V39가 37개다.
+		assertThat(flyway("39").migrate().migrationsExecuted).isEqualTo(37);
+		try (var c = connect()) {
+			c.createStatement().execute("""
+					INSERT INTO telemetry_session_conditions(user_id,session_id,firmware_0,firmware_1,dongle_firmware,link_mask,haptic_enable,
+						sensor_mount,app_build,note,received_at)
+					VALUES (1,'00000000-0000-0000-0000-000000000259','1.5',NULL,'2.3',15,true,'GRIP_FRONT','v3.0','','2026-11-06T01:00:00Z')
+					""");
+			assertThat(scalar(c, "SELECT firmware_0||':'||link_mask||':'||sensor_mount||':'||length(note) FROM telemetry_session_conditions"))
+					.isEqualTo("1.5:15:GRIP_FRONT:0");
+			// 모든 값이 null이어도 행은 남는다(보낸 적 있음).
+			c.createStatement().execute("""
+					INSERT INTO telemetry_session_conditions(user_id,session_id,received_at)
+					VALUES (2,'00000000-0000-0000-0000-000000000259','2026-11-06T01:00:00Z')
+					""");
+			assertThat(scalar(c, "SELECT count(*) FROM telemetry_session_conditions")).isEqualTo("2");
+			var at = "'2026-11-06T01:00:00Z'";
+			for (var bad : new String[][] {
+					{"(1,'00000000-0000-0000-0000-000000000259'," + at + ",NULL,NULL,NULL)", "telemetry_session_conditions_pkey"},
+					{"(3,'00000000-0000-0000-0000-000000000259'," + at + ",16,NULL,NULL)", "link_mask"},
+					{"(3,'00000000-0000-0000-0000-000000000259'," + at + ",-1,NULL,NULL)", "link_mask"},
+					{"(3,'00000000-0000-0000-0000-000000000259'," + at + ",NULL,'TIP',NULL)", "sensor_mount"},
+					{"(3,'00000000-0000-0000-0000-000000000259'," + at + ",NULL,NULL,'" + "x".repeat(201) + "')", "character varying(200)"},
+					{"(3,'00000000-0000-0000-0000-000000000259',NULL,NULL,NULL,NULL)", "received_at"}}) {
+				assertThatThrownBy(() -> c.createStatement().execute(
+						"INSERT INTO telemetry_session_conditions(user_id,session_id,received_at,link_mask,sensor_mount,note) VALUES " + bad[0]))
+						.as(bad[0]).isInstanceOf(SQLException.class).hasMessageContaining(bad[1]);
+			}
+			assertThat(scalar(c, "SELECT count(*) FROM telemetry_session_conditions")).isEqualTo("2");
+		}
+	}
+
 	Flyway flyway(String target) {
 		return Flyway.configure().dataSource(source).schemas(schema).defaultSchema(schema)
 				.locations("classpath:db/test-migration").target(target).load();

@@ -60,7 +60,9 @@ public class TelemetryController {
 	@PostMapping(value = "/batches", consumes = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(summary = "텔레메트리 배치 수신",
 			description = "schemaVersion 1. 같은 세션·mode의 HIT·STATUS 이벤트 1~100건, 본문 128 KiB 이하. 한 건이라도 규칙 위반이면 "
-					+ "전체 거절(400), 저장 실패는 전체 롤백(500). 재전송·멱등 처리는 없다. 회원은 인증 주체로 정한다.",
+					+ "전체 거절(400), 저장 실패는 전체 롤백(500). 재전송·멱등 처리는 없다. 회원은 인증 주체로 정한다. "
+					+ "선택 객체 conditions(259 측정 조건)가 있으면 (회원, 세션)당 한 행을 그 값으로 통째로 바꾸고, 없으면 행을 건드리지 않는다. "
+					+ "conditions 안의 모르는 키만 무시한다.",
 			requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
 					content = @Content(schema = @Schema(implementation = TelemetryBatchRequest.class))))
 	@ApiResponse(responseCode = "200", description = "배치 전체 저장", content = @Content(schema = @Schema(implementation = BatchAccepted.class)))
@@ -75,7 +77,7 @@ public class TelemetryController {
 	@GetMapping("/sessions")
 	@Operation(summary = "세션 목록",
 			description = "(userId, sessionId)별 기간·건수. 이벤트 time 기준 [from, to] 양끝 포함, 기본은 지금까지 최근 7일, 최대 31일. "
-					+ "lastEventTime 내림차순. 기간 밖 이벤트는 세지 않는다.")
+					+ "lastEventTime 내림차순. 기간 밖 이벤트는 세지 않는다. conditions는 259 측정 조건(요청 외피와 같은 모양)이며 받은 적 없으면 null.")
 	public PageResponse<SessionSummary> sessions(
 			@Parameter(description = "ISO-8601. 생략 시 to − 7일") @RequestParam(required = false) Instant from,
 			@Parameter(description = "ISO-8601. 생략 시 지금") @RequestParam(required = false) Instant to,
