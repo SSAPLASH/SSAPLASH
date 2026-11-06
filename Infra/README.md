@@ -142,6 +142,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 | 실행 위치 | 앱 서버의 컨테이너. PyTorch가 필요 없어 GPU 서버로 가지 않는다. 그래서 DB 포트 개방, SSH 터널, 공개 Nginx 경로가 필요 없다. 공개 Nginx의 `/internal/`은 그대로 404다 |
 | 권한 | 내부 네트워크만, `cap_drop: ALL`, `no-new-privileges`, 메모리 2GiB |
 | 상태 줄 | 끝에 `recommend-batch status=OK` 또는 `status=FAIL ...` 한 줄 |
+| 시간 제한 | `RECOMMEND_BATCH_TIMEOUT_SEC`(기본 3600초)가 지나면 멈추고 `status=FAIL error=Timeout`을 남긴다. 철회 전에 시작한 배치의 기록이 메모리에 남는 최대 시간이다. 값을 바꾸면 동의 문구도 맞춘다 |
 
 **준비 순서 (BE MR이 서버 DB에 적용된 뒤 서버에서 직접 한다)**
 

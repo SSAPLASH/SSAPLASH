@@ -610,9 +610,10 @@ services:
         case "$$SSAPLASH_RECOMMEND_EXPORT_DSN" in
           *:@*) echo "recommend-batch status=FAIL error=MissingExportPassword"; sleep 15; exit 1 ;;
         esac
-        python -m ssaplash_ai.recommend.batch "$$@"
+        # 전체 시간 제한. 철회자의 기록이 메모리에 남는 최대 시간이기도 하다. 끝나면 프로세스와 함께 사라진다
+        timeout -k 30 "$$RECOMMEND_BATCH_TIMEOUT_SEC" python -m ssaplash_ai.recommend.batch "$$@"
         code=$$?
-        if [ "$$code" -eq 0 ]; then echo "recommend-batch status=OK"; else echo "recommend-batch status=FAIL code=$$code"; fi
+        if [ "$$code" -eq 0 ]; then echo "recommend-batch status=OK"; elif [ "$$code" -eq 124 ] || [ "$$code" -eq 137 ]; then echo "recommend-batch status=FAIL error=Timeout"; else echo "recommend-batch status=FAIL code=$$code"; fi
         sleep 15
         exit $$code
       - recommend-batch
@@ -622,6 +623,7 @@ services:
       SSAPLASH_RECOMMEND_EXPORT_DSN: postgresql://recommend_export:${RECOMMEND_EXPORT_PASSWORD:-}@postgres:5432/${POSTGRES_DB}
       SSAPLASH_WORKER_BASE_URL: http://api:8080
       SSAPLASH_WORKER_TOKEN: ${RECOMMEND_BATCH_TOKEN:-}
+      RECOMMEND_BATCH_TIMEOUT_SEC: ${RECOMMEND_BATCH_TIMEOUT_SEC:-3600}
       MLFLOW_TRACKING_URI: http://mlflow:5000
     networks:
       - internal
