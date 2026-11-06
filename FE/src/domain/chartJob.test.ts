@@ -6,6 +6,7 @@ import {
   newIdempotencyKey,
   precheckAudio,
   songStatusToProgress,
+  jobSnapshotToProgress,
   uploadErrorText,
 } from './chartJob';
 
@@ -102,5 +103,19 @@ describe('기타', () => {
     const a = newIdempotencyKey();
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(newIdempotencyKey()).not.toBe(a);
+  });
+});
+
+
+describe('jobSnapshotToProgress', () => {
+  it.each(['QUEUED', 'SEPARATING', 'TRANSCRIBING', 'DONE', 'FAILED'])('%s 단계를 그대로 반영한다', (status) => {
+    expect(jobSnapshotToProgress({ status, progress: 0, error: null })).toMatchObject({ stage: status, stageKnown: true, percent: 0 });
+  });
+  it.each([null, -1, 101, 1.5, '50', NaN])('유효하지 않은 진행률 %s는 숨긴다', (progress) => {
+    expect(jobSnapshotToProgress({ status: 'TRANSCRIBING', progress, error: null })?.percent).toBeNull();
+  });
+  it('100은 보존하고 모르는 단계는 반영하지 않는다', () => {
+    expect(jobSnapshotToProgress({ status: 'DONE', progress: 100, error: null })?.percent).toBe(100);
+    expect(jobSnapshotToProgress({ status: 'OTHER', progress: 20, error: null })).toBeNull();
   });
 });
