@@ -10,6 +10,16 @@ const SETUP_PRIORITY = -1;
 
 export const SETUP_TAGS: readonly LiveTag[] = ['LIVE_SETUP_OFFSET', 'LIVE_SETUP_PADS'];
 
+/** 스틱 입력인가. 세팅 안내는 스틱에서만 뜬다(키보드·포인터는 패드 위치와 기기 지연이 다르다) */
+export function isStickSensor(sensorKind: string): boolean {
+  return sensorKind === 'ble' || sensorKind === 'websocket';
+}
+
+/** 플레이 로그에서 이 판에 뜬 세팅 안내 태그를 고른다 */
+export function setupTagsOf(events: readonly { tag: string }[] | undefined): string[] {
+  return (events ?? []).map((e) => e.tag).filter((tag) => (SETUP_TAGS as readonly string[]).includes(tag));
+}
+
 export function evaluateSetupHints(m: WindowMetrics): RuleEvaluation[] {
   const c = LIVE_COACH_CONFIG.setup;
   const s = m.setup;
@@ -30,7 +40,7 @@ export function evaluateSetupHints(m: WindowMetrics): RuleEvaluation[] {
       trigger: steadyOffset,
       release: false,
       severity: 1,
-      text: '소리 타이밍이 일정하게 어긋나요. 세팅에서 소리 지연을 맞춰 보세요.',
+      text: '소리 타이밍이 일정하게 어긋나요. 설정에서 타격음 지연 보정을 맞춰 보세요.',
       target: null,
     },
     {
