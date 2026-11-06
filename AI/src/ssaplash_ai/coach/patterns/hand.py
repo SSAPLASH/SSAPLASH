@@ -42,7 +42,7 @@ def detect_hand_weak(notes: NoteTable, th: Thresholds) -> list[Candidate]:
             pattern="HAND_WEAK",
             from_ms=start,
             to_ms=end,
-            description=f"한쪽 손이 상대 손보다 {(1 - ratio) * 100:.0f}% 약하게 쳐요.",
+            description=f"{'왼손' if weak_id == 0 else '오른손'}이 다른 손보다 {(1 - ratio) * 100:.0f}% 약하게 쳐요.",
             cause_tags=["WEAK", "HAND"],
             pads=pads,
             severity=clamp01((th.hand_ratio_max - ratio) / th.severity_hand_span),
