@@ -47,12 +47,12 @@ class SimilarSongsServiceTest {
 	}
 
 	private long builtin(String title, String kind, int durationMs, String timing) {
-		long id = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license) VALUES(?,'BUILTIN','READY',?,'CC0') RETURNING id", Long.class, title, durationMs);
+		long id = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license,bpm,time_signature) VALUES(?,'BUILTIN','READY',?,'CC0',120,'4/4') RETURNING id", Long.class, title, durationMs);
 		chart(id, kind, timing);
 		return id;
 	}
 	private long personal(String title, long owner, String kind) {
-		long id = db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,?,'MIDI','READY',100000) RETURNING id", Long.class, owner, title);
+		long id = db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms,bpm,time_signature) VALUES(?,?,'MIDI','READY',100000,120,'4/4') RETURNING id", Long.class, owner, title);
 		chart(id, kind, TIMING_120);
 		return id;
 	}
@@ -101,11 +101,11 @@ class SimilarSongsServiceTest {
 
 	private List<Long> songIds(SimilarResponses.Similar r) { return r.items().stream().map(i -> i.song().id()).toList(); }
 
-	@Test void 같은_종류의_곡이_가장_앞에_오고_기준_곡과_개인_곡과_격자_없는_곡은_빠진다() {
+	@Test void 같은_종류의_곡이_앞에_오고_기준_곡과_개인_곡은_빠진다() {
 		var result = service.similar(user, rockA, "NORMAL", 10);
 		assertThat(result.strategy()).isEqualTo("SIMILAR_V1");
-		assertThat(songIds(result)).doesNotContain(rockA, personal, noGrid).doesNotHaveDuplicates();
-		assertThat(songIds(result).getFirst()).isEqualTo(rockB);
+		assertThat(songIds(result)).doesNotContain(rockA, personal).doesNotHaveDuplicates();
+		assertThat(songIds(result).subList(0, 2)).containsExactlyInAnyOrder(rockB, noGrid);
 		assertThat(result.items()).allSatisfy(i -> {
 			assertThat(i.similarity()).isBetween(0.5, 1.0);
 			assertThat(i.matchedOn()).isNotEmpty().hasSizeLessThanOrEqualTo(2);
@@ -127,8 +127,15 @@ class SimilarSongsServiceTest {
 		assertThat(songIds(own)).contains(rockA).doesNotContain(personal);
 	}
 
-	@Test void 기준_곡에_격자가_없으면_200과_빈_목록이고_노출을_남기지_않는다() {
-		var result = service.similar(user, noGrid, "NORMAL", 5);
+	@Test void 격자가_없는_곡도_후보와_기준_곡이_된다() {
+		assertThat(db.queryForObject("SELECT count(*) FROM chart_features f JOIN chart_versions v ON v.id=f.chart_version_id JOIN charts c ON c.id=v.chart_id WHERE c.song_id=? AND (f.rhythm_grid -> 'groups') IS NOT NULL", Integer.class, noGrid)).isZero();
+		assertThat(songIds(service.similar(user, rockA, "NORMAL", 10))).contains(noGrid);
+		assertThat(songIds(service.similar(user, noGrid, "NORMAL", 10))).contains(rockA);
+	}
+
+	@Test void 기준_곡에_채보_특징이_없으면_200과_빈_목록이고_노출을_남기지_않는다() {
+		long empty = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license) VALUES('sim-empty','BUILTIN','READY',100000,'CC0') RETURNING id", Long.class);
+		var result = service.similar(user, empty, "NORMAL", 5);
 		assertThat(result.items()).isEmpty();
 		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE request_id=?", Integer.class, result.requestId())).isZero();
 	}

@@ -29,7 +29,7 @@ public class SimilarSongsController {
 	public SimilarSongsController(SimilarSongsService service) { this.service = service; }
 
 	@GetMapping
-	@Operation(summary = "비슷한 곡", description = "기준 곡과 연주 느낌(리듬·패드·전환·밀도·템포)이 비슷한 공용 곡을 곡당 채보 하나로 돌려줍니다. 후보가 없거나 기준 곡의 격자가 없으면 200과 빈 items입니다. 개인 곡은 결과에 나오지 않습니다. 호출하면 노출이 기록되며 클릭은 POST /api/v1/recommendations/{requestId}/clicks로 기록합니다.")
+	@Operation(summary = "비슷한 곡", description = "기준 곡과 연주 느낌(패드·전환·밀도·템포)이 비슷한 공용 곡을 곡당 채보 하나로 돌려줍니다. 후보가 없거나 기준 곡의 채보 특징이 없으면 200과 빈 items입니다. 개인 곡은 결과에 나오지 않습니다. 호출하면 노출이 기록되며 클릭은 POST /api/v1/recommendations/{requestId}/clicks로 기록합니다.")
 	@ApiResponse(responseCode = "400", description = "잘못된 파라미터", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	@ApiResponse(responseCode = "404", description = "없는 곡·타인의 개인 곡: SONG_NOT_FOUND", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	public Similar similar(@Parameter(hidden = true) AuthUser me,
