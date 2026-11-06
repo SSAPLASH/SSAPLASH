@@ -247,6 +247,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **화면**(`components/calibration/CalibrationStage`): 빈 `DrumKit` 위에 목표 패드가 유령(`ghost`)으로 깜빡이고, 손별 2타를 채우면 그 패드가 실제 친 위치(`placement`, 앵커 평균 방향 → `layoutToKitPoint`)에 0.2s 확대 모션으로 나타난다. 문구 "스네어를 양손으로 2번씩 쳐 주세요 (왼손 1/2 · 오른손 0/2)", 퍼짐 경고, 2초 넘게 타격이 없는데 스틱이 움직이면 "조금 세게 쳐 보세요". 끝난 드럼을 누르면 그 드럼만 다시(`redo`).
 - **스네어 재정렬**(`engine/SnareRealign`, `startRealign()`): 스틱이 다시 켜져 방위각 기준이 사라진 손(STATUS 비트 5 재연결 또는 버튼 보정 0x22를 받았고 앵커가 있는 손 = `liveStore.realignNeeded`)은 전체 보정 대신 스네어를 한 번 친다. `d = wrap180(친 방위각 − 저장 스네어 방위각)`를 `yawDriftMonitor.correct(stickId, d)`로 `SET_YAW_OFFSET(적용값 − d)` 전송. 고도각·저장 표는 그대로다. 대상이 아닌 손의 타격은 정상 판정이다(자유 연습에서 다른 손은 계속 친다).
 - **재정렬 진입점 네 곳**이 같은 `RealignPrompt`(손 점 L·R + 문구 + [건너뛰기], variant card/row/band)와 훅 `components/useRealign(enabled)`을 쓴다: 세팅 ② 카드, 연주 준비 기기 준비 카드의 「보정」 행, 곡 연주 끊김 복귀 카드(「재연결 성공!」 뒤 재정렬이 걸려 있으면 `useReconnectResume`이 `realigning`으로 카운트다운을 미루고, 치거나 건너뛰면 3·2·1 → 자동 재개), 자유 연습 띠. 준비 조건(`readiness`)은 막지 않는다. [건너뛰기]는 동글만 다시 꽂아 방향이 안 바뀐 경우를 위한 것이다.
+- **패드 단위 재보정**(후속 T9, UX "디폴트에서 옮겨서 저장"): 드럼 배치 카드에서 패드를 고르고 [이 드럼 다시 치기]를 누르면 `startCapture([pad])`로 그 패드만 연결된 손마다 2타를 받는다. 완료하면 그 손들의 그 패드 앵커·배치만 바뀌고 나머지는 유지된다(반경은 합친 집합으로 다시 계산). 표 지우기·소리·완료 부작용은 전체 보정과 같고, 화면에는 세션 밖 패드가 현재 자리에 그대로 보인다.
+- 화면 기본 배치 `DEFAULT_KIT_LAYOUT`은 사람이 디자인한 고정값(후속 T8)이고, 3D 모델은 보정 전 판정 앵커에만 쓴다.
 - 세션 스냅샷은 `liveStore.calibration`(`mode: 'idle' | 'capture' | 'realign'`)이고 화면은 이것만 읽는다. `liveStore.referenceSetAt`은 마지막 보정·재정렬 시각이다. `/calibration`은 `/setup`으로 이동한다.
 
 ## 통합 설정(프리셋·캘리브레이션)
