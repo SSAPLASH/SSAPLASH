@@ -33,6 +33,7 @@ function render(p: {
   accuracy?: Map<number, number>;
   mode?: 'play' | 'sheet';
   isLocked?: (s: SongSummary) => boolean;
+  isRecommended?: (s: SongSummary) => boolean;
   emptyState?: ReactNode;
 }) {
   return renderToStaticMarkup(
@@ -45,6 +46,7 @@ function render(p: {
       bestScores={p.best ?? new Map()}
       bestAccuracies={p.accuracy ?? new Map()}
       isLocked={p.isLocked}
+      isRecommended={p.isRecommended}
       emptyState={p.emptyState}
     />,
   );
@@ -130,6 +132,17 @@ describe('SongTable', () => {
 
   it('곡이 있으면 emptyState를 그리지 않는다', () => {
     expect(render({ songs: songs(1), emptyState: <p>빈 안내</p> })).not.toContain('빈 안내');
+  });
+
+  it('isRecommended가 참인 행만 제목 줄에 「✦ AI 추천」 라벨을 붙인다', () => {
+    const html = render({ songs: songs(3), isRecommended: (s) => s.id !== 2 });
+    expect(html.match(/class="play-st-ai">✦ AI 추천</g)?.length).toBe(2);
+    expect(html).toContain('<span class="play-st-titleline"><span class="play-st-name">곡1</span><span class="play-st-ai">✦ AI 추천</span></span>');
+    expect(html).toContain('<span class="play-st-titleline"><span class="play-st-name">곡2</span></span>');
+  });
+
+  it('isRecommended가 없으면 라벨이 없다', () => {
+    expect(render({ songs: songs(3) })).not.toContain('play-st-ai');
   });
 });
 
