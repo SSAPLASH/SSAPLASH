@@ -15,7 +15,7 @@ public record ReportResponse(long id, UUID playId, int score, BigDecimal accurac
         Counts judgementCounts, TimingHistogram timingHistogram, List<PadStats> padStats,
         String mode, String inputSource, String endReason, AnalysisStatus analysisStatus,
         JsonNode weakSegments, JsonNode recommendedDrills, String generatorVersion, Instant generatedAt,
-        JsonNode coachSummary) {
+        JsonNode coachSummary, Long songId, Long chartId, String difficulty) {
     public ReportResponse { padStats = List.copyOf(padStats); }
     public enum AnalysisStatus { NOT_REQUESTED, PENDING, DONE, FAILED }
     public record PadStats(Pad pad, BigDecimal accuracy, BigDecimal meanDeltaMs, BigDecimal meanVelocity,

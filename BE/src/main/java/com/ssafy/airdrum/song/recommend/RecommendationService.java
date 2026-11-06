@@ -55,7 +55,7 @@ public class RecommendationService {
 	public enum Mode { RHYTHM, SHEET }
 
 	@Transactional
-	public Recommendations recommend(long userId, Context context, Mode mode, UUID playId, int size) {
+	public Recommendations recommend(long userId, Context context, UUID playId, int size) {
 		access.requireActive(userId);
 		if (playId != null) {
 			if (context != Context.REPORT) throw new BusinessException(CommonErrorCode.INVALID_INPUT);
@@ -63,7 +63,7 @@ public class RecommendationService {
 			if (!Boolean.TRUE.equals(own)) throw new BusinessException(PlayErrorCode.PLAY_NOT_FOUND);
 		}
 		Instant now = clock.instant();
-		var pool = candidates(mode);
+		var pool = candidates();
 		var profile = profile(userId, playId);
 		var blended = RecommendationScorer.blend(pool, profile, now, size, candidateSongs.usableSongs(userId, now), r3.relevanceWeight());
 		String strategy = blended.isEmpty() ? STRATEGY : R3_STRATEGY;
@@ -137,7 +137,7 @@ public class RecommendationService {
 	}
 
 	/** 공개·READY·난이도 산정 완료인 공용 곡의 채보 최신 버전 중 특징이 계산된 것. */
-	private List<Candidate> candidates(Mode mode) {
+	private List<Candidate> candidates() {
 		return db.query("""
 				SELECT s.id, c.id, c.difficulty, s.song_level, v.note_count, f.avg_notes_per_sec, CAST(f.pad_ratio AS text)
 				FROM songs s JOIN charts c ON c.song_id = s.id
@@ -145,10 +145,9 @@ public class RecommendationService {
 				JOIN chart_features f ON f.chart_version_id = v.id AND f.feature_version = ?
 				WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
 				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL
-				  AND (? <> 'SHEET' OR v.notation_status = 'READY')
 				ORDER BY s.id, c.id
 				""", (r, n) -> new Candidate(r.getLong(1), r.getLong(2), r.getString(3), r.getString(4), r.getInt(5), r.getDouble(6), numbers(r.getString(7))),
-				ChartFeatureService.VERSION, mode.name());
+				ChartFeatureService.VERSION);
 	}
 
 	private Profile profile(long userId, UUID playId) {

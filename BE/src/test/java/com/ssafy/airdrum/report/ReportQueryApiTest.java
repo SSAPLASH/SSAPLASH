@@ -103,6 +103,18 @@ class ReportQueryApiTest {
         assertThat(notes.get(1).get("deltaMs").isNull()).isTrue();
         assertThat(notes.get(1).get("matchedNoteId").asText()).isEqualTo("n2");
     }
+    @Test void reportCarriesThePlayedSongAndChart() throws Exception {
+        upload();
+        var report = read("");
+        assertThat(report.get("songId").asLong()).isEqualTo(song);
+        assertThat(report.get("chartId").asLong()).isEqualTo(chart);
+        assertThat(report.get("difficulty").asText()).isEqualTo("NORMAL");
+    }
+    @Test void deletedSongKeepsItsIdInTheReport() throws Exception {
+        upload();
+        db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
+        assertThat(read("").get("songId").asLong()).isEqualTo(song);
+    }
     @Test void legacyReportAndHitAreReadUsingTheCanonicalName() throws Exception {
         upload();
         db.update("UPDATE reports SET pad_stats=(replace(pad_stats::text, '\"SMALL_TOM\"', '\"HI_TOM\"')::jsonb - 8) WHERE play_session_id=?", play);
