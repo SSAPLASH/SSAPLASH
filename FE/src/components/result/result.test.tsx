@@ -34,6 +34,22 @@ describe('ResultSummaryCard', () => {
     expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('badge-x'));
   });
 
+  it('점수가 있으면 지표 묶음이 [점수 | 세로선 | 정확도] 순서다', () => {
+    const html = renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" scoreText="92,400 / 64" accuracyText="96.8%" />);
+    const metrics = html.slice(html.indexOf('result-summary-metrics'));
+    expect(metrics.indexOf('result-summary-score')).toBeGreaterThan(-1);
+    expect(metrics.indexOf('result-summary-score')).toBeLessThan(metrics.indexOf('result-summary-divider'));
+    expect(metrics.indexOf('result-summary-divider')).toBeLessThan(metrics.indexOf('result-summary-accuracy'));
+    expect(html.indexOf('result-summary-song')).toBeLessThan(html.indexOf('result-summary-metrics'));
+  });
+
+  it('점수가 없으면(악보 모드) 세로선 없이 정확도만 묶음에 있다', () => {
+    const html = renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="96.8%" />);
+    expect(html).toContain('result-summary-metrics');
+    expect(html).not.toContain('result-summary-divider');
+    expect(html).not.toContain('result-summary-score');
+  });
+
   it('titleBadge가 없으면 칩이 없다', () => {
     expect(renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="1%" />)).not.toContain('badge-x');
   });
