@@ -8,7 +8,7 @@ export interface FetchRecommendationsParams {
   mode: 'RHYTHM' | 'SHEET';
   /** 1~10, 기본 5 */
   size?: number;
-  /** REPORT에서만 쿼리에 싣는다. SONG_PICKER에 주면 BE가 400이라 버린다 */
+  /** REPORT·DRILL에서만 쿼리에 싣는다. SONG_PICKER에 주면 BE가 400이라 버린다 */
   playId?: string;
 }
 
@@ -16,7 +16,7 @@ export interface FetchRecommendationsParams {
 export async function fetchRecommendations(params: FetchRecommendationsParams, signal?: AbortSignal): Promise<RecommendationPage> {
   const qs = new URLSearchParams({ context: params.context, mode: params.mode });
   if (params.size !== undefined) qs.set('size', String(params.size));
-  if (params.context === 'REPORT' && params.playId) qs.set('playId', params.playId);
+  if ((params.context === 'REPORT' || params.context === 'DRILL') && params.playId) qs.set('playId', params.playId);
   const body = await apiFetch<{ requestId?: unknown; strategy?: unknown; items?: Record<string, unknown>[] }>(
     `/api/v1/songs/recommendations?${qs}`,
     { signal },

@@ -36,6 +36,14 @@ describe('fetchRecommendations', () => {
     expect(url.searchParams.has('size')).toBe(false);
   });
 
+  it('DRILL은 playId와 size를 직렬화하고 focus를 보존한다', async () => {
+    const fn = stub({ requestId: 'd', strategy: 'DRILL_V1', items: [{ song: songDto, chartId: 34, difficulty: 'HARD', reasons: [{ code: 'DRILL_TRANSITION', text: '그대로' }], focus: { pattern: 'TRANSITION', pads: ['SNARE', 'HIHAT'] } }] });
+    const page = await fetchRecommendations({ context: 'DRILL', mode: 'SHEET', playId: 'p1', size: 3 });
+    const url = new URL(String(fn.mock.calls[0][0]), 'http://x');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ context: 'DRILL', mode: 'SHEET', size: '3', playId: 'p1' });
+    expect(page.items[0].focus).toEqual({ pattern: 'TRANSITION', pads: ['SNARE', 'HIHAT'] });
+  });
+
   it('응답을 RecommendationPage로 바꾼다(song 전체 필드)', async () => {
     stub({ requestId: 'r1', strategy: 'RULE_R1', items: [{ song: songDto, chartId: 34, difficulty: 'EASY', reasons: [{ code: 'STARTER', text: 't' }] }] });
     const page = await fetchRecommendations({ context: 'SONG_PICKER', mode: 'RHYTHM' });

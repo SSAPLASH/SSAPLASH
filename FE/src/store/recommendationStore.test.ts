@@ -69,6 +69,25 @@ describe('load', () => {
     expect(useRecommendations.getState().entries.H?.status).toBe('hidden');
   });
 
+  it('DRILL은 기존 코드와 겹쳐도 서버 문구를 그대로 쓴다', async () => {
+    vi.mocked(fetchRecommendations).mockResolvedValue(page([{ ...item, reasons: [{ code: 'STARTER', text: '서버 문구' }] }]));
+    await useRecommendations.getState().load('DRILL:p1', { context: 'DRILL', mode: 'RHYTHM', playId: 'p1', size: 3 });
+    expect(useRecommendations.getState().entries['DRILL:p1']).toMatchObject({ status: 'ready', cards: [{ line: '서버 문구' }] });
+  });
+
+  it('시간 초과 후 늦은 응답이 와도 hidden을 유지한다', async () => {
+    vi.useFakeTimers();
+    let resolve!: (p: RecommendationPage) => void;
+    vi.mocked(fetchRecommendations).mockReturnValue(new Promise((r) => { resolve = r; }));
+    const p = useRecommendations.getState().load(KEY, PARAMS);
+    await vi.advanceTimersByTimeAsync(RECOMMENDATION_TIMEOUT_MS);
+    await p;
+    expect(status()).toBe('hidden');
+    resolve(page([item]));
+    await Promise.resolve();
+    expect(status()).toBe('hidden');
+  });
+
   it('5초가 지나면 요청을 끊고 hidden', async () => {
     vi.useFakeTimers();
     vi.mocked(fetchRecommendations).mockImplementation(
