@@ -22,7 +22,9 @@ public interface SongRepository extends Repository<Song, Long> {
 		 s.created_at AS "createdAt", s.license, s.updated_at AS "updatedAt", s.cover_key AS "coverKey", s.owner_id AS "ownerId",
 		 s.song_level AS "songLevel",
 		 (SELECT j.status FROM chart_jobs j WHERE j.song_id=s.id AND j.user_id=:userId AND s.owner_id=:userId ORDER BY j.created_at DESC,j.id DESC LIMIT 1) AS "jobStatus",
-		 (SELECT j.error_code FROM chart_jobs j WHERE j.song_id=s.id AND j.user_id=:userId AND s.owner_id=:userId ORDER BY j.created_at DESC,j.id DESC LIMIT 1) AS "jobErrorCode"
+		 (SELECT j.error_code FROM chart_jobs j WHERE j.song_id=s.id AND j.user_id=:userId AND s.owner_id=:userId ORDER BY j.created_at DESC,j.id DESC LIMIT 1) AS "jobErrorCode",
+		 (SELECT m.id FROM sheet_music m WHERE m.song_id=s.id AND m.owner_id=s.owner_id AND m.deleted_at IS NULL
+		   AND EXISTS(SELECT 1 FROM sheet_music_pages p WHERE p.sheet_id=m.id) ORDER BY m.id DESC LIMIT 1) AS "sheetId"
 		FROM songs s
 		""";
 	String VISIBLE = """
@@ -57,5 +59,7 @@ public interface SongRepository extends Repository<Song, Long> {
 		BigDecimal getBpm(); String getTimeSignature(); Integer getDurationMs();
 		boolean getHasAccompaniment(); String getAccompanimentStatus(); Instant getCreatedAt(); String getLicense(); Instant getUpdatedAt(); String getCoverKey(); Long getOwnerId();
 		String getSongLevel(); String getJobStatus(); String getJobErrorCode();
+		/** 248: 연결된 살아 있는 악보(페이지 연결 완료). 없으면 null. 공용 곡은 항상 null */
+		Long getSheetId();
 	}
 }

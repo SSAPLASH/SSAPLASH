@@ -185,7 +185,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 처음에는 사람이 수동으로 돌리고, 안정되면 GitLab 예약으로 옮긴다. 후보는 7일이 지나면 쓰이지 않으므로 그보다 자주 돌려야 한다.
 
-**가명 키 전환(V44 배포 뒤 한 번):** 서버에서 `ALTER ROLE recommend_export RESET app.recommend_key_secret;`을 실행하고 `.env`에서 `RECOMMEND_KEY_SECRET`을 지운다. 그다음 `recommend_export`로 `SHOW app.recommend_key_secret`이 오류이거나 빈 값이고, `SELECT 1 FROM recommendation_user_keys LIMIT 1`이 권한 오류인지 확인한다.
+**가명 키 전환(V45 배포 뒤 한 번):** 서버에서 `ALTER ROLE recommend_export RESET app.recommend_key_secret;`을 실행하고 `.env`에서 `RECOMMEND_KEY_SECRET`을 지운다. 그다음 `recommend_export`로 `SHOW app.recommend_key_secret`이 오류이거나 빈 값이고, `SELECT 1 FROM recommendation_user_keys LIMIT 1`이 권한 오류인지 확인한다.
 
 ## 약점 분석 보정 배치 (coach-calibration, COACH-003)
 

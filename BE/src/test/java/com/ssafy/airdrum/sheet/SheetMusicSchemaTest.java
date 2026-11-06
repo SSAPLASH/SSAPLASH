@@ -18,17 +18,42 @@ class SheetMusicSchemaTest {
 
 	@Autowired JdbcTemplate db;
 	long user;
+	long song;
 
 	@BeforeEach
 	void seed() {
 		user = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 스키마 회원') RETURNING id", Long.class);
+		song = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'연결 곡','MIDI','READY') RETURNING id", Long.class, user);
 	}
 
 	@AfterEach
 	void clean() {
 		db.update("DELETE FROM file_cleanup_tasks WHERE object_key LIKE 'sheet/%'");
 		db.update("DELETE FROM sheet_music WHERE owner_id=?", user);
+		db.update("DELETE FROM songs WHERE id=?", song);
 		db.update("DELETE FROM users WHERE id=?", user);
+	}
+
+	/** 248 V44: 곡당 살아 있는 악보는 하나다. 소프트 삭제하면 자리가 비고, 곡 없는 악보는 제한이 없다. */
+	@Test
+	void V44_곡당_살아_있는_악보는_하나이고_지운_뒤에는_다시_연결된다() {
+		long first = insertLinked("첫 악보", song);
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, first)).isEqualTo(song);
+		assertThatThrownBy(() -> insertLinked("둘째 악보", song)).isInstanceOf(DataIntegrityViolationException.class);
+		db.update("UPDATE sheet_music SET deleted_at=now() WHERE id=?", first);
+		long second = insertLinked("둘째 악보", song);
+		assertThat(second).isNotEqualTo(first);
+		// 곡 없는 악보는 여러 개여도 된다
+		insertSheet("곡 없음 1", "UPLOADED", "IMAGE", 1, 1);
+		insertSheet("곡 없음 2", "UPLOADED", "IMAGE", 1, 1);
+		// 없는 곡은 FK로 막는다
+		assertThatThrownBy(() -> insertLinked("없는 곡", 999_999_999L)).isInstanceOf(DataIntegrityViolationException.class);
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music WHERE owner_id=? AND deleted_at IS NULL", Integer.class, user)).isEqualTo(3);
+	}
+
+	private long insertLinked(String title, long songId) {
+		return db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,?,'UPLOADED','IMAGE',1,1,?) RETURNING id",
+				Long.class, user, title, songId);
 	}
 
 	@Test
