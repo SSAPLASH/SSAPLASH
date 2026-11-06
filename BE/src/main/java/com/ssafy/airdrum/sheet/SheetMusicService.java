@@ -11,11 +11,13 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ssafy.airdrum.chart.ChartErrorCode;
 import com.ssafy.airdrum.chart.asset.ChartAssetKeyPolicy;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.common.response.PageResponse;
@@ -62,7 +64,8 @@ class SheetMusicService {
 		this.tx.setTimeout(15);
 	}
 
-	SheetDetail register(long user, String title, String source, List<MultipartFile> files) {
+	/** @param songId 248: 연결할 개인 곡. null이면 곡 없는 악보 */
+	SheetDetail register(long user, String title, String source, Long songId, List<MultipartFile> files) {
 		if (files.isEmpty() || files.size() > MAX_PAGES) throw new BusinessException(SheetError.SHEET_INVALID);
 		if (!slots.tryAcquire()) throw new BusinessException(SheetError.SHEET_UNAVAILABLE);
 		var temps = new ArrayList<Path>();
@@ -85,7 +88,18 @@ class SheetMusicService {
 				sheets.lockOwner(user);
 				if (sheets.liveCount(user) >= MAX_SHEETS || sheets.liveBytes(user) + total > MAX_TOTAL_BYTES)
 					throw new BusinessException(SheetError.SHEET_QUOTA_EXCEEDED);
-				long created = sheets.insert(user, title, source, kind, inspected.size(), total);
+				if (songId != null) {
+					// 248: 남의 곡·없는 곡·지운 곡·공용 곡은 모두 404(FE 요청). 곡당 살아 있는 악보는 하나다.
+					if (!sheets.ownSong(user, songId)) throw new BusinessException(ChartErrorCode.SONG_NOT_FOUND);
+					if (sheets.linked(songId)) throw new BusinessException(SheetError.SHEET_ALREADY_LINKED);
+				}
+				long created;
+				try {
+					created = sheets.insert(user, title, source, kind, inspected.size(), total, songId);
+				} catch (DuplicateKeyException ex) {
+					// 같은 곡에 동시에 올린 경우 부분 유일 인덱스가 막는다
+					throw new BusinessException(SheetError.SHEET_ALREADY_LINKED);
+				}
 				for (int i = 0; i < inspected.size(); i++) {
 					var info = inspected.get(i);
 					String key = "sheet-music/" + user + "/" + created + "/" + UUID.randomUUID() + "." + info.extension();
@@ -121,7 +135,7 @@ class SheetMusicService {
 	PageResponse<SheetSummary> list(long user, String q, int page, int size) {
 		String pattern = "%" + (q == null ? "" : q.strip()).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
 		var items = sheets.page(user, pattern, size, (long) page * size).stream()
-				.map(r -> new SheetSummary(r.id(), r.title(), r.source(), r.kind(), r.pageCount(), r.totalBytes(), thumbnail(r), r.createdAt(), r.updatedAt()))
+				.map(r -> new SheetSummary(r.id(), r.title(), r.source(), r.kind(), r.pageCount(), r.totalBytes(), thumbnail(r), r.createdAt(), r.updatedAt(), r.songId()))
 				.toList();
 		return PageResponse.of(items, page, size, sheets.count(user, pattern));
 	}
@@ -132,7 +146,8 @@ class SheetMusicService {
 		var pages = sheets.pages(id).stream()
 				.map(p -> new SheetPage(p.pageNo(), sign(r, p.key()), p.contentType(), p.width(), p.height(), p.bytes())).toList();
 		String thumbnail = r.kind().equals("IMAGE") && !pages.isEmpty() ? pages.getFirst().url() : null;
-		return new SheetDetail(r.id(), r.title(), r.source(), r.kind(), r.pageCount(), r.totalBytes(), thumbnail, r.createdAt(), r.updatedAt(), pages, expires);
+		return new SheetDetail(r.id(), r.title(), r.source(), r.kind(), r.pageCount(), r.totalBytes(), thumbnail, r.createdAt(), r.updatedAt(), pages, expires,
+				r.songId());
 	}
 
 	SheetDetail rename(long user, long id, String title) {
