@@ -50,8 +50,10 @@ export interface SetupStepsResult {
 }
 
 export interface SetupStepsInput extends ReadinessInput {
-  /** 이 세션의 시작 위치 보정 시각(ms). 없으면 null */
+  /** 마지막 보정·재정렬 시각(ms). 없으면 null */
   referenceSetAt: number | null;
+  /** 재정렬이 필요한 손(스틱이 다시 켜졌거나 버튼 보정을 받음). 없으면 [false, false]로 본다 */
+  realignNeeded?: [boolean, boolean];
   activePresetName: string | null;
   /** [왼손, 오른손] 배터리 %. null = 알 수 없음. 값을 안 넘기면 요약에 배터리를 붙이지 않는다 */
   battery?: [number | null, number | null];
@@ -161,6 +163,16 @@ export function returnButtonText(returnTo: string, returnLabel?: string | null):
 
 // ---- 단계 판정 ----
 
+/** ② 요약: 연결된 손 중 앵커가 없는 손이 있을 때(PLAY-004 4-5) */
+export const CALIBRATION_NEEDED_TEXT = '드럼 위치를 아직 잡지 않았어요';
+
+/** ② 요약: 재정렬이 필요한 손이 있을 때. 없으면 null */
+export function realignText(needed: readonly [boolean, boolean] | undefined): string | null {
+  if (!needed || (!needed[0] && !needed[1])) return null;
+  if (needed[0] && needed[1]) return '스틱이 다시 켜졌어요 · 스네어를 왼손·오른손 한 번씩 쳐 주세요';
+  return `${needed[0] ? '왼손' : '오른손'} 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요`;
+}
+
 function two(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -213,10 +225,9 @@ export function setupSteps(input: SetupStepsInput, now: number): SetupStepsResul
       id: 'calibration',
       status: calNeeded ? 'needed' : 'done',
       summary: calNeeded
-        ? '시작 위치를 아직 맞추지 않았어요'
-        : input.referenceSetAt !== null
-          ? `${calibrationTime(input.referenceSetAt, now)}에 보정했어요`
-          : '보정했어요',
+        ? CALIBRATION_NEEDED_TEXT
+        : realignText(input.realignNeeded)
+          ?? (input.referenceSetAt !== null ? `${calibrationTime(input.referenceSetAt, now)}에 보정했어요` : '보정했어요'),
     });
   }
   steps.push({

@@ -11,6 +11,7 @@ import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
+import { useRealign } from '@/components/useRealign';
 import { PlayStage } from '@/components/play/PlayStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
@@ -105,6 +106,8 @@ function PlayPageBody() {
   useEffect(() => {
     readyRef.current = ready;
   }, [ready]);
+  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
+  const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
 
   // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
@@ -400,7 +403,16 @@ function PlayPageBody() {
   }, []);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
-  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
+  const { isResuming } = useReconnectResume({
+    pauseReason,
+    ready,
+    realignPending: realign.pending,
+    setPauseReason,
+    setCountValue,
+    resume,
+    pauseTo,
+    goMs: GO_MS,
+  });
 
   // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
   const restart = useCallback(() => {
@@ -662,6 +674,7 @@ function PlayPageBody() {
           onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
+          realign={realign.info}
           footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
         />
       </main>
@@ -684,6 +697,7 @@ function PlayPageBody() {
         onRestart={restart}
         onLeave={leave}
         returnTo={returnTo}
+        realign={realign.info}
       />
     );
   } else if (countValue !== null) {

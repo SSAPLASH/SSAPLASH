@@ -1,6 +1,6 @@
 // readiness 단위 테스트: 키보드 면제, 누락 조합, 전부 충족.
 import { describe, expect, it } from 'vitest';
-import { READINESS_MESSAGES, readiness, stickMissingText } from './readiness';
+import { READINESS_MESSAGES, anchorsReady, readiness, stickMissingText } from './readiness';
 
 const base = {
   sensorKind: 'pointer',
@@ -68,5 +68,18 @@ describe('stickMissingText', () => {
   });
   it('둘 다 연결이면 일반형', () => {
     expect(stickMissingText([true, true])).toBe(READINESS_MESSAGES.stick);
+  });
+});
+
+describe('anchorsReady (PLAY-004 D9)', () => {
+  it('연결된 손마다 앵커가 있어야 true', () => {
+    expect(anchorsReady([true, true], [true, true])).toBe(true);
+    expect(anchorsReady([true, true], [true, false])).toBe(false);
+    expect(anchorsReady([true, false], [true, false])).toBe(true);
+    expect(anchorsReady([false, true], [true, false])).toBe(false);
+  });
+  it('연결된 손이 없으면 앵커가 하나라도 있으면 true', () => {
+    expect(anchorsReady([false, false], [false, true])).toBe(true);
+    expect(anchorsReady([false, false], [false, false])).toBe(false);
   });
 });
