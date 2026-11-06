@@ -17,6 +17,7 @@ data/*
 data/mdb_drums/*
 !data/mdb_drums/CHECKSUMS.txt
 mlruns/
+runs/
 
 # 파이썬 캐시
 __pycache__/
