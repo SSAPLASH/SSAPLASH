@@ -48,6 +48,10 @@ export interface DrumKitProps {
   faded?: PadId[];
   /** 패드가 새로 나타날 때 0.2s 확대 모션(보정 화면). 동작 줄이기면 즉시 */
   appear?: boolean;
+  /** 킷 전체를 어둡게(0.18). lit 패드만 제외(UX-64 보정 무대) */
+  dimAll?: boolean;
+  /** 원래 밝기 + 브랜드색 글로우로 켤 패드(지금 칠 패드) */
+  lit?: PadId;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -110,6 +114,8 @@ export function DrumKit({
   ghost,
   faded,
   appear = false,
+  dimAll = false,
+  lit,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -194,7 +200,14 @@ export function DrumKit({
         />
         );
         // 유령·흐림·나타남은 패드 바깥 그룹에 건다(Pad 마크업 불변)
-        const wrapClass = [isGhost ? 'drum-pad-ghost' : '', isFaded ? 'drum-pad-faded' : '', appear && !isGhost ? 'drum-pad-appear' : '']
+        const isLit = lit === p.pad;
+        const wrapClass = [
+          isGhost ? 'drum-pad-ghost' : '',
+          isFaded ? 'drum-pad-faded' : '',
+          appear && !isGhost ? 'drum-pad-appear' : '',
+          dimAll && !isLit ? 'drum-pad-dim' : '',
+          isLit ? 'drum-pad-lit' : '',
+        ]
           .filter(Boolean)
           .join(' ');
         const pad = wrapClass ? (

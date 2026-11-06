@@ -128,33 +128,36 @@
   border-color: var(--brand);
 }
 
-/* ---- UX-64 보정 중: 킷 + 오른쪽 카드 두 열, 킷 위 큰 안내(수치는 디자인 MR에서 Figma로) ---- */
+/* ---- UX-64 보정 중(Figma 배치 편집기 765:33504 · 보정 무대 766:34637): 킷 720 + 오른쪽 카드 264, 사이 32 ---- */
 .cal-stage-main {
   display: flex;
-  gap: var(--space-l);
-  align-items: flex-start;
+  gap: 32px;
+  align-items: center;
+  justify-content: center;
 }
 .cal-stage-main .cal-stage-kit {
   flex: 1;
   min-width: 0;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  padding: var(--space-s) 0;
+  border: 0;
+  background: transparent;
 }
 .cal-stage-headline {
-  margin: 0 0 var(--space-s);
+  margin: 0;
   text-align: center;
-  font-size: 28px;
+  font-size: 40px;
   font-weight: 700;
+  line-height: 1.2;
   color: var(--text-1);
 }
 .cal-panel {
   width: 264px;
   flex: none;
-}
-.setup-padinfo-caption {
-  font-size: 12px;
-  color: var(--text-3);
-}
-.cal-panel-actions > * {
-  flex: 1;
 }
 @media (max-width: 1024px) {
   .cal-stage-main {
@@ -162,5 +165,8 @@
   }
   .cal-panel {
     width: 100%;
+  }
+  .cal-stage-headline {
+    font-size: 28px;
   }
 }
