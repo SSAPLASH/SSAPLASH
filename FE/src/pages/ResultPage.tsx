@@ -27,7 +27,7 @@ import { buttonClassName } from '@/components/ui/buttonStyle';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPlayDate } from '@/domain/playLogView';
 import { timingHistogram } from '@/domain/timingHistogram';
-import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
+import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from '@/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
@@ -62,6 +62,7 @@ export function ResultPage() {
   const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs } : undefined) : []), [log, showLocalFeedback]);
   // 패드별 표는 통계라 모든 모드에서 보인다(업로드 대상이어도)
   const summary = useMemo(() => (log ? summarizeByPad(log) : []), [log]);
+  const openHihat = useMemo(() => (log ? summarizeOpenHihat(log) : null), [log]);
   // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
   const snippetChart = useMemo(() => (log && showLocalFeedback ? chartFromLog(log) : null), [log, showLocalFeedback]);
   const noteStates = useMemo(() => (log ? log.notes.map((n) => n.judgement) : []), [log]);
@@ -174,7 +175,8 @@ export function ResultPage() {
           </section>
         )}
 
-        {summary.length > 0 && <PadSummaryTable summary={summary} />}
+        {summary.length > 0 && <PadSummaryTable summary={summary} openHihat={openHihat} />}
+        {openHihat && !summary.some((row) => row.pad === 'HIHAT') && <p className="result-caption" aria-label={openHihat.label}>{openHihat.text}</p>}
 
         <div className="result-actions">
           {!songDeleted && (
