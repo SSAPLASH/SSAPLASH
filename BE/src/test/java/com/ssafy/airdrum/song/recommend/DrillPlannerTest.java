@@ -164,4 +164,17 @@ class DrillPlannerTest {
 		assertThat(DrillPlanner.percentile(2.0, values, false)).isEqualTo(0.75);
 		assertThat(DrillPlanner.percentile(1.0, values, true)).isEqualTo(1.0);
 	}
+
+	private static String text(String reason, String... pads) {
+		return RecommendationService.drillText(new Drill(plain(1, 3.0), "X", List.of(pads), reason, 0));
+	}
+
+	@Test void 문구의_조사가_받침에_맞는다() {
+		assertThat(text(DrillPlanner.TRANSITION, "SNARE", "KICK")).startsWith("스네어에서 킥으로 ");
+		assertThat(text(DrillPlanner.TRANSITION, "KICK", "SNARE")).startsWith("킥에서 스네어로 ");
+		assertThat(text(DrillPlanner.TRANSITION, "KICK", "HIHAT_PEDAL")).startsWith("킥에서 하이햇 페달로 ");
+		assertThat(text(DrillPlanner.PAD, "HIHAT")).startsWith("하이햇을 ");
+		assertThat(text(DrillPlanner.PAD, "SNARE")).startsWith("스네어를 ");
+		assertThat(text(DrillPlanner.PAD, "NEW_PAD")).startsWith("NEW_PAD를 ");
+	}
 }
