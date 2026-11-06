@@ -27,7 +27,7 @@ vi.mock('@/app/playSync', async (orig) => ({
 
 const song: SongSummary = {
   id: 77, title: '추천곡', artist: '가수', source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 60000,
-  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: 'BEGINNER', difficulties: ['EASY'], createdAt: '', coverUrl: null,
+  hasAccompaniment: false, accompanimentStatus: 'NONE', songLevel: 'BEGINNER', difficulties: ['EASY'], createdAt: '', coverUrl: null, sheetId: null,
 };
 const recoItem: RecommendationItem = { song, chartId: 555, difficulty: 'EASY', reasons: [{ code: 'WEAK_PAD', text: 'x' }] };
 const drillItem: RecommendationItem = { ...recoItem, song: { ...song, id: 99, title: '약점 연습곡' }, chartId: 777, difficulty: 'HARD', reasons: [{ code: 'DRILL_PAD', text: '스네어 연습 문구' }] };

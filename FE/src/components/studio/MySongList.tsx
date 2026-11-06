@@ -2,11 +2,15 @@
 // 그 아래 카드 그리드(데스크톱 3열·태블릿 2열) 또는 목록 행. 빈 목록(첫 방문)은 페이지가 처리한다.
 import { Button } from '@/components/ui/Button';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
+import { mergeLibraryItems, type SheetSummary } from '@/domain/sheetMusic';
 import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
 import { ActiveJobCard } from './ActiveJobCard';
 import { MySongCard } from './MySongCard';
 import { MySongRow } from './MySongRow';
-import type { SongEditKind } from './SongMenu';
+import { SheetItemCard } from './SheetItemCard';
+import { SheetItemRow } from './SheetItemRow';
+import type { SheetMenuKind } from './SheetMenu';
+import type { SongEditKind, SongSheetKind } from './SongMenu';
 import './studio.css';
 
 /** 내 곡 보기 모드 */
@@ -27,6 +31,19 @@ interface Props {
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
   /** 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
   onCoverError?: () => void;
+  /** 악보 목록(악보 기능 켜짐). 없으면 곡만 그린다 */
+  sheets?: SheetSummary[];
+  /** 악보 목록만 읽지 못했다. 곡은 그대로 두고 목록 위에 한 줄을 보인다 */
+  sheetsFailed?: boolean;
+  onSheetsRetry?: () => void;
+  /** 악보-곡 연결 스위치. 켜져 있고 곡에 연결된 악보는 곡 안으로 들어가 따로 보이지 않는다 */
+  linkEnabled?: boolean;
+  /** 악보 썸네일을 불러오지 못했을 때(서명 URL 만료). 악보 목록을 다시 읽는다 */
+  onSheetCoverError?: () => void;
+  /** 악보 항목 ⋯ 메뉴 선택 */
+  onSheetMenu?: (kind: SheetMenuKind, sheet: SheetSummary) => void;
+  /** 있으면 곡 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다 */
+  onSongSheet?: (kind: SongSheetKind, song: SongSummary) => void;
 }
 
 /** 202 직후 목록에 아직 없는 활성 작업을 임시 곡으로 만든다 */
@@ -46,10 +63,30 @@ function tempSong(job: ActiveJob): SongSummary {
     difficulties: [],
     createdAt: job.startedAt,
     coverUrl: null,
+    sheetId: null,
   };
 }
 
-export function MySongList({ status, items, error, onRetry, active, progress, justDoneId, onReupload, view = 'card', onEdit, onCoverError }: Props) {
+export function MySongList({
+  status,
+  items,
+  error,
+  onRetry,
+  active,
+  progress,
+  justDoneId,
+  onReupload,
+  view = 'card',
+  onEdit,
+  onCoverError,
+  sheets,
+  sheetsFailed = false,
+  onSheetsRetry,
+  linkEnabled = false,
+  onSheetMenu,
+  onSheetCoverError,
+  onSongSheet,
+}: Props) {
   if (status === 'idle' || status === 'loading') {
     // 스켈레톤 카드 6장 (Figma 로딩: 커버·제목·아티스트·동작 자리)
     return (
@@ -80,41 +117,62 @@ export function MySongList({ status, items, error, onRetry, active, progress, ju
   }
 
   const merged = active && !items.some((s) => s.id === active.songId) ? [tempSong(active), ...items] : items;
-  if (merged.length === 0) return null;
+  const sheetsLine = sheetsFailed ? (
+    <p className="studio-sheet-loadfail" role="alert">
+      악보를 불러오지 못했어요
+      <Button variant="text" size="sm" onClick={onSheetsRetry}>
+        다시 시도
+      </Button>
+    </p>
+  ) : null;
+  if (merged.length === 0 && (sheets?.length ?? 0) === 0) return sheetsLine;
   const sorted = sortMineSongs(merged);
   // 진행 단계를 아는 활성 작업은 ActiveJobCard 한 줄로 맨 위에 두고, 목록에서는 뺀다
   const jobShown = active !== null && progress !== null;
   const rows = jobShown ? sorted.filter((s) => s.id !== active.songId) : sorted;
+  // 곡과 악보를 한 목록으로 합친다(악보가 없으면 곡 순서 그대로)
+  const entries = mergeLibraryItems(rows, sheets ?? [], linkEnabled);
 
   return (
     <>
+      {sheetsLine}
       {jobShown && <ActiveJobCard job={active} progress={progress} />}
-      {rows.length > 0 &&
+      {entries.length > 0 &&
         (view === 'card' ? (
           <ul className="studio-grid">
-            {rows.map((song) => (
-              <MySongCard
-                key={song.id}
-                song={song}
-                justDone={song.id === justDoneId}
-                onReupload={onReupload}
-                onEdit={onEdit}
-                onCoverError={onCoverError}
-              />
-            ))}
+            {entries.map((it) =>
+              it.type === 'song' ? (
+                <MySongCard
+                  key={`song-${it.song.id}`}
+                  song={it.song}
+                  justDone={it.song.id === justDoneId}
+                  onReupload={onReupload}
+                  onEdit={onEdit}
+                  onSheet={onSongSheet}
+                  onCoverError={onCoverError}
+                />
+              ) : (
+                <SheetItemCard key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} />
+              ),
+            )}
           </ul>
         ) : (
           <ul className="studio-list">
-            {rows.map((song) => (
-              <MySongRow
-                key={song.id}
-                song={song}
-                justDone={song.id === justDoneId}
-                onReupload={onReupload}
-                onEdit={onEdit}
-                onCoverError={onCoverError}
-              />
-            ))}
+            {entries.map((it) =>
+              it.type === 'song' ? (
+                <MySongRow
+                  key={`song-${it.song.id}`}
+                  song={it.song}
+                  justDone={it.song.id === justDoneId}
+                  onReupload={onReupload}
+                  onEdit={onEdit}
+                  onSheet={onSongSheet}
+                  onCoverError={onCoverError}
+                />
+              ) : (
+                <SheetItemRow key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} />
+              ),
+            )}
           </ul>
         ))}
     </>

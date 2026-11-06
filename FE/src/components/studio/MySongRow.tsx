@@ -7,7 +7,7 @@ import { buttonClassName } from '@/components/ui/buttonStyle';
 import { SongCover } from '@/components/song/SongCover';
 import { chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { dateLabel } from './dateLabel';
-import { SongMenu, type SongEditKind } from './SongMenu';
+import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
 import './studio.css';
@@ -19,10 +19,12 @@ interface Props {
   onReupload: (song: SongSummary) => void;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
+  /** 있으면 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다(악보-곡 연결 스위치 켜짐) */
+  onSheet?: (kind: SongSheetKind, song: SongSummary) => void;
   onCoverError?: () => void;
 }
 
-export function MySongRow({ song, justDone, onReupload, onEdit, onCoverError }: Props) {
+export function MySongRow({ song, justDone, onReupload, onEdit, onSheet, onCoverError }: Props) {
   const query = `scope=MINE&song=${song.id}`;
   const ready = song.status === 'READY';
   const failed = song.status === 'FAILED';
@@ -63,7 +65,14 @@ export function MySongRow({ song, justDone, onReupload, onEdit, onCoverError }: 
         {processing && <span className="studio-row-stage">처리 중</span>}
       </span>
       <span className="studio-row-more">
-        {onEdit !== undefined && <SongMenu title={song.title} status={song.status} onPick={(kind) => onEdit(kind, song)} />}
+        {onEdit !== undefined && (
+          <SongMenu
+            title={song.title}
+            status={song.status}
+            onPick={(kind) => onEdit(kind, song)}
+            sheet={onSheet && { sheetId: song.sheetId, onPick: (kind) => onSheet(kind, song) }}
+          />
+        )}
       </span>
     </li>
   );
