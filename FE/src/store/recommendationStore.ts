@@ -49,15 +49,18 @@ async function run(
   set((s) => ({ entries: { ...s.entries, [key]: { status: 'loading' } } }));
   const ac = new AbortController();
   activeRequests.set(key, ac);
-  const timer = setTimeout(() => ac.abort(), RECOMMENDATION_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { ac.abort(); reject(new Error('추천 시간 초과')); }, RECOMMENDATION_TIMEOUT_MS);
+  });
   let next: RecommendationEntry;
   try {
-    const { requestId, cards } = await fetcher(ac.signal);
+    const { requestId, cards } = await Promise.race([fetcher(ac.signal), timeout]);
     next = cards.length > 0 ? { status: 'ready', requestId, cards } : { status: 'hidden' };
   } catch {
     next = { status: 'hidden' };
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer!);
   }
   if (activeRequests.get(key) !== ac) return;
   activeRequests.delete(key);
@@ -70,7 +73,7 @@ export const useRecommendations = create<RecommendationState>()((set, get) => ({
   load: (key, params) =>
     run(key, set, get, async (signal) => {
       const page = await fetchRecommendations(params, signal);
-      return { requestId: page.requestId, cards: page.items.map(cardOf) };
+      return { requestId: page.requestId, cards: page.items.map((item) => params.context === 'DRILL' ? { ...cardOf(item), line: item.reasons[0]?.text ?? '' } : cardOf(item)) };
     }),
 
   loadSimilar: (key, { songId, ...rest }) =>
