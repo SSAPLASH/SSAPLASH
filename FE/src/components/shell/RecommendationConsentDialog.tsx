@@ -32,6 +32,7 @@ export function RecommendationConsentDialog({ busy, onAgree, onDecline }: Props)
           <li key={line}>{line}</li>
         ))}
       </ul>
+      <p>닫거나 괜찮아요를 선택하면 동의하지 않은 것으로 기록돼요.</p>
       <div className="dialog-actions">
         <Button variant="secondary" ref={declineRef} onClick={onDecline} disabled={busy}>
           괜찮아요

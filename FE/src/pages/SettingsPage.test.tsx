@@ -193,8 +193,7 @@ describe('SettingsPage 데이터 활용 카드', () => {
     expect(html.indexOf('데이터 활용')).toBeGreaterThan(html.indexOf('드러머곰'));
     expect(html.indexOf('데이터 활용')).toBeLessThan(html.indexOf('>기기<'));
     expect(html).toContain('연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요');
-    expect(html).toContain('맞춤 곡 추천 학습 활용');
-    expect(html).toContain('동의한 연주 기록만 추천 모델 학습에 써요. 끄면 이후 학습부터 제외돼요.');
+    expect(html).not.toContain('맞춤 곡 추천 학습 활용');
   });
 
   it('동의함: 토글 켜짐, 상태 줄에 판·변경일', () => {
@@ -205,36 +204,34 @@ describe('SettingsPage 데이터 활용 카드', () => {
     expect(html).toContain(`동의함 · ${V} 판 · 11/05 변경`);
   });
 
-  it('미동의(거부·미응답): 토글 꺼짐, 상태 줄 미동의, 잠기지 않음', () => {
+  it('미동의: 비공개 상태에서 토글을 숨긴다', () => {
     put(useRecommendationConsent, { status: 'ready', consent: { agreed: false, version: V, updatedAt: '2026-11-05T12:00:00Z' } });
     const html = render();
-    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
-    expect(toggleTag(html)).not.toContain('disabled');
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBeUndefined();
     expect(html).toContain('>미동의<');
     expect(html).not.toContain('약관이 바뀌었어요');
   });
 
-  it('판 불일치: 토글 꺼짐 + 새 판 안내', () => {
+  it('판 불일치: 이전 동의와 새 판 필요를 표시', () => {
     put(useRecommendationConsent, { status: 'ready', consent: { agreed: true, version: '2026-01-01', updatedAt: '2026-01-02T12:00:00Z' } });
     const html = render();
-    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
-    expect(html).toContain('>미동의<');
-    expect(html).toContain('약관이 바뀌었어요. 다시 켜면 새 판에 동의해요.');
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('true');
+    expect(html).toContain('이전 판에 동의함 · 2026-01-01 판 · 새 동의 내용 확인 필요');
   });
 
-  it('읽기 실패: 미동의로 보이고 토글이 잠기며 안내가 뜬다', () => {
+  it('읽기 실패: 미동의로 단정하지 않고 재시도를 표시', () => {
     put(useRecommendationConsent, { status: 'error', consent: null });
     const html = render();
-    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('false');
-    expect(toggleTag(html)).toContain('disabled');
-    expect(html).toContain('>미동의<');
-    expect(html).toContain('상태를 불러오지 못했어요');
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBeUndefined();
+    expect(html).not.toContain('>미동의<');
+    expect(html).toContain('동의 상태를 불러오지 못했어요');
+    expect(html).toContain('다시 시도');
   });
 
   it('아직 읽는 중이어도 토글은 잠겨 있고 오류 문구는 없다', () => {
     put(useRecommendationConsent, { status: 'loading', consent: null });
     const html = render();
-    expect(toggleTag(html)).toContain('disabled');
+    expect(toggleTag(html)).toBe('');
     expect(html).not.toContain('상태를 불러오지 못했어요');
   });
 

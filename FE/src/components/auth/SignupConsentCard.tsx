@@ -1,12 +1,13 @@
 // Figma Auth / SignupConsentCard 440:19890 — 가입 동의 카드. 동의 상태(어느 항목을 켰는지)는 여기서 들고, 제출 뒤 동작은 onSubmit으로 넘긴다.
 // 「필수 항목에 모두 동의합니다」는 별도 상태가 아니라 필수 항목이 전부 켜졌는지의 파생값이고, 선택 항목은 켜지도 끄지도 않는다(설계 COACH-003 D7, COACH-004 D2).
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Checkbox } from '@/components/ui/Checkbox';
 import {
   SIGNUP_INTRO,
   SIGNUP_TERMS,
+  recommendationConsentEnabled,
   allAgreed,
   allRequiredAgreed,
   currentConsentVersions,
@@ -28,11 +29,12 @@ interface Props {
   submitting?: boolean;
   /** 제출 실패 문구. 버튼 위에 보인다 */
   error?: string | null;
+  notice?: ReactNode;
   /** 처음부터 켜 둘 항목. 재동의 진입(`/signup`에 기존 회원이 옴)에서 이전에 동의한 선택 항목을 보존할 때 쓴다(설계 4-4). 기본은 전부 꺼짐 */
   initialAgreed?: readonly SignupTermId[];
 }
 
-export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting = false, error = null, initialAgreed = [] }: Props) {
+export function SignupConsentCard({ terms = recommendationConsentEnabled() ? SIGNUP_TERMS : SIGNUP_TERMS.filter((t) => t.id !== 'recommendation'), onSubmit, submitting = false, error = null, notice, initialAgreed = [] }: Props) {
   const [agreed, setAgreed] = useState<ReadonlySet<SignupTermId>>(() => new Set(initialAgreed));
   const canSubmit = allRequiredAgreed(agreed, terms) && !submitting;
 
@@ -53,6 +55,7 @@ export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting =
       {terms.map((term) => (
         <TermsItem key={term.id} term={term} checked={agreed.has(term.id)} onChange={() => setAgreed((prev) => toggleOne(prev, term.id))} />
       ))}
+      {notice}
       {error && (
         <p className="signup-card-error t-body-14" role="alert">
           {error}

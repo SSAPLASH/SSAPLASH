@@ -24,7 +24,12 @@ export interface ConsentVersions {
   termsVersion: string;
   privacyVersion: string;
   dataConsent: { agreed: true; version: string };
-  recommendationConsent: { agreed: boolean; version: string };
+  recommendationConsent?: { agreed: boolean; version: string };
+}
+
+/** 검토된 본문과 허용 판이 배포되기 전까지 신규 동의 수집을 열지 않는다. */
+export function recommendationConsentEnabled(): boolean {
+  return import.meta.env.VITE_RECOMMENDATION_CONSENT_ENABLED === 'true';
 }
 
 /** 가입 동의 카드 머리의 설명 문구 (Figma 440:19794) */
@@ -83,10 +88,11 @@ export const SIGNUP_TERMS: readonly SignupTerm[] = [
     version: '2026-11-05',
     body: [
       '1. 목적: 사용자에게 맞는 곡을 추천하는 모델을 만들고 평가하는 것',
-      '2. 수집·이용 항목: 연주한 곡과 난이도, 연주 시각, 정확도, 완주 여부, 약점 요약(어떤 패드·유형이 약했는지의 횟수·정도). 이름·이메일 등 계정 정보는 쓰지 않아요.',
-      '3. 처리 방식: 분석 전에 누구의 기록인지 알 수 없도록 가명 처리해요. 개인별 학습 값은 저장하지 않아요.',
-      '4. 철회: 설정에서 언제든 철회할 수 있어요. 철회하면 이후 모델 학습부터 제외돼요. 이미 학습에 반영된 값은 개인별로 찾아 삭제할 수 없어요.',
-      '5. 동의하지 않아도 곡 추천을 포함한 모든 기능을 그대로 쓸 수 있어요.',
+      '2. 이용 항목: 연주한 곡과 채보, 난이도, 연주 시각, 정확도, 완주 여부, 연주 모드. 이름·이메일 등 계정 정보와 약점 요약은 학습에 쓰지 않아요.',
+      '3. 처리 방식: 비밀 값으로 만든 가명 키를 사용해요. 이 정보는 익명이 아니며, 서비스에서 사용자를 다시 찾을 수 있어요.',
+      '4. 저장: 학습 입력은 파일로 남기지 않고 사용자별 학습 벡터도 저장하지 않아요. 추천 후보 곡은 계정당 최대 50개를 저장하고 다음 배치에서 교체해요. 기본적으로 7일이 지난 후보는 추천에 쓰지 않아요.',
+      '5. 철회: 설정에서 언제든 철회할 수 있어요. 철회하면 저장된 후보를 지우고 다음 데이터 조회부터 학습에서 제외해요. 이미 학습한 모델에서 개인의 반영분을 따로 지울 수는 없어요.',
+      '6. 동의하지 않아도 곡 추천을 포함한 모든 기능을 그대로 쓸 수 있어요.',
       '(초안 — 약관 담당 검토 후 교체)',
     ].join('\n'),
   },
@@ -106,7 +112,7 @@ export function currentConsentVersions(
     termsVersion: termVersion('terms', terms),
     privacyVersion: termVersion('privacy', terms),
     dataConsent: { agreed: true, version: termVersion('dataConsent', terms) },
-    recommendationConsent: { agreed: agreed.has('recommendation'), version: termVersion('recommendation', terms) },
+    ...(terms.some((t) => t.id === 'recommendation') ? { recommendationConsent: { agreed: agreed.has('recommendation'), version: termVersion('recommendation', terms) } } : {}),
   };
 }
 

@@ -31,13 +31,13 @@ describe('load', () => {
     expect(getRecommendationConsent).toHaveBeenCalledTimes(1);
   });
 
-  it('실패하면 error이고 던지지 않으며 다시 요청하지 않는다', async () => {
+  it('실패하면 error이며 다시 요청할 수 있다', async () => {
     vi.mocked(getRecommendationConsent).mockRejectedValue(new Error('x'));
     await expect(state().load()).resolves.toBeUndefined();
     expect(state().status).toBe('error');
     expect(state().consent).toBeNull();
     await state().load();
-    expect(getRecommendationConsent).toHaveBeenCalledTimes(1);
+    expect(getRecommendationConsent).toHaveBeenCalledTimes(2);
   });
 });
 
