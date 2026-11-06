@@ -374,3 +374,16 @@ describe('촘촘한 같은 패드 노트 매칭 (MODE-001-judge-window 3-1)', ()
     expect(s.lastContestedMatch).toBeNull();
   });
 });
+
+it('열린 하이햇 속성은 같은 채보의 판정·점수·콤보를 바꾸지 않는다', () => {
+  const run = (opened: boolean) => {
+    const notes: ChartNote[] = [{ timeMs: 1000, pad: 'HIHAT', ...(opened ? { hihatOpen: true as const } : {}) }, { timeMs: 1500, pad: 'SNARE' }];
+    const ss = playing(notes);
+    const first = ss.handleHit({ ...hit('HIHAT', T0 + 1000), hihatClosed: true });
+    const second = ss.handleHit(hit('SNARE', T0 + 1540));
+    const snap = ss.snapshot(T0 + 1600);
+    return { judgements: [first?.judgement, second?.judgement], score: snap.score, combo: snap.combo, maxCombo: snap.maxCombo, counts: snap.counts };
+  };
+  expect(run(true)).toEqual(run(false));
+  expect(run(true)).toMatchObject({ judgements: ['PERFECT', 'GOOD'], score: 160, maxCombo: 2 });
+});

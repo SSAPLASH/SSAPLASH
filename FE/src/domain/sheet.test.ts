@@ -281,3 +281,14 @@ describe('countLabel', () => {
     expect(countLabel(11, 12, 3)).toEqual({ beat: 3, sub: 'a' });
   });
 });
+
+it('열린 하이햇만 원 위치를 캐시하고 동시 크래시·빔도 유지한다', () => {
+  const layout = layoutBar(chartOf([
+    { timeMs: 0, pad: 'HIHAT', hihatOpen: true },
+    { timeMs: 0, pad: 'CRASH', hihatOpen: true },
+    { timeMs: 125, pad: 'HIHAT' },
+  ], 2000), 0);
+  expect(layout.glyphs.map((g) => g.openOffsetY)).toEqual([20, undefined, undefined]);
+  expect(layout.glyphs[0].xRatio).toBe(layout.glyphs[1].xRatio);
+  expect(layout.beams).toHaveLength(1);
+});

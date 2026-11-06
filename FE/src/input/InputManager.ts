@@ -10,6 +10,7 @@ import type { KeyMap } from '@/domain/keyMap';
 import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
 import { isSensorSource } from '@/domain/events';
+import { PedalTimeline } from './pedalTimeline';
 import { packetTap } from './packetTap';
 import { decodePacket, PARAM_ACK_RESET_POSE } from './stickProtocol';
 
@@ -60,6 +61,14 @@ export class InputManager {
   private sensorOffsetMs = DEFAULT_SENSOR_TUNING.sensorOffsetMs;
   private outsidePolicy: OutsidePolicy = DEFAULT_SENSOR_TUNING.outsidePolicy;
   private seq = 0;
+  private pedalTimeline = new PedalTimeline();
+  private pedalOwners: Partial<Record<FootId, InputSource>> = {};
+  private retiredPedalOwners: Record<FootId, WeakSet<InputSource>> = { 2: new WeakSet(), 3: new WeakSet() };
+
+  getHihatPedalState(): { connected: boolean; closed: boolean | null } {
+    const connected = !!this.pedalOwners[2];
+    return { connected, closed: connected ? this.pedalTimeline.stateAt(performance.now()) : null };
+  }
   /** 리듬 게임이 "지금 칠 법한 패드"를 알려주면 판정을 그 후보로 제한한다 */
   private candidateProvider: ((tHit: number) => PadId[] | undefined) | null = null;
   readonly lastPose: Record<StickId, Pose> = { 0: { pitch: 0, yaw: 0 }, 1: { pitch: 0, yaw: 0 } };
@@ -121,10 +130,12 @@ export class InputManager {
    */
   async attach(source: InputSource, auto = false): Promise<void> {
     await this.detach(source.kind);
+    this.retiredPedalOwners[2].delete(source);
+    this.retiredPedalOwners[3].delete(source);
     this.sources.set(source.kind, source);
     this.unsubs.set(
       source.kind,
-      source.subscribe((e) => this.handle(e, source.kind)),
+      source.subscribe((e) => { if (this.sources.get(source.kind) === source) this.handle(e, source); }),
     );
     if (auto && source.autoConnect) await source.autoConnect();
     else await source.connect();
@@ -136,16 +147,17 @@ export class InputManager {
     this.unsubs.get(kind)?.();
     this.unsubs.delete(kind);
     this.sources.delete(kind);
-    await s.disconnect();
     for (const l of this.statusListeners) {
       l(0, false, kind);
       l(1, false, kind);
     }
-    // 소스가 내려가면 페달도 끊긴 것으로 알린다(손 status와 같은 방식)
-    for (const l of this.pedalStatusListeners) {
-      l(2, false);
-      l(3, false);
+    for (const foot of [2, 3] as const) {
+      if (this.pedalOwners[foot] !== s) continue;
+      delete this.pedalOwners[foot];
+      if (foot === 2) this.pedalTimeline.clear();
+      for (const l of this.pedalStatusListeners) l(foot, false);
     }
+    await s.disconnect();
   }
 
   get(kind: InputSourceKind): InputSource | undefined {
@@ -210,7 +222,8 @@ export class InputManager {
     return resolvePad(this.profiles[stickId], pose);
   }
 
-  private handle(e: StickEvent, source: InputSourceKind): void {
+  private handle(e: StickEvent, owner: InputSource): void {
+    const source = owner.kind;
     if (e.kind === 'pose') {
       this.lastPose[e.stickId] = { pitch: e.pitch, yaw: e.yaw };
       for (const l of this.poseListeners) l(e.stickId, this.lastPose[e.stickId], source);
@@ -221,10 +234,28 @@ export class InputManager {
       return;
     }
     if (e.kind === 'pedalStatus') {
+      if (this.retiredPedalOwners[e.foot].has(owner)) return;
+      const previous = this.pedalOwners[e.foot];
+      if (e.connected) {
+        if (previous !== owner) {
+          if (previous) {
+            this.retiredPedalOwners[e.foot].add(previous);
+            for (const l of this.pedalStatusListeners) l(e.foot, false);
+          }
+          if (e.foot === 2) this.pedalTimeline.clear();
+          this.pedalOwners[e.foot] = owner;
+        }
+      } else {
+        if (previous !== owner) return;
+        delete this.pedalOwners[e.foot];
+        if (e.foot === 2) this.pedalTimeline.clear();
+      }
       for (const l of this.pedalStatusListeners) l(e.foot, e.connected, e.batteryPct);
       return;
     }
     if (e.kind === 'pedal') {
+      if (this.retiredPedalOwners[2].has(owner) || this.pedalOwners[2] !== owner || !Number.isFinite(e.timestamp)) return;
+      this.pedalTimeline.add(e.timestamp, e.closed);
       for (const l of this.pedalListeners) l(e.closed);
       return;
     }
@@ -251,6 +282,7 @@ export class InputManager {
       id: ++this.seq,
       stickId,
       pad: m.pad,
+      ...(m.pad === 'HIHAT' ? { hihatClosed: this.pedalOwners[2] ? this.pedalTimeline.stateAt(e.timestamp) : null } : {}),
       // 스틱 velocity는 펌웨어 곡선 결과라 그대로 쓴다(이중 적용 금지). 없으면 가속도 곡선
       velocity:
         e.velocity !== undefined
@@ -283,6 +315,7 @@ export class InputManager {
       stickId: null,
       foot,
       pad: e.pad ?? null,
+      ...(e.pad === 'HIHAT' ? { hihatClosed: this.pedalOwners[2] ? this.pedalTimeline.stateAt(e.timestamp) : null } : {}),
       velocity: Math.min(127, Math.max(1, Math.round(e.velocity ?? 100))),
       tHit: e.timestamp + this.sensorOffsetMs,
       tRecv: e.recvTime,

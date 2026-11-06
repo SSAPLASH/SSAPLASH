@@ -7,6 +7,7 @@ export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO';
 export interface ChartNote {
   timeMs: number;
   pad: PadId;
+  hihatOpen?: true;
   /** 0~127, 선택 */
   velocityHint?: number;
   /** BE 채보의 노트 id(업로드 matchedNoteId). 내장 채보는 미설정 */
