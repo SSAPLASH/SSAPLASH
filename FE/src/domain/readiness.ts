@@ -10,7 +10,7 @@ export interface ReadinessInput {
   connected: [boolean, boolean];
   /** [왼발, 오른발] 페달 연결. 동글(webserial) 소스는 두 발 모두 붙어야 한다(PLAY-002 D3). 다른 소스는 보지 않는다 */
   pedal: [boolean, boolean];
-  /** 최초 설정 완료 여부. 설정 페이지에서는 "이 세션에서 보정했는가"(referenceSetAt !== null)를 넘긴다 */
+  /** 최초 설정 완료 여부. 센서 모드에서는 "연결된 손마다 앵커가 있는가"(anchorsReady)를 넘긴다(PLAY-004 4-3) */
   firstSetupDone: boolean;
   activePresetId: string | null;
 }
@@ -23,7 +23,7 @@ export interface ReadinessResult {
 export const READINESS_MESSAGES: Record<ReadinessMissing, string> = {
   stick: '스틱을 연결하세요', // 일반형. 빠진 손을 짚으려면 stickMissingText
   pedal: '페달을 연결하세요',
-  firstSetup: '최초 설정(시작 위치 맞추기)이 필요합니다',
+  firstSetup: '최초 설정(드럼 위치 보정)이 필요합니다',
   preset: '사용할 프리셋을 적용하세요',
 };
 
@@ -33,6 +33,16 @@ export function stickMissingText(connected: [boolean, boolean]): string {
   if (!connected[0]) return '왼손 스틱을 연결하세요';
   if (!connected[1]) return '오른손 스틱을 연결하세요';
   return READINESS_MESSAGES.stick;
+}
+
+/**
+ * 연결된 손마다 앵커가 있는가(PLAY-004 D9). 연결된 손이 없으면 어느 손이든 앵커가 하나라도 있어야 한다.
+ * 한 손만 보정한 채 다른 손이 붙으면 false가 되어 ②가 "보정 필요"로 돌아간다
+ */
+export function anchorsReady(connected: readonly [boolean, boolean], hasAnchors: readonly [boolean, boolean]): boolean {
+  const any = connected[0] || connected[1];
+  if (!any) return hasAnchors[0] || hasAnchors[1];
+  return ([0, 1] as const).every((i) => !connected[i] || hasAnchors[i]);
 }
 
 export function readiness(input: ReadinessInput): ReadinessResult {

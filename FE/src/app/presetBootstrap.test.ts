@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrapPresets, resetPresetBootstrapForTest, syncPresetSource } from './presetBootstrap';
 import { ServerPresetSource } from '@/api/presets';
 import { resetForTest } from '@/api/auth';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
 import type { KitPreset } from '@/domain/preset';
 import { resetAuthStoreForTest, useAuth, type AuthStatus } from '@/store/authStore';
 import { LocalPresetSource } from '@/store/localPresetSource';
@@ -19,7 +20,7 @@ const SERVER = [
     id: 7,
     name: '서버 기본',
     isDefault: true,
-    layout: KIT_LAYOUT_PRESETS.wide,
+    layout: WIDE_LAYOUT,
     sounds: { soundSetId: 'synth' },
     calibration: null,
     schemaVersion: 1,
@@ -30,7 +31,7 @@ const SERVER = [
     id: 8,
     name: '서버 둘째',
     isDefault: false,
-    layout: KIT_LAYOUT_PRESETS.tight,
+    layout: TIGHT_LAYOUT,
     sounds: { soundSetId: 'ssaplash' },
     calibration: null,
     schemaVersion: 1,
@@ -43,7 +44,7 @@ const LOCAL: KitPreset = {
   id: 'local-1',
   name: '로컬 기본',
   isDefault: true,
-  layout: KIT_LAYOUT_PRESETS.tight,
+  layout: TIGHT_LAYOUT,
   soundSetId: 'synth',
   schemaVersion: 1,
   createdAt: '2026-10-20T00:00:00Z',
@@ -101,18 +102,18 @@ describe('syncPresetSource', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(presets().items.map((p) => p.id)).toEqual(['7', '8']);
     expect(settings().activePresetId).toBe('7');
-    expect(settings().kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    expect(settings().kitLayout).toEqual(WIDE_LAYOUT);
     expect(settings().soundSetId).toBe('synth');
   });
 
   it('authenticated: 영속된 activePresetId가 로컬 id라 목록에 없으면 기본 프리셋으로 바꾼다', async () => {
     mockServer();
-    useSettings.setState({ activePresetId: 'local-1', kitLayout: KIT_LAYOUT_PRESETS.tight });
+    useSettings.setState({ activePresetId: 'local-1', kitLayout: TIGHT_LAYOUT });
 
     await syncPresetSource('authenticated');
 
     expect(settings().activePresetId).toBe('7');
-    expect(settings().kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    expect(settings().kitLayout).toEqual(WIDE_LAYOUT);
   });
 
   it('authenticated: 적용 중이던 서버 프리셋이 목록에 있으면 그대로 둔다(기본으로 덮지 않는다)', async () => {
@@ -128,13 +129,13 @@ describe('syncPresetSource', () => {
 
   it('authenticated: 기본 프리셋이 없고 적용 중인 것도 목록에 없으면 적용 프리셋을 비운다', async () => {
     mockServer([{ ...SERVER[1], isDefault: false }]);
-    useSettings.setState({ activePresetId: 'local-1', kitLayout: KIT_LAYOUT_PRESETS.tight });
+    useSettings.setState({ activePresetId: 'local-1', kitLayout: TIGHT_LAYOUT });
 
     await syncPresetSource('authenticated');
 
     expect(presets().items.map((p) => p.id)).toEqual(['8']);
     expect(settings().activePresetId).toBeNull();
-    expect(settings().kitLayout).toEqual(KIT_LAYOUT_PRESETS.tight);
+    expect(settings().kitLayout).toEqual(TIGHT_LAYOUT);
   });
 
   it('authenticated: 목록 읽기에 실패하면 오류 상태만 남기고 적용 프리셋은 건드리지 않는다', async () => {

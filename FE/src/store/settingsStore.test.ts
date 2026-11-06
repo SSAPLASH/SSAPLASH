@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VERSION, migrateSettings, useSettings } from './settingsStore';
-import { KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
-import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { WIDE_LAYOUT } from '@/test/layoutFixtures';
+import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/tuning';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {
@@ -76,7 +77,7 @@ describe('migrateSettings v3 → v4 (튜닝)', () => {
 
   it('범위 밖 저장값은 슬라이더 범위로 자른다', () => {
     const out = migrateSettings({ maxRadiusDeg: 999 }, 3) as unknown as { tuning: { maxRadiusDeg: number } };
-    expect(out.tuning.maxRadiusDeg).toBe(40);
+    expect(out.tuning.maxRadiusDeg).toBe(45);
   });
 
   it('v2 이하에서도 v4까지 한 번에 이행', () => {
@@ -151,17 +152,17 @@ describe('migrateSettings v6 → v7 (메트로놈·사운드 토글)', () => {
 });
 
 describe('레이아웃 프리셋', () => {
-  it('applyLayoutPreset은 kitLayout을 프리셋으로 바꾼다', () => {
-    useSettings.getState().applyLayoutPreset('wide');
-    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.wide);
+  it('setKitLayout은 kitLayout을 바꾸고 resetLayout은 기본으로 되돌린다', () => {
+    useSettings.getState().setKitLayout(WIDE_LAYOUT);
+    expect(useSettings.getState().kitLayout).toEqual(WIDE_LAYOUT);
     useSettings.getState().resetLayout();
-    expect(useSettings.getState().kitLayout).toEqual(KIT_LAYOUT_PRESETS.basic);
+    expect(useSettings.getState().kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
   });
 });
 
 describe('migrateSettings v7 → v8 (키 매핑 폐기·프리셋 정리)', () => {
   const run = (p: Record<string, unknown>) => migrateSettings(p, 7) as unknown as Record<string, unknown>;
-  const layout = KIT_LAYOUT_PRESETS.basic;
+  const layout = DEFAULT_KIT_LAYOUT;
 
   it('keyMap을 버리고 프리셋에서 keyMap·profile을 떼며 soundSetId를 채운다', () => {
     const out = run({
@@ -198,7 +199,7 @@ describe('migrateSettings v7 → v8 (키 매핑 폐기·프리셋 정리)', () =
 });
 
 describe('migrateSettings v8 → v9 (프로필 삭제·최초 설정·프리셋 적용 상태)', () => {
-  const layout = KIT_LAYOUT_PRESETS.basic;
+  const layout = DEFAULT_KIT_LAYOUT;
   const run = (p: Record<string, unknown>) => migrateSettings(p, 8) as unknown as Record<string, unknown>;
 
   it('profile·calibrationMode·holdMs를 지우고 firstSetupDone=false, activePresetId=null을 채운다', () => {
@@ -237,7 +238,7 @@ describe('migrateSettings v8 → v9 (프로필 삭제·최초 설정·프리셋 
 });
 
 describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
-  const basic = KIT_LAYOUT_PRESETS.basic;
+  const basic = DEFAULT_KIT_LAYOUT;
   // v9 배치: HI_TOM 키 7개(MID_TOM·HIHAT_PEDAL 없음)
   const { SMALL_TOM: _s, MID_TOM: _m, HIHAT_PEDAL: _h, ...rest } = basic;
   void _s;
@@ -276,7 +277,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(16);
+    expect(SETTINGS_VERSION).toBe(17);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -320,5 +321,41 @@ describe('migrateSettings v13 → v14 (statsConsent 삭제)', () => {
     const out = migrateSettings({ statsConsent: true, liveCoach: false }, 13) as unknown as Record<string, unknown>;
     expect('statsConsent' in out).toBe(false);
     expect(out.liveCoach).toBe(false);
+  });
+});
+
+describe('migrateSettings v16 → v17 (손별 앵커, PLAY-004)', () => {
+  const run = (p: Record<string, unknown>) => migrateSettings(p, 16) as unknown as Record<string, unknown>;
+
+  it('stickAnchors가 없으면 [null, null], calibratedAt은 null', () => {
+    const out = run({ kitSkin: 'acoustic' });
+    expect(out.stickAnchors).toEqual([null, null]);
+    expect(out.calibratedAt).toBeNull();
+  });
+
+  it('깨진 앵커(숫자 아님)는 버리고 멀쩡한 손만 남긴다', () => {
+    const good = { pad: 'SNARE', pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };
+    const out = run({ stickAnchors: [{ SNARE: good, HIHAT: { pitch: 'x', yaw: 0 } }, 'bad'], calibratedAt: 123 });
+    expect(out.stickAnchors).toEqual([{ SNARE: good }, null]);
+    expect(out.calibratedAt).toBe(123);
+  });
+
+  it('setStickAnchors는 앵커와 시각을 저장하고 clearStickAnchors는 비운다. 프리셋 적용과 무관', () => {
+    const good = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };
+    useSettings.getState().setStickAnchors([{ SNARE: good }, null], 999);
+    expect(useSettings.getState().stickAnchors).toEqual([{ SNARE: good }, null]);
+    expect(useSettings.getState().calibratedAt).toBe(999);
+    useSettings.getState().setKitLayout(WIDE_LAYOUT);
+    useSettings.getState().setActivePresetId('p');
+    expect(useSettings.getState().stickAnchors[0]?.SNARE).toEqual(good);
+    useSettings.getState().clearStickAnchors();
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+    expect(useSettings.getState().calibratedAt).toBeNull();
+  });
+
+  it('merge는 저장분의 tuning에 minRadiusDeg가 없으면 기본값 15로 채운다', () => {
+    const t = mergeTuning(DEFAULT_SENSOR_TUNING, { radiusFactor: 0.5 });
+    expect(t.minRadiusDeg).toBe(15);
+    expect(DEFAULT_SENSOR_TUNING).toMatchObject({ radiusFactor: 0.6, minRadiusDeg: 15, maxRadiusDeg: 35 });
   });
 });
