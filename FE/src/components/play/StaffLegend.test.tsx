@@ -14,7 +14,7 @@ describe('StaffLegend', () => {
   it('9줄을 크래시부터 하이햇 페달까지 위에서 아래 순서로 그린다', () => {
     const r = rows(render());
     expect(r).toHaveLength(9);
-    r.forEach((row, i) => expect(row).toContain(`play-sl-name">${PAD_META[ORDER[i]].label}</span>`));
+    r.forEach((row, i) => expect(row).toContain(`play-sl-name">${PAD_META[ORDER[i]].label}`));
   });
 
   it('손/발 태그: 킥·하이햇 페달만 발', () => {
@@ -30,11 +30,12 @@ describe('StaffLegend', () => {
     const html = render();
     expect(html).toContain('aria-label="스네어 — 오선 셋째 칸, 손"');
     expect(html).toContain('aria-label="크래시 — 오선 위 덧줄, 손"');
-    expect(html).toContain('aria-label="하이햇 — 오선 맨 위 줄 위, 손"');
+    expect(html).toContain('aria-label="하이햇 — 오선 맨 위 줄 위, 손, o 열린 하이햇, 페달 떼고 치기"');
     expect(html).toContain('aria-label="킥 — 오선 첫째 칸, 발"');
     expect(html).toContain('aria-label="하이햇 페달 — 오선 첫째 줄, 발"');
     expect(html).toContain('aria-label="라이드 — 오선 다섯째 줄, 손"');
     expect(html).toContain('aria-label="악보 읽는 법"');
+    expect(html).toContain('o 열린 하이햇 · 페달 떼고 치기');
   });
 
   it('패드 색 점이 PAD_META 색', () => {
