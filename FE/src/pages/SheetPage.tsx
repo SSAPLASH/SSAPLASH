@@ -60,7 +60,7 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -293,7 +293,7 @@ function SheetPageBody() {
         stickId: e.stickId,
         velocity: e.velocity,
       };
-      const message = coach.push(judged);
+      const message = coach.push(judged, activeSession.snapshot().strayHits);
       shadowRef.current?.push(judged);
       if (!message) return;
       try {
@@ -438,7 +438,7 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
-    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach, setupHints: isStickSensor(st.sensorKind) });
     coachRef.current = coach;
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
