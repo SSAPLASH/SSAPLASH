@@ -44,12 +44,12 @@ public class RecommendationConsentService {
 
 	/**
 	 * @throws UserNotActiveException ACTIVE 회원이 아닐 때. 아무것도 기록되지 않는다
-	 * @throws BusinessException 허용 판 목록이 설정돼 있고 보낸 판이 그 목록에 없을 때(422)
+	 * @throws BusinessException 동의인데 허용 판 목록이 설정돼 있고 보낸 판이 그 목록에 없을 때(422). 철회는 판과 관계없이 받는다
 	 */
 	@Transactional
 	public Consent save(long userId, RecommendationConsentInput input) {
 		String version = input.version().strip();
-		if (!versions.isEmpty() && !versions.contains(version)) {
+		if (input.agreed() && !versions.isEmpty() && !versions.contains(version)) {
 			throw new BusinessException(UserErrorCode.SIGNUP_CONSENT_VERSION_INVALID,
 					SignupConsentVersions.DETAIL + " (recommendationConsent.version)");
 		}
