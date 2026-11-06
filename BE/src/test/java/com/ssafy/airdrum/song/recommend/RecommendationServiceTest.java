@@ -16,7 +16,6 @@ import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.feature.ChartFeatureService;
 import com.ssafy.airdrum.song.recommend.RecommendationService.Context;
-import com.ssafy.airdrum.song.recommend.RecommendationService.Mode;
 import static org.assertj.core.api.Assertions.*;
 
 /** 곡 추천 R1의 DB 연결 부분: 채보 특징 저장, 후보 조건, 노출·클릭 기록, 보관 정리. 순수 점수 규칙은 RecommendationScorerTest가 본다. */
@@ -91,7 +90,7 @@ class RecommendationServiceTest {
 		tx.executeWithoutResult(s -> levels.process(noHard, true));
 		assertThat(db.queryForObject("SELECT song_level FROM songs WHERE id=?", String.class, noHard)).isNull();
 		assertThat(db.queryForObject("SELECT count(*) FROM chart_features f JOIN chart_versions v ON v.id=f.chart_version_id JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", Integer.class, noHard)).isZero();
-		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 10))).doesNotContain(noHard);
+		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, null, 10))).doesNotContain(noHard);
 	}
 
 	@Test void 난이도_산정이_커밋되면_채보_특징이_저장되고_같은_값으로_다시_계산해도_중복이_없다() {
@@ -104,7 +103,7 @@ class RecommendationServiceTest {
 	}
 
 	@Test void 기록이_없으면_BEGINNER의_쉬운_곡만_STARTER_이유로_추천하고_개인_곡은_넣지_않는다() {
-		var result = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
 		assertThat(result.strategy()).isEqualTo("RULE_V1");
 		assertThat(songIds(result)).contains(slow, mid).doesNotContain(fast, personal);
 		assertThat(songIds(result)).doesNotHaveDuplicates();
@@ -113,16 +112,21 @@ class RecommendationServiceTest {
 
 	@Test void 높은_정확도_기록이_있으면_기준_밀도의_1점5배를_넘는_채보를_추천하지_않는다() {
 		play(user, mid, midVersion, 90, Instant.now().minus(1, ChronoUnit.DAYS));
-		var result = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
 		// 기준 4.0 → fast(8.0)는 비율 2.0으로 제외
 		assertThat(songIds(result)).doesNotContain(fast, personal).contains(slow);
 		assertThat(result.items()).allSatisfy(i -> assertThat(i.reasons()).isNotEmpty());
 	}
 
+	@Test void 악보_이미지가_준비되지_않은_채보도_추천한다() {
+		db.update("UPDATE chart_versions SET notation_status='PENDING' WHERE id=?", midVersion);
+		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, null, 10))).contains(mid);
+	}
+
 	@Test void 같은_입력이면_같은_순서를_돌려준다() {
 		play(user, mid, midVersion, 90, Instant.now().minus(1, ChronoUnit.DAYS));
-		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5)))
-				.isEqualTo(songIds(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5)));
+		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, null, 5)))
+				.isEqualTo(songIds(service.recommend(user, Context.SONG_PICKER, null, 5)));
 	}
 
 	@Test void 약점_패드가_있으면_그_패드를_많이_치는_곡의_이유에_WEAK_PAD가_붙는다() {
@@ -131,23 +135,23 @@ class RecommendationServiceTest {
 				INSERT INTO reports(play_session_id,timing_histogram,pad_stats,weak_segments,generator_version)
 				VALUES (?, '[]'::jsonb, '[]'::jsonb, '[{"pattern":"PAD_LATE","pads":["SNARE","KICK"],"metrics":{"severity":0.9}}]'::jsonb, 'test')
 				""", id);
-		var result = service.recommend(user, Context.REPORT, Mode.RHYTHM, id, 5);
+		var result = service.recommend(user, Context.REPORT, id, 5);
 		assertThat(result.items()).anySatisfy(i -> assertThat(i.reasons()).extracting(RecommendationResponses.Reason::code).contains("WEAK_PAD"));
 	}
 
 	@Test void 타인의_연주나_없는_연주_ID는_404이고_SONG_PICKER에_playId를_주면_400이다() {
 		var othersPlay = play(other, mid, midVersion, 90, Instant.now());
-		assertThatThrownBy(() -> service.recommend(user, Context.REPORT, Mode.RHYTHM, othersPlay, 5))
+		assertThatThrownBy(() -> service.recommend(user, Context.REPORT, othersPlay, 5))
 				.isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode().code()).isEqualTo("PLAY_NOT_FOUND"));
-		assertThatThrownBy(() -> service.recommend(user, Context.REPORT, Mode.RHYTHM, UUID.randomUUID(), 5))
+		assertThatThrownBy(() -> service.recommend(user, Context.REPORT, UUID.randomUUID(), 5))
 				.isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode().code()).isEqualTo("PLAY_NOT_FOUND"));
 		var mine = play(user, mid, midVersion, 90, Instant.now());
-		assertThatThrownBy(() -> service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, mine, 5))
+		assertThatThrownBy(() -> service.recommend(user, Context.SONG_PICKER, mine, 5))
 				.isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode().code()).isEqualTo("INVALID_INPUT"));
 	}
 
 	@Test void 노출이_기록되고_클릭은_본인_것만_처음_시각을_유지하며_기록된다() {
-		var result = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
 		assertThat(result.items()).isNotEmpty();
 		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE request_id=? AND user_id=?", Integer.class, result.requestId(), user)).isEqualTo(result.items().size());
 		long song = result.items().getFirst().song().id();
@@ -162,7 +166,7 @@ class RecommendationServiceTest {
 	}
 
 	@Test void 보관_기간이_지난_노출_기록만_지운다() {
-		var result = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
 		var old = UUID.randomUUID();
 		db.update("INSERT INTO recommendation_items(request_id,rank,user_id,context,strategy,song_id,chart_id,score,reason_codes,shown_at) SELECT ?,1,?,'SONG_PICKER','RULE_V1',s.id,c.id,0.5,'[]'::jsonb,? FROM songs s JOIN charts c ON c.song_id=s.id WHERE s.id=?",
 				old, user, Timestamp.from(Instant.now().minus(120, ChronoUnit.DAYS)), mid);
@@ -172,8 +176,8 @@ class RecommendationServiceTest {
 	}
 
 	@Test void 회원_탈퇴하면_그_회원의_추천_기록이_지워진다() {
-		var mine = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
-		var theirs = service.recommend(other, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var mine = service.recommend(user, Context.SONG_PICKER, null, 5);
+		var theirs = service.recommend(other, Context.SONG_PICKER, null, 5);
 		assertThat(mine.items()).isNotEmpty();
 		withdrawal.withdraw(user);
 		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE user_id=?", Integer.class, user)).isZero();

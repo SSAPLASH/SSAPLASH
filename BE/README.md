@@ -811,7 +811,7 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 | API | 응답·규칙 |
 | --- | --- |
-| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt, coachSummary |
+| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt, coachSummary, songId, chartId, difficulty(연주한 곡·채보. 곡이 삭제돼도 id는 그대로, 값이 없으면 null) |
 | `GET /api/v1/plays/{playId}/report/notes?afterSeq=4&limit=1000&fromMs=7000&toMs=12000` | items, nextAfterSeq. `fromMs`·`toMs`(선택)를 주면 노트 시각이 fromMs 이상 toMs 미만인 노트만 돌려준다(노트 시각은 PERFECT·GOOD이 tMs−deltaMs, MISS가 tMs). 약점 구간 재생용이다. 둘의 순서가 뒤바뀌거나 유한하지 않으면 `VALIDATION_FAILED`. limit 기본 500·범위 1~1000. afterSeq 생략 시 처음부터, 명시 시 0~2147483647. seq 오름차순·커서 초과 행을 limit+1개 읽어 다음 페이지 판별 |
 
 notes.items는 seq, matchedNoteId, tMs, pad, judgement, deltaMs, velocity다. PERFECT·GOOD·MISS만 반환하고
@@ -1286,7 +1286,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | `GET /api/v1/songs/recommendations?context=SONG_PICKER\|REPORT&mode=RHYTHM\|SHEET&playId=&size=` | Bearer 인증. `size` 1~10(기본 5). 응답 `{requestId, strategy: "RULE_V1", items[{song, chartId, difficulty, reasons[{code, text}]}]}`. 후보가 없으면 200과 빈 `items`. `playId`는 `context=REPORT`에서만 쓰며(아니면 400) 본인 연주가 아니면 404 `PLAY_NOT_FOUND` |
 | `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
 
-- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. `mode=SHEET`이면 `notation_status=READY`인 채보만. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
+- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. 악보 이미지 유무(`notation_status`)는 추천에 쓰지 않는다. 악보 연습은 채보 노트로 그리기 때문이다. `mode`는 값을 검사만 하고 결과에는 영향을 주지 않는다. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
 - **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
 - **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
 - **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.

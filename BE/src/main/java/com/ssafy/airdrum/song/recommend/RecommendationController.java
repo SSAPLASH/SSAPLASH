@@ -35,10 +35,10 @@ public class RecommendationController {
 	@ApiResponse(responseCode = "404", description = "없는 연주·타인의 연주: PLAY_NOT_FOUND", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 	public Recommendations recommend(@Parameter(hidden = true) AuthUser me,
 			@RequestParam RecommendationService.Context context,
-			@RequestParam(defaultValue = "RHYTHM") RecommendationService.Mode mode,
+			@Parameter(description = "카드를 누르면 갈 연주 모드. 값을 검사만 하고 결과에는 영향을 주지 않는다(악보 이미지 유무는 추천에 쓰지 않는다)") @RequestParam(defaultValue = "RHYTHM") RecommendationService.Mode mode,
 			@Parameter(description = "REPORT일 때 그 연주의 약점을 우선한다. 본인 연주만 가능") @RequestParam(required = false) UUID playId,
 			@RequestParam(defaultValue = "5") @Min(value = 1, message = "크기는 1 이상이어야 합니다") @Max(value = 10, message = "크기는 10 이하여야 합니다") int size) {
-		return service.recommend(me.id(), context, mode, playId, size);
+		return service.recommend(me.id(), context, playId, size);
 	}
 
 	@PostMapping("/recommendations/{requestId}/clicks")
