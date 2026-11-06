@@ -47,8 +47,19 @@ export const MAX_TITLE_LEN = 100;
 export type PrecheckReason = 'EXT' | 'SIZE' | 'EMPTY';
 export type PrecheckResult = { ok: true } | { ok: false; reason: PrecheckReason };
 
-const AUDIO_EXT = /\.(mp3|wav)$/i;
-const AUDIO_MIME = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave'];
+const AUDIO_EXT = /\.(mp3|wav|m4a|opus|ogg)$/i;
+// 브라우저마다 m4a는 audio/mp4·audio/x-m4a, opus는 audio/ogg·audio/opus로 넘긴다. .ogg의 Vorbis 거절은 BE 422로 처리
+const AUDIO_MIME = [
+  'audio/mpeg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/m4a',
+  'audio/ogg',
+  'audio/opus',
+];
 
 /** 전송 전 검사. 순서는 빈 파일 → 크기 → 형식 */
 export function precheckAudio(file: { name: string; size: number; type: string }): PrecheckResult {
@@ -59,7 +70,7 @@ export function precheckAudio(file: { name: string; size: number; type: string }
 }
 
 export const PRECHECK_TEXT: Record<PrecheckReason, string> = {
-  EXT: 'MP3 또는 WAV 파일만 올릴 수 있습니다.',
+  EXT: 'MP3·WAV·M4A·OPUS 파일만 올릴 수 있습니다.',
   SIZE: '파일이 너무 큽니다. 50 MiB 이하만 올릴 수 있습니다.',
   EMPTY: '빈 파일입니다. 다른 파일을 골라 주세요.',
 };
@@ -97,7 +108,7 @@ export function songStatusToProgress(status: string): JobProgress {
 
 export const UPLOAD_ERROR_TEXT: Record<string, string> = {
   AUDIO_INVALID: '제목 또는 파일이 올바르지 않습니다. 입력을 확인해 주세요.',
-  AUDIO_UNSUPPORTED: '지원하지 않는 음원입니다. 10분 이하의 MP3 또는 WAV 파일을 올려 주세요.',
+  AUDIO_UNSUPPORTED: '지원하지 않는 음원입니다. 10분 이하의 MP3·WAV·M4A·OPUS 파일을 올려 주세요.',
   AUDIO_TOO_LARGE: '파일이 너무 큽니다. 50 MiB 이하만 올릴 수 있습니다.',
   AUDIO_CONFLICT: '같은 요청이 다른 내용으로 이미 접수되어 있습니다. 파일을 다시 골라 올려 주세요.',
   AUDIO_BUSY: '이미 진행 중인 곡이 있습니다. 끝난 뒤에 다시 올려 주세요.',
