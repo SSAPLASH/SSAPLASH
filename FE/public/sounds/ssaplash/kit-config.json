@@ -5,15 +5,15 @@
   "pads": {
     "kick": {
       "file": "audio/kick.wav",
-      "label": "Yamaha Custom Birch 22\" FF",
-      "gain": 1.8,
+      "label": "킥 (팀원 전달 kick.wav)",
+      "gain": 1.6,
       "semitones": 0,
       "playbackRate": 1.0,
-      "author": "minorr",
-      "title": "Yamaha Custom Birch BASS DRUM 22'' FF.wav",
-      "sourceUrl": "https://freesound.org/people/minorr/sounds/104256/",
-      "license": "CC0 1.0",
-      "sha256": "901248300824ff581a0c6eb222611530face0086d26a0df7408bc005e3aadadc"
+      "author": "미확인",
+      "title": "미확인",
+      "sourceUrl": "미확인",
+      "license": "미확인",
+      "sha256": "ea9418e00ea4cafbbae34dd21761e5fb52e5e2fa6480547c91070a7e403e1924"
     },
     "snare": {
       "file": "audio/snare.wav",
@@ -116,14 +116,14 @@
     "ride": {
       "file": "audio/ride.wav",
       "label": "Zildjian K Custom Session F",
-      "gain": 5,
+      "gain": 1.2,
       "semitones": 0,
       "playbackRate": 1.0,
       "author": "minorr",
       "title": "RIDE Zildian K Custom Session F.wav",
       "sourceUrl": "https://freesound.org/people/minorr/sounds/104236/",
       "license": "CC0 1.0",
-      "sha256": "e070646c1846860d92f2a51f9c815581b38c44c0e44baf6acebdfe98992031ea"
+      "sha256": "7e3c578deb5395f99425e0b44597ae43a5b39bf849eda6e5c374c5c8cd1b55db"
     }
   }
 }
