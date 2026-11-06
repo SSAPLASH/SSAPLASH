@@ -42,4 +42,9 @@ void pose_angles(const pose_t *p, float *elev_deg, float *azim_deg);
 /* 정면 보정 (RESET_POSE): 현재 방향을 방위각 0으로. 고도각은 그대로 */
 void pose_reset_yaw(pose_t *p);
 
+/* 스틱 끝이 아래로 내려가는 회전 속도 (°/s, 내려갈 때 +). 스틱을 쥔 방향(롤)과 무관 (235).
+ * 자이로를 "끝을 아래로 꺾는 수평 회전축"에 투영한 값 = 고도각 변화율의 부호 반대.
+ * 끝이 거의 수직(|고도각| > 약 75°)이면 축이 정해지지 않아 0 */
+float pose_down_rate(const pose_t *p, const float gyro_dps[3]);
+
 #endif /* POSE_H */
