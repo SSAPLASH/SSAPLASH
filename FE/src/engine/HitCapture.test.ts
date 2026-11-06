@@ -170,3 +170,26 @@ describe('HitCapture build', () => {
     expect(l!.SNARE!.yaw).toBeCloseTo(-39.5);
   });
 });
+
+describe('HitCapture 패드 단위(T9)', () => {
+  it('start(hands, order)는 그 패드들만 받고 스냅샷 order에 남는다. restart도 order 유지', () => {
+    const c = new HitCapture();
+    c.start([0, 1], ['HIHAT']);
+    expect(c.snapshot()).toMatchObject({ target: 'HIHAT', order: ['HIHAT'] });
+    twice(c, 0, 0, -30);
+    c.restart();
+    expect(c.snapshot()).toMatchObject({ target: 'HIHAT', order: ['HIHAT'], counts: [0, 0] });
+    twice(c, 0, 0, -30);
+    twice(c, 1, 0, -35);
+    expect(c.snapshot().phase).toBe('done');
+    const [l, r] = c.build(DEFAULT_SENSOR_TUNING);
+    expect(Object.keys(l!)).toEqual(['HIHAT']);
+    expect(Object.keys(r!)).toEqual(['HIHAT']);
+  });
+
+  it('전체 순서에 없는 패드는 걸러지고, 비면 바로 done', () => {
+    const c = new HitCapture();
+    c.start([0], ['KICK']);
+    expect(c.snapshot().phase).toBe('done');
+  });
+});
