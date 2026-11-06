@@ -83,7 +83,7 @@ def test_놓침_비율이_높으면_약점이_없어도_NEEDS_WORK이고_문장�
     assert summary.level == "NEEDS_WORK"
     assert summary.focusPattern is None
     assert "눈에 띄는 약점은 없었어요" not in summary.text
-    assert "느린 템포" in summary.text
+    assert "쉬운 연습 단계" in summary.text
 
 
 def test_적중률이_높은_패드를_잘한_점으로_꼽는다():
