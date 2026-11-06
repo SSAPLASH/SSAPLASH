@@ -2,24 +2,30 @@
 // 곡이 없는 첫 방문에는 창 없이 본문에 같은 탭 양식을 둔다(설계 CHART-002 4-1).
 // 상태·폴링은 store/chartJobStore, MIDI는 store/midiUploadStore, 목록은 store/songStore. 이 페이지는 세 store를 접착한다.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SONG_EDIT_ENABLED } from '@/app/features';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { listSheets, deleteSheet, updateSheetTitle } from '@/api/sheets';
+import { SHEET_ARCHIVE_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
+import { SheetDeleteDialog } from '@/components/sheet/SheetDeleteDialog';
+import { SheetTitleDialog } from '@/components/sheet/SheetTitleDialog';
 import { useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Segmented } from '@/components/ui/Segmented';
 import { HowtoPanel } from '@/components/studio/HowtoPanel';
 import { MySongList, type StudioView } from '@/components/studio/MySongList';
+import type { SheetMenuKind } from '@/components/studio/SheetMenu';
+import { SheetUploadForm } from '@/components/studio/SheetUploadForm';
 import { SongCoverDialog } from '@/components/studio/SongCoverDialog';
 import { SongDeleteDialog } from '@/components/studio/SongDeleteDialog';
 import { SongMetaDialog } from '@/components/studio/SongMetaDialog';
 import { StudioToast } from '@/components/studio/StudioToast';
 import { useAccompanimentPolling } from '@/components/studio/useAccompanimentPolling';
-import type { SongEditKind } from '@/components/studio/SongMenu';
+import type { SongEditKind, SongSheetKind } from '@/components/studio/SongMenu';
 import { PlusIcon } from '@/components/studio/StudioIcons';
-import { UploadDialog } from '@/components/studio/UploadDialog';
+import { UploadDialog, type UploadSection } from '@/components/studio/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/components/studio/UploadPanel';
 import type { MidiDraft } from '@/domain/midiUpload';
+import type { SheetSummary } from '@/domain/sheetMusic';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
 import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
 import type { SongMetaPatch } from '@/domain/songEdit';
@@ -51,6 +57,30 @@ function saveView(view: StudioView): void {
   }
 }
 
+/** 올리기 창의 마지막 섹션을 브라우저에 기억한다 */
+const SECTION_KEY = 'airdrum.studio.uploadSection';
+
+function loadSection(): UploadSection {
+  try {
+    return localStorage.getItem(SECTION_KEY) === 'SHEET' ? 'SHEET' : 'SONG';
+  } catch {
+    return 'SONG';
+  }
+}
+
+function saveSection(section: UploadSection): void {
+  try {
+    localStorage.setItem(SECTION_KEY, section);
+  } catch {
+    // 저장하지 못해도 창은 그대로 쓴다
+  }
+}
+
+interface SheetEditing {
+  kind: SheetMenuKind;
+  sheet: SheetSummary;
+}
+
 interface Editing {
   kind: SongEditKind;
   song: SongSummary;
@@ -59,6 +89,7 @@ interface Editing {
 export function StudioPage() {
   useShell({ title: '라이브러리' });
   const navigate = useNavigate();
+  const location = useLocation();
   const { active, progress, phase, error, doneSource, upload, resume, retry, clear, stopPolling } = useChartJob();
   const load = useSongs((s) => s.load);
   const scope = useSongs((s) => s.scope);
@@ -81,6 +112,17 @@ export function StudioPage() {
   const [prefillSeq, setPrefillSeq] = useState(0);
   const [justDoneId, setJustDoneId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // 악보 보관(설계 CHART-001 악보 보관): 악보 목록은 곡 목록과 따로 읽고, 둘 중 하나만 실패해도 나머지는 보인다
+  const [sheets, setSheets] = useState<SheetSummary[]>([]);
+  const [sheetsStatus, setSheetsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [section, setSection] = useState<UploadSection>(loadSection);
+  // openUpload(useCallback)에서 렌더 시점의 첫 방문 여부를 읽기 위한 ref
+  const firstVisitRef = useRef(false);
+  // 곡 ⋯ [악보 올리기]로 열었을 때 붙일 곡(헤더에서 열면 null)
+  const [sheetTarget, setSheetTarget] = useState<SongSummary | null>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const sheetBusyRef = useRef(false);
+  const [sheetEditing, setSheetEditing] = useState<SheetEditing | null>(null);
   // 창을 다시 열면 마지막 탭을 유지한다
   const [tab, setTab] = useState<UploadTab>('AUDIO');
   const prevPhase = useRef(phase);
@@ -101,6 +143,35 @@ export function StudioPage() {
     };
   }, [resume, stopPolling, load]);
 
+  const loadSheets = useCallback(async () => {
+    if (!SHEET_ARCHIVE_ENABLED) return;
+    try {
+      const page = await listSheets();
+      setSheets(page.items);
+      setSheetsStatus('ready');
+    } catch {
+      setSheetsStatus('error');
+    }
+  }, []);
+
+  // 들어오면 악보 목록을 읽는다(곡 목록과 따로 — 한쪽 실패가 다른 쪽을 가리지 않는다)
+  useEffect(() => {
+    if (!SHEET_ARCHIVE_ENABLED) return;
+    let off = false;
+    listSheets()
+      .then((page) => {
+        if (off) return;
+        setSheets(page.items);
+        setSheetsStatus('ready');
+      })
+      .catch(() => {
+        if (!off) setSheetsStatus('error');
+      });
+    return () => {
+      off = true;
+    };
+  }, []);
+
   // 새 곡 행을 잠깐 강조한다
   const flashRow = useCallback((songId: number) => {
     setJustDoneId(songId);
@@ -113,6 +184,14 @@ export function StudioPage() {
     if (toastTimer.current !== null) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
+
+  // 뷰어에서 악보를 지우고 돌아오면(라우터 state) 토스트를 보이고 state를 비운다(새로고침해도 다시 뜨지 않게)
+  const sheetDeletedFlag = (location.state as { sheetDeleted?: boolean } | null)?.sheetDeleted === true;
+  useEffect(() => {
+    if (!SHEET_ARCHIVE_ENABLED || !sheetDeletedFlag) return;
+    queueMicrotask(() => showToast('악보를 지웠어요'));
+    navigate(location.pathname, { replace: true, state: null });
+  }, [sheetDeletedFlag, navigate, location.pathname, showToast]);
 
   // 서명 URL이 만료돼 커버를 못 불러오면 목록을 다시 읽어 새 URL을 받는다. 카드 여럿이 한꺼번에 실패해도 1분에 한 번만
   const onCoverError = useCallback(() => {
@@ -206,14 +285,57 @@ export function StudioPage() {
   const editBusy = editPhase === 'saving';
   const editErrorText = editPhase === 'failed' ? (editError?.text ?? null) : null;
 
-  const locked = phase === 'uploading' || midiPhase === 'uploading';
+  const locked = phase === 'uploading' || midiPhase === 'uploading' || sheetBusy;
 
   // 업로드 중에는 닫지 않는다. 닫을 때 MIDI 실패 문구는 비워 다음에 열 때 남지 않게 한다
   const closeDialog = useCallback(() => {
-    if (useChartJob.getState().phase === 'uploading' || useMidiUpload.getState().phase === 'uploading') return;
+    if (useChartJob.getState().phase === 'uploading' || useMidiUpload.getState().phase === 'uploading' || sheetBusyRef.current) return;
     if (useMidiUpload.getState().phase === 'failed') midiReset();
     setDialogOpen(false);
   }, [midiReset]);
+
+  // 헤더 [올리기]: 곡 없이 마지막에 쓴 섹션으로 연다.
+  // 첫 방문은 본문에 음원·MIDI 패널이 이미 있으므로 [악보] 섹션으로만 연다(같은 패널이 두 번 그려지지 않게)
+  const openUpload = useCallback(() => {
+    setSheetTarget(null);
+    if (firstVisitRef.current) setSection('SHEET');
+    setDialogOpen(true);
+  }, []);
+
+  const changeSection = useCallback((next: UploadSection) => {
+    setSection(next);
+    saveSection(next);
+  }, []);
+
+  const onSheetBusy = useCallback((busy: boolean) => {
+    sheetBusyRef.current = busy;
+    setSheetBusy(busy);
+  }, []);
+
+  // 악보 올리기 성공: 창을 닫고 곡·악보 목록을 다시 읽고 알린다(곡에 붙였으면 그 곡 ⋯ 메뉴가 [악보 보기]로 바뀐다)
+  const onSheetUploaded = useCallback(() => {
+    setDialogOpen(false);
+    setSheetTarget(null);
+    void load('MINE');
+    void loadSheets();
+    showToast('악보를 올렸어요');
+  }, [load, loadSheets, showToast]);
+
+  // 곡 ⋯ 메뉴의 악보 항목(악보-곡 연결 스위치 켜짐)
+  const onSongSheet = useCallback(
+    (kind: SongSheetKind, song: SongSummary) => {
+      if (kind === 'sheetView') {
+        if (song.sheetId != null) navigate(`/studio/sheets/${song.sheetId}`);
+        return;
+      }
+      setSheetTarget(song);
+      setSection('SHEET');
+      setDialogOpen(true);
+    },
+    [navigate],
+  );
+
+  const onSheetMenu = useCallback((kind: SheetMenuKind, sheet: SheetSummary) => setSheetEditing({ kind, sheet }), []);
 
   // MIDI는 작업(job) 없이 동기 처리다: 201이면 창을 닫고 목록을 다시 읽어 새 곡 행을 강조한다(이동 없음).
   // 결과를 모르는 실패(네트워크·5xx)는 서버에 저장됐을 수 있어 목록도 다시 읽는다
@@ -242,7 +364,12 @@ export function StudioPage() {
 
   // store가 이미 사용자용 문장으로 만들어 둔다
   const errorText = error?.detail ?? null;
-  const firstVisit = status === 'ready' && items.length === 0 && active === null;
+  // 악보만 올려 둔 사람은 첫 방문이 아니다. 악보 목록을 읽는 동안에는 판단을 미룬다(빈 화면으로 깜빡이지 않게 목록만 비운다)
+  const sheetsEmpty = !SHEET_ARCHIVE_ENABLED || sheetsStatus === 'error' || (sheetsStatus === 'ready' && sheets.length === 0);
+  const firstVisit = status === 'ready' && items.length === 0 && active === null && sheetsEmpty;
+  useEffect(() => {
+    firstVisitRef.current = firstVisit;
+  }, [firstVisit]);
   const audioBusyTitle = phase === 'polling' && active ? active.title : null;
 
   const panel = (emphasis: boolean) => (
@@ -283,7 +410,10 @@ export function StudioPage() {
   if (status === 'idle' || status === 'loading') summary = '불러오는 중…';
   else if (status === 'error') summary = '목록을 불러오지 못했어요';
   else if (firstVisit) summary = '아직 올린 곡이 없어요. 음원이나 MIDI를 올리면 드럼 악보를 만들어 드려요.';
-  else summary = processing > 0 ? `곡 ${total}개 · 생성 중 ${processing}` : `곡 ${total}개`;
+  else {
+    summary = processing > 0 ? `곡 ${total}개 · 생성 중 ${processing}` : `곡 ${total}개`;
+    if (SHEET_ARCHIVE_ENABLED && sheets.length > 0) summary += ` · 악보 ${sheets.length}개`;
+  }
 
   // 안내 패널은 카드 보기에서만 오른쪽에 둔다(목록 보기·로딩·오류는 본문 전체 폭, Figma 225:4551·225:5042·225:5368)
   const split = status === 'ready' && view === 'card';
@@ -295,9 +425,10 @@ export function StudioPage() {
           <h2 className="t-title-24">라이브러리</h2>
           <p className="studio-summary">{summary}</p>
         </div>
-        {!firstVisit && (
-          <Button variant="primary" size="md" className="studio-upload-btn" leadingIcon={<PlusIcon />} onClick={() => setDialogOpen(true)}>
-            곡 올리기
+        {/* 악보 기능이 켜져 있으면 첫 방문에도 [올리기]를 둔다: 악보만 올리는 사람이 [악보] 섹션에 닿을 길이다 */}
+        {(!firstVisit || SHEET_ARCHIVE_ENABLED) && (
+          <Button variant="primary" size="md" className="studio-upload-btn" leadingIcon={<PlusIcon />} onClick={openUpload}>
+            {SHEET_ARCHIVE_ENABLED ? '올리기' : '곡 올리기'}
           </Button>
         )}
       </header>
@@ -335,6 +466,13 @@ export function StudioPage() {
               view={view}
               onEdit={SONG_EDIT_ENABLED ? openEdit : undefined}
               onCoverError={onCoverError}
+              sheets={SHEET_ARCHIVE_ENABLED ? sheets : undefined}
+              sheetsFailed={SHEET_ARCHIVE_ENABLED && sheetsStatus === 'error'}
+              onSheetsRetry={() => void loadSheets()}
+              linkEnabled={SHEET_SONG_LINK_ENABLED}
+              onSheetMenu={onSheetMenu}
+              onSheetCoverError={() => void loadSheets()}
+              onSongSheet={SHEET_ARCHIVE_ENABLED && SHEET_SONG_LINK_ENABLED && SONG_EDIT_ENABLED ? onSongSheet : undefined}
             />
           </div>
           {split && <HowtoPanel variant="panel" />}
@@ -369,9 +507,49 @@ export function StudioPage() {
           onClose={closeEdit}
         />
       )}
+      {sheetEditing?.kind === 'rename' && (
+        <SheetTitleDialog
+          key={sheetEditing.sheet.id}
+          title={sheetEditing.sheet.title}
+          onSubmit={async (title) => {
+            await updateSheetTitle(sheetEditing.sheet.id, title);
+            await loadSheets();
+          }}
+          onClose={() => setSheetEditing(null)}
+        />
+      )}
+      {sheetEditing?.kind === 'delete' && (
+        <SheetDeleteDialog
+          title={sheetEditing.sheet.title}
+          onConfirm={async () => {
+            const linked = sheetEditing.sheet.songId !== null;
+            await deleteSheet(sheetEditing.sheet.id);
+            await loadSheets();
+            // 곡에 붙어 있던 악보면 그 곡 ⋯ 메뉴가 [악보 올리기]로 돌아오도록 곡 목록도 다시 읽는다
+            if (linked) void load('MINE');
+            showToast('악보를 지웠어요');
+          }}
+          onClose={() => setSheetEditing(null)}
+        />
+      )}
       <StudioToast text={toast} />
-      <UploadDialog open={dialogOpen && !firstVisit} locked={locked} onClose={closeDialog}>
-        {panel(false)}
+      <UploadDialog
+        open={dialogOpen && (!firstVisit || (SHEET_ARCHIVE_ENABLED && section === 'SHEET'))}
+        locked={locked}
+        onClose={closeDialog}
+        section={SHEET_ARCHIVE_ENABLED ? { value: section, onChange: changeSection } : undefined}
+      >
+        {SHEET_ARCHIVE_ENABLED && section === 'SHEET' ? (
+          <SheetUploadForm
+            key={sheetTarget?.id ?? 'none'}
+            target={sheetTarget ? { id: sheetTarget.id, title: sheetTarget.title } : null}
+            onBusyChange={onSheetBusy}
+            onUploaded={onSheetUploaded}
+            onCancel={closeDialog}
+          />
+        ) : (
+          panel(false)
+        )}
       </UploadDialog>
     </main>
   );
