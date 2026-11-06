@@ -1,7 +1,7 @@
 // 추천 곡 R1·비슷한 곡 R2 도메인 (설계 COACH-004-song-recommend-picker 3-2, COACH-004-similar-songs 3-2). 타입·문구 표·카드 모델·BE 응답 변환.
 import type { Difficulty } from './chart';
 import { pickPathOf } from './playRetry';
-import { DIFFICULTY_ORDER, songFromDto, toSafeId, type SongSummary } from './songCatalog';
+import { DIFFICULTY_ORDER, songFromDto, toSafeId, type SongLevel, type SongSummary } from './songCatalog';
 
 /** 추천 노출 위치 */
 export type RecommendationContext = 'SONG_PICKER' | 'REPORT' | 'DRILL';
@@ -135,4 +135,22 @@ export function similarFromDto(d: Record<string, unknown>): SimilarItem {
  */
 export function recommendationPathOf(card: { song: { id: number }; chartId: number }, mode: string): string {
   return `${pickPathOf(mode)}?song=${card.song.id}&chart=${card.chartId}`;
+}
+
+/**
+ * 곡 선택 [AI 추천곡] 탭의 검색·곡 난이도 칩(설계 COACH-004-song-picker-ai-tab 3-2). 받은 R1 목록을 FE에서 거르고 순서는 그대로 둔다.
+ * 검색어는 앞뒤 공백을 빼고 대소문자 없이 제목·아티스트 부분 일치, `level`이 null이면 난이도로 거르지 않는다.
+ */
+export function filterRecommended(cards: readonly RecommendCard[], query: string, level: SongLevel | null): RecommendCard[] {
+  const q = query.trim().toLowerCase();
+  return cards.filter(
+    (c) =>
+      (level === null || c.song.songLevel === level) &&
+      (q === '' || c.song.title.toLowerCase().includes(q) || c.song.artist.toLowerCase().includes(q)),
+  );
+}
+
+/** 선택한 곡 패널에 보일 비슷한 곡 한 건 — 선택한 곡과 다른 첫 카드(설계 COACH-004-song-picker-ai-tab 3-2) */
+export function pickSimilar(cards: readonly RecommendCard[], selectedId: number): RecommendCard | undefined {
+  return cards.find((c) => c.song.id !== selectedId);
 }
