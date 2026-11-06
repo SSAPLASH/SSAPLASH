@@ -73,8 +73,8 @@ describe('UploadPanel', () => {
 describe('AudioDropzone 문구', () => {
   const html = renderToStaticMarkup(<AudioDropzone {...audio} emphasis={false} />);
 
-  it('제한 문구: MP3·WAV · 50MiB 이하 · 10분 이하', () => {
-    expect(html).toContain('MP3·WAV · 50MiB 이하 · 10분 이하');
+  it('제한 문구: MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하', () => {
+    expect(html).toContain('MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하');
   });
 
   it('보관 정책 문구: 올린 음원과 분리한 드럼 트랙은 채보를 만든 뒤 지운다', () => {
