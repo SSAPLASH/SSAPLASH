@@ -10,9 +10,9 @@ import { captureLine, HAND_NAME, spreadWarningText } from './calibrationText';
 import { calibrationSession } from '@/app/calibrationSession';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
-import { CAPTURE_ORDER, type CaptureSnapshot } from '@/engine/HitCapture';
+import type { CaptureSnapshot } from '@/engine/HitCapture';
 import { anchorsToLayout } from '@/domain/kitJudge';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import type { KitLayout } from '@/domain/kitLayout';
 import { layoutToKitPoint } from '@/domain/drumKit';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { angleBetween, type HandAnchors } from '@/domain/calibration';
@@ -26,13 +26,16 @@ const MOVING_DEG = 3;
 
 /** 끝난 패드(대상 손 전부가 채운 패드) */
 function completedOf(cap: CaptureSnapshot): PadId[] {
-  return CAPTURE_ORDER.filter((pad) => cap.hands.length > 0 && cap.hands.every((h) => cap.captured[pad]?.[h] !== undefined));
+  return cap.order.filter((pad) => cap.hands.length > 0 && cap.hands.every((h) => cap.captured[pad]?.[h] !== undefined));
 }
 
-/** 끝난 패드를 실제 친 위치(앵커 평균 방향)에 놓는 placement. 목표 패드는 기본 배치 자리 */
-function placementOf(cap: CaptureSnapshot, angleRange: { yawDeg: number; pitchDeg: number }): Partial<Record<PadId, { x: number; y: number }>> {
+/**
+ * 패드 위치: 이번 세션에 없는 패드(패드 단위 재보정 때 나머지)는 현재 배치 자리, 끝난 패드는 실제 친 위치(앵커 평균 방향),
+ * 목표 패드(유령)는 현재 배치 자리
+ */
+function placementOf(cap: CaptureSnapshot, layout: KitLayout, angleRange: { yawDeg: number; pitchDeg: number }): Partial<Record<PadId, { x: number; y: number }>> {
   const hands: HandAnchors = [{}, {}];
-  for (const pad of CAPTURE_ORDER) {
+  for (const pad of cap.order) {
     const slot = cap.captured[pad];
     if (!slot) continue;
     for (const h of [0, 1] as const) {
@@ -40,10 +43,10 @@ function placementOf(cap: CaptureSnapshot, angleRange: { yawDeg: number; pitchDe
       if (a) hands[h]![pad] = a;
     }
   }
-  const layout = anchorsToLayout(hands, DEFAULT_KIT_LAYOUT, angleRange);
+  const derived = anchorsToLayout(hands, layout, angleRange);
+  const completed = completedOf(cap);
   const out: Partial<Record<PadId, { x: number; y: number }>> = {};
-  for (const pad of completedOf(cap)) out[pad] = layoutToKitPoint(layout[pad]);
-  if (cap.target) out[cap.target] = layoutToKitPoint(DEFAULT_KIT_LAYOUT[cap.target]);
+  for (const pad of STICK_PADS) out[pad] = layoutToKitPoint(completed.includes(pad) ? derived[pad] : layout[pad]);
   return out;
 }
 
@@ -82,6 +85,7 @@ export function CalibrationStage({ onRestart }: CalibrationStageProps) {
   const cal = useLive((l) => l.calibration);
   const kitSkin = useSettings((s) => s.kitSkin);
   const angleRange = useSettings((s) => s.tuning.angleRange);
+  const kitLayout = useSettings((s) => s.kitLayout);
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
   const weak = useWeakHint(cal.capture);
@@ -107,8 +111,9 @@ export function CalibrationStage({ onRestart }: CalibrationStageProps) {
   if (cal.mode !== 'capture' || !cal.capture) return null;
   const cap = cal.capture;
   const completed = completedOf(cap);
-  const hidden = STICK_PADS.filter((p) => !completed.includes(p) && p !== cap.target);
-  const placement = placementOf(cap, angleRange);
+  // 이번 세션 패드 중 아직 안 잡은 것만 숨긴다. 세션 밖 패드(패드 단위 재보정의 나머지)는 그대로 보인다
+  const hidden = cap.order.filter((p) => !completed.includes(p) && p !== cap.target);
+  const placement = placementOf(cap, kitLayout, angleRange);
   const onPadClick = (pad: PadId) => {
     if (completed.includes(pad)) calibrationSession.redo(pad);
   };
@@ -141,8 +146,8 @@ export function CalibrationStage({ onRestart }: CalibrationStageProps) {
           </span>
         </div>
       )}
-      <span className="cal-stage-progress" aria-label={`${completed.length} / ${CAPTURE_ORDER.length} 패드 완료`}>
-        {CAPTURE_ORDER.map((pad) => (
+      <span className="cal-stage-progress" aria-label={`${completed.length} / ${cap.order.length} 패드 완료`}>
+        {cap.order.map((pad) => (
           <span key={pad} className={`cal-stage-dot ${completed.includes(pad) ? 'done' : pad === cap.target ? 'now' : ''}`} title={PAD_META[pad].label} />
         ))}
       </span>
