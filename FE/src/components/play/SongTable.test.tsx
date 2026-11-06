@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SongSummary } from '@/domain/songCatalog';
@@ -32,6 +33,7 @@ function render(p: {
   accuracy?: Map<number, number>;
   mode?: 'play' | 'sheet';
   isLocked?: (s: SongSummary) => boolean;
+  emptyState?: ReactNode;
 }) {
   return renderToStaticMarkup(
     <SongTable
@@ -43,6 +45,7 @@ function render(p: {
       bestScores={p.best ?? new Map()}
       bestAccuracies={p.accuracy ?? new Map()}
       isLocked={p.isLocked}
+      emptyState={p.emptyState}
     />,
   );
 }
@@ -116,6 +119,17 @@ describe('SongTable', () => {
     const html = render({ songs: [] });
     expect(html).toContain('총 0곡');
     expect(html.match(/class="play-st-pg/g)).toHaveLength(3);
+  });
+
+  it('곡이 없으면 머리글을 두고 본문 한 칸(열 전체)에 emptyState를 그린다', () => {
+    const html = render({ songs: [], emptyState: <p>빈 안내</p> });
+    expect(html).toContain('곡 난이도</th>');
+    expect(html).toContain('<tr class="play-st-empty"><td colSpan="6"><p>빈 안내</p></td></tr>');
+    expect(html).toContain('총 0곡');
+  });
+
+  it('곡이 있으면 emptyState를 그리지 않는다', () => {
+    expect(render({ songs: songs(1), emptyState: <p>빈 안내</p> })).not.toContain('빈 안내');
   });
 });
 
