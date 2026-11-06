@@ -212,6 +212,103 @@ class TelemetryBatchValidatorTest {
 		reject(batch(STATUS.replace(from, to)), TelemetryErrorCode.TELEMETRY_EVENT_INVALID, path);
 	}
 
+	// --- 259 외피 conditions(측정 세션 실험 조건) ---
+
+	/** FE 회신(2026-11-06)의 7개 필드. firmware는 스틱별 객체이고 "1"은 아직 STATUS를 못 받은 상태다. */
+	static final String CONDITIONS = """
+			{"firmware":{"0":"1.5","1":null},"dongleFirmware":"2.3","linkMask":3,"hapticEnable":true,\
+			"sensorMount":"GRIP_FRONT","appBuild":"v3.0","note":"블루투스 거리 3m"}""";
+
+	static String withConditions(String conditions, String... events) {
+		return batch(events).replace("\"events\":[", "\"conditions\":" + conditions + ",\"events\":[");
+	}
+
+	@Test
+	void conditionsAreReadAsSentAndUnknownKeysInsideAreIgnored() {
+		var c = read(withConditions(CONDITIONS, SENSOR_HIT)).conditions();
+		assertThat(c.firmware().stick0()).isEqualTo("1.5");
+		assertThat(c.firmware().stick1()).isNull();
+		assertThat(c.dongleFirmware()).isEqualTo("2.3");
+		assertThat(c.linkMask()).isEqualTo(3);
+		assertThat(c.hapticEnable()).isTrue();
+		assertThat(c.sensorMount()).isEqualTo(TelemetryBatchRequest.SensorMount.GRIP_FRONT);
+		assertThat(c.appBuild()).isEqualTo("v3.0");
+		assertThat(c.note()).isEqualTo("블루투스 거리 3m");
+		accept(withConditions(CONDITIONS, SENSOR_HIT));
+		accept(withConditions(CONDITIONS.replace("GRIP_FRONT", "BENCH"), SENSOR_HIT));
+		// 부재와 null은 같다
+		assertThat(read(batch(SENSOR_HIT)).conditions()).isNull();
+		assertThat(read(withConditions("null", SENSOR_HIT)).conditions()).isNull();
+		accept(withConditions("null", SENSOR_HIT));
+		// 모든 값이 null인 객체도 객체다(보낸 적 있음)
+		var empty = read(withConditions("{}", SENSOR_HIT)).conditions();
+		assertThat(empty).isNotNull();
+		assertThat(empty.firmware()).isNull();
+		assertThat(empty.linkMask()).isNull();
+		accept(withConditions("{}", SENSOR_HIT));
+		// conditions 안의 모르는 키(EMB가 나중에 더하는 필드)는 무시한다. firmware 안도 같다(설계 U4)
+		var extra = read(withConditions(CONDITIONS.replace("\"note\"", "\"stickWeight\":42,\"note\"")
+				.replace("\"1\":null", "\"1\":null,\"2\":\"9.9\""), SENSOR_HIT)).conditions();
+		assertThat(extra.note()).isEqualTo("블루투스 거리 3m");
+		assertThat(extra.firmware().stick0()).isEqualTo("1.5");
+		accept(withConditions(CONDITIONS.replace("\"note\"", "\"stickWeight\":42,\"note\""), SENSOR_HIT));
+		// 외피의 모르는 키는 지금처럼 거절한다
+		assertThatThrownBy(() -> read(withConditions(CONDITIONS, SENSOR_HIT).replace("\"conditions\":", "\"stickWeight\":42,\"conditions\":")))
+				.isInstanceOfSatisfying(BusinessException.class, ex -> assertThat(ex.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT));
+	}
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"\"linkMask\":3|\"linkMask\":\"3\"|conditions.linkMask",
+			"\"linkMask\":3|\"linkMask\":3.0|conditions.linkMask",
+			"\"hapticEnable\":true|\"hapticEnable\":1|conditions.hapticEnable",
+			"\"hapticEnable\":true|\"hapticEnable\":\"true\"|conditions.hapticEnable",
+			"\"sensorMount\":\"GRIP_FRONT\"|\"sensorMount\":\"TIP\"|conditions.sensorMount",
+			"\"sensorMount\":\"GRIP_FRONT\"|\"sensorMount\":\"grip_front\"|conditions.sensorMount",
+			"\"sensorMount\":\"GRIP_FRONT\"|\"sensorMount\":0|conditions.sensorMount",
+			"\"firmware\":{\"0\":\"1.5\",\"1\":null}|\"firmware\":\"1.5\"|conditions.firmware",
+			"\"firmware\":{\"0\":\"1.5\",\"1\":null}|\"firmware\":{\"0\":15,\"1\":null}|conditions.firmware.0",
+			"\"note\":\"블루투스 거리 3m\"|\"note\":[]|conditions.note",
+			"\"note\":\"블루투스 거리 3m\"|\"note\":\"블루투스 거리 3m\",\"note\":\"x\"|"})
+	void conditionsShapeViolationsAreUnreadable(String from, String to, String path) {
+		assertThatThrownBy(() -> read(withConditions(CONDITIONS.replace(from, to), SENSOR_HIT)))
+				.isInstanceOfSatisfying(BusinessException.class, ex -> {
+					assertThat(ex.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
+					if (path != null) assertThat(ex.getDetail()).contains(path).doesNotContain("TIP");
+				});
+		assertThatThrownBy(() -> read(withConditions("[]", SENSOR_HIT)))
+				.isInstanceOfSatisfying(BusinessException.class, ex -> assertThat(ex.getDetail()).contains("conditions"));
+	}
+
+	@Test
+	void conditionsValueRules() {
+		var max = "x".repeat(64);
+		accept(withConditions(CONDITIONS.replace("\"0\":\"1.5\"", "\"0\":\"" + max + "\"").replace("\"2.3\"", "\"" + max + "\"")
+				.replace("\"v3.0\"", "\"" + max + "\"").replace("블루투스 거리 3m", "가".repeat(200)), SENSOR_HIT));
+		accept(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":0").replace("블루투스 거리 3m", ""), SENSOR_HIT));
+		accept(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":15"), SENSOR_HIT));
+		var invalid = TelemetryErrorCode.TELEMETRY_EVENT_INVALID;
+		reject(withConditions(CONDITIONS.replace("\"0\":\"1.5\"", "\"0\":\"" + max + "x\""), SENSOR_HIT), invalid, "conditions.firmware.0");
+		reject(withConditions(CONDITIONS.replace("\"0\":\"1.5\"", "\"0\":\"\""), SENSOR_HIT), invalid, "conditions.firmware.0");
+		reject(withConditions(CONDITIONS.replace("\"1\":null", "\"1\":\"\""), SENSOR_HIT), invalid, "conditions.firmware.1");
+		reject(withConditions(CONDITIONS.replace("\"2.3\"", "\"\""), SENSOR_HIT), invalid, "conditions.dongleFirmware");
+		reject(withConditions(CONDITIONS.replace("\"2.3\"", "\"" + max + "x\""), SENSOR_HIT), invalid, "conditions.dongleFirmware");
+		reject(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":16"), SENSOR_HIT), invalid, "conditions.linkMask");
+		reject(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":-1"), SENSOR_HIT), invalid, "conditions.linkMask");
+		reject(withConditions(CONDITIONS.replace("\"v3.0\"", "\"\""), SENSOR_HIT), invalid, "conditions.appBuild");
+		reject(withConditions(CONDITIONS.replace("\"v3.0\"", "\"" + max + "x\""), SENSOR_HIT), invalid, "conditions.appBuild");
+		reject(withConditions(CONDITIONS.replace("블루투스 거리 3m", "가".repeat(201)), SENSOR_HIT), invalid, "conditions.note");
+		// PG text가 거절하는 U+0000은 DB 오류(500)가 아니라 400으로 막는다(검증 보완 1)
+		reject(withConditions(CONDITIONS.replace("블루투스 거리 3m", "a\\u0000b"), SENSOR_HIT), invalid, "conditions.note");
+		reject(withConditions(CONDITIONS.replace("\"0\":\"1.5\"", "\"0\":\"1.5\\u0000\""), SENSOR_HIT), invalid, "conditions.firmware.0");
+		// 거부된 값은 detail에 넣지 않는다
+		assertThatThrownBy(() -> validator.validate(read(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":16"), SENSOR_HIT))))
+				.isInstanceOfSatisfying(BusinessException.class, ex -> assertThat(ex.getDetail()).doesNotContain("16"));
+		// 이벤트 검사가 conditions 검사보다 먼저다
+		reject(withConditions(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":16"), SENSOR_HIT.replace("\"velocity\":96", "\"velocity\":128")),
+				invalid, "events[0].velocity");
+	}
+
 	@Test
 	void reportsIndexOfTheFirstBadEventWithoutEchoingValues() {
 		reject(batch(SENSOR_HIT, KEYBOARD_HIT, STATUS.replace("\"batteryPct\":80", "\"batteryPct\":12345")),
