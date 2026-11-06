@@ -38,8 +38,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 5                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지) */
-#define FW_TAG   "BOOT 1.5 nrf52"
+#define FW_MINOR 7                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235) */
+#define FW_TAG   "BOOT 1.7 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -59,7 +59,10 @@ extern "C" {
 #define ACC_G_PER_LSB    0.000488f     /* ±16g */
 #define G_MS2            9.80665f
 
-/* 스윙 축: 2026-10-26 녹화에서 내려칠 때 자이로 y가 + (보드를 손에 쥔 방향 기준. 스틱 부착 후 재확인) */
+/* 타격 신호 (235): 1 = 스틱 끝이 아래로 내려가는 회전 속도(pose_down_rate). 스틱을 돌려 쥐어도 같다.
+ *                  0 = 예전 방식, 센서 y축 하나 (위아래를 맞춰 쥐어야 함). 문제 생기면 0으로 되돌린다 */
+#define HIT_ROLL_FREE 1
+/* 스윙 축 (HIT_ROLL_FREE 0일 때만): 2026-10-26 녹화에서 내려칠 때 자이로 y가 + (보드를 손에 쥔 방향 기준) */
 #define HIT_AXIS 1
 #define HIT_SIGN (+1)
 /* 스틱 끝 방향 (센서 좌표). 부착 방향이 정해지면 녹화로 확인할 것 */
@@ -341,7 +344,7 @@ static int16_t  vib_prev[3];
 static uint8_t  vib_n = 0;
 
 static bool    haptic_seq_dirty = false;            /* 버튼 진동이 WAVESEQ2를 썼으면 다음 진동 전에 비운다 */
-static uint8_t hit_effect[3] = {14, 48, 50};       /* 세기 상·중·하: Strong Buzz 100%, Buzz 2 80%, Buzz 4 40% (10/30 손으로 골라봄) */
+static uint8_t hit_effect[3] = {14, 17, 19};       /* 세기 강·중·약: Strong Buzz 100%, Strong Click 1 100%, Strong Click 3 60% (11/6 손으로 고름. 세기만 다르면 LRA에서 구분 안 돼 종류를 다르게) */
 
 static void haptic_effect(uint8_t effect)
 {
@@ -831,7 +834,7 @@ void app_setup()
     hp.max_swing_ms  = 160;                             /* 진짜 71~112ms, 가짜 175~219ms */
     hp.min_swing_ms  = 20;                              /* 버튼·충격 튐(1ms) 제거 */
     hp.ts_corr_us    = 800;                             /* 정지 시각 평균 오차 0으로 */
-    hp.vel_max_dps   = 1200;                            /* 세게 친 타격이 127에 붙지 않게 */
+    hp.vel_max_dps   = 2000;                            /* 236: 1200이면 세게 친 타격이 전부 127 (11/6 측정). 자이로 최대 ±2000dps */
     hit_init(&hd, &hp);
     pad_table_default(&pads);
 
@@ -939,7 +942,11 @@ void app_loop()
     pose_update(&pose, g, ap, dt);
 
     /* 타격 검출: hit_detect는 BNO055 단위(16 LSB/dps) 정수로 받는다 */
+#if HIT_ROLL_FREE
+    int32_t down = (int32_t)(pose_down_rate(&pose, g) * 16.0f);   /* 수평으로 쥐고 롤 0이면 HIT_SIGN·g[y]와 같은 값 */
+#else
     int32_t down = (int32_t)(HIT_SIGN * g[HIT_AXIS] * 16.0f);
+#endif
     hit_event_t ev;
     int fired = hit_update(&hd, t, down, &ev);
 
@@ -974,9 +981,11 @@ void app_loop()
         uint8_t n = pkt_hit(b, &h);
         send(b, n);
         uint32_t t_sent = now_us();
-        /* 패드를 판정 못 한 타격(PAD_NONE, 패드 밖)은 울리지 않는다 (11/5 FE 지적). 세기: hapticStrength × (0.6 + 0.4 × 타격 세기) → 3단계 */
+        /* 패드를 판정 못 한 타격(PAD_NONE, 패드 밖)은 울리지 않는다 (11/5 FE 지적).
+         * 236: 타격 세기 → 진동 3단계 (약 ≤40, 중 41~62, 강 ≥63. vel_max 2000 기준, 11/6 측정에서 잡은 경계).
+         * hapticStrength(기본 200) × 100/66/33% → haptic_click 의 >170 / >85 경계로 강·중·약 파형이 골라진다 */
         if (haptic_enable && pr.id != PAD_NONE)
-            haptic_click((uint8_t)(haptic_strength * (77 + 51 * ev.velocity / 127) / 128));
+            haptic_click((uint8_t)(haptic_strength * (ev.velocity >= 63 ? 100 : ev.velocity > 40 ? 66 : 33) / 100));
         if (lat_log) {                                  /* 233: 샘플 시각 t 기준 µs. 검출 끝 / 전송 끝 / 진동 GO 쓰기 끝 */
             uint32_t t_hap = now_us();
             char m[20];
