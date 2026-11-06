@@ -83,7 +83,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const recoKey = `REPORT:${playId}`;
   const songsSource = useSongs((s) => s.source);
   const authed = useAuth((a) => a.status === 'authenticated');
-  const recoEnabled = songsSource === 'api' && authed;
+  const recoEnabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && songsSource === 'api' && authed;
   const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
   const loadReco = useRecommendations((r) => r.load);
   const clickReco = useRecommendations((r) => r.click);
@@ -102,7 +102,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   useEffect(() => {
     if (!recoEnabled || similarSongId === null) return;
     similarKeys.add(similarKey);
-    void loadSimilar(similarKey, { songId: similarSongId, difficulty: similarDifficulty ?? 'NORMAL', size: 5 });
+    void loadSimilar(similarKey, { songId: similarSongId, difficulty: similarDifficulty ?? undefined, size: 5 });
   }, [recoEnabled, similarSongId, similarDifficulty, similarKey, similarKeys, loadSimilar]);
 
   useEffect(() => {

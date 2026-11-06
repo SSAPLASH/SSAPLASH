@@ -15,6 +15,9 @@ export type RecommendationEntry =
   | { status: 'hidden' };
 
 const IDLE: RecommendationEntry = { status: 'idle' };
+// StrictMode의 즉시 재마운트는 같은 요청을 유지하고, 실제 이탈은 다음 마이크로태스크에서 정리한다.
+const pendingClear = new Map<string, object>();
+const activeRequests = new Map<string, AbortController>();
 
 interface RecommendationState {
   entries: Record<string, RecommendationEntry>;
@@ -25,8 +28,7 @@ interface RecommendationState {
   /** 클릭 기록을 보내고 결과·오류를 모두 무시한다 */
   click: (card: Pick<RecommendCard, 'song'>, requestId: string) => Promise<void>;
   /**
-   * 화면을 닫을 때 끝난 결과(ready·hidden)를 버린다. 다음 마운트가 이전 추천을 잠깐 보이지 않게 하고(옛 requestId로 기록되는 것도 막는다),
-   * 진행 중(loading)은 그대로 둬 StrictMode의 효과 정리에서도 요청이 한 번만 나간다(D3)
+   * 화면 이탈 시 결과를 버린다. 진행 중인 요청은 StrictMode 재설정과 구분하기 위해 한 마이크로태스크 후 취소한다.
    */
   clear: (key: string) => void;
   resetForTest: () => void;
@@ -41,10 +43,12 @@ async function run(
   get: () => RecommendationState,
   fetcher: (signal: AbortSignal) => Promise<{ requestId: string; cards: RecommendCard[] }>,
 ): Promise<void> {
+  pendingClear.delete(key);
   const cur = get().entries[key];
   if (cur !== undefined && cur.status !== 'idle') return;
   set((s) => ({ entries: { ...s.entries, [key]: { status: 'loading' } } }));
   const ac = new AbortController();
+  activeRequests.set(key, ac);
   const timer = setTimeout(() => ac.abort(), RECOMMENDATION_TIMEOUT_MS);
   let next: RecommendationEntry;
   try {
@@ -55,6 +59,8 @@ async function run(
   } finally {
     clearTimeout(timer);
   }
+  if (activeRequests.get(key) !== ac) return;
+  activeRequests.delete(key);
   set((s) => ({ entries: { ...s.entries, [key]: next } }));
 }
 
@@ -81,15 +87,33 @@ export const useRecommendations = create<RecommendationState>()((set, get) => ({
     }
   },
 
-  clear: (key) =>
-    set((s) => {
-      if (s.entries[key] === undefined || s.entries[key].status === 'loading') return s;
-      const entries = { ...s.entries };
-      delete entries[key];
-      return { entries };
-    }),
+  clear: (key) => {
+    const remove = () => {
+      activeRequests.get(key)?.abort();
+      activeRequests.delete(key);
+      set((s) => {
+        if (s.entries[key] === undefined) return s;
+        const entries = { ...s.entries };
+        delete entries[key];
+        return { entries };
+      });
+    };
+    if (get().entries[key]?.status !== 'loading') { remove(); return; }
+    const marker = {};
+    pendingClear.set(key, marker);
+    queueMicrotask(() => {
+      if (pendingClear.get(key) !== marker) return;
+      pendingClear.delete(key);
+      remove();
+    });
+  },
 
-  resetForTest: () => set({ entries: {} }),
+  resetForTest: () => {
+    pendingClear.clear();
+    activeRequests.forEach((ac) => ac.abort());
+    activeRequests.clear();
+    set({ entries: {} });
+  },
 }));
 
 /** 키의 현재 상태(없으면 idle) */

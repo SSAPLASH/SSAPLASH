@@ -25,6 +25,14 @@ describe('SIGNUP_TERMS', () => {
     }
   });
 
+  it('추천 학습 초안은 약점 미사용과 가명·철회 범위를 명시한다', () => {
+    const body = SIGNUP_TERMS.find((t) => t.id === 'recommendation')!.body;
+    expect(body).toContain('약점 요약은 학습에 쓰지 않아요');
+    expect(body).toContain('익명이 아니며');
+    expect(body).toContain('다음 데이터 조회부터 학습에서 제외');
+    expect(body).toContain('7일이 지난 후보는 추천에 쓰지 않아요');
+  });
+
   it('필수 3항목의 판은 그대로다', () => {
     expect(SIGNUP_TERMS.slice(0, 3).map((t) => t.version)).toEqual(['2026-11-02', '2026-11-02', '2026-11-02']);
   });
@@ -48,7 +56,7 @@ describe('currentConsentVersions', () => {
   });
 
   it('필수 항목만 체크한 집합은 agreed false', () => {
-    expect(currentConsentVersions(SIGNUP_TERMS, new Set<SignupTermId>(['terms', 'privacy', 'dataConsent'])).recommendationConsent.agreed).toBe(false);
+    expect(currentConsentVersions(SIGNUP_TERMS, new Set<SignupTermId>(['terms', 'privacy', 'dataConsent'])).recommendationConsent!.agreed).toBe(false);
   });
 
   it('항목이 빠지면 빈 문자열', () => {
@@ -56,15 +64,14 @@ describe('currentConsentVersions', () => {
       termsVersion: SIGNUP_TERMS[0].version,
       privacyVersion: '',
       dataConsent: { agreed: true, version: '' },
-      recommendationConsent: { agreed: false, version: '' },
     });
   });
 });
 
 describe('recommendationVersion', () => {
-  it('추천 학습 활용 항목의 판이며 묶음의 recommendationConsent.version과 같다', () => {
+  it('추천 학습 활용 항목의 판이며 묶음의 recommendationConsent!.version과 같다', () => {
     expect(recommendationVersion()).toBe(SIGNUP_TERMS[3].version);
-    expect(recommendationVersion()).toBe(currentConsentVersions().recommendationConsent.version);
+    expect(recommendationVersion()).toBe(currentConsentVersions().recommendationConsent!.version);
     expect(recommendationVersion([])).toBe('');
   });
 });

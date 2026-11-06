@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { postRecommendationClick } from '@/api/recommendations';
 import { fetchSimilarSongs } from '@/api/similarSongs';
 import type { Difficulty } from '@/domain/chart';
-import type { SongDetail, SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/songCatalog';
 import { useAuth } from '@/store/authStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
@@ -48,7 +48,7 @@ beforeEach(() => {
   useAuth.setState({ status: 'authenticated' });
   useSongs.setState({ source: 'api', selectSong });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 describe('요청', () => {
   it('준비 단계에 들어오면 곡·난이도로 1회 요청하고 카드를 낸다', async () => {
@@ -102,6 +102,13 @@ describe('요청', () => {
     expect(fetchSimilarSongs).not.toHaveBeenCalled();
   });
 
+  it('인증 끔 빌드에서는 로그인 상태가 남아 있어도 요청하지 않는다', async () => {
+    vi.stubEnv('VITE_AUTH_REQUIRED', 'false');
+    setup({ songId: 1, active: true, difficulty: 'NORMAL' });
+    await Promise.resolve();
+    expect(fetchSimilarSongs).not.toHaveBeenCalled();
+  });
+
   it('빈 결과·오류면 카드가 없다', async () => {
     vi.mocked(fetchSimilarSongs).mockRejectedValue(new Error('404'));
     const { result } = setup({ songId: 1, active: true, difficulty: 'EASY' });
@@ -110,61 +117,17 @@ describe('요청', () => {
   });
 });
 
-describe('선택 단계 따라가기(D11)', () => {
-  it('곡이 그 단계를 가지면 배지가 선택 단계로, 아니면 BE 단계 그대로다', async () => {
+describe('서버가 고른 채보', () => {
+  it('선택 단계를 바꿔도 응답 난이도를 표시하고 응답 chartId로 즉시 이동한다', async () => {
     const { result, rerender } = setup({ songId: 1, active: true, difficulty: 'EASY' });
     await waitFor(() => expect(result.current.cards).toHaveLength(2));
-    expect(result.current.cards.map((c) => c.difficulty)).toEqual(['EASY', 'HARD']);
-    rerender({ songId: 1, active: true, difficulty: 'NORMAL' });
     expect(result.current.cards.map((c) => c.difficulty)).toEqual(['NORMAL', 'HARD']);
-    expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
-  });
-
-  it('클릭: 기록을 보내고 선택 단계의 채보 id로 select한다', async () => {
-    selectSong.mockResolvedValue({ charts: [{ id: 51, difficulty: 'EASY' }, { id: 50, difficulty: 'NORMAL' }] } as SongDetail);
-    const { result } = setup({ songId: 1, active: true, difficulty: 'EASY' });
-    await waitFor(() => expect(result.current.cards).toHaveLength(2));
+    rerender({ songId: 1, active: true, difficulty: 'HARD' });
+    expect(result.current.cards.map((c) => c.difficulty)).toEqual(['NORMAL', 'HARD']);
     act(() => result.current.onPick(result.current.cards[0]));
     expect(postRecommendationClick).toHaveBeenCalledWith('r1', 5);
-    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(5, 51));
-  });
-
-  it('클릭: 곡이 그 단계를 갖지 않으면 상세를 읽지 않고 BE 채보로 간다', async () => {
-    const { result } = setup({ songId: 1, active: true, difficulty: 'EASY' });
-    await waitFor(() => expect(result.current.cards).toHaveLength(2));
-    act(() => result.current.onPick(result.current.cards[1]));
+    expect(onSelect).toHaveBeenCalledWith(5, 50);
     expect(selectSong).not.toHaveBeenCalled();
-    expect(onSelect).toHaveBeenCalledWith(6, 60);
-  });
-
-  it('클릭: 상세 조회 실패나 단계 채보 없음이면 BE chartId로 간다', async () => {
-    selectSong.mockRejectedValueOnce(new Error('x')).mockResolvedValueOnce({ charts: [{ id: 50, difficulty: 'NORMAL' }] });
-    const { result } = setup({ songId: 1, active: true, difficulty: 'EASY' });
-    await waitFor(() => expect(result.current.cards).toHaveLength(2));
-    act(() => result.current.onPick(result.current.cards[0]));
-    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(5, 50));
-    onSelect.mockReset();
-    act(() => result.current.onPick(result.current.cards[0]));
-    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(5, 50));
-  });
-});
-
-describe('중복 클릭', () => {
-  it('곡 상세 조회 중에는 같은 카드를 다시 눌러도 이동이 한 번만 난다', async () => {
-    let resolve: (d: SongDetail) => void = () => {};
-    selectSong.mockImplementation(() => new Promise<SongDetail>((r) => (resolve = r)));
-    const { result } = setup({ songId: 1, active: true, difficulty: 'EASY' });
-    await waitFor(() => expect(result.current.cards.length).toBeGreaterThan(0));
-    const card = result.current.cards[0];
-    act(() => {
-      result.current.onPick(card);
-      result.current.onPick(card);
-    });
-    expect(selectSong).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      resolve({ ...card.song, license: null, updatedAt: null, charts: [{ id: 51, difficulty: 'EASY', chartVersionId: 1, version: 1, noteCount: 1, notationStatus: 'READY' }] });
-    });
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith(5, 51);
+    expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
   });
 });

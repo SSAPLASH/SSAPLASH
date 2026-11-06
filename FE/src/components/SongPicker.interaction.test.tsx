@@ -100,6 +100,16 @@ describe('SongPicker 추천 줄', () => {
     expect(fetchRecommendations).toHaveBeenCalledTimes(1);
   });
 
+  it('라이브러리에서 시작하면 기본 곡을 처음 열 때 요청한다', async () => {
+    useSongs.setState({ scope: 'MINE' });
+    show();
+    await screen.findByText('리듬에 맞춰 도전해요');
+    expect(fetchRecommendations).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    await screen.findByRole('region', { name: '추천곡' });
+    expect(fetchRecommendations).toHaveBeenCalledTimes(1);
+  });
+
   it('내장 곡 소스면 요청도 줄도 없다', async () => {
     useSongs.setState({ source: 'builtin' });
     show();

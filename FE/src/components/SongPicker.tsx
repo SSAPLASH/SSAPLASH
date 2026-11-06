@@ -86,7 +86,7 @@ export function SongPicker({ onSelect, mode }: Props) {
   // 추천 줄: API 곡 소스이고 로그인 상태일 때만 마운트 시 한 번 요청한다(D2·D4)
   const authed = useAuth((a) => a.status === 'authenticated');
   const recoKey = `SONG_PICKER:${mode === 'play' ? 'RHYTHM' : 'SHEET'}`;
-  const recoEnabled = source === 'api' && authed;
+  const recoEnabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && source === 'api' && authed;
   const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
   const loadReco = useRecommendations((r) => r.load);
   const clickReco = useRecommendations((r) => r.click);
@@ -115,11 +115,11 @@ export function SongPicker({ onSelect, mode }: Props) {
   const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
   useEffect(() => {
-    if (!recoEnabled) return;
-    void loadReco(recoKey, { context: 'SONG_PICKER', mode: mode === 'play' ? 'RHYTHM' : 'SHEET', size: 5 });
-    // 닫을 때 끝난 결과를 버린다. 다음에 열면 이전 추천이 잠깐 보이지 않고 새로 요청한다(진행 중이면 그대로 둔다)
-    return () => clearReco(recoKey);
-  }, [recoEnabled, recoKey, mode, loadReco, clearReco]);
+    if (recoEnabled && tab === 'BUILTIN') {
+      void loadReco(recoKey, { context: 'SONG_PICKER', mode: mode === 'play' ? 'RHYTHM' : 'SHEET', size: 5 });
+    }
+  }, [recoEnabled, tab, recoKey, mode, loadReco]);
+  useEffect(() => () => clearReco(recoKey), [recoKey, clearReco]);
 
   // 탭·검색어·난이도가 바뀌면 목록을 다시 읽는다. 검색어 변경만 디바운스하고 나머지는 즉시
   useEffect(() => {

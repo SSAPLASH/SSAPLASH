@@ -69,8 +69,8 @@ describe('consentStatusText', () => {
   it('미응답·거부·판 불일치·null은 미동의', () => {
     expect(consentStatusText({ agreed: false, version: null, updatedAt: null })).toBe('미동의');
     expect(consentStatusText(c({ agreed: false }))).toBe('미동의');
-    expect(consentStatusText(c({ version: '2026-01-01' }))).toBe('미동의');
-    expect(consentStatusText(null)).toBe('미동의');
+    expect(consentStatusText(c({ version: '2026-01-01' }))).toBe('이전 판에 동의함 · 2026-01-01 판 · 새 동의 내용 확인 필요');
+    expect(consentStatusText(null)).toBe('동의 상태를 확인할 수 없어요');
   });
 });
 
