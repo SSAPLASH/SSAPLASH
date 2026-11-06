@@ -166,6 +166,48 @@ class RecommendationR3Test {
 		assertThat(consents.get(user).version()).isEqualTo("r-1");
 	}
 
+	private List<String> history(long id) {
+		return db.queryForList("SELECT agreed::text || ':' || version FROM user_recommendation_consent_history WHERE user_id = ? ORDER BY id", String.class, id);
+	}
+
+	@Test void everyAnswerIsKeptInTheHistory() {
+		agree(user);
+		disagree(user);
+		consents.save(user, new RecommendationConsentInput(true, "r-2"));
+		assertThat(history(user)).containsExactly("true:2026-11-05", "false:2026-11-05", "true:r-2");
+	}
+
+	@Test void withdrawalIsRecordedAsWithdrawingConsent() {
+		agree(user);
+		withdrawal.withdraw(user);
+		assertThat(history(user)).containsExactly("true:2026-11-05", "false:2026-11-05");
+	}
+
+	@Test void withdrawalWithoutConsentAddsNoHistory() {
+		disagree(user);
+		withdrawal.withdraw(user);
+		assertThat(history(user)).containsExactly("false:2026-11-05");
+	}
+
+	@Test void historyIsDeletedOnlyAfterTheRetentionOfWithdrawnConsent() {
+		agree(user);
+		disagree(stranger);
+		var future = Instant.now().plus(java.time.Duration.ofDays(1));
+		assertThat(consents.deleteHistoryBefore(Instant.now().minus(java.time.Duration.ofDays(1)))).isZero();
+		assertThat(consents.deleteHistoryBefore(future)).isEqualTo(1);
+		assertThat(history(stranger)).isEmpty();
+		assertThat(consents.get(stranger).version()).isEqualTo("2026-11-05");
+		assertThat(history(user)).hasSize(1);
+	}
+
+	@Test void withdrawnMembersLoseTheirConsentRowWithTheHistory() {
+		agree(user);
+		withdrawal.withdraw(user);
+		consents.deleteHistoryBefore(Instant.now().plus(java.time.Duration.ofDays(1)));
+		assertThat(history(user)).isEmpty();
+		assertThat(db.queryForObject("SELECT count(*) FROM user_recommendation_consent WHERE user_id = ?", Integer.class, user)).isZero();
+	}
+
 	@Test void withdrawalDeletesCandidates() {
 		ready(easy);
 		withdrawal.withdraw(user);
