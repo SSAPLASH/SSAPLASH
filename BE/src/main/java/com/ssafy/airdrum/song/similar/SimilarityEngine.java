@@ -8,16 +8,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import com.ssafy.airdrum.song.feature.RhythmGrid;
 
 /**
  * R2 비슷한 곡의 유사도 계산(설계 문서 부록 A). DB·시간·난수에 의존하지 않아 같은 입력이면 항상 같은 값과 순서를 낸다.
  * 모든 수치는 가정값이며 평가와 노출·클릭 기록으로 보정한다.
+ * 리듬 격자는 쓰지 않는다. 공용 곡의 절반 가까이가 격자를 만들 수 없어(가변 템포·격자 이탈) 비교 대상에서 빠지기 때문이다.
  */
 public final class SimilarityEngine {
-	public static final double W_RHYTHM = 0.35, W_PADS = 0.20, W_TRANSITIONS = 0.15, W_DENSITY = 0.15, W_TEMPO = 0.15;
-	/** 묶음별 가중치. 노트가 양쪽 모두 없는 묶음은 평균에서 뺀다. */
-	static final Map<String, Double> GROUP_WEIGHT = Map.of("KICK", 0.30, "SNARE", 0.30, "HAT", 0.25, "CYMBAL", 0.10, "TOM", 0.05);
+	public static final double W_PADS = 0.31, W_TRANSITIONS = 0.23, W_DENSITY = 0.23, W_TEMPO = 0.23;
 	/** 메타데이터가 양쪽에 있을 때만 이 비율로 섞는다. */
 	static final double META_WEIGHT = 0.15;
 	/** 박자표 분자가 다르면 총점에 곱한다. */
@@ -32,7 +30,7 @@ public final class SimilarityEngine {
 	static final double MATCH_MIN_SCORE = 0.6;
 	private static final List<String> DIFFICULTIES = List.of("EASY", "NORMAL", "HARD");
 
-	public static final String RHYTHM = "RHYTHM", PADS = "PADS", TRANSITIONS = "TRANSITIONS", DENSITY = "DENSITY", TEMPO = "TEMPO", GENRE = "GENRE", MOOD = "MOOD";
+	public static final String PADS = "PADS", TRANSITIONS = "TRANSITIONS", DENSITY = "DENSITY", TEMPO = "TEMPO", GENRE = "GENRE", MOOD = "MOOD";
 
 	public record Match(ChartVector chart, double similarity, List<String> matchedOn) {}
 
@@ -46,14 +44,14 @@ public final class SimilarityEngine {
 
 	static Breakdown breakdown(ChartVector a, ChartVector b) {
 		var scores = new LinkedHashMap<String, Double>();
-		scores.put(RHYTHM, rhythm(a.groups(), b.groups()));
 		scores.put(PADS, cosine(a.padRatio(), b.padRatio()));
 		scores.put(TRANSITIONS, cosine(a.transitionRatio(), b.transitionRatio()));
 		scores.put(DENSITY, octaveCloseness(a.density(), b.density(), 1.0));
 		scores.put(TEMPO, octaveCloseness(a.bpm(), b.bpm(), TEMPO_SPAN));
-		double chart = W_RHYTHM * scores.get(RHYTHM) + W_PADS * scores.get(PADS) + W_TRANSITIONS * scores.get(TRANSITIONS)
+		double chart = W_PADS * scores.get(PADS) + W_TRANSITIONS * scores.get(TRANSITIONS)
 				+ W_DENSITY * scores.get(DENSITY) + W_TEMPO * scores.get(TEMPO);
-		if (numerator(a.timeSignature()) != numerator(b.timeSignature())) chart *= TIME_SIGNATURE_PENALTY;
+		int beatsA = numerator(a.timeSignature()), beatsB = numerator(b.timeSignature());
+		if (beatsA > 0 && beatsB > 0 && beatsA != beatsB) chart *= TIME_SIGNATURE_PENALTY; // 모르는 쪽이 있으면 감점하지 않는다
 
 		var meta = metaParts(a.meta(), b.meta());
 		double total = chart;
@@ -64,7 +62,6 @@ public final class SimilarityEngine {
 			chartShare = 1 - META_WEIGHT;
 		}
 		var contributions = new LinkedHashMap<String, Double>();
-		contributions.put(RHYTHM, chartShare * W_RHYTHM * scores.get(RHYTHM));
 		contributions.put(PADS, chartShare * W_PADS * scores.get(PADS));
 		contributions.put(TRANSITIONS, chartShare * W_TRANSITIONS * scores.get(TRANSITIONS));
 		contributions.put(DENSITY, chartShare * W_DENSITY * scores.get(DENSITY));
@@ -138,30 +135,6 @@ public final class SimilarityEngine {
 		var normalCount = new HashMap<Long, Integer>();
 		for (var c : all) if ("NORMAL".equals(c.difficulty())) normalCount.put(c.songId(), c.noteCount());
 		return all.stream().filter(c -> "NORMAL".equals(c.difficulty()) || !normalCount.containsKey(c.songId()) || normalCount.get(c.songId()) != c.noteCount()).toList();
-	}
-
-	/** 묶음별 코사인의 가중 평균. 양쪽 모두 노트가 없는 묶음은 평균에서 빼고, 한쪽만 없으면 0점으로 센다. */
-	static double rhythm(Map<String, List<Double>> a, Map<String, List<Double>> b) {
-		double weighted = 0, weights = 0;
-		for (var name : RhythmGrid.GROUP_NAMES) {
-			var x = a.get(name);
-			var y = b.get(name);
-			boolean emptyX = x == null || isZero(x), emptyY = y == null || isZero(y);
-			if (emptyX && emptyY) continue;
-			double w = GROUP_WEIGHT.getOrDefault(name, 0.0);
-			weights += w;
-			if (emptyX || emptyY) continue;
-			weighted += w * cosine(x, y);
-		}
-		return weights == 0 ? 0 : weighted / weights;
-	}
-
-	private static boolean isZero(List<Double> values) { return values.stream().noneMatch(v -> v != 0); }
-
-	static double cosine(List<Double> a, List<Double> b) {
-		double dot = 0, na = 0, nb = 0;
-		for (int i = 0; i < Math.min(a.size(), b.size()); i++) { dot += a.get(i) * b.get(i); na += a.get(i) * a.get(i); nb += b.get(i) * b.get(i); }
-		return na == 0 || nb == 0 ? 0 : clamp(dot / Math.sqrt(na * nb));
 	}
 
 	static double cosine(Map<String, Double> a, Map<String, Double> b) {

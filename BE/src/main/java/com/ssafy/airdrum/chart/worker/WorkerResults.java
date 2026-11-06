@@ -191,6 +191,8 @@ class WorkerResults {
             require(note.isObject() && note.path("timeMs").isIntegralNumber() && note.path("timeMs").canConvertToLong()
                     && note.path("timeMs").asLong()>=0 && note.path("timeMs").asLong()<=duration
                     && note.path("pad").isString() && PADS.contains(note.path("pad").asString()));
+            var hihatOpen=note.get("hihatOpen");
+            require(hihatOpen==null || hihatOpen.isNull() || hihatOpen.isBoolean());
             if("READY".equals(c.path("notationStatus").asString())) require(note.path("notation").isObject());
         }
         if("READY".equals(c.path("notationStatus").asString())) require(count>0

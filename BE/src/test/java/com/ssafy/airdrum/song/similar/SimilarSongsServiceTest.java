@@ -17,6 +17,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.SongLevelService;
+import com.ssafy.airdrum.song.meta.SongMetadata;
+import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 import com.ssafy.airdrum.song.recommend.RecommendationService;
 import static org.assertj.core.api.Assertions.*;
 
@@ -29,6 +31,7 @@ class SimilarSongsServiceTest {
 	@Autowired SongLevelService levels;
 	@Autowired SimilarSongsService service;
 	@Autowired RecommendationService recommendations;
+	@Autowired SongMetadataRepository metadata;
 	TransactionTemplate tx;
 	long user, other, rockA, rockB, four, shuffle, personal, noGrid, fast;
 
@@ -47,12 +50,12 @@ class SimilarSongsServiceTest {
 	}
 
 	private long builtin(String title, String kind, int durationMs, String timing) {
-		long id = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license) VALUES(?,'BUILTIN','READY',?,'CC0') RETURNING id", Long.class, title, durationMs);
+		long id = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license,bpm,time_signature) VALUES(?,'BUILTIN','READY',?,'CC0',120,'4/4') RETURNING id", Long.class, title, durationMs);
 		chart(id, kind, timing);
 		return id;
 	}
 	private long personal(String title, long owner, String kind) {
-		long id = db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms) VALUES(?,?,'MIDI','READY',100000) RETURNING id", Long.class, owner, title);
+		long id = db.queryForObject("INSERT INTO songs(owner_id,title,source,status,duration_ms,bpm,time_signature) VALUES(?,?,'MIDI','READY',100000,120,'4/4') RETURNING id", Long.class, owner, title);
 		chart(id, kind, TIMING_120);
 		return id;
 	}
@@ -101,11 +104,11 @@ class SimilarSongsServiceTest {
 
 	private List<Long> songIds(SimilarResponses.Similar r) { return r.items().stream().map(i -> i.song().id()).toList(); }
 
-	@Test void 같은_종류의_곡이_가장_앞에_오고_기준_곡과_개인_곡과_격자_없는_곡은_빠진다() {
+	@Test void 같은_종류의_곡이_앞에_오고_기준_곡과_개인_곡은_빠진다() {
 		var result = service.similar(user, rockA, "NORMAL", 10);
 		assertThat(result.strategy()).isEqualTo("SIMILAR_V1");
-		assertThat(songIds(result)).doesNotContain(rockA, personal, noGrid).doesNotHaveDuplicates();
-		assertThat(songIds(result).getFirst()).isEqualTo(rockB);
+		assertThat(songIds(result)).doesNotContain(rockA, personal).doesNotHaveDuplicates();
+		assertThat(songIds(result).subList(0, 2)).containsExactlyInAnyOrder(rockB, noGrid);
 		assertThat(result.items()).allSatisfy(i -> {
 			assertThat(i.similarity()).isBetween(0.5, 1.0);
 			assertThat(i.matchedOn()).isNotEmpty().hasSizeLessThanOrEqualTo(2);
@@ -127,8 +130,15 @@ class SimilarSongsServiceTest {
 		assertThat(songIds(own)).contains(rockA).doesNotContain(personal);
 	}
 
-	@Test void 기준_곡에_격자가_없으면_200과_빈_목록이고_노출을_남기지_않는다() {
-		var result = service.similar(user, noGrid, "NORMAL", 5);
+	@Test void 격자가_없는_곡도_후보와_기준_곡이_된다() {
+		assertThat(db.queryForObject("SELECT count(*) FROM chart_features f JOIN chart_versions v ON v.id=f.chart_version_id JOIN charts c ON c.id=v.chart_id WHERE c.song_id=? AND (f.rhythm_grid -> 'groups') IS NOT NULL", Integer.class, noGrid)).isZero();
+		assertThat(songIds(service.similar(user, rockA, "NORMAL", 10))).contains(noGrid);
+		assertThat(songIds(service.similar(user, noGrid, "NORMAL", 10))).contains(rockA);
+	}
+
+	@Test void 기준_곡에_채보_특징이_없으면_200과_빈_목록이고_노출을_남기지_않는다() {
+		long empty = db.queryForObject("INSERT INTO songs(title,source,status,duration_ms,license) VALUES('sim-empty','BUILTIN','READY',100000,'CC0') RETURNING id", Long.class);
+		var result = service.similar(user, empty, "NORMAL", 5);
 		assertThat(result.items()).isEmpty();
 		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE request_id=?", Integer.class, result.requestId())).isZero();
 	}
@@ -159,6 +169,25 @@ class SimilarSongsServiceTest {
 		recommendations.click(user, result.requestId(), clicked);
 		assertThat(db.queryForObject("SELECT clicked_at FROM recommendation_items WHERE request_id=? AND song_id=?", Timestamp.class, result.requestId(), clicked)).isNotNull();
 		assertThatThrownBy(() -> recommendations.click(other, result.requestId(), clicked)).isInstanceOf(BusinessException.class);
+	}
+
+	private double similarityOf(SimilarResponses.Similar r, long songId) {
+		return r.items().stream().filter(i -> i.song().id() == songId).findFirst().orElseThrow().similarity();
+	}
+
+	/** 255번 설계 4-2절: 곡 메타데이터가 양쪽에 있으면 엔진이 섞고, 한쪽이라도 없으면 채보 유사도만 쓴다(엔진 기존 규칙). */
+	@Test void 곡_메타데이터가_같은_곡이_더_비슷하고_메타가_없는_곡은_점수가_그대로다() {
+		var before = service.similar(user, rockA, "NORMAL", 10);
+		assertThat(similarityOf(before, rockB)).isEqualTo(similarityOf(before, noGrid)); // 채보가 같아 점수도 같다
+		var rock = new SongMetadata("ROCK", List.of("POP"), List.of("ENERGETIC"), 4, null, "EN", List.of("EIGHT_BEAT"), "HUMAN", null);
+		var ballad = new SongMetadata("BALLAD", List.of(), List.of("CALM"), 1, null, "KO", List.of("HALF_TIME"), "HUMAN", null);
+		metadata.upsert(rockA, rock);
+		metadata.upsert(noGrid, rock);
+		metadata.upsert(rockB, ballad);
+
+		var after = service.similar(user, rockA, "NORMAL", 10);
+		assertThat(similarityOf(after, noGrid)).isGreaterThan(similarityOf(after, rockB));
+		assertThat(similarityOf(after, four)).isEqualTo(similarityOf(before, four));
 	}
 
 	@Test void 크기_제한을_지킨다() {

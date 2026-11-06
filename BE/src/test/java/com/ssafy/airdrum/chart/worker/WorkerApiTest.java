@@ -306,6 +306,8 @@ class WorkerApiTest {
             for (Object value:List.of(List.of(),123)) args.add(org.junit.jupiter.params.provider.Arguments.of(field,value));
         args.add(org.junit.jupiter.params.provider.Arguments.of("notationStatus",null));
         args.add(org.junit.jupiter.params.provider.Arguments.of("padMissing",123));
+        for (Object value:List.of("true",1,Map.of(),List.of()))
+            args.add(org.junit.jupiter.params.provider.Arguments.of("hihatOpen",value));
         return args.stream();
     }
     @ParameterizedTest(name="{0} 잘못된 타입 {1}")
@@ -326,7 +328,7 @@ class WorkerApiTest {
             else if(field.equals("chart")) result.put("charts",Collections.singletonList(value));
             else {
                 if(field.equals("note")) chart.put("notes",Collections.singletonList(value));
-                else if(field.equals("pad") || field.equals("padMissing")) {var note=new HashMap<>((Map<String,Object>)((List<?>)chart.get("notes")).getFirst()); if(field.equals("padMissing")) note.remove("pad"); else note.put("pad",value); chart.put("notes",List.of(note));}
+                else if(field.equals("pad") || field.equals("padMissing") || field.equals("hihatOpen")) {var note=new HashMap<>((Map<String,Object>)((List<?>)chart.get("notes")).getFirst()); if(field.equals("padMissing")) note.remove("pad"); else note.put(field,value); chart.put("notes",List.of(note));}
                 else chart.put(field,value);
                 result.put("charts",List.of(chart));
             }
@@ -370,6 +372,45 @@ class WorkerApiTest {
         assertThat(returned.get("HARD").notes()).extracting("noteId").containsExactly("pedal","snare");
         assertThat(returned.get("NORMAL").notes()).extracting("pad").containsExactly("HIHAT_PEDAL","SNARE");
         assertThat(returned.get("EASY").notes()).extracting("pad").containsExactly("SNARE");
+    }
+    @Test void transcriptionAcceptsMissingNullAndBooleanHihatOpen() throws Exception {
+        UUID id=prepareTranscription();
+        var missing=Map.of("noteId","missing","timeMs",0,"pad","HIHAT");
+        var explicitNull=new HashMap<String,Object>(Map.of("noteId","null","timeMs",500,"pad","HIHAT"));
+        explicitNull.put("hihatOpen",null);
+        var closed=Map.of("noteId","closed","timeMs",1000,"pad","HIHAT","hihatOpen",false);
+        var open=Map.of("noteId","open","timeMs",1500,"pad","HIHAT","hihatOpen",true);
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",List.of(missing,explicitNull,closed,open),
+                        "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
+        var receipt=json.readTree(raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200));
+        var rows=db.queryForList("SELECT v.id,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND c.difficulty='HARD'",song);
+        assertThat(rows).hasSize(1);
+        assertThat(json.readTree((String)rows.getFirst().get("notes"))).isEqualTo(json.valueToTree(List.of(missing,explicitNull,closed,open)));
+        var detail=charts.version(user,((Number)rows.getFirst().get("id")).longValue());
+        assertThat(detail.notes()).extracting(com.ssafy.airdrum.chart.ChartResponses.Note::hihatOpen).containsExactly(null,null,false,true);
+        assertThat(receipt.path("chartVersionIds").size()).isEqualTo(3);
+    }
+    @Test void transcriptionPreservesHihatOpenThroughStorageAndDifficultySelection() throws Exception {
+        UUID id=prepareTranscription();
+        var open=Map.of("noteId","open","timeMs",0,"pad","HIHAT","velocityHint",100,"hihatOpen",true);
+        var pedal=Map.of("noteId","pedal","timeMs",500,"pad","HIHAT_PEDAL","velocityHint",100);
+        var input=Map.of("schemaVersion",1,"generator","ADT_MODEL","generatorVersion","v1","metrics",Map.of(),"charts",List.of(
+                Map.of("difficulty","NORMAL","notationStatus","UNAVAILABLE","notes",List.of(open,pedal),
+                        "timing",Map.of("bpm",120,"offsetMs",0,"timeSignature","4/4"))));
+        var receipt=json.readTree(raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200));
+        var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        assertThat(rows).hasSize(3);
+        for (var row:rows) {
+            var stored=json.readTree((String)row.get("notes"));
+            assertThat(stored.get(0)).isEqualTo(json.valueToTree(open));
+        }
+        assertThat(receipt.path("chartVersionIds").size()).isEqualTo(3);
+        for (var version:receipt.path("chartVersionIds")) {
+            var detail=charts.version(user,version.asLong());
+            assertThat(detail.notes().getFirst().noteId()).isEqualTo("open");
+            assertThat(detail.notes().getFirst().hihatOpen()).isTrue();
+        }
     }
     @Test void transcriptionPreservesOriginalNotesAndMakesThreeDifficulties() throws Exception {
         UUID id=prepareTranscription();

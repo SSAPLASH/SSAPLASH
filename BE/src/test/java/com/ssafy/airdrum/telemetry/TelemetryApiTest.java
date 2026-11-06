@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +31,7 @@ import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
 
+import static com.ssafy.airdrum.telemetry.TelemetryBatchValidatorTest.CONDITIONS;
 import static com.ssafy.airdrum.telemetry.TelemetryBatchValidatorTest.KEYBOARD_HIT;
 import static com.ssafy.airdrum.telemetry.TelemetryBatchValidatorTest.SENSOR_HIT;
 import static com.ssafy.airdrum.telemetry.TelemetryBatchValidatorTest.STATUS;
@@ -57,6 +59,8 @@ class TelemetryApiTest {
 	AccessTokenService tokens;
 	@MockitoSpyBean
 	TelemetryEventRepository events;
+	@MockitoSpyBean
+	TelemetrySessionConditionsRepository conditions;
 
 	final JsonMapper json = new JsonMapper();
 	long admin;
@@ -77,6 +81,7 @@ class TelemetryApiTest {
 	@AfterEach
 	void cleanup() {
 		db.update("DELETE FROM telemetry_events WHERE user_id IN (?,?,?)", admin, otherAdmin, user);
+		db.update("DELETE FROM telemetry_session_conditions WHERE user_id IN (?,?,?)", admin, otherAdmin, user);
 		db.update("DELETE FROM users WHERE id IN (?,?,?)", admin, otherAdmin, user);
 	}
 
@@ -238,6 +243,111 @@ class TelemetryApiTest {
 		assertThat(stored()).isZero();
 	}
 
+	// --- 259 측정 세션 실험 조건 ---
+
+	String batchWith(String conditions, String... events) {
+		return batch(events).replace("\"events\":[", "\"conditions\":" + conditions + ",\"events\":[");
+	}
+
+	Map<String, Object> conditionsRow(long userId) {
+		return db.queryForMap("SELECT * FROM telemetry_session_conditions WHERE user_id=? AND session_id=?", userId, session);
+	}
+
+	int conditionRows() {
+		return db.queryForObject("SELECT count(*) FROM telemetry_session_conditions WHERE session_id=?", Integer.class, session);
+	}
+
+	@Test
+	void conditionsAreStoredWithTheBatchAndWhollyReplacedByTheLastOnes() throws Exception {
+		var r = postBatch(batchWith(CONDITIONS, SENSOR_HIT), admin);
+		assertThat(r.getResponse().getStatus()).as(r.getResponse().getContentAsString()).isEqualTo(200);
+		assertThat(body(r).propertyNames()).containsExactly("acceptedCount");
+		var row = conditionsRow(admin);
+		assertThat(row.get("firmware_0")).isEqualTo("1.5");
+		assertThat(row.get("firmware_1")).isNull();
+		assertThat(row.get("dongle_firmware")).isEqualTo("2.3");
+		assertThat(((Number) row.get("link_mask")).intValue()).isEqualTo(3);
+		assertThat(row.get("haptic_enable")).isEqualTo(true);
+		assertThat(row.get("sensor_mount")).isEqualTo("GRIP_FRONT");
+		assertThat(row.get("app_build")).isEqualTo("v3.0");
+		assertThat(row.get("note")).isEqualTo("블루투스 거리 3m");
+		var firstReceived = ((java.sql.Timestamp) row.get("received_at")).toInstant();
+		assertThat(firstReceived).isAfter(base);
+
+		// 두 번째 배치: 행 전체가 마지막 값으로 바뀐다. null이 된 값은 null이 된다(설계 U2)
+		var second = CONDITIONS.replace("\"1\":null", "\"1\":\"1.6\"").replace("\"note\":\"블루투스 거리 3m\"", "\"note\":null")
+				.replace("GRIP_FRONT", "BENCH");
+		assertThat(postBatch(batchWith(second, STATUS), admin).getResponse().getStatus()).isEqualTo(200);
+		row = conditionsRow(admin);
+		assertThat(row.get("firmware_0")).isEqualTo("1.5");
+		assertThat(row.get("firmware_1")).isEqualTo("1.6");
+		assertThat(row.get("note")).isNull();
+		assertThat(row.get("sensor_mount")).isEqualTo("BENCH");
+		assertThat(((java.sql.Timestamp) row.get("received_at")).toInstant()).isAfterOrEqualTo(firstReceived);
+		// conditions 없는 배치는 행을 건드리지 않는다
+		assertThat(postBatch(batch(KEYBOARD_HIT), admin).getResponse().getStatus()).isEqualTo(200);
+		assertThat(conditionsRow(admin).get("sensor_mount")).isEqualTo("BENCH");
+		assertThat(conditionRows()).isEqualTo(1);
+		assertThat(stored()).isEqualTo(3);
+		// 모든 값이 null인 conditions도 "보낸 적 있음"이라 행이 남는다
+		assertThat(postBatch(batchWith("{}", KEYBOARD_HIT), admin).getResponse().getStatus()).isEqualTo(200);
+		row = conditionsRow(admin);
+		for (var column : new String[] {"firmware_0", "firmware_1", "dongle_firmware", "link_mask", "haptic_enable", "sensor_mount", "app_build", "note"})
+			assertThat(row.get(column)).as(column).isNull();
+		// 다른 회원의 같은 sessionId는 별도 행
+		assertThat(postBatch(batchWith(CONDITIONS, STATUS), otherAdmin).getResponse().getStatus()).isEqualTo(200);
+		assertThat(conditionRows()).isEqualTo(2);
+		assertThat(conditionsRow(otherAdmin).get("sensor_mount")).isEqualTo("GRIP_FRONT");
+		assertThat(conditionsRow(admin).get("sensor_mount")).isNull();
+	}
+
+	@Test
+	void unknownKeysInsideConditionsAreIgnoredButInvalidConditionsRejectTheWholeBatch() throws Exception {
+		var extra = CONDITIONS.replace("\"note\"", "\"stickWeight\":42,\"note\"");
+		assertThat(postBatch(batchWith(extra, SENSOR_HIT), admin).getResponse().getStatus()).isEqualTo(200);
+		assertThat(conditionsRow(admin).get("note")).isEqualTo("블루투스 거리 3m");
+		db.update("DELETE FROM telemetry_session_conditions WHERE session_id=?", session);
+		db.update("DELETE FROM telemetry_events WHERE session_id=?", session);
+
+		var r = postBatch(batchWith(CONDITIONS.replace("\"linkMask\":3", "\"linkMask\":16"), SENSOR_HIT), admin);
+		problem(r, 400, "TELEMETRY_EVENT_INVALID");
+		assertThat(body(r).path("detail").asString()).contains("conditions.linkMask").doesNotContain("16");
+		var shape = postBatch(batchWith(CONDITIONS.replace("GRIP_FRONT", "TIP"), SENSOR_HIT), admin);
+		problem(shape, 400, "INVALID_INPUT");
+		assertThat(body(shape).path("detail").asString()).contains("conditions.sensorMount").doesNotContain("TIP");
+		problem(postBatch(batchWith("[]", SENSOR_HIT), admin), 400, "INVALID_INPUT");
+		problem(postBatch(batchWith(CONDITIONS, SENSOR_HIT).replace("\"conditions\":", "\"stickWeight\":42,\"conditions\":"), admin), 400, "INVALID_INPUT");
+		assertThat(stored()).isZero();
+		assertThat(conditionRows()).isZero();
+	}
+
+	@Test
+	void conditionsFailureRollsBackTheEventsOfTheSameBatch() throws Exception {
+		doAnswer(call -> {
+			call.callRealMethod();
+			throw new DataIntegrityViolationException("주입한 조건 저장 실패");
+		}).when(conditions).upsert(anyLong(), any(), any());
+		problem(postBatch(batchWith(CONDITIONS, SENSOR_HIT, STATUS), admin), 500, "INTERNAL_ERROR");
+		assertThat(stored()).isZero();
+		assertThat(conditionRows()).isZero();
+	}
+
+	/**
+	 * FE가 문서로 계약을 읽으므로 Swagger 스키마에 firmware의 "0"·"1" 키(@JsonProperty)와 conditions 7필드가 나와야 한다.
+	 * 세션 목록·이벤트 응답 스키마(SessionSummary·EventItem)는 152번부터 문서에 나오지 않는다(후속).
+	 */
+	@Test
+	void apiDocsDescribeConditionsWithStickKeys() throws Exception {
+		var docs = body(send(get("/v3/api-docs"), null));
+		var schemas = docs.path("components").path("schemas");
+		assertThat(schemas.path("Firmware").path("properties").propertyNames()).containsExactlyInAnyOrder("0", "1");
+		assertThat(schemas.path("Conditions").path("properties").propertyNames()).containsExactlyInAnyOrder("firmware", "dongleFirmware",
+				"linkMask", "hapticEnable", "sensorMount", "appBuild", "note");
+		assertThat(schemas.path("Conditions").path("properties").path("sensorMount").path("enum")).extracting(JsonNode::asString)
+				.containsExactly("GRIP_FRONT", "BENCH");
+		assertThat(schemas.path("TelemetryBatchRequest").path("properties").has("conditions")).isTrue();
+	}
+
 	// --- ADMIN 조회 ---
 
 	static final String SESSIONS = "/api/telemetry/sessions";
@@ -277,7 +387,7 @@ class TelemetryApiTest {
 		assertThat(rows.get(0).path("mode").isNull()).isTrue();
 		var first = rows.get(1);
 		assertThat(first.propertyNames()).containsExactlyInAnyOrder("userId", "sessionId", "mode", "firstEventTime", "lastEventTime",
-				"eventCount", "hitCount", "statusCount");
+				"eventCount", "hitCount", "statusCount", "conditions");
 		assertThat(first.path("userId").longValue()).isEqualTo(admin);
 		assertThat(first.path("mode").asString()).isEqualTo("RHYTHM");
 		assertThat(Instant.parse(first.path("firstEventTime").asString())).isEqualTo(base);
@@ -294,6 +404,45 @@ class TelemetryApiTest {
 		assertThat(paged.path("totalElements").longValue()).isEqualTo(2);
 		assertThat(paged.path("hasNext").booleanValue()).isFalse();
 		assertThat(items(paged).getFirst().path("sessionId").asString()).isEqualTo(session.toString());
+	}
+
+	/** 259: 세션 목록 항목의 conditions는 요청과 같은 모양이고 받은 적 없으면 null, 회원별로 나뉜다. */
+	@Test
+	void sessionListCarriesConditionsPerUserOrNull() throws Exception {
+		seedQueries();
+		assertThat(postBatch(batchWith(CONDITIONS, STATUS), admin).getResponse().getStatus()).isEqualTo(200);
+		assertThat(postBatch(batchWith("{}", STATUS), otherAdmin).getResponse().getStatus()).isEqualTo(200);
+		var rows = items(ok(get(SESSIONS).param("size", "100")));
+		var mine = rows.stream().filter(row -> row.path("sessionId").asString().equals(session.toString())
+				&& row.path("userId").longValue() == admin).findFirst().orElseThrow();
+		var c = mine.path("conditions");
+		assertThat(c.propertyNames()).containsExactlyInAnyOrder("firmware", "dongleFirmware", "linkMask", "hapticEnable", "sensorMount",
+				"appBuild", "note");
+		assertThat(c.path("firmware").propertyNames()).containsExactlyInAnyOrder("0", "1");
+		assertThat(c.path("firmware").path("0").asString()).isEqualTo("1.5");
+		assertThat(c.path("firmware").path("1").isNull()).isTrue();
+		assertThat(c.path("dongleFirmware").asString()).isEqualTo("2.3");
+		assertThat(c.path("linkMask").intValue()).isEqualTo(3);
+		assertThat(c.path("hapticEnable").booleanValue()).isTrue();
+		assertThat(c.path("sensorMount").asString()).isEqualTo("GRIP_FRONT");
+		assertThat(c.path("appBuild").asString()).isEqualTo("v3.0");
+		assertThat(c.path("note").asString()).isEqualTo("블루투스 거리 3m");
+		// 받은 적 없는 세션은 null
+		var none = rows.stream().filter(row -> row.path("sessionId").asString().equals(later.toString())).findFirst().orElseThrow();
+		assertThat(none.has("conditions")).isTrue();
+		assertThat(none.path("conditions").isNull()).isTrue();
+		// 모든 값이 null인 조건은 필드가 null인 객체. firmware도 "0"·"1"이 null인 객체다(설계 3-3)
+		var theirs = rows.stream().filter(row -> row.path("sessionId").asString().equals(session.toString())
+				&& row.path("userId").longValue() == otherAdmin).findFirst().orElseThrow().path("conditions");
+		assertThat(theirs.isObject()).isTrue();
+		assertThat(theirs.path("firmware").path("0").isNull()).isTrue();
+		assertThat(theirs.path("sensorMount").isNull()).isTrue();
+		assertThat(theirs.path("linkMask").isNull()).isTrue();
+		// 건수·정렬·페이지는 그대로
+		var page = ok(get(SESSIONS).param("userId", String.valueOf(admin)));
+		assertThat(page.path("totalElements").longValue()).isEqualTo(2);
+		assertThat(items(page).getFirst().path("sessionId").asString()).isEqualTo(later.toString());
+		assertThat(items(page).get(1).path("eventCount").intValue()).isEqualTo(4);
 	}
 
 	@Test

@@ -28,6 +28,7 @@ import com.ssafy.airdrum.song.SongManagementError;
 import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.audio.AudioErrorCode;
 import com.ssafy.airdrum.song.audio.AudioProbe;
+import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 import com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty;
 import com.ssafy.airdrum.song.midi.MidiChartConverter;
 import com.ssafy.airdrum.song.midi.MidiChartDocuments;
@@ -65,12 +66,14 @@ class AdminSongService {
 	private final SpoolDirectory spool;
 	private final TransactionTemplate tx;
 	private final SongLevelService levels;
+	private final SongMetadataRepository metadata;
 
 	AdminSongService(AdminSongRepository songs, MidiChartConverter converter, MidiChartRepository charts,
 			CoverStorage covers, ChartAssetKeyPolicy keys, SongAssetCleanup cleanup, CoverImage images,
 			AccompanimentStorage backings, AudioProbe probe, ChartAssetStore assets, SpoolDirectory spool,
-			PlatformTransactionManager manager, SongLevelService levels) {
+			PlatformTransactionManager manager, SongLevelService levels, SongMetadataRepository metadata) {
 		this.songs = songs;
+		this.metadata = metadata;
 		this.levels = levels;
 		this.converter = converter;
 		this.charts = charts;
@@ -277,7 +280,7 @@ class AdminSongService {
 				c.noteCount(), c.notationStatus(), c.generator(), c.generatorVersion(), c.createdAt())).toList();
 		return new AdminSongDetail(r.id(), r.title(), r.artist(), r.license(), r.status(), r.bpm(), r.timeSignature(),
 				r.durationMs(), r.accompanimentKey() != null, r.coverKey() != null, r.published(), difficulties(latest),
-				r.createdAt(), r.updatedAt(), coverUrl(id, r.coverKey()), summaries);
+				r.createdAt(), r.updatedAt(), coverUrl(id, r.coverKey()), summaries, metadata.findBySongIds(List.of(id)).get(id));
 	}
 
 	private String coverUrl(long id, String key) {

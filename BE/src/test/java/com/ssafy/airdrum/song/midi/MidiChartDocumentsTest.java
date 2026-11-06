@@ -50,6 +50,31 @@ class MidiChartDocumentsTest {
 	}
 
 	@Test
+	void midi하이햇_피치는_솎기와_시간_이동_후에도_열림만_표시한다() {
+		var bytes = MidiFixtures.ppq(480).drum(480, 46).drum(960, 42).drum(1440, 44).bytes();
+		var sequence = new MidiSequenceReader().read(bytes);
+		var rebased = documents.rebase(sequence, GmDrumMapping.notes(sequence.events()), 500);
+		var song = documents.build(rebased.sequence(), 500, DifficultyThinner.thin(rebased.notes(), 480));
+		for (var difficulty : Difficulty.values()) {
+			var built = song.charts().get(difficulty);
+			var result = reader.notes(built.notes(), built.noteCount());
+			assertThat(result).anySatisfy(n -> {
+				assertThat(n.pad()).isEqualTo("HIHAT");
+				assertThat(n.hihatOpen()).isTrue();
+			});
+			assertThat(result).anySatisfy(n -> {
+				assertThat(n.timeMs()).isEqualTo(1000);
+				assertThat(n.pad()).isEqualTo("HIHAT");
+				assertThat(n.hihatOpen()).isNull();
+			});
+			if (difficulty != Difficulty.EASY) assertThat(result).anySatisfy(n -> {
+				assertThat(n.pad()).isEqualTo("HIHAT_PEDAL");
+				assertThat(n.hihatOpen()).isNull();
+			});
+		}
+	}
+
+	@Test
 	void 노트_JSON은_noteId_정수_timeMs_패드_세기_notation을_가진다() {
 		var song = documents.build(seq(480, List.of(new Tempo(0, 500_000)), List.of(), 0),
 				same(List.of(new DrumNote(0, KICK, 110, 0), new DrumNote(480, SNARE, 90, 240),

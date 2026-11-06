@@ -10,6 +10,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.*;
 
 @Component
@@ -22,6 +23,7 @@ public class AudioProbe {
     private final String executable;
     private final JsonMapper json;
     private final Launcher launcher;
+    private final Duration timeout;
 
     @org.springframework.beans.factory.annotation.Autowired
     public AudioProbe(@Value("${audio.ffprobe-path:ffprobe}") String executable, JsonMapper json) {
@@ -29,9 +31,14 @@ public class AudioProbe {
     }
 
     AudioProbe(String executable, JsonMapper json, Launcher launcher) {
+        this(executable, json, launcher, Duration.ofSeconds(10));
+    }
+
+    AudioProbe(String executable, JsonMapper json, Launcher launcher, Duration timeout) {
         this.executable = executable;
         this.json = json;
         this.launcher = launcher;
+        this.timeout = timeout;
     }
 
     public record Info(String mime, int durationMs) {}
@@ -60,7 +67,7 @@ public class AudioProbe {
         var output = new FutureTask<byte[]>(() -> readBounded(process.getInputStream()));
         Thread.ofVirtual().start(output);
         try {
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            if (!process.waitFor(timeout.toNanos(), TimeUnit.NANOSECONDS)) {
                 throw new BusinessException(AudioErrorCode.UNAVAILABLE);
             }
             byte[] bytes = output.get(2, TimeUnit.SECONDS);
