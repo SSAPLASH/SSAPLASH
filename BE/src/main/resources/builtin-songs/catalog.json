@@ -2,233 +2,514 @@
   {
     "title": "기본 8비트",
     "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
-    "midi": "basic-8beat.mid"
+    "midi": "basic-8beat.mid",
+    "meta": {
+      "genre": "PRACTICE",
+      "language": "INSTRUMENTAL",
+      "drumStyle": ["EIGHT_BEAT"],
+      "source": "HUMAN"
+    }
   },
   {
     "title": "8비트 + 필인",
     "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
-    "midi": "8beat-fill.mid"
+    "midi": "8beat-fill.mid",
+    "meta": {
+      "genre": "PRACTICE",
+      "language": "INSTRUMENTAL",
+      "drumStyle": ["EIGHT_BEAT", "FILL_HEAVY"],
+      "source": "HUMAN"
+    }
   },
   {
     "title": "라이드 16비트",
     "license": "프로젝트 FE 데모 연습 패턴; 원본 FE/src/domain/chart.ts@d4080d1; 별도 라이선스 표기 없음; 음원 미포함",
-    "midi": "ride-16beat.mid"
+    "midi": "ride-16beat.mid",
+    "meta": {
+      "genre": "PRACTICE",
+      "language": "INSTRUMENTAL",
+      "drumStyle": ["SIXTEEN_BEAT"],
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Hail To The King",
     "artist": "Avenged Sevenfold",
     "license": "원곡 Avenged Sevenfold, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "a7x_hail_to_the_king.mid",
-    "offsetMs": 562
+    "offsetMs": 562,
+    "meta": {
+      "genre": "METAL",
+      "subGenres": ["ROCK"],
+      "mood": ["DARK", "ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2013,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "505",
     "artist": "Arctic Monkeys",
     "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "arctic_monkeys_505.mid",
-    "offsetMs": 180
+    "offsetMs": 180,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["SENTIMENTAL"],
+      "energy": 3,
+      "releaseYear": 2007,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Do I Wanna Know?",
     "artist": "Arctic Monkeys",
     "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "arctic_monkeys_do_i_wanna_know.mid",
-    "offsetMs": 836
+    "offsetMs": 836,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["DARK"],
+      "energy": 2,
+      "releaseYear": 2013,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "R U Mine?",
     "artist": "Arctic Monkeys",
     "license": "원곡 Arctic Monkeys, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "arctic_monkeys_r_u_mine.mid",
-    "offsetMs": 2109
+    "offsetMs": 2109,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC", "DARK"],
+      "energy": 4,
+      "releaseYear": 2012,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Billie Jean",
     "artist": "Michael Jackson",
     "license": "원곡 Michael Jackson, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "billie_jean.mid",
-    "offsetMs": 1226
+    "offsetMs": 1226,
+    "meta": {
+      "genre": "POP",
+      "subGenres": ["FUNK"],
+      "mood": ["DARK"],
+      "energy": 3,
+      "releaseYear": 1982,
+      "language": "EN",
+      "drumStyle": ["EIGHT_BEAT"],
+      "source": "HUMAN"
+    }
   },
   {
     "title": "EVERYTHING",
     "artist": "검정치마",
     "license": "원곡 검정치마, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "black_skirts_everything.mid",
-    "offsetMs": 231
+    "offsetMs": 231,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["BALLAD"],
+      "mood": ["SENTIMENTAL", "CALM"],
+      "energy": 2,
+      "releaseYear": 2017,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Congratulations",
     "artist": "DAY6",
     "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "day6_congratulations.mid",
-    "offsetMs": 996
+    "offsetMs": 996,
+    "meta": {
+      "genre": "KPOP",
+      "subGenres": ["ROCK"],
+      "mood": ["SENTIMENTAL"],
+      "energy": 3,
+      "releaseYear": 2015,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Welcome to the Show",
     "artist": "DAY6",
     "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "day6_welcome_to_the_show.mid",
-    "offsetMs": 1549
+    "offsetMs": 1549,
+    "meta": {
+      "genre": "KPOP",
+      "subGenres": ["ROCK"],
+      "mood": ["UPLIFTING"],
+      "energy": 4,
+      "releaseYear": 2024,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Zombie",
     "artist": "DAY6",
     "license": "원곡 DAY6, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "day6_zombie.mid",
-    "offsetMs": 38
+    "offsetMs": 38,
+    "meta": {
+      "genre": "KPOP",
+      "subGenres": ["ROCK"],
+      "mood": ["SENTIMENTAL"],
+      "energy": 3,
+      "releaseYear": 2020,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Sugar, We're Goin Down",
     "artist": "Fall Out Boy",
     "license": "원곡 Fall Out Boy, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "fall_out_boy_sugar_were_goin_down.mid",
-    "offsetMs": 241
+    "offsetMs": 241,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["PUNK"],
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2005,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "The Pretender",
     "artist": "Foo Fighters",
     "license": "원곡 Foo Fighters, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "foo_fighters_the_pretender.mid",
-    "offsetMs": 109
+    "offsetMs": 109,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 5,
+      "releaseYear": 2007,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Take Me Out",
     "artist": "Franz Ferdinand",
     "license": "원곡 Franz Ferdinand, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "franz_ferdinand_take_me_out.mid",
-    "offsetMs": 280
+    "offsetMs": 280,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2004,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Feel Good Inc.",
     "artist": "Gorillaz",
     "license": "원곡 Gorillaz, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "gorillaz_feel_good_inc.mid",
-    "offsetMs": 16
+    "offsetMs": 16,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["HIPHOP"],
+      "mood": ["DARK"],
+      "energy": 3,
+      "releaseYear": 2005,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "거울",
     "artist": "국카스텐",
     "license": "원곡 국카스텐, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "guckkasten_mirror.mid",
-    "offsetMs": 273
+    "offsetMs": 273,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["DARK", "ENERGETIC"],
+      "energy": 4,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "TOMBOY",
     "artist": "혁오",
     "license": "원곡 혁오, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "hyukoh_tomboy.mid",
-    "offsetMs": 1113
+    "offsetMs": 1113,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["SENTIMENTAL"],
+      "energy": 2,
+      "releaseYear": 2017,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Believer",
     "artist": "Imagine Dragons",
     "license": "원곡 Imagine Dragons, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "imagine_dragons_believer.mid",
-    "offsetMs": 237
+    "offsetMs": 237,
+    "meta": {
+      "genre": "POP",
+      "subGenres": ["ROCK"],
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2017,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Mr. Brightside",
     "artist": "The Killers",
     "license": "원곡 The Killers, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "killers_mr_brightside.mid",
-    "offsetMs": 249
+    "offsetMs": 249,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2003,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Sex On Fire",
     "artist": "Kings of Leon",
     "license": "원곡 Kings of Leon, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "kings_of_leon_sex_on_fire.mid",
-    "offsetMs": 1239
+    "offsetMs": 1239,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2008,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Numb",
     "artist": "Linkin Park",
     "license": "원곡 Linkin Park, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "linkin_park_numb.mid",
-    "offsetMs": 1791
+    "offsetMs": 1791,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["METAL"],
+      "mood": ["DARK", "SENTIMENTAL"],
+      "energy": 4,
+      "releaseYear": 2003,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Beggin'",
     "artist": "Måneskin",
     "license": "원곡 Måneskin, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "maneskin_beggin.mid",
-    "offsetMs": 1324
+    "offsetMs": 1324,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2017,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "I WANNA BE YOUR SLAVE",
     "artist": "Måneskin",
     "license": "원곡 Måneskin, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "maneskin_i_wanna_be_your_slave.mid",
-    "offsetMs": 1674
+    "offsetMs": 1674,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2021,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Welcome To The Black Parade",
     "artist": "My Chemical Romance",
     "license": "원곡 My Chemical Romance, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "mcr_welcome_to_the_black_parade.mid",
-    "offsetMs": 25800
+    "offsetMs": 25800,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["PUNK"],
+      "mood": ["SENTIMENTAL", "ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2006,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Hysteria",
     "artist": "Muse",
     "license": "원곡 Muse, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "muse_hysteria.mid",
-    "offsetMs": 118
+    "offsetMs": 118,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC", "DARK"],
+      "energy": 5,
+      "releaseYear": 2003,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Uprising",
     "artist": "Muse",
     "license": "원곡 Muse, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "muse_uprising.mid",
-    "offsetMs": 117
+    "offsetMs": 117,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["DARK"],
+      "energy": 3,
+      "releaseYear": 2009,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Misery Business",
     "artist": "Paramore",
     "license": "원곡 Paramore, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "paramore_misery_business.mid",
-    "offsetMs": 420
+    "offsetMs": 420,
+    "meta": {
+      "genre": "ROCK",
+      "subGenres": ["PUNK"],
+      "mood": ["ENERGETIC"],
+      "energy": 5,
+      "releaseYear": 2007,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "No One Knows",
     "artist": "Queens of the Stone Age",
     "license": "원곡 Queens of the Stone Age, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "qotsa_no_one_knows.mid",
-    "offsetMs": 1235
+    "offsetMs": 1235,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["DARK"],
+      "energy": 4,
+      "releaseYear": 2002,
+      "language": "EN",
+      "drumStyle": ["FILL_HEAVY"],
+      "source": "HUMAN"
+    }
   },
   {
     "title": "고민중독",
     "artist": "QWER",
     "license": "원곡 QWER, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "qwer_gominjungdok.mid",
-    "offsetMs": 1084
+    "offsetMs": 1084,
+    "meta": {
+      "genre": "KPOP",
+      "subGenres": ["ROCK"],
+      "mood": ["UPLIFTING", "ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2024,
+      "language": "KO",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Figure It Out",
     "artist": "Royal Blood",
     "license": "원곡 Royal Blood, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "royal_blood_figure_it_out.mid",
-    "offsetMs": 155
+    "offsetMs": 155,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2014,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Reptilia",
     "artist": "The Strokes",
     "license": "원곡 The Strokes, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "strokes_reptilia.mid",
-    "offsetMs": 300
+    "offsetMs": 300,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["ENERGETIC"],
+      "energy": 4,
+      "releaseYear": 2003,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Heathens",
     "artist": "twenty one pilots",
     "license": "원곡 twenty one pilots, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "twenty_one_pilots_heathens.mid",
-    "offsetMs": 1742
+    "offsetMs": 1742,
+    "meta": {
+      "genre": "POP",
+      "subGenres": ["HIPHOP"],
+      "mood": ["DARK"],
+      "energy": 2,
+      "releaseYear": 2016,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   },
   {
     "title": "Seven Nation Army",
     "artist": "The White Stripes",
     "license": "원곡 The White Stripes, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용",
     "midi": "white_stripes_seven_nation_army.mid",
-    "offsetMs": 1310
+    "offsetMs": 1310,
+    "meta": {
+      "genre": "ROCK",
+      "mood": ["DARK"],
+      "energy": 3,
+      "releaseYear": 2003,
+      "language": "EN",
+      "source": "HUMAN"
+    }
   }
 ]

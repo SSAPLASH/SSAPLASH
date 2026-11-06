@@ -29,6 +29,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ssafy.airdrum.auth.AccessTokenService;
+import com.ssafy.airdrum.song.meta.SongMetadata;
+import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.user.AuthUser;
 import com.ssafy.airdrum.user.UserRole;
@@ -50,6 +52,7 @@ class AdminSongApiTest {
 	@Autowired MockMvc mvc;
 	@Autowired JdbcTemplate db;
 	@Autowired AccessTokenService tokens;
+	@Autowired SongMetadataRepository metadata;
 	final JsonMapper json = new JsonMapper();
 	long admin, user;
 
@@ -189,6 +192,38 @@ class AdminSongApiTest {
 		// 숨긴 HARD도 채보 id로는 그대로 조회된다(과거 플레이 기록에서 다시 열기).
 		long hardId = song.path("charts").valueStream().filter(c -> "HARD".equals(c.path("difficulty").asString())).findFirst().orElseThrow().path("id").asLong();
 		status(send(get("/api/v1/charts/" + hardId), user), 200);
+	}
+
+	/** 255번 설계 3-5절: 메타데이터는 ADMIN 상세에만 보이고, 목록과 회원 응답은 그대로다. */
+	@Test
+	void 상세는_곡_메타데이터를_보여주고_없으면_null이다() throws Exception {
+		long id = registered(true);
+		var empty = send(get(BASE + "/" + id), admin);
+		status(empty, 200);
+		assertThat(body(empty).has("metadata")).isTrue();
+		assertThat(body(empty).path("metadata").isNull()).isTrue();
+
+		metadata.upsert(id, new SongMetadata("METAL", List.of("ROCK"), List.of("DARK"), 4, 2013, "EN", List.of(), "HUMAN", null));
+		var r = send(get(BASE + "/" + id), admin);
+		status(r, 200);
+		var meta = body(r).path("metadata");
+		assertThat(meta.path("genre").asString()).isEqualTo("METAL");
+		assertThat(meta.path("subGenres").valueStream().map(JsonNode::asString).toList()).containsExactly("ROCK");
+		assertThat(meta.path("mood").valueStream().map(JsonNode::asString).toList()).containsExactly("DARK");
+		assertThat(meta.path("drumStyle").isArray()).isTrue();
+		assertThat(meta.path("drumStyle")).isEmpty();
+		assertThat(meta.path("energy").asInt()).isEqualTo(4);
+		assertThat(meta.path("releaseYear").asInt()).isEqualTo(2013);
+		assertThat(meta.path("language").asString()).isEqualTo("EN");
+		assertThat(meta.path("source").asString()).isEqualTo("HUMAN");
+		assertThat(meta.path("sourceNote").isNull()).isTrue();
+
+		var list = send(get(BASE).param("q", "관리 테스트"), admin);
+		status(list, 200);
+		assertThat(body(list).path("items").get(0).has("metadata")).isFalse();
+		var member = send(get("/api/v1/songs/" + id), user);
+		status(member, 200);
+		assertThat(body(member).has("metadata")).isFalse();
 	}
 
 	@Test

@@ -17,6 +17,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.SongLevelService;
+import com.ssafy.airdrum.song.meta.SongMetadata;
+import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 import com.ssafy.airdrum.song.recommend.RecommendationService;
 import static org.assertj.core.api.Assertions.*;
 
@@ -29,6 +31,7 @@ class SimilarSongsServiceTest {
 	@Autowired SongLevelService levels;
 	@Autowired SimilarSongsService service;
 	@Autowired RecommendationService recommendations;
+	@Autowired SongMetadataRepository metadata;
 	TransactionTemplate tx;
 	long user, other, rockA, rockB, four, shuffle, personal, noGrid, fast;
 
@@ -166,6 +169,25 @@ class SimilarSongsServiceTest {
 		recommendations.click(user, result.requestId(), clicked);
 		assertThat(db.queryForObject("SELECT clicked_at FROM recommendation_items WHERE request_id=? AND song_id=?", Timestamp.class, result.requestId(), clicked)).isNotNull();
 		assertThatThrownBy(() -> recommendations.click(other, result.requestId(), clicked)).isInstanceOf(BusinessException.class);
+	}
+
+	private double similarityOf(SimilarResponses.Similar r, long songId) {
+		return r.items().stream().filter(i -> i.song().id() == songId).findFirst().orElseThrow().similarity();
+	}
+
+	/** 255번 설계 4-2절: 곡 메타데이터가 양쪽에 있으면 엔진이 섞고, 한쪽이라도 없으면 채보 유사도만 쓴다(엔진 기존 규칙). */
+	@Test void 곡_메타데이터가_같은_곡이_더_비슷하고_메타가_없는_곡은_점수가_그대로다() {
+		var before = service.similar(user, rockA, "NORMAL", 10);
+		assertThat(similarityOf(before, rockB)).isEqualTo(similarityOf(before, noGrid)); // 채보가 같아 점수도 같다
+		var rock = new SongMetadata("ROCK", List.of("POP"), List.of("ENERGETIC"), 4, null, "EN", List.of("EIGHT_BEAT"), "HUMAN", null);
+		var ballad = new SongMetadata("BALLAD", List.of(), List.of("CALM"), 1, null, "KO", List.of("HALF_TIME"), "HUMAN", null);
+		metadata.upsert(rockA, rock);
+		metadata.upsert(noGrid, rock);
+		metadata.upsert(rockB, ballad);
+
+		var after = service.similar(user, rockA, "NORMAL", 10);
+		assertThat(similarityOf(after, noGrid)).isGreaterThan(similarityOf(after, rockB));
+		assertThat(similarityOf(after, four)).isEqualTo(similarityOf(before, four));
 	}
 
 	@Test void 크기_제한을_지킨다() {
