@@ -118,6 +118,27 @@ class CoachExportViewMigrationTest {
 		}
 	}
 
+	/** V41: 탈퇴 회원의 세션이 삭제되기 전에도 뷰에 나오지 않고, 열과 권한은 그대로다. */
+	@Test
+	void v41ExcludesWithdrawnMembersAndKeepsColumns() throws Exception {
+		migrateLatest(schema);
+		var seed = seed(schema);
+		flyway(schema, "41").migrate();
+		try (var c = open(schema)) {
+			execute(c, "SET app.export_salt = 's1'");
+			execute(c, "SET ROLE coach_export_reader");
+			assertThat(keys(c)).doesNotContain(key(seed.withdrawnSession(), "s1")).contains(key(seed.privateSession(), "s1"));
+			assertThat(scalarLong(c, "SELECT count(DISTINCT session_key) FROM coach_export_v")).isEqualTo(11);
+			execute(c, "RESET ROLE");
+			var columns = new java.util.ArrayList<String>();
+			try (var st = c.createStatement(); var rows = st.executeQuery("SELECT column_name FROM information_schema.columns "
+					+ "WHERE table_schema=current_schema() AND table_name='coach_export_v' ORDER BY ordinal_position")) {
+				while (rows.next()) columns.add(rows.getString(1));
+			}
+			assertThat(columns).containsExactlyElementsOf(ALLOWED_COLUMNS);
+		}
+	}
+
 	@Test
 	void privateSongHidesSongRefButKeepsDifficultyAndHitShapes() throws Exception {
 		migrateLatest(schema);

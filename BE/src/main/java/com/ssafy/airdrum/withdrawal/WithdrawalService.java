@@ -20,7 +20,7 @@ import com.ssafy.airdrum.user.UserWithdrawnEvent;
 
 /**
  * 회원 탈퇴 트랜잭션(탈퇴 설계 4장 흐름 A). {@code users} 행을 {@code FOR UPDATE}로 잠근 뒤 상태 전이·개인정보 비우기,
- * 소셜 연동·키트 프리셋·연주 녹음·비동의 플레이 로그·텔레메트리 삭제, refresh 토큰 폐기, {@link UserWithdrawnEvent} 발행까지 한 트랜잭션에서 한다.
+ * 소셜 연동·키트 프리셋·연주 녹음·텔레메트리 삭제, refresh 토큰 폐기, {@link UserWithdrawnEvent} 발행까지 한 트랜잭션에서 한다.
  *
  * <p>곡·파일·채보 작업 정리는 이벤트를 받는 쪽(BE2)이 커밋 뒤에 한다. 이 클래스가 {@code user}·{@code auth}·{@code preset}을
  * 모두 알아야 해서 {@code user} 패키지에 두지 않는다(순환 의존 방지). 플레이 로그·텔레메트리는 {@code play}·{@code telemetry} 클래스를 쓰지 않고 SQL로 지운다.
@@ -64,32 +64,22 @@ public class WithdrawalService {
 		socialAccounts.deleteAllByUserId(userId);
 		presets.deleteAllByUserId(userId);
 		int deletedRecordings = deleteRecordings(userId);
-		int deletedPlays = deleteNonConsentedPlays(userId);
 		int deletedTelemetry = deleteTelemetry(userId);
 		int deletedTelemetryConditions = deleteTelemetryConditions(userId);
 		db.update("DELETE FROM recommendation_items WHERE user_id = ?", userId);
 		db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
 		revokeRefreshTokens(userId);
 		events.publishEvent(new UserWithdrawnEvent(userId));
-		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedPlays={} deletedTelemetry={} deletedTelemetryConditions={}", userId,
-				deletedRecordings, deletedPlays, deletedTelemetry, deletedTelemetryConditions);
+		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedTelemetry={} deletedTelemetryConditions={}", userId,
+				deletedRecordings, deletedTelemetry, deletedTelemetryConditions);
 	}
 
 	/**
-	 * 연주 녹음(살아 있는 것·지운 것)을 지운다(257 U7). 파일이 없어 정리 큐가 필요 없다. 비동의 세션 삭제보다 먼저 지워
-	 * {@code play_session_id}의 SET NULL 갱신을 줄인다. {@code recording} 클래스를 쓰지 않고 SQL로 지운다.
+	 * 연주 녹음(살아 있는 것·지운 것)을 지운다(257 U7). 파일이 없어 정리 큐가 필요 없다.
+	 * {@code recording} 클래스를 쓰지 않고 SQL로 지운다.
 	 */
 	private int deleteRecordings(long userId) {
 		return db.update("DELETE FROM recordings WHERE user_id = ?", userId);
-	}
-
-	/**
-	 * 학습 데이터 사용에 동의하지 않은 세션을 지운다. {@code hits}·{@code reports}는 cascade로 함께 지워지고,
-	 * {@code play_raw_uploads}는 세션 참조만 NULL이 되어 {@code RawLogCleanupWorker}가 다음 주기에 원본 객체를 회수한다.
-	 * 동의 세션은 회원 행(개인정보를 비운 행)만 가리키므로 그대로 둔다.
-	 */
-	private int deleteNonConsentedPlays(long userId) {
-		return db.update("DELETE FROM play_sessions WHERE user_id = ? AND consent = false", userId);
 	}
 
 	/**

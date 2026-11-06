@@ -247,8 +247,7 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
   recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
-  같은 트랜잭션에서 그 회원의 녹음(257번)과 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
-  `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
+  같은 트랜잭션에서 그 회원의 녹음(257번)을 지운다. 연주 세션은 동의 여부와 관계없이 `withdrawal.WithdrawnPlayCleanup`이 1분 주기로 지운다(229, hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어 `RawLogCleanupWorker`가 객체를 회수). 남는 것은 MLflow 보정 기록의 익명 집계뿐이다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
@@ -436,6 +435,8 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V37 | `V37__add_recommendation_r3.sql` | 곡 추천 R3: 추천 학습 동의, 후보 저장, AI 배치가 읽는 가명 뷰와 `recommend_export_reader` 역할 | 곡 추천 R3 |
 | V38 | `V38__add_song_metadata.sql` | 곡 추천용 공용 곡 메타데이터 `song_metadata`(값 목록·개수 CHECK)와 AI 배치 뷰 `recommend_song_meta_v`. 값은 카탈로그 `meta`에서 앱 시작 때 넣는다 | -255 |
 | V39 | `V39__create_telemetry_session_conditions.sql` | 측정 세션 실험 조건 `telemetry_session_conditions`. `(user_id, session_id)` PK, 7개 조건 열(`firmware_0`·`firmware_1`·`dongle_firmware`·`link_mask` 0~15·`haptic_enable`·`sensor_mount` `GRIP_FRONT`/`BENCH`·`app_build`·`note` 200자)과 `received_at`. FK·보관 정책 없음 | -259 |
+| V40 | `V40__add_recommendation_drill.sql` | 연습 추천: 노출 기록 `context`에 `DRILL` 허용 |
+| V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
 
 규칙:
 
@@ -718,7 +719,7 @@ V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 fa
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258)·`telemetry_session_conditions`(259) 삭제,
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`telemetry_events`(258)·`telemetry_session_conditions`(259) 삭제,
   `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
@@ -1287,7 +1288,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
 - 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡 제외, 격자 없는 곡 포함, 특징 없는 곡은 빈 결과, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
 
-### 연습 추천 (`context=DRILL`, V38, `DrillPlanner`)
+### 연습 추천 (`context=DRILL`, V40, `DrillPlanner`)
 
 `GET /api/v1/songs/recommendations?context=DRILL&playId=&size=` (Bearer 인증). 그 연주의 약점에 맞는 공용 곡을 약점 종류마다 하나씩, 최대 3개 돌려준다. `playId`는 필수이고(없으면 400) 본인 연주만 된다(404 `PLAY_NOT_FOUND`). 약점이 없거나 분석 전·실패면 200과 빈 `items`다. AI 서버를 부르지 않는다.
 
@@ -1335,7 +1336,7 @@ AI 약점 분석 임계값 보정 배치가 원본 테이블 대신 읽는 읽�
 
 - `consent = true`, `mode`가 RHYTHM/SHEET인 세션만. 타격(`hits`)이 없는 세션은 행이 없다.
 - `users.role = 'ADMIN'`인 회원(팀원)의 세션은 뺀다. 팀원은 운영 `ADMIN_EMAILS`에 등록해 다음 로그인부터 ADMIN이 된다.
-- 탈퇴 회원의 동의 세션은 포함한다. 탈퇴 시 `consent=true` 세션을 남기는 목적이 분석 활용이다.
+- 탈퇴 회원의 세션은 뺀다(V41). 세션 원본은 탈퇴 뒤 삭제되고, 이미 보정 기록에 반영된 집계만 남는다.
 - 위 조건을 만족하는 세션 중 회원별 최근 10개(`ended_at` 내림차순). 회원 ID는 순위 계산에만 쓰고 내보내지 않는다.
 
 열(이 순서): `session_key`, `mode`, `input_source`, `song_ref`, `song_origin`, `perfect_ms`, `good_ms`, `difficulty`,
