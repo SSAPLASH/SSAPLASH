@@ -439,6 +439,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
 | V42 | `V42__recommend_interactions_consented_plays.sql` | 추천 학습 입력에서 `consent=false` 세션 제외. 열은 그대로 |
 | V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
+| V44 | `V44__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
 
 규칙:
 
@@ -1493,10 +1494,10 @@ AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 �
 | `POST /internal/v1/recommend-candidates` | 워커 토큰. 후보 적재. 응답 `{ accepted, droppedUnknown, droppedNoConsent }` |
 | `GET /internal/v1/recommend-candidates/status` | 워커 토큰. `{ modelVersion, generatedAt, usersWithCandidates }` |
 
-- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
+- **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
 - **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
-- **읽기 뷰(V37, V42):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
-- **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
+- **읽기 뷰(V37, V42, V44):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할은 서버에서 만든다.
+- **`user_key`:** 동의할 때 만드는 무작위 16진수 32자(`recommendation_user_keys`). `user_id`에서 계산되지 않고, 대응표는 뷰가 소유자 권한으로만 읽는다. 배치 계정은 표를 읽지 못한다. 철회·탈퇴하면 지우고, 다시 동의하면 새 키가 된다. BE는 표로 사용자를 찾을 수 있어 익명이 아니라 가명이다.
 - **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
 - **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다. 철회는 판 검사를 하지 않아 옛 판 화면에서도 된다. 적재는 동의 행과 회원 행을 잠가 철회·탈퇴 뒤에 후보가 남지 않게 한다.
 - **보관:** 후보는 생성 후 `RECOMMEND_R3_MAX_AGE_DAYS`(7일)가 지나면 서빙에 쓰지 않고, `RecommendationCandidateRetention`이 한 시간마다 지운다. 실패하면 다음 주기에 다시 지운다.
