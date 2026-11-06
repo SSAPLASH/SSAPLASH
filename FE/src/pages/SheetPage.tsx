@@ -297,7 +297,7 @@ function SheetPageBody() {
       shadowRef.current?.push(judged);
       if (!message) return;
       try {
-        const copy = coachCopy(message);
+        const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
         if (copy) showCoachLine(copy, message.displayMs);
       } catch {
         // 코칭 오류는 무시한다
