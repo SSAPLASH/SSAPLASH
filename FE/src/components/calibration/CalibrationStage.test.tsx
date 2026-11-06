@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CalibrationStage } from './CalibrationStage';
 import { IDLE_CALIBRATION, useLive, type CalibrationSnapshot } from '@/store/liveStore';
-import type { CaptureSnapshot } from '@/engine/HitCapture';
+import { CAPTURE_ORDER, type CaptureSnapshot } from '@/engine/HitCapture';
 
 // zustand v5는 서버 렌더에서 getInitialState()를 읽으므로 초기 상태 객체에 넣고 끝나면 되돌린다
 const restores: Array<() => void> = [];
@@ -28,6 +28,7 @@ function capture(over: Partial<CaptureSnapshot> = {}): CalibrationSnapshot {
   const cap: CaptureSnapshot = {
     phase: 'capturing',
     hands: [0, 1],
+    order: [...CAPTURE_ORDER],
     index: 1,
     target: 'HIHAT',
     counts: [1, 0],
@@ -80,5 +81,17 @@ describe('CalibrationStage 재정렬', () => {
   it('idle이면 아무것도 그리지 않는다', () => {
     putLive({ calibration: IDLE_CALIBRATION });
     expect(renderToStaticMarkup(<CalibrationStage />)).toBe('');
+  });
+});
+
+describe('CalibrationStage 패드 단위 재보정(T9)', () => {
+  it('order가 한 패드면 그 패드만 유령이고 나머지 패드는 숨기지 않는다. 진행 점은 1개', () => {
+    putLive({ calibration: capture({ order: ['HIHAT'], index: 0, target: 'HIHAT', counts: [0, 0], captured: {} }) });
+    const html = renderToStaticMarkup(<CalibrationStage />);
+    expect(html).toContain('>스네어<');
+    expect(html).toContain('>라이드<');
+    expect(html).toContain('drum-pad-ghost');
+    expect(html).toContain('0 / 1 패드 완료');
+    expect(html).toContain('하이햇을 양손으로 2번씩 쳐 주세요');
   });
 });

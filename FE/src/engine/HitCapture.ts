@@ -35,6 +35,8 @@ export interface CaptureSnapshot {
   phase: CapturePhase;
   /** 보정 대상 손 */
   hands: StickId[];
+  /** 이번 세션이 받는 패드 순서(전체 보정은 CAPTURE_ORDER, 패드 단위 재보정은 그 패드만) */
+  order: PadId[];
   /** order 안의 현재 위치 */
   index: number;
   /** 지금 치라고 하는 패드. idle·done이면 null */
@@ -55,6 +57,7 @@ export class HitCapture {
   private opts: HitCaptureOptions;
   private phase: CapturePhase = 'idle';
   private hands: StickId[] = [];
+  private order: readonly PadId[] = [];
   private index = 0;
   private samples: [Pose[], Pose[]] = [[], []];
   private captured: CaptureSnapshot['captured'] = {};
@@ -76,8 +79,9 @@ export class HitCapture {
     return {
       phase: this.phase,
       hands: [...this.hands],
+      order: [...this.order],
       index: this.index,
-      target: this.phase === 'capturing' ? this.opts.order[this.index] : null,
+      target: this.phase === 'capturing' ? this.order[this.index] : null,
       counts: [this.samples[0].length, this.samples[1].length],
       captured: { ...this.captured },
       warning: this.warning,
@@ -90,21 +94,25 @@ export class HitCapture {
     for (const l of this.listeners) l(s);
   }
 
-  /** 보정 시작. hands가 비면 바로 done(아무것도 안 잡힘) */
-  start(hands: StickId[]): void {
+  /**
+   * 보정 시작. order를 주면 그 패드들만(패드 단위 재보정, 후속 T9), 없으면 옵션의 전체 순서.
+   * hands나 order가 비면 바로 done(아무것도 안 잡힘)
+   */
+  start(hands: StickId[], order?: readonly PadId[]): void {
     this.hands = [...new Set(hands)].sort() as StickId[];
+    this.order = order ? order.filter((p) => this.opts.order.includes(p)) : this.opts.order;
     this.index = 0;
     this.samples = [[], []];
     this.captured = {};
     this.warning = null;
     this.lastAccepted = null;
-    this.phase = this.hands.length && this.opts.order.length ? 'capturing' : 'done';
+    this.phase = this.hands.length && this.order.length ? 'capturing' : 'done';
     this.notify();
   }
 
-  /** 처음부터 다시(버튼 보정·연결 끊김 복구). 손 목록은 유지 */
+  /** 처음부터 다시(버튼 보정·연결 끊김 복구). 손 목록·패드 순서는 유지 */
   restart(): void {
-    this.start(this.hands);
+    this.start(this.hands, this.order);
   }
 
   /** 보정 중 손이 새로 붙었다: 대상에 넣고 현재 패드부터 받는다. 이미 끝난 패드는 그 손에 대해 비어 있다(건너뜀) */
@@ -132,7 +140,7 @@ export class HitCapture {
 
   /** 특정 패드를 다시: 그 패드의 모든 손 결과를 지우고 index를 그 패드로 */
   redo(pad: PadId): void {
-    const i = this.opts.order.indexOf(pad);
+    const i = this.order.indexOf(pad);
     if (i < 0) return;
     delete this.captured[pad];
     this.index = i;
@@ -148,7 +156,7 @@ export class HitCapture {
    */
   onHit(stickId: StickId, pose: Pose, now: number = performance.now()): boolean {
     if (this.phase !== 'capturing' || !this.hands.includes(stickId)) return false;
-    const target = this.opts.order[this.index];
+    const target = this.order[this.index];
     const ring = this.samples[stickId];
     if (ring.length >= this.opts.hitsPerPad) return false;
     ring.push({ pitch: pose.pitch, yaw: pose.yaw });
@@ -182,11 +190,11 @@ export class HitCapture {
 
   /** 대상 손 전부가 현재 패드를 채웠으면 다음 패드로. 마지막이면 done */
   private advanceIfFilled(): void {
-    const target = this.opts.order[this.index];
+    const target = this.order[this.index];
     const filled = this.hands.every((h) => this.captured[target]?.[h] !== undefined);
     if (!filled) return;
     this.samples = [[], []];
-    if (this.index + 1 >= this.opts.order.length) {
+    if (this.index + 1 >= this.order.length) {
       this.phase = 'done';
     } else {
       this.index += 1;
@@ -201,7 +209,7 @@ export class HitCapture {
     const out: HandAnchors = [null, null];
     for (const h of this.hands) {
       const set: HandAnchorSet = {};
-      for (const pad of this.opts.order) {
+      for (const pad of this.order) {
         const a = this.captured[pad]?.[h];
         if (a) set[pad] = a;
       }
@@ -212,7 +220,7 @@ export class HitCapture {
 
   /** 끝난 패드 목록(어느 손이든 앵커가 있는 패드) */
   completedPads(): PadId[] {
-    return this.opts.order.filter((pad) => {
+    return this.order.filter((pad) => {
       const slot = this.captured[pad];
       return !!slot && this.hands.every((h) => slot[h] !== undefined);
     });

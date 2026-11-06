@@ -308,3 +308,31 @@ describe('스네어 재정렬', () => {
     expect(useLive.getState().calibration.mode).toBe('capture');
   });
 });
+
+describe('패드 단위 재보정(T9)', () => {
+  it('startCapture([pad])는 그 패드만 받고, 완료 시 그 손들의 그 패드 앵커만 바꾸며 나머지는 유지한다', () => {
+    useSettings.setState({
+      stickAnchors: [
+        { SNARE: anchor('SNARE', -20, -10), HIHAT: anchor('HIHAT', -5, -40) },
+        { SNARE: anchor('SNARE', -20, 10), HIHAT: anchor('HIHAT', -5, -20) },
+      ],
+    });
+    calibrationSession.startCapture(['HIHAT']);
+    expect(useLive.getState().calibration.capture).toMatchObject({ target: 'HIHAT', order: ['HIHAT'] });
+    expect(clears().map((s) => s.stickId)).toEqual([0, 1]);
+    twice(0, 0, -30);
+    twice(1, 0, -25);
+    const s = useSettings.getState();
+    expect(useLive.getState().calibration.mode).toBe('idle');
+    expect(s.stickAnchors[0]?.SNARE).toMatchObject({ pitch: -20, yaw: -10 });
+    expect(s.stickAnchors[0]?.HIHAT?.yaw).toBeCloseTo(-29.5);
+    expect(s.stickAnchors[1]?.HIHAT?.yaw).toBeCloseTo(-24.5);
+    expect(s.stickAnchors[1]?.SNARE?.yaw).toBe(10);
+    // 반경은 합친 집합으로 다시 계산돼 하한 이상
+    expect(s.stickAnchors[0]?.HIHAT?.radius).toBeGreaterThanOrEqual(15);
+    // 배치는 이번에 친 하이햇만 옮기고 나머지는 현재 배치 그대로
+    expect(s.kitLayout.SNARE).toEqual(DEFAULT_KIT_LAYOUT.SNARE);
+    expect(s.kitLayout.HIHAT).not.toEqual(DEFAULT_KIT_LAYOUT.HIHAT);
+    expect(deps.setSoundOnHit).toHaveBeenLastCalledWith(true);
+  });
+});

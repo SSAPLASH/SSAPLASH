@@ -116,7 +116,7 @@ describe('SetupPage ② 드럼 위치 보정(PLAY-004 4-5)', () => {
       connected: [true, true],
       calibration: {
         mode: 'capture',
-        capture: { phase: 'capturing', hands: [0, 1], index: 0, target: 'SNARE', counts: [0, 0], captured: {}, warning: null, lastAccepted: null },
+        capture: { phase: 'capturing', hands: [0, 1], order: ['SNARE', 'HIHAT'], index: 0, target: 'SNARE', counts: [0, 0], captured: {}, warning: null, lastAccepted: null },
         realign: null,
         hands: [0, 1],
       },
@@ -124,5 +124,14 @@ describe('SetupPage ② 드럼 위치 보정(PLAY-004 4-5)', () => {
     const html = await renderSetup();
     expect(html).toContain('cal-stage-capture');
     expect(html).toContain('스네어를 양손으로 2번씩 쳐 주세요');
+  });
+});
+
+describe('SetupPage 패드 단위 재보정 버튼(T9)', () => {
+  it('센서 모드에서 드럼 배치 카드에 [이 드럼 다시 치기]가 있고, 키보드만이면 없다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null] });
+    expect(await renderSetup()).toContain('>이 드럼 다시 치기</button>');
+    putSettings({ sensorKind: 'none' });
+    expect(await renderSetup()).not.toContain('>이 드럼 다시 치기</button>');
   });
 });
