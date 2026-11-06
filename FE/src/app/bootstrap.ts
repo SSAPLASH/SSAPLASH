@@ -12,15 +12,16 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
-import type { ResolvedHit, SensorId } from '@/domain/events';
+import type { ResolvedHit, SensorId, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import { layoutToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kitJudge';
+import { calibrationSession } from './calibrationSession';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { smoothBattery } from '@/domain/stickStatus';
 import { devicesReady, pedalRequired } from '@/domain/pedalStatus';
-import type { CalibrationProfile, YawDriftStatus } from '@/domain/calibration';
+import type { CalibrationProfile, PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';
 
 let currentSensor: SensorId = 'none';
@@ -52,13 +53,16 @@ function applySensorOptions(): void {
   desc.applyTuning?.(activeInstance, useSettings.getState().tuning);
 }
 
-/** 현재 설정에서 유도한 판정 프로필(설계 D1) */
-function currentProfile(): CalibrationProfile {
+/** 현재 설정에서 유도한 손별 판정 프로필(PLAY-004 D1). 보정 안 된 손은 3D 모델 기본 앵커 */
+function currentProfiles(): [CalibrationProfile, CalibrationProfile] {
   const s = useSettings.getState();
-  return layoutToProfile(s.kitLayout, s.tuning.angleRange, {
-    maxRadiusDeg: s.tuning.maxRadiusDeg,
-    radiusFactor: s.tuning.radiusFactor,
-  });
+  return [anchorsToProfile(s.stickAnchors[0], s.tuning, 0), anchorsToProfile(s.stickAnchors[1], s.tuning, 1)];
+}
+
+/** 그 손에 현재 프로필을 보낸다. 보정 중에는 표를 비워 둬야 하므로 보내지 않는다(D6) */
+function pushTable(stickId: StickId, force = false): void {
+  if (calibrationSession.currentMode === 'capture') return;
+  padTableSync.push(currentProfiles()[stickId], { stickId, force });
 }
 
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
@@ -201,8 +205,15 @@ function startTelemetry(): void {
 export function bootstrapInput(): void {
   // 키보드 매핑은 고정 상수라 설정 구독 밖에서 한 번만 넘긴다
   inputManager.setKeyMap(KEY_MAP);
-  // 패드 표 적용 상태를 liveStore로 옮긴다(input → store 직접 import 금지라 콜백 주입)
-  padTableSync.onStatus((st) => useLive.setState({ padTable: st }));
+  // 손별 패드 표 적용 상태를 liveStore로 옮긴다(input → store 직접 import 금지라 콜백 주입)
+  padTableSync.onStatus((stickId, st) =>
+    useLive.setState((s) => {
+      const arr: [PadTableStatus | null, PadTableStatus | null] = [s.padTable[0], s.padTable[1]];
+      arr[stickId] = st;
+      return { padTable: arr };
+    }),
+  );
+  calibrationSession.bind({ setSoundOnHit, pushTable: (stickId, force) => pushTable(stickId, force) });
   // 방위각 드리프트 보정 상태도 같은 방식으로 스틱별로 옮긴다
   yawDriftMonitor.onStatus((stickId, st) =>
     useLive.setState((s) => {
@@ -211,8 +222,12 @@ export function bootstrapInput(): void {
       return { yawDrift: arr };
     }),
   );
-  // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다
-  inputManager.onResetPose(() => yawDriftMonitor.reset());
+  // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다.
+  // 스틱 버튼 보정(0x22)은 세션이 처리한다: 보정 중이면 처음부터, 아니면 그 손 재정렬 필요
+  inputManager.onResetPose((source, stickId) => {
+    yawDriftMonitor.reset(stickId ?? undefined);
+    calibrationSession.onResetPose(source, stickId);
+  });
 
   // 저장된 sensorKind가 등록되지 않은 id(제거된 소스, 다른 PC에서 복사한 설정)면 'none'으로 되돌린다(R6)
   if (!sensorRegistry.isKnown(useSettings.getState().sensorKind)) useSettings.setState({ sensorKind: 'none' });
@@ -222,10 +237,11 @@ export function bootstrapInput(): void {
     const s = useSettings.getState();
     keyboardSource.setKeys(keyboardKeys());
     applySensorOptions();
-    // 튜닝은 다음 타격부터 반영된다. 판정 프로필은 배치에서 유도(설계 D1): 배치·각도 범위·반경 튜닝이 바뀔 때마다 다시 만든다.
-    const profile = currentProfile();
-    inputManager.setProfile(profile);
-    padTableSync.push(profile);
+    // 튜닝은 다음 타격부터 반영된다. 판정 프로필은 손별 앵커에서 유도(PLAY-004 D1): 앵커·반경 튜닝이 바뀔 때마다 다시 만들고
+    // 연결된 손마다 보낸다(같은 표면 padTableSync가 생략한다)
+    inputManager.setProfiles(currentProfiles());
+    const live = useLive.getState();
+    for (const i of [0, 1] as StickId[]) if (live.connected[i]) pushTable(i);
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
@@ -268,20 +284,31 @@ export function bootstrapInput(): void {
     }
     if (connected) {
       if (unconfigured === true) {
-        // 비트 5(설정 전): 그 손에만 패드 표를 강제로 보내고 방위각 오프셋을 0으로 맞춘다. 1초 쿨다운(D5)
+        // 비트 5(설정 전): 그 손에만 패드 표를 강제로 보내고 방위각 오프셋을 0으로 맞춘다. 1초 쿨다운(D5).
+        // 스틱이 다시 켜져 방위각 기준이 사라졌으므로, 그 손에 앵커가 있으면 스네어 재정렬이 필요하다(PLAY-004 4-2)
         const now = performance.now();
         if (shouldResend(lastResendAt[stickId], now)) {
           lastResendAt[stickId] = now;
-          padTableSync.push(currentProfile(), { stickId, force: true });
+          pushTable(stickId, true);
           yawDriftMonitor.onConnected(stickId);
+          if (useSettings.getState().stickAnchors[stickId] && calibrationSession.currentMode !== 'capture') {
+            useLive.setState((s) => {
+              const r: [boolean, boolean] = [s.realignNeeded[0], s.realignNeeded[1]];
+              r[stickId] = true;
+              return { realignNeeded: r };
+            });
+          }
         }
       } else if (!wasConnected) {
         // 새로 붙은 손에만(ROUTE) 현재 표를 보낸다 — 프로토콜 5장 "연결할 때마다 설정 재전송". 포트를 닫았다 연 뒤 첫 전송만 나가고
         // 그 손에 같은 표를 이미 보냈으면 무동작(해시는 손별). 다른 손에는 가지 않는다.
         // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③)
-        padTableSync.push(currentProfile(), { stickId });
+        pushTable(stickId);
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
       }
+      if (!wasConnected) calibrationSession.onHandConnected(stickId);
+    } else if (wasConnected) {
+      calibrationSession.onHandDisconnected(stickId);
     }
     // 기준 자세를 잡은 뒤 연결이 끊기면 재연결 때 다시 맞추라고 안내한다(강제하지 않음)
     if (!connected && wasConnected && live.referenceSetAt !== null) useLive.setState({ referenceStale: true });
@@ -324,6 +351,8 @@ export function bootstrapInput(): void {
     useLive.setState({ pose: p });
   });
   inputManager.onHit((hit: ResolvedHit) => {
+    // 보정·재정렬 중인 손의 타격은 세션이 가로챈다(소리는 목표 패드로, 판정·텔레메트리 없음)
+    if (calibrationSession.intercept(hit)) return;
     if (soundOnHit && hit.pad) {
       // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
@@ -335,7 +364,7 @@ export function bootstrapInput(): void {
     // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
-    if (isSensorSource(hit.source)) yawDriftMonitor.observe(hit, currentProfile());
+    if (isSensorSource(hit.source) && hit.stickId !== null) yawDriftMonitor.observe(hit, inputManager.profileFor(hit.stickId));
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);

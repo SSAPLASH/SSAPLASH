@@ -155,3 +155,23 @@ describe('DisconnectNotice 페달', () => {
     expect(html).not.toContain('stick-dot off');
   });
 });
+
+describe('DisconnectNotice 재정렬 프롬프트(PLAY-004 D12)', () => {
+  const reconnected: ReconnectInfo = { status: 'reconnected', attempt: 0, max: 3 };
+  it('reconnected + realign이면 「3초 뒤」 대신 스네어 프롬프트와 [건너뛰기]', () => {
+    const html = renderToStaticMarkup(
+      <DisconnectNotice left right status={reconnected} onExit={noop} realign={{ hands: [1], done: [false, false], onSkip: noop }} />,
+    );
+    expect(html).toContain('재연결 성공!');
+    expect(html).toContain('오른손으로 스네어를 한 번 쳐 주세요');
+    expect(html).toContain('건너뛰기');
+    expect(html).not.toContain('3초 뒤 이어서 연주해요');
+    expect(html).toContain('realign-prompt card');
+  });
+  it('reconnected가 아니면 realign을 줘도 프롬프트가 없다', () => {
+    const html = renderToStaticMarkup(
+      <DisconnectNotice left={false} right status={idle} onExit={noop} realign={{ hands: [1], done: [false, false], onSkip: noop }} />,
+    );
+    expect(html).not.toContain('realign-prompt');
+  });
+});

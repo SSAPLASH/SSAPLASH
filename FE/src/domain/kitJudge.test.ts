@@ -1,15 +1,19 @@
-// 배치 → 판정 프로필 유도 검증: 중심·반경 변환, 이웃 상한, 킥 제외.
+// 손별 앵커 → 판정 프로필·표시 배치 유도 검증(PLAY-004 D1·D2·D4).
 import { describe, expect, it } from 'vitest';
-import { layoutToProfile } from './kitJudge';
-import { DEFAULT_KIT_LAYOUT, type KitLayout } from './kitLayout';
-import { DEFAULT_ANGLE_RANGE, screenRadiusToDeg, radiusToScreen } from './kitMapping';
-import { STICK_PADS } from './pads';
+import { anchorsToLayout, anchorsToProfile } from './kitJudge';
+import { defaultHandAnchors } from './kitModel';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
+import { DEFAULT_ANGLE_RANGE, poseToScreen, screenRadiusToDeg, radiusToScreen } from './kitMapping';
+import { STICK_PADS, type PadId } from './pads';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
+import type { HandAnchorSet, PadAnchor } from './calibration';
 
-const OPTS = {
-  maxRadiusDeg: DEFAULT_SENSOR_TUNING.maxRadiusDeg,
-  radiusFactor: DEFAULT_SENSOR_TUNING.radiusFactor,
-  createdAt: '2026-10-22T00:00:00.000Z',
+const anchor = (pad: PadId, pitch: number, yaw: number): PadAnchor => ({ pad, pitch, yaw, radius: 0, samples: 2, spread: 1 });
+
+const hand: HandAnchorSet = {
+  SNARE: anchor('SNARE', -20, 0),
+  HIHAT: anchor('HIHAT', -5, -30),
+  RIDE: anchor('RIDE', 20, 30),
 };
 
 describe('screenRadiusToDeg', () => {
@@ -19,59 +23,63 @@ describe('screenRadiusToDeg', () => {
   });
 });
 
-describe('layoutToProfile', () => {
-  it('화면 중앙(0.5, 0.5)은 pose (0, 0)', () => {
-    const layout: KitLayout = { ...DEFAULT_KIT_LAYOUT, SNARE: { x: 0.5, y: 0.5, r: 0.05 } };
-    const a = layoutToProfile(layout, DEFAULT_ANGLE_RANGE, OPTS).anchors.SNARE!;
-    expect(a.pitch).toBeCloseTo(0);
-    expect(a.yaw).toBeCloseTo(0);
+describe('anchorsToProfile', () => {
+  it('보정한 손: 앵커 중심은 그대로, 반경은 튜닝으로 다시 계산한다(source hits)', () => {
+    const p = anchorsToProfile(hand, DEFAULT_SENSOR_TUNING, 0, '2026-11-06T00:00:00.000Z');
+    expect(p).toMatchObject({ id: 'hits-0', source: 'hits', createdAt: '2026-11-06T00:00:00.000Z', maxRadiusDeg: 35 });
+    expect(p.anchors.SNARE).toMatchObject({ pitch: -20, yaw: 0, samples: 2 });
+    // 스네어 이웃 최소 각도 ≈ 33.5°(하이햇) × 0.6 ≈ 20 → 15~35 안
+    expect(p.anchors.SNARE!.radius).toBeGreaterThan(15);
+    expect(p.anchors.SNARE!.radius).toBeLessThan(35);
+    expect(Object.keys(p.anchors).sort()).toEqual(['HIHAT', 'RIDE', 'SNARE']);
   });
 
-  it('기본 배치 SNARE(0.42, 0.68) 중심 변환', () => {
-    const a = layoutToProfile(DEFAULT_KIT_LAYOUT, DEFAULT_ANGLE_RANGE, OPTS).anchors.SNARE!;
-    expect(a.yaw).toBeCloseTo((0.42 - 0.5) * 120); // -9.6
-    expect(a.pitch).toBeCloseTo(-(0.68 - 0.5) * 70); // -12.6
+  it('반경 하한·상한·계수가 튜닝을 따른다', () => {
+    const p = anchorsToProfile(hand, { ...DEFAULT_SENSOR_TUNING, radiusFactor: 0.3, minRadiusDeg: 12, maxRadiusDeg: 14 }, 1);
+    for (const a of Object.values(p.anchors)) {
+      expect(a!.radius).toBeGreaterThanOrEqual(12);
+      expect(a!.radius).toBeLessThanOrEqual(14);
+    }
   });
 
-  it('반경은 r을 각도로 환산한 값(이웃 상한이 더 크면)', () => {
-    const layout: KitLayout = { ...DEFAULT_KIT_LAYOUT, SNARE: { x: 0.5, y: 0.5, r: 0.05 } };
-    const a = layoutToProfile(layout, DEFAULT_ANGLE_RANGE, { ...OPTS, radiusFactor: 0.8 }).anchors.SNARE!;
-    expect(a.radius).toBeCloseTo(screenRadiusToDeg(0.05)); // 6°
-  });
-
-  it('이웃 상한이 r보다 작으면 작은 쪽을 쓴다', () => {
-    const layout: KitLayout = {
-      ...DEFAULT_KIT_LAYOUT,
-      SNARE: { x: 0.5, y: 0.5, r: 0.2 },
-      SMALL_TOM: { x: 0.55, y: 0.5, r: 0.2 },
-    };
-    const p = layoutToProfile(layout, DEFAULT_ANGLE_RANGE, OPTS);
-    const dist = 0.05 * 120; // 6°
-    expect(p.anchors.SNARE!.radius).toBeLessThan(screenRadiusToDeg(0.2));
-    expect(p.anchors.SNARE!.radius).toBeCloseTo(dist * OPTS.radiusFactor);
-  });
-
-  it('반경 상한(maxRadiusDeg)도 넘지 않는다', () => {
-    const layout: KitLayout = { ...DEFAULT_KIT_LAYOUT, SNARE: { x: 0.42, y: 0.68, r: 0.4 } };
-    const a = layoutToProfile(layout, DEFAULT_ANGLE_RANGE, { ...OPTS, maxRadiusDeg: 8 }).anchors.SNARE!;
-    expect(a.radius).toBeLessThanOrEqual(8);
-  });
-
-  it('킥은 제외하고 스틱 패드만 담는다', () => {
-    const p = layoutToProfile(DEFAULT_KIT_LAYOUT, DEFAULT_ANGLE_RANGE, OPTS);
-    expect(p.anchors.KICK).toBeUndefined();
+  it('보정 안 된 손(null)은 3D 모델 기본 앵커(source model)로 스틱 패드 7개를 채운다', () => {
+    const p = anchorsToProfile(null, DEFAULT_SENSOR_TUNING, 1);
+    expect(p.source).toBe('model');
+    expect(p.id).toBe('model-1');
     expect(Object.keys(p.anchors).sort()).toEqual([...STICK_PADS].sort());
-    expect(Object.keys(p.anchors)).toHaveLength(7);
+    expect(p.anchors.KICK).toBeUndefined();
+    const model = defaultHandAnchors()[1]!;
+    expect(p.anchors.SNARE!.yaw).toBeCloseTo(model.SNARE!.yaw);
+  });
+});
+
+describe('anchorsToLayout', () => {
+  it('한 손만 있으면 그 손의 방향을 화면에 투영한다', () => {
+    const l = anchorsToLayout([hand, null], DEFAULT_KIT_LAYOUT);
+    const s = poseToScreen({ pitch: -20, yaw: 0 }, DEFAULT_ANGLE_RANGE);
+    expect(l.SNARE.x).toBeCloseTo(s.x);
+    expect(l.SNARE.y).toBeCloseTo(s.y);
   });
 
-  it('pads를 주면 그 패드만 담는다', () => {
-    const p = layoutToProfile(DEFAULT_KIT_LAYOUT, DEFAULT_ANGLE_RANGE, { ...OPTS, pads: ['SNARE', 'HIHAT'] });
-    expect(Object.keys(p.anchors).sort()).toEqual(['HIHAT', 'SNARE']);
+  it('양손이 있으면 벡터 평균 방향이다', () => {
+    const right: HandAnchorSet = { SNARE: anchor('SNARE', -20, 20) };
+    const l = anchorsToLayout([hand, right], DEFAULT_KIT_LAYOUT);
+    const s = poseToScreen({ pitch: -20, yaw: 10 }, DEFAULT_ANGLE_RANGE);
+    expect(l.SNARE.x).toBeCloseTo(s.x, 2);
+    expect(l.SNARE.y).toBeCloseTo(s.y, 2);
   });
 
-  it('메타 필드: samples·spread 0, id·name·source', () => {
-    const p = layoutToProfile(DEFAULT_KIT_LAYOUT, DEFAULT_ANGLE_RANGE, OPTS);
-    expect(p).toMatchObject({ id: 'layout', name: '배치 기반', source: 'layout', audioOffsetMs: 0, createdAt: OPTS.createdAt });
-    expect(p.anchors.SNARE).toMatchObject({ samples: 0, spread: 0 });
+  it('없는 패드와 반지름·페달은 base 값을 유지한다', () => {
+    const l = anchorsToLayout([hand, null], DEFAULT_KIT_LAYOUT);
+    expect(l.CRASH).toEqual(DEFAULT_KIT_LAYOUT.CRASH);
+    expect(l.KICK).toEqual(DEFAULT_KIT_LAYOUT.KICK);
+    expect(l.SNARE.r).toBe(DEFAULT_KIT_LAYOUT.SNARE.r);
+  });
+
+  it('화면 밖 방향은 0.05~0.95로 자른다', () => {
+    const far: HandAnchorSet = { RIDE: anchor('RIDE', 80, 170) };
+    const l = anchorsToLayout([far, null], DEFAULT_KIT_LAYOUT);
+    expect(l.RIDE.x).toBe(0.95);
+    expect(l.RIDE.y).toBe(0.05);
   });
 });
