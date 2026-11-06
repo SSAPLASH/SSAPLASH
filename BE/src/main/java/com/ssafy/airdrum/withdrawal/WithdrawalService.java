@@ -1,5 +1,6 @@
 package com.ssafy.airdrum.withdrawal;
 
+import java.sql.Timestamp;
 import java.time.Clock;
 
 import org.slf4j.Logger;
@@ -68,6 +69,12 @@ public class WithdrawalService {
 		int deletedTelemetryConditions = deleteTelemetryConditions(userId);
 		db.update("DELETE FROM recommendation_items WHERE user_id = ?", userId);
 		db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
+		db.update("DELETE FROM recommendation_user_keys WHERE user_id = ?", userId);
+		// 탈퇴는 철회로 본다. 동의 행을 잠그면 후보 적재와 잠금 순서가 엇갈리므로 이력만 추가한다
+		db.update("""
+				INSERT INTO user_recommendation_consent_history(user_id, agreed, version, recorded_at)
+				SELECT user_id, false, version, ? FROM user_recommendation_consent WHERE user_id = ? AND agreed
+				""", Timestamp.from(clock.instant()), userId);
 		revokeRefreshTokens(userId);
 		events.publishEvent(new UserWithdrawnEvent(userId));
 		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedTelemetry={} deletedTelemetryConditions={}", userId,

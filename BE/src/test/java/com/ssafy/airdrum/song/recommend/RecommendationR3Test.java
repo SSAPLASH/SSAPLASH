@@ -35,8 +35,7 @@ import com.ssafy.airdrum.user.SignupConsentRequest;
 /** R3 운영 연결(설계 문서 부록 C.7): 동의, 읽기 뷰, 적재, 서빙, 철회·탈퇴. */
 @SpringBootTest(properties = { "spring.datasource.hikari.schema=public", "auth.jwt.secret=test-only-jwt-secret-0123456789ab",
 		"auth.refresh-token.store=memory", "chart.worker.credentials=worker1=01234567890123456789012345678901",
-		"recommend.r3.enabled=true", "recommend.r3.rollout-percent=100", "recommend.r3.accepted-model-versions=r3-base-aaaaaaaa",
-		"recommend.r3.key-secret=test-secret" })
+		"recommend.r3.enabled=true", "recommend.r3.rollout-percent=100", "recommend.r3.accepted-model-versions=r3-base-aaaaaaaa" })
 @AutoConfigureMockMvc
 class RecommendationR3Test {
 	static final String MODEL = "r3-base-aaaaaaaa", TOKEN = "Bearer 01234567890123456789012345678901";
@@ -120,8 +119,14 @@ class RecommendationR3Test {
 	private void agree(long id) { consents.save(id, new RecommendationConsentInput(true, "2026-11-05")); }
 	private void disagree(long id) { consents.save(id, new RecommendationConsentInput(false, "2026-11-05")); }
 
+	/** 이 사용자의 가명 키. 없으면 어느 사용자에게도 없는 값이다 */
+	private String key(long id) {
+		var keys = db.queryForList("SELECT user_key FROM recommendation_user_keys WHERE user_id = ?", String.class, id);
+		return keys.isEmpty() ? "f".repeat(31) + "0" : keys.getFirst();
+	}
+
 	private Upload upload(long id, String generatedAt, Long... songIds) {
-		return new Upload("b-1", MODEL, generatedAt, List.of(new UserCandidates(settings.userKey(id), List.of(songIds))));
+		return new Upload("b-1", MODEL, generatedAt, List.of(new UserCandidates(key(id), List.of(songIds))));
 	}
 	private String now() { return Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(); }
 	private int stored(long id) { return db.queryForObject("SELECT count(*) FROM recommendation_candidates WHERE user_id=?", Integer.class, id); }
@@ -166,6 +171,81 @@ class RecommendationR3Test {
 		assertThat(consents.get(user).version()).isEqualTo("r-1");
 	}
 
+	private List<String> history(long id) {
+		return db.queryForList("SELECT agreed::text || ':' || version FROM user_recommendation_consent_history WHERE user_id = ? ORDER BY id", String.class, id);
+	}
+
+	@Test void everyAnswerIsKeptInTheHistory() {
+		agree(user);
+		disagree(user);
+		consents.save(user, new RecommendationConsentInput(true, "r-2"));
+		assertThat(history(user)).containsExactly("true:2026-11-05", "false:2026-11-05", "true:r-2");
+	}
+
+	@Test void withdrawalIsRecordedAsWithdrawingConsent() {
+		agree(user);
+		withdrawal.withdraw(user);
+		assertThat(history(user)).containsExactly("true:2026-11-05", "false:2026-11-05");
+	}
+
+	@Test void withdrawalWithoutConsentAddsNoHistory() {
+		disagree(user);
+		withdrawal.withdraw(user);
+		assertThat(history(user)).containsExactly("false:2026-11-05");
+	}
+
+	@Test void historyIsDeletedOnlyAfterTheRetentionOfWithdrawnConsent() {
+		agree(user);
+		disagree(stranger);
+		var future = Instant.now().plus(java.time.Duration.ofDays(1));
+		assertThat(consents.deleteHistoryBefore(Instant.now().minus(java.time.Duration.ofDays(1)))).isZero();
+		assertThat(consents.deleteHistoryBefore(future)).isEqualTo(1);
+		assertThat(history(stranger)).isEmpty();
+		assertThat(consents.get(stranger).version()).isEqualTo("2026-11-05");
+		assertThat(history(user)).hasSize(1);
+	}
+
+	@Test void withdrawnMembersLoseTheirConsentRowWithTheHistory() {
+		agree(user);
+		withdrawal.withdraw(user);
+		consents.deleteHistoryBefore(Instant.now().plus(java.time.Duration.ofDays(1)));
+		assertThat(history(user)).isEmpty();
+		assertThat(db.queryForObject("SELECT count(*) FROM user_recommendation_consent WHERE user_id = ?", Integer.class, user)).isZero();
+	}
+
+	@Test void agreeingIssuesARandomKeyAndKeepsItWhileAgreed() {
+		agree(user);
+		agree(stranger);
+		String first = key(user);
+		assertThat(first).matches("[0-9a-f]{32}").isNotEqualTo(key(stranger));
+		agree(user);
+		assertThat(key(user)).isEqualTo(first);
+	}
+
+	@Test void withdrawingConsentDeletesTheKeyAndAgreeingAgainGivesANewOne() {
+		agree(user);
+		String first = key(user);
+		disagree(user);
+		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_user_keys WHERE user_id = ?", Integer.class, user)).isZero();
+		agree(user);
+		assertThat(key(user)).isNotEqualTo(first);
+	}
+
+	@Test void uploadWithTheKeyOfAWithdrawnConsentStoresNothing() {
+		agree(user);
+		String old = key(user);
+		disagree(user);
+		var body = new Upload("b-1", MODEL, now(), List.of(new UserCandidates(old, List.of(easy))));
+		assertThat(candidates.upload(body).droppedUnknown()).isEqualTo(1);
+		assertThat(stored(user)).isZero();
+	}
+
+	@Test void withdrawalDeletesTheKey() {
+		agree(user);
+		withdrawal.withdraw(user);
+		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_user_keys WHERE user_id = ?", Integer.class, user)).isZero();
+	}
+
 	@Test void withdrawalDeletesCandidates() {
 		ready(easy);
 		withdrawal.withdraw(user);
@@ -195,12 +275,11 @@ class RecommendationR3Test {
 	@Test void uploadAcceptsConsentedAndDropsOthersWithoutError() {
 		agree(user);
 		var body = new Upload("b-1", MODEL, now(), List.of(
-				new UserCandidates(settings.userKey(user), List.of(easy)),
-				new UserCandidates(settings.userKey(stranger), List.of(easy)),
+				new UserCandidates(key(user), List.of(easy)),
 				new UserCandidates("0".repeat(32), List.of(easy))));
 		var result = candidates.upload(body);
 		assertThat(result.accepted()).isEqualTo(1);
-		assertThat(result.droppedNoConsent()).isEqualTo(1);
+		assertThat(result.droppedNoConsent()).isZero();
 		assertThat(result.droppedUnknown()).isEqualTo(1);
 		assertThat(stored(stranger)).isZero();
 	}
@@ -237,7 +316,7 @@ class RecommendationR3Test {
 	}
 
 	@Test void malformedBodiesAreRejected() {
-		var key = settings.userKey(user);
+		var key = key(user);
 		var bad = List.of(
 				new Upload("", MODEL, now(), List.of()),
 				new Upload("b", MODEL, "어제", List.of()),
@@ -249,7 +328,7 @@ class RecommendationR3Test {
 
 	@Test void apiNeedsTheWorkerTokenAndReturnsCountsOnly() throws Exception {
 		agree(user);
-		String body = "{\"batchId\":\"b-1\",\"modelVersion\":\"" + MODEL + "\",\"generatedAt\":\"" + now() + "\",\"users\":[{\"userKey\":\"" + settings.userKey(user) + "\",\"songIds\":[" + easy + "]}]}";
+		String body = "{\"batchId\":\"b-1\",\"modelVersion\":\"" + MODEL + "\",\"generatedAt\":\"" + now() + "\",\"users\":[{\"userKey\":\"" + key(user) + "\",\"songIds\":[" + easy + "]}]}";
 		mvc.perform(post("/internal/v1/recommend-candidates").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
 		mvc.perform(post("/internal/v1/recommend-candidates").header("Authorization", TOKEN).contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(1)).andExpect(jsonPath("$.droppedUnknown").value(0));
@@ -300,24 +379,19 @@ class RecommendationR3Test {
 		play(user, tooHard, 70, 10, false);
 		play(stranger, mid, 90, 90);
 		tx.executeWithoutResult(s -> {
-			db.queryForObject("SELECT set_config('app.recommend_key_secret', 'test-secret', true)", String.class);
-			String key = settings.userKey(user);
+			String key = key(user);
 			assertThat(db.queryForObject("SELECT count(*) FROM recommend_interactions_v WHERE user_key=? AND song_id=?", Integer.class, key, tooHard)).isZero();
-			assertThat(db.queryForList("SELECT user_key FROM recommend_users_v", String.class)).contains(key).doesNotContain(settings.userKey(stranger));
-			assertThat(db.queryForList("SELECT DISTINCT user_key FROM recommend_interactions_v", String.class)).contains(key).doesNotContain(settings.userKey(stranger));
+			assertThat(db.queryForObject("SELECT count(*) FROM recommend_users_v WHERE user_key=?", Integer.class, key)).isEqualTo(1);
+			assertThat(db.queryForList("SELECT DISTINCT user_key FROM recommend_interactions_v", String.class)).containsExactly(key);
 			assertThat(db.queryForObject("SELECT completed FROM recommend_interactions_v WHERE user_key=? AND song_id=?", Boolean.class, key, mid)).isTrue();
 			assertThat(db.queryForObject("SELECT completed FROM recommend_interactions_v WHERE user_key=? AND song_id=?", Boolean.class, key, easy)).isFalse();
 			assertThat(db.queryForObject("SELECT rhythm_grid FROM recommend_chart_features_v WHERE song_id=?", String.class, mid)).startsWith("{");
-		});
-		tx.executeWithoutResult(s -> {
-			db.queryForObject("SELECT set_config('app.recommend_key_secret', '', true)", String.class);
-			assertThat(db.queryForObject("SELECT count(*) FROM recommend_users_v", Integer.class)).isZero();
 		});
 	}
 
 	@Test void readerRoleCanReadViewsButNotTables() {
 		assertThat(db.queryForObject("SELECT has_table_privilege('recommend_export_reader', 'recommend_users_v', 'SELECT')", Boolean.class)).isTrue();
-		for (String table : List.of("users", "play_sessions", "user_recommendation_consent", "recommendation_candidates"))
+		for (String table : List.of("users", "play_sessions", "user_recommendation_consent", "recommendation_candidates", "recommendation_user_keys", "user_recommendation_consent_history"))
 			assertThat(db.queryForObject("SELECT has_table_privilege('recommend_export_reader', ?, 'SELECT')", Boolean.class, table)).isFalse();
 	}
 }
