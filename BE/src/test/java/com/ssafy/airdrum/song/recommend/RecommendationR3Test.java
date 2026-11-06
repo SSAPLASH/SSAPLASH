@@ -107,12 +107,14 @@ class RecommendationR3Test {
 		return db.queryForObject("SELECT v.id FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?", Long.class, song);
 	}
 
-	private void play(long userId, long song, double accuracy, long seconds) {
+	private void play(long userId, long song, double accuracy, long seconds) { play(userId, song, accuracy, seconds, true); }
+
+	private void play(long userId, long song, double accuracy, long seconds, boolean consent) {
 		Instant end = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 		db.update("""
-				INSERT INTO play_sessions(id,user_id,song_id,chart_version_id,mode,input_source,judgement_context,payload_schema_version,payload_hash,accuracy,started_at,ended_at)
-				VALUES (?,?,?,?, 'RHYTHM','KEYBOARD','{}'::jsonb,1,?,?,?,?)
-				""", UUID.randomUUID(), userId, song, version(song), "a".repeat(64), accuracy, Timestamp.from(end.minusSeconds(seconds)), Timestamp.from(end));
+				INSERT INTO play_sessions(id,user_id,song_id,chart_version_id,mode,input_source,judgement_context,consent,payload_schema_version,payload_hash,accuracy,started_at,ended_at)
+				VALUES (?,?,?,?, 'RHYTHM','KEYBOARD','{}'::jsonb,?,1,?,?,?,?)
+				""", UUID.randomUUID(), userId, song, version(song), consent, "a".repeat(64), accuracy, Timestamp.from(end.minusSeconds(seconds)), Timestamp.from(end));
 	}
 
 	private void agree(long id) { consents.save(id, new RecommendationConsentInput(true, "2026-11-05")); }
@@ -147,6 +149,14 @@ class RecommendationR3Test {
 		assertThat(consents.get(user).agreed()).isFalse();
 	}
 
+	@Test void withdrawingConsentIsAcceptedEvenWithAnOldVersion() {
+		var strict = new RecommendationConsentService(db, java.time.Clock.systemUTC(), "new-version");
+		ready(easy);
+		assertThatThrownBy(() -> strict.save(user, new RecommendationConsentInput(true, "old-version"))).isInstanceOf(com.ssafy.airdrum.common.error.BusinessException.class);
+		assertThat(strict.save(user, new RecommendationConsentInput(false, "old-version")).agreed()).isFalse();
+		assertThat(stored(user)).isZero();
+	}
+
 	@Test void signupCanCarryTheOptionalConsentAndOmittingItKeepsThePreviousAnswer() {
 		db.update("INSERT INTO social_accounts(user_id,provider,provider_user_id) VALUES(?,'GOOGLE',?)", user, "r3-" + user);
 		var data = new com.ssafy.airdrum.user.DataConsentInput(true, "d");
@@ -160,6 +170,24 @@ class RecommendationR3Test {
 		ready(easy);
 		withdrawal.withdraw(user);
 		assertThat(stored(user)).isZero();
+	}
+
+	@Test void uploadAfterWithdrawalStoresNothing() {
+		agree(user);
+		withdrawal.withdraw(user);
+		var result = candidates.upload(upload(user, now(), easy));
+		assertThat(result.accepted()).isZero();
+		assertThat(stored(user)).isZero();
+	}
+
+	@Test void expiredCandidatesAreDeletedAndFreshOnesKept() {
+		agree(user);
+		agree(stranger);
+		candidates.upload(upload(user, Instant.now().minus(java.time.Duration.ofDays(8)).truncatedTo(ChronoUnit.SECONDS).toString(), easy));
+		candidates.upload(upload(stranger, now(), easy));
+		assertThat(candidates.deleteExpired(Instant.now())).isEqualTo(1);
+		assertThat(stored(user)).isZero();
+		assertThat(stored(stranger)).isEqualTo(1);
 	}
 
 	// ---- 적재
@@ -269,10 +297,12 @@ class RecommendationR3Test {
 		disagree(stranger);
 		play(user, mid, 90, 90);
 		play(user, easy, 50, 10);
+		play(user, tooHard, 70, 10, false);
 		play(stranger, mid, 90, 90);
 		tx.executeWithoutResult(s -> {
 			db.queryForObject("SELECT set_config('app.recommend_key_secret', 'test-secret', true)", String.class);
 			String key = settings.userKey(user);
+			assertThat(db.queryForObject("SELECT count(*) FROM recommend_interactions_v WHERE user_key=? AND song_id=?", Integer.class, key, tooHard)).isZero();
 			assertThat(db.queryForList("SELECT user_key FROM recommend_users_v", String.class)).contains(key).doesNotContain(settings.userKey(stranger));
 			assertThat(db.queryForList("SELECT DISTINCT user_key FROM recommend_interactions_v", String.class)).contains(key).doesNotContain(settings.userKey(stranger));
 			assertThat(db.queryForObject("SELECT completed FROM recommend_interactions_v WHERE user_key=? AND song_id=?", Boolean.class, key, mid)).isTrue();

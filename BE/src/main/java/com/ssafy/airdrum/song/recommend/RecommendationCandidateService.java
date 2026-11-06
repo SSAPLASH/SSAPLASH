@@ -45,8 +45,11 @@ public class RecommendationCandidateService {
 		Instant generatedAt = validate(body);
 		if (!settings.accepts(body.modelVersion())) throw new BusinessException(RecommendationErrorCode.MODEL_VERSION_NOT_ACCEPTED);
 
-		// 동의 행을 잠가 적재 중에 철회가 끼어들어 지운 뒤에 후보가 남는 일을 막는다
-		var agreed = new HashSet<>(db.queryForList("SELECT user_id FROM user_recommendation_consent WHERE agreed FOR SHARE", Long.class));
+		// 동의 행과 회원 행을 잠가 적재 중에 철회·탈퇴가 끼어들어 지운 뒤에 후보가 남는 일을 막는다
+		var agreed = new HashSet<>(db.queryForList("""
+				SELECT c.user_id FROM user_recommendation_consent c JOIN users u ON u.id = c.user_id
+				WHERE c.agreed AND u.status = 'ACTIVE' FOR SHARE OF c, u
+				""", Long.class));
 		var idByKey = new HashMap<String, Long>();
 		for (long id : db.queryForList("SELECT id FROM users WHERE status = 'ACTIVE'", Long.class)) idByKey.put(settings.userKey(id), id);
 		var servable = new HashSet<>(db.queryForList("SELECT song_id FROM recommend_songs_v", Long.class));
@@ -91,6 +94,11 @@ public class RecommendationCandidateService {
 
 	private static boolean name(String value) { return value != null && !value.isBlank() && value.length() <= MAX_NAME; }
 	private static BusinessException invalid() { return new BusinessException(RecommendationErrorCode.CANDIDATES_INVALID); }
+
+	/** 보관 기간이 지난 후보를 지우고 지운 행 수를 돌려준다. 서빙의 낡음 기준과 같다. */
+	public int deleteExpired(Instant now) {
+		return db.update("DELETE FROM recommendation_candidates WHERE generated_at < ?", Timestamp.from(now.minus(Duration.ofDays(settings.maxAgeDays()))));
+	}
 
 	/** 가장 최근 배치의 모델과 시각, 후보가 있는 사용자 수(집계만). */
 	@Transactional(readOnly = true)
