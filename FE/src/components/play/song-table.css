@@ -53,6 +53,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 제목 줄: 제목 + 「✦ AI 추천」 라벨, 간격 8. 제목만 줄어든다(Figma SongRow 제목 줄 777:4213) */
+.play-st-titleline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.play-st-titleline .play-st-name {
+  min-width: 0;
+}
+.play-st-ai {
+  flex: none;
+  color: var(--brand-text);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
 .play-st-name {
   color: var(--text-1);
   font-size: 14px;
