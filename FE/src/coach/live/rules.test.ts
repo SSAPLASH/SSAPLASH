@@ -18,6 +18,7 @@ function metrics(over: Partial<WindowMetrics> = {}): WindowMetrics {
     pads: [],
     missInPadWindow: 0,
     padMisses: [],
+    setup: { judged: 0, validCount: 0, meanDelta: null, stdDelta: null, sameSignRatio: null, misses: 0, strayHits: 0 },
     hands: [
       { count: 0, meanVelocity: 0 },
       { count: 0, meanVelocity: 0 },
