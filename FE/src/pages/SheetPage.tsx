@@ -32,6 +32,7 @@ import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
+import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
@@ -163,6 +164,8 @@ function SheetPageBody() {
       : paramStatus === 'none' && !paramLoaded
         ? 'select'
         : 'loading';
+  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
+  const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -476,7 +479,16 @@ function SheetPageBody() {
   }, []);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
-  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
+  const { isResuming } = useReconnectResume({
+    pauseReason,
+    ready,
+    realignPending: realign.pending,
+    setPauseReason,
+    setCountValue,
+    resume,
+    pauseTo,
+    goMs: GO_MS,
+  });
 
   const restart = useCallback(() => {
     const clock = clockRef.current;
@@ -723,6 +735,7 @@ function SheetPageBody() {
           onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
+          realign={realign.info}
           footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
           options={
             <>
@@ -760,6 +773,7 @@ function SheetPageBody() {
         onRestart={restart}
         onLeave={leave}
         returnTo={returnTo}
+        realign={realign.info}
       />
     );
   } else if (countValue !== null) {

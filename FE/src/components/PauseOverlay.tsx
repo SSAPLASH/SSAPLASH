@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReadinessNotice } from '@/components/ReadinessNotice';
 import { DisconnectNotice } from '@/components/stick/DisconnectNotice';
+import type { RealignInfo } from '@/components/calibration/RealignPrompt';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
@@ -27,9 +28,11 @@ interface Props {
   returnTo: string;
   /** 멈춘 곡 시각(ms). 지금 화면에는 쓰지 않지만 호출부 계약을 유지한다 */
   pausedAtMs?: number;
+  /** reconnected 카드에 끼울 스네어 재정렬 프롬프트(PLAY-004 D12). 없으면 「3초 뒤 이어서 연주해요」 */
+  realign?: RealignInfo | null;
 }
 
-export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo }: Props) {
+export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo, realign }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
@@ -70,6 +73,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
             onReconnect={available ? () => void reconnect() : undefined}
             onOpenSetup={() => navigate('/setup', { state: { returnTo } })}
             primaryRef={primaryRef}
+            realign={realign}
           />
         ) : (
           <div className="play-pause motion-dialog" role="dialog" aria-modal="true" aria-labelledby="play-pause-title">

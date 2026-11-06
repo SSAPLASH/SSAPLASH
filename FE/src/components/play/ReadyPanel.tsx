@@ -12,6 +12,7 @@ import { SongCover } from '@/components/song/SongCover';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
 import { StaffLegend } from './StaffLegend';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
@@ -50,6 +51,8 @@ export interface ReadyPanelProps {
   options?: ReactNode;
   /** true면 오른쪽 열 맨 위에 「악보 읽는 법」 카드를 보인다(악보 연습) */
   staffLegend?: boolean;
+  /** 스네어 재정렬이 걸려 있으면 「보정」 행에 프롬프트를 보인다(PLAY-004 D11). 준비 완료·[시작]은 막지 않는다 */
+  realign?: RealignInfo | null;
   /** 두 열 아래 전체 폭에 그대로 넣는 슬롯(비슷한 곡 줄, 설계 COACH-004-similar-songs D9) */
   footer?: ReactNode;
 }
@@ -95,6 +98,7 @@ export function ReadyPanel({
   onStart,
   options,
   staffLegend = false,
+  realign,
   footer,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
@@ -167,7 +171,11 @@ export function ReadyPanel({
                 <Dot ok={calOk} />
                 <span className="play-rp-row-label">보정</span>
                 <span className="play-rp-row-value">
-                  <span className={calOk ? '' : 'need'}>{calOk ? '완료' : '필요'}</span>
+                  {calOk && realign ? (
+                    <RealignPrompt hands={realign.hands} done={realign.done} variant="row" onSkip={realign.onSkip} />
+                  ) : (
+                    <span className={calOk ? '' : 'need'}>{calOk ? '완료' : '필요'}</span>
+                  )}
                 </span>
               </li>
               <li className="play-rp-row">

@@ -1,6 +1,6 @@
-// 캘리브레이션 프로필과 기준선 패드 판정(PLAY-03).
+// 캘리브레이션 프로필과 기준선 패드 판정(PLAY-003·PLAY-004).
 // 패드마다 "중심 자세(앵커)"를 잡고, 경계는 앵커 간 거리로 자동 계산한다.
-// 하드웨어가 오면 자세의 출처만 IMU로 바뀌고 이 파일은 그대로 쓴다.
+// 거리·평균은 방향 벡터(단위 벡터)로 계산해 방위각 ±180° 끊김이 없고 펌웨어 판정과 같은 기준이다(PLAY-004 D3).
 import type { PadId } from './pads';
 import type { Pose, SensorId, StickId } from './events';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
@@ -76,8 +76,12 @@ export interface CalibrationProfile {
   audioOffsetMs: number;
 }
 
-/** 캘리브레이션 캡처 방식: 홀딩(기획발표) / 2타(공통 명세서). D7 */
-export type CaptureMode = 'hold' | 'hits';
+/**
+ * 손별 앵커 집합. 인덱스 = StickId(0 왼손, 1 오른손). null = 그 손은 보정 안 됨(PLAY-004 D1).
+ * 손별 앵커 7개가 곧 스틱에 보내는 SET_PAD_TABLE 한 장이고 FE 판정 프로필도 같은 값이다
+ */
+export type HandAnchorSet = Partial<Record<PadId, PadAnchor>>;
+export type HandAnchors = [HandAnchorSet | null, HandAnchorSet | null];
 
 export function createEmptyProfile(source: CalibrationProfile['source']): CalibrationProfile {
   return {
@@ -91,32 +95,73 @@ export function createEmptyProfile(source: CalibrationProfile['source']): Calibr
   };
 }
 
-/** 각도 공간 거리. yaw는 pitch보다 민감하지 않게 가중치를 둘 수 있으나 1차는 유클리드 */
-export function poseDistance(a: Pose, b: Pose): number {
-  const dp = a.pitch - b.pitch;
-  const dy = a.yaw - b.yaw;
-  return Math.hypot(dp, dy);
+const DEG = Math.PI / 180;
+
+/** 방향 단위 벡터 [x, y, z]. x = 정면, y = 오른쪽, z = 위 — 스틱 패킷의 elev·azim 정의와 같다 */
+export type Vec3 = [number, number, number];
+
+/** 고도(pitch)·방위(yaw) → 단위 벡터 (cos el·cos az, cos el·sin az, sin el) */
+export function poseToVec(p: Pose): Vec3 {
+  const el = p.pitch * DEG;
+  const az = p.yaw * DEG;
+  return [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)];
 }
 
-/** 샘플 평균과 퍼짐 */
+/** 단위 벡터 → 고도·방위(도). 영벡터는 (0, 0) */
+export function vecToPose(v: Vec3): Pose {
+  const len = Math.hypot(v[0], v[1], v[2]);
+  if (len === 0) return { pitch: 0, yaw: 0 };
+  return { pitch: Math.asin(Math.max(-1, Math.min(1, v[2] / len))) / DEG, yaw: Math.atan2(v[1], v[0]) / DEG };
+}
+
+/** 두 자세의 대원 각도(도). 방위각 ±180° 경계에서도 연속이다 */
+export function angleBetween(a: Pose, b: Pose): number {
+  const u = poseToVec(a);
+  const w = poseToVec(b);
+  const dot = u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
+  return Math.acos(Math.max(-1, Math.min(1, dot))) / DEG;
+}
+
+/** 각도 공간 거리. 대원 각도로 계산한다(시그니처는 유지) */
+export function poseDistance(a: Pose, b: Pose): number {
+  return angleBetween(a, b);
+}
+
+/** 벡터 합을 정규화한 평균 자세. 빈 배열은 (0, 0) */
+export function meanPose(poses: readonly Pose[]): Pose {
+  if (poses.length === 0) return { pitch: 0, yaw: 0 };
+  const sum: Vec3 = [0, 0, 0];
+  for (const p of poses) {
+    const v = poseToVec(p);
+    sum[0] += v[0];
+    sum[1] += v[1];
+    sum[2] += v[2];
+  }
+  return vecToPose(sum);
+}
+
+/** 2타 퍼짐 = 두 타격의 대원 각도(도) */
+export function pairSpread(a: Pose, b: Pose): number {
+  return angleBetween(a, b);
+}
+
+/** 샘플 평균과 퍼짐(평균에서의 RMS 각도) */
 export function summarizePoses(samples: Pose[]): { mean: Pose; spread: number } {
   if (samples.length === 0) return { mean: { pitch: 0, yaw: 0 }, spread: 0 };
-  const mean = samples.reduce(
-    (acc, p) => ({ pitch: acc.pitch + p.pitch / samples.length, yaw: acc.yaw + p.yaw / samples.length }),
-    { pitch: 0, yaw: 0 },
-  );
-  const spread = Math.sqrt(samples.reduce((s, p) => s + poseDistance(p, mean) ** 2, 0) / samples.length);
+  const mean = meanPose(samples);
+  const spread = Math.sqrt(samples.reduce((s, p) => s + angleBetween(p, mean) ** 2, 0) / samples.length);
   return { mean, spread };
 }
 
 /**
- * 경계 계산: 반경 = min(상한, 가장 가까운 다른 앵커까지 거리 × radiusFactor).
- * 앵커가 하나뿐이면 상한을 쓴다.
+ * 경계 계산: 반경 = clamp(하한, 상한, 가장 가까운 다른 앵커까지 각도 × radiusFactor).
+ * 앵커가 하나뿐이면 상한을 쓴다. 상한이 하한보다 작으면 상한이 이긴다.
  */
 export function computeBoundaries(
   anchors: Partial<Record<PadId, PadAnchor>>,
   maxRadiusDeg: number,
   radiusFactor: number = DEFAULT_SENSOR_TUNING.radiusFactor,
+  minRadiusDeg: number = DEFAULT_SENSOR_TUNING.minRadiusDeg,
 ): Partial<Record<PadId, PadAnchor>> {
   const list = Object.values(anchors).filter((a): a is PadAnchor => !!a);
   const out: Partial<Record<PadId, PadAnchor>> = {};
@@ -124,9 +169,9 @@ export function computeBoundaries(
     let nearest = Infinity;
     for (const b of list) {
       if (b.pad === a.pad) continue;
-      nearest = Math.min(nearest, poseDistance(a, b));
+      nearest = Math.min(nearest, angleBetween(a, b));
     }
-    const radius = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, nearest * radiusFactor) : maxRadiusDeg;
+    const radius = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, Math.max(minRadiusDeg, nearest * radiusFactor)) : maxRadiusDeg;
     out[a.pad] = { ...a, radius };
   }
   return out;
@@ -153,9 +198,10 @@ export function resolvePad(
   for (const a of Object.values(profile.anchors)) {
     if (!a) continue;
     if (candidates && !candidates.includes(a.pad)) continue;
-    const d = poseDistance(pose, a);
+    const d = angleBetween(pose, a);
     if (!best || d < best.distanceDeg) {
-      best = { pad: a.pad, distanceDeg: d, inside: d <= a.radius };
+      // acos 반올림 오차(1e-14)로 경계값이 밖으로 새지 않게 작은 여유를 둔다
+      best = { pad: a.pad, distanceDeg: d, inside: d <= a.radius + 1e-9 };
     }
   }
   return best;

@@ -54,6 +54,8 @@ class YawDriftMonitor {
   private offState: (() => void) | null = null;
   private offTap: (() => void) | null = null;
   private sticks: [StickState, StickState] = [blank(), blank()];
+  /** 일시정지 중에는 observe를 무시한다(보정·재정렬 중, PLAY-004 D7) */
+  private paused = false;
   private statusCb: ((stickId: StickId, st: YawDriftStatus | null) => void) | null = null;
 
   constructor() {
@@ -175,8 +177,43 @@ class YawDriftMonitor {
     }
   }
 
+  /** 드리프트 감시를 멈춘다. 보정·재정렬 중 타격은 샘플이 아니다 */
+  pause(): void {
+    this.paused = true;
+  }
+
+  /** 감시 재개. 링은 비워 옛 앵커 기준 샘플이 섞이지 않게 한다 */
+  resume(): void {
+    this.paused = false;
+    for (const i of STICKS) this.sticks[i].ring = [];
+  }
+
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
+  /**
+   * 즉시 보정(재정렬, PLAY-004 D5): 링을 비우고 applied − errorDeg를 SET_YAW_OFFSET으로 보낸 뒤 확인 창을 연다.
+   * 쿨다운은 보지 않는다(사용자가 스네어를 쳐서 명시적으로 요청한 보정)
+   */
+  correct(stickId: StickId, errorDeg: number): void {
+    const src = this.usable();
+    if (!src) return;
+    const s = this.sticks[stickId];
+    const next = wrap180(s.applied - errorDeg);
+    src.sendCommand!(encodeSetYawOffset(next), stickId);
+    s.applied = next;
+    s.lastErr = errorDeg;
+    s.lastSentAt = performance.now();
+    s.acked = null;
+    s.ring = [];
+    this.openWindow(stickId);
+    this.report(stickId);
+  }
+
   /** 타격 1건을 보고 샘플로 쓸 수 있으면 링에 넣고, 조건이 맞으면 보정을 보낸다 */
   observe(hit: ResolvedHit, profile: CalibrationProfile | null): void {
+    if (this.paused) return;
     const src = this.usable();
     if (!src) return;
     if (!isSensorSource(hit.source)) return;
@@ -217,6 +254,7 @@ class YawDriftMonitor {
     this.offState?.();
     this.offState = null;
     this.source = null;
+    this.paused = false;
     for (const i of STICKS) {
       this.clearWindow(this.sticks[i]);
       this.sticks[i] = blank();
