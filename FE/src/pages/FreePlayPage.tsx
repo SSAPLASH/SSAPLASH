@@ -22,6 +22,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { usePresets } from '@/store/presetStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
+import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { freeStage } from '@/domain/freeStage';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
@@ -121,7 +122,7 @@ export function FreePlayPage() {
   const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
   const showBand = stage === 'oneHand' || (stage === 'ready' && pedal === false);
   const mean = meanVelocity(stats);
-  const preset = presetItems.find((p) => p.id === activePresetId);
+  const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
 
   let guide: React.ReactNode;
   if (empty) guide = '연결 대기 중 · 스틱을 연결해 주세요';
@@ -145,7 +146,7 @@ export function FreePlayPage() {
       <Card className="free-canvas" aria-label="연주 캔버스">
         <div className="free-canvas-head">
           <h2 className="free-canvas-title">드럼 킷</h2>
-          <span className="free-canvas-meta">프리셋: {preset?.name ?? '없음'} · 8패드</span>
+          <span className="free-canvas-meta">프리셋: {presetName} · 8패드</span>
         </div>
 
         {showBand ? (

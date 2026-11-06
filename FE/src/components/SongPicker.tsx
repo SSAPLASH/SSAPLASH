@@ -16,6 +16,7 @@ import {
   type SongSummary,
 } from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
+import { presetDisplayName } from '@/domain/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
@@ -195,7 +196,7 @@ export function SongPicker({ onSelect, mode }: Props) {
       : selDetail?.status === 'error' || (selDetail?.status === 'ready' && selDetail.detail.charts.length === 0)
         ? 'error'
         : 'loading';
-  const presetName = presets.find((p) => p.id === activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presets, activePresetId);
   const copy = COPY[mode];
 
   return (

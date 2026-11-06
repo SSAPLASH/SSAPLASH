@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import type { Difficulty } from '@/domain/chart';
 import type { PadId } from '@/domain/pads';
 import type { PadVisualState } from '@/domain/drumKit';
+import { SYSTEM_PRESET_NAME } from '@/domain/preset';
 import type { ReadinessMissing } from '@/domain/readiness';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -111,7 +112,6 @@ export function ReadyPanel({
   const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
   const stickOk = !missing.includes('stick') && !missing.includes('pedal');
   const calOk = !missing.includes('firstSetup');
-  const presetOk = !missing.includes('preset');
   const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
   if (song.durationSec !== undefined) meta.push(formatDuration(song.durationSec * 1000));
   meta.push(`최고 정확도 ${bestAccuracy === undefined ? '—' : formatAccuracy(bestAccuracy)}`);
@@ -178,11 +178,12 @@ export function ReadyPanel({
                   )}
                 </span>
               </li>
+              {/* 프리셋은 준비 조건이 아니다(UX-64 D1): 시스템 기본이 항상 적용 가능해 이름만 보인다 */}
               <li className="play-rp-row">
-                <Dot ok={presetOk} />
+                <Dot ok />
                 <span className="play-rp-row-label">프리셋</span>
                 <span className="play-rp-row-value">
-                  <span className={presetOk ? '' : 'need'}>{presetOk ? (presetName ?? '적용됨') : '적용 필요'}</span>
+                  <span>{presetName ?? SYSTEM_PRESET_NAME}</span>
                 </span>
               </li>
             </ul>

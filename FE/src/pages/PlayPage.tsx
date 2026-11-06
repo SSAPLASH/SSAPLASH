@@ -38,6 +38,7 @@ import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { PadId } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
+import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
@@ -124,7 +125,7 @@ function PlayPageBody() {
   const reconnect = useReconnect((r) => r.reconnect);
   const lastHit = useLive((l) => l.lastHit);
   const presets = usePresets((p) => p.items);
-  const presetName = presets.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presets, settings.activePresetId);
   const selectSong = useSongs((s) => s.selectSong);
   const songsSource = useSongs((s) => s.source);
   // 킷 미니 뷰: 타격(hit)·판정 색
