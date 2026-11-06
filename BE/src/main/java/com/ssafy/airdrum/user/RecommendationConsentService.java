@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.airdrum.common.error.BusinessException;
 
 /**
- * 맞춤 곡 추천 학습 활용 동의 저장·철회. 철회하면 같은 트랜잭션에서 그 사용자의 후보를 지운다.
+ * 맞춤 곡 추천 학습 활용 동의 저장·철회. 동의하면 가명 키를 발급하고, 철회하면 같은 트랜잭션에서 키와 후보를 지운다.
  * 응답마다 이력(user_recommendation_consent_history)을 추가한다. 현재 상태 행은 덮어쓰여 지난 동의를 알 수 없기 때문이다.
  * 허용 판 목록의 규칙은 {@link SignupConsentVersions}와 같다(비어 있으면 검사하지 않는다).
  */
@@ -65,8 +65,14 @@ public class RecommendationConsentService {
 		}
 		db.update("INSERT INTO user_recommendation_consent_history(user_id, agreed, version, recorded_at) VALUES (?, ?, ?, ?)",
 				userId, input.agreed(), version, Timestamp.from(now));
-		if (!input.agreed()) {
+		if (input.agreed()) {
+			db.update("""
+					INSERT INTO recommendation_user_keys(user_id, user_key) VALUES (?, replace(gen_random_uuid()::text, '-', ''))
+					ON CONFLICT (user_id) DO NOTHING
+					""", userId);
+		} else {
 			db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
+			db.update("DELETE FROM recommendation_user_keys WHERE user_id = ?", userId);
 		}
 		return new Consent(input.agreed(), version, now);
 	}

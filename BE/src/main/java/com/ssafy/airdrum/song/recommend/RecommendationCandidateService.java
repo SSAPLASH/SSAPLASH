@@ -36,30 +36,30 @@ public class RecommendationCandidateService {
 	}
 
 	/**
-	 * 사용자별 후보를 새 값으로 바꾼다. 같은 본문을 다시 보내도 결과가 같다. 알 수 없는 사용자와 동의가 없는 사용자는 오류가 아니라
+	 * 사용자별 후보를 새 값으로 바꾼다. 같은 본문을 다시 보내도 결과가 같다. 알 수 없는 키(철회·탈퇴 포함)는 오류가 아니라
 	 * 버리고 개수만 돌려준다. 이미 더 새로운 배치가 들어 있는 사용자는 건드리지 않는다(늦게 도착한 재전송이 덮어쓰지 않게).
 	 */
 	@Transactional
 	public UploadResult upload(Upload body) {
-		if (!settings.hasKeySecret()) throw new BusinessException(RecommendationErrorCode.CANDIDATES_NOT_CONFIGURED);
 		Instant generatedAt = validate(body);
 		if (!settings.accepts(body.modelVersion())) throw new BusinessException(RecommendationErrorCode.MODEL_VERSION_NOT_ACCEPTED);
 
-		// 동의 행과 회원 행을 잠가 적재 중에 철회·탈퇴가 끼어들어 지운 뒤에 후보가 남는 일을 막는다
-		var agreed = new HashSet<>(db.queryForList("""
-				SELECT c.user_id FROM user_recommendation_consent c JOIN users u ON u.id = c.user_id
-				WHERE c.agreed AND u.status = 'ACTIVE' FOR SHARE OF c, u
-				""", Long.class));
+		// 동의 행과 회원 행을 잠가 적재 중에 철회·탈퇴가 끼어들어 지운 뒤에 후보가 남는 일을 막는다.
+		// 키는 동의 중인 사용자에게만 있어서, 철회·탈퇴한 사용자의 키는 알 수 없는 키로 버려진다
 		var idByKey = new HashMap<String, Long>();
-		for (long id : db.queryForList("SELECT id FROM users WHERE status = 'ACTIVE'", Long.class)) idByKey.put(settings.userKey(id), id);
+		db.query("""
+				SELECT k.user_key, c.user_id FROM user_recommendation_consent c
+				JOIN users u ON u.id = c.user_id
+				JOIN recommendation_user_keys k ON k.user_id = c.user_id
+				WHERE c.agreed AND u.status = 'ACTIVE' FOR SHARE OF c, u
+				""", rs -> { idByKey.put(rs.getString(1), rs.getLong(2)); });
 		var servable = new HashSet<>(db.queryForList("SELECT song_id FROM recommend_songs_v", Long.class));
 
-		int accepted = 0, unknown = 0, noConsent = 0;
+		int accepted = 0, unknown = 0;
 		var rows = new ArrayList<Object[]>();
 		for (var user : body.users()) {
 			Long id = idByKey.get(user.userKey());
 			if (id == null) { unknown++; continue; }
-			if (!agreed.contains(id)) { noConsent++; continue; }
 			accepted++;
 			if (hasNewerBatch(id, generatedAt)) continue;
 			db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", id);
@@ -70,7 +70,7 @@ public class RecommendationCandidateService {
 			}
 		}
 		db.batchUpdate("INSERT INTO recommendation_candidates(user_id, rank, song_id, model_version, batch_id, generated_at) VALUES (?, ?, ?, ?, ?, ?)", rows);
-		return new UploadResult(accepted, unknown, noConsent);
+		return new UploadResult(accepted, unknown, 0);
 	}
 
 	private boolean hasNewerBatch(long userId, Instant generatedAt) {

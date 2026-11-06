@@ -142,18 +142,18 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 | 실행 위치 | 앱 서버의 컨테이너. PyTorch가 필요 없어 GPU 서버로 가지 않는다. 그래서 DB 포트 개방, SSH 터널, 공개 Nginx 경로가 필요 없다. 공개 Nginx의 `/internal/`은 그대로 404다 |
 | 권한 | 내부 네트워크만, `cap_drop: ALL`, `no-new-privileges`, 메모리 2GiB |
 | 상태 줄 | 끝에 `recommend-batch status=OK` 또는 `status=FAIL ...` 한 줄 |
+| 시간 제한 | `RECOMMEND_BATCH_TIMEOUT_SEC`(기본 3600초)가 지나면 멈추고 `status=FAIL error=Timeout`을 남긴다. 철회 전에 시작한 배치의 기록이 메모리에 남는 최대 시간이다. 값을 바꾸면 동의 문구도 맞춘다 |
 
 **준비 순서 (BE MR이 서버 DB에 적용된 뒤 서버에서 직접 한다)**
 
-1. 비밀 값 세 개를 만들어 `.env`에 넣는다. 값은 화면에 출력하지 말고 파일에 바로 쓴다.
-   - `RECOMMEND_EXPORT_PASSWORD`, `RECOMMEND_KEY_SECRET`, `RECOMMEND_BATCH_TOKEN`(모두 `openssl rand -hex 32` 수준의 난수).
+1. 비밀 값 두 개를 만들어 `.env`에 넣는다. 값은 화면에 출력하지 말고 파일에 바로 쓴다.
+   - `RECOMMEND_EXPORT_PASSWORD`, `RECOMMEND_BATCH_TOKEN`(모두 `openssl rand -hex 32` 수준의 난수).
    - `CHART_WORKER_CREDENTIALS`에 `,recommend-batch=<RECOMMEND_BATCH_TOKEN과 같은 값>`을 덧붙인다.
 2. DB에 로그인 계정을 만든다(`psql`을 슈퍼유저로 연다).
 
    ```sql
    CREATE ROLE recommend_export LOGIN PASSWORD '<RECOMMEND_EXPORT_PASSWORD>' CONNECTION LIMIT 2;
    GRANT recommend_export_reader TO recommend_export;
-   ALTER ROLE recommend_export SET app.recommend_key_secret = '<RECOMMEND_KEY_SECRET>';
    ALTER ROLE recommend_export SET statement_timeout = '5min';
    ALTER ROLE recommend_export SET default_transaction_read_only = on;
    ```
@@ -186,7 +186,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 처음에는 사람이 수동으로 돌리고, 안정되면 GitLab 예약으로 옮긴다. 후보는 7일이 지나면 쓰이지 않으므로 그보다 자주 돌려야 한다.
 
-**비밀 값을 바꿀 때**: `RECOMMEND_KEY_SECRET`과 `app.recommend_key_secret`을 함께 바꾸고 `api`를 다시 띄운다. 어긋나면 적재가 전부 `droppedUnknown`이 된다. 후보는 다음 배치에서 다시 적재되므로 데이터는 잃지 않는다.
+**가명 키 전환(V45 배포 뒤 한 번):** 서버에서 `ALTER ROLE recommend_export RESET app.recommend_key_secret;`을 실행하고 `.env`에서 `RECOMMEND_KEY_SECRET`을 지운다. 그다음 `recommend_export`로 `SHOW app.recommend_key_secret`이 오류이거나 빈 값이고, `SELECT 1 FROM recommendation_user_keys LIMIT 1`이 권한 오류인지 확인한다.
 
 ## 약점 분석 보정 배치 (coach-calibration, COACH-003)
 
