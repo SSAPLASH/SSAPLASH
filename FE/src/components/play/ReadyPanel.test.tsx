@@ -37,14 +37,16 @@ describe('ReadyPanel 준비 상태', () => {
     expect(html).not.toContain('드럼 세팅에서 준비하기');
   });
 
-  it('준비 필요: 상태 문구·시작 버튼 비활성·안내·세팅 버튼', () => {
-    const html = need(['stick', 'firstSetup', 'preset'], { connected: [false, false], presetName: null });
+  it('준비 필요: 상태 문구·시작 버튼 비활성·안내·세팅 버튼. 프리셋 줄은 조건이 아니라 이름만(없으면 시스템 기본)', () => {
+    const html = need(['stick', 'firstSetup'], { connected: [false, false], presetName: null });
     expect(html).toContain('준비가 필요해요');
     expect(html).toMatch(/<button[^>]*disabled[^>]*>시작/);
     expect(html).toContain('기기 준비가 끝나면 시작할 수 있어요.');
     expect(html).toContain('드럼 세팅에서 준비하기');
     expect(html).toContain('왼손·오른손 연결 안 됨');
-    expect(html).toContain('적용 필요');
+    expect(html).not.toContain('적용 필요');
+    expect(html).toContain('시스템 기본');
+    expect(render()).toContain('기본 프리셋');
   });
 
   it('한 손만 끊긴 문구', () => {
