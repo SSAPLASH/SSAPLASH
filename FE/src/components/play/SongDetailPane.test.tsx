@@ -54,3 +54,29 @@ describe('SongDetailPane 준비 줄', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>준비<\/button>/);
   });
 });
+
+describe('SongDetailPane 비슷한 곡', () => {
+  const similar = { song: song({ id: 9, title: '도시의 리듬', artist: '모노레일', songLevel: 'ADVANCED' }), chartId: 90, difficulty: 'NORMAL' as const, line: '리듬이 비슷해요' };
+
+  it('[준비] 줄 아래 구분선과 캡션·제목·「아티스트 · 곡 난이도」·이유·[이 곡 보기]를 그린다', () => {
+    const html = render(song(), { similar });
+    expect(html).toMatch(/play-sd-ready.*<\/div><hr class="play-sd-divider"\/><section class="play-sd-similar" aria-label="이 곡과 비슷한 곡">/);
+    expect(html).toContain('>✦ 이 곡과 비슷한 곡<');
+    expect(html).toContain('<span class="play-sd-similar-title">도시의 리듬</span>');
+    expect(html).toContain('<span class="play-sd-similar-meta">모노레일 · 고급</span>');
+    expect(html).toContain('<span class="play-sd-similar-reason">리듬이 비슷해요</span>');
+    expect(html).toMatch(/<button[^>]*play-sd-similar-pick[^>]*>이 곡 보기<\/button>/);
+  });
+
+  it('이유가 비면 이유 줄이 없고, 곡 난이도가 없으면 아티스트만', () => {
+    const html = render(song(), { similar: { ...similar, line: '', song: { ...similar.song, songLevel: null } } });
+    expect(html).not.toContain('play-sd-similar-reason');
+    expect(html).toContain('<span class="play-sd-similar-meta">모노레일</span>');
+  });
+
+  it('비슷한 곡이 없으면 구분선까지 없다', () => {
+    const html = render(song());
+    expect(html).not.toContain('play-sd-divider');
+    expect(html).not.toContain('play-sd-similar');
+  });
+});
