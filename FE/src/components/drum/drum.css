@@ -309,3 +309,11 @@
     animation: none;
   }
 }
+
+/* ---- UX-64 보정 무대: 킷 전체 흐림(0.18) + 지금 칠 패드만 원래 밝기 + 브랜드색 글로우 ---- */
+.drum-pad-dim {
+  opacity: 0.18;
+}
+.drum-pad-lit {
+  filter: drop-shadow(0 0 12px var(--brand)) drop-shadow(0 0 28px color-mix(in srgb, var(--brand) 55%, transparent));
+}
