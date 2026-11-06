@@ -57,7 +57,7 @@ public class ChartDocumentReader {
 			}
 			var hihatOpen = node.get("hihatOpen");
 			notes.add(new Note(id, time, pad, velocity, notation,
-					hihatOpen != null && hihatOpen.isBoolean() ? hihatOpen.booleanValue() : null));
+					"HIHAT".equals(pad) && hihatOpen != null && hihatOpen.isBoolean() ? hihatOpen.booleanValue() : null));
 		}
 		return List.copyOf(notes);
 	}
