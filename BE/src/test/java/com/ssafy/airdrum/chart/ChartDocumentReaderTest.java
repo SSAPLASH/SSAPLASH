@@ -16,9 +16,11 @@ class ChartDocumentReaderTest {
 			 {"noteId":"d","timeMs":3,"pad":"HIHAT","hihatOpen":null},
 			 {"noteId":"e","timeMs":4,"pad":"HIHAT","hihatOpen":"true"},
 			 {"noteId":"f","timeMs":5,"pad":"HIHAT","hihatOpen":1},
-			 {"noteId":"g","timeMs":6,"pad":"HIHAT","hihatOpen":{}}]
-			""", 7);
-		assertThat(notes).extracting(ChartResponses.Note::hihatOpen).containsExactly(true, false, null, null, null, null, null);
+			 {"noteId":"g","timeMs":6,"pad":"HIHAT","hihatOpen":{}},
+			 {"noteId":"h","timeMs":7,"pad":"SNARE","hihatOpen":true},
+			 {"noteId":"i","timeMs":8,"pad":"KICK","hihatOpen":false}]
+			""", 9);
+		assertThat(notes).extracting(ChartResponses.Note::hihatOpen).containsExactly(true, false, null, null, null, null, null, null, null);
 		assertThat(notes.getFirst().velocityHint()).isEqualTo(90);
 		assertThat(notes.getFirst().pad()).isEqualTo("HIHAT");
 	}
