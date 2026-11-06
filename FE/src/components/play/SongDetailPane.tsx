@@ -1,6 +1,8 @@
 // 선택한 곡 패널 (Figma SongDetailPanel 126:3582, 폭 352). 커버 · 제목 · 아티스트 · BPM·길이·곡 난이도 · 최고 점수(sheet 모드는 최고 정확도) · [프리셋 · 준비] 한 줄.
 // 스틱 연결 문구는 두지 않는다 — 상단 바 스틱 상태로 충분하다(Figma 11/03).
+// similar가 있으면 [준비] 줄 아래 구분선과 「✦ 이 곡과 비슷한 곡」 한 줄 + [이 곡 보기](설계 COACH-004-song-picker-ai-tab 3-3, Figma 666:33647).
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
+import type { RecommendCard } from '@/domain/recommendation';
 import { SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +24,10 @@ export interface SongDetailPaneProps {
   chartState: 'loading' | 'error' | 'ready';
   onRetry: () => void;
   onPrepare: () => void;
+  /** 선택한 곡과 비슷한 곡(R2) 한 건. 없으면 구분선까지 그리지 않는다 */
+  similar?: RecommendCard;
+  /** [이 곡 보기] */
+  onSimilarPick?: () => void;
 }
 
 export function SongDetailPane({
@@ -33,6 +39,8 @@ export function SongDetailPane({
   chartState,
   onRetry,
   onPrepare,
+  similar,
+  onSimilarPick,
 }: SongDetailPaneProps) {
   if (!song) {
     return (
@@ -80,6 +88,24 @@ export function SongDetailPane({
           준비
         </Button>
       </div>
+      {similar && (
+        <>
+          <hr className="play-sd-divider" />
+          <section className="play-sd-similar" aria-label="이 곡과 비슷한 곡">
+            <div className="play-sd-similar-text">
+              <span className="play-sd-similar-caption">✦ 이 곡과 비슷한 곡</span>
+              <span className="play-sd-similar-title">{similar.song.title}</span>
+              <span className="play-sd-similar-meta">
+                {[similar.song.artist, similar.song.songLevel === null ? '' : SONG_LEVEL_LABEL[similar.song.songLevel]].filter(Boolean).join(' · ')}
+              </span>
+              {similar.line && <span className="play-sd-similar-reason">{similar.line}</span>}
+            </div>
+            <Button variant="secondary" size="sm" className="play-sd-similar-pick" onClick={onSimilarPick}>
+              이 곡 보기
+            </Button>
+          </section>
+        </>
+      )}
     </aside>
   );
 }
