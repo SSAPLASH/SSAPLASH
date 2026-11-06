@@ -4,7 +4,7 @@
 import type { ResolvedHit, StickId } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import type { HandAnchors } from '@/domain/calibration';
+import { computeBoundaries, type HandAnchors } from '@/domain/calibration';
 import { anchorsToLayout } from '@/domain/kitJudge';
 import { HitCapture } from '@/engine/HitCapture';
 import { SnareRealign } from '@/engine/SnareRealign';
@@ -77,8 +77,11 @@ class CalibrationSession {
 
   // ── 2타 보정 ─────────────────────────────────────────────
 
-  /** 보정 시작(3-7 시작 부작용). 연결된 손이 없거나 센서가 없으면 무동작 */
-  startCapture(): void {
+  /**
+   * 보정 시작(3-7 시작 부작용). pads를 주면 그 패드만 다시 친다(패드 단위 재보정, 후속 T9).
+   * 연결된 손이 없거나 센서가 없으면 무동작
+   */
+  startCapture(pads?: PadId[]): void {
     if (useLive.getState().activeSensor === 'none') return;
     const hands = this.connectedHands();
     if (hands.length === 0) return;
@@ -92,7 +95,7 @@ class CalibrationSession {
     // 스틱 표를 비워 보정 중 HIT pad가 0xFF가 되게 한다(D6)
     for (const i of hands) padTableSync.clear(i);
     this.deps.setSoundOnHit(false);
-    this.capture.start(hands);
+    this.capture.start(hands, pads);
     if (this.capture.snapshot().phase === 'done') this.finishCapture();
   }
 
@@ -117,15 +120,19 @@ class CalibrationSession {
   private finishCapture(): void {
     const settings = useSettings.getState();
     const built = this.capture.build(settings.tuning);
-    // 이번에 대상이 아니던 손은 이전 앵커를 유지한다(D9: 손별 독립)
-    const merged: HandAnchors = [built[0] ?? settings.stickAnchors[0], built[1] ?? settings.stickAnchors[1]];
+    // 이번에 대상이 아니던 손은 이전 앵커를 유지하고(D9: 손별 독립), 대상 손도 이번에 친 패드만 바꾼다(T9 패드 단위).
+    // 반경은 합친 집합으로 다시 계산한다
+    const t = settings.tuning;
+    const mergeHand = (h: 0 | 1) =>
+      built[h] ? computeBoundaries({ ...(settings.stickAnchors[h] ?? {}), ...built[h] }, t.maxRadiusDeg, t.radiusFactor, t.minRadiusDeg) : settings.stickAnchors[h];
+    const merged: HandAnchors = [mergeHand(0), mergeHand(1)];
     const now = Date.now();
     this.mode = 'idle';
     this.hands = [];
     // 저장 → applySettings(손별 프로필·연결된 손마다 push). 표는 clear로 해시가 비어 반드시 나간다
     settings.setStickAnchors(merged, now);
-    // 표시 배치: 앵커에서 유도해 프리셋 layout으로 저장될 값(D2)
-    useSettings.getState().setKitLayout(anchorsToLayout(merged, useSettings.getState().kitLayout, settings.tuning.angleRange));
+    // 표시 배치: 이번에 친 패드만 앵커에서 유도해 옮기고 나머지는 현재 배치를 유지한다(D2, T9 "디폴트에서 옮겨서 저장")
+    useSettings.getState().setKitLayout(anchorsToLayout(built, useSettings.getState().kitLayout, settings.tuning.angleRange));
     yawDriftMonitor.reset();
     yawDriftMonitor.resume();
     this.deps.setSoundOnHit(true);

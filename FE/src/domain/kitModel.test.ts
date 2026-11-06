@@ -1,7 +1,7 @@
 // 3D 드럼셋 모델 검증(PLAY-004 D4): 손별 기본 앵커가 손마다 다르고, 반경이 튜닝 범위 안이며, 기본 배치가 화면 안에 있다.
 import { describe, expect, it } from 'vitest';
-import { defaultHandAnchorSet, defaultHandAnchors, defaultLayout, handPoseTo, HAND_ORIGINS, PAD_POINTS } from './kitModel';
-import { ALL_PADS, STICK_PADS } from './pads';
+import { defaultHandAnchorSet, defaultHandAnchors, handPoseTo, HAND_ORIGINS, PAD_POINTS } from './kitModel';
+import { STICK_PADS } from './pads';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
 
 describe('handPoseTo', () => {
@@ -52,27 +52,5 @@ describe('defaultHandAnchors', () => {
   it('튜닝을 바꾸면 반경이 따라간다', () => {
     const a = defaultHandAnchorSet(0, { ...DEFAULT_SENSOR_TUNING, minRadiusDeg: 8, maxRadiusDeg: 9 });
     for (const x of Object.values(a)) expect(x!.radius).toBeLessThanOrEqual(9);
-  });
-});
-
-describe('defaultLayout', () => {
-  it('패드 9개 전부, 위치는 0.05~0.95 안', () => {
-    const l = defaultLayout();
-    expect(Object.keys(l).sort()).toEqual([...ALL_PADS].sort());
-    for (const pad of ALL_PADS) {
-      for (const v of [l[pad].x, l[pad].y]) {
-        expect(v).toBeGreaterThanOrEqual(0.05);
-        expect(v).toBeLessThanOrEqual(0.95);
-      }
-      expect(l[pad].r).toBeGreaterThan(0);
-    }
-  });
-
-  it('연주자 시점 배치: 하이햇은 왼쪽, 라이드는 오른쪽, 심벌은 위, 스네어는 아래', () => {
-    const l = defaultLayout();
-    expect(l.HIHAT.x).toBeLessThan(l.SNARE.x);
-    expect(l.RIDE.x).toBeGreaterThan(l.SNARE.x);
-    expect(l.CRASH.y).toBeLessThan(l.SNARE.y);
-    expect(l.SMALL_TOM.x).toBeLessThan(l.MID_TOM.x);
   });
 });

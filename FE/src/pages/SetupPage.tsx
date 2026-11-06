@@ -24,7 +24,7 @@ import { UnsavedLeaveDialog } from '@/components/setup/UnsavedLeaveDialog';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
@@ -591,11 +591,21 @@ export function SetupPage() {
               </div>
             </dl>
             <div className="setup-padinfo-foot">
-              <p className="setup-padinfo-hint">패드를 눌러 고르면 위치를 볼 수 있어요. 위치는 ② 보정에서 친 자리로 정해져요.</p>
-              {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
-              <Button variant="secondary" size="sm" onClick={s.resetLayout}>
-                기본 배치로
-              </Button>
+              <p className="setup-padinfo-hint">
+                패드를 눌러 고르면 위치를 볼 수 있어요. 위치는 보정에서 친 자리로 정해지고, 한 드럼만 다른 자리로 옮기려면 [이 드럼 다시 치기]로 그 자리를 2번씩 쳐요.
+              </p>
+              <div className="setup-row">
+                {/* 패드 단위 재보정(PLAY-004 후속 T9): 선택한 스틱 패드만 연결된 손마다 2타 */}
+                {sensorMode && STICK_PADS.includes(selectedPad) && (
+                  <Button size="sm" onClick={() => calibrationSession.startCapture([selectedPad])} disabled={!anyConnected || capturing}>
+                    이 드럼 다시 치기
+                  </Button>
+                )}
+                {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
+                <Button variant="secondary" size="sm" onClick={s.resetLayout}>
+                  기본 배치로
+                </Button>
+              </div>
             </div>
           </div>
         </div>
