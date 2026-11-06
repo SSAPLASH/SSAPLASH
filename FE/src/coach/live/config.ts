@@ -71,6 +71,19 @@ export const LIVE_COACH_CONFIG = {
     /** 그 패드의 MISS가 이 이하이면 거둔다 */
     releaseMax: 1,
   },
+  /** 세팅 안내. 기기 지연은 판정 폭과 무관해서 ms로 적는다. 스틱 입력에서 플레이당 태그별 한 번만 뜬다 */
+  setup: {
+    /** 판단에 쓰는 최근 판정 수 */
+    window: 16,
+    /** 소리 지연: 유효 타격 수, 평균 |deltaMs| 하한, 표준편차 상한, 같은 부호 비율 */
+    minValid: 16,
+    offsetMeanMs: 45,
+    offsetMaxStdMs: 20,
+    offsetSameSign: 0.9,
+    /** 패드 위치: 판정 중 MISS 비율, MISS 대비 채보 밖 타격 비율 */
+    padsMissRate: 0.5,
+    padsStrayRatio: 0.5,
+  },
   /** 한쪽 손이 약함 */
   hand: {
     minPerHand: 4,
