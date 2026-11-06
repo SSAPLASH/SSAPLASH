@@ -66,6 +66,41 @@ describe('midiUploadStore', () => {
     expect(useMidiUpload.getState().error).toMatchObject({ text: MIDI_UNCERTAIN_TEXT, uncertain: true });
   });
 
+  // 293 MusicXML: 확장자로 경로를 가른다. 상한·문구는 domain/midiUpload.
+  it('.musicxml·.mxl은 /api/v1/songs/musicxml로 보내고 MUSICXML 곡을 보관한다', async () => {
+    const fetch = mockFetch(() => json(201, { id: 9, title: '악보', artist: '', source: 'MUSICXML', status: 'READY', charts: [] }));
+    await useMidiUpload.getState().upload(draft({ file: new File(['<score-partwise/>'], 'score.musicxml') }));
+    expect(fetch.mock.calls[0][0]).toBe('/api/v1/songs/musicxml');
+    expect(useMidiUpload.getState().song?.source).toBe('MUSICXML');
+    useMidiUpload.getState().reset();
+    await useMidiUpload.getState().upload(draft({ file: new File(['PK'], 'score.mxl') }));
+    expect(fetch.mock.calls[1][0]).toBe('/api/v1/songs/musicxml');
+    useMidiUpload.getState().reset();
+    await useMidiUpload.getState().upload(draft({ file: new File(['MThd'], 'a.mid') }));
+    expect(fetch.mock.calls[2][0]).toBe('/api/v1/songs/midi');
+  });
+
+  it('알 수 없는 확장자와 MusicXML 상한 초과는 보내지 않고 실패한다', async () => {
+    const fetch = mockFetch(() => created());
+    await useMidiUpload.getState().upload(draft({ file: new File(['%PDF'], 'score.pdf') }));
+    expect(useMidiUpload.getState().error).toMatchObject({ code: 'UNKNOWN_TYPE', uncertain: false });
+    useMidiUpload.getState().reset();
+    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'score.musicxml');
+    await useMidiUpload.getState().upload(draft({ file: big }));
+    expect(useMidiUpload.getState().error).toMatchObject({ code: 'TOO_LARGE_MUSICXML', text: '5 MiB 이하 MusicXML만 올릴 수 있어요.', uncertain: false });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [422, 'MUSICXML_NO_DRUM_NOTES', '드럼 파트가 있는 MusicXML을 올려 주세요.', false],
+    [422, 'MUSICXML_UNSUPPORTED', 'BE 문장', false],
+    [503, 'MUSICXML_UNAVAILABLE', '악보 변환 서버에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.', false],
+  ])('%i %s 문구(503 UNAVAILABLE은 곡이 안 생긴 것이 확실하다)', async (status, code, text, uncertain) => {
+    mockFetch(() => problem(status, code, 'BE 문장'));
+    await useMidiUpload.getState().upload(draft({ file: new File(['<score-partwise/>'], 'score.musicxml') }));
+    expect(useMidiUpload.getState().error).toEqual({ code, text, uncertain });
+  });
+
   it('uploading 중 다시 부르면 무시한다', async () => {
     let release: (r: Response) => void = () => {};
     const fetch = mockFetch(() => new Promise<Response>((r) => (release = r)));

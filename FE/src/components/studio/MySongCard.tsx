@@ -61,6 +61,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCove
         <SongStatusBadge status={song.status} />
         <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
         {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
+        {song.source === 'MUSICXML' && <span className="studio-chip">MusicXML</span>}
       </div>
 
       {ready && (
