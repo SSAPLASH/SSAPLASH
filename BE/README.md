@@ -438,6 +438,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V40 | `V40__add_recommendation_drill.sql` | 연습 추천: 노출 기록 `context`에 `DRILL` 허용 |
 | V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
 | V42 | `V42__recommend_interactions_consented_plays.sql` | 추천 학습 입력에서 `consent=false` 세션 제외. 열은 그대로 |
+| V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
 
 규칙:
 
@@ -1499,4 +1500,5 @@ AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 �
 - **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
 - **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다. 철회는 판 검사를 하지 않아 옛 판 화면에서도 된다. 적재는 동의 행과 회원 행을 잠가 철회·탈퇴 뒤에 후보가 남지 않게 한다.
 - **보관:** 후보는 생성 후 `RECOMMEND_R3_MAX_AGE_DAYS`(7일)가 지나면 서빙에 쓰지 않고, `RecommendationCandidateRetention`이 한 시간마다 지운다. 실패하면 다음 주기에 다시 지운다.
+- **동의 이력:** 응답마다 `user_recommendation_consent_history`에 추가한다. 탈퇴는 철회로 기록한다. 철회·탈퇴일부터 `recommend.consent-history-retention-days`(730일)가 지나면 하루 주기로 지우고, 탈퇴 회원은 현재 상태 행도 함께 지운다. 동의 중인 회원의 이력은 남긴다. 뷰로 내보내지 않는다.
 - **노출 기록:** 철회 뒤에도 `recommendation_items`는 보관 기간(90일)까지 남는다. 평가에는 철회 전 기록만 집계로 쓴다.

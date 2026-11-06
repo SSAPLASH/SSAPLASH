@@ -15,6 +15,7 @@ import com.ssafy.airdrum.common.error.BusinessException;
 
 /**
  * 맞춤 곡 추천 학습 활용 동의 저장·철회. 철회하면 같은 트랜잭션에서 그 사용자의 후보를 지운다.
+ * 응답마다 이력(user_recommendation_consent_history)을 추가한다. 현재 상태 행은 덮어쓰여 지난 동의를 알 수 없기 때문이다.
  * 허용 판 목록의 규칙은 {@link SignupConsentVersions}와 같다(비어 있으면 검사하지 않는다).
  */
 @Service
@@ -62,10 +63,33 @@ public class RecommendationConsentService {
 		if (saved == 0) {
 			throw new UserNotActiveException(userId);
 		}
+		db.update("INSERT INTO user_recommendation_consent_history(user_id, agreed, version, recorded_at) VALUES (?, ?, ?, ?)",
+				userId, input.agreed(), version, Timestamp.from(now));
 		if (!input.agreed()) {
 			db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
 		}
 		return new Consent(input.agreed(), version, now);
+	}
+
+	/**
+	 * 철회했거나 탈퇴한 회원 중 그 시각이 기준보다 오래된 회원의 이력을 지운다. 동의 중인 회원의 이력은 남긴다.
+	 * 탈퇴 회원은 현재 상태 행도 함께 지운다. 지운 이력 수를 돌려준다.
+	 */
+	@Transactional
+	public int deleteHistoryBefore(Instant cutoff) {
+		var at = Timestamp.from(cutoff);
+		int deleted = db.update("""
+				DELETE FROM user_recommendation_consent_history h
+				USING user_recommendation_consent c, users u
+				WHERE c.user_id = h.user_id AND u.id = h.user_id
+				  AND (NOT c.agreed OR u.status <> 'ACTIVE')
+				  AND GREATEST(c.updated_at, u.withdrawn_at) < ?
+				""", at);
+		db.update("""
+				DELETE FROM user_recommendation_consent c USING users u
+				WHERE u.id = c.user_id AND u.status <> 'ACTIVE' AND GREATEST(c.updated_at, u.withdrawn_at) < ?
+				""", at);
+		return deleted;
 	}
 
 }
