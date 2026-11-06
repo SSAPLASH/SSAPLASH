@@ -25,14 +25,14 @@ BE가 만드는 읽기 전용 뷰다(마이그레이션 V21, BE MR !166). AI 배
 
 | 구분 | 내용 |
 | --- | --- |
-| 행 조건 | `consent = true`인 세션. **탈퇴한 사용자의 세션도 포함**(BE 탈퇴 정책이 동의한 기록을 남긴다). 팀원 시험 계정은 `users.role = 'ADMIN'`으로 제외(운영 `ADMIN_EMAILS`에 팀원 등록). 사용자당 최근 10개만. `RHYTHM`/`SHEET`만 |
+| 행 조건 | `consent = true`인 활성 회원의 세션. **탈퇴한 사용자의 세션은 나오지 않는다**(V41, 세션 원본은 탈퇴 뒤 BE가 삭제한다). 팀원 시험 계정은 `users.role = 'ADMIN'`으로 제외(운영 `ADMIN_EMAILS`에 팀원 등록). 사용자당 최근 10개만. `RHYTHM`/`SHEET`만 |
 | 세션 열 | `session_key`(소금 해시, 원본 `id`로 되돌릴 수 없음), `mode`, `input_source`, `song_ref`(개인 곡은 `NULL`), `song_origin`(`PUBLIC`/`PRIVATE`), `difficulty`, `perfect_ms`, `good_ms`, `played_date`(날짜까지, KST), `payload_schema_version` |
 | 타격 열 | `seq`, `t_ms`, `stick_id`, `pad`, `velocity`, `peak_accel`, `judgement`, `matched_note_id`, `delta_ms` |
 | 없는 것 | 회원 정보 전부, 키트·보정·`client_meta`, 원본 키, `payload_hash`, 정확한 시각, `pitch`·`yaw`, `baseline_pad`·`predicted_pad` |
 
 - 허용 열 목록은 `source.py`의 `ALLOWED_COLUMNS`에 있고 시험이 BE와 합의한 목록과 같은지 고정한다. 열을 늘리려면 BE와 먼저 합의한다.
 - `difficulty`는 BE가 확인하는 동안 선택 열이다. 나머지 열은 필수이고 하나라도 없으면 실패한다.
-- 동의 철회는 "철회 이후 세션부터 `consent=false`"다. 어제 있던 `session_key`가 오늘 없을 수 있다. 그래서 세션 키를 저장하지 않고 **세션 수의 증감**으로만 다시 돌릴지 판단한다(줄어든 만큼은 새 세션이 가려져 실행이 늦어질 수 있다).
+- 동의 철회는 "철회 이후 세션부터 `consent=false`"다. 탈퇴하면 그 회원의 세션이 모두 사라진다. 어제 있던 `session_key`가 오늘 없을 수 있다. 그래서 세션 키를 저장하지 않고 **세션 수의 증감**으로만 다시 돌릴지 판단한다(줄어든 만큼은 새 세션이 가려져 실행이 늦어질 수 있다).
 
 ## 3. 실행
 
@@ -162,6 +162,7 @@ what-if는 (격자 21점 × 7그룹) × 세션 수번의 분석이라 세션이 
 - 분석에 쓰는 것은 동의한 기록이고, 읽는 곳은 비식별 뷰뿐이다. 읽기 전용 계정은 뷰 외에 권한이 없고 접속 문자열은 환경 변수로만 받는다.
 - 세션 키(소금 해시)는 기록과 산출물에 남기지 않는다.
 - 비식별 집계는 동의 철회·회원 탈퇴 이후에도 개인별로 찾아 지울 수 없다. 동의 문구에 이 점을 적는다.
+- 회원 탈퇴 뒤 남는 것은 이미 MLflow에 기록된 이 집계뿐이다. 보정 배치에 반영되기 전에 탈퇴한 회원의 기록은 통계에 들어가지 않는다.
 - 법적 기준(가명정보 처리 요건)은 팀·멘토 확인이 필요하다. 이 문서는 법적 판단을 하지 않는다.
 
 ## 10. 한계
