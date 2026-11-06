@@ -6,6 +6,8 @@ import { isSensorSource } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { computeBoundaries, type HandAnchors } from '@/domain/calibration';
 import { anchorsToLayout } from '@/domain/kitJudge';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { isSystemPreset, type CaptureDraft } from '@/domain/preset';
 import { HitCapture } from '@/engine/HitCapture';
 import { SnareRealign } from '@/engine/SnareRealign';
 import { inputManager } from './sources';
@@ -28,9 +30,16 @@ const noDeps: CalibrationDeps = { setSoundOnHit: () => {}, pushTable: () => {} }
 /** 패드 완료 햅틱(강도, ms) */
 const PAD_DONE_HAPTIC: [number, number] = [120, 60];
 
+/** 보정 시작 옵션(UX-64 D4). target 'new' = 추가하기(새 프리셋 초안, 7패드), 'active' = 적용 프리셋에 바로 반영(pads로 일부만 가능) */
+export interface StartCaptureOptions {
+  target?: 'new' | 'active';
+  pads?: PadId[];
+}
+
 class CalibrationSession {
   private deps: CalibrationDeps = noDeps;
   private mode: CalibrationSnapshot['mode'] = 'idle';
+  private target: CalibrationSnapshot['target'] = null;
   readonly capture = new HitCapture();
   readonly realign = new SnareRealign();
   private hands: StickId[] = [];
@@ -65,6 +74,7 @@ class CalibrationSession {
             capture: this.mode === 'capture' ? this.capture.snapshot() : null,
             realign: this.mode === 'realign' ? this.realign.snapshot() : null,
             hands: [...this.hands],
+            target: this.mode === 'capture' ? this.target : null,
           };
     useLive.setState({ calibration: snap });
   }
@@ -78,15 +88,19 @@ class CalibrationSession {
   // ── 2타 보정 ─────────────────────────────────────────────
 
   /**
-   * 보정 시작(3-7 시작 부작용). pads를 주면 그 패드만 다시 친다(패드 단위 재보정, 후속 T9).
-   * 연결된 손이 없거나 센서가 없으면 무동작
+   * 보정 시작(3-7 시작 부작용). target 'active'(기본)는 적용 프리셋에 바로 반영하며 pads를 주면 그 패드만 다시 친다(T9).
+   * target 'new'는 추가하기: 7패드를 새로 받아 초안으로 돌려준다(finish). 시스템 기본이 적용 중이면 'active'는 무동작(UX-64 D6).
+   * 연결된 손이 없거나 센서가 없으면 무동작. 끝나도 자동으로 저장하지 않고 finish()를 기다린다(D3)
    */
-  startCapture(pads?: PadId[]): void {
+  startCapture(opts: StartCaptureOptions = {}): void {
+    const target = opts.target ?? 'active';
     if (useLive.getState().activeSensor === 'none') return;
+    if (target === 'active' && isSystemPreset(useSettings.getState().activePresetId)) return;
     const hands = this.connectedHands();
     if (hands.length === 0) return;
     if (this.mode === 'realign') this.cancelRealign();
     this.mode = 'capture';
+    this.target = target;
     this.hands = hands;
     // 연결된 스틱 모두 기준 자세 잡기(펌웨어 방위각 오프셋 0). bootstrap의 onResetPose('fe')가 yawDriftMonitor.reset()을 부른다
     inputManager.resetPose();
@@ -95,41 +109,84 @@ class CalibrationSession {
     // 스틱 표를 비워 보정 중 HIT pad가 0xFF가 되게 한다(D6)
     for (const i of hands) padTableSync.clear(i);
     this.deps.setSoundOnHit(false);
-    this.capture.start(hands, pads);
-    if (this.capture.snapshot().phase === 'done') this.finishCapture();
+    this.capture.start(hands, target === 'new' ? undefined : opts.pads);
+    // 받을 패드가 없으면(잘못된 pads) 바로 접는다
+    if (this.capture.snapshot().phase === 'done') this.cancelCapture();
   }
 
-  /** 보정 취소·중단: 표를 비워 둔 채 나가지 않는다 */
+  /** 보정 취소·중단: 표를 비워 둔 채 나가지 않는다. 'new'면 초안 없이 버린다(U3) */
   cancelCapture(): void {
     if (this.mode !== 'capture') return;
+    this.teardownCapture();
+    this.publish();
+  }
+
+  /** 세션 접기 공통: 적용 프리셋의 표 재전송(force)·감시 resume·소리 켜기·idle. publish는 호출자가 */
+  private teardownCapture(): void {
     this.mode = 'idle';
+    this.target = null;
     for (const i of this.hands) this.deps.pushTable(i, true);
     this.hands = [];
     yawDriftMonitor.reset();
     yawDriftMonitor.resume();
     this.deps.setSoundOnHit(true);
-    this.publish();
   }
 
-  /** 특정 패드를 다시 친다 */
+  /** 특정 패드를 다시 친다. 확인 대기 중 [다시]는 현재 패드 */
   redo(pad: PadId): void {
     if (this.mode !== 'capture') return;
     this.capture.redo(pad);
+  }
+
+  /** [다음]: 확인 대기 중인 패드를 끝내고 다음 패드로(UX-64 D3) */
+  next(): void {
+    if (this.mode !== 'capture') return;
+    this.capture.next();
+  }
+
+  /** 보정 중 반지름 슬라이더(UX-64 D9): 그 패드의 판정 반경을 사용자 값으로. 저장(finish) 때 양손 앵커에 들어간다 */
+  setRadiusOverride(pad: PadId, deg: number): void {
+    if (this.mode !== 'capture') return;
+    this.capture.setRadiusOverride(pad, deg);
+  }
+
+  /**
+   * [저장]: 모든 패드가 끝난(done) 보정을 마친다. 'active'면 적용 프리셋의 앵커·배치에 반영하고 null,
+   * 'new'면 초안(앵커·기본 배치에서 유도한 배치·시각)을 돌려주고 세션을 접는다 — 저장은 화면이 presetStore.saveAs(name, draft)로.
+   * done이 아니면 무동작(null)
+   */
+  finish(): CaptureDraft | null {
+    if (this.mode !== 'capture' || this.capture.snapshot().phase !== 'done') return null;
+    if (this.target === 'new') {
+      const settings = useSettings.getState();
+      const anchors = this.capture.build(settings.tuning);
+      const draft: CaptureDraft = {
+        anchors,
+        layout: anchorsToLayout(anchors, DEFAULT_KIT_LAYOUT, settings.tuning.angleRange),
+        calibratedAt: Date.now(),
+      };
+      this.teardownCapture();
+      this.publish();
+      return draft;
+    }
+    this.finishCapture();
+    return null;
   }
 
   private finishCapture(): void {
     const settings = useSettings.getState();
     const built = this.capture.build(settings.tuning);
     // 이번에 대상이 아니던 손은 이전 앵커를 유지하고(D9: 손별 독립), 대상 손도 이번에 친 패드만 바꾼다(T9 패드 단위).
-    // 반경은 합친 집합으로 다시 계산한다
+    // 반경은 합친 집합으로 다시 계산한다(사용자 반경 radiusOverride는 computeBoundaries가 지킨다)
     const t = settings.tuning;
     const mergeHand = (h: 0 | 1) =>
       built[h] ? computeBoundaries({ ...(settings.stickAnchors[h] ?? {}), ...built[h] }, t.maxRadiusDeg, t.radiusFactor, t.minRadiusDeg) : settings.stickAnchors[h];
     const merged: HandAnchors = [mergeHand(0), mergeHand(1)];
     const now = Date.now();
     this.mode = 'idle';
+    this.target = null;
     this.hands = [];
-    // 저장 → applySettings(손별 프로필·연결된 손마다 push). 표는 clear로 해시가 비어 반드시 나간다
+    // 저장(사본 + 적용 프리셋 기록) → applySettings(손별 프로필·연결된 손마다 push). 표는 clear로 해시가 비어 반드시 나간다
     settings.setStickAnchors(merged, now);
     // 표시 배치: 이번에 친 패드만 앵커에서 유도해 옮기고 나머지는 현재 배치를 유지한다(D2, T9 "디폴트에서 옮겨서 저장")
     useSettings.getState().setKitLayout(anchorsToLayout(built, useSettings.getState().kitLayout, settings.tuning.angleRange));
@@ -138,6 +195,18 @@ class CalibrationSession {
     this.deps.setSoundOnHit(true);
     useLive.setState({ referenceSetAt: now, referenceStale: false, realignNeeded: [false, false] });
     this.publish();
+  }
+
+  /**
+   * ② [시작 위치 잡기](UX-64 D7): 스틱을 정면으로 든 채 기준 자세를 다시 잡는다. 보정·재정렬 중이 아닐 때만.
+   * 앵커는 "정면 기준" 값이라 그대로 유효하고, 방위각 기준이 새로 잡혔으니 재정렬 필요 표시는 끈다
+   */
+  resetPose(): void {
+    if (this.mode !== 'idle') return;
+    if (useLive.getState().activeSensor === 'none') return;
+    inputManager.resetPose();
+    yawDriftMonitor.reset();
+    useLive.setState({ referenceSetAt: Date.now(), referenceStale: false, realignNeeded: [false, false] });
   }
 
   // ── 스네어 재정렬 ────────────────────────────────────────
@@ -213,7 +282,7 @@ class CalibrationSession {
       if (this.capture.completedPads().length > before) {
         for (const h of snap.hands) inputManager.haptic(h, PAD_DONE_HAPTIC[0], PAD_DONE_HAPTIC[1]);
       }
-      if (snap.phase === 'done') this.finishCapture();
+      // 패드가 차도 자동으로 넘어가거나 끝내지 않는다: 화면의 [다음]/[저장](next·finish)이 한다(UX-64 D3)
       return true;
     }
     // realign
@@ -256,11 +325,8 @@ class CalibrationSession {
     this.hands = this.hands.filter((h) => h !== stickId);
     if (this.mode === 'capture') {
       this.capture.dropHand(stickId);
-      if (this.hands.length === 0) {
-        this.cancelCapture();
-        return;
-      }
-      if (this.capture.snapshot().phase === 'done') this.finishCapture();
+      if (this.hands.length === 0) this.cancelCapture();
+      // 남은 손이 현재 패드를 다 채웠으면 엔진이 확인 대기(padDone)로 간다. 저장은 [저장]이 한다
     } else {
       this.realign.dropHand(stickId);
       if (this.hands.length === 0) this.cancelRealign();
@@ -290,6 +356,7 @@ class CalibrationSession {
   /** 테스트용 초기화 */
   resetForTest(): void {
     this.mode = 'idle';
+    this.target = null;
     this.hands = [];
     this.deps = noDeps;
     this.capture.start([]);
