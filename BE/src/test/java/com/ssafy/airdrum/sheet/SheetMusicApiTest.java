@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 
@@ -58,6 +59,7 @@ class SheetMusicApiTest {
 	@MockitoBean SheetStorage storage;
 	final JsonMapper json = new JsonMapper();
 	long user, other;
+	long song, othersSong, builtin;
 
 	@BeforeEach
 	void seed() {
@@ -65,6 +67,9 @@ class SheetMusicApiTest {
 		SignupConsentFixtures.complete(db, user);
 		other = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 다른 회원') RETURNING id", Long.class);
 		SignupConsentFixtures.complete(db, other);
+		song = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'내 곡','MIDI','READY') RETURNING id", Long.class, user);
+		othersSong = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'남의 곡','MIDI','READY') RETURNING id", Long.class, other);
+		builtin = db.queryForObject("INSERT INTO songs(title,source,status,license,published) VALUES('공용 곡','BUILTIN','READY','test',true) RETURNING id", Long.class);
 		when(storage.sign(anyString())).thenAnswer(i -> "https://objects.test/" + i.getArgument(0));
 	}
 
@@ -72,7 +77,88 @@ class SheetMusicApiTest {
 	void clean() {
 		db.update("DELETE FROM file_cleanup_tasks WHERE user_id IN (?,?)", user, other);
 		db.update("DELETE FROM sheet_music WHERE owner_id IN (?,?)", user, other);
+		db.update("DELETE FROM songs WHERE id IN (?,?,?)", song, othersSong, builtin);
 		db.update("DELETE FROM users WHERE id IN (?,?)", user, other);
+	}
+
+	// --- 248 내 악보와 개인 곡 연결 ---
+
+	Long sheetIdOf(long songId, long as) throws Exception {
+		var r = send(get("/api/v1/songs/" + songId), as);
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(200);
+		var node = body(r).path("sheetId");
+		assertThat(node.isMissingNode()).as("sheetId 키").isFalse();
+		return node.isNull() ? null : node.asLong();
+	}
+
+	@Test
+	void songId로_등록하면_악보와_곡_응답에_연결이_보이고_곡당_하나다() throws Exception {
+		var r = upload(user, "내 곡 악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(4, 4)));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		long id = body(r).path("id").asLong();
+		assertThat(body(r).path("songId").asLong()).isEqualTo(song);
+		assertThat(body(send(get("/api/v1/sheets/" + id), user)).path("songId").asLong()).isEqualTo(song);
+		var listed = body(send(get("/api/v1/sheets"), user)).path("items").get(0);
+		assertThat(listed.path("id").asLong()).isEqualTo(id);
+		assertThat(listed.path("songId").asLong()).isEqualTo(song);
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isEqualTo(song);
+		// 곡 상세·내 곡 목록에 sheetId
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		var mine = body(send(get("/api/v1/songs").param("source", "MINE"), user)).path("items");
+		var row = java.util.stream.StreamSupport.stream(mine.spliterator(), false).filter(n -> n.path("id").asLong() == song).findFirst().orElseThrow();
+		assertThat(row.path("sheetId").asLong()).isEqualTo(id);
+		// 곡당 하나: 두 번째는 409이고 저장소를 부르지 않는다
+		problem(upload(user, "둘째 악보", null, Map.of("songId", String.valueOf(song)), file("b.png", png(4, 4))), 409, "SHEET_ALREADY_LINKED");
+		verify(storage, times(1)).put(anyString(), any(), anyLong(), anyString());
+		// 악보를 지우면 자리가 비고 다시 올릴 수 있다
+		assertThat(send(delete("/api/v1/sheets/" + id), user).getResponse().getStatus()).isEqualTo(204);
+		assertThat(sheetIdOf(song, user)).isNull();
+		var again = upload(user, "다시 올린 악보", null, Map.of("songId", String.valueOf(song)), file("c.png", png(4, 4)));
+		assertThat(again.getResponse().getStatus()).as(text(again)).isEqualTo(201);
+		assertThat(body(again).path("id").asLong()).isNotEqualTo(id);
+		assertThat(sheetIdOf(song, user)).isEqualTo(body(again).path("id").asLong());
+		// songId 없는 등록은 그대로이고 songId가 null로 나온다
+		var plain = upload(user, "곡 없는 악보", null, file("d.png", png(4, 4)));
+		assertThat(plain.getResponse().getStatus()).isEqualTo(201);
+		assertThat(body(plain).has("songId")).isTrue();
+		assertThat(body(plain).path("songId").isNull()).isTrue();
+		// 공용 곡 상세의 sheetId는 항상 null
+		assertThat(sheetIdOf(builtin, user)).isNull();
+	}
+
+	@Test
+	void songId가_잘못되면_거절하고_저장소를_부르지_않는다() throws Exception {
+		var tiny = png(2, 2);
+		for (var bad : new String[] {String.valueOf(othersSong), "999999999", String.valueOf(builtin)})
+			problem(upload(user, "악보", null, Map.of("songId", bad), file("a.png", tiny)), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
+		problem(upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", tiny)), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=NULL WHERE id=?", song);
+		// 9999999999999999999는 19자리지만 Long 범위를 넘는다(검증 보완 1)
+		for (var bad : new String[] {"abc", "0", "-1", "1.5", "", " 1", "01", "9999999999999999999"})
+			problem(upload(user, "악보", null, Map.of("songId", bad), file("a.png", tiny)), 400, "SHEET_INVALID");
+		var twice = multipart("/api/v1/sheets").file(file("a.png", tiny)).param("title", "악보").param("songId", String.valueOf(song), String.valueOf(song));
+		problem(send(twice, user), 400, "SHEET_INVALID");
+		verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music WHERE owner_id=?", Integer.class, user)).isZero();
+		assertThat(sheetIdOf(song, user)).isNull();
+	}
+
+	@Test
+	void 페이지가_연결되지_않은_악보는_곡_sheetId에_보이지_않고_지우면_자리가_빈다() throws Exception {
+		long inProgress = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'업로드 중','UPLOADED','IMAGE',1,1,?) RETURNING id",
+				Long.class, user, song);
+		assertThat(sheetIdOf(song, user)).isNull();
+		problem(upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(2, 2))), 409, "SHEET_ALREADY_LINKED");
+		db.update("UPDATE sheet_music SET deleted_at=now() WHERE id=?", inProgress);
+		var r = upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(2, 2)));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		assertThat(sheetIdOf(song, user)).isEqualTo(body(r).path("id").asLong());
+		// 공용 곡의 sheetId는 DB에 남의 악보가 억지로 연결돼 있어도 null이다(쿼리가 소유자를 맞춘다, 검증 보완 2)
+		long foreign = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'억지 연결','UPLOADED','IMAGE',1,1,?) RETURNING id",
+				Long.class, other, builtin);
+		db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes) VALUES(?,1,?,'image/png',1)", foreign, "sheet-music/" + other + "/" + foreign + "/x.png");
+		assertThat(sheetIdOf(builtin, user)).isNull();
 	}
 
 	@Test
@@ -183,7 +269,7 @@ class SheetMusicApiTest {
 		problem(upload(user, "악보", null, many), 400, "SHEET_INVALID");
 		var wrongPart = multipart("/api/v1/sheets").file(new MockMultipartFile("file", "a.png", "image/png", tiny)).param("title", "악보");
 		problem(send(wrongPart, user), 400, "SHEET_INVALID");
-		var extraField = multipart("/api/v1/sheets").file(file("a.png", tiny)).param("title", "악보").param("songId", "1");
+		var extraField = multipart("/api/v1/sheets").file(file("a.png", tiny)).param("title", "악보").param("note", "x");
 		problem(send(extraField, user), 400, "SHEET_INVALID");
 
 		verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
@@ -214,10 +300,15 @@ class SheetMusicApiTest {
 	}
 
 	MvcResult upload(long as, String title, String source, MockMultipartFile... files) throws Exception {
+		return upload(as, title, source, Map.of(), files);
+	}
+
+	MvcResult upload(long as, String title, String source, Map<String, String> extra, MockMultipartFile... files) throws Exception {
 		MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/sheets");
 		for (var f : files) request.file(f);
 		if (title != null) request.param("title", title);
 		if (source != null) request.param("source", source);
+		extra.forEach(request::param);
 		return send(request, as);
 	}
 
