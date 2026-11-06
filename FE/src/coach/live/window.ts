@@ -28,6 +28,13 @@ export interface PadStat {
   sameSignRatio: number;
 }
 
+/** 패드별 놓침. 노트 수는 그 패드의 판정 전체(MISS 포함)다 */
+export interface PadMissStat {
+  pad: PadId;
+  misses: number;
+  notes: number;
+}
+
 export interface HandStat {
   count: number;
   meanVelocity: number;
@@ -53,12 +60,16 @@ export interface WindowMetrics {
   missInRelease: number;
   /** 창 안에서 유효 타격이 있는 패드별 통계 */
   pads: PadStat[];
+  /** 최근 padMissSize개 중 전체 MISS 개수 */
+  missInPadWindow: number;
+  /** 최근 padMissSize개의 패드별 놓침 */
+  padMisses: PadMissStat[];
   /** 손별(0 = 왼손, 1 = 오른손) 평균 세기. handSize 창 기준 */
   hands: [HandStat, HandStat];
 }
 
-const { size, handSize, missSize } = LIVE_COACH_CONFIG.window;
-const CAPACITY = Math.max(size, handSize, missSize, LIVE_COACH_CONFIG.miss.releaseWindow);
+const { size, handSize, missSize, padMissSize } = LIVE_COACH_CONFIG.window;
+const CAPACITY = Math.max(size, handSize, missSize, padMissSize, LIVE_COACH_CONFIG.miss.releaseWindow);
 
 function isValid(n: JudgedNote): n is JudgedNote & { deltaMs: number } {
   return (n.judgement === 'PERFECT' || n.judgement === 'GOOD') && n.deltaMs !== null && Number.isFinite(n.deltaMs);
@@ -121,6 +132,15 @@ export class JudgedWindow {
       };
     });
 
+    const padRecent = this.buf.slice(-padMissSize);
+    const missByPad = new Map<PadId, PadMissStat>();
+    for (const v of padRecent) {
+      const stat = missByPad.get(v.pad) ?? { pad: v.pad, misses: 0, notes: 0 };
+      stat.notes += 1;
+      if (v.judgement === 'MISS') stat.misses += 1;
+      missByPad.set(v.pad, stat);
+    }
+
     const handSums: [number, number] = [0, 0];
     const handCounts: [number, number] = [0, 0];
     for (const v of this.buf.slice(-handSize)) {
@@ -144,6 +164,8 @@ export class JudgedWindow {
       trailingMisses: trailing,
       missInRelease: releaseRecent.filter((v) => v.judgement === 'MISS').length,
       pads,
+      missInPadWindow: padRecent.filter((v) => v.judgement === 'MISS').length,
+      padMisses: [...missByPad.values()],
       hands: [hand(0), hand(1)],
     };
   }
