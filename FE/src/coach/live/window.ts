@@ -35,6 +35,19 @@ export interface PadMissStat {
   notes: number;
 }
 
+/** 세팅 안내에 쓰는 최근 setup.window개의 지표 */
+export interface SetupStat {
+  /** 창 안의 판정 수 */
+  judged: number;
+  validCount: number;
+  meanDelta: number | null;
+  stdDelta: number | null;
+  sameSignRatio: number | null;
+  misses: number;
+  /** 창이 시작된 뒤 들어온 채보 밖 타격 수 */
+  strayHits: number;
+}
+
 export interface HandStat {
   count: number;
   meanVelocity: number;
@@ -64,33 +77,55 @@ export interface WindowMetrics {
   missInPadWindow: number;
   /** 최근 padMissSize개의 패드별 놓침 */
   padMisses: PadMissStat[];
+  setup: SetupStat;
   /** 손별(0 = 왼손, 1 = 오른손) 평균 세기. handSize 창 기준 */
   hands: [HandStat, HandStat];
 }
 
 const { size, handSize, missSize, padMissSize } = LIVE_COACH_CONFIG.window;
-const CAPACITY = Math.max(size, handSize, missSize, padMissSize, LIVE_COACH_CONFIG.miss.releaseWindow);
+const CAPACITY = Math.max(size, handSize, missSize, padMissSize, LIVE_COACH_CONFIG.setup.window, LIVE_COACH_CONFIG.miss.releaseWindow);
 
 function isValid(n: JudgedNote): n is JudgedNote & { deltaMs: number } {
   return (n.judgement === 'PERFECT' || n.judgement === 'GOOD') && n.deltaMs !== null && Number.isFinite(n.deltaMs);
 }
 
+/** 유효 타격의 평균·표준편차·같은 부호 비율 */
+function deltaStats(valid: readonly (JudgedNote & { deltaMs: number })[]): Pick<SetupStat, 'meanDelta' | 'stdDelta' | 'sameSignRatio'> {
+  const n = valid.length;
+  if (n === 0) return { meanDelta: null, stdDelta: null, sameSignRatio: null };
+  const mean = valid.reduce((s, v) => s + v.deltaMs, 0) / n;
+  const sign = Math.sign(mean);
+  return {
+    meanDelta: mean,
+    stdDelta: Math.sqrt(valid.reduce((s, v) => s + (v.deltaMs - mean) ** 2, 0) / n),
+    sameSignRatio: sign === 0 ? 0 : valid.filter((v) => Math.sign(v.deltaMs) === sign).length / n,
+  };
+}
+
 export class JudgedWindow {
   private buf: JudgedNote[] = [];
+  /** buf와 같은 순서로, 그 판정이 들어온 때까지의 채보 밖 타격 누적 */
+  private strayTotals: number[] = [];
   private seen = 0;
 
   get total(): number {
     return this.seen;
   }
 
-  push(n: JudgedNote): void {
+  /** strayTotal은 이 플레이에서 지금까지 들어온 채보 밖 타격 수다 */
+  push(n: JudgedNote, strayTotal = 0): void {
     this.buf.push(n);
-    if (this.buf.length > CAPACITY) this.buf.shift();
+    this.strayTotals.push(strayTotal);
+    if (this.buf.length > CAPACITY) {
+      this.buf.shift();
+      this.strayTotals.shift();
+    }
     this.seen += 1;
   }
 
   reset(): void {
     this.buf = [];
+    this.strayTotals = [];
     this.seen = 0;
   }
 
@@ -99,16 +134,18 @@ export class JudgedWindow {
     const valid = recent.filter(isValid);
     const n = valid.length;
 
-    let meanDelta: number | null = null;
-    let sameSignRatio: number | null = null;
-    let stdDelta: number | null = null;
-    if (n > 0) {
-      const mean = valid.reduce((s, v) => s + v.deltaMs, 0) / n;
-      meanDelta = mean;
-      stdDelta = Math.sqrt(valid.reduce((s, v) => s + (v.deltaMs - mean) ** 2, 0) / n);
-      const sign = Math.sign(mean);
-      sameSignRatio = sign === 0 ? 0 : valid.filter((v) => Math.sign(v.deltaMs) === sign).length / n;
-    }
+    const { meanDelta, stdDelta, sameSignRatio } = deltaStats(valid);
+
+    const setupRecent = this.buf.slice(-LIVE_COACH_CONFIG.setup.window);
+    const setupValid = setupRecent.filter(isValid);
+    const strays = this.strayTotals.slice(-LIVE_COACH_CONFIG.setup.window);
+    const setup: SetupStat = {
+      judged: setupRecent.length,
+      validCount: setupValid.length,
+      ...deltaStats(setupValid),
+      misses: setupRecent.filter((v) => v.judgement === 'MISS').length,
+      strayHits: strays.length === 0 ? 0 : strays[strays.length - 1] - strays[0],
+    };
 
     const missRecent = this.buf.slice(-missSize);
     const releaseRecent = this.buf.slice(-LIVE_COACH_CONFIG.miss.releaseWindow);
@@ -166,6 +203,7 @@ export class JudgedWindow {
       pads,
       missInPadWindow: padRecent.filter((v) => v.judgement === 'MISS').length,
       padMisses: [...missByPad.values()],
+      setup,
       hands: [hand(0), hand(1)],
     };
   }

@@ -7,6 +7,8 @@ import { coachPadName, objectParticle } from './padName';
 import type { WindowMetrics } from './window';
 
 export type LiveTag =
+  | 'LIVE_SETUP_OFFSET'
+  | 'LIVE_SETUP_PADS'
   | 'LIVE_PAD_MISS'
   | 'LIVE_MISS_STREAK'
   | 'LIVE_LATE'

@@ -1,6 +1,6 @@
 // 실시간 코칭 화면 문구 표. CoachMessage(태그+대상)를 연주 안내 칸에 띄울 제목·보조·모드로 바꾼다.
 // 문구·톤은 이 파일에서만 고친다(모듈의 text는 플레이 로그 전용). 모드는 문자열만 돌려주고
-// GuideSlot 컴포넌트를 가져오지 않는다. 지적 제목은 10자, 칭찬 제목은 13자, 보조는 16자 안쪽으로 쓴다.
+// GuideSlot 컴포넌트를 가져오지 않는다. 지적 제목은 10자, 칭찬과 세팅 안내 제목은 13자, 보조는 16자 안쪽으로 쓴다.
 // 같은 태그가 다시 뜨면 repeat 순서대로 제목을 돌려 쓴다(난수를 쓰지 않아 재생 결과가 같다).
 import { coachPadName, objectParticle, padMissHint } from './padName';
 import type { CoachMessage } from './LiveCoach';
@@ -31,6 +31,10 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
   const turn = (titles: readonly string[]): string => titles[repeat % titles.length];
 
   switch (tag) {
+    case 'LIVE_SETUP_OFFSET':
+      return { title: '소리 타이밍을 확인해요', sub: '세팅에서 소리 지연을 맞춰요', mode: 'coach-info' };
+    case 'LIVE_SETUP_PADS':
+      return { title: '패드 위치를 확인해요', sub: '세팅에서 패드를 다시 잡아요', mode: 'coach-info' };
     case 'LIVE_PAD_MISS':
       return pad && padLabel
         ? {
