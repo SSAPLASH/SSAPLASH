@@ -66,12 +66,13 @@ public class WithdrawalService {
 		int deletedRecordings = deleteRecordings(userId);
 		int deletedPlays = deleteNonConsentedPlays(userId);
 		int deletedTelemetry = deleteTelemetry(userId);
+		int deletedTelemetryConditions = deleteTelemetryConditions(userId);
 		db.update("DELETE FROM recommendation_items WHERE user_id = ?", userId);
 		db.update("DELETE FROM recommendation_candidates WHERE user_id = ?", userId);
 		revokeRefreshTokens(userId);
 		events.publishEvent(new UserWithdrawnEvent(userId));
-		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedPlays={} deletedTelemetry={}", userId, deletedRecordings,
-				deletedPlays, deletedTelemetry);
+		log.info("회원 탈퇴 userId={} deletedRecordings={} deletedPlays={} deletedTelemetry={} deletedTelemetryConditions={}", userId,
+				deletedRecordings, deletedPlays, deletedTelemetry, deletedTelemetryConditions);
 	}
 
 	/**
@@ -98,6 +99,11 @@ public class WithdrawalService {
 	 */
 	private int deleteTelemetry(long userId) {
 		return db.update("DELETE FROM telemetry_events WHERE user_id = ?", userId);
+	}
+
+	/** 그 회원의 측정 세션 실험 조건(259, 세션당 한 행)을 지운다. 보관 정책이 없어 탈퇴 삭제가 유일한 정리다. */
+	private int deleteTelemetryConditions(long userId) {
+		return db.update("DELETE FROM telemetry_session_conditions WHERE user_id = ?", userId);
 	}
 
 	/** Redis 장애로 탈퇴를 막지 않는다(U2). 남은 토큰은 재발급 때 회원 상태 검사로 거절되고 TTL로 사라진다. */
