@@ -534,7 +534,7 @@ ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 �
   최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
 - `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.
   `velocityHint`, `notation`, `hihatOpen`, `durationMs`, 확장 timing 필드는 없으면 null이며 가짜 기본값을 채우지 않는다.
-- 노트의 `hihatOpen`은 선택 Boolean이다. 저장된 Boolean `true`·`false`를 그대로 반환하고, 부재·null·다른 타입은 null이다. null은 하이햇이 닫혔다는 뜻이 아니라 열림 상태를 알 수 없다는 뜻이다. MIDI 업로드의 46번(열린 하이햇)에 `true`를 기록하며 42·44의 기존 패드 매핑은 유지한다. 기존 채보는 소급 변환하지 않는다.
+- 워커 노트의 `hihatOpen`은 선택 Boolean이다. 신규 결과에서 부재·null·Boolean만 허용한다. 조회 시 `HIHAT`의 Boolean `true`·`false`를 반환하고, 부재·null·과거의 다른 타입과 다른 패드의 값은 null이다. null은 하이햇이 닫혔다는 뜻이 아니라 열림 상태를 알 수 없다는 뜻이다. MIDI 업로드의 46번(열린 하이햇)에 `true`를 기록하며 42·44의 기존 패드 매핑은 유지한다. 기존 채보는 소급 변환하지 않는다.
 - `timing`은 버전에 저장된 값이다. 곡의 현재 BPM으로 대체하지 않는다. `beatsPerBar`는 박자표의 분자이며
   `6/8`을 `6/4`로 해석하면 안 된다. 변박은 `timeSignatureMap`을 함께 사용한다.
 - `notationStatus=PENDING`/`UNAVAILABLE`여도 정상 노트는 조회할 수 있다. `READY`에 이미지가 없는 경우도 유효하다.
