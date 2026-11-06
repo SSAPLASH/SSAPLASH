@@ -139,6 +139,64 @@ class RecommendationServiceTest {
 		assertThat(result.items()).anySatisfy(i -> assertThat(i.reasons()).extracting(RecommendationResponses.Reason::code).contains("WEAK_PAD"));
 	}
 
+	private void report(UUID playId, String weakSegments) {
+		db.update("INSERT INTO reports(play_session_id,timing_histogram,pad_stats,weak_segments,generator_version) VALUES (?, '[]'::jsonb, '[]'::jsonb, ?::jsonb, 'test')", playId, weakSegments);
+	}
+	private static final String TRANSITION_WEAK = "[{\"pattern\":\"TRANSITION_LATE\",\"pads\":[\"SNARE\",\"KICK\"],\"metrics\":{\"severity\":0.9}}]";
+
+	@Test void 연습_추천은_약점에_맞는_곡을_이유와_함께_돌려주고_DRILL로_기록한다() {
+		var id = play(user, mid, midVersion, 90, Instant.now());
+		report(id, TRANSITION_WEAK);
+		var result = service.recommend(user, Context.DRILL, id, 3);
+		assertThat(result.strategy()).isEqualTo("DRILL_V1");
+		assertThat(result.items()).hasSize(1);
+		var item = result.items().getFirst();
+		assertThat(item.song().id()).isNotEqualTo(mid).isNotEqualTo(fast).isNotEqualTo(personal);
+		assertThat(item.reasons()).extracting(RecommendationResponses.Reason::code).containsExactly("DRILL_TRANSITION");
+		assertThat(item.reasons().getFirst().text()).startsWith("스네어에서 킥으로 넘어가는");
+		assertThat(item.focus().pattern()).isEqualTo("TRANSITION_LATE");
+		assertThat(item.focus().pads()).containsExactly("SNARE", "KICK");
+		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE request_id=? AND context='DRILL' AND strategy='DRILL_V1'", Integer.class, result.requestId())).isEqualTo(1);
+		service.click(user, result.requestId(), item.song().id());
+		assertThat(db.queryForObject("SELECT clicked_at IS NOT NULL FROM recommendation_items WHERE request_id=?", Boolean.class, result.requestId())).isTrue();
+	}
+
+	@Test void 연습_추천은_약점이_없거나_분석_전이면_빈_목록이고_기록하지_않는다() {
+		var noWeakness = play(user, mid, midVersion, 90, Instant.now());
+		report(noWeakness, "[]");
+		var pending = play(user, mid, midVersion, 90, Instant.now());
+		db.update("INSERT INTO reports(play_session_id,timing_histogram,pad_stats,generator_version) VALUES (?, '[]'::jsonb, '[]'::jsonb, 'test')", pending);
+		var noReport = play(user, mid, midVersion, 90, Instant.now());
+		for (var id : java.util.List.of(noWeakness, pending, noReport)) {
+			var result = service.recommend(user, Context.DRILL, id, 3);
+			assertThat(result.items()).isEmpty();
+			assertThat(result.strategy()).isEqualTo("DRILL_V1");
+		}
+		assertThat(db.queryForObject("SELECT count(*) FROM recommendation_items WHERE user_id=?", Integer.class, user)).isZero();
+	}
+
+	@Test void 기준_밀도가_없으면_방금_친_채보의_밀도를_쓴다() {
+		var id = play(user, mid, midVersion, 50, Instant.now()); // 85% 미만이라 기준 밀도가 없다
+		report(id, TRANSITION_WEAK);
+		var result = service.recommend(user, Context.DRILL, id, 3);
+		assertThat(result.items()).isNotEmpty();
+		assertThat(result.items()).extracting(i -> i.song().id()).doesNotContain(fast);
+	}
+
+	@Test void 연습_추천은_playId가_필수이고_타인의_연주는_404다() {
+		assertThatThrownBy(() -> service.recommend(user, Context.DRILL, null, 3))
+				.isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode().code()).isEqualTo("INVALID_INPUT"));
+		var othersPlay = play(other, mid, midVersion, 90, Instant.now());
+		assertThatThrownBy(() -> service.recommend(user, Context.DRILL, othersPlay, 3))
+				.isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode().code()).isEqualTo("PLAY_NOT_FOUND"));
+	}
+
+	@Test void 다른_context의_항목에는_focus가_없고_JSON에도_나오지_않는다() {
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
+		assertThat(result.items()).isNotEmpty().allSatisfy(i -> assertThat(i.focus()).isNull());
+		assertThat(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(result.items().getFirst())).doesNotContain("focus");
+	}
+
 	@Test void 타인의_연주나_없는_연주_ID는_404이고_SONG_PICKER에_playId를_주면_400이다() {
 		var othersPlay = play(other, mid, midVersion, 90, Instant.now());
 		assertThatThrownBy(() -> service.recommend(user, Context.REPORT, othersPlay, 5))
