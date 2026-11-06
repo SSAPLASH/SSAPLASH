@@ -17,6 +17,8 @@ export const LIVE_COACH_CONFIG = {
     handSize: 16,
     /** 놓침 몰림 지표 */
     missSize: 6,
+    /** 패드별 놓침 지표(패드마다 표본이 필요해서 더 넓게 본다) */
+    padMissSize: 16,
   },
   /** 이 개수만큼 판정이 쌓이기 전에는 문구를 띄우지 않는다 */
   warmupJudgements: 8,
@@ -55,6 +57,19 @@ export const LIVE_COACH_CONFIG = {
     /** 패드 평균 − 창 평균의 절댓값 ≥ diffCoef × goodMs */
     diffCoef: 0.45,
     releaseCoef: 0.25,
+  },
+  /** 놓침이 한 패드에 몰림 */
+  padMiss: {
+    /** 창 안의 전체 MISS가 이만큼은 있어야 몰림을 판단한다 */
+    minTotalMisses: 4,
+    /** 그 패드의 MISS 개수 */
+    minMisses: 3,
+    /** 전체 MISS 중 그 패드의 비율 */
+    share: 0.6,
+    /** 그 패드 노트 중 MISS 비율. 노트가 많은 패드가 우연히 많이 놓친 것처럼 보이지 않게 한다 */
+    rate: 0.5,
+    /** 그 패드의 MISS가 이 이하이면 거둔다 */
+    releaseMax: 1,
   },
   /** 한쪽 손이 약함 */
   hand: {
