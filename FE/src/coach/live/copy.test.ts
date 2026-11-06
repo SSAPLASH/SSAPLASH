@@ -52,13 +52,13 @@ describe('coachCopy', () => {
     expect(coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: { kind: 'pad', pad: 'FLOOR_TOM' } }), { keyboard: true })!.sub.length).toBeLessThanOrEqual(16);
   });
 
-  it('세팅 안내는 제목 13자, 보조 16자 이내이고 세팅을 가리킨다', () => {
+  it('세팅 안내는 제목 13자, 보조 16자 이내이고 고칠 곳을 가리킨다', () => {
     for (const tag of ['LIVE_SETUP_OFFSET', 'LIVE_SETUP_PADS'] as const) {
       const c = coachCopy(msg({ tag }));
       expect(c?.mode).toBe('coach-info');
       expect(c!.title.length, c!.title).toBeLessThanOrEqual(13);
       expect(c!.sub.length, c!.sub).toBeLessThanOrEqual(16);
-      expect(c!.sub).toContain('세팅');
+      expect(c!.sub).toMatch(/세팅|설정/);
     }
   });
 

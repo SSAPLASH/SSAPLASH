@@ -43,7 +43,7 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -238,7 +238,11 @@ function PlayPageBody() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
-      const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
+      const coach = new LiveCoach({
+        goodMs: settings.timing.goodMs,
+        enabled: settings.liveCoach,
+        setupHints: isStickSensor(useSettings.getState().sensorKind),
+      });
       coachRef.current = coach;
       shadowRef.current = null;
       // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -268,7 +272,7 @@ function PlayPageBody() {
           stickId: e.stickId,
           velocity: e.velocity,
         };
-        const message = coach.push(judged);
+        const message = coach.push(judged, ss.snapshot().strayHits);
         shadowRef.current?.push(judged);
         if (!message) return;
         try {

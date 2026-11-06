@@ -32,7 +32,7 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
 
   switch (tag) {
     case 'LIVE_SETUP_OFFSET':
-      return { title: '소리 타이밍을 확인해요', sub: '세팅에서 소리 지연을 맞춰요', mode: 'coach-info' };
+      return { title: '소리 타이밍을 확인해요', sub: '설정에서 지연 보정을 맞춰요', mode: 'coach-info' };
     case 'LIVE_SETUP_PADS':
       return { title: '패드 위치를 확인해요', sub: '세팅에서 패드를 다시 잡아요', mode: 'coach-info' };
     case 'LIVE_PAD_MISS':

@@ -2,6 +2,8 @@
 // 요약 카드 → [서버 분석 진입] → 판정 분포·타이밍 분포 → (악보 모드) 피드백 카드·약점 마디 미니 악보 → 패드별 표 → 버튼 행.
 // 악보 연주(mode SHEET)는 점수·콤보 대신 정확도 중심이라 요약 카드에 점수 블록이 없다.
 // 곡이 삭제됐으면(곡 상세 404, CHART-001 U7) 결과는 그대로 보이고 「삭제된 곡」 칩과 함께 [다시 하기]·Enter만 숨긴다.
+import { setupTagsOf } from '@/coach/live';
+import { SetupHintCard } from '@/components/result/SetupHintCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/components/ReportEntry';
@@ -177,6 +179,8 @@ export function ResultPage() {
 
         {summary.length > 0 && <PadSummaryTable summary={summary} openHihat={openHihat} />}
         {openHihat && !summary.some((row) => row.pad === 'HIHAT') && <p className="result-caption" aria-label={openHihat.label}>{openHihat.text}</p>}
+
+        <SetupHintCard tags={setupTagsOf(log.liveCoachEvents)} returnTo={`/result/${log.playId}`} />
 
         <div className="result-actions">
           {!songDeleted && (
