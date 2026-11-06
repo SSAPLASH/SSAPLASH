@@ -109,7 +109,6 @@ services:
       RECOMMEND_R3_ENABLED: ${RECOMMEND_R3_ENABLED:-false}
       RECOMMEND_R3_ROLLOUT_PERCENT: ${RECOMMEND_R3_ROLLOUT_PERCENT:-0}
       RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS: ${RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS:-}
-      RECOMMEND_KEY_SECRET: ${RECOMMEND_KEY_SECRET:-}
       # 오브젝트 스토리지(SeaweedFS). 켜는 스위치는 .env에서 정하며 기본은 꺼짐이다.
       # 악보·반주는 읽기용 키로 서명 URL을 만든다. 공개 주소는 브라우저가 접속하는 도메인 루트다.
       CHART_ASSET_ENABLED: ${CHART_ASSET_ENABLED:-false}
