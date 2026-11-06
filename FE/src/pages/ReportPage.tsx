@@ -1,7 +1,7 @@
 // 연주 상세 분석 (COACH-002, 설계 COACH-002 4-3). 서버 리포트만 쓴다 — 로컬 결과 값과 섞지 않는다(D5).
 // 요약이 오면 바로 그리고, 노트 타임라인은 페이지를 끝까지 받아 시간순 정렬한 뒤 그린다(D8).
 // 리포트에 songId가 있으면 그 아래 별도 카드로 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
-// 하단 "AI 추천 연습곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
+// 하단 "추천 곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getChartAssets } from '@/api/charts';
@@ -59,6 +59,7 @@ export function ReportPage() {
     const key = `REPORT:${playId}`;
     return () => {
       clearReco(key);
+      clearReco(`DRILL:${playId}`);
       similarKeys.forEach((k) => clearReco(k));
       similarKeys.clear();
     };
@@ -92,6 +93,15 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     if (!recoEnabled || reportMode === null) return;
     void loadReco(recoKey, { context: 'REPORT', mode: reportMode === 'SHEET' ? 'SHEET' : 'RHYTHM', playId, size: 5 });
   }, [recoEnabled, reportMode, recoKey, playId, loadReco]);
+
+  // 약점 연계 연습은 분석 완료 후 별도 노출로 한 번만 조회한다.
+  const drillKey = `DRILL:${playId}`;
+  const drillEntry = useRecommendations((r) => entryOf(r.entries, drillKey));
+  const analysisDone = report.s === 'ok' && report.v.analysisStatus === 'DONE';
+  useEffect(() => {
+    if (!recoEnabled || !analysisDone || reportMode === null) return;
+    void loadReco(drillKey, { context: 'DRILL', mode: reportMode === 'SHEET' ? 'SHEET' : 'RHYTHM', playId, size: 3 });
+  }, [recoEnabled, analysisDone, reportMode, drillKey, playId, loadReco]);
 
   // 비슷한 곡: 리포트 응답에 songId가 있을 때만(없으면 null로 두고 요청·그리기 모두 안 한다)
   const similarSongId = report.s === 'ok' ? report.v.songId : null;
@@ -238,10 +248,23 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
         />
       </div>
 
+      {recoEnabled && r.analysisStatus === 'DONE' && drillEntry.status === 'ready' && (
+        <div className="card col" style={{ marginTop: 16 }}>
+          <RecommendRow
+            caption="이 약점 연습하기"
+            items={drillEntry.cards}
+            onPick={(item) => {
+              void clickReco(item, drillEntry.requestId);
+              navigate(recommendationPathOf(item, r.mode));
+            }}
+          />
+        </div>
+      )}
+
       {recoEnabled && recoEntry.status === 'ready' && (
         <div className="card col" style={{ marginTop: 16 }}>
           <RecommendRow
-            caption="AI 추천 연습곡"
+            caption="추천 곡"
             items={recoEntry.cards}
             onPick={(item) => {
               // 기록은 기다리지 않는다(D5)
