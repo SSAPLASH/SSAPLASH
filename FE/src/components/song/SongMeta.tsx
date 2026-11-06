@@ -14,7 +14,7 @@ interface Props {
 export function SongMeta({ artist, bpm, durationSec, level, className }: Props) {
   const parts: string[] = [];
   if (artist) parts.push(artist);
-  if (bpm !== undefined) parts.push(`${Math.round(bpm)} BPM`);
+  if (bpm !== undefined) parts.push(`BPM ${Math.round(bpm)}`);
   if (durationSec !== undefined) parts.push(formatDuration(durationSec * 1000));
   if (level) parts.push(level);
   if (parts.length === 0) return null;

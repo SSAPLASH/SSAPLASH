@@ -52,11 +52,12 @@
 }
 .play-sd-line {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-2);
   font-size: 12px;
-}
-.play-sd-line.warn {
-  color: var(--brand-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .play-sd-error {
   margin: 0;
@@ -73,6 +74,15 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.play-sd .ui-btn {
+/* [프리셋 · 준비] 한 줄(Figma 126:3582, 11/03): 위 여백 8, [준비] 폭 120 */
+.play-sd-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
   margin-top: var(--space-s);
+}
+.play-sd .play-sd-prepare {
+  flex: none;
+  width: 120px;
 }
