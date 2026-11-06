@@ -1,6 +1,6 @@
-// 드럼 배치 카드 칩 줄(UX-64): [시스템 기본 · 고정] [내 배치] … [+ 추가하기] | 완료 시각 pill + [전체 보정].
+// 드럼 배치 카드 칩 줄(Figma 765:33421·765:33496, UX-64): [시스템 기본 · 고정] [내 배치] … [+ 추가하기] | 완료 시각 pill + [전체 보정].
 // 보정 중에는 「새 프리셋 · 보정 중」(추가하기) 또는 적용 칩 유지 + 「보정 중 n / 7」 pill + [보정 취소].
-// 상태는 props로만 받고 세션·스토어 호출은 콜백으로 한다. Figma 수치는 디자인 MR에서 입힌다.
+// 상태는 props로만 받고 세션·스토어 호출은 콜백으로 한다.
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -28,6 +28,15 @@ export interface PresetChipsProps {
 /** 저장 슬롯이 다 찼을 때 [추가하기] 비활성 안내(UX-64 U9) */
 export const SLOTS_FULL_TEXT = '슬롯이 다 찼어요 · 프리셋을 지우고 추가하세요';
 
+/** + 아이콘(16px, 텍스트 버튼 색을 따른다) */
+function PlusIcon() {
+  return (
+    <svg className="setup-chips-plus" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+  );
+}
+
 export function PresetChips({
   presets,
   activeId,
@@ -47,7 +56,7 @@ export function PresetChips({
   const locked = busy || calibrating !== null;
 
   return (
-    <div className="setup-chips setup-preset-chips" role="group" aria-label="프리셋">
+    <div className="setup-preset-chips" role="group" aria-label="프리셋">
       <div className="setup-chips-row">
         <Chip selected={system && !newCapture} disabled={locked} onClick={() => onSelect(SYSTEM_PRESET_ID)}>
           시스템 기본 · 고정
@@ -63,8 +72,9 @@ export function PresetChips({
           </Chip>
         ) : (
           sensorMode && (
-            <Button variant="text" size="sm" onClick={onAdd} disabled={locked || !canCalibrate || full} title={full ? SLOTS_FULL_TEXT : undefined}>
-              <span aria-hidden="true">+</span> 추가하기
+            <Button variant="text" size="sm" className="setup-chips-add" onClick={onAdd} disabled={locked || !canCalibrate || full} title={full ? SLOTS_FULL_TEXT : undefined}>
+              <PlusIcon />
+              추가하기
             </Button>
           )
         )}

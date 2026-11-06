@@ -335,9 +335,10 @@
 }
 .setup-kit-body {
   display: grid;
-  grid-template-columns: minmax(0, 720px) minmax(0, 336px);
-  gap: var(--space-m);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 720px) 264px;
+  gap: 32px;
+  justify-content: center;
+  align-items: center;
 }
 @media (max-width: 1024px) {
   .setup-kit-body {
@@ -371,47 +372,75 @@
   color: var(--text-3);
   font-size: 12px;
 }
+/* 선택 패드 카드(Figma 정보 영역 765:33431, UX-62): 폭 264·내용 높이·머리(캡션/이름)·구분선·값 줄(이름 왼쪽·값 오른쪽)·버튼 */
 .setup-padinfo {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
+  gap: 16px;
+  width: 264px;
   padding: var(--space-m);
   border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  align-self: center;
+}
+.setup-padinfo-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-padinfo-caption {
+  font-size: 12px;
+  color: var(--text-1);
 }
 .setup-padinfo-title {
   margin: 0;
-  padding-bottom: var(--space-s);
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.setup-padinfo-rule {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 .setup-padinfo-values {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
+  gap: 10px;
   margin: 0;
 }
 .setup-padinfo-values > div {
   display: flex;
+  justify-content: space-between;
   gap: var(--space-m);
   font-size: 14px;
+  line-height: 1.45;
 }
 .setup-padinfo-values dt {
-  width: 56px;
-  color: var(--text-2);
+  color: var(--text-1);
 }
 .setup-padinfo-values dd {
   margin: 0;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.setup-padinfo-actions {
+  display: flex;
+  gap: var(--space-s);
+}
+.setup-padinfo-actions > .ui-btn {
+  flex: 1;
+  min-width: 0;
 }
 .setup-padinfo-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-s);
+}
+.setup-padinfo-foot > .ui-btn {
+  width: 100%;
 }
 .setup-padinfo-hint {
   color: var(--text-3);
@@ -592,8 +621,11 @@
 
 /* ---- UX-64 프리셋 칩 줄(드럼 배치 카드). 수치는 디자인 MR에서 Figma로 ---- */
 .setup-preset-chips {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-s);
+  gap: var(--space-s);
+  margin-bottom: 12px;
 }
 .setup-chips-row,
 .setup-chips-right {
@@ -601,4 +633,291 @@
   align-items: center;
   gap: var(--space-s);
   flex-wrap: wrap;
+}
+
+/* ---- 반지름 블록(Figma 765:33463, UX-62 ④): 이름·값 행 → 4px 트랙 → 범위 ---- */
+.setup-radius {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.setup-radius-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.setup-radius-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.setup-radius-input {
+  height: 16px;
+}
+.setup-radius-input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+}
+.setup-radius-input::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+}
+.setup-radius-input::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+}
+.setup-radius-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+}
+.setup-radius-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* ---- 칩 줄 세부(Figma 765:33421): [+ 추가하기] 텍스트 버튼의 아이콘 ---- */
+.setup-chips-add {
+  gap: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.setup-chips-plus {
+  flex: none;
+}
+
+/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64): 2열, 높이 118, 전체가 버튼 ---- */
+.setup-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m);
+}
+.setup-tile-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+  scroll-margin-top: 148px;
+}
+.setup-tile-wrap.expanded {
+  grid-column: 1 / -1;
+}
+.setup-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-s);
+  width: 100%;
+  min-height: 118px;
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  text-align: left;
+  font-family: var(--font);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--motion-fast);
+}
+.setup-tile.is-on {
+  border-color: var(--good);
+}
+.setup-tile.is-on::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  background: var(--good);
+  opacity: 0.1;
+  pointer-events: none;
+}
+.setup-tile.is-urgent {
+  border-color: var(--miss);
+}
+.setup-tile:hover {
+  border-color: var(--line-strong);
+}
+.setup-tile.is-on:hover {
+  border-color: var(--good);
+}
+.setup-tile > * {
+  position: relative;
+}
+.setup-tile-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+}
+.setup-tile-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.setup-tile.is-on .setup-tile-dot {
+  background: var(--good);
+}
+.setup-tile.is-urgent .setup-tile-dot {
+  background: var(--miss);
+}
+.setup-tile-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.setup-tile-chevron {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transition: transform var(--motion-fast);
+}
+.setup-tile-wrap.expanded .setup-tile-chevron {
+  transform: rotate(90deg);
+}
+.setup-tile-status {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.setup-tile.is-on .setup-tile-status {
+  color: var(--good);
+}
+.setup-tile.is-urgent .setup-tile-status {
+  color: var(--miss);
+}
+.setup-tile-summary {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.setup-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+@media (max-width: 1024px) {
+  .setup-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- 프리셋 슬롯 창(Figma 772:33828 · Setup / PresetSlot 505:2501): 폭 570, 3열, 슬롯 116 ---- */
+.dialog.setup-slot-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  max-width: 570px;
+  padding: var(--space-l);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.setup-slot-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setup-slot-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.setup-slot-head p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.setup-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.setup-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 116px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  color: var(--text-1);
+  text-align: left;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: border-color var(--motion-fast);
+}
+.setup-slot:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.setup-slot:disabled {
+  cursor: default;
+}
+.setup-slot.active {
+  border: 2px solid var(--good);
+  padding: 11px;
+}
+.setup-slot.is-empty {
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-1);
+}
+.setup-slot.is-empty:disabled {
+  opacity: 0.4;
+}
+.setup-slot:not(.active):not(.is-empty):disabled {
+  opacity: 0.5;
+}
+.setup-slot-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.setup-slot-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-3);
+}
+.setup-slot-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--good);
+}
+.setup-slot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--good);
+}
+.setup-slot-name {
+  margin-top: auto;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.setup-slot.is-empty .setup-slot-name {
+  color: var(--brand-text);
+}
+.setup-slot-meta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.setup-slot-actions {
+  display: flex;
+  justify-content: flex-end;
 }
