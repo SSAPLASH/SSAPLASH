@@ -8,12 +8,10 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import com.ssafy.airdrum.chart.ChartResponses.Note;
-import com.ssafy.airdrum.chart.ChartResponses.Timing;
 import com.ssafy.airdrum.song.feature.ChartFeatures;
-import com.ssafy.airdrum.song.feature.RhythmGrid;
 import static org.assertj.core.api.Assertions.*;
 
-/** R2 유사도 계산. 실제 특징 계산(ChartFeatures·RhythmGrid)을 거친 입력으로 확인해 두 계산이 맞물리는지도 본다. */
+/** R2 유사도 계산. 실제 특징 계산(ChartFeatures)을 거친 입력으로 확인해 두 계산이 맞물리는지도 본다. */
 class SimilarityEngineTest {
 	private static int counter;
 	private static Note note(double t, String pad) { return new Note("n" + counter++, t, pad, null, null); }
@@ -48,26 +46,24 @@ class SimilarityEngineTest {
 	static ChartVector vec(long song, long chart, String difficulty, List<Note> notes, double bpm, String signature) {
 		int duration = (int) Math.ceil(notes.getLast().timeMs()) + 500;
 		var features = ChartFeatures.compute(notes, duration);
-		var grid = RhythmGrid.compute(notes, new Timing(bpm, 0, signature, null, null, null)).grid();
-		assertThat(grid).as("격자가 만들어져야 한다").isNotNull();
 		return new ChartVector(song, chart, difficulty, notes.size(), features.avgNotesPerSec(), bpm, signature,
-				features.padRatio(), features.transitionRatio(), grid.groups(), null);
+				features.padRatio(), features.transitionRatio(), null);
 	}
 	static ChartVector vec(long song, String kind, double bpm) { return vec(song, song * 10, "NORMAL", pattern(kind, 8, bpm), bpm, "4/4"); }
 
 	/** 같은 특징에서 밀도·노트 수만 바꾼 채보. */
 	static ChartVector withDensity(ChartVector base, long song, long chart, String difficulty, int noteCount, double density) {
-		return new ChartVector(song, chart, difficulty, noteCount, density, base.bpm(), base.timeSignature(), base.padRatio(), base.transitionRatio(), base.groups(), base.meta());
+		return new ChartVector(song, chart, difficulty, noteCount, density, base.bpm(), base.timeSignature(), base.padRatio(), base.transitionRatio(), base.meta());
 	}
 
 	@Test void 같은_채보끼리는_1이고_순서를_바꿔도_같다() {
 		var a = vec(1, "ROCK", 120);
 		var b = vec(2, "FOUR", 120);
 		assertThat(SimilarityEngine.similarity(a, a)).isCloseTo(1.0, within(1e-9));
-		assertThat(SimilarityEngine.similarity(a, b)).isEqualTo(SimilarityEngine.similarity(b, a));
+		assertThat(SimilarityEngine.similarity(a, b)).isCloseTo(SimilarityEngine.similarity(b, a), within(1e-12)); // 합산 순서에 따른 부동소수 오차만 허용
 	}
 
-	@Test void 같은_종류의_리듬은_다른_종류보다_가깝다() {
+	@Test void 같은_종류의_패턴은_다른_종류보다_가깝다() {
 		var rock = vec(1, "ROCK", 120);
 		double sameKind = SimilarityEngine.similarity(rock, vec(2, "ROCK", 125));
 		assertThat(sameKind).isGreaterThan(0.9);
@@ -75,7 +71,7 @@ class SimilarityEngineTest {
 		assertThat(sameKind).isGreaterThan(SimilarityEngine.similarity(rock, vec(4, "SHUFFLE", 120)));
 	}
 
-	@Test void 노트를_10퍼센트_빼거나_격자_안에서_흔든_사본은_후보_중_1위다() {
+	@Test void 노트를_10퍼센트_빼거나_시각을_흔든_사본은_후보_중_1위다() {
 		var original = pattern("ROCK", 8, 120);
 		var dropped = new ArrayList<Note>();
 		for (int i = 0; i < original.size(); i++) if (i % 10 != 9) dropped.add(original.get(i));
@@ -100,13 +96,17 @@ class SimilarityEngineTest {
 
 	@Test void 최소_유사도_미만은_결과에_없다() {
 		var source = vec(1, "ROCK", 120);
-		var alien = new ChartVector(2, 20, "NORMAL", 100, 8.0, 60, "4/4", Map.of("TOM", 1.0), Map.of(),
-				Map.of("KICK", zeros(), "SNARE", zeros(), "HAT", zeros(), "CYMBAL", zeros(), "TOM", oneHot(5)), null);
+		var alien = new ChartVector(2, 20, "NORMAL", 100, 8.0, 60, "4/4", Map.of("TOM", 1.0), Map.of(), null);
 		assertThat(SimilarityEngine.similarity(source, alien)).isLessThan(SimilarityEngine.MIN_SIMILARITY);
 		assertThat(SimilarityEngine.rank(source, List.of(alien), null, 5)).isEmpty();
 	}
-	private static List<Double> zeros() { return Collections.nCopies(12, 0.0); }
-	private static List<Double> oneHot(int i) { var l = new ArrayList<>(zeros()); l.set(i, 1.0); return l; }
+
+	@Test void 박자표나_템포를_모르는_곡도_비교한다() {
+		var known = vec(1, 10, "NORMAL", pattern("ROCK", 8, 120), 120, "4/4");
+		var unknown = new ChartVector(2, 20, "NORMAL", known.noteCount(), known.density(), 0, null, known.padRatio(), known.transitionRatio(), null);
+		// 템포 점수만 0이고 박자표 감점은 없다
+		assertThat(SimilarityEngine.similarity(known, unknown)).isCloseTo(1 - SimilarityEngine.W_TEMPO, within(1e-9));
+	}
 
 	@Test void 기준_곡_자신은_빠지고_곡당_하나만_나온다() {
 		var source = vec(1, "ROCK", 120);
@@ -198,10 +198,10 @@ class SimilarityEngineTest {
 
 	@Test void 비슷한_이유는_기여가_큰_요소_최대_2개이고_점수가_낮은_요소는_빠진다() {
 		var a = vec(1, "ROCK", 120);
-		var tempoOff = vec(2, "ROCK", 160); // 리듬·패드는 같고 템포는 1.41배를 넘어 0점
+		var tempoOff = vec(2, "ROCK", 180); // 패드는 같고 템포는 1.41배를 넘어 0점
 		var ranked = SimilarityEngine.rank(a, List.of(tempoOff), null, 5);
 		assertThat(ranked).hasSize(1);
-		assertThat(ranked.getFirst().matchedOn()).hasSizeLessThanOrEqualTo(2).doesNotContain(SimilarityEngine.TEMPO).contains(SimilarityEngine.RHYTHM);
+		assertThat(ranked.getFirst().matchedOn()).hasSizeLessThanOrEqualTo(2).doesNotContain(SimilarityEngine.TEMPO).contains(SimilarityEngine.PADS);
 	}
 
 	@Test void 후보가_없으면_빈_목록() {
