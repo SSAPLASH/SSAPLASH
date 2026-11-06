@@ -82,3 +82,9 @@
   color: var(--text-3);
   font-size: 11px;
 }
+
+.play-sl-open {
+  display: block;
+  color: var(--text-2);
+  font-size: 11px;
+}

@@ -42,6 +42,7 @@ import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
+import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/hihatPedalCoverage';
 import { readCurrentConsent } from '@/app/dataConsent';
 import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
@@ -178,6 +179,12 @@ function SheetPageBody() {
   }, [stage, activeSession, pauseReason, screenOk]);
 
   const recorder = useRef(new PlayRecorder());
+  const pedalCoverage = useRef<HihatPedalCoverageTracker | null>(null);
+  const openWarnings = useRef(new Map<number, number>());
+
+  useEffect(() => inputManager.onPedalStatus((foot, connected) => {
+    if (foot === 2) pedalCoverage.current?.connection(connected);
+  }), []);
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
@@ -202,8 +209,11 @@ function SheetPageBody() {
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
   useEffect(() => {
     setSoundOnHit(false);
+    const warnings = openWarnings.current;
     return () => {
       diagSessionEnd('left');
+      pedalCoverage.current = null;
+      warnings.clear();
       setSoundOnHit(true);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
@@ -309,6 +319,12 @@ function SheetPageBody() {
       const ev = active ? ss.handleHit(hit) : null;
       if (active) {
         const lh = recorder.current.hit(hit, ev, ss);
+        if (ev && (ev.judgement === 'PERFECT' || ev.judgement === 'GOOD') && ss.notes[ev.noteIndex].note.hihatOpen === true) {
+          if (hit.hihatClosed == null) pedalCoverage.current?.unknownHit();
+          if (shouldWarnOpenHihat(true, ev.judgement, hit.hihatClosed, inputManager.getHihatPedalState().connected)) {
+            openWarnings.current.set(ev.noteIndex, performance.now() + 400);
+          }
+        }
         // 채보 밖 타격: 악보에 작은 점으로 남긴다. 판정과 같은 곡 시각(오디오 오프셋 반영)
         if (!ev && hit.pad && lh.tSongMs !== undefined) {
           const timeMs = lh.tSongMs;
@@ -352,6 +368,7 @@ function SheetPageBody() {
       const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         mode: 'SHEET',
+        hihatPedalCoverage: pedalCoverage.current?.value(),
         snapshot: ss.snapshot(),
         notes: ss.notes,
         hits: recorder.current.hits,
@@ -369,6 +386,8 @@ function SheetPageBody() {
         consent: consentAtStart.current,
         liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
+      pedalCoverage.current = null;
+      openWarnings.current.clear();
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
@@ -395,6 +414,9 @@ function SheetPageBody() {
 
   const resetRun = useCallback((ss: RhythmSession) => {
     recorder.current.reset();
+    const pedal = inputManager.getHihatPedalState();
+    pedalCoverage.current = new HihatPedalCoverageTracker(pedal.connected, pedal.closed !== null);
+    openWarnings.current.clear();
     finishing.current = false;
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
@@ -472,6 +494,8 @@ function SheetPageBody() {
   /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
   const leave = useCallback(() => {
     diagSessionEnd('left');
+    pedalCoverage.current = null;
+    openWarnings.current.clear();
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -490,6 +514,8 @@ function SheetPageBody() {
 
   const toSelect = useCallback(() => {
     diagSessionEnd('left');
+    pedalCoverage.current = null;
+    openWarnings.current.clear();
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -761,6 +787,7 @@ function SheetPageBody() {
         }
         area={
           <SheetPager
+            openWarnings={openWarnings}
             chart={chart}
             noteStates={noteStates}
             strayHits={strays}

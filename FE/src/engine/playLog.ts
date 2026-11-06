@@ -1,5 +1,6 @@
 // 플레이 로그 (공통 명세서 9-3) 의 로컬 버전. 텔레메트리는 telemetry.ts.
 // localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 app/playSync가 이 로그로 하고 상태를 upload에 적는다.
+import type { HihatPedalCoverage } from '@/domain/hihatPedalCoverage';
 import type { Judgement, TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
 import { normalizePadId, type PadId } from '@/domain/pads';
@@ -10,6 +11,7 @@ export interface LoggedHit {
   /** null = 손 없음(페달 타격) */
   stickId: 0 | 1 | null;
   pad: PadId | null;
+  hihatClosed?: boolean | null;
   velocity: number;
   tHit: number;
   tRecv: number;
@@ -35,6 +37,7 @@ export interface LogNote {
   index: number;
   timeMs: number;
   pad: PadId;
+  hihatOpen?: true;
   judgement: Judgement | null;
   deltaMs: number | null;
   /** BE 채보 노트 id. 내장 채보·이전 로그는 없다 */
@@ -70,6 +73,7 @@ export interface PlayLog {
   difficulty: string;
   mode: 'RHYTHM' | 'FREE' | 'SHEET';
   inputSource: InputSourceKind;
+  hihatPedalCoverage?: HihatPedalCoverage;
   startedAt: string;
   durationMs: number;
   timing: TimingWindows;
@@ -163,6 +167,7 @@ export function buildPlayLog(args: {
   consent: boolean;
   /** 기본 'RHYTHM' */
   mode?: PlayLog['mode'];
+  hihatPedalCoverage?: HihatPedalCoverage;
   /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
   missSeqs?: ReadonlyMap<number, number>;
   audioOffsetMs?: number;
@@ -198,6 +203,7 @@ export function buildPlayLog(args: {
       index: n.index,
       timeMs: n.note.timeMs,
       pad: n.note.pad,
+      ...(n.note.pad === 'HIHAT' && n.note.hihatOpen === true ? { hihatOpen: true as const } : {}),
       judgement: n.judgement,
       deltaMs: n.deltaMs,
       noteId: n.note.noteId ?? null,
@@ -216,6 +222,7 @@ export function buildPlayLog(args: {
     lastSongTimeMs: s.songTimeMs,
     elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
     sourceNoteCount: args.chart.sourceNoteCount ?? null,
+    ...(args.hihatPedalCoverage ? { hihatPedalCoverage: args.hihatPedalCoverage } : {}),
     ...(args.liveCoachEvents ? { liveCoachEvents: args.liveCoachEvents } : {}),
   };
 }
@@ -284,6 +291,7 @@ export function toLoggedHit(h: ResolvedHit): LoggedHit {
     hitId: h.id,
     stickId: h.stickId,
     pad: h.pad,
+    ...(h.pad === 'HIHAT' ? { hihatClosed: h.hihatClosed ?? null } : {}),
     velocity: h.velocity,
     tHit: h.tHit,
     tRecv: h.tRecv,
