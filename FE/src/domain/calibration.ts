@@ -57,6 +57,8 @@ export interface PadAnchor {
   yaw: number;
   /** 판정 반경 (도). computeBoundaries가 채운다 */
   radius: number;
+  /** 사용자가 슬라이더로 정한 판정 반경(도, UX-64 D9). 있으면 computeBoundaries가 자동값 대신 clamp해서 radius에 넣는다 */
+  radiusOverride?: number;
   /** 중심을 잡을 때 쓴 샘플 수 */
   samples: number;
   /** 샘플 퍼짐 (도). 손떨림·센서 노이즈 지표 */
@@ -171,10 +173,33 @@ export function computeBoundaries(
       if (b.pad === a.pad) continue;
       nearest = Math.min(nearest, angleBetween(a, b));
     }
-    const radius = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, Math.max(minRadiusDeg, nearest * radiusFactor)) : maxRadiusDeg;
+    const auto = Number.isFinite(nearest) ? Math.min(maxRadiusDeg, Math.max(minRadiusDeg, nearest * radiusFactor)) : maxRadiusDeg;
+    const radius = a.radiusOverride !== undefined ? clampRadius(a.radiusOverride, minRadiusDeg, maxRadiusDeg) : auto;
     out[a.pad] = { ...a, radius };
   }
   return out;
+}
+
+/** 판정 반경을 하한·상한으로 자른다. 상한이 하한보다 작으면 상한이 이긴다(computeBoundaries와 같은 규칙) */
+export function clampRadius(deg: number, minRadiusDeg: number, maxRadiusDeg: number): number {
+  return Math.min(maxRadiusDeg, Math.max(minRadiusDeg, deg));
+}
+
+/**
+ * 한 손 앵커 집합에서 한 패드의 판정 반경을 사용자 값으로 덮어쓴다(UX-64 D9). 그 패드 앵커가 없으면 그대로.
+ * radius도 함께 바꿔 computeBoundaries를 다시 돌리지 않아도 프로필·표에 반영된다
+ */
+export function withRadiusOverride(
+  set: HandAnchorSet | null,
+  pad: PadId,
+  deg: number,
+  minRadiusDeg: number,
+  maxRadiusDeg: number,
+): HandAnchorSet | null {
+  const a = set?.[pad];
+  if (!set || !a) return set;
+  const radius = clampRadius(deg, minRadiusDeg, maxRadiusDeg);
+  return { ...set, [pad]: { ...a, radiusOverride: radius, radius } };
 }
 
 export interface PadResolution {
