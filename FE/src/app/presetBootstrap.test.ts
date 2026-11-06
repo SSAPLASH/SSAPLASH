@@ -4,7 +4,7 @@ import { ServerPresetSource } from '@/api/presets';
 import { resetForTest } from '@/api/auth';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
-import type { KitPreset } from '@/domain/preset';
+import { SYSTEM_PRESET_ID, type KitPreset } from '@/domain/preset';
 import { resetAuthStoreForTest, useAuth, type AuthStatus } from '@/store/authStore';
 import { LocalPresetSource } from '@/store/localPresetSource';
 import { usePresets } from '@/store/presetStore';
@@ -70,7 +70,9 @@ beforeEach(() => {
   resetPresetBootstrapForTest();
   useSettings.setState({
     presets: [],
-    activePresetId: null,
+    // 목록에 없는 id = "적용 중인 프리셋이 없다"(시스템 기본은 항상 유효해 기본 프리셋으로 덮지 않는다)
+    activePresetId: 'stale-none',
+    presetAnchors: {},
     kitLayout: DEFAULT_KIT_LAYOUT,
     soundSetId: 'ssaplash',
   });
@@ -127,15 +129,25 @@ describe('syncPresetSource', () => {
     expect(settings().soundSetId).toBe('ssaplash');
   });
 
-  it('authenticated: 기본 프리셋이 없고 적용 중인 것도 목록에 없으면 적용 프리셋을 비운다', async () => {
+  it('authenticated: 기본 프리셋이 없고 적용 중인 것도 목록에 없으면 시스템 기본을 적용한다(UX-64 D1)', async () => {
     mockServer([{ ...SERVER[1], isDefault: false }]);
     useSettings.setState({ activePresetId: 'local-1', kitLayout: TIGHT_LAYOUT });
 
     await syncPresetSource('authenticated');
 
     expect(presets().items.map((p) => p.id)).toEqual(['8']);
-    expect(settings().activePresetId).toBeNull();
-    expect(settings().kitLayout).toEqual(TIGHT_LAYOUT);
+    expect(settings().activePresetId).toBe(SYSTEM_PRESET_ID);
+    expect(settings().kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
+  });
+
+  it('authenticated: 시스템 기본이 적용 중이면 기본 프리셋이 있어도 그대로 둔다', async () => {
+    mockServer();
+    useSettings.setState({ activePresetId: SYSTEM_PRESET_ID });
+
+    await syncPresetSource('authenticated');
+
+    expect(settings().activePresetId).toBe(SYSTEM_PRESET_ID);
+    expect(settings().kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
   });
 
   it('authenticated: 목록 읽기에 실패하면 오류 상태만 남기고 적용 프리셋은 건드리지 않는다', async () => {
@@ -172,7 +184,7 @@ describe('syncPresetSource', () => {
 
     expect(presets().source).toBeInstanceOf(LocalPresetSource);
     expect(presets().items).toEqual([]);
-    expect(settings().activePresetId).toBeNull();
+    expect(settings().activePresetId).toBe(SYSTEM_PRESET_ID);
   });
 
   it('같은 상태를 다시 받으면 목록을 다시 읽지 않는다', async () => {

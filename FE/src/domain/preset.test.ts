@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
-import { PRESET_NAME_MAX, isDirty, layoutEquals, normalizePresetName, validatePresetName, type KitPreset } from './preset';
+import {
+  PRESET_NAME_MAX,
+  SYSTEM_PRESET_ID,
+  isDirty,
+  isSystemPreset,
+  layoutEquals,
+  normalizePresetName,
+  presetDisplayName,
+  validatePresetName,
+  type KitPreset,
+} from './preset';
 
 function preset(over: Partial<KitPreset> = {}): KitPreset {
   return {
@@ -44,6 +54,17 @@ describe('isDirty', () => {
   it('배치가 다르면 true', () => expect(isDirty({ ...cur, layout: WIDE_LAYOUT }, preset())).toBe(true));
   it('사운드가 다르면 true', () => expect(isDirty({ ...cur, soundSetId: 'synth' }, preset())).toBe(true));
   it('적용 프리셋이 없으면 true', () => expect(isDirty(cur, undefined)).toBe(true));
+});
+
+describe('시스템 기본 프리셋(UX-64 D1)', () => {
+  it('isSystemPreset·presetDisplayName', () => {
+    expect(isSystemPreset(SYSTEM_PRESET_ID)).toBe(true);
+    expect(isSystemPreset('a')).toBe(false);
+    expect(isSystemPreset(null)).toBe(false);
+    expect(presetDisplayName([preset()], SYSTEM_PRESET_ID)).toBe('시스템 기본');
+    expect(presetDisplayName([preset()], 'a')).toBe('기본');
+    expect(presetDisplayName([preset()], 'zzz')).toBeNull();
+  });
 });
 
 describe('layoutEquals', () => {
