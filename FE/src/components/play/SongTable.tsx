@@ -1,5 +1,6 @@
 // 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 곡 난이도 · 최고 점수(sheet 모드는 최고 정확도).
 // 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡. 곡 로딩은 호출자가 한다(props만 받는다).
+// 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { songLevelLabel, songStatusView, type SongSummary } from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
@@ -87,9 +88,11 @@ interface Props {
   bestAccuracies?: ReadonlyMap<number, number>;
   /** true면 고를 수 없는 곡(처리 중·실패) */
   isLocked?: (song: SongSummary) => boolean;
+  /** 곡이 없을 때 본문 가운데 내용 */
+  emptyState?: ReactNode;
 }
 
-export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked }: Props) {
+export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked, emptyState }: Props) {
   const columns = COLUMNS_BY_MODE[mode];
   const bests = mode === 'sheet' ? bestAccuracies : bestScores;
   const [rawPage, setPage] = useState(0);
@@ -146,6 +149,11 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
           </tr>
         </thead>
         <tbody ref={bodyRef} onKeyDown={onKeyDown}>
+          {songs.length === 0 && (
+            <tr className="play-st-empty">
+              <td colSpan={columns.length}>{emptyState}</td>
+            </tr>
+          )}
           {rows.map((song) => {
             const isLock = locked(song);
             const selected = song.id === selectedId;
