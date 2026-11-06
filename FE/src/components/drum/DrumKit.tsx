@@ -1,7 +1,18 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion } from 'motion/react';
 import type { PadId } from '@/domain/pads';
-import { DRUM_KIT_H, DRUM_KIT_W, fitScale, kitPadsFor, kitSizeAt, type KitSkin, type PadBadge, type PadVisualState } from '@/domain/drumKit';
+import {
+  DRUM_KIT_H,
+  DRUM_KIT_W,
+  fitScale,
+  kitPadsFor,
+  kitSizeAt,
+  placePad,
+  type DrumKitPad,
+  type KitSkin,
+  type PadBadge,
+  type PadVisualState,
+} from '@/domain/drumKit';
 import { HitEffects } from './HitEffects';
 import { Pad, PadDefs } from './Pad';
 import { usePadHitPulse } from './usePadStates';
@@ -27,6 +38,20 @@ export interface DrumKitProps {
   hitSeq?: Partial<Record<PadId, number>>;
   /** 타격 이펙트(충격파 링·심벌 스파크) 표시. 기본 false — 연주 화면에서만 켠다 */
   effects?: boolean;
+  /** 패드 헤드 중심을 정규화 좌표(0~1)로 덮어쓴다(보정 화면: 실제 친 위치). 없는 패드는 고정 배치 */
+  placement?: Partial<Record<PadId, { x: number; y: number }>>;
+  /** 그리지 않을 패드(보정 화면: 아직 안 잡은 패드) */
+  hidden?: PadId[];
+  /** 유령(반투명 + 링 깜빡임)으로 그릴 목표 패드 */
+  ghost?: PadId;
+  /** 흐리게 그릴 패드(보정 대상이 아닌 페달 패드) */
+  faded?: PadId[];
+  /** 패드가 새로 나타날 때 0.2s 확대 모션(보정 화면). 동작 줄이기면 즉시 */
+  appear?: boolean;
+  /** 킷 전체를 어둡게(0.18). lit 패드만 제외(UX-64 보정 무대) */
+  dimAll?: boolean;
+  /** 원래 밝기 + 브랜드색 글로우로 켤 패드(지금 칠 패드) */
+  lit?: PadId;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -84,6 +109,13 @@ export function DrumKit({
   skin = 'acoustic',
   hitSeq,
   effects = false,
+  placement,
+  hidden,
+  ghost,
+  faded,
+  appear = false,
+  dimAll = false,
+  lit,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -103,7 +135,13 @@ export function DrumKit({
   const eff = fitWidth ? (fit ?? scale) : scale;
   const { width, height } = kitSizeAt(eff);
 
-  const pads = kitPadsFor(skin);
+  // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
+  const pads: readonly DrumKitPad[] = kitPadsFor(skin)
+    .filter((p) => !hidden?.includes(p.pad))
+    .map((p) => {
+      const at = placement?.[p.pad];
+      return at ? placePad(p, at.x, at.y) : p;
+    });
   const shakes = usePadShakeCounts(effects, (pad) => pads.find((p) => p.pad === pad)?.shape);
   // 킥 진동은 킷 전체(패드와 이펙트 레이어)를 흔든다. 이펙트가 꺼진 킷은 감싸지 않는다
   const withKitShake = (kids: ReactNode) =>
@@ -130,7 +168,9 @@ export function DrumKit({
       {withKitShake(
         <>
       {pads.map((p) => {
-        const pad = (
+        const isGhost = ghost === p.pad;
+        const isFaded = faded?.includes(p.pad) === true;
+        const padEl = (
         <Pad
           key={p.pad}
           shape={p.shape}
@@ -139,7 +179,7 @@ export function DrumKit({
           w={p.w}
           label={p.label}
           labelVisible={labels}
-          state={states?.[p.pad] ?? 'idle'}
+          state={isGhost ? 'armed' : (states?.[p.pad] ?? 'idle')}
           badge={badges?.[p.pad]}
           badgeHighlight={highlight === p.pad}
           defsId={defsId}
@@ -158,6 +198,24 @@ export function DrumKit({
               : undefined
           }
         />
+        );
+        // 유령·흐림·나타남은 패드 바깥 그룹에 건다(Pad 마크업 불변)
+        const isLit = lit === p.pad;
+        const wrapClass = [
+          isGhost ? 'drum-pad-ghost' : '',
+          isFaded ? 'drum-pad-faded' : '',
+          appear && !isGhost ? 'drum-pad-appear' : '',
+          dimAll && !isLit ? 'drum-pad-dim' : '',
+          isLit ? 'drum-pad-lit' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const pad = wrapClass ? (
+          <g className={wrapClass} data-ghost={isGhost || undefined}>
+            {padEl}
+          </g>
+        ) : (
+          padEl
         );
         // 이펙트가 켜진 킷만 패드별 진동 그룹으로 감싼다(꺼진 킷은 마크업 불변). 킥은 킷 전체 그룹이 흔든다
         return effects ? (

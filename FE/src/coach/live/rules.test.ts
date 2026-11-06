@@ -16,6 +16,9 @@ function metrics(over: Partial<WindowMetrics> = {}): WindowMetrics {
     trailingMisses: 0,
     missInRelease: 0,
     pads: [],
+    missInPadWindow: 0,
+    padMisses: [],
+    setup: { judged: 0, validCount: 0, meanDelta: null, stdDelta: null, sameSignRatio: null, misses: 0, strayHits: 0 },
     hands: [
       { count: 0, meanVelocity: 0 },
       { count: 0, meanVelocity: 0 },
@@ -210,10 +213,48 @@ describe('LIVE_MISS_STREAK', () => {
   });
 });
 
+describe('LIVE_PAD_MISS', () => {
+  const miss = (over: Partial<WindowMetrics>) => evaluateRules(metrics(over), th);
+
+  it('놓침이 한 패드에 몰리면 그 패드를 안내한다', () => {
+    const r = miss({ missInPadWindow: 4, padMisses: [{ pad: 'SMALL_TOM', misses: 3, notes: 5 }, { pad: 'SNARE', misses: 1, notes: 11 }] });
+    const e = find(r, 'LIVE_PAD_MISS:SMALL_TOM');
+    expect(e.trigger).toBe(true);
+    expect(e.target).toEqual({ kind: 'pad', pad: 'SMALL_TOM' });
+    expect(e.text).toContain('탐1을');
+    expect(find(r, 'LIVE_PAD_MISS:SNARE').trigger).toBe(false);
+  });
+
+  it('전체 놓침이 적으면 띄우지 않는다', () => {
+    expect(find(miss({ missInPadWindow: 3, padMisses: [{ pad: 'SNARE', misses: 3, notes: 4 }] }), 'LIVE_PAD_MISS:SNARE').trigger).toBe(false);
+  });
+
+  it('놓침이 여러 패드에 흩어지면 띄우지 않는다', () => {
+    const r = miss({ missInPadWindow: 6, padMisses: [{ pad: 'SNARE', misses: 3, notes: 5 }, { pad: 'HIHAT', misses: 3, notes: 5 }] });
+    expect(find(r, 'LIVE_PAD_MISS:SNARE').trigger).toBe(false);
+  });
+
+  it('노트가 많은 패드는 놓침 비율이 낮으면 띄우지 않는다', () => {
+    const r = miss({ missInPadWindow: 4, padMisses: [{ pad: 'HIHAT', misses: 4, notes: 14 }] });
+    expect(find(r, 'LIVE_PAD_MISS:HIHAT').trigger).toBe(false);
+  });
+
+  it('페달은 평가하지 않는다', () => {
+    const r = miss({ missInPadWindow: 4, padMisses: [{ pad: 'KICK', misses: 4, notes: 4 }] });
+    expect(r.some((e) => e.key === 'LIVE_PAD_MISS:KICK')).toBe(false);
+  });
+
+  it('그 패드의 놓침이 1개 이하가 되면 거둔다', () => {
+    expect(find(miss({ missInPadWindow: 1, padMisses: [{ pad: 'SNARE', misses: 1, notes: 6 }] }), 'LIVE_PAD_MISS:SNARE').release).toBe(true);
+    expect(find(miss({ missInPadWindow: 2, padMisses: [{ pad: 'SNARE', misses: 2, notes: 6 }] }), 'LIVE_PAD_MISS:SNARE').release).toBe(false);
+  });
+});
+
 describe('우선순위 값', () => {
-  it('놓침 < 늦음·빠름 < 패드 < 손 < 박자 순으로 작다', () => {
+  it('패드 놓침 < 놓침 < 늦음·빠름 < 패드 < 손 < 박자 순으로 작다', () => {
     const r = evaluateRules(metrics(), th);
     const p = (k: string) => find(r, k).priority;
+    expect(p('LIVE_PAD_MISS:SNARE')).toBeLessThan(p('LIVE_MISS_STREAK'));
     expect(p('LIVE_MISS_STREAK')).toBeLessThan(p('LIVE_LATE'));
     expect(p('LIVE_LATE')).toBeLessThan(p('LIVE_PAD_LATE:SNARE'));
     expect(p('LIVE_PAD_LATE:SNARE')).toBeLessThan(p('LIVE_HAND_WEAK:0'));

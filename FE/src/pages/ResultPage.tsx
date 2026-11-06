@@ -2,6 +2,8 @@
 // 요약 카드 → [서버 분석 진입] → 판정 분포·타이밍 분포 → (악보 모드) 피드백 카드·약점 마디 미니 악보 → 패드별 표 → 버튼 행.
 // 악보 연주(mode SHEET)는 점수·콤보 대신 정확도 중심이라 요약 카드에 점수 블록이 없다.
 // 곡이 삭제됐으면(곡 상세 404, CHART-001 U7) 결과는 그대로 보이고 「삭제된 곡」 칩과 함께 [다시 하기]·Enter만 숨긴다.
+import { setupTagsOf } from '@/coach/live';
+import { SetupHintCard } from '@/components/result/SetupHintCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/components/ReportEntry';
@@ -27,7 +29,7 @@ import { buttonClassName } from '@/components/ui/buttonStyle';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPlayDate } from '@/domain/playLogView';
 import { timingHistogram } from '@/domain/timingHistogram';
-import { buildFeedback, chartFromLog, summarizeByPad } from '@/domain/feedback';
+import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from '@/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
 import { getPlayLog, type PlayLog } from '@/engine/playLog';
 
@@ -62,6 +64,7 @@ export function ResultPage() {
   const feedback = useMemo(() => (log && showLocalFeedback ? buildFeedback(log, log.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs } : undefined) : []), [log, showLocalFeedback]);
   // 패드별 표는 통계라 모든 모드에서 보인다(업로드 대상이어도)
   const summary = useMemo(() => (log ? summarizeByPad(log) : []), [log]);
+  const openHihat = useMemo(() => (log ? summarizeOpenHihat(log) : null), [log]);
   // 약점 마디 미니 악보. 이전 로그(bpm 없음)는 채보를 못 만들어 스니펫·카드 클릭이 없다
   const snippetChart = useMemo(() => (log && showLocalFeedback ? chartFromLog(log) : null), [log, showLocalFeedback]);
   const noteStates = useMemo(() => (log ? log.notes.map((n) => n.judgement) : []), [log]);
@@ -174,7 +177,10 @@ export function ResultPage() {
           </section>
         )}
 
-        {summary.length > 0 && <PadSummaryTable summary={summary} />}
+        {summary.length > 0 && <PadSummaryTable summary={summary} openHihat={openHihat} />}
+        {openHihat && !summary.some((row) => row.pad === 'HIHAT') && <p className="result-caption" aria-label={openHihat.label}>{openHihat.text}</p>}
+
+        <SetupHintCard tags={setupTagsOf(log.liveCoachEvents)} returnTo={`/result/${log.playId}`} />
 
         <div className="result-actions">
           {!songDeleted && (

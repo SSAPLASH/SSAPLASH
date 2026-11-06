@@ -18,6 +18,7 @@ const song = (id: number, accompanimentStatus: AccompanimentStatus): SongSummary
   difficulties: [],
   createdAt: '2026-11-03T00:00:00Z',
   coverUrl: null,
+  sheetId: null,
 });
 
 /** 한 회차의 타이머를 넘기고 조회 Promise들을 흘려 보낸다 */

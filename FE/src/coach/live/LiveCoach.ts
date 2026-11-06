@@ -5,6 +5,7 @@
 import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { CoachPolicy } from './policy';
 import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
+import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
 import { JudgedWindow, type JudgedNote } from './window';
 
 export interface LiveCoachOptions {
@@ -14,6 +15,8 @@ export interface LiveCoachOptions {
   enabled?: boolean;
   /** 임계값 기준 방식. 생략하면 config의 COACH_BASIS(기본 fixed) */
   basis?: CoachBasis;
+  /** 세팅 안내를 켠다. 스틱 입력에서만 true로 준다. 기본 false */
+  setupHints?: boolean;
 }
 
 export interface CoachMessage {
@@ -46,6 +49,9 @@ const MAX_LOG = 1_000;
 
 export class LiveCoach {
   private readonly enabled: boolean;
+  private readonly setupHints: boolean;
+  /** 이 플레이에서 이미 띄운 세팅 안내 */
+  private readonly setupShown = new Set<LiveTag>();
   private thresholds: LiveThresholds;
   private readonly window = new JudgedWindow();
   private readonly policy = new CoachPolicy();
@@ -53,18 +59,20 @@ export class LiveCoach {
 
   constructor(opts: LiveCoachOptions) {
     this.enabled = opts.enabled ?? true;
+    this.setupHints = opts.setupHints ?? false;
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     this.resetLog();
   }
 
   /** 판정 한 건을 넣는다. 문구를 띄울 때만 돌려주고 아니면 null. 일시정지 중에는 부르지 않는다 */
-  push(note: JudgedNote): CoachMessage | null {
+  push(note: JudgedNote, strayTotal = 0): CoachMessage | null {
     if (!this.enabled) return null;
     try {
       if (!Number.isFinite(note.songTimeMs)) return null;
-      this.window.push(note);
+      this.window.push(note, strayTotal);
       const metrics = this.window.metrics();
       const evals = evaluateRules(metrics, this.thresholds);
+      if (this.setupHints) evals.push(...evaluateSetupHints(metrics).filter((e) => !this.setupShown.has(e.tag)));
       const { show, recovered, repeat } = this.policy.decide(
         evals,
         { songTimeMs: note.songTimeMs, judged: this.window.total },
@@ -73,6 +81,7 @@ export class LiveCoach {
 
       for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, `경향 해소: ${r.key}`);
       if (!show) return null;
+      if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
       this.append(note.songTimeMs, show.tag, show.text);
       return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat };
@@ -91,6 +100,7 @@ export class LiveCoach {
   reset(): void {
     this.window.reset();
     this.policy.reset();
+    this.setupShown.clear();
     this.resetLog();
   }
 

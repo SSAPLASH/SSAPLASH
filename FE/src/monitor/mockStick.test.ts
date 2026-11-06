@@ -572,3 +572,57 @@ describe('MockStick 재연결 시나리오', () => {
     });
   });
 });
+
+describe('MockStick 타격 각도(PLAY-004)', () => {
+  let got: PacketRecord[];
+  let off: () => void;
+  let mock: MockStick;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    got = [];
+    off = packetTap.subscribe((r) => got.push(r));
+    mock = new MockStick();
+  });
+  afterEach(() => {
+    mock.stop();
+    off();
+    vi.useRealTimers();
+  });
+
+  const hitsOf = () =>
+    got
+      .filter((r) => r.dir === 'in' && r.bytes[0] === 0x01 && r.bytes.length === 20)
+      .map((r) => decodePacket(r.bytes, 0))
+      .filter((d): d is Extract<typeof d, { kind: 'hit' }> => d.kind === 'hit');
+
+  it('표를 받기 전(패드 0개)에는 pad 0xFF(null), 각도는 그 손의 기본 앵커 ±1.5° 안', async () => {
+    const { defaultHandAnchors } = await import('@/domain/kitModel');
+    const { resolvePad } = await import('@/domain/calibration');
+    const { anchorsToProfile } = await import('@/domain/kitJudge');
+    const { DEFAULT_SENSOR_TUNING } = await import('@/domain/tuning');
+    mock.start({ sticks: 2, hitIntervalMs: 100, poseHz: 1 });
+    vi.advanceTimersByTime(100 * 30);
+    const hits = hitsOf();
+    expect(hits.length).toBeGreaterThan(20);
+    expect(hits.every((h) => h.pad === null)).toBe(true);
+    const anchors = defaultHandAnchors();
+    for (const h of hits) {
+      const role = h.role === 1 ? 1 : 0;
+      const profile = anchorsToProfile(anchors[role], DEFAULT_SENSOR_TUNING, role);
+      const r = resolvePad(profile, { pitch: h.elevationDeg, yaw: h.azimuthDeg });
+      // FE 기본 표로 판정하면 반경 안의 어느 패드에 들어간다
+      expect(r?.inside).toBe(true);
+    }
+  });
+
+  it('표를 받은 손은 pad를 채워 보낸다', () => {
+    mock.start({ sticks: 1, hitIntervalMs: 100, poseHz: 1 });
+    mock.handleCommand(encodeSetPadTable([{ pad: 'SNARE', elevationDeg: 0, azimuthDeg: 0, radiusDeg: 10 }], true, 2)[0]);
+    got.length = 0;
+    vi.advanceTimersByTime(100 * 10);
+    const hits = hitsOf();
+    expect(hits.length).toBeGreaterThan(5);
+    expect(hits.every((h) => h.pad !== null)).toBe(true);
+  });
+});

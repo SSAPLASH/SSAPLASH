@@ -1,9 +1,10 @@
 // 연결 끊김 카드 (Figma Play / DisconnectNotice 228:1138, 10/31 재구성). 420 카드 안에 L·R(동글이면 P) 연결 점, 제목, 재연결 상태 문구, 버튼 둘.
 // 시도 중 [다시 연결]은 눌러도 된다(다음 시도를 바로 시작). 시도 중에는 끊긴 손 점이 맥동하고 문구 앞에 스피너가 돈다.
-// 복귀(reconnected)하면 점 둘이 초록, 제목 「재연결 성공!」, 버튼 없음.
+// 복귀(reconnected)하면 점 둘이 초록, 제목 「재연결 성공!」, 버튼 없음. 재정렬이 필요하면(realign) 상태 문구 자리에 스네어 프롬프트(PLAY-004 D12).
 // 버튼은 ref가 필요해 ui/Button 대신 buttonClassName 모양을 입힌 button을 쓴다.
 // 재연결 상태(status)는 store/reconnectStore가 정한 값을 호출부가 넘긴다. 이 컴포넌트는 props만 받는다.
 import type { Ref } from 'react';
+import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import './DisconnectNotice.css';
@@ -30,6 +31,8 @@ interface Props {
   onOpenSetup?: () => void;
   /** 열릴 때 초점을 받을 주 버튼 ref */
   primaryRef?: Ref<HTMLButtonElement>;
+  /** reconnected일 때 스네어 재정렬이 걸려 있으면 상태 문구 대신 프롬프트를 보인다 */
+  realign?: RealignInfo | null;
 }
 
 function titleText(left: boolean, right: boolean, pedal?: boolean): string {
@@ -56,7 +59,7 @@ function Dot({ hand, connected, pulse }: { hand: 'L' | 'R' | 'P'; connected: boo
   );
 }
 
-export function DisconnectNotice({ left, right, pedal, status, onExit, onReconnect, onOpenSetup, primaryRef }: Props) {
+export function DisconnectNotice({ left, right, pedal, status, onExit, onReconnect, onOpenSetup, primaryRef, realign }: Props) {
   const failed = status.status === 'failed';
   const trying = status.status === 'trying';
   const reconnected = status.status === 'reconnected';
@@ -75,18 +78,22 @@ export function DisconnectNotice({ left, right, pedal, status, onExit, onReconne
       <h2 id="stick-disconnect-title" className={`stick-disconnect-title${reconnected ? ' good' : ''}`}>
         {reconnected ? '재연결 성공!' : titleText(left, right, pedal)}
       </h2>
-      <p className="stick-disconnect-status" role={reconnected ? undefined : 'status'}>
-        {trying && <span className="stick-spinner" aria-hidden="true" />}
-        <span>
-          {statusText(status)}
-          {failed && (
-            <>
-              <br />
-              {status.hint ?? '드럼 세팅에서 연결해 주세요.'}
-            </>
-          )}
-        </span>
-      </p>
+      {reconnected && realign ? (
+        <RealignPrompt hands={realign.hands} done={realign.done} variant="card" onSkip={realign.onSkip} />
+      ) : (
+        <p className="stick-disconnect-status" role={reconnected ? undefined : 'status'}>
+          {trying && <span className="stick-spinner" aria-hidden="true" />}
+          <span>
+            {statusText(status)}
+            {failed && (
+              <>
+                <br />
+                {status.hint ?? '드럼 세팅에서 연결해 주세요.'}
+              </>
+            )}
+          </span>
+        </p>
+      )}
       {!reconnected && (
         <div className="stick-disconnect-actions">
           <button type="button" className={buttonClassName({ variant: 'secondary', className: 'stick-disconnect-btn' })} onClick={onExit}>

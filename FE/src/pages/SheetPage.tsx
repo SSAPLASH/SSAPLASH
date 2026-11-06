@@ -21,6 +21,8 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { useSimilarSongs } from '@/components/play/useSimilarSongs';
+import { RecommendRow } from '@/components/song/RecommendRow';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
@@ -30,14 +32,19 @@ import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
+import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
+import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
+import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/hihatPedalCoverage';
 import { readCurrentConsent } from '@/app/dataConsent';
 import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
@@ -53,7 +60,7 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -124,6 +131,7 @@ function SheetPageBody() {
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const selectSong = useSongs((s) => s.selectSong);
+  const songsSource = useSongs((s) => s.source);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -157,6 +165,8 @@ function SheetPageBody() {
       : paramStatus === 'none' && !paramLoaded
         ? 'select'
         : 'loading';
+  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
+  const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -173,6 +183,12 @@ function SheetPageBody() {
   }, [stage, activeSession, pauseReason, screenOk]);
 
   const recorder = useRef(new PlayRecorder());
+  const pedalCoverage = useRef<HihatPedalCoverageTracker | null>(null);
+  const openWarnings = useRef(new Map<number, number>());
+
+  useEffect(() => inputManager.onPedalStatus((foot, connected) => {
+    if (foot === 2) pedalCoverage.current?.connection(connected);
+  }), []);
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
@@ -197,8 +213,11 @@ function SheetPageBody() {
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
   useEffect(() => {
     setSoundOnHit(false);
+    const warnings = openWarnings.current;
     return () => {
       diagSessionEnd('left');
+      pedalCoverage.current = null;
+      warnings.clear();
       setSoundOnHit(true);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
@@ -274,11 +293,11 @@ function SheetPageBody() {
         stickId: e.stickId,
         velocity: e.velocity,
       };
-      const message = coach.push(judged);
+      const message = coach.push(judged, activeSession.snapshot().strayHits);
       shadowRef.current?.push(judged);
       if (!message) return;
       try {
-        const copy = coachCopy(message);
+        const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
         if (copy) showCoachLine(copy, message.displayMs);
       } catch {
         // 코칭 오류는 무시한다
@@ -304,6 +323,12 @@ function SheetPageBody() {
       const ev = active ? ss.handleHit(hit) : null;
       if (active) {
         const lh = recorder.current.hit(hit, ev, ss);
+        if (ev && (ev.judgement === 'PERFECT' || ev.judgement === 'GOOD') && ss.notes[ev.noteIndex].note.hihatOpen === true) {
+          if (hit.hihatClosed == null) pedalCoverage.current?.unknownHit();
+          if (shouldWarnOpenHihat(true, ev.judgement, hit.hihatClosed, inputManager.getHihatPedalState().connected)) {
+            openWarnings.current.set(ev.noteIndex, performance.now() + 400);
+          }
+        }
         // 채보 밖 타격: 악보에 작은 점으로 남긴다. 판정과 같은 곡 시각(오디오 오프셋 반영)
         if (!ev && hit.pad && lh.tSongMs !== undefined) {
           const timeMs = lh.tSongMs;
@@ -347,6 +372,7 @@ function SheetPageBody() {
       const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         mode: 'SHEET',
+        hihatPedalCoverage: pedalCoverage.current?.value(),
         snapshot: ss.snapshot(),
         notes: ss.notes,
         hits: recorder.current.hits,
@@ -364,6 +390,8 @@ function SheetPageBody() {
         consent: consentAtStart.current,
         liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
+      pedalCoverage.current = null;
+      openWarnings.current.clear();
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
@@ -390,6 +418,9 @@ function SheetPageBody() {
 
   const resetRun = useCallback((ss: RhythmSession) => {
     recorder.current.reset();
+    const pedal = inputManager.getHihatPedalState();
+    pedalCoverage.current = new HihatPedalCoverageTracker(pedal.connected, pedal.closed !== null);
+    openWarnings.current.clear();
     finishing.current = false;
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
@@ -407,7 +438,7 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
-    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach });
+    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach, setupHints: isStickSensor(st.sensorKind) });
     coachRef.current = coach;
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -449,7 +480,16 @@ function SheetPageBody() {
   }, []);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
-  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
+  const { isResuming } = useReconnectResume({
+    pauseReason,
+    ready,
+    realignPending: realign.pending,
+    setPauseReason,
+    setCountValue,
+    resume,
+    pauseTo,
+    goMs: GO_MS,
+  });
 
   const restart = useCallback(() => {
     const clock = clockRef.current;
@@ -467,6 +507,8 @@ function SheetPageBody() {
   /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
   const leave = useCallback(() => {
     diagSessionEnd('left');
+    pedalCoverage.current = null;
+    openWarnings.current.clear();
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -485,6 +527,8 @@ function SheetPageBody() {
 
   const toSelect = useCallback(() => {
     diagSessionEnd('left');
+    pedalCoverage.current = null;
+    openWarnings.current.clear();
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
@@ -570,12 +614,24 @@ function SheetPageBody() {
   const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
-  // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그)
+  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  const bestAccuracy = useMemo(
-    () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
-    [stage, selectedChartId],
+  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
+  const similar = useSimilarSongs({
+    songId: songIdParam,
+    active: stage === 'ready' && param.status === 'ready',
+    difficulty: chart?.difficulty ?? null,
+    onSelect: param.select,
+  });
+  const records = useBestRecords(
+    stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
+    'SHEET', stage === 'ready' && detail?.id === songIdParam, songsSource,
   );
+  const localBestAccuracy = useMemo(
+    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
+    [songsSource, stage, selectedChartId],
+  );
+  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
@@ -585,7 +641,7 @@ function SheetPageBody() {
     const fallback = chartFallback(detail, chartIdParam);
     if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
   }, [stage, songIdParam, chartIdParam, detail, selectParam]);
-  const presetName = presetItems.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presetItems, settings.activePresetId);
 
   if (stage === 'loading') {
     return (
@@ -658,6 +714,7 @@ function SheetPageBody() {
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
       <main className="main">
+        <BestRecordsNotice status={records.status} retry={records.retry} />
         <ReadyPanel
           song={song}
           modeLabel="악보 연습"
@@ -679,6 +736,8 @@ function SheetPageBody() {
           onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
+          realign={realign.info}
+          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
           options={
             <>
               {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}
@@ -715,6 +774,7 @@ function SheetPageBody() {
         onRestart={restart}
         onLeave={leave}
         returnTo={returnTo}
+        realign={realign.info}
       />
     );
   } else if (countValue !== null) {
@@ -742,6 +802,7 @@ function SheetPageBody() {
         }
         area={
           <SheetPager
+            openWarnings={openWarnings}
             chart={chart}
             noteStates={noteStates}
             strayHits={strays}

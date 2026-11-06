@@ -38,6 +38,24 @@ describe('coverUrl 변환', () => {
   });
 });
 
+describe('sheetId 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('없거나 null이면 null', () => {
+    expect(songFromDto(base).sheetId).toBeNull();
+    expect(songFromDto({ ...base, sheetId: null }).sheetId).toBeNull();
+  });
+
+  it('숫자면 그대로, 상세도 같다', () => {
+    expect(songFromDto({ ...base, sheetId: 12 }).sheetId).toBe(12);
+    expect(songDetailFromDto({ ...base, sheetId: 12, charts: [] }).sheetId).toBe(12);
+  });
+
+  it('정수가 아니면 거부한다', () => {
+    expect(() => songFromDto({ ...base, sheetId: 'x' })).toThrow();
+  });
+});
+
 function song(id: number, status: string, createdAt: string): SongSummary {
   return {
     id,
@@ -54,6 +72,7 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     difficulties: [],
     createdAt,
     coverUrl: null,
+    sheetId: null,
   };
 }
 
@@ -231,5 +250,22 @@ describe('곡 난이도 변환', () => {
     expect(songLevelLabel('INTERMEDIATE')).toBe('중급');
     expect(songLevelLabel('ADVANCED')).toBe('고급');
     expect(songLevelLabel(null)).toBe('—');
+  });
+});
+
+
+describe('채보 실패 사유 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'FAILED' };
+
+  it('목록과 상세에 코드만 담고 서버 메시지는 버린다', () => {
+    const dto = { ...base, chartFailure: { code: 'MODEL_FAILED', message: 'internal details' } };
+    expect(songFromDto(dto).chartFailure).toEqual({ code: 'MODEL_FAILED' });
+    expect(songDetailFromDto({ ...dto, charts: [] }).chartFailure).toEqual({ code: 'MODEL_FAILED' });
+  });
+
+  it('사유가 없거나 객체 또는 문자열 코드가 아니면 null이다', () => {
+    for (const value of [undefined, null, 'MODEL_FAILED', [], 12, {}, { code: null }, { code: 123 }]) {
+      expect(songFromDto({ ...base, chartFailure: value }).chartFailure).toBeNull();
+    }
   });
 });

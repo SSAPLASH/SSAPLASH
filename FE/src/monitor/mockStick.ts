@@ -17,7 +17,11 @@ import {
   stickParamById,
 } from '@/input/stickProtocol';
 import { STICK_PADS } from '@/domain/pads';
+import { defaultHandAnchors } from '@/domain/kitModel';
 import type { DeviceRole } from '@/domain/events';
+
+/** 손별 기본 앵커(모의 타격 각도의 기준). 튜닝 기본값으로 한 번만 만든다 */
+const MOCK_ANCHORS = defaultHandAnchors();
 
 /** flags role. 모의 스틱이 실제로 내는 것은 손(0·1)뿐이고 2·3(페달)은 빌더만 받는다 */
 type Role = DeviceRole;
@@ -408,14 +412,17 @@ export class MockStick {
     this.hitSeq[role] = (this.hitSeq[role] + (this.hitCount % HIT_SEQ_SKIP_EVERY === 0 ? 2 : 1)) & 0xff;
     const pad = STICK_PADS[Math.floor(Math.random() * STICK_PADS.length)];
     const peakSpeedDps = rand(500, 750);
+    // 각도는 그 손의 3D 모델 기본 앵커 ± 1.5°로 — FE 기본 표로 판정하면 같은 패드가 나오고, 2타 보정도 퍼짐 8° 안에 든다(PLAY-004).
+    // 표를 비운 뒤(보정 중)에는 실제 스틱처럼 pad 0xFF
+    const anchor = MOCK_ANCHORS[role === 1 ? 1 : 0]?.[pad];
     const bytes = buildHit({
       role,
       seq: this.hitSeq[role],
       timestampUs: this.clockUs(role),
-      pad: PAD_CODE[pad],
+      pad: this.padCount[role] === 0 ? 0xff : PAD_CODE[pad],
       marginDeg: rand(1, 8),
-      elevationDeg: this.lastElevationDeg,
-      azimuthDeg: rand(-30, 30),
+      elevationDeg: anchor ? anchor.pitch + rand(-1.5, 1.5) : this.lastElevationDeg,
+      azimuthDeg: anchor ? anchor.yaw + rand(-1.5, 1.5) : rand(-30, 30),
       peakSpeedDps,
       velocity: mockVelocity(peakSpeedDps),
       swingMs: rand(60, 200),

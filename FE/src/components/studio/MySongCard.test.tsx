@@ -22,6 +22,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,
+  sheetId: null,
   ...over,
 });
 
