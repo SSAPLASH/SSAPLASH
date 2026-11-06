@@ -15,18 +15,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import com.ssafy.airdrum.play.raw.PlayRawStore;
 import com.ssafy.airdrum.storage.cleanup.RawLogCleanupWorker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 탈퇴 설계 3-5·4장 A 6단계, 인수 조건 11·12·13(153). 비동의 세션은 탈퇴 트랜잭션에서 지우고, 고아가 된 원본은 기존
- * {@link RawLogCleanupWorker}가 회수한다. 동의 세션은 그대로 남는다. 실제 커밋이 필요해 테스트 트랜잭션을 쓰지 않는다.
+ * 탈퇴 회원의 세션은 동의 여부와 관계없이 {@link WithdrawnPlayCleanup}이 지우고, 고아가 된 원본 객체는
+ * {@link RawLogCleanupWorker}가 회수한다(229). 실제 커밋이 필요해 테스트 트랜잭션을 쓰지 않는다.
  */
 @SpringBootTest
 class WithdrawalPlayLogCleanupTest {
@@ -37,6 +42,12 @@ class WithdrawalPlayLogCleanupTest {
 
 	@Autowired
 	private WithdrawalService withdrawals;
+
+	@Autowired
+	private WithdrawnPlayCleanup cleanup;
+
+	@Autowired
+	private PlatformTransactionManager manager;
 
 	@Autowired
 	private RawLogCleanupWorker worker;
@@ -73,56 +84,56 @@ class WithdrawalPlayLogCleanupTest {
 	}
 
 	@Test
-	void nonConsentedSessionIsDeletedAndItsRawObjectIsReclaimed() {
+	void withdrawalKeepsSessionsUntilCleanupRuns() {
 		var user = member();
-		var play = session(user, false, 3, true);
-		var key = rawKey(user, play);
+		var play = session(user, true, 3, false);
 
 		withdrawals.withdraw(user);
 
-		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isZero();
-		assertThat(count("SELECT count(*) FROM hits WHERE play_session_id = ?", play)).isZero();
-		assertThat(count("SELECT count(*) FROM reports WHERE play_session_id = ?", play)).isZero();
+		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isEqualTo(1);
+	}
+
+	@Test
+	void sessionsAreDeletedWhetherConsentedOrNotAndRawObjectsAreReclaimed() {
+		var user = member();
+		var consented = session(user, true, 3, true);
+		var nonConsented = session(user, false, 2, true);
+		var keys = List.of(rawKey(user, consented), rawKey(user, nonConsented));
+
+		withdrawals.withdraw(user);
+		assertThat(cleanup.runOnce()).isEqualTo(2);
+
+		for (var play : List.of(consented, nonConsented)) {
+			assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isZero();
+			assertThat(count("SELECT count(*) FROM hits WHERE play_session_id = ?", play)).isZero();
+			assertThat(count("SELECT count(*) FROM reports WHERE play_session_id = ?", play)).isZero();
+		}
 		// 접수 기록은 고아 정리 근거로 남고 세션 참조만 NULL이다
-		assertThat(db.queryForObject("SELECT status FROM play_raw_uploads WHERE object_key = ?", String.class, key))
-				.isEqualTo("ACCEPTED");
-		assertThat(objects).contains(key);
+		for (var key : keys) {
+			assertThat(db.queryForObject("SELECT status FROM play_raw_uploads WHERE object_key = ?", String.class, key))
+					.isEqualTo("ACCEPTED");
+		}
+		assertThat(objects).containsAll(keys);
 
 		worker.runOnce();
 
-		assertThat(db.queryForObject("SELECT status FROM play_raw_uploads WHERE object_key = ?", String.class, key))
-				.isEqualTo("RETIRED");
-		assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key = ?", String.class, key))
-				.isEqualTo("DELETED");
-		assertThat(objects).doesNotContain(key);
+		for (var key : keys) {
+			assertThat(db.queryForObject("SELECT status FROM play_raw_uploads WHERE object_key = ?", String.class, key))
+					.isEqualTo("RETIRED");
+			assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key = ?", String.class, key))
+					.isEqualTo("DELETED");
+		}
+		assertThat(objects).doesNotContainAnyElementsOf(keys);
 	}
 
 	@Test
-	void consentedSessionIsKeptWithHitsReportAndRawObject() {
-		var user = member();
-		var kept = session(user, true, 3, true);
-		var dropped = session(user, false, 2, false);
-		var key = rawKey(user, kept);
-
-		withdrawals.withdraw(user);
-		worker.runOnce();
-
-		assertThat(db.queryForObject("SELECT user_id FROM play_sessions WHERE id = ?", Long.class, kept)).isEqualTo(user);
-		assertThat(count("SELECT count(*) FROM hits WHERE play_session_id = ?", kept)).isEqualTo(3);
-		assertThat(count("SELECT count(*) FROM reports WHERE play_session_id = ?", kept)).isEqualTo(1);
-		assertThat(db.queryForObject("SELECT status FROM play_raw_uploads WHERE object_key = ?", String.class, key))
-				.isEqualTo("ACCEPTED");
-		assertThat(objects).contains(key);
-		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", dropped)).isZero();
-	}
-
-	@Test
-	void otherMembersSessionsAreUntouched() {
+	void activeMembersSessionsAreUntouched() {
 		var user = member();
 		var other = member();
-		var otherPlay = session(other, false, 2, true);
+		var otherPlay = session(other, true, 2, true);
 
 		withdrawals.withdraw(user);
+		cleanup.runOnce();
 		worker.runOnce();
 
 		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", otherPlay)).isEqualTo(1);
@@ -130,23 +141,61 @@ class WithdrawalPlayLogCleanupTest {
 		assertThat(objects).contains(rawKey(other, otherPlay));
 	}
 
-	/** 위험 1·인수 조건 13: 세션 50개·hits 5,000행 삭제가 15초 트랜잭션 제한 안에 끝난다(넘으면 타임아웃 예외). */
 	@Test
-	void fiftySessionsWithFiveThousandHitsFinishWithinTransactionTimeout() {
+	void sessionArrivingAfterWithdrawalIsDeletedToo() {
+		var user = member();
+		withdrawals.withdraw(user);
+		var late = session(user, true, 1, false);
+
+		cleanup.runOnce();
+
+		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", late)).isZero();
+	}
+
+	/** 세션이 많아도 탈퇴는 세션을 지우지 않아 빨리 끝나고, 삭제는 여러 묶음에 걸쳐 끝까지 간다. */
+	@Test
+	void manySessionsAreDeletedAcrossBatchesWithoutSlowingWithdrawal() {
 		var user = member();
 		for (int i = 0; i < 50; i++) {
-			session(user, false, 100, false);
+			session(user, true, 100, false);
 		}
-		assertThat(count("SELECT count(*) FROM hits h JOIN play_sessions s ON s.id = h.play_session_id WHERE s.user_id = ?",
-				user)).isEqualTo(5_000);
 
 		long started = System.nanoTime();
 		withdrawals.withdraw(user);
 		long elapsedMs = (System.nanoTime() - started) / 1_000_000;
-		log.info("세션 50개·hits 5,000행 탈퇴 소요 {}ms", elapsedMs);
-
+		log.info("세션 50개·hits 5,000행 회원 탈퇴 소요 {}ms", elapsedMs);
 		assertThat(elapsedMs).isLessThan(15_000);
+
+		var smallBatches = new WithdrawnPlayCleanup(db, manager, true, 7);
+		assertThat(smallBatches.runOnce()).isEqualTo(50);
 		assertThat(count("SELECT count(*) FROM play_sessions WHERE user_id = ?", user)).isZero();
+	}
+
+	@Test
+	void disabledCleanupDeletesNothing() {
+		var user = member();
+		var play = session(user, true, 1, false);
+		withdrawals.withdraw(user);
+
+		new WithdrawnPlayCleanup(db, manager, false, 20).scheduled();
+
+		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isEqualTo(1);
+	}
+
+	/** 실패는 다음 주기로 넘기고 예외를 밖으로 내지 않는다. */
+	@Test
+	void failureIsSwallowedAndRetriedOnNextRun() {
+		var user = member();
+		var play = session(user, true, 1, false);
+		withdrawals.withdraw(user);
+		var broken = mock(PlatformTransactionManager.class);
+		when(broken.getTransaction(any())).thenThrow(new CannotCreateTransactionException("시험"));
+
+		assertThatCode(new WithdrawnPlayCleanup(db, broken, true, 20)::scheduled).doesNotThrowAnyException();
+		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isEqualTo(1);
+
+		new WithdrawnPlayCleanup(db, manager, true, 20).scheduled();
+		assertThat(count("SELECT count(*) FROM play_sessions WHERE id = ?", play)).isZero();
 	}
 
 	private long member() {

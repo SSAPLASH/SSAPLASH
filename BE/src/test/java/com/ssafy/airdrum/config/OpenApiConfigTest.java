@@ -1,7 +1,8 @@
 package com.ssafy.airdrum.config;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import tools.jackson.databind.JsonNode;
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 테스트 소스의 ErrorProbeController가 함께 떠서 paths가 비어 있지 않다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OpenApiConfigTest {
 
 	@Value("${local.server.port}")
@@ -23,7 +25,7 @@ class OpenApiConfigTest {
 
 	private JsonNode document;
 
-	@BeforeEach
+	@BeforeAll
 	void loadDocument() throws Exception {
 		var response = HttpProbe.get(port, "/v3/api-docs");
 		assertThat(response.statusCode()).isEqualTo(200);

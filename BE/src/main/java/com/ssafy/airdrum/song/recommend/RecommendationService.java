@@ -28,7 +28,7 @@ import com.ssafy.airdrum.song.recommend.RecommendationScorer.*;
  */
 @Service
 public class RecommendationService {
-	public static final String STRATEGY = "RULE_V1", R3_STRATEGY = "R3_V1";
+	public static final String STRATEGY = "RULE_V1", R3_STRATEGY = "R3_V1", DRILL_STRATEGY = "DRILL_V1";
 	static final int RECENT_PLAYS = 10, RECENT_REPORTS = 5;
 	private static final Map<String, String> TEXT = Map.of(
 			RecommendationScorer.CHALLENGE, "지금 실력보다 조금 어려워서 도전하기 좋아요",
@@ -37,6 +37,9 @@ public class RecommendationService {
 			RecommendationScorer.RETRY, "한 번 더 치면 목표 정확도에 닿을 수 있어요",
 			RecommendationScorer.STARTER, "처음 시작하기 좋은 쉬운 곡이에요");
 
+	private static final Map<String, String> PAD_LABEL = Map.of("KICK", "킥", "SNARE", "스네어", "HIHAT", "하이햇", "HIHAT_PEDAL", "하이햇 페달", "CRASH", "크래시",
+			"RIDE", "라이드", "SMALL_TOM", "스몰탐", "HI_TOM", "스몰탐", "MID_TOM", "미드탐", "FLOOR_TOM", "플로어탐");
+
 	private final JdbcTemplate db;
 	private final SongQueryService songs;
 	private final ChartQueryAccess access;
@@ -44,26 +47,31 @@ public class RecommendationService {
 	private final Clock clock;
 	private final RecommendationCandidateService candidateSongs;
 	private final RecommendationR3Settings r3;
+	private final DrillInputs drillInputs;
 
 	public RecommendationService(JdbcTemplate db, SongQueryService songs, ChartQueryAccess access, JsonMapper json, Clock clock,
-			RecommendationCandidateService candidateSongs, RecommendationR3Settings r3) {
+			RecommendationCandidateService candidateSongs, RecommendationR3Settings r3, DrillInputs drillInputs) {
 		this.db = db; this.songs = songs; this.access = access; this.json = json; this.clock = clock;
-		this.candidateSongs = candidateSongs; this.r3 = r3;
+		this.candidateSongs = candidateSongs; this.r3 = r3; this.drillInputs = drillInputs;
 	}
 
-	public enum Context { SONG_PICKER, REPORT }
+	public enum Context { SONG_PICKER, REPORT, DRILL }
 	public enum Mode { RHYTHM, SHEET }
 
 	@Transactional
-	public Recommendations recommend(long userId, Context context, Mode mode, UUID playId, int size) {
+	public Recommendations recommend(long userId, Context context, UUID playId, int size) {
 		access.requireActive(userId);
 		if (playId != null) {
-			if (context != Context.REPORT) throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+			if (context == Context.SONG_PICKER) throw new BusinessException(CommonErrorCode.INVALID_INPUT);
 			var own = db.queryForObject("SELECT EXISTS(SELECT 1 FROM play_sessions WHERE id = ? AND user_id = ?)", Boolean.class, playId, userId);
 			if (!Boolean.TRUE.equals(own)) throw new BusinessException(PlayErrorCode.PLAY_NOT_FOUND);
 		}
+		if (context == Context.DRILL) {
+			if (playId == null) throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+			return drills(userId, playId, size);
+		}
 		Instant now = clock.instant();
-		var pool = candidates(mode);
+		var pool = candidates();
 		var profile = profile(userId, playId);
 		var blended = RecommendationScorer.blend(pool, profile, now, size, candidateSongs.usableSongs(userId, now), r3.relevanceWeight());
 		String strategy = blended.isEmpty() ? STRATEGY : R3_STRATEGY;
@@ -81,10 +89,62 @@ public class RecommendationService {
 			if (summary == null) continue; // 조회 사이에 비공개·삭제된 곡
 			rank++;
 			items.add(new Item(summary, c.chartId(), c.difficulty(),
-					scored.reasons().stream().map(code -> new Reason(code, TEXT.get(code))).toList()));
+					scored.reasons().stream().map(code -> new Reason(code, TEXT.get(code))).toList(), null));
 			logExposure(requestId, rank, userId, context.name(), strategy, c.songId(), c.chartId(), scored.total(), scored.reasons(), null, now);
 		}
 		return new Recommendations(requestId, strategy, List.copyOf(items));
+	}
+
+	/** 연습 추천. 약점에 맞는 곡을 고른다. 기준 밀도가 없으면 방금 친 채보의 밀도를 쓴다. R3 후보는 쓰지 않는다. */
+	private Recommendations drills(long userId, UUID playId, int size) {
+		var inputs = drillInputs.read(playId);
+		Double baseline = baselineDensity(userId);
+		if (baseline == null) baseline = inputs.playedDensity();
+		UUID requestId = UUID.randomUUID();
+		if (baseline == null || inputs.weaknesses().isEmpty()) return new Recommendations(requestId, DRILL_STRATEGY, List.of());
+
+		long played = inputs.playedSongId() == null ? -1 : inputs.playedSongId();
+		var drills = DrillPlanner.plan(inputs.weaknesses(), drillCharts(), played, baseline, size);
+		var summaries = songs.byIds(userId, drills.stream().map(d -> d.chart().songId()).toList());
+		var bySong = new HashMap<Long, com.ssafy.airdrum.song.SongResponses.SongSummary>();
+		for (var s : summaries) bySong.put(s.id(), s);
+
+		Instant now = clock.instant();
+		var items = new ArrayList<Item>();
+		int rank = 0;
+		for (var drill : drills) {
+			var chart = drill.chart();
+			var summary = bySong.get(chart.songId());
+			if (summary == null) continue; // 조회 사이에 비공개·삭제된 곡
+			rank++;
+			items.add(new Item(summary, chart.chartId(), chart.difficulty(), List.of(new Reason(drill.reason(), drillText(drill))),
+					new Focus(drill.pattern(), drill.pads())));
+			logExposure(requestId, rank, userId, Context.DRILL.name(), DRILL_STRATEGY, chart.songId(), chart.chartId(), drill.score(), List.of(drill.reason()), null, now);
+		}
+		return new Recommendations(requestId, DRILL_STRATEGY, List.copyOf(items));
+	}
+
+	static String drillText(DrillPlanner.Drill drill) {
+		var pads = drill.pads().stream().map(p -> PAD_LABEL.getOrDefault(p, p)).toList();
+		return switch (drill.reason()) {
+			case DrillPlanner.TRANSITION -> pads.get(0) + "에서 " + toward(pads.get(1)) + " 넘어가는 동작이 많아 연습하기 좋아요";
+			case DrillPlanner.PAD -> object(pads.getFirst()) + " 많이 치는 곡이에요";
+			case DrillPlanner.MISS -> "노트가 적당해서 놓친 부분을 다시 잡기 좋아요";
+			default -> "느긋한 곡으로 박을 일정하게 맞춰 봐요";
+		};
+	}
+
+	/** 마지막 글자의 받침. 한글이 아니면 0이다. */
+	private static int finalConsonant(String word) {
+		char last = word.charAt(word.length() - 1);
+		return last >= '가' && last <= '힣' ? (last - '가') % 28 : 0;
+	}
+	/** 을·를. */
+	private static String object(String word) { return word + (finalConsonant(word) == 0 ? "를" : "을"); }
+	/** 으로·로. ㄹ 받침(8)은 "로"다. */
+	private static String toward(String word) {
+		int consonant = finalConsonant(word);
+		return word + (consonant == 0 || consonant == 8 ? "로" : "으로");
 	}
 
 	/** 추천 노출 한 줄을 기록한다. 비슷한 곡(R2)도 같은 테이블을 쓰며 그때만 {@code sourceSongId}가 있다. */
@@ -137,7 +197,7 @@ public class RecommendationService {
 	}
 
 	/** 공개·READY·난이도 산정 완료인 공용 곡의 채보 최신 버전 중 특징이 계산된 것. */
-	private List<Candidate> candidates(Mode mode) {
+	private List<Candidate> candidates() {
 		return db.query("""
 				SELECT s.id, c.id, c.difficulty, s.song_level, v.note_count, f.avg_notes_per_sec, CAST(f.pad_ratio AS text)
 				FROM songs s JOIN charts c ON c.song_id = s.id
@@ -145,10 +205,23 @@ public class RecommendationService {
 				JOIN chart_features f ON f.chart_version_id = v.id AND f.feature_version = ?
 				WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
 				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL
-				  AND (? <> 'SHEET' OR v.notation_status = 'READY')
 				ORDER BY s.id, c.id
 				""", (r, n) -> new Candidate(r.getLong(1), r.getLong(2), r.getString(3), r.getString(4), r.getInt(5), r.getDouble(6), numbers(r.getString(7))),
-				ChartFeatureService.VERSION, mode.name());
+				ChartFeatureService.VERSION);
+	}
+
+	/** {@link #candidates()}와 같은 곡에 전환 비율을 더한 것. */
+	private List<DrillPlanner.Chart> drillCharts() {
+		return db.query("""
+				SELECT s.id, c.id, c.difficulty, v.note_count, f.avg_notes_per_sec, CAST(f.pad_ratio AS text), CAST(f.transition_ratio AS text)
+				FROM songs s JOIN charts c ON c.song_id = s.id
+				JOIN chart_versions v ON v.id = (SELECT x.id FROM chart_versions x WHERE x.chart_id = c.id ORDER BY x.version DESC LIMIT 1)
+				JOIN chart_features f ON f.chart_version_id = v.id AND f.feature_version = ?
+				WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
+				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL
+				ORDER BY s.id, c.id
+				""", (r, n) -> new DrillPlanner.Chart(r.getLong(1), r.getLong(2), r.getString(3), r.getInt(4), r.getDouble(5), numbers(r.getString(6)), numbers(r.getString(7))),
+				ChartFeatureService.VERSION);
 	}
 
 	private Profile profile(long userId, UUID playId) {

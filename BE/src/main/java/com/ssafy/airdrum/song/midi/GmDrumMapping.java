@@ -35,7 +35,8 @@ final class GmDrumMapping {
 		var notes = new ArrayList<DrumNote>();
 		for (var e : events) {
 			var pad = pad(e.pitch());
-			if (pad != null) notes.add(new DrumNote(e.tick(), pad, e.velocity(), e.durationTicks()));
+			if (pad != null) notes.add(new DrumNote(e.tick(), pad, e.velocity(), e.durationTicks(),
+					e.pitch() == 46 ? Boolean.TRUE : null));
 		}
 		return List.copyOf(notes);
 	}

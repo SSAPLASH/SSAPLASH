@@ -32,8 +32,10 @@ public class ReportRepository {
 			SELECT r.id,s.id AS play_id,s.score,s.accuracy,s.max_combo,s.judgement_counts::text,
 				r.timing_histogram::text,r.pad_stats::text,s.mode,s.input_source,s.client_meta->>'endReason' AS end_reason,
 				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at,
-				r.coach_summary::text
-			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id WHERE s.id=? AND s.user_id=?
+				r.coach_summary::text,s.song_id,v.chart_id,c.difficulty
+			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id
+			LEFT JOIN chart_versions v ON v.id=s.chart_version_id LEFT JOIN charts c ON c.id=v.chart_id
+			WHERE s.id=? AND s.user_id=?
 			""", (r,n) -> new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
 				r.getInt("score"), r.getBigDecimal("accuracy"), r.getInt("max_combo"),
 				json.readValue(r.getString("judgement_counts"), Counts.class),
@@ -45,7 +47,8 @@ public class ReportRepository {
 				r.getString("weak_segments") == null ? null : json.readTree(r.getString("weak_segments")),
 				r.getString("recommended_drills") == null ? null : json.readTree(r.getString("recommended_drills")),
 				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant(),
-				r.getString("coach_summary") == null ? null : json.readTree(r.getString("coach_summary"))), playId, userId)
+				r.getString("coach_summary") == null ? null : json.readTree(r.getString("coach_summary")),
+				r.getObject("song_id", Long.class), r.getObject("chart_id", Long.class), r.getString("difficulty")), playId, userId)
 				.stream().findFirst().orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
 	}
 	public List<ReportNotesResponse.Item> notes(long userId, UUID playId, int afterSeq, int fetchSize) {

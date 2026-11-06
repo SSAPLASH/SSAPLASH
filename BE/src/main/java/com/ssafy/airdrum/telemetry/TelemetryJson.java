@@ -17,9 +17,12 @@ import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.MapperFeature;
 import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.cfg.EnumFeature;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
+import tools.jackson.databind.type.LogicalType;
 
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.common.error.CommonErrorCode;
@@ -44,6 +47,9 @@ public class TelemetryJson {
 			.enable(EnumFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
 			.disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
 			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
+			// 259 conditions의 문자열 필드(firmware·note 등)에 숫자·boolean 토큰이 오면 거절한다. 위 설정은 문자열→숫자만 막는다.
+			.withCoercionConfig(LogicalType.Textual, config -> config.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+					.setCoercion(CoercionInputShape.Float, CoercionAction.Fail).setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
 			.addModule(new SimpleModule().addDeserializer(Instant.class, new ValueDeserializer<Instant>() {
 				@Override
 				public Instant deserialize(JsonParser parser, DeserializationContext context) {

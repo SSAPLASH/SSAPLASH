@@ -1,5 +1,7 @@
 package com.ssafy.airdrum.telemetry;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -11,7 +13,10 @@ import org.springframework.stereotype.Repository;
 
 import tools.jackson.databind.json.JsonMapper;
 
+import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Conditions;
+import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Firmware;
 import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.Kind;
+import com.ssafy.airdrum.telemetry.TelemetryBatchRequest.SensorMount;
 import com.ssafy.airdrum.telemetry.TelemetryResponses.EventItem;
 import com.ssafy.airdrum.telemetry.TelemetryResponses.SessionSummary;
 
@@ -58,18 +63,30 @@ public class TelemetryEventRepository {
 		});
 	}
 
-	/** 기간은 이벤트 {@code time} 기준 양끝 포함. 마지막 이벤트가 최근인 순서. */
+	/** 기간은 이벤트 {@code time} 기준 양끝 포함. 마지막 이벤트가 최근인 순서. 259 조건 행은 집계 뒤 LEFT JOIN으로 붙인다. */
 	public List<SessionSummary> sessions(Instant from, Instant to, Long userId, int offset, int limit) {
 		var where = new SessionWhere(userId);
 		return db.query("""
-				SELECT user_id,session_id,(array_agg(mode ORDER BY time DESC))[1] AS mode,min(time) AS first_time,max(time) AS last_time,
-					count(*) AS events,count(*) FILTER (WHERE kind='HIT') AS hits,count(*) FILTER (WHERE kind='STATUS') AS statuses
-				FROM telemetry_events WHERE %s
-				GROUP BY user_id,session_id ORDER BY last_time DESC,user_id,session_id LIMIT ? OFFSET ?
+				SELECT s.*,c.user_id IS NOT NULL AS has_conditions,c.firmware_0,c.firmware_1,c.dongle_firmware,c.link_mask,c.haptic_enable,
+					c.sensor_mount,c.app_build,c.note
+				FROM (SELECT user_id,session_id,(array_agg(mode ORDER BY time DESC))[1] AS mode,min(time) AS first_time,max(time) AS last_time,
+						count(*) AS events,count(*) FILTER (WHERE kind='HIT') AS hits,count(*) FILTER (WHERE kind='STATUS') AS statuses
+					FROM telemetry_events WHERE %s GROUP BY user_id,session_id) s
+				LEFT JOIN telemetry_session_conditions c ON c.user_id=s.user_id AND c.session_id=s.session_id
+				ORDER BY s.last_time DESC,s.user_id,s.session_id LIMIT ? OFFSET ?
 				""".formatted(where.sql()), (r, n) -> new SessionSummary(r.getObject("user_id", Long.class),
 				r.getObject("session_id", UUID.class), r.getString("mode"), r.getTimestamp("first_time").toInstant(),
-				r.getTimestamp("last_time").toInstant(), r.getLong("events"), r.getLong("hits"), r.getLong("statuses")),
+				r.getTimestamp("last_time").toInstant(), r.getLong("events"), r.getLong("hits"), r.getLong("statuses"), conditions(r)),
 				where.args(from, to, limit, offset));
+	}
+
+	/** 조건 행이 없으면 null. 있으면 모든 값이 null이어도 객체이며 firmware도 "0"·"1"이 null인 객체다(설계 3-3). */
+	private static Conditions conditions(ResultSet r) throws SQLException {
+		if (!r.getBoolean("has_conditions")) return null;
+		var mount = r.getString("sensor_mount");
+		return new Conditions(new Firmware(r.getString("firmware_0"), r.getString("firmware_1")), r.getString("dongle_firmware"),
+				r.getObject("link_mask", Integer.class), r.getObject("haptic_enable", Boolean.class),
+				mount == null ? null : SensorMount.valueOf(mount), r.getString("app_build"), r.getString("note"));
 	}
 
 	public long countSessions(Instant from, Instant to, Long userId) {

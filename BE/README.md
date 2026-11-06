@@ -247,8 +247,7 @@ V1·V2·V9를 포함해 도메인 테이블은 총 16개다. 프리셋·로그·
   세션 내 seq·매칭 noteId는 각각 중복될 수 없다. 패드 이름의 최종 enum은 소비 API에서 검증한다.
 - 회원·곡·채보 버전을 참조 중이면 물리 삭제를 막는다. 세션 삭제는 hits/reports를 함께 삭제하고,
   recordings의 세션 참조만 NULL로 만든다. 회원 탈퇴는 `users` 행을 지우지 않고 WITHDRAWN으로 바꾸며,
-  같은 트랜잭션에서 그 회원의 녹음(257번)과 `consent=false` 세션만 지운다(hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어
-  `RawLogCleanupWorker`가 다음 주기에 객체를 회수). `consent=true` 세션은 hits·리포트·원본과 함께 그대로 남는다.
+  같은 트랜잭션에서 그 회원의 녹음(257번)을 지운다. 연주 세션은 동의 여부와 관계없이 `withdrawal.WithdrawnPlayCleanup`이 1분 주기로 지운다(229, hits/reports는 cascade, 원본 접수는 세션 참조가 NULL이 되어 `RawLogCleanupWorker`가 객체를 회수). 남는 것은 MLflow 보정 기록의 익명 집계뿐이다.
 - JSON 내부 필드, noteId 실재 여부, 곡과 채보 버전의 일치, 프리셋 소유권, 집계 일관성,
   해시 계산 및 결과 불변성은 CHECK/FK만으로 보장되지 않는다. 각 저장 서비스에서 검증한다.
 
@@ -284,8 +283,8 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 V1~V31을 적용하고(`spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다), V8·V30 검사는 별도 필수 CI job
-`be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 39). V8·V30 검사는 별도 필수 CI job
+`be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
@@ -429,6 +428,17 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V30 | `V30__add_telemetry_retention_policy.sql` | `telemetry_events`에 TimescaleDB 보관 정책 `add_retention_policy(90 days, if_not_exists)` 등록. 확장 전용이라 V8처럼 일반 테스트 복사본에서 제외하고 `timescaleTest`에서 검증한다 | -258 |
 | V31 | `V31__midi_accompaniment.sql` | MIDI 원본 접수·비동기 반주 작업·시도와 객체 정리 참조를 추가하고 MIDI 곡의 반주 키를 허용한다 | -274 |
 | V32 | `V32__add_coach_narrative.sql` | `reports.coach_summary`(AI 종합 총평 jsonb)와 LLM 총평 작업 큐 `coach_narrative_jobs`를 추가한다 | COACH-003 후속 |
+| V33 | `V33__add_chart_features.sql` | 곡 추천 R1: 채보 버전별 특징 테이블. 추천 요청마다 노트 JSON을 읽지 않도록 미리 계산해 둔다. 미계산 채보는 행이 없고 후보에서만 빠진다 | 곡 추천 R1 |
+| V34 | `V34__add_recommendation_items.sql` | 곡 추천 R1: 노출·클릭 기록. 가중치 보정과 R3 평가의 근거, 탈퇴 때 삭제, 보관 90일 | 곡 추천 R1 |
+| V35 | `V35__add_chart_features_rhythm_grid.sql` | 곡 추천 R2: 채보 특징에 리듬 격자(한 박 12칸 위치 비율) 추가. NULL은 미계산, 제외 채보는 `{"excluded": …}` | 곡 추천 R2 |
+| V36 | `V36__add_recommendation_similar.sql` | 곡 추천 R2: 노출 기록 `context`에 `SIMILAR` 허용, 기준 곡 열 추가 | 곡 추천 R2 |
+| V37 | `V37__add_recommendation_r3.sql` | 곡 추천 R3: 추천 학습 동의, 후보 저장, AI 배치가 읽는 가명 뷰와 `recommend_export_reader` 역할 | 곡 추천 R3 |
+| V38 | `V38__add_song_metadata.sql` | 곡 추천용 공용 곡 메타데이터 `song_metadata`(값 목록·개수 CHECK)와 AI 배치 뷰 `recommend_song_meta_v`. 값은 카탈로그 `meta`에서 앱 시작 때 넣는다 | -255 |
+| V39 | `V39__create_telemetry_session_conditions.sql` | 측정 세션 실험 조건 `telemetry_session_conditions`. `(user_id, session_id)` PK, 7개 조건 열(`firmware_0`·`firmware_1`·`dongle_firmware`·`link_mask` 0~15·`haptic_enable`·`sensor_mount` `GRIP_FRONT`/`BENCH`·`app_build`·`note` 200자)과 `received_at`. FK·보관 정책 없음 | -259 |
+| V40 | `V40__add_recommendation_drill.sql` | 연습 추천: 노출 기록 `context`에 `DRILL` 허용 |
+| V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
+| V42 | `V42__recommend_interactions_consented_plays.sql` | 추천 학습 입력에서 `consent=false` 세션 제외. 열은 그대로 |
+| V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
 
 규칙:
 
@@ -533,7 +543,8 @@ ADMIN도 타인의 개인 곡에 접근할 수 없다. 내 생성 중·실패 �
 - 곡 상세에서 난이도와 `chartVersionId`를 고르고, 플레이 시작 이후에는 버전 조회와 assets 갱신에 그 ID를 사용한다.
   최신 채보 API를 다시 호출해 플레이 도중 버전을 바꾸지 않는다.
 - `notes`는 저장 순서와 `noteId`, `timeMs`, `pad`를 유지한다. `timeMs`에 `offsetMs`를 다시 더하지 않는다.
-  `velocityHint`, `notation`, `durationMs`, 확장 timing 필드는 없으면 null이며 가짜 기본값을 채우지 않는다.
+  `velocityHint`, `notation`, `hihatOpen`, `durationMs`, 확장 timing 필드는 없으면 null이며 가짜 기본값을 채우지 않는다.
+- 워커 노트의 `hihatOpen`은 선택 Boolean이다. 신규 결과에서 부재·null·Boolean만 허용한다. 조회 시 `HIHAT`의 Boolean `true`·`false`를 반환하고, 부재·null·과거의 다른 타입과 다른 패드의 값은 null이다. null은 하이햇이 닫혔다는 뜻이 아니라 열림 상태를 알 수 없다는 뜻이다. MIDI 업로드의 46번(열린 하이햇)에 `true`를 기록하며 42·44의 기존 패드 매핑은 유지한다. 기존 채보는 소급 변환하지 않는다.
 - `timing`은 버전에 저장된 값이다. 곡의 현재 BPM으로 대체하지 않는다. `beatsPerBar`는 박자표의 분자이며
   `6/8`을 `6/4`로 해석하면 안 된다. 변박은 `timeSignatureMap`을 함께 사용한다.
 - `notationStatus=PENDING`/`UNAVAILABLE`여도 정상 노트는 조회할 수 있다. `READY`에 이미지가 없는 경우도 유효하다.
@@ -710,7 +721,7 @@ V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 fa
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258) 삭제,
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`telemetry_events`(258)·`telemetry_session_conditions`(259) 삭제,
   `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
@@ -765,12 +776,19 @@ refresh 저장소 `memory`와 Redis 헬스 비활성을 강제하고, `JWT_SECRE
 `@WebMvcTest` 슬라이스에는 우리 Security 체인이 없고 Boot 기본 체인이 붙으므로, 인증과 무관한 슬라이스는
 `@AutoConfigureMockMvc(addFilters = false)`로 필터를 뺀다. 이 경우 로그에 "generated security password"가 나오지만 슬라이스에만 해당한다.
 
-GitLab의 `be-test`, `be-build`는 BE 또는 CI 파일이 바뀌는 MR과 기존 workflow가 허용하는
-통합 브랜치 파이프라인에서 실행된다. 현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와
-`eclipse-temurin:21-jdk`를 사용하며 `./gradlew --no-daemon test`, `./gradlew --no-daemon bootJar`를 실행한다.
-필수 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
-필수 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
-`./gradlew --no-daemon timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
+GitLab의 `be-test`, `be-build`는 BE·DB 문서·인프라·CI 등 공통 파일이 바뀌는 MR과 기존 workflow가 허용하는
+통합 브랜치 파이프라인에서 실행된다. 열린 MR이 있는 `develop-BE` push의 중복 파이프라인은 만들지 않으며,
+main 대상 MR과 main 브랜치 파이프라인은 변경 경로와 무관하게 모든 BE 필수 검사를 실행한다. 일반 BE 대상 MR과 `develop-BE` push는
+FAST `be-test` 한 작업에서 전체 소스와 테스트를 컴파일하고 인증·입력·채보·집계의 고정 단위 테스트 13개 클래스와 앱 JAR 빌드를 실행한다.
+공통 코드 변경도 FAST이며 서버·DB·WebSocket·외부 프로세스 통합 검사는 main 통합 시 FULL에서 확인한다.
+BE 대상 경로가 없는 일반 FE·AI·EMB MR에는 BE job을 만들지 않는다. `Docs/API/examples`는 테스트 입력이므로
+BE 대상 경로다. FULL에서만 별도 앱 JAR·실제 FluidSynth 렌더·Timescale·워커 JAR job을 생성한다.
+MR을 만들기 전의 push 파이프라인은 소급하여 제거하지 않는다. main 배포·예약 보정 규칙은 유지한다.
+현재 `.gitlab-ci.yml`은 `docker` 태그의 Linux Docker Runner와 `eclipse-temurin:21-jdk`를 사용한다.
+Gradle에 `--build-cache`를 사용해 컴파일 결과를 재사용할 수 있지만 테스트 결과는 캐시하지 않고 CI에서 매번 실행한다.
+전체 검사에서 필수인 `be-midi-worker-build`는 `bootMidiWorkerJar`를 실행하고 워커 JAR을 별도 아티팩트로 보관한다.
+전체 검사에서 필수인 `be-timescale-test`는 `timescale/timescaledb:2.30.2-pg16` service에 연결해
+`./gradlew --no-daemon --build-cache timescaleTest`를 실행한다. 로컬 Windows에서는 JDK 21과 `gradlew.bat`를
 사용하고 기존 루프백·테스트 JVM IPv4 설정을 유지한다. 로컬 통과와 실제 CI 통과는 구분한다.
 Runner 연결·운영과 CD는 인프라 작업 범위다.
 
@@ -803,7 +821,7 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 
 | API | 응답·규칙 |
 | --- | --- |
-| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt, coachSummary |
+| `GET /api/v1/plays/{playId}/report` | id, playId, score, accuracy, maxCombo, judgementCounts, timingHistogram, padStats, mode, inputSource, endReason, analysisStatus, weakSegments, recommendedDrills, generatorVersion, generatedAt, coachSummary, songId, chartId, difficulty(연주한 곡·채보. 곡이 삭제돼도 id는 그대로, 값이 없으면 null) |
 | `GET /api/v1/plays/{playId}/report/notes?afterSeq=4&limit=1000&fromMs=7000&toMs=12000` | items, nextAfterSeq. `fromMs`·`toMs`(선택)를 주면 노트 시각이 fromMs 이상 toMs 미만인 노트만 돌려준다(노트 시각은 PERFECT·GOOD이 tMs−deltaMs, MISS가 tMs). 약점 구간 재생용이다. 둘의 순서가 뒤바뀌거나 유한하지 않으면 `VALIDATION_FAILED`. limit 기본 500·범위 1~1000. afterSeq 생략 시 처음부터, 명시 시 0~2147483647. seq 오름차순·커서 초과 행을 limit+1개 읽어 다음 페이지 판별 |
 
 notes.items는 seq, matchedNoteId, tMs, pad, judgement, deltaMs, velocity다. PERFECT·GOOD·MISS만 반환하고
@@ -1016,7 +1034,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 | `PUT /{id}/accompaniment`, `DELETE /{id}/accompaniment` | multipart `file` WAV·MP3, 50 MiB·10분 이하 | `{accompanimentUrl, expiresAt}` / 204 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
 
-관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다.
+관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다. 255번부터 상세에만 곡 추천용 `metadata`(아래 공용 곡 카탈로그의 `meta`와 같은 필드, 없으면 null)를 더한다. 목록·회원용 곡 응답에는 없고, ADMIN API로 고치는 기능은 두지 않는다(카탈로그가 유일한 출처).
 
 - **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
 - **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
@@ -1042,18 +1060,21 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 **앱이 켜질 때 자동으로 등록**한다. 배포만 하면 로컬·dev·운영에 같은 공용 곡이 들어가며, 사람이 ADMIN API를 호출할 필요가 없다.
 
-- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 라이선스. 명세 17장대로 자작·CC0·퍼블릭 도메인만)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
+- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 이용 조건. 명세 17장은 자작·CC0·퍼블릭 도메인을 전제했으나, 2026-11-05 팀 결정으로 AI가 채보한 상업 곡도 `원곡 {아티스트}, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용` 형식으로 넣는다)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점)·`meta`(선택, 아래 곡 추천 메타데이터). 모르는 필드·제목 중복·필수 누락·MIDI 없음·`meta` 규칙 위반이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
 - **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
-- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 MR CI가 먼저 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
+- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 전체 검사 CI가 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
 - **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
 - **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
 - **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
 - **시드 3곡:** V10의 「기본 8비트」·「8비트 + 필인」·「라이드 16비트」는 난이도가 1개씩이라, 같은 패턴을 MIDI로 옮겨(`scripts/seed_midi_from_v10.py`, 1회용·재현용) 카탈로그에 넣었다. 첫 시작 때 3난이도로 채워진다. 「기본 8비트」 EASY 최신 버전은 전체 패턴(96노트)에서 솎은 패턴으로 바뀐다(기존 버전과 플레이 기록은 그대로). MIDI 변환기가 마지막 노트 뒤에 한 마디를 붙이는 규칙(사용자 MIDI 곡과 같음) 때문에 곡 길이(`songs.duration_ms`)가 한 마디 늘어난다: 「기본 8비트」 21333→23667, 「8비트 + 필인」 19200→21300, 「라이드 16비트」 16000→17875 ms. 82번 반주 도구(`registerBasic8Backing`)는 「기본 8비트」의 채보가 V10 원본 그대로(EASY 하나, 버전 1개, 96노트)일 때만 동작하므로 **이 등록 뒤에는 거부된다**. 82번 반주를 아직 연결하지 않은 환경이라면 이 변경을 배포하기 전에 82번 도구를 먼저 실행하거나, 이후에는 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`로 반주를 올린다.
 - **운영 주의:** 카탈로그에 있는 곡은 ADMIN으로 지우거나 제목을 바꿔도 다음 앱 시작 때 카탈로그 제목으로 다시 등록된다. 공용 곡을 없애려면 카탈로그에서 빼서 배포한 뒤 ADMIN으로 지운다.
-- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가 → MR에서 라이선스 리뷰 → 배포. 반주는 MIDI 반주 합성(274번) 방식이 정해지면 붙인다.
+- **AI 공용 곡 31곡(261번):** AI(245번)가 드럼리스 음원에 맞춰 만든 MIDI 31곡(type 1·PPQ 480·10번 채널)을 AI가 준 곡별 첫 박 시각을 `offsetMs`로 넣어 추가했다. 첫 박보다 앞선 노트는 없다. 제목·아티스트는 곡 추천 메타데이터(224번 요청 CSV)와 글자 그대로 같고, AI 표기에서 국카스텐·혁오·검정치마는 아티스트를 한글로, 「거울」·「고민중독」은 제목을 한글로 바꿨고 DAY6 두 곡은 대소문자만 고쳤다. 배포 뒤 첫 시작 로그는 `공용 곡 카탈로그 결과 34곡:`에 REGISTERED 31·SKIPPED 3이다(시드 3곡이 이미 3난이도인 환경. 맵이라 키 순서는 바뀔 수 있다).
+- **곡 추천 메타데이터 `meta`(255번, V38 `song_metadata`):** 필드·값 목록은 AI 요청 문서 COACH-004(224번 CSV)와 글자 그대로 같고, CSV의 `;` 다중 값만 JSON 배열이다. `genre`(필수, `ROCK POP KPOP BALLAD JAZZ FUNK LATIN METAL PUNK HIPHOP ELECTRONIC SOUNDTRACK PRACTICE OTHER` 중 1개)·`subGenres`(장르 0~2개)·`mood`(`CALM UPLIFTING ENERGETIC DARK SENTIMENTAL` 0~2개)·`energy`(1~5)·`releaseYear`(1900~2099)·`language`(`KO EN JA INSTRUMENTAL OTHER`)·`drumStyle`(`EIGHT_BEAT SIXTEEN_BEAT SHUFFLE HALF_TIME FOUR_ON_FLOOR DOUBLE_KICK SYNCOPATED FILL_HEAVY LATIN_PERCUSSION` 0~3개)·`source`(필수, `HUMAN AUTO EXTERNAL_DB`)·`sourceNote`(`EXTERNAL_DB`면 필수, 200자 이하). 모르는 값은 필드를 빼고, 같은 값을 두 번 쓰지 않는다. **라이선스·아티스트와 달리 앱이 시작할 때마다(배포·재시작) 결과(REGISTERED·FILLED·SKIPPED)와 무관하게 카탈로그 값으로 덮어쓰고, `meta`를 빼면 DB 행을 지운다.** 메타데이터 저장이 실패하면 곡은 남고 그 곡 결과만 FAILED다. 34곡 값은 11/05 CSV v2를 그대로 옮겼다(모두 `HUMAN`, `drumStyle`은 확실한 곡만). 255번 배포 뒤 첫 시작은 곡이 이미 있으면 34곡 모두 SKIPPED이고 `song_metadata`에 34행이 생긴다. 읽는 곳: AI 배치 뷰 `recommend_song_meta_v`(아래 R3), 비슷한 곡 R2, ADMIN 상세 `metadata`.
+- **반주:** 카탈로그는 반주를 다루지 않는다. 배포 뒤 ADMIN이 `GET /api/v1/admin/songs`로 제목에 맞는 곡 id를 찾아 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`(WAV·MP3, 50 MiB·10분 이하)로 올린다. 31곡의 드럼리스 음원은 저장소에 커밋하지 않고 운영 저장소에만 둔다(MP3 192 kbps로 변환해 올림).
+- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가(추천에 쓰려면 `meta`도) → MR에서 라이선스 리뷰 → 배포. 반주는 위 ADMIN 업로드로 붙인다.
 
 ```powershell
-.\gradlew.bat test --tests '*BuiltinSong*'
+.\gradlew.bat test --tests '*BuiltinSong*' --tests '*SongMetadata*'
 ```
 
 ## 내 악보 보관 (155번)
@@ -1250,7 +1271,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - `SongLevelService.process(..., apply=true)`가 난이도를 저장하면 `SongChartsChanged`를 발행하고, **커밋 뒤** `ChartFeatureListener`가 새 트랜잭션에서 계산한다. 계산이 실패해도 채보 생성·난이도 산정은 성공이고, 특징이 없는 채보는 추천 후보에서만 빠진다.
 - 앱이 준비되면 `ChartFeatureBackfillStartup`이 특징이 없는 기존 채보를 채운다(`chart-features.backfill.enabled=false`로 끈다. 테스트 기본값). 이미 현재 버전으로 저장된 채보는 건너뛰므로 여러 번 돌려도 같다.
 
-### 리듬 격자 (V35 `chart_features.rhythm_grid`, R2 비슷한 곡의 입력)
+### 리듬 격자 (V35 `chart_features.rhythm_grid`, 지금은 저장만 하고 R2 점수에 쓰지 않음)
 
 - 패드 묶음(`KICK`·`SNARE`·`HAT`=HIHAT·HIHAT_PEDAL·`CYMBAL`=CRASH·RIDE·`TOM`)마다 **한 박을 12칸으로 나눈 위치별 비율**(합 1, 노트 없는 묶음은 전부 0)과 `bpm`·`timeSignature`·`unquantizedRatio`를 JSON으로 저장한다. 12칸은 8분·16분·셋잇단음표를 모두 담는다. 위치는 `(timeMs - offsetMs) / (60000 / bpm)`의 소수부를 가장 가까운 칸에 맞춰 구한다.
 - **제외 표시:** 가변 템포(`tempoMap`에 다른 BPM이 둘 이상)는 `{"excluded":"VARIABLE_TEMPO"}`, 칸에서 1/48박 넘게 벗어난 노트가 20%를 넘으면 `OFF_GRID`, 박자 정보가 망가졌으면 `INVALID_TIMING`, 아는 패드가 없으면 `NO_KNOWN_PADS`를 저장한다. 제외된 채보도 값이 저장되므로 백필이 반복 계산하지 않는다.
@@ -1262,12 +1283,22 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 `GET /api/v1/songs/{songId}/similar?difficulty=EASY|NORMAL|HARD&size=` (Bearer 인증, `size` 1~10 기본 5, `difficulty` 기본 NORMAL). 기준 곡과 연주 느낌이 비슷한 공용 곡을 곡당 채보 하나로 돌려준다. 응답 `{requestId, strategy: "SIMILAR_V1", items[{song, chartId, difficulty, similarity(0~1), matchedOn[]}]}`. AI 서버를 부르지 않는다.
 
 - **기준 곡:** 공개된 공용 곡이거나 본인 곡. 없는 곡·타인의 개인 곡은 404 `SONG_NOT_FOUND`. 기준 채보는 요청한 난이도, 없으면 EASY·NORMAL·HARD 순서에서 가장 가까운 것(같은 거리면 쉬운 쪽). 기준 곡에 리듬 격자가 없으면(가변 템포·격자 이탈·아직 계산 전) 오류가 아니라 200과 빈 `items`다.
-- **후보:** R1과 같은 공용 곡 조건에 `rhythm_grid`가 있는 최신 버전 채보. 개인 곡은 결과에 나오지 않는다. 후보 채보 목록은 `similar.cache-ttl-seconds`(기본 300, 0이면 끔) 동안 프로세스 안에 캐시한다. 사용자와 무관한 값이다.
-- **유사도(`SimilarityEngine`, 가정값):** 리듬 격자 0.35 + 패드 구성 0.20 + 전환 0.15 + 밀도 0.15 + 템포 0.15. 박자표 분자가 다르면 ×0.5, 0.5 미만은 제외. 같은 입력이면 같은 값·순서(같은 점수는 곡 id순). 사용자 기록은 점수에 쓰지 않는다.
+- **후보:** R1과 같은 공용 곡 조건에 채보 특징이 있는 최신 버전 채보. 개인 곡은 결과에 나오지 않는다. 후보 채보 목록은 `similar.cache-ttl-seconds`(기본 300, 0이면 끔) 동안 프로세스 안에 캐시한다. 사용자와 무관한 값이다.
+- **유사도(`SimilarityEngine`, 가정값):** 패드 구성 0.31 + 전환 0.23 + 밀도 0.23 + 템포 0.23. 리듬 격자는 점수에 쓰지 않는다(공용 곡의 절반 가까이가 격자를 만들 수 없어서, `rhythm_grid` 값은 계속 저장한다). 템포와 박자표는 `songs`에서 읽고, 모르는 쪽이 있으면 박자표 감점을 하지 않는다. 박자표 분자가 다르면 ×0.5, 0.5 미만은 제외. 같은 입력이면 같은 값·순서(같은 점수는 곡 id순). 사용자 기록은 점수에 쓰지 않는다.
 - **본인 기록 필터:** R1의 기준 밀도(최근 85% 이상 연주의 밀도 최댓값)가 있으면 그 1.5배를 넘는 채보는 거른다. 기록이 없으면 거르지 않는다.
-- **메타데이터:** 곡 메타데이터(장르·분위기 등)가 양쪽 곡에 있을 때만 15%를 섞도록 엔진에 구현돼 있으나, 메타데이터 저장은 아직 없어 지금은 채보 유사도만 쓴다.
+- **메타데이터(255번):** 기준·후보 채보에 `song_metadata`를 붙여 엔진에 넘긴다. 양쪽 곡에 있을 때만 15%를 섞고(엔진 규칙), 한쪽이라도 없으면 채보 유사도만 쓴다. 장르는 대표+보조 장르를 합친 집합이다. 메타 기여가 요소당 약 0.04라 `matchedOn`에 `GENRE`·`MOOD`·`DRUM_STYLE`·`ENERGY`는 거의 나오지 않는다(FE는 모르는 코드를 문구 없이 처리). 후보 캐시 때문에 메타데이터 변경은 최대 `similar.cache-ttl-seconds` 뒤에 반영된다.
 - **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
-- 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡·격자 없는 곡 제외, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
+- 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡 제외, 격자 없는 곡 포함, 특징 없는 곡은 빈 결과, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
+
+### 연습 추천 (`context=DRILL`, V40, `DrillPlanner`)
+
+`GET /api/v1/songs/recommendations?context=DRILL&playId=&size=` (Bearer 인증). 그 연주의 약점에 맞는 공용 곡을 약점 종류마다 하나씩, 최대 3개 돌려준다. `playId`는 필수이고(없으면 400) 본인 연주만 된다(404 `PLAY_NOT_FOUND`). 약점이 없거나 분석 전·실패면 200과 빈 `items`다. AI 서버를 부르지 않는다.
+
+- 응답: R1과 같고 `strategy`는 `DRILL_V1`이다. 항목에 `focus: {pattern, pads}`가 더 있다. 이유 코드는 `DRILL_TRANSITION`, `DRILL_PAD`, `DRILL_MISS`, `DRILL_TIMING`이다.
+- 규칙(가정값): 전환 약점은 그 방향의 전환이 있는 곡, 패드 약점은 그 패드를 치는 곡, 놓침 약점은 놓친 패드를 치는 곡, 타이밍·불안정 약점은 밀도가 낮은 곡을 고른다. `HAND_WEAK`는 채보에 손 정보가 없어 건너뛴다.
+- 점수: `0.6 × 후보 내 순위 + 0.4 × 밀도 적합도`. 좋게 보는 밀도는 기준 밀도의 0.6~1.0배(전환·패드), 0.5~0.85배(놓침·타이밍)다. 1.25배를 넘는 채보는 뺀다. 기준 밀도가 없으면 방금 친 채보의 밀도를 쓴다.
+- 방금 친 곡과 개인 곡은 나오지 않는다. 전환 비율은 채보별 상위 12개만 저장하므로 드문 전환은 결과가 비어 있을 수 있다.
+- 기록: `recommendation_items`에 `context=DRILL`, `strategy=DRILL_V1`. 클릭은 R1과 같은 호출이다. 리포트의 `recommendedDrills`는 쓰지 않고 null로 둔다.
 
 ### 조회와 기록
 
@@ -1276,7 +1307,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | `GET /api/v1/songs/recommendations?context=SONG_PICKER\|REPORT&mode=RHYTHM\|SHEET&playId=&size=` | Bearer 인증. `size` 1~10(기본 5). 응답 `{requestId, strategy: "RULE_V1", items[{song, chartId, difficulty, reasons[{code, text}]}]}`. 후보가 없으면 200과 빈 `items`. `playId`는 `context=REPORT`에서만 쓰며(아니면 400) 본인 연주가 아니면 404 `PLAY_NOT_FOUND` |
 | `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
 
-- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. `mode=SHEET`이면 `notation_status=READY`인 채보만. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
+- 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. 악보 이미지 유무(`notation_status`)는 추천에 쓰지 않는다. 악보 연습은 채보 노트로 그리기 때문이다. `mode`는 값을 검사만 하고 결과에는 영향을 주지 않는다. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
 - **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
 - **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
 - **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.
@@ -1307,7 +1338,7 @@ AI 약점 분석 임계값 보정 배치가 원본 테이블 대신 읽는 읽�
 
 - `consent = true`, `mode`가 RHYTHM/SHEET인 세션만. 타격(`hits`)이 없는 세션은 행이 없다.
 - `users.role = 'ADMIN'`인 회원(팀원)의 세션은 뺀다. 팀원은 운영 `ADMIN_EMAILS`에 등록해 다음 로그인부터 ADMIN이 된다.
-- 탈퇴 회원의 동의 세션은 포함한다. 탈퇴 시 `consent=true` 세션을 남기는 목적이 분석 활용이다.
+- 탈퇴 회원의 세션은 뺀다(V41). 세션 원본은 탈퇴 뒤 삭제되고, 이미 보정 기록에 반영된 집계만 남는다.
 - 위 조건을 만족하는 세션 중 회원별 최근 10개(`ended_at` 내림차순). 회원 ID는 순위 계산에만 쓰고 내보내지 않는다.
 
 열(이 순서): `session_key`, `mode`, `input_source`, `song_ref`, `song_origin`, `perfect_ms`, `good_ms`, `difficulty`,
@@ -1351,11 +1382,11 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | API | 요청 | 응답 |
 | --- | --- | --- |
 | `POST /api/telemetry/batches` | JSON 본문 128 KiB 이하, 이벤트 1~100건 | 200 `{acceptedCount}`. 배치 전체를 한 트랜잭션으로 저장 |
-| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount}>`, lastEventTime 내림차순 |
+| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount, conditions}>`, lastEventTime 내림차순. `conditions`는 [측정 조건](#측정-세션-실험-조건-259번)이며 받은 적 없으면 null |
 | `GET /api/telemetry/sessions/{sessionId}/events` | `userId`(필수), `kind`(`HIT`·`STATUS`, 선택), `page`, `size`(1~1000, 기본 500) | `PageResponse<이벤트>`, time 오름차순(같은 시각은 stickId 0·1·null). 없는 세션은 빈 페이지 |
 
-요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`다. `userId`는 받지 않고
-인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
+요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`, 선택 객체
+`conditions`([측정 조건](#측정-세션-실험-조건-259번))다. `userId`는 받지 않고 인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
 
 | 이벤트 필드 | HIT | STATUS |
 | --- | --- | --- |
@@ -1376,15 +1407,44 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드·타입 불일치·목록 밖 enum. detail에 `events[0].pad` 같은 위치만 담는다 |
+| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드(`conditions` 안은 예외)·타입 불일치·목록 밖 enum. detail에 `events[0].pad`·`conditions.sensorMount` 같은 위치만 담는다 |
 | 400 | `TELEMETRY_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
-| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`. detail은 `events[i].필드: 이유`이며 값은 넣지 않는다 |
+| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`, `conditions`의 길이·범위 위반. detail은 `events[i].필드: 이유`·`conditions.필드: 이유`이며 값은 넣지 않는다 |
 | 400 | `VALIDATION_FAILED` | 조회 페이지·기간 범위 밖 |
 | 413 | `TELEMETRY_BATCH_TOO_LARGE` | 본문 128 KiB 초과(Content-Length가 없어도 읽는 도중 끊음) 또는 이벤트 100건 초과 |
 | 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
 
 한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
 요청 횟수 제한(429)은 MVP에서 구현하지 않는다(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+### 측정 세션 실험 조건 (259번)
+
+MONITOR-002. 세션끼리 "어떤 조건에서 쟀는지"를 비교하기 위한 환경 정보다. 필드·값은 FE가 EMB와 맞춰 확정했다(`MONITOR-002_측정세션-실험조건`, 2026-11-06).
+설계: `.claude/plans/MONITOR-002-측정-세션-실험-조건.md`.
+
+배치 외피의 선택 객체 `conditions`로 받는다. **FE는 같은 `sessionId`의 매 배치에 그 시점의 전체 값을 붙이고**, BE는 `telemetry_session_conditions`(V39)의
+`(user_id, session_id)` 한 행을 **마지막으로 받은 값으로 통째로 바꾼다**(null이 된 값은 null이 된다). `conditions`가 없거나 null인 배치는 행을 건드리지 않는다.
+조건이 바뀌어도 세션을 나누지 않으며 BE는 세션 경계를 판단하지 않는다. 저장은 이벤트와 같은 트랜잭션이라 조건만 남고 이벤트가 롤백되는 일은 없다.
+`conditions`도 본문 128 KiB 상한에 들어간다. `schemaVersion`은 1 그대로다.
+
+| 필드 | 타입 | 규칙 |
+| --- | --- | --- |
+| `firmware` | `{"0": 문자열 또는 null, "1": 문자열 또는 null}` 또는 null | 스틱별 펌웨어(0 왼손·1 오른손, `"{major}.{minor}"`). 각 1~64자. 아직 STATUS를 못 받은 스틱은 null |
+| `dongleFirmware` | 문자열 또는 null | 동글 펌웨어 1~64자. 블루투스 직결이면 null |
+| `linkMask` | 정수 또는 null | 동글 LINK 연결 마스크 0~15(bit0 왼손, bit1 오른손, bit2 왼발 페달, bit3 오른발 페달) |
+| `hapticEnable` | boolean 또는 null | 스틱 타격 진동 켬/끔. FE가 값을 확인했을 때만 채운다 |
+| `sensorMount` | `GRIP_FRONT`·`BENCH` 또는 null | 센서 부착 위치. `GRIP_FRONT`는 하우징 안 그립 앞(시제품 유일 위치), `BENCH`는 하우징 없이 책상·손에 둔 시험용 |
+| `appBuild` | 문자열 또는 null | FE 빌드 식별자 1~64자 |
+| `note` | 문자열 또는 null | 측정자 메모 0~200자(빈 문자열 허용) |
+
+- **`conditions` 안의 모르는 키는 무시한다**(`firmware` 안도 같다). EMB가 필드를 더할 때 FE를 먼저 배포할 수 있게 하기 위해서다. 외피·이벤트 `tags`의 모르는 키는 지금처럼 400이다.
+- 정의된 키의 값이 잘못되면 배치 전체를 거절한다. 타입·목록 밖 값(`"3"`, `3.0`, `TIP`, 문자열 자리의 숫자)은 파서가 400 `INVALID_INPUT`, 길이·범위는 400 `TELEMETRY_EVENT_INVALID`(`conditions.linkMask: 0~15 정수여야 합니다`).
+- 값을 보정하지 않는다. 1~64자 필드의 빈 문자열은 거절하고 `note`의 빈 문자열은 그대로 저장한다.
+- 세션 목록 응답의 `conditions`는 요청과 같은 모양이다. 조건을 받은 적 없는 세션은 null, 모든 값이 null인 조건은 필드가 null인 객체이며 `firmware`는 언제나 `"0"`·`"1"`을 가진 객체다. 이벤트 조회 응답은 바뀌지 않는다.
+- 조건별 비교·필터 조회는 없다(Jira 259 보류). 조건 수정·삭제 API도 없다.
+
+**배포 순서:** 텔레메트리 파서는 모르는 외피 필드를 거절하므로, **이 버전이 배포되기 전에 FE가 `conditions`를 보내면 그 배치는 모두 400으로 버려진다.**
+FE 전송(2026-11-10 예정)보다 BE를 먼저 배포한다. 반대 순서는 서비스 장애는 아니지만(유실 허용 계약) 그 기간의 측정이 빈다.
 
 ### 보관·탈퇴 (258번)
 
@@ -1397,6 +1457,7 @@ MONITOR-002. 기준은 Infra와 합의했다(`MONITOR-002_텔레메트리-보관
 | 압축 | 두지 않는다. 용량이 작아(팀 테스트 4주 0.5 GB 안팎) 관리 부담이 더 크다. 운영 크기가 예상보다 크면 다시 정한다 |
 | `user_id` 인덱스 | 두지 않는다. 탈퇴 삭제는 청크 순차 스캔이지만 보관 상한·탈퇴 빈도가 작고, 인덱스는 청크마다 생겨 수집 쓰기 비용을 늘린다 |
 | 백업 | 이미 만든 `pg_dump` 파일 안의 데이터는 이 정책이 지우지 않는다. 백업 보관 기간은 Infra 백업 정책(133번)에서 정한다 |
+| 측정 조건(259) | `telemetry_session_conditions`에는 보관 정책을 두지 않는다(세션당 한 행, 수백 바이트). 이벤트가 지워진 세션은 목록에 나오지 않으므로 남은 행은 보이지 않는다. 탈퇴 때 그 회원의 행을 같은 트랜잭션에서 지운다(`deletedTelemetryConditions` 로그) |
 
 **운영 적용:** 따로 SQL을 실행하지 않는다. 릴리즈 배포 때 Flyway가 V30을 한 번 실행해 정책을 등록한다.
 TimescaleDB 백그라운드 작업이 켜져 있어야 정책이 돈다(`SHOW timescaledb.max_background_workers;`가 1 이상, 2026-11-04 운영 16).
@@ -1416,8 +1477,9 @@ SELECT min(time), max(time), count(*) FROM telemetry_events;
 **되돌리기·변경:** 앱만 롤백해도 정책은 DB에 남는다. 기간을 바꾸거나 정책을 없애려면 운영에서 직접 SQL을 쓰지 않고
 Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다시 등록)으로 한다.
 
-`TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
-`TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.
+`TelemetryBatchValidatorTest`는 파싱·검증 규칙(259 `conditions`의 모양·길이·범위·모르는 키 무시 포함)을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서
+권한·저장·null 보존·전체 거절·롤백·조회와 259 조건의 저장·통째 교체·행 유지·롤백·세션 목록 응답을, `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과
+컬럼 타입, V39의 PK·CHECK를 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다. 탈퇴 시 조건 행 삭제는 `WithdrawalServiceTest`가 본다.
 
 ## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
 
@@ -1433,7 +1495,10 @@ AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 �
 
 - **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
 - **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
-- **읽기 뷰(V37):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
+- **읽기 뷰(V37, V42):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
 - **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
 - **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
-- **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다.
+- **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다. 철회는 판 검사를 하지 않아 옛 판 화면에서도 된다. 적재는 동의 행과 회원 행을 잠가 철회·탈퇴 뒤에 후보가 남지 않게 한다.
+- **보관:** 후보는 생성 후 `RECOMMEND_R3_MAX_AGE_DAYS`(7일)가 지나면 서빙에 쓰지 않고, `RecommendationCandidateRetention`이 한 시간마다 지운다. 실패하면 다음 주기에 다시 지운다.
+- **동의 이력:** 응답마다 `user_recommendation_consent_history`에 추가한다. 탈퇴는 철회로 기록한다. 철회·탈퇴일부터 `recommend.consent-history-retention-days`(730일)가 지나면 하루 주기로 지우고, 탈퇴 회원은 현재 상태 행도 함께 지운다. 동의 중인 회원의 이력은 남긴다. 뷰로 내보내지 않는다.
+- **노출 기록:** 철회 뒤에도 `recommendation_items`는 보관 기간(90일)까지 남는다. 평가에는 철회 전 기록만 집계로 쓴다.

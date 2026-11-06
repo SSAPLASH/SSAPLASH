@@ -4,8 +4,8 @@
 - 패드: GM 번호를 BE `GmDrumMapping`과 같은 표로 바꿈. 표에 없는 타악기는 빼고 개수만 셈
 - 하이햇 페달(44): 설정 emit_hihat_pedal이 참이면 HIHAT_PEDAL 노트로 냄(S15P31A307-249), 거짓이면 HIHAT으로 합침.
   코드 기본값은 거짓이고 서비스 설정 configs/chart/sheet.yaml은 참. 개수는 결과 메타에 남김
-- 열린 하이햇: 설정 emit_hihat_open이 참이면 열린 하이햇 노트에 hihat_open_field 필드를 붙임. 필드 이름·값은
-  BE·FE 합의 전이라(설계 U3) 기본값은 거짓이고, 그때는 출력이 음원 채보와 같은 모양
+- 열린 하이햇: 설정 emit_hihat_open이 참이면 열린 하이햇 노트에 hihat_open_field 필드를 붙임.
+  코드 기본값은 거짓이고 서비스 설정 configs/chart/sheet.yaml은 참. FE는 판정에 안 쓰고 표시에만 씀
 - timing: bpm은 첫 템포, timeSignature는 첫 박자, offsetMs는 못갖춘마디 길이(첫 정마디 시작)
 - generator는 BE가 받는 ADT_MODEL 그대로, 악보에서 온 것은 generatorVersion으로 구분(설계 U2)
 """
