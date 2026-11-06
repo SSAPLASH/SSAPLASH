@@ -55,6 +55,7 @@ AI/
 │   │                    loop(claim 폴링 루프), cli(ssaplash-worker 명령), fake_be(테스트·로컬 확인용 BE 대역)
 │   ├─ coach/            약점 구간 분석 엔진(통계 규칙, 모델 없음). config(임계값), schema(요청·응답), notes(노트 표),
 │   │                    patterns/(패턴별 규칙), select(후보 선택), advice(연습 조언·상세 설명·심각도 단계), summary(종합 총평), analyzer(진입점). 설명은 docs/coach-weak-segments.md
+│   ├─ coach_live_model/ 실시간 코칭 거름 모델 학습(개발 전용)
 │   ├─ coach_eval/       약점 분석 합성 평가(개발 전용, 서버가 import하지 않음). chart(합성 채보), player(연주 모델·hits 만들기),
 │   │                    scenarios(심는 약점·정답), metrics(탐지·오탐 계산), runner(실행), report(표·그림·MLflow), cli
 │   ├─ coach_calibration/ 약점 분석 실측 보정 배치(서버가 import하지 않음). source(비식별 뷰 읽기·허용 열 검증), filters(이상치 제외),
@@ -381,6 +382,31 @@ uv run python -m ssaplash_ai.coach_calibration.cli --help
 - 실행 끝에 `coach-calibration status=OK|SKIPPED|FAIL ...` 한 줄을 남긴다(알림이 이 줄을 본다).
 - 정책 파일(`configs/coach/calibration_policy.yaml`)은 서버 이미지에 들어가지 않는다. 컨테이너에서는 마운트하고 `SSAPLASH_CALIBRATION_POLICY`로 경로를 준다.
 - 뷰와 읽기 전용 계정이 서버에 적용되기 전에는 실제 DB 연결을 시험하지 못했다. 모든 시험은 뷰를 모사한 메모리 행으로 한다.
+
+### 실시간 코칭 거름 모델 (COACH-001)
+
+실시간 코칭이 띄운 지적이 진짜 경향인지 우연한 쏠림인지 점수를 내는 작은 모델이다. 문구를 만들지 않고 규칙이 낸 지적을 뺄 수만 있다.
+서버는 쓰지 않고, 학습 산출물을 FE 번들에 넣는다.
+
+```bash
+uv sync --extra coach-live
+uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live
+uv run --extra coach-live pytest tests/coach_live_model
+```
+
+- `replay.py`는 FE `coach/live`의 창·규칙·표시 정책을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다.
+- 학습 데이터는 합성 연주다. 시나리오가 심은 약점과 같은 지적이 1, 약점이 없는 연주에서 뜬 지적이 0이다. 판 단위로 나눠 평가한다.
+- 산출물은 `coachGate.json`, `coachGate.onnx`, `report.json`이다. 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
+
+합성 결과(판 2,580개, 지적 13,932건, 진짜 11,636건, 오탐 2,296건):
+
+| 모델 | AUC | 탐지 95%에서 남는 오탐 | 탐지 98%에서 남는 오탐 |
+| --- | --- | --- | --- |
+| 로지스틱 회귀 | 0.943 | 25.9% | 40.5% |
+| MLP 16 | 0.980 | 10.1% | 15.2% |
+| MLP 32×16 | 0.980 | 10.0% | 14.8% |
+
+**합성 성능은 실제 성능이 아니다.** 합성 연주는 판 내내 오차 분포가 같고 실제 사람은 곡 중간에 변한다. 켜기 전에 그림자 평가로 확인한다.
 
 ## 벤치마크 실행
 
