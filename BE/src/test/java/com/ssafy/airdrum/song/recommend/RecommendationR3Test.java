@@ -28,7 +28,6 @@ import com.ssafy.airdrum.song.SongLevelService;
 import com.ssafy.airdrum.song.recommend.RecommendationCandidateService.Upload;
 import com.ssafy.airdrum.song.recommend.RecommendationCandidateService.UserCandidates;
 import com.ssafy.airdrum.song.recommend.RecommendationService.Context;
-import com.ssafy.airdrum.song.recommend.RecommendationService.Mode;
 import com.ssafy.airdrum.user.RecommendationConsentInput;
 import com.ssafy.airdrum.user.RecommendationConsentService;
 import com.ssafy.airdrum.user.SignupConsentRequest;
@@ -234,7 +233,7 @@ class RecommendationR3Test {
 
 	@Test void servesCandidatesWithHardExclusionAndLogsTheStrategy() {
 		ready(tooHard, easy);
-		var result = service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5);
+		var result = service.recommend(user, Context.SONG_PICKER, null, 5);
 		assertThat(result.strategy()).isEqualTo("R3_V1");
 		assertThat(result.items()).extracting(i -> i.song().id()).doesNotContain(tooHard).startsWith(easy);
 		assertThat(db.queryForList("SELECT DISTINCT strategy FROM recommendation_items WHERE user_id=?", String.class, user)).containsExactly("R3_V1");
@@ -243,24 +242,24 @@ class RecommendationR3Test {
 	@Test void candidatesAreIgnoredWithoutConsent() {
 		ready(easy);
 		db.update("UPDATE user_recommendation_consent SET agreed=false WHERE user_id=?", user);
-		assertThat(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5).strategy()).isEqualTo("RULE_V1");
+		assertThat(service.recommend(user, Context.SONG_PICKER, null, 5).strategy()).isEqualTo("RULE_V1");
 	}
 
 	@Test void staleCandidatesFallBackToRules() {
 		ready(easy);
 		db.update("UPDATE recommendation_candidates SET generated_at = generated_at - interval '8 days' WHERE user_id=?", user);
-		assertThat(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5).strategy()).isEqualTo("RULE_V1");
+		assertThat(service.recommend(user, Context.SONG_PICKER, null, 5).strategy()).isEqualTo("RULE_V1");
 	}
 
 	@Test void onlyUnsafeCandidatesFallBackToRules() {
 		ready(tooHard);
-		assertThat(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5).strategy()).isEqualTo("RULE_V1");
+		assertThat(service.recommend(user, Context.SONG_PICKER, null, 5).strategy()).isEqualTo("RULE_V1");
 	}
 
 	@Test void userWithoutBaselineGetsRules() {
 		agree(user);
 		candidates.upload(upload(user, now(), easy));
-		assertThat(service.recommend(user, Context.SONG_PICKER, Mode.RHYTHM, null, 5).strategy()).isEqualTo("RULE_V1");
+		assertThat(service.recommend(user, Context.SONG_PICKER, null, 5).strategy()).isEqualTo("RULE_V1");
 	}
 
 	// ---- 읽기 뷰
