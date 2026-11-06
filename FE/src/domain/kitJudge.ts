@@ -1,47 +1,32 @@
-// 배치(kitLayout) → 판정용 프로필 유도(설계 SETUP-unified-setup D1·D2).
-// 화면에서 드래그한 패드 위치·크기를 각도 공간의 앵커로 바꿔, 기존 판정(resolvePad)을 그대로 쓴다.
-import type { KitLayout } from './kitLayout';
-import type { PadId } from './pads';
-import { STICK_PADS } from './pads';
-import { computeBoundaries, type CalibrationProfile, type PadAnchor } from './calibration';
-import { screenRadiusToDeg, screenToPose, type AngleRange } from './kitMapping';
+// 손별 앵커 → 판정 프로필·표시 배치 유도(PLAY-004 D1·D2·D4).
+// 보정한 손은 저장된 앵커(settingsStore.stickAnchors)로, 보정하지 않은 손은 3D 모델 기본 앵커로 프로필을 만든다.
+// 배치(layout)는 판정에 쓰지 않고 앵커에서 유도해 표시만 한다.
+import type { StickId } from './events';
+import { computeBoundaries, type CalibrationProfile, type HandAnchorSet } from './calibration';
+import { defaultHandAnchorSet } from './kitModel';
+import type { SensorTuning } from './tuning';
 
-export interface LayoutProfileOptions {
-  /** 판정 반경 상한 (도) */
-  maxRadiusDeg: number;
-  /** 이웃 패드 거리 대비 반경 비율 (겹침 방지 상한) */
-  radiusFactor: number;
-  /** 프로필에 넣을 패드. 기본은 스틱 패드(킥 제외) */
-  pads?: PadId[];
-  /** 생성 시각. 생략하면 호출 시각 */
-  createdAt?: string;
-}
+export { anchorsToLayout } from './kitModel';
 
 /**
- * 배치를 판정 프로필로 바꾼다. 중심은 screenToPose, 반경은 패드 r의 각도값과
- * computeBoundaries(이웃 거리 × radiusFactor, 상한)가 주는 값 중 작은 쪽이다.
+ * 한 손의 앵커 집합 → 판정 프로필. 반경은 튜닝(계수·하한·상한)으로 다시 계산한다.
+ * anchors가 null(보정 안 됨)이면 그 손의 3D 모델 기본 앵커(source 'model')를 쓴다
  */
-export function layoutToProfile(layout: KitLayout, angleRange: AngleRange, opts: LayoutProfileOptions): CalibrationProfile {
-  const pads = opts.pads ?? STICK_PADS;
-  const centers: Partial<Record<PadId, PadAnchor>> = {};
-  for (const pad of pads) {
-    const pl = layout[pad];
-    const pose = screenToPose(pl.x, pl.y, angleRange);
-    centers[pad] = { pad, pitch: pose.pitch, yaw: pose.yaw, radius: screenRadiusToDeg(pl.r, angleRange), samples: 0, spread: 0 };
-  }
-  const limits = computeBoundaries(centers, opts.maxRadiusDeg, opts.radiusFactor);
-  const anchors: Partial<Record<PadId, PadAnchor>> = {};
-  for (const pad of pads) {
-    const c = centers[pad]!;
-    anchors[pad] = { ...c, radius: Math.min(c.radius, limits[pad]!.radius) };
-  }
+export function anchorsToProfile(
+  anchors: HandAnchorSet | null,
+  tuning: SensorTuning,
+  stickId: StickId,
+  createdAt: string = new Date().toISOString(),
+): CalibrationProfile {
+  const calibrated = anchors !== null;
+  const base = calibrated ? anchors : defaultHandAnchorSet(stickId, tuning);
   return {
-    id: 'layout',
-    name: '배치 기반',
-    createdAt: opts.createdAt ?? new Date().toISOString(),
-    source: 'layout',
-    anchors,
-    maxRadiusDeg: opts.maxRadiusDeg,
+    id: calibrated ? `hits-${stickId}` : `model-${stickId}`,
+    name: calibrated ? '2타 보정' : '기본 모델',
+    createdAt,
+    source: calibrated ? 'hits' : 'model',
+    anchors: computeBoundaries(base, tuning.maxRadiusDeg, tuning.radiusFactor, tuning.minRadiusDeg),
+    maxRadiusDeg: tuning.maxRadiusDeg,
     audioOffsetMs: 0,
   };
 }

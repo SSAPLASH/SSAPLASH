@@ -6,6 +6,7 @@ import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '
 import { accelToVelocity, DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
 import { KEY_MAP } from '@/domain/keyMap';
 import type { InputSourceKind, ResolvedHit, StickEvent, StickHitEvent } from '@/domain/events';
+import { packetTap } from './packetTap';
 
 /** emit을 공개한 모의 소스. connect는 바로 끝난다 */
 class MockSource extends BaseInputSource {
@@ -46,7 +47,7 @@ function profile(): CalibrationProfile {
 
 async function setup(kind: InputSourceKind) {
   const im = new InputManager();
-  im.setProfile(profile());
+  im.setProfiles([profile(), profile()]);
   im.setKeyMap(KEY_MAP);
   const src = new MockSource(kind);
   await im.attach(src);
@@ -176,7 +177,7 @@ describe('InputManager 페달(foot)', () => {
   }
   async function footSetup() {
     const im = new InputManager();
-    im.setProfile(profile());
+    im.setProfiles([profile(), profile()]);
     im.setKeyMap(KEY_MAP);
     im.setSensorOffsetMs(7);
     const src = new FootSource('webserial');
@@ -304,4 +305,70 @@ it('비동기 detach가 끝나기 전에 페달 상태를 지운다', async () =
   expect(im.getHihatPedalState()).toEqual({ connected: false, closed: null });
   expect(hits[0].hihatClosed).toBeNull();
   finish(); await pending;
+});
+describe('InputManager 손별 프로필·기준 자세 초기화(PLAY-004)', () => {
+  it('왼손 타격은 왼손 프로필, 오른손 타격은 오른손 프로필로 판정한다', async () => {
+    const im = new InputManager();
+    const left = profile();
+    const right = createEmptyProfile('ble');
+    // 오른손 표는 스네어가 yaw +20 자리(왼손 표의 하이햇 자리)
+    right.anchors = computeBoundaries({ SNARE: { pad: 'SNARE', pitch: 0, yaw: 20, radius: 0, samples: 2, spread: 0 } }, 22);
+    im.setProfiles([left, right]);
+    im.setKeyMap(KEY_MAP);
+    const src = new MockSource('ble');
+    await im.attach(src);
+    const hits: ResolvedHit[] = [];
+    im.onHit((h) => hits.push(h));
+    src.fire(hit({ stickId: 0, pad: null, yaw: 20 }));
+    src.fire(hit({ stickId: 1, pad: null, yaw: 20 }));
+    expect(hits.map((h) => h.pad)).toEqual(['HIHAT', 'SNARE']);
+    expect(im.profileFor(1)).toBe(right);
+    im.dispose();
+  });
+
+  it('손별 매핑으로 정한 하이햇에만 페달 스냅샷을 적용한다', async () => {
+    const im = new InputManager();
+    const right = createEmptyProfile('ble');
+    right.anchors = computeBoundaries({ SNARE: { pad: 'SNARE', pitch: 0, yaw: 20, radius: 0, samples: 2, spread: 0 } }, 22);
+    im.setProfiles([profile(), right]);
+    const src = new MockSource('ble');
+    await im.attach(src);
+    const hits: ResolvedHit[] = [];
+    im.onHit((h) => hits.push(h));
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedal', foot: 2, closed: false, timestamp: 50, recvTime: 50 });
+    src.fire(hit({ stickId: 0, pad: null, yaw: 20, timestamp: 100 }));
+    src.fire(hit({ stickId: 1, pad: null, yaw: 20, timestamp: 100 }));
+    expect(hits.map((h) => [h.pad, h.hihatClosed])).toEqual([['HIHAT', false], ['SNARE', undefined]]);
+    im.dispose();
+  });
+
+  it('resetPose()는 리스너에 (fe, null)로 알리고, 1초 안의 PARAM_ACK 0x22는 버튼으로 치지 않는다', async () => {
+    const im = new InputManager();
+    const calls: Array<[string, number | null]> = [];
+    im.onResetPose((s, id) => calls.push([s, id]));
+    const src = new MockSource('ble');
+    await im.attach(src);
+    im.resetPose();
+    expect(calls).toEqual([['fe', null]]);
+    packetTap.publish({ dir: 'in', transport: 'ble', stickId: 0, bytes: new Uint8Array([0x06, 0, 0x22, 0, 0]), recvTime: performance.now() });
+    expect(calls).toHaveLength(1);
+    im.dispose();
+  });
+
+  it('FE 요청 없이 온 PARAM_ACK 0x22는 (button, 그 손)으로 알린다. 레코드가 손을 모르면 패킷 role', async () => {
+    const im = new InputManager();
+    const calls: Array<[string, number | null]> = [];
+    im.onResetPose((s, id) => calls.push([s, id]));
+    const src = new MockSource('ble');
+    await im.attach(src);
+    packetTap.publish({ dir: 'in', transport: 'ble', stickId: 1, bytes: new Uint8Array([0x06, 0, 0x22, 0, 0]), recvTime: performance.now() });
+    packetTap.publish({ dir: 'in', transport: 'serial', stickId: null, bytes: new Uint8Array([0x06, 0, 0x22, 0, 0]), recvTime: performance.now() });
+    packetTap.publish({ dir: 'out', transport: 'serial', stickId: null, bytes: new Uint8Array([0x06, 1, 0x22, 0, 0]), recvTime: performance.now() });
+    expect(calls).toEqual([
+      ['button', 1],
+      ['button', 0],
+    ]);
+    im.dispose();
+  });
 });

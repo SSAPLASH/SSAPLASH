@@ -102,9 +102,9 @@ src/
 │   ├─ WebSerialStickSource  USB 직결·동글(Web Serial) + 디스크립터. LINK 네 비트(손 2 + 발 2)·STATUS 비트 5 처리, 페달(role 2·3) 수신, reopen, 재장착(connect 이벤트) 자동 재열기
 │   ├─ serialFraming       직결 프레이밍(SOF·LEN·CRC8) 인코더·디코더
 │   ├─ stickProtocol       BLE/WS 공용 바이너리 패킷(v0.8.1: PEDAL 0x08, role 2·3 해석)
-│   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(배치에서 유도한 판정 프로필)
+│   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(손별 앵커에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
-├─ engine/     ReferenceCapture · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
+├─ engine/     HitCapture(2타 보정) · SnareRealign(스네어 재정렬) · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
 ├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach · copy(화면 문구 표)). 순수 TypeScript, domain만 import
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
@@ -195,7 +195,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 입력 구조
 
 - **소스**는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 낸다. 어느 패드인지는 모른다.
-- **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(배치에서 유도한 판정 프로필).
+- **매퍼**가 패드를 정한다. 키보드 타격은 키 매퍼(고정 키), 센서 타격은 자세 매퍼(**손별** 판정 프로필 — 왼손 타격은 왼손 앵커, 오른손 타격은 오른손 앵커. `InputManager.setProfiles`·`profileFor`).
 - **키보드는 항상 켜져 있고**, 센서 소스는 세팅에서 하나만 고른다(없음 / 레지스트리에 등록된 소스: 포인터 모의 IMU · BLE · WebSocket · Web Serial). 센서를 켜도 Space 킥과 키보드 타격은 그대로 동작한다.
 - **터치 입력(`TouchPadSource`, `kind: 'touch'`)**: 자유 연습의 드럼 킷만 켠다(`DrumKit`의 `onPadDown`). 패드를 누르는 즉시(pointerdown) `strike(pad)`가 이벤트를 내고, 자세 매퍼가 이벤트의 `pad`를 그대로 쓴다. 세기는 100 고정, `stickId`는 0·1 교대다. 키보드처럼 항상 붙어 있다.
 - **센서 판정은 `domain/events`의 `isSensorSource`로만 한다**: keyboard·preview·touch는 센서가 아니다. `source !== 'keyboard'`처럼 직접 비교하지 않는다(센서 시각 오프셋·드리프트 보정·센서 통계가 오염된다). `'touch'`는 `sensorRegistry` 예약어다.
@@ -207,13 +207,14 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
   세기는 스틱 `velocity`를 그대로 쓰고(펌웨어 곡선), 없을 때만 FE 가속도 곡선을 쓴다. 판정 출처는 `ResolvedHit.judgedBy`·텔레메트리에 남는다.
 - **Web Serial(USB 직결)**: 921600 8N1, 프레이밍은 `input/serialFraming`(SOF 0xA5 · LEN · payload · CRC8). 직결 CRC·재동기 통계는 모니터가 표시한다.
 - **`packetTap`**: 소스가 프레이밍을 벗긴 payload를 파싱 직전(수신)·송신 직후에 `input/packetTap`으로 publish한다. 모니터가 구독할 예정이며, 구독자가 없으면 아무 비용도 들지 않는다.
-- **패드 테이블 동기화**(`input/padTableSync`): 센서가 연결되거나 판정 프로필(배치·보정·튜닝)이 바뀌면 스틱 패드 중심을 `SET_PAD_TABLE`(지우고 시작, 3개씩)로 보낸다. 소수 2자리 기준으로 직전과 같으면 보내지 않고, `sendCommand`가 없는 소스(키보드·포인터)는 무동작이다.
-- 확인은 `PARAM_ACK_PAD_TABLE`(0x20, value = 적용 개수)을 500ms 창 안에 받아 `acked`로 남긴다. 연결이 끊기거나 소스를 바꾸면 기록을 지운다.
-- 표시: 상태(`PadTableStatus`, `domain/calibration`)를 bootstrap이 `liveStore.padTable`로 옮기고, 세팅 화면 "스틱 연결" 카드가 "적용됨 / 적용 n개 / 확인 없음 / 전송 중"을 보인다. input은 store를 import하지 않으므로 `onStatus` 콜백으로 주입한다.
+- **패드 테이블 동기화**(`input/padTableSync`, 손별): 손이 연결되거나 그 손의 판정 프로필(앵커·튜닝)이 바뀌면 그 손에만(`push(profile, { stickId })`, ROUTE로 감싸 패킷당 2개) `SET_PAD_TABLE`(지우고 시작)을 보낸다. 해시는 손별이라 같은 표는 다시 보내지 않고, `sendCommand`가 없는 소스(키보드·포인터)는 무동작이다. 2타 보정을 시작할 때는 `clear(stickId)`로 지우기 전용 패킷(`[0x15, 0x80]`)을 보내 보정 중 HIT의 `pad`가 0xFF가 되게 한다(PLAY-004 D6).
+- 확인은 `PARAM_ACK_PAD_TABLE`(0x20, value = 적용 개수)을 손별 500ms 창 안에 받아 `acked`로 남긴다(패킷 role 또는 BLE 레코드의 손으로 가른다). 연결이 끊기거나 소스를 바꾸면 기록을 지운다.
+- 표시: 손별 상태(`[PadTableStatus | null, PadTableStatus | null]`)를 bootstrap이 `liveStore.padTable`로 옮기고, 세팅 화면 "스틱 연결" 카드가 "스틱 패드 표 · 왼손 7개 적용됨 · 오른손 7개 적용됨"처럼 보인다. input은 store를 import하지 않으므로 `onStatus` 콜백으로 주입한다.
 - **방위각 드리프트 보정**(`input/yawDriftMonitor`): 스틱 방위각은 자이로 적분이라 시간이 지나면 밀린다. 센서 타격(`pad` 있음, `judgedBy`가 `stick`·`chart`이거나 `pose`이고 반경 안, 앵커 있음)의 `wrap180(pose.yaw − 앵커.yaw)`를 스틱별 링 12개에 모은다.
 - 8개 이상이고 중앙값 절대값 ≥ 6°, 중앙절대편차 ≤ 5°이면 `SET_YAW_OFFSET(적용값 − 중앙값)`(절대값 설정)을 보내고 링을 비운다. 송신 뒤 10초는 재송신하지 않고 `PARAM_ACK_YAW_OFFSET`(0x21)으로 적용값을 확인한다. 임계값은 `domain/tuning`(실측 뒤 조정).
 - 연결 직후엔 `SET_YAW_OFFSET(0)`을 보내 기억을 맞추고, `inputManager.resetPose()`(펌웨어가 오프셋을 0으로 되돌림) 때는 FE 상태도 0으로 비운다. 상태(`YawDriftStatus`)는 `liveStore.yawDrift`로 옮겨 세팅 화면 "스틱 연결" 카드에 보인다.
-- 하드웨어가 오면 BLE 소스 연결을 검증하고 기준 자세 보정으로 시작 위치를 맞추면 된다. 고정 키·소리·게임 코드는 바뀌지 않는다.
+- 보정·재정렬 중에는 `pause()`로 감시를 멈추고(그 타격은 샘플이 아니다) 끝나면 `resume()`(링 비움). 스네어 재정렬은 `correct(stickId, d)`로 쿨다운 없이 `SET_YAW_OFFSET(적용값 − d)`를 바로 보낸다.
+- **스틱 USER 버튼 보정(0x22)**: FE가 `RESET_POSE`를 보낸 뒤 1초 안에 온 `PARAM_ACK 0x22`는 그 응답, 밖에서 온 것은 버튼 보정으로 보고 `InputManager.onResetPose('button', stickId)`로 알린다. 보정 중이면 처음부터, 아니면 그 손이 "재정렬 필요"가 된다.
 
 ## 새 입력 소스 추가 방법
 
@@ -238,13 +239,15 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 소스 클래스가 `setSurface(el)`을 구현하면(포인터처럼 화면 좌표를 쓰는 소스) 자유 연주·세팅의 캔버스가 `bindSensorSurface`를 통해 자동으로 연결된다. 소스를 지우거나 이름을 바꿀 때도 이 두 곳만 고친다. 저장된 `sensorKind`가 등록되지 않은 id면 앱 시작 때 `none`으로 되돌아간다.
 
-## 기준 자세 보정
+## 드럼 위치 보정(2타)·스네어 재정렬 (PLAY-004)
 
-센서(포인터 모의 IMU 포함)를 쓸 때는 스틱을 든 채 자세를 3초 유지해 시작 위치를 잡는다. `engine/ReferenceCapture`가 최근 300ms 샘플의 퍼짐이 3° 이하인 구간을 3초 채우면 완료로 보고, 중간에 흔들리거나 자세 스트림이 300ms 넘게 끊기면 처음부터 다시 센다. 완료되면 호출하는 쪽이 `inputManager.resetPose()`를 불러 그 자세를 기준(캔버스 중앙)으로 삼고, 이후 자세는 기준 대비 상대 각도가 된다.
+판정은 **손별 앵커**(`settingsStore.stickAnchors`, 기기 로컬·프리셋과 무관)가 맡는다. 앵커 = 한 손이 한 패드를 칠 때의 스틱 방향(고도 `pitch`·방위 `yaw`)의 중심과 판정 반경 `radius`. 손별 앵커 7개가 곧 그 손에 보내는 `SET_PAD_TABLE` 한 장이고 FE 판정 프로필(`domain/kitJudge.anchorsToProfile`)도 같은 값이다. 거리·평균은 방향 벡터(대원 각도, `domain/calibration.angleBetween`·`meanPose`)로 계산해 방위각 ±180° 끊김이 없다. 보정 안 한 손은 3D 드럼셋 모델(`domain/kitModel`: 패드 위치·손 출발점 미터 좌표, 수치는 가정값)에서 유도한 기본 앵커를 쓴다. 반경 = 같은 손의 가장 가까운 다른 앵커까지 각도 × `radiusFactor`를 `[minRadiusDeg, maxRadiusDeg]`로 자른 값(기본 0.6 · 15° · 35°, EMB 실측).
 
-패드 위치는 보정이 아니라 배치(`kitLayout`)가 정한다. 패드마다 스틱을 가져가 앵커를 잡는 캘리브레이션은 없앴고, 판정 프로필은 배치와 각도 범위에서 유도한다(`domain/kitJudge`). 시스템은 보정이 맞았는지 판정하지 않는다 — 쳐 보고 어긋나면 다시 맞춘다. 연결이 끊긴 뒤에는 `liveStore.referenceStale`로 다시 맞추라고 안내만 하고 강제하지 않는다.
-
-재보정은 통합 설정 페이지(`/setup`)에서 한다. `/calibration`은 `/setup`으로 이동한다.
+- **2타 보정**(세팅 ②, `app/calibrationSession.startCapture()`): 연결된 스틱 전부 `RESET_POSE` → 드리프트 감시 pause → 손마다 표 지우기(`padTableSync.clear`) → 공용 소리 끄기. 그 뒤 `engine/HitCapture`가 스네어→하이햇→스몰탐→미드탐→플로어탐→크래시→라이드 순으로 연결된 손마다 2타를 받는다(2타 각도 차 > 8°면 그 손의 그 패드만 다시). 보정 중 센서 타격은 bootstrap 타격 핸들러 맨 앞의 `calibrationSession.intercept(hit)`가 가로채 소리는 "지금 치라고 한 패드"로 내고 판정·텔레메트리에는 넣지 않는다(키보드·페달은 정상 경로). 끝나면 손별 앵커·시각 저장 → 손별 프로필·표 전송(`applySettings`) → 앵커에서 유도한 배치를 `kitLayout`에 써서 프리셋 `layout`으로 저장될 값으로 둠(배치는 표시 전용) → 감시 resume → 소리 켜기. 취소·끊김 때는 표를 다시 보내고 소리를 켠다. 한 손만 연결이면 그 손만 보정하고, 다른 손이 붙으면 ②가 다시 "보정 필요"가 된다(`domain/readiness.anchorsReady`).
+- **화면**(`components/calibration/CalibrationStage`): 빈 `DrumKit` 위에 목표 패드가 유령(`ghost`)으로 깜빡이고, 손별 2타를 채우면 그 패드가 실제 친 위치(`placement`, 앵커 평균 방향 → `layoutToKitPoint`)에 0.2s 확대 모션으로 나타난다. 문구 "스네어를 양손으로 2번씩 쳐 주세요 (왼손 1/2 · 오른손 0/2)", 퍼짐 경고, 2초 넘게 타격이 없는데 스틱이 움직이면 "조금 세게 쳐 보세요". 끝난 드럼을 누르면 그 드럼만 다시(`redo`).
+- **스네어 재정렬**(`engine/SnareRealign`, `startRealign()`): 스틱이 다시 켜져 방위각 기준이 사라진 손(STATUS 비트 5 재연결 또는 버튼 보정 0x22를 받았고 앵커가 있는 손 = `liveStore.realignNeeded`)은 전체 보정 대신 스네어를 한 번 친다. `d = wrap180(친 방위각 − 저장 스네어 방위각)`를 `yawDriftMonitor.correct(stickId, d)`로 `SET_YAW_OFFSET(적용값 − d)` 전송. 고도각·저장 표는 그대로다. 대상이 아닌 손의 타격은 정상 판정이다(자유 연습에서 다른 손은 계속 친다).
+- **재정렬 진입점 네 곳**이 같은 `RealignPrompt`(손 점 L·R + 문구 + [건너뛰기], variant card/row/band)와 훅 `components/useRealign(enabled)`을 쓴다: 세팅 ② 카드, 연주 준비 기기 준비 카드의 「보정」 행, 곡 연주 끊김 복귀 카드(「재연결 성공!」 뒤 재정렬이 걸려 있으면 `useReconnectResume`이 `realigning`으로 카운트다운을 미루고, 치거나 건너뛰면 3·2·1 → 자동 재개), 자유 연습 띠. 준비 조건(`readiness`)은 막지 않는다. [건너뛰기]는 동글만 다시 꽂아 방향이 안 바뀐 경우를 위한 것이다.
+- 세션 스냅샷은 `liveStore.calibration`(`mode: 'idle' | 'capture' | 'realign'`)이고 화면은 이것만 읽는다. `liveStore.referenceSetAt`은 마지막 보정·재정렬 시각이다. `/calibration`은 `/setup`으로 이동한다.
 
 ## 통합 설정(프리셋·캘리브레이션)
 
@@ -252,11 +255,11 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 - **단계 카드**(`components/setup/StepCard`) — 번호/체크 원, `ui/StatusPill` 상태(완료·진행 중·필요·필요 없음 — 필요한 단계를 펼쳐 두면 「진행 중」, 복귀 띠가 떠 있으면 「필요」(빨강 테두리) 유지), 한 줄 요약, 오른쪽 텍스트 버튼(160×44). 판정·요약 문구는 `domain/setupSteps.setupSteps()`가 `readiness()`의 `missing`에서 유도한다(규칙 중복 없음).
   - ① **스틱 연결** — 왼손·오른손 `StickCard` 2장(연결 점·배터리), 입력 소스 선택, 소스 옵션 패널, 패드 표·방위각 문구. 센서를 쓰면 **양손이 모두 연결**돼야 완료다. 연결이 끊겼다 돌아오면(`referenceStale`) 시작 위치를 다시 맞추라는 안내만 낸다. 스틱은 버튼으로 켜면 동글에 자동으로 붙고, 동글↔브라우저는 한 번 허락한 포트를 페이지를 열 때 자동으로 다시 연다. 센서가 Web Serial이면 두 손 카드 아래에 페달 줄이 붙고("페달 연결됨 · 82%" / "페달 연결 안 됨 · 페달을 켰다면 동글을 다시 꽂아 주세요") 페달도 완료 조건이다. Web Serial이면 맨 위에 동글 줄을 둔다: 포트가 안 열렸으면 [동글 연결](처음 한 번 포트 선택), 열렸으면 "동글이 연결됐어요"(스틱 0개면 "스틱 버튼을 눌러 켜 주세요")와 [다른 동글 연결], LINK가 3초 넘게 끊기면 "동글 응답이 없어요". 키보드만 쓰면 "필요 없음"이지만 [변경]으로 펼쳐 센서를 고를 수 있다.
-  - ② **시작 위치 보정** — 3초 자세 유지(`ReferenceCapture`, 진행 바·퍼짐 표시). 완료하면 `resetPose()`와 함께 `referenceSetAt`을 기록한다. 완료 뒤 [다시 하기]는 펼치고 바로 보정을 시작한다. 보정 중 연결이 끊기면 처음부터 다시 센다. 키보드만 쓰면 "필요 없음".
+  - ② **드럼 위치 보정** — 5상태: 키보드만("필요 없음") / 보정 필요("드럼 위치를 아직 잡지 않았어요" + [보정 시작]) / 재정렬 중("오른손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요", 스네어 유령 킷 + 프롬프트 + [처음부터 보정]) / 완료("HH:MM에 보정했어요" + [다시 하기]) / 보정 중(`CalibrationStage` + [취소]). 완료 조건은 연결된 손마다 앵커가 있는 것(`anchorsReady`). [다시 하기]는 펼치고 바로 보정을 시작한다. 자세한 흐름은 [드럼 위치 보정(2타)](#드럼-위치-보정2타스네어-재정렬-play-004).
   - ③ **프리셋** — 목록(이름·기본 ★·"적용 중" 배지, 적용·기본으로·삭제)과 [새 프리셋으로 저장](이름 창 `PresetNameDialog`, 1~20자·중복 검사가 입력 중 반영).
 - **펼침 규칙**(`domain/setupExpand`) — 펼침 = 사용자가 연 단계 ∪ 모자란 첫 단계. 모자란 첫 단계가 바뀌면 그 단계를 새로 펼치고, 자동으로 펼친 단계는 끝나면 접힌다. 진입 때 한 번만 모자란 첫 단계 카드로 스크롤한다. 다 끝났으면 아무것도 펼치지 않는다.
-- **드럼 배치 카드** — 편집기(폭 720, 비율은 배치 좌표계와 같은 16:10 — Figma 720×320으로 자르면 킥·하이햇 페달이 잘려 끌 수 없다, `KitCanvas` 그대로: 마우스는 패드 고르기·끌기만(소리·타격 기록 없음, 포인터 모의 IMU의 클릭 타격도 `data-no-pointer-strike`로 막음), 캔버스가 포인터 기준면 `bindSensorSurface`, 배치가 곧 판정)와 오른쪽 정보 패널(선택 패드 이름·위치 X·Y·반지름 값, [기본 배치로] = 전체 배치 초기화). 반지름 편집은 없다(값만 표시). 편집기 아래에 배치 칩 3개. 사운드 세트 선택 UI는 없고 값은 `ssaplash` 고정이다. **타격 확인**(`HitLog`) — 최근 5행(패드·손·세기·경과 시각, 새 타격이 위, 손은 센서 타격만), 구독은 `components/drum/useRecentHits(n)`. 연결이 끊기면 "스틱 입력 중단".
-- **고급 설정**(카드 + [펼치기], 접힘이 기본) — 판정 반경 상한·판정 폭·노트 낙하·카운트인·메트로놈(볼륨·오디오 오프셋은 설정 화면에 있다). 설정 스토어에 즉시 저장되므로 미저장 판정 대상이 아니다.
+- **드럼 배치 카드** — 표시 전용 `KitCanvas`(폭 720, 비율은 배치 좌표계와 같은 16:10): 배치는 보정에서 친 자리가 정하고(PLAY-004 D2), 드래그 편집·넓게/좁게 칩은 없다. 마우스는 패드 고르기만(소리·타격 기록 없음, 포인터 모의 IMU의 클릭 타격도 `data-no-pointer-strike`로 막음), 캔버스가 포인터 기준면 `bindSensorSurface`. 점선 원은 손별 판정 범위(파랑 왼손·주황 오른손, `anchorSets`). 오른쪽 정보 패널(선택 패드 이름·위치 X·Y·반지름 값, [기본 배치로] = 전체 배치 초기화). 사운드 세트 선택 UI는 없고 값은 `ssaplash` 고정이다. **타격 확인**(`HitLog`) — 최근 5행(패드·손·세기·경과 시각, 새 타격이 위, 손은 센서 타격만), 구독은 `components/drum/useRecentHits(n)`. 연결이 끊기면 "스틱 입력 중단".
+- **고급 설정**(카드 + [펼치기], 접힘이 기본) — 판정 반경 하한·상한·판정 폭·노트 낙하·카운트인·메트로놈(볼륨·오디오 오프셋은 설정 화면에 있다). 설정 스토어에 즉시 저장되므로 미저장 판정 대상이 아니다.
 - **하단 고정 바** — 4상태(`domain/setupSteps.setupBarView`): 변경 없음 「이름」 사용 중 + [저장] 비활성 / 변경 있음 노랑 점 + "「이름」 변경 있음 · 저장하지 않으면 다음에 사라져요" + [저장] / 프리셋 없음 "아직 프리셋으로 저장하지 않았어요" + [새 프리셋으로 저장] / 변경이 있는 채로 나가려 해 이탈 확인이 열린 동안 빨강 "저장하지 않은 변경 사항이 있어요…". 화면 아래에 sticky로 붙는다.
 
 [설정 완료] 버튼은 없다. 센서를 쓰는 화면에서 준비 조건이 처음 갖춰지면 `firstSetupDone = true`로 기록하고, 복귀 띠로 돌아갈 때도 켠다.
@@ -450,22 +453,23 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 
 ### 튜닝 (디버그 창)
 
-디버그 창의 "튜닝" 구역(접힘이 기본)에서 센서 판정·세기 파라미터 9개를 플레이 중에 바꾼다. 바꾼 값은 다음 타격부터 반영되고 localStorage(설정 `tuning`)에 저장된다. 재캘리브레이션은 필요 없다 — 판정 프로필은 배치(kitLayout)와 각도 범위에서 유도한다(설계 `SETUP-unified-setup.md` D1). 반경은 현재 튜닝으로 매번 다시 계산한다.
+디버그 창의 "튜닝" 구역(접힘이 기본)에서 센서 판정·세기 파라미터 10개를 플레이 중에 바꾼다. 바꾼 값은 다음 타격부터 반영되고 localStorage(설정 `tuning`)에 저장된다. 재캘리브레이션은 필요 없다 — 반경은 저장된 손별 앵커에 현재 튜닝을 적용해 매번 다시 계산한다(`anchorsToProfile`). 앵커별 반경 줄은 왼손·오른손이 다르면 "왼/오"로 보인다.
 
 | 값 | 기본값 | 범위 | 의미 |
 | --- | --- | --- | --- |
-| `radiusFactor` | 0.55 | 0.30~0.80 | 앵커 반경 = 가장 가까운 앵커 거리 × 계수 |
-| `maxRadiusDeg` | 22 | 8~40 | 반경 상한(°). 세팅 화면의 "판정 반경 상한"과 같은 값 |
+| `radiusFactor` | 0.6 | 0.30~0.80 | 앵커 반경 = 같은 손의 가장 가까운 다른 앵커까지 각도 × 계수 |
+| `minRadiusDeg` | 15 | 8~30 | 반경 하한(°). 세팅 화면의 "판정 반경 하한"과 같은 값 |
+| `maxRadiusDeg` | 35 | 8~45 | 반경 상한(°). 세팅 화면의 "판정 반경 상한"과 같은 값 |
 | `velocity.minAccelG` | 0.8 | 0.2~4 | 이 가속도(g) 이하는 벨로시티 1 |
 | `velocity.maxAccelG` | 8 | 2~32 | 이 가속도(g) 이상은 127. min 이하로 내리면 min + 0.5 |
 | `velocity.gamma` | 0.8 | 0.3~2 | 곡선 모양. 1 미만이면 약한 타격이 더 크게 |
 | `sensorOffsetMs` | 0 | -150~150 | 센서 타격 시각에 더하는 값. 키보드 타격에는 적용 안 됨 |
 | `outsidePolicy` | `mute` | `mute` / `nearest` | 앵커 반경 밖 센서 타격: 무음 / 가장 가까운 패드 |
-| `angleRange.yawDeg` | 60 | 20~120 | 화면 가로 전체가 몇 도의 팔 움직임인지(±). 포인터 모의 IMU와 배치 → 판정 변환이 같이 쓴다 |
+| `angleRange.yawDeg` | 60 | 20~120 | 화면 가로 전체가 몇 도의 팔 움직임인지(±). 포인터 모의 IMU와 앵커 → 표시 배치 변환이 같이 쓴다 |
 | `angleRange.pitchDeg` | 35 | 10~80 | 화면 세로 전체가 몇 도의 팔 움직임인지(±) |
 
 - 기본값과 슬라이더 범위는 `src/domain/tuning.ts`(`DEFAULT_SENSOR_TUNING`, `TUNING_RANGES`)에만 있다. 실측값을 찾으면 여기만 고친다. 이미 저장된 값은 자동으로 덮어쓰지 않으므로 "기본값으로" 버튼으로 받는다.
-- 기본값은 모두 **하드웨어(스틱) 도착 전 초안**이다. 포인터 모의 IMU로 동작만 확인했고 실측 전이다.
+- 반경 세 값(0.6 · 15 · 35)은 EMB 실측(11/5 메일)이고 11/6 7패드 통합 테스트 뒤 조정한다. 나머지는 하드웨어 도착 전 초안이다.
 - 튜닝 값은 키 프리셋에 포함되지 않는다(기기·펌웨어별 값).
 
 ## 스틱 패킷 모니터 (EMB용, 숨김 주소)

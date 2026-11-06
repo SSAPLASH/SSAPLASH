@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS } from './kitLayout';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
+import { WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { PRESET_NAME_MAX, isDirty, layoutEquals, normalizePresetName, validatePresetName, type KitPreset } from './preset';
 
 function preset(over: Partial<KitPreset> = {}): KitPreset {
@@ -40,7 +41,7 @@ describe('validatePresetName', () => {
 describe('isDirty', () => {
   const cur = { layout: DEFAULT_KIT_LAYOUT, soundSetId: 'ssaplash' as const };
   it('같으면 false', () => expect(isDirty(cur, preset())).toBe(false));
-  it('배치가 다르면 true', () => expect(isDirty({ ...cur, layout: KIT_LAYOUT_PRESETS.wide }, preset())).toBe(true));
+  it('배치가 다르면 true', () => expect(isDirty({ ...cur, layout: WIDE_LAYOUT }, preset())).toBe(true));
   it('사운드가 다르면 true', () => expect(isDirty({ ...cur, soundSetId: 'synth' }, preset())).toBe(true));
   it('적용 프리셋이 없으면 true', () => expect(isDirty(cur, undefined)).toBe(true));
 });
