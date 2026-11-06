@@ -178,6 +178,7 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 
 **켜는 순서** (실데이터 보고서, 동의 화면 배포, 동의 문구 확정이 끝난 뒤)
 
+0. 동의 화면을 연다. `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`를 넣은 뒤 `FE_VITE_RECOMMENDATION_CONSENT_ENABLED=true`로 `web` 이미지를 다시 빌드한다. 빌드 때 고정되는 값이라 재시작만으로는 바뀌지 않는다.
 1. 쓸 모델 버전을 `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`에 넣는다. 비어 있으면 적재를 모두 거절한다. 값은 배치 출력의 `r3-...`이다.
 2. 그림자 단계: `RECOMMEND_R3_ENABLED=true`, `RECOMMEND_R3_ROLLOUT_PERCENT=0`으로 두고 `--upload`로 적재한다. 응답은 아직 R1이다.
 3. `RECOMMEND_R3_ROLLOUT_PERCENT`를 5부터 올린다. 노출은 `recommendation_items.strategy`로 구분한다.
