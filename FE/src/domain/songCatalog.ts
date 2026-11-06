@@ -26,6 +26,8 @@ export interface SongSummary {
   /** 곡 출처(응답값). 목록 범위(SongScope)와 다르다 */
   source: ChartSource;
   status: string;
+  /** 채보 실패 코드. 서버 메시지는 보관하지 않는다 */
+  chartFailure?: { code: string } | null;
   bpm: number;
   timeSignature: string;
   durationMs: number | null;
@@ -106,6 +108,12 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function chartFailureFromDto(value: unknown): { code: string } | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const code = (value as Record<string, unknown>).code;
+  return typeof code === 'string' ? { code } : null;
+}
+
 export function songFromDto(d: Record<string, unknown>): SongSummary {
   return {
     id: toSafeId(d.id, 'songId'),
@@ -113,6 +121,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     artist: String(d.artist ?? ''),
     source: d.source as ChartSource,
     status: String(d.status ?? ''),
+    chartFailure: chartFailureFromDto(d.chartFailure),
     bpm: toNumber(d.bpm),
     timeSignature: String(d.timeSignature ?? '4/4'),
     durationMs: d.durationMs == null ? null : toNumber(d.durationMs),
@@ -199,6 +208,24 @@ export function songStatusView(status: string): SongStatusView {
       return { label: '생성 실패', tone: 'danger' };
     default:
       return { label: status, tone: 'default' };
+  }
+}
+
+/** 공개된 채보 실패 코드만 사용자 문구로 바꾼다 */
+export function chartFailureText(failure: SongSummary['chartFailure']): string {
+  switch (failure?.code) {
+    case 'INPUT_INVALID':
+      return '파일을 처리할 수 없어요';
+    case 'OUTPUT_INVALID':
+      return '채보 결과를 처리하지 못했어요';
+    case 'MODEL_FAILED':
+      return '채보 생성 중 오류가 발생했어요';
+    case 'JOB_CANCELLED':
+      return '채보 생성이 취소됐어요';
+    case 'JOB_FAILED':
+      return '채보 작업을 완료하지 못했어요';
+    default:
+      return '채보를 만들지 못했어요';
   }
 }
 
