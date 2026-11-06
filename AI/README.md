@@ -225,7 +225,7 @@ uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config
 
 ### 드럼 악보 → 채보 (S15P31A307-292)
 
-MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. 워커 연결은 BE 악보 입력 작업 형식(S15P31A307-293)이 정해진 뒤 붙인다.
+MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. BE 업로드 API(S15P31A307-293)는 AI 서버 `POST /chart/sheet`를 동기로 부른다(아래).
 
 ```bash
 uv run ssaplash-chart sheet score.mxl --out data/chart/score
@@ -238,6 +238,8 @@ uv run ssaplash-chart sheet score.mxl --out data/chart/score
 - 하이햇은 세 가지로 나눌 수 있다. 하이햇 페달만 밟기(44)는 `emit_hihat_pedal`이 참이면 `HIHAT_PEDAL` 노트, 페달 안 밟고 치기(46·26, 또는 `<technical><open/>`)는 `emit_hihat_open`이 참이면 `HIHAT` 노트에 `hihatOpen: true`, 페달 밟고 치기(42·22)는 필드 없는 `HIHAT` 노트다. 두 값은 `configs/chart/sheet.yaml`에 있다. BE 결과 검증이 `HIHAT_PEDAL`을 받아서 `emit_hihat_pedal`은 참이다. `emit_hihat_open`도 참이다. FE는 `hihatOpen`을 판정에 쓰지 않고 악보 표시와 연습 가이드에만 쓴다
 - `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`은 `sheet-musicxml-3`이다. 페달 출력을 켜면서 1에서 2로, 열린 하이햇 출력을 켜면서 3으로 올렸다. 2 이하로 만든 악보 채보에는 `hihatOpen`이 없다
 - 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
+
+**AI 서버 엔드포인트 (S15P31A307-293):** `POST /chart/sheet?name=<원래 파일 이름>` 본문에 파일 바이트를 그대로 보내면(`application/octet-stream`, 5 MiB 이하) 위 명령과 같은 변환을 하고 `{"chart": <chart.json>, "sheet": <sheet.json 내용>}`을 돌려준다. 확장자(`.mxl`/`.musicxml`·`.xml`)는 `name`으로 가른다. 오류는 `{"error": 코드, "message": 한 줄}` — 400 `INPUT_INVALID`(형식·timewise·깨진 파일·길이 초과), 422 `NO_DRUM_NOTES`(드럼 파트 없음), 413 `BODY_TOO_LARGE`, 500 `INTERNAL_ERROR`. 설정은 `configs/chart/sheet.yaml`(환경 변수 `SSAPLASH_SHEET_CONFIG`로 바꿈)이라 Docker 이미지에 `configs/`를 넣는다. 악보 본문·파일 이름은 로그에 남기지 않고 요약 한 줄만 남긴다. BE `POST /api/v1/songs/musicxml`이 이 응답을 음원 채보와 같은 규칙으로 3난이도 저장한다. 라우터 `server/sheet.py`, 시험 `tests/server/test_sheet_endpoint.py`.
 
 정확도는 PDMX 공개 악보와 MuseScore가 같은 악보를 재생해 내보낸 MIDI를 비교해 측정한다. 악보·MIDI는 저장소에 넣지 않는다.
 
