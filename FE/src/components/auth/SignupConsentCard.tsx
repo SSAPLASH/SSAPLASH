@@ -1,5 +1,5 @@
 // Figma Auth / SignupConsentCard 440:19890 — 가입 동의 카드. 동의 상태(어느 항목을 켰는지)는 여기서 들고, 제출 뒤 동작은 onSubmit으로 넘긴다.
-// 「모두 동의합니다」는 별도 상태가 아니라 세 항목이 전부 켜졌는지의 파생값이다(설계 D7).
+// 「필수 항목에 모두 동의합니다」는 별도 상태가 아니라 필수 항목이 전부 켜졌는지의 파생값이고, 선택 항목은 켜지도 끄지도 않는다(설계 COACH-003 D7, COACH-004 D2).
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -22,16 +22,18 @@ import './auth.css';
 interface Props {
   /** 기본은 SIGNUP_TERMS. 테스트·시안 확인용으로 바꿀 수 있다 */
   terms?: readonly SignupTerm[];
-  /** 필수 항목을 모두 켜고 [동의하고 시작하기]를 눌렀을 때. 현재 약관 판을 BE 저장 본문 모양으로 준다 */
+  /** 필수 항목을 모두 켜고 [동의하고 시작하기]를 눌렀을 때. 현재 약관 판과 선택 항목 체크 여부를 BE 저장 본문 모양으로 준다 */
   onSubmit: (versions: ConsentVersions) => void;
   /** 서버 저장 중이면 true. 버튼을 잠근다 */
   submitting?: boolean;
   /** 제출 실패 문구. 버튼 위에 보인다 */
   error?: string | null;
+  /** 처음부터 켜 둘 항목. 재동의 진입(`/signup`에 기존 회원이 옴)에서 이전에 동의한 선택 항목을 보존할 때 쓴다(설계 4-4). 기본은 전부 꺼짐 */
+  initialAgreed?: readonly SignupTermId[];
 }
 
-export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting = false, error = null }: Props) {
-  const [agreed, setAgreed] = useState<ReadonlySet<SignupTermId>>(() => new Set());
+export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting = false, error = null, initialAgreed = [] }: Props) {
+  const [agreed, setAgreed] = useState<ReadonlySet<SignupTermId>>(() => new Set(initialAgreed));
   const canSubmit = allRequiredAgreed(agreed, terms) && !submitting;
 
   return (
@@ -43,7 +45,7 @@ export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting =
       <Checkbox
         checked={allAgreed(agreed, terms)}
         onChange={() => setAgreed((prev) => toggleAll(prev, terms))}
-        label="모두 동의합니다"
+        label="필수 항목에 모두 동의합니다"
         labelStyle="body-16"
         className="signup-card-all"
       />
@@ -56,7 +58,7 @@ export function SignupConsentCard({ terms = SIGNUP_TERMS, onSubmit, submitting =
           {error}
         </p>
       )}
-      <Button fullWidth disabled={!canSubmit} onClick={() => onSubmit(currentConsentVersions(terms))}>
+      <Button fullWidth disabled={!canSubmit} onClick={() => onSubmit(currentConsentVersions(terms, agreed))}>
         동의하고 시작하기
       </Button>
     </Card>

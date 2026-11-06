@@ -1,4 +1,5 @@
 // 플레이 리포트 화면 타입 (COACH-002). 서버 응답 변환은 api/reports, 정확도는 0~1, 표본 없음은 null.
+import type { Difficulty } from './chart';
 import type { Judgement } from './judgement';
 import type { PadId } from './pads';
 
@@ -154,6 +155,10 @@ export interface Report {
   histogram: { binMs: number; fromMs: number; counts: number[] } | null;
   padStats: PadStat[];
   mode: string;
+  /** 연주한 곡·채보·연습 단계. BE 응답에 아직 없으면 null(리포트 하단 비슷한 곡이 이 값이 있을 때만 보인다) */
+  songId: number | null;
+  chartId: number | null;
+  difficulty: Difficulty | null;
   inputSource: string;
   analysisStatus: AnalysisStatus;
   /** AI 약점 구간. null = 미분석·실패, [] = 분석했으나 약점 없음 */

@@ -285,6 +285,8 @@ p {
   flex: 1;
   min-width: 0;
   display: grid;
+  /* 열 폭을 칸 폭에 고정한다. 지정하지 않으면 숨긴 SSAPLASH의 글자 폭만큼 열이 커져 접힘 때 S가 가운데(아이콘 축)에서 오른쪽으로 밀린다 */
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   line-height: 28px;
   text-decoration: none;

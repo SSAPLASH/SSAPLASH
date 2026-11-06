@@ -2,6 +2,7 @@
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다. 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
 // 선택 결과는 페이지가 URL로 옮긴다.
+// 기본 곡 탭에는 추천 곡 줄(RecommendRow)이 필터 아래에 붙는다(설계 COACH-004-song-recommend-picker D1·D4).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -16,7 +17,11 @@ import {
 } from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { loadPlayLogs } from '@/engine/playLog';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
+import { useAuth } from '@/store/authStore';
+import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +31,7 @@ import { Input } from '@/components/ui/Input';
 import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from '@/components/play/SongTable';
 import { SongDetailPane } from '@/components/play/SongDetailPane';
+import { RecommendRow } from '@/components/song/RecommendRow';
 import './play/song-picker.css';
 
 interface Props {
@@ -77,6 +83,14 @@ export function SongPicker({ onSelect, mode }: Props) {
   const activePresetId = useSettings((s) => s.activePresetId);
   const sensorKind = useSettings((s) => s.sensorKind);
   const connected = useLive((l) => l.connected);
+  // 추천 줄: API 곡 소스이고 로그인 상태일 때만 마운트 시 한 번 요청한다(D2·D4)
+  const authed = useAuth((a) => a.status === 'authenticated');
+  const recoKey = `SONG_PICKER:${mode === 'play' ? 'RHYTHM' : 'SHEET'}`;
+  const recoEnabled = source === 'api' && authed;
+  const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
+  const loadReco = useRecommendations((r) => r.load);
+  const clickReco = useRecommendations((r) => r.click);
+  const clearReco = useRecommendations((r) => r.clear);
   // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
   const [params] = useSearchParams();
   const [tab, setTab] = useState<SongScope>(params.get('scope') === 'MINE' ? 'MINE' : scope);
@@ -88,13 +102,24 @@ export function SongPicker({ onSelect, mode }: Props) {
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
-  // 곡별 최고 기록: 마운트 시점의 로컬 플레이 로그(U18). play는 최고 점수, sheet는 최고 정확도
-  const bests = useMemo(() => {
-    const logs = loadPlayLogs();
+  // 내장 개발 소스만 로컬 기록을 사용한다. API 실패를 로컬값으로 대체하지 않는다.
+  const localBests = useMemo(() => {
+    const logs = source === 'builtin' ? loadPlayLogs() : [];
     return mode === 'play'
       ? { scores: bestScoreBySong(logs, 'RHYTHM'), accuracies: undefined }
       : { scores: undefined, accuracies: bestAccuracyBySong(logs, 'SHEET') };
-  }, [mode]);
+  }, [mode, source]);
+
+  const recordsReady = status === 'ready' && scope === tab;
+  const records = useBestRecords(recordsReady ? items.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
+  const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
+
+  useEffect(() => {
+    if (!recoEnabled) return;
+    void loadReco(recoKey, { context: 'SONG_PICKER', mode: mode === 'play' ? 'RHYTHM' : 'SHEET', size: 5 });
+    // 닫을 때 끝난 결과를 버린다. 다음에 열면 이전 추천이 잠깐 보이지 않고 새로 요청한다(진행 중이면 그대로 둔다)
+    return () => clearReco(recoKey);
+  }, [recoEnabled, recoKey, mode, loadReco, clearReco]);
 
   // 탭·검색어·난이도가 바뀌면 목록을 다시 읽는다. 검색어 변경만 디바운스하고 나머지는 즉시
   useEffect(() => {
@@ -199,6 +224,17 @@ export function SongPicker({ onSelect, mode }: Props) {
         </div>
       </div>
 
+      {recoEnabled && tab === 'BUILTIN' && recoEntry.status === 'ready' && (
+        <RecommendRow
+          items={recoEntry.cards}
+          onPick={(item) => {
+            // 기록은 기다리지 않는다(D8)
+            void clickReco(item, recoEntry.requestId);
+            onSelect(item.song.id, item.chartId);
+          }}
+        />
+      )}
+
       {status === 'loading' && (
         <div className="play-sp-center">
           <span className="spinner" aria-label="불러오는 중" />
@@ -230,6 +266,8 @@ export function SongPicker({ onSelect, mode }: Props) {
           }
         />
       )}
+
+      {ready && items.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
 
       {ready && items.length > 0 && (
         <div className="play-sp-grid">

@@ -233,3 +233,20 @@ describe('곡 난이도 변환', () => {
     expect(songLevelLabel(null)).toBe('—');
   });
 });
+
+
+describe('채보 실패 사유 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'FAILED' };
+
+  it('목록과 상세에 코드만 담고 서버 메시지는 버린다', () => {
+    const dto = { ...base, chartFailure: { code: 'MODEL_FAILED', message: 'internal details' } };
+    expect(songFromDto(dto).chartFailure).toEqual({ code: 'MODEL_FAILED' });
+    expect(songDetailFromDto({ ...dto, charts: [] }).chartFailure).toEqual({ code: 'MODEL_FAILED' });
+  });
+
+  it('사유가 없거나 객체 또는 문자열 코드가 아니면 null이다', () => {
+    for (const value of [undefined, null, 'MODEL_FAILED', [], 12, {}, { code: null }, { code: 123 }]) {
+      expect(songFromDto({ ...base, chartFailure: value }).chartFailure).toBeNull();
+    }
+  });
+});

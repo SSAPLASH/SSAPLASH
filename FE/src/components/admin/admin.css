@@ -1,0 +1,132 @@
+/* 관리자 공용 곡 관리 화면 (Jira 262). Figma 시안이 없어 라이브러리(studio) 창·표 모양을 따른다. 접두사 admin- */
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-l);
+}
+.admin-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.admin-head h2 {
+  margin: 0;
+}
+.admin-summary {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.admin-table-wrap {
+  overflow-x: auto;
+}
+.admin-table td {
+  vertical-align: middle;
+}
+.admin-artist {
+  color: var(--text-2);
+}
+.admin-yes {
+  color: var(--text-1);
+}
+.admin-no {
+  color: var(--text-3);
+}
+.admin-row-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.admin-row-error {
+  max-width: 280px;
+  margin: 0;
+  color: var(--miss);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+/* 공용 곡 추가 창 */
+.dialog.admin-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  padding: var(--space-l);
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-dock);
+}
+.admin-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.admin-dialog-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+.admin-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.admin-file-label {
+  font-weight: 600;
+}
+.admin-file-help {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.admin-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-s);
+}
+.admin-footer-btn {
+  width: 160px;
+}
+
+/* 일괄 추가 창 */
+.dialog.admin-bulk-dialog {
+  max-width: 880px;
+}
+.admin-bad {
+  color: var(--miss);
+}
+.admin-note {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.admin-head-actions {
+  display: flex;
+  gap: var(--space-s);
+}
+.admin-picked {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.admin-picked .admin-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
