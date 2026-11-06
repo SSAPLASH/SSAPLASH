@@ -1,4 +1,6 @@
 // 키트 프리셋 도메인: 타입·상수·이름 검증·변경 여부 판정. 저장소(로컬/서버)는 PresetSource 뒤에 둔다.
+// 시스템 기본(SYSTEM_PRESET_ID)은 목록에 없는 예약 프리셋이다(UX-64 D1): 고정 배치 + 3D 모델 기본 앵커, 편집 불가.
+import type { HandAnchors } from './calibration';
 import type { KitLayout } from './kitLayout';
 import { ALL_PADS } from './pads';
 // 타입만 가져온다(런타임 의존 없음). 사운드 세트 id의 주인은 audio/soundSets
@@ -6,6 +8,38 @@ import type { SoundSetId } from './soundSet';
 
 /** 프리셋 상한(BE와 동일) */
 export const MAX_PRESETS = 10;
+/** 드럼 세팅 슬롯 창의 저장 슬롯 수(Figma 772:33828, UX-64 U9). 0번 시스템 기본은 따로 */
+export const PRESET_SLOTS = 5;
+/** 시스템 기본 프리셋의 예약 id. 목록(PresetSource)에는 없다 */
+export const SYSTEM_PRESET_ID = 'system';
+export const SYSTEM_PRESET_NAME = '시스템 기본';
+
+export function isSystemPreset(id: string | null | undefined): boolean {
+  return id === SYSTEM_PRESET_ID;
+}
+
+/** 적용 프리셋 표시 이름. 시스템 기본이면 고정 이름, 목록에 없으면 null */
+export function presetDisplayName(presets: readonly { id: string; name: string }[], id: string | null): string | null {
+  if (isSystemPreset(id)) return SYSTEM_PRESET_NAME;
+  return presets.find((p) => p.id === id)?.name ?? null;
+}
+
+/** 프리셋 하나의 손별 앵커(기기 로컬, UX-64 D2). 서버 프리셋 스키마에는 없다 */
+export interface PresetAnchorRecord {
+  anchors: HandAnchors;
+  /** 보정 시각(Date.now) */
+  calibratedAt: number;
+}
+
+/** 프리셋 id → 앵커. 다른 기기에서 만든 프리셋은 항목이 없다(모델 기본 앵커로 판정) */
+export type PresetAnchors = Record<string, PresetAnchorRecord>;
+
+/** 'new' 보정(추가하기)의 결과. 저장 전까지 아무것도 바꾸지 않는다(UX-64 D4) */
+export interface CaptureDraft {
+  anchors: HandAnchors;
+  layout: KitLayout;
+  calibratedAt: number;
+}
 /** 프리셋 스키마 버전(서버 저장 형식과 맞춘다) */
 export const PRESET_SCHEMA_VERSION = 1;
 /** 이름 최대 길이(trim 뒤). BE는 50자까지 받지만 표시 공간 때문에 FE에서 20자로 제한한다 */

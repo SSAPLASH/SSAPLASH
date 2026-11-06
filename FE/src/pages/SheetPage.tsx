@@ -40,6 +40,7 @@ import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
+import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
@@ -640,7 +641,7 @@ function SheetPageBody() {
     const fallback = chartFallback(detail, chartIdParam);
     if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
   }, [stage, songIdParam, chartIdParam, detail, selectParam]);
-  const presetName = presetItems.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presetItems, settings.activePresetId);
 
   if (stage === 'loading') {
     return (
