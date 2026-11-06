@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import { songFromDto, type SongSummary } from '@/domain/songCatalog';
 import { dateLabel } from './dateLabel';
 import { MySongCard } from './MySongCard';
 import { MySongRow } from './MySongRow';
@@ -133,5 +133,50 @@ describe('반주 배지 (CHART-002 반주 상태)', () => {
     expect(row(song({ accompanimentStatus: 'FAILED' }))).toContain('반주 생성 실패');
     expect(row(song({ accompanimentStatus: 'READY' }))).not.toContain('반주 생성');
     expect(row(song({ status: 'PROCESSING', accompanimentStatus: 'GENERATING' }))).not.toContain('반주 생성');
+  });
+});
+
+
+describe('채보 실패 사유 표시', () => {
+  const messages = [
+    ['INPUT_INVALID', '파일을 처리할 수 없어요'],
+    ['OUTPUT_INVALID', '채보 결과를 처리하지 못했어요'],
+    ['MODEL_FAILED', '채보 생성 중 오류가 발생했어요'],
+    ['JOB_CANCELLED', '채보 생성이 취소됐어요'],
+    ['JOB_FAILED', '채보 작업을 완료하지 못했어요'],
+  ] as const;
+
+  it.each(messages)('%s 코드를 카드와 행의 문구로 표시한다', (code, message) => {
+    const failedSong = song({ status: 'FAILED', chartFailure: { code } });
+    expect(card(failedSong)).toContain(`<p class="studio-card-reason">${message}</p>`);
+    expect(row(failedSong)).toContain(`파란물결 · ${message}`);
+  });
+
+  it('없는 코드, 빈 코드, 모르는 코드와 프로토타입 키에는 기본 문구를 쓴다', () => {
+    for (const chartFailure of [undefined, null, { code: '' }, { code: 'UNKNOWN_SECRET' }, { code: '__proto__' }]) {
+      const failedSong = song({ status: 'FAILED', chartFailure });
+      for (const html of [card(failedSong), row(failedSong)]) {
+        expect(html).toContain('채보를 만들지 못했어요');
+        expect(html).not.toContain('UNKNOWN_SECRET');
+        expect(html).not.toContain('__proto__');
+      }
+    }
+  });
+
+  it('서버 메시지를 카드와 행에 노출하지 않는다', () => {
+    const item = songFromDto({ id: 7, title: '곡', source: 'AUDIO', status: 'FAILED', chartFailure: { code: 'UNKNOWN_SECRET', message: 'internal details' } });
+    for (const html of [card(item), row(item)]) {
+      expect(html).toContain('채보를 만들지 못했어요');
+      expect(html).not.toContain('UNKNOWN_SECRET');
+      expect(html).not.toContain('internal details');
+    }
+  });
+
+  it('완료와 처리 중 곡에는 실패 사유를 표시하지 않는다', () => {
+    for (const status of ['READY', 'PROCESSING']) {
+      const item = song({ status, chartFailure: { code: 'INPUT_INVALID' } });
+      expect(card(item)).not.toContain('파일을 처리할 수 없어요');
+      expect(row(item)).not.toContain('파일을 처리할 수 없어요');
+    }
   });
 });
