@@ -15,9 +15,9 @@ export const STAGE_LABEL: Record<JobStage, string> = {
 
 export interface JobProgress {
   stage: JobStage;
-  /** false면 폴링만으로 추정한 값("처리 중"으로 표시) */
+  /** false면 곡 상태로 추정한 값("처리 중"으로 표시) */
   stageKnown: boolean;
-  /** 진행 WebSocket이 주면 0~100, 아니면 null */
+  /** 서버가 준 0~100 정수, 없거나 잘못되면 null */
   percent: number | null;
   failReason: string | null;
 }
@@ -104,6 +104,19 @@ export function songStatusToProgress(status: string): JobProgress {
     default:
       return { stage: 'QUEUED', stageKnown: true, percent: null, failReason: null };
   }
+}
+
+/** 작업 스냅샷 상태를 진행으로 변환한다. 알 수 없는 상태는 반영하지 않는다. */
+export function jobSnapshotToProgress(snapshot: { status: string; progress: unknown; error: { code: string; message: string } | null }): JobProgress | null {
+  if (!['QUEUED', 'SEPARATING', 'TRANSCRIBING', 'DONE', 'FAILED'].includes(snapshot.status)) return null;
+  const n = snapshot.progress;
+  const percent = typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
+  return {
+    stage: snapshot.status as JobStage,
+    stageKnown: true,
+    percent,
+    failReason: snapshot.error?.message.trim() || null,
+  };
 }
 
 export const UPLOAD_ERROR_TEXT: Record<string, string> = {

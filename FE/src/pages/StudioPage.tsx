@@ -364,9 +364,11 @@ export function StudioPage() {
 
   // store가 이미 사용자용 문장으로 만들어 둔다
   const errorText = error?.detail ?? null;
+  const jobLookupError = phase === 'failed' && active !== null && (error?.code === 'AUDIO_NOT_FOUND' || error?.code === 'JOB_AUTH');
+  const displayedActive = jobLookupError ? null : active;
   // 악보만 올려 둔 사람은 첫 방문이 아니다. 악보 목록을 읽는 동안에는 판단을 미룬다(빈 화면으로 깜빡이지 않게 목록만 비운다)
   const sheetsEmpty = !SHEET_ARCHIVE_ENABLED || sheetsStatus === 'error' || (sheetsStatus === 'ready' && sheets.length === 0);
-  const firstVisit = status === 'ready' && items.length === 0 && active === null && sheetsEmpty;
+  const firstVisit = status === 'ready' && items.length === 0 && displayedActive === null && sheetsEmpty;
   useEffect(() => {
     firstVisitRef.current = firstVisit;
   }, [firstVisit]);
@@ -403,7 +405,7 @@ export function StudioPage() {
 
   // 요약: 곡 n개 · 생성 중 n. 활성 작업이 목록에 아직 없으면 임시 행(MySongList)과 같이 센다
   const mine = summarizeMineSongs(items);
-  const tempRow = active !== null && !items.some((s) => s.id === active.songId);
+  const tempRow = displayedActive !== null && !items.some((s) => s.id === displayedActive.songId);
   const total = mine.total + (tempRow ? 1 : 0);
   const processing = mine.processing + (tempRow ? 1 : 0);
   let summary: string;
@@ -432,6 +434,7 @@ export function StudioPage() {
           </Button>
         )}
       </header>
+      {jobLookupError && <p className="notice error" role="alert">{errorText}</p>}
       {firstVisit ? (
         <>
           <Card padding="lg" className="studio-first-card">
@@ -459,7 +462,7 @@ export function StudioPage() {
               items={items}
               error={listError}
               onRetry={() => void load('MINE')}
-              active={active}
+              active={displayedActive}
               progress={progress}
               justDoneId={justDoneId}
               onReupload={onReupload}
