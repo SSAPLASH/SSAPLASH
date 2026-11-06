@@ -284,7 +284,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 38). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 39). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -429,6 +429,13 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V30 | `V30__add_telemetry_retention_policy.sql` | `telemetry_events`에 TimescaleDB 보관 정책 `add_retention_policy(90 days, if_not_exists)` 등록. 확장 전용이라 V8처럼 일반 테스트 복사본에서 제외하고 `timescaleTest`에서 검증한다 | -258 |
 | V31 | `V31__midi_accompaniment.sql` | MIDI 원본 접수·비동기 반주 작업·시도와 객체 정리 참조를 추가하고 MIDI 곡의 반주 키를 허용한다 | -274 |
 | V32 | `V32__add_coach_narrative.sql` | `reports.coach_summary`(AI 종합 총평 jsonb)와 LLM 총평 작업 큐 `coach_narrative_jobs`를 추가한다 | COACH-003 후속 |
+| V33 | `V33__add_chart_features.sql` | 곡 추천 R1: 채보 버전별 특징 테이블. 추천 요청마다 노트 JSON을 읽지 않도록 미리 계산해 둔다. 미계산 채보는 행이 없고 후보에서만 빠진다 | 곡 추천 R1 |
+| V34 | `V34__add_recommendation_items.sql` | 곡 추천 R1: 노출·클릭 기록. 가중치 보정과 R3 평가의 근거, 탈퇴 때 삭제, 보관 90일 | 곡 추천 R1 |
+| V35 | `V35__add_chart_features_rhythm_grid.sql` | 곡 추천 R2: 채보 특징에 리듬 격자(한 박 12칸 위치 비율) 추가. NULL은 미계산, 제외 채보는 `{"excluded": …}` | 곡 추천 R2 |
+| V36 | `V36__add_recommendation_similar.sql` | 곡 추천 R2: 노출 기록 `context`에 `SIMILAR` 허용, 기준 곡 열 추가 | 곡 추천 R2 |
+| V37 | `V37__add_recommendation_r3.sql` | 곡 추천 R3: 추천 학습 동의, 후보 저장, AI 배치가 읽는 가명 뷰와 `recommend_export_reader` 역할 | 곡 추천 R3 |
+| V38 | `V38__add_song_metadata.sql` | 곡 추천용 공용 곡 메타데이터 `song_metadata`(값 목록·개수 CHECK)와 AI 배치 뷰 `recommend_song_meta_v`. 값은 카탈로그 `meta`에서 앱 시작 때 넣는다 | -255 |
+| V39 | `V39__create_telemetry_session_conditions.sql` | 측정 세션 실험 조건 `telemetry_session_conditions`. `(user_id, session_id)` PK, 7개 조건 열(`firmware_0`·`firmware_1`·`dongle_firmware`·`link_mask` 0~15·`haptic_enable`·`sensor_mount` `GRIP_FRONT`/`BENCH`·`app_build`·`note` 200자)과 `received_at`. FK·보관 정책 없음 | -259 |
 
 규칙:
 
@@ -711,7 +718,7 @@ V26 이후 동의 전으로 시작한다. FE는 `/me`의 `signupCompleted`가 fa
 - **`/internal/**`**: 이 API 체인(`@Order(2)`)에서는 열려 있다. AI 워커 인증은 `@Order(1)` + `securityMatcher("/internal/**")`인 별도
   `SecurityFilterChain`으로 더한다.
 - **탈퇴**(`withdrawal.WithdrawalService`, 149번): 한 트랜잭션에서 `users`를 `FOR UPDATE`(`UserRepository.findByIdForUpdate`)로 잠그고
-  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258) 삭제,
+  ACTIVE를 확인한 뒤 WITHDRAWN으로 바꾸면서 개인정보 컬럼을 비우고(`User.withdraw`), 소셜 연동·키트 프리셋·연주 녹음·`consent=false` 플레이 세션·`telemetry_events`(258)·`telemetry_session_conditions`(259) 삭제,
   `RefreshTokenService.revokeAllOf`(Redis 실패는 WARN 로그 후 계속),
   `user.UserWithdrawnEvent(userId)` 발행까지 한다. 그 밖의 회원 데이터(곡·파일·채보 작업)를 정리하는 모듈은
   `@TransactionalEventListener(phase = AFTER_COMMIT)`로 이 이벤트를 받고 DB 변경은 `REQUIRES_NEW`로 연다. 롤백된 탈퇴에는 호출되지 않는다.
@@ -1372,11 +1379,11 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 | API | 요청 | 응답 |
 | --- | --- | --- |
 | `POST /api/telemetry/batches` | JSON 본문 128 KiB 이하, 이벤트 1~100건 | 200 `{acceptedCount}`. 배치 전체를 한 트랜잭션으로 저장 |
-| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount}>`, lastEventTime 내림차순 |
+| `GET /api/telemetry/sessions` | `from`·`to`(ISO-8601, 기본 지금까지 최근 7일, 최대 31일), `userId`(선택), `page`(0~), `size`(1~100, 기본 20) | `PageResponse<{userId, sessionId, mode, firstEventTime, lastEventTime, eventCount, hitCount, statusCount, conditions}>`, lastEventTime 내림차순. `conditions`는 [측정 조건](#측정-세션-실험-조건-259번)이며 받은 적 없으면 null |
 | `GET /api/telemetry/sessions/{sessionId}/events` | `userId`(필수), `kind`(`HIT`·`STATUS`, 선택), `page`, `size`(1~1000, 기본 500) | `PageResponse<이벤트>`, time 오름차순(같은 시각은 stickId 0·1·null). 없는 세션은 빈 페이지 |
 
-요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`다. `userId`는 받지 않고
-인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
+요청 외피는 `schemaVersion`(1), `sessionId`(UUID), `mode`(`RHYTHM`·`FREE`·`TEMPO`·`SHEET` 또는 null), `events`, 선택 객체
+`conditions`([측정 조건](#측정-세션-실험-조건-259번))다. `userId`는 받지 않고 인증 주체로 저장한다. 같은 `sessionId`를 다른 회원이 보내도 조회는 항상 `(userId, sessionId)`로 나뉜다. `play_sessions` 존재는 검사하지 않는다.
 
 | 이벤트 필드 | HIT | STATUS |
 | --- | --- | --- |
@@ -1397,15 +1404,44 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드·타입 불일치·목록 밖 enum. detail에 `events[0].pad` 같은 위치만 담는다 |
+| 400 | `INVALID_INPUT` | 본문 파싱 실패·모르는 필드(`conditions` 안은 예외)·타입 불일치·목록 밖 enum. detail에 `events[0].pad`·`conditions.sensorMount` 같은 위치만 담는다 |
 | 400 | `TELEMETRY_SCHEMA_UNSUPPORTED` | `schemaVersion`이 1이 아님 |
-| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`. detail은 `events[i].필드: 이유`이며 값은 넣지 않는다 |
+| 400 | `TELEMETRY_EVENT_INVALID` | 위 규칙 위반, 빈 `events`, `conditions`의 길이·범위 위반. detail은 `events[i].필드: 이유`·`conditions.필드: 이유`이며 값은 넣지 않는다 |
 | 400 | `VALIDATION_FAILED` | 조회 페이지·기간 범위 밖 |
 | 413 | `TELEMETRY_BATCH_TOO_LARGE` | 본문 128 KiB 초과(Content-Length가 없어도 읽는 도중 끊음) 또는 이벤트 100건 초과 |
 | 500 | `INTERNAL_ERROR` | DB 저장 실패. 이미 넣은 행도 모두 롤백하며 로그에는 예외 클래스명만 남긴다 |
 
 한 건이라도 거절되면 그 배치의 어떤 행도 저장하지 않는다. 재전송·멱등 처리는 없으므로 FE는 실패한 배치를 다시 보내지 않는다.
 요청 횟수 제한(429)은 MVP에서 구현하지 않는다(행에는 이름·이메일이 없고 회원 번호만 있다).
+
+### 측정 세션 실험 조건 (259번)
+
+MONITOR-002. 세션끼리 "어떤 조건에서 쟀는지"를 비교하기 위한 환경 정보다. 필드·값은 FE가 EMB와 맞춰 확정했다(`MONITOR-002_측정세션-실험조건`, 2026-11-06).
+설계: `.claude/plans/MONITOR-002-측정-세션-실험-조건.md`.
+
+배치 외피의 선택 객체 `conditions`로 받는다. **FE는 같은 `sessionId`의 매 배치에 그 시점의 전체 값을 붙이고**, BE는 `telemetry_session_conditions`(V39)의
+`(user_id, session_id)` 한 행을 **마지막으로 받은 값으로 통째로 바꾼다**(null이 된 값은 null이 된다). `conditions`가 없거나 null인 배치는 행을 건드리지 않는다.
+조건이 바뀌어도 세션을 나누지 않으며 BE는 세션 경계를 판단하지 않는다. 저장은 이벤트와 같은 트랜잭션이라 조건만 남고 이벤트가 롤백되는 일은 없다.
+`conditions`도 본문 128 KiB 상한에 들어간다. `schemaVersion`은 1 그대로다.
+
+| 필드 | 타입 | 규칙 |
+| --- | --- | --- |
+| `firmware` | `{"0": 문자열 또는 null, "1": 문자열 또는 null}` 또는 null | 스틱별 펌웨어(0 왼손·1 오른손, `"{major}.{minor}"`). 각 1~64자. 아직 STATUS를 못 받은 스틱은 null |
+| `dongleFirmware` | 문자열 또는 null | 동글 펌웨어 1~64자. 블루투스 직결이면 null |
+| `linkMask` | 정수 또는 null | 동글 LINK 연결 마스크 0~15(bit0 왼손, bit1 오른손, bit2 왼발 페달, bit3 오른발 페달) |
+| `hapticEnable` | boolean 또는 null | 스틱 타격 진동 켬/끔. FE가 값을 확인했을 때만 채운다 |
+| `sensorMount` | `GRIP_FRONT`·`BENCH` 또는 null | 센서 부착 위치. `GRIP_FRONT`는 하우징 안 그립 앞(시제품 유일 위치), `BENCH`는 하우징 없이 책상·손에 둔 시험용 |
+| `appBuild` | 문자열 또는 null | FE 빌드 식별자 1~64자 |
+| `note` | 문자열 또는 null | 측정자 메모 0~200자(빈 문자열 허용) |
+
+- **`conditions` 안의 모르는 키는 무시한다**(`firmware` 안도 같다). EMB가 필드를 더할 때 FE를 먼저 배포할 수 있게 하기 위해서다. 외피·이벤트 `tags`의 모르는 키는 지금처럼 400이다.
+- 정의된 키의 값이 잘못되면 배치 전체를 거절한다. 타입·목록 밖 값(`"3"`, `3.0`, `TIP`, 문자열 자리의 숫자)은 파서가 400 `INVALID_INPUT`, 길이·범위는 400 `TELEMETRY_EVENT_INVALID`(`conditions.linkMask: 0~15 정수여야 합니다`).
+- 값을 보정하지 않는다. 1~64자 필드의 빈 문자열은 거절하고 `note`의 빈 문자열은 그대로 저장한다.
+- 세션 목록 응답의 `conditions`는 요청과 같은 모양이다. 조건을 받은 적 없는 세션은 null, 모든 값이 null인 조건은 필드가 null인 객체이며 `firmware`는 언제나 `"0"`·`"1"`을 가진 객체다. 이벤트 조회 응답은 바뀌지 않는다.
+- 조건별 비교·필터 조회는 없다(Jira 259 보류). 조건 수정·삭제 API도 없다.
+
+**배포 순서:** 텔레메트리 파서는 모르는 외피 필드를 거절하므로, **이 버전이 배포되기 전에 FE가 `conditions`를 보내면 그 배치는 모두 400으로 버려진다.**
+FE 전송(2026-11-10 예정)보다 BE를 먼저 배포한다. 반대 순서는 서비스 장애는 아니지만(유실 허용 계약) 그 기간의 측정이 빈다.
 
 ### 보관·탈퇴 (258번)
 
@@ -1418,6 +1454,7 @@ MONITOR-002. 기준은 Infra와 합의했다(`MONITOR-002_텔레메트리-보관
 | 압축 | 두지 않는다. 용량이 작아(팀 테스트 4주 0.5 GB 안팎) 관리 부담이 더 크다. 운영 크기가 예상보다 크면 다시 정한다 |
 | `user_id` 인덱스 | 두지 않는다. 탈퇴 삭제는 청크 순차 스캔이지만 보관 상한·탈퇴 빈도가 작고, 인덱스는 청크마다 생겨 수집 쓰기 비용을 늘린다 |
 | 백업 | 이미 만든 `pg_dump` 파일 안의 데이터는 이 정책이 지우지 않는다. 백업 보관 기간은 Infra 백업 정책(133번)에서 정한다 |
+| 측정 조건(259) | `telemetry_session_conditions`에는 보관 정책을 두지 않는다(세션당 한 행, 수백 바이트). 이벤트가 지워진 세션은 목록에 나오지 않으므로 남은 행은 보이지 않는다. 탈퇴 때 그 회원의 행을 같은 트랜잭션에서 지운다(`deletedTelemetryConditions` 로그) |
 
 **운영 적용:** 따로 SQL을 실행하지 않는다. 릴리즈 배포 때 Flyway가 V30을 한 번 실행해 정책을 등록한다.
 TimescaleDB 백그라운드 작업이 켜져 있어야 정책이 돈다(`SHOW timescaledb.max_background_workers;`가 1 이상, 2026-11-04 운영 16).
@@ -1437,8 +1474,9 @@ SELECT min(time), max(time), count(*) FROM telemetry_events;
 **되돌리기·변경:** 앱만 롤백해도 정책은 DB에 남는다. 기간을 바꾸거나 정책을 없애려면 운영에서 직접 SQL을 쓰지 않고
 Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다시 등록)으로 한다.
 
-`TelemetryBatchValidatorTest`는 파싱·검증 규칙을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서 권한·저장·null 보존·전체 거절·롤백·조회를,
-`TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과 컬럼 타입을 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다.
+`TelemetryBatchValidatorTest`는 파싱·검증 규칙(259 `conditions`의 모양·길이·범위·모르는 키 무시 포함)을, `TelemetryApiTest`는 실제 JWT·임베디드 PG에서
+권한·저장·null 보존·전체 거절·롤백·조회와 259 조건의 저장·통째 교체·행 유지·롤백·세션 목록 응답을, `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과
+컬럼 타입, V39의 PK·CHECK를 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다. 탈퇴 시 조건 행 삭제는 `WithdrawalServiceTest`가 본다.
 
 ## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
 
