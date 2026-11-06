@@ -72,7 +72,7 @@ export function StaffLegend({ activePad, onHoverPad, className }: StaffLegendPro
               key={pad}
               className={`play-sl-row${activePad === pad ? ' active' : ''}`}
               tabIndex={0}
-              aria-label={`${meta.label} — ${staffPosText(line)}, ${meta.stick ? '손' : '발'}`}
+              aria-label={`${meta.label} — ${staffPosText(line)}, ${meta.stick ? '손' : '발'}${pad === 'HIHAT' ? ', o 열린 하이햇, 페달 떼고 치기' : ''}`}
               onMouseEnter={() => onHoverPad?.(pad)}
               onMouseLeave={() => onHoverPad?.(null)}
               onFocus={() => onHoverPad?.(pad)}
@@ -80,7 +80,7 @@ export function StaffLegend({ activePad, onHoverPad, className }: StaffLegendPro
             >
               <MiniStaff pad={pad} />
               <span className="play-sl-dot" style={{ background: meta.color }} aria-hidden="true" />
-              <span className="play-sl-name">{meta.label}</span>
+              <span className="play-sl-name">{meta.label}{pad === 'HIHAT' && <span className="play-sl-open">o 열린 하이햇 · 페달 떼고 치기</span>}</span>
               <span className={`play-sl-tag${meta.stick ? '' : ' foot'}`}>{meta.stick ? '손' : '발'}</span>
             </li>
           );

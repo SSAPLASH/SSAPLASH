@@ -239,6 +239,10 @@ describe('InputManager 페달(foot)', () => {
     const { im } = await footSetup();
     const statuses: unknown[] = [];
     im.onPedalStatus((foot, connected) => statuses.push([foot, connected]));
+    const src = im.get('webserial') as FootSource;
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedalStatus', foot: 3, connected: true });
+    statuses.length = 0;
     await im.attach(new FootSource('webserial')); // 같은 kind 교체 → detach
     expect(statuses).toEqual([
       [2, false],
@@ -247,6 +251,61 @@ describe('InputManager 페달(foot)', () => {
   });
 });
 
+
+describe('하이햇 페달 스냅샷', () => {
+  it('원시 타격 시각으로 상태를 찾고 오프셋과 소유자가 아닌 소스 detach에 영향받지 않는다', async () => {
+    const { im, src, hits } = await setup('webserial');
+    const keyboard = new MockSource('keyboard');
+    await im.attach(keyboard);
+    src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 10, recvTime: 10 });
+    src.fire(hit({ pad: 'HIHAT', timestamp: 20 }));
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedal', foot: 2, closed: false, timestamp: 100, recvTime: 100 });
+    src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 200, recvTime: 200 });
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true, batteryPct: 80 });
+    im.setSensorOffsetMs(200);
+    await im.detach('keyboard');
+    src.fire(hit({ pad: 'HIHAT', timestamp: 150 }));
+    src.fire(hit({ pad: 'HIHAT', timestamp: 250 }));
+    expect(hits.map((h) => h.hihatClosed)).toEqual([null, false, true]);
+    expect(hits[1].tHit).toBe(350);
+  });
+  it('소스 교체 뒤 이전 이벤트와 연결 전 페달을 무시한다', async () => {
+    const { im, src, hits } = await setup('webserial');
+    const other = new MockSource('ble');
+    await im.attach(other);
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 10, recvTime: 10 });
+    other.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 20, recvTime: 20 });
+    other.fire(hit({ pad: 'HIHAT', timestamp: 30 }));
+    other.fire({ kind: 'pedal', foot: 2, closed: false, timestamp: 25, recvTime: 25 });
+    other.fire(hit({ pad: 'HIHAT', timestamp: 30 }));
+    other.fire({ kind: 'pedalStatus', foot: 2, connected: false });
+    other.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 31, recvTime: 31 });
+    other.fire(hit({ pad: 'HIHAT', timestamp: 32 }));
+    expect(hits.map((h) => h.hihatClosed)).toEqual([null, false, null]);
+  });
+});
+
+it('비동기 detach가 끝나기 전에 페달 상태를 지운다', async () => {
+  let finish!: () => void;
+  class SlowSource extends MockSource {
+    async disconnect(): Promise<void> { await new Promise<void>((resolve) => { finish = resolve; }); }
+  }
+  const im = new InputManager(); im.setKeyMap(KEY_MAP);
+  const src = new SlowSource('webserial'); const keys = new MockSource('keyboard');
+  await im.attach(src); await im.attach(keys);
+  const hits: ResolvedHit[] = []; im.onHit((h) => hits.push(h));
+  src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+  src.fire({ kind: 'pedal', foot: 2, closed: true, timestamp: 1, recvTime: 1 });
+  const pending = im.detach('webserial');
+  keys.fire(hit({ keyCode: 'KeyD', timestamp: 2 }));
+  expect(im.getHihatPedalState()).toEqual({ connected: false, closed: null });
+  expect(hits[0].hihatClosed).toBeNull();
+  finish(); await pending;
+});
 describe('InputManager 손별 프로필·기준 자세 초기화(PLAY-004)', () => {
   it('왼손 타격은 왼손 프로필, 오른손 타격은 오른손 프로필로 판정한다', async () => {
     const im = new InputManager();
@@ -264,6 +323,23 @@ describe('InputManager 손별 프로필·기준 자세 초기화(PLAY-004)', () 
     src.fire(hit({ stickId: 1, pad: null, yaw: 20 }));
     expect(hits.map((h) => h.pad)).toEqual(['HIHAT', 'SNARE']);
     expect(im.profileFor(1)).toBe(right);
+    im.dispose();
+  });
+
+  it('손별 매핑으로 정한 하이햇에만 페달 스냅샷을 적용한다', async () => {
+    const im = new InputManager();
+    const right = createEmptyProfile('ble');
+    right.anchors = computeBoundaries({ SNARE: { pad: 'SNARE', pitch: 0, yaw: 20, radius: 0, samples: 2, spread: 0 } }, 22);
+    im.setProfiles([profile(), right]);
+    const src = new MockSource('ble');
+    await im.attach(src);
+    const hits: ResolvedHit[] = [];
+    im.onHit((h) => hits.push(h));
+    src.fire({ kind: 'pedalStatus', foot: 2, connected: true });
+    src.fire({ kind: 'pedal', foot: 2, closed: false, timestamp: 50, recvTime: 50 });
+    src.fire(hit({ stickId: 0, pad: null, yaw: 20, timestamp: 100 }));
+    src.fire(hit({ stickId: 1, pad: null, yaw: 20, timestamp: 100 }));
+    expect(hits.map((h) => [h.pad, h.hihatClosed])).toEqual([['HIHAT', false], ['SNARE', undefined]]);
     im.dispose();
   });
 

@@ -20,6 +20,7 @@ export interface Colors {
   base: string;
   /** 기준선 글로우 색 */
   baseGlow: string;
+  warning: string;
   judge: Record<Judgement, string>;
 }
 
@@ -33,6 +34,7 @@ export function readColors(el: Element = document.documentElement): Colors {
     inkFaint: v('--text-3', '#828d9e'),
     base: v('--brand-text', '#52b2dd'),
     baseGlow: v('--brand', '#35a3d4'),
+    warning: v('--brand-sub', '#ffc83d'),
     judge: {
       PERFECT: v('--perfect', '#8fceea'),
       GOOD: v('--good', '#4cd07d'),
@@ -71,6 +73,8 @@ export interface DrawSheetOpts {
   /** false면 기준선·박 번호·카운트인 숫자를 그리지 않는다 */
   showBase: boolean;
   countInMs?: number;
+  openWarnings?: ReadonlyMap<number, number>;
+  nowMs?: number;
 }
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
@@ -118,7 +122,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     ctx.font = '600 11px Pretendard Variable, Pretendard, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(String(bar + 1), left + 4, top - 22);
+    ctx.fillText(String(bar + 1), left + 4, top - 40);
 
     const layout = layoutOf(bar);
 
@@ -196,6 +200,14 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
           ctx.arc(x, y, r + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
+      }
+      if (g.openOffsetY !== undefined) {
+        const warning = (opts.openWarnings?.get(g.noteIndex) ?? 0) > (opts.nowMs ?? 0);
+        ctx.strokeStyle = warning ? colors.warning : c;
+        ctx.lineWidth = warning ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y - g.openOffsetY, 3, 0, Math.PI * 2);
+        ctx.stroke();
       }
       // 격자 밖 노트: 머리 오른쪽 위에 작은 점("악보보다 조금 앞뒤로 친다")
       if (g.offGrid) {

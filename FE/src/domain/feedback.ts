@@ -256,6 +256,24 @@ export function chartFromLog(log: PlayLog): GridChart | null {
     bpm: log.bpm,
     beatsPerBar: log.beatsPerBar,
     offsetMs: log.offsetMs ?? 0,
-    notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })),
+    notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs, ...(n.pad === 'HIHAT' && n.hihatOpen === true ? { hihatOpen: true as const } : {}) })),
   };
+}
+
+/** 열린 하이햇의 전체 채보 수와 유일한 성공 노트 수. 측정 불완전은 숫자를 표시하지 않는다. */
+export function summarizeOpenHihat(log: PlayLog): { text: string; label: string } | null {
+  if (log.mode !== 'SHEET' || !log.hihatPedalCoverage || log.hihatPedalCoverage === 'NONE') return null;
+  const open = new Set(log.notes.filter((n) => n.pad === 'HIHAT' && n.hihatOpen === true).map((n) => n.index));
+  if (!open.size) return null;
+  const incompleteRun = log.lastSongTimeMs !== undefined && log.lastSongTimeMs < log.durationMs;
+  const suffix = incompleteRun ? ' · 전체 채보 기준' : '';
+  if (log.hihatPedalCoverage === 'PARTIAL') {
+    const text = `열린 하이햇 · 측정 불완전${suffix}`;
+    return { text, label: text };
+  }
+  const hits = new Set<number>();
+  for (const h of log.hits) {
+    if (h.matchedNoteIndex !== undefined && open.has(h.matchedNoteIndex) && (h.judgement === 'PERFECT' || h.judgement === 'GOOD') && h.hihatClosed === false) hits.add(h.matchedNoteIndex);
+  }
+  return { text: `열린 ${hits.size}/${open.size}${suffix}`, label: `열린 하이햇: 페달을 떼고 정확히 친 노트 ${hits.size}개, 전체 열린 노트 ${open.size}개${suffix}` };
 }
