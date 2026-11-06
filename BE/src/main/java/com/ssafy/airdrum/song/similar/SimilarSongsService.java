@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
@@ -23,6 +24,8 @@ import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.song.SongQueryService;
 import com.ssafy.airdrum.song.SongResponses.SongSummary;
 import com.ssafy.airdrum.song.feature.ChartFeatureService;
+import com.ssafy.airdrum.song.meta.SongMetadata;
+import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 import com.ssafy.airdrum.song.recommend.RecommendationService;
 import com.ssafy.airdrum.song.similar.SimilarResponses.Item;
 import com.ssafy.airdrum.song.similar.SimilarResponses.Similar;
@@ -51,14 +54,15 @@ public class SimilarSongsService {
 	private final SongQueryService songs;
 	private final ChartQueryAccess access;
 	private final RecommendationService recommendations;
+	private final SongMetadataRepository metadata;
 	private final JsonMapper json;
 	private final Clock clock;
 	private final long cacheSeconds;
 	private final AtomicReference<Cached> cache = new AtomicReference<>();
 
 	public SimilarSongsService(JdbcTemplate db, SongQueryService songs, ChartQueryAccess access, RecommendationService recommendations,
-			JsonMapper json, Clock clock, @Value("${similar.cache-ttl-seconds:300}") long cacheSeconds) {
-		this.db = db; this.songs = songs; this.access = access; this.recommendations = recommendations;
+			SongMetadataRepository metadata, JsonMapper json, Clock clock, @Value("${similar.cache-ttl-seconds:300}") long cacheSeconds) {
+		this.db = db; this.songs = songs; this.access = access; this.recommendations = recommendations; this.metadata = metadata;
 		this.json = json; this.clock = clock; this.cacheSeconds = Math.max(0, cacheSeconds);
 	}
 
@@ -68,8 +72,8 @@ public class SimilarSongsService {
 		requireVisibleSource(userId, songId);
 		Instant now = clock.instant();
 		UUID requestId = UUID.randomUUID();
-		var sourceCharts = db.query(SELECT + " AND s.id = ? ORDER BY c.id", this::vector, ChartFeatureService.VERSION, songId)
-				.stream().filter(v -> v != null).toList();
+		var sourceCharts = withMeta(db.query(SELECT + " AND s.id = ? ORDER BY c.id", this::vector, ChartFeatureService.VERSION, songId)
+				.stream().filter(v -> v != null).toList());
 		// 채보 특징이 아직 없는 곡은 비교할 수 없다. 오류가 아니라 빈 결과다.
 		if (sourceCharts.isEmpty()) return new Similar(requestId, STRATEGY, List.of());
 
@@ -109,8 +113,23 @@ public class SimilarSongsService {
 				 AND s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published AND s.song_level IS NOT NULL
 				ORDER BY s.id, c.id
 				""", this::vector, ChartFeatureService.VERSION).stream().filter(v -> v != null).toList();
+		loaded = withMeta(loaded);
 		if (cacheSeconds > 0) cache.set(new Cached(loaded, now));
 		return loaded;
+	}
+
+	/**
+	 * 곡 메타데이터(255번)를 채운다. 없는 곡은 null로 두어 엔진이 채보 유사도만 쓴다. 장르는 대표+보조 장르를 합친다(인웅님 합의 11/06).
+	 * 후보 목록은 캐시되므로 메타데이터 변경은 캐시가 만료된 뒤(기본 300초) 반영된다.
+	 */
+	private List<ChartVector> withMeta(List<ChartVector> vectors) {
+		if (vectors.isEmpty()) return vectors;
+		var bySong = metadata.findBySongIds(vectors.stream().map(ChartVector::songId).distinct().toList());
+		if (bySong.isEmpty()) return vectors;
+		return vectors.stream().map(v -> {
+			SongMetadata m = bySong.get(v.songId());
+			return m == null ? v : v.withMeta(new ChartVector.SongMeta(m.genresWithSub(), Set.copyOf(m.mood()), Set.copyOf(m.drumStyle()), m.energy()));
+		}).toList();
 	}
 
 	/** 읽은 JSON이 망가졌으면 그 채보만 건너뛴다. */

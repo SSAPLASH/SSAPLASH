@@ -284,8 +284,8 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 V1~V31을 적용하고(`spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다), V8·V30 검사는 별도 필수 CI job
-`be-timescale-test`가 수행한다. 현재 CI는 `docker` 태그의 Linux Docker Runner에서
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 38). V8·V30 검사는 별도 필수 CI job
+`be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
 Gradle·JDK 설정은 기존 BE CI 설정을 공통으로 사용한다.
@@ -1024,7 +1024,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 | `PUT /{id}/accompaniment`, `DELETE /{id}/accompaniment` | multipart `file` WAV·MP3, 50 MiB·10분 이하 | `{accompanimentUrl, expiresAt}` / 204 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
 
-관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다.
+관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다. 255번부터 상세에만 곡 추천용 `metadata`(아래 공용 곡 카탈로그의 `meta`와 같은 필드, 없으면 null)를 더한다. 목록·회원용 곡 응답에는 없고, ADMIN API로 고치는 기능은 두지 않는다(카탈로그가 유일한 출처).
 
 - **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
 - **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
@@ -1050,7 +1050,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 
 CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 **앱이 켜질 때 자동으로 등록**한다. 배포만 하면 로컬·dev·운영에 같은 공용 곡이 들어가며, 사람이 ADMIN API를 호출할 필요가 없다.
 
-- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 이용 조건. 명세 17장은 자작·CC0·퍼블릭 도메인을 전제했으나, 2026-11-05 팀 결정으로 AI가 채보한 상업 곡도 `원곡 {아티스트}, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용` 형식으로 넣는다)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점). 모르는 필드·제목 중복·필수 누락·MIDI 없음이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
+- **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 이용 조건. 명세 17장은 자작·CC0·퍼블릭 도메인을 전제했으나, 2026-11-05 팀 결정으로 AI가 채보한 상업 곡도 `원곡 {아티스트}, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용` 형식으로 넣는다)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점)·`meta`(선택, 아래 곡 추천 메타데이터). 모르는 필드·제목 중복·필수 누락·MIDI 없음·`meta` 규칙 위반이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
 - **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
 - **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 전체 검사 CI가 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
 - **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
@@ -1059,11 +1059,12 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 - **시드 3곡:** V10의 「기본 8비트」·「8비트 + 필인」·「라이드 16비트」는 난이도가 1개씩이라, 같은 패턴을 MIDI로 옮겨(`scripts/seed_midi_from_v10.py`, 1회용·재현용) 카탈로그에 넣었다. 첫 시작 때 3난이도로 채워진다. 「기본 8비트」 EASY 최신 버전은 전체 패턴(96노트)에서 솎은 패턴으로 바뀐다(기존 버전과 플레이 기록은 그대로). MIDI 변환기가 마지막 노트 뒤에 한 마디를 붙이는 규칙(사용자 MIDI 곡과 같음) 때문에 곡 길이(`songs.duration_ms`)가 한 마디 늘어난다: 「기본 8비트」 21333→23667, 「8비트 + 필인」 19200→21300, 「라이드 16비트」 16000→17875 ms. 82번 반주 도구(`registerBasic8Backing`)는 「기본 8비트」의 채보가 V10 원본 그대로(EASY 하나, 버전 1개, 96노트)일 때만 동작하므로 **이 등록 뒤에는 거부된다**. 82번 반주를 아직 연결하지 않은 환경이라면 이 변경을 배포하기 전에 82번 도구를 먼저 실행하거나, 이후에는 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`로 반주를 올린다.
 - **운영 주의:** 카탈로그에 있는 곡은 ADMIN으로 지우거나 제목을 바꿔도 다음 앱 시작 때 카탈로그 제목으로 다시 등록된다. 공용 곡을 없애려면 카탈로그에서 빼서 배포한 뒤 ADMIN으로 지운다.
 - **AI 공용 곡 31곡(261번):** AI(245번)가 드럼리스 음원에 맞춰 만든 MIDI 31곡(type 1·PPQ 480·10번 채널)을 AI가 준 곡별 첫 박 시각을 `offsetMs`로 넣어 추가했다. 첫 박보다 앞선 노트는 없다. 제목·아티스트는 곡 추천 메타데이터(224번 요청 CSV)와 글자 그대로 같고, AI 표기에서 국카스텐·혁오·검정치마는 아티스트를 한글로, 「거울」·「고민중독」은 제목을 한글로 바꿨고 DAY6 두 곡은 대소문자만 고쳤다. 배포 뒤 첫 시작 로그는 `공용 곡 카탈로그 결과 34곡:`에 REGISTERED 31·SKIPPED 3이다(시드 3곡이 이미 3난이도인 환경. 맵이라 키 순서는 바뀔 수 있다).
+- **곡 추천 메타데이터 `meta`(255번, V38 `song_metadata`):** 필드·값 목록은 AI 요청 문서 COACH-004(224번 CSV)와 글자 그대로 같고, CSV의 `;` 다중 값만 JSON 배열이다. `genre`(필수, `ROCK POP KPOP BALLAD JAZZ FUNK LATIN METAL PUNK HIPHOP ELECTRONIC SOUNDTRACK PRACTICE OTHER` 중 1개)·`subGenres`(장르 0~2개)·`mood`(`CALM UPLIFTING ENERGETIC DARK SENTIMENTAL` 0~2개)·`energy`(1~5)·`releaseYear`(1900~2099)·`language`(`KO EN JA INSTRUMENTAL OTHER`)·`drumStyle`(`EIGHT_BEAT SIXTEEN_BEAT SHUFFLE HALF_TIME FOUR_ON_FLOOR DOUBLE_KICK SYNCOPATED FILL_HEAVY LATIN_PERCUSSION` 0~3개)·`source`(필수, `HUMAN AUTO EXTERNAL_DB`)·`sourceNote`(`EXTERNAL_DB`면 필수, 200자 이하). 모르는 값은 필드를 빼고, 같은 값을 두 번 쓰지 않는다. **라이선스·아티스트와 달리 앱이 시작할 때마다(배포·재시작) 결과(REGISTERED·FILLED·SKIPPED)와 무관하게 카탈로그 값으로 덮어쓰고, `meta`를 빼면 DB 행을 지운다.** 메타데이터 저장이 실패하면 곡은 남고 그 곡 결과만 FAILED다. 34곡 값은 11/05 CSV v2를 그대로 옮겼다(모두 `HUMAN`, `drumStyle`은 확실한 곡만). 255번 배포 뒤 첫 시작은 곡이 이미 있으면 34곡 모두 SKIPPED이고 `song_metadata`에 34행이 생긴다. 읽는 곳: AI 배치 뷰 `recommend_song_meta_v`(아래 R3), 비슷한 곡 R2, ADMIN 상세 `metadata`.
 - **반주:** 카탈로그는 반주를 다루지 않는다. 배포 뒤 ADMIN이 `GET /api/v1/admin/songs`로 제목에 맞는 곡 id를 찾아 156번 `PUT /api/v1/admin/songs/{id}/accompaniment`(WAV·MP3, 50 MiB·10분 이하)로 올린다. 31곡의 드럼리스 음원은 저장소에 커밋하지 않고 운영 저장소에만 둔다(MP3 192 kbps로 변환해 올림).
-- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가 → MR에서 라이선스 리뷰 → 배포. 반주는 위 ADMIN 업로드로 붙인다.
+- **곡 추가:** MIDI를 `midi/`에 넣고 카탈로그에 한 줄 추가(추천에 쓰려면 `meta`도) → MR에서 라이선스 리뷰 → 배포. 반주는 위 ADMIN 업로드로 붙인다.
 
 ```powershell
-.\gradlew.bat test --tests '*BuiltinSong*'
+.\gradlew.bat test --tests '*BuiltinSong*' --tests '*SongMetadata*'
 ```
 
 ## 내 악보 보관 (155번)
@@ -1275,7 +1276,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - **후보:** R1과 같은 공용 곡 조건에 채보 특징이 있는 최신 버전 채보. 개인 곡은 결과에 나오지 않는다. 후보 채보 목록은 `similar.cache-ttl-seconds`(기본 300, 0이면 끔) 동안 프로세스 안에 캐시한다. 사용자와 무관한 값이다.
 - **유사도(`SimilarityEngine`, 가정값):** 패드 구성 0.31 + 전환 0.23 + 밀도 0.23 + 템포 0.23. 리듬 격자는 점수에 쓰지 않는다(공용 곡의 절반 가까이가 격자를 만들 수 없어서, `rhythm_grid` 값은 계속 저장한다). 템포와 박자표는 `songs`에서 읽고, 모르는 쪽이 있으면 박자표 감점을 하지 않는다. 박자표 분자가 다르면 ×0.5, 0.5 미만은 제외. 같은 입력이면 같은 값·순서(같은 점수는 곡 id순). 사용자 기록은 점수에 쓰지 않는다.
 - **본인 기록 필터:** R1의 기준 밀도(최근 85% 이상 연주의 밀도 최댓값)가 있으면 그 1.5배를 넘는 채보는 거른다. 기록이 없으면 거르지 않는다.
-- **메타데이터:** 곡 메타데이터(장르·분위기 등)가 양쪽 곡에 있을 때만 15%를 섞도록 엔진에 구현돼 있으나, 메타데이터 저장은 아직 없어 지금은 채보 유사도만 쓴다.
+- **메타데이터(255번):** 기준·후보 채보에 `song_metadata`를 붙여 엔진에 넘긴다. 양쪽 곡에 있을 때만 15%를 섞고(엔진 규칙), 한쪽이라도 없으면 채보 유사도만 쓴다. 장르는 대표+보조 장르를 합친 집합이다. 메타 기여가 요소당 약 0.04라 `matchedOn`에 `GENRE`·`MOOD`·`DRUM_STYLE`·`ENERGY`는 거의 나오지 않는다(FE는 모르는 코드를 문구 없이 처리). 후보 캐시 때문에 메타데이터 변경은 최대 `similar.cache-ttl-seconds` 뒤에 반영된다.
 - **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
 - 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡 제외, 격자 없는 곡 포함, 특징 없는 곡은 빈 결과, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
 
@@ -1443,7 +1444,7 @@ AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 �
 
 - **설정:** `RECOMMEND_R3_ENABLED`(기본 false), `RECOMMEND_R3_ROLLOUT_PERCENT`(0), `RECOMMEND_R3_MAX_AGE_DAYS`(7), `RECOMMEND_R3_RELEVANCE_WEIGHT`(0.75), `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`(쉼표 구분, 빈 값이면 적재를 모두 거절), `RECOMMEND_KEY_SECRET`, `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`.
 - **서빙 조건:** 켜짐, 롤아웃 대상(사용자 해시), 동의, 허용된 모델, `max-age-days` 안의 후보, 기준 밀도 있음. 하나라도 어긋나면 `strategy=RULE_V1`이다. 후보를 쓰면 `R3_V1`이고, 기준 밀도의 1.5배를 넘는 채보만 있는 곡은 빠지며, 자리가 남으면 R1이 채운다.
-- **읽기 뷰(V37):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
+- **읽기 뷰(V37):** `recommend_users_v`, `recommend_songs_v`, `recommend_chart_features_v`, `recommend_interactions_v`. `recommend_export_reader` 그룹 역할에만 권한을 준다. **V38 `recommend_song_meta_v`**(AI 선택 입력): 열은 AI 로더와 같은 `song_id, genre, sub_genres, mood, energy, language, drum_style, release_year`뿐이고(다른 열이 있으면 배치가 멈춘다) `recommend_songs_v`에 있는 곡만 낸다. 다중 값은 `;`로 이은 문자열, 빈 목록은 빈 문자열, 모르는 값은 NULL이다. 출처(`source`·`source_note`)는 내보내지 않는다. 접속 역할과 `ALTER ROLE ... SET app.recommend_key_secret`은 서버에서 한다. 이 값과 `RECOMMEND_KEY_SECRET`은 항상 같아야 한다.
 - **`user_key`:** SHA-256(비밀 값 + `:` + 사용자 id)의 16진수 앞 32자. 뷰와 `RecommendationR3Settings.userKey`가 같은 값을 낸다.
 - **`completed`:** 연주 시간이 곡 길이의 80% 이상인 판.
 - **철회·탈퇴:** 후보 행을 지운다. 뷰는 다음 읽기부터 그 사용자를 뺀다.
