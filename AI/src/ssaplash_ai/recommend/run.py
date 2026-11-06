@@ -19,7 +19,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ssaplash_ai.recommend import schema as S
-from ssaplash_ai.recommend.data import DataError, Dataset, load_dataset, temporal_split
+from ssaplash_ai.recommend.data import (
+    DataError,
+    Dataset,
+    dataset_from_frames,
+    load_dataset,
+    temporal_split,
+)
 from ssaplash_ai.recommend.evaluate import EvalConfig, Report, evaluate
 from ssaplash_ai.recommend.models import (
     CoPlay,
@@ -32,6 +38,7 @@ from ssaplash_ai.recommend.models import (
     SimilarToRecent,
 )
 from ssaplash_ai.recommend.simulate import SimConfig, generate
+from ssaplash_ai.recommend.source import ExportSource, PostgresExportSource, require_views
 
 # 이름 → 방법. M5: LightGCN(특징 없음), M5F: +곡 특징 노드, M5FM: +메타데이터. M6*: 각 LightGCN 상위 50을 R1 규칙으로 재정렬. M4*: Node2Vec(같은 세 변형).
 MODEL_FACTORIES: dict[str, Callable[[], Recommender]] = {
@@ -57,6 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--data", type=Path, help="입력 CSV 폴더(docs/recommend-poc.md의 규격)")
     source.add_argument(
         "--synthetic", action="store_true", help="합성 데이터를 만들어 쓴다(출처 단계 P0)"
+    )
+    source.add_argument(
+        "--from-views",
+        action="store_true",
+        help="BE 읽기 뷰에서 메모리로 읽는다(파일을 만들지 않음)",
     )
     p.add_argument("--stage", required=True, choices=S.STAGES, help="데이터 출처 단계")
     p.add_argument("--p2-approval", help="P2 사용 승인 근거(동의 범위 결정 문서·번호)")
@@ -89,11 +101,21 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def run(args: argparse.Namespace) -> Report:
+def run(args: argparse.Namespace, source: ExportSource | None = None) -> Report:
     names = [n.strip() for n in args.models.split(",") if n.strip()]
     unknown = [n for n in names if n not in MODEL_FACTORIES]
     if unknown:
         raise DataError(f"알 수 없는 방법: {unknown}. 사용 가능: {list(MODEL_FACTORIES)}")
+    if args.stage == S.STAGE_PRODUCTION and not args.from_views:
+        raise DataError("일반 사용자 데이터는 파일로 두지 않습니다. --from-views로 읽으세요.")
+    if args.from_views:
+        if args.stage == S.STAGE_SYNTHETIC:
+            raise DataError("뷰에서 읽은 입력은 출처 단계 P0로 쓸 수 없습니다.")
+        frames = (source or PostgresExportSource()).frames()
+        require_views(frames)
+        return evaluate_all(
+            dataset_from_frames(frames, args.stage, p2_approval=args.p2_approval), names, args
+        )
     with tempfile.TemporaryDirectory(prefix="recommend-synthetic-") as tmp:
         if args.synthetic:
             if args.stage != S.STAGE_SYNTHETIC:
@@ -117,12 +139,18 @@ def evaluate_all(data: Dataset, names: list[str], args: argparse.Namespace) -> R
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, source: ExportSource | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = run(args)
+        report = run(args, source)
     except DataError as ex:
         print(f"데이터 오류: {ex}", file=sys.stderr)
+        return 2
+    except Exception as ex:
+        if not args.from_views:
+            raise
+        # DB 오류 메시지에 접속 정보가 섞일 수 있어 종류만 남긴다
+        print(f"평가 중단: {type(ex).__name__}", file=sys.stderr)
         return 2
     table = report.table()
     print(
