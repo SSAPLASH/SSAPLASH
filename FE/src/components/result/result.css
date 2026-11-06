@@ -50,6 +50,22 @@
   font-size: 12px;
   line-height: 1.45;
 }
+/* 오른쪽 지표 묶음(Figma 672:4132): 간격 48, 아래 정렬. 점수 칸 아래 여백 10으로 「92,400」과 「96.8%」 아래선을 맞춘다 */
+.result-summary-metrics {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 48px;
+}
+.result-summary-score {
+  padding-bottom: 10px;
+}
+.result-summary-divider {
+  flex: none;
+  width: 1px;
+  height: 48px;
+  background: var(--line);
+}
 .result-summary-block {
   display: flex;
   flex-direction: column;
