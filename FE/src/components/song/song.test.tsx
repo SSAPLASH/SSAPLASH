@@ -93,7 +93,7 @@ describe("RecommendRow", () => {
   const item = (id: number, code: string, text = "BE 문구"): RecommendationItem => ({
     song: {
       id, title: `곡${id}`, artist: `가수${id}`, source: "BUILTIN", status: "READY", bpm: 100, timeSignature: "4/4", durationMs: null,
-      hasAccompaniment: false, accompanimentStatus: "NONE", songLevel: null, difficulties: [], createdAt: "", coverUrl: null,
+      hasAccompaniment: false, accompanimentStatus: "NONE", songLevel: null, difficulties: [], createdAt: "", coverUrl: null, sheetId: null,
     },
     chartId: id * 10, difficulty: "HARD", reasons: [{ code, text }, { code: "RETRY", text: "둘째" }],
   });

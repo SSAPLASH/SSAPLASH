@@ -38,6 +38,24 @@ describe('coverUrl 변환', () => {
   });
 });
 
+describe('sheetId 변환', () => {
+  const base = { id: 1, title: '곡', source: 'AUDIO', status: 'READY' };
+
+  it('없거나 null이면 null', () => {
+    expect(songFromDto(base).sheetId).toBeNull();
+    expect(songFromDto({ ...base, sheetId: null }).sheetId).toBeNull();
+  });
+
+  it('숫자면 그대로, 상세도 같다', () => {
+    expect(songFromDto({ ...base, sheetId: 12 }).sheetId).toBe(12);
+    expect(songDetailFromDto({ ...base, sheetId: 12, charts: [] }).sheetId).toBe(12);
+  });
+
+  it('정수가 아니면 거부한다', () => {
+    expect(() => songFromDto({ ...base, sheetId: 'x' })).toThrow();
+  });
+});
+
 function song(id: number, status: string, createdAt: string): SongSummary {
   return {
     id,
@@ -54,6 +72,7 @@ function song(id: number, status: string, createdAt: string): SongSummary {
     difficulties: [],
     createdAt,
     coverUrl: null,
+    sheetId: null,
   };
 }
 

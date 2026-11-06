@@ -18,6 +18,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   difficulties: ['NORMAL'],
   createdAt: '',
   coverUrl: null,
+  sheetId: null,
   ...over,
 });
 
