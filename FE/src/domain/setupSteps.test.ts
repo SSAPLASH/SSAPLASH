@@ -148,6 +148,14 @@ describe('하단 바·이탈 문구', () => {
       buttonEnabled: false,
     });
   });
+
+  it('초안을 들고 슬롯·이름 창이 열린 동안(UX-64 Figma ④·⑤): 저장 안내에 [저장] 비활성', () => {
+    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: null } })).toMatchObject({
+      text: '보정 완료 · 빈 슬롯을 눌러 저장해요',
+      buttonEnabled: false,
+    });
+    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: 3 } }).text).toBe('보정 완료 · 슬롯 3에 저장할 이름을 정해요');
+  });
 });
 
 describe('dongleLine', () => {

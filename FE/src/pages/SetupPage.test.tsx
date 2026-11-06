@@ -85,12 +85,16 @@ describe('SetupPage 페달 줄', () => {
 });
 
 describe('SetupPage 단계 2개(UX-64)', () => {
-  it('상단은 스틱 연결·시작 위치 보정 두 단계이고 ③ 프리셋 카드가 없다', async () => {
+  it('상단은 스틱 연결·시작 위치 보정 두 타일(StatusTile)이고 ③ 프리셋 카드가 없다', async () => {
     putSettings({ sensorKind: 'pointer' });
     putLive({ connected: [true, true] });
     const html = await renderSetup();
     expect(html).toContain('2단계 중');
     expect(html).toContain('시작 위치 보정');
+    expect((html.match(/class="setup-tile is-on"/g) ?? []).length).toBe(2);
+    expect(html).toContain('>연결됨<');
+    expect(html).toContain('>보정됨<');
+    expect(html).not.toContain('setup-step-mark');
     expect(html).not.toContain('step-preset');
     expect(html).not.toContain('새 프리셋으로 저장</button>'.replace('</button>', '')); // 하단 바에도 없다(시스템 기본은 저장 대상이 아님)
     expect(html).not.toContain('적용된 프리셋 없음');
