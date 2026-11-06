@@ -84,6 +84,16 @@ export async function uploadMidi(draft: MidiDraft, signal?: AbortSignal): Promis
   return songDetailFromDto(body);
 }
 
+/** `POST /api/v1/songs/musicxml` — MIDI와 같은 multipart, 201 곡 상세(`source=MUSICXML`). AI 변환은 BE가 동기로 한다 (293) */
+export async function uploadMusicXml(draft: MidiDraft, signal?: AbortSignal): Promise<SongDetail> {
+  const form = new FormData();
+  form.append('title', draft.title.trim());
+  if (draft.artist.trim() !== '') form.append('artist', draft.artist.trim());
+  form.append('file', draft.file);
+  const body = await apiFetch<Record<string, unknown>>('/api/v1/songs/musicxml', { method: 'POST', body: form, signal });
+  return songDetailFromDto(body);
+}
+
 /** `PATCH /api/v1/songs/{id}` — 바뀐 필드만 JSON으로 보낸다. 아티스트 `""`는 비움 (설계 CHART-001 3-1, 제안 API) */
 export async function updateSongMeta(id: number, patch: SongMetaPatch, signal?: AbortSignal): Promise<SongDetail> {
   const body = await apiFetch<Record<string, unknown>>(`/api/v1/songs/${id}`, { method: 'PATCH', body: patch, signal });
