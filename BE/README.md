@@ -1280,6 +1280,16 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
 - 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡 제외, 격자 없는 곡 포함, 특징 없는 곡은 빈 결과, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
 
+### 연습 추천 (`context=DRILL`, V38, `DrillPlanner`)
+
+`GET /api/v1/songs/recommendations?context=DRILL&playId=&size=` (Bearer 인증). 그 연주의 약점에 맞는 공용 곡을 약점 종류마다 하나씩, 최대 3개 돌려준다. `playId`는 필수이고(없으면 400) 본인 연주만 된다(404 `PLAY_NOT_FOUND`). 약점이 없거나 분석 전·실패면 200과 빈 `items`다. AI 서버를 부르지 않는다.
+
+- 응답: R1과 같고 `strategy`는 `DRILL_V1`이다. 항목에 `focus: {pattern, pads}`가 더 있다. 이유 코드는 `DRILL_TRANSITION`, `DRILL_PAD`, `DRILL_MISS`, `DRILL_TIMING`이다.
+- 규칙(가정값): 전환 약점은 그 방향의 전환이 있는 곡, 패드 약점은 그 패드를 치는 곡, 놓침 약점은 놓친 패드를 치는 곡, 타이밍·불안정 약점은 밀도가 낮은 곡을 고른다. `HAND_WEAK`는 채보에 손 정보가 없어 건너뛴다.
+- 점수: `0.6 × 후보 내 순위 + 0.4 × 밀도 적합도`. 좋게 보는 밀도는 기준 밀도의 0.6~1.0배(전환·패드), 0.5~0.85배(놓침·타이밍)다. 1.25배를 넘는 채보는 뺀다. 기준 밀도가 없으면 방금 친 채보의 밀도를 쓴다.
+- 방금 친 곡과 개인 곡은 나오지 않는다. 전환 비율은 채보별 상위 12개만 저장하므로 드문 전환은 결과가 비어 있을 수 있다.
+- 기록: `recommendation_items`에 `context=DRILL`, `strategy=DRILL_V1`. 클릭은 R1과 같은 호출이다. 리포트의 `recommendedDrills`는 쓰지 않고 null로 둔다.
+
 ### 조회와 기록
 
 | 호출 | 설명 |
