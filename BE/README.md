@@ -436,6 +436,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V37 | `V37__add_recommendation_r3.sql` | 곡 추천 R3: 추천 학습 동의, 후보 저장, AI 배치가 읽는 가명 뷰와 `recommend_export_reader` 역할 | 곡 추천 R3 |
 | V38 | `V38__add_song_metadata.sql` | 곡 추천용 공용 곡 메타데이터 `song_metadata`(값 목록·개수 CHECK)와 AI 배치 뷰 `recommend_song_meta_v`. 값은 카탈로그 `meta`에서 앱 시작 때 넣는다 | -255 |
 | V39 | `V39__create_telemetry_session_conditions.sql` | 측정 세션 실험 조건 `telemetry_session_conditions`. `(user_id, session_id)` PK, 7개 조건 열(`firmware_0`·`firmware_1`·`dongle_firmware`·`link_mask` 0~15·`haptic_enable`·`sensor_mount` `GRIP_FRONT`/`BENCH`·`app_build`·`note` 200자)과 `received_at`. FK·보관 정책 없음 | -259 |
+| V40 | `V40__add_recommendation_drill.sql` | 연습 추천: 노출 기록 `context`에 `DRILL` 허용 |
 
 규칙:
 
@@ -1287,7 +1288,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - **기록:** 호출마다 `recommendation_items`에 `context=SIMILAR`, `strategy=SIMILAR_V1`, `source_song_id`(기준 곡), 점수(유사도), `reason_codes`(`matchedOn`)로 노출을 남긴다. 클릭은 R1과 같은 `POST /api/v1/recommendations/{requestId}/clicks`. 보관 정리·탈퇴 삭제도 R1과 같다.
 - 시험: `SimilarityEngineTest`(순수 계산), `SimilarSongsServiceTest`(후보 조건, 개인 곡·기준 곡 제외, 격자 없는 곡 포함, 특징 없는 곡은 빈 결과, 404, 본인 기록 필터, 노출·클릭. 임베디드 DB가 필요해 CI에서 돈다).
 
-### 연습 추천 (`context=DRILL`, V38, `DrillPlanner`)
+### 연습 추천 (`context=DRILL`, V40, `DrillPlanner`)
 
 `GET /api/v1/songs/recommendations?context=DRILL&playId=&size=` (Bearer 인증). 그 연주의 약점에 맞는 공용 곡을 약점 종류마다 하나씩, 최대 3개 돌려준다. `playId`는 필수이고(없으면 400) 본인 연주만 된다(404 `PLAY_NOT_FOUND`). 약점이 없거나 분석 전·실패면 200과 빈 `items`다. AI 서버를 부르지 않는다.
 
