@@ -79,7 +79,7 @@ export function SongDetailPane({
           </>
         )}
       </p>
-      <p className="play-sd-line">프리셋: {presetName ?? '없음'}</p>
+      <p className="play-sd-line">프리셋: {presetName ?? '시스템 기본'}</p>
       <p className={`play-sd-line${allOk ? '' : ' warn'}`}>{connectionText(connected, keyboardOnly)}</p>
       {chartState === 'error' && (
         <p className="play-sd-error" role="alert">

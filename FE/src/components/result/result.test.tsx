@@ -142,3 +142,9 @@ describe('FeedbackCard', () => {
     expect(html.match(/result-fb-desc/g)).toHaveLength(1);
   });
 });
+
+it('하이햇 행에만 열린 노트 결과와 접근 가능한 설명을 넣는다', () => {
+  const row: PadSummary = { pad: 'HIHAT', total: 1, perfect: 1, good: 0, miss: 0, meanDeltaMs: 0, accuracy: 1, meanVelocity: 80 };
+  const html = renderToStaticMarkup(<PadSummaryTable summary={[row]} openHihat={{ text: '열린 1/2', label: '열린 하이햇 성공 1개, 전체 2개' }} />);
+  expect(html).toContain('열린 1/2'); expect(html).toContain('aria-label="열린 하이햇 성공 1개, 전체 2개"');
+});

@@ -1,13 +1,14 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS, fillLayout, type KitLayout, type KitLayoutPresetId } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
+import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
 import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { normalizePadKeys, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
-import type { KitPreset } from '@/domain/preset';
+import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/preset';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
@@ -16,12 +17,22 @@ interface SettingsState {
   sensorKind: SensorId;
   /** 소스별 설정값 묶음. 항목 스키마는 입력 소스 디스크립터가 선언하고, 여기서는 내용을 모른다 */
   sensorOptions: Record<SensorId, OptionValues>;
+  /** 화면 배치(표시 전용, PLAY-004 D2). 보정이 끝나면 앵커에서 유도한 값이 들어오고 프리셋 layout으로 저장된다 */
   kitLayout: KitLayout;
   presets: KitPreset[];
-  /** 최초 설정(3초 보정·배치·프리셋 적용)을 끝냈는지 */
+  /** 최초 설정(2타 보정·프리셋 적용)을 끝냈는지 */
   firstSetupDone: boolean;
-  /** 지금 적용 중인 프리셋. 없으면 null */
-  activePresetId: string | null;
+  /**
+   * 손별 판정 앵커(기기 로컬, PLAY-004 D1) — 적용 중 프리셋의 앵커 사본(UX-64 D2). null = 그 손은 보정 안 됨(모델 기본).
+   * 시스템 기본이면 [null, null]. 판정·전송 경로(currentProfiles·pushTable)는 이 사본만 본다
+   */
+  stickAnchors: HandAnchors;
+  /** 적용 중 프리셋의 보정 시각(Date.now). 없으면 null */
+  calibratedAt: number | null;
+  /** 프리셋별 앵커(기기 로컬, UX-64 D2). 키 = 프리셋 id. 시스템 기본은 항목이 없다 */
+  presetAnchors: PresetAnchors;
+  /** 지금 적용 중인 프리셋 id. 사용자 프리셋 id 또는 SYSTEM_PRESET_ID(시스템 기본). v18부터 null 없음 */
+  activePresetId: string;
   timing: TimingWindows;
   audioOffsetMs: number;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
@@ -61,11 +72,25 @@ interface SettingsState {
 
   setSensorKind: (k: SensorId) => void;
   setSensorOption: (id: SensorId, key: string, value: OptionValue) => void;
-  movePad: (pad: PadId, x: number, y: number) => void;
+  /** 배치 교체(보정 완료·프리셋 적용). 빠진 패드는 기본값으로 채운다 */
+  setKitLayout: (layout: Partial<KitLayout>) => void;
   resetLayout: () => void;
-  applyLayoutPreset: (id: KitLayoutPresetId) => void;
+  /**
+   * 손별 앵커 저장(사본). at은 보정 시각(기본 지금). 적용 중인 것이 사용자 프리셋이면 presetAnchors[그 id]에도 같이 기록한다.
+   * 시스템 기본이 적용 중이면 사본만 바뀐다(호출자는 시스템 기본에서 보정을 열지 않는다)
+   */
+  setStickAnchors: (anchors: HandAnchors, at?: number) => void;
+  /** 앵커 전부 지우기(보정 전 상태로). 적용 중 사용자 프리셋의 기록도 지운다 */
+  clearStickAnchors: () => void;
+  /** 프리셋 하나의 앵커 기록(새 프리셋 저장·초안 반영). 적용 중 프리셋이면 사본도 같이 바꾼다 */
+  setPresetAnchors: (id: string, record: PresetAnchorRecord) => void;
+  /** 프리셋 삭제 때 그 앵커 기록을 지운다 */
+  removePresetAnchors: (id: string) => void;
+  /** 한 패드의 판정 반경을 양손 앵커에 덮어쓴다(UX-64 D9). 하한·상한은 tuning. 그 패드 앵커가 없는 손은 그대로 */
+  setRadiusOverride: (pad: PadId, deg: number) => void;
   setFirstSetupDone: (v: boolean) => void;
-  setActivePresetId: (id: string | null) => void;
+  /** 적용 프리셋 바꾸기(사본은 presetStore.apply가 갈아끼운다) */
+  setActivePresetId: (id: string) => void;
   /** 프리셋 저장소 교체. LocalPresetSource만 부른다(화면은 presetStore를 쓴다) */
   setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
@@ -97,7 +122,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 16;
+export const SETTINGS_VERSION = 18;
 
 /**
  * 저장된 설정 이행.
@@ -116,6 +141,9 @@ export const SETTINGS_VERSION = 16;
  * v13 → v14: statsConsent 삭제(연주 기록 활용 동의는 가입 때 필수, 서버 값만 쓴다). 저장돼 있던 값은 버린다.
  * v14 → v15: drumVolume(기본 1, 0~2)·songVolume(기본 1, 0~1) 추가. 없거나 숫자가 아니면 1, 범위 밖은 잘라 채운다.
  * v15 → v16: kitSkin(기본 'acoustic') 추가. 없거나 모르는 값이면 'acoustic'.
+ * v16 → v17: stickAnchors([null, null])·calibratedAt(null) 추가(PLAY-004). tuning.minRadiusDeg는 merge가 기본값으로 채운다.
+ * v17 → v18: presetAnchors({}) 추가, activePresetId null → 'system'(UX-64 D1). 적용 중이던 것이 사용자 프리셋이고 앵커가 있으면
+ *            presetAnchors[그 id]로 복사(사본은 유지). 시스템 기본이면 사본·시각을 비운다(모델 기본 앵커로 판정).
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -200,7 +228,75 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.songVolume = clampVolume(p.songVolume, 1);
   }
   if (version < 16) p.kitSkin = isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic';
+  if (version < 17) {
+    p.stickAnchors = sanitizeAnchors(p.stickAnchors);
+    p.calibratedAt = typeof p.calibratedAt === 'number' && Number.isFinite(p.calibratedAt) ? p.calibratedAt : null;
+  }
+  if (version < 18) {
+    const active = typeof p.activePresetId === 'string' && p.activePresetId.length > 0 ? p.activePresetId : SYSTEM_PRESET_ID;
+    const anchors = sanitizeAnchors(p.stickAnchors);
+    const at = isFiniteNum(p.calibratedAt) ? p.calibratedAt : null;
+    const records: PresetAnchors = {};
+    if (!isSystemPreset(active) && (anchors[0] || anchors[1])) {
+      records[active] = { anchors, calibratedAt: at ?? Date.now() };
+    }
+    p.activePresetId = active;
+    p.presetAnchors = records;
+    if (isSystemPreset(active)) {
+      p.stickAnchors = [null, null];
+      p.calibratedAt = null;
+    }
+  }
   return p as unknown as SettingsState;
+}
+
+/** 저장된 프리셋별 앵커를 검증한다. 형이 아니면 {}, 깨진 항목(앵커가 양손 다 없거나 시각이 숫자가 아님)은 버린다 */
+export function sanitizePresetAnchors(raw: unknown): PresetAnchors {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const out: PresetAnchors = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v !== 'object' || v === null) continue;
+    const r = v as Record<string, unknown>;
+    const anchors = sanitizeAnchors(r.anchors);
+    if (!anchors[0] && !anchors[1]) continue;
+    if (!isFiniteNum(r.calibratedAt)) continue;
+    out[id] = { anchors, calibratedAt: r.calibratedAt };
+  }
+  return out;
+}
+
+const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** 저장된 앵커 하나를 검증한다. 숫자 필드가 깨졌으면 null */
+function sanitizeAnchor(pad: PadId, raw: unknown): PadAnchor | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const a = raw as Record<string, unknown>;
+  if (!isFiniteNum(a.pitch) || !isFiniteNum(a.yaw)) return null;
+  const out: PadAnchor = {
+    pad,
+    pitch: a.pitch,
+    yaw: a.yaw,
+    radius: isFiniteNum(a.radius) ? a.radius : 0,
+    samples: isFiniteNum(a.samples) ? a.samples : 0,
+    spread: isFiniteNum(a.spread) ? a.spread : 0,
+  };
+  if (isFiniteNum(a.radiusOverride)) out.radiusOverride = a.radiusOverride;
+  return out;
+}
+
+/** 저장된 손별 앵커를 검증한다. 형이 아니면 [null, null], 손 안의 깨진 패드는 버린다 */
+export function sanitizeAnchors(raw: unknown): HandAnchors {
+  if (!Array.isArray(raw) || raw.length !== 2) return [null, null];
+  const hand = (h: unknown): HandAnchorSet | null => {
+    if (typeof h !== 'object' || h === null || Array.isArray(h)) return null;
+    const out: HandAnchorSet = {};
+    for (const [k, v] of Object.entries(normalizePadKeys(h as Record<string, unknown>))) {
+      const a = sanitizeAnchor(k as PadId, v);
+      if (a) out[k as PadId] = a;
+    }
+    return Object.keys(out).length ? out : null;
+  };
+  return [hand(raw[0]), hand(raw[1])];
 }
 
 /** 음량 값을 0~max로 자른다. 숫자가 아니면 기본값 1 */
@@ -222,7 +318,10 @@ export const useSettings = create<SettingsState>()(
       kitLayout: DEFAULT_KIT_LAYOUT,
       presets: [],
       firstSetupDone: false,
-      activePresetId: null,
+      stickAnchors: [null, null],
+      calibratedAt: null,
+      presetAnchors: {},
+      activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
       scrollMs: 1400,
@@ -248,10 +347,47 @@ export const useSettings = create<SettingsState>()(
       setSensorKind: (sensorKind) => set({ sensorKind }),
       setSensorOption: (id, key, value) =>
         set({ sensorOptions: { ...get().sensorOptions, [id]: { ...get().sensorOptions[id], [key]: value } } }),
-      movePad: (pad, x, y) =>
-        set({ kitLayout: { ...get().kitLayout, [pad]: { ...get().kitLayout[pad], x, y } } }),
+      setKitLayout: (layout) => set({ kitLayout: fillLayout(layout) }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
-      applyLayoutPreset: (id) => set({ kitLayout: KIT_LAYOUT_PRESETS[id] }),
+      setStickAnchors: (anchors, at = Date.now()) => {
+        const copy: HandAnchors = [anchors[0], anchors[1]];
+        const { activePresetId, presetAnchors } = get();
+        const records = isSystemPreset(activePresetId) ? presetAnchors : { ...presetAnchors, [activePresetId]: { anchors: copy, calibratedAt: at } };
+        set({ stickAnchors: copy, calibratedAt: at, presetAnchors: records });
+      },
+      clearStickAnchors: () => {
+        const { activePresetId, presetAnchors } = get();
+        const records = { ...presetAnchors };
+        delete records[activePresetId];
+        set({ stickAnchors: [null, null], calibratedAt: null, presetAnchors: records });
+      },
+      setPresetAnchors: (id, record) => {
+        const copy: PresetAnchorRecord = { anchors: [record.anchors[0], record.anchors[1]], calibratedAt: record.calibratedAt };
+        const { activePresetId, presetAnchors } = get();
+        const next: Partial<SettingsState> = { presetAnchors: { ...presetAnchors, [id]: copy } };
+        if (activePresetId === id) {
+          next.stickAnchors = copy.anchors;
+          next.calibratedAt = copy.calibratedAt;
+        }
+        set(next);
+      },
+      removePresetAnchors: (id) => {
+        const records = { ...get().presetAnchors };
+        delete records[id];
+        set({ presetAnchors: records });
+      },
+      setRadiusOverride: (pad, deg) => {
+        const { stickAnchors, tuning, activePresetId, presetAnchors, calibratedAt } = get();
+        const next: HandAnchors = [
+          withRadiusOverride(stickAnchors[0], pad, deg, tuning.minRadiusDeg, tuning.maxRadiusDeg),
+          withRadiusOverride(stickAnchors[1], pad, deg, tuning.minRadiusDeg, tuning.maxRadiusDeg),
+        ];
+        const records =
+          isSystemPreset(activePresetId) || !presetAnchors[activePresetId]
+            ? presetAnchors
+            : { ...presetAnchors, [activePresetId]: { anchors: next, calibratedAt: calibratedAt ?? presetAnchors[activePresetId].calibratedAt } };
+        set({ stickAnchors: next, presetAnchors: records });
+      },
       setFirstSetupDone: (firstSetupDone) => set({ firstSetupDone }),
       setActivePresetId: (activePresetId) => set({ activePresetId }),
       setPresets: (presets) => set({ presets }),
@@ -297,6 +433,10 @@ export const useSettings = create<SettingsState>()(
           drumVolume: clampVolume(p.drumVolume, 2),
           songVolume: clampVolume(p.songVolume, 1),
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
+          stickAnchors: sanitizeAnchors(p.stickAnchors),
+          calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
+          presetAnchors: sanitizePresetAnchors(p.presetAnchors),
+          activePresetId: typeof p.activePresetId === 'string' && p.activePresetId.length > 0 ? p.activePresetId : SYSTEM_PRESET_ID,
         };
       },
     },

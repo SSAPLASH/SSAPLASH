@@ -132,6 +132,8 @@ export interface ResolvedHit {
   /** 페달 타격만: 어느 발인지 */
   foot?: FootId;
   pad: PadId | null;
+  /** 타격 시점의 하이햇 페달 상태. null은 모름 */
+  hihatClosed?: boolean | null;
   /** 0~127 */
   velocity: number;
   /** 센서 타격 시각을 브라우저 시계로 환산한 값 */

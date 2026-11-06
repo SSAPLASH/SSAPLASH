@@ -107,7 +107,7 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
         onDrop={onDrop}
         onClick={() => !busy && inputRef.current?.click()}
       >
-        <input ref={inputRef} type="file" accept=".mp3,.wav,audio/mpeg,audio/wav,audio/x-wav" hidden onChange={onInput} disabled={busy} />
+        <input ref={inputRef} type="file" accept=".mp3,.wav,.m4a,.opus,.ogg,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/ogg,audio/opus" hidden onChange={onInput} disabled={busy} />
         <span className="studio-drop-icon">
           <UploadIcon size={emphasis ? 40 : 32} />
         </span>
@@ -128,7 +128,7 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
         >
           {file ? '다른 파일 고르기' : '파일 고르기'}
         </Button>
-        <span className="studio-drop-limits">MP3·WAV · {limitMib}MiB 이하 · 10분 이하</span>
+        <span className="studio-drop-limits">MP3·WAV·M4A·OPUS · {limitMib}MiB 이하 · 10분 이하</span>
       </div>
       {/* 보관 정책 안내(CHART 설계) — Figma 양식에는 없지만 개인정보 안내라 유지한다 */}
       <p className="studio-policy-note">

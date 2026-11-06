@@ -242,7 +242,7 @@ button.result-fb {
 
 /* ---- 패드별 표 (134:2686 + 126:4143) ---- */
 .result-table-wrap {
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
@@ -288,4 +288,12 @@ button.result-fb {
   .result-summary {
     flex-wrap: wrap;
   }
+}
+
+.result-open-hihat {
+  display: block;
+  word-break: keep-all;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: 11px;
 }

@@ -5,7 +5,9 @@ import type { UserMe } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
+import { recommendationVersion } from '@/domain/signupTerms';
 import { SettingsPage } from './SettingsPage';
 
 const user: UserMe = {
@@ -59,7 +61,7 @@ beforeEach(() => {
   put(useAuth, { status: 'authenticated', user });
   put(useSettings, {
     sensorKind: 'none',
-    activePresetId: null,
+    activePresetId: 'system',
     volume: 0.8,
     audioOffsetMs: 0,
     liveCoach: true,
@@ -167,16 +169,74 @@ describe('SettingsPage 기기 행', () => {
     expect(render()).toContain('연결 안 됨');
   });
 
-  it('프리셋 값: 보정 필요·보정 완료·프리셋 없음', () => {
+  it('프리셋 값: 보정 필요·보정 완료·시스템 기본(UX-64)', () => {
     put(usePresets, { items: [{ id: 'p1', name: '내 세팅' } as never] });
     put(useSettings, { sensorKind: 'ble', activePresetId: 'p1' });
     put(useLive, { referenceSetAt: null });
     expect(render()).toContain('내 세팅 · 보정 필요');
     put(useLive, { referenceSetAt: 123 });
     expect(render()).toContain('내 세팅 · 보정 완료');
-    put(useSettings, { activePresetId: null });
-    expect(render()).toContain('프리셋 없음 · 보정 완료');
+    put(useSettings, { activePresetId: 'system' });
+    expect(render()).toContain('시스템 기본 · 보정 완료');
     put(useSettings, { sensorKind: 'none' });
-    expect(render()).toContain('>프리셋 없음<');
+    expect(render()).toContain('>시스템 기본<');
+  });
+});
+
+describe('SettingsPage 데이터 활용 카드', () => {
+  const V = recommendationVersion();
+  const toggleTag = (html: string) => new RegExp(`<button[^>]*aria-label="맞춤 곡 추천 학습 활용"[^>]*>`).exec(html)?.[0] ?? '';
+
+  it('계정 카드 아래에 머리 한 줄·행·도움말이 보인다', () => {
+    const html = render();
+    expect(html).toContain('데이터 활용');
+    expect(html.indexOf('데이터 활용')).toBeGreaterThan(html.indexOf('드러머곰'));
+    expect(html.indexOf('데이터 활용')).toBeLessThan(html.indexOf('>기기<'));
+    expect(html).toContain('연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요');
+    expect(html).not.toContain('맞춤 곡 추천 학습 활용');
+  });
+
+  it('동의함: 토글 켜짐, 상태 줄에 판·변경일', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: true, version: V, updatedAt: '2026-11-05T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('true');
+    expect(toggleTag(html)).not.toContain('disabled');
+    expect(html).toContain(`동의함 · ${V} 판 · 11/05 변경`);
+  });
+
+  it('미동의: 비공개 상태에서 토글을 숨긴다', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: false, version: V, updatedAt: '2026-11-05T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBeUndefined();
+    expect(html).toContain('>미동의<');
+    expect(html).not.toContain('약관이 바뀌었어요');
+  });
+
+  it('판 불일치: 이전 동의와 새 판 필요를 표시', () => {
+    put(useRecommendationConsent, { status: 'ready', consent: { agreed: true, version: '2026-01-01', updatedAt: '2026-01-02T12:00:00Z' } });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBe('true');
+    expect(html).toContain('이전 판에 동의함 · 2026-01-01 판 · 새 동의 내용 확인 필요');
+  });
+
+  it('읽기 실패: 미동의로 단정하지 않고 재시도를 표시', () => {
+    put(useRecommendationConsent, { status: 'error', consent: null });
+    const html = render();
+    expect(switchChecked(html, '맞춤 곡 추천 학습 활용')).toBeUndefined();
+    expect(html).not.toContain('>미동의<');
+    expect(html).toContain('동의 상태를 불러오지 못했어요');
+    expect(html).toContain('다시 시도');
+  });
+
+  it('아직 읽는 중이어도 토글은 잠겨 있고 오류 문구는 없다', () => {
+    put(useRecommendationConsent, { status: 'loading', consent: null });
+    const html = render();
+    expect(toggleTag(html)).toBe('');
+    expect(html).not.toContain('상태를 불러오지 못했어요');
+  });
+
+  it('로그인하지 않았으면 카드가 없다', () => {
+    put(useAuth, { status: 'anonymous', user: null });
+    expect(render()).not.toContain('데이터 활용');
   });
 });

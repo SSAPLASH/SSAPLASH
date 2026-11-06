@@ -8,6 +8,8 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useRecentHits } from '@/components/drum/useRecentHits';
 import { AccompanimentBar } from '@/components/free/AccompanimentBar';
 import { DisconnectBand } from '@/components/free/DisconnectBand';
+import { RealignPrompt } from '@/components/calibration/RealignPrompt';
+import { useRealign } from '@/components/useRealign';
 import { HitReadout } from '@/components/play/HitReadout';
 import { TABLET_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +22,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { usePresets } from '@/store/presetStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
+import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { freeStage } from '@/domain/freeStage';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
@@ -88,6 +91,8 @@ export function FreePlayPage() {
   const hitSeq = usePadHitSeq();
   const kitSkin = useSettings((s) => s.kitSkin);
   const lastHit = useRecentHits(1)[0];
+  // 스틱이 다시 켜진 손이 있으면 스네어 재정렬 띠(다른 손은 계속 친다, PLAY-004 4-2)
+  const realign = useRealign(true);
   const [stats, setStats] = useState(emptyHitStats);
 
   // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
@@ -117,7 +122,7 @@ export function FreePlayPage() {
   const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
   const showBand = stage === 'oneHand' || (stage === 'ready' && pedal === false);
   const mean = meanVelocity(stats);
-  const preset = presetItems.find((p) => p.id === activePresetId);
+  const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
 
   let guide: React.ReactNode;
   if (empty) guide = '연결 대기 중 · 스틱을 연결해 주세요';
@@ -141,10 +146,10 @@ export function FreePlayPage() {
       <Card className="free-canvas" aria-label="연주 캔버스">
         <div className="free-canvas-head">
           <h2 className="free-canvas-title">드럼 킷</h2>
-          <span className="free-canvas-meta">프리셋: {preset?.name ?? '없음'} · 8패드</span>
+          <span className="free-canvas-meta">프리셋: {presetName} · 8패드</span>
         </div>
 
-        {showBand && (
+        {showBand ? (
           <DisconnectBand
             left={connected[0]}
             right={connected[1]}
@@ -152,6 +157,12 @@ export function FreePlayPage() {
             reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
             onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
           />
+        ) : (
+          realign.info && (
+            <div className="free-band motion-toast" role="status">
+              <RealignPrompt hands={realign.info.hands} done={realign.info.done} variant="band" onSkip={realign.info.onSkip} />
+            </div>
+          )
         )}
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>

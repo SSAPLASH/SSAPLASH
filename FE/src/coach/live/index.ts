@@ -4,6 +4,7 @@ export type { CoachMessage, LiveCoachLogEntry, LiveCoachOptions } from './LiveCo
 export type { JudgedNote } from './window';
 export { isPraiseTag } from './rules';
 export type { CoachTarget, LiveTag } from './rules';
+export { isStickSensor, setupTagsOf } from './setupHints';
 export { coachCopy } from './copy';
 export type { CoachCopy } from './copy';
 export { LIVE_COACH_CONFIG } from './config';

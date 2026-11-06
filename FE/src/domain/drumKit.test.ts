@@ -131,3 +131,33 @@ describe('kitPadsFor · DRUM_KIT_FLAT_PADS', () => {
     expect(isKitSkin(undefined)).toBe(false);
   });
 });
+
+describe('placePad / padCenter (PLAY-004)', () => {
+  it('placePad로 옮긴 패드의 헤드 중심이 지정한 정규화 좌표에 온다', async () => {
+    const { DRUM_KIT_PADS, DRUM_KIT_W, DRUM_KIT_H, padCenter, placePad } = await import('./drumKit');
+    const snare = DRUM_KIT_PADS.find((p) => p.pad === 'SNARE')!;
+    const moved = placePad(snare, 0.25, 0.8);
+    const c = padCenter(moved);
+    expect(c.x).toBeCloseTo(0.25 * DRUM_KIT_W);
+    expect(c.y).toBeCloseTo(0.8 * DRUM_KIT_H);
+    expect(moved.w).toBe(snare.w);
+    expect(moved.h).toBe(snare.h);
+  });
+
+  it('원래 자리의 중심은 left/top보다 안쪽', async () => {
+    const { DRUM_KIT_PADS, padCenter } = await import('./drumKit');
+    for (const p of DRUM_KIT_PADS) {
+      const c = padCenter(p);
+      expect(c.x).toBeGreaterThan(p.left);
+      expect(c.y).toBeGreaterThan(p.top);
+    }
+  });
+});
+
+describe('layoutToKitPoint', () => {
+  it('가로는 그대로, 세로는 0.15~0.77로 누른다', async () => {
+    const { layoutToKitPoint } = await import('./drumKit');
+    expect(layoutToKitPoint({ x: 0.3, y: 0 })).toEqual({ x: 0.3, y: 0.15 });
+    expect(layoutToKitPoint({ x: 0.3, y: 1 }).y).toBeCloseTo(0.77);
+  });
+});

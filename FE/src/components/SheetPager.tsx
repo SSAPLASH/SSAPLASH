@@ -19,6 +19,7 @@ export interface SheetPagerProps {
   getSongTime: () => number | null;
   /** 카운트인 길이(ms). 주어지면 이 구간에서만 남은 박 수를 보인다 */
   countInMs?: number;
+  openWarnings?: React.RefObject<Map<number, number>>;
 }
 
 /** 마디 왼쪽 선·번호가 잘리지 않도록 clip 왼쪽에 두는 여유(px) */
@@ -26,10 +27,10 @@ const CLIP_PAD = 2;
 /** 왼쪽 여백(px). 첫 마디 앞 박자표(drawSheet가 마디 왼쪽 22px에 그린다)가 잘리지 않게 둔다 */
 const GUTTER_X = 44;
 /** 보표·커서·박 번호가 차지하는 세로 범위(px). 캔버스가 더 높으면 이만큼을 세로 가운데에 놓는다 */
-const CONTENT_TOP = STAFF_TOP_Y - 30;
+const CONTENT_TOP = STAFF_TOP_Y - 46;
 const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 
-export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInMs }: SheetPagerProps) {
+export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInMs, openWarnings }: SheetPagerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -75,6 +76,8 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const p = live.current;
+      const nowMs = performance.now();
+      for (const [index, expiry] of openWarnings?.current ?? []) if (expiry <= nowMs) openWarnings?.current.delete(index);
       const dpr = window.devicePixelRatio || 1;
       if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
         canvas.width = Math.round(width * dpr);
@@ -123,6 +126,8 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
           beatMs,
           showBase: false,
           countInMs: p.countInMs,
+          openWarnings: openWarnings?.current,
+          nowMs,
         });
         ctx.restore();
       });
@@ -137,7 +142,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [chart, model]);
+  }, [chart, model, openWarnings]);
 
   return (
     <div ref={wrapRef} className="sheet-pager">

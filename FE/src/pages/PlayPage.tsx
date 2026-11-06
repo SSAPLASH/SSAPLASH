@@ -11,6 +11,7 @@ import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
+import { useRealign } from '@/components/useRealign';
 import { PlayStage } from '@/components/play/PlayStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
@@ -21,6 +22,8 @@ import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
+import { useSimilarSongs } from '@/components/play/useSimilarSongs';
+import { RecommendRow } from '@/components/song/RecommendRow';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
@@ -30,14 +33,17 @@ import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { PadId } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
+import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { coachCopy, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -101,6 +107,8 @@ function PlayPageBody() {
   useEffect(() => {
     readyRef.current = ready;
   }, [ready]);
+  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
+  const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
 
   // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
@@ -117,8 +125,9 @@ function PlayPageBody() {
   const reconnect = useReconnect((r) => r.reconnect);
   const lastHit = useLive((l) => l.lastHit);
   const presets = usePresets((p) => p.items);
-  const presetName = presets.find((p) => p.id === settings.activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presets, settings.activePresetId);
   const selectSong = useSongs((s) => s.selectSong);
+  const songsSource = useSongs((s) => s.source);
   // 킷 미니 뷰: 타격(hit)·판정 색
   const padStates = usePadStates(session);
   const hitSeq = usePadHitSeq();
@@ -229,7 +238,11 @@ function PlayPageBody() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
-      const coach = new LiveCoach({ goodMs: settings.timing.goodMs, enabled: settings.liveCoach });
+      const coach = new LiveCoach({
+        goodMs: settings.timing.goodMs,
+        enabled: settings.liveCoach,
+        setupHints: isStickSensor(useSettings.getState().sensorKind),
+      });
       coachRef.current = coach;
       shadowRef.current = null;
       // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -259,11 +272,11 @@ function PlayPageBody() {
           stickId: e.stickId,
           velocity: e.velocity,
         };
-        const message = coach.push(judged);
+        const message = coach.push(judged, ss.snapshot().strayHits);
         shadowRef.current?.push(judged);
         if (!message) return;
         try {
-          const copy = coachCopy(message);
+          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
           if (copy) showCoachLine(copy, message.displayMs);
         } catch {
           // 코칭 오류는 무시한다
@@ -395,7 +408,16 @@ function PlayPageBody() {
   }, []);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
-  const { isResuming } = useReconnectResume({ pauseReason, ready, setPauseReason, setCountValue, resume, pauseTo, goMs: GO_MS });
+  const { isResuming } = useReconnectResume({
+    pauseReason,
+    ready,
+    realignPending: realign.pending,
+    setPauseReason,
+    setCountValue,
+    resume,
+    pauseTo,
+    goMs: GO_MS,
+  });
 
   // 처음부터: 카운트인부터 다시. 메트로놈 잠금은 유지한다
   const restart = useCallback(() => {
@@ -536,12 +558,24 @@ function PlayPageBody() {
     return () => window.removeEventListener('keydown', onKey);
   }, [begin, toSelect, pauseTo, isResuming]);
 
-  // 준비 화면: 고른 연습 단계의 최고 정확도(이 기기의 플레이 로그, U18)
+  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  const bestAccuracy = useMemo(
-    () => (stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'RHYTHM').get(selectedChartId) : undefined),
-    [stage, selectedChartId],
+  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
+  const similar = useSimilarSongs({
+    songId: songIdParam,
+    active: stage === 'ready' && param.status === 'ready',
+    difficulty: chart?.difficulty ?? null,
+    onSelect: param.select,
+  });
+  const records = useBestRecords(
+    stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
+    'RHYTHM', stage === 'ready' && detail?.id === songIdParam, songsSource,
   );
+  const localBestAccuracy = useMemo(
+    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'RHYTHM').get(selectedChartId) : undefined),
+    [songsSource, stage, selectedChartId],
+  );
+  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
@@ -624,6 +658,7 @@ function PlayPageBody() {
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
       <main className="main">
+        <BestRecordsNotice status={records.status} retry={records.retry} />
         <ReadyPanel
           song={song}
           modeLabel="리듬 게임"
@@ -644,6 +679,8 @@ function PlayPageBody() {
           onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
           onStart={() => void begin()}
+          realign={realign.info}
+          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
         />
       </main>
     );
@@ -665,6 +702,7 @@ function PlayPageBody() {
         onRestart={restart}
         onLeave={leave}
         returnTo={returnTo}
+        realign={realign.info}
       />
     );
   } else if (countValue !== null) {

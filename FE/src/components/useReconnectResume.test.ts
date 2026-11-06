@@ -122,3 +122,47 @@ describe('createReconnectResume', () => {
     expect(log).toEqual([]);
   });
 });
+
+describe('createReconnectResume 재정렬 보류(PLAY-004 D12)', () => {
+  it('1초 뒤 realignPending이면 카드를 둔 채(realigning) 기다리고, 꺼지면 카운트다운 → resume', () => {
+    const { ctrl, log } = setup();
+    ctrl.update('disconnected', true, false);
+    ctrl.update('reconnected', true, true); // 프롬프트가 떴다
+    vi.advanceTimersByTime(1000);
+    expect(log).toEqual(['reason:reconnected']); // 카운트다운 보류, 카드 유지
+    expect(ctrl.isResuming()).toBe(false);
+    vi.advanceTimersByTime(5000);
+    expect(log).toEqual(['reason:reconnected']);
+    // 스네어를 쳤거나 [건너뛰기]
+    ctrl.update('reconnected', true, false);
+    expect(log.slice(1)).toEqual(['reason:null', 'count:3']);
+    expect(ctrl.isResuming()).toBe(true);
+    ctrl.update(null, true, false);
+    vi.advanceTimersByTime(3000 + GO_MS);
+    expect(log.slice(-2)).toEqual(['count:null', 'resume']);
+  });
+
+  it('realignPending이 아니면(방향 유지 재연결) 기존대로 1초 뒤 바로 카운트다운', () => {
+    const { ctrl, log } = setup();
+    ctrl.update('disconnected', true, false);
+    ctrl.update('reconnected', true, false);
+    vi.advanceTimersByTime(1000);
+    expect(log.slice(1)).toEqual(['reason:null', 'count:3']);
+  });
+
+  it('realigning 중 ready가 떨어지면 끊김 카드로, 페이지가 reason을 바꾸면 접는다', () => {
+    const { ctrl, log } = setup();
+    ctrl.update('disconnected', true, true);
+    ctrl.update('reconnected', true, true);
+    vi.advanceTimersByTime(1000);
+    ctrl.update('reconnected', false, true);
+    expect(log.slice(-1)).toEqual(['reason:disconnected']);
+    expect(ctrl.isResuming()).toBe(false);
+    ctrl.update('disconnected', true, true);
+    ctrl.update('reconnected', true, true);
+    vi.advanceTimersByTime(1000);
+    ctrl.update(null, true, true); // 나가기 등
+    vi.advanceTimersByTime(10_000);
+    expect(log).not.toContain('resume');
+  });
+});

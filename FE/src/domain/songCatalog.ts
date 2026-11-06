@@ -26,6 +26,8 @@ export interface SongSummary {
   /** 곡 출처(응답값). 목록 범위(SongScope)와 다르다 */
   source: ChartSource;
   status: string;
+  /** 채보 실패 코드. 서버 메시지는 보관하지 않는다 */
+  chartFailure?: { code: string } | null;
   bpm: number;
   timeSignature: string;
   durationMs: number | null;
@@ -38,6 +40,8 @@ export interface SongSummary {
   createdAt: string;
   /** 커버 이미지 서명 URL. 없으면 null(기본 커버) */
   coverUrl: string | null;
+  /** 이 곡에 연결된 악보 id(설계 CHART-001 악보 보관 3-3). BE가 붙이기 전이거나 연결이 없으면 null */
+  sheetId: number | null;
 }
 
 export interface ChartSummary {
@@ -106,6 +110,12 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function chartFailureFromDto(value: unknown): { code: string } | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const code = (value as Record<string, unknown>).code;
+  return typeof code === 'string' ? { code } : null;
+}
+
 export function songFromDto(d: Record<string, unknown>): SongSummary {
   return {
     id: toSafeId(d.id, 'songId'),
@@ -113,6 +123,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     artist: String(d.artist ?? ''),
     source: d.source as ChartSource,
     status: String(d.status ?? ''),
+    chartFailure: chartFailureFromDto(d.chartFailure),
     bpm: toNumber(d.bpm),
     timeSignature: String(d.timeSignature ?? '4/4'),
     durationMs: d.durationMs == null ? null : toNumber(d.durationMs),
@@ -124,6 +135,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     ),
     createdAt: String(d.createdAt ?? ''),
     coverUrl: typeof d.coverUrl === 'string' && d.coverUrl !== '' ? d.coverUrl : null,
+    sheetId: d.sheetId == null ? null : toSafeId(d.sheetId, 'sheetId'),
   };
 }
 
@@ -202,18 +214,38 @@ export function songStatusView(status: string): SongStatusView {
   }
 }
 
+/** 공개된 채보 실패 코드만 사용자 문구로 바꾼다 */
+export function chartFailureText(failure: SongSummary['chartFailure']): string {
+  switch (failure?.code) {
+    case 'INPUT_INVALID':
+      return '파일을 처리할 수 없어요';
+    case 'OUTPUT_INVALID':
+      return '채보 결과를 처리하지 못했어요';
+    case 'MODEL_FAILED':
+      return '채보 생성 중 오류가 발생했어요';
+    case 'JOB_CANCELLED':
+      return '채보 생성이 취소됐어요';
+    case 'JOB_FAILED':
+      return '채보 작업을 완료하지 못했어요';
+    default:
+      return '채보를 만들지 못했어요';
+  }
+}
+
 /** 플레이·악보 연습에 쓸 수 있는 상태(설계 3-3). READY만 true */
 export function isPlayableStatus(status: string): boolean {
   return status === 'READY';
 }
 
-function mineGroup(status: string): number {
+/** 내 곡 정렬 그룹: 처리 중 0 → 실패 1 → 그 밖 2. 악보 항목도 「그 밖」에 속한다 */
+export function mineGroup(status: string): number {
   if (status === 'PROCESSING') return 0;
   if (status === 'FAILED') return 1;
   return 2;
 }
 
-function createdTime(iso: string): number {
+/** createdAt ISO → ms. 해석 못 하면 0 */
+export function createdTime(iso: string): number {
   const t = Date.parse(iso);
   return Number.isFinite(t) ? t : 0;
 }
