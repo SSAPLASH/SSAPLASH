@@ -50,6 +50,12 @@ describe('recommendationFromDto', () => {
     expect(item.song.coverUrl).toBeNull();
   });
 
+  it('선택 focus와 패드 순서를 보존하고 미제공 응답도 지원한다', () => {
+    const base = { song: songDto, chartId: 34, difficulty: 'EASY', reasons: [] };
+    expect(recommendationFromDto({ ...base, focus: { pattern: 'TRANSITION', pads: ['SNARE', 'TOM1'] } }).focus).toEqual({ pattern: 'TRANSITION', pads: ['SNARE', 'TOM1'] });
+    expect(recommendationFromDto(base).focus).toBeUndefined();
+  });
+
   it('chartId가 정수가 아니면 던진다', () => {
     expect(() => recommendationFromDto({ song: songDto, chartId: 1.5, difficulty: 'EASY', reasons: [] })).toThrow();
     expect(() => recommendationFromDto({ song: songDto, chartId: 'x', difficulty: 'EASY', reasons: [] })).toThrow();

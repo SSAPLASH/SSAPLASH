@@ -3,8 +3,8 @@ import type { Difficulty } from './chart';
 import { pickPathOf } from './playRetry';
 import { DIFFICULTY_ORDER, songFromDto, toSafeId, type SongSummary } from './songCatalog';
 
-/** 노출 위치. 곡 선택은 SONG_PICKER, 리포트 하단은 후속 작업 */
-export type RecommendationContext = 'SONG_PICKER' | 'REPORT';
+/** 추천 노출 위치 */
+export type RecommendationContext = 'SONG_PICKER' | 'REPORT' | 'DRILL';
 
 export interface RecommendationReason {
   /** 열린 문자열 — BE가 코드를 늘려도 깨지지 않는다 */
@@ -18,6 +18,8 @@ export interface RecommendationItem {
   chartId: number;
   difficulty: Difficulty;
   reasons: RecommendationReason[];
+  /** DRILL 추천의 연습 대상. 이전 응답에는 없다 */
+  focus?: { pattern: string; pads: string[] };
 }
 
 export interface RecommendationPage {
@@ -57,11 +59,13 @@ function reasonFromDto(d: Record<string, unknown>): RecommendationReason {
 
 export function recommendationFromDto(d: Record<string, unknown>): RecommendationItem {
   const reasons = Array.isArray(d.reasons) ? (d.reasons as Record<string, unknown>[]).map(reasonFromDto) : [];
+  const focus = d.focus && typeof d.focus === 'object' && !Array.isArray(d.focus) ? d.focus as Record<string, unknown> : null;
   return {
     song: songFromDto((d.song ?? {}) as Record<string, unknown>),
     chartId: toSafeId(d.chartId, 'chartId'),
     difficulty: difficultyOf(d.difficulty),
     reasons,
+    ...(focus ? { focus: { pattern: String(focus.pattern ?? ''), pads: Array.isArray(focus.pads) ? focus.pads.map(String) : [] } } : {}),
   };
 }
 

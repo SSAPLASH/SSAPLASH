@@ -8,7 +8,7 @@ import './song.css';
 interface Props {
   items: RecommendCard[];
   onPick: (card: RecommendCard) => void;
-  /** 줄 제목. 기본 "추천곡"(리포트는 "AI 추천 연습곡", 설계 COACH-004-song-recommend-report D4) */
+  /** 줄 제목. 기본 "추천곡"(리포트는 "추천 곡" 또는 "이 약점 연습하기") */
   caption?: string;
 }
 
