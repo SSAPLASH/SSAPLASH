@@ -141,6 +141,8 @@ let lastLink = -1;
 let unconf = {};                   // 역할 → STATUS의 '설정 전' 플래그                 // LINK 마스크 (v0.8) 바뀔 때만 로그
 let bat = {}, batLog = [];       // 역할 → 배터리 %, 30초마다 LOG "BAT 3987mV 82%" 기록                    // 역할 → 마지막으로 스틱 패킷을 받은 시각(ms)
 function activeRoles() { const now = performance.now(); return Object.keys(seen).map(Number).filter((r) => now - seen[r] < 3000).sort(); }
+/* 패드 위치 설정·기준 맞추기는 스틱(역할 0·1)만. 페달 보드(2·3)는 방향이 없다 (11/6: 설정 때 발까지 2번씩 기다리던 문제) */
+const stickRoles = () => activeRoles().filter((r) => r < 2);
 
 function median(a) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; }
 function pct(a, p) { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; }
@@ -212,7 +214,7 @@ function handle(dv, recv) {
       let shown = pad;                               // 설정 중엔 지금 치라고 한 패드 소리·불
       const near = pad === '-' ? nearestInfo(el, az, role) : '';
       if (anchor && anchor.left.has(role)) { shown = 'SNARE'; anchorHit(el, az, role); }
-      else if (calib && calib.step < CALIB_ORDER.length) { shown = CALIB_ORDER[calib.step].name; calibHit(el, az, role); }
+      else if (calib && calib.step < CALIB_ORDER.length && role < 2) { shown = CALIB_ORDER[calib.step].name; calibHit(el, az, role); }
       play(shown, vel);
       const off = offset(role);
       const lat = off === null ? NaN : recv - (ts / 1000 + off);
@@ -384,7 +386,7 @@ function calibShow() {
 }
 async function calibStart() {
   anchor = null;
-  calib = { step: 0, roles: activeRoles(), acc: CALIB_ORDER.map(() => ({})) };   // acc[패드][역할] = {x,y,z,n}
+  calib = { step: 0, roles: stickRoles(), acc: CALIB_ORDER.map(() => ({})) };   // acc[패드][역할] = {x,y,z,n}
   await write([0x13]);                                   // RESET_POSE: 연결된 스틱 모두, 지금 방향 = 방위각 0
   $('btnCalibCancel').disabled = false;
   calibShow();
@@ -392,7 +394,7 @@ async function calibStart() {
 function calibCancel() { calib = null; calibShow(); $('btnCalibCancel').disabled = true; $('calibMsg').textContent = '취소됨'; }
 /* 설정 중인 HIT. 지금 패드를 모든 스틱이 CALIB_HITS번씩 채우면 다음 패드로 */
 function calibHit(el, az, role) {
-  if (!calib || calib.step >= CALIB_ORDER.length) return false;
+  if (!calib || calib.step >= CALIB_ORDER.length || role >= 2) return false;
   if (!calib.roles.includes(role)) { calib.roles.push(role); calib.roles.sort(); }
   const acc = calib.acc[calib.step], a = acc[role] || (acc[role] = { x: 0, y: 0, z: 0, n: 0 });
   if (a.n < CALIB_HITS) { const v = vec(el, az); a.x += v[0]; a.y += v[1]; a.z += v[2]; a.n++; }
@@ -595,7 +597,7 @@ $('btnCalibResend').onclick = async () => {
   const p = storedPads();
   if (!p) return;
   calib = null; calibShow();
-  const act = activeRoles();
+  const act = stickRoles();
   let roles = act.filter((r) => p[r]);
   if (!roles.length && act.length === 1 && Object.keys(p).length) { p[act[0]] = p[Object.keys(p)[0]]; roles = act; }  // 표가 없는 손 1대면 있는 표로
   if (!roles.length) { $('calibMsg').textContent = '연결된 스틱의 저장된 위치가 없음. [설정 시작]부터'; return; }
