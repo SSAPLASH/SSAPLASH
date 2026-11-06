@@ -48,6 +48,7 @@ export type DiagBody =
     }
   /** 코칭 기준 방식별 그림자 평가(D6). 두 방식 모두 문구가 나올 때 발행한다. active는 화면에 실제로 보인 방식 */
   | { type: 'coachEval'; basis: CoachBasis; active: boolean; tag: string; tMs: number }
+  | { type: 'coachGate'; runtime: 'json' | 'onnx'; tag: string; tMs: number; score: number; kept: boolean; elapsedMs: number }
   /**
    * 반주 시계 드리프트 측정(T2). 반주 재생 중 일정 주기로 발행한다. 보정은 하지 않는다.
    * audioPosMs는 오디오 시계(AudioContext) 기준 반주 재생 위치, driftMs = audioPosMs − songTimeMs.

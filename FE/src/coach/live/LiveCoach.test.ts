@@ -1,7 +1,8 @@
 // 합성 플레이로 설계의 인수 조건을 확인한다: 경향이 있으면 지적이 뜨고, 없으면 칭찬만 뜨고, 간격을 지킨다.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
+import type { CoachGate, GateDecision } from './gate/gate';
 import { LIVE_OFF_TAG, LIVE_RECOVERED_TAG, LiveCoach, type CoachMessage } from './LiveCoach';
 import { isPraiseTag } from './rules';
 import type { JudgedNote } from './window';
@@ -306,5 +307,97 @@ describe('세팅 안내', () => {
     const coach = new LiveCoach({ goodMs: 100, setupHints: true });
     run(coach, steady(60, 30));
     expect(coach.events().some((e) => e.tag === 'LIVE_SETUP_OFFSET')).toBe(true);
+  });
+});
+
+describe('거름', () => {
+  const late = (count: number) => Array.from({ length: count }, (_, i) => hit(i, 40));
+  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'json', threshold, score: () => score });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const firstLate = (coach: LiveCoach, onDeferred?: (m: CoachMessage) => void) => {
+    const out: CoachMessage[] = [];
+    for (const n of late(12)) {
+      const m = coach.push(n, 0, onDeferred);
+      if (m) out.push(m);
+    }
+    return out;
+  };
+
+  it('꺼져 있으면 지금과 같다', () => {
+    expect(firstLate(new LiveCoach({ goodMs: 60, gate: null })).map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('shadow는 낮은 점수도 띄우고 판단을 기록한다', () => {
+    const seen: GateDecision[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'shadow', onGate: (d) => seen.push(d) });
+    expect(firstLate(coach).map((m) => m.tag)).toContain('LIVE_LATE');
+    expect(seen[0]).toMatchObject({ runtime: 'json', tag: 'LIVE_LATE', score: 0.1, kept: false });
+  });
+
+  it('on은 낮은 점수의 지적을 빼고 로그에도 남기지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'on' });
+    expect(firstLate(coach).map((m) => m.tag)).not.toContain('LIVE_LATE');
+    expect(coach.events().some((e) => e.tag === 'LIVE_LATE')).toBe(false);
+  });
+
+  it('on은 높은 점수의 지적을 띄운다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    expect(firstLate(coach).map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('칭찬은 거르지 않는다', () => {
+    const score = vi.fn(() => 0);
+    const coach = new LiveCoach({ goodMs: 60, gate: { runtime: 'json', threshold: 1, score }, gateMode: 'on' });
+    const list = Array.from({ length: 40 }, (_, i) => coach.push(hit(i, 0)));
+    expect(list.some((m) => m && isPraiseTag(m.tag))).toBe(true);
+    expect(score).not.toHaveBeenCalled();
+  });
+
+  it('비동기 on은 높은 점수가 오면 늦게 띄운다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    expect(firstLate(coach, (m) => got.push(m)).map((m) => m.tag)).not.toContain('LIVE_LATE');
+    await flush();
+    expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+    expect(coach.events().some((e) => e.tag === 'LIVE_LATE')).toBe(true);
+  });
+
+  it('비동기 on은 낮은 점수면 띄우지 않는다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.1)), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    await flush();
+    expect(got).toHaveLength(0);
+  });
+
+  it('실행기가 실패하면 규칙 판단대로 띄운다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.reject(new Error('시험'))), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    await flush();
+    expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('점수가 늦으면 시간 한도 뒤 규칙 판단대로 띄운다', async () => {
+    vi.useFakeTimers();
+    try {
+      const got: CoachMessage[] = [];
+      const coach = new LiveCoach({ goodMs: 60, gate: gate(new Promise<number>(() => undefined)), gateMode: 'on' });
+      firstLate(coach, (m) => got.push(m));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('재시작 뒤 도착한 점수는 버린다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    coach.reset();
+    await flush();
+    expect(got).toHaveLength(0);
+    expect(coach.events()).toHaveLength(0);
   });
 });

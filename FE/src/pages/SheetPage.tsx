@@ -60,7 +60,7 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -293,15 +293,19 @@ function SheetPageBody() {
         stickId: e.stickId,
         velocity: e.velocity,
       };
-      const message = coach.push(judged, activeSession.snapshot().strayHits);
+      // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+      const show = (message: CoachMessage) => {
+        if (coachRef.current !== coach) return;
+        try {
+          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+          if (copy) showCoachLine(copy, message.displayMs);
+        } catch {
+          // 코칭 오류는 무시한다
+        }
+      };
+      const message = coach.push(judged, activeSession.snapshot().strayHits, show);
       shadowRef.current?.push(judged);
-      if (!message) return;
-      try {
-        const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-        if (copy) showCoachLine(copy, message.displayMs);
-      } catch {
-        // 코칭 오류는 무시한다
-      }
+      if (message) show(message);
     });
   }, [activeSession, showCoachLine]);
 
@@ -438,7 +442,12 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
-    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach, setupHints: isStickSensor(st.sensorKind) });
+    const coach = new LiveCoach({
+      goodMs: st.timing.goodMs,
+      enabled: st.liveCoach,
+      setupHints: isStickSensor(st.sensorKind),
+      onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+    });
     coachRef.current = coach;
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다

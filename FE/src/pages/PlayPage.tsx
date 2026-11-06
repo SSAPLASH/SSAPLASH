@@ -43,7 +43,7 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
+import { coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -242,6 +242,7 @@ function PlayPageBody() {
         goodMs: settings.timing.goodMs,
         enabled: settings.liveCoach,
         setupHints: isStickSensor(useSettings.getState().sensorKind),
+        onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
       });
       coachRef.current = coach;
       shadowRef.current = null;
@@ -272,15 +273,19 @@ function PlayPageBody() {
           stickId: e.stickId,
           velocity: e.velocity,
         };
-        const message = coach.push(judged, ss.snapshot().strayHits);
+        // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+        const show = (message: CoachMessage) => {
+          if (coachRef.current !== coach) return;
+          try {
+            const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+            if (copy) showCoachLine(copy, message.displayMs);
+          } catch {
+            // 코칭 오류는 무시한다
+          }
+        };
+        const message = coach.push(judged, ss.snapshot().strayHits, show);
         shadowRef.current?.push(judged);
-        if (!message) return;
-        try {
-          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-          if (copy) showCoachLine(copy, message.displayMs);
-        } catch {
-          // 코칭 오류는 무시한다
-        }
+        if (message) show(message);
       });
       flashes.current.clear();
       popups.current = [];
