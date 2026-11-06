@@ -17,6 +17,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { Dialog } from '@/components/ui/Dialog';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
+import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { consentSaveErrorMessage, consentStatusText, isRecommendationVersionStale } from '@/domain/recommendationConsent';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
@@ -114,7 +115,7 @@ export function SettingsPage() {
   const [left, right] = connected;
   const connText = !sensorMode ? '키보드 전용' : left && right ? '연결됨' : left || right ? '한 손만 연결됨' : '연결 안 됨';
   const connTone = sensorMode && left && right ? 'good' : sensorMode ? 'warn' : '';
-  const presetName = presetItems.find((p) => p.id === activePresetId)?.name ?? '프리셋 없음';
+  const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
   const onLogout = () => {
