@@ -1,4 +1,5 @@
-// Figma Feedback / ResultSummaryCard 126:3795 — 곡 제목·메타 / 점수·최고 콤보 / 정확도(64) 가로 요약 카드. 악보 모드는 점수 블록이 없다.
+// Figma Feedback / ResultSummaryCard 126:3795 — 왼쪽 곡 제목·메타, 오른쪽 지표 묶음(672:4132: 점수·최고 콤보 | 세로선 | 정확도 64, 간격 48, 아래 정렬).
+// 악보 모드는 점수 블록과 세로선 없이 정확도만 있다.
 import type { ReactNode } from 'react';
 import './result.css';
 
@@ -24,15 +25,20 @@ export function ResultSummaryCard({ title, meta, titleBadge, scoreText, accuracy
         </div>
         <p className="result-summary-meta">{meta}</p>
       </div>
-      {scoreText ? (
+      <div className="result-summary-metrics">
+        {scoreText ? (
+          <>
+            <div className="result-summary-block result-summary-score">
+              <span className="result-summary-label">점수 / 최고 콤보</span>
+              <span className="t-display-20">{scoreText}</span>
+            </div>
+            <span className="result-summary-divider" aria-hidden="true" />
+          </>
+        ) : null}
         <div className="result-summary-block">
-          <span className="result-summary-label">점수 / 최고 콤보</span>
-          <span className="t-display-20">{scoreText}</span>
+          <span className="result-summary-label">정확도</span>
+          <span className="t-display-64 result-summary-accuracy">{accuracyText}</span>
         </div>
-      ) : null}
-      <div className="result-summary-block">
-        <span className="result-summary-label">정확도</span>
-        <span className="t-display-64 result-summary-accuracy">{accuracyText}</span>
       </div>
     </section>
   );
