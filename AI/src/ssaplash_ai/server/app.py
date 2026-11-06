@@ -8,10 +8,12 @@
 
 from fastapi import FastAPI
 
+from ssaplash_ai.server.sheet import router as sheet_router
 from ssaplash_ai.server.weak_segments import router as weak_segments_router
 
 app = FastAPI(title="SSAPLASH AI")
 app.include_router(weak_segments_router)
+app.include_router(sheet_router)
 
 
 @app.get("/health")
