@@ -34,7 +34,7 @@ export const useRecommendationConsent = create<RecommendationConsentState>()((se
   ...INITIAL,
 
   load: async () => {
-    if (get().status !== 'idle') return;
+    if (get().status !== 'idle' && get().status !== 'error') return;
     set({ status: 'loading' });
     try {
       const consent = await getRecommendationConsent();

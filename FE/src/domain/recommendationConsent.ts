@@ -21,7 +21,7 @@ export function needsRecommendationPrompt(c: RecommendationConsent | null | unde
   return c != null && c.version === null;
 }
 
-/** 동의했지만 판이 지금과 다른가(약관 개정). 설정에서 "다시 켜면 새 판에 동의해요" 안내를 보인다 */
+/** 동의했지만 판이 지금과 다른가(약관 개정). 설정에서 새 본문 확인과 동의 여부를 별도로 안내한다 */
 export function isRecommendationVersionStale(c: RecommendationConsent | null | undefined, version: string = recommendationVersion()): boolean {
   return c?.agreed === true && c.version !== null && c.version !== version;
 }
@@ -34,9 +34,11 @@ function shortDate(iso: string | null): string | null {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** 설정 상태 줄: 현재 판에 동의했으면 "동의함 · {판} 판 · {MM/DD} 변경", 그 밖(미응답·거부·판 불일치·읽기 실패)은 "미동의" */
+/** 설정 상태 줄: 현재 판에 동의했으면 "동의함 · {판} 판 · {MM/DD} 변경", 미응답·거부는 "미동의", 판 불일치와 읽기 실패는 별도 안내 */
 export function consentStatusText(c: RecommendationConsent | null | undefined, version: string = recommendationVersion()): string {
-  if (!isRecommendationConsentCurrent(c, version) || c == null) return '미동의';
+  if (c == null) return '동의 상태를 확인할 수 없어요';
+  if (isRecommendationVersionStale(c, version)) return `이전 판에 동의함 · ${c.version} 판 · 새 동의 내용 확인 필요`;
+  if (!isRecommendationConsentCurrent(c, version)) return '미동의';
   const date = shortDate(c.updatedAt);
   return date === null ? `동의함 · ${version} 판` : `동의함 · ${version} 판 · ${date} 변경`;
 }

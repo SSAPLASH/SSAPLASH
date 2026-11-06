@@ -5,7 +5,7 @@ import { SignupConsentCard } from './SignupConsentCard';
 import { TermsItem } from './TermsItem';
 
 describe('SignupConsentCard', () => {
-  const html = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} />);
+  const html = renderToStaticMarkup(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={() => {}} />);
 
   it('제목·설명·필수 모두 동의·항목 4개·버튼이 Figma 순서로 보인다', () => {
     const order = ['가입 동의', SIGNUP_INTRO, '필수 항목에 모두 동의합니다', 'signup-card-divider', ...SIGNUP_TERMS.map((t) => t.title), '동의하고 시작하기'];
@@ -31,7 +31,7 @@ describe('SignupConsentCard', () => {
   });
 
   it('error가 있으면 버튼 앞에 role=alert 문구가 보인다', () => {
-    const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} error="동의를 저장하지 못했습니다." />);
+    const h = renderToStaticMarkup(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={() => {}} error="동의를 저장하지 못했습니다." />);
     expect(h).toContain('<p class="signup-card-error t-body-14" role="alert">동의를 저장하지 못했습니다.</p>');
     expect(h.indexOf('signup-card-error')).toBeLessThan(h.indexOf('동의하고 시작하기'));
   });
@@ -41,14 +41,14 @@ describe('SignupConsentCard', () => {
   });
 
   it('submitting이면 버튼을 잠근다', () => {
-    const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} submitting />);
+    const h = renderToStaticMarkup(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={() => {}} submitting />);
     expect(h).toMatch(/<button[^>]*disabled=""[^>]*>동의하고 시작하기/);
   });
 });
 
 describe('SignupConsentCard initialAgreed', () => {
   it('넘긴 항목만 처음부터 체크돼 있다', () => {
-    const h = renderToStaticMarkup(<SignupConsentCard onSubmit={() => {}} initialAgreed={['recommendation']} />);
+    const h = renderToStaticMarkup(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={() => {}} initialAgreed={['recommendation']} />);
     expect(h.match(/checked=""/g)?.length).toBe(1);
     // 필수 항목은 꺼져 있어 버튼은 여전히 잠겨 있다
     expect(h).toMatch(/<button[^>]*disabled=""[^>]*>동의하고 시작하기/);

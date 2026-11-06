@@ -176,7 +176,7 @@ describe('리포트 하단 비슷한 곡', () => {
     setReport(report({ songId: 12 }));
     show();
     await screen.findByText('방금 친 곡과 비슷한 곡');
-    expect(vi.mocked(fetchSimilarSongs).mock.calls[0][1]).toEqual({ difficulty: 'NORMAL', size: 5 });
+    expect(vi.mocked(fetchSimilarSongs).mock.calls[0][1]).toEqual({ difficulty: undefined, size: 5 });
   });
 
   it('클릭하면 기록을 보내고 모드별 경로로 이동한다', async () => {

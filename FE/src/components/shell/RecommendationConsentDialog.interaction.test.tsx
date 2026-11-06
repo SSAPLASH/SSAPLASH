@@ -74,13 +74,14 @@ function setup(path = '/free') {
 }
 
 beforeEach(() => {
+  vi.stubEnv('VITE_RECOMMENDATION_CONSENT_ENABLED', 'true');
   useRecommendationConsent.getState().resetForTest();
   useShellStore.setState({ immersive: false });
   useAuth.setState({ status: 'authenticated', user: USER, lostReason: null });
   vi.mocked(getRecommendationConsent).mockReset().mockResolvedValue(NONE);
   vi.mocked(putRecommendationConsent).mockReset();
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 describe('기존 사용자 학습 동의 안내', () => {
   it('한 번도 답하지 않았으면 본문 요약과 두 버튼이 뜬다', async () => {

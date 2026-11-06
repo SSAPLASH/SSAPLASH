@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { needsRecommendationPrompt } from '@/domain/recommendationConsent';
+import { recommendationConsentEnabled } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
@@ -96,7 +97,7 @@ export function AppShell({ authRequired }: Props) {
   // 한 번도 답하지 않은 기존 사용자에게만 1회 안내. 가입 화면·연주 중에는 띄우지 않고 벗어난 뒤 다음 렌더에 띄운다.
   // PUT이 실패하면 이번 세션만 다시 띄우지 않는다
   const showConsentDialog =
-    authStatus === 'authenticated' && signupCompleted !== false && !immersive && pathname !== '/signup' && !consentDismissed && needsRecommendationPrompt(consent);
+    recommendationConsentEnabled() && authStatus === 'authenticated' && signupCompleted !== false && !immersive && pathname !== '/signup' && !consentDismissed && needsRecommendationPrompt(consent);
   const answerConsent = (agreed: boolean) => {
     useRecommendationConsent
       .getState()

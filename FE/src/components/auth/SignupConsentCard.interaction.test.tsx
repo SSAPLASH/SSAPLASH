@@ -6,17 +6,29 @@ import userEvent from '@testing-library/user-event';
 import { SIGNUP_TERMS } from '@/domain/signupTerms';
 import { SignupConsentCard } from './SignupConsentCard';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 const allRequired = () => screen.getByRole('checkbox', { name: '필수 항목에 모두 동의합니다' });
 const recommendation = () => screen.getByRole('checkbox', { name: /맞춤 곡 추천 학습 활용 동의/ });
 const submit = () => screen.getByRole('button', { name: '동의하고 시작하기' });
 
+describe('신규 동의 수집 비활성', () => {
+  it('가입에 항목을 숨기고 기존 응답을 덮어쓰지 않도록 본문에서 생략한다', async () => {
+    vi.stubEnv('VITE_RECOMMENDATION_CONSENT_ENABLED', 'false');
+    const onSubmit = vi.fn();
+    render(<SignupConsentCard onSubmit={onSubmit} />);
+    expect(screen.queryByRole('checkbox', { name: /맞춤 곡 추천 학습 활용 동의/ })).toBeNull();
+    await userEvent.setup().click(allRequired());
+    await userEvent.setup().click(submit());
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('recommendationConsent');
+  });
+});
+
 describe('SignupConsentCard 선택 항목', () => {
   it('필수 모두 동의만으로 활성이고, 선택 항목은 꺼져 있으며 제출 본문에 agreed false가 실린다', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<SignupConsentCard onSubmit={onSubmit} />);
+    render(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={onSubmit} />);
     expect((submit() as HTMLButtonElement).disabled).toBe(true);
 
     await user.click(allRequired());
@@ -36,7 +48,7 @@ describe('SignupConsentCard 선택 항목', () => {
   it('선택 항목을 체크하고 제출하면 agreed true', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<SignupConsentCard onSubmit={onSubmit} />);
+    render(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={onSubmit} />);
     await user.click(allRequired());
     await user.click(recommendation());
     await user.click(submit());
@@ -45,7 +57,7 @@ describe('SignupConsentCard 선택 항목', () => {
 
   it('선택 항목만 체크해서는 제출할 수 없고, 필수 모두 동의를 끄면 선택 항목은 그대로 둔다', async () => {
     const user = userEvent.setup();
-    render(<SignupConsentCard onSubmit={() => {}} />);
+    render(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={() => {}} />);
     await user.click(recommendation());
     expect((submit() as HTMLButtonElement).disabled).toBe(true);
     expect((allRequired() as HTMLInputElement).checked).toBe(false);
@@ -59,7 +71,7 @@ describe('SignupConsentCard 선택 항목', () => {
   it('initialAgreed로 선택 항목을 미리 켠 채 시작하고 그대로 제출하면 agreed true', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<SignupConsentCard onSubmit={onSubmit} initialAgreed={['recommendation']} />);
+    render(<SignupConsentCard terms={SIGNUP_TERMS} onSubmit={onSubmit} initialAgreed={['recommendation']} />);
     expect((recommendation() as HTMLInputElement).checked).toBe(true);
     await user.click(allRequired());
     await user.click(submit());
