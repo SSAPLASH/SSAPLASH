@@ -13,6 +13,30 @@ export function captureLine(target: PadId, hands: readonly StickId[]): string {
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 쳐 주세요`;
 }
 
+/** 킷 위 큰 안내(UX-64): "하이햇을 2번 타격하세요" / 한 손 "하이햇을 왼손으로 2번 타격하세요" */
+export function captureHeadline(target: PadId, hands: readonly StickId[]): string {
+  const label = PAD_META[target].label;
+  if (hands.length === 2) return `${label}${josaEulReul(label)} 2번 타격하세요`;
+  return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 타격하세요`;
+}
+
+/** 오른쪽 카드 제목(UX-64): "하이햇 2회 타격 (1/7)". index는 0부터 */
+export function captureCardTitle(target: PadId, index: number, total: number): string {
+  return `${PAD_META[target].label} 2회 타격 (${index + 1}/${total})`;
+}
+
+/** 카드 타격 줄(UX-64 U7): 양손 "왼 1/2 · 오 2/2", 한 손 "1/2" */
+export function hitCountText(hands: readonly StickId[], counts: readonly [number, number], perPad = 2): string {
+  if (hands.length === 2) return `왼 ${counts[0]}/${perPad} · 오 ${counts[1]}/${perPad}`;
+  const h = hands[0] ?? 1;
+  return `${counts[h]}/${perPad}`;
+}
+
+/** 칩 줄 pill(UX-64): "보정 중 1 / 7". index는 0부터 */
+export function capturePillText(index: number, total: number): string {
+  return `보정 중 ${index + 1} / ${total}`;
+}
+
 /** 2타 퍼짐 경고 */
 export function spreadWarningText(w: NonNullable<CaptureSnapshot['warning']>): string {
   const label = PAD_META[w.pad].label;

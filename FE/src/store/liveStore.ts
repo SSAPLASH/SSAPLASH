@@ -15,9 +15,11 @@ export interface CalibrationSnapshot {
   realign: RealignSnapshot | null;
   /** 지금 세션의 대상 손 */
   hands: StickId[];
+  /** 보정 대상(UX-64 D4): new = 추가하기(새 프리셋 초안), active = 적용 프리셋에 바로 반영. 보정 중이 아니면 null */
+  target: 'new' | 'active' | null;
 }
 
-export const IDLE_CALIBRATION: CalibrationSnapshot = { mode: 'idle', capture: null, realign: null, hands: [] };
+export const IDLE_CALIBRATION: CalibrationSnapshot = { mode: 'idle', capture: null, realign: null, hands: [], target: null };
 
 /** 전역 메트로놈 화면용 사본. 값의 주인은 engine/Metronome이고 bootstrap이 여기 옮긴다 */
 export interface MetronomeLive {

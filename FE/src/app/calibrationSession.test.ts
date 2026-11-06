@@ -10,6 +10,7 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { CAPTURE_ORDER } from '@/engine/HitCapture';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { SYSTEM_PRESET_ID } from '@/domain/preset';
 import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
@@ -64,11 +65,15 @@ function twice(h: StickId, pitch: number, yaw: number) {
   expect(calibrationSession.intercept(hit(h, pitch, yaw + 1))).toBe(true);
 }
 
+/** 7패드를 손마다 채우고 패드마다 [다음]. 마지막 [다음] 뒤 done이라 [저장](finish)은 호출자가 */
 function fillAll(hands: StickId[]) {
   CAPTURE_ORDER.forEach((_, i) => {
     for (const h of hands) twice(h, -10 + i * 5, (h === 0 ? -40 : -20) + i * 12);
+    calibrationSession.next();
   });
 }
+
+const cap = () => useLive.getState().calibration.capture;
 
 beforeEach(async () => {
   calibrationSession.resetForTest();
@@ -79,7 +84,8 @@ beforeEach(async () => {
   padTableSync.setSource(src);
   yawDriftMonitor.setSource(src);
   src.set('connected');
-  useSettings.setState({ stickAnchors: [null, null], calibratedAt: null, kitLayout: DEFAULT_KIT_LAYOUT });
+  // 사용자 프리셋 'p'가 적용 중(시스템 기본이면 'active' 보정이 열리지 않는다, UX-64 D6)
+  useSettings.setState({ stickAnchors: [null, null], calibratedAt: null, kitLayout: DEFAULT_KIT_LAYOUT, activePresetId: 'p', presetAnchors: {} });
   useLive.setState({ activeSensor: 'ble', connected: [true, true], realignNeeded: [false, false], referenceSetAt: null });
   deps = { setSoundOnHit: vi.fn(), pushTable: vi.fn() };
   calibrationSession.bind(deps);
@@ -102,7 +108,17 @@ describe('2타 보정 시작', () => {
     const snap = useLive.getState().calibration;
     expect(snap.mode).toBe('capture');
     expect(snap.hands).toEqual([0, 1]);
+    expect(snap.target).toBe('active');
     expect(snap.capture?.target).toBe('SNARE');
+  });
+
+  it("시스템 기본이 적용 중이면 'active' 보정은 무동작, 'new'(추가하기)는 열린다(UX-64 D6)", () => {
+    useSettings.setState({ activePresetId: SYSTEM_PRESET_ID });
+    calibrationSession.startCapture();
+    expect(useLive.getState().calibration.mode).toBe('idle');
+    calibrationSession.startCapture({ target: 'new' });
+    expect(useLive.getState().calibration).toMatchObject({ mode: 'capture', target: 'new' });
+    expect(cap()?.order).toEqual([...CAPTURE_ORDER]);
   });
 
   it('한 손만 연결이면 그 손만 대상', () => {
@@ -138,19 +154,24 @@ describe('보정 중 타격 가로채기', () => {
     expect(trigger).not.toHaveBeenCalled();
   });
 
-  it('단계를 넘기는 두 번째 타격도 이전 패드 소리이고, 이미 찬 손의 타격도 목표 패드 소리', () => {
+  it('패드를 채우는 두 번째 타격도 그 패드 소리이고, 확인 대기 중 타격·이미 찬 손의 타격도 목표 패드 소리', () => {
     useLive.setState({ connected: [true, false] });
     calibrationSession.startCapture();
     calibrationSession.intercept(hit(0, -10, 0));
-    calibrationSession.intercept(hit(0, -10, 1)); // 스네어 완료 → 하이햇으로
-    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['SNARE', 'SNARE']);
-    expect(useLive.getState().calibration.capture?.target).toBe('HIHAT');
+    calibrationSession.intercept(hit(0, -10, 1)); // 스네어 완료 → 확인 대기
+    expect(cap()).toMatchObject({ phase: 'padDone', target: 'SNARE' });
+    expect(calibrationSession.intercept(hit(0, -10, 1))).toBe(true); // 대기 중 타격은 가로채되 세지 않는다
+    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['SNARE', 'SNARE', 'SNARE']);
+    expect(cap()?.counts).toEqual([2, 0]);
+    trigger.mockClear();
+    calibrationSession.next(); // [다음] → 하이햇
+    expect(cap()?.target).toBe('HIHAT');
     useLive.setState({ connected: [true, true] });
     calibrationSession.onHandConnected(1);
     calibrationSession.intercept(hit(0, 0, -30));
     calibrationSession.intercept(hit(0, 0, -29));
     calibrationSession.intercept(hit(0, 0, -29)); // 왼손은 찼다 — 오른손 대기
-    expect(trigger.mock.calls.map((c) => c[0]).slice(2)).toEqual(['HIHAT', 'HIHAT', 'HIHAT']);
+    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['HIHAT', 'HIHAT', 'HIHAT']);
   });
 
   it('패드를 채우면 그 패드를 채운 손마다 햅틱', () => {
@@ -164,16 +185,22 @@ describe('보정 중 타격 가로채기', () => {
   });
 });
 
-describe('보정 완료', () => {
-  it('손별 앵커·시각 저장 → 배치 유도 → 드리프트 resume → 소리 켜기 → referenceSetAt·realignNeeded 해제', () => {
+describe('보정 완료([저장] = finish)', () => {
+  it("'active': 마지막 [다음] 뒤 done에서 멈추고, finish()가 손별 앵커·시각 저장(사본 + 프리셋 기록) → 배치 유도 → resume → 소리 켜기 → referenceSetAt·realignNeeded 해제", () => {
     useLive.setState({ realignNeeded: [true, false] });
     calibrationSession.startCapture();
     fillAll([0, 1]);
+    // 아직 저장 전: done에서 대기, 앵커는 비어 있다
+    expect(cap()?.phase).toBe('done');
+    expect(useLive.getState().calibration.mode).toBe('capture');
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+    expect(calibrationSession.finish()).toBeNull();
     const s = useSettings.getState();
     expect(s.stickAnchors[0]?.SNARE?.yaw).toBeCloseTo(-39.5);
     expect(s.stickAnchors[1]?.SNARE?.yaw).toBeCloseTo(-19.5);
     expect(Object.keys(s.stickAnchors[0]!)).toHaveLength(7);
     expect(s.calibratedAt).not.toBeNull();
+    expect(s.presetAnchors.p?.anchors[0]?.SNARE?.yaw).toBeCloseTo(-39.5);
     expect(s.kitLayout).not.toEqual(DEFAULT_KIT_LAYOUT);
     expect(s.kitLayout.KICK).toEqual(DEFAULT_KIT_LAYOUT.KICK);
     expect(yawDriftMonitor.isPaused).toBe(false);
@@ -184,14 +211,59 @@ describe('보정 완료', () => {
     expect(live.realignNeeded).toEqual([false, false]);
   });
 
+  it('done이 아니면 finish()는 무동작(null)', () => {
+    calibrationSession.startCapture();
+    twice(0, -10, 0);
+    expect(calibrationSession.finish()).toBeNull();
+    expect(useLive.getState().calibration.mode).toBe('capture');
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+  });
+
+  it("'new': finish()가 초안(앵커·기본 배치에서 유도한 배치·시각)을 돌려주고 세션을 접는다. 설정은 그대로(UX-64 D4)", () => {
+    useSettings.setState({ activePresetId: SYSTEM_PRESET_ID, kitLayout: DEFAULT_KIT_LAYOUT });
+    calibrationSession.startCapture({ target: 'new' });
+    fillAll([0, 1]);
+    calibrationSession.setRadiusOverride('SNARE', 30);
+    const draft = calibrationSession.finish()!;
+    expect(draft).not.toBeNull();
+    expect(draft.anchors[0]?.SNARE).toMatchObject({ radiusOverride: 30, radius: 30 });
+    expect(Object.keys(draft.anchors[1]!)).toHaveLength(7);
+    expect(draft.layout.SNARE).not.toEqual(DEFAULT_KIT_LAYOUT.SNARE);
+    expect(draft.layout.KICK).toEqual(DEFAULT_KIT_LAYOUT.KICK);
+    expect(draft.calibratedAt).toBeGreaterThan(0);
+    // 저장 전까지 아무것도 바뀌지 않는다. 표는 적용 프리셋 것으로 복구(force)
+    const s = useSettings.getState();
+    expect(s.stickAnchors).toEqual([null, null]);
+    expect(s.kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
+    expect(s.activePresetId).toBe(SYSTEM_PRESET_ID);
+    expect(deps.pushTable.mock.calls).toEqual([
+      [0, true],
+      [1, true],
+    ]);
+    expect(useLive.getState().calibration).toMatchObject({ mode: 'idle', target: null });
+    expect(deps.setSoundOnHit).toHaveBeenLastCalledWith(true);
+    expect(yawDriftMonitor.isPaused).toBe(false);
+  });
+
   it('한 손만 보정하면 그 손만 채우고 다른 손의 이전 앵커는 유지된다', () => {
     useSettings.setState({ stickAnchors: [null, { SNARE: anchor('SNARE', -20, 5) }] });
     useLive.setState({ connected: [true, false] });
     calibrationSession.startCapture();
     fillAll([0]);
+    calibrationSession.finish();
     const s = useSettings.getState();
     expect(s.stickAnchors[0]).not.toBeNull();
     expect(s.stickAnchors[1]).toEqual({ SNARE: anchor('SNARE', -20, 5) });
+  });
+
+  it('보정 중 반지름 슬라이더(setRadiusOverride)는 저장 때 합쳐진 앵커에 남고 반경을 자른다', () => {
+    calibrationSession.startCapture();
+    fillAll([0, 1]);
+    calibrationSession.setRadiusOverride('HIHAT', 1);
+    calibrationSession.finish();
+    const s = useSettings.getState();
+    expect(s.stickAnchors[0]?.HIHAT).toMatchObject({ radiusOverride: 1, radius: 15 });
+    expect(s.stickAnchors[1]?.HIHAT?.radius).toBe(15);
   });
 });
 
@@ -210,10 +282,13 @@ describe('보정 취소·중단·버튼', () => {
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
   });
 
-  it('대상 손이 모두 끊기면 중단, 한 손만 끊기면 남은 손으로 계속', () => {
+  it('대상 손이 모두 끊기면 중단, 한 손만 끊기면 남은 손으로 계속(남은 손이 찼으면 확인 대기)', () => {
     calibrationSession.startCapture();
+    twice(0, -10, 0);
     calibrationSession.onHandDisconnected(1);
     expect(useLive.getState().calibration.hands).toEqual([0]);
+    expect(cap()).toMatchObject({ phase: 'padDone', target: 'SNARE' });
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
     calibrationSession.onHandDisconnected(0);
     expect(useLive.getState().calibration.mode).toBe('idle');
     // 끊긴 손에는 보낼 수 없다. 다시 붙으면 bootstrap이 표를 보낸다. 소리·감시는 되돌린다
@@ -225,6 +300,7 @@ describe('보정 취소·중단·버튼', () => {
     calibrationSession.startCapture();
     twice(0, -10, 0);
     twice(1, -10, 5);
+    calibrationSession.next();
     expect(useLive.getState().calibration.capture?.target).toBe('HIHAT');
     calibrationSession.onResetPose('button', 1);
     expect(useLive.getState().calibration.capture).toMatchObject({ phase: 'capturing', target: 'SNARE', counts: [0, 0] });
@@ -239,6 +315,19 @@ describe('보정 취소·중단·버튼', () => {
     useLive.setState({ realignNeeded: [false, false] });
     calibrationSession.onResetPose('fe', null);
     expect(useLive.getState().realignNeeded).toEqual([false, false]);
+  });
+});
+
+describe('시작 위치 잡기(resetPose, UX-64 D7)', () => {
+  it('idle에서 RESET_POSE를 보내고 referenceSetAt을 찍으며 재정렬 필요를 끈다. 보정 중에는 무동작', () => {
+    useLive.setState({ realignNeeded: [true, false] });
+    calibrationSession.resetPose();
+    expect(src.resets).toBe(1);
+    expect(useLive.getState().referenceSetAt).not.toBeNull();
+    expect(useLive.getState().realignNeeded).toEqual([false, false]);
+    calibrationSession.startCapture();
+    calibrationSession.resetPose();
+    expect(src.resets).toBe(2); // startCapture의 1회뿐
   });
 });
 
@@ -317,11 +406,14 @@ describe('패드 단위 재보정(T9)', () => {
         { SNARE: anchor('SNARE', -20, 10), HIHAT: anchor('HIHAT', -5, -20) },
       ],
     });
-    calibrationSession.startCapture(['HIHAT']);
+    calibrationSession.startCapture({ pads: ['HIHAT'] });
     expect(useLive.getState().calibration.capture).toMatchObject({ target: 'HIHAT', order: ['HIHAT'] });
     expect(clears().map((s) => s.stickId)).toEqual([0, 1]);
     twice(0, 0, -30);
     twice(1, 0, -25);
+    calibrationSession.next();
+    expect(cap()?.phase).toBe('done');
+    calibrationSession.finish();
     const s = useSettings.getState();
     expect(useLive.getState().calibration.mode).toBe('idle');
     expect(s.stickAnchors[0]?.SNARE).toMatchObject({ pitch: -20, yaw: -10 });

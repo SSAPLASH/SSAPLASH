@@ -3,8 +3,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   angleBetween,
+  clampRadius,
   computeBoundaries,
   createEmptyProfile,
+  withRadiusOverride,
   meanPose,
   pairSpread,
   poseDistance,
@@ -159,6 +161,28 @@ describe('computeBoundaries', () => {
   it('방위각 ±180° 경계에 걸친 이웃도 가까운 것으로 본다', () => {
     const out = computeBoundaries({ SNARE: anchor('SNARE', 0, 175), HIHAT: anchor('HIHAT', 0, -175) }, 35, 0.6, 1);
     expect(out.SNARE?.radius).toBeCloseTo(6); // 10° × 0.6
+  });
+
+  it('radiusOverride가 있으면 자동값 대신 그 값을 하한·상한으로 잘라 쓴다(UX-64 D9)', () => {
+    const out = computeBoundaries(
+      { SNARE: { ...anchor('SNARE', 0, -20), radiusOverride: 30 }, HIHAT: { ...anchor('HIHAT', 0, 20), radiusOverride: 99 } },
+      35,
+    );
+    expect(out.SNARE?.radius).toBe(30);
+    expect(out.HIHAT?.radius).toBe(35);
+    expect(out.SNARE?.radiusOverride).toBe(30);
+  });
+});
+
+describe('withRadiusOverride', () => {
+  it('그 패드 앵커의 radius·radiusOverride를 잘라 넣고 다른 패드는 그대로. 앵커가 없으면 입력 그대로', () => {
+    const set = { SNARE: anchor('SNARE', 0, 0, 20), HIHAT: anchor('HIHAT', 0, 30, 20) };
+    const out = withRadiusOverride(set, 'SNARE', 10, 15, 35)!;
+    expect(out.SNARE).toMatchObject({ radius: 15, radiusOverride: 15 });
+    expect(out.HIHAT).toBe(set.HIHAT);
+    expect(withRadiusOverride(set, 'RIDE', 20, 15, 35)).toBe(set);
+    expect(withRadiusOverride(null, 'SNARE', 20, 15, 35)).toBeNull();
+    expect(clampRadius(50, 15, 35)).toBe(35);
   });
 });
 

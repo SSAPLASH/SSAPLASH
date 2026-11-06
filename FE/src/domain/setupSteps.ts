@@ -2,7 +2,8 @@
 import { PRESET_NAME_MAX, type PresetNameError } from './preset';
 import { READINESS_MESSAGES, readiness, stickMissingText, type ReadinessInput, type ReadinessMissing } from './readiness';
 
-export type SetupStepId = 'stick' | 'calibration' | 'preset';
+/** 단계는 둘(UX-64): ③ 프리셋은 드럼 배치 카드의 칩 줄로 합쳐졌다 */
+export type SetupStepId = 'stick' | 'calibration';
 /** skipped = 키보드 전용이라 필요 없음 */
 export type SetupStepStatus = 'done' | 'needed' | 'skipped';
 
@@ -54,7 +55,8 @@ export interface SetupStepsInput extends ReadinessInput {
   referenceSetAt: number | null;
   /** 재정렬이 필요한 손(스틱이 다시 켜졌거나 버튼 보정을 받음). 없으면 [false, false]로 본다 */
   realignNeeded?: [boolean, boolean];
-  activePresetName: string | null;
+  /** 시스템 기본 프리셋 적용 중(UX-64 D7): 보정 없이 모델 앵커로 판정하므로 ② 완료 요약이 다르다 */
+  systemPreset?: boolean;
   /** [왼손, 오른손] 배터리 %. null = 알 수 없음. 값을 안 넘기면 요약에 배터리를 붙이지 않는다 */
   battery?: [number | null, number | null];
   /** 동글 상태. 동글 소스(Web Serial)가 아니면 넘기지 않는다 */
@@ -87,9 +89,33 @@ export interface SetupBarView {
   buttonEnabled: boolean;
 }
 
-/** 하단 바 상태. leaving = 변경이 있는 채로 나가려 해서 이탈 확인이 열려 있다 */
-export function setupBarView(input: { activePresetName: string | null; dirty: boolean; leaving: boolean }): SetupBarView {
-  const { activePresetName, dirty, leaving } = input;
+/** 보정 중 하단 바 입력(UX-64). target 'new' = 추가하기(새 프리셋), 'active' = 적용 프리셋 편집. index는 0부터(세션 스냅샷 그대로) */
+export interface SetupBarCalibrating {
+  target: 'new' | 'active';
+  index: number;
+  total: number;
+}
+
+/** 하단 바: 보정 중 문구. 「새 프리셋 보정 중 · 7개 중 1번째」 / 「「내 배치」 보정 중 · 7개 중 3번째」 */
+export function setupBarCalibratingText(c: SetupBarCalibrating, presetName: string | null): string {
+  const head = c.target === 'new' || presetName === null ? '새 프리셋 보정 중' : `「${presetName}」 보정 중`;
+  return `${head} · ${c.total}개 중 ${c.index + 1}번째`;
+}
+
+/**
+ * 하단 바 상태. leaving = 변경이 있는 채로 나가려 해서 이탈 확인이 열려 있다.
+ * calibrating이 있으면 보정 중 문구에 [저장] 비활성(UX-64)
+ */
+export function setupBarView(input: {
+  activePresetName: string | null;
+  dirty: boolean;
+  leaving: boolean;
+  calibrating?: SetupBarCalibrating | null;
+}): SetupBarView {
+  const { activePresetName, dirty, leaving, calibrating } = input;
+  if (calibrating) {
+    return { text: setupBarCalibratingText(calibrating, activePresetName), tone: 'caption', button: 'save', buttonEnabled: false };
+  }
   if (dirty && leaving) {
     return { text: SETUP_BAR_DIRTY_TEXT, tone: 'leaving', button: activePresetName === null ? 'saveNew' : 'save', buttonEnabled: true };
   }
@@ -163,8 +189,10 @@ export function returnButtonText(returnTo: string, returnLabel?: string | null):
 
 // ---- 단계 판정 ----
 
-/** ② 요약: 연결된 손 중 앵커가 없는 손이 있을 때(PLAY-004 4-5) */
-export const CALIBRATION_NEEDED_TEXT = '드럼 위치를 아직 잡지 않았어요';
+/** ② 요약: 적용 프리셋에 연결된 손의 앵커가 없을 때(PLAY-004 4-5). 보정은 드럼 배치 카드에서 한다(UX-64) */
+export const CALIBRATION_NEEDED_TEXT = '드럼 위치를 아직 잡지 않았어요 · 드럼 배치에서 보정하세요';
+/** ② 요약: 시스템 기본 프리셋은 보정 없이 쓴다(UX-64 D7) */
+export const CALIBRATION_SYSTEM_TEXT = '시스템 기본 배치 · 보정 없이 바로 칠 수 있어요';
 
 /** ② 요약: 재정렬이 필요한 손이 있을 때. 없으면 null */
 export function realignText(needed: readonly [boolean, boolean] | undefined): string | null {
@@ -205,11 +233,21 @@ function stickSummary(input: SetupStepsInput, done: boolean): string {
   return '연결된 스틱이 없어요';
 }
 
+/**
+ * ② 「시작 위치 보정」 요약(UX-64 D7). 재정렬이 필요한 손이 있으면 그 손을 짚는 문구가 우선이고(상태는 needed),
+ * 그다음 앵커 없음, 시스템 기본, 보정 시각 순
+ */
+function calibrationSummary(input: SetupStepsInput, needed: boolean, now: number): string {
+  const realign = realignText(input.realignNeeded);
+  if (realign) return realign;
+  if (needed) return CALIBRATION_NEEDED_TEXT;
+  if (input.referenceSetAt !== null) return `${calibrationTime(input.referenceSetAt, now)}에 보정했어요`;
+  return input.systemPreset ? CALIBRATION_SYSTEM_TEXT : '보정했어요';
+}
+
 export function setupSteps(input: SetupStepsInput, now: number): SetupStepsResult {
   const keyboardOnly = input.sensorKind === 'none';
-  // 키보드 전용은 readiness가 항상 통과라 프리셋만 따로 본다
   const missing = keyboardOnly ? [] : readiness(input).missing;
-  const presetNeeded = keyboardOnly ? input.activePresetId === null : missing.includes('preset');
 
   const skippedSummary = '키보드만 사용해 필요 없어요';
   const steps: SetupStep[] = [];
@@ -221,20 +259,8 @@ export function setupSteps(input: SetupStepsInput, now: number): SetupStepsResul
     const stickNeeded = missing.includes('stick');
     steps.push({ id: 'stick', status: stickNeeded ? 'needed' : 'done', summary: stickSummary(input, !stickNeeded) });
     const calNeeded = missing.includes('firstSetup');
-    steps.push({
-      id: 'calibration',
-      status: calNeeded ? 'needed' : 'done',
-      summary: calNeeded
-        ? CALIBRATION_NEEDED_TEXT
-        : realignText(input.realignNeeded)
-          ?? (input.referenceSetAt !== null ? `${calibrationTime(input.referenceSetAt, now)}에 보정했어요` : '보정했어요'),
-    });
+    steps.push({ id: 'calibration', status: calNeeded ? 'needed' : 'done', summary: calibrationSummary(input, calNeeded, now) });
   }
-  steps.push({
-    id: 'preset',
-    status: presetNeeded ? 'needed' : 'done',
-    summary: presetNeeded || input.activePresetName === null ? '사용할 프리셋을 적용하세요' : `「${input.activePresetName}」 사용 중`,
-  });
 
   const counted = steps.filter((s) => s.status !== 'skipped');
   return {

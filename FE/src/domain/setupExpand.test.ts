@@ -15,9 +15,9 @@ describe('setupExpand', () => {
   });
 
   it('사용자가 연 단계는 끝나도 유지된다', () => {
-    const open = openByUser({}, 'preset');
-    expect(isExpanded(open, 'preset', 'done')).toBe(true);
-    expect(isExpanded(collapse(open, 'preset'), 'preset', 'done')).toBe(false);
+    const open = openByUser({}, 'calibration');
+    expect(isExpanded(open, 'calibration', 'done')).toBe(true);
+    expect(isExpanded(collapse(open, 'calibration'), 'calibration', 'done')).toBe(false);
   });
 
   it('모자란 첫 단계가 바뀌면 새 단계를 펼침에 더하고 사용자가 연 단계는 건드리지 않는다', () => {
