@@ -10,13 +10,15 @@ import com.ssafy.airdrum.chart.asset.ChartAssetKeyPolicy;
 import com.ssafy.airdrum.chart.withdrawal.SongAssetCleanup;
 import com.ssafy.airdrum.common.error.BusinessException;
 import com.ssafy.airdrum.common.error.CommonErrorCode;
+import com.ssafy.airdrum.sheet.SheetSongLink;
 
 @Service
 public class SongManagementService {
     private final JdbcTemplate db; private final TransactionTemplate tx;
     private final SongAssetCleanup assets; private final CoverStorage storage; private final ChartAssetKeyPolicy keys;
-    public SongManagementService(JdbcTemplate db,PlatformTransactionManager manager,SongAssetCleanup assets,CoverStorage storage,ChartAssetKeyPolicy keys) {
-        this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(15); this.assets=assets; this.storage=storage; this.keys=keys;
+    private final SheetSongLink sheets;
+    public SongManagementService(JdbcTemplate db,PlatformTransactionManager manager,SongAssetCleanup assets,CoverStorage storage,ChartAssetKeyPolicy keys,SheetSongLink sheets) {
+        this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(15); this.assets=assets; this.storage=storage; this.keys=keys; this.sheets=sheets;
     }
     record Song(String status,String accompaniment,String cover) {}
     private Song lock(long user,long id,boolean busy) {
@@ -57,8 +59,10 @@ public class SongManagementService {
             db.update("UPDATE songs SET cover_key=NULL,updated_at=clock_timestamp() WHERE id=?",id); assets.cover(user,id,row.cover());
         }});
     }
+    /** 248: 연결된 내 악보도 같은 트랜잭션에서 소프트 삭제하고 페이지 파일을 정리 대상으로 등록한다. */
     public void deleteSong(long user,long id) {
         tx.executeWithoutResult(x->{ var row=lock(user,id,true); assets.registerAll(user,id,row.accompaniment(),row.cover());
+            sheets.deleteLinked(user,id);
             db.update("UPDATE songs SET deleted_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=?",id);
         });
     }
