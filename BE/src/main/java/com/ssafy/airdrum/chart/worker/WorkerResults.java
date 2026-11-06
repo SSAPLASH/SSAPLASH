@@ -1,24 +1,12 @@
 package com.ssafy.airdrum.chart.worker;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HexFormat;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
-import com.ssafy.airdrum.chart.ChartDocumentReader;
-import com.ssafy.airdrum.chart.ChartVersionRepository;
 import com.ssafy.airdrum.common.error.BusinessException;
-import com.ssafy.airdrum.song.midi.DifficultyThinner;
-import com.ssafy.airdrum.song.midi.DrumNote;
-import com.ssafy.airdrum.song.midi.DrumPad;
 import com.ssafy.airdrum.song.SongLevelService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,12 +21,12 @@ class WorkerResults {
     private final WorkerQueue queue;
     private final WorkerStore store;
     private final WorkerPayload payload;
-    private final ChartDocumentReader documents;
     private final SongLevelService levels;
+    private final TranscriptionCharts charts;
     WorkerResults(JdbcTemplate db, PlatformTransactionManager manager, WorkerQueue queue,
-            WorkerStore store, WorkerPayload payload, ChartDocumentReader documents, SongLevelService levels) {
+            WorkerStore store, WorkerPayload payload, TranscriptionCharts charts, SongLevelService levels) {
         this.db=db; this.tx=new TransactionTemplate(manager); this.tx.setTimeout(15); this.queue=queue;
-        this.store=store; this.payload=payload; this.documents=documents; this.levels=levels;
+        this.store=store; this.payload=payload; this.charts=charts; this.levels=levels;
     }
     record Envelope(long jobId,UUID attemptId,UUID resultId,String payloadHash,JsonNode result) {}
     record Receipt(UUID resultId,boolean accepted,String jobStatus,long revision,List<Long> chartVersionIds) {}
@@ -174,129 +162,6 @@ class WorkerResults {
     private void save(Envelope e,String stage,Receipt receipt) {
         db.update("INSERT INTO chart_job_results(result_id,job_id,attempt_id,stage,payload_hash,receipt) VALUES(?,?,?,?,?,?::jsonb)",e.resultId(),e.jobId(),e.attemptId(),stage,e.payloadHash(),payload.write(receipt));
     }
-    private static final Set<String> PADS=Set.of("KICK","SNARE","HIHAT","HIHAT_PEDAL","SMALL_TOM","MID_TOM","FLOOR_TOM","CRASH","RIDE");
-    record ChartData(String notes,String normalNotes,String easyNotes,String timing,String notationStatus,int noteCount,int normalCount,int easyCount,String generatorVersion,
-            java.math.BigDecimal bpm,int offset,String timeSignature,String metrics) {}
-    private ChartData chart(JsonNode n,int duration) {
-        require(n.path("schemaVersion").isIntegralNumber() && n.path("schemaVersion").canConvertToInt() && n.path("schemaVersion").asInt()==1
-                && n.path("generator").isString() && "ADT_MODEL".equals(n.path("generator").asString()) && n.path("generatorVersion").isString()
-                && !n.path("generatorVersion").asString().isBlank() && n.path("generatorVersion").asString().length()<=50
-                && n.path("metrics").isObject() && n.path("charts").isArray() && n.path("charts").size()==1);
-        var c=n.path("charts").get(0);
-        require(c.isObject() && c.path("difficulty").isString() && "NORMAL".equals(c.path("difficulty").asString()) && c.path("notes").isArray()
-                && c.path("notes").size()<=50000 && c.path("timing").isObject()
-                && c.path("notationStatus").isString() && Set.of("READY","PENDING","UNAVAILABLE").contains(c.path("notationStatus").asString()) && !c.has("sheetPages"));
-        int count=c.path("notes").size();
-        for(var note:c.path("notes")) {
-            require(note.isObject() && note.path("timeMs").isIntegralNumber() && note.path("timeMs").canConvertToLong()
-                    && note.path("timeMs").asLong()>=0 && note.path("timeMs").asLong()<=duration
-                    && note.path("pad").isString() && PADS.contains(note.path("pad").asString()));
-            var hihatOpen=note.get("hihatOpen");
-            require(hihatOpen==null || hihatOpen.isNull() || hihatOpen.isBoolean());
-            if("READY".equals(c.path("notationStatus").asString())) require(note.path("notation").isObject());
-        }
-        if("READY".equals(c.path("notationStatus").asString())) require(count>0
-                && c.path("timing").path("ppq").isIntegralNumber() && c.path("timing").path("ppq").canConvertToInt() && c.path("timing").path("ppq").asInt()>0
-                && c.path("timing").path("tempoMap").isArray() && !c.path("timing").path("tempoMap").isEmpty()
-                && c.path("timing").path("timeSignatureMap").isArray() && !c.path("timing").path("timeSignatureMap").isEmpty());
-        String notes=payload.write(c.path("notes")), timing=payload.write(c.path("timing")), status=c.path("notationStatus").asString();
-        try { documents.detail(new Detail(notes,timing,status,count,duration)); }
-        catch(RuntimeException x) { throw invalid(); }
-        var t=c.path("timing");
-        double bpm=t.path("bpm").doubleValue();
-        require(Double.isFinite(bpm) && bpm>=0.01 && bpm<=9999.99 && t.path("offsetMs").isIntegralNumber()
-                && t.path("offsetMs").canConvertToInt() && t.path("timeSignature").asString().length()<=5);
-        var source=c.path("notes");
-        boolean useTicks=t.path("ppq").isIntegralNumber() && t.path("ppq").canConvertToInt() && t.path("ppq").asInt()>0;
-        for (var note:source) useTicks &= note.path("notation").isObject();
-        int ppq=useTicks ? t.path("ppq").asInt() : 480;
-        var virtualTicks=useTicks ? null : VirtualTicks.of(t,bpm,ppq);
-        var drumNotes=new ArrayList<DrumNote>();
-        var originals=new IdentityHashMap<DrumNote,JsonNode>();
-        for (var note:source) {
-            long tick=useTicks ? note.path("notation").path("tick").asLong() : virtualTicks.tick(note.path("timeMs").asLong());
-            int velocity=note.path("velocityHint").isIntegralNumber() ? note.path("velocityHint").asInt() : 100;
-            var drum=new DrumNote(tick,DrumPad.valueOf(note.path("pad").asString()),velocity,0);
-            drumNotes.add(drum); originals.put(drum,note);
-        }
-        var thinned=DifficultyThinner.thin(drumNotes,ppq);
-        var hard=thinned.get(DifficultyThinner.Difficulty.HARD);
-        var normalKept=thinned.get(DifficultyThinner.Difficulty.NORMAL);
-        var easyKept=thinned.get(DifficultyThinner.Difficulty.EASY);
-        // 공통 규칙의 빈 결과 폴백이 HARD라면 병합 전 음원 원본을 복원한다.
-        var normal=normalKept==hard ? originalNotes(source) : selected(source,originals,normalKept);
-        var easy=easyKept==hard ? originalNotes(source) : selected(source,originals,easyKept);
-        return new ChartData(notes,payload.write(normal),payload.write(easy),timing,status,count,normal.size(),easy.size(),n.path("generatorVersion").asString(),
-                java.math.BigDecimal.valueOf(bpm).setScale(2,java.math.RoundingMode.HALF_UP),
-                t.path("offsetMs").asInt(),t.path("timeSignature").asString(),payload.write(n.path("metrics")));
-    }
-    /**
-     * notation이 없는 노트의 난이도 줄이기용 틱. timing.tempoMap(빠르기가 바뀌는 곡)이 있으면 구간마다 그 bpm으로,
-     * 없으면 timing.bpm 하나로 offsetMs부터 센다. tempoMap 틱은 timing.ppq 단위라 박 수로 바꾼 뒤 솎기 ppq를 곱한다.
-     * 구간 시작 시각·박 수는 채보마다 한 번만 계산하고, 노트마다 이분 탐색으로 구간을 찾는다(노트 N, 구간 M에서 O(M + N log M)).
-     */
-    static final class VirtualTicks {
-        private final double offsetMs, bpm;
-        private final int ppq;
-        private final double[] startMs, startBeat, rate;
-
-        private VirtualTicks(double offsetMs,double bpm,int ppq,double[] startMs,double[] startBeat,double[] rate) {
-            this.offsetMs=offsetMs; this.bpm=bpm; this.ppq=ppq; this.startMs=startMs; this.startBeat=startBeat; this.rate=rate;
-        }
-
-        static VirtualTicks of(JsonNode timing,double bpm,int ppq) {
-            double offset=timing.path("offsetMs").asInt();
-            var map=timing.path("tempoMap");
-            int mapPpq=timing.path("ppq").isIntegralNumber() ? timing.path("ppq").asInt() : 0;
-            if(!map.isArray() || map.size()<2 || mapPpq<=0) return new VirtualTicks(offset,bpm,ppq,null,null,null);
-            int m=map.size();
-            double[] startMs=new double[m], startBeat=new double[m], rate=new double[m];
-            for(int i=0;i<m;i++) {
-                startBeat[i]=map.get(i).path("tick").asLong()/(double)mapPpq;
-                rate[i]=map.get(i).path("bpm").doubleValue();
-                startMs[i]=i==0 ? 0 : startMs[i-1]+(startBeat[i]-startBeat[i-1])*60000.0/rate[i-1];
-            }
-            return new VirtualTicks(offset,bpm,ppq,startMs,startBeat,rate);
-        }
-
-        long tick(long timeMs) {
-            double ms=timeMs-offsetMs;
-            if(startMs==null) return Math.max(0,Math.round(ms*bpm*ppq/60000.0));
-            int i=Arrays.binarySearch(startMs,ms);
-            if(i<0) i=Math.max(0,-i-2);
-            double beats=startBeat[i]+(ms-startMs[i])*rate[i]/60000.0;
-            return Math.max(0,Math.round(beats*ppq));
-        }
-    }
-    private List<JsonNode> originalNotes(JsonNode source) {
-        var result=new ArrayList<JsonNode>();
-        for (var node:source) result.add(node);
-        return result;
-    }
-    private List<JsonNode> selected(JsonNode source,IdentityHashMap<DrumNote,JsonNode> originals,List<DrumNote> kept) {
-        var selected=Collections.newSetFromMap(new IdentityHashMap<JsonNode,Boolean>());
-        for (var note:kept) selected.add(originals.get(note));
-        var result=new ArrayList<JsonNode>();
-        for (var node:source) if(selected.contains(node)) result.add(node);
-        return result;
-    }
-    private static String derivedVersion(String original) {
-        String suffix="+"+DifficultyThinner.RULE_VERSION;
-        if(original.length()+suffix.length()<=50) return original+suffix;
-        try {
-            String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(original.getBytes(StandardCharsets.UTF_8))).substring(0,12);
-            int end=50-suffix.length()-hash.length()-1;
-            if (Character.isHighSurrogate(original.charAt(end-1)) && Character.isLowSurrogate(original.charAt(end))) end--;
-            return original.substring(0,end)+"~"+hash+suffix;
-        } catch(NoSuchAlgorithmException x) { throw new IllegalStateException(x); }
-    }
-    private record Detail(String notes,String timing,String notationStatus,int noteCount,int duration) implements ChartVersionRepository.Detail {
-        public Long getSongId(){return 1L;} public Long getChartId(){return 1L;} public String getDifficulty(){return "NORMAL";}
-        public Long getChartVersionId(){return 1L;} public int getVersion(){return 1;} public int getNoteCount(){return noteCount;}
-        public String getNotationStatus(){return notationStatus;} public int getSchemaVersion(){return 1;} public String getTitle(){return "검증";}
-        public String getSource(){return "AUDIO";} public String getStatus(){return "READY";} public Integer getDurationMs(){return duration;}
-        public String getTiming(){return timing;} public String getSheetPages(){return null;} public String getNotes(){return notes;}
-    }
     Receipt transcription(long job,String worker,JsonNode body) {
         Envelope e=envelope(job,body); String hash=payload.hash(e.result());
         try { return transcriptionImpl(job,worker,e,hash); }
@@ -309,11 +174,11 @@ class WorkerResults {
     }
     private Receipt transcriptionImpl(long job,String worker,Envelope e,String hash) {
         Receipt old=preflight(e,worker,"TRANSCRIBING",hash); if(old!=null) return old;
-        ChartData chart;
+        TranscriptionCharts.ChartData chart;
         try {
             if(!hash.equals(e.payloadHash())) throw invalid();
             var l=tx.execute(s->queue.valid(job,e.attemptId(),worker,"TRANSCRIBING"));
-            chart=chart(e.result(),l.durationMs());
+            chart=charts.parse(e.result(),l.durationMs());
         } catch(BusinessException x) { if(x.getErrorCode()==WorkerError.RESULT_INVALID) failValid(e,worker,"TRANSCRIBING"); throw x; }
         return tx.execute(s -> {
             db.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,1))",Object.class,e.resultId().toString());
@@ -327,7 +192,7 @@ class WorkerResults {
                 Long chartId=db.queryForObject("INSERT INTO charts(song_id,difficulty) VALUES(?,?) RETURNING id",Long.class,l.songId(),difficulty);
                 String selectedNotes=switch(difficulty) { case "HARD" -> chart.notes(); case "NORMAL" -> chart.normalNotes(); default -> chart.easyNotes(); };
                 int selectedCount=switch(difficulty) { case "HARD" -> chart.noteCount(); case "NORMAL" -> chart.normalCount(); default -> chart.easyCount(); };
-                String version=difficulty.equals("HARD") ? chart.generatorVersion() : derivedVersion(chart.generatorVersion());
+                String version=difficulty.equals("HARD") ? chart.generatorVersion() : TranscriptionCharts.derivedVersion(chart.generatorVersion());
                 versionIds.add(db.queryForObject("INSERT INTO chart_versions(chart_id,version,schema_version,notes,timing,notation_status,note_count,generator,generator_version) VALUES(?,1,1,?::jsonb,?::jsonb,?,?,'ADT_MODEL',?) RETURNING id",Long.class,chartId,selectedNotes,chart.timing(),chart.notationStatus(),selectedCount,version));
             }
             db.update("UPDATE songs SET status='READY',bpm=?,offset_ms=?,time_signature=?,updated_at=clock_timestamp() WHERE id=? AND deleted_at IS NULL",chart.bpm(),chart.offset(),chart.timeSignature(),l.songId());
