@@ -45,9 +45,18 @@ export function diffMeta(current: SongMetaInput, next: SongMetaInput): SongMetaP
 /** 카드 ⋯ 메뉴의 편집 종류 */
 export type SongEditKind = 'cover' | 'meta' | 'delete';
 
-/** 곡 상태별 ⋯ 메뉴 항목(D5): 완료 = 커버·곡 정보·삭제, 실패 = 삭제만, 처리 중·알 수 없는 상태 = 없음 */
-export function menuKinds(status: string): SongEditKind[] {
-  if (status === 'READY') return ['cover', 'meta', 'delete'];
+/** 곡 ⋯ 메뉴의 악보 항목(설계 CHART-001 악보 보관 D7): 연결된 악보가 있으면 보기, 없으면 올리기 */
+export type SongSheetKind = 'sheetView' | 'sheetUpload';
+
+/**
+ * 곡 상태별 ⋯ 메뉴 항목(D5): 완료 = 커버·곡 정보·삭제, 실패 = 삭제만, 처리 중·알 수 없는 상태 = 없음.
+ * sheet를 주면(악보-곡 연결 스위치 켜짐) 완료 곡의 곡 정보 수정 뒤에 [악보 보기](sheetId 있음) 또는 [악보 올리기](없음)를 넣는다. 주지 않으면 그대로다.
+ */
+export function menuKinds(status: string, sheet?: { sheetId: number | null }): (SongEditKind | SongSheetKind)[] {
+  if (status === 'READY') {
+    if (!sheet) return ['cover', 'meta', 'delete'];
+    return ['cover', 'meta', sheet.sheetId != null ? 'sheetView' : 'sheetUpload', 'delete'];
+  }
   if (status === 'FAILED') return ['delete'];
   return [];
 }
