@@ -14,11 +14,12 @@ import com.ssafy.airdrum.common.error.BusinessException;
 /** sheet_music·sheet_music_pages SQL. 권한 판단은 owner_id 조건으로만 한다(남의 것은 없는 것과 같다). */
 @Repository
 class SheetMusicRepository {
-	private static final String COLUMNS = "SELECT m.id,m.owner_id,m.title,m.source,m.kind,m.page_count,m.total_bytes,m.created_at,m.updated_at FROM sheet_music m";
+	private static final String COLUMNS = "SELECT m.id,m.owner_id,m.title,m.source,m.kind,m.page_count,m.total_bytes,m.created_at,m.updated_at,m.song_id FROM sheet_music m";
 	/** 페이지가 연결되기 전(업로드 중·실패) 행은 보여 주지 않는다. */
 	private static final String VISIBLE = " m.owner_id=? AND m.deleted_at IS NULL AND EXISTS(SELECT 1 FROM sheet_music_pages p WHERE p.sheet_id=m.id)";
 
-	record Row(long id, long ownerId, String title, String source, String kind, int pageCount, long totalBytes, Instant createdAt, Instant updatedAt) {}
+	record Row(long id, long ownerId, String title, String source, String kind, int pageCount, long totalBytes, Instant createdAt, Instant updatedAt,
+			Long songId) {}
 
 	record Page(int pageNo, String key, String contentType, long bytes, Integer width, Integer height) {}
 
@@ -42,9 +43,20 @@ class SheetMusicRepository {
 		return db.queryForObject("SELECT coalesce(sum(total_bytes),0) FROM sheet_music WHERE owner_id=? AND deleted_at IS NULL", Long.class, user);
 	}
 
-	long insert(long user, String title, String source, String kind, int pages, long bytes) {
-		return db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,?,?,?,?,?) RETURNING id",
-				Long.class, user, title, source, kind, pages, bytes);
+	/** 248: {@code songId}가 있으면 연결해 넣는다. 곡당 살아 있는 악보 하나는 부분 유일 인덱스가 보장한다(경합은 {@code DuplicateKeyException}). */
+	long insert(long user, String title, String source, String kind, int pages, long bytes, Long songId) {
+		return db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,?,?,?,?,?,?) RETURNING id",
+				Long.class, user, title, source, kind, pages, bytes, songId);
+	}
+
+	/** 248: 본인 소유·삭제 안 됨·공용(BUILTIN) 아님인 곡만 연결한다. 상태는 보지 않는다. 곡 삭제와 겹치지 않게 공유 잠금을 건다. */
+	boolean ownSong(long user, long song) {
+		return !db.queryForList("SELECT id FROM songs WHERE id=? AND owner_id=? AND deleted_at IS NULL AND source<>'BUILTIN' FOR SHARE", Long.class, song, user).isEmpty();
+	}
+
+	/** 248: 그 곡에 살아 있는 악보(페이지 연결 전 포함)가 있는지. */
+	boolean linked(long song) {
+		return !db.queryForList("SELECT id FROM sheet_music WHERE song_id=? AND deleted_at IS NULL", Long.class, song).isEmpty();
 	}
 
 	void insertPage(long sheet, Page page) {
@@ -97,6 +109,6 @@ class SheetMusicRepository {
 
 	private Row row(ResultSet r, int n) throws SQLException {
 		return new Row(r.getLong(1), r.getLong(2), r.getString(3), r.getString(4), r.getString(5), r.getInt(6), r.getLong(7),
-				r.getTimestamp(8).toInstant(), r.getTimestamp(9).toInstant());
+				r.getTimestamp(8).toInstant(), r.getTimestamp(9).toInstant(), r.getObject(10, Long.class));
 	}
 }

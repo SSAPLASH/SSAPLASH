@@ -47,7 +47,7 @@ public class SongQueryService {
 		return new SongSummary(s.getId(), s.getTitle(), s.getArtist(), s.getSource(),
 				s.getStatus(), s.getBpm(), s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
 				distinct(summaries.getOrDefault(s.getId(), List.of())).stream().map(ChartVersionRepository.Summary::getDifficulty).toList(),
-				s.getCreatedAt(), coverUrls.get(s.getId()), s.getSongLevel(), failure(s));
+				s.getCreatedAt(), coverUrls.get(s.getId()), s.getSongLevel(), failure(s), s.getSheetId());
 	}
 	public SongDetail detail(long userId, long songId) {
 		access.requireActive(userId);
@@ -57,7 +57,8 @@ public class SongQueryService {
 						v.getNoteCount(), v.getNotationStatus())).toList();
 		return new SongDetail(s.getId(), s.getTitle(), s.getArtist(), s.getSource(), s.getStatus(), s.getBpm(),
 				s.getTimeSignature(), s.getDurationMs(), s.getHasAccompaniment(), s.getAccompanimentStatus(),
-				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts,covers.forSongs(userId,List.of(s)).get(s.getId()),s.getSongLevel(),failure(s));
+				charts.stream().map(ChartSummary::difficulty).toList(), s.getCreatedAt(), s.getLicense(), s.getUpdatedAt(), charts,covers.forSongs(userId,List.of(s)).get(s.getId()),s.getSongLevel(),failure(s),
+				s.getSheetId());
 	}
 	/**
 	 * 노트가 NORMAL과 같은 HARD·EASY를 뺀다(260번 설계 3-4절). NORMAL·EASY는 HARD에서 노트를 빼기만 해서 만들므로

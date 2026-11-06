@@ -283,7 +283,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 39). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 43). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -439,6 +439,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V41 | `V41__exclude_withdrawn_from_coach_export.sql` | 보정 뷰 `coach_export_v`에서 탈퇴 회원 제외. 열은 그대로 |
 | V42 | `V42__recommend_interactions_consented_plays.sql` | 추천 학습 입력에서 `consent=false` 세션 제외. 열은 그대로 |
 | V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
+| V44 | `V44__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
 
 규칙:
 
@@ -899,7 +900,7 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 
 `PUT /api/v1/songs/{id}/cover`는 multipart의 `file` 한 개만 받는다. JPEG·PNG·WebP는 실제 바이트와 디코딩으로 검사하며 확장자·MIME을 신뢰하지 않는다. 파일 상한 2MiB, 요청 전체 상한은 2MiB+64KiB, 파트 헤더는 8KiB, 동시 처리 슬롯은 인스턴스당 2개다. 이미지 크기는 가로·세로 각각 4096 이하이면서 전체 400만 픽셀 이하다. 빈 파일·손상·이미지가 아님은 400 `COVER_INVALID`, 다른 이미지 형식은 415 `COVER_UNSUPPORTED`, 크기 초과는 413 `COVER_TOO_LARGE`, 저장소 또는 슬롯 장애는 503 `COVER_UNAVAILABLE`이다. 파일명은 저장 키에 사용하지 않는다. 서버는 이미지 원본을 비공개 저장하므로 메타데이터를 제거하지 않는다. 성공은 200 `{ "coverUrl": "..." }`다. `DELETE /api/v1/songs/{id}/cover`는 없어도 204다. 커버 PUT·DELETE는 처리 중인 곡에도 허용한다.
 
-곡 목록·상세는 기존 필드와 함께 `coverUrl`(없으면 null)을 제공한다. 개인 커버만 1시간 서명하며 서명은 저장소에 HEAD를 호출하지 않고 로컬에서 수행한다. URL은 만료 전 재사용 가능하며 저장소 객체의 현재 가용성을 보장하지 않는다. 커버가 없는 곡은 저장소가 비활성이어도 정상 조회된다. 커버는 기존 비공개 악보 버킷의 `cover/{userId}/{songId}/{uuid}.{ext}`에 저장하고, 쓰기·삭제에는 기존 워커의 악보 버킷 쓰기 자격증명(`WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY`·`WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY`, 미설정 시 음원 저장소 쓰기 키)을 쓴다. 읽기 서명은 기존 chart.assets 읽기 자격증명을 쓴다. 반주·악보 서명 유효 시간은 기존 1~10분 설정을 유지한다.
+곡 목록·상세는 기존 필드와 함께 `coverUrl`(없으면 null)과 `sheetId`(248번, 연결된 내 악보 `/api/v1/sheets/{sheetId}`; 없거나 공용 곡이면 null)를 제공한다. 개인 커버만 1시간 서명하며 서명은 저장소에 HEAD를 호출하지 않고 로컬에서 수행한다. URL은 만료 전 재사용 가능하며 저장소 객체의 현재 가용성을 보장하지 않는다. 커버가 없는 곡은 저장소가 비활성이어도 정상 조회된다. 커버는 기존 비공개 악보 버킷의 `cover/{userId}/{songId}/{uuid}.{ext}`에 저장하고, 쓰기·삭제에는 기존 워커의 악보 버킷 쓰기 자격증명(`WORKER_STORAGE_ACCOMPANIMENT_WRITE_ACCESS_KEY`·`WORKER_STORAGE_ACCOMPANIMENT_WRITE_SECRET_KEY`, 미설정 시 음원 저장소 쓰기 키)을 쓴다. 읽기 서명은 기존 chart.assets 읽기 자격증명을 쓴다. 반주·악보 서명 유효 시간은 기존 1~10분 설정을 유지한다.
 
 업로드 전 임시 정리 작업을 등록하고 저장소 작업 뒤 회원·곡 상태를 다시 확인한다. 커버 교체·삭제, 곡 삭제와 탈퇴 시 객체 삭제는 기존 영속 정리 큐가 재시도한다. 곡 삭제는 소프트 삭제이며 채보 버전과 플레이·리포트 참조를 보존한다. 곡 제목의 과거 스냅샷을 새로 만들지 않는다. 현재 리포트 API는 곡 제목을 자체 필드로 반환하지 않으며 이후 곡 상세를 조회하는 화면은 변경된 제목을 볼 수 있다. 운영 저장소의 비공개 설정과 읽기·쓰기·삭제 권한은 배포 환경에서 별도 확인해야 한다.
 
@@ -1079,18 +1080,18 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 
 ## 내 악보 보관 (155번)
 
-CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 곡·채보와 연결하지 않는다. FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
+CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 본다. 채보와는 무관하며, 개인 곡에는 선택적으로 하나를 연결할 수 있다([개인 곡 연결 (248번)](#개인-곡-연결-248번)). FE가 채보로 렌더링한 악보(`source=RENDERED`)와 사용자가 가진 악보(`UPLOADED`, 기본)를 같은 보관함에 둔다.
 모든 경로는 `/api/v1/sheets`이고 Bearer 인증이 필요하다. 미인증·탈퇴 401, 남의 악보·없는 악보·삭제된 악보는 404 `SHEET_NOT_FOUND`. 응답은 `Cache-Control: private, no-store`.
 
 | 메서드·경로 | 요청 | 성공 |
 | --- | --- | --- |
-| `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED` | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
+| `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED`, 선택 `songId`(연결할 개인 곡, 248번) | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
 | `GET /` | `q`(제목 부분 검색), `page` 0~100000, `size` 1~100 | `PageResponse<SheetSummary>`, 최신순 |
 | `GET /{id}` | — | 악보 상세 |
 | `PATCH /{id}` | JSON `{"title": "..."}`만 | 악보 상세 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
 
-- **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`. 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
+- **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`, `songId`(연결된 개인 곡, 없으면 null). 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
 - **파일 규칙:** 한 악보는 JPG·PNG·WEBP 이미지 1~20장 또는 PDF 1개. 이미지는 장당 10 MiB, 가로·세로 8000px·4000만 화소 이하, PDF는 20 MiB 이하. 요청 전체는 전역 multipart 상한 50 MiB. 회원당 악보 100개·합계 500 MiB. 실제 바이트를 검사한다(이미지 디코드와 끝 표시, PDF `%PDF-` 머리와 끝 1 KiB 안 `%%EOF`). 확장자·Content-Type은 보지 않는다.
 - **메모리:** 본문은 multipart 임시 파일에서 다시 임시 파일로 옮겨 저장소에도 파일에서 바로 올린다. 이미지는 400만 화소 이하로 줄여 읽는다(운영 힙 약 460MB 보호). 검사·저장 단계는 서버 전체 동시 2건이며 넘으면 503이다.
 - **저장:** 악보 버킷(`CHART_ASSET_SHEET_BUCKET`)의 `sheet-music/{userId}/{sheetId}/{uuid}.{jpg|png|webp|pdf}`. 커버와 같은 악보 버킷 쓰기 자격증명으로 조건부 PUT(`If-None-Match: *`)하고, 서명은 `chart.assets` 읽기 자격증명을 쓴다. `CHART_ASSET_ENABLED=false`면 등록·조회 서명이 503이다.
@@ -1099,11 +1100,24 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `SHEET_INVALID` | 제목·`source` 형식, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
+| 400 | `SHEET_INVALID` | 제목·`source` 형식, `songId`가 양의 정수 문자열이 아님, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
+| 404 | `SONG_NOT_FOUND` | `songId`의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡 모두) |
+| 409 | `SHEET_ALREADY_LINKED` | 그 곡에 살아 있는 악보가 이미 있음(업로드 중인 악보 포함). 지우면 다시 올릴 수 있다 |
 | 413 | `SHEET_TOO_LARGE` | 이미지 10 MiB·PDF 20 MiB 초과 |
 | 413 | `SHEET_QUOTA_EXCEEDED` | 회원당 100개 또는 500 MiB 초과 |
 | 415 | `SHEET_UNSUPPORTED` | JPG·PNG·WEBP·PDF가 아님(GIF·BMP·HEIC 등) |
 | 503 | `SHEET_UNAVAILABLE` | 저장소 비활성·쓰기 실패, 동시 처리 초과 |
+
+### 개인 곡 연결 (248번)
+
+FE 요청(2026-11-06, `CHART-001_내-악보와-개인-곡-연결`)으로 10/30 결정("곡과 연결하지 않는다")을 바꿨다. 라이브러리의 곡 ⋯ 메뉴 [악보 보기 | 악보 올리기]가 곡에 맞는 악보를 찾기 위한 연결이며, 변환은 없다.
+
+- 등록 때 선택 파트 `songId`(양의 정수 문자열)를 보내면 그 곡에 연결한다. 곡은 **본인 소유·삭제되지 않음·공용(`BUILTIN`)이 아님**이어야 하고 상태(처리 중·실패)는 보지 않는다. 아니면 모두 404 `SONG_NOT_FOUND`. `songId`가 없으면 지금처럼 곡 없는 악보다. `RENDERED`도 같은 규칙이다.
+- **곡당 살아 있는 악보는 하나다.** `sheet_music_song_live_idx`(V44)가 보장하므로 동시에 올려도 하나만 들어가고 나머지는 409 `SHEET_ALREADY_LINKED`다. 악보를 소프트 삭제하면 자리가 비어 다시 올릴 수 있다. 업로드 실패로 소프트 삭제된 행도 자리를 차지하지 않는다.
+- 악보 상세·목록 항목에 `songId`, 곡 목록·상세([187번](#개인-곡-관리커버-187번))에 `sheetId`가 나온다. 곡의 `sheetId`는 페이지가 연결된 살아 있는 악보만 가리키며(업로드 중인 행은 null), 공용 곡은 항상 null이다.
+- **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보도 같은 트랜잭션에서 소프트 삭제되고 페이지 파일이 바로 정리 대상으로 등록된다(`sheet.SheetSongLink`, 악보 DELETE와 같은 처리). 악보만 지우면 곡은 그대로다.
+- 이미 올린 악보를 나중에 곡에 연결하는 PATCH는 없다(FE가 쓰지 않음). 필요하면 `PATCH /{id}`에 `songId`를 더하는 식으로 호환되게 추가한다.
+- 패키지 경계: `sheet`는 `songs` 테이블을 SQL로만 확인하고 `song`을 import하지 않는다. `song`은 `sheetId`를 `SongRepository` 서브쿼리로 읽고, 곡 삭제 때 `SheetSongLink`를 부른다(한 방향).
 
 ```powershell
 .\gradlew.bat test --tests 'com.ssafy.airdrum.sheet.*' --tests '*SheetMusicStorageTest' --tests '*SheetMusicCleanupTest'
