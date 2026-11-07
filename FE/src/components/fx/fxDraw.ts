@@ -128,6 +128,25 @@ function drawOne(ctx: CanvasRenderingContext2D, p: FxParticle, s: FxSample, scal
       ctx.fillRect(s.x - h, s.y - h, s.size, s.size);
       return;
     }
+    case 'shard': {
+      // 회전 삼각형(깨짐 파편). 꼭짓점 3개를 직접 계산한다 — save/restore·transform 없이
+      ctx.globalAlpha = s.alpha;
+      ctx.fillStyle = p.color;
+      const r = Math.max(0.1, s.size);
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        // 외접 반지름 r에 120도 간격, 한 꼭짓점을 길게 늘여 뾰족한 파편처럼 보이게(1.3배)
+        const a = s.rot + (i * TAU) / 3;
+        const k = i === 0 ? 1.3 : 0.8;
+        const px = s.x + Math.cos(a) * r * k;
+        const py = s.y + Math.sin(a) * r * k;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      return;
+    }
     case 'bolt':
       drawBolt(ctx, p, s, scale, glow);
   }
