@@ -7,6 +7,8 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useRecentHits } from '@/components/drum/useRecentHits';
 import { AccompanimentBar } from '@/components/free/AccompanimentBar';
+import { AccompanimentPicker } from '@/components/free/AccompanimentPicker';
+import { useFreeAccompaniment } from '@/components/free/useFreeAccompaniment';
 import { DisconnectBand } from '@/components/free/DisconnectBand';
 import { RealignPrompt } from '@/components/calibration/RealignPrompt';
 import { useRealign } from '@/components/useRealign';
@@ -94,6 +96,9 @@ export function FreePlayPage() {
   // 스틱이 다시 켜진 손이 있으면 스네어 재정렬 띠(다른 손은 계속 친다, PLAY-004 4-2)
   const realign = useRealign(true);
   const [stats, setStats] = useState(emptyHitStats);
+  // 반주(MODE-002 설계 D1): 페이지가 재생기를 하나 들고 떠나면 해제한다
+  const accomp = useFreeAccompaniment();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
   useEffect(() => {
@@ -141,7 +146,25 @@ export function FreePlayPage() {
 
   return (
     <main className="main free-page">
-      <AccompanimentBar />
+      <AccompanimentBar
+        view={accomp.view}
+        onPick={accomp.available ? () => setPickerOpen(true) : undefined}
+        onPause={accomp.pause}
+        onResume={accomp.resume}
+        onSeek={accomp.seek}
+        onOff={accomp.off}
+        onRetry={accomp.retry}
+      />
+      {pickerOpen && (
+        <AccompanimentPicker
+          currentSongId={accomp.view.pick?.songId ?? null}
+          onPick={(song) => {
+            setPickerOpen(false);
+            accomp.pick(song);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       <Card className="free-canvas" aria-label="연주 캔버스">
         <div className="free-canvas-head">

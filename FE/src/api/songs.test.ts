@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { checkSongAvailability, deleteSong, deleteSongCover, listSongs, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, listSongs, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -164,5 +164,51 @@ describe('listSongs 목록 조건', () => {
     const fn = stubList();
     await listSongs({ source: 'MINE', playableOnly: false });
     expect(query(fn).has('playableOnly')).toBe(false);
+  });
+});
+
+describe('listSongs withAccompaniment', () => {
+  const stubOnce = () => {
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ items: [], hasNext: false }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  };
+
+  it('true면 withAccompaniment=true를 보낸다', async () => {
+    const fn = stubOnce();
+    await listSongs({ source: 'BUILTIN', withAccompaniment: true });
+    expect(new URL(String(fn.mock.calls[0][0]), 'http://x').searchParams.get('withAccompaniment')).toBe('true');
+  });
+
+  it('false·생략이면 보내지 않는다', async () => {
+    const fn = stubOnce();
+    await listSongs({ source: 'MINE', withAccompaniment: false });
+    await listSongs({ source: 'MINE' });
+    for (const c of fn.mock.calls) expect(new URL(String(c[0]), 'http://x').searchParams.has('withAccompaniment')).toBe(false);
+  });
+});
+
+describe('getSongAccompaniment', () => {
+  const stubJson = (json: unknown, status = 200) => {
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  };
+
+  it('곡 단위 URL을 부르고 응답을 url·expiresAt으로 바꾼다', async () => {
+    const fn = stubJson({ accompanimentUrl: 'https://s/a.mp3', expiresAt: '2026-11-07T00:00:00Z' });
+    const r = await getSongAccompaniment(7);
+    expect(fn.mock.calls[0][0]).toBe('/api/v1/songs/7/accompaniment');
+    expect(r).toEqual({ url: 'https://s/a.mp3', expiresAt: '2026-11-07T00:00:00Z' });
+  });
+
+  it('반주가 없으면 둘 다 null', async () => {
+    stubJson({ accompanimentUrl: null, expiresAt: null });
+    expect(await getSongAccompaniment(7)).toEqual({ url: null, expiresAt: null });
+  });
+
+  it('404는 ApiError로 던진다', async () => {
+    stubJson({ code: 'SONG_NOT_FOUND', detail: '없음' }, 404);
+    await expect(getSongAccompaniment(7)).rejects.toMatchObject({ status: 404 });
   });
 });
