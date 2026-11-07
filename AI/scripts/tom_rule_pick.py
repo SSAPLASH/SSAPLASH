@@ -208,7 +208,8 @@ def cmd_enst(args) -> int:
         name, rest = spec.split("=", 1)
         path, base8 = rest.rsplit(":", 1)
         df = pd.read_csv(path)
-        rows = enst_table(df, others, float(base8))
+        present = set(df["candidate"].unique())
+        rows = enst_table(df, [c for c in others if c in present], float(base8))
         lines += [
             f"## {name}",
             "",
