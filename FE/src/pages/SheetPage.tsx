@@ -29,6 +29,9 @@ import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
+import { TimingBar } from '@/components/play/TimingBar';
+import type { HitMark } from '@/components/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
@@ -191,6 +194,13 @@ function SheetPageBody() {
   const recorder = useRef(new PlayRecorder());
   const pedalCoverage = useRef<HihatPedalCoverageTracker | null>(null);
   const openWarnings = useRef(new Map<number, number>());
+  // 친 위치 눈금(PERFECT·GOOD). SheetPager가 매 프레임 읽는다(React state를 거치지 않는다)
+  const hitMarks = useRef<HitMark[]>([]);
+  // 이펙트 소스: 패드(DrumKit)와 악보·타이밍 막대에 판정 이벤트를 따로 보낸다. MISS는 악보 쪽으로만
+  const [padFx] = useState(createFxEmitter);
+  const [sheetFx] = useState(createFxEmitter);
+  // 타이밍 막대 눈금을 비우는 신호(새 판·다시 시작)
+  const [fxRun, setFxRun] = useState(0);
 
   useEffect(() => inputManager.onPedalStatus((foot, connected) => {
     if (foot === 2) pedalCoverage.current?.connection(connected);
@@ -281,6 +291,9 @@ function SheetPageBody() {
     if (!activeSession) return;
     return activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
+      // 놓친 노트 머리 파편(악보만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
+      const miss = missFxEvent(e, 'sheet');
+      if (miss) sheetFx.emit(miss);
       setNoteStates((prev) => {
         const next = prev.slice();
         next[e.noteIndex] = e.judgement;
@@ -313,7 +326,7 @@ function SheetPageBody() {
         // 코칭 오류는 무시한다
       }
     });
-  }, [activeSession, showCoachLine]);
+  }, [activeSession, showCoachLine, sheetFx]);
 
   // 타격: 즉시 발음 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다. 타격 진동은 스틱이 직접 울린다(PLAY-006)
   useEffect(() => {
@@ -339,6 +352,10 @@ function SheetPageBody() {
             openWarnings.current.set(ev.noteIndex, performance.now() + 400);
           }
         }
+        // 친 위치 눈금: 노트 시각 + 빠름/늦음 = 친 곡 시각(채보 밖 점과 같은 시간 축)
+        if (ev && (ev.judgement === 'PERFECT' || ev.judgement === 'GOOD') && ev.deltaMs !== null) {
+          hitMarks.current.push({ timeMs: ss.notes[ev.noteIndex].note.timeMs + ev.deltaMs, judgement: ev.judgement });
+        }
         // 채보 밖 타격: 악보에 작은 점으로 남긴다. 판정과 같은 곡 시각(오디오 오프셋 반영)
         if (!ev && hit.pad && lh.tSongMs !== undefined) {
           const timeMs = lh.tSongMs;
@@ -346,8 +363,14 @@ function SheetPageBody() {
         }
       }
       reportHit(hit, ev, active ? ss : null);
+      // 이펙트(표시만): 판정·헛침·비판정 이벤트 하나를 패드와 악보에 보낸다. 판정·기록 뒤라 실패해도 연주를 막지 않는다
+      const fx = judgedFxEvent(hit, ev, 'sheet', Boolean(active));
+      if (fx) {
+        padFx.emit(fx);
+        sheetFx.emit(fx);
+      }
     });
-  }, []);
+  }, [padFx, sheetFx]);
 
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
@@ -436,6 +459,8 @@ function SheetPageBody() {
     consentAtStart.current = readCurrentConsent();
     setNoteStates(new Array<Judgement | null>(ss.notes.length).fill(null));
     setStrays([]);
+    hitMarks.current.length = 0;
+    setFxRun((n) => n + 1);
     setHud(ss.snapshot());
     setSongMs(0);
     resetCountdown();
@@ -530,6 +555,7 @@ function SheetPageBody() {
     setPauseReason(null);
     setNoteStates([]);
     setStrays([]);
+    hitMarks.current.length = 0;
     setHud(null);
     setPlaySession(null);
     navigate(returnTo, { replace: true });
@@ -816,8 +842,15 @@ function SheetPageBody() {
             chart={chart}
             noteStates={noteStates}
             strayHits={strays}
+            hitMarks={hitMarks}
             getSongTime={getSongTime}
             countInMs={activeSession.countInMs}
+            fxSource={sheetFx.source}
+            overlay={
+              settings.timingBar ? (
+                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
+              ) : undefined
+            }
           />
         }
         guide={
@@ -837,6 +870,7 @@ function SheetPageBody() {
               badges={badges}
               skin={settings.kitSkin}
               hitSeq={hitSeq}
+              fxSource={padFx.source}
               coachPad={coachLine?.target?.kind === 'pad' ? coachLine.target.pad : undefined}
             />
             {coachLine?.target?.kind === 'hand' && <CoachHandChip hand={coachLine.target.hand} />}
