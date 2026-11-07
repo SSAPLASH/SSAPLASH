@@ -100,7 +100,7 @@ src/
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · CoachSummaryCard(총평) · WeakSegments(AI 약점 구간·상태 안내) · SegmentPlaybackPanel(구간 재생 UI) · useSegmentPlayer(구간 재생 상태)
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
 │   ├─ drum/         드럼 킷 그리기 — Pad · padRing(링 기하) · DrumKit(코칭 대상 패드 링 `coachPad`) · usePadStates · padStateMachine · drum.css
-│   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손·페달 끊김 띠) · free.css
+│   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 바 5변이) · SeekBar(진행 막대) · AccompanimentPicker(반주 선택 창) · useFreeAccompaniment(반주 재생 훅) · useAccompanimentSongs(선택 창 목록 훅) · DisconnectBand(한 손·페달 끊김 띠) · free.css
 │   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸, 구령+보조 두 줄) · CoachHandChip(코칭 손 대상 칩) · coachDisplay(밀집 구간 유예·구령만 판단) · useCoachLine·coachLineTimer(코칭 문구 3초 표시, 유예 지원) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · recommendationConsentStore(맞춤 곡 추천 학습 동의 상태, 서버 원본·영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · adminSongStore(관리자 공용 곡 목록·등록·행별 반주 업로드) · adminBulkStore(CSV 일괄 추가 순차 실행·줄별 결과) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent·recommendation-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157) · adminSongs(관리자 공용 곡 목록·MIDI 등록·반주 업로드, BE 156·262)
@@ -422,7 +422,11 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 
 자유 연습(`/free`)은 치면 바로 울린다. 화면은 반주 바 → 캔버스 카드(`DrumKit` `fitWidth` 최대 1.25, ≤1024는 1.1) → 정보 띠(최근 타격 패드·손·세기 · 세션 통계 타격 수·평균 세기) 순이다.
 
-- **반주 바**(`components/free/AccompanimentBar`)는 반주 없음 상태와 [반주 고르기](비활성, 「곧 지원」)만 있다. 반주 재생은 `S15P31A307-201`.
+- **반주 바**(`components/free/AccompanimentBar`, `S15P31A307-201`)는 없음·불러오는 중·재생 중·일시정지·오류 5변이다. [반주 고르기]는 선택 창(`AccompanimentPicker`)을 열고, 고르면 불러오는 즉시 처음부터 재생한다. 보조 줄은 모든 곡이 「드럼 뺀 반주」다.
+  - **재생기**는 자유 연습 페이지가 하나 들고(`useFreeAccompaniment`) 떠나면 `unload`한다. 새로고침하면 없음으로 시작하고, 화면이 숨겨지면(`visibilitychange`) 일시정지하며 돌아와도 자동 재개하지 않는다. 곡이 끝나면 처음 위치에서 일시정지한다. 반주 URL은 곡 단위 API(`getSongAccompaniment`)로 받는다. `VITE_SONGS_SOURCE=builtin` 빌드에서는 [반주 고르기]가 비활성이다.
+  - **진행 막대**(`SeekBar`)는 네이티브 range다. 누르기·끌기(손을 뗄 때 한 번 적용)·←/→ 5초·Home·End로 탐색하고, 일시정지 중 탐색한 위치는 [재생] 때 시작 위치가 된다. 문자·숫자 키(드럼 연주 키)는 막대가 쓰지 않는다.
+  - **선택 창**은 공용 곡·내 곡 섹션을 같은 검색어(300ms 디바운스, 100자)로 따로 받고 섹션별 [더 보기]가 있다. 목록은 전역 곡 스토어를 쓰지 않고 `listSongs`(`withAccompaniment=true`)를 직접 부른다. 반주 없음·실패 곡은 거르고, 만드는 중인 곡은 흐리게 보여 줄 뿐 고를 수 없다. BE가 필터를 반영하기 전에는 FE가 거른 뒤 비면 다음 페이지를 이어 받는다(최대 3페이지).
+  - 반주 오류 문구: 반주 파일 없음 / 곡 없음·삭제됨 / 곡 준비 중(409) / 그 밖 「반주를 불러오지 못했어요」. 오류여도 연주는 계속된다.
 - **화면 상태**는 `domain/freeStage`가 정한다: 스틱 센서 + 양손 미연결이면 흐린 킷 위 빈 상태 카드와 [드럼 세팅에서 연결하기](복귀 띠로 돌아옴), 한 손만 끊기면 캔버스 위 `DisconnectBand`(연주 계속, [다시 연결]은 `reconnectStore`). 키보드 전용·포인터 모의 IMU는 항상 연주 상태다.
 - 준비 안내(`ReadinessNotice`)는 이 화면에 두지 않는다 — 빈 상태·끊김 띠가 대신한다.
 - 앵커 거리·패드별 횟수 같은 실측 표는 모니터 빌드의 「자유 연습 실측」 섹션(`pages/monitor/sections/FreeMeasureSection`)으로 옮겼다.
