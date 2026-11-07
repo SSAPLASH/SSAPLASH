@@ -11,6 +11,7 @@ const msg = (over: Partial<CoachMessage>): CoachMessage => ({
   displayMs: 3000,
   target: null,
   repeat: 0,
+  recoveredFrom: null,
   ...over,
 });
 

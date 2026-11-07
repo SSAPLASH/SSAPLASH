@@ -36,8 +36,10 @@ export const LIVE_COACH_CONFIG = {
     minGapMs: 6_000,
     /** 안정 칭찬에 필요한 유효 타격 수 */
     minValid: 8,
-    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다 */
-    keepMaxMiss: 2,
+    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다. 0이라 놓침이 하나라도 있으면 칭찬하지 않는다 */
+    keepMaxMiss: 0,
+    /** 일반 칭찬(LIVE_GOOD_KEEP)은 직전 문구(지적·칭찬 모두)에서 이만큼 지나야 띄운다. 빈 칭찬이 잦지 않게 한다 */
+    keepMinGapMs: 20_000,
   },
   /** 계속 늦음·빠름 */
   trend: {
