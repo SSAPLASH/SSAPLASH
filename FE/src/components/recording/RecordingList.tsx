@@ -10,7 +10,11 @@ import { Input } from '@/components/ui/Input';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { Segmented } from '@/components/ui/Segmented';
 import { Toast, type ToastVariant } from '@/components/ui/Toast';
+import { ApiError } from '@/api/error';
+import { getRecording } from '@/api/recordings';
 import type { RecordingSort, RecordingSummary } from '@/domain/recording';
+import { midiFileName, recordingToMidi } from '@/domain/recordingMidi';
+import { downloadBlob } from '@/media/downloadFile';
 import {
   formatHitCount,
   formatRecordingLength,
@@ -44,6 +48,9 @@ const MENU_ITEMS = [
   { key: 'delete', label: '삭제', danger: true },
 ];
 
+/** 타격이 없는 녹음에는 MIDI 항목을 두지 않는다 */
+const MENU_ITEMS_WITH_MIDI = [{ key: 'midi', label: 'MIDI로 내보내기' }, ...MENU_ITEMS];
+
 const TOAST_MS = 4000;
 
 function PlayGlyph() {
@@ -71,14 +78,16 @@ interface RowProps {
   onToggle: (item: RecordingSummary) => void;
   onRename?: (item: RecordingSummary) => void;
   onDelete?: (item: RecordingSummary) => void;
+  onExportMidi?: (item: RecordingSummary) => void;
 }
 
-function RecordingRow({ item, playing, loading, progress, onToggle, onRename, onDelete }: RowProps) {
+function RecordingRow({ item, playing, loading, progress, onToggle, onRename, onDelete, onExportMidi }: RowProps) {
   const level = item.song ? songDifficulty(item.song.difficulty) : null;
   const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
   const pick = (key: string) => {
     if (key === 'rename') onRename?.(item);
     else if (key === 'delete') onDelete?.(item);
+    else if (key === 'midi') onExportMidi?.(item);
   };
   return (
     <tr className={playing ? 'rec-list-row playing' : 'rec-list-row'}>
@@ -121,7 +130,7 @@ function RecordingRow({ item, playing, loading, progress, onToggle, onRename, on
       <td className="rec-list-num">{formatHitCount(item.hitCount)}</td>
       <td>
         <div className="rec-list-more-cell">
-          <MoreMenu label={`${item.title} 메뉴`} items={MENU_ITEMS} onPick={pick} />
+          <MoreMenu label={`${item.title} 메뉴`} items={item.hitCount > 0 ? MENU_ITEMS_WITH_MIDI : MENU_ITEMS} onPick={pick} />
         </div>
       </td>
     </tr>
@@ -151,6 +160,7 @@ export interface RecordingBoardProps {
   onToggle?: (item: RecordingSummary) => void;
   onRename?: (item: RecordingSummary) => void;
   onDelete?: (item: RecordingSummary) => void;
+  onExportMidi?: (item: RecordingSummary) => void;
 }
 
 /** 표시부. 상태는 모두 props로 받는다 */
@@ -175,6 +185,7 @@ export function RecordingBoard({
   onToggle,
   onRename,
   onDelete,
+  onExportMidi,
 }: RecordingBoardProps) {
   const hasCondition = mode !== 'ALL' || q.trim() !== '';
   const firstLoading = loading && items.length === 0;
@@ -247,6 +258,7 @@ export function RecordingBoard({
                   onToggle={(it) => onToggle?.(it)}
                   onRename={onRename}
                   onDelete={onDelete}
+                  onExportMidi={onExportMidi}
                 />
               ))}
             </tbody>
@@ -318,6 +330,52 @@ export function RecordingList() {
     onError: (message) => notify('error', message),
   });
 
+  // MIDI 내보내기 (설계 REC-002 4-1): 상세 조회 → 변환 → 내려받기. 내보내는 중인 id는 다시 누르지 못한다
+  const exportingRef = useRef(new Map<number, AbortController>());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    const exporting = exportingRef.current;
+    return () => {
+      mountedRef.current = false;
+      for (const c of exporting.values()) c.abort();
+    };
+  }, []);
+  const exportMidi = (item: RecordingSummary) => {
+    const id = item.id;
+    if (exportingRef.current.has(id)) return;
+    const controller = new AbortController();
+    exportingRef.current.set(id, controller);
+    void (async () => {
+      try {
+        let detail;
+        try {
+          detail = await getRecording(id, controller.signal);
+        } catch (e) {
+          if (!mountedRef.current || controller.signal.aborted) return;
+          notify(
+            'error',
+            e instanceof ApiError && e.status > 0 && e.status < 500 ? e.detail : '녹음을 불러오지 못했어요',
+          );
+          return;
+        }
+        if (!mountedRef.current) return;
+        try {
+          const { bytes, usedChartTiming } = recordingToMidi(detail);
+          downloadBlob(new Blob([bytes as BlobPart], { type: 'audio/midi' }), midiFileName(detail.title, detail.id));
+          // 곡 녹음인데 채보 템포를 못 써서 120 BPM으로 내보낸 경우만 따로 알린다
+          const isSongRecording = detail.song !== null || detail.mode === 'RHYTHM' || detail.mode === 'SHEET';
+          if (isSongRecording && !usedChartTiming) notify('info', '곡 빠르기 정보가 없어 120 BPM으로 내보냈어요');
+          else notify('success', 'MIDI 파일을 내려받았어요');
+        } catch {
+          notify('error', 'MIDI 파일을 만들지 못했어요');
+        }
+      } finally {
+        exportingRef.current.delete(id);
+      }
+    })();
+  };
+
   // 재생 중인 행이 목록에서 사라지면(조건 변경·삭제·다시 불러오기) 정지
   const { playingId, stop } = playback;
   useEffect(() => {
@@ -347,6 +405,7 @@ export function RecordingList() {
         onToggle={playback.toggle}
         onRename={(item) => setEditing({ kind: 'rename', item })}
         onDelete={(item) => setEditing({ kind: 'delete', item })}
+        onExportMidi={exportMidi}
       />
       {editing?.kind === 'rename' && (
         <RecordingTitleDialog
