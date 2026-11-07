@@ -28,6 +28,8 @@ import { useSimilarSongs } from '@/components/play/useSimilarSongs';
 import { RecommendRow } from '@/components/song/RecommendRow';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
+import { TimingBar } from '@/components/play/TimingBar';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
@@ -150,6 +152,11 @@ function PlayPageBody() {
 
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
+  // 이펙트 소스: 패드(DrumKit)와 하이웨이·타이밍 막대에 판정 이벤트를 따로 보낸다. MISS는 하이웨이 쪽으로만
+  const [padFx] = useState(createFxEmitter);
+  const [laneFx] = useState(createFxEmitter);
+  // 타이밍 막대 눈금을 비우는 신호(새 곡·다시 시작)
+  const [fxRun, setFxRun] = useState(0);
   const recorder = useRef(new PlayRecorder());
   // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
   const coachRef = useRef<LiveCoach | null>(null);
@@ -234,8 +241,14 @@ function PlayPageBody() {
       const ev = active ? ss.handleHit(hit) : null;
       if (active) recorder.current.hit(hit, ev, ss);
       reportHit(hit, ev, active ? ss : null);
+      // 이펙트(표시만): 판정·헛침·비판정 이벤트 하나를 패드와 하이웨이에 보낸다. 판정·기록 뒤라 실패해도 연주를 막지 않는다
+      const fx = judgedFxEvent(hit, ev, 'game', Boolean(active));
+      if (fx) {
+        padFx.emit(fx);
+        laneFx.emit(fx);
+      }
     });
-  }, []);
+  }, [padFx, laneFx]);
 
   const choose = useCallback(
     (c: Chart) => {
@@ -266,6 +279,9 @@ function PlayPageBody() {
       clearCoachLine();
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
+        // 놓친 노트 깨짐(하이웨이만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
+        const miss = missFxEvent(e, 'game');
+        if (miss) laneFx.emit(miss);
         popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
         setHud(ss.snapshot());
         // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
@@ -297,13 +313,14 @@ function PlayPageBody() {
       recorder.current.reset();
       finishing.current = false;
       resetCountdown();
+      setFxRun((n) => n + 1);
       setChart(c);
       setSession(ss);
       setHud(ss.snapshot());
       setPauseReason(null);
       setStage('ready');
     },
-    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine],
+    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine, laneFx],
   );
 
   // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
@@ -438,6 +455,7 @@ function PlayPageBody() {
     diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     flashes.current.clear();
     popups.current = [];
+    setFxRun((n) => n + 1);
     recorder.current.reset();
     coachRef.current?.reset();
     shadowRef.current?.reset();
@@ -746,6 +764,12 @@ function PlayPageBody() {
             popups={popups}
             keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
             onFrame={onFrame}
+            fxSource={laneFx.source}
+            overlay={
+              settings.timingBar ? (
+                <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
+              ) : undefined
+            }
           />
         }
         // 코칭 모드는 구령(제목)+보조 두 줄. 라벨은 화면에서 감춘다(play.css, 칸 51px 안)
@@ -765,6 +789,7 @@ function PlayPageBody() {
               labels={false}
               skin={settings.kitSkin}
               hitSeq={hitSeq}
+              fxSource={padFx.source}
               coachPad={coachLine?.target?.kind === 'pad' ? coachLine.target.pad : undefined}
             />
             {coachLine?.target?.kind === 'hand' && <CoachHandChip hand={coachLine.target.hand} />}
