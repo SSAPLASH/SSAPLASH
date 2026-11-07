@@ -4,7 +4,7 @@ rule-eval(`ssaplash-bench rule-eval`)은 데이터셋 특징을 전부 메모리
 분리 트랙 6개가 22.7시간 분량이라 로컬 메모리(64GB)에 다 안 올라감. 이 스크립트는 곡마다 특징을 읽고 후보 전부를
 같은 rule_eval.eval_song으로 채점한 뒤 버림. 곡별 개수는 rule-eval by_song.csv와 같은 계산이다.
 
-- 분리 입력 특징(`--separator`로 만든 것, stem_input 있음)은 그 분리 드럼을 거르기 입력으로 씀. 없으면 데이터셋의
+- 분리 입력 특징(`scripts/rule_features_separated.py`로 만든 것, stem_input 있음)은 그 분리 드럼을 거르기 입력으로 씀. 없으면 데이터셋의
   정답 드럼 트랙을 씀(rule-eval과 같음)
 - 출력 csv 한 줄 = (후보, 곡). 키트 이름(E-GMD·STAR)과 정답 탐 종류 수를 같이 적음
 

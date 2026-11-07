@@ -219,3 +219,40 @@ def test_select_명령이_결과_파일을_쓴다(tmp_path: Path, monkeypatch):
     assert got["chosen"] == "x" and got["one_tom_acc"]["current"] == 0.5
     assert len(list(csv.reader(open(out.with_suffix(".kits.csv"), encoding="utf-8")))) == 3
     assert np.isclose(got["loko"][0]["diff"], 0.5)
+
+
+def test_분리_입력_특징은_분리_드럼을_stem_input으로_저장하고_있는_곡은_건너뛴다(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from ssaplash_ai.bench.analysis import rule_features as rf
+
+    sep_feat = _load("rule_features_separated")
+    sr = 8000
+    mixture = np.ones((2, sr), dtype=np.float32)
+
+    class Ds:
+        name = "toy"
+
+        def song_ids(self):
+            return ["a/1", "b/2"]
+
+        def load(self, song_id):
+            if song_id == "b/2":
+                raise RuntimeError("읽기 실패")
+            return SimpleNamespace(mixture=mixture, sample_rate=sr)
+
+    sep = SimpleNamespace(separate=lambda mix, rate: SimpleNamespace(drums=mix * 0.5))
+    seen = {}
+
+    def fake_features(tr, audio, rate, stems=None):
+        seen["audio"] = audio
+        return rf.make_features({47: [0.1]}, {"toms": audio}, rate, audio.shape[1] / rate)
+
+    monkeypatch.setattr(rf, "features_from_adapter", fake_features)
+    assert sep_feat.build(Ds(), sep, object(), tmp_path, log=lambda m: None) == (1, 0, 1)
+    assert np.allclose(seen["audio"], 0.5)  # 채보에 원곡이 아니라 분리 드럼을 넣음
+    f = rf.load_features(rf.feature_path(tmp_path, "toy", "a/1"))
+    assert np.allclose(f.stems["input"], 0.5, atol=1e-3)
+    assert sep_feat.build(Ds(), sep, object(), tmp_path, log=lambda m: None) == (0, 1, 1)
