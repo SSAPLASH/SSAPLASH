@@ -4,6 +4,8 @@ import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
 import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
 import { isKitSkin, type KitSkin } from '@/domain/drumKit';
+import { isHitFxTheme } from '@/domain/hitFx/themes';
+import type { HitFxTheme } from '@/domain/hitFx/types';
 import { normalizePadKeys, type PadId } from '@/domain/pads';
 import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
@@ -48,6 +50,8 @@ interface SettingsState {
   drumVolume: number;
   /** 드럼 모양(기기별 로컬) */
   kitSkin: KitSkin;
+  /** 타격 이펙트 테마(기기별 로컬). 기본 'auto' = 드럼 모양에 맞춘 기본 이펙트 */
+  hitFxTheme: HitFxTheme;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -106,6 +110,7 @@ interface SettingsState {
   setDrumVolume: (v: number) => void;
   setSongVolume: (v: number) => void;
   setKitSkin: (s: KitSkin) => void;
+  setHitFxTheme: (t: HitFxTheme) => void;
   setSoundSetId: (id: SoundSetId) => void;
   setTestVelocity: (v: TestVelocity) => void;
   setGameView: (v: GameView) => void;
@@ -122,7 +127,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 18;
+export const SETTINGS_VERSION = 19;
 
 /**
  * 저장된 설정 이행.
@@ -144,6 +149,7 @@ export const SETTINGS_VERSION = 18;
  * v16 → v17: stickAnchors([null, null])·calibratedAt(null) 추가(PLAY-004). tuning.minRadiusDeg는 merge가 기본값으로 채운다.
  * v17 → v18: presetAnchors({}) 추가, activePresetId null → 'system'(UX-64 D1). 적용 중이던 것이 사용자 프리셋이고 앵커가 있으면
  *            presetAnchors[그 id]로 복사(사본은 유지). 시스템 기본이면 사본·시각을 비운다(모델 기본 앵커로 판정).
+ * v18 → v19: hitFxTheme(기본 'auto') 추가. 없거나 모르는 값이면 'auto'.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -247,6 +253,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
       p.calibratedAt = null;
     }
   }
+  if (version < 19) p.hitFxTheme = isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto';
   return p as unknown as SettingsState;
 }
 
@@ -332,6 +339,7 @@ export const useSettings = create<SettingsState>()(
       metronomeVolume: 1,
       drumVolume: 1,
       kitSkin: 'acoustic',
+      hitFxTheme: 'auto',
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -404,6 +412,9 @@ export const useSettings = create<SettingsState>()(
       setKitSkin: (s) => {
         if (isKitSkin(s)) set({ kitSkin: s });
       },
+      setHitFxTheme: (t) => {
+        if (isHitFxTheme(t)) set({ hitFxTheme: t });
+      },
       setSongVolume: (v) => set({ songVolume: clampVolume(v, 1) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
       setTestVelocity: (testVelocity) => set({ testVelocity }),
@@ -433,6 +444,7 @@ export const useSettings = create<SettingsState>()(
           drumVolume: clampVolume(p.drumVolume, 2),
           songVolume: clampVolume(p.songVolume, 1),
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
+          hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
           presetAnchors: sanitizePresetAnchors(p.presetAnchors),
