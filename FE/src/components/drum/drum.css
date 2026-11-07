@@ -338,3 +338,14 @@
     animation: none;
   }
 }
+
+/* 타격 이펙트 캔버스(FxCanvas): 킷 SVG 크기에 맞춘 래퍼 위에 절대 위치로 겹치고 포인터를 통과시킨다 */
+.drum-kit-fx {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+.fx-canvas {
+  position: absolute;
+  pointer-events: none;
+}
