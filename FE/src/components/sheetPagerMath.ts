@@ -1,5 +1,7 @@
 // 마디 고정 악보(SheetPager)의 순수 계산: 페이지당 마디 수, 슬롯별 마디, 커서 위치. 캔버스·DOM에 의존하지 않는다.
 // 시각 입력(songTime)은 모두 격자 시각(곡 시각 − 격자 원점 offsetMs)이다. 0이 1마디 1박, 음수는 리드인.
+import type { BarLayout } from '@/domain/sheet';
+import { xInBar } from './sheetStripMath';
 
 /** 악보 영역 폭(px)에 따른 페이지당 마디 수 */
 export function barsPerPage(width: number): number {
@@ -50,4 +52,28 @@ export function cursorPos(songTime: number, barMs: number, perPage: number): { s
 /** reduced-motion용: 격자 시각을 박 경계로 내린다 */
 export function snapToBeat(songTime: number, beatMs: number): number {
   return Math.floor(songTime / beatMs) * beatMs;
+}
+
+/**
+ * 노트 머리의 화면 위치(슬롯 안, 세로 정렬 offset 전). 현재 페이지(슬롯)에 없으면 null —
+ * 다음 페이지 미리보기(upcoming)·곡 끝 너머 슬롯·다른 페이지 노트는 이펙트를 내지 않는다.
+ */
+export function noteHeadAt(args: {
+  slots: readonly PagerSlot[];
+  layoutOf: (bar: number) => BarLayout;
+  noteIndex: number;
+  /** 슬롯 i의 왼쪽 x */
+  slotX: (i: number) => number;
+  slotW: number;
+  /** 보표 위치(반 칸 단위) → y */
+  lineY: (line: number) => number;
+}): { x: number; y: number } | null {
+  const { slots, layoutOf, noteIndex, slotX, slotW, lineY } = args;
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i]!;
+    if (slot.bar === null || slot.upcoming) continue;
+    const g = layoutOf(slot.bar).glyphs.find((gl) => gl.noteIndex === noteIndex);
+    if (g) return { x: xInBar(slotX(i), slotW, g.xRatio), y: lineY(g.line) };
+  }
+  return null;
 }
