@@ -19,6 +19,8 @@ import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
+import { planCoachDisplay } from '@/components/play/coachDisplay';
+import { CoachHandChip } from '@/components/play/CoachHandChip';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { useSimilarSongs } from '@/components/play/useSimilarSongs';
@@ -121,7 +123,11 @@ function SheetPageBody() {
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교, MODE-001 D6)
   const shadowRef = useRef<CoachShadow | null>(null);
-  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
+  const { line: coachLine, show: showCoachLine, cancelPending: cancelPendingCoach, clear: clearCoachLine } = useCoachLine<CoachCopy>();
+  // 악보 연습은 미루지 않지만, 일시정지하면 대기 중인 문구가 있다면 버린다(떠 있는 문구는 그대로)
+  useEffect(() => {
+    if (pauseReason !== null) cancelPendingCoach();
+  }, [pauseReason, cancelPendingCoach]);
 
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
@@ -298,7 +304,11 @@ function SheetPageBody() {
       if (!message) return;
       try {
         const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-        if (copy) showCoachLine(copy, message.displayMs);
+        if (copy) {
+          // 악보 연습은 설명형: 항상 보조까지, 미루지 않는다
+          const plan = planCoachDisplay(message.tMs, [], 'SHEET');
+          showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+        }
       } catch {
         // 코칭 오류는 무시한다
       }
@@ -812,12 +822,26 @@ function SheetPageBody() {
         }
         guide={
           coachLine ? (
-            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} sub={coachLine.sub} />
           ) : (
             <GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />
           )
         }
-        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} badges={badges} skin={settings.kitSkin} hitSeq={hitSeq} />}
+        kit={
+          <div className="coach-kit">
+            <DrumKit
+              scale={0.7}
+              effects
+              states={padStates}
+              labels={false}
+              badges={badges}
+              skin={settings.kitSkin}
+              hitSeq={hitSeq}
+              coachPad={coachLine?.target?.kind === 'pad' ? coachLine.target.pad : undefined}
+            />
+            {coachLine?.target?.kind === 'hand' && <CoachHandChip hand={coachLine.target.hand} />}
+          </div>
+        }
         readout={
           <HitReadout
             variant="stack"
