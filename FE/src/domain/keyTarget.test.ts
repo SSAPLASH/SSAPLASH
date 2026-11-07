@@ -33,6 +33,15 @@ describe('isKeyOwnedByTarget', () => {
     expect(isKeyOwnedByTarget({ tagName: 'DIV', isContentEditable: true }, 'Escape')).toBe(true);
   });
 
+  it('range 입력(진행 막대)은 방향키·Home·End·PageUp·PageDown만 소유하고 연주 키는 통과시킨다', () => {
+    const range = { tagName: 'INPUT', getAttribute: (n: string) => (n === 'type' ? 'range' : null), closest: () => null };
+    for (const code of ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp']) expect(isKeyOwnedByTarget(range, code)).toBe(true);
+    for (const code of ['KeyF', 'KeyJ', 'Space', 'Digit1']) expect(isKeyOwnedByTarget(range, code)).toBe(false);
+    // 다이얼로그 안의 range는 기존처럼 모든 키를 소유한다
+    const rangeInDialog = { ...range, closest: (s: string) => (s === '[role="dialog"]' ? {} : null) };
+    expect(isKeyOwnedByTarget(rangeInDialog, 'KeyF')).toBe(true);
+  });
+
   it('다이얼로그 안은 모든 키를 소유한다', () => {
     for (const code of ['Enter', 'Escape', 'Tab', 'KeyF', 'Space']) {
       expect(isKeyOwnedByTarget(dialogChild, code)).toBe(true);
