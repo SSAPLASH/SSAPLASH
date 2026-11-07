@@ -181,6 +181,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 - **`components/drum/DrumKit`:** 연주 화면용 드럼 킷 SVG. 배치는 `domain/drumKit`의 **고정 8패드**(`DRUM_KIT_PADS`, 760×300 × `scale`, 하이햇 페달 제외)다. `fitWidth`면 부모 폭에 맞춰 `scale`까지 줄인다. 패드별 `states`(`idle`·`hit`·`perfect`·`good`·`miss`)와 `badges`(+`highlight`)를 받고 `labels`·`onPadClick`을 쓴다. 세팅 편집기의 `KitCanvas`(사용자 배치를 Canvas로 그리고 드래그)와 역할이 다르다 — 판정 배치(`kitLayout`)와 무관한 표시 전용이다.
 - **드럼 모양:** 설정 › 연주의 "드럼 모양"(실물 `acoustic` / 전자 `electronic` / 네온 `neon`)을 `DrumKit`의 `skin`이 받는다. 값은 설정 스토어 `kitSkin`에 기기별로 로컬 저장하고 서버 동기화 대상이 아니다. `hitSeq`는 패드별 타격 모션 재생용이다. `onPadDown`이 있으면 킷이 터치 표면이 되어 `touch-action: none`을 쓰고 포인터 모의 IMU는 이 킷을 무시한다(`data-no-pointer-strike`).
+- **타격 이펙트 테마:** 설정 › 연주의 "타격 이펙트"(기본 `auto` / 전기 `electric` / 물 `water` / 불 `fire`)를 설정 스토어 `hitFxTheme`에 기기별로 로컬 저장한다(settings v19). `DrumKit`에 `effects`가 있으면 SVG 위에 캔버스(`components/fx/FxCanvas`)를 겹쳐 그린다. 타격은 liveStore를 직접 구독해 React 렌더 없이 파티클 엔진(`fxEngine`, 동시 200개 상한, 비면 rAF 정지)에 들어간다. 테마 정의·생성 함수·세기 변환은 순수 함수(`domain/hitFx/`)다. 패드 흔들림은 테마와 무관하게 세기 100 이상 드럼·킥에서 동작한다. 잉크 `ink`·픽셀 `pixel`은 랩 전용이다.
+- **FX 랩(개발 전용):** 개발 서버에서 `/dev/fx`. 테마 A/B 비교, 자동 연주 패턴(8비트·16분 필인·크래시 연타·스트레스), 세기 고정, 발광 끄기·모션 줄이기 강제, 이펙트 처리 시간(평균·p95)·파티클 수 표시. 콘솔에서 `window.__fxLab`으로 같은 조작·측정을 할 수 있다. 프로덕션 빌드에는 라우트·코드가 들어가지 않는다.
 - **`usePadStates(session?)`:** `liveStore.hitSeq`마다 해당 패드를 hit으로 220ms(`HIT_MS`) 켜고, `RhythmSession` 판정마다 perfect/good/miss를 400ms(`JUDGE_MS`) 보인다(판정이 hit보다 우선). 타이머 규칙은 순수 모듈 `padStateMachine`이 맡는다.
 - **`components/play`:** `GuideSlot`(드럼 영역 왼쪽 안내·코칭 칸)·`HitReadout`(최근 타격, 연주용 `stack`·자유 연습용 `row`).
 
