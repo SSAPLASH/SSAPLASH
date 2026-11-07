@@ -20,6 +20,7 @@ const on = (key: string, over: Partial<RuleEvaluation> = {}) => ev(key, { trigge
 const ctx = (songTimeMs: number, judged = 20) => ({ songTimeMs, judged });
 const { minGapMs, tagCooldownMs } = LIVE_COACH_CONFIG.policy;
 const praiseGapMs = LIVE_COACH_CONFIG.praise.minGapMs;
+const keepGapMs = LIVE_COACH_CONFIG.praise.keepMinGapMs;
 const good = ev('LIVE_GOOD_STEADY', { tag: 'LIVE_GOOD_STEADY', priority: 5, trigger: true });
 
 describe('CoachPolicy 시작 억제', () => {
@@ -184,8 +185,42 @@ describe('CoachPolicy 경향 해소 칭찬', () => {
     const p = new CoachPolicy();
     p.decide([on('A')], ctx(10_000));
     p.decide([ev('A', { release: true })], ctx(12_000));
-    expect(p.decide([], ctx(10_000 + praiseGapMs), keep).show?.key).toBe('LIVE_GOOD_KEEP');
-    expect(p.decide([], ctx(10_000 + praiseGapMs + minGapMs), good).show).toBe(RECOVERED_PRAISE);
+    expect(p.decide([], ctx(10_000 + keepGapMs), keep).show?.key).toBe('LIVE_GOOD_KEEP');
+    expect(p.decide([], ctx(10_000 + keepGapMs + minGapMs), good).show).toBe(RECOVERED_PRAISE);
+  });
+
+  it('일반 칭찬(KEEP)은 직전 문구 후 20초가 지나야 뜬다', () => {
+    const keep = ev('LIVE_GOOD_KEEP', { tag: 'LIVE_GOOD_KEEP', priority: 5, trigger: true });
+    const p = new CoachPolicy();
+    expect(p.decide([on('A')], ctx(10_000)).show?.key).toBe('A');
+    expect(p.decide([], ctx(10_000 + keepGapMs - 1), keep).show).toBeNull();
+    expect(p.decide([], ctx(10_000 + keepGapMs), keep).show?.key).toBe('LIVE_GOOD_KEEP');
+    // 칭찬 뒤에도 20초를 다시 기다린다. 안정 칭찬은 6초 간격 그대로다
+    expect(p.decide([], ctx(10_000 + keepGapMs + praiseGapMs), keep).show).toBeNull();
+    expect(p.decide([], ctx(10_000 + keepGapMs + praiseGapMs), good).show?.key).toBe('LIVE_GOOD_STEADY');
+  });
+
+  it('해소 칭찬은 해소된 지적 중 가장 최근에 띄웠던 것을 recoveredFrom으로 싣는다', () => {
+    const padTarget = { kind: 'pad', pad: 'SNARE' } as const;
+    const p = new CoachPolicy();
+    p.decide([on('A', { tag: 'LIVE_LATE' })], ctx(10_000));
+    p.decide([ev('A'), on('B', { tag: 'LIVE_PAD_LATE', target: padTarget })], ctx(10_000 + minGapMs));
+    const rel = p.decide(
+      [ev('A', { tag: 'LIVE_LATE', release: true }), ev('B', { tag: 'LIVE_PAD_LATE', target: padTarget, release: true })],
+      ctx(10_000 + minGapMs + 1_000),
+    );
+    expect(rel.recoveredFrom).toBeNull();
+    const d = p.decide([], ctx(10_000 + 2 * minGapMs + 1_000), good);
+    expect(d.show).toBe(RECOVERED_PRAISE);
+    expect(d.recoveredFrom).toEqual({ tag: 'LIVE_PAD_LATE', target: padTarget });
+  });
+
+  it('해소 칭찬이 아닌 결정은 recoveredFrom이 null이고, 칭찬 뒤에는 기록을 비운다', () => {
+    const p = new CoachPolicy();
+    p.decide([on('A', { tag: 'LIVE_LATE' })], ctx(10_000));
+    p.decide([ev('A', { release: true })], ctx(12_000));
+    expect(p.decide([], ctx(10_000 + minGapMs), good).recoveredFrom).toEqual({ tag: 'LIVE_LATE', target: null });
+    expect(p.decide([], ctx(10_000 + minGapMs + praiseGapMs), good).recoveredFrom).toBeNull();
   });
 
   it('놓침이 많아 후보가 없으면 미뤘다가 후보가 생기면 띄운다', () => {
