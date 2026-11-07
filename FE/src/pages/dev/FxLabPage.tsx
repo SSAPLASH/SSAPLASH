@@ -11,7 +11,7 @@ import type { FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/pads';
 import { audioEngine } from '@/audio/AudioEngine';
 import { unlockAudio } from '@/app/bootstrap';
-import { LAB_PATTERNS, combineStats, hitsInWindow, isLabPattern, type LabPatternId, type LabStats } from './fxLabPatterns';
+import { LAB_JUDGEMENTS, LAB_PATTERNS, combineStats, hitsInWindow, isLabJudgement, isLabPattern, labJudgementFields, type LabJudgementId, type LabPatternId, type LabStats } from './fxLabPatterns';
 import './FxLabPage.css';
 
 type Side = 'a' | 'b';
@@ -45,6 +45,8 @@ export interface FxLabApi {
   setReduced(on: boolean): void;
   /** 'ab' 나란히 / 'single' A만 크게 */
   setView(v: View): void;
+  /** 판정 선택(없음/perfect/good-early/good-late/stray/mix). 이후 타격에 판정을 붙여 보낸다 */
+  setJudgement(id: LabJudgementId): void;
   /** 고정 세기(1~127). null이면 패턴 악센트 */
   setFixedVelocity(v: number | null): void;
   /** 현재 통계. 단일 보기면 b는 null, total은 마운트된 킷의 합 */
@@ -91,6 +93,7 @@ export function FxLabPage() {
   const [pattern, setPatternState] = useState<LabPatternId>('off');
   const [fixedOn, setFixedOn] = useState(false);
   const [velocity, setVelocity] = useState(100);
+  const [judgeId, setJudgeIdState] = useState<LabJudgementId>('none');
   const [sound, setSound] = useState(false);
   const [manual, setManual] = useState(true);
   const [reduced, setReduced] = useState(false);
@@ -104,7 +107,7 @@ export function FxLabPage() {
   const seqRef = useRef(0);
 
   // 시계·이벤트 경로가 읽는 최신 값(React 렌더와 무관하게 즉시 반영)
-  const live = useRef({ pattern: 'off' as LabPatternId, fixedOn: false, velocity: 100, sound: false, manual: true, view: 'ab' as View });
+  const live = useRef({ pattern: 'off' as LabPatternId, fixedOn: false, velocity: 100, sound: false, manual: true, view: 'ab' as View, judge: 'none' as LabJudgementId });
   useEffect(() => {
     live.current.fixedOn = fixedOn;
     live.current.velocity = velocity;
@@ -117,11 +120,22 @@ export function FxLabPage() {
   const emitHit = useCallback(
     (pad: PadId, accent: number) => {
       const v = live.current.fixedOn ? live.current.velocity : accent;
-      emitter.emit({ seq: ++seqRef.current, pad, velocity: v, mode: 'lab', judgement: null, deltaMs: null, combo: null });
+      const seq = ++seqRef.current;
+      emitter.emit({ seq, pad, velocity: v, mode: 'lab', combo: null, noteIndex: null, ...labJudgementFields(live.current.judge, seq) });
       if (live.current.sound) audioEngine.trigger(pad, v);
     },
     [emitter],
   );
+
+  const setJudge = useCallback((id: LabJudgementId) => {
+    live.current.judge = id;
+    setJudgeIdState(id);
+  }, []);
+
+  /** 깨짐 미리보기: 패드 화면에는 MISS가 나오지 않으므로 스네어 위에 파편만 낸다 */
+  const previewShatter = useCallback(() => {
+    emitter.emit({ seq: ++seqRef.current, pad: 'SNARE', velocity: 0, mode: 'lab', judgement: 'MISS', deltaMs: null, combo: null, noteIndex: null, stray: false });
+  }, [emitter]);
 
   const applyPattern = useCallback((id: LabPatternId) => {
     live.current.pattern = id;
@@ -193,6 +207,9 @@ export function FxLabPage() {
       setPattern: (id) => {
         if (isLabPattern(id)) applyPattern(id);
       },
+      setJudgement: (id) => {
+        if (isLabJudgement(id)) setJudge(id);
+      },
       setTheme: (side, id) => {
         (side === 'a' ? setThemeA : setThemeB)(id);
         (side === 'a' ? engineA : engineB).current?.setTheme(id);
@@ -226,7 +243,7 @@ export function FxLabPage() {
     return () => {
       delete window.__fxLab;
     };
-  }, [applyPattern, getSnap]);
+  }, [applyPattern, getSnap, setJudge]);
 
   const fxOptions = { reduced: reduced ? true : undefined, maxParticles, glow };
 
@@ -276,7 +293,7 @@ export function FxLabPage() {
   return (
     <main className="fxlab">
       <h1>FX 랩 (개발 전용)</h1>
-      <p className="fxlab-note">같은 이벤트를 두 킷에 동시에 보낸다. 숫자 키 1~6은 A 테마 선택. 패턴·세기·소리는 판정·기록에 들어가지 않는다.</p>
+      <p className="fxlab-note">같은 이벤트를 두 킷에 동시에 보낸다. 숫자 키 1~6은 A 테마 선택. 패턴·세기·소리는 판정·기록에 들어가지 않는다. 판정 선택은 패드 이펙트의 판정 배율·링·헛침 회색 퍼짐을 본다(하이웨이·악보는 실제 화면에서).</p>
 
       <div className="fxlab-controls">
         <div className="fxlab-group">
@@ -298,6 +315,19 @@ export function FxLabPage() {
                 {p.label}
               </button>
             ))}
+          </div>
+        </div>
+        <div className="fxlab-group">
+          판정
+          <div className="fxlab-row">
+            {LAB_JUDGEMENTS.map((j) => (
+              <button key={j.id} type="button" aria-pressed={judgeId === j.id} onClick={() => setJudge(j.id)}>
+                {j.label}
+              </button>
+            ))}
+            <button type="button" onClick={previewShatter}>
+              깨짐 미리보기
+            </button>
           </div>
         </div>
         <div className="fxlab-group">
