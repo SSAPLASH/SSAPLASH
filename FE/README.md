@@ -63,6 +63,16 @@ npm run build      # tsc 타입 검사 + vite 번들
 
 악보 연습 결과의 열린 하이햇 수치는 연주 시작 시 페달이 연결되고 상태를 알고 있었으며 끝까지 관측된 경우에만 표시한다. 중간 연결·끊김이나 열린 노트 타격 상태 미상은 측정 불완전으로 표시한다. 일시정지 중 끊긴 경우도 불완전으로 기록한다. 연결되지 않은 연주와 구 로그에는 수치를 표시하지 않는다. 중도 종료 결과의 분모는 전체 채보 기준이다.
 
+### 실시간 코칭 문구
+
+연주 중 코칭은 "옆에 앉은 드럼 선생님"처럼 말한다(설계 COACH-001). 화면 문구는 모두 `src/coach/live/copy.ts`의 문구 표에서만 고친다(모듈의 `text`는 플레이 로그 전용).
+
+- 행동을 먼저 말한다: 제목은 구령("조금 일찍!"), 이유·방법은 보조 줄. 지적 구령은 8자, 칭찬·세팅 13자, 보조 16자 이내.
+- 말투는 "~해요" 존댓말. 점수·정확도 언급, "틀렸어요/못" 단정, 영어는 쓰지 않는다(`copy.test.ts`가 길이·금지어를 검사한다).
+- 바쁠 땐 구령만: 리듬 게임은 직후 1초에 노트가 4개 이상이면 최대 1.5초 미루고, 그래도 바쁘면 보조 없이 띄운다(`components/play/coachDisplay.ts`). 악보 연습은 미루지 않고 항상 보조까지 보인다.
+- 가리키며 말한다: 패드 대상이면 키트의 그 패드에 링(`DrumKit`의 `coachPad`), 손 대상이면 킷 왼쪽 아래에 왼손/오른손 칩. 문구와 함께 사라진다.
+- 칭찬은 근거가 있을 때만: 해소 칭찬은 무엇이 고쳐졌는지 보조로 말하고(`CoachMessage.recoveredFrom`), 일반 칭찬(`LIVE_GOOD_KEEP`)은 직전 문구 후 20초·최근 12판정 놓침 0일 때만 뜬다(`config.ts`의 `praise.keepMinGapMs`).
+
 ## 폴더 구조
 
 ```
@@ -89,9 +99,9 @@ src/
 │   ├─ stick/        스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, 동글 소스면 P 점 추가, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행)
 │   ├─ report/       상세 분석 섹션 — ReportSummary · PadAccuracyChart · TimingHistogram · NoteTimeline · CoachSummaryCard(총평) · WeakSegments(AI 약점 구간·상태 안내) · SegmentPlaybackPanel(구간 재생 UI) · useSegmentPlayer(구간 재생 상태)
 │   ├─ shell/        앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed`) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
-│   ├─ drum/         드럼 킷 그리기 — Pad · DrumKit · usePadStates · padStateMachine · drum.css
+│   ├─ drum/         드럼 킷 그리기 — Pad · padRing(링 기하) · DrumKit(코칭 대상 패드 링 `coachPad`) · usePadStates · padStateMachine · drum.css
 │   ├─ free/         자유 연습 전용 — AccompanimentBar(반주 없음 상태만) · DisconnectBand(한 손·페달 끊김 띠) · free.css
-│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
+│   └─ play/         연주 흐름 공용(리듬 게임·악보 연습) — SongTable·SongDetailPane(곡 선택 표·상세) · ReadyPanel(연주 준비) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸, 구령+보조 두 줄) · CoachHandChip(코칭 손 대상 칩) · coachDisplay(밀집 구간 유예·구령만 판단) · useCoachLine·coachLineTimer(코칭 문구 3초 표시, 유예 지원) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · recommendationConsentStore(맞춤 곡 추천 학습 동의 상태, 서버 원본·영속 안 함) · songStore(곡 목록·상세·`loadChart`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · adminSongStore(관리자 공용 곡 목록·등록·행별 반주 업로드) · adminBulkStore(CSV 일괄 추가 순차 실행·줄별 결과) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent·recommendation-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157) · adminSongs(관리자 공용 곡 목록·MIDI 등록·반주 업로드, BE 156·262)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)

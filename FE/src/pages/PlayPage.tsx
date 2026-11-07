@@ -20,6 +20,8 @@ import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
 import { useCoachLine } from '@/components/play/useCoachLine';
+import { planCoachDisplay } from '@/components/play/coachDisplay';
+import { CoachHandChip } from '@/components/play/CoachHandChip';
 import { HitReadout } from '@/components/play/HitReadout';
 import { ReadyPanel } from '@/components/play/ReadyPanel';
 import { useSimilarSongs } from '@/components/play/useSimilarSongs';
@@ -153,7 +155,11 @@ function PlayPageBody() {
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교)
   const shadowRef = useRef<CoachShadow | null>(null);
-  const { line: coachLine, show: showCoachLine, clear: clearCoachLine } = useCoachLine<CoachCopy>();
+  const { line: coachLine, show: showCoachLine, cancelPending: cancelPendingCoach, clear: clearCoachLine } = useCoachLine<CoachCopy>();
+  // 일시정지하면 미루는 중이던 문구는 버린다(떠 있는 문구는 기존처럼 그대로 둔다)
+  useEffect(() => {
+    if (pauseReason !== null) cancelPendingCoach();
+  }, [pauseReason, cancelPendingCoach]);
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
@@ -277,7 +283,11 @@ function PlayPageBody() {
         if (!message) return;
         try {
           const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-          if (copy) showCoachLine(copy, message.displayMs);
+          if (copy) {
+            // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
+            const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
+            showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+          }
         } catch {
           // 코칭 오류는 무시한다
         }
@@ -738,15 +748,28 @@ function PlayPageBody() {
             onFrame={onFrame}
           />
         }
-        // 코칭 모드는 라벨+제목 두 줄만 — 보조까지 세 줄이면 51px 칸을 넘친다(설계 U1 결정, 브라우저 확인 64px)
+        // 코칭 모드는 구령(제목)+보조 두 줄. 라벨은 화면에서 감춘다(play.css, 칸 51px 안)
         guide={
           coachLine ? (
-            <GuideSlot mode={coachLine.mode} title={coachLine.title} />
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} sub={coachLine.sub} />
           ) : (
             <GuideSlot mode="guide" title="노트에 맞춰 연주" sub="판정선에 노트가 닿을 때 타격하세요." />
           )
         }
-        kit={<DrumKit scale={0.7} effects states={padStates} labels={false} skin={settings.kitSkin} hitSeq={hitSeq} />}
+        kit={
+          <div className="coach-kit">
+            <DrumKit
+              scale={0.7}
+              effects
+              states={padStates}
+              labels={false}
+              skin={settings.kitSkin}
+              hitSeq={hitSeq}
+              coachPad={coachLine?.target?.kind === 'pad' ? coachLine.target.pad : undefined}
+            />
+            {coachLine?.target?.kind === 'hand' && <CoachHandChip hand={coachLine.target.hand} />}
+          </div>
+        }
         readout={
           <HitReadout
             variant="stack"
