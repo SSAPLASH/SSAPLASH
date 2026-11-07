@@ -15,6 +15,7 @@ import {
 } from '@/domain/drumKit';
 import { HitEffects } from './HitEffects';
 import { Pad, PadDefs } from './Pad';
+import { RING } from './padRing';
 import { usePadHitPulse } from './usePadStates';
 import './drum.css';
 
@@ -52,6 +53,8 @@ export interface DrumKitProps {
   dimAll?: boolean;
   /** 원래 밝기 + 브랜드색 글로우로 켤 패드(지금 칠 패드) */
   lit?: PadId;
+  /** 실시간 코칭이 가리키는 패드. 그 패드에 링을 그린다(문구가 떠 있는 동안만 넘긴다). ghost·lit와 별개 */
+  coachPad?: PadId;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -116,6 +119,7 @@ export function DrumKit({
   appear = false,
   dimAll = false,
   lit,
+  coachPad,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -210,13 +214,26 @@ export function DrumKit({
         ]
           .filter(Boolean)
           .join(' ');
-        const pad = wrapClass ? (
+        const pad0 = wrapClass ? (
           <g className={wrapClass} data-ghost={isGhost || undefined}>
             {padEl}
           </g>
         ) : (
           padEl
         );
+        // 코칭 링: 패드 위에 같은 좌표계(원본 160 기준)로 그린다. 클릭을 가로채지 않는다
+        const ring = RING[p.shape];
+        const pad =
+          coachPad === p.pad ? (
+            <>
+              {pad0}
+              <g className="drum-pad-coach" transform={`translate(${p.left} ${p.top}) scale(${p.w / 160})`} data-coach-pad={p.pad}>
+                <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
+              </g>
+            </>
+          ) : (
+            pad0
+          );
         // 이펙트가 켜진 킷만 패드별 진동 그룹으로 감싼다(꺼진 킷은 마크업 불변). 킥은 킷 전체 그룹이 흔든다
         return effects ? (
           <Shake key={p.pad} className="pad-shake" count={p.pad === 'KICK' ? undefined : shakes[p.pad]}>
