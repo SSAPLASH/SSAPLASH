@@ -5,13 +5,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
 import type { FxEngine } from '@/components/fx/fxEngine';
 import { createFxEmitter, createLiveFxSource } from '@/components/fx/fxSource';
+import { ComboDisplay } from '@/components/play/ComboDisplay';
+import { CelebrationFx } from '@/components/result/CelebrationFx';
+import type { Judgement } from '@/domain/judgement';
 import { KIT_SKINS, KIT_SKIN_LABELS, type KitSkin } from '@/domain/drumKit';
 import { HIT_FX_LAB_THEMES, HIT_FX_THEME_LABELS } from '@/domain/hitFx/themes';
 import type { FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/pads';
 import { audioEngine } from '@/audio/AudioEngine';
 import { unlockAudio } from '@/app/bootstrap';
-import { LAB_JUDGEMENTS, LAB_PATTERNS, combineStats, hitsInWindow, isLabJudgement, isLabPattern, labJudgementFields, type LabJudgementId, type LabPatternId, type LabStats } from './fxLabPatterns';
+import { LAB_COMBO_DEFAULT, LAB_COMBO_STEP_MS, LAB_JUDGEMENTS, LAB_PATTERNS, combineStats, comboSeqSteps, hitsInWindow, isLabJudgement, isLabPattern, labJudgementFields, type LabJudgementId, type LabPatternId, type LabStats } from './fxLabPatterns';
 import './FxLabPage.css';
 
 type Side = 'a' | 'b';
@@ -53,6 +56,10 @@ export interface FxLabApi {
   stats(): FxLabSnapshot;
   /** 프레임 통계·버린 수 초기화 */
   resetStats(): void;
+  /** 콤보 미리보기 재생. 값 순서(기본 [2,10,50,0], 0 = MISS) */
+  playCombo(seq?: readonly number[]): void;
+  /** 결과 축하 미리보기 1회 발사 */
+  celebrate(): void;
 }
 
 declare global {
@@ -103,6 +110,13 @@ export function FxLabPage() {
 
   const engineA = useRef<FxEngine | null>(null);
   const engineB = useRef<FxEngine | null>(null);
+  // 결과 축하 미리보기 엔진(통계 합산용)
+  const engineC = useRef<FxEngine | null>(null);
+  const [comboView, setComboView] = useState<{ combo: number; judgement: Judgement | null; at: number | null }>({ combo: 0, judgement: null, at: null });
+  const [comboPlacement, setComboPlacement] = useState<'top' | 'stage'>('top');
+  const [celebrateRun, setCelebrateRun] = useState(0);
+  const comboTimers = useRef<number[]>([]);
+  const comboAt = useRef(0);
   const [emitter] = useState(createFxEmitter);
   const seqRef = useRef(0);
 
@@ -136,6 +150,26 @@ export function FxLabPage() {
   const previewShatter = useCallback(() => {
     emitter.emit({ seq: ++seqRef.current, pad: 'SNARE', velocity: 0, mode: 'lab', judgement: 'MISS', deltaMs: null, combo: null, noteIndex: null, stray: false });
   }, [emitter]);
+
+  /** 콤보 미리보기: 값 순서대로 일정 간격으로 ComboDisplay에 판정을 넣는다(세션 없이 props만) */
+  const playCombo = useCallback((seq: readonly number[] = LAB_COMBO_DEFAULT) => {
+    comboTimers.current.forEach((t) => window.clearTimeout(t));
+    comboTimers.current = [];
+    // 처음부터 보이도록 먼저 비운다(콤보 0·판정 없음 = 숨김)
+    setComboView({ combo: 0, judgement: null, at: null });
+    comboSeqSteps(seq).forEach((step, i) => {
+      comboTimers.current.push(
+        window.setTimeout(() => setComboView({ combo: step.combo, judgement: step.judgement, at: ++comboAt.current }), 60 + i * LAB_COMBO_STEP_MS),
+      );
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      comboTimers.current.forEach((t) => window.clearTimeout(t));
+    },
+    [],
+  );
+  const celebrateNow = useCallback(() => setCelebrateRun((n) => n + 1), []);
 
   const applyPattern = useCallback((id: LabPatternId) => {
     live.current.pattern = id;
@@ -174,7 +208,9 @@ export function FxLabPage() {
   const getSnap = useCallback((): FxLabSnapshot => {
     const a = engineA.current?.stats() ?? null;
     const b = live.current.view === 'ab' ? (engineB.current?.stats() ?? null) : null;
-    return { a, b, total: combineStats([a, b].filter((x): x is LabStats => x !== null)) };
+    // 축하 미리보기 캔버스가 떠 있으면 합계에 함께 센다
+    const c = engineC.current?.stats() ?? null;
+    return { a, b, total: combineStats([a, b, c].filter((x): x is LabStats => x !== null)) };
   }, []);
 
   useEffect(() => {
@@ -237,13 +273,18 @@ export function FxLabPage() {
         if (v !== null) setVelocity(v);
       },
       stats: getSnap,
-      resetStats: () => both((e) => e.resetStats()),
+      resetStats: () => {
+        both((e) => e.resetStats());
+        engineC.current?.resetStats();
+      },
+      playCombo,
+      celebrate: celebrateNow,
     };
     window.__fxLab = api;
     return () => {
       delete window.__fxLab;
     };
-  }, [applyPattern, getSnap, setJudge]);
+  }, [applyPattern, getSnap, setJudge, playCombo, celebrateNow]);
 
   const fxOptions = { reduced: reduced ? true : undefined, maxParticles, glow };
 
@@ -331,6 +372,24 @@ export function FxLabPage() {
           </div>
         </div>
         <div className="fxlab-group">
+          콤보·결과 연출
+          <div className="fxlab-row">
+            <button type="button" onClick={() => playCombo()}>
+              콤보 미리보기
+            </button>
+            <label>
+              위치
+              <select value={comboPlacement} aria-label="콤보 위치" onChange={(e) => setComboPlacement(e.target.value as 'top' | 'stage')}>
+                <option value="top">A 상단 중앙 상시</option>
+                <option value="stage">B 단계 때만 가운데</option>
+              </select>
+            </label>
+            <button type="button" onClick={celebrateNow}>
+              축하 미리보기
+            </button>
+          </div>
+        </div>
+        <div className="fxlab-group">
           세기
           <div className="fxlab-row">
             <label>
@@ -392,6 +451,16 @@ export function FxLabPage() {
       <div className="fxlab-kits">
         {kit('a')}
         {view === 'ab' && kit('b')}
+      </div>
+
+      <div className="fxlab-previews">
+        <section className="fxlab-combo-stage" aria-label="콤보 미리보기">
+          <ComboDisplay combo={comboView.combo} judgement={comboView.judgement} at={comboView.at} placement={comboPlacement} />
+        </section>
+        <section className="fxlab-celebrate-card" aria-label="축하 미리보기">
+          <span className="fxlab-celebrate-text">최고 기록 갱신 · 이전 1,200,000 → 현재 1,310,000</span>
+          {celebrateRun > 0 && <CelebrationFx key={celebrateRun} engineRef={engineC} reduced={reduced ? true : undefined} />}
+        </section>
       </div>
 
       <table className="fxlab-stats" aria-label="성능">

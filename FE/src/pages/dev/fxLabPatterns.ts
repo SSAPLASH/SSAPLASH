@@ -169,3 +169,23 @@ function mixPick(seq: number): LabJudgementId {
   if (r < 0.9) return rand01(seq, 11) < 0.5 ? 'good-early' : 'good-late';
   return 'stray';
 }
+
+/** 콤보 미리보기 기본 순서: 2(표시) → 10(pulse) → 50(burst) → 0(MISS, break). 0은 MISS를 뜻한다 */
+export const LAB_COMBO_DEFAULT: readonly number[] = [2, 10, 50, 0];
+/** 콤보 미리보기 단계 간격(ms) */
+export const LAB_COMBO_STEP_MS = 900;
+
+export interface LabComboStep {
+  combo: number;
+  judgement: Judgement;
+}
+
+/** 콤보 값 순서 → ComboDisplay에 넣을 단계. 0·음수는 MISS(콤보 0), 그 외는 PERFECT. 값이 정수가 아니면 건너뛴다 */
+export function comboSeqSteps(seq: readonly number[]): LabComboStep[] {
+  const out: LabComboStep[] = [];
+  for (const v of seq) {
+    if (!Number.isInteger(v)) continue;
+    out.push(v <= 0 ? { combo: 0, judgement: 'MISS' } : { combo: v, judgement: 'PERFECT' });
+  }
+  return out;
+}
