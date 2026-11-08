@@ -713,6 +713,26 @@ uv run python scripts/tom_rule_pick.py select --egmd data/results/tom-rule-retun
 uv run python scripts/tom_rule_pick.py enst --pick docs/chart-rules/tom-rule-retune-2026-11/pick.json --set enst_drums=data/results/tom-rule-retune/stream_enst_drums.csv:0.828 --set enst_mix_g100=data/results/tom-rule-retune/stream_enst_sep.csv:0.782 --out docs/chart-rules/tom-rule-retune-2026-11/enst.md
 ```
 
+### 실제 곡(Songsterr 인기곡)으로 채보 평가
+
+데이터셋 `kind: songsterr`는 Songsterr 드럼 탭을 원곡 박에 맞춘 정답과 서비스 분리 모델이 뽑은 드럼을 읽는다. 곡 폴더는 `data/songsterr/{곡}/final/`이다. 시험 31곡 `public_songs.yaml`, 학습·검증용 새 곡 `public_songs_train_*.yaml`·`public_songs_val.yaml`, 확인용 처음 보는 곡 `public_songs_holdout38.yaml`이 있다. 결과와 결론은 `docs/bench/public-songs-2026-11/expand.md`, 후처리 후보는 `docs/chart-rules/postproc-2026-11/summary.md`.
+
+| 스크립트 | 하는 일 |
+| --- | --- |
+| `public_songs_eval.py features` | 분리 드럼으로 채보 특징을 만들고 `stem_input`으로 입력 드럼을 같이 저장 |
+| `make_songsterr_splits.py` | 정렬 결과가 좋은 새 곡을 검증·학습 목록으로 나누고 학습 설정 `configs/train/songsterr_*.yaml`을 만듦 |
+| `postproc_eval.py` | 규칙 값·문턱값·후처리 후보를 곡마다 채점하고, 같은 곡끼리 다시 뽑은 95% 구간으로 비교 |
+| `ensemble_eval.py` | ADTOF 가중치·입력 여러 개의 점수를 열마다 평균해 채보. `--pads`로 크래시·라이드 이름을 8패드 모델 것으로 바꾼 줄도 냄 |
+| `pad_combo_eval.py` | 서비스 채보와 8패드 학습 모델을 패드별로 섞어 채점 |
+| `tom_merged_eval.py` | 탐 3종을 하나로 합쳐 채점 |
+| `repeat_consensus_eval.py` | 비슷한 마디끼리 ADTOF 점수를 섞어 채보 |
+| `hit_error_breakdown.py`, `time_offset_eval.py` | 틀린 타격 종류별 개수, 타격 시각을 일정하게 밀었을 때 점수 |
+
+```bash
+uv run python scripts/public_songs_eval.py features --songs data/songsterr --out data/rule_features/public_songs
+uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_songs_holdout38.yaml --pads data/models/songsterr_ft/pads_all_noguard/last.pth --cand base=default@drums --cand avg_five_notom=default@drums,data/models/songsterr_ft/five_all/last.pth@drums:kshc --out data/results/ensemble/holdout38.csv
+```
+
 ### 채보 모델 파인튜닝 (S15P31A307-164)
 
 1순위 채보 모델 ADTOF Frame_RNN(파라미터 45만 개)을 E-GMD·STAR Drums의 정답 드럼 트랙으로 더 학습시켜 탐 검출을 올린다. 2026-10-31 결과로 파인튜닝 가중치는 채택하지 않았다. MDB 탐은 올랐지만 학습에 안 쓴 실제 녹음 ENST에서 탐이 떨어졌다(`docs/chart-rules/tom-finetune-2026-10-31/summary.md`). 서비스는 기본 가중치 그대로이고 아래 도구는 재시도용으로 남긴다. 모델 구조·입력 특징은 그대로이고 가중치 파일만 바뀌므로 어댑터·벤치마크·서비스 추론은 yaml의 `checkpoint_path`만 바꾸면 그대로 돈다. 원본 ADTOF 학습 코드는 Keras이고 학습 데이터는 신청제라 학습 코드를 새로 썼다(`src/ssaplash_ai/train/`). 학습은 GPU 서버에서 `notebooks/tom_finetune_server.ipynb`로 돌리고, 로컬은 pytest의 합성 데이터 몇 스텝(CPU)까지만 한다.
