@@ -45,6 +45,8 @@ export interface FxEngine {
   setView(view: FxView): void;
   detach(): void;
   emit(event: FxEvent): void;
+  /** 이벤트·위치·테마를 거치지 않고 만든 파티클을 바로 넣는다(결과 축하 같은 판정 밖 연출). 상한·수명 규칙은 emit과 같다 */
+  spawn(particles: readonly FxParticle[]): void;
   /** 이벤트 → 위치 함수. null이면 기본(킷 좌표의 패드 위치). 하이웨이·악보는 판정 이펙트 전용 locate를 넣는다 */
   setLocate(fn: FxLocate | null): void;
   /** 판정 색(디자인 토큰을 읽은 값). 캔버스는 CSS 변수를 못 쓴다 */
@@ -143,6 +145,18 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     if (pool.length > 0) schedule();
   }
 
+  function spawn(particles: readonly FxParticle[]) {
+    const t = now();
+    const n = Math.min(particles.length, MAX_SPAWN);
+    for (let i = 0; i < n; i++) pool.push({ p: particles[i]!, t0: t, additive: false });
+    const over = pool.length - max;
+    if (over > 0) {
+      pool.splice(0, over);
+      dropped += over;
+    }
+    if (pool.length > 0) schedule();
+  }
+
   function stats(): FxStats {
     const t = now();
     const vals: number[] = [];
@@ -182,6 +196,7 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
       view = null;
     },
     emit,
+    spawn,
     setTheme(id) {
       theme = id;
     },
