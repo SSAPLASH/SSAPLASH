@@ -1,12 +1,18 @@
 // 리듬 게임 노트 레인 (Canvas 2D, Figma Play 112:499). 노트가 위에서 판정선으로 떨어진다.
 // 레인 순서는 domain/highwayLanes, 카운트인 숫자는 play/Countdown이 그린다. 폭·높이는 부모가 정한다.
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { FxCanvas } from '@/components/fx/FxCanvas';
+import { readFxColors } from '@/components/fx/judgeColors';
+import { JUDGE_COLORS_FALLBACK } from '@/domain/hitFx/judgeFx';
+import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
+import { highwayLayout, laneCenterX, locateHighway, noteY } from './highwayGeometry';
 import { PAD_META, type PadId } from '@/domain/pads';
 import { HIGHWAY_LANES } from '@/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { barTimeMs, beatAtMs } from '@/domain/tempo';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
+import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from './popupLook';
 import './NoteHighway.css';
 
 export interface Popup {
@@ -24,10 +30,16 @@ export interface NoteHighwayProps {
   popups: React.RefObject<Popup[]>;
   keyMap?: KeyMap;
   onFrame?: (now: number) => void;
+  /** 판정 이펙트 소스(PERFECT·GOOD 판정선 폭발, MISS 깨짐). 없으면 이펙트 캔버스를 만들지 않는다 */
+  fxSource?: FxSource;
+  /** 하이웨이 안쪽에 얹는 것(판정선 아래 가운데에 놓는 타이밍 막대 등) */
+  overlay?: ReactNode;
+  /** 하이웨이 상단 가운데에 얹는 것(콤보 표시). 레인 이름 줄 아래 */
+  topOverlay?: ReactNode;
 }
-
-const JUDGE_COLOR: Record<Judgement, string> = { PERFECT: '#ffd166', GOOD: '#5fb8ae', MISS: '#e05a5a' };
 const JUDGE_LABEL: Record<Judgement, string> = { PERFECT: 'PERFECT', GOOD: 'GOOD', MISS: 'MISS' };
+
+const FONT = 'Pretendard Variable, Pretendard, sans-serif';
 
 export function NoteHighway(props: NoteHighwayProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -37,6 +49,26 @@ export function NoteHighway(props: NoteHighwayProps) {
   useEffect(() => {
     propsRef.current = props;
   });
+
+  // 이펙트 위치 찾기: 지금 크기·세션·스크롤 시간으로 계산한다(렌더마다 바뀌는 값은 ref로)
+  const locate = useCallback((e: FxEvent): FxLocation | null => {
+    const wrap = wrapRef.current;
+    const p = propsRef.current;
+    const s = p.session;
+    if (!wrap || !s) return null;
+    return locateHighway(e, {
+      width: wrap.clientWidth,
+      height: wrap.clientHeight,
+      lanes: HIGHWAY_LANES,
+      noteOf: (i) => {
+        const n = s.notes[i];
+        return n ? { pad: n.note.pad, timeMs: n.note.timeMs } : undefined;
+      },
+      songTime: s.songTime(performance.now()),
+      scrollMs: p.scrollMs,
+      tintOf: (pad) => PAD_META[pad].color,
+    });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -52,7 +84,15 @@ export function NoteHighway(props: NoteHighwayProps) {
       text2: tok('--text-2', '#98a2b1'),
       text3: tok('--text-3', '#828d9e'),
       canvas: tok('--bg-canvas', '#050607'),
+      perfect: tok('--perfect', JUDGE_COLORS_FALLBACK.perfect),
+      good: tok('--good', JUDGE_COLORS_FALLBACK.good),
+      miss: tok('--miss', JUDGE_COLORS_FALLBACK.miss),
     };
+    // 팝업은 UX-21 네온(--fx-*)으로 그린다(U1 ①). 노트·판정선은 위 상태 토큰 그대로
+    const neon = readFxColors();
+    const judgeColor: Record<Judgement, string> = { PERFECT: neon.perfect, GOOD: neon.good, MISS: neon.miss };
+    // 모션 줄이기: 놓친 노트가 깨지지 않고 지금처럼 흐려진 채 내려간다
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let raf = 0;
     const draw = () => {
       const p = propsRef.current;
@@ -69,10 +109,8 @@ export function NoteHighway(props: NoteHighwayProps) {
       ctx.clearRect(0, 0, W, H);
 
       const lanes = HIGHWAY_LANES;
-      const laneW = W / lanes.length;
-      const judgeY = H - 90;
-      const top = 30;
-      const travel = judgeY - top;
+      const layout = highwayLayout(W, H, lanes.length);
+      const { laneW, judgeY, top, travel } = layout;
       const s = p.session;
       const t = s ? s.songTime(now) : 0;
 
@@ -150,19 +188,23 @@ export function NoteHighway(props: NoteHighwayProps) {
           const dt = n.note.timeMs - t;
           if (dt > p.scrollMs) break;
           if (n.judgement !== null && n.judgement !== 'MISS') continue;
+          // 놓친 노트는 깨진 뒤(이펙트 캔버스가 파편을 낸다) 더 그리지 않는다. 모션 줄이기면 흐리게 남긴다
+          if (n.judgement === 'MISS' && !reduced) continue;
           if (dt < -300) continue;
           // 레인에 없는 패드는 그리지 않는다(첫 레인에 엉뚱하게 떨어지지 않게). 판정은 엔진이 그대로 한다
           const li = laneIndex.get(n.note.pad);
           if (li === undefined) continue;
-          const y = judgeY - (dt / p.scrollMs) * travel;
-          const cx = li * laneW + laneW / 2;
+          const y = noteY(layout, dt, p.scrollMs);
+          const cx = laneCenterX(layout, li);
           // Figma 노트: 레인 폭의 약 57%(132에 76) × 높이 20, radius 10인 가로 막대. 중심 y는 판정 위치 그대로
           const nw = laneW * 0.57;
           const nh = 20;
           ctx.beginPath();
           ctx.roundRect(cx - nw / 2, y - nh / 2, nw, nh, nh / 2);
-          ctx.fillStyle = n.judgement === 'MISS' ? 'rgba(224,90,90,0.4)' : PAD_META[n.note.pad].color;
+          if (n.judgement === 'MISS') ctx.globalAlpha = 0.4;
+          ctx.fillStyle = n.judgement === 'MISS' ? C.miss : PAD_META[n.note.pad].color;
           ctx.fill();
+          ctx.globalAlpha = 1;
           if (n.judgement !== 'MISS') {
             ctx.strokeStyle = C.canvas;
             ctx.lineWidth = 2;
@@ -171,32 +213,47 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       }
 
-      // 판정 팝업
+      // 판정 팝업(스탬프). 글로우는 shadowBlur 대신 굵은 반투명 stroke 한 번으로 낸다(D2-1). 동시 16개까지
       const popups = p.popups.current;
       if (popups) {
+        if (popups.length > MAX_POPUPS) popups.splice(0, popups.length - MAX_POPUPS);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.lineJoin = 'round';
         for (let i = popups.length - 1; i >= 0; i--) {
           const pop = popups[i];
           const age = now - pop.at;
-          if (age > 600) {
+          if (age > POPUP_LIFE_MS) {
             popups.splice(i, 1);
             continue;
           }
           const li = lanes.indexOf(pop.pad);
-          const cx = li * laneW + laneW / 2;
-          const a = 1 - age / 600;
-          const y = judgeY - 70 - age * 0.06;
-          ctx.globalAlpha = a;
-          ctx.fillStyle = JUDGE_COLOR[pop.judgement];
-          ctx.font = `800 ${pop.judgement === 'PERFECT' ? 20 : 17}px Pretendard Variable, Pretendard, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillText(JUDGE_LABEL[pop.judgement], cx, y);
-          if (pop.deltaMs !== null && pop.judgement !== 'PERFECT') {
-            ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
-            ctx.fillStyle = 'rgba(243,239,230,0.8)';
-            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, cx, y + 18);
+          const look = popupLook(pop.judgement, age, reduced);
+          const cx = li * laneW + laneW / 2 + look.dx;
+          const y = judgeY - 70 - look.rise;
+          const color = judgeColor[pop.judgement];
+          const size = pop.judgement === 'PERFECT' ? 22 : 17;
+          ctx.save();
+          ctx.translate(cx, y);
+          ctx.scale(look.scale, look.scale);
+          ctx.font = `800 ${size}px ${FONT}`;
+          if (pop.judgement !== 'MISS') {
+            ctx.globalAlpha = look.alpha * (pop.judgement === 'PERFECT' ? 0.35 : 0.3);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = pop.judgement === 'PERFECT' ? 6 : 4;
+            ctx.strokeText(JUDGE_LABEL[pop.judgement], 0, 0);
           }
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = look.alpha;
+          ctx.fillStyle = color;
+          ctx.fillText(JUDGE_LABEL[pop.judgement], 0, 0);
+          if (pop.deltaMs !== null && pop.judgement !== 'PERFECT') {
+            ctx.font = `600 12px ${FONT}`;
+            ctx.fillStyle = 'rgba(243,239,230,0.8)';
+            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, 0, 18);
+          }
+          ctx.restore();
         }
+        ctx.globalAlpha = 1;
       }
 
       raf = requestAnimationFrame(draw);
@@ -208,6 +265,9 @@ export function NoteHighway(props: NoteHighwayProps) {
   return (
     <div ref={wrapRef} className="play-highway">
       <canvas ref={canvasRef} />
+      {props.fxSource && <FxCanvas space="pixel" mode="game" source={props.fxSource} locate={locate} />}
+      {props.topOverlay && <div className="play-highway-top">{props.topOverlay}</div>}
+      {props.overlay && <div className="play-highway-overlay">{props.overlay}</div>}
     </div>
   );
 }

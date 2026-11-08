@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { SongCover } from '@/components/song/SongCover';
 import { chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { PlayIcon } from './StudioIcons';
-import { SongMenu, type SongEditKind } from './SongMenu';
+import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
 import { SongStatusBadge } from './SongStatusBadge';
 import './studio.css';
@@ -20,11 +20,13 @@ interface Props {
   onReupload: (song: SongSummary) => void;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
+  /** 있으면 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다(악보-곡 연결 스위치 켜짐) */
+  onSheet?: (kind: SongSheetKind, song: SongSummary) => void;
   /** 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
   onCoverError?: () => void;
 }
 
-export function MySongCard({ song, justDone, onReupload, onEdit, onCoverError }: Props) {
+export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCoverError }: Props) {
   const query = `scope=MINE&song=${song.id}`;
   const ready = song.status === 'READY';
   const failed = song.status === 'FAILED';
@@ -40,7 +42,15 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onCoverError }:
             <PlayIcon />
           </Link>
         )}
-        {showMenu && <SongMenu className="studio-card-menu" title={song.title} status={song.status} onPick={(kind) => onEdit(kind, song)} />}
+        {showMenu && (
+          <SongMenu
+            className="studio-card-menu"
+            title={song.title}
+            status={song.status}
+            onPick={(kind) => onEdit(kind, song)}
+            sheet={onSheet && { sheetId: song.sheetId, onPick: (kind) => onSheet(kind, song) }}
+          />
+        )}
       </div>
       <span className="studio-card-title" title={song.title}>
         {song.title}
@@ -51,6 +61,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onCoverError }:
         <SongStatusBadge status={song.status} />
         <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
         {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
+        {song.source === 'MUSICXML' && <span className="studio-chip">MusicXML</span>}
       </div>
 
       {ready && (

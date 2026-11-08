@@ -16,6 +16,8 @@ export interface ListSongsParams {
   songLevel?: SongLevel;
   /** true면 READY이면서 곡 난이도가 있는 곡만(곡 선택·추천). false·생략이면 쿼리를 보내지 않는다 */
   playableOnly?: boolean;
+  /** true면 반주가 있거나 만드는 중인 곡만(자유 연습 반주 선택 창, 설계 MODE-002 3-2). false·생략이면 쿼리를 보내지 않는다 */
+  withAccompaniment?: boolean;
 }
 
 /** `GET /api/v1/songs` */
@@ -27,8 +29,22 @@ export async function listSongs(params: ListSongsParams, signal?: AbortSignal): 
   if (params.size !== undefined) qs.set('size', String(params.size));
   if (params.songLevel) qs.set('songLevel', params.songLevel);
   if (params.playableOnly) qs.set('playableOnly', 'true');
+  if (params.withAccompaniment) qs.set('withAccompaniment', 'true');
   const body = await apiFetch<{ items?: Record<string, unknown>[]; hasNext?: boolean }>(`/api/v1/songs?${qs}`, { signal });
   return { items: (body.items ?? []).map(songFromDto), hasNext: body.hasNext === true };
+}
+
+/** 곡 단위 반주 URL. 반주가 없으면 url·expiresAt 모두 null */
+export interface SongAccompaniment {
+  url: string | null;
+  expiresAt: string | null;
+}
+
+/** `GET /api/v1/songs/{songId}/accompaniment` (BE 265). 실패는 ApiError 그대로 던진다(문구 변환은 호출자) */
+export async function getSongAccompaniment(songId: number, signal?: AbortSignal): Promise<SongAccompaniment> {
+  const body = await apiFetch<{ accompanimentUrl?: unknown; expiresAt?: unknown }>(`/api/v1/songs/${songId}/accompaniment`, { signal });
+  const url = typeof body.accompanimentUrl === 'string' && body.accompanimentUrl !== '' ? body.accompanimentUrl : null;
+  return { url, expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : null };
 }
 
 /** `GET /api/v1/songs/{id}` — 난이도별 채보 요약 포함 */
@@ -81,6 +97,16 @@ export async function uploadMidi(draft: MidiDraft, signal?: AbortSignal): Promis
   if (draft.artist.trim() !== '') form.append('artist', draft.artist.trim());
   form.append('file', draft.file);
   const body = await apiFetch<Record<string, unknown>>('/api/v1/songs/midi', { method: 'POST', body: form, signal });
+  return songDetailFromDto(body);
+}
+
+/** `POST /api/v1/songs/musicxml` — MIDI와 같은 multipart, 201 곡 상세(`source=MUSICXML`). AI 변환은 BE가 동기로 한다 (293) */
+export async function uploadMusicXml(draft: MidiDraft, signal?: AbortSignal): Promise<SongDetail> {
+  const form = new FormData();
+  form.append('title', draft.title.trim());
+  if (draft.artist.trim() !== '') form.append('artist', draft.artist.trim());
+  form.append('file', draft.file);
+  const body = await apiFetch<Record<string, unknown>>('/api/v1/songs/musicxml', { method: 'POST', body: form, signal });
   return songDetailFromDto(body);
 }
 

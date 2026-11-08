@@ -5,7 +5,7 @@
 import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { gateFeatures, isGatedTag, type CoachGate, type GateDecision, type GateMode } from './gate/gate';
 import { gateMode, loadedCoachGate, preloadCoachGate } from './gate/loader';
-import { CoachPolicy } from './policy';
+import { CoachPolicy, type RecoveredFrom } from './policy';
 import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
 import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
 import { JudgedWindow, type JudgedNote } from './window';
@@ -43,6 +43,8 @@ export interface CoachMessage {
   target: CoachTarget | null;
   /** 이 플레이에서 같은 태그가 앞서 뜬 횟수. 화면 문구를 돌려 쓰는 데 쓴다 */
   repeat: number;
+  /** LIVE_GOOD_RECOVERED일 때만: 해소된 지적 중 가장 최근에 띄웠던 것(무엇이 고쳐졌는지). 그 외 태그는 null */
+  recoveredFrom: RecoveredFrom | null;
 }
 
 /** 플레이 로그 liveCoachEvents[] 한 항목. BE 검증: tMs 유한 수, tag ≤ 64자, text ≤ 2048자, 최대 1,000개 */
@@ -95,7 +97,7 @@ export class LiveCoach {
       const metrics = this.window.metrics();
       const evals = evaluateRules(metrics, this.thresholds);
       if (this.setupHints) evals.push(...evaluateSetupHints(metrics).filter((e) => !this.setupShown.has(e.tag)));
-      const { show, recovered, repeat } = this.policy.decide(
+      const { show, recovered, repeat, recoveredFrom } = this.policy.decide(
         evals,
         { songTimeMs: note.songTimeMs, judged: this.window.total },
         evaluatePraise(metrics, this.thresholds),
@@ -105,7 +107,7 @@ export class LiveCoach {
       if (!show) return null;
       if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
-      const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat };
+      const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom };
       const gate = this.gateOption === undefined ? loadedCoachGate() : this.gateOption;
       if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, gateFeatures(metrics, show.tag), onDeferred);
       this.append(note.songTimeMs, show.tag, show.text);

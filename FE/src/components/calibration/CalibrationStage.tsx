@@ -1,5 +1,5 @@
-// 보정·재정렬 본문(PLAY-004 4-1·4-2, UX-64). 보정 중(드럼 배치 카드 안): 킷 위에 큰 안내 「하이햇을 2번 타격하세요」,
-// 킷은 목표 패드가 유령으로 깜빡이고 연결된 손마다 2타를 채우면 그 패드가 실제 친 위치에 나타난다. 오른쪽은 CapturePanel([다시][다음|저장]).
+// 보정·재정렬 본문(PLAY-004 4-1·4-2, UX-64, Figma 보정 무대 766:34637). 보정 중(드럼 배치 카드 안): 킷 위에 큰 안내 「하이햇을 2번 타격하세요」(40px),
+// 킷 전체는 어둡게(0.18) 두고 지금 칠 패드만 원래 밝기 + 글로우. 연결된 손마다 2타를 채우면 그 패드가 실제 친 위치로 옮겨진다. 오른쪽은 CapturePanel([다시][다음|저장]).
 // 재정렬 중(② 카드): 스네어 유령 + RealignPrompt. 계산·전송은 하지 않는다: liveStore.calibration 스냅샷을 읽고 calibrationSession 액션만 부른다.
 import { useEffect, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
@@ -115,10 +115,9 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   if (cal.mode !== 'capture' || !cal.capture) return null;
   const cap = cal.capture;
   const completed = completedOf(cap);
-  // 이번 세션 패드 중 아직 안 잡은 것만 숨긴다. 세션 밖 패드(패드 단위 재보정의 나머지)는 그대로 보인다.
-  // 새 프리셋(추가하기)은 기본 배치를 바탕으로 놓는다
+  // 킷 전체를 어둡게 두고 지금 칠 패드만 켠다(Figma 766:34637). 끝난 패드는 실제 친 위치로 옮기고,
+  // 세션 밖 패드(패드 단위 재보정의 나머지)는 현재 배치 자리. 새 프리셋(추가하기)은 기본 배치를 바탕으로 놓는다
   const base = cal.target === 'new' ? DEFAULT_KIT_LAYOUT : kitLayout;
-  const hidden = cap.order.filter((p) => !completed.includes(p) && p !== cap.target);
   const placement = placementOf(cap, base, tuning.angleRange);
   const onPadClick = (pad: PadId) => {
     if (completed.includes(pad)) calibrationSession.redo(pad);
@@ -129,18 +128,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
       <div className="cal-stage-main">
         <div className="cal-stage-kit">
           {cap.target && <p className="cal-stage-headline">{captureHeadline(cap.target, cap.hands)}</p>}
-          <DrumKit
-            fitWidth
-            skin={kitSkin}
-            states={padStates}
-            hitSeq={hitSeq}
-            hidden={hidden}
-            ghost={cap.target ?? undefined}
-            placement={placement}
-            faded={['KICK']}
-            appear
-            onPadClick={onPadClick}
-          />
+          <DrumKit fitWidth skin={kitSkin} states={padStates} hitSeq={hitSeq} placement={placement} dimAll lit={cap.target ?? undefined} onPadClick={onPadClick} />
         </div>
         <CapturePanel
           cap={cap}

@@ -1,0 +1,201 @@
+/* 악보 뷰어 (Figma Studio / SheetViewer 452:1685, 07-1 악보 뷰어). 전체 화면, 바는 위에 겹치고 몰입 모드에서 숨긴다. */
+.sheet-viewer {
+  --sheet-bar-h: 56px;
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-canvas);
+  color: var(--text-1);
+}
+
+.sheet-viewer-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  height: var(--sheet-bar-h);
+  padding: 0 var(--space-m);
+  /* 우상단 아바타(셸 고정)와 겹치지 않게 오른쪽을 비운다 */
+  padding-right: 72px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line);
+  transition: opacity var(--motion-fade) var(--ease-out), transform var(--motion-move) var(--ease-out);
+}
+.sheet-viewer.immersive .sheet-viewer-bar {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+
+.sheet-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 40px;
+  padding: 0 var(--space-s);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.sheet-back:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+.sheet-viewer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheet-kind-badge {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.sheet-counter {
+  flex: none;
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-size: 14px;
+}
+.sheet-counter-float {
+  position: absolute;
+  top: var(--space-m);
+  left: var(--space-m);
+  z-index: 4;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+}
+
+.sheet-viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--sheet-bar-h);
+  transition: padding-top var(--motion-move) var(--ease-out);
+}
+.sheet-viewer.immersive .sheet-viewer-stage {
+  padding-top: 0;
+}
+.sheet-viewer-loading {
+  color: var(--text-2);
+}
+
+/* 이미지: 한 쪽씩 화면에 맞춰 보인다 */
+.sheet-image-area {
+  position: absolute;
+  inset: var(--sheet-bar-h) 0 40px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+}
+.sheet-viewer.immersive .sheet-image-area {
+  inset: 0 0 40px 0;
+}
+.sheet-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+.sheet-page-caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 40px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.sheet-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 44px;
+  height: 64px;
+  margin-top: -32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sheet-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.sheet-arrow-prev {
+  left: var(--space-m);
+}
+.sheet-arrow-next {
+  right: var(--space-m);
+}
+
+/* PDF: 세로로 이어 스크롤 */
+.pdf-pages {
+  position: absolute;
+  inset: var(--sheet-bar-h) 0 0 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+  padding-bottom: var(--space-l);
+}
+.sheet-viewer.immersive .pdf-pages {
+  inset: 0;
+}
+.pdf-slot {
+  flex: none;
+  background: #fff;
+}
+.pdf-slot canvas {
+  display: block;
+}
+
+/* 태블릿 이하에서 바 간격을 줄인다 */
+@media (max-width: 1024px) {
+  .sheet-viewer-bar {
+    padding-left: var(--space-s);
+  }
+}
+
+/* 폰: 뒤로 아이콘만, 좌우 버튼 숨김(밀기·가장자리 탭으로 넘김) */
+@media (max-width: 600px) {
+  .sheet-back-label,
+  .sheet-arrow {
+    display: none;
+  }
+  .sheet-kind-badge {
+    display: none;
+  }
+}

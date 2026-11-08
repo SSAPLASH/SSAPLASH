@@ -1,4 +1,4 @@
-// 곡 올리기 탭 "음원 / MIDI" (Figma Studio / UploadDialog 224:1069 · 첫 방문 210:2978 업로드 양식). 탭 Chip 두 개와 탭 내용 배치만 한다 — 상태는 받은 props를 그린다.
+// 곡 올리기 탭 "음원 / MIDI·MusicXML" (Figma Studio / UploadDialog 224:1069 · 첫 방문 210:2978 업로드 양식. MusicXML은 293). 탭 Chip 두 개와 탭 내용 배치만 한다 — 상태는 받은 props를 그린다.
 // 창(UploadDialog) 안과 첫 방문 본문에서 같이 쓴다. onCancel이 있으면 하단에 [취소]를 둔다.
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -25,7 +25,7 @@ interface Props {
 
 const TABS: { id: UploadTab; label: string }[] = [
   { id: 'AUDIO', label: '음원' },
-  { id: 'MIDI', label: 'MIDI' },
+  { id: 'MIDI', label: 'MIDI·MusicXML' },
 ];
 
 export function UploadPanel({ tab, onTab, locked, audio, audioBusyTitle, midi, emphasis, onCancel }: Props) {
