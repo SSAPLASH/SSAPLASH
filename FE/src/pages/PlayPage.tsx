@@ -12,6 +12,7 @@ import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
+import { StageFade } from '@/components/StageFade';
 import { PlayStage } from '@/components/play/PlayStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
@@ -633,57 +634,61 @@ function PlayPageBody() {
   // 불러오는 중·오류. 연습 단계를 바꿔 다시 불러올 때도 이 카드로 돌아온다
   if (stage === 'loading') {
     return (
-      <main className="main">
-        <Card padding="md" style={{ maxWidth: 480 }}>
-          <div className="col">
-            {accStatus === 'error' ? (
-              <>
-                <div className="notice error" role="alert">
-                  {accError ?? '반주를 불러오지 못했습니다.'}
-                </div>
-                <div className="row">
-                  {param.loaded && (
-                    <Button
-                      onClick={() => {
-                        acc.unload();
-                        setAccStatus('idle');
-                        if (param.loaded) choose(param.loaded.chart);
-                      }}
-                    >
-                      반주 없이 계속
+      <StageFade stageKey="loading">
+        <main className="main">
+          <Card padding="md" style={{ maxWidth: 480 }}>
+            <div className="col">
+              {accStatus === 'error' ? (
+                <>
+                  <div className="notice error" role="alert">
+                    {accError ?? '반주를 불러오지 못했습니다.'}
+                  </div>
+                  <div className="row">
+                    {param.loaded && (
+                      <Button
+                        onClick={() => {
+                          acc.unload();
+                          setAccStatus('idle');
+                          if (param.loaded) choose(param.loaded.chart);
+                        }}
+                      >
+                        반주 없이 계속
+                      </Button>
+                    )}
+                    <Button variant="secondary" onClick={toSelect}>
+                      곡 선택으로
                     </Button>
-                  )}
+                  </div>
+                </>
+              ) : param.status === 'error' ? (
+                <>
+                  <div className="notice error" role="alert">
+                    {param.error ?? '채보를 불러오지 못했습니다.'}
+                  </div>
                   <Button variant="secondary" onClick={toSelect}>
                     곡 선택으로
                   </Button>
+                </>
+              ) : (
+                <div className="row">
+                  <span className="spinner" aria-label="불러오는 중" />
+                  <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
                 </div>
-              </>
-            ) : param.status === 'error' ? (
-              <>
-                <div className="notice error" role="alert">
-                  {param.error ?? '채보를 불러오지 못했습니다.'}
-                </div>
-                <Button variant="secondary" onClick={toSelect}>
-                  곡 선택으로
-                </Button>
-              </>
-            ) : (
-              <div className="row">
-                <span className="spinner" aria-label="불러오는 중" />
-                <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
-              </div>
-            )}
-          </div>
-        </Card>
-      </main>
+              )}
+            </div>
+          </Card>
+        </main>
+      </StageFade>
     );
   }
 
   if (stage === 'select' || !chart || !session) {
     return (
-      <main className="main">
-        <SongPicker mode="play" onSelect={param.select} />
-      </main>
+      <StageFade stageKey="select">
+        <main className="main">
+          <SongPicker mode="play" onSelect={param.select} />
+        </main>
+      </StageFade>
     );
   }
 
@@ -701,32 +706,34 @@ function PlayPageBody() {
       ? sortCharts(detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty }))
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
-      <main className="main">
-        <BestRecordsNotice status={records.status} retry={records.retry} />
-        <ReadyPanel
-          song={song}
-          modeLabel="리듬 게임"
-          charts={charts}
-          selectedChartId={selectedChartId}
-          bestAccuracy={bestAccuracy}
-          ready={ready}
-          missing={missing}
-          connected={connected}
-          keyboardOnly={settings.sensorKind === 'none'}
-          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
-          presetName={presetName}
-          countInBars={settings.countInBars}
-          onBack={toSelect}
-          onSelectChart={(chartId) => {
-            if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
-          }}
-          onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
-          onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
-          onStart={() => void begin()}
-          realign={realign.info}
-          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
-        />
-      </main>
+      <StageFade stageKey="ready">
+        <main className="main">
+          <BestRecordsNotice status={records.status} retry={records.retry} />
+          <ReadyPanel
+            song={song}
+            modeLabel="리듬 게임"
+            charts={charts}
+            selectedChartId={selectedChartId}
+            bestAccuracy={bestAccuracy}
+            ready={ready}
+            missing={missing}
+            connected={connected}
+            keyboardOnly={settings.sensorKind === 'none'}
+            pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
+            presetName={presetName}
+            countInBars={settings.countInBars}
+            onBack={toSelect}
+            onSelectChart={(chartId) => {
+              if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
+            }}
+            onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
+            onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
+            onStart={() => void begin()}
+            realign={realign.info}
+            footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
+          />
+        </main>
+      </StageFade>
     );
   }
 
