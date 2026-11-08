@@ -2,6 +2,7 @@
 // 레인 순서는 domain/highwayLanes, 카운트인 숫자는 play/Countdown이 그린다. 폭·높이는 부모가 정한다.
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { FxCanvas } from '@/components/fx/FxCanvas';
+import { readFxColors } from '@/components/fx/judgeColors';
 import { JUDGE_COLORS_FALLBACK } from '@/domain/hitFx/judgeFx';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import { highwayLayout, laneCenterX, locateHighway, noteY } from './highwayGeometry';
@@ -11,6 +12,7 @@ import type { RhythmSession } from '@/engine/RhythmSession';
 import { barTimeMs, beatAtMs } from '@/domain/tempo';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
+import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from './popupLook';
 import './NoteHighway.css';
 
 export interface Popup {
@@ -32,8 +34,12 @@ export interface NoteHighwayProps {
   fxSource?: FxSource;
   /** 하이웨이 안쪽에 얹는 것(판정선 아래 가운데에 놓는 타이밍 막대 등) */
   overlay?: ReactNode;
+  /** 하이웨이 상단 가운데에 얹는 것(콤보 표시). 레인 이름 줄 아래 */
+  topOverlay?: ReactNode;
 }
 const JUDGE_LABEL: Record<Judgement, string> = { PERFECT: 'PERFECT', GOOD: 'GOOD', MISS: 'MISS' };
+
+const FONT = 'Pretendard Variable, Pretendard, sans-serif';
 
 export function NoteHighway(props: NoteHighwayProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -82,7 +88,9 @@ export function NoteHighway(props: NoteHighwayProps) {
       good: tok('--good', JUDGE_COLORS_FALLBACK.good),
       miss: tok('--miss', JUDGE_COLORS_FALLBACK.miss),
     };
-    const judgeColor: Record<Judgement, string> = { PERFECT: C.perfect, GOOD: C.good, MISS: C.miss };
+    // 팝업은 UX-21 네온(--fx-*)으로 그린다(U1 ①). 노트·판정선은 위 상태 토큰 그대로
+    const neon = readFxColors();
+    const judgeColor: Record<Judgement, string> = { PERFECT: neon.perfect, GOOD: neon.good, MISS: neon.miss };
     // 모션 줄이기: 놓친 노트가 깨지지 않고 지금처럼 흐려진 채 내려간다
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let raf = 0;
@@ -205,32 +213,47 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       }
 
-      // 판정 팝업
+      // 판정 팝업(스탬프). 글로우는 shadowBlur 대신 굵은 반투명 stroke 한 번으로 낸다(D2-1). 동시 16개까지
       const popups = p.popups.current;
       if (popups) {
+        if (popups.length > MAX_POPUPS) popups.splice(0, popups.length - MAX_POPUPS);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.lineJoin = 'round';
         for (let i = popups.length - 1; i >= 0; i--) {
           const pop = popups[i];
           const age = now - pop.at;
-          if (age > 600) {
+          if (age > POPUP_LIFE_MS) {
             popups.splice(i, 1);
             continue;
           }
           const li = lanes.indexOf(pop.pad);
-          const cx = li * laneW + laneW / 2;
-          const a = 1 - age / 600;
-          const y = judgeY - 70 - age * 0.06;
-          ctx.globalAlpha = a;
-          ctx.fillStyle = judgeColor[pop.judgement];
-          ctx.font = `800 ${pop.judgement === 'PERFECT' ? 20 : 17}px Pretendard Variable, Pretendard, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillText(JUDGE_LABEL[pop.judgement], cx, y);
-          if (pop.deltaMs !== null && pop.judgement !== 'PERFECT') {
-            ctx.font = '600 12px Pretendard Variable, Pretendard, sans-serif';
-            ctx.fillStyle = 'rgba(243,239,230,0.8)';
-            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, cx, y + 18);
+          const look = popupLook(pop.judgement, age, reduced);
+          const cx = li * laneW + laneW / 2 + look.dx;
+          const y = judgeY - 70 - look.rise;
+          const color = judgeColor[pop.judgement];
+          const size = pop.judgement === 'PERFECT' ? 22 : 17;
+          ctx.save();
+          ctx.translate(cx, y);
+          ctx.scale(look.scale, look.scale);
+          ctx.font = `800 ${size}px ${FONT}`;
+          if (pop.judgement !== 'MISS') {
+            ctx.globalAlpha = look.alpha * (pop.judgement === 'PERFECT' ? 0.35 : 0.3);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = pop.judgement === 'PERFECT' ? 6 : 4;
+            ctx.strokeText(JUDGE_LABEL[pop.judgement], 0, 0);
           }
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = look.alpha;
+          ctx.fillStyle = color;
+          ctx.fillText(JUDGE_LABEL[pop.judgement], 0, 0);
+          if (pop.deltaMs !== null && pop.judgement !== 'PERFECT') {
+            ctx.font = `600 12px ${FONT}`;
+            ctx.fillStyle = 'rgba(243,239,230,0.8)';
+            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, 0, 18);
+          }
+          ctx.restore();
         }
+        ctx.globalAlpha = 1;
       }
 
       raf = requestAnimationFrame(draw);
@@ -243,6 +266,7 @@ export function NoteHighway(props: NoteHighwayProps) {
     <div ref={wrapRef} className="play-highway">
       <canvas ref={canvasRef} />
       {props.fxSource && <FxCanvas space="pixel" mode="game" source={props.fxSource} locate={locate} />}
+      {props.topOverlay && <div className="play-highway-top">{props.topOverlay}</div>}
       {props.overlay && <div className="play-highway-overlay">{props.overlay}</div>}
     </div>
   );
