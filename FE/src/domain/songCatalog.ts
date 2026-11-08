@@ -40,6 +40,8 @@ export interface SongSummary {
   createdAt: string;
   /** 커버 이미지 서명 URL. 없으면 null(기본 커버) */
   coverUrl: string | null;
+  /** 이 곡에 연결된 악보 id(설계 CHART-001 악보 보관 3-3). BE가 붙이기 전이거나 연결이 없으면 null */
+  sheetId: number | null;
 }
 
 export interface ChartSummary {
@@ -133,6 +135,7 @@ export function songFromDto(d: Record<string, unknown>): SongSummary {
     ),
     createdAt: String(d.createdAt ?? ''),
     coverUrl: typeof d.coverUrl === 'string' && d.coverUrl !== '' ? d.coverUrl : null,
+    sheetId: d.sheetId == null ? null : toSafeId(d.sheetId, 'sheetId'),
   };
 }
 
@@ -234,13 +237,15 @@ export function isPlayableStatus(status: string): boolean {
   return status === 'READY';
 }
 
-function mineGroup(status: string): number {
+/** 내 곡 정렬 그룹: 처리 중 0 → 실패 1 → 그 밖 2. 악보 항목도 「그 밖」에 속한다 */
+export function mineGroup(status: string): number {
   if (status === 'PROCESSING') return 0;
   if (status === 'FAILED') return 1;
   return 2;
 }
 
-function createdTime(iso: string): number {
+/** createdAt ISO → ms. 해석 못 하면 0 */
+export function createdTime(iso: string): number {
   const t = Date.parse(iso);
   return Number.isFinite(t) ? t : 0;
 }

@@ -170,6 +170,8 @@ describe('LiveCoach 표시 정책', () => {
     const tags = coach.events().map((e) => e.tag);
     expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG, 'LIVE_GOOD_RECOVERED']);
     expect(coach.events()[1].text).toBe('경향 해소: LIVE_LATE');
+    expect(back[0].recoveredFrom).toEqual({ tag: 'LIVE_LATE', target: null });
+    expect(late[0].recoveredFrom).toBeNull();
   });
 });
 

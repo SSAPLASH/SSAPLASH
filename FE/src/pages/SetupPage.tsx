@@ -19,9 +19,11 @@ import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { useHitFx } from '@/components/useHitFx';
 import { PresetChips } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
+import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
 import { ReturnBanner } from '@/components/setup/ReturnBanner';
-import { StepCard } from '@/components/setup/StepCard';
+import { StatusTile } from '@/components/setup/StatusTile';
 import { StickCard } from '@/components/setup/StickCard';
+import { RadiusSlider } from '@/components/calibration/RadiusSlider';
 import { UnsavedLeaveDialog } from '@/components/setup/UnsavedLeaveDialog';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
@@ -281,22 +283,39 @@ export function SetupPage() {
     setNameOpen(purpose);
   };
 
+  /** 초안을 들고 연 슬롯 창(Figma ④). 빈 슬롯을 고르면 그 번호를 들고 이름 창(⑤)으로 */
+  const [slotOpen, setSlotOpen] = useState(false);
+  const [draftSlot, setDraftSlot] = useState<number | null>(null);
+
   const cancelNameDialog = () => {
     presets.clearError();
     setNameOpen(null);
     setDraft(null);
+    setDraftSlot(null);
   };
 
-  /** 마지막 패드의 [저장]: 확인 대기를 끝내고(next) 세션을 마친다. 추가하기면 초안을 들고 이름 창을 연다 */
+  const closeSlotDialog = () => {
+    setSlotOpen(false);
+    setDraft(null);
+    setDraftSlot(null);
+  };
+
+  /** 마지막 패드의 [저장]: 확인 대기를 끝내고(next) 세션을 마친다. 추가하기면 초안을 들고 슬롯 창을 연다 */
   const onCaptureSave = () => {
     calibrationSession.next();
     const result = calibrationSession.finish();
     if (result) {
       setDraft(result);
-      openNameDialog('draft');
+      setSlotOpen(true);
     } else {
       flashSaved();
     }
+  };
+
+  const onPickEmptySlot = (slot: number) => {
+    setSlotOpen(false);
+    setDraftSlot(slot);
+    openNameDialog('draft');
   };
 
   // ---- 복귀·이탈 ----
@@ -373,6 +392,7 @@ export function SetupPage() {
         if (!ok) return; // 오류 문구는 이름 창이 presets.error로 보인다
         setNameOpen(null);
         setDraft(null);
+        setDraftSlot(null);
         if (purpose === 'leave') proceedLeave();
         else flashSaved();
       });
@@ -388,19 +408,24 @@ export function SetupPage() {
     connText = `연결됨 (${connected[0] ? '왼손' : ''}${connected[0] && connected[1] ? '·' : ''}${connected[1] ? '오른손' : ''})`;
   else connText = '연결 안 됨';
 
-  // ---- 단계 카드 공통 ----
+  // ---- 상태 타일 공통(Setup / StatusTile): 누르면 아래로 펼치고 다시 누르면 접는다 ----
   const expandedOf = (id: SetupStepId) => isExpanded(open, id, stepOf(id).status) || (id === 'calibration' && realigning);
-  const openStep = (id: SetupStepId) => setOpen((o) => openByUser(o, id));
-  const collapseStep = (id: SetupStepId) => setOpen((o) => collapse(o, id));
-  const actionLabelOf = (id: SetupStepId): string | undefined => {
+  const toggleStep = (id: SetupStepId) => setOpen((o) => (expandedOf(id) ? collapse(o, id) : openByUser(o, id)));
+  /** 타일 상태 한 단어(Figma StatusTile status 줄) */
+  const tileStatusText = (id: SetupStepId): string => {
     const { status } = stepOf(id);
-    if (id === 'calibration') return status === 'skipped' ? undefined : '열기';
-    // 스틱은 키보드 전용(skipped)이어도 센서를 고르려면 펼칠 수 있어야 한다
-    return status === 'needed' ? '열기' : '변경';
+    if (status === 'skipped') return '필요 없음';
+    if (id === 'stick') return status === 'done' ? '연결됨' : '연결 안 됨';
+    return status === 'done' ? '보정됨' : '보정 필요';
   };
-  const onActionOf = (id: SetupStepId) => () => openStep(id);
 
-  const bar = setupBarView({ activePresetName, dirty, leaving: leaveOpen || nameOpen === 'leave', calibrating });
+  const bar = setupBarView({
+    activePresetName,
+    dirty,
+    leaving: leaveOpen || nameOpen === 'leave',
+    calibrating,
+    draft: draft ? { slot: draftSlot } : null,
+  });
   const nameDialogError = presets.status === 'error' && presets.error ? ERROR_TEXT[presets.error] : null;
   const showPresetError = presets.status === 'error' && presets.error !== null && nameOpen === null;
   const calNeeded = stepOf('calibration').status === 'needed' && !realigning;
@@ -424,18 +449,16 @@ export function SetupPage() {
         </span>
       </div>
 
-      <div className="setup-steps">
+      <div className="setup-tiles">
         {/* ① 스틱 연결 */}
-        <StepCard
+        <StatusTile
           id={STEP_DOM_ID.stick}
-          index={1}
           title="스틱 연결"
           status={stepOf('stick').status}
+          statusText={tileStatusText('stick')}
           summary={stepOf('stick').summary}
-          actionLabel={actionLabelOf('stick')}
-          onAction={onActionOf('stick')}
           expanded={expandedOf('stick')}
-          onCollapse={() => collapseStep('stick')}
+          onToggle={() => toggleStep('stick')}
           urgent={returnTo !== null}
         >
           <div className="setup-col">
@@ -478,19 +501,17 @@ export function SetupPage() {
               <div className="setup-notice">다시 연결됐습니다. 쳐 보고 판정이 밀리면 ②에서 시작 위치를 다시 잡으세요</div>
             )}
           </div>
-        </StepCard>
+        </StatusTile>
 
         {/* ② 시작 위치 보정(기준 자세·스네어 재정렬, UX-64 D7). 2타 보정은 아래 드럼 배치 카드에서 한다 */}
-        <StepCard
+        <StatusTile
           id={STEP_DOM_ID.calibration}
-          index={2}
           title="시작 위치 보정"
           status={stepOf('calibration').status}
+          statusText={tileStatusText('calibration')}
           summary={stepOf('calibration').summary}
-          actionLabel={actionLabelOf('calibration')}
-          onAction={onActionOf('calibration')}
           expanded={expandedOf('calibration')}
-          onCollapse={() => collapseStep('calibration')}
+          onToggle={() => toggleStep('calibration')}
           urgent={returnTo !== null}
         >
           {!sensorMode ? (
@@ -509,7 +530,7 @@ export function SetupPage() {
               {!anyConnected && <p className="setup-note faint">스틱을 연결하면 보정할 수 있습니다.</p>}
             </div>
           )}
-        </StepCard>
+        </StatusTile>
       </div>
 
       {/* 드럼 배치 카드: 프리셋 칩 줄 · 배치 편집기(보정 중에는 보정 무대) · 선택 패드 정보 · 타격 확인(준비 조건이 아니라 단계가 아니다) */}
@@ -565,9 +586,13 @@ export function SetupPage() {
               </div>
               {systemPreset && sensorMode && <p className="setup-note">고정 배치예요. 그 자리를 찾아 치세요. 내 자리로 바꾸려면 [추가하기]로 새 프리셋을 만들어요.</p>}
             </div>
+            {/* 선택 패드 카드(Figma 정보 영역 765:33431, UX-62) */}
             <div className="setup-padinfo">
-              <span className="setup-padinfo-caption">선택 패드</span>
-              <h3 className="setup-padinfo-title">{PAD_META[selectedPad].label}</h3>
+              <div className="setup-padinfo-head">
+                <span className="setup-padinfo-caption">선택 패드</span>
+                <h3 className="setup-padinfo-title">{PAD_META[selectedPad].label}</h3>
+              </div>
+              <hr className="setup-padinfo-rule" />
               <dl className="setup-padinfo-values">
                 <div>
                   <dt>위치 X</dt>
@@ -586,13 +611,10 @@ export function SetupPage() {
               </dl>
               {/* 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다 */}
               {selectedRadius !== null && (
-                <Slider
-                  label="반지름"
+                <RadiusSlider
+                  value={selectedRadius}
                   min={s.tuning.minRadiusDeg}
                   max={s.tuning.maxRadiusDeg}
-                  step={1}
-                  value={Math.round(selectedRadius)}
-                  valueText={`${Math.round(selectedRadius)}°`}
                   disabled={systemPreset}
                   onChange={(v) => s.setRadiusOverride(selectedPad, v)}
                 />
@@ -601,22 +623,21 @@ export function SetupPage() {
                 <p className="setup-padinfo-hint">
                   패드를 눌러 고르면 위치를 볼 수 있어요. 한 드럼만 다른 자리로 옮기려면 [이 드럼 다시 치기]로 그 자리를 2번씩 쳐요.
                 </p>
-                <div className="setup-row">
-                  {/* 패드 단위 재보정(PLAY-004 후속 T9): 선택한 스틱 패드만 연결된 손마다 2타. 시스템 기본은 편집 불가 */}
-                  {sensorMode && STICK_PADS.includes(selectedPad) && (
-                    <Button
-                      size="sm"
-                      onClick={() => calibrationSession.startCapture({ target: 'active', pads: [selectedPad] })}
-                      disabled={!anyConnected || systemPreset}
-                    >
-                      이 드럼 다시 치기
-                    </Button>
-                  )}
-                  {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
-                  <Button variant="secondary" size="sm" onClick={s.resetLayout} disabled={systemPreset}>
-                    기본 배치로
+                {/* 패드 단위 재보정(PLAY-004 후속 T9): 선택한 스틱 패드만 연결된 손마다 2타. 시스템 기본은 편집 불가 */}
+                {sensorMode && STICK_PADS.includes(selectedPad) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => calibrationSession.startCapture({ target: 'active', pads: [selectedPad] })}
+                    disabled={!anyConnected || systemPreset}
+                  >
+                    이 드럼 다시 치기
                   </Button>
-                </div>
+                )}
+                {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
+                <Button variant="text" size="sm" onClick={s.resetLayout} disabled={systemPreset}>
+                  기본 배치로
+                </Button>
               </div>
             </div>
           </div>
@@ -739,11 +760,25 @@ export function SetupPage() {
         onDiscard={discardAndLeave}
         onSave={saveAndLeave}
       />
+      <PresetSlotDialog
+        open={slotOpen}
+        presets={presets.items}
+        activeId={s.activePresetId}
+        draftMode={draft !== null}
+        busy={saving}
+        onApply={(id) => {
+          presets.apply(id);
+          setSlotOpen(false);
+        }}
+        onPickEmpty={onPickEmptySlot}
+        onClose={closeSlotDialog}
+      />
       <PresetNameDialog
         open={nameOpen !== null}
         existing={presets.items}
         busy={saving}
         error={nameDialogError}
+        initialValue={nameOpen === 'draft' && draftSlot !== null ? `새 프리셋 ${draftSlot}` : undefined}
         onSave={saveNewName}
         onCancel={cancelNameDialog}
       />

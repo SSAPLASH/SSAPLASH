@@ -9,7 +9,7 @@ import { SignupConsentCard } from './SignupConsentCard';
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 const allRequired = () => screen.getByRole('checkbox', { name: '필수 항목에 모두 동의합니다' });
-const recommendation = () => screen.getByRole('checkbox', { name: /맞춤 곡 추천 학습 활용 동의/ });
+const recommendation = () => screen.getByRole('checkbox', { name: /곡 추천 개선을 위한 연주 기록 이용 동의/ });
 const submit = () => screen.getByRole('button', { name: '동의하고 시작하기' });
 
 describe('신규 동의 수집 비활성', () => {
@@ -17,7 +17,7 @@ describe('신규 동의 수집 비활성', () => {
     vi.stubEnv('VITE_RECOMMENDATION_CONSENT_ENABLED', 'false');
     const onSubmit = vi.fn();
     render(<SignupConsentCard onSubmit={onSubmit} />);
-    expect(screen.queryByRole('checkbox', { name: /맞춤 곡 추천 학습 활용 동의/ })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /곡 추천 개선을 위한 연주 기록 이용 동의/ })).toBeNull();
     await userEvent.setup().click(allRequired());
     await userEvent.setup().click(submit());
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('recommendationConsent');

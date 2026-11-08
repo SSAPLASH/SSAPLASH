@@ -55,6 +55,16 @@ describe('ActiveJobCard', () => {
     expect(html).not.toContain('aria-current');
   });
 
+  it('0과 100은 접근 가능한 진행률로 보이고 null은 숨긴다', () => {
+    for (const percent of [0, 100]) {
+      const html = render(job(), prog({ percent }));
+      expect(html).toContain('role="progressbar"');
+      expect(html).toContain(`aria-valuenow="${percent}"`);
+      expect(html).toContain(`진행률 ${percent}%`);
+    }
+    expect(render(job(), prog({ percent: null }))).not.toContain('role="progressbar"');
+  });
+
   it('경과 시간을 「n분 n초」로 보인다', () => {
     const html = render(job(), prog());
     expect(html).toContain('경과');

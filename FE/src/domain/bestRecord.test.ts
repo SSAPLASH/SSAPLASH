@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayLog } from '@/engine/playLog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestScoreBySong } from './bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreBySong, localPrevBest, mergePrevBest, recordBadgeOf } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */
 function log(p: {
@@ -127,5 +127,71 @@ describe('bestAccuracyBySong', () => {
     const m = bestAccuracyBySong([log({ mode: 'SHEET', song: 1, accuracy: Number.NaN }), log({ mode: 'SHEET', song: 2, accuracy: 0 })], 'SHEET');
     expect(m.has(1)).toBe(false);
     expect(m.get(2)).toBe(0);
+  });
+});
+
+describe('bestRecordDelta', () => {
+  const g = (score: number) => ({ mode: 'RHYTHM' as const, summary: { score, accuracy: 0.5 } }) as unknown as PlayLog;
+  const s = (accuracy: number) => ({ mode: 'SHEET' as const, summary: { score: 0, accuracy } }) as unknown as PlayLog;
+
+  it('게임: 이전 점수가 없으면 first', () => {
+    expect(bestRecordDelta(g(100), { score: null, accuracy: null }).kind).toBe('first');
+  });
+  it('게임: 이전보다 높으면 new, 같거나 낮으면 same', () => {
+    expect(bestRecordDelta(g(101), { score: 100, accuracy: null })).toEqual({ kind: 'new', prevScore: 100, prevAccuracy: null });
+    expect(bestRecordDelta(g(100), { score: 100, accuracy: null }).kind).toBe('same');
+    expect(bestRecordDelta(g(99), { score: 100, accuracy: null }).kind).toBe('same');
+  });
+  it('악보: 정확도를 소수 3자리로 비교한다', () => {
+    expect(bestRecordDelta(s(0.9), { score: null, accuracy: null }).kind).toBe('first');
+    expect(bestRecordDelta(s(0.9501), { score: null, accuracy: 0.95 }).kind).toBe('same'); // 3자리 반올림이 같다
+    expect(bestRecordDelta(s(0.952), { score: null, accuracy: 0.95 }).kind).toBe('new');
+    expect(bestRecordDelta(s(0.9), { score: null, accuracy: 0.95 }).kind).toBe('same');
+  });
+  it('악보는 점수 기록이 있어도 정확도만 본다', () => {
+    expect(bestRecordDelta(s(0.8), { score: 5000, accuracy: null }).kind).toBe('first');
+  });
+});
+
+describe('localPrevBest·mergePrevBest', () => {
+  const full = (p: { mode?: PlayLog['mode']; song?: number | null; chart?: number | null; songId?: string; difficulty?: string; score?: number; accuracy?: number; playId?: string }) =>
+    ({ ...log(p), playId: p.playId ?? 'x', songId: p.songId ?? 's', difficulty: p.difficulty ?? 'NORMAL' }) as PlayLog;
+
+  it('게임 점수는 곡 id 기준 최고(이 판 제외)', () => {
+    const logs = [full({ song: 1, chart: 10, score: 100, playId: 'a' }), full({ song: 1, chart: 11, score: 300, playId: 'b' }), full({ song: 1, chart: 10, score: 999, playId: 'me' })];
+    const prev = localPrevBest(logs, { mode: 'RHYTHM', songNumericId: 1, chartId: 10, songId: 's', difficulty: 'NORMAL' }, (l) => l.playId === 'me');
+    expect(prev.score).toBe(300);
+    expect(prev.accuracy).toBe(0);
+  });
+  it('기록이 없으면 null', () => {
+    expect(localPrevBest([], { mode: 'RHYTHM', songNumericId: 1, chartId: 10, songId: 's', difficulty: 'NORMAL' })).toEqual({ score: null, accuracy: null });
+  });
+  it('악보 정확도는 채보 id 기준', () => {
+    const logs = [full({ mode: 'SHEET', song: 1, chart: 10, accuracy: 0.8 }), full({ mode: 'SHEET', song: 1, chart: 11, accuracy: 0.99 })];
+    expect(localPrevBest(logs, { mode: 'SHEET', songNumericId: 1, chartId: 10, songId: 's', difficulty: 'NORMAL' }).accuracy).toBe(0.8);
+  });
+  it('내장 곡(id 없음)은 곡 id·단계로 맞춘다', () => {
+    const logs = [full({ songId: 'b1', difficulty: 'HARD', score: 70 }), full({ songId: 'b1', difficulty: 'EASY', score: 900 })];
+    expect(localPrevBest(logs, { mode: 'RHYTHM', songNumericId: null, chartId: null, songId: 'b1', difficulty: 'HARD' }).score).toBe(70);
+  });
+  it('mergePrevBest는 큰 값, 둘 다 없으면 null', () => {
+    expect(mergePrevBest({ score: 10, accuracy: null }, { score: 20, accuracy: 0.5 })).toEqual({ score: 20, accuracy: 0.5 });
+    expect(mergePrevBest({ score: null, accuracy: null }, { score: null, accuracy: null })).toEqual({ score: null, accuracy: null });
+  });
+});
+
+describe('recordBadgeOf', () => {
+  const lg = (mode: PlayLog['mode'], score: number, accuracy: number) => ({ mode, summary: { score, accuracy } }) as unknown as PlayLog;
+  it('same은 칩 없음, first는 첫 기록', () => {
+    expect(recordBadgeOf(lg('RHYTHM', 1, 1), { kind: 'same', prevScore: 5, prevAccuracy: null })).toBeNull();
+    expect(recordBadgeOf(lg('RHYTHM', 1, 1), { kind: 'first', prevScore: null, prevAccuracy: null })).toEqual({ kind: 'first', text: '첫 기록' });
+  });
+  it('게임 갱신 문구는 이전 → 현재 점수', () => {
+    const b = recordBadgeOf(lg('RHYTHM', 1310000, 0.9), { kind: 'new', prevScore: 1200000, prevAccuracy: null });
+    expect(b).toEqual({ kind: 'new', text: '최고 기록 갱신 · 이전 1,200,000 → 현재 1,310,000' });
+  });
+  it('악보 갱신 문구는 정확도 %', () => {
+    const b = recordBadgeOf(lg('SHEET', 0, 0.968), { kind: 'new', prevScore: null, prevAccuracy: 0.9 });
+    expect(b?.text).toBe('최고 기록 갱신 · 이전 90.0% → 현재 96.8%');
   });
 });

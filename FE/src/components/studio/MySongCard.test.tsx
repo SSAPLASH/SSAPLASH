@@ -22,6 +22,7 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   difficulties: [],
   createdAt: '2026-10-29T01:00:00Z',
   coverUrl: null,
+  sheetId: null,
   ...over,
 });
 
@@ -34,6 +35,12 @@ function card(s: SongSummary, withEdit = true): string {
 }
 
 describe('MySongCard (v0.4)', () => {
+  it('출처 칩: MIDI는 「MIDI」, MusicXML 악보 곡은 「MusicXML」, 음원 곡은 없음(293)', () => {
+    expect(card(song({ source: 'MIDI' }))).toContain('class="studio-chip">MIDI<');
+    expect(card(song({ source: 'MUSICXML' }))).toContain('class="studio-chip">MusicXML<');
+    expect(card(song({ source: 'AUDIO' }))).not.toContain('class="studio-chip">');
+  });
+
   it('완료 곡: 커버 ▶ 리듬 게임(곡 제목 라벨)과 [악보 연습] 하나, 카드 아래 [플레이] 버튼은 없다', () => {
     const html = card(song());
     expect(html).toContain('class="song-card-play"');

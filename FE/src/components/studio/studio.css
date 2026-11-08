@@ -819,3 +819,79 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---- 악보 항목·악보 업로드 (설계 CHART-001 악보 보관) ---- */
+.studio-sheet-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+.studio-card .song-card-play.disabled,
+.studio-card .song-card-play.disabled:hover {
+  background: var(--surface-2);
+  color: var(--text-3);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.studio-sheet-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.studio-sheet-hint-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.studio-sheet-actions {
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.studio-seg-row {
+  display: flex;
+}
+.studio-sheet-target {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.studio-sheet-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-sheet-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.studio-sheet-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  font-size: 14px;
+}
+.studio-sheet-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-sheet-loadfail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  margin: 0 0 var(--space-m);
+  color: var(--text-2);
+  font-size: 14px;
+}

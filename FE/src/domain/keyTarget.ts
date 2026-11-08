@@ -40,9 +40,18 @@ export function isInsideDialog(target: KeyTarget): boolean {
   return target.closest('[role="dialog"]') != null;
 }
 
+/** range 입력(진행 막대·음량)이 스스로 쓰는 키. 그 밖의 키(드럼 연주 키)는 range에 초점이 있어도 통과시킨다 */
+export const RANGE_CODES: ReadonlySet<string> = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+
+/** input type=range */
+export function isRangeTarget(target: KeyTarget): boolean {
+  return tagOf(target) === 'INPUT' && target?.getAttribute?.('type') === 'range';
+}
+
 /** 포커스 대상이 이 키를 스스로 처리하는가. 참이면 전역 핸들러는 통과해야 한다 */
 export function isKeyOwnedByTarget(target: KeyTarget, code: string): boolean {
   if (!target) return false;
+  if (isRangeTarget(target) && !isInsideDialog(target)) return RANGE_CODES.has(code);
   if (isTextEntryTarget(target)) return true;
   if (isInsideDialog(target)) return true;
   if (isActivationTarget(target)) return ACTIVATION_CODES.has(code);

@@ -25,11 +25,11 @@ describe('SIGNUP_TERMS', () => {
     }
   });
 
-  it('추천 학습 초안은 약점 미사용과 가명·철회 범위를 명시한다', () => {
+  it('추천 학습 동의는 약점 미사용과 가명·철회 범위를 명시한다', () => {
     const body = SIGNUP_TERMS.find((t) => t.id === 'recommendation')!.body;
     expect(body).toContain('약점 요약은 학습에 쓰지 않아요');
     expect(body).toContain('익명이 아니며');
-    expect(body).toContain('다음 데이터 조회부터 학습에서 제외');
+    expect(body).toContain('이후 새로 조회하는 학습 데이터에서 해당 사용자의 기록을 제외');
     expect(body).toContain('7일이 지난 후보는 추천에 쓰지 않아요');
   });
 
@@ -146,12 +146,12 @@ describe('연주 기록 활용 본문', () => {
 });
 
 describe('추천 학습 활용 본문', () => {
-  it('선택 항목이며 철회·기능 동일 안내와 초안 표시가 있다', () => {
+  it('선택 항목이며 철회·기본 추천 안내와 운영 확인 표시가 있다', () => {
     const t = SIGNUP_TERMS[3];
     expect(t.required).toBe(false);
     expect(t.body).toContain('설정에서 언제든 철회할 수 있어요');
-    expect(t.body).toContain('동의하지 않아도 곡 추천을 포함한 모든 기능을 그대로 쓸 수 있어요');
-    expect(t.body.split('\n').at(-1)).toBe('(초안 — 약관 담당 검토 후 교체)');
+    expect(t.body).toContain('맞춤 모델 추천 대신 기본 추천을 제공해요');
+    expect(t.body.split('\n').at(-1)).toBe('(신규 동의 수집 비활성 — 운영 적용 확인 후 공개)');
   });
 });
 
