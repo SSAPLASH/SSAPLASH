@@ -32,7 +32,17 @@
 
 /* 라우트 래퍼 전용(AppShell). 페이드만 건다 — transform이 없어 안쪽 position: fixed 요소가 어긋나지 않는다 */
 .route-fade {
-  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+  animation: motion-fade-in var(--motion-route) var(--ease-out);
+}
+
+/* 같은 화면 안 단계 전환(StageFade). 라우트 래퍼와 같은 페이드. 단계 화면의 .main이 라우트 래퍼(.route-view)의 flex 열 자식일 때와
+ * 똑같이 놓이도록 .route-view와 같은 배치를 이어받는다 */
+.stage-fade {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  animation: motion-fade-in var(--motion-route) var(--ease-out);
 }
 
 /* 다이얼로그 배경 */
