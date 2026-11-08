@@ -5,7 +5,7 @@
 import { setupTagsOf } from '@/coach/live';
 import { SetupHintCard } from '@/components/result/SetupHintCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/components/ReportEntry';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
@@ -18,6 +18,9 @@ import { FeedbackCard } from '@/components/result/FeedbackCard';
 import { JudgeBars } from '@/components/result/JudgeBars';
 import { PadSummaryTable } from '@/components/result/PadSummaryTable';
 import { ResultSummaryCard } from '@/components/result/ResultSummaryCard';
+import { CelebrationFx } from '@/components/result/CelebrationFx';
+import { useReducedMotion } from 'motion/react';
+import { bestRecordDelta, localPrevBest, recordBadgeOf, type PrevBest } from '@/domain/bestRecord';
 import { TimingHistogram } from '@/components/result/TimingHistogram';
 import '@/components/result/result.css';
 import { useShell } from '@/components/shell/useShell';
@@ -31,7 +34,7 @@ import { formatPlayDate } from '@/domain/playLogView';
 import { timingHistogram } from '@/domain/timingHistogram';
 import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from '@/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
-import { getPlayLog, type PlayLog } from '@/engine/playLog';
+import { getPlayLog, loadPlayLogs, type PlayLog } from '@/engine/playLog';
 
 /** 모드별 선택 화면 경로 */
 const pickPath = (l: PlayLog): string => pickPathOf(l.mode);
@@ -44,6 +47,34 @@ export function ResultPage() {
   const { playId } = useParams();
   const navigate = useNavigate();
   const log = useMemo(() => (playId ? getPlayLog(playId) : null), [playId]);
+  const location = useLocation();
+  const reducedMotion = useReducedMotion();
+
+  // 최고 기록 비교(설계 MODE-001-score-combo-fx D4). 연주 직후 도착이면 치기 전 최고값(prevBest)이 navigate state로 온다.
+  // 도착 때 한 번만 정해 두고(state를 곧 비우므로) 그 뒤 로컬 로그가 바뀌어도 칩이 흔들리지 않게 한다
+  const stateBest = (location.state as { prevBest?: PrevBest } | null)?.prevBest ?? null;
+  const [arrival, setArrival] = useState<{ playId: string | undefined; prev: PrevBest | null } | null>(null);
+  if (arrival === null || arrival.playId !== playId) setArrival({ playId, prev: stateBest });
+  const arrived = arrival !== null && arrival.playId === playId ? arrival.prev : stateBest;
+  // 새로고침해도 축하가 다시 나오지 않도록 도착 state를 비운다(칩은 로컬 로그로 다시 계산)
+  useEffect(() => {
+    if (stateBest) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    // 도착 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const delta = useMemo(() => {
+    if (!log || log.mode === 'FREE') return null;
+    // state가 없으면(새로고침·기록 화면에서 연 결과) 이 판보다 먼저 친 로컬 로그만으로 비교한다
+    const prev =
+      arrived ??
+      localPrevBest(
+        loadPlayLogs(),
+        { mode: log.mode, songNumericId: log.songNumericId, chartId: log.chartId, songId: log.songId, difficulty: log.difficulty },
+        (l) => l.playId === log.playId || !(l.startedAt < log.startedAt),
+      );
+    return bestRecordDelta(log, prev);
+  }, [log, arrived]);
+  const celebrating = arrived !== null && delta?.kind === 'new' && !reducedMotion;
 
   // 서버 업로드 상태(설계 COACH-002 4-1). 진입 시 한 번 끊긴 업로드·재시도 가능한 실패를 다시 보낸다 —
   // 연주 직후라면 이미 진행 중이라 무시된다
@@ -133,6 +164,16 @@ export function ResultPage() {
           titleBadge={songDeleted ? <DeletedSongChip /> : undefined}
           scoreText={isSheet ? undefined : `${s.score.toLocaleString('ko-KR')} / ${s.maxCombo}`}
           accuracyText={`${(s.accuracy * 100).toFixed(1)}%`}
+          recordBadge={delta ? recordBadgeOf(log, delta) : null}
+          countUp={
+            celebrating
+              ? {
+                  score: isSheet ? undefined : (p) => `${Math.round(s.score * p).toLocaleString('ko-KR')} / ${Math.round(s.maxCombo * p)}`,
+                  accuracy: (p) => `${(s.accuracy * 100 * p).toFixed(1)}%`,
+                }
+              : undefined
+          }
+          celebration={celebrating ? <CelebrationFx /> : undefined}
         />
 
         <ReportEntry

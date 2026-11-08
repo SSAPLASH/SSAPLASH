@@ -40,7 +40,7 @@ import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
-import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
@@ -205,6 +205,9 @@ function SheetPageBody() {
   useEffect(() => inputManager.onPedalStatus((foot, connected) => {
     if (foot === 2) pedalCoverage.current?.connection(connected);
   }), []);
+  // 결과 화면 최고 기록 비교용(설계 D4): 서버 스냅샷(준비 화면에서만 채움)과 연주 시작 시점에 고정한 치기 전 최고 정확도
+  const serverPrevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
+  const prevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
   const startedAt = useRef<Date | null>(null);
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
@@ -440,7 +443,7 @@ function SheetPageBody() {
       } catch (e) {
         console.warn('녹음 확정에 실패했습니다.', e);
       }
-      navigate(`/result/${log.playId}`, { replace: true });
+      navigate(`/result/${log.playId}`, { replace: true, state: { prevBest: prevBest.current } });
     },
     [navigate, inputSource, settings.timing],
   );
@@ -455,6 +458,11 @@ function SheetPageBody() {
     pedalCoverage.current = new HihatPedalCoverageTracker(pedal.connected, pedal.closed !== null);
     openWarnings.current.clear();
     finishing.current = false;
+    {
+      const c = ss.chart;
+      const local = localPrevBest(loadPlayLogs(), { mode: 'SHEET', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
+      prevBest.current = mergePrevBest(local, serverPrevBest.current);
+    }
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
     setNoteStates(new Array<Judgement | null>(ss.notes.length).fill(null));
@@ -668,6 +676,11 @@ function SheetPageBody() {
     [songsSource, stage, selectedChartId],
   );
   const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
+  // 준비 화면 동안만 서버 최고 정확도를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
+  const serverBestAccuracy = records.accuraciesByChart.get(selectedChartId);
+  useEffect(() => {
+    if (stage === 'ready') serverPrevBest.current = { score: null, accuracy: serverBestAccuracy ?? null };
+  }, [stage, serverBestAccuracy]);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
