@@ -108,3 +108,19 @@ describe('랩 판정 선택', () => {
     expect(isLabJudgement('miss')).toBe(false);
   });
 });
+
+describe('comboSeqSteps', () => {
+  it('기본 순서 [2,10,50,0]은 PERFECT 3단계 뒤 MISS(콤보 0)', async () => {
+    const { LAB_COMBO_DEFAULT, comboSeqSteps } = await import('./fxLabPatterns');
+    expect(comboSeqSteps(LAB_COMBO_DEFAULT)).toEqual([
+      { combo: 2, judgement: 'PERFECT' },
+      { combo: 10, judgement: 'PERFECT' },
+      { combo: 50, judgement: 'PERFECT' },
+      { combo: 0, judgement: 'MISS' },
+    ]);
+  });
+  it('정수가 아닌 값은 건너뛴다', async () => {
+    const { comboSeqSteps } = await import('./fxLabPatterns');
+    expect(comboSeqSteps([1.5, Number.NaN, 3])).toEqual([{ combo: 3, judgement: 'PERFECT' }]);
+  });
+});

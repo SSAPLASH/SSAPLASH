@@ -112,3 +112,25 @@
 .fxlab-over {
   color: var(--brand-sub);
 }
+
+/* 콤보·축하 미리보기 영역 */
+.fxlab-previews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.fxlab-combo-stage,
+.fxlab-celebrate-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.fxlab-celebrate-text {
+  color: var(--text-2);
+  font-size: 14px;
+}

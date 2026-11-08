@@ -30,13 +30,14 @@ import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/components/play/TimingBar';
+import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
 import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
-import { bestAccuracyByChart } from '@/domain/bestRecord';
+import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { PadId } from '@/domain/pads';
@@ -157,6 +158,14 @@ function PlayPageBody() {
   const [laneFx] = useState(createFxEmitter);
   // 타이밍 막대 눈금을 비우는 신호(새 곡·다시 시작)
   const [fxRun, setFxRun] = useState(0);
+  // 결과 화면 최고 기록 비교용: 서버 스냅샷(준비 화면에서만 채움)과 연주 시작 시점에 고정한 치기 전 최고값(설계 D4)
+  const serverPrevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
+  const prevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
+  const freezePrevBest = useCallback((ss: RhythmSession) => {
+    const c = ss.chart;
+    const local = localPrevBest(loadPlayLogs(), { mode: 'RHYTHM', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
+    prevBest.current = mergePrevBest(local, serverPrevBest.current);
+  }, []);
   const recorder = useRef(new PlayRecorder());
   // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
   const coachRef = useRef<LiveCoach | null>(null);
@@ -373,6 +382,7 @@ function PlayPageBody() {
     const ss = sessionRef.current;
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
     await unlockAudio();
+    freezePrevBest(ss);
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
@@ -388,7 +398,7 @@ function PlayPageBody() {
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setStage('play');
-  }, [acc]);
+  }, [acc, freezePrevBest]);
 
   const toSelect = useCallback(() => {
     diagSessionEnd('left');
@@ -461,12 +471,13 @@ function PlayPageBody() {
     shadowRef.current?.reset();
     clearCoachLine();
     finishing.current = false;
+    freezePrevBest(ss);
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
     resetCountdown();
     setHud(ss.snapshot());
     setPauseReason(null);
-  }, [resetCountdown, clearCoachLine]);
+  }, [resetCountdown, clearCoachLine, freezePrevBest]);
 
   // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
   const leave = useCallback(() => {
@@ -522,7 +533,7 @@ function PlayPageBody() {
       } catch (e) {
         console.warn('녹음 확정에 실패했습니다.', e);
       }
-      navigate(`/result/${log.playId}`);
+      navigate(`/result/${log.playId}`, { state: { prevBest: prevBest.current } });
     },
     [navigate, inputSource, settings.timing],
   );
@@ -604,6 +615,11 @@ function PlayPageBody() {
     [songsSource, stage, selectedChartId],
   );
   const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
+  // 준비 화면 동안만 서버 최고 점수를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
+  const serverBestScore = songIdParam === null ? undefined : records.scoresBySong.get(songIdParam);
+  useEffect(() => {
+    if (stage === 'ready') serverPrevBest.current = { score: serverBestScore ?? null, accuracy: null };
+  }, [stage, serverBestScore]);
 
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
@@ -765,6 +781,7 @@ function PlayPageBody() {
             keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
             onFrame={onFrame}
             fxSource={laneFx.source}
+            topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
             overlay={
               settings.timingBar ? (
                 <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />

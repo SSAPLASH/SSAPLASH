@@ -28,3 +28,11 @@
   transform: translateX(-50%);
   pointer-events: none;
 }
+/* 상단 가운데(레인 이름 줄 아래): 콤보 표시 자리. 위치 B(단계 때만)는 가운데로 내린다 */
+.play-highway-top {
+  position: absolute;
+  left: 50%;
+  top: 34px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
