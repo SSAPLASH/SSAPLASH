@@ -164,3 +164,34 @@ it('하이햇 행에만 열린 노트 결과와 접근 가능한 설명을 넣�
   const html = renderToStaticMarkup(<PadSummaryTable summary={[row]} openHihat={{ text: '열린 1/2', label: '열린 하이햇 성공 1개, 전체 2개' }} />);
   expect(html).toContain('열린 1/2'); expect(html).toContain('aria-label="열린 하이햇 성공 1개, 전체 2개"');
 });
+
+describe('ResultSummaryCard 최고 기록 칩·카운트업', () => {
+  it('칩이 없으면 그리지 않는다', () => {
+    expect(renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="1%" recordBadge={null} />)).not.toContain('result-record-chip');
+  });
+  it('첫 기록·갱신 칩은 종류와 문구를 그린다', () => {
+    const first = renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="1%" recordBadge={{ kind: 'first', text: '첫 기록' }} />);
+    expect(first).toContain('data-kind="first"');
+    expect(first).toContain('첫 기록');
+    const up = renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="1%" recordBadge={{ kind: 'new', text: '최고 기록 갱신 · 이전 1 → 현재 2' }} />);
+    expect(up).toContain('data-kind="new"');
+    expect(up).toContain('최고 기록 갱신 · 이전 1 → 현재 2');
+  });
+  it('카운트업이 있어도 처음 마크업은 최종 글자다(보간은 마운트 뒤 DOM에서)', () => {
+    const html = renderToStaticMarkup(
+      <ResultSummaryCard
+        title="곡"
+        meta="m"
+        scoreText="1,000 / 10"
+        accuracyText="96.8%"
+        countUp={{ score: (p) => `${Math.round(1000 * p).toLocaleString('ko-KR')} / ${Math.round(10 * p)}`, accuracy: (p) => `${(96.8 * p).toFixed(1)}%` }}
+      />,
+    );
+    expect(html).toContain('>1,000 / 10<');
+    expect(html).toContain('>96.8%<');
+  });
+  it('축하 슬롯을 카드 안에 그린다', () => {
+    const html = renderToStaticMarkup(<ResultSummaryCard title="곡" meta="m" accuracyText="1%" celebration={<i className="slot-x" />} />);
+    expect(html).toContain('slot-x');
+  });
+});
