@@ -11,6 +11,7 @@ import { SheetPager } from '@/components/SheetPager';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
+import { StageFade } from '@/components/StageFade';
 import { PlayStage } from '@/components/play/PlayStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
@@ -694,56 +695,60 @@ function SheetPageBody() {
 
   if (stage === 'loading') {
     return (
-      <main className="main">
-        <Card padding="md" style={{ maxWidth: 480 }}>
-          <div className="col">
-            {accError ? (
-              <>
-                <div className="notice error" role="alert">
-                  {accError}
-                </div>
-                <div className="row">
-                  {paramLoaded && (
-                    <Button
-                      onClick={() => {
-                        acc.unload();
-                        setAccResult({ loaded: paramLoaded, ok: true });
-                      }}
-                    >
-                      반주 없이 계속
+      <StageFade stageKey="loading">
+        <main className="main">
+          <Card padding="md" style={{ maxWidth: 480 }}>
+            <div className="col">
+              {accError ? (
+                <>
+                  <div className="notice error" role="alert">
+                    {accError}
+                  </div>
+                  <div className="row">
+                    {paramLoaded && (
+                      <Button
+                        onClick={() => {
+                          acc.unload();
+                          setAccResult({ loaded: paramLoaded, ok: true });
+                        }}
+                      >
+                        반주 없이 계속
+                      </Button>
+                    )}
+                    <Button variant="secondary" onClick={toSelect}>
+                      곡 선택으로
                     </Button>
-                  )}
+                  </div>
+                </>
+              ) : paramStatus === 'error' ? (
+                <>
+                  <div className="notice error" role="alert">
+                    {param.error ?? '채보를 불러오지 못했습니다.'}
+                  </div>
                   <Button variant="secondary" onClick={toSelect}>
                     곡 선택으로
                   </Button>
+                </>
+              ) : (
+                <div className="row">
+                  <span className="spinner" aria-label="불러오는 중" />
+                  <span className="dim">{accLoading ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
                 </div>
-              </>
-            ) : paramStatus === 'error' ? (
-              <>
-                <div className="notice error" role="alert">
-                  {param.error ?? '채보를 불러오지 못했습니다.'}
-                </div>
-                <Button variant="secondary" onClick={toSelect}>
-                  곡 선택으로
-                </Button>
-              </>
-            ) : (
-              <div className="row">
-                <span className="spinner" aria-label="불러오는 중" />
-                <span className="dim">{accLoading ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
-              </div>
-            )}
-          </div>
-        </Card>
-      </main>
+              )}
+            </div>
+          </Card>
+        </main>
+      </StageFade>
     );
   }
 
   if (stage === 'select' || !chart || !activeSession) {
     return (
-      <main className="main">
-        <SongPicker mode="sheet" onSelect={param.select} />
-      </main>
+      <StageFade stageKey="select">
+        <main className="main">
+          <SongPicker mode="sheet" onSelect={param.select} />
+        </main>
+      </StageFade>
     );
   }
 
@@ -762,51 +767,53 @@ function SheetPageBody() {
       ? sortCharts(detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty }))
       : [{ id: selectedChartId, difficulty: chart.difficulty }];
     return (
-      <main className="main">
-        <BestRecordsNotice status={records.status} retry={records.retry} />
-        <ReadyPanel
-          song={song}
-          modeLabel="악보 연습"
-          staffLegend
-          charts={charts}
-          selectedChartId={selectedChartId}
-          bestAccuracy={bestAccuracy}
-          ready={ready}
-          missing={missing}
-          connected={connected}
-          keyboardOnly={settings.sensorKind === 'none'}
-          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
-          presetName={presetName}
-          countInBars={settings.countInBars}
-          onBack={toSelect}
-          onSelectChart={(chartId) => {
-            if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
-          }}
-          onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
-          onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
-          onStart={() => void begin()}
-          realign={realign.info}
-          footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
-          options={
-            <>
-              {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}
-              {chart.variableTempo && (
-                <div className="notice" role="status">
-                  변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
-                </div>
-              )}
-              <PlayOptions
-              metronome={settings.metronome}
-              onMetronome={settings.setMetronome}
-              padCount={settings.sheetPadCount}
-              onPadCount={settings.setSheetPadCount}
-              hasAccompaniment={hasAcc}
-              accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
-              />
-            </>
-          }
-        />
-      </main>
+      <StageFade stageKey="ready">
+        <main className="main">
+          <BestRecordsNotice status={records.status} retry={records.retry} />
+          <ReadyPanel
+            song={song}
+            modeLabel="악보 연습"
+            staffLegend
+            charts={charts}
+            selectedChartId={selectedChartId}
+            bestAccuracy={bestAccuracy}
+            ready={ready}
+            missing={missing}
+            connected={connected}
+            keyboardOnly={settings.sensorKind === 'none'}
+            pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
+            presetName={presetName}
+            countInBars={settings.countInBars}
+            onBack={toSelect}
+            onSelectChart={(chartId) => {
+              if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
+            }}
+            onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
+            onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
+            onStart={() => void begin()}
+            realign={realign.info}
+            footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
+            options={
+              <>
+                {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}
+                {chart.variableTempo && (
+                  <div className="notice" role="status">
+                    변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
+                  </div>
+                )}
+                <PlayOptions
+                metronome={settings.metronome}
+                onMetronome={settings.setMetronome}
+                padCount={settings.sheetPadCount}
+                onPadCount={settings.setSheetPadCount}
+                hasAccompaniment={hasAcc}
+                accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
+                />
+              </>
+            }
+          />
+        </main>
+      </StageFade>
     );
   }
 
