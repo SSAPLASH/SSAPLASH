@@ -66,4 +66,24 @@ describe('FxLabPage', () => {
     expect(window.__fxLab!.stats().a!.alive).toBeGreaterThan(0);
     act(() => window.__fxLab!.setPattern('off'));
   });
+
+  it('판정 선택: PERFECT는 비판정보다 파티클이 1개 많고, 헛침은 6개, 깨짐 미리보기는 8개', () => {
+    mount();
+    act(() => window.__fxLab!.setTheme('a', 'auto'));
+    act(() => window.__fxLab!.setView('single'));
+    const pad = document.querySelector('.drum-pad')!;
+    fireEvent.pointerDown(pad, { pointerType: 'mouse' });
+    const plain = window.__fxLab!.stats().a!.alive;
+    act(() => window.__fxLab!.resetStats());
+    act(() => window.__fxLab!.setJudgement('perfect'));
+    fireEvent.pointerDown(pad, { pointerType: 'mouse' });
+    expect(window.__fxLab!.stats().a!.alive).toBe(plain + 1 + plain);
+    act(() => window.__fxLab!.setJudgement('stray'));
+    const before = window.__fxLab!.stats().a!.alive;
+    fireEvent.pointerDown(pad, { pointerType: 'mouse' });
+    expect(window.__fxLab!.stats().a!.alive).toBe(before + 6);
+    const before2 = window.__fxLab!.stats().a!.alive;
+    fireEvent.click(screen.getByText('깨짐 미리보기'));
+    expect(window.__fxLab!.stats().a!.alive).toBe(before2 + 8);
+  });
 });

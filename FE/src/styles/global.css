@@ -1333,6 +1333,21 @@ a.btn-ghost.as-button {
   width: 100%;
   height: 100%;
 }
+/* 판정 이펙트 캔버스: 악보 위에 같은 크기로 겹친다 */
+.sheet-pager .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+/* 타이밍 막대: 악보 영역 안쪽 아래 가운데(보표·커서·박 번호 아래 여백) */
+.sheet-pager-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 
 /* ---- 리포트 약점 구간 (COACH-003) ---- */
 .weak-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }

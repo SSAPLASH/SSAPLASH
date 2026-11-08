@@ -1,5 +1,6 @@
 // 타격 이펙트 공용 타입 — 이벤트(FxEvent)·테마 id·파티클·강도. 그리기·상태는 여기 없다.
 import type { PadId } from '@/domain/pads';
+import type { PadShape } from '@/domain/drumKit';
 import type { Judgement } from '@/domain/judgement';
 
 /** 이펙트가 나오는 화면. 1단계에서는 미리보기·랩의 크기 조정에만 쓴다 */
@@ -14,16 +15,22 @@ export interface FxEvent {
   /** 세기 0~127 */
   velocity: number;
   mode: FxMode;
+  /** 게임·악보에서 판정된 타격 = PERFECT/GOOD, 놓친 노트 = MISS. 자유 연주·준비 단계 = null */
   judgement: Judgement | null;
+  /** 빠름 음수, 늦음 양수. MISS·헛침은 null */
   deltaMs: number | null;
   combo: number | null;
+  /** 판정 중인데 맞는 노트가 없는 타격(헛침). judgement는 null. 없으면 false */
+  stray?: boolean;
+  /** 하이웨이·악보가 노트 위치를 찾는 데 쓴다. 없으면 null */
+  noteIndex?: number | null;
 }
 
 /** 테마 id 전체(랩 6종). 설정에 노출하는 출시 목록은 themes.ts의 HIT_FX_THEMES */
 export type HitFxTheme = 'auto' | 'electric' | 'water' | 'fire' | 'ink' | 'pixel';
 
-/** 엔진이 그리는 기본 도형 5종 */
-export type FxKind = 'ring' | 'dot' | 'bolt' | 'blob' | 'pixel';
+/** 엔진이 그리는 기본 도형 6종 */
+export type FxKind = 'ring' | 'dot' | 'bolt' | 'blob' | 'pixel' | 'shard';
 
 export type FxEase = 'out' | 'linear' | 'step12';
 
@@ -65,6 +72,9 @@ export interface FxParticle {
   jag?: number;
   /** 번개 꺾임 씨앗 */
   seed?: number;
+  /** 조각(shard) 시작 각도(rad)·초당 회전(rad/s). size는 삼각형 외접 반지름 */
+  rot?: number;
+  spin?: number;
 }
 
 /** 세기 → 배율. 판정·콤보가 null이면 판정 배율은 1 */
@@ -82,6 +92,28 @@ export interface FxGeo {
   ry: number;
   /** 거리 기준 배율(패드 폭 비례) */
   k: number;
+}
+
+/** 위치 찾기 결과의 모양. 패드 3종(테마 이펙트) + 하이웨이 레인·악보 머리(판정 이펙트 전용) */
+export type FxShape = PadShape | 'lane' | 'head';
+
+/** 이벤트가 이펙트를 낼 위치. geo의 좌표 공간은 FxCanvas의 space(킷 좌표 / CSS 픽셀)를 따른다 */
+export interface FxLocation {
+  geo: FxGeo;
+  shape: FxShape;
+  /** 깨짐 파편 색(하이웨이: 노트 색). 없으면 판정 색 */
+  tint?: string;
+}
+
+/** 이벤트 → 위치. null이면(화면 밖 노트·레인에 없는 패드·비판정) 이펙트를 내지 않는다 */
+export type FxLocate = (event: FxEvent) => FxLocation | null;
+
+/** 판정 이펙트 색 묶음(디자인 토큰 --perfect·--good·--miss, 회색은 헛침) */
+export interface JudgeColors {
+  perfect: string;
+  good: string;
+  miss: string;
+  stray: string;
 }
 
 /** 테마 색 묶음 */

@@ -15,10 +15,12 @@ export interface FxSample {
   width: number;
   /** 번개 꺾임 단계(40ms마다 +1) */
   step: number;
+  /** 조각 회전각(rad) */
+  rot: number;
 }
 
 export function createSample(): FxSample {
-  return { x: 0, y: 0, size: 0, alpha: 0, width: 0, step: 0 };
+  return { x: 0, y: 0, size: 0, alpha: 0, width: 0, step: 0, rot: 0 };
 }
 
 /**
@@ -38,6 +40,7 @@ export function sampleParticle(p: FxParticle, ageMs: number, out: FxSample): boo
   out.alpha = p.alpha0 + (p.alpha1 - p.alpha0) * e;
   out.width = p.w0 + (p.w1 - p.w0) * e;
   out.step = Math.floor(ageMs / BOLT_STEP_MS);
+  out.rot = (p.rot ?? 0) + (p.spin ?? 0) * sec;
   return true;
 }
 

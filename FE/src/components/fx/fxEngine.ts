@@ -3,9 +3,10 @@ import { kitPadsFor, type KitSkin } from '@/domain/drumKit';
 import { fxGeoOf } from '@/domain/hitFx/geometry';
 import { fxIntensity } from '@/domain/hitFx/intensity';
 import { createRand } from '@/domain/hitFx/rand';
+import { JUDGE_COLORS_FALLBACK, judgeFx } from '@/domain/hitFx/judgeFx';
 import { BRAND_FALLBACK, hitFxThemeDef } from '@/domain/hitFx/themes';
 import { MAX_SPAWN } from '@/domain/hitFx/spawn/util';
-import type { FxEvent, HitFxTheme } from '@/domain/hitFx/types';
+import type { FxEvent, FxLocate, FxLocation, FxParticle, HitFxTheme, JudgeColors } from '@/domain/hitFx/types';
 import { drawFrame, type FxLive, type FxView } from './fxDraw';
 
 /** 전체 파티클 기본 상한(D10) */
@@ -44,6 +45,10 @@ export interface FxEngine {
   setView(view: FxView): void;
   detach(): void;
   emit(event: FxEvent): void;
+  /** 이벤트 → 위치 함수. null이면 기본(킷 좌표의 패드 위치). 하이웨이·악보는 판정 이펙트 전용 locate를 넣는다 */
+  setLocate(fn: FxLocate | null): void;
+  /** 판정 색(디자인 토큰을 읽은 값). 캔버스는 CSS 변수를 못 쓴다 */
+  setJudgeColors(colors: JudgeColors): void;
   setTheme(id: HitFxTheme): void;
   setSkin(skin: KitSkin): void;
   setReduced(flag: boolean): void;
@@ -69,6 +74,8 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
   let skin: KitSkin = 'acoustic';
   let reduced = false;
   let brand = BRAND_FALLBACK;
+  let judgeColors = JUDGE_COLORS_FALLBACK;
+  let locate: FxLocate | null = null;
   let ctx: CanvasRenderingContext2D | null = null;
   let view: FxView | null = null;
 
@@ -106,17 +113,28 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     if (pool.length > 0) schedule();
   }
 
-  function emit(event: FxEvent) {
+  /** 기본 위치 찾기: 킷 좌표의 패드 헤드. 패드가 없는 킷이면 null */
+  function kitLocate(event: FxEvent): FxLocation | null {
     const pad = kitPadsFor(skin).find((p) => p.pad === event.pad);
-    if (!pad) return;
+    return pad ? { geo: fxGeoOf(pad, skin), shape: pad.shape } : null;
+  }
+
+  function emit(event: FxEvent) {
+    const loc = locate ? locate(event) : kitLocate(event);
+    if (!loc) return;
     const def = hitFxThemeDef(theme);
-    const geo = fxGeoOf(pad, skin);
-    const run = reduced ? def.spawnReduced : def.spawn;
-    const list = run(event, geo, pad.shape, fxIntensity(event), createRand(event.seq), def.palette(skin, pad.shape, brand));
+    // 판정 이펙트(테마 무관)를 먼저 두고, 테마 이펙트는 패드에서 판정된·비판정 타격에만 더한다. 합쳐서 상한 24
+    const list: FxParticle[] = judgeFx(event, loc, judgeColors, reduced);
+    const judgeN = list.length;
+    if (loc.shape !== 'lane' && loc.shape !== 'head' && !event.stray && event.judgement !== 'MISS') {
+      const run = reduced ? def.spawnReduced : def.spawn;
+      const themed = run(event, loc.geo, loc.shape, fxIntensity(event), createRand(event.seq), def.palette(skin, loc.shape, brand));
+      for (let i = 0; i < themed.length; i++) list.push(themed[i]!);
+    }
     const n = Math.min(list.length, MAX_SPAWN);
     const t = now();
     const additive = !reduced && def.blend === 'additive';
-    for (let i = 0; i < n; i++) pool.push({ p: list[i]!, t0: t, additive });
+    for (let i = 0; i < n; i++) pool.push({ p: list[i]!, t0: t, additive: additive && i >= judgeN });
     const over = pool.length - max;
     if (over > 0) {
       pool.splice(0, over);
@@ -172,6 +190,12 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     },
     setReduced(flag) {
       reduced = flag;
+    },
+    setLocate(fn) {
+      locate = fn;
+    },
+    setJudgeColors(colors) {
+      judgeColors = colors;
     },
     setBrand(color) {
       brand = color || BRAND_FALLBACK;
