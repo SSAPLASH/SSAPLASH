@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LAB_PATTERNS, combineStats, hitsInWindow, isLabPattern, patternHitsPerLoop, patternLoopMs, type LabStats } from './fxLabPatterns';
+import { LAB_JUDGEMENTS, LAB_PATTERNS, combineStats, isLabJudgement, labJudgementFields, hitsInWindow, isLabPattern, patternHitsPerLoop, patternLoopMs, type LabStats } from './fxLabPatterns';
 
 describe('fxLabPatterns', () => {
   it('끔은 아무것도 치지 않는다', () => {
@@ -72,5 +72,39 @@ describe('combineStats', () => {
   });
   it('빈 목록은 0·정지', () => {
     expect(combineStats([])).toEqual(s({}));
+  });
+});
+
+describe('랩 판정 선택', () => {
+  it('고정 선택은 그대로 필드로 바뀐다', () => {
+    expect(labJudgementFields('none', 1)).toEqual({ judgement: null, deltaMs: null, stray: false });
+    expect(labJudgementFields('perfect', 1)).toEqual({ judgement: 'PERFECT', deltaMs: 0, stray: false });
+    expect(labJudgementFields('good-early', 1)).toMatchObject({ judgement: 'GOOD', deltaMs: -40 });
+    expect(labJudgementFields('good-late', 1)).toMatchObject({ judgement: 'GOOD', deltaMs: 40 });
+    expect(labJudgementFields('stray', 1)).toEqual({ judgement: null, deltaMs: null, stray: true });
+  });
+  it('섞기는 결정적이고 비율이 대략 60·30·10%', () => {
+    expect(labJudgementFields('mix', 42)).toEqual(labJudgementFields('mix', 42));
+    let perfect = 0;
+    let good = 0;
+    let stray = 0;
+    const n = 4000;
+    for (let i = 1; i <= n; i++) {
+      const f = labJudgementFields('mix', i);
+      if (f.stray) stray++;
+      else if (f.judgement === 'PERFECT') perfect++;
+      else if (f.judgement === 'GOOD') good++;
+    }
+    expect(perfect / n).toBeGreaterThan(0.52);
+    expect(perfect / n).toBeLessThan(0.68);
+    expect(good / n).toBeGreaterThan(0.24);
+    expect(good / n).toBeLessThan(0.36);
+    expect(stray / n).toBeGreaterThan(0.06);
+    expect(stray / n).toBeLessThan(0.14);
+  });
+  it('id 검사', () => {
+    expect(LAB_JUDGEMENTS).toHaveLength(6);
+    expect(isLabJudgement('mix')).toBe(true);
+    expect(isLabJudgement('miss')).toBe(false);
   });
 });

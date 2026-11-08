@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { DRUM_KIT_H, DRUM_KIT_W, type KitSkin } from '@/domain/drumKit';
-import type { FxMode, FxSource, HitFxTheme } from '@/domain/hitFx/types';
+import type { FxLocate, FxMode, FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import { MAX_PARTICLES, createFxEngine, type FxEngine } from './fxEngine';
 import type { FxView } from './fxDraw';
 import { createLiveFxSource } from './fxSource';
+import { readJudgeColors } from './judgeColors';
 
 /** 킷 바깥으로 이펙트가 넘칠 기본 여백(킷 크기의 비율, 사방) */
 export const DEFAULT_BLEED = 0.12;
@@ -14,8 +15,16 @@ export const DEFAULT_BLEED = 0.12;
 const MAX_DPR = 2;
 
 export interface FxCanvasProps {
-  skin: KitSkin;
-  theme: HitFxTheme;
+  /** 킷 좌표 공간(기본)에서 패드 위치·테마를 찾는 데 쓴다. 픽셀 공간에서는 쓰지 않는다 */
+  skin?: KitSkin;
+  theme?: HitFxTheme;
+  /**
+   * 좌표 공간. 'kit'(기본) = 킷 좌표 760×300을 부모 폭에 맞춰 늘리고 여백(bleed)을 둔다 / 'pixel' = 부모 크기 그대로 CSS 픽셀
+   * (하이웨이·악보 위에 겹친다. 부모는 position이 static이 아니어야 한다)
+   */
+  space?: 'kit' | 'pixel';
+  /** 이벤트 → 위치·모양. 없으면 킷 좌표의 패드 헤드. 픽셀 공간은 source와 함께 반드시 넘긴다 */
+  locate?: FxLocate;
   /** 없으면 liveStore(실제 타격)를 구독한다 */
   source?: FxSource;
   mode?: FxMode;
@@ -30,13 +39,19 @@ export interface FxCanvasProps {
   glow?: boolean;
 }
 
-export function FxCanvas({ skin, theme, source, mode = 'free', bleed = DEFAULT_BLEED, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
+export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', locate, source, mode = 'free', bleed = DEFAULT_BLEED, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine] = useState(() => createFxEngine());
   const osReduced = useReducedMotion() ?? false;
   const reduced = reducedProp ?? osReduced;
   const liveSource = useMemo(() => createLiveFxSource(mode), [mode]);
   const src = source ?? liveSource;
+  // locate는 렌더마다 새 함수일 수 있어 ref로 최신 값만 본다(엔진·구독을 다시 만들지 않는다)
+  const locateRef = useRef(locate);
+  useEffect(() => {
+    locateRef.current = locate;
+  });
+  const hasLocate = locate !== undefined;
 
   useEffect(() => {
     if (engineRef) engineRef.current = engine;
@@ -53,6 +68,10 @@ export function FxCanvas({ skin, theme, source, mode = 'free', bleed = DEFAULT_B
   }, [engine, theme, skin, reduced]);
 
   useEffect(() => {
+    engine.setLocate(hasLocate ? (e) => locateRef.current?.(e) ?? null : null);
+  }, [engine, hasLocate]);
+
+  useEffect(() => {
     engine.setMaxParticles(maxParticles ?? MAX_PARTICLES);
     engine.setGlow(glow);
   }, [engine, maxParticles, glow]);
@@ -65,15 +84,18 @@ export function FxCanvas({ skin, theme, source, mode = 'free', bleed = DEFAULT_B
     // 캔버스는 CSS 변수를 못 쓰므로 brand 색을 한 번 읽어 둔다
     const brand = getComputedStyle(canvas).getPropertyValue('--brand').trim();
     if (brand) engine.setBrand(brand);
+    engine.setJudgeColors(readJudgeColors(canvas));
 
     let attached = false;
     const update = () => {
       const w = host.clientWidth;
       if (!(w > 0)) return;
-      const scale = w / DRUM_KIT_W;
-      const h = DRUM_KIT_H * scale;
-      const bx = Math.round(w * bleed);
-      const by = Math.round(h * bleed);
+      const pixel = space === 'pixel';
+      const scale = pixel ? 1 : w / DRUM_KIT_W;
+      const h = pixel ? host.clientHeight : DRUM_KIT_H * scale;
+      if (!(h > 0)) return;
+      const bx = pixel ? 0 : Math.round(w * bleed);
+      const by = pixel ? 0 : Math.round(h * bleed);
       const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
       const view: FxView = { width: w + bx * 2, height: h + by * 2, scale, offsetX: bx, offsetY: by, dpr };
       canvas.style.left = `${-bx}px`;
@@ -98,7 +120,7 @@ export function FxCanvas({ skin, theme, source, mode = 'free', bleed = DEFAULT_B
       ro?.disconnect();
       engine.detach();
     };
-  }, [engine, bleed]);
+  }, [engine, bleed, space]);
 
   // 이벤트 구독: 타격마다 React를 거치지 않고 엔진으로 간다
   useEffect(() => src((e) => engine.emit(e)), [engine, src]);

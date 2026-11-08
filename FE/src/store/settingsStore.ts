@@ -52,6 +52,8 @@ interface SettingsState {
   kitSkin: KitSkin;
   /** 타격 이펙트 테마(기기별 로컬). 기본 'auto' = 드럼 모양에 맞춘 기본 이펙트 */
   hitFxTheme: HitFxTheme;
+  /** 타이밍 오차 막대 표시(게임 판정선 아래·악보 아래). 기본 켬 */
+  timingBar: boolean;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -122,12 +124,13 @@ interface SettingsState {
   setSidebarCollapsed: (v: boolean) => void;
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
+  setTimingBar: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 19;
+export const SETTINGS_VERSION = 20;
 
 /**
  * 저장된 설정 이행.
@@ -150,6 +153,7 @@ export const SETTINGS_VERSION = 19;
  * v17 → v18: presetAnchors({}) 추가, activePresetId null → 'system'(UX-64 D1). 적용 중이던 것이 사용자 프리셋이고 앵커가 있으면
  *            presetAnchors[그 id]로 복사(사본은 유지). 시스템 기본이면 사본·시각을 비운다(모델 기본 앵커로 판정).
  * v18 → v19: hitFxTheme(기본 'auto') 추가. 없거나 모르는 값이면 'auto'.
+ * v19 → v20: timingBar(기본 true) 추가. boolean이 아니면 true.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -254,6 +258,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     }
   }
   if (version < 19) p.hitFxTheme = isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto';
+  if (version < 20) p.timingBar = typeof p.timingBar === 'boolean' ? p.timingBar : true;
   return p as unknown as SettingsState;
 }
 
@@ -340,6 +345,7 @@ export const useSettings = create<SettingsState>()(
       drumVolume: 1,
       kitSkin: 'acoustic',
       hitFxTheme: 'auto',
+      timingBar: true,
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -426,6 +432,7 @@ export const useSettings = create<SettingsState>()(
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
+      setTimingBar: (timingBar) => set({ timingBar }),
     }),
     {
       name: 'ssaplash.settings',
@@ -445,6 +452,7 @@ export const useSettings = create<SettingsState>()(
           songVolume: clampVolume(p.songVolume, 1),
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
+          timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
           presetAnchors: sanitizePresetAnchors(p.presetAnchors),

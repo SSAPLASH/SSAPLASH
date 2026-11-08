@@ -1,6 +1,8 @@
 // FX 랩 자동 연주 패턴 — 순수 함수. 시각(ms) 구간 → 그 구간에 칠 패드·세기 목록.
 import { DRUM_KIT_PADS } from '@/domain/drumKit';
 import type { PadId } from '@/domain/pads';
+import type { Judgement } from '@/domain/judgement';
+import { rand01 } from '@/domain/hitFx/rand';
 
 export type LabPatternId = 'off' | 'beat8' | 'fill16' | 'crash' | 'stress';
 
@@ -126,4 +128,44 @@ export function combineStats(list: readonly LabStats[]): LabStats {
     dropped: list.reduce((s, x) => s + x.dropped, 0),
     running: list.some((x) => x.running),
   };
+}
+
+/** 랩 판정 선택: 없음 / PERFECT / GOOD 빠름·늦음 / 헛침 / 섞기(60% PERFECT · 30% GOOD · 10% 헛침) */
+export type LabJudgementId = 'none' | 'perfect' | 'good-early' | 'good-late' | 'stray' | 'mix';
+
+export const LAB_JUDGEMENTS: readonly { id: LabJudgementId; label: string }[] = [
+  { id: 'none', label: '없음' },
+  { id: 'perfect', label: 'PERFECT' },
+  { id: 'good-early', label: 'GOOD 빠름' },
+  { id: 'good-late', label: 'GOOD 늦음' },
+  { id: 'stray', label: '헛침' },
+  { id: 'mix', label: '섞기 60·30·10%' },
+];
+
+export function isLabJudgement(v: unknown): v is LabJudgementId {
+  return LAB_JUDGEMENTS.some((j) => j.id === v);
+}
+
+/** 랩 이벤트에 붙일 판정 필드. 섞기는 seq로 정해 같은 seq면 같은 결과(결정적) */
+export function labJudgementFields(id: LabJudgementId, seq: number): { judgement: Judgement | null; deltaMs: number | null; stray: boolean } {
+  const pick: LabJudgementId = id === 'mix' ? mixPick(seq) : id;
+  switch (pick) {
+    case 'perfect':
+      return { judgement: 'PERFECT', deltaMs: 0, stray: false };
+    case 'good-early':
+      return { judgement: 'GOOD', deltaMs: -40, stray: false };
+    case 'good-late':
+      return { judgement: 'GOOD', deltaMs: 40, stray: false };
+    case 'stray':
+      return { judgement: null, deltaMs: null, stray: true };
+    default:
+      return { judgement: null, deltaMs: null, stray: false };
+  }
+}
+
+function mixPick(seq: number): LabJudgementId {
+  const r = rand01(seq, 7);
+  if (r < 0.6) return 'perfect';
+  if (r < 0.9) return rand01(seq, 11) < 0.5 ? 'good-early' : 'good-late';
+  return 'stray';
 }
