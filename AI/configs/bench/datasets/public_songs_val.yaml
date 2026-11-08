@@ -1,0 +1,17 @@
+# 11/08 추가 공용 곡 중 검증 10곡 (에폭 고르기·문턱값). scripts/make_songsterr_splits.py
+name: public_songs_val
+kind: songsterr
+root: data/songsterr
+sample_rate: 44100
+clip: null
+songs:
+- ac_dc_highway_to_hell
+- audioslave_like_a_stone
+- foo_fighters_my_hero
+- goo_goo_dolls_iris
+- green_day_brain_stew
+- guns_n_roses_paradise_city
+- led_zeppelin_stairway_to_heaven
+- nirvana_heart_shaped_box
+- ozzy_osbourne_crazy_train
+- system_of_a_down_aerials
