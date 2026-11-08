@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HIT_FX_LAB_THEMES } from '@/domain/hitFx/themes';
+import { celebrate } from '@/domain/hitFx/spawn/celebrate';
 import type { FxEvent } from '@/domain/hitFx/types';
 import { createFxEngine, MAX_PARTICLES } from './fxEngine';
 
@@ -212,5 +213,14 @@ describe('fxEngine', () => {
     h.engine.emit(ev(1));
     h.advance(50);
     expect(() => h.frame()).not.toThrow();
+  });
+});
+
+describe('spawn(판정 밖 파티클 직접 넣기)', () => {
+  it('넣은 파티클이 풀에 들어가고 상한을 넘으면 오래된 것부터 버린다', () => {
+    const engine = createFxEngine({ maxParticles: 10, now: () => 0, raf: () => 1, caf: () => {} });
+    engine.spawn(celebrate(1, 0, 0, ['#fff', '#000']));
+    expect(engine.stats().alive).toBe(10);
+    expect(engine.stats().dropped).toBe(5);
   });
 });
