@@ -30,6 +30,7 @@ import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/components/play/TimingBar';
+import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
@@ -765,6 +766,7 @@ function PlayPageBody() {
             keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
             onFrame={onFrame}
             fxSource={laneFx.source}
+            topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
             overlay={
               settings.timingBar ? (
                 <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
