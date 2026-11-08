@@ -1,0 +1,42 @@
+[
+ {
+  "name": "current"
+ },
+ {
+  "name": "k2t1_floor",
+  "k2t": 1,
+  "k2t_name": "floor"
+ },
+ {
+  "name": "k2t1_pitch",
+  "k2t": 1
+ },
+ {
+  "name": "thr_val",
+  "thr_abs": [
+   0.22,
+   0.18,
+   0.26,
+   0.18,
+   0.26
+  ],
+  "rules": {
+   "tom_threshold": 0.26
+  }
+ },
+ {
+  "name": "thr_val_k2t1_floor",
+  "thr_abs": [
+   0.22,
+   0.18,
+   0.26,
+   0.18,
+   0.26
+  ],
+  "rules": {
+   "tom_threshold": 0.26
+  },
+  "k2t": 1,
+  "k2t_name": "floor"
+ }
+]
