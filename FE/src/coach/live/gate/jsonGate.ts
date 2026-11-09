@@ -9,12 +9,14 @@ export interface GateWeights {
   w2: number[][];
   b2: number[];
   threshold: number;
+  modelVersion?: string;
 }
 
 export function createJsonGate(w: GateWeights): CoachGate {
   return {
     runtime: 'json',
     threshold: w.threshold,
+    model: w.modelVersion ?? '',
     score(input) {
       const normal = input.map((v, i) => (v - w.mean[i]) / w.scale[i]);
       let logit = w.b2[0];
