@@ -44,7 +44,10 @@ VITE_SONGS_SOURCE=builtin
 npm run lint       # oxlint
 npm test           # vitest — domain·input 순수 로직 단위 테스트
 npm run build      # tsc 타입 검사 + vite 번들
+npm run measure    # build 뒤 첫 로드 JS gzip 합계 확인 (예산 235kB, 넘으면 exit 1)
 ```
+
+`npm run measure`는 `dist/index.html`의 entry 스크립트와 modulepreload JS를 읽어 파일별 raw·gzip 크기와 합계를 찍는다(`scripts/measure-first-load.mjs`). CI에는 연결하지 않은 로컬 확인용이다. 화면이나 셸에 정적 import를 추가해 합계가 늘면 아래 「코드 분할」 규칙대로 지연 로드를 먼저 검토한다.
 
 ### 상호작용 테스트
 
@@ -172,6 +175,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **Sidebar:** 펼침 240px · 접힘 80px(아이콘만, `title` 툴팁). 실제 접힘 = 설정 `sidebarCollapsed` 또는 태블릿 폭(≤1024px, `useSidebarCollapsed`)이라 ≤1024에서는 강제로 접히고 펼치기 버튼이 없다. 본문 여백은 40, 태블릿은 24. 접을 때는 라벨·로고 글자(`SSAPLASH`↔`S`)가 먼저 사라지고(opacity) 폭이 200ms 줄며, 펼칠 때는 폭이 먼저 늘고 라벨이 뒤따른다(라벨·글자는 항상 렌더하고 `aria-hidden`). 토글 아이콘(`SidebarToggleIcon`)은 하나이고 화살표만 접힘에서 오른쪽을 가리키도록 180° 회전한다. 하단에는 설정만 있고 로그아웃은 프로필 메뉴에 있다. Dock은 `left` 대신 `transform`으로 본문 가운데를 따라간다.
 - **TopBar:** 높이 56. 제목은 페이지가 알린 값, 없으면 `defaultTitles`의 라우트별 기본값(예: `/studio` "내 곡", `/setup` "드럼 세팅").
 - **라우트 전환:** 본문(`<Outlet/>`)은 `key={pathname}`의 `.route-view.route-fade` 래퍼 안에서 160ms(`--motion-route`) 페이드 인한다(쿼리만 바뀌면 그대로, 나가는 화면 연출 없음). 같은 화면 안 단계 전환도 `StageFade`(`.stage-fade`, 같은 페이드·토큰)로 감싼다 — 리듬 게임·악보 연습의 로딩·곡 선택·준비는 페이드, 준비 → 연주(immersive)는 즉시. 사이드바 현재 위치 표시는 `layoutId="side-active"` `m.span` 하나가 활성 항목으로 200ms ease-out 미끄러진다(motion 기능 도착 전에는 제자리에 바로 보이고, 모션 줄이기에서는 즉시 이동). 연주 화면도 같은 래퍼이고 immersive 전환(사이드바·TopBar 언마운트)은 즉시다. 경로가 바뀐 뒤에는 스크롤을 맨 위로 올리고 포커스를 옮긴다 — 셸 화면은 TopBar 제목 `h1`, immersive 화면은 본문 래퍼(둘 다 `tabIndex={-1}`, 외곽선 없음). 첫 로드에는 옮기지 않는다.
+- **코드 분할 (S15P31A307-349):** 첫 진입 화면인 자유 연습(`/free`)·로그인·로그인 콜백만 정적 import하고, 나머지 화면은 `app/routeModules`의 import 표를 거쳐 `lazy(() => loadRoute(key))`로 지연 로드한다. 새 화면은 표에 키를 추가하고 `App.tsx`에서 연결한다(페이지는 named export 그대로). `loadRoute`는 키마다 Promise를 하나만 만들어 두고, 실패하면 캐시에서 지워 다음 이동에서 다시 받는다. Suspense 경계는 AppShell의 `key={pathname}` 래퍼 **바깥**과 PublicLayout의 Outlet 바깥에 하나씩 있다(fallback 없음). 라우터가 이동을 transition으로 처리하므로 다음 화면 코드가 올 때까지 지금 화면이 그대로 남는다. 경계를 keyed 래퍼 안이나 라우트마다 두면 이동할 때 본문이 비니 옮기지 않는다. 새로고침·직접 진입처럼 첫 렌더가 지연 화면이면 셸이 먼저 보이고 본문이 이어서 뜬다. 셸에서 조건부로만 뜨는 UI(DebugOverlay·추천 동의 창)도 지연 로드한다. `VITE_MONITOR`·`import.meta.env.DEV` 조건 화면은 상수 삼항으로 감싸 미설정 빌드에 청크가 생기지 않는다.
+- **라이브러리 청크:** `vite.config.ts`의 `build.rolldownOptions.output.codeSplitting.groups`가 react·react-dom·scheduler·react-router(-dom)·zustand를 `vendor-react`로, entry에서 정적으로 닿는 motion 모듈만(`tags: ['$initial']`) `vendor-motion`으로 묶는다. 앱 코드만 바뀐 배포에서는 두 파일 이름이 그대로라 브라우저 캐시를 다시 쓴다. motion의 `domMax`(`app/motionFeatures`)는 지연 청크로 남는다. `chunkSizeWarningLimit`은 올리지 않는다.
 - **GlassDock:** 상단 가운데 글래스 Dock(음량 토글·메트로놈 칩·BPM ±·프리셋 이름). 모드는 `shell`(일반) / `play`(전체 화면 연주, 일시정지 버튼 추가) × 접힘 여부 4변이다. 칩 본체를 누르면 `MetronomePanel`(Dock 아래 오른쪽 360, `shellStore.dockPanel`)이 열린다. 스틱 연결이 필요한 센서인데 한 손이라도 끊기면 프리셋 칩이 「● L ● R 준비 필요」(amber)로 바뀐다(`domain/dockChip`, 키보드 전용·포인터 모의 IMU는 제외).
 - **StickStatusIndicator·ProfileMenu:** 오른쪽 위 고정.
 - **페이지 선언:** 페이지는 `useShell({ title, immersive })`로 제목과 전체 화면 여부를 알린다. `immersive`면 Sidebar·TopBar가 사라지고 본문이 전폭이 된다. 언마운트하면 자기가 바꾼 필드만 기본값으로 돌아간다. 이 상태는 `store/shellStore`에 있고 영속하지 않는다(현재 `/settings`·`/history`가 사용, 나머지 화면은 아직 기본 제목).
