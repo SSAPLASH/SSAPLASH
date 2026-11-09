@@ -59,10 +59,10 @@ public class SongManagementService {
             db.update("UPDATE songs SET cover_key=NULL,updated_at=clock_timestamp() WHERE id=?",id); assets.cover(user,id,row.cover());
         }});
     }
-    /** 248: 연결된 내 악보도 같은 트랜잭션에서 소프트 삭제하고 페이지 파일을 정리 대상으로 등록한다. */
+    /** 333: 연결된 내 악보는 지우지 않고 같은 트랜잭션에서 연결만 끊는다(11/06 "같이 소프트 삭제"에서 변경). 악보는 곡 없는 악보로 남는다. */
     public void deleteSong(long user,long id) {
         tx.executeWithoutResult(x->{ var row=lock(user,id,true); assets.registerAll(user,id,row.accompaniment(),row.cover());
-            sheets.deleteLinked(user,id);
+            sheets.unlinkAll(user,id);
             db.update("UPDATE songs SET deleted_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=?",id);
         });
     }
