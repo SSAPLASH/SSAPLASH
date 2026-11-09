@@ -35,6 +35,10 @@ function card(s: SongSummary, withEdit = true): string {
 }
 
 describe('MySongCard (v0.4)', () => {
+  it('아티스트가 없으면 「알 수 없음」', () => {
+    expect(card(song({ artist: '' }))).toContain('<span class="studio-card-artist">알 수 없음</span>');
+  });
+
   it('출처 칩: MIDI는 「MIDI」, MusicXML 악보 곡은 「MusicXML」, 음원 곡은 없음(293)', () => {
     expect(card(song({ source: 'MIDI' }))).toContain('class="studio-chip">MIDI<');
     expect(card(song({ source: 'MUSICXML' }))).toContain('class="studio-chip">MusicXML<');
