@@ -110,13 +110,13 @@ describe('SetupPage ② 시작 위치 보정(UX-64 D7)', () => {
     expect(html).not.toContain('보정 시작');
   });
 
-  it('사용자 프리셋인데 앵커가 없으면 "드럼 위치를 아직 잡지 않았어요", 펼친 본문에 [시작 위치 잡기]와 드럼 배치 안내', async () => {
+  it('사용자 프리셋인데 앵커가 없으면 "드럼 위치를 아직 잡지 않았어요", 펼친 본문에 [시작 위치 맞추기]와 드럼 배치 안내', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: 'p1' });
     putPresets([preset('p1', '내 배치')]);
     putLive({ connected: [true, true] });
     const html = await renderSetup();
     expect(html).toContain('드럼 위치를 아직 잡지 않았어요');
-    expect(html).toContain('>시작 위치 잡기</button>');
+    expect(html).toContain('>시작 위치 맞추기</button>');
     expect(html).toContain('[전체 보정] 또는 [추가하기]');
     expect(html).not.toContain('넓게');
   });
