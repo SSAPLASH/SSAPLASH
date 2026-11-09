@@ -1133,7 +1133,7 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 | `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED`, 선택 `songId`(연결할 개인 곡, 248번) | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
 | `GET /` | `q`(제목 부분 검색), `page` 0~100000, `size` 1~100 | `PageResponse<SheetSummary>`, 최신순 |
 | `GET /{id}` | — | 악보 상세 |
-| `PATCH /{id}` | JSON `{"title": "..."}`만 | 악보 상세 |
+| `PATCH /{id}` | JSON `{"title": "...", "songId": 42 \| null}` 중 1~2개 필드(333번). `title`은 제목, `songId`는 숫자면 개인 곡 연결(이미 연결돼 있으면 옮김)·`null`이면 해제. 없는 필드는 그대로 | 악보 상세 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
 
 - **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`, `songId`(연결된 개인 곡, 없으면 null). 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
@@ -1145,9 +1145,9 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `SHEET_INVALID` | 제목·`source` 형식, `songId`가 양의 정수 문자열이 아님, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
-| 404 | `SONG_NOT_FOUND` | `songId`의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡 모두) |
-| 409 | `SHEET_ALREADY_LINKED` | 그 곡에 살아 있는 악보가 이미 있음(업로드 중인 악보 포함). 지우면 다시 올릴 수 있다 |
+| 400 | `SHEET_INVALID` | 제목·`source` 형식, 등록 `songId`가 양의 정수 문자열이 아님, PATCH `songId`가 양의 정수(Long 범위)도 `null`도 아님, 모르는 필드, 빈 PATCH 본문, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한 |
+| 404 | `SONG_NOT_FOUND` | 등록·PATCH의 `songId`의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡 모두) |
+| 409 | `SHEET_ALREADY_LINKED` | 그 곡에 살아 있는 다른 악보가 이미 있음(업로드 중인 악보 포함). 지우거나 연결을 풀면 다시 연결할 수 있다 |
 | 413 | `SHEET_TOO_LARGE` | 이미지 10 MiB·PDF 20 MiB 초과 |
 | 413 | `SHEET_QUOTA_EXCEEDED` | 회원당 100개 또는 500 MiB 초과 |
 | 415 | `SHEET_UNSUPPORTED` | JPG·PNG·WEBP·PDF가 아님(GIF·BMP·HEIC 등) |
@@ -1160,8 +1160,9 @@ FE 요청(2026-11-06, `CHART-001_내-악보와-개인-곡-연결`)으로 10/30 �
 - 등록 때 선택 파트 `songId`(양의 정수 문자열)를 보내면 그 곡에 연결한다. 곡은 **본인 소유·삭제되지 않음·공용(`BUILTIN`)이 아님**이어야 하고 상태(처리 중·실패)는 보지 않는다. 아니면 모두 404 `SONG_NOT_FOUND`. `songId`가 없으면 지금처럼 곡 없는 악보다. `RENDERED`도 같은 규칙이다.
 - **곡당 살아 있는 악보는 하나다.** `sheet_music_song_live_idx`(V44)가 보장하므로 동시에 올려도 하나만 들어가고 나머지는 409 `SHEET_ALREADY_LINKED`다. 악보를 소프트 삭제하면 자리가 비어 다시 올릴 수 있다. 업로드 실패로 소프트 삭제된 행도 자리를 차지하지 않는다.
 - 악보 상세·목록 항목에 `songId`, 곡 목록·상세([187번](#개인-곡-관리커버-187번))에 `sheetId`가 나온다. 곡의 `sheetId`는 페이지가 연결된 살아 있는 악보만 가리키며(업로드 중인 행은 null), 공용 곡은 항상 null이다.
-- **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보도 같은 트랜잭션에서 소프트 삭제되고 페이지 파일이 바로 정리 대상으로 등록된다(`sheet.SheetSongLink`, 악보 DELETE와 같은 처리). 악보만 지우면 곡은 그대로다.
-- 이미 올린 악보를 나중에 곡에 연결하는 PATCH는 없다(FE가 쓰지 않음). 필요하면 `PATCH /{id}`에 `songId`를 더하는 식으로 호환되게 추가한다.
+- **나중에 연결·해제(333번, 2026-11-09 FE 회신 2 "안 B"):** `PATCH /{id}`에 `songId`를 보내면 이미 올린 악보를 곡에 연결한다. 판정은 등록과 같다(404 `SONG_NOT_FOUND`, 409 `SHEET_ALREADY_LINKED`, 곡 상태 무관). `null`이면 해제한다. 이미 다른 곡에 연결된 악보에 다른 `songId`를 보내면 **옮기고**(이전 곡의 `sheetId`는 null) 지금 연결된 곡과 같은 값이면 아무것도 바꾸지 않는다. FE는 악보만 있는 카드의 [곡 올리기]로 곡을 만든 직후(201·202) 이 PATCH를 부른다.
+- **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보는 **지우지 않고 `song_id`만 비운다**(`sheet.SheetSongLink.unlinkAll`, 같은 트랜잭션, 업로드 중 행 포함). 페이지 파일은 정리 큐에 올리지 않으며 악보는 곡 없는 악보로 다시 보인다. 11/06(248번)에는 악보도 같이 소프트 삭제했으나 FE에 곡 없는 악보 화면이 생겨 333번에서 바꿨다. V44 마이그레이션 파일의 주석은 그때 기준이며 Flyway 체크섬 때문에 고치지 않는다. 악보만 지우면 곡은 그대로다. 회원 탈퇴 때 악보를 통째로 정리하는 처리는 그대로다.
+- 곡 없는 악보가 늘어도 회원당 100개·500 MiB 한도는 그대로 적용된다. 정리는 악보 DELETE로 한다.
 - 패키지 경계: `sheet`는 `songs` 테이블을 SQL로만 확인하고 `song`을 import하지 않는다. `song`은 `sheetId`를 `SongRepository` 서브쿼리로 읽고, 곡 삭제 때 `SheetSongLink`를 부른다(한 방향).
 
 ```powershell
