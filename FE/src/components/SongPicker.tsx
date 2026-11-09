@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from '@/components/play/SongTable';
 import { SongDetailPane } from '@/components/play/SongDetailPane';
@@ -51,15 +52,10 @@ const RECOMMEND_SIZE = 10;
 /** 패널은 한 건만 보이지만 선택한 곡이 섞여 와도 남도록 여유 있게 받는다 */
 const SIMILAR_SIZE = 3;
 
-const COPY: Record<Props['mode'], { title: string; desc: string }> = {
-  play: {
-    title: '리듬에 맞춰 도전해요',
-    desc: '곡을 고르면 연주 준비로 넘어가요. 라이브러리 탭에는 완료된 곡만 고를 수 있어요.',
-  },
-  sheet: {
-    title: '악보로 차근차근 연습해요',
-    desc: '곡을 고르면 연주 준비로 넘어가요. 라이브러리 탭에는 완료된 곡만 고를 수 있어요.',
-  },
+// 제목 아래 설명 줄은 두지 않는다(설계 QA-page-header-dock-fold)
+const COPY: Record<Props['mode'], { title: string }> = {
+  play: { title: '리듬에 맞춰 도전해요' },
+  sheet: { title: '악보로 차근차근 연습해요' },
 };
 
 /** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과다 */
@@ -288,10 +284,7 @@ export function SongPicker({ onSelect, mode }: Props) {
 
   return (
     <div className="play-sp">
-      <div className="play-sp-head">
-        <h2 className="play-sp-title">{copy.title}</h2>
-        <p className="play-sp-desc">{copy.desc}</p>
-      </div>
+      <PageHeader title={copy.title} />
 
       {source === 'api' && (
         <Segmented label="곡 범위" options={recoEnabled ? TAB_OPTIONS_WITH_AI : SCOPE_OPTIONS} value={tab} onChange={setTab} />

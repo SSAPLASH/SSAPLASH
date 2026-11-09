@@ -16,6 +16,7 @@ import { Slider } from '@/components/ui/Slider';
 import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
 import { Dialog } from '@/components/ui/Dialog';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
 import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
@@ -154,10 +155,7 @@ export function SettingsPage() {
 
   return (
     <main className="main">
-      <header className="settings-head">
-        <h1>설정</h1>
-        <p>계정, 기기, 오디오, 연주 설정을 관리해요.</p>
-      </header>
+      <PageHeader className="settings-head" title="설정" />
 
       <div className="settings-cols">
         <div className="settings-col">

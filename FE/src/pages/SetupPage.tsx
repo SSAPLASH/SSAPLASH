@@ -10,6 +10,7 @@ import { useRecentHits } from '@/components/drum/useRecentHits';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Segmented } from '@/components/ui/Segmented';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Slider } from '@/components/ui/Slider';
 import { Toggle } from '@/components/ui/Toggle';
 import { HitLog } from '@/components/setup/HitLog';
@@ -471,12 +472,14 @@ export function SetupPage() {
         />
       )}
 
-      <div className="setup-head">
-        <h1>연주 환경 설정</h1>
-        <span className="setup-progress">
-          {stepsResult.total}단계 중 {stepsResult.doneCount}단계 완료
-        </span>
-      </div>
+      <PageHeader
+        title="연주 환경 설정"
+        actions={
+          <span className="setup-progress">
+            {stepsResult.total}단계 중 {stepsResult.doneCount}단계 완료
+          </span>
+        }
+      />
 
       <div className="setup-tiles">
         {/* ① 스틱 연결 */}
