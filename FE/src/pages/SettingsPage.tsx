@@ -282,7 +282,7 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <p className="settings-help">메트로놈은 상단 Dock에서도 바꿀 수 있어요.</p>
+            <p className="settings-help">메트로놈은 연주 화면 상단 Dock에서도 바꿀 수 있어요.</p>
           </Card>
         </div>
 
