@@ -116,6 +116,15 @@ function chartFailureFromDto(value: unknown): { code: string } | null {
   return typeof code === 'string' ? { code } : null;
 }
 
+/** 가수를 비워 올린 곡의 표시 문구. 저장은 빈 값 그대로 두고 화면에서만 바꾼다 */
+export const UNKNOWN_ARTIST = '알 수 없음';
+
+/** 화면에 보일 가수 이름. 비어 있으면(공백만 포함) 「알 수 없음」 */
+export function artistLabel(artist: string | null | undefined): string {
+  const name = artist?.trim() ?? '';
+  return name === '' ? UNKNOWN_ARTIST : name;
+}
+
 export function songFromDto(d: Record<string, unknown>): SongSummary {
   return {
     id: toSafeId(d.id, 'songId'),

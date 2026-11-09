@@ -42,7 +42,7 @@ import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
-import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { artistLabel, chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
@@ -869,7 +869,7 @@ function SheetPageBody() {
           <PlayHud
             variant="sheet"
             title={song.title}
-            artist={song.artist || undefined}
+            artist={artistLabel(song.artist)}
             coverUrl={song.coverUrl}
             level={chart.difficulty}
             bpm={chart.bpm}
