@@ -47,7 +47,16 @@ export function LandingView({ onStart, onMode, showLogin }: LandingViewProps) {
 
   const scrollToScene = useCallback((id: string) => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+    const behavior = reduce ? 'auto' : 'smooth';
+    const hero = document.getElementById('hero');
+    // 소개 앵커: 히어로 와이프가 끝나기 직전(시안: 히어로 끝 - 20vh)으로 가야 글자 채움이 처음부터 보인다.
+    // 모션 줄이기에서는 장면이 풀려 있어 장면 시작점으로 간다.
+    if (id === 'statement' && hero && !hero.classList.contains('lp-static')) {
+      const top = hero.getBoundingClientRect().bottom + window.scrollY - window.innerHeight * 0.2;
+      window.scrollTo({ top, behavior });
+      return;
+    }
+    document.getElementById(id)?.scrollIntoView({ behavior });
   }, []);
 
   return (
