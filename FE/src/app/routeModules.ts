@@ -18,7 +18,7 @@ const routeImports = {
   result: () => import('@/pages/ResultPage').then((m) => ({ default: m.ResultPage })),
   report: () => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })),
   adminSongs: () => import('@/pages/AdminSongsPage').then((m) => ({ default: m.AdminSongsPage })),
-  signup: () => import('@/pages/SignupPage').then((m) => ({ default: m.SignupPage })),
+  landing: () => import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
   /** 악보 뷰어. pdf.js가 이 화면 청크에만 들어간다 */
   sheetViewer: () => import('@/pages/SheetViewerPage').then((m) => ({ default: m.SheetViewerPage })),
 } satisfies Record<string, () => Promise<RouteModule>>;

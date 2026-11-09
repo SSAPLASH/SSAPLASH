@@ -22,7 +22,7 @@ export function ProfileMenu() {
   if (status !== 'authenticated' || !user) return null;
 
   const onLogout = () => {
-    void logout().then(() => navigate('/login', { replace: true }));
+    void logout().then(() => navigate('/', { replace: true }));
   };
 
   // 항목을 고르면 메뉴를 닫고 실행한다
