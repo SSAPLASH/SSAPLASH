@@ -266,14 +266,15 @@ export function StudioPage() {
         setEditing(null);
         editReset();
         if (removed && useChartJob.getState().active?.songId === song.id) clear();
-        await load('MINE');
+        // BE는 곡을 지우면 연결된 악보도 같이 지운다. 악보 목록도 다시 읽어야 곡 없는 악보로 남지 않는다
+        await Promise.all([load('MINE'), removed && song.sheetId != null ? loadSheets() : undefined]);
         if (removed) showToast(`「${song.title}」을 삭제했습니다.`);
         else flashRow(song.id);
       } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
         void load('MINE');
       }
     },
-    [editReset, clear, load, flashRow, showToast],
+    [editReset, clear, load, loadSheets, flashRow, showToast],
   );
 
   const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
