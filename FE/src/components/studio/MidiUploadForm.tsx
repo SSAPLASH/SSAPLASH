@@ -22,6 +22,8 @@ export interface MidiUploadFormProps {
   /** 업로드 실패 문구(store의 error). 있으면 버튼 위에 보인다 */
   error: string | null;
   onSubmit: (draft: MidiDraft) => void;
+  /** 제목 입력의 처음 값(악보에 곡 올리기: 악보 제목). 마운트 시 한 번만 읽는다 */
+  initialTitle?: string;
   /** 첫 방문(곡도 작업도 없음)의 큰 드롭 영역 */
   emphasis: boolean;
   /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
@@ -32,10 +34,10 @@ function size(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function MidiUploadForm({ busy, error, onSubmit, emphasis, onCancel }: MidiUploadFormProps) {
+export function MidiUploadForm({ busy, error, onSubmit, initialTitle, emphasis, onCancel }: MidiUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<UploadPrecheck | null>(null);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialTitle ?? '');
   const [artist, setArtist] = useState('');
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

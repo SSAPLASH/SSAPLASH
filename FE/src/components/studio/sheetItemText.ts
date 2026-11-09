@@ -5,6 +5,3 @@ import type { SheetSummary } from '@/domain/sheetMusic';
 export function sheetSubtitle(sheet: SheetSummary): string {
   return sheet.kind === 'PDF' ? '악보 · PDF' : `악보 · 이미지 ${sheet.pageCount}쪽`;
 }
-
-/** 음원이 필요한 버튼을 비활성으로 둘 때 붙이는 설명 */
-export const SHEET_NO_AUDIO_HINT = '음원이 있어야 할 수 있어요';

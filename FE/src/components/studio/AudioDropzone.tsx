@@ -28,6 +28,8 @@ interface Props {
   /** 실패한 곡 다시 올리기: 제목·아티스트를 미리 채우고 파일만 다시 고르게 한다 */
   prefill: { title: string; artist: string } | null;
   onCancelPrefill: () => void;
+  /** 제목 입력의 처음 값(악보에 곡 올리기: 악보 제목). 다시 올리기 배너 없이 제목만 채운다. 마운트 시 한 번만 읽는다 */
+  initialTitle?: string;
   /** 첫 방문(곡도 작업도 없음)의 큰 드롭존 */
   emphasis: boolean;
   /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
@@ -40,10 +42,10 @@ function mib(bytes: number): string {
 
 const limitMib = Math.round(MAX_AUDIO_BYTES / 1024 / 1024);
 
-export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, emphasis, onCancel }: Props) {
+export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, initialTitle, emphasis, onCancel }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<PrecheckResult | null>(null);
-  const [title, setTitle] = useState(prefill?.title ?? '');
+  const [title, setTitle] = useState(prefill?.title ?? initialTitle ?? '');
   const [artist, setArtist] = useState(prefill?.artist ?? '');
   const [dragging, setDragging] = useState(false);
   // 파일·제목·아티스트 조합마다 키 하나. 바뀌면 null로 두고 제출 때 새로 만든다
