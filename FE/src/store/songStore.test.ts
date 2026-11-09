@@ -83,3 +83,50 @@ describe('load 목록 조건', () => {
     expect(useSongs.getState().status).toBe('ready');
   });
 });
+
+describe('load 전체 페이지 (Jira 363)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const ok = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  const pageOf = (url: string) => Number(new URL(url, 'http://x').searchParams.get('page'));
+
+  it('api 소스: 51곡 이상이면 다음 페이지까지 모두 items에 담는다', async () => {
+    resetForTest('tok');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const p = pageOf(url);
+        const ids = p === 0 ? Array.from({ length: 100 }, (_, i) => i + 1) : [101, 102];
+        return ok({ items: ids.map((id) => ({ id, title: `곡${id}`, status: 'READY' })), hasNext: p === 0 });
+      }),
+    );
+    useSongs.setState({ source: 'api' });
+    await useSongs.getState().load('BUILTIN');
+    expect(useSongs.getState().status).toBe('ready');
+    expect(useSongs.getState().items).toHaveLength(102);
+    expect(useSongs.getState().items.at(-1)?.id).toBe(102);
+  });
+
+  it('로드 중 새 load가 오면 이전 로드는 다음 페이지를 요청하지 않고 결과도 반영하지 않는다', async () => {
+    resetForTest('tok');
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const fn = vi.fn(async (url: string) => {
+      const q = new URL(url, 'http://x').searchParams.get('q');
+      if (q === '옛') {
+        await gate;
+        return ok({ items: [{ id: 1, title: '옛곡', status: 'READY' }], hasNext: true });
+      }
+      return ok({ items: [{ id: 9, title: '새곡', status: 'READY' }], hasNext: false });
+    });
+    vi.stubGlobal('fetch', fn);
+    useSongs.setState({ source: 'api' });
+    const first = useSongs.getState().load('BUILTIN', '옛');
+    await useSongs.getState().load('BUILTIN', '새');
+    release();
+    await first;
+    const oldCalls = fn.mock.calls.filter(([u]) => new URL(String(u), 'http://x').searchParams.get('q') === '옛');
+    expect(oldCalls).toHaveLength(1);
+    expect(useSongs.getState().items.map((s) => s.id)).toEqual([9]);
+  });
+});
