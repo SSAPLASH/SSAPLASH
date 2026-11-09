@@ -1,12 +1,13 @@
 // 악보 페이저 — 마디를 화면에 고정하고 커서가 왼쪽에서 오른쪽으로 움직인다 (Canvas 2D).
 // 슬롯마다 drawSheet를 한 번씩 clip해서 부르고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지 마디로 바꿔 끼운다.
-// 슬롯·커서·박 라벨은 격자 시각(곡 시각 − chart.offsetMs)으로 계산한다. 격자 시각이 0보다 작으면(카운트인·인트로) 커서는 첫 슬롯 왼쪽에 선다.
+// 슬롯·커서·박 라벨은 격자 시각(gridTimeAt: 빠르기 구간이 없으면 곡 시각 − chart.offsetMs, 있으면 박 번호 기준)으로 계산한다.
+// 격자 시각이 0보다 작으면(카운트인·인트로) 커서는 첫 슬롯 왼쪽에 선다.
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FxCanvas } from '@/components/fx/FxCanvas';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
-import { buildSheet, gridTimeOf, layoutBar, type BarLayout } from '@/domain/sheet';
+import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/sheet';
 import { barsPerPage, cursorPos, noteHeadAt, pagerSlots, snapToBeat, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from './sheetStripMath';
 import { drawBeatLabel, drawCursor, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from './sheetStripDraw';
@@ -121,7 +122,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       const inner = Math.max(1, width - GUTTER_X);
 
       const raw = p.getSongTime() ?? 0;
-      const grid = gridTimeOf(raw, originMs);
+      const grid = gridTimeAt(chart, raw);
       const t = reduced ? snapToBeat(grid, beatMs) : grid;
       const perPage = barsPerPage(inner);
       const slotW = inner / perPage;
@@ -146,7 +147,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
           noteStates: p.noteStates,
           strayHits: p.strayHits,
           hitMarks: hitMarks?.current,
-          songTime: originMs + slot.bar * barMs,
+          songTime: songTimeAtGrid(chart, slot.bar * barMs),
           rawSongTime: raw,
           originMs,
           width,
