@@ -1,7 +1,7 @@
 // 약점 마디 미니 악보 — 결과 페이지용 정지 화면. 마운트·props 변경·리사이즈 때만 그린다(rAF 없음).
 import { useEffect, useRef } from 'react';
 import type { Judgement } from '@/domain/judgement';
-import { gridOriginMs, layoutBar, SHEET_BAR_PX, type BarLayout, type GridChart } from '@/domain/sheet';
+import { gridOriginMs, layoutBar, SHEET_BAR_PX, songTimeAtGrid, type BarLayout, type GridChart } from '@/domain/sheet';
 import { drawSheet, readColors } from './sheetStripDraw';
 
 export interface SheetSnippetProps {
@@ -56,7 +56,7 @@ export function SheetSnippet({ chart, noteStates, bars }: SheetSnippetProps) {
         chart,
         noteStates,
         strayHits: [],
-        songTime: originMs + bars[0] * barMs,
+        songTime: songTimeAtGrid(chart, bars[0] * barMs),
         originMs,
         width,
         height,

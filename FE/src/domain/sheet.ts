@@ -1,19 +1,38 @@
 // 악보 모드의 격자 모델 (MODE-sheet-practice 3-2). 채보를 마디 × 16분음 칸으로 양자화한다.
 // 격자 원점은 chart.offsetMs(1마디 1박 시각)이고, 칸·마디는 모두 "격자 시각 = timeMs − originMs"로 센다 (MODE-003-sheet-grid-origin 3장).
+// 빠르기 구간(tempoSegments)이 있는 곡은 격자 시각을 박 번호 × 첫 빠르기 한 박 길이로 센다(gridTimeAt). 마디 폭이 같고
+// 노트가 그 구간 빠르기의 칸에 맞는다 (CHART-003-variable-tempo-exp). 구간이 없으면 timeMs − originMs와 같다.
 import type { Chart } from './chart';
 import { ALL_PADS, type PadId } from './pads';
+import { beatAtMs, beatTimeMs } from './tempo';
 
 /** 격자 원점·격자 밖 판정에 필요한 채보 필드. offsetMs가 없으면(이전 플레이 로그) 0으로 본다 */
-export type GridChart = Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> & Partial<Pick<Chart, 'offsetMs'>>;
+export type GridChart = Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> & Partial<Pick<Chart, 'offsetMs' | 'tempoSegments'>>;
 
 /** 격자 원점(ms, 반주 기준). 원점 정의를 이 한 곳에 둔다 */
 export function gridOriginMs(chart: Partial<Pick<Chart, 'offsetMs'>>): number {
   return chart.offsetMs ?? 0;
 }
 
-/** 반주 기준 시각 → 격자 시각. 음수면 리드인(카운트인·인트로) 구간 */
+/** 반주 기준 시각 → 격자 시각(빠르기 구간 없는 곡). 음수면 리드인(카운트인·인트로) 구간 */
 export function gridTimeOf(songTimeMs: number, originMs: number): number {
   return songTimeMs - originMs;
+}
+
+type TimeChart = Pick<Chart, 'bpm'> & Partial<Pick<Chart, 'offsetMs' | 'tempoSegments'>>;
+
+const hasSegments = (chart: TimeChart): boolean => (chart.tempoSegments?.length ?? 0) > 1;
+
+/** 반주 기준 시각 → 격자 시각. 빠르기 구간이 있으면 박 번호 × (60000 / chart.bpm). 없으면 gridTimeOf와 같음 */
+export function gridTimeAt(chart: TimeChart, songTimeMs: number): number {
+  if (!hasSegments(chart)) return gridTimeOf(songTimeMs, gridOriginMs(chart));
+  return (beatAtMs(chart, songTimeMs) * 60_000) / chart.bpm;
+}
+
+/** 격자 시각 → 반주 기준 시각. gridTimeAt의 역함수 */
+export function songTimeAtGrid(chart: TimeChart, gridMs: number): number {
+  if (!hasSegments(chart)) return gridOriginMs(chart) + gridMs;
+  return beatTimeMs(chart, (gridMs * chart.bpm) / 60_000);
 }
 
 /**
@@ -23,7 +42,15 @@ export function gridTimeOf(songTimeMs: number, originMs: number): number {
  * 그보다 앞선 노트만 offGrid다(AI 박 시각 해상도 20ms 때문에 첫 박 타격이 원점보다 조금 앞설 수 있다).
  */
 export function stepIndexOf(timeMs: number, originMs: number, stepMs: number): { idx: number; offGrid: boolean } {
-  const grid = gridTimeOf(timeMs, originMs);
+  return stepOfGrid(gridTimeOf(timeMs, originMs), stepMs);
+}
+
+/** stepIndexOf와 같은 규칙을 격자 시각(gridTimeAt)으로. 빠르기 구간이 있는 곡도 칸이 구간 빠르기에 맞는다 */
+export function stepIndexAt(chart: TimeChart, timeMs: number, stepMs: number): { idx: number; offGrid: boolean } {
+  return stepOfGrid(gridTimeAt(chart, timeMs), stepMs);
+}
+
+function stepOfGrid(grid: number, stepMs: number): { idx: number; offGrid: boolean } {
   const idx = Math.max(0, Math.round(grid / stepMs));
   const offGrid = Math.abs(grid - idx * stepMs) > stepMs / 4;
   return { idx, offGrid };
@@ -36,9 +63,8 @@ const BAR_COUNT_EPS_MS = 1;
 export function barCountOf(chart: GridChart & Pick<Chart, 'durationMs'>, stepsPerBar = chart.beatsPerBar * 4): number {
   const barMs = (60_000 / chart.bpm) * chart.beatsPerBar;
   const stepMs = barMs / stepsPerBar;
-  const originMs = gridOriginMs(chart);
-  const byDuration = Math.max(1, Math.ceil((chart.durationMs - originMs - BAR_COUNT_EPS_MS) / barMs));
-  const maxBar = chart.notes.reduce((m, n) => Math.max(m, Math.floor(stepIndexOf(n.timeMs, originMs, stepMs).idx / stepsPerBar)), 0);
+  const byDuration = Math.max(1, Math.ceil((gridTimeAt(chart, chart.durationMs) - BAR_COUNT_EPS_MS) / barMs));
+  const maxBar = chart.notes.reduce((m, n) => Math.max(m, Math.floor(stepIndexAt(chart, n.timeMs, stepMs).idx / stepsPerBar)), 0);
   return Math.max(byDuration, maxBar + 1);
 }
 
@@ -79,7 +105,7 @@ export function buildSheet(chart: Chart, stepsPerBar = 16): SheetModel {
   const rows = ALL_PADS.filter((p) => present.has(p));
 
   const placed = chart.notes.map((n, noteIndex) => {
-    const { idx, offGrid } = stepIndexOf(n.timeMs, originMs, stepMs);
+    const { idx, offGrid } = stepIndexAt(chart, n.timeMs, stepMs);
     return { bar: Math.floor(idx / stepsPerBar), cell: { pad: n.pad, step: idx % stepsPerBar, noteIndex, offGrid } };
   });
 
@@ -165,12 +191,11 @@ export function layoutBar(chart: GridChart, barIndex: number, opts: { stepsPerBa
   const stepsPerBar = opts.stepsPerBar ?? chart.beatsPerBar * 4;
   const stepMs = ((60_000 / chart.bpm) * chart.beatsPerBar) / stepsPerBar;
   const stepsPerBeat = stepsPerBar / chart.beatsPerBar;
-  const originMs = gridOriginMs(chart);
 
   const glyphs: NoteGlyph[] = [];
   const steps: number[] = []; // glyphs와 같은 인덱스의 마디 안 step
   chart.notes.forEach((n, noteIndex) => {
-    const { idx, offGrid } = stepIndexOf(n.timeMs, originMs, stepMs);
+    const { idx, offGrid } = stepIndexAt(chart, n.timeMs, stepMs);
     if (Math.floor(idx / stepsPerBar) !== barIndex) return;
     const step = idx % stepsPerBar;
     const pos = STAFF_POS[n.pad];
