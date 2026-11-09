@@ -82,7 +82,7 @@ interface SettingsState {
   /** 배치 교체(보정 완료·프리셋 적용). 빠진 패드는 기본값으로 채운다 */
   setKitLayout: (layout: Partial<KitLayout>) => void;
   resetLayout: () => void;
-  /** 패드 하나를 (x, y)로 옮긴다(드래그 편집, kit-drag 설계 D2·D4). 0.05~0.95로 자르고 그 패드의 손별 앵커도 같이 옮긴다. presetAnchors 기록은 저장 때 갱신. 시스템 기본이면 무시 */
+  /** 패드 하나를 (x, y)로 옮긴다(드래그 편집, kit-drag 설계 D2·D4). 0.05~0.95로 자르고 그 패드의 손별 앵커도 같이 옮긴다. presetAnchors 기록은 저장 때 갱신. 시스템 기본도 옮긴다(앵커가 없어 배치만 이동, D9) */
   movePad: (pad: PadId, x: number, y: number) => void;
   /**
    * 손별 앵커 저장(사본). at은 보정 시각(기본 지금). 적용 중인 것이 사용자 프리셋이면 presetAnchors[그 id]에도 같이 기록한다.
@@ -367,8 +367,7 @@ export const useSettings = create<SettingsState>()(
       setKitLayout: (layout) => set({ kitLayout: fillLayout(layout) }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
       movePad: (pad, x, y) => {
-        const { activePresetId, kitLayout, stickAnchors, tuning } = get();
-        if (isSystemPreset(activePresetId)) return;
+        const { kitLayout, stickAnchors, tuning } = get();
         const clamp = (v: number) => Math.min(0.95, Math.max(0.05, v));
         const from = { x: kitLayout[pad].x, y: kitLayout[pad].y };
         const to = { x: clamp(x), y: clamp(y) };

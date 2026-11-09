@@ -6,6 +6,7 @@ import {
   SYSTEM_PRESET_ID,
   isDirty,
   isSystemPreset,
+  layoutEquals,
   validatePresetName,
   type CaptureDraft,
   type KitPreset,
@@ -156,14 +157,15 @@ export const usePresets = create<PresetState>()((set, get) => {
 });
 
 /**
- * 변경 여부(적용 프리셋과 현재 편집값 비교). 시스템 기본은 편집할 수 없으니 항상 false,
+ * 변경 여부(적용 프리셋과 현재 편집값 비교). 시스템 기본은 고정이라 저장할 수 없지만, 배치를 끌어 옮겼으면
+ * (기본 배치와 다르면) true — 새 프리셋으로 저장할 것이 있다(kit-drag D8). 소리 세트는 비교하지 않는다,
  * 사용자 프리셋인데 목록에 없으면(저장소 전환 직후) 저장할 것이 있는 것으로 보아 true
  */
 export function selectDirty(
   settings: { kitLayout: KitPreset['layout']; soundSetId: KitPreset['soundSetId']; activePresetId: string },
   presets: { items: KitPreset[] },
 ): boolean {
-  if (isSystemPreset(settings.activePresetId)) return false;
+  if (isSystemPreset(settings.activePresetId)) return !layoutEquals(settings.kitLayout, DEFAULT_KIT_LAYOUT);
   const active = presets.items.find((p) => p.id === settings.activePresetId);
   return isDirty({ layout: settings.kitLayout, soundSetId: settings.soundSetId }, active);
 }
