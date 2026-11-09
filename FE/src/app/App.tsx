@@ -4,23 +4,26 @@ import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from '@/components/AppShell';
 import { RequireAdmin } from '@/components/RequireAdmin';
 import { RequireAuth } from '@/components/RequireAuth';
-import { AdminSongsPage } from '@/pages/AdminSongsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { HistoryPage } from '@/pages/HistoryPage';
-import { SetupPage } from '@/pages/SetupPage';
-import { PlayPage } from '@/pages/PlayPage';
 import { FreePlayPage } from '@/pages/FreePlayPage';
-import { ResultPage } from '@/pages/ResultPage';
-import { ReportPage } from '@/pages/ReportPage';
-import { SheetPage } from '@/pages/SheetPage';
-import { StudioPage } from '@/pages/StudioPage';
 import { LoginPage } from '@/pages/LoginPage';
-import { SignupPage } from '@/pages/SignupPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
+import { loadRoute } from './routeModules';
 
+// 지연 로드 규칙: 새 화면은 routeModules 표에 추가하고 여기서 lazy로 연결한다. 첫 진입 화면(자유 연습·로그인·콜백)만 정적 import.
+// Suspense 경계는 AppShell·PublicLayout에 있다(fallback null)
+const SetupPage = lazy(() => loadRoute('setup'));
+const PlayPage = lazy(() => loadRoute('play'));
+const SheetPage = lazy(() => loadRoute('sheet'));
+const StudioPage = lazy(() => loadRoute('studio'));
+const SettingsPage = lazy(() => loadRoute('settings'));
+const HistoryPage = lazy(() => loadRoute('history'));
+const ResultPage = lazy(() => loadRoute('result'));
+const ReportPage = lazy(() => loadRoute('report'));
+const AdminSongsPage = lazy(() => loadRoute('adminSongs'));
+const SignupPage = lazy(() => loadRoute('signup'));
 /** 악보 뷰어. pdf.js가 이 라우트 청크에만 들어가도록 지연 로드한다(설계 CHART-001 D12) */
-const SheetViewerPage = lazy(() => import('@/pages/SheetViewerPage').then((m) => ({ default: m.SheetViewerPage })));
+const SheetViewerPage = lazy(() => loadRoute('sheetViewer'));
 
 /** 스틱 패킷 모니터(EMB용 숨김 페이지). VITE_MONITOR=true 빌드에만 라우트·코드가 들어간다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
@@ -37,7 +40,7 @@ const FxLabPage = import.meta.env.DEV
 export default function App() {
   return (
     <Routes>
-      {/* 개발 전용 FX 랩 — 인증·셸 없이 전체 폭으로 연다 */}
+      {/* 개발 전용 FX 랩 — 인증·셸 없이 전체 폭으로 열어 흡수할 경계가 없으므로 Suspense를 직접 둔다 */}
       {FxLabPage && (
         <Route
           path="dev/fx"
@@ -66,14 +69,7 @@ export default function App() {
           <Route path="sheet" element={<SheetPage />} />
           <Route path="studio" element={<StudioPage />} />
           {/* 악보 뷰어(스위치 꺼짐이면 페이지가 /studio로 보낸다) */}
-          <Route
-            path="studio/sheets/:id"
-            element={
-              <Suspense fallback={null}>
-                <SheetViewerPage />
-              </Suspense>
-            }
-          />
+          <Route path="studio/sheets/:id" element={<SheetViewerPage />} />
           <Route path="me" element={<Navigate to="/settings" replace />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="history" element={<HistoryPage />} />
@@ -83,15 +79,9 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route path="admin/songs" element={<AdminSongsPage />} />
           </Route>
+          {/* 모니터 화면의 Suspense는 AppShell 경계가 맡는다 */}
           {StickMonitorPage && (
-            <Route
-              path="monitor/stick"
-              element={
-                <Suspense fallback={null}>
-                  <StickMonitorPage />
-                </Suspense>
-              }
-            />
+            <Route path="monitor/stick" element={<StickMonitorPage />} />
           )}
         </Route>
       </Route>
