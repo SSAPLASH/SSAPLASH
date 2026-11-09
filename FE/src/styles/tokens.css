@@ -132,6 +132,19 @@
   font-weight: 600;
   line-height: 1.45;
 }
+/* 페이지 제목(ui/PageHeader). 좁은 화면은 28 */
+.t-title-36 {
+  font-family: var(--font);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 560px) {
+  .t-title-36 {
+    font-size: 28px;
+  }
+}
 .t-title-20 {
   font-family: var(--font);
   font-size: 20px;
