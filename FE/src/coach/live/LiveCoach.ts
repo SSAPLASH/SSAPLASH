@@ -3,8 +3,8 @@
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import type { PadId } from '@/domain/pads';
-import { missCauses, type CauseCandidate } from './cause';
-import { type CoachBasis, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
+import { missCauses, pickCauseByRule, type CauseCandidate } from './cause';
+import { type CoachBasis, type CoachStage, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { gateFeatures, isGatedTag, type CoachGate, type GateDecision, type GateMode } from './gate/gate';
 import { gateMode, loadedCoachGate, preloadCoachGate } from './gate/loader';
 import { CoachPolicy, type RecoveredFrom } from './policy';
@@ -49,6 +49,28 @@ export interface CoachMessage {
   repeat: number;
   /** LIVE_GOOD_RECOVERED일 때만: 해소된 지적 중 가장 최근에 띄웠던 것(무엇이 고쳐졌는지). 그 외 태그는 null */
   recoveredFrom: RecoveredFrom | null;
+  /**
+   * 놓침 지적(CAUSE_TAGS)에 고른 원인. 근거가 없으면 UNKNOWN이다.
+   * 원인을 말하지 않는 단계(0·1)나 다른 태그는 null이다
+   */
+  cause: CauseCandidate | null;
+}
+
+/** 원인을 붙이는 놓침 지적 */
+const CAUSE_TAGS: readonly LiveTag[] = ['LIVE_PAD_MISS', 'LIVE_MISS_STREAK'];
+/** 원인을 말하기 시작하는 판정 단계(설계 3.2) */
+const CAUSE_MIN_STAGE = 2;
+
+/** 원인 판단 기록. 띄운 놓침 지적 행 바로 뒤에 남긴다(설계 3.3) */
+export const LIVE_CAUSE_TAG = 'LIVE_CAUSE';
+
+/** 원인 판단 한 번. 로그와 문구가 함께 쓴다 */
+interface CauseDecision {
+  candidates: CauseCandidate[];
+  picked: CauseCandidate;
+  /** 지금은 규칙만 고른다. 원인 모델은 2단계(R1~R5) 뒤에 MODEL로 남긴다 */
+  by: 'RULE';
+  stage: CoachStage;
 }
 
 /** 플레이 로그 liveCoachEvents[] 한 항목. BE 검증: tMs 유한 수, tag ≤ 64자, text ≤ 2048자, 최대 1,000개 */
@@ -65,13 +87,26 @@ export const LIVE_GATE_FALLBACK_TAG = 'LIVE_GATE_FALLBACK';
 
 /**
  * 로그 문구 형식. 띄운 문구는 {"key","text"}, 경향 해소는 {"key"} JSON 한 줄이다.
+ * 원인을 고른 놓침 지적은 {"key","text","cause"}다.
  * key는 대상까지 담은 상태 키(예: LIVE_PAD_LATE:SNARE)라서 BE가 무엇을 지적했는지 집계할 수 있다.
  */
-function entryText(key: string, text?: string): string {
-  return JSON.stringify(text === undefined ? { key } : { key, text });
+function entryText(key: string, text?: string, cause?: string): string {
+  if (text === undefined) return JSON.stringify({ key });
+  return JSON.stringify(cause === undefined ? { key, text } : { key, text, cause });
 }
 
 const round = (x: number, digits: number): number => Math.round(x * 10 ** digits) / 10 ** digits;
+
+/** 로그용 후보. 강도는 소수 셋째 자리까지, 없는 필드는 뺀다 */
+function candidateLog(c: CauseCandidate): Record<string, unknown> {
+  return {
+    cause: c.cause,
+    strength: round(c.strength, 3),
+    pad: c.pad,
+    ...(c.fromPad ? { fromPad: c.fromPad } : {}),
+    ...(c.intoPad ? { intoPad: c.intoPad } : {}),
+  };
+}
 
 /** 경향이 사라졌을 때 로그에만 남기는 태그(화면에 띄우지 않는다) */
 export const LIVE_RECOVERED_TAG = 'LIVE_RECOVERED';
@@ -158,10 +193,11 @@ export class LiveCoach {
       if (!show) return null;
       if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
-      const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom };
+      const cause = this.decideCause(show.tag, show.target);
+      const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom, cause: cause?.picked ?? null };
       const gate = this.gateOption === undefined ? loadedCoachGate() : this.gateOption;
-      if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, show.key, gateFeatures(metrics, show.tag), onDeferred);
-      this.append(note.songTimeMs, show.tag, entryText(show.key, show.text));
+      if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, show.key, gateFeatures(metrics, show.tag), cause, onDeferred);
+      this.appendShown(message, show.key, cause);
       return message;
     } catch {
       // 코칭 오류로 플레이를 멈추지 않는다. 이 판정은 건너뛰고 다음 판정부터 다시 계산한다
@@ -178,6 +214,7 @@ export class LiveCoach {
     message: CoachMessage,
     key: string,
     input: number[],
+    cause: CauseDecision | null,
     onDeferred?: DeferredMessage,
   ): CoachMessage | null {
     const started = performance.now();
@@ -190,7 +227,7 @@ export class LiveCoach {
       );
     };
     const show = (): CoachMessage => {
-      this.append(message.tMs, message.tag, entryText(key, message.text));
+      this.appendShown(message, key, cause);
       return message;
     };
     const judge = (score: number): boolean => {
@@ -279,6 +316,29 @@ export class LiveCoach {
     this.setupShown.clear();
     this.run += 1;
     this.resetLog();
+  }
+
+  /**
+   * 놓침 지적에 붙일 원인을 고른다. 원인을 말하는 단계(2·3)의 놓침 지적만 계산하고, 그 외는 null.
+   * 근거가 없으면 UNKNOWN을 고른다(그래도 기록은 남겨 학습에 쓴다, 설계 4.4)
+   */
+  private decideCause(tag: LiveTag, target: CoachTarget | null): CauseDecision | null {
+    if (!CAUSE_TAGS.includes(tag)) return null;
+    const stage = coachStage(this.window.total);
+    if (stage < CAUSE_MIN_STAGE) return null;
+    const candidates = this.missCauses(target?.kind === 'pad' ? target.pad : null);
+    return { candidates, picked: pickCauseByRule(candidates), by: 'RULE', stage };
+  }
+
+  /** 띄운 지적 행을 남기고, 원인을 골랐으면 바로 뒤에 LIVE_CAUSE를 같은 시각으로 남긴다 */
+  private appendShown(message: CoachMessage, key: string, cause: CauseDecision | null): void {
+    this.append(message.tMs, message.tag, entryText(key, message.text, cause?.picked.cause));
+    if (!cause) return;
+    this.append(
+      message.tMs,
+      LIVE_CAUSE_TAG,
+      JSON.stringify({ key, candidates: cause.candidates.map(candidateLog), picked: cause.picked.cause, by: cause.by, stage: cause.stage }),
+    );
   }
 
   private resetLog(): void {
