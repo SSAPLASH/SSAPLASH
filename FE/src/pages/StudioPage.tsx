@@ -236,12 +236,13 @@ export function StudioPage() {
       return;
     }
     if (phase === 'done' && active) {
-      const songId = active.songId;
-      if (doneSource === 'live') {
-        clear();
-        navigate(`/sheet?scope=MINE&song=${songId}`);
-      } else if (doneSource === 'restored') {
-        queueMicrotask(() => flashRow(songId));
+      // 채보가 끝나도 라이브러리에 머문다(QA): 목록을 다시 읽고 그 곡을 잠깐 강조한다. 지켜보던 중 끝났으면 알림도 띄운다
+      const { songId, title } = active;
+      if (doneSource === 'live' || doneSource === 'restored') {
+        queueMicrotask(() => {
+          flashRow(songId);
+          if (doneSource === 'live') showToast(`「${title}」 악보가 만들어졌어요`);
+        });
         void load('MINE');
         clear();
       }
@@ -251,7 +252,7 @@ export function StudioPage() {
       void load('MINE');
       clear();
     }
-  }, [phase, doneSource, active, error, load, clear, navigate, flashRow, linkToSong]);
+  }, [phase, doneSource, active, error, load, clear, flashRow, showToast, linkToSong]);
 
   const onReupload = useCallback((song: SongSummary) => {
     useSheetLink.getState().cancel();
