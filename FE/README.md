@@ -349,7 +349,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 
 - **기능 스위치:**
   - `VITE_SHEET_ARCHIVE`(`SHEET_ARCHIVE_ENABLED`): 기본 켜짐, `false`로 빌드하면 [악보] 섹션·악보 항목을 숨기고 뷰어 주소는 `/studio`로 보낸다.
-  - `VITE_SHEET_SONG_LINK`(`SHEET_SONG_LINK_ENABLED`): 기본 꺼짐, `true`일 때만 곡 연결을 쓴다. 지금 BE는 `files`·`title`·`source` 외 파트를 400으로 거절하므로, BE가 곡 연결(`songId`·`sheetId`)을 배포한 뒤 켠다.
+  - `VITE_SHEET_SONG_LINK`(`SHEET_SONG_LINK_ENABLED`): 기본 켜짐, `false`로 빌드하면 곡 ⋯ 메뉴의 악보 항목과 업로드의 `songId` 파트를 끈다. BE 곡 연결(`songId`·`sheetId`)이 v3.0에 배포돼 켰다. 곡 하나에 악보 하나이고(409 `SHEET_ALREADY_LINKED`), 곡을 지우면 BE가 연결된 악보도 같이 지우므로 FE는 곡 삭제 뒤 악보 목록도 다시 읽는다.
 - **올리기:** 헤더 [올리기] 창 맨 위 [음원·MIDI | 악보] 전환(마지막 섹션은 localStorage `airdrum.studio.uploadSection`). [악보]는 이미지(JPG·PNG·WEBP) 1~20장 또는 PDF 1개 + 제목(1~100자). 고른 순서가 쪽 순서다. 섞음·21장 이상·형식·크기(이미지 10 MiB, PDF 20 MiB)는 요청 전에 `validateSheetFiles`로 막고, 화소 상한·한도(100개·500 MiB)는 BE 응답 문구를 보인다(`sheetErrorText`). 헤더에서는 곡 없이 올린다. 첫 방문(곡·악보 없음)에는 본문에 음원·MIDI 패널이 있으므로 헤더 [올리기]가 [악보] 섹션으로만 열린다.
 - **라이브러리 악보 항목:** 곡에 연결되지 않은 악보는 카드·목록 보기에 곡과 섞여 한 항목으로 보인다(`mergeLibraryItems`, 정렬은 내 곡 규칙의 「그 밖」 그룹). 썸네일(이미지 1쪽, PDF는 자리표시) · 「악보 · 이미지 n쪽」/「악보 · PDF」 · 「악보만」 칩 · [악보 보기]. 리듬 게임·악보 연습은 비활성이고 「음원이 있어야 할 수 있어요」를 단다. ⋯ = [제목 수정 | 악보 삭제]. 악보 목록만 실패하면 곡은 그대로 두고 「악보를 불러오지 못했어요 [다시 시도]」 한 줄. 곡 고르기(리듬 게임·악보 연습)는 곡 API만 읽으므로 악보 항목이 나오지 않는다.
 - **곡 연결(링크 스위치 켜짐):** 완료 곡 ⋯ 메뉴에 `sheetId`가 있으면 [악보 보기], 없으면 [악보 올리기](창이 [악보] 섹션으로 열리고 `songId`를 보낸다). 409 `SHEET_ALREADY_LINKED`·404 `SONG_NOT_FOUND`는 창 안 문구. 링크가 켜져 있으면 곡에 붙은 악보는 따로 항목으로 보이지 않는다.
