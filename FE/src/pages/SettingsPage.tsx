@@ -77,6 +77,8 @@ export function SettingsPage() {
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{ variant: ToastVariant; text: string } | null>(null);
 
+  // 불러오지 못한 프로필 사진 URL. 이니셜로 바꾼다
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -162,8 +164,14 @@ export function SettingsPage() {
           <Card padding="lg" title="계정">
             {user ? (
               <div className="settings-account">
-                {user.profileImageUrl ? (
-                  <img className="settings-avatar" src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" />
+                {user.profileImageUrl && user.profileImageUrl !== failedAvatar ? (
+                  <img
+                    className="settings-avatar"
+                    src={user.profileImageUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedAvatar(user.profileImageUrl)}
+                  />
                 ) : (
                   <span className="settings-avatar settings-avatar-initial" aria-hidden="true">
                     {Array.from(user.nickname)[0] ?? '?'}
