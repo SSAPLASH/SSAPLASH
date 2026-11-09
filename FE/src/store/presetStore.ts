@@ -105,6 +105,11 @@ export const usePresets = create<PresetState>()((set, get) => {
       if (!active || !isDirty({ layout: s.kitLayout, soundSetId: s.soundSetId }, active)) return Promise.resolve(false);
       return run(async () => {
         await get().source.update(active.id, { name: active.name, layout: s.kitLayout, soundSetId: s.soundSetId });
+        // 드래그로 옮긴 앵커를 기기 로컬 기록에도 남긴다(kit-drag 설계 D5). update가 실패하면 여기까지 오지 않는다
+        const cur = useSettings.getState();
+        if ((cur.stickAnchors[0] || cur.stickAnchors[1]) && cur.calibratedAt !== null) {
+          cur.setPresetAnchors(active.id, { anchors: cur.stickAnchors, calibratedAt: cur.calibratedAt });
+        }
         await reload();
       });
     },
