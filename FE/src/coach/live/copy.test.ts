@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STICK_PADS } from '@/domain/pads';
+import { ALL_PADS, STICK_PADS } from '@/domain/pads';
 import { coachCopy } from './copy';
 import type { CoachMessage } from './LiveCoach';
 import type { LiveTag } from './rules';
@@ -13,6 +13,7 @@ const msg = (over: Partial<CoachMessage>): CoachMessage => ({
   target: null,
   repeat: 0,
   recoveredFrom: null,
+  cause: null,
   ...over,
 });
 
@@ -158,6 +159,56 @@ describe('coachCopy', () => {
     expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'hand', hand: 0 } }))).toBeNull();
     expect(coachCopy(msg({ tag: 'LIVE_HAND_WEAK', target: null }))).toBeNull();
     expect(coachCopy(msg({ tag: 'LIVE_HAND_WEAK', target: { kind: 'pad', pad: 'SNARE' } }))).toBeNull();
+  });
+
+  describe('놓침 원인 문구', () => {
+    const tom = { kind: 'pad', pad: 'SMALL_TOM' } as const;
+    const withCause = (cause: CoachMessage['cause'], over: Partial<CoachMessage> = {}) =>
+      coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: tom, cause, ...over }));
+
+    it('원인이 있으면 제목은 그대로 두고 보조만 원인 문구로 바꾼다', () => {
+      const c = withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
+      expect(c).toEqual({ title: '탐1 보세요', sub: '탐2 말고 탐1', mode: 'coach-warn', target: tom });
+      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM', fromPad: 'SNARE' })?.sub).toBe('스네어에서 미리 옮겨요');
+      expect(withCause({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('빠른 곳은 힘 빼고 쳐요');
+      expect(withCause({ cause: 'DRIFT_LATE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('늦어지기 전에 당겨요');
+    });
+
+    it('연속 놓침에도 원인 문구를 붙인다', () => {
+      const c = coachCopy(msg({ tag: 'LIVE_MISS_STREAK', cause: { cause: 'DENSE', strength: 1, pad: 'SNARE' } }));
+      expect(c).toMatchObject({ title: '다음 마디부터', sub: '빠른 곳은 힘 빼고 쳐요', target: null });
+    });
+
+    it('UNKNOWN이거나 필요한 패드가 없으면 원래 보조 문구를 쓴다', () => {
+      expect(withCause({ cause: 'UNKNOWN', strength: 0, pad: null })?.sub).toBe('왼쪽 탐을 보고 쳐요');
+      expect(withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('왼쪽 탐을 보고 쳐요');
+      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('왼쪽 탐을 보고 쳐요');
+      expect(withCause({ cause: 'UNKNOWN', strength: 0, pad: null }, { tag: 'LIVE_MISS_STREAK', target: null })?.sub).toBe('놓친 건 잊고 다음 노트');
+    });
+
+    it('놓침이 아닌 지적은 원인이 있어도 보조 문구를 바꾸지 않는다', () => {
+      expect(coachCopy(msg({ tag: 'LIVE_LATE', cause: { cause: 'DENSE', strength: 1, pad: null } }))?.sub).toBe('스틱을 미리 올려 둬요');
+    });
+
+    it('모든 패드 조합에서 원인 보조는 16자 이내이고 금지어가 없다', () => {
+      const banned = [/점수/, /정확도/, /틀렸/, /못 /, /[A-Za-z]/];
+      for (const pad of ALL_PADS) {
+        for (const other of ALL_PADS) {
+          if (other === pad) continue;
+          const causes: CoachMessage['cause'][] = [
+            { cause: 'WRONG_PAD', strength: 1, pad, intoPad: other },
+            { cause: 'TRANSITION', strength: 1, pad, fromPad: other },
+            { cause: 'DENSE', strength: 1, pad },
+            { cause: 'DRIFT_LATE', strength: 1, pad },
+          ];
+          for (const cause of causes) {
+            const sub = coachCopy(msg({ tag: 'LIVE_MISS_STREAK', cause }))!.sub;
+            expect(sub.length, sub).toBeLessThanOrEqual(16);
+            for (const re of banned) expect(sub, sub).not.toMatch(re);
+          }
+        }
+      }
+    });
   });
 
   it('모르는 태그는 null', () => {
