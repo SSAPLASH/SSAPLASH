@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SheetError } from '@/domain/sheetMusic';
 import { resetForTest } from './auth';
-import { deleteSheet, getSheet, listSheets, updateSheetTitle, uploadSheet } from './sheets';
+import { deleteSheet, getSheet, linkSheetToSong, listSheets, updateSheetTitle, uploadSheet } from './sheets';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const summary = { id: 5, title: '악보', source: 'UPLOADED', kind: 'IMAGE', pageCount: 2, totalBytes: 10, thumbnailUrl: 'https://x/t.png', createdAt: '2026-11-06T01:00:00Z', updatedAt: '2026-11-06T01:00:00Z' };
@@ -95,6 +95,35 @@ describe('updateSheetTitle·deleteSheet', () => {
     const fn = stub(204, undefined);
     await expect(deleteSheet(5)).resolves.toBeUndefined();
     expect(fn.mock.calls[0][1]?.method).toBe('DELETE');
+  });
+});
+
+describe('linkSheetToSong', () => {
+  it('PATCH 본문은 {songId}만 보내고 악보 상세를 돌려준다', async () => {
+    const fn = stub(200, { ...detail, songId: 9 });
+    const d = await linkSheetToSong(5, 9);
+    const [url, init] = fn.mock.calls[0];
+    expect(url).toBe('/api/v1/sheets/5');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(String(init?.body))).toEqual({ songId: 9 });
+    expect(d.songId).toBe(9);
+  });
+
+  it('null이면 해제 요청으로 {songId: null}을 보낸다', async () => {
+    const fn = stub(200, detail);
+    await linkSheetToSong(5, null);
+    expect(JSON.parse(String(fn.mock.calls[0][1]?.body))).toEqual({ songId: null });
+  });
+
+  it.each([
+    [404, 'SONG_NOT_FOUND'],
+    [409, 'SHEET_ALREADY_LINKED'],
+    [400, 'SHEET_INVALID'],
+  ])('%i %s는 SheetError로', async (status, code) => {
+    stub(status, { code, detail: '문제' });
+    const e = await linkSheetToSong(5, 9).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(SheetError);
+    expect((e as SheetError).code).toBe(code);
   });
 });
 
