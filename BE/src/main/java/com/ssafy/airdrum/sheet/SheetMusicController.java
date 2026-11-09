@@ -57,6 +57,8 @@ import com.ssafy.airdrum.user.AuthUser;
 public class SheetMusicController {
 
 	private static final Set<String> REGISTER_FIELDS = Set.of("title", "source", "songId");
+	/** 333: PATCH 본문에 올 수 있는 필드. */
+	private static final Set<String> UPDATE_FIELDS = Set.of("title", "songId");
 
 	private final SheetMusicService service;
 	private final JsonMapper strict = JsonMapper.builder(JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
@@ -120,10 +122,16 @@ public class SheetMusicController {
 	}
 
 	@PatchMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-	@Operation(summary = "악보 제목 수정", description = "JSON {\"title\": \"...\"}만 받는다. 모르는 필드·중복 키·후행 JSON은 SHEET_INVALID.")
-	@ApiResponse(responseCode = "400", description = "SHEET_INVALID",
+	@Operation(summary = "악보 제목·곡 연결 수정",
+			description = "JSON {\"title\": \"...\", \"songId\": 42 | null} 중 1~2개 필드. title은 제목 변경, songId(333번)는 숫자면 개인 곡 연결(이미 다른 곡에 연결돼 있으면 옮김), "
+					+ "null이면 해제. 없는 필드는 그대로 둔다. 모르는 필드·중복 키·후행 JSON은 SHEET_INVALID.")
+	@ApiResponse(responseCode = "400", description = "SHEET_INVALID: 빈 본문, 모르는 필드, 제목 형식, songId가 양의 정수(Long 범위)도 null도 아님",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
-	public SheetDetail rename(@Parameter(hidden = true) AuthUser me, @PathVariable long id, HttpServletRequest request) {
+	@ApiResponse(responseCode = "404", description = "SHEET_NOT_FOUND: 악보. SONG_NOT_FOUND: songId의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡)",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	@ApiResponse(responseCode = "409", description = "SHEET_ALREADY_LINKED: 그 곡에 살아 있는 다른 악보가 이미 있음",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+	public SheetDetail update(@Parameter(hidden = true) AuthUser me, @PathVariable long id, HttpServletRequest request) {
 		JsonNode node;
 		try {
 			byte[] bytes = request.getInputStream().readNBytes(4097);
@@ -134,8 +142,18 @@ public class SheetMusicController {
 		} catch (Exception ex) {
 			throw invalid();
 		}
-		if (node == null || !node.isObject() || node.size() != 1 || !node.has("title") || !node.path("title").isString()) throw invalid();
-		return service.rename(me.id(), id, title(node.path("title").asString()));
+		if (node == null || !node.isObject() || node.isEmpty() || node.size() > UPDATE_FIELDS.size()) throw invalid();
+		for (var name : node.propertyNames()) if (!UPDATE_FIELDS.contains(name)) throw invalid();
+		String title = node.has("title") ? title(node.path("title").isString() ? node.path("title").asString() : null) : null;
+		SheetMusicService.SongChange songChange = node.has("songId") ? songChange(node.path("songId")) : null;
+		return service.update(me.id(), id, title, songChange);
+	}
+
+	/** 333: JSON null 또는 양의 정수(Long 범위)만 받는다. 문자열·소수·0·음수·불리언·배열·객체는 SHEET_INVALID. */
+	private static SheetMusicService.SongChange songChange(JsonNode value) {
+		if (value.isNull()) return new SheetMusicService.SongChange(null);
+		if (!value.isIntegralNumber() || !value.canConvertToLong() || value.asLong() <= 0) throw invalid();
+		return new SheetMusicService.SongChange(value.asLong());
 	}
 
 	@DeleteMapping("/{id}")
