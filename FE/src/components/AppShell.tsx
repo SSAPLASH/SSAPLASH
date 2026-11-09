@@ -111,9 +111,12 @@ export function AppShell({ authRequired }: Props) {
       <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
         {/* 경로가 바뀌면 key로 다시 마운트되어 .route-fade가 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼 */}
-        <div key={pathname} ref={routeRef} className="route-view route-fade" tabIndex={-1}>
-          <Outlet />
-        </div>
+        {/* Suspense는 key 래퍼 바깥에 둔다. 안에 두면 key가 바뀔 때마다 새 경계가 생겨 지연 화면을 기다리는 동안 이전 화면이 아닌 fallback이 보인다 */}
+        <Suspense fallback={null}>
+          <div key={pathname} ref={routeRef} className="route-view route-fade" tabIndex={-1}>
+            <Outlet />
+          </div>
+        </Suspense>
       </div>
 
       <div className="shell-dock">
