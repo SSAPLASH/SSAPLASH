@@ -17,7 +17,7 @@ import { HIT_LOG_ROWS } from '@/components/setup/hitLogFormat';
 import '@/components/setup/setup.css';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { useHitFx } from '@/components/useHitFx';
-import { PresetChips } from '@/components/setup/PresetChips';
+import { PresetChips, SLOTS_FULL_TEXT } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
 import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
 import { ReturnBanner } from '@/components/setup/ReturnBanner';
@@ -32,7 +32,7 @@ import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { HitFx } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
-import { isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
+import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { calibrationReady, readiness } from '@/domain/readiness';
@@ -45,6 +45,7 @@ import {
   setupBarView,
   setupSteps,
   unsavedLeaveText,
+  UNSAVED_LEAVE_SYSTEM_SAVE_LABEL,
   type SetupDongleState,
   type SetupStepId,
 } from '@/domain/setupSteps';
@@ -165,6 +166,8 @@ export function SetupPage() {
   const yawDriftLine = sensorMode ? yawDriftText(yawDrift, connected) : null;
   const dirty = selectDirty(s, presets);
   const systemPreset = isSystemPreset(s.activePresetId);
+  /** 슬롯이 가득 차면 새 프리셋을 못 만든다(추가하기와 같은 규칙, kit-drag D12) */
+  const slotsFull = presets.items.length >= PRESET_SLOTS;
   const activePresetName = presetDisplayName(presets.items, s.activePresetId);
   const saving = presets.status === 'saving';
 
@@ -366,8 +369,8 @@ export function SetupPage() {
   };
 
   const saveAndLeave = () => {
-    if (!presets.items.some((p) => p.id === s.activePresetId)) {
-      // 적용 프리셋이 목록에 없다(저장소 전환 직후): 새 프리셋으로 저장
+    if (systemPreset || !presets.items.some((p) => p.id === s.activePresetId)) {
+      // 시스템 기본이거나 적용 프리셋이 목록에 없다(저장소 전환 직후): 새 프리셋으로 저장
       openNameDialog('leave');
       return;
     }
@@ -423,6 +426,8 @@ export function SetupPage() {
     activePresetName,
     dirty,
     leaving: leaveOpen || nameOpen === 'leave',
+    system: systemPreset,
+    full: slotsFull,
     calibrating,
     draft: draft ? { slot: draftSlot } : null,
   });
@@ -574,8 +579,8 @@ export function SetupPage() {
                 <KitCanvas
                   layout={s.kitLayout}
                   onTapPad={setSelectedPad}
-                  // 사용자 프리셋·비보정 중에만 끌어 옮긴다. 앵커도 같이 옮겨 표시와 판정이 맞는다(kit-drag 설계 D1)
-                  draggable={!systemPreset && !capturing}
+                  // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
+                  draggable={!capturing && !draft}
                   onMovePad={(pad, x, y) => {
                     setSelectedPad(pad);
                     s.movePad(pad, x, y);
@@ -750,7 +755,12 @@ export function SetupPage() {
               저장
             </Button>
           ) : (
-            <Button className="setup-bar-action wide" disabled={saving || capturing} onClick={() => openNameDialog('save')}>
+            <Button
+              className="setup-bar-action wide"
+              disabled={saving || capturing || !bar.buttonEnabled}
+              title={systemPreset && slotsFull ? SLOTS_FULL_TEXT : undefined}
+              onClick={() => openNameDialog('save')}
+            >
               새 프리셋으로 저장
             </Button>
           )}
@@ -759,7 +769,9 @@ export function SetupPage() {
 
       <UnsavedLeaveDialog
         open={leaveOpen}
-        message={unsavedLeaveText(activePresetName)}
+        message={unsavedLeaveText(activePresetName, systemPreset)}
+        saveLabel={systemPreset ? UNSAVED_LEAVE_SYSTEM_SAVE_LABEL : undefined}
+        saveDisabled={systemPreset && slotsFull}
         busy={saving}
         error={leaveError}
         onCancel={cancelLeave}

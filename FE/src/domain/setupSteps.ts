@@ -73,6 +73,12 @@ export const SETUP_BAR_NO_PRESET_TEXT = '아직 프리셋으로 저장하지 않
 export function setupBarCleanText(presetName: string): string {
   return `「${presetName}」 사용 중`;
 }
+/** 하단 바: 시스템 기본을 끌어 옮겼을 때(노랑 점). 시스템 기본은 고정이라 새 프리셋으로만 남긴다(kit-drag D10) */
+export const SETUP_BAR_SYSTEM_CHANGED_TEXT = '시스템 기본은 바꿀 수 없어요 · 새 프리셋으로 저장해야 남아요';
+/** 이탈 확인: 시스템 기본을 끌어 옮긴 채 나갈 때(D11) */
+export const UNSAVED_LEAVE_SYSTEM_TEXT = '시스템 기본은 바꿀 수 없어요. 새 프리셋으로 저장하지 않고 나가면 옮긴 배치가 사라져요.';
+/** 이탈 확인: 시스템 기본일 때 저장 버튼 이름 */
+export const UNSAVED_LEAVE_SYSTEM_SAVE_LABEL = '새 프리셋으로 저장하고 나가기';
 /** 하단 바: 변경이 있을 때(노랑 점) */
 export function setupBarChangedText(presetName: string): string {
   return `「${presetName}」 변경 있음 · 저장하지 않으면 다음에 사라져요`;
@@ -109,21 +115,30 @@ export function setupBarDraftText(slot: number | null): string {
 
 /**
  * 하단 바 상태. leaving = 변경이 있는 채로 나가려 해서 이탈 확인이 열려 있다.
- * calibrating이 있으면 보정 중 문구에 [저장] 비활성, draft가 있으면 저장 안내에 [저장] 비활성(UX-64)
+ * calibrating이 있으면 보정 중 문구에 [저장] 비활성, draft가 있으면 저장 안내에 [저장] 비활성(UX-64).
+ * system = 적용 중이 시스템 기본. dirty(끌어 옮김)면 [새 프리셋으로 저장]을 낸다. full = 프리셋 슬롯이 가득 참(새 프리셋 저장 불가)
  */
 export function setupBarView(input: {
   activePresetName: string | null;
   dirty: boolean;
   leaving: boolean;
+  system: boolean;
+  /** 슬롯이 가득 차 새 프리셋을 못 만든다(시스템 기본 저장 버튼만 막는다) */
+  full?: boolean;
   calibrating?: SetupBarCalibrating | null;
   /** 초안을 들고 슬롯·이름 창이 열린 동안. slot은 고른 슬롯 번호 */
   draft?: { slot: number | null } | null;
 }): SetupBarView {
-  const { activePresetName, dirty, leaving, calibrating, draft } = input;
+  const { activePresetName, dirty, leaving, system, full = false, calibrating, draft } = input;
   if (calibrating) {
     return { text: setupBarCalibratingText(calibrating, activePresetName), tone: 'caption', button: 'save', buttonEnabled: false };
   }
   if (draft) return { text: setupBarDraftText(draft.slot), tone: 'caption', button: 'save', buttonEnabled: false };
+  if (system && dirty) {
+    return leaving
+      ? { text: SETUP_BAR_DIRTY_TEXT, tone: 'leaving', button: 'saveNew', buttonEnabled: !full }
+      : { text: SETUP_BAR_SYSTEM_CHANGED_TEXT, tone: 'changed', button: 'saveNew', buttonEnabled: !full };
+  }
   if (dirty && leaving) {
     return { text: SETUP_BAR_DIRTY_TEXT, tone: 'leaving', button: activePresetName === null ? 'saveNew' : 'save', buttonEnabled: true };
   }
@@ -133,7 +148,8 @@ export function setupBarView(input: {
 }
 
 /** 이탈 확인 문구: 적용 프리셋이 있을 때(4-4) */
-export function unsavedLeaveText(presetName: string | null): string {
+export function unsavedLeaveText(presetName: string | null, system = false): string {
+  if (system) return UNSAVED_LEAVE_SYSTEM_TEXT;
   if (presetName === null) return '아직 프리셋으로 저장하지 않았어요. 저장하지 않고 나가면 프리셋으로 남지 않아요.';
   return `「${presetName}」의 패드 위치를 바꿨어요. 저장하지 않고 나가면 바꾼 내용이 사라져요.`;
 }
