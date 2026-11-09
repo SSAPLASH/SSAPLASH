@@ -32,6 +32,8 @@ OUTPUT_FORMATS = ("flac", "wav")
 TEMPO_METHODS = ("beat_this", "librosa")
 # offsetMs 원점 방식(설계 v0.5). downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
 ORIGIN_MODES = ("downbeat", "notes")
+# Beat This! 후처리. minimal: 확률 봉우리 그대로, dbn: madmom DBN으로 박 간격·마디 길이를 고르게 (설계 CHART-003-variable-tempo-exp)
+TEMPO_POSTPROCESS = ("minimal", "dbn")
 # BE WorkerResults가 schemaVersion 1만 받음
 SCHEMA_VERSIONS = (1,)
 
@@ -112,11 +114,21 @@ class TempoConfig:
     time_signature: str = "4/4"
     # offsetMs 원점 방식. ORIGIN_MODES 중 하나
     origin: str = "downbeat"
+    # Beat This! 후처리. TEMPO_POSTPROCESS 중 하나
+    postprocess: str = "minimal"
+    # 찾은 박을 따라가는 빠르기 구간(tempoMap)을 낼지
+    tempo_map: bool = False
+    # 빠르기 구간 묶음 허용(ms). 구간 안 마디 경계가 모두 이 거리 안이면 한 구간으로 묶음
+    tempo_map_tolerance_ms: float = 20.0
+    # 채보 노트로 bpm·offsetMs 다시 맞추기(chart/tempo_refine.py). 끄면 박 추적 bpm 그대로
+    refine: bool = False
 
     @classmethod
     def from_dict(cls, raw: dict | None) -> TempoConfig:
         raw = raw or {}
-        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature", "origin"})
+        known = {"method", "min_bpm", "max_bpm", "time_signature", "origin", "postprocess"}
+        known |= {"tempo_map", "tempo_map_tolerance_ms", "refine"}
+        unknown = sorted(set(raw) - known)
         if unknown:
             raise ValueError(f"모르는 tempo 필드: {unknown}")
         method = str(raw.get("method", cls.method)).lower()
@@ -135,12 +147,28 @@ class TempoConfig:
         origin = str(raw.get("origin", cls.origin)).lower()
         if origin not in ORIGIN_MODES:
             raise ValueError(f"tempo.origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
+        postprocess = str(raw.get("postprocess", cls.postprocess)).lower()
+        if postprocess not in TEMPO_POSTPROCESS:
+            raise ValueError(f"tempo.postprocess는 {TEMPO_POSTPROCESS} 중 하나: {postprocess!r}")
+        tempo_map = raw.get("tempo_map", cls.tempo_map)
+        if not isinstance(tempo_map, bool):
+            raise ValueError(f"tempo.tempo_map은 true/false: {tempo_map!r}")
+        tolerance = float(raw.get("tempo_map_tolerance_ms", cls.tempo_map_tolerance_ms))
+        if not tolerance > 0:
+            raise ValueError(f"tempo.tempo_map_tolerance_ms는 양수: {tolerance}")
+        refine = raw.get("refine", cls.refine)
+        if not isinstance(refine, bool):
+            raise ValueError(f"tempo.refine은 true 또는 false: {refine!r}")
         return cls(
             method=method,
             min_bpm=min_bpm,
             max_bpm=max_bpm,
             time_signature=time_signature,
             origin=origin,
+            postprocess=postprocess,
+            tempo_map=tempo_map,
+            tempo_map_tolerance_ms=tolerance,
+            refine=refine,
         )
 
 
