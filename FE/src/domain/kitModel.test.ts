@@ -1,6 +1,7 @@
 // 3D 드럼셋 모델 검증(PLAY-004 D4): 손별 기본 앵커가 손마다 다르고, 반경이 튜닝 범위 안이며, 기본 배치가 화면 안에 있다.
 import { describe, expect, it } from 'vitest';
-import { anchorToPoint, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, padPointOf, HAND_ORIGINS, PAD_POINTS } from './kitModel';
+import { anchorsToLayout, anchorToPoint, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, moveAnchorsForPad, padPointOf, HAND_ORIGINS, PAD_POINTS } from './kitModel';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { STICK_PADS } from './pads';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
 
@@ -73,5 +74,47 @@ describe('anchorToPoint·padPointOf (UX-64 D8)', () => {
     const left = padPointOf('SNARE', [l, undefined])!;
     expect(left.x).toBeCloseTo(PAD_POINTS.SNARE[0] * 100, 5);
     expect(padPointOf('SNARE', [undefined, undefined])).toBeNull();
+  });
+});
+
+describe('moveAnchorsForPad (드래그 편집)', () => {
+  const from = DEFAULT_KIT_LAYOUT.SNARE;
+  const to = { x: 0.62, y: 0.4 };
+
+  it('양손 앵커를 옮기면 유도 배치의 그 패드가 끈 자리와 같고 다른 패드는 그대로다', () => {
+    const hands = defaultHandAnchors();
+    const base = anchorsToLayout(hands, DEFAULT_KIT_LAYOUT);
+    const moved = moveAnchorsForPad(hands, 'SNARE', base.SNARE, to);
+    const layout = anchorsToLayout(moved, DEFAULT_KIT_LAYOUT);
+    expect(layout.SNARE.x).toBeCloseTo(to.x, 3);
+    expect(layout.SNARE.y).toBeCloseTo(to.y, 3);
+    expect(layout.HIHAT).toEqual(base.HIHAT);
+    // 반지름 등 다른 필드 보존, 원본 불변
+    expect(moved[0]?.SNARE?.radius).toBe(hands[0]?.SNARE?.radius);
+    expect(hands).toEqual(defaultHandAnchors());
+  });
+
+  it('한 손만 앵커가 있으면 그 손만 옮기고 다른 손은 null 그대로', () => {
+    const [l] = defaultHandAnchors();
+    const moved = moveAnchorsForPad([l, null], 'SNARE', anchorsToLayout([l, null], DEFAULT_KIT_LAYOUT).SNARE, to);
+    expect(moved[1]).toBeNull();
+    const layout = anchorsToLayout(moved, DEFAULT_KIT_LAYOUT);
+    expect(layout.SNARE.x).toBeCloseTo(to.x, 6);
+    expect(layout.SNARE.y).toBeCloseTo(to.y, 6);
+  });
+
+  it('그 패드 앵커가 없는 손·앵커가 전혀 없으면 그대로', () => {
+    const [l, r] = defaultHandAnchors();
+    const { SNARE: _omit, ...rest } = r!;
+    const moved = moveAnchorsForPad([l, rest], 'SNARE', from, to);
+    expect(moved[1]).toEqual(rest);
+    expect(moved[0]?.SNARE?.yaw).not.toBe(l?.SNARE?.yaw);
+    expect(moveAnchorsForPad([null, null], 'SNARE', from, to)).toEqual([null, null]);
+  });
+
+  it('스틱 패드가 아니면(KICK·HIHAT_PEDAL) 앵커를 바꾸지 않는다', () => {
+    const hands = defaultHandAnchors();
+    expect(moveAnchorsForPad(hands, 'KICK', from, to)).toEqual(hands);
+    expect(moveAnchorsForPad(hands, 'HIHAT_PEDAL', from, to)).toEqual(hands);
   });
 });
