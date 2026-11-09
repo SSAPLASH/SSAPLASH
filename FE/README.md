@@ -121,7 +121,7 @@ src/
 │   ├─ padMapper           키 매퍼(keyMap) · 자세 매퍼(손별 앵커에서 유도한 판정 프로필)
 │   └─ InputManager        소스 합성 → 매퍼 → ResolvedHit 발행
 ├─ engine/     HitCapture(2타 보정) · SnareRealign(스네어 재정렬) · RhythmSession(일시정지 포함) · playLog · playRecorder(타격·MISS 처리 순번) · telemetry
-├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · LiveCoach · copy(화면 문구 표)). 순수 TypeScript, domain만 import
+├─ coach/      실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · cause · noteContext · LiveCoach · copy(화면 문구 표)). 순수 TypeScript, domain만 import
 ├─ media/      coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스) · downloadFile(Blob 내려받기)
 ├─ audio/      AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
 ├─ domain/     순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
@@ -405,8 +405,13 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **패드 규칙 대상:** `STICK_PADS`(스틱 7개)만 평가한다. 킥·하이햇 페달은 평가하지 않는다(COACH-001 D5). 페달 판정은 손·세기가 null이라 손별 규칙에서도 자연히 빠진다.
 - **패드 이름(`coach/live/padName.ts`):** 코칭은 화면 키트와 같은 이름(탐1, 탐2)을 쓴다. 패드 놓침의 보조 문구는 키보드면 키(`E·I`), 스틱이면 위치(왼쪽 탐)를 알려 준다.
 - **세팅 안내**(`setupHints.ts`): 연주가 아니라 세팅이 원인으로 보일 때 안내한다. `LIVE_SETUP_OFFSET`(최근 16개가 모두 유효 타격이고 평균 |오차| 45ms 이상, 표준편차 20ms 미만, 같은 부호 90% 이상), `LIVE_SETUP_PADS`(최근 16개 중 MISS 50% 이상이고 채보 밖 타격이 MISS의 절반 이상). 스틱 입력(`ble`, `websocket`)에서만, 태그별 한 번, 지적보다 먼저 뜬다. 결과 화면의 `SetupHintCard`가 설정의 타격음 지연 보정이나 `/setup`으로 보낸다.
+- **플레이 로그(`liveCoachEvents`) 문구 형식:** 띄운 문구는 `{"key","text"}`, 경향 해소(`LIVE_RECOVERED`)는 `{"key"}` JSON 한 줄이다. `key`는 대상까지 담은 상태 키(예: `LIVE_PAD_LATE:SNARE`)라 BE가 무엇을 지적했는지 집계할 수 있다. 코칭을 끈 판의 `LIVE_OFF`만 일반 문장이다.
+- **거름 판단 기록:** `LIVE_GATE_KEEP`(남긴 지적, 지적 행 바로 뒤), `LIVE_GATE_DROP`(뺀 지적. `on`이면 지적 행이 없다), `LIVE_GATE_FALLBACK`(점수가 100ms 안에 오지 않거나 실패해 규칙대로 띄움). 문구는 `{"tag","key","score" 또는 "reason","threshold","model","runtime","mode","ms"}` JSON이다. 칭찬과 세팅 안내에는 남기지 않는다. **집계할 때 `LIVE_GATE_*`는 띄운 지적으로 세지 않는다.**
+- **거름(`coach/live/gate`):** 규칙이 낸 지적을 작은 모델 점수로 뺄 수 있다. 칭찬과 세팅 안내는 거르지 않는다. `VITE_COACH_GATE`(비움·`json`·`onnx`)로 실행 방식을, `VITE_COACH_GATE_MODE`(`shadow`·`on`)로 동작을 고른다. `shadow`는 판단만 진단 이벤트 `coachGate`로 남긴다. `onnx`는 점수가 비동기로 와서 `on`이면 문구가 늦게 뜨고, 100ms 안에 오지 않거나 실패하면 규칙 판단대로 띄운다. 꺼진 빌드에는 모델과 런타임이 들어가지 않는다. 모델 파일은 AI `coach_live_model`의 산출물이고 `parity.fixture.json`으로 입력과 점수가 AI와 같은지 확인한다.
 - **규칙 6종**(`rules.ts`): `LIVE_PAD_MISS`(최근 16개에서 전체 놓침 4개 이상, 한 패드가 3개 이상이고 놓침의 60% 이상이며 그 패드 노트의 50% 이상을 놓침. 스틱 패드만, 전체 놓침보다 먼저 뜬다) · `LIVE_MISS_STREAK`(연속 3번 또는 최근 6개 중 4개 놓침) · `LIVE_LATE`/`LIVE_EARLY`(최근 12개 평균이 `0.3 × goodMs` 이상이고 같은 부호가 75% 이상) · `LIVE_PAD_LATE`/`LIVE_PAD_EARLY`(한 패드가 나머지 패드보다 `0.45 × goodMs` 이상 늦거나 빠름) · `LIVE_HAND_WEAK`(한 손 평균 세기가 다른 손의 70% 미만) · `LIVE_UNSTEADY`(편차가 `0.5 × goodMs` 이상).
-- **표시 정책**(`policy.ts`): 판정 8개 전에는 띄우지 않고, 지적 사이 4초, 같은 키는 10초, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자 > 칭찬). 플레이당 상한은 없다. 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
+- **판정 단계**(`config.ts`의 `stages`, `coachStage`): 한 판에서 쌓인 판정 수로 단계를 정한다. 4개 전에는 아무것도 띄우지 않고, 1단계(4~7개)는 연속 놓침(`LIVE_MISS_STREAK`)만, 2단계(8개부터)는 모든 규칙과 칭찬, 3단계(16개부터)는 원인 후보 전부를 쓴다. 재시작하면 처음부터다.
+- **놓침 원인**(`cause.ts`, `noteContext.ts`): `LiveCoach.missCauses(pad?)`가 창 안 기록을 노트 시각 순으로 정렬해 원인 후보를 낸다. 2단계는 다른 패드(`WRONG_PAD`, 대신 친 패드까지)와 빠른 구간(`DENSE`), 3단계는 패드 이동(`TRANSITION`)과 늦어지다 놓침(`DRIFT_LATE`)까지. 화면은 `chartCoachContext(chart.notes)`로 노트마다 직전 시점의 패드·간격을 미리 계산해 `JudgedNote`에 펼쳐 넣고, 곡의 간격 중앙값을 `LiveCoach`의 `noteGapMedianMs`로, `RhythmSession.onStray`의 채보 밖 타격을 `pushStray`로 넘긴다. 원인 문구와 `LIVE_CAUSE` 기록은 아직 없다.
+- **표시 정책**(`policy.ts`): 판정 단계를 따르고, 지적 사이 4초, 같은 키는 10초, 한 번에 하나(놓침 > 늦음·빠름 > 패드 > 손 > 박자 > 칭찬). 플레이당 상한은 없다. 띄운 뒤 거두는 문턱(예: 늦음 평균 `0.15 × goodMs` 미만)을 만족하면 쿨다운 없이 다시 띄울 수 있다. 거둔 것은 로그에 `LIVE_RECOVERED`로만 남는다.
 - **칭찬**(`rules.ts`의 `evaluatePraise`, `policy.ts`): 지적 후보가 없을 때만 뜬다. `LIVE_GOOD_RECOVERED`(지적한 경향이 사라지고 연주가 안정됨, 직전 문구에서 4초) · `LIVE_GOOD_STEADY`(창에 놓침 없고 평균·표준편차가 거두는 문턱 안) · `LIVE_GOOD_KEEP`(창의 놓침 2개 이하). 뒤의 둘은 직전 문구에서 6초 뒤에 뜬다. 창의 놓침이 3개 이상이거나, 활성 지적이 지금도 조건을 만족하거나 쿨다운 안이면 칭찬하지 않는다. 칭찬은 지적을 늦추지 않아서, 칭찬이 떠 있어도 지적이 바로 대신 뜬다. 화면 모드는 `coach-good`이다.
 - **로그 태그:** 위 규칙 태그 + 칭찬 태그(`isPraiseTag`로 구분, 효과 평가와 방식 비교에서는 뺀다) + `LIVE_RECOVERED` + `LIVE_OFF`(코칭을 끈 플레이에 시작 시각 0으로 한 건. 효과 평가에서 "코칭 없음" 대조군을 가른다). BE는 `tMs`(유한 수)·`tag`(≤ 64자)·`text`(≤ 2048자)·최대 1,000개를 검증한다. `PlayLog.liveCoachEvents`(`engine/playLog`의 `LiveCoachEvent`, `coach`를 import하지 않는 구조적 타입)에 저장되고 업로드 본문(`domain/playUpload`)에는 `log.liveCoachEvents ?? []`로 실린다 — 기능 도입 전 로그는 빈 배열이라 "코칭 켬·문구 0개"와 구분되지 않으니 효과 평가는 `clientMeta.appVersion`·업로드 날짜로 거른다(AI에 회신함).
 - **수치 고치는 곳:** 모든 임계값은 `coach/live/config.ts` 한 곳에 있다. 판정 폭에 비례하는 값은 `goodMs`에 곱하는 계수라서 사용자가 판정 폭(30~150ms)을 바꿔도 같은 비율로 따라간다. 수치는 가정값이므로 직접 플레이해 보며 여기서 고친다.

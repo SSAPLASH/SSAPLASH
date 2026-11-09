@@ -33,7 +33,7 @@ const BASES: readonly CoachBasis[] = ['fixed', 'window'];
 
 export function createCoachShadow(opts: CoachShadowOptions): CoachShadow {
   // 화면 코치의 enabled 설정과 무관하게 두 방식 모두 문구를 내야 비교가 된다
-  const coaches = BASES.map((basis) => ({ basis, coach: new LiveCoach({ goodMs: opts.goodMs, basis, enabled: true }) }));
+  const coaches = BASES.map((basis) => ({ basis, coach: new LiveCoach({ goodMs: opts.goodMs, basis, enabled: true, gate: null }) }));
   return {
     push(note) {
       for (const { basis, coach } of coaches) {

@@ -1,8 +1,17 @@
 // 합성 플레이로 설계의 인수 조건을 확인한다: 경향이 있으면 지적이 뜨고, 없으면 칭찬만 뜨고, 간격을 지킨다.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
-import { LIVE_OFF_TAG, LIVE_RECOVERED_TAG, LiveCoach, type CoachMessage } from './LiveCoach';
+import type { CoachGate, GateDecision } from './gate/gate';
+import {
+  LIVE_GATE_DROP_TAG,
+  LIVE_GATE_FALLBACK_TAG,
+  LIVE_GATE_KEEP_TAG,
+  LIVE_OFF_TAG,
+  LIVE_RECOVERED_TAG,
+  LiveCoach,
+  type CoachMessage,
+} from './LiveCoach';
 import { isPraiseTag } from './rules';
 import type { JudgedNote } from './window';
 
@@ -47,6 +56,31 @@ function play(coach: LiveCoach, notes: JudgedNote[]): CoachMessage[] {
   }
   return out;
 }
+
+describe('LiveCoach 놓침 원인', () => {
+  it('다른 패드로 들어간 놓침은 8개부터 WRONG_PAD로, 대신 친 패드까지 나온다', () => {
+    const coach = new LiveCoach({ goodMs: 60, noteGapMedianMs: NOTE_GAP_MS });
+    for (let i = 0; i < 8; i++) {
+      if (i % 2 === 1) {
+        coach.pushStray('MID_TOM', 4_000 + i * NOTE_GAP_MS + 10);
+        coach.push(miss(i, 'SMALL_TOM'));
+      } else {
+        coach.push(hit(i, 0));
+      }
+      if (i === 6) expect(coach.missCauses()).toEqual([]);
+    }
+    const [c] = coach.missCauses();
+    expect(c).toMatchObject({ cause: 'WRONG_PAD', pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
+  });
+
+  it('꺼진 코칭과 잘못된 시각의 채보 밖 타격은 무시한다', () => {
+    const off = new LiveCoach({ goodMs: 60, enabled: false });
+    expect(() => off.pushStray('SMALL_TOM', 1_000)).not.toThrow();
+    const coach = new LiveCoach({ goodMs: 60 });
+    coach.pushStray('SMALL_TOM', Number.NaN);
+    expect(coach.missCauses()).toEqual([]);
+  });
+});
 
 /** 칭찬을 뺀 지적 문구만 */
 const corrections = (list: CoachMessage[]): CoachMessage[] => list.filter((m) => !isPraiseTag(m.tag));
@@ -168,7 +202,7 @@ describe('LiveCoach 표시 정책', () => {
     expect(back.map((m) => m.tag)).toEqual(['LIVE_GOOD_RECOVERED']);
     const tags = coach.events().map((e) => e.tag);
     expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG, 'LIVE_GOOD_RECOVERED']);
-    expect(coach.events()[1].text).toBe('경향 해소: LIVE_LATE');
+    expect(JSON.parse(coach.events()[1].text)).toEqual({ key: 'LIVE_LATE' });
     expect(back[0].recoveredFrom).toEqual({ tag: 'LIVE_LATE', target: null });
     expect(late[0].recoveredFrom).toBeNull();
   });
@@ -203,6 +237,21 @@ describe('LiveCoach 로그와 설정', () => {
     const again = corrections(play(coach, notes));
     expect(again).toHaveLength(1);
     expect(again[0].repeat).toBe(0);
+  });
+
+  it('판정 4개째에 연속 놓침이 뜨고, 재시작하면 4개 전에는 다시 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 60 });
+    const notes = [hit(0, 0), miss(1), miss(2), miss(3)];
+    expect(play(coach, notes.slice(0, 3))).toEqual([]);
+    expect(coach.push(notes[3])?.tag).toBe('LIVE_MISS_STREAK');
+    coach.reset();
+    expect(play(coach, [miss(0), miss(1), miss(2)])).toEqual([]);
+  });
+
+  it('1단계에서는 늦음이 계속돼도 띄우지 않고 8개부터 띄운다', () => {
+    const coach = new LiveCoach({ goodMs: 60 });
+    const out = play(coach, Array.from({ length: 8 }, (_, i) => hit(i, 40)));
+    expect(out.map((m) => m.tMs)).toEqual([hit(7, 40).songTimeMs]);
   });
 
   it('잘못된 입력(NaN 시각, 손 번호 2)은 던지지 않고 무시하며 다음 판정부터 정상 동작한다', () => {
@@ -308,5 +357,188 @@ describe('세팅 안내', () => {
     const coach = new LiveCoach({ goodMs: 100, setupHints: true });
     run(coach, steady(60, 30));
     expect(coach.events().some((e) => e.tag === 'LIVE_SETUP_OFFSET')).toBe(true);
+  });
+});
+
+describe('거름', () => {
+  const late = (count: number) => Array.from({ length: count }, (_, i) => hit(i, 40));
+  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'json', threshold, model: 'test-0', score: () => score });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const firstLate = (coach: LiveCoach, onDeferred?: (m: CoachMessage) => void) => {
+    const out: CoachMessage[] = [];
+    for (const n of late(12)) {
+      const m = coach.push(n, 0, onDeferred);
+      if (m) out.push(m);
+    }
+    return out;
+  };
+
+  it('꺼져 있으면 지금과 같다', () => {
+    expect(firstLate(new LiveCoach({ goodMs: 60, gate: null })).map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('shadow는 낮은 점수도 띄우고 판단을 기록한다', () => {
+    const seen: GateDecision[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'shadow', onGate: (d) => seen.push(d) });
+    expect(firstLate(coach).map((m) => m.tag)).toContain('LIVE_LATE');
+    expect(seen[0]).toMatchObject({ runtime: 'json', tag: 'LIVE_LATE', score: 0.1, kept: false });
+  });
+
+  it('on은 낮은 점수의 지적을 빼고 로그에도 남기지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'on' });
+    expect(firstLate(coach).map((m) => m.tag)).not.toContain('LIVE_LATE');
+    expect(coach.events().some((e) => e.tag === 'LIVE_LATE')).toBe(false);
+  });
+
+  it('on은 높은 점수의 지적을 띄운다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    expect(firstLate(coach).map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('칭찬은 거르지 않는다', () => {
+    const score = vi.fn(() => 0);
+    const coach = new LiveCoach({ goodMs: 60, gate: { runtime: 'json', threshold: 1, model: 'test-0', score }, gateMode: 'on' });
+    const list = Array.from({ length: 40 }, (_, i) => coach.push(hit(i, 0)));
+    expect(list.some((m) => m && isPraiseTag(m.tag))).toBe(true);
+    expect(score).not.toHaveBeenCalled();
+  });
+
+  it('비동기 on은 높은 점수가 오면 늦게 띄운다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    expect(firstLate(coach, (m) => got.push(m)).map((m) => m.tag)).not.toContain('LIVE_LATE');
+    await flush();
+    expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+    expect(coach.events().some((e) => e.tag === 'LIVE_LATE')).toBe(true);
+  });
+
+  it('비동기 on은 낮은 점수면 띄우지 않는다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.1)), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    await flush();
+    expect(got).toHaveLength(0);
+  });
+
+  it('실행기가 실패하면 규칙 판단대로 띄운다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.reject(new Error('시험'))), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    await flush();
+    expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+  });
+
+  it('점수가 늦으면 시간 한도 뒤 규칙 판단대로 띄운다', async () => {
+    vi.useFakeTimers();
+    try {
+      const got: CoachMessage[] = [];
+      const coach = new LiveCoach({ goodMs: 60, gate: gate(new Promise<number>(() => undefined)), gateMode: 'on' });
+      firstLate(coach, (m) => got.push(m));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(got.map((m) => m.tag)).toContain('LIVE_LATE');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('재시작 뒤 도착한 점수는 버린다', async () => {
+    const got: CoachMessage[] = [];
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    firstLate(coach, (m) => got.push(m));
+    coach.reset();
+    await flush();
+    expect(got).toHaveLength(0);
+    expect(coach.events()).toHaveLength(0);
+  });
+});
+
+describe('판단 기록', () => {
+  const late = (count: number) => Array.from({ length: count }, (_, i) => hit(i, 40));
+  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'onnx', threshold, model: 'test-0', score: () => score });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const play = (coach: LiveCoach) => {
+    for (const n of late(12)) coach.push(n, 0, () => undefined);
+  };
+  const tags = (coach: LiveCoach) => coach.events().map((e) => e.tag);
+  const body = (coach: LiveCoach, tag: string) => JSON.parse(coach.events().find((e) => e.tag === tag)!.text);
+
+  it('띄운 문구는 상태 키와 문장을 JSON으로 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    play(coach);
+    expect(body(coach, 'LIVE_LATE')).toEqual({ key: 'LIVE_LATE', text: expect.any(String) });
+  });
+
+  it('패드 지적은 대상까지 담은 키를 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    for (let i = 0; i < 24; i++) coach.push(hit(i, i % 2 === 0 ? 45 : -5, { pad: i % 2 === 0 ? 'SNARE' : 'HIHAT' }));
+    const pad = coach.events().find((e) => e.tag === 'LIVE_PAD_LATE');
+    expect(pad && JSON.parse(pad.text).key).toBe('LIVE_PAD_LATE:SNARE');
+  });
+
+  it('남긴 지적은 지적 바로 뒤에 KEEP과 점수를 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    play(coach);
+    const list = tags(coach);
+    expect(list[list.indexOf('LIVE_LATE') + 1]).toBe(LIVE_GATE_KEEP_TAG);
+    expect(body(coach, LIVE_GATE_KEEP_TAG)).toMatchObject({ tag: 'LIVE_LATE', key: 'LIVE_LATE', score: 0.9, threshold: 0.5, model: 'test-0', runtime: 'onnx', mode: 'on' });
+  });
+
+  it('뺀 지적은 지적 행 없이 DROP만 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'on' });
+    play(coach);
+    expect(tags(coach)).not.toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_DROP_TAG)).toMatchObject({ tag: 'LIVE_LATE', score: 0.1 });
+  });
+
+  it('shadow는 띄우면서 뺐을 판단을 DROP으로 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'shadow' });
+    play(coach);
+    expect(tags(coach)).toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_DROP_TAG)).toMatchObject({ mode: 'shadow' });
+  });
+
+  it('비동기 점수도 같은 형식으로 남긴다', async () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    play(coach);
+    await flush();
+    const list = tags(coach);
+    expect(list[list.indexOf('LIVE_LATE') + 1]).toBe(LIVE_GATE_KEEP_TAG);
+  });
+
+  it('실행기가 실패하면 규칙대로 띄우고 FALLBACK을 남긴다', async () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.reject(new Error('시험'))), gateMode: 'on' });
+    play(coach);
+    await flush();
+    expect(tags(coach)).toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_FALLBACK_TAG)).toMatchObject({ tag: 'LIVE_LATE', reason: 'error' });
+  });
+
+  it('점수가 늦으면 FALLBACK에 timeout을 남긴다', async () => {
+    vi.useFakeTimers();
+    try {
+      const coach = new LiveCoach({ goodMs: 60, gate: gate(new Promise<number>(() => undefined)), gateMode: 'on' });
+      play(coach);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(body(coach, LIVE_GATE_FALLBACK_TAG)).toMatchObject({ reason: 'timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('칭찬에는 판단 기록이 없다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0), gateMode: 'on' });
+    for (let i = 0; i < 40; i++) coach.push(hit(i, 0));
+    expect(tags(coach).some((t) => t.startsWith('LIVE_GOOD_'))).toBe(true);
+    expect(tags(coach).some((t) => t.startsWith('LIVE_GATE_'))).toBe(false);
+  });
+
+  it('기록은 BE 검증 형식을 지킨다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    for (let i = 0; i < 200; i++) coach.push(hit(i, i % 20 < 10 ? 40 : -40));
+    for (const e of coach.events()) {
+      expect(e.tag.length).toBeLessThanOrEqual(64);
+      expect(e.text.length).toBeLessThanOrEqual(2048);
+      expect(() => JSON.parse(e.text)).not.toThrow();
+    }
   });
 });
