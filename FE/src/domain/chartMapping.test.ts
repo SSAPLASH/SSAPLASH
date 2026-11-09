@@ -137,3 +137,9 @@ describe('chartFromDetail', () => {
     expect(c.bpm).toBe(120);
   });
 });
+
+it('HIHAT의 엄격한 true만 열린 상태로 보존한다', () => {
+  const notes = [true, false, null, undefined, 'true'].map((hihatOpen, i) => ({ noteId: String(i), timeMs: i, pad: 'HIHAT', hihatOpen }));
+  const c = chartFromDetail(dto({ notes: [...notes, { noteId: 'x', timeMs: 6, pad: 'SNARE', hihatOpen: true }] as ChartDetailDto['notes'] }), false);
+  expect(c.notes.map((n) => n.hihatOpen)).toEqual([true, undefined, undefined, undefined, undefined, undefined]);
+});

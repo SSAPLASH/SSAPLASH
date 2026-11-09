@@ -1,8 +1,8 @@
-// 가입 동의 약관 문구·판과 동의 상태 규칙 (설계 COACH-003-signup-consent 3-1절).
+// 가입 동의 약관 문구·판과 동의 상태 규칙 (설계 COACH-003-signup-consent 3-1절, COACH-004-recommendation-consent D1~D3).
 // 약관 원문이 확정되면 이 파일의 본문·판 문자열만 바꾼다. React·브라우저·fetch에 의존하지 않는다.
 
 /** 약관 항목 id. BE 저장 필드 이름(`termsVersion`·`privacyVersion`·`dataConsentVersion`)의 앞부분과 같다 */
-export type SignupTermId = 'terms' | 'privacy' | 'dataConsent';
+export type SignupTermId = 'terms' | 'privacy' | 'dataConsent' | 'recommendation';
 
 export interface SignupTerm {
   id: SignupTermId;
@@ -16,11 +16,20 @@ export interface SignupTerm {
   body: string;
 }
 
-/** `POST /api/users/me/signup-consent` 본문 그대로. 연주 기록 활용은 필수라 agreed는 항상 true (메일 ACCT-001 회신 2) */
+/**
+ * `POST /api/users/me/signup-consent` 본문 그대로. 연주 기록 활용은 필수라 agreed는 항상 true (메일 ACCT-001 회신 2).
+ * 추천 학습 활용은 선택이지만 항상 싣는다 — BE는 생략하면 이전 응답을 유지해 신규 가입자가 "응답 안 함"으로 남기 때문이다(설계 D3)
+ */
 export interface ConsentVersions {
   termsVersion: string;
   privacyVersion: string;
   dataConsent: { agreed: true; version: string };
+  recommendationConsent?: { agreed: boolean; version: string };
+}
+
+/** 검토된 본문과 허용 판이 배포되기 전까지 신규 동의 수집을 열지 않는다. */
+export function recommendationConsentEnabled(): boolean {
+  return import.meta.env.VITE_RECOMMENDATION_CONSENT_ENABLED === 'true';
 }
 
 /** 가입 동의 카드 머리의 설명 문구 (Figma 440:19794) */
@@ -71,6 +80,23 @@ export const SIGNUP_TERMS: readonly SignupTerm[] = [
       '6. 동의 철회는 회원 탈퇴로 할 수 있어요.',
     ].join('\n'),
   },
+  {
+    id: 'recommendation',
+    title: '곡 추천 개선을 위한 연주 기록 이용 동의',
+    // 선택 항목이며, 검토와 구현 확인 전까지 신규 동의 수집을 비활성으로 유지한다.
+    // 공개 전 확인: 7일 후보 삭제 주기·배치 처리 시한·평가 CSV·탈퇴 경합·동의 이력 보관 근거·노출 집계 90일·개인정보 처리방침.
+    required: false,
+    version: '2026-11-05',
+    body: [
+      '1. 이용 목적: 곡 추천 모델을 학습·평가하고 개선해요. 학습 결과는 다른 사용자의 추천에도 반영될 수 있어요.',
+      '2. 이용 항목: 연주 기록 활용에 동의한 공용 곡의 기록 중 서비스에 보관 중인 과거 연주와 동의 이후 연주의 곡, 채보, 난이도, 연주 시각, 정확도, 완주 여부, 연주 모드와 가명 식별값을 이용해요. 이름·이메일 등 계정 정보와 약점 요약은 학습에 쓰지 않아요.',
+      '3. 처리 방식: 무작위로 만든 가명 식별값으로 연주 기록을 처리해요. 가명 정보는 익명이 아니며 추가 정보를 이용하면 계정과 연결할 수 있어요. 추천 운영 학습 배치는 모델, 입력 파일, 사용자별 학습 벡터를 저장하지 않고 메모리에서 처리해요.',
+      '4. 추천 후보: 계정당 최대 50개를 저장해요. 새 후보가 생성된 경우 기존 목록을 교체하며, 생성 후 7일이 지난 후보는 추천에 쓰지 않아요.',
+      '5. 동의 철회: 설정에서 언제든 철회할 수 있어요. 철회하면 저장된 후보를 삭제하고 이후 새로 조회하는 학습 데이터에서 해당 사용자의 기록을 제외해요. 철회 전에 이미 시작된 배치는 읽어 둔 기록을 메모리에서 처리할 수 있어요. 배치는 매번 새로 학습하며 학습 모델과 사용자별 벡터는 저장하지 않고, 철회한 기록은 다음 학습부터 반영되지 않아요. 다시 동의하면 새 가명 식별값을 만들며, 서비스에 보관 중인 과거 연주 기록도 위 이용 항목의 범위에서 다시 학습에 사용할 수 있어요.',
+      '6. 동의하지 않거나 철회해도 곡 추천을 포함한 서비스를 이용할 수 있어요. 맞춤 모델 추천 대신 기본 추천을 제공해요.',
+      '(신규 동의 수집 비활성 — 운영 적용 확인 후 공개)',
+    ].join('\n'),
+  },
 ];
 
 /** 약관 항목 하나의 판. 항목이 없으면 빈 문자열 */
@@ -78,12 +104,16 @@ export function termVersion(id: SignupTermId, terms: readonly SignupTerm[] = SIG
   return terms.find((t) => t.id === id)?.version ?? '';
 }
 
-/** 현재 약관 판을 BE 저장 본문 모양으로 묶는다 */
-export function currentConsentVersions(terms: readonly SignupTerm[] = SIGNUP_TERMS): ConsentVersions {
+/** 현재 약관 판을 BE 저장 본문 모양으로 묶는다. 추천 학습 활용은 체크 집합에 `recommendation`이 있는지를 agreed로 싣는다(설계 D3) */
+export function currentConsentVersions(
+  terms: readonly SignupTerm[] = SIGNUP_TERMS,
+  agreed: ReadonlySet<SignupTermId> = new Set(),
+): ConsentVersions {
   return {
     termsVersion: termVersion('terms', terms),
     privacyVersion: termVersion('privacy', terms),
     dataConsent: { agreed: true, version: termVersion('dataConsent', terms) },
+    ...(terms.some((t) => t.id === 'recommendation') ? { recommendationConsent: { agreed: agreed.has('recommendation'), version: termVersion('recommendation', terms) } } : {}),
   };
 }
 
@@ -92,19 +122,32 @@ export function dataConsentVersion(terms: readonly SignupTerm[] = SIGNUP_TERMS):
   return termVersion('dataConsent', terms);
 }
 
+/** 맞춤 곡 추천 학습 활용 항목의 판. 없으면 빈 문자열. 설정 토글·PUT·안내 모달이 이 판 하나만 쓴다 */
+export function recommendationVersion(terms: readonly SignupTerm[] = SIGNUP_TERMS): string {
+  return termVersion('recommendation', terms);
+}
+
 /** 필수 항목이 전부 동의됐는가 — [동의하고 시작하기] 활성 조건 */
 export function allRequiredAgreed(agreed: ReadonlySet<SignupTermId>, terms: readonly SignupTerm[] = SIGNUP_TERMS): boolean {
   return terms.every((t) => !t.required || agreed.has(t.id));
 }
 
-/** 선택 항목까지 전부 동의됐는가 — 「모두 동의합니다」 체크 표시 */
+/** 필수 항목이 전부 동의됐는가 — 「필수 항목에 모두 동의합니다」 체크 표시. 선택 항목은 보지 않는다(설계 D2) */
 export function allAgreed(agreed: ReadonlySet<SignupTermId>, terms: readonly SignupTerm[] = SIGNUP_TERMS): boolean {
-  return terms.length > 0 && terms.every((t) => agreed.has(t.id));
+  const required = terms.filter((t) => t.required);
+  return required.length > 0 && required.every((t) => agreed.has(t.id));
 }
 
-/** 「모두 동의」 클릭: 전부 켜져 있으면 전부 끄고, 아니면 전부 켠다. 새 집합을 돌려준다 */
+/** 「필수 항목에 모두 동의」 클릭: 필수가 전부 켜져 있으면 필수만 끄고, 아니면 필수를 켠다. 선택 항목 상태는 그대로 둔 새 집합을 돌려준다 */
 export function toggleAll(agreed: ReadonlySet<SignupTermId>, terms: readonly SignupTerm[] = SIGNUP_TERMS): Set<SignupTermId> {
-  return allAgreed(agreed, terms) ? new Set() : new Set(terms.map((t) => t.id));
+  const next = new Set(agreed);
+  const allOn = allAgreed(agreed, terms);
+  for (const t of terms) {
+    if (!t.required) continue;
+    if (allOn) next.delete(t.id);
+    else next.add(t.id);
+  }
+  return next;
 }
 
 /** 항목 하나를 넣거나 뺀 새 집합 */

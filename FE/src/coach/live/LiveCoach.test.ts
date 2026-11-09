@@ -169,6 +169,8 @@ describe('LiveCoach 표시 정책', () => {
     const tags = coach.events().map((e) => e.tag);
     expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG, 'LIVE_GOOD_RECOVERED']);
     expect(coach.events()[1].text).toBe('경향 해소: LIVE_LATE');
+    expect(back[0].recoveredFrom).toEqual({ tag: 'LIVE_LATE', target: null });
+    expect(late[0].recoveredFrom).toBeNull();
   });
 });
 
@@ -236,5 +238,75 @@ describe('LiveCoach 기준 방식', () => {
     const coach = new LiveCoach({ goodMs: 150 });
     const out = play(coach, Array.from({ length: 10 }, (_, i) => hit(i, 25)));
     expect(out[0]?.tag).toBe('LIVE_LATE');
+  });
+});
+
+describe('세팅 안내', () => {
+  const run = (coach: LiveCoach, notes: readonly JudgedNote[], stray: (i: number) => number = () => 0): CoachMessage[] =>
+    notes.flatMap((n, i) => {
+      const m = coach.push(n, stray(i));
+      return m ? [m] : [];
+    });
+  const tags = (list: readonly CoachMessage[]) => list.map((m) => m.tag);
+  const steady = (delta: number, count: number, jitter = 3) => Array.from({ length: count }, (_, i) => hit(i, delta + ((i % 3) - 1) * jitter));
+  const wobbly = (mean: number, count: number) => {
+    const r = rng(7);
+    return Array.from({ length: count }, (_, i) => hit(i, mean + (r() - 0.5) * 100));
+  };
+  const misses = (count: number) =>
+    Array.from({ length: count }, (_, i) => (i % 4 === 3 ? hit(i, 5) : miss(i)));
+
+  it('일정한 +60ms 지연이면 소리 지연을 안내한다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    expect(tags(run(coach, steady(60, 30)))).toContain('LIVE_SETUP_OFFSET');
+  });
+
+  it('일정한 -60ms도 소리 지연으로 본다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    expect(tags(run(coach, steady(-60, 30)))).toContain('LIVE_SETUP_OFFSET');
+  });
+
+  it('사람처럼 흔들리는 +30ms 연주에서는 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    expect(tags(run(coach, wobbly(30, 60)))).not.toContain('LIVE_SETUP_OFFSET');
+  });
+
+  it('놓침과 채보 밖 타격이 함께 많으면 패드 위치를 안내한다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    expect(tags(run(coach, misses(40), (i) => i))).toContain('LIVE_SETUP_PADS');
+  });
+
+  it('안 친 놓침만 많으면 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    expect(tags(run(coach, misses(40)))).not.toContain('LIVE_SETUP_PADS');
+  });
+
+  it('태그별로 플레이당 한 번만 뜨고 재시작하면 다시 뜰 수 있다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    const once = tags(run(coach, steady(60, 120)));
+    expect(once.filter((t) => t === 'LIVE_SETUP_OFFSET')).toHaveLength(1);
+    coach.reset();
+    expect(tags(run(coach, steady(60, 30)))).toContain('LIVE_SETUP_OFFSET');
+  });
+
+  it('지연이 있으면 연주 지적보다 먼저 뜬다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    // 표본이 16개 쌓이자마자 뜨고, 그사이 지적은 먼저 찬 늦음 문구 하나뿐이다
+    const list = tags(run(coach, steady(60, 24)));
+    expect(list.indexOf('LIVE_SETUP_OFFSET')).toBeGreaterThanOrEqual(0);
+    expect(list.indexOf('LIVE_SETUP_OFFSET')).toBeLessThanOrEqual(1);
+  });
+
+  it('켜지 않으면 뜨지 않는다(키보드 입력)', () => {
+    const coach = new LiveCoach({ goodMs: 100 });
+    const list = tags(run(coach, steady(60, 40)));
+    expect(list).not.toContain('LIVE_SETUP_OFFSET');
+    expect(list).not.toContain('LIVE_SETUP_PADS');
+  });
+
+  it('세팅 안내도 플레이 로그에 남는다', () => {
+    const coach = new LiveCoach({ goodMs: 100, setupHints: true });
+    run(coach, steady(60, 30));
+    expect(coach.events().some((e) => e.tag === 'LIVE_SETUP_OFFSET')).toBe(true);
   });
 });

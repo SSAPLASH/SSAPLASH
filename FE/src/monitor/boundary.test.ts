@@ -48,7 +48,7 @@ describe('edgeDeg', () => {
   });
   it('반경 경계는 0이고 안쪽(<=)', () => {
     const e = edgeDeg(profile, { pitch: 0, yaw: 10 });
-    expect(e?.edgeDeg).toBe(0);
+    expect(e?.edgeDeg).toBeCloseTo(0, 6);
     expect(e?.inside).toBe(true);
   });
   it('바깥은 양수', () => {

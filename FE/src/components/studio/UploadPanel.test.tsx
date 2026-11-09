@@ -34,10 +34,10 @@ function chips(html: string): { label: string; selected: boolean; disabled: bool
 }
 
 describe('UploadPanel', () => {
-  it('탭 Chip 「음원」「MIDI」 중 현재 탭만 selected', () => {
+  it('탭 Chip 「음원」「MIDI·MusicXML」 중 현재 탭만 selected', () => {
     expect(chips(panel('AUDIO'))).toEqual([
       { label: '음원', selected: true, disabled: false },
-      { label: 'MIDI', selected: false, disabled: false },
+      { label: 'MIDI·MusicXML', selected: false, disabled: false },
     ]);
     expect(chips(panel('MIDI')).map((c) => c.selected)).toEqual([false, true]);
   });
@@ -48,7 +48,7 @@ describe('UploadPanel', () => {
 
   it('음원 탭은 드롭존, MIDI 탭은 MIDI 양식', () => {
     expect(panel('AUDIO')).toContain('음원 파일을 여기에 끌어다 놓으세요');
-    expect(panel('MIDI')).toContain('MIDI 파일을 여기에 끌어다 놓으세요');
+    expect(panel('MIDI')).toContain('MIDI·MusicXML 파일을 여기에 끌어다 놓으세요');
   });
 
   it('음원 생성 중이면 음원 탭이 안내 문구로 바뀐다(드롭존 없음)', () => {
@@ -59,7 +59,7 @@ describe('UploadPanel', () => {
   });
 
   it('음원 생성 중이어도 MIDI 탭은 양식을 그린다', () => {
-    expect(panel('MIDI', { audioBusyTitle: '별빛 산책' })).toContain('MIDI 파일을 여기에 끌어다 놓으세요');
+    expect(panel('MIDI', { audioBusyTitle: '별빛 산책' })).toContain('MIDI·MusicXML 파일을 여기에 끌어다 놓으세요');
   });
 
   it('안내 문구 상태에서도 onCancel이 있으면 [취소] secondary md', () => {
@@ -73,8 +73,8 @@ describe('UploadPanel', () => {
 describe('AudioDropzone 문구', () => {
   const html = renderToStaticMarkup(<AudioDropzone {...audio} emphasis={false} />);
 
-  it('제한 문구: MP3·WAV · 50MiB 이하 · 10분 이하', () => {
-    expect(html).toContain('MP3·WAV · 50MiB 이하 · 10분 이하');
+  it('제한 문구: MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하', () => {
+    expect(html).toContain('MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하');
   });
 
   it('보관 정책 문구: 올린 음원과 분리한 드럼 트랙은 채보를 만든 뒤 지운다', () => {

@@ -239,3 +239,57 @@ describe('yawDriftMonitor 페달(stickId null, PLAY-002)', () => {
     expect(last).toEqual([null, null]);
   });
 });
+
+describe('yawDriftMonitor pause / resume / correct (PLAY-004)', () => {
+  it('pause 중 observe는 샘플도 송신도 없고, resume 뒤에는 다시 쌓인다', () => {
+    const src = connected();
+    yawDriftMonitor.pause();
+    expect(yawDriftMonitor.isPaused).toBe(true);
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(0);
+    expect(last[0]).toBeNull();
+    yawDriftMonitor.resume();
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(1);
+  });
+
+  it('resume은 쌓여 있던 링을 비운다(옛 앵커 샘플이 섞이지 않게)', () => {
+    connected();
+    feed([6, 6, 6]);
+    expect(last[0]?.samples).toBe(3);
+    yawDriftMonitor.pause();
+    yawDriftMonitor.resume();
+    feed([6]);
+    expect(last[0]?.samples).toBe(1);
+  });
+
+  it('correct(stickId, d)는 applied − d를 그 손에 보내고 확인 창을 연다. 쿨다운은 보지 않는다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(1, 12);
+    expect(src.sent).toHaveLength(1);
+    expect(src.sent[0].stickId).toBe(1);
+    expect(sentDeg(src.sent[0].bytes)).toBeCloseTo(-12);
+    expect(last[1]).toMatchObject({ appliedDeg: -12, acked: null, samples: 0, lastErrorDeg: 12 });
+    // 바로 다시 보정해도 쿨다운 없이 나간다: −12 − 3 = −15
+    yawDriftMonitor.correct(1, 3);
+    expect(src.sent).toHaveLength(2);
+    expect(sentDeg(src.sent[1].bytes)).toBeCloseTo(-15);
+    ack(-1500, 1);
+    expect(last[1]).toMatchObject({ appliedDeg: -15, acked: true });
+  });
+
+  it('correct 뒤 500ms 안에 ACK가 없으면 acked false, 보낸 값은 유지', () => {
+    connected();
+    yawDriftMonitor.correct(0, -8);
+    vi.advanceTimersByTime(600);
+    expect(last[0]).toMatchObject({ appliedDeg: 8, acked: false });
+  });
+
+  it('보낼 수 없는 소스에서는 correct가 무동작', () => {
+    const src = new NoCmdSource();
+    yawDriftMonitor.setSource(src);
+    src.set('connected');
+    yawDriftMonitor.correct(0, 5);
+    expect(last[0]).toBeNull();
+  });
+});

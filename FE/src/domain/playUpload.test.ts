@@ -202,3 +202,9 @@ describe('페달 타격 업로드 (PLAY-002)', () => {
     expect(body(l).hits[0].stickId).toBeNull();
   });
 });
+
+it('로컬 페달 필드는 서버 업로드 계약에 추가하지 않는다', () => {
+  const base = log();
+  const changed = { ...base, hihatPedalCoverage: 'COMPLETE' as const, notes: base.notes.map((n) => ({ ...n, hihatOpen: true as const })), hits: base.hits.map((h) => ({ ...h, hihatClosed: false })) };
+  expect(body(changed)).toEqual(body(base));
+});

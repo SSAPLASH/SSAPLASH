@@ -145,6 +145,8 @@ export interface NoteGlyph {
   stem: boolean;
   /** 칸 중심에서 stepMs/4보다 먼 노트(머리 옆에 점 표시) */
   offGrid: boolean;
+  /** 크래시 머리와 빔 사이의 원 위치(px). 배치 캐시에 보관한다 */
+  openOffsetY?: number;
 }
 
 export interface BeamGroup {
@@ -172,7 +174,7 @@ export function layoutBar(chart: GridChart, barIndex: number, opts: { stepsPerBa
     if (Math.floor(idx / stepsPerBar) !== barIndex) return;
     const step = idx % stepsPerBar;
     const pos = STAFF_POS[n.pad];
-    glyphs.push({ noteIndex, pad: n.pad, xRatio: step / stepsPerBar, line: pos.line, head: pos.head, stem: true, offGrid });
+    glyphs.push({ noteIndex, pad: n.pad, xRatio: step / stepsPerBar, line: pos.line, head: pos.head, stem: true, offGrid, ...(n.pad === 'HIHAT' && n.hihatOpen === true ? { openOffsetY: 20 } : {}) });
     steps.push(step);
   });
 

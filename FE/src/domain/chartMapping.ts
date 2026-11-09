@@ -8,6 +8,7 @@ export interface ChartNoteDto {
   noteId: string;
   timeMs: number;
   pad: string;
+  hihatOpen?: boolean | null;
   velocityHint?: number | null;
   notation?: { tick: number; durationTicks: number; voice: number } | null;
 }
@@ -82,6 +83,7 @@ export function chartFromDetail(detail: ChartDetailDto, hasAccompaniment: boolea
       continue;
     }
     const note: ChartNote = { timeMs: n.timeMs, pad, noteId: n.noteId };
+    if (pad === 'HIHAT' && n.hihatOpen === true) note.hihatOpen = true;
     if (n.velocityHint != null) note.velocityHint = n.velocityHint;
     notes.push(note);
   }

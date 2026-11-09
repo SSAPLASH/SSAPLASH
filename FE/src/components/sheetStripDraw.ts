@@ -6,8 +6,8 @@ import { xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
 const LINE_GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
 const STAFF_BOTTOM = 150; // 선 1의 y
 const STEM_LEN = 34;
-const HEAD_RX = 6;
-const HEAD_RY = 4.5;
+export const HEAD_RX = 6;
+export const HEAD_RY = 4.5;
 const STEM_DX = HEAD_RX - 0.75; // 기둥은 머리 오른쪽
 /** 격자 밖 노트 표시 점의 반지름(px). 지름 3px */
 const OFF_GRID_DOT_R = 1.5;
@@ -20,6 +20,7 @@ export interface Colors {
   base: string;
   /** 기준선 글로우 색 */
   baseGlow: string;
+  warning: string;
   judge: Record<Judgement, string>;
 }
 
@@ -33,6 +34,7 @@ export function readColors(el: Element = document.documentElement): Colors {
     inkFaint: v('--text-3', '#828d9e'),
     base: v('--brand-text', '#52b2dd'),
     baseGlow: v('--brand', '#35a3d4'),
+    warning: v('--brand-sub', '#ffc83d'),
     judge: {
       PERFECT: v('--perfect', '#8fceea'),
       GOOD: v('--good', '#4cd07d'),
@@ -42,9 +44,18 @@ export function readColors(el: Element = document.documentElement): Colors {
 }
 
 const yOfPos = (pos: number) => STAFF_BOTTOM - pos * (LINE_GAP / 2);
+/** 보표 위치(반 칸 단위)의 y. SheetPager가 노트 머리 화면 위치를 찾을 때 쓴다 */
+export const headY = yOfPos;
 /** 보표 맨 위 선·맨 아래 선의 y. SheetPager가 커서 길이를 맞출 때 쓴다 */
 export const STAFF_TOP_Y = yOfPos(8);
 export const STAFF_BOTTOM_Y = yOfPos(0);
+
+/** 판정된 타격의 실제 위치 눈금(친 곡 시각 + 판정 색) */
+export interface HitMark {
+  /** 친 곡 시각(ms) = 노트 시각 + 빠름/늦음 */
+  timeMs: number;
+  judgement: Judgement;
+}
 
 export interface DrawSheetOpts {
   chart: GridChart;
@@ -52,6 +63,8 @@ export interface DrawSheetOpts {
   noteStates: (Judgement | null)[];
   /** 채보 밖 타격(곡 시각 ms) */
   strayHits: { timeMs: number }[];
+  /** 판정된 타격의 친 위치 눈금(PERFECT·GOOD). x가 시각이라 얼마나 앞뒤로 쳤는지 보인다. 없으면 그리지 않는다 */
+  hitMarks?: readonly HitMark[];
   /** 기준선이 가리키는 곡 시각(반주 기준, reduced motion이면 이미 마디 경계로 내린 값) */
   songTime: number;
   /** 스냅 전 곡 시각(반주 기준). 박 번호·카운트인 숫자에 쓴다(없으면 songTime) */
@@ -71,6 +84,8 @@ export interface DrawSheetOpts {
   /** false면 기준선·박 번호·카운트인 숫자를 그리지 않는다 */
   showBase: boolean;
   countInMs?: number;
+  openWarnings?: ReadonlyMap<number, number>;
+  nowMs?: number;
 }
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
@@ -118,7 +133,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     ctx.font = '600 11px Pretendard Variable, Pretendard, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(String(bar + 1), left + 4, top - 22);
+    ctx.fillText(String(bar + 1), left + 4, top - 40);
 
     const layout = layoutOf(bar);
 
@@ -197,6 +212,14 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
           ctx.stroke();
         }
       }
+      if (g.openOffsetY !== undefined) {
+        const warning = (opts.openWarnings?.get(g.noteIndex) ?? 0) > (opts.nowMs ?? 0);
+        ctx.strokeStyle = warning ? colors.warning : c;
+        ctx.lineWidth = warning ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y - g.openOffsetY, 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       // 격자 밖 노트: 머리 오른쪽 위에 작은 점("악보보다 조금 앞뒤로 친다")
       if (g.offGrid) {
         ctx.fillStyle = colors.inkFaint;
@@ -215,6 +238,16 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     ctx.beginPath();
     ctx.arc(x, bottom + 26, 3, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // 친 위치 눈금: 보표 바로 아래 판정 색 짧은 세로선(같은 시각 노트 머리와 같은 x). 눈금 색이 판정을 말한다
+  if (opts.hitMarks) {
+    for (const m of opts.hitMarks) {
+      const x = xOfTimeInBar(m.timeMs, t, width, barPx, baseRatio, barMs, originMs);
+      if (x < -4 || x > width + 4) continue;
+      ctx.fillStyle = colors.judge[m.judgement];
+      ctx.fillRect(x - 1, bottom + 8, 2, 12);
+    }
   }
 
   if (!showBase) return;

@@ -52,11 +52,12 @@
 }
 .play-sd-line {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-2);
   font-size: 12px;
-}
-.play-sd-line.warn {
-  color: var(--brand-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .play-sd-error {
   margin: 0;
@@ -73,6 +74,63 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.play-sd .ui-btn {
+/* [프리셋 · 준비] 한 줄(Figma 126:3582, 11/03): 위 여백 8, [준비] 폭 120 */
+.play-sd-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
   margin-top: var(--space-s);
+}
+.play-sd .play-sd-prepare {
+  flex: none;
+  width: 120px;
+}
+/* 비슷한 곡 한 줄(Figma 666:33646·666:33647): 구분선 → 위·아래 8, 글 묶음과 [이 곡 보기] 사이 12, 글 줄 사이 2 */
+.play-sd-divider {
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--line);
+}
+.play-sd-similar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: var(--space-s) 0;
+}
+.play-sd-similar-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.45;
+}
+.play-sd-similar-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-sd-similar-caption {
+  color: var(--brand-text);
+  font-size: 12px;
+  letter-spacing: 0.48px;
+}
+.play-sd-similar-title {
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 700;
+}
+.play-sd-similar-meta {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.play-sd-similar-reason {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.play-sd .play-sd-similar-pick {
+  flex: none;
 }

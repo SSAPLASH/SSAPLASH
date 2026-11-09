@@ -57,4 +57,54 @@ describe('coachLineTimer', () => {
     timer.clear();
     expect(seen).toEqual([null]);
   });
+
+  it('delayMs가 있으면 그만큼 뒤에 띄우고 그때부터 displayMs를 센다', () => {
+    const { seen, timer } = setup();
+    timer.show('문구', 3000, 1000);
+    expect(seen).toEqual([null]);
+    vi.advanceTimersByTime(999);
+    expect(seen).toEqual([null]);
+    vi.advanceTimersByTime(1);
+    expect(seen).toEqual([null, '문구']);
+    vi.advanceTimersByTime(2999);
+    expect(seen).toEqual([null, '문구']);
+    vi.advanceTimersByTime(1);
+    expect(seen).toEqual([null, '문구', null]);
+  });
+
+  it('미루는 중에 새 문구가 오면 앞의 것은 버린다', () => {
+    const { seen, timer } = setup();
+    timer.show('첫째', 3000, 1000);
+    vi.advanceTimersByTime(500);
+    timer.show('둘째', 3000, 1000);
+    vi.advanceTimersByTime(1000);
+    expect(seen.filter((x) => x !== null)).toEqual(['둘째']);
+  });
+
+  it('cancelPending은 미루는 문구만 버리고 떠 있는 문구는 둔다', () => {
+    const { seen, timer } = setup();
+    timer.show('떠 있는 문구', 3000);
+    timer.show('미루는 문구', 3000, 1000);
+    timer.cancelPending();
+    vi.advanceTimersByTime(5000);
+    expect(seen.filter((x) => x === '미루는 문구')).toEqual([]);
+    const second = setup();
+    second.timer.show('떠 있는 문구', 3000);
+    second.timer.cancelPending();
+    expect(second.seen).toEqual(['떠 있는 문구']);
+    vi.advanceTimersByTime(3000);
+    expect(second.seen).toEqual(['떠 있는 문구', null]);
+  });
+
+  it('clear·dispose는 미루는 문구도 정리한다', () => {
+    const a = setup();
+    a.timer.show('문구', 3000, 1000);
+    a.timer.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+    const b = setup();
+    b.timer.show('문구', 3000, 1000);
+    b.timer.clear();
+    vi.advanceTimersByTime(5000);
+    expect(b.seen.filter((x) => x === '문구')).toEqual([]);
+  });
 });
