@@ -327,6 +327,7 @@ export function KitCanvas(props: KitCanvasProps) {
     <div
       ref={wrapRef}
       className="kit-wrap"
+      data-pointer-strike=""
       style={{ cursor: props.draggable ? 'grab' : props.onTapPad ? 'pointer' : 'crosshair' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
