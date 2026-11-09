@@ -38,8 +38,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 7                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235) */
-#define FW_TAG   "BOOT 1.7 nrf52"
+#define FW_MINOR 8                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343) */
+#define FW_TAG   "BOOT 1.8 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -834,7 +834,7 @@ void app_setup()
     hp.max_swing_ms  = 160;                             /* 진짜 71~112ms, 가짜 175~219ms */
     hp.min_swing_ms  = 20;                              /* 버튼·충격 튐(1ms) 제거 */
     hp.ts_corr_us    = 800;                             /* 정지 시각 평균 오차 0으로 */
-    hp.vel_max_dps   = 2000;                            /* 236: 1200이면 세게 친 타격이 전부 127 (11/6 측정). 자이로 최대 ±2000dps */
+    hp.vel_max_dps   = 1400;                            /* PLAY-006: 세게 친 타격이 100~120 (11/9 1600 실측 오른손 강 79~102 → 1400 환산 94~122) */
     hit_init(&hd, &hp);
     pad_table_default(&pads);
 
@@ -982,10 +982,10 @@ void app_loop()
         send(b, n);
         uint32_t t_sent = now_us();
         /* 패드를 판정 못 한 타격(PAD_NONE, 패드 밖)은 울리지 않는다 (11/5 FE 지적).
-         * 236: 타격 세기 → 진동 3단계 (약 ≤40, 중 41~62, 강 ≥63. vel_max 2000 기준, 11/6 측정에서 잡은 경계).
+         * 236: 타격 세기 → 진동 3단계 (약 ≤68, 중 69~92, 강 ≥93. vel_max 1400 기준, 11/9 양손 번갈아 30타씩 실측에서 잡은 경계).
          * hapticStrength(기본 200) × 100/66/33% → haptic_click 의 >170 / >85 경계로 강·중·약 파형이 골라진다 */
         if (haptic_enable && pr.id != PAD_NONE)
-            haptic_click((uint8_t)(haptic_strength * (ev.velocity >= 63 ? 100 : ev.velocity > 40 ? 66 : 33) / 100));
+            haptic_click((uint8_t)(haptic_strength * (ev.velocity >= 93 ? 100 : ev.velocity > 68 ? 66 : 33) / 100));
         if (lat_log) {                                  /* 233: 샘플 시각 t 기준 µs. 검출 끝 / 전송 끝 / 진동 GO 쓰기 끝 */
             uint32_t t_hap = now_us();
             char m[20];
