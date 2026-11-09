@@ -1,0 +1,68 @@
+// 타이밍 오차 막대 상태(설계 3-5, D8) — 순수 함수. 그리기·시계는 모른다.
+// 판정(PERFECT·GOOD)마다 눈금 하나를 쌓고, 시각에서 눈금 목록(위치 −1~1·투명도)과 최근 평균 위치를 계산한다.
+import type { Judgement } from '@/domain/judgement';
+
+/** 보관하는 눈금 최대 수 */
+export const TIMING_BAR_MAX = 20;
+/** 눈금이 옅어져 사라지는 시간(ms) */
+export const TIMING_BAR_FADE_MS = 2000;
+/** 평균을 내는 최근 타수 */
+export const TIMING_BAR_AVG_COUNT = 10;
+
+export interface TimingMark {
+  /** 타격 − 노트 (ms). 빠름 음수, 늦음 양수 */
+  deltaMs: number;
+  judgement: Judgement;
+  /** 쌓은 시각(ms, 호출자 시계) */
+  at: number;
+}
+
+export interface TimingBarState {
+  /** 오래된 순. 최대 TIMING_BAR_MAX */
+  marks: readonly TimingMark[];
+}
+
+export interface TimingTick {
+  /** 막대 위 위치 −1(가장 빠름)~1(가장 늦음). 창(goodMs) 밖은 끝에 붙는다 */
+  pos: number;
+  /** 1 → 0 (2초에 걸쳐) */
+  alpha: number;
+  judgement: Judgement;
+}
+
+export interface TimingBarView {
+  ticks: TimingTick[];
+  /** 최근 10타 평균 위치. 눈금이 없으면 null(옅어진 눈금도 평균에는 들어간다) */
+  avgPos: number | null;
+}
+
+export const EMPTY_TIMING_BAR: TimingBarState = { marks: [] };
+
+const clamp1 = (v: number) => Math.min(1, Math.max(-1, v));
+
+/** 판정을 눈금으로 더한다. PERFECT·GOOD만(MISS·deltaMs 없음은 무시). 20개를 넘으면 오래된 것부터 버린다 */
+export function addTimingMark(state: TimingBarState, mark: { deltaMs: number | null; judgement: Judgement | null; at: number }): TimingBarState {
+  if (mark.deltaMs === null || !Number.isFinite(mark.deltaMs)) return state;
+  if (mark.judgement !== 'PERFECT' && mark.judgement !== 'GOOD') return state;
+  const marks = [...state.marks, { deltaMs: mark.deltaMs, judgement: mark.judgement, at: mark.at }];
+  return { marks: marks.length > TIMING_BAR_MAX ? marks.slice(marks.length - TIMING_BAR_MAX) : marks };
+}
+
+/** now 시점의 눈금 목록(옅어진 것은 뺀다)과 평균 위치. goodMs는 막대 바깥 창의 절반 폭(ms) */
+export function timingBarView(state: TimingBarState, now: number, goodMs: number): TimingBarView {
+  const w = goodMs > 0 ? goodMs : 1;
+  const ticks: TimingTick[] = [];
+  for (const m of state.marks) {
+    const alpha = 1 - (now - m.at) / TIMING_BAR_FADE_MS;
+    if (alpha > 0) ticks.push({ pos: clamp1(m.deltaMs / w), alpha: Math.min(1, alpha), judgement: m.judgement });
+  }
+  const recent = state.marks.slice(-TIMING_BAR_AVG_COUNT);
+  const avgPos = recent.length === 0 ? null : clamp1(recent.reduce((s, m) => s + m.deltaMs, 0) / recent.length / w);
+  return { ticks, avgPos };
+}
+
+/** 살아 있는(아직 옅어지지 않은) 눈금이 있는가 — rAF를 계속 돌릴지 정한다 */
+export function hasLiveTicks(state: TimingBarState, now: number): boolean {
+  const last = state.marks[state.marks.length - 1];
+  return last !== undefined && now - last.at < TIMING_BAR_FADE_MS;
+}

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { listSheets, deleteSheet, updateSheetTitle } from '@/api/sheets';
-import { SHEET_ARCHIVE_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
+import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
 import { SheetDeleteDialog } from '@/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/components/sheet/SheetTitleDialog';
 import { useShell } from '@/components/shell/useShell';
@@ -31,6 +31,7 @@ import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
 import type { SongMetaPatch } from '@/domain/songEdit';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
+import { useSheetLink } from '@/store/sheetLinkStore';
 import { useSongEdit } from '@/store/songEditStore';
 import { useSongs } from '@/store/songStore';
 
@@ -100,6 +101,11 @@ export function StudioPage() {
   const midiError = useMidiUpload((s) => s.error);
   const midiUpload = useMidiUpload((s) => s.upload);
   const midiReset = useMidiUpload((s) => s.reset);
+
+  // 악보만 항목의 [곡 올리기]: 대상 악보와 연결 실패 대상(설계 CHART-001 D16·D17)
+  const linkTarget = useSheetLink((s) => s.target);
+  const linkPending = useSheetLink((s) => s.pending);
+  const linkPhase = useSheetLink((s) => s.phase);
 
   const editPhase = useSongEdit((s) => s.phase);
   const editError = useSongEdit((s) => s.error);
@@ -185,6 +191,18 @@ export function StudioPage() {
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
+  // 곡이 등록된 직후 target 악보를 그 곡에 연결하고(PATCH 1회) 곡·악보 목록을 다시 읽는다. 실패해도 곡은 남으므로 목록은 읽는다(D16·D17)
+  const finishLink = useCallback(
+    async (run: () => Promise<void>) => {
+      await run();
+      await Promise.all([load('MINE'), loadSheets()]);
+      if (useSheetLink.getState().phase === 'done') showToast('곡을 올리고 악보를 연결했어요');
+    },
+    [load, loadSheets, showToast],
+  );
+  const linkToSong = useCallback((songId: number) => finishLink(() => useSheetLink.getState().link(songId)), [finishLink]);
+  const retryLink = useCallback(() => void finishLink(() => useSheetLink.getState().retry()), [finishLink]);
+
   // 뷰어에서 악보를 지우고 돌아오면(라우터 state) 토스트를 보이고 state를 비운다(새로고침해도 다시 뜨지 않게)
   const sheetDeletedFlag = (location.state as { sheetDeleted?: boolean } | null)?.sheetDeleted === true;
   useEffect(() => {
@@ -210,6 +228,15 @@ export function StudioPage() {
       // 효과 안 동기 setState를 피해 한 틱 미룬다
       queueMicrotask(() => setDialogOpen(false));
       void load('MINE');
+      // 음원은 202 응답의 songId로 바로 연결한다(채보 생성이 끝나길 기다리지 않는다). 효과 안 동기 setState를 피해 한 틱 미룬다.
+      // jobId가 없으면 이번 업로드가 아니라 AUDIO_BUSY로 복구한 다른 생성 중 곡이다 — 그 곡에 붙이지 않고 대상 지정만 푼다
+      const songId = active.songId;
+      const accepted = active.jobId !== null;
+      queueMicrotask(() => {
+        if (!useSheetLink.getState().target) return;
+        if (accepted) void linkToSong(songId);
+        else useSheetLink.getState().cancel();
+      });
       return;
     }
     if (phase === 'done' && active) {
@@ -228,9 +255,10 @@ export function StudioPage() {
       void load('MINE');
       clear();
     }
-  }, [phase, doneSource, active, error, load, clear, navigate, flashRow]);
+  }, [phase, doneSource, active, error, load, clear, navigate, flashRow, linkToSong]);
 
   const onReupload = useCallback((song: SongSummary) => {
+    useSheetLink.getState().cancel();
     setPrefill({ title: song.title, artist: song.artist });
     setPrefillSeq((n) => n + 1);
     setTab('AUDIO');
@@ -266,14 +294,15 @@ export function StudioPage() {
         setEditing(null);
         editReset();
         if (removed && useChartJob.getState().active?.songId === song.id) clear();
-        await load('MINE');
+        // BE는 곡을 지우면 연결된 악보도 같이 지운다. 악보 목록도 다시 읽어야 곡 없는 악보로 남지 않는다
+        await Promise.all([load('MINE'), removed && song.sheetId != null ? loadSheets() : undefined]);
         if (removed) showToast(`「${song.title}」을 삭제했습니다.`);
         else flashRow(song.id);
       } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
         void load('MINE');
       }
     },
-    [editReset, clear, load, flashRow, showToast],
+    [editReset, clear, load, loadSheets, flashRow, showToast],
   );
 
   const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
@@ -291,12 +320,15 @@ export function StudioPage() {
   const closeDialog = useCallback(() => {
     if (useChartJob.getState().phase === 'uploading' || useMidiUpload.getState().phase === 'uploading' || sheetBusyRef.current) return;
     if (useMidiUpload.getState().phase === 'failed') midiReset();
+    // 악보에 곡 올리기 중이었다면 대상 지정을 푼다(창을 닫으면 연결하지 않는다)
+    useSheetLink.getState().cancel();
     setDialogOpen(false);
   }, [midiReset]);
 
   // 헤더 [올리기]: 곡 없이 마지막에 쓴 섹션으로 연다.
   // 첫 방문은 본문에 음원·MIDI 패널이 이미 있으므로 [악보] 섹션으로만 연다(같은 패널이 두 번 그려지지 않게)
   const openUpload = useCallback(() => {
+    useSheetLink.getState().cancel();
     setSheetTarget(null);
     if (firstVisitRef.current) setSection('SHEET');
     setDialogOpen(true);
@@ -328,12 +360,21 @@ export function StudioPage() {
         if (song.sheetId != null) navigate(`/studio/sheets/${song.sheetId}`);
         return;
       }
+      useSheetLink.getState().cancel();
       setSheetTarget(song);
       setSection('SHEET');
       setDialogOpen(true);
     },
     [navigate],
   );
+
+  // 악보만 항목의 [곡 올리기]: 대상 악보를 정하고 업로드 창을 [음원·MIDI]로 연다. 다시 올리기 안내는 끈다
+  const onUploadSong = useCallback((sheet: SheetSummary) => {
+    useSheetLink.getState().begin(sheet);
+    setPrefill(null);
+    setSheetTarget(null);
+    setDialogOpen(true);
+  }, []);
 
   const onSheetMenu = useCallback((kind: SheetMenuKind, sheet: SheetSummary) => setSheetEditing({ kind, sheet }), []);
 
@@ -346,13 +387,15 @@ export function StudioPage() {
       if (p === 'done' && song) {
         setDialogOpen(false);
         midiReset();
-        await load('MINE');
+        // MIDI·MusicXML은 201 응답의 곡 id로 바로 연결한다(finishLink가 목록도 다시 읽는다)
+        if (useSheetLink.getState().target) await linkToSong(song.id);
+        else await load('MINE');
         flashRow(song.id);
       } else if (p === 'failed' && err?.uncertain) {
         void load('MINE');
       }
     },
-    [midiUpload, midiReset, load, flashRow],
+    [midiUpload, midiReset, load, flashRow, linkToSong],
   );
 
   // songStore가 곡 선택 창 등에서 다른 범위로 채워져 있으면 아직 안 읽은 것으로 본다
@@ -376,7 +419,8 @@ export function StudioPage() {
 
   const panel = (emphasis: boolean) => (
     <UploadPanel
-      key={prefillSeq}
+      key={`${prefillSeq}-${linkTarget?.id ?? 'none'}`}
+      initialTitle={linkTarget?.title}
       tab={tab}
       onTab={setTab}
       locked={locked}
@@ -435,6 +479,14 @@ export function StudioPage() {
         )}
       </header>
       {jobLookupError && <p className="notice error" role="alert">{errorText}</p>}
+      {SHEET_RELINK_ENABLED && linkPending !== null && (
+        <p className="notice error" role="alert">
+          곡은 올렸지만 악보를 연결하지 못했어요
+          <Button variant="text" size="sm" disabled={linkPhase === 'linking'} onClick={retryLink}>
+            다시 연결
+          </Button>
+        </p>
+      )}
       {firstVisit ? (
         <>
           <Card padding="lg" className="studio-first-card">
@@ -476,6 +528,7 @@ export function StudioPage() {
               onSheetMenu={onSheetMenu}
               onSheetCoverError={() => void loadSheets()}
               onSongSheet={SHEET_ARCHIVE_ENABLED && SHEET_SONG_LINK_ENABLED && SONG_EDIT_ENABLED ? onSongSheet : undefined}
+              onUploadSong={SHEET_ARCHIVE_ENABLED && SHEET_RELINK_ENABLED ? onUploadSong : undefined}
             />
           </div>
           {split && <HowtoPanel variant="panel" />}
@@ -537,12 +590,14 @@ export function StudioPage() {
       )}
       <StudioToast text={toast} />
       <UploadDialog
-        open={dialogOpen && (!firstVisit || (SHEET_ARCHIVE_ENABLED && section === 'SHEET'))}
+        open={dialogOpen && (linkTarget !== null || !firstVisit || (SHEET_ARCHIVE_ENABLED && section === 'SHEET'))}
         locked={locked}
         onClose={closeDialog}
-        section={SHEET_ARCHIVE_ENABLED ? { value: section, onChange: changeSection } : undefined}
+        section={SHEET_ARCHIVE_ENABLED && !linkTarget ? { value: section, onChange: changeSection } : undefined}
+        title={linkTarget ? '곡 올리기' : undefined}
+        notice={linkTarget ? `「${linkTarget.title}」 악보에 연결돼요` : undefined}
       >
-        {SHEET_ARCHIVE_ENABLED && section === 'SHEET' ? (
+        {SHEET_ARCHIVE_ENABLED && !linkTarget && section === 'SHEET' ? (
           <SheetUploadForm
             key={sheetTarget?.id ?? 'none'}
             target={sheetTarget ? { id: sheetTarget.id, title: sheetTarget.title } : null}

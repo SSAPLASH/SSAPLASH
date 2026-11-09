@@ -2,7 +2,7 @@
 import type { PadId } from './pads';
 
 export type Difficulty = 'EASY' | 'NORMAL' | 'HARD';
-export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO';
+export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO' | 'MUSICXML';
 
 export interface ChartNote {
   timeMs: number;

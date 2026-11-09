@@ -1,5 +1,7 @@
 // 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 곡 난이도 · 최고 점수(sheet 모드는 최고 정확도).
 // 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡. 곡 로딩은 호출자가 한다(props만 받는다).
+// 추천 곡(isRecommended)은 제목 옆에 「✦ AI 추천」 라벨을 붙인다 — 제목만 말줄임하고 라벨은 줄이지 않는다(Figma SongRow `AI 추천 라벨`, 설계 COACH-004-song-picker-ai-tab 3-3).
+// 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { songLevelLabel, songStatusView, type SongSummary } from '@/domain/songCatalog';
 import { formatDuration } from '@/components/formatTime';
@@ -14,7 +16,7 @@ interface Column {
   key: string;
   header: string;
   className?: string;
-  render: (song: SongSummary, ctx: { best: number | undefined; locked: boolean }) => ReactNode;
+  render: (song: SongSummary, ctx: { best: number | undefined; locked: boolean; recommended: boolean }) => ReactNode;
 }
 
 const DASH = '—';
@@ -48,9 +50,12 @@ const BASE_COLUMNS: Column[] = [
     key: 'title',
     header: '제목 / 아티스트',
     className: 'play-st-title',
-    render: (s, { locked }) => (
+    render: (s, { locked, recommended }) => (
       <>
-        <span className="play-st-name">{s.title}</span>
+        <span className="play-st-titleline">
+          <span className="play-st-name">{s.title}</span>
+          {recommended && <span className="play-st-ai">✦ AI 추천</span>}
+        </span>
         <span className="play-st-artist">
           {s.artist}
           {locked && <span className={`play-st-status ${songStatusView(s.status).tone}`}>{songStatusView(s.status).label}</span>}
@@ -87,9 +92,13 @@ interface Props {
   bestAccuracies?: ReadonlyMap<number, number>;
   /** true면 고를 수 없는 곡(처리 중·실패) */
   isLocked?: (song: SongSummary) => boolean;
+  /** true면 제목 옆에 「✦ AI 추천」 라벨 */
+  isRecommended?: (song: SongSummary) => boolean;
+  /** 곡이 없을 때 본문 가운데 내용 */
+  emptyState?: ReactNode;
 }
 
-export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked }: Props) {
+export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked, isRecommended, emptyState }: Props) {
   const columns = COLUMNS_BY_MODE[mode];
   const bests = mode === 'sheet' ? bestAccuracies : bestScores;
   const [rawPage, setPage] = useState(0);
@@ -146,6 +155,11 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
           </tr>
         </thead>
         <tbody ref={bodyRef} onKeyDown={onKeyDown}>
+          {songs.length === 0 && (
+            <tr className="play-st-empty">
+              <td colSpan={columns.length}>{emptyState}</td>
+            </tr>
+          )}
           {rows.map((song) => {
             const isLock = locked(song);
             const selected = song.id === selectedId;
@@ -168,7 +182,7 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
               >
                 {columns.map((c) => (
                   <td key={c.key} className={c.className}>
-                    {c.render(song, { best: bests?.get(song.id), locked: isLock })}
+                    {c.render(song, { best: bests?.get(song.id), locked: isLock, recommended: isRecommended?.(song) ?? false })}
                   </td>
                 ))}
               </tr>

@@ -93,6 +93,11 @@ export function updateSheetTitle(id: number, title: string, signal?: AbortSignal
   );
 }
 
+/** `PATCH /api/v1/sheets/{id}` — 곡 연결(나중 연결, D16). `songId`가 null이면 연결을 해제한다. 응답은 악보 상세 */
+export function linkSheetToSong(id: number, songId: number | null, signal?: AbortSignal): Promise<SheetDetail> {
+  return call(async () => sheetDetailFromDto(await apiFetch<Dto>(`/api/v1/sheets/${id}`, { method: 'PATCH', body: { songId }, signal })));
+}
+
 /** `DELETE /api/v1/sheets/{id}` — 204 */
 export function deleteSheet(id: number, signal?: AbortSignal): Promise<void> {
   return call(() => apiFetch(`/api/v1/sheets/${id}`, { method: 'DELETE', signal }));

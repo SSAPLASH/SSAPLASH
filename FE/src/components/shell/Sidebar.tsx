@@ -1,6 +1,7 @@
 // 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
 import type { ReactNode } from 'react';
+import { m } from 'motion/react';
 import { NavLink } from 'react-router-dom';
 import { isAdmin } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
@@ -89,6 +90,9 @@ interface MenuItem {
   badge?: boolean;
 }
 
+/** 현재 위치 표시 이동. 200ms ease-out(tokens.css --motion-base·--ease-out과 같은 값) */
+const ACTIVE_MARK_TRANSITION = { duration: 0.2, ease: [0, 0, 0.58, 1] } as const;
+
 export function Sidebar() {
   const stored = useSettings((s) => s.sidebarCollapsed);
   const setStored = useSettings((s) => s.setSidebarCollapsed);
@@ -98,14 +102,21 @@ export function Sidebar() {
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
   const admin = useAuth((s) => isAdmin(s.user));
 
-  const item = (m: MenuItem) => (
-    <NavLink key={m.to} to={m.to} className="side-item" title={collapsed ? m.label : undefined} aria-label={m.label}>
-      {m.icon}
-      {/* 라벨은 항상 그리고 접힘 때 opacity로 숨긴다(폭 전환과 시점을 맞추려고, CSS .side-label) */}
-      <span className="side-label" aria-hidden={collapsed}>
-        {m.label}
-      </span>
-      {m.badge && <span className="side-badge" aria-label="처리 중" />}
+  const item = (mi: MenuItem) => (
+    <NavLink key={mi.to} to={mi.to} className="side-item" title={collapsed ? mi.label : undefined} aria-label={mi.label}>
+      {({ isActive }) => (
+        <>
+          {/* 현재 위치 표시. 활성 항목에만 있고 layoutId로 이전 항목에서 새 항목으로 미끄러진다.
+              LazyMotion 기능이 오기 전에는 일반 span으로 제자리에 그려진다(애니메이션만 없음). 모션 줄이기는 MotionConfig가 처리 */}
+          {isActive && <m.span className="side-active-mark" layoutId="side-active" transition={ACTIVE_MARK_TRANSITION} aria-hidden="true" />}
+          {mi.icon}
+          {/* 라벨은 항상 그리고 접힘 때 opacity로 숨긴다(폭 전환과 시점을 맞추려고, CSS .side-label) */}
+          <span className="side-label" aria-hidden={collapsed}>
+            {mi.label}
+          </span>
+          {mi.badge && <span className="side-badge" aria-label="처리 중" />}
+        </>
+      )}
     </NavLink>
   );
 

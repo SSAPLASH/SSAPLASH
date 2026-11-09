@@ -70,15 +70,23 @@ describe.each<StudioView>(['card', 'list'])('악보 항목 (%s 보기)', (view) 
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['/studio/sheets/10', '/studio/sheets/11']);
   });
 
-  it('[악보 연습]은 비활성이고 설명을 단다', () => {
+  it('비활성 [악보 연습]·설명 문구가 없고, 스위치 꺼짐(onUploadSong 없음)이면 곡 올리기 버튼도 없다', () => {
     renderList(view);
-    const btns = screen.getAllByRole('button', { name: '악보 연습' }) as HTMLButtonElement[];
-    // 곡의 [악보 연습]은 링크라 버튼은 악보 항목 둘뿐이다
-    expect(btns).toHaveLength(2);
-    for (const b of btns) {
-      expect(b.disabled).toBe(true);
-      expect(document.getElementById(b.getAttribute('aria-describedby') as string)?.textContent).toBe('음원이 있어야 할 수 있어요');
-    }
+    // 곡의 [악보 연습]은 링크라 버튼 역할로는 하나도 없다
+    expect(screen.queryAllByRole('button', { name: '악보 연습' })).toHaveLength(0);
+    expect(screen.queryByText('음원이 있어야 할 수 있어요')).toBeNull();
+    expect(screen.queryByRole('button', { name: /곡 올리기/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /리듬 게임/ })).toBeNull();
+  });
+
+  it('onUploadSong이 있으면 악보마다 [곡 올리기] 버튼이 있고 누르면 그 악보를 넘긴다', async () => {
+    const onUploadSong = vi.fn();
+    const user = userEvent.setup();
+    renderList(view, { onUploadSong });
+    const btns = screen.getAllByRole('button', { name: /곡 올리기$/ });
+    expect(btns.map((b) => b.getAttribute('aria-label'))).toEqual(['「합주 악보」 곡 올리기', '「PDF 악보」 곡 올리기']);
+    await user.click(btns[1]);
+    expect(onUploadSong).toHaveBeenCalledWith(expect.objectContaining({ id: 11 }));
   });
 
   it('썸네일이 있으면 이미지, PDF는 자리표시', () => {
@@ -97,12 +105,19 @@ describe.each<StudioView>(['card', 'list'])('악보 항목 (%s 보기)', (view) 
   });
 });
 
-describe('카드 보기의 리듬 게임 ▶', () => {
-  it('악보 항목의 ▶은 비활성이고 같은 설명을 단다', () => {
-    renderList('card');
-    const play = screen.getByRole('button', { name: '「합주 악보」 리듬 게임' }) as HTMLButtonElement;
-    expect(play.disabled).toBe(true);
-    expect(document.getElementById(play.getAttribute('aria-describedby') as string)?.textContent).toBe('음원이 있어야 할 수 있어요');
+describe('카드 보기의 곡 올리기 버튼', () => {
+  it('▶ 자리(song-card-play)에 같은 크기의 업로드 버튼을 두고 title이 「곡 올리기」다', () => {
+    renderList('card', { onUploadSong: () => {} });
+    const btn = screen.getByRole('button', { name: '「합주 악보」 곡 올리기' });
+    expect(btn.className).toContain('song-card-play');
+    expect(btn.className).toContain('song-card-upload');
+    expect(btn.getAttribute('title')).toBe('곡 올리기');
+  });
+
+  it('목록 보기는 [악보 보기] 다음에 [곡 올리기]가 온다', () => {
+    const { container } = renderList('list', { onUploadSong: () => {} });
+    const actions = container.querySelector('.studio-row.sheet .studio-row-actions') as HTMLElement;
+    expect(Array.from(actions.children).map((c) => c.textContent)).toEqual(['악보 보기', '곡 올리기']);
   });
 });
 

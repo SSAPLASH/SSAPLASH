@@ -29,9 +29,25 @@ const StickMonitorPage = MONITOR_ENABLED
   ? lazy(() => import('@/pages/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
   : null;
 
+/** FX 랩(개발 전용, 설계 MODE-002-hit-fx-theme D7). 개발 서버에서만 라우트·청크가 생긴다 */
+const FxLabPage = import.meta.env.DEV
+  ? lazy(() => import('@/pages/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
+  : null;
+
 export default function App() {
   return (
     <Routes>
+      {/* 개발 전용 FX 랩 — 인증·셸 없이 전체 폭으로 연다 */}
+      {FxLabPage && (
+        <Route
+          path="dev/fx"
+          element={
+            <Suspense fallback={null}>
+              <FxLabPage />
+            </Suspense>
+          }
+        />
+      )}
       {/* 로그인 전에도 열리는 화면 — 셸 없이 전체 화면 */}
       <Route element={<PublicLayout />}>
         <Route path="login" element={<LoginPage />} />

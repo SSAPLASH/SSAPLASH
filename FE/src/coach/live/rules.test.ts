@@ -275,16 +275,17 @@ describe('evaluatePraise', () => {
     expect(evaluatePraise(metrics({ stdDelta: 21 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
   });
 
-  it('놓침이 하나라도 있으면 안정 칭찬이 아니다', () => {
-    expect(evaluatePraise(metrics({ missInWindow: 1 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  it('놓침이 하나라도 있으면 안정 칭찬도 계속 칭찬도 없다', () => {
+    expect(evaluatePraise(metrics({ missInWindow: 1 }), th)).toBeNull();
   });
 
   it('유효 타격이 8개 미만이면 안정 칭찬이 아니다', () => {
     expect(evaluatePraise(metrics({ validCount: 7 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
   });
 
-  it('놓침이 2개까지는 칭찬하고 3개부터는 하지 않는다', () => {
-    expect(evaluatePraise(metrics({ missInWindow: 2 }), th)?.tag).toBe('LIVE_GOOD_KEEP');
+  it('놓침이 없으면 칭찬 후보가 있고 1개부터는 없다', () => {
+    expect(evaluatePraise(metrics({ missInWindow: 0 }), th)).not.toBeNull();
+    expect(evaluatePraise(metrics({ missInWindow: 1 }), th)).toBeNull();
     expect(evaluatePraise(metrics({ missInWindow: 3 }), th)).toBeNull();
   });
 

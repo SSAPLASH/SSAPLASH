@@ -345,7 +345,7 @@ p {
   font-size: 14px;
   text-decoration: none;
   white-space: nowrap;
-  overflow: hidden; /* 접힌 동안 숨은 라벨이 항목 밖으로 나가지 않게 */
+  /* overflow는 열어 둔다 — 현재 위치 표시(.side-active-mark)가 이전 항목에서 미끄러져 오는 동안 잘리지 않게. 라벨 넘침은 .side-label이 막는다 */
 }
 .side-item:hover {
   color: var(--text-1);
@@ -354,18 +354,21 @@ p {
   background: var(--surface-3);
   color: var(--text-1);
 }
-.side-item.active::before {
-  content: '';
+.side-active-mark {
   position: absolute;
   left: 0;
   top: 0;
   width: 3px;
   height: 46px;
+  /* 예전 ::before가 항목 둥근 모서리(--radius-control 8px)에 잘리던 모양을 그대로: 가로 3px·세로 8px 타원 모서리 */
+  border-radius: 3px 0 0 3px / var(--radius-control) 0 0 var(--radius-control);
   background: var(--brand);
 }
 /* 라벨: 항상 그리고 opacity로 숨긴다(aria-hidden은 마크업). 펼칠 땐 폭이 먼저 늘고 라벨이 --motion-fast 뒤에 --motion-press 동안 나타나며,
  * 접을 땐 지연 없이 곧바로 사라진다. 시간이 이동 계열 토큰이라 모션 줄이기에서는 즉시 바뀐다 */
 .side-label {
+  min-width: 0;
+  overflow: hidden; /* 접힌 동안 숨은 라벨이 항목 밖으로 나가지 않게(예전 .side-item overflow 대신) */
   transition: opacity var(--motion-press) var(--ease-out) var(--motion-fast);
 }
 .sidebar.collapsed .side-label {
@@ -1332,6 +1335,21 @@ a.btn-ghost.as-button {
   position: relative;
   width: 100%;
   height: 100%;
+}
+/* 판정 이펙트 캔버스: 악보 위에 같은 크기로 겹친다 */
+.sheet-pager .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+/* 타이밍 막대: 악보 영역 안쪽 아래 가운데(보표·커서·박 번호 아래 여백) */
+.sheet-pager-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 /* ---- 리포트 약점 구간 (COACH-003) ---- */
