@@ -31,6 +31,13 @@ export interface JudgementEvent {
   velocity: number | null;
 }
 
+/** 채보 밖 타격. 어느 패드를 언제 쳤는지 알린다(코칭의 다른 패드 놓침 판단용). 판정·점수와 무관하다 */
+export interface StrayHitEvent {
+  pad: PadId;
+  /** 곡 시각(ms). 판정과 같은 기준(오디오 오프셋 반영) */
+  songTimeMs: number;
+}
+
 export interface SessionSnapshot {
   status: SessionStatus;
   songTimeMs: number;
@@ -83,6 +90,7 @@ export class RhythmSession {
   private pausedAt = 0;
   private statusBeforePause: SessionStatus = 'playing';
   private judgementListeners = new Set<(e: JudgementEvent) => void>();
+  private strayListeners = new Set<(e: StrayHitEvent) => void>();
 
   constructor(chart: Chart, opts: RhythmOptions) {
     this.chart = chart;
@@ -111,6 +119,12 @@ export class RhythmSession {
   onJudgement(l: (e: JudgementEvent) => void): () => void {
     this.judgementListeners.add(l);
     return () => this.judgementListeners.delete(l);
+  }
+
+  /** 채보 밖 타격 알림. 알림만 하고 판정·개수는 바꾸지 않는다. 받는 쪽 오류는 세션에 전하지 않는다 */
+  onStray(l: (e: StrayHitEvent) => void): () => void {
+    this.strayListeners.add(l);
+    return () => this.strayListeners.delete(l);
   }
 
   /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at + originMs − countInMs부터 시작한다 */
@@ -215,6 +229,14 @@ export class RhythmSession {
     const m = hitMatch(cands, t, this.opts.windows);
     if (m.pick === null || m.rule === null) {
       this.strayHits += 1;
+      const stray: StrayHitEvent = { pad: hit.pad, songTimeMs: t };
+      for (const l of this.strayListeners) {
+        try {
+          l(stray);
+        } catch {
+          // 알림을 받는 쪽(코칭) 오류로 연주를 막지 않는다
+        }
+      }
       return null;
     }
     const best = this.notes[m.pick];
