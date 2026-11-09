@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { linkSheetToSong, listSheets } from '@/api/sheets';
-import { listSongs, uploadMidi } from '@/api/songs';
+import { listAllSongs, uploadMidi } from '@/api/songs';
 import { SheetError, type SheetSummary } from '@/domain/sheetMusic';
 import type { SongDetail } from '@/domain/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
@@ -16,7 +16,7 @@ import { StudioPage } from './StudioPage';
 
 vi.mock('@/app/features', async (orig) => ({ ...(await orig<typeof import('@/app/features')>()), SHEET_RELINK_ENABLED: true }));
 vi.mock('@/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listSongs: vi.fn(), uploadMidi: vi.fn(), uploadMusicXml: vi.fn() }));
+vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn(), uploadMidi: vi.fn(), uploadMusicXml: vi.fn() }));
 
 const sheet: SheetSummary = {
   id: 10,
@@ -49,7 +49,8 @@ async function pickMidi(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   localStorage.clear();
-  vi.mocked(listSongs).mockReset().mockResolvedValue({ items: [], hasNext: false });
+  // songStore는 전체 페이지를 읽는 listAllSongs를 쓴다(Jira 363). listSongs만 mock하면 실제 요청이 나간다
+  vi.mocked(listAllSongs).mockReset().mockResolvedValue([]);
   vi.mocked(listSheets).mockReset().mockResolvedValue({ items: [sheet], hasNext: false });
   vi.mocked(uploadMidi).mockReset().mockResolvedValue(midiSong);
   vi.mocked(linkSheetToSong).mockReset().mockResolvedValue({ ...sheet, songId: 77, pages: [], expiresAt: 0 });
