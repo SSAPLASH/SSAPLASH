@@ -4,6 +4,7 @@ import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { SYSTEM_PRESET_ID } from '@/domain/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/tuning';
+import { anchorsToLayout, defaultHandAnchors } from '@/domain/kitModel';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {
@@ -448,5 +449,37 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
     expect(SETTINGS_VERSION).toBe(20);
     expect(useSettings.getInitialState().activePresetId).toBe(SYSTEM_PRESET_ID);
     expect(useSettings.getInitialState().presetAnchors).toEqual({});
+  });
+});
+
+describe('movePad (드래그 편집, kit-drag)', () => {
+  it('시스템 프리셋이면 아무것도 바꾸지 않는다', () => {
+    useSettings.setState({ activePresetId: SYSTEM_PRESET_ID, kitLayout: DEFAULT_KIT_LAYOUT, stickAnchors: [null, null], presetAnchors: {} });
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    expect(useSettings.getState().kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+  });
+
+  it('사용자 프리셋이면 배치와 앵커를 옮기고 presetAnchors·calibratedAt은 그대로 둔다. 범위는 0.05~0.95로 자른다', () => {
+    const base = defaultHandAnchors();
+    const records = { p1: { anchors: base, calibratedAt: 9 } };
+    useSettings.setState({ activePresetId: 'p1', kitLayout: anchorsToLayout(base, DEFAULT_KIT_LAYOUT), stickAnchors: base, calibratedAt: 9, presetAnchors: records, tuning: DEFAULT_SENSOR_TUNING });
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    let s = useSettings.getState();
+    expect(s.kitLayout.SNARE).toMatchObject({ x: 0.7, y: 0.3 });
+    expect(anchorsToLayout(s.stickAnchors, DEFAULT_KIT_LAYOUT).SNARE.x).toBeCloseTo(0.7, 3);
+    expect(anchorsToLayout(s.stickAnchors, DEFAULT_KIT_LAYOUT).SNARE.y).toBeCloseTo(0.3, 3);
+    expect(s.presetAnchors).toBe(records);
+    expect(s.calibratedAt).toBe(9);
+    useSettings.getState().movePad('SNARE', 2, -1);
+    s = useSettings.getState();
+    expect(s.kitLayout.SNARE).toMatchObject({ x: 0.95, y: 0.05 });
+  });
+
+  it('앵커가 없으면 배치만 옮긴다', () => {
+    useSettings.setState({ activePresetId: 'p1', kitLayout: DEFAULT_KIT_LAYOUT, stickAnchors: [null, null], presetAnchors: {} });
+    useSettings.getState().movePad('KICK', 0.4, 0.8);
+    expect(useSettings.getState().kitLayout.KICK).toMatchObject({ x: 0.4, y: 0.8 });
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
   });
 });

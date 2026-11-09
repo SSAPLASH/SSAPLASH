@@ -6,6 +6,7 @@ import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { PresetError, SYSTEM_PRESET_ID, type PresetSource } from '@/domain/preset';
 import type { HandAnchors } from '@/domain/calibration';
+import { defaultHandAnchors } from '@/domain/kitModel';
 
 const ANCHOR = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };
 const ANCHORS: HandAnchors = [{ SNARE: ANCHOR }, null];
@@ -83,6 +84,48 @@ describe('presetStore', () => {
     expect(dirty()).toBe(true);
     expect(await usePresets.getState().saveChanges()).toBe(true);
     expect(usePresets.getState().items[0].layout).toEqual(WIDE_LAYOUT);
+    expect(dirty()).toBe(false);
+  });
+
+  it('saveChanges: 드래그로 옮긴 앵커를 저장 뒤 presetAnchors에 기록하고, apply로 다시 읽어도 유지된다(kit-drag D5)', async () => {
+    const base = defaultHandAnchors();
+    useSettings.getState().setStickAnchors(base, 5);
+    await usePresets.getState().saveAs('a');
+    const a = byName('a');
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    // 끄는 동안은 기록(presetAnchors)을 건드리지 않는다
+    expect(useSettings.getState().presetAnchors[a.id]?.anchors).toEqual(base);
+    expect(await usePresets.getState().saveChanges()).toBe(true);
+    const moved = useSettings.getState().stickAnchors;
+    expect(moved).not.toEqual(base);
+    expect(useSettings.getState().presetAnchors[a.id]).toEqual({ anchors: moved, calibratedAt: 5 });
+    usePresets.getState().apply(a.id);
+    expect(useSettings.getState().stickAnchors).toEqual(moved);
+    expect(useSettings.getState().kitLayout.SNARE).toMatchObject({ x: 0.7, y: 0.3 });
+  });
+
+  it('saveChanges: update가 실패하면 앵커 기록을 바꾸지 않는다', async () => {
+    const base = defaultHandAnchors();
+    useSettings.getState().setStickAnchors(base, 5);
+    await usePresets.getState().saveAs('a');
+    const a = byName('a');
+    const src = usePresets.getState().source;
+    usePresets.getState().setSource({ ...src, list: () => src.list(), update: () => Promise.reject(new PresetError('NETWORK')) } as PresetSource);
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    expect(await usePresets.getState().saveChanges()).toBe(false);
+    expect(useSettings.getState().presetAnchors[a.id]?.anchors).toEqual(base);
+  });
+
+  it('movePad 후 저장 안 하고 apply하면 이동 전 배치·앵커로 복원된다', async () => {
+    const base = defaultHandAnchors();
+    useSettings.getState().setStickAnchors(base, 5);
+    await usePresets.getState().saveAs('a');
+    const a = byName('a');
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    expect(dirty()).toBe(true);
+    usePresets.getState().apply(a.id);
+    expect(useSettings.getState().stickAnchors).toEqual(base);
+    expect(useSettings.getState().kitLayout).toEqual(a.layout);
     expect(dirty()).toBe(false);
   });
 
