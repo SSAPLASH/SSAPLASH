@@ -27,6 +27,28 @@ beforeEach(() => {
 const dirty = () => selectDirty(useSettings.getState(), usePresets.getState());
 const byName = (name: string) => usePresets.getState().items.find((p) => p.name === name)!;
 
+describe('selectDirty 시스템 기본(kit-drag D8)', () => {
+  it('끌지 않은 시스템 기본은 false', () => {
+    expect(dirty()).toBe(false);
+  });
+  it('시스템 기본에서 패드를 끌면 true, 기본 배치로 되돌리면 false. 앵커는 null 그대로', () => {
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    expect(dirty()).toBe(true);
+    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+    usePresets.getState().apply(SYSTEM_PRESET_ID);
+    expect(dirty()).toBe(false);
+  });
+  it('끈 시스템 기본을 saveAs하면 옮긴 배치로 새 프리셋이 생기고 앵커 기록은 없다', async () => {
+    useSettings.getState().movePad('SNARE', 0.7, 0.3);
+    expect(await usePresets.getState().saveAs('새 배치')).toBe(true);
+    const saved = usePresets.getState().items[0];
+    expect(saved.layout.SNARE).toMatchObject({ x: 0.7, y: 0.3 });
+    expect(useSettings.getState().activePresetId).toBe(saved.id);
+    expect(useSettings.getState().presetAnchors[saved.id]).toBeUndefined();
+    expect(dirty()).toBe(false);
+  });
+});
+
 describe('presetStore', () => {
   it('saveAs: 만들고 적용하며 첫 프리셋은 기본', async () => {
     useSettings.setState({ soundSetId: 'synth' });
