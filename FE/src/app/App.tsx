@@ -5,12 +5,12 @@ import { AppShell } from '@/components/AppShell';
 import { RequireAdmin } from '@/components/RequireAdmin';
 import { RequireAuth } from '@/components/RequireAuth';
 import { FreePlayPage } from '@/pages/FreePlayPage';
-import { LoginPage } from '@/pages/LoginPage';
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
 import { loadRoute } from './routeModules';
 
-// 지연 로드 규칙: 새 화면은 routeModules 표에 추가하고 여기서 lazy로 연결한다. 첫 진입 화면(자유 연습·로그인·콜백)만 정적 import.
+// 지연 로드 규칙: 새 화면은 routeModules 표에 추가하고 여기서 lazy로 연결한다. 첫 진입 화면(자유 연습·콜백)만 정적 import.
 // Suspense 경계는 AppShell·PublicLayout에 있다(fallback null)
 const SetupPage = lazy(() => loadRoute('setup'));
 const PlayPage = lazy(() => loadRoute('play'));
@@ -21,7 +21,8 @@ const HistoryPage = lazy(() => loadRoute('history'));
 const ResultPage = lazy(() => loadRoute('result'));
 const ReportPage = lazy(() => loadRoute('report'));
 const AdminSongsPage = lazy(() => loadRoute('adminSongs'));
-const SignupPage = lazy(() => loadRoute('signup'));
+/** 랜딩(`/`·`/login`·`/signup`·`/welcome`). 로그인 사용자는 쓰지 않으므로 메인 청크에 넣지 않는다 */
+const LandingPage = lazy(() => loadRoute('landing'));
 /** 악보 뷰어. pdf.js가 이 라우트 청크에만 들어가도록 지연 로드한다(설계 CHART-001 D12) */
 const SheetViewerPage = lazy(() => loadRoute('sheetViewer'));
 
@@ -51,17 +52,27 @@ export default function App() {
           }
         />
       )}
-      {/* 로그인 전에도 열리는 화면 — 셸 없이 전체 화면 */}
+      {/* 랜딩 + 로그인·가입 동의 팝업 — 셸·PublicLayout 없이 전체 화면. 주소로 팝업을 정한다(설계 UX-353) */}
+      {['/', '/login', '/signup', '/welcome'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RouteErrorBoundary resetKey={path}>
+              <Suspense fallback={null}>
+                <LandingPage />
+              </Suspense>
+            </RouteErrorBoundary>
+          }
+        />
+      ))}
+      {/* 로그인 전에도 열리는 화면 */}
       <Route element={<PublicLayout />}>
-        <Route path="login" element={<LoginPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
-        {/* 가입 동의 — 페이지가 서버 가입 상태를 스스로 확인한다(설계 COACH-003-signup-consent v0.4) */}
-        <Route path="signup" element={<SignupPage />} />
       </Route>
       <Route element={<AppShell authRequired={AUTH_REQUIRED} />}>
         {/* 나머지는 로그인 필요 (VITE_AUTH_REQUIRED=false면 통과) */}
         <Route element={<RequireAuth required={AUTH_REQUIRED} />}>
-          <Route index element={<Navigate to="/free" replace />} />
           <Route path="setup" element={<SetupPage />} />
           <Route path="calibration" element={<Navigate to="/setup" replace />} />
           <Route path="play" element={<PlayPage />} />

@@ -11,7 +11,7 @@ const KEYS: RouteKey[] = [
   'result',
   'report',
   'adminSongs',
-  'signup',
+  'landing',
   'sheetViewer',
 ];
 
