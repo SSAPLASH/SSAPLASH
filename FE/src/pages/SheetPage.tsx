@@ -33,6 +33,7 @@ import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/components/play/TimingBar';
+import { strayMissSource } from '@/components/play/strayMissSource';
 import type { HitMark } from '@/components/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
@@ -168,6 +169,8 @@ function SheetPageBody() {
     [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs],
   );
   const activeSession = playSession ?? session;
+  // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
+  const missSource = useMemo(() => (activeSession ? strayMissSource(activeSession) : undefined), [activeSession]);
   const chart = activeSession?.chart ?? null;
   const stage: Stage = playSession
     ? 'play'
@@ -889,7 +892,7 @@ function SheetPageBody() {
             fxSource={sheetFx.source}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
+                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} missSource={missSource} />
               ) : undefined
             }
           />
