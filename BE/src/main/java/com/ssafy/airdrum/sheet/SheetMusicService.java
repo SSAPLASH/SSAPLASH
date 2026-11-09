@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
@@ -150,10 +151,32 @@ class SheetMusicService {
 				r.songId());
 	}
 
-	SheetDetail rename(long user, long id, String title) {
+	/** 333: PATCH의 songId 변경. {@code songId}가 null이면 "해제", 숫자면 "연결·옮김". 본문에 필드가 없으면 이 값 자체가 null이다. */
+	record SongChange(Long songId) {}
+
+	/**
+	 * 제목·곡 연결 수정(333번). {@code title}이 null이면 제목은 그대로, {@code songChange}가 null이면 연결은 그대로다.
+	 * 연결 판정은 등록과 같다(본인 소유·삭제 안 됨·공용 아님 → 404, 그 곡에 살아 있는 다른 악보 → 409). 이미 다른 곡에 연결된 악보는 옮기고,
+	 * 지금 연결된 곡과 같은 값이면 아무것도 바꾸지 않는다. {@code songId}가 null이면 해제한다.
+	 */
+	SheetDetail update(long user, long id, String title, SongChange songChange) {
 		tx.executeWithoutResult(s -> {
-			if (!sheets.lockOwn(user, id) || sheets.find(user, id).isEmpty()) throw new BusinessException(SheetError.SHEET_NOT_FOUND);
-			sheets.rename(id, title);
+			if (!sheets.lockOwn(user, id)) throw new BusinessException(SheetError.SHEET_NOT_FOUND);
+			var current = sheets.find(user, id).orElseThrow(() -> new BusinessException(SheetError.SHEET_NOT_FOUND));
+			if (title != null) sheets.rename(id, title);
+			if (songChange != null && !Objects.equals(current.songId(), songChange.songId())) {
+				Long song = songChange.songId();
+				if (song != null) {
+					if (!sheets.ownSong(user, song)) throw new BusinessException(ChartErrorCode.SONG_NOT_FOUND);
+					if (sheets.linked(song)) throw new BusinessException(SheetError.SHEET_ALREADY_LINKED);
+				}
+				try {
+					sheets.link(id, song);
+				} catch (DuplicateKeyException ex) {
+					// 같은 곡에 동시에 연결한 경우 부분 유일 인덱스가 막는다
+					throw new BusinessException(SheetError.SHEET_ALREADY_LINKED);
+				}
+			}
 		});
 		return detail(user, id);
 	}
