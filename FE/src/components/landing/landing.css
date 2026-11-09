@@ -1,6 +1,7 @@
 /* 랜딩 페이지 전용 스타일 (시안 ssaplash-main.html 이식).
    모든 클래스는 lp- 접두사, 모든 규칙은 루트 .lp 아래로 한정한다. 앱 전역(button·h1·a 등) 규칙은 .lp 안에서 되돌린다.
-   정적 버전: 스크롤 연동 연출(sticky 장면·와이프·reveal)은 넣지 않고 최종 모습을 일반 흐름으로 이어 붙인다. */
+   장면(.lp-scene)은 높이를 길게 잡고 안의 .lp-sticky가 화면에 붙어 스크롤 진행도로 연출한다.
+   모션 줄이기에서는 장면에 .lp-static이 붙어 연출 없이 최종 모습을 일반 흐름으로 이어 붙인다. */
 
 .lp {
   --bg: #000;
@@ -126,12 +127,50 @@
 /* ───────── 장면 공통 ───────── */
 .lp .lp-scene {
   position: relative;
+}
+.lp .lp-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+/* 연출 장면 높이(시안 값). 스크롤 거리 = 높이 - 화면 높이 */
+.lp .lp-hero {
+  height: 220vh;
+}
+.lp .lp-statement {
+  height: 280vh;
+}
+.lp .lp-stick {
+  height: 420vh;
+}
+.lp .lp-ai {
+  height: 320vh;
+}
+.lp .lp-modes-scene {
+  height: 300vh;
+}
+/* 모션 줄이기: 장면을 일반 흐름으로 풀어 최종 상태로 보인다 */
+.lp .lp-scene.lp-static {
+  height: auto;
   min-height: 100vh;
   min-height: 100svh;
 }
+.lp .lp-scene.lp-static .lp-sticky {
+  position: relative;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: visible;
+}
 
 /* ───────── 1. 히어로 ───────── */
-.lp .lp-hero {
+/* 오버플로 숨김은 sticky 안쪽(.lp-sticky)에서 한다 — 조상에 두면 sticky가 풀린다 */
+.lp .lp-hero.lp-static {
+  overflow: hidden;
+}
+.lp .lp-hero.lp-static .lp-sticky {
   overflow: hidden;
 }
 .lp .lp-photo {
@@ -400,17 +439,45 @@
   }
 }
 
-/* ───────── 장면 본문 공통 (정적 버전: 한 화면 이상, 가운데 정렬) ───────── */
+/* ───────── 장면 본문 공통: 화면 가운데 정렬(모션 줄이기는 위아래 여백을 더 둔다) ───────── */
 .lp .lp-frame {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100svh;
-  padding: 14vh 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 0 22px;
   text-align: center;
+}
+.lp .lp-scene.lp-static .lp-frame {
+  padding: 14vh 22px;
+}
+
+/* 1 히어로 와이프: 대각선으로 올라오며 히어로를 덮는 면 */
+.lp .lp-wipe {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--panel);
+  clip-path: polygon(0 120%, 100% 120%, 100% 120%, 0 120%);
+  will-change: clip-path;
+}
+.lp .lp-bars {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.lp .lp-bars div {
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 9vh 18px;
+}
+.lp .lp-bars span {
+  font-size: clamp(60px, 9vw, 130px);
+  font-weight: 200;
+  color: rgba(255, 255, 255, 0.06);
+  letter-spacing: -0.04em;
 }
 
 /* ───────── 2. 한 문장 소개: 점 글자 위에 채워진 글자 ───────── */
@@ -460,13 +527,15 @@
   background: var(--bg);
 }
 .lp .lp-stick-grid {
-  min-height: 100vh;
-  min-height: 100svh;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 40px;
-  padding: 14vh max(22px, calc((100vw - 1100px) / 2));
+  padding: 0 max(22px, calc((100vw - 1100px) / 2));
+}
+.lp .lp-scene.lp-static .lp-stick-grid {
+  padding-top: 14vh;
+  padding-bottom: 14vh;
 }
 .lp .lp-kicker {
   font-size: clamp(17px, 1.6vw, 22px);
@@ -486,7 +555,34 @@
   gap: 26px;
 }
 .lp .lp-step {
+  opacity: 0.28;
+  transform: translateX(0);
+  transition:
+    opacity 0.5s var(--ease),
+    transform 0.5s var(--ease);
+}
+.lp .lp-step.lp-on {
+  opacity: 1;
   transform: translateX(6px);
+}
+/* 단계 진행 막대 */
+.lp .lp-progress {
+  display: flex;
+  gap: 6px;
+  margin-top: 40px;
+}
+.lp .lp-progress i {
+  width: 26px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  transition:
+    background 0.4s,
+    width 0.4s;
+}
+.lp .lp-progress i.lp-on {
+  background: var(--text);
+  width: 44px;
 }
 .lp .lp-step h3 {
   font-size: clamp(20px, 2vw, 26px);
@@ -541,7 +637,8 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.07);
 }
-.lp .lp-pipe-tabs button {
+.lp .lp-pipe-tabs button,
+.lp .lp-pipe-tabs span {
   padding: 8px 18px;
   border-radius: 999px;
   font-size: 13.5px;
@@ -551,7 +648,8 @@
     background 0.4s var(--ease),
     color 0.4s;
 }
-.lp .lp-pipe-tabs button.lp-on {
+.lp .lp-pipe-tabs button.lp-on,
+.lp .lp-pipe-tabs span.lp-on {
   background: var(--text);
   color: #000;
 }
@@ -583,13 +681,12 @@
   background: var(--bg);
 }
 .lp .lp-modes-frame {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100svh;
-  padding: 24vh 0 22vh;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.lp .lp-scene.lp-static .lp-modes-frame {
+  padding: 24vh 0 22vh;
 }
 .lp .lp-bg-word {
   position: absolute;
@@ -689,16 +786,7 @@
     box-shadow 0.4s var(--ease),
     border-color 0.4s var(--ease);
 }
-/* 최종 위치·기울기(시안 finalY/finalR) */
-.lp .lp-card:nth-child(1) {
-  transform: translateY(-24px) rotate(-3deg);
-}
-.lp .lp-card:nth-child(2) {
-  transform: translateY(30px) rotate(1.5deg);
-}
-.lp .lp-card:nth-child(3) {
-  transform: translateY(-40px) rotate(3.5deg);
-}
+/* 위치·기울기는 ModesScene이 인라인으로 준다(연출: 스크롤 값, 모션 줄이기: MODE_CARD_FINAL) */
 /* 마우스를 올린 카드: 테두리에 은은한 푸른 네온 번짐 (PLAY YOUR WAY 네온과 같은 색) */
 .lp .lp-card:hover,
 .lp .lp-card:focus-visible {
@@ -909,7 +997,16 @@
     grid-template-columns: 1fr;
     align-content: center;
     gap: 12px;
+    padding: 64px 22px 0;
+  }
+  .lp .lp-scene.lp-static .lp-stick-grid {
     padding: 96px 22px 64px;
+  }
+  .lp .lp-step:not(.lp-on) p {
+    display: none;
+  }
+  .lp .lp-progress {
+    display: none;
   }
   .lp .lp-stage {
     width: min(300px, 70vw);
