@@ -1,5 +1,5 @@
 // 곡 선택 표 (Figma SongRow 126:3485 default·hover·selected). 열 · 커버 · 제목/아티스트 · BPM · 길이 · 곡 난이도 · 최고 점수(sheet 모드는 최고 정확도).
-// 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡. 곡 로딩은 호출자가 한다(props만 받는다).
+// 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡, 쪽 번호는 ui/Pagination(10개 묶음). 곡 로딩은 호출자가 한다(props만 받는다).
 // 추천 곡(isRecommended)은 제목 옆에 「✦ AI 추천」 라벨을 붙인다 — 제목만 말줄임하고 라벨은 줄이지 않는다(Figma SongRow `AI 추천 라벨`, 설계 COACH-004-song-picker-ai-tab 3-3).
 // 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -7,6 +7,7 @@ import { songLevelLabel, songStatusView, type SongSummary } from '@/domain/songC
 import { formatDuration } from '@/components/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
+import { Pagination } from '@/components/ui/Pagination';
 import '@/components/ui/table.css';
 import './song-table.css';
 
@@ -192,25 +193,7 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
       </table>
       <div className="play-st-foot">
         <span className="play-st-total">총 {songs.length}곡</span>
-        <nav className="play-st-pager" aria-label="곡 목록 쪽">
-          <button type="button" className="play-st-pg" disabled={page === 0} onClick={() => setPage(page - 1)}>
-            이전
-          </button>
-          {Array.from({ length: pageCount }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              className={`play-st-pg${i === page ? ' current' : ''}`}
-              aria-current={i === page ? 'page' : undefined}
-              onClick={() => setPage(i)}
-            >
-              {i + 1}
-            </button>
-          ))}
-          <button type="button" className="play-st-pg" disabled={page >= pageCount - 1} onClick={() => setPage(page + 1)}>
-            다음
-          </button>
-        </nav>
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} label="곡 목록 쪽" />
       </div>
     </div>
   );
