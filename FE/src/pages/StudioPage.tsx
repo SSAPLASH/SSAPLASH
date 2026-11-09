@@ -415,7 +415,6 @@ export function StudioPage() {
       tab={tab}
       onTab={setTab}
       locked={locked}
-      emphasis={false}
       onCancel={closeDialog}
       audioBusyTitle={audioBusyTitle}
       audio={{
