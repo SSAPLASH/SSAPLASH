@@ -24,6 +24,7 @@ import { smoothBattery } from '@/domain/stickStatus';
 import { devicesReady, pedalRequired } from '@/domain/pedalStatus';
 import type { CalibrationProfile, PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';
+import { hitSoundActive, setCalibrationSound } from './hitSound';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -39,11 +40,8 @@ let lastSurface: HTMLElement | null = null;
 /** 손별 마지막 설정 재전송 시각(비트 5 쿨다운, D5). 센서가 바뀌면 비운다 */
 const lastResendAt: [number | null, number | null] = [null, null];
 
-/** "타격이 오면 소리를 낼지"를 모드 화면이 결정한다. 리듬 게임은 자체 처리 */
-let soundOnHit = true;
-export function setSoundOnHit(v: boolean): void {
-  soundOnHit = v;
-}
+/** 타격음 스위치는 hitSound 모듈에 있다. 화면들이 이 경로로 import하므로 그대로 다시 내보낸다 */
+export { setSoundOnHit } from './hitSound';
 
 /** 활성 센서의 디스크립터에 현재 설정값(기본값 병합)을 적용한다 */
 function applySensorOptions(): void {
@@ -214,7 +212,7 @@ export function bootstrapInput(): void {
       return { padTable: arr };
     }),
   );
-  calibrationSession.bind({ setSoundOnHit, pushTable: (stickId, force) => pushTable(stickId, force) });
+  calibrationSession.bind({ setSoundOnHit: setCalibrationSound, pushTable: (stickId, force) => pushTable(stickId, force) });
   // 방위각 드리프트 보정 상태도 같은 방식으로 스틱별로 옮긴다
   yawDriftMonitor.onStatus((stickId, st) =>
     useLive.setState((s) => {
@@ -358,14 +356,14 @@ export function bootstrapInput(): void {
   inputManager.onHit((hit: ResolvedHit) => {
     // 보정·재정렬 중인 손의 타격은 세션이 가로챈다(소리는 목표 패드로, 판정·텔레메트리 없음)
     if (calibrationSession.intercept(hit)) return;
-    if (soundOnHit && hit.pad) {
+    if (hitSoundActive() && hit.pad) {
       // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
       if (tAudio !== null) hit.tAudio = tAudio;
       // 타격 진동은 스틱이 패드를 판정한 순간 직접 울린다(PLAY-006). 브라우저 명령은 늦게 도착해 진동이 겹치므로 보내지 않는다
     }
     useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
-    if (soundOnHit) pushTelemetry(hit);
+    if (hitSoundActive()) pushTelemetry(hit);
     // 모니터 진단: 구독자가 없으면 즉시 반환한다. 연주 화면은 tAudio를 이 뒤에 채우므로 hit 참조를 싣는다
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
