@@ -1,8 +1,6 @@
 /* Navigation / GlassDock 148:2288 — 상단 글래스 Dock. mode(shell|play) × collapsed 4변이 */
 .glass-dock {
   position: relative;
-  /* 접힘 ↔ 펼침 때 위쪽 가운데를 기준으로 커진다(GlassDock useAnimate) */
-  transform-origin: top center;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,10 +20,9 @@
   color: var(--text-1);
   white-space: nowrap;
 }
+/* 접혀도 높이·아이콘 크기는 그대로다(설계 QA-page-header-dock-fold). 좌우 여백만 아이콘 줄에 맞게 줄인다 */
 .glass-dock.collapsed {
-  height: 36px;
-  padding: 0;
-  border-radius: 18px;
+  padding: 0 var(--space-s);
 }
 .dock-inner {
   display: flex;
@@ -40,14 +37,37 @@
   height: 28px;
   background: var(--line);
 }
-.dock-divider.short {
-  height: 14px;
-}
 .ui-icon-btn.sound-toggle:not(.on) {
   color: var(--text-3);
 }
-.ui-icon-btn.dock-collapse {
-  width: 24px;
+/* 접힘·펼침 때 폭 0 ↔ 제 폭으로 미끄러지는 묶음(GlassDock Slide). 넘치는 부분은 잘라 왼쪽으로 사라져 보이게 한다 */
+.dock-slide {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-dock-gap);
+  height: 100%;
+  overflow: hidden;
+}
+/* 접힘 메트로놈 아이콘 스위치: 켜지면 브랜드 색 */
+.ui-icon-btn.dock-metro-mini {
+  color: var(--text-2);
+}
+.ui-icon-btn.dock-metro-mini.on {
+  color: var(--brand-text);
+}
+/* 접힘 녹음 상태(표시만): 꺼짐은 흐린 원, 녹음 중은 빨간 원 */
+.dock-rec-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-3);
+}
+.dock-rec-status.on {
+  color: var(--miss);
 }
 .dock-metro-chip {
   flex: none;
@@ -126,54 +146,4 @@
 .dock-switch.on .dock-switch-knob {
   background: var(--brand-on);
   transform: translateX(12px);
-}
-/* 접힘 알약: ♩ BPM · 점 · (‖) · ⌄ */
-.dock-pill {
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  height: 100%;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 18px;
-  background: transparent;
-  color: var(--text-1);
-  cursor: pointer;
-}
-.dock-pill:active:not(:disabled) {
-  transform: none;
-}
-.dock-pill:hover {
-  background: var(--surface-3);
-}
-.dock-pill-metro {
-  display: flex;
-  color: var(--text-2);
-}
-.dock-pill-metro.on {
-  color: var(--brand-text);
-}
-.dock-pill-bpm {
-  font-family: var(--font-num);
-  font-size: 14px;
-  font-weight: 500;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-.dock-pill-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-3);
-}
-.dock-pill-dot.on {
-  background: var(--brand);
-}
-/* 접힘 상태 녹음 중 표시(설계 REC-001 6-2) */
-.dock-pill-rec {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--miss);
 }
