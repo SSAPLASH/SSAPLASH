@@ -51,6 +51,10 @@
   gap: var(--space-m);
   min-height: 44px;
 }
+/* 정렬 안내가 없을 때(빈 라이브러리)도 보기 전환은 오른쪽에 */
+.studio-toolbar > :last-child {
+  margin-left: auto;
+}
 .studio-sortnote {
   margin: 0;
   color: var(--text-3);
@@ -475,6 +479,43 @@
 }
 .studio-error-btn {
   width: 160px;
+}
+
+/* ---- 빈 안내 (설계 QA-studio-empty-state): 곡·악보가 없을 때 카드·목록 자리 ---- */
+.studio-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  box-sizing: border-box;
+  padding: var(--space-l) var(--space-m);
+  border-radius: var(--radius-panel);
+  text-align: center;
+}
+/* 카드 보기: 그리드 폭 점선 상자, 카드 한 장 정도 높이 */
+.studio-empty.card {
+  min-height: 240px;
+  border: 1.5px dashed var(--line-strong);
+}
+/* 목록 보기: 목록 틀(.studio-list)과 같은 테두리 안 한 칸 */
+.studio-empty.list {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+.studio-empty-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.studio-empty-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 /* ---- 첫 방문 4단계 (210:3273) ---- */
