@@ -77,6 +77,11 @@ class SheetMusicRepository {
 		db.update("UPDATE sheet_music SET title=?,updated_at=clock_timestamp() WHERE id=?", title, sheet);
 	}
 
+	/** 333: 곡 연결을 바꾼다. {@code song}이 null이면 해제. 곡당 하나는 부분 유일 인덱스가 보장한다(경합은 {@code DuplicateKeyException}). */
+	void link(long sheet, Long song) {
+		db.update("UPDATE sheet_music SET song_id=?,updated_at=clock_timestamp() WHERE id=?", song, sheet);
+	}
+
 	/** 임시 정리 작업이 아직 실행 전이면 잠그고 true. 이미 정리가 시작됐으면 연결하지 않는다. */
 	boolean temporaryAlive(String key) {
 		return !db.queryForList("SELECT id FROM file_cleanup_tasks WHERE object_key=? AND file_role='SHEET_MUSIC' AND status='PENDING' AND next_attempt_at>clock_timestamp() FOR UPDATE",
