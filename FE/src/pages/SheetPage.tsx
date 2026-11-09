@@ -231,7 +231,7 @@ function SheetPageBody() {
     setCountValue(null);
   }, []);
 
-  // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
+  // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때도 끈 채로 둔다(기본값, QA 352)
   useEffect(() => {
     setSoundOnHit(false);
     const warnings = openWarnings.current;
@@ -239,7 +239,7 @@ function SheetPageBody() {
       diagSessionEnd('left');
       pedalCoverage.current = null;
       warnings.clear();
-      setSoundOnHit(true);
+      setSoundOnHit(false);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
       metronome.unlock();
