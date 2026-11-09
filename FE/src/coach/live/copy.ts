@@ -3,7 +3,10 @@
 // GuideSlot 컴포넌트를 가져오지 않는다. 제목은 "무엇을 하라"는 구령으로 쓰고(지적 8자, 칭찬과 세팅 안내 13자 안쪽),
 // 이유·방법은 보조(16자 안쪽)에 둔다. 말투 원칙: 행동 먼저, "~해요" 존댓말, 점수·정확도·단정("틀렸어요")·영어 금지.
 // 같은 태그가 다시 뜨면 repeat 순서대로 제목을 돌려 쓴다(난수를 쓰지 않아 재생 결과가 같다).
-import { coachPadName, padMissHint } from './padName';
+// 문구는 상태 알림·격려보다 "몸의 어디로 무엇을 할지"를 말한다(예: "킥·스네어만 쳐요", "빠른 곳은 손목만 써요").
+// 지시 어휘는 QA 전 가정이다(설계 U6).
+import { STICK_PADS } from '@/domain/pads';
+import { coachPadName, directionParticle, padMissHint, padPosition, topicParticle } from './padName';
 import type { CoachMessage } from './LiveCoach';
 import type { CoachTarget } from './rules';
 
@@ -60,15 +63,24 @@ function recoveredSub(from: CoachMessage['recoveredFrom']): string {
 function causeSub(cause: CoachMessage['cause']): string | null {
   if (!cause) return null;
   switch (cause.cause) {
-    case 'WRONG_PAD':
-      // 예: "탐2 말고 탐1". 가장 긴 패드 이름 조합도 16자 안이다
-      return cause.pad && cause.intoPad ? `${coachPadName(cause.intoPad)} 말고 ${coachPadName(cause.pad)}` : null;
-    case 'TRANSITION':
-      return cause.fromPad ? `${coachPadName(cause.fromPad)}에서 미리 옮겨요` : null;
+    case 'WRONG_PAD': {
+      if (!cause.pad || !cause.intoPad) return null;
+      // 위치를 말할 수 있는 패드는 위치로(예: "탐1은 왼쪽 탐이에요"), 아니면 "탐2 말고 탐1"
+      const name = coachPadName(cause.pad);
+      const position = padPosition(cause.pad);
+      return position ? `${name}${topicParticle(name)} ${position}이에요` : `${coachPadName(cause.intoPad)} 말고 ${name}`;
+    }
+    case 'TRANSITION': {
+      // 손을 옮기는 지시라 도착이 페달(킥 등)이면 말하지 않는다. 출발은 원인 계산에서 이미 손 패드만이다
+      if (!cause.fromPad || !cause.pad || !STICK_PADS.includes(cause.pad)) return null;
+      // 예: "스네어 치고 바로 탐1로". 손 패드끼리는 가장 긴 조합도 16자 안이다
+      const to = coachPadName(cause.pad);
+      return `${coachPadName(cause.fromPad)} 치고 바로 ${to}${directionParticle(to)}`;
+    }
     case 'DENSE':
-      return '빠른 곳은 힘 빼고 쳐요';
+      return '빠른 곳은 손목만 써요';
     case 'DRIFT_LATE':
-      return '늦어지기 전에 당겨요';
+      return '킥에 맞춰 당겨 쳐요';
     default:
       return null;
   }
@@ -86,7 +98,8 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
   const pad = target?.kind === 'pad' ? target.pad : undefined;
   const padLabel = pad ? coachPadName(pad) : undefined;
   const handLabel = target?.kind === 'hand' ? HAND_LABEL[target.hand] : undefined;
-  const turn = (titles: readonly string[]): string => titles[repeat % titles.length];
+  const otherHandLabel = target?.kind === 'hand' ? HAND_LABEL[1 - target.hand] : undefined;
+  const turn =(titles: readonly string[]): string => titles[repeat % titles.length];
 
   switch (tag) {
     case 'LIVE_SETUP_OFFSET':
@@ -98,19 +111,25 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
         ? withCause({ title: turn([`${padLabel} 보세요`, `${padLabel} 챙겨요`]), sub: padMissHint(pad, context.keyboard === true), mode: 'coach-warn', target }, message)
         : null;
     case 'LIVE_MISS_STREAK':
-      return withCause({ title: turn(['다음 마디부터', '숨 고르고 다시']), sub: '놓친 건 잊고 다음 노트', mode: 'coach-warn', target: null }, message);
+      // 놓쳐서 흐름을 잃으면 박의 뼈대(킥·스네어)만 치며 다시 잡는다
+      return withCause(
+        { title: turn(['킥·스네어만!', '발로 박을 세요']), sub: turn(['박이 잡히면 다시 다 쳐요', '킥 소리에 맞춰 들어가요']), mode: 'coach-warn', target: null },
+        message,
+      );
     case 'LIVE_LATE':
-      return { title: turn(['조금 일찍!', '미리 준비해요', '한발 앞서요']), sub: '스틱을 미리 올려 둬요', mode: 'coach-info', target: null };
+      return { title: turn(['스틱 미리 들기', '미리 들어 둬요', '노트 오기 전에']), sub: '노트가 닿기 전에 들어요', mode: 'coach-info', target: null };
     case 'LIVE_EARLY':
-      return { title: turn(['기다렸다 쳐요', '서두르지 마요', '한 템포 쉬고']), sub: '판정선에 닿을 때 쳐요', mode: 'coach-info', target: null };
+      return { title: turn(['닿을 때 쳐요', '기다렸다 쳐요', '끝까지 봐요']), sub: '노트를 끝까지 보고 쳐요', mode: 'coach-info', target: null };
     case 'LIVE_PAD_LATE':
-      return padLabel ? { title: turn([`${padLabel} 미리!`, `${padLabel} 준비!`]), sub: '치기 전에 손을 옮겨 둬요', mode: 'coach-info', target } : null;
+      return padLabel ? { title: turn([`${padLabel} 먼저`, `${padLabel} 미리!`]), sub: '앞 노트 치고 바로 옮겨요', mode: 'coach-info', target } : null;
     case 'LIVE_PAD_EARLY':
       return padLabel ? { title: turn([`${padLabel} 차분히`, `${padLabel} 천천히`]), sub: `${padLabel}만 서두르고 있어요`, mode: 'coach-info', target } : null;
     case 'LIVE_HAND_WEAK':
-      return handLabel ? { title: turn([`${handLabel} 더 세게`, `${handLabel}도 똑같이`]), sub: '스틱을 조금 더 들어요', mode: 'coach-info', target } : null;
+      return handLabel && otherHandLabel
+        ? { title: turn([`${handLabel} 높이!`, `${handLabel}도 똑같이`]), sub: `${otherHandLabel}만큼 높이 들어요`, mode: 'coach-info', target }
+        : null;
     case 'LIVE_UNSTEADY':
-      return { title: turn(['박을 세면서', '일정하게 쳐요']), sub: '속으로 하나 둘 세어 봐요', mode: 'coach-info', target: null };
+      return { title: turn(['하나 둘 세며', '일정하게 쳐요']), sub: '킥에 맞춰 속으로 세요', mode: 'coach-info', target: null };
     case 'LIVE_GOOD_RECOVERED':
       return { title: turn(['그거예요!', '바로 그 느낌!']), sub: recoveredSub(message.recoveredFrom), mode: 'coach-good', target: message.recoveredFrom?.target ?? null };
     case 'LIVE_GOOD_STEADY':
