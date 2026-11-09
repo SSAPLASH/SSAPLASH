@@ -13,9 +13,13 @@ interface Props {
   onCancel: () => void;
   onDiscard: () => void;
   onSave: () => void;
+  /** 저장 버튼 이름. 시스템 기본이면 「새 프리셋으로 저장하고 나가기」 */
+  saveLabel?: string;
+  /** 저장 버튼 잠금(슬롯이 가득 차 새 프리셋을 못 만들 때) */
+  saveDisabled?: boolean;
 }
 
-export function UnsavedLeaveDialog({ open, message, busy, error, onCancel, onDiscard, onSave }: Props) {
+export function UnsavedLeaveDialog({ open, message, busy, error, onCancel, onDiscard, onSave, saveLabel = '저장하고 나가기', saveDisabled = false }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   if (!open) return null;
@@ -41,8 +45,8 @@ export function UnsavedLeaveDialog({ open, message, busy, error, onCancel, onDis
         <Button variant="secondary" onClick={onDiscard} disabled={busy}>
           저장 안 함
         </Button>
-        <Button variant="primary" onClick={onSave} disabled={busy}>
-          {busy ? '저장 중…' : '저장하고 나가기'}
+        <Button variant="primary" onClick={onSave} disabled={busy || saveDisabled}>
+          {busy ? '저장 중…' : saveLabel}
         </Button>
       </div>
     </Dialog>
