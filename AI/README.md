@@ -195,9 +195,11 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 - 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE·HIHAT_PEDAL)다
 - `pad`는 위 9종 중 하나다. 음원 채보는 하이햇 페달을 따로 내지 않고, 채보 모델이 `HIHAT_PEDAL`을 내도 `HIHAT`으로 합친다. 페달이 따로 적힌 실제 녹음 드럼 데이터가 MDB Drums 한 묶음뿐이라, 처음 보는 드럼 세트에서도 맞는지 확인할 수 없어서다. MDB에서는 현재 사용 중 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측이 30ms 안에 있으면 페달로 바꿨을 때 페달 정밀도 0.835, F1 0.548이었다(`scripts/score_pedal_relabel.py`). ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 `chh`로 적어서 페달 채점에 쓸 수 없다
 - bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고 계산한다. 박마다 몇 번째 박인지와 울린 시각을 짝지어, 박들이 모두 몇 초에 걸쳐 나왔는지로 한 박 길이를 구하고 bpm으로 바꾼다. Beat This! 박 시각은 0.02초 단위로 반올림돼 있어서, 이웃한 두 박 간격을 하나씩 재서 평균 내면 이 오차가 남는다. 박을 놓치거나 두 번 잡은 곳, 즉 간격이 중앙값에서 15% 넘게 벗어난 곳에서는 구간을 끊어 따로 계산한 뒤 합친다. 4박 넘게 이어지는 구간이 하나도 없으면 고른 간격의 평균을 쓴다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
-- `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 첫 마디 첫 박에서 한 마디(`60000 / bpm × 4` ms)씩 앞으로 당겨 0ms 이상인 가장 이른 마디 시작을 넣는다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
+- `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 마디 첫 박 전부를 한 마디(`60000 / bpm × 4` ms) 길이로 접어 가장 많이 모인 위치, 즉 곡 맨 앞 한 마디 안의 마디 시작을 넣는다. 첫 번째 마디 첫 박 하나만 쓰면 드럼 인트로·필인에서 틀린 박을 잡는 곡이 많아서 곡 전체 다수결로 정한다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
 - 설정 `tempo.origin`이 `notes`면 위 값을 킥·스네어 노트로 한 번 더 맞춘다. 격자 박에서 60ms 안에 있는 킥·스네어 노트가 박보다 평균 몇 ms 앞뒤에 있는지 중앙값을 구해 그만큼 `offsetMs`를 옮긴다. 쓸 노트가 16개보다 적으면 옮기지 않는다. Beat This! 박 시각이 드럼 소리보다 늦게 잡히면 메트로놈 클릭이 킥보다 늦게 울리는데 이를 줄인다. 기본값은 `notes`이고, `downbeat`면 위 값을 그대로 쓴다. 측정은 `scripts/origin_alignment_eval.py`로 두 방식을 같은 Beat This! 박으로 비교한다
-- bpm·`offsetMs`를 다시 재려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
+- bpm·`offsetMs`를 다시 측정하려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
+- 마디선이 실제 곡 마디와 맞는지는 `scripts/chart_bar_grid_eval.py`로 측정한다. Songsterr 곡의 `final/bars.json` 마디 시작을 정답으로, Beat This! 박 캐시로 만든 마디선 70ms 안에 정답 마디 시작이 80% 이상 드는 곡 수를 이전 규칙(첫 번째 마디 첫 박)과 나란히 낸다
+- 설정 `tempo.refine`이 `true`면 노트가 나온 뒤 bpm·`offsetMs`를 노트에 맞춰 다시 정한다(`chart/tempo_refine.py`, S15P31A307-322). 노트가 16분·셋잇단 칸에서 15ms 넘게 벗어난 비율과 곡 처음→끝 메트로놈 밀림을 측정해, 정수 bpm(±1) 또는 지금 bpm ±0.10(0.01 간격) 후보가 비율을 5%p 넘게 줄이거나, 비율을 1%p 넘게 늘리지 않으면서 밀림을 5ms 이상 줄일 때만 바꾼다. 노트 시각은 그대로다. 기본값은 `false`다. 전자음악 NCS 50곡은 밀림 10ms 넘는 곡이 26 → 0이었지만, 밴드 녹음 Songsterr 131곡은 정답 마디가 마디선 70ms 안에 80% 이상 드는 곡이 52 → 47로 줄었다. 측정은 `scripts/chart_tempo_refine_eval.py`. 켜면 `generatorVersion`이 바뀌고 `transcription.json`에 `tracked_bpm`(보정 전)과 `timing_refine`(보정 전후 값·이유)이 남는다
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
 - 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
@@ -210,6 +212,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
+| `tempo.refine` | `false` | 노트로 bpm·`offsetMs` 다시 맞추기. 위 bpm 설명 참고 |
 | `tempo.min_bpm`, `tempo.max_bpm` | 60, 200 | 이 범위 밖이면 2배·절반으로 접는다. 상한은 하한의 2배 이상 |
 | `tempo.time_signature` | `4/4` | 박자. 추정하지 않는다 |
 | `max_duration_sec` | 600 | 이보다 긴 드럼 트랙은 입력 오류 |
@@ -247,6 +250,17 @@ uv run ssaplash-chart sheet score.mxl --out data/chart/score
 ```bash
 uv run python scripts/sheet_pdmx_eval.py --list <곡 목록.csv> --pdmx <PDMX 압축 푼 폴더> --out data/results/sheet_pdmx
 ```
+
+### NCS 기본곡 적재 (S15P31A307-322)
+
+NCS 50곡(표 `configs/ncs/songs.csv`)을 서비스 채보로 만들어 운영 공용 곡으로 올린다. 음원은 git에 넣지 않는다.
+
+1. `uv run python scripts/ncs_prepare.py --src <유튜브 opus 폴더> --out data/ncs/audio`: 영상 ID로 50곡을 찾아 `ncs_NN 아티스트 - 제목.opus`로 모음
+2. GPU 서버 `notebooks/ncs_charts_server.ipynb`: 50곡 `ssaplash-chart run`, 결과 zip을 `data/ncs/`에 풂
+3. `uv run python scripts/ncs_make_bulk.py`: 곡마다 음원 정렬 드럼 MIDI(0틱 = 드럼리스 MR 0초)와 반주 WAV, 등록 표 `register.csv`, 점검 표 `check.csv`. bpm이 소수점만큼 틀려 메트로놈이 밀리는 곡은 `tempo_refine.refine_timing`으로 bpm·첫 박을 고친 뒤 MIDI를 씀
+4. `uv run python scripts/ncs_inspect.py`: 곡별 박자 칸·원곡 시각 차이·빈 구간·패드 비율 점검 표 `data/ncs/inspect.csv`
+5. `uv run python scripts/ncs_register.py --bulk data/ncs/bulk --all`: 관리자 API로 숨김 등록 → 3난이도·반주 확인 → 공개. `--replace-fixed`면 bpm 고친 곡을 지우고 다시 등록. 토큰은 관리자 access 토큰을 `SSAPLASH_ADMIN_TOKEN`에 넣거나 실행할 때 입력
+6. 공용 곡 전부 지우고 다시 올릴 때: `scripts/builtin_reset.py` `backup` → `delete-all` → `restore-catalog`(BE 카탈로그 곡과 받아 둔 반주·커버) → 5번
 
 ## 채보 워커 실행 (S15P31A307-171)
 
