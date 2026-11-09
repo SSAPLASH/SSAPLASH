@@ -181,10 +181,11 @@ export function SetupPage() {
   const activePresetName = presetDisplayName(presets.items, s.activePresetId);
   const saving = presets.status === 'saving';
 
-  // 진입: 프리셋 목록 읽기, 센서 타격이 바로 울리게
+  // 진입: 프리셋 목록 읽기, 센서 타격이 바로 울리게. 떠날 때 타격음을 끈다
   useEffect(() => {
     void usePresets.getState().refresh();
     setSoundOnHit(true);
+    return () => setSoundOnHit(false);
   }, []);
 
   useEffect(() => {
