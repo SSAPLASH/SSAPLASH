@@ -3,7 +3,7 @@
 // 메트로놈 패널(MetronomePanel)은 Radix Popover(비모달)로 연다 — 열림 상태는 shellStore.dockPanel이 쥐고(제어 모드), 내용은 포털로 body에 붙는다.
 // 프리셋 칩은 두지 않는다(11/04 결정, 연결 상태는 상단 바 스틱 상태 표시가 보여 준다).
 import * as Popover from '@radix-ui/react-popover';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence, m, useAnimate, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
@@ -17,7 +17,7 @@ import { RecordButton } from '@/components/recording/RecordButton';
 import { recordButtonVisible } from '@/components/recording/recordButtonRoute';
 import { IconButton } from '@/components/ui/IconButton';
 import { createDockAutoCollapse } from './dockAutoCollapse';
-import { DOCK_RADIUS_COLLAPSED, DOCK_RADIUS_EXPANDED, DOCK_TRANSITION, PANEL_TRANSITION } from './dockMotion';
+import { DOCK_SWAP_FROM, DOCK_TRANSITION, PANEL_TRANSITION } from './dockMotion';
 import './glass-dock.css';
 import { MetronomePanel } from './MetronomePanel';
 import { SoundToggle } from './SoundToggle';
@@ -92,6 +92,18 @@ export function GlassDock() {
     auto.setPanelOpen(dockPanel === 'metronome');
   }, [auto, dockPanel]);
 
+  // 접힘 ↔ 펼침: 크기를 보간하지 않고 내용을 바로 바꾼 뒤 틀 전체를 살짝 작고 흐린 상태에서 제자리로 띄운다(QA 352).
+  // 크기 보간은 scale 왜곡·교차 페이드 튐이 생겼다. toolbar 노드는 그대로 두어 초점·자동 접힘 핸들러가 유지된다
+  const [dockRef, animateDock] = useAnimate<HTMLDivElement>();
+  const reduceMotion = useReducedMotion();
+  const prevCollapsed = useRef(collapsed);
+  useEffect(() => {
+    if (prevCollapsed.current === collapsed) return;
+    prevCollapsed.current = collapsed;
+    if (reduceMotion || !dockRef.current) return;
+    void animateDock(dockRef.current, { opacity: [DOCK_SWAP_FROM.opacity, 1], scale: [DOCK_SWAP_FROM.scale, 1] }, DOCK_TRANSITION);
+  }, [collapsed, reduceMotion, animateDock, dockRef]);
+
   // 라우트가 바뀌거나 Dock이 접히면 메트로놈 패널을 닫는다
   useEffect(() => {
     setDockPanel(null);
@@ -113,12 +125,9 @@ export function GlassDock() {
 
   return (
     <Popover.Root open={panelOpen} onOpenChange={(o) => setDockPanel(o ? 'metronome' : null)} modal={false}>
-      {/* 바깥 틀은 하나로 유지해 알약 ↔ 막대가 이어서 변한다(D3). 모서리 반경은 style로 motion이 보간한다
-          (layout 애니메이션 중 크기 scale에 모서리가 늘어나는 왜곡을 motion이 보정한다) */}
-      <m.div
-        layout
-        transition={{ layout: DOCK_TRANSITION }}
-        style={{ borderRadius: collapsed ? DOCK_RADIUS_COLLAPSED : DOCK_RADIUS_EXPANDED }}
+      {/* 바깥 틀은 하나로 유지한다(D3). 전환은 위 useAnimate가 맡는다 */}
+      <div
+        ref={dockRef}
         className={`glass-dock${collapsed ? ' collapsed' : ''} ${mode}`}
         role="toolbar"
         aria-label="Dock"
@@ -126,9 +135,8 @@ export function GlassDock() {
         onKeyDownCapture={collapsed ? undefined : auto.touch}
         onFocusCapture={collapsed ? undefined : auto.touch}
       >
-        <AnimatePresence mode="popLayout" initial={false}>
-          {collapsed ? (
-            <m.div key="collapsed" className="dock-inner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={DOCK_TRANSITION}>
+        {collapsed ? (
+            <div className="dock-inner">
               <button type="button" className="dock-pill" aria-label="Dock 펼치기" onClick={expand}>
                 <span className={`dock-pill-metro${running ? ' on' : ''}`}>
                   <MetroIcon size={16} />
@@ -140,9 +148,9 @@ export function GlassDock() {
                 <span className="dock-divider short" />
                 <Chevron />
               </button>
-            </m.div>
+            </div>
           ) : (
-            <m.div key="expanded" className="dock-inner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={DOCK_TRANSITION}>
+            <div className="dock-inner">
               <SoundToggle />
               <span className="dock-divider" />
               <Popover.Anchor asChild>
@@ -190,10 +198,9 @@ export function GlassDock() {
               <IconButton size="sm" className="dock-collapse" label="Dock 접기" title="접기" onClick={collapse}>
                 <Chevron up />
               </IconButton>
-            </m.div>
+            </div>
           )}
-        </AnimatePresence>
-      </m.div>
+      </div>
       {/* key로 접힘 ↔ 펼침 때 AnimatePresence를 새로 만든다 — 앵커(칩)가 사라질 때 패널이 닫힘 애니메이션 중 엉뚱한 위치로 튀지 않고 즉시 언마운트된다.
           라우트 변경 등 다른 이유로 닫힐 때는 페이드 아웃 후 언마운트 */}
       <AnimatePresence key={collapsed ? 'collapsed' : 'expanded'}>
