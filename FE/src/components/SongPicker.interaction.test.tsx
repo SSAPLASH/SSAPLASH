@@ -16,7 +16,11 @@ import type { UserMe } from '@/domain/auth';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
-vi.mock('@/api/songs', () => ({ listSongs: vi.fn(), getSong: vi.fn() }));
+// songStore는 전체 페이지를 읽는 listAllSongs를 쓴다. 기존 단언을 그대로 쓰려고 mock된 listSongs 한 페이지로 이어 준다
+vi.mock('@/api/songs', () => {
+  const listSongs = vi.fn();
+  return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
+});
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
 
 const song = (id: number, title: string): SongSummary => ({
