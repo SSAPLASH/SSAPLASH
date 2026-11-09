@@ -7,6 +7,7 @@ import '@/components/history/history.css';
 import { RecordingList } from '@/components/recording/RecordingList';
 import { useShell } from '@/components/shell/useShell';
 import { Segmented } from '@/components/ui/Segmented';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 type HistoryTab = 'logs' | 'recordings';
 
@@ -30,10 +31,7 @@ export function HistoryPage() {
   return (
     <main className="main">
       <div className="history-page">
-        <header className="history-head">
-          <h1 className="history-title">나의 연주 기록</h1>
-          <p className="history-sub">지난 연주를 돌아보고 리듬의 변화를 확인하세요.</p>
-        </header>
+        <PageHeader title="나의 연주 기록" />
 
         {RECORDING_ENABLED ? (
           <div className="history-tabs">
