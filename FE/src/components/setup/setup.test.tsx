@@ -71,6 +71,17 @@ describe('UnsavedLeaveDialog', () => {
     const html = dlg(true);
     for (const t of ['문구', '취소', '저장 안 함', '저장하고 나가기']) expect(html).toContain(t);
   });
+  it('저장 버튼 이름을 prop으로 바꾼다(시스템 기본)', () => {
+    const html = renderToStaticMarkup(
+      <UnsavedLeaveDialog open message="문구" busy={false} error={null} onCancel={noop} onDiscard={noop} onSave={noop} saveLabel="새 프리셋으로 저장하고 나가기" />,
+    );
+    expect(html).toContain('새 프리셋으로 저장하고 나가기');
+    expect(html).not.toContain('>저장하고 나가기<');
+  });
+  it('saveDisabled면 저장 버튼만 잠근다', () => {
+    const html = renderToStaticMarkup(<UnsavedLeaveDialog open message="문구" busy={false} error={null} onCancel={noop} onDiscard={noop} onSave={noop} saveDisabled />);
+    expect((html.match(/disabled/g) ?? []).length).toBe(1);
+  });
   it('저장 중이면 잠그고, 오류 문구를 보인다', () => {
     const html = dlg(true, true, '저장에 실패했어요');
     expect((html.match(/disabled/g) ?? []).length).toBe(3);

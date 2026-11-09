@@ -143,6 +143,9 @@ describe('SetupPage ② 시작 위치 보정(UX-64 D7)', () => {
   });
 });
 
+// 시스템 기본에서 스네어를 끌어 옮긴 배치(서버 렌더는 초기 상태를 읽으므로 movePad 대신 값을 넣는다)
+const MOVED_LAYOUT = { ...DEFAULT_KIT_LAYOUT, SNARE: { ...DEFAULT_KIT_LAYOUT.SNARE, x: 0.7, y: 0.3 } };
+
 describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
   it('시스템 기본 칩 + 저장 프리셋 칩 + [추가하기] + [전체 보정]. 시스템 기본이면 전체 보정·이 드럼 다시 치기·기본 배치로가 비활성이고 안내가 보인다', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
@@ -160,6 +163,24 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
     expect(html).toContain('「시스템 기본」 사용 중');
   });
 
+  it('시스템 기본에서 패드를 옮겼으면 하단 바가 새 프리셋 저장 안내와 [새 프리셋으로 저장]이 된다(kit-drag D10)', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
+    putPresets([preset('p1', '내 배치')]);
+    putLive({ connected: [true, true] });
+    putSettings({ kitLayout: MOVED_LAYOUT });
+    const html = await renderSetup();
+    expect(html).toContain('시스템 기본은 바꿀 수 없어요 · 새 프리셋으로 저장해야 남아요');
+    expect(html).toMatch(/<button[^>]*>새 프리셋으로 저장</);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>새 프리셋으로 저장</);
+  });
+  it('시스템 기본에서 옮겼는데 슬롯이 가득 차면 [새 프리셋으로 저장]이 비활성이다(D12)', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
+    putPresets([1, 2, 3, 4, 5].map((n) => preset(`p${n}`, `배치 ${n}`)));
+    putLive({ connected: [true, true] });
+    putSettings({ kitLayout: MOVED_LAYOUT });
+    const html = await renderSetup();
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>새 프리셋으로 저장</);
+  });
   it('사용자 프리셋이면 [전체 보정]·[이 드럼 다시 치기]가 활성이고 완료 pill', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, { SNARE: good }], calibratedAt: new Date(2026, 10, 6, 14, 2).getTime(), activePresetId: 'p1' });
     putPresets([preset('p1', '내 배치')]);
