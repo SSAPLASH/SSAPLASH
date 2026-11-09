@@ -58,3 +58,17 @@ describe('PlayRecorder', () => {
     expect(rec.hit(h2, null, ss).seq).toBe(0);
   });
 });
+
+it('페달 스냅샷을 기록해도 판정과 점수는 유지된다', () => {
+  const hihatChart = { ...chart, notes: [{ timeMs: 0, pad: 'HIHAT' as const, hihatOpen: true as const }] };
+  const run = (closed: boolean | null) => {
+    const ss = new RhythmSession(hihatChart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10 });
+    const rec = new PlayRecorder(); ss.start(1000);
+    const hit = { ...hitAt(1, 1010, 'HIHAT'), hihatClosed: closed };
+    rec.hit(hit, ss.handleHit(hit), ss);
+    return { snapshot: ss.snapshot(1010), hit: rec.hits[0] };
+  };
+  const open = run(false), closed = run(true), unknown = run(null);
+  expect(open.snapshot).toEqual(closed.snapshot); expect(open.snapshot).toEqual(unknown.snapshot);
+  expect([open.hit.hihatClosed, closed.hit.hihatClosed, unknown.hit.hihatClosed]).toEqual([false, true, null]);
+});

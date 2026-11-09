@@ -1,21 +1,29 @@
 // 설정 화면(/settings, ACCT-001, Figma 03 Screens / 설정). 계정·기기·오디오 / 연주·회원 탈퇴 카드.
 // 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 가입 때 필수이고 철회는 탈퇴뿐이라 토글이 없다.
+// "데이터 활용" 카드(설계 COACH-004-recommendation-consent D7)는 선택 동의인 맞춤 곡 추천 학습 활용만 토글로 켜고 끈다. 상태는 서버가 원본이다.
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
 import { KitSkinCarousel } from '@/components/settings/KitSkinCarousel';
+import { HitFxPicker } from '@/components/fx/HitFxPicker';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
 import { useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Slider } from '@/components/ui/Slider';
+import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
+import { Dialog } from '@/components/ui/Dialog';
+import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
+import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
+import { consentSaveErrorMessage, consentStatusText, isRecommendationVersionStale } from '@/domain/recommendationConsent';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
 import '@/components/settings/settings.css';
 
@@ -23,6 +31,9 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
   GOOGLE: 'Google',
   SSAFY: 'SSAFY',
 };
+
+/** 동의 저장 결과 토스트가 보이는 시간 */
+const TOAST_MS = 3000;
 
 /** 지연 보정 표시: +20ms · 0ms · -10ms */
 function offsetText(ms: number): string {
@@ -49,12 +60,22 @@ export function SettingsPage() {
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
   const kitSkin = useSettings((s) => s.kitSkin);
   const setKitSkin = useSettings((s) => s.setKitSkin);
+  const hitFxTheme = useSettings((s) => s.hitFxTheme);
+  const setHitFxTheme = useSettings((s) => s.setHitFxTheme);
   const liveCoach = useSettings((s) => s.liveCoach);
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
+  const timingBar = useSettings((s) => s.timingBar);
+  const setTimingBar = useSettings((s) => s.setTimingBar);
 
   const connected = useLive((l) => l.connected);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const presetItems = usePresets((p) => p.items);
+
+  const consentStatus = useRecommendationConsent((s) => s.status);
+  const consent = useRecommendationConsent((s) => s.consent);
+  const consentSaving = useRecommendationConsent((s) => s.saving);
+  const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
+  const [toast, setToast] = useState<{ variant: ToastVariant; text: string } | null>(null);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
@@ -65,11 +86,41 @@ export function SettingsPage() {
     void usePresets.getState().refresh();
   }, []);
 
+  // 학습 동의 상태는 로그인한 계정만 읽는다(비로그인·인증 끔 개발 모드는 카드가 없다). 이미 읽었으면 재요청하지 않는다(store가 세션당 1회)
+  const loggedIn = user !== null;
+  useEffect(() => {
+    if (loggedIn) void useRecommendationConsent.getState().load();
+  }, [loggedIn]);
+
+  useEffect(() => {
+    if (toast === null) return;
+    const t = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const consentChecked = consent?.agreed === true;
+  const consentStale = isRecommendationVersionStale(consent);
+  const consentLocked = consentStatus !== 'ready' || consentSaving;
+
+  const onToggleConsent = (next: boolean) => {
+    if (next) { setConsentConfirmOpen(true); return; }
+    saveConsent(false);
+  };
+  const saveConsent = (next: boolean) => {
+    useRecommendationConsent
+      .getState()
+      .set(next)
+      .then(
+        () => { setConsentConfirmOpen(false); setToast(next ? null : { variant: 'info', text: '동의를 철회했어요' }); },
+        (e: unknown) => setToast({ variant: 'error', text: consentSaveErrorMessage(e) }),
+      );
+  };
+
   const sensorMode = sensorKind !== 'none';
   const [left, right] = connected;
   const connText = !sensorMode ? '키보드 전용' : left && right ? '연결됨' : left || right ? '한 손만 연결됨' : '연결 안 됨';
   const connTone = sensorMode && left && right ? 'good' : sensorMode ? 'warn' : '';
-  const presetName = presetItems.find((p) => p.id === activePresetId)?.name ?? '프리셋 없음';
+  const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
   const onLogout = () => {
@@ -133,6 +184,25 @@ export function SettingsPage() {
               </p>
             )}
           </Card>
+
+          {user && (
+            <Card padding="lg" title="데이터 활용">
+              <p className="settings-note">연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요.</p>
+              {(recommendationConsentEnabled() || consentChecked) && <SettingRow label="맞춤 곡 추천 학습 활용" help="동의 상태를 확인하고 철회할 수 있어요.">
+                {(aria) => <Toggle {...aria} label="맞춤 곡 추천 학습 활용" checked={consentChecked} disabled={consentLocked} onChange={onToggleConsent} />}
+              </SettingRow>}
+              {consentStatus === 'ready' && <p className="settings-note">{consentStatusText(consent)}</p>}
+              {consentStale && recommendationConsentEnabled() && <Button variant="text" disabled={consentLocked} onClick={() => setConsentConfirmOpen(true)}>새 동의 내용 확인</Button>}
+              {consentStatus === 'error' && <div role="alert"><p className="settings-note">동의 상태를 불러오지 못했어요</p><Button variant="text" onClick={() => void useRecommendationConsent.getState().load()}>다시 시도</Button></div>}
+              {consentConfirmOpen && recommendationConsentEnabled() && (
+                <Dialog labelledBy="settings-recommend-consent-title" onClose={() => setConsentConfirmOpen(false)}>
+                  <h2 id="settings-recommend-consent-title">맞춤 곡 추천 학습 활용 동의</h2>
+                  {(SIGNUP_TERMS.find((t) => t.id === 'recommendation')?.body ?? '').split('\n').map((line) => <p key={line}>{line}</p>)}
+                  <div className="dialog-actions"><Button variant="secondary" onClick={() => setConsentConfirmOpen(false)}>취소</Button><Button disabled={consentLocked} onClick={() => saveConsent(true)}>동의</Button></div>
+                </Dialog>
+              )}
+            </Card>
+          )}
 
           <Card padding="lg" title="기기">
             <SettingRow label="스틱 연결" help="왼손·오른손 스틱 상태">
@@ -221,10 +291,16 @@ export function SettingsPage() {
             <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
               {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}
             </SettingRow>
+            <SettingRow label="타격 이펙트" help="패드를 칠 때 나오는 효과예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
+              {(aria) => <HitFxPicker value={hitFxTheme} onChange={setHitFxTheme} skin={kitSkin} labelledBy={aria['aria-labelledby']} />}
+            </SettingRow>
             <SettingRow label="실시간 코칭" help="리듬 게임·악보 연습 공통. 연주 중 늦음·빠름·연속 MISS 같은 신호를 드럼 옆 안내 칸에 3초간 띄워요.">
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>
             <p className="settings-note">연주를 시작할 때의 값이 그 판에 적용돼요. 끄면 코칭 문구가 뜨지 않아요.</p>
+            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
+              {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
+            </SettingRow>
           </Card>
 
           {user && (
@@ -241,6 +317,8 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      <Toast variant={toast?.variant ?? 'info'} text={toast?.text ?? null} regionClassName="settings-toast-region" />
 
       <WithdrawDialog
         open={withdrawOpen}

@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import type { Difficulty } from '@/domain/chart';
 import type { PadId } from '@/domain/pads';
 import type { PadVisualState } from '@/domain/drumKit';
+import { SYSTEM_PRESET_NAME } from '@/domain/preset';
 import type { ReadinessMissing } from '@/domain/readiness';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +13,7 @@ import { SongCover } from '@/components/song/SongCover';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
 import { StaffLegend } from './StaffLegend';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
@@ -50,6 +52,10 @@ export interface ReadyPanelProps {
   options?: ReactNode;
   /** true면 오른쪽 열 맨 위에 「악보 읽는 법」 카드를 보인다(악보 연습) */
   staffLegend?: boolean;
+  /** 스네어 재정렬이 걸려 있으면 「보정」 행에 프롬프트를 보인다(PLAY-004 D11). 준비 완료·[시작]은 막지 않는다 */
+  realign?: RealignInfo | null;
+  /** 두 열 아래 전체 폭에 그대로 넣는 슬롯(비슷한 곡 줄, 설계 COACH-004-similar-songs D9) */
+  footer?: ReactNode;
 }
 
 function Dot({ ok }: { ok: boolean }) {
@@ -93,6 +99,8 @@ export function ReadyPanel({
   onStart,
   options,
   staffLegend = false,
+  realign,
+  footer,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
@@ -104,7 +112,6 @@ export function ReadyPanel({
   const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
   const stickOk = !missing.includes('stick') && !missing.includes('pedal');
   const calOk = !missing.includes('firstSetup');
-  const presetOk = !missing.includes('preset');
   const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
   if (song.durationSec !== undefined) meta.push(formatDuration(song.durationSec * 1000));
   meta.push(`최고 정확도 ${bestAccuracy === undefined ? '—' : formatAccuracy(bestAccuracy)}`);
@@ -164,14 +171,19 @@ export function ReadyPanel({
                 <Dot ok={calOk} />
                 <span className="play-rp-row-label">보정</span>
                 <span className="play-rp-row-value">
-                  <span className={calOk ? '' : 'need'}>{calOk ? '완료' : '필요'}</span>
+                  {calOk && realign ? (
+                    <RealignPrompt hands={realign.hands} done={realign.done} variant="row" onSkip={realign.onSkip} />
+                  ) : (
+                    <span className={calOk ? '' : 'need'}>{calOk ? '완료' : '필요'}</span>
+                  )}
                 </span>
               </li>
+              {/* 프리셋은 준비 조건이 아니다(UX-64 D1): 시스템 기본이 항상 적용 가능해 이름만 보인다 */}
               <li className="play-rp-row">
-                <Dot ok={presetOk} />
+                <Dot ok />
                 <span className="play-rp-row-label">프리셋</span>
                 <span className="play-rp-row-value">
-                  <span className={presetOk ? '' : 'need'}>{presetOk ? (presetName ?? '적용됨') : '적용 필요'}</span>
+                  <span>{presetName ?? SYSTEM_PRESET_NAME}</span>
                 </span>
               </li>
             </ul>
@@ -215,6 +227,7 @@ export function ReadyPanel({
           </Card>
         </div>
       </div>
+      {footer}
     </section>
   );
 }

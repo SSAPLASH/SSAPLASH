@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useSettings } from '@/store/settingsStore';
 import type { TelemetryRow } from '@/engine/telemetry';
 import { PAD_META } from '@/domain/pads';
-import { layoutToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kitJudge';
 import {
   TUNING_RANGES,
   countChangedTuning,
@@ -52,7 +52,7 @@ const DELTA_WINDOW = 10;
 export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
   const [open, setOpen] = useState(false);
   const tuning = useSettings((s) => s.tuning);
-  const kitLayout = useSettings((s) => s.kitLayout);
+  const stickAnchors = useSettings((s) => s.stickAnchors);
   const setTuning = useSettings((s) => s.setTuning);
   const resetTuning = useSettings((s) => s.resetTuning);
 
@@ -65,14 +65,15 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
   const lastPose = rows.find((r) => r.distanceDeg !== null);
   const deltas = rows.filter((r) => r.deltaMs !== undefined).slice(0, DELTA_WINDOW);
   const deltaAvg = deltas.length ? deltas.reduce((s, r) => s + (r.deltaMs ?? 0), 0) / deltas.length : null;
-  // 앵커별 반경은 배치에서 유도한 판정 프로필 기준(설계 D1)
-  const derived = layoutToProfile(kitLayout, tuning.angleRange, {
-    maxRadiusDeg: tuning.maxRadiusDeg,
-    radiusFactor: tuning.radiusFactor,
-  });
-  const radii = Object.values(derived.anchors)
+  // 앵커별 반경은 손별 판정 프로필 기준(PLAY-004 D1). 왼손·오른손이 다르면 "왼/오"로 보여 준다
+  const derived = [anchorsToProfile(stickAnchors[0], tuning, 0), anchorsToProfile(stickAnchors[1], tuning, 1)];
+  const radii = Object.values(derived[0].anchors)
     .filter((a) => !!a)
-    .map((a) => `${PAD_META[a.pad].label} ${a.radius.toFixed(1)}`)
+    .map((a) => {
+      const r = derived[1].anchors[a.pad];
+      const same = r && Math.abs(r.radius - a.radius) < 0.05;
+      return `${PAD_META[a.pad].label} ${same || !r ? a.radius.toFixed(1) : `${a.radius.toFixed(1)}/${r.radius.toFixed(1)}`}`;
+    })
     .join(' · ');
 
   return (
@@ -97,6 +98,13 @@ export function TuningPanel({ rows }: { rows: TelemetryRow[] }) {
               range={TUNING_RANGES.radiusFactor}
               digits={2}
               onChange={(radiusFactor) => setTuning({ radiusFactor })}
+            />
+            <TuningSlider
+              label="반경 하한"
+              value={tuning.minRadiusDeg}
+              range={TUNING_RANGES.minRadiusDeg}
+              unit="°"
+              onChange={(minRadiusDeg) => setTuning({ minRadiusDeg })}
             />
             <TuningSlider
               label="반경 상한"

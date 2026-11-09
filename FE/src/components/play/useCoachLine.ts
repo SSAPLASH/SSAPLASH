@@ -5,8 +5,10 @@ import { type CoachLineTimer, createCoachLineTimer } from './coachLineTimer';
 
 export interface CoachLineControl<T> {
   line: T | null;
-  /** 이전 타이머를 지우고 새 문구를 displayMs 동안 보인다 */
-  show: (line: T, displayMs: number) => void;
+  /** 이전 타이머를 지우고 새 문구를 delayMs 뒤부터(기본 바로) displayMs 동안 보인다 */
+  show: (line: T, displayMs: number, delayMs?: number) => void;
+  /** 아직 띄우지 않은(미루는 중인) 문구만 버린다. 떠 있는 문구는 그대로 둔다 */
+  cancelPending: () => void;
   /** 문구를 바로 비우고 타이머를 정리한다 */
   clear: () => void;
 }
@@ -18,8 +20,9 @@ export function useCoachLine<T>(): CoachLineControl<T> {
 
   useEffect(() => () => timer.current?.dispose(), []);
 
-  const show = useCallback((next: T, displayMs: number) => timer.current?.show(next, displayMs), []);
+  const show = useCallback((next: T, displayMs: number, delayMs?: number) => timer.current?.show(next, displayMs, delayMs), []);
+  const cancelPending = useCallback(() => timer.current?.cancelPending(), []);
   const clear = useCallback(() => timer.current?.clear(), []);
 
-  return { line, show, clear };
+  return { line, show, cancelPending, clear };
 }

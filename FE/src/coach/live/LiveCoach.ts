@@ -3,8 +3,9 @@
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
-import { CoachPolicy } from './policy';
+import { CoachPolicy, type RecoveredFrom } from './policy';
 import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
+import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
 import { JudgedWindow, type JudgedNote } from './window';
 
 export interface LiveCoachOptions {
@@ -14,6 +15,8 @@ export interface LiveCoachOptions {
   enabled?: boolean;
   /** 임계값 기준 방식. 생략하면 config의 COACH_BASIS(기본 fixed) */
   basis?: CoachBasis;
+  /** 세팅 안내를 켠다. 스틱 입력에서만 true로 준다. 기본 false */
+  setupHints?: boolean;
 }
 
 export interface CoachMessage {
@@ -29,6 +32,8 @@ export interface CoachMessage {
   target: CoachTarget | null;
   /** 이 플레이에서 같은 태그가 앞서 뜬 횟수. 화면 문구를 돌려 쓰는 데 쓴다 */
   repeat: number;
+  /** LIVE_GOOD_RECOVERED일 때만: 해소된 지적 중 가장 최근에 띄웠던 것(무엇이 고쳐졌는지). 그 외 태그는 null */
+  recoveredFrom: RecoveredFrom | null;
 }
 
 /** 플레이 로그 liveCoachEvents[] 한 항목. BE 검증: tMs 유한 수, tag ≤ 64자, text ≤ 2048자, 최대 1,000개 */
@@ -46,6 +51,9 @@ const MAX_LOG = 1_000;
 
 export class LiveCoach {
   private readonly enabled: boolean;
+  private readonly setupHints: boolean;
+  /** 이 플레이에서 이미 띄운 세팅 안내 */
+  private readonly setupShown = new Set<LiveTag>();
   private thresholds: LiveThresholds;
   private readonly window = new JudgedWindow();
   private readonly policy = new CoachPolicy();
@@ -53,19 +61,21 @@ export class LiveCoach {
 
   constructor(opts: LiveCoachOptions) {
     this.enabled = opts.enabled ?? true;
+    this.setupHints = opts.setupHints ?? false;
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     this.resetLog();
   }
 
   /** 판정 한 건을 넣는다. 문구를 띄울 때만 돌려주고 아니면 null. 일시정지 중에는 부르지 않는다 */
-  push(note: JudgedNote): CoachMessage | null {
+  push(note: JudgedNote, strayTotal = 0): CoachMessage | null {
     if (!this.enabled) return null;
     try {
       if (!Number.isFinite(note.songTimeMs)) return null;
-      this.window.push(note);
+      this.window.push(note, strayTotal);
       const metrics = this.window.metrics();
       const evals = evaluateRules(metrics, this.thresholds);
-      const { show, recovered, repeat } = this.policy.decide(
+      if (this.setupHints) evals.push(...evaluateSetupHints(metrics).filter((e) => !this.setupShown.has(e.tag)));
+      const { show, recovered, repeat, recoveredFrom } = this.policy.decide(
         evals,
         { songTimeMs: note.songTimeMs, judged: this.window.total },
         evaluatePraise(metrics, this.thresholds),
@@ -73,9 +83,10 @@ export class LiveCoach {
 
       for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, `경향 해소: ${r.key}`);
       if (!show) return null;
+      if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
       this.append(note.songTimeMs, show.tag, show.text);
-      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat };
+      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom };
     } catch {
       // 코칭 오류로 플레이를 멈추지 않는다. 이 판정은 건너뛰고 다음 판정부터 다시 계산한다
       return null;
@@ -91,6 +102,7 @@ export class LiveCoach {
   reset(): void {
     this.window.reset();
     this.policy.reset();
+    this.setupShown.clear();
     this.resetLog();
   }
 

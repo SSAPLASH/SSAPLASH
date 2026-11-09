@@ -2,21 +2,30 @@
 // 2단계 완료: 서버 가입 상태(domain/signupGate)로 분기하고 동의를 저장한다 — 비로그인은 /login, 가입이 끝난 회원은 원래 목적지,
 // 동의가 필요한 회원만 카드를 본다. 제출하면 POST로 저장하고 응답으로 회원 정보를 갱신한 뒤 원래 목적지로 간다.
 // VITE_AUTH_REQUIRED=false 빌드는 검사 없이 카드를 보이고 제출하면 홈으로 간다.
+// 약관 개정으로 다시 온 기존 회원(signupCompleted=true)은 추천 학습 동의 상태를 읽어 선택 항목을 미리 켜 둔다(설계 COACH-004 4-4).
+// 가입 전 회원은 GET이 403 SIGNUP_INCOMPLETE라 읽지 않고, 선택 항목은 꺼진 채로 시작한다.
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AUTH_REQUIRED } from '@/app/authBootstrap';
 import { AuthBrandPane } from '@/components/auth/AuthBrandPane';
 import { SignupConsentCard } from '@/components/auth/SignupConsentCard';
+import { Button } from '@/components/ui/Button';
 import { sanitizeReturnTo, signupErrorMessage } from '@/domain/auth';
+import { isRecommendationConsentCurrent } from '@/domain/recommendationConsent';
 import { signupGateDecision } from '@/domain/signupGate';
-import type { ConsentVersions } from '@/domain/signupTerms';
+import { recommendationConsentEnabled, SIGNUP_TERMS, type ConsentVersions } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
+import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 
 export function SignupPage() {
   const status = useAuth((s) => s.status);
   const user = useAuth((s) => s.user);
   const restore = useAuth((s) => s.restore);
   const submitSignupConsent = useAuth((s) => s.submitSignupConsent);
+  const consentStatus = useRecommendationConsent((s) => s.status);
+  const consent = useRecommendationConsent((s) => s.consent);
+  const loadConsent = useRecommendationConsent((s) => s.load);
+  const resetConsent = useRecommendationConsent((s) => s.reset);
   const location = useLocation();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
@@ -26,14 +35,20 @@ export function SignupPage() {
     if (AUTH_REQUIRED && status === 'unknown') void restore();
   }, [status, restore]);
 
-  const from = sanitizeReturnTo((location.state as { from?: string } | null)?.from ?? null);
   const decision = signupGateDecision({ required: AUTH_REQUIRED, status, user });
+  // 약관 개정 재동의: 이미 가입을 마친 회원만 추천 동의 상태가 있다
+  const reconsent = recommendationConsentEnabled() && decision === 'signup' && user?.signupCompleted === true;
+  useEffect(() => {
+    if (reconsent) void loadConsent();
+  }, [reconsent, loadConsent]);
 
-  if (decision === 'wait') {
+  const from = sanitizeReturnTo((location.state as { from?: string } | null)?.from ?? null);
+
+  if (decision === 'wait' || (reconsent && (consentStatus === 'idle' || consentStatus === 'loading'))) {
     return (
       <div className="auth-wait">
         <span className="spinner" aria-hidden="true" />
-        <span>로그인 확인 중…</span>
+        <span>{reconsent ? '동의 상태 확인 중…' : '로그인 확인 중…'}</span>
       </div>
     );
   }
@@ -49,7 +64,11 @@ export function SignupPage() {
     setSubmitting(true);
     // 성공하면 user가 바뀌어 decision이 done이 되고 페이지가 이동한다. 이 컴포넌트가 사라지므로 submitting은 되돌리지 않는다
     submitSignupConsent(body).then(
-      () => navigate(from, { replace: true }),
+      () => {
+        // 제출한 선택 항목 값이 서버에 반영됐으므로 읽어 둔 옛 상태를 버린다(설정·안내 모달이 다시 읽는다)
+        resetConsent();
+        navigate(from, { replace: true });
+      },
       (e: unknown) => {
         setError(signupErrorMessage(e));
         setSubmitting(false);
@@ -60,7 +79,14 @@ export function SignupPage() {
   return (
     <div className="login">
       <AuthBrandPane />
-      <SignupConsentCard onSubmit={onSubmit} submitting={submitting} error={error} />
+      <SignupConsentCard
+        notice={reconsent && consentStatus === 'error' ? <div role="alert" className="signup-card-error">동의 상태를 불러오지 못했어요. <Button variant="text" onClick={() => void loadConsent()}>다시 시도</Button></div> : undefined}
+        terms={recommendationConsentEnabled() && !(reconsent && consentStatus === 'error') ? SIGNUP_TERMS : SIGNUP_TERMS.filter((t) => t.id !== 'recommendation')}
+        onSubmit={onSubmit}
+        submitting={submitting}
+        error={error}
+        initialAgreed={reconsent && isRecommendationConsentCurrent(consent) ? ['recommendation'] : []}
+      />
     </div>
   );
 }

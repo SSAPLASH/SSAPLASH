@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeedback, chartFromLog, summarizeByPad } from './feedback';
+import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from './feedback';
 import type { Chart } from './chart';
 import type { Judgement } from './judgement';
 import type { PadId } from './pads';
@@ -220,5 +220,25 @@ describe('패드 표준편차 기준 방식(코칭 기준 폭)', () => {
     expect(jitterOf(26, 50, 'window')).toBe(true);
     expect(jitterOf(24, 50, 'window')).toBe(false);
     expect(jitterOf(31, 150, 'window')).toBe(false);
+  });
+});
+
+
+describe('열린 하이햇 결과', () => {
+  const base = logOf(Array.from({ length: 12 }, () => perfect(0, 'HIHAT')));
+  const open = { ...base, hihatPedalCoverage: 'COMPLETE' as const, lastSongTimeMs: base.durationMs, notes: base.notes.map((n) => ({ ...n, hihatOpen: true as const })) };
+  const hits = Array.from({ length: 9 }, (_, i) => ({ hitId: i, stickId: 0 as const, pad: 'HIHAT' as const, velocity: 90, tHit: 0, tRecv: 0, tResolved: 0, judgement: 'PERFECT' as const, matchedNoteIndex: i, hihatClosed: false }));
+  it('유일 노트 성공만 세고 0타격 완주도 표시한다', () => {
+    expect(summarizeOpenHihat({ ...open, hits: [...hits, hits[0], { ...hits[0], matchedNoteIndex: 9, hihatClosed: true }] })?.text).toBe('열린 9/12');
+    expect(summarizeOpenHihat(open)?.text).toBe('열린 0/12');
+    expect(chartFromLog(open)?.notes[0].hihatOpen).toBe(true);
+  });
+  it('불완전, 중도 종료와 구 로그·다른 모드를 구분한다', () => {
+    expect(summarizeOpenHihat({ ...open, hihatPedalCoverage: 'PARTIAL' })?.text).toBe('열린 하이햇 · 측정 불완전');
+    expect(summarizeOpenHihat({ ...open, lastSongTimeMs: 100 })?.text).toContain('전체 채보 기준');
+    expect(summarizeOpenHihat({ ...open, hihatPedalCoverage: 'NONE' })).toBeNull();
+    expect(summarizeOpenHihat({ ...open, hihatPedalCoverage: undefined })).toBeNull();
+    expect(summarizeOpenHihat({ ...open, mode: 'RHYTHM' })).toBeNull();
+    expect(summarizeOpenHihat({ ...open, notes: base.notes })).toBeNull();
   });
 });

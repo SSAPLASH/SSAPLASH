@@ -2,11 +2,12 @@
 import type { PadId } from './pads';
 
 export type Difficulty = 'EASY' | 'NORMAL' | 'HARD';
-export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO';
+export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO' | 'MUSICXML';
 
 export interface ChartNote {
   timeMs: number;
   pad: PadId;
+  hihatOpen?: true;
   /** 0~127, 선택 */
   velocityHint?: number;
   /** BE 채보의 노트 id(업로드 matchedNoteId). 내장 채보는 미설정 */

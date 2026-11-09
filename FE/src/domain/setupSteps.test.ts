@@ -6,7 +6,11 @@ import {
   returnButtonText,
   returnTargetName,
   setupBarCleanText,
+  setupBarView,
   setupSteps,
+  realignText,
+  CALIBRATION_NEEDED_TEXT,
+  CALIBRATION_SYSTEM_TEXT,
   unsavedLeaveText,
   type SetupStepsInput,
 } from './setupSteps';
@@ -17,25 +21,22 @@ const base: SetupStepsInput = {
   connected: [false, false],
   pedal: [true, true],
   firstSetupDone: false,
-  activePresetId: null,
   referenceSetAt: null,
-  activePresetName: null,
 };
 const allDone: SetupStepsInput = {
   ...base,
   connected: [true, true],
   firstSetupDone: true,
-  activePresetId: 'p1',
   referenceSetAt: new Date(2026, 9, 30, 14, 2).getTime(),
-  activePresetName: '기본 배치',
   battery: [82, 64],
 };
 
 describe('setupSteps', () => {
-  it('아무것도 없으면 세 단계 모두 필요, 첫 단계는 스틱', () => {
+  it('아무것도 없으면 두 단계 모두 필요, 첫 단계는 스틱(③ 프리셋 단계는 없다, UX-64)', () => {
     const r = setupSteps(base, NOW);
-    expect(r.steps.map((s) => s.status)).toEqual(['needed', 'needed', 'needed']);
-    expect(r).toMatchObject({ doneCount: 0, total: 3, firstNeeded: 'stick' });
+    expect(r.steps.map((s) => s.id)).toEqual(['stick', 'calibration']);
+    expect(r.steps.map((s) => s.status)).toEqual(['needed', 'needed']);
+    expect(r).toMatchObject({ doneCount: 0, total: 2, firstNeeded: 'stick' });
     expect(r.steps[0].summary).toBe('연결된 스틱이 없어요');
   });
 
@@ -57,8 +58,8 @@ describe('setupSteps', () => {
 
   it('전부 충족하면 완료 요약 문구', () => {
     const r = setupSteps(allDone, NOW);
-    expect(r.steps.map((s) => s.summary)).toEqual(['왼손·오른손 연결됨 · 82% / 64%', '오늘 14:02에 보정했어요', '「기본 배치」 사용 중']);
-    expect(r).toMatchObject({ doneCount: 3, total: 3, firstNeeded: null });
+    expect(r.steps.map((s) => s.summary)).toEqual(['왼손·오른손 연결됨 · 82% / 64%', '오늘 14:02에 보정했어요']);
+    expect(r).toMatchObject({ doneCount: 2, total: 2, firstNeeded: null });
   });
 
   it('배터리가 null이면 –, 값을 안 넘기면 배터리를 붙이지 않는다', () => {
@@ -73,34 +74,30 @@ describe('setupSteps', () => {
     expect(r.steps[1].summary).toBe('10월 29일 09:05에 보정했어요');
   });
 
-  it('양손·보정만 끝나면 프리셋이 첫 필요 단계', () => {
-    const r = setupSteps({ ...allDone, activePresetId: null, activePresetName: null }, NOW);
-    expect(r).toMatchObject({ doneCount: 2, firstNeeded: 'preset' });
-  });
-
-  it('키보드 전용은 스틱·보정이 필요 없음, 프리셋만 센다', () => {
+  it('키보드 전용은 두 단계 모두 필요 없음이라 셀 단계가 없다', () => {
     const none = { ...base, sensorKind: 'none' as const };
     const r = setupSteps(none, NOW);
-    expect(r.steps.map((s) => s.status)).toEqual(['skipped', 'skipped', 'needed']);
+    expect(r.steps.map((s) => s.status)).toEqual(['skipped', 'skipped']);
     expect(r.steps[0].summary).toBe('키보드만 사용해 필요 없어요');
-    expect(r).toMatchObject({ doneCount: 0, total: 1, firstNeeded: 'preset' });
-    expect(setupSteps({ ...none, activePresetId: 'p', activePresetName: 'A' }, NOW)).toMatchObject({ doneCount: 1, total: 1, firstNeeded: null });
+    expect(r).toMatchObject({ doneCount: 0, total: 0, firstNeeded: null });
   });
 });
 
 describe('returnBannerText', () => {
   it('모자라면 준비 중 제목(을/를 처리)', () => {
-    expect(returnBannerText(['preset'], [true, true], '악보 연습').title).toBe('악보 연습을 준비하고 있어요');
-    expect(returnBannerText(['preset'], [true, true], '리듬 게임').title).toBe('리듬 게임을 준비하고 있어요');
-    expect(returnBannerText(['preset'], [true, true], '홈').title).toBe('홈을 준비하고 있어요');
-    expect(returnBannerText(['preset'], [true, true], '자유 연습 모드').title).toBe('자유 연습 모드를 준비하고 있어요');
+    expect(returnBannerText(['firstSetup'], [true, true], '악보 연습').title).toBe('악보 연습을 준비하고 있어요');
+    expect(returnBannerText(['firstSetup'], [true, true], '리듬 게임').title).toBe('리듬 게임을 준비하고 있어요');
+    expect(returnBannerText(['firstSetup'], [true, true], '홈').title).toBe('홈을 준비하고 있어요');
+    expect(returnBannerText(['firstSetup'], [true, true], '자유 연습 모드').title).toBe('자유 연습 모드를 준비하고 있어요');
   });
   it('스틱만 한 손 빠지면 손을 짚는 한 줄', () => {
     expect(returnBannerText(['stick'], [true, false], '악보 연습').line).toBe('오른손 스틱만 연결하면 돌아갈 수 있어요');
     expect(returnBannerText(['stick'], [false, true], '악보 연습').line).toBe('왼손 스틱만 연결하면 돌아갈 수 있어요');
   });
   it('여러 조건이면 문구를 이어 붙인다', () => {
-    expect(returnBannerText(['stick', 'preset'], [false, false], 'x').line).toBe('왼손·오른손 스틱을 연결하세요 · 사용할 프리셋을 적용하세요');
+    expect(returnBannerText(['stick', 'firstSetup'], [false, false], 'x').line).toBe(
+      '왼손·오른손 스틱을 연결하세요 · 최초 설정(드럼 위치 보정)이 필요합니다',
+    );
     expect(returnBannerText(['stick', 'firstSetup'], [true, false], 'x').line).toContain('오른손 스틱을 연결하세요 · 최초 설정');
   });
   it('다 되면 준비 완료 + 돌아가기 안내(으로/로)', () => {
@@ -138,6 +135,27 @@ describe('하단 바·이탈 문구', () => {
     expect(unsavedLeaveText('기본 배치')).toContain('「기본 배치」의 패드 위치를 바꿨어요');
     expect(unsavedLeaveText(null)).toContain('프리셋으로 남지 않아요');
   });
+
+  it('보정 중(UX-64): 새 프리셋 / 적용 프리셋 문구와 [저장] 비활성. 변경·이탈보다 우선', () => {
+    const v = setupBarView({ activePresetName: '내 배치', dirty: true, leaving: true, calibrating: { target: 'new', index: 0, total: 7 } });
+    expect(v).toEqual({ text: '새 프리셋 보정 중 · 7개 중 1번째', tone: 'caption', button: 'save', buttonEnabled: false });
+    expect(setupBarView({ activePresetName: '내 배치', dirty: false, leaving: false, calibrating: { target: 'active', index: 2, total: 7 } }).text).toBe(
+      '「내 배치」 보정 중 · 7개 중 3번째',
+    );
+    // 보정 중이 아니면 기존 4상태 그대로
+    expect(setupBarView({ activePresetName: '내 배치', dirty: false, leaving: false, calibrating: null })).toMatchObject({
+      text: '「내 배치」 사용 중',
+      buttonEnabled: false,
+    });
+  });
+
+  it('초안을 들고 슬롯·이름 창이 열린 동안(UX-64 Figma ④·⑤): 저장 안내에 [저장] 비활성', () => {
+    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: null } })).toMatchObject({
+      text: '보정 완료 · 빈 슬롯을 눌러 저장해요',
+      buttonEnabled: false,
+    });
+    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: 3 } }).text).toBe('보정 완료 · 슬롯 3에 저장할 이름을 정해요');
+  });
 });
 
 describe('dongleLine', () => {
@@ -154,5 +172,31 @@ describe('dongleLine', () => {
   });
   it('LINK가 끊기면 빨간 점과 다시 꽂기 안내', () => {
     expect(dongleLine('stale', [false, false])).toMatchObject({ dot: 'off', action: '다른 동글 연결' });
+  });
+});
+
+describe('setupSteps ② 보정 카드 문구(PLAY-004 4-5)', () => {
+  it('앵커가 없으면 "드럼 위치를 아직 잡지 않았어요"', () => {
+    expect(setupSteps({ ...allDone, firstSetupDone: false }, NOW).steps[1].summary).toBe(CALIBRATION_NEEDED_TEXT);
+  });
+
+  it('재정렬이 필요한 손이 있으면 그 손을 짚는 요약(앵커 없음 문구보다 우선). 상태는 firstSetupDone이 정한다(UX-64 D7)', () => {
+    const r = setupSteps({ ...allDone, firstSetupDone: false, realignNeeded: [false, true] }, NOW).steps[1];
+    expect(r).toEqual({ id: 'calibration', status: 'needed', summary: '오른손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요' });
+    expect(setupSteps({ ...allDone, realignNeeded: [true, true] }, NOW).steps[1].summary).toBe(
+      '스틱이 다시 켜졌어요 · 스네어를 왼손·오른손 한 번씩 쳐 주세요',
+    );
+  });
+
+  it('시스템 기본 프리셋은 보정 시각이 없으면 "보정 없이" 요약, 있으면 시각', () => {
+    expect(setupSteps({ ...allDone, referenceSetAt: null, systemPreset: true }, NOW).steps[1].summary).toBe(CALIBRATION_SYSTEM_TEXT);
+    expect(setupSteps({ ...allDone, systemPreset: true }, NOW).steps[1].summary).toBe('오늘 14:02에 보정했어요');
+    expect(setupSteps({ ...allDone, referenceSetAt: null }, NOW).steps[1].summary).toBe('보정했어요');
+  });
+
+  it('realignText 단독', () => {
+    expect(realignText(undefined)).toBeNull();
+    expect(realignText([false, false])).toBeNull();
+    expect(realignText([true, false])).toBe('왼손 스틱이 다시 켜졌어요 · 스네어를 한 번 쳐 주세요');
   });
 });

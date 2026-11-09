@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { KitSkin, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
 import { ElectronicPad } from './ElectronicPad';
 import { NeonPad } from './NeonPad';
+import { RING } from './padRing';
 import './drum.css';
 
 /** 원본 패드 폭(px). 모든 좌표는 이 폭 기준이고 w에 맞춰 균등 확대·축소한다 */
@@ -81,20 +82,6 @@ export function PadDefs({ id }: { id: string }) {
     </defs>
   );
 }
-
-interface RingGeo {
-  cx: number;
-  cy: number;
-  rx: number;
-  ry: number;
-}
-
-/** 링 기하(원본 160 기준). 헤드 중심에서 rx 86 */
-const RING: Record<PadShape, RingGeo> = {
-  drum: { cx: 80, cy: 72, rx: 86, ry: 54 },
-  cymbal: { cx: 80, cy: 70, rx: 86, ry: 46 },
-  kick: { cx: 80, cy: 85, rx: 86, ry: 86 },
-};
 
 /** 판정 텍스트 중심 y(원본 좌표) */
 const JUDGE_Y: Record<PadShape, number> = { drum: 12, cymbal: 18, kick: -7 };

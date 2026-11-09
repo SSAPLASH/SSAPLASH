@@ -96,6 +96,7 @@
   --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1); /* 사이드바 폭처럼 양방향 전환 */
   --motion-move: var(--motion-base); /* 이동·확대·회전. 모션 줄이기에서 0ms */
   --motion-fade: var(--motion-base); /* 투명도. 모션 줄이기에서도 유지 */
+  --motion-route: 160ms; /* 라우트·단계 전환 페이드(화면은 자주 바뀌므로 --motion-base보다 짧게). 페이드라 모션 줄이기에서도 유지 */
 
   /* 폰트 */
   --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo',

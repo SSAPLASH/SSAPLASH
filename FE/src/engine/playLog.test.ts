@@ -100,6 +100,17 @@ describe('buildPlayLog 실시간 코칭 기록', () => {
     presetId: null,
   } as unknown as Parameters<typeof buildPlayLog>[0];
 
+  it('열린 HIHAT와 측정 완전성을 로컬 로그에 보존한다', () => {
+    const notes = [
+      { index: 0, note: { pad: 'HIHAT', timeMs: 0, hihatOpen: true }, judgement: null, deltaMs: null },
+      { index: 1, note: { pad: 'SNARE', timeMs: 1, hihatOpen: true }, judgement: null, deltaMs: null },
+    ] as Parameters<typeof buildPlayLog>[0]['notes'];
+    const log = buildPlayLog({ ...base, notes, hihatPedalCoverage: 'COMPLETE' });
+    expect(log.hihatPedalCoverage).toBe('COMPLETE');
+    expect(log.notes.map((n) => n.hihatOpen)).toEqual([true, undefined]);
+    expect(buildPlayLog(base).hihatPedalCoverage).toBeUndefined();
+  });
+
   it('넘긴 liveCoachEvents를 그대로 싣고, 안 넘기면 필드가 없다', () => {
     const events = [{ tMs: 1000, tag: 'LIVE_LATE', text: '늦어요' }];
     expect(buildPlayLog({ ...base, liveCoachEvents: events }).liveCoachEvents).toEqual(events);

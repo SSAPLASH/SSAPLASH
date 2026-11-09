@@ -22,6 +22,8 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
+  /* 축하 캔버스(CelebrationFx)가 카드 안에 겹친다 */
+  position: relative;
 }
 .result-summary-song {
   display: flex;
@@ -50,6 +52,22 @@
   font-size: 12px;
   line-height: 1.45;
 }
+/* 오른쪽 지표 묶음(Figma 672:4132): 간격 48, 아래 정렬. 점수 칸 아래 여백 10으로 「92,400」과 「96.8%」 아래선을 맞춘다 */
+.result-summary-metrics {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 48px;
+}
+.result-summary-score {
+  padding-bottom: 10px;
+}
+.result-summary-divider {
+  flex: none;
+  width: 1px;
+  height: 48px;
+  background: var(--line);
+}
 .result-summary-block {
   display: flex;
   flex-direction: column;
@@ -66,6 +84,28 @@
 }
 .result-summary-accuracy {
   color: var(--brand-text);
+}
+
+/* 최고 기록 칩: 갱신은 콤보 노랑, 첫 기록은 브랜드 */
+.result-record-chip {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--brand-text);
+}
+.result-record-chip[data-kind='new'] {
+  color: var(--fx-combo);
+}
+/* 축하 캔버스 래퍼: 카드 전체를 덮고 클릭을 막지 않는다 */
+.result-celebrate {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 /* ---- 2열: 판정 분포 · 타이밍 분포 ---- */
@@ -242,7 +282,7 @@ button.result-fb {
 
 /* ---- 패드별 표 (134:2686 + 126:4143) ---- */
 .result-table-wrap {
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
@@ -288,4 +328,18 @@ button.result-fb {
   .result-summary {
     flex-wrap: wrap;
   }
+}
+
+.result-open-hihat {
+  display: block;
+  word-break: keep-all;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: 11px;
+}
+.result-celebrate .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
 }

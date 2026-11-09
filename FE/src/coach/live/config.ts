@@ -17,6 +17,8 @@ export const LIVE_COACH_CONFIG = {
     handSize: 16,
     /** 놓침 몰림 지표 */
     missSize: 6,
+    /** 패드별 놓침 지표(패드마다 표본이 필요해서 더 넓게 본다) */
+    padMissSize: 16,
   },
   /** 이 개수만큼 판정이 쌓이기 전에는 문구를 띄우지 않는다 */
   warmupJudgements: 8,
@@ -34,8 +36,10 @@ export const LIVE_COACH_CONFIG = {
     minGapMs: 6_000,
     /** 안정 칭찬에 필요한 유효 타격 수 */
     minValid: 8,
-    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다 */
-    keepMaxMiss: 2,
+    /** 창 안의 MISS가 이보다 많으면 어떤 칭찬도 띄우지 않는다. 0이라 놓침이 하나라도 있으면 칭찬하지 않는다 */
+    keepMaxMiss: 0,
+    /** 일반 칭찬(LIVE_GOOD_KEEP)은 직전 문구(지적·칭찬 모두)에서 이만큼 지나야 띄운다. 빈 칭찬이 잦지 않게 한다 */
+    keepMinGapMs: 20_000,
   },
   /** 계속 늦음·빠름 */
   trend: {
@@ -55,6 +59,32 @@ export const LIVE_COACH_CONFIG = {
     /** 패드 평균 − 창 평균의 절댓값 ≥ diffCoef × goodMs */
     diffCoef: 0.45,
     releaseCoef: 0.25,
+  },
+  /** 놓침이 한 패드에 몰림 */
+  padMiss: {
+    /** 창 안의 전체 MISS가 이만큼은 있어야 몰림을 판단한다 */
+    minTotalMisses: 4,
+    /** 그 패드의 MISS 개수 */
+    minMisses: 3,
+    /** 전체 MISS 중 그 패드의 비율 */
+    share: 0.6,
+    /** 그 패드 노트 중 MISS 비율. 노트가 많은 패드가 우연히 많이 놓친 것처럼 보이지 않게 한다 */
+    rate: 0.5,
+    /** 그 패드의 MISS가 이 이하이면 거둔다 */
+    releaseMax: 1,
+  },
+  /** 세팅 안내. 기기 지연은 판정 폭과 무관해서 ms로 적는다. 스틱 입력에서 플레이당 태그별 한 번만 뜬다 */
+  setup: {
+    /** 판단에 쓰는 최근 판정 수 */
+    window: 16,
+    /** 소리 지연: 유효 타격 수, 평균 |deltaMs| 하한, 표준편차 상한, 같은 부호 비율 */
+    minValid: 16,
+    offsetMeanMs: 45,
+    offsetMaxStdMs: 20,
+    offsetSameSign: 0.9,
+    /** 패드 위치: 판정 중 MISS 비율, MISS 대비 채보 밖 타격 비율 */
+    padsMissRate: 0.5,
+    padsStrayRatio: 0.5,
   },
   /** 한쪽 손이 약함 */
   hand: {

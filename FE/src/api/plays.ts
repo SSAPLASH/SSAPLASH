@@ -3,6 +3,25 @@ import type { PlayUploadBody } from '@/domain/playUpload';
 import { apiFetch } from './http';
 import type { PageResponse } from './recordings';
 
+export interface BestRecordDto {
+  songId: number;
+  chartId: number;
+  difficulty: 'EASY' | 'NORMAL' | 'HARD';
+  mode: 'RHYTHM' | 'SHEET';
+  bestScore: number | null;
+  /** 서버 백분율(0~100). 화면 비율로의 변환은 domain/serverBestRecord가 맡는다. */
+  bestAccuracy: number | null;
+}
+
+export interface BestRecordsResponse { items: BestRecordDto[] }
+
+export function getBestRecords(songIds: readonly number[], signal: AbortSignal): Promise<BestRecordsResponse> {
+  if (songIds.length < 1 || songIds.length > 100 || songIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+    return Promise.reject(new Error('최고 기록 조회에는 유효한 곡 ID 1~100개가 필요합니다.'));
+  }
+  return apiFetch<BestRecordsResponse>(`/api/v1/plays/best-records?songIds=${songIds.join(',')}`, { signal });
+}
+
 export interface PlaySummary {
   playId: string;
   startedAt: string;

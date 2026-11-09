@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { activateSensor } from '@/app/bootstrap';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { audioEngine } from '@/audio/AudioEngine';
-import { layoutToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
 import { feed, type FeedMode } from '@/monitor/feed';
@@ -97,7 +97,7 @@ function initialMode(): FeedMode {
 }
 
 export function StickMonitorPage() {
-  const kitLayout = useSettings((s) => s.kitLayout);
+  const stickAnchors = useSettings((s) => s.stickAnchors);
   const tuning = useSettings((s) => s.tuning);
   const activeSensor = useLive((s) => s.activeSensor);
   const sourceState = useLive((s) => s.sourceState);
@@ -114,11 +114,8 @@ export function StickMonitorPage() {
   const sourceLabel = activeSensor === 'none' ? '없음' : (sensorRegistry.get(activeSensor)?.label ?? activeSensor);
 
   // 판정에 쓰는 것과 같은 규칙의 프로필(fePad 계산·패드 테이블 전송·녹화 meta)
-  const profile = useMemo(
-    () =>
-      layoutToProfile(kitLayout, tuning.angleRange, { maxRadiusDeg: tuning.maxRadiusDeg, radiusFactor: tuning.radiusFactor }),
-    [kitLayout, tuning.angleRange, tuning.maxRadiusDeg, tuning.radiusFactor],
-  );
+  // 모니터는 오른손 프로필을 대표로 쓴다(손별 표는 PLAY-004). 보정 전이면 3D 모델 기본 앵커
+  const profile = useMemo(() => anchorsToProfile(stickAnchors[1], tuning, 1), [stickAnchors, tuning]);
 
   const [section, setSectionState] = useState<Section>(readSection);
   const setSection = useCallback((s: Section) => {

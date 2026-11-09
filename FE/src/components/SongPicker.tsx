@@ -2,9 +2,15 @@
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다. 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
 // 선택 결과는 페이지가 URL로 옮긴다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// 칩·검색·탭은 둘러보기다 — 사용자가 고른 곡은 목록에서 빠져도 패널에 남고 [준비]가 된다(설계 CHART-001 곡 난이도·선택 U5).
+// 0곡이면 표 틀(머리글·「총 0곡」)을 두고 본문 자리에 안내를 둔다. 라이브러리 안내는 라이브러리 탭 0곡일 때만 보인다.
+// 추천(설계 COACH-004-song-picker-ai-tab): 로그인·API 소스면 탭 [AI 추천곡]이 붙는다. 추천 곡(R1)은 진입 때 모드마다 한 번 읽고
+// AI 추천곡 탭 목록과 기본 곡 탭의 「✦ AI 추천」 라벨이 같은 결과를 쓴다. 선택한 곡 패널 아래는 그 곡과 비슷한 곡(R2) 한 건이다.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/recommendation';
 import {
+  chartFallback,
   defaultChartId,
   isPlayableStatus,
   SONG_LEVEL_LABEL,
@@ -15,10 +21,14 @@ import {
   type SongSummary,
 } from '@/domain/songCatalog';
 import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
+import { presetDisplayName } from '@/domain/preset';
 import { loadPlayLogs } from '@/engine/playLog';
+import { useBestRecords } from '@/app/useBestRecords';
+import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
+import { useAuth } from '@/store/authStore';
+import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
-import { useLive } from '@/store/liveStore';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -34,6 +44,12 @@ interface Props {
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
+/** 선택이 이만큼 그대로일 때 비슷한 곡을 읽는다 — 키로 행을 빠르게 넘길 때 요청·노출 기록이 쌓이지 않게(검색 디바운스와 같은 값) */
+const SIMILAR_DELAY_MS = 300;
+/** AI 추천곡 탭이 받는 추천 곡 수(BE 최대) */
+const RECOMMEND_SIZE = 10;
+/** 패널은 한 건만 보이지만 선택한 곡이 섞여 와도 남도록 여유 있게 받는다 */
+const SIMILAR_SIZE = 3;
 
 const COPY: Record<Props['mode'], { title: string; desc: string }> = {
   play: {
@@ -46,10 +62,14 @@ const COPY: Record<Props['mode'], { title: string; desc: string }> = {
   },
 };
 
-const SCOPE_OPTIONS: { value: SongScope; label: string }[] = [
+/** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과다 */
+type PickerTab = SongScope | 'RECOMMEND';
+
+const SCOPE_OPTIONS: { value: PickerTab; label: string }[] = [
   { value: 'BUILTIN', label: '기본 곡' },
   { value: 'MINE', label: '라이브러리' },
 ];
+const TAB_OPTIONS_WITH_AI: { value: PickerTab; label: string }[] = [...SCOPE_OPTIONS, { value: 'RECOMMEND', label: 'AI 추천곡' }];
 
 type LevelFilter = SongLevel | 'ALL';
 
@@ -64,10 +84,26 @@ function listFilter(level: LevelFilter) {
 }
 
 /** 내 곡 탭에서 완료되지 않은 곡은 고를 수 없다(playableOnly 응답에는 없지만 내장 소스·구버전 응답 대비) */
-function isLocked(tab: SongScope, song: SongSummary): boolean {
+function isLocked(tab: PickerTab, song: SongSummary): boolean {
   return tab === 'MINE' && !isPlayableStatus(song.status);
 }
 
+/** 0곡 안내(설계 4-2): 추천 없음 → 난이도로 빈 경우 → 라이브러리 탭 → 기본 곡 탭 순으로 고른다 */
+function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommend: boolean): { title: string; description?: ReactNode } {
+  if (noRecommend) return { title: '아직 추천할 곡이 없어요', description: '연주 기록을 모아서 실력에 맞는 곡을 추천해 드릴게요.' };
+  if (level !== 'ALL') return { title: '이 난이도의 곡이 없어요', description: '다른 난이도를 골라 보세요.' };
+  if (tab === 'MINE') {
+    return {
+      title: '아직 고를 수 있는 곡이 없어요',
+      description: (
+        <>
+          처리 중·실패한 곡은 <Link to="/studio">라이브러리</Link>에서 확인하세요.
+        </>
+      ),
+    };
+  }
+  return { title: '곡이 없어요', description: query ? '검색어를 바꿔 보세요.' : undefined };
+}
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
@@ -75,32 +111,75 @@ export function SongPicker({ onSelect, mode }: Props) {
   const { source, scope, items, status, error, load, selectSong } = useSongs();
   const presets = useSettings((s) => s.presets);
   const activePresetId = useSettings((s) => s.activePresetId);
-  const sensorKind = useSettings((s) => s.sensorKind);
-  const connected = useLive((l) => l.connected);
+  // 추천: API 곡 소스이고 로그인 상태일 때만 탭과 무관하게 마운트 시 한 번 요청한다(U7)
+  const authed = useAuth((a) => a.status === 'authenticated');
+  const recoKey = `SONG_PICKER:${mode === 'play' ? 'RHYTHM' : 'SHEET'}`;
+  const recoEnabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && source === 'api' && authed;
+  const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
+  const loadReco = useRecommendations((r) => r.load);
+  const loadSimilar = useRecommendations((r) => r.loadSimilar);
+  const clickReco = useRecommendations((r) => r.click);
+  const clearReco = useRecommendations((r) => r.clear);
   // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
   const [params] = useSearchParams();
-  const [tab, setTab] = useState<SongScope>(params.get('scope') === 'MINE' ? 'MINE' : scope);
+  const [rawTab, setTab] = useState<PickerTab>(params.get('scope') === 'MINE' ? 'MINE' : scope);
+  // 로그인이 풀리면 AI 추천곡 탭은 사라지므로 기본 곡으로 본다
+  const tab: PickerTab = rawTab === 'RECOMMEND' && !recoEnabled ? 'BUILTIN' : rawTab;
+  const isAi = tab === 'RECOMMEND';
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<LevelFilter>('ALL');
-  // undefined: 사용자가 아직 고르지 않았다(이때는 `?song=` 딥링크 곡, 없으면 첫 곡이 선택된다)
-  const [manualId, setManualId] = useState<number | undefined>(undefined);
+  // null: 사용자가 아직 고르지 않았다(이때는 `?song=` 딥링크 곡, 없으면 첫 곡이 선택된다).
+  // 곡 객체를 기억해 필터로 목록에서 빠져도 패널에 그대로 보인다(U5)
+  const [manual, setManual] = useState<SongSummary | null>(null);
+  // AI 추천곡 탭에서 직접 고른 곡 id — 그 곡의 [준비]는 추천 채보로 가고 클릭을 기록한다. 다른 곡을 고르면 지운다
+  const [aiPickedId, setAiPickedId] = useState<number | null>(null);
+  // 비슷한 곡을 읽을 곡 — 선택이 SIMILAR_DELAY_MS 그대로일 때 정해진다
+  const [similarFor, setSimilarFor] = useState<number | null>(null);
+  const similarKeys = useRef(new Set<string>());
   const [details, setDetails] = useState<Record<number, DetailState>>({});
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
-  // 곡별 최고 기록: 마운트 시점의 로컬 플레이 로그(U18). play는 최고 점수, sheet는 최고 정확도
-  const bests = useMemo(() => {
-    const logs = loadPlayLogs();
+  // 내장 개발 소스만 로컬 기록을 사용한다. API 실패를 로컬값으로 대체하지 않는다.
+  const localBests = useMemo(() => {
+    const logs = source === 'builtin' ? loadPlayLogs() : [];
     return mode === 'play'
       ? { scores: bestScoreBySong(logs, 'RHYTHM'), accuracies: undefined }
       : { scores: undefined, accuracies: bestAccuracyBySong(logs, 'SHEET') };
-  }, [mode]);
+  }, [mode, source]);
+
+  // AI 추천곡 탭 목록: 받은 R1을 검색·칩으로 FE에서 거른다(순서 유지)
+  const aiCards: RecommendCard[] = useMemo(
+    () => (recoEntry.status === 'ready' ? filterRecommended(recoEntry.cards, query, level === 'ALL' ? null : level) : []),
+    [recoEntry, query, level],
+  );
+  const recoIds = useMemo(() => new Set(recoEntry.status === 'ready' ? recoEntry.cards.map((c) => c.song.id) : []), [recoEntry]);
+  const songs: SongSummary[] = useMemo(() => (isAi ? aiCards.map((c) => c.song) : items), [isAi, aiCards, items]);
+  const ready = isAi ? recoEntry.status === 'ready' || recoEntry.status === 'hidden' : status === 'ready';
+  const listLoading = isAi ? !ready : status === 'loading';
+
+  const recordsReady = isAi ? ready : status === 'ready' && scope === tab;
+  const records = useBestRecords(recordsReady ? songs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
+  const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
+
+  useEffect(() => {
+    if (recoEnabled) {
+      void loadReco(recoKey, { context: 'SONG_PICKER', mode: mode === 'play' ? 'RHYTHM' : 'SHEET', size: RECOMMEND_SIZE });
+    }
+  }, [recoEnabled, recoKey, mode, loadReco]);
+  useEffect(() => () => clearReco(recoKey), [recoKey, clearReco]);
+  useEffect(() => {
+    const keys = similarKeys.current;
+    return () => keys.forEach((k) => clearReco(k));
+  }, [clearReco]);
 
   // 탭·검색어·난이도가 바뀌면 목록을 다시 읽는다. 검색어 변경만 디바운스하고 나머지는 즉시
   useEffect(() => {
     const delay = firstLoad.current || queryRef.current === query ? 0 : SEARCH_DEBOUNCE_MS;
     firstLoad.current = false;
     queryRef.current = query;
+    // AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다)
+    if (tab === 'RECOMMEND') return;
     const t = setTimeout(() => void load(tab, query, listFilter(level)), delay);
     return () => clearTimeout(t);
   }, [tab, query, level, load]);
@@ -123,21 +202,27 @@ export function SongPicker({ onSelect, mode }: Props) {
     const n = Number(params.get('song'));
     return Number.isInteger(n) && n > 0 ? n : null;
   }, [params]);
-  const ready = status === 'ready';
   const deepTarget =
     deepLinkId !== null && tab === 'MINE' && ready && scope === 'MINE'
       ? items.find((s) => s.id === deepLinkId && isPlayableStatus(s.status))
       : undefined;
-  const selectable = (id: number | undefined) => {
-    const s = id === undefined ? undefined : items.find((x) => x.id === id);
-    return s !== undefined && !isLocked(tab, s);
+  const pick = (id: number) => {
+    const s = songs.find((x) => x.id === id);
+    if (!s || isLocked(tab, s)) return;
+    setManual(s);
+    setAiPickedId(isAi ? id : null);
   };
-  const selectedId: number | null = !ready
+  const selectedSong: SongSummary | null = !ready
     ? null
-    : selectable(manualId)
-      ? (manualId as number)
-      : (deepTarget?.id ?? items.find((s) => !isLocked(tab, s))?.id ?? null);
-  const selectedSong = selectedId === null ? null : (items.find((s) => s.id === selectedId) ?? null);
+    : manual
+      ? (songs.find((s) => s.id === manual.id) ?? manual)
+      : (deepTarget ?? songs.find((s) => !isLocked(tab, s)) ?? null);
+  const selectedId = selectedSong?.id ?? null;
+  // 추천 채보로 갈 카드: AI 추천곡 탭에서 고른 곡(아직 고르지 않았으면 그 탭에서 자동 선택된 첫 곡)
+  const aiCard =
+    selectedId !== null && recoEntry.status === 'ready' && (aiPickedId === selectedId || (manual === null && isAi))
+      ? recoEntry.cards.find((c) => c.song.id === selectedId)
+      : undefined;
 
   // 선택된 곡의 채보 정보를 한 번 읽는다([준비]가 기본 채보를 고르는 데 쓴다)
   useEffect(() => {
@@ -145,22 +230,50 @@ export function SongPicker({ onSelect, mode }: Props) {
     fetchDetail(selectedId);
   }, [selectedId, fetchDetail]);
 
+  // 기본 채보로 간다. AI 추천곡 탭에서 고른 곡은 추천 채보(상세에 없으면 기본 채보)로 가고 클릭을 기록한다(설계 4-3, U2·U5)
   const prepare = (id: number) => {
+    const card = aiCard?.song.id === id ? aiCard : undefined;
+    const go = (detail: SongDetail) => {
+      const chartId = card ? (chartFallback(detail, card.chartId) ?? card.chartId) : defaultChartId(detail);
+      if (chartId === null) return;
+      // 기록은 기다리지 않는다(D8)
+      if (card && recoEntry.status === 'ready') void clickReco(card, recoEntry.requestId);
+      onSelect(id, chartId);
+    };
     const d = details[id];
     if (d?.status === 'ready') {
-      const chartId = defaultChartId(d.detail);
-      if (chartId !== null) onSelect(id, chartId);
+      go(d.detail);
       return;
     }
     if (d?.status === 'loading') return;
     // 아직 못 읽었으면 읽고 나서 넘어간다(더블클릭이 상세 조회보다 빠른 경우)
-    selectSong(id).then(
-      (detail) => {
-        const chartId = defaultChartId(detail);
-        if (chartId !== null) onSelect(id, chartId);
-      },
-      () => fetchDetail(id),
-    );
+    selectSong(id).then(go, () => fetchDetail(id));
+  };
+
+  // 비슷한 곡(R2): 선택이 SIMILAR_DELAY_MS 그대로면 그 곡으로 한 번 읽는다. 연주 준비의 SIMILAR:{id}(size 5)와 섞이지 않게 키를 나눈다
+  useEffect(() => {
+    if (!recoEnabled || selectedId === null) return;
+    const t = setTimeout(() => setSimilarFor(selectedId), SIMILAR_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [recoEnabled, selectedId]);
+  const similarKey = recoEnabled && similarFor !== null && similarFor === selectedId ? `SONG_PICKER:SIMILAR:${similarFor}` : null;
+  const similarDetail = similarFor === null ? undefined : details[similarFor];
+  useEffect(() => {
+    if (similarKey === null || similarFor === null) return;
+    similarKeys.current.add(similarKey);
+    // 기준 단계: 상세를 읽었으면 기본 채보의 단계, 아직이면 BE 기본(NORMAL)
+    const base =
+      similarDetail?.status === 'ready' ? similarDetail.detail.charts.find((c) => c.id === defaultChartId(similarDetail.detail)) : undefined;
+    void loadSimilar(similarKey, { songId: similarFor, difficulty: base?.difficulty, size: SIMILAR_SIZE });
+  }, [similarKey, similarFor, similarDetail, loadSimilar]);
+  const similarEntry = useRecommendations((r) => (similarKey === null ? undefined : entryOf(r.entries, similarKey)));
+  const similarCard = similarEntry?.status === 'ready' && selectedId !== null ? pickSimilar(similarEntry.cards, selectedId) : undefined;
+  // [이 곡 보기]: 탭·검색·칩은 그대로 두고 그 곡을 선택한 곡으로 바꾼다. [준비]는 기본 채보(U5)
+  const viewSimilar = () => {
+    if (!similarCard || similarEntry?.status !== 'ready') return;
+    void clickReco(similarCard, similarEntry.requestId);
+    setManual(similarCard.song);
+    setAiPickedId(null);
   };
 
   const selDetail = selectedId === null ? undefined : details[selectedId];
@@ -170,7 +283,7 @@ export function SongPicker({ onSelect, mode }: Props) {
       : selDetail?.status === 'error' || (selDetail?.status === 'ready' && selDetail.detail.charts.length === 0)
         ? 'error'
         : 'loading';
-  const presetName = presets.find((p) => p.id === activePresetId)?.name ?? null;
+  const presetName = presetDisplayName(presets, activePresetId);
   const copy = COPY[mode];
 
   return (
@@ -180,7 +293,9 @@ export function SongPicker({ onSelect, mode }: Props) {
         <p className="play-sp-desc">{copy.desc}</p>
       </div>
 
-      {source === 'api' && <Segmented label="곡 범위" options={SCOPE_OPTIONS} value={tab} onChange={setTab} />}
+      {source === 'api' && (
+        <Segmented label="곡 범위" options={recoEnabled ? TAB_OPTIONS_WITH_AI : SCOPE_OPTIONS} value={tab} onChange={setTab} />
+      )}
       <div className="play-sp-filter">
         <Input
           className="play-sp-search"
@@ -199,13 +314,13 @@ export function SongPicker({ onSelect, mode }: Props) {
         </div>
       </div>
 
-      {status === 'loading' && (
+      {listLoading && (
         <div className="play-sp-center">
           <span className="spinner" aria-label="불러오는 중" />
         </div>
       )}
 
-      {status === 'error' && (
+      {!isAi && status === 'error' && (
         <div className="notice error col" role="alert">
           <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
           <Button variant="secondary" size="sm" onClick={() => void load(tab, query, listFilter(level))}>
@@ -214,46 +329,27 @@ export function SongPicker({ onSelect, mode }: Props) {
         </div>
       )}
 
-      {ready && items.length === 0 && level !== 'ALL' && <EmptyState title="이 난이도의 곡이 없어요" description="다른 난이도를 골라 보세요." />}
+      {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
 
-      {ready && items.length === 0 && level === 'ALL' && (
-        <EmptyState
-          title={tab === 'MINE' ? '아직 만든 곡이 없어요' : '곡이 없어요'}
-          description={
-            tab === 'MINE' ? (
-              <>
-                <Link to="/studio">라이브러리</Link>에서 음원을 올려 보세요.
-              </>
-            ) : (
-              query ? '검색어를 바꿔 보세요.' : undefined
-            )
-          }
-        />
-      )}
-
-      {ready && items.length > 0 && (
+      {ready && (
         <div className="play-sp-grid">
           <div className="play-sp-list">
             <SongTable
               key={`${tab}|${query}|${level}`}
-              songs={items}
+              songs={songs}
               selectedId={selectedId}
-              onSelect={setManualId}
+              onSelect={pick}
               onOpen={(id) => {
-                setManualId(id);
+                pick(id);
                 prepare(id);
               }}
               mode={mode}
               bestScores={bests.scores}
               bestAccuracies={bests.accuracies}
               isLocked={(s) => isLocked(tab, s)}
+              isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
+              emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
             />
-            {/* 처리 중·실패 곡은 목록에 오지 않으므로 라이브러리 탭이면 늘 안내한다(설계 4-3) */}
-            {tab === 'MINE' && (
-              <p className="play-sp-note">
-                처리 중·실패한 곡은 <Link to="/studio">라이브러리</Link>에서 확인하세요.
-              </p>
-            )}
           </div>
           <SongDetailPane
             song={selectedSong}
@@ -261,11 +357,11 @@ export function SongPicker({ onSelect, mode }: Props) {
             bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
             bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
             presetName={presetName}
-            connected={connected}
-            keyboardOnly={sensorKind === 'none'}
             chartState={chartState}
             onRetry={() => selectedId !== null && fetchDetail(selectedId)}
             onPrepare={() => selectedId !== null && prepare(selectedId)}
+            similar={similarCard}
+            onSimilarPick={viewSimilar}
           />
         </div>
       )}

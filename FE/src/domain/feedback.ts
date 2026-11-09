@@ -74,11 +74,6 @@ function eulReul(word: string): string {
   return hasBatchim(word) ? '을' : '를';
 }
 
-/** 이/가 */
-function iGa(word: string): string {
-  return hasBatchim(word) ? '이' : '가';
-}
-
 function barRange(bars: number[]): [number, number] | undefined {
   return bars.length ? [Math.min(...bars), Math.max(...bars)] : undefined;
 }
@@ -153,8 +148,8 @@ export function buildFeedback(
       title: `${label}${eulReul(label)} 자주 놓쳐요`,
       body: `${label} 노트 ${worst.total}개 중 ${worst.miss}개(${pct(worst.miss / worst.total)})를 놓쳤어요.`,
       suggestion: missBars
-        ? `${label}${iGa(label)} 나오는 ${fmtBars(missBars)}를 느리게 반복해 보세요.`
-        : `${label}${iGa(label)} 나오는 마디를 느리게 반복해 보세요.`,
+        ? `${fmtBars(missBars)} 악보에서 ${label} 자리를 눈으로 먼저 따라간 뒤 다시 쳐 보세요.`
+        : `악보에서 ${label} 자리를 눈으로 먼저 따라간 뒤 다시 쳐 보세요.`,
       pads: [worst.pad],
       bars: missBars,
     });
@@ -198,7 +193,7 @@ export function buildFeedback(
         id: 'segment',
         title: `${fmtBars(bars)}에서 흔들려요`,
         body: `이 구간 정확도 ${pct(weak.acc)}로 전체 ${pct(overall)}보다 낮아요.`,
-        suggestion: `${fmtBars(bars)}만 따로 반복해서 연습해 보세요.`,
+        suggestion: `${fmtBars(bars)} 악보를 눈으로 먼저 따라간 뒤 다시 쳐 보세요.`,
         bars,
       });
     }
@@ -219,7 +214,7 @@ export function buildFeedback(
       id: 'pad-jitter',
       title: `${label} 타이밍이 들쭉날쭉해요`,
       body: `${label} 타격 시각의 편차가 ${jittery.sd.toFixed(0)}ms예요.`,
-      suggestion: `${label}만 8분음으로 천천히 쳐서 간격을 고르게 만들어 보세요.`,
+      suggestion: `자유 연습에서 메트로놈을 켜고 ${label}만 일정한 간격으로 쳐 보세요.`,
       pads: [jittery.pad],
     });
   }
@@ -245,7 +240,7 @@ function fallback(log: PlayLog): FeedbackItem {
     id: 'stable',
     title: '안정적이에요',
     body: `정확도 ${pct(log.summary.accuracy)}, PERFECT 비율 ${pct(perfectRate)}로 눈에 띄는 약점이 없어요.`,
-    suggestion: '다음 곡에 도전하거나 같은 곡을 더 빠른 템포로 쳐 보세요.',
+    suggestion: '다음 곡에 도전하거나 같은 곡을 더 높은 연습 단계로 쳐 보세요.',
   };
 }
 
@@ -256,6 +251,24 @@ export function chartFromLog(log: PlayLog): GridChart | null {
     bpm: log.bpm,
     beatsPerBar: log.beatsPerBar,
     offsetMs: log.offsetMs ?? 0,
-    notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs })),
+    notes: log.notes.map((n) => ({ pad: n.pad, timeMs: n.timeMs, ...(n.pad === 'HIHAT' && n.hihatOpen === true ? { hihatOpen: true as const } : {}) })),
   };
+}
+
+/** 열린 하이햇의 전체 채보 수와 유일한 성공 노트 수. 측정 불완전은 숫자를 표시하지 않는다. */
+export function summarizeOpenHihat(log: PlayLog): { text: string; label: string } | null {
+  if (log.mode !== 'SHEET' || !log.hihatPedalCoverage || log.hihatPedalCoverage === 'NONE') return null;
+  const open = new Set(log.notes.filter((n) => n.pad === 'HIHAT' && n.hihatOpen === true).map((n) => n.index));
+  if (!open.size) return null;
+  const incompleteRun = log.lastSongTimeMs !== undefined && log.lastSongTimeMs < log.durationMs;
+  const suffix = incompleteRun ? ' · 전체 채보 기준' : '';
+  if (log.hihatPedalCoverage === 'PARTIAL') {
+    const text = `열린 하이햇 · 측정 불완전${suffix}`;
+    return { text, label: text };
+  }
+  const hits = new Set<number>();
+  for (const h of log.hits) {
+    if (h.matchedNoteIndex !== undefined && open.has(h.matchedNoteIndex) && (h.judgement === 'PERFECT' || h.judgement === 'GOOD') && h.hihatClosed === false) hits.add(h.matchedNoteIndex);
+  }
+  return { text: `열린 ${hits.size}/${open.size}${suffix}`, label: `열린 하이햇: 페달을 떼고 정확히 친 노트 ${hits.size}개, 전체 열린 노트 ${open.size}개${suffix}` };
 }

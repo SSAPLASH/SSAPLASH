@@ -2,6 +2,7 @@
 // - 정확도: 서버 0~100 → 화면 0~1. null은 그대로 두고 화면에서 "–"
 // - 패드 코드: normalizePadId(옛 이름 HI_TOM → SMALL_TOM). 모르는 패드는 버린다
 // - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
+import type { Difficulty } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import { normalizePadId, type PadId } from '@/domain/pads';
 import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/report';
@@ -32,6 +33,10 @@ export interface ReportDto {
     sampleCount: number;
   }[];
   mode: string;
+  /** 선택 필드 — BE가 곡 정보를 추가하기 전 응답에는 없다 */
+  songId?: unknown;
+  chartId?: unknown;
+  difficulty?: unknown;
   inputSource: string;
   endReason: string | null;
   analysisStatus: AnalysisStatus;
@@ -118,6 +123,14 @@ export function toWeakSegments(raw: unknown): WeakSegment[] | null {
   });
 }
 
+/** 양의 정수 id만 인정한다(없거나 모르는 값은 null) */
+function positiveId(v: unknown): number | null {
+  const n = finite(v);
+  return n !== null && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+const isDifficulty = (v: unknown): v is Difficulty => v === 'EASY' || v === 'NORMAL' || v === 'HARD';
+
 export function toReport(dto: ReportDto): Report {
   return {
     playId: dto.playId,
@@ -142,6 +155,9 @@ export function toReport(dto: ReportDto): Report {
       ];
     }),
     mode: dto.mode,
+    songId: positiveId(dto.songId),
+    chartId: positiveId(dto.chartId),
+    difficulty: isDifficulty(dto.difficulty) ? dto.difficulty : null,
     inputSource: dto.inputSource,
     analysisStatus: dto.analysisStatus,
     weakSegments: toWeakSegments(dto.weakSegments),
