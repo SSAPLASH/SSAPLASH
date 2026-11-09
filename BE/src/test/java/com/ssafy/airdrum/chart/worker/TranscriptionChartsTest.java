@@ -60,6 +60,22 @@ class TranscriptionChartsTest {
 	}
 
 	@Test
+	void 빠르기_구간이_있는_음원_채보는_구간_빠르기로_솎는다() {
+		// CHART-003-variable-tempo-exp: AI가 찾은 박으로 낸 tempoMap. 120bpm 8박(0~4000ms) 뒤 60bpm
+		// 60bpm 구간의 4분 = 1000ms, 8분 = 500ms. 고정 120bpm으로 셌다면 4500ms도 4분 박이 된다
+		var notes = List.of(note("n1", 0, "KICK"), note("n2", 500, "KICK"), note("n3", 4000, "KICK"),
+				note("n4", 4500, "KICK"), note("n5", 5000, "KICK"));
+		JsonNode doc = json.valueToTree(Map.of("schemaVersion", 1, "generator", "ADT_MODEL", "generatorVersion", "adtof_drumsep@abc",
+				"metrics", Map.of("transcribeMs", 3), "charts", List.of(Map.of("difficulty", "NORMAL", "notationStatus", "UNAVAILABLE",
+						"notes", notes, "timing", Map.of("bpm", 120.0, "offsetMs", 0, "timeSignature", "4/4", "ppq", 480,
+								"tempoMap", List.of(Map.of("tick", 0, "bpm", 120.0), Map.of("tick", 8 * 480, "bpm", 60.0)),
+								"timeSignatureMap", List.of(Map.of("tick", 0, "numerator", 4, "denominator", 4)))))));
+		var data = charts.parse(doc, 6000);
+		assertThat(ids(data.easyNotes())).containsExactly("n1", "n2", "n3", "n5");
+		assertThat(data.timing()).contains("\"tempoMap\"");
+	}
+
+	@Test
 	void 계약_밖_채보는_RESULT_INVALID다() {
 		var ok = List.of(note("n1", 100, "SNARE"));
 		assertThatThrownBy(() -> charts.parse(chart("MUSICXML_RULE", "v", ok), 2000)).isInstanceOfSatisfying(BusinessException.class,
