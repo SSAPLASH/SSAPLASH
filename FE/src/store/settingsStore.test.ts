@@ -453,11 +453,14 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
 });
 
 describe('movePad (드래그 편집, kit-drag)', () => {
-  it('시스템 프리셋이면 아무것도 바꾸지 않는다', () => {
+  it('시스템 프리셋도 배치만 옮기고 앵커는 null 그대로 둔다(D9)', () => {
     useSettings.setState({ activePresetId: SYSTEM_PRESET_ID, kitLayout: DEFAULT_KIT_LAYOUT, stickAnchors: [null, null], presetAnchors: {} });
     useSettings.getState().movePad('SNARE', 0.7, 0.3);
-    expect(useSettings.getState().kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
-    expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+    const s = useSettings.getState();
+    expect(s.kitLayout.SNARE).toMatchObject({ x: 0.7, y: 0.3 });
+    expect(s.kitLayout.RIDE).toEqual(DEFAULT_KIT_LAYOUT.RIDE);
+    expect(s.stickAnchors).toEqual([null, null]);
+    expect(s.presetAnchors).toEqual({});
   });
 
   it('사용자 프리셋이면 배치와 앵커를 옮기고 presetAnchors·calibratedAt은 그대로 둔다. 범위는 0.05~0.95로 자른다', () => {
