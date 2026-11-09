@@ -127,7 +127,7 @@ export function SettingsPage() {
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
   const onLogout = () => {
-    void logout().then(() => navigate('/login', { replace: true }));
+    void logout().then(() => navigate('/', { replace: true }));
   };
 
   const openSetup = () => navigate('/setup', { state: { returnTo: '/settings', returnLabel: '설정' } });
