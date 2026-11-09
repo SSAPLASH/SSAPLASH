@@ -32,6 +32,7 @@ import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/components/play/TimingBar';
+import { strayMissSource } from '@/components/play/strayMissSource';
 import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
@@ -97,6 +98,8 @@ function PlayPageBody() {
   const [stage, setStage] = useState<Stage>(param.status === 'none' ? 'select' : 'loading');
   const [chart, setChart] = useState<Chart | null>(null);
   const [session, setSession] = useState<RhythmSession | null>(null);
+  // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
+  const missSource = useMemo(() => (session ? strayMissSource(session) : undefined), [session]);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
@@ -804,7 +807,7 @@ function PlayPageBody() {
             topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
+                <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} missSource={missSource} />
               ) : undefined
             }
           />
