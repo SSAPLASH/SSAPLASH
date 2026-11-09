@@ -461,11 +461,11 @@ export function StudioPage() {
     if (SHEET_ARCHIVE_ENABLED && sheets.length > 0) summary += ` · 악보 ${sheets.length}개`;
   }
 
-  // 안내 패널은 카드 보기에서만 오른쪽에 둔다(목록 보기·로딩·오류는 본문 전체 폭, Figma 225:4551·225:5042·225:5368)
-  const split = status === 'ready' && view === 'card';
+  // 카드·목록 보기 모두 본문 전체 폭(안내 패널은 없앴다, 설계 QA-363). 카드 보기는 제목 아래 간격만 넓다
+  const cardView = status === 'ready' && view === 'card';
 
   return (
-    <main className={`main studio-page${split || firstVisit ? ' roomy' : ''}`}>
+    <main className={`main studio-page${cardView || firstVisit ? ' roomy' : ''}`}>
       <header className="studio-head">
         <div className="studio-head-title">
           <h2 className="t-title-24">라이브러리</h2>
@@ -492,10 +492,10 @@ export function StudioPage() {
           <Card padding="lg" className="studio-first-card">
             {panel(true)}
           </Card>
-          <HowtoPanel variant="steps" />
+          <HowtoPanel />
         </>
       ) : (
-        <div className={`studio-body${split ? ' split' : ''}`}>
+        <div className="studio-body">
           <div className="studio-main-col">
             <div className="studio-toolbar">
               <p className="studio-sortnote">처리 중 → 실패 → 완료 · 같은 상태는 최신순</p>
@@ -531,7 +531,6 @@ export function StudioPage() {
               onUploadSong={SHEET_ARCHIVE_ENABLED && SHEET_RELINK_ENABLED ? onUploadSong : undefined}
             />
           </div>
-          {split && <HowtoPanel variant="panel" />}
         </div>
       )}
       {editing?.kind === 'cover' && (
