@@ -306,7 +306,7 @@ export function SettingsPage() {
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>
             <p className="settings-note">연주를 시작할 때의 값이 그 판에 적용돼요. 끄면 코칭 문구가 뜨지 않아요.</p>
-            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
+            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 판정 범위를 벗어나면 막대 바깥에 빨간 점으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
             </SettingRow>
           </Card>
