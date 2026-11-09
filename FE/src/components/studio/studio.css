@@ -38,21 +38,11 @@
 .studio-body {
   display: block;
 }
-/* 카드 보기: 목록 + 오른쪽 안내 패널 300 */
-.studio-body.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: var(--space-l);
-  align-items: start;
-}
 .studio-main-col {
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
-}
-.studio-body.split .studio-main-col {
-  gap: var(--space-m);
 }
 .studio-toolbar {
   display: flex;
@@ -212,9 +202,15 @@
 }
 
 /* ---- 카드 그리드 · 카드 (Studio / SongCard 202:561) ---- */
-.studio-grid {
+/* 최대 5열, 열 최소 200px — 폭이 줄면 4·3·2·1열 (설계 QA-363) */
+.studio-grid,
+.studio-skeleton-grid {
+  --studio-grid-cols: 5;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(200px, calc((100% - (var(--studio-grid-cols) - 1) * var(--space-l)) / var(--studio-grid-cols))), 1fr)
+  );
   gap: var(--space-l);
   margin: 0;
   padding: 0;
@@ -424,14 +420,6 @@
 }
 
 /* ---- 로딩 스켈레톤 (225:5042) · 목록 오류 (225:5368) ---- */
-.studio-skeleton-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 260px);
-  gap: var(--space-l);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .studio-skeleton-card {
   display: flex;
   flex-direction: column;
@@ -489,69 +477,8 @@
   width: 160px;
 }
 
-/* ---- 안내 패널 (207:2650) · 첫 방문 4단계 (210:3273) ---- */
-.studio-howto {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
-}
-.studio-howto-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.studio-howto-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.studio-howto-step {
-  display: flex;
-  gap: 12px;
-}
-.studio-howto-num {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--brand) 16%, transparent);
-  color: var(--brand-text);
-  font-size: 12px;
-  line-height: 1;
-}
-.studio-howto-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.studio-howto-h {
-  font-size: 14px;
-  line-height: 1.45;
-}
-.studio-howto-d {
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
-}
+/* ---- 첫 방문 4단계 (210:3273) ---- */
 .studio-policy-note {
-  margin: 0;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.studio-howto-note {
   margin: 0;
   color: var(--text-3);
   font-size: 12px;
@@ -790,16 +717,13 @@
   pointer-events: none;
 }
 
-/* ---- 좁은 화면: 안내 패널을 아래로, 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
+/* ---- 좁은 화면: 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
 @media (max-width: 900px) {
   .studio-steps4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 760px) {
-  .studio-body.split {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .studio-row-date {
     display: none;
   }
