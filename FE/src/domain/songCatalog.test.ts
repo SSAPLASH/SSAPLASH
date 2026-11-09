@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Difficulty } from './chart';
 import {
+  artistLabel,
+  UNKNOWN_ARTIST,
   accompanimentOptionText,
   chartFallback,
   defaultChartId,
@@ -267,5 +269,19 @@ describe('채보 실패 사유 변환', () => {
     for (const value of [undefined, null, 'MODEL_FAILED', [], 12, {}, { code: null }, { code: 123 }]) {
       expect(songFromDto({ ...base, chartFailure: value }).chartFailure).toBeNull();
     }
+  });
+});
+
+describe('artistLabel', () => {
+  it('가수가 비어 있거나 공백뿐이면 「알 수 없음」', () => {
+    expect(UNKNOWN_ARTIST).toBe('알 수 없음');
+    expect(artistLabel('')).toBe('알 수 없음');
+    expect(artistLabel('   ')).toBe('알 수 없음');
+    expect(artistLabel(null)).toBe('알 수 없음');
+    expect(artistLabel(undefined)).toBe('알 수 없음');
+  });
+
+  it('가수가 있으면 앞뒤 공백만 뗀다', () => {
+    expect(artistLabel(' 파란물결 ')).toBe('파란물결');
   });
 });

@@ -1,4 +1,4 @@
-/* 라이브러리(/studio) — Figma 207:2110(카드) · 225:4551(목록) · 210:2978(첫 방문) · 225:5042(로딩) · 225:5368(오류) · 240:6949(태블릿) 및 Studio / * 컴포넌트.
+/* 라이브러리(/studio) — Figma 207:2110(카드) · 225:4551(목록) · 225:5042(로딩) · 225:5368(오류) · 240:6949(태블릿) 및 Studio / * 컴포넌트.
  * 토큰은 tokens.css의 새 이름만 쓴다. 간격은 4px 배수(Figma 6·10·14·18은 가까운 4 배수로 맞춘다). */
 
 /* ---- 화면 틀 ---- */
@@ -9,7 +9,7 @@
   gap: 20px;
   color: var(--text-1);
 }
-/* 카드 보기·첫 방문은 제목 아래 간격이 24 */
+/* 카드 보기는 제목 아래 간격이 24 */
 .studio-page.roomy {
   gap: var(--space-l);
 }
@@ -50,6 +50,10 @@
   justify-content: space-between;
   gap: var(--space-m);
   min-height: 44px;
+}
+/* 정렬 안내가 없을 때(빈 라이브러리)도 보기 전환은 오른쪽에 */
+.studio-toolbar > :last-child {
+  margin-left: auto;
 }
 .studio-sortnote {
   margin: 0;
@@ -477,47 +481,51 @@
   width: 160px;
 }
 
-/* ---- 첫 방문 4단계 (210:3273) ---- */
+/* ---- 음원 양식 아래 정책 안내 ---- */
 .studio-policy-note {
   margin: 0;
   color: var(--text-3);
   font-size: 12px;
   line-height: 1.45;
 }
-.studio-steps4 {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-m);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.studio-steps4-item {
+/* ---- 빈 안내 (설계 QA-studio-empty-state): 곡·악보가 없을 때 카드·목록 자리 ---- */
+.studio-empty {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
-  padding: var(--space-m);
-  border: 1px solid var(--line);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  box-sizing: border-box;
+  padding: var(--space-l) var(--space-m);
   border-radius: var(--radius-panel);
+  text-align: center;
+}
+/* 카드 보기: 그리드 폭 점선 상자, 카드 한 장 정도 높이 */
+.studio-empty.card {
+  min-height: 240px;
+  border: 1.5px dashed var(--line-strong);
+}
+/* 목록 보기: 목록 틀(.studio-list)과 같은 테두리 안 한 칸 */
+.studio-empty.list {
+  min-height: 72px;
+  border: 1px solid var(--line);
   background: var(--surface-1);
 }
-.studio-steps4-n {
-  color: var(--brand-text);
-}
-.studio-steps4-h {
-  font-size: 14px;
+.studio-empty-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.45;
 }
-.studio-steps4-d {
-  color: var(--text-3);
-  font-size: 12px;
+.studio-empty-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
   line-height: 1.45;
 }
 
-/* ---- 업로드 양식 (Studio / UploadDialog 224:1069 · 첫 방문 210:2978) ---- */
-.studio-first-card {
-  gap: 20px;
-}
+/* ---- 업로드 양식 (Studio / UploadDialog 224:1069) ---- */
 .studio-panel {
   display: flex;
   flex-direction: column;
@@ -550,9 +558,6 @@
   cursor: pointer;
   transition: border-color var(--motion-fast);
 }
-.studio-drop.large {
-  padding: 40px var(--space-m);
-}
 .studio-drop:hover,
 .studio-drop.over {
   border-color: var(--brand);
@@ -570,9 +575,6 @@
   font-size: 14px;
   line-height: 1.45;
 }
-.studio-drop-title.large {
-  font-size: 16px;
-}
 .studio-drop-btn {
   width: 160px;
 }
@@ -585,9 +587,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-.studio-first-card .studio-fields {
-  gap: var(--space-m);
 }
 .studio-form-footer,
 .studio-dialog-footer {
@@ -718,11 +717,6 @@
 }
 
 /* ---- 좁은 화면: 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
-@media (max-width: 900px) {
-  .studio-steps4 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 @media (max-width: 760px) {
   .studio-row-date {
     display: none;
@@ -735,8 +729,7 @@
   }
 }
 @media (max-width: 560px) {
-  .studio-fields,
-  .studio-steps4 {
+  .studio-fields {
     grid-template-columns: minmax(0, 1fr);
   }
   .studio-head {
