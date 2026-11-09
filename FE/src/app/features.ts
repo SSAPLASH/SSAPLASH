@@ -19,7 +19,7 @@ export const RECORDING_ENABLED = import.meta.env.VITE_RECORDING !== 'false';
 export const SHEET_ARCHIVE_ENABLED = import.meta.env.VITE_SHEET_ARCHIVE !== 'false';
 
 /**
- * 악보-곡 연결(곡 ⋯ 메뉴의 악보 항목·업로드의 songId 파트) 사용 여부. 기본은 꺼짐이고 VITE_SHEET_SONG_LINK=true로 빌드할 때만 켠다.
- * 현재 BE 155는 files·title·source 외 multipart 파트를 400으로 거절하므로, BE가 곡 연결 API를 배포하기 전까지 꺼 둔다(278).
+ * 악보-곡 연결(곡 ⋯ 메뉴의 악보 항목·업로드의 songId 파트) 사용 여부. 기본은 켜짐이고 VITE_SHEET_SONG_LINK=false로 빌드할 때만 끈다.
+ * BE 곡 연결(songId·sheetId, MR !352)이 v3.0에 배포돼 2026-11-09 켜짐으로 전환(278).
  */
-export const SHEET_SONG_LINK_ENABLED = import.meta.env.VITE_SHEET_SONG_LINK === 'true';
+export const SHEET_SONG_LINK_ENABLED = import.meta.env.VITE_SHEET_SONG_LINK !== 'false';
