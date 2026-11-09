@@ -81,7 +81,7 @@ src/
 ├─ app/        앱 조립 — 아래 전부를 알아도 되는 유일한 곳
 │   ├─ App.tsx       라우터. /login·/auth/callback 밖의 화면은 RequireAuth 아래. `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262). 악보 뷰어 `/studio/sheets/:id`는 지연 로드(278)
 │   ├─ sources.ts         키보드 소스 · inputManager 단일 인스턴스
-│   ├─ features.ts        빌드 기능 스위치(SONG_EDIT_ENABLED·RECORDING_ENABLED·SHEET_ARCHIVE_ENABLED·SHEET_SONG_LINK_ENABLED)
+│   ├─ features.ts        빌드 기능 스위치(SONG_EDIT_ENABLED·RECORDING_ENABLED·SHEET_ARCHIVE_ENABLED·SHEET_SONG_LINK_ENABLED·SHEET_RELINK_ENABLED)
 │   ├─ sensorRegistry.ts  센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
 │   ├─ sensors.ts         센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
 │   ├─ bootstrap.ts       설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface), 오디오 언락
@@ -350,9 +350,11 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **기능 스위치:**
   - `VITE_SHEET_ARCHIVE`(`SHEET_ARCHIVE_ENABLED`): 기본 켜짐, `false`로 빌드하면 [악보] 섹션·악보 항목을 숨기고 뷰어 주소는 `/studio`로 보낸다.
   - `VITE_SHEET_SONG_LINK`(`SHEET_SONG_LINK_ENABLED`): 기본 켜짐, `false`로 빌드하면 곡 ⋯ 메뉴의 악보 항목과 업로드의 `songId` 파트를 끈다. BE 곡 연결(`songId`·`sheetId`)이 v3.0에 배포돼 켰다. 곡 하나에 악보 하나이고(409 `SHEET_ALREADY_LINKED`), 곡을 지우면 BE가 연결된 악보도 같이 지우므로 FE는 곡 삭제 뒤 악보 목록도 다시 읽는다.
+  - `VITE_SHEET_RELINK`(`SHEET_RELINK_ENABLED`): **기본 꺼짐**, `true`로 빌드할 때만 켠다. BE가 `PATCH /api/v1/sheets/{id}`의 `songId`를 받고 곡 삭제 시 악보를 남기는 11/13 릴리즈(BE 회신 3) 뒤에 켠다. 켜면 악보만 항목에 [곡 올리기](카드 ▶ 자리 업로드 버튼·행 [⤒ 곡 올리기])가 생기고, 연결된 곡의 삭제 안내가 「…연결된 악보와 연주 기록·결과는 남아요」로 바뀐다. 꺼짐이면 그 자리는 비고 PATCH `songId` 요청도 나가지 않으며 삭제 안내는 「…악보가 함께 지워지고」다.
 - **올리기:** 헤더 [올리기] 창 맨 위 [음원·MIDI | 악보] 전환(마지막 섹션은 localStorage `airdrum.studio.uploadSection`). [악보]는 이미지(JPG·PNG·WEBP) 1~20장 또는 PDF 1개 + 제목(1~100자). 고른 순서가 쪽 순서다. 섞음·21장 이상·형식·크기(이미지 10 MiB, PDF 20 MiB)는 요청 전에 `validateSheetFiles`로 막고, 화소 상한·한도(100개·500 MiB)는 BE 응답 문구를 보인다(`sheetErrorText`). 헤더에서는 곡 없이 올린다. 첫 방문(곡·악보 없음)에는 본문에 음원·MIDI 패널이 있으므로 헤더 [올리기]가 [악보] 섹션으로만 열린다.
-- **라이브러리 악보 항목:** 곡에 연결되지 않은 악보는 카드·목록 보기에 곡과 섞여 한 항목으로 보인다(`mergeLibraryItems`, 정렬은 내 곡 규칙의 「그 밖」 그룹). 썸네일(이미지 1쪽, PDF는 자리표시) · 「악보 · 이미지 n쪽」/「악보 · PDF」 · 「악보만」 칩 · [악보 보기]. 리듬 게임·악보 연습은 비활성이고 「음원이 있어야 할 수 있어요」를 단다. ⋯ = [제목 수정 | 악보 삭제]. 악보 목록만 실패하면 곡은 그대로 두고 「악보를 불러오지 못했어요 [다시 시도]」 한 줄. 곡 고르기(리듬 게임·악보 연습)는 곡 API만 읽으므로 악보 항목이 나오지 않는다.
+- **라이브러리 악보 항목:** 곡에 연결되지 않은 악보는 카드·목록 보기에 곡과 섞여 한 항목으로 보인다(`mergeLibraryItems`, 정렬은 내 곡 규칙의 「그 밖」 그룹). 썸네일(이미지 1쪽, PDF는 자리표시) · 「악보 · 이미지 n쪽」/「악보 · PDF」 · 「악보만」 칩 · [악보 보기]. 곡 카드·곡 행과 같은 틀·같은 높이이고 비활성 ▶·[악보 연습]·설명 문구는 두지 않는다(상태 줄은 「악보만」 칩뿐). 재연결 스위치가 켜지면 ▶ 자리에 같은 크기의 원형 업로드 버튼(브랜드 외곽선·아이콘, `aria-label="「제목」 곡 올리기"`)이, 목록 보기에는 [악보 보기] 다음에 [⤒ 곡 올리기](브랜드 외곽선)가 생긴다. 꺼짐이면 그 자리를 비운다. ⋯ = [제목 수정 | 악보 삭제]. 악보 목록만 실패하면 곡은 그대로 두고 「악보를 불러오지 못했어요 [다시 시도]」 한 줄. 곡 고르기(리듬 게임·악보 연습)는 곡 API만 읽으므로 악보 항목이 나오지 않는다.
 - **곡 연결(링크 스위치 켜짐):** 완료 곡 ⋯ 메뉴에 `sheetId`가 있으면 [악보 보기], 없으면 [악보 올리기](창이 [악보] 섹션으로 열리고 `songId`를 보낸다). 409 `SHEET_ALREADY_LINKED`·404 `SONG_NOT_FOUND`는 창 안 문구. 링크가 켜져 있으면 곡에 붙은 악보는 따로 항목으로 보이지 않는다.
+- **나중 연결(`SHEET_RELINK_ENABLED` 켜짐, D15~D17):** [곡 올리기]는 `store/sheetLinkStore`에 대상 악보를 정하고 업로드 창을 「곡 올리기」 제목·[음원·MIDI] 양식으로 연다(섹션 전환 없음, 창 위 「「악보 제목」 악보에 연결돼요」, 제목 기본값 = 악보 제목, 다시 올리기 안내 없음). 곡이 등록되면 응답의 곡 id(음원 202 `songId`·MIDI·MusicXML 201 `id`)로 `PATCH /api/v1/sheets/{id}` `{songId}`를 한 번 보내고(`api/sheets.linkSheetToSong`) 곡·악보 목록을 다시 읽으며 「곡을 올리고 악보를 연결했어요」 토스트를 보인다. 연결이 실패하면 곡은 남고 목록 위에 「곡은 올렸지만 악보를 연결하지 못했어요 [다시 연결]」이 보이며 [다시 연결]은 PATCH만 다시 보낸다(재시도 대상은 메모리에만 있어 새로고침하면 사라진다). 창을 닫거나 헤더 [올리기]·곡 ⋯ [악보 올리기]·다시 올리기로 열면 대상 지정이 풀린다.
 - **뷰어 `/studio/sheets/:id`(`pages/SheetViewerPage`, `components/sheet`):** 셸을 숨긴 전체 화면. 이미지는 한 쪽씩(← → 키, 좌우 밀기, 좌우 25% 가장자리 탭, 다음 쪽 미리 받기), PDF는 `PdfPages`가 쪽을 화면 폭에 맞춰 세로로 그리고 화면 근처 쪽만 그린다. 바에 n/m, 가운데 탭으로 몰입 모드(바 숨김, n/m 칩만). ⋯로 제목 수정·삭제(삭제 뒤 `/studio`로 가며 토스트). 600px 이하에서는 뒤로 아이콘만 남기고 좌우 버튼·종류 배지를 숨긴다.
 - **서명 URL(1시간):** 만료 2분 전에 상세를 다시 읽어 URL만 바꾼다(보던 쪽 유지, 최소 30초 간격). 그림·PDF 읽기 실패는 상세를 1회 다시 읽고 또 실패하면 [다시 시도]. 404 `SHEET_NOT_FOUND`는 「지워졌거나 주소가 틀렸어요」 + [라이브러리로]. URL·파일은 메모리에만 둔다.
 

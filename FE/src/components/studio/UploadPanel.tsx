@@ -20,6 +20,8 @@ interface Props {
   audioBusyTitle: string | null;
   midi: Omit<MidiUploadFormProps, 'emphasis' | 'onCancel'>;
   emphasis: boolean;
+  /** 제목 입력의 처음 값(음원·MIDI 양식). 다시 올리기 배너 없이 제목만 채운다(악보에 곡 올리기) */
+  initialTitle?: string;
   onCancel?: () => void;
 }
 
@@ -28,7 +30,7 @@ const TABS: { id: UploadTab; label: string }[] = [
   { id: 'MIDI', label: 'MIDI·MusicXML' },
 ];
 
-export function UploadPanel({ tab, onTab, locked, audio, audioBusyTitle, midi, emphasis, onCancel }: Props) {
+export function UploadPanel({ tab, onTab, locked, audio, audioBusyTitle, midi, emphasis, initialTitle, onCancel }: Props) {
   return (
     <div className="studio-panel">
       <div className="studio-tabs" role="group" aria-label="올리는 종류">
@@ -39,7 +41,7 @@ export function UploadPanel({ tab, onTab, locked, audio, audioBusyTitle, midi, e
         ))}
       </div>
       {tab === 'MIDI' ? (
-        <MidiUploadForm {...midi} emphasis={emphasis} onCancel={onCancel} />
+        <MidiUploadForm {...midi} initialTitle={initialTitle} emphasis={emphasis} onCancel={onCancel} />
       ) : audioBusyTitle !== null ? (
         <>
           <p className="studio-busy">「{audioBusyTitle}」 생성이 끝나면 올릴 수 있어요</p>
@@ -52,7 +54,7 @@ export function UploadPanel({ tab, onTab, locked, audio, audioBusyTitle, midi, e
           )}
         </>
       ) : (
-        <AudioDropzone {...audio} emphasis={emphasis} onCancel={onCancel} />
+        <AudioDropzone {...audio} initialTitle={initialTitle} emphasis={emphasis} onCancel={onCancel} />
       )}
     </div>
   );
