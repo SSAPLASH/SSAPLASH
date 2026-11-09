@@ -123,34 +123,3 @@
   color: var(--text-2);
   font-size: 12px;
 }
-.play-st-pager {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-.play-st-pg {
-  min-height: 0;
-  height: 28px;
-  min-width: 28px;
-  padding: 0 var(--space-s);
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-2);
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    color var(--motion-fast),
-    border-color var(--motion-fast);
-}
-.play-st-pg:hover:not(:disabled) {
-  color: var(--text-1);
-}
-.play-st-pg.current {
-  border-color: var(--brand);
-  color: var(--text-1);
-}
-.play-st-pg:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
