@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barCountOf, buildSheet, countLabel, gridOriginMs, gridTimeOf, layoutBar, stepIndexOf } from './sheet';
+import { barCountOf, buildSheet, countLabel, gridOriginMs, gridTimeAt, gridTimeOf, layoutBar, songTimeAtGrid, stepIndexOf } from './sheet';
 import { BUILTIN_CHARTS, CHART_8_FILL, CHART_BASIC_8, type Chart } from './chart';
 
 function chartOf(notes: Chart['notes'], durationMs: number): Chart {
@@ -291,4 +291,33 @@ it('열린 하이햇만 원 위치를 캐시하고 동시 크래시·빔도 유�
   expect(layout.glyphs.map((g) => g.openOffsetY)).toEqual([20, undefined, undefined]);
   expect(layout.glyphs[0].xRatio).toBe(layout.glyphs[1].xRatio);
   expect(layout.beams).toHaveLength(1);
+});
+
+// 빠르기 구간 (CHART-003-variable-tempo-exp): 120bpm으로 8박(2마디), 4000ms부터 60bpm
+describe('빠르기 구간이 있는 곡의 격자', () => {
+  const segs = [
+    { beat: 0, startMs: 0, bpm: 120 },
+    { beat: 8, startMs: 4000, bpm: 60 },
+  ];
+  const withSegs = (notes: Chart['notes'], durationMs: number): Chart => ({ ...chartOf(notes, durationMs), tempoSegments: segs });
+
+  it('격자 시각은 박 번호 × 첫 빠르기 한 박이고 역함수가 맞다', () => {
+    const c = withSegs([], 10_000);
+    expect(gridTimeAt(c, 2000)).toBe(2000); // 4박
+    expect(gridTimeAt(c, 5000)).toBe(4500); // 9박
+    expect(songTimeAtGrid(c, 4500)).toBe(5000);
+    expect(gridTimeAt(chartOf([], 10_000), 5000)).toBe(5000); // 구간 없으면 곡 시각 − 원점
+  });
+
+  it('노트는 구간 빠르기의 박에 놓인다', () => {
+    // 5000ms = 9박 = 3마디(2번) 2박 = 칸 4. 고정 120bpm으로 셌다면 10박(3마디 3박)
+    const sheet = buildSheet(withSegs([{ timeMs: 5000, pad: 'SNARE' }], 6000));
+    expect(sheet.bars[2].cells).toEqual([{ pad: 'SNARE', step: 4, noteIndex: 0, offGrid: false }]);
+    expect(layoutBar(withSegs([{ timeMs: 5000, pad: 'SNARE' }], 6000), 2).glyphs[0].xRatio).toBe(4 / 16);
+  });
+
+  it('마디 수는 격자 시각으로 센다', () => {
+    // 곡 끝 8000ms = 12박 = 3마디
+    expect(barCountOf(withSegs([], 8000))).toBe(3);
+  });
 });
