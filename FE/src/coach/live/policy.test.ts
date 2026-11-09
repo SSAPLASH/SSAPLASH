@@ -23,11 +23,36 @@ const praiseGapMs = LIVE_COACH_CONFIG.praise.minGapMs;
 const keepGapMs = LIVE_COACH_CONFIG.praise.keepMinGapMs;
 const good = ev('LIVE_GOOD_STEADY', { tag: 'LIVE_GOOD_STEADY', priority: 5, trigger: true });
 
-describe('CoachPolicy 시작 억제', () => {
-  it('판정이 8개 쌓이기 전에는 띄우지 않는다', () => {
+describe('CoachPolicy 판정 단계', () => {
+  const streak = () => on('LIVE_MISS_STREAK', { tag: 'LIVE_MISS_STREAK' });
+
+  it('판정 4개 전에는 연속 놓침도 띄우지 않는다', () => {
     const p = new CoachPolicy();
-    expect(p.decide([on('A')], ctx(5_000, 7)).show).toBeNull();
-    expect(p.decide([on('A')], ctx(5_500, 8))?.show?.key).toBe('A');
+    const d = p.decide([streak()], ctx(5_000, 3));
+    expect(d.show).toBeNull();
+    expect(d.stage).toBe(0);
+  });
+
+  it('1단계(4~7개)는 연속 놓침만 띄운다', () => {
+    const p = new CoachPolicy();
+    const late = p.decide([on('A')], ctx(5_000, 4));
+    expect(late.show).toBeNull();
+    expect(late.stage).toBe(1);
+    expect(p.decide([on('A'), streak()], ctx(5_000, 4)).show?.key).toBe('LIVE_MISS_STREAK');
+  });
+
+  it('1단계는 칭찬하지 않는다', () => {
+    const p = new CoachPolicy();
+    expect(p.decide([], ctx(10_000, 7), good).show).toBeNull();
+  });
+
+  it('판정 8개부터 2단계로 모든 규칙을 띄우고 16개부터 3단계다', () => {
+    const p = new CoachPolicy();
+    const d = p.decide([on('A')], ctx(5_500, 8));
+    expect(d.show?.key).toBe('A');
+    expect(d.stage).toBe(2);
+    expect(p.decide([], ctx(6_000, 15)).stage).toBe(2);
+    expect(p.decide([], ctx(6_500, 16)).stage).toBe(3);
   });
 });
 

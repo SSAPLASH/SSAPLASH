@@ -18,6 +18,16 @@ export interface JudgedNote {
   stickId: 0 | 1 | null;
   /** 0~127. MISS는 null */
   velocity: number | null;
+  /** 직전 시점(같은 시각 노트 묶음)의 패드들. 없으면 전환 원인을 계산하지 않는다(noteContext) */
+  prevPads?: readonly PadId[];
+  /** 직전 시점과의 간격(ms). 첫 노트는 null. 없으면 빠른 구간 원인을 계산하지 않는다 */
+  prevGapMs?: number | null;
+}
+
+/** 채보 밖 타격 한 건. 시각은 곡 시각(ms) */
+export interface StrayHit {
+  pad: PadId;
+  songTimeMs: number;
 }
 
 export interface PadStat {
@@ -83,7 +93,15 @@ export interface WindowMetrics {
 }
 
 const { size, handSize, missSize, padMissSize } = LIVE_COACH_CONFIG.window;
-const CAPACITY = Math.max(size, handSize, missSize, padMissSize, LIVE_COACH_CONFIG.setup.window, LIVE_COACH_CONFIG.miss.releaseWindow);
+const CAPACITY = Math.max(
+  size,
+  handSize,
+  missSize,
+  padMissSize,
+  LIVE_COACH_CONFIG.setup.window,
+  LIVE_COACH_CONFIG.miss.releaseWindow,
+  LIVE_COACH_CONFIG.cause.window,
+);
 
 function isValid(n: JudgedNote): n is JudgedNote & { deltaMs: number } {
   return (n.judgement === 'PERFECT' || n.judgement === 'GOOD') && n.deltaMs !== null && Number.isFinite(n.deltaMs);
@@ -102,8 +120,12 @@ function deltaStats(valid: readonly (JudgedNote & { deltaMs: number })[]): Pick<
   };
 }
 
+/** 원인 계산용으로 들고 있는 채보 밖 타격 수 */
+const STRAY_CAPACITY = 32;
+
 export class JudgedWindow {
   private buf: JudgedNote[] = [];
+  private strayBuf: StrayHit[] = [];
   /** buf와 같은 순서로, 그 판정이 들어온 때까지의 채보 밖 타격 누적 */
   private strayTotals: number[] = [];
   private seen = 0;
@@ -123,8 +145,25 @@ export class JudgedWindow {
     this.seen += 1;
   }
 
+  /** 채보 밖 타격을 기록한다. 개수 지표(strayTotal)와는 따로 원인 계산에만 쓴다 */
+  pushStray(s: StrayHit): void {
+    this.strayBuf.push(s);
+    if (this.strayBuf.length > STRAY_CAPACITY) this.strayBuf.shift();
+  }
+
+  /** 최근 n개 판정(들어온 순서). 원인 계산은 노트 시각 순으로 다시 정렬해서 쓴다 */
+  recent(n: number): JudgedNote[] {
+    return this.buf.slice(-n);
+  }
+
+  /** 최근 채보 밖 타격 */
+  strays(): readonly StrayHit[] {
+    return this.strayBuf;
+  }
+
   reset(): void {
     this.buf = [];
+    this.strayBuf = [];
     this.strayTotals = [];
     this.seen = 0;
   }
