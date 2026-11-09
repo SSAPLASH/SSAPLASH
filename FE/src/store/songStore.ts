@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
-import { getSong, listSongs } from '@/api/songs';
+import { getSong, listAllSongs } from '@/api/songs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
 import type { SongDetail, SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
@@ -109,7 +109,11 @@ export const useSongs = create<SongsState>()((set, get) => ({
                 (s) => (!needle || s.title.toLowerCase().includes(needle)) && (!filter?.songLevel || s.songLevel === filter.songLevel),
               );
       } else {
-        items = (await listSongs({ source: scope, q, size: 50, songLevel: filter?.songLevel, playableOnly: filter?.playableOnly })).items;
+        // 표가 전체 배열을 쪽으로 나누므로 hasNext가 끝날 때까지 모두 읽는다(Jira 363)
+        items = await listAllSongs(
+          { source: scope, q, songLevel: filter?.songLevel, playableOnly: filter?.playableOnly },
+          { isStale: () => my !== seq },
+        );
       }
       if (my !== seq) return;
       set({ items, status: 'ready' });
