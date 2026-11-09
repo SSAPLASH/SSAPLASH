@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardOf, matchedOnText, MATCHED_ON_COPY, primaryReason, similarCardOf, similarFromDto, recommendationPathOf, REASON_COPY, reasonText, recommendationFromDto } from './recommendation';
+import { cardOf, filterRecommended, matchedOnText, pickSimilar, MATCHED_ON_COPY, primaryReason, similarCardOf, similarFromDto, recommendationPathOf, REASON_COPY, reasonText, recommendationFromDto } from './recommendation';
 
 const songDto = {
   id: 12, title: '곡', artist: '가수', source: 'BUILTIN', status: 'READY', bpm: 120, timeSignature: '3/4', durationMs: 90000,
@@ -116,5 +116,40 @@ describe('카드 변환', () => {
   it('similarCardOf는 matchedOnText를 line으로 쓴다', () => {
     const c = similarCardOf({ song, chartId: 2, difficulty: 'HARD', similarity: 0.5, matchedOn: ['RHYTHM'] });
     expect(c).toEqual({ song, chartId: 2, difficulty: 'HARD', line: MATCHED_ON_COPY.RHYTHM });
+  });
+});
+
+describe('filterRecommended', () => {
+  const card = (id: number, title: string, artist: string, songLevel: 'BEGINNER' | 'ADVANCED' | null) =>
+    cardOf(recommendationFromDto({ song: { ...songDto, id, title, artist, songLevel }, chartId: id * 10, difficulty: 'EASY', reasons: [] }));
+  const cards = [card(3, 'Night Run', '모노레일', 'ADVANCED'), card(1, '작은 파도', '파란물결', 'BEGINNER'), card(2, '파도 소리', 'Wave', null)];
+
+  it('검색어·난이도가 없으면 순서 그대로 전부', () => {
+    expect(filterRecommended(cards, '', null).map((c) => c.song.id)).toEqual([3, 1, 2]);
+  });
+
+  it('제목·아티스트 부분 일치, 앞뒤 공백·대소문자 무시, 순서 유지', () => {
+    expect(filterRecommended(cards, '  파도 ', null).map((c) => c.song.id)).toEqual([1, 2]);
+    expect(filterRecommended(cards, 'night', null).map((c) => c.song.id)).toEqual([3]);
+    expect(filterRecommended(cards, 'WAVE', null).map((c) => c.song.id)).toEqual([2]);
+  });
+
+  it('곡 난이도가 같은 곡만, 난이도 없는 곡은 빠진다', () => {
+    expect(filterRecommended(cards, '', 'BEGINNER').map((c) => c.song.id)).toEqual([1]);
+    expect(filterRecommended(cards, '파도', 'ADVANCED')).toEqual([]);
+  });
+});
+
+describe('pickSimilar', () => {
+  const card = (id: number) => similarCardOf(similarFromDto({ song: { ...songDto, id }, chartId: id, difficulty: 'NORMAL', similarity: 0.5, matchedOn: [] }));
+
+  it('선택한 곡과 다른 첫 카드', () => {
+    expect(pickSimilar([card(5), card(7)], 5)?.song.id).toBe(7);
+    expect(pickSimilar([card(7), card(5)], 5)?.song.id).toBe(7);
+  });
+
+  it('선택한 곡뿐이거나 비면 없음', () => {
+    expect(pickSimilar([card(5)], 5)).toBeUndefined();
+    expect(pickSimilar([], 5)).toBeUndefined();
   });
 });

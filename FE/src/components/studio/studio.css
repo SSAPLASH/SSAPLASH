@@ -827,30 +827,33 @@
   justify-content: center;
   color: var(--text-3);
 }
-.studio-card .song-card-play.disabled,
-.studio-card .song-card-play.disabled:hover {
-  background: var(--surface-2);
-  color: var(--text-3);
+/* 악보만 카드의 곡 올리기 (D15): ▶ 자리·크기 그대로, 꽉 찬 ▶과 구분되게 브랜드색 외곽선·아이콘에 안쪽은 비운다 */
+.song-card-play.song-card-upload {
+  border: 1.5px solid var(--brand);
+  background: transparent;
+  color: var(--brand);
   box-shadow: none;
-  cursor: not-allowed;
 }
-.studio-sheet-hint {
+.song-card-play.song-card-upload:hover {
+  background: transparent;
+  border-color: var(--brand-text);
+  color: var(--brand-text);
+}
+/* 악보만 행의 [⤒ 곡 올리기]: secondary 버튼 틀에 브랜드 외곽선 */
+.ui-btn.studio-upload-song {
+  border: 1.5px solid var(--brand);
+  background: transparent;
+  color: var(--brand-text);
+}
+.ui-btn.studio-upload-song:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--brand-text);
+}
+.studio-link-notice {
   margin: 0;
-  color: var(--text-3);
-  font-size: 12px;
+  color: var(--brand-text);
+  font-size: 14px;
   line-height: 1.45;
-}
-.studio-sheet-hint-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.studio-sheet-actions {
-  flex-direction: column;
-  gap: var(--space-s);
 }
 .studio-seg-row {
   display: flex;

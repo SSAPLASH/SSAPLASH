@@ -1,7 +1,7 @@
 // 연주 HUD (Figma PlayHUD 126:3352, 10/31 재구성). 높이 96, 세션 접근 없이 스냅샷을 props로 받는다.
 // 일시정지 버튼은 없다(U20, Dock ‖·Esc). 각 수치는 data-stat 요소로 분리해 카운트업 같은 이펙트를 나중에 얹을 수 있게 한다.
-import { useState } from 'react';
-import { m, useReducedMotion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { animate, m, useMotionValue, useReducedMotion } from 'motion/react';
 import type { Difficulty } from '@/domain/chart';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongCover } from '@/components/song/SongCover';
@@ -69,6 +69,54 @@ function stats(p: PlayHudProps): Stat[] {
     { key: 'good', label: 'GOOD', value: String(p.good), tone: 'good' },
     { key: 'miss', label: 'MISS', value: String(p.miss), tone: 'miss' },
   ];
+}
+
+/** 점수 카운트업 시간(설계 MODE-001-score-combo-fx 3-2) */
+export const SCORE_COUNT_SEC = 0.24;
+/** 올라갈 때 번쩍(brand → brand-text) 시간(ms) */
+const SCORE_FLASH_MS = 160;
+
+const formatScore = (n: number): string => Math.round(n).toLocaleString('en-US');
+
+/**
+ * 점수 카운트업(D1). React state가 아니라 MotionValue로 DOM 텍스트만 직접 쓴다 — 보간 프레임마다 HUD가 렌더되지 않는다.
+ * 처음 텍스트는 마운트 때 한 번만 React가 그리고(이후 children이 바뀌지 않아 React는 건드리지 않는다), 이후는 textContent로 갱신한다.
+ * 모션 줄이기면 즉시 반영·번쩍 없음. 내려가거나(다시 시작) 같은 값이면 보간하지 않는다.
+ */
+export function ScoreValue({ score }: { score: number }) {
+  const reduced = useReducedMotion();
+  const ref = useRef<HTMLSpanElement>(null);
+  const [initial] = useState(() => formatScore(score));
+  const value = useMotionValue(score);
+
+  useEffect(() => {
+    const write = (v: number) => {
+      if (ref.current) ref.current.textContent = formatScore(v);
+    };
+    write(value.get());
+    return value.on('change', write);
+  }, [value]);
+
+  useEffect(() => {
+    const from = value.get();
+    if (score === from) return;
+    if (reduced || score < from) {
+      value.stop();
+      value.set(score);
+      return;
+    }
+    // 번쩍: 브라우저 Web Animations로(React 렌더 없음). 지원하지 않는 환경(테스트)은 건너뛴다
+    ref.current?.animate?.([{ color: 'var(--brand)' }, { color: 'var(--brand-text)' }], { duration: SCORE_FLASH_MS, easing: 'ease-out' });
+    const controls = animate(value, score, { duration: SCORE_COUNT_SEC, ease: 'easeOut' });
+    // 진행 중 새 값이 오면 현재 표시값에서 다시 시작한다(cleanup이 멈추고 다음 effect가 value.get()부터 보간)
+    return () => controls.stop();
+  }, [score, reduced, value]);
+
+  return (
+    <span ref={ref} className="play-hud-value" data-stat="score">
+      {initial}
+    </span>
+  );
 }
 
 /** 콤보 범프 크기·시간(E5) */
@@ -144,6 +192,8 @@ export function PlayHud(props: PlayHudProps) {
             <span className="play-hud-label">{s.label}</span>
             {s.key === 'combo' && props.variant === 'game' ? (
               <ComboValue combo={props.combo} />
+            ) : s.key === 'score' && props.variant === 'game' ? (
+              <ScoreValue score={props.score} />
             ) : (
               <span className="play-hud-value" data-stat={s.key}>
                 {s.value}

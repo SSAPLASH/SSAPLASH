@@ -1,10 +1,18 @@
-// 곡 올리기의 MIDI 탭 양식 (설계 CHART-002 2·3-5). 파일 선택·드롭, 제목(파일명 기본값)·아티스트, 사전 검사를 하고
+// 곡 올리기의 MIDI·MusicXML 탭 양식 (설계 CHART-002 2·3-5, 293). 파일 선택·드롭, 제목(파일명 기본값)·아티스트, 사전 검사를 하고
 // 업로드 호출은 하지 않는다 — 완성된 MidiDraft를 onSubmit으로 넘긴다. AudioDropzone과 같은 모양·접근성 패턴.
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { MAX_TITLE_LEN, defaultTitleFromFile } from '@/domain/chartJob';
-import { MAX_MIDI_BYTES, MIDI_PRECHECK_TEXT, precheckMidi, type MidiDraft, type MidiPrecheck } from '@/domain/midiUpload';
+import {
+  MAX_MIDI_BYTES,
+  MAX_MUSICXML_BYTES,
+  MIDI_PRECHECK_TEXT,
+  UPLOAD_ACCEPT,
+  precheckUpload,
+  type MidiDraft,
+  type UploadPrecheck,
+} from '@/domain/midiUpload';
 import { UploadIcon } from './StudioIcons';
 import './studio.css';
 
@@ -14,6 +22,8 @@ export interface MidiUploadFormProps {
   /** 업로드 실패 문구(store의 error). 있으면 버튼 위에 보인다 */
   error: string | null;
   onSubmit: (draft: MidiDraft) => void;
+  /** 제목 입력의 처음 값(악보에 곡 올리기: 악보 제목). 마운트 시 한 번만 읽는다 */
+  initialTitle?: string;
   /** 첫 방문(곡도 작업도 없음)의 큰 드롭 영역 */
   emphasis: boolean;
   /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
@@ -24,10 +34,10 @@ function size(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function MidiUploadForm({ busy, error, onSubmit, emphasis, onCancel }: MidiUploadFormProps) {
+export function MidiUploadForm({ busy, error, onSubmit, initialTitle, emphasis, onCancel }: MidiUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [check, setCheck] = useState<MidiPrecheck | null>(null);
-  const [title, setTitle] = useState('');
+  const [check, setCheck] = useState<UploadPrecheck | null>(null);
+  const [title, setTitle] = useState(initialTitle ?? '');
   const [artist, setArtist] = useState('');
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,7 +48,7 @@ export function MidiUploadForm({ busy, error, onSubmit, emphasis, onCancel }: Mi
       setCheck(null);
       return;
     }
-    setCheck(precheckMidi(f));
+    setCheck(precheckUpload(f));
     // 제목이 비어 있을 때만 파일명을 기본값으로 쓴다(직접 친 제목은 유지)
     setTitle((t) => (t.trim() === '' ? defaultTitleFromFile(f.name) : t));
   };
@@ -72,19 +82,19 @@ export function MidiUploadForm({ busy, error, onSubmit, emphasis, onCancel }: Mi
         onDrop={onDrop}
         onClick={() => !busy && inputRef.current?.click()}
       >
-        <input ref={inputRef} type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden onChange={onInput} disabled={busy} />
+        <input ref={inputRef} type="file" accept={UPLOAD_ACCEPT} hidden onChange={onInput} disabled={busy} />
         <span className="studio-drop-icon">
           <UploadIcon size={emphasis ? 40 : 32} />
         </span>
         <span className={`studio-drop-title${emphasis ? ' large' : ''}`}>
-          {file ? `${file.name} · ${size(file.size)}` : 'MIDI 파일을 여기에 끌어다 놓으세요'}
+          {file ? `${file.name} · ${size(file.size)}` : 'MIDI·MusicXML 파일을 여기에 끌어다 놓으세요'}
         </span>
         <Button
           variant="secondary"
           size={emphasis ? 'md' : 'sm'}
           className="studio-drop-btn"
           disabled={busy}
-          aria-label="MIDI 파일 선택"
+          aria-label="MIDI·MusicXML 파일 선택"
           onClick={(e) => {
             e.stopPropagation();
             inputRef.current?.click();
@@ -92,7 +102,10 @@ export function MidiUploadForm({ busy, error, onSubmit, emphasis, onCancel }: Mi
         >
           {file ? '다른 파일 고르기' : '파일 고르기'}
         </Button>
-        <span className="studio-drop-limits">.mid · .midi · {size(MAX_MIDI_BYTES)} 이하 · 쉬움·보통·어려움 채보가 바로 만들어져요 · 반주는 없어요</span>
+        <span className="studio-drop-limits">
+          MIDI(.mid · .midi) {size(MAX_MIDI_BYTES)} 이하 · MusicXML 드럼 악보(.musicxml · .xml · .mxl) {size(MAX_MUSICXML_BYTES)} 이하 · 쉬움·보통·어려움
+          채보가 바로 만들어져요 · 반주는 없어요 · 악보 이미지·PDF는 받지 않아요
+        </span>
       </div>
       {check && !check.ok && (
         <p className="notice error" role="alert">

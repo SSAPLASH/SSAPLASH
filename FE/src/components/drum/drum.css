@@ -317,3 +317,35 @@
 .drum-pad-lit {
   filter: drop-shadow(0 0 12px var(--brand)) drop-shadow(0 0 28px color-mix(in srgb, var(--brand) 55%, transparent));
 }
+
+/* ---- 실시간 코칭 대상 패드 링(COACH-001 D4): 문구가 떠 있는 동안만 그려진다 ---- */
+.drum-pad-coach {
+  pointer-events: none;
+}
+.drum-pad-coach ellipse {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 6;
+  filter: drop-shadow(0 0 8px var(--brand-text));
+  animation: drum-coach-pulse 0.9s ease-in-out infinite;
+}
+@keyframes drum-coach-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-coach ellipse {
+    animation: none;
+  }
+}
+
+/* 타격 이펙트 캔버스(FxCanvas): 킷 SVG 크기에 맞춘 래퍼 위에 절대 위치로 겹치고 포인터를 통과시킨다 */
+.drum-kit-fx {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+.fx-canvas {
+  position: absolute;
+  pointer-events: none;
+}

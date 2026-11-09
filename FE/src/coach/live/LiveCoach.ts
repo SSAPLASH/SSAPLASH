@@ -3,7 +3,7 @@
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
-import { CoachPolicy } from './policy';
+import { CoachPolicy, type RecoveredFrom } from './policy';
 import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
 import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
 import { JudgedWindow, type JudgedNote } from './window';
@@ -32,6 +32,8 @@ export interface CoachMessage {
   target: CoachTarget | null;
   /** 이 플레이에서 같은 태그가 앞서 뜬 횟수. 화면 문구를 돌려 쓰는 데 쓴다 */
   repeat: number;
+  /** LIVE_GOOD_RECOVERED일 때만: 해소된 지적 중 가장 최근에 띄웠던 것(무엇이 고쳐졌는지). 그 외 태그는 null */
+  recoveredFrom: RecoveredFrom | null;
 }
 
 /** 플레이 로그 liveCoachEvents[] 한 항목. BE 검증: tMs 유한 수, tag ≤ 64자, text ≤ 2048자, 최대 1,000개 */
@@ -73,7 +75,7 @@ export class LiveCoach {
       const metrics = this.window.metrics();
       const evals = evaluateRules(metrics, this.thresholds);
       if (this.setupHints) evals.push(...evaluateSetupHints(metrics).filter((e) => !this.setupShown.has(e.tag)));
-      const { show, recovered, repeat } = this.policy.decide(
+      const { show, recovered, repeat, recoveredFrom } = this.policy.decide(
         evals,
         { songTimeMs: note.songTimeMs, judged: this.window.total },
         evaluatePraise(metrics, this.thresholds),
@@ -84,7 +86,7 @@ export class LiveCoach {
       if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
       this.append(note.songTimeMs, show.tag, show.text);
-      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat };
+      return { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom };
     } catch {
       // 코칭 오류로 플레이를 멈추지 않는다. 이 판정은 건너뛰고 다음 판정부터 다시 계산한다
       return null;
