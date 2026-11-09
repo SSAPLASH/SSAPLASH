@@ -29,6 +29,15 @@ tempo:
   # offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 격자 박에서 60ms 안의 킥·스네어 노트
   # 중앙값만큼 박 안 위치를 옮김. Beat This! 박이 드럼보다 늦게 잡혀 메트로놈 클릭이 킥보다 늦게 울리던 것을 줄임
   origin: notes
+  # Beat This! 후처리. dbn은 madmom 필요 (설계 CHART-003-variable-tempo-exp, 원곡 기준 마디 맞는 곡 88 → 102/131)
+  postprocess: dbn
+  # 찾은 박을 따라가는 빠르기 구간(tempoMap)을 냄. 마디 경계가 이 ms 안으로 맞는 가장 긴 구간으로 묶음
+  tempo_map: true
+  tempo_map_tolerance_ms: 20
+  # 채보 노트로 bpm·offsetMs 다시 맞추기(chart/tempo_refine.py, S15P31A307-322). 노트 시각은 그대로.
+  # 전자음악 NCS 50곡은 곡 끝 메트로놈 밀림 10ms 넘는 곡 26 → 0이지만, 밴드 녹음 Songsterr 131곡은 정답 마디가
+  # 마디선 70ms 안에 80% 이상 드는 곡이 52 → 47로 줄어 서비스 기본값은 끔(scripts/chart_tempo_refine_eval.py)
+  refine: false
 # 이보다 긴 드럼 트랙은 입력 오류
 max_duration_sec: 600
 # 채보 가능 검사 (S15P31A307-246). 걸리면 실패 사유 NOT_TRANSCRIBABLE로 보고함

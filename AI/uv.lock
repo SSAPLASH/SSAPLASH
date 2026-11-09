@@ -1128,6 +1128,16 @@ wheels = [
 ]
 
 [[package]]
+name = "madmom"
+version = "0.17.dev0"
+source = { git = "https://github.com/CPJKU/madmom?rev=27f032e8947204902c675e5e341a3faf5dc86dae#27f032e8947204902c675e5e341a3faf5dc86dae" }
+dependencies = [
+    { name = "mido" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+
+[[package]]
 name = "mako"
 version = "1.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2584,6 +2594,7 @@ models = [
 transcribers = [
     { name = "adtof-pytorch" },
     { name = "beat-this" },
+    { name = "madmom" },
     { name = "pretty-midi" },
 ]
 
@@ -2602,6 +2613,7 @@ requires-dist = [
     { name = "demucs", marker = "extra == 'models'", specifier = ">=4.0.1" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "librosa", specifier = ">=0.10,<1" },
+    { name = "madmom", marker = "extra == 'transcribers'", git = "https://github.com/CPJKU/madmom?rev=27f032e8947204902c675e5e341a3faf5dc86dae" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "mido", specifier = ">=1.3.3" },
     { name = "mir-eval", specifier = ">=0.8" },
