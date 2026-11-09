@@ -251,6 +251,45 @@ describe('InputManager 페달(foot)', () => {
   });
 });
 
+/** sendCommand를 기록하는 모의 센서 소스 */
+class CommandSource extends MockSource {
+  sent: Array<{ bytes: number[]; stickId: number | undefined }> = [];
+  sendCommand(bytes: Uint8Array, stickId?: 0 | 1): void {
+    this.sent.push({ bytes: [...bytes], stickId });
+  }
+}
+
+describe('hapticWave·setLocalHaptic', () => {
+  it('hapticWave는 sendCommand가 있는 소스에 HAPTIC 파형 바이트를 그 손으로 보낸다', async () => {
+    const m = new InputManager();
+    const sensor = new CommandSource('ble');
+    await m.attach(sensor);
+    m.hapticWave(1, 4);
+    expect(sensor.sent).toEqual([{ bytes: [0x12, 4, 0], stickId: 1 }]);
+  });
+
+  it('setLocalHaptic은 SET_PARAM 0x05 값 1/0을 보내고 손을 안 주면 stickId가 없다', async () => {
+    const m = new InputManager();
+    const sensor = new CommandSource('ble');
+    await m.attach(sensor);
+    m.setLocalHaptic(false);
+    m.setLocalHaptic(true, 0);
+    expect(sensor.sent).toEqual([
+      { bytes: [0x14, 0x05, 0, 0], stickId: undefined },
+      { bytes: [0x14, 0x05, 1, 0], stickId: 0 },
+    ]);
+  });
+
+  it('sendCommand가 없는 소스(키보드 등)는 무시하고 던지지 않는다', async () => {
+    const m = new InputManager();
+    await m.attach(new MockSource('keyboard'));
+    expect(() => {
+      m.hapticWave(0, 1);
+      m.setLocalHaptic(false);
+    }).not.toThrow();
+  });
+});
+
 
 describe('하이햇 페달 스냅샷', () => {
   it('원시 타격 시각으로 상태를 찾고 오프셋과 소유자가 아닌 소스 detach에 영향받지 않는다', async () => {

@@ -10,6 +10,7 @@ import { useChartParam } from '@/components/useChartParam';
 import { SheetPager } from '@/components/SheetPager';
 import { usePauseTriggers } from '@/components/usePauseTriggers';
 import { useReconnectResume } from '@/components/useReconnectResume';
+import { useJudgementHaptic } from '@/components/useJudgementHaptic';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { StageFade } from '@/components/StageFade';
 import { PlayStage } from '@/components/play/PlayStage';
@@ -584,6 +585,8 @@ function SheetPageBody() {
   useShell({ title: '악보 연습', immersive: stage === 'play' });
   // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
+  // 판정 진동(PLAY-006): 연주 단계 전체(stage 'play' = playSession이 있는 동안)에서 로컬 진동을 끄고 판정으로 울린다
+  useJudgementHaptic(activeSession, stage === 'play');
   // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
   useEffect(() => {
     setLocked(stage === 'play');

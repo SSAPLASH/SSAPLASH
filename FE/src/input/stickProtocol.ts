@@ -459,6 +459,14 @@ export function encodeHaptic(strength: number, durationMs: number): Uint8Array<A
   ]);
 }
 
+/**
+ * HAPTIC 라이브러리 파형 모드: [0x12, 파형 번호, 0]. 세 번째 바이트 0이면 라이브러리 파형 1회(프로토콜 5장).
+ * 파형 번호는 1~123으로 자른다(그 밖은 펌웨어가 거절한다)
+ */
+export function encodeHapticWave(wave: number): Uint8Array<ArrayBuffer> {
+  return new Uint8Array([CommandType.HAPTIC, Math.max(1, Math.min(123, Math.round(wave))), 0]);
+}
+
 export function encodeResetPose(): Uint8Array<ArrayBuffer> {
   return new Uint8Array([CommandType.RESET_POSE]);
 }
