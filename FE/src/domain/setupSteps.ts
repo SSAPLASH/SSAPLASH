@@ -316,3 +316,17 @@ export function returnBannerText(missing: ReadinessMissing[], connected: [boolea
   const parts = missing.map((m) => (m === 'stick' ? stickMissingText(connected) : READINESS_MESSAGES[m]));
   return { title, line: parts.join(' · ') };
 }
+
+/** ② 시작 위치 맞추기(PLAY-004 D6) 문구 */
+export const REFERENCE_HINT_TEXT = '스틱을 정면으로 들고 [시작 위치 맞추기]를 누른 뒤 3초간 움직이지 마세요. 아래 킷에서 내 포인터를 확인할 수 있어요.';
+export const REFERENCE_START_LABEL = '시작 위치 맞추기';
+export const REFERENCE_RESTART_LABEL = '다시 맞추기';
+export const REFERENCE_HOLDING_TEXT = '3초간 자세를 유지하세요';
+export const REFERENCE_SHAKY_TEXT = '자세가 흔들리면 처음부터 다시 셉니다';
+export const REFERENCE_LOST_TEXT = '스틱 연결이 끊겨 시작 위치 맞추기를 멈췄어요. 스틱을 다시 연결해 주세요.';
+export const REFERENCE_DONE_TEXT = '시작 위치를 맞췄어요';
+
+/** 진행 줄: 「유지 중 1.2초 · 흔들림 0.8°」 */
+export function referenceHoldingLine(progress: number, spread: number, holdMs = 3000): string {
+  return `유지 중 ${((progress * holdMs) / 1000).toFixed(1)}초 · 흔들림 ${spread.toFixed(1)}°`;
+}
