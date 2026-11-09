@@ -574,6 +574,12 @@ export function SetupPage() {
                 <KitCanvas
                   layout={s.kitLayout}
                   onTapPad={setSelectedPad}
+                  // 사용자 프리셋·비보정 중에만 끌어 옮긴다. 앵커도 같이 옮겨 표시와 판정이 맞는다(kit-drag 설계 D1)
+                  draggable={!systemPreset && !capturing}
+                  onMovePad={(pad, x, y) => {
+                    setSelectedPad(pad);
+                    s.movePad(pad, x, y);
+                  }}
                   highlightPad={selectedPad}
                   hits={hits}
                   keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
