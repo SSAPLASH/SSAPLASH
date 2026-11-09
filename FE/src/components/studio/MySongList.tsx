@@ -42,6 +42,8 @@ interface Props {
   onSheetCoverError?: () => void;
   /** 악보 항목 ⋯ 메뉴 선택 */
   onSheetMenu?: (kind: SheetMenuKind, sheet: SheetSummary) => void;
+  /** 있으면 악보만 항목에 업로드 버튼(곡 올리기)을 그린다(악보 재연결 스위치 켜짐) */
+  onUploadSong?: (sheet: SheetSummary) => void;
   /** 있으면 곡 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다 */
   onSongSheet?: (kind: SongSheetKind, song: SongSummary) => void;
 }
@@ -86,6 +88,7 @@ export function MySongList({
   onSheetMenu,
   onSheetCoverError,
   onSongSheet,
+  onUploadSong,
 }: Props) {
   if (status === 'idle' || status === 'loading') {
     // 스켈레톤 카드 6장 (Figma 로딩: 커버·제목·아티스트·동작 자리)
@@ -152,7 +155,7 @@ export function MySongList({
                   onCoverError={onCoverError}
                 />
               ) : (
-                <SheetItemCard key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} />
+                <SheetItemCard key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} onUploadSong={onUploadSong} />
               ),
             )}
           </ul>
@@ -170,7 +173,7 @@ export function MySongList({
                   onCoverError={onCoverError}
                 />
               ) : (
-                <SheetItemRow key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} />
+                <SheetItemRow key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} onUploadSong={onUploadSong} />
               ),
             )}
           </ul>
