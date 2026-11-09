@@ -13,24 +13,6 @@
 .studio-page.roomy {
   gap: var(--space-l);
 }
-.studio-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-m);
-}
-.studio-head-title {
-  min-width: 0;
-}
-.studio-head-title h2 {
-  margin: 0;
-}
-.studio-summary {
-  margin: var(--space-xs) 0 0;
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.45;
-}
 .studio-upload-btn {
   flex: none;
   width: 160px;
@@ -51,15 +33,9 @@
   gap: var(--space-m);
   min-height: 44px;
 }
-/* 정렬 안내가 없을 때(빈 라이브러리)도 보기 전환은 오른쪽에 */
+/* 정렬 안내는 없앴다(QA). 보기 전환은 오른쪽에 */
 .studio-toolbar > :last-child {
   margin-left: auto;
-}
-.studio-sortnote {
-  margin: 0;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 /* ---- 상태 배지 (Studio / SongStatusBadge 202:503) ---- */
@@ -731,9 +707,6 @@
 @media (max-width: 560px) {
   .studio-fields {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .studio-head {
-    flex-wrap: wrap;
   }
 }
 

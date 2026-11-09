@@ -21,17 +21,6 @@
 .setup-steps > * {
   flex-shrink: 0;
 }
-.setup-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-m);
-}
-.setup-head h1 {
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.4;
-}
 .setup-progress {
   color: var(--text-3);
   font-size: 12px;

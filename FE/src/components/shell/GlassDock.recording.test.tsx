@@ -50,18 +50,26 @@ describe('GlassDock 녹음 슬롯(스위치 켜짐)', () => {
     expect((html.match(/dock-divider/g) ?? []).length).toBe(1);
   });
 
-  it('접힘: 자유 녹음 중이면 녹음 점, 아니면 없음', () => {
+  it('접힘: 녹음 중이 아니면 꺼진 원, 자유 녹음 중이면 빨간 원(표시만)', () => {
     useSettings.setState({ dockCollapsed: true });
-    expect(render('/free')).not.toContain('dock-pill-rec');
+    expect(render('/free')).toMatch(/<span class="dock-rec-status" role="img" aria-label="녹음 안 함">/);
     useRecordingStore.setState({ phase: 'recording', free: { startPerfMs: 0, startedAt: new Date(), hitCount: 0 } });
-    expect(render('/free')).toMatch(/dock-pill-dot[^>]*><\/span><span class="dock-pill-rec"/);
+    const html = render('/free');
+    expect(html).toMatch(/<span class="dock-rec-status on" role="img" aria-label="녹음 중">/);
+    // 접힌 Dock에는 녹음 버튼이 없다(조작은 펼친 Dock)
+    expect(html).not.toContain('rec-btn');
   });
 
-  it('접힘: armed는 잠겨 있을 때만 점', () => {
+  it('접힘: armed는 잠겨 있을 때만 빨간 원', () => {
     useSettings.setState({ dockCollapsed: true });
     useRecordingStore.setState({ phase: 'armed', locked: false });
-    expect(render('/play')).not.toContain('dock-pill-rec');
+    expect(render('/play')).toContain('class="dock-rec-status"');
     useRecordingStore.setState({ phase: 'armed', locked: true });
-    expect(render('/play')).toContain('dock-pill-rec');
+    expect(render('/play')).toContain('dock-rec-status on');
+  });
+
+  it('접힘: 녹음 버튼이 없는 화면에는 녹음 상태도 없다', () => {
+    useSettings.setState({ dockCollapsed: true });
+    expect(render('/history')).not.toContain('dock-rec-status');
   });
 });
