@@ -15,6 +15,7 @@ import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
 import { StageFade } from '@/components/StageFade';
 import { PlayStage } from '@/components/play/PlayStage';
+import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
@@ -71,7 +72,7 @@ import { useReconnect } from '@/store/reconnectStore';
 import { useSongs } from '@/store/songStore';
 
 // loading: URL의 곡·채보를 불러오는 중(실패하면 같은 단계에서 오류 문구)
-type Stage = 'select' | 'loading' | 'ready' | 'play';
+type Stage = PlayStageName;
 
 /** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
 const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
@@ -239,9 +240,10 @@ function PlayPageBody() {
   }, [songIdParam, selectSong]);
 
   // 타격: 즉시 발음(D6) → 플래시 → 판정 → 로그·텔레메트리. 타격 진동은 스틱이 직접 울린다(PLAY-006)
+  // 소리·플래시는 드럼 킷이 보이는 단계(준비·연주)에서만 낸다(QA 352). 곡 선택 중에는 어떤 입력으로 쳐도 울리지 않는다
   useEffect(() => {
     return inputManager.onHit((hit) => {
-      if (hit.pad) {
+      if (hit.pad && kitSoundStage(stageRef.current)) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
         flashes.current.set(hit.pad, performance.now());

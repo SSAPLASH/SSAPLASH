@@ -78,12 +78,14 @@ describe('라이브러리 빈 화면', () => {
     expect(document.querySelector('.studio-empty.card')).toBeNull();
   });
 
-  it('곡이 있으면 안내가 없고 정렬 안내가 보인다', async () => {
+  it('곡이 있으면 안내가 없고, 요약은 제목 옆 작은 글씨이며 정렬 안내는 없다', async () => {
     vi.mocked(listAllSongs).mockResolvedValue([song]);
     renderPage();
     expect(await screen.findByText('별빛 산책')).toBeTruthy();
     expect(screen.queryByText(HINT)).toBeNull();
-    expect(screen.getByText(/처리 중 → 실패 → 완료/)).toBeTruthy();
+    expect(screen.getByText('곡 1개').className).toBe('ui-page-meta');
+    expect(screen.getByRole('heading', { level: 2, name: '라이브러리' })).toBeTruthy();
+    expect(screen.queryByText(/처리 중 → 실패 → 완료/)).toBeNull();
   });
 
   it('악보만 있어도 안내가 없다', async () => {

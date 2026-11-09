@@ -9,6 +9,7 @@ import { SheetDeleteDialog } from '@/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/components/sheet/SheetTitleDialog';
 import { useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Segmented } from '@/components/ui/Segmented';
 import { MySongList, type StudioView } from '@/components/studio/MySongList';
 import type { SheetMenuKind } from '@/components/studio/SheetMenu';
@@ -456,16 +457,16 @@ export function StudioPage() {
 
   return (
     <main className={`main studio-page${cardView ? ' roomy' : ''}`}>
-      <header className="studio-head">
-        <div className="studio-head-title">
-          <h2 className="t-title-24">라이브러리</h2>
-          <p className="studio-summary">{summary}</p>
-        </div>
-        {/* 올리기 진입점은 곡이 없을 때도 이 버튼 하나다(설계 QA-studio-empty-state) */}
-        <Button variant="primary" size="md" className="studio-upload-btn" leadingIcon={<PlusIcon />} onClick={openUpload}>
-          {SHEET_ARCHIVE_ENABLED ? '올리기' : '곡 올리기'}
-        </Button>
-      </header>
+      {/* 요약은 제목 오른쪽 작은 글씨. 올리기 진입점은 곡이 없을 때도 이 버튼 하나다(설계 QA-studio-empty-state·QA-page-header-dock-fold) */}
+      <PageHeader
+        title="라이브러리"
+        meta={summary}
+        actions={
+          <Button variant="primary" size="md" className="studio-upload-btn" leadingIcon={<PlusIcon />} onClick={openUpload}>
+            {SHEET_ARCHIVE_ENABLED ? '올리기' : '곡 올리기'}
+          </Button>
+        }
+      />
       {jobLookupError && <p className="notice error" role="alert">{errorText}</p>}
       {SHEET_RELINK_ENABLED && linkPending !== null && (
         <p className="notice error" role="alert">
@@ -478,8 +479,6 @@ export function StudioPage() {
       <div className="studio-body">
         <div className="studio-main-col">
           <div className="studio-toolbar">
-            {/* 정렬할 항목이 없으면 정렬 안내는 뜻이 없다 */}
-            {!libraryEmpty && <p className="studio-sortnote">처리 중 → 실패 → 완료 · 같은 상태는 최신순</p>}
             <Segmented<StudioView>
               label="보기 방식"
               value={view}

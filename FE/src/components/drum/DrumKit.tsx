@@ -183,6 +183,7 @@ export function DrumKit({
     <svg
       className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
       data-no-pointer-strike={onPadDown ? '' : undefined}
+      data-pointer-strike={onPadDown ? undefined : ''}
       viewBox={`0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
       width={width}
       height={height}

@@ -5,21 +5,6 @@
   gap: var(--space-m);
   color: var(--text-1);
 }
-.play-sp-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-s);
-}
-.play-sp-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-}
-.play-sp-desc {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
-}
 /* 검색 라벨은 화면 낭독기에만 보인다 */
 .play-sp .play-sp-search {
   width: 400px;
