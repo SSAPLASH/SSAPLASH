@@ -3,7 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
 import type { CoachGate, GateDecision } from './gate/gate';
-import { LIVE_OFF_TAG, LIVE_RECOVERED_TAG, LiveCoach, type CoachMessage } from './LiveCoach';
+import {
+  LIVE_GATE_DROP_TAG,
+  LIVE_GATE_FALLBACK_TAG,
+  LIVE_GATE_KEEP_TAG,
+  LIVE_OFF_TAG,
+  LIVE_RECOVERED_TAG,
+  LiveCoach,
+  type CoachMessage,
+} from './LiveCoach';
 import { isPraiseTag } from './rules';
 import type { JudgedNote } from './window';
 
@@ -169,7 +177,7 @@ describe('LiveCoach 표시 정책', () => {
     expect(back.map((m) => m.tag)).toEqual(['LIVE_GOOD_RECOVERED']);
     const tags = coach.events().map((e) => e.tag);
     expect(tags).toEqual(['LIVE_LATE', LIVE_RECOVERED_TAG, 'LIVE_GOOD_RECOVERED']);
-    expect(coach.events()[1].text).toBe('경향 해소: LIVE_LATE');
+    expect(JSON.parse(coach.events()[1].text)).toEqual({ key: 'LIVE_LATE' });
     expect(back[0].recoveredFrom).toEqual({ tag: 'LIVE_LATE', target: null });
     expect(late[0].recoveredFrom).toBeNull();
   });
@@ -314,7 +322,7 @@ describe('세팅 안내', () => {
 
 describe('거름', () => {
   const late = (count: number) => Array.from({ length: count }, (_, i) => hit(i, 40));
-  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'json', threshold, score: () => score });
+  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'json', threshold, model: 'test-0', score: () => score });
   const flush = () => new Promise((r) => setTimeout(r, 0));
   const firstLate = (coach: LiveCoach, onDeferred?: (m: CoachMessage) => void) => {
     const out: CoachMessage[] = [];
@@ -349,7 +357,7 @@ describe('거름', () => {
 
   it('칭찬은 거르지 않는다', () => {
     const score = vi.fn(() => 0);
-    const coach = new LiveCoach({ goodMs: 60, gate: { runtime: 'json', threshold: 1, score }, gateMode: 'on' });
+    const coach = new LiveCoach({ goodMs: 60, gate: { runtime: 'json', threshold: 1, model: 'test-0', score }, gateMode: 'on' });
     const list = Array.from({ length: 40 }, (_, i) => coach.push(hit(i, 0)));
     expect(list.some((m) => m && isPraiseTag(m.tag))).toBe(true);
     expect(score).not.toHaveBeenCalled();
@@ -401,5 +409,96 @@ describe('거름', () => {
     await flush();
     expect(got).toHaveLength(0);
     expect(coach.events()).toHaveLength(0);
+  });
+});
+
+describe('판단 기록', () => {
+  const late = (count: number) => Array.from({ length: count }, (_, i) => hit(i, 40));
+  const gate = (score: number | Promise<number>, threshold = 0.5): CoachGate => ({ runtime: 'onnx', threshold, model: 'test-0', score: () => score });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const play = (coach: LiveCoach) => {
+    for (const n of late(12)) coach.push(n, 0, () => undefined);
+  };
+  const tags = (coach: LiveCoach) => coach.events().map((e) => e.tag);
+  const body = (coach: LiveCoach, tag: string) => JSON.parse(coach.events().find((e) => e.tag === tag)!.text);
+
+  it('띄운 문구는 상태 키와 문장을 JSON으로 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    play(coach);
+    expect(body(coach, 'LIVE_LATE')).toEqual({ key: 'LIVE_LATE', text: expect.any(String) });
+  });
+
+  it('패드 지적은 대상까지 담은 키를 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    for (let i = 0; i < 24; i++) coach.push(hit(i, i % 2 === 0 ? 45 : -5, { pad: i % 2 === 0 ? 'SNARE' : 'HIHAT' }));
+    const pad = coach.events().find((e) => e.tag === 'LIVE_PAD_LATE');
+    expect(pad && JSON.parse(pad.text).key).toBe('LIVE_PAD_LATE:SNARE');
+  });
+
+  it('남긴 지적은 지적 바로 뒤에 KEEP과 점수를 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    play(coach);
+    const list = tags(coach);
+    expect(list[list.indexOf('LIVE_LATE') + 1]).toBe(LIVE_GATE_KEEP_TAG);
+    expect(body(coach, LIVE_GATE_KEEP_TAG)).toMatchObject({ tag: 'LIVE_LATE', key: 'LIVE_LATE', score: 0.9, threshold: 0.5, model: 'test-0', runtime: 'onnx', mode: 'on' });
+  });
+
+  it('뺀 지적은 지적 행 없이 DROP만 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'on' });
+    play(coach);
+    expect(tags(coach)).not.toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_DROP_TAG)).toMatchObject({ tag: 'LIVE_LATE', score: 0.1 });
+  });
+
+  it('shadow는 띄우면서 뺐을 판단을 DROP으로 남긴다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.1), gateMode: 'shadow' });
+    play(coach);
+    expect(tags(coach)).toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_DROP_TAG)).toMatchObject({ mode: 'shadow' });
+  });
+
+  it('비동기 점수도 같은 형식으로 남긴다', async () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.resolve(0.9)), gateMode: 'on' });
+    play(coach);
+    await flush();
+    const list = tags(coach);
+    expect(list[list.indexOf('LIVE_LATE') + 1]).toBe(LIVE_GATE_KEEP_TAG);
+  });
+
+  it('실행기가 실패하면 규칙대로 띄우고 FALLBACK을 남긴다', async () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(Promise.reject(new Error('시험'))), gateMode: 'on' });
+    play(coach);
+    await flush();
+    expect(tags(coach)).toContain('LIVE_LATE');
+    expect(body(coach, LIVE_GATE_FALLBACK_TAG)).toMatchObject({ tag: 'LIVE_LATE', reason: 'error' });
+  });
+
+  it('점수가 늦으면 FALLBACK에 timeout을 남긴다', async () => {
+    vi.useFakeTimers();
+    try {
+      const coach = new LiveCoach({ goodMs: 60, gate: gate(new Promise<number>(() => undefined)), gateMode: 'on' });
+      play(coach);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(body(coach, LIVE_GATE_FALLBACK_TAG)).toMatchObject({ reason: 'timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('칭찬에는 판단 기록이 없다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0), gateMode: 'on' });
+    for (let i = 0; i < 40; i++) coach.push(hit(i, 0));
+    expect(tags(coach).some((t) => t.startsWith('LIVE_GOOD_'))).toBe(true);
+    expect(tags(coach).some((t) => t.startsWith('LIVE_GATE_'))).toBe(false);
+  });
+
+  it('기록은 BE 검증 형식을 지킨다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: gate(0.9), gateMode: 'on' });
+    for (let i = 0; i < 200; i++) coach.push(hit(i, i % 20 < 10 ? 40 : -40));
+    for (const e of coach.events()) {
+      expect(e.tag.length).toBeLessThanOrEqual(64);
+      expect(e.text.length).toBeLessThanOrEqual(2048);
+      expect(() => JSON.parse(e.text)).not.toThrow();
+    }
   });
 });

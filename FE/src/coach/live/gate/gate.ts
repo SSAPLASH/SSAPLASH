@@ -10,6 +10,8 @@ export type GateMode = 'shadow' | 'on';
 export interface CoachGate {
   runtime: GateRuntime;
   threshold: number;
+  /** 모델 버전. 판단 기록에 남긴다 */
+  model: string;
   /** 0~1. json은 바로, onnx는 비동기로 돌려준다 */
   score(input: readonly number[]): number | Promise<number>;
 }

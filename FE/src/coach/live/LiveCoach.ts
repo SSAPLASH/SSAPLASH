@@ -54,6 +54,21 @@ export interface LiveCoachLogEntry {
   text: string;
 }
 
+/** 모델 판단 기록 태그. 뺀 지적, 남긴 지적, 점수가 늦거나 실패해 규칙대로 띄운 경우 */
+export const LIVE_GATE_DROP_TAG = 'LIVE_GATE_DROP';
+export const LIVE_GATE_KEEP_TAG = 'LIVE_GATE_KEEP';
+export const LIVE_GATE_FALLBACK_TAG = 'LIVE_GATE_FALLBACK';
+
+/**
+ * 로그 문구 형식. 띄운 문구는 {"key","text"}, 경향 해소는 {"key"} JSON 한 줄이다.
+ * key는 대상까지 담은 상태 키(예: LIVE_PAD_LATE:SNARE)라서 BE가 무엇을 지적했는지 집계할 수 있다.
+ */
+function entryText(key: string, text?: string): string {
+  return JSON.stringify(text === undefined ? { key } : { key, text });
+}
+
+const round = (x: number, digits: number): number => Math.round(x * 10 ** digits) / 10 ** digits;
+
 /** 경향이 사라졌을 때 로그에만 남기는 태그(화면에 띄우지 않는다) */
 export const LIVE_RECOVERED_TAG = 'LIVE_RECOVERED';
 export const LIVE_OFF_TAG = 'LIVE_OFF';
@@ -103,14 +118,14 @@ export class LiveCoach {
         evaluatePraise(metrics, this.thresholds),
       );
 
-      for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, `경향 해소: ${r.key}`);
+      for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, entryText(r.key));
       if (!show) return null;
       if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
       const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom };
       const gate = this.gateOption === undefined ? loadedCoachGate() : this.gateOption;
-      if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, gateFeatures(metrics, show.tag), onDeferred);
-      this.append(note.songTimeMs, show.tag, show.text);
+      if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, show.key, gateFeatures(metrics, show.tag), onDeferred);
+      this.append(note.songTimeMs, show.tag, entryText(show.key, show.text));
       return message;
     } catch {
       // 코칭 오류로 플레이를 멈추지 않는다. 이 판정은 건너뛰고 다음 판정부터 다시 계산한다
@@ -118,39 +133,100 @@ export class LiveCoach {
     }
   }
 
-  /** 점수에 따라 지적을 뺀다. 실패하거나 늦으면 규칙 판단대로 띄운다 */
-  private applyGate(gate: CoachGate, message: CoachMessage, input: number[], onDeferred?: DeferredMessage): CoachMessage | null {
+  /**
+   * 점수에 따라 지적을 뺀다. 실패하거나 늦으면 규칙 판단대로 띄운다.
+   * 판단은 모두 로그에 남긴다(설계 4.4). 남긴 지적은 지적 행 바로 뒤에 같은 시각으로 KEEP을 남긴다.
+   */
+  private applyGate(
+    gate: CoachGate,
+    message: CoachMessage,
+    key: string,
+    input: number[],
+    onDeferred?: DeferredMessage,
+  ): CoachMessage | null {
     const started = performance.now();
+    const record = (tag: string, extra: Record<string, unknown>) => {
+      const ms = round(performance.now() - started, 1);
+      this.append(
+        message.tMs,
+        tag,
+        JSON.stringify({ tag: message.tag, key, ...extra, threshold: round(gate.threshold, 3), model: gate.model, runtime: gate.runtime, mode: this.mode, ms }),
+      );
+    };
+    const show = (): CoachMessage => {
+      this.append(message.tMs, message.tag, entryText(key, message.text));
+      return message;
+    };
     const judge = (score: number): boolean => {
       const kept = score >= gate.threshold;
       this.onGate?.({ runtime: gate.runtime, tag: message.tag, tMs: message.tMs, score, kept, elapsedMs: performance.now() - started });
       return kept;
     };
-    const show = (): CoachMessage => {
-      this.append(message.tMs, message.tag, message.text);
-      return message;
+    /** 점수가 나왔을 때 기록한다. 띄울지는 호출 쪽이 정한다 */
+    const decide = (score: number): boolean => {
+      const kept = judge(score);
+      record(kept ? LIVE_GATE_KEEP_TAG : LIVE_GATE_DROP_TAG, { score: round(score, 3) });
+      return kept;
     };
 
-    const scored = gate.score(input);
+    let scored: number | Promise<number>;
+    try {
+      scored = gate.score(input);
+    } catch {
+      const shown = show();
+      record(LIVE_GATE_FALLBACK_TAG, { reason: 'error' });
+      return shown;
+    }
+
     if (typeof scored === 'number') {
       const kept = judge(scored);
-      return kept || this.mode === 'shadow' ? show() : null;
-    }
-    if (this.mode === 'shadow') {
-      void scored.then(judge).catch(() => undefined);
-      return show();
+      if (!kept && this.mode === 'on') {
+        record(LIVE_GATE_DROP_TAG, { score: round(scored, 3) });
+        return null;
+      }
+      const shown = show();
+      record(kept ? LIVE_GATE_KEEP_TAG : LIVE_GATE_DROP_TAG, { score: round(scored, 3) });
+      return shown;
     }
 
     const run = this.run;
+    if (this.mode === 'shadow') {
+      const shown = show();
+      void scored.then(
+        (score) => {
+          if (run === this.run) decide(score);
+        },
+        () => {
+          if (run === this.run) record(LIVE_GATE_FALLBACK_TAG, { reason: 'error' });
+        },
+      );
+      return shown;
+    }
+
+    type Outcome = { kind: 'score'; score: number } | { kind: 'timeout' } | { kind: 'error' };
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => resolve(true), GATE_TIMEOUT_MS);
+    const timeout = new Promise<Outcome>((resolve) => {
+      timer = setTimeout(() => resolve({ kind: 'timeout' }), GATE_TIMEOUT_MS);
     });
-    void Promise.race([scored.then(judge), timeout])
-      .catch(() => true)
-      .then((kept) => {
+    void Promise.race([scored.then((score): Outcome => ({ kind: 'score', score })), timeout])
+      .catch((): Outcome => ({ kind: 'error' }))
+      .then((outcome) => {
         clearTimeout(timer);
-        if (kept && run === this.run) onDeferred?.(show());
+        if (run !== this.run) return;
+        if (outcome.kind === 'score') {
+          const kept = judge(outcome.score);
+          if (!kept) {
+            record(LIVE_GATE_DROP_TAG, { score: round(outcome.score, 3) });
+            return;
+          }
+          const shown = show();
+          record(LIVE_GATE_KEEP_TAG, { score: round(outcome.score, 3) });
+          onDeferred?.(shown);
+          return;
+        }
+        const shown = show();
+        record(LIVE_GATE_FALLBACK_TAG, { reason: outcome.kind });
+        onDeferred?.(shown);
       });
     return null;
   }

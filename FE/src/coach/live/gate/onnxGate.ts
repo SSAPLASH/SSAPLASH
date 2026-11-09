@@ -14,11 +14,12 @@ export interface OrtLike {
   InferenceSession: { create(model: Uint8Array): Promise<OrtSession> };
 }
 
-export async function createOnnxGateFrom(ort: OrtLike, model: Uint8Array, threshold: number): Promise<CoachGate> {
+export async function createOnnxGateFrom(ort: OrtLike, model: Uint8Array, threshold: number, version = ''): Promise<CoachGate> {
   const session = await ort.InferenceSession.create(model);
   return {
     runtime: 'onnx',
     threshold,
+    model: version,
     async score(input) {
       const x = new ort.Tensor('float32', Float32Array.from(input), [1, input.length]);
       const out = await session.run({ x });
@@ -27,7 +28,7 @@ export async function createOnnxGateFrom(ort: OrtLike, model: Uint8Array, thresh
   };
 }
 
-export async function createOnnxGate(threshold: number): Promise<CoachGate> {
+export async function createOnnxGate(threshold: number, version = ''): Promise<CoachGate> {
   const [ort, wasm, mjs, modelUrl] = await Promise.all([
     import('onnxruntime-web/wasm'),
     import('onnxruntime-web/ort-wasm-simd-threaded.wasm?url'),
@@ -37,5 +38,5 @@ export async function createOnnxGate(threshold: number): Promise<CoachGate> {
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.wasmPaths = { wasm: wasm.default, mjs: mjs.default };
   const model = new Uint8Array(await (await fetch(modelUrl.default)).arrayBuffer());
-  return createOnnxGateFrom(ort as unknown as OrtLike, model, threshold);
+  return createOnnxGateFrom(ort as unknown as OrtLike, model, threshold, version);
 }

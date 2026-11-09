@@ -14,7 +14,7 @@ async function load(): Promise<CoachGate | null> {
   // 조건을 빌드 상수와 직접 비교해야 꺼진 쪽의 모듈이 번들에서 빠진다
   if (import.meta.env.VITE_COACH_GATE === 'onnx') {
     const [weights, { createOnnxGate }] = await Promise.all([import('./coachGate.json'), import('./onnxGate')]);
-    return createOnnxGate(weights.default.threshold);
+    return createOnnxGate(weights.default.threshold, weights.default.modelVersion);
   }
   if (import.meta.env.VITE_COACH_GATE === 'json') {
     const weights = await import('./coachGate.json');
