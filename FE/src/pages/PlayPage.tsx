@@ -49,7 +49,7 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -267,10 +267,13 @@ function PlayPageBody() {
         countInBars: settings.countInBars,
         audioOffsetMs: settings.audioOffsetMs,
       });
+      // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 채보마다 한 번 계산한다
+      const coachContext = chartCoachContext(c.notes);
       const coach = new LiveCoach({
         goodMs: settings.timing.goodMs,
         enabled: settings.liveCoach,
         setupHints: isStickSensor(useSettings.getState().sensorKind),
+        noteGapMedianMs: coachContext.noteGapMedianMs,
         onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
       });
       coachRef.current = coach;
@@ -288,6 +291,7 @@ function PlayPageBody() {
         });
       }
       clearCoachLine();
+      ss.onStray((s) => coach.pushStray(s.pad, s.songTimeMs));
       ss.onJudgement((e) => {
         recorder.current.judgement(e);
         // 놓친 노트 깨짐(하이웨이만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
@@ -304,6 +308,7 @@ function PlayPageBody() {
           pad: e.pad,
           stickId: e.stickId,
           velocity: e.velocity,
+          ...coachContext.notes[e.noteIndex],
         };
         // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
         const show = (message: CoachMessage) => {

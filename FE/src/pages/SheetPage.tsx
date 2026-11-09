@@ -66,7 +66,7 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -293,7 +293,10 @@ function SheetPageBody() {
   // 판정 → 노트 색(새 배열로 갱신: SheetPager가 렌더 후 ref에 복사한다) · HUD
   useEffect(() => {
     if (!activeSession) return;
-    return activeSession.onJudgement((e) => {
+    // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
+    const coachContext = chartCoachContext(activeSession.chart.notes);
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offJudgement = activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
       // 놓친 노트 머리 파편(악보만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
       const miss = missFxEvent(e, 'sheet');
@@ -315,6 +318,7 @@ function SheetPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
+        ...coachContext.notes[e.noteIndex],
       };
       // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
       const show = (message: CoachMessage) => {
@@ -334,6 +338,10 @@ function SheetPageBody() {
       shadowRef.current?.push(judged);
       if (message) show(message);
     });
+    return () => {
+      offStray();
+      offJudgement();
+    };
   }, [activeSession, showCoachLine, sheetFx]);
 
   // 타격: 즉시 발음 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다. 타격 진동은 스틱이 직접 울린다(PLAY-006)
@@ -490,6 +498,7 @@ function SheetPageBody() {
       goodMs: st.timing.goodMs,
       enabled: st.liveCoach,
       setupHints: isStickSensor(st.sensorKind),
+      noteGapMedianMs: chartCoachContext(ss.chart.notes).noteGapMedianMs,
       onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
     });
     coachRef.current = coach;

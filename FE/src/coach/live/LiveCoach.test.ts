@@ -57,6 +57,31 @@ function play(coach: LiveCoach, notes: JudgedNote[]): CoachMessage[] {
   return out;
 }
 
+describe('LiveCoach 놓침 원인', () => {
+  it('다른 패드로 들어간 놓침은 8개부터 WRONG_PAD로, 대신 친 패드까지 나온다', () => {
+    const coach = new LiveCoach({ goodMs: 60, noteGapMedianMs: NOTE_GAP_MS });
+    for (let i = 0; i < 8; i++) {
+      if (i % 2 === 1) {
+        coach.pushStray('MID_TOM', 4_000 + i * NOTE_GAP_MS + 10);
+        coach.push(miss(i, 'SMALL_TOM'));
+      } else {
+        coach.push(hit(i, 0));
+      }
+      if (i === 6) expect(coach.missCauses()).toEqual([]);
+    }
+    const [c] = coach.missCauses();
+    expect(c).toMatchObject({ cause: 'WRONG_PAD', pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
+  });
+
+  it('꺼진 코칭과 잘못된 시각의 채보 밖 타격은 무시한다', () => {
+    const off = new LiveCoach({ goodMs: 60, enabled: false });
+    expect(() => off.pushStray('SMALL_TOM', 1_000)).not.toThrow();
+    const coach = new LiveCoach({ goodMs: 60 });
+    coach.pushStray('SMALL_TOM', Number.NaN);
+    expect(coach.missCauses()).toEqual([]);
+  });
+});
+
 /** 칭찬을 뺀 지적 문구만 */
 const corrections = (list: CoachMessage[]): CoachMessage[] => list.filter((m) => !isPraiseTag(m.tag));
 
@@ -212,6 +237,21 @@ describe('LiveCoach 로그와 설정', () => {
     const again = corrections(play(coach, notes));
     expect(again).toHaveLength(1);
     expect(again[0].repeat).toBe(0);
+  });
+
+  it('판정 4개째에 연속 놓침이 뜨고, 재시작하면 4개 전에는 다시 뜨지 않는다', () => {
+    const coach = new LiveCoach({ goodMs: 60 });
+    const notes = [hit(0, 0), miss(1), miss(2), miss(3)];
+    expect(play(coach, notes.slice(0, 3))).toEqual([]);
+    expect(coach.push(notes[3])?.tag).toBe('LIVE_MISS_STREAK');
+    coach.reset();
+    expect(play(coach, [miss(0), miss(1), miss(2)])).toEqual([]);
+  });
+
+  it('1단계에서는 늦음이 계속돼도 띄우지 않고 8개부터 띄운다', () => {
+    const coach = new LiveCoach({ goodMs: 60 });
+    const out = play(coach, Array.from({ length: 8 }, (_, i) => hit(i, 40)));
+    expect(out.map((m) => m.tMs)).toEqual([hit(7, 40).songTimeMs]);
   });
 
   it('잘못된 입력(NaN 시각, 손 번호 2)은 던지지 않고 무시하며 다음 판정부터 정상 동작한다', () => {

@@ -1,6 +1,6 @@
-// 규칙 평가 결과 중 무엇을 지금 띄울지 정한다. 시작 억제, 전역 간격, 키별 쿨다운, 우선순위, 칭찬.
+// 규칙 평가 결과 중 무엇을 지금 띄울지 정한다. 판정 단계, 전역 간격, 키별 쿨다운, 우선순위, 칭찬.
 // 시각은 입력으로 받는다(곡 시각 ms). 시계를 직접 읽지 않는다.
-import { LIVE_COACH_CONFIG } from './config';
+import { coachStage, LIVE_COACH_CONFIG, STAGE1_TAGS, type CoachStage } from './config';
 import { RECOVERED_PRAISE, type CoachTarget, type LiveTag, type RuleEvaluation } from './rules';
 
 interface KeyState {
@@ -30,6 +30,8 @@ export interface PolicyDecision {
   repeat: number;
   /** show가 경향 해소 칭찬일 때만: 해소된 지적 중 가장 최근에 띄웠던 것. 그 외에는 null */
   recoveredFrom: RecoveredFrom | null;
+  /** 이번 판정의 판정 단계 */
+  stage: CoachStage;
 }
 
 export class CoachPolicy {
@@ -77,17 +79,20 @@ export class CoachPolicy {
     }
     if (recovered.length > 0) this.recoveredPending = true;
 
-    // 2. 시작 억제
-    if (ctx.judged < cfg.warmupJudgements) return { show: null, recovered, repeat: 0, recoveredFrom: null };
+    // 2. 판정 단계. 0단계는 아무것도 띄우지 않는다
+    const stage = coachStage(ctx.judged);
+    if (stage === 0) return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
 
     // 3. 지적과 지적 사이 간격. 칭찬이 떠 있어도 지적은 바로 그 자리를 차지한다
     if (this.lastCorrectionMs !== null && ctx.songTimeMs - this.lastCorrectionMs < cfg.policy.minGapMs) {
-      return { show: null, recovered, repeat: 0, recoveredFrom: null };
+      return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
     }
 
     // 4. 띄울 수 있는 후보. 거둔 키는 쿨다운 없이, 아직 활성인 키는 쿨다운이 지나야 다시 띄운다
+    // 1단계는 연속 놓침만 띄운다
     const candidates = evals.filter((e) => {
       if (!e.trigger) return false;
+      if (stage === 1 && !STAGE1_TAGS.includes(e.tag)) return false;
       const st = this.states.get(e.key);
       if (!st || !st.active) return true;
       return ctx.songTimeMs - st.lastShownMs >= cfg.policy.tagCooldownMs;
@@ -101,14 +106,15 @@ export class CoachPolicy {
       this.lastCorrectionMs = ctx.songTimeMs;
       this.recoveredPending = false;
       this.recoveredLatest = null;
-      return { show: pick, recovered, repeat: this.markShown(pick, ctx.songTimeMs), recoveredFrom: null };
+      return { show: pick, recovered, repeat: this.markShown(pick, ctx.songTimeMs), recoveredFrom: null, stage };
     }
 
-    // 6. 지적할 것이 없으면 칭찬
+    // 6. 지적할 것이 없으면 칭찬. 1단계는 칭찬하지 않는다(근거가 적다)
+    if (stage === 1) return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
     const recoveredFrom = this.recoveredLatest?.from ?? null;
     const pick = this.pickPraise(evals, ctx.songTimeMs, praise);
     if (pick === RECOVERED_PRAISE) this.recoveredLatest = null;
-    return { show: pick, recovered, repeat: pick ? this.markShown(pick, ctx.songTimeMs) : 0, recoveredFrom: pick === RECOVERED_PRAISE ? recoveredFrom : null };
+    return { show: pick, recovered, repeat: pick ? this.markShown(pick, ctx.songTimeMs) : 0, recoveredFrom: pick === RECOVERED_PRAISE ? recoveredFrom : null, stage };
   }
 
   private pickPraise(evals: readonly RuleEvaluation[], songTimeMs: number, praise: RuleEvaluation | null): RuleEvaluation | null {

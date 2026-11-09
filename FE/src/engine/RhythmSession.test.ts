@@ -152,6 +152,21 @@ describe('노트 배정과 판정', () => {
     expect(snap.combo).toBe(1);
   });
 
+  it('채보 밖 타격을 패드·곡 시각과 함께 알리고, 받는 쪽 오류는 세션에 전하지 않는다', () => {
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
+    const got: { pad: PadId; songTimeMs: number }[] = [];
+    s.onStray(() => {
+      throw new Error('코칭 오류');
+    });
+    const off = s.onStray((e) => got.push(e));
+    expect(() => s.handleHit(hit('RIDE', T0 + 1010))).not.toThrow();
+    expect(got).toEqual([{ pad: 'RIDE', songTimeMs: 1000 }]);
+    expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
+    off();
+    s.handleHit(hit('RIDE', T0 + 1020));
+    expect(got).toHaveLength(1);
+  });
+
   it('pad가 없는 타격은 무시한다', () => {
     const s = playing();
     expect(s.handleHit(hit(null, T0 + 1000))).toBeNull();

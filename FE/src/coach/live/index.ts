@@ -2,7 +2,10 @@
 export { LiveCoach, LIVE_GATE_DROP_TAG, LIVE_GATE_FALLBACK_TAG, LIVE_GATE_KEEP_TAG, LIVE_OFF_TAG, LIVE_RECOVERED_TAG } from './LiveCoach';
 export type { CoachMessage, DeferredMessage, LiveCoachLogEntry, LiveCoachOptions } from './LiveCoach';
 export type { GateDecision } from './gate/gate';
-export type { JudgedNote } from './window';
+export type { JudgedNote, StrayHit } from './window';
+export { chartCoachContext } from './noteContext';
+export type { ChartCoachContext, NoteContext } from './noteContext';
+export type { CauseCandidate, MissCause } from './cause';
 export { isPraiseTag } from './rules';
 export type { CoachTarget, LiveTag } from './rules';
 export { isStickSensor, setupTagsOf } from './setupHints';

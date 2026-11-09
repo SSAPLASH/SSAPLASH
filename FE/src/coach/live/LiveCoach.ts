@@ -2,7 +2,9 @@
 // 창(window) → 규칙(rules) → 정책(policy)을 묶고, 플레이 로그에 넣을 liveCoachEvents를 쌓는다.
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
-import { type CoachBasis, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
+import type { PadId } from '@/domain/pads';
+import { missCauses, type CauseCandidate } from './cause';
+import { type CoachBasis, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { gateFeatures, isGatedTag, type CoachGate, type GateDecision, type GateMode } from './gate/gate';
 import { gateMode, loadedCoachGate, preloadCoachGate } from './gate/loader';
 import { CoachPolicy, type RecoveredFrom } from './policy';
@@ -25,6 +27,8 @@ export interface LiveCoachOptions {
   gateMode?: GateMode;
   /** 모델 판단을 받는다. 진단 빌드에서 기록에 쓴다 */
   onGate?: (decision: GateDecision) => void;
+  /** 곡의 노트 간격 중앙값(ms, chartCoachContext). 없으면 빠른 구간 원인을 계산하지 않는다 */
+  noteGapMedianMs?: number | null;
 }
 
 /** 늦게 도착한 문구를 받는다 */
@@ -91,6 +95,7 @@ export class LiveCoach {
   private readonly onGate: ((decision: GateDecision) => void) | undefined;
   /** 재시작하면 늘어난다. 앞선 판의 늦은 점수를 버리는 데 쓴다 */
   private run = 0;
+  private readonly noteGapMedianMs: number | null;
 
   constructor(opts: LiveCoachOptions) {
     this.enabled = opts.enabled ?? true;
@@ -100,7 +105,38 @@ export class LiveCoach {
     this.onGate = opts.onGate;
     if (opts.gate === undefined) preloadCoachGate();
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
+    const median = opts.noteGapMedianMs;
+    this.noteGapMedianMs = median !== undefined && median !== null && Number.isFinite(median) && median > 0 ? median : null;
     this.resetLog();
+  }
+
+  /** 채보 밖 타격을 넣는다(RhythmSession.onStray). 원인 계산에만 쓰고 문구는 띄우지 않는다 */
+  pushStray(pad: PadId, songTimeMs: number): void {
+    if (!this.enabled || !Number.isFinite(songTimeMs)) return;
+    try {
+      this.window.pushStray({ pad, songTimeMs });
+    } catch {
+      // 코칭 오류로 연주를 막지 않는다
+    }
+  }
+
+  /**
+   * 지금 창으로 계산한 놓침 원인 후보(설계 3.1). 단계(판정 수)에 맞는 원인만 나온다.
+   * pad를 주면 그 패드의 놓침만 본다(패드 놓침 지적).
+   */
+  missCauses(pad: PadId | null = null): CauseCandidate[] {
+    try {
+      return missCauses({
+        notes: this.window.recent(LIVE_COACH_CONFIG.cause.window),
+        strays: this.window.strays(),
+        stage: coachStage(this.window.total),
+        goodMs: this.thresholds.goodMs,
+        noteGapMedianMs: this.noteGapMedianMs,
+        pad,
+      });
+    } catch {
+      return [];
+    }
   }
 
   /** 판정 한 건을 넣는다. 문구를 띄울 때만 돌려주고 아니면 null. 일시정지 중에는 부르지 않는다 */
