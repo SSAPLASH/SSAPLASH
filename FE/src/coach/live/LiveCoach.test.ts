@@ -4,6 +4,7 @@ import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
 import type { CoachGate, GateDecision } from './gate/gate';
 import {
+  LIVE_CAUSE_TAG,
   LIVE_GATE_DROP_TAG,
   LIVE_GATE_FALLBACK_TAG,
   LIVE_GATE_KEEP_TAG,
@@ -71,6 +72,83 @@ describe('LiveCoach 놓침 원인', () => {
     }
     const [c] = coach.missCauses();
     expect(c).toMatchObject({ cause: 'WRONG_PAD', pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
+  });
+
+  /** 탐1을 놓치고 탐2를 치는 연주. 놓침 지적이 원인과 함께 뜨는지 본다 */
+  function wrongPadPlay(coach: LiveCoach, count: number): CoachMessage[] {
+    const out: CoachMessage[] = [];
+    for (let i = 0; i < count; i++) {
+      if (i % 2 === 1) coach.pushStray('MID_TOM', 4_000 + i * NOTE_GAP_MS + 10);
+      const m = coach.push(i % 2 === 1 ? miss(i, 'SMALL_TOM') : hit(i, 0));
+      if (m) out.push(m);
+    }
+    return out;
+  }
+  const isMissTag = (m: CoachMessage) => m.tag === 'LIVE_PAD_MISS' || m.tag === 'LIVE_MISS_STREAK';
+  const logBody = (coach: LiveCoach, i: number) => JSON.parse(coach.events()[i].text);
+
+  it('2단계부터 놓침 지적에 고른 원인이 붙고, 지적 행 바로 뒤에 LIVE_CAUSE가 남는다', () => {
+    const coach = new LiveCoach({ goodMs: 60, noteGapMedianMs: NOTE_GAP_MS, gate: null });
+    const shown = wrongPadPlay(coach, 24).filter((m) => isMissTag(m) && m.cause);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown[0].cause).toMatchObject({ cause: 'WRONG_PAD', intoPad: 'MID_TOM' });
+
+    const events = coach.events();
+    const at = events.findIndex((e) => e.tag === shown[0].tag && JSON.parse(e.text).cause);
+    expect(logBody(coach, at)).toMatchObject({ cause: 'WRONG_PAD' });
+    expect(events[at + 1].tag).toBe(LIVE_CAUSE_TAG);
+    expect(logBody(coach, at + 1)).toEqual({
+      key: logBody(coach, at).key,
+      candidates: [expect.objectContaining({ cause: 'WRONG_PAD', intoPad: 'MID_TOM' })],
+      picked: 'WRONG_PAD',
+      by: 'RULE',
+      stage: expect.any(Number),
+    });
+    expect(logBody(coach, at + 1).stage).toBeGreaterThanOrEqual(2);
+  });
+
+  it('1단계(판정 8개 전)의 놓침 지적에는 원인이 없고 LIVE_CAUSE도 없다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    const shown = play(coach, Array.from({ length: 7 }, (_, i) => miss(i)));
+    expect(shown.map((m) => m.tag)).toEqual(['LIVE_MISS_STREAK']);
+    expect(shown[0].cause).toBeNull();
+    expect(coach.events().map((e) => e.tag)).not.toContain(LIVE_CAUSE_TAG);
+    expect(JSON.parse(coach.events()[0].text)).not.toHaveProperty('cause');
+  });
+
+  it('근거가 없으면 UNKNOWN을 고르고 빈 후보를 기록한다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    const shown = play(coach, Array.from({ length: 24 }, (_, i) => (i % 3 === 0 ? hit(i, 0) : miss(i)))).filter(isMissTag);
+    const withCause = shown.find((m) => m.cause);
+    expect(withCause?.cause?.cause).toBe('UNKNOWN');
+    const body = JSON.parse(coach.events().find((e) => e.tag === LIVE_CAUSE_TAG)!.text);
+    expect(body).toMatchObject({ candidates: [], picked: 'UNKNOWN', by: 'RULE' });
+  });
+
+  it('놓침이 아닌 지적에는 원인이 없다', () => {
+    const coach = new LiveCoach({ goodMs: 60, gate: null });
+    const shown = play(coach, Array.from({ length: 24 }, (_, i) => hit(i, 40)));
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown.every((m) => m.cause === null)).toBe(true);
+    expect(coach.events().map((e) => e.tag)).not.toContain(LIVE_CAUSE_TAG);
+  });
+
+  it('거름 모델이 남긴 놓침 지적은 지적 → LIVE_CAUSE → KEEP 순서로 남는다', () => {
+    const gate: CoachGate = { runtime: 'json', threshold: 0.5, model: 'test-0', score: () => 0.9 };
+    const coach = new LiveCoach({ goodMs: 60, noteGapMedianMs: NOTE_GAP_MS, gate, gateMode: 'on' });
+    wrongPadPlay(coach, 24);
+    const tags = coach.events().map((e) => e.tag);
+    const at = tags.indexOf(LIVE_CAUSE_TAG);
+    expect(at).toBeGreaterThan(0);
+    expect(['LIVE_PAD_MISS', 'LIVE_MISS_STREAK']).toContain(tags[at - 1]);
+    expect(tags[at + 1]).toBe(LIVE_GATE_KEEP_TAG);
+  });
+
+  it('거름 모델이 뺀 놓침 지적은 LIVE_CAUSE도 남기지 않는다', () => {
+    const gate: CoachGate = { runtime: 'json', threshold: 0.5, model: 'test-0', score: () => 0.1 };
+    const coach = new LiveCoach({ goodMs: 60, noteGapMedianMs: NOTE_GAP_MS, gate, gateMode: 'on' });
+    wrongPadPlay(coach, 24);
+    expect(coach.events().map((e) => e.tag)).not.toContain(LIVE_CAUSE_TAG);
   });
 
   it('꺼진 코칭과 잘못된 시각의 채보 밖 타격은 무시한다', () => {
