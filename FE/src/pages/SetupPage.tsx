@@ -29,7 +29,7 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { HitFx } from '@/domain/events';
+import type { HitFx, StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
 import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
@@ -39,6 +39,14 @@ import { calibrationReady, readiness } from '@/domain/readiness';
 import { pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
   dongleLine,
+  referenceHoldingLine,
+  REFERENCE_DONE_TEXT,
+  REFERENCE_HINT_TEXT,
+  REFERENCE_HOLDING_TEXT,
+  REFERENCE_LOST_TEXT,
+  REFERENCE_RESTART_LABEL,
+  REFERENCE_SHAKY_TEXT,
+  REFERENCE_START_LABEL,
   returnBannerText,
   returnButtonText,
   returnTargetName,
@@ -54,6 +62,8 @@ import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/components/calibration/CalibrationStage';
 import { useRealign } from '@/components/useRealign';
+import { usePoseStream } from '@/components/calibration/usePoseStream';
+import { useReferenceCapture } from '@/components/calibration/useReferenceCapture';
 import { calibrationSession } from '@/app/calibrationSession';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap';
@@ -262,6 +272,19 @@ export function SetupPage() {
   const calibrating = calibration.capture && captureTarget ? { target: captureTarget, index: calibration.capture.index, total: calibration.capture.order.length } : null;
   // 스틱이 다시 켜진 손이 있으면 재정렬 세션을 자동으로 시작한다(네 진입점 공용 훅)
   useRealign(sensorMode);
+
+  // ---- 시작 위치 맞추기(PLAY-004 D1·D4~D6): 세팅 화면에서만 자세 스트림을 켜고, 연결된 모든 손이 3초 안정되면 기준을 잡는다 ----
+  const handsConnected = useMemo<StickId[]>(() => ([0, 1] as StickId[]).filter((i) => connected[i]), [connected]);
+  usePoseStream(sensorMode && anyConnected, handsConnected.length);
+  const refHold = useReferenceCapture(handsConnected);
+  const refHolding = refHold.phase === 'holding';
+  const [refLost, setRefLost] = useState(false);
+  const refLostWasHolding = useRef(false);
+  useEffect(() => {
+    // 진행 중 연결이 모두 끊기면 훅이 idle로 돌아간다 — 그때 오류 문구를 띄운다
+    if (refLostWasHolding.current && refHold.phase === 'idle' && !anyConnected) setRefLost(true);
+    refLostWasHolding.current = refHolding;
+  }, [refHold.phase, refHolding, anyConnected]);
 
   // 언마운트 시 진행 중인 보정은 접는다(표를 비워 둔 채 나가지 않게)
   useEffect(() => () => calibrationSession.cancelCapture(), []);
@@ -525,12 +548,51 @@ export function SetupPage() {
             <CalibrationStage onRestart={anyConnected && !systemPreset ? startFull : undefined} />
           ) : (
             <div className="setup-col">
-              <p className="setup-note">스틱을 정면으로 들고 [시작 위치 잡기]를 누르면 기준 자세가 다시 잡혀요. 판정이 한쪽으로 밀릴 때 눌러요.</p>
-              <div className="setup-row">
-                <Button variant={calNeeded ? 'primary' : 'secondary'} onClick={() => calibrationSession.resetPose()} disabled={!anyConnected || capturing}>
-                  시작 위치 잡기
-                </Button>
-              </div>
+              {refHolding ? (
+                <>
+                  <p className="setup-note" role="status">
+                    {REFERENCE_HOLDING_TEXT}
+                  </p>
+                  <div className="setup-progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(refHold.progress * 100)}>
+                    <div style={{ width: `${Math.round(refHold.progress * 100)}%` }} />
+                  </div>
+                  <p className="setup-note faint">
+                    {referenceHoldingLine(refHold.progress, refHold.spread)}
+                    {refHold.progress === 0 && refHold.spread > 3 ? ` · ${REFERENCE_SHAKY_TEXT}` : ''}
+                  </p>
+                  <div className="setup-row">
+                    <Button variant="secondary" onClick={refHold.cancel}>
+                      취소
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="setup-note">{REFERENCE_HINT_TEXT}</p>
+                  {refHold.phase === 'done' && (
+                    <p className="setup-note" role="status">
+                      {REFERENCE_DONE_TEXT}
+                    </p>
+                  )}
+                  {refLost && !anyConnected && (
+                    <p className="setup-notice error" role="alert">
+                      {REFERENCE_LOST_TEXT}
+                    </p>
+                  )}
+                  <div className="setup-row">
+                    <Button
+                      variant={calNeeded && referenceSetAt === null ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setRefLost(false);
+                        refHold.start();
+                      }}
+                      disabled={!anyConnected || capturing || realigning}
+                    >
+                      {referenceSetAt === null && refHold.phase !== 'done' ? REFERENCE_START_LABEL : REFERENCE_RESTART_LABEL}
+                    </Button>
+                  </div>
+                </>
+              )}
               {calNeeded && !systemPreset && <p className="setup-note">드럼 위치는 아래 드럼 배치 카드에서 [전체 보정] 또는 [추가하기]로 잡아요.</p>}
               {!anyConnected && <p className="setup-note faint">스틱을 연결하면 보정할 수 있습니다.</p>}
             </div>
