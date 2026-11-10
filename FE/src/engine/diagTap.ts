@@ -73,7 +73,43 @@ export type DiagBody =
       summary?: DiagSessionSummary;
     }
   /** 곡 시작 직후: 노트 시각·pad 배열(타임라인용) */
-  | { type: 'notes'; songId: string; notes: { timeMs: number; pad: PadId }[] };
+  | { type: 'notes'; songId: string; notes: { timeMs: number; pad: PadId }[] }
+  /** 곡 시작 직후(session start·notes 뒤 1회): 손별 앵커 표. hands 인덱스 0 왼손, 1 오른손. null = 그 손 보정 안 됨 */
+  | { type: 'anchors'; hands: [DiagAnchor[] | null, DiagAnchor[] | null]; calibratedAt: number | null; presetId: string | null }
+  /**
+   * 센서 시계 오프셋(브라우저 − 센서, ms). 센서 연결 중 10초마다, 곡 시작 직후 1회.
+   * offsets 인덱스 = role(0 왼손, 1 오른손, 2·3 페달). 미동기·미연결은 null
+   */
+  | { type: 'clock'; offsets: [number | null, number | null, number | null, number | null]; source: string }
+  /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
+  | ({ type: 'yawCorrect' } & DiagYawCorrection);
+
+/** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
+export interface DiagAnchor {
+  pad: PadId;
+  pitch: number;
+  yaw: number;
+  radius: number;
+  samples: number;
+  spread: number;
+}
+
+/** yawCorrect 줄 본문. input/yawDriftMonitor의 YawCorrection과 구조가 같다(engine은 input을 import하지 않는다) */
+export interface DiagYawCorrection {
+  stickId: 0 | 1;
+  /** drift 자동 드리프트 보정 / realign 재정렬(스네어 치기) / connected 연결 직후 0 초기화 */
+  reason: 'drift' | 'realign' | 'connected';
+  /** 보내기 전 적용값(도) */
+  prevDeg: number;
+  /** 보낸 절대값(도) */
+  sentDeg: number;
+  /** 링 중앙값 = 오차(도). realign은 요청받은 오차, connected는 null */
+  medianDeg: number | null;
+  /** 중앙값 절대편차(도). drift만 */
+  madDeg: number | null;
+  /** 그때 링의 (스틱 yaw − 앵커 yaw) 샘플. drift만 채운다 */
+  samples: number[];
+}
 
 export type DiagEvent = DiagBody & { /** performance.now() */ t: number };
 
