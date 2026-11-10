@@ -74,3 +74,17 @@ uv run ssaplash-worker live-run
 - BE: `LIVE_COACH_LLM_ENABLED`(기본 꺼짐), 판당·분당 상한은 `LIVE_COACH_LLM_PER_RUN`·`LIVE_COACH_LLM_PER_MINUTE`(BE README).
 - FE: 실험 설정 `coach-live-config`의 `llm`(`off`·`shadow`·`on`, `rolloutPercent`). `shadow`는 요청·기록만 하고 화면에 띄우지 않는다.
 - 처음에는 `shadow`로 켜서 플레이 로그 `LIVE_LLM`의 늦음·실패 비율과 지연을 본 뒤 `on`으로 바꾼다.
+
+## 평가 (GPU 서버에서 실행)
+
+골든 구간 사실 10가지(늦음, 빠름, 흔들림, 패드 놓침, 패드 이동, 빠른 구간, 늦어지다 놓침, 약한 손, 키보드 늦음, 잘 친 구간)로 모델을 여러 번 돌려 가드레일 통과율, 첫 시도 통과율, 거절 이유, 지연 중앙값·95백분위를 잰다. 코드는 `coach_eval/live_tip_compare.py`.
+
+```bash
+uv run python -m ssaplash_ai.coach_eval.live_tip_compare --model gemma3:4b --repeat 10 --out data/results/live-tip-compare.md
+uv run python -m ssaplash_ai.coach_eval.live_tip_compare --model gemma3:4b --mlflow   # MLflow 실험 coach-live-tip
+```
+
+- 목표(확정 전): 통과 90% 이상, 지연 95백분위 4초 이하. 보고서 첫 줄에 충족 여부가 나온다.
+- 통과율은 가드레일이 잡는 것만 센다. 문구가 사실과 맞는지(예: 잘 친 패드를 지적하지 않는지), 코치다운지는 보고서 표의 문구를 사람이 읽어서 본다.
+- 채보 작업과 같은 GPU를 쓰므로, 채보가 도는 중에도 한 번 재서 지연이 얼마나 느는지 본다.
+- 아직 실제 모델로 재지 않았다(GPU 서버에서 실행 필요).
