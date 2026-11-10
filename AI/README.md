@@ -402,20 +402,27 @@ uv run python -m ssaplash_ai.coach_calibration.cli --help
 ### 실시간 코칭 거름 모델 (COACH-001)
 
 실시간 코칭이 띄운 지적이 진짜 경향인지 우연한 쏠림인지 점수를 내는 작은 모델이다. 문구를 만들지 않고 규칙이 낸 지적을 뺄 수만 있다.
-서버는 쓰지 않고, 학습 산출물을 FE 번들에 넣는다.
+지금은 학습 산출물을 FE 번들에 넣는다. 서버에서 모델을 받아 FE 배포 없이 바꾸는 구조(설계 COACH-001 2단계)를 위해 MLflow 등록까지 한다.
 
 ```bash
 uv sync --extra coach-live
 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live
 uv run --extra coach-live pytest tests/coach_live_model
+# MLflow에 기록하고 레지스트리에 새 버전으로 등록(서버 MLflow는 SSH 터널을 연 뒤)
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live --register
 ```
+
+- `--register`는 실험 `coach-live-gate`에 실행을 남기고(파라미터·지표·`report.json`), 레지스트리 모델 `coach-gate-mlp16`(`--model-name`으로 바꿈)에 새 버전을 만든다. 모델 폴더에는 브라우저가 받을 `coachGate.json`, `coachGate.onnx`, `meta.json`만 넣는다. 게시 도구가 모델 폴더를 그대로 복사하기 때문이다.
+- 게시는 따로 서버에서 한다: `docker compose -p infra exec mlflow publish-model publish coach-gate-mlp16 <버전>`(`Infra/mlflow/README.md`). CLI가 등록한 버전으로 이 명령을 출력한다.
+- `meta.json`: `task`(`gate`), `modelVersion`, `featureVersion`(입력 계산 버전, `dataset.py`의 `FEATURE_VERSION`), `inputNames`, `runtime`(이 버전에 든 실행 파일 목록: `json`·`onnx`), `threshold`, `trainedOn`(`SYNTHETIC`). FE는 `featureVersion`이 자기 값과 다르면 그 모델을 쓰지 않는다. `features()`의 순서·식을 바꾸면 `FEATURE_VERSION`을 올린다.
+- 로컬 파일 저장소로 학습 → 등록 → `publish-model` 게시 → `manifest.json`(파일별 `sha256`)까지 이어지는 것을 확인했다. 서버 MLflow 등록과 게시는 아직 하지 않았다.
 
 - `replay.py`는 FE `coach/live`의 창·규칙·표시 정책·판정 단계·놓침 원인을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다. 기록은 띄운 시점·대상·지표에 더해 단계, 원인 후보, 고른 원인까지 FE와 같아야 한다.
   - 판정 단계: 판정 4개 전에는 띄우지 않고, 4~7개는 연속 놓침만, 8개부터 전부. 위 학습 데이터도 이 단계로 재생한다.
   - 놓침 원인: 2단계(8개)부터 놓침 지적에 원인 후보를 계산하고 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐)로 하나를 고른다. 근거가 없으면 `UNKNOWN`. 패드 이동은 같은 패드를 다른 곳에서 넘어와 친 노트와 비교해 2.5배 이상 더 놓칠 때만 본다(비교 대상이 없으면 보지 않는다). 원인 계산에는 노트 시각, 직전 시점의 패드·간격, 채보 밖 타격, 곡의 노트 간격 중앙값이 필요하고 `replay(notes, strays, note_gap_median_ms)`로 넘긴다.
 - 원인 합성 시나리오(`dataset.py`의 `cause_plays`, `build_cause_rows`): 다른 패드(탐1 대신 탐2), 패드 이동(하이햇 → 스네어), 빠른 구간(400ms 사이 150ms 몰아치기), 늦어지다 놓침, 대조군(원인 없이 자주 놓침)을 만든다. 행은 원인을 고른 놓침 지적마다 하나이고 라벨은 심은 원인(대조군은 `UNKNOWN`)이다. 원인 모델 학습(R1)의 자료다.
 - 학습 데이터는 합성 연주다. 시나리오가 심은 약점과 같은 지적이 1, 약점이 없는 연주에서 뜬 지적이 0이다. 판 단위로 나눠 평가한다.
-- 산출물은 `coachGate.json`, `coachGate.onnx`, `report.json`이다. 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
+- 산출물은 `coachGate.json`, `coachGate.onnx`, `meta.json`, `report.json`이다. 앞의 둘은 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
 
 합성 결과(판 2,580개, 지적 13,932건, 진짜 11,636건, 오탐 2,296건):
 

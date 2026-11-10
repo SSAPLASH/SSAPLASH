@@ -69,6 +69,58 @@ def test_onnx_matches_the_json_gate() -> None:
     assert onnx_diff(gate, to_onnx(gate), x) <= PARITY_LIMIT
 
 
+def test_meta_names_the_task_inputs_and_runtimes() -> None:
+    from ssaplash_ai.coach_live_model.dataset import FEATURE_VERSION
+    from ssaplash_ai.coach_live_model.train import model_meta
+
+    meta = model_meta(small_gate())
+    assert meta["task"] == "gate"
+    assert meta["featureVersion"] == FEATURE_VERSION
+    assert meta["inputNames"] == list(FEATURE_NAMES)
+    assert {r["kind"]: r["path"] for r in meta["runtime"]} == {
+        "json": "coachGate.json",
+        "onnx": "coachGate.onnx",
+    }
+    assert meta["threshold"] == 0.5
+    assert meta["trainedOn"] == "SYNTHETIC"
+
+
+def test_register_uploads_only_the_browser_files(tmp_path) -> None:
+    """레지스트리에서 받은 모델 폴더가 게시 도구가 복사할 파일 셋뿐인지, 다시 등록하면 새 버전이 되는지."""
+    pytest.importorskip("onnx")
+    import json
+
+    import mlflow
+
+    from ssaplash_ai.coach_live_model.train import Score, register, to_onnx, write_outputs
+
+    gate = small_gate()
+    out = tmp_path / "out"
+    report = {"dataSource": "SYNTHETIC", "rows": 10, "perCell": 1, "onnxMaxDiff": 0.0}
+    write_outputs(out, gate, to_onnx(gate), report)
+    assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["task"] == "gate"
+
+    score = Score("mlp16", 0.9, 0.5, 0.95, 0.1, 0.2)
+    uri = (tmp_path / "mlruns").as_uri()
+    assert register(out, report, score, "coach-gate-test", uri) == "1"
+    assert register(out, report, score, "coach-gate-test", uri) == "2"
+
+    got = mlflow.artifacts.download_artifacts(
+        artifact_uri="models:/coach-gate-test/2", dst_path=str(tmp_path / "dl")
+    )
+    names = sorted(p.name for p in (tmp_path / "dl").rglob("*") if p.is_file())
+    assert names == ["coachGate.json", "coachGate.onnx", "meta.json"]
+    assert got
+
+
+def test_register_refuses_a_folder_without_model_files(tmp_path) -> None:
+    from ssaplash_ai.coach_live_model.train import Score, register
+
+    score = Score("mlp16", 0.9, 0.5, 0.95, 0.1, 0.2)
+    with pytest.raises(FileNotFoundError):
+        register(tmp_path, {}, score, "coach-gate-test", (tmp_path / "mlruns").as_uri())
+
+
 def test_comparing_models_splits_by_play() -> None:
     pytest.importorskip("sklearn")
     from ssaplash_ai.coach_live_model.train import compare
