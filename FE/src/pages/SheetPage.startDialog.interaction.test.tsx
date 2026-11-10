@@ -109,9 +109,9 @@ describe('SheetPage 시작 확인 창', () => {
     show('/sheet?song=1&chart=12&start=1');
     const dialog = await screen.findByRole('dialog', { name: '시험곡' });
     fireEvent.click(await within(dialog).findByRole('button', { name: '플레이' }));
-    // 시작(begin)은 오디오 준비를 기다리는 비동기라 전체 실행 부하에서 1초를 넘길 때가 있다
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: '시험곡' })).toBeNull(), { timeout: 3000 });
-    expect(where()).toBe('/sheet?song=1&chart=12');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '시험곡' })).toBeNull());
+    // 창은 연주 단계가 되면 바로 닫히고, 주소의 start는 begin()이 끝난 뒤 지운다 — 주소는 따로 기다린다
+    await waitFor(() => expect(where()).toBe('/sheet?song=1&chart=12'));
     // 곡 선택은 사라지고 연주 화면(HUD)이 보인다
     expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull();
   });
