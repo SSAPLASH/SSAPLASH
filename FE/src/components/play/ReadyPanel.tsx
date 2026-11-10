@@ -1,10 +1,8 @@
 // 연주 준비 (Figma 223:3812 준비 완료 · 223:4163 준비 필요 · ReadyCheck 222:856). 곡 카드(커버 120·연습 단계 고르기) · 기기 준비 카드 · 시작 줄 · 오른쪽 미리 쳐 보기.
 // props만 받는다 — 준비 조건 계산(useReadiness)·스토어 구독·이동은 페이지가 한다. 동의 카드는 없다(설계 U19).
 // Enter = 시작은 페이지 전역 핸들러가 맡는다(여기서 중복 처리하지 않는다).
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { Difficulty } from '@/domain/chart';
-import type { PadId } from '@/domain/pads';
-import type { PadVisualState } from '@/domain/drumKit';
 import type { ReadinessMissing } from '@/domain/readiness';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -14,7 +12,6 @@ import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
 import type { RealignInfo } from '@/components/calibration/RealignPrompt';
 import { DeviceCheck } from './DeviceCheck';
-import { StaffLegend } from './StaffLegend';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
 import { artistLabel } from '@/domain/songCatalog';
@@ -43,18 +40,12 @@ export interface ReadyPanelProps {
   /** 카운트다운 켬(1)·끔(0). 안내 문구용 */
   countInBars: number;
   onBack: () => void;
-  /** 뒤로 가기 이름. 기본 「곡 선택」, 입문 코스에서 연 레슨은 「입문 코스」(Jira 331) */
-  backLabel?: string;
   onSelectChart: (chartId: number) => void;
   /** 드럼 세팅으로 이동(복귀 규칙은 페이지가 정한다) */
   onSetup: () => void;
   /** 있을 때만 [다시 연결]을 보인다 */
   onReconnect?: () => void;
   onStart: () => void;
-  /** 기기 준비 카드 아래·시작 줄 위에 그대로 넣는 슬롯(악보 연습의 「연주 중 옵션」 카드) */
-  options?: ReactNode;
-  /** true면 오른쪽 열 맨 위에 「악보 읽는 법」 카드를 보인다(악보 연습) */
-  staffLegend?: boolean;
   /** 스네어 재정렬이 걸려 있으면 「보정」 행에 프롬프트를 보인다(PLAY-004 D11). 준비 완료·[시작]은 막지 않는다 */
   realign?: RealignInfo | null;
   /** 두 열 아래 전체 폭에 그대로 넣는 슬롯(비슷한 곡 줄, 설계 COACH-004-similar-songs D9) */
@@ -75,24 +66,16 @@ export function ReadyPanel({
   presetName,
   countInBars,
   onBack,
-  backLabel = '곡 선택',
   onSelectChart,
   onSetup,
   onReconnect,
   onStart,
-  options,
-  staffLegend = false,
   realign,
   footer,
 }: ReadyPanelProps) {
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
   const kitSkin = useSettings((s) => s.kitSkin);
-  // 악보 읽는 법 줄에 올린 패드는 킷에서 예고(armed) 링으로, 타격(hit)한 패드는 그 줄을 강조한다
-  const [hoverPad, setHoverPad] = useState<PadId | null>(null);
-  const kitStates: Partial<Record<PadId, PadVisualState>> =
-    staffLegend && hoverPad && !padStates[hoverPad] ? { ...padStates, [hoverPad]: 'armed' } : padStates;
-  const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
   const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
   if (song.durationSec !== undefined) meta.push(formatDuration(song.durationSec * 1000));
   meta.push(`최고 정확도 ${bestAccuracy === undefined ? '—' : formatAccuracy(bestAccuracy)}`);
@@ -101,7 +84,7 @@ export function ReadyPanel({
     <section className="play-rp" aria-label="연주 준비">
       <header className="play-rp-head">
         <Button variant="text" size="sm" onClick={onBack}>
-          ← {backLabel}
+          ← 곡 선택
         </Button>
         <h2 className="play-rp-title">연주 준비</h2>
       </header>
@@ -138,8 +121,6 @@ export function ReadyPanel({
             onReconnect={onReconnect}
           />
 
-          {options}
-
           <div className="play-rp-start">
             <Button className="play-rp-start-btn" disabled={!ready} onClick={onStart}>
               시작 (Enter)
@@ -155,10 +136,9 @@ export function ReadyPanel({
         </div>
 
         <div className="play-rp-side">
-          {staffLegend && <StaffLegend activePad={hitPad} onHoverPad={setHoverPad} />}
           <Card padding="md" className="play-rp-preview" title="미리 쳐 보기">
             <div className="play-rp-kit">
-              <DrumKit fitWidth states={kitStates} skin={kitSkin} hitSeq={hitSeq} />
+              <DrumKit fitWidth states={padStates} skin={kitSkin} hitSeq={hitSeq} />
             </div>
             <p className="play-rp-caption">쳐 보면 소리만 나요. 기록은 남지 않아요.</p>
           </Card>
