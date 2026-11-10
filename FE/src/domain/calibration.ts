@@ -181,6 +181,29 @@ export function computeBoundaries(
 }
 
 /** 판정 반경을 하한·상한으로 자른다. 상한이 하한보다 작으면 상한이 이긴다(computeBoundaries와 같은 규칙) */
+export interface PadGap {
+  a: PadId;
+  b: PadId;
+  /** 두 앵커 사이 각도(도) */
+  deg: number;
+}
+
+/** 한 손 앵커 집합에서 thresholdDeg 미만으로 가까운 패드 쌍(쌍마다 1번, 가까운 순). 결과 화면의 겹침 표시용 */
+export function padGaps(set: HandAnchorSet, thresholdDeg: number): PadGap[] {
+  const entries = Object.entries(set) as [PadId, PadAnchor | undefined][];
+  const out: PadGap[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      const [pa, a] = entries[i];
+      const [pb, b] = entries[j];
+      if (!a || !b) continue;
+      const deg = angleBetween(a, b);
+      if (deg < thresholdDeg) out.push({ a: pa, b: pb, deg });
+    }
+  }
+  return out.sort((x, y) => x.deg - y.deg);
+}
+
 export function clampRadius(deg: number, minRadiusDeg: number, maxRadiusDeg: number): number {
   return Math.min(maxRadiusDeg, Math.max(minRadiusDeg, deg));
 }
