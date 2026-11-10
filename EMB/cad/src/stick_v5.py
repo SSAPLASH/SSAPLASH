@@ -26,24 +26,28 @@ USER_X_FROM_USB, USER_Y = 29.9, -5.6      # Adafruit Rev C .brd SW2
 BLE_X_FROM_USB, BLE_Y, BLE_H = (35.0, 50.0), (-7.7, 7.8), 2.2   # ※ BLE 모듈 영역
 JST_PLUG = (6.0, 4.5, 7.0)                # (폭, 높이, 길이). 보드 위에 올라앉는다
 LED_X_FROM_USB, LED_Y = 19.5, -5.2        # Adafruit Rev C .brd
+LED_HOLE_D, LED_HOLE_C = 2.5, 0.5         # LED 창 관통 구멍, 겉면 모따기 (스틱·페달 공용)
+# LED 표시 링은 삭제 (11/10): 타원 포켓 밖 Ø9.5–10.5 로 옮기면 USER 탭 슬릿과 0.05 만 남는다
 RESET_HOLE = True
 RESET_X_FROM_USB, RESET_Y = 11.1, -5.2    # Adafruit Rev C .brd
 LRA_D, LRA_H = 8.0, 3.2                   # ※
-LRA_X = 130.0                             # ※ 잡아보고 정한다
 
-EXT_F_HEAD = (13.0, 8.0, 40.0)            # ※ 암 머리 (폭, 높이, 길이)
-EXT_M_HEAD = (13.0, 8.0, 40.0)            # ※ 수 머리 (금속 혀 제외한 몸통)
+EXT_F_HEAD = (12.0, 7.2, 28.0)            # 암 머리 몸통 (폭 y, 두께 z, 길이 x) 실측 11/10
+EXT_M_HEAD = (12.4, 7.0, 22.6)            # 수 머리 몸통 (금속 혀 제외) 실측 11/10
+EXT_F_NECK = (7.4, 6.0)                   # 암 머리 뒤 목 (지름, 길이): 몸통 뒷면이 목 칸 턱에 걸린다
+EXT_M_NECK = (7.4, 5.5)                   # 수 머리 뒤 목
 EXT_M_TONGUE = 6.5
-EXT_CABLE_D = 5.0                         # ※
-EXT_TOTAL_L = 200.0                       # ※ 끝에서 끝 (20cm, 도착 후 실측)
-EXT_F_MOUTH = (9.0, 3.5)                  # ※
+EXT_CABLE_D, EXT_CABLE_H = 5.0, 4.5       # 연장선 단면 실측 (옆 y, 위아래 z)
+CABLE_GROOVE_D = 6.2                      # 연장선 홈 (11/10: Ø5.6 → 6.2)
+EXT_TOTAL_L = 154.6                       # 15cm 연장선, 끝에서 끝. 남는 길이 1.0 (PATH_L 153.6)
 MT527_BODY = (10.9, 6.2, 27.0)            # (폭, 높이, 길이※). 고리는 잘라서 쓰므로 모델에 없음
 MT527_MICRO = 6.5
 
 # ── 치수 ────────────────────────────────────────────────
 TOTAL_L = 406.0                           # ※ 5A 스틱 실측
 PRINT_MAX = 250.0                         # ※ 프린터 판
-GRIP_L = 120.0 + (TOTAL_L - 340.0)        # 그립 원통 길이 (186)
+GRIP_SHORTEN = 30.0                       # 15cm 연장선에 맞춰 그립을 줄인다 (TOTAL_L 은 그대로: 앞부분이 늘어남). 여유 1.0 (11/10)
+GRIP_L = 120.0 + (TOTAL_L - 340.0) - GRIP_SHORTEN   # 그립 원통 길이 (156)
 GRIP_OD = 18.2
 TRANS_L = 10.0
 FLOOR = 1.2
@@ -52,8 +56,9 @@ WALL_FRONT = 2.4                          # 코 뿌리 보강 (1.2 는 출력물
 WALL_BACK = 1.6                           # 뚜껑 끝 멈춤
 BACK_GAP = 14.0                           # ※ 뒷벽 → USB 끝
 LID_T = 1.6
-BUTT_WALL = 1.6
+BUTT_WALL = 0.0                           # 버트 끝 벽 없음: 암 머리 앞면 = 버트 끝면 (11/10: 충전 플러그 몸통이 벽에 걸림)
 POCKET_CLR = 0.2                          # 머리 포켓 틈
+POCKET_MOUTH_C = 0.3                      # 버트 끝면 포켓 입구 모따기 (머리 넣기 쉽게)
 
 CAV_W = 31.0                              # DRV 17.8 + 칸막이 0.6 + 배터리 12 + 여유
 OUT_W = CAV_W + 2 * WALL_SIDE
@@ -68,9 +73,9 @@ USB_Z = PCB_Z1 + USB_Z_ABOVE_PCB
 Z_AX = USB_Z                              # 손잡이 축 = USB 축
 SHAFT_Z = OUT_H / 2                       # 앞부분 축 = 박스 높이 가운데
 
-X_GRIP_END = GRIP_L + TRANS_L             # 그립 끝 = 박스 뒷면 (196)
+X_GRIP_END = GRIP_L + TRANS_L             # 그립 끝 = 박스 뒷면 (167)
 GRIP_TRANS_L = 25.0                       # 이음 곡선 loft 길이 (앞 캡과 같은 곡선)
-X_TRANS0 = X_GRIP_END - GRIP_TRANS_L      # 그립 원통 끝 = 이음 시작 (171)
+X_TRANS0 = X_GRIP_END - GRIP_TRANS_L      # 그립 원통 끝 = 이음 시작 (142)
 X_BOX0 = X_GRIP_END
 X_CAV0 = X_BOX0 + WALL_BACK
 X_FEATHER0 = X_CAV0 + BACK_GAP
@@ -79,7 +84,7 @@ X_CAV1 = X_FEATHER1 + 1.0
 X_BOX_END = X_CAV1 + WALL_FRONT
 
 NOSE_D, NOSE_L = 12.0, 15.0
-NOSE_CLR = 0.3                            # 코 ↔ 앞부분 구멍 한쪽 틈
+NOSE_CLR = 0.15                           # 코 ↔ 앞부분 구멍 한쪽 틈 (0.3 은 헐거웠음)
 NOSE_TIP_C = 1.0                          # 코 끝 모따기, 앞부분 구멍 입구 모따기
 NOSE_ROOT_R = 1.0                         # 코 뿌리 (앞벽 바깥면) 둥글림
 NOSE_SLOT_R = 0.5                         # 누름 기둥 홈이 코를 자른 모서리
@@ -90,7 +95,7 @@ BOLT_HOLE_D = 2.2                         # M2 관통
 BOLT_L = 20.0
 NUT_POCKET_AF = 4.1
 NUT_AF, NUT_T = 4.0, 1.6
-NUT_SEAT_Y = SHAFT_D0 / 2                 # 너트·볼트 머리 받침면 |y| (코 구멍과 벽 1.35)
+NUT_SEAT_Y = SHAFT_D0 / 2                 # 너트·볼트 머리 받침면 |y| (코 구멍과 벽 1.35 + 틈 줄인 몫)
 HEAD_D = 4.4                              # 볼트 머리 자리 (M2 머리 Ø3.8)
 CAP_L = 25.0                              # 앞 캡 길이
 BOX_R_BOT, BOX_R_TOP = 2.0, 1.0           # 박스 긴 모서리 R (아래, 위: 레일 턱 유지). 앞 캡·그립 이음 시작 단면도 같음
@@ -103,9 +108,9 @@ X_F0 = BUTT_WALL
 X_F1 = X_F0 + EXT_F_HEAD[2]
 PATH_L = X_MT0                            # 가이드 2-4: 버트 끝면 → MT527 C면
 SLACK_L = EXT_TOTAL_L - PATH_L
-FOLD = SLACK_L > 25.0                     # 이하면 접는 칸 없이 일자 선 홈 안에서 휘어 흡수
+FOLD = SLACK_L > 25.0                     # 이하면 접는 칸 없이 일자 선 홈(Ø6.2 / 선 5.0 x 4.5) 안에서 휘어 흡수
 FOLD_L = SLACK_L / 2
-CABLE_GROOVE_R = (EXT_CABLE_D + 0.6) / 2
+CABLE_GROOVE_R = CABLE_GROOVE_D / 2
 FOLD_R = GRIP_OD / 2 - 1.0                # 접는 칸 반지름 (벽 1.0)
 FOLD_X0 = X_F1 + 6.9                      # 앞쪽 나사·핀 자리 뒤에서 시작
 FOLD_X1 = FOLD_X0 + FOLD_L + 2 * EXT_CABLE_D   # 양 끝 R(EXT_CABLE_D) 몫 포함
@@ -120,35 +125,49 @@ Z_SPIGOT = SPIGOT_IN_TOP - SPIGOT_IN[1] / 2      # 통로·SPIGOT 중심: 늘어
 SPIGOT_OUT = (SPIGOT_IN[0] + 2 * SPIGOT_WALL, SPIGOT_IN[1] + 2 * SPIGOT_WALL)
 SPIGOT_IN_R = SPIGOT_R - SPIGOT_WALL      # 안쪽 모서리를 같은 중심으로 둥글려 벽을 일정하게
 RIDGE_H, RIDGE_W = 0.8, 1.5
-RIDGE_X0 = 185.0                          # 이음 곡선이 박스 높이로 내려오기 전: 턱 홈 윗벽 1.0 이상
+RIDGE_X0 = X_GRIP_END - 11.0              # 이음 곡선이 박스 높이로 내려오기 전: 턱 홈 윗벽 1.0 이상 (156)
 FIT_CLR = 0.15                            # SPIGOT · 턱 ↔ 그립 홈 틈
 X_SPIGOT0 = X_BOX0 - SPIGOT_L
 
-# LRA
-LRA_R = (LRA_D + 0.4) / 2
-LRA_WALL = 0.7
-LRA_TOP = Z_AX + ((GRIP_OD / 2) ** 2 - LRA_R ** 2) ** 0.5 - LRA_WALL
+# LRA: grip_bottom 에 나누는 면 쪽으로 열린 직사각 홈 하나 (11/10: top → bottom, z 대칭). 단 없음
+# 모터와 접은 선을 같은 바닥면(홈 바닥 = 바깥 벽 안쪽 면)에 테이프로 붙인다 (둥근 구멍은 틈 때문에 진동이 약했음)
+# LRA 선이 닿는 거리가 박스에서 L 135 / R 170 이라 손잡이 끝 쪽으로 최대한 내린다
+LRA_W, LRA_L = 8.6, 24.0                  # 홈 폭 (y), 길이 (x). 선은 박스 쪽으로 당겨 정리 (11/10)
+LRA_X0 = X_F1 + 10.4                      # 홈 시작 (38.4): 링 A 홈 뒤 (C–모터–C 배치)
+LRA_X1 = LRA_X0 + LRA_L                   # 홈 끝 (62.4)
+LRA_WALL = 0.7                            # 홈 바닥 모서리의 바깥 벽
+LRA_BOT = Z_AX - ((GRIP_OD / 2 - LRA_WALL) ** 2 - (LRA_W / 2) ** 2) ** 0.5   # 모서리(|y| 4.3)에서 벽 0.7
+LRA_END_CLR = 0.2                         # 모터 ↔ 홈 버트 쪽 끝면
+LRA_X = LRA_X0 + LRA_END_CLR + LRA_D / 2  # 모터 가운데: 홈의 버트 쪽 끝에 붙임
 LRA_WIRE = (2.5, 1.3)                     # Ø1.2 두 가닥 나란히 (폭, 두께)
-LRA_WIRE_CLR = 0.2                        # 선 홈 틈
-LRA_DROP_X = LRA_X + LRA_D / 2            # 내려가는 구간 x 시작: x 140 핀 구멍 앞
-LRA_DROP_Y = -4.05                        # 내려가는 구간 안쪽 면 y: 연장선 홈(R2.8) 옆
+LRA_WIRE_CLR = 0.4                        # 선 홈 틈 (11/10: 0.2 → 0.4)
+LRA_STACK_X0 = LRA_X + LRA_D / 2 + 0.5    # 접은 선 시작 (모터 옆)
+LRA_RISE_X = LRA_X1 - LRA_WIRE_CLR - LRA_WIRE[1]   # 홈 박스 쪽 끝면에서 연장선 홈 밑 높이로 올라간다
+# 연장선 홈 밑 선 높이: 수 머리 몸통·목 칸 밑을 지난다 (선 윗면 = 둘 중 낮은 밑면 - 0.05)
+LRA_RUN_Z0 = Z_AX - max(EXT_M_HEAD[1], EXT_M_NECK[0]) / 2 - 0.05 - LRA_WIRE[1]
 
 # 그립 결합: C자 클립 링이 조이고, 일자 정렬 핀(필라멘트 1.75 조각)이 맞춘다
 ALIGN_D, ALIGN_DEPTH = 1.9, 3.5           # 정렬 핀 구멍: 반쪽마다 나누는 면에서 일자로
 ALIGN_Y = 5.5
-# 턱 쪽 한 쌍: x ≤ 189 는 SPIGOT 홈(|y| 9.45) 바깥이 그립 밖이라 불가. 턱 앞, 박스 쪽 넓은 구간에 둔다
-ALIGN_RIDGE = (193.0, 12.5)
-ALIGN_X = (45.0, 98.0, 120.0, 140.0) if FOLD else (45.0, 70.0, 98.0, 120.0, 140.0)   # x 70: 접는 칸 자리. x 98: 클립 홈(105) 과 떨어지게
-ALIGN_PINS = tuple((x, y) for x in ALIGN_X for y in (-ALIGN_Y, ALIGN_Y)) + \
-    ((ALIGN_RIDGE[0], -ALIGN_RIDGE[1]), ALIGN_RIDGE)
-CLIP_X = (60.0, 105.0)                    # 클립 링 홈 가운데: LRA(130±5)·머리 포켓 구간 밖
+# 턱 쪽 한 쌍: 이음 구간에서 SPIGOT 홈(|y| 9.45) 바깥이 그립 밖인 곳은 불가. 턱 앞, 박스 쪽 넓은 구간에 둔다
+ALIGN_RIDGE = (X_GRIP_END - 3.0, 12.5)
+# LRA 홈(x 38.4–62.4) 안에는 핀·클립·드라이버 홈을 두지 않는다. 머리 몸통 포켓(~28.2, 130.8~) 위에도 링 홈 불가
+# → 클립–모터–클립: 링 A 는 암 머리 몸통 바로 뒤 (목 칸 위), 링 B 는 모터 홈 앞 (선 홈 구간). 핀은 링 B 앞 +y
+#   (버트 쪽은 암 머리가 위·아래 포켓에 같이 물려 맞춘다)
+ALIGN_PINS = ((97.5, ALIGN_Y), (ALIGN_RIDGE[0], -ALIGN_RIDGE[1]), ALIGN_RIDGE)
+CLIP_X = (X_F1 + 4.4, X_F1 + 46.4)        # 클립 링 홈 가운데 (32.4, 74.4): 링 A 는 암 머리 몸통 바로 뒤, 링 B 는 모터 홈 앞
 CLIP_GROOVE_W, CLIP_GROOVE_D = 7.2, 1.5
 CLIP_GROOVE_DIA = GRIP_OD - 2 * CLIP_GROOVE_D    # 홈 바닥 지름 15.2
 CLIP_ID = CLIP_GROOVE_DIA - 0.2           # 링 안지름: 0.1 조여서 끼움
 CLIP_T, CLIP_W = 1.5, 7.0                 # 링 두께(반경), 폭. 바깥 Ø18.0 ≈ 그립
 CLIP_ARC = 235.0                          # 남기는 둘레 각
 CLIP_END_R = 1.0
-PRY_X = (110.0, 160.0) if FOLD else (70.0, 160.0)   # 드라이버 홈. 접는 칸이 있으면 x 70 은 그 벽(1.0)을 뚫는다
+# 키: 링이 없는 쪽(벌어진 쪽) 홈은 파지 않고 남긴다. grip_top, 가운데 +z. 링은 벌어진 쪽이 위를 보게 끼운다
+CLIP_KEY_GAP = 0.3                        # 링 끝 ↔ 키 끝 틈 (바깥 반지름 기준)
+CLIP_KEY_GAP_DEG = math.degrees(CLIP_KEY_GAP / (GRIP_OD / 2))   # 약 1.9°
+CLIP_KEY_ARC = (360.0 - CLIP_ARC) - 2 * CLIP_KEY_GAP_DEG       # 약 121°
+CLIP_KEY_R = 0.5                          # 키 양 끝 바깥 모서리: 링 끝이 미끄러져 들어가게
+PRY_X = (20.0, 131.0)                     # 드라이버 홈: 암 머리 포켓 옆 (버트 쪽), 수 머리 포켓 옆
 PRY_W, PRY_DEPTH, PRY_H = 4.0, 1.0, 2.0
 
 # 박스 안 배치
@@ -269,47 +288,90 @@ def spigot_pocket():
     return p
 
 
-def lra_wire_path(c):
-    """LRA 앞 → 위에서 -y 로 비켜 → 연장선 홈 옆으로 내려가 → 가운데로 → 수 머리 밑 → 통로 바닥 → 칸.
-    c = 둘레 틈 (0 이면 선 더미)"""
+def lra_groove():
+    """grip_bottom 의 직사각 홈 (나누는 면 쪽으로 열림). 전 구간 LRA_BOT 까지, 단 없음"""
+    hw = LRA_W / 2
+    return box(LRA_X0, LRA_X1, -hw, hw, LRA_BOT, Z_AX + 0.01)
+
+
+LRA_PASS_Z0 = SPIGOT_IN_TOP - SPIGOT_IN[1] + 0.05               # 통로 바닥 위
+LRA_STEP_X = X_M1 + 0.2                                         # 수 머리 앞면 ↔ SPIGOT 사이에서 통로 바닥으로 올라탄다
+
+
+def lra_wire_dummy():
+    """홈 바닥에 붙인 두 겹 접힌 선 → 홈 박스 쪽 끝면을 타고 올라가 → 연장선 홈 밑 → 수 머리 밑 → 통로 바닥 → 칸"""
     w, t = LRA_WIRE
-    x0, x1 = LRA_DROP_X - c, LRA_DROP_X + w + c
-    yd = LRA_DROP_Y
-    z_hi = LRA_TOP - LRA_H + 0.03                               # LRA 바닥 높이로 나온다
-    z_lo = Z_AX - EXT_M_HEAD[1] / 2 - t - 0.05                  # 수 머리 밑
-    z_ps = SPIGOT_IN_TOP - SPIGOT_IN[1] + 0.05                  # 통로 바닥 위
-    x_step = X_M1 + 0.2                                         # 수 머리 앞면 ↔ SPIGOT 사이에서 0.4 올라탄다
-    return (box(x0, x1, yd - t - c, w / 2 + c, z_hi - c, z_hi + t + c)
-            + box(x0, x1, yd - t - c, yd + c, z_lo - c, z_hi + t + c)
-            + box(x0, x1, yd - t - c, w / 2 + c, z_lo - c, z_lo + t + c)
-            + box(x0, x_step + 0.1, -w / 2 - c, w / 2 + c, z_lo - c, z_lo + t + c)
-            + box(x_step - 0.1, X_CAV0 + 2.0, -w / 2 - c, w / 2 + c, z_ps - c, z_ps + t + c))
+    z_floor, z_run = LRA_BOT + 0.01, LRA_RUN_Z0
+    xr = LRA_RISE_X
+    return (box(LRA_STACK_X0, xr, -w / 2, w / 2, z_floor, z_floor + 2 * t)
+            + box(xr, xr + t, -w / 2, w / 2, z_floor, z_run + t)
+            + box(xr, LRA_STEP_X + 0.1, -w / 2, w / 2, z_run, z_run + t)
+            + box(LRA_STEP_X - 0.1, X_CAV0 + 2.0, -w / 2, w / 2, LRA_PASS_Z0, LRA_PASS_Z0 + t))
+
+
+def lra_wire_slot():
+    """grip_bottom 의 선 홈: 연장선 홈 밑에 붙은 좁은 홈 (위는 연장선 홈·수 머리 포켓으로 열림). 둘레 틈 LRA_WIRE_CLR"""
+    w, t = LRA_WIRE
+    c = LRA_WIRE_CLR
+    z_top = Z_AX - CABLE_GROOVE_R + 0.6                         # 연장선 홈 안까지: 얇은 막이 남지 않게
+    assert LRA_PASS_Z0 + t + c <= z_top                         # 통로 바닥으로 올라탄 선도 이 홈 높이 안
+    return box(LRA_X1 - 1.0, X_GRIP_END + 0.01, -w / 2 - c, w / 2 + c, LRA_RUN_Z0 - c, z_top)
+
+
+def f_body_pocket():
+    w, h, l = EXT_F_HEAD
+    c = POCKET_CLR
+    pw, ph = w + 2 * c, h + 2 * c
+    pocket = box(X_F0 - 1, X_F1 + c, -pw / 2, pw / 2, Z_AX - ph / 2, Z_AX + ph / 2)   # 버트 끝면으로 열림
+    m = POCKET_MOUTH_C                                          # 입구 모서리 C0.3
+    yz = dict(x_dir=(0, 1, 0), z_dir=(1, 0, 0))
+    s0 = bd.Plane(origin=(X_F0 - 0.01, 0, Z_AX), **yz) * bd.Rectangle(pw + 2 * (m + 0.01), ph + 2 * (m + 0.01))
+    s1 = bd.Plane(origin=(X_F0 + m, 0, Z_AX), **yz) * bd.Rectangle(pw, ph)
+    return pocket + bd.loft([s0, s1])
+
+
+F_NECK_X = (X_F1 + POCKET_CLR, X_F1 + 2 * POCKET_CLR + EXT_F_NECK[1])   # 몸통 뒷면이 걸리는 턱 = 앞 끝
+M_NECK_X = (X_M0 - 2 * POCKET_CLR - EXT_M_NECK[1], X_M0 - POCKET_CLR)   # 턱 = 뒤 끝
+
+
+def f_neck_pocket():
+    return cyl_x(F_NECK_X[0] - 0.01, F_NECK_X[1], EXT_F_NECK[0] / 2 + POCKET_CLR)
 
 
 def f_pocket():
-    w, h, l = EXT_F_HEAD
-    c = POCKET_CLR
-    return box(X_F0, X_F1 + c, -w / 2 - c, w / 2 + c, Z_AX - h / 2 - c, Z_AX + h / 2 + c)
+    """버트 끝면 → 몸통 (안쪽 끝이 턱) → 목 칸 → 선 홈"""
+    return f_body_pocket() + f_neck_pocket()
 
 
-def m_pocket():
+def m_body_pocket():
     w, h, _ = EXT_M_HEAD
     c = POCKET_CLR
     return box(X_M0 - c, X_SPIGOT0, -w / 2 - c, w / 2 + c, Z_AX - h / 2 - c, Z_AX + h / 2 + c)
 
 
+def m_neck_pocket():
+    return cyl_x(M_NECK_X[0], M_NECK_X[1] + 0.01, EXT_M_NECK[0] / 2 + POCKET_CLR)
+
+
+def m_pocket():
+    """선 홈 → 목 칸 → 몸통 (뒤 끝이 턱: 보드에서 빠지지 않게) → SPIGOT"""
+    return m_body_pocket() + m_neck_pocket()
+
+
+def ext_cable(x0, x1):
+    """연장선 단면 5.0 (y) x 4.5 (z) 타원"""
+    return bd.extrude(yz_plane(x0, Z_AX) * bd.Ellipse(EXT_CABLE_D / 2, EXT_CABLE_H / 2), x1 - x0)
+
+
 def grip_body():
     """나누기 전 그립: 부품에 맞춘 포켓과 홈"""
     body = grip_outer()
-    mw, mh = EXT_F_MOUTH
-    body -= box(-1, BUTT_WALL + 0.01, -mw / 2 - 0.2, mw / 2 + 0.2, Z_AX - mh / 2 - 0.2, Z_AX + mh / 2 + 0.2)
-    body -= f_pocket()                                          # 뒷끝이 턱: 선 홈이 더 좁다
+    body -= f_pocket()                                          # 버트 끝면으로 열림. 안쪽 끝이 턱: 선 홈이 더 좁다
     body -= cyl_x(X_F1, X_M0, CABLE_GROOVE_R)
     if FOLD:
         body -= fold_chamber()
     body -= m_pocket()
     body -= spigot_pocket()
-    body -= lra_wire_path(LRA_WIRE_CLR) & box(-1, X_GRIP_END + 0.01, -50, 50, -50, 50)   # LRA 선 홈 (위·아래 반쪽)
     for x, y in ALIGN_PINS:
         body -= align_hole(x, y)
     for x in CLIP_X:
@@ -333,6 +395,24 @@ def clip_groove(x):
     return cyl_x(x0, x1, GRIP_OD / 2 + 1) - cyl_x(x0 - 1, x1 + 1, CLIP_GROOVE_DIA / 2)
 
 
+def clip_key(x):
+    """홈 안에 남기는 키: 홈 바닥 ~ 그립 바깥면(Ø GRIP_OD), 가운데 +z, 각 CLIP_KEY_ARC. 양 끝 바깥 모서리 R CLIP_KEY_R"""
+    x0, x1 = x - CLIP_GROOVE_W / 2, x + CLIP_GROOVE_W / 2
+    ro, ri = GRIP_OD / 2, CLIP_GROOVE_DIA / 2 - 0.01           # 안쪽은 홈 바닥에 살짝 묻혀 붙는다
+    half = math.radians(CLIP_KEY_ARC / 2)
+    far = ro * 3
+    wedge = prism_x(x0 - 1, x1 + 1, [(0, Z_AX), (far * math.sin(half), Z_AX + far * math.cos(half)), (0, Z_AX + far),
+                                     (-far * math.sin(half), Z_AX + far * math.cos(half))])   # 반시계: +x 로 민다
+    key = (cyl_x(x0, x1, ro) - cyl_x(x0 - 1, x1 + 1, ri)) & wedge
+    def along_x_at_ro(e):                                       # 바깥면 양 끝 x 방향 모서리
+        a, b = e.start_point(), e.end_point()
+        return abs(a.Y - b.Y) < 1e-6 and abs(a.Z - b.Z) < 1e-6 and abs(a.X - b.X) > 1.0 and \
+            abs(math.hypot(a.Y, a.Z - Z_AX) - ro) < 1e-3
+    ends = [e for e in key.edges() if along_x_at_ro(e)]
+    assert len(ends) == 2, len(ends)
+    return bd.fillet(ends, CLIP_KEY_R)
+
+
 def clip_ring_body(inner_d=CLIP_ID):
     """축 z, 바닥 z 0. 열린 쪽 가운데 +y. 열린 끝의 폭 방향 모서리 R CLIP_END_R"""
     ri, ro = inner_d / 2, inner_d / 2 + CLIP_T
@@ -353,12 +433,16 @@ def split_box(lower):
 
 
 def grip_bottom_body():
-    return grip_body() & split_box(True)
+    body = grip_body() & split_box(True)
+    body -= lra_groove()                                        # LRA 모터 + 접은 선
+    body -= lra_wire_slot()                                     # LRA 선: 연장선 홈 밑 (grip_top 에는 선 홈 없음)
+    return body
 
 
 def grip_top_body():
     body = grip_body() & split_box(False)
-    body -= cyl_z(Z_AX, LRA_TOP, LRA_R, LRA_X, 0)               # LRA 자리
+    for x in CLIP_X:                                            # 클립 홈의 링 없는 쪽(위)을 키로 채움
+        body += clip_key(x)
     return body
 
 
@@ -470,6 +554,18 @@ def press_post():
     return cyl_z(z0, z1, r, USER_X, USER_Y) & wedge
 
 
+def led_window(lx, ly, z_top, out_h):
+    """LED 창 (빼는 모양): 안쪽 타원 포켓(겉면 0.6 남김)이 빛을 모으고, 가운데 Ø LED_HOLE_D 관통 + 겉면 C LED_HOLE_C.
+    검정 출력이라 막으로는 안 보인다. 스틱·페달 공용"""
+    ell = bd.Ellipse(2.5, 4.0).moved(bd.Location((lx, ly)))
+    cut = bd.extrude(bd.Plane.XY.offset(z_top - 1) * ell, out_h - 0.6 - (z_top - 1))
+    r, c = LED_HOLE_D / 2, LED_HOLE_C
+    cut += cyl_z(z_top - 1, out_h + 1, r, lx, ly)
+    cut += bd.Cone(r, r + c + 0.01, c + 0.01, align=(bd.Align.CENTER, bd.Align.CENTER, bd.Align.MIN)).moved(
+        bd.Location((lx, ly, out_h - c)))
+    return cut
+
+
 def lid_body(side):
     x0 = X_CAV0 + 0.1
     e = WIRE_SIDE_EXTRA
@@ -487,9 +583,7 @@ def lid_body(side):
 
     lid = add_latches(lid, X_CAV1, Z_TOP, OUT_H)
 
-    # LED 창: 겉면 0.6 남김
-    ell = bd.Ellipse(2.5, 4.0).moved(bd.Location((X_FEATHER0 + LED_X_FROM_USB, LED_Y)))
-    lid -= bd.extrude(bd.Plane.XY.offset(Z_TOP - 1) * ell, OUT_H - 0.6 - (Z_TOP - 1))
+    lid -= led_window(X_FEATHER0 + LED_X_FROM_USB, LED_Y, Z_TOP, OUT_H)
     if RESET_HOLE:
         lid -= cyl_z(z0, z1, 1.0, X_FEATHER0 + RESET_X_FROM_USB, RESET_Y)
 
@@ -566,6 +660,10 @@ def dummy_parts():
     mt527 = box(X_MT0, X_MT0 + ml, -mw / 2, mw / 2, Z_AX - mh / 2, Z_AX + mh / 2) + \
         box(X_MT0 + ml, X_MT0 + ml + MT527_MICRO, -3.5, 3.5, Z_AX - 0.9, Z_AX + 0.9)
     fw, fh, _ = EXT_F_HEAD
+    mhw, mhh, _ = EXT_M_HEAD
+    (fnd, fnl), (mnd, mnl) = EXT_F_NECK, EXT_M_NECK
+    f_head = box(X_F0, X_F1, -fw / 2, fw / 2, Z_AX - fh / 2, Z_AX + fh / 2) + cyl_x(X_F1 - 0.01, X_F1 + fnl, fnd / 2)
+    m_head = box(X_M0, X_M1, -mhw / 2, mhw / 2, Z_AX - mhh / 2, Z_AX + mhh / 2) + cyl_x(X_M0 - mnl, X_M0 + 0.01, mnd / 2)
     jw, jh, jl = JST_PLUG
     bx, by, bh = USER_BTN
     return [
@@ -579,11 +677,11 @@ def dummy_parts():
         ("jst_plug", box(JST_X0, JST_X0 + jl, JST_Y - jw / 2, JST_Y + jw / 2, PCB_Z1, PCB_Z1 + jh), "#dddddd"),
         ("batt_lead", batt_lead(), "#cc3333"),
         ("mt527", mt527, "#aaaaaa"),
-        ("ext_m_head", box(X_M0, X_M1, -fw / 2, fw / 2, Z_AX - fh / 2, Z_AX + fh / 2), "#555555"),
-        ("ext_cable", cyl_x(X_F1, X_M0, EXT_CABLE_D / 2), "#888888"),
-        ("ext_f_head", box(X_F0, X_F1, -fw / 2, fw / 2, Z_AX - fh / 2, Z_AX + fh / 2), "#444444"),
-        ("lra", cyl_z(LRA_TOP - LRA_H, LRA_TOP, LRA_D / 2, LRA_X, 0), "#e07a50"),
-        ("lra_wire", lra_wire_path(0), "#d04040"),
+        ("ext_m_head", m_head, "#555555"),
+        ("ext_cable", ext_cable(X_F1 + fnl, X_M0 - mnl), "#888888"),
+        ("ext_f_head", f_head, "#444444"),
+        ("lra", cyl_z(LRA_BOT, LRA_BOT + LRA_H, LRA_D / 2, LRA_X, 0), "#e07a50"),
+        ("lra_wire", lra_wire_dummy(), "#d04040"),
         ("m2_bolt", bolt_dummy(), "#999999"),
         ("m2_nut", hex_y(NUT_SEAT_Y + NUT_T, NUT_T, NUT_AF), "#999999"),
     ]
