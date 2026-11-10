@@ -1,5 +1,6 @@
 // 드럼 배치 캔버스 오른쪽 아래(또는 왼쪽 아래)에 겹쳐 띄우는 정보 카드(PLAY-004 D10). 공통 틀 + 본문 슬롯 구조다.
-// 편집(평소) 본문은 패드 이름 / X·Y·반지름 큰 숫자 3칸 / 반지름 슬라이더(앵커가 있을 때만)이고 버튼은 없다.
+// 세로형(폭 190): 맨 위 패드 이름+보조 캡션 / X·Y·반지름이 한 줄에 하나씩(라벨 왼쪽·큰 숫자 오른쪽) / 반지름 슬라이더(앵커가 있을 때만).
+// 편집(평소)에는 버튼이 없다.
 // 보정 진행·경고·결과 상태는 같은 틀에 children이나 tone으로 얹는다. 표시용 값과 콜백만 받고 계산은 하지 않는다(설계 2절).
 import type { ReactNode, Ref } from 'react';
 import { RadiusSlider, type RadiusSliderProps } from '@/components/calibration/RadiusSlider';
@@ -25,12 +26,24 @@ export function KitInfoFrame({ corner = 'right', tone, cardRef, children }: KitI
   );
 }
 
+/** 카드 맨 위: 패드 이름 + 보조 캡션(편집 「선택 패드」, 진행 「n / 7」) */
+export function KitInfoHead({ name, caption, nameClassName }: { name: string; caption?: string; nameClassName?: string }) {
+  return (
+    <div className="setup-kitinfo-head">
+      <h3 className={`setup-kitinfo-name${nameClassName ? ` ${nameClassName}` : ''}`}>{name}</h3>
+      {caption && <p className="setup-kitinfo-caption">{caption}</p>}
+    </div>
+  );
+}
+
 export interface KitInfoOverlayProps {
   corner?: KitInfoCorner;
   tone?: 'warn';
   cardRef?: Ref<HTMLElement>;
   /** 패드 이름 */
   name: string;
+  /** 이름 아래 보조 캡션. 없으면 「선택 패드」 */
+  caption?: string;
   /** 표시용 값(문자열). 단위 변환은 호출자가 한다 */
   x: string;
   y: string;
@@ -41,10 +54,10 @@ export interface KitInfoOverlayProps {
   children?: ReactNode;
 }
 
-export function KitInfoOverlay({ corner, tone, cardRef, name, x, y, radius, slider = null, children }: KitInfoOverlayProps) {
+export function KitInfoOverlay({ corner, tone, cardRef, name, caption = '선택 패드', x, y, radius, slider = null, children }: KitInfoOverlayProps) {
   return (
     <KitInfoFrame corner={corner} tone={tone} cardRef={cardRef}>
-      <h3 className="setup-kitinfo-name">{name}</h3>
+      <KitInfoHead name={name} caption={caption} />
       <dl className="setup-kitinfo-values">
         <KitInfoValue label="X" value={x} />
         <KitInfoValue label="Y" value={y} />
