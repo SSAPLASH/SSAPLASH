@@ -208,7 +208,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 | 키 | 기본값 | 뜻 |
 | --- | --- | --- |
 | `model` | `original` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
-| `models` | `original`, `combo` | 이름 → 채보 모델 yaml. `original`은 원래 ADTOF + 드럼 킷 분리, `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고) |
+| `models` | `original`, `combo` | 이름 → 채보 모델 yaml. `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고) |
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
@@ -349,13 +349,21 @@ uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is
 #   SSAPLASH_CHART_DEVICE=cuda
 #   SSAPLASH_CHART_MODEL=original   # 채보 모델. combo로 바꾸고 워커를 다시 띄우면 패드별 가중치 조합
 #   CUDA_VISIBLE_DEVICES=6
+#   OMP_NUM_THREADS=16              # CPU 스레드 수. 네 줄 모두 16
+#   MKL_NUM_THREADS=16
+#   OPENBLAS_NUM_THREADS=16
+#   NUMEXPR_NUM_THREADS=16
 chmod 600 ~/ssaplash/worker.env && set -a && source ~/ssaplash/worker.env && set +a
 uv run --no-sync ssaplash-worker check
-mkdir -p ~/ssaplash/results && nohup uv run --no-sync ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
-echo $! > ~/ssaplash/worker.pid
+mkdir -p ~/ssaplash/results
+setsid nohup taskset -c 0-127 uv run --no-sync ssaplash-worker run >> ~/ssaplash/results/worker.log 2>&1 < /dev/null &
+sleep 3; pgrep -f "\.venv/bin/ssaplash-worker run" | tee ~/ssaplash/worker.pid   # 숫자 하나만 나와야 함
+grep Cpus_allowed_list /proc/$(cat ~/ssaplash/worker.pid)/status                 # 0-127
 tail -f ~/ssaplash/results/worker.log        # 상태
-kill $(cat ~/ssaplash/worker.pid)            # 멈추기. 처리 중인 작업을 끝내고 종료
+kill -TERM $(cat ~/ssaplash/worker.pid)      # 멈추기. 한 번만 보낸다. 두 번 보내면 처리 중인 곡을 버리고 바로 끈다
 ```
+
+워커는 CPU 0~127번 코어에 묶어 띄운다. 이 서버는 CPU 0~127번과 128~255번이 서로 다른 NUMA 노드인데, 2026-11-10 측정에서 128~255번 코어에서 돌면 같은 곡이 26.8초에서 265.2초로 10배 느려졌다. 묶지 않으면 리눅스가 고르는 코어에 따라 처리 시간이 40초에서 545초까지 달라진다. CPU 스레드 수를 정하지 않으면 워커가 코어를 수십 개 쓰면서 오히려 느려지므로 `worker.env`에 16을 넣는다. 처리 시간이 다시 늘어나면 [docs/트러블슈팅-워커-처리-속도.md](docs/트러블슈팅-워커-처리-속도.md)의 "다시 확인하는 법" 명령으로 두 노드를 다시 비교한다.
 
 ## 약점 구간 분석 (COACH-003, S15P31A307-138)
 
