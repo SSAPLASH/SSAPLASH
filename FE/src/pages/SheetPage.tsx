@@ -841,7 +841,7 @@ function SheetPageBody() {
     return (
       <StageFade stageKey="select">
         <main className="main">
-          <SongPicker mode="sheet" onSelect={param.select} />
+          <SongPicker mode="sheet" onStart={param.select} />
         </main>
       </StageFade>
     );
