@@ -2,12 +2,12 @@
 // 손마다 (패드 − 손 출발점) 방향을 고도·방위각으로 바꿔 손별 기본 앵커를 만든다.
 // 보정 전 기본 판정 표에 쓴다. 화면 기본 배치(DEFAULT_KIT_LAYOUT)는 고정값이라 여기서 유도하지 않는다(후속 T8).
 // 수치는 가정값이다(설계 U4) — 11/6 양손 보정 실측 평균으로 상수만 바꾼다.
-import type { KitLayout } from './kitLayout';
+import { DEFAULT_KIT_LAYOUT, type KitLayout } from './kitLayout';
 import type { PadId } from './pads';
 import { STICK_PADS } from './pads';
 import type { StickId } from './events';
 import { computeBoundaries, meanPose, poseToVec, type HandAnchors, type HandAnchorSet, type PadAnchor } from './calibration';
-import { DEFAULT_ANGLE_RANGE, poseToScreen, type AngleRange } from './kitMapping';
+import { DEFAULT_ANGLE_RANGE, poseToScreen, screenToPose, type AngleRange } from './kitMapping';
 import type { Pose } from './events';
 import { DEFAULT_SENSOR_TUNING, type SensorTuning } from './tuning';
 
@@ -110,6 +110,44 @@ export function anchorsToLayout(hands: HandAnchors, base: KitLayout, angleRange:
     if (poses.length === 0) continue;
     const s = poseToScreen(meanPose(poses), angleRange);
     out[pad] = { ...base[pad], x: clamp01(s.x), y: clamp01(s.y) };
+  }
+  return out;
+}
+
+/**
+ * 한 패드를 화면에서 from → to로 옮길 때 그 패드의 손별 앵커를 같이 옮긴다(드래그 편집, kit-drag 설계 D2·D3).
+ * 먼저 screenToPose(to) − screenToPose(from)을 pitch·yaw에 더하고, 손별 평균(meanPose)이 선형이 아니라서 생기는 오차는
+ * anchorsToLayout 유도 위치와 목표(0.05~0.95로 자른 값)의 차이를 다시 더해 최대 4회 보정한다(x·y 오차 0.001 이하면 중단).
+ * 반지름 등 다른 필드는 보존하고, 앵커가 없는 손·스틱 패드가 아닌 패드는 그대로. 원본은 바꾸지 않는다
+ */
+export function moveAnchorsForPad(
+  hands: HandAnchors,
+  pad: PadId,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  angleRange: AngleRange = DEFAULT_ANGLE_RANGE,
+): HandAnchors {
+  if (!isStickPad(pad)) return hands;
+  const shift = (cur: HandAnchors, a: { x: number; y: number }, b: { x: number; y: number }): HandAnchors => {
+    const pa = screenToPose(a.x, a.y, angleRange);
+    const pb = screenToPose(b.x, b.y, angleRange);
+    const dPitch = pb.pitch - pa.pitch;
+    const dYaw = pb.yaw - pa.yaw;
+    const move = (set: HandAnchorSet | null): HandAnchorSet | null => {
+      const anchor = set?.[pad];
+      if (!set || !anchor) return set;
+      return { ...set, [pad]: { ...anchor, pitch: anchor.pitch + dPitch, yaw: anchor.yaw + dYaw } };
+    };
+    return [move(cur[0]), move(cur[1])];
+  };
+  let out = shift(hands, from, to);
+  if (!out[0]?.[pad] && !out[1]?.[pad]) return out;
+  const target = { x: clamp01(to.x), y: clamp01(to.y) };
+  for (let i = 0; i < 4; i++) {
+    // 앵커가 있는 패드는 base 값을 쓰지 않으므로 base는 아무 배치나 된다
+    const derived = anchorsToLayout(out, DEFAULT_KIT_LAYOUT, angleRange)[pad];
+    if (Math.abs(target.x - derived.x) <= 0.001 && Math.abs(target.y - derived.y) <= 0.001) break;
+    out = shift(out, derived, target);
   }
   return out;
 }

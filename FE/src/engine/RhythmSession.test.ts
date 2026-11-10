@@ -152,6 +152,21 @@ describe('노트 배정과 판정', () => {
     expect(snap.combo).toBe(1);
   });
 
+  it('채보 밖 타격을 패드·곡 시각과 함께 알리고, 받는 쪽 오류는 세션에 전하지 않는다', () => {
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
+    const got: { pad: PadId; songTimeMs: number; nearDeltaMs: number | null }[] = [];
+    s.onStray(() => {
+      throw new Error('코칭 오류');
+    });
+    const off = s.onStray((e) => got.push(e));
+    expect(() => s.handleHit(hit('RIDE', T0 + 1010))).not.toThrow();
+    expect(got).toEqual([{ pad: 'RIDE', songTimeMs: 1000, nearDeltaMs: null }]);
+    expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
+    off();
+    s.handleHit(hit('RIDE', T0 + 1020));
+    expect(got).toHaveLength(1);
+  });
+
   it('pad가 없는 타격은 무시한다', () => {
     const s = playing();
     expect(s.handleHit(hit(null, T0 + 1000))).toBeNull();
@@ -163,6 +178,47 @@ describe('노트 배정과 판정', () => {
     s.handleHit(hit('HIHAT', T0 + 1000));
     expect(s.handleHit(hit('HIHAT', T0 + 1010))).toBeNull();
     expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
+  });
+});
+
+describe('채보 밖 타격의 가까운 노트 차(nearDeltaMs, 설계 MODE-003-timing-bar-miss-dot)', () => {
+  // 스네어 1000·1100, 킥 1500. goodMs 60 → 판정 범위 ±60, 찾는 범위 ±120
+  const near = (s: RhythmSession) => {
+    const got: (number | null)[] = [];
+    s.onStray((e) => got.push(e.nearDeltaMs));
+    return got;
+  };
+
+  it('범위 밖으로 빠르게 치면 음수(가장 가까운 같은 패드 노트 기준)', () => {
+    const s = playing();
+    const got = near(s);
+    s.handleHit(hit('KICK', T0 + 1420));
+    expect(got).toEqual([-80]);
+  });
+
+  it('놓친(MISS) 노트 뒤에 늦게 치면 양수', () => {
+    const s = playing();
+    const got = near(s);
+    s.tick(T0 + 1570); // 킥 1500이 MISS가 된다
+    s.handleHit(hit('KICK', T0 + 1590));
+    expect(got).toEqual([90]);
+  });
+
+  it('이미 친 노트 옆 추가 타격, 찾는 범위 밖, 다른 패드는 null', () => {
+    const s = playing();
+    const got = near(s);
+    s.handleHit(hit('KICK', T0 + 1500)); // PERFECT
+    s.handleHit(hit('KICK', T0 + 1580)); // 친 노트 옆 → null
+    s.handleHit(hit('CRASH', T0 + 1850)); // 크래시 2000까지 −150, 범위 밖 → null
+    s.handleHit(hit('RIDE', T0 + 1930)); // 라이드 노트 없음 → null
+    expect(got).toEqual([null, null, null]);
+  });
+
+  it('노트가 없는 채보에서도 터지지 않는다', () => {
+    const s = playing([]);
+    const got = near(s);
+    s.handleHit(hit('SNARE', T0 + 100));
+    expect(got).toEqual([null]);
   });
 });
 

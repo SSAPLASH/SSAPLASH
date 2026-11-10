@@ -18,7 +18,6 @@ function panel(tab: UploadTab, over: { audioBusyTitle?: string | null; locked?: 
       audio={audio}
       audioBusyTitle={over.audioBusyTitle ?? null}
       midi={midi}
-      emphasis={false}
       onCancel={over.onCancel}
     />,
   );
@@ -71,7 +70,7 @@ describe('UploadPanel', () => {
 });
 
 describe('AudioDropzone 문구', () => {
-  const html = renderToStaticMarkup(<AudioDropzone {...audio} emphasis={false} />);
+  const html = renderToStaticMarkup(<AudioDropzone {...audio} />);
 
   it('제한 문구: MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하', () => {
     expect(html).toContain('MP3·WAV·M4A·OPUS · 50MiB 이하 · 10분 이하');
@@ -85,18 +84,15 @@ describe('AudioDropzone 문구', () => {
   it('[채보 만들기]는 파일이 없어 비활성, [취소]는 onCancel이 있을 때만', () => {
     expect(html).toMatch(/ui-btn-primary[^>]*disabled=""[^>]*>채보 만들기/);
     expect(html).not.toContain('>취소<');
-    expect(renderToStaticMarkup(<AudioDropzone {...audio} emphasis={false} onCancel={noop} />)).toContain('>취소<');
+    expect(renderToStaticMarkup(<AudioDropzone {...audio} onCancel={noop} />)).toContain('>취소<');
   });
 
-  it('첫 방문(emphasis)은 큰 드롭존과 md 파일 버튼', () => {
-    const big = renderToStaticMarkup(<AudioDropzone {...audio} emphasis />);
-    expect(big).toContain('studio-drop large');
-    expect(big).toMatch(/ui-btn-secondary ui-btn-md[^>]*studio-drop-btn/);
+  it('드롭존 파일 버튼은 sm', () => {
     expect(html).toMatch(/ui-btn-secondary ui-btn-sm[^>]*studio-drop-btn/);
   });
 
   it('다시 올리기(prefill)는 제목을 채우고 안내 줄을 둔다', () => {
-    const re = renderToStaticMarkup(<AudioDropzone {...audio} prefill={{ title: '별빛 산책', artist: '파란물결' }} emphasis={false} />);
+    const re = renderToStaticMarkup(<AudioDropzone {...audio} prefill={{ title: '별빛 산책', artist: '파란물결' }} />);
     expect(re).toContain('다시 올리기 — 파일만 다시 골라 주세요');
     expect(re).toContain('value="별빛 산책"');
   });

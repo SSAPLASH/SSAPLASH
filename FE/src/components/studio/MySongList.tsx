@@ -1,10 +1,11 @@
 // 내 곡 목록 본문 (Figma 207:2110 카드 · 225:4551 목록 · 225:5042 로딩 · 225:5368 오류). 활성 작업은 맨 위 ActiveJobCard 한 줄,
-// 그 아래 카드 그리드(데스크톱 3열·태블릿 2열) 또는 목록 행. 빈 목록(첫 방문)은 페이지가 처리한다.
+// 그 아래 카드 그리드(최대 5열) 또는 목록 행. 곡·악보가 모두 없으면(페이지가 empty로 알림) 빈 안내를 둔다.
 import { Button } from '@/components/ui/Button';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
 import { mergeLibraryItems, type SheetSummary } from '@/domain/sheetMusic';
 import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
 import { ActiveJobCard } from './ActiveJobCard';
+import { LibraryEmpty } from './LibraryEmpty';
 import { MySongCard } from './MySongCard';
 import { MySongRow } from './MySongRow';
 import { SheetItemCard } from './SheetItemCard';
@@ -46,6 +47,8 @@ interface Props {
   onUploadSong?: (sheet: SheetSummary) => void;
   /** 있으면 곡 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다 */
   onSongSheet?: (kind: SongSheetKind, song: SongSummary) => void;
+  /** 곡·악보·진행 작업이 모두 없다(페이지가 판단, 악보를 읽는 중이면 거짓). 참이면 목록 자리에 빈 안내를 둔다 */
+  empty?: boolean;
 }
 
 /** 202 직후 목록에 아직 없는 활성 작업을 임시 곡으로 만든다 */
@@ -89,6 +92,7 @@ export function MySongList({
   onSheetCoverError,
   onSongSheet,
   onUploadSong,
+  empty = false,
 }: Props) {
   if (status === 'idle' || status === 'loading') {
     // 스켈레톤 카드 6장 (Figma 로딩: 커버·제목·아티스트·동작 자리)
@@ -128,7 +132,15 @@ export function MySongList({
       </Button>
     </p>
   ) : null;
-  if (merged.length === 0 && (sheets?.length ?? 0) === 0) return sheetsLine;
+  if (merged.length === 0 && (sheets?.length ?? 0) === 0) {
+    if (!empty) return sheetsLine;
+    return (
+      <>
+        {sheetsLine}
+        <LibraryEmpty view={view} sheetsEnabled={sheets !== undefined} />
+      </>
+    );
+  }
   const sorted = sortMineSongs(merged);
   // 진행 단계를 아는 활성 작업은 ActiveJobCard 한 줄로 맨 위에 두고, 목록에서는 뺀다
   const jobShown = active !== null && progress !== null;

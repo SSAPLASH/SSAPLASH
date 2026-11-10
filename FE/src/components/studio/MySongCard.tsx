@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { Button } from '@/components/ui/Button';
 import { SongCover } from '@/components/song/SongCover';
-import { chartFailureText, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { PlayIcon } from './StudioIcons';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
@@ -56,7 +56,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCove
         {song.title}
       </span>
       {/* 아티스트가 없어도 줄을 비워 둬 카드끼리 배지 줄 높이를 맞춘다 */}
-      <span className="studio-card-artist">{song.artist || ' '}</span>
+      <span className="studio-card-artist">{artistLabel(song.artist)}</span>
       <div className="studio-card-badges">
         <SongStatusBadge status={song.status} />
         <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />

@@ -3,7 +3,7 @@ import type { UploadDraft } from '@/domain/chartJob';
 import type { MidiDraft } from '@/domain/midiUpload';
 import { availabilityFromFailure, type SongAvailability } from '@/domain/songAvailability';
 import type { SongMetaPatch } from '@/domain/songEdit';
-import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongLevel, type SongPage, type SongScope } from '@/domain/songCatalog';
+import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongLevel, type SongPage, type SongScope, type SongSummary } from '@/domain/songCatalog';
 import { ApiError } from './error';
 import { apiFetch } from './http';
 
@@ -32,6 +32,31 @@ export async function listSongs(params: ListSongsParams, signal?: AbortSignal): 
   if (params.withAccompaniment) qs.set('withAccompaniment', 'true');
   const body = await apiFetch<{ items?: Record<string, unknown>[]; hasNext?: boolean }>(`/api/v1/songs?${qs}`, { signal });
   return { items: (body.items ?? []).map(songFromDto), hasNext: body.hasNext === true };
+}
+
+/** 전체 목록을 읽을 때 한 번에 받는 곡 수. BE `@Max(100)` */
+export const SONG_LIST_PAGE_SIZE = 100;
+/** 무한 반복 방지. 100곡 × 50쪽 = 5,000곡까지 */
+export const SONG_LIST_MAX_PAGES = 50;
+
+export interface ListAllSongsOptions {
+  signal?: AbortSignal;
+  /** 참이면 다음 페이지를 읽지 않고 지금까지 모은 목록을 돌려준다(더 새 요청이 생긴 경우) */
+  isStale?: () => boolean;
+}
+
+/** 같은 조건으로 hasNext가 거짓이 될 때까지 이어 읽어 하나로 합친다(서버 순서 유지) */
+export async function listAllSongs(
+  params: Omit<ListSongsParams, 'page' | 'size'>,
+  opts: ListAllSongsOptions = {},
+): Promise<SongSummary[]> {
+  const all: SongSummary[] = [];
+  for (let page = 0; page < SONG_LIST_MAX_PAGES; page++) {
+    const res = await listSongs({ ...params, page, size: SONG_LIST_PAGE_SIZE }, opts.signal);
+    all.push(...res.items);
+    if (!res.hasNext || opts.isStale?.()) break;
+  }
+  return all;
 }
 
 /** 곡 단위 반주 URL. 반주가 없으면 url·expiresAt 모두 null */

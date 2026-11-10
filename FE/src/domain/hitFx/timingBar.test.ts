@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addTimingMark, EMPTY_TIMING_BAR, hasLiveTicks, TIMING_BAR_FADE_MS, TIMING_BAR_MAX, timingBarView, type TimingBarState } from './timingBar';
+import { addMissMark, addTimingMark, EMPTY_TIMING_BAR, hasLiveTicks, TIMING_BAR_FADE_MS, TIMING_BAR_MAX, timingBarView, type TimingBarState } from './timingBar';
 
 const add = (s: TimingBarState, deltaMs: number, at: number, judgement: 'PERFECT' | 'GOOD' = 'GOOD') => addTimingMark(s, { deltaMs, judgement, at });
 
@@ -7,6 +7,7 @@ describe('timingBar', () => {
   it('빈 상태: 눈금·평균 없음', () => {
     const v = timingBarView(EMPTY_TIMING_BAR, 0, 60);
     expect(v.ticks).toEqual([]);
+    expect(v.misses).toEqual([]);
     expect(v.avgPos).toBeNull();
     expect(hasLiveTicks(EMPTY_TIMING_BAR, 0)).toBe(false);
   });
@@ -65,5 +66,42 @@ describe('timingBar', () => {
     const before = s.marks.length;
     add(s, 2, 1);
     expect(s.marks).toHaveLength(before);
+  });
+
+  describe('범위 밖 타격 점 (설계 MODE-003-timing-bar-miss-dot)', () => {
+    it('빠름은 왼쪽(−1), 늦음은 오른쪽(1) 바깥 점이고 눈금에는 없다', () => {
+      let s = addMissMark(EMPTY_TIMING_BAR, { deltaMs: -80, at: 0 });
+      s = addMissMark(s, { deltaMs: 95, at: 0 });
+      const v = timingBarView(s, 0, 60);
+      expect(v.misses).toEqual([
+        { side: -1, alpha: 1 },
+        { side: 1, alpha: 1 },
+      ]);
+      expect(v.ticks).toEqual([]);
+      expect(hasLiveTicks(s, 0)).toBe(true);
+    });
+
+    it('2초에 걸쳐 옅어지고 사라진다', () => {
+      const s = addMissMark(EMPTY_TIMING_BAR, { deltaMs: -80, at: 0 });
+      expect(timingBarView(s, TIMING_BAR_FADE_MS / 2, 60).misses[0].alpha).toBeCloseTo(0.5);
+      expect(timingBarView(s, TIMING_BAR_FADE_MS, 60).misses).toEqual([]);
+    });
+
+    it('평균에는 넣지 않는다', () => {
+      let s = add(EMPTY_TIMING_BAR, 30, 0);
+      s = addMissMark(s, { deltaMs: -110, at: 0 });
+      expect(timingBarView(s, 0, 60).avgPos).toBe(0.5);
+      expect(timingBarView(addMissMark(EMPTY_TIMING_BAR, { deltaMs: 90, at: 0 }), 0, 60).avgPos).toBeNull();
+    });
+
+    it('0·숫자 아님은 무시하고, 보관 수 20은 눈금과 함께 센다', () => {
+      expect(addMissMark(EMPTY_TIMING_BAR, { deltaMs: 0, at: 0 })).toBe(EMPTY_TIMING_BAR);
+      expect(addMissMark(EMPTY_TIMING_BAR, { deltaMs: Number.NaN, at: 0 })).toBe(EMPTY_TIMING_BAR);
+      let s = EMPTY_TIMING_BAR;
+      for (let i = 0; i < TIMING_BAR_MAX; i++) s = add(s, 10, i);
+      s = addMissMark(s, { deltaMs: 90, at: 99 });
+      expect(s.marks).toHaveLength(TIMING_BAR_MAX);
+      expect(s.marks[s.marks.length - 1].judgement).toBe('MISS');
+    });
   });
 });

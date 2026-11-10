@@ -16,6 +16,7 @@ import { Slider } from '@/components/ui/Slider';
 import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
 import { Dialog } from '@/components/ui/Dialog';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
 import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
@@ -77,6 +78,8 @@ export function SettingsPage() {
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{ variant: ToastVariant; text: string } | null>(null);
 
+  // 불러오지 못한 프로필 사진 URL. 이니셜로 바꾼다
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -124,7 +127,7 @@ export function SettingsPage() {
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
   const onLogout = () => {
-    void logout().then(() => navigate('/login', { replace: true }));
+    void logout().then(() => navigate('/', { replace: true }));
   };
 
   const openSetup = () => navigate('/setup', { state: { returnTo: '/settings', returnLabel: '설정' } });
@@ -152,18 +155,21 @@ export function SettingsPage() {
 
   return (
     <main className="main">
-      <header className="settings-head">
-        <h1>설정</h1>
-        <p>계정, 기기, 오디오, 연주 설정을 관리해요.</p>
-      </header>
+      <PageHeader className="settings-head" title="설정" />
 
       <div className="settings-cols">
         <div className="settings-col">
           <Card padding="lg" title="계정">
             {user ? (
               <div className="settings-account">
-                {user.profileImageUrl ? (
-                  <img className="settings-avatar" src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" />
+                {user.profileImageUrl && user.profileImageUrl !== failedAvatar ? (
+                  <img
+                    className="settings-avatar"
+                    src={user.profileImageUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedAvatar(user.profileImageUrl)}
+                  />
                 ) : (
                   <span className="settings-avatar settings-avatar-initial" aria-hidden="true">
                     {Array.from(user.nickname)[0] ?? '?'}
@@ -282,7 +288,7 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <p className="settings-help">메트로놈은 상단 Dock에서도 바꿀 수 있어요.</p>
+            <p className="settings-help">메트로놈은 연주 화면 상단 Dock에서도 바꿀 수 있어요.</p>
           </Card>
         </div>
 
@@ -298,7 +304,7 @@ export function SettingsPage() {
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>
             <p className="settings-note">연주를 시작할 때의 값이 그 판에 적용돼요. 끄면 코칭 문구가 뜨지 않아요.</p>
-            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
+            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 판정 범위를 벗어나면 막대 바깥에 빨간 점으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
             </SettingRow>
           </Card>

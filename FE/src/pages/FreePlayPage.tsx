@@ -100,10 +100,11 @@ export function FreePlayPage() {
   const accomp = useFreeAccompaniment();
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // 진입: 소리 켜기 복구(리듬 게임이 꺼 두었을 수 있음), 채보 후보 제한 해제
+  // 진입: 타격음 켜기(기본은 꺼져 있다), 채보 후보 제한 해제. 떠날 때 타격음을 끈다
   useEffect(() => {
     setSoundOnHit(true);
     inputManager.setCandidateProvider(null);
+    return () => setSoundOnHit(false);
   }, []);
 
   // 떠날 때 녹음 중이면 정지해 저장 창으로 넘긴다(녹음 중이 아니면 스토어가 무시한다)
@@ -188,7 +189,7 @@ export function FreePlayPage() {
           )
         )}
 
-        <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`}>
+        <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`} data-pointer-strike="">
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
             <DrumKit fitWidth effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
           </div>

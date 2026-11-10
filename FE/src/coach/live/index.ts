@@ -1,7 +1,11 @@
 // 실시간 코칭(COACH-001) 규칙 모듈의 공개 진입점. 화면·엔진은 여기서만 가져온다.
-export { LiveCoach, LIVE_OFF_TAG, LIVE_RECOVERED_TAG } from './LiveCoach';
-export type { CoachMessage, LiveCoachLogEntry, LiveCoachOptions } from './LiveCoach';
-export type { JudgedNote } from './window';
+export { LiveCoach, LIVE_CAUSE_TAG, LIVE_GATE_DROP_TAG, LIVE_GATE_FALLBACK_TAG, LIVE_GATE_KEEP_TAG, LIVE_OFF_TAG, LIVE_RECOVERED_TAG } from './LiveCoach';
+export type { CoachMessage, DeferredMessage, LiveCoachLogEntry, LiveCoachOptions } from './LiveCoach';
+export type { GateDecision } from './gate/gate';
+export type { JudgedNote, StrayHit } from './window';
+export { chartCoachContext } from './noteContext';
+export type { ChartCoachContext, NoteContext } from './noteContext';
+export type { CauseCandidate, MissCause } from './cause';
 export { isPraiseTag } from './rules';
 export type { CoachTarget, LiveTag } from './rules';
 export { isStickSensor, setupTagsOf } from './setupHints';

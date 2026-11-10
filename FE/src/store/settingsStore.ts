@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
 import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
+import { moveAnchorsForPad } from '@/domain/kitModel';
 import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { isHitFxTheme } from '@/domain/hitFx/themes';
 import type { HitFxTheme } from '@/domain/hitFx/types';
@@ -81,6 +82,8 @@ interface SettingsState {
   /** 배치 교체(보정 완료·프리셋 적용). 빠진 패드는 기본값으로 채운다 */
   setKitLayout: (layout: Partial<KitLayout>) => void;
   resetLayout: () => void;
+  /** 패드 하나를 (x, y)로 옮긴다(드래그 편집, kit-drag 설계 D2·D4). 0.05~0.95로 자르고 그 패드의 손별 앵커도 같이 옮긴다. presetAnchors 기록은 저장 때 갱신. 시스템 기본도 옮긴다(앵커가 없어 배치만 이동, D9) */
+  movePad: (pad: PadId, x: number, y: number) => void;
   /**
    * 손별 앵커 저장(사본). at은 보정 시각(기본 지금). 적용 중인 것이 사용자 프리셋이면 presetAnchors[그 id]에도 같이 기록한다.
    * 시스템 기본이 적용 중이면 사본만 바뀐다(호출자는 시스템 기본에서 보정을 열지 않는다)
@@ -363,6 +366,16 @@ export const useSettings = create<SettingsState>()(
         set({ sensorOptions: { ...get().sensorOptions, [id]: { ...get().sensorOptions[id], [key]: value } } }),
       setKitLayout: (layout) => set({ kitLayout: fillLayout(layout) }),
       resetLayout: () => set({ kitLayout: DEFAULT_KIT_LAYOUT }),
+      movePad: (pad, x, y) => {
+        const { kitLayout, stickAnchors, tuning } = get();
+        const clamp = (v: number) => Math.min(0.95, Math.max(0.05, v));
+        const from = { x: kitLayout[pad].x, y: kitLayout[pad].y };
+        const to = { x: clamp(x), y: clamp(y) };
+        set({
+          kitLayout: { ...kitLayout, [pad]: { ...kitLayout[pad], ...to } },
+          stickAnchors: moveAnchorsForPad(stickAnchors, pad, from, to, tuning.angleRange),
+        });
+      },
       setStickAnchors: (anchors, at = Date.now()) => {
         const copy: HandAnchors = [anchors[0], anchors[1]];
         const { activePresetId, presetAnchors } = get();

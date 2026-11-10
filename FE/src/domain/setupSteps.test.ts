@@ -137,24 +137,24 @@ describe('하단 바·이탈 문구', () => {
   });
 
   it('보정 중(UX-64): 새 프리셋 / 적용 프리셋 문구와 [저장] 비활성. 변경·이탈보다 우선', () => {
-    const v = setupBarView({ activePresetName: '내 배치', dirty: true, leaving: true, calibrating: { target: 'new', index: 0, total: 7 } });
+    const v = setupBarView({ activePresetName: '내 배치', system: false, dirty: true, leaving: true, calibrating: { target: 'new', index: 0, total: 7 } });
     expect(v).toEqual({ text: '새 프리셋 보정 중 · 7개 중 1번째', tone: 'caption', button: 'save', buttonEnabled: false });
-    expect(setupBarView({ activePresetName: '내 배치', dirty: false, leaving: false, calibrating: { target: 'active', index: 2, total: 7 } }).text).toBe(
+    expect(setupBarView({ activePresetName: '내 배치', system: false, dirty: false, leaving: false, calibrating: { target: 'active', index: 2, total: 7 } }).text).toBe(
       '「내 배치」 보정 중 · 7개 중 3번째',
     );
     // 보정 중이 아니면 기존 4상태 그대로
-    expect(setupBarView({ activePresetName: '내 배치', dirty: false, leaving: false, calibrating: null })).toMatchObject({
+    expect(setupBarView({ activePresetName: '내 배치', system: false, dirty: false, leaving: false, calibrating: null })).toMatchObject({
       text: '「내 배치」 사용 중',
       buttonEnabled: false,
     });
   });
 
   it('초안을 들고 슬롯·이름 창이 열린 동안(UX-64 Figma ④·⑤): 저장 안내에 [저장] 비활성', () => {
-    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: null } })).toMatchObject({
+    expect(setupBarView({ activePresetName: '시스템 기본', system: false, dirty: false, leaving: false, draft: { slot: null } })).toMatchObject({
       text: '보정 완료 · 빈 슬롯을 눌러 저장해요',
       buttonEnabled: false,
     });
-    expect(setupBarView({ activePresetName: '시스템 기본', dirty: false, leaving: false, draft: { slot: 3 } }).text).toBe('보정 완료 · 슬롯 3에 저장할 이름을 정해요');
+    expect(setupBarView({ activePresetName: '시스템 기본', system: false, dirty: false, leaving: false, draft: { slot: 3 } }).text).toBe('보정 완료 · 슬롯 3에 저장할 이름을 정해요');
   });
 });
 

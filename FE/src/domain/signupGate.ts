@@ -1,5 +1,5 @@
 // 가입 동의가 필요한지의 순수 판단과 라우트 결정 (설계 COACH-003-signup-consent D24·D25·D28).
-// 콜백·RequireAuth·SignupPage·403 처리가 모두 이 파일의 판단을 쓴다. React·브라우저·fetch·store에 의존하지 않는다.
+// 콜백·RequireAuth·SignupConsentDialog·403 처리가 모두 이 파일의 판단을 쓴다. React·브라우저·fetch·store에 의존하지 않는다.
 import type { UserMe } from './auth';
 import { isConsentCurrent } from './dataConsent';
 import { SIGNUP_TERMS, termVersion, type SignupTerm } from './signupTerms';

@@ -97,9 +97,15 @@ describe('DrumKit 터치 연주(onPadDown)', () => {
     expect(html).not.toContain('touchable');
   });
 
+  it('없으면 svg가 포인터 클릭 타격 영역이다(QA 352)', () => {
+    expect(renderToStaticMarkup(<DrumKit />)).toMatch(/<svg class="drum-kit"[^>]*data-pointer-strike=""/);
+  });
+
   it('있으면 svg에 data-no-pointer-strike와 touchable 클래스가 붙는다', () => {
     const html = renderToStaticMarkup(<DrumKit onPadDown={() => {}} />);
     expect(html).toContain('data-no-pointer-strike');
     expect(html).toContain('class="drum-kit touchable"');
+    // 터치가 패드를 맡으므로 포인터 클릭 타격 영역이 아니다
+    expect(html).not.toContain('data-pointer-strike');
   });
 });

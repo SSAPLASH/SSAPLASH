@@ -21,7 +21,8 @@ interface Props {
 
 export function PlayStage({ variant, hud, area, guide, kit, readout, overlay }: Props) {
   return (
-    <div className={`play-stage ${variant}`}>
+    // 연주 중에는 화면 어디를 클릭해도 포인터 모의 스틱 타격이다(자세가 화면 전체 기준이라서. QA 352)
+    <div className={`play-stage ${variant}`} data-pointer-strike="">
       <div className="play-stage-hud">{hud}</div>
       <hr className="play-stage-divider" />
       <div className="play-stage-area">{area}</div>

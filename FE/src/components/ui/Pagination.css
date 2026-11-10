@@ -1,0 +1,33 @@
+/* 쪽 번호 (ui/Pagination). 치수는 기존 곡 목록 쪽 번호(.play-st-pg)를 그대로 옮겼다. */
+.ui-pg {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.ui-pg-btn {
+  min-height: 0;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 var(--space-s);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+.ui-pg-btn:hover:not(:disabled) {
+  color: var(--text-1);
+}
+.ui-pg-btn.current {
+  border-color: var(--brand);
+  color: var(--text-1);
+}
+.ui-pg-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

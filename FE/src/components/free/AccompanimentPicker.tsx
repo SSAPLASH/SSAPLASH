@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/freeAccompaniment';
-import type { SongSummary } from '@/domain/songCatalog';
+import { artistLabel, type SongSummary } from '@/domain/songCatalog';
 import { useAccompanimentSongs, type AccompanimentSongsDeps, type SectionKey, type SongSection } from './useAccompanimentSongs';
 import './free.css';
 
@@ -29,7 +29,7 @@ function Row({ song, current, onChoose }: { song: SongSummary; current: boolean;
         {song.coverUrl ? <img className="free-picker-cover" src={song.coverUrl} alt="" /> : <span className="free-picker-cover is-empty" aria-hidden="true" />}
         <span className="free-picker-names">
           <span className="free-picker-title">{song.title}</span>
-          {song.artist && <span className="free-picker-artist">{song.artist}</span>}
+          <span className="free-picker-artist">{artistLabel(song.artist)}</span>
         </span>
         {generating && <span className="free-picker-state">반주 만드는 중</span>}
         {current && <span className="free-picker-state is-current">재생 중</span>}

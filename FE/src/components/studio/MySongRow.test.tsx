@@ -61,8 +61,12 @@ describe('MySongRow', () => {
     expect(html).toContain('studio-badge-danger');
   });
 
-  it('실패 행에 아티스트가 없으면 사유만', () => {
-    expect(row(song({ status: 'FAILED', artist: '' }))).toContain('<span class="studio-row-sub">채보를 만들지 못했어요</span>');
+  it('실패 행에 아티스트가 없으면 「알 수 없음」과 사유', () => {
+    expect(row(song({ status: 'FAILED', artist: '' }))).toContain('<span class="studio-row-sub">알 수 없음 · 채보를 만들지 못했어요</span>');
+  });
+
+  it('아티스트가 없으면 「알 수 없음」', () => {
+    expect(row(song({ artist: '' }))).toContain('<span class="studio-row-sub">알 수 없음</span>');
   });
 
   it('처리 중 행: 「처리 중」 글자만, 동작 버튼과 ⋯ 메뉴 없음', () => {

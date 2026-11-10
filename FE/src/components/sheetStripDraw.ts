@@ -1,6 +1,6 @@
 // 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Judgement } from '@/domain/judgement';
-import { gridTimeOf, type BarLayout, type GridChart } from '@/domain/sheet';
+import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/sheet';
 import { xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
 const LINE_GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
@@ -69,7 +69,7 @@ export interface DrawSheetOpts {
   songTime: number;
   /** 스냅 전 곡 시각(반주 기준). 박 번호·카운트인 숫자에 쓴다(없으면 songTime) */
   rawSongTime?: number;
-  /** 격자 원점(ms, 반주 기준). 마디 bar의 왼쪽은 originMs + bar·barMs */
+  /** 격자 원점(ms, 반주 기준). 그리기는 chart(offsetMs·tempoSegments)의 격자 시각으로 하고 이 값은 쓰지 않는다 */
   originMs: number;
   width: number;
   height: number;
@@ -90,10 +90,13 @@ export interface DrawSheetOpts {
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
 export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): void {
-  const { chart, noteStates, strayHits, songTime: t, originMs, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
+  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
   const raw = opts.rawSongTime ?? t;
   const { first, last } = bars;
-  const X = (ms: number) => xOfTime(ms, t, width, barPx, baseRatio, barMs);
+  // x는 격자 시각(gridTimeAt)으로 계산한다. 빠르기 구간이 있는 곡도 마디 폭이 같다. 구간이 없으면 곡 시각 − 원점과 같다
+  const G = (ms: number) => gridTimeAt(chart, ms);
+  const gT = G(t);
+  const X = (gridMs: number) => xOfTime(gridMs, gT, width, barPx, baseRatio, barMs);
   const baseX = width * baseRatio;
   const top = STAFF_TOP_Y;
   const bottom = STAFF_BOTTOM_Y;
@@ -110,7 +113,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   }
 
   // 박자표: 첫 마디(격자 원점) 앞
-  const x0 = X(originMs);
+  const x0 = X(0);
   if (x0 > -60 && x0 < width + 60) {
     ctx.fillStyle = colors.ink;
     ctx.font = '700 22px Pretendard Variable, Pretendard, sans-serif';
@@ -121,7 +124,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   }
 
   for (let bar = first; bar <= last; bar++) {
-    const left = X(originMs + bar * barMs);
+    const left = X(bar * barMs);
     // 마디선·번호
     ctx.strokeStyle = colors.inkDim;
     ctx.lineWidth = 1.5;
@@ -233,7 +236,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   // 채보 밖 타격: 보표 아래 작은 점(같은 시각 노트 머리와 같은 x, 마디 앞 여백 포함)
   ctx.fillStyle = colors.judge.MISS;
   for (const h of strayHits) {
-    const x = xOfTimeInBar(h.timeMs, t, width, barPx, baseRatio, barMs, originMs);
+    const x = xOfTimeInBar(G(h.timeMs), gT, width, barPx, baseRatio, barMs, 0);
     if (x < -4 || x > width + 4) continue;
     ctx.beginPath();
     ctx.arc(x, bottom + 26, 3, 0, Math.PI * 2);
@@ -243,7 +246,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   // 친 위치 눈금: 보표 바로 아래 판정 색 짧은 세로선(같은 시각 노트 머리와 같은 x). 눈금 색이 판정을 말한다
   if (opts.hitMarks) {
     for (const m of opts.hitMarks) {
-      const x = xOfTimeInBar(m.timeMs, t, width, barPx, baseRatio, barMs, originMs);
+      const x = xOfTimeInBar(G(m.timeMs), gT, width, barPx, baseRatio, barMs, 0);
       if (x < -4 || x > width + 4) continue;
       ctx.fillStyle = colors.judge[m.judgement];
       ctx.fillRect(x - 1, bottom + 8, 2, 12);
@@ -253,7 +256,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   if (!showBase) return;
 
   drawCursor(ctx, baseX, top - 30, bottom + 40, colors);
-  drawBeatLabel(ctx, baseX + 12, bottom + 46, gridTimeOf(raw, originMs), beatMs, chart.beatsPerBar, colors, countInMs);
+  drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors, countInMs);
 }
 
 /** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */

@@ -52,6 +52,34 @@ function recoveredSub(from: CoachMessage['recoveredFrom']): string {
   }
 }
 
+/**
+ * 놓침 원인별 보조 문구. 원인이 없거나 UNKNOWN, 필요한 패드가 없으면 null(원래 보조 문구를 쓴다).
+ * 제목(무엇을 하라)은 그대로 두고 보조(왜·어떻게)만 원인으로 바꾼다.
+ * 어휘는 QA 전 가정이다(설계 U6). QA 결과로 이 함수만 고친다.
+ */
+function causeSub(cause: CoachMessage['cause']): string | null {
+  if (!cause) return null;
+  switch (cause.cause) {
+    case 'WRONG_PAD':
+      // 예: "탐2 말고 탐1". 가장 긴 패드 이름 조합도 16자 안이다
+      return cause.pad && cause.intoPad ? `${coachPadName(cause.intoPad)} 말고 ${coachPadName(cause.pad)}` : null;
+    case 'TRANSITION':
+      return cause.fromPad ? `${coachPadName(cause.fromPad)}에서 미리 옮겨요` : null;
+    case 'DENSE':
+      return '빠른 곳은 힘 빼고 쳐요';
+    case 'DRIFT_LATE':
+      return '늦어지기 전에 당겨요';
+    default:
+      return null;
+  }
+}
+
+/** 놓침 지적의 보조 문구를 원인 문구로 바꾼다. 원인 문구가 없으면 그대로 */
+function withCause(copy: CoachCopy | null, message: CoachMessage): CoachCopy | null {
+  const sub = causeSub(message.cause);
+  return copy && sub ? { ...copy, sub } : copy;
+}
+
 /** 변환할 수 없으면(모르는 태그·필요한 대상 없음) null. 호출 쪽이 표시를 건너뛴다 */
 export function coachCopy(message: CoachMessage, context: CoachCopyContext = {}): CoachCopy | null {
   const { tag, target, repeat } = message;
@@ -67,10 +95,10 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
       return { title: '패드 자리를 확인해요', sub: '끝나고 패드를 다시 잡아요', mode: 'coach-info', target: null };
     case 'LIVE_PAD_MISS':
       return pad && padLabel
-        ? { title: turn([`${padLabel} 보세요`, `${padLabel} 챙겨요`]), sub: padMissHint(pad, context.keyboard === true), mode: 'coach-warn', target }
+        ? withCause({ title: turn([`${padLabel} 보세요`, `${padLabel} 챙겨요`]), sub: padMissHint(pad, context.keyboard === true), mode: 'coach-warn', target }, message)
         : null;
     case 'LIVE_MISS_STREAK':
-      return { title: turn(['다음 마디부터', '숨 고르고 다시']), sub: '놓친 건 잊고 다음 노트', mode: 'coach-warn', target: null };
+      return withCause({ title: turn(['다음 마디부터', '숨 고르고 다시']), sub: '놓친 건 잊고 다음 노트', mode: 'coach-warn', target: null }, message);
     case 'LIVE_LATE':
       return { title: turn(['조금 일찍!', '미리 준비해요', '한발 앞서요']), sub: '스틱을 미리 올려 둬요', mode: 'coach-info', target: null };
     case 'LIVE_EARLY':
