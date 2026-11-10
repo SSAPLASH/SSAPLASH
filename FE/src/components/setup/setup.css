@@ -402,7 +402,7 @@
   flex-direction: column;
   gap: var(--space-s);
   box-sizing: border-box;
-  width: 190px;
+  width: 120px;
   max-width: calc(100% - 2 * var(--setup-panel-pad, 16px));
   padding: var(--space-s) var(--space-m);
   border: 1px solid var(--line);
@@ -1194,7 +1194,7 @@
 }
 .setup-page .setup-kitinfo {
   gap: 8px;
-  width: 190px;
+  width: 120px;
   padding: 14px;
 }
 /* 세로 카드엔 값 목록에 반지름이 이미 있어 슬라이더 머리 줄(이름·값)은 눈에서만 감춘다(label은 접근성용으로 남김) */
