@@ -17,7 +17,7 @@ const baseProps: ReadyPanelProps = {
   missing: [],
   connected: [true, true],
   presetName: '기본 프리셋',
-  countInBars: 1,
+  countInBars: 2,
   onBack: noop,
   onSelectChart: noop,
   onSetup: noop,
@@ -28,12 +28,13 @@ const render = (over: Partial<ReadyPanelProps> = {}) => renderToStaticMarkup(<Re
 const need = (missing: ReadinessMissing[], over: Partial<ReadyPanelProps> = {}) => render({ ready: false, missing, ...over });
 
 describe('ReadyPanel 준비 상태', () => {
-  it('준비 완료: 상태 문구·시작 버튼 활성·카운트인 안내', () => {
+  it('준비 완료: 상태 문구·시작 버튼 활성·시작 전 마디 안내', () => {
     const html = render();
     expect(html).toContain('준비 완료');
     expect(html).not.toContain('준비가 필요해요');
     expect(html).not.toMatch(/<button[^>]*disabled[^>]*>시작/);
-    expect(html).toContain('시작하면 1마디 카운트인 뒤 노트가 내려와요.');
+    expect(html).toContain('시작하면 2마디가 흐른 뒤 노트가 시작돼요.');
+    expect(render({ countInBars: 0 })).toContain('시작하면 바로 노트가 시작돼요.');
     expect(html).not.toContain('드럼 세팅에서 준비하기');
   });
 
