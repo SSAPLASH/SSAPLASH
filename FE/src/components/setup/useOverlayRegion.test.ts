@@ -1,6 +1,6 @@
 // 판 안 배치 계산 검증(PLAY-004 D10·D11): 판 안쪽 폭·그림·카드 px → 그림 정규 영역 / 겹침 없음(null) / 측정 불가(undefined), 배너 쌓기 offset.
 import { describe, expect, it } from 'vitest';
-import { bannerBottomOffset, PANEL_PAD, regionFromSizes, STACK_GAP } from './useOverlayRegion';
+import { bannerPlacement, PANEL_PAD, regionFromSizes, STACK_GAP } from './useOverlayRegion';
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
 
 describe('regionFromSizes', () => {
@@ -35,20 +35,19 @@ describe('regionFromSizes', () => {
   });
 });
 
-describe('bannerBottomOffset', () => {
-  const banner = { left: 300, right: 700 };
-  it('카드가 없으면 기본 여백(24px)', () => {
-    expect(bannerBottomOffset(banner, null)).toBe(PANEL_PAD);
+describe('bannerPlacement', () => {
+  // 판 폭 1000, 배너 폭 500 → 가운데 자리 left 250 ~ 750
+  it('카드가 없거나 가운데 자리와 안 겹치면 가운데·기본 여백', () => {
+    expect(bannerPlacement(1000, 500, null)).toEqual({ left: 250, bottom: PANEL_PAD });
+    expect(bannerPlacement(1000, 500, { left: 750, right: 976, h: 150 })).toEqual({ left: 250, bottom: PANEL_PAD }); // 맞닿기만 하면 겹침 아님
   });
-  it('가로로 안 겹치면 기본 여백', () => {
-    expect(bannerBottomOffset(banner, { left: 704, right: 924, h: 150 })).toBe(PANEL_PAD);
-    expect(bannerBottomOffset(banner, { left: 700, right: 920, h: 150 })).toBe(PANEL_PAD); // 맞닿기만 하면 겹침 아님
+  it('오른쪽 카드와 겹치면 왼쪽으로 비켜 같은 줄에 둔다', () => {
+    expect(bannerPlacement(1000, 500, { left: 700, right: 976, h: 150 })).toEqual({ left: 700 - STACK_GAP - 500, bottom: PANEL_PAD });
   });
-  it('가로로 겹치면 카드 위로 쌓는다(카드 높이 + 12px)', () => {
-    expect(bannerBottomOffset(banner, { left: 600, right: 820, h: 150 })).toBe(PANEL_PAD + 150 + STACK_GAP);
+  it('왼쪽 카드와 겹치면 오른쪽으로 비킨다', () => {
+    expect(bannerPlacement(1000, 500, { left: 24, right: 300, h: 150 })).toEqual({ left: 300 + STACK_GAP, bottom: PANEL_PAD });
   });
-  it('왼쪽 모서리 카드와도 같은 규칙', () => {
-    expect(bannerBottomOffset(banner, { left: 24, right: 244, h: 100 })).toBe(PANEL_PAD);
-    expect(bannerBottomOffset(banner, { left: 200, right: 420, h: 100 })).toBe(PANEL_PAD + 100 + STACK_GAP);
+  it('비킬 자리가 없으면 가운데에서 카드 위로 쌓는다', () => {
+    expect(bannerPlacement(800, 500, { left: 500, right: 776, h: 150 })).toEqual({ left: 150, bottom: PANEL_PAD + 150 + STACK_GAP });
   });
 });
