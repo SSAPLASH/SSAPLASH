@@ -1,0 +1,48 @@
+# 서비스 adtof_drumsep에 실제 곡(Songsterr 인기곡 83곡)으로 학습한 가중치 두 개를 더한 조합 (2026-11-08)
+# 1) 원래 ADTOF와 실제 곡 5종 학습 가중치(five_all)의 프레임별 점수를 킥·스네어·하이햇·심벌 열만 평균. 탐 열은 원래 것만
+#    (학습 가중치가 처음 보는 드럼 세트의 킥을 탐으로 내는 것을 막으려고)
+# 2) 패드 붙이기 규칙은 서비스와 같음
+# 3) 크래시·라이드 타격 시각은 두고 이름만 실제 곡 8패드 학습 가중치(pads_all_noguard) 판정으로 바꿈
+# 8패드 F1 지금 서비스 대비: 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST 드럼 단독 +0.008,
+# ENST 원곡 분리 +0.013, MDB +0.022. 분석: AI/docs/bench/public-songs-2026-11/expand.md 9절
+# SSAPLASH_MODELS_DIR/songsterr_ft/ 아래 five_all/last.pth, pads_all_noguard/last.pth가 있어야 함
+name: adtof_drumsep_songsterr_avg
+adapter: adtof_drumsep
+velocity: false
+input_sample_rate: 44100
+average_checkpoints:
+  - path: data/models/songsterr_ft/five_all/last.pth
+    columns: kshc
+cymbal_checkpoint_path: data/models/songsterr_ft/pads_all_noguard/last.pth
+cymbal_mode: name
+# 드럼 킷 분리는 서비스 original(adtof_drumsep_ds_ov2.yaml)과 같은 조각 겹침 2 (S15P31A307-320)
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep_ov2.yaml
+rules:
+  window_ms: 120
+  cymbal_window_ms: 80
+  tom_fmin: 50
+  tom_fmax: 400
+  tom_bands: [113, 142]
+  tom_gate_ratio: 0.10
+  tom_peak_mode: raw
+  tom_mode: relative
+  tom_relative_method: peaks
+  tom_relative_naming: hybrid
+  tom_relative_min_gap: 3.0
+  cymbal_crash_weight: 0.7
+  stems:
+    toms: toms
+    crash: crash
+    ride: ride
+license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
+license_weights: CC BY-NC-SA 4.0 (원래 ADTOF 가중치, 그리고 이를 Songsterr 인기곡 탭·원곡으로 이어 학습한 가중치 2개) + 미명시 (MDX23C DrumSep 가중치, aufr33·jarredou 공개)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  SMALL_TOM: SMALL_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE
