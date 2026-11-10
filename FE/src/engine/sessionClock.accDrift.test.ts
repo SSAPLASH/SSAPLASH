@@ -81,8 +81,8 @@ describe('PlayClock accDrift', () => {
     listen();
     const t = setup(1.0001);
     t.clock.begin();
-    // 반주 0초 = 3300. 25ms 타이머로 3분 진행
-    for (let n = 1025; n <= 3300 + 180_000; n += 25) t.tick(n);
+    // 반주 0초 = 8300. 25ms 타이머로 3분 진행
+    for (let n = 1025; n <= 8300 + 180_000; n += 25) t.tick(n);
     const d = drifts();
     expect(d.length).toBeGreaterThan(300);
     const last = d[d.length - 1];
@@ -98,9 +98,9 @@ describe('PlayClock accDrift', () => {
     listen();
     const t = setup(1);
     t.clock.begin();
-    for (let n = 1025; n < 3300; n += 25) t.tick(n);
+    for (let n = 1025; n < 8300; n += 25) t.tick(n);
     expect(drifts()).toHaveLength(0);
-    for (let n = 3300; n <= 3300 + 5000; n += 25) t.tick(n);
+    for (let n = 8300; n <= 8300 + 5000; n += 25) t.tick(n);
     expect(drifts().length).toBe(Math.floor(5000 / ACC_DRIFT_INTERVAL_MS) + 1);
     for (const x of drifts()) expect(Math.abs(x.drift)).toBeLessThan(1e-9);
   });
@@ -108,12 +108,12 @@ describe('PlayClock accDrift', () => {
   it('구독자가 없거나 audioPositionAt이 없는 반주면 발행하지 않는다', () => {
     const t = setup(1);
     t.clock.begin();
-    for (let n = 1025; n < 5000; n += 25) t.tick(n);
+    for (let n = 1025; n < 11000; n += 25) t.tick(n);
     expect(events).toHaveLength(0);
     listen();
     const u = setup(null);
     u.clock.begin();
-    for (let n = 1025; n < 5000; n += 25) u.tick(n);
+    for (let n = 1025; n < 11000; n += 25) u.tick(n);
     expect(events).toHaveLength(0);
   });
 });

@@ -30,3 +30,22 @@ describe('Countdown', () => {
     expect(html).toContain('aria-live="assertive"');
   });
 });
+
+describe('Countdown backdrop', () => {
+  it('기본은 dim', () => {
+    const html = renderToStaticMarkup(<Countdown value={3} />);
+    expect(html).toContain('play-countdown-dim');
+    expect(html).toContain('data-backdrop="dim"');
+  });
+
+  it.each(['dim', 'clear'] as const)('%s 배경 클래스', (b) => {
+    const html = renderToStaticMarkup(<Countdown value={2} backdrop={b} />);
+    expect(html).toContain(`play-countdown-${b}`);
+    expect(html).toContain('motion-overlay');
+  });
+
+  it('clear에서도 시작!·숫자 문구는 같다', () => {
+    expect(text(renderToStaticMarkup(<Countdown value="go" backdrop="clear" />))).toBe('시작!');
+    expect(text(renderToStaticMarkup(<Countdown value={4} backdrop="clear" />))).toBe('4');
+  });
+});

@@ -19,6 +19,7 @@ import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundSta
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { countdownValue } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
@@ -107,6 +108,7 @@ function PlayPageBody() {
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
+  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   // 반주 디코드 단계 표시·오류
@@ -197,8 +199,8 @@ function PlayPageBody() {
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
-  // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
-  const wasCountin = useRef(false);
+  // 카운트 숫자를 한 번이라도 보였는지(격자 0이 되는 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
+  const wasCounting = useRef(false);
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
@@ -207,7 +209,7 @@ function PlayPageBody() {
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
-    wasCountin.current = false;
+    wasCounting.current = false;
     if (goTimer.current !== null) {
       window.clearTimeout(goTimer.current);
       goTimer.current = null;
@@ -565,7 +567,7 @@ function PlayPageBody() {
         hits: recorder.current.hits,
         missSeqs: recorder.current.missSeqs,
         audioOffsetMs: ss.audioOffsetMs,
-        countInMs: ss.countInMs,
+        countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
@@ -611,25 +613,34 @@ function PlayPageBody() {
         finish(ss);
         return;
       }
-      // 카운트다운: 카운트인 동안 남은 박 수, 끝난 직후 잠깐 「시작!」(일시정지 중에는 값을 건드리지 않는다)
+      // 카운트다운(설계 MODE-001-lead-in-bars D16·D17): 격자 시각(곡 시각 − 1마디 1박 원점) 기준으로 준비 마디 시작까지 5·4·3·2·1,
+      // 그 뒤 1마디 준비 구간은 오버레이 없이(불 켜짐) 두고 격자 0에서 「시작!」. 일시정지·재연결 복귀 카운트다운 중에는 값을 건드리지 않는다
       const status = ss.currentStatus;
-      if (status === 'countin') {
-        wasCountin.current = true;
-        setCountValue(Math.max(1, Math.ceil(-ss.songTime(now) / ss.beatMs)));
-      } else if (status === 'playing' && wasCountin.current) {
-        wasCountin.current = false;
-        setCountValue('go');
-        goTimer.current = window.setTimeout(() => {
-          goTimer.current = null;
+      if ((status === 'countin' || status === 'playing') && !isResuming()) {
+        const g = ss.songTime(now) - ss.originMs;
+        const c = countdownValue(g, ss.countInMs);
+        if (c !== null) {
+          wasCounting.current = true;
+          setCountValue(c);
+        } else if (g >= 0) {
+          if (wasCounting.current) {
+            wasCounting.current = false;
+            setCountValue('go');
+            goTimer.current = window.setTimeout(() => {
+              goTimer.current = null;
+              setCountValue(null);
+            }, GO_MS);
+          }
+        } else {
           setCountValue(null);
-        }, GO_MS);
+        }
       }
       if (now - lastHud.current > 250) {
         lastHud.current = now;
         setHud(ss.snapshot(now));
       }
     },
-    [finish],
+    [finish, isResuming],
   );
 
   // Enter / Esc
@@ -817,7 +828,8 @@ function PlayPageBody() {
       />
     );
   } else if (countValue !== null) {
-    overlay = <Countdown value={countValue} />;
+    // 재연결 복귀 카운트다운은 기존 딤(dim), 곡 시작 카운트다운 숫자는 옅은 딤(soft), 「시작!」에서 딤이 걷힌다(clear, 같은 요소 유지)
+    overlay = <Countdown value={countValue} backdrop={isResuming() || countValue !== 'go' ? 'dim' : 'clear'} />;
   }
 
   return (

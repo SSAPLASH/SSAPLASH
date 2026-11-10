@@ -83,14 +83,13 @@ export interface DrawSheetOpts {
   beatMs: number;
   /** false면 기준선·박 번호·카운트인 숫자를 그리지 않는다 */
   showBase: boolean;
-  countInMs?: number;
   openWarnings?: ReadonlyMap<number, number>;
   nowMs?: number;
 }
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
 export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): void {
-  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
+  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase } = opts;
   const raw = opts.rawSongTime ?? t;
   const { first, last } = bars;
   // x는 격자 시각(gridTimeAt)으로 계산한다. 빠르기 구간이 있는 곡도 마디 폭이 같다. 구간이 없으면 곡 시각 − 원점과 같다
@@ -256,7 +255,29 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   if (!showBase) return;
 
   drawCursor(ctx, baseX, top - 30, bottom + 40, colors);
-  drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors, countInMs);
+  drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors);
+}
+
+/**
+ * 빈 준비 마디 한 칸: 보표 5선과 슬롯 왼쪽 마디선만 그린다(노트·박자표·번호 없음). 호출자가 슬롯 clip을 걸어 둔다.
+ * 선은 0..width로 긋고 clip이 자른다. slotX는 슬롯 왼쪽 x
+ */
+export function drawEmptyBar(ctx: CanvasRenderingContext2D, slotX: number, width: number, colors: Colors): void {
+  ctx.strokeStyle = colors.inkFaint;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = Math.round(yOfPos(i * 2)) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = colors.inkDim;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(slotX, STAFF_TOP_Y);
+  ctx.lineTo(slotX, STAFF_BOTTOM_Y);
+  ctx.stroke();
 }
 
 /** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */
@@ -274,7 +295,7 @@ export function drawCursor(ctx: CanvasRenderingContext2D, x: number, top: number
 }
 
 /**
- * 현재 박 번호(큰 숫자 + 작은 "박") / 리드인 남은 박 수.
+ * 현재 박 번호(큰 숫자 + 작은 "박") / 리드인 마지막 마디의 남은 박 수.
  * x는 숫자의 왼쪽 끝, y는 글자 기준선이다. gridTime은 격자 시각(곡 시각 − 원점)이며 0보다 작으면 1마디 1박 전(카운트인·인트로)이다.
  */
 export function drawBeatLabel(
@@ -285,17 +306,10 @@ export function drawBeatLabel(
   beatMs: number,
   beatsPerBar: number,
   colors: Colors,
-  countInMs?: number,
 ): void {
-  let label: string | null = null;
-  if (gridTime < 0) {
-    if (countInMs === undefined || gridTime >= -countInMs) {
-      label = String(Math.max(1, Math.ceil(-gridTime / beatMs - 1e-9)));
-    }
-  } else {
-    label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
-  }
-  if (label === null) return;
+  // 원점 앞(카운트다운 구간)은 큰 숫자와 겹치므로 라벨을 그리지 않는다 (설계 MODE-001-lead-in-bars D11)
+  if (gridTime < 0) return;
+  const label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
   ctx.fillStyle = colors.base;
   ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
   ctx.textAlign = 'left';
