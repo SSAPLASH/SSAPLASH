@@ -12,6 +12,7 @@ import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { SongPicker } from './SongPicker';
 import { getBestRecords } from '@/api/plays';
+import { queryClient } from '@/app/queryClient';
 import type { UserMe } from '@/domain/auth';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
@@ -41,6 +42,8 @@ function show(onSelect = vi.fn()) {
 }
 
 beforeEach(() => {
+  // 곡 목록 캐시는 앱 전역 인스턴스다. 테스트마다 비운다
+  queryClient.clear();
   vi.mocked(getBestRecords).mockReset().mockResolvedValue({ items: [] });
   vi.mocked(listSongs).mockReset().mockResolvedValue({ items: [song(1, '목록곡')], hasNext: false });
   vi.mocked(getSong).mockReset().mockRejectedValue(new Error('no'));
@@ -317,5 +320,33 @@ describe('SongPicker 빈 목록·선택 유지 (설계 CHART-001 곡 난이도 4
     show();
     await screen.findByText('곡이 없어요');
     expect(screen.getByText('목록에서 곡을 고르면 여기에 보여요.')).toBeTruthy();
+  });
+});
+
+describe('SongPicker 곡 목록 캐시 (설계 TECH-350)', () => {
+  it('탭을 바꿨다 돌아오면 곡 목록을 다시 요청하지 않고 바로 보인다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    expect(listSongs).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    await waitFor(() => expect(listSongs).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(listSongs).mock.calls[1][0]).toMatchObject({ source: 'MINE' });
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    expect(screen.getAllByText('목록곡').length).toBeGreaterThan(0);
+    expect(listSongs).toHaveBeenCalledTimes(2);
+  });
+  it('다시 마운트해도 30초 안이면 요청하지 않는다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    cleanup();
+    show();
+    expect(screen.getAllByText('목록곡').length).toBeGreaterThan(0);
+    expect(listSongs).toHaveBeenCalledTimes(1);
+  });
+  it('마지막으로 연 목록 탭을 songStore.scope에 남긴다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    await waitFor(() => expect(useSongs.getState().scope).toBe('MINE'));
   });
 });
