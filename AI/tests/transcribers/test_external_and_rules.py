@@ -290,6 +290,54 @@ def test_서비스_조합_어댑터는_탐_전용_ADTOF는_기본_가중치로_�
     assert AdtofDrumsepTranscriber(plain, device="cpu")._tom_adtof is None
 
 
+def _yaml_dict(cfg: TranscriberConfig) -> dict:
+    import yaml
+
+    return yaml.safe_load(cfg.source_path.read_text(encoding="utf-8"))
+
+
+def test_실제_곡_평균_조합은_탐_열을_빼고_평균하고_심벌은_이름만_가져온다():
+    cfg = TranscriberConfig.from_yaml(
+        CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep_songsterr_avg.yaml"
+    )
+    tr = AdtofDrumsepTranscriber(cfg, device="cpu")
+    assert cfg.cymbal_mode == "name"
+    assert [(a.config.checkpoint_path, cols) for a, cols in tr._avg_adtofs] == [
+        ("data/models/songsterr_ft/five_all/last.pth", "kshc")
+    ]
+    plain = TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep.yaml")
+    assert plain.cymbal_mode == "take" and plain.average_checkpoints == []
+    with pytest.raises(ValueError, match="cymbal_mode"):
+        bad = {**_yaml_dict(plain), "cymbal_mode": "x"}
+        AdtofDrumsepTranscriber(TranscriberConfig.from_dict(bad), device="cpu")
+    with pytest.raises(ValueError, match="columns"):
+        bad = {**_yaml_dict(plain), "average_checkpoints": [{"path": "default", "columns": "kz"}]}
+        AdtofDrumsepTranscriber(TranscriberConfig.from_dict(bad), device="cpu")
+
+
+def test_점수_평균은_적은_열만_평균하고_짧은_길이에_맞춘다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import average_activations
+
+    main = np.full((4, 5), 0.2, dtype=np.float32)
+    other = np.full((3, 5), 0.6, dtype=np.float32)
+    out = average_activations(main, [(other, "kshc")])
+    assert out.shape == (3, 5)
+    np.testing.assert_allclose(out[:, [0, 1, 3, 4]], 0.4)
+    np.testing.assert_allclose(out[:, 2], 0.2)  # 탐 열은 주 가중치 그대로
+
+
+def test_심벌_이름만_가져오기는_시각은_두고_50ms_안_이름만_바꾼다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import rename_pad_hits
+
+    hits = [(1.0, "CRASH", None), (2.0, "RIDE", None), (3.0, "KICK", None)]
+    other = [(1.03, "RIDE", None), (2.2, "CRASH", None), (3.0, "SNARE", None)]
+    assert rename_pad_hits(hits, other, ("CRASH", "RIDE")) == [
+        (1.0, "RIDE", None),
+        (2.0, "RIDE", None),
+        (3.0, "KICK", None),
+    ]
+
+
 def test_파인튜닝_가중치_상대_경로는_SSAPLASH_MODELS_DIR_기준으로_찾는다(
     monkeypatch, tmp_path: Path
 ):
