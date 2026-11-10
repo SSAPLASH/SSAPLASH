@@ -16,3 +16,7 @@ export { LIVE_ARM_TAG } from './LiveCoach';
 export { chooseCoachModel, refreshCoachModels, RULE_ARM } from './models/registry';
 export type { CoachModelChoice } from './models/registry';
 export type { CauseModel } from './models/remoteCause';
+export { LIVE_LLM_TAG } from './LiveCoach';
+export { LlmCoach } from './llmCoach';
+export type { LlmCoachClient, LlmRecord, LlmTip } from './llmCoach';
+export type { FinishedSegment, SegmentFacts } from './segment';

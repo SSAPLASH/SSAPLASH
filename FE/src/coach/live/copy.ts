@@ -157,6 +157,9 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
     case 'LIVE_UNSTEADY':
       // 소리 내어 반박까지 세면 간격이 고르게 된다
       return { title: turn(['입으로 세요', '소리 내어 세요']), sub: '하나 그리고 둘 그리고', mode: 'coach-info', target: null };
+    case 'LIVE_LLM':
+      // LLM 구간 문구는 워커 가드레일(제목 8자·보조 16자, 숫자·금지어·키보드 표현)을 통과한 그대로 쓴다
+      return message.llm?.title ? { title: message.llm.title, sub: message.llm.sub, mode: 'coach-info', target: null } : null;
     case 'LIVE_GOOD_RECOVERED':
       return { title: turn(['그거예요!', '바로 그 느낌!']), sub: recoveredSub(message.recoveredFrom), mode: 'coach-good', target: message.recoveredFrom?.target ?? null };
     case 'LIVE_GOOD_STEADY':
