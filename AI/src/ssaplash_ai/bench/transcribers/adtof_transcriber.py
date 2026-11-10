@@ -39,6 +39,17 @@ def resolve_checkpoint(path: str) -> Path:
     return Path(path)
 
 
+def model_input(audio: np.ndarray, sample_rate: int):
+    """(채널, 샘플) → ADTOF 모델 입력 특징 텐서 (CPU). 패키지가 파일만 받아 임시 wav를 거침."""
+    import adtof_pytorch as adtof
+
+    path = write_temp_wav(audio, sample_rate)
+    try:
+        return adtof.load_audio_for_model(str(path))
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def checkpoint_info(path: Path) -> dict:
     """체크포인트의 model_info. 기본 가중치 파일처럼 class_set이 없으면 5클래스로 봄(빈 dict에 가깝게)."""
     import torch
@@ -92,16 +103,14 @@ class AdtofTranscriber(BaseTranscriber):
 
     def activations(self, audio: np.ndarray, sample_rate: int) -> np.ndarray:
         """(채널, 샘플) → 활성값 (프레임, 5). 다른 어댑터(adtof_drumsep)도 씀."""
-        import adtof_pytorch as adtof
+        return self.activations_from_input(model_input(audio, sample_rate))
+
+    def activations_from_input(self, x) -> np.ndarray:
+        """model_input 결과(모델 입력 특징) → 활성값. 같은 곡에 가중치 여러 개를 돌릴 때 특징을 한 번만 만듦."""
         import torch
 
-        path = write_temp_wav(audio, sample_rate)
-        try:
-            x = adtof.load_audio_for_model(str(path)).to(self._run_device)
-            with torch.no_grad():
-                pred = self._model(x).cpu().numpy()
-        finally:
-            path.unlink(missing_ok=True)
+        with torch.no_grad():
+            pred = self._model(x.to(self._run_device)).cpu().numpy()
         return pred[0]
 
     def peaks(self, activations: np.ndarray) -> dict[object, list[float]]:

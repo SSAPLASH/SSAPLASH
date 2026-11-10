@@ -160,7 +160,7 @@ PyAV 라이선스: PyAV는 BSD-3이고, 휠에 든 FFmpeg는 LGPL 3 이상으로
 | 환경 변수 | 뜻 |
 | --- | --- |
 | `SSAPLASH_CHART_DEVICE` | `device` 값을 덮어쓴다 |
-| `SSAPLASH_CHART_MODEL` | 채보 설정의 `model` 값을 덮어쓴다. `original`·`combo` |
+| `SSAPLASH_CHART_MODEL` | 채보 설정의 `model` 값을 덮어쓴다. `songsterr_avg`·`original`·`combo` |
 | `SSAPLASH_MODELS_DIR` | 가중치 폴더. 기본 `data/models`. 벤치마크 어댑터도 같이 읽는다 |
 | `SSAPLASH_WORK_DIR` | `--out`이 없을 때 출력 폴더의 부모. `<WORK_DIR>/<원곡 파일 이름>/`에 쓴다 |
 
@@ -203,12 +203,12 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
 - 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
-채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=combo`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
+채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `songsterr_avg`·`original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=original`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
 
 | 키 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `model` | `original` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
-| `models` | `original`, `combo` | 이름 → 채보 모델 yaml. `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고) |
+| `model` | `songsterr_avg` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
+| `models` | `songsterr_avg`, `original`, `combo` | 이름 → 채보 모델 yaml. `songsterr_avg`는 원래 ADTOF와 실제 곡 학습 가중치 점수 평균(아래 "실제 곡 점수 평균 조합" 참고), `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고). `songsterr_avg`도 같은 겹침 2 드럼 킷 분리를 쓴다 |
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
@@ -347,7 +347,7 @@ uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is
 #   SSAPLASH_WORKER_TOKEN=<토큰>
 #   SSAPLASH_WORK_DIR=$HOME/ssaplash/work
 #   SSAPLASH_CHART_DEVICE=cuda
-#   SSAPLASH_CHART_MODEL=original   # 채보 모델. combo로 바꾸고 워커를 다시 띄우면 패드별 가중치 조합
+#   SSAPLASH_CHART_MODEL=songsterr_avg   # 채보 모델. 가중치를 못 올렸으면 original로 바꾸고 워커를 다시 띄움
 #   CUDA_VISIBLE_DEVICES=6
 #   OMP_NUM_THREADS=16              # CPU 스레드 수. 네 줄 모두 16
 #   MKL_NUM_THREADS=16
@@ -859,6 +859,12 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
 
 패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 채보 JSON을 만들 때 하이햇 페달은 하이햇으로 합친다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
+
+실제 곡 점수 평균 조합(`adtof_drumsep_songsterr_avg.yaml`, 모델 이름 `songsterr_avg`, 서비스 기본)은 ADTOF를 세 번 돌린다. 원래 가중치와 Songsterr 인기곡 83곡으로 이어 학습한 5종 가중치의 프레임별 점수를 킥·스네어·하이햇·심벌 열만 평균하고(`average_checkpoints`, 탐 열은 원래 것), 그 점수로 서비스와 같은 규칙을 돌린 뒤 크래시·라이드 이름만 같은 곡으로 학습한 8패드 가중치 판정으로 바꾼다(`cymbal_mode: name`). 원래 모델 대비 8패드 F1은 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST +0.008·+0.013, MDB +0.022, PDO 무료 5곡 +0.006이다. 같은 곡의 ADTOF 입력 특징은 한 번만 만들어 세 가중치가 같이 쓰므로, 시험 31곡 채보 단계 시간은 원래 모델과 차이가 측정 흔들림보다 작았다. 2026-11-10부터 서비스 기본이다. `SSAPLASH_MODELS_DIR/songsterr_ft/` 아래 `five_all/last.pth`, `pads_all_noguard/last.pth`가 있어야 하고, 없으면 워커가 모델을 올리다 실패하므로 `SSAPLASH_CHART_MODEL=original`로 띄운다. 모델 yaml로 데이터셋을 서비스 어댑터 그대로 채보해 비교할 때는 `scripts/model_yaml_eval.py`를 쓰고, `--separator`를 주면 원곡을 분리한 드럼부터 돌린다.
+
+```bash
+uv run python scripts/model_yaml_eval.py --dataset configs/bench/datasets/mdb_drums.yaml --model configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml --model configs/bench/transcribers/adtof_drumsep/adtof_drumsep_songsterr_avg.yaml --out data/results/model_yaml/mdb.csv
+```
 
 서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
 
