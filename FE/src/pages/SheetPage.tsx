@@ -896,6 +896,7 @@ function SheetPageBody() {
         }
         area={
           <SheetPager
+            countInMs={activeSession.countInMs}
             openWarnings={openWarnings}
             chart={chart}
             noteStates={noteStates}
