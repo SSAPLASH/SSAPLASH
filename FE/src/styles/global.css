@@ -1268,6 +1268,9 @@ a.btn-ghost.as-button {
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
+  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
+  width: max-content;
+  max-width: 100%;
   pointer-events: none;
 }
 

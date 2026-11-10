@@ -1,6 +1,7 @@
 // 타이밍 오차 막대(설계 3-5) — 판정 창(±goodMs) 폭의 가로 막대. 왼쪽 빠름·오른쪽 늦음, 가운데 0.
 // 눈금은 이벤트 소스(판정된 타격)에서 직접 받아 쌓고(React state 없음), 눈금이 살아 있는 동안만 rAF를 돈다.
-// 판정 범위 밖 타격(missSource)은 막대 양 끝 바깥에 MISS 색 점으로 보인다(설계 MODE-003-timing-bar-miss-dot).
+// 판정 범위 밖 타격(missSource)은 막대 양옆 MISS 구간(옅은 MISS 색)에 눈금으로 보인다(설계 MODE-001-lead-in-bars D18·D19).
+// 표시는 기본 크기의 TIMING_BAR_SCALE배(CSS 크기)이고 비트맵도 그만큼 키워 선명하게 그린다.
 import { useEffect, useRef } from 'react';
 import type { FxSource } from '@/domain/hitFx/types';
 import { addMissMark, addTimingMark, EMPTY_TIMING_BAR, hasLiveTicks, timingBarView, type MissSource, type TimingBarState } from '@/domain/hitFx/timingBar';
@@ -11,9 +12,11 @@ import './TimingBar.css';
 /** 막대 폭(판정 창 ±goodMs) */
 export const TIMING_BAR_W = 240;
 export const TIMING_BAR_H = 14;
-/** 막대 좌우 바깥 범위 밖 점 자리 */
-export const TIMING_BAR_MISS_GUTTER = 12;
-/** 캔버스 폭 = 막대 + 양쪽 점 자리 */
+/** 막대 좌우 바깥 MISS 구간 폭 */
+export const TIMING_BAR_MISS_GUTTER = 36;
+/** 표시 배율(CSS 크기 = 기본 크기 × 배율. TimingBar.css와 맞춘다) */
+export const TIMING_BAR_SCALE = 2;
+/** 캔버스 기본 폭 = 막대 + 양쪽 MISS 구간 */
 export const TIMING_BAR_CANVAS_W = TIMING_BAR_W + TIMING_BAR_MISS_GUTTER * 2;
 
 export interface TimingBarProps {
@@ -49,8 +52,9 @@ export function TimingBar({ source, perfectMs, goodMs, resetToken, missSource }:
       }
     })();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(TIMING_BAR_CANVAS_W * dpr);
-    canvas.height = Math.round(TIMING_BAR_H * dpr);
+    const k = dpr * TIMING_BAR_SCALE;
+    canvas.width = Math.round(TIMING_BAR_CANVAS_W * k);
+    canvas.height = Math.round(TIMING_BAR_H * k);
     let state: TimingBarState = EMPTY_TIMING_BAR;
     let raf = 0;
 
@@ -59,21 +63,19 @@ export function TimingBar({ source, perfectMs, goodMs, resetToken, missSource }:
       const now = performance.now();
       const { perfectMs: pm, goodMs: gm } = win.current;
       const view = timingBarView(state, now, gm);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const G = TIMING_BAR_MISS_GUTTER;
+      ctx.setTransform(k, 0, 0, k, 0, 0);
       ctx.clearRect(0, 0, TIMING_BAR_CANVAS_W, TIMING_BAR_H);
       const half = TIMING_BAR_W / 2;
       const barTop = 2;
       const barH = 8;
-      // 범위 밖 점: 막대 끝에서 바깥으로 6px, 지름 6
-      for (const m of view.misses) {
-        ctx.globalAlpha = m.alpha;
-        ctx.fillStyle = colors.miss;
-        ctx.beginPath();
-        ctx.arc(m.side < 0 ? TIMING_BAR_MISS_GUTTER - 6 : TIMING_BAR_MISS_GUTTER + TIMING_BAR_W + 6, barTop + barH / 2, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // 좌우 MISS 구간 배경(MISS 색 옅게)
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = colors.miss;
+      ctx.fillRect(0, barTop, G, barH);
+      ctx.fillRect(G + TIMING_BAR_W, barTop, G, barH);
       // 이 아래는 막대 좌표(막대 왼쪽 끝 = 0)
-      ctx.setTransform(dpr, 0, 0, dpr, TIMING_BAR_MISS_GUTTER * dpr, 0);
+      ctx.setTransform(k, 0, 0, k, G * k, 0);
       // 바깥 창(GOOD 색 옅게) → 안쪽(PERFECT 색 옅게) → 가운데 0선
       ctx.globalAlpha = 0.28;
       ctx.fillStyle = colors.good;
@@ -89,6 +91,13 @@ export function TimingBar({ source, perfectMs, goodMs, resetToken, missSource }:
         ctx.globalAlpha = t.alpha;
         ctx.fillStyle = t.judgement === 'PERFECT' ? colors.perfect : colors.good;
         ctx.fillRect(half + t.pos * half - 1, barTop - 2, 2, barH + 4);
+      }
+      // 범위 밖 타격: 막대 끝(|pos|=1)에서 구간 바깥 끝(|pos|=2)까지 MISS 색 눈금
+      ctx.fillStyle = colors.miss;
+      for (const m of view.misses) {
+        ctx.globalAlpha = m.alpha;
+        const x = half + Math.sign(m.pos) * (half + (Math.abs(m.pos) - 1) * G);
+        ctx.fillRect(x - 1, barTop - 2, 2, barH + 4);
       }
       // 최근 10타 평균: 아래쪽 작은 삼각형
       if (view.avgPos !== null) {
