@@ -62,6 +62,7 @@ import { diagTap } from '@/engine/diagTap';
 import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
+import { diagSessionOpts } from '@/app/diagSessionOpts';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 import { setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -460,7 +461,7 @@ function PlayPageBody() {
     clockRef.current = clock;
     clock.begin();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
-    diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
+    diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
     setStage('play');
   }, [acc, freezePrevBest]);
 
@@ -526,7 +527,7 @@ function PlayPageBody() {
     const ss = sessionRef.current;
     if (!clock || !ss) return;
     clock.restart();
-    diagSessionStart(ss, 'RHYTHM', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
+    diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
     flashes.current.clear();
     popups.current = [];
     setFxRun((n) => n + 1);
