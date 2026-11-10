@@ -66,7 +66,7 @@ docker compose -p infra exec mlflow publish-model rollback <모델 이름> [<게
 | --- | --- | --- |
 | `coach-gate-mlp16` (실험군마다 이름이 다를 수 있다) | `coachGate.json`, `coachGate.onnx`, `meta.json` | 거름 모델. `meta.json`의 `featureVersion`이 FE와 다르면 FE가 쓰지 않는다 |
 | `coach-cause-logistic` (구조에 따라 `coach-cause-mlp16`) | `coachCause.json`, `meta.json` | 놓침 원인 모델. 규칙이 낸 원인 후보 중 무엇을 화면에 말할지 고른다. `meta.json`의 `task`가 `cause`, `featureVersion`·`classes`가 FE와 맞아야 쓴다 |
-| `coach-live-config` | `config.json` | 모드(`off`·`shadow`·`on`), 거름 실험군(`gate.arms`)과 원인 실험군(`cause.arms`), 비율(`share`, 합 100), 모델을 쓰는 사용자 비율(`rolloutPercent`) |
+| `coach-live-config` | `config.json` | 모드(`off`·`shadow`·`on`), 거름 실험군(`gate.arms`)과 원인 실험군(`cause.arms`), 비율(`share`, 합 100), 모델을 쓰는 사용자 비율(`rolloutPercent`), 연주 중 LLM 구간 코칭(`llm: {mode, rolloutPercent}`, 없으면 off) |
 
 **처음 켜는 순서** (내 PC에서 등록, 서버에서 게시)
 
@@ -94,6 +94,7 @@ docker compose -p infra exec mlflow publish-model rollback <모델 이름> [<게
 | 새 모델로 교체 | 새로 학습·등록해 게시한다(게시하면 현재 버전이 된다). 다음 연주부터 반영 |
 | 두 모델 비교 | 두 번째 모델을 다른 이름(예: `coach-gate-logistic`)으로 등록·게시하고, 설정의 `arms`를 50/50으로 바꿔 새 설정을 게시한다 |
 | 원인 모델 켜기 | `cause_model --register`로 학습·등록하고(출력에 규칙 대비 정확도가 나온다) 게시한 뒤, 설정의 `cause.arms`에 넣어 새 설정을 게시한다. 거름 모드와 무관하게 쓰인다. 확인: `LIVE_ARM`에 `causeArm`, `LIVE_CAUSE`에 `"by":"MODEL"`과 모델 이름 |
+| 연주 중 LLM 구간 코칭 켜기 | ① GPU 서버에서 `ssaplash-worker live-run`을 띄운다(총평과 같은 모델 설정, `AI/docs/live-coach-llm.md`) ② 서버 `.env`에 `LIVE_COACH_LLM_ENABLED=true`, `api` 재생성 ③ 설정에 `"llm": {"mode": "shadow", "rolloutPercent": 100}`을 넣어 새 설정을 게시한다. 이 기능은 MLflow 모델이 아니라 로컬 LLM을 쓰므로 설정만 게시하면 된다. 확인: `LIVE_ARM`에 `llmArm`, 구간마다 `LIVE_LLM`(`SHADOW`·`LATE`·`FAILED` 비율과 `latencyMs`)을 보고 `on`으로 바꾼다 |
 | 문구를 실제로 빼기 | 그림자 기록을 본 뒤 설정의 `mode`를 `on`으로 바꿔 게시한다 |
 | 일부 사용자만 | 설정의 `rolloutPercent`를 낮춘다. 비율 밖은 규칙만 쓰고 `LIVE_ARM`에 `rule`로 남는다 |
 | 되돌리기 | `publish-model rollback coach-live-config` 또는 `publish-model rollback coach-gate-mlp16` |
