@@ -152,6 +152,7 @@ def _run_transcription(
     drum_path: Path,
     out_dir: Path,
     duration_ms: int | None = None,
+    beat_audio_path: Path | None = None,
 ) -> TranscriptionOutput:
     module = TranscriptionModule(config, device=device)
     _log(f"장치: {module.device}, 채보 모델 설정: {config.model_config}")
@@ -159,7 +160,11 @@ def _run_transcription(
         load_sec = module.load()
         _log(f"채보 모델 올리기 {load_sec:.1f}초")
         return module.transcribe_file(
-            drum_path, out_dir, on_progress=_progress, duration_ms=duration_ms
+            drum_path,
+            out_dir,
+            on_progress=_progress,
+            duration_ms=duration_ms,
+            beat_audio_path=beat_audio_path,
         )
     finally:
         module.close()
@@ -202,8 +207,11 @@ def transcribe_cmd(args: argparse.Namespace) -> int:
         return 1
 
     _log(f"입력: {input_path}")
+    beat_audio = Path(args.beat_audio) if args.beat_audio else None
     try:
-        output = _run_transcription(config, args.device, input_path, out_dir, args.duration_ms)
+        output = _run_transcription(
+            config, args.device, input_path, out_dir, args.duration_ms, beat_audio
+        )
     except ChartError as e:
         return _report_error(e)
 
@@ -230,8 +238,9 @@ def run_cmd(args: argparse.Namespace) -> int:
     try:
         sep = _run_separation(sep_config, args.device, input_path, out_dir, args.duration_ms)
         write_meta(out_dir / META_FILENAME, sep)
+        # 박은 원곡으로 찾음 (설계 CHART-003-variable-tempo-exp)
         tr = _run_transcription(
-            tr_config, args.device, sep.drum_stem_path, out_dir, args.duration_ms
+            tr_config, args.device, sep.drum_stem_path, out_dir, args.duration_ms, input_path
         )
         write_meta(out_dir / TRANSCRIPTION_META_FILENAME, tr)
     except ChartError as e:
@@ -299,6 +308,10 @@ def build_parser() -> argparse.ArgumentParser:
     tr = sub.add_parser("transcribe", help="드럼 트랙 → chart.json + transcription.json")
     tr.add_argument("input", help="드럼 트랙 파일 (flac·wav)")
     _add_common(tr)
+    tr.add_argument(
+        "--beat-audio",
+        help="박 추정용 원곡 (드럼 트랙과 같은 시간축). 없으면 드럼 트랙으로 박을 찾음",
+    )
     tr.add_argument(
         "--config",
         default=str(DEFAULT_TRANSCRIPTION_CONFIG),

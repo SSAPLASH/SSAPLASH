@@ -19,6 +19,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 # 소스를 넣고 프로젝트를 설치한다.
 COPY src ./src
+# 서비스 설정(채보 변환 등). AI 서버가 /app에서 configs/…를 상대 경로로 읽는다(S15P31A307-293)
+COPY configs ./configs
 RUN uv sync --frozen --no-dev
 
 # ---- 2단계: 실행 이미지 ----

@@ -98,7 +98,15 @@ def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyP
     assert cfg.device == "cuda"
     assert cfg.schema_version == 1
     assert cfg.tempo == TempoConfig(
-        method="beat_this", min_bpm=60, max_bpm=200, time_signature="4/4", origin="notes"
+        method="beat_this",
+        min_bpm=60,
+        max_bpm=200,
+        time_signature="4/4",
+        origin="notes",
+        postprocess="dbn",
+        tempo_map=True,
+        tempo_map_tolerance_ms=20.0,
+        refine=False,
     )
     assert cfg.max_duration_sec == 600
 
@@ -141,6 +149,12 @@ def test_drum_check_설정을_읽는다():
         ({"model_config": "m.yaml", "tempo": {"time_signature": "4-4"}}, "time_signature"),
         ({"model_config": "m.yaml", "tempo": {"bpm": 120}}, "모르는 tempo 필드"),
         ({"model_config": "m.yaml", "tempo": {"origin": "first_beat"}}, "tempo.origin"),
+        ({"model_config": "m.yaml", "tempo": {"postprocess": "hmm"}}, "tempo.postprocess"),
+        ({"model_config": "m.yaml", "tempo": {"tempo_map": "yes"}}, "tempo.tempo_map"),
+        (
+            {"model_config": "m.yaml", "tempo": {"tempo_map_tolerance_ms": 0}},
+            "tempo_map_tolerance_ms",
+        ),
         ({"model_config": "m.yaml", "drum_check": {"min_notes": 3}}, "모르는 drum_check 필드"),
         (
             {"model_config": "m.yaml", "drum_check": {"min_notes_per_minute": 0}},

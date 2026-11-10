@@ -335,11 +335,16 @@ class JobRunner:
         hb.set_progress(PROGRESS_DRUM_READY)
         _check_lease(hb)
 
+        # 같은 작업에서 분리를 했으면 원곡이 작업 폴더에 남아 있어 박 추정에 씀. 채보만 다시 배정받았으면 없음
+        # (설계 CHART-003-variable-tempo-exp U4)
+        sources = sorted(job_dir.glob("source.*"))
+        beat_audio = sources[0] if sources else None
         out = self.transcription.transcribe_file(
             drum,
             job_dir,
             on_progress=_progress_callback(hb, TRANSCRIPTION_STAGE_PROGRESS),
             duration_ms=duration,
+            beat_audio_path=beat_audio,
         )
         _write_meta(job_dir / TRANSCRIPTION_META, out.to_dict())
         hb.set_progress(PROGRESS_TRANSCRIPTION_SUBMIT)

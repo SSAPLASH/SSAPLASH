@@ -20,7 +20,8 @@ import numpy as np
 from ssaplash_ai.bench.datasets.pads import PADS
 from ssaplash_ai.chart.config import ORIGIN_MODES
 from ssaplash_ai.chart.errors import ChartOutputError
-from ssaplash_ai.chart.tempo import TempoEstimate
+from ssaplash_ai.chart.tempo import TempoEstimate, TempoMapPoint
+from ssaplash_ai.chart.tempo_refine import RefineResult, refine_timing
 
 GENERATOR = "ADT_MODEL"
 DIFFICULTY = "NORMAL"
@@ -33,7 +34,9 @@ BPM_MAX = 9999.99
 TIME_SIGNATURE_MAX = 5
 NOTE_ID_WIDTH = 4
 # offsetMs·bpm 계산 규칙 버전. 규칙이 바뀌면 올려서 generatorVersion이 바뀌게 함(transcription.model_version)
-TIMING_RULES_VERSION = "timing3"
+TIMING_RULES_VERSION = "timing5"
+# 빠르기 구간(tempoMap) 틱 단위. BE MIDI 채보와 같은 480
+TEMPO_MAP_PPQ = 480
 # 원점 보정에 쓰는 노트. 8분·16분에 많은 하이햇·심벌은 빼고 4분 박에 주로 오는 패드만
 ORIGIN_ALIGN_PADS = ("KICK", "SNARE")
 # 격자 박에서 이 거리 안의 노트만 보정에 씀
@@ -74,13 +77,17 @@ def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
 def grid_origin_ms(tempo: TempoEstimate) -> int:
     """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(곡의 첫 마디 첫 박, 설계 U14·U16).
 
-    - 마디 첫 박이 있으면(Beat This!) 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
-      마디 시작. 드럼 없는 인트로가 있어도 첫 마디가 곡 맨 앞 한 마디 길이 안에서 시작함
+    - 마디 첫 박 다수결 위치(downbeat_phase_ms, Beat This!)가 있으면 그 값. 곡 맨 앞 한 마디 길이 안의
+      마디 시작이라 드럼 없는 인트로가 있어도 첫 마디가 곡 처음에서 시작함 (설계 CHART-003-downbeat-vote)
+    - 다수결 위치가 없고 첫 마디 첫 박만 있으면 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
+      마디 시작
     - 마디 첫 박이 없으면(librosa) 첫 박 시각
     - bpm 추정 실패나 박이 없으면 0
     """
     if not tempo.estimated:
         return 0
+    if tempo.downbeat_phase_ms is not None:
+        return tempo.downbeat_phase_ms
     if tempo.first_downbeat_ms is not None:
         beats_per_bar = int(tempo.time_signature.split("/")[0])
         bar_ms = 60_000.0 / tempo.bpm * beats_per_bar
@@ -114,6 +121,63 @@ def align_origin_to_notes(origin_ms: int, tempo: TempoEstimate, notes: list[dict
     return int(round(aligned))
 
 
+def _beat_number(points: list[TempoMapPoint], time_ms: np.ndarray) -> np.ndarray:
+    """곡 시각 → 박 번호(실수). 첫 구간 앞은 첫 구간 빠르기로 거꾸로 셈"""
+    starts = np.array([p.time_ms for p in points])
+    i = np.clip(np.searchsorted(starts, time_ms, side="right") - 1, 0, len(points) - 1)
+    beat = np.array([p.beat for p in points], dtype=float)[i]
+    bpm = np.array([p.bpm for p in points])[i]
+    return beat + (time_ms - starts[i]) * bpm / 60_000.0
+
+
+def tempo_map_timing(tempo: TempoEstimate, notes: list[dict], origin: str) -> dict | None:
+    """빠르기 구간이 있는 채보 JSON timing (설계 CHART-003-variable-tempo-exp 3-1). 구간이 둘 미만이면 None.
+
+    - origin이 notes면 킥·스네어 노트가 가장 가까운 박보다 몇 ms 앞뒤인지(ORIGIN_ALIGN_WINDOW_MS 안) 중앙값만큼
+      모든 구간 시작을 옮김. 쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적으면 안 옮김
+    - offsetMs(틱 0)는 첫 구간 시작에서 첫 구간 빠르기로 한 마디씩 당겨 0ms 이상인 가장 이른 마디 시작
+    - tempoMap 첫 항목은 틱 0·첫 구간 bpm(= timing.bpm), 나머지는 구간 시작 박 번호 × TEMPO_MAP_PPQ
+    """
+    points = tempo.tempo_map
+    if not tempo.estimated or not points or len(points) < 2:
+        return None
+    shift = 0.0
+    if origin == "notes":
+        times = np.array([n["timeMs"] for n in notes if n["pad"] in ORIGIN_ALIGN_PADS], dtype=float)
+        if times.size:
+            beat = _beat_number(points, times)
+            nearest = np.round(beat)
+            bpm = np.array([p.bpm for p in points])[
+                np.clip(
+                    np.searchsorted([p.time_ms for p in points], times, side="right") - 1,
+                    0,
+                    len(points) - 1,
+                )
+            ]
+            d = (beat - nearest) * 60_000.0 / bpm
+            d = d[np.abs(d) <= ORIGIN_ALIGN_WINDOW_MS]
+            if d.size >= ORIGIN_ALIGN_MIN_NOTES:
+                shift = float(np.median(d))
+    beats_per_bar = int(tempo.time_signature.split("/")[0])
+    first = points[0]
+    bar0 = 60_000.0 / first.bpm * beats_per_bar
+    start0 = first.time_ms + shift
+    pulled = math.floor(start0 / bar0)
+    offset = int(round(start0 - pulled * bar0))
+    base = pulled * beats_per_bar
+    tempo_map = [{"tick": 0, "bpm": first.bpm}]
+    tempo_map += [{"tick": (p.beat + base) * TEMPO_MAP_PPQ, "bpm": p.bpm} for p in points[1:]]
+    numerator, denominator = (int(x) for x in tempo.time_signature.split("/"))
+    return {
+        "bpm": first.bpm,
+        "offsetMs": offset,
+        "timeSignature": tempo.time_signature,
+        "ppq": TEMPO_MAP_PPQ,
+        "tempoMap": tempo_map,
+        "timeSignatureMap": [{"tick": 0, "numerator": numerator, "denominator": denominator}],
+    }
+
+
 def build_chart(
     hits: np.ndarray,
     duration_ms: int,
@@ -127,9 +191,12 @@ def build_chart(
     if origin not in ORIGIN_MODES:
         raise ValueError(f"origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
     notes = build_notes(hits, duration_ms)
-    offset_ms = grid_origin_ms(tempo)
-    if origin == "notes":
-        offset_ms = align_origin_to_notes(offset_ms, tempo, notes)
+    timing = tempo_map_timing(tempo, notes, origin)
+    if timing is None:
+        offset_ms = grid_origin_ms(tempo)
+        if origin == "notes":
+            offset_ms = align_origin_to_notes(offset_ms, tempo, notes)
+        timing = {"bpm": tempo.bpm, "offsetMs": offset_ms, "timeSignature": tempo.time_signature}
     return {
         "schemaVersion": schema_version,
         "generator": GENERATOR,
@@ -140,14 +207,29 @@ def build_chart(
                 "difficulty": DIFFICULTY,
                 "notationStatus": NOTATION_STATUS,
                 "notes": notes,
-                "timing": {
-                    "bpm": tempo.bpm,
-                    "offsetMs": offset_ms,
-                    "timeSignature": tempo.time_signature,
-                },
+                "timing": timing,
             }
         ],
     }
+
+
+def refine_chart_timing(
+    chart: dict, tempo: TempoEstimate, min_bpm: float, max_bpm: float
+) -> RefineResult | None:
+    """채보 노트로 bpm·offsetMs 다시 맞춰 chart의 timing을 바꿈(설계 CHART-001-ncs-builtin-songs v0.5).
+
+    노트 시각은 그대로. bpm 추정 실패이거나 tempoMap이 있으면 아무것도 안 하고 None. 계산은 chart/tempo_refine.py.
+    """
+    timing = chart["charts"][0]["timing"]
+    # 빠르기 구간(tempoMap)이 있는 채보는 박 위치를 이미 따라가므로 bpm 하나로 고치지 않음
+    if not tempo.estimated or "tempoMap" in timing:
+        return None
+    times = [n["timeMs"] for n in chart["charts"][0]["notes"]]
+    result = refine_timing(times, float(timing["bpm"]), int(timing["offsetMs"]), min_bpm, max_bpm)
+    if result.changed:
+        timing["bpm"] = result.bpm
+        timing["offsetMs"] = result.offset_ms
+    return result
 
 
 def _require(ok: bool, message: str) -> None:

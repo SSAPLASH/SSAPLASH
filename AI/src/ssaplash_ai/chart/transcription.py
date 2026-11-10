@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import time
 from collections.abc import Callable
@@ -33,6 +34,7 @@ from ssaplash_ai.chart.chart_json import (
     TIMING_RULES_VERSION,
     build_chart,
     notes_by_pad,
+    refine_chart_timing,
     validate_chart,
 )
 from ssaplash_ai.chart.config import DrumCheckConfig, TranscriptionConfig
@@ -50,6 +52,11 @@ from ssaplash_ai.chart.tempo import TempoEstimate, TempoEstimator, create_tempo_
 
 STAGES = ("LOAD_INPUT", "TRANSCRIBE", "JSON")
 CHART_FILENAME = "chart.json"
+# 박 추정 입력. 원곡이 있으면 원곡(설계 CHART-003-variable-tempo-exp), 없으면 드럼 트랙
+BEAT_SOURCE_MIX = "mix"
+BEAT_SOURCE_DRUMS = "drums"
+
+logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str, float], None]
 
@@ -63,7 +70,11 @@ class TranscriptionOutput:
     n_notes: int
     notes_by_pad: dict[str, int]
     duration_ms: int
+    # 채보 JSON bpm(보정 뒤). tracked_bpm은 박 추적 bpm(보정 전)
     bpm: float
+    tracked_bpm: float
+    # 노트로 bpm·offsetMs 다시 맞춘 결과(tempo_refine.RefineResult.to_dict). 보정을 껐거나 추정 실패면 None
+    timing_refine: dict | None
     raw_bpm: float | None
     first_beat_ms: int | None
     first_downbeat_ms: int | None
@@ -75,6 +86,11 @@ class TranscriptionOutput:
     transcribe_ms: int
     peak_vram_mb: float | None
     peak_ram_mb: float | None
+    # 마디 첫 박 다수결 위치(TempoEstimate.downbeat_phase_ms). offsetMs의 노트 보정 전 값
+    downbeat_phase_ms: int | None = None
+    # 박 추정 입력(BEAT_SOURCE_MIX·BEAT_SOURCE_DRUMS)과 채보 JSON tempoMap 항목 수(없으면 0)
+    beat_source: str = "drums"
+    tempo_segments: int = 0
 
     def to_dict(self) -> dict:
         """결과 메타(transcription.json)용 dict. 채보 본문은 chart.json에 있으므로 뺌."""
@@ -122,6 +138,10 @@ class TranscriptionModule:
                 tempo.time_signature,
                 TIMING_RULES_VERSION,
                 tempo.origin,
+                tempo.postprocess,
+                f"{tempo.tempo_map}:{tempo.tempo_map_tolerance_ms:g}",
+                # bpm 보정을 켜면 다른 값. 끄면 이전과 같은 generatorVersion
+                *(("refine1",) if tempo.refine else ()),
             )
         )
         return f"{self._model_config.name}@{hashlib.sha256(key.encode()).hexdigest()[:12]}"
@@ -156,11 +176,14 @@ class TranscriptionModule:
         out_dir: str | Path,
         on_progress: ProgressCallback | None = None,
         duration_ms: int | None = None,
+        beat_audio_path: str | Path | None = None,
     ) -> TranscriptionOutput:
         """드럼 트랙 파일 → out_dir/chart.json 저장 → TranscriptionOutput.
 
         duration_ms를 주면(워커가 BE claim의 원곡 길이를 넘김, 설계 U13) 노트 시각 상한과
         metrics.durationMs에 그 값을 씀. 없으면 드럼 트랙 길이.
+        beat_audio_path를 주면(워커가 작업 폴더의 원곡을 넘김) 박 추정을 그 파일로 함. 드럼 트랙과 같은 시간축이어야
+        하고, 읽지 못하면 드럼 트랙으로 함 (설계 CHART-003-variable-tempo-exp).
         """
         self._require_loaded()
         notify = on_progress or _no_progress
@@ -187,8 +210,17 @@ class TranscriptionModule:
         notify("TRANSCRIBE", 1.0)
 
         notify("JSON", 0.0)
+        beat_audio, beat_source = audio, BEAT_SOURCE_DRUMS
+        if beat_audio_path is not None:
+            try:
+                beat_audio = read_audio_file(
+                    beat_audio_path, SAMPLE_RATE, self.config.max_duration_sec
+                )
+                beat_source = BEAT_SOURCE_MIX
+            except Exception as e:  # 원곡을 못 읽어도 채보는 드럼 트랙 박으로 계속
+                logger.warning("박 추정용 원곡을 못 읽어 드럼 트랙으로 함: %s", e)
         try:
-            tempo = self._tempo.estimate(audio, SAMPLE_RATE)
+            tempo = self._tempo.estimate(beat_audio, SAMPLE_RATE)
         except Exception as e:
             raise model_error_from(e, "bpm 추정") from e
         # 노래 파일 채보는 하이햇 페달을 따로 내지 않음(페달 예측 정확도 기준 미달). 모델이 내도 HIHAT으로 합침
@@ -201,6 +233,10 @@ class TranscriptionModule:
             schema_version=self.config.schema_version,
             origin=self.config.tempo.origin,
         )
+        refined = None
+        if self.config.tempo.refine:
+            cfg = self.config.tempo
+            refined = refine_chart_timing(chart, tempo, cfg.min_bpm, cfg.max_bpm)
         counts = notes_by_pad(chart)
         check_transcribable(sum(counts.values()), length_ms, tempo, self.config.drum_check)
         validate_chart(chart, length_ms)
@@ -213,7 +249,9 @@ class TranscriptionModule:
             n_notes=sum(counts.values()),
             notes_by_pad=counts,
             duration_ms=length_ms,
-            bpm=tempo.bpm,
+            bpm=chart["charts"][0]["timing"]["bpm"],
+            tracked_bpm=tempo.bpm,
+            timing_refine=refined.to_dict() if refined else None,
             raw_bpm=tempo.raw_bpm,
             first_beat_ms=tempo.first_beat_ms,
             first_downbeat_ms=tempo.first_downbeat_ms,
@@ -225,6 +263,9 @@ class TranscriptionModule:
             transcribe_ms=transcribe_ms,
             peak_vram_mb=_mb_or_none(usage.peak_vram_mb),
             peak_ram_mb=_mb_or_none(usage.peak_ram_mb),
+            downbeat_phase_ms=tempo.downbeat_phase_ms,
+            beat_source=beat_source,
+            tempo_segments=len(chart["charts"][0]["timing"].get("tempoMap", [])),
         )
 
     def close(self) -> None:

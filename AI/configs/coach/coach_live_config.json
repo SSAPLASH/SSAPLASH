@@ -1,0 +1,8 @@
+{
+  "gate": {
+    "mode": "shadow",
+    "arms": [{ "model": "coach-gate-mlp16", "share": 100 }]
+  },
+  "cause": { "arms": [] },
+  "rolloutPercent": 100
+}

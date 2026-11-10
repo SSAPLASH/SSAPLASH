@@ -195,9 +195,11 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 - 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE·HIHAT_PEDAL)다
 - `pad`는 위 9종 중 하나다. 음원 채보는 하이햇 페달을 따로 내지 않고, 채보 모델이 `HIHAT_PEDAL`을 내도 `HIHAT`으로 합친다. 페달이 따로 적힌 실제 녹음 드럼 데이터가 MDB Drums 한 묶음뿐이라, 처음 보는 드럼 세트에서도 맞는지 확인할 수 없어서다. MDB에서는 현재 사용 중 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측이 30ms 안에 있으면 페달로 바꿨을 때 페달 정밀도 0.835, F1 0.548이었다(`scripts/score_pedal_relabel.py`). ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 `chh`로 적어서 페달 채점에 쓸 수 없다
 - bpm은 드럼 트랙에 Beat This!(2024, 코드·가중치 MIT)를 돌려 박 시각을 찾고 계산한다. 박마다 몇 번째 박인지와 울린 시각을 짝지어, 박들이 모두 몇 초에 걸쳐 나왔는지로 한 박 길이를 구하고 bpm으로 바꾼다. Beat This! 박 시각은 0.02초 단위로 반올림돼 있어서, 이웃한 두 박 간격을 하나씩 재서 평균 내면 이 오차가 남는다. 박을 놓치거나 두 번 잡은 곳, 즉 간격이 중앙값에서 15% 넘게 벗어난 곳에서는 구간을 끊어 따로 계산한 뒤 합친다. 4박 넘게 이어지는 구간이 하나도 없으면 고른 간격의 평균을 쓴다. 60~200 밖이면 2배나 절반으로 접는다. 박을 못 찾으면 120이다. GMD test 45곡에서 정답 bpm ±2% 안에 든 곡은 Beat This! 45곡, madmom 32곡, librosa 25곡이었다
-- `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 첫 마디 첫 박에서 한 마디(`60000 / bpm × 4` ms)씩 앞으로 당겨 0ms 이상인 가장 이른 마디 시작을 넣는다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
+- `offsetMs`는 곡의 첫 마디 첫 박이 울리는 시각이고 FE 악보 격자와 BE 난이도 솎기의 원점이다. Beat This!가 찾은 마디 첫 박 전부를 한 마디(`60000 / bpm × 4` ms) 길이로 접어 가장 많이 모인 위치, 즉 곡 맨 앞 한 마디 안의 마디 시작을 넣는다. 첫 번째 마디 첫 박 하나만 쓰면 드럼 인트로·필인에서 틀린 박을 잡는 곡이 많아서 곡 전체 다수결로 정한다. 드럼 없는 인트로가 있어도 첫 마디는 곡 맨 앞 한 마디 길이 안에서 시작한다. 마디 첫 박이 없으면(librosa) 첫 박 시각, 박을 못 찾으면 0이다. `offsetMs`보다 앞선 노트도 지우지 않는다. 박자는 `4/4` 고정이다
 - 설정 `tempo.origin`이 `notes`면 위 값을 킥·스네어 노트로 한 번 더 맞춘다. 격자 박에서 60ms 안에 있는 킥·스네어 노트가 박보다 평균 몇 ms 앞뒤에 있는지 중앙값을 구해 그만큼 `offsetMs`를 옮긴다. 쓸 노트가 16개보다 적으면 옮기지 않는다. Beat This! 박 시각이 드럼 소리보다 늦게 잡히면 메트로놈 클릭이 킥보다 늦게 울리는데 이를 줄인다. 기본값은 `notes`이고, `downbeat`면 위 값을 그대로 쓴다. 측정은 `scripts/origin_alignment_eval.py`로 두 방식을 같은 Beat This! 박으로 비교한다
-- bpm·`offsetMs`를 다시 재려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
+- bpm·`offsetMs`를 다시 측정하려면 `scripts/chart_timing_eval.py`를 쓴다. 드럼 트랙에 Beat This!만 돌려 데모 곡에서 FE 악보의 16분음표 칸을 벗어나 점이 찍히는 노트 비율, MDB Drums 정답 박 대비 bpm 차이·곡 끝 어긋남, GMD·합성곡 bpm 정확도를 낸다
+- 마디선이 실제 곡 마디와 맞는지는 `scripts/chart_bar_grid_eval.py`로 측정한다. Songsterr 곡의 `final/bars.json` 마디 시작을 정답으로, Beat This! 박 캐시로 만든 마디선 70ms 안에 정답 마디 시작이 80% 이상 드는 곡 수를 이전 규칙(첫 번째 마디 첫 박)과 나란히 낸다
+- 설정 `tempo.refine`이 `true`면 노트가 나온 뒤 bpm·`offsetMs`를 노트에 맞춰 다시 정한다(`chart/tempo_refine.py`, S15P31A307-322). 노트가 16분·셋잇단 칸에서 15ms 넘게 벗어난 비율과 곡 처음→끝 메트로놈 밀림을 측정해, 정수 bpm(±1) 또는 지금 bpm ±0.10(0.01 간격) 후보가 비율을 5%p 넘게 줄이거나, 비율을 1%p 넘게 늘리지 않으면서 밀림을 5ms 이상 줄일 때만 바꾼다. 노트 시각은 그대로다. 기본값은 `false`다. 전자음악 NCS 50곡은 밀림 10ms 넘는 곡이 26 → 0이었지만, 밴드 녹음 Songsterr 131곡은 정답 마디가 마디선 70ms 안에 80% 이상 드는 곡이 52 → 47로 줄었다. 측정은 `scripts/chart_tempo_refine_eval.py`. 켜면 `generatorVersion`이 바뀌고 `transcription.json`에 `tracked_bpm`(보정 전)과 `timing_refine`(보정 전후 값·이유)이 남는다
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
 - 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
@@ -210,6 +212,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
+| `tempo.refine` | `false` | 노트로 bpm·`offsetMs` 다시 맞추기. 위 bpm 설명 참고 |
 | `tempo.min_bpm`, `tempo.max_bpm` | 60, 200 | 이 범위 밖이면 2배·절반으로 접는다. 상한은 하한의 2배 이상 |
 | `tempo.time_signature` | `4/4` | 박자. 추정하지 않는다 |
 | `max_duration_sec` | 600 | 이보다 긴 드럼 트랙은 입력 오류 |
@@ -226,7 +229,7 @@ uv run ssaplash-chart transcribe <드럼 트랙> --out data/chart/check --config
 
 ### 드럼 악보 → 채보 (S15P31A307-292)
 
-MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. 워커 연결은 BE 악보 입력 작업 형식(S15P31A307-293)이 정해진 뒤 붙인다.
+MusicXML 드럼 악보(`.musicxml`·`.xml`·`.mxl`)를 음원 채보와 같은 `chart.json`으로 바꾼다. 모델 없이 CPU로 곡당 0.5초 안에 끝난다. MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꾸고, PDF·사진 악보는 받지 않는다. BE 업로드 API(S15P31A307-293)는 AI 서버 `POST /chart/sheet`를 동기로 부른다(아래).
 
 ```bash
 uv run ssaplash-chart sheet score.mxl --out data/chart/score
@@ -240,11 +243,24 @@ uv run ssaplash-chart sheet score.mxl --out data/chart/score
 - `generator`는 `ADT_MODEL` 그대로이고 `generatorVersion`은 `sheet-musicxml-3`이다. 페달 출력을 켜면서 1에서 2로, 열린 하이햇 출력을 켜면서 3으로 올렸다. 2 이하로 만든 악보 채보에는 `hihatOpen`이 없다
 - 드럼 파트가 없거나, 패드로 바꿀 음표가 없거나, 반복을 펼친 길이가 30분을 넘으면 입력 오류(종료 코드 2)다
 
+**AI 서버 엔드포인트 (S15P31A307-293):** `POST /chart/sheet?name=<원래 파일 이름>` 본문에 파일 바이트를 그대로 보내면(`application/octet-stream`, 5 MiB 이하) 위 명령과 같은 변환을 하고 `{"chart": <chart.json>, "sheet": <sheet.json 내용>}`을 돌려준다. 확장자(`.mxl`/`.musicxml`·`.xml`)는 `name`으로 가른다. 오류는 `{"error": 코드, "message": 한 줄}` — 400 `INPUT_INVALID`(형식·timewise·깨진 파일·길이 초과), 422 `NO_DRUM_NOTES`(드럼 파트 없음), 413 `BODY_TOO_LARGE`, 500 `INTERNAL_ERROR`. 설정은 `configs/chart/sheet.yaml`(환경 변수 `SSAPLASH_SHEET_CONFIG`로 바꿈)이라 Docker 이미지에 `configs/`를 넣는다. 악보 본문·파일 이름은 로그에 남기지 않고 요약 한 줄만 남긴다. BE `POST /api/v1/songs/musicxml`이 이 응답을 음원 채보와 같은 규칙으로 3난이도 저장한다. 라우터 `server/sheet.py`, 시험 `tests/server/test_sheet_endpoint.py`.
+
 정확도는 PDMX 공개 악보와 MuseScore가 같은 악보를 재생해 내보낸 MIDI를 비교해 측정한다. 악보·MIDI는 저장소에 넣지 않는다.
 
 ```bash
 uv run python scripts/sheet_pdmx_eval.py --list <곡 목록.csv> --pdmx <PDMX 압축 푼 폴더> --out data/results/sheet_pdmx
 ```
+
+### NCS 기본곡 적재 (S15P31A307-322)
+
+NCS 50곡(표 `configs/ncs/songs.csv`)을 서비스 채보로 만들어 운영 공용 곡으로 올린다. 음원은 git에 넣지 않는다.
+
+1. `uv run python scripts/ncs_prepare.py --src <유튜브 opus 폴더> --out data/ncs/audio`: 영상 ID로 50곡을 찾아 `ncs_NN 아티스트 - 제목.opus`로 모음
+2. GPU 서버 `notebooks/ncs_charts_server.ipynb`: 50곡 `ssaplash-chart run`, 결과 zip을 `data/ncs/`에 풂
+3. `uv run python scripts/ncs_make_bulk.py`: 곡마다 음원 정렬 드럼 MIDI(0틱 = 드럼리스 MR 0초)와 반주 WAV, 등록 표 `register.csv`, 점검 표 `check.csv`. bpm이 소수점만큼 틀려 메트로놈이 밀리는 곡은 `tempo_refine.refine_timing`으로 bpm·첫 박을 고친 뒤 MIDI를 씀
+4. `uv run python scripts/ncs_inspect.py`: 곡별 박자 칸·원곡 시각 차이·빈 구간·패드 비율 점검 표 `data/ncs/inspect.csv`
+5. `uv run python scripts/ncs_register.py --bulk data/ncs/bulk --all`: 관리자 API로 숨김 등록 → 3난이도·반주 확인 → 공개. `--replace-fixed`면 bpm 고친 곡을 지우고 다시 등록. 토큰은 관리자 access 토큰을 `SSAPLASH_ADMIN_TOKEN`에 넣거나 실행할 때 입력
+6. 공용 곡 전부 지우고 다시 올릴 때: `scripts/builtin_reset.py` `backup` → `delete-all` → `restore-catalog`(BE 카탈로그 곡과 받아 둔 반주·커버) → 5번
 
 ## 채보 워커 실행 (S15P31A307-171)
 
@@ -386,17 +402,35 @@ uv run python -m ssaplash_ai.coach_calibration.cli --help
 ### 실시간 코칭 거름 모델 (COACH-001)
 
 실시간 코칭이 띄운 지적이 진짜 경향인지 우연한 쏠림인지 점수를 내는 작은 모델이다. 문구를 만들지 않고 규칙이 낸 지적을 뺄 수만 있다.
-서버는 쓰지 않고, 학습 산출물을 FE 번들에 넣는다.
+지금은 학습 산출물을 FE 번들에 넣는다. 서버에서 모델을 받아 FE 배포 없이 바꾸는 구조(설계 COACH-001 2단계)를 위해 MLflow 등록까지 한다.
 
 ```bash
 uv sync --extra coach-live
 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live
 uv run --extra coach-live pytest tests/coach_live_model
+# MLflow에 기록하고 레지스트리에 새 버전으로 등록(서버 MLflow는 SSH 터널을 연 뒤)
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live --register
 ```
 
-- `replay.py`는 FE `coach/live`의 창·규칙·표시 정책을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다.
+- `--register`는 실험 `coach-live-gate`에 실행을 남기고(파라미터·지표·`report.json`), 레지스트리 모델 `coach-gate-mlp16`(`--model-name`으로 바꿈)에 새 버전을 만든다. 모델 폴더에는 브라우저가 받을 `coachGate.json`, `coachGate.onnx`, `meta.json`만 넣는다. 게시 도구가 모델 폴더를 그대로 복사하기 때문이다.
+- 게시는 따로 서버에서 한다: `docker compose -p infra exec mlflow publish-model publish coach-gate-mlp16 <버전>`(`Infra/mlflow/README.md`). CLI가 등록한 버전으로 이 명령을 출력한다.
+- `meta.json`: `task`(`gate`), `modelVersion`, `featureVersion`(입력 계산 버전, `dataset.py`의 `FEATURE_VERSION`), `inputNames`, `runtime`(이 버전에 든 실행 파일 목록: `json`·`onnx`), `threshold`, `trainedOn`(`SYNTHETIC`). FE는 `featureVersion`이 자기 값과 다르면 그 모델을 쓰지 않는다. `features()`의 순서·식을 바꾸면 `FEATURE_VERSION`을 올린다.
+- 실험 설정(`coach-live-config`): 어떤 모델을 몇 %에게 어떤 모드로 쓸지 정하는 파일이다. 모델처럼 등록·게시하고 롤백한다. 예시는 `configs/coach/coach_live_config.json`(그림자 모드, `coach-gate-mlp16` 100%)이다.
+
+  ```bash
+  uv run python -m ssaplash_ai.coach_live_model.experiment check configs/coach/coach_live_config.json
+  MLFLOW_TRACKING_URI=http://localhost:5000 uv run python -m ssaplash_ai.coach_live_model.experiment register configs/coach/coach_live_config.json
+  ```
+
+  형식은 FE `coach/live/models/experiment.ts`와 같다(`gate.mode`는 `off`·`shadow`·`on`, `arms[].share` 합 100, `rolloutPercent` 0~100). 등록할 때 실험군 모델이 레지스트리에 있는지 확인한다.
+- 로컬 파일 저장소로 학습 → 등록 → `publish-model` 게시 → `manifest.json`(파일별 `sha256`)까지 이어지고, 그 폴더를 FE `refreshCoachModels`가 받아 실험군 모델을 고르는 것까지 확인했다. 서버 MLflow 등록과 게시는 아직 하지 않았다.
+
+- `replay.py`는 FE `coach/live`의 창·규칙·표시 정책·판정 단계·놓침 원인을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다. 기록은 띄운 시점·대상·지표에 더해 단계, 원인 후보, 고른 원인까지 FE와 같아야 한다.
+  - 판정 단계: 판정 4개 전에는 띄우지 않고, 4~7개는 연속 놓침만, 8개부터 전부. 위 학습 데이터도 이 단계로 재생한다.
+  - 놓침 원인: 2단계(8개)부터 놓침 지적에 원인 후보를 계산하고 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐)로 하나를 고른다. 근거가 없으면 `UNKNOWN`. 패드 이동은 같은 패드를 다른 곳에서 넘어와 친 노트와 비교해 2.5배 이상 더 놓칠 때만 본다(비교 대상이 없으면 보지 않는다). 원인 계산에는 노트 시각, 직전 시점의 패드·간격, 채보 밖 타격, 곡의 노트 간격 중앙값이 필요하고 `replay(notes, strays, note_gap_median_ms)`로 넘긴다.
+- 원인 합성 시나리오(`dataset.py`의 `cause_plays`, `build_cause_rows`): 다른 패드(탐1 대신 탐2), 패드 이동(하이햇 → 스네어), 빠른 구간(400ms 사이 150ms 몰아치기), 늦어지다 놓침, 대조군(원인 없이 자주 놓침)을 만든다. 행은 원인을 고른 놓침 지적마다 하나이고 라벨은 심은 원인(대조군은 `UNKNOWN`)이다. 원인 모델 학습(R1)의 자료다.
 - 학습 데이터는 합성 연주다. 시나리오가 심은 약점과 같은 지적이 1, 약점이 없는 연주에서 뜬 지적이 0이다. 판 단위로 나눠 평가한다.
-- 산출물은 `coachGate.json`, `coachGate.onnx`, `report.json`이다. 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
+- 산출물은 `coachGate.json`, `coachGate.onnx`, `meta.json`, `report.json`이다. 앞의 둘은 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
 
 합성 결과(판 2,580개, 지적 13,932건, 진짜 11,636건, 오탐 2,296건):
 
@@ -407,6 +441,32 @@ uv run --extra coach-live pytest tests/coach_live_model
 | MLP 32×16 | 0.980 | 10.0% | 14.8% |
 
 **합성 성능은 실제 성능이 아니다.** 합성 연주는 판 내내 오차 분포가 같고 실제 사람은 곡 중간에 변한다. 켜기 전에 그림자 평가로 확인한다.
+
+### 놓침 원인 모델 (COACH-001)
+
+놓침 지적에 원인 후보가 여럿 걸렸을 때 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐) 대신 무엇을 고를지 학습한 작은 모델이다. 규칙이 낸 후보와 `UNKNOWN`(근거 없음) 중에서만 고르고, 없는 원인을 만들지 않는다.
+
+```bash
+uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause --register
+```
+
+- 데이터: 원인 합성 시나리오(`build_cause_rows`). 입력은 원인별 후보 강도, 3단계 여부, 패드 놓침 여부(`cause_features`, `CAUSE_FEATURE_VERSION`=1). 라벨은 심은 원인.
+- 로지스틱 회귀와 MLP16을 판 단위 5겹 교차 검증으로 규칙 순서와 비교하고, 정확도가 같으면 로지스틱을 고른다. 모델이 규칙보다 낫지 않으면 경고를 출력한다.
+- 산출물: `coachCause.json`(표준화 값과 층 `layers[{w,b,act}]`, softmax), `meta.json`(`task: cause`, `classes`), `report.json`. `--register`는 실험 `coach-live-cause`, 모델 이름 `coach-cause-<구조>`로 등록한다. `--fixture`는 FE 계산 비교용 표본을 쓴다(FE `coach/live/models/cause.parity.fixture.json`).
+- 서비스에서 쓰려면 게시한 뒤 실험 설정의 `cause.arms`에 넣는다.
+
+합성 결과(시나리오당 강도 3 × 20판, 원인을 고른 놓침 지적 1,542건, 후보가 겹친 지적 64건):
+
+| | 정확도 | 후보가 겹친 지적 | 대조군에서 UNKNOWN |
+| --- | --- | --- | --- |
+| 규칙 순서 | 94.8% | 92.2% | 90.3% |
+| 로지스틱 | 95.1% | 98.4% | 93.5% |
+| MLP16 | 95.1% | 98.4% | 93.5% |
+
+- 개선은 후보가 겹친 지적과 대조군에서 나온다. 전체 차이가 작은 건 겹친 지적이 4%뿐이어서다.
+- 남은 오류(늦어짐 약 8%, 패드 이동 약 10%)는 규칙이 후보를 내지 못한 지적이라 이 모델로는 고칠 수 없다. 규칙 문턱을 운영 기록으로 고쳐야 한다.
+- 합성 데이터의 원인은 한 판에 하나씩 심었다. 실제 사람은 여러 원인이 섞이므로 운영 `LIVE_CAUSE`로 다시 학습한다.
 
 ## 벤치마크 실행
 
@@ -700,6 +760,35 @@ uv run python scripts/compare_drum2midi.py --run d2m=data/results/d2m-drums-mdb 
 
 ```bash
 uv run python scripts/check_false_toms.py --features base=data/rule_features --features tom_6cls=data/rule_features_ft_tom_6cls --dataset configs/bench/datasets/enst_minus_one.yaml --song-prefix drummer_1 --candidates docs/chart-rules/tom-newkits-2026-10-29/candidates.yaml --candidate pk_gap30 --out data/results/false-toms-enst-drummer_1.md
+```
+
+곡 안 탐 그룹 나누기·이름 붙이기 값을 다시 고를 때는 스크립트 세 개를 쓴다. `tom_rule_grid.py`가 서비스 규칙에서 탐 그룹 키만 바꾼 후보 yaml을 만들고, `tom_rule_eval_stream.py`가 곡마다 특징을 읽어 후보 전부를 rule-eval과 같은 계산으로 채점한다. rule-eval은 특징을 한꺼번에 메모리에 올려서 E-GMD test 1,170개처럼 큰 데이터는 이 스크립트를 쓴다. `tom_rule_pick.py select`는 E-GMD 키트마다 탐 이름 정확도를 내고 키트 평균으로 후보를 고른 뒤 키트 하나 빼기를 반복하고, `enst`는 ENST에서 지금 규칙 대비 차이와 같은 곡끼리 다시 뽑은 95% 구간을 드러머별로 낸다. 결과는 `docs/chart-rules/tom-rule-retune-2026-11/`. 같은 실행을 GPU 서버에서 하려면 `notebooks/tom_rule_retune_server.ipynb`를 쓴다. 서버 운영 코드를 덮어쓰지 않고, 채점 스크립트와 후보 yaml을 셀 안에서 따로 써서 돌린다. 서비스처럼 원곡을 분리한 드럼으로 특징을 만들 때는 `scripts/rule_features_separated.py --separator <분리 모델 yaml> --dataset <데이터셋 yaml> --out <특징 폴더>`를 쓴다. 채보에 넣은 분리 드럼을 `stem_input`으로 같이 저장해 채점 스크립트가 거르기 입력으로 쓴다.
+
+```bash
+uv run python scripts/tom_rule_grid.py --out docs/chart-rules/tom-rule-retune-2026-11
+uv run python scripts/tom_rule_eval_stream.py --dataset configs/bench/datasets/egmd_test_acoustic.yaml --features data/rule_features --candidates docs/chart-rules/tom-rule-retune-2026-11/candidates_part1.yaml --two-tom-upper MID_TOM --workers 16 --out data/results/tom-rule-retune/stream_egmd_test.csv
+uv run python scripts/tom_rule_pick.py select --egmd data/results/tom-rule-retune/stream_egmd_test.csv --candidates docs/chart-rules/tom-rule-retune-2026-11/candidates_part1.yaml --out docs/chart-rules/tom-rule-retune-2026-11/pick.json
+uv run python scripts/tom_rule_pick.py enst --pick docs/chart-rules/tom-rule-retune-2026-11/pick.json --set enst_drums=data/results/tom-rule-retune/stream_enst_drums.csv:0.828 --set enst_mix_g100=data/results/tom-rule-retune/stream_enst_sep.csv:0.782 --out docs/chart-rules/tom-rule-retune-2026-11/enst.md
+```
+
+### 실제 곡(Songsterr 인기곡)으로 채보 평가
+
+데이터셋 `kind: songsterr`는 Songsterr 드럼 탭을 원곡 박에 맞춘 정답과 서비스 분리 모델이 뽑은 드럼을 읽는다. 곡 폴더는 `data/songsterr/{곡}/final/`이다. 시험 31곡 `public_songs.yaml`, 학습·검증용 새 곡 `public_songs_train_*.yaml`·`public_songs_val.yaml`, 확인용 처음 보는 곡 `public_songs_holdout38.yaml`이 있다. 결과와 결론은 `docs/bench/public-songs-2026-11/expand.md`, 후처리 후보는 `docs/chart-rules/postproc-2026-11/summary.md`.
+
+| 스크립트 | 하는 일 |
+| --- | --- |
+| `public_songs_eval.py features` | 분리 드럼으로 채보 특징을 만들고 `stem_input`으로 입력 드럼을 같이 저장 |
+| `make_songsterr_splits.py` | 정렬 결과가 좋은 새 곡을 검증·학습 목록으로 나누고 학습 설정 `configs/train/songsterr_*.yaml`을 만듦 |
+| `postproc_eval.py` | 규칙 값·문턱값·후처리 후보를 곡마다 채점하고, 같은 곡끼리 다시 뽑은 95% 구간으로 비교 |
+| `ensemble_eval.py` | ADTOF 가중치·입력 여러 개의 점수를 열마다 평균해 채보. `--pads`로 크래시·라이드 이름을 8패드 모델 것으로 바꾼 줄도 냄 |
+| `pad_combo_eval.py` | 서비스 채보와 8패드 학습 모델을 패드별로 섞어 채점 |
+| `tom_merged_eval.py` | 탐 3종을 하나로 합쳐 채점 |
+| `repeat_consensus_eval.py` | 비슷한 마디끼리 ADTOF 점수를 섞어 채보 |
+| `hit_error_breakdown.py`, `time_offset_eval.py` | 틀린 타격 종류별 개수, 타격 시각을 일정하게 밀었을 때 점수 |
+
+```bash
+uv run python scripts/public_songs_eval.py features --songs data/songsterr --out data/rule_features/public_songs
+uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_songs_holdout38.yaml --pads data/models/songsterr_ft/pads_all_noguard/last.pth --cand base=default@drums --cand avg_five_notom=default@drums,data/models/songsterr_ft/five_all/last.pth@drums:kshc --out data/results/ensemble/holdout38.csv
 ```
 
 ### 채보 모델 파인튜닝 (S15P31A307-164)
