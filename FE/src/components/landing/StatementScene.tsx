@@ -30,8 +30,8 @@ export function StatementScene() {
           ))}
         </h2>
         <m.p className="lp-statement-sub" style={reduce ? undefined : { opacity: subOpacity, y: subY }}>
-          싸플래쉬는 <b>센서가 든 스틱</b>을 휘두르면 그 움직임을 드럼 소리로 바꿔 주는 <b>에어드럼 리듬 게임</b>입니다.
-          드럼 세트도, 방음실도 필요 없습니다.
+          싸플래쉬는 <b>센서 스틱</b>을 휘두르는 대로 소리가 나는 <b>에어드럼 서비스</b>입니다.
+          좋아하는 곡을 악보로 연습하고 게임으로 즐기며, 드럼 없이 나의 첫 드럼을 시작하세요.
         </m.p>
       </div>
     </section>

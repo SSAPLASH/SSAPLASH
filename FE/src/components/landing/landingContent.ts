@@ -49,7 +49,7 @@ export const HERO_PHOTO = '/landing/hero.jpg';
 export const HERO_COPY = {
   eyebrow: '에어드럼 리듬 게임',
   title: 'SSAPLASH',
-  slogan: '언제 어디서든, 그곳이 무대가 된다.',
+  slogan: '드럼 없이 시작하는 나의 첫 드럼',
   sub: '센서 스틱 두 개면 충분합니다.',
 };
 
