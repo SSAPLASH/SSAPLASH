@@ -105,6 +105,46 @@ describe("Slider", () => {
     expect(value).toBeLessThan(input);
   });
 
+  it("leading·trailing이 없으면 트랙 묶음 없이 입력이 바로 들어간다(마크업 불변)", () => {
+    const html = renderToStaticMarkup(
+      <Slider label="음량" value={25} min={0} max={100} onChange={() => {}} valueText="25%" id="vol" />,
+    );
+    expect(html).not.toContain("ui-slider-track-row");
+    expect(html).toMatch(/<\/span><input /);
+  });
+
+  it("leading·trailing을 주면 입력 앞뒤에 놓인 한 줄 묶음으로 감싼다", () => {
+    const html = renderToStaticMarkup(
+      <Slider
+        label="음량"
+        value={25}
+        min={0}
+        max={100}
+        onChange={() => {}}
+        valueText="25%"
+        id="vol"
+        leading={<i data-k="l" />}
+        trailing={<i data-k="t" />}
+      />,
+    );
+    const row = html.indexOf("ui-slider-track-row");
+    const l = html.indexOf('data-k="l"');
+    const input = html.indexOf("<input");
+    const t = html.indexOf('data-k="t"');
+    expect(row).toBeGreaterThan(html.indexOf("ui-slider-value"));
+    expect(row).toBeLessThan(l);
+    expect(l).toBeLessThan(input);
+    expect(input).toBeLessThan(t);
+    expect(html).toContain('for="vol"');
+  });
+
+  it("leading만 줘도 묶음이 생긴다", () => {
+    const html = renderToStaticMarkup(
+      <Slider label="a" value={1} min={0} max={2} onChange={() => {}} leading={<i data-k="l" />} />,
+    );
+    expect(html).toContain("ui-slider-track-row");
+  });
+
   it("valueText가 없으면 값 표시가 없고, max<=min이면 채움 0%", () => {
     const html = renderToStaticMarkup(
       <Slider label="a" value={3} min={3} max={3} onChange={() => {}} />,
