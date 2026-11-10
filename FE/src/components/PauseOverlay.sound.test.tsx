@@ -71,6 +71,20 @@ describe('PauseOverlay 음량', () => {
     expect(screen.getByText('이 곡은 반주가 없어요')).toBeTruthy();
   });
 
+  it('반주가 없는 곡은 노래 줄에 흐림 묶음 클래스가 붙고, 드럼 줄에는 없다', () => {
+    const { container } = setup({ hasAccompaniment: false });
+    const off = container.querySelectorAll('.play-pause-sound-off');
+    expect(off).toHaveLength(1);
+    expect(off[0].querySelector('#' + CSS.escape((screen.getByLabelText('노래 음량(반주)') as HTMLInputElement).id))).toBeTruthy();
+    // 라벨은 흐림 대상이 아니다(CSS가 값·트랙 줄만 흐리게 한다) — 라벨 요소는 그대로 존재
+    expect(off[0].querySelector('.ui-slider-label')?.textContent).toBe('노래 음량(반주)');
+  });
+
+  it('반주가 있으면 흐림 묶음 클래스가 없다', () => {
+    const { container } = setup();
+    expect(container.querySelector('.play-pause-sound-off')).toBeNull();
+  });
+
   it('팝업이 떠 있는 동안 Dock 승격 플래그가 켜지고, 닫히면 꺼진다(일시정지·끊김 모두)', () => {
     const a = setup();
     expect(useShellStore.getState().dockRaised).toBe(true);
