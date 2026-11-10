@@ -23,6 +23,8 @@ vi.mock('@/api/songs', () => {
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+// 입문 코스 탭 본문은 이 파일의 관심사가 아니다 — 응답하지 않는 요청으로 둔다
+vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 
 const song = (id: number, title: string): SongSummary => ({
   id, title, artist: `가수${id}`, source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 60000,
@@ -348,5 +350,64 @@ describe('SongPicker 곡 목록 캐시 (설계 TECH-350)', () => {
     await screen.findAllByText('목록곡');
     fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
     await waitFor(() => expect(useSongs.getState().scope).toBe('MINE'));
+  });
+});
+
+describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영역)', () => {
+  const showMode = (mode: 'play' | 'sheet') =>
+    render(
+      <MemoryRouter>
+        <SongPicker onSelect={vi.fn()} mode={mode} />
+      </MemoryRouter>,
+    );
+  const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('/sheet: 제목 → 안내 줄 → 구분선 → 목록 영역 순서', async () => {
+    showMode('sheet');
+    await screen.findAllByText('목록곡');
+    const title = screen.getByRole('heading', { name: '악보로 차근차근 연습해요' });
+    const guide = screen.getByRole('region', { name: '악보 연습 안내' });
+    const sep = screen.getByRole('separator');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    expect(follows(title, guide)).toBe(true);
+    expect(follows(guide, sep)).toBe(true);
+    expect(follows(sep, grid)).toBe(true);
+    // 안내 줄 오른쪽 칸은 악보 읽는 법 카드
+    expect(guide.contains(screen.getByRole('region', { name: '악보 읽는 법' }))).toBe(true);
+  });
+
+  it('/play: 안내 줄·구분선이 없다', async () => {
+    showMode('play');
+    await screen.findAllByText('목록곡');
+    expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '악보 읽는 법' })).toBeNull();
+    expect(screen.queryByRole('separator')).toBeNull();
+  });
+
+  it('/sheet: 입문 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
+    showMode('sheet');
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
+    expect(screen.queryByRole('separator')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    await screen.findAllByText('목록곡');
+    expect(screen.getByRole('region', { name: '악보 연습 안내' })).toBeTruthy();
+    expect(screen.getByRole('separator')).toBeTruthy();
+  });
+
+  it.each(['play', 'sheet'] as const)('%s: 탭과 표는 왼쪽 열, 선택 곡 카드는 목록 영역 오른쪽 열이다', async (mode) => {
+    showMode(mode);
+    await screen.findAllByText('목록곡');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    const list = grid.querySelector('.play-sp-list') as HTMLElement;
+    const card = screen.getByRole('complementary', { name: '선택한 곡' });
+    expect(card.parentElement).toBe(grid);
+    expect(list.parentElement).toBe(grid);
+    expect(follows(list, card)).toBe(true);
+    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다
+    expect(list.firstElementChild).toBe(screen.getByRole('radiogroup', { name: '곡 범위' }));
+    expect(list.querySelector('table')).not.toBeNull();
+    expect(list.contains(card)).toBe(false);
   });
 });
