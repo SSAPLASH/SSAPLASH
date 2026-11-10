@@ -18,10 +18,14 @@ interface Fetched {
   error: string | null;
 }
 
-/** 곡 선택 탭 쿼리만 남긴다(Jira 331: `?tab=lessons`) */
+/** 곡 선택 탭 쿼리만 남긴다(Jira 331: `?tab=lessons`, 악보 연습 라이브러리 탭 `?scope=MINE`) */
 function keptTab(prev: URLSearchParams): Record<string, string> {
+  const out: Record<string, string> = {};
   const tab = prev.get('tab');
-  return tab ? { tab } : {};
+  if (tab) out.tab = tab;
+  const scope = prev.get('scope');
+  if (scope === 'MINE') out.scope = scope;
+  return out;
 }
 
 export function useChartParam() {
