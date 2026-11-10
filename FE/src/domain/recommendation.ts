@@ -130,11 +130,12 @@ export function similarFromDto(d: Record<string, unknown>): SimilarItem {
 }
 
 /**
- * 추천 카드를 눌렀을 때 이동할 연주 준비 경로(설계 COACH-004-song-recommend-report D5).
- * `mode`는 리포트 모드 문자열 그대로 — SHEET만 `/sheet`, 그 밖은 `/play`.
+ * 추천 카드를 눌렀을 때 이동할 경로(설계 COACH-004-song-recommend-report D5).
+ * `mode`는 리포트 모드 문자열 그대로 — SHEET만 `/sheet`(곡·단계를 골라 둔 채 시작 확인 창을 연다, `start=1`), 그 밖은 `/play`(연주 준비).
  */
 export function recommendationPathOf(card: { song: { id: number }; chartId: number }, mode: string): string {
-  return `${pickPathOf(mode)}?song=${card.song.id}&chart=${card.chartId}`;
+  const path = `${pickPathOf(mode)}?song=${card.song.id}&chart=${card.chartId}`;
+  return mode === 'SHEET' ? `${path}&start=1` : path;
 }
 
 /**
