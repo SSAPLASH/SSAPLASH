@@ -1,4 +1,4 @@
-// 양 모드 준비 화면의 공통 회귀 시나리오. 네트워크·음향·캔버스 경계만 대체한다.
+// 리듬 게임 준비 화면의 최고 기록 회귀 시나리오. 네트워크·음향·캔버스 경계만 대체한다.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,12 +33,14 @@ const detail: SongDetail = {
   ],
 };
 
-export function testReadyBestRecords(Page: ComponentType, mode: 'RHYTHM' | 'SHEET') {
+const mode = 'RHYTHM';
+
+export function testReadyBestRecords(Page: ComponentType) {
   beforeEach(() => {
     vi.mocked(getBestRecords).mockReset().mockResolvedValue({ items: [
       { songId: 1, chartId: 11, difficulty: 'EASY', mode, bestScore: 100, bestAccuracy: 98.76 },
       { songId: 1, chartId: 12, difficulty: 'HARD', mode, bestScore: 500, bestAccuracy: 0 },
-      { songId: 1, chartId: 11, difficulty: 'EASY', mode: mode === 'RHYTHM' ? 'SHEET' : 'RHYTHM', bestScore: 999, bestAccuracy: 50 },
+      { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'SHEET', bestScore: 999, bestAccuracy: 50 },
     ] });
     vi.mocked(loadChart).mockImplementation(async ({ chartId }) => ({ chart: { ...BUILTIN_CHARTS[0], title: '시험곡', chartId, songNumericId: 1, chartVersionId: chartId + 100, difficulty: chartId === 12 ? 'HARD' : 'EASY' }, assets: null }));
     useSongs.setState({ source: 'api', selectSong: vi.fn().mockResolvedValue(detail) });
@@ -46,7 +48,7 @@ export function testReadyBestRecords(Page: ComponentType, mode: 'RHYTHM' | 'SHEE
     useSettings.setState({ sensorKind: 'none', countInBars: 0 });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-  const show = (chartId = 11) => render(<MemoryRouter initialEntries={[`/${mode === 'RHYTHM' ? 'play' : 'sheet'}?song=1&chart=${chartId}`]}><Page /></MemoryRouter>);
+  const show = (chartId = 11) => render(<MemoryRouter initialEntries={[`/play?song=1&chart=${chartId}`]}><Page /></MemoryRouter>);
 
   describe(`${mode} 준비 최고 기록`, () => {
     it('기록 없음은 —이며 내장 개발 소스는 기존 로컬 기록을 유지한다', async () => {

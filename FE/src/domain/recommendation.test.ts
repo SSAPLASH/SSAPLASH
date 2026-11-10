@@ -70,7 +70,7 @@ describe('recommendationPathOf', () => {
   const card = { song: { id: 7 }, chartId: 9 };
   it('RHYTHM은 /play, SHEET는 /sheet', () => {
     expect(recommendationPathOf(card, 'RHYTHM')).toBe('/play?song=7&chart=9');
-    expect(recommendationPathOf(card, 'SHEET')).toBe('/sheet?song=7&chart=9');
+    expect(recommendationPathOf(card, 'SHEET')).toBe('/sheet?song=7&chart=9&start=1');
   });
   it('FREE·빈 값은 /play', () => {
     expect(recommendationPathOf(card, 'FREE')).toBe('/play?song=7&chart=9');

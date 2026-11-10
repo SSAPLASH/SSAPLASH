@@ -166,10 +166,10 @@ describe('입문 코스 탭 본문', () => {
     expect(screen.getByRole('heading', { name: '2. 레슨 2' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /1번 레슨 1/ }));
     expect(screen.getByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '다시 연습하기' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '플레이' })).toBeTruthy();
   });
 
-  it('[레슨 시작하기]는 연주 레슨이면 탭을 유지한 악보 연습, 알아보기 레슨이면 알아보기 화면으로 간다', async () => {
+  it('연주 레슨의 [플레이]는 탭을 유지한 악보 연습(시작 확인 창), 알아보기 레슨의 [레슨 시작하기]는 알아보기 화면으로 간다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { kind: 'READ' }), lesson(2)]));
     at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: '레슨 시작하기' }));
@@ -178,8 +178,8 @@ describe('입문 코스 탭 본문', () => {
     useLessons.getState().resetForTest();
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { kind: 'READ', passed: true }), lesson(2, { locked: false })]));
     at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: '레슨 시작하기' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202');
+    fireEvent.click(await screen.findByRole('button', { name: '플레이' }));
+    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
   });
 
   it('이번 접속에서 통과한 레슨은 서버 반영 전이어도 다음 스테이지를 연다', async () => {
@@ -218,7 +218,7 @@ describe('결과 화면 입문 코스 띠', () => {
     expect(within(band).getByText('통과!')).toBeTruthy();
     expect(useLessons.getState().localPassed.has(102)).toBe(true);
     fireEvent.click(within(band).getByRole('button', { name: '다음 레슨' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=103&chart=203');
+    expect(where()).toBe('/sheet?tab=lessons&song=103&chart=203&start=1');
   });
 
   it('70% 미만이면 재도전 안내와 [다시 하기], 마지막 레슨 통과는 [코스로]만', async () => {
@@ -226,7 +226,7 @@ describe('결과 화면 입문 코스 띠', () => {
     const band = await screen.findByRole('status');
     expect(within(band).getByText('정확도 70%를 넘기면 통과예요.')).toBeTruthy();
     fireEvent.click(within(band).getByRole('button', { name: '다시 하기' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202');
+    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
     expect(useLessons.getState().localPassed.size).toBe(0);
     cleanup();
     at('/result/x', <LessonResultBand log={log(203, 2000)} />);

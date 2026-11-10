@@ -95,7 +95,7 @@ describe('리포트 하단 추천', () => {
     show();
     fireEvent.click(await screen.findByText('추천곡'));
     expect(reportCalls()[0][0].mode).toBe('SHEET');
-    expect((await screen.findByTestId('where')).textContent).toBe('/sheet?song=77&chart=555');
+    expect((await screen.findByTestId('where')).textContent).toBe('/sheet?song=77&chart=555&start=1');
   });
 
   it('카드 클릭은 기록을 보내고 /play?song=&chart=로 이동한다', async () => {
@@ -195,7 +195,7 @@ describe('리포트 하단 비슷한 곡', () => {
     show();
     fireEvent.click(await screen.findByText('닮은곡'));
     expect(postRecommendationClick).toHaveBeenCalledWith('s1', 88);
-    expect((await screen.findByTestId('where')).textContent).toBe('/sheet?song=88&chart=600');
+    expect((await screen.findByTestId('where')).textContent).toBe('/sheet?song=88&chart=600&start=1');
   });
 
   it('[다시 시도] 재마운트에도 1회이고, 내장 곡·비인증이면 요청이 없다', async () => {
