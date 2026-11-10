@@ -100,6 +100,8 @@ export class PointerStickSource extends BaseInputSource {
 
   private onKeyDown = (ev: KeyboardEvent): void => {
     if (ev.repeat) return;
+    // Ctrl/Alt/Meta 조합은 브라우저·OS 단축키라 치지도 막지도 않는다. Shift는 악센트로 허용
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
     if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return;
     const accel = ev.shiftKey ? 8 : 6.3;
     if (ev.code === this.opts.leftHitKey) {

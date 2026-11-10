@@ -88,6 +88,7 @@ export function GlassDock() {
   const setSavedCollapsed = useSettings((s) => s.setDockCollapsed);
   const immersive = useShellStore((s) => s.immersive);
   const dockPanel = useShellStore((s) => s.dockPanel);
+  const dockRaised = useShellStore((s) => s.dockRaised);
   const setDockPanel = useShellStore((s) => s.setDockPanel);
   const playRunning = useShellStore((s) => s.playRunning);
   const { pathname } = useLocation();
@@ -252,7 +253,7 @@ export function GlassDock() {
             >
               <m.div
                 ref={panelRef}
-                className="metro-popover"
+                className={`metro-popover${dockRaised ? ' raised' : ''}`}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}

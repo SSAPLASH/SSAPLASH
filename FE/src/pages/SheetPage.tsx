@@ -38,7 +38,7 @@ import { TimingBar } from '@/components/play/TimingBar';
 import { strayMissSource } from '@/components/play/strayMissSource';
 import type { HitMark } from '@/components/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { usePlayRunning, useShell } from '@/components/shell/useShell';
+import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
@@ -62,7 +62,7 @@ import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/app/sources';
-import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import { setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
@@ -189,6 +189,10 @@ function SheetPageBody() {
         : 'loading';
   // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
   const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
+  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
+  useKeyboardDrum(stage === 'play');
+  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·준비 화면에는 없다(QA 352 Q8)
+  useDock(stage === 'play');
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -919,6 +923,7 @@ function SheetPageBody() {
         onLeave={leave}
         returnTo={returnTo}
         realign={realign.info}
+        hasAccompaniment={accUrl !== null}
       />
     );
   } else if (countValue !== null) {

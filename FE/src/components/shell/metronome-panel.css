@@ -4,6 +4,10 @@
   z-index: 31;
   outline: none;
 }
+/* 일시정지 팝업(스크림 z 50) 위에서 Dock 패널을 열 때: 올라간 Dock(55)보다 위 */
+.metro-popover.raised {
+  z-index: 56;
+}
 .metro-panel {
   display: flex;
   flex-direction: column;

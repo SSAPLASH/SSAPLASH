@@ -42,6 +42,8 @@ const lastResendAt: [number | null, number | null] = [null, null];
 
 /** 타격음 스위치는 hitSound 모듈에 있다. 화면들이 이 경로로 import하므로 그대로 다시 내보낸다 */
 export { setSoundOnHit } from './hitSound';
+/** 키보드 드럼 스위치는 keyboardDrum 모듈에 있다. 연주 중인 화면이 이 경로로 import한다 */
+export { setKeyboardDrum, useKeyboardDrum } from './keyboardDrum';
 
 /** 활성 센서의 디스크립터에 현재 설정값(기본값 병합)을 적용한다 */
 function applySensorOptions(): void {
