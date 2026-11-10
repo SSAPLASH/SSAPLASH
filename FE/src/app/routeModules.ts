@@ -12,6 +12,8 @@ const routeImports = {
   setup: () => import('@/pages/SetupPage').then((m) => ({ default: m.SetupPage })),
   play: () => import('@/pages/PlayPage').then((m) => ({ default: m.PlayPage })),
   sheet: () => import('@/pages/SheetPage').then((m) => ({ default: m.SheetPage })),
+  /** 입문 코스 알아보기 레슨(Jira 331) */
+  lessonRead: () => import('@/pages/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
   studio: () => import('@/pages/StudioPage').then((m) => ({ default: m.StudioPage })),
   settings: () => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
   history: () => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })),

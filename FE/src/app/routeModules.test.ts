@@ -5,6 +5,7 @@ const KEYS: RouteKey[] = [
   'setup',
   'play',
   'sheet',
+  'lessonRead',
   'studio',
   'settings',
   'history',

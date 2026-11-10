@@ -43,6 +43,8 @@ export interface ReadyPanelProps {
   /** 카운트다운 켬(1)·끔(0). 안내 문구용 */
   countInBars: number;
   onBack: () => void;
+  /** 뒤로 가기 이름. 기본 「곡 선택」, 입문 코스에서 연 레슨은 「입문 코스」(Jira 331) */
+  backLabel?: string;
   onSelectChart: (chartId: number) => void;
   /** 드럼 세팅으로 이동(복귀 규칙은 페이지가 정한다) */
   onSetup: () => void;
@@ -94,6 +96,7 @@ export function ReadyPanel({
   presetName,
   countInBars,
   onBack,
+  backLabel = '곡 선택',
   onSelectChart,
   onSetup,
   onReconnect,
@@ -121,7 +124,7 @@ export function ReadyPanel({
     <section className="play-rp" aria-label="연주 준비">
       <header className="play-rp-head">
         <Button variant="text" size="sm" onClick={onBack}>
-          ← 곡 선택
+          ← {backLabel}
         </Button>
         <h2 className="play-rp-title">연주 준비</h2>
       </header>
