@@ -829,7 +829,7 @@ function SheetPageBody() {
             navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart?.title ?? detail?.title ?? '곡'}` } })
           }
           onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
-          onRetry={() => songIdParam !== null && chartIdParam !== null && param.select(songIdParam, chartIdParam, { replace: true, start: true })}
+          onRetry={param.reload}
           onClose={closeStart}
         />
       </>
