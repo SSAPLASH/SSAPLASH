@@ -1,13 +1,15 @@
-// 2타 보정 상태 기계(PLAY-004 3-5, UX-64 D3). 패드 순서대로 연결된 손마다 2타를 받아 손별 앵커를 만든다.
-// 패드가 차면 자동으로 넘어가지 않고 padDone(확인 대기)에서 next()를 기다린다 — 화면의 [다음]/[저장].
+// 2타 보정 상태 기계(PLAY-004 3-5, UX-64 D3, 보정 흐름 개편 D1~D7). 패드 순서대로 연결된 손마다 2타를 받아 손별 앵커를 만든다.
+// 패드가 차면 같은 손의 다른 패드 앵커(이번 세션 끝난 패드 + 세션 밖 base)와 간격을 검사한다.
+// 경고가 없으면 advanceDelayMs 뒤 자동으로 다음 패드(순서상 안 끝난 첫 패드, 없으면 done)로 가고,
+// 경고가 있으면 padDone(확인 대기)에서 멈춰 redo()·next()를 기다린다 — 화면의 [다시]/[다음].
 // 소리·스틱 명령·전송은 하지 않는다 — app/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
 import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import { computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
+import { angleBetween, computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
 import type { SensorTuning } from '@/domain/tuning';
 
-/** 보정 순서. 스네어부터 가까운 것 → 먼 것(UX-64 D10: 기존 순서 유지) */
-export const CAPTURE_ORDER: readonly PadId[] = ['SNARE', 'HIHAT', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'CRASH', 'RIDE'];
+/** 보정 순서(개편 D1): 게임 레인 순서. 붙어 있기 쉬운 하이햇·크래시를 바로 이어 확인한다 */
+export const CAPTURE_ORDER: readonly PadId[] = ['HIHAT', 'CRASH', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE'];
 
 export interface HitCaptureOptions {
   /** 패드마다 손별로 받을 타격 수 */
@@ -15,15 +17,21 @@ export interface HitCaptureOptions {
   /** 2타의 각도 차가 이 값(도)을 넘으면 그 손의 그 패드를 다시 친다(설계 U6) */
   maxSpreadDeg: number;
   order: readonly PadId[];
+  /** 같은 손 두 패드 앵커가 이 각도(도) 미만이면 간격 경고(개편 D4) */
+  minGapDeg: number;
+  /** 자동 진행 전 대기(ms). 0이면 동기 진행. 그동안 타격은 무시한다 */
+  advanceDelayMs: number;
 }
 
 export const DEFAULT_CAPTURE_OPTIONS: HitCaptureOptions = {
   hitsPerPad: 2,
   maxSpreadDeg: 8,
   order: CAPTURE_ORDER,
+  minGapDeg: 20,
+  advanceDelayMs: 400,
 };
 
-/** padDone = 현재 패드를 대상 손 전부가 채워 next()를 기다린다(UX-64 D3) */
+/** padDone = 현재 패드를 대상 손 전부가 채웠다. 경고가 있으면 next()/redo()를 기다리고, 없으면 advancing 동안 잠깐 있다 자동 진행 */
 export type CapturePhase = 'idle' | 'capturing' | 'padDone' | 'done';
 
 export interface CaptureWarning {
@@ -31,6 +39,17 @@ export interface CaptureWarning {
   stickId: StickId;
   /** 두 타격의 각도 차(도) */
   spread: number;
+}
+
+/** 방금 끝난 패드가 같은 손의 다른 패드와 minGapDeg 미만으로 가깝다 */
+export interface GapWarning {
+  stickId: StickId;
+  /** 방금 끝난 패드 */
+  pad: PadId;
+  /** 가장 가까운 같은 손 패드 */
+  near: PadId;
+  /** 두 앵커 사이 각도(도) */
+  deg: number;
 }
 
 export interface CaptureSnapshot {
@@ -49,6 +68,10 @@ export interface CaptureSnapshot {
   captured: Partial<Record<PadId, [PadAnchor | undefined, PadAnchor | undefined]>>;
   /** 마지막 퍼짐 경고. 다음 수락 타격에서 지운다 */
   warning: CaptureWarning | null;
+  /** 현재 패드의 간격 경고(손별 최대 1개). 비어 있지 않으면 padDone에서 멈춘다 */
+  gapWarnings: GapWarning[];
+  /** 경고 없이 자동 진행 대기 중(padDone이지만 버튼을 그리지 않는다) */
+  advancing: boolean;
   /** 마지막으로 수락한 타격 */
   lastAccepted: { stickId: StickId; pad: PadId; at: number } | null;
   /** 사용자가 슬라이더로 정한 패드별 판정 반경(도, UX-64 D9). build에서 양손 앵커의 radiusOverride가 된다 */
@@ -66,6 +89,10 @@ export class HitCapture {
   private samples: [Pose[], Pose[]] = [[], []];
   private captured: CaptureSnapshot['captured'] = {};
   private warning: CaptureWarning | null = null;
+  private gapWarnings: GapWarning[] = [];
+  private advanceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 세션 밖 패드의 손별 앵커. 간격 검사에만 쓴다 */
+  private base: HandAnchors = [null, null];
   private lastAccepted: CaptureSnapshot['lastAccepted'] = null;
   private radiusOverrides: CaptureSnapshot['radiusOverrides'] = {};
   private listeners = new Set<Listener>();
@@ -91,6 +118,8 @@ export class HitCapture {
       counts: [this.samples[0].length, this.samples[1].length],
       captured: { ...this.captured },
       warning: this.warning,
+      gapWarnings: this.gapWarnings.map((w) => ({ ...w })),
+      advancing: this.advanceTimer !== null,
       lastAccepted: this.lastAccepted,
       radiusOverrides: { ...this.radiusOverrides },
     };
@@ -103,9 +132,13 @@ export class HitCapture {
 
   /**
    * 보정 시작. order를 주면 그 패드들만(패드 단위 재보정, 후속 T9), 없으면 옵션의 전체 순서.
+   * base는 세션 밖 패드의 손별 앵커(패드 단위 재보정에서 적용 프리셋 값). 간격 검사에만 쓴다.
    * hands나 order가 비면 바로 done(아무것도 안 잡힘)
    */
-  start(hands: StickId[], order?: readonly PadId[]): void {
+  start(hands: StickId[], order?: readonly PadId[], base?: HandAnchors): void {
+    this.clearAdvance();
+    this.base = base ?? [null, null];
+    this.gapWarnings = [];
     this.hands = [...new Set(hands)].sort() as StickId[];
     this.order = order ? order.filter((p) => this.opts.order.includes(p)) : this.opts.order;
     this.index = 0;
@@ -118,9 +151,9 @@ export class HitCapture {
     this.notify();
   }
 
-  /** 처음부터 다시(버튼 보정·연결 끊김 복구). 손 목록·패드 순서는 유지 */
+  /** 처음부터 다시(버튼 보정·연결 끊김 복구). 손 목록·패드 순서·base는 유지 */
   restart(): void {
-    this.start(this.hands, this.order);
+    this.start(this.hands, this.order, this.base);
   }
 
   /**
@@ -131,7 +164,11 @@ export class HitCapture {
     if (this.hands.includes(stickId)) return;
     this.hands = [...this.hands, stickId].sort() as StickId[];
     this.samples[stickId] = [];
-    if (this.phase === 'done' || this.phase === 'padDone') this.phase = 'capturing';
+    if (this.phase === 'done' || this.phase === 'padDone') {
+      this.clearAdvance();
+      this.gapWarnings = [];
+      this.phase = 'capturing';
+    }
     this.notify();
   }
 
@@ -141,6 +178,8 @@ export class HitCapture {
     this.hands = this.hands.filter((h) => h !== stickId);
     this.samples[stickId] = [];
     if (this.hands.length === 0) {
+      this.clearAdvance();
+      this.gapWarnings = [];
       this.phase = 'done';
       this.notify();
       return;
@@ -149,10 +188,15 @@ export class HitCapture {
     this.notify();
   }
 
-  /** 특정 패드를 다시: 그 패드의 모든 손 결과를 지우고 index를 그 패드로. 확인 대기 중 [다시]는 현재 패드로 부른다 */
+  /**
+   * 특정 패드를 다시: 그 패드의 모든 손 결과를 지우고 index를 그 패드로. 확인 대기 중 [다시]는 현재 패드로 부른다.
+   * done(결과 화면)에서도 부를 수 있다. 다시 친 패드가 끝나면 순서상 안 끝난 첫 패드로(없으면 done, D7)
+   */
   redo(pad: PadId): void {
     const i = this.order.indexOf(pad);
     if (i < 0) return;
+    this.clearAdvance();
+    this.gapWarnings = [];
     delete this.captured[pad];
     this.index = i;
     this.samples = [[], []];
@@ -161,16 +205,37 @@ export class HitCapture {
     this.notify();
   }
 
-  /** 확인 대기(padDone)에서 다음 패드로. 마지막 패드였으면 done. 다른 단계에서는 무동작 */
+  /** 확인 대기(padDone)에서 다음 패드로(경고는 무시). 순서상 안 끝난 첫 패드, 없으면 done. 다른 단계에서는 무동작 */
   next(): void {
     if (this.phase !== 'padDone') return;
+    this.advance();
+  }
+
+  /** 안 끝난 첫 패드로 이동(D7). 끝났는지는 어느 손이든 앵커가 있으면 끝난 것(나중에 붙은 손은 건너뜀) */
+  private advance(): void {
+    this.clearAdvance();
+    this.gapWarnings = [];
     this.samples = [[], []];
-    if (this.index + 1 >= this.order.length) {
+    const next = this.order.findIndex((p) => !this.captured[p]?.some((a) => a !== undefined));
+    if (next < 0) {
       this.phase = 'done';
     } else {
-      this.index += 1;
+      this.index = next;
       this.phase = 'capturing';
     }
+    this.notify();
+  }
+
+  private clearAdvance(): void {
+    if (this.advanceTimer !== null) clearTimeout(this.advanceTimer);
+    this.advanceTimer = null;
+  }
+
+  /** 세션을 접을 때 타이머를 정리한다 */
+  cancel(): void {
+    this.clearAdvance();
+    this.gapWarnings = [];
+    this.phase = 'idle';
     this.notify();
   }
 
@@ -219,11 +284,53 @@ export class HitCapture {
     return Math.max(...ring.map((p) => pairSpread(p, m)));
   }
 
-  /** 대상 손 전부가 현재 패드를 채웠으면 확인 대기(padDone). 넘어가는 것은 next()가 한다(UX-64 D3) */
+  /**
+   * 대상 손 전부가 현재 패드를 채웠으면 간격을 검사한다. 경고가 있으면 padDone에서 대기(next·redo),
+   * 없으면 advanceDelayMs 뒤 자동 진행(그동안은 padDone·advancing이라 타격 무시)
+   */
   private settleIfFilled(): void {
     const target = this.order[this.index];
     const filled = this.hands.every((h) => this.captured[target]?.[h] !== undefined);
-    if (filled) this.phase = 'padDone';
+    if (!filled) return;
+    this.gapWarnings = this.checkGaps(target);
+    this.phase = 'padDone';
+    if (this.gapWarnings.length > 0) return;
+    if (this.opts.advanceDelayMs <= 0) {
+      this.advance();
+      return;
+    }
+    this.clearAdvance();
+    this.advanceTimer = setTimeout(() => {
+      this.advanceTimer = null;
+      if (this.phase === 'padDone') this.advance();
+    }, this.opts.advanceDelayMs);
+  }
+
+  /** 방금 끝난 패드를 손별로 같은 손 앵커(이번 세션 끝난 패드 + 세션 밖 base)와 비교한다 */
+  private checkGaps(target: PadId): GapWarning[] {
+    const out: GapWarning[] = [];
+    for (const h of this.hands) {
+      const me = this.captured[target]?.[h];
+      if (!me) continue;
+      let near: PadId | null = null;
+      let best = Infinity;
+      const consider = (pad: PadId, a: PadAnchor) => {
+        const d = angleBetween(me, a);
+        if (d < best) {
+          best = d;
+          near = pad;
+        }
+      };
+      for (const [pad, a] of Object.entries(this.base[h] ?? {}) as [PadId, PadAnchor | undefined][]) {
+        if (a && pad !== target && !this.order.includes(pad)) consider(pad, a);
+      }
+      for (const pad of this.order) {
+        const a = this.captured[pad]?.[h];
+        if (a && pad !== target) consider(pad, a);
+      }
+      if (near !== null && best < this.opts.minGapDeg) out.push({ stickId: h, pad: target, near, deg: best });
+    }
+    return out;
   }
 
   /**
