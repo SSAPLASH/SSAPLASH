@@ -120,6 +120,14 @@ describe('/login', () => {
     expect(dialog()).toBeNull();
   });
 
+  it('닫기(X) 버튼으로 /로 닫는다', async () => {
+    const user = userEvent.setup();
+    setup({ pathname: '/login', state: { from: '/sheet' } });
+    await user.click(screen.getByRole('button', { name: '닫기' }));
+    expect(where()).toBe('/');
+    expect(dialog()).toBeNull();
+  });
+
   it('탈퇴 완료 문구는 오류 색이 아니다', () => {
     setup('/login?error=withdrawn');
     expect(screen.getByText(/탈퇴가 완료되었습니다/).className).toBe('notice');
