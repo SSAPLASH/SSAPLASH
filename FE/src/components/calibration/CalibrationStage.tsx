@@ -1,7 +1,8 @@
-// 보정·재정렬 본문(PLAY-004 4-1·4-2, 개편 D2·D3·D6·D10). 보정 중(드럼 배치 카드 안): 카드 전체 폭 틀(setup-stage, 16:10) 안에 킷 하나,
-// 위쪽 가운데에 큰 안내 「하이햇을 2번 타격하세요」·진행 점, 오른쪽 아래에 정보 카드(KitInfoFrame)를 겹친다. 킷 전체는 어둡게(0.18) 두고 지금 칠 패드만 원래 밝기 + 글로우.
-// 정보 카드 상태: 진행(「하이햇 1/7」+손별 타격 점, 버튼 없음) / 간격 경고(padDone·경고 있음: 문구·[다시][다음]) / 결과(done: 선택 패드 값·반지름·겹침·[다시 치기][저장]).
-// 결과 화면에서는 같은 손에서 20° 미만으로 붙은 패드에 --warn 테두리를 그리고, 패드를 눌러 고른다(진행 중 클릭은 무동작).
+// 보정·재정렬 본문(PLAY-004 4-1·4-2, 개편 D2·D3·D6·D10·D11·D14, v0.2). 보정 중(드럼 배치 카드 안): 스테이지 행 전체 폭 판(StagePanel) 안에
+// 킷 하나(16:10 contain). 판 안 자리: 위쪽 가운데 큰 안내 「하이햇을 2번 타격하세요」·진행 점 / 오른쪽 아래 정보 카드 / 아래쪽 가운데 경고 배너(GapBanner).
+// 킷 전체는 어둡게(0.18) 두고 지금 칠 패드만 원래 밝기 + 글로우. 간격 경고는 멈추지 않는다: 진행 중에는 배너([◯◯ 다시])로, 다음 패드를 치면 사라진다.
+// 정보 카드 상태: 진행(「하이햇 1/7」+손별 타격 점, 버튼 없음) / 결과(done: 선택 패드 값·반지름·겹침·[다시 치기][저장]).
+// 결과 화면에서는 같은 손에서 20° 미만으로 붙은 패드(세션 밖 앵커 base 포함, D14)에 --warn 테두리를 그리고 겹침 요약 배너를 띄우며, 패드를 눌러 고른다(진행 중 클릭은 무동작).
 // 재정렬 중(② 카드): 스네어 유령 + RealignPrompt. 계산·전송은 하지 않는다: liveStore.calibration 스냅샷을 읽고 calibrationSession 액션만 부른다.
 import { useEffect, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
@@ -9,8 +10,10 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { Button } from '@/components/ui/Button';
 import { RealignPrompt } from './RealignPrompt';
 import { KitInfoFrame, KitInfoOverlay } from '@/components/setup/KitInfoOverlay';
+import { StagePanel } from '@/components/setup/StagePanel';
+import { GapBanner } from './GapBanner';
 import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
-import { HAND_NAME, captureHeadline, captureProgressText, gapAdviceText, gapWarningText, overlapLineText, overlapSummaryText, spreadWarningText } from './calibrationText';
+import { HAND_NAME, captureHeadline, captureProgressText, overlapLineText, spreadWarningText } from './calibrationText';
 import { previewRadius } from './captureRadius';
 import { calibrationSession } from '@/app/calibrationSession';
 import { useLive } from '@/store/liveStore';
@@ -22,7 +25,7 @@ import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
 import { DRUM_KIT_H, DRUM_KIT_W, kitPadsFor, layoutToKitPoint } from '@/domain/drumKit';
 import { padPointOf } from '@/domain/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadGap } from '@/domain/calibration';
+import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/calibration';
 import type { KitSkin } from '@/domain/drumKit';
 import type { Pose, StickId } from '@/domain/events';
 import './calibration.css';
@@ -102,16 +105,24 @@ function padFrameCircle(pad: PadId, point: { x: number; y: number }, skin: KitSk
 
 type HandGap = PadGap & { stickId: StickId };
 
-/** 손별로 20° 미만으로 붙은 패드 쌍(결과 화면). 가까운 순이 아니라 손 순서, 손 안에서는 가까운 순 */
+/**
+ * 손별로 20° 미만으로 붙은 패드 쌍(결과 화면). 세션 앵커에 세션 밖 앵커(cap.base, D14)를 합쳐 계산하되
+ * 세션 패드가 하나라도 든 쌍만 남긴다(세션 밖 패드끼리의 쌍은 이번 보정과 무관). 손 순서, 손 안에서는 가까운 순
+ */
 function overlapsOf(cap: CaptureSnapshot): HandGap[] {
   const out: HandGap[] = [];
   for (const h of cap.hands) {
     const set: HandAnchorSet = {};
+    for (const [pad, a] of Object.entries(cap.base?.[h] ?? {}) as [PadId, PadAnchor | undefined][]) {
+      if (a && !cap.order.includes(pad)) set[pad] = a;
+    }
     for (const pad of cap.order) {
       const a = cap.captured[pad]?.[h];
       if (a) set[pad] = a;
     }
-    for (const g of padGaps(set, DEFAULT_CAPTURE_OPTIONS.minGapDeg)) out.push({ ...g, stickId: h });
+    for (const g of padGaps(set, DEFAULT_CAPTURE_OPTIONS.minGapDeg)) {
+      if (cap.order.includes(g.a) || cap.order.includes(g.b)) out.push({ ...g, stickId: h });
+    }
   }
   return out;
 }
@@ -149,7 +160,8 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   const hitSeq = usePadHitSeq();
   const weak = useWeakHint(cal.capture);
   const [picked, setPicked] = useState<PadId | null>(null);
-  const { rowRef, frameRef, cardRef, region } = useOverlayRegion();
+  const overlay = useOverlayRegion();
+  const { cardRef, region } = overlay;
 
   if (cal.mode === 'realign' && cal.realign) {
     return (
@@ -184,11 +196,10 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   const selected: PadId | null = isDone ? (picked && cap.order.includes(picked) ? picked : (warnPads[0] ?? cap.order[0] ?? null)) : null;
   const onPadClick = isDone ? (pad: PadId) => cap.order.includes(pad) && setPicked(pad) : undefined;
 
-  // 간격 경고: 확인 대기에서 자동 진행 없이 멈춘 경우만
-  const gapStop = cap.phase === 'padDone' && !cap.advancing && cap.gapWarnings.length > 0;
-  const noMoreAfter = cap.target !== null && cap.order.every((p) => p === cap.target || cap.captured[p]?.some((a) => a !== undefined));
+  // 진행 중 간격 경고 배너: 멈추지 않는다. 다음 패드의 첫 타격이 수락되면 엔진이 gapWarnings를 비워 사라진다
+  const gapWarnings = !isDone ? (cap.gapWarnings ?? []) : [];
 
-  // 카드가 캔버스와 겹칠 때(좁은 창) 모든 패드 중 덜 가리는 모서리로. 지금 칠 패드(진행·경고)·선택 패드(결과)를 가리는 쪽은 피한다
+  // 카드가 그림과 겹칠 때(좁은 판) 모든 패드 중 덜 가리는 모서리로. 지금 칠 패드(진행·경고)·선택 패드(결과)를 가리는 쪽은 피한다
   const focusPad = isDone ? selected : cap.target;
   const frameCircles: Partial<Record<PadId, { x: number; y: number; r: number }>> = {};
   for (const pad of Object.keys(placement) as PadId[]) {
@@ -228,27 +239,6 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
         </div>
       </KitInfoOverlay>
     );
-  } else if (gapStop && cap.target) {
-    const target = cap.target;
-    card = (
-      <KitInfoFrame cardRef={cardRef} corner={corner} tone="warn">
-        <h3 className="setup-kitinfo-name">{captureProgressText(target, cap.index, cap.order.length)}</h3>
-        {cap.gapWarnings.map((w) => (
-          <div key={w.stickId} className="cal-gap-warn">
-            <p className="cal-gap-head">{gapWarningText(w)}</p>
-            <p className="cal-gap-advice">{gapAdviceText(w.pad, w.near)}</p>
-          </div>
-        ))}
-        <div className="cal-kitinfo-actions">
-          <Button variant="secondary" size="sm" onClick={() => calibrationSession.redo(target)}>
-            다시
-          </Button>
-          <Button size="sm" onClick={() => calibrationSession.next()}>
-            {noMoreAfter ? '결과 보기' : '다음'}
-          </Button>
-        </div>
-      </KitInfoFrame>
-    );
   } else if (cap.target) {
     card = (
       <KitInfoFrame cardRef={cardRef} corner={corner}>
@@ -258,10 +248,25 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
     );
   }
 
+  const top = (
+    <div className="cal-stage-top">
+      {!isDone && cap.target && <p className="cal-stage-headline">{captureHeadline(cap.target, cap.hands)}</p>}
+      <span className="cal-stage-progress" aria-label={`${completed.length} / ${cap.order.length} 패드 완료`}>
+        {cap.order.map((pad) => (
+          <span key={pad} className={`cal-stage-dot ${completed.includes(pad) ? 'done' : pad === cap.target ? 'now' : ''}`} title={PAD_META[pad].label} />
+        ))}
+      </span>
+    </div>
+  );
+  const banner = isDone ? (
+    overlaps.length > 0 ? <GapBanner kind="result" overlaps={overlaps} /> : null
+  ) : gapWarnings.length > 0 ? (
+    <GapBanner kind="progress" warnings={gapWarnings} onRedo={(pad) => calibrationSession.redo(pad)} />
+  ) : null;
+
   return (
     <div className="cal-stage" data-testid="cal-stage-capture">
-      <div className="setup-stage-row" ref={rowRef}>
-      <div className="setup-stage cal-stage-frame" ref={frameRef}>
+      <StagePanel layout={overlay} top={top} card={card} banner={banner}>
         <div className="cal-stage-canvas">
           <DrumKit
             fitWidth
@@ -277,18 +282,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
             onPadClick={onPadClick}
           />
         </div>
-        <div className="cal-stage-top">
-          {!isDone && cap.target && <p className="cal-stage-headline">{captureHeadline(cap.target, cap.hands)}</p>}
-          <span className="cal-stage-progress" aria-label={`${completed.length} / ${cap.order.length} 패드 완료`}>
-            {cap.order.map((pad) => (
-              <span key={pad} className={`cal-stage-dot ${completed.includes(pad) ? 'done' : pad === cap.target ? 'now' : ''}`} title={PAD_META[pad].label} />
-            ))}
-          </span>
-        </div>
-      </div>
-        {card}
-      </div>
-      {overlaps.length > 0 && <p className="cal-stage-overlaps">{overlapSummaryText(overlaps)}</p>}
+      </StagePanel>
       {cap.warning && <p className="cal-stage-warn">{spreadWarningText(cap.warning)}</p>}
       {weak && !cap.warning && <p className="cal-stage-hint">조금 세게 쳐 보세요</p>}
     </div>

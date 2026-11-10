@@ -80,8 +80,21 @@ export function overlapLineText(other: PadId, deg: number): string {
   return `${label}${josaWaGwa(label)} ${Math.round(deg)}°`;
 }
 
-/** 결과 화면 겹침 목록 요약: 「서로 너무 가까워요: 하이햇–크래시 10°(왼손), …」 */
-export function overlapSummaryText(items: ReadonlyArray<PadGap & { stickId: StickId }>): string {
-  const parts = items.map((g) => `${PAD_META[g.a].label}–${PAD_META[g.b].label} ${Math.round(g.deg)}°(${HAND_NAME[g.stickId]})`);
-  return `서로 너무 가까워요: ${parts.join(', ')}`;
+/** 결과 배너 안내 한 줄(v0.2) */
+export const RESULT_BANNER_ADVICE_TEXT = '드럼을 눌러 [다시 치기]로 그 자리를 다시 잡을 수 있어요';
+
+/**
+ * 결과 배너 머리(v0.2): 「2쌍이 너무 가까워요 · 하이햇–크래시 10°, 스몰탐–미드탐 14°」.
+ * 같은 쌍이 양손에서 겹치면 한 쌍으로 세고 더 가까운 각도를 적는다
+ */
+export function overlapBannerText(items: ReadonlyArray<PadGap & { stickId: StickId }>): string {
+  const pairs = new Map<string, { a: PadId; b: PadId; deg: number }>();
+  for (const g of items) {
+    const key = [g.a, g.b].sort().join('|');
+    const prev = pairs.get(key);
+    if (!prev || g.deg < prev.deg) pairs.set(key, { a: g.a, b: g.b, deg: g.deg });
+  }
+  const list = [...pairs.values()].sort((x, y) => x.deg - y.deg);
+  const parts = list.map((g) => `${PAD_META[g.a].label}–${PAD_META[g.b].label} ${Math.round(g.deg)}°`);
+  return `${list.length}쌍이 너무 가까워요 · ${parts.join(', ')}`;
 }
