@@ -9,6 +9,7 @@ import type { RealignInfo } from '@/components/calibration/RealignPrompt';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { useDockRaised } from '@/components/shell/useShell';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
@@ -41,6 +42,8 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
   const sensorKind = useSettings((s) => s.sensorKind);
   // 동글 소스만 페달을 본다(undefined면 끊김 카드가 P 점을 그리지 않는다)
   const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
+  // 팝업이 떠 있는 동안 Dock을 스크림 위로 올린다(Q9). 끊김 카드도 같은 컴포넌트라 함께 적용된다
+  useDockRaised();
   const reconnectState = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);

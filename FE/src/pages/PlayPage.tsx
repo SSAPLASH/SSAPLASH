@@ -36,7 +36,7 @@ import { TimingBar } from '@/components/play/TimingBar';
 import { strayMissSource } from '@/components/play/strayMissSource';
 import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { usePlayRunning, useShell } from '@/components/shell/useShell';
+import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
@@ -134,6 +134,8 @@ function PlayPageBody() {
   useJudgementHaptic(session, stage === 'play');
   // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
   useKeyboardDrum(stage === 'play');
+  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·준비 화면에는 없다(QA 352 Q8)
+  useDock(stage === 'play');
   // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
   useEffect(() => {
     setLocked(stage === 'play');
