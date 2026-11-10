@@ -219,68 +219,37 @@ def register(
     모델로는 `MODEL_FILES`만 올리고 `report.json`은 실행(run)의 산출물로만 남긴다. 게시는 서버에서
     `publish-model publish <모델 이름> <버전>`으로 따로 한다(이 함수는 게시하지 않는다).
     """
-    import os
-    import tempfile
+    from ssaplash_ai.coach_live_model.registry import register_model_files
 
-    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
-    import mlflow
-    from mlflow import MlflowClient
-    from mlflow.exceptions import MlflowException
-
-    from ssaplash_ai.coach_calibration.register import resolve_tracking_uri
-
-    missing = [n for n in MODEL_FILES if not (out / n).is_file()]
-    if missing:
-        raise FileNotFoundError(f"등록할 파일이 없습니다: {', '.join(missing)}")
-    uri = resolve_tracking_uri(tracking_uri)
-    mlflow.set_tracking_uri(uri)
-    mlflow.set_registry_uri(uri)
-    mlflow.set_experiment(EXPERIMENT_NAME)
-
+    if not (out / META_JSON).is_file():
+        raise FileNotFoundError(f"등록할 파일이 없습니다: {META_JSON}")
     meta = json.loads((out / META_JSON).read_text(encoding="utf-8"))
-    with mlflow.start_run(run_name=f"{MODEL_VERSION}-{model_name}") as run:
-        mlflow.log_params(
-            {
-                "modelName": model_name,
-                "modelVersion": MODEL_VERSION,
-                "featureVersion": meta["featureVersion"],
-                "threshold": round(chosen.threshold, 6),
-                "rows": report.get("rows"),
-                "perCell": report.get("perCell"),
-            }
-        )
-        mlflow.log_metrics(
-            {
-                "auc": chosen.auc,
-                "recall": chosen.recall,
-                "falseKept": chosen.false_kept,
-                "falseKeptAt98": chosen.false_kept_at_98,
-                "onnxMaxDiff": float(report.get("onnxMaxDiff", 0.0)),
-            }
-        )
-        mlflow.set_tags({"task": "gate", "trainedOn": meta["trainedOn"]})
-        mlflow.log_artifact(str(out / REPORT_JSON))
-        # 모델 폴더에는 브라우저가 받을 파일만 넣는다
-        with tempfile.TemporaryDirectory() as tmp:
-            for name in MODEL_FILES:
-                (Path(tmp) / name).write_bytes((out / name).read_bytes())
-            mlflow.log_artifacts(tmp, artifact_path="model")
-        source = mlflow.get_artifact_uri("model")
-
-    client = MlflowClient()
-    try:
-        client.create_registered_model(model_name)
-    except MlflowException as e:
-        if e.error_code != "RESOURCE_ALREADY_EXISTS":
-            raise
-    version = client.create_model_version(
-        model_name,
-        source,
-        run.info.run_id,
+    return register_model_files(
+        out,
+        MODEL_FILES,
+        experiment=EXPERIMENT_NAME,
+        model_name=model_name,
+        run_name=f"{MODEL_VERSION}-{model_name}",
+        params={
+            "modelName": model_name,
+            "modelVersion": MODEL_VERSION,
+            "featureVersion": meta["featureVersion"],
+            "threshold": round(chosen.threshold, 6),
+            "rows": report.get("rows"),
+            "perCell": report.get("perCell"),
+        },
+        metrics={
+            "auc": chosen.auc,
+            "recall": chosen.recall,
+            "falseKept": chosen.false_kept,
+            "falseKeptAt98": chosen.false_kept_at_98,
+            "onnxMaxDiff": float(report.get("onnxMaxDiff", 0.0)),
+        },
         tags={
             "task": "gate",
             "featureVersion": str(meta["featureVersion"]),
             "trainedOn": meta["trainedOn"],
         },
+        report_file=REPORT_JSON,
+        tracking_uri=tracking_uri,
     )
-    return str(version.version)
