@@ -53,12 +53,14 @@ function MiniStaff({ pad }: { pad: PadId }) {
 export interface StaffLegendProps {
   /** 강조할 줄(패드 타격 때 부모가 짧게 넘긴다) */
   activePad?: PadId;
+  /** 동시에 강조할 줄들(안내 애니메이션의 같은 칸 패드). activePad와 합쳐 모두 강조한다 */
+  activePads?: readonly PadId[];
   /** 줄에 마우스를 올리거나 포커스하면 그 패드, 벗어나면 null */
   onHoverPad?: (pad: PadId | null) => void;
   className?: string;
 }
 
-export function StaffLegend({ activePad, onHoverPad, className }: StaffLegendProps) {
+export function StaffLegend({ activePad, activePads, onHoverPad, className }: StaffLegendProps) {
   return (
     <section className={['play-sl', className].filter(Boolean).join(' ')} aria-label="악보 읽는 법">
       <h3 className="play-sl-title">악보 읽는 법</h3>
@@ -67,10 +69,11 @@ export function StaffLegend({ activePad, onHoverPad, className }: StaffLegendPro
         {LEGEND_PADS.map((pad) => {
           const meta = PAD_META[pad];
           const { line } = staffPosOf(pad);
+          const active = activePad === pad || activePads?.includes(pad) === true;
           return (
             <li
               key={pad}
-              className={`play-sl-row${activePad === pad ? ' active' : ''}`}
+              className={`play-sl-row${active ? ' active' : ''}`}
               tabIndex={0}
               aria-label={`${meta.label} — ${staffPosText(line)}, ${meta.stick ? '손' : '발'}${pad === 'HIHAT' ? ', o 열린 하이햇, 페달 떼고 치기' : ''}`}
               onMouseEnter={() => onHoverPad?.(pad)}
