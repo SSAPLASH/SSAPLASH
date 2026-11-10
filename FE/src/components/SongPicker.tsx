@@ -26,6 +26,8 @@ import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
+import { songListQuery } from '@/api/queries/songs';
+import { useApiQuery } from '@/app/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
@@ -108,7 +110,8 @@ function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommen
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
 export function SongPicker({ onSelect, mode }: Props) {
-  const { source, scope, items, status, error, load, selectSong } = useSongs();
+  const source = useSongs((s) => s.source);
+  const selectSong = useSongs((s) => s.selectSong);
   const presets = useSettings((s) => s.presets);
   const activePresetId = useSettings((s) => s.activePresetId);
   // 추천: API 곡 소스이고 로그인 상태일 때만 탭과 무관하게 마운트 시 한 번 요청한다(U7)
@@ -123,7 +126,7 @@ export function SongPicker({ onSelect, mode }: Props) {
   // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
   const [params, setParams] = useSearchParams();
   const [rawTab, setRawTab] = useState<PickerTab>(
-    params.get('tab') === LESSONS_TAB_PARAM ? 'LESSONS' : params.get('scope') === 'MINE' ? 'MINE' : scope,
+    params.get('tab') === LESSONS_TAB_PARAM ? 'LESSONS' : params.get('scope') === 'MINE' ? 'MINE' : useSongs.getState().scope,
   );
   // 곡 선택이 떠 있는 동안 주소의 tab만 바뀌면(권유 카드 [입문 코스 시작], 사이드바 「악보 연습」) 탭을 따라 바꾼다.
   // 같은 경로라 화면이 다시 만들어지지 않으므로 렌더 중에 맞춘다
@@ -167,6 +170,17 @@ export function SongPicker({ onSelect, mode }: Props) {
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
+  // 서버로 보낼 검색어. 입력은 디바운스 뒤에 옮기고 탭·난이도 변경은 즉시 반영한다
+  const [sentQuery, setSentQuery] = useState(query);
+  // 곡 목록은 서버 데이터 캐시로 읽는다(설계 TECH-350). AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다).
+  const list = useApiQuery({
+    ...songListQuery({ scope: tab === 'MINE' ? 'MINE' : 'BUILTIN', q: sentQuery, ...listFilter(level) }, source),
+    // 입문 코스 탭도 곡 목록을 쓰지 않는다
+    enabled: tab !== 'RECOMMEND' && tab !== 'LESSONS',
+  });
+  const items = useMemo(() => list.data ?? [], [list.data]);
+  const status = list.status;
+  const error = list.error;
   // 내장 개발 소스만 로컬 기록을 사용한다. API 실패를 로컬값으로 대체하지 않는다.
   const localBests = useMemo(() => {
     const logs = source === 'builtin' ? loadPlayLogs() : [];
@@ -185,7 +199,7 @@ export function SongPicker({ onSelect, mode }: Props) {
   const ready = isAi ? recoEntry.status === 'ready' || recoEntry.status === 'hidden' : status === 'ready';
   const listLoading = isAi ? !ready : status === 'loading';
 
-  const recordsReady = isAi ? ready : status === 'ready' && scope === tab;
+  const recordsReady = isAi ? ready : status === 'ready' && !list.isPlaceholder;
   const records = useBestRecords(recordsReady ? songs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
   const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
@@ -205,11 +219,14 @@ export function SongPicker({ onSelect, mode }: Props) {
     const delay = firstLoad.current || queryRef.current === query ? 0 : SEARCH_DEBOUNCE_MS;
     firstLoad.current = false;
     queryRef.current = query;
-    // AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다). 입문 코스 탭도 곡 목록을 쓰지 않는다
-    if (tab === 'RECOMMEND' || tab === 'LESSONS') return;
-    const t = setTimeout(() => void load(tab, query, listFilter(level)), delay);
+    const t = setTimeout(() => setSentQuery(query), delay);
     return () => clearTimeout(t);
-  }, [tab, query, level, load]);
+  }, [query]);
+
+  // 다음 진입의 기본 탭을 위해 마지막 목록 탭을 기억한다(기존 동작 유지, 설계 TECH-350 U4)
+  useEffect(() => {
+    if ((tab === 'BUILTIN' || tab === 'MINE') && useSongs.getState().scope !== tab) useSongs.setState({ scope: tab });
+  }, [tab]);
 
   const fetchDetail = useCallback(
     (id: number) => {
@@ -230,7 +247,7 @@ export function SongPicker({ onSelect, mode }: Props) {
     return Number.isInteger(n) && n > 0 ? n : null;
   }, [params]);
   const deepTarget =
-    deepLinkId !== null && tab === 'MINE' && ready && scope === 'MINE'
+    deepLinkId !== null && tab === 'MINE' && ready && !list.isPlaceholder
       ? items.find((s) => s.id === deepLinkId && isPlayableStatus(s.status))
       : undefined;
   const pick = (id: number) => {
@@ -349,7 +366,7 @@ export function SongPicker({ onSelect, mode }: Props) {
       {!isAi && status === 'error' && (
         <div className="notice error col" role="alert">
           <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
-          <Button variant="secondary" size="sm" onClick={() => void load(tab, query, listFilter(level))}>
+          <Button variant="secondary" size="sm" onClick={list.refetch}>
             다시 시도
           </Button>
         </div>

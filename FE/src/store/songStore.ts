@@ -4,6 +4,9 @@ import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
 import { getSong, listAllSongs } from '@/api/songs';
+import { queryClient } from '@/app/queryClient';
+import { songKeys } from '@/api/queries/songs';
+import { builtinSummary, listBuiltinSongs } from '@/domain/builtinSongs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
 import type { SongDetail, SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
@@ -25,27 +28,6 @@ const builtinIndex = (id: number): number => -id - 1;
 
 function builtinChart(id: number): Chart | null {
   return BUILTIN_CHARTS[builtinIndex(id)] ?? null;
-}
-
-function builtinSummary(c: Chart, index: number): SongSummary {
-  return {
-    id: builtinId(index),
-    title: c.title,
-    artist: '기본 제공',
-    source: 'BUILTIN',
-    status: 'READY',
-    bpm: c.bpm,
-    timeSignature: `${c.beatsPerBar}/4`,
-    durationMs: c.durationMs,
-    hasAccompaniment: false,
-    accompanimentStatus: 'NONE',
-    // 내장 곡은 BE 산정 대상이 아니고 FE는 난이도를 계산하지 않는다
-    songLevel: null,
-    difficulties: [c.difficulty],
-    createdAt: '',
-    coverUrl: null,
-    sheetId: null,
-  };
 }
 
 function builtinDetail(id: number): SongDetail | null {
@@ -87,6 +69,17 @@ interface SongsState {
 
 let seq = 0;
 
+/** 다시 읽은 상세의 상태 필드만 옮긴다 */
+function patchStatus(s: SongSummary, song: SongSummary): SongSummary {
+  return {
+    ...s,
+    status: song.status,
+    hasAccompaniment: song.hasAccompaniment,
+    accompanimentStatus: song.accompanimentStatus,
+    songLevel: song.songLevel,
+  };
+}
+
 export const useSongs = create<SongsState>()((set, get) => ({
   source: SONGS_SOURCE,
   scope: 'BUILTIN',
@@ -100,14 +93,7 @@ export const useSongs = create<SongsState>()((set, get) => ({
     try {
       let items: SongSummary[];
       if (get().source === 'builtin') {
-        const needle = q?.trim().toLowerCase() ?? '';
-        // 내장 곡은 난이도가 없다(null). playableOnly는 무시하고 난이도 필터만 흉내 낸다(설계 3-3)
-        items =
-          scope === 'MINE'
-            ? []
-            : BUILTIN_CHARTS.map(builtinSummary).filter(
-                (s) => (!needle || s.title.toLowerCase().includes(needle)) && (!filter?.songLevel || s.songLevel === filter.songLevel),
-              );
+        items = listBuiltinSongs(scope, q, filter?.songLevel);
       } else {
         // 표가 전체 배열을 쪽으로 나누므로 hasNext가 끝날 때까지 모두 읽는다(Jira 363)
         items = await listAllSongs(
@@ -117,6 +103,8 @@ export const useSongs = create<SongsState>()((set, get) => ({
       }
       if (my !== seq) return;
       set({ items, status: 'ready' });
+      // 내 곡을 다시 읽었다 = /studio에서 업로드·삭제·수정이 있었다. 곡 선택 화면의 목록 캐시도 새로 받게 한다(설계 TECH-350 U1)
+      if (scope === 'MINE') void queryClient.invalidateQueries({ queryKey: songKeys.all });
     } catch (e) {
       if (my !== seq) return;
       set({ items: [], status: 'error', error: messageOf(e) });
@@ -132,20 +120,12 @@ export const useSongs = create<SongsState>()((set, get) => ({
     return getSong(id);
   },
 
-  patchItem: (song) =>
-    set((st) => ({
-      items: st.items.map((s) =>
-        s.id === song.id
-          ? {
-              ...s,
-              status: song.status,
-              hasAccompaniment: song.hasAccompaniment,
-              accompanimentStatus: song.accompanimentStatus,
-              songLevel: song.songLevel,
-            }
-          : s,
-      ),
-    })),
+  patchItem: (song) => {
+    const patch = (list: SongSummary[]): SongSummary[] => list.map((s) => (s.id === song.id ? patchStatus(s, song) : s));
+    set((st) => ({ items: patch(st.items) }));
+    // 곡 선택 화면의 목록 캐시도 같은 곡 상태를 맞춘다(설계 TECH-350 U3)
+    queryClient.setQueriesData<SongSummary[]>({ queryKey: songKeys.lists() }, (old) => (old ? patch(old) : old));
+  },
 }));
 
 export interface LoadedChart {
