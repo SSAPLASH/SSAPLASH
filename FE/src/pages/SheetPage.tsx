@@ -158,7 +158,10 @@ function SheetPageBody() {
   }, [ready]);
 
   // 반주 URL: 개발 override > 자산. 없으면 반주 없이 클릭만
-  const accUrl = paramLoaded ? (ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null) : null;
+  // 설정 `accompaniment`가 꺼져 있으면 반주를 불러오지도 재생하지도 않는다(MODE-003)
+  const accEnabled = settings.accompaniment;
+  const accAvailableUrl = paramLoaded ? (ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null) : null;
+  const accUrl = accEnabled ? accAvailableUrl : null;
   const accCurrent = accResult && accResult.loaded === paramLoaded ? accResult : null;
   const accLoading = accUrl !== null && accCurrent === null;
   const accError = accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
