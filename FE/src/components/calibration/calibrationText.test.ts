@@ -10,7 +10,7 @@ import {
   gapAdviceText,
   gapWarningText,
   overlapLineText,
-  overlapSummaryText,
+  overlapBannerText,
   realignPromptText,
   spreadWarningText,
 } from './calibrationText';
@@ -59,7 +59,15 @@ describe('간격 경고 문구(PLAY-004 개편)', () => {
     expect(overlapLineText('CRASH', 10.2)).toBe('크래시와 10°');
     expect(overlapLineText('SNARE', 14.7)).toBe('스네어와 15°');
     expect(overlapLineText('RIDE', 8)).toBe('라이드와 8°');
-    expect(overlapSummaryText([{ a: 'HIHAT', b: 'CRASH', deg: 10.2, stickId: 0 }])).toBe('서로 너무 가까워요: 하이햇–크래시 10°(왼손)');
+    expect(overlapBannerText([{ a: 'HIHAT', b: 'CRASH', deg: 10.2, stickId: 0 }])).toBe('1쌍이 너무 가까워요 · 하이햇–크래시 10°');
+    // 같은 쌍이 양손에서 겹치면 한 쌍(더 가까운 각도), 가까운 쌍부터
+    expect(
+      overlapBannerText([
+        { a: 'SMALL_TOM', b: 'MID_TOM', deg: 14.4, stickId: 1 },
+        { a: 'HIHAT', b: 'CRASH', deg: 12, stickId: 0 },
+        { a: 'HIHAT', b: 'CRASH', deg: 10.2, stickId: 1 },
+      ]),
+    ).toBe('2쌍이 너무 가까워요 · 하이햇–크래시 10°, 스몰탐–미드탐 14°');
   });
 });
 

@@ -203,7 +203,7 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
 });
 
 describe('SetupPage 보정 중(UX-64)', () => {
-  it('추가하기 보정 중이면 드럼 배치 카드가 보정 무대이고 칩 줄은 「새 프리셋 · 보정 중」 + pill + [보정 취소], 하단 바는 보정 문구에 [저장] 비활성', async () => {
+  it('추가하기 보정 중이면 드럼 배치 카드가 보정 무대이고 칩 줄은 「새 프리셋 · 보정 중」 + pill + [보정 취소], 하단 바는 보정 문구만(저장 버튼 없음, D13)', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
     putLive({
       connected: [true, true],
@@ -233,7 +233,10 @@ describe('SetupPage 보정 중(UX-64)', () => {
     expect(html).toContain('보정 중 1 / 7');
     expect(html).toContain('보정 취소');
     expect(html).toContain('새 프리셋 보정 중 · 7개 중 1번째');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>저장</);
+    // D13: 보정 중에는 하단 바에 [저장]·[새 프리셋으로 저장] 버튼이 없다(결과 카드의 [저장]만 남는다)
+    expect(html).not.toMatch(/<button[^>]*>저장</);
+    expect(html).not.toMatch(/<button[^>]*>새 프리셋으로 저장</);
+    expect(html).toContain('setup-bar');
     expect(html).not.toContain('setup-editor');
   });
 });

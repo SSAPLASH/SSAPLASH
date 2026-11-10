@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-// CalibrationStage 검증(PLAY-004 4-1, 개편 D2·D3·D6·D10): 진행 중(버튼 없음)·자동 진행 대기·간격 경고([다시][다음|결과 보기])·결과 화면(겹침 테두리·선택·다시 치기·저장)·재정렬.
+// CalibrationStage 검증(PLAY-004 4-1, 개편 D2·D3·D6·D10·D11·D14, v0.2): 진행 중(카드 버튼 없음)·자동 진행 대기·간격 경고 배너([◯◯ 다시], 스냅샷 기준으로 사라짐)·
+// 결과 화면(겹침 테두리·결과 배너·base 포함 겹침·선택·다시 치기·저장)·재정렬.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ redo: vi.fn(), next: vi.fn(), setRadiusOverride: vi.fn(), skipRealign: vi.fn() }));
 vi.mock('@/app/calibrationSession', () => ({ calibrationSession: h }));
@@ -42,6 +43,7 @@ function setCapture(over: Partial<CaptureSnapshot> = {}, target: CalibrationSnap
     advancing: false,
     lastAccepted: null,
     radiusOverrides: {},
+    base: [null, null],
     ...over,
   };
   useLive.setState({ calibration: { mode: 'capture', capture: cap, realign: null, hands: cap.hands, target } });
@@ -119,26 +121,46 @@ describe('CalibrationStage 보정 진행', () => {
   });
 });
 
-describe('CalibrationStage 간격 경고(D3)', () => {
+describe('CalibrationStage 간격 경고 배너(D3, v0.2)', () => {
   const warnCap = (over: Partial<CaptureSnapshot> = {}): Partial<CaptureSnapshot> => ({
-    phase: 'padDone',
-    counts: [2, 2],
+    phase: 'capturing',
+    index: 2,
+    target: 'SNARE',
+    counts: [0, 0],
     captured: CLOSE,
     gapWarnings: [{ stickId: 0, pad: 'CRASH', near: 'HIHAT', deg: 10.3 }],
     ...over,
   });
 
-  it('멈추고 경고 머리·안내 문구와 [다시][다음]을 보인다(--warn 카드)', () => {
+  it('멈추지 않는다: 다음 패드를 기다리는 capturing에서 경고 머리·안내·[크래시 다시] 배너가 뜨고 정보 카드는 진행 표시 그대로', () => {
     setCapture(warnCap());
     const { container } = render(<CalibrationStage />);
-    expect(container.querySelector('.setup-kitinfo.warn')).not.toBeNull();
+    expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();
+    expect(screen.getByText('스네어 3/7')).toBeTruthy();
+    expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
     expect(screen.getByText('왼손 크래시가 하이햇과 10°밖에 안 떨어져 있어요')).toBeTruthy();
     expect(screen.getByText('크래시는 스틱 끝을 더 높이 들고 바깥쪽으로, 하이햇은 앞쪽 아래로 쳐 보세요')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '다시' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '다음' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '크래시 다시' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '다음' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '결과 보기' })).toBeNull();
+    expect(container.querySelectorAll('.setup-kitinfo button').length).toBe(0);
   });
 
-  it('손마다 경고·안내 문구를 따로 보인다', () => {
+  it('자동 진행 대기(padDone·advancing) 중에도 배너를 보인다', () => {
+    setCapture(warnCap({ phase: 'padDone', advancing: true, index: 1, target: 'CRASH', counts: [2, 2] }));
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: '크래시 다시' })).toBeTruthy();
+  });
+
+  it('[◯◯ 다시]는 그 패드를 redo한다', () => {
+    setCapture(warnCap());
+    render(<CalibrationStage />);
+    fireEvent.click(screen.getByRole('button', { name: '크래시 다시' }));
+    expect(h.redo).toHaveBeenCalledWith('CRASH');
+  });
+
+  it('손마다 경고·안내 문구를 따로 보이되 [다시] 버튼은 패드마다 하나', () => {
     setCapture(
       warnCap({
         gapWarnings: [
@@ -150,29 +172,22 @@ describe('CalibrationStage 간격 경고(D3)', () => {
     render(<CalibrationStage />);
     expect(screen.getByText('왼손 크래시가 하이햇과 10°밖에 안 떨어져 있어요')).toBeTruthy();
     expect(screen.getByText('오른손 크래시가 하이햇과 12°밖에 안 떨어져 있어요')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: '크래시 다시' }).length).toBe(1);
   });
 
-  it('[다시]는 현재 패드를 redo, [다음]은 next를 부른다', () => {
+  it('다음 타격이 수락돼 엔진이 gapWarnings를 비운 스냅샷이면 배너가 사라진다', () => {
     setCapture(warnCap());
-    render(<CalibrationStage />);
-    fireEvent.click(screen.getByRole('button', { name: '다시' }));
-    expect(h.redo).toHaveBeenCalledWith('CRASH');
-    fireEvent.click(screen.getByRole('button', { name: '다음' }));
-    expect(h.next).toHaveBeenCalledTimes(1);
-  });
-
-  it('남은 패드가 없으면 [다음] 라벨이 「결과 보기」', () => {
-    const rest = { SNARE: ALL.SNARE, SMALL_TOM: ALL.SMALL_TOM, MID_TOM: ALL.MID_TOM, FLOOR_TOM: ALL.FLOOR_TOM, HIHAT: ALL.HIHAT };
-    setCapture(warnCap({ index: 6, target: 'RIDE', captured: { ...rest, RIDE: both('RIDE', 20, 80), CRASH: both('CRASH', 0, -32) }, gapWarnings: [{ stickId: 0, pad: 'RIDE', near: 'CRASH', deg: 15 }] }));
-    render(<CalibrationStage />);
-    expect(screen.getByRole('button', { name: '결과 보기' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '다음' })).toBeNull();
-  });
-
-  it('자동 진행 대기(advancing) 중이면 경고가 있어도 버튼을 그리지 않는다', () => {
-    setCapture(warnCap({ advancing: true }));
     const { container } = render(<CalibrationStage />);
-    expect(container.querySelectorAll('button').length).toBe(0);
+    expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
+    act(() => setCapture(warnCap({ gapWarnings: [], counts: [1, 0] })));
+    expect(container.querySelector('[data-testid="gap-banner-progress"]')).toBeNull();
+    expect(container.querySelector('.setup-panel-banner')).toBeNull();
+  });
+
+  it('경고가 없으면 배너가 없다', () => {
+    setCapture();
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('.cal-gap-banner')).toBeNull();
   });
 });
 
@@ -187,7 +202,10 @@ describe('CalibrationStage 결과 화면(D6)', () => {
     expect(container.querySelector('[data-selected-pad]')?.getAttribute('data-selected-pad')).toBe('HIHAT');
     expect(container.querySelector('.setup-kitinfo-name')?.textContent).toBe('하이햇');
     expect(container.querySelector('.cal-overlap-line')?.textContent).toMatch(/^크래시와 \d+°$/);
-    expect(container.querySelector('.cal-stage-overlaps')?.textContent).toMatch(/^서로 너무 가까워요: 하이햇–크래시 \d+°\(왼손\), 하이햇–크래시 \d+°\(오른손\)$/);
+    // 양손이 같은 쌍으로 겹치면 한 쌍으로 센다
+    expect(container.querySelector('[data-testid="gap-banner-result"] .cal-stage-overlaps')?.textContent).toMatch(/^1쌍이 너무 가까워요 · 하이햇–크래시 \d+°$/);
+    expect(screen.getByText('드럼을 눌러 [다시 치기]로 그 자리를 다시 잡을 수 있어요')).toBeTruthy();
+    expect(container.querySelector('[data-testid="gap-banner-progress"]')).toBeNull();
     expect(container.querySelector('.cal-stage-headline')).toBeNull();
     expect(container.querySelector('.drum-pad-dim')).toBeNull(); // 결과 화면은 어둡게 하지 않는다
   });
@@ -198,7 +216,29 @@ describe('CalibrationStage 결과 화면(D6)', () => {
     expect(container.querySelector('[data-warn-pad]')).toBeNull();
     expect(container.querySelector('[data-selected-pad]')?.getAttribute('data-selected-pad')).toBe('HIHAT');
     expect(container.querySelector('.cal-overlap-line')).toBeNull();
-    expect(container.querySelector('.cal-stage-overlaps')).toBeNull();
+    expect(container.querySelector('.cal-gap-banner')).toBeNull();
+  });
+
+  it('D14: 패드 하나만 다시 보정해도 세션 밖 앵커(base)와의 겹침이 결과 배너·테두리에 보인다. 세션 밖 패드끼리의 쌍은 제외', () => {
+    // 세션은 크래시만. base: 왼손 하이햇이 크래시와 8° 거리, 스네어와 미드탐이 서로 8° 거리(세션 밖끼리)
+    const base: CaptureSnapshot['base'] = [
+      { HIHAT: anchor('HIHAT', 0, -40), SNARE: anchor('SNARE', -20, 0), MID_TOM: anchor('MID_TOM', -20, 8) },
+      null,
+    ];
+    setCapture(doneCap({ order: ['CRASH'], index: 0, hands: [0], captured: { CRASH: [anchor('CRASH', 0, -32), undefined] }, base }));
+    const { container } = render(<CalibrationStage />);
+    const warn = [...container.querySelectorAll('[data-warn-pad]')].map((e) => e.getAttribute('data-warn-pad'));
+    expect(warn.sort()).toEqual(['CRASH', 'HIHAT']);
+    expect(container.querySelector('[data-testid="gap-banner-result"] .cal-stage-overlaps')?.textContent).toMatch(/^1쌍이 너무 가까워요 · 하이햇–크래시 \d+°$/);
+    expect(container.querySelector('.cal-overlap-line')?.textContent).toMatch(/^(하이햇|크래시)와 \d+°$/);
+  });
+
+  it('D14: 세션 패드와 base 패드가 같은 패드면 base 값은 쓰지 않는다(옛 자리와 겹침 없음)', () => {
+    const base: CaptureSnapshot['base'] = [{ HIHAT: anchor('HIHAT', 0, -40), CRASH: anchor('CRASH', 0, -38) }, null];
+    setCapture(doneCap({ order: ['CRASH'], index: 0, hands: [0], captured: { CRASH: [anchor('CRASH', 0, 60), undefined] }, base }));
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('[data-warn-pad]')).toBeNull();
+    expect(container.querySelector('.cal-gap-banner')).toBeNull();
   });
 
   it('패드를 누르면 선택이 바뀌고 [다시 치기]는 선택 패드를 redo, [저장]은 onSave', () => {
