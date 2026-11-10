@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // 랜딩 라우트 상호작용(설계 UX-353 6장): 주소·인증 상태별 팝업·리다이렉트, 모드별 돌아갈 경로, 오류 문구, 가입 동의 제출.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { UserMe } from '@/domain/auth';
@@ -188,6 +188,34 @@ describe('/signup 비로그인·확인 중', () => {
     useAuth.setState({ status: 'restoring', user: null, restore: vi.fn().mockResolvedValue(undefined) });
     setup('/signup');
     expect(screen.getByText('로그인 확인 중…')).toBeTruthy();
+  });
+});
+
+describe('로그인 확인 중', () => {
+  beforeEach(() => {
+    useAuth.setState({ status: 'restoring', user: null, restore: vi.fn().mockResolvedValue(undefined) });
+  });
+
+  it.each(['/', '/login'])('%s는 랜딩·팝업 없이 확인 중 화면만 보인다', (path) => {
+    setup(path);
+    expect(screen.getByText('로그인 확인 중…')).toBeTruthy();
+    expect(dialog()).toBeNull();
+    expect(screen.queryAllByRole('button', { name: /로그인/ })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: '자유 모드로 시작' })).toHaveLength(0);
+  });
+
+  it('로그인으로 확인되면 랜딩 없이 /free로 간다', async () => {
+    setup('/');
+    expect(screen.queryAllByRole('button', { name: /로그인/ })).toHaveLength(0);
+    act(() => useAuth.setState({ status: 'authenticated', user: USER }));
+    await waitFor(() => expect(where()).toBe('/free'));
+    expect(screen.queryAllByRole('button', { name: /로그인/ })).toHaveLength(0);
+  });
+
+  it('비로그인으로 확인되면 랜딩이 보인다', () => {
+    setup('/');
+    act(() => useAuth.setState({ status: 'anonymous', user: null }));
+    expect(screen.getAllByRole('button', { name: /로그인/ }).length).toBeGreaterThan(0);
   });
 });
 
