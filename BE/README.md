@@ -443,6 +443,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V44 | `V44__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
 | V45 | `V45__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
 | V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
+| V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
 
 규칙:
 
@@ -1327,6 +1328,33 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - `facts`에는 타격 원본·회원 번호·`playId`·`songId`가 없다: `level`, `focusPattern`, `counts`(판정 개수), `strengthPad`, `segments`(최대 5개), 같은 사용자·같은 곡의 바로 직전 플레이를 요약한 `history`(없으면 키 없음).
 - Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
 - 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
+
+## 연주 중 LLM 구간 코칭 작업 (COACH-001, 설계 `.claude/plans/COACH-001-연주중-LLM-코칭-설계.md`)
+
+연주 중 4·8·16마디 구간이 끝날 때 FE가 구간 사실(`facts`)을 보내면, 교내 GPU 서버의 워커가 가져가 리포트 총평과 같은 로컬 모델로 안내 칸 문구(`title` 8자, `sub` 16자)를 써서 제출한다. FE는 짧은 주기로 결과를 조회해 다음 구간에 띄운다. 늦은 답은 쓸모없어서 짧게 살다 지워지는 큐(`live_coach_jobs`, V47)다. 계약과 가드레일은 AI `AI/docs/live-coach-llm.md`.
+
+- **켜기:** `LIVE_COACH_LLM_ENABLED`(기본 `false`). 꺼져 있으면 요청이 204로 끝나고 아무것도 저장하지 않는다. FE는 실험 설정(`coach-live-config`의 `llm`)도 따로 본다.
+- **상한:** 판당 `LIVE_COACH_LLM_PER_RUN`(기본 10), 사용자당 1분 `LIVE_COACH_LLM_PER_MINUTE`(기본 6). 넘으면 429. 판은 FE가 판마다 만드는 임의 번호(`runId`)로 센다(`playId`가 아니다).
+- **사실:** 객체, `contractVersion` 1, 4KB 이하만 받는다. 내용은 해석하지 않고 워커에 그대로 넘긴다. FE가 타격 원본·`playId`·곡 정보를 넣지 않는다.
+- **수명:** 워커는 만들어진 지 30초 안의 작업만 가져가고(그보다 오래되면 실패로 닫음), 임대 15초·시도 1번. 사용자 조회는 60초까지, 5분이 지난 행은 다음 요청 때 지운다.
+
+사용자 API(로그인 필요):
+
+| 호출 | 요청 | 응답 |
+| --- | --- | --- |
+| `POST /api/v1/live-coach/segments` | `{runId, facts}` | 202 `{requestId, expiresAt}`. 꺼짐 204, 상한 초과 429, 잘못된 사실 400 |
+| `GET /api/v1/live-coach/segments/{requestId}` | — | 대기 중 202 `{status}`, 완료 200 `{status:DONE, title, sub, model, generationMs}`, 실패·만료 410, 남의 요청·없음 404 |
+
+워커 API(채보·총평 워커와 같은 Bearer 토큰, `/internal/**`):
+
+| 호출 | 요청 | 응답 |
+| --- | --- | --- |
+| `POST /internal/v1/live-coach-jobs/claim` | `{workerId, claimRequestId}` | 작업이 없으면 204. 있으면 `{jobId, attemptId, leaseExpiresAt, facts}`. 같은 워커·같은 `claimRequestId`는 같은 배정 |
+| `POST /internal/v1/live-coach-jobs/{jobId}/result` | `{attemptId, title, sub, model, generationMs}` | `{status: DONE}`. `title` 1~8자, `sub` 0~16자, 제어 문자 없음, `model` 37자 이하, `generationMs` 0~60,000 |
+| `POST /internal/v1/live-coach-jobs/{jobId}/failure` | `{attemptId, code, summary}` | `{status: FAILED}`. `code`는 `INPUT_INVALID`·`MODEL_FAILED`·`OUTPUT_INVALID`(재시도 없음) |
+
+- Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 IP 허용으로 연다.
+- 시험: `LiveCoachQueueTest`(요청·claim·result·조회, claim 멱등성, 남의 요청 404, 판당·분당 상한 429, 잘못된 사실, 실패·만료 410, 오래된 작업 미배정, 결과 길이 검증과 임대 확인, 꺼짐).
 
 ## 곡 추천 R1: 규칙 추천 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md`)
 
