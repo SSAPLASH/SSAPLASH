@@ -1,5 +1,5 @@
-// 2타 보정 상태 기계 검증(PLAY-004 3-5, UX-64 D3, 보정 흐름 개편): 순서·손별 2타·자동 진행(지연)·간격 경고(padDone 대기)·
-// next(경고 무시)·redo(done에서도)·base(재보정)·손별 독립 비교·퍼짐 되돌림·손 추가/제거·restart·build.
+// 2타 보정 상태 기계 검증(PLAY-004 3-5, UX-64 D3, 보정 흐름 개편): 순서·손별 2타·자동 진행(지연)·간격 경고(멈추지 않음·다음 첫 수락 타격에서 비움, v0.2)·
+// next(외부 호출용)·redo(done에서도)·base 스냅샷·base(재보정)·손별 독립 비교·퍼짐 되돌림·손 추가/제거·restart·build.
 import { describe, expect, it, vi } from 'vitest';
 import type { PadId } from '@/domain/pads';
 import { CAPTURE_ORDER, HitCapture } from './HitCapture';
@@ -164,8 +164,8 @@ describe('HitCapture 퍼짐 검사', () => {
   });
 });
 
-describe('HitCapture 간격 경고', () => {
-  it('같은 손 방금 패드와 가까운 패드가 20° 미만이면 padDone에서 멈추고 gapWarnings를 낸다. 자동 진행 안 함', () => {
+describe('HitCapture 간격 경고(멈추지 않는 배너, v0.2)', () => {
+  it('경고가 있어도 경고 없는 경우와 똑같이 400ms 뒤 자동 진행하고, 경고는 남는다', () => {
     vi.useFakeTimers();
     try {
       const c = new HitCapture();
@@ -176,17 +176,44 @@ describe('HitCapture 간격 경고', () => {
       twice(c, 0, 0, 10); // CRASH: 약 10° 옆
       const s = c.snapshot();
       expect(s.phase).toBe('padDone');
-      expect(s.advancing).toBe(false);
+      expect(s.advancing).toBe(true);
       expect(s.target).toBe('CRASH');
       expect(s.gapWarnings).toHaveLength(1);
       expect(s.gapWarnings[0]).toMatchObject({ stickId: 0, pad: 'CRASH', near: 'HIHAT' });
       expect(s.gapWarnings[0].deg).toBeCloseTo(10, 0);
-      vi.advanceTimersByTime(5000);
+      expect(c.onHit(0, P(0, 0))).toBe(false); // 지연 중에는 타격 무시
+      vi.advanceTimersByTime(399);
       expect(c.snapshot().phase).toBe('padDone');
-      expect(c.onHit(0, P(0, 0))).toBe(false);
+      vi.advanceTimersByTime(1);
+      expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE', advancing: false, counts: [0, 0] });
+      expect(c.snapshot().gapWarnings).toHaveLength(1); // 자동 진행해도 경고는 유지
+      expect(c.snapshot().gapWarnings[0]).toMatchObject({ pad: 'CRASH', near: 'HIHAT' });
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('유지된 경고는 다음 패드의 첫 수락 타격에서 비운다(손 하나가 먼저 쳐도)', () => {
+    const c = sync();
+    c.start([0, 1]);
+    twice(c, 0, 0, 0);
+    twice(c, 1, 0, 0);
+    twice(c, 0, 0, 10);
+    twice(c, 1, 0, 10); // CRASH 양손 경고 → 즉시 SNARE
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE' });
+    expect(c.snapshot().gapWarnings).toHaveLength(2);
+    expect(c.onHit(1, P(0, 90), 300)).toBe(true);
+    expect(c.snapshot().gapWarnings).toEqual([]);
+    expect(c.snapshot().counts).toEqual([0, 1]);
+  });
+
+  it('수락되지 않은 타격(대상 아닌 손)은 경고를 비우지 않는다', () => {
+    const c = sync();
+    c.start([0]);
+    twice(c, 0, 0, 0);
+    twice(c, 0, 0, 10);
+    expect(c.onHit(1, P(0, 90))).toBe(false);
+    expect(c.snapshot().gapWarnings).toHaveLength(1);
   });
 
   it('가장 가까운 패드가 near. 기준(minGapDeg) 이상이면 경고하지 않는다', () => {
@@ -194,39 +221,67 @@ describe('HitCapture 간격 경고', () => {
     c.start([0]);
     twice(c, 0, 0, 0); // HIHAT
     twice(c, 0, 0, 40); // CRASH (멀다)
+    expect(c.snapshot().gapWarnings).toEqual([]);
     twice(c, 0, 0, 55); // SNARE: HIHAT과 약 55°, CRASH와 약 15°
     const s = c.snapshot();
-    expect(s.phase).toBe('padDone');
+    expect(s.target).toBe('SMALL_TOM');
     expect(s.gapWarnings[0]).toMatchObject({ pad: 'SNARE', near: 'CRASH' });
     const ok = new HitCapture({ advanceDelayMs: 0, minGapDeg: 10 });
     ok.start([0]);
     twice(ok, 0, 0, 0);
     twice(ok, 0, 0, 15);
-    expect(ok.snapshot().target).toBe('SNARE'); // 10° 기준이면 15°는 통과
+    expect(ok.snapshot().gapWarnings).toEqual([]); // 10° 기준이면 15°는 통과
   });
 
-  it('next()는 경고를 무시하고 진행한다', () => {
+  it('next()는 계속 쓸 수 있다: 지연 중 바로 다음 패드로(경고는 유지)', () => {
+    vi.useFakeTimers();
+    try {
+      const c = new HitCapture();
+      c.start([0]);
+      twice(c, 0, 0, 0);
+      vi.advanceTimersByTime(400);
+      twice(c, 0, 0, 10);
+      expect(c.snapshot().phase).toBe('padDone');
+      c.next();
+      expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE', counts: [0, 0] });
+      expect(c.snapshot().gapWarnings).toHaveLength(1);
+      expect(c.snapshot().captured.CRASH?.[0]).toBeDefined(); // 저장을 막지 않는다
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('redo는 경고를 비우고 그 패드만 다시 받는다. 다시 쳐서 경고가 없으면 순서상 안 끝난 첫 패드로 간다', () => {
     const c = sync();
     c.start([0]);
     twice(c, 0, 0, 0);
     twice(c, 0, 0, 10);
-    expect(c.snapshot().phase).toBe('padDone');
-    c.next();
-    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE', gapWarnings: [], counts: [0, 0] });
-    expect(c.snapshot().captured.CRASH?.[0]).toBeDefined(); // 저장을 막지 않는다
-  });
-
-  it('redo는 그 패드만 다시 받고 지운다. 다시 쳐서 경고가 없으면 순서상 안 끝난 첫 패드로 간다', () => {
-    const c = sync();
-    c.start([0]);
-    twice(c, 0, 0, 0);
-    twice(c, 0, 0, 10);
-    c.redo('CRASH'); // [다시]
+    expect(c.snapshot().gapWarnings).toHaveLength(1);
+    c.redo('CRASH'); // 배너의 [크래시 다시]
     expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'CRASH', gapWarnings: [], counts: [0, 0] });
     expect(c.snapshot().captured.CRASH).toBeUndefined();
     expect(c.snapshot().captured.HIHAT).toBeDefined();
     twice(c, 0, 0, 60);
-    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE' });
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'SNARE', gapWarnings: [] });
+  });
+
+  it('start·restart·cancel도 경고를 비운다', () => {
+    const c = sync();
+    c.start([0]);
+    twice(c, 0, 0, 0);
+    twice(c, 0, 0, 10);
+    expect(c.snapshot().gapWarnings).toHaveLength(1);
+    c.restart();
+    expect(c.snapshot().gapWarnings).toEqual([]);
+    twice(c, 0, 0, 0);
+    twice(c, 0, 0, 10);
+    c.cancel();
+    expect(c.snapshot()).toMatchObject({ phase: 'idle', gapWarnings: [] });
+    c.start([0]);
+    twice(c, 0, 0, 0);
+    twice(c, 0, 0, 10);
+    c.start([0]);
+    expect(c.snapshot().gapWarnings).toEqual([]);
   });
 
   it('손별로 따로 비교한다: 왼손은 가깝고 오른손은 멀면 왼손만 경고', () => {
@@ -237,7 +292,7 @@ describe('HitCapture 간격 경고', () => {
     twice(c, 0, 0, 10); // CRASH 왼손: HIHAT과 10°
     twice(c, 1, 0, 60); // CRASH 오른손: 60°. 왼손 앵커(0°)와 비교하지 않는다
     const s = c.snapshot();
-    expect(s.phase).toBe('padDone');
+    expect(s.target).toBe('SNARE');
     expect(s.gapWarnings).toHaveLength(1);
     expect(s.gapWarnings[0]).toMatchObject({ stickId: 0, near: 'HIHAT' });
   });
@@ -258,19 +313,27 @@ describe('HitCapture 간격 경고', () => {
     c.start([0, 1], ['HIHAT'], base);
     twice(c, 0, 0, 105); // 옛 HIHAT 자리(100°)는 base에서 제외 → 경고 아님. 스네어(0°)와는 멀다
     twice(c, 1, 0, 100);
-    expect(c.snapshot().phase).toBe('done');
+    expect(c.snapshot()).toMatchObject({ phase: 'done', gapWarnings: [] });
 
     const d = sync();
     d.start([0, 1], ['HIHAT'], base);
     twice(d, 0, 0, 10); // 왼손 스네어(0°)와 10°
     twice(d, 1, 0, 100); // 오른손: 스네어(50°)와 멀다
     const s = d.snapshot();
-    expect(s.phase).toBe('padDone');
+    // 마지막 패드에서 경고가 나도 done으로 가고, 경고는 남아 있다
+    expect(s.phase).toBe('done');
     expect(s.gapWarnings).toHaveLength(1);
     expect(s.gapWarnings[0]).toMatchObject({ stickId: 0, pad: 'HIHAT', near: 'SNARE' });
-    // 마지막 패드에서 경고여도 next()는 done
-    d.next();
-    expect(d.snapshot().phase).toBe('done');
+  });
+
+  it('base 스냅샷: 시작에서 준 세션 밖 앵커를 내보낸다. 없으면 [null, null]', () => {
+    const base: HandAnchors = [{ SNARE: anchorOf('SNARE', 0, 0) }, null];
+    const c = sync();
+    expect(c.snapshot().base).toEqual([null, null]);
+    c.start([0], ['HIHAT'], base);
+    expect(c.snapshot().base).toEqual(base);
+    c.start([0]);
+    expect(c.snapshot().base).toEqual([null, null]);
   });
 
   it('restart도 base를 유지한다', () => {
@@ -278,6 +341,7 @@ describe('HitCapture 간격 경고', () => {
     const c = sync();
     c.start([0], ['HIHAT'], base);
     c.restart();
+    expect(c.snapshot().base).toEqual(base);
     twice(c, 0, 0, 10);
     expect(c.snapshot().gapWarnings[0]).toMatchObject({ near: 'SNARE' });
   });
@@ -300,17 +364,15 @@ describe('HitCapture 결과 화면(done)에서 다시 치기', () => {
     expect(c.snapshot().captured.SNARE?.[0]).toBeDefined();
   });
 
-  it('done에서 다시 친 패드가 경고면 padDone에서 멈추고 next()로 done', () => {
+  it('done에서 다시 친 패드가 경고여도 done으로 돌아오고 경고는 남는다', () => {
     const c = sync();
     c.start([0, 1]);
     fillAll(c);
     c.redo('SNARE');
     twice(c, 0, -10, -40 + 1); // HIHAT 자리(-40 부근)
     twice(c, 1, -10 + 10, -20 + 60);
-    expect(c.snapshot().phase).toBe('padDone');
-    expect(c.snapshot().gapWarnings[0]).toMatchObject({ stickId: 0, pad: 'SNARE', near: 'HIHAT' });
-    c.next();
     expect(c.snapshot().phase).toBe('done');
+    expect(c.snapshot().gapWarnings[0]).toMatchObject({ stickId: 0, pad: 'SNARE', near: 'HIHAT' });
   });
 
   it('중간 패드를 redo해도 끝나면 순서상 안 끝난 첫 패드(없으면 done)로 간다', () => {
@@ -340,14 +402,22 @@ describe('HitCapture 손 추가·제거·redo·restart', () => {
     expect(built[1]?.HIHAT).toBeUndefined();
     expect(built[1]?.CRASH).toBeDefined();
 
-    // 확인 대기 중 손이 붙으면 그 손을 받으려고 capturing으로 돌아간다(경고 지움)
-    const d = sync();
-    d.start([0]);
-    twice(d, 0, -10, 0);
-    twice(d, 0, -10, 5); // CRASH: 경고 → padDone
-    expect(d.snapshot().phase).toBe('padDone');
-    d.addHand(1);
-    expect(d.snapshot()).toMatchObject({ phase: 'capturing', target: 'CRASH', counts: [2, 0], gapWarnings: [] });
+    // 확인 대기(자동 진행 지연) 중 손이 붙으면 그 손을 받으려고 capturing으로 돌아간다(경고 지움, 타이머 해제)
+    vi.useFakeTimers();
+    try {
+      const d = new HitCapture();
+      d.start([0]);
+      twice(d, 0, -10, 0);
+      vi.advanceTimersByTime(400);
+      twice(d, 0, -10, 5); // CRASH: 경고 → padDone(자동 진행 대기)
+      expect(d.snapshot()).toMatchObject({ phase: 'padDone', advancing: true });
+      d.addHand(1);
+      expect(d.snapshot()).toMatchObject({ phase: 'capturing', target: 'CRASH', counts: [2, 0], gapWarnings: [], advancing: false });
+      vi.advanceTimersByTime(1000);
+      expect(d.snapshot()).toMatchObject({ phase: 'capturing', target: 'CRASH' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('dropHand: 손이 빠지면 남은 손이 채운 패드는 다음으로 넘어가고, 다 빠지면 done', () => {
