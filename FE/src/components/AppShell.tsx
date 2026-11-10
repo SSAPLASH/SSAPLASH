@@ -1,22 +1,30 @@
-import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { needsRecommendationPrompt } from '@/domain/recommendationConsent';
 import { recommendationConsentEnabled } from '@/domain/signupTerms';
+import { metronome } from '@/engine/Metronome';
 import { useAuth } from '@/store/authStore';
+import { useLive } from '@/store/liveStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
-import { DebugOverlay } from './DebugOverlay';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
 import { LazyChartAutoplayToggle } from './diag/lazyChartAutoplay';
 import { RecordingToast } from './recording/RecordingToast';
 import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
+import { dockVisible } from './shell/dockRoute';
 import { ProfileMenu } from './shell/ProfileMenu';
-import { RecommendationConsentDialog } from './shell/RecommendationConsentDialog';
 import { Sidebar } from './shell/Sidebar';
 import { StickStatusIndicator } from './shell/StickStatusIndicator';
 import { TopBar } from './shell/TopBar';
 import { useSidebarCollapsed } from './shell/useMediaQuery';
+
+// 조건부로만 뜨는 셸 UI라 첫 로드에서 뺀다(설계 TECH-route-code-split U2 ①)
+const DebugOverlay = lazy(() => import('./DebugOverlay').then((m) => ({ default: m.DebugOverlay })));
+const RecommendationConsentDialog = lazy(() =>
+  import('./shell/RecommendationConsentDialog').then((m) => ({ default: m.RecommendationConsentDialog })),
+);
 
 /** 개발 모니터 빌드(VITE_MONITOR=true)에서만 "모니터 새 창" 버튼을 둔다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
@@ -42,6 +50,14 @@ export function AppShell({ authRequired }: Props) {
   const [debug, setDebug] = useState(false);
   const { pathname } = useLocation();
   const inMonitor = pathname.startsWith('/monitor');
+  const showDock = dockVisible(pathname);
+  // Dock이 없는 화면으로 나가면 Dock에서 켠 메트로놈을 멈춘다 — 끌 수 있는 조작이 사라지기 때문이다.
+  // 곡 연주에 묶인(locked) 클릭은 연주 화면이 정리한다
+  useEffect(() => {
+    if (showDock) return;
+    const met = useLive.getState().metronome;
+    if (met.playing && !met.locked) metronome.stop();
+  }, [showDock]);
   const workareaRef = useRef<HTMLDivElement>(null);
   const routeRef = useRef<HTMLDivElement>(null);
   const lastPath = useRef(pathname);
@@ -111,14 +127,22 @@ export function AppShell({ authRequired }: Props) {
       <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
         {/* 경로가 바뀌면 key로 다시 마운트되어 .route-fade가 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼 */}
-        <div key={pathname} ref={routeRef} className="route-view route-fade" tabIndex={-1}>
-          <Outlet />
-        </div>
+        {/* Suspense는 key 래퍼 바깥에 둔다. 안에 두면 key가 바뀔 때마다 새 경계가 생겨 지연 화면을 기다리는 동안 이전 화면이 아닌 fallback이 보인다 */}
+        {/* 오류 경계는 Suspense·key 래퍼보다 바깥(설계 TECH-chunk-load-recovery R3). 경로가 바뀌면 오류가 풀린다 */}
+        <RouteErrorBoundary resetKey={pathname}>
+          <Suspense fallback={null}>
+            <div key={pathname} ref={routeRef} className="route-view route-fade" tabIndex={-1}>
+              <Outlet />
+            </div>
+          </Suspense>
+        </RouteErrorBoundary>
       </div>
 
-      <div className="shell-dock">
-        <GlassDock />
-      </div>
+      {showDock && (
+        <div className="shell-dock">
+          <GlassDock />
+        </div>
+      )}
       {RECORDING_ENABLED && (
         <>
           <SaveRecordingDialog />
@@ -149,9 +173,15 @@ export function AppShell({ authRequired }: Props) {
         <ProfileMenu />
       </div>
       {showConsentDialog && (
-        <RecommendationConsentDialog busy={consentSaving} onAgree={() => answerConsent(true)} onDecline={() => answerConsent(false)} />
+        <Suspense fallback={null}>
+          <RecommendationConsentDialog busy={consentSaving} onAgree={() => answerConsent(true)} onDecline={() => answerConsent(false)} />
+        </Suspense>
       )}
-      {debug && <DebugOverlay onClose={() => setDebug(false)} />}
+      {debug && (
+        <Suspense fallback={null}>
+          <DebugOverlay onClose={() => setDebug(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -57,7 +57,7 @@ describe('SongTable', () => {
     const html = render({ songs: songs(6) });
     expect(html.match(/<tr[^>]*data-song-id/g)).toHaveLength(6);
     expect(html).toContain('총 6곡');
-    expect(html.match(/class="play-st-pg/g)).toHaveLength(3); // 이전·1·다음
+    expect(html.match(/class="ui-pg-btn/g)).toHaveLength(5); // «·‹·1·›·»
   });
 
   it('7곡이면 첫 쪽엔 6곡만, 2페이지, 총 7곡', () => {
@@ -66,7 +66,7 @@ describe('SongTable', () => {
     expect(html).not.toContain('곡7<');
     expect(html).toContain('총 7곡');
     expect(html).toContain('aria-current="page"');
-    expect(html.match(/class="play-st-pg/g)).toHaveLength(4); // 이전·1·2·다음
+    expect(html.match(/class="ui-pg-btn/g)).toHaveLength(6); // «·‹·1·2·›·»
   });
 
   it('열 머리: 커버·제목/아티스트·BPM·길이·곡 난이도·최고 점수 순서', () => {
@@ -120,7 +120,7 @@ describe('SongTable', () => {
   it('곡이 없어도 1페이지·총 0곡', () => {
     const html = render({ songs: [] });
     expect(html).toContain('총 0곡');
-    expect(html.match(/class="play-st-pg/g)).toHaveLength(3);
+    expect(html.match(/class="ui-pg-btn/g)).toHaveLength(5);
   });
 
   it('곡이 없으면 머리글을 두고 본문 한 칸(열 전체)에 emptyState를 그린다', () => {

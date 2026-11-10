@@ -31,6 +31,18 @@ export interface JudgementEvent {
   velocity: number | null;
 }
 
+/** 채보 밖 타격. 어느 패드를 언제 쳤는지 알린다(코칭의 다른 패드 놓침 판단용). 판정·점수와 무관하다 */
+export interface StrayHitEvent {
+  pad: PadId;
+  /** 곡 시각(ms). 판정과 같은 기준(오디오 오프셋 반영) */
+  songTimeMs: number;
+  /**
+   * 타격 − 가장 가까운 같은 패드 노트(ms). 아직 치지 않은 노트(미판정·MISS)만, 앞뒤 2 × goodMs 안에서 찾는다.
+   * 없으면 null. 음수 빠름·양수 늦음. 타이밍 막대의 범위 밖 빨간 점에 쓴다(설계 MODE-003-timing-bar-miss-dot)
+   */
+  nearDeltaMs: number | null;
+}
+
 export interface SessionSnapshot {
   status: SessionStatus;
   songTimeMs: number;
@@ -83,6 +95,7 @@ export class RhythmSession {
   private pausedAt = 0;
   private statusBeforePause: SessionStatus = 'playing';
   private judgementListeners = new Set<(e: JudgementEvent) => void>();
+  private strayListeners = new Set<(e: StrayHitEvent) => void>();
 
   constructor(chart: Chart, opts: RhythmOptions) {
     this.chart = chart;
@@ -111,6 +124,12 @@ export class RhythmSession {
   onJudgement(l: (e: JudgementEvent) => void): () => void {
     this.judgementListeners.add(l);
     return () => this.judgementListeners.delete(l);
+  }
+
+  /** 채보 밖 타격 알림. 알림만 하고 판정·개수는 바꾸지 않는다. 받는 쪽 오류는 세션에 전하지 않는다 */
+  onStray(l: (e: StrayHitEvent) => void): () => void {
+    this.strayListeners.add(l);
+    return () => this.strayListeners.delete(l);
   }
 
   /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at + originMs − countInMs부터 시작한다 */
@@ -215,6 +234,14 @@ export class RhythmSession {
     const m = hitMatch(cands, t, this.opts.windows);
     if (m.pick === null || m.rule === null) {
       this.strayHits += 1;
+      const stray: StrayHitEvent = { pad: hit.pad, songTimeMs: t, nearDeltaMs: this.nearMissDelta(hit.pad, t) };
+      for (const l of this.strayListeners) {
+        try {
+          l(stray);
+        } catch {
+          // 알림을 받는 쪽(코칭) 오류로 연주를 막지 않는다
+        }
+      }
       return null;
     }
     const best = this.notes[m.pick];
@@ -232,6 +259,24 @@ export class RhythmSession {
     }
     const j = judgeDelta(bestDelta, this.opts.windows);
     return this.apply(best, j, bestDelta, hit.id, hit.tResolved, hit);
+  }
+
+  /** 채보 밖 타격 t에서 가장 가까운 같은 패드의 치지 않은 노트(미판정·MISS)까지의 차. 앞뒤 2 × goodMs 밖이면 null */
+  private nearMissDelta(pad: PadId, t: number): number | null {
+    const range = this.opts.windows.goodMs * 2;
+    let best: number | null = null;
+    // 노트는 시각순이다. 범위 시작까지 앞으로 물러난 뒤 범위 끝까지 훑는다
+    let i = Math.max(0, Math.min(this.cursor, this.notes.length - 1));
+    while (i > 0 && this.notes[i - 1].note.timeMs >= t - range) i--;
+    for (; i < this.notes.length; i++) {
+      const n = this.notes[i];
+      if (n.note.timeMs > t + range) break;
+      if (n.note.pad !== pad || n.note.timeMs < t - range) continue;
+      if (n.judgement === 'PERFECT' || n.judgement === 'GOOD') continue;
+      const d = t - n.note.timeMs;
+      if (best === null || Math.abs(d) < Math.abs(best)) best = d;
+    }
+    return best;
   }
 
   private apply(n: NoteState, j: Judgement, delta: number | null, hitId: number | null, at: number, hit: ResolvedHit | null): JudgementEvent {

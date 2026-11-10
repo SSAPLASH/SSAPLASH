@@ -24,9 +24,7 @@ export interface MidiUploadFormProps {
   onSubmit: (draft: MidiDraft) => void;
   /** 제목 입력의 처음 값(악보에 곡 올리기: 악보 제목). 마운트 시 한 번만 읽는다 */
   initialTitle?: string;
-  /** 첫 방문(곡도 작업도 없음)의 큰 드롭 영역 */
-  emphasis: boolean;
-  /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
+  /** 있으면 하단에 [취소]를 둔다(업로드 창) */
   onCancel?: () => void;
 }
 
@@ -34,7 +32,7 @@ function size(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function MidiUploadForm({ busy, error, onSubmit, initialTitle, emphasis, onCancel }: MidiUploadFormProps) {
+export function MidiUploadForm({ busy, error, onSubmit, initialTitle, onCancel }: MidiUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<UploadPrecheck | null>(null);
   const [title, setTitle] = useState(initialTitle ?? '');
@@ -73,7 +71,7 @@ export function MidiUploadForm({ busy, error, onSubmit, initialTitle, emphasis, 
   return (
     <div className="studio-form">
       <div
-        className={`studio-drop${emphasis ? ' large' : ''}${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
+        className={`studio-drop${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
           if (!busy) setDragging(true);
@@ -84,14 +82,14 @@ export function MidiUploadForm({ busy, error, onSubmit, initialTitle, emphasis, 
       >
         <input ref={inputRef} type="file" accept={UPLOAD_ACCEPT} hidden onChange={onInput} disabled={busy} />
         <span className="studio-drop-icon">
-          <UploadIcon size={emphasis ? 40 : 32} />
+          <UploadIcon size={32} />
         </span>
-        <span className={`studio-drop-title${emphasis ? ' large' : ''}`}>
+        <span className="studio-drop-title">
           {file ? `${file.name} · ${size(file.size)}` : 'MIDI·MusicXML 파일을 여기에 끌어다 놓으세요'}
         </span>
         <Button
           variant="secondary"
-          size={emphasis ? 'md' : 'sm'}
+          size="sm"
           className="studio-drop-btn"
           disabled={busy}
           aria-label="MIDI·MusicXML 파일 선택"

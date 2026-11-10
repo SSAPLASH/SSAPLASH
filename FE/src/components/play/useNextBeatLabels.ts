@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { nextBeatBadges, padCues, type NextBeatBadges } from '@/domain/padCue';
-import { buildSheet, gridTimeOf } from '@/domain/sheet';
+import { buildSheet, gridTimeAt } from '@/domain/sheet';
 
 const EMPTY: NextBeatBadges = { badges: {}, nowPads: [] };
 
@@ -32,7 +32,7 @@ export function useNextBeatLabels({ session, getSongTime, enabled }: UseNextBeat
     const tick = () => {
       const t = getSongTime() ?? 0;
       // 마디는 격자 시각으로, "지금"은 원본 timeMs와 곡 시각으로 비교한다(원점과 무관)
-      const bar = Math.floor(Math.max(gridTimeOf(t, sheet.originMs), 0) / sheet.barMs);
+      const bar = Math.floor(Math.max(gridTimeAt(session.chart, t), 0) / sheet.barMs);
       const next = nextBeatBadges(padCues(sheet, bar, session.notes), t);
       const key = `${next.highlight ?? ''}|${next.nowPads.join(',')}|${Object.entries(next.badges)
         .map(([p, b]) => `${p}:${b?.text}:${b?.level}:${b?.offGrid ? 1 : 0}`)

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, listSongs, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, listAllSongs, listSongs, SONG_LIST_MAX_PAGES, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -210,5 +210,48 @@ describe('getSongAccompaniment', () => {
   it('404는 ApiError로 던진다', async () => {
     stubJson({ code: 'SONG_NOT_FOUND', detail: '없음' }, 404);
     await expect(getSongAccompaniment(7)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('listAllSongs 전체 페이지 (Jira 363)', () => {
+  function stubPages(lastPage: number) {
+    const fn = vi.fn(async (url: string, _init?: RequestInit) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'));
+      return new Response(JSON.stringify({ items: [{ ...body, id: page + 1 }], hasNext: page < lastPage }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  }
+  const qs = (fn: ReturnType<typeof stubPages>, i: number) => new URL(String(fn.mock.calls[i][0]), 'http://x').searchParams;
+
+  it('hasNext가 거짓이 될 때까지 100곡씩 읽어 순서대로 합치고, 조건은 모든 페이지에 싣는다', async () => {
+    const fn = stubPages(2);
+    const items = await listAllSongs({ source: 'BUILTIN', q: '드럼', songLevel: 'BEGINNER', playableOnly: true });
+    expect(items.map((s) => s.id)).toEqual([1, 2, 3]);
+    expect(fn).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      expect(qs(fn, i).get('page')).toBe(String(i));
+      expect(qs(fn, i).get('size')).toBe('100');
+      expect(qs(fn, i).get('q')).toBe('드럼');
+      expect(qs(fn, i).get('songLevel')).toBe('BEGINNER');
+      expect(qs(fn, i).get('playableOnly')).toBe('true');
+    }
+  });
+
+  it('hasNext가 계속 참이어도 상한 쪽수에서 멈춘다', async () => {
+    const fn = stubPages(Number.POSITIVE_INFINITY);
+    const items = await listAllSongs({ source: 'MINE' });
+    expect(fn).toHaveBeenCalledTimes(SONG_LIST_MAX_PAGES);
+    expect(items).toHaveLength(SONG_LIST_MAX_PAGES);
+  });
+
+  it('isStale이 참이면 다음 페이지를 읽지 않는다', async () => {
+    const fn = stubPages(5);
+    const items = await listAllSongs({ source: 'MINE' }, { isStale: () => true });
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(items.map((s) => s.id)).toEqual([1]);
   });
 });

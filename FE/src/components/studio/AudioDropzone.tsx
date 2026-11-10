@@ -30,9 +30,7 @@ interface Props {
   onCancelPrefill: () => void;
   /** 제목 입력의 처음 값(악보에 곡 올리기: 악보 제목). 다시 올리기 배너 없이 제목만 채운다. 마운트 시 한 번만 읽는다 */
   initialTitle?: string;
-  /** 첫 방문(곡도 작업도 없음)의 큰 드롭존 */
-  emphasis: boolean;
-  /** 있으면 하단에 [취소]를 둔다(업로드 창). 첫 방문 본문에는 없다 */
+  /** 있으면 하단에 [취소]를 둔다(업로드 창) */
   onCancel?: () => void;
 }
 
@@ -42,7 +40,7 @@ function mib(bytes: number): string {
 
 const limitMib = Math.round(MAX_AUDIO_BYTES / 1024 / 1024);
 
-export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, initialTitle, emphasis, onCancel }: Props) {
+export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefill, onCancelPrefill, initialTitle, onCancel }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<PrecheckResult | null>(null);
   const [title, setTitle] = useState(prefill?.title ?? initialTitle ?? '');
@@ -100,7 +98,7 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
         </div>
       )}
       <div
-        className={`studio-drop${emphasis ? ' large' : ''}${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
+        className={`studio-drop${dragging ? ' over' : ''}${busy ? ' disabled' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
           if (!busy) setDragging(true);
@@ -111,15 +109,15 @@ export function AudioDropzone({ busy, error, retryable, onSubmit, onRetry, prefi
       >
         <input ref={inputRef} type="file" accept=".mp3,.wav,.m4a,.opus,.ogg,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/ogg,audio/opus" hidden onChange={onInput} disabled={busy} />
         <span className="studio-drop-icon">
-          <UploadIcon size={emphasis ? 40 : 32} />
+          <UploadIcon size={32} />
         </span>
-        <span className={`studio-drop-title${emphasis ? ' large' : ''}`}>
+        <span className="studio-drop-title">
           {file ? `${file.name} · ${mib(file.size)}` : '음원 파일을 여기에 끌어다 놓으세요'}
         </span>
         <Button
           ref={dropRef}
           variant="secondary"
-          size={emphasis ? 'md' : 'sm'}
+          size="sm"
           className="studio-drop-btn"
           disabled={busy}
           aria-label="음원 파일 선택"

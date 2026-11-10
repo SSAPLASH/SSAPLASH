@@ -3,7 +3,7 @@
 // similar가 있으면 [준비] 줄 아래 구분선과 「✦ 이 곡과 비슷한 곡」 한 줄 + [이 곡 보기](설계 COACH-004-song-picker-ai-tab 3-3, Figma 666:33647).
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
 import type { RecommendCard } from '@/domain/recommendation';
-import { SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { Button } from '@/components/ui/Button';
 import { SongCover } from '@/components/song/SongCover';
@@ -56,7 +56,7 @@ export function SongDetailPane({
       <SongCover coverUrl={song.coverUrl} className="play-sd-cover" />
       <div className="play-sd-head">
         <h2 className="play-sd-title">{song.title}</h2>
-        <p className="play-sd-artist">{song.artist}</p>
+        <p className="play-sd-artist">{artistLabel(song.artist)}</p>
       </div>
       <SongMeta
         bpm={song.bpm}
@@ -96,7 +96,7 @@ export function SongDetailPane({
               <span className="play-sd-similar-caption">✦ 이 곡과 비슷한 곡</span>
               <span className="play-sd-similar-title">{similar.song.title}</span>
               <span className="play-sd-similar-meta">
-                {[similar.song.artist, similar.song.songLevel === null ? '' : SONG_LEVEL_LABEL[similar.song.songLevel]].filter(Boolean).join(' · ')}
+                {[artistLabel(similar.song.artist), similar.song.songLevel === null ? '' : SONG_LEVEL_LABEL[similar.song.songLevel]].filter(Boolean).join(' · ')}
               </span>
               {similar.line && <span className="play-sd-similar-reason">{similar.line}</span>}
             </div>

@@ -1,4 +1,4 @@
-/* 라이브러리(/studio) — Figma 207:2110(카드) · 225:4551(목록) · 210:2978(첫 방문) · 225:5042(로딩) · 225:5368(오류) · 240:6949(태블릿) 및 Studio / * 컴포넌트.
+/* 라이브러리(/studio) — Figma 207:2110(카드) · 225:4551(목록) · 225:5042(로딩) · 225:5368(오류) · 240:6949(태블릿) 및 Studio / * 컴포넌트.
  * 토큰은 tokens.css의 새 이름만 쓴다. 간격은 4px 배수(Figma 6·10·14·18은 가까운 4 배수로 맞춘다). */
 
 /* ---- 화면 틀 ---- */
@@ -9,27 +9,9 @@
   gap: 20px;
   color: var(--text-1);
 }
-/* 카드 보기·첫 방문은 제목 아래 간격이 24 */
+/* 카드 보기는 제목 아래 간격이 24 */
 .studio-page.roomy {
   gap: var(--space-l);
-}
-.studio-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-m);
-}
-.studio-head-title {
-  min-width: 0;
-}
-.studio-head-title h2 {
-  margin: 0;
-}
-.studio-summary {
-  margin: var(--space-xs) 0 0;
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.45;
 }
 .studio-upload-btn {
   flex: none;
@@ -38,21 +20,11 @@
 .studio-body {
   display: block;
 }
-/* 카드 보기: 목록 + 오른쪽 안내 패널 300 */
-.studio-body.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: var(--space-l);
-  align-items: start;
-}
 .studio-main-col {
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
-}
-.studio-body.split .studio-main-col {
-  gap: var(--space-m);
 }
 .studio-toolbar {
   display: flex;
@@ -61,11 +33,9 @@
   gap: var(--space-m);
   min-height: 44px;
 }
-.studio-sortnote {
-  margin: 0;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
+/* 정렬 안내는 없앴다(QA). 보기 전환은 오른쪽에 */
+.studio-toolbar > :last-child {
+  margin-left: auto;
 }
 
 /* ---- 상태 배지 (Studio / SongStatusBadge 202:503) ---- */
@@ -212,9 +182,15 @@
 }
 
 /* ---- 카드 그리드 · 카드 (Studio / SongCard 202:561) ---- */
-.studio-grid {
+/* 최대 5열, 열 최소 200px — 폭이 줄면 4·3·2·1열 (설계 QA-363) */
+.studio-grid,
+.studio-skeleton-grid {
+  --studio-grid-cols: 5;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(200px, calc((100% - (var(--studio-grid-cols) - 1) * var(--space-l)) / var(--studio-grid-cols))), 1fr)
+  );
   gap: var(--space-l);
   margin: 0;
   padding: 0;
@@ -424,14 +400,6 @@
 }
 
 /* ---- 로딩 스켈레톤 (225:5042) · 목록 오류 (225:5368) ---- */
-.studio-skeleton-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 260px);
-  gap: var(--space-l);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .studio-skeleton-card {
   display: flex;
   flex-direction: column;
@@ -489,108 +457,51 @@
   width: 160px;
 }
 
-/* ---- 안내 패널 (207:2650) · 첫 방문 4단계 (210:3273) ---- */
-.studio-howto {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
-}
-.studio-howto-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.studio-howto-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.studio-howto-step {
-  display: flex;
-  gap: 12px;
-}
-.studio-howto-num {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--brand) 16%, transparent);
-  color: var(--brand-text);
-  font-size: 12px;
-  line-height: 1;
-}
-.studio-howto-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.studio-howto-h {
-  font-size: 14px;
-  line-height: 1.45;
-}
-.studio-howto-d {
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
-}
+/* ---- 음원 양식 아래 정책 안내 ---- */
 .studio-policy-note {
   margin: 0;
   color: var(--text-3);
   font-size: 12px;
   line-height: 1.45;
 }
-.studio-howto-note {
-  margin: 0;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.studio-steps4 {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-m);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.studio-steps4-item {
+/* ---- 빈 안내 (설계 QA-studio-empty-state): 곡·악보가 없을 때 카드·목록 자리 ---- */
+.studio-empty {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
-  padding: var(--space-m);
-  border: 1px solid var(--line);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  box-sizing: border-box;
+  padding: var(--space-l) var(--space-m);
   border-radius: var(--radius-panel);
+  text-align: center;
+}
+/* 카드 보기: 그리드 폭 점선 상자, 카드 한 장 정도 높이 */
+.studio-empty.card {
+  min-height: 240px;
+  border: 1.5px dashed var(--line-strong);
+}
+/* 목록 보기: 목록 틀(.studio-list)과 같은 테두리 안 한 칸 */
+.studio-empty.list {
+  min-height: 72px;
+  border: 1px solid var(--line);
   background: var(--surface-1);
 }
-.studio-steps4-n {
-  color: var(--brand-text);
-}
-.studio-steps4-h {
-  font-size: 14px;
+.studio-empty-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.45;
 }
-.studio-steps4-d {
-  color: var(--text-3);
-  font-size: 12px;
+.studio-empty-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
   line-height: 1.45;
 }
 
-/* ---- 업로드 양식 (Studio / UploadDialog 224:1069 · 첫 방문 210:2978) ---- */
-.studio-first-card {
-  gap: 20px;
-}
+/* ---- 업로드 양식 (Studio / UploadDialog 224:1069) ---- */
 .studio-panel {
   display: flex;
   flex-direction: column;
@@ -623,9 +534,6 @@
   cursor: pointer;
   transition: border-color var(--motion-fast);
 }
-.studio-drop.large {
-  padding: 40px var(--space-m);
-}
 .studio-drop:hover,
 .studio-drop.over {
   border-color: var(--brand);
@@ -643,9 +551,6 @@
   font-size: 14px;
   line-height: 1.45;
 }
-.studio-drop-title.large {
-  font-size: 16px;
-}
 .studio-drop-btn {
   width: 160px;
 }
@@ -658,9 +563,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-.studio-first-card .studio-fields {
-  gap: var(--space-m);
 }
 .studio-form-footer,
 .studio-dialog-footer {
@@ -790,16 +692,8 @@
   pointer-events: none;
 }
 
-/* ---- 좁은 화면: 안내 패널을 아래로, 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
-@media (max-width: 900px) {
-  .studio-steps4 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
+/* ---- 좁은 화면: 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
 @media (max-width: 760px) {
-  .studio-body.split {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .studio-row-date {
     display: none;
   }
@@ -811,12 +705,8 @@
   }
 }
 @media (max-width: 560px) {
-  .studio-fields,
-  .studio-steps4 {
+  .studio-fields {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .studio-head {
-    flex-wrap: wrap;
   }
 }
 

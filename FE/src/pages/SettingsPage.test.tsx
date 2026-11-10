@@ -141,7 +141,7 @@ describe('SettingsPage 드럼·노래 음량', () => {
 
   it('안내 문구는 메트로놈만 Dock에 있다고 말한다', () => {
     const html = render();
-    expect(html).toContain('메트로놈은 상단 Dock에서도 바꿀 수 있어요.');
+    expect(html).toContain('메트로놈은 연주 화면 상단 Dock에서도 바꿀 수 있어요.');
     expect(html).not.toContain('음량과 메트로놈은');
   });
 });

@@ -14,6 +14,7 @@ import { useJudgementHaptic } from '@/components/useJudgementHaptic';
 import { PauseOverlay, type PauseReason } from '@/components/PauseOverlay';
 import { StageFade } from '@/components/StageFade';
 import { PlayStage } from '@/components/play/PlayStage';
+import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
@@ -33,6 +34,7 @@ import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/components/play/TimingBar';
+import { strayMissSource } from '@/components/play/strayMissSource';
 import type { HitMark } from '@/components/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { usePlayRunning, useShell } from '@/components/shell/useShell';
@@ -41,7 +43,7 @@ import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
-import { chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
+import { artistLabel, chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
 import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
@@ -67,13 +69,13 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { coachCopy, isStickSensor, LiveCoach, type CoachCopy } from '@/coach/live';
+import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
-type Stage = 'select' | 'loading' | 'ready' | 'play';
+type Stage = PlayStageName;
 
 /** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
 const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
@@ -168,6 +170,8 @@ function SheetPageBody() {
     [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs],
   );
   const activeSession = playSession ?? session;
+  // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
+  const missSource = useMemo(() => (activeSession ? strayMissSource(activeSession) : undefined), [activeSession]);
   const chart = activeSession?.chart ?? null;
   const stage: Stage = playSession
     ? 'play'
@@ -231,7 +235,7 @@ function SheetPageBody() {
     setCountValue(null);
   }, []);
 
-  // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때 되돌린다
+  // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때도 끈 채로 둔다(기본값, QA 352)
   useEffect(() => {
     setSoundOnHit(false);
     const warnings = openWarnings.current;
@@ -239,7 +243,7 @@ function SheetPageBody() {
       diagSessionEnd('left');
       pedalCoverage.current = null;
       warnings.clear();
-      setSoundOnHit(true);
+      setSoundOnHit(false);
       inputManager.setCandidateProvider(null);
       clockRef.current?.stop();
       metronome.unlock();
@@ -294,7 +298,10 @@ function SheetPageBody() {
   // 판정 → 노트 색(새 배열로 갱신: SheetPager가 렌더 후 ref에 복사한다) · HUD
   useEffect(() => {
     if (!activeSession) return;
-    return activeSession.onJudgement((e) => {
+    // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
+    const coachContext = chartCoachContext(activeSession.chart.notes);
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offJudgement = activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
       // 놓친 노트 머리 파편(악보만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
       const miss = missFxEvent(e, 'sheet');
@@ -316,27 +323,37 @@ function SheetPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
+        ...coachContext.notes[e.noteIndex],
       };
-      const message = coach.push(judged, activeSession.snapshot().strayHits);
-      shadowRef.current?.push(judged);
-      if (!message) return;
-      try {
-        const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-        if (copy) {
-          // 악보 연습은 설명형: 항상 보조까지, 미루지 않는다
-          const plan = planCoachDisplay(message.tMs, [], 'SHEET');
-          showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+      // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+      const show = (message: CoachMessage) => {
+        if (coachRef.current !== coach) return;
+        try {
+          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+          if (copy) {
+            // 악보 연습은 설명형: 항상 보조까지, 미루지 않는다
+            const plan = planCoachDisplay(message.tMs, [], 'SHEET');
+            showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+          }
+        } catch {
+          // 코칭 오류는 무시한다
         }
-      } catch {
-        // 코칭 오류는 무시한다
-      }
+      };
+      const message = coach.push(judged, activeSession.snapshot().strayHits, show);
+      shadowRef.current?.push(judged);
+      if (message) show(message);
     });
+    return () => {
+      offStray();
+      offJudgement();
+    };
   }, [activeSession, showCoachLine, sheetFx]);
 
   // 타격: 즉시 발음 → 판정 → 로그·텔레메트리. 일시정지 중에는 세션에 넣지 않는다. 타격 진동은 스틱이 직접 울린다(PLAY-006)
+  // 소리는 드럼 킷이 보이는 단계(준비·연주)에서만 낸다(QA 352). 곡 선택 중에는 어떤 입력으로 쳐도 울리지 않는다
   useEffect(() => {
     return inputManager.onHit((hit) => {
-      if (hit.pad) {
+      if (hit.pad && kitSoundStage(stageRef.current)) {
         const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
         if (tAudio !== null) hit.tAudio = tAudio;
       }
@@ -483,7 +500,13 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
-    const coach = new LiveCoach({ goodMs: st.timing.goodMs, enabled: st.liveCoach, setupHints: isStickSensor(st.sensorKind) });
+    const coach = new LiveCoach({
+      goodMs: st.timing.goodMs,
+      enabled: st.liveCoach,
+      setupHints: isStickSensor(st.sensorKind),
+      noteGapMedianMs: chartCoachContext(ss.chart.notes).noteGapMedianMs,
+      onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+    });
     coachRef.current = coach;
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -848,7 +871,7 @@ function SheetPageBody() {
           <PlayHud
             variant="sheet"
             title={song.title}
-            artist={song.artist || undefined}
+            artist={artistLabel(song.artist)}
             coverUrl={song.coverUrl}
             level={chart.difficulty}
             bpm={chart.bpm}
@@ -871,7 +894,7 @@ function SheetPageBody() {
             fxSource={sheetFx.source}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} />
+                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} missSource={missSource} />
               ) : undefined
             }
           />

@@ -1,5 +1,6 @@
 // 모의 IMU 스틱. 하드웨어 없이 캘리브레이션·기준선 판정 UX를 개발하기 위한 소스.
 // 마우스/트랙패드 위치 = 스틱 자세(yaw ← x, pitch ← y), 키/클릭 = 타격.
+// 클릭 타격은 드럼 킷 영역([data-pointer-strike]) 안에서만 친다(QA 352). 배경·다른 화면 클릭은 무시한다. 키 타격은 그대로.
 // 실제 IMU가 오면 BleStickSource가 같은 pose/hit 이벤트를 내므로 상위 코드는 바뀌지 않는다.
 import type { Pose, StickId } from '@/domain/events';
 import { BaseInputSource } from './InputSource';
@@ -25,6 +26,18 @@ export const DEFAULT_POINTER_OPTIONS: PointerStickOptions = {
   leftHitKey: 'KeyF',
   rightHitKey: 'KeyJ',
 };
+
+/** 클릭이 타격이 되는 영역(드럼 킷 그림·자유 연습 킷 칸·설정 킷 화면·연주 화면 전체) */
+export const POINTER_STRIKE_ATTR = 'data-pointer-strike';
+/** 그 안이라도 타격으로 치지 않는 곳: 조작 요소, 클릭이 편집·터치 동작인 곳 */
+const NO_STRIKE_SELECTOR = 'button, input, select, a, textarea, [data-no-pointer-strike]';
+
+/** 이 클릭 대상이 포인터 타격이 되는가 */
+export function isPointerStrikeTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest(NO_STRIKE_SELECTOR)) return false;
+  return target.closest(`[${POINTER_STRIKE_ATTR}]`) !== null;
+}
 
 export class PointerStickSource extends BaseInputSource {
   readonly kind = 'pointer' as const;
@@ -107,9 +120,8 @@ export class PointerStickSource extends BaseInputSource {
   };
 
   private onPointerDown = (ev: PointerEvent): void => {
-    // 왼쪽 클릭 = 왼손 스틱, 오른쪽 클릭 = 오른손 스틱. 버튼·입력 요소 위에서는 무시
-    // 배치 편집기처럼 클릭이 편집 동작인 곳([data-no-pointer-strike])도 타격으로 치지 않는다
-    if (!(ev.target instanceof HTMLElement) || ev.target.closest('button, input, select, a, textarea, [data-no-pointer-strike]')) return;
+    // 왼쪽 클릭 = 왼손 스틱, 오른쪽 클릭 = 오른손 스틱. 드럼 킷 영역 안에서만 친다(버튼·입력·편집기·터치 패드 제외)
+    if (!isPointerStrikeTarget(ev.target)) return;
     if (ev.button === 0) this.hit(0, 6.3);
     else if (ev.button === 2) this.hit(1, 6.3);
   };
@@ -177,7 +189,7 @@ export const pointerDescriptor: SourceDescriptor = {
   },
   // 이 두 키는 포인터 소스가 쓰므로 키보드 소스에서 뺀다(한 키에 두 번 울리지 않게)
   reservedKeys: (o) => [String(o.leftHitKey), String(o.rightHitKey)],
-  note: '좌클릭 = 왼손, 우클릭 = 오른손 · 방향키로도 자세 이동',
+  note: '드럼 킷 위 좌클릭 = 왼손, 우클릭 = 오른손(연주 중은 화면 어디든) · 방향키로도 자세 이동',
   usageGuide: (o) =>
     `캔버스 위에 포인터를 두고 ${keyName(String(o.leftHitKey))}(왼손) / ${keyName(String(o.rightHitKey))}(오른손) 또는 클릭으로 칩니다. 방향키(2°, Shift 6°)로도 자세를 움직일 수 있습니다.`,
 };

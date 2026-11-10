@@ -261,6 +261,26 @@ describe('chartJobStore', () => {
     expect(JSON.parse(storage.get(ACTIVE_JOB_KEY)!)).toMatchObject({ songId: 7, jobId: null });
   });
 
+  it('429 BUSY + PROCESSING 곡이 내 곡 두 번째 페이지에 있어도 찾는다 (Jira 363)', async () => {
+    mockFetch((url, init) => {
+      if (isUpload(url, init)) return problem(429, 'AUDIO_BUSY');
+      if (url.startsWith('/api/v1/songs?')) {
+        const page = Number(new URL(url, 'http://x').searchParams.get('page'));
+        if (page === 0) {
+          return json(200, {
+            items: Array.from({ length: 100 }, (_, i) => ({ id: i + 1, title: `곡${i + 1}`, status: 'READY', createdAt: '2026-10-01T00:00:00Z' })),
+            hasNext: true,
+          });
+        }
+        return json(200, { items: [{ id: 301, title: '뒤쪽 진행 곡', status: 'PROCESSING', createdAt: '2026-11-09T00:00:00Z' }], hasNext: false });
+      }
+      return songBody(301, 'PROCESSING');
+    });
+    await useChartJob.getState().upload(draft());
+    expect(useChartJob.getState().phase).toBe('polling');
+    expect(useChartJob.getState().active).toMatchObject({ songId: 301, title: '뒤쪽 진행 곡' });
+  });
+
   it('429 BUSY인데 PROCESSING 곡이 없으면 AUDIO_BUSY 오류', async () => {
     mockFetch((url, init) => (isUpload(url, init) ? problem(429, 'AUDIO_BUSY') : json(200, { items: [], hasNext: false })));
     await useChartJob.getState().upload(draft());

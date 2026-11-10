@@ -17,6 +17,7 @@ import { RealignPrompt, type RealignInfo } from '@/components/calibration/Realig
 import { StaffLegend } from './StaffLegend';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
+import { artistLabel } from '@/domain/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { useSettings } from '@/store/settingsStore';
 import './ready.css';
@@ -130,7 +131,7 @@ export function ReadyPanel({
             <SongCover coverUrl={song.coverUrl} className="play-rp-cover" />
             <div className="play-rp-song-info">
               <h3 className="play-rp-song-title">{song.title}</h3>
-              <SongMeta artist={song.artist} />
+              <SongMeta artist={artistLabel(song.artist)} />
               <p className="play-rp-song-meta">{meta.join(' · ')}</p>
               <div className="play-rp-levels" role="group" aria-label="연습 단계">
                 {charts.map((c) => (

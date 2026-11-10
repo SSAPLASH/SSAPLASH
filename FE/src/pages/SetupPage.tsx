@@ -10,6 +10,7 @@ import { useRecentHits } from '@/components/drum/useRecentHits';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Segmented } from '@/components/ui/Segmented';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Slider } from '@/components/ui/Slider';
 import { Toggle } from '@/components/ui/Toggle';
 import { HitLog } from '@/components/setup/HitLog';
@@ -17,7 +18,7 @@ import { HIT_LOG_ROWS } from '@/components/setup/hitLogFormat';
 import '@/components/setup/setup.css';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { useHitFx } from '@/components/useHitFx';
-import { PresetChips } from '@/components/setup/PresetChips';
+import { PresetChips, SLOTS_FULL_TEXT } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
 import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
 import { ReturnBanner } from '@/components/setup/ReturnBanner';
@@ -29,22 +30,31 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { HitFx } from '@/domain/events';
+import type { HitFx, StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
-import { isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
+import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { calibrationReady, readiness } from '@/domain/readiness';
 import { pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
   dongleLine,
+  referenceHoldingLine,
+  REFERENCE_DONE_TEXT,
+  REFERENCE_HINT_TEXT,
+  REFERENCE_HOLDING_TEXT,
+  REFERENCE_LOST_TEXT,
+  REFERENCE_RESTART_LABEL,
+  REFERENCE_SHAKY_TEXT,
+  REFERENCE_START_LABEL,
   returnBannerText,
   returnButtonText,
   returnTargetName,
   setupBarView,
   setupSteps,
   unsavedLeaveText,
+  UNSAVED_LEAVE_SYSTEM_SAVE_LABEL,
   type SetupDongleState,
   type SetupStepId,
 } from '@/domain/setupSteps';
@@ -53,6 +63,8 @@ import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/components/calibration/CalibrationStage';
 import { useRealign } from '@/components/useRealign';
+import { usePoseStream } from '@/components/calibration/usePoseStream';
+import { useReferenceCapture } from '@/components/calibration/useReferenceCapture';
 import { calibrationSession } from '@/app/calibrationSession';
 import { sensorRegistry } from '@/app/sensorRegistry';
 import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap';
@@ -165,13 +177,16 @@ export function SetupPage() {
   const yawDriftLine = sensorMode ? yawDriftText(yawDrift, connected) : null;
   const dirty = selectDirty(s, presets);
   const systemPreset = isSystemPreset(s.activePresetId);
+  /** 슬롯이 가득 차면 새 프리셋을 못 만든다(추가하기와 같은 규칙, kit-drag D12) */
+  const slotsFull = presets.items.length >= PRESET_SLOTS;
   const activePresetName = presetDisplayName(presets.items, s.activePresetId);
   const saving = presets.status === 'saving';
 
-  // 진입: 프리셋 목록 읽기, 센서 타격이 바로 울리게
+  // 진입: 프리셋 목록 읽기, 센서 타격이 바로 울리게. 떠날 때 타격음을 끈다
   useEffect(() => {
     void usePresets.getState().refresh();
     setSoundOnHit(true);
+    return () => setSoundOnHit(false);
   }, []);
 
   useEffect(() => {
@@ -259,6 +274,19 @@ export function SetupPage() {
   const calibrating = calibration.capture && captureTarget ? { target: captureTarget, index: calibration.capture.index, total: calibration.capture.order.length } : null;
   // 스틱이 다시 켜진 손이 있으면 재정렬 세션을 자동으로 시작한다(네 진입점 공용 훅)
   useRealign(sensorMode);
+
+  // ---- 시작 위치 맞추기(PLAY-004 D1·D4~D6): 세팅 화면에서만 자세 스트림을 켜고, 연결된 모든 손이 3초 안정되면 기준을 잡는다 ----
+  const handsConnected = useMemo<StickId[]>(() => ([0, 1] as StickId[]).filter((i) => connected[i]), [connected]);
+  usePoseStream(sensorMode && anyConnected, handsConnected.length);
+  const refHold = useReferenceCapture(handsConnected);
+  const refHolding = refHold.phase === 'holding';
+  const [refLost, setRefLost] = useState(false);
+  const refLostWasHolding = useRef(false);
+  useEffect(() => {
+    // 진행 중 연결이 모두 끊기면 훅이 idle로 돌아간다 — 그때 오류 문구를 띄운다
+    if (refLostWasHolding.current && refHold.phase === 'idle' && !anyConnected) setRefLost(true);
+    refLostWasHolding.current = refHolding;
+  }, [refHold.phase, refHolding, anyConnected]);
 
   // 언마운트 시 진행 중인 보정은 접는다(표를 비워 둔 채 나가지 않게)
   useEffect(() => () => calibrationSession.cancelCapture(), []);
@@ -366,8 +394,8 @@ export function SetupPage() {
   };
 
   const saveAndLeave = () => {
-    if (!presets.items.some((p) => p.id === s.activePresetId)) {
-      // 적용 프리셋이 목록에 없다(저장소 전환 직후): 새 프리셋으로 저장
+    if (systemPreset || !presets.items.some((p) => p.id === s.activePresetId)) {
+      // 시스템 기본이거나 적용 프리셋이 목록에 없다(저장소 전환 직후): 새 프리셋으로 저장
       openNameDialog('leave');
       return;
     }
@@ -423,6 +451,8 @@ export function SetupPage() {
     activePresetName,
     dirty,
     leaving: leaveOpen || nameOpen === 'leave',
+    system: systemPreset,
+    full: slotsFull,
     calibrating,
     draft: draft ? { slot: draftSlot } : null,
   });
@@ -442,12 +472,14 @@ export function SetupPage() {
         />
       )}
 
-      <div className="setup-head">
-        <h1>연주 환경 설정</h1>
-        <span className="setup-progress">
-          {stepsResult.total}단계 중 {stepsResult.doneCount}단계 완료
-        </span>
-      </div>
+      <PageHeader
+        title="연주 환경 설정"
+        actions={
+          <span className="setup-progress">
+            {stepsResult.total}단계 중 {stepsResult.doneCount}단계 완료
+          </span>
+        }
+      />
 
       <div className="setup-tiles">
         {/* ① 스틱 연결 */}
@@ -520,12 +552,51 @@ export function SetupPage() {
             <CalibrationStage onRestart={anyConnected && !systemPreset ? startFull : undefined} />
           ) : (
             <div className="setup-col">
-              <p className="setup-note">스틱을 정면으로 들고 [시작 위치 잡기]를 누르면 기준 자세가 다시 잡혀요. 판정이 한쪽으로 밀릴 때 눌러요.</p>
-              <div className="setup-row">
-                <Button variant={calNeeded ? 'primary' : 'secondary'} onClick={() => calibrationSession.resetPose()} disabled={!anyConnected || capturing}>
-                  시작 위치 잡기
-                </Button>
-              </div>
+              {refHolding ? (
+                <>
+                  <p className="setup-note" role="status">
+                    {REFERENCE_HOLDING_TEXT}
+                  </p>
+                  <div className="setup-progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(refHold.progress * 100)}>
+                    <div style={{ width: `${Math.round(refHold.progress * 100)}%` }} />
+                  </div>
+                  <p className="setup-note faint">
+                    {referenceHoldingLine(refHold.progress, refHold.spread)}
+                    {refHold.progress === 0 && refHold.spread > 3 ? ` · ${REFERENCE_SHAKY_TEXT}` : ''}
+                  </p>
+                  <div className="setup-row">
+                    <Button variant="secondary" onClick={refHold.cancel}>
+                      취소
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="setup-note">{REFERENCE_HINT_TEXT}</p>
+                  {refHold.phase === 'done' && (
+                    <p className="setup-note" role="status">
+                      {REFERENCE_DONE_TEXT}
+                    </p>
+                  )}
+                  {refLost && !anyConnected && (
+                    <p className="setup-notice error" role="alert">
+                      {REFERENCE_LOST_TEXT}
+                    </p>
+                  )}
+                  <div className="setup-row">
+                    <Button
+                      variant={calNeeded && referenceSetAt === null ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setRefLost(false);
+                        refHold.start();
+                      }}
+                      disabled={!anyConnected || capturing || realigning}
+                    >
+                      {referenceSetAt === null && refHold.phase !== 'done' ? REFERENCE_START_LABEL : REFERENCE_RESTART_LABEL}
+                    </Button>
+                  </div>
+                </>
+              )}
               {calNeeded && !systemPreset && <p className="setup-note">드럼 위치는 아래 드럼 배치 카드에서 [전체 보정] 또는 [추가하기]로 잡아요.</p>}
               {!anyConnected && <p className="setup-note faint">스틱을 연결하면 보정할 수 있습니다.</p>}
             </div>
@@ -574,6 +645,12 @@ export function SetupPage() {
                 <KitCanvas
                   layout={s.kitLayout}
                   onTapPad={setSelectedPad}
+                  // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
+                  draggable={!capturing && !draft}
+                  onMovePad={(pad, x, y) => {
+                    setSelectedPad(pad);
+                    s.movePad(pad, x, y);
+                  }}
                   highlightPad={selectedPad}
                   hits={hits}
                   keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
@@ -744,7 +821,12 @@ export function SetupPage() {
               저장
             </Button>
           ) : (
-            <Button className="setup-bar-action wide" disabled={saving || capturing} onClick={() => openNameDialog('save')}>
+            <Button
+              className="setup-bar-action wide"
+              disabled={saving || capturing || !bar.buttonEnabled}
+              title={systemPreset && slotsFull ? SLOTS_FULL_TEXT : undefined}
+              onClick={() => openNameDialog('save')}
+            >
               새 프리셋으로 저장
             </Button>
           )}
@@ -753,7 +835,9 @@ export function SetupPage() {
 
       <UnsavedLeaveDialog
         open={leaveOpen}
-        message={unsavedLeaveText(activePresetName)}
+        message={unsavedLeaveText(activePresetName, systemPreset)}
+        saveLabel={systemPreset ? UNSAVED_LEAVE_SYSTEM_SAVE_LABEL : undefined}
+        saveDisabled={systemPreset && slotsFull}
         busy={saving}
         error={leaveError}
         onCancel={cancelLeave}

@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { getJob } from '@/api/jobs';
-import { getSong, listSongs, uploadAudio } from '@/api/songs';
+import { getSong, listAllSongs, uploadAudio } from '@/api/songs';
 import {
   ACTIVE_JOB_KEY,
   PRECHECK_TEXT,
@@ -309,8 +309,9 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
 
     recoverFromMine: async () => {
       try {
-        const page = await listSongs({ source: 'MINE', size: 50 });
-        const song = page.items.find((s) => s.status === 'PROCESSING');
+        // 내 곡이 한 페이지를 넘어도 PROCESSING 곡을 찾도록 전부 읽는다(Jira 363)
+        const mine = await listAllSongs({ source: 'MINE' });
+        const song = mine.find((s) => s.status === 'PROCESSING');
         if (song) {
           const active: ActiveJob = {
             jobId: null,

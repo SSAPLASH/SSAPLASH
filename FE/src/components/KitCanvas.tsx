@@ -1,4 +1,4 @@
-// 가상 드럼 키트 캔버스(표시 전용, PLAY-004 D2). 세팅의 배치 확인(손별 앵커 원·자세 마커)과 로그인 화면 장식에 공용. 드래그 편집은 없다.
+// 가상 드럼 키트 캔버스. 세팅의 배치 확인(손별 앵커 원·자세 마커)과 로그인 화면 장식에 공용. 끌기 편집은 draggable일 때만(kit-drag 설계 D6).
 import { useEffect, useRef } from 'react';
 import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
 import type { KitLayout } from '@/domain/kitLayout';
@@ -14,6 +14,10 @@ export interface KitCanvasProps {
   /** 패드를 톡 쳤을 때(이동 6px 이내). 끌기는 호출하지 않는다 */
   onTapPad?: (pad: PadId, nx: number, ny: number) => void;
   highlightPad?: PadId | null;
+  /** 패드를 끌어 옮길 수 있다. 이동 6px 이내는 끌기가 아니라 톡 치기(onTapPad) */
+  draggable?: boolean;
+  /** 끄는 동안 포인터마다 호출. 위치는 0.05~0.95로 자른 정규화 좌표 */
+  onMovePad?: (pad: PadId, x: number, y: number) => void;
   /** 손별 판정 앵커 원(왼손 파랑·오른손 주황). null인 손은 그리지 않는다 */
   anchorSets?: readonly [HandAnchorSet | null, HandAnchorSet | null];
   /** 자세 마커 (왼손, 오른손). 없으면 안 그림 */
@@ -29,7 +33,7 @@ export interface KitCanvasProps {
   angleRange?: AngleRange;
 }
 
-/** 톡 치기로 보는 최대 이동 거리(px) */
+/** 톡 치기와 끌기를 가르는 이동 거리(px) */
 const TAP_SLOP_PX = 6;
 /** 손 색(왼손, 오른손). 자세 마커와 앵커 원이 같이 쓴다 */
 const HAND_COLORS = ['#7cc4ff', '#ffa07c'] as const;
@@ -67,7 +71,8 @@ export function KitCanvas(props: KitCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
-  /** 포인터 다운 기록. 6px 넘게 움직이면 moved(톡 치기 아님) */
+  const dragRef = useRef<{ pad: PadId; dx: number; dy: number } | null>(null);
+  /** 포인터 다운 기록. 6px 넘게 움직이면 moved → 끌기, 아니면 업에서 톡 치기 */
   const pressRef = useRef<{ pad: PadId; x: number; y: number; moved: boolean } | null>(null);
   /** 모션 줄이기 환경이면 링·눌림·의성어를 생략하고 번쩍임만 그린다 */
   const reducedMotionRef = useRef(false);
@@ -267,7 +272,7 @@ export function KitCanvas(props: KitCanvasProps) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // 패드 톡 치기(선택). 끌기는 없다(배치는 보정 결과에서 유도, PLAY-004 D2)
+  // 패드 톡 치기(선택)와 끌기(draggable). 끌기는 앵커도 같이 옮긴다(kit-drag 설계 D2·D6)
   const hitTest = (clientX: number, clientY: number): { pad: PadId; nx: number; ny: number } | null => {
     const rect = wrapRef.current!.getBoundingClientRect();
     const nx = (clientX - rect.left) / rect.width;
@@ -283,18 +288,36 @@ export function KitCanvas(props: KitCanvasProps) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!props.onTapPad) return;
+    if (!props.draggable && !props.onTapPad) return;
     const h = hitTest(e.clientX, e.clientY);
     if (!h) return;
     pressRef.current = { pad: h.pad, x: e.clientX, y: e.clientY, moved: false };
+    if (props.draggable) {
+      const pl = props.layout[h.pad];
+      dragRef.current = { pad: h.pad, dx: pl.x - h.nx, dy: pl.y - h.ny };
+      // 합성 포인터 이벤트(테스트·자동화)는 활성 포인터가 없어 캡처가 실패한다. 캡처는 끌기 보조일 뿐이라 무시한다
+      try {
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* 활성 포인터 없음 */
+      }
+    }
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const press = pressRef.current;
     if (press && !press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) press.moved = true;
+    const d = dragRef.current;
+    // 6px 안쪽 움직임은 톡 치기로 보고 패드를 옮기지 않는다
+    if (!d || !press?.moved || !props.draggable || !props.onMovePad) return;
+    const rect = wrapRef.current!.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width + d.dx;
+    const ny = (e.clientY - rect.top) / rect.height + d.dy;
+    props.onMovePad(d.pad, Math.min(0.95, Math.max(0.05, nx)), Math.min(0.95, Math.max(0.05, ny)));
   };
   const onPointerUp = (e: React.PointerEvent) => {
     const press = pressRef.current;
     pressRef.current = null;
+    dragRef.current = null;
     if (!press || press.moved || e.type === 'pointercancel') return;
     const rect = wrapRef.current!.getBoundingClientRect();
     props.onTapPad?.(press.pad, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
@@ -304,7 +327,8 @@ export function KitCanvas(props: KitCanvasProps) {
     <div
       ref={wrapRef}
       className="kit-wrap"
-      style={{ cursor: props.onTapPad ? 'pointer' : 'crosshair' }}
+      data-pointer-strike=""
+      style={{ cursor: props.draggable ? 'grab' : props.onTapPad ? 'pointer' : 'crosshair' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

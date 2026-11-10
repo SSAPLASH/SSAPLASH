@@ -20,8 +20,18 @@ export const LIVE_COACH_CONFIG = {
     /** 패드별 놓침 지표(패드마다 표본이 필요해서 더 넓게 본다) */
     padMissSize: 16,
   },
-  /** 이 개수만큼 판정이 쌓이기 전에는 문구를 띄우지 않는다 */
-  warmupJudgements: 8,
+  /**
+   * 판정 단계(설계 3.2). 한 판에서 쌓인 판정 수에 따라 코칭을 점점 자세하게 한다.
+   * 적은 표본으로 원인을 단정하면 틀리기 쉬워서, 근거가 쌓일수록 말할 수 있는 것을 늘린다.
+   */
+  stages: {
+    /** 이 수 전에는 아무것도 띄우지 않는다. 여기부터 1단계: 연속 놓침만 */
+    first: 4,
+    /** 2단계: 규칙 지적 전부와 칭찬. 근거가 충분한 원인(빠른 구간, 다른 패드)만 붙인다 */
+    second: 8,
+    /** 3단계: 원인 후보 전부 */
+    third: 16,
+  },
   policy: {
     /** 문구와 문구 사이 최소 간격(곡 시각 ms). 표시 3초 + 빈 칸 1초 */
     minGapMs: 4_000,
@@ -100,6 +110,24 @@ export const LIVE_COACH_CONFIG = {
     stdCoef: 0.5,
     releaseCoef: 0.35,
   },
+  /** 놓침 원인(설계 3.1). 창 안 기록을 노트 시각 순으로 정렬해서 본다 */
+  cause: {
+    /** 원인을 보는 최근 판정 수 */
+    window: 16,
+    /** 원인을 말하려면 창 안(대상 패드가 있으면 그 패드) MISS가 이만큼은 있어야 한다 */
+    minMisses: 2,
+    /** 빠른 구간: 놓친 노트의 직전 간격 ≤ gapRatio × 곡의 노트 간격 중앙값인 놓침의 비율 */
+    dense: { gapRatio: 0.6, share: 0.6 },
+    /** 다른 패드: 놓친 노트 시각 ± nearCoef × goodMs 안에 다른 패드의 채보 밖 타격이 있는 놓침의 비율 */
+    wrongPad: { nearCoef: 2, share: 0.5 },
+    /** 패드 이동: 같은 이동(A → B)에서 놓친 횟수, 놓침 중 그 이동의 비율, 그 이동 노트 중 놓친 비율 */
+    transition: { minRepeat: 2, share: 0.5, rate: 0.5 },
+    /**
+     * 늦어지다 놓침: 놓침 묶음 직전 lookback개 유효 타격이 모두 늦고, 마지막이 lateCoef × goodMs 이상,
+     * 처음보다 riseCoef × goodMs 이상 늦어졌다. 그런 놓침 묶음의 비율
+     */
+    drift: { lookback: 3, lateCoef: 0.3, riseCoef: 0.2, share: 0.5 },
+  },
   /** 연속·집중 놓침 */
   miss: {
     /** 연속 MISS 개수 */
@@ -111,6 +139,21 @@ export const LIVE_COACH_CONFIG = {
     releaseMax: 1,
   },
 } as const;
+
+/** 판정 단계. 0이면 아무것도 띄우지 않는다 */
+export type CoachStage = 0 | 1 | 2 | 3;
+
+/** 이 판에서 받은 판정 수로 단계를 정한다. 재시작하면 판정 수가 0으로 돌아가 1단계 전부터 다시 시작한다 */
+export function coachStage(judged: number): CoachStage {
+  const s = LIVE_COACH_CONFIG.stages;
+  if (judged >= s.third) return 3;
+  if (judged >= s.second) return 2;
+  if (judged >= s.first) return 1;
+  return 0;
+}
+
+/** 1단계에서 띄울 수 있는 태그. 근거가 적어도 확실한 연속 놓침만 */
+export const STAGE1_TAGS: readonly string[] = ['LIVE_MISS_STREAK'];
 
 export interface LiveThresholds {
   goodMs: number;
