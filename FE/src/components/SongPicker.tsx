@@ -1,4 +1,4 @@
-// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · 탭(기본 곡 / 라이브러리) · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) + 선택한 곡 패널(SongDetailPane).
+// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · (악보 연습만) 안내 줄+구분선 · [왼쪽 열: 탭 · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) | 선택한 곡 패널(SongDetailPane)].
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다. 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
 // 선택 결과는 페이지가 URL로 옮긴다.
@@ -40,6 +40,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from '@/components/play/SongTable';
 import { SongDetailPane } from '@/components/play/SongDetailPane';
 import { LessonCourse } from '@/components/lesson/LessonCourse';
+import { PickerGuide } from '@/components/guide/PickerGuide';
 import './play/song-picker.css';
 
 interface Props {
@@ -330,85 +331,100 @@ export function SongPicker({ onSelect, mode }: Props) {
   const presetName = presetDisplayName(presets, activePresetId);
   const copy = COPY[mode];
 
+  const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  // 안내 줄·구분선은 악보 연습의 곡 탭에서만 보인다. 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
+  const showGuide = mode === 'sheet' && tab !== 'LESSONS';
+
   return (
     <div className="play-sp">
       <PageHeader title={copy.title} />
 
-      {source === 'api' && <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} />}
-      {tab === 'LESSONS' ? (
-        <LessonCourse onOpenBuiltin={() => setTab('BUILTIN')} />
-      ) : (
+      {showGuide && (
         <>
-      <div className="play-sp-filter">
-        <Input
-          className="play-sp-search"
-          type="search"
-          label="곡 검색"
-          value={query}
-          placeholder="곡 제목 또는 아티스트 검색"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="play-sp-levels" role="group" aria-label="곡 난이도">
-          {LEVEL_OPTIONS.map((o) => (
-            <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
-              {o.label}
-            </Chip>
-          ))}
-        </div>
-      </div>
-
-      {listLoading && (
-        <div className="play-sp-center">
-          <span className="spinner" aria-label="불러오는 중" />
-        </div>
+          <PickerGuide mode={mode} />
+          <hr className="play-sp-divider" />
+        </>
       )}
 
-      {!isAi && status === 'error' && (
-        <div className="notice error col" role="alert">
-          <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
-          <Button variant="secondary" size="sm" onClick={list.refetch}>
-            다시 시도
-          </Button>
-        </div>
-      )}
-
-      {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
-
-      {ready && (
+      {tab === 'LESSONS' ? (
+        <>
+          {tabs}
+          <LessonCourse onOpenBuiltin={() => setTab('BUILTIN')} />
+        </>
+      ) : (
+        // 왼쪽 열(탭·검색·표)과 선택 곡 카드: 카드 윗선 = 탭 윗선(Figma 112:696·112:381)
         <div className="play-sp-grid">
           <div className="play-sp-list">
-            <SongTable
-              key={`${tab}|${query}|${level}`}
-              songs={songs}
-              selectedId={selectedId}
-              onSelect={pick}
-              onOpen={(id) => {
-                pick(id);
-                prepare(id);
-              }}
-              mode={mode}
-              bestScores={bests.scores}
-              bestAccuracies={bests.accuracies}
-              isLocked={(s) => isLocked(tab, s)}
-              isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
-              emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
-            />
+            {tabs}
+            <div className="play-sp-filter">
+              <Input
+                className="play-sp-search"
+                type="search"
+                label="곡 검색"
+                value={query}
+                placeholder="곡 제목 또는 아티스트 검색"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <div className="play-sp-levels" role="group" aria-label="곡 난이도">
+                {LEVEL_OPTIONS.map((o) => (
+                  <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
+                    {o.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            {listLoading && (
+              <div className="play-sp-center">
+                <span className="spinner" aria-label="불러오는 중" />
+              </div>
+            )}
+
+            {!isAi && status === 'error' && (
+              <div className="notice error col" role="alert">
+                <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
+                <Button variant="secondary" size="sm" onClick={list.refetch}>
+                  다시 시도
+                </Button>
+              </div>
+            )}
+
+            {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
+
+            {ready && (
+              <SongTable
+                key={`${tab}|${query}|${level}`}
+                songs={songs}
+                selectedId={selectedId}
+                onSelect={pick}
+                onOpen={(id) => {
+                  pick(id);
+                  prepare(id);
+                }}
+                mode={mode}
+                bestScores={bests.scores}
+                bestAccuracies={bests.accuracies}
+                isLocked={(s) => isLocked(tab, s)}
+                isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
+                emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
+              />
+            )}
           </div>
-          <SongDetailPane
-            song={selectedSong}
-            mode={mode}
-            bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
-            bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
-            presetName={presetName}
-            chartState={chartState}
-            onRetry={() => selectedId !== null && fetchDetail(selectedId)}
-            onPrepare={() => selectedId !== null && prepare(selectedId)}
-            similar={similarCard}
-            onSimilarPick={viewSimilar}
-          />
+          {ready && (
+            <SongDetailPane
+              song={selectedSong}
+              mode={mode}
+              bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
+              bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
+              presetName={presetName}
+              chartState={chartState}
+              onRetry={() => selectedId !== null && fetchDetail(selectedId)}
+              onPrepare={() => selectedId !== null && prepare(selectedId)}
+              similar={similarCard}
+              onSimilarPick={viewSimilar}
+            />
+          )}
         </div>
-      )}
-        </>
       )}
     </div>
   );

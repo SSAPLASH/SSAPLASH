@@ -50,6 +50,16 @@ describe('StaffLegend', () => {
     expect(render().match(/play-sl-row active/g)).toBeNull();
   });
 
+  it('activePads는 여러 줄을 동시에 강조하고 activePad와 합친다', () => {
+    const html = render({ activePads: ['HIHAT', 'SNARE'] });
+    expect(html.match(/play-sl-row active/g)).toHaveLength(2);
+    const r = rows(html);
+    expect(r[ORDER.indexOf('HIHAT')]).toContain('play-sl-row active');
+    expect(r[ORDER.indexOf('SNARE')]).toContain('play-sl-row active');
+    expect(render({ activePad: 'KICK', activePads: ['HIHAT', 'KICK'] }).match(/play-sl-row active/g)).toHaveLength(2);
+    expect(render({ activePads: [] }).match(/play-sl-row active/g)).toBeNull();
+  });
+
   it('기호 y가 staffPosOf 값(선1 y36, 반 칸 3px)과 같다', () => {
     const r = rows(render());
     ORDER.forEach((pad, i) => {
