@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import javax.sound.midi.MidiEvent;
 import javax.sound.midi.MidiSystem;
@@ -170,7 +171,7 @@ class AdminSongApiTest {
 		assertThat(song.path("charts")).hasSize(3).allSatisfy(c -> {
 			assertThat(c.path("version").asInt()).isEqualTo(1);
 			assertThat(c.path("generator").asString()).isEqualTo("MIDI_RULE");
-			assertThat(c.path("generatorVersion").asString()).isEqualTo("midi-rule-1.1");
+			assertThat(c.path("generatorVersion").asString()).isEqualTo("midi-rule-2.0");
 			assertThat(c.path("notationStatus").asString()).isEqualTo("PENDING");
 		});
 		var row = db.queryForMap("SELECT owner_id,source,status,published FROM songs WHERE id=?", id);
@@ -255,6 +256,66 @@ class AdminSongApiTest {
 		// 생략하면 지금처럼 0이다.
 		long plain = registered(true);
 		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, plain)).isZero();
+	}
+
+	MockMultipartHttpServletRequestBuilder regenerate(long id, byte[] bytes) {
+		return (MockMultipartHttpServletRequestBuilder) multipart(BASE + "/" + id + "/charts/midi")
+				.file(new MockMultipartFile("file", "fixed.mid", "audio/midi", bytes)).with(req -> { req.setMethod("PUT"); return req; });
+	}
+
+	/** 난이도별 최신 버전의 timing.offsetMs와 HARD 첫 노트(tick, timeMs). */
+	Map<String, Object> latest(long id) {
+		return db.queryForMap("""
+				SELECT array_agg(DISTINCT CAST(v.timing->>'offsetMs' AS int)) AS offsets,
+				       max(CASE WHEN c.difficulty='HARD' THEN CAST(v.notes->0->'notation'->>'tick' AS int) END) AS tick,
+				       max(CASE WHEN c.difficulty='HARD' THEN CAST(v.notes->0->>'timeMs' AS int) END) AS ms,
+				       min(v.version) AS version
+				FROM charts c JOIN chart_versions v ON v.chart_id=c.id
+				WHERE c.song_id=? AND v.version=(SELECT max(x.version) FROM chart_versions x WHERE x.chart_id=c.id)
+				""", id);
+	}
+
+	@Test
+	void 재생성할_때_offsetMs를_주지_않으면_곡의_첫_박_기준을_유지한다() throws Exception {
+		// 328번: 카탈로그 곡(offsetMs ≠ 0)을 새 솎기 규칙으로 다시 만들 때 첫 박 기준이 0으로 돌아가면 격자·반주 싱크가 어긋난다.
+		var r = send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", "1000"), admin);
+		status(r, 201);
+		long id = body(r).path("id").asLong();
+
+		status(send(regenerate(id, offsetMidi()), admin), 200);
+
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).isEqualTo(1000);
+		var v = latest(id);
+		assertThat(((Number) v.get("version")).intValue()).isEqualTo(2);
+		assertThat(v.get("offsets").toString()).isEqualTo("{1000}");
+		assertThat(v.get("tick")).isEqualTo(0);
+		assertThat(v.get("ms")).isEqualTo(1000);
+	}
+
+	@Test
+	void 재생성할_때_offsetMs를_주면_그_값으로_바꾼다() throws Exception {
+		var r = send(register(offsetMidi()).param("title", TITLE).param("license", "x").param("offsetMs", "1000"), admin);
+		status(r, 201);
+		long id = body(r).path("id").asLong();
+
+		status(send(regenerate(id, offsetMidi()).param("offsetMs", "0"), admin), 200);
+
+		assertThat(db.queryForObject("SELECT offset_ms FROM songs WHERE id=?", Integer.class, id)).isZero();
+		var v = latest(id);
+		assertThat(v.get("offsets").toString()).isEqualTo("{0}");
+		assertThat(v.get("tick")).isEqualTo(960);
+		assertThat(v.get("ms")).isEqualTo(1000);
+	}
+
+	@Test
+	void 재생성_offsetMs도_등록과_같은_규칙으로_검사하고_실패하면_새_버전이_없다() throws Exception {
+		long id = registered(true);
+		for (var bad : List.of("-1", "1800001", "1.5", "abc", ""))
+			problem(send(regenerate(id, offsetMidi()).param("offsetMs", bad), admin), 400, "SONG_INVALID");
+		problem(send(regenerate(id, offsetMidi()).param("offsetMs", "2000"), admin), 422, "MIDI_UNSUPPORTED");
+		problem(send(regenerate(id, offsetMidi()).param("title", "x"), admin), 400, "SONG_INVALID");
+		assertThat(db.queryForObject("SELECT max(v.version) FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?",
+				Integer.class, id)).isEqualTo(1);
 	}
 
 	@Test

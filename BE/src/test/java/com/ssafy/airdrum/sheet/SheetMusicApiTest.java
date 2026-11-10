@@ -59,7 +59,7 @@ class SheetMusicApiTest {
 	@MockitoBean SheetStorage storage;
 	final JsonMapper json = new JsonMapper();
 	long user, other;
-	long song, othersSong, builtin;
+	long song, song2, othersSong, builtin;
 
 	@BeforeEach
 	void seed() {
@@ -68,6 +68,7 @@ class SheetMusicApiTest {
 		other = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 다른 회원') RETURNING id", Long.class);
 		SignupConsentFixtures.complete(db, other);
 		song = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'내 곡','MIDI','READY') RETURNING id", Long.class, user);
+		song2 = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'내 둘째 곡','AUDIO','PROCESSING') RETURNING id", Long.class, user);
 		othersSong = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'남의 곡','MIDI','READY') RETURNING id", Long.class, other);
 		builtin = db.queryForObject("INSERT INTO songs(title,source,status,license,published) VALUES('공용 곡','BUILTIN','READY','test',true) RETURNING id", Long.class);
 		when(storage.sign(anyString())).thenAnswer(i -> "https://objects.test/" + i.getArgument(0));
@@ -77,7 +78,7 @@ class SheetMusicApiTest {
 	void clean() {
 		db.update("DELETE FROM file_cleanup_tasks WHERE user_id IN (?,?)", user, other);
 		db.update("DELETE FROM sheet_music WHERE owner_id IN (?,?)", user, other);
-		db.update("DELETE FROM songs WHERE id IN (?,?,?)", song, othersSong, builtin);
+		db.update("DELETE FROM songs WHERE id IN (?,?,?,?)", song, song2, othersSong, builtin);
 		db.update("DELETE FROM users WHERE id IN (?,?)", user, other);
 	}
 
@@ -161,6 +162,80 @@ class SheetMusicApiTest {
 		assertThat(sheetIdOf(builtin, user)).isNull();
 	}
 
+	// --- 333 악보 곡 연결 PATCH ---
+
+	@Test
+	void PATCH_songId로_연결_해제_옮김이_되고_같은_값은_바꾸지_않는다() throws Exception {
+		long id = body(upload(user, "나중에 연결할 악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		assertThat(body(send(get("/api/v1/sheets/" + id), user)).path("songId").isNull()).isTrue();
+		// 연결: 응답은 악보 상세 그대로
+		var linked = send(patchJson(id, "{\"songId\":" + song + "}"), user);
+		assertThat(linked.getResponse().getStatus()).as(text(linked)).isEqualTo(200);
+		assertThat(body(linked).path("songId").asLong()).isEqualTo(song);
+		assertThat(body(linked).path("title").asString()).isEqualTo("나중에 연결할 악보");
+		assertThat(body(linked).path("pages").size()).isEqualTo(1);
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		assertThat(body(send(get("/api/v1/sheets"), user)).path("items").get(0).path("songId").asLong()).isEqualTo(song);
+		// 같은 값은 200이고 아무것도 바꾸지 않는다
+		var before = db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?", java.sql.Timestamp.class, id);
+		assertThat(send(patchJson(id, "{\"songId\":" + song + "}"), user).getResponse().getStatus()).isEqualTo(200);
+		assertThat(db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?", java.sql.Timestamp.class, id)).isEqualTo(before);
+		// 제목과 함께 다른 곡으로 보내면 옮긴다
+		var moved = send(patchJson(id, "{\"title\":\"둘 다 바꿈\",\"songId\":" + song2 + "}"), user);
+		assertThat(moved.getResponse().getStatus()).as(text(moved)).isEqualTo(200);
+		assertThat(body(moved).path("title").asString()).isEqualTo("둘 다 바꿈");
+		assertThat(body(moved).path("songId").asLong()).isEqualTo(song2);
+		assertThat(sheetIdOf(song, user)).isNull();
+		assertThat(sheetIdOf(song2, user)).isEqualTo(id);
+		// 제목만 보내면 연결은 그대로다
+		var titleOnly = send(patchJson(id, "{\"title\":\"제목만\"}"), user);
+		assertThat(titleOnly.getResponse().getStatus()).isEqualTo(200);
+		assertThat(body(titleOnly).path("songId").asLong()).isEqualTo(song2);
+		// null이면 해제
+		var unlinked = send(patchJson(id, "{\"songId\":null}"), user);
+		assertThat(unlinked.getResponse().getStatus()).as(text(unlinked)).isEqualTo(200);
+		assertThat(body(unlinked).has("songId")).isTrue();
+		assertThat(body(unlinked).path("songId").isNull()).isTrue();
+		assertThat(sheetIdOf(song2, user)).isNull();
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isNull();
+		// 해제된 자리에는 다시 올릴 수 있다
+		var again = upload(user, "다시 올린 악보", null, Map.of("songId", String.valueOf(song2)), file("c.png", png(2, 2)));
+		assertThat(again.getResponse().getStatus()).as(text(again)).isEqualTo(201);
+	}
+
+	@Test
+	void PATCH_songId가_잘못되면_거절하고_연결이_바뀌지_않는다() throws Exception {
+		long id = body(upload(user, "곡 없는 악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		long occupied = body(upload(user, "둘째 곡 악보", null, Map.of("songId", String.valueOf(song2)), file("b.png", png(2, 2)))).path("id").asLong();
+		// 남의 곡·없는 곡·공용 곡·지운 곡은 404
+		for (var bad : new String[] {String.valueOf(othersSong), "999999999", String.valueOf(builtin)})
+			problem(send(patchJson(id, "{\"songId\":" + bad + "}"), user), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
+		problem(send(patchJson(id, "{\"songId\":" + song + "}"), user), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=NULL WHERE id=?", song);
+		// 그 곡에 이미 악보가 있으면 409이고 기존 연결은 그대로
+		problem(send(patchJson(id, "{\"songId\":" + song2 + "}"), user), 409, "SHEET_ALREADY_LINKED");
+		assertThat(sheetIdOf(song2, user)).isEqualTo(occupied);
+		// 형식 오류는 400: 문자열·0·음수·소수·불리언·배열·객체·빈 본문·중복 키·모르는 키·Long 범위 초과
+		for (var bad : new String[] {"{\"songId\":\"42\"}", "{\"songId\":0}", "{\"songId\":-1}", "{\"songId\":1.5}", "{\"songId\":true}", "{\"songId\":[]}",
+				"{\"songId\":{}}", "{}", "{\"songId\":1,\"songId\":2}", "{\"songId\":1,\"kind\":\"PDF\"}", "{\"songId\":99999999999999999999}", "{\"songId\":1}{}"})
+			problem(send(patchJson(id, bad), user), 400, "SHEET_INVALID");
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isNull();
+		// 남의 악보·업로드 중(페이지 미연결) 악보는 404 SHEET_NOT_FOUND
+		problem(send(patchJson(id, "{\"songId\":" + othersSong + "}"), other), 404, "SHEET_NOT_FOUND");
+		long inProgress = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'업로드 중','UPLOADED','IMAGE',1,1) RETURNING id",
+				Long.class, user);
+		problem(send(patchJson(inProgress, "{\"songId\":" + song + "}"), user), 404, "SHEET_NOT_FOUND");
+		// 지운 악보도 404
+		long gone = body(upload(user, "지울 악보", null, file("g.png", png(2, 2)))).path("id").asLong();
+		assertThat(send(delete("/api/v1/sheets/" + gone), user).getResponse().getStatus()).isEqualTo(204);
+		problem(send(patchJson(gone, "{\"songId\":" + song + "}"), user), 404, "SHEET_NOT_FOUND");
+		// 연결된 악보를 이미 악보가 있는 곡으로 옮기려 하면 409이고 양쪽 연결 모두 그대로
+		assertThat(send(patchJson(id, "{\"songId\":" + song + "}"), user).getResponse().getStatus()).isEqualTo(200);
+		problem(send(patchJson(occupied, "{\"songId\":" + song + "}"), user), 409, "SHEET_ALREADY_LINKED");
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		assertThat(sheetIdOf(song2, user)).isEqualTo(occupied);
+	}
 	@Test
 	void 이미지_여러_장으로_등록하면_201과_페이지별_URL을_준다() throws Exception {
 		var r = upload(user, "드럼 연습곡 1", null, file("a.png", png(800, 1200)), file("b.jpg", jpg(640, 480)), file("c.png", png(10, 10)));
@@ -315,6 +390,10 @@ class SheetMusicApiTest {
 	MvcResult send(AbstractMockHttpServletRequestBuilder<?> request, long as) throws Exception {
 		request.header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.issue(new AuthUser(as, UserRole.USER), Instant.now()).token());
 		return mvc.perform(request).andReturn();
+	}
+
+	static AbstractMockHttpServletRequestBuilder<?> patchJson(long id, String body) {
+		return patch("/api/v1/sheets/" + id).contentType(MediaType.APPLICATION_JSON).content(body);
 	}
 
 	static MockMultipartFile file(String name, byte[] bytes) {

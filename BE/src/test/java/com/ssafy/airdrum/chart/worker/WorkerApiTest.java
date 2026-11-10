@@ -434,7 +434,7 @@ class WorkerApiTest {
         for (var row:List.of(normal,easy)) {
             var notes=json.readTree((String)row.get("notes")); int previous=-1;
             for(var note:notes) { int index=Integer.parseInt(note.path("noteId").asString().substring(4)); assertThat(index).isGreaterThan(previous); assertThat(note).isEqualTo(original.get(index)); previous=index; }
-            assertThat((String)row.get("generator_version")).hasSize(50).endsWith("+midi-rule-1.1");
+            assertThat((String)row.get("generator_version")).hasSize(50).endsWith("+midi-rule-2.0");
             assertThat(row.get("notation_status")).isEqualTo("READY");
         }
         assertThat(hard.get("generator_version")).isEqualTo("x".repeat(50));
@@ -445,9 +445,13 @@ class WorkerApiTest {
         var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
         var easy=rows.stream().filter(r->r.get("difficulty").equals("EASY")).findFirst().orElseThrow();
         var notes=json.readTree((String)easy.get("notes"));
-        assertThat(notes.size()).isEqualTo(1);
-        assertThat(notes.get(0).path("noteId").asString()).isEqualTo("note0");
+        // 120bpm 8분(250ms) 4개는 연타 구간: 4분 박 칸마다 하나(note0, note2). EASY는 세기로 거르지 않는다(midi-rule-2.0)
+        assertThat(notes.valueStream().map(n->n.path("noteId").asString()).toList()).containsExactly("note0","note2");
         assertThat(easy.get("notation_status")).isEqualTo("UNAVAILABLE");
+        // velocityHint 20 스네어(note2)는 NORMAL에서 고스트로 빠지고, 힌트가 없는 노트는 100으로 본다
+        var normal=rows.stream().filter(r->r.get("difficulty").equals("NORMAL")).findFirst().orElseThrow();
+        assertThat(json.readTree((String)normal.get("notes")).valueStream().map(n->n.path("noteId").asString()).toList())
+                .containsExactly("note0","note1","note3");
     }
     @Test void unavailableWithTempoMapThinsBySegmentTicksAndReusesReceipt() throws Exception {
         // offsetMs 100, 0~1920틱 120bpm(박 500ms), 1920틱(2100ms)부터 60bpm(박 1000ms). 노트에는 notation이 없다
@@ -467,8 +471,8 @@ class WorkerApiTest {
         String receipt=raw(path("/results/transcription"),T1,envelope,200);
         assertThat(raw(path("/results/transcription"),T1,envelope,200)).isEqualTo(receipt);
         // 기대값: 구간 tick으로 솎은 noteId. 한 bpm으로 셌다면 결과가 달라야 이 테스트가 의미가 있다
-        var expected=keptIds(segmentTicks,pads); var singleBpm=keptIds(singleBpmTicks,pads);
-        assertThat(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.EASY)).containsExactly("tm0","tm2");
+        var expected=keptIds(segmentTicks,pads,List.of(tempo(0,120),tempo(1920,60))); var singleBpm=keptIds(singleBpmTicks,pads,List.of(tempo(0,120)));
+        assertThat(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.EASY)).containsExactly("tm0","tm1","tm2");
         assertThat(expected.get(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.NORMAL)).containsExactly("tm0","tm1","tm2");
         assertThat(singleBpm).isNotEqualTo(expected);
         var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes,v.notation_status FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
@@ -488,7 +492,11 @@ class WorkerApiTest {
             assertThat(row.get("notation_status")).isEqualTo("UNAVAILABLE");
         }
     }
-    private static Map<com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty,List<String>> keptIds(long[] ticks,String[] pads) {
+    private static com.ssafy.airdrum.song.midi.DifficultyThinner.Tempo tempo(long tick,int bpm) {
+        return new com.ssafy.airdrum.song.midi.DifficultyThinner.Tempo(tick,(int)Math.round(60_000_000.0/bpm));
+    }
+    private static Map<com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty,List<String>> keptIds(long[] ticks,String[] pads,
+            List<com.ssafy.airdrum.song.midi.DifficultyThinner.Tempo> tempos) {
         var byNote=new IdentityHashMap<com.ssafy.airdrum.song.midi.DrumNote,String>();
         var list=new ArrayList<com.ssafy.airdrum.song.midi.DrumNote>();
         for(int i=0;i<ticks.length;i++) {
@@ -496,7 +504,7 @@ class WorkerApiTest {
             list.add(n); byNote.put(n,"tm"+i);
         }
         var result=new EnumMap<com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty,List<String>>(com.ssafy.airdrum.song.midi.DifficultyThinner.Difficulty.class);
-        com.ssafy.airdrum.song.midi.DifficultyThinner.thin(list,480).forEach((d,kept)->result.put(d,kept.stream().map(byNote::get).toList()));
+        com.ssafy.airdrum.song.midi.DifficultyThinner.thin(list,480,tempos).forEach((d,kept)->result.put(d,kept.stream().map(byNote::get).toList()));
         return result;
     }
     @Test void pendingTicksFallbackPreservesOriginalDuplicates() throws Exception {
@@ -508,9 +516,13 @@ class WorkerApiTest {
                 Map.of("difficulty","NORMAL","notationStatus","PENDING","timing",timing,"notes",List.of(weak,stronger))));
         raw(path("/results/transcription"),T1,envelope(id,UUID.randomUUID(),input),200);
         var rows=db.queryForList("SELECT c.difficulty,v.notes::text AS notes FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=?",song);
+        assertThat(rows).hasSize(3);
         for(var row:rows) {
             var notes=json.readTree((String)row.get("notes"));
-            assertThat(notes).isEqualTo(json.valueToTree(List.of(weak,stronger)));
+            // NORMAL은 스네어 고스트를 빼서 비고 HARD로 폴백한다: 병합 전 원본 둘을 그대로 둔다.
+            // EASY는 세기로 거르지 않아(midi-rule-2.0) 병합된 쪽(세기가 큰 stronger)만 남는다
+            if(row.get("difficulty").equals("EASY")) assertThat(notes).isEqualTo(json.valueToTree(List.of(stronger)));
+            else assertThat(notes).isEqualTo(json.valueToTree(List.of(weak,stronger)));
         }
     }
     @Test void duplicateTickAndPadSelectsTheCorrectOriginal() throws Exception {
