@@ -182,13 +182,40 @@
   align-items: center;
   gap: var(--space-s);
 }
-/* 세그먼트는 중립 스타일(단계별 색은 나중에 별도로) */
+/* 단계 세그먼트(설계 U8 C안): 트랙·고르지 않은 칸은 중립, 고른 칸만 단계 네온색이 아래에서 은은하게 번진다 */
 .play-sd-play-row .play-sd-levels {
   flex: none;
 }
 .play-sd-play-row .play-sd-levels .ui-seg-item {
+  --seg-level: var(--level-normal);
   padding: 8px 10px;
-  font-size: 13px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='EASY'] {
+  --seg-level: var(--level-easy);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='HARD'] {
+  --seg-level: var(--level-hard);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item.selected {
+  background:
+    radial-gradient(120% 140% at 50% 120%, color-mix(in srgb, var(--seg-level) 30%, transparent), transparent 70%),
+    var(--surface-3);
+  color: color-mix(in srgb, var(--seg-level) 70%, #ffffff);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--seg-level) 45%, transparent),
+    0 0 18px -4px color-mix(in srgb, var(--seg-level) 55%, transparent);
+}
+/* 그 곡에 없는 단계: 색 없이 흐리게 */
+.play-sd-play-row .play-sd-levels .ui-seg-item:disabled {
+  opacity: 0.35;
 }
 .play-sd .play-sd-play {
   flex: 1;
