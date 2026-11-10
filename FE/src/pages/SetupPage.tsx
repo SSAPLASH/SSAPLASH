@@ -75,10 +75,8 @@ const EDITOR_W = 720;
 const EDITOR_H = 320;
 
 const COUNT_IN_OPTIONS = [
-  { value: '0', label: '없음' },
-  { value: '1', label: '1마디' },
-  { value: '2', label: '2마디' },
-  { value: '3', label: '3마디' },
+  { value: '0', label: '끔' },
+  { value: '1', label: '켬' },
 ];
 
 const NO_SENSOR = { id: 'none', label: '키보드만', description: '키 하나가 패드 하나. 보정 없이 바로 플레이' };
@@ -735,7 +733,7 @@ export function SetupPage() {
             <h2 id="setup-adv-title" className="setup-card-title">
               고급 설정
             </h2>
-            <p className="setup-card-desc">판정 반경 · 판정 폭 · 노트 낙하 · 시작 전 마디 · 메트로놈</p>
+            <p className="setup-card-desc">판정 반경 · 판정 폭 · 노트 낙하 · 카운트다운 · 메트로놈</p>
           </div>
           <Button variant="text" className="setup-step-action" aria-expanded={advOpen} aria-controls="setup-adv-body" onClick={() => setAdvOpen((v) => !v)}>
             {advOpen ? '접기' : '펼치기'}
@@ -789,9 +787,9 @@ export function SetupPage() {
               onChange={(v) => s.setScrollMs(v)}
             />
             <div className="setup-adv-item">
-              <span className="setup-adv-label">시작 전 마디</span>
+              <span className="setup-adv-label">카운트다운</span>
               <Segmented
-                label="시작 전 마디"
+                label="카운트다운"
                 options={COUNT_IN_OPTIONS}
                 value={String(s.countInBars)}
                 onChange={(v) => s.setCountInBars(Number(v))}

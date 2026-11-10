@@ -157,7 +157,7 @@ export const SETTINGS_VERSION = 21;
  *            presetAnchors[그 id]로 복사(사본은 유지). 시스템 기본이면 사본·시각을 비운다(모델 기본 앵커로 판정).
  * v18 → v19: hitFxTheme(기본 'auto') 추가. 없거나 모르는 값이면 'auto'.
  * v19 → v20: timingBar(기본 true) 추가. boolean이 아니면 true.
- * v20 → v21: countInBars 기본 1 → 2, 선택지 0~3(MODE-001). 저장값 1은 2로 올리고, 0~3 정수가 아니면 2.
+ * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -265,7 +265,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   if (version < 20) p.timingBar = typeof p.timingBar === 'boolean' ? p.timingBar : true;
   if (version < 21) {
     const n = p.countInBars;
-    p.countInBars = typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 3 && n !== 1 ? n : 2;
+    p.countInBars = n === 0 ? 0 : 1;
   }
   return p as unknown as SettingsState;
 }
@@ -347,7 +347,7 @@ export const useSettings = create<SettingsState>()(
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
-      countInBars: 2,
+      countInBars: 1,
       volume: 0.8,
       metronomeVolume: 1,
       drumVolume: 1,
