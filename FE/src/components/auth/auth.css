@@ -189,3 +189,12 @@
     max-width: none;
   }
 }
+
+/* 랜딩에서 로그인 확인 중 화면 — 화면 세로 가운데 */
+.landing-auth-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
