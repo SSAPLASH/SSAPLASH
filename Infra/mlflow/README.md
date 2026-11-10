@@ -46,7 +46,7 @@ docker compose -p infra exec mlflow publish-model publish <모델 이름> <MLflo
 | `models[].versions[].files[]` | 파일 경로(`path`), `sha256`, 크기(`size`) |
 | `models[].versions[].publishedAt` | 게시 시각 |
 
-- 필드 구성은 AI·FE와 맞춘 뒤 확정한다.
+- FE `coach/live/models/manifest.ts`가 이 필드를 읽는다. 이름·버전·경로가 위 규칙에 맞지 않는 항목은 쓰지 않는다.
 - `manifest.json`은 캐시하지 않는다(롤백이 바로 반영되어야 한다). 버전 폴더의 파일은 바뀌지 않으므로 오래 캐시한다.
 
 ## 이전 버전으로 되돌리기(롤백)
@@ -57,6 +57,49 @@ docker compose -p infra exec mlflow publish-model rollback <모델 이름> [<게
 
 - 버전을 생략하면 현재 버전 바로 앞에 게시된 버전으로 되돌린다.
 - 파일을 지우지 않고 매니페스트의 `current`만 바꾸므로 즉시 반영된다. 브라우저는 다음 로드부터 이전 모델을 받는다.
+
+## 실시간 코칭 모델과 실험 설정 (COACH-001)
+
+실시간 코칭의 거름 모델과 실험 설정을 이 게시 구조로 운영한다. FE 배포 없이 모델을 바꾸고 실험군으로 비교하고 되돌린다. 코드는 AI `coach_live_model`(학습·등록)과 FE `coach/live/models`(받기·검증·배정)에 있다.
+
+| 게시 이름 | 파일 | 내용 |
+| --- | --- | --- |
+| `coach-gate-mlp16` (실험군마다 이름이 다를 수 있다) | `coachGate.json`, `coachGate.onnx`, `meta.json` | 거름 모델. `meta.json`의 `featureVersion`이 FE와 다르면 FE가 쓰지 않는다 |
+| `coach-live-config` | `config.json` | 모드(`off`·`shadow`·`on`), 실험군과 비율(`arms[].share`, 합 100), 모델을 쓰는 사용자 비율(`rolloutPercent`) |
+
+**처음 켜는 순서** (내 PC에서 등록, 서버에서 게시)
+
+1. 터널을 열고 거름 모델을 학습·등록한다. 출력의 버전을 적어 둔다.
+
+   ```bash
+   cd AI
+   MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live --register
+   ```
+
+2. 서버에서 모델을 게시한다: `docker compose -p infra exec mlflow publish-model publish coach-gate-mlp16 <버전>`
+3. 실험 설정을 검사·등록한다. 처음에는 그림자 모드(판단만 기록하고 문구는 그대로)로 둔다(`AI/configs/coach/coach_live_config.json`).
+
+   ```bash
+   MLFLOW_TRACKING_URI=http://localhost:5000 uv run python -m ssaplash_ai.coach_live_model.experiment register configs/coach/coach_live_config.json
+   ```
+
+4. 서버에서 설정을 게시한다: `docker compose -p infra exec mlflow publish-model publish coach-live-config <버전>`
+5. 확인: `curl -s https://<도메인>/models/manifest.json`에 두 이름이 있고, 연주 한 판 뒤 플레이 로그 `liveCoachEvents`의 첫 행이 `LIVE_ARM`(`{"arm":"coach-gate-mlp16"}`)이고 `LIVE_GATE_*`에 `"model":"coach-gate-mlp16@<버전>"`이 있다.
+
+**바꾸기와 되돌리기**
+
+| 하려는 것 | 방법 |
+| --- | --- |
+| 새 모델로 교체 | 새로 학습·등록해 게시한다(게시하면 현재 버전이 된다). 다음 연주부터 반영 |
+| 두 모델 비교 | 두 번째 모델을 다른 이름(예: `coach-gate-logistic`)으로 등록·게시하고, 설정의 `arms`를 50/50으로 바꿔 새 설정을 게시한다 |
+| 문구를 실제로 빼기 | 그림자 기록을 본 뒤 설정의 `mode`를 `on`으로 바꿔 게시한다 |
+| 일부 사용자만 | 설정의 `rolloutPercent`를 낮춘다. 비율 밖은 규칙만 쓰고 `LIVE_ARM`에 `rule`로 남는다 |
+| 되돌리기 | `publish-model rollback coach-live-config` 또는 `publish-model rollback coach-gate-mlp16` |
+| 모델을 아예 끄기 | `mode`를 `off`로 한 설정을 게시하거나, 설정을 롤백한다 |
+
+- 로그인 사용자는 같은 실험군에 계속 남는다. 비율을 올려도 이미 들어온 사람의 실험군은 바뀌지 않는다. 비로그인은 판마다 무작위다.
+- 매니페스트나 설정을 못 받으면 FE는 빌드 설정(`VITE_COACH_GATE`)대로 동작한다. 실험군 모델 파일의 `sha256`·크기·`featureVersion`이 맞지 않으면 그 판은 규칙만 쓴다.
+- `sha256`은 손상·섞임을 거르는 것이지 서명이 아니다. 게시는 서버의 `publish-model`로만 한다(`Infra/SECURITY.md` 21절).
 
 ## GPU 서버 기록 이동 절차 (검증 전)
 
