@@ -411,3 +411,88 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(list.contains(card)).toBe(false);
   });
 });
+
+describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-start)', () => {
+  const detail = (id: number) => ({
+    ...song(id, `곡${id}`), license: null, updatedAt: null,
+    charts: [
+      { id: id * 10 + 1, difficulty: 'EASY' as const },
+      { id: id * 10 + 2, difficulty: 'NORMAL' as const },
+    ].map((c) => ({ ...c, chartVersionId: c.id, version: 1, noteCount: 5, notationStatus: 'READY' as const })),
+  });
+  const showSheet = (url = '/sheet', handlers: { onStart?: ReturnType<typeof vi.fn>; onSelect?: ReturnType<typeof vi.fn> } = {}) => {
+    const onStart = handlers.onStart ?? vi.fn();
+    const onSelect = handlers.onSelect ?? vi.fn();
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <SongPicker mode="sheet" onStart={onStart} onSelect={onSelect} />
+      </MemoryRouter>,
+    );
+    return { onStart, onSelect };
+  };
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
+    vi.mocked(listSongs).mockResolvedValue({ items: [song(1, '목록곡'), song(2, '둘째곡')], hasNext: false });
+    vi.mocked(getSong).mockImplementation(async (id: number) => detail(id));
+  });
+
+  it('[플레이]는 기본 단계(NORMAL)로 onStart를 부른다([준비]는 없다)', async () => {
+    const { onStart, onSelect } = showSheet();
+    const play = await screen.findByRole('button', { name: '플레이' });
+    await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('button', { name: '준비' })).toBeNull();
+    fireEvent.click(play);
+    expect(onStart).toHaveBeenCalledWith(1, 12);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('단계를 바꾸면 그 단계로 시작하고, 다른 곡을 고르면 그 곡의 기본 단계로 돌아간다', async () => {
+    const { onStart } = showSheet();
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenLastCalledWith(1, 11);
+    fireEvent.click(screen.getByText('둘째곡', { selector: '.play-st-name' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'NORM' }).getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenLastCalledWith(2, 22);
+  });
+
+  it('주소의 song·chart로 그 곡·단계를 처음부터 골라 둔다', async () => {
+    const { onStart } = showSheet('/sheet?song=2&chart=21');
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'EASY' }).getAttribute('aria-checked')).toBe('true'));
+    expect(screen.getByRole('complementary', { name: '선택한 곡' }).textContent).toContain('둘째곡');
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(2, 21);
+  });
+
+  it('더블클릭도 고른 단계로 onStart', async () => {
+    const { onStart } = showSheet();
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    fireEvent.doubleClick(screen.getByText('목록곡', { selector: '.play-st-name' }));
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith(1, 11));
+  });
+
+  it('고른 단계의 최고 정확도를 카드에 보인다', async () => {
+    vi.mocked(getBestRecords).mockResolvedValue({ items: [
+      { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'SHEET', bestScore: null, bestAccuracy: 55 },
+      { songId: 1, chartId: 12, difficulty: 'NORMAL', mode: 'SHEET', bestScore: null, bestAccuracy: 91 },
+    ] });
+    showSheet();
+    const card = await screen.findByRole('complementary', { name: '선택한 곡' });
+    await waitFor(() => expect(card.textContent).toContain('91.0%'));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    await waitFor(() => expect(card.textContent).toContain('55.0%'));
+  });
+
+  it('/play는 카드가 [준비] 그대로이고 onSelect를 부른다', async () => {
+    const onSelect = show();
+    const prepare = await screen.findByRole('button', { name: '준비' });
+    await waitFor(() => expect((prepare as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('radio', { name: 'EASY' })).toBeNull();
+    fireEvent.click(prepare);
+    expect(onSelect).toHaveBeenCalledWith(1, 12);
+  });
+});
