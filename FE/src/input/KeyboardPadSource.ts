@@ -13,6 +13,13 @@ export class KeyboardPadSource extends BaseInputSource {
   readonly label = '키보드';
   /** 반응할 키 코드. 비어 있으면 모든 키를 무시한다 */
   private keys = new Set<string>();
+  /** 꺼져 있으면 keydown을 치지도 막지도 않는다. 클래스 기본은 켬(기존 동작), 앱 인스턴스는 꺼진 채로 시작한다 */
+  private enabled = true;
+
+  /** 키보드 드럼을 켜고 끈다. 연주 중인 화면만 켜고, 그 밖에서는 브라우저 기본 동작(스크롤·단축키)을 건드리지 않는다 */
+  setEnabled(v: boolean): void {
+    this.enabled = v;
+  }
 
   /** 매핑된 키 목록만 받는다. 패드 정보는 받지 않는다 */
   setKeys(codes: Iterable<string>): void {
@@ -20,7 +27,10 @@ export class KeyboardPadSource extends BaseInputSource {
   }
 
   private onKeyDown = (ev: KeyboardEvent): void => {
+    if (!this.enabled) return;
     if (ev.repeat) return;
+    // Ctrl/Alt/Meta 조합은 브라우저·OS 단축키(개발자 도구 Ctrl+Shift+I 등)라 치지도 막지도 않는다. Shift는 악센트로 허용
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
     if (!this.keys.has(ev.code)) return;
     // D7: 입력 칸·다이얼로그, 버튼·링크의 Enter/Space는 그 요소가 쓰는 키라 치지도 막지도 않는다
     if (isKeyOwnedByTarget(ev.target as KeyTarget, ev.code)) return;

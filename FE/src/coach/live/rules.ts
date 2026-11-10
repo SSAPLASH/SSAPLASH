@@ -19,7 +19,9 @@ export type LiveTag =
   | 'LIVE_UNSTEADY'
   | 'LIVE_GOOD_RECOVERED'
   | 'LIVE_GOOD_STEADY'
-  | 'LIVE_GOOD_KEEP';
+  | 'LIVE_GOOD_KEEP'
+  /** 연주 중 LLM 구간 코칭 문구(규칙이 아니라 LiveCoach.offerLlmTip이 만든다) */
+  | 'LIVE_LLM';
 
 /** 칭찬 태그인가. 효과 평가와 방식 비교는 지적 태그만 본다 */
 export function isPraiseTag(tag: string): boolean {

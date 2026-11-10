@@ -8,7 +8,10 @@ import { DisconnectNotice } from '@/components/stick/DisconnectNotice';
 import type { RealignInfo } from '@/components/calibration/RealignPrompt';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
+import { Slider } from '@/components/ui/Slider';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { SoundIcon } from '@/components/shell/SoundIcon';
+import { useDockRaised } from '@/components/shell/useShell';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
@@ -30,9 +33,11 @@ interface Props {
   pausedAtMs?: number;
   /** reconnected 카드에 끼울 스네어 재정렬 프롬프트(PLAY-004 D12). 없으면 「3초 뒤 이어서 연주해요」 */
   realign?: RealignInfo | null;
+  /** 곡에 반주(드럼리스 MR)가 있는지. 없으면 노래 음량 슬라이더를 끄고 안내한다(기본 있음) */
+  hasAccompaniment?: boolean;
 }
 
-export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo, realign }: Props) {
+export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, returnTo, realign, hasAccompaniment = true }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
@@ -41,6 +46,12 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
   const sensorKind = useSettings((s) => s.sensorKind);
   // 동글 소스만 페달을 본다(undefined면 끊김 카드가 P 점을 그리지 않는다)
   const pedal = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
+  const drumVolume = useSettings((s) => s.drumVolume);
+  const setDrumVolume = useSettings((s) => s.setDrumVolume);
+  const songVolume = useSettings((s) => s.songVolume);
+  const setSongVolume = useSettings((s) => s.setSongVolume);
+  // 팝업이 떠 있는 동안 Dock을 스크림 위로 올린다(Q9). 끊김 카드도 같은 컴포넌트라 함께 적용된다
+  useDockRaised();
   const reconnectState = useReconnect((s) => s.status);
   const attempt = useReconnect((s) => s.attempt);
   const max = useReconnect((s) => s.max);
@@ -88,6 +99,36 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
                 <ReadinessNotice returnTo={returnTo} compact />
               </div>
             )}
+            {/* 소리 묶음: 설정 화면과 같은 값·범위. 슬라이더는 role=dialog 안이라 모든 키를 소유해 드럼 타격으로 새지 않는다 */}
+            <section className="play-pause-sound" aria-label="소리">
+              <h3 className="play-pause-sound-title">소리</h3>
+              <Slider
+                label="드럼 음량"
+                min={0}
+                max={2}
+                step={0.05}
+                value={drumVolume}
+                valueText={`${Math.round(drumVolume * 100)}%`}
+                onChange={setDrumVolume}
+                leading={<SoundIcon on={false} />}
+                trailing={<SoundIcon on />}
+              />
+              <div className="play-pause-sound-divider" aria-hidden="true" />
+              <Slider
+                label="노래 음량(반주)"
+                className={hasAccompaniment ? undefined : 'play-pause-sound-off'}
+                min={0}
+                max={1}
+                step={0.05}
+                value={songVolume}
+                valueText={`${Math.round(songVolume * 100)}%`}
+                onChange={setSongVolume}
+                disabled={!hasAccompaniment}
+                leading={<SoundIcon on={false} />}
+                trailing={<SoundIcon on />}
+              />
+              {!hasAccompaniment && <p className="play-pause-sound-note">이 곡은 반주가 없어요</p>}
+            </section>
             <div className="play-pause-actions">
               <button
                 ref={primaryRef}
@@ -98,7 +139,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
               >
                 계속
               </button>
-              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onRestart}>
+              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true, className: 'play-pause-restart' })} onClick={onRestart}>
                 다시 시작
               </button>
               <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onLeave}>

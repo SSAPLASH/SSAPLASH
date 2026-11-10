@@ -1,7 +1,8 @@
 // 악보 페이저 — 마디를 화면에 고정하고 커서가 왼쪽에서 오른쪽으로 움직인다 (Canvas 2D).
 // 슬롯마다 drawSheet를 한 번씩 clip해서 부르고, 커서가 지나간 슬롯은 1박 뒤 다음 페이지 마디로 바꿔 끼운다.
 // 슬롯·커서·박 라벨은 격자 시각(gridTimeAt: 빠르기 구간이 없으면 곡 시각 − chart.offsetMs, 있으면 박 번호 기준)으로 계산한다.
-// 격자 시각이 0보다 작으면(카운트인·인트로) 커서는 첫 슬롯 왼쪽에 선다.
+// 카운트다운이 켜져 있으면(countInMs > 0) 악보를 한 칸 오른쪽으로 밀어 첫 칸을 빈 준비 마디로 두고, 카운트다운이 끝나면 커서가
+// 준비 마디를 지나 그대로 1마디로 들어간다(설계 MODE-001-lead-in-bars D20). 그보다 앞(카운트다운·인트로)은 커서가 첫 칸 왼쪽에 선다.
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FxCanvas } from '@/components/fx/FxCanvas';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
@@ -10,7 +11,7 @@ import type { Judgement } from '@/domain/judgement';
 import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/sheet';
 import { barsPerPage, cursorPos, noteHeadAt, pagerSlots, snapToBeat, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from './sheetStripMath';
-import { drawBeatLabel, drawCursor, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from './sheetStripDraw';
+import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from './sheetStripDraw';
 
 export interface SheetPagerProps {
   chart: Chart;
@@ -20,8 +21,6 @@ export interface SheetPagerProps {
   strayHits: { timeMs: number }[];
   /** 매 프레임 호출된다(React 재렌더 없이). null이면 0 기준 정지 */
   getSongTime: () => number | null;
-  /** 카운트인 길이(ms). 주어지면 이 구간에서만 남은 박 수를 보인다 */
-  countInMs?: number;
   openWarnings?: React.RefObject<Map<number, number>>;
   /** 판정된 타격의 친 위치 눈금(PERFECT·GOOD). 보표 아래 판정 색 짧은 세로선으로 그린다 */
   hitMarks?: React.RefObject<HitMark[]>;
@@ -29,6 +28,8 @@ export interface SheetPagerProps {
   fxSource?: FxSource;
   /** 악보 영역 안쪽 아래 가운데에 얹는 것(타이밍 막대) */
   overlay?: ReactNode;
+  /** 카운트인(준비 마디) 길이(ms). 0보다 크면 준비 마디 한 칸을 앞에 둔다 */
+  countInMs?: number;
 }
 
 /** 마디 왼쪽 선·번호가 잘리지 않도록 clip 왼쪽에 두는 여유(px) */
@@ -39,7 +40,7 @@ const GUTTER_X = 44;
 const CONTENT_TOP = STAFF_TOP_Y - 46;
 const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 
-export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInMs, openWarnings, hitMarks, fxSource, overlay }: SheetPagerProps) {
+export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarnings, hitMarks, fxSource, overlay, countInMs = 0 }: SheetPagerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -126,13 +127,14 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       const t = reduced ? snapToBeat(grid, beatMs) : grid;
       const perPage = barsPerPage(inner);
       const slotW = inner / perPage;
-      const slots = pagerSlots(t, barMs, beatMs, perPage, totalBars);
+      const leadBars = p.countInMs > 0 ? 1 : 0;
+      const slots = pagerSlots(t, barMs, beatMs, perPage, totalBars, leadBars);
       geom.current.slots = slots;
       geom.current.slotW = slotW;
       geom.current.offsetY = offsetY;
 
       slots.forEach((slot, i) => {
-        if (slot.bar === null) return;
+        if (slot.bar === null && !slot.lead) return;
         ctx.save();
         ctx.beginPath();
         // 첫 슬롯은 캔버스 왼쪽 끝이라 여유가 필요 없다
@@ -142,6 +144,12 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
         ctx.rect(clipLeft, -offsetY, slotX + slotW - clipLeft, height);
         ctx.clip();
         if (slot.upcoming) ctx.globalAlpha = 0.35;
+        if (slot.bar === null) {
+          // 빈 준비 마디: 보표·마디선만
+          drawEmptyBar(ctx, slotX, width, colors);
+          ctx.restore();
+          return;
+        }
         drawSheet(ctx, {
           chart,
           noteStates: p.noteStates,
@@ -160,17 +168,16 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
           barMs,
           beatMs,
           showBase: false,
-          countInMs: p.countInMs,
           openWarnings: openWarnings?.current,
           nowMs,
         });
         ctx.restore();
       });
 
-      const { slot, ratio } = cursorPos(t, barMs, perPage);
+      const { slot, ratio } = cursorPos(t, barMs, perPage, leadBars);
       const x = xInBar(GUTTER_X + slot * slotW, slotW, ratio); // 노트 시각에 그 머리 중심을 지난다
       drawCursor(ctx, x, STAFF_TOP_Y - 30, STAFF_BOTTOM_Y + 40, colors);
-      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors, p.countInMs);
+      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors);
     };
     draw();
     return () => {

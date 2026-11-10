@@ -463,6 +463,10 @@ p {
 .shell.immersive .shell-dock {
   top: 12px;
 }
+/* 일시정지·끊김 팝업(스크림 z 50)이 떠 있는 동안 Dock을 위로 올려 마우스로 누를 수 있게 한다(QA 352 Q9) */
+.shell-dock.raised {
+  z-index: 55;
+}
 .shell-right {
   position: fixed;
   top: 12px;
@@ -1268,6 +1272,9 @@ a.btn-ghost.as-button {
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
+  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
+  width: max-content;
+  max-width: 100%;
   pointer-events: none;
 }
 

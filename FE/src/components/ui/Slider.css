@@ -76,3 +76,12 @@
 .ui-slider-input:hover:not(:disabled)::-moz-range-thumb {
   transform: scale(1.15);
 }
+/* 트랙 앞·뒤 장식(leading·trailing)이 있을 때만 쓰는 한 줄 묶음 */
+.ui-slider-track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ui-slider-track-row > .ui-slider-input {
+  flex: 1 1 auto;
+}

@@ -37,6 +37,14 @@ const GATED_TAGS: readonly LiveTag[] = [
   'LIVE_PAD_MISS',
 ];
 
+/**
+ * 입력 계산 버전. gateFeatures의 순서·식을 바꾸면 올린다. AI coach_live_model/dataset.py의 FEATURE_VERSION과 같아야 하고,
+ * 서버 모델의 meta.json 값이 다르면 그 모델을 쓰지 않는다(설계 3.4)
+ */
+export const GATE_FEATURE_VERSION = 1;
+/** gateFeatures가 내는 입력 수 */
+export const GATE_INPUT_COUNT = 12 + GATED_TAGS.length;
+
 /** 모델이 판단하는 지적인가. 칭찬과 세팅 안내는 거르지 않는다 */
 export function isGatedTag(tag: LiveTag): boolean {
   return GATED_TAGS.includes(tag);

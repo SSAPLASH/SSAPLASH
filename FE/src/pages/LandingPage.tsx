@@ -62,6 +62,18 @@ export function LandingPage() {
   if (dialog === 'signup' && decision === 'login') return <Navigate to="/login" replace state={{ from: rawFrom }} />;
   if (dialog === 'signup' && decision === 'done') return <Navigate to={destination} replace />;
 
+  // 확인 전 랜딩을 그리면 로그인 사용자에게 깜빡인다
+  if (dialog !== 'signup' && decision === 'wait') {
+    return (
+      <div className="landing-auth-wait">
+        <div className="auth-wait" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span>로그인 확인 중…</span>
+        </div>
+      </div>
+    );
+  }
+
   let popup = null;
   if (dialog === 'login' && (decision === 'login' || decision === 'pass')) {
     popup = (

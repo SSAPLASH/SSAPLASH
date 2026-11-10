@@ -19,6 +19,7 @@ import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundSta
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { countdownValue } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
@@ -36,7 +37,7 @@ import { TimingBar } from '@/components/play/TimingBar';
 import { strayMissSource } from '@/components/play/strayMissSource';
 import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { usePlayRunning, useShell } from '@/components/shell/useShell';
+import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
@@ -52,7 +53,9 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { liveCoachClient } from '@/api/liveCoach';
+import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -60,7 +63,7 @@ import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
-import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import { setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayClock } from '@/engine/sessionClock';
@@ -105,6 +108,7 @@ function PlayPageBody() {
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
+  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   // 반주 디코드 단계 표시·오류
@@ -114,6 +118,10 @@ function PlayPageBody() {
   const clockRef = useRef<PlayClock | null>(null);
   // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
   const { ready, missing } = useReadiness();
+  // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
+  useEffect(() => {
+    void refreshCoachModels();
+  }, []);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -127,6 +135,10 @@ function PlayPageBody() {
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
   // 판정 진동(PLAY-006): 연주 단계 전체(카운트인·일시정지·복귀 카운트다운 포함)에서 로컬 진동을 끄고 판정으로 울린다
   useJudgementHaptic(session, stage === 'play');
+  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
+  useKeyboardDrum(stage === 'play');
+  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·준비 화면에는 없다(QA 352 Q8)
+  useDock(stage === 'play');
   // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
   useEffect(() => {
     setLocked(stage === 'play');
@@ -179,6 +191,9 @@ function PlayPageBody() {
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교)
   const shadowRef = useRef<CoachShadow | null>(null);
+  // 연주 중 LLM 구간 코칭 요청기. 다시 하기·종료·화면 이탈 때 기다리던 결과를 버린다
+  const llmRef = useRef<LlmCoach | null>(null);
+  useEffect(() => () => llmRef.current?.cancel(), []);
   const { line: coachLine, show: showCoachLine, cancelPending: cancelPendingCoach, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   // 일시정지하면 미루는 중이던 문구는 버린다(떠 있는 문구는 기존처럼 그대로 둔다)
   useEffect(() => {
@@ -188,8 +203,8 @@ function PlayPageBody() {
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
-  // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
-  const wasCountin = useRef(false);
+  // 카운트 숫자를 한 번이라도 보였는지(격자 0이 되는 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
+  const wasCounting = useRef(false);
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
@@ -198,7 +213,7 @@ function PlayPageBody() {
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
-    wasCountin.current = false;
+    wasCounting.current = false;
     if (goTimer.current !== null) {
       window.clearTimeout(goTimer.current);
       goTimer.current = null;
@@ -277,13 +292,57 @@ function PlayPageBody() {
       });
       // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 채보마다 한 번 계산한다
       const coachContext = chartCoachContext(c.notes);
+      // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
+      const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
+      // 연주 중 LLM 구간 코칭(실험 설정 llm, 로그인 사용자만). 구간이 끝나면 BE에 요청하고 기한 안의 문구만 띄운다
+      const llmMode = settings.liveCoach ? model.llm : null;
+      let llm: LlmCoach | null = null;
       const coach = new LiveCoach({
         goodMs: settings.timing.goodMs,
         enabled: settings.liveCoach,
         setupHints: isStickSensor(useSettings.getState().sensorKind),
         noteGapMedianMs: coachContext.noteGapMedianMs,
         onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+        gate: model.gate,
+        gateMode: model.mode,
+        arm: model.arm,
+        causeModel: model.cause,
+        causeArm: model.causeArm,
+        llmArm: model.llmArm,
+        segments: llmMode
+          ? { chart: c, input: useSettings.getState().sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+          : undefined,
       });
+      // 비동기 거름·LLM 구간 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+      const showMessage = (message: CoachMessage) => {
+        if (coachRef.current !== coach) return;
+        try {
+          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+          if (copy) {
+            // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
+            const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
+            showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+          }
+        } catch {
+          // 코칭 오류는 무시한다
+        }
+      };
+      llmRef.current?.cancel();
+      if (llmMode) {
+        llm = new LlmCoach({
+          client: liveCoachClient(),
+          mode: llmMode,
+          runId: crypto.randomUUID(),
+          onTip: (tip) => {
+            const message = coach.offerLlmTip(tip, ss.songTime(performance.now()));
+            if (message) showMessage(message);
+          },
+          onRecord: (r) => coach.recordLlm(r, ss.songTime(performance.now())),
+        });
+      }
+      llmRef.current = llm;
+      // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
+      void refreshCoachModels();
       coachRef.current = coach;
       shadowRef.current = null;
       // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -318,23 +377,9 @@ function PlayPageBody() {
           velocity: e.velocity,
           ...coachContext.notes[e.noteIndex],
         };
-        // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
-        const show = (message: CoachMessage) => {
-          if (coachRef.current !== coach) return;
-          try {
-            const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-            if (copy) {
-              // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
-              const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
-              showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
-            }
-          } catch {
-            // 코칭 오류는 무시한다
-          }
-        };
-        const message = coach.push(judged, ss.snapshot().strayHits, show);
+        const message = coach.push(judged, ss.snapshot().strayHits, showMessage);
         shadowRef.current?.push(judged);
-        if (message) show(message);
+        if (message) showMessage(message);
       });
       flashes.current.clear();
       popups.current = [];
@@ -487,6 +532,7 @@ function PlayPageBody() {
     setFxRun((n) => n + 1);
     recorder.current.reset();
     coachRef.current?.reset();
+    llmRef.current?.cancel(crypto.randomUUID());
     shadowRef.current?.reset();
     clearCoachLine();
     finishing.current = false;
@@ -525,7 +571,7 @@ function PlayPageBody() {
         hits: recorder.current.hits,
         missSeqs: recorder.current.missSeqs,
         audioOffsetMs: ss.audioOffsetMs,
-        countInMs: ss.countInMs,
+        countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
@@ -537,6 +583,8 @@ function PlayPageBody() {
         consent: consentAtStart.current,
         liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
+      // 끝난 뒤 도착한 LLM 구간 문구는 띄우지도 기록하지도 않는다
+      llmRef.current?.cancel();
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
@@ -569,25 +617,34 @@ function PlayPageBody() {
         finish(ss);
         return;
       }
-      // 카운트다운: 카운트인 동안 남은 박 수, 끝난 직후 잠깐 「시작!」(일시정지 중에는 값을 건드리지 않는다)
+      // 카운트다운(설계 MODE-001-lead-in-bars D16·D17): 격자 시각(곡 시각 − 1마디 1박 원점) 기준으로 준비 마디 시작까지 5·4·3·2·1,
+      // 그 뒤 1마디 준비 구간은 오버레이 없이(불 켜짐) 두고 격자 0에서 「시작!」. 일시정지·재연결 복귀 카운트다운 중에는 값을 건드리지 않는다
       const status = ss.currentStatus;
-      if (status === 'countin') {
-        wasCountin.current = true;
-        setCountValue(Math.max(1, Math.ceil(-ss.songTime(now) / ss.beatMs)));
-      } else if (status === 'playing' && wasCountin.current) {
-        wasCountin.current = false;
-        setCountValue('go');
-        goTimer.current = window.setTimeout(() => {
-          goTimer.current = null;
+      if ((status === 'countin' || status === 'playing') && !isResuming()) {
+        const g = ss.songTime(now) - ss.originMs;
+        const c = countdownValue(g, ss.countInMs);
+        if (c !== null) {
+          wasCounting.current = true;
+          setCountValue(c);
+        } else if (g >= 0) {
+          if (wasCounting.current) {
+            wasCounting.current = false;
+            setCountValue('go');
+            goTimer.current = window.setTimeout(() => {
+              goTimer.current = null;
+              setCountValue(null);
+            }, GO_MS);
+          }
+        } else {
           setCountValue(null);
-        }, GO_MS);
+        }
       }
       if (now - lastHud.current > 250) {
         lastHud.current = now;
         setHud(ss.snapshot(now));
       }
     },
-    [finish],
+    [finish, isResuming],
   );
 
   // Enter / Esc
@@ -772,10 +829,12 @@ function PlayPageBody() {
         onLeave={leave}
         returnTo={returnTo}
         realign={realign.info}
+        hasAccompaniment={(ACCOMPANIMENT_OVERRIDE ?? param.loaded?.assets?.accompanimentUrl ?? null) !== null}
       />
     );
   } else if (countValue !== null) {
-    overlay = <Countdown value={countValue} />;
+    // 재연결 복귀 카운트다운은 기존 딤(dim), 곡 시작 카운트다운 숫자는 옅은 딤(soft), 「시작!」에서 딤이 걷힌다(clear, 같은 요소 유지)
+    overlay = <Countdown value={countValue} backdrop={isResuming() || countValue !== 'go' ? 'dim' : 'clear'} />;
   }
 
   return (

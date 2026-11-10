@@ -1,5 +1,6 @@
 // 리듬 게임 노트 레인 (Canvas 2D, Figma Play 112:499). 노트가 위에서 판정선으로 떨어진다.
 // 레인 순서는 domain/highwayLanes, 카운트인 숫자는 play/Countdown이 그린다. 폭·높이는 부모가 정한다.
+// 카운트다운(리드인) 동안에도 마디선·박선이 흘러 화면이 멈춰 보이지 않게 한다.
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { FxCanvas } from '@/components/fx/FxCanvas';
 import { readFxColors } from '@/components/fx/judgeColors';
@@ -137,7 +138,7 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       });
 
-      // 마디선: 1마디 1박(offsetMs)부터 마디 시작마다. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/tempo)
+      // 마디선: 곡 시각 0부터 마디 시작마다. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/tempo)
       if (s) {
         const firstBar = Math.floor(beatAtMs(s.chart, t) / s.chart.beatsPerBar);
         for (let b = firstBar; barTimeMs(s.chart, b) < t + p.scrollMs; b++) {
@@ -152,6 +153,25 @@ export function NoteHighway(props: NoteHighwayProps) {
           ctx.lineTo(W, y);
           ctx.stroke();
         }
+        // 리드인(카운트다운 전체, preRollMs) 마디선·박선: 1마디 1박부터 거꾸로 센 박마다. 카운트다운이 시작되자마자 흐르는 것이 보이도록
+        // 기본 마디선(--line 8%)보다 진하게 긋는다 — 마디선은 --text-3 60%·2px, 박선은 25%·1px. 첫 구간 bpm(beatMs) 간격(설계 D15)
+        const leadBeats = Math.round(s.preRollMs / s.beatMs);
+        const bpb = s.chart.beatsPerBar;
+        ctx.strokeStyle = C.text3;
+        for (let n = 1; n <= leadBeats; n++) {
+          const bt = s.originMs - n * s.beatMs;
+          if (bt < t || bt >= t + p.scrollMs) continue;
+          const y = judgeY - ((bt - t) / p.scrollMs) * travel;
+          if (y < top) continue;
+          const isBar = n % bpb === 0;
+          ctx.globalAlpha = isBar ? 0.6 : 0.25;
+          ctx.lineWidth = isBar ? 2 : 1;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
 
       // 판정선
