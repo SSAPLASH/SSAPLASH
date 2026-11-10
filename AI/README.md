@@ -415,7 +415,15 @@ MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ss
 - `--register`는 실험 `coach-live-gate`에 실행을 남기고(파라미터·지표·`report.json`), 레지스트리 모델 `coach-gate-mlp16`(`--model-name`으로 바꿈)에 새 버전을 만든다. 모델 폴더에는 브라우저가 받을 `coachGate.json`, `coachGate.onnx`, `meta.json`만 넣는다. 게시 도구가 모델 폴더를 그대로 복사하기 때문이다.
 - 게시는 따로 서버에서 한다: `docker compose -p infra exec mlflow publish-model publish coach-gate-mlp16 <버전>`(`Infra/mlflow/README.md`). CLI가 등록한 버전으로 이 명령을 출력한다.
 - `meta.json`: `task`(`gate`), `modelVersion`, `featureVersion`(입력 계산 버전, `dataset.py`의 `FEATURE_VERSION`), `inputNames`, `runtime`(이 버전에 든 실행 파일 목록: `json`·`onnx`), `threshold`, `trainedOn`(`SYNTHETIC`). FE는 `featureVersion`이 자기 값과 다르면 그 모델을 쓰지 않는다. `features()`의 순서·식을 바꾸면 `FEATURE_VERSION`을 올린다.
-- 로컬 파일 저장소로 학습 → 등록 → `publish-model` 게시 → `manifest.json`(파일별 `sha256`)까지 이어지는 것을 확인했다. 서버 MLflow 등록과 게시는 아직 하지 않았다.
+- 실험 설정(`coach-live-config`): 어떤 모델을 몇 %에게 어떤 모드로 쓸지 정하는 파일이다. 모델처럼 등록·게시하고 롤백한다. 예시는 `configs/coach/coach_live_config.json`(그림자 모드, `coach-gate-mlp16` 100%)이다.
+
+  ```bash
+  uv run python -m ssaplash_ai.coach_live_model.experiment check configs/coach/coach_live_config.json
+  MLFLOW_TRACKING_URI=http://localhost:5000 uv run python -m ssaplash_ai.coach_live_model.experiment register configs/coach/coach_live_config.json
+  ```
+
+  형식은 FE `coach/live/models/experiment.ts`와 같다(`gate.mode`는 `off`·`shadow`·`on`, `arms[].share` 합 100, `rolloutPercent` 0~100). 등록할 때 실험군 모델이 레지스트리에 있는지 확인한다.
+- 로컬 파일 저장소로 학습 → 등록 → `publish-model` 게시 → `manifest.json`(파일별 `sha256`)까지 이어지고, 그 폴더를 FE `refreshCoachModels`가 받아 실험군 모델을 고르는 것까지 확인했다. 서버 MLflow 등록과 게시는 아직 하지 않았다.
 
 - `replay.py`는 FE `coach/live`의 창·규칙·표시 정책·판정 단계·놓침 원인을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다. 기록은 띄운 시점·대상·지표에 더해 단계, 원인 후보, 고른 원인까지 FE와 같아야 한다.
   - 판정 단계: 판정 4개 전에는 띄우지 않고, 4~7개는 연속 놓침만, 8개부터 전부. 위 학습 데이터도 이 단계로 재생한다.
