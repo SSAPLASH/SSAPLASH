@@ -3,8 +3,9 @@
 // 정보 카드는 판 안쪽 오른쪽(또는 왼쪽) 아래, 경고 배너는 아래쪽 가운데에 놓인다.
 // - 카드: 그림 옆 한쪽 여백이 카드 폭 이상이면(카드 폭+24면 그림과 24px 이상 떨어진다) 그림 옆에 놓여 아무것도 가리지 않는다(region = null). 모자랄 때만 그림과 겹치고,
 //   그 교차 영역을 그림 정규 좌표(region)로 돌려준다(pickOverlayCorner가 좌우를 고른다).
-// - 배너: 폭은 판의 60% 이내. 카드와 가로로 겹치면 카드 위로 쌓는다(세로 간격 12px) — bannerBottom이 그 아래 offset(px)이다.
-// 재지 못하면(jsdom·SSR·ResizeObserver 없음) region은 고정 비율 OVERLAY_REGION, bannerBottom은 기본 여백이다.
+// - 배너: 폭은 판의 60% 이내, 아래쪽 가운데. 카드와 가로로 겹치면 먼저 카드 반대쪽으로 비켜 같은 줄에 둔다(간격 12px).
+//   비킬 자리도 없을 때만 카드 위로 쌓는다 — 위로 쌓으면 그림 가운데(지금 칠 패드)를 가리기 쉽기 때문이다. bannerPos가 그 자리(px)다.
+// 재지 못하면(jsdom·SSR·ResizeObserver 없음) region은 고정 비율 OVERLAY_REGION, bannerPos는 CSS 기본 자리(가운데, 아래 여백)다.
 // 행의 높이 맞춤(useStageFit)도 여기서 함께 건다: 행 ref 하나로 두 가지를 맡는다.
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { OVERLAY_REGION } from '@/domain/kitLayout';
@@ -12,7 +13,7 @@ import { useStageFit } from './useStageFit';
 
 /** 판 안쪽 여백(px). setup.css의 .setup-stage-panel padding과 같아야 한다 */
 export const PANEL_PAD = 24;
-/** 배너를 카드 위로 쌓을 때 세로 간격(px) */
+/** 배너와 카드 사이 간격(px): 옆으로 비킬 때 가로, 위로 쌓을 때 세로 */
 export const STACK_GAP = 12;
 
 export interface OverlayRegion {
@@ -31,8 +32,8 @@ export interface UseOverlayRegion {
   bannerRef: (el: HTMLElement | null) => void;
   /** 카드가 그림과 겹치는 정규화 영역. null이면 겹침 없음 */
   region: OverlayRegion | null;
-  /** 배너 아래쪽 offset(px). 카드와 가로로 안 겹치면 PANEL_PAD, 겹치면 카드 높이+간격만큼 위 */
-  bannerBottom: number;
+  /** 배너 자리(px, 판 기준). left가 null이면 CSS 기본(가운데) */
+  bannerPos: BannerPos;
 }
 
 /**
@@ -52,14 +53,31 @@ export function regionFromSizes(
   return { w: Math.min(1, overlapW / fig.w), h: Math.min(1, card.h / fig.h) };
 }
 
+export interface BannerPos {
+  /** 판 왼쪽 끝에서 배너 왼쪽까지(px). null이면 가운데 정렬(CSS) */
+  left: number | null;
+  /** 판 아래쪽 끝에서 배너 아래까지(px) */
+  bottom: number;
+}
+
 /**
- * 배너 아래쪽 offset(px). 배너·카드는 같은 좌표계(가로 px)의 [left, right]이다.
- * 카드가 없거나 가로로 겹치지 않으면 기본 여백, 겹치면 카드 위로 쌓는다(카드 높이 + 간격 12px)
+ * 배너 자리. 좌표는 판(테두리 상자) 왼쪽 끝 기준 px다. 카드가 없거나 가운데 자리가 카드와 안 겹치면 가운데·기본 여백.
+ * 겹치면 카드 반대쪽으로 비켜 같은 줄에 두고(판 안쪽 여백을 넘지 않는 한), 그럴 자리도 없으면 가운데에서 카드 위로 쌓는다
  */
-export function bannerBottomOffset(banner: { left: number; right: number }, card: { left: number; right: number; h: number } | null): number {
-  if (!card || !(card.h > 0)) return PANEL_PAD;
-  const overlapX = banner.left < card.right && banner.right > card.left;
-  return overlapX ? PANEL_PAD + card.h + STACK_GAP : PANEL_PAD;
+export function bannerPlacement(panelW: number, bannerW: number, card: { left: number; right: number; h: number } | null): BannerPos {
+  const centered = (panelW - bannerW) / 2;
+  if (!card || !(card.h > 0)) return { left: centered, bottom: PANEL_PAD };
+  const overlap = centered < card.right && centered + bannerW > card.left;
+  if (!overlap) return { left: centered, bottom: PANEL_PAD };
+  const cardOnRight = card.left + card.right > panelW;
+  if (cardOnRight) {
+    const maxLeft = card.left - STACK_GAP - bannerW;
+    if (maxLeft >= PANEL_PAD) return { left: Math.min(centered, maxLeft), bottom: PANEL_PAD };
+  } else {
+    const minLeft = card.right + STACK_GAP;
+    if (minLeft + bannerW <= panelW - PANEL_PAD) return { left: Math.max(centered, minLeft), bottom: PANEL_PAD };
+  }
+  return { left: centered, bottom: PANEL_PAD + card.h + STACK_GAP };
 }
 
 export function useOverlayRegion(): UseOverlayRegion {
@@ -68,17 +86,21 @@ export function useOverlayRegion(): UseOverlayRegion {
   const [card, setCard] = useState<HTMLElement | null>(null);
   const [banner, setBanner] = useState<HTMLElement | null>(null);
   const [measured, setMeasured] = useState<OverlayRegion | null | undefined>(undefined);
-  const [bottom, setBottom] = useState(PANEL_PAD);
+  const [pos, setPos] = useState<BannerPos>({ left: null, bottom: PANEL_PAD });
 
   useStageFit(row);
 
-  // 배너 offset: 카드가 좌우로 옮겨 가도 크기는 같으므로 크기 관찰만으로는 모자라다. 렌더마다 위치를 다시 읽는다
+  // 배너 자리: 카드가 좌우로 옮겨 가도 크기는 같으므로 크기 관찰만으로는 모자라다. 렌더마다 위치를 다시 읽는다.
+  // 배너 폭은 자기 자리와 상관없이(max-content, 판의 60% 상한) 같으므로 offsetWidth를 그대로 쓴다
   const measureBanner = useCallback(() => {
     if (!banner) return;
-    const b = banner.getBoundingClientRect();
+    const panel = banner.offsetParent as HTMLElement | null;
+    const bw = banner.offsetWidth;
+    if (!panel || !(bw > 0)) return;
+    const p = panel.getBoundingClientRect();
     const c = card?.getBoundingClientRect();
-    const next = b.width > 0 && c && c.width > 0 ? bannerBottomOffset({ left: b.left, right: b.right }, { left: c.left, right: c.right, h: c.height }) : PANEL_PAD;
-    setBottom((prev) => (prev === next ? prev : next));
+    const next = bannerPlacement(p.width, bw, c && c.width > 0 ? { left: c.left - p.left, right: c.right - p.left, h: c.height } : null);
+    setPos((prev) => (prev.left !== null && Math.abs(prev.left - next.left!) < 0.5 && prev.bottom === next.bottom ? prev : next));
   }, [banner, card]);
   useLayoutEffect(measureBanner);
 
@@ -104,5 +126,5 @@ export function useOverlayRegion(): UseOverlayRegion {
   const cardRef = useCallback((el: HTMLElement | null) => setCard(el), []);
   const bannerRef = useCallback((el: HTMLElement | null) => setBanner(el), []);
   // 요소가 없거나 재지 못했으면 고정 비율로 되돌아간다
-  return { rowRef, figRef, cardRef, bannerRef, region: row && fig && card && measured !== undefined ? measured : OVERLAY_REGION, bannerBottom: bottom };
+  return { rowRef, figRef, cardRef, bannerRef, region: row && fig && card && measured !== undefined ? measured : OVERLAY_REGION, bannerPos: pos };
 }

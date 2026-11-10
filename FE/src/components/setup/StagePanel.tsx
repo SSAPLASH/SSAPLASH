@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { UseOverlayRegion } from './useOverlayRegion';
 
 export interface StagePanelProps {
-  layout: Pick<UseOverlayRegion, 'rowRef' | 'figRef' | 'bannerRef' | 'bannerBottom'>;
+  layout: Pick<UseOverlayRegion, 'rowRef' | 'figRef' | 'bannerRef' | 'bannerPos'>;
   /** 그림 틀에 붙일 추가 클래스(편집기는 setup-editor) */
   figClassName?: string;
   /** 마우스 타격 모의를 막는 표식(편집기: 마우스는 고르기만 한다) */
@@ -21,7 +21,7 @@ export interface StagePanelProps {
   children: ReactNode;
 }
 
-export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerBottom }, figClassName, noPointerStrike, top, card, banner, children }: StagePanelProps) {
+export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, figClassName, noPointerStrike, top, card, banner, children }: StagePanelProps) {
   return (
     <div className="setup-stage-row" ref={rowRef}>
       <div className="setup-stage-panel">
@@ -32,7 +32,7 @@ export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerBottom }
         </div>
         {top}
         {banner && (
-          <div className="setup-panel-banner" ref={bannerRef} style={{ bottom: bannerBottom }}>
+          <div className="setup-panel-banner" ref={bannerRef} style={bannerPos.left === null ? { bottom: bannerPos.bottom } : { left: bannerPos.left, bottom: bannerPos.bottom, transform: 'none' }}>
             {banner}
           </div>
         )}
