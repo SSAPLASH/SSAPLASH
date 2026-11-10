@@ -208,7 +208,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 | 키 | 기본값 | 뜻 |
 | --- | --- | --- |
 | `model` | `songsterr_avg` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
-| `models` | `songsterr_avg`, `original`, `combo` | 이름 → 채보 모델 yaml. `songsterr_avg`는 원래 ADTOF와 실제 곡 학습 가중치 점수 평균(아래 "실제 곡 점수 평균 조합" 참고), `original`은 원래 ADTOF + 드럼 킷 분리, `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고) |
+| `models` | `songsterr_avg`, `original`, `combo` | 이름 → 채보 모델 yaml. `songsterr_avg`는 원래 ADTOF와 실제 곡 학습 가중치 점수 평균(아래 "실제 곡 점수 평균 조합" 참고), `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고). `songsterr_avg`도 같은 겹침 2 드럼 킷 분리를 쓴다 |
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
@@ -349,13 +349,21 @@ uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is
 #   SSAPLASH_CHART_DEVICE=cuda
 #   SSAPLASH_CHART_MODEL=songsterr_avg   # 채보 모델. 가중치를 못 올렸으면 original로 바꾸고 워커를 다시 띄움
 #   CUDA_VISIBLE_DEVICES=6
+#   OMP_NUM_THREADS=16              # CPU 스레드 수. 네 줄 모두 16
+#   MKL_NUM_THREADS=16
+#   OPENBLAS_NUM_THREADS=16
+#   NUMEXPR_NUM_THREADS=16
 chmod 600 ~/ssaplash/worker.env && set -a && source ~/ssaplash/worker.env && set +a
 uv run --no-sync ssaplash-worker check
-mkdir -p ~/ssaplash/results && nohup uv run --no-sync ssaplash-worker run > ~/ssaplash/results/worker.log 2>&1 &
-echo $! > ~/ssaplash/worker.pid
+mkdir -p ~/ssaplash/results
+setsid nohup taskset -c 0-127 uv run --no-sync ssaplash-worker run >> ~/ssaplash/results/worker.log 2>&1 < /dev/null &
+sleep 3; pgrep -f "\.venv/bin/ssaplash-worker run" | tee ~/ssaplash/worker.pid   # 숫자 하나만 나와야 함
+grep Cpus_allowed_list /proc/$(cat ~/ssaplash/worker.pid)/status                 # 0-127
 tail -f ~/ssaplash/results/worker.log        # 상태
-kill $(cat ~/ssaplash/worker.pid)            # 멈추기. 처리 중인 작업을 끝내고 종료
+kill -TERM $(cat ~/ssaplash/worker.pid)      # 멈추기. 한 번만 보낸다. 두 번 보내면 처리 중인 곡을 버리고 바로 끈다
 ```
+
+워커는 CPU 0~127번 코어에 묶어 띄운다. 이 서버는 CPU 0~127번과 128~255번이 서로 다른 NUMA 노드인데, 2026-11-10 측정에서 128~255번 코어에서 돌면 같은 곡이 26.8초에서 265.2초로 10배 느려졌다. 묶지 않으면 리눅스가 고르는 코어에 따라 처리 시간이 40초에서 545초까지 달라진다. CPU 스레드 수를 정하지 않으면 워커가 코어를 수십 개 쓰면서 오히려 느려지므로 `worker.env`에 16을 넣는다. 처리 시간이 다시 늘어나면 [docs/트러블슈팅-워커-처리-속도.md](docs/트러블슈팅-워커-처리-속도.md)의 "다시 확인하는 법" 명령으로 두 노드를 다시 비교한다.
 
 ## 약점 구간 분석 (COACH-003, S15P31A307-138)
 
@@ -402,20 +410,35 @@ uv run python -m ssaplash_ai.coach_calibration.cli --help
 ### 실시간 코칭 거름 모델 (COACH-001)
 
 실시간 코칭이 띄운 지적이 진짜 경향인지 우연한 쏠림인지 점수를 내는 작은 모델이다. 문구를 만들지 않고 규칙이 낸 지적을 뺄 수만 있다.
-서버는 쓰지 않고, 학습 산출물을 FE 번들에 넣는다.
+지금은 학습 산출물을 FE 번들에 넣는다. 서버에서 모델을 받아 FE 배포 없이 바꾸는 구조(설계 COACH-001 2단계)를 위해 MLflow 등록까지 한다.
 
 ```bash
 uv sync --extra coach-live
 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live
 uv run --extra coach-live pytest tests/coach_live_model
+# MLflow에 기록하고 레지스트리에 새 버전으로 등록(서버 MLflow는 SSH 터널을 연 뒤)
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cli --out runs/coach-live --register
 ```
+
+- `--register`는 실험 `coach-live-gate`에 실행을 남기고(파라미터·지표·`report.json`), 레지스트리 모델 `coach-gate-mlp16`(`--model-name`으로 바꿈)에 새 버전을 만든다. 모델 폴더에는 브라우저가 받을 `coachGate.json`, `coachGate.onnx`, `meta.json`만 넣는다. 게시 도구가 모델 폴더를 그대로 복사하기 때문이다.
+- 게시는 따로 서버에서 한다: `docker compose -p infra exec mlflow publish-model publish coach-gate-mlp16 <버전>`(`Infra/mlflow/README.md`). CLI가 등록한 버전으로 이 명령을 출력한다.
+- `meta.json`: `task`(`gate`), `modelVersion`, `featureVersion`(입력 계산 버전, `dataset.py`의 `FEATURE_VERSION`), `inputNames`, `runtime`(이 버전에 든 실행 파일 목록: `json`·`onnx`), `threshold`, `trainedOn`(`SYNTHETIC`). FE는 `featureVersion`이 자기 값과 다르면 그 모델을 쓰지 않는다. `features()`의 순서·식을 바꾸면 `FEATURE_VERSION`을 올린다.
+- 실험 설정(`coach-live-config`): 어떤 모델을 몇 %에게 어떤 모드로 쓸지 정하는 파일이다. 모델처럼 등록·게시하고 롤백한다. 예시는 `configs/coach/coach_live_config.json`(그림자 모드, `coach-gate-mlp16` 100%)이다.
+
+  ```bash
+  uv run python -m ssaplash_ai.coach_live_model.experiment check configs/coach/coach_live_config.json
+  MLFLOW_TRACKING_URI=http://localhost:5000 uv run python -m ssaplash_ai.coach_live_model.experiment register configs/coach/coach_live_config.json
+  ```
+
+  형식은 FE `coach/live/models/experiment.ts`와 같다(`gate.mode`는 `off`·`shadow`·`on`, `arms[].share` 합 100, `rolloutPercent` 0~100). 등록할 때 실험군 모델이 레지스트리에 있는지 확인한다.
+- 로컬 파일 저장소로 학습 → 등록 → `publish-model` 게시 → `manifest.json`(파일별 `sha256`)까지 이어지고, 그 폴더를 FE `refreshCoachModels`가 받아 실험군 모델을 고르는 것까지 확인했다. 서버 MLflow 등록과 게시는 아직 하지 않았다.
 
 - `replay.py`는 FE `coach/live`의 창·규칙·표시 정책·판정 단계·놓침 원인을 옮긴 것이다. FE 규칙을 바꾸면 `tests/fixtures/coach_live/fe_replay.json`을 다시 뽑아 맞춘다. 기록은 띄운 시점·대상·지표에 더해 단계, 원인 후보, 고른 원인까지 FE와 같아야 한다.
   - 판정 단계: 판정 4개 전에는 띄우지 않고, 4~7개는 연속 놓침만, 8개부터 전부. 위 학습 데이터도 이 단계로 재생한다.
-  - 놓침 원인: 2단계(8개)부터 놓침 지적에 원인 후보를 계산하고 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐)로 하나를 고른다. 근거가 없으면 `UNKNOWN`. 원인 계산에는 노트 시각, 직전 시점의 패드·간격, 채보 밖 타격, 곡의 노트 간격 중앙값이 필요하고 `replay(notes, strays, note_gap_median_ms)`로 넘긴다.
+  - 놓침 원인: 2단계(8개)부터 놓침 지적에 원인 후보를 계산하고 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐)로 하나를 고른다. 근거가 없으면 `UNKNOWN`. 패드 이동은 같은 패드를 다른 곳에서 넘어와 친 노트와 비교해 2.5배 이상 더 놓칠 때만 본다(비교 대상이 없으면 보지 않는다). 원인 계산에는 노트 시각, 직전 시점의 패드·간격, 채보 밖 타격, 곡의 노트 간격 중앙값이 필요하고 `replay(notes, strays, note_gap_median_ms)`로 넘긴다.
 - 원인 합성 시나리오(`dataset.py`의 `cause_plays`, `build_cause_rows`): 다른 패드(탐1 대신 탐2), 패드 이동(하이햇 → 스네어), 빠른 구간(400ms 사이 150ms 몰아치기), 늦어지다 놓침, 대조군(원인 없이 자주 놓침)을 만든다. 행은 원인을 고른 놓침 지적마다 하나이고 라벨은 심은 원인(대조군은 `UNKNOWN`)이다. 원인 모델 학습(R1)의 자료다.
 - 학습 데이터는 합성 연주다. 시나리오가 심은 약점과 같은 지적이 1, 약점이 없는 연주에서 뜬 지적이 0이다. 판 단위로 나눠 평가한다.
-- 산출물은 `coachGate.json`, `coachGate.onnx`, `report.json`이다. 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
+- 산출물은 `coachGate.json`, `coachGate.onnx`, `meta.json`, `report.json`이다. 앞의 둘은 같은 모델이고 두 파일의 출력 차이가 `1e-5` 이하인지 확인한다.
 
 합성 결과(판 2,580개, 지적 13,932건, 진짜 11,636건, 오탐 2,296건):
 
@@ -426,6 +449,32 @@ uv run --extra coach-live pytest tests/coach_live_model
 | MLP 32×16 | 0.980 | 10.0% | 14.8% |
 
 **합성 성능은 실제 성능이 아니다.** 합성 연주는 판 내내 오차 분포가 같고 실제 사람은 곡 중간에 변한다. 켜기 전에 그림자 평가로 확인한다.
+
+### 놓침 원인 모델 (COACH-001)
+
+놓침 지적에 원인 후보가 여럿 걸렸을 때 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐) 대신 무엇을 고를지 학습한 작은 모델이다. 규칙이 낸 후보와 `UNKNOWN`(근거 없음) 중에서만 고르고, 없는 원인을 만들지 않는다.
+
+```bash
+uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause --register
+```
+
+- 데이터: 원인 합성 시나리오(`build_cause_rows`). 입력은 원인별 후보 강도, 3단계 여부, 패드 놓침 여부(`cause_features`, `CAUSE_FEATURE_VERSION`=1). 라벨은 심은 원인.
+- 로지스틱 회귀와 MLP16을 판 단위 5겹 교차 검증으로 규칙 순서와 비교하고, 정확도가 같으면 로지스틱을 고른다. 모델이 규칙보다 낫지 않으면 경고를 출력한다.
+- 산출물: `coachCause.json`(표준화 값과 층 `layers[{w,b,act}]`, softmax), `meta.json`(`task: cause`, `classes`), `report.json`. `--register`는 실험 `coach-live-cause`, 모델 이름 `coach-cause-<구조>`로 등록한다. `--fixture`는 FE 계산 비교용 표본을 쓴다(FE `coach/live/models/cause.parity.fixture.json`).
+- 서비스에서 쓰려면 게시한 뒤 실험 설정의 `cause.arms`에 넣는다.
+
+합성 결과(시나리오당 강도 3 × 20판, 원인을 고른 놓침 지적 1,542건, 후보가 겹친 지적 64건):
+
+| | 정확도 | 후보가 겹친 지적 | 대조군에서 UNKNOWN |
+| --- | --- | --- | --- |
+| 규칙 순서 | 94.8% | 92.2% | 90.3% |
+| 로지스틱 | 95.1% | 98.4% | 93.5% |
+| MLP16 | 95.1% | 98.4% | 93.5% |
+
+- 개선은 후보가 겹친 지적과 대조군에서 나온다. 전체 차이가 작은 건 겹친 지적이 4%뿐이어서다.
+- 남은 오류(늦어짐 약 8%, 패드 이동 약 10%)는 규칙이 후보를 내지 못한 지적이라 이 모델로는 고칠 수 없다. 규칙 문턱을 운영 기록으로 고쳐야 한다.
+- 합성 데이터의 원인은 한 판에 하나씩 심었다. 실제 사람은 여러 원인이 섞이므로 운영 `LIVE_CAUSE`로 다시 학습한다.
 
 ## 벤치마크 실행
 

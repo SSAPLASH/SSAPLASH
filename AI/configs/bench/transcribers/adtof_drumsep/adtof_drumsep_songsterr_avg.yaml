@@ -15,7 +15,8 @@ average_checkpoints:
     columns: kshc
 cymbal_checkpoint_path: data/models/songsterr_ft/pads_all_noguard/last.pth
 cymbal_mode: name
-drumsep_config: configs/bench/models/msst/mdx23c_drumsep.yaml
+# 드럼 킷 분리는 서비스 original(adtof_drumsep_ds_ov2.yaml)과 같은 조각 겹침 2 (S15P31A307-320)
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep_ov2.yaml
 rules:
   window_ms: 120
   cymbal_window_ms: 80

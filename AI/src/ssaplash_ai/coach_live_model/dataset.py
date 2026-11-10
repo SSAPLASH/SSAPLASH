@@ -25,6 +25,9 @@ from ssaplash_ai.coach_live_model.replay import (
 )
 
 GOOD_MS = 60.0
+# 입력 계산 버전. `features()`의 순서·식을 바꾸면 올린다. FE `coach/live/gate`도 같은 값을 알고 있어서,
+# 서버에서 받은 모델의 `meta.json` 값이 다르면 FE가 그 모델을 쓰지 않는다(설계 3.4)
+FEATURE_VERSION = 1
 TAGS = (
     "LIVE_MISS_STREAK",
     "LIVE_LATE",
@@ -197,6 +200,8 @@ WRONG_PAD_LAYOUT = ("SNARE", "SMALL_TOM", "HIHAT", "SMALL_TOM")
 TRANSITION_PADS = ("HIHAT", "SNARE")
 # 빠른 구간: 보통 간격 400ms 사이에 150ms 간격의 몰아치기가 들어간다
 DENSE_STEP_MS, DENSE_FAST_MS = 400.0, 150.0
+# 원인 모델 입력 계산 버전. `cause_features()`를 바꾸면 올린다. FE `coach/live/models/remoteCause.ts`와 같아야 한다
+CAUSE_FEATURE_VERSION = 1
 CAUSE_FEATURE_NAMES = (
     *(f"strength:{c}" for c in RULE_ORDER),
     "stage3",

@@ -126,6 +126,41 @@ def test_pick_cause_follows_the_rule_order() -> None:
     assert pick_cause_by_rule([]).cause == "UNKNOWN"
 
 
+def _transition_notes(contrast_misses: tuple[int, ...] = ()) -> list[JudgedNote]:
+    """스네어 → 탐1에서만 놓치고, 하이햇 → 탐1(비교 대상)은 친다. FE `cause.test.ts`와 같은 연주."""
+    notes = []
+    for k in range(4):
+        base = 4 * k
+        t = [4_000.0 + (base + j) * 500.0 for j in range(4)]
+        notes.append(JudgedNote(t[0], "GOOD", 0.0, "SNARE", 0, 90, t[0], ("SMALL_TOM",), 500.0))
+        notes.append(
+            JudgedNote(t[1] + 60, "MISS", None, "SMALL_TOM", None, None, t[1], ("SNARE",), 500.0)
+        )
+        notes.append(JudgedNote(t[2], "GOOD", 0.0, "HIHAT", 0, 90, t[2], ("SMALL_TOM",), 500.0))
+        if base + 3 in contrast_misses:
+            notes.append(
+                JudgedNote(
+                    t[3] + 60, "MISS", None, "SMALL_TOM", None, None, t[3], ("HIHAT",), 500.0
+                )
+            )
+        else:
+            notes.append(JudgedNote(t[3], "GOOD", 0.0, "SMALL_TOM", 1, 90, t[3], ("HIHAT",), 500.0))
+    return notes
+
+
+def test_transition_needs_a_contrast_that_is_missed_less() -> None:
+    causes = lambda notes: [c.cause for c in miss_causes(notes, [], 3, 500.0)]  # noqa: E731
+    assert causes(_transition_notes()) == ["TRANSITION"]
+    # 비교 대상이 없으면 이동 탓인지 가를 수 없다
+    only = [
+        n for n in _transition_notes() if not (n.pad == "SMALL_TOM" and n.prev_pads == ("HIHAT",))
+    ]
+    assert "TRANSITION" not in causes(only)
+    # 비교 대상도 절반을 놓치면 이동 탓이 아니고, 하나만 놓치면 이동 탓이다
+    assert "TRANSITION" not in causes(_transition_notes((3, 7)))
+    assert "TRANSITION" in causes(_transition_notes((3,)))
+
+
 def test_causes_are_not_computed_below_stage_two() -> None:
     notes = [
         JudgedNote(i * 500.0, "MISS", None, "SNARE", None, None, prev_gap_ms=100.0)
