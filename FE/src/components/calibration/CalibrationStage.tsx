@@ -9,11 +9,11 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { Button } from '@/components/ui/Button';
 import { RealignPrompt } from './RealignPrompt';
-import { KitInfoFrame, KitInfoOverlay } from '@/components/setup/KitInfoOverlay';
+import { KitInfoFrame, KitInfoHead, KitInfoOverlay } from '@/components/setup/KitInfoOverlay';
 import { StagePanel } from '@/components/setup/StagePanel';
 import { GapBanner } from './GapBanner';
 import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
-import { HAND_NAME, captureHeadline, captureProgressText, overlapLineText, spreadWarningText } from './calibrationText';
+import { HAND_NAME, captureHeadline, overlapLineText, spreadWarningText } from './calibrationText';
 import { previewRadius } from './captureRadius';
 import { calibrationSession } from '@/app/calibrationSession';
 import { useLive } from '@/store/liveStore';
@@ -212,6 +212,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
         x={fmtCm(point?.x)}
         y={fmtCm(point?.y)}
         radius={`${Math.round(radius)}°`}
+        caption="선택 패드"
         slider={{ value: radius, min: tuning.minRadiusDeg, max: tuning.maxRadiusDeg, onChange: (v) => calibrationSession.setRadiusOverride(selected, v) }}
       >
         {mine.length > 0 && (
@@ -232,7 +233,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   } else if (cap.target) {
     card = (
       <KitInfoFrame cardRef={cardRef} corner={corner}>
-        <h3 className="setup-kitinfo-name cal-progress-title">{captureProgressText(cap.target, cap.index, cap.order.length)}</h3>
+        <KitInfoHead name={PAD_META[cap.target].label} caption={`${cap.index + 1} / ${cap.order.length}`} nameClassName="cal-progress-title" />
         <HitDots cap={cap} full={cap.phase === 'padDone'} />
       </KitInfoFrame>
     );

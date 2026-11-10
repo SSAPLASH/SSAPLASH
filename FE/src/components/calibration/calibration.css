@@ -156,7 +156,7 @@
 .cal-hands {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-s);
 }
 .cal-hand-row {
   display: flex;
@@ -168,11 +168,11 @@
 }
 .cal-hand-dots {
   display: inline-flex;
-  gap: 8px;
+  gap: 6px;
 }
 .cal-hit-dot {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   border: 2px solid var(--line);
   background: transparent;
@@ -206,10 +206,11 @@
 }
 .cal-kitinfo-actions {
   display: flex;
-  gap: var(--space-s);
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 .cal-kitinfo-actions > .ui-btn {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 /* 경고 배너(GapBanner, D3·D11): --warn 톤. 반투명 바탕 + 경고 테두리 */
