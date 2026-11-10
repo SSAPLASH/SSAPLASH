@@ -1,18 +1,18 @@
-// 캔버스 판(StagePanel) 안의 떠 있는 요소 배치를 재는 훅(PLAY-004 D10·D11, v0.2).
-// 판은 스테이지 행 전체 폭이고 안쪽 여백이 24px이다. 드럼 그림(16:10)은 판 안쪽 가운데에 contain으로 놓이고,
-// 정보 카드는 판 안쪽 오른쪽(또는 왼쪽) 아래, 경고 배너는 아래쪽 가운데에 놓인다.
-// - 카드: 그림 옆 한쪽 여백이 카드 폭 이상이면(카드 폭+24면 그림과 24px 이상 떨어진다) 그림 옆에 놓여 아무것도 가리지 않는다(region = null). 모자랄 때만 그림과 겹치고,
-//   그 교차 영역을 그림 정규 좌표(region)로 돌려준다(pickOverlayCorner가 좌우를 고른다).
+// 캔버스 판(StagePanel) 안의 떠 있는 요소 배치를 재는 훅(PLAY-004 D10·D11, v0.3).
+// 판은 스테이지 행 전체 폭이고 안쪽 여백이 16px이다. 드럼 그림 영역(.setup-stage-fig)은 판 안쪽 전체를 채우고,
+// 정보 카드는 그 오른쪽(또는 왼쪽) 아래, 경고 배너는 아래쪽 가운데에 그림 위로 겹쳐 놓인다.
+// - 카드: 항상 그림과 겹친다. 카드가 그림에서 차지하는 영역을 그림 정규 좌표(region)로 돌려주고 pickOverlayCorner가 좌우를 고른다.
+//   figSize는 그림 영역 px 크기(원 반지름·정규 좌표를 px로 환산하는 데 필요)다.
 // - 배너: 폭은 판의 60% 이내, 아래쪽 가운데. 카드와 가로로 겹치면 먼저 카드 반대쪽으로 비켜 같은 줄에 둔다(간격 12px).
-//   비킬 자리도 없을 때만 카드 위로 쌓는다 — 위로 쌓으면 그림 가운데(지금 칠 패드)를 가리기 쉽기 때문이다. bannerPos가 그 자리(px)다.
-// 재지 못하면(jsdom·SSR·ResizeObserver 없음) region은 고정 비율 OVERLAY_REGION, bannerPos는 CSS 기본 자리(가운데, 아래 여백)다.
+//   비킬 자리도 없을 때만 카드 위로 쌓는다. bannerPos가 그 자리(px)다.
+// 재지 못하면(jsdom·SSR·ResizeObserver 없음) region은 고정 비율 OVERLAY_REGION, figSize는 null, bannerPos는 CSS 기본 자리(가운데, 아래 여백)다.
 // 행의 높이 맞춤(useStageFit)도 여기서 함께 건다: 행 ref 하나로 두 가지를 맡는다.
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { OVERLAY_REGION } from '@/domain/kitLayout';
 import { useStageFit } from './useStageFit';
 
 /** 판 안쪽 여백(px). setup.css의 .setup-stage-panel padding과 같아야 한다 */
-export const PANEL_PAD = 24;
+export const PANEL_PAD = 16;
 /** 배너와 카드 사이 간격(px): 옆으로 비킬 때 가로, 위로 쌓을 때 세로 */
 export const STACK_GAP = 12;
 
@@ -30,27 +30,21 @@ export interface UseOverlayRegion {
   cardRef: (el: HTMLElement | null) => void;
   /** 경고 배너 감싸개에 연결 */
   bannerRef: (el: HTMLElement | null) => void;
-  /** 카드가 그림과 겹치는 정규화 영역. null이면 겹침 없음 */
-  region: OverlayRegion | null;
+  /** 카드가 그림과 겹치는 정규화 영역 */
+  region: OverlayRegion;
+  /** 그림 영역 px 크기. 못 쟀으면 null */
+  figSize: { w: number; h: number } | null;
   /** 배너 자리(px, 판 기준). left가 null이면 CSS 기본(가운데) */
   bannerPos: BannerPos;
 }
 
 /**
- * 판 안쪽 폭·그림·카드 px 크기로 겹침 영역을 계산한다. 카드는 판 안쪽 모서리(left/right 0, bottom 0)에 붙고 그림은 가운데에 있다.
- * 측정 불가(0 이하)면 undefined, 겹침 없음이면 null, 겹치면 그림 정규 좌표의 영역
+ * 그림 영역·카드 px 크기로 카드가 그림에서 차지하는 영역(그림 정규 좌표, 1 이하)을 계산한다.
+ * 카드는 그림 영역(= 판 안쪽) 모서리에 붙으므로 항상 겹친다. 측정 불가(0 이하)면 undefined
  */
-export function regionFromSizes(
-  inner: { w: number },
-  fig: { w: number; h: number },
-  card: { w: number; h: number },
-): OverlayRegion | null | undefined {
-  if (!(inner.w > 0) || !(fig.w > 0) || !(fig.h > 0) || !(card.w > 0) || !(card.h > 0)) return undefined;
-  const side = (inner.w - fig.w) / 2;
-  // 카드는 안쪽 모서리에 붙으므로 그림 쪽으로 파고드는 폭 = 카드 폭 − 한쪽 여백
-  const overlapW = card.w - side;
-  if (!(overlapW > 0)) return null;
-  return { w: Math.min(1, overlapW / fig.w), h: Math.min(1, card.h / fig.h) };
+export function regionFromSizes(fig: { w: number; h: number }, card: { w: number; h: number }): OverlayRegion | undefined {
+  if (!(fig.w > 0) || !(fig.h > 0) || !(card.w > 0) || !(card.h > 0)) return undefined;
+  return { w: Math.min(1, card.w / fig.w), h: Math.min(1, card.h / fig.h) };
 }
 
 export interface BannerPos {
@@ -85,7 +79,8 @@ export function useOverlayRegion(): UseOverlayRegion {
   const [fig, setFig] = useState<HTMLElement | null>(null);
   const [card, setCard] = useState<HTMLElement | null>(null);
   const [banner, setBanner] = useState<HTMLElement | null>(null);
-  const [measured, setMeasured] = useState<OverlayRegion | null | undefined>(undefined);
+  const [measured, setMeasured] = useState<OverlayRegion | undefined>(undefined);
+  const [figSize, setFigSize] = useState<{ w: number; h: number } | null>(null);
   const [pos, setPos] = useState<BannerPos>({ left: null, bottom: PANEL_PAD });
 
   useStageFit(row);
@@ -107,8 +102,11 @@ export function useOverlayRegion(): UseOverlayRegion {
   useEffect(() => {
     if (!row || !fig || !card || typeof ResizeObserver === 'undefined') return;
     const update = () => {
-      const next = regionFromSizes({ w: row.clientWidth - 2 * PANEL_PAD }, { w: fig.offsetWidth, h: fig.offsetHeight }, { w: card.offsetWidth, h: card.offsetHeight });
+      const fw = fig.offsetWidth;
+      const fh = fig.offsetHeight;
+      const next = regionFromSizes({ w: fw, h: fh }, { w: card.offsetWidth, h: card.offsetHeight });
       setMeasured((prev) => (prev === next || (prev && next && prev.w === next.w && prev.h === next.h) ? prev : next));
+      setFigSize((prev) => (fw > 0 && fh > 0 ? (prev && prev.w === fw && prev.h === fh ? prev : { w: fw, h: fh }) : null));
       measureBanner();
     };
     update();
@@ -126,5 +124,5 @@ export function useOverlayRegion(): UseOverlayRegion {
   const cardRef = useCallback((el: HTMLElement | null) => setCard(el), []);
   const bannerRef = useCallback((el: HTMLElement | null) => setBanner(el), []);
   // 요소가 없거나 재지 못했으면 고정 비율로 되돌아간다
-  return { rowRef, figRef, cardRef, bannerRef, region: row && fig && card && measured !== undefined ? measured : OVERLAY_REGION, bannerPos: pos };
+  return { rowRef, figRef, cardRef, bannerRef, region: row && fig && card && measured !== undefined ? measured : OVERLAY_REGION, figSize: fig ? figSize : null, bannerPos: pos };
 }

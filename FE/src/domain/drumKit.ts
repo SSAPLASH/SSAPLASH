@@ -98,6 +98,12 @@ export function fitScale(availableWidth: number, maxScale: number): number {
   return Math.min(maxScale, availableWidth / DRUM_KIT_W);
 }
 
+/** 폭·높이 상자 안에 들어가는 scale(contain). maxScale을 넘지 않고, 폭·높이 하나라도 0 이하면 0 */
+export function fitScaleBox(availableWidth: number, availableHeight: number, maxScale: number): number {
+  if (!(availableWidth > 0) || !(availableHeight > 0)) return 0;
+  return Math.min(maxScale, availableWidth / DRUM_KIT_W, availableHeight / DRUM_KIT_H);
+}
+
 /** 타격 패드가 화면에서 점등될 패드. 하이햇 페달은 하이햇 패드에 표시한다 */
 export function visualPadOf(pad: PadId): PadId | null {
   if (pad === 'HIHAT_PEDAL') return 'HIHAT';
@@ -135,3 +141,24 @@ export function placePad(p: DrumKitPad, x: number, y: number): DrumKitPad {
 export function layoutToKitPoint(p: { x: number; y: number }): { x: number; y: number } {
   return { x: p.x, y: 0.15 + 0.62 * p.y };
 }
+
+/** 그림 영역을 못 쟀을 때(jsdom 등) 쓰는 16:10 상자 */
+const FALLBACK_FIG = { w: 1600, h: 1000 };
+
+/**
+ * 킷 정규화 좌표의 패드를 그림 영역 정규 좌표의 원으로 바꾼다(pickOverlayCorner의 겹침 판정용).
+ * 킷은 DrumKit fitContain처럼 scale = min(4, 폭/760, 높이/300)로 그림 영역 가운데에 놓인다.
+ * 반지름은 pickOverlayCorner 기준(min(폭, 높이×1.6))에 대한 비율이다
+ */
+export function padFrameCircle(pad: PadId, point: { x: number; y: number }, skin: KitSkin, fig: { w: number; h: number } = FALLBACK_FIG): { x: number; y: number; r: number } {
+  const w = kitPadsFor(skin).find((p) => p.pad === pad)?.w ?? 0;
+  const scale = fitScaleBox(fig.w, fig.h, 4);
+  const kw = DRUM_KIT_W * scale;
+  const kh = DRUM_KIT_H * scale;
+  return {
+    x: ((fig.w - kw) / 2 + kw * point.x) / fig.w,
+    y: ((fig.h - kh) / 2 + kh * point.y) / fig.h,
+    r: (w / 2) * scale / Math.min(fig.w, fig.h * 1.6),
+  };
+}
+
