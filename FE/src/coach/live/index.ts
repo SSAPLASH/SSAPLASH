@@ -15,3 +15,4 @@ export { LIVE_COACH_CONFIG } from './config';
 export { LIVE_ARM_TAG } from './LiveCoach';
 export { chooseCoachModel, refreshCoachModels, RULE_ARM } from './models/registry';
 export type { CoachModelChoice } from './models/registry';
+export type { CauseModel } from './models/remoteCause';

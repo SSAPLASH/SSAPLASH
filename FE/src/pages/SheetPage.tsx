@@ -512,6 +512,8 @@ function SheetPageBody() {
       gate: model.gate,
       gateMode: model.mode,
       arm: model.arm,
+      causeModel: model.cause,
+      causeArm: model.causeArm,
     });
     // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
     void refreshCoachModels();

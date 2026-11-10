@@ -83,9 +83,19 @@ export interface Assignment {
  * 비율과 실험군은 다른 키로 나눠서, 비율을 올려도 이미 배정된 사람의 실험군이 바뀌지 않는다.
  */
 export function assignGateArm(config: CoachLiveConfig, userId: number | null, random: () => number = Math.random): Assignment {
-  const draw = (salt: string) => (userId === null ? Math.floor(random() * 100) : bucketOf(`${salt}:${userId}`));
-  if (config.gate.mode === 'off' || config.gate.arms.length === 0) return { inRollout: false, arm: null };
-  const inRollout = draw('rollout') < config.rolloutPercent;
+  if (config.gate.mode === 'off') return { inRollout: false, arm: null };
+  return assign(config.gate.arms, config.rolloutPercent, 'gate', userId, random);
+}
+
+/** 원인 모델 실험군. 비율(rolloutPercent)은 거름과 같은 값·같은 해시를 쓰고, 실험군은 따로 나눈다 */
+export function assignCauseArm(config: CoachLiveConfig, userId: number | null, random: () => number = Math.random): Assignment {
+  return assign(config.cause.arms, config.rolloutPercent, 'cause', userId, random);
+}
+
+function assign(arms: readonly Arm[], rolloutPercent: number, salt: string, userId: number | null, random: () => number): Assignment {
+  const draw = (s: string) => (userId === null ? Math.floor(random() * 100) : bucketOf(`${s}:${userId}`));
+  if (arms.length === 0) return { inRollout: false, arm: null };
+  const inRollout = draw('rollout') < rolloutPercent;
   if (!inRollout) return { inRollout, arm: null };
-  return { inRollout, arm: armAt(config.gate.arms, draw('gate')) };
+  return { inRollout, arm: armAt(arms, draw(salt)) };
 }
