@@ -92,8 +92,11 @@ def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyP
     monkeypatch.delenv(ENV_DEVICE, raising=False)
     monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
     cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
-    assert cfg.model_name == "original"
-    assert cfg.model_config == Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
+    assert cfg.model_name == "songsterr_avg"
+    assert cfg.model_config == Path(
+        "configs/bench/transcribers/adtof_drumsep/adtof_drumsep_songsterr_avg.yaml"
+    )
+    assert {"original", "combo", "songsterr_avg"} <= set(cfg.models)
     assert all((AI_DIR / p).is_file() for p in cfg.models.values())
     assert cfg.device == "cuda"
     assert cfg.schema_version == 1
