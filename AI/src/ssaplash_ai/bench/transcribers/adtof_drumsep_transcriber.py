@@ -20,6 +20,10 @@ hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 
   학습한 가중치가 처음 보는 드럼 세트의 킥을 탐으로 적는 것을 원래 가중치 탐으로 막으려는 것. "default"면 패키지 기본 가중치.
 - 심벌 전용 가중치(cymbal_checkpoint_path, S15P31A307-241): 같은 방식으로 크래시·라이드만 그 가중치 결과에서 가져옴.
   크래시·라이드를 직접 나눠 내는 7클래스 가중치를 쓰면 스템 에너지 비교 규칙 대신 모델 출력으로 정해짐.
+  cymbal_mode가 name이면 타격 시각은 checkpoint_path 결과를 두고, 50ms 안 가장 가까운 크래시·라이드의 이름만 가져옴.
+- 점수 평균(average_checkpoints, 11/08 실제 곡 측정): ADTOF 5종 가중치를 더 돌려 프레임별 점수를 열마다 평균한 뒤
+  checkpoint_path 가중치의 문턱값으로 피크를 고름. 항목마다 columns(ksthc: 킥·스네어·탐·하이햇·심벌)에 적은
+  열만 평균에 넣음. 실제 곡으로 학습한 가중치는 혼자 쓰면 원래보다 낮았지만 원래 가중치와 평균하면 올랐음.
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ssaplash_ai.bench.transcribers.adtof_transcriber import AdtofTranscriber
+from ssaplash_ai.bench.transcribers.adtof_transcriber import AdtofTranscriber, model_input
 from ssaplash_ai.bench.transcribers.transcriber_base import BaseTranscriber, RawHit
 
 DEFAULT_RULES: dict = {
@@ -145,6 +149,9 @@ ADTOF_PEDAL = 44  # 페달 출력을 더한 파인튜닝 체크포인트(S15P31A
 ADTOF_RIDE = 51  # 크래시·라이드를 나눈 파인튜닝 체크포인트(v0.3)만 냄. 이때 49는 크래시만
 TOM_PAD_NAMES = ("SMALL_TOM", "MID_TOM", "FLOOR_TOM")
 CYMBAL_PAD_NAMES = ("CRASH", "RIDE")
+CYMBAL_MODES = ("take", "name")
+AVERAGE_COLUMNS = "ksthc"  # ADTOF 5종 점수 열 순서: 킥 35·스네어 38·탐 47·하이햇 42·심벌 49
+RENAME_NEAR_SEC = 0.05  # cymbal_mode name에서 이름을 가져올 타격 거리
 LABEL_BY_PITCH = {ADTOF_KICK: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT", ADTOF_PEDAL: "HIHAT_PEDAL"}
 TOM_MODES = ("fixed", "relative")
 TOM_NAMINGS = ("bands", "order", "hybrid")
@@ -946,6 +953,33 @@ def merge_pad_hits(
     return sorted(out, key=lambda h: h[0])
 
 
+def rename_pad_hits(
+    hits: Sequence[RawHit], other: Sequence[RawHit], pads: Sequence[str]
+) -> list[RawHit]:
+    """hits의 pads 타격 시각은 두고, RENAME_NEAR_SEC 안 가장 가까운 other의 pads 타격 이름으로 바꿈"""
+    times = np.array([h[0] for h in other if h[1] in pads], dtype=np.float64)
+    names = [h[1] for h in other if h[1] in pads]
+    out = []
+    for h in hits:
+        if h[1] in pads and len(times):
+            j = int(np.argmin(np.abs(times - h[0])))
+            if abs(times[j] - h[0]) <= RENAME_NEAR_SEC:
+                h = (h[0], names[j], h[2])
+        out.append(h)
+    return out
+
+
+def average_activations(main: np.ndarray, members: Sequence[tuple[np.ndarray, str]]) -> np.ndarray:
+    """주 가중치 점수 (프레임, 5)와 (점수, 열 글자) 목록 → 열마다 평균. 길이는 가장 짧은 것에 맞춤"""
+    n = min([len(main), *(len(a) for a, _ in members)])
+    out = np.array(main[:n, :5], dtype=np.float32)
+    for j, letter in enumerate(AVERAGE_COLUMNS):
+        use = [a[:n, j] for a, cols in members if letter in cols]
+        if use:
+            out[:, j] = (out[:, j] + np.sum(use, axis=0)) / (1 + len(use))
+    return out
+
+
 def merge_tom_hits(hits: Sequence[RawHit], tom_hits: Sequence[RawHit]) -> list[RawHit]:
     """hits에서 탐 3종을 빼고 tom_hits의 탐 3종을 넣음. 시각순"""
     return merge_pad_hits(hits, tom_hits, TOM_PAD_NAMES)
@@ -963,6 +997,18 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         self._adtof = AdtofTranscriber(config, device)
         self._tom_adtof = self._extra_adtof(config.tom_checkpoint_path, device)
         self._cym_adtof = self._extra_adtof(config.cymbal_checkpoint_path, device)
+        if config.cymbal_mode not in CYMBAL_MODES:
+            raise ValueError(
+                f"{config.name}: cymbal_mode는 {CYMBAL_MODES} 중 하나: {config.cymbal_mode}"
+            )
+        self._avg_adtofs: list[tuple[AdtofTranscriber, str]] = []
+        for item in config.average_checkpoints:
+            cols = str(item.get("columns") or AVERAGE_COLUMNS)
+            if not item.get("path") or set(cols) - set(AVERAGE_COLUMNS):
+                raise ValueError(
+                    f"{config.name}: average_checkpoints 항목은 path와 {AVERAGE_COLUMNS} 글자 columns: {item}"
+                )
+            self._avg_adtofs.append((self._extra_adtof(str(item["path"]), device), cols))
         self._sep = None
         self.rules = rules_with_defaults(config.rules)
 
@@ -990,12 +1036,19 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         self._sep.prepare()
 
     def _load(self) -> None:
-        for adtof in (self._adtof, self._tom_adtof, self._cym_adtof):
+        for adtof in (self._adtof, self._tom_adtof, self._cym_adtof, *self._avg_models()):
             if adtof is not None:
                 adtof._load()
                 adtof.loaded = True
+        if self._avg_adtofs:
+            for adtof in (self._adtof, *self._avg_models()):
+                if adtof._labels != [35, 38, 47, 42, 49]:
+                    raise ValueError(f"점수 평균은 ADTOF 5종 가중치만 됨: {adtof._checkpoint_id()}")
         self._sep._load()
         self._sep.loaded = True
+
+    def _avg_models(self) -> list[AdtofTranscriber]:
+        return [a for a, _ in self._avg_adtofs]
 
     def stems(self, audio: np.ndarray, sample_rate: int) -> dict[str, np.ndarray]:
         """드럼 킷 분리 스템 이름 → (채널, 샘플)."""
@@ -1007,7 +1060,13 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
     def _transcribe(
         self, audio: np.ndarray, sample_rate: int, song_id: str | None
     ) -> Sequence[RawHit]:
-        activations = self._adtof.activations(audio, sample_rate)
+        x = model_input(audio, sample_rate)  # 가중치 여러 개가 같은 입력 특징을 씀
+        activations = self._adtof.activations_from_input(x)
+        if self._avg_adtofs:
+            activations = average_activations(
+                activations,
+                [(a.activations_from_input(x), cols) for a, cols in self._avg_adtofs],
+            )
         peaks = self._adtof.peaks(activations)
         stems = self.stems(audio, sample_rate)
         missing = [
@@ -1025,29 +1084,33 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
             peaks, stems, sample_rate, self.rules, mixture=audio, activations=activations
         )
         for adtof, pads in self._extras():
-            act = adtof.activations(audio, sample_rate)
+            act = adtof.activations_from_input(x)
             other = assign_pads(
                 adtof.peaks(act), stems, sample_rate, self.rules, mixture=audio, activations=act
             )
-            hits = merge_pad_hits(hits, other, pads)
+            if pads == CYMBAL_PAD_NAMES and self.config.cymbal_mode == "name":
+                hits = rename_pad_hits(hits, other, pads)
+            else:
+                hits = merge_pad_hits(hits, other, pads)
         return hits
 
     def _checkpoint_id(self) -> str:
         sep_ckpt = self._sep.info().checkpoint if self._sep is not None and self._sep.loaded else ""
         names = {id(self._tom_adtof): "tom", id(self._cym_adtof): "cymbal"}
         extra = "".join(f"+{names[id(a)]}:{a._checkpoint_id()}" for a, _ in self._extras())
-        return f"{self._adtof._checkpoint_id()}{extra}+{sep_ckpt}"
+        avg = "".join(f"+avg:{a._checkpoint_id()}:{cols}" for a, cols in self._avg_adtofs)
+        return f"{self._adtof._checkpoint_id()}{avg}{extra}+{sep_ckpt}"
 
     def _n_params(self) -> int | None:
         a = self._adtof._n_params()
-        for adtof, _ in self._extras():
+        for adtof in [*(x for x, _ in self._extras()), *self._avg_models()]:
             a = (a or 0) + (adtof._n_params() or 0)
         b = self._sep._n_params() if self._sep is not None and self._sep.loaded else None
         return (a or 0) + (b or 0) if (a is not None or b is not None) else None
 
     def _close(self) -> None:
         self._adtof.close()
-        for adtof, _ in self._extras():
+        for adtof in [*(x for x, _ in self._extras()), *self._avg_models()]:
             adtof.close()
         if self._sep is not None:
             self._sep.close()

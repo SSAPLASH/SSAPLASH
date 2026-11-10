@@ -72,6 +72,10 @@ class TranscriberConfig:
     # 탐·심벌만 다른 ADTOF 가중치로 고를 때. "default"면 패키지 기본 가중치. 없으면 checkpoint_path 하나로 전부
     tom_checkpoint_path: str | None = None
     cymbal_checkpoint_path: str | None = None
+    # 심벌 전용 가중치 결과를 쓰는 방식. take: 크래시·라이드 타격을 통째로, name: 이름만
+    cymbal_mode: str = "take"
+    # 점수를 같이 평균할 ADTOF 5종 가중치. [{path, columns}], columns는 ksthc 중 평균에 넣을 열 글자
+    average_checkpoints: list[dict] = field(default_factory=list)
     # mock
     mock_mode: str = "truth"
     truth_dir: str | None = None
