@@ -5,6 +5,8 @@ import './Segmented.css';
 export interface SegmentedOption<T extends string> {
   value: T;
   label: ReactNode;
+  /** 이 옵션만 고를 수 없게 한다(선택값은 호출자가 비활성이 아닌 값으로 둔다) */
+  disabled?: boolean;
 }
 
 export interface SegmentedProps<T extends string> {
@@ -26,7 +28,16 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
       0,
       options.findIndex((o) => o.value === value),
     );
-    const nextIndex = (cur + step + options.length) % options.length;
+    // 비활성 옵션은 건너뛴다(전부 비활성이면 제자리)
+    let nextIndex = cur;
+    for (let i = 1; i <= options.length; i++) {
+      const idx = (cur + step * i + options.length * i) % options.length;
+      if (!options[idx].disabled) {
+        nextIndex = idx;
+        break;
+      }
+    }
+    if (nextIndex === cur) return;
     onChange(options[nextIndex].value);
     // 새로 선택된 항목으로 포커스를 옮긴다(roving tabindex)
     e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]?.focus();
@@ -48,6 +59,7 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
             role="radio"
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
+            disabled={o.disabled}
             className={selected ? 'ui-seg-item selected' : 'ui-seg-item'}
             onClick={() => onChange(o.value)}
           >
