@@ -41,7 +41,7 @@ const STAGE_CAUSES: Record<CoachStage, readonly MissCause[]> = {
 };
 
 /** 모델이 없을 때 고르는 순서. 구체적으로 고칠 수 있는 원인을 먼저 */
-const RULE_ORDER: readonly MissCause[] = ['WRONG_PAD', 'TRANSITION', 'DENSE', 'DRIFT_LATE'];
+export const RULE_ORDER: readonly MissCause[] = ['WRONG_PAD', 'TRANSITION', 'DENSE', 'DRIFT_LATE'];
 
 export const UNKNOWN_CAUSE: CauseCandidate = { cause: 'UNKNOWN', strength: 0, pad: null };
 
@@ -105,7 +105,11 @@ function transition(sorted: readonly JudgedNote[], misses: readonly JudgedNote[]
     const total = sorted.filter((n) => n.pad === to && fromPads(n).includes(from)).length;
     const rate = total === 0 ? 0 : count / total;
     const share = count / misses.length;
-    if (share < c.share || rate < c.rate) continue;
+    // 같은 패드를 다른 곳에서 넘어와 친 노트보다 확실히 더 놓칠 때만 이동 탓이다(설계 U14)
+    const contrast = sorted.filter((n) => n.pad === to && !fromPads(n).includes(from));
+    if (contrast.length < c.minContrast) continue;
+    const base = contrast.filter(isMiss).length / contrast.length;
+    if (share < c.share || rate < c.rate || rate < c.lift * base) continue;
     if (!best || share > best.share || (share === best.share && rate > best.rate)) best = { share, rate, fromPad: from, pad: to };
   }
   return best && { share: best.share, fromPad: best.fromPad, pad: best.pad };
