@@ -13,7 +13,6 @@ import { LazyChartAutoplayToggle } from './diag/lazyChartAutoplay';
 import { RecordingToast } from './recording/RecordingToast';
 import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
-import { dockVisible } from './shell/dockRoute';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { Sidebar } from './shell/Sidebar';
 import { StickStatusIndicator } from './shell/StickStatusIndicator';
@@ -50,7 +49,9 @@ export function AppShell({ authRequired }: Props) {
   const [debug, setDebug] = useState(false);
   const { pathname } = useLocation();
   const inMonitor = pathname.startsWith('/monitor');
-  const showDock = dockVisible(pathname);
+  // Dock은 화면이 켠다(useDock). 자유 연습과 게임·악보의 연주 단계에서만 true
+  const showDock = useShellStore((s) => s.dock);
+  const dockRaised = useShellStore((s) => s.dockRaised);
   // Dock이 없는 화면으로 나가면 Dock에서 켠 메트로놈을 멈춘다 — 끌 수 있는 조작이 사라지기 때문이다.
   // 곡 연주에 묶인(locked) 클릭은 연주 화면이 정리한다
   useEffect(() => {
@@ -139,7 +140,7 @@ export function AppShell({ authRequired }: Props) {
       </div>
 
       {showDock && (
-        <div className="shell-dock">
+        <div className={`shell-dock${dockRaised ? ' raised' : ''}`}>
           <GlassDock />
         </div>
       )}

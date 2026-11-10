@@ -36,6 +36,22 @@ describe('PauseOverlay 일시정지', () => {
     expect(b).toBeLessThan(c);
   });
 
+  it('다시 시작만 브랜드 틴트 클래스를 갖는다', () => {
+    const html = render('user', true);
+    expect(html.match(/play-pause-restart/g)).toHaveLength(1);
+    expect(html).toMatch(/<button[^>]*play-pause-restart[^>]*>다시 시작<\/button>/);
+  });
+
+  it('음량 줄마다 장식 아이콘(끔·켬)이 aria-hidden으로 앞뒤에 있고, 슬라이더 이름은 라벨 그대로다', () => {
+    const html = render('user', true);
+    expect(html.match(/ui-slider-track-row/g)).toHaveLength(2);
+    expect(html.match(/<svg[^>]*aria-hidden="true"/g)).toHaveLength(4);
+    expect(html).toContain('>드럼 음량</label>');
+    expect(html).toContain('>노래 음량(반주)</label>');
+    expect(html).toContain('play-pause-sound-divider');
+    expect(html).not.toContain('play-pause-sound-off');
+  });
+
   it('canResume이면 [계속]이 활성이고 준비 문구가 없다', () => {
     const html = render('user', true);
     expect(html).not.toContain('disabled');

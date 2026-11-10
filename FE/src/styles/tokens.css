@@ -40,6 +40,8 @@
   --surface-1: #12151a;
   --surface-2: #1a1f26;
   --surface-3: #1f242c;
+  /* 일시정지 팝업 스크림 — Figma color/overlay/scrim (bg-canvas 40%) */
+  --overlay-scrim: color-mix(in srgb, var(--bg-canvas) 40%, transparent);
 
   /* 선 */
   --line: rgba(255, 255, 255, 0.08);
@@ -55,6 +57,9 @@
   --brand-text: #52b2dd;
   --brand-on: #04141c;
   --brand-sub: #ffc83d;
+  /* 브랜드 틴트 — Figma color/brand/tint (brand 22%) · color/brand/tint-line (brand 35%) */
+  --brand-tint: color-mix(in srgb, var(--brand) 22%, transparent);
+  --brand-tint-line: color-mix(in srgb, var(--brand) 35%, transparent);
 
   /* 판정 상태 */
   --perfect: #8fceea;

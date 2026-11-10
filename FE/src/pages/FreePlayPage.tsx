@@ -14,6 +14,7 @@ import { RealignPrompt } from '@/components/calibration/RealignPrompt';
 import { useRealign } from '@/components/useRealign';
 import { HitReadout } from '@/components/play/HitReadout';
 import { TABLET_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
+import { useDock } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -32,7 +33,7 @@ import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources
 import { stopFree } from '@/app/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
-import { bindSensorSurface, setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import { bindSensorSurface, setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import type { PadId } from '@/domain/pads';
 
 /** 킷 최대 배율(Figma 1.25, 태블릿 ≤1024는 1.1) */
@@ -98,6 +99,10 @@ export function FreePlayPage() {
   const [stats, setStats] = useState(emptyHitStats);
   // 반주(MODE-002 설계 D1): 페이지가 재생기를 하나 들고 떠나면 해제한다
   const accomp = useFreeAccompaniment();
+  // 자유 연습은 화면에 있는 동안 키보드 드럼을 켠다
+  useKeyboardDrum(true);
+  // Dock은 자유 연습 화면에 있는 동안 둔다(QA 352 Q8)
+  useDock(true);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // 진입: 타격음 켜기(기본은 꺼져 있다), 채보 후보 제한 해제. 떠날 때 타격음을 끈다
