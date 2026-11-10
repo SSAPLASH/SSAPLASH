@@ -38,6 +38,9 @@ ENV_NARRATIVE_LLM_URL = "SSAPLASH_NARRATIVE_LLM_URL"
 ENV_NARRATIVE_LLM_API = "SSAPLASH_NARRATIVE_LLM_API"
 ENV_NARRATIVE_MODEL = "SSAPLASH_NARRATIVE_MODEL"
 DEFAULT_NARRATIVE_LLM_URL = "http://127.0.0.1:11434"
+# 연주 중 LLM 구간 코칭 워커(docs/live-coach-llm.md). 모델은 총평과 같은 설정(SSAPLASH_NARRATIVE_LLM_*·MODEL)을 쓴다
+ENV_LIVE_POLL_SEC = "SSAPLASH_LIVE_POLL_SEC"
+ENV_LIVE_LLM_TIMEOUT_SEC = "SSAPLASH_LIVE_LLM_TIMEOUT_SEC"
 TRUE_WORDS = ("1", "true", "yes", "on")
 
 
@@ -65,6 +68,9 @@ class WorkerSettings:
     narrative_llm_url: str = DEFAULT_NARRATIVE_LLM_URL
     narrative_llm_api: str = "ollama"  # "ollama" 또는 "openai"(OpenAI 호환, vLLM·llama.cpp 서버)
     narrative_model: str = ""
+    # 연주 중 구간 코칭: 큐를 보는 주기와 모델 한 번 호출의 시간 제한(늦은 답은 버려지므로 짧게)
+    live_poll_sec: float = 1.0
+    live_llm_timeout_sec: float = 8.0
 
     @property
     def narrative_api_url(self) -> str:
@@ -116,6 +122,10 @@ class WorkerSettings:
             or DEFAULT_NARRATIVE_LLM_URL,
             narrative_llm_api=source.get(ENV_NARRATIVE_LLM_API, "").strip().lower() or "ollama",
             narrative_model=source.get(ENV_NARRATIVE_MODEL, "").strip(),
+            live_poll_sec=_positive_float(source, ENV_LIVE_POLL_SEC, cls.live_poll_sec),
+            live_llm_timeout_sec=_positive_float(
+                source, ENV_LIVE_LLM_TIMEOUT_SEC, cls.live_llm_timeout_sec
+            ),
             separation_config=Path(separation_config or DEFAULT_SEPARATION_CONFIG),
             transcription_config=Path(transcription_config or DEFAULT_TRANSCRIPTION_CONFIG),
         )
