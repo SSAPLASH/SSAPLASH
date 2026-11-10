@@ -339,6 +339,24 @@
   }
 }
 
+/* ---- 보정 결과 화면: 서로 너무 가까운 패드(--warn 테두리)와 선택한 패드(브랜드 링). 클릭을 가로채지 않는다 ---- */
+.drum-pad-warn,
+.drum-pad-selected {
+  pointer-events: none;
+}
+.drum-pad-warn ellipse {
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 7;
+  filter: drop-shadow(0 0 6px var(--warn));
+}
+.drum-pad-selected ellipse {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 4;
+  stroke-dasharray: 10 8;
+}
+
 /* 타격 이펙트 캔버스(FxCanvas): 킷 SVG 크기에 맞춘 래퍼 위에 절대 위치로 겹치고 포인터를 통과시킨다 */
 .drum-kit-fx {
   position: relative;

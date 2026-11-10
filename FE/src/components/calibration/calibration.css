@@ -128,45 +128,98 @@
   border-color: var(--brand);
 }
 
-/* ---- UX-64 보정 중(Figma 배치 편집기 765:33504 · 보정 무대 766:34637): 킷 720 + 오른쪽 카드 264, 사이 32 ---- */
-.cal-stage-main {
+/* ---- 보정 중·결과(PLAY-004 개편 D9·D10): 카드 전체 폭 틀(setup-stage, 16:10) 안에 킷 + 위쪽 가운데 안내 + 오른쪽 아래 정보 카드 ---- */
+.cal-stage-canvas {
+  position: absolute;
+  inset: 0;
   display: flex;
-  gap: 32px;
   align-items: center;
-  justify-content: center;
+  border-radius: var(--radius-control);
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  overflow: hidden;
 }
-.cal-stage-main .cal-stage-kit {
-  flex: 1;
-  min-width: 0;
-  max-width: 720px;
+.cal-stage-top {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 20px;
-  padding: var(--space-s) 0;
-  border: 0;
-  background: transparent;
+  align-items: center;
+  gap: var(--space-xs);
+  pointer-events: none;
 }
 .cal-stage-headline {
   margin: 0;
   text-align: center;
-  font-size: 40px;
+  font-size: clamp(20px, 2.4vw, 36px);
   font-weight: 700;
   line-height: 1.2;
   color: var(--text-1);
 }
-.cal-panel {
-  width: 264px;
-  flex: none;
+.cal-hands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
-@media (max-width: 1024px) {
-  .cal-stage-main {
-    flex-direction: column;
-  }
-  .cal-panel {
-    width: 100%;
-  }
-  .cal-stage-headline {
-    font-size: 28px;
-  }
+.cal-hand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cal-hand-dots {
+  display: inline-flex;
+  gap: 8px;
+}
+.cal-hit-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: transparent;
+}
+.cal-hit-dot.on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.cal-progress-title {
+  font-size: 18px;
+}
+.cal-gap-warn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-gap-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.cal-gap-advice,
+.cal-overlap-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.cal-overlap-line {
+  color: var(--warn);
+}
+.cal-kitinfo-actions {
+  display: flex;
+  gap: var(--space-s);
+}
+.cal-kitinfo-actions > .ui-btn {
+  flex: 1;
+  min-width: 0;
+}
+.cal-stage-overlaps {
+  margin: 0;
+  font-size: 12px;
+  color: var(--warn);
 }

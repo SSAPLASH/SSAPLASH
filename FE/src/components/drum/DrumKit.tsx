@@ -66,6 +66,10 @@ export interface DrumKitProps {
   lit?: PadId;
   /** 실시간 코칭이 가리키는 패드. 그 패드에 링을 그린다(문구가 떠 있는 동안만 넘긴다). ghost·lit와 별개 */
   coachPad?: PadId;
+  /** 서로 너무 가까운 패드(보정 결과 화면). --warn 테두리 링을 그린다 */
+  warnPads?: PadId[];
+  /** 선택한 패드(보정 결과 화면). 브랜드색 링을 그린다 */
+  selectedPad?: PadId;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -141,6 +145,8 @@ export function DrumKit({
   dimAll = false,
   lit,
   coachPad,
+  warnPads,
+  selectedPad,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -246,13 +252,28 @@ export function DrumKit({
         );
         // 코칭 링: 패드 위에 같은 좌표계(원본 160 기준)로 그린다. 클릭을 가로채지 않는다
         const ring = RING[p.shape];
+        const markTransform = `translate(${p.left} ${p.top}) scale(${p.w / 160})`;
+        const isWarn = warnPads?.includes(p.pad) === true;
+        const isSelected = selectedPad === p.pad;
         const pad =
-          coachPad === p.pad ? (
+          coachPad === p.pad || isWarn || isSelected ? (
             <>
               {pad0}
-              <g className="drum-pad-coach" transform={`translate(${p.left} ${p.top}) scale(${p.w / 160})`} data-coach-pad={p.pad}>
-                <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
-              </g>
+              {coachPad === p.pad && (
+                <g className="drum-pad-coach" transform={markTransform} data-coach-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
+                </g>
+              )}
+              {isWarn && (
+                <g className="drum-pad-warn" transform={markTransform} data-warn-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
+                </g>
+              )}
+              {isSelected && (
+                <g className="drum-pad-selected" transform={markTransform} data-selected-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx + 8} ry={ring.ry + 8} />
+                </g>
+              )}
             </>
           ) : (
             pad0
