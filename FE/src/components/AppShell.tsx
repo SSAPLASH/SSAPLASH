@@ -15,6 +15,7 @@ import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { Sidebar } from './shell/Sidebar';
+import { LessonInvite } from './lesson/LessonInvite';
 import { StickStatusIndicator } from './shell/StickStatusIndicator';
 import { TopBar } from './shell/TopBar';
 import { useSidebarCollapsed } from './shell/useMediaQuery';
@@ -127,6 +128,7 @@ export function AppShell({ authRequired }: Props) {
       {!immersive && <Sidebar />}
       <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
+        {!immersive && <LessonInvite />}
         {/* 경로가 바뀌면 key로 다시 마운트되어 .route-fade가 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼 */}
         {/* Suspense는 key 래퍼 바깥에 둔다. 안에 두면 key가 바뀔 때마다 새 경계가 생겨 지연 화면을 기다리는 동안 이전 화면이 아닌 fallback이 보인다 */}
         {/* 오류 경계는 Suspense·key 래퍼보다 바깥(설계 TECH-chunk-load-recovery R3). 경로가 바뀌면 오류가 풀린다 */}

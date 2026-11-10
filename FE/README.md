@@ -715,6 +715,22 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 - VITE_SONGS_SOURCE=builtin 개발 소스는 기존 로컬 기록 계산을 유지한다. 서버의 기본 곡(BUILTIN) 탭은 API 소스이므로 서버 기록을 사용한다.
 
 
+## 입문 코스 (331번)
+
+드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. BE `GET /api/v1/lessons`(레슨 목록·진도)·`POST /api/v1/lessons/{songId}/completion`(알아보기 완료)을 쓴다. 설계는 개인 문서 `.claude/plans/SETUP-입문-코스.md`.
+
+- **위치:** 악보 연습 곡 선택의 네 번째 탭 [입문 코스](`components/SongPicker` → `components/lesson/LessonCourse`). 로그인·API 곡 소스일 때만 보이고 리듬 게임 곡 선택에는 없다. `/sheet?tab=lessons`로 바로 열린다. `useChartParam`은 곡·채보를 바꾸거나 지울 때 `tab`을 남겨, 레슨 연주 준비의 뒤로 가기(「← 입문 코스」)가 탭으로 돌아온다.
+- **화면:** 원형 스테이지 맵(`StageMap`)과 고른 레슨의 카드. 카드에는 설명, 레슨 음표(`PadNotation`, 위치·머리는 `domain/sheet`의 `staffPosOf`), 드럼 그림(`DrumKit`에서 레슨 패드만 `armed`), [레슨 시작하기]. 드럼 그림은 악보 아래에 둔다.
+- **잠금·통과:** 서버 `passed`에 이번 접속에서 통과한 레슨(`lessonStore.localPassed`)을 더해 `domain/lesson.stageStates`가 다시 계산한다. 통과 전인 첫 스테이지만 열린다. 잠금은 화면 안내이고 서버는 순서를 강제하지 않는다.
+- **연주 레슨(`PLAY`):** 기존 악보 연습 화면 그대로(`/sheet?tab=lessons&song=&chart=`). 결과 화면은 기록의 채보가 레슨이면 `LessonResultBand`로 통과(정확도 70% 이상, 기준값은 서버 `passAccuracy`, 서버와 같은 `accuracyPercent`)·재도전과 [다음 레슨]·[코스로]를 보이고, 통과하면 업로드를 기다리지 않고 `localPassed`에 더한다.
+- **알아보기 레슨(`READ`):** `/sheet/lesson/:songId`(`pages/LessonReadPage`). 악보가 흐르지 않고 음표를 한 줄로 늘어놓는다. 지금 음표의 드럼을 치면 다음으로, 틀리면 그대로 두고 답을 알려 준다(`guide`가 꺼진 레슨은 틀리기 전에는 묻기만). 소리는 자유 연습과 같은 공용 경로(`setSoundOnHit`)가 내고 화면은 `liveStore`의 마지막 타격만 본다. 드럼 그림을 눌러도 친다. 끝까지 치면 완료를 저장하고, 실패하면 이번 접속에서는 통과로 두고 [다시 저장]을 보인다.
+- **권유 카드:** `LessonInvite`(셸 본문 위). 로그인, 레슨 1개 이상, 통과한 레슨 0개, 이 브라우저에서 닫은 적 없음(`localStorage` `airdrum.lessonInvite.dismissed`), 지금 [입문 코스] 탭이 아님일 때만 보인다. 로그인 없는 빌드·내장 곡 빌드에서는 그리지 않는다.
+- **실패:** 레슨 API가 실패하면 탭 본문에 다시 시도, 0개면 「입문 코스를 준비하고 있어요」, 카드는 띄우지 않는다. 다른 탭·화면은 영향이 없다.
+
+```powershell
+npx vitest run src/domain/lesson.test.ts src/components/lesson src/pages/LessonReadPage.interaction.test.tsx
+```
+
 ## 추천 화면과 학습 동의 공개 조건
 
 - 곡 선택은 기본 곡 탭이 처음 보일 때 추천을 요청하며, 비슷한 곡은 서버가 고른 난이도와 채보로 이동한다. 리포트의 `songId`, `chartId`, `difficulty`는 선택 필드이며 서버가 곡 ID를 주지 않으면 비슷한 곡을 요청하지 않는다. 서버 필드와 SHEET 추천 필터 변경은 BE `feat/COACH-recommend-sheet-report`에 구현됐으며 develop-BE 병합과 배포를 기다린다.

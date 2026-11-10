@@ -877,6 +877,7 @@ function SheetPageBody() {
             presetName={presetName}
             countInBars={settings.countInBars}
             onBack={toSelect}
+            backLabel={searchParams.get('tab') === 'lessons' ? '입문 코스' : undefined}
             onSelectChart={(chartId) => {
               if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
             }}

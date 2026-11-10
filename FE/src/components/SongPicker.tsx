@@ -37,6 +37,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from '@/components/play/SongTable';
 import { SongDetailPane } from '@/components/play/SongDetailPane';
+import { LessonCourse } from '@/components/lesson/LessonCourse';
 import './play/song-picker.css';
 
 interface Props {
@@ -58,14 +59,17 @@ const COPY: Record<Props['mode'], { title: string }> = {
   sheet: { title: '악보로 차근차근 연습해요' },
 };
 
-/** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과다 */
-type PickerTab = SongScope | 'RECOMMEND';
+/** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과, LESSONS는 입문 코스(악보 연습만, Jira 331)다 */
+type PickerTab = SongScope | 'RECOMMEND' | 'LESSONS';
 
 const SCOPE_OPTIONS: { value: PickerTab; label: string }[] = [
   { value: 'BUILTIN', label: '기본 곡' },
   { value: 'MINE', label: '라이브러리' },
 ];
-const TAB_OPTIONS_WITH_AI: { value: PickerTab; label: string }[] = [...SCOPE_OPTIONS, { value: 'RECOMMEND', label: 'AI 추천곡' }];
+const AI_OPTION: { value: PickerTab; label: string } = { value: 'RECOMMEND', label: 'AI 추천곡' };
+const LESSONS_OPTION: { value: PickerTab; label: string } = { value: 'LESSONS', label: '입문 코스' };
+/** `?tab=lessons`면 입문 코스 탭으로 연다(레슨 연주 준비의 뒤로 가기·권유 카드·결과 화면) */
+const LESSONS_TAB_PARAM = 'lessons';
 
 type LevelFilter = SongLevel | 'ALL';
 
@@ -117,10 +121,37 @@ export function SongPicker({ onSelect, mode }: Props) {
   const clickReco = useRecommendations((r) => r.click);
   const clearReco = useRecommendations((r) => r.clear);
   // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
-  const [params] = useSearchParams();
-  const [rawTab, setTab] = useState<PickerTab>(params.get('scope') === 'MINE' ? 'MINE' : scope);
-  // 로그인이 풀리면 AI 추천곡 탭은 사라지므로 기본 곡으로 본다
-  const tab: PickerTab = rawTab === 'RECOMMEND' && !recoEnabled ? 'BUILTIN' : rawTab;
+  const [params, setParams] = useSearchParams();
+  const [rawTab, setRawTab] = useState<PickerTab>(
+    params.get('tab') === LESSONS_TAB_PARAM ? 'LESSONS' : params.get('scope') === 'MINE' ? 'MINE' : scope,
+  );
+  // 곡 선택이 떠 있는 동안 주소의 tab만 바뀌면(권유 카드 [입문 코스 시작], 사이드바 「악보 연습」) 탭을 따라 바꾼다.
+  // 같은 경로라 화면이 다시 만들어지지 않으므로 렌더 중에 맞춘다
+  const urlLessons = params.get('tab') === LESSONS_TAB_PARAM;
+  const [seenUrlLessons, setSeenUrlLessons] = useState(urlLessons);
+  if (urlLessons !== seenUrlLessons) {
+    setSeenUrlLessons(urlLessons);
+    if (urlLessons) setRawTab('LESSONS');
+    else if (rawTab === 'LESSONS') setRawTab('BUILTIN');
+  }
+  // 입문 코스는 악보 연습에서만, 추천과 같은 조건(로그인·API 곡 소스)일 때 보인다(설계 SETUP-입문-코스 3-5)
+  const lessonsEnabled = mode === 'sheet' && recoEnabled;
+  // 로그인이 풀리면 AI 추천곡·입문 코스 탭은 사라지므로 기본 곡으로 본다
+  const tab: PickerTab = (rawTab === 'RECOMMEND' && !recoEnabled) || (rawTab === 'LESSONS' && !lessonsEnabled) ? 'BUILTIN' : rawTab;
+  const tabOptions = [...SCOPE_OPTIONS, ...(recoEnabled ? [AI_OPTION] : []), ...(lessonsEnabled ? [LESSONS_OPTION] : [])];
+  // 입문 코스 탭은 주소에 남겨 레슨에서 돌아올 때 같은 탭으로 연다
+  const setTab = (next: PickerTab) => {
+    setRawTab(next);
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === 'LESSONS') p.set('tab', LESSONS_TAB_PARAM);
+        else p.delete('tab');
+        return p;
+      },
+      { replace: true },
+    );
+  };
   const isAi = tab === 'RECOMMEND';
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<LevelFilter>('ALL');
@@ -174,8 +205,8 @@ export function SongPicker({ onSelect, mode }: Props) {
     const delay = firstLoad.current || queryRef.current === query ? 0 : SEARCH_DEBOUNCE_MS;
     firstLoad.current = false;
     queryRef.current = query;
-    // AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다)
-    if (tab === 'RECOMMEND') return;
+    // AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다). 입문 코스 탭도 곡 목록을 쓰지 않는다
+    if (tab === 'RECOMMEND' || tab === 'LESSONS') return;
     const t = setTimeout(() => void load(tab, query, listFilter(level)), delay);
     return () => clearTimeout(t);
   }, [tab, query, level, load]);
@@ -286,9 +317,11 @@ export function SongPicker({ onSelect, mode }: Props) {
     <div className="play-sp">
       <PageHeader title={copy.title} />
 
-      {source === 'api' && (
-        <Segmented label="곡 범위" options={recoEnabled ? TAB_OPTIONS_WITH_AI : SCOPE_OPTIONS} value={tab} onChange={setTab} />
-      )}
+      {source === 'api' && <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} />}
+      {tab === 'LESSONS' ? (
+        <LessonCourse onOpenBuiltin={() => setTab('BUILTIN')} />
+      ) : (
+        <>
       <div className="play-sp-filter">
         <Input
           className="play-sp-search"
@@ -357,6 +390,8 @@ export function SongPicker({ onSelect, mode }: Props) {
             onSimilarPick={viewSimilar}
           />
         </div>
+      )}
+        </>
       )}
     </div>
   );
