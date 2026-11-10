@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import App from './app/App';
 import MotionProvider from './app/MotionProvider';
 import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
@@ -8,6 +9,7 @@ import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap
 import { bootstrapAuth } from './app/authBootstrap';
 import { bootstrapPresets } from './app/presetBootstrap';
 import { installPreloadErrorHandler } from './app/chunkRecovery';
+import { queryClient } from './app/queryClient';
 import { useRecordingStore } from './app/recordingStore';
 import { RouteErrorElement } from './components/RouteErrorBoundary';
 import './styles/global.css';
@@ -32,8 +34,10 @@ const router = createBrowserRouter([{ path: '*', element: <App />, errorElement:
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MotionProvider>
-      <RouterProvider router={router} />
-    </MotionProvider>
+    <QueryClientProvider client={queryClient}>
+      <MotionProvider>
+        <RouterProvider router={router} />
+      </MotionProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );
