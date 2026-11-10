@@ -28,11 +28,15 @@ function keptTab(prev: URLSearchParams): Record<string, string> {
   return out;
 }
 
-export function useChartParam() {
+/**
+ * `enabled`가 false면 쿼리가 있어도 채보를 읽지 않고 status 'none'이다(악보 연습: 곡·단계는 주소로 골라 두기만 하고
+ * 시작 확인 창이 열릴 때 비로소 읽는다). 기본 true.
+ */
+export function useChartParam({ enabled = true }: { enabled?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const songId = parseId(params.get('song'));
   const chartId = parseId(params.get('chart'));
-  const key = songId !== null && chartId !== null ? `${songId}:${chartId}` : null;
+  const key = enabled && songId !== null && chartId !== null ? `${songId}:${chartId}` : null;
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
   useEffect(() => {
@@ -55,11 +59,17 @@ export function useChartParam() {
   const current = fetched && fetched.key === key ? fetched : null;
   const status: ChartParamStatus = key === null ? 'none' : current === null ? 'loading' : current.error ? 'error' : 'ready';
 
-  /** 곡·난이도를 URL에 싣는다. replace면 방문 기록을 쌓지 않는다(숨긴 채보 보정처럼 사용자가 고르지 않은 변경). 곡 선택 탭(`tab`)은 남긴다 */
+  /**
+   * 곡·난이도를 URL에 싣는다. replace면 방문 기록을 쌓지 않는다(숨긴 채보 보정처럼 사용자가 고르지 않은 변경). 곡 선택 탭(`tab`)은 남긴다.
+   * start면 `start=1`도 싣는다(악보 연습: 시작 확인 창을 연다)
+   */
   const select = useCallback(
-    (song: number, chart: number, options?: { replace?: boolean }) => {
+    (song: number, chart: number, options?: { replace?: boolean; start?: boolean }) => {
       setFetched(null); // 같은 곡을 다시 골라도(오류 재시도 포함) 새로 읽는다
-      setParams((prev) => ({ ...keptTab(prev), song: String(song), chart: String(chart) }), options?.replace ? { replace: true } : undefined);
+      setParams(
+        (prev) => ({ ...keptTab(prev), song: String(song), chart: String(chart), ...(options?.start ? { start: '1' } : {}) }),
+        options?.replace ? { replace: true } : undefined,
+      );
     },
     [setParams],
   );

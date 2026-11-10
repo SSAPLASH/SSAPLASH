@@ -19,7 +19,7 @@ import './start-dialog.css';
 export interface StartDialogProps {
   open: boolean;
   variant: 'play' | 'setup';
-  song: { title: string; artist: string; bpm: number; durationSec?: number; level: Difficulty };
+  song: { title: string; artist: string; bpm?: number; durationSec?: number; level: Difficulty };
   /** 요약 줄 앞머리: 「악보 연습」·「리듬 게임」 */
   modeLabel: string;
   /** setup 창 내용(ReadyPanel과 같은 의미) */
@@ -98,7 +98,8 @@ export function StartDialog({
 
   if (!open) return null;
 
-  const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
+  const meta = [modeLabel];
+  if (song.bpm !== undefined) meta.push(`BPM ${Math.round(song.bpm)}`);
   if (song.durationSec !== undefined) meta.push(formatDuration(song.durationSec * 1000));
   const isPlay = variant === 'play';
   const title = isPlay ? song.title : '기기 준비가 필요해요';

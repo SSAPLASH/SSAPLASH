@@ -1,6 +1,7 @@
-// 악보 연주 (MODE-003 설계 4-1~4-4). 곡 선택 → 불러오기(채보·반주) → 준비 → 카운트인 → 연주 → 결과 페이지.
-// PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이다. 화면은 Figma 악보 연습 흐름을 조립한다:
-// 곡 선택 SongPicker · 준비 ReadyPanel(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
+// 악보 연주 (MODE-003 설계 4-1~4-4, 설계 MODE-001-MODE-003-picker-quick-start). 곡 선택(+연습 단계) → 시작 확인 창(채보·반주 불러오기) → 카운트인 → 연주 → 결과 페이지.
+// PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이다. 준비 화면은 없다 — 곡 선택 위에 시작 확인 창(StartDialog)이 열린다:
+// 곡 선택 SongPicker · 시작 확인 StartDialog(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
+// 주소: `?song=&chart=`는 곡 선택에서 곡·단계를 골라 두고, `&start=1`이 더해지면 시작 확인 창이 열린다.
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -26,9 +27,7 @@ import { useCoachLine } from '@/components/play/useCoachLine';
 import { planCoachDisplay } from '@/components/play/coachDisplay';
 import { CoachHandChip } from '@/components/play/CoachHandChip';
 import { HitReadout } from '@/components/play/HitReadout';
-import { ReadyPanel } from '@/components/play/ReadyPanel';
-import { useSimilarSongs } from '@/components/play/useSimilarSongs';
-import { RecommendRow } from '@/components/song/RecommendRow';
+import { StartDialog } from '@/components/play/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/components/play/PlayOptions';
 import { useNextBeatLabels } from '@/components/play/useNextBeatLabels';
@@ -39,15 +38,12 @@ import { strayMissSource } from '@/components/play/strayMissSource';
 import type { HitMark } from '@/components/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { useReadiness } from '@/components/useReadiness';
 import { useRealign } from '@/components/useRealign';
 import type { Chart } from '@/domain/chart';
-import { artistLabel, chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
-import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
+import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
+import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
-import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { presetDisplayName } from '@/domain/preset';
@@ -109,15 +105,17 @@ function SheetPageBody() {
   const location = useLocation();
   const settings = useSettings();
   const presetItems = usePresets((p) => p.items);
-  const param = useChartParam();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
+  const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
+  // 시작 확인 창이 열려 있는가: `?start=1`이고 곡·단계가 주소에 있을 때. 채보·반주는 이때부터(연주 중에도) 읽는다
+  const startParam = searchParams.get('start') === '1';
+  const param = useChartParam({ enabled: startParam || playSession !== null });
   const { status: paramStatus, loaded: paramLoaded } = param;
-  const [searchParams] = useSearchParams();
   const songIdParam = parseId(searchParams.get('song'));
   const chartIdParam = parseId(searchParams.get('chart'));
   const [acc] = useState(() => new Accompaniment(audioEngine));
   const [accResult, setAccResult] = useState<AccResult | null>(null);
-  // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
-  const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   // HUD 표시용 곡 시각(ms)
@@ -163,8 +161,7 @@ function SheetPageBody() {
   const accAvailableUrl = paramLoaded ? (ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null) : null;
   const accUrl = accEnabled ? accAvailableUrl : null;
   const accCurrent = accResult && accResult.loaded === paramLoaded ? accResult : null;
-  const accLoading = accUrl !== null && accCurrent === null;
-  const accError = accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
+  const accError = accUrl !== null && accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
   const readyChart: Chart | null = paramLoaded && (accUrl === null || accCurrent?.ok) ? paramLoaded.chart : null;
 
   // 준비 단계 세션. 설정이 바뀌면 준비 화면에서만 새로 만든다
@@ -183,18 +180,13 @@ function SheetPageBody() {
   // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
   const missSource = useMemo(() => (activeSession ? strayMissSource(activeSession) : undefined), [activeSession]);
   const chart = activeSession?.chart ?? null;
-  const stage: Stage = playSession
-    ? 'play'
-    : session
-      ? 'ready'
-      : paramStatus === 'none' && !paramLoaded
-        ? 'select'
-        : 'loading';
-  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
+  const startOpen = startParam && songIdParam !== null && chartIdParam !== null;
+  const stage: Stage = playSession ? 'play' : !startOpen ? 'select' : session ? 'ready' : 'loading';
+  // 스네어 재정렬(PLAY-004 D11·D12): 시작 확인 창과 끊김 복귀 카드에서만 세션을 연다
   const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
-  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
+  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·시작 확인 창에서는 키를 가로채지 않는다)
   useKeyboardDrum(stage === 'play');
-  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·준비 화면에는 없다(QA 352 Q8)
+  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·시작 확인 창에는 없다(QA 352 Q8)
   useDock(stage === 'play');
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
@@ -237,7 +229,12 @@ function SheetPageBody() {
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
-  const clearParam = param.clear;
+  // 일시정지에서 드럼 세팅으로 갔다 돌아오면 시작 확인 창이 다시 열리게 start=1을 싣는다(연주 중 주소에는 start가 없다)
+  const pauseReturnTo = useMemo(() => {
+    const p = new URLSearchParams(location.search);
+    p.set('start', '1');
+    return `${location.pathname}?${p.toString()}`;
+  }, [location.pathname, location.search]);
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
@@ -510,9 +507,9 @@ function SheetPageBody() {
     setPauseReason(null);
   }, [resetCountdown]);
 
-  const begin = useCallback(async () => {
+  const begin = useCallback(async (): Promise<boolean> => {
     const ss = sessionRef.current;
-    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
+    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
@@ -590,6 +587,7 @@ function SheetPageBody() {
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setPlaySession(ss);
+    return true;
   }, [acc, resetRun, clearCoachLine, showCoachLine]);
 
   const resume = useCallback(() => {
@@ -627,7 +625,7 @@ function SheetPageBody() {
     clearCoachLine();
   }, [resetRun, clearCoachLine]);
 
-  /** 나가기: 기록 없이 준비 화면으로(곡 선택 유지) */
+  /** 나가기: 기록 없이 곡 선택으로(곡·단계를 골라 둔 채, 창은 닫힘 — 연주 중 주소에는 start가 없다) */
   const leave = useCallback(() => {
     diagSessionEnd('left');
     pedalCoverage.current = null;
@@ -649,22 +647,29 @@ function SheetPageBody() {
     navigate(returnTo, { replace: true });
   }, [navigate, returnTo, resetCountdown, clearCoachLine]);
 
-  const toSelect = useCallback(() => {
-    diagSessionEnd('left');
-    pedalCoverage.current = null;
-    openWarnings.current.clear();
-    clockRef.current?.stop();
-    metronome.unlock();
-    inputManager.setCandidateProvider(null);
-    clearParam();
-  }, [clearParam]);
+  /** 시작 확인 창 닫기: 주소에서 start만 지운다(곡·단계 선택은 남긴다) */
+  const closeStart = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.delete('start');
+        return p;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
+  /** [플레이]: 카운트다운으로 들어가고, 연주 중 주소에서는 start를 지워 둔다(뒤로 가기·나가기가 창을 다시 열지 않게) */
+  const startPlay = useCallback(async () => {
+    if (await begin()) closeStart();
+  }, [begin, closeStart]);
 
   // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
   useEffect(() => {
     void refreshCoachModels();
   }, []);
 
-  // 연주 중(play)은 셸을 숨긴 전체 화면. 곡 선택·준비는 TopBar 제목 "악보 연습"
+  // 연주 중(play)은 셸을 숨긴 전체 화면. 곡 선택은 TopBar 제목 "악보 연습"
   useShell({ title: '악보 연습', immersive: stage === 'play' });
   // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
@@ -727,10 +732,8 @@ function SheetPageBody() {
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
       if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       const st = stageRef.current;
-      if (st === 'ready') {
-        if (e.code === 'Enter') void begin();
-        else toSelect();
-      } else if (st === 'play') {
+      // 시작 확인 창(ready)의 Enter·Esc는 창이 맡는다
+      if (st === 'play') {
         // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
         // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
         if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
@@ -742,7 +745,7 @@ function SheetPageBody() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, pauseTo, isResuming]);
+  }, [pauseTo, isResuming]);
 
   // 스트립이 매 프레임 읽는 곡 시각. 연주 전·후에는 null(정지)
   const getSongTime = useCallback(
@@ -754,25 +757,12 @@ function SheetPageBody() {
   const hitSeq = usePadHitSeq();
   const { badges } = useNextBeatLabels({ session: activeSession, getSongTime, enabled: settings.sheetPadCount });
 
-  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
   const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
-  const similar = useSimilarSongs({
-    songId: songIdParam,
-    active: stage === 'ready' && param.status === 'ready',
-    difficulty: chart?.difficulty ?? null,
-    onSelect: param.select,
-  });
   const records = useBestRecords(
     stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
     'SHEET', stage === 'ready' && detail?.id === songIdParam, songsSource,
   );
-  const localBestAccuracy = useMemo(
-    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET').get(selectedChartId) : undefined),
-    [songsSource, stage, selectedChartId],
-  );
-  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
-  // 준비 화면 동안만 서버 최고 정확도를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
+  // 시작 확인 창이 열린 동안만 서버 최고 정확도를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
   const serverBestAccuracy = records.accuraciesByChart.get(selectedChartId);
   useEffect(() => {
     if (stage === 'ready') serverPrevBest.current = { score: null, accuracy: serverBestAccuracy ?? null };
@@ -784,66 +774,65 @@ function SheetPageBody() {
   useEffect(() => {
     if (stage !== 'ready' || songIdParam === null || chartIdParam === null || detail === null || detail.id !== songIdParam) return;
     const fallback = chartFallback(detail, chartIdParam);
-    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
+    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true, start: true });
   }, [stage, songIdParam, chartIdParam, detail, selectParam]);
   const presetName = presetDisplayName(presetItems, settings.activePresetId);
 
-  if (stage === 'loading') {
+  // 곡 선택(+시작 확인 창). 연주 단계가 아니면 항상 곡 선택이 바닥에 있고, 창은 그 위에 뜬다
+  if (stage !== 'play' || !chart || !activeSession) {
+    const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
+    const chartDifficulty = chart?.difficulty ?? detail?.charts.find((c) => c.id === chartIdParam)?.difficulty ?? 'NORMAL';
+    const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError ? `${accError} 반주를 끄면 바로 시작할 수 있어요.` : null;
     return (
-      <StageFade stageKey="loading">
-        <main className="main">
-          <Card padding="md" style={{ maxWidth: 480 }}>
-            <div className="col">
-              {accError ? (
-                <>
-                  <div className="notice error" role="alert">
-                    {accError}
-                  </div>
-                  <div className="row">
-                    {paramLoaded && (
-                      <Button
-                        onClick={() => {
-                          acc.unload();
-                          setAccResult({ loaded: paramLoaded, ok: true });
-                        }}
-                      >
-                        반주 없이 계속
-                      </Button>
-                    )}
-                    <Button variant="secondary" onClick={toSelect}>
-                      곡 선택으로
-                    </Button>
-                  </div>
-                </>
-              ) : paramStatus === 'error' ? (
-                <>
-                  <div className="notice error" role="alert">
-                    {param.error ?? '채보를 불러오지 못했습니다.'}
-                  </div>
-                  <Button variant="secondary" onClick={toSelect}>
-                    곡 선택으로
-                  </Button>
-                </>
-              ) : (
-                <div className="row">
-                  <span className="spinner" aria-label="불러오는 중" />
-                  <span className="dim">{accLoading ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
-                </div>
-              )}
-            </div>
-          </Card>
-        </main>
-      </StageFade>
-    );
-  }
-
-  if (stage === 'select' || !chart || !activeSession) {
-    return (
-      <StageFade stageKey="select">
-        <main className="main">
-          <SongPicker mode="sheet" onStart={param.select} />
-        </main>
-      </StageFade>
+      <>
+        <StageFade stageKey="select">
+          <main className="main">
+            <SongPicker mode="sheet" onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
+          </main>
+        </StageFade>
+        <StartDialog
+          open={startOpen}
+          variant={ready ? 'play' : 'setup'}
+          song={{
+            title: chart?.title ?? (sameSong ? detail.title : '곡 정보를 불러오는 중'),
+            artist: sameSong ? detail.artist : '',
+            bpm: chart?.bpm ?? (sameSong ? detail.bpm : undefined),
+            durationSec: chart ? chart.durationMs / 1000 : undefined,
+            level: chartDifficulty,
+          }}
+          modeLabel="악보 연습"
+          missing={missing}
+          connected={connected}
+          keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
+          presetName={presetName}
+          countInBars={settings.countInBars}
+          realign={realign.info}
+          loading={loadError === null && stage !== 'ready'}
+          error={loadError}
+          notices={chart?.variableTempo ? ['변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)'] : []}
+          options={
+            <PlayOptions
+              rows={['metronome', 'padCount', 'accompaniment', 'recording']}
+              metronome={settings.metronome}
+              onMetronome={settings.setMetronome}
+              padCount={settings.sheetPadCount}
+              onPadCount={settings.setSheetPadCount}
+              hasAccompaniment={accAvailableUrl !== null || (paramLoaded === null && sameSong && detail.accompanimentStatus === 'READY')}
+              accompaniment={settings.accompaniment}
+              onAccompaniment={settings.setAccompaniment}
+              accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
+            />
+          }
+          onStart={() => void startPlay()}
+          onSetup={() =>
+            navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart?.title ?? detail?.title ?? '곡'}` } })
+          }
+          onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
+          onRetry={() => songIdParam !== null && chartIdParam !== null && param.select(songIdParam, chartIdParam, { replace: true, start: true })}
+          onClose={closeStart}
+        />
+      </>
     );
   }
 
@@ -855,67 +844,6 @@ function SheetPageBody() {
     bpm: chart.bpm,
     durationSec: chart.durationMs / 1000,
   };
-
-  if (stage === 'ready') {
-    const charts = sameSong
-      ? sortCharts(detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty }))
-      : [{ id: selectedChartId, difficulty: chart.difficulty }];
-    return (
-      <StageFade stageKey="ready">
-        <main className="main">
-          <BestRecordsNotice status={records.status} retry={records.retry} />
-          <ReadyPanel
-            song={song}
-            modeLabel="악보 연습"
-            staffLegend
-            charts={charts}
-            selectedChartId={selectedChartId}
-            bestAccuracy={bestAccuracy}
-            ready={ready}
-            missing={missing}
-            connected={connected}
-            keyboardOnly={settings.sensorKind === 'none'}
-            pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
-            presetName={presetName}
-            countInBars={settings.countInBars}
-            onBack={toSelect}
-            backLabel={searchParams.get('tab') === 'lessons' ? '입문 코스' : undefined}
-            onSelectChart={(chartId) => {
-              if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
-            }}
-            onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `악보 연습 · ${chart.title}` } })}
-            onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
-            onStart={() => void begin()}
-            realign={realign.info}
-            footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
-            options={
-              <>
-                {/* 변박 곡은 지원하지 않고 안내만 한다(README 악보 연습 「격자 원점」) */}
-                {chart.variableTempo && (
-                  <div className="notice" role="status">
-                    변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
-                  </div>
-                )}
-                <Card padding="md" title="연주 중 옵션">
-                  <PlayOptions
-                    rows={['metronome', 'padCount', 'accompaniment']}
-                    metronome={settings.metronome}
-                    onMetronome={settings.setMetronome}
-                    padCount={settings.sheetPadCount}
-                    onPadCount={settings.setSheetPadCount}
-                    hasAccompaniment={accAvailableUrl !== null}
-                    accompaniment={settings.accompaniment}
-                    onAccompaniment={settings.setAccompaniment}
-                    accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
-                  />
-                </Card>
-              </>
-            }
-          />
-        </main>
-      </StageFade>
-    );
-  }
 
   // 연주 중. 점수·콤보는 없고 판정 수만 보인다
   const snap = hud ?? activeSession.snapshot();
@@ -929,7 +857,7 @@ function SheetPageBody() {
         onResume={resume}
         onRestart={restart}
         onLeave={leave}
-        returnTo={returnTo}
+        returnTo={pauseReturnTo}
         realign={realign.info}
         hasAccompaniment={accUrl !== null}
       />
