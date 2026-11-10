@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 331 V47: 레슨 순서·종류·설명·패드 제약과 완료 기록의 기본 키, 곡을 지우면 함께 지워지는지. */
+/** 331 V48: 레슨 순서·종류·설명·패드 제약과 완료 기록의 기본 키, 곡을 지우면 함께 지워지는지. */
 @SpringBootTest(properties = {"auth.jwt.secret=test-only-jwt-secret-0123456789ab", "spring.datasource.hikari.schema=public"})
 class LessonSchemaTest {
 
