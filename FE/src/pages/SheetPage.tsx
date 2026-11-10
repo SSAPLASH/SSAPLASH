@@ -847,7 +847,6 @@ function SheetPageBody() {
     );
   }
 
-  const hasAcc = acc.state === 'ready' || acc.state === 'playing' || acc.state === 'paused';
   const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
   const song = {
     title: chart.title,
@@ -897,14 +896,19 @@ function SheetPageBody() {
                     변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)
                   </div>
                 )}
-                <PlayOptions
-                metronome={settings.metronome}
-                onMetronome={settings.setMetronome}
-                padCount={settings.sheetPadCount}
-                onPadCount={settings.setSheetPadCount}
-                hasAccompaniment={hasAcc}
-                accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
-                />
+                <Card padding="md" title="연주 중 옵션">
+                  <PlayOptions
+                    rows={['metronome', 'padCount', 'accompaniment']}
+                    metronome={settings.metronome}
+                    onMetronome={settings.setMetronome}
+                    padCount={settings.sheetPadCount}
+                    onPadCount={settings.setSheetPadCount}
+                    hasAccompaniment={accAvailableUrl !== null}
+                    accompaniment={settings.accompaniment}
+                    onAccompaniment={settings.setAccompaniment}
+                    accompanimentStatus={sameSong ? detail.accompanimentStatus : null}
+                  />
+                </Card>
               </>
             }
           />
