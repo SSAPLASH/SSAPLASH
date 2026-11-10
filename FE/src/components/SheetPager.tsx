@@ -20,8 +20,6 @@ export interface SheetPagerProps {
   strayHits: { timeMs: number }[];
   /** 매 프레임 호출된다(React 재렌더 없이). null이면 0 기준 정지 */
   getSongTime: () => number | null;
-  /** 카운트인 길이(ms). 주어지면 이 구간에서만 남은 박 수를 보인다 */
-  countInMs?: number;
   openWarnings?: React.RefObject<Map<number, number>>;
   /** 판정된 타격의 친 위치 눈금(PERFECT·GOOD). 보표 아래 판정 색 짧은 세로선으로 그린다 */
   hitMarks?: React.RefObject<HitMark[]>;
@@ -39,14 +37,14 @@ const GUTTER_X = 44;
 const CONTENT_TOP = STAFF_TOP_Y - 46;
 const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 
-export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInMs, openWarnings, hitMarks, fxSource, overlay }: SheetPagerProps) {
+export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarnings, hitMarks, fxSource, overlay }: SheetPagerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // 최신 props를 그리기 루프에 넘긴다 (렌더 중 ref 쓰기 회피)
-  const live = useRef({ noteStates, strayHits, getSongTime, countInMs });
+  const live = useRef({ noteStates, strayHits, getSongTime });
   useEffect(() => {
-    live.current = { noteStates, strayHits, getSongTime, countInMs };
+    live.current = { noteStates, strayHits, getSongTime };
   });
 
   // chart가 바뀔 때만 마디 배치를 새로 만든다 (마디별 지연 계산 캐시)
@@ -160,7 +158,6 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
           barMs,
           beatMs,
           showBase: false,
-          countInMs: p.countInMs,
           openWarnings: openWarnings?.current,
           nowMs,
         });
@@ -170,7 +167,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, countInM
       const { slot, ratio } = cursorPos(t, barMs, perPage);
       const x = xInBar(GUTTER_X + slot * slotW, slotW, ratio); // 노트 시각에 그 머리 중심을 지난다
       drawCursor(ctx, x, STAFF_TOP_Y - 30, STAFF_BOTTOM_Y + 40, colors);
-      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors, p.countInMs);
+      drawBeatLabel(ctx, x + 12, STAFF_BOTTOM_Y + 46, grid, beatMs, chart.beatsPerBar, colors);
     };
     draw();
     return () => {
