@@ -112,13 +112,13 @@ export class PlayClock {
   }
 
   /**
-   * 카운트인 → 1마디 1박(originMs) = 세션 originMs. 반주 0초 = 세션 0ms.
-   * 카운트인이 원점에서 끝나도록 반주 0초는 now + lead + max(0, 카운트인 − originMs)에 울린다.
-   * originMs가 카운트인보다 길면 반주(인트로)가 먼저 시작되고 1마디 직전에 카운트인 클릭이 난다.
+   * 리드인(카운트다운) → 1마디 1박(originMs) = 세션 originMs. 반주 0초 = 세션 0ms.
+   * 리드인이 원점에서 끝나도록 반주 0초는 now + lead + max(0, preRollMs − originMs)에 울린다.
+   * originMs가 리드인보다 길면 반주(인트로)가 먼저 시작되고 1마디 직전에 카운트인 클릭이 난다.
    */
   begin(): void {
     const now = this.now();
-    const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.countInMs - this.session.originMs);
+    const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.preRollMs - this.session.originMs);
     this.nextBeat = 0;
     this.lastDriftAt = -Infinity;
     this._sync = { begin: null, resume: null };

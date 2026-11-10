@@ -24,19 +24,33 @@ const input = (notes: JudgedNote[], over: Partial<CauseInput> = {}): CauseInput 
 const causes = (i: CauseInput) => missCauses(i).map((c) => c.cause);
 
 describe('놓침 원인: 패드 이동', () => {
-  // 스네어 → 탐1로 넘어갈 때만 놓친다. 스네어 → 스네어는 친다
+  // 스네어 → 탐1로 넘어갈 때만 놓친다. 하이햇 → 탐1(비교 대상)은 친다
   const notes: JudgedNote[] = [];
   for (let k = 0; k < 4; k++) {
-    notes.push(hit(4 * k, 'SNARE', 0, { prevPads: ['SNARE'], prevGapMs: GAP }));
-    notes.push(hit(4 * k + 1, 'SNARE', 0, { prevPads: ['SNARE'], prevGapMs: GAP }));
-    notes.push(miss(4 * k + 2, 'SMALL_TOM', { prevPads: ['SNARE'], prevGapMs: GAP }));
-    notes.push(hit(4 * k + 3, 'SNARE', 0, { prevPads: ['SMALL_TOM'], prevGapMs: GAP }));
+    notes.push(hit(4 * k, 'SNARE', 0, { prevPads: ['SMALL_TOM'], prevGapMs: GAP }));
+    notes.push(miss(4 * k + 1, 'SMALL_TOM', { prevPads: ['SNARE'], prevGapMs: GAP }));
+    notes.push(hit(4 * k + 2, 'HIHAT', 0, { prevPads: ['SMALL_TOM'], prevGapMs: GAP }));
+    notes.push(hit(4 * k + 3, 'SMALL_TOM', 0, { prevPads: ['HIHAT'], prevGapMs: GAP }));
   }
 
   it('같은 이동에서 반복해 놓치면 TRANSITION과 출발 패드가 나온다', () => {
     const [c] = missCauses(input(notes));
     expect(c).toMatchObject({ cause: 'TRANSITION', pad: 'SMALL_TOM', fromPad: 'SNARE' });
     expect(c.strength).toBe(1);
+  });
+
+  it('같은 패드를 다른 곳에서 넘어온 노트가 없으면 이동 탓인지 가를 수 없어 TRANSITION이 아니다', () => {
+    const only = notes.filter((n) => !(n.pad === 'SMALL_TOM' && n.prevPads?.[0] === 'HIHAT'));
+    expect(causes(input(only))).not.toContain('TRANSITION');
+  });
+
+  it('비교 대상도 비슷하게 놓치면 TRANSITION이 아니다', () => {
+    // 비교 대상(하이햇 → 탐1) 4개 중 앞의 둘을 놓쳤다: 이동 놓침 비율 1.0 < 2.5 × 0.5
+    const both = notes.map((n, i) => (i === 3 || i === 7 ? miss(i, 'SMALL_TOM', { prevPads: ['HIHAT'], prevGapMs: GAP }) : n));
+    expect(causes(input(both))).not.toContain('TRANSITION');
+    // 하나만 놓쳤으면(0.25) 1.0 ≥ 2.5 × 0.25라 이동 탓이다
+    const one = notes.map((n, i) => (i === 3 ? miss(i, 'SMALL_TOM', { prevPads: ['HIHAT'], prevGapMs: GAP }) : n));
+    expect(causes(input(one))).toContain('TRANSITION');
   });
 
   it('2단계에서는 패드 이동을 말하지 않는다', () => {

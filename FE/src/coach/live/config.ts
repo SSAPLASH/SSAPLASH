@@ -120,8 +120,13 @@ export const LIVE_COACH_CONFIG = {
     dense: { gapRatio: 0.6, share: 0.6 },
     /** 다른 패드: 놓친 노트 시각 ± nearCoef × goodMs 안에 다른 패드의 채보 밖 타격이 있는 놓침의 비율 */
     wrongPad: { nearCoef: 2, share: 0.5 },
-    /** 패드 이동: 같은 이동(A → B)에서 놓친 횟수, 놓침 중 그 이동의 비율, 그 이동 노트 중 놓친 비율 */
-    transition: { minRepeat: 2, share: 0.5, rate: 0.5 },
+    /**
+     * 패드 이동: 같은 이동(A → B)에서 놓친 횟수, 놓침 중 그 이동의 비율, 그 이동 노트 중 놓친 비율.
+     * 같은 B를 A가 아닌 곳에서 넘어와 친 노트(비교 대상)가 minContrast개 이상 있고, 그 이동의 놓침 비율이
+     * 비교 대상 놓침 비율의 lift배 이상이어야 한다(설계 U14). 같은 이동만 반복되는 채보에서는 무작위 놓침도
+     * 이동 탓처럼 보여서, 비교할 수 없으면 이동으로 보지 않는다
+     */
+    transition: { minRepeat: 2, share: 0.5, rate: 0.5, minContrast: 2, lift: 2.5 },
     /**
      * 늦어지다 놓침: 놓침 묶음 직전 lookback개 유효 타격이 모두 늦고, 마지막이 lateCoef × goodMs 이상,
      * 처음보다 riseCoef × goodMs 이상 늦어졌다. 그런 놓침 묶음의 비율

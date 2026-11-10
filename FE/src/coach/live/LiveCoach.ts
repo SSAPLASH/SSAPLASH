@@ -4,12 +4,15 @@
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import type { PadId } from '@/domain/pads';
 import { missCauses, pickCauseByRule, type CauseCandidate } from './cause';
+import type { CauseModel } from './models/remoteCause';
 import { type CoachBasis, type CoachStage, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { gateFeatures, isGatedTag, type CoachGate, type GateDecision, type GateMode } from './gate/gate';
 import { gateMode, loadedCoachGate, preloadCoachGate } from './gate/loader';
 import { CoachPolicy, type RecoveredFrom } from './policy';
-import { evaluatePraise, evaluateRules, type CoachTarget, type LiveTag } from './rules';
+import { evaluatePraise, evaluateRules, isPraiseTag, type CoachTarget, type LiveTag } from './rules';
 import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
+import type { LlmRecord, LlmTip } from './llmCoach';
+import { SegmentTracker, type FinishedSegment, type InputKind, type LiveTipText, type SegmentChart } from './segment';
 import { JudgedWindow, type JudgedNote } from './window';
 
 export interface LiveCoachOptions {
@@ -27,6 +30,19 @@ export interface LiveCoachOptions {
   gateMode?: GateMode;
   /** 모델 판단을 받는다. 진단 빌드에서 기록에 쓴다 */
   onGate?: (decision: GateDecision) => void;
+  /** 서버 실험 설정으로 배정된 실험군(chooseCoachModel). 거름 판단 기록에 arm으로 남긴다. 없으면 남기지 않는다 */
+  arm?: string | null;
+  /** 놓침 원인 모델(chooseCoachModel). 없으면 규칙 순서로 고른다 */
+  causeModel?: CauseModel | null;
+  /** 원인 모델 실험군. LIVE_ARM에 causeArm으로 남긴다. 없으면 남기지 않는다 */
+  causeArm?: string | null;
+  /**
+   * 연주 중 LLM 구간 코칭(설계 COACH-001 연주 중 LLM 코칭). 주면 마디 구간이 끝날 때마다 onSegment로 구간 사실을 넘긴다.
+   * 네트워크는 부르지 않는다(받는 쪽이 LlmCoach로 요청한다). 없으면 지금과 같다
+   */
+  segments?: { chart: SegmentChart; input: InputKind; onSegment: (seg: FinishedSegment) => void };
+  /** LLM 구간 코칭 실험군. LIVE_ARM에 llmArm으로 남긴다 */
+  llmArm?: string | null;
   /** 곡의 노트 간격 중앙값(ms, chartCoachContext). 없으면 빠른 구간 원인을 계산하지 않는다 */
   noteGapMedianMs?: number | null;
 }
@@ -49,6 +65,8 @@ export interface CoachMessage {
   repeat: number;
   /** LIVE_GOOD_RECOVERED일 때만: 해소된 지적 중 가장 최근에 띄웠던 것(무엇이 고쳐졌는지). 그 외 태그는 null */
   recoveredFrom: RecoveredFrom | null;
+  /** LIVE_LLM일 때만: LLM이 쓴 안내 칸 문구 */
+  llm?: LiveTipText;
   /**
    * 놓침 지적(CAUSE_TAGS)에 고른 원인. 근거가 없으면 UNKNOWN이다.
    * 원인을 말하지 않는 단계(0·1)나 다른 태그는 null이다
@@ -68,8 +86,10 @@ export const LIVE_CAUSE_TAG = 'LIVE_CAUSE';
 interface CauseDecision {
   candidates: CauseCandidate[];
   picked: CauseCandidate;
-  /** 지금은 규칙만 고른다. 원인 모델은 2단계(R1~R5) 뒤에 MODEL로 남긴다 */
-  by: 'RULE';
+  /** 원인 모델이 골랐으면 MODEL, 모델이 없거나 실패하면 RULE */
+  by: 'RULE' | 'MODEL';
+  /** by가 MODEL일 때 모델 이름(이름@버전) */
+  model?: string;
   stage: CoachStage;
 }
 
@@ -111,6 +131,13 @@ function candidateLog(c: CauseCandidate): Record<string, unknown> {
 /** 경향이 사라졌을 때 로그에만 남기는 태그(화면에 띄우지 않는다) */
 export const LIVE_RECOVERED_TAG = 'LIVE_RECOVERED';
 export const LIVE_OFF_TAG = 'LIVE_OFF';
+/** 연주 중 LLM 구간 코칭 결과. 구간마다 한 건 */
+export const LIVE_LLM_TAG = 'LIVE_LLM';
+/** LLM 구간 문구의 표시 시간(ms). 규칙 문구보다 길다(설계 4.3) */
+const LLM_DISPLAY_MS = 4_000;
+
+/** 서버 실험 설정으로 배정된 실험군. 판 시작(시각 0)에 한 건 */
+export const LIVE_ARM_TAG = 'LIVE_ARM';
 /** BE 검증 상한(PlayUploadValidator) */
 const MAX_LOG = 1_000;
 /** 비동기 점수를 기다리는 한도. 넘으면 규칙 판단대로 띄운다 */
@@ -128,6 +155,14 @@ export class LiveCoach {
   private readonly gateOption: CoachGate | null | undefined;
   private readonly mode: GateMode;
   private readonly onGate: ((decision: GateDecision) => void) | undefined;
+  private readonly arm: string | null;
+  private readonly causeModel: CauseModel | null;
+  private readonly causeArm: string | null;
+  private readonly llmArm: string | null;
+  private readonly segments: LiveCoachOptions['segments'] | null;
+  private readonly tracker: SegmentTracker | null;
+  /** 규칙 지적이 떠 있어 기다리는 LLM 문구와 그 만료 시각(곡 시각) */
+  private pendingLlm: { tip: LlmTip; expiresAt: number } | null = null;
   /** 재시작하면 늘어난다. 앞선 판의 늦은 점수를 버리는 데 쓴다 */
   private run = 0;
   private readonly noteGapMedianMs: number | null;
@@ -138,6 +173,13 @@ export class LiveCoach {
     this.gateOption = opts.gate;
     this.mode = opts.gateMode ?? gateMode();
     this.onGate = opts.onGate;
+    this.arm = opts.arm ?? null;
+    this.causeModel = opts.causeModel ?? null;
+    this.causeArm = opts.causeArm ?? null;
+    this.llmArm = opts.llmArm ?? null;
+    this.segments = opts.segments ?? null;
+    // 놓침 판정은 사용자 판정 폭이 지난 뒤 오므로 구간 끝 판단에는 사용자 goodMs를 쓴다
+    this.tracker = this.segments ? new SegmentTracker(this.segments.chart, opts.goodMs, this.segments.input) : null;
     if (opts.gate === undefined) preloadCoachGate();
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     const median = opts.noteGapMedianMs;
@@ -190,10 +232,17 @@ export class LiveCoach {
       );
 
       for (const r of recovered) this.append(note.songTimeMs, LIVE_RECOVERED_TAG, entryText(r.key));
+      this.trackSegments(note);
+      // 칭찬 자리(또는 빈 자리)에는 기다리던 LLM 구간 문구가 먼저다. 규칙 지적은 지금 일어나는 일이라 LLM보다 먼저다
+      if (!show || isPraiseTag(show.tag)) {
+        const llm = this.takePendingLlm(note.songTimeMs);
+        if (llm) return llm;
+      }
       if (!show) return null;
       if (SETUP_TAGS.includes(show.tag)) this.setupShown.add(show.tag);
 
       const cause = this.decideCause(show.tag, show.target);
+      if (!isPraiseTag(show.tag)) this.tracker?.noteRuleCoach(note.songTimeMs, show.tag, cause?.picked.cause ?? null);
       const message: CoachMessage = { tag: show.tag, text: show.text, severity: show.severity, tMs: note.songTimeMs, displayMs: LIVE_COACH_CONFIG.policy.displayMs, target: show.target, repeat, recoveredFrom, cause: cause?.picked ?? null };
       const gate = this.gateOption === undefined ? loadedCoachGate() : this.gateOption;
       if (gate && isGatedTag(show.tag)) return this.applyGate(gate, message, show.key, gateFeatures(metrics, show.tag), cause, onDeferred);
@@ -223,7 +272,17 @@ export class LiveCoach {
       this.append(
         message.tMs,
         tag,
-        JSON.stringify({ tag: message.tag, key, ...extra, threshold: round(gate.threshold, 3), model: gate.model, runtime: gate.runtime, mode: this.mode, ms }),
+        JSON.stringify({
+          tag: message.tag,
+          key,
+          ...extra,
+          threshold: round(gate.threshold, 3),
+          model: gate.model,
+          runtime: gate.runtime,
+          mode: this.mode,
+          ...(this.arm === null ? {} : { arm: this.arm }),
+          ms,
+        }),
       );
     };
     const show = (): CoachMessage => {
@@ -314,6 +373,8 @@ export class LiveCoach {
     this.window.reset();
     this.policy.reset();
     this.setupShown.clear();
+    this.tracker?.reset();
+    this.pendingLlm = null;
     this.run += 1;
     this.resetLog();
   }
@@ -322,11 +383,80 @@ export class LiveCoach {
    * 놓침 지적에 붙일 원인을 고른다. 원인을 말하는 단계(2·3)의 놓침 지적만 계산하고, 그 외는 null.
    * 근거가 없으면 UNKNOWN을 고른다(그래도 기록은 남겨 학습에 쓴다, 설계 4.4)
    */
+  /**
+   * 기한 안에 도착한 LLM 구간 문구(LlmCoach.onTip). 규칙 지적이 떠 있지 않으면 바로 띄울 메시지를 돌려주고,
+   * 떠 있으면 기다렸다가 다음 push의 칭찬 자리에 띄운다. 기다리다 만료되면 LATE로 남긴다. songTimeMs는 지금 곡 시각이다
+   */
+  offerLlmTip(tip: LlmTip, songTimeMs: number): CoachMessage | null {
+    if (!this.enabled || !Number.isFinite(songTimeMs)) return null;
+    try {
+      this.pendingLlm = { tip, expiresAt: songTimeMs + tip.expiresInMs };
+      return this.takePendingLlm(songTimeMs);
+    } catch {
+      return null;
+    }
+  }
+
+  /** LlmCoach가 정한 구간 결과(SHADOW·LATE·FAILED·SKIPPED)를 남긴다 */
+  recordLlm(r: LlmRecord, songTimeMs: number): void {
+    if (!this.enabled) return;
+    this.append(Number.isFinite(songTimeMs) ? songTimeMs : 0, LIVE_LLM_TAG, JSON.stringify(r));
+  }
+
+  private trackSegments(note: JudgedNote): void {
+    if (!this.tracker || !this.segments) return;
+    for (const seg of this.tracker.push(note, coachStage(this.window.total))) {
+      try {
+        this.segments.onSegment(seg);
+      } catch {
+        // 요청 오류로 연주를 막지 않는다
+      }
+    }
+  }
+
+  /** 기다리는 LLM 문구를 지금 띄울 수 있으면 메시지로 만든다. 규칙 지적이 떠 있으면 null, 만료됐으면 LATE */
+  private takePendingLlm(songTimeMs: number): CoachMessage | null {
+    const p = this.pendingLlm;
+    if (!p) return null;
+    if (songTimeMs > p.expiresAt) {
+      this.pendingLlm = null;
+      this.recordLlm({ segment: p.tip.segment, status: 'LATE', latencyMs: p.tip.latencyMs }, songTimeMs);
+      return null;
+    }
+    const last = this.policy.lastCorrectionAt;
+    if (last !== null && songTimeMs - last < LIVE_COACH_CONFIG.policy.displayMs) return null;
+    this.pendingLlm = null;
+    const { title, sub } = p.tip;
+    this.policy.noteExternalShown(songTimeMs);
+    this.tracker?.setLastTip({ title, sub });
+    this.recordLlm({ segment: p.tip.segment, status: 'SHOWN', title, sub, model: p.tip.model, latencyMs: p.tip.latencyMs }, songTimeMs);
+    return {
+      tag: 'LIVE_LLM',
+      text: sub ? `${title} / ${sub}` : title,
+      severity: 0,
+      tMs: songTimeMs,
+      displayMs: LLM_DISPLAY_MS,
+      target: null,
+      repeat: 0,
+      recoveredFrom: null,
+      cause: null,
+      llm: { title, sub },
+    };
+  }
+
   private decideCause(tag: LiveTag, target: CoachTarget | null): CauseDecision | null {
     if (!CAUSE_TAGS.includes(tag)) return null;
     const stage = coachStage(this.window.total);
     if (stage < CAUSE_MIN_STAGE) return null;
     const candidates = this.missCauses(target?.kind === 'pad' ? target.pad : null);
+    // 후보가 있으면 원인 모델이 후보와 UNKNOWN 중에서 고른다. 모델 오류는 규칙으로 대신한다
+    if (this.causeModel && candidates.length > 0) {
+      try {
+        return { candidates, picked: this.causeModel.pick(candidates, stage, tag), by: 'MODEL', model: this.causeModel.model, stage };
+      } catch {
+        // 아래 규칙으로
+      }
+    }
     return { candidates, picked: pickCauseByRule(candidates), by: 'RULE', stage };
   }
 
@@ -337,12 +467,33 @@ export class LiveCoach {
     this.append(
       message.tMs,
       LIVE_CAUSE_TAG,
-      JSON.stringify({ key, candidates: cause.candidates.map(candidateLog), picked: cause.picked.cause, by: cause.by, stage: cause.stage }),
+      JSON.stringify({
+        key,
+        candidates: cause.candidates.map(candidateLog),
+        picked: cause.picked.cause,
+        by: cause.by,
+        ...(cause.model === undefined ? {} : { model: cause.model }),
+        stage: cause.stage,
+      }),
     );
   }
 
   private resetLog(): void {
-    this.log = this.enabled ? [] : [{ tMs: 0, tag: LIVE_OFF_TAG, text: '코칭 꺼짐' }];
+    if (!this.enabled) {
+      this.log = [{ tMs: 0, tag: LIVE_OFF_TAG, text: '코칭 꺼짐' }];
+      return;
+    }
+    // 실험군은 판마다 한 번 남긴다. 규칙만 쓰는 판은 거름 기록이 없어서 이 행으로 구분한다
+    if (this.arm === null && this.causeArm === null && this.llmArm === null) {
+      this.log = [];
+      return;
+    }
+    const arms = {
+      ...(this.arm === null ? {} : { arm: this.arm }),
+      ...(this.causeArm === null ? {} : { causeArm: this.causeArm }),
+      ...(this.llmArm === null ? {} : { llmArm: this.llmArm }),
+    };
+    this.log = [{ tMs: 0, tag: LIVE_ARM_TAG, text: JSON.stringify(arms) }];
   }
 
   private append(tMs: number, tag: string, text: string): void {

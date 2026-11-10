@@ -171,7 +171,7 @@ export function buildPlayLog(args: {
   /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
   missSeqs?: ReadonlyMap<number, number>;
   audioOffsetMs?: number;
-  /** 카운트인 길이(ms). 경과 시간 계산용 */
+  /** 곡 시작 전 리드인 실제 길이(ms, 세션 preRollMs). 경과 시간 계산용 */
   countInMs?: number;
   endedAt?: Date;
   /** 실시간 코칭 기록. 넘기지 않으면 필드를 넣지 않는다 */

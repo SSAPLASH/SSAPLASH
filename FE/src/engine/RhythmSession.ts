@@ -4,6 +4,7 @@ import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
+import { COUNTDOWN_MS } from '@/domain/leadIn';
 import { gridOriginMs } from '@/domain/sheet';
 import { isSensorSource } from '@/domain/events';
 import { hitMatch, type MatchCandidate, type MatchRule } from './hitMatch';
@@ -112,6 +113,14 @@ export class RhythmSession {
     return (60_000 / this.chart.bpm) * this.chart.beatsPerBar * this.opts.countInBars;
   }
 
+  /**
+   * 리드인 전체 길이(ms) = 곡 시작 전 격자 음수 구간. 카운트다운이 켜져 있으면 카운트다운 5초 + 1마디 준비, 꺼져 있으면 0.
+   * 클릭은 마지막 1마디(countInMs, 카운트다운이 끝난 뒤 준비 마디)에만 울린다 (설계 MODE-001-lead-in-bars D12·D17)
+   */
+  get preRollMs(): number {
+    return this.opts.countInBars > 0 ? COUNTDOWN_MS + this.countInMs : 0;
+  }
+
   get beatMs(): number {
     return 60_000 / this.chart.bpm;
   }
@@ -132,7 +141,7 @@ export class RhythmSession {
     return () => this.strayListeners.delete(l);
   }
 
-  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 카운트인은 at + originMs − countInMs부터 시작한다 */
+  /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 리드인은 at + originMs − preRollMs부터 시작한다 */
   start(at: number): void {
     this.startTime = at;
     this.status = this.opts.countInBars > 0 ? 'countin' : 'playing';
@@ -170,9 +179,9 @@ export class RhythmSession {
     return out;
   }
 
-  /** 곡 시각(ms). idle이면 카운트인 시작 시점에 고정(준비 화면에서 노트를 멈춘 채 보여주기), 일시정지 중이면 멈춘 시각 */
+  /** 곡 시각(ms). idle이면 리드인 시작 시점(−preRollMs)에 고정(준비 화면에서 노트를 멈춘 채 보여주기), 일시정지 중이면 멈춘 시각 */
   songTime(now: number = performance.now()): number {
-    if (this.status === 'idle') return -this.countInMs;
+    if (this.status === 'idle') return this.preRollMs > 0 ? -this.preRollMs : 0;
     if (this.status === 'paused') return this.pausedAt - this.startTime;
     return now - this.startTime;
   }

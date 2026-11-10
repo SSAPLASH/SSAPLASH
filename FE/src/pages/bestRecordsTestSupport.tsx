@@ -17,7 +17,7 @@ vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
 // 준비 단계의 비슷한 곡 줄이 실제 네트워크로 나가지 않게 막는다(이 시나리오는 비슷한 곡을 검증하지 않는다)
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
-vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/components/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 vi.mock('@/components/NoteHighway', () => ({ NoteHighway: () => null }));
