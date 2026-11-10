@@ -26,8 +26,11 @@ const RecommendationConsentDialog = lazy(() =>
   import('./shell/RecommendationConsentDialog').then((m) => ({ default: m.RecommendationConsentDialog })),
 );
 
-/** 개발 모니터 빌드(VITE_MONITOR=true)에서만 "모니터 새 창" 버튼을 둔다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
-const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
+/**
+ * 모니터 빌드(VITE_MONITOR=true)의 개발 서버에서만 "모니터 새 창" 버튼을 둔다. 배포 빌드는 모니터를 켜도 일반 사용자에게
+ * 보이지 않게 주소(/monitor/stick?follow=1)로만 연다(설계 PLAY-002 live-play-diagnostics D4). 상수 분기라 그 밖의 빌드에는 코드가 남지 않는다
+ */
+const MONITOR_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MONITOR === 'true';
 
 interface Props {
   /** 로그인 검사 여부(App.tsx가 VITE_AUTH_REQUIRED로 내려준다). 꺼져 있으면 익명일 때 로그인 링크를 보이지 않는다 */
