@@ -4,34 +4,32 @@ import { bannerPlacement, PANEL_PAD, regionFromSizes, STACK_GAP } from './useOve
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
 
 describe('regionFromSizes', () => {
-  it('그림 옆 한쪽 여백이 카드 폭+24 이상이면 카드가 그림 옆에 놓여 겹침 없음(null)', () => {
-    expect(regionFromSizes({ w: 1100 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull();
-    // 경계: 한쪽 여백이 정확히 244(525 + 2×244 = 1013)
-    expect(regionFromSizes({ w: 1013 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull();
-  });
-  it('한쪽 여백이 카드 폭 이상이면 맞닿지 않아 겹침 없음(null)', () => {
-    expect(regionFromSizes({ w: 965 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull(); // 여백 220
-  });
-  it('여백이 모자라면 실제 교차 영역을 그림 정규 좌표로 돌려준다', () => {
-    // 한쪽 여백 100 → 카드가 그림으로 120px 파고든다
-    const r = regionFromSizes({ w: 725 }, { w: 525, h: 328 }, { w: 220, h: 150 });
-    expect(r?.w).toBeCloseTo(120 / 525);
-    expect(r?.h).toBeCloseTo(150 / 328);
+  it('카드가 그림 영역에서 차지하는 비율을 그림 정규 좌표로 돌려준다(항상 겹침)', () => {
+    const r = regionFromSizes({ w: 1000, h: 625 }, { w: 220, h: 150 });
+    expect(r?.w).toBeCloseTo(0.22);
+    expect(r?.h).toBeCloseTo(0.24);
   });
   it('1을 넘지 않는다', () => {
-    expect(regionFromSizes({ w: 200 }, { w: 200, h: 100 }, { w: 220, h: 300 })).toEqual({ w: 1, h: 1 });
+    expect(regionFromSizes({ w: 200, h: 100 }, { w: 220, h: 300 })).toEqual({ w: 1, h: 1 });
   });
   it('크기가 0이면 측정 불가(undefined)', () => {
-    expect(regionFromSizes({ w: 0 }, { w: 0, h: 0 }, { w: 220, h: 100 })).toBeUndefined();
-    expect(regionFromSizes({ w: 500 }, { w: 300, h: 200 }, { w: 0, h: 0 })).toBeUndefined();
+    expect(regionFromSizes({ w: 0, h: 0 }, { w: 220, h: 100 })).toBeUndefined();
+    expect(regionFromSizes({ w: 500, h: 300 }, { w: 0, h: 0 })).toBeUndefined();
   });
-  it('겹침 영역이 있으면 고정 비율보다 일찍 모서리를 바꾼다', () => {
-    const region = regionFromSizes({ w: 600 }, { w: 525, h: 328 }, { w: 220, h: 150 })!;
-    expect(pickOverlayCorner({ SNARE: { x: 0.7, y: 0.85, r: 0.04 } }, region, ['SNARE'])).toBe('left');
+  it('겹침 영역이 있으면 모서리를 판정한다', () => {
+    const region = regionFromSizes({ w: 600, h: 375 }, { w: 220, h: 150 })!;
+    expect(pickOverlayCorner({ SNARE: { x: 0.8, y: 0.85, r: 0.04 } }, region, ['SNARE'])).toBe('left');
   });
-  it('겹침 없음(null)이면 항상 right', () => {
+  it('카드가 없으면(null) 항상 right', () => {
     expect(pickOverlayCorner({ SNARE: { x: 0.95, y: 0.95, r: 0.1 } }, null, ['SNARE'])).toBe('right');
     expect(pickOverlayCorner(DEFAULT_KIT_LAYOUT, { w: 0, h: 0 }, [])).toBe('right');
+  });
+  it('넓은 판은 반지름이 높이×1.6 기준이라 같은 정규 r이 덜 가린다', () => {
+    // 오른쪽 모서리 영역 x 0.7~1, y 0.7~1. 패드 (0.6, 0.85, r 0.12): 16:10이면 가림(0.1×16=1.6 < 1.92), 3:1 판이면 S=H×1.6이라 안 가림
+    const layout = { A: { x: 0.6, y: 0.85, r: 0.12 } };
+    const region = { w: 0.3, h: 0.3 };
+    expect(pickOverlayCorner(layout, region, ['A'])).toBe('left');
+    expect(pickOverlayCorner(layout, region, ['A'], { w: 3000, h: 1000 })).toBe('right');
   });
 });
 
