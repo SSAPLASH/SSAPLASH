@@ -60,6 +60,7 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             disabled={o.disabled}
+            data-value={o.value}
             className={selected ? 'ui-seg-item selected' : 'ui-seg-item'}
             onClick={() => onChange(o.value)}
           >
