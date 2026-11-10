@@ -48,7 +48,7 @@ function SheetGuide() {
           <GuideNowLine state={state} />
         </div>
       </div>
-      <StaffLegend layout="grid" activePads={activePads} onHoverPad={setHoverPad} />
+      <StaffLegend activePads={activePads} onHoverPad={setHoverPad} />
     </section>
   );
 }
