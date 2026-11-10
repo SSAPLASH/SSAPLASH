@@ -4,6 +4,7 @@
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import type { PadId } from '@/domain/pads';
 import { missCauses, pickCauseByRule, type CauseCandidate } from './cause';
+import type { CauseModel } from './models/remoteCause';
 import { type CoachBasis, type CoachStage, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { gateFeatures, isGatedTag, type CoachGate, type GateDecision, type GateMode } from './gate/gate';
 import { gateMode, loadedCoachGate, preloadCoachGate } from './gate/loader';
@@ -29,6 +30,10 @@ export interface LiveCoachOptions {
   onGate?: (decision: GateDecision) => void;
   /** 서버 실험 설정으로 배정된 실험군(chooseCoachModel). 거름 판단 기록에 arm으로 남긴다. 없으면 남기지 않는다 */
   arm?: string | null;
+  /** 놓침 원인 모델(chooseCoachModel). 없으면 규칙 순서로 고른다 */
+  causeModel?: CauseModel | null;
+  /** 원인 모델 실험군. LIVE_ARM에 causeArm으로 남긴다. 없으면 남기지 않는다 */
+  causeArm?: string | null;
   /** 곡의 노트 간격 중앙값(ms, chartCoachContext). 없으면 빠른 구간 원인을 계산하지 않는다 */
   noteGapMedianMs?: number | null;
 }
@@ -70,8 +75,10 @@ export const LIVE_CAUSE_TAG = 'LIVE_CAUSE';
 interface CauseDecision {
   candidates: CauseCandidate[];
   picked: CauseCandidate;
-  /** 지금은 규칙만 고른다. 원인 모델은 2단계(R1~R5) 뒤에 MODEL로 남긴다 */
-  by: 'RULE';
+  /** 원인 모델이 골랐으면 MODEL, 모델이 없거나 실패하면 RULE */
+  by: 'RULE' | 'MODEL';
+  /** by가 MODEL일 때 모델 이름(이름@버전) */
+  model?: string;
   stage: CoachStage;
 }
 
@@ -133,6 +140,8 @@ export class LiveCoach {
   private readonly mode: GateMode;
   private readonly onGate: ((decision: GateDecision) => void) | undefined;
   private readonly arm: string | null;
+  private readonly causeModel: CauseModel | null;
+  private readonly causeArm: string | null;
   /** 재시작하면 늘어난다. 앞선 판의 늦은 점수를 버리는 데 쓴다 */
   private run = 0;
   private readonly noteGapMedianMs: number | null;
@@ -144,6 +153,8 @@ export class LiveCoach {
     this.mode = opts.gateMode ?? gateMode();
     this.onGate = opts.onGate;
     this.arm = opts.arm ?? null;
+    this.causeModel = opts.causeModel ?? null;
+    this.causeArm = opts.causeArm ?? null;
     if (opts.gate === undefined) preloadCoachGate();
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     const median = opts.noteGapMedianMs;
@@ -343,6 +354,14 @@ export class LiveCoach {
     const stage = coachStage(this.window.total);
     if (stage < CAUSE_MIN_STAGE) return null;
     const candidates = this.missCauses(target?.kind === 'pad' ? target.pad : null);
+    // 후보가 있으면 원인 모델이 후보와 UNKNOWN 중에서 고른다. 모델 오류는 규칙으로 대신한다
+    if (this.causeModel && candidates.length > 0) {
+      try {
+        return { candidates, picked: this.causeModel.pick(candidates, stage, tag), by: 'MODEL', model: this.causeModel.model, stage };
+      } catch {
+        // 아래 규칙으로
+      }
+    }
     return { candidates, picked: pickCauseByRule(candidates), by: 'RULE', stage };
   }
 
@@ -353,7 +372,14 @@ export class LiveCoach {
     this.append(
       message.tMs,
       LIVE_CAUSE_TAG,
-      JSON.stringify({ key, candidates: cause.candidates.map(candidateLog), picked: cause.picked.cause, by: cause.by, stage: cause.stage }),
+      JSON.stringify({
+        key,
+        candidates: cause.candidates.map(candidateLog),
+        picked: cause.picked.cause,
+        by: cause.by,
+        ...(cause.model === undefined ? {} : { model: cause.model }),
+        stage: cause.stage,
+      }),
     );
   }
 
@@ -363,7 +389,12 @@ export class LiveCoach {
       return;
     }
     // 실험군은 판마다 한 번 남긴다. 규칙만 쓰는 판은 거름 기록이 없어서 이 행으로 구분한다
-    this.log = this.arm === null ? [] : [{ tMs: 0, tag: LIVE_ARM_TAG, text: JSON.stringify({ arm: this.arm }) }];
+    if (this.arm === null && this.causeArm === null) {
+      this.log = [];
+      return;
+    }
+    const arms = { ...(this.arm === null ? {} : { arm: this.arm }), ...(this.causeArm === null ? {} : { causeArm: this.causeArm }) };
+    this.log = [{ tMs: 0, tag: LIVE_ARM_TAG, text: JSON.stringify(arms) }];
   }
 
   private append(tMs: number, tag: string, text: string): void {

@@ -41,7 +41,7 @@ const STAGE_CAUSES: Record<CoachStage, readonly MissCause[]> = {
 };
 
 /** 모델이 없을 때 고르는 순서. 구체적으로 고칠 수 있는 원인을 먼저 */
-const RULE_ORDER: readonly MissCause[] = ['WRONG_PAD', 'TRANSITION', 'DENSE', 'DRIFT_LATE'];
+export const RULE_ORDER: readonly MissCause[] = ['WRONG_PAD', 'TRANSITION', 'DENSE', 'DRIFT_LATE'];
 
 export const UNKNOWN_CAUSE: CauseCandidate = { cause: 'UNKNOWN', strength: 0, pad: null };
 
