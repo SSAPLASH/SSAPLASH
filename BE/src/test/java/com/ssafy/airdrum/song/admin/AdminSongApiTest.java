@@ -170,7 +170,7 @@ class AdminSongApiTest {
 		assertThat(song.path("charts")).hasSize(3).allSatisfy(c -> {
 			assertThat(c.path("version").asInt()).isEqualTo(1);
 			assertThat(c.path("generator").asString()).isEqualTo("MIDI_RULE");
-			assertThat(c.path("generatorVersion").asString()).isEqualTo("midi-rule-1.1");
+			assertThat(c.path("generatorVersion").asString()).isEqualTo("midi-rule-2.0");
 			assertThat(c.path("notationStatus").asString()).isEqualTo("PENDING");
 		});
 		var row = db.queryForMap("SELECT owner_id,source,status,published FROM songs WHERE id=?", id);

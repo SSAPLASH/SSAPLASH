@@ -195,7 +195,7 @@ class MusicXmlUploadApiTest {
 		assertThat(((Number) hard.get("note_count")).intValue()).isEqualTo(6);
 		assertThat((String) hard.get("notes")).contains("\"hihatOpen\": true").contains("n0006");
 		var normal = versions.stream().filter(v -> v.get("difficulty").equals("NORMAL")).findFirst().orElseThrow();
-		assertThat(normal.get("generator_version")).isEqualTo("sheet-musicxml-3+midi-rule-1.1");
+		assertThat(normal.get("generator_version")).isEqualTo("sheet-musicxml-3+midi-rule-2.0");
 		assertThat(((Number) normal.get("note_count")).intValue()).isLessThan(6);
 		var easy = versions.stream().filter(v -> v.get("difficulty").equals("EASY")).findFirst().orElseThrow();
 		assertThat(((Number) easy.get("note_count")).intValue()).isLessThanOrEqualTo(((Number) normal.get("note_count")).intValue());

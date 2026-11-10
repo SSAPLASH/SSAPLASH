@@ -55,23 +55,23 @@ class TranscriptionChartsTest {
 		assertThat(ids(data.easyNotes())).containsExactly("n1", "n2", "n6");
 		assertThat(data.normalCount()).isEqualTo(4);
 		assertThat(data.easyCount()).isEqualTo(3);
-		assertThat(TranscriptionCharts.derivedVersion("sheet-musicxml-3")).isEqualTo("sheet-musicxml-3+midi-rule-1.1");
+		assertThat(TranscriptionCharts.derivedVersion("sheet-musicxml-3")).isEqualTo("sheet-musicxml-3+midi-rule-2.0");
 		assertThat(data.metrics()).contains("convertMs");
 	}
 
 	@Test
 	void 빠르기_구간이_있는_음원_채보는_구간_빠르기로_솎는다() {
-		// CHART-003-variable-tempo-exp: AI가 찾은 박으로 낸 tempoMap. 120bpm 8박(0~4000ms) 뒤 60bpm
-		// 60bpm 구간의 4분 = 1000ms, 8분 = 500ms. 고정 120bpm으로 셌다면 4500ms도 4분 박이 된다
+		// CHART-003-variable-tempo-exp: AI가 찾은 박으로 낸 tempoMap. 120bpm 8박(0~4000ms) 뒤 90bpm
+		// 90bpm 구간의 EASY 박은 8분(333ms)이라 4333ms가 박 위다. 고정 120bpm으로 셌다면 4333ms는 4분 박 밖이라 빠진다(328번 midi-rule-2.0)
 		var notes = List.of(note("n1", 0, "KICK"), note("n2", 500, "KICK"), note("n3", 4000, "KICK"),
-				note("n4", 4500, "KICK"), note("n5", 5000, "KICK"));
+				note("n4", 4333, "KICK"), note("n5", 5000, "KICK"));
 		JsonNode doc = json.valueToTree(Map.of("schemaVersion", 1, "generator", "ADT_MODEL", "generatorVersion", "adtof_drumsep@abc",
 				"metrics", Map.of("transcribeMs", 3), "charts", List.of(Map.of("difficulty", "NORMAL", "notationStatus", "UNAVAILABLE",
 						"notes", notes, "timing", Map.of("bpm", 120.0, "offsetMs", 0, "timeSignature", "4/4", "ppq", 480,
-								"tempoMap", List.of(Map.of("tick", 0, "bpm", 120.0), Map.of("tick", 8 * 480, "bpm", 60.0)),
+								"tempoMap", List.of(Map.of("tick", 0, "bpm", 120.0), Map.of("tick", 8 * 480, "bpm", 90.0)),
 								"timeSignatureMap", List.of(Map.of("tick", 0, "numerator", 4, "denominator", 4)))))));
 		var data = charts.parse(doc, 6000);
-		assertThat(ids(data.easyNotes())).containsExactly("n1", "n2", "n3", "n5");
+		assertThat(ids(data.easyNotes())).containsExactly("n1", "n2", "n3", "n4", "n5");
 		assertThat(data.timing()).contains("\"tempoMap\"");
 	}
 
