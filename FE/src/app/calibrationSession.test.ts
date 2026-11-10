@@ -437,6 +437,7 @@ describe('패드 단위 재보정(T9)', () => {
   });
 
   it('패드 단위 재보정은 적용 프리셋의 다른 패드 앵커를 base로 넘겨 간격 경고한다. 전체 보정은 비교 대상이 없다', () => {
+    vi.useFakeTimers();
     useSettings.setState({
       stickAnchors: [
         { SNARE: anchor('SNARE', 0, 0), HIHAT: anchor('HIHAT', 0, 100) },
@@ -446,9 +447,13 @@ describe('패드 단위 재보정(T9)', () => {
     calibrationSession.startCapture({ pads: ['HIHAT'] });
     twice(0, 0, 10); // 왼손 스네어(0°)와 10°
     twice(1, 0, 100); // 오른손은 멀다
-    expect(cap()?.phase).toBe('padDone');
-    expect(cap()?.advancing).toBe(false);
+    // 경고가 있어도 멈추지 않는다(v0.2): 자동 진행 대기 → 마지막 패드라 done, 경고는 남는다. base(세션 밖 앵커)도 스냅샷에 실린다
+    expect(cap()).toMatchObject({ phase: 'padDone', advancing: true });
+    expect(cap()?.base[0]?.SNARE).toBeDefined();
     expect(cap()?.gapWarnings).toEqual([expect.objectContaining({ stickId: 0, pad: 'HIHAT', near: 'SNARE' })]);
+    vi.advanceTimersByTime(400);
+    expect(cap()?.phase).toBe('done');
+    expect(cap()?.gapWarnings).toHaveLength(1);
     calibrationSession.cancelCapture();
 
     // 전체 보정(pads 없음)은 base 없이 시작: 같은 자리를 쳐도 첫 패드는 경고 없음
