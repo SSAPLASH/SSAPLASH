@@ -1,7 +1,12 @@
-/* 타이밍 오차 막대(막대 240 + 좌우 범위 밖 점 자리 12씩 = 264×14). 위치는 놓는 쪽(하이웨이·악보 래퍼)이 정한다 */
-.timing-bar {
+/* 타이밍 오차 막대(막대 240 + 좌우 MISS 구간 36씩 = 312×14 기본 크기의 2배 표시).
+   하이웨이의 `.play-highway canvas { width:100% }`보다 특이도를 높여 두 모드가 같은 크기가 되게 한다.
+   위치는 놓는 쪽(하이웨이·악보 래퍼)이 정한다 */
+.timing-bar,
+.play-highway canvas.timing-bar {
   display: block;
-  width: 264px;
-  height: 14px;
+  width: 624px; /* TIMING_BAR_CANVAS_W(312) × TIMING_BAR_SCALE(2) */
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 624 / 28; /* 높이 14 × 2 */
   pointer-events: none;
 }
