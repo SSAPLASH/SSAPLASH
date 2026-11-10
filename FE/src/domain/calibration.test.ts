@@ -8,6 +8,7 @@ import {
   createEmptyProfile,
   withRadiusOverride,
   meanPose,
+  padGaps,
   pairSpread,
   poseDistance,
   poseToVec,
@@ -171,6 +172,29 @@ describe('computeBoundaries', () => {
     expect(out.SNARE?.radius).toBe(30);
     expect(out.HIHAT?.radius).toBe(35);
     expect(out.SNARE?.radiusOverride).toBe(30);
+  });
+});
+
+describe('padGaps', () => {
+  const a = (pad: PadId, pitch: number, yaw: number) => ({ pad, pitch, yaw, radius: 18, samples: 2, spread: 1 });
+
+  it('기준 미만 쌍만 쌍마다 1번, 가까운 순으로 돌려준다', () => {
+    const set = { HIHAT: a('HIHAT', 0, 0), CRASH: a('CRASH', 0, 10), SNARE: a('SNARE', 0, 18), RIDE: a('RIDE', 0, 90) };
+    const gaps = padGaps(set, 20);
+    expect(gaps.map((g) => [g.a, g.b])).toEqual([
+      ['CRASH', 'SNARE'],
+      ['HIHAT', 'CRASH'],
+      ['HIHAT', 'SNARE'],
+    ]);
+    expect(gaps[0].deg).toBeCloseTo(8, 5);
+    expect(gaps[1].deg).toBeCloseTo(10, 5);
+  });
+
+  it('정확히 기준이면 포함하지 않고, 패드가 1개 이하·기준 아래 쌍이 없으면 빈 목록', () => {
+    const [p, q] = [a('HIHAT', 0, 0), a('CRASH', 0, 20)];
+    expect(padGaps({ HIHAT: p, CRASH: q }, angleBetween(p, q))).toEqual([]);
+    expect(padGaps({ HIHAT: a('HIHAT', 0, 0) }, 20)).toEqual([]);
+    expect(padGaps({}, 20)).toEqual([]);
   });
 });
 
