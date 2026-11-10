@@ -35,3 +35,17 @@ export function songListQuery(p: SongListParams, source: 'api' | 'builtin') {
     },
   });
 }
+
+/** 라이브러리(/studio) 내 곡 목록. 처리 중·실패 곡도 보여야 하므로 playableOnly를 켜지 않는다 (설계 TECH-351) */
+export function mineSongsQuery(source: 'api' | 'builtin') {
+  return songListQuery({ scope: 'MINE' }, source);
+}
+
+/** 다시 읽은 곡 상세의 상태 필드(status·반주·곡 난이도)만 목록 행에 옮긴다. 나머지(difficulties 등 목록 전용 값)는 그대로 둔다 */
+export function patchSongStatus(list: SongSummary[], song: SongSummary): SongSummary[] {
+  return list.map((s) =>
+    s.id === song.id
+      ? { ...s, status: song.status, hasAccompaniment: song.hasAccompaniment, accompanimentStatus: song.accompanimentStatus, songLevel: song.songLevel }
+      : s,
+  );
+}

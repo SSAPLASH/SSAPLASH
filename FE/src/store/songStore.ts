@@ -1,25 +1,15 @@
-// 곡 목록·상세·채보 로드 (설계 2·4-1). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
+// 곡 상세·채보 로드와 곡 소스 (설계 2·4-1). 곡 목록은 서버 데이터 캐시(api/queries/songs)가 읽는다(설계 TECH-351). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
 // 내장 소스의 id 규칙: 곡·채보 id 모두 -(BUILTIN_CHARTS 인덱스 + 1). chartVersionId는 null.
 import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
-import { getSong, listAllSongs } from '@/api/songs';
-import { queryClient } from '@/app/queryClient';
-import { songKeys } from '@/api/queries/songs';
-import { builtinSummary, listBuiltinSongs } from '@/domain/builtinSongs';
+import { getSong } from '@/api/songs';
+import { builtinSummary } from '@/domain/builtinSongs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
-import type { SongDetail, SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
+import type { SongDetail, SongScope } from '@/domain/songCatalog';
 
 export type SongsSource = 'api' | 'builtin';
-export type SongsStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-/** 목록 조건(설계 CHART-001 곡 난이도 3-3). 생략하면 전체·필터 없음 */
-export interface SongListFilter {
-  songLevel?: SongLevel;
-  /** 곡 선택·추천만 켠다. 내 곡(/studio)은 켜지 않는다 */
-  playableOnly?: boolean;
-}
 
 export const SONGS_SOURCE: SongsSource = import.meta.env.VITE_SONGS_SOURCE === 'builtin' ? 'builtin' : 'api';
 
@@ -50,66 +40,15 @@ function messageOf(e: unknown): string {
 
 interface SongsState {
   source: SongsSource;
+  /** 곡 선택 창이 마지막으로 연 목록 탭. 다음 진입의 기본 탭이 된다(설계 TECH-350 U4). 목록 자체는 서버 데이터 캐시(api/queries/songs)가 갖는다 */
   scope: SongScope;
-  items: SongSummary[];
-  status: SongsStatus;
-  error: string | null;
-
-  /** 목록을 읽는다. 늦게 도착한 이전 요청 결과는 버린다 */
-  load: (scope: SongScope, q?: string, filter?: SongListFilter) => Promise<void>;
   /** 곡 상세(난이도별 채보 요약 포함) */
   selectSong: (id: number) => Promise<SongDetail>;
-  /**
-   * 목록의 같은 id 곡에 다시 읽은 상세의 상태 필드(status·hasAccompaniment·accompanimentStatus·songLevel)만 반영한다(설계 CHART-002 반주 상태 3-3).
-   * 채보가 끝나면 곡 난이도가 생기므로 songLevel도 함께 옮긴다(설계 CHART-001 곡 난이도 3-3).
-   * 상세 응답에는 difficulties 등 목록 전용 값이 비어 올 수 있어 나머지는 그대로 둔다. 로딩 상태는 바꾸지 않는다
-   */
-  patchItem: (song: SongSummary) => void;
 }
 
-let seq = 0;
-
-/** 다시 읽은 상세의 상태 필드만 옮긴다 */
-function patchStatus(s: SongSummary, song: SongSummary): SongSummary {
-  return {
-    ...s,
-    status: song.status,
-    hasAccompaniment: song.hasAccompaniment,
-    accompanimentStatus: song.accompanimentStatus,
-    songLevel: song.songLevel,
-  };
-}
-
-export const useSongs = create<SongsState>()((set, get) => ({
+export const useSongs = create<SongsState>()((_set, get) => ({
   source: SONGS_SOURCE,
   scope: 'BUILTIN',
-  items: [],
-  status: 'idle',
-  error: null,
-
-  load: async (scope, q, filter) => {
-    const my = ++seq;
-    set({ scope, status: 'loading', error: null });
-    try {
-      let items: SongSummary[];
-      if (get().source === 'builtin') {
-        items = listBuiltinSongs(scope, q, filter?.songLevel);
-      } else {
-        // 표가 전체 배열을 쪽으로 나누므로 hasNext가 끝날 때까지 모두 읽는다(Jira 363)
-        items = await listAllSongs(
-          { source: scope, q, songLevel: filter?.songLevel, playableOnly: filter?.playableOnly },
-          { isStale: () => my !== seq },
-        );
-      }
-      if (my !== seq) return;
-      set({ items, status: 'ready' });
-      // 내 곡을 다시 읽었다 = /studio에서 업로드·삭제·수정이 있었다. 곡 선택 화면의 목록 캐시도 새로 받게 한다(설계 TECH-350 U1)
-      if (scope === 'MINE') void queryClient.invalidateQueries({ queryKey: songKeys.all });
-    } catch (e) {
-      if (my !== seq) return;
-      set({ items: [], status: 'error', error: messageOf(e) });
-    }
-  },
 
   selectSong: async (id) => {
     if (get().source === 'builtin') {
@@ -118,13 +57,6 @@ export const useSongs = create<SongsState>()((set, get) => ({
       return d;
     }
     return getSong(id);
-  },
-
-  patchItem: (song) => {
-    const patch = (list: SongSummary[]): SongSummary[] => list.map((s) => (s.id === song.id ? patchStatus(s, song) : s));
-    set((st) => ({ items: patch(st.items) }));
-    // 곡 선택 화면의 목록 캐시도 같은 곡 상태를 맞춘다(설계 TECH-350 U3)
-    queryClient.setQueriesData<SongSummary[]>({ queryKey: songKeys.lists() }, (old) => (old ? patch(old) : old));
   },
 }));
 
