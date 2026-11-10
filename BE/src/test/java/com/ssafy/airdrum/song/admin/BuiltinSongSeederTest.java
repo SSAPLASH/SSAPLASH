@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.ssafy.airdrum.lesson.LessonKind;
+import com.ssafy.airdrum.lesson.LessonSpec;
 import com.ssafy.airdrum.song.admin.BuiltinSongSeeder.Outcome;
 import com.ssafy.airdrum.song.meta.SongMetadata;
 import com.ssafy.airdrum.song.meta.SongMetadataRepository;
@@ -237,6 +239,74 @@ class BuiltinSongSeederTest {
 			assertThat(db.queryForObject("SELECT count(*) FROM charts c JOIN chart_versions v ON v.chart_id=c.id WHERE c.song_id=? AND v.note_count>0",
 					Integer.class, id)).as(entry.title()).isEqualTo(3);
 			assertThat(entry.license()).isNotBlank();
+		}
+	}
+
+	/** 331번 설계 3-2절: lessons는 카탈로그가 유일한 출처라 시작할 때마다 카탈로그 내용으로 바뀐다. */
+	private List<Map<String, Object>> lessons() {
+		return db.queryForList("SELECT s.title, l.position, l.kind, l.summary, l.pads::text AS pads, l.guide FROM lessons l JOIN songs s ON s.id=l.song_id "
+				+ "WHERE s.title LIKE ? ORDER BY l.position", prefix + "%");
+	}
+
+	BuiltinSongCatalog.Entry lesson(String title, LessonSpec spec) throws IOException {
+		return new BuiltinSongCatalog.Entry(prefix + title, null, "자작 (테스트)", true, midi("/builtin-songs-test/midi/test-8beat.mid"), 0, null, spec);
+	}
+
+	@Test
+	void 카탈로그의_lesson이_lessons에_들어가고_고치거나_빼면_반영된다() throws Exception {
+		var a = lesson("레슨 A", new LessonSpec(1, LessonKind.READ, "킥 음표", List.of("KICK"), false));
+		var b = lesson("레슨 B", new LessonSpec(2, LessonKind.PLAY, "킥과 스네어", List.of("KICK", "SNARE"), true));
+		var plain = entry("곡", midi("/builtin-songs-test/midi/test-8beat.mid"));
+		assertThat(seeder.seed(List.of(a, b, plain))).containsValues(Outcome.REGISTERED);
+		assertThat(lessons()).hasSize(2);
+		assertThat(lessons().get(0)).containsEntry("title", a.title()).containsEntry("position", 1).containsEntry("kind", "READ")
+				.containsEntry("summary", "킥 음표").containsEntry("pads", "[\"KICK\"]").containsEntry("guide", false);
+		assertThat(lessons().get(1)).containsEntry("title", b.title()).containsEntry("position", 2).containsEntry("kind", "PLAY")
+				.containsEntry("pads", "[\"KICK\", \"SNARE\"]").containsEntry("guide", true);
+
+		// 순서를 바꾸고 설명을 고치면 다음 시작에 반영된다(곡은 건너뛴다)
+		var a2 = lesson("레슨 A", new LessonSpec(2, LessonKind.READ, "킥 음표 다시", List.of("KICK"), true));
+		var b2 = lesson("레슨 B", new LessonSpec(1, LessonKind.PLAY, "킥과 스네어", List.of("KICK", "SNARE"), true));
+		assertThat(seeder.seed(List.of(a2, b2, plain))).containsValues(Outcome.SKIPPED);
+		assertThat(lessons()).extracting(m -> m.get("title")).containsExactly(b.title(), a.title());
+		assertThat(lessons().get(1)).containsEntry("summary", "킥 음표 다시").containsEntry("guide", true);
+
+		// lesson을 빼면 레슨에서 빠지고 곡은 그대로 남는다
+		var a3 = new BuiltinSongCatalog.Entry(a.title(), null, "자작 (테스트)", true, a.midi(), 0, null);
+		seeder.seed(List.of(a3, lesson("레슨 B", new LessonSpec(1, LessonKind.PLAY, "킥과 스네어", List.of("KICK", "SNARE"), true)), plain));
+		assertThat(lessons()).extracting(m -> m.get("title")).containsExactly(b.title());
+		assertThat(db.queryForObject("SELECT count(*) FROM songs WHERE title=? AND deleted_at IS NULL", Integer.class, a.title())).isEqualTo(1);
+	}
+
+	@Test
+	void 이미_있는_레슨_곡은_이번_처리가_실패해도_레슨에_남는다() throws Exception {
+		// 검증 추가 발견 2: 실패한 레슨 곡이 레슨에서 빠지면 일반 공용 곡으로 목록·추천에 나온다
+		var a = lesson("레슨 A", new LessonSpec(1, LessonKind.PLAY, "킥", List.of("KICK"), true));
+		seeder.seed(List.of(a));
+		long id = ((Number) song("레슨 A").get("id")).longValue();
+		// 난이도를 하나만 남겨 다음 처리가 채우기(재변환)로 가게 하고, 깨진 MIDI로 실패시킨다
+		db.update("UPDATE songs SET song_level=NULL,level_chart_version_id=NULL,level_rule_version=NULL,level_duration_ms=NULL WHERE id=?", id);
+		db.update("DELETE FROM chart_versions WHERE chart_id IN (SELECT id FROM charts WHERE song_id=? AND difficulty<>'NORMAL')", id);
+		db.update("DELETE FROM charts WHERE song_id=? AND difficulty<>'NORMAL'", id);
+		var broken = new BuiltinSongCatalog.Entry(a.title(), null, "자작 (테스트)", true, new byte[] {1, 2, 3}, 0, null, a.lesson());
+		assertThat(seeder.seed(List.of(broken))).containsEntry(a.title(), Outcome.FAILED);
+		assertThat(lessons()).extracting(m -> m.get("title")).containsExactly(a.title());
+	}
+
+	@Test
+	void 저장소_카탈로그의_레슨은_순서가_이어지고_NORMAL이_원본과_같다() {
+		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/").stream().filter(e -> e.lesson() != null).toList();
+		assertThat(entries).extracting(e -> e.lesson().order()).containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+		// 알아보기 4개(1~4) 뒤에 연주 8개(5~12). 「섞어서 읽기」(4)만 처음부터 알려 주지 않는다
+		assertThat(entries).allSatisfy(e -> assertThat(e.lesson().kind()).isEqualTo(e.lesson().order() <= 4 ? LessonKind.READ : LessonKind.PLAY));
+		assertThat(entries).filteredOn(e -> !e.lesson().guide()).extracting(e -> e.lesson().order()).containsExactly(4);
+		for (var entry : entries) {
+			// 레슨 채보는 NORMAL이다(설계 1절). 솎기로 노트가 빠지면 레슨 내용이 바뀐다.
+			var renamed = new BuiltinSongCatalog.Entry(prefix + entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi(), entry.offsetMs(), entry.meta());
+			assertThat(seeder.seed(List.of(renamed))).as(entry.title()).containsEntry(renamed.title(), Outcome.REGISTERED);
+			var counts = db.queryForMap("SELECT max(v.note_count) FILTER (WHERE c.difficulty='HARD') AS hard, max(v.note_count) FILTER (WHERE c.difficulty='NORMAL') AS normal "
+					+ "FROM charts c JOIN chart_versions v ON v.chart_id=c.id JOIN songs s ON s.id=c.song_id WHERE s.title=?", renamed.title());
+			assertThat(counts.get("normal")).as(entry.title()).isNotNull().isEqualTo(counts.get("hard"));
 		}
 	}
 }
