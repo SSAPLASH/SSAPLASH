@@ -20,9 +20,9 @@ async function renderSetup(): Promise<string> {
 }
 
 describe('SetupPage 고급 설정', () => {
-  it('접힘 요약에 판정·낙하·카운트인·메트로놈만 있고 음량·오디오 오프셋은 없다', async () => {
+  it('접힘 요약에 판정·낙하·시작 전 마디·메트로놈만 있고 음량·오디오 오프셋은 없다', async () => {
     const html = await renderSetup();
-    expect(html).toContain('판정 반경 · 판정 폭 · 노트 낙하 · 카운트인 · 메트로놈');
+    expect(html).toContain('판정 반경 · 판정 폭 · 노트 낙하 · 시작 전 마디 · 메트로놈');
     expect(html).not.toContain('전체 음량');
     expect(html).not.toContain('타격음 지연 보정');
     expect(html).not.toContain('오디오 오프셋');
