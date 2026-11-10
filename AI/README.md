@@ -442,6 +442,32 @@ MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ss
 
 **합성 성능은 실제 성능이 아니다.** 합성 연주는 판 내내 오차 분포가 같고 실제 사람은 곡 중간에 변한다. 켜기 전에 그림자 평가로 확인한다.
 
+### 놓침 원인 모델 (COACH-001)
+
+놓침 지적에 원인 후보가 여럿 걸렸을 때 규칙 순서(다른 패드 → 패드 이동 → 빠른 구간 → 늦어짐) 대신 무엇을 고를지 학습한 작은 모델이다. 규칙이 낸 후보와 `UNKNOWN`(근거 없음) 중에서만 고르고, 없는 원인을 만들지 않는다.
+
+```bash
+uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause
+MLFLOW_TRACKING_URI=http://localhost:5000 uv run --extra coach-live python -m ssaplash_ai.coach_live_model.cause_model --out runs/coach-cause --register
+```
+
+- 데이터: 원인 합성 시나리오(`build_cause_rows`). 입력은 원인별 후보 강도, 3단계 여부, 패드 놓침 여부(`cause_features`, `CAUSE_FEATURE_VERSION`=1). 라벨은 심은 원인.
+- 로지스틱 회귀와 MLP16을 판 단위 5겹 교차 검증으로 규칙 순서와 비교하고, 정확도가 같으면 로지스틱을 고른다. 모델이 규칙보다 낫지 않으면 경고를 출력한다.
+- 산출물: `coachCause.json`(표준화 값과 층 `layers[{w,b,act}]`, softmax), `meta.json`(`task: cause`, `classes`), `report.json`. `--register`는 실험 `coach-live-cause`, 모델 이름 `coach-cause-<구조>`로 등록한다. `--fixture`는 FE 계산 비교용 표본을 쓴다(FE `coach/live/models/cause.parity.fixture.json`).
+- 서비스에서 쓰려면 게시한 뒤 실험 설정의 `cause.arms`에 넣는다.
+
+합성 결과(시나리오당 강도 3 × 20판, 원인을 고른 놓침 지적 1,542건, 후보가 겹친 지적 64건):
+
+| | 정확도 | 후보가 겹친 지적 | 대조군에서 UNKNOWN |
+| --- | --- | --- | --- |
+| 규칙 순서 | 94.8% | 92.2% | 90.3% |
+| 로지스틱 | 95.1% | 98.4% | 93.5% |
+| MLP16 | 95.1% | 98.4% | 93.5% |
+
+- 개선은 후보가 겹친 지적과 대조군에서 나온다. 전체 차이가 작은 건 겹친 지적이 4%뿐이어서다.
+- 남은 오류(늦어짐 약 8%, 패드 이동 약 10%)는 규칙이 후보를 내지 못한 지적이라 이 모델로는 고칠 수 없다. 규칙 문턱을 운영 기록으로 고쳐야 한다.
+- 합성 데이터의 원인은 한 판에 하나씩 심었다. 실제 사람은 여러 원인이 섞이므로 운영 `LIVE_CAUSE`로 다시 학습한다.
+
 ## 벤치마크 실행
 
 모델 yaml 여러 개와 데이터셋 yaml 하나를 받아 모델 × 곡을 전부 돌린다. 곡마다 결과 행을 CSV에 바로 쓰므로 중간에 끊겨도 그때까지의 결과가 남는다. 끝나면 같은 폴더에 보고서를 만들고 MLflow에 run 하나를 남긴다.
