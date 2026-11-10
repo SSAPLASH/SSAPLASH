@@ -91,7 +91,9 @@ public class TranscriptionCharts {
             var drum=new DrumNote(tick,DrumPad.valueOf(note.path("pad").asString()),velocity,0);
             drumNotes.add(drum); originals.put(drum,note);
         }
-        var thinned=DifficultyThinner.thin(drumNotes,ppq);
+        // 솎기 템포는 tick을 만든 기준과 같아야 한다: notation tick이면 timing.tempoMap, 가상 tick이면 VirtualTicks가 쓴 구간(328번)
+        var tempos=useTicks ? tempoMap(t,bpm) : virtualTicks.tempos();
+        var thinned=DifficultyThinner.thin(drumNotes,ppq,tempos);
         var hard=thinned.get(DifficultyThinner.Difficulty.HARD);
         var normalKept=thinned.get(DifficultyThinner.Difficulty.NORMAL);
         var easyKept=thinned.get(DifficultyThinner.Difficulty.EASY);
@@ -102,6 +104,16 @@ public class TranscriptionCharts {
                 java.math.BigDecimal.valueOf(bpm).setScale(2,java.math.RoundingMode.HALF_UP),
                 t.path("offsetMs").asInt(),t.path("timeSignature").asString(),payload.write(n.path("metrics")));
     }
+    /** notation tick용 템포: timing.tempoMap(tick은 timing.ppq 단위), 없으면 timing.bpm 한 점. */
+    private static List<DifficultyThinner.Tempo> tempoMap(JsonNode timing,double bpm) {
+        var map=timing.path("tempoMap");
+        if(!map.isArray() || map.isEmpty()) return List.of(new DifficultyThinner.Tempo(0,micros(bpm)));
+        var tempos=new ArrayList<DifficultyThinner.Tempo>();
+        for(var e:map) tempos.add(new DifficultyThinner.Tempo(e.path("tick").asLong(),micros(e.path("bpm").doubleValue())));
+        return tempos;
+    }
+    /** BPM → 4분음표 µs. int를 넘는 값(0.03 BPM 미만)은 잘라도 EASY 박(8분)이 같다. */
+    static int micros(double bpm) { return (int)Math.min(Integer.MAX_VALUE,Math.round(60_000_000.0/bpm)); }
     /**
      * notation이 없는 노트의 난이도 줄이기용 틱. timing.tempoMap(빠르기가 바뀌는 곡)이 있으면 구간마다 그 bpm으로,
      * 없으면 timing.bpm 하나로 offsetMs부터 센다. tempoMap 틱은 timing.ppq 단위라 박 수로 바꾼 뒤 솎기 ppq를 곱한다.
@@ -131,6 +143,14 @@ public class TranscriptionCharts {
             return new VirtualTicks(offset,bpm,ppq,startMs,startBeat,rate);
         }
 
+        /** 이 틱을 만든 기준 그대로의 솎기 템포: 구간을 썼으면 구간 시작 박 × ppq와 그 bpm, 아니면 bpm 한 점. */
+        List<DifficultyThinner.Tempo> tempos() {
+            if(startMs==null) return List.of(new DifficultyThinner.Tempo(0,micros(bpm)));
+            var tempos=new ArrayList<DifficultyThinner.Tempo>();
+            for(int i=0;i<startBeat.length;i++) tempos.add(new DifficultyThinner.Tempo(Math.round(startBeat[i]*ppq),micros(rate[i])));
+            return tempos;
+        }
+
         long tick(long timeMs) {
             double ms=timeMs-offsetMs;
             if(startMs==null) return Math.max(0,Math.round(ms*bpm*ppq/60000.0));
@@ -152,7 +172,7 @@ public class TranscriptionCharts {
         for (var node:source) if(selected.contains(node)) result.add(node);
         return result;
     }
-    /** 파생 난이도의 generator_version: 원문 + {@code +midi-rule-1.1}. 50자를 넘으면 원문 앞부분과 SHA-256 앞 12자리로 결정적으로 줄인다. */
+    /** 파생 난이도의 generator_version: 원문 + {@code +}{@link DifficultyThinner#RULE_VERSION}. 50자를 넘으면 원문 앞부분과 SHA-256 앞 12자리로 결정적으로 줄인다. */
     public static String derivedVersion(String original) {
         String suffix="+"+DifficultyThinner.RULE_VERSION;
         if(original.length()+suffix.length()<=50) return original+suffix;

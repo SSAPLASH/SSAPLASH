@@ -30,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class MidiChartDocuments {
 
 	/** MIDI 규격 기본값. 템포·박자표 메타가 없으면 tick 0에 넣는다. */
-	private static final int DEFAULT_TEMPO_US = 500_000;
+	static final int DEFAULT_TEMPO_US = 500_000;
 	private static final Signature DEFAULT_SIGNATURE = new Signature(0, 4, 4);
 	static final int MAX_DURATION_MS = 30 * 60 * 1000;
 

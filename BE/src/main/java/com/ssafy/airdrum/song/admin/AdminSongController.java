@@ -84,7 +84,7 @@ public class AdminSongController {
 
 	@PostMapping(value = "/midi", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@Operation(summary = "MIDI로 공용 곡 등록",
-			description = "151번과 같은 규칙(midi-rule-1.1)으로 EASY·NORMAL·HARD 채보(version 1)를 만들어 공용 곡으로 저장한다. "
+			description = "151번과 같은 규칙(midi-rule-2.0)으로 EASY·NORMAL·HARD 채보(version 1)를 만들어 공용 곡으로 저장한다. "
 					+ "license(출처·라이선스) 필수. published 기본 true이며 false면 일반 사용자에게 보이지 않는다. "
 					+ "offsetMs(선택, 기본 0)는 0틱 = 음원 0초인 MIDI의 첫 마디 첫 박 시각(ms)으로, 카탈로그(260번)와 같이 솎기 격자·악보 마디의 원점이 된다.")
 	@ApiResponse(responseCode = "201", description = "등록")

@@ -57,7 +57,17 @@ public class MidiChartConverter {
 		if (log.isDebugEnabled()) log.debug("MIDI 드럼 노트 {}개 중 패드에 없는 {}개 제외", sequence.events().size(),
 				sequence.events().size() - notes.size());
 		var rebased = documents.rebase(sequence, notes, offsetMs);
-		return documents.build(rebased.sequence(), offsetMs, DifficultyThinner.thin(rebased.notes(), sequence.ppq()));
+		var tempos = tempos(rebased.sequence());
+		return documents.build(rebased.sequence(), offsetMs, DifficultyThinner.thin(rebased.notes(), sequence.ppq(), tempos));
+	}
+
+	/** 솎기용 템포. 첫 템포 이벤트 전은 MIDI 기본 120 BPM이다(채보 timeMs 계산과 같다). */
+	static java.util.List<DifficultyThinner.Tempo> tempos(MidiSequenceReader.DrumSequence sequence) {
+		var tempos = new java.util.ArrayList<DifficultyThinner.Tempo>();
+		if (sequence.tempos().isEmpty() || sequence.tempos().getFirst().tick() != 0)
+			tempos.add(new DifficultyThinner.Tempo(0, MidiChartDocuments.DEFAULT_TEMPO_US));
+		for (var t : sequence.tempos()) tempos.add(new DifficultyThinner.Tempo(t.tick(), t.microsPerQuarter()));
+		return tempos;
 	}
 
 	/** 선언 크기를 믿지 않고 상한 + 1바이트까지만 읽는다. */
