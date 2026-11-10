@@ -24,9 +24,9 @@ describe('retryPathOf', () => {
     expect(retryPathOf(log, { songsSource: 'api' })).toBe('/play');
   });
   it('SHEET 모드는 /sheet 경로를 쓴다', () => {
-    expect(retryPathOf({ mode: 'SHEET', songNumericId: 3, chartId: 4, songId: 'x' }, { songsSource: 'api' })).toBe('/sheet?song=3&chart=4');
+    expect(retryPathOf({ mode: 'SHEET', songNumericId: 3, chartId: 4, songId: 'x' }, { songsSource: 'api' })).toBe('/sheet?song=3&chart=4&start=1');
     const log = { mode: 'SHEET', songNumericId: null, chartId: null, songId: builtinSongId };
-    expect(retryPathOf(log, { songsSource: 'builtin' })).toBe('/sheet?song=-2&chart=-2');
+    expect(retryPathOf(log, { songsSource: 'builtin' })).toBe('/sheet?song=-2&chart=-2&start=1');
     expect(retryPathOf({ ...log, songId: 'zz' }, { songsSource: 'builtin' })).toBe('/sheet');
   });
 });
