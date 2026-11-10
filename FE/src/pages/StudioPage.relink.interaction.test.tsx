@@ -12,6 +12,7 @@ import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
 import { useSheetLink } from '@/store/sheetLinkStore';
 import { useSongs } from '@/store/songStore';
+import { queryClient } from '@/app/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/app/features', async (orig) => ({ ...(await orig<typeof import('@/app/features')>()), SHEET_RELINK_ENABLED: true }));
@@ -60,7 +61,9 @@ afterEach(() => {
   useSheetLink.getState().reset();
   useMidiUpload.getState().reset();
   useChartJob.setState({ phase: 'idle', active: null, error: null, progress: null });
-  useSongs.setState({ items: [], status: 'idle', scope: 'MINE' });
+  // 곡·악보 목록은 앱 전역 캐시다. 테스트마다 비운다
+  queryClient.clear();
+  useSongs.setState({ scope: 'MINE' });
 });
 
 describe('악보에 곡 올리기', () => {
