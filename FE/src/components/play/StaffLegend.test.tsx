@@ -85,3 +85,47 @@ describe('StaffLegend', () => {
     rows(render()).forEach((row) => expect(row.match(/play-sl-line/g)).toHaveLength(5));
   });
 });
+
+describe('StaffLegend layout="grid"', () => {
+  const grid = (p: StaffLegendProps = {}) => render({ ...p, layout: 'grid' });
+  const cells = (html: string) => html.split('<li ').slice(1, 10);
+
+  it('카드 9칸 + 기호 설명 칸을 그린다', () => {
+    const html = grid();
+    expect(html.match(/play-sl-cell(?: active)?"/g)).toHaveLength(9);
+    expect(html).toContain('play-sl-key');
+    expect(html).not.toContain('play-sl-row');
+    cells(html).forEach((c, i) => expect(c).toContain(`play-sl-name">${PAD_META[ORDER[i]].label}`));
+  });
+
+  it('발 표시는 킥·하이햇 페달만, 손 표시는 없다', () => {
+    const html = grid();
+    expect(html.match(/play-sl-tag foot">발/g)).toHaveLength(2);
+    expect(html).not.toContain('>손<');
+  });
+
+  it('오선 접두를 뺀 짧은 위치 글, 하이햇 페달은 위치 글 생략', () => {
+    const c = cells(grid());
+    expect(c[ORDER.indexOf('SNARE')]).toContain('play-sl-pos">셋째 칸');
+    expect(c[ORDER.indexOf('CRASH')]).toContain('play-sl-pos">오선 위 덧줄');
+    expect(c[ORDER.indexOf('HIHAT')]).toContain('play-sl-pos">맨 위 줄 위');
+    expect(c[ORDER.indexOf('HIHAT_PEDAL')]).not.toContain('play-sl-pos');
+  });
+
+  it('카드마다 패드 색 변수와 aria-label(오선 접두 포함)', () => {
+    const c = cells(grid());
+    c.forEach((row, i) => expect(row.toLowerCase()).toContain(`--pad-color:${PAD_META[ORDER[i]].color.toLowerCase()}`));
+    expect(grid()).toContain('aria-label="스네어 — 오선 셋째 칸, 손"');
+  });
+
+  it('오선을 1.4배로 키운다(viewBox 유지)', () => {
+    expect(grid()).toContain('width="89.6" height="61.6" viewBox="0 0 64 44"');
+  });
+
+  it('activePad·activePads 칸만 active', () => {
+    expect(grid({ activePad: 'SNARE' }).match(/play-sl-cell active/g)).toHaveLength(1);
+    const html = grid({ activePad: 'KICK', activePads: ['HIHAT', 'KICK'] });
+    expect(html.match(/play-sl-cell active/g)).toHaveLength(2);
+    expect(grid().match(/play-sl-cell active/g)).toBeNull();
+  });
+});
