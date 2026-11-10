@@ -5,13 +5,15 @@
 // - 고른 실험군의 모델을 받지 못했으면(검증 실패 포함) 그 판은 규칙만 쓴다.
 // 코칭 오류가 연주를 막지 않도록 예외를 던지지 않는다.
 import type { CoachGate, GateMode } from '../gate/gate';
-import { assignCauseArm, assignGateArm, CONFIG_FILE, CONFIG_MODEL_NAME, parseCoachLiveConfig, type Arm, type CoachLiveConfig } from './experiment';
+import { assignCauseArm, assignGateArm, assignLlm, CONFIG_FILE, CONFIG_MODEL_NAME, parseCoachLiveConfig, type Arm, type CoachLiveConfig } from './experiment';
 import { currentModel, fetchManifest, fetchVerifiedJson, type FetchLike, type Manifest } from './manifest';
 import { loadRemoteCause, type CauseModel } from './remoteCause';
 import { loadRemoteGate } from './remoteGate';
 
 /** 실험군이 아닌 판(비율 밖, 설정 off, 모델 못 받음)의 기록 이름 */
 export const RULE_ARM = 'rule';
+/** LLM 구간 코칭에 배정된 판의 기록 이름 */
+export const LLM_ARM = 'llm';
 
 export interface CoachModelChoice {
   /**
@@ -26,6 +28,10 @@ export interface CoachModelChoice {
   cause: CauseModel | null;
   /** 기록에 남길 원인 실험군. 설정에 원인 실험군이 없으면 null */
   causeArm: string | null;
+  /** 연주 중 LLM 구간 코칭 모드. 배정되지 않았으면 null(요청하지 않는다) */
+  llm: 'shadow' | 'on' | null;
+  /** 기록에 남길 LLM 실험군('llm' 또는 'rule'). 설정에서 llm이 off면 null */
+  llmArm: string | null;
 }
 
 interface State {
@@ -97,17 +103,20 @@ function loaded<T>(arm: Arm | null, cache: Map<string, T | null>): T | null {
 /** 이번 연주에 쓸 거름과 원인 모델. userId가 없으면(비로그인) 판마다 무작위로 배정한다 */
 export function chooseCoachModel(userId: number | null, random: () => number = Math.random): CoachModelChoice {
   const { config } = state;
-  if (!config) return { gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null };
+  if (!config) return { gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null, llm: null, llmArm: null };
+  const llmOn = assignLlm(config, userId);
+  const llm = llmOn && config.llm.mode !== 'off' ? config.llm.mode : null;
+  const llmArm = config.llm.mode === 'off' ? null : llmOn ? LLM_ARM : RULE_ARM;
 
   const causeArmPick = assignCauseArm(config, userId, random).arm;
   const cause = loaded(causeArmPick, state.causes);
   const causeArm = config.cause.arms.length === 0 ? null : causeArmPick && cause ? causeArmPick.model : RULE_ARM;
 
-  if (config.gate.mode === 'off') return { gate: null, mode: undefined, arm: RULE_ARM, cause, causeArm };
+  if (config.gate.mode === 'off') return { gate: null, mode: undefined, arm: RULE_ARM, cause, causeArm, llm, llmArm };
   const gateArm = assignGateArm(config, userId, random).arm;
   const gate = loaded(gateArm, state.gates);
-  if (!gateArm || !gate) return { gate: null, mode: config.gate.mode, arm: RULE_ARM, cause, causeArm };
-  return { gate, mode: config.gate.mode, arm: gateArm.model, cause, causeArm };
+  if (!gateArm || !gate) return { gate: null, mode: config.gate.mode, arm: RULE_ARM, cause, causeArm, llm, llmArm };
+  return { gate, mode: config.gate.mode, arm: gateArm.model, cause, causeArm, llm, llmArm };
 }
 
 /** 시험용 */

@@ -43,9 +43,9 @@ function variants(tag: LiveTag): CoachMessage[] {
 describe('coachCopy', () => {
   it('대상 없는 지적 태그는 구령·보조·모드를 돌려주고 target은 null이다', () => {
     expect(coachCopy(msg({ tag: 'LIVE_MISS_STREAK' }))).toEqual({ title: '킥·스네어만!', sub: '박이 잡히면 다시 다 쳐요', mode: 'coach-warn', target: null });
-    expect(coachCopy(msg({ tag: 'LIVE_LATE' }))).toEqual({ title: '스틱 미리 들기', sub: '노트가 닿기 전에 들어요', mode: 'coach-info', target: null });
-    expect(coachCopy(msg({ tag: 'LIVE_EARLY' }))).toEqual({ title: '닿을 때 쳐요', sub: '노트를 끝까지 보고 쳐요', mode: 'coach-info', target: null });
-    expect(coachCopy(msg({ tag: 'LIVE_UNSTEADY' }))).toEqual({ title: '하나 둘 세며', sub: '킥에 맞춰 속으로 세요', mode: 'coach-info', target: null });
+    expect(coachCopy(msg({ tag: 'LIVE_LATE' }))).toEqual({ title: '스틱을 낮게', sub: '높이는 주먹 하나만큼', mode: 'coach-info', target: null });
+    expect(coachCopy(msg({ tag: 'LIVE_EARLY' }))).toEqual({ title: '힘 빼고 떨궈요', sub: '스틱 무게로 떨어뜨려요', mode: 'coach-info', target: null });
+    expect(coachCopy(msg({ tag: 'LIVE_UNSTEADY' }))).toEqual({ title: '입으로 세요', sub: '하나 그리고 둘 그리고', mode: 'coach-info', target: null });
   });
 
   it('연속 놓침은 반복되면 다른 지시로 바꾼다(제목과 보조를 함께 돌린다)', () => {
@@ -54,14 +54,14 @@ describe('coachCopy', () => {
 
   it('패드 태그는 패드 라벨을 제목에 넣고 target을 싣는다', () => {
     const target = { kind: 'pad', pad: 'SNARE' } as const;
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target }))).toEqual({ title: '스네어 먼저', sub: '앞 노트 치고 바로 옮겨요', mode: 'coach-info', target });
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target }))).toEqual({ title: '스네어 미리!', sub: '앞 노트 칠 때 손을 옮겨요', mode: 'coach-info', target });
     const floor = { kind: 'pad', pad: 'FLOOR_TOM' } as const;
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: floor }))).toEqual({ title: '플로어탐 차분히', sub: '플로어탐만 서두르고 있어요', mode: 'coach-info', target: floor });
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: floor }))).toEqual({ title: '플로어탐 천천히', sub: '들고 있다 박에 떨궈요', mode: 'coach-info', target: floor });
   });
 
   it('패드 이름은 화면 키트와 같은 탐1·탐2를 쓴다', () => {
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } }))?.title).toBe('탐1 먼저');
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'MID_TOM' } }))?.title).toBe('탐2 차분히');
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } }))?.title).toBe('탐1 미리!');
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'MID_TOM' } }))?.title).toBe('탐2 천천히');
   });
 
   it('패드 놓침 구령은 패드 이름으로 가리키며 돌려 쓴다', () => {
@@ -89,7 +89,7 @@ describe('coachCopy', () => {
 
   it('손 태그는 왼손·오른손을 제목에 넣고 손 대상을 싣는다', () => {
     const left = { kind: 'hand', hand: 0 } as const;
-    expect(coachCopy(msg({ tag: 'LIVE_HAND_WEAK', target: left }))).toMatchObject({ title: '왼손 높이!', sub: '오른손만큼 높이 들어요', target: left });
+    expect(coachCopy(msg({ tag: 'LIVE_HAND_WEAK', target: left }))).toMatchObject({ title: '왼손도 높게', sub: '양손 스틱 높이를 같게', target: left });
     expect(coachCopy(msg({ tag: 'LIVE_HAND_WEAK', target: { kind: 'hand', hand: 1 }, repeat: 1 }))?.title).toBe('오른손도 똑같이');
   });
 
@@ -121,7 +121,7 @@ describe('coachCopy', () => {
         for (const m of variants(tag)) {
           const c = coachCopy(m, { keyboard })!;
           // 키보드 안내(E·I 키)는 키 이름이라 영어 검사에서 뺀다
-          const texts = [c.title, keyboard && tag === 'LIVE_PAD_MISS' ? c.sub.replace(/[A-Z·]+ 키/, '') : c.sub];
+          const texts = [c.title, keyboard ? c.sub.replace(/[A-Z·]+ 키/, '') : c.sub];
           for (const t of texts) for (const re of banned) expect(t, `${tag}: ${t}`).not.toMatch(re);
         }
       }
@@ -173,9 +173,9 @@ describe('coachCopy', () => {
     it('원인이 있으면 제목은 그대로 두고 보조만 원인 문구로 바꾼다', () => {
       const c = withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
       expect(c).toEqual({ title: '탐1 보세요', sub: '탐1은 왼쪽 탐이에요', mode: 'coach-warn', target: tom });
-      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM', fromPad: 'SNARE' })?.sub).toBe('스네어 치고 바로 탐1로');
-      expect(withCause({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('빠른 곳은 손목만 써요');
-      expect(withCause({ cause: 'DRIFT_LATE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('킥에 맞춰 당겨 쳐요');
+      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM', fromPad: 'SNARE' })?.sub).toBe('스네어 치며 탐1을 봐요');
+      expect(withCause({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('빠른 곳은 양손 번갈아 쳐요');
+      expect(withCause({ cause: 'DRIFT_LATE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('마디 첫 박에 다시 맞춰요');
     });
 
     it('다른 패드는 위치를 말할 수 있으면 위치로, 아니면 "대신 친 패드 말고 이 패드"로 말한다', () => {
@@ -188,16 +188,16 @@ describe('coachCopy', () => {
       expect(coachCopy(msg({ tag: 'LIVE_MISS_STREAK', cause: { cause: 'TRANSITION', strength: 1, pad: 'KICK', fromPad: 'SNARE' } }))?.sub).toBe('박이 잡히면 다시 다 쳐요');
     });
 
-    it('패드 이동은 받침에 맞춰 로·으로를 붙인다', () => {
-      const sub = (pad: 'HIHAT' | 'CRASH' | 'FLOOR_TOM') => withCause({ cause: 'TRANSITION', strength: 1, pad, fromPad: 'SNARE' })?.sub;
-      expect(sub('HIHAT')).toBe('스네어 치고 바로 하이햇으로');
-      expect(sub('CRASH')).toBe('스네어 치고 바로 크래시로');
-      expect(sub('FLOOR_TOM')).toBe('스네어 치고 바로 플로어탐으로');
+    it('패드 이동은 받침에 맞춰 을·를을 붙인다', () => {
+      const sub = (pad: 'HIHAT' | 'CRASH' | 'MID_TOM') => withCause({ cause: 'TRANSITION', strength: 1, pad, fromPad: 'SNARE' })?.sub;
+      expect(sub('HIHAT')).toBe('스네어 치며 하이햇을 봐요');
+      expect(sub('CRASH')).toBe('스네어 치며 크래시를 봐요');
+      expect(sub('MID_TOM')).toBe('스네어 치며 탐2를 봐요');
     });
 
     it('연속 놓침에도 원인 문구를 붙인다', () => {
       const c = coachCopy(msg({ tag: 'LIVE_MISS_STREAK', cause: { cause: 'DENSE', strength: 1, pad: 'SNARE' } }));
-      expect(c).toMatchObject({ title: '킥·스네어만!', sub: '빠른 곳은 손목만 써요', target: null });
+      expect(c).toMatchObject({ title: '킥·스네어만!', sub: '빠른 곳은 양손 번갈아 쳐요', target: null });
     });
 
     it('UNKNOWN이거나 필요한 패드가 없으면 원래 보조 문구를 쓴다', () => {
@@ -208,7 +208,33 @@ describe('coachCopy', () => {
     });
 
     it('놓침이 아닌 지적은 원인이 있어도 보조 문구를 바꾸지 않는다', () => {
-      expect(coachCopy(msg({ tag: 'LIVE_LATE', cause: { cause: 'DENSE', strength: 1, pad: null } }))?.sub).toBe('노트가 닿기 전에 들어요');
+      expect(coachCopy(msg({ tag: 'LIVE_LATE', cause: { cause: 'DENSE', strength: 1, pad: null } }))?.sub).toBe('높이는 주먹 하나만큼');
+    });
+
+    it('키보드 입력이면 원인 문구도 키보드에 맞게 말한다', () => {
+      const kb = (cause: CoachMessage['cause']) => coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: tom, cause }), { keyboard: true })?.sub;
+      expect(kb({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' })).toBe('탐1은 E·I 키예요');
+      expect(kb({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })).toBe('빠른 곳은 손가락 번갈아요');
+    });
+  });
+
+  describe('키보드 입력', () => {
+    const kb = (over: Partial<CoachMessage>) => coachCopy(msg(over), { keyboard: true });
+
+    it('스틱 전용 지시(스틱 높이, 손목, 떨구기) 대신 손가락과 키로 말한다', () => {
+      expect(kb({ tag: 'LIVE_LATE' })).toMatchObject({ title: '키 위에 손가락', sub: '손가락을 키에 올려 둬요' });
+      expect(kb({ tag: 'LIVE_EARLY' })).toMatchObject({ title: '닿을 때 눌러요', sub: '노트가 선에 닿을 때 눌러요' });
+      expect(kb({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SNARE' } })?.sub).toBe('F·J 키에 손가락 대기');
+      expect(kb({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'SNARE' } })?.sub).toBe('박에 맞춰 눌러요');
+    });
+
+    it('키보드 문구에는 스틱·손목이 나오지 않는다(모든 지적·대상·반복)', () => {
+      for (const tag of CORRECTION_TAGS.filter((t) => t !== 'LIVE_HAND_WEAK')) {
+        for (const m of variants(tag)) {
+          const c = coachCopy(m, { keyboard: true })!;
+          expect(`${c.title} ${c.sub}`, tag).not.toMatch(/스틱|손목|떨궈|떨어뜨/);
+        }
+      }
     });
 
     it('모든 패드 조합에서 원인 보조는 16자 이내이고 금지어가 없다', () => {

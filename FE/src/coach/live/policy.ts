@@ -57,6 +57,16 @@ export class CoachPolicy {
     this.recoveredLatest = null;
   }
 
+  /** 마지막 지적 시각. LLM 구간 문구가 규칙 지적에 끼어들지 않게 쓴다 */
+  get lastCorrectionAt(): number | null {
+    return this.lastCorrectionMs;
+  }
+
+  /** 정책 밖에서 문구를 띄웠다(LLM 구간 문구). 칭찬 간격의 기준만 옮기고 지적 간격은 건드리지 않는다 */
+  noteExternalShown(songTimeMs: number): void {
+    this.lastShownMs = songTimeMs;
+  }
+
   get shownCount(): number {
     return this.shown;
   }

@@ -52,7 +52,8 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { liveCoachClient } from '@/api/liveCoach';
 import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
@@ -184,6 +185,9 @@ function PlayPageBody() {
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교)
   const shadowRef = useRef<CoachShadow | null>(null);
+  // 연주 중 LLM 구간 코칭 요청기. 다시 하기·종료·화면 이탈 때 기다리던 결과를 버린다
+  const llmRef = useRef<LlmCoach | null>(null);
+  useEffect(() => () => llmRef.current?.cancel(), []);
   const { line: coachLine, show: showCoachLine, cancelPending: cancelPendingCoach, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   // 일시정지하면 미루는 중이던 문구는 버린다(떠 있는 문구는 기존처럼 그대로 둔다)
   useEffect(() => {
@@ -284,6 +288,9 @@ function PlayPageBody() {
       const coachContext = chartCoachContext(c.notes);
       // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
       const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
+      // 연주 중 LLM 구간 코칭(실험 설정 llm, 로그인 사용자만). 구간이 끝나면 BE에 요청하고 기한 안의 문구만 띄운다
+      const llmMode = settings.liveCoach ? model.llm : null;
+      let llm: LlmCoach | null = null;
       const coach = new LiveCoach({
         goodMs: settings.timing.goodMs,
         enabled: settings.liveCoach,
@@ -295,7 +302,39 @@ function PlayPageBody() {
         arm: model.arm,
         causeModel: model.cause,
         causeArm: model.causeArm,
+        llmArm: model.llmArm,
+        segments: llmMode
+          ? { chart: c, input: useSettings.getState().sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+          : undefined,
       });
+      // 비동기 거름·LLM 구간 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+      const showMessage = (message: CoachMessage) => {
+        if (coachRef.current !== coach) return;
+        try {
+          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+          if (copy) {
+            // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
+            const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
+            showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+          }
+        } catch {
+          // 코칭 오류는 무시한다
+        }
+      };
+      llmRef.current?.cancel();
+      if (llmMode) {
+        llm = new LlmCoach({
+          client: liveCoachClient(),
+          mode: llmMode,
+          runId: crypto.randomUUID(),
+          onTip: (tip) => {
+            const message = coach.offerLlmTip(tip, ss.songTime(performance.now()));
+            if (message) showMessage(message);
+          },
+          onRecord: (r) => coach.recordLlm(r, ss.songTime(performance.now())),
+        });
+      }
+      llmRef.current = llm;
       // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
       void refreshCoachModels();
       coachRef.current = coach;
@@ -332,23 +371,9 @@ function PlayPageBody() {
           velocity: e.velocity,
           ...coachContext.notes[e.noteIndex],
         };
-        // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
-        const show = (message: CoachMessage) => {
-          if (coachRef.current !== coach) return;
-          try {
-            const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-            if (copy) {
-              // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
-              const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
-              showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
-            }
-          } catch {
-            // 코칭 오류는 무시한다
-          }
-        };
-        const message = coach.push(judged, ss.snapshot().strayHits, show);
+        const message = coach.push(judged, ss.snapshot().strayHits, showMessage);
         shadowRef.current?.push(judged);
-        if (message) show(message);
+        if (message) showMessage(message);
       });
       flashes.current.clear();
       popups.current = [];
@@ -501,6 +526,7 @@ function PlayPageBody() {
     setFxRun((n) => n + 1);
     recorder.current.reset();
     coachRef.current?.reset();
+    llmRef.current?.cancel(crypto.randomUUID());
     shadowRef.current?.reset();
     clearCoachLine();
     finishing.current = false;
@@ -551,6 +577,8 @@ function PlayPageBody() {
         consent: consentAtStart.current,
         liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
+      // 끝난 뒤 도착한 LLM 구간 문구는 띄우지도 기록하지도 않는다
+      llmRef.current?.cancel();
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);

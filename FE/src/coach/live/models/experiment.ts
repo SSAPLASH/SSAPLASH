@@ -20,6 +20,11 @@ export interface CoachLiveConfig {
   cause: { arms: Arm[] };
   /** 모델을 쓰는 사용자 비율(0~100). 나머지는 규칙만 쓴다 */
   rolloutPercent: number;
+  /**
+   * 연주 중 LLM 구간 코칭(설계 COACH-001 연주 중 LLM 코칭 3.6). 없으면 off.
+   * shadow는 요청·기록만 하고 화면에 띄우지 않는다. rolloutPercent는 거름·원인과 따로다
+   */
+  llm: { mode: 'off' | 'shadow' | 'on'; rolloutPercent: number };
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -48,7 +53,25 @@ export function parseCoachLiveConfig(x: unknown): CoachLiveConfig | null {
   const rollout = x.rolloutPercent;
   if (gateArms === null || causeArms === null) return null;
   if (typeof rollout !== 'number' || !Number.isFinite(rollout) || rollout < 0 || rollout > 100) return null;
-  return { gate: { mode, arms: gateArms }, cause: { arms: causeArms }, rolloutPercent: rollout };
+  const llm = parseLlm(x.llm);
+  if (llm === null) return null;
+  return { gate: { mode, arms: gateArms }, cause: { arms: causeArms }, rolloutPercent: rollout, llm };
+}
+
+/** 없으면 off. 있는데 형식이 틀리면 null(설정 전체를 쓰지 않는다) */
+function parseLlm(x: unknown): CoachLiveConfig['llm'] | null {
+  if (x === undefined) return { mode: 'off', rolloutPercent: 0 };
+  if (!isObject(x)) return null;
+  const { mode, rolloutPercent } = x;
+  if (mode !== 'off' && mode !== 'shadow' && mode !== 'on') return null;
+  if (typeof rolloutPercent !== 'number' || !Number.isFinite(rolloutPercent) || rolloutPercent < 0 || rolloutPercent > 100) return null;
+  return { mode, rolloutPercent };
+}
+
+/** LLM 구간 코칭에 배정됐나. 로그인 사용자만 쓴다(요청 상한을 사용자별로 센다). 비율 해시는 거름·원인과 다르다 */
+export function assignLlm(config: CoachLiveConfig, userId: number | null): boolean {
+  if (userId === null || config.llm.mode === 'off') return false;
+  return bucketOf(`llm:${userId}`) < config.llm.rolloutPercent;
 }
 
 /** 문자열을 0~99로. FNV-1a 32비트. 같은 입력이면 브라우저·기기가 달라도 같다 */
