@@ -114,7 +114,7 @@ describe('알아보기 화면', () => {
     expect(postLessonCompletion).toHaveBeenCalledWith(101);
     expect(useLessons.getState().localPassed.has(101)).toBe(true);
     fireEvent.click(within(dialog).getByRole('button', { name: '다음 레슨' }));
-    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&song=102&chart=202');
+    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
   });
 
   it('완료 팝업을 닫으면 같은 화면에 [다시 하기]·[코스로]가 남고, 다시 하면 처음 음표부터 친다', async () => {

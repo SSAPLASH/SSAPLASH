@@ -85,7 +85,7 @@ describe('nextLesson · lessonOfChart · lessonPath', () => {
   });
 
   it('연주 레슨은 탭을 유지한 악보 연습, 알아보기 레슨은 알아보기 화면으로 간다', () => {
-    expect(lessonPath(ls[1])).toBe('/sheet?tab=lessons&song=102&chart=202');
+    expect(lessonPath(ls[1])).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
     expect(lessonPath(ls[0])).toBe('/sheet/lesson/101');
     expect(LESSONS_PATH).toBe('/sheet?tab=lessons');
   });

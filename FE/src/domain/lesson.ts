@@ -126,9 +126,9 @@ export function lessonOfChart(lessons: readonly Lesson[], chartId: number | null
   return chartId == null ? undefined : lessons.find((l) => l.chartId === chartId);
 }
 
-/** 레슨을 여는 주소. 연주 레슨은 [입문 코스] 탭을 유지한 악보 연습(연주 준비부터), 알아보기는 알아보기 화면 */
+/** 레슨을 여는 주소. 연주 레슨은 [입문 코스] 탭을 유지한 악보 연습(시작 확인 창부터, `start=1`), 알아보기는 알아보기 화면 */
 export function lessonPath(lesson: Pick<Lesson, 'kind' | 'songId' | 'chartId'>): string {
-  return lesson.kind === 'READ' ? `/sheet/lesson/${lesson.songId}` : `${LESSONS_PATH}&song=${lesson.songId}&chart=${lesson.chartId}`;
+  return lesson.kind === 'READ' ? `/sheet/lesson/${lesson.songId}` : `${LESSONS_PATH}&song=${lesson.songId}&chart=${lesson.chartId}&start=1`;
 }
 
 /** 연주 레슨 통과. 서버와 같은 정확도 계산(score / noteCount, 소수 둘째 자리 HALF_UP) */

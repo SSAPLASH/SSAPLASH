@@ -87,7 +87,7 @@ export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
               </div>
             </div>
             <div className="lesson-card-actions">
-              <Button onClick={() => navigate(lessonPath(lesson))}>{states[selected] === 'passed' ? '다시 연습하기' : '레슨 시작하기'}</Button>
+              <Button onClick={() => navigate(lessonPath(lesson))}>{lesson.kind === 'READ' ? (states[selected] === 'passed' ? '다시 연습하기' : '레슨 시작하기') : '플레이'}</Button>
             </div>
           </div>
         ) : (
