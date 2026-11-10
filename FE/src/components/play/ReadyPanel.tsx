@@ -212,7 +212,9 @@ export function ReadyPanel({
             </Button>
             <p className={`play-rp-hint${ready ? '' : ' need'}`}>
               {ready
-                ? `시작하면 ${countInBars}마디 카운트인 뒤 노트가 내려와요.`
+                ? countInBars > 0
+                  ? `시작하면 ${countInBars}마디가 흐른 뒤 노트가 시작돼요.`
+                  : '시작하면 바로 노트가 시작돼요.'
                 : '기기 준비가 끝나면 시작할 수 있어요.'}
             </p>
           </div>

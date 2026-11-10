@@ -1,5 +1,6 @@
 // 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Judgement } from '@/domain/judgement';
+import { leadInCount } from '@/domain/leadIn';
 import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/sheet';
 import { xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
@@ -83,14 +84,13 @@ export interface DrawSheetOpts {
   beatMs: number;
   /** false면 기준선·박 번호·카운트인 숫자를 그리지 않는다 */
   showBase: boolean;
-  countInMs?: number;
   openWarnings?: ReadonlyMap<number, number>;
   nowMs?: number;
 }
 
 /** 한 프레임을 그린다. 캔버스 크기·transform·clearRect는 호출자 몫이다 */
 export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): void {
-  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase, countInMs } = opts;
+  const { chart, noteStates, strayHits, songTime: t, width, barPx, baseRatio, colors, layoutOf, bars, barMs, beatMs, showBase } = opts;
   const raw = opts.rawSongTime ?? t;
   const { first, last } = bars;
   // x는 격자 시각(gridTimeAt)으로 계산한다. 빠르기 구간이 있는 곡도 마디 폭이 같다. 구간이 없으면 곡 시각 − 원점과 같다
@@ -256,7 +256,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   if (!showBase) return;
 
   drawCursor(ctx, baseX, top - 30, bottom + 40, colors);
-  drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors, countInMs);
+  drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors);
 }
 
 /** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */
@@ -274,7 +274,7 @@ export function drawCursor(ctx: CanvasRenderingContext2D, x: number, top: number
 }
 
 /**
- * 현재 박 번호(큰 숫자 + 작은 "박") / 리드인 남은 박 수.
+ * 현재 박 번호(큰 숫자 + 작은 "박") / 리드인 마지막 마디의 남은 박 수.
  * x는 숫자의 왼쪽 끝, y는 글자 기준선이다. gridTime은 격자 시각(곡 시각 − 원점)이며 0보다 작으면 1마디 1박 전(카운트인·인트로)이다.
  */
 export function drawBeatLabel(
@@ -285,13 +285,12 @@ export function drawBeatLabel(
   beatMs: number,
   beatsPerBar: number,
   colors: Colors,
-  countInMs?: number,
 ): void {
   let label: string | null = null;
   if (gridTime < 0) {
-    if (countInMs === undefined || gridTime >= -countInMs) {
-      label = String(Math.max(1, Math.ceil(-gridTime / beatMs - 1e-9)));
-    }
+    // 마지막 리드인 마디에서만 남은 박 수를 그린다(빈 마디·긴 인트로는 라벨 없음, 설계 MODE-001-lead-in-bars 4-5)
+    const c = leadInCount(gridTime, beatMs, beatsPerBar);
+    if (c !== null) label = String(c);
   } else {
     label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
   }

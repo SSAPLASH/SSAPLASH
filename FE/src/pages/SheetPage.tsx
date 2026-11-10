@@ -18,6 +18,7 @@ import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundSta
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
+import { isLeadInBlank, leadInCount } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
@@ -121,6 +122,8 @@ function SheetPageBody() {
   const [songMs, setSongMs] = useState(0);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
+  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
+  const [leadBlank, setLeadBlank] = useState(false);
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
@@ -218,8 +221,8 @@ function SheetPageBody() {
   const consentAtStart = useRef(false);
   const lastHud = useRef(0);
   const finishing = useRef(false);
-  // 카운트인이 진행 중이었는지(끝난 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
-  const wasCountin = useRef(false);
+  // 카운트 숫자를 한 번이라도 보였는지(격자 0이 되는 순간 「시작!」을 보이려고) · 「시작!」 숨김 타이머
+  const wasCounting = useRef(false);
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
@@ -227,12 +230,13 @@ function SheetPageBody() {
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
-    wasCountin.current = false;
+    wasCounting.current = false;
     if (goTimer.current !== null) {
       window.clearTimeout(goTimer.current);
       goTimer.current = null;
     }
     setCountValue(null);
+    setLeadBlank(false);
   }, []);
 
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때도 끈 채로 둔다(기본값, QA 352)
@@ -624,18 +628,29 @@ function SheetPageBody() {
       const ss = sessionRef.current;
       if (clock && ss) {
         clock.onFrame(now);
-        // 카운트다운: 카운트인 동안 남은 박 수, 끝난 직후 잠깐 「시작!」
+        // 카운트다운(설계 MODE-001-lead-in-bars 4-3): 격자 시각(곡 시각 − 1마디 1박 원점) 기준. 마지막 리드인 마디에 남은 박 수,
+        // 격자 0에서 「시작!」, 앞 빈 마디는 숫자 없이 leadBlank. 일시정지·재연결 복귀 카운트다운 중에는 값을 건드리지 않는다
         const status = ss.currentStatus;
-        if (status === 'countin') {
-          wasCountin.current = true;
-          setCountValue(Math.max(1, Math.ceil(-ss.songTime(now) / ss.beatMs)));
-        } else if (status === 'playing' && wasCountin.current) {
-          wasCountin.current = false;
-          setCountValue('go');
-          goTimer.current = window.setTimeout(() => {
-            goTimer.current = null;
+        if ((status === 'countin' || status === 'playing') && !isResuming()) {
+          const bpb = ss.chart.beatsPerBar;
+          const g = ss.songTime(now) - ss.originMs;
+          const c = leadInCount(g, ss.beatMs, bpb);
+          if (c !== null) {
+            wasCounting.current = true;
+            setCountValue(c);
+          } else if (g >= 0) {
+            if (wasCounting.current) {
+              wasCounting.current = false;
+              setCountValue('go');
+              goTimer.current = window.setTimeout(() => {
+                goTimer.current = null;
+                setCountValue(null);
+              }, GO_MS);
+            }
+          } else {
             setCountValue(null);
-          }, GO_MS);
+          }
+          setLeadBlank(isLeadInBlank(g, ss.beatMs, bpb, Math.round(ss.countInMs / (ss.beatMs * bpb))));
         }
         if (clock.state.phase === 'running' && now - lastHud.current > HUD_INTERVAL_MS) {
           lastHud.current = now;
@@ -647,7 +662,7 @@ function SheetPageBody() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [stage]);
+  }, [stage, isResuming]);
 
   // Enter / Esc
   useEffect(() => {
@@ -859,8 +874,9 @@ function SheetPageBody() {
         realign={realign.info}
       />
     );
-  } else if (countValue !== null) {
-    overlay = <Countdown value={countValue} />;
+  } else if (countValue !== null || (leadBlank && !isResuming())) {
+    // 재연결 복귀 카운트다운은 기존 딤, 리드인은 빈 마디 soft → 숫자 마디 clear (같은 요소가 유지돼 배경만 전환)
+    overlay = <Countdown value={countValue} backdrop={isResuming() ? 'dim' : countValue === null ? 'soft' : 'clear'} />;
   }
 
   return (
@@ -890,7 +906,6 @@ function SheetPageBody() {
             strayHits={strays}
             hitMarks={hitMarks}
             getSongTime={getSongTime}
-            countInMs={activeSession.countInMs}
             fxSource={sheetFx.source}
             overlay={
               settings.timingBar ? (
