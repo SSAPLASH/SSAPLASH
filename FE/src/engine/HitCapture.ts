@@ -1,7 +1,7 @@
 // 2타 보정 상태 기계(PLAY-004 3-5, UX-64 D3, 보정 흐름 개편 D1~D7). 패드 순서대로 연결된 손마다 2타를 받아 손별 앵커를 만든다.
 // 패드가 차면 같은 손의 다른 패드 앵커(이번 세션 끝난 패드 + 세션 밖 base)와 간격을 검사한다.
-// 경고가 없으면 advanceDelayMs 뒤 자동으로 다음 패드(순서상 안 끝난 첫 패드, 없으면 done)로 가고,
-// 경고가 있으면 padDone(확인 대기)에서 멈춰 redo()·next()를 기다린다 — 화면의 [다시]/[다음].
+// 경고 여부와 상관없이 advanceDelayMs 뒤 자동으로 다음 패드(순서상 안 끝난 첫 패드, 없으면 done)로 간다(v0.2 D3, 멈추지 않는다).
+// 간격 경고(gapWarnings)는 자동 진행 후에도 남고, 다음 패드의 첫 타격이 수락될 때·redo·start/restart·cancel 때 비운다 — 화면의 경고 배너.
 // 소리·스틱 명령·전송은 하지 않는다 — app/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
 import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
@@ -31,7 +31,7 @@ export const DEFAULT_CAPTURE_OPTIONS: HitCaptureOptions = {
   advanceDelayMs: 400,
 };
 
-/** padDone = 현재 패드를 대상 손 전부가 채웠다. 경고가 있으면 next()/redo()를 기다리고, 없으면 advancing 동안 잠깐 있다 자동 진행 */
+/** padDone = 현재 패드를 대상 손 전부가 채웠다. advancing 동안 잠깐 있다 자동 진행한다(경고가 있어도 같다) */
 export type CapturePhase = 'idle' | 'capturing' | 'padDone' | 'done';
 
 export interface CaptureWarning {
@@ -68,14 +68,16 @@ export interface CaptureSnapshot {
   captured: Partial<Record<PadId, [PadAnchor | undefined, PadAnchor | undefined]>>;
   /** 마지막 퍼짐 경고. 다음 수락 타격에서 지운다 */
   warning: CaptureWarning | null;
-  /** 현재 패드의 간격 경고(손별 최대 1개). 비어 있지 않으면 padDone에서 멈춘다 */
+  /** 방금 끝난 패드의 간격 경고(손별 최대 1개). 멈추지 않는다: 자동 진행 후에도 남고, 다음 패드의 첫 타격 수락·redo·start·cancel에서 비운다(마지막 패드면 done에도 남음) */
   gapWarnings: GapWarning[];
-  /** 경고 없이 자동 진행 대기 중(padDone이지만 버튼을 그리지 않는다) */
+  /** 자동 진행 대기 중(padDone) */
   advancing: boolean;
   /** 마지막으로 수락한 타격 */
   lastAccepted: { stickId: StickId; pad: PadId; at: number } | null;
   /** 사용자가 슬라이더로 정한 패드별 판정 반경(도, UX-64 D9). build에서 양손 앵커의 radiusOverride가 된다 */
   radiusOverrides: Partial<Record<PadId, number>>;
+  /** 세션 밖 패드의 손별 앵커(D14). 결과 화면의 겹침 계산이 세션 앵커와 합친다. 없으면 [null, null] */
+  base: HandAnchors;
 }
 
 type Listener = (s: CaptureSnapshot) => void;
@@ -122,6 +124,7 @@ export class HitCapture {
       advancing: this.advanceTimer !== null,
       lastAccepted: this.lastAccepted,
       radiusOverrides: { ...this.radiusOverrides },
+      base: [this.base[0], this.base[1]],
     };
   }
 
@@ -205,16 +208,15 @@ export class HitCapture {
     this.notify();
   }
 
-  /** 확인 대기(padDone)에서 다음 패드로(경고는 무시). 순서상 안 끝난 첫 패드, 없으면 done. 다른 단계에서는 무동작 */
+  /** 확인 대기(padDone)에서 바로 다음 패드로(자동 진행을 기다리지 않는다. 화면은 쓰지 않는다). 순서상 안 끝난 첫 패드, 없으면 done. 다른 단계에서는 무동작 */
   next(): void {
     if (this.phase !== 'padDone') return;
     this.advance();
   }
 
-  /** 안 끝난 첫 패드로 이동(D7). 끝났는지는 어느 손이든 앵커가 있으면 끝난 것(나중에 붙은 손은 건너뜀) */
+  /** 안 끝난 첫 패드로 이동(D7). 끝났는지는 어느 손이든 앵커가 있으면 끝난 것(나중에 붙은 손은 건너뜀). 간격 경고는 유지한다(배너용) */
   private advance(): void {
     this.clearAdvance();
-    this.gapWarnings = [];
     this.samples = [[], []];
     const next = this.order.findIndex((p) => !this.captured[p]?.some((a) => a !== undefined));
     if (next < 0) {
@@ -257,6 +259,7 @@ export class HitCapture {
     if (ring.length >= this.opts.hitsPerPad) return false;
     ring.push({ pitch: pose.pitch, yaw: pose.yaw });
     this.warning = null;
+    this.gapWarnings = []; // 다음 패드의 첫 수락 타격에서 앞 패드의 간격 경고를 지운다
     this.lastAccepted = { stickId, pad: target, at: now };
     if (ring.length >= this.opts.hitsPerPad) {
       const spread = this.spreadOf(ring);
@@ -285,8 +288,8 @@ export class HitCapture {
   }
 
   /**
-   * 대상 손 전부가 현재 패드를 채웠으면 간격을 검사한다. 경고가 있으면 padDone에서 대기(next·redo),
-   * 없으면 advanceDelayMs 뒤 자동 진행(그동안은 padDone·advancing이라 타격 무시)
+   * 대상 손 전부가 현재 패드를 채웠으면 간격을 검사해 gapWarnings에 담고, 경고 여부와 상관없이
+   * advanceDelayMs 뒤 자동 진행한다(그동안은 padDone·advancing이라 타격 무시)
    */
   private settleIfFilled(): void {
     const target = this.order[this.index];
@@ -294,7 +297,6 @@ export class HitCapture {
     if (!filled) return;
     this.gapWarnings = this.checkGaps(target);
     this.phase = 'padDone';
-    if (this.gapWarnings.length > 0) return;
     if (this.opts.advanceDelayMs <= 0) {
       this.advance();
       return;
