@@ -220,4 +220,8 @@
 .play-sd .play-sd-play {
   flex: 1;
   min-width: 0;
+  /* 카드의 유일한 강조 동작이라 아이콘(20)·글자(17)를 한 단계 키운다 */
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
 }
