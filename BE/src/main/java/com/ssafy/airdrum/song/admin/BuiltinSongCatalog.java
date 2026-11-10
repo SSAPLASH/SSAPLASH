@@ -12,6 +12,8 @@ import java.util.regex.Pattern;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 
+import com.ssafy.airdrum.lesson.LessonKind;
+import com.ssafy.airdrum.lesson.LessonSpec;
 import com.ssafy.airdrum.song.meta.SongMetadata;
 
 import tools.jackson.core.StreamReadFeature;
@@ -30,8 +32,12 @@ final class BuiltinSongCatalog {
 	 * 카탈로그 한 곡. MIDI는 이미 읽은 바이트다. {@code offsetMs}는 원본 음원 0초 기준 첫 마디 첫 박 시각(ms)으로,
 	 * MIDI 0틱 = 음원 0초인 곡에서 솎기 격자의 원점이 된다(260번 설계 3-1절). 생략하면 0.
 	 * {@code meta}는 곡 추천용 메타데이터(255번 설계 3-1절)이고 생략하면 null.
+	 * {@code lesson}은 입문 코스 레슨 정보(331번 설계 3-1절)이고 레슨이 아닌 곡은 null.
 	 */
-	record Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs, SongMetadata meta) {
+	record Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs, SongMetadata meta, LessonSpec lesson) {
+		Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs, SongMetadata meta) {
+			this(title, artist, license, published, midi, offsetMs, meta, null);
+		}
 	}
 
 	/** 카탈로그 규칙 위반. 메시지에 원인 곡 제목을 적는다. */
@@ -41,7 +47,8 @@ final class BuiltinSongCatalog {
 		}
 	}
 
-	private static final Set<String> FIELDS = Set.of("title", "artist", "license", "midi", "published", "offsetMs", "meta");
+	private static final Set<String> FIELDS = Set.of("title", "artist", "license", "midi", "published", "offsetMs", "meta", "lesson");
+	private static final Set<String> LESSON_FIELDS = Set.of("order", "kind", "summary", "pads", "guide");
 	private static final Set<String> META_FIELDS = Set.of("genre", "subGenres", "mood", "energy", "releaseYear", "language", "drumStyle",
 			"source", "sourceNote");
 	/** 곡 길이 상한(30분, MIDI 변환 규칙)과 같다. */
@@ -100,12 +107,63 @@ final class BuiltinSongCatalog {
 				offsetMs = offset.asInt();
 			}
 			SongMetadata meta = node.has("meta") ? meta(node.get("meta"), where) : null;
+			LessonSpec lesson = node.has("lesson") ? lesson(node.get("lesson"), where) : null;
 			if (!titles.add(title)) throw new Invalid(where + ": 제목이 중복됩니다.");
 			byte[] midi = files.apply(midiName);
 			if (midi == null) throw new Invalid(where + ": MIDI 파일이 없습니다(" + midiName + ").");
-			entries.add(new Entry(title, artist, license, published, midi, offsetMs, meta));
+			entries.add(new Entry(title, artist, license, published, midi, offsetMs, meta, lesson));
 		}
+		lessonOrders(entries);
 		return List.copyOf(entries);
+	}
+
+	/** 331번 설계 3-1절. 형식은 여기서, 값 규칙은 {@link LessonSpec}이 검사한다. guide는 알아보기(READ) 레슨에만 쓴다. */
+	private static LessonSpec lesson(JsonNode node, String where) {
+		if (!node.isObject()) throw new Invalid(where + ": lesson은 객체여야 합니다.");
+		for (var field : node.propertyNames())
+			if (!LESSON_FIELDS.contains(field)) throw new Invalid(where + ": lesson에 모르는 필드 " + field);
+		var order = node.get("order");
+		if (order == null || !order.isIntegralNumber() || !order.canConvertToInt()) throw new Invalid(where + ": lesson.order는 정수여야 합니다.");
+		LessonKind kind = LessonKind.PLAY;
+		if (node.has("kind")) {
+			if (!node.get("kind").isString()) throw new Invalid(where + ": lesson.kind는 READ·PLAY여야 합니다.");
+			try {
+				kind = LessonKind.valueOf(node.get("kind").asString());
+			} catch (IllegalArgumentException e) {
+				throw new Invalid(where + ": lesson.kind는 READ·PLAY여야 합니다.");
+			}
+		}
+		var summary = node.get("summary");
+		if (summary == null || !summary.isString()) throw new Invalid(where + ": lesson.summary는 문자열이어야 합니다.");
+		var pads = node.get("pads");
+		if (pads == null || !pads.isArray()) throw new Invalid(where + ": lesson.pads는 문자열 배열이어야 합니다.");
+		var names = new ArrayList<String>();
+		for (var pad : pads) {
+			if (!pad.isString()) throw new Invalid(where + ": lesson.pads는 문자열 배열이어야 합니다.");
+			names.add(pad.asString());
+		}
+		boolean guide = true;
+		if (node.has("guide")) {
+			if (kind != LessonKind.READ) throw new Invalid(where + ": lesson.guide는 READ 레슨에만 쓴다.");
+			if (!node.get("guide").isBoolean()) throw new Invalid(where + ": lesson.guide는 true·false여야 합니다.");
+			guide = node.get("guide").asBoolean();
+		}
+		try {
+			return new LessonSpec(order.asInt(), kind, summary.asString(), names, guide);
+		} catch (IllegalArgumentException e) {
+			throw new Invalid(where + ": lesson." + e.getMessage());
+		}
+	}
+
+	/** 레슨 순서는 카탈로그 안에서 겹치지 않고 1부터 빈 번호 없이 이어진다. */
+	private static void lessonOrders(List<Entry> entries) {
+		var orders = new HashSet<Integer>();
+		for (var entry : entries) {
+			if (entry.lesson() == null) continue;
+			if (!orders.add(entry.lesson().order())) throw new Invalid(entry.title() + ": 레슨 순서 " + entry.lesson().order() + "이 겹칩니다.");
+		}
+		for (int i = 1; i <= orders.size(); i++)
+			if (!orders.contains(i)) throw new Invalid("레슨 순서는 1부터 빈 번호 없이 이어져야 합니다(" + i + "번이 없습니다).");
 	}
 
 	/** 255번 설계 3-1절. 형식(객체·문자열·정수·문자열 배열)은 여기서, 값 규칙은 {@link SongMetadata}가 검사한다. */
