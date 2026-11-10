@@ -69,16 +69,25 @@ describe('timingBar', () => {
   });
 
   describe('범위 밖 타격 점 (설계 MODE-003-timing-bar-miss-dot)', () => {
-    it('빠름은 왼쪽(−1), 늦음은 오른쪽(1) 바깥 점이고 눈금에는 없다', () => {
+    it('빠름은 음수·늦음은 양수 위치의 MISS 눈금이고 일반 눈금에는 없다', () => {
       let s = addMissMark(EMPTY_TIMING_BAR, { deltaMs: -80, at: 0 });
       s = addMissMark(s, { deltaMs: 95, at: 0 });
       const v = timingBarView(s, 0, 60);
-      expect(v.misses).toEqual([
-        { side: -1, alpha: 1 },
-        { side: 1, alpha: 1 },
-      ]);
+      expect(v.misses).toHaveLength(2);
+      expect(v.misses[0].pos).toBeCloseTo(-80 / 60);
+      expect(v.misses[1].pos).toBeCloseTo(95 / 60);
       expect(v.ticks).toEqual([]);
       expect(hasLiveTicks(s, 0)).toBe(true);
+    });
+
+    it('|delta| goodMs→2·goodMs를 |pos| 1→2로 선형 배치하고 밖은 끝에 붙인다', () => {
+      const posOf = (d: number) => timingBarView(addMissMark(EMPTY_TIMING_BAR, { deltaMs: d, at: 0 }), 0, 60).misses[0].pos;
+      expect(posOf(60.6)).toBeCloseTo(1.01, 2);
+      expect(posOf(90)).toBeCloseTo(1.5);
+      expect(posOf(-120)).toBeCloseTo(-2);
+      expect(posOf(180)).toBe(2);
+      expect(posOf(-180)).toBe(-2);
+      expect(posOf(-30)).toBe(-1);
     });
 
     it('2초에 걸쳐 옅어지고 사라진다', () => {
