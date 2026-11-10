@@ -5,10 +5,10 @@ import { StaffLegend } from './StaffLegend';
 
 afterEach(cleanup);
 
-describe('StaffLegend grid 상호작용', () => {
+describe('StaffLegend 상호작용', () => {
   it('칸에 올리면 그 패드, 벗어나면 null을 onHoverPad로 알린다', () => {
     const onHoverPad = vi.fn();
-    const { container } = render(<StaffLegend layout="grid" onHoverPad={onHoverPad} />);
+    const { container } = render(<StaffLegend onHoverPad={onHoverPad} />);
     const cell = container.querySelectorAll('li.play-sl-cell')[5];
     fireEvent.mouseEnter(cell);
     fireEvent.mouseLeave(cell);
@@ -17,7 +17,7 @@ describe('StaffLegend grid 상호작용', () => {
 
   it('포커스·블러도 같은 콜백으로 전달한다', () => {
     const onHoverPad = vi.fn();
-    const { container } = render(<StaffLegend layout="grid" onHoverPad={onHoverPad} />);
+    const { container } = render(<StaffLegend onHoverPad={onHoverPad} />);
     const cell = container.querySelectorAll('li.play-sl-cell')[7];
     fireEvent.focus(cell);
     fireEvent.blur(cell);

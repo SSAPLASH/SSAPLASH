@@ -19,29 +19,6 @@
   color: var(--text-2);
   font-size: 12px;
 }
-.play-sl-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.play-sl-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  padding: 0 var(--space-s);
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  font-size: 14px;
-  cursor: default;
-}
-.play-sl-row:hover,
-.play-sl-row.active {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-}
 .play-sl-staff {
   flex: none;
 }
@@ -58,12 +35,6 @@
 .play-sl-sym.fill {
   fill: var(--text-1);
   stroke: none;
-}
-.play-sl-dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
 }
 .play-sl-name {
   flex: 1 1 auto;
@@ -83,13 +54,7 @@
   font-size: 11px;
 }
 
-.play-sl-open {
-  display: block;
-  color: var(--text-2);
-  font-size: 11px;
-}
-
-/* ── grid(2열 카드, 설계 U9 C안): 카드 영역이 남은 높이를 5등분 ── */
+/* ── 2열 카드(설계 U9 C안): 카드 영역이 남은 높이를 5등분 ── */
 .play-sl.grid {
   min-height: 0;
 }

@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 
 const nowLine = () => document.querySelector('.guide-now') as HTMLElement;
-const activeRows = () => [...document.querySelectorAll('.play-sl-row.active, .play-sl-cell.active')].map((r) => r.getAttribute('aria-label')?.split(' — ')[0]);
+const activeRows = () => [...document.querySelectorAll('.play-sl-cell.active')].map((r) => r.getAttribute('aria-label')?.split(' — ')[0]);
 const padStates = (s: string) => document.querySelectorAll(`.drum-pad[data-state="${s}"]`).length;
 
 describe('PickerGuide', () => {
