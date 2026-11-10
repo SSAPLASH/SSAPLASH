@@ -63,7 +63,7 @@ describe('CalibrationStage 보정 진행', () => {
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('[data-testid="cal-stage-capture"]')).not.toBeNull();
     expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('크래시를 2번 타격하세요');
-    expect(screen.getByText('크래시 2/7')).toBeTruthy();
+    expect(screen.getByText('2 / 7')).toBeTruthy();
     expect(container.querySelector('[aria-label="왼손 1/2"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
     expect(container.querySelectorAll('.drum-pad-lit').length).toBe(1);
@@ -115,7 +115,7 @@ describe('CalibrationStage 보정 진행', () => {
   it('패드 단위 재보정(T9): order가 한 패드면 진행 점 1개, 그 패드만 켜진다', () => {
     setCapture({ order: ['HIHAT'], index: 0, target: 'HIHAT', counts: [0, 0], captured: {} });
     const { container } = render(<CalibrationStage />);
-    expect(screen.getByText('하이햇 1/1')).toBeTruthy();
+    expect(screen.getByText('1 / 1')).toBeTruthy();
     expect(container.querySelectorAll('.drum-pad-lit').length).toBe(1);
     expect(container.querySelector('[aria-label="0 / 1 패드 완료"]')).not.toBeNull();
   });
@@ -136,7 +136,7 @@ describe('CalibrationStage 간격 경고 배너(D3, v0.2)', () => {
     setCapture(warnCap());
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();
-    expect(screen.getByText('스네어 3/7')).toBeTruthy();
+    expect(screen.getByText('3 / 7')).toBeTruthy();
     expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
     expect(screen.getByText('왼손 크래시가 하이햇과 10°밖에 안 떨어져 있어요')).toBeTruthy();
     expect(screen.getByText('크래시는 스틱 끝을 더 높이 들고 바깥쪽으로, 하이햇은 앞쪽 아래로 쳐 보세요')).toBeTruthy();
