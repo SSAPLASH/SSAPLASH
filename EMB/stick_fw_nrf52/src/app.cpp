@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <bluefruit.h>
+#include <nrf_soc.h>                       /* sd_clock_hfclk_request */
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
 #include <Adafruit_NeoPixel.h>             /* 상태 LED (라이브러리 매니저: "Adafruit NeoPixel") */
@@ -38,8 +39,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 8                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343) */
-#define FW_TAG   "BOOT 1.8 nrf52"
+#define FW_MINOR 9                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345) */
+#define FW_TAG   "BOOT 1.9 nrf52"
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -88,7 +89,10 @@ static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 �
 
 /* ===================== µs 시계 (TIMER4, 1MHz, 32비트) =====================
  * 프로토콜 시각이 µs u32(약 71.6분 랩어라운드)이므로 하드웨어 타이머를 그대로 쓴다.
- * Arduino micros()는 이 보드에서 약 1ms 단위라 쓰지 않는다 (2026-10-26 실측) */
+ * Arduino micros()는 이 보드에서 약 1ms 단위라 쓰지 않는다 (2026-10-26 실측)
+ * TIMER4는 HFCLK로 돈다. SoftDevice는 무선을 쓸 때만 크리스탈(HFXO)을 켜고 그 사이엔 내부 RC(HFINT)로 돌려서
+ * 보드마다 시계가 분당 수십 ms씩 다르게 흘렀다 (11/10 모니터: 오른손 오프셋 6분에 −176ms, 웹 판정이 손마다 어긋남).
+ * hfxo_hold()로 크리스탈을 계속 켜 둔다 (약 0.25mA 더 씀, 오차 ±20ppm = 분당 약 1ms) */
 static void clock_init()
 {
     NRF_TIMER4->TASKS_STOP = 1;
@@ -97,6 +101,15 @@ static void clock_init()
     NRF_TIMER4->PRESCALER = 4;                         /* 16MHz / 2^4 = 1MHz */
     NRF_TIMER4->TASKS_CLEAR = 1;
     NRF_TIMER4->TASKS_START = 1;
+}
+
+/* SoftDevice가 켜진 뒤(Bluefruit.begin 다음)에 부른다. 켜졌는지 로그로 남긴다 */
+static bool hfxo_hold()
+{
+    if (sd_clock_hfclk_request() != NRF_SUCCESS) return false;
+    uint32_t running = 0;
+    for (int i = 0; i < 50 && !running; i++) { sd_clock_hfclk_is_running(&running); delay(1); }   /* 기동 약 0.4ms */
+    return running != 0;
 }
 static inline uint32_t now_us()                        /* 메인 루프용 (CC[0]) */
 {
@@ -457,6 +470,7 @@ static void power_off(const char *why)
     Bluefruit.Advertising.stop();
     for (uint16_t h = 0; h < BLE_MAX_CONNECTION; h++)
         if (Bluefruit.connected(h)) Bluefruit.disconnect(h);
+    sd_clock_hfclk_release();                           /* 꺼진 동안은 크리스탈 끔 (0.25mA) */
     for (;;) {
         delay(50);                                      /* FreeRTOS 대기: CPU는 잔다 */
         if (digitalRead(PIN_USER_SW)) continue;
@@ -821,6 +835,7 @@ void app_setup()
     Wire.begin();
     Wire.setClock(400000);
     ble_init();
+    bool hfxo = hfxo_hold();
     InternalFS.begin();                                 /* 보드별 바이어스 저장 (Bluefruit 본딩과 같은 파일시스템) */
 
     if (!imu_init()) {
@@ -839,6 +854,7 @@ void app_setup()
     pad_table_default(&pads);
 
     send_log(FW_TAG);
+    send_log(hfxo ? "HFXO on" : "HFXO FAIL");
     if (i2c_state) send_log(i2c_state == 1 ? "I2C stuck->freed" : "I2C stuck SDA low");
     drv_init();                                         /* 자동 보정 진동 = 켜짐 알림. 정지 측정 전에 끝냄 */
     delay(200);
