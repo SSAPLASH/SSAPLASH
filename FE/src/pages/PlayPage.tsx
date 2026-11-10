@@ -52,7 +52,8 @@ import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
 import { readCurrentConsent } from '@/app/dataConsent';
-import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -114,6 +115,10 @@ function PlayPageBody() {
   const clockRef = useRef<PlayClock | null>(null);
   // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
   const { ready, missing } = useReadiness();
+  // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
+  useEffect(() => {
+    void refreshCoachModels();
+  }, []);
   const readyRef = useRef(ready);
   useEffect(() => {
     readyRef.current = ready;
@@ -277,13 +282,22 @@ function PlayPageBody() {
       });
       // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 채보마다 한 번 계산한다
       const coachContext = chartCoachContext(c.notes);
+      // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
+      const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
       const coach = new LiveCoach({
         goodMs: settings.timing.goodMs,
         enabled: settings.liveCoach,
         setupHints: isStickSensor(useSettings.getState().sensorKind),
         noteGapMedianMs: coachContext.noteGapMedianMs,
         onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+        gate: model.gate,
+        gateMode: model.mode,
+        arm: model.arm,
+        causeModel: model.cause,
+        causeArm: model.causeArm,
       });
+      // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
+      void refreshCoachModels();
       coachRef.current = coach;
       shadowRef.current = null;
       // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
