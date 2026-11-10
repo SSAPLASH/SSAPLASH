@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { Chart } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import { diagTap, type DiagEvent } from './diagTap';
-import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from './diagReport';
+import { diagSessionEnd, diagSessionPhase, diagSessionStart, onDiagSessionStart, reportHit } from './diagReport';
 import { RhythmSession } from './RhythmSession';
 
 const chart: Chart = {
@@ -113,5 +113,53 @@ describe('세션 진단', () => {
     // 종료 뒤 또 불러도 무동작
     diagSessionEnd('left');
     expect(events).toHaveLength(3);
+  });
+});
+
+describe('곡 시작 anchors 줄 (PLAY-002 실연주 진단)', () => {
+  const a = (pad: 'SNARE' | 'HIHAT', yaw: number) => ({ pad, pitch: 10, yaw, radius: 12, radiusOverride: 12, samples: 2, spread: 1.5 });
+
+  it('session start·notes 뒤에 anchors를 1회 낸다. 보정 안 한 손은 null', () => {
+    const ss = mkSession();
+    diagSessionStart(ss, 'RHYTHM', {
+      windows,
+      audioOffsetMs: 0,
+      anchors: [{ SNARE: a('SNARE', -20), HIHAT: a('HIHAT', -50) }, null],
+      calibratedAt: 1234,
+      presetId: 'system',
+    });
+    expect(events.map((e) => e.type)).toEqual(['session', 'notes', 'anchors']);
+    const ev = events[2];
+    if (ev.type !== 'anchors') throw new Error('anchors 아님');
+    expect(ev.hands[1]).toBeNull();
+    expect(ev.hands[0]).toEqual([
+      { pad: 'SNARE', pitch: 10, yaw: -20, radius: 12, samples: 2, spread: 1.5 },
+      { pad: 'HIHAT', pitch: 10, yaw: -50, radius: 12, samples: 2, spread: 1.5 },
+    ]);
+    expect(ev.calibratedAt).toBe(1234);
+    expect(ev.presetId).toBe('system');
+  });
+
+  it('재시작하면 다시 낸다. anchors를 넘기지 않으면 내지 않는다', () => {
+    const ss = mkSession();
+    const opts = { windows, audioOffsetMs: 0, anchors: [null, null] as [null, null] };
+    diagSessionStart(ss, 'SHEET', opts);
+    diagSessionStart(ss, 'SHEET', opts);
+    const anchors = events.filter((e) => e.type === 'anchors');
+    expect(anchors).toHaveLength(2);
+    expect(anchors[0].type === 'anchors' && anchors[0].calibratedAt).toBeNull();
+    events.length = 0;
+    diagSessionStart(ss, 'SHEET', { windows, audioOffsetMs: 0 });
+    expect(events.map((e) => e.type)).toEqual(['session', 'notes']);
+  });
+
+  it('곡 시작 훅은 anchors 뒤에 1회 불린다', () => {
+    const order: string[] = [];
+    const offOrder = diagTap.subscribe((e) => order.push(e.type));
+    onDiagSessionStart(() => order.push('hook'));
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, anchors: [null, null] });
+    onDiagSessionStart(null);
+    offOrder();
+    expect(order).toEqual(['session', 'notes', 'anchors', 'hook']);
   });
 });
