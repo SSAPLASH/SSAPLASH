@@ -69,7 +69,8 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { chartCoachContext, coachCopy, isStickSensor, LiveCoach, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
@@ -500,13 +501,20 @@ function SheetPageBody() {
     await unlockAudio();
     resetRun(ss);
     const st = useSettings.getState();
+    // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
+    const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
     const coach = new LiveCoach({
       goodMs: st.timing.goodMs,
       enabled: st.liveCoach,
       setupHints: isStickSensor(st.sensorKind),
       noteGapMedianMs: chartCoachContext(ss.chart.notes).noteGapMedianMs,
       onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+      gate: model.gate,
+      gateMode: model.mode,
+      arm: model.arm,
     });
+    // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
+    void refreshCoachModels();
     coachRef.current = coach;
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
@@ -603,6 +611,11 @@ function SheetPageBody() {
     inputManager.setCandidateProvider(null);
     clearParam();
   }, [clearParam]);
+
+  // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
+  useEffect(() => {
+    void refreshCoachModels();
+  }, []);
 
   // 연주 중(play)은 셸을 숨긴 전체 화면. 곡 선택·준비는 TopBar 제목 "악보 연습"
   useShell({ title: '악보 연습', immersive: stage === 'play' });
