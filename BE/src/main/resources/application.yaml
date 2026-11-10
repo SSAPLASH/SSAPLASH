@@ -95,6 +95,13 @@ recommend:
     relevance-weight: ${RECOMMEND_R3_RELEVANCE_WEIGHT:0.75}
     accepted-model-versions: ${RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS:}
 
+# 연주 중 LLM 구간 코칭(COACH-001). 기본 꺼짐이고 꺼져 있으면 요청이 204로 끝난다. 상한은 GPU를 지키는 값이다.
+live-coach:
+  llm:
+    enabled: ${LIVE_COACH_LLM_ENABLED:false}
+    per-run: ${LIVE_COACH_LLM_PER_RUN:10}
+    per-minute: ${LIVE_COACH_LLM_PER_MINUTE:6}
+
 worker:
   storage:
     url-ttl: ${WORKER_STORAGE_URL_TTL:10m}
