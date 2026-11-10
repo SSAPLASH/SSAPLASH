@@ -40,6 +40,10 @@ WRONG_PAD_SHARE = 0.5
 TRANSITION_MIN_REPEAT = 2
 TRANSITION_SHARE = 0.5
 TRANSITION_RATE = 0.5
+# 같은 패드를 다른 곳에서 넘어와 친 노트가 이만큼은 있어야 비교한다
+TRANSITION_MIN_CONTRAST = 2
+# 그 이동의 놓침 비율이 비교 대상 놓침 비율의 몇 배 이상이어야 하나
+TRANSITION_LIFT = 2.5
 DRIFT_LOOKBACK = 3
 DRIFT_LATE_COEF = 0.3
 DRIFT_RISE_COEF = 0.2
@@ -532,10 +536,16 @@ def _transition(
     for (src, dst), count in counts.items():
         if count < TRANSITION_MIN_REPEAT:
             continue
-        total = sum(1 for n in ordered if n.pad == dst and src in _from_pads(n))
-        rate = 0.0 if total == 0 else count / total
+        moved = [n for n in ordered if n.pad == dst and src in _from_pads(n)]
+        rate = 0.0 if not moved else count / len(moved)
         share = count / len(misses)
-        if share < TRANSITION_SHARE or rate < TRANSITION_RATE:
+        # 같은 패드를 다른 곳에서 넘어와 친 노트(비교 대상). 같은 이동만 반복되는 채보에서는
+        # 이동 탓인지 그 패드 탓인지 가를 수 없어서 이동으로 보지 않는다. 비교 대상보다 확실히 더 놓칠 때만 이동 탓이다(설계 U14)
+        contrast = [n for n in ordered if n.pad == dst and src not in _from_pads(n)]
+        if len(contrast) < TRANSITION_MIN_CONTRAST:
+            continue
+        base = sum(n.judgement == "MISS" for n in contrast) / len(contrast)
+        if share < TRANSITION_SHARE or rate < TRANSITION_RATE or rate < TRANSITION_LIFT * base:
             continue
         if best is None or share > best[0] or (share == best[0] and rate > best[1]):
             best = (share, rate, src, dst)
