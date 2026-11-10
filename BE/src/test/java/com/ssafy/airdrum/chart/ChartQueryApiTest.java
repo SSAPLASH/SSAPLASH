@@ -100,6 +100,76 @@ class ChartQueryApiTest {
 		for (String query : List.of("?songLevel=", "?songLevel=beginner", "?songLevel=UNKNOWN", "?playableOnly=no"))
 			problem("/api/v1/songs"+query,400,"INVALID_INPUT");
 	}
+	@Test void accompanimentFilterMatchesLatestStatusBeforePaginationAndHonorsVisibility() throws Exception {
+		long ready = song(owner, "반주 보유", "MIDI", "READY");
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/"+ready+".flac", ready);
+		var readyOriginal = midiOriginal(ready, owner);
+		midiJob(ready, owner, readyOriginal, "FAILED");
+		long queued = song(owner, "반주 대기", "MIDI", "READY");
+		midiJob(queued, owner, midiOriginal(queued, owner), "QUEUED");
+		long running = song(owner, "반주 생성", "MIDI", "READY");
+		midiJob(running, owner, midiOriginal(running, owner), "RUNNING");
+		long processing = song(owner, "반주 처리", "MIDI", "PROCESSING");
+		midiJob(processing, owner, midiOriginal(processing, owner), "QUEUED");
+		long latestFailed = song(owner, "반주 실패", "MIDI", "READY");
+		var failedOriginal = midiOriginal(latestFailed, owner);
+		midiJob(latestFailed, owner, failedOriginal, "QUEUED");
+		midiJob(latestFailed, owner, failedOriginal, "FAILED");
+		song(owner, "반주 없음", "MIDI", "READY");
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/"+hiddenSong+".flac", hiddenSong);
+		long deleted = song(owner, "삭제 곡", "AUDIO", "READY");
+		db.update("UPDATE songs SET accompaniment_key=?,deleted_at=now() WHERE id=?", "accompaniment/"+deleted+".flac", deleted);
+
+		String filtered = "/api/v1/songs?source=MINE&withAccompaniment=true&size=1";
+		long[] expected = {processing, running, queued, ready};
+		String[] statuses = {"GENERATING", "GENERATING", "GENERATING", "READY"};
+		for (int i=0; i<expected.length; i++) {
+			var page = ok(filtered+"&page="+i);
+			assertThat(page.path("totalElements").asLong()).isEqualTo(4);
+			assertThat(page.path("totalPages").asInt()).isEqualTo(4);
+			assertThat(page.path("hasNext").asBoolean()).isEqualTo(i<3);
+			assertThat(page.path("items").get(0).path("id").asLong()).isEqualTo(expected[i]);
+			assertThat(page.path("items").get(0).path("accompanimentStatus").asString()).isEqualTo(statuses[i]);
+		}
+		var empty = ok(filtered+"&page=9");
+		assertThat(empty.path("items").size()).isZero();
+		assertThat(empty.path("totalElements").asLong()).isEqualTo(4);
+		assertThat(empty.path("hasNext").asBoolean()).isFalse();
+		assertThat(ok("/api/v1/songs?source=MINE&withAccompaniment=false").path("totalElements").asLong())
+				.isEqualTo(ok("/api/v1/songs?source=MINE").path("totalElements").asLong());
+		assertThat(ok("/api/v1/songs?source=MINE&withAccompaniment=true&q=실패").path("totalElements").asLong()).isZero();
+		assertThat(ok("/api/v1/songs?source=MINE&withAccompaniment=true&q=대기").path("items").get(0).path("id").asLong()).isEqualTo(queued);
+		for (String invalid : List.of("", "TRUE", "yes", "1"))
+			problem("/api/v1/songs?withAccompaniment="+invalid, 400, "INVALID_INPUT");
+	}
+	@Test void accompanimentFilterIntersectsBuiltinSearchLevelAndPlayableFilters() throws Exception {
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/"+builtin+".wav", builtin);
+		long unpublished = song(null, "비공개", "BUILTIN", "READY");
+		db.update("UPDATE songs SET accompaniment_key=?,published=false WHERE id=?", "accompaniment/"+unpublished+".wav", unpublished);
+		var built = ok("/api/v1/songs?source=BUILTIN&withAccompaniment=true");
+		assertThat(built.path("totalElements").asLong()).isEqualTo(1);
+		assertThat(built.path("items").get(0).path("id").asLong()).isEqualTo(builtin);
+		long rated = ratedSong(owner, "레벨 반주", "READY", "BEGINNER");
+		db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/"+rated+".wav", rated);
+		ratedSong(owner, "레벨 무반주", "READY", "BEGINNER");
+		var intersection = ok("/api/v1/songs?source=MINE&withAccompaniment=true&songLevel=BEGINNER&playableOnly=true&q=레벨");
+		assertThat(intersection.path("totalElements").asLong()).isEqualTo(1);
+		assertThat(intersection.path("items").get(0).path("id").asLong()).isEqualTo(rated);
+		assertThat(ok("/api/v1/songs?source=MINE&withAccompaniment=true&songLevel=ADVANCED&playableOnly=true").path("totalElements").asLong()).isZero();
+	}
+	private java.util.UUID midiOriginal(long song, long user) {
+		var id = java.util.UUID.randomUUID();
+		db.update("INSERT INTO midi_original_uploads(id,user_id,reserved_song_id,song_id,object_key,size_bytes,sha256,status,expires_at) VALUES(?,?,?,?,?,1,?,'ACCEPTED',now()+interval '1 hour')",
+				id,user,song,song,"midi-original/"+id,"a".repeat(64));
+		return id;
+	}
+	private void midiJob(long song, long user, java.util.UUID original, String state) {
+		db.update("""
+			INSERT INTO midi_accompaniment_jobs(song_id,user_id,original_id,timing,duration_ms,status,attempt_id,lease_expires_at,attempt_deadline_at,finished_at)
+			VALUES(?,?,?,'{}'::jsonb,3000,?,?,CASE WHEN ?='RUNNING' THEN now()+interval '1 minute' END,
+			CASE WHEN ?='RUNNING' THEN now()+interval '5 minutes' END,CASE WHEN ?='FAILED' THEN now() END)
+			""",song,user,original,state,"RUNNING".equals(state)?java.util.UUID.randomUUID():null,state,state,state);
+	}
 	@Test void failureIsOwnerOnlySafeAndLatestJobWins() throws Exception {
 		db.update("UPDATE songs SET status='FAILED' WHERE id=?",ownSong);
 		db.update("INSERT INTO chart_jobs(song_id,user_id,status,error_code,error_message,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED',NULL,'https://secret',now(),'old',?)",ownSong,owner,"a".repeat(64));

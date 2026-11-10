@@ -6,7 +6,8 @@
 값은 `BEGINNER`, `INTERMEDIATE`, `ADVANCED`, 미산정이면 `null`이다. MIDI 업로드의 201 응답에도 같은 상세가 나온다.
 기존 `difficulties`의 `EASY` / `NORMAL` / `HARD`는 연습 단계이며 곡 난이도와 별개다.
 목록 쿼리 `songLevel`은 세 값 중 하나로 서버 필터링한다. `playableOnly=true`는 READY이면서 곡 난이도가 있는 곡만 반환한다.
-두 필터는 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
+`withAccompaniment=true`는 반주 상태가 `READY` 또는 `GENERATING`인 곡만 반환한다. `false` 또는 생략하면 제한하지 않으며 다른 값은 400이다.
+이 필터들은 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
 
 본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message}`가 들어간다. 공개 가능한 기존 코드는
 `INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
