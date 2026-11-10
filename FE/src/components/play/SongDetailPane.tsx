@@ -124,7 +124,7 @@ export function SongDetailPane({
           />
           <Button
             className="play-sd-play"
-            leadingIcon={<PlayIcon size={16} />}
+            leadingIcon={<PlayIcon size={20} />}
             disabled={chartState !== 'ready' || selected === undefined}
             onClick={q.onStart}
           >
