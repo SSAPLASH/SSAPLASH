@@ -230,7 +230,9 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 20px 50px rgba(0, 0, 0, 0.5));
+  /* 네온 잔광: 은빛 글자는 그대로 두고 브랜드 파랑(--brand #35a3d4) 빛만 뒤에 번지게 한다 */
+  filter: drop-shadow(0 0 18px rgba(53, 163, 212, 0.45)) drop-shadow(0 0 60px rgba(53, 163, 212, 0.25))
+    drop-shadow(0 20px 50px rgba(0, 0, 0, 0.5));
 }
 /* 슬로건: 서비스명(최대 196px)의 약 1/4 비율, 사진 위에서도 읽히게 그림자 */
 .lp .lp-slogan {
