@@ -1,8 +1,8 @@
-// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 카드 2장(스틱 연결·시작 위치 보정) → 드럼 배치 카드(프리셋 칩 줄·배치·선택 패드·타격 확인) → 접힌 고급 설정 → 하단 고정 바.
+// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·카드 전체 폭 캔버스에 겹친 선택 패드 정보 카드·타격 확인) → 접힌 고급 설정 → 하단 고정 바.
 // 프리셋 고르기·고치기·저장은 드럼 배치 카드 한 곳이다: 칩으로 적용, [추가하기]로 패드별 2타 보정 → 새 프리셋 저장, [전체 보정]·[이 드럼 다시 치기]로 적용 프리셋 편집.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
-// 단계 판정·문구는 domain/setupSteps, 펼침 규칙은 domain/setupExpand, 저장은 presetStore, 보정·재정렬은 app/calibrationSession이 맡고
-// 이 페이지는 조립과 표시만 한다. 판정은 손별 앵커(stickAnchors, 적용 프리셋의 사본)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
+// 단계 판정·문구는 domain/setupSteps, 저장은 presetStore, 보정·재정렬은 app/calibrationSession이 맡고
+// 이 페이지는 조립과 표시만 한다. 팝업은 진입·재정렬 때 자동으로 열지 않는다(모자란 단계는 타일 강조만, 보정 중에는 ② 팝업을 열 수 없다). 판정은 손별 앵커(stickAnchors, 적용 프리셋의 사본)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { KitCanvas } from '@/components/KitCanvas';
@@ -23,8 +23,9 @@ import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
 import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
 import { ReturnBanner } from '@/components/setup/ReturnBanner';
 import { StatusTile } from '@/components/setup/StatusTile';
+import { StepDialog } from '@/components/setup/StepDialog';
 import { StickCard } from '@/components/setup/StickCard';
-import { RadiusSlider } from '@/components/calibration/RadiusSlider';
+import { KitInfoOverlay } from '@/components/setup/KitInfoOverlay';
 import { UnsavedLeaveDialog } from '@/components/setup/UnsavedLeaveDialog';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
@@ -33,6 +34,7 @@ import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { HitFx, StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
+import { pickOverlayCorner } from '@/domain/kitLayout';
 import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
@@ -58,10 +60,11 @@ import {
   type SetupDongleState,
   type SetupStepId,
 } from '@/domain/setupSteps';
-import { collapse, initialOpen, isExpanded, openByUser, openOnFirstNeededChange } from '@/domain/setupExpand';
 import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/components/calibration/CalibrationStage';
+import { CAPTURE_GUIDE_TEXT, RESULT_GUIDE_TEXT } from '@/components/calibration/calibrationText';
+import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
 import { useRealign } from '@/components/useRealign';
 import { usePoseStream } from '@/components/calibration/usePoseStream';
 import { useReferenceCapture } from '@/components/calibration/useReferenceCapture';
@@ -214,6 +217,8 @@ export function SetupPage() {
   const lat = audioEngine.latency();
   const recentHits = useRecentHits(HIT_LOG_ROWS);
   const [selectedPad, setSelectedPad] = useState<PadId>('SNARE');
+  // 스테이지 행·캔버스·카드 실제 크기로 가림 영역을 재고 행 높이를 화면에 맞춘다(측정 불가면 고정 비율·CSS 폴백)
+  const { rowRef: stageRowRef, frameRef: overlayFrameRef, cardRef: overlayCardRef, region: overlayRegion } = useOverlayRegion();
   const [advOpen, setAdvOpen] = useState(false);
   const selectedPlacement = s.kitLayout[selectedPad];
   // 선택 패드의 판정 반경(°): 양손 앵커 중 있는 것의 평균. 앵커가 없으면(시스템 기본·미보정) 슬라이더 없음
@@ -246,22 +251,8 @@ export function SetupPage() {
     if (sensorMode && ready && !s.firstSetupDone) s.setFirstSetupDone(true);
   }, [sensorMode, ready, s]);
 
-  // ---- 펼침: 사용자가 연 단계 ∪ 모자란 첫 단계(모자란 첫 단계가 바뀌면 새로 더한다) ----
-  const [open, setOpen] = useState(() => initialOpen(stepsResult.firstNeeded));
-  const [prevFirstNeeded, setPrevFirstNeeded] = useState(stepsResult.firstNeeded);
-  if (prevFirstNeeded !== stepsResult.firstNeeded) {
-    setPrevFirstNeeded(stepsResult.firstNeeded);
-    setOpen(openOnFirstNeededChange(open, stepsResult.firstNeeded));
-  }
-
-  // 진입 시 한 번만 모자란 첫 단계로 스크롤(띠 높이만큼의 여백은 CSS scroll-margin-top)
-  const entryStep = useRef(stepsResult.firstNeeded);
-  useEffect(() => {
-    const id = entryStep.current;
-    if (!id) return;
-    const raf = requestAnimationFrame(() => document.getElementById(STEP_DOM_ID[id])?.scrollIntoView({ block: 'start' }));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // ---- 단계 팝업: 사용자가 타일을 눌러야 열린다(진입·재정렬 필요로 자동으로 열지 않는다, PLAY-004 D8) ----
+  const [stepDialog, setStepDialog] = useState<SetupStepId | null>(null);
 
   // ---- 2타 보정(PLAY-004, UX-64). 로직은 calibrationSession, 여기선 시작·다음·저장·취소만 ----
   const capturing = calibration.mode === 'capture';
@@ -435,9 +426,14 @@ export function SetupPage() {
     connText = `연결됨 (${connected[0] ? '왼손' : ''}${connected[0] && connected[1] ? '·' : ''}${connected[1] ? '오른손' : ''})`;
   else connText = '연결 안 됨';
 
-  // ---- 상태 타일 공통(Setup / StatusTile): 누르면 아래로 펼치고 다시 누르면 접는다 ----
-  const expandedOf = (id: SetupStepId) => isExpanded(open, id, stepOf(id).status) || (id === 'calibration' && realigning);
-  const toggleStep = (id: SetupStepId) => setOpen((o) => (expandedOf(id) ? collapse(o, id) : openByUser(o, id)));
+  // ---- 상태 타일 공통(Setup / StatusTile): 누르면 단계 팝업을 연다. 보정 중에는 ② 팝업을 열 수 없다 ----
+  const openStep = (id: SetupStepId) => setStepDialog(id);
+  const closeStep = () => setStepDialog(null);
+  /** 타일 버튼 문구: 모자란 단계는 행동 문구, 아니면 [보기] */
+  const tileActionText = (id: SetupStepId): string => {
+    if (stepOf(id).status !== 'needed') return '보기';
+    return id === 'stick' ? '연결하기' : '보정하기';
+  };
   /** 타일 상태 한 단어(Figma StatusTile status 줄) */
   const tileStatusText = (id: SetupStepId): string => {
     const { status } = stepOf(id);
@@ -488,10 +484,28 @@ export function SetupPage() {
           status={stepOf('stick').status}
           statusText={tileStatusText('stick')}
           summary={stepOf('stick').summary}
-          expanded={expandedOf('stick')}
-          onToggle={() => toggleStep('stick')}
+          actionText={tileActionText('stick')}
+          onOpen={() => openStep('stick')}
           urgent={returnTo !== null}
-        >
+          attention
+        />
+        <StatusTile
+          id={STEP_DOM_ID.calibration}
+          title="시작 위치 보정"
+          status={stepOf('calibration').status}
+          statusText={tileStatusText('calibration')}
+          summary={stepOf('calibration').summary}
+          actionText={tileActionText('calibration')}
+          onOpen={() => openStep('calibration')}
+          urgent={returnTo !== null}
+          attention
+          disabled={capturing}
+          reason={capturing ? '보정 중에는 열 수 없어요' : undefined}
+        />
+      </div>
+
+      {stepDialog === 'stick' && (
+        <StepDialog title="스틱 연결" titleId="step-dialog-stick" onClose={closeStep}>
           <div className="setup-col">
             {dongleState !== undefined && <DongleRow state={dongleState} connected={connected} busy={sourceState === 'connecting'} />}
             {sensorMode && (
@@ -532,19 +546,12 @@ export function SetupPage() {
               <div className="setup-notice">다시 연결됐습니다. 쳐 보고 판정이 밀리면 ②에서 시작 위치를 다시 잡으세요</div>
             )}
           </div>
-        </StatusTile>
+        </StepDialog>
+      )}
 
-        {/* ② 시작 위치 보정(기준 자세·스네어 재정렬, UX-64 D7). 2타 보정은 아래 드럼 배치 카드에서 한다 */}
-        <StatusTile
-          id={STEP_DOM_ID.calibration}
-          title="시작 위치 보정"
-          status={stepOf('calibration').status}
-          statusText={tileStatusText('calibration')}
-          summary={stepOf('calibration').summary}
-          expanded={expandedOf('calibration')}
-          onToggle={() => toggleStep('calibration')}
-          urgent={returnTo !== null}
-        >
+      {/* ② 시작 위치 보정(기준 자세·스네어 재정렬, UX-64 D7). 2타 보정은 아래 드럼 배치 카드에서 한다. 보정 중에는 열 수 없다 */}
+      {stepDialog === 'calibration' && !capturing && (
+        <StepDialog title="시작 위치 보정" titleId="step-dialog-calibration" onClose={closeStep}>
           {!sensorMode ? (
             <p className="setup-note">키보드 입력은 보정이 필요 없습니다.</p>
           ) : realigning ? (
@@ -600,8 +607,8 @@ export function SetupPage() {
               {!anyConnected && <p className="setup-note faint">스틱을 연결하면 보정할 수 있습니다.</p>}
             </div>
           )}
-        </StatusTile>
-      </div>
+        </StepDialog>
+      )}
 
       {/* 드럼 배치 카드: 프리셋 칩 줄 · 배치 편집기(보정 중에는 보정 무대) · 선택 패드 정보 · 타격 확인(준비 조건이 아니라 단계가 아니다) */}
       <Card padding="md" className="setup-kit" role="region" aria-labelledby="setup-kit-title">
@@ -610,7 +617,9 @@ export function SetupPage() {
         </h2>
         <p className="setup-card-desc">
           {capturing
-            ? '불이 들어온 패드를 2번 쳐요. 값이 맞으면 [다음], 다시 치려면 [다시]를 눌러요'
+            ? calibration.capture?.phase === 'done'
+              ? RESULT_GUIDE_TEXT
+              : CAPTURE_GUIDE_TEXT
             : '프리셋을 골라 고쳐요. 추가하기를 누르면 패드마다 2번씩 쳐서 새 배치를 만들어요'}
         </p>
         <PresetChips
@@ -637,86 +646,74 @@ export function SetupPage() {
         {capturing ? (
           <CalibrationStage onSave={onCaptureSave} />
         ) : (
-          <div className="setup-kit-body">
-            <div className="setup-kit-left">
-              {/* 마우스는 고르기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
-              <div className="setup-editor" data-no-pointer-strike>
-                <KitCanvas
-                  layout={s.kitLayout}
-                  onTapPad={setSelectedPad}
-                  // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
-                  draggable={!capturing && !draft}
-                  onMovePad={(pad, x, y) => {
-                    setSelectedPad(pad);
-                    s.movePad(pad, x, y);
-                  }}
-                  highlightPad={selectedPad}
-                  hits={hits}
-                  keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
-                  anchorSets={anchorSets}
-                  angleRange={s.tuning.angleRange}
-                  poses={pose}
-                  showPoses={sensorMode}
-                  surfaceRef={bindSensorSurface}
-                />
-              </div>
-              {systemPreset && sensorMode && <p className="setup-note">고정 배치예요. 그 자리를 찾아 치세요. 내 자리로 바꾸려면 [추가하기]로 새 프리셋을 만들어요.</p>}
+          <>
+            {/* 행(setup-stage-row, 카드 안쪽 전체 폭) 가운데에 화면 높이에 맞춘 캔버스 틀(setup-stage)을 두고, 정보 카드는 행 오른쪽 아래에 붙인다. 좁을 때만 캔버스와 겹친다(PLAY-004 D9·D10) */}
+            {/* 마우스는 고르기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
+            <div className="setup-stage-row" ref={stageRowRef}>
+            <div className="setup-stage setup-editor" data-no-pointer-strike ref={overlayFrameRef}>
+              <KitCanvas
+                layout={s.kitLayout}
+                onTapPad={setSelectedPad}
+                // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
+                draggable={!capturing && !draft}
+                onMovePad={(pad, x, y) => {
+                  setSelectedPad(pad);
+                  s.movePad(pad, x, y);
+                }}
+                highlightPad={selectedPad}
+                hits={hits}
+                keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
+                anchorSets={anchorSets}
+                angleRange={s.tuning.angleRange}
+                poses={pose}
+                showPoses={sensorMode}
+                surfaceRef={bindSensorSurface}
+              />
             </div>
-            {/* 선택 패드 카드(Figma 정보 영역 765:33431, UX-62) */}
-            <div className="setup-padinfo">
-              <div className="setup-padinfo-head">
-                <span className="setup-padinfo-caption">선택 패드</span>
-                <h3 className="setup-padinfo-title">{PAD_META[selectedPad].label}</h3>
-              </div>
-              <hr className="setup-padinfo-rule" />
-              <dl className="setup-padinfo-values">
-                <div>
-                  <dt>위치 X</dt>
-                  <dd>{Math.round(selectedPlacement.x * EDITOR_W)}</dd>
-                </div>
-                <div>
-                  <dt>위치 Y</dt>
-                  <dd>{Math.round(selectedPlacement.y * EDITOR_H)}</dd>
-                </div>
-                {selectedRadius === null && (
-                  <div>
-                    <dt>반지름</dt>
-                    <dd>{Math.round(selectedPlacement.r * EDITOR_W)}</dd>
-                  </div>
-                )}
-              </dl>
-              {/* 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다 */}
-              {selectedRadius !== null && (
-                <RadiusSlider
-                  value={selectedRadius}
-                  min={s.tuning.minRadiusDeg}
-                  max={s.tuning.maxRadiusDeg}
-                  disabled={systemPreset}
-                  onChange={(v) => s.setRadiusOverride(selectedPad, v)}
-                />
-              )}
-              <div className="setup-padinfo-foot">
-                <p className="setup-padinfo-hint">
-                  패드를 눌러 고르면 위치를 볼 수 있어요. 한 드럼만 다른 자리로 옮기려면 [이 드럼 다시 치기]로 그 자리를 2번씩 쳐요.
-                </p>
-                {/* 패드 단위 재보정(PLAY-004 후속 T9): 선택한 스틱 패드만 연결된 손마다 2타. 시스템 기본은 편집 불가 */}
-                {sensorMode && STICK_PADS.includes(selectedPad) && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => calibrationSession.startCapture({ target: 'active', pads: [selectedPad] })}
-                    disabled={!anyConnected || systemPreset}
-                  >
-                    이 드럼 다시 치기
-                  </Button>
-                )}
-                {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
-                <Button variant="text" size="sm" onClick={s.resetLayout} disabled={systemPreset}>
-                  기본 배치로
+              {/* 선택 패드 카드(편집 상태). 캔버스와 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */}
+              <KitInfoOverlay
+                cardRef={overlayCardRef}
+                corner={pickOverlayCorner(s.kitLayout, overlayRegion, [selectedPad])}
+                name={PAD_META[selectedPad].label}
+                x={String(Math.round(selectedPlacement.x * EDITOR_W))}
+                y={String(Math.round(selectedPlacement.y * EDITOR_H))}
+                radius={selectedRadius !== null ? `${Math.round(selectedRadius)}°` : String(Math.round(selectedPlacement.r * EDITOR_W))}
+                // 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다
+                slider={
+                  selectedRadius !== null
+                    ? {
+                        value: selectedRadius,
+                        min: s.tuning.minRadiusDeg,
+                        max: s.tuning.maxRadiusDeg,
+                        disabled: systemPreset,
+                        onChange: (v) => s.setRadiusOverride(selectedPad, v),
+                      }
+                    : null
+                }
+              />
+            </div>
+            {systemPreset && sensorMode && <p className="setup-note">고정 배치예요. 그 자리를 찾아 치세요. 내 자리로 바꾸려면 [추가하기]로 새 프리셋을 만들어요.</p>}
+            <div className="setup-kit-foot">
+              <p className="setup-padinfo-hint">
+                패드를 눌러 고르면 위치를 볼 수 있어요. 한 드럼만 다른 자리로 옮기려면 [이 드럼 다시 치기]로 그 자리를 2번씩 쳐요.
+              </p>
+              {/* 패드 단위 재보정(PLAY-004 후속 T9): 선택한 스틱 패드만 연결된 손마다 2타. 시스템 기본은 편집 불가 */}
+              {sensorMode && STICK_PADS.includes(selectedPad) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => calibrationSession.startCapture({ target: 'active', pads: [selectedPad] })}
+                  disabled={!anyConnected || systemPreset}
+                >
+                  이 드럼 다시 치기
                 </Button>
-              </div>
+              )}
+              {/* 선택 패드만이 아니라 전체 배치를 되돌린다(이전 화면의 「기본 배치로」와 같은 동작) */}
+              <Button variant="text" size="sm" onClick={s.resetLayout} disabled={systemPreset}>
+                기본 배치로
+              </Button>
             </div>
-          </div>
+          </>
         )}
 
         <div className="setup-hit">
