@@ -33,7 +33,9 @@ public interface SongRepository extends Repository<Song, Long> {
 		""";
 	String FILTER = """
 		s.deleted_at IS NULL AND
-		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY' AND s.published)
+		((:scope = 'BUILTIN' AND s.owner_id IS NULL AND s.source = 'BUILTIN' AND s.status = 'READY' AND s.published
+		  AND""" + com.ssafy.airdrum.lesson.LessonRepository.NOT_LESSON + """
+		 )
 		 OR (:scope = 'MINE' AND s.owner_id = :userId))
 		AND (LOWER(s.title) LIKE LOWER(:pattern) ESCAPE '!'
 		 OR LOWER(COALESCE(s.artist, '')) LIKE LOWER(:pattern) ESCAPE '!')

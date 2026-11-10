@@ -161,6 +161,15 @@ class RecommendationServiceTest {
 		assertThat(db.queryForObject("SELECT clicked_at IS NOT NULL FROM recommendation_items WHERE request_id=?", Boolean.class, result.requestId())).isTrue();
 	}
 
+	/** 331번: 입문 코스 레슨 곡은 공용 곡이지만 추천 후보·연습 추천에 넣지 않는다. */
+	@Test void 입문_코스_레슨_곡은_추천과_연습_추천에서_빠진다() {
+		db.update("INSERT INTO lessons(song_id,position,kind,summary,pads) VALUES(?,9001,'PLAY','레슨','[\"KICK\"]'::jsonb)", slow);
+		assertThat(songIds(service.recommend(user, Context.SONG_PICKER, null, 10))).doesNotContain(slow).contains(mid);
+		var id = play(user, mid, midVersion, 90, Instant.now());
+		report(id, TRANSITION_WEAK);
+		assertThat(songIds(service.recommend(user, Context.DRILL, id, 3))).doesNotContain(slow);
+	}
+
 	@Test void 연습_추천은_약점이_없거나_분석_전이면_빈_목록이고_기록하지_않는다() {
 		var noWeakness = play(user, mid, midVersion, 90, Instant.now());
 		report(noWeakness, "[]");
