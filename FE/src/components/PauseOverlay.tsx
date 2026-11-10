@@ -10,6 +10,7 @@ import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import { Slider } from '@/components/ui/Slider';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { SoundIcon } from '@/components/shell/SoundIcon';
 import { useDockRaised } from '@/components/shell/useShell';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
@@ -109,9 +110,13 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
                 value={drumVolume}
                 valueText={`${Math.round(drumVolume * 100)}%`}
                 onChange={setDrumVolume}
+                leading={<SoundIcon on={false} />}
+                trailing={<SoundIcon on />}
               />
+              <div className="play-pause-sound-divider" aria-hidden="true" />
               <Slider
                 label="노래 음량(반주)"
+                className={hasAccompaniment ? undefined : 'play-pause-sound-off'}
                 min={0}
                 max={1}
                 step={0.05}
@@ -119,6 +124,8 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
                 valueText={`${Math.round(songVolume * 100)}%`}
                 onChange={setSongVolume}
                 disabled={!hasAccompaniment}
+                leading={<SoundIcon on={false} />}
+                trailing={<SoundIcon on />}
               />
               {!hasAccompaniment && <p className="play-pause-sound-note">이 곡은 반주가 없어요</p>}
             </section>
@@ -132,7 +139,7 @@ export function PauseOverlay({ reason, canResume, onResume, onRestart, onLeave, 
               >
                 계속
               </button>
-              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onRestart}>
+              <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true, className: 'play-pause-restart' })} onClick={onRestart}>
                 다시 시작
               </button>
               <button type="button" className={buttonClassName({ variant: 'secondary', fullWidth: true })} onClick={onLeave}>
