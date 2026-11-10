@@ -614,8 +614,31 @@
   background: radial-gradient(circle, rgba(255, 255, 255, 0.14), transparent 65%);
   opacity: 0.5;
 }
+.lp .lp-stage .lp-shock {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+.lp .lp-stage .lp-glow {
+  will-change: transform, opacity;
+}
 .lp .lp-layer {
   transition: opacity 0.6s var(--ease);
+}
+/* reveal: 화면에 들어오면 떠오른다(마운트 후에만 lp-reveal이 붙는다) */
+.lp .lp-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition:
+    opacity 1s var(--ease),
+    transform 1s var(--ease);
+}
+.lp .lp-reveal.lp-in {
+  opacity: 1;
+  transform: none;
 }
 
 /* ───────── 4. 채보 생성: 음원 → 드럼만 → 채보 ───────── */
