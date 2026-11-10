@@ -204,7 +204,7 @@ public class RecommendationService {
 				JOIN chart_versions v ON v.id = (SELECT x.id FROM chart_versions x WHERE x.chart_id = c.id ORDER BY x.version DESC LIMIT 1)
 				JOIN chart_features f ON f.chart_version_id = v.id AND f.feature_version = ?
 				WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
-				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL
+				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL AND""" + com.ssafy.airdrum.lesson.LessonRepository.NOT_LESSON + """
 				ORDER BY s.id, c.id
 				""", (r, n) -> new Candidate(r.getLong(1), r.getLong(2), r.getString(3), r.getString(4), r.getInt(5), r.getDouble(6), numbers(r.getString(7))),
 				ChartFeatureService.VERSION);
@@ -218,7 +218,7 @@ public class RecommendationService {
 				JOIN chart_versions v ON v.id = (SELECT x.id FROM chart_versions x WHERE x.chart_id = c.id ORDER BY x.version DESC LIMIT 1)
 				JOIN chart_features f ON f.chart_version_id = v.id AND f.feature_version = ?
 				WHERE s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published
-				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL
+				  AND s.deleted_at IS NULL AND s.song_level IS NOT NULL AND""" + com.ssafy.airdrum.lesson.LessonRepository.NOT_LESSON + """
 				ORDER BY s.id, c.id
 				""", (r, n) -> new DrillPlanner.Chart(r.getLong(1), r.getLong(2), r.getString(3), r.getInt(4), r.getDouble(5), numbers(r.getString(6)), numbers(r.getString(7))),
 				ChartFeatureService.VERSION);

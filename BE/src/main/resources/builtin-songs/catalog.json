@@ -511,5 +511,138 @@
       "language": "EN",
       "source": "HUMAN"
     }
+  },
+  {
+    "title": "입문 · 킥 음표 알아보기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-read-kick.mid",
+    "lesson": {
+      "order": 1,
+      "kind": "READ",
+      "summary": "악보 맨 아래 칸의 둥근 음표가 킥이에요. 킥은 오른발로 밟는 큰 북이에요. 음표를 보고 킥을 네 번 밟아 보세요.",
+      "pads": ["KICK"]
+    }
+  },
+  {
+    "title": "입문 · 스네어 음표 알아보기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-read-snare.mid",
+    "lesson": {
+      "order": 2,
+      "kind": "READ",
+      "summary": "악보 가운데 칸의 둥근 음표가 스네어예요. 스네어는 무릎 앞의 북이에요. 음표를 보고 스네어를 네 번 쳐 보세요.",
+      "pads": ["SNARE"]
+    }
+  },
+  {
+    "title": "입문 · 하이햇 음표 알아보기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-read-hihat.mid",
+    "lesson": {
+      "order": 3,
+      "kind": "READ",
+      "summary": "악보 맨 위의 × 모양 음표가 하이햇이에요. 하이햇은 왼쪽 위의 심벌이에요. 음표를 보고 하이햇을 네 번 쳐 보세요.",
+      "pads": ["HIHAT"]
+    }
+  },
+  {
+    "title": "입문 · 섞어서 읽기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-read-mixed.mid",
+    "lesson": {
+      "order": 4,
+      "kind": "READ",
+      "summary": "세 가지 음표가 섞여 나와요. 이번에는 이름을 알려 주지 않으니 음표만 보고 맞는 드럼을 쳐 보세요. 틀리면 알려 줄게요.",
+      "pads": ["KICK", "SNARE", "HIHAT"],
+      "guide": false
+    }
+  },
+  {
+    "title": "입문 · 킥으로 박자 세기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-kick-quarter.mid",
+    "lesson": {
+      "order": 5,
+      "kind": "PLAY",
+      "summary": "킥은 오른발로 밟는 큰 북이에요. 메트로놈 소리에 맞춰 한 박에 한 번씩 밟아 보세요.",
+      "pads": ["KICK"]
+    }
+  },
+  {
+    "title": "입문 · 스네어는 2박·4박",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-snare-backbeat.mid",
+    "lesson": {
+      "order": 6,
+      "kind": "PLAY",
+      "summary": "하나, 둘, 셋, 넷을 세면서 둘과 넷에만 스네어를 쳐 보세요.",
+      "pads": ["SNARE"]
+    }
+  },
+  {
+    "title": "입문 · 킥과 스네어 번갈아",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-kick-snare.mid",
+    "lesson": {
+      "order": 7,
+      "kind": "PLAY",
+      "summary": "쿵, 딱, 쿵, 딱. 하나·셋은 킥, 둘·넷은 스네어로 발과 손을 번갈아 씁니다. 대부분의 노래가 이 뼈대 위에 있어요.",
+      "pads": ["KICK", "SNARE"]
+    }
+  },
+  {
+    "title": "입문 · 하이햇 4분음표",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-hihat-quarter.mid",
+    "lesson": {
+      "order": 8,
+      "kind": "PLAY",
+      "summary": "하이햇은 왼쪽 위의 심벌이에요. 오른손으로 한 박에 한 번씩 가볍게 쳐 보세요.",
+      "pads": ["HIHAT"]
+    }
+  },
+  {
+    "title": "입문 · 하이햇 8분음표",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-hihat-eighth.mid",
+    "lesson": {
+      "order": 9,
+      "kind": "PLAY",
+      "summary": "이번에는 한 박에 두 번씩 칩니다. 하나-앤, 둘-앤으로 세면 쉬워요.",
+      "pads": ["HIHAT"]
+    }
+  },
+  {
+    "title": "입문 · 하이햇에 스네어 얹기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-hihat-snare.mid",
+    "lesson": {
+      "order": 10,
+      "kind": "PLAY",
+      "summary": "오른손은 하이햇을 8분음표로 계속 치고, 둘과 넷에서 왼손으로 스네어를 같이 쳐요.",
+      "pads": ["HIHAT", "SNARE"]
+    }
+  },
+  {
+    "title": "입문 · 하이햇에 킥 얹기",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-hihat-kick.mid",
+    "lesson": {
+      "order": 11,
+      "kind": "PLAY",
+      "summary": "오른손은 하이햇을 8분음표로 계속 치고, 하나와 셋에서 오른발로 킥을 같이 밟아요.",
+      "pads": ["HIHAT", "KICK"]
+    }
+  },
+  {
+    "title": "입문 · 8비트 완성",
+    "license": "프로젝트 입문 코스 레슨(자작); 생성 BE/scripts/lesson_midi.py; 음원 미포함",
+    "midi": "lesson-8beat.mid",
+    "lesson": {
+      "order": 12,
+      "kind": "PLAY",
+      "summary": "지금까지 배운 것을 모두 합칩니다. 하이햇 8분음표에 킥 하나·셋, 스네어 둘·넷. 가장 많이 쓰이는 8비트 리듬이에요.",
+      "pads": ["HIHAT", "KICK", "SNARE"]
+    }
   }
 ]

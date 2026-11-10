@@ -111,6 +111,7 @@ public class SimilarSongsService {
 		if (cacheSeconds > 0 && cached != null && now.isBefore(cached.loadedAt().plusSeconds(cacheSeconds))) return cached.vectors();
 		var loaded = db.query(SELECT + """
 				 AND s.source = 'BUILTIN' AND s.owner_id IS NULL AND s.status = 'READY' AND s.published AND s.song_level IS NOT NULL
+				 AND""" + com.ssafy.airdrum.lesson.LessonRepository.NOT_LESSON + """
 				ORDER BY s.id, c.id
 				""", this::vector, ChartFeatureService.VERSION).stream().filter(v -> v != null).toList();
 		loaded = withMeta(loaded);
