@@ -12,6 +12,8 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import com.ssafy.airdrum.lesson.LessonRepository;
+import com.ssafy.airdrum.lesson.LessonSpec;
 import com.ssafy.airdrum.song.meta.SongMetadata;
 import com.ssafy.airdrum.song.meta.SongMetadataRepository;
 
@@ -20,6 +22,7 @@ import com.ssafy.airdrum.song.meta.SongMetadataRepository;
  * MIDI로 채운다. 이미 3난이도면 건너뛴다. 곡마다 따로 처리해 하나가 실패해도 나머지는 계속한다.
  * 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(운영자가 ADMIN API로 바꾼 값을 지키려고).
  * 곡 추천용 메타데이터(255번)는 결과와 무관하게 매번 카탈로그 값으로 맞춘다.
+ * 입문 코스 레슨(331번)은 곡을 모두 처리한 뒤 카탈로그 레슨으로 통째로 바꾼다. 그래서 {@link #seed}는 카탈로그 전체를 받는다.
  */
 @Component
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -37,11 +40,13 @@ class BuiltinSongSeeder {
 
 	private final AdminSongService songs;
 	private final SongMetadataRepository metadata;
+	private final LessonRepository lessons;
 	private final JdbcTemplate db;
 
-	BuiltinSongSeeder(AdminSongService songs, SongMetadataRepository metadata, JdbcTemplate db) {
+	BuiltinSongSeeder(AdminSongService songs, SongMetadataRepository metadata, LessonRepository lessons, JdbcTemplate db) {
 		this.songs = songs;
 		this.metadata = metadata;
+		this.lessons = lessons;
 		this.db = db;
 	}
 
@@ -60,7 +65,17 @@ class BuiltinSongSeeder {
 			}
 			try {
 				var result = new LinkedHashMap<String, Outcome>();
-				for (var entry : entries) result.put(entry.title(), apply(entry));
+				var lessonSongs = new LinkedHashMap<Long, LessonSpec>();
+				for (var entry : entries) {
+					var outcome = apply(entry);
+					result.put(entry.title(), outcome);
+					// 이번 처리가 실패해도 이미 있는 곡이면 레슨에 남긴다(빠지면 일반 공용 곡으로 목록·추천에 나온다)
+					if (entry.lesson() != null) {
+						var existing = find(entry.title());
+						if (existing != null) lessonSongs.put(existing.id(), entry.lesson());
+					}
+				}
+				syncLessons(lessonSongs);
 				return result;
 			} finally {
 				try (var unlock = connection.prepareStatement("SELECT pg_advisory_unlock(?)")) {
@@ -94,6 +109,16 @@ class BuiltinSongSeeder {
 		} catch (RuntimeException e) {
 			log.warn("공용 곡 등록 실패: {} errorType={} message={}", entry.title(), e.getClass().getSimpleName(), e.getMessage());
 			return Outcome.FAILED;
+		}
+	}
+
+	/** 레슨 교체가 실패해도 곡 등록 결과는 그대로 둔다. 레슨은 이전 상태로 남는다(한 트랜잭션). */
+	private void syncLessons(java.util.Map<Long, LessonSpec> lessonSongs) {
+		try {
+			lessons.replaceAll(lessonSongs);
+			if (!lessonSongs.isEmpty()) log.info("입문 코스 레슨 {}개", lessonSongs.size());
+		} catch (RuntimeException e) {
+			log.warn("입문 코스 레슨 교체 실패 errorType={} message={}", e.getClass().getSimpleName(), e.getMessage());
 		}
 	}
 
