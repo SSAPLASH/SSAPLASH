@@ -5,7 +5,6 @@ import { useState, type ReactNode } from 'react';
 import type { Difficulty } from '@/domain/chart';
 import type { PadId } from '@/domain/pads';
 import type { PadVisualState } from '@/domain/drumKit';
-import { SYSTEM_PRESET_NAME } from '@/domain/preset';
 import type { ReadinessMissing } from '@/domain/readiness';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,7 +12,8 @@ import { SongCover } from '@/components/song/SongCover';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongMeta } from '@/components/song/SongMeta';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
+import type { RealignInfo } from '@/components/calibration/RealignPrompt';
+import { DeviceCheck } from './DeviceCheck';
 import { StaffLegend } from './StaffLegend';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { formatDuration } from '@/components/formatTime';
@@ -61,27 +61,6 @@ export interface ReadyPanelProps {
   footer?: ReactNode;
 }
 
-function Dot({ ok }: { ok: boolean }) {
-  return <span className={`play-rp-dot ${ok ? 'ok' : 'need'}`} aria-hidden="true" />;
-}
-
-function HandDot({ label, on, hand }: { label: string; on: boolean; hand: 'l' | 'r' | 'p' }) {
-  return (
-    <span className="play-rp-hand">
-      <span className={`play-rp-hand-dot ${hand}${on ? ' on' : ''}`} aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function stickText(connected: [boolean, boolean], keyboardOnly: boolean, pedal?: boolean): string {
-  if (keyboardOnly) return '키보드 입력';
-  const names = ['왼손', '오른손', ...(pedal === undefined ? [] : ['페달'])];
-  const states = [connected[0], connected[1], ...(pedal === undefined ? [] : [pedal])];
-  if (states.every(Boolean)) return `${names.join('·')} 연결됨`;
-  return `${names.filter((_, i) => !states[i]).join('·')} 연결 안 됨`;
-}
-
 export function ReadyPanel({
   song,
   modeLabel,
@@ -114,8 +93,6 @@ export function ReadyPanel({
   const kitStates: Partial<Record<PadId, PadVisualState>> =
     staffLegend && hoverPad && !padStates[hoverPad] ? { ...padStates, [hoverPad]: 'armed' } : padStates;
   const hitPad = staffLegend ? (Object.keys(padStates) as PadId[]).find((p) => padStates[p] === 'hit') : undefined;
-  const stickOk = !missing.includes('stick') && !missing.includes('pedal');
-  const calOk = !missing.includes('firstSetup');
   const meta = [modeLabel, `BPM ${Math.round(song.bpm)}`];
   if (song.durationSec !== undefined) meta.push(formatDuration(song.durationSec * 1000));
   meta.push(`최고 정확도 ${bestAccuracy === undefined ? '—' : formatAccuracy(bestAccuracy)}`);
@@ -149,63 +126,17 @@ export function ReadyPanel({
             </div>
           </Card>
 
-          <Card padding="md" className={`play-rp-check${ready ? '' : ' need'}`} aria-label="기기 준비">
-            <div className="play-rp-check-head">
-              <h3 className="play-rp-check-title">기기 준비</h3>
-              <span className={`play-rp-state ${ready ? 'ok' : 'need'}`} role="status">
-                {ready ? '준비 완료' : '준비가 필요해요'}
-              </span>
-            </div>
-            <ul className="play-rp-rows">
-              <li className="play-rp-row">
-                <Dot ok={stickOk} />
-                <span className="play-rp-row-label">스틱 연결</span>
-                <span className="play-rp-row-value">
-                  {!keyboardOnly && (
-                    <span className="play-rp-hands">
-                      <HandDot label="L" on={connected[0]} hand="l" />
-                      <HandDot label="R" on={connected[1]} hand="r" />
-                      {pedal !== undefined && <HandDot label="P" on={pedal} hand="p" />}
-                    </span>
-                  )}
-                  <span className={stickOk ? '' : 'need'}>{stickText(connected, keyboardOnly, pedal)}</span>
-                </span>
-              </li>
-              <li className="play-rp-row">
-                <Dot ok={calOk} />
-                <span className="play-rp-row-label">보정</span>
-                <span className="play-rp-row-value">
-                  {calOk && realign ? (
-                    <RealignPrompt hands={realign.hands} done={realign.done} variant="row" onSkip={realign.onSkip} />
-                  ) : (
-                    <span className={calOk ? '' : 'need'}>{calOk ? '완료' : '필요'}</span>
-                  )}
-                </span>
-              </li>
-              {/* 프리셋은 준비 조건이 아니다(UX-64 D1): 시스템 기본이 항상 적용 가능해 이름만 보인다 */}
-              <li className="play-rp-row">
-                <Dot ok />
-                <span className="play-rp-row-label">프리셋</span>
-                <span className="play-rp-row-value">
-                  <span>{presetName ?? SYSTEM_PRESET_NAME}</span>
-                </span>
-              </li>
-            </ul>
-            {(!ready || onReconnect) && (
-              <div className="play-rp-actions">
-                {!ready && (
-                  <Button size="sm" onClick={onSetup}>
-                    드럼 세팅에서 준비하기
-                  </Button>
-                )}
-                {onReconnect && (
-                  <Button variant="text" size="sm" onClick={onReconnect}>
-                    다시 연결
-                  </Button>
-                )}
-              </div>
-            )}
-          </Card>
+          <DeviceCheck
+            ready={ready}
+            missing={missing}
+            connected={connected}
+            keyboardOnly={keyboardOnly}
+            pedal={pedal}
+            presetName={presetName}
+            realign={realign}
+            onSetup={onSetup}
+            onReconnect={onReconnect}
+          />
 
           {options}
 

@@ -1,0 +1,64 @@
+/* 시작 확인 창 (Figma 905:4457). 바탕·창 틀은 전역 .dialog를 쓰고 폭·안쪽 배치만 정한다. 토큰은 tokens.css의 새 이름만 */
+.dialog.start-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  max-width: 480px;
+}
+.start-dialog-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.dialog .start-dialog-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.start-dialog-song {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.start-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.start-dialog-caption {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.start-dialog-notice,
+.start-dialog-guide {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.start-dialog-guide.need,
+.start-dialog-error {
+  color: var(--brand-sub);
+}
+.start-dialog-error {
+  margin: 0;
+  font-size: 14px;
+}
+.start-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-s);
+}
+.start-dialog-actions > .ui-btn {
+  min-width: 112px;
+}
+.start-dialog-setup .play-rp-check {
+  padding: 0;
+  border: 0;
+  background: none;
+}
