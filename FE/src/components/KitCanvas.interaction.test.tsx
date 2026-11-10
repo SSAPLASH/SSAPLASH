@@ -73,3 +73,31 @@ describe('KitCanvas 끌기(kit-drag D6)', () => {
     expect(y).toBe(0.05);
   });
 });
+
+describe('KitCanvas 원 판정(D11 v0.3): 반지름 기준 길이 min(W, H×1.6)', () => {
+  const snareR = snare.r;
+  it('16:10(720×450)에서는 기존과 같이 폭 기준 반지름이다', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 720, height: 450, right: 720, bottom: 450, x: 0, y: 0, toJSON: () => ({}) });
+    const { wrap, onTapPad } = setup({ draggable: false });
+    const cx = snare.x * 720;
+    const cy = snare.y * 450;
+    fireEvent.pointerDown(wrap, at(cx + snareR * 720 * 0.95, cy));
+    fireEvent.pointerUp(wrap, at(cx + snareR * 720 * 0.95, cy));
+    expect(onTapPad).toHaveBeenCalledTimes(1);
+    expect(onTapPad.mock.calls[0][0]).toBe('SNARE');
+  });
+  it('넓은 판(1440×450)에서는 원이 커지지 않는다(H×1.6=720 기준)', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1440, height: 450, right: 1440, bottom: 450, x: 0, y: 0, toJSON: () => ({}) });
+    const { wrap, onTapPad } = setup({ draggable: false });
+    const cx = snare.x * 1440;
+    const cy = snare.y * 450;
+    // 반지름 = snare.r × 720. 안쪽은 맞고, 폭 기준(1440)이었다면 맞았을 바깥은 빗나간다
+    fireEvent.pointerDown(wrap, at(cx + snareR * 720 * 0.95, cy));
+    fireEvent.pointerUp(wrap, at(cx + snareR * 720 * 0.95, cy));
+    expect(onTapPad).toHaveBeenCalledTimes(1);
+    onTapPad.mockClear();
+    fireEvent.pointerDown(wrap, at(cx + snareR * 720 * 1.3, cy));
+    fireEvent.pointerUp(wrap, at(cx + snareR * 720 * 1.3, cy));
+    expect(onTapPad).not.toHaveBeenCalled();
+  });
+});
