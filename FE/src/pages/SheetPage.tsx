@@ -3,7 +3,7 @@
 // 곡 선택 SongPicker · 시작 확인 StartDialog(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
 // 주소: `?song=&chart=`는 곡 선택에서 곡·단계를 골라 두고, `&start=1`이 더해지면 시작 확인 창이 열린다.
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
@@ -151,7 +151,8 @@ function SheetPageBody() {
   const selectSong = useSongs((s) => s.selectSong);
   const songsSource = useSongs((s) => s.source);
   const readyRef = useRef(ready);
-  useEffect(() => {
+  // begin()이 읽는 ref는 화면을 그리기 전에 맞춘다(useEffect면 ▶ 플레이가 보인 직후 누른 클릭이 옛 값을 보고 무시될 수 있다)
+  useLayoutEffect(() => {
     readyRef.current = ready;
   }, [ready]);
 
@@ -196,7 +197,8 @@ function SheetPageBody() {
   // 세로·좁은 화면 안내(ScreenGate)가 열려 있는지. 키 핸들러가 최신 값을 본다
   const screenOk = useScreenFits();
   const gateOpenRef = useRef(!screenOk);
-  useEffect(() => {
+  // 위 readyRef와 같은 이유로 그리기 전에 맞춘다
+  useLayoutEffect(() => {
     stageRef.current = stage;
     sessionRef.current = activeSession;
     pauseRef.current = pauseReason;
