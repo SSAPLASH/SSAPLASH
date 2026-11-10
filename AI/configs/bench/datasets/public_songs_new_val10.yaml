@@ -1,0 +1,17 @@
+# public_songs_val.yaml과 같은 10곡. 점수 평균 조합 고르기용. 특징 폴더를 같이 쓰려고 name을 public_songs로 둠
+name: public_songs
+kind: songsterr
+root: data/songsterr
+sample_rate: 44100
+clip: null
+songs:
+- ac_dc_highway_to_hell
+- audioslave_like_a_stone
+- foo_fighters_my_hero
+- goo_goo_dolls_iris
+- green_day_brain_stew
+- guns_n_roses_paradise_city
+- led_zeppelin_stairway_to_heaven
+- nirvana_heart_shaped_box
+- ozzy_osbourne_crazy_train
+- system_of_a_down_aerials

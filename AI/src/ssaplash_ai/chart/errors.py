@@ -71,6 +71,13 @@ class ChartNotTranscribableError(ChartInputError):
     reason = REASON_NOT_TRANSCRIBABLE
 
 
+class ChartNoDrumError(ChartInputError):
+    """악보에 드럼 파트가 없거나 패드로 바꿀 음표가 없음(MusicXML, S15P31A307-293).
+
+    code·reason은 입력 오류 그대로라 명령줄·워커 보고는 바뀌지 않는다. AI 서버 라우터만 예외 종류로 422 NO_DRUM_NOTES를 낸다.
+    """
+
+
 class ChartModelError(ChartError):
     """모델 오류. 가중치 준비·올리기·추론 중 예외. GPU 메모리 부족이면 retryable 참."""
 

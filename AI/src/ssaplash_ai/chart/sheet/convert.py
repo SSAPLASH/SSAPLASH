@@ -22,7 +22,12 @@ import yaml
 
 from ssaplash_ai.bench.datasets.pads import HITS_DTYPE
 from ssaplash_ai.chart.chart_json import build_chart, notes_by_pad, validate_chart
-from ssaplash_ai.chart.errors import ChartInputError, ChartOutputError, summarize_exception
+from ssaplash_ai.chart.errors import (
+    ChartInputError,
+    ChartNoDrumError,
+    ChartOutputError,
+    summarize_exception,
+)
 from ssaplash_ai.chart.sheet.drum_map import pad_of
 from ssaplash_ai.chart.sheet.musicxml import SheetScore, parse_musicxml
 from ssaplash_ai.chart.tempo import TempoEstimate
@@ -161,14 +166,14 @@ def convert_sheet(
     except ValueError as e:
         raise ChartInputError(str(e)) from e
     if not any(p.is_drum for p in score.parts):
-        raise ChartInputError("드럼 파트가 없음 (음높이 없는 음표나 MIDI 채널 10 파트가 필요)")
+        raise ChartNoDrumError("드럼 파트가 없음 (음높이 없는 음표나 MIDI 채널 10 파트가 필요)")
     if score.duration_sec > config.max_duration_sec:
         raise ChartInputError(
             f"반복을 펼친 길이 {score.duration_sec:.0f}초가 {config.max_duration_sec:.0f}초를 넘음"
         )
     hits, open_sec, dropped, n_pedal = score_to_hits(score, config.emit_hihat_pedal)
     if len(hits) == 0:
-        raise ChartInputError("드럼 파트에 패드로 바꿀 음표가 없음")
+        raise ChartNoDrumError("드럼 파트에 패드로 바꿀 음표가 없음")
     duration_ms = int(round(score.duration_sec * 1000))
     convert_ms = int(round((time.perf_counter() - start) * 1000))
     chart = build_chart(

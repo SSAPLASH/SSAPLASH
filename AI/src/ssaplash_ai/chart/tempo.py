@@ -8,7 +8,8 @@
 박 시각에서 bpm을 계산하는 방법은 둘이 같음. 박 간격 중앙값에서 15% 넘게 벗어난 간격(박을 건너뛰거나
 두 번 잡은 곳)에서 박을 구간으로 나누고, 구간마다 몇 번째 박인지와 울린 시각을 짝지어 박들이 몇 초에 걸쳐
 나왔는지로 한 박 길이를 구함. 구간들은 합쳐 한 박 길이 하나로 냄.
-[min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음. 템포가 바뀌는 곡도 bpm 하나로 냄(가변 템포는 범위 밖).
+[min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음. 설정 tempo.tempo_map이 켜져 있으면 찾은 박을 따라가는
+빠르기 구간(tempoMap)도 만듦(tempo_map_from_beats, 설계 CHART-003-variable-tempo-exp).
 
 박을 못 찾으면(타격이 거의 없는 드럼 트랙) BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
 채보 JSON의 offsetMs는 첫 박·첫 마디 시각으로 chart_json이 정함(U14·U16).
@@ -37,6 +38,9 @@ FALLBACK_BPM = 120.0
 # 박 간격 중앙값에서 이 비율 넘게 벗어난 간격은 bpm 계산에서 뺌
 INTERVAL_TOLERANCE = 0.15
 MIN_INTERVALS = 3
+# 마디 첫 박 다수결(downbeat_phase_ms): 한 마디 안 후보 위치 간격과, 후보에서 이 거리 안의 마디 첫 박을 셈
+DOWNBEAT_VOTE_STEP_MS = 10
+DOWNBEAT_VOTE_WINDOW_MS = 35
 
 BEAT_THIS_CHECKPOINT = "final0"
 # 개발자가 GitHub 이슈 #20에 올린 md5
@@ -51,7 +55,12 @@ DEFAULT_MODELS_DIR = Path("data/models")
 
 @dataclass
 class TempoEstimate:
-    """bpm 추정 결과. bpm은 박 간격으로 계산하고 접은 값(소수 둘째 자리), raw_bpm은 접기 전 값."""
+    """bpm 추정 결과. bpm은 박 간격으로 계산하고 접은 값(소수 둘째 자리), raw_bpm은 접기 전 값.
+
+    downbeat_phase_ms는 마디 첫 박 전부를 한 마디 길이로 접은 다수결 위치(downbeat_phase_ms 함수).
+    마디 첫 박이 없거나 bpm 추정 실패면 None.
+    tempo_map은 찾은 박을 따라가는 빠르기 구간 시작 목록(tempo_map_from_beats). 설정이 꺼졌거나 못 만들면 None.
+    """
 
     bpm: float
     raw_bpm: float | None
@@ -61,6 +70,18 @@ class TempoEstimate:
     time_signature: str
     estimated: bool
     method: str
+    downbeat_phase_ms: int | None = None
+    tempo_map: list[TempoMapPoint] | None = None
+
+
+@dataclass(frozen=True)
+class TempoMapPoint:
+    """빠르기 구간 시작. time_ms는 곡 시각(박 시각 기준, 노트 보정 전), beat은 첫 마디 첫 박을 0으로 센 박 번호,
+    bpm은 다음 구간 시작까지의 빠르기(소수 둘째 자리). 마지막 구간은 곡 끝까지 같은 빠르기."""
+
+    time_ms: float
+    beat: int
+    bpm: float
 
 
 def fold_bpm(bpm: float, min_bpm: float, max_bpm: float) -> float:
@@ -121,6 +142,87 @@ def _ms(seconds: np.ndarray) -> int | None:
     return int(round(float(seconds[0]) * 1000)) if seconds.size else None
 
 
+def downbeat_phase_ms(downbeats: np.ndarray, bar_ms: float) -> int | None:
+    """마디 첫 박 시각(초) 전부를 한 마디 길이로 접어 가장 많이 모인 위치(ms, 0 이상 bar_ms 미만).
+
+    0부터 DOWNBEAT_VOTE_STEP_MS 간격 후보마다 ±DOWNBEAT_VOTE_WINDOW_MS 안의 마디 첫 박 수를 셈. 마디 길이를
+    넘는 차이는 한 바퀴 돌려 셈(마디 끝 근처와 처음 근처가 같은 위치). 가장 많이 센 후보(동점이면 가장 이른
+    후보)의 창 안 마디 첫 박들과 후보의 차이 중앙값만큼 옮긴 위치를 냄. 후보 간격·창 폭 때문에 생기는 치우침을 없앰.
+    첫 번째 마디 첫 박 하나만 쓰면 드럼 인트로·필인에서 틀린 박을 원점으로 잡는 곡이 많아서 곡 전체로 정함
+    (설계 CHART-003-downbeat-vote, Songsterr 131곡 중 마디선이 맞는 곡 52 → 75).
+    마디 첫 박이 없거나 bar_ms가 0 이하면 None.
+    """
+    if downbeats.size == 0 or not bar_ms > 0:
+        return None
+    phase = np.mod(downbeats * 1000.0, bar_ms)
+    candidates = np.arange(0.0, bar_ms, DOWNBEAT_VOTE_STEP_MS)
+    # 후보 → 마디 첫 박 부호 있는 차이(−bar_ms/2 ~ bar_ms/2)
+    signed = (phase[None, :] - candidates[:, None] + bar_ms / 2) % bar_ms - bar_ms / 2
+    inside = np.abs(signed) <= DOWNBEAT_VOTE_WINDOW_MS
+    best = int(np.argmax(inside.sum(axis=1)))
+    shift = float(np.median(signed[best][inside[best]]))
+    return int(round(float((candidates[best] + shift) % bar_ms)))
+
+
+def _merge_bar_knots(bar_ms: np.ndarray, tolerance_ms: float) -> list[int]:
+    """마디 경계 시각 목록에서 빠르기 구간 시작으로 쓸 경계 번호. 구간 안 모든 마디 경계가 처음·끝을 잇는 일정
+    간격에서 tolerance_ms 안이면 구간을 늘림. 마지막 경계 번호도 넣음."""
+    knots = [0]
+    i, n = 0, len(bar_ms)
+    while i < n - 1:
+        j = i + 1
+        while j + 1 < n:
+            span = bar_ms[i : j + 2]
+            line = span[0] + (span[-1] - span[0]) * np.arange(span.size) / (span.size - 1)
+            if np.max(np.abs(line - span)) > tolerance_ms:
+                break
+            j += 1
+        knots.append(j)
+        i = j
+    return knots
+
+
+def tempo_map_from_beats(
+    beats: np.ndarray,
+    downbeats: np.ndarray,
+    beats_per_bar: int,
+    tolerance_ms: float,
+    min_bpm: float,
+    max_bpm: float,
+) -> list[TempoMapPoint] | None:
+    """찾은 박을 따라가는 빠르기 구간 (설계 CHART-003-variable-tempo-exp 4장).
+
+    1. 박을 beats_per_bar개씩 묶어 마디를 만듦. 어느 박을 마디 첫 박으로 할지는 박 번호를 beats_per_bar로 나눈
+       나머지마다 마디 첫 박(±DOWNBEAT_VOTE_WINDOW_MS)과 겹치는 수를 세어 가장 많은 쪽(다수결)
+    2. 마디 경계를 _merge_bar_knots로 묶어 구간을 만들고, 구간 bpm = 구간 박 수 × 60000 / 구간 길이
+    3. bpm을 소수 둘째 자리로 반올림하면서 생기는 어긋남이 쌓이지 않게, 다음 구간 bpm은 반올림한 bpm으로
+       다시 계산한 구간 시작에서 실제 다음 경계까지로 구함
+    박이 beats_per_bar × 2 + 1개 미만이거나 마디 첫 박이 없거나, 구간 bpm 중앙값이 [min_bpm, max_bpm] 밖이면
+    (박을 8분·2분 단위로 잡은 경우) None. 그때는 고정 bpm으로 냄.
+    """
+    if beats.size < beats_per_bar * 2 + 1 or downbeats.size == 0:
+        return None
+    window = DOWNBEAT_VOTE_WINDOW_MS / 1000.0
+    near = np.abs(beats[:, None] - downbeats[None, :]).min(axis=1) <= window
+    first = int(np.argmax([near[k::beats_per_bar].sum() for k in range(beats_per_bar)]))
+    bar_ms = beats[first::beats_per_bar] * 1000.0
+    if bar_ms.size < 2:
+        return None
+    knots = _merge_bar_knots(bar_ms, tolerance_ms)
+    spans = [(knots[i], knots[i + 1]) for i in range(len(knots) - 1)]
+    raw = [(b - a) * beats_per_bar * 60_000.0 / (bar_ms[b] - bar_ms[a]) for a, b in spans]
+    if not min_bpm <= float(np.median(raw)) <= max_bpm:
+        return None
+    points: list[TempoMapPoint] = []
+    start = float(bar_ms[0])
+    for a, b in spans:
+        n_beats = (b - a) * beats_per_bar
+        bpm = round(n_beats * 60_000.0 / (float(bar_ms[b]) - start), 2)
+        points.append(TempoMapPoint(time_ms=start, beat=a * beats_per_bar, bpm=bpm))
+        start += n_beats * 60_000.0 / bpm
+    return points
+
+
 def estimate_from_beats(
     beats: np.ndarray,
     downbeats: np.ndarray | None,
@@ -145,8 +247,21 @@ def estimate_from_beats(
             estimated=False,
             method=method,
         )
+    bpm = round(fold_bpm(raw, config.min_bpm, config.max_bpm), 2)
+    beats_per_bar = int(config.time_signature.split("/")[0])
+    bar_ms = 60_000.0 / bpm * beats_per_bar
+    tempo_map = None
+    if config.tempo_map:
+        tempo_map = tempo_map_from_beats(
+            beats,
+            downbeats,
+            beats_per_bar,
+            config.tempo_map_tolerance_ms,
+            config.min_bpm,
+            config.max_bpm,
+        )
     return TempoEstimate(
-        bpm=round(fold_bpm(raw, config.min_bpm, config.max_bpm), 2),
+        bpm=bpm,
         raw_bpm=round(raw, 2),
         first_beat_ms=_ms(beats),
         first_downbeat_ms=_ms(downbeats),
@@ -154,6 +269,8 @@ def estimate_from_beats(
         time_signature=config.time_signature,
         estimated=True,
         method=method,
+        downbeat_phase_ms=downbeat_phase_ms(downbeats, bar_ms),
+        tempo_map=tempo_map,
     )
 
 
@@ -268,8 +385,11 @@ class BeatThisTempo(TempoEstimator):
         from beat_this.inference import Audio2Beats
 
         self.checkpoint_path = ensure_beat_this_checkpoint()
+        # dbn은 madmom이 있어야 함(transcribers extra, 설계 CHART-003-variable-tempo-exp U1)
         self._model = Audio2Beats(
-            checkpoint_path=str(self.checkpoint_path), device=self.device, dbn=False
+            checkpoint_path=str(self.checkpoint_path),
+            device=self.device,
+            dbn=self.config.postprocess == "dbn",
         )
 
     def estimate(self, audio: np.ndarray, sample_rate: int) -> TempoEstimate:

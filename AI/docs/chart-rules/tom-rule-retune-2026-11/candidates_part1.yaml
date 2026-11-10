@@ -1,0 +1,2111 @@
+candidates:
+- name: current
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: hybrid
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+- name: current_order
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+- name: order_gap15_sm025_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap15_sm025_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap15_sm025_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap15_sm025_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap15_sm025_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap15_sm025_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap15_sm050_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap15_sm050_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap15_sm050_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap15_sm050_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap15_sm050_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap15_sm050_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap15_sm075_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap15_sm075_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap15_sm075_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap15_sm075_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap15_sm075_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap15_sm075_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 1.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap20_sm025_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap20_sm025_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap20_sm025_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap20_sm025_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap20_sm025_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap20_sm025_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap20_sm050_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap20_sm050_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap20_sm050_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap20_sm050_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap20_sm050_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap20_sm050_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap20_sm075_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap20_sm075_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap20_sm075_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap20_sm075_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap20_sm075_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap20_sm075_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap25_sm025_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap25_sm025_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap25_sm025_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap25_sm025_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap25_sm025_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap25_sm025_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap25_sm050_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap25_sm050_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap25_sm050_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap25_sm050_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap25_sm050_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap25_sm050_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap25_sm075_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap25_sm075_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap25_sm075_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap25_sm075_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap25_sm075_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap25_sm075_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 2.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap30_sm025_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap30_sm025_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap30_sm025_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap30_sm025_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap30_sm025_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap30_sm025_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap30_sm050_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap30_sm050_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap30_sm050_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap30_sm050_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap30_sm050_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap30_sm050_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap30_sm075_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap30_sm075_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap30_sm075_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap30_sm075_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap30_sm075_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap30_sm075_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.0
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap35_sm025_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap35_sm025_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap35_sm025_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap35_sm025_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap35_sm025_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap35_sm025_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.25
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap35_sm050_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap35_sm050_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap35_sm050_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap35_sm050_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap35_sm050_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap35_sm050_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.5
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
+- name: order_gap35_sm075_fr00_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: peak
+- name: order_gap35_sm075_fr00_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.0
+    tom_f0_method: median
+- name: order_gap35_sm075_fr05_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: peak
+- name: order_gap35_sm075_fr05_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.05
+    tom_f0_method: median
+- name: order_gap35_sm075_fr10_peak
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: peak
+- name: order_gap35_sm075_fr10_median
+  rules:
+    window_ms: 120
+    cymbal_window_ms: 80
+    tom_fmin: 50
+    tom_fmax: 400
+    tom_bands:
+    - 113
+    - 142
+    tom_gate_ratio: 0.1
+    tom_peak_mode: raw
+    tom_mode: relative
+    tom_relative_method: peaks
+    tom_relative_naming: order
+    tom_relative_min_gap: 3.5
+    cymbal_crash_weight: 0.7
+    stems:
+      toms: toms
+      crash: crash
+      ride: ride
+    tom_relative_smooth: 0.75
+    tom_relative_min_frac: 0.1
+    tom_f0_method: median
