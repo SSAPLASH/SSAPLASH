@@ -61,7 +61,7 @@ import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
-import { setSoundOnHit, unlockAudio } from '@/app/bootstrap';
+import { setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayClock } from '@/engine/sessionClock';
@@ -132,6 +132,8 @@ function PlayPageBody() {
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
   // 판정 진동(PLAY-006): 연주 단계 전체(카운트인·일시정지·복귀 카운트다운 포함)에서 로컬 진동을 끄고 판정으로 울린다
   useJudgementHaptic(session, stage === 'play');
+  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
+  useKeyboardDrum(stage === 'play');
   // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
   useEffect(() => {
     setLocked(stage === 'play');
