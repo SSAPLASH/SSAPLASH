@@ -15,6 +15,7 @@ import { loadRoute } from './routeModules';
 const SetupPage = lazy(() => loadRoute('setup'));
 const PlayPage = lazy(() => loadRoute('play'));
 const SheetPage = lazy(() => loadRoute('sheet'));
+const LessonReadPage = lazy(() => loadRoute('lessonRead'));
 const StudioPage = lazy(() => loadRoute('studio'));
 const SettingsPage = lazy(() => loadRoute('settings'));
 const HistoryPage = lazy(() => loadRoute('history'));
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="play" element={<PlayPage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
+          <Route path="sheet/lesson/:songId" element={<LessonReadPage />} />
           <Route path="studio" element={<StudioPage />} />
           {/* 악보 뷰어(스위치 꺼짐이면 페이지가 /studio로 보낸다) */}
           <Route path="studio/sheets/:id" element={<SheetViewerPage />} />

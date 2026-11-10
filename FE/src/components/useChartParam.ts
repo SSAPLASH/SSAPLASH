@@ -18,6 +18,12 @@ interface Fetched {
   error: string | null;
 }
 
+/** 곡 선택 탭 쿼리만 남긴다(Jira 331: `?tab=lessons`) */
+function keptTab(prev: URLSearchParams): Record<string, string> {
+  const tab = prev.get('tab');
+  return tab ? { tab } : {};
+}
+
 export function useChartParam() {
   const [params, setParams] = useSearchParams();
   const songId = parseId(params.get('song'));
@@ -45,18 +51,18 @@ export function useChartParam() {
   const current = fetched && fetched.key === key ? fetched : null;
   const status: ChartParamStatus = key === null ? 'none' : current === null ? 'loading' : current.error ? 'error' : 'ready';
 
-  /** 곡·난이도를 URL에 싣는다. replace면 방문 기록을 쌓지 않는다(숨긴 채보 보정처럼 사용자가 고르지 않은 변경) */
+  /** 곡·난이도를 URL에 싣는다. replace면 방문 기록을 쌓지 않는다(숨긴 채보 보정처럼 사용자가 고르지 않은 변경). 곡 선택 탭(`tab`)은 남긴다 */
   const select = useCallback(
     (song: number, chart: number, options?: { replace?: boolean }) => {
       setFetched(null); // 같은 곡을 다시 골라도(오류 재시도 포함) 새로 읽는다
-      setParams({ song: String(song), chart: String(chart) }, options?.replace ? { replace: true } : undefined);
+      setParams((prev) => ({ ...keptTab(prev), song: String(song), chart: String(chart) }), options?.replace ? { replace: true } : undefined);
     },
     [setParams],
   );
-  /** 곡 선택 단계로: 쿼리를 지운다 */
+  /** 곡 선택 단계로: 쿼리를 지운다. 곡 선택 탭(`tab`, 입문 코스)은 남겨 같은 탭으로 돌아간다 */
   const clear = useCallback(() => {
     setFetched(null);
-    setParams({}, { replace: true });
+    setParams((prev) => keptTab(prev), { replace: true });
   }, [setParams]);
 
   return { status, loaded: current?.loaded ?? null, error: current?.error ?? null, select, clear };
