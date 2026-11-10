@@ -1,4 +1,4 @@
-// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·카드 전체 폭 캔버스에 겹친 선택 패드 정보 카드·타격 확인) → 접힌 고급 설정 → 하단 고정 바.
+// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·캔버스 판(행 전체 폭) 안의 선택 패드 정보 카드·타격 확인, 보정 중에는 하단 바 [저장] 숨김) → 접힌 고급 설정 → 하단 고정 바.
 // 프리셋 고르기·고치기·저장은 드럼 배치 카드 한 곳이다: 칩으로 적용, [추가하기]로 패드별 2타 보정 → 새 프리셋 저장, [전체 보정]·[이 드럼 다시 치기]로 적용 프리셋 편집.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
 // 단계 판정·문구는 domain/setupSteps, 저장은 presetStore, 보정·재정렬은 app/calibrationSession이 맡고
@@ -64,6 +64,7 @@ import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/components/calibration/CalibrationStage';
 import { CAPTURE_GUIDE_TEXT, RESULT_GUIDE_TEXT } from '@/components/calibration/calibrationText';
+import { StagePanel } from '@/components/setup/StagePanel';
 import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
 import { useRealign } from '@/components/useRealign';
 import { usePoseStream } from '@/components/calibration/usePoseStream';
@@ -218,7 +219,7 @@ export function SetupPage() {
   const recentHits = useRecentHits(HIT_LOG_ROWS);
   const [selectedPad, setSelectedPad] = useState<PadId>('SNARE');
   // 스테이지 행·캔버스·카드 실제 크기로 가림 영역을 재고 행 높이를 화면에 맞춘다(측정 불가면 고정 비율·CSS 폴백)
-  const { rowRef: stageRowRef, frameRef: overlayFrameRef, cardRef: overlayCardRef, region: overlayRegion } = useOverlayRegion();
+  const overlay = useOverlayRegion();
   const [advOpen, setAdvOpen] = useState(false);
   const selectedPlacement = s.kitLayout[selectedPad];
   // 선택 패드의 판정 반경(°): 양손 앵커 중 있는 것의 평균. 앵커가 없으면(시스템 기본·미보정) 슬라이더 없음
@@ -647,10 +648,36 @@ export function SetupPage() {
           <CalibrationStage onSave={onCaptureSave} />
         ) : (
           <>
-            {/* 행(setup-stage-row, 카드 안쪽 전체 폭) 가운데에 화면 높이에 맞춘 캔버스 틀(setup-stage)을 두고, 정보 카드는 행 오른쪽 아래에 붙인다. 좁을 때만 캔버스와 겹친다(PLAY-004 D9·D10) */}
+            {/* 판(StagePanel, 행 전체 폭) 안쪽 가운데에 16:10 드럼 그림을 두고, 정보 카드는 판 안 오른쪽 아래에 놓는다. 그림 옆 여백이 모자랄 때만 그림과 겹친다(PLAY-004 D10·D11) */}
             {/* 마우스는 고르기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
-            <div className="setup-stage-row" ref={stageRowRef}>
-            <div className="setup-stage setup-editor" data-no-pointer-strike ref={overlayFrameRef}>
+            <StagePanel
+              layout={overlay}
+              figClassName="setup-editor"
+              noPointerStrike
+              card={
+                /* 선택 패드 카드(편집 상태). 그림과 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */
+                <KitInfoOverlay
+                  cardRef={overlay.cardRef}
+                  corner={pickOverlayCorner(s.kitLayout, overlay.region, [selectedPad])}
+                  name={PAD_META[selectedPad].label}
+                  x={String(Math.round(selectedPlacement.x * EDITOR_W))}
+                  y={String(Math.round(selectedPlacement.y * EDITOR_H))}
+                  radius={selectedRadius !== null ? `${Math.round(selectedRadius)}°` : String(Math.round(selectedPlacement.r * EDITOR_W))}
+                  // 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다
+                  slider={
+                    selectedRadius !== null
+                      ? {
+                          value: selectedRadius,
+                          min: s.tuning.minRadiusDeg,
+                          max: s.tuning.maxRadiusDeg,
+                          disabled: systemPreset,
+                          onChange: (v) => s.setRadiusOverride(selectedPad, v),
+                        }
+                      : null
+                  }
+                />
+              }
+            >
               <KitCanvas
                 layout={s.kitLayout}
                 onTapPad={setSelectedPad}
@@ -669,29 +696,7 @@ export function SetupPage() {
                 showPoses={sensorMode}
                 surfaceRef={bindSensorSurface}
               />
-            </div>
-              {/* 선택 패드 카드(편집 상태). 캔버스와 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */}
-              <KitInfoOverlay
-                cardRef={overlayCardRef}
-                corner={pickOverlayCorner(s.kitLayout, overlayRegion, [selectedPad])}
-                name={PAD_META[selectedPad].label}
-                x={String(Math.round(selectedPlacement.x * EDITOR_W))}
-                y={String(Math.round(selectedPlacement.y * EDITOR_H))}
-                radius={selectedRadius !== null ? `${Math.round(selectedRadius)}°` : String(Math.round(selectedPlacement.r * EDITOR_W))}
-                // 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다
-                slider={
-                  selectedRadius !== null
-                    ? {
-                        value: selectedRadius,
-                        min: s.tuning.minRadiusDeg,
-                        max: s.tuning.maxRadiusDeg,
-                        disabled: systemPreset,
-                        onChange: (v) => s.setRadiusOverride(selectedPad, v),
-                      }
-                    : null
-                }
-              />
-            </div>
+            </StagePanel>
             {systemPreset && sensorMode && <p className="setup-note">고정 배치예요. 그 자리를 찾아 치세요. 내 자리로 바꾸려면 [추가하기]로 새 프리셋을 만들어요.</p>}
             <div className="setup-kit-foot">
               <p className="setup-padinfo-hint">
@@ -812,20 +817,22 @@ export function SetupPage() {
         <span className="setup-bar-right">
           {saving && <span className="spinner" aria-label="저장 중" />}
           {savedFlash && <span className="setup-bar-saved">저장됨</span>}
-          {bar.button === 'save' ? (
-            <Button className="setup-bar-action" disabled={!bar.buttonEnabled || saving} onClick={onSaveChanges}>
-              저장
-            </Button>
-          ) : (
-            <Button
-              className="setup-bar-action wide"
-              disabled={saving || capturing || !bar.buttonEnabled}
-              title={systemPreset && slotsFull ? SLOTS_FULL_TEXT : undefined}
-              onClick={() => openNameDialog('save')}
-            >
-              새 프리셋으로 저장
-            </Button>
-          )}
+          {/* 보정 중에는 하단 바 저장 버튼을 숨긴다: 결과 카드의 [저장]만 남긴다(PLAY-004 D13) */}
+          {!capturing &&
+            (bar.button === 'save' ? (
+              <Button className="setup-bar-action" disabled={!bar.buttonEnabled || saving} onClick={onSaveChanges}>
+                저장
+              </Button>
+            ) : (
+              <Button
+                className="setup-bar-action wide"
+                disabled={saving || !bar.buttonEnabled}
+                title={systemPreset && slotsFull ? SLOTS_FULL_TEXT : undefined}
+                onClick={() => openNameDialog('save')}
+              >
+                새 프리셋으로 저장
+              </Button>
+            ))}
         </span>
       </div>
 
