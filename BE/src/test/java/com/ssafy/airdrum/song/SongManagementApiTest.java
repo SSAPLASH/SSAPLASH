@@ -34,6 +34,8 @@ class SongManagementApiTest {
     @Autowired JdbcTemplate db; @Autowired AccessTokenService tokens; @Autowired JsonMapper json;
     @Autowired com.ssafy.airdrum.withdrawal.WithdrawalService withdrawal;
     @MockitoBean CoverStorage storage;
+    // 333: 곡 삭제 뒤 악보 상세(서명 필요)를 확인하려고 악보 저장소도 대체한다
+    @MockitoBean com.ssafy.airdrum.sheet.SheetStorage sheetStorage;
     // 내장 서버의 HTTP/1.1 본문 검증에서 JDK 클라이언트의 h2c 업그레이드를 제외한다.
     final HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     long owner,other,song,builtin; String token,otherToken;
@@ -46,6 +48,7 @@ class SongManagementApiTest {
         builtin=db.queryForObject("INSERT INTO songs(title,source,status,license) VALUES('builtin','BUILTIN','READY','test') RETURNING id",Long.class);
         token=tokens.issue(new AuthUser(owner,UserRole.USER),Instant.now()).token(); otherToken=tokens.issue(new AuthUser(other,UserRole.USER),Instant.now()).token();
         when(storage.sign(anyString())).thenAnswer(i->"https://example.test/signed/"+i.getArgument(0));
+        when(sheetStorage.sign(anyString())).thenAnswer(i->"https://example.test/sheet/"+i.getArgument(0));
     }
     @AfterEach void cleanup() {
         try {
@@ -76,25 +79,41 @@ class SongManagementApiTest {
         var body=chunked ? HttpRequest.BodyPublishers.ofInputStream(()->new java.io.ByteArrayInputStream(multipart)) : HttpRequest.BodyPublishers.ofByteArray(multipart);
         return call("PUT",path()+"/cover",token,"multipart/form-data; boundary=test-boundary",body);
     }
-    /** 248: 곡을 지우면 연결된 악보도 같은 트랜잭션에서 소프트 삭제되고 페이지 파일이 바로 정리 대상이 된다. 곡 없는 악보는 그대로다. */
-    @Test void deletingSongSoftDeletesLinkedSheetAndQueuesItsPages() throws Exception {
-        long linked=db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'곡 악보','UPLOADED','IMAGE',1,10,?) RETURNING id",Long.class,owner,song);
-        String key="sheet-music/"+owner+"/"+linked+"/page1.png";
-        db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes,width,height) VALUES(?,1,?,'image/png',10,4,4)",linked,key);
-        long loose=db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'곡 없는 악보','UPLOADED','IMAGE',1,10) RETURNING id",Long.class,owner);
-        db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes,width,height) VALUES(?,1,?,'image/png',10,4,4)",loose,"sheet-music/"+owner+"/"+loose+"/page1.png");
+    /** 333: 곡을 지우면 연결된 악보는 지우지 않고 song_id만 비운다. 페이지 파일은 정리 큐에 올리지 않고, 곡 없는 악보는 그대로다. */
+    @Test void deletingSongUnlinksSheetsAndKeepsThem() throws Exception {
+        // 목록 썸네일 서명을 피하려고 PDF 악보로 둔다(이 테스트는 악보 저장소를 대체하지 않는다)
+        long linked=db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'곡 악보','UPLOADED','PDF',1,10,?) RETURNING id",Long.class,owner,song);
+        String key="sheet-music/"+owner+"/"+linked+"/"+UUID.randomUUID()+".pdf";
+        db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes) VALUES(?,1,?,'application/pdf',10)",linked,key);
+        long loose=db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'곡 없는 악보','UPLOADED','PDF',1,10) RETURNING id",Long.class,owner);
+        db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes) VALUES(?,1,?,'application/pdf',10)",loose,"sheet-music/"+owner+"/"+loose+"/page1.pdf");
         var detail=call("GET",path(),token,null,HttpRequest.BodyPublishers.noBody());
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(json.readTree(detail.body()).path("sheetId").asLong()).isEqualTo(linked);
+        int cleanupBefore=db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=? AND file_role='SHEET_MUSIC'",Integer.class,owner);
+        var updatedBefore=db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?",java.sql.Timestamp.class,linked);
 
         assertThat(call("DELETE",path(),token,null,HttpRequest.BodyPublishers.noBody()).statusCode()).isEqualTo(204);
 
-        assertThat(db.queryForObject("SELECT deleted_at IS NOT NULL FROM sheet_music WHERE id=?",Boolean.class,linked)).isTrue();
-        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=? AND file_role='SHEET_MUSIC' AND user_id=? AND next_attempt_at<=clock_timestamp()",Integer.class,key,owner)).isEqualTo(1);
-        assertThat(call("GET","/api/v1/sheets/"+linked,token,null,HttpRequest.BodyPublishers.noBody()).statusCode()).isEqualTo(404);
-        // 곡 없는 악보는 그대로다(상세 GET은 악보 저장소 서명이 필요해 이 테스트에서는 DB로 확인한다)
-        assertThat(db.queryForObject("SELECT deleted_at IS NULL FROM sheet_music WHERE id=?",Boolean.class,loose)).isTrue();
-        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE object_key LIKE ? AND file_role='SHEET_MUSIC'",Integer.class,"sheet-music/"+owner+"/"+loose+"/%")).isZero();
+        // 악보는 살아 있고 연결만 끊겼다
+        assertThat(db.queryForObject("SELECT deleted_at IS NULL AND song_id IS NULL FROM sheet_music WHERE id=?",Boolean.class,linked)).isTrue();
+        assertThat(db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?",java.sql.Timestamp.class,linked)).isAfter(updatedBefore);
+        assertThat(db.queryForObject("SELECT count(*) FROM sheet_music_pages WHERE sheet_id=?",Integer.class,linked)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=? AND file_role='SHEET_MUSIC'",Integer.class,owner)).isEqualTo(cleanupBefore);
+        assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=?",Integer.class,key)).isZero();
+        // 악보 목록에는 곡 없는 악보로 다시 보인다
+        var list=call("GET","/api/v1/sheets",token,null,HttpRequest.BodyPublishers.noBody());
+        assertThat(list.statusCode()).as(list.body()).isEqualTo(200);
+        var items=json.readTree(list.body()).path("items");
+        var row=java.util.stream.StreamSupport.stream(items.spliterator(),false).filter(n->n.path("id").asLong()==linked).findFirst().orElseThrow();
+        assertThat(row.has("songId")).isTrue(); assertThat(row.path("songId").isNull()).isTrue();
+        // 악보 상세도 200이고 songId는 null이다(페이지 키가 UUID 규칙이라 서명이 된다)
+        var sheetDetail=call("GET","/api/v1/sheets/"+linked,token,null,HttpRequest.BodyPublishers.noBody());
+        assertThat(sheetDetail.statusCode()).as(sheetDetail.body()).isEqualTo(200);
+        assertThat(json.readTree(sheetDetail.body()).path("songId").isNull()).isTrue();
+        // 곡은 지워졌고 곡 없는 악보는 그대로다
+        assertThat(call("GET",path(),token,null,HttpRequest.BodyPublishers.noBody()).statusCode()).isEqualTo(404);
+        assertThat(db.queryForObject("SELECT deleted_at IS NULL AND song_id IS NULL FROM sheet_music WHERE id=?",Boolean.class,loose)).isTrue();
     }
     @Test void patchValidationOwnershipAndBusy() throws Exception {
         assertThat(patch("{\"title\":\"  changed  \"}",token).statusCode()).isEqualTo(200);

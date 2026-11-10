@@ -22,11 +22,11 @@ public class SongQueryService {
 	public SongQueryService(SongRepository songs, ChartVersionRepository versions, ChartQueryAccess access, CoverUrls covers) {
 		this.songs = songs; this.versions = versions; this.access = access; this.covers=covers;
 	}
-	public PageResponse<SongSummary> list(long userId, SongScope scope, String q, String level, boolean playableOnly, int page, int size) {
+	public PageResponse<SongSummary> list(long userId, SongScope scope, String q, String level, boolean playableOnly, boolean withAccompaniment, int page, int size) {
 		access.requireActive(userId);
 		String pattern = "%" + (q == null ? "" : q.strip()).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
-		var rows = songs.page(userId, scope.name(), pattern, level, playableOnly, size, (long) page * size);
-		long total = songs.count(userId, scope.name(), pattern, level, playableOnly);
+		var rows = songs.page(userId, scope.name(), pattern, level, playableOnly, withAccompaniment, size, (long) page * size);
+		long total = songs.count(userId, scope.name(), pattern, level, playableOnly, withAccompaniment);
 		Map<Long, List<ChartVersionRepository.Summary>> summaries = rows.isEmpty() ? Map.of() :
 				versions.summaries(rows.stream().map(SongRepository.View::getId).toList(), userId)
 						.stream().collect(Collectors.groupingBy(ChartVersionRepository.Summary::getSongId));

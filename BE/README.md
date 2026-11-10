@@ -6,7 +6,8 @@
 값은 `BEGINNER`, `INTERMEDIATE`, `ADVANCED`, 미산정이면 `null`이다. MIDI 업로드의 201 응답에도 같은 상세가 나온다.
 기존 `difficulties`의 `EASY` / `NORMAL` / `HARD`는 연습 단계이며 곡 난이도와 별개다.
 목록 쿼리 `songLevel`은 세 값 중 하나로 서버 필터링한다. `playableOnly=true`는 READY이면서 곡 난이도가 있는 곡만 반환한다.
-두 필터는 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
+`withAccompaniment=true`는 반주 상태가 `READY` 또는 `GENERATING`인 곡만 반환한다. `false` 또는 생략하면 제한하지 않으며 다른 값은 400이다.
+이 필터들은 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
 
 본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message}`가 들어간다. 공개 가능한 기존 코드는
 `INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
@@ -283,7 +284,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 43). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 46). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -441,6 +442,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V43 | `V43__add_recommendation_consent_history.sql` | 추천 학습 동의 이력 `user_recommendation_consent_history`. 추가만 하며 철회·탈퇴일부터 2년 뒤 삭제 |
 | V44 | `V44__add_sheet_music_song.sql` | 내 악보와 개인 곡 연결: `sheet_music.song_id`(nullable FK `songs`)와 부분 유일 인덱스 `sheet_music_song_live_idx`(살아 있는 행의 `song_id`). 곡당 살아 있는 악보 하나 | -248 |
 | V45 | `V45__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
+| V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
 
 규칙:
 
@@ -523,7 +525,7 @@ FE는 로그인 버튼에서 아래 `login` 주소로 **브라우저를 이동**
 목록은 `source=BUILTIN`(기본) 또는 `MINE`, `q`(앞뒤 공백 제거 후 100자 이내),
 `page=0`(0~100000), `size=20`(1~100)을 받는다. 제목·아티스트를 대소문자 구분 없이 부분 검색한다.
 `%`, `_`, `!`도 문자 그대로 검색하며 생성 시각 내림차순, 동률이면 ID 내림차순이다.
-`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`와 다르다.
+`source` 요청값은 목록 범위이며 응답의 곡 출처 `BUILTIN`/`AUDIO`/`MIDI`/`MUSICXML`(293번)과 다르다.
 목록과 count에 같은 권한 조건을 적용하며, 난이도 요약은 일괄 조회한다. 목록 SQL에는 큰 노트 JSON을 넣지 않는다.
 
 **같은 채보 난이도 숨김(260번):** 목록의 `difficulties`와 상세의 `difficulties`·`charts[]`에서 최신 버전 노트 수(`noteCount`)가 NORMAL과 같은 HARD·EASY를 뺀다. NORMAL·EASY는 HARD에서 노트를 빼기만 해서 만들므로(151번 솎기, 음원 채보도 같음) NORMAL = HARD는 노트 수가 같으면 같은 채보다. EASY는 HARD에서 따로 솎으므로 노트 수만 같고 노트가 다른 경우가 이론상 있지만 받아들인다(설계 U2). NORMAL은 항상 남기고, NORMAL이 없는 곡은 숨기지 않는다. 그래서 곡마다 난이도가 1~3개다(예: 시드 3곡은 `EASY`·`NORMAL`). 채보는 세 난이도 모두 저장된 그대로이므로 `/api/v1/charts/{chartId}`·`/api/v1/chart-versions/{id}`는 숨긴 채보도 200이고, 플레이·베스트·녹음의 `difficulty`와 ADMIN 응답(`/api/v1/admin/songs*`)은 바뀌지 않는다. FE는 응답 목록대로 난이도를 그리고, URL의 `chart`가 목록에 없으면 NORMAL로 바꾼다(FE 합의 `CHART-002_중복-난이도-숨김`).
@@ -960,18 +962,24 @@ CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안
 | `RIDE` | 51, 53, 59 |
 | 제외 | 그 밖의 피치(클랩·탬버린·카우벨 등) |
 
-- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.1`):
+- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-2.0`, 328번에서 EASY만 바뀜):
 
 | 규칙 | HARD | NORMAL | EASY |
 | --- | --- | --- | --- |
 | 패드 | 전체 | 전체 | `HIHAT_PEDAL` 제외 |
-| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 4분 격자만 |
-| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 전부 제외 |
+| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 EASY 박 위만(연타 구간은 아래) |
+| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 유지(세기로 거르지 않음) |
 | 같은 시각 상한 | 없음 | 2개 | 2개 |
-| 최소 간격(기준의 3/4 미만이면 충돌) | 없음 | 16분 | 8분 |
+| 최소 간격(이보다 가까우면 충돌) | 없음 | 16분의 3/4 | 225ms |
 
   상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
   EASY가 비면 NORMAL을, NORMAL이 비면 HARD를 그대로 쓴다. 규칙을 바꾸면 버전을 올린다.
+
+  EASY는 곡 템포를 본다(`DifficultyThinner`, 상수 `T_MIN_MS` 300ms·`BURST_RUN` 3).
+  - **EASY 박:** 그 tick의 템포에서 길이가 300ms 이상인 가장 짧은 음표. 100 BPM 이하는 8분, 200 BPM 이하는 4분, 그보다 빠르면 2분. 격자는 tick 0부터 센다.
+  - **연타 구간:** 앞뒤 간격이 300ms보다 짧게 3묶음 이상 이어지는 줄. 구간 안의 EASY 박마다 박 앞뒤 반 칸에서 박에 가장 가까운 묶음 하나를 남긴다(같으면 우선순위). 연타가 아닌 묶음은 EASY 박 위일 때만 남는다.
+  - 템포는 MIDI 템포 이벤트(첫 이벤트 전은 120 BPM)를 쓴다. 남는 노트는 모두 HARD 원본이며 옮기거나 새로 만들지 않는다.
+  - 느린 곡은 EASY가 8분까지 남아 NORMAL과 같아질 수 있고, 고스트가 많은 느린 곡은 EASY 노트가 NORMAL보다 많을 수 있다.
 - 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, 업로드는 `offsetMs=0`, 공용 곡 카탈로그는 254번 절의 `offsetMs`)를
   `ChartDocumentReader.milliseconds`와 같은 식으로 계산한다. 그래서 악보 페이지 ms와 노트 시각이 어긋나지 않는다.
 - `notation`은 tick·note-off까지 길이(없으면 16분음표)·voice(`KICK`·`HIHAT_PEDAL` 2, 나머지 1), `timing`에는 `ppq`·`tempoMap`·`timeSignatureMap`을 항상 넣는다.
@@ -1019,6 +1027,49 @@ GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tas
 CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리에 검증·추출해 FluidSynth 2.2.5를 실행한다. FFmpeg·ffprobe는 기존 SHA-256 고정 준비 스크립트의 8.1.3을 사용하므로 워커 이미지의 FFmpeg 4.4.2 실행 검증과 구분한다.
 
 
+## MusicXML 업로드 → 채보 변환 (293번)
+
+CHART-001. 사용자가 올린 **드럼 MusicXML**(`.musicxml`·`.xml`·`.mxl`)을 AI 서버가 채보 JSON으로 바꾸고, BE가 음원 채보와 같은 규칙으로 HARD·NORMAL·EASY를 만들어
+**내 곡**(`source=MUSICXML`)으로 저장한다. MIDI 업로드(151번)처럼 요청 안에서 끝나는 동기 API다. 이미지·PDF 악보 인식은 넣지 않는다(AI 측정: 악기 정확도 평균 0.49,
+곡당 크레딧 약 6,600). 설계 `.claude/plans/CHART-001-MusicXML-악보-업로드-곡-등록.md`.
+
+`POST /api/v1/songs/musicxml`: Bearer 인증, multipart `file`(5 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
+다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, `Cache-Control: private, no-store`, 본문은 곡 상세
+(`status=READY`, `hasAccompaniment=false`, `accompanimentStatus=NONE`). 채보는 세 난이도를 모두 저장하지만 응답의 `difficulties`·`charts[]`는 260번 숨김 규칙을 따르므로
+노트 수가 NORMAL과 같은 HARD·EASY는 빠져 1~3개다. 같은 파일을 다시 올리면 새 곡이 하나 더 생긴다(멱등 키 없음).
+
+흐름: 바이트 검사(`MusicXmlSniffer`: XML은 BOM·공백 뒤 `<`로 시작하고 앞 4 KiB 안에 `<score-partwise`/`<score-timewise`, mxl은 zip 머리 + `META-INF/container.xml`.
+확장자·Content-Type은 보지 않는다. UTF-16으로 저장된 XML은 `<`로 시작하지 않아 422다) → AI 서버 `POST {AI_ANALYSIS_BASE_URL}/chart/sheet?name=score.musicxml|score.mxl`에 파일 바이트를 그대로 보냄
+(`MusicXmlConvertClient`, 연결 1초·전체 10초·응답 5 MiB) → 응답 `chart`를 음원 워커 결과와 같은 검증·3난이도 파생(`chart.worker.TranscriptionCharts`,
+`WorkerResults`에서 꺼낸 공용 클래스) → 한 트랜잭션에 곡 1 + 채보 3 + 버전 3, 곡 난이도 산정. AI 호출 전에는 DB를 건드리지 않으므로 거절·장애 때 곡 행이 남지 않는다.
+
+저장: `songs.bpm`·`offset_ms`(못갖춘마디 길이)·`time_signature`는 AI `timing`, `duration_ms`는 AI `sheet.duration_ms`. `chart_versions`는 HARD = AI 원본
+(`generator_version` `sheet-musicxml-3`), NORMAL·EASY = `midi-rule-2.0` 솎기(`…+midi-rule-2.0`), `generator=MUSICXML_RULE`(V46), `notation_status=UNAVAILABLE`
+(악보 표기는 없고 FE 악보 격자는 `offsetMs`·`bpm`로 그린다). `hihatOpen` 필드는 노트 JSON에 그대로 남는다. 원본 MusicXML은 보관하지 않는다(반주 스프린트에서 다시 정한다).
+
+| 상태 | `code` | 경우 |
+| --- | --- | --- |
+| 400 | `MUSICXML_INVALID` | 요청 형태 위반, 제목 없음·100자 초과, 빈 파일 |
+| 401 | `UNAUTHORIZED` | 토큰 없음·무효, ACTIVE가 아닌 회원 |
+| 413 | `MUSICXML_TOO_LARGE` | 파일 5 MiB 초과(선언 크기를 믿지 않고 읽은 바이트로도 확인) |
+| 422 | `MUSICXML_UNSUPPORTED` | MusicXML 아님(바이트 검사), AI `INPUT_INVALID`(timewise·깨진 XML/zip·파트 없음·반복을 펼친 길이 30분 초과). detail에 AI 메시지 한 줄 |
+| 422 | `MUSICXML_NO_DRUM_NOTES` | 드럼 파트가 없거나 패드로 바꿀 음표가 없음(AI `NO_DRUM_NOTES`) |
+| 503 | `MUSICXML_UNAVAILABLE` | AI 서버 연결 불가·10초 초과·5xx·응답 5 MiB 초과·계약 밖 응답(채보 검증 실패 포함) |
+| 500 | `INTERNAL_ERROR` | DB 저장 실패. 곡·채보 행을 하나도 남기지 않는다 |
+
+로그: 악보 본문·사용자 파일 이름·AI 응답 본문은 남기지 않는다. 클라이언트는 AI 상태 코드와 예외 종류만 WARN으로 남기고, 422 `MUSICXML_UNSUPPORTED`의 detail(AI 메시지 한 줄)은
+공통 예외 처리기 WARN 로그에 포함된다. 503은 공통 정책대로 ERROR 스택트레이스다.
+
+**배포 순서:** `ai-api`에 `/chart/sheet`가 먼저 떠 있어야 한다(없으면 모두 503). nginx는 `/api/v1/songs/musicxml`의 본문 상한(`client_max_body_size 6m`)을 열어야
+1 MB 넘는 악보가 BE에 닿는다(Infra 요청). FE 업로드 폼은 마지막이다. AI 쪽 계약·설정(`configs/chart/sheet.yaml`)은 AI README 「드럼 악보 → 채보」 절.
+
+```powershell
+.\gradlew.bat test --tests 'com.ssafy.airdrum.song.musicxml.*' --tests 'com.ssafy.airdrum.chart.worker.TranscriptionChartsTest'
+```
+
+`MusicXmlSnifferTest`(바이트 검사·오류 코드), `MusicXmlConvertClientTest`(가짜 AI 서버로 상태별 분기·시간 초과·크기 초과·연결 실패), `MusicXmlSchemaTest`(V46 CHECK),
+`MusicXmlUploadApiTest`(실제 JWT·임베디드 PG·가짜 AI 서버: 201·3난이도 저장·mxl·400/413/422/503·롤백), `TranscriptionChartsTest`(검증·파생 규칙).
+
 ## 공용 곡 관리 (156번)
 
 CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을 MIDI로 등록하고 정보·채보·커버·반주를 고치며 공개 여부를 바꾼다.
@@ -1031,7 +1082,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 | `GET /` | `published`(생략 시 전체), `q`, `page`, `size`(곡 목록과 같은 범위) | 비공개 포함 목록, 삭제 곡 제외, 생성 내림차순 |
 | `GET /{id}` | — | 관리자 곡 상세 |
 | `PATCH /{id}` | JSON `title`·`artist`·`license`·`published` 중 1개 이상. 빈 `artist`는 null | 관리자 곡 상세 |
-| `PUT /{id}/charts/midi` | multipart `file`만 | 난이도별 새 버전이 반영된 상세 |
+| `PUT /{id}/charts/midi` | multipart `file`, 선택 `offsetMs`(생략하면 곡의 기존 값) | 난이도별 새 버전이 반영된 상세 |
 | `PUT /{id}/cover`, `DELETE /{id}/cover` | 187번 커버와 같은 이미지 규칙 | `{coverUrl}` / 204 |
 | `PUT /{id}/accompaniment`, `DELETE /{id}/accompaniment` | multipart `file` WAV·MP3, 50 MiB·10분 이하 | `{accompanimentUrl, expiresAt}` / 204 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
@@ -1039,7 +1090,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다. 255번부터 상세에만 곡 추천용 `metadata`(아래 공용 곡 카탈로그의 `meta`와 같은 필드, 없으면 null)를 더한다. 목록·회원용 곡 응답에는 없고, ADMIN API로 고치는 기능은 두지 않는다(카탈로그가 유일한 출처).
 
 - **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
-- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
+- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-2.0`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
 - **커버:** 키 `cover/builtin/{songId}/{uuid}.{jpg|png|webp}`(악보 버킷). 공개된 공용 곡 커버는 모든 회원의 곡 목록·상세 `coverUrl`에 1시간 서명으로 온다.
 - **반주:** ffprobe(`AudioProbe`)로 실제 바이트를 검사한다. 키 `accompaniment/{songId}/{uuid}.{wav|mp3}`(반주 버킷), 같은 키에 덮어쓰지 않고 교체마다 새 키를 만든다. 쓰기는 워커의 반주 버킷 쓰기 자격증명을 쓰므로 운영 자격증명에 PutObject 권한이 있어야 한다. 82번 도구가 등록한 `accompaniment/{songId}.wav`도 그대로 재생된다.
 - **정리:** 커버·반주 업로드 전에 임시 정리 작업(`user_id` NULL, 5분 뒤)을 등록하고 저장소 쓰기 뒤 곡을 다시 잠가 연결한다. 교체·삭제·곡 삭제 때 이전 객체는 기존 정리 큐가 지운다. 정리 큐는 살아 있는 공용 곡이 참조하는 커버·반주를 지우지 않는다.
@@ -1064,7 +1115,7 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 
 - **카탈로그:** `src/main/resources/builtin-songs/catalog.json`(배열)과 `builtin-songs/midi/*.mid`. 항목은 `title`(1~100자, 같은 곡 판별 키라 바꾸지 않는다)·`artist`(선택)·`license`(필수, 출처와 이용 조건. 명세 17장은 자작·CC0·퍼블릭 도메인을 전제했으나, 2026-11-05 팀 결정으로 AI가 채보한 상업 곡도 `원곡 {아티스트}, 드럼 채보 AI 팀 제작, 비상업 프로젝트 내부 시연용` 형식으로 넣는다)·`midi`(파일 이름)·`published`(선택, 기본 true)·`offsetMs`(선택, 기본 0, 아래 기준점)·`meta`(선택, 아래 곡 추천 메타데이터). 모르는 필드·제목 중복·필수 누락·MIDI 없음·`meta` 규칙 위반이 하나라도 있으면 카탈로그 전체를 거부하고 아무것도 등록하지 않는다.
 - **등록 규칙(`song.admin.BuiltinSongSeeder`):** 살아 있는 공용 곡 중 제목이 같은 곡이 없으면 156번 등록과 같이 MIDI → 3난이도로 등록한다. 있고 난이도가 3개 미만이면 156번 채보 수정과 같이 새 버전을 만들어 채운다(있던 난이도는 version+1, 빠진 난이도는 version 1, 기존 버전 행은 남음). 이미 3난이도면 건너뛴다. 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(ADMIN PATCH 값을 지킴). 지운 공용 곡·개인 곡과 제목이 같아도 새 공용 곡으로 등록한다. 곡 난이도 등급(V29)도 등록·갱신 때 함께 계산된다.
-- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 전체 검사 CI가 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT …/midi`)는 `offsetMs` 입력이 없어 그 곡의 offset이 0으로 돌아간다. 카탈로그 곡에는 쓰지 말고, 이미 0이 됐거나 `offsetMs`를 바꿔야 하면 카탈로그를 고쳐 배포한 뒤 ADMIN으로 그 곡을 지우고 앱을 다시 시작해 새로 등록되게 한다(3난이도 곡은 카탈로그만 고치면 건너뛴다). 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
+- **기준점 `offsetMs`(260번):** AI가 주는 MIDI는 0틱 = 원본 음원 0초라 첫 박이 0틱이 아니다. `offsetMs`(0 이상 1,800,000 이하 정수, 원본 음원 0초 기준 **첫 마디 첫 박** 시각 ms, 음원 없는 곡은 0)를 주면 변환기가 템포 맵으로 첫 박 tick을 역산해 노트·템포·박자표·길이 tick에서 뺀다. 첫 박에 걸린 템포·박자표는 0틱에 둔다. 그 위에서 솎기 격자가 첫 박부터 서고, `notation.tick` 0 = 첫 박, `timing.offsetMs`·`songs.offset_ms` = 카탈로그 값, `timeMs` = `offsetMs` + tick의 ms(원본 MIDI 시각과 1ms 안에서 같음), `duration_ms`도 음원 0초부터다. 음원 채보(`WorkerResults`, `timeMs - offsetMs`로 tick)와 같은 표현이다. 첫 박보다 32분음표 절반(`ppq/8`)을 넘게 앞선 노트가 있으면 그 곡은 `MIDI_UNSUPPORTED`로 등록 실패다(못갖춘마디 곡은 그 마디의 시작 시각을 `offsetMs`로 준다). 그 안쪽은 0틱으로 본다. 저장소 카탈로그 전체를 각자의 `offsetMs`로 변환하는 테스트(`BuiltinSongSeederTest.저장소의_카탈로그는_모든_곡이_3난이도로_변환된다`)가 있어 이런 곡을 넣으면 전체 검사 CI가 실패한다. 이미 3난이도인 곡은 `offsetMs`를 바꿔도 다시 만들지 않는다(다른 필드와 같다). 156번 ADMIN MIDI 재업로드(`PUT /{id}/charts/midi`)는 `offsetMs`를 생략하면 곡에 저장된 값을 그대로 쓴다(328번). 카탈로그 곡을 같은 MIDI로 다시 만들 때(예: 솎기 규칙 변경 뒤)는 생략하고, 첫 박이 다른 MIDI로 바꿀 때만 준다. 등록과 같은 형식 검사(400 `SONG_INVALID`)와 첫 박보다 앞선 노트 검사(422 `MIDI_UNSUPPORTED`)를 한다. 카탈로그의 `offsetMs` 자체를 바꾸면 3난이도 곡은 시작 시 건너뛰므로 이 API로 새 값을 주어 다시 만든다. 274번 MIDI 반주 합성은 사용자 MIDI 곡(`offsetMs` 0)만 대상이다.
 - **실패:** 곡마다 따로 처리해 MIDI 변환 실패 등은 warn 로그(`공용 곡 등록 실패: {제목}`)만 남기고 다음 곡으로 간다. 어떤 실패도 앱 시작을 막지 않는다. 결과는 info 로그 `공용 곡 카탈로그 결과 N곡: {REGISTERED=…, FILLED=…, SKIPPED=…, FAILED=…}`로 확인한다.
 - **동시 시작:** PostgreSQL advisory lock(키 254001)을 잡은 인스턴스만 실행한다.
 - **설정:** `builtin-songs.seed.enabled`(기본 true, 테스트 기본 false), `builtin-songs.location`(기본 `classpath:builtin-songs/`).
@@ -1089,7 +1140,7 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 | `POST /` | multipart `files`(같은 이름으로 여러 개, 순서가 페이지 순서), `title` 1~100자, 선택 `source` `UPLOADED`·`RENDERED`, 선택 `songId`(연결할 개인 곡, 248번) | 201, `Location: /api/v1/sheets/{id}`, 악보 상세 |
 | `GET /` | `q`(제목 부분 검색), `page` 0~100000, `size` 1~100 | `PageResponse<SheetSummary>`, 최신순 |
 | `GET /{id}` | — | 악보 상세 |
-| `PATCH /{id}` | JSON `{"title": "..."}`만 | 악보 상세 |
+| `PATCH /{id}` | JSON `{"title": "...", "songId": 42 \| null}` 중 1~2개 필드(333번). `title`은 제목, `songId`는 숫자면 개인 곡 연결(이미 연결돼 있으면 옮김)·`null`이면 해제. 없는 필드는 그대로 | 악보 상세 |
 | `DELETE /{id}` | — | 204, 소프트 삭제 |
 
 - **상세:** `id`, `title`, `source`, `kind`(`IMAGE`·`PDF`), `pageCount`, `totalBytes`, `thumbnailUrl`(이미지 악보의 1쪽, PDF는 null), `createdAt`, `updatedAt`, `pages[]`(`pageNo`, `url`, `contentType`, `width`, `height`, `bytes`), `expiresAt`, `songId`(연결된 개인 곡, 없으면 null). 목록 항목은 `pages`·`expiresAt`이 없다. URL은 1시간 서명 GET이며 `inline`이라 브라우저에서 바로 열린다. 만료되면 상세를 다시 부른다.
@@ -1101,9 +1152,9 @@ CHART-001. 회원이 악보 이미지나 PDF를 서버에 보관하고 다시 �
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `SHEET_INVALID` | 제목·`source` 형식, `songId`가 양의 정수 문자열이 아님, 모르는 필드, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한, PATCH 본문 규칙 |
-| 404 | `SONG_NOT_FOUND` | `songId`의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡 모두) |
-| 409 | `SHEET_ALREADY_LINKED` | 그 곡에 살아 있는 악보가 이미 있음(업로드 중인 악보 포함). 지우면 다시 올릴 수 있다 |
+| 400 | `SHEET_INVALID` | 제목·`source` 형식, 등록 `songId`가 양의 정수 문자열이 아님, PATCH `songId`가 양의 정수(Long 범위)도 `null`도 아님, 모르는 필드, 빈 PATCH 본문, 파일 없음·빈 파일·`files` 외 파트, 21장 이상, 이미지와 PDF 섞음, PDF 2개 이상, 깨진 파일, 화소 상한 |
+| 404 | `SONG_NOT_FOUND` | 등록·PATCH의 `songId`의 곡이 본인의 살아 있는 개인 곡이 아님(남의 곡·없는 곡·지운 곡·공용 곡 모두) |
+| 409 | `SHEET_ALREADY_LINKED` | 그 곡에 살아 있는 다른 악보가 이미 있음(업로드 중인 악보 포함). 지우거나 연결을 풀면 다시 연결할 수 있다 |
 | 413 | `SHEET_TOO_LARGE` | 이미지 10 MiB·PDF 20 MiB 초과 |
 | 413 | `SHEET_QUOTA_EXCEEDED` | 회원당 100개 또는 500 MiB 초과 |
 | 415 | `SHEET_UNSUPPORTED` | JPG·PNG·WEBP·PDF가 아님(GIF·BMP·HEIC 등) |
@@ -1116,8 +1167,9 @@ FE 요청(2026-11-06, `CHART-001_내-악보와-개인-곡-연결`)으로 10/30 �
 - 등록 때 선택 파트 `songId`(양의 정수 문자열)를 보내면 그 곡에 연결한다. 곡은 **본인 소유·삭제되지 않음·공용(`BUILTIN`)이 아님**이어야 하고 상태(처리 중·실패)는 보지 않는다. 아니면 모두 404 `SONG_NOT_FOUND`. `songId`가 없으면 지금처럼 곡 없는 악보다. `RENDERED`도 같은 규칙이다.
 - **곡당 살아 있는 악보는 하나다.** `sheet_music_song_live_idx`(V44)가 보장하므로 동시에 올려도 하나만 들어가고 나머지는 409 `SHEET_ALREADY_LINKED`다. 악보를 소프트 삭제하면 자리가 비어 다시 올릴 수 있다. 업로드 실패로 소프트 삭제된 행도 자리를 차지하지 않는다.
 - 악보 상세·목록 항목에 `songId`, 곡 목록·상세([187번](#개인-곡-관리커버-187번))에 `sheetId`가 나온다. 곡의 `sheetId`는 페이지가 연결된 살아 있는 악보만 가리키며(업로드 중인 행은 null), 공용 곡은 항상 null이다.
-- **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보도 같은 트랜잭션에서 소프트 삭제되고 페이지 파일이 바로 정리 대상으로 등록된다(`sheet.SheetSongLink`, 악보 DELETE와 같은 처리). 악보만 지우면 곡은 그대로다.
-- 이미 올린 악보를 나중에 곡에 연결하는 PATCH는 없다(FE가 쓰지 않음). 필요하면 `PATCH /{id}`에 `songId`를 더하는 식으로 호환되게 추가한다.
+- **나중에 연결·해제(333번, 2026-11-09 FE 회신 2 "안 B"):** `PATCH /{id}`에 `songId`를 보내면 이미 올린 악보를 곡에 연결한다. 판정은 등록과 같다(404 `SONG_NOT_FOUND`, 409 `SHEET_ALREADY_LINKED`, 곡 상태 무관). `null`이면 해제한다. 이미 다른 곡에 연결된 악보에 다른 `songId`를 보내면 **옮기고**(이전 곡의 `sheetId`는 null) 지금 연결된 곡과 같은 값이면 아무것도 바꾸지 않는다. FE는 악보만 있는 카드의 [곡 올리기]로 곡을 만든 직후(201·202) 이 PATCH를 부른다.
+- **곡을 지우면**(`DELETE /api/v1/songs/{id}`) 연결된 악보는 **지우지 않고 `song_id`만 비운다**(`sheet.SheetSongLink.unlinkAll`, 같은 트랜잭션, 업로드 중 행 포함). 페이지 파일은 정리 큐에 올리지 않으며 악보는 곡 없는 악보로 다시 보인다. 11/06(248번)에는 악보도 같이 소프트 삭제했으나 FE에 곡 없는 악보 화면이 생겨 333번에서 바꿨다. V44 마이그레이션 파일의 주석은 그때 기준이며 Flyway 체크섬 때문에 고치지 않는다. 악보만 지우면 곡은 그대로다. 회원 탈퇴 때 악보를 통째로 정리하는 처리는 그대로다.
+- 곡 없는 악보가 늘어도 회원당 100개·500 MiB 한도는 그대로 적용된다. 정리는 악보 DELETE로 한다.
 - 패키지 경계: `sheet`는 `songs` 테이블을 SQL로만 확인하고 `song`을 import하지 않는다. `song`은 `sheetId`를 `SongRepository` 서브쿼리로 읽고, 곡 삭제 때 `SheetSongLink`를 부른다(한 방향).
 
 ```powershell
@@ -1246,7 +1298,7 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 전송 오류의 워커 측 재시도를 소진해 heartbeat를 중단하면 임대 만료 후 복구될 수 있지만 단계 마감과 단계별 최대 2회 재시도 범위 안에서만 재배정된다. 409·422 또는 이미 DONE인 경우 재배정을 보장하지 않는다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
-음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timing에 `tempoMap`이 둘 이상이고 `ppq`가 있으면 offsetMs부터 빠르기 구간마다 그 BPM으로 박 수를 세고(`WorkerResults.VirtualTicks`, 구간 시작은 채보마다 한 번 계산하고 노트마다 이분 탐색), 없으면 BPM 하나로 환산한다. timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
+음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-2.0`으로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timing에 `tempoMap`이 둘 이상이고 `ppq`가 있으면 offsetMs부터 빠르기 구간마다 그 BPM으로 박 수를 세고(`TranscriptionCharts.VirtualTicks`, 구간 시작은 채보마다 한 번 계산하고 노트마다 이분 탐색), 없으면 BPM 하나로 환산한다. EASY 박을 정하는 템포도 tick을 만든 기준과 같다: notation tick이면 `tempoMap`(없으면 `bpm`), 가상 tick이면 그 구간 목록(없으면 `bpm`). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-2.0`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 

@@ -40,7 +40,7 @@ class AdminSongRepository {
 	record ChartRow(long songId, long chartId, String difficulty, long versionId, int version, int noteCount,
 			String notationStatus, String generator, String generatorVersion, Instant createdAt) {}
 	/** 잠근 곡의 자산 키. */
-	record Locked(String accompanimentKey, String coverKey) {}
+	record Locked(String accompanimentKey, String coverKey, int offsetMs) {}
 
 	private final JdbcTemplate db;
 	private final NamedParameterJdbcTemplate named;
@@ -60,8 +60,8 @@ class AdminSongRepository {
 	/** 개인 곡·없는 곡·삭제 곡은 존재를 드러내지 않고 404다. 트랜잭션 안에서 호출한다. */
 	Locked lock(long id) {
 		db.execute("SET LOCAL lock_timeout='3s'");
-		var rows = db.query("SELECT accompaniment_key,cover_key FROM songs s WHERE s.id=? AND" + BUILTIN + "FOR UPDATE",
-				(r, n) -> new Locked(r.getString(1), r.getString(2)), id);
+		var rows = db.query("SELECT accompaniment_key,cover_key,offset_ms FROM songs s WHERE s.id=? AND" + BUILTIN + "FOR UPDATE",
+				(r, n) -> new Locked(r.getString(1), r.getString(2), r.getInt(3)), id);
 		if (rows.isEmpty()) throw new BusinessException(ChartErrorCode.SONG_NOT_FOUND);
 		return rows.getFirst();
 	}
@@ -71,7 +71,7 @@ class AdminSongRepository {
 		db.update("UPDATE songs SET " + column + "=?,updated_at=clock_timestamp() WHERE id=?", value, id);
 	}
 
-	/** ADMIN MIDI 재업로드는 offsetMs가 0이라 카탈로그 곡의 offset이 0으로 돌아간다(260번 설계 U4, README). */
+	/** 재생성 결과의 bpm·offset·박자·길이. ADMIN 재업로드는 offsetMs를 생략하면 기존 값을 쓴다(328번, 260번 U4를 바꿈). */
 	void updateTiming(long id, MidiChartDocuments.Song song) {
 		db.update("UPDATE songs SET bpm=?,offset_ms=?,time_signature=?,duration_ms=?,updated_at=clock_timestamp() WHERE id=?",
 				song.bpm(), song.offsetMs(), song.timeSignature(), song.durationMs(), id);

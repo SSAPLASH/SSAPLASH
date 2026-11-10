@@ -54,7 +54,7 @@ class MidiChartDocumentsTest {
 		var bytes = MidiFixtures.ppq(480).drum(480, 46).drum(960, 42).drum(1440, 44).bytes();
 		var sequence = new MidiSequenceReader().read(bytes);
 		var rebased = documents.rebase(sequence, GmDrumMapping.notes(sequence.events()), 500);
-		var song = documents.build(rebased.sequence(), 500, DifficultyThinner.thin(rebased.notes(), 480));
+		var song = documents.build(rebased.sequence(), 500, DifficultyThinner.thin(rebased.notes(), 480, List.of()));
 		for (var difficulty : Difficulty.values()) {
 			var built = song.charts().get(difficulty);
 			var result = reader.notes(built.notes(), built.noteCount());

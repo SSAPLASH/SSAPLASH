@@ -110,10 +110,13 @@ class AdminSongService {
 		return detail(id);
 	}
 
-	/** 고친 MIDI로 난이도별 새 버전을 만든다(U3). 기존 버전 행은 그대로 둔다. 빠진 난이도는 version 1로 채운다. */
-	AdminSongDetail regenerate(long id, MultipartFile file) {
-		tx.executeWithoutResult(s -> songs.lock(id));
-		return regenerate(id, converter.convert(file));
+	/**
+	 * 고친 MIDI로 난이도별 새 버전을 만든다(U3). 기존 버전 행은 그대로 둔다. 빠진 난이도는 version 1로 채운다.
+	 * {@code offsetMs}가 null이면 곡에 저장된 첫 박 시각을 쓴다(카탈로그 곡을 새 솎기 규칙으로 다시 만들 때 기준이 0으로 돌아가지 않게, 328번).
+	 */
+	AdminSongDetail regenerate(long id, MultipartFile file, Integer offsetMs) {
+		int current = tx.execute(s -> songs.lock(id).offsetMs());
+		return regenerate(id, converter.convert(file, offsetMs == null ? current : offsetMs));
 	}
 
 	/** 공용 곡 카탈로그(254번)가 난이도가 모자란 곡을 채울 때 쓴다. offsetMs는 카탈로그 값(260번). */

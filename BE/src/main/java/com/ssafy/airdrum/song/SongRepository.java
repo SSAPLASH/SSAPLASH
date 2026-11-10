@@ -39,13 +39,16 @@ public interface SongRepository extends Repository<Song, Long> {
 		 OR LOWER(COALESCE(s.artist, '')) LIKE LOWER(:pattern) ESCAPE '!')
 		AND (CAST(:level AS text) IS NULL OR s.song_level = :level)
 		AND (:playableOnly = false OR (s.status = 'READY' AND s.song_level IS NOT NULL))
+		AND (:withAccompaniment = false OR s.accompaniment_key IS NOT NULL OR
+		     (s.source = 'MIDI' AND (SELECT m.status FROM midi_accompaniment_jobs m
+		       WHERE m.song_id = s.id ORDER BY m.id DESC LIMIT 1) IN ('QUEUED', 'RUNNING')))
 		""";
 
 	@Query(value = COLUMNS + " WHERE " + FILTER + " ORDER BY s.created_at DESC, s.id DESC LIMIT :size OFFSET :offset", nativeQuery = true)
 	List<View> page(@Param("userId") long userId, @Param("scope") String scope,
-			@Param("pattern") String pattern, @Param("level") String level, @Param("playableOnly") boolean playableOnly, @Param("size") int size, @Param("offset") long offset);
+			@Param("pattern") String pattern, @Param("level") String level, @Param("playableOnly") boolean playableOnly, @Param("withAccompaniment") boolean withAccompaniment, @Param("size") int size, @Param("offset") long offset);
 	@Query(value = "SELECT count(*) FROM songs s WHERE " + FILTER, nativeQuery = true)
-	long count(@Param("userId") long userId, @Param("scope") String scope, @Param("pattern") String pattern, @Param("level") String level, @Param("playableOnly") boolean playableOnly);
+	long count(@Param("userId") long userId, @Param("scope") String scope, @Param("pattern") String pattern, @Param("level") String level, @Param("playableOnly") boolean playableOnly, @Param("withAccompaniment") boolean withAccompaniment);
 	@Query(value = COLUMNS + " WHERE s.id = :id AND " + VISIBLE, nativeQuery = true)
 	Optional<View> visible(@Param("id") long id, @Param("userId") long userId);
 	@Query(value = "SELECT s.source, s.status, s.accompaniment_key AS \"accompanimentKey\" FROM songs s WHERE s.id = :id AND " + VISIBLE, nativeQuery = true)
