@@ -80,9 +80,9 @@ class MidiUploadApiTest {
 		db.update("DELETE FROM users WHERE id=?", user);
 	}
 
-	/** 100BPM 3/4, 2마디: 킥·스네어·하이햇(8분)·페달. */
+	/** 120BPM 3/4, 2마디: 킥·스네어·하이햇(8분)·페달. 8분 250ms라 EASY는 4분 박만 남아 3난이도가 모두 다르다(328번). */
 	static byte[] groove() {
-		var f = MidiFixtures.ppq(480).tempo(0, 100).signature(0, 3, 2);
+		var f = MidiFixtures.ppq(480).tempo(0, 120).signature(0, 3, 2);
 		for (int bar = 0; bar < 2; bar++) {
 			long start = bar * 1440L;
 			f.drum(start, 36).drum(start + 480, 38).drum(start + 960, 38).drum(start + 960, 44);
@@ -129,12 +129,12 @@ class MidiUploadApiTest {
 		assertThat(song.path("source").asString()).isEqualTo("MIDI");
 		assertThat(song.path("status").asString()).isEqualTo("READY");
 		assertThat(song.path("songLevel").asString()).isNotBlank();
-		assertThat(song.path("bpm").decimalValue()).isEqualByComparingTo("100.00");
+		assertThat(song.path("bpm").decimalValue()).isEqualByComparingTo("120.00");
 		assertThat(song.path("timeSignature").asString()).isEqualTo("3/4");
 		assertThat(song.path("hasAccompaniment").asBoolean()).isFalse();
 		assertThat(song.path("accompanimentStatus").asString()).isEqualTo("NONE");
-		// 마지막 노트(하이햇 2640 tick)에서 3/4 한 마디(1440 tick) 뒤 = 4080 tick, 100BPM이면 5100ms
-		assertThat(song.path("durationMs").asInt()).isEqualTo(5100);
+		// 마지막 노트(하이햇 2640 tick)에서 3/4 한 마디(1440 tick) 뒤 = 4080 tick, 120BPM이면 4250ms
+		assertThat(song.path("durationMs").asInt()).isEqualTo(4250);
 		var charts = song.path("charts");
 		assertThat(charts).hasSize(3);
 		assertThat(charts.findValuesAsString("difficulty")).containsExactly("EASY", "NORMAL", "HARD");
@@ -144,7 +144,7 @@ class MidiUploadApiTest {
 				+ "JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", songId);
 		assertThat(rows).hasSize(3).allSatisfy(row -> {
 			assertThat(row.get("generator")).isEqualTo("MIDI_RULE");
-			assertThat(row.get("generator_version")).isEqualTo("midi-rule-1.1");
+			assertThat(row.get("generator_version")).isEqualTo("midi-rule-2.0");
 			assertThat(row.get("version")).isEqualTo(1);
 			assertThat(row.get("no_pages")).isEqualTo(true);
 		});
