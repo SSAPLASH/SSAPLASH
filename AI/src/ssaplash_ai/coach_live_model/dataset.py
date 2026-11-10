@@ -25,6 +25,9 @@ from ssaplash_ai.coach_live_model.replay import (
 )
 
 GOOD_MS = 60.0
+# 입력 계산 버전. `features()`의 순서·식을 바꾸면 올린다. FE `coach/live/gate`도 같은 값을 알고 있어서,
+# 서버에서 받은 모델의 `meta.json` 값이 다르면 FE가 그 모델을 쓰지 않는다(설계 3.4)
+FEATURE_VERSION = 1
 TAGS = (
     "LIVE_MISS_STREAK",
     "LIVE_LATE",

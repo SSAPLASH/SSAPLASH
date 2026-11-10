@@ -13,12 +13,21 @@ from typing import Any
 
 import numpy as np
 
-from ssaplash_ai.coach_live_model.dataset import FEATURE_NAMES, Row
+from ssaplash_ai.coach_live_model.dataset import FEATURE_NAMES, FEATURE_VERSION, Row
 
 MODEL_VERSION = "coach-gate-0.1"
 MAX_RECALL_DROP = 0.05
 FOLDS = 5
 PARITY_LIMIT = 1e-5
+
+# 브라우저가 받는 파일. MLflow 레지스트리에는 이 셋만 모델로 올린다(게시 도구가 모델 폴더를 그대로 복사한다)
+GATE_JSON = "coachGate.json"
+GATE_ONNX = "coachGate.onnx"
+META_JSON = "meta.json"
+MODEL_FILES = (GATE_JSON, GATE_ONNX, META_JSON)
+REPORT_JSON = "report.json"
+EXPERIMENT_NAME = "coach-live-gate"
+DEFAULT_MODEL_NAME = "coach-gate-mlp16"
 
 
 @dataclass(frozen=True)
@@ -167,12 +176,111 @@ def gate_json(gate: Gate) -> dict[str, Any]:
     return {"modelVersion": MODEL_VERSION, "inputNames": list(FEATURE_NAMES), **asdict(gate)}
 
 
+def model_meta(gate: Gate, trained_on: str = "SYNTHETIC") -> dict[str, Any]:
+    """모델 메타 파일(설계 3.4). FE는 `featureVersion`이 자기 값과 다르면 이 모델을 쓰지 않는다.
+
+    `runtime`은 이 버전에 들어 있는 실행 파일 목록이다. 같은 모델을 JSON과 ONNX 두 가지로 내보낸다.
+    """
+    return {
+        "task": "gate",
+        "modelVersion": MODEL_VERSION,
+        "featureVersion": FEATURE_VERSION,
+        "inputNames": list(FEATURE_NAMES),
+        "runtime": [{"kind": "json", "path": GATE_JSON}, {"kind": "onnx", "path": GATE_ONNX}],
+        "threshold": gate.threshold,
+        "trainedOn": trained_on,
+    }
+
+
 def write_outputs(out: Path, gate: Gate, model: bytes, report: dict[str, Any]) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    (out / "coachGate.json").write_text(
-        json.dumps(gate_json(gate), ensure_ascii=False), encoding="utf-8"
+    (out / GATE_JSON).write_text(json.dumps(gate_json(gate), ensure_ascii=False), encoding="utf-8")
+    (out / GATE_ONNX).write_bytes(model)
+    (out / META_JSON).write_text(
+        json.dumps(
+            model_meta(gate, report.get("dataSource", "SYNTHETIC")), ensure_ascii=False, indent=2
+        ),
+        encoding="utf-8",
     )
-    (out / "coachGate.onnx").write_bytes(model)
-    (out / "report.json").write_text(
+    (out / REPORT_JSON).write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+
+def register(
+    out: Path,
+    report: dict[str, Any],
+    chosen: Score,
+    model_name: str = DEFAULT_MODEL_NAME,
+    tracking_uri: str | None = None,
+) -> str:
+    """`write_outputs`로 만든 폴더를 MLflow에 기록하고 레지스트리에 새 버전으로 등록한다. 등록한 버전을 돌려준다.
+
+    모델로는 `MODEL_FILES`만 올리고 `report.json`은 실행(run)의 산출물로만 남긴다. 게시는 서버에서
+    `publish-model publish <모델 이름> <버전>`으로 따로 한다(이 함수는 게시하지 않는다).
+    """
+    import os
+    import tempfile
+
+    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
+    import mlflow
+    from mlflow import MlflowClient
+    from mlflow.exceptions import MlflowException
+
+    from ssaplash_ai.coach_calibration.register import resolve_tracking_uri
+
+    missing = [n for n in MODEL_FILES if not (out / n).is_file()]
+    if missing:
+        raise FileNotFoundError(f"등록할 파일이 없습니다: {', '.join(missing)}")
+    uri = resolve_tracking_uri(tracking_uri)
+    mlflow.set_tracking_uri(uri)
+    mlflow.set_registry_uri(uri)
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+    meta = json.loads((out / META_JSON).read_text(encoding="utf-8"))
+    with mlflow.start_run(run_name=f"{MODEL_VERSION}-{model_name}") as run:
+        mlflow.log_params(
+            {
+                "modelName": model_name,
+                "modelVersion": MODEL_VERSION,
+                "featureVersion": meta["featureVersion"],
+                "threshold": round(chosen.threshold, 6),
+                "rows": report.get("rows"),
+                "perCell": report.get("perCell"),
+            }
+        )
+        mlflow.log_metrics(
+            {
+                "auc": chosen.auc,
+                "recall": chosen.recall,
+                "falseKept": chosen.false_kept,
+                "falseKeptAt98": chosen.false_kept_at_98,
+                "onnxMaxDiff": float(report.get("onnxMaxDiff", 0.0)),
+            }
+        )
+        mlflow.set_tags({"task": "gate", "trainedOn": meta["trainedOn"]})
+        mlflow.log_artifact(str(out / REPORT_JSON))
+        # 모델 폴더에는 브라우저가 받을 파일만 넣는다
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in MODEL_FILES:
+                (Path(tmp) / name).write_bytes((out / name).read_bytes())
+            mlflow.log_artifacts(tmp, artifact_path="model")
+        source = mlflow.get_artifact_uri("model")
+
+    client = MlflowClient()
+    try:
+        client.create_registered_model(model_name)
+    except MlflowException as e:
+        if e.error_code != "RESOURCE_ALREADY_EXISTS":
+            raise
+    version = client.create_model_version(
+        model_name,
+        source,
+        run.info.run_id,
+        tags={
+            "task": "gate",
+            "featureVersion": str(meta["featureVersion"]),
+            "trainedOn": meta["trainedOn"],
+        },
+    )
+    return str(version.version)
