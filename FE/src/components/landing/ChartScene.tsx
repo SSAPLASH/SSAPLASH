@@ -1,7 +1,11 @@
-// 4 자동 채보: 음원 → 드럼만 분리 → 채보. 정적 버전은 탭으로 레이어를 전환한다(기본 '채보').
-import { useState } from 'react';
+// 4 자동 채보: 음원 → 드럼만 분리 → 채보. 연출 모드는 스크롤로 층이 겹쳐 바뀌고(탭은 표시용),
+// 모션 줄이기는 탭 버튼으로 직접 전환한다(기본 '채보').
+import { m, useMotionValueEvent, useReducedMotion, useTransform } from 'motion/react';
+import { useRef, useState } from 'react';
 import { chartArt, VIZ_HEIGHT, VIZ_WIDTH, waveformBars, type RectShape } from './landingArt';
 import { CHART_COPY } from './landingContent';
+import { chartLayerOpacity, chartTab } from '../../domain/landingMotion';
+import { useSceneProgress } from './useSceneProgress';
 
 const WAVES = waveformBars();
 const CHART = chartArt();
@@ -20,12 +24,31 @@ function VizLabel({ children }: { children: string }) {
 }
 
 export function ChartScene() {
-  const [tab, setTab] = useState(2);
-  const layer = (i: number) => (tab === i ? 'lp-layer lp-on' : 'lp-layer');
+  const reduce = useReducedMotion() ?? false;
+  const ref = useRef<HTMLElement>(null);
+  const progress = useSceneProgress(ref);
+  const op0 = useTransform(progress, (p) => chartLayerOpacity(p)[0]);
+  const op1 = useTransform(progress, (p) => chartLayerOpacity(p)[1]);
+  const op2 = useTransform(progress, (p) => chartLayerOpacity(p)[2]);
+  const ops = [op0, op1, op2];
+
+  // 직접 고르는 탭(모션 줄이기)과 스크롤이 정하는 탭(경계를 넘을 때만 갱신)
+  const [manualTab, setTab] = useState(2);
+  const [autoTab, setAutoTab] = useState<0 | 1 | 2>(0);
+  const lastTab = useRef<0 | 1 | 2>(0);
+  useMotionValueEvent(progress, 'change', (p) => {
+    const next = chartTab(p);
+    if (next === lastTab.current) return;
+    lastTab.current = next;
+    setAutoTab(next);
+  });
+  const tab = reduce ? manualTab : autoTab;
+  const layer = (i: number) => (reduce && tab === i ? 'lp-layer lp-on' : 'lp-layer');
+  const layerStyle = (i: number) => (reduce ? undefined : { opacity: ops[i] });
 
   return (
-    <section className="lp-scene lp-ai" id="ai">
-      <div className="lp-frame">
+    <section ref={ref} className={reduce ? 'lp-scene lp-ai lp-static' : 'lp-scene lp-ai'} id="ai">
+      <div className="lp-sticky lp-frame">
         <p className="lp-kicker">{CHART_COPY.kicker}</p>
         <h2 className="lp-h2">
           {CHART_COPY.title[0]}
@@ -33,23 +56,33 @@ export function ChartScene() {
           {CHART_COPY.title[1]}
         </h2>
         <p className="lp-ai-sub">{CHART_COPY.sub}</p>
-        <div className="lp-pipe-tabs" role="tablist" aria-label="채보 만드는 과정">
-          {CHART_COPY.tabs.map((label, i) => (
-            <button key={label} type="button" role="tab" aria-selected={tab === i} className={tab === i ? 'lp-on' : undefined} onClick={() => setTab(i)}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="lp-viz" role="tabpanel" aria-label={CHART_COPY.tabs[tab]}>
-          <svg className={layer(0)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
+        {reduce ? (
+          <div className="lp-pipe-tabs" role="tablist" aria-label="채보 만드는 과정">
+            {CHART_COPY.tabs.map((label, i) => (
+              <button key={label} type="button" role="tab" aria-selected={tab === i} className={tab === i ? 'lp-on' : undefined} onClick={() => setTab(i)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="lp-pipe-tabs" aria-hidden="true">
+            {CHART_COPY.tabs.map((label, i) => (
+              <span key={label} className={tab === i ? 'lp-on' : undefined}>
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="lp-viz" role={reduce ? 'tabpanel' : undefined} aria-label={reduce ? CHART_COPY.tabs[tab] : undefined}>
+          <m.svg className={layer(0)} style={layerStyle(0)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
             <VizLabel>{CHART_COPY.labels.mix}</VizLabel>
             <Rects items={WAVES.mix} />
-          </svg>
-          <svg className={layer(1)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
+          </m.svg>
+          <m.svg className={layer(1)} style={layerStyle(1)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
             <VizLabel>{CHART_COPY.labels.drum}</VizLabel>
             <Rects items={WAVES.drum} />
-          </svg>
-          <svg className={layer(2)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
+          </m.svg>
+          <m.svg className={layer(2)} style={layerStyle(2)} viewBox={VIEW_BOX} preserveAspectRatio="none" aria-hidden="true">
             <VizLabel>{CHART_COPY.labels.chart}</VizLabel>
             {CHART.lanes.map((l) => (
               <g key={l.key}>
@@ -63,7 +96,7 @@ export function ChartScene() {
               <line key={i} x1={l.x1} x2={l.x2} y1={l.y1} y2={l.y2} stroke={l.stroke} />
             ))}
             <Rects items={CHART.notes} />
-          </svg>
+          </m.svg>
         </div>
       </div>
     </section>

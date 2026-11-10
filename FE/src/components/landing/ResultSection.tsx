@@ -1,23 +1,38 @@
-// 6 연주 결과: 놓친 마디를 악보로 보여 주는 예시 + 지표 3개. 정적 버전(reveal 없음).
+// 6 연주 결과: 놓친 마디를 악보로 보여 주는 예시 + 지표 3개. 각 요소는 화면에 들어오면 떠오른다(reveal).
+import { useRef } from 'react';
 import { sheetArt } from './landingArt';
 import { RESULT_COPY, RESULT_STATS } from './landingContent';
+import { joinClass, useReveal } from './useReveal';
 
 const SHEET = sheetArt();
 
 export function ResultSection() {
   const h = SHEET.highlight;
+  // 시안 .reveal 문서 순서 0~4
+  const kickerRef = useRef<HTMLParagraphElement>(null);
+  const kicker = useReveal(kickerRef, 0);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const title = useReveal(titleRef, 1);
+  const subRef = useRef<HTMLParagraphElement>(null);
+  const sub = useReveal(subRef, 2);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const card = useReveal(cardRef, 3);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const stats = useReveal(statsRef, 4);
   return (
     <section className="lp-section" id="result">
-      <p className="lp-kicker">{RESULT_COPY.kicker}</p>
-      <h2 className="lp-h2">
+      <p ref={kickerRef} className={joinClass('lp-kicker', kicker.className)} style={kicker.style}>
+        {RESULT_COPY.kicker}
+      </p>
+      <h2 ref={titleRef} className={joinClass('lp-h2', title.className)} style={title.style}>
         {RESULT_COPY.title[0]}
         <br />
         {RESULT_COPY.title[1]}
       </h2>
-      <p className="lp-ai-sub" style={{ margin: '18px auto 0' }}>
+      <p ref={subRef} className={joinClass('lp-ai-sub', sub.className)} style={{ margin: '18px auto 0', ...sub.style }}>
         {RESULT_COPY.sub}
       </p>
-      <div className="lp-sheet-card">
+      <div ref={cardRef} className={joinClass('lp-sheet-card', card.className)} style={card.style}>
         <div className="lp-sheet-meta">
           <b>{RESULT_COPY.sheetTitle}</b>
           <span>{RESULT_COPY.sheetNote}</span>
@@ -47,7 +62,7 @@ export function ResultSection() {
           ))}
         </svg>
       </div>
-      <div className="lp-stats">
+      <div ref={statsRef} className={joinClass('lp-stats', stats.className)} style={stats.style}>
         {RESULT_STATS.map((s) => (
           <div key={s.cls} className={`lp-stat lp-${s.cls}`}>
             <div className="lp-k">{s.key}</div>

@@ -68,7 +68,8 @@ export function LandingPage() {
       <LoginDialog
         returnTo={destination}
         errorCode={params.get('error')}
-        onClose={() => navigate('/', { replace: true })}
+        // 검사 끈 개발 빌드는 /가 /free로 가므로 랜딩(/welcome)으로 닫는다
+        onClose={() => navigate(decision === 'pass' ? '/welcome' : '/', { replace: true })}
       />
     );
   } else if (dialog === 'signup' && decision === 'wait') {

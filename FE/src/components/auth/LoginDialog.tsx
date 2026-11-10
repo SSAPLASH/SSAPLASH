@@ -4,6 +4,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { enabledProviders, loginErrorMessage, type ProviderKey } from '@/domain/auth';
 import { modeForRoute } from '@/domain/landingRoute';
 import { LANDING_MODES } from '@/components/landing/landingContent';
@@ -40,7 +41,14 @@ export function LoginDialog({ returnTo, errorCode, onClose }: Props) {
 
   return (
     <Dialog onClose={onClose} labelledBy="login-dialog-title" className="auth-dialog login-dialog">
-      <h2 id="login-dialog-title">로그인</h2>
+      <div className="login-dialog-head">
+        <h2 id="login-dialog-title">로그인</h2>
+        <IconButton size="sm" label="닫기" onClick={onClose}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </IconButton>
+      </div>
       {modeName && <p className="login-dialog-mode">로그인하면 {modeName} 모드로 바로 시작합니다.</p>}
       <p className="dim login-dialog-desc">소셜 계정으로 로그인하면 세팅·프리셋과 플레이 기록이 계정에 저장됩니다. 이메일·비밀번호 가입은 없습니다.</p>
       {message && <p className={errorCode === 'withdrawn' ? 'notice' : 'notice error'}>{message}</p>}
