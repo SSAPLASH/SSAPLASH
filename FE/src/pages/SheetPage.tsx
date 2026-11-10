@@ -69,7 +69,8 @@ import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
 import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
-import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
+import { liveCoachClient } from '@/api/liveCoach';
 import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
@@ -131,6 +132,9 @@ function SheetPageBody() {
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교, MODE-001 D6)
   const shadowRef = useRef<CoachShadow | null>(null);
+  // 연주 중 LLM 구간 코칭 요청기. 다시 하기·종료·화면 이탈 때 기다리던 결과를 버린다
+  const llmRef = useRef<LlmCoach | null>(null);
+  useEffect(() => () => llmRef.current?.cancel(), []);
   const { line: coachLine, show: showCoachLine, cancelPending: cancelPendingCoach, clear: clearCoachLine } = useCoachLine<CoachCopy>();
   // 악보 연습은 미루지 않지만, 일시정지하면 대기 중인 문구가 있다면 버린다(떠 있는 문구는 그대로)
   useEffect(() => {
@@ -446,6 +450,8 @@ function SheetPageBody() {
         consent: consentAtStart.current,
         liveCoachEvents: coachRef.current ? [...coachRef.current.events()] : undefined,
       });
+      // 끝난 뒤 도착한 LLM 구간 문구는 띄우지도 기록하지도 않는다
+      llmRef.current?.cancel();
       pedalCoverage.current = null;
       openWarnings.current.clear();
       savePlayLog(log);
@@ -503,6 +509,9 @@ function SheetPageBody() {
     const st = useSettings.getState();
     // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
     const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
+    // 연주 중 LLM 구간 코칭(실험 설정 llm, 로그인 사용자만). 구간이 끝나면 BE에 요청하고 기한 안의 문구만 띄운다
+    const llmMode = st.liveCoach ? model.llm : null;
+    let llm: LlmCoach | null = null;
     const coach = new LiveCoach({
       goodMs: st.timing.goodMs,
       enabled: st.liveCoach,
@@ -514,7 +523,33 @@ function SheetPageBody() {
       arm: model.arm,
       causeModel: model.cause,
       causeArm: model.causeArm,
+      llmArm: model.llmArm,
+      segments: llmMode
+        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+        : undefined,
     });
+    llmRef.current?.cancel();
+    if (llmMode) {
+      llm = new LlmCoach({
+        client: liveCoachClient(),
+        mode: llmMode,
+        runId: crypto.randomUUID(),
+        onTip: (tip) => {
+          if (coachRef.current !== coach) return;
+          const message = coach.offerLlmTip(tip, ss.songTime(performance.now()));
+          if (!message) return;
+          try {
+            const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+            // 악보 연습은 설명형: 항상 보조까지, 미루지 않는다
+            if (copy) showCoachLine(copy, message.displayMs, planCoachDisplay(message.tMs, [], 'SHEET').delayMs);
+          } catch {
+            // 코칭 오류는 무시한다
+          }
+        },
+        onRecord: (r) => coach.recordLlm(r, ss.songTime(performance.now())),
+      });
+    }
+    llmRef.current = llm;
     // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
     void refreshCoachModels();
     coachRef.current = coach;
@@ -546,7 +581,7 @@ function SheetPageBody() {
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     setPlaySession(ss);
-  }, [acc, resetRun, clearCoachLine]);
+  }, [acc, resetRun, clearCoachLine, showCoachLine]);
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
@@ -578,6 +613,7 @@ function SheetPageBody() {
     diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
     resetRun(ss);
     coachRef.current?.reset();
+    llmRef.current?.cancel(crypto.randomUUID());
     shadowRef.current?.reset();
     clearCoachLine();
   }, [resetRun, clearCoachLine]);

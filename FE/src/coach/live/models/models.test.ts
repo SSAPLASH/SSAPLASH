@@ -118,6 +118,7 @@ describe('실험 설정과 배정', () => {
     },
     cause: { arms: [] },
     rolloutPercent: 100,
+    llm: { mode: 'off', rolloutPercent: 0 },
   };
 
   it('비율 합이 100이 아니거나 모드가 틀리면 설정을 쓰지 않는다', () => {
@@ -158,11 +159,11 @@ describe('연주마다 고르기', () => {
   beforeEach(() => resetCoachModelsForTest());
 
   it('설정을 받기 전이나 매니페스트가 없으면 빌드 기본값을 쓴다', async () => {
-    expect(chooseCoachModel(1)).toEqual({ gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null });
+    expect(chooseCoachModel(1)).toEqual({ gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null, llm: null, llmArm: null });
     const s = server();
     s.down = true;
     await refreshCoachModels(s.fetch);
-    expect(chooseCoachModel(1)).toEqual({ gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null });
+    expect(chooseCoachModel(1)).toEqual({ gate: undefined, mode: undefined, arm: null, cause: null, causeArm: null, llm: null, llmArm: null });
   });
 
   it('설정을 받으면 실험군의 서버 모델과 모드를 쓴다', async () => {
@@ -192,20 +193,20 @@ describe('연주마다 고르기', () => {
     const s = server();
     s.models[0].versions[0].files = gateFiles({ badHash: true });
     await refreshCoachModels(s.fetch);
-    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: 'on', arm: RULE_ARM, cause: null, causeArm: null });
+    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: 'on', arm: RULE_ARM, cause: null, causeArm: null, llm: null, llmArm: null });
 
     const s2 = server();
     s2.models[2].versions[0].files = [{ path: 'config.json', body: config({ gate: { mode: 'on', arms: [{ model: 'coach-gate-mlp16', share: 100 }] }, rolloutPercent: 0 }) }];
     resetCoachModelsForTest();
     await refreshCoachModels(s2.fetch);
-    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: 'on', arm: RULE_ARM, cause: null, causeArm: null });
+    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: 'on', arm: RULE_ARM, cause: null, causeArm: null, llm: null, llmArm: null });
   });
 
   it('설정이 off면 거름 없이 규칙만 쓴다', async () => {
     const s = server();
     s.models[2].versions[0].files = [{ path: 'config.json', body: config({ gate: { mode: 'off', arms: [] } }) }];
     await refreshCoachModels(s.fetch);
-    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: undefined, arm: RULE_ARM, cause: null, causeArm: null });
+    expect(chooseCoachModel(7)).toEqual({ gate: null, mode: undefined, arm: RULE_ARM, cause: null, causeArm: null, llm: null, llmArm: null });
   });
 });
 
