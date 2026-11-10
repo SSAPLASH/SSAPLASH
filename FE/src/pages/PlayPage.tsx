@@ -790,6 +790,7 @@ function PlayPageBody() {
         onLeave={leave}
         returnTo={returnTo}
         realign={realign.info}
+        hasAccompaniment={(ACCOMPANIMENT_OVERRIDE ?? param.loaded?.assets?.accompanimentUrl ?? null) !== null}
       />
     );
   } else if (countValue !== null) {

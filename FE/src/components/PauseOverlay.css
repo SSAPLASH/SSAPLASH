@@ -1,4 +1,4 @@
-/* 일시정지 다이얼로그: 딤 55% + 400 패널 (Figma 112:592) */
+/* 일시정지 다이얼로그: 딤 55% + 480 패널 (Figma 112:592, 음량 묶음은 QA 352 Q10) */
 .play-pause-scrim {
   position: fixed;
   inset: 0;
@@ -18,7 +18,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-m);
-  width: 400px;
+  width: 480px;
   max-width: 100%;
   padding: var(--space-l);
   box-sizing: border-box;
@@ -44,6 +44,28 @@
   margin: 0;
   color: var(--text-2);
   font-size: 14px;
+}
+/* 소리 묶음: 제목 아래 음량 두 줄 */
+.play-pause-sound {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  text-align: left;
+}
+.play-pause-sound-title {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.play-pause-sound-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
 }
 /* 재개 불가 안내. 글자 색은 ReadinessNotice 기본 스타일을 따르고 틀만 새 토큰으로 */
 .play-pause-warn {
