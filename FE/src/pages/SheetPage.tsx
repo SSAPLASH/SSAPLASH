@@ -876,6 +876,7 @@ function SheetPageBody() {
         onLeave={leave}
         returnTo={returnTo}
         realign={realign.info}
+        hasAccompaniment={accUrl !== null}
       />
     );
   } else if (countValue !== null) {
