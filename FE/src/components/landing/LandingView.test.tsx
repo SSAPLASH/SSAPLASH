@@ -1,6 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LandingView } from './LandingView';
+
+// 모션 줄이기 분기를 바꿔 가며 확인하기 위해 훅만 바꿔 끼운다
+const motionState = vi.hoisted(() => ({ reduce: false }));
+vi.mock('motion/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('motion/react')>()),
+  useReducedMotion: () => motionState.reduce,
+}));
+
+beforeEach(() => {
+  motionState.reduce = false;
+});
 
 const noop = () => {};
 const render = (showLogin: boolean) => renderToStaticMarkup(<LandingView onStart={noop} onMode={noop} showLogin={showLogin} />);
@@ -39,11 +50,31 @@ describe('LandingView', () => {
     expect(html).toContain('로그인하고 시작하기');
   });
 
-  it('채보 탭 기본은 채보, 소개 문장과 결과 지표가 보인다', () => {
+  it('연출 모드: 장면이 sticky 구조이고 채보 탭은 표시용(음원부터), 스틱 진행 막대가 있다', () => {
     const html = render(true);
-    expect(html).toMatch(/aria-selected="true" class="lp-on">채보</);
+    expect(html).toContain('lp-sticky');
+    expect(html).not.toContain('lp-static');
+    expect(html).toContain('<span class="lp-on">음원</span>');
+    expect(html).not.toContain('role="tab"');
+    expect(html).toContain('lp-progress');
+    expect(html).toContain('lp-wipe');
+    // 초기 진행도 0: 스틱 첫 단계만 켜짐
+    expect(html.match(/class="lp-step lp-on"/g)).toHaveLength(1);
     expect(html).toContain('드럼을 칠 수 있다면.');
     expect(html).toContain('lp-stat lp-acc');
     expect(html).toContain('lp-stat lp-weak');
+  });
+
+  it('모션 줄이기: 장면이 풀려 최종 상태(채보 탭 클릭형, 단계 글 모두 밝게, 네온 켜짐, 와이프 없음)', () => {
+    motionState.reduce = true;
+    const html = render(true);
+    expect(html).toContain('lp-static');
+    expect(html).toMatch(/aria-selected="true" class="lp-on">채보</);
+    expect(html.match(/class="lp-step lp-on"/g)).toHaveLength(3);
+    expect(html).toContain('lp-fill-line lp-neon');
+    expect(html).not.toContain('lp-wipe');
+    expect(html).not.toContain('lp-progress');
+    // 카드는 MODE_CARD_FINAL 위치로 고정
+    expect(html).toContain('translateY(-24px)');
   });
 });
