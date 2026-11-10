@@ -27,6 +27,8 @@ export interface LiveCoachOptions {
   gateMode?: GateMode;
   /** 모델 판단을 받는다. 진단 빌드에서 기록에 쓴다 */
   onGate?: (decision: GateDecision) => void;
+  /** 서버 실험 설정으로 배정된 실험군(chooseCoachModel). 거름 판단 기록에 arm으로 남긴다. 없으면 남기지 않는다 */
+  arm?: string | null;
   /** 곡의 노트 간격 중앙값(ms, chartCoachContext). 없으면 빠른 구간 원인을 계산하지 않는다 */
   noteGapMedianMs?: number | null;
 }
@@ -111,6 +113,8 @@ function candidateLog(c: CauseCandidate): Record<string, unknown> {
 /** 경향이 사라졌을 때 로그에만 남기는 태그(화면에 띄우지 않는다) */
 export const LIVE_RECOVERED_TAG = 'LIVE_RECOVERED';
 export const LIVE_OFF_TAG = 'LIVE_OFF';
+/** 서버 실험 설정으로 배정된 실험군. 판 시작(시각 0)에 한 건 */
+export const LIVE_ARM_TAG = 'LIVE_ARM';
 /** BE 검증 상한(PlayUploadValidator) */
 const MAX_LOG = 1_000;
 /** 비동기 점수를 기다리는 한도. 넘으면 규칙 판단대로 띄운다 */
@@ -128,6 +132,7 @@ export class LiveCoach {
   private readonly gateOption: CoachGate | null | undefined;
   private readonly mode: GateMode;
   private readonly onGate: ((decision: GateDecision) => void) | undefined;
+  private readonly arm: string | null;
   /** 재시작하면 늘어난다. 앞선 판의 늦은 점수를 버리는 데 쓴다 */
   private run = 0;
   private readonly noteGapMedianMs: number | null;
@@ -138,6 +143,7 @@ export class LiveCoach {
     this.gateOption = opts.gate;
     this.mode = opts.gateMode ?? gateMode();
     this.onGate = opts.onGate;
+    this.arm = opts.arm ?? null;
     if (opts.gate === undefined) preloadCoachGate();
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     const median = opts.noteGapMedianMs;
@@ -223,7 +229,17 @@ export class LiveCoach {
       this.append(
         message.tMs,
         tag,
-        JSON.stringify({ tag: message.tag, key, ...extra, threshold: round(gate.threshold, 3), model: gate.model, runtime: gate.runtime, mode: this.mode, ms }),
+        JSON.stringify({
+          tag: message.tag,
+          key,
+          ...extra,
+          threshold: round(gate.threshold, 3),
+          model: gate.model,
+          runtime: gate.runtime,
+          mode: this.mode,
+          ...(this.arm === null ? {} : { arm: this.arm }),
+          ms,
+        }),
       );
     };
     const show = (): CoachMessage => {
@@ -342,7 +358,12 @@ export class LiveCoach {
   }
 
   private resetLog(): void {
-    this.log = this.enabled ? [] : [{ tMs: 0, tag: LIVE_OFF_TAG, text: '코칭 꺼짐' }];
+    if (!this.enabled) {
+      this.log = [{ tMs: 0, tag: LIVE_OFF_TAG, text: '코칭 꺼짐' }];
+      return;
+    }
+    // 실험군은 판마다 한 번 남긴다. 규칙만 쓰는 판은 거름 기록이 없어서 이 행으로 구분한다
+    this.log = this.arm === null ? [] : [{ tMs: 0, tag: LIVE_ARM_TAG, text: JSON.stringify({ arm: this.arm }) }];
   }
 
   private append(tMs: number, tag: string, text: string): void {
