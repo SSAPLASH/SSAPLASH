@@ -128,19 +128,17 @@
   border-color: var(--brand);
 }
 
-/* ---- 보정 중·결과(PLAY-004 D9~D11): 판(StagePanel) 안 그림 틀(setup-stage-fig) 가운데에 킷, 위쪽 가운데 안내, 아래쪽 가운데 경고 배너 ---- */
+/* ---- 보정 중·결과(PLAY-004 D9~D11): 판(StagePanel) 안 그림 영역(setup-stage-fig, 안쪽 전체)에 킷을 contain으로 가운데, 위쪽 가운데 안내, 아래쪽 가운데 경고 배너 ---- */
 .cal-stage-canvas {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
 }
 .cal-stage-top {
   position: absolute;
-  top: var(--setup-panel-pad, 24px);
+  top: var(--setup-panel-pad, 16px);
   left: 50%;
   transform: translateX(-50%);
-  max-width: calc(100% - 2 * var(--setup-panel-pad, 24px));
+  max-width: calc(100% - 2 * var(--setup-panel-pad, 16px));
   display: flex;
   flex-direction: column;
   align-items: center;

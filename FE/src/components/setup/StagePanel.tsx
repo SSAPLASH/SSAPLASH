@@ -1,6 +1,6 @@
-// 드럼 배치 캔버스 판(PLAY-004 D11, v0.2). 편집(KitCanvas)과 보정(DrumKit)이 같은 구조를 쓴다.
-// 행(.setup-stage-row, 카드 안쪽 전체 폭) 안에 판 하나(.setup-stage-panel: --bg-canvas, 안쪽 여백 24px, position: relative)를 두고,
-// 드럼 그림은 판 안쪽 가운데에 16:10 contain으로 놓는다. 떠 있는 요소의 자리: 위쪽 가운데 top / 오른쪽 아래 card / 아래쪽 가운데 banner.
+// 드럼 배치 캔버스 판(PLAY-004 D11, v0.3). 편집(KitCanvas)과 보정(DrumKit)이 같은 구조를 쓴다.
+// 행(.setup-stage-row, 카드 안쪽 전체 폭) 안에 판 하나(.setup-stage-panel: --bg-canvas, 안쪽 여백 16px, position: relative)를 두고,
+// 드럼 그림 영역(.setup-stage-fig)은 판 안쪽 전체를 채운다(카드·배너는 그 위에 겹친다). 떠 있는 요소의 자리: 위쪽 가운데 top / 오른쪽 아래 card / 아래쪽 가운데 banner.
 // 자리·겹침 계산은 useOverlayRegion이 하고 이 컴포넌트는 배치만 맡는다.
 import type { ReactNode } from 'react';
 import type { UseOverlayRegion } from './useOverlayRegion';

@@ -10,6 +10,7 @@ import {
   DRUM_KIT_H,
   DRUM_KIT_W,
   fitScale,
+  fitScaleBox,
   kitPadsFor,
   kitSizeAt,
   placePad,
@@ -27,6 +28,8 @@ export interface DrumKitProps {
   scale?: number;
   /** 부모 폭에 맞춰 최대 scale까지 줄인다 */
   fitWidth?: boolean;
+  /** 부모 상자(폭·높이 모두)에 맞춰 최대 scale까지 줄이고 가운데에 둔다(contain). 부모는 높이가 정해져 있어야 한다. fitWidth보다 우선 */
+  fitContain?: boolean;
   states?: Partial<Record<PadId, PadVisualState>>;
   labels?: boolean;
   /** 문자열은 next 배지. PadBadge로 now·later·격자 밖 점을 지정한다(now 배지는 여러 개여도 각자 강조) */
@@ -124,6 +127,7 @@ function Shake({ count, className, children }: { count: number | undefined; clas
 export function DrumKit({
   scale = 1,
   fitWidth = false,
+  fitContain = false,
   states,
   labels = true,
   badges,
@@ -152,18 +156,19 @@ export function DrumKit({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
+  const fitting = fitWidth || fitContain;
   useEffect(() => {
-    if (!fitWidth) return;
+    if (!fitting) return;
     const el = wrapRef.current;
     if (!el) return;
-    const update = () => setFit(fitScale(el.clientWidth, scale));
+    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale) : fitScale(el.clientWidth, scale));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fitWidth, scale]);
+  }, [fitting, fitContain, scale]);
 
-  const eff = fitWidth ? (fit ?? scale) : scale;
+  const eff = fitting ? (fit ?? scale) : scale;
   const { width, height } = kitSizeAt(eff);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
@@ -303,9 +308,9 @@ export function DrumKit({
   );
 
   // fitWidth는 부모 폭을 재야 하므로 폭 100% 래퍼로 감싼다
-  if (!fitWidth) return body;
+  if (!fitting) return body;
   return (
-    <div ref={wrapRef} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+    <div ref={wrapRef} style={fitContain ? { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' } : { width: '100%', display: 'flex', justifyContent: 'center' }}>
       {body}
     </div>
   );

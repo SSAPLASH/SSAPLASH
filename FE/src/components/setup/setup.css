@@ -319,14 +319,14 @@
 
 /* ---- 드럼 배치(캔버스 판 + 화면 높이 맞춤, PLAY-004 D9·D11) ----
  * 행(.setup-stage-row)은 카드 안쪽 전체 폭이고 가로 크기 컨테이너다. 그 안의 판(.setup-stage-panel) 하나가 어두운 바탕이다:
- * 폭은 행 전체, 높이 = min(--setup-stage-maxh, 판 폭/1.6 + 48px)(그림이 판을 채운다), 안쪽 여백 24px, position: relative.
- * 드럼 그림(.setup-stage-fig, 편집 KitCanvas·보정 DrumKit)은 안쪽 영역 가운데에 16:10 contain: 폭 = min(안쪽 폭, 안쪽 높이 × 1.6).
- * 비율은 배치 좌표계(KitCanvas 16:10)를 따른다. 떠 있는 요소는 판 안 자리: 위쪽 가운데(.cal-stage-top) / 오른쪽·왼쪽 아래(.setup-kitinfo) / 아래쪽 가운데(.setup-panel-banner).
+ * 폭은 행 전체, 높이 = max(260px, min(--setup-stage-maxh, 판 폭/1.6 + 2×여백)), 안쪽 여백 16px, position: relative.
+ * 드럼 그림 영역(.setup-stage-fig, 편집 KitCanvas·보정 DrumKit)은 판 안쪽 영역 전체를 채운다(D11 v0.3). 편집 원은 KitCanvas가 min(W, H×1.6) 기준으로, 보정 킷은 DrumKit이 contain으로 맞춘다.
+ * 정보 카드·배너·안내는 그림 위에 겹쳐 뜬다. 떠 있는 요소의 자리: 위쪽 가운데(.cal-stage-top) / 오른쪽·왼쪽 아래(.setup-kitinfo) / 아래쪽 가운데(.setup-panel-banner).
  * --setup-stage-maxh(판이 쓸 수 있는 높이)는 useStageFit이 측정해 행에 넣는다. 측정 전·jsdom의 폴백은 아래 추정값이다:
  *   상단바 56 + 위 여백 28 + 머리줄 56 + 상태 타일 64+16 + 배치 카드 위쪽 120 + 하단 바 72 + 바 위 간격 16 ≈ 430 (복귀 띠가 있으면 +80) */
 .setup-stage-row {
   --setup-stage-maxh: calc(100dvh - 430px);
-  --setup-panel-pad: 24px;
+  --setup-panel-pad: 16px;
   container-type: inline-size;
   width: 100%;
 }
@@ -350,16 +350,11 @@
 .setup-stage-inner {
   position: absolute;
   inset: var(--setup-panel-pad);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  container-type: size;
 }
 .setup-stage-fig {
   position: relative;
-  flex: none;
-  width: min(100cqw, 160cqh);
-  aspect-ratio: 16 / 10;
+  width: 100%;
+  height: 100%;
 }
 /* 판이 바탕·테두리를 맡으므로 편집 그림은 투명하게 */
 .setup-editor .kit-wrap {
@@ -399,16 +394,16 @@
   flex: 1 1 280px;
   min-width: 0;
 }
-/* 정보 카드(D10·D11): 폭 220·반투명 바탕·테두리. 판 안쪽 24px 여백의 오른쪽 아래가 기본(그림 옆 빈 자리), 좁아서 그림과 겹칠 때 패드를 가리면 왼쪽 아래 */
+/* 정보 카드(D10·D11): 폭 220·반투명 바탕·테두리. 판 안쪽 16px 여백의 오른쪽 아래가 기본(그림 위에 겹침), 패드를 더 가리면 왼쪽 아래 */
 .setup-kitinfo {
   position: absolute;
-  bottom: var(--setup-panel-pad, 24px);
+  bottom: var(--setup-panel-pad, 16px);
   display: flex;
   flex-direction: column;
   gap: var(--space-s);
   box-sizing: border-box;
   width: 220px;
-  max-width: calc(100% - 2 * var(--setup-panel-pad, 24px));
+  max-width: calc(100% - 2 * var(--setup-panel-pad, 16px));
   padding: var(--space-s) var(--space-m);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
@@ -416,10 +411,10 @@
   pointer-events: auto;
 }
 .setup-kitinfo.right {
-  right: var(--setup-panel-pad, 24px);
+  right: var(--setup-panel-pad, 16px);
 }
 .setup-kitinfo.left {
-  left: var(--setup-panel-pad, 24px);
+  left: var(--setup-panel-pad, 16px);
 }
 .setup-kitinfo.warn {
   border-color: var(--warn);

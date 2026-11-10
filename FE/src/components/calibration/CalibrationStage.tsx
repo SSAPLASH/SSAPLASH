@@ -22,11 +22,10 @@ import { DEFAULT_CAPTURE_OPTIONS, type CaptureSnapshot } from '@/engine/HitCaptu
 import { anchorsToLayout } from '@/domain/kitJudge';
 import type { KitLayout } from '@/domain/kitLayout';
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
-import { DRUM_KIT_H, DRUM_KIT_W, kitPadsFor, layoutToKitPoint } from '@/domain/drumKit';
+import { layoutToKitPoint, padFrameCircle } from '@/domain/drumKit';
 import { padPointOf } from '@/domain/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/calibration';
-import type { KitSkin } from '@/domain/drumKit';
 import type { Pose, StickId } from '@/domain/events';
 import './calibration.css';
 
@@ -94,15 +93,6 @@ export interface CalibrationStageProps {
   onSave?: () => void;
 }
 
-/** 킷(760×300)이 16:10 틀 안에서 세로로 차지하는 비율(가운데 정렬) */
-const KIT_FRAME_RATIO = DRUM_KIT_H / DRUM_KIT_W / (10 / 16);
-
-/** 킷 정규화 좌표의 패드를 틀(16:10) 정규화 좌표의 원으로 바꾼다. pickOverlayCorner의 겹침 판정용 */
-function padFrameCircle(pad: PadId, point: { x: number; y: number }, skin: KitSkin): { x: number; y: number; r: number } {
-  const w = kitPadsFor(skin).find((p) => p.pad === pad)?.w ?? 0;
-  return { x: point.x, y: (1 - KIT_FRAME_RATIO) / 2 + KIT_FRAME_RATIO * point.y, r: w / 2 / DRUM_KIT_W };
-}
-
 type HandGap = PadGap & { stickId: StickId };
 
 /**
@@ -161,7 +151,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   const weak = useWeakHint(cal.capture);
   const [picked, setPicked] = useState<PadId | null>(null);
   const overlay = useOverlayRegion();
-  const { cardRef, region } = overlay;
+  const { cardRef, region, figSize } = overlay;
 
   if (cal.mode === 'realign' && cal.realign) {
     return (
@@ -204,9 +194,9 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   const frameCircles: Partial<Record<PadId, { x: number; y: number; r: number }>> = {};
   for (const pad of Object.keys(placement) as PadId[]) {
     const point = placement[pad];
-    if (point) frameCircles[pad] = padFrameCircle(pad, point, kitSkin);
+    if (point) frameCircles[pad] = padFrameCircle(pad, point, kitSkin, figSize ?? undefined);
   }
-  const corner = pickOverlayCorner(frameCircles, region, focusPad ? [focusPad] : []);
+  const corner = pickOverlayCorner(frameCircles, region, focusPad ? [focusPad] : [], figSize ?? undefined);
 
   let card = null;
   if (isDone && selected) {
@@ -269,7 +259,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
       <StagePanel layout={overlay} top={top} card={card} banner={banner}>
         <div className="cal-stage-canvas">
           <DrumKit
-            fitWidth
+            fitContain
             scale={4}
             skin={kitSkin}
             states={padStates}

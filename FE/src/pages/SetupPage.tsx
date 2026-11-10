@@ -648,7 +648,7 @@ export function SetupPage() {
           <CalibrationStage onSave={onCaptureSave} />
         ) : (
           <>
-            {/* 판(StagePanel, 행 전체 폭) 안쪽 가운데에 16:10 드럼 그림을 두고, 정보 카드는 판 안 오른쪽 아래에 놓는다. 그림 옆 여백이 모자랄 때만 그림과 겹친다(PLAY-004 D10·D11) */}
+            {/* 판(StagePanel, 행 전체 폭) 안쪽 전체에 드럼 그림을 채우고, 정보 카드는 그 위 오른쪽 아래에 겹쳐 놓는다(PLAY-004 D10·D11 v0.3) */}
             {/* 마우스는 고르기만 한다. 소리·타격 기록은 스틱·키보드로만(포인터 모의 IMU의 클릭 타격도 막는다) */}
             <StagePanel
               layout={overlay}
@@ -658,7 +658,7 @@ export function SetupPage() {
                 /* 선택 패드 카드(편집 상태). 그림과 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */
                 <KitInfoOverlay
                   cardRef={overlay.cardRef}
-                  corner={pickOverlayCorner(s.kitLayout, overlay.region, [selectedPad])}
+                  corner={pickOverlayCorner(s.kitLayout, overlay.region, [selectedPad], overlay.figSize ?? undefined)}
                   name={PAD_META[selectedPad].label}
                   x={String(Math.round(selectedPlacement.x * EDITOR_W))}
                   y={String(Math.round(selectedPlacement.y * EDITOR_H))}
