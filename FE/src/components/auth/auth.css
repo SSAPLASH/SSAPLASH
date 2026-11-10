@@ -112,8 +112,16 @@
 }
 
 /* 로그인 팝업 */
-.login-dialog h2 {
+/* 제목 + 닫기(X). 배경 클릭·Esc와 같은 동작(랜딩으로) */
+.login-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0 0 8px;
+}
+.login-dialog h2 {
+  margin: 0;
   font-size: 24px;
 }
 .login-dialog-mode {
