@@ -38,6 +38,8 @@ export function useChartParam({ enabled = true }: { enabled?: boolean } = {}) {
   const chartId = parseId(params.get('chart'));
   const key = enabled && songId !== null && chartId !== null ? `${songId}:${chartId}` : null;
   const [fetched, setFetched] = useState<Fetched | null>(null);
+  // 같은 곡·단계를 다시 읽는 횟수(오류 재시도). 주소가 그대로여도 읽기 effect를 다시 돌린다
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (songId === null || chartId === null || key === null) return;
@@ -53,7 +55,7 @@ export function useChartParam({ enabled = true }: { enabled?: boolean } = {}) {
       },
     );
     return () => ctrl.abort();
-  }, [key, songId, chartId]);
+  }, [key, songId, chartId, attempt]);
 
   // 현재 URL 키와 같은 결과만 인정한다(이전 곡 결과가 잠깐 보이는 것을 막는다)
   const current = fetched && fetched.key === key ? fetched : null;
@@ -73,11 +75,16 @@ export function useChartParam({ enabled = true }: { enabled?: boolean } = {}) {
     },
     [setParams],
   );
+  /** 주소는 그대로 두고 지금 곡·단계의 채보를 다시 읽는다(오류 [다시 시도]) */
+  const reload = useCallback(() => {
+    setFetched(null);
+    setAttempt((n) => n + 1);
+  }, []);
   /** 곡 선택 단계로: 쿼리를 지운다. 곡 선택 탭(`tab`, 입문 코스)은 남겨 같은 탭으로 돌아간다 */
   const clear = useCallback(() => {
     setFetched(null);
     setParams((prev) => keptTab(prev), { replace: true });
   }, [setParams]);
 
-  return { status, loaded: current?.loaded ?? null, error: current?.error ?? null, select, clear };
+  return { status, loaded: current?.loaded ?? null, error: current?.error ?? null, select, clear, reload };
 }
