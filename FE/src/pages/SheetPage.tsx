@@ -18,7 +18,7 @@ import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundSta
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
 import { Countdown } from '@/components/play/Countdown';
-import { isLeadInBlank, leadInCount } from '@/domain/leadIn';
+import { countdownValue } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
 import { GuideSlot } from '@/components/play/GuideSlot';
@@ -123,7 +123,6 @@ function SheetPageBody() {
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
   // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
-  const [leadBlank, setLeadBlank] = useState(false);
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
@@ -236,7 +235,6 @@ function SheetPageBody() {
       goTimer.current = null;
     }
     setCountValue(null);
-    setLeadBlank(false);
   }, []);
 
   // 진입: 공용 발음을 끄고 이 페이지가 직접 소리·텔레메트리를 낸다. 떠날 때도 끈 채로 둔다(기본값, QA 352)
@@ -437,7 +435,7 @@ function SheetPageBody() {
         hits: recorder.current.hits,
         missSeqs: recorder.current.missSeqs,
         audioOffsetMs: ss.audioOffsetMs,
-        countInMs: ss.countInMs,
+        countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
         timing: settings.timing,
@@ -628,13 +626,12 @@ function SheetPageBody() {
       const ss = sessionRef.current;
       if (clock && ss) {
         clock.onFrame(now);
-        // 카운트다운(설계 MODE-001-lead-in-bars 4-3): 격자 시각(곡 시각 − 1마디 1박 원점) 기준. 마지막 리드인 마디에 남은 박 수,
-        // 격자 0에서 「시작!」, 앞 빈 마디는 숫자 없이 leadBlank. 일시정지·재연결 복귀 카운트다운 중에는 값을 건드리지 않는다
+        // 카운트다운(설계 MODE-001-lead-in-bars D16·D17): 격자 시각(곡 시각 − 1마디 1박 원점) 기준으로 준비 마디 시작까지 5·4·3·2·1,
+        // 그 뒤 1마디 준비 구간은 오버레이 없이(불 켜짐) 두고 격자 0에서 「시작!」. 일시정지·재연결 복귀 카운트다운 중에는 값을 건드리지 않는다
         const status = ss.currentStatus;
         if ((status === 'countin' || status === 'playing') && !isResuming()) {
-          const bpb = ss.chart.beatsPerBar;
           const g = ss.songTime(now) - ss.originMs;
-          const c = leadInCount(g, ss.beatMs, bpb);
+          const c = countdownValue(g, ss.countInMs);
           if (c !== null) {
             wasCounting.current = true;
             setCountValue(c);
@@ -650,7 +647,6 @@ function SheetPageBody() {
           } else {
             setCountValue(null);
           }
-          setLeadBlank(isLeadInBlank(g, ss.beatMs, bpb, Math.round(ss.countInMs / (ss.beatMs * bpb))));
         }
         if (clock.state.phase === 'running' && now - lastHud.current > HUD_INTERVAL_MS) {
           lastHud.current = now;
@@ -874,9 +870,9 @@ function SheetPageBody() {
         realign={realign.info}
       />
     );
-  } else if (countValue !== null || (leadBlank && !isResuming())) {
-    // 재연결 복귀 카운트다운은 기존 딤, 리드인은 빈 마디 soft → 숫자 마디 clear (같은 요소가 유지돼 배경만 전환)
-    overlay = <Countdown value={countValue} backdrop={isResuming() ? 'dim' : countValue === null ? 'soft' : 'clear'} />;
+  } else if (countValue !== null) {
+    // 재연결 복귀 카운트다운은 기존 딤(dim), 곡 시작 카운트다운 숫자는 옅은 딤(soft), 「시작!」에서 딤이 걷힌다(clear, 같은 요소 유지)
+    overlay = <Countdown value={countValue} backdrop={isResuming() || countValue !== 'go' ? 'dim' : 'clear'} />;
   }
 
   return (
