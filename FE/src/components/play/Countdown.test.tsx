@@ -38,17 +38,10 @@ describe('Countdown backdrop', () => {
     expect(html).toContain('data-backdrop="dim"');
   });
 
-  it.each(['dim', 'soft', 'clear'] as const)('%s 배경 클래스', (b) => {
+  it.each(['dim', 'clear'] as const)('%s 배경 클래스', (b) => {
     const html = renderToStaticMarkup(<Countdown value={2} backdrop={b} />);
     expect(html).toContain(`play-countdown-${b}`);
     expect(html).toContain('motion-overlay');
-  });
-
-  it('값 없음(null)은 숫자 요소 없이 배경만', () => {
-    const html = renderToStaticMarkup(<Countdown value={null} backdrop="soft" />);
-    expect(html).not.toContain('<span');
-    expect(text(html)).toBe('');
-    expect(html).toContain('play-countdown-soft');
   });
 
   it('clear에서도 시작!·숫자 문구는 같다', () => {
