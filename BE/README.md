@@ -961,18 +961,24 @@ CHART-002. 사용자가 올린 표준 MIDI 파일의 드럼 노트를 요청 안
 | `RIDE` | 51, 53, 59 |
 | 제외 | 그 밖의 피치(클랩·탬버린·카우벨 등) |
 
-- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-1.1`):
+- 같은 (tick, 패드)는 세기가 큰 노트 하나로 합친다. 난이도 규칙(`generator_version=midi-rule-2.0`, 328번에서 EASY만 바뀜):
 
 | 규칙 | HARD | NORMAL | EASY |
 | --- | --- | --- | --- |
 | 패드 | 전체 | 전체 | `HIHAT_PEDAL` 제외 |
-| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 4분 격자만 |
-| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 전부 제외 |
+| 격자(±32분음표 절반 허용) | 없음 | `HIHAT`·`HIHAT_PEDAL`·`RIDE`는 8분 격자만 | 모든 패드 EASY 박 위만(연타 구간은 아래) |
+| 고스트(세기 40 미만) | 유지 | 스네어만 제외 | 유지(세기로 거르지 않음) |
 | 같은 시각 상한 | 없음 | 2개 | 2개 |
-| 최소 간격(기준의 3/4 미만이면 충돌) | 없음 | 16분 | 8분 |
+| 최소 간격(이보다 가까우면 충돌) | 없음 | 16분의 3/4 | 225ms |
 
   상한·간격 충돌에서는 `SNARE > KICK > CRASH > HIHAT > RIDE > SMALL_TOM > MID_TOM > FLOOR_TOM > HIHAT_PEDAL`, 같으면 세기가 큰 쪽(같으면 먼저 친 쪽)을 남긴다.
   EASY가 비면 NORMAL을, NORMAL이 비면 HARD를 그대로 쓴다. 규칙을 바꾸면 버전을 올린다.
+
+  EASY는 곡 템포를 본다(`DifficultyThinner`, 상수 `T_MIN_MS` 300ms·`BURST_RUN` 3).
+  - **EASY 박:** 그 tick의 템포에서 길이가 300ms 이상인 가장 짧은 음표. 100 BPM 이하는 8분, 200 BPM 이하는 4분, 그보다 빠르면 2분. 격자는 tick 0부터 센다.
+  - **연타 구간:** 앞뒤 간격이 300ms보다 짧게 3묶음 이상 이어지는 줄. 구간 안의 EASY 박마다 박 앞뒤 반 칸에서 박에 가장 가까운 묶음 하나를 남긴다(같으면 우선순위). 연타가 아닌 묶음은 EASY 박 위일 때만 남는다.
+  - 템포는 MIDI 템포 이벤트(첫 이벤트 전은 120 BPM)를 쓴다. 남는 노트는 모두 HARD 원본이며 옮기거나 새로 만들지 않는다.
+  - 느린 곡은 EASY가 8분까지 남아 NORMAL과 같아질 수 있고, 고스트가 많은 느린 곡은 EASY 노트가 NORMAL보다 많을 수 있다.
 - 템포·박자표가 없으면 MIDI 기본값 120 BPM·4/4를 tick 0에 넣는다. BPM은 소수 둘째 자리로 반올림하고 그 값으로 `timeMs`(정수, 업로드는 `offsetMs=0`, 공용 곡 카탈로그는 254번 절의 `offsetMs`)를
   `ChartDocumentReader.milliseconds`와 같은 식으로 계산한다. 그래서 악보 페이지 ms와 노트 시각이 어긋나지 않는다.
 - `notation`은 tick·note-off까지 길이(없으면 16분음표)·voice(`KICK`·`HIHAT_PEDAL` 2, 나머지 1), `timing`에는 `ppq`·`tempoMap`·`timeSignatureMap`을 항상 넣는다.
@@ -1037,7 +1043,7 @@ CHART-001. 사용자가 올린 **드럼 MusicXML**(`.musicxml`·`.xml`·`.mxl`)�
 `WorkerResults`에서 꺼낸 공용 클래스) → 한 트랜잭션에 곡 1 + 채보 3 + 버전 3, 곡 난이도 산정. AI 호출 전에는 DB를 건드리지 않으므로 거절·장애 때 곡 행이 남지 않는다.
 
 저장: `songs.bpm`·`offset_ms`(못갖춘마디 길이)·`time_signature`는 AI `timing`, `duration_ms`는 AI `sheet.duration_ms`. `chart_versions`는 HARD = AI 원본
-(`generator_version` `sheet-musicxml-3`), NORMAL·EASY = `midi-rule-1.1` 솎기(`…+midi-rule-1.1`), `generator=MUSICXML_RULE`(V46), `notation_status=UNAVAILABLE`
+(`generator_version` `sheet-musicxml-3`), NORMAL·EASY = `midi-rule-2.0` 솎기(`…+midi-rule-2.0`), `generator=MUSICXML_RULE`(V46), `notation_status=UNAVAILABLE`
 (악보 표기는 없고 FE 악보 격자는 `offsetMs`·`bpm`로 그린다). `hihatOpen` 필드는 노트 JSON에 그대로 남는다. 원본 MusicXML은 보관하지 않는다(반주 스프린트에서 다시 정한다).
 
 | 상태 | `code` | 경우 |
@@ -1083,7 +1089,7 @@ CHART-001. 운영자(ADMIN)가 공용 곡(`source=BUILTIN`, 소유자 없음)을
 관리자 곡 상세는 곡 상세의 메타데이터에 `license`, `published`, `hasCover`, `updatedAt`, 난이도별 최신 버전의 `generator`·`generatorVersion`·`createdAt`을 더한다. `source`는 항상 BUILTIN이라 넣지 않는다. 255번부터 상세에만 곡 추천용 `metadata`(아래 공용 곡 카탈로그의 `meta`와 같은 필드, 없으면 null)를 더한다. 목록·회원용 곡 응답에는 없고, ADMIN API로 고치는 기능은 두지 않는다(카탈로그가 유일한 출처).
 
 - **공개 여부:** V22 `songs.published`. 비공개 공용 곡은 일반 사용자의 곡 목록·상세·채보·assets에서 없는 곡(404)이다(`SongRepository.VISIBLE`·`FILTER`). 개인 곡은 CHECK로 항상 true라 의미가 없다. 비공개로 바꾸기 전에 받아 둔 `chartVersionId`로 진행 중이던 플레이 결과는 저장된다(새 플레이는 조회가 막혀 시작할 수 없다).
-- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-1.1`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
+- **등록·채보 수정:** 151번 변환기(`MidiChartConverter`, `midi-rule-2.0`)를 그대로 쓴다. 채보는 `generator=MIDI_RULE`, `notation_status=PENDING`. MIDI를 다시 올리면 난이도별 `version = 최대 + 1` 행을 추가하고 기존 버전·플레이 기록은 그대로 둔다. 빠진 난이도는 version 1로 채운다. 곡의 `bpm`·`time_signature`·`duration_ms`는 새 MIDI 값으로 바뀌지만 버전별 `timing`은 그대로라 과거 버전의 시간 기준은 바뀌지 않는다.
 - **커버:** 키 `cover/builtin/{songId}/{uuid}.{jpg|png|webp}`(악보 버킷). 공개된 공용 곡 커버는 모든 회원의 곡 목록·상세 `coverUrl`에 1시간 서명으로 온다.
 - **반주:** ffprobe(`AudioProbe`)로 실제 바이트를 검사한다. 키 `accompaniment/{songId}/{uuid}.{wav|mp3}`(반주 버킷), 같은 키에 덮어쓰지 않고 교체마다 새 키를 만든다. 쓰기는 워커의 반주 버킷 쓰기 자격증명을 쓰므로 운영 자격증명에 PutObject 권한이 있어야 한다. 82번 도구가 등록한 `accompaniment/{songId}.wav`도 그대로 재생된다.
 - **정리:** 커버·반주 업로드 전에 임시 정리 작업(`user_id` NULL, 5분 뒤)을 등록하고 저장소 쓰기 뒤 곡을 다시 잠가 연결한다. 교체·삭제·곡 삭제 때 이전 객체는 기존 정리 큐가 지운다. 정리 큐는 살아 있는 공용 곡이 참조하는 커버·반주를 지우지 않는다.
@@ -1291,7 +1297,7 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 인수된 같은 resultId·같은 정규 내용은 임대가 끝나도 기존 Receipt를 반환한다. 같은 ID의 다른 내용, 오래된 attempt, 삭제·탈퇴 자원은 409다. 유효 시도의 잘못된 결과는 FAILED·정리 기록을 커밋하고 422를 반환하며 스토리지 일시 장애는 503으로 같은 요청을 재전송할 수 있다. 60초 임대와 단계별 최대 2회 재시도는 초기 설정이며 5초/15초 재시도 대기와 단계 누적 상한을 적용한다. 전송 오류의 워커 측 재시도를 소진해 heartbeat를 중단하면 임대 만료 후 복구될 수 있지만 단계 마감과 단계별 최대 2회 재시도 범위 안에서만 재배정된다. 409·422 또는 이미 DONE인 경우 재배정을 보장하지 않는다. 원본은 분리 인수 뒤, 드럼은 최종 인수 또는 실패 뒤 정리하며 staging의 늦은 업로드를 재검사한다.
 
-음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-1.1`로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timing에 `tempoMap`이 둘 이상이고 `ppq`가 있으면 offsetMs부터 빠르기 구간마다 그 BPM으로 박 수를 세고(`WorkerResults.VirtualTicks`, 구간 시작은 채보마다 한 번 계산하고 노트마다 이분 탐색), 없으면 BPM 하나로 환산한다. timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-1.1`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
+음원 전사 입력의 `NORMAL` 한 개는 계약 호환을 위해 유지하며, 저장할 때 원본 전체를 HARD로 보존하고 `midi-rule-2.0`으로 NORMAL·EASY를 각각 생성한다. 세 채보와 버전, Receipt는 한 트랜잭션에 저장한다. 기존 음원 채보는 소급 변환하지 않는다. 파생 노트는 원본 JSON과 배열 순서를 보존한다. 모든 노트에 notation과 유효한 ppq가 있으면 해당 tick을 사용하고, 그렇지 않으면 ppq 480으로 가상 tick을 계산한다(0 미만은 0). timing에 `tempoMap`이 둘 이상이고 `ppq`가 있으면 offsetMs부터 빠르기 구간마다 그 BPM으로 박 수를 세고(`TranscriptionCharts.VirtualTicks`, 구간 시작은 채보마다 한 번 계산하고 노트마다 이분 탐색), 없으면 BPM 하나로 환산한다. EASY 박을 정하는 템포도 tick을 만든 기준과 같다: notation tick이면 `tempoMap`(없으면 `bpm`), 가상 tick이면 그 구간 목록(없으면 `bpm`). timeMs는 변경하지 않는다. velocityHint가 없으면 솎기 판단에만 100을 사용한다. HARD의 generatorVersion은 입력 원문을 유지하고 파생 버전에는 `+midi-rule-2.0`을 붙인다. 50자를 넘을 경우 원문 앞부분과 SHA-256의 앞 12자리로 결정적으로 축약한다. 각 난이도는 HARD에서 독립적으로 솎으므로 노트 수의 순서는 모든 입력에 보장되지 않는다.
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
