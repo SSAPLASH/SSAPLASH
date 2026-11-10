@@ -40,7 +40,7 @@ export interface ReadyPanelProps {
   /** 페달 연결 여부. undefined면 P 점·문구를 그리지 않는다(동글이 아닌 소스·키보드 전용) */
   pedal?: boolean;
   presetName: string | null;
-  /** 시작 뒤 카운트인 마디 수(안내 문구용) */
+  /** 카운트다운 켬(1)·끔(0). 안내 문구용 */
   countInBars: number;
   onBack: () => void;
   onSelectChart: (chartId: number) => void;
@@ -213,7 +213,7 @@ export function ReadyPanel({
             <p className={`play-rp-hint${ready ? '' : ' need'}`}>
               {ready
                 ? countInBars > 0
-                  ? `시작하면 ${countInBars}마디가 흐른 뒤 노트가 시작돼요.`
+                  ? '시작하면 5초 카운트다운과 준비 1마디 뒤 노트가 시작돼요.'
                   : '시작하면 바로 노트가 시작돼요.'
                 : '기기 준비가 끝나면 시작할 수 있어요.'}
             </p>

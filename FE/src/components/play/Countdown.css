@@ -1,4 +1,4 @@
-/* 카운트다운: 배경(dim 55% · soft 25% · clear 없음) + 가운데 숫자만. 배경 전환은 0.2s ease-out(Figma 모션 토큰) */
+/* 카운트다운: 배경(dim 55% 일정 · clear 없음) + 가운데 숫자만. 배경 전환은 0.2s ease-out(Figma 모션 토큰) */
 .play-countdown {
   position: absolute;
   inset: 0;
@@ -12,9 +12,6 @@
 }
 .play-countdown-dim {
   background: color-mix(in srgb, var(--bg-canvas) 55%, transparent);
-}
-.play-countdown-soft {
-  background: color-mix(in srgb, var(--bg-canvas) 25%, transparent);
 }
 .play-countdown-clear {
   background: color-mix(in srgb, var(--bg-canvas) 0%, transparent);
