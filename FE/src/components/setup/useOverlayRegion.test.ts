@@ -1,16 +1,19 @@
-// 정보 카드 겹침 영역 계산 검증(PLAY-004 D10): 행·캔버스·카드 px → 캔버스 정규 영역 / 겹침 없음(null) / 측정 불가(undefined).
+// 판 안 배치 계산 검증(PLAY-004 D10·D11): 판 안쪽 폭·그림·카드 px → 그림 정규 영역 / 겹침 없음(null) / 측정 불가(undefined), 배너 쌓기 offset.
 import { describe, expect, it } from 'vitest';
-import { regionFromSizes, shiftForCard } from './useOverlayRegion';
+import { bannerBottomOffset, PANEL_PAD, regionFromSizes, STACK_GAP } from './useOverlayRegion';
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
 
 describe('regionFromSizes', () => {
-  it('행 폭 − 캔버스 폭 ≥ 카드 폭+24이면 캔버스 옆 여백에 놓여 겹침 없음(null)', () => {
+  it('그림 옆 한쪽 여백이 카드 폭+24 이상이면 카드가 그림 옆에 놓여 겹침 없음(null)', () => {
     expect(regionFromSizes({ w: 1100 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull();
-    // 경계: 정확히 244
-    expect(regionFromSizes({ w: 769 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull();
+    // 경계: 한쪽 여백이 정확히 244(525 + 2×244 = 1013)
+    expect(regionFromSizes({ w: 1013 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull();
   });
-  it('여백이 모자라면 실제 교차 영역을 캔버스 정규 좌표로 돌려준다', () => {
-    // 한쪽 여백 100 → 카드가 캔버스로 120px 파고든다
+  it('한쪽 여백이 카드 폭 이상이면 맞닿지 않아 겹침 없음(null)', () => {
+    expect(regionFromSizes({ w: 965 }, { w: 525, h: 328 }, { w: 220, h: 150 })).toBeNull(); // 여백 220
+  });
+  it('여백이 모자라면 실제 교차 영역을 그림 정규 좌표로 돌려준다', () => {
+    // 한쪽 여백 100 → 카드가 그림으로 120px 파고든다
     const r = regionFromSizes({ w: 725 }, { w: 525, h: 328 }, { w: 220, h: 150 });
     expect(r?.w).toBeCloseTo(120 / 525);
     expect(r?.h).toBeCloseTo(150 / 328);
@@ -32,15 +35,20 @@ describe('regionFromSizes', () => {
   });
 });
 
-describe('shiftForCard', () => {
-  it('한쪽 여백이 이미 카드 폭+24 이상이면 비키지 않는다', () => {
-    expect(shiftForCard({ w: 1100 }, { w: 525 }, { w: 220 })).toBe(0);
+describe('bannerBottomOffset', () => {
+  const banner = { left: 300, right: 700 };
+  it('카드가 없으면 기본 여백(24px)', () => {
+    expect(bannerBottomOffset(banner, null)).toBe(PANEL_PAD);
   });
-  it('남은 폭은 되지만 한쪽 여백이 모자라면 오른쪽에 그만큼 비운다', () => {
-    // 여백 합 400 → 한쪽 200, 필요 244 → p = 488 − 400 = 88
-    expect(shiftForCard({ w: 925 }, { w: 525 }, { w: 220 })).toBe(88);
+  it('가로로 안 겹치면 기본 여백', () => {
+    expect(bannerBottomOffset(banner, { left: 704, right: 924, h: 150 })).toBe(PANEL_PAD);
+    expect(bannerBottomOffset(banner, { left: 700, right: 920, h: 150 })).toBe(PANEL_PAD); // 맞닿기만 하면 겹침 아님
   });
-  it('남은 폭이 카드 폭+24보다 작으면 비키지 않는다(겹침 처리)', () => {
-    expect(shiftForCard({ w: 725 }, { w: 525 }, { w: 220 })).toBe(0);
+  it('가로로 겹치면 카드 위로 쌓는다(카드 높이 + 12px)', () => {
+    expect(bannerBottomOffset(banner, { left: 600, right: 820, h: 150 })).toBe(PANEL_PAD + 150 + STACK_GAP);
+  });
+  it('왼쪽 모서리 카드와도 같은 규칙', () => {
+    expect(bannerBottomOffset(banner, { left: 24, right: 244, h: 100 })).toBe(PANEL_PAD);
+    expect(bannerBottomOffset(banner, { left: 200, right: 420, h: 100 })).toBe(PANEL_PAD + 100 + STACK_GAP);
   });
 });
