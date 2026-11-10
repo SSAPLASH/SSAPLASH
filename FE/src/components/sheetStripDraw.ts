@@ -1,6 +1,5 @@
 // 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Judgement } from '@/domain/judgement';
-import { leadInCount } from '@/domain/leadIn';
 import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/sheet';
 import { xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
@@ -259,6 +258,28 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   drawBeatLabel(ctx, baseX + 12, bottom + 46, G(raw), beatMs, chart.beatsPerBar, colors);
 }
 
+/**
+ * 빈 준비 마디 한 칸: 보표 5선과 슬롯 왼쪽 마디선만 그린다(노트·박자표·번호 없음). 호출자가 슬롯 clip을 걸어 둔다.
+ * 선은 0..width로 긋고 clip이 자른다. slotX는 슬롯 왼쪽 x
+ */
+export function drawEmptyBar(ctx: CanvasRenderingContext2D, slotX: number, width: number, colors: Colors): void {
+  ctx.strokeStyle = colors.inkFaint;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = Math.round(yOfPos(i * 2)) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = colors.inkDim;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(slotX, STAFF_TOP_Y);
+  ctx.lineTo(slotX, STAFF_BOTTOM_Y);
+  ctx.stroke();
+}
+
 /** 고정 기준선(커서): 2px + 글로우. x는 선의 x, top·bottom은 선의 양 끝 y */
 export function drawCursor(ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number, colors: Colors): void {
   ctx.save();
@@ -286,15 +307,9 @@ export function drawBeatLabel(
   beatsPerBar: number,
   colors: Colors,
 ): void {
-  let label: string | null = null;
-  if (gridTime < 0) {
-    // 마지막 리드인 마디에서만 남은 박 수를 그린다(빈 마디·긴 인트로는 라벨 없음, 설계 MODE-001-lead-in-bars 4-5)
-    const c = leadInCount(gridTime, beatMs, beatsPerBar);
-    if (c !== null) label = String(c);
-  } else {
-    label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
-  }
-  if (label === null) return;
+  // 원점 앞(카운트다운 구간)은 큰 숫자와 겹치므로 라벨을 그리지 않는다 (설계 MODE-001-lead-in-bars D11)
+  if (gridTime < 0) return;
+  const label = String((Math.floor(gridTime / beatMs) % beatsPerBar) + 1);
   ctx.fillStyle = colors.base;
   ctx.font = '700 32px Pretendard Variable, Pretendard, sans-serif';
   ctx.textAlign = 'left';
