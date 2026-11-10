@@ -60,3 +60,30 @@ describe('PointerStickSource 클릭 타격', () => {
     }
   });
 });
+
+describe('PointerStickSource 키 타격의 수식키', () => {
+  async function run(init: KeyboardEventInit): Promise<{ hits: number; prevented: boolean }> {
+    const src = new PointerStickSource();
+    let hits = 0;
+    src.subscribe((e: StickEvent) => {
+      if (e.kind === 'hit') hits++;
+    });
+    await src.connect();
+    const ev = new KeyboardEvent('keydown', { cancelable: true, bubbles: true, ...init });
+    window.dispatchEvent(ev);
+    await src.disconnect();
+    return { hits, prevented: ev.defaultPrevented };
+  }
+
+  it('수식키 없이 타격 키를 누르면 친다', async () => {
+    expect(await run({ code: 'KeyJ' })).toEqual({ hits: 1, prevented: true });
+  });
+
+  it.each([['ctrlKey'], ['altKey'], ['metaKey']])('%s 조합은 치지도 막지도 않는다', async (mod) => {
+    expect(await run({ code: 'KeyJ', [mod]: true, shiftKey: true })).toEqual({ hits: 0, prevented: false });
+  });
+
+  it('Shift만이면 악센트로 친다', async () => {
+    expect(await run({ code: 'KeyF', shiftKey: true })).toEqual({ hits: 1, prevented: true });
+  });
+});
