@@ -444,6 +444,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V45 | `V45__add_recommendation_user_keys.sql` | R3 가명 키를 비밀 값 해시에서 무작위 대체 키로 교체. 뷰 열은 그대로 |
 | V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
 | V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
+| V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
 
 규칙:
 
@@ -1135,7 +1136,7 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 
 SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [입문 코스] 탭이다. 설계 `.claude/plans/SETUP-입문-코스.md`(개인 문서).
 
-- **카탈로그 `lesson`:** `order`(1 이상, 카탈로그 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~4개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V47)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
+- **카탈로그 `lesson`:** `order`(1 이상, 카탈로그 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~4개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
 - **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하). 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
 - **목록에서 빠짐:** `lessons`에 있는 곡은 공용 곡 목록(`GET /api/v1/songs?source=BUILTIN`)·추천 R1(곡 선택·리포트·연습)·비슷한 곡 R2 후보에 나오지 않는다(`LessonRepository.NOT_LESSON`). 곡 상세·채보 조회·연주 저장·최고 기록·ADMIN 목록은 그대로 된다.
 
