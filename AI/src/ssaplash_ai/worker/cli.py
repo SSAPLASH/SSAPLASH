@@ -24,6 +24,7 @@ from ssaplash_ai.chart.config import DEFAULT_SEPARATION_CONFIG, DEFAULT_TRANSCRI
 from ssaplash_ai.chart.errors import ChartModelError
 from ssaplash_ai.coach.llm_local import LocalServerGenerator
 from ssaplash_ai.worker.config import WorkerSettings
+from ssaplash_ai.worker.live_coach_job import LiveCoachApi, LiveCoachRunner, run_live_loop
 from ssaplash_ai.worker.loop import EXIT_CONFIG, EXIT_OK, WorkerLoop
 from ssaplash_ai.worker.narrative_job import NarrativeApi, NarrativeRunner
 
@@ -119,6 +120,45 @@ def check_cmd(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def live_run_cmd(args: argparse.Namespace) -> int:
+    """연주 중 LLM 구간 코칭 워커. 채보 모델을 올리지 않고 연주 코칭 큐만 짧은 주기로 본다."""
+    import threading
+
+    from ssaplash_ai.worker.api import ApiError
+    from ssaplash_ai.worker.loop import EXIT_AUTH
+
+    settings = _settings(args)
+    if settings is None:
+        return EXIT_CONFIG
+    if not settings.narrative_model:
+        logger.error("모델 이름이 없음: SSAPLASH_NARRATIVE_MODEL (총평과 같은 모델을 쓴다)")
+        return EXIT_CONFIG
+    generator = LocalServerGenerator(
+        settings.narrative_llm_url,
+        settings.narrative_model,
+        settings.narrative_llm_api,
+        timeout_sec=settings.live_llm_timeout_sec,
+        max_tokens=80,
+    )
+    runner = LiveCoachRunner(LiveCoachApi(settings), generator, settings.narrative_model)
+    stop = threading.Event()
+    logger.info(
+        "연주 코칭 워커 시작: 모델 %s, %.1f초 주기",
+        settings.narrative_model,
+        settings.live_poll_sec,
+    )
+    try:
+        run_live_loop(runner, settings.live_poll_sec, stop, max_jobs=args.max_jobs)
+    except ApiError as e:
+        if e.status == 401:
+            logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
+            return EXIT_AUTH
+        raise
+    except KeyboardInterrupt:
+        stop.set()
+    return EXIT_OK
+
+
 def fake_be_cmd(args: argparse.Namespace) -> int:
     from ssaplash_ai.worker.fake_be import serve
 
@@ -158,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="환경 변수·설정 검사, 모델 올려 보기. BE는 부르지 않음")
     _add_config_args(check)
     check.set_defaults(func=check_cmd)
+
+    live = sub.add_parser(
+        "live-run", help="연주 중 LLM 구간 코칭 워커(채보 모델 없이, 연주 코칭 큐만)"
+    )
+    _add_config_args(live)
+    live.add_argument("--max-jobs", type=int, default=None, help="이만큼 처리하고 끝냄(시험용)")
+    live.set_defaults(func=live_run_cmd)
 
     fake = sub.add_parser("fake-be", help="테스트용 BE 대역 띄우기 (개발용)")
     fake.add_argument(
