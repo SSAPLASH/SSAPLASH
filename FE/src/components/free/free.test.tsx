@@ -253,9 +253,9 @@ describe('AccompanimentBar', () => {
 });
 
 describe('AccompanimentPicker', () => {
-  const song = (id: number, acc: SongSummary['accompanimentStatus']): SongSummary => ({
+  const song = (id: number, acc: SongSummary['accompanimentStatus'], over: Partial<SongSummary> = {}): SongSummary => ({
     id, title: `곡${id}`, artist: '가수', source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 1000,
-    hasAccompaniment: acc === 'READY', accompanimentStatus: acc, songLevel: null, difficulties: [], createdAt: '', coverUrl: null, sheetId: null,
+    hasAccompaniment: acc === 'READY', accompanimentStatus: acc, songLevel: null, difficulties: [], createdAt: '', coverUrl: null, sheetId: null, ...over,
   });
   const listSongs = async (p: { source: string }) =>
     p.source === 'BUILTIN' ? { items: [song(1, 'READY'), song(2, 'GENERATING'), song(3, 'NONE')], hasNext: true } : { items: [], hasNext: false };
@@ -266,16 +266,30 @@ describe('AccompanimentPicker', () => {
       </MemoryRouter>,
     );
 
-  it('공용 곡·내 곡 섹션, 생성 중은 비활성+이유, 반주 없는 곡은 숨김, 더 보기·빈 문구', async () => {
+  it('공용 곡·내 곡 섹션, 생성 중은 비활성, 반주 없는 곡은 숨김, 더 보기·빈 문구', async () => {
     renderPicker();
     await screen.findByText('곡1');
     expect(screen.getByRole('region', { name: '공용 곡' })).toBeTruthy();
     expect(screen.getByRole('region', { name: '내 곡' })).toBeTruthy();
     expect(screen.queryByText('곡3')).toBeNull();
-    expect(screen.getByText('반주 만드는 중')).toBeTruthy();
     expect(screen.getByText('곡2').closest('button')?.hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('더 보기')).toBeTruthy();
     expect(await screen.findByText(/반주가 있는 내 곡이 없어요/)).toBeTruthy();
+  });
+
+  it('반주 만드는 중 곡은 「반주 만드는 중」 배지(active 색)를 낸다. 「채보 생성 중」이 아니다', async () => {
+    const { container } = renderPicker();
+    await screen.findByText('곡1');
+    const badge = screen.getByText('반주 만드는 중');
+    expect(badge.className).toContain('studio-badge-active');
+    expect(container.querySelector('.studio-badge-dot')).toBeTruthy();
+    expect(screen.queryByText('채보 생성 중')).toBeNull();
+  });
+
+  it('커버가 없는 곡은 기본 디스크 커버', async () => {
+    const { container } = renderPicker();
+    await screen.findByText('곡1');
+    expect(container.querySelectorAll('.free-picker-row .song-cover.default').length).toBeGreaterThan(0);
   });
 
   it('곡을 누르면 고른 곡 정보로 onPick', async () => {
@@ -285,14 +299,60 @@ describe('AccompanimentPicker', () => {
     expect(onPick).toHaveBeenCalledWith({ songId: 1, title: '곡1', artist: '가수', coverUrl: null });
   });
 
-  it('지금 고른 곡은 「재생 중」, 다시 누르면 onPick 없이 닫기만', async () => {
+  it('지금 곡: 강조 + 「재생 중」 글자 + PlayingEq(재생 중이면 움직임, 아니면 멈춘 점), 다시 누르면 onPick 없이 닫기만', async () => {
     const onPick = vi.fn();
     const onClose = vi.fn();
-    renderPicker({ currentSongId: 1, onPick, onClose });
+    const { container, unmount } = renderPicker({ currentSongId: 1, currentPlaying: true, onPick, onClose });
     expect(await screen.findByText('재생 중')).toBeTruthy();
+    expect(container.querySelector('.free-picker-row.is-current')).toBeTruthy();
+    expect(container.querySelector('.free-picker-row.is-current .song-eq.is-playing')).toBeTruthy();
     fireEvent.click(screen.getByText('곡1').closest('button')!);
     expect(onPick).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+    unmount();
+    const paused = renderPicker({ currentSongId: 1, currentPlaying: false });
+    await screen.findByText('재생 중');
+    expect(paused.container.querySelector('.free-picker-row.is-current .song-eq.is-paused')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '일시정지' })).toBeTruthy();
+  });
+
+  it('× 닫기(「닫기」)와 검색어 지우기 ×(「검색어 지우기」, 검색어가 있을 때만)', async () => {
+    const onClose = vi.fn();
+    renderPicker({ onClose });
+    await screen.findByText('곡1');
+    expect(screen.queryByRole('button', { name: '검색어 지우기' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const input = screen.getByLabelText('반주 검색') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '별' } });
+    fireEvent.click(screen.getByRole('button', { name: '검색어 지우기' }));
+    expect(input.value).toBe('');
+    expect(screen.queryByRole('button', { name: '검색어 지우기' })).toBeNull();
+  });
+
+  it('처음 포커스는 검색창, Esc로 닫는다', async () => {
+    const onClose = vi.fn();
+    renderPicker({ onClose });
+    await screen.findByText('곡1');
+    expect(document.activeElement).toBe(screen.getByLabelText('반주 검색'));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('데스크톱은 is-sheet 없음, ≤640은 is-sheet + 손잡이 막대(aria-hidden), 「재생 중」 글자 없이 이퀄라이저만', async () => {
+    const desktop = renderPicker({ currentSongId: 1 });
+    await screen.findByText('곡1');
+    expect(document.querySelector('.dialog.free-picker')).toBeTruthy();
+    expect(document.querySelector('.free-picker.is-sheet')).toBeNull();
+    expect(document.querySelector('.free-picker-grab')).toBeNull();
+    desktop.unmount();
+    mockMobile(true);
+    renderPicker({ currentSongId: 1, currentPlaying: true });
+    await screen.findByText('곡1');
+    expect(document.querySelector('.dialog.free-picker.is-sheet')).toBeTruthy();
+    expect(document.querySelector('.free-picker-grab')?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByText('재생 중')).toBeNull();
+    expect(screen.getByRole('img', { name: '재생 중' })).toBeTruthy();
   });
 
   it('목록 실패는 섹션별 문구와 다시 시도, 다른 섹션은 그대로', async () => {
