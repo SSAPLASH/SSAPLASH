@@ -19,6 +19,9 @@ export interface DiagSessionSummary {
   judgedCount: number;
 }
 
+/** 오디오 시계 대기가 붙는 시점 */
+export type ClockWaitPhase = 'begin' | 'resume' | 'restart';
+
 /** 이벤트 본문. 시각 t는 publish가 performance.now()로 붙인다 */
 export type DiagBody =
   /** bootstrap의 inputManager.onHit 끝. tAudio는 연주 화면의 리스너가 나중에 채울 수 있어 hit 참조를 그대로 싣는다 */
@@ -55,6 +58,14 @@ export type DiagBody =
    * 양수면 반주가 세션 곡 시각보다 앞서 있다.
    */
   | { type: 'accDrift'; songTimeMs: number; audioPosMs: number; driftMs: number }
+  /**
+   * 시작·재개·처음부터 전에 오디오 시계가 흐를 때까지 기다린 결과(설계 MODE-001 오디오 시계 시작 대기).
+   * timedOut은 최대 대기를 넘어 그냥 시작한 경우, skipped는 컨텍스트가 없거나 running이 아니어서 기다리지 않은 경우,
+   * primed는 출력이 오래 조용해 들리지 않는 신호로 장치를 먼저 깨운 경우.
+   */
+  | { type: 'audioClockWait'; phase: ClockWaitPhase; waitedMs: number; timedOut: boolean; skipped: boolean; primed: boolean }
+  /** 곡 도중 오디오 시계가 멈췄다 흐른 흔적. jumpMs는 (화면 시계 − 오디오 시계) 차이가 커진 양. 기록만 하고 연주에는 손대지 않는다 */
+  | { type: 'audioClockStall'; songTimeMs: number; jumpMs: number }
   /** 연결된 타격 없이 시간 초과로 MISS가 된 노트 */
   | { type: 'missed'; noteIndex: number; pad: PadId; songTimeMs: number }
   | {
