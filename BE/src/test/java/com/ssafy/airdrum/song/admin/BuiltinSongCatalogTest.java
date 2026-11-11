@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.ssafy.airdrum.lesson.LessonKind;
+import com.ssafy.airdrum.lesson.LessonSpec;
 import com.ssafy.airdrum.song.meta.SongMetadata;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,7 +87,8 @@ class BuiltinSongCatalogTest {
 	@Test
 	void 저장소_카탈로그에_AI_공용_곡_31곡이_곡별_offsetMs와_함께_있다() {
 		// 261번: AI(245)가 드럼리스 음원에 맞춘 MIDI 31곡. offsetMs는 AI 곡별_첫박.csv 값이다.
-		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/");
+		// 331번 입문 코스 레슨 곡은 따로 센다(저장소_카탈로그의_레슨은_… 테스트)
+		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/").stream().filter(e -> e.lesson() == null).toList();
 		var seeds = java.util.Set.of("기본 8비트", "8비트 + 필인", "라이드 16비트");
 		var added = entries.stream().filter(e -> !seeds.contains(e.title())).toList();
 		assertThat(entries).hasSize(34);
@@ -144,7 +147,8 @@ class BuiltinSongCatalogTest {
 	/** 255번: 224 요청 CSV(11/05 v2, 34곡, 모두 HUMAN)를 카탈로그 meta로 옮겼다. */
 	@Test
 	void 저장소_카탈로그_34곡_모두_meta가_있다() {
-		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/");
+		// 레슨 곡은 추천 후보가 아니라 meta를 두지 않는다(331번)
+		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/").stream().filter(e -> e.lesson() == null).toList();
 		assertThat(entries).hasSize(34).allSatisfy(e -> {
 			assertThat(e.meta()).as(e.title()).isNotNull();
 			assertThat(e.meta().source()).as(e.title()).isEqualTo("HUMAN");
@@ -166,5 +170,51 @@ class BuiltinSongCatalogTest {
 		assertThatThrownBy(() -> BuiltinSongCatalog.parse(
 				"[{\"title\":\"곡 C\",\"license\":\"자작\",\"midi\":\"없는.mid\"}]".getBytes(StandardCharsets.UTF_8), FILES::get))
 				.isInstanceOf(BuiltinSongCatalog.Invalid.class).hasMessageContaining("곡 C");
+	}
+
+	/** 331번 설계 3-1절: 입문 코스 레슨. 같은 카탈로그 안에서 순서는 1부터 빈 번호 없이 이어진다. */
+	static String lessonEntry(String title, String lesson) {
+		return "{\"title\":\"" + title + "\",\"license\":\"자작\",\"midi\":\"a.mid\",\"lesson\":" + lesson + "}";
+	}
+
+	@Test
+	void lesson은_선택이고_kind_기본값은_PLAY_guide_기본값은_true다() {
+		var entries = BuiltinSongCatalog.parse(("[" + lessonEntry("레슨 2", "{\"order\":2,\"summary\":\"킥과 스네어\",\"pads\":[\"KICK\",\"SNARE\"]}") + ","
+				+ lessonEntry("레슨 1", "{\"order\":1,\"kind\":\"READ\",\"summary\":\"킥 음표\",\"pads\":[\"KICK\"],\"guide\":false}") + ","
+				+ "{\"title\":\"곡\",\"license\":\"자작\",\"midi\":\"b.mid\"}]").getBytes(StandardCharsets.UTF_8), FILES::get);
+		assertThat(entries.get(0).lesson()).isEqualTo(new LessonSpec(2, LessonKind.PLAY, "킥과 스네어", List.of("KICK", "SNARE"), true));
+		assertThat(entries.get(1).lesson()).isEqualTo(new LessonSpec(1, LessonKind.READ, "킥 음표", List.of("KICK"), false));
+		assertThat(entries.get(2).lesson()).isNull();
+		// READ의 guide 기본값도 참이다
+		assertThat(BuiltinSongCatalog.parse(("[" + lessonEntry("레슨", "{\"order\":1,\"kind\":\"READ\",\"summary\":\"s\",\"pads\":[\"HIHAT\"]}") + "]")
+				.getBytes(StandardCharsets.UTF_8), FILES::get).get(0).lesson().guide()).isTrue();
+	}
+
+	@Test
+	void lesson_규칙을_어기면_카탈로그를_거부한다() {
+		for (String lesson : new String[] {
+				"[]", "\"x\"", "{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\"],\"extra\":1}",
+				"{\"summary\":\"s\",\"pads\":[\"KICK\"]}", "{\"order\":0,\"summary\":\"s\",\"pads\":[\"KICK\"]}",
+				"{\"order\":1.5,\"summary\":\"s\",\"pads\":[\"KICK\"]}", "{\"order\":\"1\",\"summary\":\"s\",\"pads\":[\"KICK\"]}",
+				"{\"order\":1,\"kind\":\"WATCH\",\"summary\":\"s\",\"pads\":[\"KICK\"]}",
+				"{\"order\":1,\"pads\":[\"KICK\"]}", "{\"order\":1,\"summary\":\" \",\"pads\":[\"KICK\"]}",
+				"{\"order\":1,\"summary\":\"" + "가".repeat(201) + "\",\"pads\":[\"KICK\"]}",
+				"{\"order\":1,\"summary\":\"s\"}", "{\"order\":1,\"summary\":\"s\",\"pads\":[]}",
+				"{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\",\"KICK\"]}", "{\"order\":1,\"summary\":\"s\",\"pads\":[\"COWBELL\"]}",
+				"{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\",\"SNARE\",\"HIHAT\",\"RIDE\",\"CRASH\"]}",
+				"{\"order\":1,\"summary\":\"s\",\"pads\":[1]}",
+				"{\"order\":1,\"kind\":\"READ\",\"summary\":\"s\",\"pads\":[\"KICK\"],\"guide\":\"no\"}",
+				"{\"order\":1,\"kind\":\"PLAY\",\"summary\":\"s\",\"pads\":[\"KICK\"],\"guide\":false}" })
+			assertThat(invalid("[" + lessonEntry("레슨 X", lesson) + "]")).as(lesson).hasMessageContaining("레슨 X");
+	}
+
+	@Test
+	void lesson_순서가_겹치거나_1부터_이어지지_않으면_카탈로그를_거부한다() {
+		String one = "{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		String two = "{\"order\":2,\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		String three = "{\"order\":3,\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		assertThat(invalid("[" + lessonEntry("레슨 A", one) + "," + lessonEntry("레슨 B", one) + "]")).hasMessageContaining("순서");
+		assertThat(invalid("[" + lessonEntry("레슨 A", one) + "," + lessonEntry("레슨 B", three) + "]")).hasMessageContaining("순서");
+		assertThat(invalid("[" + lessonEntry("레슨 A", two) + "]")).hasMessageContaining("순서");
 	}
 }
