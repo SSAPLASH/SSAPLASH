@@ -10,6 +10,7 @@ from pathlib import Path
 import requests
 
 from ssaplash_ai.chart.config import ENV_WORK_DIR, SeparationConfig, TranscriptionConfig
+from ssaplash_ai.chart.music_check import MusicCheckModule
 from ssaplash_ai.chart.separation import SeparationModule
 from ssaplash_ai.chart.transcription import TranscriptionModule
 from ssaplash_ai.worker.api import WorkerApi
@@ -78,8 +79,11 @@ class Rig:
         backend: FakeBackend | None = None,
         keep_files: bool = False,
         send_reason: bool = False,
+        music_check: MusicCheckModule | None = None,
     ) -> None:
         self.tmp_path = tmp_path
+        # 분리 전 음악 여부 검사 모듈(이미 올린 것). 없으면 검사 없이 돎
+        self.music_check = music_check
         self.backend = backend if backend is not None else FakeBackend(out_dir=tmp_path / "be_out")
         self.server = FakeBackendServer(self.backend)
         self.sep_cfg, self.tr_cfg = write_mock_configs(tmp_path)
@@ -105,7 +109,12 @@ class Rig:
         self.separation.load()
         self.transcription.load()
         self.runner = JobRunner(
-            self.settings, self.api, self.separation, self.transcription, session=self.session
+            self.settings,
+            self.api,
+            self.separation,
+            self.transcription,
+            session=self.session,
+            music_check=self.music_check,
         )
         return self
 

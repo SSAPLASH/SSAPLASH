@@ -2,6 +2,7 @@
 
 비밀 값(BE 주소·workerId·토큰)은 환경 변수로만 받음. 토큰은 repr·오류 메시지에 넣지 않음.
 모델 설정 yaml 경로는 명령줄 인자로 받고, 기본값은 `configs/chart/*.yaml`(chart.config).
+음악 여부 검사 설정 경로(music_check_config)가 None이면 분리 전 검사를 하지 않음. 명령줄은 기본 경로를 넘김.
 """
 
 from __future__ import annotations
@@ -58,6 +59,8 @@ class WorkerSettings:
     send_reason: bool = False
     separation_config: Path = DEFAULT_SEPARATION_CONFIG
     transcription_config: Path = DEFAULT_TRANSCRIPTION_CONFIG
+    # 분리 전 음악 여부 검사 설정 yaml. None이면 검사 안 함
+    music_check_config: Path | None = None
     # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기 (설계 3-2·3-6절)
     connect_timeout_sec: float = 5.0
     read_timeout_sec: float = 30.0
@@ -94,6 +97,7 @@ class WorkerSettings:
         *,
         separation_config: str | Path | None = None,
         transcription_config: str | Path | None = None,
+        music_check_config: str | Path | None = None,
     ) -> WorkerSettings:
         """환경 변수에서 설정 읽기. 빠진 값·잘못된 값은 ValueError (토큰 값은 메시지에 안 넣음)."""
         source: Mapping[str, str] = os.environ if env is None else env
@@ -128,6 +132,7 @@ class WorkerSettings:
             ),
             separation_config=Path(separation_config or DEFAULT_SEPARATION_CONFIG),
             transcription_config=Path(transcription_config or DEFAULT_TRANSCRIPTION_CONFIG),
+            music_check_config=Path(music_check_config) if music_check_config else None,
         )
 
 
