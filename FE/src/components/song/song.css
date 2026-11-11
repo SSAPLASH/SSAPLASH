@@ -218,3 +218,43 @@ button.song-level {
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* ---- 제목 흐름 (MarqueeTitle, 설계 CHART-003 라이브러리 재생바): 칸보다 긴 제목만 흐른다 ---- */
+.marquee {
+  text-overflow: clip;
+}
+.marquee-track {
+  --marquee-dur: 6s;
+  display: inline-flex;
+  width: max-content;
+  animation: marquee-flow var(--marquee-dur) linear infinite;
+}
+/* 묶음 = 제목 + 뒤 간격. 두 묶음이 같은 너비라 −50%에서 끊김 없이 이어진다 */
+.marquee-group {
+  display: inline-flex;
+  flex: none;
+  padding-inline-end: 2em;
+}
+.marquee-item {
+  white-space: nowrap;
+}
+@keyframes marquee-flow {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* 움직임 줄이기: 흐르지 않고 제목 하나만 말줄임으로 둔다 */
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    text-overflow: ellipsis;
+  }
+  .marquee-track,
+  .marquee-group {
+    display: inline;
+    padding: 0;
+    animation: none;
+  }
+  .marquee-group[aria-hidden] {
+    display: none;
+  }
+}

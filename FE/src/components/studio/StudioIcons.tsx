@@ -1,4 +1,4 @@
-// 라이브러리 화면 전용 아이콘 (Figma Icons / 더보기·닫기·업로드·플러스·재생). 현재 글자색을 따르는 선 아이콘이라 크기만 정한다.
+// 라이브러리 화면 전용 아이콘 (Figma Icons / 더보기·닫기·업로드·플러스·재생·일시정지). 현재 글자색을 따르는 선 아이콘이라 크기만 정한다.
 interface Props {
   size?: number;
 }
@@ -52,6 +52,15 @@ export function PlayIcon({ size = 24 }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base} fill="currentColor" stroke="none">
       <path d="M8 5.5v13l10.5-6.5z" />
+    </svg>
+  );
+}
+
+/** 일시정지 (Figma Icons / Dock Pause 148:1846 — GlassDock의 일시정지와 같은 선 두 줄) */
+export function PauseIcon({ size = 20 }: Props) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M9 6v12M15 6v12" />
     </svg>
   );
 }
