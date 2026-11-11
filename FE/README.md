@@ -100,7 +100,7 @@ src/
 │   ├─ free/             자유 연습·반주
 │   ├─ studio/           라이브러리 — 곡 올리기·채보 생성·악보 보관·악보 뷰어 (components/ + components/sheet/, store/, api/, domain/)
 │   ├─ result/           결과·상세 리포트·곡 추천 (components/ + components/report/)
-│   ├─ history/          연주 기록
+│   ├─ history/          연주 기록 — 플레이 기록 탭·녹음 목록 탭
 │   ├─ lesson/           입문 코스 레슨 화면
 │   ├─ settings/         설정
 │   ├─ landing/          랜딩·로그인·가입 동의 (components/ + components/auth/)
@@ -116,7 +116,7 @@ src/
 │   ├─ fx/               타격 이펙트·킷 스킨 고르기
 │   ├─ stick/            스틱 연결 표시
 │   ├─ calibration/      재정렬·박자 맞추기 창(세팅·설정·연주가 같이 씀)
-│   ├─ recording/        녹음 버튼·저장 창·녹음 목록(셸·연주 기록이 같이 씀)
+│   ├─ recording/        녹음 버튼·저장 창·저장 토스트(셸이 얹는다). 녹음 목록은 features/history
 │   ├─ lesson/           입문 코스 목록·초대·결과 띠(곡 선택·결과·셸이 같이 씀)
 │   └─ sheetmusic/       악보 띠 그리기(연주·결과가 같이 씀)
 ├─ store/                공유 상태(zustand) — settings · live · auth · shell · preset · song …
@@ -147,7 +147,7 @@ public/
 | `features/free` | `/free` | MODE-002 |
 | `features/studio` | `/studio` · `/studio/sheets/:id` | CHART |
 | `features/result` | `/result/:playId` · `/result/:playId/report` | COACH-002 · COACH-004 |
-| `features/history` | `/history` | COACH(기록 조회) · REC(녹음 탭은 `components/recording`) |
+| `features/history` | `/history` | COACH(기록 조회) · REC(녹음 목록) |
 | `features/lesson` | `/sheet/lesson/:songId` | 입문 코스(331) |
 | `features/settings` | `/settings` | ACCT |
 | `features/landing` | `/` · `/login` · `/signup` · `/welcome` · `/auth/callback` | ACCT · UX-353 |
@@ -159,7 +159,7 @@ public/
 
 - **쓰는 기능이 하나면 그 기능 폴더, 둘 이상이면 공유 층.** 미리 공유 자리에 두지 않는다. 두 번째 기능이 쓰게 되는 순간 공유 층으로 옮기고, 옮기는 커밋은 따로 둔다.
 - **기능 폴더 안은 `src`의 축소판이다.** 화면 파일은 기능 폴더 바로 아래, 그 밖은 `components/`·`store/`·`api/`·`domain/`(필요한 것만). 소스가 15개 이하인 기능(`admin`·`free`·`history`·`lesson`·`settings`·`dev`)은 하위 폴더 없이 평평하게 둔다.
-- **새 기능 폴더**는 자기 화면(라우트)이 있을 때 만든다. 화면 없이 여러 기능이 쓰는 묶음은 `components/이름/` 공유 폴더로 둔다(`recording`·`lesson`처럼).
+- **새 기능 폴더**는 자기 화면(라우트)이 있을 때 만든다. 화면 없이 여러 기능이 쓰는 묶음은 `components/이름/` 공유 폴더로 둔다(`recording`·`lesson`처럼). 공유 부품의 CSS는 부품 옆 파일로 둔다(`components/drum/HitReadout.css`·`components/song/SeekBar.css`) — 기능 CSS 파일에 넣지 않는다.
 - **새 화면**은 `features/기능/XxxPage.tsx`로 만들고 `app/routeModules` 표와 `app/App.tsx`에 연결한다.
 - 폴더별 `index.ts`(배럴)는 두지 않는다. 테스트와 CSS는 소스 옆에 둔다(CSS 클래스 접두사는 원래 폴더 이름을 유지한다, 예 `studio-`·`play-`).
 - `common`·`types`·`utils` 폴더는 두지 않는다. 기능 폴더 밖이 곧 공통이고, 타입은 쓰는 파일 옆에 둔다.
@@ -178,7 +178,7 @@ public/
 | 도메인 | `domain` | 없음 |
 
 - **구조 테스트가 규칙을 검사한다**(`src/test/architecture.test.ts`, `npm test`에 포함). 기능끼리의 import, 공유 층에서 기능·app으로 가는 import, `components/ui`에서 store·domain·api로 가는 import, `pages/`나 `components/` 바로 아래 파일이 생기면 실패한다. 개발 전용 `features/dev`만 다른 기능을 import할 수 있다.
-- **남은 예외 19건**은 테스트의 `ALLOWED` 목록에 있다. 공유 부품이 `app/`의 단일 인스턴스(`recordingStore`·`sensorRegistry`·`features`·`calibrationSession` 등)를 읽는 16건과, 공유로 내린 부품의 스타일이 아직 기능 CSS 파일에 있는 3건(`HitReadout`→`play.css`, `SeekBar`→`free.css`, `RecordingList`→`history.css`)이다. 새 예외는 이유와 함께 추가하고, 풀리면 목록에서 지운다(남겨 두면 테스트가 실패한다).
+- **남은 예외 15건**은 테스트의 `ALLOWED` 목록에 있다. 모두 공유 부품이 `app/`의 단일 인스턴스(`recordingStore`·`sensorRegistry`·`features`·`calibrationSession` 등)를 읽는 곳이다. 새 예외는 이유와 함께 추가하고, 풀리면 목록에서 지운다(남겨 두면 테스트가 실패한다).
 - 화면 여러 개가 같이 쓰는 조립은 `app/`이 한다. `AppShell`은 녹음 저장 창·입문 코스 초대처럼 기능·공유 부품을 한데 얹으므로 `app/`에 있다.
 - `monitor`는 판정 경로와 분리한다. `features/monitor/core`는 input·domain만 읽고, 다른 기능은 monitor를 읽지 않는다.
 - store 내부: `presetStore` → `settingsStore` 단방향은 허용한다(같은 줄끼리 import 금지의 예외). `localPresetSource`도 `settingsStore`를 읽는다.
