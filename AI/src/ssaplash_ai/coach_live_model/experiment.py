@@ -73,22 +73,19 @@ def validate_config(x: Any) -> dict[str, Any]:
         raise ConfigError("rolloutPercent는 0~100이어야 합니다")
     if mode != "off" and not gate_arms:
         raise ConfigError("gate.mode가 off가 아니면 gate.arms가 있어야 합니다")
-    out: dict[str, Any] = {
+    # llm을 빼면 FE가 꺼짐으로 읽어 연주 중 LLM 실험군을 배정하지 않는다. 등록본에 항상 남긴다
+    return {
         "gate": {"mode": mode, "arms": gate_arms},
         "cause": {"arms": cause_arms},
         "rolloutPercent": rollout,
+        "llm": _llm(x.get("llm")),
     }
-    llm = _llm(x.get("llm"))
-    # 없으면 FE가 off로 본다. 있으면 그대로 게시해야 FE가 연주 중 LLM 실험군을 배정한다
-    if llm is not None:
-        out["llm"] = llm
-    return out
 
 
-def _llm(x: Any) -> dict[str, Any] | None:
-    """연주 중 LLM 구간 코칭 설정(FE `parseLlm`과 같은 규칙). 없으면 None, 틀리면 ConfigError."""
+def _llm(x: Any) -> dict[str, Any]:
+    """연주 중 LLM 구간 코칭 설정(FE `parseLlm`과 같은 규칙). 없으면 꺼짐, 틀리면 ConfigError."""
     if x is None:
-        return None
+        return {"mode": "off", "rolloutPercent": 0}
     if not isinstance(x, dict):
         raise ConfigError("llm은 객체여야 합니다")
     mode = x.get("mode")
@@ -177,10 +174,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "check":
             config = load_config(args.file)
-            llm = config.get("llm")
-            llm_text = f"{llm['mode']} {llm['rolloutPercent']}%" if llm else "없음(off)"
+            llm = config["llm"]
             print(
-                f"형식 맞음: mode={config['gate']['mode']} rollout={config['rolloutPercent']} llm={llm_text}"
+                f"형식 맞음: mode={config['gate']['mode']} rollout={config['rolloutPercent']} "
+                f"llm={llm['mode']} {llm['rolloutPercent']}%"
             )
             return 0
         version = register_config(args.file, args.tracking_uri, not args.skip_model_check)
