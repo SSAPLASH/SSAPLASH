@@ -37,6 +37,7 @@ class WorkerApiTest {
     @Autowired MockMvc mvc;
     @Autowired JsonMapper json;
     @Autowired WorkerPayload payload;
+    @Autowired com.ssafy.airdrum.auth.AccessTokenService tokens;
     @Autowired com.ssafy.airdrum.chart.ChartQueryService charts;
     @MockitoSpyBean WorkerQueue queue;
     @Autowired WorkerResults results;
@@ -210,7 +211,8 @@ class WorkerApiTest {
     @Test void retryAfterFailureReachesDoneAndRejectsStaleCallback() throws Exception {
         UUID old=prepareTranscription();
         var stale=envelope(old,UUID.randomUUID(),transcription());
-        raw(path("/failure"),T1,Map.of("attemptId",old,"eventSeq",1,"stage","TRANSCRIBING","code","MODEL_FAILED","retryable",true,"summary","OOM"),200);
+        raw(path("/failure"),T1,Map.of("attemptId",old,"eventSeq",1,"stage","TRANSCRIBING","code","MODEL_FAILED","retryable",true,"summary","OOM","reason","GPU_OUT_OF_MEMORY"),200);
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
         assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("QUEUED");
         db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
         var next=claim("worker2",T2,UUID.randomUUID(),200);
@@ -220,6 +222,76 @@ class WorkerApiTest {
         String done=raw(path("/results/transcription"),T2,envelope(current,UUID.randomUUID(),transcription()),200);
         assertThat(json.readTree(done).path("jobStatus").asString()).isEqualTo("DONE");
         assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?",String.class,song)).isEqualTo("READY");
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
+    }
+    @ParameterizedTest
+    @ValueSource(strings={"SOURCE_INVALID", "NOT_TRANSCRIBABLE", "GPU_OUT_OF_MEMORY", "INTERNAL_ERROR"})
+    void finalWorkerReasonIsVisibleOnlyToOwnerAcrossQueries(String reason) throws Exception {
+        com.ssafy.airdrum.support.SignupConsentFixtures.complete(db,user);
+        long other=db.queryForObject("INSERT INTO users(nickname) VALUES ('other') RETURNING id",Long.class);
+        com.ssafy.airdrum.support.SignupConsentFixtures.complete(db,other);
+        try {
+            String ownerToken=tokens.issue(new com.ssafy.airdrum.user.AuthUser(user,com.ssafy.airdrum.user.UserRole.USER),Instant.now()).token();
+            String otherToken=tokens.issue(new com.ssafy.airdrum.user.AuthUser(other,com.ssafy.airdrum.user.UserRole.USER),Instant.now()).token();
+            UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+            String code=reason.equals("SOURCE_INVALID") || reason.equals("NOT_TRANSCRIBABLE") ? "INPUT_INVALID" : "MODEL_FAILED";
+            raw(path("/failure"),T1,Map.of("attemptId",id,"eventSeq",1,"stage","SEPARATING","code",code,"retryable",false,"summary","secret/path","reason",reason),200);
+            assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo(reason);
+            for(String url:List.of("/api/v1/jobs/"+job,"/api/v1/songs/"+song)) {
+                String response=mvc.perform(get(url).header("Authorization","Bearer "+ownerToken)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                JsonNode error=json.readTree(response).path(url.contains("/jobs/") ? "error" : "chartFailure");
+                assertThat(error.path("reason").asString()).isEqualTo(reason);
+                assertThat(error.path("code").asString()).isEqualTo(code);
+                assertThat(error.path("message").asString()).isEqualTo(code.equals("INPUT_INVALID") ? "입력 파일을 처리할 수 없습니다." : "채보 생성에 실패했습니다.");
+                assertThat(response).doesNotContain("secret/path");
+                mvc.perform(get(url).header("Authorization","Bearer "+otherToken)).andExpect(status().isNotFound());
+            }
+            for(String url:List.of("/api/v1/jobs", "/api/v1/songs?source=MINE")) {
+                String response=mvc.perform(get(url).header("Authorization","Bearer "+ownerToken)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                JsonNode error=json.readTree(response).path("items").get(0).path(url.contains("/jobs") ? "error" : "chartFailure");
+                assertThat(error.path("reason").asString()).isEqualTo(reason);
+                assertThat(response).doesNotContain("secret/path");
+            }
+        } finally { db.update("DELETE FROM users WHERE id=?",other); }
+    }
+    @Test void invalidAndStaleReasonsCannotChangeStateAndOnlyLastFailurePersists() throws Exception {
+        UUID first=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        var failure=new HashMap<String,Object>(Map.of("attemptId",first,"eventSeq",1,"stage","SEPARATING","code","MODEL_FAILED","retryable",true,"summary","secret/path","reason","UNKNOWN"));
+        raw(path("/failure"),T1,failure,400);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+        assertThat(db.queryForObject("SELECT heartbeat_seq FROM chart_job_attempts WHERE id=?",Long.class,first)).isZero();
+        failure.put("reason","GPU_OUT_OF_MEMORY"); raw(path("/failure"),T1,failure,200);
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
+        db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
+        UUID second=attempt(claim("worker2",T2,UUID.randomUUID(),200));
+        failure.put("eventSeq",2); raw(path("/failure"),T1,failure,409);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+        failure.put("attemptId",second); failure.put("eventSeq",1); failure.put("reason","INTERNAL_ERROR");
+        raw(path("/failure"),T2,failure,200);
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
+        db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?",job);
+        UUID third=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        failure.put("attemptId",third); failure.put("reason","INTERNAL_ERROR");
+        raw(path("/failure"),T1,failure,200);
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("INTERNAL_ERROR");
+    }
+    @Test void expiredAttemptCannotWriteFailureReason() throws Exception {
+        UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        db.update("UPDATE chart_job_attempts SET lease_expires_at=created_at+interval '1 microsecond' WHERE id=?",id);
+        raw(path("/failure"),T1,Map.of("attemptId",id,"eventSeq",1,"stage","SEPARATING","code","INPUT_INVALID","retryable",false,"summary","x","reason","SOURCE_INVALID"),409);
+        assertThat(db.queryForObject("SELECT status FROM chart_jobs WHERE id=?",String.class,job)).isEqualTo("SEPARATING");
+        assertThat(db.queryForObject("SELECT heartbeat_seq FROM chart_job_attempts WHERE id=?",Long.class,id)).isZero();
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
+    }
+    @ParameterizedTest
+    @ValueSource(booleans={true,false})
+    void omittedAndNullReasonRemainCompatible(boolean explicitNull) throws Exception {
+        UUID id=attempt(claim("worker1",T1,UUID.randomUUID(),200));
+        var failure=new HashMap<String,Object>(Map.of("attemptId",id,"eventSeq",1,"stage","SEPARATING","code","INPUT_INVALID","retryable",false,"summary","x"));
+        if (explicitNull) failure.put("reason",null);
+        raw(path("/failure"),T1,failure,200);
+        assertThat(db.queryForObject("SELECT error_reason FROM chart_jobs WHERE id=?",String.class,job)).isNull();
+        assertThat(com.ssafy.airdrum.chart.job.JobErrors.safe("INPUT_INVALID",null).reason()).isNull();
     }
     @Test void minimumPositiveDurationIsClaimed() throws Exception {
         db.update("UPDATE songs SET duration_ms=1 WHERE id=?",song);
