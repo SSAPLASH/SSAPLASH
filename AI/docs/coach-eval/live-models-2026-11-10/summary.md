@@ -78,13 +78,16 @@
 | --- | --- | --- |
 | `coach-gate-mlp16` | 1 | 거름 모델 |
 | `coach-cause-logistic` | 1 | 놓침 원인 모델 |
-| `coach-live-config` | 1 | 거름 그림자 + 원인 모델(게시하지 않음, 버전 2가 대신함) |
-| `coach-live-config` | **2 (현재)** | 거름 그림자 + 원인 모델 + 연주 중 LLM 그림자(`llm: {mode: shadow, rolloutPercent: 100}`) |
+| `coach-live-config` | 1 | 거름 그림자 + 원인 모델 |
+| `coach-live-config` | 2 | 연주 중 LLM 그림자를 넣어 등록했으나 **`llm`이 빠진 채 저장됨**(버전 1과 같은 내용) |
+| `coach-live-config` | **3 (현재)** | 거름 그림자 + 원인 모델 + 연주 중 LLM 그림자(`llm: {mode: shadow, rolloutPercent: 100}`) |
 
-- 설정 파일은 `configs/coach/coach_live_config.json`(버전 2와 같은 내용)이다.
-- 게시 뒤 `/models/manifest.json`의 현재 버전: 거름 1, 원인 1, 설정 2.
+- 설정 파일은 `configs/coach/coach_live_config.json`(버전 3과 같은 내용)이다.
+- 게시 뒤 `/models/manifest.json`의 현재 버전: 거름 1, 원인 1, 설정 3.
+- **버전 2에 `llm`이 빠진 이유:** 등록 도구 `experiment.py`의 `validate_config`가 `gate`·`cause`·`rolloutPercent`만 골라 저장해 `llm`을 버렸다. FE는 `llm`이 없으면 꺼짐으로 보므로 연주 기록 `LIVE_ARM`에 `llmArm`이 나오지 않았고, 게시된 `config.json`을 받아 보고 알았다. 등록 도구가 `llm`을 검사하고 남기도록 고친 뒤(`fix/COACH-live-config-llm`) 버전 3으로 다시 등록했다. 게시 뒤에는 `https://<도메인>/models/coach-live-config/<버전>/config.json`을 받아 실제 내용을 확인한다.
+- 실제 연주 확인(2026-11-11, 설정 버전 2일 때): `LIVE_ARM`에 `arm`·`causeArm`이 남았다. 놓침 원인 지적 33건 중 규칙이 원인 후보를 낸 5건은 모델이 골랐고(`"by":"MODEL"`, `WRONG_PAD`), 후보가 없는 28건은 `UNKNOWN`이었다. 실제 연주에서는 후보 없는 놓침이 많아, 원인 규칙의 후보 생성이 다음 개선 대상이다.
 - 연주 중 LLM은 BE `LIVE_COACH_LLM_ENABLED=true`, GPU 서버 `live-run` 워커와 함께 켰다. 리포트 LLM 총평도 같은 날 채보 워커에 `SSAPLASH_NARRATIVE_ENABLED=true`를 넣어 켰다. GPU 서버 실행 방법과 이날 겪은 문제는 `docs/live-coach-llm.md` "GPU 서버 모델 서버"에 있다.
-- 실제 연주에서의 동작(`LIVE_ARM`, `LIVE_GATE_*`, `LIVE_CAUSE`, `LIVE_LLM`)은 이 기록 시점에 아직 확인하지 않았다.
+- 설정 버전 3에서의 연주 중 LLM 동작(`llmArm`, `LIVE_LLM`)은 이 기록 시점에 아직 확인하지 않았다.
 
 ## 재현
 
