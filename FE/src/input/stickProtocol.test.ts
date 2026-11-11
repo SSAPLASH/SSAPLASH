@@ -26,7 +26,7 @@ import {
   footOf,
   handOf,
 } from './stickProtocol';
-import { buildHit, buildPedal, buildPose, buildStatus } from '@/monitor/mockStick';
+import { buildHit, buildPedal, buildPose, buildStatus } from '@/features/monitor/core/mockStick';
 
 /** HIT 20바이트 만들기 */
 function hitBytes(o: { flags?: number; pad?: number } = {}): Uint8Array {

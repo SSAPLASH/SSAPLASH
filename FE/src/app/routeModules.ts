@@ -13,14 +13,14 @@ const routeImports = {
   play: () => import('@/pages/PlayPage').then((m) => ({ default: m.PlayPage })),
   sheet: () => import('@/pages/SheetPage').then((m) => ({ default: m.SheetPage })),
   /** 입문 코스 알아보기 레슨(Jira 331) */
-  lessonRead: () => import('@/pages/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
+  lessonRead: () => import('@/features/lesson/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
   studio: () => import('@/pages/StudioPage').then((m) => ({ default: m.StudioPage })),
-  settings: () => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-  history: () => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })),
+  settings: () => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+  history: () => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })),
   result: () => import('@/pages/ResultPage').then((m) => ({ default: m.ResultPage })),
   report: () => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })),
-  adminSongs: () => import('@/pages/AdminSongsPage').then((m) => ({ default: m.AdminSongsPage })),
-  landing: () => import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
+  adminSongs: () => import('@/features/admin/AdminSongsPage').then((m) => ({ default: m.AdminSongsPage })),
+  landing: () => import('@/features/landing/LandingPage').then((m) => ({ default: m.LandingPage })),
   /** 악보 뷰어. pdf.js가 이 화면 청크에만 들어간다 */
   sheetViewer: () => import('@/pages/SheetViewerPage').then((m) => ({ default: m.SheetViewerPage })),
 } satisfies Record<string, () => Promise<RouteModule>>;

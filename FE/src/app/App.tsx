@@ -7,7 +7,7 @@ import { RequireAuth } from '@/components/shell/RequireAuth';
 import { FreePlayPage } from '@/pages/FreePlayPage';
 import { NotFoundPage } from '@/components/shell/NotFoundPage';
 import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
-import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
+import { AuthCallbackPage } from '@/features/landing/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
 import { loadRoute } from './routeModules';
 
@@ -32,12 +32,12 @@ const SheetViewerPage = lazy(() => loadRoute('sheetViewer'));
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 // 삼항으로 감싸야 미설정 빌드에서 dynamic import가 통째로 제거돼 청크가 만들어지지 않는다
 const StickMonitorPage = MONITOR_ENABLED
-  ? lazy(() => import('@/pages/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
+  ? lazy(() => import('@/features/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
   : null;
 
 /** FX 랩(개발 전용, 설계 MODE-002-hit-fx-theme D7). 개발 서버에서만 라우트·청크가 생긴다 */
 const FxLabPage = import.meta.env.DEV
-  ? lazy(() => import('@/pages/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
+  ? lazy(() => import('@/features/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
   : null;
 
 export default function App() {
