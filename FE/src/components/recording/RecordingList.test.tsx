@@ -124,7 +124,7 @@ describe('RecordingBoard', () => {
   it('조건(모드·검색어) 있는 0건은 조건 문구', () => {
     for (const props of [{ mode: 'FREE' as const }, { q: '재즈' }]) {
       const html = render(props);
-      expect(html).toContain('history-filter-empty');
+      expect(html).toContain('ui-empty-sm');
       expect(html).toContain('조건에 맞는 녹음이 없어요');
       expect(html).not.toContain('아직 녹음이 없어요');
     }
@@ -133,6 +133,7 @@ describe('RecordingBoard', () => {
   it('첫 조회 로딩과 오류 문구·다시 시도', () => {
     expect(render({ loading: true })).toContain('불러오는 중…');
     const html = render({ error: '목록을 불러오지 못했어요' });
+    expect(html).toContain('녹음 목록 로딩 실패');
     expect(html).toContain('목록을 불러오지 못했어요');
     expect(html).toContain('>다시 시도<');
     expect(html).not.toContain('<table');

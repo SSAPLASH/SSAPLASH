@@ -5,6 +5,7 @@ import { AppShell } from '@/components/AppShell';
 import { RequireAdmin } from '@/components/RequireAdmin';
 import { RequireAuth } from '@/components/RequireAuth';
 import { FreePlayPage } from '@/pages/FreePlayPage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
@@ -96,6 +97,8 @@ export default function App() {
           {StickMonitorPage && (
             <Route path="monitor/stick" element={<StickMonitorPage />} />
           )}
+          {/* 나머지 주소는 404 화면(설계 TECH-364). 로그인하지 않았으면 다른 보호 화면처럼 로그인으로 간다 */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
     </Routes>

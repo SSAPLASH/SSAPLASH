@@ -427,30 +427,9 @@
   width: 100%;
   height: 32px;
 }
-.studio-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 80px var(--space-l);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
-  text-align: center;
-}
-.studio-error-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.studio-error-desc {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.45;
-}
-.studio-error-btn {
-  width: 160px;
+/* 목록 실패 안내(ui/ErrorState) — 빈 목록 자리를 채우게 위아래 여백만 넓힌다 */
+.ui-error.studio-list-error {
+  padding-block: 80px;
 }
 
 /* ---- 음원 양식 아래 정책 안내 ---- */
@@ -777,11 +756,7 @@
   white-space: nowrap;
 }
 .studio-sheet-loadfail {
-  display: flex;
-  align-items: center;
-  gap: var(--space-m);
   margin: 0 0 var(--space-m);
-  color: var(--text-2);
   font-size: 14px;
 }
 
@@ -830,31 +805,10 @@
   line-height: 14px;
   white-space: nowrap;
 }
-.song-playbar-text.is-error {
-  color: var(--miss);
-}
-.song-playbar-text.is-error > span {
-  min-width: 0;
+/* 오류 줄(ui/InlineError plain) — 문구가 길면 말줄임 */
+.song-playbar-text .ui-inline-error-text {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.song-playbar-retry {
-  flex: none;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--brand-text);
-  font-size: 11px;
-  line-height: 14px;
-  cursor: pointer;
-}
-.song-playbar-retry:hover {
-  text-decoration: underline;
-}
-.song-playbar-retry:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
 }
 /* 목록 줄: 제목 칸 오른쪽에 자리 잡는다. 제목 칸 1 : 재생바 2 */
 .studio-row .song-playbar {

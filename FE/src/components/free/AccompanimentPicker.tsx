@@ -15,6 +15,7 @@ import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/freeA
 import { artistLabel, type SongSummary } from '@/domain/songCatalog';
 import { useAccompanimentSongs, type AccompanimentSongsDeps, type SectionKey, type SongSection } from './useAccompanimentSongs';
 import './free.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 interface Props {
   /** 지금 반주로 고른 곡 id. 다시 누르면 처음부터 다시 틀지 않고 창만 닫는다 */
@@ -102,12 +103,9 @@ function Section({ name, section, query, current, currentPlaying, sheet, onChoos
       {section.status === 'loading' && <p className="free-picker-note">불러오는 중…</p>}
       {empty && <p className="free-picker-note">{empty}</p>}
       {section.status === 'error' && (
-        <p className="free-picker-note is-error" role="alert">
-          목록을 불러오지 못했어요{' '}
-          <Button variant="text" size="sm" onClick={section.retry}>
-            다시 시도
-          </Button>
-        </p>
+        <InlineError plain className="free-picker-note" onRetry={section.retry}>
+          목록을 불러오지 못했어요
+        </InlineError>
       )}
       {section.status === 'ready' && section.hasMore && (
         <Button variant="secondary" size="sm" className="free-picker-more" onClick={section.loadMore}>

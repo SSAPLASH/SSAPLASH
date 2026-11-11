@@ -446,3 +446,7 @@
   gap: var(--space-s);
   margin-top: 8px;
 }
+/* 완료 창의 저장 실패 줄(ui/InlineError) — 가운데 정렬된 창 안에서 가운데에 둔다 */
+.lesson-done-dialog .ui-inline-error {
+  align-self: center;
+}

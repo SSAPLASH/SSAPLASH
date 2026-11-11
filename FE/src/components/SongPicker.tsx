@@ -35,7 +35,6 @@ import { useApiQuery } from '@/app/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
-import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -46,6 +45,7 @@ import { SongDetailPane } from '@/components/play/SongDetailPane';
 import { LessonCourse } from '@/components/lesson/LessonCourse';
 import { PickerGuide } from '@/components/guide/PickerGuide';
 import './play/song-picker.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 interface Props {
   /** [플레이]·표 더블클릭·Enter. 고른 단계(채보)로 시작 확인 창을 연다 */
@@ -422,12 +422,9 @@ export function SongPicker({ onStart, mode, starting }: Props) {
             )}
 
             {!isAi && status === 'error' && (
-              <div className="notice error col" role="alert">
-                <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
-                <Button variant="secondary" size="sm" onClick={list.refetch}>
-                  다시 시도
-                </Button>
-              </div>
+              <InlineError size="lg" onRetry={list.refetch}>
+                {error ?? '곡 목록을 불러오지 못했습니다.'}
+              </InlineError>
             )}
 
             {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}

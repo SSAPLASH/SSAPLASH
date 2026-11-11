@@ -29,6 +29,7 @@ import { usePresets } from '@/store/presetStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
 import '@/components/settings/settings.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 const PROVIDER_LABEL: Record<SocialProvider, string> = {
   GOOGLE: 'Google',
@@ -204,7 +205,7 @@ export function SettingsPage() {
               </SettingRow>}
               {consentStatus === 'ready' && <p className="settings-note">{consentStatusText(consent)}</p>}
               {consentStale && recommendationConsentEnabled() && <Button variant="text" disabled={consentLocked} onClick={() => setConsentConfirmOpen(true)}>새 동의 내용 확인</Button>}
-              {consentStatus === 'error' && <div role="alert"><p className="settings-note">동의 상태를 불러오지 못했어요</p><Button variant="text" onClick={() => void useRecommendationConsent.getState().load()}>다시 시도</Button></div>}
+              {consentStatus === 'error' && <InlineError plain onRetry={() => void useRecommendationConsent.getState().load()}>동의 상태를 불러오지 못했어요</InlineError>}
               {consentConfirmOpen && recommendationConsentEnabled() && (
                 <Dialog labelledBy="settings-recommend-consent-title" onClose={() => setConsentConfirmOpen(false)}>
                   <h2 id="settings-recommend-consent-title">맞춤 곡 추천 학습 활용 동의</h2>
