@@ -192,6 +192,26 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
     expect(html).toContain('「내 배치」 사용 중');
   });
 
+  it('[프리셋 관리]는 칩 줄 오른쪽에, [전체 보정]은 드럼 그림 판 오른쪽 위(setup-stage-action)에 있다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, { SNARE: good }], calibratedAt: new Date(2026, 10, 6, 14, 2).getTime(), activePresetId: 'p1' });
+    putPresets([preset('p1', '내 배치')]);
+    putLive({ connected: [true, true] });
+    const html = await renderSetup();
+    const chips = html.slice(html.indexOf('class="setup-chips-right"'), html.indexOf('setup-stage-row'));
+    expect(chips).toContain('프리셋 관리</button>');
+    expect(chips).not.toContain('전체 보정');
+    // 완료 pill 다음에 [프리셋 관리]
+    expect(chips.indexOf('완료 ')).toBeLessThan(chips.indexOf('프리셋 관리'));
+    expect(html).toMatch(/class="setup-stage-action"><button[^>]*>전체 보정<\/button>/);
+  });
+
+  it('키보드만이어도 [프리셋 관리]는 있다', async () => {
+    putSettings({ sensorKind: 'none' });
+    const html = await renderSetup();
+    expect(html).toContain('프리셋 관리</button>');
+    expect(html).not.toContain('setup-stage-action');
+  });
+
   it('키보드만이면 칩 줄 pill이 「키보드만」이고 보정 버튼이 없다', async () => {
     putSettings({ sensorKind: 'none' });
     const html = await renderSetup();
