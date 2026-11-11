@@ -7,6 +7,7 @@ const ACOUSTIC_HEAD: Record<PadShape, { cy: number; rx: number; ry: number }> = 
   drum: { cy: 72, rx: 76, ry: 44 },
   cymbal: { cy: 70, rx: 79, ry: 39 },
   kick: { cy: 85, rx: 76, ry: 76 },
+  pedal: { cy: 80, rx: 36, ry: 56 },
 };
 
 export function fxGeoOf(p: DrumKitPad, skin: KitSkin): FxGeo {

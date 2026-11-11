@@ -1,5 +1,6 @@
 // 드럼 배치 캔버스 오른쪽 아래(또는 왼쪽 아래)에 겹쳐 띄우는 정보 카드(PLAY-004 D10). 공통 틀 + 본문 슬롯 구조다.
-// 세로형(폭 190): 맨 위 패드 이름+보조 캡션 / X·Y·반지름이 한 줄에 하나씩(라벨 왼쪽·큰 숫자 오른쪽) / 반지름 슬라이더(앵커가 있을 때만).
+// 세로형(폭 190): 맨 위 패드 이름+보조 캡션 / X·Y·Z(cm)·판정 범위(°)가 한 줄에 하나씩(라벨 왼쪽·큰 숫자 오른쪽) / 판정 범위 슬라이더(앵커가 있을 때만).
+// X·Y·Z는 몸 기준 좌표(가슴 원점, X 오른쪽·Y 앞·Z 위)이고 거리 가정이 들어간 추정치다. 판정 범위는 패드 중심 방향에서 벗어나도 그 패드로 치는 각도다.
 // 편집(평소)에는 버튼이 없다.
 // 보정 진행·경고·결과 상태는 같은 틀에 children이나 tone으로 얹는다. 표시용 값과 콜백만 받고 계산은 하지 않는다(설계 2절).
 import type { ReactNode, Ref } from 'react';
@@ -44,9 +45,11 @@ export interface KitInfoOverlayProps {
   name: string;
   /** 이름 아래 보조 캡션. 없으면 「선택 패드」 */
   caption?: string;
-  /** 표시용 값(문자열). 단위 변환은 호출자가 한다 */
+  /** 표시용 값(문자열, cm). 단위 변환은 호출자가 한다 */
   x: string;
   y: string;
+  z: string;
+  /** 판정 범위(°) 표시 문자열 */
   radius: string;
   /** 판정 반경 슬라이더. 보정된 패드(앵커 있음)만 넘기고, 없으면 슬라이더를 그리지 않는다 */
   slider?: Pick<RadiusSliderProps, 'value' | 'min' | 'max' | 'disabled' | 'onChange'> | null;
@@ -54,14 +57,15 @@ export interface KitInfoOverlayProps {
   children?: ReactNode;
 }
 
-export function KitInfoOverlay({ corner, tone, cardRef, name, caption = '선택 패드', x, y, radius, slider = null, children }: KitInfoOverlayProps) {
+export function KitInfoOverlay({ corner, tone, cardRef, name, caption = '선택 패드', x, y, z, radius, slider = null, children }: KitInfoOverlayProps) {
   return (
     <KitInfoFrame corner={corner} tone={tone} cardRef={cardRef}>
       <KitInfoHead name={name} caption={caption} />
       <dl className="setup-kitinfo-values">
-        <KitInfoValue label="X" value={x} />
-        <KitInfoValue label="Y" value={y} />
-        <KitInfoValue label="반지름" value={radius} />
+        <KitInfoValue label="X" unit="cm" value={x} />
+        <KitInfoValue label="Y" unit="cm" value={y} />
+        <KitInfoValue label="Z" unit="cm" value={z} />
+        <KitInfoValue label="판정 범위" value={radius} />
       </dl>
       {slider && <RadiusSlider {...slider} />}
       {children}
@@ -69,10 +73,13 @@ export function KitInfoOverlay({ corner, tone, cardRef, name, caption = '선택 
   );
 }
 
-function KitInfoValue({ label, value }: { label: string; value: string }) {
+function KitInfoValue({ label, unit, value }: { label: string; unit?: string; value: string }) {
   return (
     <div>
-      <dt>{label}</dt>
+      <dt>
+        {label}
+        {unit && <small> {unit}</small>}
+      </dt>
       <dd>{value}</dd>
     </div>
   );

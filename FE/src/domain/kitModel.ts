@@ -20,15 +20,18 @@ export const HAND_ORIGINS: readonly [Point3, Point3] = [
   [0.2, 0.0, 0.1],
 ];
 
-/** 스틱 패드의 타격점 */
+/**
+ * 스틱 패드의 타격점. 가정값이다(실측 전): 실제 드럼 세트처럼 좌우 1m 남짓, 앞뒤 45~82cm, 높이 −15~+40cm로 벌려 놓았다.
+ * EMB 실측값(.claude/mail/EMB/PLAY-004_드럼-배치-실측값-요청)을 받으면 이 표와 HAND_ORIGINS, kitLayout.DEFAULT_KIT_LAYOUT을 함께 바꾼다
+ */
 export const PAD_POINTS: Record<Exclude<PadId, 'KICK' | 'HIHAT_PEDAL'>, Point3> = {
-  SNARE: [0.0, 0.45, -0.1],
-  HIHAT: [-0.35, 0.45, 0.05],
-  SMALL_TOM: [-0.12, 0.65, 0.1],
-  MID_TOM: [0.12, 0.65, 0.1],
-  FLOOR_TOM: [0.4, 0.5, -0.1],
-  CRASH: [-0.3, 0.75, 0.45],
-  RIDE: [0.4, 0.75, 0.4],
+  SNARE: [-0.08, 0.45, -0.12],
+  HIHAT: [-0.5, 0.42, 0.02],
+  SMALL_TOM: [-0.18, 0.75, 0.12],
+  MID_TOM: [0.18, 0.75, 0.12],
+  FLOOR_TOM: [0.52, 0.42, -0.15],
+  CRASH: [-0.46, 0.82, 0.4],
+  RIDE: [0.58, 0.8, 0.36],
 };
 
 /** 손 출발점에서 패드를 보는 방향 → 고도(위 +)·방위(정면 0, 오른쪽 +) */

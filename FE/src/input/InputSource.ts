@@ -1,7 +1,7 @@
 // 입력 소스 공통 인터페이스.
 // 키보드·포인터 모의 IMU·BLE 스틱·WebSocket 허브가 모두 같은 StickEvent를 낸다.
 // 상위(InputManager)는 소스 종류를 모른 채 이벤트만 받는다.
-import type { DeviceRole, DongleLink, InputSourceKind, SourceState, StickEvent, StickId } from '@/domain/events';
+import type { DeviceRole, DongleLink, InputSourceKind, Pose, SourceState, StickEvent, StickId } from '@/domain/events';
 
 export type { SourceState };
 
@@ -15,6 +15,9 @@ export interface TransportStats {
   droppedBytes: number;
   reconnects: number;
 }
+
+/** 표면 정규 좌표(0~1, 왼쪽 위 원점) → 자세 */
+export type SurfaceToPose = (nx: number, ny: number) => Pose;
 
 export interface InputSource {
   readonly kind: InputSourceKind;
@@ -35,8 +38,11 @@ export interface InputSource {
   resetPose?(): void;
   /** 진동 명령 (PLAY-07). 지원 안 하면 무시 */
   haptic?(stickId: 0 | 1, strength: number, durationMs: number): void;
-  /** 자세를 읽을 입력 표면(캔버스) 연결. 화면 좌표를 쓰는 소스(포인터)만 구현한다. 없으면 무시 */
-  setSurface?(el: HTMLElement | null): void;
+  /**
+   * 자세를 읽을 입력 표면(캔버스) 연결. 화면 좌표를 쓰는 소스(포인터)만 구현한다. 없으면 무시.
+   * toPose를 주면 표면 정규 좌표(0~1) → 자세를 그 함수로 구한다(원근 보기 캔버스). 없으면 각도 범위에 선형으로 편다
+   */
+  setSurface?(el: HTMLElement | null, toPose?: SurfaceToPose): void;
   /** 명령 바이트를 그대로 스틱에 보낸다. stickId를 생략하면 연결된 전부. 센서 소스만 구현 */
   sendCommand?(bytes: Uint8Array, stickId?: StickId): void;
   /** 센서 시계 → 브라우저 시계 오프셋(ms). 동기화 전이면 null. role 2·3(발)은 동글 소스만 값을 가진다 */

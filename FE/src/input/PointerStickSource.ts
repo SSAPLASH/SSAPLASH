@@ -3,7 +3,7 @@
 // 클릭 타격은 드럼 킷 영역([data-pointer-strike]) 안에서만 친다(QA 352). 배경·다른 화면 클릭은 무시한다. 키 타격은 그대로.
 // 실제 IMU가 오면 BleStickSource가 같은 pose/hit 이벤트를 내므로 상위 코드는 바뀌지 않는다.
 import type { Pose, StickId } from '@/domain/events';
-import { BaseInputSource } from './InputSource';
+import { BaseInputSource, type SurfaceToPose } from './InputSource';
 import type { SourceDescriptor } from './SourceDescriptor';
 import type { SensorTuning } from '@/domain/tuning';
 
@@ -49,6 +49,8 @@ export class PointerStickSource extends BaseInputSource {
   private streaming = true;
   /** 자세를 읽을 기준 요소. 없으면 window */
   private surface: HTMLElement | null = null;
+  /** 표면이 준 화면 → 자세 변환(원근 보기 캔버스). 없으면 각도 범위에 선형으로 편다 */
+  private toPose: SurfaceToPose | null = null;
 
   constructor(opts: Partial<PointerStickOptions> = {}) {
     super();
@@ -56,8 +58,9 @@ export class PointerStickSource extends BaseInputSource {
   }
 
   /** 캘리브레이션·키트 캔버스가 자신을 자세 기준면으로 등록한다 */
-  setSurface(el: HTMLElement | null): void {
+  setSurface(el: HTMLElement | null, toPose?: SurfaceToPose): void {
     this.surface = el;
+    this.toPose = el && toPose ? toPose : null;
   }
 
   setOptions(opts: Partial<PointerStickOptions>): void {
@@ -75,6 +78,10 @@ export class PointerStickSource extends BaseInputSource {
       width: window.innerWidth,
       height: window.innerHeight,
     };
+    if (this.toPose) {
+      const clamp = (v: number) => Math.min(1, Math.max(0, v));
+      return this.toPose(clamp((clientX - rect.left) / rect.width), clamp((clientY - rect.top) / rect.height));
+    }
     const nx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * 2 - 1; // -1..1
     const ny = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)) * 2 - 1;
     return { yaw: nx * this.opts.yawRangeDeg, pitch: -ny * this.opts.pitchRangeDeg };

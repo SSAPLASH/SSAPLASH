@@ -19,6 +19,7 @@ import {
   type PadBadge,
   type PadVisualState,
 } from '@/domain/drumKit';
+import type { KitFrame } from '@/domain/kitFrame';
 import { Pad, PadDefs } from './Pad';
 import { RING } from './padRing';
 import './drum.css';
@@ -73,6 +74,11 @@ export interface DrumKitProps {
   warnPads?: PadId[];
   /** 선택한 패드(보정 결과 화면). 브랜드색 링을 그린다 */
   selectedPad?: PadId;
+  /**
+   * 자유 틀(드럼 세팅의 원근 보기). 주면 760×300 고정 배치 대신 틀 크기(px)에 패드를 그 자리·크기로, 목록 순서(먼 것부터)대로 그린다.
+   * 하이햇 페달도 그린다. scale·fitWidth·fitContain·placement는 무시한다(domain/kitFrame)
+   */
+  frame?: KitFrame;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -151,12 +157,13 @@ export function DrumKit({
   coachPad,
   warnPads,
   selectedPad,
+  frame,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
-  const fitting = fitWidth || fitContain;
+  const fitting = !frame && (fitWidth || fitContain);
   useEffect(() => {
     if (!fitting) return;
     const el = wrapRef.current;
@@ -169,15 +176,17 @@ export function DrumKit({
   }, [fitting, fitContain, scale]);
 
   const eff = fitting ? (fit ?? scale) : scale;
-  const { width, height } = kitSizeAt(eff);
+  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
-  const pads: readonly DrumKitPad[] = kitPadsFor(skin)
-    .filter((p) => !hidden?.includes(p.pad))
-    .map((p) => {
-      const at = placement?.[p.pad];
-      return at ? placePad(p, at.x, at.y) : p;
-    });
+  const pads: readonly (DrumKitPad & { tilt?: number })[] = frame
+    ? frame.pads.filter((p) => !hidden?.includes(p.pad)).map((p) => ({ ...p, h: p.w }))
+    : kitPadsFor(skin)
+        .filter((p) => !hidden?.includes(p.pad))
+        .map((p) => {
+          const at = placement?.[p.pad];
+          return at ? placePad(p, at.x, at.y) : p;
+        });
   const settingsTheme = useSettings((st) => st.hitFxTheme);
   const shakes = usePadShakeCounts(effects, fxSource ?? LIVE_SHAKE_SOURCE, (pad) => pads.find((p) => p.pad === pad)?.shape);
   // 킥 진동은 킷 전체(캔버스 이펙트는 SVG 밖이라 흔들리지 않는다)를 흔든다. 이펙트가 꺼진 킷은 감싸지 않는다
@@ -195,7 +204,7 @@ export function DrumKit({
       className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
       data-no-pointer-strike={onPadDown ? '' : undefined}
       data-pointer-strike={onPadDown ? undefined : ''}
-      viewBox={`0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
+      viewBox={frame ? `0 0 ${frame.w} ${frame.h}` : `0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
       width={width}
       height={height}
       role="img"
@@ -224,6 +233,7 @@ export function DrumKit({
           skin={skin}
           tag={p.tag}
           hitKey={hitSeq?.[p.pad]}
+          tilt={p.tilt}
           onClick={onPadClick ? () => onPadClick(p.pad) : undefined}
           onPointerDown={
             onPadDown
