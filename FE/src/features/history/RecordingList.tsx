@@ -23,7 +23,7 @@ import {
   songDifficulty,
 } from '@/domain/recordingView';
 import { formatPlayDate } from '@/domain/playLogView';
-import '@/features/history/history.css';
+import './history.css';
 import '@/components/ui/table.css';
 import './recording-list.css';
 import { RecordingDeleteDialog } from './RecordingDeleteDialog';
