@@ -19,4 +19,12 @@ describe('SongStatusBadge', () => {
     expect(html).toContain('WEIRD');
     expect(html).toContain('studio-badge-ok');
   });
+
+  it('label을 주면 글자만 바꾸고 색·점은 status를 따른다', () => {
+    const html = renderToStaticMarkup(<SongStatusBadge status="PROCESSING" label="반주 만드는 중" />);
+    expect(html).toContain('반주 만드는 중');
+    expect(html).not.toContain('채보 생성 중');
+    expect(html).toContain('studio-badge-active');
+    expect(html).toContain('studio-badge-dot');
+  });
 });

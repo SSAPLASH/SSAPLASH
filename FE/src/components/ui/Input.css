@@ -67,3 +67,19 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* trailing: 입력칸 안 오른쪽에 요소를 얹는다(글자가 요소 밑으로 들어가지 않게 오른쪽 여백 40) */
+.ui-input-control {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.ui-input-trailing {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  transform: translateY(-50%);
+}
+.ui-input.has-trailing .ui-input-field {
+  padding-right: 40px;
+}
