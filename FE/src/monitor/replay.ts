@@ -1,7 +1,7 @@
 // 녹화 재생(순수). 되읽은 녹화(패킷 줄·진단 줄)를 원래 t 순의 시간표로 합치고, 재생·일시정지·배속을 상태기로 다룬다.
 // 시계는 밖에서 now를 넘긴다(타이머 없음). 시계 오프셋은 녹화의 SYNC 송신·SYNC_ACK 짝에서 소스(ClockSync)와 같은 식으로 다시 구한다.
 import type { DiagEvent } from '@/engine/diagTap';
-import { CommandType, decodePacket, PacketType } from '@/input/stickProtocol';
+import { CommandType, decodePacket, handOf, PacketType } from '@/input/stickProtocol';
 import { hexToBytes, type RecordedRow } from './recorder';
 import { SyncPairer, syncKeyOf } from './syncPair';
 import { TsUnwrap } from './tsUnwrap';
@@ -176,7 +176,10 @@ export class ReplayOffsets {
     if (bytes[0] !== PacketType.SYNC_ACK) return;
     const d = decodePacket(bytes, t);
     if (d.kind !== 'syncAck') return;
-    const stick: 0 | 1 = stickId ?? ((d.role & 1) as 0 | 1);
+    // 페달(role 2·3)의 SYNC_ACK는 손 오프셋이 아니다. 이전 파일은 stick이 role & 1로 적혀 있어 role로 거른다
+    const hand = handOf(d.role);
+    if (hand === null) return;
+    const stick: 0 | 1 = stickId ?? hand;
     const t0 = this.pairer.match(d.t0Ms, stick);
     if (t0 === null) return;
     const t1Ms = this.unwrap.feed(stick, d.t1Us) / 1000;

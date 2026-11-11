@@ -10,6 +10,7 @@ import {
   DRUM_KIT_H,
   DRUM_KIT_W,
   fitScale,
+  fitScaleBox,
   kitPadsFor,
   kitSizeAt,
   placePad,
@@ -27,6 +28,8 @@ export interface DrumKitProps {
   scale?: number;
   /** 부모 폭에 맞춰 최대 scale까지 줄인다 */
   fitWidth?: boolean;
+  /** 부모 상자(폭·높이 모두)에 맞춰 최대 scale까지 줄이고 가운데에 둔다(contain). 부모는 높이가 정해져 있어야 한다. fitWidth보다 우선 */
+  fitContain?: boolean;
   states?: Partial<Record<PadId, PadVisualState>>;
   labels?: boolean;
   /** 문자열은 next 배지. PadBadge로 now·later·격자 밖 점을 지정한다(now 배지는 여러 개여도 각자 강조) */
@@ -66,6 +69,10 @@ export interface DrumKitProps {
   lit?: PadId;
   /** 실시간 코칭이 가리키는 패드. 그 패드에 링을 그린다(문구가 떠 있는 동안만 넘긴다). ghost·lit와 별개 */
   coachPad?: PadId;
+  /** 서로 너무 가까운 패드(보정 결과 화면). --warn 테두리 링을 그린다 */
+  warnPads?: PadId[];
+  /** 선택한 패드(보정 결과 화면). 브랜드색 링을 그린다 */
+  selectedPad?: PadId;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -120,6 +127,7 @@ function Shake({ count, className, children }: { count: number | undefined; clas
 export function DrumKit({
   scale = 1,
   fitWidth = false,
+  fitContain = false,
   states,
   labels = true,
   badges,
@@ -141,23 +149,26 @@ export function DrumKit({
   dimAll = false,
   lit,
   coachPad,
+  warnPads,
+  selectedPad,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
+  const fitting = fitWidth || fitContain;
   useEffect(() => {
-    if (!fitWidth) return;
+    if (!fitting) return;
     const el = wrapRef.current;
     if (!el) return;
-    const update = () => setFit(fitScale(el.clientWidth, scale));
+    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale) : fitScale(el.clientWidth, scale));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fitWidth, scale]);
+  }, [fitting, fitContain, scale]);
 
-  const eff = fitWidth ? (fit ?? scale) : scale;
+  const eff = fitting ? (fit ?? scale) : scale;
   const { width, height } = kitSizeAt(eff);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
@@ -246,13 +257,28 @@ export function DrumKit({
         );
         // 코칭 링: 패드 위에 같은 좌표계(원본 160 기준)로 그린다. 클릭을 가로채지 않는다
         const ring = RING[p.shape];
+        const markTransform = `translate(${p.left} ${p.top}) scale(${p.w / 160})`;
+        const isWarn = warnPads?.includes(p.pad) === true;
+        const isSelected = selectedPad === p.pad;
         const pad =
-          coachPad === p.pad ? (
+          coachPad === p.pad || isWarn || isSelected ? (
             <>
               {pad0}
-              <g className="drum-pad-coach" transform={`translate(${p.left} ${p.top}) scale(${p.w / 160})`} data-coach-pad={p.pad}>
-                <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
-              </g>
+              {coachPad === p.pad && (
+                <g className="drum-pad-coach" transform={markTransform} data-coach-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
+                </g>
+              )}
+              {isWarn && (
+                <g className="drum-pad-warn" transform={markTransform} data-warn-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx} ry={ring.ry} />
+                </g>
+              )}
+              {isSelected && (
+                <g className="drum-pad-selected" transform={markTransform} data-selected-pad={p.pad}>
+                  <ellipse cx={ring.cx} cy={ring.cy} rx={ring.rx + 8} ry={ring.ry + 8} />
+                </g>
+              )}
             </>
           ) : (
             pad0
@@ -282,9 +308,9 @@ export function DrumKit({
   );
 
   // fitWidth는 부모 폭을 재야 하므로 폭 100% 래퍼로 감싼다
-  if (!fitWidth) return body;
+  if (!fitting) return body;
   return (
-    <div ref={wrapRef} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+    <div ref={wrapRef} style={fitContain ? { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' } : { width: '100%', display: 'flex', justifyContent: 'center' }}>
       {body}
     </div>
   );

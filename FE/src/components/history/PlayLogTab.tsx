@@ -1,8 +1,10 @@
 // 서버 기록과 이 기기에만 남은 기록을 합쳐 필터·검색·정렬·10행 페이지를 적용한다.
 // 로컬 기록의 곡 삭제 판정은 useDeletedSongIds, 서버 기록은 목록의 접근 가능 여부를 쓴다.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listAllPlays, type PlaySummary } from '@/api/plays';
+import type { PlaySummary } from '@/api/plays';
+import { playListQuery } from '@/api/queries/plays';
+import { useApiQuery } from '@/app/useApiQuery';
 import { HistoryTable, type HistoryServerRow } from '@/components/history/HistoryTable';
 import '@/components/history/history.css';
 import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';
@@ -43,20 +45,15 @@ export interface PlayLogTabProps {
 export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLogTabProps = {}) {
   const status = useAuth((s) => s.status);
   const userId = useAuth((s) => s.user?.id ?? null);
-  const [attempt, setAttempt] = useState(0);
-  const [loaded, setLoaded] = useState<{ key: string; plays: PlaySummary[] | null } | null>(null);
-  const key = `${status}:${userId}:${attempt}`;
+  // 서버 기록은 서버 데이터 캐시로 읽는다(설계 TECH-351). 사용자가 바뀌면 캐시가 비워진다(app/queryAuthBinding)
+  const server = useApiQuery({ ...playListQuery(userId ?? 0), enabled: status === 'authenticated' && userId != null });
   const localLogs = useMemo(() => status === 'anonymous' || (status === 'authenticated' && userId != null) ? loadPlayLogs() : [], [status, userId]);
-  const current = loaded?.key === key ? loaded : null;
-  useEffect(() => {
-    if (status !== 'authenticated' || userId == null) return;
-    const controller = new AbortController();
-    void listAllPlays(controller.signal).then(
-      (plays) => { if (!controller.signal.aborted) setLoaded({ key, plays }); },
-      () => { if (!controller.signal.aborted) setLoaded({ key, plays: null }); },
-    );
-    return () => controller.abort();
-  }, [key, status, userId]);
+  // 읽기 전이면 null, 실패면 plays null (기존 표시 규칙 유지)
+  const serverPlays = server.data;
+  const current: { plays: PlaySummary[] | null } | null = useMemo(
+    () => (server.status === 'ready' ? { plays: serverPlays ?? [] } : server.status === 'error' ? { plays: null } : null),
+    [server.status, serverPlays],
+  );
   const logs = useMemo(() => {
     const plays = current?.plays ?? [];
     const ids = new Set(plays.map((p) => p.playId));
@@ -86,7 +83,7 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
   }
 
   const error = status === 'authenticated' && current?.plays === null;
-  const errorNotice = error ? <div role="alert">서버 기록을 불러오지 못했어요. <button onClick={() => setAttempt((n) => n + 1)}>다시 시도</button></div> : null;
+  const errorNotice = error ? <div role="alert">서버 기록을 불러오지 못했어요. <button onClick={server.refetch}>다시 시도</button></div> : null;
 
   if (logs.length === 0) {
     if (error) return errorNotice;

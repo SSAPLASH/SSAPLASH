@@ -93,6 +93,22 @@ describe('startPlaySync', () => {
     expect(fn.mock.calls.some(([u]) => String(u).includes(`/plays/${ID}/report/notes`))).toBe(true);
   });
 
+  it('성공하면 연주 기록 목록 캐시를 무효화하고, 실패하면 하지 않는다 (설계 TECH-351)', async () => {
+    const { queryClient } = await import('./queryClient');
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    stubStorage([log()]);
+    mockFetch(() => json(201, { playId: ID, rawLogStatus: 'PENDING' }));
+    await startPlaySync(ID);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['plays'] });
+    spy.mockClear();
+    resetPlaySyncForTest();
+    stubStorage([log()]);
+    mockFetch(() => json(400, { code: 'BAD', detail: 'x' }, 'application/problem+json'));
+    await startPlaySync(ID);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it('업로드 본문의 consent는 로그에 저장된 시작 시점 값을 따른다', async () => {
     stubStorage([log({ consent: true })]);
     let fn = mockFetch(() => json(201, { playId: ID, rawLogStatus: 'PENDING' }));

@@ -70,6 +70,8 @@ interface SettingsState {
   soundOn: boolean;
   /** 악보 연주 드럼 가이드의 박 라벨 표시 */
   sheetPadCount: boolean;
+  /** 악보 연습에서 반주를 재생한다(MODE-003 시작 확인 창의 「반주」 줄). 꺼져 있으면 반주를 불러오지도 않는다 */
+  accompaniment: boolean;
   /** 사이드바 접힘(≤1024에서는 셸이 강제로 접는다) */
   sidebarCollapsed: boolean;
   /** 상단 Dock 접힘(알약) */
@@ -124,6 +126,7 @@ interface SettingsState {
   setMetronomeBeatsPerBar: (v: BeatsPerBar) => void;
   setSoundOn: (v: boolean) => void;
   setSheetPadCount: (v: boolean) => void;
+  setAccompaniment: (v: boolean) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
@@ -133,7 +136,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 21;
+export const SETTINGS_VERSION = 22;
 
 /**
  * 저장된 설정 이행.
@@ -158,6 +161,7 @@ export const SETTINGS_VERSION = 21;
  * v18 → v19: hitFxTheme(기본 'auto') 추가. 없거나 모르는 값이면 'auto'.
  * v19 → v20: timingBar(기본 true) 추가. boolean이 아니면 true.
  * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
+ * v21 → v22: accompaniment(기본 true) 추가. boolean이 아니면 true.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -267,6 +271,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     const n = p.countInBars;
     p.countInBars = n === 0 ? 0 : 1;
   }
+  if (version < 22) p.accompaniment = typeof p.accompaniment === 'boolean' ? p.accompaniment : true;
   return p as unknown as SettingsState;
 }
 
@@ -362,6 +367,7 @@ export const useSettings = create<SettingsState>()(
       metronomeBeatsPerBar: 4,
       soundOn: true,
       sheetPadCount: true,
+      accompaniment: true,
       sidebarCollapsed: false,
       dockCollapsed: false,
       liveCoach: true,
@@ -447,6 +453,7 @@ export const useSettings = create<SettingsState>()(
       setMetronomeBeatsPerBar: (metronomeBeatsPerBar) => set({ metronomeBeatsPerBar }),
       setSoundOn: (soundOn) => set({ soundOn }),
       setSheetPadCount: (sheetPadCount) => set({ sheetPadCount }),
+      setAccompaniment: (accompaniment) => set({ accompaniment }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),

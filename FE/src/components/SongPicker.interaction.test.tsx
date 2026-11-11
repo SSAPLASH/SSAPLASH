@@ -12,6 +12,7 @@ import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { SongPicker } from './SongPicker';
 import { getBestRecords } from '@/api/plays';
+import { queryClient } from '@/app/queryClient';
 import type { UserMe } from '@/domain/auth';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
@@ -22,6 +23,8 @@ vi.mock('@/api/songs', () => {
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+// 입문 코스 탭 본문은 이 파일의 관심사가 아니다 — 응답하지 않는 요청으로 둔다
+vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 
 const song = (id: number, title: string): SongSummary => ({
   id, title, artist: `가수${id}`, source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 60000,
@@ -41,6 +44,8 @@ function show(onSelect = vi.fn()) {
 }
 
 beforeEach(() => {
+  // 곡 목록 캐시는 앱 전역 인스턴스다. 테스트마다 비운다
+  queryClient.clear();
   vi.mocked(getBestRecords).mockReset().mockResolvedValue({ items: [] });
   vi.mocked(listSongs).mockReset().mockResolvedValue({ items: [song(1, '목록곡')], hasNext: false });
   vi.mocked(getSong).mockReset().mockRejectedValue(new Error('no'));
@@ -49,7 +54,7 @@ beforeEach(() => {
   vi.mocked(fetchSimilarSongs).mockReset().mockResolvedValue({ requestId: 's1', strategy: 's', items: [] });
   useRecommendations.getState().resetForTest();
   useAuth.setState({ status: 'authenticated' });
-  useSongs.setState({ source: 'api', scope: 'BUILTIN', items: [], status: 'idle', error: null });
+  useSongs.setState({ source: 'api', scope: 'BUILTIN' });
 });
 
 describe('SongPicker 서버 최고 기록', () => {
@@ -317,5 +322,177 @@ describe('SongPicker 빈 목록·선택 유지 (설계 CHART-001 곡 난이도 4
     show();
     await screen.findByText('곡이 없어요');
     expect(screen.getByText('목록에서 곡을 고르면 여기에 보여요.')).toBeTruthy();
+  });
+});
+
+describe('SongPicker 곡 목록 캐시 (설계 TECH-350)', () => {
+  it('탭을 바꿨다 돌아오면 곡 목록을 다시 요청하지 않고 바로 보인다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    expect(listSongs).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    await waitFor(() => expect(listSongs).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(listSongs).mock.calls[1][0]).toMatchObject({ source: 'MINE' });
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    expect(screen.getAllByText('목록곡').length).toBeGreaterThan(0);
+    expect(listSongs).toHaveBeenCalledTimes(2);
+  });
+  it('다시 마운트해도 30초 안이면 요청하지 않는다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    cleanup();
+    show();
+    expect(screen.getAllByText('목록곡').length).toBeGreaterThan(0);
+    expect(listSongs).toHaveBeenCalledTimes(1);
+  });
+  it('마지막으로 연 목록 탭을 songStore.scope에 남긴다', async () => {
+    show();
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    await waitFor(() => expect(useSongs.getState().scope).toBe('MINE'));
+  });
+});
+
+describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영역)', () => {
+  const showMode = (mode: 'play' | 'sheet') =>
+    render(
+      <MemoryRouter>
+        <SongPicker onSelect={vi.fn()} mode={mode} />
+      </MemoryRouter>,
+    );
+  const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('/sheet: 제목 → 안내 줄 → 구분선 → 목록 영역 순서', async () => {
+    showMode('sheet');
+    await screen.findAllByText('목록곡');
+    const title = screen.getByRole('heading', { name: '악보로 차근차근 연습해요' });
+    const guide = screen.getByRole('region', { name: '악보 연습 안내' });
+    const sep = screen.getByRole('separator');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    expect(follows(title, guide)).toBe(true);
+    expect(follows(guide, sep)).toBe(true);
+    expect(follows(sep, grid)).toBe(true);
+    // 안내 줄 오른쪽 칸은 악보 읽는 법 카드
+    expect(guide.contains(screen.getByRole('region', { name: '악보 읽는 법' }))).toBe(true);
+  });
+
+  it('/play: 안내 줄·구분선이 없다', async () => {
+    showMode('play');
+    await screen.findAllByText('목록곡');
+    expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
+    expect(screen.queryByRole('region', { name: '악보 읽는 법' })).toBeNull();
+    expect(screen.queryByRole('separator')).toBeNull();
+  });
+
+  it('/sheet: 입문 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
+    showMode('sheet');
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
+    expect(screen.queryByRole('separator')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    await screen.findAllByText('목록곡');
+    expect(screen.getByRole('region', { name: '악보 연습 안내' })).toBeTruthy();
+    expect(screen.getByRole('separator')).toBeTruthy();
+  });
+
+  it.each(['play', 'sheet'] as const)('%s: 탭과 표는 왼쪽 열, 선택 곡 카드는 목록 영역 오른쪽 열이다', async (mode) => {
+    showMode(mode);
+    await screen.findAllByText('목록곡');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    const list = grid.querySelector('.play-sp-list') as HTMLElement;
+    const card = screen.getByRole('complementary', { name: '선택한 곡' });
+    expect(card.parentElement).toBe(grid);
+    expect(list.parentElement).toBe(grid);
+    expect(follows(list, card)).toBe(true);
+    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다
+    expect(list.firstElementChild).toBe(screen.getByRole('radiogroup', { name: '곡 범위' }));
+    expect(list.querySelector('table')).not.toBeNull();
+    expect(list.contains(card)).toBe(false);
+  });
+});
+
+describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-start)', () => {
+  const detail = (id: number) => ({
+    ...song(id, `곡${id}`), license: null, updatedAt: null,
+    charts: [
+      { id: id * 10 + 1, difficulty: 'EASY' as const },
+      { id: id * 10 + 2, difficulty: 'NORMAL' as const },
+    ].map((c) => ({ ...c, chartVersionId: c.id, version: 1, noteCount: 5, notationStatus: 'READY' as const })),
+  });
+  const showSheet = (url = '/sheet', handlers: { onStart?: ReturnType<typeof vi.fn>; onSelect?: ReturnType<typeof vi.fn> } = {}) => {
+    const onStart = handlers.onStart ?? vi.fn();
+    const onSelect = handlers.onSelect ?? vi.fn();
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <SongPicker mode="sheet" onStart={onStart} onSelect={onSelect} />
+      </MemoryRouter>,
+    );
+    return { onStart, onSelect };
+  };
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
+    vi.mocked(listSongs).mockResolvedValue({ items: [song(1, '목록곡'), song(2, '둘째곡')], hasNext: false });
+    vi.mocked(getSong).mockImplementation(async (id: number) => detail(id));
+  });
+
+  it('[플레이]는 기본 단계(NORMAL)로 onStart를 부른다([준비]는 없다)', async () => {
+    const { onStart, onSelect } = showSheet();
+    const play = await screen.findByRole('button', { name: '플레이' });
+    await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('button', { name: '준비' })).toBeNull();
+    fireEvent.click(play);
+    expect(onStart).toHaveBeenCalledWith(1, 12);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('단계를 바꾸면 그 단계로 시작하고, 다른 곡을 고르면 그 곡의 기본 단계로 돌아간다', async () => {
+    const { onStart } = showSheet();
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenLastCalledWith(1, 11);
+    fireEvent.click(screen.getByText('둘째곡', { selector: '.play-st-name' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'NORM' }).getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenLastCalledWith(2, 22);
+  });
+
+  it('주소의 song·chart로 그 곡·단계를 처음부터 골라 둔다', async () => {
+    const { onStart } = showSheet('/sheet?song=2&chart=21');
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'EASY' }).getAttribute('aria-checked')).toBe('true'));
+    expect(screen.getByRole('complementary', { name: '선택한 곡' }).textContent).toContain('둘째곡');
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(2, 21);
+  });
+
+  it('더블클릭도 고른 단계로 onStart', async () => {
+    const { onStart } = showSheet();
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    fireEvent.doubleClick(screen.getByText('목록곡', { selector: '.play-st-name' }));
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith(1, 11));
+  });
+
+  it('고른 단계의 최고 정확도를 카드에 보인다', async () => {
+    vi.mocked(getBestRecords).mockResolvedValue({ items: [
+      { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'SHEET', bestScore: null, bestAccuracy: 55 },
+      { songId: 1, chartId: 12, difficulty: 'NORMAL', mode: 'SHEET', bestScore: null, bestAccuracy: 91 },
+    ] });
+    showSheet();
+    const card = await screen.findByRole('complementary', { name: '선택한 곡' });
+    await waitFor(() => expect(card.textContent).toContain('91.0%'));
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    await waitFor(() => expect(card.textContent).toContain('55.0%'));
+  });
+
+  it('/play는 카드가 [준비] 그대로이고 onSelect를 부른다', async () => {
+    const onSelect = show();
+    const prepare = await screen.findByRole('button', { name: '준비' });
+    await waitFor(() => expect((prepare as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('radio', { name: 'EASY' })).toBeNull();
+    fireEvent.click(prepare);
+    expect(onSelect).toHaveBeenCalledWith(1, 12);
   });
 });

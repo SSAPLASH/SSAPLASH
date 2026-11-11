@@ -109,7 +109,9 @@ class CalibrationSession {
     // 스틱 표를 비워 보정 중 HIT pad가 0xFF가 되게 한다(D6)
     for (const i of hands) padTableSync.clear(i);
     this.deps.setSoundOnHit(false);
-    this.capture.start(hands, target === 'new' ? undefined : opts.pads);
+    // 패드 단위 재보정이면 적용 프리셋의 손별 앵커를 간격 검사 기준(base)으로 넘긴다. 전체 보정은 비교 대상이 없다
+    const base: HandAnchors | undefined = target === 'active' && opts.pads ? useSettings.getState().stickAnchors : undefined;
+    this.capture.start(hands, target === 'new' ? undefined : opts.pads, base);
     // 받을 패드가 없으면(잘못된 pads) 바로 접는다
     if (this.capture.snapshot().phase === 'done') this.cancelCapture();
   }
@@ -125,6 +127,7 @@ class CalibrationSession {
   private teardownCapture(): void {
     this.mode = 'idle';
     this.target = null;
+    this.capture.cancel();
     for (const i of this.hands) this.deps.pushTable(i, true);
     this.hands = [];
     yawDriftMonitor.reset();
@@ -185,6 +188,7 @@ class CalibrationSession {
     const now = Date.now();
     this.mode = 'idle';
     this.target = null;
+    this.capture.cancel();
     this.hands = [];
     // 저장(사본 + 적용 프리셋 기록) → applySettings(손별 프로필·연결된 손마다 push). 표는 clear로 해시가 비어 반드시 나간다
     settings.setStickAnchors(merged, now);
@@ -282,7 +286,7 @@ class CalibrationSession {
       if (this.capture.completedPads().length > before) {
         for (const h of snap.hands) inputManager.haptic(h, PAD_DONE_HAPTIC[0], PAD_DONE_HAPTIC[1]);
       }
-      // 패드가 차도 자동으로 넘어가거나 끝내지 않는다: 화면의 [다음]/[저장](next·finish)이 한다(UX-64 D3)
+      // 패드가 차면 엔진이 간격을 검사해 자동 진행하거나(경고 없음) 멈춘다(경고 있음: [다시]/[다음]). 저장은 done에서 [저장](finish)
       return true;
     }
     // realign

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// 연주 준비 비슷한 곡 페이지 통합 테스트 (설계 COACH-004-similar-songs 4-1). 실제 PlayPage·SheetPage를 그리고 api·loadChart만 mock한다.
+// 연주 준비 비슷한 곡 페이지 통합 테스트 (설계 COACH-004-similar-songs 4-1). 실제 PlayPage를 그리고 api·loadChart만 mock한다.
 // 준비 진입 곡당 1회 · 단계 변경 재요청 없음·배지 따라감 · 클릭 → 선택 단계 채보로 URL 변경 · 곡 변경 clear · builtin·404 숨김.
 import { StrictMode, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -14,7 +14,6 @@ import { useRecommendations } from '@/store/recommendationStore';
 import type { Difficulty, Chart } from '@/domain/chart';
 import type { SongDetail, SongSummary } from '@/domain/songCatalog';
 import { PlayPage } from '@/pages/PlayPage';
-import { SheetPage } from '@/pages/SheetPage';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
@@ -121,13 +120,6 @@ describe('연주 준비 비슷한 곡 (PlayPage 통합)', () => {
   it('StrictMode 1회 (PlayPage)', async () => {
     show('/play?song=1&chart=11', <PlayPage />, true);
     await waitFor(() => expect(section()).not.toBeNull());
-    expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
-  });
-
-  it('SheetPage도 진입 1회·footer 표시', async () => {
-    show('/sheet?song=1&chart=12', <SheetPage />);
-    await waitFor(() => expect(section()).not.toBeNull());
-    expect(vi.mocked(fetchSimilarSongs).mock.calls[0].slice(0, 2)).toEqual([1, { difficulty: 'HARD', size: 5 }]);
     expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
   });
 

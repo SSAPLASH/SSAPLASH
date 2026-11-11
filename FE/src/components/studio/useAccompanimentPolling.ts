@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react';
 import { getSong } from '@/api/songs';
 import { isAccompanimentPending, type SongSummary } from '@/domain/songCatalog';
-import { useSongs } from '@/store/songStore';
+import { patchSongStatus, songKeys } from '@/api/queries/songs';
+import { queryClient } from '@/app/queryClient';
 import { AccompanimentPoller } from './accompanimentPoller';
+
+/** 다시 읽은 곡 상태를 캐시된 모든 곡 목록(라이브러리·곡 선택)에 반영한다 (설계 TECH-351) */
+function patchCachedSong(song: SongSummary): void {
+  queryClient.setQueriesData<SongSummary[]>({ queryKey: songKeys.lists() }, (old) => (old ? patchSongStatus(old, song) : old));
+}
 
 function isVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState !== 'hidden';
@@ -12,7 +18,7 @@ function isVisible(): boolean {
 
 export function useAccompanimentPolling(items: readonly SongSummary[], enabled: boolean): void {
   const [poller] = useState(
-    () => new AccompanimentPoller({ fetchSong: (id, signal) => getSong(id, signal), onSong: (song) => useSongs.getState().patchItem(song) }),
+    () => new AccompanimentPoller({ fetchSong: (id, signal) => getSong(id, signal), onSong: patchCachedSong }),
   );
   const [visible, setVisible] = useState(isVisible);
 
