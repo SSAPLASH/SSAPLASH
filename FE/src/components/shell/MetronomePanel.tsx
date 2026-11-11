@@ -29,18 +29,21 @@ const BEAT_OPTIONS = [
   { value: '3', label: '3/4' },
 ];
 
-export function MetronomePanel() {
+/** gameDisabled: 리듬 게임 — 메트로놈을 쓰지 않으므로 켜기·BPM·박자·탭을 모두 비활성으로 둔다(설계 MODE-001-play-quick-start E1) */
+export function MetronomePanel({ gameDisabled = false }: { gameDisabled?: boolean }) {
   const m = useLive((s) => s.metronome);
   const clickOn = useSettings((s) => s.metronome);
   const setClickOn = useSettings((s) => s.setMetronome);
   const volume = useSettings((s) => s.metronomeVolume);
   const setVolume = useSettings((s) => s.setMetronomeVolume);
 
-  const locked = m.locked;
-  const running = locked ? clickOn : m.playing;
+  const gameNoMetro = gameDisabled;
+  const locked = m.locked || gameNoMetro;
+  const running = gameNoMetro ? false : m.locked ? clickOn : m.playing;
 
   const onToggle = () => {
-    if (locked) {
+    if (gameNoMetro) return;
+    if (m.locked) {
       setClickOn(!clickOn);
       return;
     }
@@ -52,7 +55,7 @@ export function MetronomePanel() {
     <div className="metro-panel">
       <div className="metro-panel-head">
         <h2 className="metro-panel-title">메트로놈</h2>
-        <Toggle checked={running} onChange={onToggle} label={locked ? '메트로놈 클릭 켜기' : '메트로놈 켜기'} />
+        <Toggle checked={running} disabled={gameNoMetro} onChange={onToggle} label={m.locked ? '메트로놈 클릭 켜기' : '메트로놈 켜기'} />
       </div>
 
       <div className="metro-panel-bpm">
@@ -88,7 +91,11 @@ export function MetronomePanel() {
           탭 템포
         </Button>
       </div>
-      {locked && <p className="metro-panel-note">곡 연주 중에는 곡의 BPM·박자로 고정돼요</p>}
+      {gameNoMetro ? (
+        <p className="metro-panel-note">리듬 게임에서는 메트로놈을 쓰지 않아요</p>
+      ) : (
+        locked && <p className="metro-panel-note">곡 연주 중에는 곡의 BPM·박자로 고정돼요</p>
+      )}
 
       <Slider
         className="metro-panel-volume"

@@ -37,11 +37,23 @@ function setup(quick: Partial<QuickStartProps> = {}, over: Partial<SongDetailPan
     onStart: vi.fn(),
     ...quick,
   };
-  render(<SongDetailPane song={song} mode="sheet" presetName="내 킷" chartState="ready" onRetry={() => {}} onPrepare={() => {}} quickStart={q} {...over} />);
+  render(<SongDetailPane song={song} presetName="내 킷" chartState="ready" onRetry={() => {}} quickStart={q} {...over} />);
   return q;
 }
 
 describe('SongDetailPane quickStart', () => {
+  it('starting이면 ▶ 플레이 자리가 스피너(비활성)이고, 아니면 글자 「플레이」다', () => {
+    setup({ starting: true });
+    const btn = document.querySelector('.play-sd-play') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.querySelector('.spinner')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '플레이' })).toBeNull();
+    cleanup();
+    setup();
+    expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(document.querySelector('.play-sd-play .spinner')).toBeNull();
+  });
+
   it('제목 묶음·기록 두 칸(최고 정확도 | 프리셋)·단계 세그먼트·플레이가 보인다', () => {
     setup();
     expect(screen.getByText('BPM 120 · 3:24 · 입문')).toBeTruthy();
@@ -84,9 +96,16 @@ describe('SongDetailPane quickStart', () => {
     expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('quickStart가 없으면 지금 모양([준비])', () => {
-    render(<SongDetailPane song={song} presetName={null} chartState="ready" onRetry={() => {}} onPrepare={() => {}} />);
-    expect(screen.getByRole('button', { name: '준비' })).toBeTruthy();
-    expect(screen.queryByRole('radiogroup')).toBeNull();
+  it('bestKind=score면 기록 칸이 「최고 점수」이고 고른 단계의 점수를 쉼표 정수로 보인다', () => {
+    setup({ bestKind: 'score', bestByChart: { 11: 800, 12: 1234567 } });
+    expect(screen.getByText('최고 점수')).toBeTruthy();
+    expect(screen.queryByText('최고 정확도')).toBeNull();
+    expect(screen.getByText('1,234,567')).toBeTruthy();
+  });
+
+  it('bestKind=score에 기록이 없으면 —', () => {
+    setup({ bestKind: 'score', selectedChartId: 11, bestByChart: {} });
+    expect(screen.getByText('최고 점수')).toBeTruthy();
+    expect(screen.getByText('—')).toBeTruthy();
   });
 });

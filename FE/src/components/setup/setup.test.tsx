@@ -41,12 +41,12 @@ describe('StepCard', () => {
 
 describe('ReturnBanner', () => {
   const banner = (ready: boolean) =>
-    renderToStaticMarkup(<ReturnBanner title="제목" line="한 줄" buttonText="연주 준비로 돌아가기" ready={ready} enterEnabled onReturn={noop} />);
+    renderToStaticMarkup(<ReturnBanner title="제목" line="한 줄" buttonText="곡 선택으로 돌아가기" ready={ready} enterEnabled onReturn={noop} />);
 
   it('준비 전에는 버튼 비활성, 준비되면 활성', () => {
     expect(banner(false)).toMatch(/<button[^>]*disabled/);
     expect(banner(true)).not.toMatch(/<button[^>]*disabled/);
-    expect(banner(true)).toContain('연주 준비로 돌아가기');
+    expect(banner(true)).toContain('곡 선택으로 돌아가기');
   });
   it('Enter는 준비·허용·비입력 포커스일 때만', () => {
     expect(shouldReturnOnEnter(true, true, { tagName: 'DIV' })).toBe(true);

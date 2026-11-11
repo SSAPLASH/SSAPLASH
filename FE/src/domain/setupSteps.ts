@@ -203,10 +203,10 @@ export function returnTargetName(returnTo: string, returnLabel?: string | null):
   return hit ? hit[1] : '이전 화면';
 }
 
-/** 복귀 버튼 문구: 연주 준비 화면이면 고정 문구, 그 밖은 "{이름}으로 돌아가기" */
+/** 복귀 버튼 문구: 리듬 게임·악보 연습 곡 선택(시작 확인 창이 다시 열린다)이면 고정 문구, 그 밖은 "{이름}으로 돌아가기" */
 export function returnButtonText(returnTo: string, returnLabel?: string | null): string {
   const pathname = pathnameOf(returnTo);
-  if (matchesPath(pathname, '/play') || matchesPath(pathname, '/sheet')) return '연주 준비로 돌아가기';
+  if (matchesPath(pathname, '/play') || matchesPath(pathname, '/sheet')) return '곡 선택으로 돌아가기';
   const name = returnTargetName(returnTo, returnLabel);
   return `${name}${josaEuroRo(name)} 돌아가기`;
 }
