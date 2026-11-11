@@ -96,7 +96,7 @@ tasks.named('bootJar') {
 
 tasks.register('bootMidiWorkerJar', org.springframework.boot.gradle.tasks.bundling.BootJar) {
 	archiveFileName = 'midi-worker.jar'
-	mainClass = 'com.ssafy.airdrum.song.midi.MidiWorkerMain'
+	mainClass = 'com.ssafy.airdrum.domain.song.worker.midi.MidiWorkerMain'
 	classpath = sourceSets.main.runtimeClasspath
 	targetJavaVersion = JavaVersion.VERSION_21
 	includeTools = false
@@ -140,14 +140,14 @@ tasks.register('registerBasic8Backing', JavaExec) {
 	group = 'application'
 	dependsOn tasks.named('toolsClasses')
 	classpath = sourceSets.tools.runtimeClasspath
-	mainClass = 'com.ssafy.airdrum.chart.asset.RegisterBasic8Backing'
+	mainClass = 'com.ssafy.airdrum.domain.chart.tool.RegisterBasic8Backing'
 }
 tasks.register('backfillSongLevel', JavaExec) {
 	description = '곡 난이도 backfill. 기본은 dry-run, 적용은 --apply를 명시한다.'
 	group = 'application'
 	dependsOn tasks.named('toolsClasses')
 	classpath = sourceSets.tools.runtimeClasspath
-	mainClass = 'com.ssafy.airdrum.song.SongLevelBackfill'
+	mainClass = 'com.ssafy.airdrum.domain.song.service.level.SongLevelBackfill'
 }
 tasks.register('timescaleTest', Test) {
 	description = '실제 TimescaleDB에서 Flyway V8과 데이터 보존을 검증한다.'
