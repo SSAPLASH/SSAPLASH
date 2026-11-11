@@ -18,7 +18,9 @@ import { PlayStage } from '@/components/play/PlayStage';
 import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
+import { AudioWaitNotice } from '@/components/play/AudioWaitNotice';
 import { Countdown } from '@/components/play/Countdown';
+import { useAudioClockGate } from '@/components/play/useAudioClockGate';
 import { countdownValue } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
@@ -507,10 +509,17 @@ function SheetPageBody() {
     setPauseReason(null);
   }, [resetCountdown]);
 
+  // 시작·재개·처음부터 전에 오디오 시계가 실제로 흐를 때까지 기다린다(설계 MODE-001 오디오 시계 시작 대기).
+  // 출력을 막 깨운 직후에 시계를 움직이면 카운트인 클릭이 몰리고 반주가 곡 내내 늦는다
+  const { notice: audioWaiting, wait: waitAudioClock } = useAudioClockGate();
+
   const begin = useCallback(async (): Promise<boolean> => {
     const ss = sessionRef.current;
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     await unlockAudio();
+    // 기다리는 사이 나갔거나 곡·준비 조건이 바뀌었으면 시작하지 않는다
+    if (!(await waitAudioClock('begin'))) return false;
+    if (sessionRef.current !== ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     resetRun(ss);
     const st = useSettings.getState();
     // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
@@ -580,6 +589,7 @@ function SheetPageBody() {
       accompaniment: acc.state === 'ready' ? acc : undefined,
       clickOn: () => useSettings.getState().metronome,
       onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
+      audioClock: () => audioEngine.clockReading(),
       onFinish: () => finishRef.current(ss),
     });
     clockRef.current = clock;
@@ -588,16 +598,20 @@ function SheetPageBody() {
     diagSessionStart(ss, 'SHEET', diagSessionOpts());
     setPlaySession(ss);
     return true;
-  }, [acc, resetRun, clearCoachLine, showCoachLine]);
+  }, [acc, resetRun, clearCoachLine, showCoachLine, waitAudioClock]);
 
   const resume = useCallback(() => {
     const clock = clockRef.current;
     // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
     if (!clock || clock.state.phase !== 'paused' || !readyRef.current) return;
-    clock.resume();
-    diagSessionPhase('resume');
-    setPauseReason(null);
-  }, []);
+    void waitAudioClock('resume').then((ok) => {
+      // 기다리는 사이 나갔거나 다시 시작했거나 준비 조건이 깨졌으면 재개하지 않는다
+      if (!ok || clockRef.current !== clock || clock.state.phase !== 'paused' || !readyRef.current) return;
+      clock.resume();
+      diagSessionPhase('resume');
+      setPauseReason(null);
+    });
+  }, [waitAudioClock]);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
   const { isResuming } = useReconnectResume({
@@ -615,15 +629,19 @@ function SheetPageBody() {
     const clock = clockRef.current;
     const ss = sessionRef.current;
     if (!clock || !ss) return;
-    // 재시작은 카운트인부터. 메트로놈 잠금은 유지한다
-    clock.restart();
-    diagSessionStart(ss, 'SHEET', diagSessionOpts());
-    resetRun(ss);
-    coachRef.current?.reset();
-    llmRef.current?.cancel(crypto.randomUUID());
-    shadowRef.current?.reset();
-    clearCoachLine();
-  }, [resetRun, clearCoachLine]);
+    void waitAudioClock('restart').then((ok) => {
+      // 기다리는 사이 나갔거나 곡이 바뀌었으면 다시 시작하지 않는다
+      if (!ok || clockRef.current !== clock || sessionRef.current !== ss) return;
+      // 재시작은 카운트인부터. 메트로놈 잠금은 유지한다
+      clock.restart();
+      diagSessionStart(ss, 'SHEET', diagSessionOpts());
+      resetRun(ss);
+      coachRef.current?.reset();
+      llmRef.current?.cancel(crypto.randomUUID());
+      shadowRef.current?.reset();
+      clearCoachLine();
+    });
+  }, [resetRun, clearCoachLine, waitAudioClock]);
 
   /** 나가기: 기록 없이 곡 선택으로(곡·단계를 골라 둔 채, 창은 닫힘 — 연주 중 주소에는 start가 없다) */
   const leave = useCallback(() => {
@@ -784,6 +802,7 @@ function SheetPageBody() {
     const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError ? `${accError} 반주를 끄면 바로 시작할 수 있어요.` : null;
     return (
       <>
+        <AudioWaitNotice show={audioWaiting} />
         <StageFade stageKey="select">
           <main className="main">
             <SongPicker mode="sheet" onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
@@ -940,6 +959,7 @@ function SheetPageBody() {
           <LazyChartAutoplayRunner clockRef={clockRef} session={playSession} />
         </Suspense>
       )}
+      <AudioWaitNotice show={audioWaiting} />
     </main>
   );
 }
