@@ -636,45 +636,37 @@
   color: var(--text-1);
 }
 
-/* ---- 반주 선택 창(3-12) ---- */
+/* ---- 반주 고르기 창 (Figma 802:35314 · 모바일 시트 803:35356, 설계 MODE-002 4-5) ---- */
 .dialog.free-picker {
   display: flex;
   flex-direction: column;
+  gap: 16px;
   max-width: 520px;
   max-height: min(640px, calc(100vh - 32px));
+  padding: 24px;
   box-sizing: border-box;
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-dock);
 }
 .free-picker-top {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-.free-picker-top h2 {
-  margin: 0 0 12px;
-}
-.free-picker-search {
-  flex: none;
-  display: flex;
-  align-items: center;
   gap: var(--space-s);
-  margin-bottom: var(--space-m);
 }
-.free-picker-input {
+.dialog .free-picker-top h2 {
   flex: 1;
-  min-width: 0;
-  height: 36px;
-  padding: 0 var(--space-s);
-  box-sizing: border-box;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
+  margin: 0;
   color: var(--text-1);
-  font-size: 14px;
+  font-size: 20px;
+  font-weight: 700;
 }
-.free-picker-input:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 1px;
+.free-picker .ui-input {
+  flex: none;
+}
+/* 검색칸 안에 자체 지우기 ×가 있어 브라우저 기본 × 는 숨긴다 */
+.free-picker input[type='search']::-webkit-search-cancel-button {
+  display: none;
 }
 .free-picker-body {
   flex: 1;
@@ -682,21 +674,31 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-m);
+  gap: 20px;
+}
+.free-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .free-picker-head {
-  margin: 0 0 var(--space-xs);
-  color: var(--text-2);
-  font-size: 13px;
-  font-weight: 500;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding-left: 4px;
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 700;
 }
 .free-picker-count {
-  margin-left: var(--space-xs);
   color: var(--text-3);
   font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 400;
 }
 .dialog .free-picker-list {
-  margin: 0 0 var(--space-s);
+  margin: 0;
   padding: 0;
   list-style: none;
   gap: 2px;
@@ -705,15 +707,16 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: var(--space-s);
-  padding: var(--space-xs) var(--space-s);
+  gap: 12px;
+  padding: 8px 10px;
   box-sizing: border-box;
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: 8px;
   background: transparent;
   color: var(--text-1);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--motion-fast);
 }
 .free-picker-row:hover:not(:disabled) {
   background: var(--surface-2);
@@ -722,23 +725,17 @@
   outline: 2px solid var(--brand);
   outline-offset: -2px;
 }
-.free-picker-row.is-generating {
-  opacity: 0.5;
-  cursor: default;
-}
-.free-picker-cover {
+.free-picker-row .free-picker-cover {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-control);
-  object-fit: cover;
-  background: var(--surface-3);
+  width: 40px;
+  border-radius: 8px;
 }
 .free-picker-names {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .free-picker-title,
 .free-picker-artist {
@@ -748,24 +745,120 @@
 }
 .free-picker-title {
   font-size: 14px;
+  font-weight: 500;
 }
 .free-picker-artist {
-  color: var(--text-3);
-  font-size: 12px;
-}
-.free-picker-state {
-  flex: none;
   color: var(--text-2);
   font-size: 12px;
 }
-.free-picker-state.is-current {
+/* 지금 곡: brand 14% 옅은 칠 + brand 글자 + 이퀄라이저(U3) */
+.free-picker-row.is-current {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.free-picker-row.is-current:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.free-picker-row.is-current .free-picker-title {
   color: var(--brand-text);
 }
+.free-picker-now {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+/* 반주 만드는 중: 행은 비활성, 제목·커버만 흐리게(배지는 흐리게 하지 않는다) */
+.free-picker-row.is-generating {
+  cursor: default;
+  opacity: 1; /* 전역 button:disabled 흐림을 끄고 커버·글자만 흐리게 둔다(배지는 또렷하게, Figma 802:35426) */
+}
+.free-picker-row.is-generating .free-picker-cover,
+.free-picker-row.is-generating .free-picker-names {
+  opacity: 0.5;
+}
+.free-picker-row .studio-badge-dot {
+  animation: free-picker-breathe 1.6s ease-in-out infinite;
+}
+@keyframes free-picker-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
 .free-picker-note {
-  margin: 0 0 var(--space-s);
-  color: var(--text-3);
+  margin: 0;
+  color: var(--text-2);
   font-size: 13px;
 }
 .free-picker-note.is-error {
   color: var(--miss);
+}
+.free-picker-more {
+  align-self: flex-start;
+}
+
+/* ---- ≤640 바텀 시트(Figma 803:35369): 화면 아래에 붙어 아래에서 밀려 올라온다. 스크림 배치는 Dialog를 고치지 않고 :has로 준다 ---- */
+.dialog-backdrop:has(> .free-picker.is-sheet) {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation-duration: 360ms;
+}
+.dialog.free-picker.is-sheet {
+  width: 100%;
+  max-width: none;
+  max-height: min(640px, 90vh);
+  gap: 14px;
+  padding: 10px 16px 24px;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  animation: free-picker-sheet-in 360ms var(--ease-sheet);
+}
+@keyframes free-picker-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.free-picker-grab {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.free-picker.is-sheet .free-picker-top h2 {
+  font-size: 18px;
+}
+.free-picker.is-sheet .free-picker-body {
+  gap: 18px;
+}
+.free-picker.is-sheet .free-picker-section {
+  gap: 6px;
+}
+.free-picker.is-sheet .free-picker-row {
+  padding: 8px;
+}
+.free-picker.is-sheet .free-picker-row .free-picker-cover {
+  width: 44px;
+}
+.free-picker.is-sheet .free-picker-title {
+  font-size: 15px;
+}
+.free-picker.is-sheet .free-picker-more {
+  align-self: stretch;
+}
+/* 움직임 줄이기: 시트는 밀려 올라오지 않고 페이드만, 배지 점도 숨 쉬지 않는다 */
+@media (prefers-reduced-motion: reduce) {
+  .dialog.free-picker.is-sheet {
+    animation: motion-fade-in var(--motion-fade) var(--ease-out);
+  }
+  .free-picker-row .studio-badge-dot {
+    animation: none;
+  }
 }
