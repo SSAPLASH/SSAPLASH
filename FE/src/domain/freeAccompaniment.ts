@@ -6,6 +6,9 @@ import type { SongSummary } from '@/domain/songCatalog';
 /** 곡 끝에 붙여 바로 끝나 버리지 않게 두는 여유(ms) */
 export const SEEK_END_MARGIN_MS = 250;
 
+/** 10초 뒤로·앞으로 한 번에 옮기는 간격(ms). 라이브러리 재생바와 반주 바가 같이 쓴다 */
+export const SKIP_MS = 10_000;
+
 /** 고른 곡. 바에 이름·커버를 그린다 */
 export interface AccompanimentPick {
   songId: number;
