@@ -62,6 +62,27 @@ describe('GlassDock 접힘·펼침', () => {
     expect(screen.queryByRole('button', { name: '일시정지' })).toBeNull();
   });
 
+  it('리듬 게임(/play): 메트로놈 토글·BPM이 비활성이고 켜짐 표시도 없다(접힘·펼침 모두)', async () => {
+    useSettings.setState({ metronome: true });
+    const view = renderDock('/play');
+    const mini = screen.getByRole('switch', { name: '리듬 게임에서는 메트로놈을 쓰지 않아요' }) as HTMLButtonElement;
+    expect(mini.disabled).toBe(true);
+    expect(mini.getAttribute('aria-checked')).toBe('false');
+    view.unmount();
+    useSettings.getState().setDockCollapsed(false);
+    renderDock('/play');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'BPM 5 증가' })).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'BPM 5 증가' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'BPM 5 감소' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('switch', { name: '리듬 게임에서는 메트로놈을 쓰지 않아요' }) as HTMLButtonElement).disabled).toBe(true);
+    useSettings.setState({ metronome: false });
+  });
+
+  it('악보(/sheet)에서는 메트로놈 토글이 비활성이 아니다', () => {
+    renderDock('/sheet');
+    expect((screen.getByRole('switch', { name: '메트로놈 재생' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('접힌 채로 패드 소리를 끄면 바로 꺼지고 Dock은 접힌 채다', async () => {
     const user = userEvent.setup();
     useSettings.getState().setSoundOn(true);
@@ -88,10 +109,10 @@ describe('GlassDock 접힘·펼침', () => {
   });
 });
 
-function renderDock() {
+function renderDock(path = '/') {
   return render(
     <MotionProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <GlassDock />
       </MemoryRouter>
     </MotionProvider>,
