@@ -2,6 +2,7 @@
 import type { CalibrationProfile } from '@/domain/calibration';
 import type { AngleRange } from '@/domain/kitMapping';
 import type { StageHealth } from '@/monitor/health';
+import type { PedalStats } from '@/monitor/packetLog';
 import type { SwingAssembler } from '@/monitor/swingAssembler';
 import { HitTable } from '../HitTable';
 import { Fold } from '../layout/Fold';
@@ -10,6 +11,30 @@ import { fmt, type SendFn, type Snap } from '../monitorTypes';
 import { PoseScope } from '../PoseScope';
 import { SwingScope } from '../SwingScope';
 import { VelocityScatter } from '../VelocityScatter';
+
+/** 페달 보드(role 2·3) 칸. 손 L·R과 따로 보인다. 보드 하나가 두 role을 같은 시계로 보내므로 시계 값은 한 묶음이다 */
+function PedalStatus({ pedal, adoptedMs }: { pedal: PedalStats; adoptedMs: number | null }) {
+  // STATUS는 role 2(하이햇 페달) 것을 먼저, 없으면 role 3(킥) 것을 쓴다
+  const idx = pedal.lastStatus[0] ? 0 : 1;
+  const pkt = pedal.lastStatus[idx];
+  const age = pedal.statusAgeMs[idx];
+  const { sync } = pedal;
+  return (
+    <span className="mon-status" title="페달 보드(role 2·3). SYNC는 role 2 응답만 센다">
+      <strong>페달</strong>
+      {pkt ? (
+        <>
+          {' '}
+          배터리 {pkt.batteryPct === null ? '–' : `${pkt.batteryPct}%`} · fw {pkt.fwMajor}.{pkt.fwMinor} · STATUS {fmt(age === null ? null : age / 1000)}s 전
+        </>
+      ) : (
+        <span className="faint"> STATUS 없음</span>
+      )}
+      {' · '}SYNC rtt 최근/최소 {fmt(sync.lastRttMs)}/{fmt(sync.minRttMs)}ms · 오프셋 관측/채택 {fmt(sync.offsetObsMs, 2)}/{fmt(adoptedMs, 2)}ms · 짝 실패{' '}
+      <span className={sync.unmatched > 0 ? 'warn' : ''}>{sync.unmatched}</span>/{sync.count}
+    </span>
+  );
+}
 
 export function SensorSection({
   health,
@@ -70,6 +95,7 @@ export function SensorSection({
             </span>
           );
         })}
+        {stats.pedal.present && <PedalStatus pedal={stats.pedal} adoptedMs={snap.pedalOffset} />}
         <span className="mon-status">
           <span className="faint">build</span> {stats.build ?? '–'}
         </span>

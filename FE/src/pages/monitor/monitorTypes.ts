@@ -21,6 +21,8 @@ export interface Snap {
   transport: TransportStats | null;
   /** 스틱별 시계 오프셋(ms). 동기화 전이면 null */
   offsets: [number | null, number | null];
+  /** 페달 보드(role 2) 채택 오프셋(ms). 직결 소스에서만 알 수 있다. 따라보기·재생·동기화 전이면 null */
+  pedalOffset: number | null;
   /** ④ 판정·⑤ 채점 집계(judgeLog) */
   judge: JudgeStats;
   /** ⑥ 구간 지연 분위수(latencyStats) */

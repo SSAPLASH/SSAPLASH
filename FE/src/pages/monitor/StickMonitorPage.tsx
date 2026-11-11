@@ -210,6 +210,7 @@ export function StickMonitorPage() {
       rows,
       transport: fs ? fs.transport : replay ? null : (src?.transportStats?.() ?? null),
       offsets,
+      pedalOffset: fs || replay ? null : (src?.clockOffsetOf?.(2) ?? null),
       judge: judgeLog.stats(rows),
       latency: latencyLog.stats(),
       // 따라보기: 오디오는 연주 창 것이라 hello 값을 쓴다
