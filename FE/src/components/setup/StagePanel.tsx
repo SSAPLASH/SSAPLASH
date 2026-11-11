@@ -18,10 +18,12 @@ export interface StagePanelProps {
   /** 아래쪽 가운데 경고 배너(GapBanner) */
   banner?: ReactNode;
   /** 드럼 그림(KitCanvas·DrumKit) */
+  /** 판 오른쪽 위에 고정하는 동작 버튼(편집 화면의 [전체 보정]) */
+  action?: ReactNode;
   children: ReactNode;
 }
 
-export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, figClassName, noPointerStrike, top, card, banner, children }: StagePanelProps) {
+export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, figClassName, noPointerStrike, top, card, banner, action, children }: StagePanelProps) {
   return (
     <div className="setup-stage-row" ref={rowRef}>
       <div className="setup-stage-panel">
@@ -31,6 +33,7 @@ export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, f
           </div>
         </div>
         {top}
+        {action && <div className="setup-stage-action">{action}</div>}
         {banner && (
           <div className="setup-panel-banner" ref={bannerRef} style={bannerPos.left === null ? { bottom: bannerPos.bottom } : { left: bannerPos.left, bottom: bannerPos.bottom, transform: 'none' }}>
             {banner}

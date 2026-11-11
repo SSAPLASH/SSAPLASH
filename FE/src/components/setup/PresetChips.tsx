@@ -1,4 +1,5 @@
-// 드럼 배치 카드 칩 줄(Figma 765:33421·765:33496, UX-64): [시스템 기본 · 고정] [내 배치] … [+ 추가하기] | 완료 시각 pill + [전체 보정].
+// 드럼 배치 카드 칩 줄(Figma 765:33421·765:33496, UX-64): [시스템 기본 · 고정] [내 배치] … [+ 추가하기] | 완료 시각 pill + [프리셋 관리].
+// [전체 보정]은 드럼 그림 판 오른쪽 위에 있다(SetupPage).
 // 보정 중에는 「새 프리셋 · 보정 중」(추가하기) 또는 적용 칩 유지 + 「보정 중 n / 7」 pill + [보정 취소].
 // 상태는 props로만 받고 세션·스토어 호출은 콜백으로 한다.
 import { Button } from '@/components/ui/Button';
@@ -16,12 +17,13 @@ export interface PresetChipsProps {
   calibratedText: string | null;
   /** 센서 모드가 아니면 보정 버튼이 없다(키보드만 pill) */
   sensorMode: boolean;
-  /** 연결된 손이 없으면 보정 버튼 비활성 */
+  /** 연결된 손이 없으면 [추가하기] 비활성 */
   canCalibrate: boolean;
   busy: boolean;
   onSelect: (id: string) => void;
   onAdd: () => void;
-  onFullCalibrate: () => void;
+  /** 프리셋 창(슬롯 목록)을 연다. 적용·지우기·현재 배치 저장 */
+  onManage: () => void;
   onCancel: () => void;
 }
 
@@ -37,6 +39,18 @@ function PlusIcon() {
   );
 }
 
+/** 격자 아이콘(16px): 프리셋 슬롯 목록 */
+function GridIcon() {
+  return (
+    <svg className="setup-chips-plus" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="2.5" width="5" height="4.5" rx="1" />
+      <rect x="9" y="2.5" width="5" height="4.5" rx="1" />
+      <rect x="2" y="9" width="5" height="4.5" rx="1" />
+      <rect x="9" y="9" width="5" height="4.5" rx="1" />
+    </svg>
+  );
+}
+
 export function PresetChips({
   presets,
   activeId,
@@ -47,7 +61,7 @@ export function PresetChips({
   busy,
   onSelect,
   onAdd,
-  onFullCalibrate,
+  onManage,
   onCancel,
 }: PresetChipsProps) {
   const system = isSystemPreset(activeId);
@@ -80,9 +94,7 @@ export function PresetChips({
         )}
       </div>
       <div className="setup-chips-right">
-        {!sensorMode ? (
-          <StatusPill variant="neutral">키보드만</StatusPill>
-        ) : calibrating ? (
+        {calibrating ? (
           <>
             <StatusPill variant="accent">{capturePillText(calibrating.index, calibrating.total)}</StatusPill>
             <Button variant="text" size="sm" onClick={onCancel}>
@@ -91,10 +103,17 @@ export function PresetChips({
           </>
         ) : (
           <>
-            {calibratedText && <StatusPill variant="ok">완료 {calibratedText}</StatusPill>}
-            {!system && !calibratedText && <StatusPill variant="amber">보정 필요</StatusPill>}
-            <Button variant="secondary" size="sm" onClick={onFullCalibrate} disabled={system || !canCalibrate || busy}>
-              전체 보정
+            {!sensorMode ? (
+              <StatusPill variant="neutral">키보드만</StatusPill>
+            ) : (
+              <>
+                {calibratedText && <StatusPill variant="ok">완료 {calibratedText}</StatusPill>}
+                {!system && !calibratedText && <StatusPill variant="amber">보정 필요</StatusPill>}
+              </>
+            )}
+            <Button variant="text" size="sm" className="setup-chips-add setup-chips-manage" onClick={onManage} disabled={busy}>
+              <GridIcon />
+              프리셋 관리
             </Button>
           </>
         )}
