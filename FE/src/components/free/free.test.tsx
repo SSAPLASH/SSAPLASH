@@ -143,6 +143,22 @@ describe('AccompanimentPicker', () => {
   });
 });
 
+describe('SeekBar layout="ends"', () => {
+  it('시간을 막대 아래 양끝에 경과 · 남은 시간으로 둔다', () => {
+    const { container } = render(<SeekBar layout="ends" positionMs={72_000} durationMs={204_000} onSeek={noop} />);
+    expect(container.querySelector('.free-seek.is-ends')).toBeTruthy();
+    expect(container.querySelector('.free-seek-time')).toBeNull();
+    const ends = container.querySelectorAll('.free-seek-ends > span');
+    expect([...ends].map((e) => e.textContent)).toEqual(['1:12', '-2:12']);
+  });
+
+  it('기본 배치는 그대로 「경과 / 전체」', () => {
+    const { container } = render(<SeekBar positionMs={72_000} durationMs={204_000} onSeek={noop} />);
+    expect(container.querySelector('.free-seek.is-ends')).toBeNull();
+    expect(container.querySelector('.free-seek-time')?.textContent).toBe('1:12 / 3:24');
+  });
+});
+
 describe('SeekBar', () => {
   const setup = (onSeek = vi.fn(), positionMs = 72_000) => {
     render(<SeekBar positionMs={positionMs} durationMs={204_000} onSeek={onSeek} />);

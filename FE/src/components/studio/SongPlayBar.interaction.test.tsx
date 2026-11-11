@@ -70,7 +70,11 @@ describe('SongPlayBar', () => {
     const p = playback();
     const s = song();
     render(<SongPlayBar song={s} playback={p} />);
-    expect(screen.getByText('0:00 / 3:24')).toBeTruthy();
+    // 막대 아래 양끝: 경과 · 남은 시간
+    expect(screen.getByText('0:00')).toBeTruthy();
+    expect(screen.getByText('-3:24')).toBeTruthy();
+    // 10초 버튼은 쉬는 상태에 없다(자리만 비운다)
+    expect(screen.queryByRole('button', { name: '10초 뒤로' })).toBeNull();
     expect(screen.queryByRole('slider')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: PLAY }));
     expect(p.onListen).toHaveBeenCalledWith(s);
@@ -79,7 +83,7 @@ describe('SongPlayBar', () => {
 
   it('쉬는 상태: 곡 길이를 모르면 시간 글자를 두지 않는다', () => {
     const { container } = render(<SongPlayBar song={song({ durationMs: null })} playback={playback()} />);
-    expect(container.querySelector('.free-seek-time')).toBeNull();
+    expect(container.querySelector('.free-seek-ends')?.textContent).toBe('');
   });
 
   it('다른 곡이 재생 중이어도 이 곡은 쉬는 상태다', () => {
@@ -95,7 +99,8 @@ describe('SongPlayBar', () => {
     fireEvent.click(screen.getByRole('button', { name: PAUSE }));
     expect(p.onPause).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('slider', { name: '반주 위치' })).toBeTruthy();
-    expect(screen.getByText('0:12 / 1:00')).toBeTruthy();
+    expect(screen.getByText('0:12')).toBeTruthy();
+    expect(screen.getByText('-0:48')).toBeTruthy();
   });
 
   it('일시정지: ▶는 처음부터가 아니라 이어서 재생(onResume)', () => {
@@ -113,10 +118,22 @@ describe('SongPlayBar', () => {
     expect(p.onSeek).toHaveBeenCalledWith(17_000);
   });
 
-  it('불러오는 중: 안내 글자만', () => {
+  it('10초 뒤로·앞으로는 지금 위치에서 10초씩 옮긴다', () => {
+    const p = playback(viewOf('playing'));
+    render(<SongPlayBar song={song()} playback={p} />);
+    fireEvent.click(screen.getByRole('button', { name: '10초 앞으로' }));
+    expect(p.onSeek).toHaveBeenLastCalledWith(22_000);
+    fireEvent.click(screen.getByRole('button', { name: '10초 뒤로' }));
+    expect(p.onSeek).toHaveBeenLastCalledWith(2_000);
+  });
+
+  it('불러오는 중: 안내 글자, 버튼은 눌리지 않는다', () => {
     render(<SongPlayBar song={song()} playback={playback(viewOf('loading'))} />);
     expect(screen.getByText('반주를 불러오는 중…')).toBeTruthy();
     expect(screen.queryByRole('slider')).toBeNull();
+    for (const name of ['10초 뒤로', PLAY, '10초 앞으로']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it('오류: 문구와 [다시 시도]', () => {
@@ -175,6 +192,21 @@ describe.each([
   it('playback이 없으면 재생바를 그리지 않는다', () => {
     const { container } = renderItem(song());
     expect(container.querySelector('.song-playbar')).toBeNull();
+  });
+
+  it('제목 옆 이퀄라이저: 재생 대상 곡에만 있고, 재생 중이면 움직이고 일시정지면 납작하다', () => {
+    const idle = renderItem(song(), playback());
+    expect(idle.container.querySelector('.song-eq')).toBeNull();
+    cleanup();
+    const other = renderItem(song(), playback(viewOf('playing', 99)));
+    expect(other.container.querySelector('.song-eq')).toBeNull();
+    cleanup();
+    const playing = renderItem(song(), playback(viewOf('playing')));
+    expect(playing.container.querySelector('.song-title-line .song-eq')?.classList.contains('is-playing')).toBe(true);
+    expect(screen.getByRole('img', { name: '재생 중' })).toBeTruthy();
+    cleanup();
+    const paused = renderItem(song(), playback(viewOf('paused')));
+    expect(paused.container.querySelector('.song-eq')?.classList.contains('is-paused')).toBe(true);
   });
 
   it('보조 줄(아티스트)은 재생 중에도 그대로 보인다', () => {
