@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { StickStatusChip, StickStatusIndicator } from './StickStatusIndicator';
-import { StickCard } from '../setup/StickCard';
+import { StickCard } from '@/features/setup/components/StickCard';
 
 function render(
   connected: [boolean, boolean],

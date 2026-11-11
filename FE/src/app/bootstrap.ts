@@ -4,7 +4,7 @@ import type { InputSource, SurfaceToPose } from '@/input/InputSource';
 import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
-import { onStickLinked } from './hapticMode';
+import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
 import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
 import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';

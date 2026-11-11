@@ -9,9 +9,9 @@ type RouteModule = { default: ComponentType };
  * React·라우터를 import하지 않는다(타입 제외) — 미리 받기 등 다른 모듈이 이 파일만 가져다 쓴다.
  */
 const routeImports = {
-  setup: () => import('@/pages/SetupPage').then((m) => ({ default: m.SetupPage })),
-  play: () => import('@/pages/PlayPage').then((m) => ({ default: m.PlayPage })),
-  sheet: () => import('@/pages/SheetPage').then((m) => ({ default: m.SheetPage })),
+  setup: () => import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage })),
+  play: () => import('@/features/play/PlayPage').then((m) => ({ default: m.PlayPage })),
+  sheet: () => import('@/features/play/SheetPage').then((m) => ({ default: m.SheetPage })),
   /** 입문 코스 알아보기 레슨(Jira 331) */
   lessonRead: () => import('@/features/lesson/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
   studio: () => import('@/features/studio/StudioPage').then((m) => ({ default: m.StudioPage })),
