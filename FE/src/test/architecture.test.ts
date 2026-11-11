@@ -44,7 +44,6 @@ const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app
 /**
  * 지금 남아 있는 예외. 모두 재편 전 구조에서 넘어온 것이다.
  * - 공유 → app: 입력 인스턴스·녹음 상태·빌드 스위치처럼 조립 폴더가 가진 단일 인스턴스를 읽는 곳
- * - 공유 → 기능 CSS: 공유로 내린 부품의 스타일이 아직 기능 CSS 파일에 들어 있는 곳(CSS 분리 뒤 지운다)
  */
 const ALLOWED = new Set<string>([
   // 공유 → app
@@ -63,9 +62,6 @@ const ALLOWED = new Set<string>([
   'components/shell/Sidebar.tsx -> app/prefetchRoute.ts',
   'components/shell/TopBar.tsx -> app/sensorRegistry.ts',
   'components/song/useFreeAccompaniment.ts -> app/bootstrap.ts',
-  // 공유 → 기능 CSS
-  'components/drum/HitReadout.tsx -> features/play/components/play.css',
-  'components/song/SeekBar.tsx -> features/free/free.css',
 ]);
 
 function violations(test: (from: string, to: string) => boolean): string[] {
