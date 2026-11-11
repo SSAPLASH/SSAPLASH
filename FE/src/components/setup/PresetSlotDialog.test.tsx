@@ -49,6 +49,25 @@ describe('PresetSlotDialog', () => {
     expect(html).toContain('방금 보정한 배치를 저장해요');
   });
 
+  it('onDelete가 있으면 저장 슬롯마다 휴지통이 있고(시스템·빈 슬롯은 없음) 저장 수를 보인다', () => {
+    const html = render({ presets: [preset('a', '내 배치'), preset('b', '합주실')], onDelete: noop });
+    expect((html.match(/class="setup-slot-delete"/g) ?? []).length).toBe(2);
+    expect(html).toContain('aria-label="합주실 프리셋 지우기"');
+    expect(html).toContain(`저장 2 / ${PRESET_SLOTS}`);
+    // onDelete가 없으면 휴지통도 없다
+    expect(render()).not.toContain('setup-slot-delete');
+  });
+
+  it('초안 모드에는 휴지통이 없다', () => {
+    expect(render({ draftMode: true, onDelete: noop })).not.toContain('setup-slot-delete');
+  });
+
+  it('error 문구를 창 아래에 알린다', () => {
+    const html = render({ error: '지우지 못했어요' });
+    expect(html).toMatch(/class="setup-slot-error" role="alert">지우지 못했어요</);
+    expect(render()).not.toContain('setup-slot-error');
+  });
+
   it('닫혀 있으면 아무것도 그리지 않는다', () => {
     expect(render({ open: false })).toBe('');
   });
