@@ -63,9 +63,17 @@ describe('GlassDock 녹음 슬롯(스위치 켜짐)', () => {
   it('접힘: armed는 잠겨 있을 때만 빨간 원', () => {
     useSettings.setState({ dockCollapsed: true });
     useRecordingStore.setState({ phase: 'armed', locked: false });
-    expect(render('/play')).toContain('class="dock-rec-status"');
+    expect(render('/sheet')).toContain('class="dock-rec-status"');
     useRecordingStore.setState({ phase: 'armed', locked: true });
-    expect(render('/play')).toContain('dock-rec-status on');
+    expect(render('/sheet')).toContain('dock-rec-status on');
+  });
+
+  it('리듬 게임(/play)에는 녹음 버튼도 녹음 상태도 없다(녹음 대기·잠금이어도)', () => {
+    useRecordingStore.setState({ phase: 'armed', locked: true });
+    useSettings.setState({ dockCollapsed: false });
+    expect(render('/play')).not.toContain('rec-btn');
+    useSettings.setState({ dockCollapsed: true });
+    expect(render('/play')).not.toContain('dock-rec-status');
   });
 
   it('접힘: 녹음 버튼이 없는 화면에는 녹음 상태도 없다', () => {
