@@ -13,6 +13,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
+import { startClockDiag } from './clockDiag';
 import type { ResolvedHit, SensorId, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { anchorsToProfile } from '@/domain/kitJudge';
@@ -223,6 +224,8 @@ export function bootstrapInput(): void {
       return { yawDrift: arr };
     }),
   );
+  // 보정 전송을 진단 줄로 남긴다(구독자가 없으면 publish가 즉시 반환)
+  yawDriftMonitor.onCorrection((c) => diagTap.publish({ type: 'yawCorrect', ...c }));
   // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다.
   // 스틱 버튼 보정(0x22)은 세션이 처리한다: 보정 중이면 처음부터, 아니면 그 손 재정렬 필요
   inputManager.onResetPose((source, stickId) => {
@@ -381,6 +384,8 @@ export function bootstrapInput(): void {
     if (s.sensorKind !== prev.sensorKind) void activateSensor(s.sensorKind);
     if (s.soundSetId !== prev.soundSetId) void applySoundSet();
   });
+  // 센서 시계 오프셋 진단 줄: 10초마다 + 곡 시작 직후 1회
+  startClockDiag(() => activeInstance);
   startRelay();
   startTelemetry();
 }
