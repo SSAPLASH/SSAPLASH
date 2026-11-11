@@ -50,6 +50,28 @@ def test_invalid_config_is_rejected(bad: dict) -> None:
         validate_config(bad)
 
 
+def test_llm_is_kept_for_publishing() -> None:
+    # 등록본에서 llm이 빠지면 FE가 off로 보고 연주 중 LLM 실험군을 배정하지 않는다
+    llm = {"mode": "shadow", "rolloutPercent": 100}
+    assert validate_config({**GOOD, "llm": llm})["llm"] == llm
+    assert "llm" not in validate_config(GOOD)
+
+
+@pytest.mark.parametrize(
+    "llm",
+    [
+        "shadow",
+        {"mode": "maybe", "rolloutPercent": 100},
+        {"mode": "on"},
+        {"mode": "on", "rolloutPercent": 101},
+        {"mode": "on", "rolloutPercent": True},
+    ],
+)
+def test_invalid_llm_is_rejected(llm: object) -> None:
+    with pytest.raises(ConfigError):
+        validate_config({**GOOD, "llm": llm})
+
+
 def test_off_needs_no_arms() -> None:
     assert validate_config({"gate": {"mode": "off"}, "rolloutPercent": 0})["gate"]["arms"] == []
 
