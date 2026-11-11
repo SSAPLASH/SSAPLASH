@@ -218,3 +218,97 @@ button.song-level {
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* ---- 제목 흐름 (MarqueeTitle, 설계 CHART-003 라이브러리 재생바): 칸보다 긴 제목만 흐른다 ---- */
+.marquee {
+  text-overflow: clip;
+}
+.marquee-track {
+  --marquee-dur: 6s;
+  display: inline-flex;
+  width: max-content;
+  animation: marquee-flow var(--marquee-dur) linear infinite;
+}
+/* 묶음 = 제목 + 뒤 간격. 두 묶음이 같은 너비라 −50%에서 끊김 없이 이어진다 */
+.marquee-group {
+  display: inline-flex;
+  flex: none;
+  padding-inline-end: 2em;
+}
+.marquee-item {
+  white-space: nowrap;
+}
+@keyframes marquee-flow {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* 움직임 줄이기: 흐르지 않고 제목 하나만 말줄임으로 둔다 */
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    text-overflow: ellipsis;
+  }
+  .marquee-track,
+  .marquee-group {
+    display: inline;
+    padding: 0;
+    animation: none;
+  }
+  .marquee-group[aria-hidden] {
+    display: none;
+  }
+}
+
+/* ---- 재생 중 이퀄라이저 (PlayingEq, Figma 시안 D eq 971:50985 · 일시정지 971:51089) ---- */
+.song-eq {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 2px;
+  width: 13px;
+  height: 14px;
+}
+.song-eq-bar {
+  width: 3px;
+  border-radius: 1.5px;
+  background: var(--brand);
+  transform-origin: bottom;
+}
+.song-eq.is-playing .song-eq-bar {
+  animation: song-eq-bounce 0.9s ease-in-out infinite alternate;
+}
+.song-eq.is-playing .song-eq-bar:nth-child(1) {
+  height: 8px;
+  animation-duration: 0.7s;
+}
+.song-eq.is-playing .song-eq-bar:nth-child(2) {
+  height: 14px;
+  animation-duration: 0.9s;
+  animation-delay: -0.3s;
+}
+.song-eq.is-playing .song-eq-bar:nth-child(3) {
+  height: 10px;
+  animation-duration: 0.6s;
+  animation-delay: -0.15s;
+}
+/* 일시정지: 납작해지고 회색으로 */
+.song-eq.is-paused {
+  align-items: center;
+}
+.song-eq.is-paused .song-eq-bar {
+  height: 3px;
+  background: var(--text-3);
+}
+@keyframes song-eq-bounce {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-eq.is-playing .song-eq-bar {
+    animation: none;
+  }
+}

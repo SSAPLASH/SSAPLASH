@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
 import { mergeLibraryItems, type SheetSummary } from '@/domain/sheetMusic';
 import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
+import type { SongPlayback } from '@/domain/songPlayback';
 import { ActiveJobCard } from './ActiveJobCard';
 import { LibraryEmpty } from './LibraryEmpty';
 import { MySongCard } from './MySongCard';
@@ -49,6 +50,8 @@ interface Props {
   onSongSheet?: (kind: SongSheetKind, song: SongSummary) => void;
   /** 곡·악보·진행 작업이 모두 없다(페이지가 판단, 악보를 읽는 중이면 거짓). 참이면 목록 자리에 빈 안내를 둔다 */
   empty?: boolean;
+  /** 곡 반주 듣기 상태와 조작. 없으면 듣기 UI를 그리지 않는다 */
+  playback?: SongPlayback;
 }
 
 /** 202 직후 목록에 아직 없는 활성 작업을 임시 곡으로 만든다 */
@@ -93,6 +96,7 @@ export function MySongList({
   onSongSheet,
   onUploadSong,
   empty = false,
+  playback,
 }: Props) {
   if (status === 'idle' || status === 'loading') {
     // 스켈레톤 카드 6장 (Figma 로딩: 커버·제목·아티스트·동작 자리)
@@ -165,6 +169,7 @@ export function MySongList({
                   onEdit={onEdit}
                   onSheet={onSongSheet}
                   onCoverError={onCoverError}
+                  playback={playback}
                 />
               ) : (
                 <SheetItemCard key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} onUploadSong={onUploadSong} />
@@ -183,6 +188,7 @@ export function MySongList({
                   onEdit={onEdit}
                   onSheet={onSongSheet}
                   onCoverError={onCoverError}
+                  playback={playback}
                 />
               ) : (
                 <SheetItemRow key={`sheet-${it.sheet.id}`} sheet={it.sheet} onMenu={(k, s) => onSheetMenu?.(k, s)} onCoverError={onSheetCoverError} onUploadSong={onUploadSong} />
