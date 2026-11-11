@@ -1,5 +1,6 @@
 // 보정·재정렬 화면 문구(순수 함수, PLAY-004 4-1·3-9). 컴포넌트 파일과 분리해 테스트와 Fast Refresh가 편하게 한다.
-import type { CaptureSnapshot } from '@/engine/HitCapture';
+import type { CaptureSnapshot, GapWarning } from '@/engine/HitCapture';
+import type { PadGap } from '@/domain/calibration';
 import type { StickId } from '@/domain/events';
 import { PAD_META, type PadId } from '@/domain/pads';
 import { josaEulReul } from '@/domain/setupSteps';
@@ -20,16 +21,9 @@ export function captureHeadline(target: PadId, hands: readonly StickId[]): strin
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 타격하세요`;
 }
 
-/** 오른쪽 카드 제목(UX-64): "하이햇 2회 타격 (1/7)". index는 0부터 */
-export function captureCardTitle(target: PadId, index: number, total: number): string {
-  return `${PAD_META[target].label} 2회 타격 (${index + 1}/${total})`;
-}
-
-/** 카드 타격 줄(UX-64 U7): 양손 "왼 1/2 · 오 2/2", 한 손 "1/2" */
-export function hitCountText(hands: readonly StickId[], counts: readonly [number, number], perPad = 2): string {
-  if (hands.length === 2) return `왼 ${counts[0]}/${perPad} · 오 ${counts[1]}/${perPad}`;
-  const h = hands[0] ?? 1;
-  return `${counts[h]}/${perPad}`;
+/** 정보 카드 진행 제목(D10): "하이햇 1/7". index는 0부터 */
+export function captureProgressText(target: PadId, index: number, total: number): string {
+  return `${PAD_META[target].label} ${index + 1}/${total}`;
 }
 
 /** 칩 줄 pill(UX-64): "보정 중 1 / 7". index는 0부터 */
@@ -49,4 +43,58 @@ export function realignPromptText(hands: readonly StickId[], done: readonly [boo
   if (left.length === 0) return '스네어 재정렬을 마쳤어요';
   if (left.length === 2) return '스네어를 왼손·오른손 한 번씩 쳐 주세요';
   return `${HAND_NAME[left[0]]}으로 스네어를 한 번 쳐 주세요`;
+}
+
+/** 와/과 조사(받침 있으면 과). setupSteps에 없어 여기서만 쓴다 */
+function josaWaGwa(word: string): string {
+  const last = word.charCodeAt(word.length - 1);
+  if (last < 0xac00 || last > 0xd7a3) return '와';
+  return (last - 0xac00) % 28 === 0 ? '와' : '과';
+}
+
+/** 간격 경고 머리(개편 3절): 「왼손 크래시가 하이햇과 10°밖에 안 떨어져 있어요」. 각도는 반올림 정수 */
+export function gapWarningText(w: GapWarning): string {
+  const pad = PAD_META[w.pad].label;
+  const near = PAD_META[w.near].label;
+  const subj = (word: string) => (josaEulReul(word) === '를' ? '가' : '이');
+  return `${HAND_NAME[w.stickId]} ${pad}${subj(pad)} ${near}${josaWaGwa(near)} ${Math.round(w.deg)}°밖에 안 떨어져 있어요`;
+}
+
+/** 쌍별 안내(개편 3절 표). 순서는 상관없다. 표에 없는 쌍은 기본 문구 */
+export function gapAdviceText(a: PadId, b: PadId): string {
+  const has = (x: PadId, y: PadId) => (a === x && b === y) || (a === y && b === x);
+  if (has('HIHAT', 'CRASH')) return '크래시는 스틱 끝을 더 높이 들고 바깥쪽으로, 하이햇은 앞쪽 아래로 쳐 보세요';
+  if (has('SMALL_TOM', 'MID_TOM')) return '두 탐을 좌우로 더 벌려서 쳐 보세요';
+  if (has('FLOOR_TOM', 'RIDE')) return '라이드는 더 높이, 플로어탐은 더 낮게 쳐 보세요';
+  return '두 패드를 칠 때 스틱 방향을 더 다르게 해 주세요';
+}
+
+/** 진행 안내(개편 3절). 드럼 배치 카드 설명에 쓴다 */
+export const CAPTURE_GUIDE_TEXT = '불이 들어온 패드를 2번 쳐요. 다 치면 다음 드럼으로 넘어가요.';
+/** 결과 안내(개편 3절) */
+export const RESULT_GUIDE_TEXT = '드럼을 눌러 반경을 고치거나 다시 칠 수 있어요. 주황 테두리는 서로 너무 가까운 드럼이에요.';
+
+/** 결과 화면 한 줄: 「크래시와 10°」 */
+export function overlapLineText(other: PadId, deg: number): string {
+  const label = PAD_META[other].label;
+  return `${label}${josaWaGwa(label)} ${Math.round(deg)}°`;
+}
+
+/** 결과 배너 안내 한 줄(v0.2) */
+export const RESULT_BANNER_ADVICE_TEXT = '드럼을 눌러 [다시 치기]로 그 자리를 다시 잡을 수 있어요';
+
+/**
+ * 결과 배너 머리(v0.2): 「2쌍이 너무 가까워요 · 하이햇–크래시 10°, 스몰탐–미드탐 14°」.
+ * 같은 쌍이 양손에서 겹치면 한 쌍으로 세고 더 가까운 각도를 적는다
+ */
+export function overlapBannerText(items: ReadonlyArray<PadGap & { stickId: StickId }>): string {
+  const pairs = new Map<string, { a: PadId; b: PadId; deg: number }>();
+  for (const g of items) {
+    const key = [g.a, g.b].sort().join('|');
+    const prev = pairs.get(key);
+    if (!prev || g.deg < prev.deg) pairs.set(key, { a: g.a, b: g.b, deg: g.deg });
+  }
+  const list = [...pairs.values()].sort((x, y) => x.deg - y.deg);
+  const parts = list.map((g) => `${PAD_META[g.a].label}–${PAD_META[g.b].label} ${Math.round(g.deg)}°`);
+  return `${list.length}쌍이 너무 가까워요 · ${parts.join(', ')}`;
 }
