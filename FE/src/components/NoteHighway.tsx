@@ -6,9 +6,9 @@ import { FxCanvas } from '@/components/fx/FxCanvas';
 import { readFxColors } from '@/components/fx/judgeColors';
 import { JUDGE_COLORS_FALLBACK } from '@/domain/hitFx/judgeFx';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
-import { highwayLayout, laneCenterX, locateHighway, noteY } from './highwayGeometry';
+import { highwayLayout, laneCenterX, laneLeft, locateHighway, noteY } from './highwayGeometry';
 import { PAD_META, type PadId } from '@/domain/pads';
-import { HIGHWAY_LANES } from '@/domain/highwayLanes';
+import { HIGHWAY_LANES, laneColorOf } from '@/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { barTimeMs, beatAtMs } from '@/domain/tempo';
 import type { Judgement } from '@/domain/judgement';
@@ -67,7 +67,7 @@ export function NoteHighway(props: NoteHighwayProps) {
       },
       songTime: s.songTime(performance.now()),
       scrollMs: p.scrollMs,
-      tintOf: (pad) => PAD_META[pad].color,
+      tintOf: laneColorOf,
     });
   }, []);
 
@@ -117,13 +117,14 @@ export function NoteHighway(props: NoteHighwayProps) {
 
       // 레인 배경 + 플래시
       lanes.forEach((pad, i) => {
-        const x = i * laneW;
+        const x = laneLeft(layout, i);
         ctx.fillStyle = C.lane;
         ctx.fillRect(x, 0, laneW, H);
-        // 레인 경계 1px (맨 오른쪽은 바깥 테두리가 맡는다)
+        // 레인 경계 1px (맨 오른쪽은 바깥 테두리가 맡는다). 페달 칸 오른쪽 가장자리도 그어 간격이 떨어져 보이게 한다
         if (i > 0) {
           ctx.fillStyle = C.line;
           ctx.fillRect(x, 0, 1, H);
+          if (i === 1) ctx.fillRect(x - layout.gap - 1, 0, 1, H);
         }
         const f = p.flashes.current?.get(pad);
         if (f !== undefined) {
@@ -131,7 +132,7 @@ export function NoteHighway(props: NoteHighwayProps) {
           if (a > 0) {
             const g = ctx.createLinearGradient(0, judgeY - 220, 0, judgeY);
             g.addColorStop(0, 'rgba(0,0,0,0)');
-            g.addColorStop(1, PAD_META[pad].color + Math.round(a * 140).toString(16).padStart(2, '0'));
+            g.addColorStop(1, laneColorOf(pad) + Math.round(a * 140).toString(16).padStart(2, '0'));
             ctx.fillStyle = g;
             ctx.fillRect(x, judgeY - 220, laneW, 220);
           }
@@ -178,13 +179,18 @@ export function NoteHighway(props: NoteHighwayProps) {
       ctx.strokeStyle = C.brand;
       ctx.lineWidth = 3;
       ctx.beginPath();
+      // 페달 칸과 나머지 칸이 떨어져 있어 두 구간으로 나눠 긋는다
+      const mainLeft = laneLeft(layout, 1);
+      ctx.beginPath();
       ctx.moveTo(0, judgeY);
+      ctx.lineTo(laneW, judgeY);
+      ctx.moveTo(mainLeft, judgeY);
       ctx.lineTo(W, judgeY);
       ctx.stroke();
 
       // 레인 이름(위쪽) + 키(개발용, 판정선 아래)
       lanes.forEach((pad, i) => {
-        const cx = i * laneW + laneW / 2;
+        const cx = laneCenterX(layout, i);
         ctx.fillStyle = C.text2;
         ctx.font = '400 12px Pretendard Variable, Pretendard, sans-serif';
         ctx.textAlign = 'center';
@@ -222,7 +228,7 @@ export function NoteHighway(props: NoteHighwayProps) {
           ctx.beginPath();
           ctx.roundRect(cx - nw / 2, y - nh / 2, nw, nh, nh / 2);
           if (n.judgement === 'MISS') ctx.globalAlpha = 0.4;
-          ctx.fillStyle = n.judgement === 'MISS' ? C.miss : PAD_META[n.note.pad].color;
+          ctx.fillStyle = n.judgement === 'MISS' ? C.miss : laneColorOf(n.note.pad);
           ctx.fill();
           ctx.globalAlpha = 1;
           if (n.judgement !== 'MISS') {
@@ -249,7 +255,7 @@ export function NoteHighway(props: NoteHighwayProps) {
           }
           const li = lanes.indexOf(pop.pad);
           const look = popupLook(pop.judgement, age, reduced);
-          const cx = li * laneW + laneW / 2 + look.dx;
+          const cx = laneCenterX(layout, li) + look.dx;
           const y = judgeY - 70 - look.rise;
           const color = judgeColor[pop.judgement];
           const size = pop.judgement === 'PERFECT' ? 22 : 17;
