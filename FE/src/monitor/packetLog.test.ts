@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PacketRecord } from '@/input/packetTap';
 import { encodeSetPadTable, type PadTableEntry } from '@/input/stickProtocol';
-import { buildBridgeStats, buildHit, buildLog, buildParamAck, buildPose, buildStatus, buildSyncAck } from './mockStick';
+import { buildBridgeStats, buildHit, buildLog, buildParamAck, buildPedal, buildPose, buildStatus, buildSyncAck } from './mockStick';
 import { PacketLog } from './packetLog';
 import { WRAP_US } from './tsUnwrap';
 
@@ -35,6 +35,28 @@ describe('PacketLog 행 생성', () => {
     expect(rows[0].stick).toBe(1);
     expect(rows[1].stick).toBe(1);
     expect(rows[2].stick).toBeNull();
+  });
+
+  it('role은 IN 패킷의 flags role, role 없는 패킷·OUT은 null', () => {
+    log.ingest(hit(1, 0, 1));
+    log.ingest(rec(buildBridgeStats({ okFrames: 1, crcErrors: 0, resyncCount: 0 }), 1));
+    log.ingest(rec(new Uint8Array([0x10, 1, 0, 0, 0]), 2, { dir: 'out' }));
+    expect(log.rows().map((r) => r.role)).toEqual([1, null, null]);
+  });
+
+  it('페달(role 2·3) 패킷은 stick null·role 그대로이고 손 통계에 들어가지 않는다', () => {
+    log.ingest(rec(buildHit({ role: 2, seq: 1, timestampUs: 1_000_000, pad: 0 }), 0));
+    log.ingest(rec(buildStatus({ role: 3, batteryPct: 50, rssi: -60, fwMajor: 1, fwMinor: 0 }), 1));
+    log.ingest(rec(buildPedal(2, 1, 2_000_000), 2));
+    const rows = log.rows();
+    expect(rows.map((r) => r.stick)).toEqual([null, null, null]);
+    expect(rows.map((r) => r.role)).toEqual([2, 3, 2]);
+    // 페달 HIT는 손 시각 펼치기에 넣지 않는다
+    expect(rows[0].tBrowser).toBeNull();
+    const s = log.stats(3);
+    expect(s.perStick[0].hitCount).toBe(0);
+    expect(s.perStick[1].hitCount).toBe(0);
+    expect(s.perStick[1].lastStatus).toBeNull();
   });
 
   it('out 레코드는 decoded null, outType은 첫 바이트', () => {
@@ -378,6 +400,12 @@ describe('SYNC 왕복 표본', () => {
     const s = log.stats(0).sync;
     expect(s.samples).toHaveLength(600);
     expect(s.samples[0].t0).toBe(50);
+  });
+
+  it('페달(role 2) ACK는 손 표본이 아니다', () => {
+    log.ingest(out(100));
+    log.ingest(rec(buildSyncAck({ role: 2, t0Ms: 100, t1Us: 0 }), 105));
+    expect(log.stats(106).sync.samples).toHaveLength(0);
   });
 
   it('role 1 ACK는 stick 1 표본', () => {

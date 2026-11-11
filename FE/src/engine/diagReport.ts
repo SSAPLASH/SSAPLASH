@@ -3,7 +3,9 @@
 // 판정 경로는 바꾸지 않는다: 값을 읽어 내보내기만 한다.
 import type { ResolvedHit } from '@/domain/events';
 import type { TimingWindows } from '@/domain/judgement';
-import { diagTap, judgementToDiag, type DiagBody } from './diagTap';
+import type { PadAnchor } from '@/domain/calibration';
+import type { PadId } from '@/domain/pads';
+import { diagTap, judgementToDiag, type DiagAnchor, type DiagBody } from './diagTap';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';
 import { pushTelemetry } from './telemetry';
 
@@ -70,12 +72,35 @@ function sessionBody(a: ActiveSession, phase: 'start' | 'pause' | 'resume' | 'en
   };
 }
 
-/** 곡 시작(재시작 포함). 노트 배열을 1회 내보내고, MISS 노트를 missed로 파생하는 구독을 건다 */
-export function diagSessionStart(
-  ss: RhythmSession,
-  mode: 'RHYTHM' | 'SHEET',
-  opts: { windows: TimingWindows; audioOffsetMs: number },
-): void {
+/** 손 하나의 앵커 집합(판정 프로필의 anchors). null = 그 손 보정 안 됨 */
+export type DiagHandAnchors = Partial<Record<PadId, PadAnchor>> | null;
+
+export interface DiagSessionOpts {
+  windows: TimingWindows;
+  audioOffsetMs: number;
+  /** 손별 앵커(0 왼손, 1 오른손). 반경이 계산된 판정 프로필 값을 넘긴다. 없으면 anchors 줄을 내지 않는다 */
+  anchors?: [DiagHandAnchors, DiagHandAnchors];
+  calibratedAt?: number | null;
+  presetId?: string | null;
+}
+
+function toDiagAnchors(set: DiagHandAnchors): DiagAnchor[] | null {
+  if (!set) return null;
+  const out: DiagAnchor[] = [];
+  for (const a of Object.values(set)) {
+    if (a) out.push({ pad: a.pad, pitch: a.pitch, yaw: a.yaw, radius: a.radius, samples: a.samples, spread: a.spread });
+  }
+  return out;
+}
+
+/** 곡 시작 직후 부를 훅(1개). app/bootstrap이 clock 줄 발행을 건다(engine은 입력 소스를 모른다) */
+let sessionStartHook: (() => void) | null = null;
+export function onDiagSessionStart(cb: (() => void) | null): void {
+  sessionStartHook = cb;
+}
+
+/** 곡 시작(재시작 포함). 노트 배열·앵커 표를 1회 내보내고, MISS 노트를 missed로 파생하는 구독을 건다 */
+export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', opts: DiagSessionOpts): void {
   active?.off();
   const off = ss.onJudgement((e) => {
     if (!diagTap.active) return;
@@ -90,6 +115,15 @@ export function diagSessionStart(
     songId: ss.chart.songId,
     notes: ss.chart.notes.map((n) => ({ timeMs: n.timeMs, pad: n.pad })),
   });
+  if (opts.anchors) {
+    diagTap.publish({
+      type: 'anchors',
+      hands: [toDiagAnchors(opts.anchors[0]), toDiagAnchors(opts.anchors[1])],
+      calibratedAt: opts.calibratedAt ?? null,
+      presetId: opts.presetId ?? null,
+    });
+  }
+  sessionStartHook?.();
 }
 
 /** 일시정지·재개 */

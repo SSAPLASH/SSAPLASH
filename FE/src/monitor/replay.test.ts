@@ -139,6 +139,18 @@ describe('ReplayOffsets', () => {
     expect(o.offsetOf(1)).toBe(3006 - 2400);
   });
 
+  it('페달(role 2·3) ACK는 손 오프셋에 쓰지 않는다. 이전 파일처럼 stick이 role & 1로 적혀 있어도 같다', () => {
+    const o = new ReplayOffsets();
+    o.observe(1000, 'out', null, encodeSync(1000));
+    o.observe(1010, 'in', null, buildSyncAck({ role: 2, t0Ms: 1000, t1Us: 400_000 }));
+    o.observe(1012, 'in', 1, buildSyncAck({ role: 3, t0Ms: 1000, t1Us: 400_000 }));
+    expect(o.offsetOf(0)).toBeNull();
+    expect(o.offsetOf(1)).toBeNull();
+    // 같은 SYNC에 손은 그대로 짝지어진다
+    o.observe(1020, 'in', null, ack(1000, 400_000, 1));
+    expect(o.offsetOf(1)).toBe(610);
+  });
+
   it('짝이 없는 ACK는 무시하고, 초기화하면 비운다', () => {
     const o = new ReplayOffsets();
     o.observe(100, 'in', 0, ack(777, 1000));
