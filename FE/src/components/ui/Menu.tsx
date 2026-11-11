@@ -3,7 +3,7 @@
 // 팝오버는 Radix Popover로 body 끝(portal)에 그린다 — 조상의 overflow에 잘리지 않고, 아래 공간이 모자라면 Radix가 위로 뒤집는다(data-side="top").
 // 공용 Dialog(.dialog) 안의 트리거는 그 창 안에 그린다 — 다이얼로그 포커스 가두기(useDialogFocus)가 메뉴로 간 초점을 되돌리지 않게 한다.
 import * as Popover from '@radix-ui/react-popover';
-import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 
 /** 트리거 버튼에 펼쳐 걸 속성. ref는 Esc 초점 복원에 쓰이므로 반드시 걸어야 한다 */
 export interface MenuTriggerAttrs {
@@ -33,14 +33,29 @@ interface Props {
   /** 팝오버 aria-label */
   menuLabel?: string;
   onOpenChange?: (open: boolean) => void;
+  /** 열릴 때 첫 [role=menuitem]에 초점을 둔다(기본 꺼짐: 초점은 트리거에 남는다) */
+  focusFirstItem?: boolean;
+  /** 메뉴 안에서 ↑/↓로 항목을 순환 이동하고 Home/End로 처음·끝으로 간다(기본 꺼짐) */
+  arrowNav?: boolean;
 }
 
-export function Menu({ renderTrigger, children, align = 'end', className, menuClassName, menuLabel, onOpenChange }: Props) {
+export function Menu({
+  renderTrigger,
+  children,
+  align = 'end',
+  className,
+  menuClassName,
+  menuLabel,
+  onOpenChange,
+  focusFirstItem = false,
+  arrowNav = false,
+}: Props) {
   const [open, setOpenState] = useState(false);
   const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // 바깥 클릭으로 닫힌 경우에는 초점을 트리거로 돌리지 않는다(사용자가 누른 곳이 초점을 가져간다)
   const outsideClosedRef = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -51,6 +66,23 @@ export function Menu({ renderTrigger, children, align = 'end', className, menuCl
   );
   const close = useCallback(() => setOpen(false), [setOpen]);
   const toggle = () => setOpen(!open);
+
+  const items = () => Array.from(contentRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  // ↑/↓는 항목을 순환하고 Home/End는 처음·끝으로 간다. Enter·Space는 링크·버튼 기본 동작에 맡긴다
+  const onContentKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!arrowNav) return;
+    const list = items();
+    if (list.length === 0) return;
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    let to: number | null = null;
+    if (e.key === 'ArrowDown') to = at < 0 ? 0 : (at + 1) % list.length;
+    else if (e.key === 'ArrowUp') to = at <= 0 ? list.length - 1 : at - 1;
+    else if (e.key === 'Home') to = 0;
+    else if (e.key === 'End') to = list.length - 1;
+    if (to === null) return;
+    e.preventDefault();
+    list[to].focus();
+  };
 
   // 다이얼로그 안이면 그 창 요소에 그린다
   const container = wrapEl?.closest<HTMLElement>('.dialog') ?? undefined;
@@ -74,6 +106,7 @@ export function Menu({ renderTrigger, children, align = 'end', className, menuCl
       </Popover.Anchor>
       <Popover.Portal container={container}>
         <Popover.Content
+          ref={contentRef}
           className={menuClassName ? `${menuClassName} motion-menu` : 'motion-menu'}
           role="menu"
           aria-label={menuLabel}
@@ -81,11 +114,13 @@ export function Menu({ renderTrigger, children, align = 'end', className, menuCl
           align={align}
           sideOffset={4}
           collisionPadding={8}
-          // 열 때 초점은 트리거에 둔다(항목으로 옮기지 않는다)
+          // 열 때 초점은 기본적으로 트리거에 둔다. focusFirstItem이면 첫 항목으로 옮긴다
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             outsideClosedRef.current = false;
+            if (focusFirstItem) items()[0]?.focus();
           }}
+          onKeyDown={onContentKeyDown}
           // 닫힐 때 초점은 트리거로. 바깥 클릭으로 닫힌 경우만 건드리지 않는다
           onCloseAutoFocus={(e) => {
             e.preventDefault();
