@@ -59,14 +59,14 @@ describe('coachCopy', () => {
     expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: floor }))).toEqual({ title: '플로어탐 천천히', sub: '들고 있다 박에 떨궈요', mode: 'coach-info', target: floor });
   });
 
-  it('패드 이름은 화면 키트와 같은 탐1·탐2를 쓴다', () => {
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } }))?.title).toBe('탐1 미리!');
-    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'MID_TOM' } }))?.title).toBe('탐2 천천히');
+  it('패드 이름은 PAD_META 이름(스몰탐·미드탐)을 쓴다', () => {
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } }))?.title).toBe('스몰탐 미리!');
+    expect(coachCopy(msg({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'MID_TOM' } }))?.title).toBe('미드탐 천천히');
   });
 
   it('패드 놓침 구령은 패드 이름으로 가리키며 돌려 쓴다', () => {
     const titles = (pad: 'SMALL_TOM' | 'SNARE') => [0, 1, 2].map((repeat) => coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: { kind: 'pad', pad }, repeat }))?.title);
-    expect(titles('SMALL_TOM')).toEqual(['탐1 보세요', '탐1 챙겨요', '탐1 보세요']);
+    expect(titles('SMALL_TOM')).toEqual(['스몰탐 보세요', '스몰탐 챙겨요', '스몰탐 보세요']);
     expect(titles('SNARE')[0]).toBe('스네어 보세요');
   });
 
@@ -140,7 +140,7 @@ describe('coachCopy', () => {
     const sub = (recoveredFrom: CoachMessage['recoveredFrom']) => coachCopy(msg({ tag: 'LIVE_GOOD_RECOVERED', recoveredFrom }))?.sub;
     expect(sub({ tag: 'LIVE_LATE', target: null })).toBe('늦던 박이 맞았어요');
     expect(sub({ tag: 'LIVE_EARLY', target: null })).toBe('급하던 박이 맞았어요');
-    expect(sub({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } })).toBe('탐1 박이 맞아요');
+    expect(sub({ tag: 'LIVE_PAD_LATE', target: { kind: 'pad', pad: 'SMALL_TOM' } })).toBe('스몰탐 박이 맞아요');
     expect(sub({ tag: 'LIVE_PAD_EARLY', target: { kind: 'pad', pad: 'SNARE' } })).toBe('스네어 박이 맞아요');
     expect(sub({ tag: 'LIVE_HAND_WEAK', target: { kind: 'hand', hand: 1 } })).toBe('오른손 소리가 살았어요');
     expect(sub({ tag: 'LIVE_UNSTEADY', target: null })).toBe('박이 고르게 됐어요');
@@ -172,14 +172,14 @@ describe('coachCopy', () => {
 
     it('원인이 있으면 제목은 그대로 두고 보조만 원인 문구로 바꾼다', () => {
       const c = withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
-      expect(c).toEqual({ title: '탐1 보세요', sub: '탐1은 왼쪽 탐이에요', mode: 'coach-warn', target: tom });
-      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM', fromPad: 'SNARE' })?.sub).toBe('스네어 치며 탐1을 봐요');
+      expect(c).toEqual({ title: '스몰탐 보세요', sub: '스몰탐은 왼쪽 탐이에요', mode: 'coach-warn', target: tom });
+      expect(withCause({ cause: 'TRANSITION', strength: 1, pad: 'SMALL_TOM', fromPad: 'SNARE' })?.sub).toBe('스네어 치며 스몰탐을 봐요');
       expect(withCause({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('빠른 곳은 양손 번갈아 쳐요');
       expect(withCause({ cause: 'DRIFT_LATE', strength: 1, pad: 'SMALL_TOM' })?.sub).toBe('마디 첫 박에 다시 맞춰요');
     });
 
     it('다른 패드는 위치를 말할 수 있으면 위치로, 아니면 "대신 친 패드 말고 이 패드"로 말한다', () => {
-      expect(withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'MID_TOM', intoPad: 'SMALL_TOM' })?.sub).toBe('탐2는 오른쪽 탐이에요');
+      expect(withCause({ cause: 'WRONG_PAD', strength: 1, pad: 'MID_TOM', intoPad: 'SMALL_TOM' })?.sub).toBe('미드탐은 오른쪽 탐이에요');
       const snare = coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: { kind: 'pad', pad: 'SNARE' }, cause: { cause: 'WRONG_PAD', strength: 1, pad: 'SNARE', intoPad: 'HIHAT' } }));
       expect(snare?.sub).toBe('하이햇 말고 스네어');
     });
@@ -192,7 +192,7 @@ describe('coachCopy', () => {
       const sub = (pad: 'HIHAT' | 'CRASH' | 'MID_TOM') => withCause({ cause: 'TRANSITION', strength: 1, pad, fromPad: 'SNARE' })?.sub;
       expect(sub('HIHAT')).toBe('스네어 치며 하이햇을 봐요');
       expect(sub('CRASH')).toBe('스네어 치며 크래시를 봐요');
-      expect(sub('MID_TOM')).toBe('스네어 치며 탐2를 봐요');
+      expect(sub('MID_TOM')).toBe('스네어 치며 미드탐을 봐요');
     });
 
     it('연속 놓침에도 원인 문구를 붙인다', () => {
@@ -213,7 +213,7 @@ describe('coachCopy', () => {
 
     it('키보드 입력이면 원인 문구도 키보드에 맞게 말한다', () => {
       const kb = (cause: CoachMessage['cause']) => coachCopy(msg({ tag: 'LIVE_PAD_MISS', target: tom, cause }), { keyboard: true })?.sub;
-      expect(kb({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' })).toBe('탐1은 E·I 키예요');
+      expect(kb({ cause: 'WRONG_PAD', strength: 1, pad: 'SMALL_TOM', intoPad: 'MID_TOM' })).toBe('스몰탐은 E·I 키예요');
       expect(kb({ cause: 'DENSE', strength: 1, pad: 'SMALL_TOM' })).toBe('빠른 곳은 손가락 번갈아요');
     });
   });
