@@ -9,8 +9,13 @@ export const HIGHWAY_TOP = 30;
 /** 판정선 이펙트 세로 반지름(px) */
 export const LANE_FX_RY = 12;
 
+/** 첫 칸(하이햇 페달)과 나머지 칸 사이를 띄우는 간격(px). 칸이 둘 이상일 때만 적용한다 */
+export const HIGHWAY_PEDAL_GAP = 16;
+
 export interface HighwayLayout {
   laneW: number;
+  /** 첫 칸 뒤 간격(칸이 하나면 0) */
+  gap: number;
   judgeY: number;
   top: number;
   /** 위 여백에서 판정선까지의 거리 */
@@ -19,7 +24,13 @@ export interface HighwayLayout {
 
 export function highwayLayout(width: number, height: number, laneCount: number): HighwayLayout {
   const judgeY = height - JUDGE_FROM_BOTTOM;
-  return { laneW: width / Math.max(1, laneCount), judgeY, top: HIGHWAY_TOP, travel: judgeY - HIGHWAY_TOP };
+  const gap = laneCount > 1 ? HIGHWAY_PEDAL_GAP : 0;
+  return { laneW: (width - gap) / Math.max(1, laneCount), gap, judgeY, top: HIGHWAY_TOP, travel: judgeY - HIGHWAY_TOP };
+}
+
+/** 칸 i의 왼쪽 x: i × 칸 폭 + (첫 칸 뒤라면 간격). 하이웨이의 모든 x 계산이 이 함수를 쓴다 */
+export function laneLeft(layout: HighwayLayout, laneIndex: number): number {
+  return laneIndex * layout.laneW + (laneIndex >= 1 ? layout.gap : 0);
 }
 
 /** 노트 y: dtMs = 노트 시각 − 현재 곡 시각. 0이면 판정선, 양수면 위, 음수면 아래 */
@@ -28,7 +39,7 @@ export function noteY(layout: HighwayLayout, dtMs: number, scrollMs: number): nu
 }
 
 export function laneCenterX(layout: HighwayLayout, laneIndex: number): number {
-  return laneIndex * layout.laneW + layout.laneW / 2;
+  return laneLeft(layout, laneIndex) + layout.laneW / 2;
 }
 
 /** 레인 가운데 × y 의 이펙트 기하: rx = 레인 폭 0.4, ry = 12 */
