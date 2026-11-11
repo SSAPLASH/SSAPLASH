@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSerialStickSource } from './WebSerialStickSource';
 import { frame } from './serialFraming';
-import { buildHit, buildLink, buildPedal, buildStatus, buildSyncAck } from '@/monitor/mockStick';
+import { buildHit, buildLink, buildPedal, buildStatus, buildSyncAck } from '@/features/monitor/core/mockStick';
 
 function fakePort(open: () => Promise<void>) {
   return {
