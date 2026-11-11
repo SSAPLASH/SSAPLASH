@@ -34,10 +34,10 @@ function row(s: SongSummary, justDone = false, withEdit = true): string {
     </MemoryRouter>,
   );
 }
-function card(s: SongSummary, justDone = false): string {
+function card(s: SongSummary, justDone = false, onSheet?: () => void): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <MySongCard song={s} justDone={justDone} onReupload={noop} onEdit={noop} />
+      <MySongCard song={s} justDone={justDone} onReupload={noop} onEdit={noop} onSheet={onSheet} />
     </MemoryRouter>,
   );
 }
@@ -99,17 +99,18 @@ describe('MySongRow', () => {
 });
 
 describe('MySongCard 보강', () => {
-  it('완료 카드 [악보 연습]은 secondary sm 전체 폭 링크, ▶는 같은 곡 리듬 게임 링크', () => {
-    const html = card(song());
-    expect(html).toMatch(/class="ui-btn ui-btn-secondary ui-btn-sm ui-btn-full" href="\/sheet\?scope=MINE&amp;song=7"[^>]*>악보 연습/);
-    expect(html).toMatch(/class="song-card-play"[^>]*>\s*<svg/);
+  it('완료 카드 맨 아래는 악보가 있으면 secondary sm 전체 폭 [악보 보기] 링크, 커버 ▶·[악보 연습] 링크는 없다', () => {
+    const html = card(song({ sheetId: 4 }), false, noop);
+    expect(html).toMatch(/class="ui-btn ui-btn-secondary ui-btn-sm ui-btn-full" href="\/studio\/sheets\/4"[^>]*>악보 보기/);
+    expect(html).not.toContain('class="song-card-play"');
+    expect(html).not.toContain('악보 연습');
     expect(html).not.toContain('다시 올리기');
   });
 
   it('실패 카드: failed 클래스, 사유 줄, [다시 올리기] secondary sm 전체 폭', () => {
     const html = card(song({ status: 'FAILED' }));
     expect(html).toContain('studio-card failed');
-    expect(html).toContain('<p class="studio-card-reason">채보를 만들지 못했어요</p>');
+    expect(html).toContain('<span class="studio-card-reason">채보를 만들지 못했어요</span>');
     expect(html).toMatch(/ui-btn ui-btn-secondary ui-btn-sm ui-btn-full[^>]*>다시 올리기/);
     expect(html).not.toContain('악보 연습');
   });
@@ -153,7 +154,7 @@ describe('채보 실패 사유 표시', () => {
 
   it.each(messages)('%s 코드를 카드와 행의 문구로 표시한다', (code, message) => {
     const failedSong = song({ status: 'FAILED', chartFailure: { code } });
-    expect(card(failedSong)).toContain(`<p class="studio-card-reason">${message}</p>`);
+    expect(card(failedSong)).toContain(`<span class="studio-card-reason">${message}</span>`);
     expect(row(failedSong)).toContain(`파란물결 · ${message}`);
   });
 

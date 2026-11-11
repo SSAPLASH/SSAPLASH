@@ -163,12 +163,13 @@ const renderRow = (s: SongSummary, p?: SongPlayback) =>
   );
 
 describe.each([
-  ['MySongCard', renderCard, 'studio-card-title'],
-  ['MySongRow', renderRow, 'studio-row-title'],
-] as const)('%s 재생바', (_name, renderItem, titleClass) => {
+  // 카드 보기는 커버 아래 재생 UI(.studio-cover-player), 목록 줄은 재생바(.song-playbar)를 쓴다
+  ['MySongCard', renderCard, 'studio-card-title', '.studio-cover-player'],
+  ['MySongRow', renderRow, 'studio-row-title', '.song-playbar'],
+] as const)('%s 재생바', (_name, renderItem, titleClass, barSelector) => {
   it('반주가 준비된 완료 곡에만 재생바가 기본으로 보인다(A1)', () => {
     const { container } = renderItem(song(), playback());
-    expect(container.querySelector('.song-playbar')).toBeTruthy();
+    expect(container.querySelector(barSelector)).toBeTruthy();
     expect(screen.getByRole('button', { name: PLAY })).toBeTruthy();
     cleanup();
     for (const s of [
@@ -178,7 +179,7 @@ describe.each([
       song({ status: 'FAILED' }),
     ]) {
       const r = renderItem(s, playback());
-      expect(r.container.querySelector('.song-playbar')).toBeNull();
+      expect(r.container.querySelector(barSelector)).toBeNull();
       cleanup();
     }
   });
@@ -191,7 +192,7 @@ describe.each([
 
   it('playback이 없으면 재생바를 그리지 않는다', () => {
     const { container } = renderItem(song());
-    expect(container.querySelector('.song-playbar')).toBeNull();
+    expect(container.querySelector(barSelector)).toBeNull();
   });
 
   it('제목 옆 이퀄라이저: 재생 대상 곡에만 있고, 재생 중이면 움직이고 일시정지면 납작하다', () => {
@@ -266,7 +267,9 @@ describe('MySongList 재생바 전달', () => {
   it.each(['card', 'list'] as const)('%s 보기: 곡마다 재생바, 재생 중인 곡에만 움직이는 진행 막대', (view) => {
     const p = playback(viewOf('playing', 8));
     const { container } = list(view, p);
-    expect(container.querySelectorAll('.song-playbar')).toHaveLength(2);
+    // 카드 보기는 `.studio-cover-player`, 목록 보기는 `.song-playbar`
+    expect(container.querySelectorAll(view === 'card' ? '.studio-cover-player' : '.song-playbar')).toHaveLength(2);
+    expect(container.querySelectorAll(view === 'card' ? '.song-playbar' : '.studio-cover-player')).toHaveLength(0);
     expect(screen.getByRole('button', { name: PLAY })).toBeTruthy();
     expect(screen.getByRole('button', { name: '「둘째 곡」 반주 일시정지' })).toBeTruthy();
     expect(screen.getAllByRole('slider', { name: '반주 위치' })).toHaveLength(1);
