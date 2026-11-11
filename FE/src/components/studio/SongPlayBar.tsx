@@ -5,15 +5,11 @@
 // 쉬는 상태(이 곡이 재생 대상이 아님)는 ▶ + 빈 막대 + 곡 길이이고, ▶를 누르면 이 곡이 재생 대상이 된다.
 // 재생기는 모른다. 페이지가 만든 SongPlayback(`domain/songPlayback`)의 view를 그리고 조작은 콜백으로만 알린다.
 import { SeekBar } from '@/components/free/SeekBar';
-import { IconButton } from '@/components/ui/IconButton';
+import { PlaybackTransport } from '@/components/song/PlaybackTransport';
 import { formatClock } from '@/domain/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 import { isListening, type SongPlayback } from '@/domain/songPlayback';
-import { Back10Icon, Forward10Icon, PauseGlyph, PlayGlyph } from './StudioIcons';
 import './studio.css';
-
-/** 10초 뒤로·앞으로 한 번에 옮기는 간격(ms) */
-export const SKIP_MS = 10_000;
 
 interface Props {
   song: SongSummary;
@@ -23,18 +19,21 @@ interface Props {
 export function SongPlayBar({ song, playback }: Props) {
   const { view } = playback;
   const playLabel = `「${song.title}」 반주 재생`;
+  const pauseLabel = `「${song.title}」 반주 일시정지`;
 
   if (!isListening(playback, song.id)) {
     const known = song.durationMs !== null && song.durationMs > 0;
     return (
       <div className="song-playbar is-idle" data-phase="idle">
-        <div className="song-playbar-controls">
-          <span className="song-playbar-skip-gap" aria-hidden="true" />
-          <IconButton size="sm" className="song-playbar-toggle" label={playLabel} onClick={() => playback.onListen(song)}>
-            <PlayGlyph />
-          </IconButton>
-          <span className="song-playbar-skip-gap" aria-hidden="true" />
-        </div>
+        <PlaybackTransport
+          className="song-playbar-controls"
+          playing={false}
+          skips={false}
+          playLabel={playLabel}
+          pauseLabel={pauseLabel}
+          onToggle={() => playback.onListen(song)}
+          onSkip={() => {}}
+        />
         <div className="song-playbar-progress">
           <span className="song-playbar-track" aria-hidden="true" />
           <span className="free-seek-ends num">
@@ -55,23 +54,15 @@ export function SongPlayBar({ song, playback }: Props) {
 
   return (
     <div className={`song-playbar is-${view.phase}`} data-phase={view.phase}>
-      <div className="song-playbar-controls">
-        <IconButton size="sm" className="song-playbar-skip" label="10초 뒤로" disabled={!ready} onClick={() => skip(-SKIP_MS)}>
-          <Back10Icon />
-        </IconButton>
-        {view.phase === 'playing' ? (
-          <IconButton size="sm" className="song-playbar-toggle" label={`「${song.title}」 반주 일시정지`} onClick={playback.onPause}>
-            <PauseGlyph />
-          </IconButton>
-        ) : (
-          <IconButton size="sm" className="song-playbar-toggle" label={playLabel} disabled={!ready} onClick={playback.onResume}>
-            <PlayGlyph />
-          </IconButton>
-        )}
-        <IconButton size="sm" className="song-playbar-skip" label="10초 앞으로" disabled={!ready} onClick={() => skip(SKIP_MS)}>
-          <Forward10Icon />
-        </IconButton>
-      </div>
+      <PlaybackTransport
+        className="song-playbar-controls"
+        playing={view.phase === 'playing'}
+        disabled={!ready}
+        playLabel={playLabel}
+        pauseLabel={pauseLabel}
+        onToggle={view.phase === 'playing' ? playback.onPause : playback.onResume}
+        onSkip={skip}
+      />
       <div className="song-playbar-progress">
         {ready ? (
           <SeekBar layout="ends" positionMs={view.positionMs} durationMs={view.durationMs} onSeek={playback.onSeek} />
