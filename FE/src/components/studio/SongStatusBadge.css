@@ -1,0 +1,28 @@
+/* 상태 배지 (Studio / SongStatusBadge 202:503). 라이브러리 밖(자유 연습 반주 고르기 창)에서도 쓰므로 컴포넌트가 직접 불러온다 */
+.studio-badge {
+  --badge-color: var(--good);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex: none;
+  padding: var(--space-xs) var(--space-m);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--badge-color) 16%, transparent);
+  color: var(--badge-color);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.studio-badge-active {
+  --badge-color: var(--brand-text);
+}
+.studio-badge-danger {
+  --badge-color: var(--miss);
+}
+.studio-badge-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}

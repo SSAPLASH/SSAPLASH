@@ -164,6 +164,7 @@ export function FreePlayPage() {
       {pickerOpen && (
         <AccompanimentPicker
           currentSongId={accomp.view.pick?.songId ?? null}
+          currentPlaying={accomp.view.phase === 'playing'}
           onPick={(song) => {
             setPickerOpen(false);
             accomp.pick(song);
