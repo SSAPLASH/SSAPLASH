@@ -95,21 +95,21 @@ afterEach(() => {
 
 describe('곡 선택의 [입문 코스] 탭', () => {
   it('악보 연습에만 있고 리듬 게임·로그인 전에는 없다', async () => {
-    at('/sheet', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
     await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡', '입문 코스']));
     cleanup();
-    at('/play', <SongPicker mode="play" onSelect={vi.fn()} />);
+    at('/play', <SongPicker mode="play" onStart={vi.fn()} />);
     expect(screen.getAllByRole('radio').map((r) => r.textContent)).not.toContain('입문 코스');
     cleanup();
     useAuth.setState({ status: 'anonymous', user: null });
-    at('/sheet', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
     expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
     expect(fetchLessons).not.toHaveBeenCalled();
   });
 
   it('?tab=lessons로 열면 입문 코스 탭이고, 탭을 바꾸면 주소에서 빠진다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2)]));
-    at('/sheet?tab=lessons', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet?tab=lessons', <SongPicker mode="sheet" onStart={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
     expect(screen.queryByRole('searchbox')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
@@ -132,7 +132,7 @@ describe('주소가 바뀌면 탭이 따라간다 (검증 추가 발견 1)', () 
 
   it('곡 선택이 떠 있는 동안 ?tab=lessons로 바뀌면 입문 코스 탭, tab이 빠지면 기본 곡 탭', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1)]));
-    at('/sheet', <><Nav /><SongPicker mode="sheet" onSelect={vi.fn()} /></>);
+    at('/sheet', <><Nav /><SongPicker mode="sheet" onStart={vi.fn()} /></>);
     await waitFor(() => expect(screen.getByRole('radio', { name: '기본 곡' }).getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: '코스로 가기' }));
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
