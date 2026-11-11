@@ -17,7 +17,6 @@ import { HitLog } from '@/components/setup/HitLog';
 import { HIT_LOG_ROWS } from '@/components/setup/hitLogFormat';
 import '@/components/setup/setup.css';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
-import { useHitFx } from '@/components/useHitFx';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
 import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
@@ -31,7 +30,7 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { HitFx, StickId } from '@/domain/events';
+import type { StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
 import { pickOverlayCorner } from '@/domain/kitLayout';
@@ -238,10 +237,6 @@ export function SetupPage() {
     const radii = [s.stickAnchors[0]?.[selectedPad]?.radius, s.stickAnchors[1]?.[selectedPad]?.radius].filter((r): r is number => r !== undefined);
     return radii.length ? radii.reduce((a, b) => a + b, 0) / radii.length : null;
   }, [s.stickAnchors, selectedPad]);
-
-  // 타격 이펙트. 키보드·센서 타격이 live의 hitSeq로 들어온다(편집기 마우스 클릭은 타격이 아니다)
-  const hits = useRef(new Map<PadId, HitFx>());
-  useHitFx(hits);
 
   // ---- 단계 판정(적용 프리셋 기준 보정 완료, PLAY-004 D9·UX-64 D7) ----
   const readinessInput = {
@@ -710,6 +705,7 @@ export function SetupPage() {
             >
               <KitCanvas
                 layout={s.kitLayout}
+                skin={s.kitSkin}
                 onTapPad={setSelectedPad}
                 // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
                 draggable={!capturing && !draft}
@@ -718,7 +714,6 @@ export function SetupPage() {
                   s.movePad(pad, x, y);
                 }}
                 highlightPad={selectedPad}
-                hits={hits}
                 keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
                 anchorSets={anchorSets}
                 angleRange={s.tuning.angleRange}
