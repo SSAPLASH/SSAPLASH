@@ -97,14 +97,18 @@ interface Props {
   isRecommended?: (song: SongSummary) => boolean;
   /** 곡이 없을 때 본문 가운데 내용 */
   emptyState?: ReactNode;
+  /** 처음 보일 때 이 곡이 있는 쪽을 연다(주소로 골라 둔 곡: 다시 하기·추천·세팅 복귀). 사용자가 쪽을 넘기면 더 따르지 않는다 */
+  revealId?: number | null;
 }
 
-export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked, isRecommended, emptyState }: Props) {
+export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked, isRecommended, emptyState, revealId = null }: Props) {
   const columns = COLUMNS_BY_MODE[mode];
   const bests = mode === 'sheet' ? bestAccuracies : bestScores;
-  const [rawPage, setPage] = useState(0);
+  // null = 아직 쪽을 넘기지 않음. 그동안은 revealId 곡이 있는 쪽(없으면 첫 쪽)을 보인다
+  const [rawPage, setPage] = useState<number | null>(null);
   const pageCount = Math.max(1, Math.ceil(songs.length / SONG_TABLE_PAGE_SIZE));
-  const page = Math.min(rawPage, pageCount - 1);
+  const revealIndex = revealId === null ? -1 : songs.findIndex((s) => s.id === revealId);
+  const page = Math.min(rawPage ?? (revealIndex < 0 ? 0 : Math.floor(revealIndex / SONG_TABLE_PAGE_SIZE)), pageCount - 1);
   const pending = useRef<number | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
   const locked = (s: SongSummary) => isLocked?.(s) ?? false;
