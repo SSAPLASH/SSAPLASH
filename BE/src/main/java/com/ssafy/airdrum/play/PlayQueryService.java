@@ -1,6 +1,9 @@
 package com.ssafy.airdrum.play;
 
 import java.util.LinkedHashSet;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +21,29 @@ public class PlayQueryService {
         this.sessions = sessions;
         this.authentication = authentication;
     }
-    public PageResponse<PlaySummaryResponse> list(long userId, int page, int size) {
+    public PageResponse<PlaySummaryResponse> list(long userId, int page, int size, String q, String from, String to, String mode, String sort) {
         if (authentication.findActive(userId).isEmpty()) throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
         if (page < 0 || page > 100000 || size < 1 || size > 100) throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
-        long count = sessions.countForUser(userId);
-        return PageResponse.of(sessions.pageForUser(userId, size, (long) page * size), page, size, count);
+        String search = q == null ? "" : q.strip();
+        if (search.indexOf(0) >= 0 || search.length() > 100 || (mode != null && !java.util.Set.of("FREE", "RHYTHM", "SHEET", "TEMPO").contains(mode))
+                || (sort != null && !java.util.Set.of("NEWEST", "OLDEST").contains(sort))) throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
+        LocalDate start = date(from), end = date(to);
+        if (start != null && end != null && start.isAfter(end)) throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
+        var zone = ZoneId.of("Asia/Seoul");
+        String pattern = search.isEmpty() ? null : "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        var filters = new PlayListFilters(pattern, start == null ? null : start.atStartOfDay(zone).toInstant(),
+                end == null ? null : end.plusDays(1).atStartOfDay(zone).toInstant(), mode, sort == null ? "NEWEST" : sort);
+        long count = sessions.countForUser(userId, filters);
+        return PageResponse.of(sessions.pageForUser(userId, size, (long) page * size, filters), page, size, count);
+    }
+    private LocalDate date(String value) {
+        if (value == null) return null;
+        try {
+            if (!value.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) throw new DateTimeParseException("invalid date", value, 0);
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException(CommonErrorCode.VALIDATION_FAILED);
+        }
     }
     public BestRecordsResponse bestRecords(long userId, String songIds) {
         if (authentication.findActive(userId).isEmpty()) throw new BusinessException(CommonErrorCode.UNAUTHORIZED);
