@@ -18,6 +18,8 @@ import type { ResolvedHit, SensorId, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { anchorsToProfile } from '@/domain/kitJudge';
 import { calibrationSession } from './calibrationSession';
+import { timingCalSession } from './timingCalSession';
+import { startAudioDiag } from './audioDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
@@ -363,6 +365,8 @@ export function bootstrapInput(): void {
   inputManager.onHit((hit: ResolvedHit) => {
     // 보정·재정렬 중인 손의 타격은 세션이 가로챈다(소리는 목표 패드로, 판정·텔레메트리 없음)
     if (calibrationSession.intercept(hit)) return;
+    // 박자 맞추기 중인 타격은 소리만 내고 시각을 모은다(판정·텔레메트리·진단 없음)
+    if (timingCalSession.intercept(hit)) return;
     if (hitSoundActive() && hit.pad) {
       // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
@@ -388,6 +392,12 @@ export function bootstrapInput(): void {
   });
   // 센서 시계 오프셋 진단 줄: 10초마다 + 곡 시작 직후 1회
   startClockDiag(() => activeInstance);
+  // 판정 타이밍 보정·오디오 지연 진단 줄: 10초마다 + 곡 시작 직후 1회
+  startAudioDiag(() => ({
+    audioOffsetMs: useSettings.getState().audioOffsetMs,
+    latency: audioEngine.latency(),
+    timingCal: useSettings.getState().timingCal,
+  }));
   startRelay();
   startTelemetry();
 }
@@ -401,6 +411,17 @@ export function bootstrapMetronome(): void {
   // 초기값: settings → 엔진
   metronome.setBpm(s0.metronomeBpm);
   metronome.setBeatsPerBar(s0.metronomeBeatsPerBar);
+  // 박자 맞추기: 클릭·타격음은 게임과 같은 오디오 경로를 쓴다
+  timingCalSession.bind({
+    click: (atMs, accent) => audioEngine.click(atMs, accent),
+    ensureAudio: unlockAudio,
+    playHit: (hit) => {
+      if (hit.pad) audioEngine.trigger(hit.pad, hit.velocity);
+    },
+    stopMetronome: () => metronome.stop(),
+    busy: () => useLive.getState().calibration.mode !== 'idle',
+    outputLatencyMs: () => audioEngine.latency()?.outputLatencyMs ?? null,
+  });
   metronome.bind({
     click: (atMs, accent) => audioEngine.click(atMs, accent),
     ensureAudio: unlockAudio,
