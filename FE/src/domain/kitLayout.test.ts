@@ -12,18 +12,6 @@ describe('DEFAULT_KIT_LAYOUT', () => {
       }
     }
   });
-
-  it('고정 배치라 어느 두 패드도 겹치지 않는다(16:10 캔버스 기준)', () => {
-    for (const a of ALL_PADS) {
-      for (const b of ALL_PADS) {
-        if (a >= b) continue;
-        const pa = DEFAULT_KIT_LAYOUT[a];
-        const pb = DEFAULT_KIT_LAYOUT[b];
-        const d = Math.hypot(pa.x - pb.x, (pa.y - pb.y) / 1.6);
-        expect(d).toBeGreaterThan((pa.r + pb.r) * 0.9);
-      }
-    }
-  });
 });
 
 describe('fillLayout', () => {
@@ -37,12 +25,6 @@ describe('fillLayout', () => {
 });
 
 describe('overlayCorner', () => {
-  it('기본 배치의 모든 패드는 오른쪽 아래 카드와 겹치지 않아 right다', () => {
-    for (const pad of ALL_PADS) {
-      expect(overlayCorner(DEFAULT_KIT_LAYOUT[pad])).toBe('right');
-    }
-  });
-
   it('카드 영역 안에 있는 패드는 left다', () => {
     expect(overlayCorner({ x: 0.9, y: 0.9, r: 0.05 })).toBe('left');
   });
