@@ -17,7 +17,7 @@ class WorkerController {
     WorkerController(WorkerQueue queue, WorkerFileAccess files, WorkerResults results, WorkerPayload payload) { this.queue=queue; this.files=files; this.results=results; this.payload=payload; }
     record ClaimRequest(String workerId, UUID claimRequestId) {}
     record HeartbeatRequest(UUID attemptId, long eventSeq, int progress) {}
-    record FailureRequest(UUID attemptId, long eventSeq, String stage, String code, boolean retryable, String summary) {}
+    record FailureRequest(UUID attemptId, long eventSeq, String stage, String code, boolean retryable, String summary, String reason) {}
     private String worker(HttpServletRequest request) { return (String)request.getAttribute(WorkerSecurityConfiguration.WORKER); }
     @PostMapping("/claim")
     ResponseEntity<WorkerQueue.Assignment> claim(@RequestBody ClaimRequest body, HttpServletRequest request) {
@@ -45,6 +45,6 @@ class WorkerController {
     }
     @PostMapping("/{jobId}/failure")
     WorkerQueue.FailureOutcome failure(@PathVariable long jobId, @RequestBody FailureRequest body, HttpServletRequest request) {
-        return queue.failure(jobId,worker(request),body.attemptId(),body.eventSeq(),body.stage(),body.code(),body.retryable(),body.summary());
+        return queue.failure(jobId,worker(request),body.attemptId(),body.eventSeq(),body.stage(),body.code(),body.retryable(),body.summary(),body.reason());
     }
 }

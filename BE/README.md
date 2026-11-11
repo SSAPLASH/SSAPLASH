@@ -9,9 +9,9 @@
 `withAccompaniment=true`는 반주 상태가 `READY` 또는 `GENERATING`인 곡만 반환한다. `false` 또는 생략하면 제한하지 않으며 다른 값은 400이다.
 이 필터들은 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
 
-본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message}`가 들어간다. 공개 가능한 기존 코드는
+본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message,reason}`이 들어간다. 공개 가능한 기존 코드는
 `INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
-워커가 보낸 메시지·스토리지 정보는 반환하지 않는다. AI 246의 세부 실패 코드 계약은 아직 확정되지 않아 추측해 매핑하지 않았다.
+선택 필드 `reason`은 `SOURCE_INVALID`, `NOT_TRANSCRIBABLE`, `GPU_OUT_OF_MEMORY`, `INTERNAL_ERROR` 중 하나이며 기존 행과 BE 자체 실패는 `null`이다. 워커가 보낸 메시지·스토리지 정보는 반환하지 않는다. 재시도 중간 실패는 공개하지 않고 최종 실패의 사유만 저장한다. AI 워커 기본 전송 설정은 꺼져 있으므로 BE 배포 뒤 `SSAPLASH_WORKER_SEND_REASON` 설정과 연동을 확인한다.
 
 ### 산정 방식과 한계
 
@@ -1270,7 +1270,7 @@ REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(
 
 `GET /api/v1/jobs/{jobId}`는 Bearer access 토큰으로 본인의 최신 작업 상태를 반환한다. 타인·삭제된 곡·없는 작업은 404, 미인증·비활성 회원은 401이다. `GET /api/v1/jobs?status=QUEUED&page=0&size=20`은 본인 작업 목록을 `PageResponse`로 반환한다. `status`는 선택이며 `QUEUED`, `SEPARATING`, `TRANSCRIBING`, `DONE`, `FAILED` 중 하나다. page는 0~100000, size는 1~100이다. 다른 브라우저에서 jobId를 모르면 목록으로 복구할 수 있다.
 
-두 GET과 WS는 동일한 DB 상태를 사용한다. JobSnapshot은 숫자 `jobId`, `songId`, `progress`(0~100), `revision`, 문자열 `status`, `error`(null 또는 안전한 `code`·`message`), UTC 시각 `createdAt`, `startedAt`, `finishedAt`으로 구성된다. 오류 원문·파일 키는 노출하지 않는다. 재시도에서는 progress가 감소할 수 있으므로 FE는 revision이 증가한 상태만 적용한다.
+두 GET과 WS는 동일한 DB 상태를 사용한다. JobSnapshot은 숫자 `jobId`, `songId`, `progress`(0~100), `revision`, 문자열 `status`, `error`(null 또는 안전한 `code`·`message`·null 가능한 `reason`), UTC 시각 `createdAt`, `startedAt`, `finishedAt`으로 구성된다. 오류 원문·파일 키는 노출하지 않는다. 재시도에서는 progress가 감소할 수 있으므로 FE는 revision이 증가한 상태만 적용한다.
 
 브라우저는 `wss://<호스트>/ws/jobs/{jobId}`를 연결하고 **5초 안에 첫 텍스트 프레임**으로 `{"type":"AUTH","accessToken":"<access token>"}`을 보낸다. 인증 전 데이터는 전송하지 않는다. URL 쿼리와 추가 필드·중복 키·후행 JSON은 허용하지 않으며 텍스트·바이너리 프레임 한도는 4096바이트다. 서버는 토큰·ACTIVE·본인 소유·곡 삭제를 확인하고 현재 JobSnapshot을 먼저 보낸 뒤 revision이 커진 커밋 상태만 보낸다. DONE·FAILED는 최종 스냅샷을 보낸 후 1000으로 닫는다. 이미 끝난 작업에 접속하면 현재 스냅샷 한 개를 받은 뒤 닫힌다. 인증 실패·만료·접근 불가·잘못된 인증 프레임은 1008, 프레임 한도 초과는 1009, 연결 한도 초과는 1013, 서버 오류는 1011이다. 소켓이 닫히거나 느리면 FE는 GET으로 현재 상태를 복구하고 필요할 때 재연결한다. 연결 불가 중에는 3초 간격의 GET 복구를 사용할 수 있으며 DONE·FAILED 또는 401·404에서 중단한다.
 
@@ -1293,7 +1293,7 @@ REC-001. 자유·리듬·박자·악보 모드에서 녹음한 타격 시퀀스(
 | `POST /{jobId}/file-access` | `attemptId`, `files` 배열. 분리 입력은 `{role: SOURCE_AUDIO, fileId: 배정 input.fileId}`, 분리 출력은 `DRUM_STEM`·`ACCOMPANIMENT`이며 각 파일의 `sizeBytes`를 지정한다. fileId 생략 시 각 시도에 하나씩 발급한다. 채보 입력은 `{role: DRUM_STEM, fileId: 배정 input.fileId}`. 응답은 역할·fileId·GET/PUT·URL·만료시각이다. PUT 시 `Content-Type: audio/flac`과 지정한 `Content-Length`를 사용한다. |
 | `POST /{jobId}/results/separation` | 공통 결과 봉투와 `drumStem`, `accompaniment` manifest, `durationMs`, `audioTimeOrigin`, `model`, `metrics`를 제출한다. 분리 파일은 FLAC 16비트·44,100Hz·스테레오, 시간축은 `SOURCE_START`다. |
 | `POST /{jobId}/results/transcription` | 같은 봉투 안에 schemaVersion 1·NORMAL 채보 하나를 제출한다. `generator`는 `ADT_MODEL`, `generatorVersion`은 1~50자, `metrics`는 객체다. 각 채보는 `difficulty`, `notes`, `timing`, `notationStatus`를 가지며 신규 `sheetPages`는 허용하지 않는다. |
-| `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
+| `POST /{jobId}/failure` | `attemptId`, `eventSeq`, `stage`, `code`, `retryable`, 200자 이내 단일 행 `summary`, 선택 `reason`. `reason`의 허용값은 `SOURCE_INVALID`, `NOT_TRANSCRIBABLE`, `GPU_OUT_OF_MEMORY`, `INTERNAL_ERROR`이며 생략·null을 허용하고 다른 값은 400으로 거절한다. `INPUT_INVALID`, `MODEL_FAILED`, `OUTPUT_INVALID` 중 `MODEL_FAILED`만 재시도 가능 보고를 허용하며 AI는 GPU OOM일 때만 true를 보낸다. 진단 원문은 저장하지 않는다. |
 
 원곡 길이가 없거나 0 또는 600,000ms를 넘는 대기 작업은 `INPUT_INVALID`로 실패하고 입력 정리 대상이 된다. 동일 요청 재조회 중 길이가 유효하지 않으면 409를 반환한다. 새 작업 배정과 만료 작업 복구는 회원·곡·작업 행 중 잠긴 후보를 건너뛰고 다른 후보를 처리한다. 건너뛴 후보는 이후 배정 또는 복구 주기에 다시 확인한다.
 
