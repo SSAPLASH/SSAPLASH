@@ -14,6 +14,7 @@ import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
+import { queryClient } from '@/app/queryClient';
 import { useChartParam } from '@/components/useChartParam';
 import { SongPicker } from '@/components/SongPicker';
 import { LessonCourse } from './LessonCourse';
@@ -84,7 +85,8 @@ beforeEach(() => {
   vi.mocked(fetchSimilarSongs).mockReset().mockResolvedValue({ requestId: 's1', strategy: 's', items: [] });
   useRecommendations.getState().resetForTest();
   useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
-  useSongs.setState({ source: 'api', scope: 'BUILTIN', items: [], status: 'idle', error: null });
+  queryClient.clear();
+  useSongs.setState({ source: 'api', scope: 'BUILTIN' });
 });
 afterEach(() => {
   cleanup();

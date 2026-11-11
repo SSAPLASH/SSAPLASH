@@ -163,3 +163,18 @@ describe('describeRecordingError', () => {
     expect(r.message).toBe('녹음을 저장하지 못했어요.');
   });
 });
+
+describe('uploadRecording 캐시 무효화 (설계 TECH-351)', () => {
+  it('저장에 성공하면 녹음 목록 캐시를 무효화하고, 실패하면 하지 않는다', async () => {
+    const { queryClient } = await import('./queryClient');
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    save.mockResolvedValueOnce(SUMMARY);
+    await uploadRecording(BODY);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['recordings'] });
+    spy.mockClear();
+    save.mockRejectedValueOnce(new ApiError(400, 'BAD', 'x'));
+    await expect(uploadRecording(BODY)).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});

@@ -1,9 +1,13 @@
 // 라이브러리 (CHART-003, Jira 189 · CHART-002 MIDI 업로드 · Figma 207:2110 외). 헤더 [올리기] → 업로드 창(음원/MIDI 탭), 아래 목록(카드·목록 보기).
 // 곡·악보가 하나도 없으면 같은 틀에 목록 자리만 빈 안내로 둔다(설계 QA-studio-empty-state).
 // 상태·폴링은 store/chartJobStore, MIDI는 store/midiUploadStore, 목록은 store/songStore. 이 페이지는 세 store를 접착한다.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { listSheets, deleteSheet, updateSheetTitle } from '@/api/sheets';
+import { deleteSheet, updateSheetTitle } from '@/api/sheets';
+import { sheetKeys, sheetListQuery } from '@/api/queries/sheets';
+import { mineSongsQuery, songKeys } from '@/api/queries/songs';
+import { queryClient } from '@/app/queryClient';
+import { useApiQuery } from '@/app/useApiQuery';
 import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
 import { SheetDeleteDialog } from '@/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/components/sheet/SheetTitleDialog';
@@ -91,11 +95,11 @@ export function StudioPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { active, progress, phase, error, doneSource, upload, resume, retry, clear, stopPolling } = useChartJob();
-  const load = useSongs((s) => s.load);
-  const scope = useSongs((s) => s.scope);
-  const rawItems = useSongs((s) => s.items);
-  const rawStatus = useSongs((s) => s.status);
-  const listError = useSongs((s) => s.error);
+  // 내 곡·악보 목록은 서버 데이터 캐시로 읽는다(설계 TECH-351). 저장·삭제 뒤에는 무효화해 다시 받는다
+  const songsSource = useSongs((s) => s.source);
+  const mineList = useApiQuery(mineSongsQuery(songsSource));
+  const listError = mineList.error;
+  const reloadSongs = useCallback(() => queryClient.invalidateQueries({ queryKey: songKeys.all }), []);
   const midiPhase = useMidiUpload((s) => s.phase);
   const midiError = useMidiUpload((s) => s.error);
   const midiUpload = useMidiUpload((s) => s.upload);
@@ -118,8 +122,9 @@ export function StudioPage() {
   const [justDoneId, setJustDoneId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   // 악보 보관(설계 CHART-001 악보 보관): 악보 목록은 곡 목록과 따로 읽고, 둘 중 하나만 실패해도 나머지는 보인다
-  const [sheets, setSheets] = useState<SheetSummary[]>([]);
-  const [sheetsStatus, setSheetsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const sheetList = useApiQuery({ ...sheetListQuery(), enabled: SHEET_ARCHIVE_ENABLED });
+  const sheets: SheetSummary[] = useMemo(() => sheetList.data?.items ?? [], [sheetList.data]);
+  const sheetsStatus = sheetList.status;
   const [section, setSection] = useState<UploadSection>(loadSection);
   // 곡 ⋯ [악보 올리기]로 열었을 때 붙일 곡(헤더에서 열면 null)
   const [sheetTarget, setSheetTarget] = useState<SongSummary | null>(null);
@@ -135,44 +140,21 @@ export function StudioPage() {
   // 커버 오류로 목록을 마지막으로 다시 읽은 시각(U10)
   const coverRefreshAt = useRef<number | null>(null);
 
-  // 들어오면 진행 중 작업을 복원해 폴링하고 목록을 읽는다. 나가면 타이머만 멈춘다(기록은 남는다)
+  // 들어오면 진행 중 작업을 복원해 폴링한다(목록은 쿼리가 읽는다). 나가면 타이머만 멈춘다(기록은 남는다).
+  // 곡 선택 창은 라이브러리를 다녀오면 내 곡 탭으로 열린다(기존 동작, 설계 TECH-350 U4)
   useEffect(() => {
     resume();
-    void load('MINE');
+    useSongs.setState({ scope: 'MINE' });
     return () => {
       stopPolling();
       if (justDoneTimer.current !== null) clearTimeout(justDoneTimer.current);
       if (toastTimer.current !== null) clearTimeout(toastTimer.current);
     };
-  }, [resume, stopPolling, load]);
+  }, [resume, stopPolling]);
 
   const loadSheets = useCallback(async () => {
     if (!SHEET_ARCHIVE_ENABLED) return;
-    try {
-      const page = await listSheets();
-      setSheets(page.items);
-      setSheetsStatus('ready');
-    } catch {
-      setSheetsStatus('error');
-    }
-  }, []);
-
-  // 들어오면 악보 목록을 읽는다(곡 목록과 따로 — 한쪽 실패가 다른 쪽을 가리지 않는다)
-  useEffect(() => {
-    if (!SHEET_ARCHIVE_ENABLED) return;
-    let off = false;
-    listSheets()
-      .then((page) => {
-        if (off) return;
-        setSheets(page.items);
-        setSheetsStatus('ready');
-      })
-      .catch(() => {
-        if (!off) setSheetsStatus('error');
-      });
-    return () => {
-      off = true;
-    };
+    await queryClient.invalidateQueries({ queryKey: sheetKeys.all });
   }, []);
 
   // 새 곡 행을 잠깐 강조한다
@@ -192,10 +174,10 @@ export function StudioPage() {
   const finishLink = useCallback(
     async (run: () => Promise<void>) => {
       await run();
-      await Promise.all([load('MINE'), loadSheets()]);
+      await Promise.all([reloadSongs(), loadSheets()]);
       if (useSheetLink.getState().phase === 'done') showToast('곡을 올리고 악보를 연결했어요');
     },
-    [load, loadSheets, showToast],
+    [reloadSongs, loadSheets, showToast],
   );
   const linkToSong = useCallback((songId: number) => finishLink(() => useSheetLink.getState().link(songId)), [finishLink]);
   const retryLink = useCallback(() => void finishLink(() => useSheetLink.getState().retry()), [finishLink]);
@@ -213,8 +195,8 @@ export function StudioPage() {
     const now = Date.now();
     if (!coverRefreshDue(coverRefreshAt.current, now)) return;
     coverRefreshAt.current = now;
-    void load('MINE');
-  }, [load]);
+    void reloadSongs();
+  }, [reloadSongs]);
 
   // 접착 규칙: 202(업로드 → 폴링)·완료·실패에 따라 창 닫기·목록 재조회·이동·강조·clear
   useEffect(() => {
@@ -224,7 +206,7 @@ export function StudioPage() {
     if (phase === 'polling' && prev === 'uploading' && active) {
       // 효과 안 동기 setState를 피해 한 틱 미룬다
       queueMicrotask(() => setDialogOpen(false));
-      void load('MINE');
+      void reloadSongs();
       // 음원은 202 응답의 songId로 바로 연결한다(채보 생성이 끝나길 기다리지 않는다). 효과 안 동기 setState를 피해 한 틱 미룬다.
       // jobId가 없으면 이번 업로드가 아니라 AUDIO_BUSY로 복구한 다른 생성 중 곡이다 — 그 곡에 붙이지 않고 대상 지정만 푼다
       const songId = active.songId;
@@ -244,16 +226,16 @@ export function StudioPage() {
           flashRow(songId);
           if (doneSource === 'live') showToast(`「${title}」 악보가 만들어졌어요`);
         });
-        void load('MINE');
+        void reloadSongs();
         clear();
       }
       return;
     }
     if (phase === 'failed' && error?.code === 'JOB_FAILED') {
-      void load('MINE');
+      void reloadSongs();
       clear();
     }
-  }, [phase, doneSource, active, error, load, clear, flashRow, showToast, linkToSong]);
+  }, [phase, doneSource, active, error, reloadSongs, clear, flashRow, showToast, linkToSong]);
 
   const onReupload = useCallback((song: SongSummary) => {
     useSheetLink.getState().cancel();
@@ -293,14 +275,14 @@ export function StudioPage() {
         editReset();
         if (removed && useChartJob.getState().active?.songId === song.id) clear();
         // BE는 곡을 지우면 연결된 악보도 같이 지운다. 악보 목록도 다시 읽어야 곡 없는 악보로 남지 않는다
-        await Promise.all([load('MINE'), removed && song.sheetId != null ? loadSheets() : undefined]);
+        await Promise.all([reloadSongs(), removed && song.sheetId != null ? loadSheets() : undefined]);
         if (removed) showToast(`「${song.title}」을 삭제했습니다.`);
         else flashRow(song.id);
       } else if (p === 'failed' && (err?.uncertain || err?.code === 'SONG_NOT_FOUND')) {
-        void load('MINE');
+        void reloadSongs();
       }
     },
-    [editReset, clear, load, loadSheets, flashRow, showToast],
+    [editReset, clear, reloadSongs, loadSheets, flashRow, showToast],
   );
 
   const saveMeta = (song: SongSummary, patch: SongMetaPatch) =>
@@ -344,10 +326,10 @@ export function StudioPage() {
   const onSheetUploaded = useCallback(() => {
     setDialogOpen(false);
     setSheetTarget(null);
-    void load('MINE');
+    void reloadSongs();
     void loadSheets();
     showToast('악보를 올렸어요');
-  }, [load, loadSheets, showToast]);
+  }, [reloadSongs, loadSheets, showToast]);
 
   // 곡 ⋯ 메뉴의 악보 항목(악보-곡 연결 스위치 켜짐)
   const onSongSheet = useCallback(
@@ -385,19 +367,17 @@ export function StudioPage() {
         midiReset();
         // MIDI·MusicXML은 201 응답의 곡 id로 바로 연결한다(finishLink가 목록도 다시 읽는다)
         if (useSheetLink.getState().target) await linkToSong(song.id);
-        else await load('MINE');
+        else await reloadSongs();
         flashRow(song.id);
       } else if (p === 'failed' && err?.uncertain) {
-        void load('MINE');
+        void reloadSongs();
       }
     },
-    [midiUpload, midiReset, load, flashRow, linkToSong],
+    [midiUpload, midiReset, reloadSongs, flashRow, linkToSong],
   );
 
-  // songStore가 곡 선택 창 등에서 다른 범위로 채워져 있으면 아직 안 읽은 것으로 본다
-  const isMine = scope === 'MINE';
-  const items = isMine ? rawItems : [];
-  const status = isMine ? rawStatus : 'loading';
+  const items = useMemo(() => mineList.data ?? [], [mineList.data]);
+  const status = mineList.status;
   // 채보는 READY인데 반주가 생성 중인 곡만 짧게 다시 읽어 배지를 갱신한다(설계 CHART-002 반주 상태 4-2)
   useAccompanimentPolling(items, status === 'ready');
 
@@ -445,7 +425,7 @@ export function StudioPage() {
   const total = mine.total + (tempRow ? 1 : 0);
   const processing = mine.processing + (tempRow ? 1 : 0);
   let summary: string;
-  if (status === 'idle' || status === 'loading') summary = '불러오는 중…';
+  if (status === 'loading') summary = '불러오는 중…';
   else if (status === 'error') summary = '목록을 불러오지 못했어요';
   else {
     summary = processing > 0 ? `곡 ${total}개 · 생성 중 ${processing}` : `곡 ${total}개`;
@@ -493,7 +473,7 @@ export function StudioPage() {
             status={status}
             items={items}
             error={listError}
-            onRetry={() => void load('MINE')}
+            onRetry={() => void reloadSongs()}
             active={displayedActive}
             progress={progress}
             justDoneId={justDoneId}
@@ -561,7 +541,7 @@ export function StudioPage() {
             await deleteSheet(sheetEditing.sheet.id);
             await loadSheets();
             // 곡에 붙어 있던 악보면 그 곡 ⋯ 메뉴가 [악보 올리기]로 돌아오도록 곡 목록도 다시 읽는다
-            if (linked) void load('MINE');
+            if (linked) void reloadSongs();
             showToast('악보를 지웠어요');
           }}
           onClose={() => setSheetEditing(null)}
