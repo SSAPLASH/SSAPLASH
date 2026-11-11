@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayLog } from '@/engine/playLog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreBySong, localPrevBest, mergePrevBest, recordBadgeOf } from './bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, localPrevBest, mergePrevBest, recordBadgeOf } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */
 function log(p: {
@@ -90,6 +90,32 @@ describe('bestAccuracyByChart', () => {
   it('유한하지 않은 정확도는 건너뛴다', () => {
     const m = bestAccuracyByChart([log({ chart: 1, accuracy: Number.NaN }), log({ chart: 1, accuracy: 0.2 })], 'RHYTHM');
     expect(m.get(1)).toBe(0.2);
+  });
+});
+
+describe('bestScoreByChart', () => {
+  it('빈 입력이면 빈 Map', () => {
+    expect(bestScoreByChart([], 'RHYTHM').size).toBe(0);
+  });
+
+  it('채보별 최고 점수를 뽑는다', () => {
+    const m = bestScoreByChart(
+      [log({ chart: 10, score: 500 }), log({ chart: 10, score: 900 }), log({ chart: 11, score: 700 }), log({ chart: 10, score: 800 })],
+      'RHYTHM',
+    );
+    expect(m.get(10)).toBe(900);
+    expect(m.get(11)).toBe(700);
+  });
+
+  it('모드별로 분리한다(RHYTHM·SHEET)', () => {
+    const logs = [log({ mode: 'RHYTHM', chart: 10, score: 400 }), log({ mode: 'SHEET', chart: 10, score: 950 })];
+    expect(bestScoreByChart(logs, 'RHYTHM').get(10)).toBe(400);
+    expect(bestScoreByChart(logs, 'SHEET').get(10)).toBe(950);
+  });
+
+  it('채보 id 없는 로그와 유한하지 않은 점수는 건너뛴다', () => {
+    const m = bestScoreByChart([log({ chart: null, score: 1000 }), log({ chart: 2, score: Number.NaN }), log({ chart: 2, score: 300 })], 'RHYTHM');
+    expect([...m]).toEqual([[2, 300]]);
   });
 });
 
