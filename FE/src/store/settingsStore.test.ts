@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, useSettings } from './settingsStore';
+import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, sanitizeTimingSettings, useSettings } from './settingsStore';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { SYSTEM_PRESET_ID } from '@/domain/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
@@ -512,5 +512,46 @@ describe('migrateSettings v22 → v23 (시스템 기본 배치 변경)', () => {
 
   it('v23 저장 값은 건드리지 않는다', () => {
     expect(migrateSettings({ kitLayout: legacy }, 23).kitLayout).toEqual(legacy);
+  });
+});
+
+describe('판정 타이밍 보정·박자 맞추기 기록', () => {
+  const merge = sanitizeTimingSettings;
+
+  it('기본값은 0, 기록 없음', () => {
+    expect(useSettings.getInitialState()).toMatchObject({ audioOffsetMs: 0, timingCal: null });
+  });
+
+  it('setAudioOffsetMs는 5ms 단위로 맞추고 −250~+100으로 자른다', () => {
+    const st = useSettings.getState();
+    st.setAudioOffsetMs(-67);
+    expect(useSettings.getState().audioOffsetMs).toBe(-65);
+    st.setAudioOffsetMs(180);
+    expect(useSettings.getState().audioOffsetMs).toBe(100);
+    st.setAudioOffsetMs(-999);
+    expect(useSettings.getState().audioOffsetMs).toBe(-250);
+    st.setAudioOffsetMs(0);
+  });
+
+  it('옛 범위로 저장된 값(+150)은 읽을 때 지금 범위로 자른다', () => {
+    expect(merge({ audioOffsetMs: 150 }).audioOffsetMs).toBe(100);
+    expect(merge({ audioOffsetMs: -40 }).audioOffsetMs).toBe(-40);
+    expect(merge({ audioOffsetMs: 'x' }).audioOffsetMs).toBe(0);
+  });
+
+  it('박자 맞추기 기록은 저장분에서 복원하고, 모양이 틀리면 버린다', () => {
+    const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
+    expect(merge({ timingCal: rec }).timingCal).toEqual(rec);
+    expect(merge({}).timingCal).toBeNull();
+    expect(merge({ timingCal: { ...rec, input: 'mouse' } }).timingCal).toBeNull();
+    expect(merge({ timingCal: { ...rec, outputLatencyMs: 'x' } }).timingCal).toMatchObject({ outputLatencyMs: null });
+  });
+
+  it('setTimingCal로 기록을 넣고 지운다', () => {
+    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null };
+    useSettings.getState().setTimingCal(rec);
+    expect(useSettings.getState().timingCal).toEqual(rec);
+    useSettings.getState().setTimingCal(null);
+    expect(useSettings.getState().timingCal).toBeNull();
   });
 });
