@@ -3,7 +3,7 @@ import type { PacketRecord } from '@/input/packetTap';
 import { encodeSetPadTable, type PadTableEntry } from '@/input/stickProtocol';
 import { buildBridgeStats, buildHit, buildLog, buildParamAck, buildPedal, buildPose, buildStatus, buildSyncAck } from './mockStick';
 import { PacketLog } from './packetLog';
-import { WRAP_US } from './tsUnwrap';
+import { WRAP_MS, WRAP_US } from './tsUnwrap';
 
 let log: PacketLog;
 let nextId: number;
@@ -121,10 +121,36 @@ describe('시각 펼치기·미래 ms', () => {
     log.ingest(hit(2, 1000, 0, 0xffffff00));
     log.ingest(hit(3, 1100, 0, 0x100));
     const [, a, b] = log.rows();
-    expect(a.tBrowser).toBeCloseTo(0xffffff00 / 1000 + 100);
-    expect(b.tBrowser).toBeCloseTo((0x100 + WRAP_US) / 1000 + 100);
+    // 바퀴 수를 세지 않고 수신 시각(1000·1100)에 가장 가까운 바퀴로 맞춘다
+    expect(a.tBrowser).toBeCloseTo(0xffffff00 / 1000 + 100 - WRAP_MS);
+    expect(b.tBrowser).toBeCloseTo(0x100 / 1000 + 100);
     expect(b.tBrowser as number).toBeGreaterThan(a.tBrowser as number);
     expect(a.futureMs).toBeCloseTo((a.tBrowser as number) - 1000);
+  });
+
+  it('랩 뒤에 소스 시계만 초기화돼도 수신−정지가 한 바퀴만큼 튀지 않는다', () => {
+    // 랩 2초 전의 센서 시각이 브라우저 10000. 타격은 5ms 뒤 도착
+    const base = WRAP_US - 2_000_000;
+    let offset = 10_000 - base / 1000;
+    log.configure({ clockOffsetOf: () => offset });
+    log.ingest(hit(1, 10_005, 0, base));
+    // 랩을 넘은 타격(센서 1초 = 브라우저 13000)
+    log.ingest(hit(2, 13_005, 0, 1_000_000));
+    // 스틱 재연결로 소스 ClockSync가 초기화되면 새 오프셋은 한 바퀴만큼 커진다
+    offset += WRAP_MS;
+    log.ingest(hit(3, 14_005, 0, 2_000_000));
+    for (const r of log.rows()) expect(r.futureMs).toBeCloseTo(-5, 6);
+    expect(log.stats(14_010).perStick[0].hitFuture.median).toBeCloseTo(-5, 6);
+  });
+
+  it('랩 뒤에 모니터 로그만 지워도 수신−정지가 튀지 않는다', () => {
+    const base = WRAP_US - 2_000_000;
+    const offset = 10_000 - base / 1000; // 소스는 랩 전 기준 오프셋을 그대로 쓴다
+    log.configure({ clockOffsetOf: () => offset });
+    log.ingest(hit(1, 10_005, 0, base));
+    log.clear();
+    log.ingest(hit(2, 13_005, 0, 1_000_000));
+    expect(log.rows()[0].futureMs).toBeCloseTo(-5, 6);
   });
 
   it('hitFuture는 중앙값·최대·최소를 낸다', () => {
@@ -408,6 +434,46 @@ describe('SYNC 왕복 표본', () => {
     expect(log.stats(106).sync.samples).toHaveLength(0);
   });
 
+  it('양손·두 페달이 모두 답해도 짝 실패는 0건이고 ACK 수는 손 것만 센다', () => {
+    for (let i = 0; i < 4; i++) {
+      const t0 = 1000 + i * 1000;
+      log.ingest(out(t0));
+      log.ingest(ack(t0, t0 * 1000, t0 + 4, 0));
+      log.ingest(ack(t0, t0 * 1000, t0 + 5, 1));
+      log.ingest(rec(buildSyncAck({ role: 2, t0Ms: t0, t1Us: t0 * 1000 }), t0 + 6));
+      log.ingest(rec(buildSyncAck({ role: 3, t0Ms: t0, t1Us: t0 * 1000 }), t0 + 6));
+    }
+    const s = log.stats(5000);
+    expect(s.sync.count).toBe(8);
+    expect(s.sync.unmatched).toBe(0);
+    expect(s.sync.samples).toHaveLength(8);
+  });
+
+  it('페달 SYNC는 페달 칸에 따로 세고 role 2 응답만 쓴다', () => {
+    expect(log.stats(0).pedal.present).toBe(false);
+    log.ingest(out(1000));
+    log.ingest(rec(buildSyncAck({ role: 2, t0Ms: 1000, t1Us: 400_000 }), 1008));
+    log.ingest(rec(buildSyncAck({ role: 3, t0Ms: 1000, t1Us: 400_000 }), 1008));
+    log.ingest(out(2000));
+    log.ingest(rec(buildSyncAck({ role: 2, t0Ms: 2000, t1Us: 1_400_000 }), 2006));
+    // 짝이 없는 페달 ACK
+    log.ingest(rec(buildSyncAck({ role: 2, t0Ms: 777, t1Us: 0 }), 2100));
+    log.ingest(rec(buildStatus({ role: 3, batteryPct: 80, rssi: -55, fwMajor: 3, fwMinor: 1 }), 2200));
+    const p = log.stats(2300).pedal;
+    expect(p.present).toBe(true);
+    expect(p.sync).toEqual({ count: 3, unmatched: 1, lastRttMs: 6, minRttMs: 6, offsetObsMs: 2003 - 1400 });
+    expect(p.lastStatus[0]).toBeNull();
+    expect(p.lastStatus[1]).toMatchObject({ batteryPct: 80, fwMajor: 3, fwMinor: 1 });
+    expect(p.statusAgeMs).toEqual([null, 100]);
+    // 손 통계에는 들어가지 않는다
+    const s = log.stats(2300);
+    expect(s.sync.count).toBe(0);
+    expect(s.sync.unmatched).toBe(0);
+    log.clear();
+    expect(log.stats(0).pedal.present).toBe(false);
+    expect(log.stats(0).pedal.sync.count).toBe(0);
+  });
+
   it('role 1 ACK는 stick 1 표본', () => {
     log.ingest(out(100));
     log.ingest(ack(100, 0, 105, 1));
@@ -427,6 +493,27 @@ describe('채택 오프셋 기록', () => {
       { t: 30, stick: 1, offsetMs: 7 },
       { t: 40, stick: 0, offsetMs: 4.5 },
     ]);
+  });
+
+  it('0.5ms 미만의 움직임은 변화점으로 남기지 않는다', () => {
+    log.noteAdoptedOffsets(10, [100, null]);
+    log.noteAdoptedOffsets(20, [100.2, null]);
+    log.noteAdoptedOffsets(30, [100.4, null]);
+    log.noteAdoptedOffsets(40, [100.6, null]);
+    expect(log.stats(50).sync.adopted).toEqual([
+      { t: 10, stick: 0, offsetMs: 100 },
+      { t: 40, stick: 0, offsetMs: 100.6 },
+    ]);
+  });
+
+  it('소스 오프셋이 한 바퀴 뛰어도(랩 뒤 초기화) 채택·관측 오프셋이 튀지 않는다', () => {
+    log.noteAdoptedOffsets(10, [1000, null]);
+    log.noteAdoptedOffsets(20, [1000.2 + WRAP_MS, null]);
+    log.noteAdoptedOffsets(30, [1003 + WRAP_MS, null]);
+    const a = log.stats(40).sync.adopted;
+    expect(a).toHaveLength(2);
+    expect(a[0].offsetMs).toBe(1000);
+    expect(a[1].offsetMs).toBeCloseTo(1003, 6);
   });
 
   it('최근 200개만 보관하고 clear로 비운다', () => {
