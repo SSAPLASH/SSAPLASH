@@ -4,7 +4,7 @@ import { PublicLayout } from '@/components/shell/PublicLayout';
 import { AppShell } from './AppShell';
 import { RequireAdmin } from '@/components/shell/RequireAdmin';
 import { RequireAuth } from '@/components/shell/RequireAuth';
-import { FreePlayPage } from '@/pages/FreePlayPage';
+import { FreePlayPage } from '@/features/free/FreePlayPage';
 import { NotFoundPage } from '@/components/shell/NotFoundPage';
 import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
 import { AuthCallbackPage } from '@/features/landing/AuthCallbackPage';

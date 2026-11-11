@@ -9,7 +9,7 @@ import { useLive } from '@/store/liveStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
 import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
-import { LazyChartAutoplayToggle } from '@/components/diag/lazyChartAutoplay';
+import { LazyChartAutoplayToggle } from '@/features/play/components/diag/lazyChartAutoplay';
 import { RecordingToast } from '@/components/recording/RecordingToast';
 import { SaveRecordingDialog } from '@/components/recording/SaveRecordingDialog';
 import { GlassDock } from '@/components/shell/GlassDock';
