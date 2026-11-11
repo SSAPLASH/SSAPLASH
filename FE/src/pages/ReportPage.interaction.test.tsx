@@ -147,13 +147,13 @@ describe('리포트 하단 추천', () => {
   it('내장 곡 빌드나 비인증이면 요청이 없다', async () => {
     useSongs.setState({ source: 'builtin' });
     show();
-    await screen.findByText(/상세 분석/);
+    await screen.findByText(/연주 리포트/);
     await waitFor(() => expect(loadAllReportNotes).toHaveBeenCalled());
     cleanup();
     useSongs.setState({ source: 'api' });
     useAuth.setState({ status: 'anonymous' });
     show();
-    await screen.findByText(/상세 분석/);
+    await screen.findByText(/연주 리포트/);
     expect(fetchRecommendations).not.toHaveBeenCalled();
   });
 
@@ -210,7 +210,7 @@ describe('리포트 하단 비슷한 곡', () => {
     cleanup();
     useAuth.setState({ status: 'anonymous' });
     show();
-    await screen.findByText(/상세 분석/);
+    await screen.findByText(/연주 리포트/);
     expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
   });
 
@@ -241,7 +241,7 @@ describe('약점 연계 연습', () => {
   it('인증 검사를 끈 빌드에서는 로그인 상태여도 DRILL을 조회하지 않는다', async () => {
     vi.stubEnv('VITE_AUTH_REQUIRED', 'false');
     show();
-    await screen.findByText(/상세 분석/);
+    await screen.findByText(/연주 리포트/);
     await waitFor(() => expect(loadAllReportNotes).toHaveBeenCalled());
     expect(fetchRecommendations).not.toHaveBeenCalled();
   });
@@ -276,5 +276,154 @@ describe('약점 연계 연습', () => {
     show();
     await waitFor(() => expect(useRecommendations.getState().entries['DRILL:p1']?.status).toBe('hidden'));
     expect(screen.queryByText('이 약점 연습하기')).toBeNull();
+  });
+});
+
+// 화면 구성 (설계 COACH-002 리포트 화면 개편 A1·A3·A4·A7·A9): 약점을 자리별로 나눠 그리고, 고른 구간으로 확대 영역이 바뀐다
+describe('리포트 화면 구성', () => {
+  const N = (seq: number, timeMs: number, pad: 'KICK' | 'SNARE' | 'RIDE' | 'HIHAT', judgement: 'PERFECT' | 'GOOD' | 'MISS') => ({
+    seq, noteId: null, timeMs, pad, judgement, deltaMs: judgement === 'MISS' ? null : -10, velocity: null,
+  });
+  const NOTES = [
+    N(1, 13340, 'RIDE', 'MISS'), N(2, 14790, 'RIDE', 'MISS'), N(3, 15530, 'HIHAT', 'MISS'),
+    N(4, 46000, 'KICK', 'PERFECT'), N(5, 46240, 'SNARE', 'MISS'), N(6, 46480, 'KICK', 'PERFECT'), N(7, 46720, 'SNARE', 'MISS'),
+  ];
+  const SEG = { causeTags: [], severity: 0.8, scope: 'SEGMENT' as const };
+  const CLUSTER = { ...SEG, fromMs: 12300, toMs: 17300, pattern: 'MISS_CLUSTER', description: '이 구간에서 많이 놓쳐요.', pads: ['RIDE' as const], metrics: { missCount: 3, noteCount: 3, missRate: 1 } };
+  const TRANSITION = {
+    ...SEG, fromMs: 40000, toMs: 50000, pattern: 'TRANSITION_MISS', description: '킥에서 스네어로 넘어갈 때 100%를 놓쳐요.', pads: ['KICK' as const, 'SNARE' as const],
+    metrics: { transitionCount: 6, missCount: 6, missRate: 1 },
+  };
+  const WHOLE = { ...SEG, scope: 'WHOLE' as const, fromMs: 0, toMs: 50000, pattern: 'TIMING_LATE', description: '전반적으로 조금 늦게 쳐요.', pads: [], metrics: {} };
+  const headline = () => screen.getByRole('heading', { level: 2, name: /확인|연습/ }).textContent;
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'anonymous' });
+    vi.mocked(loadAllReportNotes).mockResolvedValue(NOTES);
+  });
+
+  it('머리말·요약 수치가 보이고, 처음에는 첫 놓친 구간이 확대된다', async () => {
+    setReport(report({ accuracy: 0.383, maxCombo: 24, score: 26320, weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
+    show();
+    expect(await screen.findByRole('heading', { level: 1, name: '연주 리포트' })).toBeTruthy();
+    expect(screen.getByText('리듬 게임 · 키보드')).toBeTruthy();
+    expect(screen.getByLabelText('연주 요약').textContent).toContain('38.3%');
+    await waitFor(() => expect(headline()).toBe('0:12–0:17놓친 노트 확인'));
+    expect(screen.getByText('노트 3개 중 3개 놓침 · 100%')).toBeTruthy();
+    expect(screen.getByText('이 구간에서 많이 놓쳐요.')).toBeTruthy();
+  });
+
+  it('패드 전환 관찰의 [예시 보기]를 누르면 그 전환이 든 구간으로 바뀌고, 구간 버튼으로 되돌아온다', async () => {
+    setReport(report({ weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
+    show();
+    const open = await screen.findByRole('button', { name: '0:46–0:54 예시 보기' });
+    expect(screen.getByText('전환 6번 중 6번 놓침 · 100%')).toBeTruthy();
+    fireEvent.click(open);
+    expect(headline()).toBe('킥 → 스네어전환 연습');
+    expect(screen.getByText('킥에서 스네어로 넘어갈 때 100%를 놓쳐요.')).toBeTruthy();
+    expect(open.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /0:12\.3–0:17\.3/ }));
+    expect(headline()).toBe('0:12–0:17놓친 노트 확인');
+  });
+
+  it('[예시 보기]는 한 번만 눌러도 확대 영역으로 화면을 옮긴다(목적지가 다시 만들어지지 않는다)', async () => {
+    const scrolled: Element[] = [];
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    setReport(report({ weakSegments: [TRANSITION, CLUSTER] }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: '0:46–0:54 예시 보기' }));
+    expect(headline()).toBe('킥 → 스네어전환 연습');
+    expect(scrolled).toHaveLength(1);
+    // 선택이 바뀌어 확대 영역이 다시 그려진 뒤에도 목적지가 문서에 남아 있고, 새 확대 영역을 담고 있다
+    expect(scrolled[0].id).toBe('rp-focus');
+    expect(scrolled[0].isConnected).toBe(true);
+    expect(scrolled[0].contains(screen.getByRole('heading', { level: 2, name: /전환 연습/ }))).toBe(true);
+    spy.mockRestore();
+  });
+
+  it('연주 전체 약점은 「그 밖의 관찰」에 버튼 없이 보인다', async () => {
+    setReport(report({ weakSegments: [WHOLE, CLUSTER] }));
+    show();
+    expect(await screen.findByRole('heading', { name: '그 밖의 관찰' })).toBeTruthy();
+    expect(screen.getByText('전반적으로 조금 늦게 쳐요.')).toBeTruthy();
+    expect(screen.getByText('연주 전체')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '구간 보기' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '패드 전환 관찰' })).toBeNull();
+  });
+
+  it('약점이 없으면 안내가 보이고, 막대를 누르면 그 5초가 확대된다', async () => {
+    setReport(report({ counts: { PERFECT: 30, GOOD: 0, MISS: 4 }, weakSegments: [] }));
+    show();
+    expect(await screen.findByText('뚜렷한 약점이 발견되지 않았어요')).toBeTruthy();
+    expect(screen.queryByLabelText('놓친 노트가 모인 구간')).toBeNull();
+    // 처음에는 놓침이 가장 많은 칸
+    await waitFor(() => expect(headline()).toBe('0:10–0:15노트 확인'));
+    fireEvent.click(screen.getByRole('button', { name: /^0:45–0:50: / }));
+    expect(headline()).toBe('0:45–0:50노트 확인');
+    expect(screen.getByText('노트 4개 중 2개 놓침 · 50%')).toBeTruthy();
+  });
+
+  it('놓친 구간과 겹치는 막대를 눌러도 그 막대의 5초가 열리고, 놓친 구간은 구간 버튼으로 연다', async () => {
+    setReport(report({ weakSegments: [TRANSITION, CLUSTER] }));
+    show();
+    // 0:10–0:15 막대는 놓친 구간(0:12.3–0:17.3)과 겹친다
+    fireEvent.click(await screen.findByRole('button', { name: /^0:10–0:15: / }));
+    expect(headline()).toBe('0:10–0:15노트 확인');
+    expect(screen.getByRole('button', { name: /^0:10–0:15: / }).getAttribute('aria-pressed')).toBe('true');
+    const marker = screen.getByRole('button', { name: /0:12\.3–0:17\.3/ });
+    expect(marker.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(marker);
+    expect(headline()).toBe('0:12–0:17놓친 노트 확인');
+  });
+
+  it('분석 대기 중이면 안내가 보이고, 분석이 오면 놓친 구간이 나타나 확대된다', async () => {
+    setReport(report({ analysisStatus: 'PENDING', weakSegments: null }));
+    vi.mocked(refreshReport).mockResolvedValue(report({ weakSegments: [CLUSTER] }));
+    show();
+    expect(await screen.findByText('AI가 연주를 분석하고 있어요')).toBeTruthy();
+    await waitFor(() => expect(headline()).toBe('0:12–0:17놓친 노트 확인'), { timeout: 4000 });
+    expect(screen.queryByText('AI가 연주를 분석하고 있어요')).toBeNull();
+  });
+
+  it('분석 대기 중에 고른 구간은 분석이 도착해도 바뀌지 않는다', async () => {
+    setReport(report({ analysisStatus: 'PENDING', weakSegments: null }));
+    vi.mocked(refreshReport).mockResolvedValue(report({ weakSegments: [CLUSTER] }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^0:45–0:50: / }));
+    expect(headline()).toBe('0:45–0:50노트 확인');
+    // 분석이 도착해 놓친 구간 버튼이 생긴 뒤에도 선택은 그대로다
+    expect(await screen.findByRole('button', { name: /0:12\.3–0:17\.3/ }, { timeout: 4000 })).toBeTruthy();
+    expect(headline()).toBe('0:45–0:50노트 확인');
+  });
+
+  it('전환 약점에 열 구간이 없으면 [예시 보기] 버튼을 두지 않는다', async () => {
+    vi.mocked(loadAllReportNotes).mockResolvedValue([]);
+    setReport(report({ weakSegments: [{ ...TRANSITION, fromMs: 0, toMs: 0 }] }));
+    show();
+    // 관찰 목록과 (처음 선택된) 확대 영역 두 곳에 같은 문구가 나온다
+    expect((await screen.findAllByText('전환 6번 중 6번 놓침 · 100%')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: '패드 전환 관찰' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /예시 보기/ })).toBeNull();
+  });
+
+  it('노트 조회만 실패하면 막대 자리에 안내와 [다시 시도], 요약과 패드 표는 그린다', async () => {
+    vi.mocked(loadAllReportNotes).mockRejectedValue(new Error('network'));
+    setReport(report({ weakSegments: [] }));
+    show();
+    expect(await screen.findByText('분석을 불러오지 못했습니다.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeTruthy();
+    expect(screen.getByLabelText('연주 요약')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '패드별 기록' })).toBeTruthy();
+  });
+
+  it('노트 조회가 실패하면 확대 영역은 불러오는 중이 아니라 실패 안내를 보인다', async () => {
+    vi.mocked(loadAllReportNotes).mockRejectedValue(new Error('network'));
+    setReport(report({ weakSegments: [CLUSTER] }));
+    show();
+    expect(await screen.findByText('노트를 불러오지 못해 이 구간을 그릴 수 없어요.')).toBeTruthy();
+    expect(screen.queryByText('노트를 불러오는 중…')).toBeNull();
+    expect(headline()).toBe('0:12–0:17놓친 노트 확인');
   });
 });
