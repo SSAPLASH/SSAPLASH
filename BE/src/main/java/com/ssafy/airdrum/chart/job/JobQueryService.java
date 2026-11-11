@@ -18,7 +18,7 @@ import com.ssafy.airdrum.common.response.PageResponse;
 
 @Service
 public class JobQueryService {
-    private static final String COLUMNS="j.id,j.song_id,j.status,j.progress,j.revision,j.error_code,j.created_at,j.started_at,j.finished_at";
+    private static final String COLUMNS="j.id,j.song_id,j.status,j.progress,j.revision,j.error_code,j.error_reason,j.created_at,j.started_at,j.finished_at";
     private static final String VISIBLE=" FROM chart_jobs j JOIN songs s ON s.id=j.song_id JOIN users u ON u.id=j.user_id WHERE j.user_id=? AND s.owner_id=j.user_id AND s.deleted_at IS NULL AND u.status='ACTIVE'";
     private final JdbcTemplate db;
     private final AuthenticationService authentication;
@@ -26,9 +26,9 @@ public class JobQueryService {
     private static Instant instant(Timestamp value) { return value==null ? null : value.toInstant(); }
     private JobSnapshot map(ResultSet row,int index) throws SQLException {
         String code=row.getString(6);
-        JobSnapshot.JobError error=code==null ? null : JobErrors.safe(code);
+        JobSnapshot.JobError error=code==null ? null : JobErrors.safe(code,row.getString(7));
         return new JobSnapshot(row.getLong(1),row.getLong(2),JobSnapshot.Status.valueOf(row.getString(3)),row.getInt(4),row.getLong(5),error,
-                instant(row.getTimestamp(7)),instant(row.getTimestamp(8)),instant(row.getTimestamp(9)));
+                instant(row.getTimestamp(8)),instant(row.getTimestamp(9)),instant(row.getTimestamp(10)));
     }
     public Optional<JobSnapshot> visible(long userId,long jobId) {
         var rows=db.query("SELECT "+COLUMNS+VISIBLE+" AND j.id=?",this::map,userId,jobId);

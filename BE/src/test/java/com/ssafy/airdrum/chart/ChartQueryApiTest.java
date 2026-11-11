@@ -175,6 +175,7 @@ class ChartQueryApiTest {
 		db.update("INSERT INTO chart_jobs(song_id,user_id,status,error_code,error_message,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED',NULL,'https://secret',now(),'old',?)",ownSong,owner,"a".repeat(64));
 		var first = ok("/api/v1/songs/"+ownSong);
 		assertThat(first.path("chartFailure").path("code").asString()).isEqualTo("JOB_FAILED");
+		assertThat(first.path("chartFailure").path("reason").isNull()).isTrue();
 		assertThat(first.toString()).doesNotContain("https://secret");
 		db.update("INSERT INTO chart_jobs(song_id,user_id,status,error_code,finished_at,idempotency_key,request_hash) VALUES(?,?,'FAILED','INPUT_INVALID',now(),'foreign',?)",ownSong,other,"c".repeat(64));
 		assertThat(ok("/api/v1/songs/"+ownSong).path("chartFailure").path("code").asString()).isEqualTo("JOB_FAILED");

@@ -71,6 +71,6 @@ public class SongQueryService {
 		return charts.stream().filter(c -> c == normal || c.getNoteCount() != normal.getNoteCount()).toList();
 	}
 	private JobError failure(SongRepository.View song) {
-		return "FAILED".equals(song.getStatus()) && "FAILED".equals(song.getJobStatus()) ? JobErrors.safe(song.getJobErrorCode()) : null;
+		return "FAILED".equals(song.getStatus()) && "FAILED".equals(song.getJobStatus()) ? JobErrors.safe(song.getJobErrorCode(),song.getJobErrorReason()) : null;
 	}
 }

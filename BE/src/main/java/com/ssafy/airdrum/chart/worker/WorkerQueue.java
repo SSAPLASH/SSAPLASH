@@ -132,9 +132,14 @@ class WorkerQueue {
     record FailureOutcome(String status, long revision) {}
     FailureOutcome failure(long job, String worker, UUID attempt, long seq, String stage,
             String code, boolean retryable, String summary) {
+        return failure(job,worker,attempt,seq,stage,code,retryable,summary,null);
+    }
+    FailureOutcome failure(long job, String worker, UUID attempt, long seq, String stage,
+            String code, boolean retryable, String summary, String reason) {
         if (attempt==null || seq<1 || !("SEPARATING".equals(stage) || "TRANSCRIBING".equals(stage))
                 || !("INPUT_INVALID".equals(code) || "MODEL_FAILED".equals(code) || "OUTPUT_INVALID".equals(code))
                 || (retryable && !"MODEL_FAILED".equals(code)) || summary==null || summary.length()>200
+                || (reason!=null && !java.util.Set.of("SOURCE_INVALID", "NOT_TRANSCRIBABLE", "GPU_OUT_OF_MEMORY", "INTERNAL_ERROR").contains(reason))
                 || summary.indexOf('\n')>=0 || summary.indexOf('\r')>=0)
             throw new BusinessException(WorkerError.INVALID);
         return tx.execute(s -> {
@@ -142,7 +147,7 @@ class WorkerQueue {
             Long previous=db.queryForObject("SELECT heartbeat_seq FROM chart_job_attempts WHERE id=? FOR UPDATE",Long.class,attempt);
             if (seq<=previous) throw conflict();
             db.update("UPDATE chart_job_attempts SET heartbeat_seq=? WHERE id=?",seq,attempt);
-            retryOrFail(l,code,retryable);
+            retryOrFail(l,code,retryable,reason);
             return db.queryForObject("SELECT status,revision FROM chart_jobs WHERE id=?",(r,n)->new FailureOutcome(r.getString(1),r.getLong(2)),job);
         });
     }
@@ -176,16 +181,22 @@ class WorkerQueue {
         });
     }
     void retryOrFail(Lock l,String code,boolean retryable) {
+        retryOrFail(l,code,retryable,null);
+    }
+    void retryOrFail(Lock l,String code,boolean retryable,String reason) {
         db.update("UPDATE chart_job_attempts SET finished_at=clock_timestamp() WHERE id=? AND finished_at IS NULL",l.currentAttemptId());
         String column=l.status().equals("SEPARATING")?"separation_retry_count":"transcription_retry_count";
         Integer count=db.queryForObject("SELECT "+column+" FROM chart_jobs WHERE id=?",Integer.class,l.jobId());
         if(retryable && l.active() && !l.deleted() && count<2 && l.deadline().isAfter(Instant.now())) {
             db.update("UPDATE chart_jobs SET status='QUEUED',current_attempt_id=NULL,resume_stage=?,"+column+"="+column+"+1,next_attempt_at=clock_timestamp()+?*interval '1 second',queued_at=clock_timestamp(),progress=?,revision=revision+1 WHERE id=?",l.status(),count==0?5:15,l.status().equals("SEPARATING")?0:50,l.jobId());
-        } else finishFailure(l,code);
+        } else finishFailure(l,code,reason);
     }
     void finishFailure(Lock l,String code) {
+        finishFailure(l,code,null);
+    }
+    void finishFailure(Lock l,String code,String reason) {
         if(l.currentAttemptId()!=null) db.update("UPDATE chart_job_attempts SET finished_at=coalesce(finished_at,clock_timestamp()) WHERE id=?",l.currentAttemptId());
-        db.update("UPDATE chart_jobs SET status='FAILED',error_code=?,error_message='작업을 완료할 수 없습니다.',finished_at=clock_timestamp(),revision=revision+1 WHERE id=?",code,l.jobId());
+        db.update("UPDATE chart_jobs SET status='FAILED',error_code=?,error_reason=?,error_message='작업을 완료할 수 없습니다.',finished_at=clock_timestamp(),revision=revision+1 WHERE id=?",code,reason,l.jobId());
         db.update("UPDATE songs SET status='FAILED',updated_at=clock_timestamp() WHERE id=? AND deleted_at IS NULL AND status='PROCESSING'",l.songId());
         cleanupInputs(l);
     }
