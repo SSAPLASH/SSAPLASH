@@ -1,5 +1,5 @@
 // 패킷 로그. packetTap 레코드를 디코드해 링버퍼에 쌓고, 1초 창 통계(MonitorStats)를 계산한다.
-// 시각 펼치기(TsUnwrap)로 tBrowser·futureMs를 채운다. 타이머는 만들지 않는다 — stats() 호출 주기는 화면이 정한다.
+// 원시 센서 시각을 수신 시각에 가장 가까운 바퀴로 환산해 tBrowser·futureMs를 채운다(바퀴 수를 세지 않음). 타이머는 만들지 않는다 — stats() 호출 주기는 화면이 정한다.
 import type { PacketRecord } from '@/input/packetTap';
 import { packetTap } from '@/input/packetTap';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/input/stickProtocol';
 import { parseLogText, type ParsedLog } from './logParse';
 import { SyncPairer, syncKeyOf } from './syncPair';
-import { futureMs, toBrowserMs, TsUnwrap } from './tsUnwrap';
+import { futureMs, nearBrowserMs, normalizeOffsetMs } from './tsUnwrap';
 import { median } from './syncTrend';
 
 /** SYNC 왕복 1회. t0 = 송신(out 0x10), t1Ms = 스틱 시계(펼친 µs → ms), t2 = SYNC_ACK 수신 */
@@ -89,15 +89,34 @@ export interface MonitorStats {
     adopted: { t: number; stick: 0 | 1; offsetMs: number }[];
     /** 마지막 표본의 rttMs */
     lastLagMs: number | null;
-    /** SYNC_ACK 수신 수(짝 실패 포함) */
+    /** 손(role 0·1) SYNC_ACK 수신 수(짝 실패 포함). 페달 ACK는 pedal.sync에 따로 센다 */
     count: number;
-    /** t0Ms가 맞는 pending을 못 찾은 ACK 수 */
+    /** t0Ms가 맞는 pending을 못 찾은 손 ACK 수 */
     unmatched: number;
   };
+  /** 페달 보드(role 2·3). 손 통계와 섞지 않고 따로 둔다 */
+  pedal: PedalStats;
   /** FE가 스틱에 보낸 SET_PAD_TABLE을 되읽어 복원한 "스틱이 가진 패드 표". 보낸 적 없으면 entries 비고 t null */
   padTable: { entries: PadTableEntry[]; t: number | null };
   errorCount: number;
   total: number;
+}
+
+/** 페달 보드 통계. 보드 하나가 role 2·3을 같은 시계로 보내므로 SYNC는 role 2 ACK만 센다(role 3은 같은 t0·t1의 중복) */
+export interface PedalStats {
+  /** role 2·3 패킷이 온 적이 있는지 */
+  present: boolean;
+  /** 마지막 STATUS [role 2, role 3] */
+  lastStatus: [DecodedStatus | null, DecodedStatus | null];
+  statusAgeMs: [number | null, number | null];
+  sync: {
+    count: number;
+    unmatched: number;
+    lastRttMs: number | null;
+    minRttMs: number | null;
+    /** 마지막 관측 오프셋(브라우저 시계 − 페달 시계, ms) */
+    offsetObsMs: number | null;
+  };
 }
 
 export interface PacketLogDeps {
@@ -110,6 +129,8 @@ const FUTURE_KEEP = 50;
 const LOSS_KEEP_MS = 60_000;
 const SYNC_KEEP = 600;
 const ADOPTED_KEEP = 200;
+/** 채택 오프셋이 직전 기록값과 이만큼(ms) 이상 달라야 변화점으로 남긴다. 적용 오프셋이 조금씩 움직여도 기록이 금방 차지 않게 한다 */
+const ADOPTED_MIN_STEP_MS = 0.5;
 const BRIDGE_STALL_MS = 3000;
 
 interface SeqEvent {
@@ -167,6 +188,8 @@ function seqLoss(prev: number | null, cur: number): number {
   return Math.max(0, diff - 1);
 }
 
+const freshPedalSync = (): PedalStats['sync'] => ({ count: 0, unmatched: 0, lastRttMs: null, minRttMs: null, offsetObsMs: null });
+
 export class PacketLog {
   /** 행 추가마다 +1. useSyncExternalStore 스냅샷으로 쓴다 */
   version = 0;
@@ -181,7 +204,11 @@ export class PacketLog {
   private merged: { version: number; rows: LogRow[] } | null = null;
   private listeners = new Set<() => void>();
   private offTap: (() => void) | null = null;
-  private unwrap = new TsUnwrap();
+  /** 오프셋 정규화 기준값(칸별로 처음 본 오프셋). 0·1 = 손, 2 = 페달 */
+  private offsetRef: [number | null, number | null, number | null] = [null, null, null];
+  private pedalStatus: [{ pkt: DecodedStatus; t: number } | null, { pkt: DecodedStatus; t: number } | null] = [null, null];
+  private pedalPresent = false;
+  private pedalSync: PedalStats['sync'] = freshPedalSync();
 
   private sticks: [StickState, StickState] = [freshStick(), freshStick()];
   private rateEvents: { t: number; key: string }[] = [];
@@ -241,11 +268,14 @@ export class PacketLog {
     let t1Ms: number | null = null;
     if (decoded && stick !== null && (decoded.kind === 'hit' || decoded.kind === 'pose' || decoded.kind === 'syncAck')) {
       const us = decoded.kind === 'syncAck' ? decoded.t1Us : decoded.timestampUs;
-      const unwrapped = this.unwrap.feed(stick, us);
-      tBrowser = toBrowserMs(unwrapped, this.deps.clockOffsetOf ? this.deps.clockOffsetOf(stick) : null);
-      if (decoded.kind === 'syncAck') t1Ms = unwrapped / 1000;
+      // 바퀴 수를 세지 않고 수신 시각에 가장 가까운 바퀴로 맞춘다(소스 ClockSync와 초기화 시점이 달라도 어긋나지 않는다)
+      tBrowser = nearBrowserMs(us, this.deps.clockOffsetOf ? this.deps.clockOffsetOf(stick) : null, rec.recvTime);
+      if (decoded.kind === 'syncAck') t1Ms = us / 1000;
       if (decoded.kind !== 'syncAck') future = futureMs(tBrowser, rec.recvTime);
+    } else if (decoded?.kind === 'syncAck' && role === 2) {
+      t1Ms = decoded.t1Us / 1000;
     }
+    if (role === 2 || role === 3) this.pedalPresent = true;
 
     const row: LogRow = {
       id: rec.id,
@@ -327,18 +357,35 @@ export class PacketLog {
       }
       case 'status':
         if (st) st.lastStatus = { pkt: d, t: row.t };
+        else if (row.role === 2 || row.role === 3) this.pedalStatus[row.role - 2] = { pkt: d, t: row.t };
         break;
       case 'bridgeStats':
         this.lastBridge = { pkt: d, t: row.t };
         this.bridgeSamples.push({ t: row.t, okFrames: d.okFrames, crcErrors: d.crcErrors, resyncCount: d.resyncCount });
         break;
       case 'syncAck': {
-        this.syncCount++;
-        // 되돌아온 t0Ms와 송신 바이트의 t0가 같고 이 스틱이 아직 짝짓지 않은 pending 중 가장 오래된 것.
-        // 못 찾으면 표본 제외(FIFO 폴백 없음). SYNC 1건에 스틱마다 ACK가 오므로 pending은 짝지어도 2초 만료까지 둔다
+        // 되돌아온 t0Ms와 송신 바이트의 t0가 같고 이 칸이 아직 짝짓지 않은 pending 중 가장 오래된 것.
+        // 못 찾으면 표본 제외(FIFO 폴백 없음). SYNC 1건에 기기마다 ACK가 오므로 pending은 짝지어도 2초 만료까지 둔다
         const stick = row.stick;
-        const t0 = stick === null || t1Ms === null ? null : this.pairer.match(d.t0Ms, stick);
-        if (t0 === null || stick === null || t1Ms === null) {
+        if (stick === null) {
+          // 페달 보드: role 2 ACK만 페달 칸에 센다. role 3은 같은 보드가 같은 t0·t1로 한 번 더 보낸 것이라 세지 않는다
+          if (row.role !== 2) break;
+          const ps = this.pedalSync;
+          ps.count++;
+          const pt0 = t1Ms === null ? null : this.pairer.match(d.t0Ms, 2);
+          if (pt0 === null || t1Ms === null) {
+            ps.unmatched++;
+            break;
+          }
+          const rtt = row.t - pt0;
+          ps.lastRttMs = rtt;
+          ps.minRttMs = ps.minRttMs === null ? rtt : Math.min(ps.minRttMs, rtt);
+          ps.offsetObsMs = this.normalized(2, (pt0 + row.t) / 2 - t1Ms);
+          break;
+        }
+        this.syncCount++;
+        const t0 = t1Ms === null ? null : this.pairer.match(d.t0Ms, stick);
+        if (t0 === null || t1Ms === null) {
           this.syncUnmatched++;
           break;
         }
@@ -348,7 +395,7 @@ export class PacketLog {
           t0,
           t1Ms,
           rttMs: row.t - t0,
-          offsetObsMs: (t0 + row.t) / 2 - t1Ms,
+          offsetObsMs: this.normalized(stick, (t0 + row.t) / 2 - t1Ms),
         });
         if (this.syncSamples.length > SYNC_KEEP) this.syncSamples.shift();
         break;
@@ -490,20 +537,42 @@ export class PacketLog {
         count: this.syncCount,
         unmatched: this.syncUnmatched,
       },
+      pedal: {
+        present: this.pedalPresent,
+        lastStatus: [this.pedalStatus[0]?.pkt ?? null, this.pedalStatus[1]?.pkt ?? null],
+        statusAgeMs: [
+          this.pedalStatus[0] ? now - this.pedalStatus[0].t : null,
+          this.pedalStatus[1] ? now - this.pedalStatus[1].t : null,
+        ],
+        sync: { ...this.pedalSync },
+      },
       padTable: { entries: [...this.padTable.values()], t: this.padTableT },
       errorCount: this.errorCount,
       total: this.total,
     };
   }
 
+  /** 오프셋을 그 칸의 기준값(처음 본 오프셋)과 반 바퀴 이내로 맞춘다 */
+  private normalized(slot: 0 | 1 | 2, offsetMs: number): number {
+    const ref = this.offsetRef[slot];
+    if (ref === null) {
+      this.offsetRef[slot] = offsetMs;
+      return offsetMs;
+    }
+    return normalizeOffsetMs(offsetMs, ref);
+  }
+
   /**
    * 소스가 지금 채택한 시계 오프셋을 기록한다. 페이지가 스냅샷마다 부른다.
-   * 직전 값과 다를 때만 변화점으로 추가한다(null은 무시).
+   * 직전 기록값과 0.5ms 이상 다를 때만 변화점으로 추가한다(null은 무시). 한 바퀴 차이는 정규화해 없앤다.
    */
   noteAdoptedOffsets(now: number, offsets: readonly [number | null, number | null]): void {
     for (const stick of [0, 1] as const) {
-      const o = offsets[stick];
-      if (o === null || o === this.lastAdopted[stick]) continue;
+      const raw = offsets[stick];
+      if (raw === null) continue;
+      const o = this.normalized(stick, raw);
+      const last = this.lastAdopted[stick];
+      if (last !== null && Math.abs(o - last) < ADOPTED_MIN_STEP_MS) continue;
       this.lastAdopted[stick] = o;
       this.adopted.push({ t: now, stick, offsetMs: o });
       if (this.adopted.length > ADOPTED_KEEP) this.adopted.shift();
@@ -522,7 +591,10 @@ export class PacketLog {
     this.poseBuf = [];
     this.eventBuf = [];
     this.merged = null;
-    this.unwrap.reset();
+    this.offsetRef = [null, null, null];
+    this.pedalStatus = [null, null];
+    this.pedalPresent = false;
+    this.pedalSync = freshPedalSync();
     this.sticks = [freshStick(), freshStick()];
     this.rateEvents = [];
     this.bridgeSamples = [];

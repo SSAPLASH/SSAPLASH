@@ -11,11 +11,14 @@ export function syncKeyOf(bytes: Uint8Array): number | null {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(1, true);
 }
 
+/** 짝짓기 칸. 0·1 = 왼손·오른손, 2 = 페달 보드(role 2·3이 같은 시계라 한 칸) */
+export type SyncSlot = 0 | 1 | 2;
+
 interface PendingSync {
   t: number;
   key: number;
-  /** 이미 짝을 맺은 스틱(스틱별로 한 번씩만) */
-  matched: Set<0 | 1>;
+  /** 이미 짝을 맺은 칸(칸별로 한 번씩만). 0·1 = 손, 2 = 페달 보드 */
+  matched: Set<SyncSlot>;
 }
 
 export class SyncPairer {
@@ -39,7 +42,7 @@ export class SyncPairer {
    * SYNC_ACK의 t0Ms와 키가 같고 이 스틱이 아직 짝짓지 않은 pending 중 가장 오래된 것을 짝지어 그 송신 시각(t0)을 돌려준다.
    * 못 찾으면 null(FIFO 폴백 없음). SYNC 1건에 스틱마다 ACK가 오므로 pending은 짝지어도 만료까지 둔다
    */
-  match(key: number, stick: 0 | 1): number | null {
+  match(key: number, stick: SyncSlot): number | null {
     const pend = this.pending.find((p) => p.key === key && !p.matched.has(stick));
     if (!pend) return null;
     pend.matched.add(stick);
