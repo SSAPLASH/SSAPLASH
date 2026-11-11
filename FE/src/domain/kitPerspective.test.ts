@@ -267,3 +267,12 @@ describe('PAD_SOLIDS', () => {
     for (const pad of ALL_PADS) expect(PAD_SOLIDS[pad].radius).toBeGreaterThan(0);
   });
 });
+
+describe('기본 배치의 하이햇 페달', () => {
+  it('화면에서 하이햇 바로 아래에 있다(가로 어긋남이 하이햇 반지름의 1/4 이내)', () => {
+    const hh = shapeOf('HIHAT');
+    const pedal = shapeOf('HIHAT_PEDAL');
+    expect(Math.abs(pedal.cx - hh.cx)).toBeLessThan(hh.rx / 4);
+    expect(pedal.cy).toBeGreaterThan(hh.cy + hh.ry);
+  });
+});
