@@ -243,3 +243,148 @@
   flex: none;
   gap: var(--space-xs);
 }
+
+/* ---- 시작 위치 보정 자세 안내(ReferencePoseGuide) ---- */
+.pose-guide {
+  display: grid;
+  gap: 12px;
+}
+.pose-guide-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.pose-guide-figs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pose-guide-fig {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+  transition: border-color var(--motion-fast);
+}
+.pose-guide-fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pose-guide-fig figcaption {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.pose-guide-body {
+  fill: none;
+  stroke: #5b6677;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pose-guide-body.mid {
+  stroke-width: 5;
+}
+.pose-guide-body.thin {
+  stroke-width: 4;
+}
+.pose-guide-fill {
+  fill: #2b323c;
+  stroke: #5b6677;
+  stroke-width: 2;
+}
+/* 스틱은 검정. 어두운 판 위에서 보이도록 밝은 외곽선을 두른다 */
+.pose-guide-stick {
+  fill: #0b0d10;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+}
+.pose-guide-ghost {
+  opacity: 0.3;
+}
+.pose-guide-tip {
+  fill: var(--text-1);
+}
+.pose-guide-label {
+  fill: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* 가운데 점선: 스틱 끝이 모일 자리. 상태에 따라 색이 바뀐다 */
+.pose-guide-line {
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+.pose-guide[data-state='holding'] .pose-guide-line {
+  stroke: var(--brand);
+}
+.pose-guide[data-state='shaky'] .pose-guide-line {
+  stroke: var(--miss);
+}
+.pose-guide[data-state='done'] .pose-guide-line {
+  stroke: var(--good);
+}
+.pose-guide[data-state='done'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--good) 55%, transparent);
+}
+.pose-guide-check circle {
+  fill: var(--good);
+}
+.pose-guide-check path {
+  fill: none;
+  stroke: #04140a;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pose-guide-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pose-guide-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.pose-guide-steps li i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+}
+.pose-guide-steps li.on {
+  color: var(--text-1);
+}
+.pose-guide-steps li.on i {
+  background: var(--brand);
+  color: var(--brand-on);
+}
+@media (max-width: 520px) {
+  .pose-guide-figs,
+  .pose-guide-steps {
+    grid-template-columns: 1fr;
+  }
+}

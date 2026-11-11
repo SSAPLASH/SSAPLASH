@@ -44,7 +44,6 @@ import {
   dongleLine,
   referenceHoldingLine,
   REFERENCE_DONE_TEXT,
-  REFERENCE_HINT_TEXT,
   REFERENCE_HOLDING_TEXT,
   REFERENCE_LOST_TEXT,
   REFERENCE_RESTART_LABEL,
@@ -68,6 +67,7 @@ import { StagePanel } from '@/components/setup/StagePanel';
 import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
 import { useRealign } from '@/components/useRealign';
 import { usePoseStream } from '@/components/calibration/usePoseStream';
+import { ReferencePoseGuide } from '@/components/calibration/ReferencePoseGuide';
 import { useReferenceCapture } from '@/components/calibration/useReferenceCapture';
 import { calibrationSession } from '@/app/calibrationSession';
 import { sensorRegistry } from '@/app/sensorRegistry';
@@ -566,6 +566,10 @@ export function SetupPage() {
             <CalibrationStage onRestart={anyConnected && !systemPreset ? startFull : undefined} />
           ) : (
             <div className="setup-col">
+              {/* 자세 안내 그림: 처음이든 다시 맞추기든 항상 보인다 */}
+              <ReferencePoseGuide
+                state={refHolding ? (refHold.progress === 0 && refHold.spread > 3 ? 'shaky' : 'holding') : refHold.phase === 'done' ? 'done' : 'idle'}
+              />
               {refHolding ? (
                 <>
                   <p className="setup-note" role="status">
@@ -586,7 +590,6 @@ export function SetupPage() {
                 </>
               ) : (
                 <>
-                  <p className="setup-note">{REFERENCE_HINT_TEXT}</p>
                   {refHold.phase === 'done' && (
                     <p className="setup-note" role="status">
                       {REFERENCE_DONE_TEXT}
