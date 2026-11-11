@@ -122,8 +122,8 @@ describe('돌아갈 곳 이름·버튼 문구', () => {
     expect(returnTargetName('/sheet?x=1', '악보 연습 · 별빛 산책')).toBe('악보 연습 · 별빛 산책');
   });
   it('/play·/sheet는 연주 준비 문구, 그 밖은 이름 + 으로/로', () => {
-    expect(returnButtonText('/play?x=1')).toBe('연주 준비로 돌아가기');
-    expect(returnButtonText('/sheet', '악보 연습 · 별빛 산책')).toBe('연주 준비로 돌아가기');
+    expect(returnButtonText('/play?x=1')).toBe('곡 선택으로 돌아가기');
+    expect(returnButtonText('/sheet', '악보 연습 · 별빛 산책')).toBe('곡 선택으로 돌아가기');
     expect(returnButtonText('/free')).toBe('자유 연습으로 돌아가기');
     expect(returnButtonText('/')).toBe('홈으로 돌아가기');
   });
