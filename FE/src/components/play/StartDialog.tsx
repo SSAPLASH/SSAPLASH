@@ -1,5 +1,5 @@
 // 시작 확인 창 (설계 MODE-001-MODE-003-picker-quick-start, Figma 905:4457 `Play / StartDialog`).
-// 곡 카드의 [플레이]를 누르면 항상 이 창이 열린다. 준비 조건에 따라 두 변형 중 하나:
+// 악보 연습은 곡 카드의 [플레이]를 누르면 항상 이 창이 열린다. 리듬 게임은 기기 준비·불러오기 실패·재정렬일 때만 뜨고 옵션 줄이 없다. 두 변형 중 하나:
 //  - play: 곡 한 줄 요약 · 연주 옵션 · 안내 · [취소] [▶ 플레이]. Enter = 플레이(불러오는 중·오류에는 막음)
 //  - setup: 「기기 준비가 필요해요」 · 빠진 항목 · [취소] [다시 연결] [드럼 세팅으로]. 플레이 버튼 없음
 // props만 받는다 — 스토어 구독·준비 조건 계산·이동은 페이지가 한다. 초점 가둠·Esc는 ui/Dialog(useDialogFocus)가 맡는다.
@@ -22,13 +22,12 @@ export interface StartDialogProps {
   song: { title: string; artist: string; bpm?: number; durationSec?: number; level: Difficulty };
   /** 요약 줄 앞머리: 「악보 연습」·「리듬 게임」 */
   modeLabel: string;
-  /** setup 창 내용(ReadyPanel과 같은 의미) */
+  /** setup 창 내용(기기 준비 줄) */
   missing: ReadinessMissing[];
   connected: [boolean, boolean];
   keyboardOnly?: boolean;
   pedal?: boolean;
-  presetName?: string | null;
-  /** play 창의 옵션 칸(PlayOptions) */
+  /** play 창의 옵션 칸(PlayOptions). 없으면 「연주 옵션」 구역을 그리지 않는다(리듬 게임) */
   options?: ReactNode;
   /** 안내 문구(재정렬·변박 등). 줄마다 하나 */
   notices?: string[];
@@ -57,7 +56,6 @@ export function StartDialog({
   connected,
   keyboardOnly = false,
   pedal,
-  presetName = null,
   options,
   notices = [],
   realign,
@@ -128,10 +126,12 @@ export function StartDialog({
 
       {isPlay ? (
         <>
-          <section className="start-dialog-section" aria-label="연주 옵션">
-            <h3 className="start-dialog-caption">연주 옵션</h3>
-            {options}
-          </section>
+          {options && (
+            <section className="start-dialog-section" aria-label="연주 옵션">
+              <h3 className="start-dialog-caption">연주 옵션</h3>
+              {options}
+            </section>
+          )}
           {notices.map((n) => (
             <p key={n} className="start-dialog-notice" role="status">
               {n}
@@ -140,17 +140,7 @@ export function StartDialog({
           {realign && <RealignPrompt hands={realign.hands} done={realign.done} variant="row" onSkip={realign.onSkip} />}
         </>
       ) : (
-        <DeviceCheck
-          ready={false}
-          missing={missing}
-          connected={connected}
-          keyboardOnly={keyboardOnly}
-          pedal={pedal}
-          presetName={presetName}
-          hideHead
-          hideActions
-          hidePreset
-        />
+        <DeviceCheck missing={missing} connected={connected} keyboardOnly={keyboardOnly} pedal={pedal} />
       )}
 
       {error ? (
