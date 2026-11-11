@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/app/features';
 import { PlayLogTab } from './PlayLogTab';
 import './history.css';
-import { RecordingList } from '@/components/recording/RecordingList';
+import { RecordingList } from './RecordingList';
 import { useShell } from '@/components/shell/useShell';
 import { Segmented } from '@/components/ui/Segmented';
 import { PageHeader } from '@/components/ui/PageHeader';

@@ -56,7 +56,6 @@ const ALLOWED = new Set<string>([
   'components/recording/RecordingToast.tsx -> app/recordingStore.ts',
   'components/recording/SaveRecordingDialog.tsx -> app/recordingStore.ts',
   'components/recording/toastContent.tsx -> app/recordingStore.ts',
-  'components/recording/useRecordingList.ts -> app/queryClient.ts',
   'components/shell/GlassDock.tsx -> app/features.ts',
   'components/shell/GlassDock.tsx -> app/recordingStore.ts',
   'components/shell/RouteErrorBoundary.tsx -> app/chunkRecovery.ts',
@@ -66,7 +65,6 @@ const ALLOWED = new Set<string>([
   'components/song/useFreeAccompaniment.ts -> app/bootstrap.ts',
   // 공유 → 기능 CSS
   'components/drum/HitReadout.tsx -> features/play/components/play.css',
-  'components/recording/RecordingList.tsx -> features/history/history.css',
   'components/song/SeekBar.tsx -> features/free/free.css',
 ]);
 
