@@ -23,6 +23,12 @@
     transform: translateY(-4px);
   }
 }
+/* translateY 4px → 0 (위로 펼치는 드롭다운) */
+@keyframes motion-drop-in-up {
+  from {
+    transform: translateY(4px);
+  }
+}
 /* translateY 8px → 0 */
 @keyframes motion-rise-in {
   from {
@@ -60,6 +66,12 @@
   animation:
     motion-fade-in var(--motion-fade) var(--ease-out),
     motion-drop-in var(--motion-move) var(--ease-out);
+}
+/* 아래 공간이 모자라 위로 뒤집힌 메뉴(Radix data-side)는 반대 방향에서 들어온다 */
+.motion-menu[data-side='top'] {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    motion-drop-in-up var(--motion-move) var(--ease-out);
 }
 /* 토스트 */
 .motion-toast {

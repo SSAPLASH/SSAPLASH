@@ -1057,10 +1057,8 @@ a.btn-ghost.as-button {
   text-transform: uppercase;
 }
 .profile-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
+  /* 위치는 Radix가 정한다(ui/Menu) */
+  z-index: 40;
   min-width: 180px;
   display: flex;
   flex-direction: column;
