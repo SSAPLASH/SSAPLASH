@@ -49,6 +49,9 @@ export interface GuideScript {
   totalMs: number;
   /** 칸 i의 멈춤 시작 시각(ms) */
   holdStart: readonly number[];
+  /** 위치 0이 되는 진행 시작·끝(8분 단위). progress = (pos − startPos) ÷ (endPos − startPos) */
+  startPos: number;
+  endPos: number;
   /** ②에서 커서가 첫 음표까지 가는 시간 */
   leadMs: number;
   /** ② 한 마디 길이 */
@@ -90,9 +93,26 @@ export const EXAMPLE_STEPS: readonly GuideStep[] = (
   ] as PadId[][]
 ).map((pads, beat) => ({ pads, beat }));
 
-export function buildGuideScript(steps: readonly GuideStep[] = EXAMPLE_STEPS, bpm: number = GUIDE_BPM): GuideScript {
+/** 시간표 옵션. 기본값은 악보 장면(커서)용이고, 리듬 게임 장면은 노트가 위에서 내려올 거리를 위해 시작 위치를 더 앞에 둔다 */
+export interface GuideScriptOptions {
+  startPos?: number;
+  endPos?: number;
+  /** ① 처음 이동 시간(ms). 기본 MOVE_MS */
+  firstMoveMs?: number;
+}
+
+/** 리듬 게임 안내 장면 시간표 옵션: 노트가 판정선 위 4칸(8분 단위)에서 내려오기 시작한다 */
+export const GAME_GUIDE_OPTIONS: GuideScriptOptions = { startPos: -4, endPos: 8, firstMoveMs: 1400 };
+
+export function buildGuideScript(
+  steps: readonly GuideStep[] = EXAMPLE_STEPS,
+  bpm: number = GUIDE_BPM,
+  options: GuideScriptOptions = {},
+): GuideScript {
+  const startPos = options.startPos ?? CURSOR_START_POS;
+  const endPos = options.endPos ?? CURSOR_END_POS;
   const barMs = (BEATS_PER_BAR * 60000) / bpm;
-  const leadMs = (-CURSOR_START_POS / STEPS_PER_BAR) * barMs;
+  const leadMs = (-startPos / STEPS_PER_BAR) * barMs;
   const segments: GuideSegment[] = [];
   const holdStart: number[] = [];
   let total = 0;
@@ -100,25 +120,25 @@ export function buildGuideScript(steps: readonly GuideStep[] = EXAMPLE_STEPS, bp
     segments.push({ p1: s.p0, ...s, t0: total });
     total += s.d;
   };
-  let pos = CURSOR_START_POS;
+  let pos = startPos;
   steps.forEach((s, i) => {
-    push({ phase: 'step', kind: 'move', d: MOVE_MS, p0: pos, p1: s.beat });
+    push({ phase: 'step', kind: 'move', d: i === 0 ? (options.firstMoveMs ?? MOVE_MS) : MOVE_MS, p0: pos, p1: s.beat });
     holdStart[i] = total;
     push({ phase: 'step', kind: 'hold', d: HOLD_MS, p0: s.beat, step: i });
     pos = s.beat;
   });
-  push({ phase: 'step', kind: 'move', d: MOVE_MS, p0: pos, p1: CURSOR_END_POS });
-  push({ phase: 'step', kind: 'hold', d: A_END_HOLD_MS, p0: CURSOR_END_POS });
-  push({ phase: 'run', kind: 'hold', d: B_RESET_MS, p0: CURSOR_START_POS, reset: true });
-  push({ phase: 'run', kind: 'run', d: leadMs + barMs, p0: CURSOR_START_POS });
-  push({ phase: 'run', kind: 'hold', d: B_END_HOLD_MS, p0: CURSOR_END_POS });
-  return { steps, bpm, segments, totalMs: total, holdStart, leadMs, barMs };
+  push({ phase: 'step', kind: 'move', d: MOVE_MS, p0: pos, p1: endPos });
+  push({ phase: 'step', kind: 'hold', d: A_END_HOLD_MS, p0: endPos });
+  push({ phase: 'run', kind: 'hold', d: B_RESET_MS, p0: startPos, reset: true });
+  push({ phase: 'run', kind: 'run', d: leadMs + barMs, p0: startPos });
+  push({ phase: 'run', kind: 'hold', d: B_END_HOLD_MS, p0: endPos });
+  return { steps, bpm, segments, totalMs: total, holdStart, startPos, endPos, leadMs, barMs };
 }
 
 /** 입력 u(0~1)의 ease-in-out. 칸 사이 이동에 쓴다 */
 const ease = (u: number) => (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);
 
-const progressOf = (pos: number) => (pos - CURSOR_START_POS) / (CURSOR_END_POS - CURSOR_START_POS);
+const progressOf = (script: GuideScript, pos: number) => (pos - script.startPos) / (script.endPos - script.startPos);
 
 /** 시각 t(ms, 루프 포함) → 장면 상태 */
 export function stateAt(script: GuideScript, t: number): GuideState {
@@ -141,7 +161,7 @@ export function stateAt(script: GuideScript, t: number): GuideState {
   } else if (seg.reset) {
     pos = seg.p0;
   } else if (seg.kind === 'run') {
-    pos = Math.min(CURSOR_END_POS, CURSOR_START_POS + ((tm - seg.t0) / script.barMs) * STEPS_PER_BAR);
+    pos = Math.min(script.endPos, script.startPos + ((tm - seg.t0) / script.barMs) * STEPS_PER_BAR);
     const e = tm - seg.t0 - script.leadMs; // 0 = 첫 음표 시각
     steps.forEach((s, i) => {
       const dt = e - (script.barMs * s.beat) / STEPS_PER_BAR;
@@ -154,7 +174,7 @@ export function stateAt(script: GuideScript, t: number): GuideState {
   }
 
   const nx = steps.findIndex((s) => s.beat > pos + NEXT_EPS);
-  return { phase: seg.phase, progress: progressOf(pos), active, done, next: active === null && nx >= 0 ? nx : null };
+  return { phase: seg.phase, progress: progressOf(script, pos), active, done, next: active === null && nx >= 0 ? nx : null };
 }
 
 /** 칸 i의 멈춤 시작 시각(ms). ◀ ▶ 한 칸 이동이 이 시각 +1ms로 시계를 옮긴다 */
