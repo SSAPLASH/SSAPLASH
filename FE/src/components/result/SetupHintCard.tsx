@@ -21,7 +21,7 @@ export function SetupHintCard({ tags, returnTo }: Props) {
       <div className="result-actions">
         {offset && (
           <Link to="/settings" className={buttonClassName({ variant: 'secondary', size: 'md' })}>
-            타격음 지연 보정하기
+            박자 맞추러 가기
           </Link>
         )}
         {pads && (

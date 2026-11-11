@@ -40,7 +40,7 @@ export function evaluateSetupHints(m: WindowMetrics): RuleEvaluation[] {
       trigger: steadyOffset,
       release: false,
       severity: 1,
-      text: '소리 타이밍이 일정하게 어긋나요. 설정에서 타격음 지연 보정을 맞춰 보세요.',
+      text: '소리 타이밍이 일정하게 어긋나요. 설정에서 박자 맞추기를 해 보세요.',
       target: null,
     },
     {
