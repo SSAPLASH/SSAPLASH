@@ -1,6 +1,8 @@
-// 연주 상세 분석 (COACH-002, 설계 COACH-002 4-3). 서버 리포트만 쓴다 — 로컬 결과 값과 섞지 않는다(D5).
-// 요약이 오면 바로 그리고, 노트 타임라인은 페이지를 끝까지 받아 시간순 정렬한 뒤 그린다(D8).
-// 리포트에 songId가 있으면 그 아래 별도 카드로 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
+// 연주 상세 리포트 (COACH-002, 설계 COACH-002 4-3 · 화면 구성은 설계 COACH-002 리포트 화면 개편). 서버 리포트만 쓴다 — 로컬 결과 값과 섞지 않는다(D5).
+// 화면 순서: 머리말 → 요약 수치 → 코치의 한마디 → 전체 노트 흐름(5초 막대·놓친 구간 버튼) → 선택 구간 확대 → 패드 전환 관찰 → 그 밖의 관찰 → 패드별 기록 → 추천.
+// 요약이 오면 바로 그리고, 노트는 페이지를 끝까지 받아 시간순 정렬한 뒤 막대와 확대 영역을 그린다(D8).
+// AI 약점은 유형으로 자리를 나누되(놓침이 몰린 구간·패드 전환·그 밖) 문구는 서버 값을 그대로 쓴다.
+// 리포트에 songId가 있으면 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
 // 하단 "추천 곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -9,19 +11,33 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from '@/app/analysisPoller';
 import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/app/playSync';
 import { CoachSummaryCard } from '@/components/report/CoachSummaryCard';
-import { NoteTimeline } from '@/components/report/NoteTimeline';
-import { PadAccuracyChart } from '@/components/report/PadAccuracyChart';
-import { ReportSummary } from '@/components/report/ReportSummary';
+import { FocusPanel } from '@/components/report/FocusPanel';
+import { NoteFlowChart } from '@/components/report/NoteFlowChart';
+import { AnalysisNotice, ObservationList, PadTable, StatsLine, type ObservationRow, type PollingState } from '@/components/report/ReportSections';
 import { TimingHistogram } from '@/components/report/TimingHistogram';
 import { useSegmentPlayer } from '@/components/report/useSegmentPlayer';
 import { RecommendRow } from '@/components/song/RecommendRow';
-import { WeakSegments, type PollingState } from '@/components/report/WeakSegments';
-import type { Report, ReportNote } from '@/domain/report';
+import type { Report, ReportNote, WeakSegment } from '@/domain/report';
 import { recommendationPathOf } from '@/domain/recommendation';
+import {
+  clockRange,
+  flowBins,
+  flowTotalMs,
+  focusOfBin,
+  focusOfCluster,
+  focusOfSegment,
+  focusOfTransition,
+  initialFocus,
+  observationText,
+  splitSegments,
+  transitionWindow,
+  type Focus,
+} from '@/domain/reportView';
 import { getPlayLog } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
+import '@/components/report/report.css';
 
 type Load<T> = { s: 'loading' } | { s: 'ok'; v: T } | { s: 'error'; e: unknown };
 
@@ -31,6 +47,7 @@ const ANALYSIS_POLL_MAX = 5;
 
 const MODE_LABEL: Record<string, string> = { RHYTHM: '리듬 게임', SHEET: '악보 연습' };
 const INPUT_LABEL: Record<string, string> = { KEYBOARD: '키보드', STICK: '스틱' };
+const DIFFICULTY_LABEL: Record<string, string> = { EASY: 'EASY', NORMAL: 'NORMAL', HARD: 'HARD' };
 
 /** 오류 → 안내 문구와 다시 시도 가능 여부 (회신 1 §4) */
 function describeError(e: unknown): { text: string; retry: boolean; login?: boolean } {
@@ -78,6 +95,13 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const player = useSegmentPlayer(audioEngine);
   const [accompanimentUrl, setAccompanimentUrl] = useState<string | null>(null);
   const pending = report.s === 'ok' && report.v.analysisStatus === 'PENDING';
+  // 지금 확대해서 보는 구간. 사용자가 고르기 전(null)에는 initialFocus가 정한다 — 분석이 늦게 와도 고른 뒤에는 바뀌지 않는다
+  const [picked, setPicked] = useState<Focus | null>(null);
+  const weakSegments = report.s === 'ok' ? report.v.weakSegments : null;
+  const groups = useMemo(() => splitSegments(weakSegments), [weakSegments]);
+  const noteList = notes.s === 'ok' ? notes.v : null;
+  const totalMs = useMemo(() => flowTotalMs(noteList ?? [], log?.durationMs ?? null), [noteList, log?.durationMs]);
+  const bins = useMemo(() => flowBins(noteList ?? [], totalMs), [noteList, totalMs]);
 
   // 추천: API 곡 소스 + 로그인일 때만, 리포트가 처음 OK가 된 뒤 요청한다(D1·D6). 중복은 store가 막는다(D2)
   const navigate = useNavigate();
@@ -157,17 +181,23 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     return poller.stop;
   }, [playId, pending, pollRun]);
 
-  const title = log?.title ?? '연주 리포트';
+  const title = log?.title ? `${log.title} 연주 리포트` : '연주 리포트';
+  const meta =
+    report.s === 'ok'
+      ? [
+          MODE_LABEL[report.v.mode] ?? report.v.mode,
+          report.v.difficulty ? (DIFFICULTY_LABEL[report.v.difficulty] ?? report.v.difficulty) : (log?.difficulty ?? ''),
+          INPUT_LABEL[report.v.inputSource] ?? report.v.inputSource,
+          log ? new Date(log.startedAt).toLocaleString('ko-KR') : '',
+        ].filter((t) => t !== '')
+      : [];
   const header = (
-    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
+    <header className="rp-header">
       <div>
-        <h1>{title} · 상세 분석</h1>
-        <div className="small dim">
-          {report.s === 'ok' && `${MODE_LABEL[report.v.mode] ?? report.v.mode} · 입력 ${INPUT_LABEL[report.v.inputSource] ?? report.v.inputSource}`}
-          {log && ` · ${new Date(log.startedAt).toLocaleString('ko-KR')}`}
-        </div>
+        <h1>{title}</h1>
+        {meta.length > 0 && <p className="rp-header-meta">{meta.join(' · ')}</p>}
       </div>
-      <div className="row">
+      <div className="rp-header-actions">
         {log && (
           <Link to={`/result/${playId}`} className="btn-ghost as-button">
             결과 화면
@@ -177,23 +207,23 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           곡 선택
         </Link>
       </div>
-    </div>
+    </header>
   );
 
   if (report.s === 'loading') {
     return (
-      <main className="main">
+      <main className="main rp">
         {header}
-        <p className="dim">분석을 불러오는 중…</p>
+        <p className="rp-notice">분석을 불러오는 중…</p>
       </main>
     );
   }
   if (report.s === 'error') {
     const d = describeError(report.e);
     return (
-      <main className="main">
+      <main className="main rp">
         {header}
-        <div className="notice error row">
+        <div className="notice error row" style={{ marginTop: 16 }}>
           <span>{d.text}</span>
           {d.retry && <button onClick={onRetry}>다시 시도</button>}
           {d.login && <Link to="/login">로그인</Link>}
@@ -203,53 +233,94 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   }
 
   const r = report.v;
+  const focus = picked ?? initialFocus(groups, noteList ?? [], totalMs);
+  /** 구간을 고르고 확대 영역으로 화면을 옮긴다(관찰 목록의 버튼) */
+  const openFocus = (f: Focus) => {
+    setPicked(f);
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('rp-focus')?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+  const transitionRows: ObservationRow[] = groups.transitions.map((seg: WeakSegment, i) => {
+    const f = focusOfTransition(seg, noteList ?? []);
+    const w = transitionWindow(noteList ?? [], seg, seg.pattern === 'TRANSITION_MISS');
+    return {
+      key: `${f.key}:${i}`,
+      ...observationText(seg),
+      // 열 구간이 없으면(전환 노트를 못 찾았고 약점 구간도 비어 있음) 버튼을 두지 않는다
+      action: w.toMs > w.fromMs ? { text: `${clockRange(w.fromMs, w.toMs)} 예시 보기`, onClick: () => openFocus(f), pressed: focus?.key === f.key } : undefined,
+    };
+  });
+  const otherRows: ObservationRow[] = groups.others.map((seg: WeakSegment, i) => {
+    const f = focusOfSegment(seg);
+    return {
+      key: `${f.key}:${i}`,
+      ...observationText(seg),
+      action: seg.scope === 'WHOLE' ? undefined : { text: '구간 보기', onClick: () => openFocus(f), pressed: focus?.key === f.key },
+    };
+  });
+  const notice = (
+    <AnalysisNotice
+      status={r.analysisStatus}
+      segments={r.weakSegments}
+      counts={r.counts}
+      polling={polling}
+      onRefresh={() => {
+        setPolling('polling');
+        setPollRun((n) => n + 1);
+      }}
+    />
+  );
+
   return (
-    <main className="main">
+    <main className="main rp">
       {header}
+      <StatsLine report={r} />
       <CoachSummaryCard summary={r.coachSummary} />
-      <ReportSummary report={r} />
 
-      <div className="grid-2" style={{ marginTop: 16 }}>
-        <div className="card col">
-          <h3>패드별 정확도</h3>
-          <PadAccuracyChart stats={r.padStats} />
-        </div>
-        <div className="card col">
-          <h3>타이밍</h3>
-          <TimingHistogram histogram={r.histogram} perfectMs={log?.timing.perfectMs ?? null} />
-        </div>
-      </div>
-
-      <div className="card col" style={{ marginTop: 16 }}>
-        <h3>노트 흐름</h3>
-        {notes.s === 'loading' && <p className="small dim">노트를 불러오는 중…</p>}
-        {notes.s === 'error' && (
-          <div className="notice error row">
-            <span>{describeError(notes.e).text}</span>
-            <button onClick={onRetry}>다시 시도</button>
-          </div>
-        )}
-        {notes.s === 'ok' && <NoteTimeline notes={notes.v} />}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <WeakSegments
-          status={r.analysisStatus}
-          segments={r.weakSegments}
-          counts={r.counts}
-          bars={log?.bpm ? { bpm: log.bpm, beatsPerBar: log.beatsPerBar } : null}
-          polling={polling}
-          playback={{ notes: notes.s === 'ok' ? notes.v : null, durationMs: log?.durationMs ?? null, accompanimentUrl }}
-          player={player}
-          onRefresh={() => {
-            setPolling('polling');
-            setPollRun((n) => n + 1);
-          }}
+      {notes.s === 'ok' ? (
+        <NoteFlowChart
+          bins={bins}
+          totalMs={totalMs}
+          clusters={groups.clusters}
+          focus={focus}
+          // 막대는 항상 그 5초를 연다. 놓친 구간은 아래 구간 버튼으로 연다(겹치는 막대가 구간을 대신 열면 그 막대의 나머지 노트를 볼 수 없다)
+          onPickBin={(fromMs) => setPicked(focusOfBin(fromMs))}
+          onPickCluster={(seg) => setPicked(focusOfCluster(seg))}
+          notice={notice}
         />
+      ) : (
+        <section className="rp-flow" aria-labelledby="rp-flow-title">
+          <div className="rp-flow-header">
+            <h2 id="rp-flow-title">전체 노트 흐름</h2>
+          </div>
+          {notes.s === 'loading' && <p className="rp-notice">노트를 불러오는 중…</p>}
+          {notes.s === 'error' && (
+            <div className="notice error row" style={{ marginTop: 14 }}>
+              <span>{describeError(notes.e).text}</span>
+              <button onClick={onRetry}>다시 시도</button>
+            </div>
+          )}
+          {notice}
+        </section>
+      )}
+
+      {/* 화면 이동의 목적지는 이 틀이다. 안쪽 FocusPanel은 선택마다 다시 만들어져서, 거기로 부드럽게 옮기면 도중에 목적지가 사라져 이동이 끊긴다 */}
+      <div id="rp-focus" className="rp-focus-anchor">
+        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} />}
       </div>
+
+      <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />
+      <ObservationList id="rp-others-title" title="그 밖의 관찰" rows={otherRows} />
+
+      <PadTable stats={r.padStats}>
+        <details className="rp-more">
+          <summary>타이밍 분포 보기</summary>
+          <TimingHistogram histogram={r.histogram} perfectMs={log?.timing.perfectMs ?? null} />
+        </details>
+      </PadTable>
 
       {recoEnabled && r.analysisStatus === 'DONE' && drillEntry.status === 'ready' && (
-        <div className="card col" style={{ marginTop: 16 }}>
+        <div className="rp-reco">
           <RecommendRow
             caption="이 약점 연습하기"
             items={drillEntry.cards}
@@ -262,7 +333,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
       )}
 
       {recoEnabled && recoEntry.status === 'ready' && (
-        <div className="card col" style={{ marginTop: 16 }}>
+        <div className="rp-reco">
           <RecommendRow
             caption="추천 곡"
             items={recoEntry.cards}
@@ -276,7 +347,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
       )}
 
       {recoEnabled && similarSongId !== null && similarEntry.status === 'ready' && (
-        <div className="card col" style={{ marginTop: 16 }}>
+        <div className="rp-reco">
           <RecommendRow
             caption="방금 친 곡과 비슷한 곡"
             items={similarEntry.cards}
