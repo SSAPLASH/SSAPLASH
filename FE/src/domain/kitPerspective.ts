@@ -255,7 +255,7 @@ function aimFrom(origin: Point3, pt: Point3): { dir: Point3; dist: number } {
 }
 
 /** 자세 마커의 출발점. hand가 'center'면 두 손 가운데(포인터 모의 IMU: 마우스 자세는 손 구분이 없다) */
-export function poseOrigin(hand: StickId | 'center'): Point3 {
+function poseOrigin(hand: StickId | 'center'): Point3 {
   return hand === 'center' ? AIM_ORIGIN : HAND_ORIGINS[hand];
 }
 
