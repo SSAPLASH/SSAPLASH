@@ -1,6 +1,6 @@
 // SheetPager 순수 계산 테스트 (페이지당 마디 수, 슬롯 교체, 커서, 박 스냅)
 import { describe, expect, it } from 'vitest';
-import { xInBar } from './sheetStripMath';
+import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 import { barsPerPage, cursorPos, pagerSlots, snapToBeat } from './sheetPagerMath';
 
 // 120 BPM 4/4: 박 500ms, 마디 2000ms

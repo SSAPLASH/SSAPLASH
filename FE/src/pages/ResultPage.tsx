@@ -15,7 +15,7 @@ import { unlockAudio } from '@/app/bootstrap';
 import { SONGS_SOURCE } from '@/store/songStore';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
-import { formatDuration } from '@/components/formatTime';
+import { formatDuration } from '@/domain/formatTime';
 import { FeedbackCard } from '@/components/result/FeedbackCard';
 import { JudgeBars } from '@/components/result/JudgeBars';
 import { PadSummaryTable } from '@/components/result/PadSummaryTable';

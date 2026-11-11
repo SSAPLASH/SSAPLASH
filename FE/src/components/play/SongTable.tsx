@@ -4,7 +4,7 @@
 // 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { artistLabel, songLevelLabel, songStatusView, type SongSummary } from '@/domain/songCatalog';
-import { formatDuration } from '@/components/formatTime';
+import { formatDuration } from '@/domain/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
 import { Pagination } from '@/components/ui/Pagination';

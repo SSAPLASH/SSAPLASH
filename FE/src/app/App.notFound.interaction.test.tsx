@@ -18,7 +18,7 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@/components/AppShell', () => ({ AppShell: () => <Outlet /> }));
+vi.mock('./AppShell', () => ({ AppShell: () => <Outlet /> }));
 vi.mock('@/components/shell/PublicLayout', () => ({ PublicLayout: () => <Outlet /> }));
 vi.mock('@/pages/FreePlayPage', () => ({ FreePlayPage: () => <div>화면:free</div> }));
 vi.mock('@/pages/AuthCallbackPage', () => ({ AuthCallbackPage: () => <div>화면:callback</div> }));

@@ -1,6 +1,6 @@
 import type { PadId } from '@/domain/pads';
 import { PAD_META } from '@/domain/pads';
-import './play.css';
+import '@/components/play/play.css';
 
 interface Props {
   /** stack: 연주 화면(두 줄, 180폭) · row: 자유 연습 정보 띠(패드·손·세기 세 칸) */

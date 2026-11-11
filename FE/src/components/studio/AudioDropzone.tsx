@@ -13,7 +13,7 @@ import {
   type PrecheckResult,
   type UploadDraft,
 } from '@/domain/chartJob';
-import { UploadIcon } from './StudioIcons';
+import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 interface Props {

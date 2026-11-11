@@ -69,7 +69,7 @@ import { CalibrationStage } from '@/components/calibration/CalibrationStage';
 import { CAPTURE_GUIDE_TEXT, RESULT_GUIDE_TEXT } from '@/components/calibration/calibrationText';
 import { StagePanel } from '@/components/setup/StagePanel';
 import { useOverlayRegion } from '@/components/setup/useOverlayRegion';
-import { useRealign } from '@/components/useRealign';
+import { useRealign } from '@/components/calibration/useRealign';
 import { usePoseStream } from '@/components/calibration/usePoseStream';
 import { ReferencePoseGuide } from '@/components/calibration/ReferencePoseGuide';
 import { useReferenceCapture } from '@/components/calibration/useReferenceCapture';

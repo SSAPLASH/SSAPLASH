@@ -1,7 +1,7 @@
 // 마디 고정 악보(SheetPager)의 순수 계산: 페이지당 마디 수, 슬롯별 마디, 커서 위치. 캔버스·DOM에 의존하지 않는다.
 // 시각 입력(songTime)은 모두 격자 시각(곡 시각 − 격자 원점 offsetMs)이다. 0이 1마디 1박, 음수는 리드인.
 import type { BarLayout } from '@/domain/sheet';
-import { xInBar } from './sheetStripMath';
+import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 
 /** 악보 영역 폭(px)에 따른 페이지당 마디 수 */
 export function barsPerPage(width: number): number {

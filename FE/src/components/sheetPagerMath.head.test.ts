@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BarLayout } from '@/domain/sheet';
 import { noteHeadAt, type PagerSlot } from './sheetPagerMath';
-import { xInBar } from './sheetStripMath';
+import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 
 const layouts: Record<number, BarLayout> = {
   0: { glyphs: [{ noteIndex: 0, xRatio: 0, line: 4 }, { noteIndex: 1, xRatio: 0.5, line: 8 }] },

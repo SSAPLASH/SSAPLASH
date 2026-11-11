@@ -3,7 +3,7 @@
 import { PAD_META, type PadId } from '@/domain/pads';
 import { FLOOR_Z, type Camera, type PadShape } from '@/domain/kitPerspective';
 import type { Point3 } from '@/domain/kitModel';
-import { FONT } from './kitPadPaint';
+import { FONT } from '@/components/drum/kitPadPaint';
 
 /** 손 색(왼손, 오른손). 자세 마커와 판정 범위가 같이 쓴다 */
 export const HAND_COLORS = ['#7cc4ff', '#ffa07c'] as const;

@@ -4,7 +4,7 @@ import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode 
 import { useRouteError } from 'react-router-dom';
 import { isChunkLoadError, tryAutoReload } from '@/app/chunkRecovery';
 import { useRecordingStore } from '@/app/recordingStore';
-import { ErrorState } from './ui/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import './RouteErrorBoundary.css';
 
 /** 녹음 중·저장 대기 중이면 자동 새로고침을 하지 않는다(D7) */

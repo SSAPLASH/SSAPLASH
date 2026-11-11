@@ -12,7 +12,7 @@ import { installPreloadErrorHandler } from './app/chunkRecovery';
 import { queryClient } from './app/queryClient';
 import { bindQueryCacheToAuth } from './app/queryAuthBinding';
 import { useRecordingStore } from './app/recordingStore';
-import { RouteErrorElement } from './components/RouteErrorBoundary';
+import { RouteErrorElement } from '@/components/shell/RouteErrorBoundary';
 import './styles/global.css';
 
 bootstrapInput();

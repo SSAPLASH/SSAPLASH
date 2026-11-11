@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom';
 import { Menu } from '@/components/ui/Menu';
 import type { SongSummary } from '@/domain/songCatalog';
-import { GameIcon, PlayIcon, SheetIcon } from './StudioIcons';
+import { GameIcon, PlayIcon, SheetIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 interface Props {

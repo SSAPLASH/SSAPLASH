@@ -9,7 +9,7 @@ import { SEEK_END_MARGIN_MS, SKIP_MS, seekTarget, type AccompanimentBarView, typ
 import type { SongSummary } from '@/domain/songCatalog';
 import { AccompanimentBar } from './AccompanimentBar';
 import { AccompanimentPicker } from './AccompanimentPicker';
-import { SeekBar } from './SeekBar';
+import { SeekBar } from '@/components/song/SeekBar';
 import { DisconnectBand, type BandReconnect } from './DisconnectBand';
 
 afterEach(() => {

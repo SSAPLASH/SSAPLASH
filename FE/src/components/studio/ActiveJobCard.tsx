@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { JOB_STAGE_ORDER, STAGE_LABEL, type ActiveJob, type JobProgress } from '@/domain/chartJob';
 import { SongCover } from '@/components/song/SongCover';
-import { SongStatusBadge } from './SongStatusBadge';
+import { SongStatusBadge } from '@/components/song/SongStatusBadge';
 
 /** 이보다 오래 처리 중이면 안내를 덧붙인다 (설계 CHART-003 4-2) */
 const LONG_RUNNING_MS = 24 * 60 * 60 * 1000;
