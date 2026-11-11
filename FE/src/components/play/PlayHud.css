@@ -151,3 +151,30 @@
     color: var(--brand);
   }
 }
+
+/* 리듬 게임: 세 수치를 오른쪽 끝으로 붙여 오른쪽 정렬한다(가운데에 떠 있는 Dock이 점수를 가리지 않게).
+   칸 폭은 가장 긴 값 기준으로 고정해 숫자가 바뀌어도 자리가 흔들리지 않는다: 점수 1,000,000대 · 콤보 4자리 · 정확도 100.0% */
+.play-hud.game .play-hud-stats {
+  width: auto;
+  justify-content: flex-end;
+  gap: 28px;
+}
+.play-hud.game .play-hud-stat {
+  align-items: flex-end;
+}
+.play-hud.game .play-hud-value {
+  display: inline-block;
+  text-align: right;
+  white-space: nowrap;
+  /* 콤보가 커졌다 줄 때 오른쪽 끝을 기준으로 */
+  transform-origin: right center;
+}
+.play-hud.game .play-hud-value[data-stat='score'] {
+  min-width: 150px;
+}
+.play-hud.game .play-hud-value[data-stat='combo'] {
+  min-width: 76px;
+}
+.play-hud.game .play-hud-value[data-stat='accuracy'] {
+  min-width: 122px;
+}

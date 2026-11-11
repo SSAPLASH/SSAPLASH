@@ -7,11 +7,11 @@ interface Props {
   /** game: HUD·구분선이 하이웨이 폭(1060) 가운데 / sheet: 전폭 */
   variant: 'game' | 'sheet';
   hud: ReactNode;
-  /** 하이웨이(1060×420) 또는 악보(전폭 ×420) */
+  /** 하이웨이(폭 1060, 높이는 남는 화면 높이) 또는 악보(전폭 ×420) */
   area: ReactNode;
   /** 드럼 영역 왼쪽 안내 칸(GuideSlot) */
   guide: ReactNode;
-  /** 드럼 킷(0.7배, 532×210) */
+  /** 드럼 킷. 게임 0.5배(380×150), 악보 0.7배(532×210) */
   kit: ReactNode;
   /** 최근 타격 표시(HitReadout) */
   readout: ReactNode;
