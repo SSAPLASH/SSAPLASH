@@ -48,7 +48,7 @@ describe('postSignupConsent 추천 학습 본문', () => {
     vi.stubGlobal('fetch', fetch);
     await postSignupConsent(currentConsentVersions());
     const init = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect(JSON.parse(init.body as string).recommendationConsent).toEqual({ agreed: false, version: '2026-11-05' });
+    expect(JSON.parse(init.body as string).recommendationConsent).toEqual({ agreed: false, version: '2026-11-11' });
   });
 });
 
