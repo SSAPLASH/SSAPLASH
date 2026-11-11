@@ -1,5 +1,5 @@
 // 이 기기의 로컬 플레이 로그에서 최고 기록을 뽑는 순수 함수 (설계 U18).
-// 곡 선택 = 곡별 최고 점수, 연주 준비 = 연습 단계(채보)별 최고 정확도. 기록이 없으면 Map에 키가 없다.
+// 곡 선택 표 = 곡별 최고 점수·정확도, 선택 곡 카드 = 연습 단계(채보)별 최고 점수(게임)·정확도(악보). 기록이 없으면 Map에 키가 없다.
 // 로그는 끝까지 친 판만 저장된다(PlayPage·SheetPage의 finish에서만 savePlayLog) — 중간에 나간 판은 애초에 로그가 없어 따로 거르지 않는다.
 import type { PlayLog } from '@/engine/playLog';
 
@@ -46,7 +46,7 @@ export function bestAccuracyBySong(logs: readonly PlayLog[], mode: LogMode): Map
 
 // ── 결과 화면 최고 기록 비교(설계 MODE-001-score-combo-fx 3-4) ──
 
-/** 곡·채보별 최고 점수. 채보 id가 있는 로그만 센다(내장 곡 보조용) */
+/** 채보(연습 단계)별 최고 점수. 채보 id가 있는 로그만 센다(게임 곡 선택 카드의 내장 개발 소스용, 결과 화면 비교 보조) */
 export function bestScoreByChart(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
   const best = new Map<number, number>();
   for (const l of logs) {
