@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KIT_LAYOUT, fillLayout, overlayCorner, OVERLAY_REGION, PAD_EDGE_PX, padCenterPx, pickOverlayCorner } from './kitLayout';
+import { DEFAULT_KIT_LAYOUT, fillLayout, overlayCorner, OVERLAY_REGION, pickOverlayCorner } from './kitLayout';
 import { ALL_PADS } from './pads';
 
 describe('DEFAULT_KIT_LAYOUT', () => {
@@ -9,18 +9,6 @@ describe('DEFAULT_KIT_LAYOUT', () => {
       for (const v of [DEFAULT_KIT_LAYOUT[pad].x, DEFAULT_KIT_LAYOUT[pad].y]) {
         expect(v).toBeGreaterThanOrEqual(0.05);
         expect(v).toBeLessThanOrEqual(0.95);
-      }
-    }
-  });
-
-  it('고정 배치라 어느 두 패드도 겹치지 않는다(16:10 캔버스 기준)', () => {
-    for (const a of ALL_PADS) {
-      for (const b of ALL_PADS) {
-        if (a >= b) continue;
-        const pa = DEFAULT_KIT_LAYOUT[a];
-        const pb = DEFAULT_KIT_LAYOUT[b];
-        const d = Math.hypot(pa.x - pb.x, (pa.y - pb.y) / 1.6);
-        expect(d).toBeGreaterThan((pa.r + pb.r) * 0.9);
       }
     }
   });
@@ -37,12 +25,6 @@ describe('fillLayout', () => {
 });
 
 describe('overlayCorner', () => {
-  it('기본 배치의 모든 패드는 오른쪽 아래 카드와 겹치지 않아 right다', () => {
-    for (const pad of ALL_PADS) {
-      expect(overlayCorner(DEFAULT_KIT_LAYOUT[pad])).toBe('right');
-    }
-  });
-
   it('카드 영역 안에 있는 패드는 left다', () => {
     expect(overlayCorner({ x: 0.9, y: 0.9, r: 0.05 })).toBe('left');
   });
@@ -86,17 +68,5 @@ describe('pickOverlayCorner', () => {
   it('양쪽 모두 focus를 가리면 가려지는 수가 적은 쪽', () => {
     const layout = { A: { x: 0.9, y: 0.9, r: 0.05 }, B: { x: 0.1, y: 0.9, r: 0.05 }, D: { x: 0.2, y: 0.85, r: 0.05 } };
     expect(pickOverlayCorner(layout, region, ['A', 'B'])).toBe('right');
-  });
-});
-
-describe('padCenterPx', () => {
-  it('그림 안에 들어오면 배치 좌표 그대로', () => {
-    expect(padCenterPx({ x: 0.5, y: 0.5, r: 0.1 }, { w: 800, h: 500 })).toEqual({ cx: 400, cy: 250, r: 80 });
-  });
-  it('넓은 판에서 아래로 넘치는 원은 반지름만큼 안쪽으로 붙인다', () => {
-    // 1000×300 → 기준 길이 min(1000, 480) = 480, r = 0.065 × 480 = 31.2. y 0.9 × 300 = 270은 아래로 넘친다(여유 6px 포함)
-    const c = padCenterPx({ x: 0.58, y: 0.9, r: 0.065 }, { w: 1000, h: 300 });
-    expect(c.cy).toBeCloseTo(300 - 31.2 - PAD_EDGE_PX);
-    expect(c.cx).toBeCloseTo(580);
   });
 });

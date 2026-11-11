@@ -60,7 +60,8 @@
   pointer-events: none;
 }
 .drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
-.drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body {
+.drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body,
+.drum-pad[data-state='hit'][data-shape='pedal'] .drum-pad-body {
   animation: drum-pad-press 220ms ease-out;
 }
 .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
@@ -87,6 +88,7 @@
 @media (prefers-reduced-motion: reduce) {
   .drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
   .drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body,
+  .drum-pad[data-state='hit'][data-shape='pedal'] .drum-pad-body,
   .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
     animation: drum-pad-bright 220ms ease-out;
   }
@@ -229,7 +231,8 @@
 
 /* ---- 네온: 모양별 네온색 ---- */
 .drum-pad[data-skin='neon'] { --neon: #22e4ff; }
-.drum-pad[data-skin='neon'][data-shape='cymbal'] { --neon: #ffc24a; }
+.drum-pad[data-skin='neon'][data-shape='cymbal'],
+.drum-pad[data-skin='neon'][data-shape='pedal'] { --neon: #ffc24a; }
 .drum-pad[data-skin='neon'][data-shape='kick'] { --neon: #ff3ec8; }
 
 .neon-body {

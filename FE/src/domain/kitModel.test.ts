@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { anchorsToLayout, anchorToPoint, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, moveAnchorsForPad, padPointOf, HAND_ORIGINS, PAD_POINTS } from './kitModel';
 import { DEFAULT_KIT_LAYOUT } from './kitLayout';
+import { poseToScreen } from './kitMapping';
 import { STICK_PADS } from './pads';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
 
@@ -38,7 +39,22 @@ describe('defaultHandAnchors', () => {
   it('왼손·오른손 표가 다르다(같은 패드의 방위각이 다름)', () => {
     const [l, r] = defaultHandAnchors();
     expect(l!.SNARE!.yaw).not.toBeCloseTo(r!.SNARE!.yaw);
-    expect(l!.SNARE!.yaw).toBeCloseTo(-r!.SNARE!.yaw); // 스네어는 정중앙이라 좌우 대칭
+    // 탐 두 개는 좌우 대칭으로 놓여 있어, 왼손이 스몰탐을 보는 방위와 오른손이 미드탐을 보는 방위가 반대다
+    expect(l!.SMALL_TOM!.yaw).toBeCloseTo(-r!.MID_TOM!.yaw);
+  });
+
+  it('기본 배치(DEFAULT_KIT_LAYOUT)의 스틱 패드 자리는 모델 타격점을 두 손 가운데에서 본 방향과 같다', () => {
+    const mid = [(HAND_ORIGINS[0][0] + HAND_ORIGINS[1][0]) / 2, (HAND_ORIGINS[0][1] + HAND_ORIGINS[1][1]) / 2, (HAND_ORIGINS[0][2] + HAND_ORIGINS[1][2]) / 2];
+    const DEG = 180 / Math.PI;
+    for (const [pad, p] of Object.entries(PAD_POINTS)) {
+      const dx = p[0] - mid[0];
+      const dy = p[1] - mid[1];
+      const dz = p[2] - mid[2];
+      const s = poseToScreen({ yaw: Math.atan2(dx, dy) * DEG, pitch: Math.atan2(dz, Math.hypot(dx, dy)) * DEG });
+      const pl = DEFAULT_KIT_LAYOUT[pad as keyof typeof PAD_POINTS];
+      expect(pl.x).toBeCloseTo(s.x, 2);
+      expect(pl.y).toBeCloseTo(s.y, 2);
+    }
   });
 
   it('반경은 튜닝 하한~상한 안이고 모델값 표시(samples 0)', () => {
