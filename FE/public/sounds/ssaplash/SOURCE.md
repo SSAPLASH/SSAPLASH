@@ -13,8 +13,8 @@
 | 하이햇 닫힌 타격 | `audio/hihat.wav` | HHAT Paiste 302+ 14'' FF | 2.4 |
 | 하이햇 열린 타격 | `audio/hihat-open.wav` | HHAT Paiste 302+ 14'' open FF | 1.6 |
 | 하이햇 페달 닫기 | `audio/hihat-pedal.wav` | 02a_Hat_OpenClose_Cymbals_&_Snares (Theriavirra) | 1.6 |
-| 하이탐 | `audio/high.wav` | TOM 1 F (Polmuz) | 1.2 |
-| 미들탐 | `audio/mid.wav` | TOM 2 FF (Polmuz) | 0.8 |
+| 스몰탐 | `audio/high.wav` | TOM 1 F (Polmuz) | 1.2 |
+| 미드탐 | `audio/mid.wav` | TOM 2 FF (Polmuz) | 0.8 |
 | 플로어탐 | `audio/floor.wav` | TOM 3 FF (Polmuz) | 1.1 |
 | 크래시 | `audio/crash.wav` | CRASH Zildian A Custom 16'' centr FF | 1.2 |
 | 라이드 | `audio/ride.wav` | RIDE Zildian K Custom Session F (가공) | 1.2 |
@@ -40,8 +40,8 @@
 - 하이햇 닫힌 타격 — minorr, https://freesound.org/people/minorr/sounds/104222/ — CC0 1.0
 - 하이햇 열린 타격 — minorr, https://freesound.org/people/minorr/sounds/104225/ — CC0 1.0
 - 하이햇 페달 닫기 — Theriavirra, https://freesound.org/people/Theriavirra/sounds/270177/ — **CC BY 4.0**
-- 하이탐 — minorr, https://freesound.org/people/minorr/sounds/138369/ — **CC BY 3.0**
-- 미들탐 — minorr, https://freesound.org/people/minorr/sounds/138368/ — **CC BY 3.0**
+- 스몰탐 — minorr, https://freesound.org/people/minorr/sounds/138369/ — **CC BY 3.0**
+- 미드탐 — minorr, https://freesound.org/people/minorr/sounds/138368/ — **CC BY 3.0**
 - 플로어탐 — minorr, https://freesound.org/people/minorr/sounds/138372/ — **CC BY 3.0**
 - 크래시 — minorr, https://freesound.org/people/minorr/sounds/104218/ — CC0 1.0
 - 라이드 — minorr, https://freesound.org/people/minorr/sounds/104236/ — CC0 1.0

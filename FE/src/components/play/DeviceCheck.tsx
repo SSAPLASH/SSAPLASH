@@ -2,6 +2,7 @@
 // 준비 화면이 있던 때의 카드 머리·버튼 줄·프리셋 줄은 없앴다(머리와 버튼은 창이 갖는다).
 // props만 받는다. 준비 조건 계산(useReadiness)·이동은 호출자가 한다.
 import { Card } from '@/components/ui/Card';
+import { DEVICE_META, deviceGroupName, deviceListText, type DeviceId } from '@/domain/devices';
 import type { ReadinessMissing } from '@/domain/readiness';
 import './ready.css';
 
@@ -19,21 +20,19 @@ function Dot({ ok }: { ok: boolean }) {
   return <span className={`play-rp-dot ${ok ? 'ok' : 'need'}`} aria-hidden="true" />;
 }
 
-function HandDot({ label, on, hand }: { label: string; on: boolean; hand: 'l' | 'r' | 'p' }) {
+function HandDot({ device, on }: { device: DeviceId; on: boolean }) {
+  const hand = device === 'LEFT' ? 'l' : device === 'RIGHT' ? 'r' : 'p';
   return (
     <span className="play-rp-hand">
       <span className={`play-rp-hand-dot ${hand}${on ? ' on' : ''}`} aria-hidden="true" />
-      {label}
+      {DEVICE_META[device].mark}
     </span>
   );
 }
 
 function stickText(connected: [boolean, boolean], keyboardOnly: boolean, pedal?: boolean): string {
   if (keyboardOnly) return '키보드 입력';
-  const names = ['왼손', '오른손', ...(pedal === undefined ? [] : ['페달'])];
-  const states = [connected[0], connected[1], ...(pedal === undefined ? [] : [pedal])];
-  if (states.every(Boolean)) return `${names.join('·')} 연결됨`;
-  return `${names.filter((_, i) => !states[i]).join('·')} 연결 안 됨`;
+  return deviceListText({ left: connected[0], right: connected[1], pedal });
 }
 
 export function DeviceCheck({ missing, connected, keyboardOnly = false, pedal }: DeviceCheckProps) {
@@ -44,13 +43,13 @@ export function DeviceCheck({ missing, connected, keyboardOnly = false, pedal }:
       <ul className="play-rp-rows">
         <li className="play-rp-row">
           <Dot ok={stickOk} />
-          <span className="play-rp-row-label">스틱 연결</span>
+          <span className="play-rp-row-label">{deviceGroupName(pedal !== undefined)} 연결</span>
           <span className="play-rp-row-value">
             {!keyboardOnly && (
               <span className="play-rp-hands">
-                <HandDot label="L" on={connected[0]} hand="l" />
-                <HandDot label="R" on={connected[1]} hand="r" />
-                {pedal !== undefined && <HandDot label="P" on={pedal} hand="p" />}
+                <HandDot device="LEFT" on={connected[0]} />
+                <HandDot device="RIGHT" on={connected[1]} />
+                {pedal !== undefined && <HandDot device="PEDAL" on={pedal} />}
               </span>
             )}
             <span className={stickOk ? '' : 'need'}>{stickText(connected, keyboardOnly, pedal)}</span>

@@ -67,17 +67,17 @@ function causeSub(cause: CoachMessage['cause'], keyboard: boolean): string | nul
     case 'WRONG_PAD': {
       if (!cause.pad || !cause.intoPad) return null;
       const name = coachPadName(cause.pad);
-      // 키보드는 그 패드의 키를 알려 준다(예: "탐1은 E·I 키예요")
+      // 키보드는 그 패드의 키를 알려 준다(예: "스몰탐은 E·I 키예요")
       const keys = keyboard ? padKeys(cause.pad) : '';
       if (keys) return `${name}${topicParticle(name)} ${keys} 키예요`;
-      // 스틱은 위치를 말할 수 있는 패드는 위치로(예: "탐1은 왼쪽 탐이에요"), 아니면 "탐2 말고 탐1"
+      // 스틱은 위치를 말할 수 있는 패드는 위치로(예: "스몰탐은 왼쪽 탐이에요"), 아니면 "미드탐 말고 스몰탐"
       const position = padPosition(cause.pad);
       return position ? `${name}${topicParticle(name)} ${position}이에요` : `${coachPadName(cause.intoPad)} 말고 ${name}`;
     }
     case 'TRANSITION': {
       // 손을 옮기는 지시라 도착이 페달(킥 등)이면 말하지 않는다. 출발은 원인 계산에서 이미 손 패드만이다
       if (!cause.fromPad || !cause.pad || !STICK_PADS.includes(cause.pad)) return null;
-      // 시선이 먼저 가야 손이 따라간다(예: "스네어 치며 탐1을 봐요"). 손 패드끼리는 가장 긴 조합도 16자 안이다
+      // 시선이 먼저 가야 손이 따라간다(예: "스네어 치며 스몰탐을 봐요"). 손 패드끼리는 가장 긴 조합도 16자 안이다
       const to = coachPadName(cause.pad);
       return `${coachPadName(cause.fromPad)} 치며 ${to}${objectParticle(to)} 봐요`;
     }

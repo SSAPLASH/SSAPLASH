@@ -5,6 +5,7 @@
 // 재연결 상태(status)는 store/reconnectStore가 정한 값을 호출부가 넘긴다. 이 컴포넌트는 props만 받는다.
 import type { Ref } from 'react';
 import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
+import { DEVICE_META, DISCONNECTED_TEXT, CONNECTED_TEXT, disconnectTitle, type DeviceId } from '@/domain/devices';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import './DisconnectNotice.css';
@@ -35,12 +36,6 @@ interface Props {
   realign?: RealignInfo | null;
 }
 
-function titleText(left: boolean, right: boolean, pedal?: boolean): string {
-  if (pedal === false) return left && right ? '페달 연결이 끊겼어요' : '스틱·페달 연결이 끊겼어요';
-  if (!left && !right) return '양손 스틱 연결이 끊겼어요';
-  return `${left ? '오른손' : '왼손'} 스틱 연결이 끊겼어요`;
-}
-
 function statusText(status: ReconnectInfo): string {
   if (status.status === 'trying') return `연주를 멈췄어요. 다시 연결하는 중… (${status.attempt}/${status.max})`;
   if (status.status === 'reconnected') return '3초 뒤 이어서 연주해요';
@@ -48,13 +43,13 @@ function statusText(status: ReconnectInfo): string {
   return '연주를 멈췄어요. 다시 연결되면 이어서 할 수 있어요.';
 }
 
-function Dot({ hand, connected, pulse }: { hand: 'L' | 'R' | 'P'; connected: boolean; pulse?: boolean }) {
+function Dot({ device, connected, pulse }: { device: DeviceId; connected: boolean; pulse?: boolean }) {
   return (
     <div className="stick-dot-wrap">
       <span className={`stick-dot ${connected ? 'on' : 'off'}${pulse && !connected ? ' pulse' : ''}`} aria-hidden="true">
-        {hand}
+        {DEVICE_META[device].mark}
       </span>
-      <span className="stick-dot-label">{connected ? '연결됨' : '끊김'}</span>
+      <span className="stick-dot-label">{connected ? CONNECTED_TEXT : DISCONNECTED_TEXT}</span>
     </div>
   );
 }
@@ -71,12 +66,12 @@ export function DisconnectNotice({ left, right, pedal, status, onExit, onReconne
       aria-labelledby="stick-disconnect-title"
     >
       <div className="stick-dots">
-        <Dot hand="L" connected={reconnected || left} pulse={trying} />
-        <Dot hand="R" connected={reconnected || right} pulse={trying} />
-        {pedal !== undefined && <Dot hand="P" connected={reconnected || pedal} pulse={trying} />}
+        <Dot device="LEFT" connected={reconnected || left} pulse={trying} />
+        <Dot device="RIGHT" connected={reconnected || right} pulse={trying} />
+        {pedal !== undefined && <Dot device="PEDAL" connected={reconnected || pedal} pulse={trying} />}
       </div>
       <h2 id="stick-disconnect-title" className={`stick-disconnect-title${reconnected ? ' good' : ''}`}>
-        {reconnected ? '재연결 성공!' : titleText(left, right, pedal)}
+        {reconnected ? '재연결 성공!' : disconnectTitle(left, right, pedal)}
       </h2>
       {reconnected && realign ? (
         <RealignPrompt hands={realign.hands} done={realign.done} variant="card" onSkip={realign.onSkip} />

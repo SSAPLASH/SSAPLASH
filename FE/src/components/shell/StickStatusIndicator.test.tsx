@@ -36,6 +36,12 @@ describe('StickStatusChip', () => {
 });
 
 describe('StickStatusChip 페달 조각', () => {
+  it('페달 조각이 있으면 aria-label에도 페달이 들어간다(E7)', () => {
+    const html = render([true, true], [82, 64], { connected: [true, true], battery: 90 });
+    expect(html).toContain('aria-label="스틱·페달 연결 상태"');
+    expect(html).toContain('페달');
+  });
+
   // 인수 조건: pedal prop이 없으면(동글이 아닌 소스) "페달" 글자가 없다
   it('pedal이 없으면 페달 조각이 없다', () => {
     expect(render([true, true], [82, 64])).not.toContain('페달');

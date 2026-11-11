@@ -1,4 +1,6 @@
 // 드럼 세팅 단계 판정·복귀 띠 문구(순수 함수). 판정은 readiness()의 missing에서 유도해 규칙을 중복하지 않는다.
+import { deviceListText } from './devices';
+import { pedalConnected, pedalRequired } from './pedalStatus';
 import { PRESET_NAME_MAX, type PresetNameError } from './preset';
 import { READINESS_MESSAGES, readiness, stickMissingText, type ReadinessInput, type ReadinessMissing } from './readiness';
 
@@ -243,14 +245,15 @@ function pct(v: number | null): string {
 
 function stickSummary(input: SetupStepsInput, done: boolean): string {
   const [l, r] = input.connected;
+  // 페달은 동글 소스만 넣는다(deviceListText의 pedal이 undefined면 뺀다)
+  const pedal = pedalRequired(input.sensorKind) ? pedalConnected({ connected: input.pedal }) : undefined;
   if (done) {
-    const base = '왼손·오른손 연결됨';
-    // 배터리를 하나도 모르면(포인터 소스·STATUS 전) 배터리 부분을 빼고 한 줄로
+    const base = deviceListText({ left: true, right: true, pedal });
+    // 배터리를 하나도 모르면(포인터 소스·STATUS 전) 배터리 부분을 빼고 한 줄로. 페달이 빠졌으면 빠진 기기만 말한다
     const b = input.battery;
-    return b && (b[0] !== null || b[1] !== null) ? `${base} · ${pct(b[0])} / ${pct(b[1])}` : base;
+    return pedal !== false && b && (b[0] !== null || b[1] !== null) ? `${base} · ${pct(b[0])} / ${pct(b[1])}` : base;
   }
-  if (l) return '왼손만 연결됨';
-  if (r) return '오른손만 연결됨';
+  if (l || r) return deviceListText({ left: l, right: r, pedal });
   if (input.dongle === 'closed') return '동글을 연결하면 스틱 상태가 보여요';
   if (input.dongle === 'stale') return '동글 응답이 없어요 · 동글을 다시 꽂아 주세요';
   if (input.dongle !== undefined) return `동글이 연결됐어요 · ${STICK_POWER_HINT}`;
@@ -280,7 +283,8 @@ export function setupSteps(input: SetupStepsInput, now: number): SetupStepsResul
     steps.push({ id: 'stick', status: 'skipped', summary: skippedSummary });
     steps.push({ id: 'calibration', status: 'skipped', summary: skippedSummary });
   } else {
-    const stickNeeded = missing.includes('stick');
+    // 동글 소스는 페달까지 붙어야 ① 연결이 끝난다(타일 이름이 「스틱·페달 연결」, UX-device-naming-unify v0.3)
+    const stickNeeded = missing.includes('stick') || missing.includes('pedal');
     steps.push({ id: 'stick', status: stickNeeded ? 'needed' : 'done', summary: stickSummary(input, !stickNeeded) });
     const calNeeded = missing.includes('firstSetup');
     steps.push({ id: 'calibration', status: calNeeded ? 'needed' : 'done', summary: calibrationSummary(input, calNeeded, now) });

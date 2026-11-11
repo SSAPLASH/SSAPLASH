@@ -41,8 +41,26 @@ describe('setupSteps', () => {
   });
 
   it('한 손만 연결되면 스틱은 필요이고 요약이 그 손을 말한다', () => {
-    expect(setupSteps({ ...base, connected: [true, false] }, NOW).steps[0]).toMatchObject({ status: 'needed', summary: '왼손만 연결됨' });
-    expect(setupSteps({ ...base, connected: [false, true] }, NOW).steps[0].summary).toBe('오른손만 연결됨');
+    expect(setupSteps({ ...base, connected: [true, false] }, NOW).steps[0]).toMatchObject({ status: 'needed', summary: '오른손 연결 안 됨' });
+    expect(setupSteps({ ...base, connected: [false, true] }, NOW).steps[0].summary).toBe('왼손 연결 안 됨');
+  });
+
+  it('동글 소스는 요약에 페달을 포함하고, 다른 소스는 페달을 넣지 않는다(E4)', () => {
+    const dongle = { ...allDone, sensorKind: 'webserial' as const };
+    expect(setupSteps({ ...dongle, pedal: [true, true] }, NOW).steps[0].summary).toBe('왼손·오른손·페달 연결됨 · 82% / 64%');
+    expect(setupSteps({ ...dongle, pedal: [false, true] }, NOW).steps[0].summary).toBe('페달 연결 안 됨');
+    expect(setupSteps({ ...dongle, connected: [true, false], pedal: [true, true] }, NOW).steps[0].summary).toBe('오른손 연결 안 됨');
+    expect(setupSteps({ ...allDone, sensorKind: 'ble', pedal: [false, false] }, NOW).steps[0].summary).toBe('왼손·오른손 연결됨 · 82% / 64%');
+  });
+
+  it('동글 소스는 페달까지 붙어야 ① 연결이 끝나고, 다른 소스는 페달을 보지 않는다', () => {
+    const dongle = { ...allDone, sensorKind: 'webserial' as const };
+    const off = setupSteps({ ...dongle, pedal: [false, false] }, NOW);
+    expect(off.steps[0]).toMatchObject({ status: 'needed', summary: '페달 연결 안 됨' });
+    expect(off.firstNeeded).toBe('stick');
+    expect(off.steps[1].status).toBe('done');
+    expect(setupSteps({ ...dongle, pedal: [true, true] }, NOW).steps[0].status).toBe('done');
+    expect(setupSteps({ ...allDone, sensorKind: 'ble', pedal: [false, false] }, NOW).steps[0].status).toBe('done');
   });
 
   it('동글 상태에 따라 스틱 요약이 바뀐다(Figma 264:8805·264:8855)', () => {
@@ -53,7 +71,7 @@ describe('setupSteps', () => {
     expect(summary('waiting')).toBe('동글이 연결됐어요 · 스틱 버튼을 눌러 켜 주세요');
     expect(summary('stale')).toBe('동글 응답이 없어요 · 동글을 다시 꽂아 주세요');
     // 한 손이라도 붙었으면 손을 짚는 요약이 우선
-    expect(summary('ok', [false, true])).toBe('오른손만 연결됨');
+    expect(summary('ok', [false, true])).toBe('왼손 연결 안 됨');
   });
 
   it('전부 충족하면 완료 요약 문구', () => {
@@ -96,9 +114,9 @@ describe('returnBannerText', () => {
   });
   it('여러 조건이면 문구를 이어 붙인다', () => {
     expect(returnBannerText(['stick', 'firstSetup'], [false, false], 'x').line).toBe(
-      '왼손·오른손 스틱을 연결하세요 · 최초 설정(드럼 위치 보정)이 필요합니다',
+      '왼손·오른손 스틱을 연결해 주세요 · 최초 설정(드럼 위치 보정)이 필요합니다',
     );
-    expect(returnBannerText(['stick', 'firstSetup'], [true, false], 'x').line).toContain('오른손 스틱을 연결하세요 · 최초 설정');
+    expect(returnBannerText(['stick', 'firstSetup'], [true, false], 'x').line).toContain('오른손 스틱을 연결해 주세요 · 최초 설정');
   });
   it('다 되면 준비 완료 + 돌아가기 안내(으로/로)', () => {
     expect(returnBannerText([], [true, true], '악보 연습')).toEqual({

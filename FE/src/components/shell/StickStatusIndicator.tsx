@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
+import { DEVICE_META, deviceGroupName } from '@/domain/devices';
 import { stickStatus } from '@/domain/stickStatus';
 import { pedalRequired, pedalStatus, type PedalView } from '@/domain/pedalStatus';
 
@@ -16,7 +17,7 @@ interface ChipProps {
 export function StickStatusChip({ connected, battery, pedal }: ChipProps) {
   const pv = pedal ? pedalStatus(pedal) : null;
   return (
-    <NavLink to="/setup" className="stick-status" aria-label="스틱 연결 상태">
+    <NavLink to="/setup" className="stick-status" aria-label={`${deviceGroupName(pedal !== undefined)} 연결 상태`}>
       {([0, 1] as const).map((hand) => {
         const v = stickStatus(connected[hand], battery[hand], hand);
         return (
@@ -29,7 +30,7 @@ export function StickStatusChip({ connected, battery, pedal }: ChipProps) {
       })}
       {pv && (
         <span className={`stick-status-hand ${pv.dot}`} title={pv.text}>
-          페달
+          {DEVICE_META.PEDAL.chip}
           <span className={`stick-dot ${pv.dot}`} />
           {pv.batteryText && <span className="stick-batt ok">{pv.batteryText}</span>}
         </span>

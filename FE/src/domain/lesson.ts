@@ -3,6 +3,7 @@
 import { PAD_META, type PadId } from './pads';
 import { accuracyPercent } from './playUpload';
 import { stickConnectionRequired } from './dockChip';
+import { DEVICE_META, deviceGroupName } from './devices';
 import { pedalConnected, pedalRequired } from './pedalStatus';
 
 export type LessonKind = 'READ' | 'PLAY';
@@ -210,10 +211,10 @@ export interface DeviceHintInput {
 export function readDeviceHint(i: DeviceHintInput): string | null {
   const hands = i.pads.some((p) => !FOOT_PADS.has(p));
   if (hands && stickConnectionRequired(i.sensorKind, i.hasUsageGuide) && !i.sticks[0] && !i.sticks[1]) {
-    return '스틱이 연결되지 않았어요. 아래 드럼 그림을 눌러도 돼요.';
+    return `${deviceGroupName(false)}을 연결해 주세요. 아래 드럼 그림을 눌러도 돼요.`;
   }
   if (i.pads.some((p) => FOOT_PADS.has(p)) && pedalRequired(i.sensorKind) && !pedalConnected({ connected: i.pedal })) {
-    return '페달이 연결되지 않았어요. 아래 드럼 그림을 눌러도 돼요.';
+    return `${DEVICE_META.PEDAL.name}을 연결해 주세요. 아래 드럼 그림을 눌러도 돼요.`;
   }
   return null;
 }
