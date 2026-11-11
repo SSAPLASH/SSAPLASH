@@ -54,7 +54,7 @@ beforeEach(() => {
   vi.mocked(fetchSimilarSongs).mockReset().mockResolvedValue({ requestId: 's1', strategy: 's', items: [] });
   useRecommendations.getState().resetForTest();
   useAuth.setState({ status: 'authenticated' });
-  useSongs.setState({ source: 'api', scope: 'BUILTIN', items: [], status: 'idle', error: null });
+  useSongs.setState({ source: 'api', scope: 'BUILTIN' });
 });
 
 describe('SongPicker 서버 최고 기록', () => {

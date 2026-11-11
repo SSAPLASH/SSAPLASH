@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listAllPlays, type PlaySummary } from '@/api/plays';
 import { setPlayLogOwner } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
+import { queryClient } from '@/app/queryClient';
 import { PlayLogTab } from './PlayLogTab';
 
 vi.mock('@/api/plays', () => ({ listAllPlays: vi.fn() }));
@@ -23,7 +24,8 @@ const login = (id: number) => {
 };
 const show = () => render(<MemoryRouter><PlayLogTab /></MemoryRouter>);
 
-beforeEach(() => { localStorage.clear(); vi.mocked(listAllPlays).mockReset(); login(1); });
+// 서버 기록은 앱 전역 캐시다. 테스트마다 비운다
+beforeEach(() => { queryClient.clear(); localStorage.clear(); vi.mocked(listAllPlays).mockReset(); login(1); });
 afterEach(() => { cleanup(); localStorage.clear(); setPlayLogOwner(null); useAuth.setState({ status: 'unknown', user: null }); });
 
 describe('서버 연주 기록', () => {
@@ -73,5 +75,23 @@ describe('서버 연주 기록', () => {
     expect(await screen.findByText('두 번째 계정')).toBeTruthy();
     await act(async () => resolveFirst([summary({ songTitle: '이전 계정' })]));
     await waitFor(() => expect(screen.queryByText('이전 계정')).toBeNull());
+  });
+});
+
+describe('서버 연주 기록 캐시 (설계 TECH-351)', () => {
+  it('다시 들어오면 30초 안에는 요청하지 않고, 다른 계정이면 그 계정 기록을 새로 읽는다', async () => {
+    vi.mocked(listAllPlays).mockResolvedValue([summary()]);
+    show();
+    expect(await screen.findByText('서버 곡')).toBeTruthy();
+    cleanup();
+    show();
+    expect(screen.getByText('서버 곡')).toBeTruthy();
+    expect(listAllPlays).toHaveBeenCalledTimes(1);
+    cleanup();
+    vi.mocked(listAllPlays).mockResolvedValue([summary({ playId: 'b', songTitle: '다른 계정 곡' })]);
+    login(2);
+    show();
+    expect(await screen.findByText('다른 계정 곡')).toBeTruthy();
+    expect(screen.queryByText('서버 곡')).toBeNull();
   });
 });

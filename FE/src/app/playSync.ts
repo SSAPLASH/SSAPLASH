@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { uploadPlay } from '@/api/plays';
+import { playKeys } from '@/api/queries/plays';
+import { queryClient } from './queryClient';
 import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/reports';
 import { logConsent } from '@/domain/dataConsent';
 import { buildUploadBody, type PlayUploadBody } from '@/domain/playUpload';
@@ -80,6 +82,8 @@ async function run(playId: string): Promise<PlayUploadState | null> {
     await uploadPlay(body);
     const done: PlayUploadState = { status: 'DONE', reason: null, retryable: false, attempts, updatedAt: new Date().toISOString() };
     save(playId, done);
+    // 연주 기록 목록 캐시를 새로 받게 한다(설계 TECH-351)
+    void queryClient.invalidateQueries({ queryKey: playKeys.all });
     prefetchReport(playId);
     return done;
   } catch (e) {

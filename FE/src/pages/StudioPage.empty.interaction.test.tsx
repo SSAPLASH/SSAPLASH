@@ -11,6 +11,7 @@ import type { SongSummary } from '@/domain/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
 import { useSongs } from '@/store/songStore';
+import { queryClient } from '@/app/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/app/features', async (orig) => ({ ...(await orig<typeof import('@/app/features')>()), SHEET_ARCHIVE_ENABLED: true }));
@@ -55,7 +56,9 @@ afterEach(() => {
   cleanup();
   useMidiUpload.getState().reset();
   useChartJob.setState({ phase: 'idle', active: null, error: null, progress: null });
-  useSongs.setState({ items: [], status: 'idle', scope: 'MINE' });
+  // 곡·악보 목록은 앱 전역 캐시다. 테스트마다 비운다
+  queryClient.clear();
+  useSongs.setState({ scope: 'MINE' });
 });
 
 describe('라이브러리 빈 화면', () => {
@@ -99,7 +102,8 @@ describe('라이브러리 빈 화면', () => {
     let resolve: (v: { items: SheetSummary[]; hasNext: boolean }) => void = () => {};
     vi.mocked(listSheets).mockReturnValue(new Promise((r) => (resolve = r)));
     renderPage();
-    await waitFor(() => expect(useSongs.getState().status).toBe('ready'));
+    // 곡 목록 읽기가 끝날 때까지 기다린다
+    await waitFor(() => expect(queryClient.getQueryCache().find({ queryKey: ['songs', 'list'], exact: false })?.state.status).toBe('success'));
     expect(screen.queryByText(HINT)).toBeNull();
     resolve({ items: [], hasNext: false });
     expect(await screen.findByText(HINT)).toBeTruthy();
@@ -112,5 +116,19 @@ describe('라이브러리 빈 화면', () => {
     await user.click(screen.getByRole('button', { name: '올리기' }));
     expect(screen.getByRole('radio', { name: '음원·MIDI' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText('음원 파일을 여기에 끌어다 놓으세요')).toBeTruthy();
+  });
+});
+
+describe('라이브러리 목록 캐시 (설계 TECH-351)', () => {
+  it('다시 들어오면 30초 안에는 곡·악보 목록을 다시 요청하지 않는다', async () => {
+    renderPage();
+    expect(await screen.findByText(HINT)).toBeTruthy();
+    expect(listAllSongs).toHaveBeenCalledTimes(1);
+    expect(listSheets).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderPage();
+    expect(screen.getByText(HINT)).toBeTruthy();
+    expect(listAllSongs).toHaveBeenCalledTimes(1);
+    expect(listSheets).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,6 +7,7 @@ import { listSheets } from '@/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSongs } from '@/store/songStore';
+import { queryClient } from '@/app/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
@@ -39,7 +40,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   useChartJob.setState({ phase: 'idle', active: null, error: null, progress: null, doneSource: null });
-  useSongs.setState({ items: [], status: 'idle', scope: 'MINE' });
+  // 곡·악보 목록은 앱 전역 캐시다. 테스트마다 비운다
+  queryClient.clear();
+  useSongs.setState({ scope: 'MINE' });
 });
 
 describe('음원 채보 완료', () => {

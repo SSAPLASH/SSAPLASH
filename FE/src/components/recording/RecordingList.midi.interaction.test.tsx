@@ -7,6 +7,7 @@ import { ApiError } from '@/api/error';
 import { getRecording, listRecordings } from '@/api/recordings';
 import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
 import { downloadBlob } from '@/media/downloadFile';
+import { queryClient } from '@/app/queryClient';
 import { RecordingList } from './RecordingList';
 
 vi.mock('@/api/recordings');
@@ -49,6 +50,8 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>, title = '내 �
 }
 
 beforeEach(() => {
+  // 녹음 목록은 앱 전역 캐시다. 테스트마다 비운다
+  queryClient.clear();
   vi.mocked(listRecordings).mockReset();
   vi.mocked(getRecording).mockReset();
   vi.mocked(downloadBlob).mockReset();
