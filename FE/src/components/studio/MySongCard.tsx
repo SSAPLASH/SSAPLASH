@@ -7,8 +7,9 @@ import { Link } from 'react-router-dom';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { Button } from '@/components/ui/Button';
 import { MarqueeTitle } from '@/components/song/MarqueeTitle';
+import { PlayingEq } from '@/components/song/PlayingEq';
 import { SongCover } from '@/components/song/SongCover';
-import { canListen, isSounding, type SongPlayback } from '@/domain/songPlayback';
+import { canListen, isListening, isSounding, type SongPlayback } from '@/domain/songPlayback';
 import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { PlayIcon } from './StudioIcons';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
@@ -59,7 +60,10 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCove
           />
         )}
       </div>
-      <MarqueeTitle className="studio-card-title" text={song.title} active={isSounding(playback, song.id)} />
+      <span className="song-title-line">
+        <MarqueeTitle className="studio-card-title" text={song.title} active={isSounding(playback, song.id)} />
+        {listenable && isListening(playback, song.id) && <PlayingEq playing={isSounding(playback, song.id)} />}
+      </span>
       {/* 아티스트가 없어도 줄을 비워 둬 카드끼리 배지 줄 높이를 맞춘다 */}
       <span className="studio-card-artist">{artistLabel(song.artist)}</span>
       <div className="studio-card-badges">

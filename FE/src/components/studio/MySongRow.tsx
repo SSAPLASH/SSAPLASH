@@ -6,8 +6,9 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { MarqueeTitle } from '@/components/song/MarqueeTitle';
+import { PlayingEq } from '@/components/song/PlayingEq';
 import { SongCover } from '@/components/song/SongCover';
-import { canListen, isSounding, type SongPlayback } from '@/domain/songPlayback';
+import { canListen, isListening, isSounding, type SongPlayback } from '@/domain/songPlayback';
 import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { dateLabel } from './dateLabel';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
@@ -45,7 +46,10 @@ export function MySongRow({ song, justDone, onReupload, onEdit, onSheet, onCover
         <SongCover coverUrl={song.coverUrl} onImageError={onCoverError} />
       </div>
       <span className="studio-row-info">
-        <MarqueeTitle className="studio-row-title" text={song.title} active={isSounding(playback, song.id)} />
+        <span className="song-title-line">
+          <MarqueeTitle className="studio-row-title" text={song.title} active={isSounding(playback, song.id)} />
+          {listenable && isListening(playback, song.id) && <PlayingEq playing={isSounding(playback, song.id)} />}
+        </span>
         <span className="studio-row-sub">{sub || ' '}</span>
       </span>
       {listenable && <SongPlayBar song={song} playback={playback} />}

@@ -789,81 +789,127 @@
   font-size: 14px;
 }
 
-/* ---- 곡 재생바 (설계 CHART-003 라이브러리 재생바). 반주가 준비된 완료 곡에 항상 보인다 ---- */
-/* 재생바: Figma Play / AccompanimentBar state=playing(226:5461)의 재생부 — 아이콘 버튼 sm(32, 테두리 없음) · 진행 막대 10px(surface-3 바탕, brand 채움) · 시간 12px */
+/* ---- 곡 재생바 (설계 CHART-003 라이브러리 재생바). 반주가 준비된 완료 곡에 항상 보인다.
+   모양: Figma 시안 「자유 연습 · 반주 바 — C · 애플 스타일」(971:50674)의 조작부(971:50687)·진행부(971:50701) ---- */
 .song-playbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 18px;
   min-width: 0;
-  min-height: 32px;
+  min-height: 34px;
+  color: var(--text-1);
+}
+/* 조작: 10초 뒤로 24 · 재생/일시정지 30 · 10초 앞으로 24. 버튼 틀(32)을 뺀 글리프 간격이 시안의 20px에 가깝게 */
+.song-playbar-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+}
+.song-playbar-controls .ui-icon-btn {
+  color: var(--text-1);
+}
+.song-playbar-controls .ui-icon-btn:disabled {
+  color: var(--text-3);
+  opacity: 1;
+}
+/* 쉬는 상태: 10초 버튼 자리만 비워 둬 재생을 시작해도 ▶ 위치가 움직이지 않는다 */
+.song-playbar-skip-gap {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.song-playbar-progress {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+/* 쉬는 상태·불러오는 중·오류의 빈 막대(누를 수 없다). 재생 중 막대와 같은 자리·두께 */
+.song-playbar-track {
+  display: block;
+  height: 3px;
+  margin: 6px 0;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+/* 불러오는 중: 막대 앞쪽에 옅은 채움 */
+.song-playbar-track.is-loading {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--text-1) 10%, transparent) 25%,
+    color-mix(in srgb, var(--text-1) 16%, transparent) 25%
+  );
 }
 .song-playbar-text {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
   min-width: 0;
+  min-height: 14px;
   margin: 0;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 12px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 14px;
   white-space: nowrap;
 }
 .song-playbar-text.is-error {
   color: var(--miss);
 }
-.song-playbar .free-seek {
-  gap: 14px;
-}
-.song-playbar .free-seek-range::-webkit-slider-runnable-track {
-  height: 10px;
-  border-radius: var(--radius-control);
-  background: linear-gradient(to right, var(--brand) var(--free-seek-pct), var(--surface-3) var(--free-seek-pct));
-}
-.song-playbar .free-seek-range::-moz-range-track {
-  height: 10px;
-  border-radius: var(--radius-control);
-  background: var(--surface-3);
-}
-.song-playbar .free-seek-range::-moz-range-progress {
-  height: 10px;
-  border-radius: var(--radius-control);
-  background: var(--brand);
-}
-/* 손잡이(올리거나 끄는 동안·초점일 때만 보임)를 10px 막대 가운데에 맞춘다 */
-.song-playbar .free-seek-range::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: -2px;
-}
-.song-playbar .free-seek-range::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-}
-/* 쉬는 상태의 빈 막대(누를 수 없다). 재생 중 막대와 같은 두께·모양 */
-.song-playbar-track {
-  flex: 1;
+.song-playbar-text.is-error > span {
   min-width: 0;
-  height: 10px;
-  border-radius: var(--radius-control);
-  background: var(--surface-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* 목록 줄: 제목 칸 오른쪽에 자리 잡는다. 제목 칸 1 : 재생바 2 (1427px 화면에서 제목 약 180px — Figma 226:5465 info 폭과 같다) */
+.song-playbar-retry {
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
+  font-size: 11px;
+  line-height: 14px;
+  cursor: pointer;
+}
+.song-playbar-retry:hover {
+  text-decoration: underline;
+}
+.song-playbar-retry:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* 카드(폭 229): 조작 간격을 줄여 막대 자리를 남긴다 */
+.studio-card .song-playbar {
+  gap: 10px;
+}
+.studio-card .song-playbar-controls {
+  gap: 2px;
+}
+/* 목록 줄: 제목 칸 오른쪽에 자리 잡는다. 제목 칸 1 : 재생바 2 */
 .studio-row .song-playbar {
   flex: 2 1 0;
 }
-/* 좁은 화면의 목록 줄: 시간 글자를 먼저 숨기고, 더 좁으면 막대도 숨겨 ▶만 남긴다(위치 이동은 카드 보기에서) */
-@media (max-width: 960px) {
-  .studio-row .song-playbar .free-seek-time {
-    display: none;
-  }
-}
+/* 좁은 화면의 목록 줄: 760px 이하에서는 막대·10초 버튼을 숨겨 ▶만 남긴다(위치 이동은 카드 보기에서) */
 @media (max-width: 760px) {
   .studio-row .song-playbar {
     flex: none;
   }
-  .studio-row .song-playbar .free-seek,
-  .studio-row .song-playbar-text {
+  .studio-row .song-playbar-progress,
+  .studio-row .song-playbar-skip,
+  .studio-row .song-playbar-skip-gap {
     display: none;
   }
+}
+/* 제목 줄: 제목 + 재생 중 이퀄라이저 */
+.song-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.song-title-line > :first-child {
+  flex: 0 1 auto;
+  min-width: 0;
 }
