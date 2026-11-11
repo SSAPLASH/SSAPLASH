@@ -69,6 +69,31 @@ uv run ssaplash-worker live-run
 - Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 GPU 서버 IP 허용으로 열어야 한다.
 - 모델을 연주 시간대에 GPU에 올려 두려면 Ollama의 `keep_alive`를 길게 둔다(GPU 메모리 여유 확인 필요).
 
+## GPU 서버 모델 서버 (2026-11-11 운영 적용)
+
+교내 GPU 서버는 여러 팀이 같이 쓴다. 기본 포트 11434에는 **다른 사용자의 Ollama**가 떠 있어서, 우리 Ollama는 **127.0.0.1:11435**로 띄우고 워커가 그 주소를 보게 한다. 기본 주소로 두면 연주 사실이 다른 사용자의 프로세스로 간다. 우리 팀이 쓸 수 있는 GPU는 **6번**이다.
+
+```bash
+CUDA_VISIBLE_DEVICES=6 OLLAMA_VULKAN=0 OLLAMA_CONTEXT_LENGTH=4096 OLLAMA_KEEP_ALIVE=-1 \
+OLLAMA_HOST=127.0.0.1:11435 OLLAMA_MODELS=$HOME/ollama-models OLLAMA_LLM_LIBRARY=cuda_v12 OLLAMA_NO_CLOUD=1 \
+setsid nohup ~/ollama/bin/ollama serve >> ~/ssaplash/results/ollama.log 2>&1 < /dev/null &
+# 모델을 미리 GPU에 올린다(시간 제한 없음)
+curl -s http://127.0.0.1:11435/api/generate -d '{"model":"gemma3:4b","keep_alive":-1,"options":{"num_ctx":4096}}' >/dev/null
+OLLAMA_HOST=127.0.0.1:11435 ~/ollama/bin/ollama ps   # 100% GPU, CONTEXT 4096, UNTIL Forever
+```
+
+`worker.env`에는 `SSAPLASH_NARRATIVE_LLM_URL=http://127.0.0.1:11435`, `SSAPLASH_NARRATIVE_MODEL=gemma3:4b`를 둔다. 총평 워커(`run`)와 연주 코칭 워커(`live-run`)가 같은 모델 서버를 쓴다.
+
+| 설정 | 이유 |
+| --- | --- |
+| `CUDA_VISIBLE_DEVICES=6`, `OLLAMA_VULKAN=0` | GPU 8장과 Vulkan 장치를 모두 찾다가 시작 시 GPU 찾기가 30초 제한을 넘겨 CPU로 내려갔다(로그 `GPU discovery watchdog timed out`, `ollama ps`의 `100% CPU`). 6번 한 장만 보게 하고 Vulkan 찾기를 끄면 GPU에 올라간다. 로그에는 `CUDA0`으로 찍힌다 |
+| `OLLAMA_CONTEXT_LENGTH=4096` | 워커는 요청마다 `num_ctx` 4096을 보낸다. 모델이 다른 문맥 길이로 올라가 있으면 요청 때 다시 올린다 |
+| `OLLAMA_KEEP_ALIVE=-1` | 모델 올리기는 약 15초 걸리는데 워커는 요청을 8초만 기다린다. 요청이 끊기면 Ollama도 올리던 모델을 버려서(`client connection closed before llama-server finished loading`), 모델이 한 번 내려가면 다시 올라오지 못하고 모든 요청이 실패한다. 그래서 내리지 않는다(GPU 메모리 약 4GB 상주) |
+
+- 재부팅하면 자동으로 다시 뜨지 않는다. Ollama → 모델 미리 올리기 → 채보·총평 워커(`run`) → 연주 코칭 워커(`live-run`) 순서로 다시 띄운다.
+- 상태 확인: `pgrep -u "$USER" -af "ssaplash-worker (run|live-run)$"`와 `OLLAMA_HOST=127.0.0.1:11435 ~/ollama/bin/ollama ps`.
+- **2026-11-11 측정:** GPU 6번 사용률이 다른 사용자 작업 때문에 99%일 때 `gemma3:4b`가 초당 6.8토큰(2026-11-04 단독 측정은 185토큰)이었다. 구간 문구 한 장에 6~9초가 걸려 8초 제한에 대부분 걸렸고, 골든 평가는 끝까지 돌리지 못했다. 그래서 연주 중 LLM은 그림자 모드로 켜고 플레이 로그 `LIVE_LLM`의 늦음·실패 비율을 본 뒤 `on`을 정한다.
+
 ## 켜고 끄기
 
 - BE: `LIVE_COACH_LLM_ENABLED`(기본 꺼짐), 판당·분당 상한은 `LIVE_COACH_LLM_PER_RUN`·`LIVE_COACH_LLM_PER_MINUTE`(BE README).
@@ -87,4 +112,4 @@ uv run python -m ssaplash_ai.coach_eval.live_tip_compare --model gemma3:4b --mlf
 - 목표(확정 전): 통과 90% 이상, 지연 95백분위 4초 이하. 보고서 첫 줄에 충족 여부가 나온다.
 - 통과율은 가드레일이 잡는 것만 센다. 문구가 사실과 맞는지(예: 잘 친 패드를 지적하지 않는지), 코치다운지는 보고서 표의 문구를 사람이 읽어서 본다.
 - 채보 작업과 같은 GPU를 쓰므로, 채보가 도는 중에도 한 번 재서 지연이 얼마나 느는지 본다.
-- 아직 실제 모델로 재지 않았다(GPU 서버에서 실행 필요).
+- 2026-11-11 GPU 서버에서 처음 돌렸으나 GPU가 다른 작업으로 바빠 요청 대부분이 시간 제한에 걸려 끝까지 재지 못했다("GPU 서버 모델 서버" 절). 평가에도 `--url http://127.0.0.1:11435`를 준다.

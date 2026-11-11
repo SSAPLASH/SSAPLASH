@@ -1,0 +1,57 @@
+{
+  "modelVersion": "coach-cause-0.1",
+  "featureVersion": 1,
+  "dataSource": "SYNTHETIC",
+  "perCell": 40,
+  "rows": 3094,
+  "overlapRows": 129,
+  "byLabel": {
+    "WRONG_PAD": 946,
+    "TRANSITION": 502,
+    "DENSE": 329,
+    "DRIFT_LATE": 1192,
+    "UNKNOWN": 125
+  },
+  "chosen": "logistic",
+  "scores": {
+    "rule": {
+      "name": "rule",
+      "accuracy": 0.9457013574660633,
+      "overlap_accuracy": 0.9147286821705426,
+      "none_unknown": 0.904,
+      "by_scenario": {
+        "DENSE": 0.9666,
+        "DRIFT_LATE": 0.9195,
+        "NONE": 0.904,
+        "TRANSITION": 0.9024,
+        "WRONG_PAD": 1.0
+      }
+    },
+    "logistic": {
+      "name": "logistic",
+      "accuracy": 0.9495798319327731,
+      "overlap_accuracy": 0.9922480620155039,
+      "none_unknown": 0.928,
+      "by_scenario": {
+        "DENSE": 0.997,
+        "DRIFT_LATE": 0.9195,
+        "NONE": 0.928,
+        "TRANSITION": 0.9004,
+        "WRONG_PAD": 1.0
+      }
+    },
+    "mlp16": {
+      "name": "mlp16",
+      "accuracy": 0.9495798319327731,
+      "overlap_accuracy": 0.9922480620155039,
+      "none_unknown": 0.928,
+      "by_scenario": {
+        "DENSE": 0.997,
+        "DRIFT_LATE": 0.9195,
+        "NONE": 0.928,
+        "TRANSITION": 0.9004,
+        "WRONG_PAD": 1.0
+      }
+    }
+  }
+}

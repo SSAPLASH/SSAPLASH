@@ -1,0 +1,39 @@
+{
+  "task": "gate",
+  "modelVersion": "coach-gate-0.1",
+  "featureVersion": 1,
+  "inputNames": [
+    "absMean",
+    "sameSign",
+    "std",
+    "valid",
+    "missInWindow",
+    "missInRecent",
+    "trailing",
+    "topPadCount",
+    "topPadDiff",
+    "topPadSameSign",
+    "handRatio",
+    "progress",
+    "tag:LIVE_MISS_STREAK",
+    "tag:LIVE_LATE",
+    "tag:LIVE_EARLY",
+    "tag:LIVE_PAD_LATE",
+    "tag:LIVE_PAD_EARLY",
+    "tag:LIVE_HAND_WEAK",
+    "tag:LIVE_UNSTEADY",
+    "tag:LIVE_PAD_MISS"
+  ],
+  "runtime": [
+    {
+      "kind": "json",
+      "path": "coachGate.json"
+    },
+    {
+      "kind": "onnx",
+      "path": "coachGate.onnx"
+    }
+  ],
+  "threshold": 0.8162679002333246,
+  "trainedOn": "SYNTHETIC"
+}
