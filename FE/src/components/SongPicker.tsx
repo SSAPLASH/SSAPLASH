@@ -373,8 +373,8 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   const copy = COPY[mode];
 
   const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
-  // 안내 줄·구분선은 악보 연습의 곡 탭에서만 보인다. 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
-  const showGuide = mode === 'sheet' && tab !== 'LESSONS';
+  // 안내 줄·구분선은 두 모드 모두 보인다. 악보 연습의 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
+  const showGuide = mode === 'play' || tab !== 'LESSONS';
 
   return (
     <div className="play-sp">
