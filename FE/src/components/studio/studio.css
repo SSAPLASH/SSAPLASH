@@ -38,34 +38,6 @@
   margin-left: auto;
 }
 
-/* ---- 상태 배지 (Studio / SongStatusBadge 202:503) ---- */
-.studio-badge {
-  --badge-color: var(--good);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-s);
-  flex: none;
-  padding: var(--space-xs) var(--space-m);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--badge-color) 16%, transparent);
-  color: var(--badge-color);
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: nowrap;
-}
-.studio-badge-active {
-  --badge-color: var(--brand-text);
-}
-.studio-badge-danger {
-  --badge-color: var(--miss);
-}
-.studio-badge-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
 /* MIDI 칩 (Studio / SongCard midi-chip 202:518) */
 .studio-chip {
   display: inline-flex;
@@ -799,26 +771,6 @@
   min-height: 34px;
   color: var(--text-1);
 }
-/* 조작: 10초 뒤로 24 · 재생/일시정지 30 · 10초 앞으로 24. 버튼 틀(32)을 뺀 글리프 간격이 시안의 20px에 가깝게 */
-.song-playbar-controls {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 14px;
-}
-.song-playbar-controls .ui-icon-btn {
-  color: var(--text-1);
-}
-.song-playbar-controls .ui-icon-btn:disabled {
-  color: var(--text-3);
-  opacity: 1;
-}
-/* 쉬는 상태: 10초 버튼 자리만 비워 둬 재생을 시작해도 ▶ 위치가 움직이지 않는다 */
-.song-playbar-skip-gap {
-  flex: none;
-  width: 32px;
-  height: 32px;
-}
 .song-playbar-progress {
   display: flex;
   flex: 1 1 0;
@@ -897,8 +849,8 @@
     flex: none;
   }
   .studio-row .song-playbar-progress,
-  .studio-row .song-playbar-skip,
-  .studio-row .song-playbar-skip-gap {
+  .studio-row .playback-skip,
+  .studio-row .playback-skip-gap {
     display: none;
   }
 }

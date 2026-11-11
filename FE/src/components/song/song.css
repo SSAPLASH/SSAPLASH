@@ -312,3 +312,75 @@ button.song-level {
     animation: none;
   }
 }
+
+/* ---- 재생 조작부 (PlaybackTransport, 설계 MODE-002 D2-1·4-6): 누름 0.88배 · 10초 회전 24° 280ms · 글리프 pop 180ms ---- */
+.playback-transport {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+}
+.playback-transport .ui-icon-btn {
+  color: var(--text-1);
+}
+.playback-transport .ui-icon-btn:disabled {
+  color: var(--text-3);
+  opacity: 1;
+}
+.playback-transport .ui-icon-btn:active:not(:disabled) {
+  transform: scale(0.88);
+}
+/* 쉬는 상태: 10초 버튼 자리만 비워 둬 재생을 시작해도 ▶ 위치가 움직이지 않는다 */
+.playback-skip-gap {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.playback-icon,
+.playback-glyph {
+  display: grid;
+  place-items: center;
+}
+.playback-glyph {
+  animation: playback-pop 180ms var(--ease-out);
+}
+.playback-icon.is-spin-back {
+  animation: playback-spin-back 280ms var(--ease-out);
+}
+.playback-icon.is-spin-forward {
+  animation: playback-spin-forward 280ms var(--ease-out);
+}
+@keyframes playback-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes playback-spin-back {
+  40% {
+    transform: rotate(-24deg);
+  }
+  to {
+    transform: rotate(0);
+  }
+}
+@keyframes playback-spin-forward {
+  40% {
+    transform: rotate(24deg);
+  }
+  to {
+    transform: rotate(0);
+  }
+}
+/* 움직임 줄이기: 회전·pop을 끈다 */
+@media (prefers-reduced-motion: reduce) {
+  .playback-glyph,
+  .playback-icon.is-spin-back,
+  .playback-icon.is-spin-forward {
+    animation: none;
+  }
+}

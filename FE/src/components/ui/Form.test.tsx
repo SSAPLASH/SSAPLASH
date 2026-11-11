@@ -226,4 +226,27 @@ describe("Input", () => {
     expect(html).not.toContain("ui-input-label-hidden");
     expect(html).toContain("ui-input-foot");
   });
+
+  it("trailing이 없으면(undefined) 기존 마크업 그대로: 감싸는 칸·has-trailing 없음", () => {
+    const html = renderToStaticMarkup(<Input label="이름" id="nm" />);
+    expect(html).not.toContain("ui-input-control");
+    expect(html).not.toContain("has-trailing");
+    expect(html).not.toContain("ui-input-trailing");
+  });
+
+  it("trailing이 있으면 입력칸 안 오른쪽 슬롯에 그린다", () => {
+    const html = renderToStaticMarkup(
+      <Input label="검색" id="q" compact trailing={<button type="button">x</button>} />,
+    );
+    expect(html).toContain("has-trailing");
+    expect(html).toContain('class="ui-input-control"><input');
+    expect(html).toContain('<span class="ui-input-trailing"><button type="button">x</button></span></div>');
+  });
+
+  it("trailing이 null이면 슬롯 요소 없이 자리만 둔다(input이 다시 만들어지지 않는다)", () => {
+    const html = renderToStaticMarkup(<Input label="검색" id="q" compact trailing={null} />);
+    expect(html).toContain("has-trailing");
+    expect(html).toContain("ui-input-control");
+    expect(html).not.toContain("ui-input-trailing");
+  });
 });
