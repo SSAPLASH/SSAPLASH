@@ -211,6 +211,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
         name={PAD_META[selected].label}
         x={fmtCm(point?.x)}
         y={fmtCm(point?.y)}
+        z={fmtCm(point?.z)}
         radius={`${Math.round(radius)}°`}
         caption="선택 패드"
         slider={{ value: radius, min: tuning.minRadiusDeg, max: tuning.maxRadiusDeg, onChange: (v) => calibrationSession.setRadiusOverride(selected, v) }}
