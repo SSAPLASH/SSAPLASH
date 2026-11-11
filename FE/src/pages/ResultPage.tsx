@@ -20,7 +20,7 @@ import { FeedbackCard } from '@/components/result/FeedbackCard';
 import { JudgeBars } from '@/components/result/JudgeBars';
 import { PadSummaryTable } from '@/components/result/PadSummaryTable';
 import { ResultSummaryCard } from '@/components/result/ResultSummaryCard';
-import { CelebrationFx } from '@/components/result/CelebrationFx';
+import { RecordCelebration } from '@/components/result/RecordCelebration';
 import { useReducedMotion } from 'motion/react';
 import { bestRecordDelta, localPrevBest, recordBadgeOf, type PrevBest } from '@/domain/bestRecord';
 import { TimingHistogram } from '@/components/result/TimingHistogram';
@@ -164,6 +164,7 @@ export function ResultPage() {
   ].filter((x): x is string => x !== null);
   const timingDetail = `빠름 평균 ${h.early === null ? '–' : `${h.early.toFixed(0)}ms`} · 늦음 평균 ${h.late === null ? '–' : `+${h.late.toFixed(0)}ms`} · 판정 폭 ±${log.timing.perfectMs}/±${log.timing.goodMs}ms`;
 
+  const badge = delta ? recordBadgeOf(log, delta) : null;
   return (
     <main className="main">
       <div className="result-page">
@@ -173,7 +174,7 @@ export function ResultPage() {
           titleBadge={songDeleted ? <DeletedSongChip /> : undefined}
           scoreText={isSheet ? undefined : `${s.score.toLocaleString('ko-KR')} / ${s.maxCombo}`}
           accuracyText={`${(s.accuracy * 100).toFixed(1)}%`}
-          recordBadge={delta ? recordBadgeOf(log, delta) : null}
+          recordBadge={badge}
           countUp={
             celebrating
               ? {
@@ -182,8 +183,9 @@ export function ResultPage() {
                 }
               : undefined
           }
-          celebration={celebrating ? <CelebrationFx /> : undefined}
         />
+        {/* 최고 기록 갱신: 화면 전체 색종이 + 가운데 네온 글자(요약 카드 안 작은 폭발 대신) */}
+        {celebrating && <RecordCelebration detail={badge?.text.split(' · ')[1]} />}
         <LessonResultBand log={log} />
 
         <ReportEntry
