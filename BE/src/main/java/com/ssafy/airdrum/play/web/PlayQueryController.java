@@ -25,18 +25,23 @@ import com.ssafy.airdrum.user.AuthUser;
 @RequestMapping("/api/v1/plays")
 @Tag(name = "Plays", description = "본인 플레이 기록")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@ApiResponse(responseCode = "400", description = "페이지 파라미터 오류", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
+@ApiResponse(responseCode = "400", description = "페이지 또는 필터 파라미터 오류", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 @ApiResponse(responseCode = "401", description = "인증 필요", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 public class PlayQueryController {
     private final PlayQueryService plays;
     public PlayQueryController(PlayQueryService plays) { this.plays = plays; }
     @GetMapping
     @ApiResponse(responseCode = "200", description = "본인 연주 기록 페이지")
-    @Operation(summary = "내 연주 기록 목록", description = "본인의 모든 모드를 종료 시각과 ID 내림차순으로 반환합니다. 접근할 수 없는 곡의 제목은 null입니다. accuracy는 0~100이며 hasReport가 true인 플레이는 기존 리포트 API에서 조회할 수 있습니다.")
+    @Operation(summary = "내 연주 기록 목록", description = "본인 기록을 종료 시각과 ID 기준으로 정렬합니다. 날짜는 한국 시간의 종료일 기준이며 양 끝을 포함합니다. 검색은 접근 가능한 곡 제목만 대상으로 합니다. 접근할 수 없는 곡의 제목은 null입니다. accuracy는 0~100이며 hasReport가 true인 플레이는 기존 리포트 API에서 조회할 수 있습니다.")
     public PageResponse<PlaySummaryResponse> list(@Parameter(hidden = true) AuthUser me,
+            @Parameter(description = "곡 제목 부분 검색(공백 제거 후 100자 이하, %와 _는 문자 그대로)") @RequestParam(required = false) String q,
+            @Parameter(description = "종료일 시작(한국 시간, 포함)", example = "2026-01-01") @RequestParam(required = false) String from,
+            @Parameter(description = "종료일 끝(한국 시간, 포함)", example = "2026-01-31") @RequestParam(required = false) String to,
+            @Parameter(description = "모드 필터", schema = @Schema(allowableValues = {"FREE", "RHYTHM", "SHEET", "TEMPO"})) @RequestParam(required = false) String mode,
+            @Parameter(description = "종료 시각 정렬", schema = @Schema(allowableValues = {"NEWEST", "OLDEST"}, defaultValue = "NEWEST")) @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") @Min(0) @Max(100000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return plays.list(me.id(), page, size);
+        return plays.list(me.id(), page, size, q, from, to, mode, sort);
     }
     @GetMapping("/best-records")
     @ApiResponse(responseCode = "200", description = "접근 가능한 요청 곡의 본인 최고 기록")

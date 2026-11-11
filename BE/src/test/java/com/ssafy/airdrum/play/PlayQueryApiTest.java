@@ -66,7 +66,7 @@ class PlayQueryApiTest {
         db.update("INSERT INTO play_sessions(id,user_id,song_id,chart_version_id,mode,input_source,score,accuracy,max_combo,judgement_context,payload_schema_version,payload_hash,started_at,ended_at) VALUES(?,?,?,?,?,'KEYBOARD',?,?,?,?::jsonb,1,?,?::timestamptz,?::timestamptz)",id,owner,song,version,mode,song==null?null:100,song==null?null:new java.math.BigDecimal("50.25"),song==null?null:1,song==null?null:"{}","a".repeat(64),end,end);
     }
     JsonNode list(String auth,String query,int status) throws Exception {
-        var request=get("/api/v1/plays"+query); if(auth!=null) request.header("Authorization","Bearer "+auth);
+        var request=get(java.net.URI.create("/api/v1/plays"+query)); if(auth!=null) request.header("Authorization","Bearer "+auth);
         var result=mvc.perform(request).andExpect(status().is(status)).andReturn().getResponse();
         return result.getContentAsString().isEmpty()?null:json.readTree(result.getContentAsString());
     }
@@ -80,9 +80,9 @@ class PlayQueryApiTest {
             assertThat(list(token,query,400).path("code").asString()).isEqualTo("VALIDATION_FAILED");
         list(token,"?page=x",400);
         for(int[] bad:new int[][]{{-1,20},{100001,20},{0,0},{0,101}})
-            assertThatThrownBy(()->service.list(user,bad[0],bad[1])).isInstanceOfSatisfying(BusinessException.class,e->assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_FAILED));
+            assertThatThrownBy(()->service.list(user,bad[0],bad[1],null,null,null,null,null)).isInstanceOfSatisfying(BusinessException.class,e->assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.VALIDATION_FAILED));
         db.update("UPDATE users SET status='WITHDRAWN',withdrawn_at=now() WHERE id=?",user);
-        list(token,"",401); assertThatThrownBy(()->service.list(user,0,20)).isInstanceOfSatisfying(BusinessException.class,e->assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED));
+        list(token,"",401); assertThatThrownBy(()->service.list(user,0,20,null,null,null,null,null)).isInstanceOfSatisfying(BusinessException.class,e->assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.UNAUTHORIZED));
     }
     @Test void visibleSongsAndAllModesKeepHistoricalReferences() throws Exception {
         long own=song(user,"MIDI","내 곡",true), foreign=song(other,"MIDI","타인 비밀",true);
@@ -132,6 +132,36 @@ class PlayQueryApiTest {
         db.update("UPDATE users SET role='ADMIN' WHERE id=?",other);
         assertThat(list(token(other,UserRole.ADMIN,Instant.now()),"",200).path("totalElements").asInt()).isEqualTo(1);
     }
+    @Test void filtersUseVisibleTitlesInclusiveKoreanDatesAndStablePagination() throws Exception {
+        long own=song(user,"MIDI","Rock 100%_!",true), hidden=song(other,"MIDI","Rock 100%_!",true);
+        long v=version(own,"NORMAL",1), hv=version(hidden,"NORMAL",1);
+        UUID before=UUID.fromString("00000000-0000-0000-0000-000000000001"), first=UUID.fromString("00000000-0000-0000-0000-000000000002"), second=UUID.fromString("00000000-0000-0000-0000-000000000003"), after=UUID.fromString("00000000-0000-0000-0000-000000000004");
+        insert(before,user,"RHYTHM",own,v,"2025-12-31T14:59:59.999999Z");
+        insert(first,user,"RHYTHM",own,v,"2025-12-31T15:00:00Z");
+        insert(second,user,"RHYTHM",own,v,"2025-12-31T15:00:00Z");
+        insert(after,user,"RHYTHM",own,v,"2026-01-01T15:00:00Z");
+        insert(UUID.randomUUID(),user,"SHEET",hidden,hv,"2026-01-01T14:59:59.999999Z");
+        insert(UUID.randomUUID(),other,"RHYTHM",own,v,"2026-01-01T00:00:00Z");
+        String query="?q=rock&from=2026-01-01&to=2026-01-01&mode=RHYTHM&size=1";
+        var newest=list(token,query,200);
+        assertThat(newest.path("totalElements").asInt()).isEqualTo(2);
+        assertThat(newest.path("totalPages").asInt()).isEqualTo(2);
+        assertThat(newest.path("items").get(0).path("playId").asString()).isEqualTo(second.toString());
+        assertThat(list(token,query+"&page=1",200).path("items").get(0).path("playId").asString()).isEqualTo(first.toString());
+        assertThat(list(token,query+"&sort=OLDEST",200).path("items").get(0).path("playId").asString()).isEqualTo(first.toString());
+        assertThat(list(token,"?q=100%25_!&from=2026-01-01&to=2026-01-01",200).path("totalElements").asInt()).isEqualTo(2);
+        assertThat(list(token,"?q=100%25x",200).path("totalElements").asInt()).isZero();
+        assertThat(list(token,"?q=rock&mode=SHEET",200).path("totalElements").asInt()).isZero();
+        assertThat(list(token,"?mode=SHEET",200).path("totalElements").asInt()).isEqualTo(1);
+        assertThat(list(token,"?from=2026-01-01&to=2026-01-01",200).path("totalElements").asInt()).isEqualTo(3);
+        assertThat(list(token,"?to=2025-12-31",200).path("totalElements").asInt()).isEqualTo(1);
+        assertThat(list(token,"?from=2026-01-02",200).path("totalElements").asInt()).isEqualTo(1);
+    }
+    @Test void filterInputsAreValidated() throws Exception {
+        for (String query:List.of("?from=2026-02-30", "?to=2026-1-01", "?from=2026-02-01&to=2026-01-01", "?mode=BAD", "?sort=bad", "?q="+"a".repeat(101)))
+            assertThat(list(token,query,400).path("code").asString()).isEqualTo("VALIDATION_FAILED");
+        assertThat(list(token,"?q=%20%20",200).path("totalElements").asInt()).isZero();
+    }
     @Test void uploadListReportAndNotesFlow() throws Exception {
         long song=song(user,"MIDI","업로드 곡",true), version=version(song,"NORMAL",1); UUID play=UUID.randomUUID();
         mvc.perform(post("/api/v1/plays").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(PlayFixtures.scored(play,song,version))).andExpect(status().isCreated());
@@ -152,14 +182,14 @@ class PlayQueryApiTest {
     @Test void listQueriesCountAndPageOnceRegardlessOfPageSize() throws Exception {
         insert(UUID.randomUUID(),user,"FREE",null,null,"2026-01-01T00:00:00Z");
         list(token,"",200);
-        verify(sessions,times(1)).countForUser(user);
-        verify(sessions,times(1)).pageForUser(user,20,0L);
+        verify(sessions,times(1)).countForUser(eq(user), any());
+        verify(sessions,times(1)).pageForUser(eq(user),eq(20),eq(0L),any());
         verifyNoMoreInteractions(sessions);
         clearInvocations(sessions);
         for(int i=0;i<10;i++) insert(UUID.randomUUID(),user,"FREE",null,null,"2026-01-01T00:00:00Z");
         list(token,"",200);
-        verify(sessions,times(1)).countForUser(user);
-        verify(sessions,times(1)).pageForUser(user,20,0L);
+        verify(sessions,times(1)).countForUser(eq(user), any());
+        verify(sessions,times(1)).pageForUser(eq(user),eq(20),eq(0L),any());
         verifyNoMoreInteractions(sessions);
     }
     @Test void openApiDescribesNullableFieldsAndVisibility() throws Exception {
@@ -262,8 +292,8 @@ class PlayQueryApiTest {
                 pool.submit(()->{ if(delete) db.update("DELETE FROM play_sessions WHERE id=?",first); else insert(second,user,"TEMPO",null,null,"2026-01-02T00:00:00Z"); }).get(15,TimeUnit.SECONDS);
             }
             return count;
-        }).when(sessions).countForUser(user);
-        var result=service.list(user,0,20);
+        }).when(sessions).countForUser(eq(user), any());
+        var result=service.list(user,0,20,null,null,null,null,null);
         assertThat(result.totalElements()).isEqualTo(1); assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0).playId()).isEqualTo(first);
     }
