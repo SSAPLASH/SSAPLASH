@@ -103,6 +103,21 @@ describe('kitShapes', () => {
   });
 });
 
+describe('기본 배치(DEFAULT_KIT_LAYOUT)', () => {
+  it.each([BOX, { w: 1400, h: 520 }, { w: 600, h: 600 }])('원근 그림에서 어느 두 패드의 윗면도 겹치지 않는다 %o', (box) => {
+    const list = kitShapes(DEFAULT_KIT_LAYOUT, makeCamera(box));
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        // 타원끼리의 겹침을 넉넉하게 본다: 세로 거리를 타원 눌림만큼 늘려 원으로 비교
+        const squash = Math.min(a.rx / a.ry, b.rx / b.ry);
+        expect(Math.hypot(a.cx - b.cx, (a.cy - b.cy) * squash)).toBeGreaterThan(a.rx + b.rx);
+      }
+    }
+  });
+});
+
 describe('hitTestPads', () => {
   it('패드 윗면 중심을 누르면 그 패드다', () => {
     for (const pad of ['CRASH', 'RIDE', 'KICK', 'HIHAT_PEDAL', 'FLOOR_TOM'] as const) {
@@ -146,9 +161,10 @@ describe('dragToLayout', () => {
       [0, -70],
       [40, 50],
     ]) {
-      const s = shapeOf('SNARE');
-      const next = dragToLayout('SNARE', s.cx + dx, s.cy + dy, DEFAULT_KIT_LAYOUT.SNARE, cam);
-      const moved = padShape('SNARE', padPoint('SNARE', next), cam);
+      // 가운데쯤 있는 패드라 옮겨도 0.05~0.95 한계에 닿지 않는다
+      const s = shapeOf('MID_TOM');
+      const next = dragToLayout('MID_TOM', s.cx + dx, s.cy + dy, DEFAULT_KIT_LAYOUT.MID_TOM, cam);
+      const moved = padShape('MID_TOM', padPoint('MID_TOM', next), cam);
       expect(Math.hypot(moved.cx - (s.cx + dx), moved.cy - (s.cy + dy))).toBeLessThan(1);
     }
   });
