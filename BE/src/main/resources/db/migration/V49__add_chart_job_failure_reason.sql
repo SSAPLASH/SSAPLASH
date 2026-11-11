@@ -1,0 +1,2 @@
+ALTER TABLE chart_jobs ADD COLUMN error_reason varchar(32)
+    CHECK (error_reason IN ('SOURCE_INVALID', 'NOT_TRANSCRIBABLE', 'GPU_OUT_OF_MEMORY', 'INTERNAL_ERROR'));
