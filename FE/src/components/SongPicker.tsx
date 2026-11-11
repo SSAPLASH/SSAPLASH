@@ -1,11 +1,11 @@
 // 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · (악보 연습만) 안내 줄+구분선 · [왼쪽 열: 탭 · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) | 선택한 곡 패널(SongDetailPane)].
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다.
-//  - /play: 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
-//  - /sheet(설계 MODE-001-MODE-003-picker-quick-start): 선택 곡 카드에서 연습 단계까지 고르고 [플레이]·더블클릭·Enter가
-//    onStart(songId, 고른 채보 id)를 부른다. 단계는 주소 `?song=&chart=`로 처음 골라 둘 수 있다(추천·다시 하기·세팅 복귀).
+// 두 모드가 같은 흐름이다(설계 MODE-001-MODE-003-picker-quick-start, MODE-001-play-quick-start): 선택 곡 카드에서 연습 단계까지 고르고
+// [플레이]·더블클릭·Enter가 onStart(songId, 고른 채보 id)를 부른다. 단계는 주소 `?song=&chart=`로 처음 골라 둘 수 있다(추천·다시 하기·세팅 복귀).
+// 카드의 기록은 고른 단계 기준이다(/play 최고 점수, /sheet 최고 정확도). 표의 기록 열은 곡 전체 최고다.
 // 선택 결과는 페이지가 URL로 옮긴다.
-// 칩·검색·탭은 둘러보기다 — 사용자가 고른 곡은 목록에서 빠져도 패널에 남고 [준비]가 된다(설계 CHART-001 곡 난이도·선택 U5).
+// 칩·검색·탭은 둘러보기다 — 사용자가 고른 곡은 목록에서 빠져도 패널에 남고 [플레이]가 된다(설계 CHART-001 곡 난이도·선택 U5).
 // 0곡이면 표 틀(머리글·「총 0곡」)을 두고 본문 자리에 안내를 둔다. 라이브러리 안내는 라이브러리 탭 0곡일 때만 보인다.
 // 추천(설계 COACH-004-song-picker-ai-tab): 로그인·API 소스면 탭 [AI 추천곡]이 붙는다. 추천 곡(R1)은 진입 때 모드마다 한 번 읽고
 // AI 추천곡 탭 목록과 기본 곡 탭의 「✦ AI 추천」 라벨이 같은 결과를 쓴다. 선택한 곡 패널 아래는 그 곡과 비슷한 곡(R2) 한 건이다.
@@ -24,7 +24,7 @@ import {
   type SongScope,
   type SongSummary,
 } from '@/domain/songCatalog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/bestRecord';
 import { presetDisplayName } from '@/domain/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/app/useBestRecords';
@@ -48,11 +48,11 @@ import { PickerGuide } from '@/components/guide/PickerGuide';
 import './play/song-picker.css';
 
 interface Props {
-  /** /play: [준비] */
-  onSelect?: (songId: number, chartId: number) => void;
-  /** /sheet: [플레이]. 고른 단계(채보)로 시작 확인 창을 연다 */
-  onStart?: (songId: number, chartId: number) => void;
+  /** [플레이]·표 더블클릭·Enter. 고른 단계(채보)로 시작 확인 창을 연다 */
+  onStart: (songId: number, chartId: number) => void;
   mode: 'play' | 'sheet';
+  /** 시작 대기 중(채보·반주를 읽는 동안): 카드의 ▶ 플레이가 스피너. 리듬 게임만 넘긴다 */
+  starting?: boolean;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -117,7 +117,7 @@ function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommen
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
-export function SongPicker({ onSelect, onStart, mode }: Props) {
+export function SongPicker({ onStart, mode, starting }: Props) {
   const source = useSongs((s) => s.source);
   const selectSong = useSongs((s) => s.selectSong);
   const presets = useSettings((s) => s.presets);
@@ -158,11 +158,9 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
         const p = new URLSearchParams(prev);
         if (next === 'LESSONS') p.set('tab', LESSONS_TAB_PARAM);
         else p.delete('tab');
-        // 악보 연습: 라이브러리 탭은 주소에도 남겨 곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게 한다
-        if (mode === 'sheet') {
-          if (next === 'MINE') p.set('scope', 'MINE');
-          else p.delete('scope');
-        }
+        // 라이브러리 탭은 주소에도 남겨 곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게 한다
+        if (next === 'MINE') p.set('scope', 'MINE');
+        else p.delete('scope');
         return p;
       },
       { replace: true },
@@ -174,9 +172,9 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
   // null: 사용자가 아직 고르지 않았다(이때는 `?song=` 딥링크 곡, 없으면 첫 곡이 선택된다).
   // 곡 객체를 기억해 필터로 목록에서 빠져도 패널에 그대로 보인다(U5)
   const [manual, setManual] = useState<SongSummary | null>(null);
-  // AI 추천곡 탭에서 직접 고른 곡 id — 그 곡의 [준비]는 추천 채보로 가고 클릭을 기록한다. 다른 곡을 고르면 지운다
+  // AI 추천곡 탭에서 직접 고른 곡 id — 그 곡의 [플레이]는 추천 채보로 가고 클릭을 기록한다. 다른 곡을 고르면 지운다
   const [aiPickedId, setAiPickedId] = useState<number | null>(null);
-  // 악보 연습: 카드에서 고른 연습 단계. 곡을 바꾸면 그 곡의 처음 단계(주소 chart → 기본)로 돌아간다
+  // 카드에서 고른 연습 단계. 곡을 바꾸면 그 곡의 처음 단계(주소 chart → 기본)로 돌아간다
   const [pickedChart, setPickedChart] = useState<{ songId: number; chartId: number } | null>(null);
   // 비슷한 곡을 읽을 곡 — 선택이 SIMILAR_DELAY_MS 그대로일 때 정해진다
   const [similarFor, setSimilarFor] = useState<number | null>(null);
@@ -215,7 +213,11 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
   const listLoading = isAi ? !ready : status === 'loading';
 
   const recordsReady = isAi ? ready : status === 'ready' && !list.isPlaceholder;
-  const localChartBests = useMemo(() => (source === 'builtin' && mode === 'sheet' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET') : new Map<number, number>()), [mode, source]);
+  // 카드의 단계별 기록: 게임은 최고 점수, 악보는 최고 정확도
+  const localChartBests = useMemo(() => {
+    if (source !== 'builtin') return new Map<number, number>();
+    return mode === 'play' ? bestScoreByChart(loadPlayLogs(), 'RHYTHM') : bestAccuracyByChart(loadPlayLogs(), 'SHEET');
+  }, [mode, source]);
   const records = useBestRecords(recordsReady ? songs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
   const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
@@ -266,9 +268,9 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
     const n = Number(params.get('chart'));
     return Number.isInteger(n) && n > 0 ? n : null;
   }, [params]);
-  // 라이브러리 탭은 기존대로, 악보 연습은 기본 곡 탭에서도 주소의 곡을 골라 둔다
+  // 기본 곡·라이브러리 탭 모두 주소의 곡을 골라 둔다
   const deepTarget =
-    deepLinkId !== null && (tab === 'MINE' || (mode === 'sheet' && tab === 'BUILTIN')) && ready && !list.isPlaceholder
+    deepLinkId !== null && (tab === 'MINE' || tab === 'BUILTIN') && ready && !list.isPlaceholder
       ? items.find((s) => s.id === deepLinkId && isPlayableStatus(s.status))
       : undefined;
   const pick = (id: number) => {
@@ -289,13 +291,13 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
       ? recoEntry.cards.find((c) => c.song.id === selectedId)
       : undefined;
 
-  // 선택된 곡의 채보 정보를 한 번 읽는다([준비]가 기본 채보를 고르는 데 쓴다)
+  // 선택된 곡의 채보 정보를 한 번 읽는다([플레이]가 단계를 고르는 데 쓴다)
   useEffect(() => {
     if (selectedId === null || requested.current.has(selectedId)) return;
     fetchDetail(selectedId);
   }, [selectedId, fetchDetail]);
 
-  // 악보 연습: 카드가 보일 단계. 직접 고른 단계 → (처음 한 번) 주소의 단계 → AI 추천 채보 → 기본 단계
+  // 카드가 보일 단계. 직접 고른 단계 → (처음 한 번) 주소의 단계 → AI 추천 채보 → 기본 단계
   const initialChartId = (detail: SongDetail, id: number, card?: RecommendCard): number | null => {
     const has = (c: number | null | undefined): c is number => c != null && detail.charts.some((x) => x.id === c);
     if (pickedChart?.songId === id && has(pickedChart.chartId)) return pickedChart.chartId;
@@ -304,15 +306,15 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
     return defaultChartId(detail);
   };
 
-  // 기본 채보로 간다. AI 추천곡 탭에서 고른 곡은 추천 채보(상세에 없으면 기본 채보)로 가고 클릭을 기록한다(설계 4-3, U2·U5)
-  const prepare = (id: number) => {
+  // 고른 단계로 시작 확인 창을 연다. AI 추천곡 탭에서 고른 곡은 추천 채보(상세에 없으면 기본 채보)로 가고 클릭을 기록한다(설계 4-3, U2·U5)
+  const start = (id: number) => {
     const card = aiCard?.song.id === id ? aiCard : undefined;
     const go = (detail: SongDetail) => {
-      const chartId = mode === 'sheet' ? initialChartId(detail, id, card) : card ? (chartFallback(detail, card.chartId) ?? card.chartId) : defaultChartId(detail);
+      const chartId = initialChartId(detail, id, card);
       if (chartId === null) return;
       // 기록은 기다리지 않는다(D8)
       if (card && recoEntry.status === 'ready') void clickReco(card, recoEntry.requestId);
-      (mode === 'sheet' ? onStart : onSelect)?.(id, chartId);
+      onStart(id, chartId);
     };
     const d = details[id];
     if (d?.status === 'ready') {
@@ -324,7 +326,7 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
     selectSong(id).then(go, () => fetchDetail(id));
   };
 
-  // 비슷한 곡(R2): 선택이 SIMILAR_DELAY_MS 그대로면 그 곡으로 한 번 읽는다. 연주 준비의 SIMILAR:{id}(size 5)와 섞이지 않게 키를 나눈다
+  // 비슷한 곡(R2): 선택이 SIMILAR_DELAY_MS 그대로면 그 곡으로 한 번 읽는다. 키는 SONG_PICKER:SIMILAR:{id}로 따로 둔다
   useEffect(() => {
     if (!recoEnabled || selectedId === null) return;
     const t = setTimeout(() => setSimilarFor(selectedId), SIMILAR_DELAY_MS);
@@ -342,7 +344,7 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
   }, [similarKey, similarFor, similarDetail, loadSimilar]);
   const similarEntry = useRecommendations((r) => (similarKey === null ? undefined : entryOf(r.entries, similarKey)));
   const similarCard = similarEntry?.status === 'ready' && selectedId !== null ? pickSimilar(similarEntry.cards, selectedId) : undefined;
-  // [이 곡 보기]: 탭·검색·칩은 그대로 두고 그 곡을 선택한 곡으로 바꾼다. [준비]는 기본 채보(U5)
+  // [이 곡 보기]: 탭·검색·칩은 그대로 두고 그 곡을 선택한 곡으로 바꾼다. [플레이]는 기본 채보(U5)
   const viewSimilar = () => {
     if (!similarCard || similarEntry?.status !== 'ready') return;
     void clickReco(similarCard, similarEntry.requestId);
@@ -360,12 +362,13 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
   const presetName = presetDisplayName(presets, activePresetId);
   const quickCharts = selDetail?.status === 'ready' ? sortCharts(selDetail.detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty })) : [];
   const quickChartId =
-    mode === 'sheet' && selDetail?.status === 'ready' && selectedId !== null
+    selDetail?.status === 'ready' && selectedId !== null
       ? initialChartId(selDetail.detail, selectedId, aiCard?.song.id === selectedId ? aiCard : undefined)
       : null;
-  // 내장 개발 소스는 로컬 로그, 그 밖은 서버 단계별 최고 정확도(고른 단계 기준)
+  // 내장 개발 소스는 로컬 로그, 그 밖은 서버 단계별 최고 기록(고른 단계 기준). 게임은 점수, 악보는 정확도
+  const serverChartBests = mode === 'play' ? records.scoresByChart : records.accuraciesByChart;
   const bestByChart: Record<number, number | undefined> = Object.fromEntries(
-    quickCharts.map((c) => [c.id, source === 'builtin' ? localChartBests.get(c.id) : records.accuraciesByChart.get(c.id)]),
+    quickCharts.map((c) => [c.id, source === 'builtin' ? localChartBests.get(c.id) : serverChartBests.get(c.id)]),
   );
   const copy = COPY[mode];
 
@@ -437,7 +440,7 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
                 onSelect={pick}
                 onOpen={(id) => {
                   pick(id);
-                  prepare(id);
+                  start(id);
                 }}
                 mode={mode}
                 bestScores={bests.scores}
@@ -451,24 +454,18 @@ export function SongPicker({ onSelect, onStart, mode }: Props) {
           {ready && (
             <SongDetailPane
               song={selectedSong}
-              mode={mode}
-              bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
-              bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
               presetName={presetName}
               chartState={chartState}
               onRetry={() => selectedId !== null && fetchDetail(selectedId)}
-              onPrepare={() => selectedId !== null && prepare(selectedId)}
-              quickStart={
-                mode === 'sheet'
-                  ? {
-                      charts: quickCharts,
-                      selectedChartId: quickChartId,
-                      onSelectChart: (chartId) => selectedId !== null && setPickedChart({ songId: selectedId, chartId }),
-                      bestByChart,
-                      onStart: () => selectedId !== null && prepare(selectedId),
-                    }
-                  : undefined
-              }
+              quickStart={{
+                charts: quickCharts,
+                selectedChartId: quickChartId,
+                onSelectChart: (chartId) => selectedId !== null && setPickedChart({ songId: selectedId, chartId }),
+                bestKind: mode === 'play' ? 'score' : 'accuracy',
+                bestByChart,
+                starting,
+                onStart: () => selectedId !== null && start(selectedId),
+              }}
               similar={similarCard}
               onSimilarPick={viewSimilar}
             />
