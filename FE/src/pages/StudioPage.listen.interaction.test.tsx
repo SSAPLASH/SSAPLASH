@@ -110,10 +110,11 @@ describe('라이브러리 곡 재생바 연결', () => {
     expect(hook.current.off).not.toHaveBeenCalled();
   });
 
-  it('반주를 쓸 수 없는 빌드(available=false)면 재생바가 없다', async () => {
+  it('반주를 쓸 수 없는 빌드(available=false)면 재생바·커버 재생 UI가 없다', async () => {
     hook.current = fakeHook({ available: false });
     renderPage();
     await screen.findByText('별빛 산책');
     expect(document.querySelector('.song-playbar')).toBeNull();
+    expect(document.querySelector('.studio-cover-player')).toBeNull();
   });
 });

@@ -45,13 +45,15 @@ describe('MySongCard (v0.4)', () => {
     expect(card(song({ source: 'AUDIO' }))).not.toContain('class="studio-chip">');
   });
 
-  it('완료 곡: 커버 ▶ 리듬 게임(곡 제목 라벨)과 [악보 연습] 하나, 카드 아래 [플레이] 버튼은 없다', () => {
+  it('완료 곡: [▶ 플레이] 하나(곡 제목 라벨, 메뉴 트리거)만 있고 커버 ▶ 링크·[악보 연습] 링크는 없다', () => {
     const html = card(song());
-    expect(html).toContain('class="song-card-play"');
-    expect(html).toContain('aria-label="「별빛 산책」 리듬 게임"');
-    expect(html).toContain('href="/play?scope=MINE&amp;song=7"');
-    expect(html).toContain('href="/sheet?scope=MINE&amp;song=7"');
-    expect(html).toContain('악보 연습');
+    expect(html).toContain('aria-label="「별빛 산책」 플레이"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('class="song-card-play"');
+    expect(html).not.toContain('href="/play?');
+    expect(html).not.toContain('href="/sheet?');
+    expect(html).not.toContain('악보 연습');
     expect(html).not.toContain('악보 확인');
     expect(html).not.toContain('btn-primary');
   });
@@ -69,17 +71,17 @@ describe('MySongCard (v0.4)', () => {
     expect(card(song({ coverUrl: 'https://x/c.jpg' }))).toContain('src="https://x/c.jpg"');
   });
 
-  it('실패 곡: ▶ 없음, 사유 한 줄과 [다시 올리기], ⋯ 메뉴 있음', () => {
+  it('실패 곡: [플레이] 없음, 사유 한 줄과 [다시 올리기], ⋯ 메뉴 있음', () => {
     const html = card(song({ status: 'FAILED' }));
-    expect(html).not.toContain('song-card-play');
+    expect(html).not.toContain('플레이');
     expect(html).toContain('다시 올리기');
     expect(html).toContain('채보를 만들지 못했어요');
     expect(html).toContain('aria-label="별빛 산책 메뉴"');
   });
 
-  it('처리 중 곡: ▶·⋯ 메뉴 없음', () => {
+  it('처리 중 곡: [플레이]·⋯ 메뉴 없음', () => {
     const html = card(song({ status: 'PROCESSING' }));
-    expect(html).not.toContain('song-card-play');
+    expect(html).not.toContain('플레이');
     expect(html).not.toContain('ui-more-menu');
   });
 

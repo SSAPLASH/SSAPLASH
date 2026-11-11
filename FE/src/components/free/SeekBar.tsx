@@ -11,8 +11,8 @@ interface Props {
   positionMs: number;
   durationMs: number;
   onSeek: (ms: number) => void;
-  /** inline(기본): 막대 오른쪽에 「경과 / 전체」. ends: 막대 아래 양끝에 경과·남은 시간(손잡이 없이 끄는 동안 막대가 굵어진다) */
-  layout?: 'inline' | 'ends';
+  /** inline(기본): 막대 오른쪽에 「경과 / 전체」. ends: 막대 아래 양끝에 경과·남은 시간(손잡이 없이 끄는 동안 막대가 굵어진다). bare: 시간 글자 없이 막대만(3px, 올림 5px, 끌기·키보드 초점 7px) */
+  layout?: 'inline' | 'ends' | 'bare';
 }
 
 export function SeekBar({ positionMs, durationMs, onSeek, layout = 'inline' }: Props) {
@@ -48,7 +48,7 @@ export function SeekBar({ positionMs, durationMs, onSeek, layout = 'inline' }: P
   };
 
   return (
-    <div className={layout === 'ends' ? 'free-seek is-ends' : 'free-seek'}>
+    <div className={layout === 'ends' ? 'free-seek is-ends' : layout === 'bare' ? 'free-seek is-bare' : 'free-seek'}>
       <input
         className={`free-seek-range${drag !== null ? ' is-dragging' : ''}`}
         type="range"
@@ -73,7 +73,7 @@ export function SeekBar({ positionMs, durationMs, onSeek, layout = 'inline' }: P
         onPointerCancel={commit}
         onKeyDown={onKeyDown}
       />
-      {layout === 'ends' ? (
+      {layout === 'bare' ? null : layout === 'ends' ? (
         <span className="free-seek-ends num">
           <span>{formatClock(shown)}</span>
           <span>-{formatClock(dur - shown)}</span>

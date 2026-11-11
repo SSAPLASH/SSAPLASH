@@ -60,6 +60,9 @@
   /* 브랜드 틴트 — Figma color/brand/tint (brand 22%) · color/brand/tint-line (brand 35%) */
   --brand-tint: color-mix(in srgb, var(--brand) 22%, transparent);
   --brand-tint-line: color-mix(in srgb, var(--brand) 35%, transparent);
+  /* 마우스 올림·포커스 네온 — Figma color/brand/glow (brand 55%) · color/brand/glow-soft (brand 26%) */
+  --brand-glow: color-mix(in srgb, var(--brand) 55%, transparent);
+  --brand-glow-soft: color-mix(in srgb, var(--brand) 26%, transparent);
 
   /* 판정 상태 */
   --perfect: #8fceea;
