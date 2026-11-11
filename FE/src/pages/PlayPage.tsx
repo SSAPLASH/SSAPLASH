@@ -22,7 +22,9 @@ import { PlayStage } from '@/components/play/PlayStage';
 import { kitSoundStage, type PlayStageName } from '@/components/play/kitSoundStage';
 import { LazyChartAutoplayRunner } from '@/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/components/play/PlayHud';
+import { AudioWaitNotice } from '@/components/play/AudioWaitNotice';
 import { Countdown } from '@/components/play/Countdown';
+import { useAudioClockGate } from '@/components/play/useAudioClockGate';
 import { countdownValue } from '@/domain/leadIn';
 import { ScreenGate } from '@/components/ScreenGate';
 import { useScreenFits } from '@/components/screenFit';
@@ -416,10 +418,17 @@ function PlayPageBody() {
     [freezePrevBest, resetCountdown],
   );
 
+  // 시작·재개·처음부터 전에 오디오 시계가 실제로 흐를 때까지 기다린다(설계 MODE-001 오디오 시계 시작 대기).
+  // 출력을 막 깨운 직후에 시계를 움직이면 카운트인 클릭이 몰리고 반주가 곡 내내 늦는다
+  const { notice: audioWaiting, wait: waitAudioClock } = useAudioClockGate();
+
   const begin = useCallback(async (): Promise<boolean> => {
     const ss = sessionRef.current;
     if (!ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     await unlockAudio();
+    // 기다리는 사이 나갔거나 곡·준비 조건이 바뀌었으면 시작하지 않는다
+    if (!(await waitAudioClock('begin'))) return false;
+    if (sessionRef.current !== ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     resetRun(ss);
     const st = useSettings.getState();
     // 놓침 원인 계산용 노트 맥락(직전 패드·간격)
@@ -484,6 +493,7 @@ function PlayPageBody() {
       // 게임은 곡 중 클릭을 내지 않는다(E1). 카운트다운 박 소리는 PlayClock이 clickOn과 무관하게 항상 낸다
       clickOn: () => false,
       onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
+      audioClock: () => audioEngine.clockReading(),
     });
     clockRef.current = clock;
     clock.begin();
@@ -491,7 +501,7 @@ function PlayPageBody() {
     diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
     setPlaySession(ss);
     return true;
-  }, [acc, resetRun, clearCoachLine, showCoachMessage]);
+  }, [acc, resetRun, clearCoachLine, showCoachMessage, waitAudioClock]);
 
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
@@ -518,10 +528,14 @@ function PlayPageBody() {
     const clock = clockRef.current;
     // 복귀 카운트다운 중에는 pauseReason이 null이므로 일시정지 여부는 시계 상태로 본다
     if (!clock || clock.state.phase !== 'paused' || !readyRef.current) return;
-    clock.resume();
-    diagSessionPhase('resume');
-    setPauseReason(null);
-  }, []);
+    void waitAudioClock('resume').then((ok) => {
+      // 기다리는 사이 나갔거나 다시 시작했거나 준비 조건이 깨졌으면 재개하지 않는다
+      if (!ok || clockRef.current !== clock || clock.state.phase !== 'paused' || !readyRef.current) return;
+      clock.resume();
+      diagSessionPhase('resume');
+      setPauseReason(null);
+    });
+  }, [waitAudioClock]);
 
   // 끊김에서 복귀 → 「재연결 성공!」 1초 → 카운트다운 → 자동 재개 (PLAY-002 D9). 사용자 클릭 없음
   const { isResuming } = useReconnectResume({
@@ -540,14 +554,18 @@ function PlayPageBody() {
     const clock = clockRef.current;
     const ss = sessionRef.current;
     if (!clock || !ss) return;
-    clock.restart();
-    diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
-    resetRun(ss);
-    coachRef.current?.reset();
-    llmRef.current?.cancel(crypto.randomUUID());
-    shadowRef.current?.reset();
-    clearCoachLine();
-  }, [resetRun, clearCoachLine]);
+    void waitAudioClock('restart').then((ok) => {
+      // 기다리는 사이 나갔거나 곡이 바뀌었으면 다시 시작하지 않는다
+      if (!ok || clockRef.current !== clock || sessionRef.current !== ss) return;
+      clock.restart();
+      diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
+      resetRun(ss);
+      coachRef.current?.reset();
+      llmRef.current?.cancel(crypto.randomUUID());
+      shadowRef.current?.reset();
+      clearCoachLine();
+    });
+  }, [resetRun, clearCoachLine, waitAudioClock]);
 
   /** 나가기: 기록 없이 곡 선택으로(곡·단계를 골라 둔 채) */
   const leave = useCallback(() => {
@@ -723,6 +741,7 @@ function PlayPageBody() {
     const chartDifficulty = chart?.difficulty ?? detail?.charts.find((c) => c.id === chartIdParam)?.difficulty ?? 'NORMAL';
     return (
       <>
+        <AudioWaitNotice show={audioWaiting} />
         <StageFade stageKey="select">
           <main className="main">
             <SongPicker
@@ -878,6 +897,7 @@ function PlayPageBody() {
           <LazyChartAutoplayRunner clockRef={clockRef} session={playSession} />
         </Suspense>
       )}
+      <AudioWaitNotice show={audioWaiting} />
     </main>
   );
 }

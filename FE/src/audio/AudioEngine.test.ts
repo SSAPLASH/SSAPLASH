@@ -335,3 +335,219 @@ describe('AudioEngine 하이햇 열림/닫힘 선택 (PLAY-002)', () => {
     expect(started).toHaveLength(1); // 합성 노이즈 보이스 하나
   });
 });
+
+// 시작·재개 전 오디오 시계 대기 (설계 MODE-001 오디오 시계 시작 대기 3장)
+describe('AudioEngine.whenClockFlowing', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * 가짜 시계(performance.now도 같은 값을 준다). sleep이 불릴 때마다 시간이 가고, 오디오 시계는 stalls 구간(대기 시작 기준 ms)에서만 멈춘다.
+   * stallMs는 처음부터 그만큼 멈춰 있는 경우의 줄임이다.
+   */
+  async function setup(opts: { stallMs?: number; stalls?: [number, number][]; state?: string; outFresh?: boolean }) {
+    const stalls: [number, number][] = opts.stalls ?? (opts.stallMs ? [[0, opts.stallMs]] : []);
+    const ts: { contextTime?: number; performanceTime?: number } = { contextTime: 0, performanceTime: 0 };
+    let t = 5000;
+    vi.spyOn(performance, 'now').mockImplementation(() => t);
+    const e = await engineWith({ state: opts.state ?? 'running', currentTime: 0, ts });
+    const ctx = e.context as unknown as { currentTime: number; state: string; resume: ReturnType<typeof vi.fn>; createOscillator: () => unknown };
+    ctx.resume.mockClear();
+    const oscillators: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = [];
+    const makeOsc = ctx.createOscillator;
+    ctx.createOscillator = () => {
+      const o = makeOsc() as { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> };
+      oscillators.push(o);
+      return o;
+    };
+    let start = t;
+    const apply = () => {
+      const elapsed = t - start;
+      const stalled = stalls.reduce((sum, [from, to]) => sum + Math.max(0, Math.min(elapsed, to) - from), 0);
+      const flowed = elapsed - stalled;
+      ctx.currentTime = flowed / 1000;
+      if (opts.outFresh !== false && flowed > 0) {
+        ts.contextTime = ctx.currentTime;
+        ts.performanceTime = t;
+      }
+    };
+    const sleeps: number[] = [];
+    const deps = {
+      now: () => t,
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+        t += ms;
+        apply();
+      },
+    };
+    return {
+      e,
+      ctx,
+      deps,
+      sleeps,
+      oscillators,
+      /** 대기를 시작하기 전에 시간을 보낸다(오디오 시계 기준은 대기 시작 시점으로 다시 잡는다) */
+      idle(ms: number) {
+        t += ms;
+        start = t;
+      },
+      /** 방금 소리를 낸 상태로 만든다(출력 장치가 깨어 있음) */
+      sound() {
+        e.click(undefined, false);
+        oscillators.length = 0;
+      },
+    };
+  }
+
+  it('컨텍스트가 없으면 기다리지 않는다', async () => {
+    installMock({ state: 'running', currentTime: 0, ts: {} });
+    const e = new AudioEngine();
+    const r = await e.whenClockFlowing();
+    expect(r).toMatchObject({ timedOut: false, skipped: true, primed: false });
+    // 실제 시계를 쓰므로 0에 가까운 값이다
+    expect(r.waitedMs).toBeLessThan(5);
+  });
+
+  it('running이 아니면 기다리지 않고 깨우는 신호도 틀지 않는다', async () => {
+    const s = await setup({ state: 'suspended' });
+    expect(await s.e.whenClockFlowing(s.deps)).toEqual({ waitedMs: 0, timedOut: false, skipped: true, primed: false });
+    expect(s.sleeps).toEqual([]);
+    expect(s.oscillators).toHaveLength(0);
+  });
+
+  it('방금 소리를 냈고 시계가 흐르고 있으면 150ms 남짓 만에 끝난다(A4). 깨우는 신호는 틀지 않는다', async () => {
+    const s = await setup({});
+    s.sound();
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r).toMatchObject({ timedOut: false, skipped: false, primed: false });
+    expect(r.waitedMs).toBeGreaterThanOrEqual(150);
+    expect(r.waitedMs).toBeLessThanOrEqual(200);
+    expect(new Set(s.sleeps)).toEqual(new Set([20]));
+    expect(s.oscillators).toHaveLength(0);
+  });
+
+  it('소리를 낸 적이 없으면 들리지 않는 신호로 장치를 깨우고 350ms 이상 기다린 뒤 신호를 끈다', async () => {
+    const s = await setup({});
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r).toMatchObject({ timedOut: false, skipped: false, primed: true });
+    expect(r.waitedMs).toBeGreaterThanOrEqual(350);
+    expect(r.waitedMs).toBeLessThanOrEqual(400);
+    expect(s.oscillators).toHaveLength(1);
+    expect(s.oscillators[0].start).toHaveBeenCalledTimes(1);
+    expect(s.oscillators[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('소리를 낸 지 20초 안이면 깨우지 않고, 20초가 넘었으면 다시 깨운다', async () => {
+    const recent = await setup({});
+    recent.sound();
+    recent.idle(19_000);
+    expect((await recent.e.whenClockFlowing(recent.deps)).primed).toBe(false);
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    const old = await setup({});
+    old.sound();
+    old.idle(21_000);
+    expect((await old.e.whenClockFlowing(old.deps)).primed).toBe(true);
+  });
+
+  it('깨운 직후에는 바로 다시 기다려도 깨우지 않는다(깨우는 신호도 소리다)', async () => {
+    const s = await setup({});
+    await s.e.whenClockFlowing(s.deps);
+    s.idle(1000);
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r.primed).toBe(false);
+    expect(s.oscillators).toHaveLength(1);
+  });
+
+  it('깨운 뒤 0.146초에 시계가 0.45초 멈추는 경우(측정): 멈춤이 끝나고 150ms 남짓 뒤에 끝난다', async () => {
+    const s = await setup({ stalls: [[146, 596]] });
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r).toMatchObject({ timedOut: false, primed: true });
+    expect(r.waitedMs).toBeGreaterThanOrEqual(596 + 140);
+    expect(r.waitedMs).toBeLessThanOrEqual(596 + 200);
+  });
+
+  it('깨우지 않았다면 같은 경우에 멈춤 전에 통과해 버린다(깨우는 이유)', async () => {
+    const s = await setup({ stalls: [[146, 596]] });
+    s.sound();
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r.primed).toBe(false);
+    expect(r.waitedMs).toBeLessThan(200);
+  });
+
+  it('700ms 멈췄다 흐르면(첫 접속), 흐른 지 150ms 남짓 뒤에 끝난다', async () => {
+    const s = await setup({ stallMs: 700 });
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r.timedOut).toBe(false);
+    expect(r.waitedMs).toBeGreaterThanOrEqual(850);
+    expect(r.waitedMs).toBeLessThanOrEqual(900);
+  });
+
+  it('출력 시각이 갱신되지 않아도 시계가 500ms 계속 흐르면 끝난다', async () => {
+    const s = await setup({ outFresh: false });
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r.timedOut).toBe(false);
+    expect(r.waitedMs).toBeGreaterThanOrEqual(500);
+    expect(r.waitedMs).toBeLessThanOrEqual(560);
+  });
+
+  it('끝내 흐르지 않으면 3초 뒤 timedOut으로 끝나고 신호를 끈다(A5)', async () => {
+    const s = await setup({ stallMs: 60_000 });
+    const r = await s.e.whenClockFlowing(s.deps);
+    expect(r).toMatchObject({ timedOut: true, skipped: false });
+    expect(r.waitedMs).toBeGreaterThanOrEqual(3000);
+    expect(r.waitedMs).toBeLessThan(3050);
+    expect(s.oscillators[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('최대 대기를 바꿀 수 있다', async () => {
+    const s = await setup({ stallMs: 60_000 });
+    const r = await s.e.whenClockFlowing({ ...s.deps, maxMs: 400 });
+    expect(r.timedOut).toBe(true);
+    expect(r.waitedMs).toBeGreaterThanOrEqual(400);
+    expect(r.waitedMs).toBeLessThan(450);
+  });
+
+  it('기다리는 동안 resume()을 다시 부르지 않는다', async () => {
+    const s = await setup({ stallMs: 700 });
+    await s.e.whenClockFlowing(s.deps);
+    expect(s.ctx.resume).not.toHaveBeenCalled();
+  });
+
+  it('기다리는 도중 컨텍스트가 멈추면(suspended) 바로 끝내고 신호를 끈다', async () => {
+    const s = await setup({ stallMs: 60_000 });
+    let n = 0;
+    const r = await s.e.whenClockFlowing({
+      now: s.deps.now,
+      sleep: async (ms) => {
+        await s.deps.sleep(ms);
+        if (++n === 3) s.ctx.state = 'suspended';
+      },
+    });
+    expect(r).toMatchObject({ timedOut: false, skipped: true });
+    expect(r.waitedMs).toBe(60);
+    expect(s.oscillators[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('패드 소리가 음소거면 소리를 낸 것으로 치지 않는다(무음은 장치를 깨우지 못한다)', async () => {
+    // 이 모의 컨텍스트는 합성음 노드를 만들지 못해 trigger가 던진다. 소리를 낸 시각은 그 전에 기록된다
+    const hit = (e: AudioEngine) => {
+      try {
+        e.trigger('SNARE', 100);
+      } catch {
+        // 모의 한계
+      }
+    };
+    const muted = await setup({});
+    muted.e.setPadMuted(true);
+    hit(muted.e);
+    expect((await muted.e.whenClockFlowing(muted.deps)).primed).toBe(true);
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    const audible = await setup({});
+    hit(audible.e);
+    expect((await audible.e.whenClockFlowing(audible.deps)).primed).toBe(false);
+  });
+});

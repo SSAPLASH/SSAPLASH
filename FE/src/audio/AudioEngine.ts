@@ -2,6 +2,7 @@
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
 import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
+import { CLOCK_POLL_MS, CLOCK_WAIT_MAX_MS, PRIMED_MIN_WAIT_MS, SOUND_RECENT_MS, clockFlowing, type ClockSample } from '@/domain/audioClock';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -42,6 +43,26 @@ function noiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
   return buf;
 }
 
+export interface ClockWaitOptions {
+  /** 최대 대기(ms). 기본 CLOCK_WAIT_MAX_MS */
+  maxMs?: number;
+  /** performance.now 같은 시계(테스트 주입) */
+  now?: () => number;
+  /** ms만큼 기다리는 함수(테스트 주입) */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+export interface ClockWaitResult {
+  /** 기다린 시간(ms) */
+  waitedMs: number;
+  /** 최대 대기를 넘어 포기했다 */
+  timedOut: boolean;
+  /** 컨텍스트가 없거나 running이 아니어서 기다리지 않았다 */
+  skipped: boolean;
+  /** 출력 장치가 쉬고 있을 수 있어 들리지 않는 신호로 먼저 깨웠다 */
+  primed: boolean;
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -56,6 +77,8 @@ export class AudioEngine {
   private songVolume = 1;
   /** 메트로놈 클릭 음량(0~1) */
   private clickVolume = 1;
+  /** 마지막으로 들리는 소리를 예약한 시각(performance.now). 출력 장치가 깨어 있는지 가늠한다 */
+  private lastSoundPerf = -Infinity;
   private stateListeners = new Set<(state: string) => void>();
   private noise: AudioBuffer | null = null;
   private voices: Record<PadId, Voice>;
@@ -266,6 +289,75 @@ export class AudioEngine {
     return a.contextSec + (perfMs - a.perfMs) / 1000;
   }
 
+  /** 지금의 화면 시계·오디오 시계 값. 컨텍스트가 없거나 running이 아니면 null (곡 도중 멈춤 진단용) */
+  clockReading(): { perfMs: number; ctxSec: number } | null {
+    if (!this.ctx || this.ctx.state !== 'running') return null;
+    return { perfMs: performance.now(), ctxSec: this.ctx.currentTime };
+  }
+
+  /**
+   * 출력 장치를 깨우는 신호: 들리지 않지만 0은 아닌 30Hz. 음량 설정과 무관하게 destination에 바로 잇는다.
+   * 반환한 함수로 멈춘다.
+   */
+  private startPrimer(ctx: AudioContext): () => void {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.frequency.value = 30;
+    g.gain.value = 0.0005;
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    return () => {
+      try {
+        o.stop();
+      } catch {
+        // 이미 멈춘 소스
+      }
+      o.disconnect();
+    };
+  }
+
+  /**
+   * 오디오 시계가 실제로 흐를 때까지 기다린다 (설계 MODE-001 오디오 시계 시작 대기). 시작·재개에서 시계를 움직이기 전에 부른다.
+   * 두 가지를 막는다.
+   * (1) 출력을 막 깨운 직후(첫 접속 등)에는 running이어도 currentTime이 0.5~1.2초 멈춰 있다.
+   * (2) 출력이 30~45초 넘게 조용했으면 장치가 쉬고 있어, 다음 첫 소리가 나기 시작한 직후 오디오 시계가 0.4~0.8초 멈춘다.
+   * 어느 쪽이든 그동안 예약한 클릭은 몰리고 한 번만 예약하는 반주는 곡 내내 늦는다.
+   * 최근(SOUND_RECENT_MS)에 소리를 낸 적이 없으면 들리지 않는 신호로 장치를 먼저 깨우고 PRIMED_MIN_WAIT_MS 이상 기다린다.
+   * 20ms마다 표본을 읽어 domain/audioClock.clockFlowing이 참이면 끝낸다. 최대 대기를 넘으면 timedOut으로 끝내고(그냥 시작),
+   * 컨텍스트가 없거나 running이 아니면 skipped로 바로 끝낸다. 거절하지 않는다. resume()은 부르지 않는다 — 사용자 제스처 안의 ensure()가 이미 했다.
+   */
+  async whenClockFlowing(opts: ClockWaitOptions = {}): Promise<ClockWaitResult> {
+    const now = opts.now ?? (() => performance.now());
+    const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    const maxMs = opts.maxMs ?? CLOCK_WAIT_MAX_MS;
+    const start = now();
+    const first = this.ctx;
+    if (!first || first.state !== 'running') return { waitedMs: 0, timedOut: false, skipped: true, primed: false };
+    const primed = start - this.lastSoundPerf > SOUND_RECENT_MS;
+    const stopPrimer = primed ? this.startPrimer(first) : null;
+    if (primed) this.lastSoundPerf = start;
+    const minMs = primed ? PRIMED_MIN_WAIT_MS : 0;
+    const samples: ClockSample[] = [];
+    try {
+      for (;;) {
+        const t = now();
+        const ctx = this.ctx;
+        if (!ctx || ctx.state !== 'running') return { waitedMs: t - start, timedOut: false, skipped: true, primed };
+        const ts = ctx.getOutputTimestamp();
+        samples.push({
+          perfMs: t,
+          ctxSec: ctx.currentTime,
+          outPerfMs: ts.performanceTime !== undefined && ts.performanceTime > 0 ? ts.performanceTime : null,
+        });
+        if (t - start >= minMs && clockFlowing(samples)) return { waitedMs: t - start, timedOut: false, skipped: false, primed };
+        if (t - start >= maxMs) return { waitedMs: t - start, timedOut: true, skipped: false, primed };
+        await sleep(CLOCK_POLL_MS);
+      }
+    } finally {
+      stopPrimer?.();
+    }
+  }
+
   /** AudioContext 시각(초) → performance.now 기준 시각. 컨텍스트가 없으면 performance.now() */
   contextToPerfTime(ctxTime: number): number {
     if (!this.ctx) return performance.now();
@@ -308,6 +400,8 @@ export class AudioEngine {
   /** gate가 있으면 padBus 대신 그 노드로 소리를 보낸다(취소용 관문) */
   private fire(pad: PadId, velocity: number, whenMs: number | undefined, gate: AudioNode | null): { perfMs: number; ctxAt: number } | null {
     if (!this.ctx || !this.padBus || this.ctx.state !== 'running') return null;
+    // 음소거·음량 0이면 출력은 무음이라 장치를 깨우지 못한다
+    if (!this.padMuted && this.drumVolume > 0) this.lastSoundPerf = performance.now();
     const ctx = this.ctx;
     const out = gate ?? this.padBus;
     const v = Math.pow(Math.max(1, Math.min(127, velocity)) / 127, 1.4);
@@ -355,6 +449,7 @@ export class AudioEngine {
   click(whenMs: number | undefined, accent: boolean): number | null {
     if (!this.ctx || !this.master || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
+    this.lastSoundPerf = performance.now();
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
     const o = ctx.createOscillator();
     const g = ctx.createGain();

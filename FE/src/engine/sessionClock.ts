@@ -3,6 +3,7 @@
 import { diagTap } from './diagTap';
 import type { RhythmSession } from './RhythmSession';
 import { beatTimeMs } from '@/domain/tempo';
+import { clockStalled } from '@/domain/audioClock';
 
 /** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
 export const CLICK_LOOKAHEAD_MS = 200;
@@ -46,6 +47,8 @@ export interface PlayClockDeps {
   onBeat?(beatInBar: number, atMs: number): void;
   /** 세션이 끝났을 때 1회 */
   onFinish?(): void;
+  /** 지금의 화면 시계·오디오 시계 값(곡 도중 멈춤 진단용). 없거나 null이면 진단하지 않는다 */
+  audioClock?(): { perfMs: number; ctxSec: number } | null;
 }
 
 export type ClockPhase = 'idle' | 'running' | 'paused' | 'finished';
@@ -64,6 +67,9 @@ export class PlayClock {
   private pausedSongTime = 0;
   private _state: ClockState = { phase: 'idle', reason: null };
   private lastDriftAt = -Infinity;
+  private lastStallAt = -Infinity;
+  /** 직전에 읽은 (화면 시계 − 오디오 시계) 차이(ms). 시작·일시정지·재개에서 비운다 */
+  private prevClockOffset: number | null = null;
   private _sync: { begin: number | null; resume: number | null } = { begin: null, resume: null };
 
   constructor(session: RhythmSession, deps: PlayClockDeps) {
@@ -121,6 +127,7 @@ export class PlayClock {
     const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.preRollMs - this.session.originMs);
     this.nextBeat = 0;
     this.lastDriftAt = -Infinity;
+    this.resetStall();
     this._sync = { begin: null, resume: null };
     this.session.start(at);
     this.deps.accompaniment?.start(at, 0);
@@ -158,6 +165,7 @@ export class PlayClock {
     if (this._state.phase !== 'running' || this.session.currentStatus === 'paused') return;
     const t = this.session.songTime(now);
     this.measureAccDrift(now, t);
+    this.measureClockStall(now, t);
     const countInBeats = Math.round(this.session.countInMs / this.session.beatMs);
     const beatsPerBar = this.session.chart.beatsPerBar;
     const duration = this.session.chart.durationMs;
@@ -190,6 +198,27 @@ export class PlayClock {
     diagTap.publish({ type: 'accDrift', songTimeMs, audioPosMs, driftMs: audioPosMs - songTimeMs });
   }
 
+  private resetStall(): void {
+    this.lastStallAt = -Infinity;
+    this.prevClockOffset = null;
+  }
+
+  /**
+   * 곡 도중 오디오 시계가 멈췄다 흐른 흔적을 ACC_DRIFT_INTERVAL_MS마다 진단 탭에 낸다(처리 없음, 설계 MODE-001 오디오 시계 시작 대기 D6).
+   * (화면 시계 − 오디오 시계) 차이가 직전보다 CLOCK_STALL_MS 넘게 커졌으면 그만큼 멈췄던 것이다. 구독자가 없으면 건너뛴다.
+   */
+  private measureClockStall(now: number, songTimeMs: number): void {
+    if (!diagTap.active || now - this.lastStallAt < ACC_DRIFT_INTERVAL_MS) return;
+    const r = this.deps.audioClock?.();
+    if (!r) return;
+    this.lastStallAt = now;
+    const offset = r.perfMs - r.ctxSec * 1000;
+    if (clockStalled(this.prevClockOffset, offset)) {
+      diagTap.publish({ type: 'audioClockStall', songTimeMs, jumpMs: Math.round(offset - (this.prevClockOffset ?? offset)) });
+    }
+    this.prevClockOffset = offset;
+  }
+
   /** 세션·반주를 한 번에 멈춘다. 이미 예약된 클릭은 지난 것만(최대 lookahead) 울린다 */
   pause(reason: string): void {
     if (this._state.phase !== 'running') return;
@@ -199,6 +228,7 @@ export class PlayClock {
     this.session.pause(now);
     this.deps.accompaniment?.pause();
     this.lastDriftAt = -Infinity;
+    this.resetStall();
     this._state = { phase: 'paused', reason };
   }
 
