@@ -67,7 +67,7 @@ describe('CalibrationStage 보정 진행', () => {
     expect(container.querySelector('[aria-label="왼손 1/2"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
     expect(container.querySelectorAll('.drum-pad-lit').length).toBe(1);
-    expect(container.querySelectorAll('.drum-pad-dim').length).toBe(7);
+    expect(container.querySelectorAll('.drum-pad-dim').length).toBe(8); // 하이햇 페달까지 9패드 중 목표 하나만 켜진다
     expect(container.querySelector('.drum-pad-ghost')).toBeNull();
     expect(container.querySelectorAll('button').length).toBe(0);
     expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();

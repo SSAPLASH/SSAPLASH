@@ -117,3 +117,19 @@ describe('KitCanvas 기준면 등록(포인터 모의 IMU)', () => {
     expect(pose.pitch).toBeCloseTo(-(snare.y - 0.5) * 70, 3);
   });
 });
+
+describe('KitCanvas 드럼 그림(보정 화면과 같은 DrumKit)', () => {
+  it('하이햇 페달까지 9패드를 스킨 그림으로 그리고, 선택 패드에 선택 링을 그린다', () => {
+    const { wrap } = setup({ highlightPad: 'SNARE' });
+    expect(wrap.querySelectorAll('.drum-kit .drum-pad').length).toBe(9);
+    expect(wrap.querySelector('[data-selected-pad="SNARE"]')).not.toBeNull();
+    // 실물 스킨은 data-skin이 없다
+    expect(wrap.querySelector('.drum-kit')?.getAttribute('data-skin')).toBeNull();
+  });
+
+  it('skin을 넘기면 그 스킨으로 그린다', () => {
+    const { wrap } = setup({ skin: 'neon' });
+    expect(wrap.querySelector('.drum-kit')?.getAttribute('data-skin')).toBe('neon');
+    expect(wrap.querySelectorAll('.drum-pad[data-skin="neon"]').length).toBe(9);
+  });
+});
