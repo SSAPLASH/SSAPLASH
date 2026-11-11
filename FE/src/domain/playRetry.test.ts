@@ -1,7 +1,7 @@
 // 다시 하기 경로 테스트
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_CHARTS } from './chart';
-import { retryPathOf } from './playRetry';
+import { RETRY_AUTOSTART_STATE, retryPathOf } from './playRetry';
 
 const builtinSongId = BUILTIN_CHARTS[1].songId;
 
@@ -28,5 +28,10 @@ describe('retryPathOf', () => {
     const log = { mode: 'SHEET', songNumericId: null, chartId: null, songId: builtinSongId };
     expect(retryPathOf(log, { songsSource: 'builtin' })).toBe('/sheet?song=-2&chart=-2&start=1');
     expect(retryPathOf({ ...log, songId: 'zz' }, { songsSource: 'builtin' })).toBe('/sheet');
+  });
+
+  it('리듬 게임 다시 하기는 주소가 아니라 navigate state로 바로 시작을 알린다', () => {
+    expect(RETRY_AUTOSTART_STATE).toEqual({ autoStart: true });
+    expect(retryPathOf({ mode: 'RHYTHM', songNumericId: 7, chartId: 9, songId: 'x' }, { songsSource: 'api' })).not.toContain('start');
   });
 });
