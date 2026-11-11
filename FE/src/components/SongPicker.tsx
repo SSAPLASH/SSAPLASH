@@ -262,11 +262,11 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   // `?song={id}`: 내 곡 탭의 목록에 그 곡이 있고 완료 상태면 선택된 채로 연다
   const deepLinkId = useMemo(() => {
     const n = Number(params.get('song'));
-    return Number.isInteger(n) && n > 0 ? n : null;
+    return Number.isInteger(n) && n !== 0 ? n : null;
   }, [params]);
   const deepChartId = useMemo(() => {
     const n = Number(params.get('chart'));
-    return Number.isInteger(n) && n > 0 ? n : null;
+    return Number.isInteger(n) && n !== 0 ? n : null;
   }, [params]);
   // 기본 곡·라이브러리 탭 모두 주소의 곡을 골라 둔다
   const deepTarget =
@@ -437,6 +437,7 @@ export function SongPicker({ onStart, mode, starting }: Props) {
                 key={`${tab}|${query}|${level}`}
                 songs={songs}
                 selectedId={selectedId}
+                revealId={deepTarget?.id ?? null}
                 onSelect={pick}
                 onOpen={(id) => {
                   pick(id);
@@ -465,6 +466,8 @@ export function SongPicker({ onStart, mode, starting }: Props) {
                 bestByChart,
                 starting,
                 onStart: () => selectedId !== null && start(selectedId),
+                // 리듬 게임은 주소로 골라 둔 곡이면 ▶ 플레이에 포커스를 준다. 악보 연습은 시작 확인 창이 포커스를 가져간다
+                focusStart: mode === 'play' && deepTarget !== undefined && selectedId === deepTarget.id,
               }}
               similar={similarCard}
               onSimilarPick={viewSimilar}
