@@ -1,7 +1,7 @@
 // 가상 드럼 키트 캔버스. 세팅의 배치 확인(손별 앵커 원·자세 마커)과 로그인 화면 장식에 공용. 끌기 편집은 draggable일 때만(kit-drag 설계 D6).
 import { useEffect, useRef } from 'react';
 import { LANE_PADS, PAD_META, type PadId } from '@/domain/pads';
-import type { KitLayout } from '@/domain/kitLayout';
+import { padCenterPx, radiusBasisOf, type KitLayout } from '@/domain/kitLayout';
 import type { HitFx, Pose } from '@/domain/events';
 import type { HandAnchorSet } from '@/domain/calibration';
 import { DEFAULT_ANGLE_RANGE, poseToScreen, radiusToScreen, type AngleRange } from '@/domain/kitMapping';
@@ -112,6 +112,8 @@ export function KitCanvas(props: KitCanvasProps) {
       ctx.clearRect(0, 0, W, H);
       const now = performance.now();
       const range = p.angleRange ?? DEFAULT_ANGLE_RANGE;
+      // 원 반지름 기준 길이: 배치 x·y는 W·H에 펼치되 크기는 16:10일 때 W, 더 넓으면 H×1.6(원이 커지지 않게)
+      const S = radiusBasisOf({ w: W, h: H });
 
       // 손별 앵커 영역(보정 결과). 색은 손, 중심 점은 패드 색
       if (p.anchorSets) {
@@ -121,7 +123,7 @@ export function KitCanvas(props: KitCanvasProps) {
           for (const a of Object.values(set)) {
             if (!a) continue;
             const s = poseToScreen(a, range);
-            const r = radiusToScreen(a.radius, range) * W;
+            const r = radiusToScreen(a.radius, range) * S;
             ctx.beginPath();
             ctx.arc(s.x * W, s.y * H, r, 0, Math.PI * 2);
             ctx.fillStyle = color + '14';
@@ -142,9 +144,7 @@ export function KitCanvas(props: KitCanvasProps) {
       // 패드
       for (const pad of LANE_PADS) {
         const pl = p.layout[pad];
-        const cx = pl.x * W;
-        const cy = pl.y * H;
-        const r = pl.r * W;
+        const { cx, cy, r } = padCenterPx(pl, { w: W, h: H });
         const meta = PAD_META[pad];
         const fx = p.hits?.current?.get(pad);
         const age = fx ? now - fx.at : Infinity;
@@ -209,9 +209,7 @@ export function KitCanvas(props: KitCanvasProps) {
           if (!fx) continue;
           const age = now - fx.at;
           const pl = p.layout[pad];
-          const cx = pl.x * W;
-          const cy = pl.y * H;
-          const r = pl.r * W;
+          const { cx, cy, r } = padCenterPx(pl, { w: W, h: H });
           const color = PAD_META[pad].color;
           if (age < RING_MS) {
             const u = age / RING_MS;
@@ -277,12 +275,11 @@ export function KitCanvas(props: KitCanvasProps) {
     const rect = wrapRef.current!.getBoundingClientRect();
     const nx = (clientX - rect.left) / rect.width;
     const ny = (clientY - rect.top) / rect.height;
-    const aspect = rect.width / rect.height;
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
     for (const pad of [...LANE_PADS].reverse()) {
-      const pl = propsRef.current.layout[pad];
-      const dx = nx - pl.x;
-      const dy = (ny - pl.y) / aspect;
-      if (Math.hypot(dx, dy) <= pl.r) return { pad, nx, ny };
+      const { cx, cy, r } = padCenterPx(propsRef.current.layout[pad], { w: rect.width, h: rect.height });
+      if (Math.hypot(px - cx, py - cy) <= r) return { pad, nx, ny };
     }
     return null;
   };

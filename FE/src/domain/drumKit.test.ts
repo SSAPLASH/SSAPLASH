@@ -8,6 +8,8 @@ import {
   kitPadsFor,
   DRUM_KIT_W,
   fitScale,
+  fitScaleBox,
+  padFrameCircle,
   kitSizeAt,
   labelFontSize,
   visualPadOf,
@@ -79,6 +81,19 @@ describe('fitScale', () => {
     expect(fitScale(1520, 1)).toBe(1);
     expect(fitScale(1520, 2)).toBe(2);
     expect(fitScale(532, 1)).toBeCloseTo(0.7);
+  });
+});
+
+describe('fitScaleBox (contain)', () => {
+  it('폭·높이 하나라도 0 이하면 0', () => {
+    expect(fitScaleBox(0, 300, 4)).toBe(0);
+    expect(fitScaleBox(760, 0, 4)).toBe(0);
+  });
+  it('min(maxScale, w/760, h/300)', () => {
+    expect(fitScaleBox(1520, 300, 4)).toBe(1); // 높이가 제한
+    expect(fitScaleBox(760, 900, 4)).toBe(1); // 폭이 제한
+    expect(fitScaleBox(1520, 600, 4)).toBe(2);
+    expect(fitScaleBox(5000, 5000, 4)).toBe(4); // 상한
   });
 });
 
@@ -159,5 +174,19 @@ describe('layoutToKitPoint', () => {
     const { layoutToKitPoint } = await import('./drumKit');
     expect(layoutToKitPoint({ x: 0.3, y: 0 })).toEqual({ x: 0.3, y: 0.15 });
     expect(layoutToKitPoint({ x: 0.3, y: 1 }).y).toBeCloseTo(0.77);
+  });
+});
+
+describe('padFrameCircle (contain 환산)', () => {
+  it('킷이 틀을 폭으로 꽉 채우는 760×300 틀에서는 점 좌표가 그대로고 반지름은 w/2/760', () => {
+    const c = padFrameCircle('SNARE', { x: 0.5, y: 0.5 }, 'acoustic', { w: 760, h: 300 });
+    expect(c.x).toBeCloseTo(0.5);
+    expect(c.y).toBeCloseTo(0.5);
+    // S = min(760, 480) = 480, scale 1 → r = w/2/480
+    expect(c.r).toBeGreaterThan(0);
+  });
+  it('가로로 넓은 틀에서는 킷이 가운데에 놓여 x가 안쪽으로 모인다', () => {
+    const c = padFrameCircle('SNARE', { x: 0, y: 0.5 }, 'acoustic', { w: 2000, h: 300 });
+    expect(c.x).toBeCloseTo((2000 - 760) / 2 / 2000);
   });
 });
