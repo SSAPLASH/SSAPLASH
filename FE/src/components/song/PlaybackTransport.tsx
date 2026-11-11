@@ -18,6 +18,10 @@ interface Props {
   showBack?: boolean;
   /** 재생·일시정지 글리프 크기(기본 30) */
   glyphSize?: number;
+  /** 10초 아이콘 크기(기본 24) */
+  skipIconSize?: number;
+  /** 참이면 10초 버튼만 비활성으로 그린다(쉬는 상태: 재생 버튼은 눌러 시작할 수 있다) */
+  skipsDisabled?: boolean;
   playLabel: string;
   pauseLabel: string;
   backLabel?: string;
@@ -36,6 +40,8 @@ export function PlaybackTransport({
   skips = true,
   showBack = true,
   glyphSize = 30,
+  skipIconSize = 24,
+  skipsDisabled = false,
   playLabel,
   pauseLabel,
   backLabel = '10초 뒤로',
@@ -57,9 +63,9 @@ export function PlaybackTransport({
     <div className={cls}>
       {skips ? (
         showBack && (
-          <IconButton size="sm" className="playback-skip" label={backLabel} disabled={disabled} onClick={() => skip('back')}>
+          <IconButton size="sm" className="playback-skip" label={backLabel} disabled={disabled || skipsDisabled} onClick={() => skip('back')}>
             <span key={spin?.dir === 'back' ? spin.n : 0} className={`playback-icon ${spinning('back')}`}>
-              <Back10Icon />
+              <Back10Icon size={skipIconSize} />
             </span>
           </IconButton>
         )
@@ -73,9 +79,9 @@ export function PlaybackTransport({
         </span>
       </IconButton>
       {skips ? (
-        <IconButton size="sm" className="playback-skip" label={forwardLabel} disabled={disabled} onClick={() => skip('forward')}>
+        <IconButton size="sm" className="playback-skip" label={forwardLabel} disabled={disabled || skipsDisabled} onClick={() => skip('forward')}>
           <span key={spin?.dir === 'forward' ? spin.n : 0} className={`playback-icon ${spinning('forward')}`}>
-            <Forward10Icon />
+            <Forward10Icon size={skipIconSize} />
           </span>
         </IconButton>
       ) : (
