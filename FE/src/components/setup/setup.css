@@ -709,6 +709,17 @@
 .setup-chips-plus {
   flex: none;
 }
+/* [프리셋 관리]: 칩 줄 오른쪽 끝. 추가하기보다 한 단계 낮은 색 */
+.setup-chips-manage {
+  color: var(--text-2);
+}
+/* 판 오른쪽 위에 고정하는 동작 버튼([전체 보정]). 정보 카드(아래 모서리)·배너(아래 가운데)와 겹치지 않는다 */
+.setup-stage-action {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
 
 /* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64·PLAY-004 D8): 2열 한 줄, 요약만 보이는 버튼 ---- */
 .setup-tiles {
@@ -968,7 +979,90 @@
 }
 .setup-slot-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.setup-slot-count {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.setup-slot-error {
+  margin: 0;
+  color: var(--miss);
+  font-size: 14px;
+  line-height: 1.45;
+}
+/* 저장 슬롯 감싸개: 적용 버튼(카드 전체) 위 오른쪽 구석에 휴지통을 겹친다(버튼 안에 버튼을 넣지 않기 위해) */
+.setup-slot-cell {
+  position: relative;
+  display: flex;
+}
+.setup-slot-cell > .setup-slot {
+  flex: 1;
+  min-width: 0;
+}
+/* 휴지통 자리를 비워 「적용 중」과 겹치지 않게 한다 */
+.setup-slot-cell.has-delete .setup-slot-top {
+  padding-right: 28px;
+  min-height: 24px;
+}
+.setup-slot-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+.setup-slot-delete:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--miss);
+}
+.setup-slot-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 삭제 확인: 카드 자리를 그대로 쓰고 안쪽만 질문·버튼으로 바꾼다 */
+.setup-slot.is-confirm {
+  justify-content: space-between;
+  border-color: var(--miss);
+  cursor: default;
+}
+.setup-slot.is-confirm.active {
+  border: 2px solid var(--miss);
+}
+.setup-slot-question {
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.setup-slot-question b {
+  font-weight: 600;
+}
+.setup-slot-confirm-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.setup-slot-confirm-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+.setup-slot-confirm-row > .ui-btn {
+  flex: 1;
+  min-width: 0;
 }
 
 /* =====================================================================
