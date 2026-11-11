@@ -37,7 +37,12 @@ export interface NoteHighwayProps {
   overlay?: ReactNode;
   /** 하이웨이 상단 가운데에 얹는 것(콤보 표시). 레인 이름 줄 아래 */
   topOverlay?: ReactNode;
+  /** 하이웨이 위쪽을 덮는 것(게임 HUD)의 높이(px). 레인 이름 줄과 topOverlay를 그만큼 내린다. 노트는 그대로 맨 위에서 나온다 */
+  topInset?: number;
 }
+/** 판정 글씨 크기(px). PERFECT만 한 단계 크다 */
+const POPUP_FONT_PERFECT = 32;
+const POPUP_FONT = 26;
 const JUDGE_LABEL: Record<Judgement, string> = { PERFECT: 'PERFECT', GOOD: 'GOOD', MISS: 'MISS' };
 
 const FONT = 'Pretendard Variable, Pretendard, sans-serif';
@@ -195,7 +200,7 @@ export function NoteHighway(props: NoteHighwayProps) {
         ctx.font = '400 12px Pretendard Variable, Pretendard, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(PAD_META[pad].label, cx, 16);
+        ctx.fillText(PAD_META[pad].label, cx, (p.topInset ?? 0) + 16);
         if (p.keyMap) {
           const keys = Object.entries(p.keyMap)
             .filter(([, b]) => b.pad === pad)
@@ -256,26 +261,28 @@ export function NoteHighway(props: NoteHighwayProps) {
           const li = lanes.indexOf(pop.pad);
           const look = popupLook(pop.judgement, age, reduced);
           const cx = laneCenterX(layout, li) + look.dx;
-          const y = judgeY - 70 - look.rise;
+          const y = judgeY - 84 - look.rise;
           const color = judgeColor[pop.judgement];
-          const size = pop.judgement === 'PERFECT' ? 22 : 17;
+          const size = pop.judgement === 'PERFECT' ? POPUP_FONT_PERFECT : POPUP_FONT;
           ctx.save();
-          ctx.translate(cx, y);
-          ctx.scale(look.scale, look.scale);
           ctx.font = `800 ${size}px ${FONT}`;
+          // 글씨가 레인보다 넓어 양 끝 레인에서는 캔버스 밖으로 잘린다. 글씨 반폭만큼 안쪽으로 당긴다
+          const half = (ctx.measureText(JUDGE_LABEL[pop.judgement]).width * look.scale) / 2 + 6;
+          ctx.translate(Math.min(Math.max(cx, half), Math.max(half, W - half)), y);
+          ctx.scale(look.scale, look.scale);
           if (pop.judgement !== 'MISS') {
             ctx.globalAlpha = look.alpha * (pop.judgement === 'PERFECT' ? 0.35 : 0.3);
             ctx.strokeStyle = color;
-            ctx.lineWidth = pop.judgement === 'PERFECT' ? 6 : 4;
+            ctx.lineWidth = pop.judgement === 'PERFECT' ? 8 : 6;
             ctx.strokeText(JUDGE_LABEL[pop.judgement], 0, 0);
           }
           ctx.globalAlpha = look.alpha;
           ctx.fillStyle = color;
           ctx.fillText(JUDGE_LABEL[pop.judgement], 0, 0);
           if (pop.deltaMs !== null && pop.judgement !== 'PERFECT') {
-            ctx.font = `600 12px ${FONT}`;
+            ctx.font = `600 15px ${FONT}`;
             ctx.fillStyle = 'rgba(243,239,230,0.8)';
-            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, 0, 18);
+            ctx.fillText(pop.deltaMs > 0 ? `늦음 +${pop.deltaMs.toFixed(0)}` : `빠름 ${pop.deltaMs.toFixed(0)}`, 0, 26);
           }
           ctx.restore();
         }
@@ -292,7 +299,11 @@ export function NoteHighway(props: NoteHighwayProps) {
     <div ref={wrapRef} className="play-highway">
       <canvas ref={canvasRef} />
       {props.fxSource && <FxCanvas space="pixel" mode="game" source={props.fxSource} locate={locate} />}
-      {props.topOverlay && <div className="play-highway-top">{props.topOverlay}</div>}
+      {props.topOverlay && (
+        <div className="play-highway-top" style={props.topInset ? { top: props.topInset + 34 } : undefined}>
+          {props.topOverlay}
+        </div>
+      )}
       {props.overlay && <div className="play-highway-overlay">{props.overlay}</div>}
     </div>
   );

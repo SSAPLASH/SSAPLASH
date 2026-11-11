@@ -73,6 +73,8 @@ import { useSongs, type LoadedChart } from '@/store/songStore';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = PlayStageName;
+/** 하이웨이 위에 겹쳐 뜨는 HUD가 덮는 높이(px, PlayStage.css의 HUD 위 여백 8 + 높이 96). 레인 이름·콤보를 그 아래로 내린다 */
+const GAME_HUD_INSET = 104;
 
 /** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
 const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
@@ -695,10 +697,10 @@ function PlayPageBody() {
   useEffect(() => {
     if (stage !== 'ready' || songIdParam === null || fallbackChart === null) return;
     selectParam(songIdParam, fallbackChart, { replace: true });
-  }, [stage, songIdParam, fallbackChart, selectParam]);
-
     // 시작 대기 대상도 바꾼 단계를 따라간다
     setStartTarget((t) => (t === null ? t : { song: songIdParam, chart: fallbackChart }));
+  }, [stage, songIdParam, fallbackChart, selectParam]);
+
   const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError;
   // 팝업을 띄워야 하는 경우: 기기 준비 안 됨(E3) · 불러오기 실패(E5) · 스네어 재정렬(E8)
   const popupWanted = startOpen && (!ready || loadError !== null || realign.pending);
@@ -828,6 +830,7 @@ function PlayPageBody() {
             keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
             onFrame={onFrame}
             fxSource={laneFx.source}
+            topInset={GAME_HUD_INSET}
             topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
             overlay={
               settings.timingBar ? (
@@ -847,7 +850,7 @@ function PlayPageBody() {
         kit={
           <div className="coach-kit">
             <DrumKit
-              scale={0.7}
+              scale={0.5}
               effects
               states={padStates}
               labels={false}
