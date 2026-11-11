@@ -301,14 +301,17 @@
   stroke: #5b6677;
   stroke-width: 2;
 }
-/* 스틱은 검정. 어두운 판 위에서 보이도록 밝은 외곽선을 두른다 */
+/* 스틱은 브랜드 파랑에 은은한 네온 빛(안쪽은 또렷하게, 바깥은 넓고 옅게) */
 .pose-guide-stick {
-  fill: #0b0d10;
-  stroke: var(--text-2);
-  stroke-width: 1.5;
+  fill: var(--brand);
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--brand) 90%, transparent)) drop-shadow(0 0 6px color-mix(in srgb, var(--brand) 45%, transparent));
 }
+/* 벌어진 자세 윤곽에는 빛을 넣지 않는다 */
 .pose-guide-ghost {
   opacity: 0.3;
+}
+.pose-guide-ghost .pose-guide-stick {
+  filter: none;
 }
 .pose-guide-tip {
   fill: var(--text-1);
