@@ -154,13 +154,21 @@ describe('SettingsPage 기기 행', () => {
   it('센서 양손 연결됨', () => {
     put(useSettings, { sensorKind: 'ble' });
     put(useLive, { connected: [true, true] });
-    expect(render()).toContain('>연결됨<');
+    expect(render()).toContain('>왼손·오른손 연결됨<');
+  });
+
+  it('동글 소스는 페달을 포함해 빠진 기기를 말한다(E4)', () => {
+    put(useSettings, { sensorKind: 'webserial' });
+    put(useLive, { connected: [true, true], pedal: { connected: [false, false], battery: null } });
+    const html = render();
+    expect(html).toContain('페달 연결 안 됨');
+    expect(html).toContain('스틱·페달 연결');
   });
 
   it('센서 한 손만', () => {
     put(useSettings, { sensorKind: 'ble' });
     put(useLive, { connected: [true, false] });
-    expect(render()).toContain('한 손만 연결됨');
+    expect(render()).toContain('오른손 연결 안 됨');
   });
 
   it('센서 미연결', () => {
