@@ -11,6 +11,7 @@ import { formatClock } from '@/domain/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 import { isListening, type SongPlayback } from '@/domain/songPlayback';
 import './studio.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 interface Props {
   song: SongSummary;
@@ -72,14 +73,9 @@ export function SongPlayBar({ song, playback }: Props) {
             <span className={`song-playbar-track${view.phase === 'loading' ? ' is-loading' : ''}`} aria-hidden="true" />
             {view.phase === 'loading' && <p className="song-playbar-text">반주를 불러오는 중…</p>}
             {view.phase === 'error' && (
-              <p className="song-playbar-text is-error">
-                <span role="alert" title={view.errorText ?? undefined}>
-                  {view.errorText}
-                </span>
-                <button type="button" className="song-playbar-retry" onClick={playback.onRetry}>
-                  다시 시도
-                </button>
-              </p>
+              <InlineError plain className="song-playbar-text" title={view.errorText ?? undefined} onRetry={playback.onRetry}>
+                {view.errorText}
+              </InlineError>
             )}
           </>
         )}

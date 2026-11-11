@@ -24,6 +24,7 @@ import {
 } from '@/domain/playLogView';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
+import { InlineError } from '@/components/ui/InlineError';
 
 const FILTERS: { value: HistoryFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },
@@ -83,7 +84,8 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
   }
 
   const error = status === 'authenticated' && current?.plays === null;
-  const errorNotice = error ? <div role="alert">서버 기록을 불러오지 못했어요. <button onClick={server.refetch}>다시 시도</button></div> : null;
+  // 기록이 하나도 없으면 오류 줄이 본문에 혼자 뜨므로 크게 그린다
+  const errorNotice = error ? <InlineError size={logs.length === 0 ? 'lg' : 'md'} onRetry={server.refetch}>서버 기록을 불러오지 못했어요.</InlineError> : null;
 
   if (logs.length === 0) {
     if (error) return errorNotice;
@@ -134,7 +136,7 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
       </div>
 
       {visible.length === 0 ? (
-        <p className="history-filter-empty">조건에 맞는 기록이 없어요</p>
+        <EmptyState size="sm" title="조건에 맞는 기록이 없어요" />
       ) : (
         <>
           <HistoryTable

@@ -12,6 +12,7 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { PadNotation } from './PadNotation';
 import { StageMap } from './StageMap';
 import './lesson.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
   const status = useLessons((s) => s.status);
@@ -33,12 +34,9 @@ export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
 
   if (status === 'error' && !list) {
     return (
-      <div className="notice error col" role="alert">
-        <span>입문 코스를 불러오지 못했어요.</span>
-        <Button variant="secondary" size="sm" onClick={() => void load(true)}>
-          다시 시도
-        </Button>
-      </div>
+      <InlineError size="lg" onRetry={() => void load(true)}>
+        입문 코스를 불러오지 못했어요.
+      </InlineError>
     );
   }
   if (!list) {

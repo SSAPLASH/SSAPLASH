@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { sheetErrorText, type SheetDetail } from '@/domain/sheetMusic';
 import { PdfPages } from './PdfPages';
 import './sheet-viewer.css';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 export type SheetViewerState = 'loading' | 'ready' | 'missing' | 'unavailable';
 
@@ -51,7 +52,7 @@ export function SheetViewer({ state, detail, page, onPageChange, pdfKey, onToggl
   if (state === 'unavailable' || !detail) {
     return (
       <div className="sheet-viewer-stage">
-        <EmptyState title="지금은 악보를 볼 수 없어요" description="잠시 뒤 다시 시도해 주세요" action={<Button onClick={onRetry}>다시 시도</Button>} />
+        <ErrorState size="lg" title="지금은 악보를 볼 수 없어요" description="잠시 뒤 다시 시도해 주세요" onRetry={onRetry} />
       </div>
     );
   }

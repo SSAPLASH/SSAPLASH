@@ -1,0 +1,48 @@
+/* 오류 패널(ui/ErrorState) — 아이콘·제목·설명을 한 덩어리로 붙이고 버튼만 띄운다 */
+.ui-error {
+  gap: 4px;
+}
+.ui-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--space-s);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--miss) 14%, transparent);
+  color: var(--miss);
+}
+.ui-error .ui-empty-title {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+.ui-error .ui-empty-desc {
+  font-size: 13px;
+}
+.ui-error .ui-empty-action {
+  margin-top: 12px;
+}
+/* 큰 크기 — 화면·탭 본문 가운데에 혼자 뜨는 자리. 여백·글자·버튼을 함께 키운다 */
+.ui-error-lg {
+  gap: 6px;
+  padding: var(--space-xl) var(--space-l);
+}
+.ui-error-lg .ui-error-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+}
+.ui-error-lg .ui-error-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.ui-error-lg .ui-empty-title {
+  font-size: 22px;
+}
+.ui-error-lg .ui-empty-desc {
+  font-size: 15px;
+}
+.ui-error-lg .ui-empty-action {
+  margin-top: var(--space-m);
+}

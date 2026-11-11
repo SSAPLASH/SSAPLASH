@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import type { AdminSongDraft } from '@/domain/adminSong';
 import { useAdminSongs } from '@/store/adminSongStore';
 import '@/components/admin/admin.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 export function AdminSongsPage() {
   useShell({ title: '공용 곡 관리' });
@@ -76,12 +77,7 @@ export function AdminSongsPage() {
 
       {status === 'loading' && <p className="admin-summary">불러오는 중…</p>}
       {status === 'error' && (
-        <div className="notice error" role="alert">
-          {loadError}{' '}
-          <Button variant="secondary" size="sm" onClick={() => void load()}>
-            다시 시도
-          </Button>
-        </div>
+        <InlineError size="lg" onRetry={() => void load()}>{loadError}</InlineError>
       )}
       {status === 'ready' && <AdminSongTable songs={songs} uploading={uploading} rowErrors={rowErrors} onUpload={(id, file) => void uploadFor(id, file)} />}
 

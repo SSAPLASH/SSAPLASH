@@ -792,9 +792,6 @@
   color: var(--text-2);
   font-size: 13px;
 }
-.free-picker-note.is-error {
-  color: var(--miss);
-}
 .free-picker-more {
   align-self: flex-start;
 }
