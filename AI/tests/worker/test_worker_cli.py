@@ -20,7 +20,15 @@ def _set_env(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> None:
 
 def _config_args(tmp_path: Path) -> list[str]:
     sep_cfg, tr_cfg = write_mock_configs(tmp_path)
-    return ["--separation-config", str(sep_cfg), "--transcription-config", str(tr_cfg)]
+    # 분리 전 음악 여부 검사는 실제 분류 모델을 올리므로 mock 모델 테스트에서는 끔
+    return [
+        "--separation-config",
+        str(sep_cfg),
+        "--transcription-config",
+        str(tr_cfg),
+        "--music-check-config",
+        "",
+    ]
 
 
 def test_check는_모델을_올려_보고_0(
