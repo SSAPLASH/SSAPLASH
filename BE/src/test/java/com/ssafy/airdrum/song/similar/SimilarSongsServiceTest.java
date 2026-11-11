@@ -117,6 +117,13 @@ class SimilarSongsServiceTest {
 		assertThat(similarities).isSortedAccordingTo(Comparator.reverseOrder());
 	}
 
+	/** 331번: 입문 코스 레슨 곡은 비슷한 곡 후보가 아니다. 레슨 곡을 기준으로는 찾을 수 있다. */
+	@Test void 입문_코스_레슨_곡은_비슷한_곡_후보에서_빠진다() {
+		db.update("INSERT INTO lessons(song_id,position,kind,summary,pads) VALUES(?,9002,'PLAY','레슨','[\"KICK\"]'::jsonb)", rockB);
+		assertThat(songIds(service.similar(user, rockA, "NORMAL", 10))).doesNotContain(rockB).contains(noGrid);
+		assertThat(songIds(service.similar(user, rockB, "NORMAL", 10))).contains(rockA);
+	}
+
 	@Test void 같은_입력이면_같은_결과를_돌려준다() {
 		assertThat(songIds(service.similar(user, rockA, "NORMAL", 10))).isEqualTo(songIds(service.similar(user, rockA, "NORMAL", 10)));
 	}
