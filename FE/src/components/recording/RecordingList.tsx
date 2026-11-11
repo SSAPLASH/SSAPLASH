@@ -30,6 +30,7 @@ import { RecordingDeleteDialog } from './RecordingDeleteDialog';
 import { RecordingTitleDialog } from './RecordingTitleDialog';
 import { useRecordingList, type RecordingModeFilter } from './useRecordingList';
 import { useRecordingPlayback } from './useRecordingPlayback';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 const MODES: { value: RecordingModeFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },
@@ -194,12 +195,7 @@ export function RecordingBoard({
   let body: ReactNode;
   if (error) {
     body = (
-      <div className="rec-list-error" role="alert">
-        <p className="rec-list-error-text">{error}</p>
-        <Button variant="secondary" size="sm" onClick={onRetry}>
-          다시 시도
-        </Button>
-      </div>
+      <ErrorState size="lg" title="녹음 목록 로딩 실패" description={error} action={<Button variant="secondary" onClick={onRetry}>다시 시도</Button>} />
     );
   } else if (firstLoading) {
     body = (
@@ -209,7 +205,7 @@ export function RecordingBoard({
     );
   } else if (items.length === 0) {
     body = hasCondition ? (
-      <p className="history-filter-empty">조건에 맞는 녹음이 없어요</p>
+      <EmptyState size="sm" title="조건에 맞는 녹음이 없어요" />
     ) : (
       <EmptyState title="아직 녹음이 없어요" description="상단 녹음 버튼으로 연주를 남겨 보세요." />
     );

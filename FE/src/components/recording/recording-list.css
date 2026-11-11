@@ -119,21 +119,6 @@
   display: flex;
   justify-content: center;
 }
-.rec-list-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-m);
-  padding: var(--space-l) var(--space-m);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
-}
-.rec-list-error-text {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
-}
 
 /* 하단 중앙 고정 토스트 영역(studio-toast-region과 같은 값) */
 .rec-list-toast-region {

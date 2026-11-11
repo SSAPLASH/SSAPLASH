@@ -24,6 +24,7 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { ReadStaff } from '@/components/lesson/PadNotation';
 import '@/components/lesson/lesson.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 
@@ -152,12 +153,9 @@ export function LessonReadPage() {
     if (status === 'error') {
       return (
         <main className="main">
-          <div className="notice error col" role="alert">
-            <span>입문 코스를 불러오지 못했어요.</span>
-            <Button variant="secondary" size="sm" onClick={() => void load(true)}>
-              다시 시도
-            </Button>
-          </div>
+          <InlineError size="lg" onRetry={() => void load(true)}>
+            입문 코스를 불러오지 못했어요.
+          </InlineError>
         </main>
       );
     }
@@ -203,12 +201,9 @@ export function LessonReadPage() {
         )}
 
         {chartError && (
-          <div className="notice error col" role="alert">
-            <span>레슨 악보를 불러오지 못했어요.</span>
-            <Button variant="secondary" size="sm" onClick={() => setRetry((n) => n + 1)}>
-              다시 시도
-            </Button>
-          </div>
+          <InlineError size="lg" onRetry={() => setRetry((n) => n + 1)}>
+            레슨 악보를 불러오지 못했어요.
+          </InlineError>
         )}
         {!chartError && seq === null && <span className="spinner" aria-label="불러오는 중" />}
 
@@ -241,12 +236,9 @@ export function LessonReadPage() {
               음표 {seq.length}개를 모두 쳤어요. {next ? '다음 스테이지가 열렸어요.' : '입문 코스를 모두 마쳤어요.'}
             </p>
             {save === 'failed' && (
-              <div className="notice error col" role="alert">
-                <span>진도를 저장하지 못했어요. 이번 접속에서는 다음 스테이지가 열려 있어요.</span>
-                <Button variant="secondary" size="sm" onClick={complete}>
-                  다시 저장
-                </Button>
-              </div>
+              <InlineError onRetry={complete} retryLabel="다시 저장">
+                진도를 저장하지 못했어요. 이번 접속에서는 다음 스테이지가 열려 있어요.
+              </InlineError>
             )}
             <div className="lesson-done-actions">
               <Button variant="secondary" onClick={toCourse}>

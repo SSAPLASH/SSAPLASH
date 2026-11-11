@@ -38,6 +38,7 @@ import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import '@/components/report/report.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 type Load<T> = { s: 'loading' } | { s: 'ok'; v: T } | { s: 'error'; e: unknown };
 
@@ -223,11 +224,9 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     return (
       <main className="main rp">
         {header}
-        <div className="notice error row" style={{ marginTop: 16 }}>
-          <span>{d.text}</span>
-          {d.retry && <button onClick={onRetry}>다시 시도</button>}
-          {d.login && <Link to="/login">로그인</Link>}
-        </div>
+        <InlineError size="lg" style={{ marginTop: 16 }} onRetry={d.retry ? onRetry : undefined} action={d.login ? <Link to="/login">로그인</Link> : undefined}>
+          {d.text}
+        </InlineError>
       </main>
     );
   }
@@ -295,10 +294,9 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           </div>
           {notes.s === 'loading' && <p className="rp-notice">노트를 불러오는 중…</p>}
           {notes.s === 'error' && (
-            <div className="notice error row" style={{ marginTop: 14 }}>
-              <span>{describeError(notes.e).text}</span>
-              <button onClick={onRetry}>다시 시도</button>
-            </div>
+            <InlineError style={{ marginTop: 14 }} onRetry={onRetry}>
+              {describeError(notes.e).text}
+            </InlineError>
           )}
           {notice}
         </section>

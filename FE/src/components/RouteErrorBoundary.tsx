@@ -4,8 +4,7 @@ import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode 
 import { useRouteError } from 'react-router-dom';
 import { isChunkLoadError, tryAutoReload } from '@/app/chunkRecovery';
 import { useRecordingStore } from '@/app/recordingStore';
-import { Button } from './ui/Button';
-import './ui/EmptyState.css';
+import { ErrorState } from './ui/ErrorState';
 import './RouteErrorBoundary.css';
 
 /** 녹음 중·저장 대기 중이면 자동 새로고침을 하지 않는다(D7) */
@@ -22,15 +21,16 @@ type Mode = 'pending' | 'reloading' | 'chunk' | 'general';
 
 function Notice({ mode }: { mode: 'chunk' | 'general' }) {
   const chunk = mode === 'chunk';
-  // EmptyState는 h3라 제목 단계가 맞지 않아 같은 클래스로 h2를 쓴다
   return (
-    <div className="ui-empty route-error" role="alert">
-      <h2 className="ui-empty-title">{chunk ? '새 버전이 있어요' : '화면을 불러오지 못했어요'}</h2>
-      <p className="ui-empty-desc">{chunk ? '새로고침하면 이어서 쓸 수 있어요.' : '새로고침해 주세요. 계속되면 알려 주세요.'}</p>
-      <div className="ui-empty-action">
-        <Button onClick={reloadPage}>새로고침</Button>
-      </div>
-    </div>
+    <ErrorState
+      className="route-error"
+      headingLevel={2}
+      size="lg"
+      title={chunk ? '새 버전이 있어요' : '화면을 불러오지 못했어요'}
+      description={chunk ? '새로고침하면 이어서 쓸 수 있어요.' : '새로고침해 주세요. 계속되면 알려 주세요.'}
+      onRetry={reloadPage}
+      retryLabel="새로고침"
+    />
   );
 }
 

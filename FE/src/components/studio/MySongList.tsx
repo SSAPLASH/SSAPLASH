@@ -1,6 +1,5 @@
 // 내 곡 목록 본문 (Figma 207:2110 카드 · 225:4551 목록 · 225:5042 로딩 · 225:5368 오류). 활성 작업은 맨 위 ActiveJobCard 한 줄,
 // 그 아래 카드 그리드(최대 5열) 또는 목록 행. 곡·악보가 모두 없으면(페이지가 empty로 알림) 빈 안내를 둔다.
-import { Button } from '@/components/ui/Button';
 import type { ActiveJob, JobProgress } from '@/domain/chartJob';
 import { mergeLibraryItems, type SheetSummary } from '@/domain/sheetMusic';
 import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
@@ -14,6 +13,8 @@ import { SheetItemRow } from './SheetItemRow';
 import type { SheetMenuKind } from './SheetMenu';
 import type { SongEditKind, SongSheetKind } from './SongMenu';
 import './studio.css';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { InlineError } from '@/components/ui/InlineError';
 
 /** 내 곡 보기 모드 */
 export type StudioView = 'card' | 'list';
@@ -115,26 +116,21 @@ export function MySongList({
   }
   if (status === 'error') {
     return (
-      <div className="studio-error" role="alert">
-        <h3 className="studio-error-title">라이브러리 목록을 불러오지 못했어요</h3>
-        <p className="studio-error-desc" title={error ?? undefined}>
-          네트워크 상태를 확인하고 다시 시도해 주세요. 올린 곡은 지워지지 않았어요.
-        </p>
-        <Button variant="primary" size="md" className="studio-error-btn" onClick={onRetry}>
-          다시 시도
-        </Button>
-      </div>
+      <ErrorState
+        size="lg"
+        className="studio-list-error"
+        title="라이브러리 목록을 불러오지 못했어요"
+        description={<span title={error ?? undefined}>네트워크 상태를 확인하고 다시 시도해 주세요. 올린 곡은 지워지지 않았어요.</span>}
+        onRetry={onRetry}
+      />
     );
   }
 
   const merged = active && !items.some((s) => s.id === active.songId) ? [tempSong(active), ...items] : items;
   const sheetsLine = sheetsFailed ? (
-    <p className="studio-sheet-loadfail" role="alert">
+    <InlineError plain className="studio-sheet-loadfail" onRetry={onSheetsRetry}>
       악보를 불러오지 못했어요
-      <Button variant="text" size="sm" onClick={onSheetsRetry}>
-        다시 시도
-      </Button>
-    </p>
+    </InlineError>
   ) : null;
   if (merged.length === 0 && (sheets?.length ?? 0) === 0) {
     if (!empty) return sheetsLine;
