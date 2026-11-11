@@ -182,3 +182,28 @@ describe('downloadJsonl', () => {
     expect(() => downloadJsonl('x')).not.toThrow();
   });
 });
+
+describe('패킷 줄 role (PLAY-002 실연주 진단)', () => {
+  it('손은 role 0·1, 페달은 stick null·role 2, OUT은 role null로 남는다', () => {
+    const log = new PacketLog();
+    log.ingest(mk(buildHit({ role: 1, seq: 1, timestampUs: 0, pad: 2 }), 10));
+    log.ingest(mk(buildHit({ role: 2, seq: 2, timestampUs: 0, pad: 0 }), 20));
+    log.ingest(mk(new Uint8Array([0x14, 0x02, 20, 0]), 30, 'out'));
+    const lines = log.rows().map((r) => JSON.parse(serializeRow(r)) as { stick: number | null; role: number | null });
+    expect(lines.map((l) => [l.stick, l.role])).toEqual([
+      [1, 1],
+      [null, 2],
+      [null, null],
+    ]);
+  });
+
+  it('role이 없는 이전 형식 줄도 그대로 되읽는다', () => {
+    const old = JSON.stringify({ t: 5, dir: 'in', transport: 'serial', stick: 0, hex: '0102', decoded: null });
+    const diag = JSON.stringify({ kind: 'diag', t: 6, ev: { type: 'clock', offsets: [1, 2, null, null], source: 'serial' } });
+    const { rows, diags } = parseJsonl([JSON.stringify(meta), old, diag].join('\n'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stick).toBe(0);
+    expect(rows[0].role).toBeUndefined();
+    expect(diags[0]).toMatchObject({ type: 'clock', t: 6 });
+  });
+});
