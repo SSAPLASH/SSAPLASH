@@ -10,6 +10,7 @@ import {
   type DecodedPacket,
   type DecodedStatus,
   CommandType,
+  handOf,
 } from '@/input/stickProtocol';
 import { parseLogText, type ParsedLog } from './logParse';
 import { SyncPairer, syncKeyOf } from './syncPair';
@@ -34,7 +35,10 @@ export interface LogRow {
   t: number;
   dir: 'in' | 'out';
   transport: PacketRecord['transport'];
+  /** 손(role 0·1)만. 페달(role 2·3)·손을 모르는 줄은 null */
   stick: 0 | 1 | null;
+  /** IN 패킷의 flags role(0 왼손, 1 오른손, 2·3 페달). role이 없는 패킷·OUT은 null */
+  role: number | null;
   bytes: Uint8Array;
   /** out이면 null */
   decoded: DecodedPacket | null;
@@ -229,7 +233,8 @@ export class PacketLog {
   ingest(rec: PacketRecord): void {
     const decoded = rec.dir === 'in' ? decodePacket(rec.bytes, rec.recvTime) : null;
     const role = decoded && 'role' in decoded ? decoded.role : null;
-    const stick: 0 | 1 | null = rec.stickId ?? (role !== null ? ((role & 1) as 0 | 1) : null);
+    // 페달(role 2·3)은 손이 아니다. stick을 비워 손 통계(SYNC 왕복·HIT 유실·오프셋)에 섞이지 않게 한다
+    const stick: 0 | 1 | null = rec.stickId ?? (role !== null ? handOf(role) : null);
 
     let tBrowser: number | null = null;
     let future: number | null = null;
@@ -248,6 +253,7 @@ export class PacketLog {
       dir: rec.dir,
       transport: rec.transport,
       stick,
+      role,
       bytes: rec.bytes,
       decoded,
       outType: rec.dir === 'out' ? (rec.bytes.length ? rec.bytes[0] : null) : null,

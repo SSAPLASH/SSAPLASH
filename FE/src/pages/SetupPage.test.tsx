@@ -62,25 +62,12 @@ const preset = (id: string, name: string): KitPreset => ({
 const good = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };
 
 describe('SetupPage 페달 줄', () => {
-  // 인수 조건: 동글 소스면 ① 카드에 페달 줄이 보인다(포트가 닫혀 있으면 재탐색 안내 없이 "페달 연결 안 됨")
-  it('동글 소스에서는 "페달 연결 안 됨" 줄이 보인다', async () => {
+  // 페달 줄은 「스틱 연결」 팝업 안에 있다(PLAY-004 D8). 팝업을 연 뒤 검증은 SetupPage.dialog.test.tsx에서 한다
+  it('진입 시에는 팝업이 닫혀 있어 페이지에 페달 줄이 없다', async () => {
     putSettings({ sensorKind: 'webserial' });
     const html = await renderSetup();
-    expect(html).toContain('setup-pedal');
-    expect(html).toContain('페달 연결 안 됨');
-    expect(html).not.toContain('동글을 다시 꽂아 주세요');
-  });
-
-  // 인수 조건: 포인터 소스에서는 페달 줄이 없다
-  it('포인터 소스에서는 페달 줄이 없다', async () => {
-    putSettings({ sensorKind: 'pointer' });
-    const html = await renderSetup();
     expect(html).not.toContain('setup-pedal');
-  });
-
-  // 인수 조건: 키보드 전용(기본)에서도 페달 줄이 없다
-  it('키보드 전용에서는 페달 줄이 없다', async () => {
-    expect(await renderSetup()).not.toContain('setup-pedal');
+    expect(html).not.toContain('role="dialog"');
   });
 });
 
@@ -102,7 +89,7 @@ describe('SetupPage 단계 2개(UX-64)', () => {
 });
 
 describe('SetupPage ② 시작 위치 보정(UX-64 D7)', () => {
-  it('시스템 기본이면 앵커가 없어도 완료 요약(카드는 접힘)', async () => {
+  it('시스템 기본이면 앵커가 없어도 완료 요약(타일은 요약만)', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
     putLive({ connected: [true, true], referenceSetAt: null });
     const html = await renderSetup();
@@ -110,14 +97,15 @@ describe('SetupPage ② 시작 위치 보정(UX-64 D7)', () => {
     expect(html).not.toContain('보정 시작');
   });
 
-  it('사용자 프리셋인데 앵커가 없으면 "드럼 위치를 아직 잡지 않았어요", 펼친 본문에 [시작 위치 맞추기]와 드럼 배치 안내', async () => {
+  it('사용자 프리셋인데 앵커가 없으면 요약이 "드럼 위치를 아직 잡지 않았어요", 타일 버튼은 [보정하기]이고 팝업은 닫혀 있다', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: 'p1' });
     putPresets([preset('p1', '내 배치')]);
     putLive({ connected: [true, true] });
     const html = await renderSetup();
     expect(html).toContain('드럼 위치를 아직 잡지 않았어요');
-    expect(html).toContain('>시작 위치 맞추기</button>');
-    expect(html).toContain('[전체 보정] 또는 [추가하기]');
+    expect(html).toContain('>보정하기<');
+    expect(html).not.toContain('role="dialog"');
+    expect(html).not.toContain('시작 위치 맞추기');
     expect(html).not.toContain('넓게');
   });
 
@@ -163,6 +151,18 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
     expect(html).toContain('「시스템 기본」 사용 중');
   });
 
+  it('드럼 배치 카드는 2열 정보 칸 없이 캔버스 틀 안에 정보 카드를 겹쳐 둔다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
+    putLive({ connected: [true, true] });
+    const html = await renderSetup();
+    expect(html).not.toContain('setup-kit-body');
+    expect(html).not.toContain('setup-padinfo"');
+    const stage = html.indexOf('setup-stage');
+    const overlay = html.indexOf('setup-kitinfo');
+    expect(stage).toBeGreaterThan(-1);
+    expect(overlay).toBeGreaterThan(stage);
+  });
+
   it('시스템 기본에서 패드를 옮겼으면 하단 바가 새 프리셋 저장 안내와 [새 프리셋으로 저장]이 된다(kit-drag D10)', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
     putPresets([preset('p1', '내 배치')]);
@@ -192,6 +192,26 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
     expect(html).toContain('「내 배치」 사용 중');
   });
 
+  it('[프리셋 관리]는 칩 줄 오른쪽에, [전체 보정]은 드럼 그림 판 오른쪽 위(setup-stage-action)에 있다', async () => {
+    putSettings({ sensorKind: 'pointer', stickAnchors: [{ SNARE: good }, { SNARE: good }], calibratedAt: new Date(2026, 10, 6, 14, 2).getTime(), activePresetId: 'p1' });
+    putPresets([preset('p1', '내 배치')]);
+    putLive({ connected: [true, true] });
+    const html = await renderSetup();
+    const chips = html.slice(html.indexOf('class="setup-chips-right"'), html.indexOf('setup-stage-row'));
+    expect(chips).toContain('프리셋 관리</button>');
+    expect(chips).not.toContain('전체 보정');
+    // 완료 pill 다음에 [프리셋 관리]
+    expect(chips.indexOf('완료 ')).toBeLessThan(chips.indexOf('프리셋 관리'));
+    expect(html).toMatch(/class="setup-stage-action"><button[^>]*>전체 보정<\/button>/);
+  });
+
+  it('키보드만이어도 [프리셋 관리]는 있다', async () => {
+    putSettings({ sensorKind: 'none' });
+    const html = await renderSetup();
+    expect(html).toContain('프리셋 관리</button>');
+    expect(html).not.toContain('setup-stage-action');
+  });
+
   it('키보드만이면 칩 줄 pill이 「키보드만」이고 보정 버튼이 없다', async () => {
     putSettings({ sensorKind: 'none' });
     const html = await renderSetup();
@@ -203,7 +223,7 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
 });
 
 describe('SetupPage 보정 중(UX-64)', () => {
-  it('추가하기 보정 중이면 드럼 배치 카드가 보정 무대이고 칩 줄은 「새 프리셋 · 보정 중」 + pill + [보정 취소], 하단 바는 보정 문구에 [저장] 비활성', async () => {
+  it('추가하기 보정 중이면 드럼 배치 카드가 보정 무대이고 칩 줄은 「새 프리셋 · 보정 중」 + pill + [보정 취소], 하단 바는 보정 문구만(저장 버튼 없음, D13)', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
     putLive({
       connected: [true, true],
@@ -233,7 +253,10 @@ describe('SetupPage 보정 중(UX-64)', () => {
     expect(html).toContain('보정 중 1 / 7');
     expect(html).toContain('보정 취소');
     expect(html).toContain('새 프리셋 보정 중 · 7개 중 1번째');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>저장</);
+    // D13: 보정 중에는 하단 바에 [저장]·[새 프리셋으로 저장] 버튼이 없다(결과 카드의 [저장]만 남는다)
+    expect(html).not.toMatch(/<button[^>]*>저장</);
+    expect(html).not.toMatch(/<button[^>]*>새 프리셋으로 저장</);
+    expect(html).toContain('setup-bar');
     expect(html).not.toContain('setup-editor');
   });
 });

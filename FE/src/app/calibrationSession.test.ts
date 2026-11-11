@@ -65,11 +65,15 @@ function twice(h: StickId, pitch: number, yaw: number) {
   expect(calibrationSession.intercept(hit(h, pitch, yaw + 1))).toBe(true);
 }
 
-/** 7패드를 손마다 채우고 패드마다 [다음]. 마지막 [다음] 뒤 done이라 [저장](finish)은 호출자가 */
+/** 자동 진행 지연(400ms)을 넘긴다. 호출하는 테스트는 vi.useFakeTimers()를 먼저 켠다 */
+const tick = () => vi.advanceTimersByTime(400);
+
+/** 7패드를 손마다 채우고 패드마다 자동 진행을 기다린다(패드끼리 약 30° 떨어져 간격 경고 없음). 끝나면 done이라 [저장](finish)은 호출자가 */
 function fillAll(hands: StickId[]) {
+  if (!vi.isFakeTimers()) vi.useFakeTimers();
   CAPTURE_ORDER.forEach((_, i) => {
-    for (const h of hands) twice(h, -10 + i * 5, (h === 0 ? -40 : -20) + i * 12);
-    calibrationSession.next();
+    for (const h of hands) twice(h, -10 + i * 5, (h === 0 ? -40 : -20) + i * 30);
+    tick();
   });
 }
 
@@ -93,13 +97,14 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   trigger.mockRestore();
   await inputManager.detach('ble');
   calibrationSession.resetForTest();
 });
 
 describe('2타 보정 시작', () => {
-  it('RESET_POSE → 드리프트 감시 pause → 손마다 지우기 전용 표 → 소리 끄기 → capturing(SNARE)', () => {
+  it('RESET_POSE → 드리프트 감시 pause → 손마다 지우기 전용 표 → 소리 끄기 → capturing(HIHAT)', () => {
     calibrationSession.startCapture();
     expect(src.resets).toBe(1);
     expect(yawDriftMonitor.isPaused).toBe(true);
@@ -109,7 +114,7 @@ describe('2타 보정 시작', () => {
     expect(snap.mode).toBe('capture');
     expect(snap.hands).toEqual([0, 1]);
     expect(snap.target).toBe('active');
-    expect(snap.capture?.target).toBe('SNARE');
+    expect(snap.capture?.target).toBe('HIHAT');
   });
 
   it("시스템 기본이 적용 중이면 'active' 보정은 무동작, 'new'(추가하기)는 열린다(UX-64 D6)", () => {
@@ -141,9 +146,9 @@ describe('2타 보정 시작', () => {
 describe('보정 중 타격 가로채기', () => {
   it('센서 손 타격은 전부 가로채고, 소리·표시는 스틱 pad가 아니라 목표 패드', () => {
     calibrationSession.startCapture();
-    expect(calibrationSession.intercept(hit(0, -10, 0, { pad: 'HIHAT' }))).toBe(true);
-    expect(trigger).toHaveBeenCalledWith('SNARE', 90);
-    expect(useLive.getState().lastHit?.pad).toBe('SNARE');
+    expect(calibrationSession.intercept(hit(0, -10, 0, { pad: 'SNARE' }))).toBe(true);
+    expect(trigger).toHaveBeenCalledWith('HIHAT', 90);
+    expect(useLive.getState().lastHit?.pad).toBe('HIHAT');
     expect(useLive.getState().calibration.capture?.counts).toEqual([1, 0]);
   });
 
@@ -154,24 +159,25 @@ describe('보정 중 타격 가로채기', () => {
     expect(trigger).not.toHaveBeenCalled();
   });
 
-  it('패드를 채우는 두 번째 타격도 그 패드 소리이고, 확인 대기 중 타격·이미 찬 손의 타격도 목표 패드 소리', () => {
+  it('패드를 채우는 두 번째 타격도 그 패드 소리이고, 자동 진행 대기 중 타격·이미 찬 손의 타격도 목표 패드 소리', () => {
+    vi.useFakeTimers();
     useLive.setState({ connected: [true, false] });
     calibrationSession.startCapture();
     calibrationSession.intercept(hit(0, -10, 0));
-    calibrationSession.intercept(hit(0, -10, 1)); // 스네어 완료 → 확인 대기
-    expect(cap()).toMatchObject({ phase: 'padDone', target: 'SNARE' });
+    calibrationSession.intercept(hit(0, -10, 1)); // 하이햇 완료 → 자동 진행 대기
+    expect(cap()).toMatchObject({ phase: 'padDone', advancing: true, target: 'HIHAT' });
     expect(calibrationSession.intercept(hit(0, -10, 1))).toBe(true); // 대기 중 타격은 가로채되 세지 않는다
-    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['SNARE', 'SNARE', 'SNARE']);
+    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['HIHAT', 'HIHAT', 'HIHAT']);
     expect(cap()?.counts).toEqual([2, 0]);
     trigger.mockClear();
-    calibrationSession.next(); // [다음] → 하이햇
-    expect(cap()?.target).toBe('HIHAT');
+    tick(); // 자동 진행 → 크래시
+    expect(cap()?.target).toBe('CRASH');
     useLive.setState({ connected: [true, true] });
     calibrationSession.onHandConnected(1);
-    calibrationSession.intercept(hit(0, 0, -30));
-    calibrationSession.intercept(hit(0, 0, -29));
-    calibrationSession.intercept(hit(0, 0, -29)); // 왼손은 찼다 — 오른손 대기
-    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['HIHAT', 'HIHAT', 'HIHAT']);
+    calibrationSession.intercept(hit(0, 0, -50));
+    calibrationSession.intercept(hit(0, 0, -49));
+    calibrationSession.intercept(hit(0, 0, -49)); // 왼손은 찼다 — 오른손 대기
+    expect(trigger.mock.calls.map((c) => c[0])).toEqual(['CRASH', 'CRASH', 'CRASH']);
   });
 
   it('패드를 채우면 그 패드를 채운 손마다 햅틱', () => {
@@ -186,7 +192,7 @@ describe('보정 중 타격 가로채기', () => {
 });
 
 describe('보정 완료([저장] = finish)', () => {
-  it("'active': 마지막 [다음] 뒤 done에서 멈추고, finish()가 손별 앵커·시각 저장(사본 + 프리셋 기록) → 배치 유도 → resume → 소리 켜기 → referenceSetAt·realignNeeded 해제", () => {
+  it("'active': 마지막 패드 자동 진행 뒤 done에서 멈추고, finish()가 손별 앵커·시각 저장(사본 + 프리셋 기록) → 배치 유도 → resume → 소리 켜기 → referenceSetAt·realignNeeded 해제", () => {
     useLive.setState({ realignNeeded: [true, false] });
     calibrationSession.startCapture();
     fillAll([0, 1]);
@@ -196,11 +202,11 @@ describe('보정 완료([저장] = finish)', () => {
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
     expect(calibrationSession.finish()).toBeNull();
     const s = useSettings.getState();
-    expect(s.stickAnchors[0]?.SNARE?.yaw).toBeCloseTo(-39.5);
-    expect(s.stickAnchors[1]?.SNARE?.yaw).toBeCloseTo(-19.5);
+    expect(s.stickAnchors[0]?.HIHAT?.yaw).toBeCloseTo(-39.5);
+    expect(s.stickAnchors[1]?.HIHAT?.yaw).toBeCloseTo(-19.5);
     expect(Object.keys(s.stickAnchors[0]!)).toHaveLength(7);
     expect(s.calibratedAt).not.toBeNull();
-    expect(s.presetAnchors.p?.anchors[0]?.SNARE?.yaw).toBeCloseTo(-39.5);
+    expect(s.presetAnchors.p?.anchors[0]?.HIHAT?.yaw).toBeCloseTo(-39.5);
     expect(s.kitLayout).not.toEqual(DEFAULT_KIT_LAYOUT);
     expect(s.kitLayout.KICK).toEqual(DEFAULT_KIT_LAYOUT.KICK);
     expect(yawDriftMonitor.isPaused).toBe(false);
@@ -282,12 +288,12 @@ describe('보정 취소·중단·버튼', () => {
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
   });
 
-  it('대상 손이 모두 끊기면 중단, 한 손만 끊기면 남은 손으로 계속(남은 손이 찼으면 확인 대기)', () => {
+  it('대상 손이 모두 끊기면 중단, 한 손만 끊기면 남은 손으로 계속(남은 손이 찼으면 자동 진행 대기)', () => {
     calibrationSession.startCapture();
     twice(0, -10, 0);
     calibrationSession.onHandDisconnected(1);
     expect(useLive.getState().calibration.hands).toEqual([0]);
-    expect(cap()).toMatchObject({ phase: 'padDone', target: 'SNARE' });
+    expect(cap()).toMatchObject({ phase: 'padDone', advancing: true, target: 'HIHAT' });
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
     calibrationSession.onHandDisconnected(0);
     expect(useLive.getState().calibration.mode).toBe('idle');
@@ -297,13 +303,14 @@ describe('보정 취소·중단·버튼', () => {
   });
 
   it('보정 중 스틱 버튼 보정(0x22 button)은 처음부터 다시', () => {
+    vi.useFakeTimers();
     calibrationSession.startCapture();
     twice(0, -10, 0);
-    twice(1, -10, 5);
-    calibrationSession.next();
-    expect(useLive.getState().calibration.capture?.target).toBe('HIHAT');
+    twice(1, -10, 50);
+    tick();
+    expect(useLive.getState().calibration.capture?.target).toBe('CRASH');
     calibrationSession.onResetPose('button', 1);
-    expect(useLive.getState().calibration.capture).toMatchObject({ phase: 'capturing', target: 'SNARE', counts: [0, 0] });
+    expect(useLive.getState().calibration.capture).toMatchObject({ phase: 'capturing', target: 'HIHAT', counts: [0, 0] });
   });
 
   it('보정 중이 아닐 때 버튼 보정은 앵커가 있는 손만 재정렬 필요로. FE 요청(fe)은 무시', () => {
@@ -406,12 +413,13 @@ describe('패드 단위 재보정(T9)', () => {
         { SNARE: anchor('SNARE', -20, 10), HIHAT: anchor('HIHAT', -5, -20) },
       ],
     });
+    vi.useFakeTimers();
     calibrationSession.startCapture({ pads: ['HIHAT'] });
     expect(useLive.getState().calibration.capture).toMatchObject({ target: 'HIHAT', order: ['HIHAT'] });
     expect(clears().map((s) => s.stickId)).toEqual([0, 1]);
     twice(0, 0, -30);
     twice(1, 0, -25);
-    calibrationSession.next();
+    tick();
     expect(cap()?.phase).toBe('done');
     calibrationSession.finish();
     const s = useSettings.getState();
@@ -426,5 +434,44 @@ describe('패드 단위 재보정(T9)', () => {
     expect(s.kitLayout.SNARE).toEqual(DEFAULT_KIT_LAYOUT.SNARE);
     expect(s.kitLayout.HIHAT).not.toEqual(DEFAULT_KIT_LAYOUT.HIHAT);
     expect(deps.setSoundOnHit).toHaveBeenLastCalledWith(true);
+  });
+
+  it('패드 단위 재보정은 적용 프리셋의 다른 패드 앵커를 base로 넘겨 간격 경고한다. 전체 보정은 비교 대상이 없다', () => {
+    vi.useFakeTimers();
+    useSettings.setState({
+      stickAnchors: [
+        { SNARE: anchor('SNARE', 0, 0), HIHAT: anchor('HIHAT', 0, 100) },
+        { SNARE: anchor('SNARE', 0, 50), HIHAT: anchor('HIHAT', 0, 100) },
+      ],
+    });
+    calibrationSession.startCapture({ pads: ['HIHAT'] });
+    twice(0, 0, 10); // 왼손 스네어(0°)와 10°
+    twice(1, 0, 100); // 오른손은 멀다
+    // 경고가 있어도 멈추지 않는다(v0.2): 자동 진행 대기 → 마지막 패드라 done, 경고는 남는다. base(세션 밖 앵커)도 스냅샷에 실린다
+    expect(cap()).toMatchObject({ phase: 'padDone', advancing: true });
+    expect(cap()?.base[0]?.SNARE).toBeDefined();
+    expect(cap()?.gapWarnings).toEqual([expect.objectContaining({ stickId: 0, pad: 'HIHAT', near: 'SNARE' })]);
+    vi.advanceTimersByTime(400);
+    expect(cap()?.phase).toBe('done');
+    expect(cap()?.gapWarnings).toHaveLength(1);
+    calibrationSession.cancelCapture();
+
+    // 전체 보정(pads 없음)은 base 없이 시작: 같은 자리를 쳐도 첫 패드는 경고 없음
+    calibrationSession.startCapture();
+    vi.useFakeTimers();
+    twice(0, 0, 10);
+    twice(1, 0, 100);
+    expect(cap()).toMatchObject({ phase: 'padDone', advancing: true, gapWarnings: [] });
+  });
+
+  it('보정을 마치거나 취소하면 자동 진행 타이머가 정리된다', () => {
+    vi.useFakeTimers();
+    useLive.setState({ connected: [true, false] });
+    calibrationSession.startCapture();
+    twice(0, -10, 0);
+    calibrationSession.cancelCapture();
+    vi.advanceTimersByTime(1000);
+    expect(cap()?.phase).not.toBe('capturing'); // idle로 접혔고 늦게 진행하지 않는다
+    expect(useLive.getState().calibration.mode).toBe('idle');
   });
 });

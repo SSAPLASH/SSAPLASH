@@ -134,3 +134,94 @@
 .play-sd .play-sd-similar-pick {
   flex: none;
 }
+
+/* 바로 플레이 모양(Figma 904:4326, 11/10 애플풍): 둥근 패널·커버, 제목 묶음 간격 2, 기록 두 칸, 맨 아래 [단계 세그먼트][▶ 플레이] */
+.play-sd-quick {
+  gap: var(--space-m);
+}
+.play-sd-quick .play-sd-cover {
+  margin: 0;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+.play-sd-quick .play-sd-head {
+  gap: 2px;
+}
+.play-sd-records {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.play-sd-record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.play-sd-record-end {
+  align-items: flex-end;
+  text-align: right;
+}
+.play-sd-record-caption {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.play-sd-record-value {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-sd-play-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+/* 단계 세그먼트(설계 U8 C안): 트랙·고르지 않은 칸은 중립, 고른 칸만 단계 네온색이 아래에서 은은하게 번진다 */
+.play-sd-play-row .play-sd-levels {
+  flex: none;
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item {
+  --seg-level: var(--level-normal);
+  padding: 8px 10px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='EASY'] {
+  --seg-level: var(--level-easy);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='HARD'] {
+  --seg-level: var(--level-hard);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item.selected {
+  background:
+    radial-gradient(120% 140% at 50% 120%, color-mix(in srgb, var(--seg-level) 30%, transparent), transparent 70%),
+    var(--surface-3);
+  color: color-mix(in srgb, var(--seg-level) 70%, #ffffff);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--seg-level) 45%, transparent),
+    0 0 18px -4px color-mix(in srgb, var(--seg-level) 55%, transparent);
+}
+/* 그 곡에 없는 단계: 색 없이 흐리게 */
+.play-sd-play-row .play-sd-levels .ui-seg-item:disabled {
+  opacity: 0.35;
+}
+.play-sd .play-sd-play {
+  flex: 1;
+  min-width: 0;
+  /* 카드의 유일한 강조 동작이라 아이콘(20)·글자(17)를 한 단계 키운다 */
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+}

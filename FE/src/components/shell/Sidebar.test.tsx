@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { prefetchRoute } from '@/app/prefetchRoute';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+
+vi.mock('@/app/prefetchRoute', () => ({ PREFETCH_HOVER_MS: 100, prefetchRoute: vi.fn() }));
 
 afterEach(cleanup);
 
@@ -34,5 +37,28 @@ describe('Sidebar 현재 위치 표시', () => {
   it('메뉴에 없는 경로면 표시가 없다', () => {
     const { container } = view('/result/1');
     expect(container.querySelectorAll('.side-active-mark')).toHaveLength(0);
+  });
+});
+
+describe('Sidebar 미리 받기 (설계 TECH-351)', () => {
+  it('hover 100ms 뒤·포커스 즉시 그 메뉴 경로를 미리 받고, 100ms 전에 떠나면 받지 않는다', () => {
+    vi.mocked(prefetchRoute).mockClear();
+    vi.useFakeTimers();
+    try {
+      view('/free');
+      const studio = screen.getByRole('link', { name: '라이브러리' });
+      fireEvent.mouseEnter(studio);
+      vi.advanceTimersByTime(50);
+      fireEvent.mouseLeave(studio);
+      vi.advanceTimersByTime(200);
+      expect(prefetchRoute).not.toHaveBeenCalled();
+      fireEvent.mouseEnter(studio);
+      vi.advanceTimersByTime(100);
+      expect(prefetchRoute).toHaveBeenCalledWith('/studio');
+      fireEvent.focus(screen.getByRole('link', { name: '연주 기록' }));
+      expect(prefetchRoute).toHaveBeenCalledWith('/history');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

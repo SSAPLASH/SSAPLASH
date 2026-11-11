@@ -128,45 +128,118 @@
   border-color: var(--brand);
 }
 
-/* ---- UX-64 보정 중(Figma 배치 편집기 765:33504 · 보정 무대 766:34637): 킷 720 + 오른쪽 카드 264, 사이 32 ---- */
-.cal-stage-main {
-  display: flex;
-  gap: 32px;
-  align-items: center;
-  justify-content: center;
+/* ---- 보정 중·결과(PLAY-004 D9~D11): 판(StagePanel) 안 그림 영역(setup-stage-fig, 안쪽 전체)에 킷을 contain으로 가운데, 위쪽 가운데 안내, 아래쪽 가운데 경고 배너 ---- */
+.cal-stage-canvas {
+  position: absolute;
+  inset: 0;
 }
-.cal-stage-main .cal-stage-kit {
-  flex: 1;
-  min-width: 0;
-  max-width: 720px;
+.cal-stage-top {
+  position: absolute;
+  top: var(--setup-panel-pad, 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--setup-panel-pad, 16px));
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 20px;
-  padding: var(--space-s) 0;
-  border: 0;
-  background: transparent;
+  align-items: center;
+  gap: var(--space-xs);
+  pointer-events: none;
 }
 .cal-stage-headline {
   margin: 0;
   text-align: center;
-  font-size: 40px;
+  font-size: clamp(20px, 2.4vw, 36px);
   font-weight: 700;
   line-height: 1.2;
   color: var(--text-1);
 }
-.cal-panel {
-  width: 264px;
-  flex: none;
+.cal-hands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
 }
-@media (max-width: 1024px) {
-  .cal-stage-main {
-    flex-direction: column;
-  }
-  .cal-panel {
-    width: 100%;
-  }
-  .cal-stage-headline {
-    font-size: 28px;
-  }
+.cal-hand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cal-hand-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.cal-hit-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: transparent;
+}
+.cal-hit-dot.on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.cal-progress-title {
+  font-size: 18px;
+}
+.cal-gap-warn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-gap-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.cal-gap-advice,
+.cal-overlap-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.cal-overlap-line {
+  color: var(--warn);
+}
+.cal-kitinfo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.cal-kitinfo-actions > .ui-btn {
+  width: 100%;
+  min-width: 0;
+}
+/* 경고 배너(GapBanner, D3·D11): --warn 톤. 반투명 바탕 + 경고 테두리 */
+.cal-gap-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  box-sizing: border-box;
+  padding: var(--space-s) var(--space-m);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+  pointer-events: auto;
+}
+.cal-gap-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.cal-gap-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.cal-gap-banner-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
 }

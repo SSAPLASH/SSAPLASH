@@ -1,6 +1,9 @@
-// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · 탭(기본 곡 / 라이브러리) · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) + 선택한 곡 패널(SongDetailPane).
+// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · (악보 연습만) 안내 줄+구분선 · [왼쪽 열: 탭 · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) | 선택한 곡 패널(SongDetailPane)].
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
-// /play·/sheet가 같이 쓴다. 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
+// /play·/sheet가 같이 쓴다.
+//  - /play: 곡만 고르고 연습 단계는 연주 준비에서 고른다(U17) — [준비]·더블클릭·Enter가 onSelect(songId, 기본 채보 id)를 부른다.
+//  - /sheet(설계 MODE-001-MODE-003-picker-quick-start): 선택 곡 카드에서 연습 단계까지 고르고 [플레이]·더블클릭·Enter가
+//    onStart(songId, 고른 채보 id)를 부른다. 단계는 주소 `?song=&chart=`로 처음 골라 둘 수 있다(추천·다시 하기·세팅 복귀).
 // 선택 결과는 페이지가 URL로 옮긴다.
 // 칩·검색·탭은 둘러보기다 — 사용자가 고른 곡은 목록에서 빠져도 패널에 남고 [준비]가 된다(설계 CHART-001 곡 난이도·선택 U5).
 // 0곡이면 표 틀(머리글·「총 0곡」)을 두고 본문 자리에 안내를 둔다. 라이브러리 안내는 라이브러리 탭 0곡일 때만 보인다.
@@ -12,6 +15,7 @@ import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/rec
 import {
   chartFallback,
   defaultChartId,
+  sortCharts,
   isPlayableStatus,
   SONG_LEVEL_LABEL,
   SONG_LEVEL_ORDER,
@@ -20,12 +24,14 @@ import {
   type SongScope,
   type SongSummary,
 } from '@/domain/songCatalog';
-import { bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestScoreBySong } from '@/domain/bestRecord';
 import { presetDisplayName } from '@/domain/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/app/useBestRecords';
 import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
+import { songListQuery } from '@/api/queries/songs';
+import { useApiQuery } from '@/app/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
@@ -37,10 +43,15 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from '@/components/play/SongTable';
 import { SongDetailPane } from '@/components/play/SongDetailPane';
+import { LessonCourse } from '@/components/lesson/LessonCourse';
+import { PickerGuide } from '@/components/guide/PickerGuide';
 import './play/song-picker.css';
 
 interface Props {
-  onSelect: (songId: number, chartId: number) => void;
+  /** /play: [준비] */
+  onSelect?: (songId: number, chartId: number) => void;
+  /** /sheet: [플레이]. 고른 단계(채보)로 시작 확인 창을 연다 */
+  onStart?: (songId: number, chartId: number) => void;
   mode: 'play' | 'sheet';
 }
 
@@ -58,14 +69,17 @@ const COPY: Record<Props['mode'], { title: string }> = {
   sheet: { title: '악보로 차근차근 연습해요' },
 };
 
-/** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과다 */
-type PickerTab = SongScope | 'RECOMMEND';
+/** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과, LESSONS는 입문 코스(악보 연습만, Jira 331)다 */
+type PickerTab = SongScope | 'RECOMMEND' | 'LESSONS';
 
 const SCOPE_OPTIONS: { value: PickerTab; label: string }[] = [
   { value: 'BUILTIN', label: '기본 곡' },
   { value: 'MINE', label: '라이브러리' },
 ];
-const TAB_OPTIONS_WITH_AI: { value: PickerTab; label: string }[] = [...SCOPE_OPTIONS, { value: 'RECOMMEND', label: 'AI 추천곡' }];
+const AI_OPTION: { value: PickerTab; label: string } = { value: 'RECOMMEND', label: 'AI 추천곡' };
+const LESSONS_OPTION: { value: PickerTab; label: string } = { value: 'LESSONS', label: '입문 코스' };
+/** `?tab=lessons`면 입문 코스 탭으로 연다(레슨 연주 준비의 뒤로 가기·권유 카드·결과 화면) */
+const LESSONS_TAB_PARAM = 'lessons';
 
 type LevelFilter = SongLevel | 'ALL';
 
@@ -103,8 +117,9 @@ function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommen
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
-export function SongPicker({ onSelect, mode }: Props) {
-  const { source, scope, items, status, error, load, selectSong } = useSongs();
+export function SongPicker({ onSelect, onStart, mode }: Props) {
+  const source = useSongs((s) => s.source);
+  const selectSong = useSongs((s) => s.selectSong);
   const presets = useSettings((s) => s.presets);
   const activePresetId = useSettings((s) => s.activePresetId);
   // 추천: API 곡 소스이고 로그인 상태일 때만 탭과 무관하게 마운트 시 한 번 요청한다(U7)
@@ -117,10 +132,42 @@ export function SongPicker({ onSelect, mode }: Props) {
   const clickReco = useRecommendations((r) => r.click);
   const clearReco = useRecommendations((r) => r.clear);
   // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
-  const [params] = useSearchParams();
-  const [rawTab, setTab] = useState<PickerTab>(params.get('scope') === 'MINE' ? 'MINE' : scope);
-  // 로그인이 풀리면 AI 추천곡 탭은 사라지므로 기본 곡으로 본다
-  const tab: PickerTab = rawTab === 'RECOMMEND' && !recoEnabled ? 'BUILTIN' : rawTab;
+  const [params, setParams] = useSearchParams();
+  const [rawTab, setRawTab] = useState<PickerTab>(
+    params.get('tab') === LESSONS_TAB_PARAM ? 'LESSONS' : params.get('scope') === 'MINE' ? 'MINE' : useSongs.getState().scope,
+  );
+  // 곡 선택이 떠 있는 동안 주소의 tab만 바뀌면(권유 카드 [입문 코스 시작], 사이드바 「악보 연습」) 탭을 따라 바꾼다.
+  // 같은 경로라 화면이 다시 만들어지지 않으므로 렌더 중에 맞춘다
+  const urlLessons = params.get('tab') === LESSONS_TAB_PARAM;
+  const [seenUrlLessons, setSeenUrlLessons] = useState(urlLessons);
+  if (urlLessons !== seenUrlLessons) {
+    setSeenUrlLessons(urlLessons);
+    if (urlLessons) setRawTab('LESSONS');
+    else if (rawTab === 'LESSONS') setRawTab('BUILTIN');
+  }
+  // 입문 코스는 악보 연습에서만, 추천과 같은 조건(로그인·API 곡 소스)일 때 보인다(설계 SETUP-입문-코스 3-5)
+  const lessonsEnabled = mode === 'sheet' && recoEnabled;
+  // 로그인이 풀리면 AI 추천곡·입문 코스 탭은 사라지므로 기본 곡으로 본다
+  const tab: PickerTab = (rawTab === 'RECOMMEND' && !recoEnabled) || (rawTab === 'LESSONS' && !lessonsEnabled) ? 'BUILTIN' : rawTab;
+  const tabOptions = [...SCOPE_OPTIONS, ...(recoEnabled ? [AI_OPTION] : []), ...(lessonsEnabled ? [LESSONS_OPTION] : [])];
+  // 입문 코스 탭은 주소에 남겨 레슨에서 돌아올 때 같은 탭으로 연다
+  const setTab = (next: PickerTab) => {
+    setRawTab(next);
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === 'LESSONS') p.set('tab', LESSONS_TAB_PARAM);
+        else p.delete('tab');
+        // 악보 연습: 라이브러리 탭은 주소에도 남겨 곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게 한다
+        if (mode === 'sheet') {
+          if (next === 'MINE') p.set('scope', 'MINE');
+          else p.delete('scope');
+        }
+        return p;
+      },
+      { replace: true },
+    );
+  };
   const isAi = tab === 'RECOMMEND';
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<LevelFilter>('ALL');
@@ -129,6 +176,8 @@ export function SongPicker({ onSelect, mode }: Props) {
   const [manual, setManual] = useState<SongSummary | null>(null);
   // AI 추천곡 탭에서 직접 고른 곡 id — 그 곡의 [준비]는 추천 채보로 가고 클릭을 기록한다. 다른 곡을 고르면 지운다
   const [aiPickedId, setAiPickedId] = useState<number | null>(null);
+  // 악보 연습: 카드에서 고른 연습 단계. 곡을 바꾸면 그 곡의 처음 단계(주소 chart → 기본)로 돌아간다
+  const [pickedChart, setPickedChart] = useState<{ songId: number; chartId: number } | null>(null);
   // 비슷한 곡을 읽을 곡 — 선택이 SIMILAR_DELAY_MS 그대로일 때 정해진다
   const [similarFor, setSimilarFor] = useState<number | null>(null);
   const similarKeys = useRef(new Set<string>());
@@ -136,6 +185,17 @@ export function SongPicker({ onSelect, mode }: Props) {
   const requested = useRef(new Set<number>());
   const queryRef = useRef(query);
   const firstLoad = useRef(true);
+  // 서버로 보낼 검색어. 입력은 디바운스 뒤에 옮기고 탭·난이도 변경은 즉시 반영한다
+  const [sentQuery, setSentQuery] = useState(query);
+  // 곡 목록은 서버 데이터 캐시로 읽는다(설계 TECH-350). AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다).
+  const list = useApiQuery({
+    ...songListQuery({ scope: tab === 'MINE' ? 'MINE' : 'BUILTIN', q: sentQuery, ...listFilter(level) }, source),
+    // 입문 코스 탭도 곡 목록을 쓰지 않는다
+    enabled: tab !== 'RECOMMEND' && tab !== 'LESSONS',
+  });
+  const items = useMemo(() => list.data ?? [], [list.data]);
+  const status = list.status;
+  const error = list.error;
   // 내장 개발 소스만 로컬 기록을 사용한다. API 실패를 로컬값으로 대체하지 않는다.
   const localBests = useMemo(() => {
     const logs = source === 'builtin' ? loadPlayLogs() : [];
@@ -154,7 +214,8 @@ export function SongPicker({ onSelect, mode }: Props) {
   const ready = isAi ? recoEntry.status === 'ready' || recoEntry.status === 'hidden' : status === 'ready';
   const listLoading = isAi ? !ready : status === 'loading';
 
-  const recordsReady = isAi ? ready : status === 'ready' && scope === tab;
+  const recordsReady = isAi ? ready : status === 'ready' && !list.isPlaceholder;
+  const localChartBests = useMemo(() => (source === 'builtin' && mode === 'sheet' ? bestAccuracyByChart(loadPlayLogs(), 'SHEET') : new Map<number, number>()), [mode, source]);
   const records = useBestRecords(recordsReady ? songs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
   const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
@@ -174,11 +235,14 @@ export function SongPicker({ onSelect, mode }: Props) {
     const delay = firstLoad.current || queryRef.current === query ? 0 : SEARCH_DEBOUNCE_MS;
     firstLoad.current = false;
     queryRef.current = query;
-    // AI 추천곡 탭은 곡 목록을 읽지 않는다(받은 추천을 FE에서 거른다)
-    if (tab === 'RECOMMEND') return;
-    const t = setTimeout(() => void load(tab, query, listFilter(level)), delay);
+    const t = setTimeout(() => setSentQuery(query), delay);
     return () => clearTimeout(t);
-  }, [tab, query, level, load]);
+  }, [query]);
+
+  // 다음 진입의 기본 탭을 위해 마지막 목록 탭을 기억한다(기존 동작 유지, 설계 TECH-350 U4)
+  useEffect(() => {
+    if ((tab === 'BUILTIN' || tab === 'MINE') && useSongs.getState().scope !== tab) useSongs.setState({ scope: tab });
+  }, [tab]);
 
   const fetchDetail = useCallback(
     (id: number) => {
@@ -198,8 +262,13 @@ export function SongPicker({ onSelect, mode }: Props) {
     const n = Number(params.get('song'));
     return Number.isInteger(n) && n > 0 ? n : null;
   }, [params]);
+  const deepChartId = useMemo(() => {
+    const n = Number(params.get('chart'));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, [params]);
+  // 라이브러리 탭은 기존대로, 악보 연습은 기본 곡 탭에서도 주소의 곡을 골라 둔다
   const deepTarget =
-    deepLinkId !== null && tab === 'MINE' && ready && scope === 'MINE'
+    deepLinkId !== null && (tab === 'MINE' || (mode === 'sheet' && tab === 'BUILTIN')) && ready && !list.isPlaceholder
       ? items.find((s) => s.id === deepLinkId && isPlayableStatus(s.status))
       : undefined;
   const pick = (id: number) => {
@@ -226,15 +295,24 @@ export function SongPicker({ onSelect, mode }: Props) {
     fetchDetail(selectedId);
   }, [selectedId, fetchDetail]);
 
+  // 악보 연습: 카드가 보일 단계. 직접 고른 단계 → (처음 한 번) 주소의 단계 → AI 추천 채보 → 기본 단계
+  const initialChartId = (detail: SongDetail, id: number, card?: RecommendCard): number | null => {
+    const has = (c: number | null | undefined): c is number => c != null && detail.charts.some((x) => x.id === c);
+    if (pickedChart?.songId === id && has(pickedChart.chartId)) return pickedChart.chartId;
+    if (id === deepLinkId && has(deepChartId)) return deepChartId;
+    if (card) return chartFallback(detail, card.chartId) ?? card.chartId;
+    return defaultChartId(detail);
+  };
+
   // 기본 채보로 간다. AI 추천곡 탭에서 고른 곡은 추천 채보(상세에 없으면 기본 채보)로 가고 클릭을 기록한다(설계 4-3, U2·U5)
   const prepare = (id: number) => {
     const card = aiCard?.song.id === id ? aiCard : undefined;
     const go = (detail: SongDetail) => {
-      const chartId = card ? (chartFallback(detail, card.chartId) ?? card.chartId) : defaultChartId(detail);
+      const chartId = mode === 'sheet' ? initialChartId(detail, id, card) : card ? (chartFallback(detail, card.chartId) ?? card.chartId) : defaultChartId(detail);
       if (chartId === null) return;
       // 기록은 기다리지 않는다(D8)
       if (card && recoEntry.status === 'ready') void clickReco(card, recoEntry.requestId);
-      onSelect(id, chartId);
+      (mode === 'sheet' ? onStart : onSelect)?.(id, chartId);
     };
     const d = details[id];
     if (d?.status === 'ready') {
@@ -280,82 +358,121 @@ export function SongPicker({ onSelect, mode }: Props) {
         ? 'error'
         : 'loading';
   const presetName = presetDisplayName(presets, activePresetId);
+  const quickCharts = selDetail?.status === 'ready' ? sortCharts(selDetail.detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty })) : [];
+  const quickChartId =
+    mode === 'sheet' && selDetail?.status === 'ready' && selectedId !== null
+      ? initialChartId(selDetail.detail, selectedId, aiCard?.song.id === selectedId ? aiCard : undefined)
+      : null;
+  // 내장 개발 소스는 로컬 로그, 그 밖은 서버 단계별 최고 정확도(고른 단계 기준)
+  const bestByChart: Record<number, number | undefined> = Object.fromEntries(
+    quickCharts.map((c) => [c.id, source === 'builtin' ? localChartBests.get(c.id) : records.accuraciesByChart.get(c.id)]),
+  );
   const copy = COPY[mode];
+
+  const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  // 안내 줄·구분선은 악보 연습의 곡 탭에서만 보인다. 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
+  const showGuide = mode === 'sheet' && tab !== 'LESSONS';
 
   return (
     <div className="play-sp">
       <PageHeader title={copy.title} />
 
-      {source === 'api' && (
-        <Segmented label="곡 범위" options={recoEnabled ? TAB_OPTIONS_WITH_AI : SCOPE_OPTIONS} value={tab} onChange={setTab} />
-      )}
-      <div className="play-sp-filter">
-        <Input
-          className="play-sp-search"
-          type="search"
-          label="곡 검색"
-          value={query}
-          placeholder="곡 제목 또는 아티스트 검색"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="play-sp-levels" role="group" aria-label="곡 난이도">
-          {LEVEL_OPTIONS.map((o) => (
-            <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
-              {o.label}
-            </Chip>
-          ))}
-        </div>
-      </div>
-
-      {listLoading && (
-        <div className="play-sp-center">
-          <span className="spinner" aria-label="불러오는 중" />
-        </div>
+      {showGuide && (
+        <>
+          <PickerGuide mode={mode} />
+          <hr className="play-sp-divider" />
+        </>
       )}
 
-      {!isAi && status === 'error' && (
-        <div className="notice error col" role="alert">
-          <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
-          <Button variant="secondary" size="sm" onClick={() => void load(tab, query, listFilter(level))}>
-            다시 시도
-          </Button>
-        </div>
-      )}
-
-      {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
-
-      {ready && (
+      {tab === 'LESSONS' ? (
+        <>
+          {tabs}
+          <LessonCourse onOpenBuiltin={() => setTab('BUILTIN')} />
+        </>
+      ) : (
+        // 왼쪽 열(탭·검색·표)과 선택 곡 카드: 카드 윗선 = 탭 윗선(Figma 112:696·112:381)
         <div className="play-sp-grid">
           <div className="play-sp-list">
-            <SongTable
-              key={`${tab}|${query}|${level}`}
-              songs={songs}
-              selectedId={selectedId}
-              onSelect={pick}
-              onOpen={(id) => {
-                pick(id);
-                prepare(id);
-              }}
-              mode={mode}
-              bestScores={bests.scores}
-              bestAccuracies={bests.accuracies}
-              isLocked={(s) => isLocked(tab, s)}
-              isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
-              emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
-            />
+            {tabs}
+            <div className="play-sp-filter">
+              <Input
+                className="play-sp-search"
+                type="search"
+                label="곡 검색"
+                value={query}
+                placeholder="곡 제목 또는 아티스트 검색"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <div className="play-sp-levels" role="group" aria-label="곡 난이도">
+                {LEVEL_OPTIONS.map((o) => (
+                  <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
+                    {o.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            {listLoading && (
+              <div className="play-sp-center">
+                <span className="spinner" aria-label="불러오는 중" />
+              </div>
+            )}
+
+            {!isAi && status === 'error' && (
+              <div className="notice error col" role="alert">
+                <span>{error ?? '곡 목록을 불러오지 못했습니다.'}</span>
+                <Button variant="secondary" size="sm" onClick={list.refetch}>
+                  다시 시도
+                </Button>
+              </div>
+            )}
+
+            {ready && songs.length > 0 && <BestRecordsNotice status={records.status} retry={records.retry} />}
+
+            {ready && (
+              <SongTable
+                key={`${tab}|${query}|${level}`}
+                songs={songs}
+                selectedId={selectedId}
+                onSelect={pick}
+                onOpen={(id) => {
+                  pick(id);
+                  prepare(id);
+                }}
+                mode={mode}
+                bestScores={bests.scores}
+                bestAccuracies={bests.accuracies}
+                isLocked={(s) => isLocked(tab, s)}
+                isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
+                emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
+              />
+            )}
           </div>
-          <SongDetailPane
-            song={selectedSong}
-            mode={mode}
-            bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
-            bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
-            presetName={presetName}
-            chartState={chartState}
-            onRetry={() => selectedId !== null && fetchDetail(selectedId)}
-            onPrepare={() => selectedId !== null && prepare(selectedId)}
-            similar={similarCard}
-            onSimilarPick={viewSimilar}
-          />
+          {ready && (
+            <SongDetailPane
+              song={selectedSong}
+              mode={mode}
+              bestScore={selectedId === null ? undefined : bests.scores?.get(selectedId)}
+              bestAccuracy={selectedId === null ? undefined : bests.accuracies?.get(selectedId)}
+              presetName={presetName}
+              chartState={chartState}
+              onRetry={() => selectedId !== null && fetchDetail(selectedId)}
+              onPrepare={() => selectedId !== null && prepare(selectedId)}
+              quickStart={
+                mode === 'sheet'
+                  ? {
+                      charts: quickCharts,
+                      selectedChartId: quickChartId,
+                      onSelectChart: (chartId) => selectedId !== null && setPickedChart({ songId: selectedId, chartId }),
+                      bestByChart,
+                      onStart: () => selectedId !== null && prepare(selectedId),
+                    }
+                  : undefined
+              }
+              similar={similarCard}
+              onSimilarPick={viewSimilar}
+            />
+          )}
         </div>
       )}
     </div>

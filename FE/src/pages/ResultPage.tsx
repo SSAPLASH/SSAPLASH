@@ -7,6 +7,7 @@ import { SetupHintCard } from '@/components/result/SetupHintCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/components/ReportEntry';
+import { LessonResultBand } from '@/components/lesson/LessonResultBand';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { pickPathOf, retryPathOf } from '@/domain/playRetry';
@@ -175,6 +176,7 @@ export function ResultPage() {
           }
           celebration={celebrating ? <CelebrationFx /> : undefined}
         />
+        <LessonResultBand log={log} />
 
         <ReportEntry
           playId={log.playId}

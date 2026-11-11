@@ -15,6 +15,7 @@ import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
 import { GlassDock } from './shell/GlassDock';
 import { ProfileMenu } from './shell/ProfileMenu';
 import { Sidebar } from './shell/Sidebar';
+import { LessonInvite } from './lesson/LessonInvite';
 import { StickStatusIndicator } from './shell/StickStatusIndicator';
 import { TopBar } from './shell/TopBar';
 import { useSidebarCollapsed } from './shell/useMediaQuery';
@@ -25,8 +26,11 @@ const RecommendationConsentDialog = lazy(() =>
   import('./shell/RecommendationConsentDialog').then((m) => ({ default: m.RecommendationConsentDialog })),
 );
 
-/** 개발 모니터 빌드(VITE_MONITOR=true)에서만 "모니터 새 창" 버튼을 둔다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
-const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
+/**
+ * 모니터 빌드(VITE_MONITOR=true)의 개발 서버에서만 "모니터 새 창" 버튼을 둔다. 배포 빌드는 모니터를 켜도 일반 사용자에게
+ * 보이지 않게 주소(/monitor/stick?follow=1)로만 연다(설계 PLAY-002 live-play-diagnostics D4). 상수 분기라 그 밖의 빌드에는 코드가 남지 않는다
+ */
+const MONITOR_ENABLED = import.meta.env.DEV && import.meta.env.VITE_MONITOR === 'true';
 
 interface Props {
   /** 로그인 검사 여부(App.tsx가 VITE_AUTH_REQUIRED로 내려준다). 꺼져 있으면 익명일 때 로그인 링크를 보이지 않는다 */
@@ -127,6 +131,7 @@ export function AppShell({ authRequired }: Props) {
       {!immersive && <Sidebar />}
       <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
+        {!immersive && <LessonInvite />}
         {/* 경로가 바뀌면 key로 다시 마운트되어 .route-fade가 페이드 인한다(쿼리만 바뀌면 그대로). 연주 화면도 같은 래퍼 */}
         {/* Suspense는 key 래퍼 바깥에 둔다. 안에 두면 key가 바뀔 때마다 새 경계가 생겨 지연 화면을 기다리는 동안 이전 화면이 아닌 fallback이 보인다 */}
         {/* 오류 경계는 Suspense·key 래퍼보다 바깥(설계 TECH-chunk-load-recovery R3). 경로가 바뀌면 오류가 풀린다 */}

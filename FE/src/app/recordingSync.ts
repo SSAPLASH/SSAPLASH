@@ -2,6 +2,8 @@
 // 본문 조립은 domain/recording, 상태 보관은 app/recordingStore가 한다.
 import { ApiError } from '@/api/error';
 import { saveRecording } from '@/api/recordings';
+import { recordingKeys } from '@/api/queries/recordings';
+import { queryClient } from './queryClient';
 import type { RecordingBody, RecordingSummary } from '@/domain/recording';
 import { startPlaySync } from './playSync';
 
@@ -47,7 +49,10 @@ export async function uploadRecording(body: RecordingBody, opts: UploadOptions =
   const sleep = opts.sleep ?? defaultSleep;
   for (let attempt = 0; ; attempt++) {
     try {
-      return await saveRecording(body, opts.signal);
+      const saved = await saveRecording(body, opts.signal);
+      // 녹음 보관함 목록 캐시를 새로 받게 한다(설계 TECH-351)
+      void queryClient.invalidateQueries({ queryKey: recordingKeys.all });
+      return saved;
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 503 || attempt >= RECORDING_RETRY_DELAYS_MS.length) throw e;
       await sleep(e.retryAfterMs ?? RECORDING_RETRY_DELAYS_MS[attempt]);

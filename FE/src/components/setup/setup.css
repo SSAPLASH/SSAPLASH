@@ -317,39 +317,61 @@
   gap: var(--space-m);
 }
 
-/* ---- 드럼 배치(편집기 폭 720 + 정보 336) ----
- * 편집기 비율은 배치 좌표계(KitCanvas 16:10)를 따른다. Figma의 720×320으로 자르면 킥·하이햇 페달이 잘려 끌 수 없다 */
+/* ---- 드럼 배치(캔버스 판 + 화면 높이 맞춤, PLAY-004 D9·D11) ----
+ * 행(.setup-stage-row)은 카드 안쪽 전체 폭이고 가로 크기 컨테이너다. 그 안의 판(.setup-stage-panel) 하나가 어두운 바탕이다:
+ * 폭은 행 전체, 높이 = max(260px, min(--setup-stage-maxh, 판 폭/1.6 + 2×여백)), 안쪽 여백 16px, position: relative.
+ * 드럼 그림 영역(.setup-stage-fig, 편집 KitCanvas·보정 DrumKit)은 판 안쪽 영역 전체를 채운다(D11 v0.3). 편집 원은 KitCanvas가 min(W, H×1.6) 기준으로, 보정 킷은 DrumKit이 contain으로 맞춘다.
+ * 정보 카드·배너·안내는 그림 위에 겹쳐 뜬다. 떠 있는 요소의 자리: 위쪽 가운데(.cal-stage-top) / 오른쪽·왼쪽 아래(.setup-kitinfo) / 아래쪽 가운데(.setup-panel-banner).
+ * --setup-stage-maxh(판이 쓸 수 있는 높이)는 useStageFit이 측정해 행에 넣는다. 측정 전·jsdom의 폴백은 아래 추정값이다:
+ *   상단바 56 + 위 여백 28 + 머리줄 56 + 상태 타일 64+16 + 배치 카드 위쪽 120 + 하단 바 72 + 바 위 간격 16 ≈ 430 (복귀 띠가 있으면 +80) */
+.setup-stage-row {
+  --setup-stage-maxh: calc(100dvh - 430px);
+  --setup-panel-pad: 16px;
+  container-type: inline-size;
+  width: 100%;
+}
+.setup-page:has(.setup-banner) .setup-stage-row {
+  --setup-stage-maxh: calc(100dvh - 510px);
+}
 .setup-kit {
   gap: var(--space-s);
 }
-.setup-kit-body {
-  display: grid;
-  grid-template-columns: minmax(0, 720px) 264px;
-  gap: 32px;
-  justify-content: center;
-  align-items: center;
-}
-@media (max-width: 1024px) {
-  .setup-kit-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.setup-kit-left {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-s);
-  min-width: 0;
-}
-.setup-editor {
+/* 판: 높이는 그림이 판을 채우는 값(폭/1.6 + 위아래 여백)과 가용 높이 중 작은 쪽. 260px 밑으로는 줄이지 않는다(그보다 낮은 화면은 스크롤) */
+.setup-stage-panel {
+  position: relative;
+  box-sizing: border-box;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  height: max(260px, min(var(--setup-stage-maxh), calc(100cqw / 1.6 + 2 * var(--setup-panel-pad))));
+  border-radius: var(--radius-control);
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  overflow: hidden;
 }
+.setup-stage-inner {
+  position: absolute;
+  inset: var(--setup-panel-pad);
+}
+.setup-stage-fig {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+/* 판이 바탕·테두리를 맡으므로 편집 그림은 투명하게 */
 .setup-editor .kit-wrap {
   height: 100%;
   aspect-ratio: auto;
-  border-radius: var(--radius-control);
-  background: var(--bg-canvas);
-  border-color: var(--line);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+/* 아래쪽 가운데 경고 배너 감싸개: 폭 ≤ 판의 60%. bottom은 useOverlayRegion이 정한다(카드와 가로로 겹치면 카드 위로 쌓임) */
+.setup-panel-banner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 60%;
 }
 .setup-chips {
   display: flex;
@@ -361,75 +383,86 @@
   color: var(--text-3);
   font-size: 12px;
 }
-/* 선택 패드 카드(Figma 정보 영역 765:33431, UX-62): 폭 264·내용 높이·머리(캡션/이름)·구분선·값 줄(이름 왼쪽·값 오른쪽)·버튼 */
-.setup-padinfo {
+.setup-kit-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  flex-wrap: wrap;
+}
+.setup-kit-foot > .setup-padinfo-hint {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+/* 정보 카드(D10·D11): 폭 220·반투명 바탕·테두리. 판 안쪽 16px 여백의 오른쪽 아래가 기본(그림 위에 겹침), 패드를 더 가리면 왼쪽 아래 */
+.setup-kitinfo {
+  position: absolute;
+  bottom: var(--setup-panel-pad, 16px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 264px;
-  padding: var(--space-m);
+  gap: var(--space-s);
+  box-sizing: border-box;
+  width: 120px;
+  max-width: calc(100% - 2 * var(--setup-panel-pad, 16px));
+  padding: var(--space-s) var(--space-m);
   border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
-  align-self: center;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+  pointer-events: auto;
 }
-.setup-padinfo-head {
+.setup-kitinfo.right {
+  right: var(--setup-panel-pad, 16px);
+}
+.setup-kitinfo.left {
+  left: var(--setup-panel-pad, 16px);
+}
+.setup-kitinfo.warn {
+  border-color: var(--warn);
+}
+.setup-kitinfo-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.setup-kitinfo-head {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.setup-padinfo-caption {
-  font-size: 12px;
-  color: var(--text-1);
-}
-.setup-padinfo-title {
+.setup-kitinfo-caption {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.45;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.3;
 }
-.setup-padinfo-rule {
-  margin: 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-.setup-padinfo-values {
+.setup-kitinfo-values {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   margin: 0;
 }
-.setup-padinfo-values > div {
+.setup-kitinfo-values > div {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-m);
-  font-size: 14px;
-  line-height: 1.45;
+  gap: var(--space-s);
 }
-.setup-padinfo-values dt {
-  color: var(--text-1);
+.setup-kitinfo-values > div + div {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 6px;
 }
-.setup-padinfo-values dd {
+.setup-kitinfo-values dt {
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.setup-kitinfo-values dd {
   margin: 0;
   font-family: var(--font-num);
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.setup-padinfo-actions {
-  display: flex;
-  gap: var(--space-s);
-}
-.setup-padinfo-actions > .ui-btn {
-  flex: 1;
-  min-width: 0;
-}
-.setup-padinfo-foot {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-s);
-}
-.setup-padinfo-foot > .ui-btn {
-  width: 100%;
+  line-height: 1.2;
 }
 .setup-padinfo-hint {
   color: var(--text-3);
@@ -676,32 +709,33 @@
 .setup-chips-plus {
   flex: none;
 }
+/* [프리셋 관리]: 칩 줄 오른쪽 끝. 추가하기보다 한 단계 낮은 색 */
+.setup-chips-manage {
+  color: var(--text-2);
+}
+/* 판 오른쪽 위에 고정하는 동작 버튼([전체 보정]). 정보 카드(아래 모서리)·배너(아래 가운데)와 겹치지 않는다 */
+.setup-stage-action {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
 
-/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64): 2열, 높이 118, 전체가 버튼 ---- */
+/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64·PLAY-004 D8): 2열 한 줄, 요약만 보이는 버튼 ---- */
 .setup-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-m);
-}
-.setup-tile-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  min-width: 0;
-  scroll-margin-top: 148px;
-}
-.setup-tile-wrap.expanded {
-  grid-column: 1 / -1;
 }
 .setup-tile {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-s);
+  gap: var(--space-xs);
   width: 100%;
-  min-height: 118px;
-  padding: var(--space-m);
+  min-width: 0;
+  padding: var(--space-s) var(--space-m);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface-1);
@@ -711,6 +745,10 @@
   cursor: pointer;
   overflow: hidden;
   transition: border-color var(--motion-fast);
+}
+.setup-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 .setup-tile.is-on {
   border-color: var(--good);
@@ -726,10 +764,13 @@
 .setup-tile.is-urgent {
   border-color: var(--miss);
 }
-.setup-tile:hover {
+.setup-tile.is-attention {
+  border-color: var(--warn);
+}
+.setup-tile:not(:disabled):hover {
   border-color: var(--line-strong);
 }
-.setup-tile.is-on:hover {
+.setup-tile.is-on:not(:disabled):hover {
   border-color: var(--good);
 }
 .setup-tile > * {
@@ -754,23 +795,18 @@
 .setup-tile.is-urgent .setup-tile-dot {
   background: var(--miss);
 }
+.setup-tile.is-attention .setup-tile-dot {
+  background: var(--warn);
+}
 .setup-tile-title {
   flex: 1;
   min-width: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  line-height: 1.45;
-}
-.setup-tile-chevron {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  transition: transform var(--motion-fast);
-}
-.setup-tile-wrap.expanded .setup-tile-chevron {
-  transform: rotate(90deg);
+  line-height: 1.4;
 }
 .setup-tile-status {
+  flex: none;
   font-size: 12px;
   line-height: 1.45;
   color: var(--text-3);
@@ -781,24 +817,59 @@
 .setup-tile.is-urgent .setup-tile-status {
   color: var(--miss);
 }
+.setup-tile.is-attention .setup-tile-status {
+  color: var(--warn);
+}
 .setup-tile-summary {
   font-size: 14px;
   line-height: 1.45;
   color: var(--text-1);
 }
-.setup-tile-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  padding: var(--space-m);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
+.setup-tile-reason {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.setup-tile-action {
+  flex: none;
+  margin-left: var(--space-s);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.setup-tile.is-urgent .setup-tile-action {
+  color: var(--miss);
+}
+.setup-tile.is-attention .setup-tile-action {
+  color: var(--warn);
 }
 @media (max-width: 1024px) {
   .setup-tiles {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ---- 단계 팝업(StepDialog, PLAY-004 D8) ---- */
+.dialog.setup-step-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  max-width: 640px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.setup-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.setup-step-head h2 {
+  margin: 0;
+}
+.setup-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
 }
 
 /* ---- 프리셋 슬롯 창(Figma 772:33828 · Setup / PresetSlot 505:2501): 폭 570, 3열, 슬롯 116 ---- */
@@ -908,5 +979,533 @@
 }
 .setup-slot-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.setup-slot-count {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.setup-slot-error {
+  margin: 0;
+  color: var(--miss);
+  font-size: 14px;
+  line-height: 1.45;
+}
+/* 저장 슬롯 감싸개: 적용 버튼(카드 전체) 위 오른쪽 구석에 휴지통을 겹친다(버튼 안에 버튼을 넣지 않기 위해) */
+.setup-slot-cell {
+  position: relative;
+  display: flex;
+}
+.setup-slot-cell > .setup-slot {
+  flex: 1;
+  min-width: 0;
+}
+/* 휴지통 자리를 비워 「적용 중」과 겹치지 않게 한다 */
+.setup-slot-cell.has-delete .setup-slot-top {
+  padding-right: 28px;
+  min-height: 24px;
+}
+.setup-slot-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+.setup-slot-delete:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--miss);
+}
+.setup-slot-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 삭제 확인: 카드 자리를 그대로 쓰고 안쪽만 질문·버튼으로 바꾼다 */
+.setup-slot.is-confirm {
+  justify-content: space-between;
+  border-color: var(--miss);
+  cursor: default;
+}
+.setup-slot.is-confirm.active {
+  border: 2px solid var(--miss);
+}
+.setup-slot-question {
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.setup-slot-question b {
+  font-weight: 600;
+}
+.setup-slot-confirm-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.setup-slot-confirm-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+.setup-slot-confirm-row > .ui-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+/* =====================================================================
+ * 애플 스타일(PLAY-004 D12, v0.2). 드럼 세팅 화면에만 적용한다.
+ * tokens.css·components/ui/*는 건드리지 않고 .setup-page(팝업은 .setup-step-dialog) 아래로 범위를 한정해 덮는다.
+ * 규칙: 카드는 테두리 없이 바탕 차이 + 모서리 20px / 떠 있는 요소는 72% 반투명 + blur / 버튼은 알약형 / 칩 줄은 세그먼트 컨트롤.
+ * 이 블록은 파일 맨 끝에 둔다(위의 같은 선택자 규칙을 덮어야 하므로 순서가 의미를 가진다).
+ * ===================================================================== */
+.setup-page,
+.dialog.setup-step-dialog {
+  /* 떠 있는 면: 바탕색 72%. 경고는 --warn 12%를 섞는다 */
+  --apple-float: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  --apple-float-warn: color-mix(in srgb, var(--warn) 12%, color-mix(in srgb, var(--bg-base) 72%, transparent));
+  --apple-hair: rgba(255, 255, 255, 0.08);
+  --apple-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  --apple-fill: color-mix(in srgb, var(--text-1) 10%, transparent);
+  --apple-fill-hover: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+
+/* 떠 있는 요소 등장: 180ms 페이드 + 6px 위로. 모션 줄이기에서는 페이드만 */
+@keyframes apple-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes apple-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- 페이지 머리: 큰 제목과 옅은 보조 글자로 위계를 만든다 ---- */
+.setup-page {
+  --setup-py: 24px;
+  gap: var(--space-m);
+}
+.setup-page .ui-page-title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.setup-page .ui-page-meta {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.setup-progress {
+  font-size: 13px;
+}
+
+/* ---- 버튼: 알약형. 주 버튼은 채움, 보조는 옅은 채움(테두리 없음), 텍스트 버튼은 그대로 ---- */
+.setup-page .ui-btn,
+.dialog.setup-step-dialog .ui-btn {
+  border-radius: 999px;
+  border-color: transparent;
+}
+.setup-page .ui-btn-sm,
+.dialog.setup-step-dialog .ui-btn-sm {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.setup-page .ui-btn-secondary,
+.dialog.setup-step-dialog .ui-btn-secondary {
+  background: var(--apple-fill);
+}
+.setup-page .ui-btn-secondary:hover:not(:disabled),
+.dialog.setup-step-dialog .ui-btn-secondary:hover:not(:disabled) {
+  background: var(--apple-fill-hover);
+  border-color: transparent;
+}
+.setup-page .ui-btn-text:hover:not(:disabled),
+.dialog.setup-step-dialog .ui-btn-text:hover:not(:disabled) {
+  background: var(--apple-fill);
+}
+
+/* ---- 단계 타일: 테두리 없이 --surface-1, 모서리 20px, 안쪽 여백 24px ---- */
+.setup-page .setup-tiles {
+  gap: var(--space-m);
+}
+.setup-page .setup-tile {
+  gap: 2px;
+  padding: 18px var(--space-l);
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface-1);
+  transition: background-color var(--motion-fast);
+}
+.setup-page .setup-tile:not(:disabled):hover,
+.setup-page .setup-tile.is-on:not(:disabled):hover {
+  background: var(--surface-2);
+}
+/* 켜진 타일의 초록 면 대신 점·상태 글자로만 알린다 */
+.setup-page .setup-tile.is-on::before {
+  display: none;
+}
+.setup-page .setup-tile.is-urgent,
+.setup-page .setup-tile.is-attention {
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface-1));
+}
+.setup-page .setup-tile.is-urgent {
+  background: color-mix(in srgb, var(--miss) 8%, var(--surface-1));
+}
+.setup-page .setup-tile-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.setup-page .setup-tile-status {
+  font-size: 11px;
+}
+.setup-page .setup-tile-action {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--brand-text);
+}
+.setup-page .setup-tile.is-urgent .setup-tile-action {
+  color: var(--miss);
+}
+.setup-page .setup-tile.is-attention .setup-tile-action {
+  color: var(--warn);
+}
+.setup-page .setup-tile:disabled .setup-tile-action {
+  color: var(--text-3);
+}
+.setup-page .setup-tile-summary {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* ---- 드럼 배치 카드: 테두리 없이 --surface-1, 모서리 20px, 여백 24px ---- */
+.setup-page .setup-kit {
+  gap: 4px;
+  padding: var(--space-l);
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface-1);
+}
+.setup-page .setup-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.setup-page .setup-card-desc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.setup-page .setup-note {
+  line-height: 1.55;
+}
+.setup-page .setup-notice,
+.dialog.setup-step-dialog .setup-notice {
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.setup-page .setup-notice.error,
+.dialog.setup-step-dialog .setup-notice.error {
+  background: color-mix(in srgb, var(--miss) 12%, var(--surface-2));
+}
+
+/* ---- 프리셋 칩 줄: 세그먼트 컨트롤(한 판 안의 알약들, 선택만 떠 있는 바탕) ---- */
+.setup-page .setup-preset-chips {
+  margin: 4px 0 var(--space-s);
+}
+.setup-page .setup-chips-row {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+.setup-page .setup-chips-row .ui-chip {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.setup-page .setup-chips-row .ui-chip:hover:not(:disabled) {
+  color: var(--text-1);
+}
+.setup-page .setup-chips-row .ui-chip.selected,
+.setup-page .setup-chips-row .ui-chip.selected:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 15%, var(--surface-2));
+  color: var(--text-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.setup-page .setup-chips-row .ui-chip.selected:disabled {
+  opacity: 1;
+}
+.setup-page .setup-chips-row .ui-btn {
+  height: 30px;
+  font-weight: 500;
+}
+
+/* ---- 캔버스 판: 모서리 16px, --bg-canvas, 테두리 없음 ---- */
+.setup-page .setup-stage-panel {
+  border: 0;
+  border-radius: 16px;
+  background: var(--bg-canvas);
+}
+
+/* ---- 떠 있는 카드(정보 카드)·배너·보정 안내 ---- */
+.setup-page .setup-kitinfo,
+.setup-page .cal-gap-banner {
+  border: 1px solid var(--apple-hair);
+  border-radius: 16px;
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--apple-shadow);
+  animation: apple-rise 180ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-page .setup-kitinfo,
+  .setup-page .cal-gap-banner {
+    animation-name: apple-fade;
+  }
+}
+.setup-page .setup-kitinfo {
+  gap: 8px;
+  width: 120px;
+  padding: 14px;
+}
+/* 세로 카드엔 값 목록에 반지름이 이미 있어 슬라이더 머리 줄(이름·값)은 눈에서만 감춘다(label은 접근성용으로 남김) */
+.setup-kitinfo .setup-radius-row {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.setup-kitinfo .setup-radius {
+  gap: 4px;
+}
+.setup-page .setup-kitinfo.warn,
+.setup-page .cal-gap-banner {
+  border-color: var(--apple-hair);
+}
+.setup-page .setup-kitinfo.warn {
+  position: absolute;
+  padding-left: 28px;
+  background: var(--apple-float-warn);
+}
+.setup-page .setup-kitinfo.warn::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 21px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.setup-page .setup-kitinfo-name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.setup-page .setup-kitinfo-values {
+  gap: 4px;
+}
+.setup-page .setup-kitinfo-values > div + div {
+  padding-top: 4px;
+}
+/* 낮은 화면(1366×768 판 약 317px): 결과 카드가 판 높이를 넘지 않게 줄인다 */
+@media (max-height: 820px) {
+  .setup-page .setup-kitinfo {
+    gap: 6px;
+    padding: 10px 14px;
+  }
+  .setup-page .setup-kitinfo-name {
+    font-size: 15px;
+  }
+  .setup-page .setup-kitinfo-values dd {
+    font-size: 20px;
+  }
+  .setup-page .setup-kitinfo-values > div + div {
+    padding-top: 2px;
+  }
+  .setup-page .setup-kitinfo .setup-radius-range {
+    display: none;
+  }
+  .setup-page .cal-kitinfo-actions {
+    gap: 4px;
+  }
+}
+.setup-page .setup-kitinfo-values dt {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.setup-page .setup-kitinfo-values dd {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: right;
+}
+.setup-page .cal-gap-banner {
+  gap: var(--space-m);
+  padding: 12px var(--space-m);
+  background: var(--apple-float-warn);
+}
+.setup-page .cal-gap-head {
+  font-size: 13px;
+  font-weight: 600;
+}
+.setup-page .cal-gap-advice,
+.setup-page .cal-overlap-line {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setup-page .cal-progress-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.setup-page .cal-hand-row {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.setup-page .cal-hit-dot {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+}
+/* 위쪽 가운데 큰 안내: 굵기를 한 단계 낮추고 글자 사이를 조인다 */
+.setup-page .cal-stage-headline {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.setup-page .cal-stage-dot {
+  border: 0;
+  background: color-mix(in srgb, var(--text-1) 22%, transparent);
+}
+.setup-page .cal-stage-dot.done {
+  background: var(--good);
+}
+.setup-page .cal-stage-dot.now {
+  background: var(--brand);
+}
+
+/* ---- 보조 카드류(스틱 카드·타격 로그·프리셋 행): 테두리 없이 바탕 차이로 ---- */
+.setup-page .stick-card,
+.dialog.setup-step-dialog .stick-card {
+  border: 0;
+  border-radius: 16px;
+  padding: var(--space-m);
+}
+.setup-page .setup-hitlog {
+  border: 0;
+  border-radius: 16px;
+}
+.setup-page .setup-progress-bar,
+.dialog.setup-step-dialog .setup-progress-bar {
+  border-radius: 999px;
+}
+
+/* ---- 하단 바: 반투명 + 블러, 머리카락 윗선 ---- */
+.setup-page .setup-bar {
+  border-top: 1px solid var(--apple-hair);
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* ---- 단계 팝업: 같은 반투명·블러, 모서리 20px ---- */
+.dialog.setup-step-dialog {
+  padding: var(--space-l);
+  border: 1px solid var(--apple-hair);
+  border-radius: 20px;
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  gap: var(--space-m);
+}
+.dialog.setup-step-dialog .setup-step-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.dialog.setup-step-dialog .setup-note {
+  line-height: 1.55;
+}
+
+/* ---- 정보 카드 글자 위계(토스·애플식 목록) ----
+ * 머리(패드 이름 17/600) > 값(16/600, --text-1) > 라벨(13/500, --text-2) 순으로 차이를 작게 둬서 한눈에 읽히게 한다.
+ * 숫자를 라벨보다 지나치게 키우면(24 vs 11) 라벨이 안 보이고 줄 사이가 벌어져 보이므로, 한 줄 높이 32px 목록으로 묶는다 */
+.setup-page .setup-kitinfo {
+  gap: 10px;
+  padding: 14px 16px;
+}
+.setup-page .setup-kitinfo-head {
+  gap: 2px;
+}
+.setup-page .setup-kitinfo-name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.setup-page .setup-kitinfo-caption {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.setup-page .setup-kitinfo-values {
+  gap: 0;
+}
+.setup-page .setup-kitinfo-values > div {
+  align-items: center;
+  min-height: 32px;
+}
+.setup-page .setup-kitinfo-values > div + div {
+  padding-top: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.setup-page .setup-kitinfo-values dt {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.setup-page .setup-kitinfo-values dd {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+@media (max-height: 820px) {
+  .setup-page .setup-kitinfo {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .setup-page .setup-kitinfo-name {
+    font-size: 16px;
+  }
+  .setup-page .setup-kitinfo-values > div {
+    min-height: 28px;
+  }
+  .setup-page .setup-kitinfo-values dd {
+    font-size: 15px;
+  }
 }

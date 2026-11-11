@@ -52,4 +52,14 @@ describe('DrumKit 보정 props', () => {
     expect(html).not.toContain('drum-pad-appear');
     expect(html).not.toContain('drum-pad-dim');
   });
+
+  it('warnPads는 --warn 링, selectedPad는 선택 링을 그린다(클릭을 가로채지 않는 별도 그룹)', () => {
+    const html = renderToStaticMarkup(<DrumKit warnPads={['HIHAT', 'CRASH']} selectedPad="HIHAT" />);
+    expect(count(html, /class="drum-pad-warn"/g)).toBe(2);
+    expect(html).toContain('data-warn-pad="HIHAT"');
+    expect(html).toContain('data-warn-pad="CRASH"');
+    expect(count(html, /class="drum-pad-selected"/g)).toBe(1);
+    expect(html).toContain('data-selected-pad="HIHAT"');
+    expect(renderToStaticMarkup(<DrumKit />)).not.toContain('drum-pad-warn');
+  });
 });

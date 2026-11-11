@@ -25,6 +25,23 @@ import { isSensorSource } from '@/domain/events';
 
 export type { YawDriftStatus };
 
+/** SET_YAW_OFFSET을 보낸 사실과 근거. bootstrap이 진단 줄(yawCorrect)로 잇는다 */
+export interface YawCorrection {
+  stickId: StickId;
+  /** drift 자동 드리프트 보정 / realign 재정렬 / connected 연결 직후 0 초기화 */
+  reason: 'drift' | 'realign' | 'connected';
+  /** 보내기 전 적용값(도) */
+  prevDeg: number;
+  /** 보낸 절대값(도) */
+  sentDeg: number;
+  /** 링 중앙값 = 오차(도). realign은 요청받은 오차, connected는 null */
+  medianDeg: number | null;
+  /** 중앙값 절대편차(도). drift만 */
+  madDeg: number | null;
+  /** 그때 링의 (스틱 yaw − 앵커 yaw) 샘플. drift만 채운다 */
+  samples: number[];
+}
+
 /** 전송 후 PARAM_ACK를 기다리는 시간(ms) */
 const ACK_WINDOW_MS = 500;
 const STICKS: readonly StickId[] = [0, 1];
@@ -65,6 +82,13 @@ class YawDriftMonitor {
   /** 상태 보고 콜백 등록(1개). 이후 스틱 상태가 바뀔 때마다 호출한다 */
   onStatus(cb: (stickId: StickId, st: YawDriftStatus | null) => void): void {
     this.statusCb = cb;
+  }
+
+  private correctionCb: ((c: YawCorrection) => void) | null = null;
+
+  /** 보정 전송 콜백 등록(1개). SET_YAW_OFFSET을 보낼 때마다 호출한다 */
+  onCorrection(cb: (c: YawCorrection) => void): void {
+    this.correctionCb = cb;
   }
 
   /** 보낼 수 있는 소스(연결됨 + sendCommand)면 반환, 아니면 null */
@@ -164,7 +188,9 @@ class YawDriftMonitor {
   onConnected(stickId: StickId): void {
     const src = this.usable();
     if (!src) return;
+    const prevDeg = this.sticks[stickId].applied;
     src.sendCommand!(encodeSetYawOffset(0), stickId);
+    this.correctionCb?.({ stickId, reason: 'connected', prevDeg, sentDeg: 0, medianDeg: null, madDeg: null, samples: [] });
     this.forget(stickId);
     this.report(stickId);
   }
@@ -202,6 +228,7 @@ class YawDriftMonitor {
     const s = this.sticks[stickId];
     const next = wrap180(s.applied - errorDeg);
     src.sendCommand!(encodeSetYawOffset(next), stickId);
+    this.correctionCb?.({ stickId, reason: 'realign', prevDeg: s.applied, sentDeg: next, medianDeg: errorDeg, madDeg: null, samples: [] });
     s.applied = next;
     s.lastErr = errorDeg;
     s.lastSentAt = performance.now();
@@ -239,6 +266,8 @@ class YawDriftMonitor {
       if (Math.abs(m) >= DRIFT_MIN_DEG && mad <= DRIFT_MAX_SPREAD_DEG && cooled) {
         const next = wrap180(s.applied - m);
         src.sendCommand!(encodeSetYawOffset(next), i);
+        // 링을 비우기 전에 근거 샘플을 넘긴다(콜백이 없으면 복사하지 않는다)
+        this.correctionCb?.({ stickId: i, reason: 'drift', prevDeg: s.applied, sentDeg: next, medianDeg: m, madDeg: mad, samples: s.ring.slice() });
         s.applied = next;
         s.lastSentAt = now;
         s.acked = null;
@@ -261,6 +290,7 @@ class YawDriftMonitor {
       this.active[i] = false;
     }
     this.statusCb = null;
+    this.correctionCb = null;
     this.subscribeTap();
   }
 }

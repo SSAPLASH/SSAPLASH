@@ -1,9 +1,10 @@
 // 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import { NavLink } from 'react-router-dom';
 import { isAdmin } from '@/domain/auth';
+import { PREFETCH_HOVER_MS, prefetchRoute } from '@/app/prefetchRoute';
 import { useAuth } from '@/store/authStore';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
@@ -102,8 +103,24 @@ export function Sidebar() {
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
   const admin = useAuth((s) => isAdmin(s.user));
 
+  // 메뉴에 커서가 100ms 머물거나 키보드 포커스가 오면 그 화면을 미리 받는다(설계 TECH-351)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelHover = () => {
+    if (hoverTimer.current !== null) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  };
+  useEffect(() => cancelHover, []);
+  const prefetchProps = (to: string) => ({
+    onMouseEnter: () => {
+      cancelHover();
+      hoverTimer.current = setTimeout(() => prefetchRoute(to), PREFETCH_HOVER_MS);
+    },
+    onMouseLeave: cancelHover,
+    onFocus: () => prefetchRoute(to),
+  });
+
   const item = (mi: MenuItem) => (
-    <NavLink key={mi.to} to={mi.to} className="side-item" title={collapsed ? mi.label : undefined} aria-label={mi.label}>
+    <NavLink key={mi.to} to={mi.to} className="side-item" title={collapsed ? mi.label : undefined} aria-label={mi.label} {...prefetchProps(mi.to)}>
       {({ isActive }) => (
         <>
           {/* 현재 위치 표시. 활성 항목에만 있고 layoutId로 이전 항목에서 새 항목으로 미끄러진다.
@@ -159,7 +176,7 @@ export function Sidebar() {
       </nav>
 
       <div className="side-footer">
-        <NavLink to="/settings" className="side-foot-btn" title={collapsed ? '설정' : undefined} aria-label="설정">
+        <NavLink to="/settings" className="side-foot-btn" title={collapsed ? '설정' : undefined} aria-label="설정" {...prefetchProps('/settings')}>
           {ICONS.settings}
           <span className="side-label" aria-hidden={collapsed}>
             설정
