@@ -212,3 +212,21 @@ describe('summaryToMarkdown', () => {
     expect(md).not.toContain('### 곡 B');
   });
 });
+
+describe('녹화 요약의 audio 줄', () => {
+  const audio = (t: number, audioOffsetMs: number, outputLatencyMs: number | null): DiagEvent => ({
+    type: 'audio', t, audioOffsetMs, baseLatencyMs: 10, outputLatencyMs, sampleRate: 48000, measured: null,
+  });
+
+  it('마지막 audio 줄의 판정 타이밍 보정·지연을 싣고 Markdown에 한 줄로 낸다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [audio(1, 0, 40), audio(2, -65, 45.25)] });
+    expect(s.audio).toEqual({ audioOffsetMs: -65, baseLatencyMs: 10, outputLatencyMs: 45.25 });
+    expect(summaryToMarkdown(s)).toContain('- 오디오: 판정 타이밍 보정 -65.0ms · base 10.0ms · output 45.3ms');
+  });
+
+  it('audio 줄이 없으면 null이고 Markdown은 –', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [] });
+    expect(s.audio).toBeNull();
+    expect(summaryToMarkdown(s)).toContain('- 오디오: –');
+  });
+});

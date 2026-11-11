@@ -75,6 +75,8 @@ export interface RecordingSummary {
   /** 매칭 경합 타격 수(전체) */
   contested: number;
   sessions: SessionSummary[];
+  /** 마지막 audio 진단 줄: 판정 타이밍 보정과 브라우저가 보고한 오디오 지연. 줄이 없으면 null */
+  audio: { audioOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
   /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
   timing: SessionTiming[];
 }
@@ -140,6 +142,7 @@ export function summarizeRecording(input: {
   const judgements = { PERFECT: 0, GOOD: 0, MISS: 0 };
   let stray = 0;
   let missed = 0;
+  let audioLine: RecordingSummary['audio'] = null;
   let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
@@ -159,6 +162,8 @@ export function summarizeRecording(input: {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
       sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
+    } else if (ev.type === 'audio') {
+      audioLine = { audioOffsetMs: ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
     } else if (ev.type === 'matchContested') {
       contested++;
       const cur = sessions[sessions.length - 1];
@@ -192,6 +197,7 @@ export function summarizeRecording(input: {
     missed,
     contested,
     sessions,
+    audio: audioLine,
     timing: timingReport(diags),
   };
 }
@@ -224,6 +230,7 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     `- 입력 방식: ${meta.inputMode ? INPUT_MODE_LABEL[meta.inputMode] : '–'}`,
     `- 메모: ${meta.note || '–'}`,
     `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
+    `- 오디오: ${s.audio ? `판정 타이밍 보정 ${f1(s.audio.audioOffsetMs)}ms · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
     '',
     '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
     '| --- | --- | --- | --- | --- | --- |',

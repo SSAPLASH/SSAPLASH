@@ -92,6 +92,19 @@ export type DiagBody =
    * offsets 인덱스 = role(0 왼손, 1 오른손, 2·3 페달). 미동기·미연결은 null
    */
   | { type: 'clock'; offsets: [number | null, number | null, number | null, number | null]; source: string }
+  /**
+   * 판정 타이밍 보정과 오디오 지연. 곡 시작 직후 1회 + 10초마다.
+   * audioOffsetMs는 진행 중인 판의 값(없으면 설정 값). 지연은 AudioContext가 보고한 값이며 오디오를 아직 안 켰으면 null.
+   * measured는 마지막 박자 맞추기 기록(없으면 null)
+   */
+  | {
+      type: 'audio';
+      audioOffsetMs: number;
+      baseLatencyMs: number | null;
+      outputLatencyMs: number | null;
+      sampleRate: number | null;
+      measured: { medianMs: number; madMs: number; pairs: number; input: 'sensor' | 'keyboard'; measuredAt: number } | null;
+    }
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
   | ({ type: 'yawCorrect' } & DiagYawCorrection);
 

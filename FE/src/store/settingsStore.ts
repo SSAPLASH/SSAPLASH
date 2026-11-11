@@ -1,4 +1,5 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
+import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/timingCalibration';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
@@ -37,7 +38,10 @@ interface SettingsState {
   /** 지금 적용 중인 프리셋 id. 사용자 프리셋 id 또는 SYSTEM_PRESET_ID(시스템 기본). v18부터 null 없음 */
   activePresetId: string;
   timing: TimingWindows;
+  /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/timingCalibration) */
   audioOffsetMs: number;
+  /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
+  timingCal: TimingCalRecord | null;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
   scrollMs: number;
   /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
@@ -106,6 +110,7 @@ interface SettingsState {
   setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
+  setTimingCal: (v: TimingCalRecord | null) => void;
   setScrollMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
   setTuning: (partial: PartialTuning) => void;
@@ -314,6 +319,17 @@ export function sanitizePresetAnchors(raw: unknown): PresetAnchors {
 
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/**
+ * 저장분의 판정 타이밍 보정과 박자 맞추기 기록을 정리한다(merge용).
+ * 범위가 바뀌기 전에 저장된 값(예: +150)은 지금 범위로 자르고, 기록은 모양이 틀리면 버린다.
+ */
+export function sanitizeTimingSettings(p: { audioOffsetMs?: unknown; timingCal?: unknown }): Pick<SettingsState, 'audioOffsetMs' | 'timingCal'> {
+  return {
+    audioOffsetMs: clampTimingOffset(isFiniteNum(p.audioOffsetMs) ? p.audioOffsetMs : 0),
+    timingCal: sanitizeTimingCalRecord(p.timingCal),
+  };
+}
+
 /** 저장된 앵커 하나를 검증한다. 숫자 필드가 깨졌으면 null */
 function sanitizeAnchor(pad: PadId, raw: unknown): PadAnchor | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -371,6 +387,7 @@ export const useSettings = create<SettingsState>()(
       activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
+      timingCal: null,
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
@@ -452,7 +469,8 @@ export const useSettings = create<SettingsState>()(
       setActivePresetId: (activePresetId) => set({ activePresetId }),
       setPresets: (presets) => set({ presets }),
       setTiming: (timing) => set({ timing }),
-      setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs }),
+      setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs: clampTimingOffset(audioOffsetMs) }),
+      setTimingCal: (timingCal) => set({ timingCal }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
       resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
@@ -500,6 +518,7 @@ export const useSettings = create<SettingsState>()(
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
+          ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
           presetAnchors: sanitizePresetAnchors(p.presetAnchors),
