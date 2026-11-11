@@ -6,7 +6,7 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import type { FxEngine } from '@/components/fx/fxEngine';
 import { createFxEmitter, createLiveFxSource } from '@/components/fx/fxSource';
 import { ComboDisplay } from '@/components/play/ComboDisplay';
-import { CelebrationFx } from '@/components/result/CelebrationFx';
+import { CelebrationFx } from '@/features/result/components/CelebrationFx';
 import type { Judgement } from '@/domain/judgement';
 import { KIT_SKINS, KIT_SKIN_LABELS, type KitSkin } from '@/domain/drumKit';
 import { HIT_FX_LAB_THEMES, HIT_FX_THEME_LABELS } from '@/domain/hitFx/themes';
