@@ -73,11 +73,35 @@ def validate_config(x: Any) -> dict[str, Any]:
         raise ConfigError("rolloutPercent는 0~100이어야 합니다")
     if mode != "off" and not gate_arms:
         raise ConfigError("gate.mode가 off가 아니면 gate.arms가 있어야 합니다")
-    return {
+    out: dict[str, Any] = {
         "gate": {"mode": mode, "arms": gate_arms},
         "cause": {"arms": cause_arms},
         "rolloutPercent": rollout,
     }
+    llm = _llm(x.get("llm"))
+    # 없으면 FE가 off로 본다. 있으면 그대로 게시해야 FE가 연주 중 LLM 실험군을 배정한다
+    if llm is not None:
+        out["llm"] = llm
+    return out
+
+
+def _llm(x: Any) -> dict[str, Any] | None:
+    """연주 중 LLM 구간 코칭 설정(FE `parseLlm`과 같은 규칙). 없으면 None, 틀리면 ConfigError."""
+    if x is None:
+        return None
+    if not isinstance(x, dict):
+        raise ConfigError("llm은 객체여야 합니다")
+    mode = x.get("mode")
+    if mode not in MODES:
+        raise ConfigError(f"llm.mode는 {', '.join(MODES)} 중 하나여야 합니다")
+    rollout = x.get("rolloutPercent")
+    if (
+        not isinstance(rollout, (int, float))
+        or isinstance(rollout, bool)
+        or not 0 <= rollout <= 100
+    ):
+        raise ConfigError("llm.rolloutPercent는 0~100이어야 합니다")
+    return {"mode": mode, "rolloutPercent": rollout}
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -153,7 +177,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "check":
             config = load_config(args.file)
-            print(f"형식 맞음: mode={config['gate']['mode']} rollout={config['rolloutPercent']}")
+            llm = config.get("llm")
+            llm_text = f"{llm['mode']} {llm['rolloutPercent']}%" if llm else "없음(off)"
+            print(
+                f"형식 맞음: mode={config['gate']['mode']} rollout={config['rolloutPercent']} llm={llm_text}"
+            )
             return 0
         version = register_config(args.file, args.tracking_uri, not args.skip_model_check)
     except ConfigError as e:
