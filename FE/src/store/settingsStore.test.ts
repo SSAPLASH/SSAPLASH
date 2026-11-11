@@ -279,7 +279,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(22);
+    expect(SETTINGS_VERSION).toBe(23);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -446,7 +446,7 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
   });
 
   it('스토어 초기값은 system·빈 기록', () => {
-    expect(SETTINGS_VERSION).toBe(22);
+    expect(SETTINGS_VERSION).toBe(23);
     expect(useSettings.getInitialState().activePresetId).toBe(SYSTEM_PRESET_ID);
     expect(useSettings.getInitialState().presetAnchors).toEqual({});
   });
@@ -484,5 +484,33 @@ describe('movePad (드래그 편집, kit-drag)', () => {
     useSettings.getState().movePad('KICK', 0.4, 0.8);
     expect(useSettings.getState().kitLayout.KICK).toMatchObject({ x: 0.4, y: 0.8 });
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+  });
+});
+
+describe('migrateSettings v22 → v23 (시스템 기본 배치 변경)', () => {
+  const legacy = {
+    CRASH: { x: 0.2, y: 0.22, r: 0.1 },
+    HIHAT: { x: 0.24, y: 0.52, r: 0.085 },
+    SNARE: { x: 0.42, y: 0.68, r: 0.095 },
+    SMALL_TOM: { x: 0.42, y: 0.34, r: 0.07 },
+    MID_TOM: { x: 0.6, y: 0.34, r: 0.07 },
+    FLOOR_TOM: { x: 0.72, y: 0.66, r: 0.1 },
+    RIDE: { x: 0.8, y: 0.26, r: 0.11 },
+    KICK: { x: 0.58, y: 0.9, r: 0.065 },
+    HIHAT_PEDAL: { x: 0.24, y: 0.9, r: 0.055 },
+  };
+
+  it('옛 기본 배치 그대로인 저장 값은 새 기본 배치로 바꾼다', () => {
+    const out = migrateSettings({ kitLayout: legacy }, 22);
+    expect(out.kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
+  });
+
+  it('손으로 옮긴 배치는 그대로 둔다', () => {
+    const moved = { ...legacy, SNARE: { x: 0.5, y: 0.7, r: 0.095 } };
+    expect(migrateSettings({ kitLayout: moved }, 22).kitLayout).toEqual(moved);
+  });
+
+  it('v23 저장 값은 건드리지 않는다', () => {
+    expect(migrateSettings({ kitLayout: legacy }, 23).kitLayout).toEqual(legacy);
   });
 });

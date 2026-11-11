@@ -724,6 +724,13 @@ p {
   height: 100%;
   display: block;
 }
+/* 드럼 세팅: 아래 캔버스(바닥) → 드럼 킷 SVG → 위 캔버스(판정 범위·L·R 표식)를 겹친다. 포인터는 래퍼가 받는다 */
+.kit-stack > canvas,
+.kit-stack > .drum-kit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 
 /* ---- 세팅 ---- */
 .keymap-list {

@@ -17,7 +17,6 @@ import { HitLog } from '@/components/setup/HitLog';
 import { HIT_LOG_ROWS } from '@/components/setup/hitLogFormat';
 import '@/components/setup/setup.css';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
-import { useHitFx } from '@/components/useHitFx';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
 import { PresetSlotDialog } from '@/components/setup/PresetSlotDialog';
@@ -31,10 +30,12 @@ import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import type { HitFx, StickId } from '@/domain/events';
+import type { StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
 import { anchorsToProfile } from '@/domain/kitJudge';
 import { pickOverlayCorner } from '@/domain/kitLayout';
+import { defaultHandAnchorSet } from '@/domain/kitModel';
+import { padPointCm, padScreenCircles } from '@/domain/kitPerspective';
 import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
@@ -75,8 +76,8 @@ import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap
 import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
 
 /** 편집기 표시 크기(Figma 720×320). 위치 값은 이 좌표계의 px로 보여 준다 */
-const EDITOR_W = 720;
-const EDITOR_H = 320;
+/** 그림 영역을 못 쟀을 때 쓰는 16:10 상자 */
+const FALLBACK_FIG = { w: 1600, h: 1000 };
 
 const COUNT_IN_OPTIONS = [
   { value: '0', label: '끔' },
@@ -222,15 +223,20 @@ export function SetupPage() {
   const overlay = useOverlayRegion();
   const [advOpen, setAdvOpen] = useState(false);
   const selectedPlacement = s.kitLayout[selectedPad];
+  // 선택 패드의 표시 좌표(cm). 그림에 놓인 3D 점 그대로다(거리는 모델 가정값)
+  const selectedPoint = padPointCm(selectedPad, selectedPlacement, s.tuning.angleRange);
+  // 보정 전 판정 범위(°): 3D 모델 기본 앵커의 손별 평균. 페달은 없다(null)
+  const defaultRadius = useMemo(() => {
+    const radii = ([0, 1] as const).map((h) => defaultHandAnchorSet(h, s.tuning)[selectedPad]?.radius).filter((r): r is number => r !== undefined);
+    return radii.length ? radii.reduce((a, b) => a + b, 0) / radii.length : null;
+  }, [s.tuning, selectedPad]);
+  // 정보 카드 자리 고르기용: 원근 그림에서 패드가 차지하는 원
+  const padCircles = useMemo(() => padScreenCircles(s.kitLayout, overlay.figSize ?? FALLBACK_FIG, s.tuning.angleRange), [s.kitLayout, overlay.figSize, s.tuning.angleRange]);
   // 선택 패드의 판정 반경(°): 양손 앵커 중 있는 것의 평균. 앵커가 없으면(시스템 기본·미보정) 슬라이더 없음
   const selectedRadius = useMemo(() => {
     const radii = [s.stickAnchors[0]?.[selectedPad]?.radius, s.stickAnchors[1]?.[selectedPad]?.radius].filter((r): r is number => r !== undefined);
     return radii.length ? radii.reduce((a, b) => a + b, 0) / radii.length : null;
   }, [s.stickAnchors, selectedPad]);
-
-  // 타격 이펙트. 키보드·센서 타격이 live의 hitSeq로 들어온다(편집기 마우스 클릭은 타격이 아니다)
-  const hits = useRef(new Map<PadId, HitFx>());
-  useHitFx(hits);
 
   // ---- 단계 판정(적용 프리셋 기준 보정 완료, PLAY-004 D9·UX-64 D7) ----
   const readinessInput = {
@@ -676,11 +682,12 @@ export function SetupPage() {
                 /* 선택 패드 카드(편집 상태). 그림과 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */
                 <KitInfoOverlay
                   cardRef={overlay.cardRef}
-                  corner={pickOverlayCorner(s.kitLayout, overlay.region, [selectedPad], overlay.figSize ?? undefined)}
+                  corner={pickOverlayCorner(padCircles, overlay.region, [selectedPad], overlay.figSize ?? undefined)}
                   name={PAD_META[selectedPad].label}
-                  x={String(Math.round(selectedPlacement.x * EDITOR_W))}
-                  y={String(Math.round(selectedPlacement.y * EDITOR_H))}
-                  radius={selectedRadius !== null ? `${Math.round(selectedRadius)}°` : String(Math.round(selectedPlacement.r * EDITOR_W))}
+                  x={String(Math.round(selectedPoint.x))}
+                  y={String(Math.round(selectedPoint.y))}
+                  z={String(Math.round(selectedPoint.z))}
+                  radius={selectedRadius !== null ? `${Math.round(selectedRadius)}°` : defaultRadius !== null ? `${Math.round(defaultRadius)}°` : '–'}
                   // 판정 반경(°) 슬라이더(UX-64 D9): 보정된 패드만. 양손 앵커에 덮어쓰고 스틱 표에도 간다
                   slider={
                     selectedRadius !== null
@@ -698,6 +705,7 @@ export function SetupPage() {
             >
               <KitCanvas
                 layout={s.kitLayout}
+                skin={s.kitSkin}
                 onTapPad={setSelectedPad}
                 // 보정 중·추가하기 초안이 있을 때만 막는다. 사용자 프리셋은 앵커도 같이 옮기고, 시스템 기본은 배치만 옮겨 새 프리셋으로 저장한다(kit-drag D1·D9)
                 draggable={!capturing && !draft}
@@ -706,12 +714,12 @@ export function SetupPage() {
                   s.movePad(pad, x, y);
                 }}
                 highlightPad={selectedPad}
-                hits={hits}
                 keyMap={KEYBOARD_INPUT_ENABLED ? KEY_MAP : undefined}
                 anchorSets={anchorSets}
                 angleRange={s.tuning.angleRange}
                 poses={pose}
                 showPoses={sensorMode}
+                posesFromCenter={s.sensorKind === 'pointer'}
                 surfaceRef={bindSensorSurface}
               />
             </StagePanel>

@@ -17,19 +17,23 @@ export interface PadPlacement {
 export type KitLayout = Record<PadId, PadPlacement>;
 
 /**
- * 시스템 기본 배치(고정값, PLAY-004 후속 T8). 사람이 디자인한 값이라 패드가 겹치지 않는다.
+ * 시스템 기본 배치(고정값, PLAY-004 후속 T8). 스틱 패드의 x·y는 3D 모델(kitModel.PAD_POINTS)의 타격점을 두 손 가운데에서 본 방향이라,
+ * 원근 그림의 자리와 보정 전 기본 판정 자리가 같은 모델에서 나온다(kitModel.test가 두 값이 맞는지 본다). 모델을 바꾸면 이 값도 다시 계산해 넣는다.
+ * x·y는 방향이다(kitMapping.screenToPose: x 0.5가 정면, y 0.5가 수평). 원근 보기(kitPerspective)가 이 방향에 패드별 모델 거리를 곱해 3D 자리로 쓴다.
+ * 원근 그림에서 패드가 서로 겹치지 않게 실제 드럼 세트처럼 넓게 벌려 놓았다: 스네어가 정면 아래, 하이햇이 왼쪽, 플로어탐이 오른쪽, 심벌이 위.
+ * 킥은 세워진 베이스 드럼이라 가운데 가까이, 스네어와 플로어탐 사이로 가운데가 보이는 자리에 둔다. 하이햇 페달은 하이햇 바로 아래다.
  * 보정 전 판정은 3D 모델 기본 앵커(kitModel)가 맡고, 이 배치는 화면 표시에만 쓴다
  */
 export const DEFAULT_KIT_LAYOUT: KitLayout = {
-  CRASH: { x: 0.2, y: 0.22, r: 0.1 },
-  HIHAT: { x: 0.24, y: 0.52, r: 0.085 },
-  SNARE: { x: 0.42, y: 0.68, r: 0.095 },
-  SMALL_TOM: { x: 0.42, y: 0.34, r: 0.07 },
-  MID_TOM: { x: 0.6, y: 0.34, r: 0.07 },
-  FLOOR_TOM: { x: 0.72, y: 0.66, r: 0.1 },
-  RIDE: { x: 0.8, y: 0.26, r: 0.11 },
-  KICK: { x: 0.58, y: 0.9, r: 0.065 },
-  HIHAT_PEDAL: { x: 0.24, y: 0.9, r: 0.055 },
+  CRASH: { x: 0.256, y: 0.247, r: 0.1 },
+  HIHAT: { x: 0.084, y: 0.6, r: 0.085 },
+  SNARE: { x: 0.416, y: 0.867, r: 0.095 },
+  SMALL_TOM: { x: 0.388, y: 0.479, r: 0.07 },
+  MID_TOM: { x: 0.612, y: 0.479, r: 0.07 },
+  FLOOR_TOM: { x: 0.926, y: 0.793, r: 0.1 },
+  RIDE: { x: 0.8, y: 0.289, r: 0.11 },
+  KICK: { x: 0.57, y: 0.9, r: 0.065 },
+  HIHAT_PEDAL: { x: 0.095, y: 0.9, r: 0.055 },
 };
 
 /** 일부 패드만 있는 배치를 완전한 KitLayout으로 만든다. 없는 패드는 기본 배치 값을 쓴다 */
@@ -70,24 +74,9 @@ export interface FigBox {
 }
 const DEFAULT_FIG_BOX: FigBox = { w: 16, h: 10 };
 
-/** 원 반지름 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6(KitCanvas.radiusBasis와 같다) */
+/** 그림 크기 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6. 원근 보기의 초점 거리와 겹침 판정의 원 반지름이 같이 쓴다 */
 export function radiusBasisOf(box: FigBox): number {
   return Math.min(box.w, box.h * 1.6);
-}
-
-/** 원을 그림 가장자리에서 띄우는 여유(px) */
-export const PAD_EDGE_PX = 6;
-
-/**
- * 패드 원의 화면 중심(px). 배치 좌표를 그림 크기에 펼치되 원이 그림 밖으로 나가지 않게 반지름만큼 안쪽으로 붙인다.
- * 넓은 판에서는 반지름이 높이 기준으로 커져 아래쪽 킥·페달이 잘리기 쉬워서다. 그리기와 클릭 판정이 같이 쓴다
- */
-export function padCenterPx(pad: PadPlacement, box: FigBox): { cx: number; cy: number; r: number } {
-  const r = pad.r * radiusBasisOf(box);
-  // 테두리·선택 링 두께만큼 여유(px)를 더 둔다
-  const m = r + PAD_EDGE_PX;
-  const clamp = (v: number, max: number) => (max <= 2 * m ? max / 2 : Math.min(Math.max(v, m), max - m));
-  return { cx: clamp(pad.x * box.w, box.w), cy: clamp(pad.y * box.h, box.h), r };
 }
 
 /** 원(정규 좌표, 반지름은 radiusBasisOf(box) 기준)이 사각형 [x0,x1]×[y0,y1]과 겹치는가. 맞닿기만 하면 겹침이 아니다 */

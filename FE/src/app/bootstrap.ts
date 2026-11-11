@@ -1,6 +1,6 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
-import type { InputSource } from '@/input/InputSource';
+import type { InputSource, SurfaceToPose } from '@/input/InputSource';
 import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from './sensorRegistry';
@@ -38,6 +38,7 @@ let batteryHistory: [number[], number[]] = [[], []];
 let pedalBatteryHistory: [number[], number[]] = [[], []];
 /** 화면이 마지막으로 등록한 입력 표면. 센서가 바뀌어도 새 인스턴스에 다시 넘긴다 */
 let lastSurface: HTMLElement | null = null;
+let lastSurfaceToPose: SurfaceToPose | undefined;
 /** 손별 마지막 설정 재전송 시각(비트 5 쿨다운, D5). 센서가 바뀌면 비운다 */
 const lastResendAt: [number | null, number | null] = [null, null];
 
@@ -101,7 +102,7 @@ export async function activateSensor(id: SensorId, auto = false): Promise<void> 
     padTableSync.setSource(src);
     yawDriftMonitor.setSource(src);
     applySensorOptions();
-    src.setSurface?.(lastSurface);
+    src.setSurface?.(lastSurface, lastSurfaceToPose);
     unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
     unsubDongle = src.onDongle?.((link) => useLive.setState({ dongle: link })) ?? null;
     // 연결 개념이 없는 소스(포인터)는 autoConnect·reopen이 없어 핸들러를 등록하지 않는다 → [다시 연결]이 숨는다
@@ -147,11 +148,12 @@ async function reconnectAttempt(src: InputSource, signal: AbortSignal): Promise<
 
 /**
  * 화면이 자세 기준면(캔버스)을 등록한다. 활성 센서가 setSurface를 지원하면 넘기고 아니면 무시한다.
- * 언마운트 시 null로 해제한다.
+ * toPose는 표면 정규 좌표 → 자세 변환(원근 보기 캔버스만 넘긴다). 언마운트 시 null로 해제한다.
  */
-export function bindSensorSurface(el: HTMLElement | null): void {
+export function bindSensorSurface(el: HTMLElement | null, toPose?: SurfaceToPose): void {
   lastSurface = el;
-  activeInstance?.setSurface?.(el);
+  lastSurfaceToPose = el ? toPose : undefined;
+  activeInstance?.setSurface?.(el, lastSurfaceToPose);
 }
 
 /** 키보드 소스가 반응할 키. 센서 소스가 점유하는 키(디스크립터 reservedKeys)는 뺀다 — 한 키에 두 번 울리지 않게 */

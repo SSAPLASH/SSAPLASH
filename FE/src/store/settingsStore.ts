@@ -136,7 +136,26 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 22;
+export const SETTINGS_VERSION = 23;
+
+/** v22까지의 시스템 기본 배치(x·y). v23 이행에서 "기본 배치 그대로인 저장 값"을 알아보는 데만 쓴다 */
+const LEGACY_DEFAULT_XY: Record<string, readonly [number, number]> = {
+  CRASH: [0.2, 0.22],
+  HIHAT: [0.24, 0.52],
+  SNARE: [0.42, 0.68],
+  SMALL_TOM: [0.42, 0.34],
+  MID_TOM: [0.6, 0.34],
+  FLOOR_TOM: [0.72, 0.66],
+  RIDE: [0.8, 0.26],
+  KICK: [0.58, 0.9],
+  HIHAT_PEDAL: [0.24, 0.9],
+};
+
+function isLegacyDefaultLayout(raw: unknown): boolean {
+  if (typeof raw !== 'object' || raw === null) return false;
+  const layout = raw as Record<string, { x?: unknown; y?: unknown } | undefined>;
+  return Object.entries(LEGACY_DEFAULT_XY).every(([pad, [x, y]]) => layout[pad]?.x === x && layout[pad]?.y === y);
+}
 
 /**
  * 저장된 설정 이행.
@@ -162,6 +181,7 @@ export const SETTINGS_VERSION = 22;
  * v19 → v20: timingBar(기본 true) 추가. boolean이 아니면 true.
  * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
  * v21 → v22: accompaniment(기본 true) 추가. boolean이 아니면 true.
+ * v22 → v23: 시스템 기본 배치 값 변경(원근 보기용으로 넓힘). kitLayout이 옛 기본 배치와 같으면 새 기본 배치로 바꾼다. 손으로 옮긴 배치와 프리셋 layout은 그대로.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -272,6 +292,8 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.countInBars = n === 0 ? 0 : 1;
   }
   if (version < 22) p.accompaniment = typeof p.accompaniment === 'boolean' ? p.accompaniment : true;
+  // 시스템 기본 배치 값이 바뀌었다. 옛 기본 배치 그대로인 저장 값은 새 기본 배치로 맞춰 "변경 있음"으로 보이지 않게 한다(손으로 옮긴 배치는 둔다)
+  if (version < 23 && isLegacyDefaultLayout(p.kitLayout)) p.kitLayout = DEFAULT_KIT_LAYOUT;
   return p as unknown as SettingsState;
 }
 
