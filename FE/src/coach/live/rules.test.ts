@@ -221,7 +221,7 @@ describe('LIVE_PAD_MISS', () => {
     const e = find(r, 'LIVE_PAD_MISS:SMALL_TOM');
     expect(e.trigger).toBe(true);
     expect(e.target).toEqual({ kind: 'pad', pad: 'SMALL_TOM' });
-    expect(e.text).toContain('탐1을');
+    expect(e.text).toContain('스몰탐을');
     expect(find(r, 'LIVE_PAD_MISS:SNARE').trigger).toBe(false);
   });
 
