@@ -314,9 +314,16 @@ export function SetupPage() {
   };
 
   const closeSlotDialog = () => {
+    presets.clearError();
     setSlotOpen(false);
     setDraft(null);
     setDraftSlot(null);
+  };
+
+  /** 칩 줄 [프리셋 관리]: 초안 없이 슬롯 창을 연다(적용·지우기·현재 배치 저장) */
+  const openManage = () => {
+    presets.clearError();
+    setSlotOpen(true);
   };
 
   /** 마지막 패드의 [저장]: 확인 대기를 끝내고(next) 세션을 마친다. 추가하기면 초안을 들고 슬롯 창을 연다 */
@@ -633,7 +640,7 @@ export function SetupPage() {
           busy={saving}
           onSelect={(id) => presets.apply(id)}
           onAdd={startAdd}
-          onFullCalibrate={startFull}
+          onManage={openManage}
           onCancel={stopCapture}
         />
         {showPresetError && (
@@ -654,6 +661,14 @@ export function SetupPage() {
               layout={overlay}
               figClassName="setup-editor"
               noPointerStrike
+              action={
+                /* 적용 프리셋의 패드 위치를 처음부터 다시 잡는다. 시스템 기본은 고정이라 비활성 */
+                sensorMode && (
+                  <Button variant="secondary" size="sm" onClick={startFull} disabled={systemPreset || !anyConnected || saving}>
+                    전체 보정
+                  </Button>
+                )
+              }
               card={
                 /* 선택 패드 카드(편집 상태). 그림과 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */
                 <KitInfoOverlay
@@ -858,6 +873,8 @@ export function SetupPage() {
           setSlotOpen(false);
         }}
         onPickEmpty={onPickEmptySlot}
+        onDelete={(id) => void presets.remove(id)}
+        error={slotOpen ? nameDialogError : null}
         onClose={closeSlotDialog}
       />
       <PresetNameDialog
