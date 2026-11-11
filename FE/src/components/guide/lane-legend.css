@@ -1,0 +1,25 @@
+/* 레인 읽는 법: 악보 읽는 법(play/staff-legend.css)의 2열 카드 규칙을 그대로 쓰고, 레인 띠·색 설명 칸 규칙만 더한다 */
+.play-sl-cell-top .play-sl-lanes {
+  max-height: 100%;
+}
+/* 미니 레인 띠: 이 레인만 패드 색 + 번짐 */
+.play-sl-lanes .off {
+  fill: #2a2f37;
+}
+.play-sl-lanes .on {
+  fill: var(--pad-color);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--pad-color) 70%, transparent));
+}
+.play-sl-lanes .base {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+/* 색 설명 칸의 색 점 */
+.play-sl-key i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin: 0 4px;
+  border-radius: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
