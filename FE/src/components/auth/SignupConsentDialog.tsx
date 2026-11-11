@@ -18,6 +18,7 @@ import { recommendationConsentEnabled, SIGNUP_TERMS, type ConsentVersions } from
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import './auth.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 interface Props {
   /** 동의 뒤 갈 목적지(검증된 경로) */
@@ -86,7 +87,7 @@ export function SignupConsentDialog({ from, onDone, onSwitchAccount }: Props) {
     <Dialog onClose={noop} closeOnEscape={false} closeOnBackdrop={false} label="가입 동의" className="auth-dialog signup-dialog">
       {modeName && <p className="signup-dialog-mode">{modeName} 모드로 시작하기 전에 약관에 동의해 주세요.</p>}
       <SignupConsentCard
-        notice={reconsent && consentStatus === 'error' ? <div role="alert" className="signup-card-error">동의 상태를 불러오지 못했어요. <Button variant="text" onClick={() => void loadConsent()}>다시 시도</Button></div> : undefined}
+        notice={reconsent && consentStatus === 'error' ? <InlineError onRetry={() => void loadConsent()}>동의 상태를 불러오지 못했어요.</InlineError> : undefined}
         terms={recommendationConsentEnabled() && !(reconsent && consentStatus === 'error') ? SIGNUP_TERMS : SIGNUP_TERMS.filter((t) => t.id !== 'recommendation')}
         onSubmit={onSubmit}
         submitting={submitting}

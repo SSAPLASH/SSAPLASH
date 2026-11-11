@@ -60,19 +60,7 @@
   white-space: nowrap;
 }
 .play-sd-error {
-  margin: 0;
-  color: var(--miss);
   font-size: 12px;
-}
-.play-sd-retry {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-text);
-  font-size: 12px;
-  text-decoration: underline;
-  cursor: pointer;
 }
 /* [프리셋 · 준비] 한 줄(Figma 126:3582, 11/03): 위 여백 8, [준비] 폭 120 */
 .play-sd-ready {

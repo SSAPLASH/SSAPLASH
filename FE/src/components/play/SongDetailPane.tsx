@@ -14,6 +14,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { SongCover } from '@/components/song/SongCover';
 import { SongMeta } from '@/components/song/SongMeta';
 import './song-detail.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 /** 바로 플레이 카드(악보 연습·리듬 게임). 단계는 쉬움 → 어려움 순 */
 export interface QuickStartProps {
@@ -115,12 +116,9 @@ export function SongDetailPane({
         </div>
       </div>
       {chartState === 'error' && (
-        <p className="play-sd-error" role="alert">
-          곡 정보를 불러오지 못했어요.{' '}
-          <button type="button" className="play-sd-retry" onClick={onRetry}>
-            다시 시도
-          </button>
-        </p>
+        <InlineError plain className="play-sd-error" onRetry={onRetry}>
+          곡 정보를 불러오지 못했어요.
+        </InlineError>
       )}
       <div className="play-sd-play-row">
         <Segmented
