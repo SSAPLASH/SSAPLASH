@@ -4,6 +4,7 @@ import {
   CURSOR_END_POS,
   CURSOR_START_POS,
   EXAMPLE_STEPS,
+  GAME_GUIDE_OPTIONS,
   HIT_WINDOW_MS,
   HOLD_MS,
   holdStartOf,
@@ -136,5 +137,33 @@ describe('stepTarget (◀ ▶)', () => {
     const s = at(hitTime(2) + 10);
     expect(stepTarget(script, s, 1)).toBe(0);
     expect(stepTarget(script, s, -1)).toBe(7);
+  });
+});
+
+describe('리듬 게임 시간표(GAME_GUIDE_OPTIONS)', () => {
+  const game = buildGuideScript(undefined, undefined, GAME_GUIDE_OPTIONS);
+
+  it('기본 시간표는 옵션이 없으면 그대로(악보 커서 범위)', () => {
+    expect(script.startPos).toBeCloseTo(CURSOR_START_POS, 10);
+    expect(script.endPos).toBeCloseTo(CURSOR_END_POS, 10);
+  });
+
+  it('시작은 노트가 판정선 위 4칸에서 내려오고 progress 0, 끝은 1이다', () => {
+    expect(game.startPos).toBe(-4);
+    expect(game.endPos).toBe(8);
+    expect(stateAt(game, 0).progress).toBeCloseTo(0, 5);
+    expect(stateAt(game, game.totalMs - 1).progress).toBeCloseTo(1, 5);
+  });
+
+  it('① 첫 칸은 더 길게(1400ms) 이동해 노트가 내려오는 것이 보인다', () => {
+    expect(holdStartOf(game, 0)).toBe(GAME_GUIDE_OPTIONS.firstMoveMs);
+    const s = stateAt(game, holdStartOf(game, 0) + 1);
+    expect(s.active).toBe(0);
+    // 칸 0이 판정선에 닿은 위치: (0 − (−4)) ÷ 12
+    expect(s.progress).toBeCloseTo(4 / 12, 5);
+  });
+
+  it('② 노트가 4칸(8분) 앞에서 시작해 첫 음표까지 4칸 길이로 간다', () => {
+    expect(game.leadMs).toBeCloseTo(game.barMs / 2, 5);
   });
 });

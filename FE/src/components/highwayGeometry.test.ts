@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { HIGHWAY_LANES } from '@/domain/highwayLanes';
 import type { FxEvent } from '@/domain/hitFx/types';
-import { highwayLayout, laneCenterX, laneFxGeo, locateHighway, noteY, type HighwayLocateInput } from './highwayGeometry';
+import { HIGHWAY_PEDAL_GAP, highwayLayout, laneCenterX, laneFxGeo, laneLeft, locateHighway, noteY, type HighwayLocateInput } from './highwayGeometry';
 
-const L = highwayLayout(900, 600, 9);
+const L = highwayLayout(900 + HIGHWAY_PEDAL_GAP, 600, 9);
 const ev = (over: Partial<FxEvent>): FxEvent => ({ seq: 1, pad: 'SNARE', velocity: 100, mode: 'game', judgement: 'PERFECT', deltaMs: 0, combo: null, noteIndex: 0, ...over });
 const input = (over: Partial<HighwayLocateInput> = {}): HighwayLocateInput => ({
-  width: 900,
+  width: 900 + HIGHWAY_PEDAL_GAP,
   height: 600,
   lanes: HIGHWAY_LANES,
   noteOf: (i) => (i === 0 ? { pad: 'SNARE', timeMs: 1000 } : i === 1 ? { pad: 'HIHAT_PEDAL', timeMs: 1200 } : undefined),
@@ -17,9 +17,11 @@ const input = (over: Partial<HighwayLocateInput> = {}): HighwayLocateInput => ({
 });
 
 describe('highwayGeometry', () => {
-  it('판정선은 아래에서 90px, 레인 폭은 균등', () => {
+  it('판정선은 아래에서 90px, 칸 폭은 (폭 − 페달 칸 간격) ÷ 칸 수로 균등', () => {
     expect(L.judgeY).toBe(510);
     expect(L.laneW).toBe(100);
+    expect(L.gap).toBe(16);
+    expect(HIGHWAY_PEDAL_GAP).toBe(16);
     expect(L.travel).toBe(480);
   });
   it('noteY: dt 0은 판정선, 양수는 위, 음수는 아래', () => {
@@ -28,8 +30,20 @@ describe('highwayGeometry', () => {
     expect(noteY(L, -60, 1400)).toBeGreaterThan(510);
   });
   it('레인 geo: 가운데 x, rx = 레인 폭 0.4, ry = 12', () => {
-    expect(laneCenterX(L, 2)).toBe(250);
-    expect(laneFxGeo(L, 2, 510)).toEqual({ cx: 250, cy: 510, rx: 40, ry: 12, k: 1 });
+    expect(laneCenterX(L, 2)).toBe(266);
+    expect(laneFxGeo(L, 2, 510)).toEqual({ cx: 266, cy: 510, rx: 40, ry: 12, k: 1 });
+  });
+  it('페달 칸(첫 칸)만 간격 없이 왼쪽 끝, 둘째 칸부터 간격만큼 밀린다', () => {
+    expect(laneLeft(L, 0)).toBe(0);
+    expect(laneLeft(L, 1)).toBe(116);
+    expect(laneLeft(L, 8)).toBe(816);
+    expect(laneLeft(L, 8) + L.laneW).toBe(916);
+    expect(laneCenterX(L, 0)).toBe(50);
+  });
+  it('칸이 하나면 간격이 없다', () => {
+    const one = highwayLayout(300, 600, 1);
+    expect(one.gap).toBe(0);
+    expect(one.laneW).toBe(300);
   });
 
   it('PERFECT·GOOD는 레인 가운데 × 판정선', () => {

@@ -393,12 +393,20 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(guide.contains(screen.getByRole('region', { name: '악보 읽는 법' }))).toBe(true);
   });
 
-  it('/play: 안내 줄·구분선이 없다', async () => {
+  it('/play: 제목 → 레인 안내 줄 → 구분선 → 목록 영역 순서, 악보 안내는 없다', async () => {
     showMode('play');
     await screen.findAllByText('목록곡');
+    const title = screen.getByRole('heading', { name: '리듬에 맞춰 도전해요' });
+    const guide = screen.getByRole('region', { name: '리듬 게임 안내' });
+    const sep = screen.getByRole('separator');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    expect(follows(title, guide)).toBe(true);
+    expect(follows(guide, sep)).toBe(true);
+    expect(follows(sep, grid)).toBe(true);
+    // 안내 줄 오른쪽 칸은 레인 읽는 법 카드
+    expect(guide.contains(screen.getByRole('region', { name: '레인 읽는 법' }))).toBe(true);
     expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
     expect(screen.queryByRole('region', { name: '악보 읽는 법' })).toBeNull();
-    expect(screen.queryByRole('separator')).toBeNull();
   });
 
   it('/sheet: 입문 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
@@ -521,6 +529,31 @@ describe('SongPicker 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-sta
     expect(screen.getByRole('complementary', { name: '선택한 곡' }).textContent).toContain('둘째곡');
     fireEvent.doubleClick(screen.getByText('둘째곡', { selector: '.play-st-name' }));
     await waitFor(() => expect(onStart).toHaveBeenCalledWith(2, 21));
+  });
+
+  it('/play: 주소로 골라 둔 곡이면 ▶ 플레이에 포커스를 준다(다시 하기 복귀). /sheet와 주소 없는 진입은 주지 않는다', async () => {
+    const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+    showMode('play', '/play?song=2&chart=21');
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: '플레이' })));
+    cleanup();
+    showMode('sheet', '/sheet?song=2&chart=21');
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    await nextFrame();
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: '플레이' }));
+    cleanup();
+    showMode('play');
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    await nextFrame();
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: '플레이' }));
+  });
+
+  it('/play: 내장 곡(음수 id)도 주소의 song·chart로 골라 둔다', async () => {
+    vi.mocked(listSongs).mockResolvedValue({ items: [song(-1, '내장 첫째'), song(-2, '내장 둘째')], hasNext: false });
+    const { onStart } = showMode('play', '/play?song=-2&chart=-19');
+    await waitFor(() => expect(screen.getByRole('complementary', { name: '선택한 곡' }).textContent).toContain('내장 둘째'));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'EASY' }).getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(-2, -19);
   });
 
   it('/play: 카드는 고른 단계의 최고 점수를 보이고, 표는 곡 전체 최고 점수다. 기록이 없으면 —', async () => {
