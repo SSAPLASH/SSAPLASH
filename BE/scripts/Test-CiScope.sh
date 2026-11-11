@@ -26,8 +26,8 @@ check() {
     else
         [ "$(grep -Fxc -- --tests "$CI_CAPTURE")" -eq 13 ]
         grep -Fxq bootJar "$CI_CAPTURE"
-        grep -Fxq 'com.ssafy.airdrum.auth.AccessTokenServiceTest' "$CI_CAPTURE"
-        grep -Fxq 'com.ssafy.airdrum.play.PlayPayloadTest' "$CI_CAPTURE"
+        grep -Fxq 'com.ssafy.airdrum.domain.auth.service.token.AccessTokenServiceTest' "$CI_CAPTURE"
+        grep -Fxq 'com.ssafy.airdrum.domain.play.service.upload.PlayPayloadTest' "$CI_CAPTURE"
     fi
     printf 'PASS %s %s %s: %s\n' "$source" "$branch" "$target" "$actual"
 }

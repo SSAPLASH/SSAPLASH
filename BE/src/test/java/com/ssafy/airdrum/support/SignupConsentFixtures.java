@@ -6,7 +6,7 @@ import java.time.temporal.ChronoUnit;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.ssafy.airdrum.user.User;
+import com.ssafy.airdrum.domain.user.entity.User;
 
 /**
  * 테스트 회원을 「가입 완료」(이용약관·개인정보·연주 기록 활용 동의를 마친 상태)로 만든다.

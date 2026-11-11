@@ -1,0 +1,431 @@
+package com.ssafy.airdrum.domain.sheet.controller;
+
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Map;
+
+import javax.imageio.ImageIO;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+import com.ssafy.airdrum.domain.sheet.exception.SheetError;
+import com.ssafy.airdrum.domain.sheet.storage.SheetStorage;
+import com.ssafy.airdrum.domain.auth.service.token.AccessTokenService;
+import com.ssafy.airdrum.global.error.BusinessException;
+import com.ssafy.airdrum.support.SignupConsentFixtures;
+import com.ssafy.airdrum.domain.user.model.AuthUser;
+import com.ssafy.airdrum.domain.user.model.UserRole;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+
+/** 155번 설계 3·4·6절: 내 악보 등록·목록·상세·제목 수정·삭제. 저장소는 대체하고 파일 검사는 실제로 한다. */
+@SpringBootTest
+@AutoConfigureMockMvc
+class SheetMusicApiTest {
+
+	@Autowired MockMvc mvc;
+	@Autowired JdbcTemplate db;
+	@Autowired AccessTokenService tokens;
+	@MockitoBean SheetStorage storage;
+	final JsonMapper json = new JsonMapper();
+	long user, other;
+	long song, song2, othersSong, builtin;
+
+	@BeforeEach
+	void seed() {
+		user = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, user);
+		other = db.queryForObject("INSERT INTO users(nickname) VALUES('악보 다른 회원') RETURNING id", Long.class);
+		SignupConsentFixtures.complete(db, other);
+		song = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'내 곡','MIDI','READY') RETURNING id", Long.class, user);
+		song2 = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'내 둘째 곡','AUDIO','PROCESSING') RETURNING id", Long.class, user);
+		othersSong = db.queryForObject("INSERT INTO songs(owner_id,title,source,status) VALUES(?,'남의 곡','MIDI','READY') RETURNING id", Long.class, other);
+		builtin = db.queryForObject("INSERT INTO songs(title,source,status,license,published) VALUES('공용 곡','BUILTIN','READY','test',true) RETURNING id", Long.class);
+		when(storage.sign(anyString())).thenAnswer(i -> "https://objects.test/" + i.getArgument(0));
+	}
+
+	@AfterEach
+	void clean() {
+		db.update("DELETE FROM file_cleanup_tasks WHERE user_id IN (?,?)", user, other);
+		db.update("DELETE FROM sheet_music WHERE owner_id IN (?,?)", user, other);
+		db.update("DELETE FROM songs WHERE id IN (?,?,?,?)", song, song2, othersSong, builtin);
+		db.update("DELETE FROM users WHERE id IN (?,?)", user, other);
+	}
+
+	// --- 248 내 악보와 개인 곡 연결 ---
+
+	Long sheetIdOf(long songId, long as) throws Exception {
+		var r = send(get("/api/v1/songs/" + songId), as);
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(200);
+		var node = body(r).path("sheetId");
+		assertThat(node.isMissingNode()).as("sheetId 키").isFalse();
+		return node.isNull() ? null : node.asLong();
+	}
+
+	@Test
+	void songId로_등록하면_악보와_곡_응답에_연결이_보이고_곡당_하나다() throws Exception {
+		var r = upload(user, "내 곡 악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(4, 4)));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		long id = body(r).path("id").asLong();
+		assertThat(body(r).path("songId").asLong()).isEqualTo(song);
+		assertThat(body(send(get("/api/v1/sheets/" + id), user)).path("songId").asLong()).isEqualTo(song);
+		var listed = body(send(get("/api/v1/sheets"), user)).path("items").get(0);
+		assertThat(listed.path("id").asLong()).isEqualTo(id);
+		assertThat(listed.path("songId").asLong()).isEqualTo(song);
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isEqualTo(song);
+		// 곡 상세·내 곡 목록에 sheetId
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		var mine = body(send(get("/api/v1/songs").param("source", "MINE"), user)).path("items");
+		var row = java.util.stream.StreamSupport.stream(mine.spliterator(), false).filter(n -> n.path("id").asLong() == song).findFirst().orElseThrow();
+		assertThat(row.path("sheetId").asLong()).isEqualTo(id);
+		// 곡당 하나: 두 번째는 409이고 저장소를 부르지 않는다
+		problem(upload(user, "둘째 악보", null, Map.of("songId", String.valueOf(song)), file("b.png", png(4, 4))), 409, "SHEET_ALREADY_LINKED");
+		verify(storage, times(1)).put(anyString(), any(), anyLong(), anyString());
+		// 악보를 지우면 자리가 비고 다시 올릴 수 있다
+		assertThat(send(delete("/api/v1/sheets/" + id), user).getResponse().getStatus()).isEqualTo(204);
+		assertThat(sheetIdOf(song, user)).isNull();
+		var again = upload(user, "다시 올린 악보", null, Map.of("songId", String.valueOf(song)), file("c.png", png(4, 4)));
+		assertThat(again.getResponse().getStatus()).as(text(again)).isEqualTo(201);
+		assertThat(body(again).path("id").asLong()).isNotEqualTo(id);
+		assertThat(sheetIdOf(song, user)).isEqualTo(body(again).path("id").asLong());
+		// songId 없는 등록은 그대로이고 songId가 null로 나온다
+		var plain = upload(user, "곡 없는 악보", null, file("d.png", png(4, 4)));
+		assertThat(plain.getResponse().getStatus()).isEqualTo(201);
+		assertThat(body(plain).has("songId")).isTrue();
+		assertThat(body(plain).path("songId").isNull()).isTrue();
+		// 공용 곡 상세의 sheetId는 항상 null
+		assertThat(sheetIdOf(builtin, user)).isNull();
+	}
+
+	@Test
+	void songId가_잘못되면_거절하고_저장소를_부르지_않는다() throws Exception {
+		var tiny = png(2, 2);
+		for (var bad : new String[] {String.valueOf(othersSong), "999999999", String.valueOf(builtin)})
+			problem(upload(user, "악보", null, Map.of("songId", bad), file("a.png", tiny)), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
+		problem(upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", tiny)), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=NULL WHERE id=?", song);
+		// 9999999999999999999는 19자리지만 Long 범위를 넘는다(검증 보완 1)
+		for (var bad : new String[] {"abc", "0", "-1", "1.5", "", " 1", "01", "9999999999999999999"})
+			problem(upload(user, "악보", null, Map.of("songId", bad), file("a.png", tiny)), 400, "SHEET_INVALID");
+		var twice = multipart("/api/v1/sheets").file(file("a.png", tiny)).param("title", "악보").param("songId", String.valueOf(song), String.valueOf(song));
+		problem(send(twice, user), 400, "SHEET_INVALID");
+		verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music WHERE owner_id=?", Integer.class, user)).isZero();
+		assertThat(sheetIdOf(song, user)).isNull();
+	}
+
+	@Test
+	void 페이지가_연결되지_않은_악보는_곡_sheetId에_보이지_않고_지우면_자리가_빈다() throws Exception {
+		long inProgress = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'업로드 중','UPLOADED','IMAGE',1,1,?) RETURNING id",
+				Long.class, user, song);
+		assertThat(sheetIdOf(song, user)).isNull();
+		problem(upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(2, 2))), 409, "SHEET_ALREADY_LINKED");
+		db.update("UPDATE sheet_music SET deleted_at=now() WHERE id=?", inProgress);
+		var r = upload(user, "악보", null, Map.of("songId", String.valueOf(song)), file("a.png", png(2, 2)));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		assertThat(sheetIdOf(song, user)).isEqualTo(body(r).path("id").asLong());
+		// 공용 곡의 sheetId는 DB에 남의 악보가 억지로 연결돼 있어도 null이다(쿼리가 소유자를 맞춘다, 검증 보완 2)
+		long foreign = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes,song_id) VALUES(?,'억지 연결','UPLOADED','IMAGE',1,1,?) RETURNING id",
+				Long.class, other, builtin);
+		db.update("INSERT INTO sheet_music_pages(sheet_id,page_no,object_key,content_type,bytes) VALUES(?,1,?,'image/png',1)", foreign, "sheet-music/" + other + "/" + foreign + "/x.png");
+		assertThat(sheetIdOf(builtin, user)).isNull();
+	}
+
+	// --- 333 악보 곡 연결 PATCH ---
+
+	@Test
+	void PATCH_songId로_연결_해제_옮김이_되고_같은_값은_바꾸지_않는다() throws Exception {
+		long id = body(upload(user, "나중에 연결할 악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		assertThat(body(send(get("/api/v1/sheets/" + id), user)).path("songId").isNull()).isTrue();
+		// 연결: 응답은 악보 상세 그대로
+		var linked = send(patchJson(id, "{\"songId\":" + song + "}"), user);
+		assertThat(linked.getResponse().getStatus()).as(text(linked)).isEqualTo(200);
+		assertThat(body(linked).path("songId").asLong()).isEqualTo(song);
+		assertThat(body(linked).path("title").asString()).isEqualTo("나중에 연결할 악보");
+		assertThat(body(linked).path("pages").size()).isEqualTo(1);
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		assertThat(body(send(get("/api/v1/sheets"), user)).path("items").get(0).path("songId").asLong()).isEqualTo(song);
+		// 같은 값은 200이고 아무것도 바꾸지 않는다
+		var before = db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?", java.sql.Timestamp.class, id);
+		assertThat(send(patchJson(id, "{\"songId\":" + song + "}"), user).getResponse().getStatus()).isEqualTo(200);
+		assertThat(db.queryForObject("SELECT updated_at FROM sheet_music WHERE id=?", java.sql.Timestamp.class, id)).isEqualTo(before);
+		// 제목과 함께 다른 곡으로 보내면 옮긴다
+		var moved = send(patchJson(id, "{\"title\":\"둘 다 바꿈\",\"songId\":" + song2 + "}"), user);
+		assertThat(moved.getResponse().getStatus()).as(text(moved)).isEqualTo(200);
+		assertThat(body(moved).path("title").asString()).isEqualTo("둘 다 바꿈");
+		assertThat(body(moved).path("songId").asLong()).isEqualTo(song2);
+		assertThat(sheetIdOf(song, user)).isNull();
+		assertThat(sheetIdOf(song2, user)).isEqualTo(id);
+		// 제목만 보내면 연결은 그대로다
+		var titleOnly = send(patchJson(id, "{\"title\":\"제목만\"}"), user);
+		assertThat(titleOnly.getResponse().getStatus()).isEqualTo(200);
+		assertThat(body(titleOnly).path("songId").asLong()).isEqualTo(song2);
+		// null이면 해제
+		var unlinked = send(patchJson(id, "{\"songId\":null}"), user);
+		assertThat(unlinked.getResponse().getStatus()).as(text(unlinked)).isEqualTo(200);
+		assertThat(body(unlinked).has("songId")).isTrue();
+		assertThat(body(unlinked).path("songId").isNull()).isTrue();
+		assertThat(sheetIdOf(song2, user)).isNull();
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isNull();
+		// 해제된 자리에는 다시 올릴 수 있다
+		var again = upload(user, "다시 올린 악보", null, Map.of("songId", String.valueOf(song2)), file("c.png", png(2, 2)));
+		assertThat(again.getResponse().getStatus()).as(text(again)).isEqualTo(201);
+	}
+
+	@Test
+	void PATCH_songId가_잘못되면_거절하고_연결이_바뀌지_않는다() throws Exception {
+		long id = body(upload(user, "곡 없는 악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		long occupied = body(upload(user, "둘째 곡 악보", null, Map.of("songId", String.valueOf(song2)), file("b.png", png(2, 2)))).path("id").asLong();
+		// 남의 곡·없는 곡·공용 곡·지운 곡은 404
+		for (var bad : new String[] {String.valueOf(othersSong), "999999999", String.valueOf(builtin)})
+			problem(send(patchJson(id, "{\"songId\":" + bad + "}"), user), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=now() WHERE id=?", song);
+		problem(send(patchJson(id, "{\"songId\":" + song + "}"), user), 404, "SONG_NOT_FOUND");
+		db.update("UPDATE songs SET deleted_at=NULL WHERE id=?", song);
+		// 그 곡에 이미 악보가 있으면 409이고 기존 연결은 그대로
+		problem(send(patchJson(id, "{\"songId\":" + song2 + "}"), user), 409, "SHEET_ALREADY_LINKED");
+		assertThat(sheetIdOf(song2, user)).isEqualTo(occupied);
+		// 형식 오류는 400: 문자열·0·음수·소수·불리언·배열·객체·빈 본문·중복 키·모르는 키·Long 범위 초과
+		for (var bad : new String[] {"{\"songId\":\"42\"}", "{\"songId\":0}", "{\"songId\":-1}", "{\"songId\":1.5}", "{\"songId\":true}", "{\"songId\":[]}",
+				"{\"songId\":{}}", "{}", "{\"songId\":1,\"songId\":2}", "{\"songId\":1,\"kind\":\"PDF\"}", "{\"songId\":99999999999999999999}", "{\"songId\":1}{}"})
+			problem(send(patchJson(id, bad), user), 400, "SHEET_INVALID");
+		assertThat(db.queryForObject("SELECT song_id FROM sheet_music WHERE id=?", Long.class, id)).isNull();
+		// 남의 악보·업로드 중(페이지 미연결) 악보는 404 SHEET_NOT_FOUND
+		problem(send(patchJson(id, "{\"songId\":" + othersSong + "}"), other), 404, "SHEET_NOT_FOUND");
+		long inProgress = db.queryForObject("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'업로드 중','UPLOADED','IMAGE',1,1) RETURNING id",
+				Long.class, user);
+		problem(send(patchJson(inProgress, "{\"songId\":" + song + "}"), user), 404, "SHEET_NOT_FOUND");
+		// 지운 악보도 404
+		long gone = body(upload(user, "지울 악보", null, file("g.png", png(2, 2)))).path("id").asLong();
+		assertThat(send(delete("/api/v1/sheets/" + gone), user).getResponse().getStatus()).isEqualTo(204);
+		problem(send(patchJson(gone, "{\"songId\":" + song + "}"), user), 404, "SHEET_NOT_FOUND");
+		// 연결된 악보를 이미 악보가 있는 곡으로 옮기려 하면 409이고 양쪽 연결 모두 그대로
+		assertThat(send(patchJson(id, "{\"songId\":" + song + "}"), user).getResponse().getStatus()).isEqualTo(200);
+		problem(send(patchJson(occupied, "{\"songId\":" + song + "}"), user), 409, "SHEET_ALREADY_LINKED");
+		assertThat(sheetIdOf(song, user)).isEqualTo(id);
+		assertThat(sheetIdOf(song2, user)).isEqualTo(occupied);
+	}
+	@Test
+	void 이미지_여러_장으로_등록하면_201과_페이지별_URL을_준다() throws Exception {
+		var r = upload(user, "드럼 연습곡 1", null, file("a.png", png(800, 1200)), file("b.jpg", jpg(640, 480)), file("c.png", png(10, 10)));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		var body = body(r);
+		long id = body.path("id").asLong();
+		assertThat(r.getResponse().getHeader("Location")).isEqualTo("/api/v1/sheets/" + id);
+		assertThat(r.getResponse().getHeader("Cache-Control")).isEqualTo("private, no-store");
+		assertThat(body.path("title").asString()).isEqualTo("드럼 연습곡 1");
+		assertThat(body.path("source").asString()).isEqualTo("UPLOADED");
+		assertThat(body.path("kind").asString()).isEqualTo("IMAGE");
+		assertThat(body.path("pageCount").asInt()).isEqualTo(3);
+		var pages = body.path("pages");
+		assertThat(pages.size()).isEqualTo(3);
+		assertThat(pages.get(0).path("pageNo").asInt()).isEqualTo(1);
+		assertThat(pages.get(0).path("contentType").asString()).isEqualTo("image/png");
+		assertThat(pages.get(0).path("width").asInt()).isEqualTo(800);
+		assertThat(pages.get(1).path("contentType").asString()).isEqualTo("image/jpeg");
+		String key = db.queryForObject("SELECT object_key FROM sheet_music_pages WHERE sheet_id=? AND page_no=1", String.class, id);
+		assertThat(key).matches("sheet-music/" + user + "/" + id + "/[0-9a-f-]{36}\\.png");
+		assertThat(pages.get(0).path("url").asString()).isEqualTo("https://objects.test/" + key);
+		assertThat(body.path("expiresAt").isMissingNode()).isFalse();
+		verify(storage, times(3)).put(anyString(), any(), anyLong(), anyString());
+		verify(storage).put(eq(key), any(), anyLong(), eq("image/png"));
+		assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=? AND file_role='SHEET_MUSIC'", Integer.class, user)).isEqualTo(3);
+		assertThat(db.queryForObject("SELECT total_bytes FROM sheet_music WHERE id=?", Long.class, id))
+				.isEqualTo(db.queryForObject("SELECT sum(bytes) FROM sheet_music_pages WHERE sheet_id=?", Long.class, id));
+	}
+
+	@Test
+	void PDF_하나와_RENDERED_출처로_등록할_수_있다() throws Exception {
+		var r = upload(user, "렌더링 악보", "RENDERED", file("s.pdf", pdf()));
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(201);
+		var body = body(r);
+		assertThat(body.path("kind").asString()).isEqualTo("PDF");
+		assertThat(body.path("source").asString()).isEqualTo("RENDERED");
+		assertThat(body.path("pages").get(0).path("contentType").asString()).isEqualTo("application/pdf");
+		assertThat(body.path("pages").get(0).path("width").isNull()).isTrue();
+		assertThat(body.path("thumbnailUrl").isNull()).isTrue();
+	}
+
+	@Test
+	void 목록은_본인_것만_최신순으로_검색과_페이지가_된다() throws Exception {
+		long first = body(upload(user, "첫 악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		long second = body(upload(user, "두번째 50%_악보", null, file("a.png", png(2, 2)))).path("id").asLong();
+		upload(other, "남의 악보", null, file("a.png", png(2, 2)));
+
+		var list = body(send(get("/api/v1/sheets"), user));
+		assertThat(list.path("items").size()).isEqualTo(2);
+		assertThat(list.path("items").get(0).path("id").asLong()).isEqualTo(second);
+		assertThat(list.path("items").get(1).path("id").asLong()).isEqualTo(first);
+		assertThat(list.path("items").get(0).path("thumbnailUrl").asString()).startsWith("https://objects.test/sheet-music/" + user + "/" + second + "/");
+		assertThat(list.path("items").get(0).has("pages")).isFalse();
+		assertThat(list.path("totalElements").asLong()).isEqualTo(2);
+
+		var searched = body(send(get("/api/v1/sheets").param("q", "50%_"), user));
+		assertThat(searched.path("items").size()).isEqualTo(1);
+		assertThat(searched.path("items").get(0).path("id").asLong()).isEqualTo(second);
+		var paged = body(send(get("/api/v1/sheets").param("page", "1").param("size", "1"), user));
+		assertThat(paged.path("items").get(0).path("id").asLong()).isEqualTo(first);
+		assertThat(send(get("/api/v1/sheets").param("size", "101"), user).getResponse().getStatus()).isEqualTo(400);
+	}
+
+	@Test
+	void 상세_제목수정_삭제와_남의_것은_404() throws Exception {
+		long id = body(upload(user, "원래 제목", null, file("a.png", png(2, 2)), file("b.png", png(2, 2)))).path("id").asLong();
+		var detail = body(send(get("/api/v1/sheets/" + id), user));
+		assertThat(detail.path("pages").size()).isEqualTo(2);
+
+		var patched = send(patch("/api/v1/sheets/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"  바뀐 제목 \"}"), user);
+		assertThat(patched.getResponse().getStatus()).as(text(patched)).isEqualTo(200);
+		assertThat(body(patched).path("title").asString()).isEqualTo("바뀐 제목");
+		for (String bad : new String[] {"{}", "{\"title\":\"\"}", "{\"title\":1}", "{\"title\":\"x\",\"kind\":\"PDF\"}", "{\"title\":\"" + "가".repeat(101) + "\"}", "[]", "{\"title\":\"a\"}{}"})
+			problem(send(patch("/api/v1/sheets/" + id).contentType(MediaType.APPLICATION_JSON).content(bad), user), 400, "SHEET_INVALID");
+
+		problem(send(get("/api/v1/sheets/" + id), other), 404, "SHEET_NOT_FOUND");
+		problem(send(patch("/api/v1/sheets/" + id).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"남\"}"), other), 404, "SHEET_NOT_FOUND");
+		problem(send(delete("/api/v1/sheets/" + id), other), 404, "SHEET_NOT_FOUND");
+		problem(send(get("/api/v1/sheets/999999999"), user), 404, "SHEET_NOT_FOUND");
+		assertThat(mvc.perform(get("/api/v1/sheets")).andReturn().getResponse().getStatus()).isEqualTo(401);
+
+		var keys = db.queryForList("SELECT object_key FROM sheet_music_pages WHERE sheet_id=?", String.class, id);
+		assertThat(send(delete("/api/v1/sheets/" + id), user).getResponse().getStatus()).isEqualTo(204);
+		problem(send(get("/api/v1/sheets/" + id), user), 404, "SHEET_NOT_FOUND");
+		assertThat(body(send(get("/api/v1/sheets"), user)).path("items").size()).isZero();
+		for (String key : keys)
+			assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE object_key=? AND next_attempt_at<=clock_timestamp()", Integer.class, key)).isOne();
+		problem(send(delete("/api/v1/sheets/" + id), user), 404, "SHEET_NOT_FOUND");
+	}
+
+	@Test
+	void 잘못된_등록은_4xx이고_저장소와_DB에_남기지_않는다() throws Exception {
+		problem(upload(user, "악보", null), 400, "SHEET_INVALID");
+		problem(upload(user, " ", null, file("a.png", png(2, 2))), 400, "SHEET_INVALID");
+		problem(upload(user, null, null, file("a.png", png(2, 2))), 400, "SHEET_INVALID");
+		problem(upload(user, "가".repeat(101), null, file("a.png", png(2, 2))), 400, "SHEET_INVALID");
+		problem(upload(user, "악보", "SCANNED", file("a.png", png(2, 2))), 400, "SHEET_INVALID");
+		problem(upload(user, "악보", null, file("a.png", png(2, 2)), file("b.pdf", pdf())), 400, "SHEET_INVALID");
+		problem(upload(user, "악보", null, file("a.pdf", pdf()), file("b.pdf", pdf())), 400, "SHEET_INVALID");
+		problem(upload(user, "악보", null, file("a.png", new byte[0])), 400, "SHEET_INVALID");
+		problem(upload(user, "악보", null, file("a.png", "가짜".getBytes(StandardCharsets.UTF_8))), 415, "SHEET_UNSUPPORTED");
+		problem(upload(user, "악보", null, file("a.gif", gif())), 415, "SHEET_UNSUPPORTED");
+		var many = new MockMultipartFile[21];
+		byte[] tiny = png(2, 2);
+		for (int i = 0; i < many.length; i++) many[i] = file("p" + i + ".png", tiny);
+		problem(upload(user, "악보", null, many), 400, "SHEET_INVALID");
+		var wrongPart = multipart("/api/v1/sheets").file(new MockMultipartFile("file", "a.png", "image/png", tiny)).param("title", "악보");
+		problem(send(wrongPart, user), 400, "SHEET_INVALID");
+		var extraField = multipart("/api/v1/sheets").file(file("a.png", tiny)).param("title", "악보").param("note", "x");
+		problem(send(extraField, user), 400, "SHEET_INVALID");
+
+		verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music WHERE owner_id=?", Integer.class, user)).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=?", Integer.class, user)).isZero();
+	}
+
+	@Test
+	void 회원당_개수와_용량_상한을_넘으면_413() throws Exception {
+		for (int i = 0; i < 100; i++)
+			db.update("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'채움','UPLOADED','IMAGE',1,1)", user);
+		problem(upload(user, "101번째", null, file("a.png", png(2, 2))), 413, "SHEET_QUOTA_EXCEEDED");
+		db.update("UPDATE sheet_music SET deleted_at=now() WHERE owner_id=?", user);
+		db.update("INSERT INTO sheet_music(owner_id,title,source,kind,page_count,total_bytes) VALUES(?,'큰 악보','UPLOADED','PDF',1,?)", user, 500L * 1024 * 1024 - 10);
+		problem(upload(user, "용량 초과", null, file("a.png", png(2, 2))), 413, "SHEET_QUOTA_EXCEEDED");
+		verify(storage, never()).put(anyString(), any(), anyLong(), anyString());
+	}
+
+	@Test
+	void 저장소_장애는_503이고_악보가_남지_않으며_올린_파일은_정리된다() throws Exception {
+		doThrow(new BusinessException(SheetError.SHEET_UNAVAILABLE)).doNothing()
+				.when(storage).put(anyString(), any(), anyLong(), anyString());
+		problem(upload(user, "장애 악보", null, file("a.png", png(2, 2)), file("b.png", png(2, 2))), 503, "SHEET_UNAVAILABLE");
+		assertThat(body(send(get("/api/v1/sheets"), user)).path("items").size()).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music WHERE owner_id=? AND deleted_at IS NULL", Integer.class, user)).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM sheet_music_pages p JOIN sheet_music m ON m.id=p.sheet_id WHERE m.owner_id=?", Integer.class, user)).isZero();
+		assertThat(db.queryForObject("SELECT count(*) FROM file_cleanup_tasks WHERE user_id=? AND file_role='SHEET_MUSIC'", Integer.class, user)).isGreaterThanOrEqualTo(1);
+	}
+
+	MvcResult upload(long as, String title, String source, MockMultipartFile... files) throws Exception {
+		return upload(as, title, source, Map.of(), files);
+	}
+
+	MvcResult upload(long as, String title, String source, Map<String, String> extra, MockMultipartFile... files) throws Exception {
+		MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/sheets");
+		for (var f : files) request.file(f);
+		if (title != null) request.param("title", title);
+		if (source != null) request.param("source", source);
+		extra.forEach(request::param);
+		return send(request, as);
+	}
+
+	MvcResult send(AbstractMockHttpServletRequestBuilder<?> request, long as) throws Exception {
+		request.header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.issue(new AuthUser(as, UserRole.USER), Instant.now()).token());
+		return mvc.perform(request).andReturn();
+	}
+
+	static AbstractMockHttpServletRequestBuilder<?> patchJson(long id, String body) {
+		return patch("/api/v1/sheets/" + id).contentType(MediaType.APPLICATION_JSON).content(body);
+	}
+
+	static MockMultipartFile file(String name, byte[] bytes) {
+		return new MockMultipartFile("files", name, "application/octet-stream", bytes);
+	}
+
+	JsonNode body(MvcResult r) throws Exception {
+		return json.readTree(text(r));
+	}
+
+	static String text(MvcResult r) throws Exception {
+		return r.getResponse().getContentAsString(StandardCharsets.UTF_8);
+	}
+
+	void problem(MvcResult r, int status, String code) throws Exception {
+		assertThat(r.getResponse().getStatus()).as(text(r)).isEqualTo(status);
+		assertThat(body(r).path("code").asString()).isEqualTo(code);
+	}
+
+	static byte[] png(int w, int h) throws Exception { return image("png", w, h); }
+	static byte[] jpg(int w, int h) throws Exception { return image("jpg", w, h); }
+	static byte[] gif() throws Exception { return image("gif", 2, 2); }
+
+	static byte[] image(String format, int w, int h) throws Exception {
+		var out = new ByteArrayOutputStream();
+		ImageIO.write(new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB), format, out);
+		return out.toByteArray();
+	}
+
+	static byte[] pdf() {
+		return "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n".getBytes(StandardCharsets.US_ASCII);
+	}
+}
