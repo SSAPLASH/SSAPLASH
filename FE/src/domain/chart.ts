@@ -123,7 +123,7 @@ export const CHART_8_FILL: Chart = make('demo-8beat-fill', '8비트 + 필인', '
     groove.push(s);
   }
   if (bar % 4 === 3) {
-    // 마지막 반 마디 필인: 스네어 → 하이탐 → 플로어탐 → 크래시
+    // 마지막 반 마디 필인: 스네어 → 스몰탐 → 플로어탐 → 크래시
     groove[8] = { SNARE: 100 };
     groove[9] = { SNARE: 90 };
     groove[10] = { SMALL_TOM: 100 };
