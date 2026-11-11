@@ -121,7 +121,7 @@ describe('ReplayOffsets', () => {
     expect(syncOffsetMs(1000, 400, 1010)).toBe(605);
   });
 
-  it('SYNC 송신(t0)과 SYNC_ACK 짝으로 스틱별 오프셋을 구하고 rtt가 가장 작은 표본을 채택한다', () => {
+  it('SYNC 송신(t0)과 SYNC_ACK 짝으로 스틱별 오프셋을 구하고 왕복이 긴 표본은 쓰지 않는다', () => {
     const o = new ReplayOffsets();
     expect(o.offsetOf(0)).toBeNull();
     o.observe(1000, 'out', null, encodeSync(1000));
@@ -137,6 +137,21 @@ describe('ReplayOffsets', () => {
     // 1번 스틱은 같은 SYNC에 따로 짝지어진다
     o.observe(3012, 'in', 1, ack(3000, 2_400_000, 1));
     expect(o.offsetOf(1)).toBe(3006 - 2400);
+  });
+
+  it('연주 때와 같은 규칙: 옛 표본은 10초 창에서 빠지고 적용값은 초당 1ms로 따라간다', () => {
+    const o = new ReplayOffsets();
+    o.observe(1000, 'out', null, encodeSync(1000));
+    o.observe(1004, 'in', 0, ack(1000, 400_000)); // rtt 4, offset 1002 - 400 = 602
+    expect(o.offsetOf(0)).toBe(602);
+    // 12초 뒤: 왕복이 더 길지만 옛 표본이 창에서 빠져 목표가 된다. 그 사이 12초라 5ms 차이를 다 따라간다
+    o.observe(13_000, 'out', null, encodeSync(13_000));
+    o.observe(13_010, 'in', 0, ack(13_000, 12_398_000)); // offset 13005 - 12398 = 607
+    expect(o.offsetOf(0)).toBeCloseTo(607, 6);
+    // 1초 뒤 목표가 10ms 바뀌어도 1ms만 움직인다
+    o.observe(14_000, 'out', null, encodeSync(14_000));
+    o.observe(14_010, 'in', 0, ack(14_000, 13_388_000)); // offset 14005 - 13388 = 617
+    expect(o.offsetOf(0)).toBeCloseTo(608, 6);
   });
 
   it('페달(role 2·3) ACK는 손 오프셋에 쓰지 않는다. 이전 파일처럼 stick이 role & 1로 적혀 있어도 같다', () => {
