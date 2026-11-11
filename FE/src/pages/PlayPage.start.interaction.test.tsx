@@ -38,6 +38,8 @@ vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), 
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/components/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
+// 안내 애니메이션의 rAF 갱신이 라우터 전환 렌더를 굶기지 않게 막는다
+vi.mock('@/components/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 // 하이웨이는 그리지 않고 프레임 콜백만 잡아 둔다 — 테스트가 곡 끝을 흉내 낸다
 const frame: { current: ((now: number) => void) | null } = { current: null };
 vi.mock('@/components/NoteHighway', () => ({
