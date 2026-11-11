@@ -12,7 +12,7 @@
 // 첫 LINK 전(예전 동글 펌웨어)에는 지금처럼 STATUS가 오면 연결로 본다.
 // 사용자 제스처 안에서 connect()를 불러야 포트 선택 창이 열린다.
 import type { DongleLink, FootId, StickEvent, StickId } from '@/domain/events';
-import { BaseInputSource } from './InputSource';
+import { BaseInputSource, SYNC_INTERVAL_MS } from './InputSource';
 import type { TransportStats } from './InputSource';
 import { FrameDecoder, frame } from './serialFraming';
 import { packetTap } from './packetTap';
@@ -48,7 +48,6 @@ interface SerialLike {
 }
 
 export const SERIAL_BAUD_RATE = 921600;
-const SYNC_INTERVAL_MS = 10_000;
 /** 시계 초기화 뒤 SYNC 연속 송신 횟수·간격 */
 const SYNC_BURST_COUNT = 5;
 const SYNC_BURST_GAP_MS = 50;

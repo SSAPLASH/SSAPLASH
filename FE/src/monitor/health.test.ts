@@ -41,6 +41,12 @@ function mkStats(over: Partial<MonitorStats> = {}): MonitorStats {
     i2cRecoveries: null,
     build: null,
     sync: { samples: [], adopted: [], lastLagMs: null, count: 0, unmatched: 0 },
+    pedal: {
+      present: false,
+      lastStatus: [null, null],
+      statusAgeMs: [null, null],
+      sync: { count: 0, unmatched: 0, lastRttMs: null, minRttMs: null, offsetObsMs: null },
+    },
     padTable: { entries: [], t: null },
     errorCount: 0,
     total: 0,

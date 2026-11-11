@@ -2,6 +2,7 @@
 // 키보드·포인터 모의 IMU·BLE 스틱·WebSocket 허브가 모두 같은 StickEvent를 낸다.
 // 상위(InputManager)는 소스 종류를 모른 채 이벤트만 받는다.
 import type { DeviceRole, DongleLink, InputSourceKind, Pose, SourceState, StickEvent, StickId } from '@/domain/events';
+import { ClockEstimate } from './clockEstimate';
 
 export type { SourceState };
 
@@ -88,16 +89,21 @@ export abstract class BaseInputSource implements InputSource {
   abstract disconnect(): Promise<void>;
 }
 
+/**
+ * 주기 SYNC 간격(ms). ClockEstimate의 10초 창에 표본이 10개쯤 들어오게 1초로 둔다(EMB 합의 2026-11-11).
+ * 연결·시계 초기화 직후의 연속 5회는 소스마다 따로 보낸다
+ */
+export const SYNC_INTERVAL_MS = 1000;
+
 /** 센서 시각 u32 µs의 한 주기(2^32 µs)를 ms로 */
 export const WRAP_MS = 4294967.296;
 
 /**
- * 센서 시계 ↔ 브라우저 시계 오프셋 추정 (공통 명세서 8-3 시계 동기화).
- * 왕복 지연이 가장 짧았던 샘플을 신뢰한다.
+ * 센서 시계 ↔ 브라우저 시계 오프셋 (공통 명세서 8-3 시계 동기화).
+ * 센서 시각 펼치기는 여기서, 오프셋 추정(최근 창의 최소 왕복 표본 + 천천히 따라가기)은 ClockEstimate가 한다.
  */
 export class ClockSync {
-  private offsetMs: number | null = null;
-  private bestRtt = Infinity;
+  private estimate = new ClockEstimate();
   /** 직전까지 본 가장 큰 펼친 센서 시각(ms). 랩 판정 기준 */
   private lastSensorMs: number | null = null;
   /** 지금까지 더해진 랩 보정(ms) */
@@ -124,30 +130,34 @@ export class ClockSync {
   /** t0: 요청 보낸 브라우저 시각, t1: 센서가 찍은 시각, t2: 응답 받은 브라우저 시각 */
   addSample(t0: number, t1: number, t2: number): void {
     t1 = this.unwrap(t1);
-    const rtt = t2 - t0;
-    if (rtt < this.bestRtt) {
-      this.bestRtt = rtt;
-      this.offsetMs = (t0 + t2) / 2 - t1; // browser = sensor + offset
-    }
+    this.estimate.add(t2, t2 - t0, (t0 + t2) / 2 - t1); // browser = sensor + offset
   }
 
-  /** 동기화 전이면 "지금 받았다"로 간주 */
+  /** 동기화 전이면 "지금 받았다"로 간주. 적용 오프셋을 recvTime까지 옮긴 뒤 환산한다 */
   toBrowserTime(sensorTs: number, recvTime: number): number {
     const t = this.unwrap(sensorTs);
-    return this.offsetMs === null ? recvTime : t + this.offsetMs;
+    this.estimate.advance(recvTime);
+    const offset = this.estimate.applied;
+    return offset === null ? recvTime : t + offset;
   }
 
+  /** 타격 시각 환산에 쓰는 적용 오프셋 */
   get offset(): number | null {
-    return this.offsetMs;
+    return this.estimate.applied;
   }
 
+  /** 최근 창이 가리키는 목표 오프셋. 적용 오프셋이 이 값을 따라간다(모니터·진단용) */
+  get targetOffset(): number | null {
+    return this.estimate.target;
+  }
+
+  /** 최근 창 안 최소 왕복(ms) */
   get rtt(): number {
-    return this.bestRtt;
+    return this.estimate.minRtt;
   }
 
   reset(): void {
-    this.offsetMs = null;
-    this.bestRtt = Infinity;
+    this.estimate.reset();
     this.lastSensorMs = null;
     this.wrapOffsetMs = 0;
   }

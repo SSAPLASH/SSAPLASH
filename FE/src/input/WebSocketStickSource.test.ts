@@ -184,9 +184,9 @@ describe('WebSocketStickSource', () => {
       expect(FakeWS.instances.map((w) => w.url)).toEqual(['ws://left', 'ws://right']);
       vi.advanceTimersByTime(300);
       for (const ws of FakeWS.instances) expect(ws.sent.filter(isSync)).toHaveLength(5);
-      // 10초 주기 재동기화도 링크마다
-      vi.advanceTimersByTime(10_000);
-      for (const ws of FakeWS.instances) expect(ws.sent.filter(isSync).length).toBeGreaterThanOrEqual(6);
+      // 1초 주기 재동기화도 링크마다
+      vi.advanceTimersByTime(3000);
+      for (const ws of FakeWS.instances) expect(ws.sent.filter(isSync)).toHaveLength(8);
     });
 
     it('링크별 SYNC_ACK로 손마다 다른 오프셋이 수렴한다', async () => {

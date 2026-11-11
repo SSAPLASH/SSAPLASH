@@ -1,10 +1,10 @@
 // 녹화 재생(순수). 되읽은 녹화(패킷 줄·진단 줄)를 원래 t 순의 시간표로 합치고, 재생·일시정지·배속을 상태기로 다룬다.
 // 시계는 밖에서 now를 넘긴다(타이머 없음). 시계 오프셋은 녹화의 SYNC 송신·SYNC_ACK 짝에서 소스(ClockSync)와 같은 식으로 다시 구한다.
 import type { DiagEvent } from '@/engine/diagTap';
+import { ClockSync } from '@/input/InputSource';
 import { CommandType, decodePacket, handOf, PacketType } from '@/input/stickProtocol';
 import { hexToBytes, type RecordedRow } from './recorder';
 import { SyncPairer, syncKeyOf } from './syncPair';
-import { TsUnwrap } from './tsUnwrap';
 
 export const REPLAY_SPEEDS = [1, 2, 4] as const;
 export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
@@ -148,19 +148,16 @@ export function syncOffsetMs(t0: number, t1Ms: number, t2: number): number {
 
 /**
  * 녹화의 SYNC 송신(out, t0 = 1바이트 뒤 u32 LE)과 SYNC_ACK(in)를 SyncPairer로 짝지어 스틱별 오프셋을 다시 구한다.
- * ClockSync처럼 rtt가 가장 작은 표본의 오프셋을 채택한다. 시각은 녹화 원래 시각 기준이다(재생 시각으로 옮기는 건 호출자).
+ * 연주 때 소스가 쓰는 ClockSync를 그대로 돌려, 그때 게임이 썼을 오프셋과 같은 규칙(최근 창의 최소 왕복 + 천천히 따라가기)으로 낸다.
+ * 시각은 녹화 원래 시각 기준이다(재생 시각으로 옮기는 건 호출자).
  */
 export class ReplayOffsets {
   private pairer = new SyncPairer();
-  private unwrap = new TsUnwrap();
-  private best: [number, number] = [Infinity, Infinity];
-  private offsets: [number | null, number | null] = [null, null];
+  private clocks: [ClockSync, ClockSync] = [new ClockSync(), new ClockSync()];
 
   reset(): void {
     this.pairer.clear();
-    this.unwrap.reset();
-    this.best = [Infinity, Infinity];
-    this.offsets = [null, null];
+    for (const c of this.clocks) c.reset();
   }
 
   /** 패킷 한 줄을 보여준다. t = 녹화 원래 시각 */
@@ -182,16 +179,11 @@ export class ReplayOffsets {
     const stick: 0 | 1 = stickId ?? hand;
     const t0 = this.pairer.match(d.t0Ms, stick);
     if (t0 === null) return;
-    const t1Ms = this.unwrap.feed(stick, d.t1Us) / 1000;
-    const rtt = t - t0;
-    if (rtt < this.best[stick]) {
-      this.best[stick] = rtt;
-      this.offsets[stick] = syncOffsetMs(t0, t1Ms, t);
-    }
+    this.clocks[stick].addSample(t0, d.t1Us / 1000, t);
   }
 
   /** 녹화 시각 기준 오프셋. 아직 없으면 null */
   offsetOf(stick: 0 | 1): number | null {
-    return this.offsets[stick];
+    return this.clocks[stick].offset;
   }
 }
