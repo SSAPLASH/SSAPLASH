@@ -40,14 +40,14 @@ describe('KitCanvas 끌기(kit-drag D6)', () => {
     const { wrap, onTapPad, onMovePad } = setup({ draggable: true });
     // 중심에서 조금 벗어난 곳을 잡아도 잡은 지점 차이가 유지된다
     fireEvent.pointerDown(wrap, at(sx + 10, sy + 5));
-    fireEvent.pointerMove(wrap, at(sx + 46, sy + 21));
-    fireEvent.pointerUp(wrap, at(sx + 46, sy + 21));
+    fireEvent.pointerMove(wrap, at(sx + 46, sy - 11));
+    fireEvent.pointerUp(wrap, at(sx + 46, sy - 11));
     expect(onMovePad).toHaveBeenCalled();
     const [pad, x, y] = onMovePad.mock.calls.at(-1)!;
     expect(pad).toBe('SNARE');
-    // 돌려받은 배치 좌표로 다시 그리면 패드 중심이 36·16px 옮겨진 자리에 있다
+    // 돌려받은 배치 좌표로 다시 그리면 패드 중심이 오른쪽 36·위 16px 옮겨진 자리에 있다(스네어는 아래 한계 가까이 있어 위로 옮긴다)
     const moved = padShape('SNARE', padPoint('SNARE', { x, y }), cam);
-    expect(Math.hypot(moved.cx - (sx + 36), moved.cy - (sy + 16))).toBeLessThan(2);
+    expect(Math.hypot(moved.cx - (sx + 36), moved.cy - (sy - 16))).toBeLessThan(2);
     expect(x).toBeGreaterThan(snare.x);
     expect(onTapPad).not.toHaveBeenCalled();
   });
