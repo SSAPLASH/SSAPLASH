@@ -1,18 +1,22 @@
 // @vitest-environment happy-dom
-// 키보드 드럼은 연주 중에만 받는다: 리듬 게임의 곡 선택·준비 단계에서는 키를 치지도 막지도 않는다
-import { cleanup, render, waitFor } from '@testing-library/react';
+// 키보드 드럼은 연주 중에만 받는다: 리듬 게임의 곡 선택·기기 준비 팝업(시작 대기)에서는 키를 치지도 막지도 않는다
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getSong } from '@/api/songs';
+import { getSong, listAllSongs } from '@/api/songs';
 import { keyboardSource } from '@/app/sources';
 import type { Chart, Difficulty } from '@/domain/chart';
 import type { SongDetail } from '@/domain/songCatalog';
 import { PlayPage } from '@/pages/PlayPage';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
+import { useSettings } from '@/store/settingsStore';
 
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn().mockResolvedValue({ items: [], hasNext: false }) }));
+vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn().mockResolvedValue({ items: [], hasNext: false }), listAllSongs: vi.fn() }));
 vi.mock('@/store/songStore', async (orig) => ({ ...(await orig<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
+// 카드 클릭 안에서 부르는 오디오 잠금 해제는 AudioContext가 없는 테스트 환경에서 막아 둔다
+vi.mock('@/app/bootstrap', async (orig) => ({ ...(await orig<typeof import('@/app/bootstrap')>()), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn().mockResolvedValue({ items: [] }) }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: 's', strategy: 'x', items: [] }) }));
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: 'r', strategy: 's', items: [] }), postRecommendationClick: vi.fn() }));
 
@@ -51,8 +55,15 @@ describe('PlayPage 키보드 드럼 범위', () => {
     expect(pressPrevented()).toBe(false);
   });
 
-  it('준비 단계에서도 키를 막지 않고, 떠난 뒤에도 꺼져 있다', async () => {
-    const { unmount } = render(<MemoryRouter initialEntries={['/play?song=1&chart=11']}><Routes><Route path="/play" element={<PlayPage />} /></Routes></MemoryRouter>);
+  it('기기 준비 팝업(시작 대기)에서도 키를 막지 않고, 떠난 뒤에도 꺼져 있다', async () => {
+    // 기기가 준비되지 않으면 ▶ 플레이 뒤 팝업이 뜬 채 연주 전에 머문다
+    useSettings.setState({ sensorKind: 'pointer', firstSetupDone: true });
+    vi.mocked(listAllSongs).mockResolvedValue([detail]);
+    const { unmount } = render(<MemoryRouter initialEntries={['/play']}><Routes><Route path="/play" element={<PlayPage />} /></Routes></MemoryRouter>);
+    const play = await screen.findByRole('button', { name: '플레이' });
+    await waitFor(() => expect(play.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(play);
+    await screen.findByRole('dialog', { name: '기기 준비가 필요해요' });
     await waitFor(() => expect(loadChart).toHaveBeenCalled());
     expect(pressPrevented()).toBe(false);
     unmount();

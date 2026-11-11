@@ -1,4 +1,4 @@
-// 재정렬 자동 시작 훅(PLAY-004 3-9). 네 진입점(세팅 ②·연주 준비·곡 연주 복귀·자유 연습)이 공용으로 쓴다.
+// 재정렬 자동 시작 훅(PLAY-004 3-9). 네 진입점(세팅 ②·시작 확인 창·곡 연주 복귀·자유 연습)이 공용으로 쓴다.
 // 이 화면에 있는 동안 재정렬이 필요한 손(realignNeeded)이 생기고 세션이 놀고 있으면 startRealign()을 부르고,
 // enabled가 꺼지거나 언마운트하면 cancelRealign()으로 접는다(realignNeeded는 남아 다음 화면이 이어받는다).
 import { useEffect } from 'react';

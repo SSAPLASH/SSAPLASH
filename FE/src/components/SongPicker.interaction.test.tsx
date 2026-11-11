@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
@@ -34,13 +34,13 @@ const recoItem: RecommendationItem = {
   song: song(77, '추천곡'), chartId: 555, difficulty: 'EASY', reasons: [{ code: 'STARTER', text: 'BE 문구' }],
 };
 
-function show(onSelect = vi.fn()) {
+function show(onStart = vi.fn()) {
   render(
     <MemoryRouter>
-      <SongPicker onSelect={onSelect} mode="play" />
+      <SongPicker onStart={onStart} mode="play" />
     </MemoryRouter>,
   );
-  return onSelect;
+  return onStart;
 }
 
 beforeEach(() => {
@@ -57,6 +57,20 @@ beforeEach(() => {
   useSongs.setState({ source: 'api', scope: 'BUILTIN' });
 });
 
+describe('SongPicker starting', () => {
+  it('starting을 넘기면 카드의 ▶ 플레이가 스피너이고, 넘기지 않으면 평소대로다', async () => {
+    useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
+    vi.mocked(getSong).mockResolvedValue({ ...song(1, '목록곡'), license: null, updatedAt: null, charts: [{ id: 11, difficulty: 'EASY', chartVersionId: 111, version: 1, noteCount: 5, notationStatus: 'READY' }] });
+    const view = render(<MemoryRouter><SongPicker mode="play" onStart={vi.fn()} starting /></MemoryRouter>);
+    await waitFor(() => expect(document.querySelector('.play-sd-play .spinner')).not.toBeNull());
+    expect((document.querySelector('.play-sd-play') as HTMLButtonElement).disabled).toBe(true);
+    view.unmount();
+    render(<MemoryRouter><SongPicker mode="sheet" onStart={vi.fn()} /></MemoryRouter>);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(document.querySelector('.play-sd-play .spinner')).toBeNull();
+  });
+});
+
 describe('SongPicker 서버 최고 기록', () => {
   beforeEach(() => {
     useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
@@ -68,18 +82,21 @@ describe('SongPicker 서버 최고 기록', () => {
       { songId: 1, chartId: 12, difficulty: 'HARD', mode: 'RHYTHM', bestScore: 654, bestAccuracy: 80 },
       { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'SHEET', bestScore: null, bestAccuracy: 76.54 },
     ] });
-    render(<MemoryRouter><SongPicker mode={mode} onSelect={vi.fn()} /></MemoryRouter>);
-    await waitFor(() => expect(screen.getAllByText(mode === 'play' ? '654' : '76.5%').length).toBe(2));
+    render(<MemoryRouter><SongPicker mode={mode} onStart={vi.fn()} /></MemoryRouter>);
+    // play: 표는 곡 전체 최고(654), 카드는 고른 단계(11)의 최고(321). sheet: 표·카드 모두 76.5%
+    await waitFor(() => expect(screen.getAllByText(mode === 'play' ? '654' : '76.5%').length).toBe(mode === 'play' ? 1 : 2));
+    if (mode === 'play') expect(screen.getByText('321')).toBeTruthy();
     expect(getBestRecords).toHaveBeenCalledWith([1], expect.any(AbortSignal));
   });
-  it('실패 중에도 준비 진입이 가능하고 재시도 뒤 0점이 표시된다', async () => {
+  it('실패 중에도 시작이 가능하고 재시도 뒤 0점이 표시된다', async () => {
     vi.mocked(getBestRecords).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ items: [
       { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'RHYTHM', bestScore: 0, bestAccuracy: 0 },
     ] });
-    const onSelect = show();
+    const onStart = show();
     await screen.findByText('최고 기록을 불러오지 못했어요.');
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(1, 11);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(1, 11);
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => expect(screen.getAllByText('0').length).toBe(2));
     expect(screen.queryByText('최고 기록을 불러오지 못했어요.')).toBeNull();
@@ -112,7 +129,7 @@ describe('SongPicker AI 추천곡 탭·라벨 (설계 COACH-004-song-picker-ai-t
   it('탭이 [기본 곡][라이브러리][AI 추천곡]이고 추천은 진입 때 한 번(size 10), 필터 아래 카드 줄은 없다', async () => {
     show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
-    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡']);
+    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡']);
     await waitFor(() => expect(fetchRecommendations).toHaveBeenCalledTimes(1));
     expect(vi.mocked(fetchRecommendations).mock.calls[0][0]).toEqual({ context: 'SONG_PICKER', mode: 'RHYTHM', size: 10 });
     expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull();
@@ -159,35 +176,35 @@ describe('SongPicker AI 추천곡 탭·라벨 (설계 COACH-004-song-picker-ai-t
     expect(screen.getByText('목록에서 곡을 고르면 여기에 보여요.')).toBeTruthy();
   });
 
-  it('AI 추천곡 탭에서 고른 곡의 [준비]는 추천 채보로 가고 클릭을 기록한다', async () => {
-    const onSelect = show();
+  it('AI 추천곡 탭에서 고른 곡의 [플레이]는 추천 채보로 가고 클릭을 기록한다', async () => {
+    const onStart = show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
     fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
     await screen.findByText('어려운곡', { selector: '.play-st-name' });
     fireEvent.click(row('추천곡'));
-    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(77, 555);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(77, 555);
     expect(postRecommendationClick).toHaveBeenCalledWith('r1', 77);
   });
 
   it('추천 채보가 곡 상세에 없으면 기본 채보로 간다', async () => {
-    const onSelect = show();
+    const onStart = show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
     fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
     fireEvent.click(await screen.findByText('어려운곡', { selector: '.play-st-name' }));
-    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(78, 780);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(78, 780);
   });
 
-  it('기본 곡 탭의 라벨 곡 [준비]는 기본 채보이고 클릭 기록이 없다', async () => {
-    const onSelect = show();
+  it('기본 곡 탭의 라벨 곡 [플레이]는 기본 채보이고 클릭 기록이 없다', async () => {
+    const onStart = show();
     await waitFor(() => expect(row('추천곡').querySelector('.play-st-ai')).toBeTruthy());
     fireEvent.click(row('추천곡'));
-    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(77, 770);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(77, 770);
     expect(postRecommendationClick).not.toHaveBeenCalled();
   });
 
@@ -203,7 +220,7 @@ describe('SongPicker AI 추천곡 탭·라벨 (설계 COACH-004-song-picker-ai-t
     useAuth.setState({ status: 'unknown' });
     show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
-    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
+    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
     await new Promise((r) => setTimeout(r, 400));
     expect(fetchRecommendations).not.toHaveBeenCalled();
     expect(fetchSimilarSongs).not.toHaveBeenCalled();
@@ -244,8 +261,8 @@ describe('SongPicker 선택한 곡 패널 비슷한 곡', () => {
     expect(pane.querySelector('.play-sd-similar-reason')?.textContent).toBe('리듬이 비슷해요');
   });
 
-  it('[이 곡 보기]는 클릭을 기록하고 탭·칩은 그대로 패널만 그 곡으로 바꾸며, [준비]는 기본 채보다', async () => {
-    const onSelect = show();
+  it('[이 곡 보기]는 클릭을 기록하고 탭·칩은 그대로 패널만 그 곡으로 바꾸며, [플레이]는 기본 채보다', async () => {
+    const onStart = show();
     await screen.findByText('✦ 이 곡과 비슷한 곡');
     fireEvent.click(screen.getByRole('button', { name: '이 곡 보기' }));
     expect(postRecommendationClick).toHaveBeenCalledWith('s1', 9);
@@ -253,9 +270,9 @@ describe('SongPicker 선택한 곡 패널 비슷한 곡', () => {
     await waitFor(() => expect(pane.querySelector('.play-sd-title')?.textContent).toBe('비슷한곡'));
     expect((screen.getByRole('radio', { name: '기본 곡' }) as HTMLElement).getAttribute('aria-checked')).toBe('true');
     expect(document.querySelector('.play-st-row.selected')).toBeNull();
-    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(9, 90);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(9, 90);
   });
 
   it('비슷한 곡이 없으면 구분선까지 없다', async () => {
@@ -300,21 +317,21 @@ describe('SongPicker 빈 목록·선택 유지 (설계 CHART-001 곡 난이도 4
     expect(screen.getByText(/처리 중·실패한 곡은/).querySelector('a')?.getAttribute('href')).toBe('/studio');
   });
 
-  it('고른 곡이 필터로 목록에서 빠져도 패널에 남고 [준비]가 그 곡으로 간다', async () => {
+  it('고른 곡이 필터로 목록에서 빠져도 패널에 남고 [플레이]가 그 곡으로 간다', async () => {
     vi.mocked(listSongs).mockImplementation(async (p) => ({
       items: p.songLevel === 'ADVANCED' ? [song(3, '고급곡')] : [song(1, '첫곡'), song(2, '둘째곡')],
       hasNext: false,
     }));
-    const onSelect = show();
+    const onStart = show();
     fireEvent.click(await screen.findByText('둘째곡', { selector: '.play-st-name' }));
     fireEvent.click(screen.getByRole('button', { name: '고급' }));
     await screen.findByText('고급곡', { selector: '.play-st-name' });
     const pane = screen.getByRole('complementary', { name: '선택한 곡' });
     expect(pane.querySelector('.play-sd-title')?.textContent).toBe('둘째곡');
     expect(document.querySelector('.play-st-row.selected')).toBeNull();
-    await waitFor(() => expect((screen.getByRole('button', { name: '준비' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: '준비' }));
-    expect(onSelect).toHaveBeenCalledWith(2, 20);
+    await waitFor(() => expect((screen.getByRole('button', { name: '플레이' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '플레이' }));
+    expect(onStart).toHaveBeenCalledWith(2, 20);
   });
 
   it('한 번도 고르지 않았고 0곡이면 패널은 안내 문구다', async () => {
@@ -357,7 +374,7 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
   const showMode = (mode: 'play' | 'sheet') =>
     render(
       <MemoryRouter>
-        <SongPicker onSelect={vi.fn()} mode={mode} />
+        <SongPicker onStart={vi.fn()} mode={mode} />
       </MemoryRouter>,
     );
   const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -412,7 +429,7 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
   });
 });
 
-describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-start)', () => {
+describe('SongPicker 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-start, MODE-001-play-quick-start)', () => {
   const detail = (id: number) => ({
     ...song(id, `곡${id}`), license: null, updatedAt: null,
     charts: [
@@ -420,16 +437,16 @@ describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-pi
       { id: id * 10 + 2, difficulty: 'NORMAL' as const },
     ].map((c) => ({ ...c, chartVersionId: c.id, version: 1, noteCount: 5, notationStatus: 'READY' as const })),
   });
-  const showSheet = (url = '/sheet', handlers: { onStart?: ReturnType<typeof vi.fn>; onSelect?: ReturnType<typeof vi.fn> } = {}) => {
-    const onStart = handlers.onStart ?? vi.fn();
-    const onSelect = handlers.onSelect ?? vi.fn();
+  const showMode = (mode: 'play' | 'sheet', url = `/${mode}`) => {
+    const onStart = vi.fn();
     render(
       <MemoryRouter initialEntries={[url]}>
-        <SongPicker mode="sheet" onStart={onStart} onSelect={onSelect} />
+        <SongPicker mode={mode} onStart={onStart} />
       </MemoryRouter>,
     );
-    return { onStart, onSelect };
+    return { onStart };
   };
+  const showSheet = (url = '/sheet') => showMode('sheet', url);
 
   beforeEach(() => {
     useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
@@ -438,13 +455,13 @@ describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-pi
   });
 
   it('[플레이]는 기본 단계(NORMAL)로 onStart를 부른다([준비]는 없다)', async () => {
-    const { onStart, onSelect } = showSheet();
+    const { onStart } = showSheet();
     const play = await screen.findByRole('button', { name: '플레이' });
     await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false));
     expect(screen.queryByRole('button', { name: '준비' })).toBeNull();
     fireEvent.click(play);
+    expect(onStart).toHaveBeenCalledTimes(1);
     expect(onStart).toHaveBeenCalledWith(1, 12);
-    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('단계를 바꾸면 그 단계로 시작하고, 다른 곡을 고르면 그 곡의 기본 단계로 돌아간다', async () => {
@@ -487,12 +504,38 @@ describe('SongPicker 악보 연습 바로 플레이 (설계 MODE-001-MODE-003-pi
     await waitFor(() => expect(card.textContent).toContain('55.0%'));
   });
 
-  it('/play는 카드가 [준비] 그대로이고 onSelect를 부른다', async () => {
-    const onSelect = show();
-    const prepare = await screen.findByRole('button', { name: '준비' });
-    await waitFor(() => expect((prepare as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.queryByRole('radio', { name: 'EASY' })).toBeNull();
-    fireEvent.click(prepare);
-    expect(onSelect).toHaveBeenCalledWith(1, 12);
+  it('/play도 같은 카드다: 단계 세그먼트·[플레이]가 있고 [준비]는 없다', async () => {
+    const { onStart } = showMode('play');
+    const play = await screen.findByRole('button', { name: '플레이' });
+    await waitFor(() => expect((play as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('button', { name: '준비' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'NORM' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    fireEvent.click(play);
+    expect(onStart).toHaveBeenCalledWith(1, 11);
+  });
+
+  it('/play: 주소의 song·chart로 그 곡·단계를 골라 두고, 더블클릭도 고른 단계로 onStart', async () => {
+    const { onStart } = showMode('play', '/play?song=2&chart=21');
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'EASY' }).getAttribute('aria-checked')).toBe('true'));
+    expect(screen.getByRole('complementary', { name: '선택한 곡' }).textContent).toContain('둘째곡');
+    fireEvent.doubleClick(screen.getByText('둘째곡', { selector: '.play-st-name' }));
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith(2, 21));
+  });
+
+  it('/play: 카드는 고른 단계의 최고 점수를 보이고, 표는 곡 전체 최고 점수다. 기록이 없으면 —', async () => {
+    vi.mocked(getBestRecords).mockResolvedValue({ items: [
+      { songId: 1, chartId: 11, difficulty: 'EASY', mode: 'RHYTHM', bestScore: 1500, bestAccuracy: 55 },
+      { songId: 1, chartId: 12, difficulty: 'NORMAL', mode: 'RHYTHM', bestScore: 98765, bestAccuracy: 91 },
+    ] });
+    showMode('play');
+    const card = await screen.findByRole('complementary', { name: '선택한 곡' });
+    await waitFor(() => expect(card.textContent).toContain('98,765'));
+    expect(card.textContent).toContain('최고 점수');
+    fireEvent.click(screen.getByRole('radio', { name: 'EASY' }));
+    await waitFor(() => expect(card.textContent).toContain('1,500'));
+    expect(card.textContent).not.toContain('98,765');
+    // 표의 최고 점수 열은 곡 전체 최고
+    expect(screen.getByText('98,765', { selector: '.play-st-row td, .play-st-row td *' })).toBeTruthy();
   });
 });

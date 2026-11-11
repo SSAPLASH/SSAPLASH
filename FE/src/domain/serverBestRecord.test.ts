@@ -12,6 +12,9 @@ describe('서버 최고 기록 선택', () => {
     expect(result.accuraciesBySong.get(1)).toBeCloseTo(0.9876);
     expect(result.accuraciesByChart.get(11)).toBeCloseTo(0.9876);
     expect(result.accuraciesByChart.get(12)).toBe(0.8);
+    expect(result.scoresByChart.get(11)).toBe(100);
+    expect(result.scoresByChart.get(12)).toBe(200);
+    expect(result.scoresByChart.size).toBe(2);
     expect(selectServerBestRecords(rows, [1], 'SHEET').accuraciesBySong.get(1)).toBe(0.5);
   });
   it('0을 유지하고 null·잘못된 수치·ID·누락은 기록 없음으로 처리한다', () => {
@@ -24,6 +27,7 @@ describe('서버 최고 기록 선택', () => {
     ], [1, 2, 3, 4], 'RHYTHM');
     expect([...result.scoresBySong]).toEqual([[1, 0]]);
     expect([...result.accuraciesByChart]).toEqual([[11, 0]]);
+    expect([...result.scoresByChart]).toEqual([[11, 0]]);
     expect(result.accuraciesBySong.has(2)).toBe(false);
     expect(result.accuraciesBySong.has(4)).toBe(false);
   });

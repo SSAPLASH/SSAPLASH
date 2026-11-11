@@ -1,7 +1,10 @@
-// 리듬 게임 (MODE-01, 설계 4-2). 곡 선택 → 준비 → 카운트인 → 플레이 → (일시정지) → 종료 → 결과.
+// 리듬 게임 (MODE-01, 설계 4-2, 설계 MODE-001-play-quick-start v0.2). 곡 선택 → (시작 대기: 채보·반주 불러오기) → 카운트인 → 플레이 → (일시정지) → 종료 → 결과.
 // 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD 값, 로그 저장을 맡는다.
-// 화면은 Figma 연주 흐름을 조립한다: 곡 선택 SongPicker · 준비 ReadyPanel · 연주 PlayStage(HUD·하이웨이·킷). 연주 중은 셸을 숨긴 전체 화면이다(D2).
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// 준비 화면·시작 확인 창은 없다 — 카드의 [▶ 플레이]를 누르면 기기가 준비된 경우 바로 카운트다운으로 들어간다(E3).
+// 팝업(StartDialog, 옵션 줄 없음)은 기기 준비가 안 됐거나 불러오기에 실패했거나 스네어 재정렬이 걸렸을 때만 뜬다(E5·E6·E8).
+// 시작 대기(`starting`)는 화면 안 상태다 — 주소에는 `?song=&chart=`만 싣고 `start`는 쓰지 않는다(E7). 반주가 있는 곡은 항상 반주를 재생한다.
+// 게임은 곡 중 메트로놈 클릭이 없고(카운트다운 박 소리만) 녹음하지 않는다(E1·E2). 연주 중은 셸을 숨긴 전체 화면이다(D2).
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { SongPicker } from '@/components/SongPicker';
@@ -27,9 +30,7 @@ import { useCoachLine } from '@/components/play/useCoachLine';
 import { planCoachDisplay } from '@/components/play/coachDisplay';
 import { CoachHandChip } from '@/components/play/CoachHandChip';
 import { HitReadout } from '@/components/play/HitReadout';
-import { ReadyPanel } from '@/components/play/ReadyPanel';
-import { useSimilarSongs } from '@/components/play/useSimilarSongs';
-import { RecommendRow } from '@/components/song/RecommendRow';
+import { StartDialog } from '@/components/play/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
@@ -38,17 +39,13 @@ import { strayMissSource } from '@/components/play/strayMissSource';
 import { ComboDisplay } from '@/components/play/ComboDisplay';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import type { Chart } from '@/domain/chart';
-import { artistLabel, chartFallback, sortCharts, type SongDetail } from '@/domain/songCatalog';
-import { bestAccuracyByChart, EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
+import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
+import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
 import { useBestRecords } from '@/app/useBestRecords';
-import { BestRecordsNotice } from '@/components/play/BestRecordsNotice';
 import type { PadId } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
-import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
@@ -60,7 +57,6 @@ import type { CoachShadow } from '@/coach/live/shadowCoach';
 import { COACH_BASIS } from '@/domain/coachBasis';
 import { diagTap } from '@/engine/diagTap';
 import { startPlaySync } from '@/app/playSync';
-import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { diagSessionOpts } from '@/app/diagSessionOpts';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/app/sources';
@@ -70,12 +66,11 @@ import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { useSettings } from '@/store/settingsStore';
-import { usePresets } from '@/store/presetStore';
 import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
-import { useSongs } from '@/store/songStore';
+import { useSongs, type LoadedChart } from '@/store/songStore';
 
-// loading: URL의 곡·채보를 불러오는 중(실패하면 같은 단계에서 오류 문구)
+// 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = PlayStageName;
 
 /** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
@@ -92,30 +87,37 @@ function parseId(raw: string | null): number | null {
   return Number.isSafeInteger(n) ? n : null;
 }
 
+/** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
+interface AccResult {
+  loaded: LoadedChart;
+  ok: boolean;
+  error?: string;
+}
+
 function PlayPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
-  const param = useChartParam();
   const [searchParams] = useSearchParams();
+  // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
+  const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
+  // 시작 대기: [▶ 플레이]를 누른 뒤 카운트다운에 들어가기 전까지(화면 안 상태, 주소에 싣지 않는다). 채보·반주는 이때부터(연주 중에도) 읽는다
+  const [starting, setStarting] = useState(false);
+  // 시작 대기 중 팝업이 한 번이라도 떴는가. 떴으면 기기가 이어져도 자동 시작하지 않고 팝업의 [▶ 플레이]를 기다린다(E6)
+  const [popupSeen, setPopupSeen] = useState(false);
   const songIdParam = parseId(searchParams.get('song'));
   const chartIdParam = parseId(searchParams.get('chart'));
-  const [stage, setStage] = useState<Stage>(param.status === 'none' ? 'select' : 'loading');
-  const [chart, setChart] = useState<Chart | null>(null);
-  const [session, setSession] = useState<RhythmSession | null>(null);
-  // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
-  const missSource = useMemo(() => (session ? strayMissSource(session) : undefined), [session]);
+  const startOpen = starting && songIdParam !== null && chartIdParam !== null;
+  const param = useChartParam({ enabled: startOpen || playSession !== null });
+  const { status: paramStatus, loaded: paramLoaded } = param;
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
-  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
-  // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
+  // 곡 상세(커버·가수·연습 단계 목록). 시작 확인 창·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
-  // 반주 디코드 단계 표시·오류
-  const [accStatus, setAccStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [accError, setAccError] = useState<string | null>(null);
   const [acc] = useState(() => new Accompaniment(audioEngine));
+  const [accResult, setAccResult] = useState<AccResult | null>(null);
   const clockRef = useRef<PlayClock | null>(null);
   // 준비 조건 미충족이면 시작하지 못한다(키보드 전용은 면제). 키 핸들러·begin이 최신 값을 보도록 ref에도 둔다
   const { ready, missing } = useReadiness();
@@ -124,38 +126,57 @@ function PlayPageBody() {
     void refreshCoachModels();
   }, []);
   const readyRef = useRef(ready);
-  useEffect(() => {
+  // begin()이 읽는 ref는 화면을 그리기 전에 맞춘다(useEffect면 ▶ 플레이가 보인 직후 누른 클릭이 옛 값을 보고 무시될 수 있다)
+  useLayoutEffect(() => {
     readyRef.current = ready;
   }, [ready]);
-  // 스네어 재정렬(PLAY-004 D11·D12): 연주 준비 화면과 끊김 복귀 카드에서만 세션을 연다
-  const realign = useRealign(stage === 'ready' || pauseReason === 'reconnected');
 
-  // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·준비는 TopBar 제목 "리듬 게임"
+  // 반주 URL: 개발 override > 자산. 없으면 반주 없이 클릭만. 게임은 반주를 끄는 옵션이 없어 있으면 항상 불러온다
+  const accUrl = paramLoaded ? (ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null) : null;
+  const accCurrent = accResult && accResult.loaded === paramLoaded ? accResult : null;
+  const accError = accUrl !== null && accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
+  const readyChart: Chart | null = paramLoaded && (accUrl === null || accCurrent?.ok) ? paramLoaded.chart : null;
+
+  // 시작 확인 창이 열린 동안의 세션. 설정이 바뀌면 이 단계에서만 새로 만든다
+  const session = useMemo(
+    () =>
+      readyChart
+        ? new RhythmSession(readyChart, {
+            windows: settings.timing,
+            countInBars: settings.countInBars,
+            audioOffsetMs: settings.audioOffsetMs,
+          })
+        : null,
+    [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs],
+  );
+  const activeSession = playSession ?? session;
+  // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
+  const missSource = useMemo(() => (activeSession ? strayMissSource(activeSession) : undefined), [activeSession]);
+  const chart = activeSession?.chart ?? null;
+  const stage: Stage = playSession ? 'play' : !startOpen ? 'select' : session ? 'ready' : 'loading';
+  // 스네어 재정렬(PLAY-004 D11·D12): 시작 대기 중과 끊김 복귀 카드에서만 세션을 연다
+  const realign = useRealign(startOpen || pauseReason === 'reconnected');
+
+  // 연주 중(play)은 셸을 숨긴 전체 화면(D2). 곡 선택·시작 확인 창은 TopBar 제목 "리듬 게임"
   useShell({ title: '리듬 게임', immersive: stage === 'play' });
   // 카운트인이 끝나 곡이 진행 중일 때만 Dock이 자동으로 접힌다(일시정지·종료 시 해제)
   usePlayRunning(stage === 'play' && pauseReason === null && hud?.status === 'playing');
   // 판정 진동(PLAY-006): 연주 단계 전체(카운트인·일시정지·복귀 카운트다운 포함)에서 로컬 진동을 끄고 판정으로 울린다
-  useJudgementHaptic(session, stage === 'play');
-  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·불러오는 중·준비 화면에서는 키를 가로채지 않는다)
+  useJudgementHaptic(activeSession, stage === 'play');
+  // 키보드 드럼은 연주 단계에서만 받는다(곡 선택·시작 확인 창에서는 키를 가로채지 않는다)
   useKeyboardDrum(stage === 'play');
-  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·준비 화면에는 없다(QA 352 Q8)
+  // Dock도 연주 단계(카운트인·일시정지 포함)에서만 둔다. 곡 선택·시작 확인 창에는 없다(QA 352 Q8)
   useDock(stage === 'play');
-  // 연주 단계(카운트인·연주·일시정지·복귀 카운트다운 모두 stage 'play')에서는 녹음 스위치를 잠근다
-  useEffect(() => {
-    setLocked(stage === 'play');
-  }, [stage]);
 
   const connected = useLive((l) => l.connected);
   const pedalPair = useLive((l) => l.pedal.connected);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
   const lastHit = useLive((l) => l.lastHit);
-  const presets = usePresets((p) => p.items);
-  const presetName = presetDisplayName(presets, settings.activePresetId);
   const selectSong = useSongs((s) => s.selectSong);
   const songsSource = useSongs((s) => s.source);
   // 킷 미니 뷰: 타격(hit)·판정 색
-  const padStates = usePadStates(session);
+  const padStates = usePadStates(activeSession);
   const hitSeq = usePadHitSeq();
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
@@ -165,12 +186,13 @@ function PlayPageBody() {
   // 세로·좁은 화면 안내(ScreenGate)가 열려 있는지. 키 핸들러가 최신 값을 본다
   const screenOk = useScreenFits();
   const gateOpenRef = useRef(!screenOk);
-  useEffect(() => {
+  // 위 readyRef와 같은 이유로 그리기 전에 맞춘다
+  useLayoutEffect(() => {
     stageRef.current = stage;
-    sessionRef.current = session;
+    sessionRef.current = activeSession;
     pauseRef.current = pauseReason;
     gateOpenRef.current = !screenOk;
-  }, [stage, session, pauseReason, screenOk]);
+  }, [stage, activeSession, pauseReason, screenOk]);
 
   const flashes = useRef(new Map<PadId, number>());
   const popups = useRef<Popup[]>([]);
@@ -179,7 +201,7 @@ function PlayPageBody() {
   const [laneFx] = useState(createFxEmitter);
   // 타이밍 막대 눈금을 비우는 신호(새 곡·다시 시작)
   const [fxRun, setFxRun] = useState(0);
-  // 결과 화면 최고 기록 비교용: 서버 스냅샷(준비 화면에서만 채움)과 연주 시작 시점에 고정한 치기 전 최고값(설계 D4)
+  // 결과 화면 최고 기록 비교용: 서버 스냅샷(시작 확인 창이 열린 동안에만 채움)과 연주 시작 시점에 고정한 치기 전 최고값(설계 D4)
   const serverPrevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
   const prevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
   const freezePrevBest = useCallback((ss: RhythmSession) => {
@@ -188,7 +210,7 @@ function PlayPageBody() {
     prevBest.current = mergePrevBest(local, serverPrevBest.current);
   }, []);
   const recorder = useRef(new PlayRecorder());
-  // 실시간 코칭: 곡 선택 시점에 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
+  // 실시간 코칭: 연주를 시작할 때 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
   const coachRef = useRef<LiveCoach | null>(null);
   // 진단 빌드에서만 채워지는 그림자 코치(두 기준 방식 비교)
   const shadowRef = useRef<CoachShadow | null>(null);
@@ -209,8 +231,6 @@ function PlayPageBody() {
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
-  const clearParam = param.clear;
-
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
@@ -233,8 +253,6 @@ function PlayPageBody() {
       metronome.unlock();
       acc.unload();
       if (goTimer.current !== null) window.clearTimeout(goTimer.current);
-      // 녹음 스위치 해제(armed였으면 idle로, 잠금도 푼다)
-      disarm();
     };
   }, [acc]);
 
@@ -247,7 +265,7 @@ function PlayPageBody() {
         if (!cancelled) setDetail(d);
       },
       () => {
-        // 상세 없이도 준비·연주는 가능하다
+        // 상세 없이도 시작·연주는 가능하다
       },
     );
     return () => {
@@ -255,8 +273,86 @@ function PlayPageBody() {
     };
   }, [songIdParam, selectSong]);
 
+  // 반주는 시작 대기가 되면 디코드해 둔다. URL이 바뀌면(다른 곡) 이전 로드는 취소한다
+  useEffect(() => {
+    if (!paramLoaded) return;
+    if (!accUrl) {
+      acc.unload();
+      return;
+    }
+    const ctrl = new AbortController();
+    acc.load(accUrl, ctrl.signal).then(
+      () => {
+        if (!ctrl.signal.aborted) setAccResult({ loaded: paramLoaded, ok: true });
+      },
+      (e: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setAccResult({
+          loaded: paramLoaded,
+          ok: false,
+          error: e instanceof Error ? e.message : '반주를 불러오지 못했습니다.',
+        });
+      },
+    );
+    return () => ctrl.abort();
+  }, [paramLoaded, accUrl, acc]);
+
+  // 비동기 거름·LLM 구간 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
+  const showCoachMessage = useCallback(
+    (coach: LiveCoach, ss: RhythmSession, message: CoachMessage) => {
+      if (coachRef.current !== coach) return;
+      try {
+        const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
+        if (copy) {
+          // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
+          const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
+          showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
+        }
+      } catch {
+        // 코칭 오류는 무시한다
+      }
+    },
+    [showCoachLine],
+  );
+
+  // 판정 → 팝업·HUD·코칭. 세션이 바뀌면 다시 건다
+  useEffect(() => {
+    if (!activeSession) return;
+    // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
+    const coachContext = chartCoachContext(activeSession.chart.notes);
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offJudgement = activeSession.onJudgement((e) => {
+      recorder.current.judgement(e);
+      // 놓친 노트 깨짐(하이웨이만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
+      const miss = missFxEvent(e, 'game');
+      if (miss) laneFx.emit(miss);
+      popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
+      setHud(activeSession.snapshot());
+      // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
+      const coach = coachRef.current;
+      if (!coach) return;
+      const judged = {
+        songTimeMs: activeSession.songTime(e.at),
+        noteTimeMs: activeSession.notes[e.noteIndex].note.timeMs,
+        judgement: e.judgement,
+        deltaMs: e.deltaMs,
+        pad: e.pad,
+        stickId: e.stickId,
+        velocity: e.velocity,
+        ...coachContext.notes[e.noteIndex],
+      };
+      const message = coach.push(judged, activeSession.snapshot().strayHits, (m) => showCoachMessage(coach, activeSession, m));
+      shadowRef.current?.push(judged);
+      if (message) showCoachMessage(coach, activeSession, message);
+    });
+    return () => {
+      offStray();
+      offJudgement();
+    };
+  }, [activeSession, laneFx, showCoachMessage]);
+
   // 타격: 즉시 발음(D6) → 플래시 → 판정 → 로그·텔레메트리. 타격 진동은 스틱이 직접 울린다(PLAY-006)
-  // 소리·플래시는 드럼 킷이 보이는 단계(준비·연주)에서만 낸다(QA 352). 곡 선택 중에는 어떤 입력으로 쳐도 울리지 않는다
+  // 소리·플래시는 드럼 킷이 보이는 단계(시작 확인 창·연주)에서만 낸다(QA 352). 곡 선택 중에는 어떤 입력으로 쳐도 울리지 않는다
   useEffect(() => {
     return inputManager.onHit((hit) => {
       if (hit.pad && kitSoundStage(stageRef.current)) {
@@ -284,200 +380,100 @@ function PlayPageBody() {
     });
   }, [padFx, laneFx]);
 
-  const choose = useCallback(
-    (c: Chart) => {
-      const ss = new RhythmSession(c, {
-        windows: settings.timing,
-        countInBars: settings.countInBars,
-        audioOffsetMs: settings.audioOffsetMs,
-      });
-      // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 채보마다 한 번 계산한다
-      const coachContext = chartCoachContext(c.notes);
-      // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
-      const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
-      // 연주 중 LLM 구간 코칭(실험 설정 llm, 로그인 사용자만). 구간이 끝나면 BE에 요청하고 기한 안의 문구만 띄운다
-      const llmMode = settings.liveCoach ? model.llm : null;
-      let llm: LlmCoach | null = null;
-      const coach = new LiveCoach({
-        goodMs: settings.timing.goodMs,
-        enabled: settings.liveCoach,
-        setupHints: isStickSensor(useSettings.getState().sensorKind),
-        noteGapMedianMs: coachContext.noteGapMedianMs,
-        onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
-        gate: model.gate,
-        gateMode: model.mode,
-        arm: model.arm,
-        causeModel: model.cause,
-        causeArm: model.causeArm,
-        llmArm: model.llmArm,
-        segments: llmMode
-          ? { chart: c, input: useSettings.getState().sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
-          : undefined,
-      });
-      // 비동기 거름·LLM 구간 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
-      const showMessage = (message: CoachMessage) => {
-        if (coachRef.current !== coach) return;
-        try {
-          const copy = coachCopy(message, { keyboard: useSettings.getState().sensorKind === 'none' });
-          if (copy) {
-            // 노트가 몰린 구간이면 미루거나 구령만 띄운다. 로그 기록(coach.push)은 이미 끝났고 시점은 그대로다
-            const plan = planCoachDisplay(message.tMs, ss.notes.map((n) => n.note.timeMs), 'RHYTHM');
-            showCoachLine(plan.compact ? { ...copy, sub: '' } : copy, message.displayMs, plan.delayMs);
-          }
-        } catch {
-          // 코칭 오류는 무시한다
-        }
-      };
-      llmRef.current?.cancel();
-      if (llmMode) {
-        llm = new LlmCoach({
-          client: liveCoachClient(),
-          mode: llmMode,
-          runId: crypto.randomUUID(),
-          onTip: (tip) => {
-            const message = coach.offerLlmTip(tip, ss.songTime(performance.now()));
-            if (message) showMessage(message);
-          },
-          onRecord: (r) => coach.recordLlm(r, ss.songTime(performance.now())),
-        });
-      }
-      llmRef.current = llm;
-      // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
-      void refreshCoachModels();
-      coachRef.current = coach;
-      shadowRef.current = null;
-      // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
-      if (MONITOR_ENABLED) {
-        const goodMs = settings.timing.goodMs;
-        void import('@/coach/live/shadowCoach').then((m) => {
-          if (coachRef.current !== coach) return; // 그 사이 다른 채보로 바뀐 경우
-          shadowRef.current = m.createCoachShadow({
-            goodMs,
-            activeBasis: COACH_BASIS,
-            publish: (b) => diagTap.publish({ type: 'coachEval', ...b }),
-          });
-        });
-      }
-      clearCoachLine();
-      ss.onStray((s) => coach.pushStray(s.pad, s.songTimeMs));
-      ss.onJudgement((e) => {
-        recorder.current.judgement(e);
-        // 놓친 노트 깨짐(하이웨이만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
-        const miss = missFxEvent(e, 'game');
-        if (miss) laneFx.emit(miss);
-        popups.current.push({ judgement: e.judgement, deltaMs: e.deltaMs, pad: e.pad, at: performance.now() });
-        setHud(ss.snapshot());
-        // 코칭은 기록·팝업·HUD 뒤에 한다. 변환·표시가 실패해도 플레이를 막지 않는다
-        const judged = {
-          songTimeMs: ss.songTime(e.at),
-          noteTimeMs: ss.notes[e.noteIndex].note.timeMs,
-          judgement: e.judgement,
-          deltaMs: e.deltaMs,
-          pad: e.pad,
-          stickId: e.stickId,
-          velocity: e.velocity,
-          ...coachContext.notes[e.noteIndex],
-        };
-        const message = coach.push(judged, ss.snapshot().strayHits, showMessage);
-        shadowRef.current?.push(judged);
-        if (message) showMessage(message);
-      });
+  // 새 판(처음·다시 시작) 초기화: 기록·팝업·카운트다운을 비우고 이번 판의 치기 전 최고값을 고정한다
+  const resetRun = useCallback(
+    (ss: RhythmSession) => {
       flashes.current.clear();
       popups.current = [];
       recorder.current.reset();
       finishing.current = false;
-      resetCountdown();
+      freezePrevBest(ss);
+      startedAt.current = new Date();
+      consentAtStart.current = readCurrentConsent();
       setFxRun((n) => n + 1);
-      setChart(c);
-      setSession(ss);
       setHud(ss.snapshot());
+      resetCountdown();
       setPauseReason(null);
-      setStage('ready');
     },
-    [settings.timing, settings.countInBars, settings.audioOffsetMs, settings.liveCoach, resetCountdown, clearCoachLine, showCoachLine, laneFx],
+    [freezePrevBest, resetCountdown],
   );
 
-  // URL의 곡·채보 → 로딩 → 준비 화면. 쿼리가 사라지면(뒤로 가기·곡 선택으로) 선택 단계로 돌아간다.
-  // 연주 중에는 URL 변화를 따라가지 않는다
-  const chooseRef = useRef(choose);
-  useEffect(() => {
-    chooseRef.current = choose;
-  }, [choose]);
-  const { status: paramStatus, loaded: paramLoaded } = param;
-  useEffect(() => {
-    if (stageRef.current === 'play') return;
-    if (paramStatus === 'loading') {
-      setStage('loading');
-    } else if (paramStatus === 'ready' && paramLoaded) {
-      const url = ACCOMPANIMENT_OVERRIDE ?? paramLoaded.assets?.accompanimentUrl ?? null;
-      if (!url) {
-        acc.unload();
-        chooseRef.current(paramLoaded.chart);
-        return;
-      }
-      // 반주는 준비 화면 전에 디코드해 둔다
-      const ctrl = new AbortController();
-      setAccStatus('loading');
-      setAccError(null);
-      setStage('loading');
-      acc.load(url, ctrl.signal).then(
-        () => {
-          if (ctrl.signal.aborted) return;
-          setAccStatus('idle');
-          chooseRef.current(paramLoaded.chart);
-        },
-        (e: unknown) => {
-          if (ctrl.signal.aborted) return;
-          setAccStatus('error');
-          setAccError(e instanceof Error ? e.message : '반주를 불러오지 못했습니다.');
-        },
-      );
-      return () => ctrl.abort();
-    } else if (paramStatus === 'none') {
-      inputManager.setCandidateProvider(null);
-      setPauseReason(null);
-      setSession(null);
-      setChart(null);
-      setHud(null);
-      setStage('select');
-    }
-  }, [paramStatus, paramLoaded, acc]);
-
-  const begin = useCallback(async () => {
+  const begin = useCallback(async (): Promise<boolean> => {
     const ss = sessionRef.current;
-    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return;
+    if (!ss || stageRef.current !== 'ready' || !readyRef.current) return false;
     await unlockAudio();
-    freezePrevBest(ss);
-    startedAt.current = new Date();
-    consentAtStart.current = readCurrentConsent();
+    resetRun(ss);
+    const st = useSettings.getState();
+    // 놓침 원인 계산용 노트 맥락(직전 패드·간격)
+    const coachContext = chartCoachContext(ss.chart.notes);
+    // 서버 실험 설정이 있으면 실험군의 모델을 쓴다. 로그인 사용자는 같은 실험군에 남는다
+    const model = chooseCoachModel(useAuth.getState().user?.id ?? null);
+    // 연주 중 LLM 구간 코칭(실험 설정 llm, 로그인 사용자만). 구간이 끝나면 BE에 요청하고 기한 안의 문구만 띄운다
+    const llmMode = st.liveCoach ? model.llm : null;
+    let llm: LlmCoach | null = null;
+    const coach = new LiveCoach({
+      goodMs: st.timing.goodMs,
+      enabled: st.liveCoach,
+      setupHints: isStickSensor(st.sensorKind),
+      noteGapMedianMs: coachContext.noteGapMedianMs,
+      onGate: MONITOR_ENABLED ? (d) => diagTap.publish({ type: 'coachGate', ...d }) : undefined,
+      gate: model.gate,
+      gateMode: model.mode,
+      arm: model.arm,
+      causeModel: model.cause,
+      causeArm: model.causeArm,
+      llmArm: model.llmArm,
+      segments: llmMode
+        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+        : undefined,
+    });
+    llmRef.current?.cancel();
+    if (llmMode) {
+      llm = new LlmCoach({
+        client: liveCoachClient(),
+        mode: llmMode,
+        runId: crypto.randomUUID(),
+        onTip: (tip) => {
+          const message = coach.offerLlmTip(tip, ss.songTime(performance.now()));
+          if (message) showCoachMessage(coach, ss, message);
+        },
+        onRecord: (r) => coach.recordLlm(r, ss.songTime(performance.now())),
+      });
+    }
+    llmRef.current = llm;
+    // 다음 연주를 위해 다시 받는다(매니페스트의 current를 바꾸면 다음 연주부터 반영)
+    void refreshCoachModels();
+    coachRef.current = coach;
+    shadowRef.current = null;
+    // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
+    if (MONITOR_ENABLED) {
+      const goodMs = st.timing.goodMs;
+      void import('@/coach/live/shadowCoach').then((m) => {
+        if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
+        shadowRef.current = m.createCoachShadow({
+          goodMs,
+          activeBasis: COACH_BASIS,
+          publish: (b) => diagTap.publish({ type: 'coachEval', ...b }),
+        });
+      });
+    }
+    clearCoachLine();
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
       click: (at, accent) => audioEngine.click(at, accent),
       accompaniment: acc.state === 'ready' ? acc : undefined,
-      clickOn: () => useSettings.getState().metronome,
+      // 게임은 곡 중 클릭을 내지 않는다(E1). 카운트다운 박 소리는 PlayClock이 clickOn과 무관하게 항상 낸다
+      clickOn: () => false,
       onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
     });
     clockRef.current = clock;
     clock.begin();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
     diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
-    setStage('play');
-  }, [acc, freezePrevBest]);
-
-  const toSelect = useCallback(() => {
-    diagSessionEnd('left');
-    clockRef.current?.stop();
-    metronome.unlock();
-    inputManager.setCandidateProvider(null);
-    resetCountdown();
-    setPauseReason(null);
-    setSession(null);
-    setChart(null);
-    setHud(null);
-    setStage('select');
-    clearParam();
-  }, [clearParam, resetCountdown]);
+    setPlaySession(ss);
+    return true;
+  }, [acc, resetRun, clearCoachLine, showCoachMessage]);
 
   const pauseTo = useCallback((reason: PauseReason) => {
     const clock = clockRef.current;
@@ -528,33 +524,46 @@ function PlayPageBody() {
     if (!clock || !ss) return;
     clock.restart();
     diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
-    flashes.current.clear();
-    popups.current = [];
-    setFxRun((n) => n + 1);
-    recorder.current.reset();
+    resetRun(ss);
     coachRef.current?.reset();
     llmRef.current?.cancel(crypto.randomUUID());
     shadowRef.current?.reset();
     clearCoachLine();
-    finishing.current = false;
-    freezePrevBest(ss);
-    startedAt.current = new Date();
-    consentAtStart.current = readCurrentConsent();
-    resetCountdown();
-    setHud(ss.snapshot());
-    setPauseReason(null);
-  }, [resetCountdown, clearCoachLine, freezePrevBest]);
+  }, [resetRun, clearCoachLine]);
 
-  // 나가기: 기록 없이 준비 화면으로(곡 선택·URL 유지). 세션을 새로 만든다
+  /** 나가기: 기록 없이 곡 선택으로(곡·단계를 골라 둔 채) */
   const leave = useCallback(() => {
-    const c = sessionRef.current?.chart;
     diagSessionEnd('left');
     clockRef.current?.stop();
     metronome.unlock();
     inputManager.setCandidateProvider(null);
+    sessionRef.current?.reset();
+    coachRef.current = null;
+    shadowRef.current = null;
+    clearCoachLine();
+    resetCountdown();
     setPauseReason(null);
-    if (c) choose(c);
-  }, [choose]);
+    flashes.current.clear();
+    popups.current = [];
+    setHud(null);
+    setPlaySession(null);
+    navigate(returnTo, { replace: true });
+  }, [navigate, returnTo, resetCountdown, clearCoachLine]);
+
+  /** 시작 대기 취소: 팝업을 닫는다(주소의 곡·단계 선택은 남긴다) */
+  const closeStart = useCallback(() => setStarting(false), []);
+
+  /** 카운트다운으로 들어가고 시작 대기를 끈다. begin 안의 await 사이에 다시 불리지 않게 막는다 */
+  const beginning = useRef(false);
+  const startPlay = useCallback(async () => {
+    if (beginning.current) return;
+    beginning.current = true;
+    try {
+      if (await begin()) setStarting(false);
+    } finally {
+      beginning.current = false;
+    }
+  }, [begin]);
 
   const finish = useCallback(
     (ss: RhythmSession) => {
@@ -564,7 +573,6 @@ function PlayPageBody() {
       clockRef.current?.stop();
       metronome.unlock();
       inputManager.setCandidateProvider(null);
-      // 곡 시작 시각은 로그와 녹음이 같은 값을 쓴다
       const songStartedAt = startedAt.current ?? new Date();
       const log = buildPlayLog({
         snapshot: ss.snapshot(),
@@ -589,18 +597,6 @@ function PlayPageBody() {
       savePlayLog(log);
       // 서버 업로드는 결과 화면을 막지 않는다(설계 COACH-002 D1)
       void startPlaySync(log.playId);
-      // 녹음이 켜져 있으면 스토어가 저장 대기로 넘기고, 꺼져 있으면 무시한다. 실패해도 결과 이동은 막지 않는다
-      try {
-        finishSong({
-          mode: 'RHYTHM',
-          hits: recorder.current.hits,
-          chart: { title: ss.chart.title, durationMs: ss.chart.durationMs },
-          startedAt: songStartedAt,
-          playId: log.playId,
-        });
-      } catch (e) {
-        console.warn('녹음 확정에 실패했습니다.', e);
-      }
       navigate(`/result/${log.playId}`, { state: { prevBest: prevBest.current } });
     },
     [navigate, inputSource, settings.timing],
@@ -648,7 +644,7 @@ function PlayPageBody() {
     [finish, isResuming],
   );
 
-  // Enter / Esc
+  // Esc: 연주 중 일시정지. 팝업의 Enter·Esc는 창이 맡는다
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // D1: 처리하지 않는 경우·포커스 요소가 소유한 키는 가로채지 않는다
@@ -656,43 +652,20 @@ function PlayPageBody() {
       if (gateOpenRef.current) return;
       if (e.code !== 'Enter' && e.code !== 'Escape') return;
       if (isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
-      const st = stageRef.current;
-      if (st === 'ready') {
-        if (e.code === 'Enter') void begin();
-        else toSelect();
-      } else if (st === 'play') {
-        // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
-        // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
-        if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
-        pauseTo('user');
-      } else {
-        return;
-      }
+      if (stageRef.current !== 'play') return;
+      // 일시정지 중에는 다이얼로그가 키를 소유한다(D6)
+      // 복귀 카운트다운 중에는 Esc를 무시한다(일시정지 상태가 아니라 카운트다운이 끝나야 이어진다)
+      if (pauseRef.current !== null || isResuming() || e.code !== 'Escape') return;
+      pauseTo('user');
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [begin, toSelect, pauseTo, isResuming]);
+  }, [pauseTo, isResuming]);
 
-  // 준비 화면은 선택 chartId의 서버 기록, 내장 개발 소스만 로컬 기록을 쓴다.
-  const selectedChartId = chartIdParam ?? chart?.chartId ?? 0;
-  // 연주 준비의 "이 곡과 비슷한 곡"(설계 COACH-004-similar-songs): 준비 단계 진입 시 곡당 1회, 카드는 선택 단계를 따라간다
-  const similar = useSimilarSongs({
-    songId: songIdParam,
-    active: stage === 'ready' && param.status === 'ready',
-    difficulty: chart?.difficulty ?? null,
-    onSelect: param.select,
-  });
-  const records = useBestRecords(
-    stage !== 'select' && songIdParam !== null ? [songIdParam] : [],
-    'RHYTHM', stage === 'ready' && detail?.id === songIdParam, songsSource,
-  );
-  const localBestAccuracy = useMemo(
-    () => (songsSource === 'builtin' && stage === 'ready' ? bestAccuracyByChart(loadPlayLogs(), 'RHYTHM').get(selectedChartId) : undefined),
-    [songsSource, stage, selectedChartId],
-  );
-  const bestAccuracy = songsSource === 'builtin' ? localBestAccuracy : records.accuraciesByChart.get(selectedChartId);
-  // 준비 화면 동안만 서버 최고 점수를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
+  // 시작 대기 중에만 서버 최고 기록을 읽는다. 내장 개발 소스는 로컬 기록을 쓰므로 조회하지 않는다(status idle)
+  const records = useBestRecords(startOpen && songIdParam !== null ? [songIdParam] : [], 'RHYTHM', startOpen, songsSource);
+  // 시작 대기 중 세션이 준비된 동안만 서버 최고 점수를 담아 둔다(연주 중에는 조회가 꺼져 비므로 시작 때 고정한 값을 쓴다, U4)
   const serverBestScore = songIdParam === null ? undefined : records.scoresBySong.get(songIdParam);
   useEffect(() => {
     if (stage === 'ready') serverPrevBest.current = { score: serverBestScore ?? null, accuracy: null };
@@ -701,74 +674,80 @@ function PlayPageBody() {
   // 260번: 숨긴 연습 단계(노트가 NORMAL과 같아 곡 응답에서 빠진 채보)의 id가 URL에 남아 있으면(예전 링크·새로고침)
   // 기본 단계로 바꾼다. 사용자가 고른 것이 아니므로 방문 기록을 쌓지 않는다. 연주 중에는 바꾸지 않는다
   const selectParam = param.select;
+  const fallbackChart =
+    songIdParam !== null && chartIdParam !== null && detail !== null && detail.id === songIdParam ? chartFallback(detail, chartIdParam) : null;
   useEffect(() => {
-    if (stage !== 'ready' || songIdParam === null || chartIdParam === null || detail === null || detail.id !== songIdParam) return;
-    const fallback = chartFallback(detail, chartIdParam);
-    if (fallback !== null) selectParam(songIdParam, fallback, { replace: true });
-  }, [stage, songIdParam, chartIdParam, detail, selectParam]);
+    if (stage !== 'ready' || songIdParam === null || fallbackChart === null) return;
+    selectParam(songIdParam, fallbackChart, { replace: true });
+  }, [stage, songIdParam, fallbackChart, selectParam]);
 
-  // 불러오는 중·오류. 연습 단계를 바꿔 다시 불러올 때도 이 카드로 돌아온다
-  if (stage === 'loading') {
-    return (
-      <StageFade stageKey="loading">
-        <main className="main">
-          <Card padding="md" style={{ maxWidth: 480 }}>
-            <div className="col">
-              {accStatus === 'error' ? (
-                <>
-                  <div className="notice error" role="alert">
-                    {accError ?? '반주를 불러오지 못했습니다.'}
-                  </div>
-                  <div className="row">
-                    {param.loaded && (
-                      <Button
-                        onClick={() => {
-                          acc.unload();
-                          setAccStatus('idle');
-                          if (param.loaded) choose(param.loaded.chart);
-                        }}
-                      >
-                        반주 없이 계속
-                      </Button>
-                    )}
-                    <Button variant="secondary" onClick={toSelect}>
-                      곡 선택으로
-                    </Button>
-                  </div>
-                </>
-              ) : param.status === 'error' ? (
-                <>
-                  <div className="notice error" role="alert">
-                    {param.error ?? '채보를 불러오지 못했습니다.'}
-                  </div>
-                  <Button variant="secondary" onClick={toSelect}>
-                    곡 선택으로
-                  </Button>
-                </>
-              ) : (
-                <div className="row">
-                  <span className="spinner" aria-label="불러오는 중" />
-                  <span className="dim">{accStatus === 'loading' ? '반주 불러오는 중' : '채보를 불러오는 중'}</span>
-                </div>
-              )}
-            </div>
-          </Card>
-        </main>
-      </StageFade>
-    );
-  }
+  const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError;
+  // 팝업을 띄워야 하는 경우: 기기 준비 안 됨(E3) · 불러오기 실패(E5) · 스네어 재정렬(E8)
+  const popupWanted = startOpen && (!ready || loadError !== null || realign.pending);
+  // 렌더 중 상태 맞춤(React 허용 패턴): 시작 대기가 끝나면 비우고, 팝업이 필요해지는 순간 기억한다
+  if (!startOpen && popupSeen) setPopupSeen(false);
+  else if (popupWanted && !popupSeen) setPopupSeen(true);
+  const popupOpen = startOpen && (popupWanted || popupSeen);
 
-  if (stage === 'select' || !chart || !session) {
-    return (
-      <StageFade stageKey="select">
-        <main className="main">
-          <SongPicker mode="play" onSelect={param.select} />
-        </main>
-      </StageFade>
-    );
-  }
+  // 자동 시작: 팝업 없이 진행 중이던 경우에만. 신기록 판정을 위해 서버 최고 기록 조회가 끝난 뒤(ready·error·idle)에 한다
+  const autoStart =
+    startOpen && stage === 'ready' && ready && !popupSeen && !realign.pending && records.status !== 'loading' && fallbackChart === null && loadError === null;
+  useEffect(() => {
+    if (autoStart) void startPlay();
+  }, [autoStart, startPlay]);
 
   const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
+
+  // 곡 선택(+필요할 때만 뜨는 팝업). 연주 단계가 아니면 항상 곡 선택이 바닥에 있다
+  if (stage !== 'play' || !chart || !activeSession) {
+    const chartDifficulty = chart?.difficulty ?? detail?.charts.find((c) => c.id === chartIdParam)?.difficulty ?? 'NORMAL';
+    return (
+      <>
+        <StageFade stageKey="select">
+          <main className="main">
+            <SongPicker
+              mode="play"
+              starting={startOpen}
+              onStart={(song, chartId) => {
+                // 클릭 안에서 오디오 잠금을 미리 풀어 둔다(자동 시작은 클릭 뒤 비동기로 일어난다)
+                void unlockAudio();
+                param.select(song, chartId);
+                setStarting(true);
+              }}
+            />
+          </main>
+        </StageFade>
+        <StartDialog
+          open={popupOpen}
+          variant={ready ? 'play' : 'setup'}
+          song={{
+            title: chart?.title ?? (sameSong ? detail.title : '곡 정보를 불러오는 중'),
+            artist: sameSong ? detail.artist : '',
+            bpm: chart?.bpm ?? (sameSong ? detail.bpm : undefined),
+            durationSec: chart ? chart.durationMs / 1000 : undefined,
+            level: chartDifficulty,
+          }}
+          modeLabel="리듬 게임"
+          missing={missing}
+          connected={connected}
+          keyboardOnly={settings.sensorKind === 'none'}
+          pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
+          countInBars={settings.countInBars}
+          realign={realign.info}
+          loading={loadError === null && stage !== 'ready'}
+          error={loadError}
+          onStart={() => void startPlay()}
+          onSetup={() =>
+            navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart?.title ?? detail?.title ?? '곡'}` } })
+          }
+          onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
+          onRetry={param.reload}
+          onClose={closeStart}
+        />
+      </>
+    );
+  }
+
   const song = {
     title: chart.title,
     artist: sameSong ? detail.artist : '',
@@ -777,45 +756,10 @@ function PlayPageBody() {
     durationSec: chart.durationMs / 1000,
   };
 
-  if (stage === 'ready') {
-    const charts = sameSong
-      ? sortCharts(detail.charts).map((c) => ({ id: c.id, difficulty: c.difficulty }))
-      : [{ id: selectedChartId, difficulty: chart.difficulty }];
-    return (
-      <StageFade stageKey="ready">
-        <main className="main">
-          <BestRecordsNotice status={records.status} retry={records.retry} />
-          <ReadyPanel
-            song={song}
-            modeLabel="리듬 게임"
-            charts={charts}
-            selectedChartId={selectedChartId}
-            bestAccuracy={bestAccuracy}
-            ready={ready}
-            missing={missing}
-            connected={connected}
-            keyboardOnly={settings.sensorKind === 'none'}
-            pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
-            presetName={presetName}
-            countInBars={settings.countInBars}
-            onBack={toSelect}
-            onSelectChart={(chartId) => {
-              if (songIdParam !== null && chartId !== selectedChartId) param.select(songIdParam, chartId);
-            }}
-            onSetup={() => navigate('/setup', { state: { returnTo, returnLabel: `리듬 게임 · ${chart.title}` } })}
-            onReconnect={reconnectAvailable ? () => void reconnect() : undefined}
-            onStart={() => void begin()}
-            realign={realign.info}
-            footer={similar.cards.length > 0 ? <RecommendRow caption="이 곡과 비슷한 곡" items={similar.cards} onPick={similar.onPick} /> : undefined}
-          />
-        </main>
-      </StageFade>
-    );
-  }
 
   // 연주 중. 정확도는 지금까지 판정한 노트 기준(곡 전체 기준 정확도는 결과 화면)
-  const snap = hud ?? session.snapshot();
-  const perfectScore = session.notes.length ? snap.maxScore / session.notes.length : 0;
+  const snap = hud ?? activeSession.snapshot();
+  const perfectScore = activeSession.notes.length ? snap.maxScore / activeSession.notes.length : 0;
   const accuracy =
     snap.judgedCount > 0 && perfectScore > 0 ? Math.min(100, (snap.score / (snap.judgedCount * perfectScore)) * 100) : null;
 
@@ -830,7 +774,7 @@ function PlayPageBody() {
         onLeave={leave}
         returnTo={returnTo}
         realign={realign.info}
-        hasAccompaniment={(ACCOMPANIMENT_OVERRIDE ?? param.loaded?.assets?.accompanimentUrl ?? null) !== null}
+        hasAccompaniment={accUrl !== null}
       />
     );
   } else if (countValue !== null) {
@@ -859,7 +803,7 @@ function PlayPageBody() {
         }
         area={
           <NoteHighway
-            session={session}
+            session={activeSession}
             scrollMs={settings.scrollMs}
             flashes={flashes}
             popups={popups}
@@ -910,7 +854,7 @@ function PlayPageBody() {
       {/* 진단 빌드 전용: 채보 확인 재생(T2) */}
       {LazyChartAutoplayRunner && (
         <Suspense fallback={null}>
-          <LazyChartAutoplayRunner clockRef={clockRef} session={session} />
+          <LazyChartAutoplayRunner clockRef={clockRef} session={playSession} />
         </Suspense>
       )}
     </main>
