@@ -266,7 +266,7 @@ NCS 50곡(표 `configs/ncs/songs.csv`)을 서비스 채보로 만들어 운영 �
 
 BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
 
-흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
+흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 음악 여부 검사(아래 "분리 전 음악 여부 검사") → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
 
 | 환경 변수 | 필수 | 기본값 | 뜻 |
 | --- | --- | --- | --- |
@@ -301,10 +301,49 @@ uv run ssaplash-worker run
 | 모델 올리기·추론 중 그 밖의 예외, 워커 내부 예외 | `MODEL_FAILED` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
 | 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
 | heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패, 내려받은 파일의 크기·sha256이 3번 다 배정과 다름 | 보고 안 함 | — | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+| 분리 전 음악 여부 검사에서 음악이 아닌 파일로 판단 (아래 "분리 전 음악 여부 검사") | `INPUT_INVALID` | 거짓 | `NOT_TRANSCRIBABLE` | 분리를 돌리지 않고 BE가 FAILED |
 
 `reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다.
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### 분리 전 음악 여부 검사
+
+노래가 아닌 파일(말소리, 소음, 해설이 대부분인 영상)을 올리면 분리와 채보가 GPU로 끝까지 돈 뒤 노트가 없는 채보가 만들어진다. 이를 막으려고 워커가 원곡을 내려받은 직후, 분리를 시작하기 전에 CPU로 검사 한 번을 돌린다. 걸린 파일은 분리를 돌리지 않고 실패 보고(`stage` `SEPARATING`, `reason` `NOT_TRANSCRIBABLE`)로 끝낸다. 실패 보고 본문 형식은 그대로라 BE·FE 변경이 없다.
+
+- 원곡의 20·40·60·80% 위치에서 10초 구간 4개를 뽑아, 소리 종류를 맞히도록 학습된 분류 모델 AST(`MIT/ast-finetuned-audioset-10-10-0.4593`)로 구간마다 "음악일 확률"과 "말소리일 확률"을 구한다. 두 확률은 서로 독립이라 합이 1이 아니다
+- 4구간 평균으로 판정한다. **음악 확률 평균이 0.28 미만이거나 말소리 확률 평균이 0.44 이상이면 실패**다. 구간 하나로 판정하지 않는 이유는 정상 랩 곡도 구간 하나는 말소리 확률이 0.5를 넘기 때문이다
+- 드럼이 없는 음악은 이 검사로 못 거른다. 분류 모델이 섞인 소리에서 드럼 유무를 가르지 못했다. 그런 곡은 채보 뒤 노트 수 검사(`drum_check.min_notes_per_minute`)가 맡는다
+
+기준값 0.28과 0.44는 "정상 곡이 1만 곡 중 1곡꼴로만 잘못 걸리는 값"이다. 정상 곡 782개의 두 확률을 구해 분포의 평균과 표준편차를 계산하고(확률을 logit으로 바꾼 값 기준), 1만 곡 중 1곡에 해당하는 위치를 기준값으로 삼았다. 2026-11-11 측정 결과는 아래와 같다.
+
+| 파일 종류 | 파일 수 | 음악 확률 | 말소리 확률 | 검사에 걸림 |
+| --- | --- | --- | --- | --- |
+| 정상 곡: Songsterr 공용 곡, MUSDB18-HQ test, NCS 전자음악, 랩 곡 등 | 782 | 최소 0.38 | 최대 0.32 | 0 |
+| 한국어 말소리 | 100 | 최대 0.01 | 최소 0.61 | 100 |
+| 한국어 말소리에 실제 곡을 배경음악으로 깐 파일. 음악 크기는 말소리와 같거나 10·20·30dB 작게 | 120 | 최대 0.61 | 최소 0.46 | 120 |
+| 소음·비명 | 8 | 최대 0.70 | 최대 0.50 | 8 |
+| 축구 하이라이트 영상 | 1 | 0.11 | 0.57 | 1 |
+
+- 정상 곡 가운데 음악 확률이 가장 낮은 곡은 발 구르기와 박수로 된 Queen의 We Will Rock You(0.38), 말소리 확률이 가장 높은 곡은 말로 시작하는 Van Halen의 Hot for Teacher(0.32)였다
+- 말소리보다 배경음악이 더 큰 파일은 측정하지 않았다
+- 분류 모델을 바꾸면 확률 분포가 달라지므로 기준값을 다시 정해야 한다
+
+```bash
+uv sync --extra models --extra transcribers --extra music-check   # 분류 모델 실행 패키지 transformers 추가
+uv run ssaplash-chart music-check song.mp3    # 파일 하나의 두 확률과 판정. 걸리면 종료 코드 2
+```
+
+- 설정은 `configs/chart/music_check.yaml`이다. `min_music_prob`·`max_speech_prob`를 둘 다 비우면 검사를 하지 않고 분류 모델도 올리지 않는다. 워커에서 다른 설정 파일을 쓰려면 `--music-check-config <경로>`, 검사 없이 띄우려면 `--music-check-config ""`
+- 분류 모델 가중치 330MB는 처음 올릴 때 Hugging Face에서 받아 사용자 캐시 폴더에 둔다
+- 검사 시간은 곡 하나에 2~3초다(원곡 읽기 포함, 개발 PC CPU 기준). GPU는 쓰지 않는다
+- 워커가 시작할 때 분류 모델을 올리지 못하면(패키지 없음, 가중치 내려받기 실패) 워커를 멈추지 않고 검사 없이 채보 작업을 계속한다. 검사가 빠진 채 도는 것은 세 곳에서 알 수 있다
+  - 시작 로그에 ERROR 한 줄: `분리 전 음악 여부 검사 모델을 올리지 못해 검사 없이 계속함: <사유>`
+  - 작업마다 WARNING 한 줄: `작업 <번호> 음악 여부 검사 없이 분리로 넘어감: 워커 시작 때 검사 모델을 올리지 못함 (<사유>)`
+  - `uv run ssaplash-worker check` 출력의 `음악 여부 검사:` 줄. 정상이면 `켜짐`, 못 올렸으면 `[주의] 모델을 올리지 못해 검사 없이 돎`, 설정으로 껐으면 `꺼짐`
+- 곡을 검사하다가 분류 모델 실행이 실패하면 그 곡만 WARNING `작업 <번호> 음악 여부 검사를 건너뛰고 분리로 넘어감: <사유>`를 남기고 분리로 넘어간다
+- 검사가 도는지 확인하는 명령: `grep "음악 여부 검사" ~/ssaplash/results/worker.log | tail`
+- 통과한 곡도 워커 로그에 `음악 여부 검사 통과: 음악 확률 0.80, 말소리 확률 0.02, 2118 ms`처럼 한 줄이 남는다. 운영 곡의 분포를 다시 확인할 때 쓴다
 
 ### LLM 총평 작업 (선택, COACH-003 후속)
 
@@ -325,11 +364,11 @@ BE 접속 정보가 없어도 혼자 끝까지 돌려 볼 수 있게 BE 대역�
 # 터미널 1: 곡을 작업으로 넣고 BE 대역을 띄운다. 작업이 다 끝나면 요약을 찍고 종료한다
 uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
 # 터미널 2: 터미널 1이 출력한 환경 변수 3개와 SSAPLASH_WORK_DIR을 넣고 워커를 돌린다
-uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml
+uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml --music-check-config ""
 uv run pytest tests/worker
 ```
 
-실제 모델로 같은 흐름을 보려면 두 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
+`--music-check-config ""`는 분리 전 음악 여부 검사를 끈다. 켜 두면 실제 분류 모델을 올리고, 합성곡은 음악이 아닌 파일로 걸릴 수 있다. 실제 모델로 같은 흐름을 보려면 세 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
 
 ### GPU 서버에서 띄우기
 
@@ -338,7 +377,7 @@ uv run pytest tests/worker
 서버 주의 두 가지. 서버 드라이버는 570(CUDA 12.8)인데 `uv sync`는 lock의 기본 PyPI torch(CUDA 13 휠)를 깔아 `libcusparseLt.so.0` 오류로 import가 깨진다. `uv sync` 뒤에는 아래처럼 torch를 CUDA 12.8 휠로 다시 깔고, 그다음부터는 `uv run --no-sync`로 실행해 `uv run`이 다시 lock에 맞추지 않게 한다. 작업 폴더에는 `separation.json`·`transcription.json`(시간·메모리)이 남으며 `SSAPLASH_WORKER_KEEP_FILES=1`일 때만 보존된다.
 
 ```bash
-cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers
+cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers --extra music-check
 uv pip install --reinstall "torch==2.8.0" "torchaudio==2.8.0" --index-url https://download.pytorch.org/whl/cu128
 uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.8.0+cu128 True
 # ~/ssaplash/worker.env 내용 (값은 BE·인프라에게 받음):
