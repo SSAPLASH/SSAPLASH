@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { CloseIcon } from './StudioIcons';
+import { CloseIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 interface Props {

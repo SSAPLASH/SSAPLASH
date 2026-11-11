@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import type { Judgement } from '@/domain/judgement';
 import { gridOriginMs, layoutBar, SHEET_BAR_PX, songTimeAtGrid, type BarLayout, type GridChart } from '@/domain/sheet';
-import { drawSheet, readColors } from './sheetStripDraw';
+import { drawSheet, readColors } from '@/components/sheetmusic/sheetStripDraw';
 
 export interface SheetSnippetProps {
   chart: GridChart;

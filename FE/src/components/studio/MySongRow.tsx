@@ -13,7 +13,7 @@ import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCa
 import { dateLabel } from './dateLabel';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
-import { SongStatusBadge } from './SongStatusBadge';
+import { SongStatusBadge } from '@/components/song/SongStatusBadge';
 import { SongPlayBar } from './SongPlayBar';
 import './studio.css';
 

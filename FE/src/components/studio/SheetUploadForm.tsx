@@ -14,7 +14,7 @@ import {
   sheetErrorText,
   validateSheetFiles,
 } from '@/domain/sheetMusic';
-import { UploadIcon } from './StudioIcons';
+import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 /** 곡에 붙일 악보로 열었을 때의 대상 곡 */

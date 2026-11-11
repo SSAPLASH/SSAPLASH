@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Segmented } from '@/components/ui/Segmented';
-import { CloseIcon } from './StudioIcons';
+import { CloseIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 /** 올리기 창의 섹션 */

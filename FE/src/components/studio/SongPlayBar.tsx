@@ -5,7 +5,7 @@
 // 캡슐 틀·커버·[바꾸기]·[끄기]는 줄이 이미 갖고 있어 옮기지 않았다.
 // 쉬는 상태(이 곡이 재생 대상이 아님)는 ▶ + 빈 막대 + 곡 길이이고, ▶를 누르면 이 곡이 재생 대상이 된다.
 // 재생기는 모른다. 페이지가 만든 SongPlayback(`domain/songPlayback`)의 view를 그리고 조작은 콜백으로만 알린다.
-import { SeekBar } from '@/components/free/SeekBar';
+import { SeekBar } from '@/components/song/SeekBar';
 import { PlaybackTransport } from '@/components/song/PlaybackTransport';
 import { formatClock } from '@/domain/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';

@@ -10,8 +10,8 @@ import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/sheet';
 import { barsPerPage, cursorPos, noteHeadAt, pagerSlots, snapToBeat, type PagerSlot } from './sheetPagerMath';
-import { xInBar } from './sheetStripMath';
-import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from './sheetStripDraw';
+import { xInBar } from '@/components/sheetmusic/sheetStripMath';
+import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from '@/components/sheetmusic/sheetStripDraw';
 
 export interface SheetPagerProps {
   chart: Chart;

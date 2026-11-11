@@ -7,11 +7,11 @@ import { PlayingEq } from '@/components/song/PlayingEq';
 import { MarqueeTitle } from '@/components/song/MarqueeTitle';
 import { SongCover } from '@/components/song/SongCover';
 import { MOBILE_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
-import { CloseIcon } from '@/components/studio/StudioIcons';
+import { CloseIcon } from '@/components/song/StudioIcons';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import type { AccompanimentBarView } from '@/domain/freeAccompaniment';
-import { SeekBar } from './SeekBar';
+import { SeekBar } from '@/components/song/SeekBar';
 import './free.css';
 
 interface Props {

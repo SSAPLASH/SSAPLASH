@@ -9,7 +9,7 @@ import type { RecommendCard } from '@/domain/recommendation';
 import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { Button } from '@/components/ui/Button';
-import { PlayIcon } from '@/components/studio/StudioIcons';
+import { PlayIcon } from '@/components/song/StudioIcons';
 import { Segmented } from '@/components/ui/Segmented';
 import { SongCover } from '@/components/song/SongCover';
 import { SongMeta } from '@/components/song/SongMeta';

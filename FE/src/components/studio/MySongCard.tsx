@@ -16,7 +16,7 @@ import { canListen, isListening, isSounding, type SongPlayback } from '@/domain/
 import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCatalog';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';
-import { SongStatusBadge } from './SongStatusBadge';
+import { SongStatusBadge } from '@/components/song/SongStatusBadge';
 import { CoverPlayer } from './CoverPlayer';
 import { PlayModeMenu } from './PlayModeMenu';
 import './studio.css';

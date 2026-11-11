@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import { queryClient } from '@/app/queryClient';
-import type { UseFreeAccompaniment } from '@/components/free/useFreeAccompaniment';
+import type { UseFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { accompanimentBarView } from '@/domain/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
@@ -25,7 +25,7 @@ const playingView = (songId: number) =>
   });
 
 const hook = vi.hoisted(() => ({ current: null as unknown as UseFreeAccompaniment }));
-vi.mock('@/components/free/useFreeAccompaniment', () => ({ useFreeAccompaniment: () => hook.current }));
+vi.mock('@/components/song/useFreeAccompaniment', () => ({ useFreeAccompaniment: () => hook.current }));
 vi.mock('@/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
 

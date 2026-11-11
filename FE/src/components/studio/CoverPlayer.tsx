@@ -2,7 +2,7 @@
 // 조작부는 song/PlaybackTransport(10초 뒤로 · 재생/일시정지 · 10초 앞으로), 시간 바는 free/SeekBar layout="bare"를 그대로 쓴다.
 // 보이기·숨기기는 카드 CSS가 정한다(마우스 올림·카드 안 포커스·메뉴 열림). 이 컴포넌트는 재생 대상이면 `is-pinned`만 단다.
 // 재생기는 모른다. 페이지가 만든 SongPlayback(`domain/songPlayback`)의 view를 그리고 조작은 콜백으로만 알린다.
-import { SeekBar } from '@/components/free/SeekBar';
+import { SeekBar } from '@/components/song/SeekBar';
 import { PlaybackTransport } from '@/components/song/PlaybackTransport';
 import type { SongSummary } from '@/domain/songCatalog';
 import { isListening, type SongPlayback } from '@/domain/songPlayback';

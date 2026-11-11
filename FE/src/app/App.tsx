@@ -1,12 +1,12 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/shell/PublicLayout';
-import { AppShell } from '@/components/AppShell';
-import { RequireAdmin } from '@/components/RequireAdmin';
-import { RequireAuth } from '@/components/RequireAuth';
+import { AppShell } from './AppShell';
+import { RequireAdmin } from '@/components/shell/RequireAdmin';
+import { RequireAuth } from '@/components/shell/RequireAuth';
 import { FreePlayPage } from '@/pages/FreePlayPage';
-import { NotFoundPage } from '@/pages/NotFoundPage';
-import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { NotFoundPage } from '@/components/shell/NotFoundPage';
+import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AUTH_REQUIRED } from './authBootstrap';
 import { loadRoute } from './routeModules';

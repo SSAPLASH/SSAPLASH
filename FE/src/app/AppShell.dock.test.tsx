@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { act } from 'react';
-import { AppShell } from '@/components/AppShell';
+import { AppShell } from './AppShell';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
@@ -31,7 +31,7 @@ vi.mock('@/components/shell/StickStatusIndicator', () => ({ StickStatusIndicator
 vi.mock('@/components/shell/useMediaQuery', () => ({ useSidebarCollapsed: () => false }));
 vi.mock('@/components/recording/SaveRecordingDialog', () => ({ SaveRecordingDialog: () => null }));
 vi.mock('@/components/recording/RecordingToast', () => ({ RecordingToast: () => null }));
-vi.mock('@/components/DebugOverlay', () => ({ DebugOverlay: () => null }));
+vi.mock('@/components/shell/DebugOverlay', () => ({ DebugOverlay: () => null }));
 
 let go: (to: string) => void = () => {};
 function Nav() {

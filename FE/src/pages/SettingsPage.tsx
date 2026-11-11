@@ -7,7 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { deviceGroupName, deviceListText } from '@/domain/devices';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
-import { KitSkinCarousel } from '@/components/settings/KitSkinCarousel';
+import { KitSkinCarousel } from '@/components/fx/KitSkinCarousel';
 import { HitFxPicker } from '@/components/fx/HitFxPicker';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { WithdrawDialog } from '@/components/shell/WithdrawDialog';

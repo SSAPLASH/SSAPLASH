@@ -1,6 +1,6 @@
 // 곡 메타 한 줄: 아티스트 · BPM · 길이 · 곡 난이도. 없는 값은 건너뛴다 — 화면에서는 묶음 2부터 쓴다.
 import './song.css';
-import { formatDuration } from '@/components/formatTime';
+import { formatDuration } from '@/domain/formatTime';
 
 interface Props {
   artist?: string;

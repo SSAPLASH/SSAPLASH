@@ -7,7 +7,7 @@ import type { SheetSummary } from '@/domain/sheetMusic';
 import { SheetCover } from './SheetCover';
 import { SheetMenu, type SheetMenuKind } from './SheetMenu';
 import { sheetSubtitle } from './sheetItemText';
-import { UploadIcon } from './StudioIcons';
+import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 interface Props {

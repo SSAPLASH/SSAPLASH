@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/app/features';
+import { RECORDING_ENABLED } from './features';
 import { needsRecommendationPrompt } from '@/domain/recommendationConsent';
 import { recommendationConsentEnabled } from '@/domain/signupTerms';
 import { metronome } from '@/engine/Metronome';
@@ -8,22 +8,22 @@ import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
-import { RouteErrorBoundary } from './RouteErrorBoundary';
-import { LazyChartAutoplayToggle } from './diag/lazyChartAutoplay';
-import { RecordingToast } from './recording/RecordingToast';
-import { SaveRecordingDialog } from './recording/SaveRecordingDialog';
-import { GlassDock } from './shell/GlassDock';
-import { ProfileMenu } from './shell/ProfileMenu';
-import { Sidebar } from './shell/Sidebar';
-import { LessonInvite } from './lesson/LessonInvite';
-import { StickStatusIndicator } from './shell/StickStatusIndicator';
-import { TopBar } from './shell/TopBar';
-import { useSidebarCollapsed } from './shell/useMediaQuery';
+import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
+import { LazyChartAutoplayToggle } from '@/components/diag/lazyChartAutoplay';
+import { RecordingToast } from '@/components/recording/RecordingToast';
+import { SaveRecordingDialog } from '@/components/recording/SaveRecordingDialog';
+import { GlassDock } from '@/components/shell/GlassDock';
+import { ProfileMenu } from '@/components/shell/ProfileMenu';
+import { Sidebar } from '@/components/shell/Sidebar';
+import { LessonInvite } from '@/components/lesson/LessonInvite';
+import { StickStatusIndicator } from '@/components/shell/StickStatusIndicator';
+import { TopBar } from '@/components/shell/TopBar';
+import { useSidebarCollapsed } from '@/components/shell/useMediaQuery';
 
 // 조건부로만 뜨는 셸 UI라 첫 로드에서 뺀다(설계 TECH-route-code-split U2 ①)
-const DebugOverlay = lazy(() => import('./DebugOverlay').then((m) => ({ default: m.DebugOverlay })));
+const DebugOverlay = lazy(() => import('@/components/shell/DebugOverlay').then((m) => ({ default: m.DebugOverlay })));
 const RecommendationConsentDialog = lazy(() =>
-  import('./shell/RecommendationConsentDialog').then((m) => ({ default: m.RecommendationConsentDialog })),
+  import('@/components/shell/RecommendationConsentDialog').then((m) => ({ default: m.RecommendationConsentDialog })),
 );
 
 /**

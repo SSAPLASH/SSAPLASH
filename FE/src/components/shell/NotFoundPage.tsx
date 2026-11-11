@@ -1,6 +1,6 @@
 // 모르는 주소(404) 화면. 셸 안·로그인 확인 아래에서 그린다(설계 TECH-364 D1~D3). 지연 로드하지 않는다.
 import { Link } from 'react-router-dom';
-import { useShell } from '@/components/shell/useShell';
+import { useShell } from './useShell';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { EmptyState } from '@/components/ui/EmptyState';
 

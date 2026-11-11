@@ -13,7 +13,7 @@ import {
   type MidiDraft,
   type UploadPrecheck,
 } from '@/domain/midiUpload';
-import { UploadIcon } from './StudioIcons';
+import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 
 export interface MidiUploadFormProps {
