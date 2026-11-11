@@ -11,6 +11,7 @@
 | IDE | **Arduino IDE 2.3.10** |
 | 보드 패키지 | **Adafruit nRF52 1.7.0** (Boards Manager). Preferences의 Additional boards manager URLs에 `https://adafruit.github.io/arduino-board-index/package_adafruit_index.json` |
 | 보드 선택 | Tools > Board > **Adafruit Feather nRF52840 Sense** |
+| 라이브러리 | **Adafruit NeoPixel** (Library Manager, 상태 LED) |
 | 케이블 | Micro USB **데이터** 케이블 |
 | 브라우저 | Chrome / Edge (Web Bluetooth) |
 
@@ -40,7 +41,8 @@ n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed
 | 지자기 LIS3MDL | I2C 0x1C | 아직 안 씀 |
 | 근접·습도·기압 | 0x39 / 0x44 / 0x77 | 안 씀 |
 | DRV2605L (예정) | I2C 0x5A | 3V·GND·SDA·SCL 납땜 (Feather Sense엔 STEMMA QT 포트 없음) |
-| USER 버튼 | D7 | 정면 보정 (RESET_POSE) |
+| USER 버튼 | D7 | 전원·정면 보정 (237). 꺼진 상태에서 누름 = 켜기, 1.5초 누름 = 끄기, 두 번 누름 = 정면 보정(RESET_POSE), 한 번 누름 = 배터리 표시 1초. BLE·USB 시리얼 연결 없이 10분이면 자동으로 꺼짐 |
+| 상태 LED | NeoPixel (`PIN_NEOPIXEL`) | 부팅 중 초록, 연결 찾는 중 파랑 깜빡, 연결됨 은은한 파랑, 배터리 20% 이하 10초마다 주황 2번·5% 이하 빨강 깜빡. 꺼져 있어도 약 1mA |
 | µs 시계 | TIMER4, 1MHz, 32비트 | 프로토콜 시각(µs u32) 그대로. `micros()`는 이 보드에서 약 1ms 단위라 안 씀 |
 
 IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘 다 1.66kHz. 데이터 준비 신호(INT1, 펄스 모드)를 인터럽트로 받아 그 순간의 시각을 샘플 시각으로 쓴다.
@@ -146,6 +148,31 @@ IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘
 - 책상을 치면 스틱이 급정지해서 공중 타격(도착 −6ms)보다 검출이 늦다. 공중 타격이면 그만큼 빠를 수 있다
 
 녹화 원본(`swing_1026.csv`, `nohit_1026.csv`, `ble_latency_*.csv`)은 저장소 밖(`ssaplash/`)에 있다.
+
+**펌웨어 구간 지연 (2026-11-04, S15P31A307-233, 펌웨어 1.2)**
+
+측정: `ble_latency.html` [구간 지연 기록 켜기](SET_PARAM `0x10` latLog = 1) → 타격마다 LOG `LT 검출 전송 진동명령`(µs, 타격을 판정한 IMU 샘플의 DRDY 인터럽트 시각 기준). 진동 시작은 [진동 지연 측정](HAPTIC [파형, 0xFE]: 명령 → IMU 가속도가 처음 흔들린 샘플). 원본 `../tools/latency_data/fw_latency_1104.csv`
+
+| 구간 | 중앙값 | 범위 / p95 | 횟수 |
+|---|---|---|---|
+| IMU 샘플 → 검출 끝 (I2C 12바이트 읽기 0.37ms 포함) | **0.40ms** | p95 0.41, 최대 0.48 | 52타 |
+| 검출 → 전송 끝 (시리얼 쓰기 + BLE notify 큐) | +0.15ms (누적 **0.55ms**) | p95 0.60 | 52타 |
+| 전송 → 진동 GO 쓰기 끝 (I2C) | +0.18ms (누적 **0.73ms**) | p95 0.81 | 52타 |
+| 진동 명령 → 진동 시작 (DRV2605L + LRA, IMU 감지) | **3.6ms** | 2.8~4.8, sd 0.5 | 60회 (보드 2개 각 30) |
+
+**전체 지연 표 (스틱 정지 = 0 기준)**
+
+| 시점 | 정지 대비 | 근거 |
+|---|---|---|
+| 타격 검출 (예측 판정) | 약 **−11ms** | 10/26 재생 검증 (정지 전 중앙값 11ms, 7~15) |
+| HIT 전송 끝 | 약 −10.5ms | 위 + 0.55ms |
+| 진동 시작 | 약 **−7ms** | 검출 + 0.55 + 3.6ms. 스틱이 멈추기 전에 손에 진동 |
+| PC 도착 (XIAO 동글 → Web Serial) | **−12.1ms** (sd 6.0, 52타) | 11/4. SYNC 왕복 중앙값 15.2ms |
+| 소리 (유선 이어폰 / 노트북 스피커) | **+61ms / +115ms** | 10/28 탭 테스트 |
+
+- 펌웨어 안 구간(샘플 → 전송)은 0.55ms라 지연 예산에서 무시할 수준이다. 진동도 스틱 안에서 바로 울려 정지보다 먼저 시작한다
+- 30ms 목표를 넘기는 건 여전히 PC 오디오 출력이다 (정지 → 도착은 이미 음수)
+- PC 도착 −12.1ms는 편도를 SYNC 왕복의 절반으로 가정한 값이라 경로 비교용이다
 
 ## 8. 남은 것
 
