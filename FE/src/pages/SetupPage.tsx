@@ -16,6 +16,8 @@ import { Toggle } from '@/components/ui/Toggle';
 import { HitLog } from '@/components/setup/HitLog';
 import { HIT_LOG_ROWS } from '@/components/setup/hitLogFormat';
 import '@/components/setup/setup.css';
+import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
+import { timingCalStatusText } from '@/components/calibration/timingCalText';
 import { SensorOptionsPanel } from '@/components/SensorOptionsPanel';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/components/setup/PresetChips';
 import { PresetNameDialog } from '@/components/setup/PresetNameDialog';
@@ -264,6 +266,9 @@ export function SetupPage() {
 
   // ---- 2타 보정(PLAY-004, UX-64). 로직은 calibrationSession, 여기선 시작·다음·저장·취소만 ----
   const capturing = calibration.mode === 'capture';
+  // 박자 맞추기(판정 타이밍 자동 보정). 패드 보정·재정렬 중에는 타격을 서로 가로채므로 열지 않는다
+  const [timingCalOpen, setTimingCalOpen] = useState(false);
+  const timingCalBlocked = calibration.mode !== 'idle';
   const realigning = calibration.mode === 'realign';
   const captureTarget = capturing ? calibration.target : null;
   const stopCapture = () => calibrationSession.cancelCapture();
@@ -517,6 +522,18 @@ export function SetupPage() {
           reason={capturing ? '보정 중에는 열 수 없어요' : undefined}
         />
       </div>
+
+      <div className="timing-cal-row">
+        <span className="timing-cal-row-title">박자 맞추기</span>
+        <span className={`timing-cal-row-status${s.timingCal ? '' : ' todo'}`}>{timingCalStatusText(s.timingCal, s.audioOffsetMs)}</span>
+        <span className="timing-cal-row-help">
+          {timingCalBlocked ? '보정 중에는 열 수 없어요' : '클릭 소리에 맞춰 쳐서 판정 타이밍을 자동으로 맞춰요'}
+        </span>
+        <Button variant="secondary" size="sm" disabled={timingCalBlocked} onClick={() => setTimingCalOpen(true)}>
+          {s.timingCal ? '다시 맞추기' : '맞추기'}
+        </Button>
+      </div>
+      {timingCalOpen && <TimingCalDialog onClose={() => setTimingCalOpen(false)} />}
 
       {stepDialog === 'stick' && (
         <StepDialog title={`${deviceGroupName(withPedal)} 연결`} titleId="step-dialog-stick" onClose={closeStep}>
