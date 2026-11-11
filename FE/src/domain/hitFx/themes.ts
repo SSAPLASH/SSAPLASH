@@ -28,7 +28,7 @@ export interface HitFxThemeDef {
 }
 
 /** 네온 스킨 모양별 색(drum.css의 --neon과 같은 값) */
-const NEON_COLOR: Record<PadShape, string> = { drum: '#22e4ff', cymbal: '#ffc24a', kick: '#ff3ec8' };
+const NEON_COLOR: Record<PadShape, string> = { drum: '#22e4ff', cymbal: '#ffc24a', kick: '#ff3ec8', pedal: '#ffc24a' };
 
 /** brand 토큰을 읽지 못할 때의 값(tokens.css --brand) */
 export const BRAND_FALLBACK = '#35a3d4';

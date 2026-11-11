@@ -2,7 +2,8 @@
 // 판정용 배치(kitLayout)와는 별개로, 표시 전용이다. 그리기는 components/drum이 한다.
 import type { PadId } from './pads';
 
-export type PadShape = 'drum' | 'cymbal' | 'kick';
+/** pedal은 하이햇 페달(발판). 고정 8패드 킷에는 없고 드럼 세팅의 자유 틀(DrumKit frame)에서만 그린다 */
+export type PadShape = 'drum' | 'cymbal' | 'kick' | 'pedal';
 
 /** armed(예고)는 타입에만 두고 1차 범위에서는 쓰지 않는다 */
 export type PadVisualState = 'idle' | 'armed' | 'hit' | 'perfect' | 'good' | 'miss';
@@ -115,6 +116,7 @@ export const PAD_HEAD_CENTER: Record<PadShape, { x: number; y: number }> = {
   drum: { x: 80, y: 72 },
   cymbal: { x: 80, y: 70 },
   kick: { x: 80, y: 85 },
+  pedal: { x: 80, y: 80 },
 };
 
 /** 패드의 헤드 중심(킷 좌표, 760×300) */
