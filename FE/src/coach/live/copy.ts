@@ -111,7 +111,7 @@ export function coachCopy(message: CoachMessage, context: CoachCopyContext = {})
 
   switch (tag) {
     case 'LIVE_SETUP_OFFSET':
-      return { title: '소리가 밀려 들리나요?', sub: '끝나고 지연 보정을 맞춰요', mode: 'coach-info', target: null };
+      return { title: '소리가 밀려 들리나요?', sub: '끝나고 박자를 맞춰 보세요', mode: 'coach-info', target: null };
     case 'LIVE_SETUP_PADS':
       return { title: '패드 자리를 확인해요', sub: '끝나고 패드를 다시 잡아요', mode: 'coach-info', target: null };
     case 'LIVE_PAD_MISS':
