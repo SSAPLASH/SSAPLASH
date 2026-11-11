@@ -1,4 +1,4 @@
-// 준비 조건 판정(순수 함수). 홈·자유 연주·곡 연주 준비·설정 페이지가 같은 규칙을 쓴다.
+// 준비 조건 판정(순수 함수). 홈·자유 연주·곡 시작 확인 창·설정 페이지가 같은 규칙을 쓴다.
 // 키보드 전용(sensorKind === 'none')은 면제한다(설계 D11).
 import type { SensorId } from './events';
 import { pedalRequired } from './pedalStatus';

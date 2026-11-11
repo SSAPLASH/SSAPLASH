@@ -46,7 +46,6 @@ import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/
 import { useBestRecords } from '@/app/useBestRecords';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
-import { presetDisplayName } from '@/domain/preset';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
@@ -65,7 +64,6 @@ import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
 import { useReconnect } from '@/store/reconnectStore';
-import { usePresets } from '@/store/presetStore';
 import { useSettings } from '@/store/settingsStore';
 import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
 import { liveCoachClient } from '@/api/liveCoach';
@@ -105,7 +103,6 @@ function SheetPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
-  const presetItems = usePresets((p) => p.items);
   const [searchParams, setSearchParams] = useSearchParams();
   // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
@@ -779,7 +776,6 @@ function SheetPageBody() {
     const fallback = chartFallback(detail, chartIdParam);
     if (fallback !== null) selectParam(songIdParam, fallback, { replace: true, start: true });
   }, [stage, songIdParam, chartIdParam, detail, selectParam]);
-  const presetName = presetDisplayName(presetItems, settings.activePresetId);
 
   // 곡 선택(+시작 확인 창). 연주 단계가 아니면 항상 곡 선택이 바닥에 있고, 창은 그 위에 뜬다
   if (stage !== 'play' || !chart || !activeSession) {
@@ -808,7 +804,6 @@ function SheetPageBody() {
           connected={connected}
           keyboardOnly={settings.sensorKind === 'none'}
           pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
-          presetName={presetName}
           countInBars={settings.countInBars}
           realign={realign.info}
           loading={loadError === null && stage !== 'ready'}

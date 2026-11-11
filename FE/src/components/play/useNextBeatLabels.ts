@@ -9,7 +9,7 @@ const EMPTY: NextBeatBadges = { badges: {}, nowPads: [] };
 
 export interface UseNextBeatLabelsArgs {
   session: RhythmSession | null | undefined;
-  /** 매 프레임 호출된다. null이면 0 기준 정지(준비 화면) */
+  /** 매 프레임 호출된다. null이면 0 기준 정지(시작 확인 창) */
   getSongTime: () => number | null;
   /** 설정 sheetPadCount. false면 빈 배지 */
   enabled: boolean;
