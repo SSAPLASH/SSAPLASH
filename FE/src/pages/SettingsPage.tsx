@@ -19,6 +19,10 @@ import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { Toggle } from '@/components/ui/Toggle';
 import { Dialog } from '@/components/ui/Dialog';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
+import { outputLatencyWarnText, timingCalMismatchText, timingCalRecordText, timingOffsetText } from '@/components/calibration/timingCalText';
+import { TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/timingCalibration';
+import { audioEngine } from '@/audio/AudioEngine';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
 import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
@@ -38,11 +42,6 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
 /** 동의 저장 결과 토스트가 보이는 시간 */
 const TOAST_MS = 3000;
 
-/** 지연 보정 표시: +20ms · 0ms · -10ms */
-function offsetText(ms: number): string {
-  return `${ms > 0 ? '+' : ''}${ms}ms`;
-}
-
 export function SettingsPage() {
   useShell({ title: '설정' });
   const navigate = useNavigate();
@@ -61,6 +60,8 @@ export function SettingsPage() {
   const setSongVolume = useSettings((s) => s.setSongVolume);
   const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
+  const timingCal = useSettings((s) => s.timingCal);
+  const [timingCalOpen, setTimingCalOpen] = useState(false);
   const kitSkin = useSettings((s) => s.kitSkin);
   const setKitSkin = useSettings((s) => s.setKitSkin);
   const hitFxTheme = useSettings((s) => s.hitFxTheme);
@@ -129,6 +130,9 @@ export function SettingsPage() {
   const connText = !sensorMode ? '키보드 전용' : deviceListText({ left, right, pedal: pedalOn });
   const connTone = sensorMode && left && right && pedalOn !== false ? 'good' : sensorMode ? 'warn' : '';
   const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
+  // 박자 맞추기 안내: 측정한 입력과 지금 입력이 다르거나, 보고된 출력 지연이 크면 한 줄씩 보인다
+  const timingMismatch = timingCalMismatchText(timingCal, sensorMode);
+  const latencyWarn = outputLatencyWarnText(audioEngine.latency()?.outputLatencyMs);
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
   const onLogout = () => {
@@ -279,16 +283,26 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <SettingRow label="타격음 지연 보정" help="치는 순간보다 소리가 늦게 들리면 값을 올리세요" wideControl>
+            <SettingRow label="박자 맞추기" help="클릭 소리에 맞춰 치면 판정 타이밍을 자동으로 맞춰요">
+              {() => (
+                <Button variant="secondary" size="sm" onClick={() => setTimingCalOpen(true)}>
+                  {timingCal ? '다시 맞추기' : '맞추기'}
+                </Button>
+              )}
+            </SettingRow>
+            <p className="settings-note">{timingCalRecordText(timingCal)}</p>
+            {timingMismatch && <p className="settings-note">{timingMismatch}</p>}
+            {latencyWarn && <p className="settings-note">{latencyWarn}</p>}
+            <SettingRow label="판정 타이밍 보정" help="판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요" wideControl>
               {(aria) => (
                 <Slider
                   {...aria}
-                  label="타격음 지연 보정"
-                  min={-100}
-                  max={200}
-                  step={5}
+                  label="판정 타이밍 보정"
+                  min={TIMING_OFFSET_MIN_MS}
+                  max={TIMING_OFFSET_MAX_MS}
+                  step={TIMING_OFFSET_STEP_MS}
                   value={audioOffsetMs}
-                  valueText={offsetText(audioOffsetMs)}
+                  valueText={timingOffsetText(audioOffsetMs)}
                   onChange={setAudioOffsetMs}
                 />
               )}
@@ -328,6 +342,8 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      {timingCalOpen && <TimingCalDialog onClose={() => setTimingCalOpen(false)} />}
 
       <Toast variant={toast?.variant ?? 'info'} text={toast?.text ?? null} regionClassName="settings-toast-region" />
 
