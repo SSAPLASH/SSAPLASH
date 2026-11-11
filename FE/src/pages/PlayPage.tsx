@@ -2,7 +2,8 @@
 // 엔진(RhythmSession)·레인(NoteHighway)·채보는 기존 코드. 이 페이지는 단계 전환, 입력 연결, HUD 값, 로그 저장을 맡는다.
 // 준비 화면·시작 확인 창은 없다 — 카드의 [▶ 플레이]를 누르면 기기가 준비된 경우 바로 카운트다운으로 들어간다(E3).
 // 팝업(StartDialog, 옵션 줄 없음)은 기기 준비가 안 됐거나 불러오기에 실패했거나 스네어 재정렬이 걸렸을 때만 뜬다(E5·E6·E8).
-// 시작 대기(`starting`)는 화면 안 상태다 — 주소에는 `?song=&chart=`만 싣고 `start`는 쓰지 않는다(E7). 반주가 있는 곡은 항상 반주를 재생한다.
+// 시작 대기(`startTarget`)는 화면 안 상태다 — 주소에는 `?song=&chart=`만 싣고 `start`는 쓰지 않는다(E7). 반주가 있는 곡은 항상 반주를 재생한다.
+// 결과 화면의 [다시 하기]는 `location.state.autoStart`로 들어와 곡 선택을 거치지 않고 같은 곡·단계의 카운트다운으로 바로 간다.
 // 게임은 곡 중 메트로놈 클릭이 없고(카운트다운 박 소리만) 녹음하지 않는다(E1·E2). 연주 중은 셸을 숨긴 전체 화면이다(D2).
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -101,13 +102,28 @@ function PlayPageBody() {
   const [searchParams] = useSearchParams();
   // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
-  // 시작 대기: [▶ 플레이]를 누른 뒤 카운트다운에 들어가기 전까지(화면 안 상태, 주소에 싣지 않는다). 채보·반주는 이때부터(연주 중에도) 읽는다
-  const [starting, setStarting] = useState(false);
+  // 시작 대기: [▶ 플레이]를 누른 뒤 카운트다운에 들어가기 전까지(화면 안 상태, 주소에 싣지 않는다). 채보·반주는 이때부터(연주 중에도) 읽는다.
+  // 시작하려는 곡·단계를 함께 기억한다 — 주소가 그 곡·단계로 바뀐 뒤에만 읽기 시작해야, 주소에 남아 있던 이전 곡으로 시작하지 않는다.
+  // [다시 하기]로 들어왔으면(state.autoStart) 주소의 곡·단계로 바로 시작 대기에 들어간다
+  const [startTarget, setStartTarget] = useState<{ song: number; chart: number } | null>(() => {
+    const song = parseId(searchParams.get('song'));
+    const chart = parseId(searchParams.get('chart'));
+    const auto = (location.state as { autoStart?: boolean } | null)?.autoStart === true;
+    return auto && song !== null && chart !== null ? { song, chart } : null;
+  });
+  // 새로고침·뒤로 가기로 다시 자동 시작하지 않도록 도착 state를 비운다
+  useEffect(() => {
+    if ((location.state as { autoStart?: boolean } | null)?.autoStart) {
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    }
+    // 도착 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 시작 대기 중 팝업이 한 번이라도 떴는가. 떴으면 기기가 이어져도 자동 시작하지 않고 팝업의 [▶ 플레이]를 기다린다(E6)
   const [popupSeen, setPopupSeen] = useState(false);
   const songIdParam = parseId(searchParams.get('song'));
   const chartIdParam = parseId(searchParams.get('chart'));
-  const startOpen = starting && songIdParam !== null && chartIdParam !== null;
+  const startOpen = startTarget !== null && songIdParam === startTarget.song && chartIdParam === startTarget.chart;
   const param = useChartParam({ enabled: startOpen || playSession !== null });
   const { status: paramStatus, loaded: paramLoaded } = param;
   const [hud, setHud] = useState<SessionSnapshot | null>(null);
@@ -551,7 +567,7 @@ function PlayPageBody() {
   }, [navigate, returnTo, resetCountdown, clearCoachLine]);
 
   /** 시작 대기 취소: 팝업을 닫는다(주소의 곡·단계 선택은 남긴다) */
-  const closeStart = useCallback(() => setStarting(false), []);
+  const closeStart = useCallback(() => setStartTarget(null), []);
 
   /** 카운트다운으로 들어가고 시작 대기를 끈다. begin 안의 await 사이에 다시 불리지 않게 막는다 */
   const beginning = useRef(false);
@@ -559,7 +575,7 @@ function PlayPageBody() {
     if (beginning.current) return;
     beginning.current = true;
     try {
-      if (await begin()) setStarting(false);
+      if (await begin()) setStartTarget(null);
     } finally {
       beginning.current = false;
     }
@@ -681,6 +697,8 @@ function PlayPageBody() {
     selectParam(songIdParam, fallbackChart, { replace: true });
   }, [stage, songIdParam, fallbackChart, selectParam]);
 
+    // 시작 대기 대상도 바꾼 단계를 따라간다
+    setStartTarget((t) => (t === null ? t : { song: songIdParam, chart: fallbackChart }));
   const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError;
   // 팝업을 띄워야 하는 경우: 기기 준비 안 됨(E3) · 불러오기 실패(E5) · 스네어 재정렬(E8)
   const popupWanted = startOpen && (!ready || loadError !== null || realign.pending);
@@ -707,12 +725,12 @@ function PlayPageBody() {
           <main className="main">
             <SongPicker
               mode="play"
-              starting={startOpen}
+              starting={startTarget !== null}
               onStart={(song, chartId) => {
                 // 클릭 안에서 오디오 잠금을 미리 풀어 둔다(자동 시작은 클릭 뒤 비동기로 일어난다)
                 void unlockAudio();
                 param.select(song, chartId);
-                setStarting(true);
+                setStartTarget({ song, chart: chartId });
               }}
             />
           </main>
