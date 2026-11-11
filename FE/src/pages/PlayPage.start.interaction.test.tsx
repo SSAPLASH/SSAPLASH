@@ -38,6 +38,8 @@ vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), 
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/components/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
+// 안내 애니메이션의 rAF 갱신이 라우터 전환 렌더를 굶기지 않게 막는다
+vi.mock('@/components/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 // 하이웨이는 그리지 않고 프레임 콜백만 잡아 둔다 — 테스트가 곡 끝을 흉내 낸다
 const frame: { current: ((now: number) => void) | null } = { current: null };
 vi.mock('@/components/NoteHighway', () => ({
@@ -77,9 +79,9 @@ function Where() {
     </>
   );
 }
-const show = (url = '/play') =>
+const show = (url = '/play', state?: unknown) =>
   render(
-    <MemoryRouter initialEntries={[url]}>
+    <MemoryRouter initialEntries={[state === undefined ? url : { pathname: url.split('?')[0], search: url.includes('?') ? `?${url.split('?')[1]}` : '', state }]}>
       <Where />
       <Routes>
         <Route path="/play" element={<PlayPage />} />
@@ -144,6 +146,32 @@ describe('PlayPage 시작 흐름', () => {
     // 연주 중 Esc는 일시정지
     fireEvent.keyDown(window, { code: 'Escape' });
     await screen.findByRole('dialog', { name: '일시정지' });
+  });
+
+  it('주소에 다른 단계가 남아 있어도 카드에서 고른 단계만 읽고 그 단계로 시작한다', async () => {
+    show('/play?song=1&chart=12');
+    fireEvent.click(await screen.findByRole('radio', { name: 'EASY' }));
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(where()).toBe('/play?song=1&chart=11');
+    // 주소가 바뀌기 전의 단계(12)는 읽지 않는다
+    expect(vi.mocked(loadChart).mock.calls.map(([q]) => q.chartId)).toEqual([11]);
+  });
+
+  it('[다시 하기]로 들어오면(state.autoStart) 곡 선택을 거치지 않고 바로 시작하고, 도착 state를 비운다', async () => {
+    show('/play?song=1&chart=12', { autoStart: true });
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(screen.queryByRole('dialog', { name: '시험곡' })).toBeNull();
+    expect(loadChart).toHaveBeenCalledWith({ songId: 1, chartId: 12 }, expect.any(AbortSignal));
+    expect(where()).toBe('/play?song=1&chart=12');
+    expect(screen.getByTestId('state').textContent).toBe('null');
+  });
+
+  it('state.autoStart가 있어도 주소에 곡·단계가 없으면 시작하지 않는다', async () => {
+    show('/play', { autoStart: true });
+    await screen.findByRole('complementary', { name: '선택한 곡' });
+    expect(loadChart).not.toHaveBeenCalled();
+    expect(playing()).toBe(false);
   });
 
   it('불러오는 동안 팝업 없이 카드의 ▶ 플레이가 스피너다', async () => {

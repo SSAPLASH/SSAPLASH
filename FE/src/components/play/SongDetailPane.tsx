@@ -3,6 +3,7 @@
 // similar가 있으면 맨 아래에 구분선과 「✦ 이 곡과 비슷한 곡」 한 줄 + [이 곡 보기](설계 COACH-004-song-picker-ai-tab 3-3, Figma 666:33647).
 // 스틱 연결 문구는 두지 않는다 — 상단 바 스틱 상태로 충분하다(Figma 11/03).
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
+import { useEffect, useRef } from 'react';
 import type { Difficulty } from '@/domain/chart';
 import type { RecommendCard } from '@/domain/recommendation';
 import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
@@ -28,6 +29,8 @@ export interface QuickStartProps {
   starting?: boolean;
   /** ▶ 플레이 */
   onStart: () => void;
+  /** true면 ▶ 플레이를 누를 수 있게 된 뒤 그 버튼에 포커스를 한 번 주고, 카드 전체가 보이게 스크롤한다(다시 하기·추천으로 곡을 골라 둔 채 들어왔을 때) */
+  focusStart?: boolean;
 }
 
 const DIFFICULTIES: Difficulty[] = ['EASY', 'NORMAL', 'HARD'];
@@ -55,6 +58,25 @@ export function SongDetailPane({
   onSimilarPick,
   quickStart,
 }: SongDetailPaneProps) {
+  const paneRef = useRef<HTMLElement>(null);
+  const playRef = useRef<HTMLButtonElement>(null);
+  const focused = useRef(false);
+  const canStart =
+    song !== null && !quickStart.starting && chartState === 'ready' && quickStart.charts.some((c) => c.id === quickStart.selectedChartId);
+  const focusStart = quickStart.focusStart === true && canStart;
+  // 화면이 바뀌면 셸(AppShell)이 이 효과보다 늦게 제목(h1)에 포커스를 두고 맨 위로 스크롤하므로, 한 프레임 뒤에 넘겨받는다
+  useEffect(() => {
+    if (!focusStart || focused.current) return;
+    const raf = requestAnimationFrame(() => {
+      // 글을 치는 중이거나 창이 떠 있으면 두지 않는다
+      if (document.activeElement?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      if (!playRef.current) return;
+      focused.current = true;
+      playRef.current.focus({ preventScroll: true });
+      paneRef.current?.scrollIntoView?.({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focusStart]);
   if (!song) {
     return (
       <aside className="play-sd" aria-label="선택한 곡">
@@ -68,7 +90,7 @@ export function SongDetailPane({
   const best = selected ? q.bestByChart[selected.id] : undefined;
   const isScore = q.bestKind === 'score';
   return (
-    <aside className="play-sd play-sd-quick" aria-label="선택한 곡">
+    <aside ref={paneRef} className="play-sd play-sd-quick" aria-label="선택한 곡">
       <span className="play-sd-caption">선택한 곡</span>
       <SongCover coverUrl={song.coverUrl} className="play-sd-cover" />
       <div className="play-sd-head">
@@ -116,9 +138,10 @@ export function SongDetailPane({
           }}
         />
         <Button
+          ref={playRef}
           className="play-sd-play"
           leadingIcon={<PlayIcon size={20} />}
-          disabled={q.starting || chartState !== 'ready' || selected === undefined}
+          disabled={!canStart}
           onClick={q.onStart}
         >
           {q.starting ? <span className="spinner" role="status" aria-label="불러오는 중" /> : '플레이'}

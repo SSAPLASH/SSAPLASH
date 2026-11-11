@@ -6,7 +6,8 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
-  background: var(--surface-1);
+  /* 페달 칸과 나머지 칸 사이 간격에는 레인 바탕을 칠하지 않는다(레인 바탕은 캔버스가 칠한다) */
+  background: var(--bg-canvas);
 }
 .play-highway canvas {
   display: block;

@@ -10,7 +10,8 @@ import { ReportEntry } from '@/components/ReportEntry';
 import { LessonResultBand } from '@/components/lesson/LessonResultBand';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
-import { pickPathOf, retryPathOf } from '@/domain/playRetry';
+import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/playRetry';
+import { unlockAudio } from '@/app/bootstrap';
 import { SONGS_SOURCE } from '@/store/songStore';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/components/SheetSnippet';
@@ -19,7 +20,7 @@ import { FeedbackCard } from '@/components/result/FeedbackCard';
 import { JudgeBars } from '@/components/result/JudgeBars';
 import { PadSummaryTable } from '@/components/result/PadSummaryTable';
 import { ResultSummaryCard } from '@/components/result/ResultSummaryCard';
-import { CelebrationFx } from '@/components/result/CelebrationFx';
+import { RecordCelebration } from '@/components/result/RecordCelebration';
 import { useReducedMotion } from 'motion/react';
 import { bestRecordDelta, localPrevBest, recordBadgeOf, type PrevBest } from '@/domain/bestRecord';
 import { TimingHistogram } from '@/components/result/TimingHistogram';
@@ -113,10 +114,17 @@ export function ResultPage() {
   const deletedIds = useDeletedSongIds(log ? [log] : []);
   const songDeleted = log?.songNumericId != null && deletedIds.has(log.songNumericId);
 
+  // 리듬 게임은 곡 선택을 거치지 않고 같은 곡·단계의 카운트다운으로 바로 간다(state.autoStart). 악보 연습은 주소의 start=1이 시작 확인 창을 연다
   const retry = () => {
-    if (log && !songDeleted) navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }));
+    if (!log || songDeleted) return;
+    if (log.mode !== 'SHEET') void unlockAudio(); // 사용자 동작 안에서 오디오 잠금을 풀어 둔다(시작은 화면이 바뀐 뒤 자동으로 일어난다)
+    navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }), log.mode === 'SHEET' ? undefined : { state: RETRY_AUTOSTART_STATE });
   };
 
+  const retryRef = useRef(retry);
+  useEffect(() => {
+    retryRef.current = retry;
+  });
   // Enter = 다시 하기(지운 곡이면 하지 않는다)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -124,7 +132,7 @@ export function ResultPage() {
       // D1: 링크·버튼·입력 칸이 소유한 Enter는 가로채지 않는다
       if (e.isComposing || e.defaultPrevented || isKeyOwnedByTarget(e.target as KeyTarget, e.code)) return;
       e.preventDefault();
-      navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }));
+      retryRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -156,6 +164,7 @@ export function ResultPage() {
   ].filter((x): x is string => x !== null);
   const timingDetail = `빠름 평균 ${h.early === null ? '–' : `${h.early.toFixed(0)}ms`} · 늦음 평균 ${h.late === null ? '–' : `+${h.late.toFixed(0)}ms`} · 판정 폭 ±${log.timing.perfectMs}/±${log.timing.goodMs}ms`;
 
+  const badge = delta ? recordBadgeOf(log, delta) : null;
   return (
     <main className="main">
       <div className="result-page">
@@ -165,7 +174,7 @@ export function ResultPage() {
           titleBadge={songDeleted ? <DeletedSongChip /> : undefined}
           scoreText={isSheet ? undefined : `${s.score.toLocaleString('ko-KR')} / ${s.maxCombo}`}
           accuracyText={`${(s.accuracy * 100).toFixed(1)}%`}
-          recordBadge={delta ? recordBadgeOf(log, delta) : null}
+          recordBadge={badge}
           countUp={
             celebrating
               ? {
@@ -174,8 +183,9 @@ export function ResultPage() {
                 }
               : undefined
           }
-          celebration={celebrating ? <CelebrationFx /> : undefined}
         />
+        {/* 최고 기록 갱신: 화면 전체 색종이 + 가운데 네온 글자(요약 카드 안 작은 폭발 대신) */}
+        {celebrating && <RecordCelebration detail={badge?.text.split(' · ')[1]} />}
         <LessonResultBand log={log} />
 
         <ReportEntry
