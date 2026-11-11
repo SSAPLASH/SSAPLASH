@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SongSummary } from '@/domain/songCatalog';
-import { SongDetailPane } from './SongDetailPane';
+import { SongDetailPane, type QuickStartProps } from './SongDetailPane';
 
 const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   id: 1,
@@ -22,9 +22,17 @@ const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   ...over,
 });
 
+const quick: QuickStartProps = {
+  charts: [{ id: 11, difficulty: 'NORMAL' }],
+  selectedChartId: 11,
+  onSelectChart: () => {},
+  bestByChart: {},
+  onStart: () => {},
+};
+
 const render = (s: SongSummary, over: Partial<Parameters<typeof SongDetailPane>[0]> = {}) =>
   renderToStaticMarkup(
-    <SongDetailPane song={s} presetName={null} chartState="ready" onRetry={() => {}} onPrepare={() => {}} {...over} />,
+    <SongDetailPane song={s} presetName={null} chartState="ready" onRetry={() => {}} quickStart={quick} {...over} />,
   );
 
 describe('SongDetailPane 곡 난이도', () => {
@@ -40,27 +48,37 @@ describe('SongDetailPane 곡 난이도', () => {
   });
 });
 
-describe('SongDetailPane 준비 줄', () => {
-  it('[프리셋 · 준비]가 한 줄이고 스틱 연결 문구가 없다', () => {
-    const html = render(song(), { presetName: '기본 세트' });
-    expect(html).toMatch(/<div class="play-sd-ready"><p class="play-sd-line">프리셋: 기본 세트<\/p><button[^>]*class="[^"]*play-sd-prepare[^"]*"[^>]*>준비<\/button><\/div>/);
-    expect(html).not.toContain('연결');
-    expect(html).not.toContain('키보드 입력');
+describe('SongDetailPane 기록 칸', () => {
+  it('기본은 최고 정확도(퍼센트), 프리셋이 없으면 「시스템 기본」', () => {
+    const html = render(song(), { quickStart: { ...quick, bestByChart: { 11: 0.9684 } } });
+    expect(html).toContain('>최고 정확도<');
+    expect(html).toContain('96.8%');
+    expect(html).toContain('>시스템 기본<');
   });
 
-  it('프리셋이 없으면 「시스템 기본」, 채보 준비 전에는 [준비]가 꺼진다', () => {
+  it('bestKind=score면 「최고 점수」와 천 단위 쉼표 정수, 기록이 없으면 —', () => {
+    const html = render(song(), { quickStart: { ...quick, bestKind: 'score', bestByChart: { 11: 1234567 } } });
+    expect(html).toContain('>최고 점수<');
+    expect(html).not.toContain('최고 정확도');
+    expect(html).toContain('1,234,567');
+    const none = render(song(), { quickStart: { ...quick, bestKind: 'score', bestByChart: {} } });
+    expect(none).toContain('>—<');
+  });
+
+  it('옛 [준비] 모양이 없고 [플레이]만 있으며, 채보 준비 전에는 [플레이]가 꺼진다', () => {
     const html = render(song(), { chartState: 'loading' });
-    expect(html).toContain('프리셋: 시스템 기본');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>준비<\/button>/);
+    expect(html).not.toContain('play-sd-prepare');
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('플레이');
   });
 });
 
 describe('SongDetailPane 비슷한 곡', () => {
   const similar = { song: song({ id: 9, title: '도시의 리듬', artist: '모노레일', songLevel: 'ADVANCED' }), chartId: 90, difficulty: 'NORMAL' as const, line: '리듬이 비슷해요' };
 
-  it('[준비] 줄 아래 구분선과 캡션·제목·「아티스트 · 곡 난이도」·이유·[이 곡 보기]를 그린다', () => {
+  it('[플레이] 줄 아래 구분선과 캡션·제목·「아티스트 · 곡 난이도」·이유·[이 곡 보기]를 그린다', () => {
     const html = render(song(), { similar });
-    expect(html).toMatch(/play-sd-ready.*<\/div><hr class="play-sd-divider"\/><section class="play-sd-similar" aria-label="이 곡과 비슷한 곡">/);
+    expect(html).toMatch(/play-sd-play-row.*<\/div><hr class="play-sd-divider"\/><section class="play-sd-similar" aria-label="이 곡과 비슷한 곡">/);
     expect(html).toContain('>✦ 이 곡과 비슷한 곡<');
     expect(html).toContain('<span class="play-sd-similar-title">도시의 리듬</span>');
     expect(html).toContain('<span class="play-sd-similar-meta">모노레일 · 고급</span>');
