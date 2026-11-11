@@ -393,12 +393,20 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(guide.contains(screen.getByRole('region', { name: '악보 읽는 법' }))).toBe(true);
   });
 
-  it('/play: 안내 줄·구분선이 없다', async () => {
+  it('/play: 제목 → 레인 안내 줄 → 구분선 → 목록 영역 순서, 악보 안내는 없다', async () => {
     showMode('play');
     await screen.findAllByText('목록곡');
+    const title = screen.getByRole('heading', { name: '리듬에 맞춰 도전해요' });
+    const guide = screen.getByRole('region', { name: '리듬 게임 안내' });
+    const sep = screen.getByRole('separator');
+    const grid = document.querySelector('.play-sp-grid') as HTMLElement;
+    expect(follows(title, guide)).toBe(true);
+    expect(follows(guide, sep)).toBe(true);
+    expect(follows(sep, grid)).toBe(true);
+    // 안내 줄 오른쪽 칸은 레인 읽는 법 카드
+    expect(guide.contains(screen.getByRole('region', { name: '레인 읽는 법' }))).toBe(true);
     expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
     expect(screen.queryByRole('region', { name: '악보 읽는 법' })).toBeNull();
-    expect(screen.queryByRole('separator')).toBeNull();
   });
 
   it('/sheet: 입문 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
