@@ -198,29 +198,16 @@ export function paintAnchorZone(ctx: CanvasRenderingContext2D, hand: 0 | 1, pad:
   ctx.restore();
 }
 
-/** 내 포인터: 손 출발점에서 스틱이 가리키는 끝점까지 선 + 끝의 L·R 표식 */
-export function paintStick(ctx: CanvasRenderingContext2D, hand: 0 | 1, from: { sx: number; sy: number }, to: { sx: number; sy: number }): void {
-  const color = HAND_COLORS[hand];
+/** 내 포인터: 스틱이 가리키는 끝점에 손 색 원과 L·R 글자 */
+export function paintStickTip(ctx: CanvasRenderingContext2D, hand: 0 | 1, to: { sx: number; sy: number }): void {
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 4;
-  ctx.lineCap = 'round';
-  ctx.globalAlpha = 0.9;
-  ctx.beginPath();
-  ctx.moveTo(from.sx, from.sy);
-  ctx.lineTo(to.sx, to.sy);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  ctx.beginPath();
-  ctx.arc(from.sx, from.sy, 6, 0, TAU);
-  ctx.fillStyle = '#2b323c';
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.stroke();
   ctx.beginPath();
   ctx.arc(to.sx, to.sy, 9, 0, TAU);
-  ctx.fillStyle = color;
+  ctx.fillStyle = HAND_COLORS[hand];
+  ctx.globalAlpha = 0.9;
   ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2;
   ctx.strokeStyle = '#0e1320';
   ctx.stroke();
   ctx.fillStyle = '#0e1320';

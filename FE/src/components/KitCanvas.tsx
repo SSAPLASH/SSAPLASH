@@ -7,9 +7,9 @@ import type { HitFx, Pose } from '@/domain/events';
 import type { HandAnchorSet } from '@/domain/calibration';
 import { DEFAULT_ANGLE_RANGE, type AngleRange } from '@/domain/kitMapping';
 import { HAND_ORIGINS, anchorToPoint } from '@/domain/kitModel';
-import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseOrigin, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kitPerspective';
+import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kitPerspective';
 import type { KeyMap } from '@/domain/keyMap';
-import { paintAnchorZone, paintFloor, paintShadow, paintSolidHitFx, paintSolidPad, paintStick } from './kitPerspectiveDraw';
+import { paintAnchorZone, paintFloor, paintShadow, paintSolidHitFx, paintSolidPad, paintStickTip } from './kitPerspectiveDraw';
 
 export interface KitCanvasProps {
   layout: KitLayout;
@@ -145,11 +145,11 @@ export function KitCanvas(props: KitCanvasProps) {
         }
       }
 
-      // 자세 마커: 손 출발점에서 스틱이 가리키는 끝점까지
+      // 자세 마커: 스틱이 가리키는 끝점에 L·R 표식만 그린다(손에서 잇는 선은 없다)
       if (p.showPoses && p.poses) {
         p.poses.forEach((pose, i) => {
           const from = p.posesFromCenter ? 'center' : (i as 0 | 1);
-          paintStick(ctx, i as 0 | 1, cam.project(poseOrigin(from)), cam.project(poseTip(from, pose, shapes)));
+          paintStickTip(ctx, i as 0 | 1, cam.project(poseTip(from, pose, shapes)));
         });
       }
       raf = requestAnimationFrame(draw);
