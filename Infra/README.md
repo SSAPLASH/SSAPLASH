@@ -179,12 +179,23 @@ AWS S3를 쓸 수 없어 서버 안에 S3 호환 스토리지(SeaweedFS)를 Comp
 **켜는 순서** (실데이터 보고서, 동의 화면 배포, 동의 문구 확정이 끝난 뒤)
 
 0. 동의 화면을 연다. `SIGNUP_CONSENT_RECOMMENDATION_VERSIONS`를 넣은 뒤 `FE_VITE_RECOMMENDATION_CONSENT_ENABLED=true`로 `web` 이미지를 다시 빌드한다. 빌드 때 고정되는 값이라 재시작만으로는 바뀌지 않는다.
-1. 쓸 모델 버전을 `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`에 넣는다. 비어 있으면 적재를 모두 거절한다. 값은 배치 출력의 `r3-...`이다.
+1. 쓸 모델 버전을 `RECOMMEND_R3_ACCEPTED_MODEL_VERSIONS`에 넣는다. 비어 있으면 적재를 모두 거절한다. 값은 배치 출력의 `r3-...`이다. 모델 버전은 데이터와 관계없이 변형과 하이퍼파라미터로만 정해져서, 동의한 기록이 없어도 미리 넣어 둘 수 있다(배치 기본값 `base`·후보 50·seed 0이면 `r3-base-0830cf92`).
 2. 그림자 단계: `RECOMMEND_R3_ENABLED=true`, `RECOMMEND_R3_ROLLOUT_PERCENT=0`으로 두고 `--upload`로 적재한다. 응답은 아직 R1이다.
 3. `RECOMMEND_R3_ROLLOUT_PERCENT`를 5부터 올린다. 노출은 `recommendation_items.strategy`로 구분한다.
 4. 문제가 생기면 `RECOMMEND_R3_ENABLED=false`로 바꾸고 `api`를 다시 띄운다. 코드 배포가 필요 없다.
 
-처음에는 사람이 수동으로 돌리고, 안정되면 GitLab 예약으로 옮긴다. 후보는 7일이 지나면 쓰이지 않으므로 그보다 자주 돌려야 한다.
+**매일 실행(GitLab 예약):** 후보는 7일이 지나면 쓰이지 않으므로 `.gitlab-ci.yml`의 `recommend-batch` job으로 매일 돌린다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 예약 등록 | Build > Pipeline schedules에서 대상 브랜치 `main`, 매일 한 번, 변수 `RECOMMEND_BATCH=true`. 보정 배치(`COACH_CALIBRATION`)와 다른 예약으로 만든다 |
+| 수동 실행 | Build > Pipelines > Run pipeline에서 브랜치 `main`, 변수 `RECOMMEND_BATCH=true` |
+| 출처 단계 | 변수 `RECOMMEND_STAGE`(기본 `P1`: 내부 계정 기록). 일반 사용자 기록은 `P2`이고 `RECOMMEND_P2_APPROVAL`에 승인 근거(문서·결정 번호)를 넣어야 돈다 |
+| 하는 일 | 서버의 `/srv/airdrum/Infra`에서 `recommend-batch --from-views --upload --mlflow`. 배포와 같은 러너·`resource_group`이라 배포·롤백과 겹치지 않는다 |
+| 기록 없음 | 동의한 사용자의 기록이 아직 없으면 배치가 "interactions.csv에 행이 없습니다"로 멈춘다. 이때는 적재 없이 job을 성공으로 끝낸다(모두 R1 추천) |
+| 실패 알림 | 그 밖의 실패(입력 형식, 적재 거절, 시간 초과)는 job이 실패하고 GitLab이 알린다 |
+
+처음 한 번은 수동 실행으로 상태 줄(`recommend-batch status=OK`)과 적재 결과를 확인한 뒤 예약을 켠다.
 
 **가명 키 전환(V45 배포 뒤 한 번):** 서버에서 `ALTER ROLE recommend_export RESET app.recommend_key_secret;`을 실행하고 `.env`에서 `RECOMMEND_KEY_SECRET`을 지운다. 그다음 `recommend_export`로 `SHOW app.recommend_key_secret`이 오류이거나 빈 값이고, `SELECT 1 FROM recommendation_user_keys LIMIT 1`이 권한 오류인지 확인한다.
 
