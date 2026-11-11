@@ -20,6 +20,8 @@ export interface RecordedRow {
   dir: 'in' | 'out';
   transport: string;
   stick: 0 | 1 | null;
+  /** flags role(0·1 손, 2·3 페달). OUT·role 없는 패킷은 null. 이전 파일에는 없다 */
+  role?: number | null;
   hex: string;
   decoded: unknown;
   outType?: number;
@@ -42,7 +44,7 @@ const typedArrayReplacer = (_key: string, value: unknown): unknown =>
   value instanceof Uint8Array || value instanceof Int16Array ? Array.from(value) : value;
 
 export function serializeRow(row: LogRow): string {
-  const base = { t: row.t, dir: row.dir, transport: row.transport, stick: row.stick, hex: bytesToHex(row.bytes) };
+  const base = { t: row.t, dir: row.dir, transport: row.transport, stick: row.stick, role: row.role, hex: bytesToHex(row.bytes) };
   const obj = row.dir === 'out' ? { ...base, decoded: null, outType: row.outType } : { ...base, decoded: row.decoded };
   return JSON.stringify(obj, typedArrayReplacer);
 }

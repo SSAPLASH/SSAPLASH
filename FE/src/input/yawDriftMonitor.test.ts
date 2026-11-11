@@ -4,7 +4,7 @@ import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domai
 import type { PadId } from '@/domain/pads';
 import { BaseInputSource } from './InputSource';
 import { packetTap } from './packetTap';
-import { yawDriftMonitor } from './yawDriftMonitor';
+import { yawDriftMonitor, type YawCorrection } from './yawDriftMonitor';
 
 /** BLE형: stickId를 받아 기록한다 */
 class MockSource extends BaseInputSource {
@@ -291,5 +291,73 @@ describe('yawDriftMonitor pause / resume / correct (PLAY-004)', () => {
     src.set('connected');
     yawDriftMonitor.correct(0, 5);
     expect(last[0]).toBeNull();
+  });
+});
+
+describe('yawDriftMonitor onCorrection (PLAY-002 실연주 진단)', () => {
+  const listen = () => {
+    const got: YawCorrection[] = [];
+    yawDriftMonitor.onCorrection((c) => got.push(c));
+    return got;
+  };
+
+  it('드리프트 보정: 보낼 때 1회, 그때 링 샘플·중앙값·MAD와 sentDeg = prevDeg − medianDeg', () => {
+    const got = listen();
+    const src = connected();
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(1);
+    expect(got).toHaveLength(1);
+    const c = got[0];
+    expect(c).toMatchObject({ stickId: 0, reason: 'drift', prevDeg: 0 });
+    // 8번째 샘플에서 보냈다
+    expect(c.samples).toHaveLength(8);
+    c.samples.forEach((v, k) => expect(v).toBeCloseTo(NINE_PLUS6[k]));
+    expect(c.medianDeg).toBeCloseTo(6);
+    expect(c.madDeg).not.toBeNull();
+    expect(c.madDeg!).toBeLessThan(1);
+    expect(c.sentDeg).toBeCloseTo(c.prevDeg - c.medianDeg!);
+    expect(c.sentDeg).toBeCloseTo(sentDeg(src.sent[0].bytes), 1);
+  });
+
+  it('보내지 않으면(샘플 부족·쿨다운) 부르지 않는다', () => {
+    const got = listen();
+    connected();
+    feed([6, 6, 6]);
+    expect(got).toHaveLength(0);
+    feed(NINE_PLUS6);
+    vi.advanceTimersByTime(5000);
+    feed(NINE_PLUS6);
+    expect(got).toHaveLength(1);
+  });
+
+  it('재정렬(correct): realign, medianDeg는 요청 오차, 샘플은 빈 배열. 두 번째는 prevDeg가 앞선 적용값', () => {
+    const got = listen();
+    connected();
+    yawDriftMonitor.correct(1, 12);
+    yawDriftMonitor.correct(1, 3);
+    expect(got).toEqual([
+      { stickId: 1, reason: 'realign', prevDeg: 0, sentDeg: -12, medianDeg: 12, madDeg: null, samples: [] },
+      { stickId: 1, reason: 'realign', prevDeg: -12, sentDeg: -15, medianDeg: 3, madDeg: null, samples: [] },
+    ]);
+  });
+
+  it('연결 직후 0 초기화(onConnected): connected, 보내기 전 적용값을 싣는다', () => {
+    const got = listen();
+    connected();
+    yawDriftMonitor.correct(0, 5);
+    got.length = 0;
+    yawDriftMonitor.onConnected(0);
+    expect(got).toEqual([{ stickId: 0, reason: 'connected', prevDeg: -5, sentDeg: 0, medianDeg: null, madDeg: null, samples: [] }]);
+  });
+
+  it('보낼 수 없는 소스에서는 부르지 않고, resetAll이 콜백을 지운다', () => {
+    const got = listen();
+    yawDriftMonitor.correct(0, 5);
+    yawDriftMonitor.onConnected(0);
+    expect(got).toHaveLength(0);
+    yawDriftMonitor.resetAll();
+    connected();
+    yawDriftMonitor.correct(0, 5);
+    expect(got).toHaveLength(0);
   });
 });

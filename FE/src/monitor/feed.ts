@@ -261,7 +261,8 @@ export class MonitorFeed {
           id: this.nextId++,
           dir: r.dir,
           transport: r.transport as PacketRecord['transport'],
-          stickId: r.stick,
+          // 직렬(동글) 패킷은 원래 손을 모르고 role에서 유도한다. 이전 파일은 페달이 stick에 role & 1로 적혀 있어 다시 유도하게 비운다
+          stickId: r.transport === 'serial' ? null : r.stick,
           bytes: item.bytes,
           recvTime: wallT,
         };

@@ -55,6 +55,7 @@ import { readCurrentConsent } from '@/app/dataConsent';
 import { startPlaySync } from '@/app/playSync';
 import { disarm, finishSong, setLocked } from '@/app/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
+import { diagSessionOpts } from '@/app/diagSessionOpts';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/app/sources';
@@ -587,7 +588,7 @@ function SheetPageBody() {
     clockRef.current = clock;
     clock.begin();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
-    diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
+    diagSessionStart(ss, 'SHEET', diagSessionOpts());
     setPlaySession(ss);
     return true;
   }, [acc, resetRun, clearCoachLine, showCoachLine]);
@@ -619,7 +620,7 @@ function SheetPageBody() {
     if (!clock || !ss) return;
     // 재시작은 카운트인부터. 메트로놈 잠금은 유지한다
     clock.restart();
-    diagSessionStart(ss, 'SHEET', { windows: useSettings.getState().timing, audioOffsetMs: useSettings.getState().audioOffsetMs });
+    diagSessionStart(ss, 'SHEET', diagSessionOpts());
     resetRun(ss);
     coachRef.current?.reset();
     llmRef.current?.cancel(crypto.randomUUID());

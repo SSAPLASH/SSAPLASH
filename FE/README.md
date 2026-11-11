@@ -631,13 +631,22 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 
 연주 화면(`/play`·`/sheet`)을 띄운 채 다른 창에서 ④ 판정·⑤ 채점·⑥ 출력과 패킷을 실시간으로 본다. `VITE_MONITOR=true` 빌드에서만 동작한다.
 
-1. 연주 창 상단 바의 **모니터 새 창** 버튼을 누른다(`/monitor/stick?follow=1`이 팝업으로 열리고 따라보기로 시작). 이미 열린 모니터는 상단 바 **입력 방식**에서 "따라보기"를 고르면 된다. "직접 연결"로 돌아오면 저장된 센서를 다시 연다.
+1. 연주 창 상단 바의 **모니터 새 창** 버튼을 누른다(`/monitor/stick?follow=1`이 팝업으로 열리고 따라보기로 시작). 이 버튼과 **채보 확인 재생** 토글은 개발 서버(`npm run dev`)에만 있다. 배포 빌드에서는 새 탭에 주소를 직접 연다(아래 "배포 사이트에서 실연주 녹화"). 이미 열린 모니터는 상단 바 **입력 방식**에서 "따라보기"를 고르면 된다. "직접 연결"로 돌아오면 저장된 센서를 다시 연다.
 2. 상단 바에 `연주 창: {소스} · 연결됨`이 보이면 정상이다. 연주 창이 없거나 hello(1초 주기)가 3초 넘게 없으면 "연주 창 없음". 연주 창이 여러 개면 가장 최근 hello를 보낸 창 하나만 따른다.
 3. **같은 브라우저·같은 출처(origin)의 창끼리만** 된다(BroadcastChannel `ssaplash-monitor`). 다른 PC·기기에서는 볼 수 없다.
 4. **읽기 전용**이다. 따라보기 중 이 창은 센서를 열지 않고(설정의 센서 종류는 그대로), 모의 스틱·명령 송신·파라미터 쓰기는 꺼진다. 소스 연결은 연주 창이 가진다.
 5. 시각은 두 창의 `performance.timeOrigin` 차이만큼 옮겨 이 창 기준으로 보인다. 시계 오프셋·전송 통계는 연주 창이 hello로 보낸 값이다.
 
-relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모니터가 1초마다 보내는 `watch`가 있는 동안(마지막 watch 후 3초)만 packetTap·diagTap을 구독하고, 이벤트를 50ms마다 한 묶음으로 보낸다. watch가 끊기면 구독과 타이머를 모두 푼다. `/monitor` 경로의 창은 응답하지 않는다. `VITE_MONITOR` 미설정 빌드에는 relay·모니터 청크와 "모니터 새 창" 버튼이 들어가지 않는다.
+relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모니터가 1초마다 보내는 `watch`가 있는 동안(마지막 watch 후 3초)만 packetTap·diagTap을 구독하고, 이벤트를 50ms마다 한 묶음으로 보낸다. watch가 끊기면 구독과 타이머를 모두 푼다. `/monitor` 경로의 창은 응답하지 않는다. `VITE_MONITOR` 미설정 빌드에는 relay·모니터 청크가 들어가지 않는다. 상단 셸의 "모니터 새 창" 버튼과 "채보 확인 재생" 토글은 `VITE_MONITOR=true`이면서 개발 서버(`import.meta.env.DEV`)일 때만 있다 — 모니터를 켠 배포 빌드에서도 일반 사용자 화면에는 보이지 않는다.
+
+#### 배포 사이트에서 실연주 녹화
+
+배포 web 이미지를 `VITE_MONITOR=true`로 빌드하면(Infra 서버 `.env`의 `FE_VITE_MONITOR=true` → `docker-compose.yml` web 빌드 인자) 배포 사이트의 실제 곡을 치면서 패킷·판정을 한 파일로 받는다. 주소는 네비게이션에 없고 로그인한 계정만 열린다.
+
+1. 로그인 → 탭 1: 세팅에서 스틱 연결 → 곡 선택 화면까지.
+2. 탭 2(같은 브라우저): `/monitor/stick?follow=1`. 상단 바 입력 방식 "따라보기", `연주 창: … · 연결됨` 확인.
+3. 탭 2 [녹화 시작] → 탭 1에서 연주 → 탭 2 [녹화 정지·저장] → `stick-YYYYMMDD-HHMMSS.jsonl`.
+4. **모니터 탭은 곡을 시작하기 전에 열어 둔다.** 연주 창은 모니터가 보고 있는 동안만 중계하므로 곡 시작 줄(`session`·`notes`·`anchors`)은 그때 모니터가 붙어 있어야 남는다.
 
 ### 동작 원리
 
@@ -657,10 +666,18 @@ relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모�
 | 줄 | 내용 |
 | --- | --- |
 | 1 | meta — `startedAt`(ISO), `source`(종류·주소), `firmware`(마지막 STATUS `major.minor`), `build`(마지막 `BOOT` LOG 원문), `profile`(패드별 중심·반경), `note` |
-| 2~ | 패킷 — `t`(`performance.now()` ms), `dir`(`in`/`out`), `transport`, `stick`, `hex`, `decoded`(`decodePacket` 결과, 수신분만). 수신 순서 그대로, 송신·`bridgeStats` 포함 |
-| 패킷 줄 사이 | 진단 — `{"kind":"diag","t":<ev.t>,"ev":{…t를 뺀 이벤트}}`. `resolved`·`judged`·`missed`·`session`·`notes`(diagTap 이벤트). 직접 연결·따라보기 모두 기록하고 패킷과 도착 순서대로 섞인다. `resolved`의 `tAudio`는 발행 뒤에 채워지므로 정지 시점에 직렬화한다 |
+| 2~ | 패킷 — `t`(`performance.now()` ms), `dir`(`in`/`out`), `transport`, `stick`, `role`, `hex`, `decoded`(`decodePacket` 결과, 수신분만). 수신 순서 그대로, 송신·`bridgeStats` 포함. `stick`은 손(role 0·1)만 채우고 페달(role 2·3)은 `null`, `role`은 수신 패킷의 flags role(0 왼손·1 오른손·2·3 페달, role 없는 패킷·송신은 `null`). 손·페달 구분은 `role`로 한다 |
+| 패킷 줄 사이 | 진단 — `{"kind":"diag","t":<ev.t>,"ev":{…t를 뺀 이벤트}}`. `resolved`·`judged`·`missed`·`session`·`notes`·`anchors`·`clock`·`yawCorrect` 등(diagTap 이벤트). 직접 연결·따라보기 모두 기록하고 패킷과 도착 순서대로 섞인다. `resolved`의 `tAudio`는 발행 뒤에 채워지므로 정지 시점에 직렬화한다 |
 
-meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식이다. 되읽기(`parseJsonl`)는 `kind`가 없으면 패킷 행, `diag`면 진단, 그 밖의 `kind`는 건너뛰므로 이전 형식 파일도 그대로 읽힌다(진단은 없음).
+meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식이다. 되읽기(`parseJsonl`)는 `kind`가 없으면 패킷 행, `diag`면 진단, 그 밖의 `kind`는 건너뛰므로 이전 형식 파일도 그대로 읽힌다(진단은 없음). `role`이 없는 이전 파일도 그대로 읽고, 재생할 때 직렬(동글) 패킷의 손은 패킷의 role에서 다시 구하므로 페달이 손 통계에 섞이지 않는다.
+
+실연주 진단용 줄(설계 PLAY-002 live-play-diagnostics). 연주 창이 내고 모니터 화면은 쓰지 않는다 — 녹화 파일에만 남는다. 모르는 `type`은 되읽기·판정 로그·요약이 건너뛴다.
+
+| `type` | 언제 | 필드 |
+| --- | --- | --- |
+| `anchors` | 곡 시작(재시작 포함)마다 `session` start·`notes` 뒤 1회. `/play`·`/sheet` | `hands[2]`(0 왼손·1 오른손, 보정 안 한 손은 `null`) 원소 `{pad, pitch, yaw, radius, samples, spread}` — `radius`는 판정 프로필과 같은 값(자동 반경·override 반영). `calibratedAt`(ms), `presetId` |
+| `clock` | 센서 소스가 켜져 있고 모니터가 보는 동안 10초마다 + 곡 시작 직후 1회(`app/clockDiag`) | `offsets[4]` = role 0·1·2·3의 브라우저 − 센서 오프셋(ms, 미동기·미연결 `null`), `source`(센서 종류) |
+| `yawCorrect` | `yawDriftMonitor`가 `SET_YAW_OFFSET`을 보낼 때(`onCorrection`) | `stickId`, `reason`(`drift` 자동 보정 · `realign` 재정렬 · `connected` 연결 직후 0 초기화), `prevDeg`(보내기 전 적용값), `sentDeg`(보낸 절대값 = wrap180(`prevDeg` − `medianDeg`)), `medianDeg`(`drift` 링 중앙값 · `realign` 요청 오차 · `connected` `null`), `madDeg`(`drift`만), `samples[]`(`drift`만: 그때 링의 스틱 yaw − 앵커 yaw). 적용 확인은 PARAM_ACK `0x21` 패킷 줄 |
 
 #### 녹화 요약
 
