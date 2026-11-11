@@ -27,6 +27,7 @@ import { useReconnect } from '@/store/reconnectStore';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { freeStage } from '@/domain/freeStage';
+import { deviceGroupName } from '@/domain/devices';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources';
@@ -136,7 +137,7 @@ export function FreePlayPage() {
   const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
 
   let guide: React.ReactNode;
-  if (empty) guide = '연결 대기 중 · 스틱을 연결해 주세요';
+  if (empty) guide = `연결 대기 중 · ${deviceGroupName(pedal !== undefined)}을 연결해 주세요`;
   else if (sensorKind === 'none') guide = <KeyGuide />;
   else if (desc?.usageGuide) guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
   else guide = '스틱을 움직여 자유롭게 연주하세요';
