@@ -147,7 +147,7 @@ describe('readDeviceHint (검증 추가 발견 2)', () => {
 
   it('연결 개념이 있는 센서인데 스틱이 하나도 없으면 스틱 안내', async () => {
     const { readDeviceHint } = await import('./lesson');
-    expect(readDeviceHint({ ...base })).toBe('스틱이 연결되지 않았어요. 아래 드럼 그림을 눌러도 돼요.');
+    expect(readDeviceHint({ ...base })).toBe('스틱을 연결해 주세요. 아래 드럼 그림을 눌러도 돼요.');
     expect(readDeviceHint({ ...base, sticks: [true, false] })).toBeNull();
   });
 
@@ -160,7 +160,7 @@ describe('readDeviceHint (검증 추가 발견 2)', () => {
   it('동글이면 발로 치는 패드가 있는 레슨에서만 페달 연결을 본다', async () => {
     const { readDeviceHint } = await import('./lesson');
     const pedalOff = { ...base, sensorKind: 'webserial' as const, sticks: [true, true] as [boolean, boolean], pedal: [false, false] as [boolean, boolean] };
-    expect(readDeviceHint({ ...pedalOff, pads: ['KICK'] })).toBe('페달이 연결되지 않았어요. 아래 드럼 그림을 눌러도 돼요.');
+    expect(readDeviceHint({ ...pedalOff, pads: ['KICK'] })).toBe('페달을 연결해 주세요. 아래 드럼 그림을 눌러도 돼요.');
     expect(readDeviceHint({ ...pedalOff, pads: ['SNARE'] })).toBeNull();
     expect(readDeviceHint({ ...pedalOff, sensorKind: 'imu', pads: ['KICK'] })).toBeNull();
   });

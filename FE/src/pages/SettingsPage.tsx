@@ -4,6 +4,8 @@
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { deviceGroupName, deviceListText } from '@/domain/devices';
+import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { ConnectionDots } from '@/components/stick/ConnectionDots';
 import { KitSkinCarousel } from '@/components/settings/KitSkinCarousel';
 import { HitFxPicker } from '@/components/fx/HitFxPicker';
@@ -69,6 +71,7 @@ export function SettingsPage() {
   const setTimingBar = useSettings((s) => s.setTimingBar);
 
   const connected = useLive((l) => l.connected);
+  const pedalPair = useLive((l) => l.pedal.connected);
   const referenceSetAt = useLive((l) => l.referenceSetAt);
   const presetItems = usePresets((p) => p.items);
 
@@ -121,8 +124,10 @@ export function SettingsPage() {
 
   const sensorMode = sensorKind !== 'none';
   const [left, right] = connected;
-  const connText = !sensorMode ? '키보드 전용' : left && right ? '연결됨' : left || right ? '한 손만 연결됨' : '연결 안 됨';
-  const connTone = sensorMode && left && right ? 'good' : sensorMode ? 'warn' : '';
+  // 동글 소스만 페달을 본다(domain/devices의 E4 규칙). 페달이 빠져도 경고로 본다
+  const pedalOn = pedalRequired(sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined;
+  const connText = !sensorMode ? '키보드 전용' : deviceListText({ left, right, pedal: pedalOn });
+  const connTone = sensorMode && left && right && pedalOn !== false ? 'good' : sensorMode ? 'warn' : '';
   const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
   const presetValue = sensorMode ? `${presetName} · ${referenceSetAt !== null ? '보정 완료' : '보정 필요'}` : presetName;
 
@@ -211,7 +216,7 @@ export function SettingsPage() {
           )}
 
           <Card padding="lg" title="기기">
-            <SettingRow label="스틱 연결" help="왼손·오른손 스틱 상태">
+            <SettingRow label={`${deviceGroupName(pedalOn !== undefined)} 연결`} help={pedalOn !== undefined ? '왼손·오른손 스틱과 페달 상태' : '왼손·오른손 스틱 상태'}>
               {() => (
                 <div className="settings-conn">
                   {sensorMode && <ConnectionDots left={left} right={right} />}

@@ -46,7 +46,7 @@ function beat8(): LabLoop {
   return { loopMs: 2000, events: ev };
 }
 
-/** 16분 필인: 한 마디 2000ms, 16분(125ms) 16타. 스네어 → 탐1 → 탐2 → 플로어탐으로 내려가며 점점 세게 */
+/** 16분 필인: 한 마디 2000ms, 16분(125ms) 16타. 스네어 → 스몰탐 → 미드탐 → 플로어탐으로 내려가며 점점 세게 */
 function fill16(): LabLoop {
   const pads: PadId[] = ['SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM'];
   const ev: LabEvent[] = [];

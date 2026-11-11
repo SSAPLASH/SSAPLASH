@@ -40,7 +40,8 @@ import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, typ
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { calibrationReady, readiness } from '@/domain/readiness';
-import { pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
+import { deviceGroupName, deviceListText } from '@/domain/devices';
+import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
   dongleLine,
   referenceHoldingLine,
@@ -431,14 +432,13 @@ export function SetupPage() {
   };
 
   // ---- ① 연결 상태 문구(자유 연주와 같은 표현) ----
+  const withPedal = pedalRequired(s.sensorKind);
   const sensorDesc = sensorRegistry.get(s.sensorKind);
   let connText: string;
   if (!sensorMode) connText = '키보드만 사용합니다.';
   else if (sourceState === 'error') connText = `오류: ${sourceMessage ?? '알 수 없음'}`;
   else if (sourceState === 'connecting') connText = '연결 중…';
-  else if (anyConnected)
-    connText = `연결됨 (${connected[0] ? '왼손' : ''}${connected[0] && connected[1] ? '·' : ''}${connected[1] ? '오른손' : ''})`;
-  else connText = '연결 안 됨';
+  else connText = deviceListText({ left: connected[0], right: connected[1], pedal: withPedal ? pedalConnected({ connected: pedal }) : undefined });
 
   // ---- 상태 타일 공통(Setup / StatusTile): 누르면 단계 팝업을 연다. 보정 중에는 ② 팝업을 열 수 없다 ----
   const openStep = (id: SetupStepId) => setStepDialog(id);
@@ -494,7 +494,7 @@ export function SetupPage() {
         {/* ① 스틱 연결 */}
         <StatusTile
           id={STEP_DOM_ID.stick}
-          title="스틱 연결"
+          title={`${deviceGroupName(withPedal)} 연결`}
           status={stepOf('stick').status}
           statusText={tileStatusText('stick')}
           summary={stepOf('stick').summary}
@@ -519,7 +519,7 @@ export function SetupPage() {
       </div>
 
       {stepDialog === 'stick' && (
-        <StepDialog title="스틱 연결" titleId="step-dialog-stick" onClose={closeStep}>
+        <StepDialog title={`${deviceGroupName(withPedal)} 연결`} titleId="step-dialog-stick" onClose={closeStep}>
           <div className="setup-col">
             {dongleState !== undefined && <DongleRow state={dongleState} connected={connected} busy={sourceState === 'connecting'} />}
             {sensorMode && (

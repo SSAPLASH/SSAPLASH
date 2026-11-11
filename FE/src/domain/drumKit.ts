@@ -1,6 +1,6 @@
 // 연주 화면 드럼 킷(Figma Play / DrumKit 313:1381) 고정 배치·상태 상수·크기 계산.
 // 판정용 배치(kitLayout)와는 별개로, 표시 전용이다. 그리기는 components/drum이 한다.
-import type { PadId } from './pads';
+import { PAD_META, type PadId } from './pads';
 
 /** pedal은 하이햇 페달(발판). 고정 8패드 킷에는 없고 드럼 세팅의 자유 틀(DrumKit frame)에서만 그린다 */
 export type PadShape = 'drum' | 'cymbal' | 'kick' | 'pedal';
@@ -51,31 +51,31 @@ export const JUDGE_MS = 400;
 
 /** 패드 8개. 배열 순서가 겹침 순서(뒤 → 앞)다. HIHAT_PEDAL은 패드가 없다 */
 export const DRUM_KIT_PADS: readonly DrumKitPad[] = [
-  { pad: 'CRASH', shape: 'cymbal', left: 60, top: 0, w: 150, h: 140.6, label: '크래시' },
-  { pad: 'RIDE', shape: 'cymbal', left: 590, top: 0, w: 160, h: 150, label: '라이드' },
-  { pad: 'SMALL_TOM', shape: 'drum', left: 235, top: 6, w: 120, h: 112.5, label: '탐1' },
-  { pad: 'MID_TOM', shape: 'drum', left: 405, top: 6, w: 120, h: 112.5, label: '탐2' },
-  { pad: 'HIHAT', shape: 'cymbal', left: 20, top: 110, w: 130, h: 121.9, label: '하이햇' },
-  { pad: 'KICK', shape: 'kick', left: 310, top: 118, w: 140, h: 148.8, label: '킥' },
-  { pad: 'SNARE', shape: 'drum', left: 180, top: 140, w: 150, h: 140.6, label: '스네어' },
-  { pad: 'FLOOR_TOM', shape: 'drum', left: 520, top: 130, w: 170, h: 159.4, label: '플로어탐' },
+  { pad: 'CRASH', shape: 'cymbal', left: 60, top: 0, w: 150, h: 140.6, label: PAD_META.CRASH.label },
+  { pad: 'RIDE', shape: 'cymbal', left: 590, top: 0, w: 160, h: 150, label: PAD_META.RIDE.label },
+  { pad: 'SMALL_TOM', shape: 'drum', left: 235, top: 6, w: 120, h: 112.5, label: PAD_META.SMALL_TOM.label },
+  { pad: 'MID_TOM', shape: 'drum', left: 405, top: 6, w: 120, h: 112.5, label: PAD_META.MID_TOM.label },
+  { pad: 'HIHAT', shape: 'cymbal', left: 20, top: 110, w: 130, h: 121.9, label: PAD_META.HIHAT.label },
+  { pad: 'KICK', shape: 'kick', left: 310, top: 118, w: 140, h: 148.8, label: PAD_META.KICK.label },
+  { pad: 'SNARE', shape: 'drum', left: 180, top: 140, w: 150, h: 140.6, label: PAD_META.SNARE.label },
+  { pad: 'FLOOR_TOM', shape: 'drum', left: 520, top: 130, w: 170, h: 159.4, label: PAD_META.FLOOR_TOM.label },
 ];
 
-/** 원 중심(cx, cy)·지름 d → 좌상단 left/top, w = h = d */
-function flatPad(pad: PadId, shape: PadShape, label: string, tag: string, cx: number, cy: number, d: number): DrumKitPad {
-  return { pad, shape, left: cx - d / 2, top: cy - d / 2, w: d, h: d, label, tag };
+/** 원 중심(cx, cy)·지름 d → 좌상단 left/top, w = h = d. 라벨·태그는 PAD_META에서 가져온다 */
+function flatPad(pad: PadId, shape: PadShape, cx: number, cy: number, d: number): DrumKitPad {
+  return { pad, shape, left: cx - d / 2, top: cy - d / 2, w: d, h: d, label: PAD_META[pad].label, tag: PAD_META[pad].short };
 }
 
 /** 전자·네온 공용 평면 배치(2D라 겹침 없음, 순서는 DRUM_KIT_PADS와 같다). 원본 760×300 기준 */
 export const DRUM_KIT_FLAT_PADS: readonly DrumKitPad[] = [
-  flatPad('CRASH', 'cymbal', '크래시', 'CR', 140, 70, 136),
-  flatPad('RIDE', 'cymbal', '라이드', 'RD', 670, 95, 168),
-  flatPad('SMALL_TOM', 'drum', '탐1', 'T1', 300, 65, 116),
-  flatPad('MID_TOM', 'drum', '탐2', 'T2', 440, 65, 116),
-  flatPad('HIHAT', 'cymbal', '하이햇', 'HH', 75, 200, 128),
-  flatPad('KICK', 'kick', '킥', 'KK', 390, 215, 156),
-  flatPad('SNARE', 'drum', '스네어', 'SN', 240, 210, 148),
-  flatPad('FLOOR_TOM', 'drum', '플로어탐', 'FT', 545, 205, 156),
+  flatPad('CRASH', 'cymbal', 140, 70, 136),
+  flatPad('RIDE', 'cymbal', 670, 95, 168),
+  flatPad('SMALL_TOM', 'drum', 300, 65, 116),
+  flatPad('MID_TOM', 'drum', 440, 65, 116),
+  flatPad('HIHAT', 'cymbal', 75, 200, 128),
+  flatPad('KICK', 'kick', 390, 215, 156),
+  flatPad('SNARE', 'drum', 240, 210, 148),
+  flatPad('FLOOR_TOM', 'drum', 545, 205, 156),
 ];
 
 /** 스킨에 맞는 8패드 배치표. 실물은 기존 표 그대로 */

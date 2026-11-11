@@ -13,6 +13,7 @@ import {
   labelFontSize,
   visualPadOf,
 } from './drumKit';
+import { PAD_META } from './pads';
 
 describe('DRUM_KIT_PADS (설계 3-3 표)', () => {
   it('8개이고 순서가 겹침 순서(뒤 → 앞)다', () => {
@@ -29,8 +30,8 @@ describe('DRUM_KIT_PADS (설계 3-3 표)', () => {
     const table = [
       ['CRASH', 'cymbal', 60, 0, 150, 140.6, '크래시'],
       ['RIDE', 'cymbal', 590, 0, 160, 150, '라이드'],
-      ['SMALL_TOM', 'drum', 235, 6, 120, 112.5, '탐1'],
-      ['MID_TOM', 'drum', 405, 6, 120, 112.5, '탐2'],
+      ['SMALL_TOM', 'drum', 235, 6, 120, 112.5, '스몰탐'],
+      ['MID_TOM', 'drum', 405, 6, 120, 112.5, '미드탐'],
       ['HIHAT', 'cymbal', 20, 110, 130, 121.9, '하이햇'],
       ['KICK', 'kick', 310, 118, 140, 148.8, '킥'],
       ['SNARE', 'drum', 180, 140, 150, 140.6, '스네어'],
@@ -165,5 +166,21 @@ describe('placePad / padCenter (PLAY-004)', () => {
       expect(c.x).toBeGreaterThan(p.left);
       expect(c.y).toBeGreaterThan(p.top);
     }
+  });
+});
+
+describe('이름 출처 통일(PAD_META)', () => {
+  it('실물 키트 라벨은 PAD_META.label과 같다', () => {
+    for (const p of DRUM_KIT_PADS) expect(p.label).toBe(PAD_META[p.pad].label);
+  });
+
+  it('평면 키트 라벨·태그는 PAD_META의 label·short와 같다(탐은 ST·MT)', () => {
+    for (const p of DRUM_KIT_FLAT_PADS) {
+      expect(p.label).toBe(PAD_META[p.pad].label);
+      expect(p.tag).toBe(PAD_META[p.pad].short);
+    }
+    const tags = Object.fromEntries(DRUM_KIT_FLAT_PADS.map((p) => [p.pad, p.tag]));
+    expect(tags.SMALL_TOM).toBe('ST');
+    expect(tags.MID_TOM).toBe('MT');
   });
 });

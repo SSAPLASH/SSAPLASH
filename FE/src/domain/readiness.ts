@@ -1,6 +1,7 @@
 // 준비 조건 판정(순수 함수). 홈·자유 연주·곡 시작 확인 창·설정 페이지가 같은 규칙을 쓴다.
 // 키보드 전용(sensorKind === 'none')은 면제한다(설계 D11).
 import type { SensorId } from './events';
+import { DEVICE_META } from './devices';
 import { pedalRequired } from './pedalStatus';
 
 // 프리셋 조건은 없다: 시스템 기본이 항상 적용 가능해 "적용된 프리셋 없음" 상태가 없다(UX-64 D1).
@@ -21,16 +22,17 @@ export interface ReadinessResult {
 }
 
 export const READINESS_MESSAGES: Record<ReadinessMissing, string> = {
-  stick: '스틱을 연결하세요', // 일반형. 빠진 손을 짚으려면 stickMissingText
-  pedal: '페달을 연결하세요',
+  stick: '스틱을 연결해 주세요', // 일반형. 빠진 손을 짚으려면 stickMissingText
+  pedal: `${DEVICE_META.PEDAL.name}을 연결해 주세요`,
   firstSetup: '최초 설정(드럼 위치 보정)이 필요합니다',
 };
 
 /** 빠진 손을 짚는 스틱 안내 문구. 둘 다 연결돼 있으면(호출 실수) 일반형 */
 export function stickMissingText(connected: [boolean, boolean]): string {
-  if (!connected[0] && !connected[1]) return '왼손·오른손 스틱을 연결하세요';
-  if (!connected[0]) return '왼손 스틱을 연결하세요';
-  if (!connected[1]) return '오른손 스틱을 연결하세요';
+  const { LEFT, RIGHT } = DEVICE_META;
+  if (!connected[0] && !connected[1]) return `${LEFT.name}·${RIGHT.name} 스틱을 연결해 주세요`;
+  if (!connected[0]) return `${LEFT.name} 스틱을 연결해 주세요`;
+  if (!connected[1]) return `${RIGHT.name} 스틱을 연결해 주세요`;
   return READINESS_MESSAGES.stick;
 }
 
