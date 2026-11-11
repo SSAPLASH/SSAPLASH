@@ -112,7 +112,8 @@ src/
 ├─ store/      zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · recommendationConsentStore(맞춤 곡 추천 학습 동의 상태, 서버 원본·영속 안 함) · songStore(곡 소스·마지막 곡 선택 탭·상세·`loadChart`, 목록은 `api/queries`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · adminSongStore(관리자 공용 곡 목록·등록·행별 반주 업로드) · adminBulkStore(CSV 일괄 추가 순차 실행·줄별 결과) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
 ├─ api/        BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent·recommendation-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157) · adminSongs(관리자 공용 곡 목록·MIDI 등록·반주 업로드, BE 156·262)
 ├─ input/      입력 소스와 매퍼 (인스턴스는 만들지 않는다 → app/sensorRegistry · app/sources)
-│   ├─ InputSource         공통 인터페이스 · ClockSync
+│   ├─ InputSource         공통 인터페이스 · ClockSync(센서 시각 펼치기) · 주기 SYNC 간격
+│   ├─ clockEstimate       시계 오프셋 추정(최근 10초 창의 최소 왕복 표본 → 목표, 적용값은 초당 1ms로 따라감)
 │   ├─ deviceState         기기별 상태(role 0~3 네 칸: 시계·SYNC 대기·연결·배터리/설정 전 보류). 이벤트는 손(0·1)은 status·hit·pose, 발(2·3)은 pedalStatus·hit(foot)·pedal
 │   ├─ SourceDescriptor    입력 소스 디스크립터 타입 (id·라벨·설정 항목·동작 버튼 선언)
 │   ├─ KeyboardPadSource   키 코드 타격 (항상 켜짐)
@@ -313,6 +314,8 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 ## 준비 조건
 
 **스틱 연결·배터리 판정(Web Serial 동글, 프로토콜 v0.8):** 동글 하나(포트 하나)에 두 스틱이 붙고 `flags` role(0 왼손·1 오른손)로 가른다. 손별 연결은 동글이 1초마다·바뀔 때 보내는 `0x07 LINK` 마스크가 기준이고, LINK를 한 번 받은 뒤엔 STATUS는 배터리만 바꾼다(첫 LINK 전 = 예전 동글 펌웨어는 STATUS가 오면 연결). LINK가 3초 넘게 안 오면 동글 문제(`liveStore.dongle = 'stale'`)로 보고 양손을 끊김으로 둔다. 배터리는 STATUS(5초) 최근 3개 평균이고 20% 이하 주황, 10% 이하 빨강·"곧 꺼짐"(`domain/stickStatus`). 시계 동기화는 손별(스틱마다 시계가 다름), 한 손용 명령(방위각 보정·진동·패드 표 재전송)은 LINK 확인 뒤 동글 `0x70 ROUTE`로 감싼다(감싼 SET_PAD_TABLE은 패킷당 패드 2개). 기기별 상태는 `input/deviceState`의 role 0~3 네 칸이고, role 2·3(발)도 같은 네 칸을 쓰며 이벤트는 `pedalStatus`·`pedal`로 낸다(아래 "페달 보드").
+
+**시계 동기화(PLAY-002, 설계 `.claude/plans/PLAY-002-stick-clock-drift.md`):** 스틱 시계는 흐르므로(FW 1.8 분당 약 29ms, FW 1.9 분당 1ms 안팎) 오프셋을 계속 다시 잡는다. 세 소스(Web Serial·WebSocket·BLE) 모두 `SYNC_INTERVAL_MS`(1초)마다 SYNC를 1회 보내고, 연결·시계 초기화 직후에는 종전대로 50~60ms 간격 5회를 보낸다. `input/clockEstimate`가 가장 최근 표본 기준 10초 창(최대 32개)을 들고, 창 안 최소 왕복 + 1ms 이하 표본 가운데 가장 최근 것의 오프셋을 **목표**로 삼는다. 타격 시각 환산에 쓰는 **적용** 오프셋은 목표 쪽으로 초당 최대 1ms씩 따라가며, 첫 표본·첫 표본 뒤 2초(연속 SYNC 구간)·목표와 50ms 이상 벌어졌을 때는 즉시 맞춘다. 기울기 추정은 하지 않는다. `ClockSync.offset`·`clockOffsetOf`는 적용 오프셋, `targetOffset`은 목표, `rtt`는 창 안 최소 왕복이다. 양손과 페달(role 0~3)이 같은 규칙을 쓴다. 센서 시각 u32 µs는 71.6분마다 한 바퀴 도는데, `ClockSync`가 HIT·SYNC_ACK를 같은 펼침 상태로 편다. 기기 사이 고정 어긋남(손·페달의 도착 중앙값 차이)은 이 규칙으로 잡히지 않는다(EMB 실측 뒤 따로 정함).
 
 **페달 보드(PLAY-002, 설계 `.claude/plans/PLAY-002-pedal-input.md`, 프로토콜 v0.8.1):** 킥·하이햇 페달은 동글에 붙은 페달 보드 하나지만 프로토콜이 role 2(왼발 하이햇)·3(오른발 킥) 두 기기처럼 보내므로 FE도 두 칸으로 둔다. `0x07 LINK` 마스크는 bit0~1 손, bit2 왼발, bit3 오른발이고, role 2·3 STATUS는 배터리만 싣는다(비트 5 없음 — 발은 설정 재전송 대상이 아니고 시계 초기화만 한다). SYNC_ACK는 role별로 와서 각 칸 시계가 따로 맞는다(LINK 0→1 때 그 칸 시계 초기화 + SYNC 5회는 손과 같다). `0x08 PEDAL`(state 0 뗌·1 밟음)은 하이햇(role 2)만 오고 시각을 그 칸 시계로 환산해 `pedal` 이벤트로 낸다. 상태는 `liveStore.pedal { connected: [왼발, 오른발], battery, hihatClosed }`에 둔다(배터리는 최근 3개 평균, 왼발이 끊기면 `hihatClosed`는 true로 되돌린다).
 
@@ -636,7 +639,7 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 제어 섹션 "녹화 요약"의 **녹화 파일 열기·재생**으로 `.jsonl`을 열면 입력 방식이 "녹화 재생"으로 바뀌고, 요약을 보이면서 바로 재생을 시작한다(녹화 중에는 요약만).
 
 - 재생 바(상단 바 아래): 재생/일시정지, 처음부터, 배속(1·2·4×), 진행 막대(경과/전체), 파일 이름, 닫기. 패킷·진단 줄을 원래 간격대로 흘리므로 ①②③ 섹션·파형·수치 바(모의 스틱 녹화), ④⑤⑥(키보드 녹화)가 녹화 때와 같은 모양으로 채워진다. 진단 줄이 없는 이전 형식 파일도 재생된다(④⑤⑥은 빈 채).
-- 시각은 재생 시작 시점 기준으로 옮기고, 진단의 hit 시각 필드(`tHit`·`tRecv`·`tResolved`·`tAudio`)도 같은 차이만큼 옮긴다(따라보기와 같은 방식). 시계 오프셋은 녹화의 SYNC 송신(t0)·SYNC_ACK 짝(`monitor/syncPair`)에서 스틱별로 다시 구해(rtt 최소 표본, `(t0 + t2) / 2 − t1`) 도착·③이 채워진다.
+- 시각은 재생 시작 시점 기준으로 옮기고, 진단의 hit 시각 필드(`tHit`·`tRecv`·`tResolved`·`tAudio`)도 같은 차이만큼 옮긴다(따라보기와 같은 방식). 시계 오프셋은 녹화의 SYNC 송신(t0)·SYNC_ACK 짝(`monitor/syncPair`)을 연주 때와 같은 `ClockSync`에 넣어 스틱별로 다시 구해(10초 창 최소 왕복 + 초당 1ms 추종) 도착·③이 채워진다.
 - 재생 중에는 이 창의 센서 연결을 해제하고, 명령 송신·녹화·모의 스틱이 막힌다. "닫기"나 입력 방식 변경 시 화면 상태(패킷 로그·판정·선택)를 비우고 원래 입력 방식으로 돌아간다. "처음부터"도 화면 상태를 비우고 다시 시작한다. 구현은 `monitor/replay`(순수: 시간표·상태기·오프셋)와 `monitor/feed`의 `replay` 모드다.
 
 ### 연주 창 따라보기
@@ -663,6 +666,8 @@ relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모�
 ### 동작 원리
 
 - 입력 소스(WS·BLE·Web Serial)가 프레이밍을 벗긴 payload를 `input/packetTap`에 publish하면 `monitor/packetLog`가 구독해 `decodePacket`으로 풀고 링버퍼(2,000건)에 쌓는다. 판정 경로(`parsePacket` → `InputManager`)는 그대로 돌고, 모니터는 복제본만 본다. 모니터를 켜도 소리·판정 지연은 바뀌지 않는다.
+- 센서 시각은 바퀴 수를 세지 않고 환산한다: 원시 µs + 소스 오프셋에 한 바퀴(2^32 µs)의 정수배를 더해 **수신 시각에 가장 가까운 값**을 쓰고(`tsUnwrap.nearBrowserMs`), 관측·채택 오프셋은 그 손에서 처음 본 값과 반 바퀴 이내로 맞춘다(`normalizeOffsetMs`). 소스 `ClockSync`와 모니터가 각자 바퀴를 세면 한쪽만 초기화될 때(스틱 재연결, 로그 지우기) 정확히 한 바퀴만큼 어긋나기 때문이다.
+- 페달 보드(role 2·3)는 손 L·R 통계에 섞지 않는다. SYNC 짝 실패·ACK 수는 손 응답만 세고, 페달은 ② 센서의 **페달** 칸에 배터리·fw·SYNC 왕복(최근/최소)·오프셋(관측/채택)·짝 실패를 따로 보인다. 페달 보드 하나가 두 role을 같은 시계로 보내므로 SYNC는 role 2 응답만 센다. 채택 오프셋은 직결 소스에서만 나온다(따라보기·재생은 –).
 - 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
 - 제어 섹션: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
 - 파라미터 기본값은 펌웨어별 표다(`stickParamDefault`). STATUS의 fwMajor가 0이면 NUCLEO, 1이면 Feather(nRF52840)이고 STATUS를 받기 전에는 Feather 표를 쓴다(스틱 2개의 fwMajor가 다르면 마지막 STATUS 기준). 차이는 minDecel 30/60, maxSwingMs 400/160, tsCorrUs 3000/800, velMax 1000/1200(NUCLEO/Feather)이다. "기본값 복원"은 이 표를 쓰고, 패널 머리글에 지금 쓰는 표를 보여 준다. 현재값은 항상 GET_PARAMS 결과다.
