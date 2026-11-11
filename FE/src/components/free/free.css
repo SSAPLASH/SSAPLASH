@@ -862,3 +862,63 @@
     animation: none;
   }
 }
+
+/* ---- 진행 막대 bare 배치 (라이브러리 카드 커버 재생 UI, 설계 CHART-003): 시간 글자 없이 막대만.
+   3px → 마우스 올림 5px → 끌기·키보드 초점 7px, 바탕 text-1 20%, 채움 text-1, 손잡이는 끌 수 있게 남기되 보이지 않는다 ---- */
+.free-seek.is-bare {
+  display: block;
+}
+.free-seek.is-bare .free-seek-range {
+  --bare-h: 3px;
+  display: block;
+  width: 100%;
+  height: 15px;
+}
+.free-seek.is-bare .free-seek-range:hover {
+  --bare-h: 5px;
+}
+.free-seek.is-bare .free-seek-range.is-dragging,
+.free-seek.is-bare .free-seek-range:focus-visible {
+  --bare-h: 7px;
+}
+.free-seek.is-bare .free-seek-range:focus-visible {
+  outline-offset: 0;
+  border-radius: 4px;
+}
+.free-seek.is-bare .free-seek-range::-webkit-slider-runnable-track {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: linear-gradient(
+    to right,
+    var(--text-1) var(--free-seek-pct),
+    color-mix(in srgb, var(--text-1) 20%, transparent) var(--free-seek-pct)
+  );
+  transition: height var(--motion-fast) var(--ease-out);
+}
+.free-seek.is-bare .free-seek-range::-moz-range-track {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: color-mix(in srgb, var(--text-1) 20%, transparent);
+}
+.free-seek.is-bare .free-seek-range::-moz-range-progress {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: var(--text-1);
+}
+.free-seek.is-bare .free-seek-range::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range:hover::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range:focus-visible::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range.is-dragging::-webkit-slider-thumb {
+  width: 7px;
+  height: 7px;
+  margin-top: calc((var(--bare-h) - 7px) / 2);
+  opacity: 0;
+}
+.free-seek.is-bare .free-seek-range::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range:hover::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range:focus-visible::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range.is-dragging::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
+  opacity: 0;
+}
