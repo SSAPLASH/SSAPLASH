@@ -318,7 +318,9 @@ export function returnBannerText(missing: ReadinessMissing[], connected: [boolea
 }
 
 /** ② 시작 위치 맞추기(PLAY-004 D6) 문구 */
-export const REFERENCE_HINT_TEXT = '스틱을 정면으로 들고 [시작 위치 맞추기]를 누른 뒤 3초간 움직이지 마세요. 아래 킷에서 내 포인터를 확인할 수 있어요.';
+/** 자세 안내 그림(ReferencePoseGuide)의 제목과 세 줄 안내 */
+export const REFERENCE_POSE_TITLE = '편안히 들고 스틱 끝을 모아 주세요';
+export const REFERENCE_POSE_STEPS = ['화면을 마주 보고 편하게 앉아요', '두 손을 가까이 모으고 스틱 끝을 맞대요', '버튼을 누르고 3초간 가만히 있어요'] as const;
 export const REFERENCE_START_LABEL = '시작 위치 맞추기';
 export const REFERENCE_RESTART_LABEL = '다시 맞추기';
 export const REFERENCE_HOLDING_TEXT = '3초간 자세를 유지하세요';
