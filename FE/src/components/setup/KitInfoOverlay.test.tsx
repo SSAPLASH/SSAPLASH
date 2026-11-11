@@ -2,15 +2,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KitInfoOverlay } from './KitInfoOverlay';
 
-const base = { name: '스네어', x: '302', y: '218', radius: '68' };
+const base = { name: '스네어', x: '-12', y: '45', z: '-8', radius: '24°' };
 
 describe('KitInfoOverlay', () => {
-  it('패드 이름과 X·Y·반지름 숫자를 라벨과 함께 보여 준다', () => {
+  it('패드 이름과 X·Y·Z(cm)·판정 범위를 라벨과 함께 보여 준다', () => {
     const html = renderToStaticMarkup(<KitInfoOverlay {...base} />);
     expect(html).toContain('>스네어</h3>');
-    expect(html).toContain('<dt>X</dt><dd>302</dd>');
-    expect(html).toContain('<dt>Y</dt><dd>218</dd>');
-    expect(html).toContain('<dt>반지름</dt><dd>68</dd>');
+    expect(html).toContain('<dt>X<small> cm</small></dt><dd>-12</dd>');
+    expect(html).toContain('<dt>Y<small> cm</small></dt><dd>45</dd>');
+    expect(html).toContain('<dt>Z<small> cm</small></dt><dd>-8</dd>');
+    expect(html).toContain('<dt>판정 범위</dt><dd>24°</dd>');
   });
 
   it('슬라이더는 넘겼을 때만 그린다', () => {
@@ -33,6 +34,6 @@ describe('KitInfoOverlay', () => {
         <p>추가 줄</p>
       </KitInfoOverlay>,
     );
-    expect(html.indexOf('추가 줄')).toBeGreaterThan(html.indexOf('반지름'));
+    expect(html.indexOf('추가 줄')).toBeGreaterThan(html.indexOf('판정 범위'));
   });
 });

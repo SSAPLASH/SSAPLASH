@@ -102,7 +102,7 @@ describe('CalibrationStage 보정 진행', () => {
     expect(screen.getByText('두 번 친 자리가 너무 달라요(12°). 왼손으로 크래시를 다시 쳐 주세요')).toBeTruthy();
   });
 
-  it('반지름 슬라이더 값: 사용자 값이 있으면 그 값, 없으면 자동값(앵커 하나면 상한)', () => {
+  it('판정 범위 슬라이더 값: 사용자 값이 있으면 그 값, 없으면 자동값(앵커 하나면 상한)', () => {
     const t = DEFAULT_SENSOR_TUNING;
     setCapture();
     const cap = useLive.getState().calibration.capture!;
@@ -255,7 +255,7 @@ describe('CalibrationStage 결과 화면(D6)', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('반지름 슬라이더를 움직이면 선택 패드의 판정 반경을 바꾼다', () => {
+  it('판정 범위 슬라이더를 움직이면 선택 패드의 판정 반경을 바꾼다', () => {
     setCapture(doneCap());
     const { container } = render(<CalibrationStage />);
     const input = container.querySelector('input[type="range"]') as HTMLInputElement;
