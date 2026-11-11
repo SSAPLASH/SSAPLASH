@@ -5,6 +5,7 @@ import { screenToPose } from './kitMapping';
 import { ALL_PADS, type PadId } from './pads';
 import {
   AIM_ORIGIN,
+  FLOOR_Z,
   PAD_SOLIDS,
   dragToLayout,
   hitTestPads,
@@ -57,10 +58,16 @@ describe('padPoint', () => {
   });
 
   it('페달은 바닥 가까이 고정 줄에 있고 배치 y와 무관하다', () => {
-    const a = padPoint('KICK', { x: 0.58, y: 0.9 });
-    const b = padPoint('KICK', { x: 0.58, y: 0.3 });
+    const a = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.9 });
+    const b = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.3 });
     expect(a).toEqual(b);
     expect(a[2]).toBeLessThan(-0.5);
+  });
+
+  it('킥은 바닥에 세워져 있다: 중심 높이 = 바닥 + 반지름, 배치 y와 무관', () => {
+    const a = padPoint('KICK', { x: 0.6, y: 0.9 });
+    expect(a).toEqual(padPoint('KICK', { x: 0.6, y: 0.2 }));
+    expect(a[2]).toBeCloseTo(FLOOR_Z + PAD_SOLIDS.KICK.radius, 6);
   });
 
   it('padPointCm은 같은 점을 cm로 준다', () => {
@@ -77,7 +84,7 @@ describe('kitShapes', () => {
     for (let i = 1; i < shapes.length; i++) expect(shapes[i].depth).toBeLessThanOrEqual(shapes[i - 1].depth);
   });
 
-  it('드럼은 통 옆면, 심벌은 스탠드, 페달은 그림자 없음', () => {
+  it('드럼은 통 옆면, 심벌은 스탠드, 킥·페달은 그림자 없음', () => {
     expect(shapeOf('FLOOR_TOM').wall).toBeGreaterThan(0);
     expect(shapeOf('FLOOR_TOM').stand).toBe(0);
     expect(shapeOf('CRASH').stand).toBeGreaterThan(0);
@@ -88,9 +95,12 @@ describe('kitShapes', () => {
 
   it('윗면은 눌린 타원이다(세로 반지름 < 가로 반지름)', () => {
     for (const s of shapes) {
+      if (s.kind === 'kick') continue;
       expect(s.ry).toBeLessThan(s.rx);
       expect(s.ry).toBeGreaterThan(0);
     }
+    // 킥은 연주자를 향해 서 있어 원이다
+    expect(shapeOf('KICK').ry).toBe(shapeOf('KICK').rx);
   });
 
   it.each([BOX, { w: 1400, h: 520 }, { w: 600, h: 600 }])('기본 배치가 그림 영역 안에 들어온다 %o', (box) => {
@@ -104,8 +114,9 @@ describe('kitShapes', () => {
 });
 
 describe('기본 배치(DEFAULT_KIT_LAYOUT)', () => {
-  it.each([BOX, { w: 1400, h: 520 }, { w: 600, h: 600 }])('원근 그림에서 어느 두 패드의 윗면도 겹치지 않는다 %o', (box) => {
-    const list = kitShapes(DEFAULT_KIT_LAYOUT, makeCamera(box));
+  it.each([BOX, { w: 1400, h: 520 }, { w: 600, h: 600 }])('원근 그림에서 킥을 뺀 어느 두 패드의 윗면도 겹치지 않는다 %o', (box) => {
+    // 킥은 세워진 베이스 드럼이라 실제처럼 스네어·플로어탐 뒤에 일부 가려진다(아래 테스트에서 가운데가 보이는지 본다)
+    const list = kitShapes(DEFAULT_KIT_LAYOUT, makeCamera(box)).filter((s) => s.kind !== 'kick');
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i];
@@ -115,6 +126,14 @@ describe('기본 배치(DEFAULT_KIT_LAYOUT)', () => {
         expect(Math.hypot(a.cx - b.cx, (a.cy - b.cy) * squash)).toBeGreaterThan(a.rx + b.rx);
       }
     }
+  });
+});
+
+describe('기본 배치의 킥', () => {
+  it.each([BOX, { w: 1400, h: 520 }, { w: 600, h: 600 }])('가운데가 다른 패드에 가리지 않아 누를 수 있다 %o', (box) => {
+    const list = kitShapes(DEFAULT_KIT_LAYOUT, makeCamera(box));
+    const kick = list.find((s) => s.pad === 'KICK')!;
+    expect(hitTestPads(list, kick.cx, kick.cy)).toBe('KICK');
   });
 });
 
