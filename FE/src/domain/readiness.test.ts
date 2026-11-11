@@ -41,7 +41,7 @@ describe('readiness', () => {
     expect(readiness({ ...ok, pedal: [true, false] }).missing).toEqual(['pedal']);
     expect(readiness({ ...ok, pedal: [false, false] })).toEqual({ ready: false, missing: ['pedal'] });
     expect(readiness({ ...dongle, pedal: [false, false] }).missing).toEqual(['stick', 'pedal', 'firstSetup']);
-    expect(READINESS_MESSAGES.pedal).toBe('페달을 연결하세요');
+    expect(READINESS_MESSAGES.pedal).toBe('페달을 연결해 주세요');
   });
 
   it('키보드 전용은 페달이 없어도 면제', () => {
@@ -70,9 +70,9 @@ describe('calibrationReady (UX-64 D7)', () => {
 
 describe('stickMissingText', () => {
   it('빠진 손을 짚는다', () => {
-    expect(stickMissingText([false, false])).toBe('왼손·오른손 스틱을 연결하세요');
-    expect(stickMissingText([true, false])).toBe('오른손 스틱을 연결하세요');
-    expect(stickMissingText([false, true])).toBe('왼손 스틱을 연결하세요');
+    expect(stickMissingText([false, false])).toBe('왼손·오른손 스틱을 연결해 주세요');
+    expect(stickMissingText([true, false])).toBe('오른손 스틱을 연결해 주세요');
+    expect(stickMissingText([false, true])).toBe('왼손 스틱을 연결해 주세요');
   });
   it('둘 다 연결이면 일반형', () => {
     expect(stickMissingText([true, true])).toBe(READINESS_MESSAGES.stick);

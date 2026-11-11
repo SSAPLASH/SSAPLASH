@@ -54,13 +54,13 @@ describe('SetupPage 단계 팝업', () => {
     expect(screen.getByRole('button', { name: /스틱 연결/ }).textContent).toContain('연결하기');
   });
 
-  it('스틱 연결 타일을 누르면 「스틱 연결」 팝업에 연결 내용(페달 줄 포함)이 보이고 닫으면 타일로 포커스가 돌아온다', () => {
+  it('스틱·페달 연결 타일을 누르면 「스틱·페달 연결」 팝업에 연결 내용(페달 줄 포함)이 보이고 닫으면 타일로 포커스가 돌아온다', () => {
     useSettings.setState({ sensorKind: 'webserial' });
     renderSetup();
-    const tile = screen.getByRole('button', { name: /스틱 연결/ });
+    const tile = screen.getByRole('button', { name: /스틱·페달 연결/ });
     tile.focus();
     fireEvent.click(tile);
-    const dialog = screen.getByRole('dialog', { name: '스틱 연결' });
+    const dialog = screen.getByRole('dialog', { name: '스틱·페달 연결' });
     expect(dialog.textContent).toContain('페달 연결 안 됨');
     expect(dialog.textContent).toContain('키보드는 항상 켜져 있습니다');
     fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));

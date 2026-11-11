@@ -16,7 +16,7 @@ describe('ConnectionDots', () => {
   it('한 손만 연결', () => {
     const html = renderToStaticMarkup(<ConnectionDots left right={false} />);
     expect(dots(html)).toEqual(['L:on', 'R:off']);
-    expect(html).toContain('오른손 스틱 끊김');
+    expect(html).toContain('오른손 스틱 연결 안 됨');
   });
 
   it('둘 다 끊김, className 전달', () => {
