@@ -70,24 +70,9 @@ export interface FigBox {
 }
 const DEFAULT_FIG_BOX: FigBox = { w: 16, h: 10 };
 
-/** 원 반지름 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6(KitCanvas.radiusBasis와 같다) */
+/** 그림 크기 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6. 원근 보기의 초점 거리와 겹침 판정의 원 반지름이 같이 쓴다 */
 export function radiusBasisOf(box: FigBox): number {
   return Math.min(box.w, box.h * 1.6);
-}
-
-/** 원을 그림 가장자리에서 띄우는 여유(px) */
-export const PAD_EDGE_PX = 6;
-
-/**
- * 패드 원의 화면 중심(px). 배치 좌표를 그림 크기에 펼치되 원이 그림 밖으로 나가지 않게 반지름만큼 안쪽으로 붙인다.
- * 넓은 판에서는 반지름이 높이 기준으로 커져 아래쪽 킥·페달이 잘리기 쉬워서다. 그리기와 클릭 판정이 같이 쓴다
- */
-export function padCenterPx(pad: PadPlacement, box: FigBox): { cx: number; cy: number; r: number } {
-  const r = pad.r * radiusBasisOf(box);
-  // 테두리·선택 링 두께만큼 여유(px)를 더 둔다
-  const m = r + PAD_EDGE_PX;
-  const clamp = (v: number, max: number) => (max <= 2 * m ? max / 2 : Math.min(Math.max(v, m), max - m));
-  return { cx: clamp(pad.x * box.w, box.w), cy: clamp(pad.y * box.h, box.h), r };
 }
 
 /** 원(정규 좌표, 반지름은 radiusBasisOf(box) 기준)이 사각형 [x0,x1]×[y0,y1]과 겹치는가. 맞닿기만 하면 겹침이 아니다 */
