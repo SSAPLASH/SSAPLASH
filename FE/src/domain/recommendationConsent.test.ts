@@ -4,6 +4,7 @@ import {
   consentStatusText,
   isRecommendationConsentCurrent,
   isRecommendationVersionStale,
+  DRAFT_RECOMMENDATION_VERSION,
   needsRecommendationPrompt,
   type RecommendationConsent,
 } from './recommendationConsent';
@@ -39,6 +40,14 @@ describe('needsRecommendationPrompt', () => {
     expect(needsRecommendationPrompt(c())).toBe(false);
     expect(needsRecommendationPrompt(c({ agreed: false }))).toBe(false);
     expect(needsRecommendationPrompt(c({ version: '2026-01-01' }))).toBe(false);
+    expect(needsRecommendationPrompt(c({ agreed: false, version: '2026-01-01' }))).toBe(false);
+  });
+
+  it('초안 판에 자동 저장된 거부는 한 번 다시 묻는다', () => {
+    expect(DRAFT_RECOMMENDATION_VERSION).not.toBe(V);
+    expect(needsRecommendationPrompt(c({ agreed: false, version: DRAFT_RECOMMENDATION_VERSION }))).toBe(true);
+    // 초안 판에 동의한 경우는 판 불일치(isRecommendationVersionStale)로 따로 안내한다
+    expect(needsRecommendationPrompt(c({ agreed: true, version: DRAFT_RECOMMENDATION_VERSION }))).toBe(false);
   });
 
   it('아직 읽지 못했거나 읽기 실패(null)면 false', () => {
