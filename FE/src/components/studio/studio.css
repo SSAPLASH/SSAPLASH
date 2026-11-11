@@ -788,3 +788,82 @@
   color: var(--text-2);
   font-size: 14px;
 }
+
+/* ---- 곡 재생바 (설계 CHART-003 라이브러리 재생바). 반주가 준비된 완료 곡에 항상 보인다 ---- */
+/* 재생바: Figma Play / AccompanimentBar state=playing(226:5461)의 재생부 — 아이콘 버튼 sm(32, 테두리 없음) · 진행 막대 10px(surface-3 바탕, brand 채움) · 시간 12px */
+.song-playbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 32px;
+}
+.song-playbar-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-playbar-text.is-error {
+  color: var(--miss);
+}
+.song-playbar .free-seek {
+  gap: 14px;
+}
+.song-playbar .free-seek-range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: var(--radius-control);
+  background: linear-gradient(to right, var(--brand) var(--free-seek-pct), var(--surface-3) var(--free-seek-pct));
+}
+.song-playbar .free-seek-range::-moz-range-track {
+  height: 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-3);
+}
+.song-playbar .free-seek-range::-moz-range-progress {
+  height: 10px;
+  border-radius: var(--radius-control);
+  background: var(--brand);
+}
+/* 손잡이(올리거나 끄는 동안·초점일 때만 보임)를 10px 막대 가운데에 맞춘다 */
+.song-playbar .free-seek-range::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -2px;
+}
+.song-playbar .free-seek-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+}
+/* 쉬는 상태의 빈 막대(누를 수 없다). 재생 중 막대와 같은 두께·모양 */
+.song-playbar-track {
+  flex: 1;
+  min-width: 0;
+  height: 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-3);
+}
+/* 목록 줄: 제목 칸 오른쪽에 자리 잡는다. 제목 칸 1 : 재생바 2 (1427px 화면에서 제목 약 180px — Figma 226:5465 info 폭과 같다) */
+.studio-row .song-playbar {
+  flex: 2 1 0;
+}
+/* 좁은 화면의 목록 줄: 시간 글자를 먼저 숨기고, 더 좁으면 막대도 숨겨 ▶만 남긴다(위치 이동은 카드 보기에서) */
+@media (max-width: 960px) {
+  .studio-row .song-playbar .free-seek-time {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .studio-row .song-playbar {
+    flex: none;
+  }
+  .studio-row .song-playbar .free-seek,
+  .studio-row .song-playbar-text {
+    display: none;
+  }
+}
