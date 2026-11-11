@@ -135,32 +135,3 @@ export function placePad(p: DrumKitPad, x: number, y: number): DrumKitPad {
   const c = PAD_HEAD_CENTER[p.shape];
   return { ...p, left: x * DRUM_KIT_W - c.x * s, top: y * DRUM_KIT_H - c.y * s };
 }
-
-/**
- * 배치 좌표(kitLayout, 16:10 캔버스의 0~1) → DrumKit 정규화 좌표(760×300). 가로는 그대로, 세로는 킷의 패드 띠(0.15~0.77)로 눌러
- * 아래쪽 패드가 잘리지 않게 한다. 보정 화면이 "실제 친 위치"를 킷에 놓을 때 쓴다
- */
-export function layoutToKitPoint(p: { x: number; y: number }): { x: number; y: number } {
-  return { x: p.x, y: 0.15 + 0.62 * p.y };
-}
-
-/** 그림 영역을 못 쟀을 때(jsdom 등) 쓰는 16:10 상자 */
-const FALLBACK_FIG = { w: 1600, h: 1000 };
-
-/**
- * 킷 정규화 좌표의 패드를 그림 영역 정규 좌표의 원으로 바꾼다(pickOverlayCorner의 겹침 판정용).
- * 킷은 DrumKit fitContain처럼 scale = min(4, 폭/760, 높이/300)로 그림 영역 가운데에 놓인다.
- * 반지름은 pickOverlayCorner 기준(min(폭, 높이×1.6))에 대한 비율이다
- */
-export function padFrameCircle(pad: PadId, point: { x: number; y: number }, skin: KitSkin, fig: { w: number; h: number } = FALLBACK_FIG): { x: number; y: number; r: number } {
-  const w = kitPadsFor(skin).find((p) => p.pad === pad)?.w ?? 0;
-  const scale = fitScaleBox(fig.w, fig.h, 4);
-  const kw = DRUM_KIT_W * scale;
-  const kh = DRUM_KIT_H * scale;
-  return {
-    x: ((fig.w - kw) / 2 + kw * point.x) / fig.w,
-    y: ((fig.h - kh) / 2 + kh * point.y) / fig.h,
-    r: (w / 2) * scale / Math.min(fig.w, fig.h * 1.6),
-  };
-}
-
