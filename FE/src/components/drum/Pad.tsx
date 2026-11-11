@@ -84,9 +84,9 @@ export function PadDefs({ id }: { id: string }) {
 }
 
 /** 판정 텍스트 중심 y(원본 좌표) */
-const JUDGE_Y: Record<PadShape, number> = { drum: 12, cymbal: 18, kick: -7 };
+const JUDGE_Y: Record<PadShape, number> = { drum: 12, cymbal: 18, kick: -7, pedal: 8 };
 /** 라벨 중심 y */
-const LABEL_Y: Record<PadShape, number> = { drum: 140, cymbal: 140, kick: 160 };
+const LABEL_Y: Record<PadShape, number> = { drum: 140, cymbal: 140, kick: 160, pedal: 152 };
 
 const JUDGE_TEXT: Partial<Record<PadVisualState, string>> = {
   perfect: 'PERFECT',
@@ -117,6 +117,8 @@ interface PadProps {
   tag?: string;
   /** 연타마다 바뀌는 값. hit일 때 모션 그룹의 key가 되어 CSS 애니메이션을 재시작한다 */
   hitKey?: number;
+  /** 전자·네온 원판의 세로 눌림 배율(원근 자리용). 실물 스킨은 그림이 이미 기울어 있어 쓰지 않는다 */
+  tilt?: number;
 }
 
 /** 심벌 광택 부채꼴(원뿔 그라디언트 근사). 중심 (80,70)에서 원판 가장자리까지, 각도는 도 단위 */
@@ -171,6 +173,19 @@ function PadBody({ shape, defsId, motionKey }: { shape: PadShape; defsId: string
       </>
     );
   }
+  if (shape === 'pedal') {
+    // 하이햇 페달: 금속 발판(위가 좁다) + 가로 홈 + 뒤꿈치 판 + 위로 올라가는 연결 막대
+    return (
+      <>
+        <rect x="77" y="6" width="6" height="30" fill={`url(#${defsId}-stand)`} />
+        <path d="M60,28 H100 L114,128 Q114,136 106,136 H54 Q46,136 46,128 Z" fill={`url(#${defsId}-drum-rim)`} stroke="#2A303A" strokeWidth="2" />
+        {[48, 64, 80, 96].map((y) => (
+          <line key={y} x1={60 - (y - 28) * 0.1} y1={y} x2={100 + (y - 28) * 0.1} y2={y} stroke="#2A303A" strokeOpacity="0.55" strokeWidth="2" />
+        ))}
+        <path d="M50,112 H110 L114,128 Q114,136 106,136 H54 Q46,136 46,128 Z" fill={`url(#${defsId}-drum-shell)`} stroke="#2A303A" strokeWidth="2" />
+      </>
+    );
+  }
   return (
     <>
       <circle cx="80" cy="85" r="76" fill={`url(#${defsId}-kick)`} stroke={`url(#${defsId}-kick-rim)`} strokeWidth="8" />
@@ -197,13 +212,14 @@ export const Pad = memo(function Pad({
   skin = 'acoustic',
   tag,
   hitKey,
+  tilt,
 }: PadProps) {
   const s = w / BASE_W;
   const ring = RING[shape];
   const showRing = state !== 'idle';
   const ringWidth = state === 'armed' ? 3 : 5;
   // 헤드 flash는 drum·cymbal의 hit에만
-  const flash = state === 'hit' && shape !== 'kick';
+  const flash = state === 'hit' && shape !== 'kick' && shape !== 'pedal';
   const judge = JUDGE_TEXT[state];
   // 문자열 배지는 next. now이거나 badgeHighlight면 강조 모양
   const badgeObj: PadBadge | undefined = typeof badge === 'string' ? { text: badge, level: 'next' } : badge;
@@ -227,9 +243,9 @@ export const Pad = memo(function Pad({
     >
       {flat ? (
         skin === 'electronic' ? (
-          <ElectronicPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} />
+          <ElectronicPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} tilt={tilt} />
         ) : (
-          <NeonPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} />
+          <NeonPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} tilt={tilt} />
         )
       ) : (
         <>
