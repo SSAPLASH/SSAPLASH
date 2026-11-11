@@ -244,3 +244,17 @@
 .guide-plus {
   color: var(--text-3);
 }
+
+/* ── 리듬 게임 장면: 네온 스킨(drum.css neon) · 드럼 배치 순 레인 ── */
+.guide-strip-bg { fill: #05070d; stroke: rgba(34, 228, 255, 0.18); }
+.guide-strip-sep { stroke: rgba(34, 228, 255, 0.08); stroke-width: 1; }
+.guide-lane-tag { fill: var(--text-3); font: 700 11px var(--font); letter-spacing: 1px; text-anchor: middle; transition: fill 120ms; }
+.guide-lane-tag.on { fill: var(--c); filter: drop-shadow(0 0 6px var(--c)); }
+.guide-judge { stroke: #e8f7ff; stroke-width: 2; filter: drop-shadow(0 0 6px #22e4ff); }
+.guide-judge-cap { fill: var(--text-3); font: 600 10px var(--font); }
+.guide-gnote { fill: var(--c); filter: drop-shadow(0 0 6px var(--c)); transition: opacity 140ms; }
+.guide-gnote.on { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 14px var(--c)); }
+.guide-lane-flash { opacity: 0; transition: opacity 160ms; }
+.guide-lane-flash.on { opacity: 1; }
+.guide-lane-flash.hov { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .guide-lane-flash, .guide-gnote, .guide-lane-tag { transition: none; } }
