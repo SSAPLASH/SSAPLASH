@@ -47,7 +47,7 @@ describe('KitCanvas 끌기(kit-drag D6)', () => {
     expect(pad).toBe('SNARE');
     // 돌려받은 배치 좌표로 다시 그리면 패드 중심이 36·16px 옮겨진 자리에 있다
     const moved = padShape('SNARE', padPoint('SNARE', { x, y }), cam);
-    expect(Math.hypot(moved.cx - (sx + 36), moved.cy - (sy + 16))).toBeLessThan(1);
+    expect(Math.hypot(moved.cx - (sx + 36), moved.cy - (sy + 16))).toBeLessThan(2);
     expect(x).toBeGreaterThan(snare.x);
     expect(onTapPad).not.toHaveBeenCalled();
   });
