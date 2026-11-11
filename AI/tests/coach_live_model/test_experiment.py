@@ -29,8 +29,11 @@ GOOD = {
 EXAMPLE = Path(__file__).parents[2] / "configs" / "coach" / "coach_live_config.json"
 
 
+LLM_OFF = {"mode": "off", "rolloutPercent": 0}
+
+
 def test_valid_config_is_normalised() -> None:
-    assert validate_config(GOOD) == GOOD
+    assert validate_config(GOOD) == {**GOOD, "llm": LLM_OFF}
     assert validate_config({**GOOD, "cause": None})["cause"] == {"arms": []}
 
 
@@ -54,7 +57,8 @@ def test_llm_is_kept_for_publishing() -> None:
     # 등록본에서 llm이 빠지면 FE가 off로 보고 연주 중 LLM 실험군을 배정하지 않는다
     llm = {"mode": "shadow", "rolloutPercent": 100}
     assert validate_config({**GOOD, "llm": llm})["llm"] == llm
-    assert "llm" not in validate_config(GOOD)
+    # 없으면 FE parseLlm처럼 꺼짐으로 남긴다
+    assert validate_config(GOOD)["llm"] == LLM_OFF
 
 
 @pytest.mark.parametrize(
@@ -80,6 +84,13 @@ def test_example_config_is_valid() -> None:
     assert load_config(EXAMPLE)["gate"]["mode"] == "shadow"
 
 
+def test_example_config_keeps_llm() -> None:
+    # 운영 게시본(버전 3)과 같은 예시 설정의 llm이 등록 결과에 그대로 남는다
+    raw = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    assert raw["llm"] == {"mode": "shadow", "rolloutPercent": 100}
+    assert load_config(EXAMPLE)["llm"] == raw["llm"]
+
+
 def test_register_checks_arm_models_and_creates_versions(tmp_path: Path) -> None:
     import mlflow
 
@@ -96,7 +107,10 @@ def test_register_checks_arm_models_and_creates_versions(tmp_path: Path) -> None
     )
     files = sorted(p.name for p in Path(got).rglob("*") if p.is_file())
     assert files == ["config.json"]
-    assert json.loads((Path(got) / "config.json").read_text(encoding="utf-8")) == GOOD
+    assert json.loads((Path(got) / "config.json").read_text(encoding="utf-8")) == {
+        **GOOD,
+        "llm": LLM_OFF,
+    }
 
 
 def test_cli_reports_config_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
