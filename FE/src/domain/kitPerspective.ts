@@ -22,13 +22,16 @@ export const VIEW_CENTER_Y = 0.53;
 export const FLOOR_Z = -0.65;
 /** 방향의 출발점: 두 손 출발점의 가운데 */
 export const AIM_ORIGIN: Point3 = [0, 0, 0.1];
-/** 페달이 놓이는 앞쪽 거리·높이(m) */
+/** 하이햇 페달이 놓이는 앞쪽 거리·높이(m) */
 const PEDAL_Y = 0.28;
 const PEDAL_Z = -0.62;
+/** 킥(세워진 베이스 드럼)의 앞쪽 거리. 스네어 뒤, 탐 아래 */
+const KICK_Y = 0.62;
 /** 페달 좌우 자리: x = sin(방위각) × 이 값 */
 const PEDAL_REACH = 0.8;
 
-export type PadKind = 'drum' | 'cymbal' | 'pedal';
+/** kick은 바닥에 세워져 연주자를 향한 원판, pedal은 바닥의 납작한 발판 */
+export type PadKind = 'drum' | 'cymbal' | 'kick' | 'pedal';
 
 /** 패드 실물 크기(m). 배치의 r(평면 보기용)은 원근 보기에서 쓰지 않는다 */
 export const PAD_SOLIDS: Record<PadId, { kind: PadKind; radius: number; height: number }> = {
@@ -39,7 +42,7 @@ export const PAD_SOLIDS: Record<PadId, { kind: PadKind; radius: number; height: 
   HIHAT: { kind: 'cymbal', radius: 0.17, height: 0 },
   SNARE: { kind: 'drum', radius: 0.18, height: 0.13 },
   FLOOR_TOM: { kind: 'drum', radius: 0.2, height: 0.38 },
-  KICK: { kind: 'pedal', radius: 0.12, height: 0 },
+  KICK: { kind: 'kick', radius: 0.18, height: 0 },
   HIHAT_PEDAL: { kind: 'pedal', radius: 0.1, height: 0 },
 };
 
@@ -129,10 +132,14 @@ export function padReach(pad: StickPad): number {
   return len(sub(PAD_POINTS[pad], AIM_ORIGIN));
 }
 
-/** 배치 좌표 → 3D 점. 스틱 패드는 방향 × 모델 거리, 페달은 바닥의 고정 줄에서 좌우만 */
+/** 배치 좌표 → 3D 점. 스틱 패드는 방향 × 모델 거리, 킥·하이햇 페달은 바닥의 고정 줄에서 좌우만 */
 export function padPoint(pad: PadId, pl: Pick<PadPlacement, 'x' | 'y'>, range: AngleRange = DEFAULT_ANGLE_RANGE): Point3 {
   const pose = screenToPose(pl.x, pl.y, range);
-  if (!isStickPad(pad)) return [Math.sin(pose.yaw * RAD) * PEDAL_REACH, PEDAL_Y, PEDAL_Z];
+  if (!isStickPad(pad)) {
+    const x = Math.sin(pose.yaw * RAD) * PEDAL_REACH;
+    // 킥은 바닥에 세워 둔다: 중심 높이 = 바닥 + 반지름
+    return pad === 'KICK' ? [x, KICK_Y, FLOOR_Z + PAD_SOLIDS.KICK.radius] : [x, PEDAL_Y, PEDAL_Z];
+  }
   const d = poseDir(pose);
   const reach = padReach(pad);
   return [AIM_ORIGIN[0] + d[0] * reach, AIM_ORIGIN[1] + d[1] * reach, AIM_ORIGIN[2] + d[2] * reach];
@@ -168,7 +175,8 @@ export function padShape(pad: PadId, point: Point3, cam: Camera): PadShape {
   const solid = PAD_SOLIDS[pad];
   const q = cam.project(point);
   const rx = solid.radius * q.scale;
-  const ry = rx * Math.sin(q.elev);
+  // 킥은 연주자를 향해 서 있어 화면에서도 원에 가깝다
+  const ry = solid.kind === 'kick' ? rx : rx * Math.sin(q.elev);
   const floor = cam.project([point[0], point[1], FLOOR_Z]);
   const frx = solid.radius * floor.scale * 0.9;
   return {
@@ -180,7 +188,7 @@ export function padShape(pad: PadId, point: Point3, cam: Camera): PadShape {
     ry,
     wall: solid.kind === 'drum' ? solid.height * q.scale * Math.cos(q.elev) : 0,
     stand: solid.kind === 'cymbal' ? Math.max(0, floor.sy - q.sy) : 0,
-    shadow: solid.kind === 'pedal' ? null : { cx: floor.sx, cy: floor.sy, rx: frx, ry: frx * Math.sin(floor.elev) },
+    shadow: solid.kind === 'pedal' || solid.kind === 'kick' ? null : { cx: floor.sx, cy: floor.sy, rx: frx, ry: frx * Math.sin(floor.elev) },
     depth: q.depth,
     point,
   };
@@ -269,7 +277,7 @@ export function poseTip(hand: StickId | 'center', pose: Pose, shapes: readonly P
   let wsum = 0;
   let dsum = 0;
   for (const s of shapes) {
-    if (s.kind === 'pedal') continue;
+    if (s.kind === 'pedal' || s.kind === 'kick') continue;
     const a = aimFrom(origin, s.point);
     const dot = Math.min(1, Math.max(-1, a.dir[0] * d[0] + a.dir[1] * d[1] + a.dir[2] * d[2]));
     const ang = Math.acos(dot);
@@ -286,7 +294,7 @@ export function poseTip(hand: StickId | 'center', pose: Pose, shapes: readonly P
  * 기준점에서 그 점을 보는 방향을 자세로 한다. 패드 중심 위에서는 그 패드의 배치 자세와 같다
  */
 export function screenPointToPose(px: number, py: number, shapes: readonly PadShape[], cam: Camera): Pose {
-  const sticks = shapes.filter((s) => s.kind !== 'pedal');
+  const sticks = shapes.filter((s) => s.kind !== 'pedal' && s.kind !== 'kick');
   if (sticks.length === 0) return { pitch: 0, yaw: 0 };
   const hit = hitTestPads(sticks, px, py);
   let base = sticks.find((s) => s.pad === hit);
