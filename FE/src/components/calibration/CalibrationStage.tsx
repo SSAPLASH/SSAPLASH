@@ -1,5 +1,5 @@
 // 보정·재정렬 본문(PLAY-004 4-1·4-2, 개편 D2·D3·D6·D10·D11·D14, v0.2). 보정 중(드럼 배치 카드 안): 스테이지 행 전체 폭 판(StagePanel) 안에
-// 킷 하나(16:10 contain). 판 안 자리: 위쪽 가운데 큰 안내 「하이햇을 2번 타격하세요」·진행 점 / 오른쪽 아래 정보 카드 / 아래쪽 가운데 경고 배너(GapBanner).
+// 킷 하나(편집 화면과 같은 원근 틀 + 사용자가 고른 스킨, domain/kitFrame). 판 안 자리: 위쪽 가운데 큰 안내 「하이햇을 2번 타격하세요」·진행 점 / 오른쪽 아래 정보 카드 / 아래쪽 가운데 경고 배너(GapBanner).
 // 킷 전체는 어둡게(0.18) 두고 지금 칠 패드만 원래 밝기 + 글로우. 간격 경고는 멈추지 않는다: 진행 중에는 배너([◯◯ 다시])로, 다음 패드를 치면 사라진다.
 // 정보 카드 상태: 진행(「하이햇 1/7」+손별 타격 점, 버튼 없음) / 결과(done: 선택 패드 값·반지름·겹침·[다시 치기][저장]).
 // 결과 화면에서는 같은 손에서 20° 미만으로 붙은 패드(세션 밖 앵커 base 포함, D14)에 --warn 테두리를 그리고 겹침 요약 배너를 띄우며, 패드를 눌러 고른다(진행 중 클릭은 무동작).
@@ -22,7 +22,8 @@ import { DEFAULT_CAPTURE_OPTIONS, type CaptureSnapshot } from '@/engine/HitCaptu
 import { anchorsToLayout } from '@/domain/kitJudge';
 import type { KitLayout } from '@/domain/kitLayout';
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
-import { layoutToKitPoint, padFrameCircle } from '@/domain/drumKit';
+import { kitFrame } from '@/domain/kitFrame';
+import { padScreenCircles } from '@/domain/kitPerspective';
 import { padPointOf } from '@/domain/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/calibration';
@@ -39,11 +40,14 @@ function completedOf(cap: CaptureSnapshot): PadId[] {
   return cap.order.filter((pad) => cap.hands.length > 0 && cap.hands.every((h) => cap.captured[pad]?.[h] !== undefined));
 }
 
+/** 그림 영역을 못 쟀을 때(jsdom 등) 쓰는 16:10 상자 */
+const FALLBACK_FIG = { w: 1600, h: 1000 };
+
 /**
- * 패드 위치: 이번 세션에 없는 패드(패드 단위 재보정 때 나머지)는 현재 배치 자리, 끝난 패드는 실제 친 위치(앵커 평균 방향),
- * 목표 패드(유령)는 현재 배치 자리
+ * 보정 중에 보일 배치(편집 화면과 같은 배치 좌표): 이번 세션에 없는 패드(패드 단위 재보정 때 나머지·페달)는 현재 배치 자리,
+ * 끝난 패드는 실제 친 위치(앵커 평균 방향), 목표 패드는 현재 배치 자리
  */
-function placementOf(cap: CaptureSnapshot, layout: KitLayout, angleRange: { yawDeg: number; pitchDeg: number }): Partial<Record<PadId, { x: number; y: number }>> {
+function shownLayoutOf(cap: CaptureSnapshot, layout: KitLayout, angleRange: { yawDeg: number; pitchDeg: number }): KitLayout {
   const hands: HandAnchors = [{}, {}];
   for (const pad of cap.order) {
     const slot = cap.captured[pad];
@@ -55,8 +59,8 @@ function placementOf(cap: CaptureSnapshot, layout: KitLayout, angleRange: { yawD
   }
   const derived = anchorsToLayout(hands, layout, angleRange);
   const completed = completedOf(cap);
-  const out: Partial<Record<PadId, { x: number; y: number }>> = {};
-  for (const pad of STICK_PADS) out[pad] = layoutToKitPoint(completed.includes(pad) ? derived[pad] : layout[pad]);
+  const out = { ...layout };
+  for (const pad of STICK_PADS) if (completed.includes(pad)) out[pad] = derived[pad];
   return out;
 }
 
@@ -178,7 +182,10 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   // 킷 전체를 어둡게 두고 지금 칠 패드만 켠다(Figma 766:34637). 끝난 패드는 실제 친 위치로 옮기고,
   // 세션 밖 패드(패드 단위 재보정의 나머지)는 현재 배치 자리. 새 프리셋(추가하기)은 기본 배치를 바탕으로 놓는다
   const base = cal.target === 'new' ? DEFAULT_KIT_LAYOUT : kitLayout;
-  const placement = placementOf(cap, base, tuning.angleRange);
+  const shown = shownLayoutOf(cap, base, tuning.angleRange);
+  const fig = figSize ?? FALLBACK_FIG;
+  // 편집 화면과 같은 원근 자리에 같은 스킨 그림을 놓는다
+  const frame = kitFrame(shown, fig, kitSkin, tuning.angleRange);
 
   // 결과 화면: 겹친 쌍과 선택 패드. 첫 선택은 겹침 있는 첫 패드, 없으면 첫 패드
   const overlaps = isDone ? overlapsOf(cap) : [];
@@ -191,12 +198,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
 
   // 카드가 그림과 겹칠 때(좁은 판) 모든 패드 중 덜 가리는 모서리로. 지금 칠 패드(진행·경고)·선택 패드(결과)를 가리는 쪽은 피한다
   const focusPad = isDone ? selected : cap.target;
-  const frameCircles: Partial<Record<PadId, { x: number; y: number; r: number }>> = {};
-  for (const pad of Object.keys(placement) as PadId[]) {
-    const point = placement[pad];
-    if (point) frameCircles[pad] = padFrameCircle(pad, point, kitSkin, figSize ?? undefined);
-  }
-  const corner = pickOverlayCorner(frameCircles, region, focusPad ? [focusPad] : [], figSize ?? undefined);
+  const corner = pickOverlayCorner(padScreenCircles(shown, fig, tuning.angleRange), region, focusPad ? [focusPad] : [], fig);
 
   let card = null;
   if (isDone && selected) {
@@ -211,6 +213,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
         name={PAD_META[selected].label}
         x={fmtCm(point?.x)}
         y={fmtCm(point?.y)}
+        z={fmtCm(point?.z)}
         radius={`${Math.round(radius)}°`}
         caption="선택 패드"
         slider={{ value: radius, min: tuning.minRadiusDeg, max: tuning.maxRadiusDeg, onChange: (v) => calibrationSession.setRadiusOverride(selected, v) }}
@@ -260,12 +263,10 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
       <StagePanel layout={overlay} top={top} card={card} banner={banner}>
         <div className="cal-stage-canvas">
           <DrumKit
-            fitContain
-            scale={4}
+            frame={frame}
             skin={kitSkin}
             states={padStates}
             hitSeq={hitSeq}
-            placement={placement}
             dimAll={!isDone}
             lit={isDone ? undefined : (cap.target ?? undefined)}
             warnPads={warnPads}

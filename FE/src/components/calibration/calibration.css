@@ -133,6 +133,12 @@
   position: absolute;
   inset: 0;
 }
+/* 원근 틀 킷: 틀 크기가 그림 영역과 같다. 재기 전(폴백 크기)에도 넘치지 않게 영역에 맞춘다 */
+.cal-stage-canvas > .drum-kit {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .cal-stage-top {
   position: absolute;
   top: var(--setup-panel-pad, 16px);

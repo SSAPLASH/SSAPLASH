@@ -2,7 +2,8 @@
 // 판정용 배치(kitLayout)와는 별개로, 표시 전용이다. 그리기는 components/drum이 한다.
 import { PAD_META, type PadId } from './pads';
 
-export type PadShape = 'drum' | 'cymbal' | 'kick';
+/** pedal은 하이햇 페달(발판). 고정 8패드 킷에는 없고 드럼 세팅의 자유 틀(DrumKit frame)에서만 그린다 */
+export type PadShape = 'drum' | 'cymbal' | 'kick' | 'pedal';
 
 /** armed(예고)는 타입에만 두고 1차 범위에서는 쓰지 않는다 */
 export type PadVisualState = 'idle' | 'armed' | 'hit' | 'perfect' | 'good' | 'miss';
@@ -115,6 +116,7 @@ export const PAD_HEAD_CENTER: Record<PadShape, { x: number; y: number }> = {
   drum: { x: 80, y: 72 },
   cymbal: { x: 80, y: 70 },
   kick: { x: 80, y: 85 },
+  pedal: { x: 80, y: 80 },
 };
 
 /** 패드의 헤드 중심(킷 좌표, 760×300) */
@@ -133,32 +135,3 @@ export function placePad(p: DrumKitPad, x: number, y: number): DrumKitPad {
   const c = PAD_HEAD_CENTER[p.shape];
   return { ...p, left: x * DRUM_KIT_W - c.x * s, top: y * DRUM_KIT_H - c.y * s };
 }
-
-/**
- * 배치 좌표(kitLayout, 16:10 캔버스의 0~1) → DrumKit 정규화 좌표(760×300). 가로는 그대로, 세로는 킷의 패드 띠(0.15~0.77)로 눌러
- * 아래쪽 패드가 잘리지 않게 한다. 보정 화면이 "실제 친 위치"를 킷에 놓을 때 쓴다
- */
-export function layoutToKitPoint(p: { x: number; y: number }): { x: number; y: number } {
-  return { x: p.x, y: 0.15 + 0.62 * p.y };
-}
-
-/** 그림 영역을 못 쟀을 때(jsdom 등) 쓰는 16:10 상자 */
-const FALLBACK_FIG = { w: 1600, h: 1000 };
-
-/**
- * 킷 정규화 좌표의 패드를 그림 영역 정규 좌표의 원으로 바꾼다(pickOverlayCorner의 겹침 판정용).
- * 킷은 DrumKit fitContain처럼 scale = min(4, 폭/760, 높이/300)로 그림 영역 가운데에 놓인다.
- * 반지름은 pickOverlayCorner 기준(min(폭, 높이×1.6))에 대한 비율이다
- */
-export function padFrameCircle(pad: PadId, point: { x: number; y: number }, skin: KitSkin, fig: { w: number; h: number } = FALLBACK_FIG): { x: number; y: number; r: number } {
-  const w = kitPadsFor(skin).find((p) => p.pad === pad)?.w ?? 0;
-  const scale = fitScaleBox(fig.w, fig.h, 4);
-  const kw = DRUM_KIT_W * scale;
-  const kh = DRUM_KIT_H * scale;
-  return {
-    x: ((fig.w - kw) / 2 + kw * point.x) / fig.w,
-    y: ((fig.h - kh) / 2 + kh * point.y) / fig.h,
-    r: (w / 2) * scale / Math.min(fig.w, fig.h * 1.6),
-  };
-}
-

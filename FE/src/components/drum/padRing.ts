@@ -13,4 +13,5 @@ export const RING: Record<PadShape, RingGeo> = {
   drum: { cx: 80, cy: 72, rx: 86, ry: 54 },
   cymbal: { cx: 80, cy: 70, rx: 86, ry: 46 },
   kick: { cx: 80, cy: 85, rx: 86, ry: 86 },
+  pedal: { cx: 80, cy: 80, rx: 50, ry: 68 },
 };
