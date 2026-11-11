@@ -64,6 +64,7 @@ beforeEach(() => {
     activePresetId: 'system',
     volume: 0.8,
     audioOffsetMs: 0,
+    timingCal: null,
     liveCoach: true,
   });
   put(useLive, { connected: [false, false], referenceSetAt: null });
@@ -246,5 +247,40 @@ describe('SettingsPage 데이터 활용 카드', () => {
   it('로그인하지 않았으면 카드가 없다', () => {
     put(useAuth, { status: 'anonymous', user: null });
     expect(render()).not.toContain('데이터 활용');
+  });
+});
+
+describe('SettingsPage 박자 맞추기', () => {
+  const rec = { measuredAt: new Date(2026, 10, 11).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40 };
+
+  it('맞춘 적이 없으면 안내와 [맞추기] 버튼', () => {
+    const html = render();
+    expect(html).toContain('아직 박자를 맞추지 않았어요');
+    expect(html).toMatch(/<button[^>]*>맞추기<\/button>/);
+    expect(html).not.toContain('다시 맞추기');
+  });
+
+  it('맞춘 뒤에는 날짜·입력과 [다시 맞추기]', () => {
+    put(useSettings, { sensorKind: 'serial', timingCal: rec, audioOffsetMs: -65 });
+    const html = render();
+    expect(html).toContain('11월 11일에 스틱으로 맞췄어요');
+    expect(html).toContain('다시 맞추기');
+    expect(html).toContain('-65ms');
+    expect(html).not.toContain('다시 맞춰 주세요');
+  });
+
+  it('스틱으로 맞췄는데 지금 키보드만이면 다시 맞추라고 안내한다', () => {
+    put(useSettings, { sensorKind: 'none', timingCal: rec });
+    expect(render()).toContain('스틱으로 맞춘 값이에요. 키보드로 칠 때는 다시 맞춰 주세요.');
+  });
+
+  it('수동 칸은 판정 타이밍 보정이고 범위 −250~+100, 5ms 단위다', () => {
+    const html = render();
+    expect(html).toContain('판정 타이밍 보정');
+    expect(html).toContain('판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요');
+    expect(html).not.toContain('타격음 지연 보정');
+    expect(html).toMatch(/min="-250"/);
+    expect(html).toMatch(/max="100"/);
+    expect(html).toMatch(/step="5"/);
   });
 });
