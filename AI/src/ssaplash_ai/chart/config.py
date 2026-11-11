@@ -2,7 +2,7 @@
 
 `configs/chart/separation.yaml` → SeparationConfig, `configs/chart/transcription.yaml` → TranscriptionConfig
 (S15P31A307-169). 둘 다 공통 부분(ChartConfig)을 상속. yaml의 상대 경로는 벤치마크 yaml과 같이
-AI/ 폴더(현재 작업 폴더) 기준.
+AI/ 폴더(현재 작업 폴더) 기준. `configs/chart/music_check.yaml` → MusicCheckConfig (분리 전 음악 여부 검사).
 
 환경 변수(`SSAPLASH_` 접두사, 인프라 -125 회신과 같은 규칙)가 yaml 값을 덮어씀.
 - SSAPLASH_CHART_DEVICE: 장치(cuda / cpu)
@@ -27,6 +27,7 @@ ENV_CHART_MODEL = "SSAPLASH_CHART_MODEL"
 
 DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
 DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
+DEFAULT_MUSIC_CHECK_CONFIG = Path("configs/chart/music_check.yaml")
 OUTPUT_FORMATS = ("flac", "wav")
 # beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
 TEMPO_METHODS = ("beat_this", "librosa")
@@ -271,6 +272,80 @@ class TranscriptionConfig(ChartConfig):
             tempo=TempoConfig.from_dict(raw.get("tempo")),
             max_duration_sec=max_duration,
             drum_check=DrumCheckConfig.from_dict(raw.get("drum_check")),
+        )
+
+
+@dataclass
+class MusicCheckConfig:
+    """`configs/chart/music_check.yaml` 한 파일. 분리 전에 원곡이 음악인지 보는 검사.
+
+    원곡의 positions 위치에서 window_sec 길이 구간을 뽑아 분류 모델로 음악 확률·말소리 확률을 구하고 평균함.
+    음악 확률 평균이 min_music_prob 미만이거나 말소리 확률 평균이 max_speech_prob 이상이면 NOT_TRANSCRIBABLE.
+    기준값 두 개가 모두 None이면 검사하지 않고 모델도 올리지 않음.
+    장치는 분리·채보와 따로 정함(환경 변수 SSAPLASH_CHART_DEVICE를 따르지 않음). GPU를 쓰지 않으려는 검사라 기본 cpu.
+    """
+
+    model: str = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    device: str = "cpu"
+    min_music_prob: float | None = None
+    max_speech_prob: float | None = None
+    positions: tuple[float, ...] = (0.2, 0.4, 0.6, 0.8)
+    window_sec: float = 10.0
+    max_duration_sec: float = 600.0
+    source_path: Path | None = field(default=None, repr=False)
+
+    @property
+    def enabled(self) -> bool:
+        """기준값이 하나라도 있으면 검사함."""
+        return self.min_music_prob is not None or self.max_speech_prob is not None
+
+    @classmethod
+    def from_yaml(cls, path: str | Path = DEFAULT_MUSIC_CHECK_CONFIG) -> MusicCheckConfig:
+        path = Path(path)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"음악 여부 검사 설정이 비어 있음: {path}")
+        return cls.from_dict(raw, source_path=path)
+
+    @classmethod
+    def from_dict(cls, raw: dict, source_path: Path | None = None) -> MusicCheckConfig:
+        known = {"model", "device", "min_music_prob", "max_speech_prob", "positions"}
+        known |= {"window_sec", "max_duration_sec"}
+        unknown = sorted(set(raw) - known)
+        if unknown:
+            raise ValueError(f"모르는 음악 여부 검사 설정 필드: {unknown}")
+        model = str(raw.get("model", cls.model)).strip()
+        if not model:
+            raise ValueError("음악 여부 검사 설정의 model이 비어 있음")
+        thresholds = {}
+        for name in ("min_music_prob", "max_speech_prob"):
+            value = raw.get(name)
+            if value is not None:
+                value = float(value)
+                if not 0.0 < value < 1.0:
+                    raise ValueError(f"{name}은 0과 1 사이 또는 비움: {value}")
+            thresholds[name] = value
+        positions = raw.get("positions", cls.positions)
+        if not isinstance(positions, (list, tuple)) or not positions:
+            raise ValueError(f"positions는 비어 있지 않은 목록: {positions!r}")
+        positions = tuple(float(p) for p in positions)
+        if any(not 0.0 <= p <= 1.0 for p in positions):
+            raise ValueError(f"positions는 0과 1 사이 비율: {positions}")
+        window_sec = float(raw.get("window_sec", cls.window_sec))
+        if window_sec <= 0:
+            raise ValueError(f"window_sec는 양수: {window_sec}")
+        max_duration = float(raw.get("max_duration_sec", cls.max_duration_sec))
+        if max_duration <= 0:
+            raise ValueError(f"max_duration_sec는 양수: {max_duration}")
+        return cls(
+            model=model,
+            device=str(raw.get("device", cls.device)),
+            min_music_prob=thresholds["min_music_prob"],
+            max_speech_prob=thresholds["max_speech_prob"],
+            positions=positions,
+            window_sec=window_sec,
+            max_duration_sec=max_duration,
+            source_path=source_path,
         )
 
 
