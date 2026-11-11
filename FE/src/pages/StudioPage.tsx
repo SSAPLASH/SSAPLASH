@@ -1,3 +1,4 @@
+// 곡 반주 듣기(재생바·제목 흐름)는 설계 CHART-003 라이브러리 재생바(S15P31A307-327).
 // 라이브러리 (CHART-003, Jira 189 · CHART-002 MIDI 업로드 · Figma 207:2110 외). 헤더 [올리기] → 업로드 창(음원/MIDI 탭), 아래 목록(카드·목록 보기).
 // 곡·악보가 하나도 없으면 같은 틀에 목록 자리만 빈 안내로 둔다(설계 QA-studio-empty-state).
 // 상태·폴링은 store/chartJobStore, MIDI는 store/midiUploadStore, 목록은 store/songStore. 이 페이지는 세 store를 접착한다.
@@ -11,6 +12,7 @@ import { useApiQuery } from '@/app/useApiQuery';
 import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
 import { SheetDeleteDialog } from '@/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/components/sheet/SheetTitleDialog';
+import { useFreeAccompaniment } from '@/components/free/useFreeAccompaniment';
 import { useShell } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -32,6 +34,7 @@ import type { SheetSummary } from '@/domain/sheetMusic';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
 import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
 import type { SongMetaPatch } from '@/domain/songEdit';
+import type { SongPlayback } from '@/domain/songPlayback';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/store/midiUploadStore';
 import { useSheetLink } from '@/store/sheetLinkStore';
@@ -378,6 +381,33 @@ export function StudioPage() {
 
   const items = useMemo(() => mineList.data ?? [], [mineList.data]);
   const status = mineList.status;
+  // 곡 반주 듣기(설계 CHART-003 라이브러리 재생바). 자유 연습의 반주 훅 하나를 써서 한 번에 한 곡만 울리고, 화면을 떠나면 훅이 해제한다
+  const {
+    view: listenView,
+    pick: listenPick,
+    pause: listenPause,
+    resume: listenResume,
+    seek: listenSeek,
+    off: listenOff,
+    retry: listenRetry,
+    available: listenAvailable,
+  } = useFreeAccompaniment();
+  const playback = useMemo<SongPlayback>(
+    () => ({
+      view: listenView,
+      onListen: (song) => listenPick({ songId: song.id, title: song.title, artist: song.artist || null, coverUrl: song.coverUrl }),
+      onPause: listenPause,
+      onResume: listenResume,
+      onSeek: listenSeek,
+      onRetry: listenRetry,
+    }),
+    [listenView, listenPick, listenPause, listenResume, listenSeek, listenRetry],
+  );
+  // 듣던 곡이 목록에서 사라지면(삭제) 끈다
+  const listeningId = listenView.pick?.songId ?? null;
+  useEffect(() => {
+    if (listeningId !== null && status === 'ready' && !items.some((s) => s.id === listeningId)) listenOff();
+  }, [listeningId, status, items, listenOff]);
   // 채보는 READY인데 반주가 생성 중인 곡만 짧게 다시 읽어 배지를 갱신한다(설계 CHART-002 반주 상태 4-2)
   useAccompanimentPolling(items, status === 'ready');
 
@@ -490,6 +520,7 @@ export function StudioPage() {
             onSongSheet={SHEET_ARCHIVE_ENABLED && SHEET_SONG_LINK_ENABLED && SONG_EDIT_ENABLED ? onSongSheet : undefined}
             onUploadSong={SHEET_ARCHIVE_ENABLED && SHEET_RELINK_ENABLED ? onUploadSong : undefined}
             empty={libraryEmpty}
+            playback={listenAvailable ? playback : undefined}
           />
         </div>
       </div>
