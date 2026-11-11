@@ -16,9 +16,19 @@ export function isRecommendationConsentCurrent(c: RecommendationConsent | null |
   return c?.agreed === true && c.version === version;
 }
 
-/** 한 번도 답하지 않았는가(= 기존 사용자 안내 대상). 읽지 못했거나 아직 안 읽었으면(null) 안내하지 않는다 */
+/**
+ * 수집이 꺼진 초안 판. 이 기간에는 가입 화면에 추천 항목이 없었는데도 가입 요청이 "거부, 이 판"을 함께 저장했다.
+ * 그래서 이 판의 거부는 사용자가 본문을 보고 고른 답이 아니므로 한 번 다시 묻는다.
+ */
+export const DRAFT_RECOMMENDATION_VERSION = '2026-11-05';
+
+/**
+ * 안내 창을 띄울 대상인가: 한 번도 답하지 않았거나(version null), 초안 판에 자동으로 거부가 저장된 경우.
+ * 공개 판 이후에 거부한 사람은 판이 바뀌어도 다시 묻지 않는다. 읽지 못했거나 아직 안 읽었으면(null) 안내하지 않는다
+ */
 export function needsRecommendationPrompt(c: RecommendationConsent | null | undefined): boolean {
-  return c != null && c.version === null;
+  if (c == null) return false;
+  return c.version === null || (c.agreed === false && c.version === DRAFT_RECOMMENDATION_VERSION);
 }
 
 /** 동의했지만 판이 지금과 다른가(약관 개정). 설정에서 새 본문 확인과 동의 여부를 별도로 안내한다 */
