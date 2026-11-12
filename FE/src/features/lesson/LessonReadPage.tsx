@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { postLessonCompletion } from '@/api/lessons';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
+import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { touchSource } from '@/runtime/sources';
 import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/play/lesson';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
@@ -63,6 +64,9 @@ export function LessonReadPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 이 화면은 처음부터 끝까지 치는 화면이라 자유 연습처럼 키보드 드럼을 계속 받는다(떠나면 끈다)
+  useKeyboardDrum(true);
 
   // 이 화면에서는 친 드럼이 울린다(자유 연습과 같은 공용 경로)
   useEffect(() => {

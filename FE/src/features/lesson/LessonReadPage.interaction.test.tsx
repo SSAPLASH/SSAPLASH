@@ -4,7 +4,9 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLessons, postLessonCompletion } from '@/api/lessons';
 import { hitSoundActive, resetHitSoundForTest } from '@/runtime/hitSound';
+import { keyboardSource } from '@/runtime/sources';
 import type { UserMe } from '@/domain/auth';
+import type { StickEvent } from '@/domain/events';
 import type { Lesson } from '@/domain/play/lesson';
 import type { PadId } from '@/domain/pads';
 import { useAuth } from '@/store/authStore';
@@ -174,5 +176,27 @@ describe('알아보기 화면', () => {
     await screen.findByRole('img', { name: '음표 2개 중 1번째' });
     cleanup();
     expect(hitSoundActive()).toBe(false);
+  });
+
+  it('이 화면에 있는 동안 키보드 드럼을 받고, 떠나면 다시 받지 않는다', async () => {
+    // 키보드 드럼은 화면이 직접 켜야 받는다(352). 알아보기 화면도 연주 화면처럼 켠다
+    const keyHits: StickEvent[] = [];
+    keyboardSource.setKeys(['KeyJ']);
+    const unsub = keyboardSource.subscribe((e) => {
+      if (e.kind === 'hit') keyHits.push(e);
+    });
+    await keyboardSource.connect();
+    try {
+      open();
+      await screen.findByRole('img', { name: '음표 2개 중 1번째' });
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', cancelable: true }));
+      expect(keyHits).toHaveLength(1);
+      cleanup();
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', cancelable: true }));
+      expect(keyHits).toHaveLength(1);
+    } finally {
+      unsub();
+      await keyboardSource.disconnect();
+    }
   });
 });
