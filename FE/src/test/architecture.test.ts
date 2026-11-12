@@ -54,7 +54,6 @@ const ALLOWED = new Set<string>([
   'components/calibration/TimingCalDialog.tsx -> app/keyboardDrum.ts',
   'components/calibration/TimingCalDialog.tsx -> app/timingCalSession.ts',
   'components/calibration/useRealign.ts -> app/calibrationSession.ts',
-  'components/lesson/LessonInvite.tsx -> app/authBootstrap.ts',
   'components/recording/RecordButton.tsx -> app/recordingStore.ts',
   'components/recording/RecordingToast.tsx -> app/recordingStore.ts',
   'components/recording/SaveRecordingDialog.tsx -> app/recordingStore.ts',

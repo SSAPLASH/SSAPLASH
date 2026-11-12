@@ -2,7 +2,7 @@
 // 닫으면 이 브라우저에서는 다시 보이지 않는다. 로그인 없는 빌드·내장 곡 빌드에서는 그리지 않는다.
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AUTH_REQUIRED } from '@/app/authBootstrap';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { LESSONS_PATH, shouldInvite } from '@/domain/lesson';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';

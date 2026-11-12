@@ -3,7 +3,7 @@
 // VITE_AUTH_REQUIRED=false 빌드는 `/`가 `/free`로 가고, 랜딩은 `/welcome`에서만 열린다(모드·시작은 바로 이동).
 import { useCallback, useEffect } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { AUTH_REQUIRED } from '@/app/authBootstrap';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { LandingView } from '@/features/landing/components/LandingView';
 import type { LandingModeKey } from '@/features/landing/components/landingContent';
 import { LoginDialog } from '@/features/landing/components/auth/LoginDialog';
