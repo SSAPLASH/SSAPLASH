@@ -501,7 +501,10 @@ export function encodeSetYawOffset(deg: number): Uint8Array<ArrayBuffer> {
   return buf;
 }
 
-/** GET_PARAMS: [0x17]. 응답은 PARAM_ACK 14개 + 끝 표시(PARAM_ACK_END) */
+/**
+ * GET_PARAMS: [0x17]. 응답은 파라미터마다 PARAM_ACK 하나(스틱 FW 기준 15개) + 끝 표시(PARAM_ACK_END, value = 파라미터 개수).
+ * 스틱 FW 1.12부터 끝 표시 앞에 PARAM_ACK_YAW_OFFSET(0x21, 현재 방위각 오프셋 ×100)이 하나 더 온다. 이 응답은 개수에 들어가지 않는다
+ */
 export function encodeGetParams(): Uint8Array<ArrayBuffer> {
   return new Uint8Array([CommandType.GET_PARAMS]);
 }
