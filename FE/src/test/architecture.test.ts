@@ -87,6 +87,12 @@ describe('폴더 구조 의존 규칙', () => {
     ...SOURCES.filter((f) => domainOwner(f) !== null).flatMap((f) => packageImportsOf(f).map((pkg) => `${f} -> ${pkg}`)),
     // R4 components/ui는 store·domain·api를 모른다
     ...violations((from, to) => from.startsWith('components/ui/') && /^(store|domain|api|engine|input|audio)\//.test(to)),
+    // R5 config는 config 파일만 import한다(값·순수 함수만 두는 층이라 다른 폴더를 모른다)
+    ...violations((from, to) => from.startsWith('config/') && !to.startsWith('config/')),
+    // R6 runtime은 화면 층(components)을 import하지 않는다(기능·app은 R2가 막는다)
+    ...violations((from, to) => from.startsWith('runtime/') && to.startsWith('components/')),
+    // R7 core·store·domain은 runtime을 모른다(runtime이 이들 위의 층이다)
+    ...violations((from, to) => /^(store|api|domain|input|engine|audio|coach|telemetry|media)\//.test(from) && to.startsWith('runtime/')),
   ];
   const unique = [...new Set(found)].sort();
 
