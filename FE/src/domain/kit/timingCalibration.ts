@@ -77,6 +77,14 @@ export function sanitizeTimingCalRecord(raw: unknown): TimingCalRecord | null {
   };
 }
 
+/**
+ * 발 타격(하이햇 페달·킥)에 쓸 판정 타이밍 보정값. 킥 값을 따로 재지 않았으면(null) 스틱 값을 쓴다
+ * (설계 PLAY-004-timing-cal-stick-kick D1·D2)
+ */
+export function kickOffsetOrStick(audioOffsetMs: number, kickOffsetMs: number | null): number {
+  return kickOffsetMs ?? audioOffsetMs;
+}
+
 /** 박 간격(ms) */
 export function timingCalBeatMs(): number {
   return 60_000 / TIMING_CAL_BPM;
