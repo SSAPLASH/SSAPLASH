@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderHook } from '@testing-library/react';
 
 const setPoseStream = vi.fn();
-vi.mock('@/app/sources', () => ({ inputManager: { setPoseStream: (v: boolean) => setPoseStream(v) } }));
+vi.mock('@/runtime/sources', () => ({ inputManager: { setPoseStream: (v: boolean) => setPoseStream(v) } }));
 
 import { usePoseStream } from './usePoseStream';
 

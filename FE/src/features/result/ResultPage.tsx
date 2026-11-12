@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/features/result/components/ReportEntry';
 import { LessonResultBand } from '@/components/lesson/LessonResultBand';
-import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/app/playSync';
+import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/runtime/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/playRetry';
 import { unlockAudio } from '@/app/bootstrap';

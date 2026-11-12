@@ -9,7 +9,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getChartAssets } from '@/api/charts';
 import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from './analysisPoller';
-import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/app/playSync';
+import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/runtime/playSync';
 import { CoachSummaryCard } from '@/features/result/components/report/CoachSummaryCard';
 import { FocusPanel } from '@/features/result/components/report/FocusPanel';
 import { NoteFlowChart } from '@/features/result/components/report/NoteFlowChart';

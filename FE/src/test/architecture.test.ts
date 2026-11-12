@@ -51,17 +51,7 @@ const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app
  */
 const ALLOWED = new Set<string>([
   // 공유 → app
-  'components/calibration/TimingCalDialog.tsx -> app/keyboardDrum.ts',
-  'components/calibration/TimingCalDialog.tsx -> app/timingCalSession.ts',
-  'components/calibration/useRealign.ts -> app/calibrationSession.ts',
-  'components/recording/RecordButton.tsx -> app/recordingStore.ts',
-  'components/recording/RecordingToast.tsx -> app/recordingStore.ts',
-  'components/recording/SaveRecordingDialog.tsx -> app/recordingStore.ts',
-  'components/recording/toastContent.tsx -> app/recordingStore.ts',
-  'components/shell/GlassDock.tsx -> app/recordingStore.ts',
-  'components/shell/RouteErrorBoundary.tsx -> app/recordingStore.ts',
   'components/shell/Sidebar.tsx -> app/prefetchRoute.ts',
-  'components/shell/TopBar.tsx -> app/sensorRegistry.ts',
   'components/song/useFreeAccompaniment.ts -> app/bootstrap.ts',
 ]);
 

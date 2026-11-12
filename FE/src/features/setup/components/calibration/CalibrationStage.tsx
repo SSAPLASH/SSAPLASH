@@ -15,7 +15,7 @@ import { GapBanner } from './GapBanner';
 import { useOverlayRegion } from '@/features/setup/components/useOverlayRegion';
 import { HAND_NAME, captureHeadline, overlapLineText, spreadWarningText } from '@/components/calibration/calibrationText';
 import { previewRadius } from './captureRadius';
-import { calibrationSession } from '@/app/calibrationSession';
+import { calibrationSession } from '@/runtime/calibrationSession';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureSnapshot } from '@/engine/HitCapture';

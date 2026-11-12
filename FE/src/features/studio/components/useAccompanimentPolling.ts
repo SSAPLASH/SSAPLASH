@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getSong } from '@/api/songs';
 import { isAccompanimentPending, type SongSummary } from '@/domain/songCatalog';
 import { patchSongStatus, songKeys } from '@/api/queries/songs';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { AccompanimentPoller } from './accompanimentPoller';
 
 /** 다시 읽은 곡 상태를 캐시된 모든 곡 목록(라이브러리·곡 선택)에 반영한다 (설계 TECH-351) */

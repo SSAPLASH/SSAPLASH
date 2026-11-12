@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import type { UseFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { accompanimentBarView } from '@/domain/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';

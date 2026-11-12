@@ -11,7 +11,7 @@ import type { SongSummary } from '@/domain/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_ARCHIVE_ENABLED: true }));

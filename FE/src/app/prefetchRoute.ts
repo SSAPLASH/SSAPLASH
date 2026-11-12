@@ -6,10 +6,10 @@ import { mineSongsQuery, songListQuery } from '@/api/queries/songs';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
-import { useRecordingStore } from './recordingStore';
+import { useRecordingStore } from '@/runtime/recordingStore';
 import { useSongs } from '@/store/songStore';
 import { SHEET_ARCHIVE_ENABLED } from '@/config/features';
-import { queryClient } from './queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { loadRoute, type RouteKey } from './routeModules';
 
 type NetworkInfo = { saveData?: boolean; effectiveType?: string };

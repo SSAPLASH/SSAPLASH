@@ -12,7 +12,7 @@ import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSheetLink } from '@/features/studio/store/sheetLinkStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_RELINK_ENABLED: true }));

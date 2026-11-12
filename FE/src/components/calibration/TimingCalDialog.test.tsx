@@ -1,7 +1,7 @@
 // 박자 맞추기 대화상자 표시 검증: 안내 → 진행(박 점) → 결과 3종.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { TimingCalSnapshot } from '@/app/timingCalSession';
+import type { TimingCalSnapshot } from '@/runtime/timingCalSession';
 import { TimingCalView } from './TimingCalDialog';
 
 const noop = () => {};

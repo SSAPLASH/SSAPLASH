@@ -1,5 +1,5 @@
 // 결과 화면의 [상세 분석 보기] 진입부 (설계 COACH-002 4-1). 업로드 상태에 따라 활성·사유·다시 시도를 보여 준다.
-// 상태 구독·재전송은 화면(ResultPage)이 app/playSync로 하고 여기는 그리기만 한다.
+// 상태 구독·재전송은 화면(ResultPage)이 runtime/playSync로 하고 여기는 그리기만 한다.
 import { Link } from 'react-router-dom';
 import { analysisTeaser, type Report } from '@/domain/report';
 import type { PlayUploadState } from '@/domain/playLog';

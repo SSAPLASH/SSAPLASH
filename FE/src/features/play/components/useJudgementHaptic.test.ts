@@ -5,7 +5,7 @@ import type { JudgementEvent } from '@/engine/RhythmSession';
 const hapticWave = vi.fn();
 const enter = vi.fn();
 const leave = vi.fn();
-vi.mock('@/app/sources', () => ({ inputManager: { hapticWave: (...a: unknown[]) => hapticWave(...a) } }));
+vi.mock('@/runtime/sources', () => ({ inputManager: { hapticWave: (...a: unknown[]) => hapticWave(...a) } }));
 vi.mock('@/features/play/hapticMode', () => ({ enterJudgementHaptic: () => enter(), leaveJudgementHaptic: () => leave() }));
 
 import { attachJudgementHaptic } from './useJudgementHaptic';

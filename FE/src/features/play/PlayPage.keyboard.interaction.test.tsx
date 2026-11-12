@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSong, listAllSongs } from '@/api/songs';
-import { keyboardSource } from '@/app/sources';
+import { keyboardSource } from '@/runtime/sources';
 import type { Chart, Difficulty } from '@/domain/chart';
 import type { SongDetail } from '@/domain/songCatalog';
 import { PlayPage } from './PlayPage';

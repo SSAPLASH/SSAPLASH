@@ -12,7 +12,7 @@ import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { SongPicker } from './SongPicker';
 import { getBestRecords } from '@/api/plays';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import type { UserMe } from '@/domain/auth';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));

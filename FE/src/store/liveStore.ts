@@ -8,7 +8,7 @@ import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } fr
 import type { CaptureSnapshot } from '@/engine/HitCapture';
 import type { RealignSnapshot } from '@/engine/SnareRealign';
 
-/** 보정·재정렬 세션 스냅샷(PLAY-004 3-7). app/calibrationSession이 쓰고 화면이 읽는다 */
+/** 보정·재정렬 세션 스냅샷(PLAY-004 3-7). runtime/calibrationSession이 쓰고 화면이 읽는다 */
 export interface CalibrationSnapshot {
   mode: 'idle' | 'capture' | 'realign';
   capture: CaptureSnapshot | null;

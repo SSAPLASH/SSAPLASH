@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
 import { fetchSimilarSongs } from '@/api/similarSongs';
-import { loadAllReportNotes, prefetchReport, refreshReport } from '@/app/playSync';
+import { loadAllReportNotes, prefetchReport, refreshReport } from '@/runtime/playSync';
 import type { RecommendationItem } from '@/domain/recommendation';
 import type { Report } from '@/domain/report';
 import type { SongSummary } from '@/domain/songCatalog';
@@ -18,8 +18,8 @@ import { ReportPage } from './ReportPage';
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 vi.mock('@/api/charts', () => ({ getChartAssets: vi.fn().mockResolvedValue({ accompanimentUrl: null }) }));
-vi.mock('@/app/playSync', async (orig) => ({
-  ...(await orig<typeof import('@/app/playSync')>()),
+vi.mock('@/runtime/playSync', async (orig) => ({
+  ...(await orig<typeof import('@/runtime/playSync')>()),
   prefetchReport: vi.fn(),
   refreshReport: vi.fn(),
   loadAllReportNotes: vi.fn(),

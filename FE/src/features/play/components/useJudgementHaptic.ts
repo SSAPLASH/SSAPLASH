@@ -4,7 +4,7 @@
 //  - MISS·손 없는 판정(키보드·터치)에는 보내지 않는다.
 import { useEffect } from 'react';
 import { enterJudgementHaptic, leaveJudgementHaptic } from '@/features/play/hapticMode';
-import { inputManager } from '@/app/sources';
+import { inputManager } from '@/runtime/sources';
 import { waveForJudgement } from '@/features/play/domain/haptics';
 import type { JudgementEvent, RhythmSession } from '@/engine/RhythmSession';
 

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listAllPlays, type PlaySummary } from '@/api/plays';
 import { setPlayLogOwner } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { PlayLogTab } from './PlayLogTab';
 
 vi.mock('@/api/plays', () => ({ listAllPlays: vi.fn() }));

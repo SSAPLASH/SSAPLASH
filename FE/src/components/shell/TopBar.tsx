@@ -1,7 +1,7 @@
 // 상단 바(Figma Navigation / TopBar 126:2123, 높이 56). 왼쪽에 제목, 오른쪽은 비운다.
 // Dock·StickStatus·아바타는 셸 루트에 fixed로 겹쳐 놓인다(D3). InfoBar 변이는 만들지 않는다.
 import { useLocation } from 'react-router-dom';
-import { sensorRegistry } from '@/app/sensorRegistry';
+import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';

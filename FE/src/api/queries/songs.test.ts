@@ -1,7 +1,7 @@
 // 곡 목록 쿼리 (설계 TECH-350·351). 옛 songStore.load·patchItem 테스트를 옮겼다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from '@/api/auth';
-import { createQueryClient } from '@/app/queryClient';
+import { createQueryClient } from '@/runtime/queryClient';
 import { BUILTIN_CHARTS } from '@/domain/chart';
 import type { SongSummary } from '@/domain/songCatalog';
 import { mineSongsQuery, patchSongStatus, songListQuery } from './songs';

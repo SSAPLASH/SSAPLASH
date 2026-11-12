@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
 import { getBestRecords, type BestRecordsResponse } from '@/api/plays';
 import { useAuth } from '@/store/authStore';
-import { usePlaySync } from '@/app/playSync';
+import { usePlaySync } from '@/runtime/playSync';
 import { useBestRecords } from './useBestRecords';
 import type { UserMe } from '@/domain/auth';
 import type { PlayUploadState } from '@/domain/playLog';
 
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })) }));
+vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })) }));
 const response = (score: number): BestRecordsResponse => ({ items: [{ songId: 1, chartId: 11, difficulty: 'EASY', mode: 'RHYTHM', bestScore: score, bestAccuracy: 80 }] });
 function deferred() {
   let resolve!: (value: BestRecordsResponse) => void;

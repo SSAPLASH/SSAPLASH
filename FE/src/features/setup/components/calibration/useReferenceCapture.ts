@@ -2,8 +2,8 @@
 // 2타 보정 상태 기계(calibrationSession)와 섞지 않고 화면 훅에 둔다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ReferenceCapture } from '@/engine/ReferenceCapture';
-import { calibrationSession } from '@/app/calibrationSession';
-import { inputManager } from '@/app/sources';
+import { calibrationSession } from '@/runtime/calibrationSession';
+import { inputManager } from '@/runtime/sources';
 import type { StickId } from '@/domain/events';
 
 export type ReferenceHoldPhase = 'idle' | 'holding' | 'done';

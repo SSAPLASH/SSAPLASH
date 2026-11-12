@@ -8,7 +8,7 @@ import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { ApiError } from '@/api/error';
 import { recordingKeys, recordingListQuery } from '@/api/queries/recordings';
 import type { ListRecordingsParams, PageResponse } from '@/api/recordings';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import type { RecordingMode, RecordingSort, RecordingSummary } from '@/domain/recording';
 
 /** 모드 필터 값. ALL이면 mode 쿼리를 생략한다 */

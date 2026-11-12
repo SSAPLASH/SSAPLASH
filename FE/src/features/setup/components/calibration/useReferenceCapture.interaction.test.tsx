@@ -5,7 +5,7 @@ import type { Pose, StickId } from '@/domain/events';
 
 type PoseListener = (stickId: StickId, pose: Pose) => void;
 const h = vi.hoisted(() => ({ listeners: new Set<(s: 0 | 1, p: { pitch: number; yaw: number }) => void>(), resetPose: vi.fn() }));
-vi.mock('@/app/sources', () => ({
+vi.mock('@/runtime/sources', () => ({
   inputManager: {
     onPose: (l: PoseListener) => {
       h.listeners.add(l);
@@ -13,7 +13,7 @@ vi.mock('@/app/sources', () => ({
     },
   },
 }));
-vi.mock('@/app/calibrationSession', () => ({ calibrationSession: { resetPose: () => h.resetPose() } }));
+vi.mock('@/runtime/calibrationSession', () => ({ calibrationSession: { resetPose: () => h.resetPose() } }));
 
 import { useReferenceCapture } from './useReferenceCapture';
 

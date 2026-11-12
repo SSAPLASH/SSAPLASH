@@ -1,7 +1,7 @@
 // 공통 조회 훅 (설계 TECH-350 3절). useQuery 결과를 화면이 쓰던 상태명(loading/ready/error)과 오류 문장으로 바꾼다.
 import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query';
 import { ApiError } from '@/api/http';
-import { queryClient } from './queryClient';
+import { queryClient } from '@/runtime/queryClient';
 
 export type ApiQueryStatus = 'loading' | 'ready' | 'error';
 

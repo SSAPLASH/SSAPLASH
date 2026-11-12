@@ -7,7 +7,7 @@ import { ApiError } from '@/api/error';
 import { getRecording, listRecordings } from '@/api/recordings';
 import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
 import { downloadBlob } from '@/media/downloadFile';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { RecordingList } from './RecordingList';
 
 vi.mock('@/api/recordings');

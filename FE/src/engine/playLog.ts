@@ -1,5 +1,5 @@
 // 플레이 로그 (공통 명세서 9-3) 의 로컬 버전. 텔레메트리는 telemetry.ts.
-// localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 app/playSync가 이 로그로 하고 상태를 upload에 적는다.
+// localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 runtime/playSync가 이 로그로 하고 상태를 upload에 적는다.
 import type { HihatPedalCoverage } from '@/domain/hihatPedalCoverage';
 import type { TimingWindows } from '@/domain/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
