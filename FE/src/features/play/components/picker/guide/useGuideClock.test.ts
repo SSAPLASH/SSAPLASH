@@ -75,6 +75,22 @@ describe('useGuideClock', () => {
     expect(result.current.t).toBe(150);
   });
 
+  it('active=false(접힘)면 누적하지 않고 true로 돌아오면 이어간다', () => {
+    const target = { current: document.createElement('div') };
+    const { result, rerender } = renderHook(({ active }) => useGuideClock(script, target, active), { initialProps: { active: true } });
+    tick(0);
+    tick(100);
+    expect(result.current.t).toBe(100);
+    rerender({ active: false });
+    tick(500);
+    tick(500);
+    expect(result.current.t).toBe(100);
+    rerender({ active: true });
+    tick(0);
+    tick(50);
+    expect(result.current.t).toBe(150);
+  });
+
   it('stepTo(i)는 그 칸의 멈춤 시작으로 옮기고 멈춘다', () => {
     const { result } = setup();
     act(() => result.current.stepTo(3));
