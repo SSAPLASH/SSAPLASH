@@ -5,12 +5,22 @@ import { accompanimentView, type AccompanimentStatus } from '@/domain/songCatalo
 interface Props {
   songStatus: string;
   accompanimentStatus: AccompanimentStatus;
+  onRetry?: () => void;
+  retrying?: boolean;
 }
 
-export function AccompanimentBadge({ songStatus, accompanimentStatus }: Props) {
+export function AccompanimentBadge({ songStatus, accompanimentStatus, onRetry, retrying = false }: Props) {
   const view = accompanimentView(songStatus, accompanimentStatus);
   if (!view) return null;
   const tone = view.tone === 'danger' ? 'danger' : 'active';
+  if (accompanimentStatus === 'FAILED' && onRetry) {
+    return (
+      <button type="button" className={`studio-badge studio-badge-${tone} studio-badge-retry`} aria-label="반주 생성 다시 시도" title="반주 생성 다시 시도" disabled={retrying} onClick={onRetry}>
+        <span className="studio-badge-dot" aria-hidden="true" />
+        {view.label}
+      </button>
+    );
+  }
   return (
     <span className={`studio-badge studio-badge-${tone}`}>
       <span className="studio-badge-dot" aria-hidden="true" />

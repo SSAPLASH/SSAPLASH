@@ -74,6 +74,20 @@ describe('AccompanimentPoller', () => {
     expect(fetchSong).toHaveBeenCalledTimes(ACC_POLL_MAX_TRIES);
   });
 
+  it('최대 횟수 뒤 재시도한 곡은 새 회차로 다시 확인한다', async () => {
+    const fetchSong = vi.fn(async (id: number) => song(id, 'GENERATING'));
+    const p = new AccompanimentPoller({ fetchSong, onSong: () => {}, maxTries: 1 });
+    p.update([1], true);
+    await tick();
+    await tick();
+    expect(fetchSong).toHaveBeenCalledTimes(1);
+    p.restart(2);
+    p.update([1, 2], true);
+    await tick();
+    expect(fetchSong.mock.calls.map((c) => c[0])).toEqual([1, 1, 2]);
+    p.dispose();
+  });
+
   it('비활성(탭 숨김)이면 멈추고, 다시 활성이면 남은 횟수로 이어간다', async () => {
     const fetchSong = vi.fn(async (id: number) => song(id, 'GENERATING'));
     const p = new AccompanimentPoller({ fetchSong, onSong: () => {} });
