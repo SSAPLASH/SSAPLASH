@@ -5,7 +5,7 @@ TensorFlow(Omnizart)·torch 2.8 고정(ADT_STR)·numpy<2(Inverse Drum Machine)�
 스크립트가 모델을 한 번 올린 뒤 곡마다 (시각, 원래 라벨, 세기)와 채보 시간·GPU 메모리를 재서
 JSON으로 돌려줌. 곡마다 프로세스를 새로 띄우면 로드 시간이 RTF에 섞이기 때문.
 
-요청 JSON: songs[{song_id, wav_path}], device, warmup, options
+요청 JSON: model, songs[{song_id, wav_path}], device, warmup, options
 응답 JSON: load_sec, checkpoint, n_params, songs[{song_id, hits[[t, label, vel|null]], elapsed_sec,
   peak_vram_mb|null, error|null}], note|null
 스크립트가 GPU 메모리를 못 읽으면(TensorFlow 등) 러너가 nvidia-smi 폴링 값을 쓰고 vramMethod에 적음.

@@ -1,9 +1,10 @@
-# 서비스 adtof_drumsep에 실제 곡(Songsterr 인기곡 83곡)으로 학습한 가중치 두 개를 더한 조합 (2026-11-08)
+# 원래 ADTOF + 드럼 킷 분리(original)에 실제 곡(Songsterr 인기곡 83곡)으로 학습한 가중치 두 개를 더한 조합 (2026-11-08).
+# 2026-11-10 ~ 11 서비스 기본, 지금은 되돌리기용
 # 1) 원래 ADTOF와 실제 곡 5종 학습 가중치(five_all)의 프레임별 점수를 킥·스네어·하이햇·심벌 열만 평균. 탐 열은 원래 것만
 #    (학습 가중치가 처음 보는 드럼 세트의 킥을 탐으로 내는 것을 막으려고)
-# 2) 패드 붙이기 규칙은 서비스와 같음
-# 3) 크래시·라이드 타격 시각은 두고 이름만 실제 곡 8패드 학습 가중치(pads_all_noguard) 판정으로 바꿈
-# 8패드 F1 지금 서비스 대비: 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST 드럼 단독 +0.008,
+# 2) 패드 붙이기 규칙은 original과 같음
+# 3) 크래시·라이드 타격 시각은 두고 이름만 실제 곡 9패드 학습 가중치(pads_all_noguard) 판정으로 바꿈
+# 8패드 F1 original 대비: 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST 드럼 단독 +0.008,
 # ENST 원곡 분리 +0.013, MDB +0.022. 분석: AI/docs/bench/public-songs-2026-11/expand.md 9절
 # SSAPLASH_MODELS_DIR/songsterr_ft/ 아래 five_all/last.pth, pads_all_noguard/last.pth가 있어야 함
 name: adtof_drumsep_songsterr_avg

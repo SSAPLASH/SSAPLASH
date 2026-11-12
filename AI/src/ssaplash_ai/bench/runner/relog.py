@@ -74,7 +74,7 @@ class RelogOutcome:
     kind: str | None
     experiment: str
     run_id: str
-    status: str  # 기록 / 건너뜀(중복) / 건너뜀(이유) / 실패
+    status: str  # 기록 / 기록 예정(dry-run) / 건너뜀(중복) / 건너뜀 / 실패
     mlflow_run_id: str = ""
     detail: str = ""
 

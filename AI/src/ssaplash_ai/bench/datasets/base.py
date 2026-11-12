@@ -198,7 +198,7 @@ class BaseDataset(abc.ABC):
         return len(self.song_ids())
 
     def check(self) -> CheckReport:
-        """파일 유무와 길이만 확인. 오디오 본문은 읽지 않음."""
+        """파일 유무·길이·패드별 타격 수 확인. 오디오 본문은 읽지 않음."""
         missing: list[str] = []
         total = 0.0
         hits_by_pad: dict[str, int] | None = None

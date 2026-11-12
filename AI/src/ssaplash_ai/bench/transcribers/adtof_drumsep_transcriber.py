@@ -615,7 +615,7 @@ def name_clusters(
 
 @dataclass
 class TomAssignment:
-    """곡 하나의 탐 타격 처리 결과. 분석 도구(rule_eval·tom_pitch)가 by_song 통계에 씀."""
+    """곡 하나의 탐 타격 처리 결과. 분석 도구 rule_eval이 by_song 통계에 씀."""
 
     times: list[float]
     f0: np.ndarray  # Hz, 무음이면 nan
@@ -888,7 +888,7 @@ def assign_pads(
     """ADTOF 피치별 시각 + 분리 스템 (+ 입력 드럼, 프레임별 점수) → (시각, 패드 이름, None) 목록.
 
     mixture는 tom_gate_ratio(탐 아닌 소리 거르기)를 켰을 때 필요한 입력 드럼 (채널, 샘플).
-    activations는 ADTOF 프레임별 점수 (프레임, 5 또는 6). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
+    activations는 ADTOF 프레임별 점수 (프레임, 5·6·7). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
     낮은 탐 되살리기의 점수 조건에 씀. 없으면 peaks의 탐 시각 그대로.
     """
     r = rules_with_defaults(rules)

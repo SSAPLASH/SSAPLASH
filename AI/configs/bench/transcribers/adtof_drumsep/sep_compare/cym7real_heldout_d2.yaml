@@ -23,7 +23,7 @@ rules:
     crash: crash
     ride: ride
 license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
-license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치를 E-GMD·STAR로 파인튜닝, 페달·크래시·라이드 출력 추가) + 미명시 (MDX23C DrumSep 가중치)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치를 E-GMD·STAR·ENST·MDB로 파인튜닝, 페달·크래시·라이드 출력 추가) + 미명시 (MDX23C DrumSep 가중치)
 source_url: https://github.com/xavriley/ADTOF-pytorch
 labels:
   KICK: KICK

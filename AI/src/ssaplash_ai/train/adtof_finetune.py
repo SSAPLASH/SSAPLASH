@@ -547,7 +547,7 @@ def train(
         epochs = range(0) if finished else range(start_epoch, cfg.max_epochs)
     else:
         t0 = time.time()
-        # 학습 전 시작 가중치 (6·9클래스는 출력층을 복사한 상태라 하이햇·탐이 겹쳐 나올 수 있음)
+        # 학습 전 시작 가중치 (6·7·9클래스는 출력층을 복사한 상태라 하이햇·탐이 겹쳐 나올 수 있음)
         start_row: dict = {"epoch": -1, "step": 0, "lr": state.lr, "loss": float("nan"), "sec": 0}
         consider(evaluate_model(model, val_songs, cfg.classes, thresholds, device), -1, start_row)
         write_row(start_row)

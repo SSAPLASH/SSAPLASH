@@ -18,7 +18,7 @@ learning_rate: 0.0001
 lr_reduce_patience: 2
 early_stop_patience: 4
 label_radiation: 1
-class_weights: null  # null이면 ADTOF 원본 [1.078, 1.353, 3.414, 1.144, 1.768]
+class_weights: null  # null이면 [1.078, 1.353, 3.414, 1.144, 1.768, 1.144] (ADTOF 원본 + 페달은 하이햇 값)
 tom_weight_mult: 1.0
 pedal_weight_mult: 2.0
 tom_window_frac: 0.0

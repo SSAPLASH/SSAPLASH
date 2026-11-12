@@ -219,7 +219,7 @@ def label_f1_table(hits: pd.DataFrame, scheme: str, window_ms: int = 50) -> pd.D
 
 
 def label_f1_metrics(hits: pd.DataFrame, window_ms: int = 50) -> dict[str, dict[str, float]]:
-    """tracking.log_run용 {모델: {f1_{라벨}: 값}}. 패드 8종(pads 기준)과 tom·cymbal(five 기준).
+    """mlflow_tracking.log_run용 {모델: {f1_{라벨}: 값}}. 패드 8종(pads 기준)과 tom·cymbal(five 기준).
 
     run 하나는 입력이 하나라 모델만 키로 씀. S15P31A307-163: 규칙을 바꿔 가며 잰 run을 MLflow에서
     나란히 놓고 패드별 차이를 보기 위한 것.
@@ -375,7 +375,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame, hits: pd.DataFrame
 
 
 def summary_metrics_by_model(summary: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """tracking.log_run에 넘길 {모델: {열: 값}}. run 하나는 묶음·입력이 하나라 모델만 키로."""
+    """mlflow_tracking.log_run에 넘길 {모델: {열: 값}}. run 하나는 묶음·입력이 하나라 모델만 키로."""
     cols = [c for c, _, _ in COMPARISON_METRICS] + [c for c, _ in AUXILIARY_METRICS]
     out: dict[str, dict[str, float]] = {}
     for _, r in summary.iterrows():
