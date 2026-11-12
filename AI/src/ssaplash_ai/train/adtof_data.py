@@ -10,7 +10,7 @@
   49 채널은 크래시만, 51 채널은 라이드)
 - 클래스 `pads`: 패드 9종(KICK·SNARE·SMALL_TOM·MID_TOM·FLOOR_TOM·HIHAT·CRASH·RIDE·HIHAT_PEDAL)
 - 탐 강조: 윈도의 `tom_window_frac` 비율은 그 곡의 정답 탐 타격 하나를 가운데 두고 자름
-- 반주가 있는 곡(STAR·ENST)은 `accomp_mix_prob` 확률로 반주를 낮은 게인으로 섞음
+- 반주가 있는 곡(STAR·ENST·MDB·Songsterr 공용 곡)은 `accomp_mix_prob` 확률로 반주를 낮은 게인으로 섞음
 - 입력 전체 게인을 `gain_db_range` 안에서 바꿈
 - 데이터셋마다 `ignore_classes`로 손실에서 뺄 클래스를 지정(주석에 그 악기 표시가 없는 데이터용)
 

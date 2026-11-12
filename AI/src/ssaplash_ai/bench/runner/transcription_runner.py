@@ -2,7 +2,7 @@
 
 흐름: 데이터셋에 타격 정답이 있는지 확인 → (separated면 분리 어댑터 준비) → 모델마다 어댑터 생성·
 load(loadSec)·워밍업 → 곡마다 입력 고르기(drums / mixture / separated) → transcribe(시간·메모리 측정)
-→ hit_f1로 5가지·(8패드)·라벨 무시 점수 → results.csv 1행 + hits_by_class.csv 여러 행 즉시 기록
+→ hit_f1로 5가지·(8패드·9패드·페달 혼동 수)·라벨 무시 점수 → results.csv 1행 + hits_by_class.csv 여러 행 즉시 기록
 → 선택 시 예측 MIDI 저장 → 어댑터 해제.
 입력 3가지는 실행 1회에 하나. separated는 run 폴더 `separated/<분리 모델>/<곡>/drums.wav`에 캐시하고
 있으면 분리를 건너뜀(분리 시간은 separateSec 열, 채보 RTF에는 안 들어감).

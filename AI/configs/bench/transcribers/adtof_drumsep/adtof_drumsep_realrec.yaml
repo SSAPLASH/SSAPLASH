@@ -5,10 +5,10 @@
 # - 킥·스네어·하이햇·하이햇 페달: 실제 녹음 학습 모델 tom_6cls_real_full (E-GMD·STAR에 ENST·MDB 실제 녹음을 더해 학습)
 # - 탐 3종: 원래 ADTOF 가중치(tom_checkpoint_path: default). 실제 녹음 학습 모델은 처음 보는 드럼 세트의 킥을 탐으로 적음
 # - 크래시·라이드: 7클래스 실제 녹음 학습 모델 tom_7cls_real_full (크래시·라이드를 모델이 직접 나눠 냄)
-# 규칙(pk_gap30 + 크래시 가중치 0.7)과 드럼 킷 분리는 adtof_drumsep.yaml과 같음. 하이햇 페달은 하이햇으로 합쳐 채보 JSON
-# 8패드를 유지(페달 출력은 하드웨어 뒤, 팀 11/02 결정).
+# 규칙(pk_gap30 + 크래시 가중치 0.7)과 드럼 킷 분리는 adtof_drumsep.yaml과 같음. 하이햇 페달은 음원 채보에서
+# HIHAT으로 합침(채보 JSON 패드는 9종, HIHAT_PEDAL은 악보 채보만 냄).
 # 드럼 분리 입력 8패드 F1(페달은 하이햇으로 합침, MDB 23곡·ENST 64곡, 곡마다 학습에 안 쓴 버전으로 채점):
-# 현재 모델 0.844·0.790 → 이 조합 0.886·0.830. 표 data/results/sep_compare/compare.md, 스크립트 scripts/score_sep_compare.py.
+# 원래 ADTOF + 드럼 킷 분리 0.844·0.790 → 이 조합 0.886·0.830 (2026-11-03). 표 data/results/sep_compare/compare.md, 스크립트 scripts/score_sep_compare.py.
 # 가중치는 서비스에서 SSAPLASH_MODELS_DIR/adtof_ft/{tom_6cls_real_full,tom_7cls_real_full}/best.pth
 name: adtof_drumsep_realrec
 adapter: adtof_drumsep

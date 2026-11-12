@@ -41,7 +41,7 @@ DEFAULT_THRESHOLDS_FIVE: dict[str, float] = dict(
 )
 DEFAULT_THRESHOLDS_FIVE["pedal"] = 0.22  # 페달은 하이햇 값으로 시작
 DEFAULT_THRESHOLDS_FIVE["crash"] = DEFAULT_THRESHOLDS_FIVE["ride"] = 0.30  # 크래시·라이드는 심벌 값
-# 8패드 기본값: 탐 3개는 탐 값, 크래시·라이드는 심벌 값
+# 9패드 기본값: 탐 3개는 탐 값, 크래시·라이드는 심벌 값, 페달은 하이햇 값
 DEFAULT_THRESHOLDS_PADS: dict[str, float] = {
     "KICK": 0.22,
     "SNARE": 0.24,
@@ -87,7 +87,7 @@ def model_activations(
 
 
 def activations_to_hits(act: np.ndarray, classes: str, thresholds: Sequence[float]) -> np.ndarray:
-    """(프레임, 클래스) → 예측 타격 표. five면 라벨 KICK·SNARE·HIHAT·tom·cymbal(five_pedal은 + HIHAT_PEDAL), pads면 패드 이름."""
+    """(프레임, 클래스) → 예측 타격 표. five면 라벨 KICK·SNARE·HIHAT·tom·cymbal(five_pedal은 + HIHAT_PEDAL, five_pedal_cym은 cymbal 대신 CRASH·RIDE), pads면 패드 이름."""
     names = class_names(classes)
     rows: list[tuple[float, str, int]] = []
     for k, name in enumerate(names):

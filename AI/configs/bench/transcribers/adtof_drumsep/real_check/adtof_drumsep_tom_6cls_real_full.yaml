@@ -1,4 +1,4 @@
-# adtof_drumsep_ft6.yaml과 같고 체크포인트만 tom_6cls_real_full (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 9). ENST·MDB 전체를 더해 학습한 서비스 후보
+# adtof_drumsep_ft6.yaml과 같고 체크포인트만 tom_6cls_real_full (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 9). ENST·MDB 전체를 더해 학습한 가중치(2026-11-03 결과로 서비스 기본에서 내림)
 # 규칙은 pk_gap30. 드럼 분리 입력 비교 채점용. 서비스 기본값 아님
 name: adtof_drumsep_tom_6cls_real_full
 adapter: adtof_drumsep
