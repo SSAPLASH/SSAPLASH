@@ -1048,7 +1048,7 @@ GRANT INSERT, UPDATE ON file_cleanup_tasks TO midi_worker;
 GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tasks_id_seq TO midi_worker;
 ```
 
-운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자가 호출하는 재시도 API는 없다.
+운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자는 `POST /api/v1/songs/{songId}/accompaniment/retry`로 본인 MIDI 반주의 최종 실패를 재시도할 수 있다. 본문 없이 Bearer 인증을 사용하며 등록 성공은 빈 202다. 키가 없고 최신 합성 작업이 FAILED이며 ACCEPTED 원본·최신 HARD timing·드럼 외 노트가 있어야 한다. 큐 등록 뒤 목록·상세의 `accompanimentStatus`를 확인한다. 타인·삭제 곡은 404 `SONG_NOT_FOUND`, 대상이 아니거나 중복 요청이면 409 `MIDI_RETRY_UNAVAILABLE`, 저장소 장애는 503 `MIDI_STORAGE_UNAVAILABLE`이다. 기존 반주 교체와 AUDIO 재시도는 지원하지 않는다.
 
 워커 이미지는 Ubuntu Jammy의 [FluidSynth 2.2.5-1](https://packages.ubuntu.com/jammy/fluidsynth), [FluidR3 GM 3.1-5.3](https://packages.ubuntu.com/source/jammy/fluid-soundfont), [FFmpeg 7:4.4.2-0ubuntu0.22.04.1](https://packages.ubuntu.com/jammy-updates/ffmpeg)을 사용하며 SoundFont SHA-256 `74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0`를 빌드·시작 시 확인한다. FluidSynth는 LGPL, FluidR3 GM은 MIT이며 이미지에 패키지 저작권 고지가 포함된다. 로컬 2.4.6 실측을 운영 2.2.5의 성능 보장으로 해석하지 않는다.
 
