@@ -270,6 +270,36 @@ describe('권유 카드', () => {
     expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
   });
 
+  it('[입문 코스] 탭에 한 번 들어오면(카드 버튼이 아닌 길이어도) 나와도 다시 보이지 않는다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2)]));
+    function Nav() {
+      const navigate = useNavigate();
+      return (
+        <>
+          <button onClick={() => navigate('/sheet?tab=lessons')}>사이드바 악보 연습 입문 코스</button>
+          <button onClick={() => navigate('/free')}>자유 연습</button>
+        </>
+      );
+    }
+    function Page() {
+      const { pathname } = useLocation();
+      return pathname === '/sheet' ? <SongPicker mode="sheet" onStart={vi.fn()} /> : null;
+    }
+    at('/free', <><Nav /><LessonInvite /><Page /></>);
+    expect(await screen.findByRole('region', { name: '입문 코스 안내' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '사이드바 악보 연습 입문 코스' }));
+    expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '자유 연습' }));
+    await waitFor(() => expect(where()).toBe('/free'));
+    expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
+    // 새로 고쳐도(브라우저에 기억) 다시 뜨지 않는다
+    cleanup();
+    useLessons.getState().resetForTest();
+    at('/free', <LessonInvite />);
+    await Promise.resolve();
+    expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
+  });
+
   it('하나라도 통과했거나 로그인 전이면 보이지 않는다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), lesson(2)]));
     at('/free', <LessonInvite />);
