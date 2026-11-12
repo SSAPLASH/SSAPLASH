@@ -121,7 +121,7 @@ class YawDriftMonitor {
     });
   }
 
-  /** 상태를 보고 중인(연결돼 보정 대상인) 스틱 표시. forget 때 꺼진다 */
+  /** 상태를 보고 중인(연결돼 보정 대상인) 스틱 표시. forget·suspend 때 꺼진다 */
   private active: [boolean, boolean] = [false, false];
   private hasStatus(i: StickId): boolean {
     return this.active[i];
@@ -172,6 +172,22 @@ class YawDriftMonitor {
     }
   }
 
+  /**
+   * 소스가 끊기거나 다시 여는 중: 링·오차·쿨다운·확인 창을 비우고 상태 보고를 내린다. 적용값은 남긴다.
+   * 스틱이 꺼지지 않았으면 오프셋을 그대로 갖고 있고(STATUS 비트 5 = 0), 꺼졌다 켜졌으면 onConnected가 0으로 다시 맞춘다.
+   * 여기서 0으로 지우면 FE만 0으로 알게 되어 다음 보정(절대값)이 스틱에 남은 값만큼 튄다
+   */
+  private suspend(i: StickId): void {
+    const { applied } = this.sticks[i];
+    this.clearWindow(this.sticks[i]);
+    this.sticks[i] = { ...blank(), applied };
+    if (this.active[i]) {
+      this.active[i] = false;
+      this.statusCb?.(i, null);
+    }
+  }
+
+  /** 소스를 바꾸거나 떼면 모두 잊는다. 같은 소스의 상태 변화(끊김·다시 여는 중)에는 적용값을 남긴다(suspend) */
   setSource(src: InputSource | null): void {
     this.offState?.();
     this.offState = null;
@@ -179,7 +195,7 @@ class YawDriftMonitor {
     for (const i of STICKS) this.forget(i);
     if (!src) return;
     this.offState = src.onState((s) => {
-      if (s !== 'connected') for (const i of STICKS) this.forget(i);
+      if (s !== 'connected') for (const i of STICKS) this.suspend(i);
     });
   }
 
