@@ -31,9 +31,10 @@ import { CoachHandChip } from '@/features/play/components/stage/CoachHandChip';
 import { HitReadout } from '@/components/drum/HitReadout';
 import { StartDialog } from '@/features/play/components/start/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
+import { smallKitSpec } from '@/domain/drumKit';
 import { PlayOptions } from '@/features/play/components/start/PlayOptions';
 import { useNextBeatLabels } from '@/features/play/components/stage/useNextBeatLabels';
-import { DrumKit } from '@/components/drum/DrumKit';
+import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/features/play/components/stage/TimingBar';
 import { strayMissSource } from '@/features/play/components/stage/strayMissSource';
@@ -107,6 +108,8 @@ function SheetPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
+  // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
+  const smallKit = smallKitSpec('sheet', settings.kitSkin);
   const [searchParams, setSearchParams] = useSearchParams();
   // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
@@ -893,6 +896,7 @@ function SheetPageBody() {
     <main>
       <PlayStage
         variant="sheet"
+        kitTop={smallKit.view === 'top'}
         hud={
           <PlayHud
             variant="sheet"
@@ -934,8 +938,9 @@ function SheetPageBody() {
         }
         kit={
           <div className="coach-kit">
-            <DrumKit
-              scale={0.7}
+            <LiveDrumKit
+              scale={smallKit.scale}
+              view={smallKit.view}
               effects
               states={padStates}
               labels={false}
