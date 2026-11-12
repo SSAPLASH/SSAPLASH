@@ -11,7 +11,7 @@ import {
 } from './timingCalText';
 
 const result = (over: Partial<TimingCalResult>): TimingCalResult => ({ status: 'ok', pairs: 12, medianMs: -66.4, madMs: 8, offsetMs: -65, input: 'sensor', ...over });
-const rec: TimingCalRecord = { measuredAt: new Date(2026, 10, 11, 18, 0).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40 };
+const rec: TimingCalRecord = { measuredAt: new Date(2026, 10, 11, 18, 0).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40, kick: null };
 
 describe('timingOffsetText', () => {
   it('양수에만 부호를 붙인다', () => {
@@ -39,11 +39,15 @@ describe('기록·상태 문구', () => {
     expect(timingCalRecordText(null)).toBe('아직 박자를 맞추지 않았어요');
     expect(timingCalRecordText(rec)).toBe('11월 11일에 스틱으로 맞췄어요');
     expect(timingCalRecordText({ ...rec, input: 'keyboard' })).toBe('11월 11일에 키보드로 맞췄어요');
+    expect(timingCalRecordText({ ...rec, kick: { medianMs: -41, madMs: 5, pairs: 12 } })).toBe('11월 11일에 스틱으로 맞췄어요 · 킥 -40ms');
   });
 
   it('드럼 세팅 상태 줄', () => {
     expect(timingCalStatusText(null, 0)).toBe('안 맞춤');
     expect(timingCalStatusText(rec, -65)).toBe('맞춤 · -65ms');
+    expect(timingCalStatusText(rec, -65, null)).toBe('맞춤 · -65ms');
+    expect(timingCalStatusText(rec, -65, -40)).toBe('맞춤 · 스틱 -65ms · 킥 -40ms');
+    expect(timingCalStatusText(null, 0, -40)).toBe('안 맞춤');
   });
 
   it('측정한 입력과 지금 입력이 다를 때만 다시 맞추라고 안내한다', () => {
