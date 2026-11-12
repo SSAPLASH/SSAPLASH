@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import type { KitSkin, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
 import type { KitArtPad } from '@/domain/kit/kitArt';
-import { AcousticPad } from './acoustic/AcousticPad';
+import { AcousticPad, AcousticUnder } from './acoustic/AcousticPad';
 import { ElectronicPad } from './ElectronicPad';
 import { NeonPad } from './NeonPad';
 import './drum.css';
@@ -84,6 +84,17 @@ interface PadProps {
   hitKey?: number;
   /** 전자·네온 원판의 세로 눌림 배율(원근 자리용). 실물 스킨은 그림이 이미 기울어 있어 쓰지 않는다 */
   tilt?: number;
+  /**
+   * 실물 심벌의 그리는 층(자유 틀 겹침 순서). 기본 all = 한 번에 전부.
+   * under = 받침 조각만(모든 패드보다 먼저 깔 때), over = 받침을 뺀 나머지. 받침이 없는 패드·전자·네온은 all만 쓴다
+   */
+  layer?: 'all' | 'under' | 'over';
+  /** 실물 하이햇·하이햇 페달: 닫힘(밟힘) 여부. 없으면 닫힘 */
+  closed?: boolean;
+  /** 실물 하이햇 페달: 왼발 페달이 연결되지 않음 */
+  pedalOff?: boolean;
+  /** 실물 하이햇·페달: 페달을 밟을 때마다 바뀌는 값("칙" 모션 재시작) */
+  pedalHitSeq?: number;
 }
 
 /** 패드 하나(SVG <g>). 원본 160 기준으로 그리고 w에 맞춰 확대·축소한다. 상태 타이머는 없다 */
@@ -106,6 +117,10 @@ export const Pad = memo(function Pad({
   tag,
   hitKey,
   tilt,
+  layer = 'all',
+  closed,
+  pedalOff,
+  pedalHitSeq,
 }: PadProps) {
   const s = w / BASE_W;
   // 문자열 배지는 next. now이거나 badgeHighlight면 강조 모양
@@ -118,6 +133,15 @@ export const Pad = memo(function Pad({
   const image = flat ? undefined : art;
   // 실물: 조각 상자 폭이 패드마다 달라 글자·배지·링 굵기를 따로 맞춘다
   const k = image ? (textSize !== undefined ? textSize / s : image.head.rx / OLD_HEAD_RX[shape]) : 1;
+
+  // 받침 층: 받침 이미지만 같은 자리·크기로 그린다(누름·상태·배지는 over 층의 몫)
+  if (layer === 'under') {
+    return (
+      <g className="drum-pad-under" data-shape={shape} transform={`translate(${left} ${top}) scale(${s})`}>
+        {image && <AcousticUnder art={image} />}
+      </g>
+    );
+  }
 
   return (
     <g
@@ -136,7 +160,7 @@ export const Pad = memo(function Pad({
           <NeonPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} tilt={tilt} />
         )
       ) : (
-        image && <AcousticPad art={image} state={state} label={label} labelVisible={labelVisible} hitKey={hitKey} k={k} />
+        image && <AcousticPad art={image} state={state} label={label} labelVisible={labelVisible} hitKey={hitKey} k={k} layer={layer} closed={closed} pedalOff={pedalOff} pedalHitSeq={pedalHitSeq} />
       )}
       {badge && (
         <g

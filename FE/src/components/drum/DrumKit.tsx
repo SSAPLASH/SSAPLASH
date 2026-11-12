@@ -78,6 +78,12 @@ export interface DrumKitProps {
    * 하이햇 페달도 그린다. scale·fitWidth·fitContain·placement는 무시한다(domain/kit/kitFrame)
    */
   frame?: KitFrame;
+  /** 실물 스킨 하이햇 닫힘(왼발 페달 밟힘 또는 페달 없음). 없으면 닫힌 채 정지해 그린다. 실시간 값은 LiveDrumKit이 넣는다 */
+  hihatClosed?: boolean;
+  /** 실물 스킨: 왼발 하이햇 페달이 연결되지 않음 → 페달 그림을 어둡게 */
+  pedalOff?: boolean;
+  /** 하이햇 페달을 밟을 때마다 바뀌는 값. 0보다 크면 바뀔 때 "칙" 모션을 재생한다 */
+  pedalHitSeq?: number;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -157,6 +163,9 @@ export function DrumKit({
   warnPads,
   selectedPad,
   frame,
+  hihatClosed,
+  pedalOff = false,
+  pedalHitSeq,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -199,6 +208,21 @@ export function DrumKit({
       kids
     );
 
+  // 유령·흐림·나타남·어둡게·켬 클래스(패드 바깥 그룹과 받침 층이 같이 쓴다)
+  const wrapClassOf = (pad: PadId) =>
+    [
+      ghost === pad ? 'drum-pad-ghost' : '',
+      faded?.includes(pad) === true ? 'drum-pad-faded' : '',
+      appear && ghost !== pad ? 'drum-pad-appear' : '',
+      dimAll && lit !== pad ? 'drum-pad-dim' : '',
+      lit === pad ? 'drum-pad-lit' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  // 실물 심벌(원판 조각이 있는 패드)은 받침(스탠드)이 길어 먼저 그린 가까운 패드 위로 겹친다 → 받침만 모든 패드보다 먼저 깐다
+  const underPads = skin === 'acoustic' ? pads.filter((p) => p.art?.top) : [];
+  const closedHihat = hihatClosed ?? true;
+
   const svg = (
     <svg
       className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
@@ -214,9 +238,19 @@ export function DrumKit({
       <PadDefs id={defsId} />
       {withKitShake(
         <>
+      {underPads.map((p) => {
+        const wrapClass = wrapClassOf(p.pad);
+        const under = <Pad shape={p.shape} left={p.left} top={p.top} w={p.w} label={p.label} defsId={defsId} skin={skin} art={p.art} layer="under" />;
+        return wrapClass ? (
+          <g key={`under-${p.pad}`} className={wrapClass}>
+            {under}
+          </g>
+        ) : (
+          <Fragment key={`under-${p.pad}`}>{under}</Fragment>
+        );
+      })}
       {pads.map((p) => {
         const isGhost = ghost === p.pad;
-        const isFaded = faded?.includes(p.pad) === true;
         const padEl = (
         <Pad
           key={p.pad}
@@ -235,6 +269,11 @@ export function DrumKit({
           hitKey={hitSeq?.[p.pad]}
           tilt={p.tilt}
           art={p.art}
+          layer={skin === 'acoustic' && p.art?.top ? 'over' : undefined}
+          // 하이햇·페달만 받는다(다른 패드의 memo props는 바뀌지 않는다)
+          closed={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? closedHihat : undefined}
+          pedalOff={p.pad === 'HIHAT_PEDAL' ? pedalOff : undefined}
+          pedalHitSeq={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? pedalHitSeq : undefined}
           // 고정 배치의 실물 패드는 글자 크기를 통일하고, 킷이 줄어도 약 12px 아래로 작아지지 않게 키운다(최대 1.6배).
           // 자유 틀은 헤드 크기에 비례(Pad 기본)
           textSize={frame || !p.art ? undefined : Math.min(1.6, Math.max(1, eff > 0 ? 1 / eff : 1))}
@@ -252,16 +291,7 @@ export function DrumKit({
         />
         );
         // 유령·흐림·나타남은 패드 바깥 그룹에 건다(Pad 마크업 불변)
-        const isLit = lit === p.pad;
-        const wrapClass = [
-          isGhost ? 'drum-pad-ghost' : '',
-          isFaded ? 'drum-pad-faded' : '',
-          appear && !isGhost ? 'drum-pad-appear' : '',
-          dimAll && !isLit ? 'drum-pad-dim' : '',
-          isLit ? 'drum-pad-lit' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
+        const wrapClass = wrapClassOf(p.pad);
         const pad0 = wrapClass ? (
           <g className={wrapClass} data-ghost={isGhost || undefined}>
             {padEl}
