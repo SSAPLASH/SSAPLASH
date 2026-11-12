@@ -1,7 +1,7 @@
 // 마디 고정 악보(SheetPager)의 순수 계산: 페이지당 마디 수, 슬롯별 마디, 커서 위치. 캔버스·DOM에 의존하지 않는다.
 // 시각 입력(songTime)은 모두 격자 시각(곡 시각 − 격자 원점 offsetMs)이다. 0이 1마디 1박, 음수는 리드인.
 import type { BarLayout } from '@/domain/sheet';
-import { xInBar } from '@/components/sheetmusic/sheetStripMath';
+import { xInBar, xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 
 /** 악보 영역 폭(px)에 따른 페이지당 마디 수 */
 export function barsPerPage(width: number): number {
@@ -75,15 +75,30 @@ export function noteHeadAt(args: {
   /** 슬롯 i의 왼쪽 x */
   slotX: (i: number) => number;
   slotW: number;
+  continuousStepsPerBar?: number;
   /** 보표 위치(반 칸 단위) → y */
   lineY: (line: number) => number;
 }): { x: number; y: number } | null {
-  const { slots, layoutOf, noteIndex, slotX, slotW, lineY } = args;
+  const { slots, layoutOf, noteIndex, slotX, slotW, lineY, continuousStepsPerBar } = args;
   for (let i = 0; i < slots.length; i++) {
     const slot = slots[i]!;
     if (slot.bar === null || slot.upcoming) continue;
     const g = layoutOf(slot.bar).glyphs.find((gl) => gl.noteIndex === noteIndex);
-    if (g) return { x: xInBar(slotX(i), slotW, g.xRatio), y: lineY(g.line) };
+    if (g) return { x: continuousStepsPerBar ? xInBarContinuous(slotX(i), slotW, g.xRatio, continuousStepsPerBar) : xInBar(slotX(i), slotW, g.xRatio), y: lineY(g.line) };
   }
   return null;
+}
+
+/** 일반 모드: 커서가 화면 안쪽에 도달하면 악보 전체를 같은 좌표계로 이동한다. */
+export function flowGeometry(gridTime: number, barMs: number, stepsPerBar: number, width: number, gutter: number, barPx: number, totalBars: number, leadBars: number) {
+  const t = Math.max(gridTime, -leadBars * barMs);
+  const bar = Math.floor(t / barMs);
+  const ratio = (t - bar * barMs) / barMs;
+  const origin = gutter + leadBars * barPx;
+  const worldCursor = xInBarContinuous(origin + bar * barPx, barPx, ratio, stepsPerBar);
+  const scroll = Math.max(0, worldCursor - Math.max(gutter + Math.min(12, barPx / stepsPerBar / 2), width * 0.36));
+  const barZeroX = origin - scroll;
+  const first = Math.max(0, Math.floor(-barZeroX / barPx));
+  const last = Math.min(totalBars - 1, Math.floor((width - barZeroX) / barPx));
+  return { cursorX: worldCursor - scroll, barZeroX, first, last };
 }

@@ -83,6 +83,13 @@
   border-radius: 999px;
   background: var(--surface-3);
 }
+.play-hud.sheet .play-hud-progress {
+  min-width: 0;
+}
+.play-hud.sheet .play-hud-bar {
+  flex: 0 1 280px;
+  min-width: 0;
+}
 .play-hud-bar-fill {
   height: 100%;
   border-radius: 999px;
@@ -105,7 +112,9 @@
   width: 460px;
 }
 .play-hud.sheet .play-hud-stats {
-  width: 420px;
+  width: min(420px, 52vw);
+  /* 오른쪽 위 프로필·기기 상태와 수치 라벨이 겹치지 않게 한다. */
+  transform: translateY(16px);
 }
 .play-hud-stat {
   display: flex;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutBar } from '@/domain/sheet';
+import { xInBarContinuous } from './sheetStripMath';
 import { drawSheet, type Colors } from './sheetStripDraw';
 
 const colors: Colors = { ink: 'ink', inkDim: 'dim', inkFaint: 'faint', base: 'base', baseGlow: 'glow', warning: 'warning', judge: { PERFECT: 'perfect', GOOD: 'good', MISS: 'miss' } };
@@ -26,4 +27,26 @@ describe('열린 하이햇 그리기', () => {
     expect(live.arcs.find((a) => a.r === 3)).toMatchObject({ y: 85, color: 'warning', width: 2.5 });
     expect(expired.arcs.find((a) => a.r === 3)).toMatchObject({ y: 85, color: 'perfect', width: 1.5 });
   });
+});
+
+
+it('연속 모드에서 음표 머리와 실제 타격 눈금을 같은 등간격 좌표에 그린다', () => {
+  const marks: number[] = [];
+  const heads: number[] = [];
+  const ctx = new Proxy({}, {
+    get(_target, key) {
+      if (key === 'ellipse') return (x: number) => heads.push(x);
+      if (key === 'fillRect') return (x: number, _y: number, width: number) => { if (width === 2) marks.push(x + 1); };
+      return () => {};
+    },
+    set: () => true,
+  }) as unknown as CanvasRenderingContext2D;
+  const c = { bpm: 120, beatsPerBar: 4, notes: [{ timeMs: 250, pad: 'SNARE' as const }] };
+  drawSheet(ctx, { chart: c, noteStates: [null], strayHits: [], hitMarks: [{ timeMs: 250, judgement: 'PERFECT' }],
+    songTime: 0, originMs: 0, width: 320, height: 200, barPx: 320, baseRatio: 0, colors,
+    layoutOf: (bar) => layoutBar(c, bar), bars: { first: 0, last: 0 }, barMs: 2000, beatMs: 500,
+    showBase: false, continuousStepsPerBar: 16 });
+  const expected = xInBarContinuous(0, 320, 2 / 16, 16);
+  expect(heads).toEqual([expected]);
+  expect(marks).toEqual([expected]);
 });
