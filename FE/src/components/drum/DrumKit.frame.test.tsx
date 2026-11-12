@@ -2,6 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KIT_SKINS } from '@/domain/drumKit';
+import { KIT_ART_PERSP, kitArtPad } from '@/domain/kit/kitArt';
 import { kitFrame } from '@/domain/kit/kitFrame';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { DrumKit } from './DrumKit';
@@ -58,7 +59,7 @@ describe('하이햇 페달 스킨', () => {
         const html = renderToStaticMarkup(
           <svg>
             <PadDefs id="t" />
-            <Pad shape="pedal" left={0} top={0} w={160} state={state} label="페달" tag="HP" skin={skin} defsId="t" />
+            <Pad shape="pedal" left={0} top={0} w={160} state={state} label="페달" tag="HP" skin={skin} art={kitArtPad(KIT_ART_PERSP, 'HIHAT_PEDAL')} defsId="t" />
           </svg>,
         );
         expect(html).toContain('data-shape="pedal"');

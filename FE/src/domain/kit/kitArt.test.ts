@@ -23,7 +23,7 @@ describe('실물 드럼 자리 표(원근 그림)', () => {
   it('조각 이미지 이름이 겹치지 않는다', () => {
     const names = art.pads.flatMap((p) => (p.top ? [p.sprite, p.top.sprite] : [p.sprite]));
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(12);
   });
 
   it('헤드 타원이 조각 상자 안에 있다', () => {
@@ -76,8 +76,17 @@ describe('실물 드럼 자리 표(원근 그림)', () => {
     expect(art.pads[art.pads.length - 1]?.pad).toBe('HIHAT_PEDAL');
   });
 
-  it('윗판 조각은 하이햇에만 있고, 닫힘 이동은 헤드 세로 반지름보다 작다', () => {
-    expect(art.pads.filter((p) => p.top).map((p) => p.pad)).toEqual(['HIHAT']);
+  it('원판 조각은 심벌 셋에만 있고 원판이 헤드를 덮는다', () => {
+    expect(art.pads.filter((p) => p.top).map((p) => p.pad).sort()).toEqual(['CRASH', 'HIHAT', 'RIDE']);
+    for (const p of art.pads) {
+      if (!p.top) continue;
+      expect(p.top.x, p.pad).toBeLessThanOrEqual(p.head.cx - p.head.rx + 2);
+      expect(p.top.x + p.top.w, p.pad).toBeGreaterThanOrEqual(p.head.cx + p.head.rx - 2);
+    }
+  });
+
+  it('닫힘 이동은 하이햇에만 있고 헤드 세로 반지름보다 작다', () => {
+    expect(art.pads.filter((p) => p.top?.closeDy !== undefined).map((p) => p.pad)).toEqual(['HIHAT']);
     const { top, head } = of('HIHAT');
     expect(top?.closeDy).toBeGreaterThan(0);
     expect(top?.closeDy).toBeLessThan(head.ry);
