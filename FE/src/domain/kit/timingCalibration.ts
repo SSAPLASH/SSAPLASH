@@ -8,6 +8,12 @@ export const TIMING_CAL_BPM = 100;
 export const TIMING_CAL_LISTEN_BEATS = 4;
 /** 재는 박 수 */
 export const TIMING_CAL_MEASURE_BEATS = 12;
+/** 스틱 구간과 킥 구간 사이의 전환 박 수. 이 박들은 짝짓지 않는다 */
+export const TIMING_CAL_SWITCH_BEATS = 4;
+/** 킥 구간에서 재는 박 수 */
+export const TIMING_CAL_KICK_BEATS = 12;
+/** 스틱·킥 중앙값이 이보다 많이 다르면 다시 재 보라고 권한다(ms) */
+export const TIMING_CAL_RECHECK_DIFF_MS = 60;
 /** 박과 타격을 짝짓는 폭(±ms). 박 간격의 절반보다 좁아 한 타격이 두 박에 걸리지 않는다 */
 export const TIMING_CAL_PAIR_WINDOW_MS = 250;
 /** 이보다 짝이 적으면 표본 부족 (실측 뒤 조정) */
@@ -25,10 +31,14 @@ export const OUTPUT_LATENCY_WARN_MS = 100;
 /** 측정에 쓴 입력. 스틱·페달은 sensor, 키보드·화면 터치는 keyboard */
 export type TimingCalInput = 'sensor' | 'keyboard';
 
+/** 타격한 부위. stick 스틱 / kick 킥 페달 */
+export type TimingCalLimb = 'stick' | 'kick';
+
 export interface TimingCalTap {
   /** 타격 시각(performance.now 기준). 판정이 쓰는 tHit */
   tHit: number;
   input: TimingCalInput;
+  limb: TimingCalLimb;
 }
 
 /** ok 성공 / few 짝이 모자람 / scattered 흩어짐이 큼 */
@@ -58,6 +68,8 @@ export interface TimingCalRecord {
   input: TimingCalInput;
   /** 측정 때 브라우저가 보고한 출력 지연(ms). 모르면 null */
   outputLatencyMs: number | null;
+  /** 킥 구간 측정 결과. 킥을 재지 않았거나 실패했으면 null */
+  kick: { medianMs: number; madMs: number; pairs: number } | null;
 }
 
 /** 저장된 측정 기록을 검사한다. 모양이 맞지 않으면 null */
@@ -67,6 +79,11 @@ export function sanitizeTimingCalRecord(raw: unknown): TimingCalRecord | null {
   const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   if (!num(r.measuredAt) || !num(r.medianMs) || !num(r.madMs) || !num(r.pairs)) return null;
   if (r.input !== 'sensor' && r.input !== 'keyboard') return null;
+  // 옛 저장분(kick 없음)이나 모양이 틀린 kick은 null로 읽는다. 기록 전체를 버리지 않는다
+  const k = r.kick as Record<string, unknown> | null | undefined;
+  const kick = typeof k === 'object' && k !== null && num(k.medianMs) && num(k.madMs) && num(k.pairs)
+    ? { medianMs: k.medianMs, madMs: k.madMs, pairs: k.pairs }
+    : null;
   return {
     measuredAt: r.measuredAt,
     medianMs: r.medianMs,
@@ -74,6 +91,7 @@ export function sanitizeTimingCalRecord(raw: unknown): TimingCalRecord | null {
     pairs: r.pairs,
     input: r.input,
     outputLatencyMs: num(r.outputLatencyMs) ? r.outputLatencyMs : null,
+    kick,
   };
 }
 
@@ -137,4 +155,34 @@ export function evaluateTimingCal(beats: number[], taps: TimingCalTap[]): Timing
   const input: TimingCalInput = sensor * 2 >= pairs ? 'sensor' : 'keyboard';
   const status: TimingCalStatus = pairs < TIMING_CAL_MIN_PAIRS ? 'few' : madMs > TIMING_CAL_MAX_MAD_MS ? 'scattered' : 'ok';
   return { status, pairs, medianMs, madMs, offsetMs: status === 'ok' ? clampTimingOffset(medianMs) : null, input };
+}
+
+/** 스틱 구간·킥 구간 결과와 다시 재 보라는 권유 */
+export interface TimingCalOutcome {
+  stick: TimingCalResult;
+  /** 킥 구간이 없었으면 null */
+  kick: TimingCalResult | null;
+  /** 스틱·킥 둘 다 성공했는데 중앙값이 많이 다르면 true. 적용은 막지 않는다 */
+  recheck: boolean;
+}
+
+/** 구간별로 그 구간 입력(스틱/킥)의 타격만 평가한다. kickBeats가 null이면 킥 구간이 없었던 것 */
+export function evaluateTimingCalPhases(stickBeats: number[], kickBeats: number[] | null, taps: TimingCalTap[]): TimingCalOutcome {
+  const stick = evaluateTimingCal(stickBeats, taps.filter((t) => t.limb === 'stick'));
+  const kick = kickBeats ? evaluateTimingCal(kickBeats, taps.filter((t) => t.limb === 'kick')) : null;
+  const recheck =
+    kick !== null &&
+    stick.status === 'ok' &&
+    kick.status === 'ok' &&
+    stick.medianMs !== null &&
+    kick.medianMs !== null &&
+    Math.abs(stick.medianMs - kick.medianMs) > TIMING_CAL_RECHECK_DIFF_MS;
+  return { stick, kick, recheck };
+}
+
+/** 설정에 넣을 값. 스틱이 실패하면 null. 킥이 없었거나 실패하면 kickOffsetMs는 null(스틱 값을 쓴다) */
+export function timingCalApply(o: TimingCalOutcome): { audioOffsetMs: number; kickOffsetMs: number | null } | null {
+  if (o.stick.status !== 'ok' || o.stick.offsetMs === null) return null;
+  const kickOk = o.kick !== null && o.kick.status === 'ok' && o.kick.offsetMs !== null;
+  return { audioOffsetMs: o.stick.offsetMs, kickOffsetMs: kickOk ? o.kick!.offsetMs : null };
 }
