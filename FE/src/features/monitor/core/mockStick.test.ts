@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { encodeSetMode, StreamMode, encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, encodeRoute, encodeSetYawOffset, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
+import { encodeSetMode, StreamMode, encodeGetParams, encodeSetParam, encodeSetPadTable, decodePacket, encodeSync, encodeRoute, encodeSetYawOffset, encodeResetPose, STICK_PARAMS, PAD_CODE } from '@/input/stickProtocol';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
 import {
   buildBridgeStats,
@@ -183,16 +183,35 @@ describe('MockStick', () => {
     }
   });
 
-  it('GET_PARAMS → out 기록 + PARAM_ACK 14개와 종료 표시', () => {
+  it('GET_PARAMS의 0x21은 SET_YAW_OFFSET으로 보낸 값이고 RESET_POSE 뒤에는 0이다', () => {
+    mock.start({ poseHz: 1, hitIntervalMs: 100000 });
+    const yawOf = () => {
+      got.length = 0;
+      mock.handleCommand(encodeGetParams());
+      vi.advanceTimersByTime(1000);
+      const acks = got.filter((r) => r.dir === 'in' && r.bytes[0] === 0x06).map((r) => decodePacket(r.bytes, 0) as { paramId: number; value: number });
+      return acks.find((x) => x.paramId === 0x21)?.value;
+    };
+    mock.handleCommand(encodeSetYawOffset(-58));
+    vi.advanceTimersByTime(100);
+    expect(yawOf()).toBe(-5800);
+    mock.handleCommand(encodeResetPose());
+    vi.advanceTimersByTime(100);
+    expect(yawOf()).toBe(0);
+  });
+
+  it('GET_PARAMS → out 기록 + PARAM_ACK 14개, 현재 방위각 오프셋(0x21), 종료 표시', () => {
     mock.start({ poseHz: 1, hitIntervalMs: 100000 });
     got.length = 0;
     mock.handleCommand(encodeGetParams());
     vi.advanceTimersByTime(1000);
     expect(got[0].dir).toBe('out');
     const acks = got.filter((r) => r.dir === 'in' && r.bytes[0] === 0x06).map((r) => decodePacket(r.bytes, 0) as { paramId: number; value: number });
-    expect(acks.length).toBe(15);
+    expect(acks.length).toBe(16);
     expect(acks.slice(0, 14).map((a) => a.paramId)).toEqual(STICK_PARAMS.map((p) => p.id));
-    expect(acks[14]).toMatchObject({ paramId: 0, value: 14 });
+    // 스틱 FW 1.12: 끝 표시 앞에 0x21. 끝 표시의 개수는 그대로 14
+    expect(acks[14]).toMatchObject({ paramId: 0x21, value: 0 });
+    expect(acks[15]).toMatchObject({ paramId: 0, value: 14 });
     // Feather fw 1.0 기본값
     const byId = Object.fromEntries(acks.slice(0, 14).map((a) => [a.paramId, a.value]));
     expect(byId).toMatchObject({ 0x0a: 60, 0x0b: 160, 0x0e: 800, 0x0f: 1200, 0x01: 150 });
