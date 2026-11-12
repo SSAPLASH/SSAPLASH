@@ -3,6 +3,10 @@ package com.ssafy.airdrum.domain.song.controller.midi;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,14 +35,19 @@ import com.ssafy.airdrum.domain.auth.service.token.AccessTokenService;
 import com.ssafy.airdrum.support.SignupConsentFixtures;
 import com.ssafy.airdrum.domain.user.model.AuthUser;
 import com.ssafy.airdrum.domain.user.model.UserRole;
+import com.ssafy.airdrum.domain.withdrawal.service.WithdrawalService;
+import com.ssafy.airdrum.global.error.BusinessException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 
 /**
@@ -57,6 +66,8 @@ class MidiUploadApiTest {
 	JdbcTemplate db;
 	@Autowired
 	AccessTokenService tokens;
+    @Autowired
+    WithdrawalService withdrawal;
 	@MockitoSpyBean
 	MidiChartRepository repository;
 	@MockitoBean
@@ -276,4 +287,133 @@ class MidiUploadApiTest {
 		assertThat(songCount()).isZero();
 	}
 
+    @Test
+    void 실패한_반주만_재시도하고_인증과_소유권을_검사한다() throws Exception {
+        byte[] midi = melody();
+        when(midiOriginalStore.get(any(), anyInt(), any(), anyLong())).thenReturn(midi);
+        long songId = failedSong(midi);
+        String url = retryUrl(songId);
+        assertThat(send(post(url), null).getResponse().getStatus()).isEqualTo(401);
+
+        long other = db.queryForObject("INSERT INTO users(nickname) VALUES('다른 회원') RETURNING id", Long.class);
+        try {
+            SignupConsentFixtures.complete(db, other);
+            assertThat(send(post(url), other).getResponse().getStatus()).isEqualTo(404);
+        } finally {
+            db.update("DELETE FROM users WHERE id=?", other);
+        }
+        var accepted = send(post(url), user);
+        assertThat(accepted.getResponse().getStatus()).isEqualTo(202);
+        assertThat(accepted.getResponse().getContentAsString()).isEmpty();
+        assertThat(body(send(get("/api/v1/songs/" + songId), user)).path("accompanimentStatus").asString())
+                .isEqualTo("GENERATING");
+        var conflict = send(post(url), user);
+        assertThat(conflict.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(conflict).path("code").asString()).isEqualTo("MIDI_RETRY_UNAVAILABLE");
+        assertThat(queuedCount(songId)).isEqualTo(1);
+    }
+
+    @Test
+    void 재시도_조건과_저장소_장애를_검사한다() throws Exception {
+        byte[] midi = melody();
+        long songId = body(send(upload(midi).param("title", "실패 조건"), user)).path("id").asLong();
+        String url = retryUrl(songId);
+        assertThat(send(post(url), user).getResponse().getStatus()).isEqualTo(409);
+        markFailed(songId);
+        when(midiOriginalStore.get(any(), anyInt(), any(), anyLong()))
+                .thenThrow(new BusinessException(MidiErrorCode.STORAGE_UNAVAILABLE));
+        assertThat(send(post(url), user).getResponse().getStatus()).isEqualTo(503);
+        doReturn(MidiFixtures.ppq(480).drum(0, 36).bytes())
+                .when(midiOriginalStore).get(any(), anyInt(), any(), anyLong());
+        assertThat(send(post(url), user).getResponse().getStatus()).isEqualTo(409);
+        db.update("UPDATE songs SET accompaniment_key=? WHERE id=?", "accompaniment/" + songId + "/existing.flac", songId);
+        assertThat(send(post(url), user).getResponse().getStatus()).isEqualTo(409);
+        assertThat(db.queryForObject("SELECT count(*) FROM midi_accompaniment_jobs WHERE song_id=?", Integer.class, songId)).isEqualTo(1);
+    }
+
+    @Test
+    void 동시_재시도는_하나만_등록하고_삭제가_먼저면_등록하지_않는다() throws Exception {
+        byte[] midi = melody();
+        long songId = failedSong(midi);
+        String url = retryUrl(songId);
+        var entered = new CountDownLatch(2);
+        var release = new CountDownLatch(1);
+        blockOriginalRead(midi, entered, release);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> send(post(url), user).getResponse().getStatus());
+            var second = pool.submit(() -> send(post(url), user).getResponse().getStatus());
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(202, 409);
+        } finally {
+            release.countDown();
+        }
+        assertThat(queuedCount(songId)).isEqualTo(1);
+        markFailed(songId);
+        var reading = new CountDownLatch(1);
+        var resume = new CountDownLatch(1);
+        blockOriginalRead(midi, reading, resume);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            var pending = pool.submit(() -> send(post(url), user).getResponse().getStatus());
+            assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
+            db.update("UPDATE songs SET deleted_at=clock_timestamp() WHERE id=?", songId);
+            resume.countDown();
+            assertThat(pending.get(10, TimeUnit.SECONDS)).isEqualTo(404);
+        } finally {
+            resume.countDown();
+        }
+        assertThat(queuedCount(songId)).isZero();
+    }
+
+    @Test
+    void 원본_조회_중_탈퇴하면_재시도를_등록하지_않는다() throws Exception {
+        byte[] midi = melody();
+        long songId = failedSong(midi);
+        var reading = new CountDownLatch(1);
+        var resume = new CountDownLatch(1);
+        blockOriginalRead(midi, reading, resume);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            var pending = pool.submit(() -> send(post(retryUrl(songId)), user).getResponse().getStatus());
+            assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
+            withdrawal.withdraw(user);
+            resume.countDown();
+            assertThat(pending.get(10, TimeUnit.SECONDS)).isEqualTo(401);
+        } finally {
+            resume.countDown();
+        }
+        assertThat(queuedCount(songId)).isZero();
+    }
+
+    private byte[] melody() {
+        return MidiFixtures.ppq(480).drum(0, 36).note(480, 0, 60, 100, 120).bytes();
+    }
+
+    private long failedSong(byte[] midi) throws Exception {
+        long songId = body(send(upload(midi).param("title", "재시도 곡"), user)).path("id").asLong();
+        markFailed(songId);
+        return songId;
+    }
+
+    private void markFailed(long songId) {
+        db.update("UPDATE midi_accompaniment_jobs SET status='FAILED',finished_at=clock_timestamp() WHERE song_id=? AND status='QUEUED'", songId);
+    }
+
+    private String retryUrl(long songId) {
+        return "/api/v1/songs/" + songId + "/accompaniment/retry";
+    }
+
+    private int queuedCount(long songId) {
+        return db.queryForObject("SELECT count(*) FROM midi_accompaniment_jobs WHERE song_id=? AND status='QUEUED'", Integer.class, songId);
+    }
+
+    private void blockOriginalRead(byte[] midi, CountDownLatch entered, CountDownLatch release) {
+        doAnswer(invocation -> {
+            entered.countDown();
+            if (!release.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("원본 조회 대기 시간 초과");
+            }
+            return midi;
+        }).when(midiOriginalStore).get(any(), anyInt(), any(), anyLong());
+    }
 }
