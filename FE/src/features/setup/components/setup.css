@@ -321,20 +321,35 @@
  * 행(.setup-stage-row)은 카드 안쪽 전체 폭이고 가로 크기 컨테이너다. 그 안의 판(.setup-stage-panel) 하나가 어두운 바탕이다:
  * 폭은 행 전체, 높이 = max(260px, min(--setup-stage-maxh, 판 폭/1.6 + 2×여백)), 안쪽 여백 16px, position: relative.
  * 드럼 그림 영역(.setup-stage-fig, 편집 KitCanvas·보정 DrumKit)은 판 안쪽 영역 전체를 채운다(D11 v0.3). 편집 원은 KitCanvas가 min(W, H×1.6) 기준으로, 보정 킷은 DrumKit이 contain으로 맞춘다.
- * 정보 카드·배너·안내는 그림 위에 겹쳐 뜬다. 떠 있는 요소의 자리: 위쪽 가운데(.cal-stage-top) / 오른쪽·왼쪽 아래(.setup-kitinfo) / 아래쪽 가운데(.setup-panel-banner).
+ * 정보 카드·배너·안내·타격 확인 카드는 그림 위에 겹쳐 뜬다. 떠 있는 요소의 자리: 왼쪽 위(.setup-hit.is-float) / 위쪽 가운데(.cal-stage-top) / 오른쪽·왼쪽 아래(.setup-kitinfo) / 아래쪽 가운데(.setup-panel-banner).
  * --setup-stage-maxh(판이 쓸 수 있는 높이)는 useStageFit이 측정해 행에 넣는다. 측정 전·jsdom의 폴백은 아래 추정값이다:
- *   상단바 56 + 위 여백 28 + 머리줄 56 + 상태 타일 64+16 + 배치 카드 위쪽 120 + 하단 바 72 + 바 위 간격 16 ≈ 430 (복귀 띠가 있으면 +80) */
+ *   상단바 56 + 위 여백 28 + 머리줄 56 + 상태 타일 한 줄 83+16 + 배치 카드 머리 한 줄(위 여백·제목·칩 줄) 약 69 + 하단 바 72 + 바 위 간격 16 ≈ 400 (복귀 띠가 있으면 +80)
+ * 화면이 낮아 이 값이 500px보다 작으면 한 화면 맞춤을 풀고 500px까지 키운다(페이지가 스크롤된다). 스크롤했을 때 상단바와 하단 바 사이에 다 보이는 높이(100dvh − 165px)는 넘지 않는다 */
 .setup-stage-row {
-  --setup-stage-maxh: calc(100dvh - 430px);
+  --setup-stage-maxh: max(calc(100dvh - 400px), min(calc(100dvh - 165px), 500px));
   --setup-panel-pad: 16px;
   container-type: inline-size;
   width: 100%;
 }
 .setup-page:has(.setup-banner) .setup-stage-row {
-  --setup-stage-maxh: calc(100dvh - 510px);
+  --setup-stage-maxh: max(calc(100dvh - 480px), min(calc(100dvh - 165px), 500px));
 }
 .setup-kit {
   gap: var(--space-s);
+}
+/* 카드 머리 한 줄: 제목 + 프리셋 칩 줄(남는 폭 전부). 좁으면 줄바꿈 */
+.setup-kit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-m);
+}
+.setup-kit-head > .setup-card-title {
+  flex: none;
+}
+.setup-kit-head > :not(.setup-card-title) {
+  flex: 1 1 0;
+  min-width: 0;
 }
 /* 판: 높이는 그림이 판을 채우는 값(폭/1.6 + 위아래 여백)과 가용 높이 중 작은 쪽. 260px 밑으로는 줄이지 않는다(그보다 낮은 화면은 스크롤) */
 .setup-stage-panel {
@@ -533,6 +548,50 @@
   border-top: 1px solid var(--line);
   color: var(--text-3);
   font-size: 14px;
+}
+/* 판 안 타격 확인 카드(왼쪽 위, 정보 카드와 같은 재질). 아래 패드를 누르고 끌 수 있게 포인터를 받지 않는다 */
+.setup-page .setup-hit.is-float {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: 248px;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border: 1px solid var(--apple-hair);
+  border-radius: 16px;
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--apple-shadow);
+  pointer-events: none;
+}
+.setup-page .setup-hit.is-float .setup-hit-title {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.setup-page .setup-hit.is-float .setup-hitlog {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.setup-page .setup-hit.is-float .setup-hitlog-row.head {
+  display: none;
+}
+.setup-page .setup-hit.is-float .setup-hitlog-row {
+  grid-template-columns: 1.3fr 1fr 0.6fr 0.9fr;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0;
+  font-size: 13px;
+}
+.setup-page .setup-hit.is-float .setup-hitlog-list .setup-hitlog-row {
+  border-top: 0;
+}
+.setup-page .setup-hit.is-float .setup-hitlog-empty {
+  padding: 4px 0 6px;
+  border-top: 0;
+  font-size: 13px;
 }
 
 /* ---- 고급 설정 ---- */
@@ -733,10 +792,10 @@
   z-index: 2;
 }
 
-/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64·PLAY-004 D8): 2열 한 줄, 요약만 보이는 버튼 ---- */
+/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64·PLAY-004 D8): 3열 한 줄(스틱 연결·시작 위치 보정·박자 맞추기), 요약만 보이는 버튼 ---- */
 .setup-tiles {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-m);
 }
 .setup-tile {
@@ -829,7 +888,8 @@
 .setup-tile.is-urgent .setup-tile-status {
   color: var(--miss);
 }
-.setup-tile.is-attention .setup-tile-status {
+.setup-tile.is-attention .setup-tile-status,
+.setup-tile.is-todo .setup-tile-status {
   color: var(--warn);
 }
 .setup-tile-summary {
@@ -1302,6 +1362,13 @@
   gap: 8px;
   width: 120px;
   padding: 14px;
+}
+/* 정보 카드와 타격 확인 카드는 드럼 위에 겹친다. 그 자리로 옮긴 드럼이 뒤로 비쳐 보이게 바탕을 옅게, 흐림을 약하게 둔다 */
+.setup-page .setup-stage-panel .setup-kitinfo,
+.setup-page .setup-stage-panel .setup-hit.is-float {
+  background: color-mix(in srgb, var(--bg-base) 50%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 /* 세로 카드엔 값 목록에 판정 범위가 이미 있어 슬라이더 머리 줄(이름·값)은 눈에서만 감춘다(label은 접근성용으로 남김) */
 .setup-kitinfo .setup-radius-row {
