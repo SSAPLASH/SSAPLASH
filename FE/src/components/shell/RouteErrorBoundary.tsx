@@ -2,7 +2,7 @@
 // 청크 로드 실패면 1회 자동 새로고침을 시도하고, 못 하면 "새 버전" 안내. 그 밖의 오류는 일반 안내(자동 새로고침 없음).
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { useRouteError } from 'react-router-dom';
-import { isChunkLoadError, tryAutoReload } from '@/app/chunkRecovery';
+import { isChunkLoadError, tryAutoReload } from '@/config/chunkRecovery';
 import { useRecordingStore } from '@/app/recordingStore';
 import { ErrorState } from '@/components/ui/ErrorState';
 import './RouteErrorBoundary.css';

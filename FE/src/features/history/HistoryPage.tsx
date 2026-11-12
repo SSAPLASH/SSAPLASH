@@ -1,7 +1,7 @@
 // 연주 기록 (Figma 연주 기록 112:1351). 머리 + [플레이 기록 | 녹음] 탭 줄 + 탭 본문만 둔다.
 // 탭은 URL 쿼리 ?tab=recordings로 정한다(저장 토스트의 [보관함] 링크가 바로 녹음 탭을 연다). RECORDING_ENABLED가 꺼져 있으면 탭 줄 없이 플레이 기록만 보이고 쿼리는 무시한다.
 import { useSearchParams } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/app/features';
+import { RECORDING_ENABLED } from '@/config/features';
 import { PlayLogTab } from './PlayLogTab';
 import './history.css';
 import { RecordingList } from './RecordingList';

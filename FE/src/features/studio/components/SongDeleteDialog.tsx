@@ -2,7 +2,7 @@
 // 재연결 스위치가 꺼져 있으면 BE가 연결된 악보도 같이 지우므로(CHART-001 곡 연결 회신) 악보가 있을 때 안내에 넣는다.
 // 켜져 있으면(BE 회신 3, D18) 연결만 끊기고 악보는 남으므로 연결된 곡에는 그렇게 안내한다.
 // 질문 16 + 안내 14, 하단 [취소] secondary md + [삭제] danger md.
-import { SHEET_RELINK_ENABLED } from '@/app/features';
+import { SHEET_RELINK_ENABLED } from '@/config/features';
 import { Button } from '@/components/ui/Button';
 import type { SongSummary } from '@/domain/songCatalog';
 import { EditDialog } from './EditDialog';

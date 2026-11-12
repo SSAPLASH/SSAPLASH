@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from './features';
+import { RECORDING_ENABLED } from '@/config/features';
 import { needsRecommendationPrompt } from '@/domain/recommendationConsent';
 import { recommendationConsentEnabled } from '@/domain/signupTerms';
 import { metronome } from '@/engine/Metronome';

@@ -8,7 +8,7 @@ import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
 import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap';
 import { bootstrapAuth } from './app/authBootstrap';
 import { bootstrapPresets } from './app/presetBootstrap';
-import { installPreloadErrorHandler } from './app/chunkRecovery';
+import { installPreloadErrorHandler } from './config/chunkRecovery';
 import { queryClient } from './app/queryClient';
 import { bindQueryCacheToAuth } from './app/queryAuthBinding';
 import { useRecordingStore } from './app/recordingStore';

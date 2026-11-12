@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { deleteSheet, getSheet, updateSheetTitle } from '@/features/studio/api/sheets';
-import { SHEET_ARCHIVE_ENABLED } from '@/app/features';
+import { SHEET_ARCHIVE_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { SheetViewer, type SheetViewerState } from '@/features/studio/components/sheet/SheetViewer';
