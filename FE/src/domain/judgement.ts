@@ -16,11 +16,18 @@ export const DEFAULT_TIMING: TimingWindows = { perfectMs: 25, goodMs: 60 };
  */
 export const COACH_REF_GOOD_MS = 60;
 
+/**
+ * 판정 점수(SCORE_RULE). GOOD은 11/12 팀 결정으로 60 → 80(330번): 하나도 놓치지 않고 전부 GOOD이면 80%라
+ * 입문 코스 통과 기준 70%를 넘는다. 값을 바꾸면 SCORE_RULE도 올리고 BE `ScoreRule`에 같은 버전을 더한다(업로드 검산이 버전으로 점수를 맞춘다)
+ */
 export const JUDGEMENT_SCORE: Record<Judgement, number> = {
   PERFECT: 100,
-  GOOD: 60,
+  GOOD: 80,
   MISS: 0,
 };
+
+/** 위 점수표의 버전. 업로드 `judgementContext.judgementVersion`으로 보낸다(SCORE_V1은 GOOD 60) */
+export const SCORE_RULE = 'SCORE_V2';
 
 export function judgeDelta(deltaMs: number, w: TimingWindows): Judgement {
   const a = Math.abs(deltaMs);
