@@ -73,6 +73,7 @@ import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
+import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 
@@ -345,7 +346,7 @@ function PlayPageBody() {
     if (!activeSession) return;
     // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
     const coachContext = chartCoachContext(activeSession.chart.notes);
-    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs, s.stickId, s.pose));
     const offJudgement = activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
       // 놓친 노트 깨짐(하이웨이만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
@@ -364,6 +365,7 @@ function PlayPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
+        pose: e.pose,
         ...coachContext.notes[e.noteIndex],
       };
       const message = coach.push(judged, activeSession.snapshot().strayHits, (m) => showCoachMessage(coach, activeSession, m));
@@ -456,7 +458,7 @@ function PlayPageBody() {
       causeArm: model.causeArm,
       llmArm: model.llmArm,
       segments: llmMode
-        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg), aim: liveAimSource() }
         : undefined,
     });
     llmRef.current?.cancel();

@@ -1,7 +1,7 @@
 // MODE-01 리듬 게임 세션. 채보와 타격을 대조해 Perfect/Good/Miss를 낸다.
 // 판정은 센서 타격 시각(tHit) 기준 — 통신·처리 지연과 무관 (공통 명세서 2-4).
 import type { Chart, ChartNote } from '@/domain/chart';
-import type { ResolvedHit } from '@/domain/events';
+import type { Pose, ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
 import { COUNTDOWN_MS } from '@/domain/time/leadIn';
@@ -30,6 +30,8 @@ export interface JudgementEvent {
   stickId: 0 | 1 | null;
   /** 타격 세기 0~127. MISS·키보드 타격은 null */
   velocity: number | null;
+  /** 타격 순간 스틱 끝 방향(도). 센서 타격만, MISS·키보드는 null. 연주 중 코칭의 스틱 끝 방향 사실에 쓴다 */
+  pose: Pose | null;
 }
 
 /** 채보 밖 타격. 어느 패드를 언제 쳤는지 알린다(코칭의 다른 패드 놓침 판단용). 판정·점수와 무관하다 */
@@ -42,6 +44,9 @@ export interface StrayHitEvent {
    * 없으면 null. 음수 빠름·양수 늦음. 타이밍 막대의 범위 밖 빨간 점에 쓴다(설계 MODE-003-timing-bar-miss-dot)
    */
   nearDeltaMs: number | null;
+  /** 타격한 손과 스틱 끝 방향. 센서 타격만, 아니면 null(다른 패드로 잡힌 타격의 방향을 코칭에 쓴다) */
+  stickId: 0 | 1 | null;
+  pose: Pose | null;
 }
 
 export interface SessionSnapshot {
@@ -261,7 +266,14 @@ export class RhythmSession {
     const m = hitMatch(cands, t, this.opts.windows);
     if (m.pick === null || m.rule === null) {
       this.strayHits += 1;
-      const stray: StrayHitEvent = { pad: hit.pad, songTimeMs: t, nearDeltaMs: this.nearMissDelta(hit.pad, t) };
+      const sensor = isSensorSource(hit.source);
+      const stray: StrayHitEvent = {
+        pad: hit.pad,
+        songTimeMs: t,
+        nearDeltaMs: this.nearMissDelta(hit.pad, t),
+        stickId: sensor ? hit.stickId : null,
+        pose: sensor ? poseOf(hit) : null,
+      };
       for (const l of this.strayListeners) {
         try {
           l(stray);
@@ -329,6 +341,7 @@ export class RhythmSession {
       at,
       stickId: sensor ? hit.stickId : null,
       velocity: sensor ? hit.velocity : null,
+      pose: sensor ? poseOf(hit) : null,
     };
     this.last = ev;
     for (const l of this.judgementListeners) l(ev);
@@ -364,4 +377,10 @@ export class RhythmSession {
       judgedCount: this.judgedCount,
     };
   }
+}
+
+/** 타격의 스틱 끝 방향. 값이 없거나 숫자가 아니면 null(코칭이 방향을 쓰지 않는다. 판정에는 영향 없음) */
+function poseOf(hit: ResolvedHit): Pose | null {
+  const p = hit.pose;
+  return p && Number.isFinite(p.pitch) && Number.isFinite(p.yaw) ? { pitch: p.pitch, yaw: p.yaw } : null;
 }

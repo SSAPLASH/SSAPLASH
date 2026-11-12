@@ -69,6 +69,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
+import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSettings } from '@/store/settingsStore';
 import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
@@ -321,7 +322,7 @@ function SheetPageBody() {
     if (!activeSession) return;
     // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
     const coachContext = chartCoachContext(activeSession.chart.notes);
-    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs, s.stickId, s.pose));
     const offJudgement = activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
       // 놓친 노트 머리 파편(악보만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
@@ -344,6 +345,7 @@ function SheetPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
+        pose: e.pose,
         ...coachContext.notes[e.noteIndex],
       };
       // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
@@ -548,7 +550,7 @@ function SheetPageBody() {
       causeArm: model.causeArm,
       llmArm: model.llmArm,
       segments: llmMode
-        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg), aim: liveAimSource() }
         : undefined,
     });
     llmRef.current?.cancel();

@@ -1,6 +1,6 @@
 // 리듬 게임 세션(설계 4-2 판정 절차) 규칙 검증. 가짜 시각(ms)만 넣고 performance.now는 쓰지 않는다.
 import { describe, expect, it } from 'vitest';
-import { RhythmSession, type RhythmOptions } from './RhythmSession';
+import { RhythmSession, type RhythmOptions, type StrayHitEvent } from './RhythmSession';
 import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
@@ -163,17 +163,29 @@ describe('노트 배정과 판정', () => {
 
   it('채보 밖 타격을 패드·곡 시각과 함께 알리고, 받는 쪽 오류는 세션에 전하지 않는다', () => {
     const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
-    const got: { pad: PadId; songTimeMs: number; nearDeltaMs: number | null }[] = [];
+    const got: StrayHitEvent[] = [];
     s.onStray(() => {
       throw new Error('코칭 오류');
     });
     const off = s.onStray((e) => got.push(e));
     expect(() => s.handleHit(hit('RIDE', T0 + 1010))).not.toThrow();
-    expect(got).toEqual([{ pad: 'RIDE', songTimeMs: 1000, nearDeltaMs: null }]);
+    // 키보드 타격은 손·방향이 없다
+    expect(got).toEqual([{ pad: 'RIDE', songTimeMs: 1000, nearDeltaMs: null, stickId: null, pose: null }]);
     expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
     off();
     s.handleHit(hit('RIDE', T0 + 1020));
     expect(got).toHaveLength(1);
+  });
+
+  it('센서 타격이면 판정·채보 밖 타격에 손과 스틱 끝 방향을 싣는다(연주 중 코칭 aim)', () => {
+    const s = playing(NOTES, OPTS);
+    const strays: StrayHitEvent[] = [];
+    s.onStray((e) => strays.push(e));
+    const sensor = (pad: PadId, t: number): ResolvedHit => ({ ...hit(pad, t), source: 'stick', stickId: 1, pose: { pitch: -32, yaw: 4 } });
+    const j = s.handleHit(sensor('SNARE', T0 + 1005));
+    expect(j).toMatchObject({ stickId: 1, pose: { pitch: -32, yaw: 4 } });
+    s.handleHit(sensor('RIDE', T0 + 1010));
+    expect(strays[0]).toMatchObject({ pad: 'RIDE', stickId: 1, pose: { pitch: -32, yaw: 4 } });
   });
 
   it('pad가 없는 타격은 무시한다', () => {
