@@ -3,7 +3,7 @@
 // 포커스 규칙(D3·D4): 열릴 때 주 버튼, Tab 순환, Esc = 계속, 닫힐 때 body로(returnFocus 'blur' — 연주 중 Space 킥 보호).
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ReadinessNotice } from './ReadinessNotice';
+import { ReadinessNotice } from '@/features/play/components/start/ReadinessNotice';
 import { DisconnectNotice } from '@/components/stick/DisconnectNotice';
 import type { RealignInfo } from '@/components/calibration/RealignPrompt';
 import { buttonClassName } from '@/components/ui/buttonStyle';

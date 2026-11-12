@@ -25,11 +25,11 @@ vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {}
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/features/play/components/screenFit', () => ({ useScreenFits: () => true }));
+vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
-vi.mock('@/features/play/components/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
 // 안내 애니메이션의 rAF 갱신이 라우터 전환 렌더를 굶기지 않게 막는다
-vi.mock('@/features/play/components/guide/PickerGuide', () => ({ PickerGuide: () => null }));
+vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
 // 반주: 불러오기 호출만 센다
 vi.mock('@/audio/Accompaniment', () => {

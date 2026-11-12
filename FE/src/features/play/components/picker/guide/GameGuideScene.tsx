@@ -4,7 +4,7 @@
 // 킷은 사용자 kitSkin과 무관하게 네온으로 그린다(게임 노트 색과 같은 3색). 논리 좌표 760×470 한 판을 CSS 비율로 줄인다. 소리 없음.
 import { memo, useId, useMemo, useState, type CSSProperties } from 'react';
 import { NeonPad } from '@/components/drum/NeonPad';
-import { highwayLayout, laneLeft } from '@/features/play/components/highwayGeometry';
+import { highwayLayout, laneLeft } from '@/features/play/components/stage/highwayGeometry';
 import { DRUM_KIT_FLAT_PADS, visualPadOf, type PadVisualState } from '@/domain/drumKit';
 import { EXAMPLE_STEPS, GAME_GUIDE_OPTIONS, type GuideState } from '@/features/play/domain/guideScript';
 import { HIGHWAY_LANES, LANE_COLOR, laneColorOf, laneGroupOf, type LaneGroup } from '@/features/play/domain/highwayLanes';

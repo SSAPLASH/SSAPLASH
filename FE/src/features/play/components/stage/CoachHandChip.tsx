@@ -1,4 +1,4 @@
-import './play.css';
+import '../play.css';
 
 const HAND_LABEL = ['왼손', '오른손'] as const;
 

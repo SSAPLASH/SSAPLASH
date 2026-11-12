@@ -13,7 +13,7 @@ import type { RhythmSession } from '@/engine/RhythmSession';
 import { barTimeMs, beatAtMs } from '@/domain/tempo';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
-import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from './popupLook';
+import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from '@/features/play/components/pause/popupLook';
 import './NoteHighway.css';
 
 export interface Popup {

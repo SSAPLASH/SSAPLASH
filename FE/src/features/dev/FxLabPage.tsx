@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
 import type { FxEngine } from '@/components/fx/fxEngine';
 import { createFxEmitter, createLiveFxSource } from '@/components/fx/fxSource';
-import { ComboDisplay } from '@/features/play/components/ComboDisplay';
+import { ComboDisplay } from '@/features/play/components/stage/ComboDisplay';
 import { CelebrationFx } from '@/features/result/components/CelebrationFx';
 import type { Judgement } from '@/domain/judgement';
 import { KIT_SKINS, KIT_SKIN_LABELS, type KitSkin } from '@/domain/drumKit';

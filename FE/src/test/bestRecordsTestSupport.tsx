@@ -23,17 +23,17 @@ vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockReso
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/features/play/components/screenFit', () => ({ useScreenFits: () => true }));
+vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 // 하이웨이는 그리지 않고 프레임 콜백만 잡아 둔다 — 테스트가 곡 끝을 흉내 낸다
 const frame: { current: ((now: number) => void) | null } = { current: null };
-vi.mock('@/features/play/components/NoteHighway', () => ({
+vi.mock('@/features/play/components/stage/NoteHighway', () => ({
   NoteHighway: ({ onFrame }: { onFrame?: (now: number) => void }) => {
     frame.current = onFrame ?? null;
     return null;
   },
 }));
-vi.mock('@/features/play/components/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...await original<typeof import('@/store/songStore')>(), loadChart: vi.fn() }));
 
 const detail: SongDetail = {
