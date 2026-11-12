@@ -2,7 +2,7 @@
 // 이 파일은 연결(소스·송신·ParamStore)과 100ms 스냅샷 갱신만 맡고, 표시는 하위 컴포넌트가 한다.
 // 판정·발음 경로(InputManager)에는 관여하지 않는다 — 입력은 monitor/feed(직접 연결: packetTap·diagTap, 따라보기: 채널)로만 받는다.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { activateSensor } from '@/app/bootstrap';
+import { activateSensor } from '@/runtime/sensorSession';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { audioEngine } from '@/audio/AudioEngine';
 import { anchorsToProfile } from '@/domain/kitJudge';
