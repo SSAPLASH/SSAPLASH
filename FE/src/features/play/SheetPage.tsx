@@ -58,6 +58,7 @@ import { readCurrentConsent } from './dataConsent';
 import { startPlaySync } from '@/runtime/playSync';
 import { disarm, finishSong, setLocked } from '@/runtime/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
+import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
@@ -182,9 +183,10 @@ function SheetPageBody() {
             windows: settings.timing,
             countInBars: settings.countInBars,
             audioOffsetMs: settings.audioOffsetMs,
+            kickOffsetMs: kickOffsetOrStick(settings.audioOffsetMs, settings.kickOffsetMs),
           })
         : null,
-    [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs],
+    [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs, settings.kickOffsetMs],
   );
   const activeSession = playSession ?? session;
   // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
@@ -456,6 +458,7 @@ function SheetPageBody() {
         hits: recorder.current.hits,
         missSeqs: recorder.current.missSeqs,
         audioOffsetMs: ss.audioOffsetMs,
+        kickOffsetMs: ss.kickOffsetMs,
         countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
