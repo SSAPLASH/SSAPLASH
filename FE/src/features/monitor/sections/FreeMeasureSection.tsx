@@ -2,7 +2,7 @@
 // 판정 반경(U6)·앵커 밖 처리(U11)를 하드웨어로 실측할 때 쓰던 UI를 자유 연습 화면에서 옮겨 왔다(설계 U11).
 // 집계는 모듈에 둬서 섹션을 오가도 이어진다. 구독은 섹션이 열려 있는 동안만 건다.
 import { useEffect, useSyncExternalStore } from 'react';
-import { inputManager } from '@/app/sources';
+import { inputManager } from '@/runtime/sources';
 import { addHit, emptyHitStats, meanSensorDistance, type HitStats } from '@/domain/hitStats';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { useLive } from '@/store/liveStore';

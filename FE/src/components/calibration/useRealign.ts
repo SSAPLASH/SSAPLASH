@@ -3,7 +3,7 @@
 // enabled가 꺼지거나 언마운트하면 cancelRealign()으로 접는다(realignNeeded는 남아 다음 화면이 이어받는다).
 import { useEffect } from 'react';
 import type { RealignInfo } from './RealignPrompt';
-import { calibrationSession } from '@/app/calibrationSession';
+import { calibrationSession } from '@/runtime/calibrationSession';
 import { useLive, type CalibrationSnapshot } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 

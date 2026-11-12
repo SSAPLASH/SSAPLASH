@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const setLocalHaptic = vi.fn();
-vi.mock('@/app/sources', () => ({ inputManager: { setLocalHaptic: (...a: unknown[]) => setLocalHaptic(...a) } }));
+vi.mock('@/runtime/sources', () => ({ inputManager: { setLocalHaptic: (...a: unknown[]) => setLocalHaptic(...a) } }));
 
 import {
   currentHapticMode,

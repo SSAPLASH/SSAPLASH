@@ -3,7 +3,7 @@
 // 변형: idle / recording / armed / locked-on / locked-off. 저장 창이 열린 동안은 locked-off 모양 + disabled(U11).
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { startFree, stopFree, toggleArm, useRecordingStore, type RecordingPhase } from '@/app/recordingStore';
+import { startFree, stopFree, toggleArm, useRecordingStore, type RecordingPhase } from '@/runtime/recordingStore';
 import { formatElapsed } from '@/domain/recordingView';
 import { recordButtonVisible } from './recordButtonRoute';
 import './recording.css';

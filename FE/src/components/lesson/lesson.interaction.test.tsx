@@ -14,7 +14,7 @@ import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { useChartParam } from '@/features/play/components/useChartParam';
 import { SongPicker } from '@/features/play/components/SongPicker';
 import { LessonCourse } from './LessonCourse';

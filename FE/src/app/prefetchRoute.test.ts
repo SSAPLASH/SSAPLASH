@@ -8,7 +8,7 @@ import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from './queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { canPrefetch, prefetchRoute } from './prefetchRoute';
 import { loadRoute } from './routeModules';
 

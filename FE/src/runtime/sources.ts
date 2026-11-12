@@ -7,7 +7,7 @@ import { TouchPadSource } from '@/input/TouchPadSource';
 
 export const inputManager = new InputManager();
 export const keyboardSource = new KeyboardPadSource();
-// 키보드 타격은 연주 중인 화면이 app/keyboardDrum으로 켤 때만 받는다. 그 밖에서는 키(Space 스크롤·단축키)를 가로채지 않는다
+// 키보드 타격은 연주 중인 화면이 runtime/keyboardDrum으로 켤 때만 받는다. 그 밖에서는 키(Space 스크롤·단축키)를 가로채지 않는다
 keyboardSource.setEnabled(false);
 /** 화면 터치 소스(MODE-002). 키보드처럼 항상 붙어 있고, 자유 연습의 DrumKit만 strike를 부른다 */
 export const touchSource = new TouchPadSource();

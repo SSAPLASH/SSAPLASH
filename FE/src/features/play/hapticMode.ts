@@ -2,7 +2,7 @@
 //  - local: 스틱이 타격 즉시 직접 진동한다(기본, 자유 연습). hapticEnable = 1
 //  - judgement: 곡 연주 중. 로컬 진동을 끄고(hapticEnable = 0) FE 판정 결과로만 진동한다
 // 모드가 바뀔 때와 손이 새로 붙을 때마다 현재 모드 값을 보내, 스틱 상태가 항상 FE 모드를 따라가게 한다.
-import { inputManager } from '@/app/sources';
+import { inputManager } from '@/runtime/sources';
 import type { StickId } from '@/domain/events';
 
 export type HapticMode = 'local' | 'judgement';

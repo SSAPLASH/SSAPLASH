@@ -1,9 +1,9 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import type { InputSource, SurfaceToPose } from '@/input/InputSource';
-import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
+import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 import { KEY_MAP } from '@/domain/keyMap';
-import { resolveOptions, sensorRegistry } from './sensorRegistry';
+import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
 import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
@@ -17,8 +17,8 @@ import { startClockDiag } from './clockDiag';
 import type { ResolvedHit, SensorId, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { anchorsToProfile } from '@/domain/kitJudge';
-import { calibrationSession } from './calibrationSession';
-import { timingCalSession } from './timingCalSession';
+import { calibrationSession } from '@/runtime/calibrationSession';
+import { timingCalSession } from '@/runtime/timingCalSession';
 import { startAudioDiag } from './audioDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
@@ -47,7 +47,7 @@ const lastResendAt: [number | null, number | null] = [null, null];
 /** 타격음 스위치는 hitSound 모듈에 있다. 화면들이 이 경로로 import하므로 그대로 다시 내보낸다 */
 export { setSoundOnHit } from '@/features/lesson/hitSound';
 /** 키보드 드럼 스위치는 keyboardDrum 모듈에 있다. 연주 중인 화면이 이 경로로 import한다 */
-export { setKeyboardDrum, useKeyboardDrum } from './keyboardDrum';
+export { setKeyboardDrum, useKeyboardDrum } from '@/runtime/keyboardDrum';
 
 /** 활성 센서의 디스크립터에 현재 설정값(기본값 병합)을 적용한다 */
 function applySensorOptions(): void {

@@ -3,7 +3,7 @@
 // 판정·발음 경로(InputManager)에는 관여하지 않는다 — 입력은 monitor/feed(직접 연결: packetTap·diagTap, 따라보기: 채널)로만 받는다.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { activateSensor } from '@/app/bootstrap';
-import { sensorRegistry } from '@/app/sensorRegistry';
+import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { audioEngine } from '@/audio/AudioEngine';
 import { anchorsToProfile } from '@/domain/kitJudge';
 import type { InputSource } from '@/input/InputSource';

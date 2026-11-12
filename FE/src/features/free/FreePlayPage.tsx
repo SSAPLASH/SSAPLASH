@@ -30,10 +30,10 @@ import { freeStage } from './freeStage';
 import { deviceGroupName } from '@/domain/devices';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
-import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/app/sources';
-import { stopFree } from '@/app/recordingStore';
+import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/runtime/sources';
+import { stopFree } from '@/runtime/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
-import { resolveOptions, sensorRegistry } from '@/app/sensorRegistry';
+import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { bindSensorSurface, setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
 import type { PadId } from '@/domain/pads';
 

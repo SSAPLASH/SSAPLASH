@@ -1,5 +1,5 @@
 // 녹음 업로드 실행 (설계 REC-001 2절·3-5·3-6). 503 자동 재시도, 오류 → 사용자 문구, 게임·악보 playId 결정을 맡는다.
-// 본문 조립은 domain/recording, 상태 보관은 app/recordingStore가 한다.
+// 본문 조립은 domain/recording, 상태 보관은 runtime/recordingStore가 한다.
 import { ApiError } from '@/api/error';
 import { saveRecording } from '@/api/recordings';
 import { recordingKeys } from '@/api/queries/recordings';

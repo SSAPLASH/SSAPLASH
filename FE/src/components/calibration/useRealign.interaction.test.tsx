@@ -3,8 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { useRealign } from './useRealign';
-import { calibrationSession } from '@/app/calibrationSession';
-import { inputManager } from '@/app/sources';
+import { calibrationSession } from '@/runtime/calibrationSession';
+import { inputManager } from '@/runtime/sources';
 import { BaseInputSource } from '@/input/InputSource';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';

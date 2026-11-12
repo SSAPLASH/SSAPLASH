@@ -1,7 +1,7 @@
 // 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·캔버스 판(행 전체 폭) 안의 선택 패드 정보 카드·타격 확인, 보정 중에는 하단 바 [저장] 숨김) → 접힌 고급 설정 → 하단 고정 바.
 // 프리셋 고르기·고치기·저장은 드럼 배치 카드 한 곳이다: 칩으로 적용, [추가하기]로 패드별 2타 보정 → 새 프리셋 저장, [전체 보정]·[이 드럼 다시 치기]로 적용 프리셋 편집.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
-// 단계 판정·문구는 domain/setupSteps, 저장은 presetStore, 보정·재정렬은 app/calibrationSession이 맡고
+// 단계 판정·문구는 domain/setupSteps, 저장은 presetStore, 보정·재정렬은 runtime/calibrationSession이 맡고
 // 이 페이지는 조립과 표시만 한다. 팝업은 진입·재정렬 때 자동으로 열지 않는다(모자란 단계는 타일 강조만, 보정 중에는 ② 팝업을 열 수 없다). 판정은 손별 앵커(stickAnchors, 적용 프리셋의 사본)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
@@ -73,10 +73,10 @@ import { useRealign } from '@/components/calibration/useRealign';
 import { usePoseStream } from '@/features/setup/components/calibration/usePoseStream';
 import { ReferencePoseGuide } from '@/features/setup/components/calibration/ReferencePoseGuide';
 import { useReferenceCapture } from '@/features/setup/components/calibration/useReferenceCapture';
-import { calibrationSession } from '@/app/calibrationSession';
-import { sensorRegistry } from '@/app/sensorRegistry';
+import { calibrationSession } from '@/runtime/calibrationSession';
+import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap';
-import { KEYBOARD_INPUT_ENABLED } from '@/app/sources';
+import { KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 
 /** 편집기 표시 크기(Figma 720×320). 위치 값은 이 좌표계의 px로 보여 준다 */
 /** 그림 영역을 못 쟀을 때 쓰는 16:10 상자 */

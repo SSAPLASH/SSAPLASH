@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { UserMe } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
-import { createQueryClient } from './queryClient';
+import { createQueryClient } from '@/runtime/queryClient';
 import { bindQueryCacheToAuth } from './queryAuthBinding';
 
 const client = createQueryClient();

@@ -20,7 +20,7 @@ vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/so
 // 곡 선택의 비슷한 곡·추천이 실제 네트워크로 나가지 않게 막는다(이 시나리오는 추천을 검증하지 않는다)
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
-vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
+vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));

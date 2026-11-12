@@ -3,7 +3,7 @@
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { useRouteError } from 'react-router-dom';
 import { isChunkLoadError, tryAutoReload } from '@/config/chunkRecovery';
-import { useRecordingStore } from '@/app/recordingStore';
+import { useRecordingStore } from '@/runtime/recordingStore';
 import { ErrorState } from '@/components/ui/ErrorState';
 import './RouteErrorBoundary.css';
 

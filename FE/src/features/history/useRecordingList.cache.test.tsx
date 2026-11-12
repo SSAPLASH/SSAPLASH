@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listRecordings, type PageResponse } from '@/api/recordings';
 import { recordingKeys } from '@/api/queries/recordings';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import type { RecordingSummary } from '@/domain/recording';
 import { useRecordingList } from './useRecordingList';
 

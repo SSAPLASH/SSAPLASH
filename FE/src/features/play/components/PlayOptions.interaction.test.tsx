@@ -2,11 +2,11 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useRecordingStore } from '@/app/recordingStore';
+import { useRecordingStore } from '@/runtime/recordingStore';
 import type { AccompanimentStatus } from '@/domain/songCatalog';
 import { PlayOptions } from './PlayOptions';
 
-vi.mock('@/app/sources', () => ({ inputManager: { onHit: () => () => {} } }));
+vi.mock('@/runtime/sources', () => ({ inputManager: { onHit: () => () => {} } }));
 
 function renderOptions(hasAccompaniment: boolean, accompanimentStatus?: AccompanimentStatus | null, extra: Partial<Parameters<typeof PlayOptions>[0]> = {}) {
   return render(<PlayOptions hasAccompaniment={hasAccompaniment} accompanimentStatus={accompanimentStatus} {...extra} />);

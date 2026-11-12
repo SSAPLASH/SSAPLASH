@@ -9,9 +9,9 @@ import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap
 import { bootstrapAuth } from './app/authBootstrap';
 import { bootstrapPresets } from './app/presetBootstrap';
 import { installPreloadErrorHandler } from './config/chunkRecovery';
-import { queryClient } from './app/queryClient';
+import { queryClient } from './runtime/queryClient';
 import { bindQueryCacheToAuth } from './app/queryAuthBinding';
-import { useRecordingStore } from './app/recordingStore';
+import { useRecordingStore } from './runtime/recordingStore';
 import { RouteErrorElement } from '@/components/shell/RouteErrorBoundary';
 import './styles/global.css';
 

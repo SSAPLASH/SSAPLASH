@@ -7,7 +7,7 @@ import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from '@/app/queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));

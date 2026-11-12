@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ redo: vi.fn(), next: vi.fn(), setRadiusOverride: vi.fn(), skipRealign: vi.fn() }));
-vi.mock('@/app/calibrationSession', () => ({ calibrationSession: h }));
+vi.mock('@/runtime/calibrationSession', () => ({ calibrationSession: h }));
 
 import { CalibrationStage } from './CalibrationStage';
 import { previewRadius } from './captureRadius';

@@ -3,7 +3,7 @@ import { getBestRecords, type BestRecordDto } from '@/api/plays';
 import { selectServerBestRecords, type BestRecordMode } from '@/features/play/api/serverBestRecord';
 import { useAuth } from '@/store/authStore';
 import type { SongsSource } from '@/store/songStore';
-import { usePlaySync } from '@/app/playSync';
+import { usePlaySync } from '@/runtime/playSync';
 
 export type BestRecordsStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface Snapshot { key: string; items: BestRecordDto[] | null }
