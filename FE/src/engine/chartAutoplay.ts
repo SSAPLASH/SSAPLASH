@@ -26,6 +26,22 @@ export interface ChartAutoplayDeps {
   setInterval?(fn: () => void, ms: number): unknown;
   clearInterval?(id: unknown): void;
   visibility?(): 'visible' | 'hidden';
+  /**
+   * 오디오 시계가 들리는 시각보다 앞선 정도(ms, AudioEngine.renderAheadMs). 예약 창에 더한다.
+   * 안 더하면 출력 지연이 창보다 클 때 소리가 "지금"으로 당겨져 늦게 울린다(설계 MODE-001). 없으면 0
+   */
+  renderAheadMs?(): number;
+  /**
+   * 오디오 시계로 바로 예약하는 경로(설계 MODE-001). 셋 다 주고 songToContext가 값을 돌려주면(연주 시계가 오디오 시계 기준으로 돌 때)
+   * 노트를 곡 시각을 울릴 오디오 시각(PlayClock.songTimeToContext)에 예약해 반주·클릭과 같은 기준에 놓는다.
+   * 화면 시계를 거치지 않으므로 출력 지연·곡 시각 멈춤과 상관없다. 없거나 null이면 화면 시계 경로(play)
+   */
+  songToContext?(songMs: number): number | null;
+  /** 지금 AudioContext.currentTime(초). 컨텍스트가 running이 아니면 null */
+  contextNow?(): number | null;
+  playAtContext?(pad: PadId, velocity: number, ctxSec: number): (() => void) | void;
+  /** 탭 가림 상태 변경 구독(테스트 주입용). 해제 함수를 돌려준다. 기본은 document visibilitychange. 가려지는 순간 넓은 창으로 한 번 예약한다 */
+  onVisibilityChange?(fn: () => void): () => void;
 }
 
 export interface ChartAutoplay {
@@ -37,17 +53,22 @@ export function createChartAutoplay(deps: ChartAutoplayDeps): ChartAutoplay {
   const { notes } = deps;
   const now = () => (deps.now ? deps.now() : performance.now());
   let timer: unknown = null;
+  let unsubVisibility: (() => void) | null = null;
   /** 다음에 예약할 노트 인덱스 */
   let cursor = 0;
   /** 직전 tick의 곡 시각. null이면 시계가 멈춰 있었음(재개·재시작 직후 커서를 다시 잡는다) */
   let lastT: number | null = null;
-  /** 예약했지만 아직 울릴 시각이 안 된 소리(취소용) */
-  let pending: { atMs: number; cancel: () => void }[] = [];
+  /** 예약했지만 아직 울릴 시각이 안 된 소리(취소용). atMs는 화면 시계, ctxSec는 오디오 시계 경로 */
+  let pending: { atMs?: number; ctxSec?: number; cancel: () => void }[] = [];
+
+  const notYet = (p: { atMs?: number; ctxSec?: number }, nowMs: number, ctxNow: number | null): boolean =>
+    p.ctxSec !== undefined ? ctxNow === null || p.ctxSec > ctxNow : (p.atMs ?? 0) > nowMs;
 
   /** 아직 안 울린 예약 소리를 취소한다. 재개 때 같은 노트를 다시 예약하므로 일시정지 중에 울리지 않게 한다 */
   const cancelPending = (): void => {
     const nowMs = now();
-    for (const p of pending) if (p.atMs > nowMs) p.cancel();
+    const ctxNow = deps.contextNow?.() ?? null;
+    for (const p of pending) if (notYet(p, nowMs, ctxNow)) p.cancel();
     pending = [];
   };
 
@@ -83,8 +104,24 @@ export function createChartAutoplay(deps: ChartAutoplayDeps): ChartAutoplay {
     if (lastT === null || t < lastT) cursor = firstFrom(t);
     lastT = t;
     const nowMs = now();
-    pending = pending.filter((p) => p.atMs > nowMs);
-    const ahead = lookahead();
+    const ctxNow = deps.contextNow?.() ?? null;
+    pending = pending.filter((p) => notYet(p, nowMs, ctxNow));
+    // 오디오 시계 경로: 노트를 ctxZero + 곡 시각에 바로 예약. 예약 창은 오디오 시계 기준
+    if (deps.songToContext && deps.playAtContext && ctxNow !== null && deps.songToContext(t) !== null) {
+      const aheadSec = lookahead() / 1000;
+      while (cursor < notes.length) {
+        const n = notes[cursor];
+        const ctxSec = deps.songToContext(n.timeMs) as number;
+        if (ctxSec > ctxNow + aheadSec) break;
+        cursor += 1;
+        if (ctxSec < ctxNow - AUTOPLAY_SKIP_MS / 1000) continue; // 타이머가 늦어 놓친 노트
+        const cancel = deps.playAtContext(n.pad, n.velocityHint ?? AUTOPLAY_DEFAULT_VELOCITY, ctxSec);
+        if (cancel) pending.push({ ctxSec, cancel });
+      }
+      return;
+    }
+    // 화면 시계 경로: 창에 오디오 시계가 들리는 시각보다 앞선 정도를 더한다
+    const ahead = lookahead() + (deps.renderAheadMs?.() ?? 0);
     while (cursor < notes.length && notes[cursor].timeMs <= t + ahead) {
       const n = notes[cursor];
       cursor += 1;
@@ -102,6 +139,11 @@ export function createChartAutoplay(deps: ChartAutoplayDeps): ChartAutoplay {
       lastT = null;
       const si = deps.setInterval ?? ((fn, ms) => globalThis.setInterval(fn, ms));
       timer = si(tick, AUTOPLAY_TICK_MS);
+      if (deps.onVisibilityChange) unsubVisibility = deps.onVisibilityChange(tick);
+      else if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', tick);
+        unsubVisibility = () => document.removeEventListener('visibilitychange', tick);
+      }
       tick();
     },
     stop() {
@@ -109,6 +151,8 @@ export function createChartAutoplay(deps: ChartAutoplayDeps): ChartAutoplay {
       const ci = deps.clearInterval ?? ((id) => globalThis.clearInterval(id as number));
       ci(timer);
       timer = null;
+      unsubVisibility?.();
+      unsubVisibility = null;
       cancelPending();
     },
   };
