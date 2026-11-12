@@ -9,7 +9,7 @@ import { startYawAutoDiag, YAW_AUTO_DIAG_INTERVAL_MS, type YawAutoDiag } from '.
 const chart = { songId: 's', title: 't', bpm: 120, beatsPerBar: 4, notes: [{ timeMs: 0, pad: 'SNARE' }] } as Chart;
 const windows = { perfectMs: 25, goodMs: 60 };
 const startSong = () =>
-  diagSessionStart(new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0 }), 'RHYTHM', { windows, audioOffsetMs: 0 });
+  diagSessionStart(new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0, kickOffsetMs: 0 }), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
 
 let diag: YawAutoDiag | null = null;
 beforeEach(() => vi.useFakeTimers());
