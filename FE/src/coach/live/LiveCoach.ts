@@ -2,6 +2,7 @@
 // 창(window) → 규칙(rules) → 정책(policy)을 묶고, 플레이 로그에 넣을 liveCoachEvents를 쌓는다.
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
+import type { Pose } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { missCauses, pickCauseByRule, type CauseCandidate } from './cause';
 import type { CauseModel } from './models/remoteCause';
@@ -12,7 +13,7 @@ import { CoachPolicy, type RecoveredFrom } from './policy';
 import { evaluatePraise, evaluateRules, isPraiseTag, type CoachTarget, type LiveTag } from './rules';
 import { evaluateSetupHints, SETUP_TAGS } from './setupHints';
 import type { LlmRecord, LlmTip } from './llmCoach';
-import { SegmentTracker, type FinishedSegment, type InputKind, type LiveTipText, type SegmentChart } from './segment';
+import { SegmentTracker, type AimSource, type FinishedSegment, type InputKind, type LiveTipText, type SegmentChart } from './segment';
 import { JudgedWindow, type JudgedNote } from './window';
 
 export interface LiveCoachOptions {
@@ -40,7 +41,7 @@ export interface LiveCoachOptions {
    * 연주 중 LLM 구간 코칭(설계 COACH-001 연주 중 LLM 코칭). 주면 마디 구간이 끝날 때마다 onSegment로 구간 사실을 넘긴다.
    * 네트워크는 부르지 않는다(받는 쪽이 LlmCoach로 요청한다). 없으면 지금과 같다
    */
-  segments?: { chart: SegmentChart; input: InputKind; onSegment: (seg: FinishedSegment) => void };
+  segments?: { chart: SegmentChart; input: InputKind; onSegment: (seg: FinishedSegment) => void; aim?: AimSource | null };
   /** LLM 구간 코칭 실험군. LIVE_ARM에 llmArm으로 남긴다 */
   llmArm?: string | null;
   /** 곡의 노트 간격 중앙값(ms, chartCoachContext). 없으면 빠른 구간 원인을 계산하지 않는다 */
@@ -179,7 +180,7 @@ export class LiveCoach {
     this.llmArm = opts.llmArm ?? null;
     this.segments = opts.segments ?? null;
     // 놓침 판정은 사용자 판정 폭이 지난 뒤 오므로 구간 끝 판단에는 사용자 goodMs를 쓴다
-    this.tracker = this.segments ? new SegmentTracker(this.segments.chart, opts.goodMs, this.segments.input) : null;
+    this.tracker = this.segments ? new SegmentTracker(this.segments.chart, opts.goodMs, this.segments.input, this.segments.aim ?? null) : null;
     if (opts.gate === undefined) preloadCoachGate();
     this.thresholds = coachThresholds(opts.goodMs, opts.basis);
     const median = opts.noteGapMedianMs;
@@ -188,10 +189,11 @@ export class LiveCoach {
   }
 
   /** 채보 밖 타격을 넣는다(RhythmSession.onStray). 원인 계산에만 쓰고 문구는 띄우지 않는다 */
-  pushStray(pad: PadId, songTimeMs: number): void {
+  pushStray(pad: PadId, songTimeMs: number, stickId: 0 | 1 | null = null, pose: Pose | null = null): void {
     if (!this.enabled || !Number.isFinite(songTimeMs)) return;
     try {
       this.window.pushStray({ pad, songTimeMs });
+      this.tracker?.noteStray(pad, songTimeMs, stickId, pose);
     } catch {
       // 코칭 오류로 연주를 막지 않는다
     }
