@@ -10,6 +10,12 @@ export const HAND_COLORS = ['#7cc4ff', '#ffa07c'] as const;
 
 const TAU = Math.PI * 2;
 
+/** 캔버스가 그림 영역(폭 w) 바깥으로 넘친 폭(px, 한쪽). 넘침은 CSS가 정한다(드럼 세팅은 판 안쪽 여백만큼). 재지 못하면 0 */
+export function canvasBleed(clientWidth: number, w: number): number {
+  const b = Math.round((clientWidth - w) / 2);
+  return Number.isFinite(b) && b > 0 ? b : 0;
+}
+
 /** 바닥 격자(0.2m 간격) */
 export function paintFloor(ctx: CanvasRenderingContext2D, cam: Camera): void {
   ctx.save();
