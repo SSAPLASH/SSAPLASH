@@ -68,6 +68,19 @@ const ALLOWED = new Set<string>([
   'components/song/useFreeAccompaniment.ts -> app/bootstrap.ts',
 ]);
 
+/** domain 파일 여부와 그 파일이 속한 기능(공유 domain이면 null) */
+const domainOwner = (f: string): { feature: string | null } | null => {
+  if (f.startsWith('domain/')) return { feature: null };
+  const m = /^features\/([^/]+)\/domain\//.exec(f);
+  return m ? { feature: m[1] } : null;
+};
+
+/** 소스 한 파일이 가져오는 패키지(`@/`·상대 경로가 아닌 import 대상). EDGES는 src 파일만 담아 따로 읽는다 */
+function packageImportsOf(file: string): string[] {
+  const text = readFileSync(join(SRC, file), 'utf8');
+  return [...text.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]).filter((spec) => !spec.startsWith('@/') && !spec.startsWith('.'));
+}
+
 function violations(test: (from: string, to: string) => boolean): string[] {
   return EDGES.filter((e) => test(e.from, e.to)).map((e) => `${e.from} -> ${e.to}`);
 }
@@ -82,6 +95,13 @@ describe('폴더 구조 의존 규칙', () => {
     }),
     // R2 공유 층은 기능 폴더와 app을 import하지 않는다
     ...violations((from, to) => isShared(from) && (to.startsWith('features/') || to.startsWith('app/'))),
+    // R3 domain은 다른 domain 파일만 import한다(패키지도 안 된다)
+    ...violations((from, to) => {
+      const owner = domainOwner(from);
+      if (!owner) return false;
+      return owner.feature === null ? !to.startsWith('domain/') : !to.startsWith(`features/${owner.feature}/domain/`) && !to.startsWith('domain/');
+    }),
+    ...SOURCES.filter((f) => domainOwner(f) !== null).flatMap((f) => packageImportsOf(f).map((pkg) => `${f} -> ${pkg}`)),
     // R4 components/ui는 store·domain·api를 모른다
     ...violations((from, to) => from.startsWith('components/ui/') && /^(store|domain|api|engine|input|audio)\//.test(to)),
   ];
