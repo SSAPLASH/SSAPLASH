@@ -115,6 +115,27 @@ class PlayPayloadTest {
 				java.util.Map.of(0,new PlaySessionRepository.SensorHit(0,p.hits().getFirst().tMs())));
 		assertThat(result.bytes()).isPositive();
 	}
+	/** GOOD 하나·MISS 하나(노트 2개) 기록. 규칙 버전과 요약 점수·정확도만 바꿔 넣는다 */
+	String good(String version, int score, String accuracy) {
+		return PlayFixtures.scored(id,1,2).replace("\"SCORE_V1\"", "\""+version+"\"")
+				.replace("\"tMs\":100.125","\"tMs\":130").replace("\"judgement\":\"PERFECT\"","\"judgement\":\"GOOD\"").replace("\"deltaMs\":0.125","\"deltaMs\":30")
+				.replace("\"score\":100,\"accuracy\":50","\"score\":"+score+",\"accuracy\":"+accuracy)
+				.replace("{\"perfect\":1,\"good\":0,\"miss\":1}","{\"perfect\":0,\"good\":1,\"miss\":1}");
+	}
+	@Test void goodIsScoredByTheUploadedRuleVersion() {
+		// SCORE_V2: GOOD 80점(11/12 팀 결정). 배포 전에 친 기록·열려 있던 옛 화면의 SCORE_V1(GOOD 60)도 그 규칙으로 받는다
+		for (String ok : new String[]{good("SCORE_V2",80,"40"), good("SCORE_V1",60,"30")}) {
+			var p=read(ok); validator.structure(p); validator.notes(p,chart());
+		}
+		// 버전과 점수가 어긋나면 거부한다
+		for (String bad : new String[]{good("SCORE_V2",60,"30"), good("SCORE_V1",80,"40")})
+			assertThatThrownBy(()->{ var b=read(bad); validator.structure(b); validator.notes(b,chart()); })
+					.isInstanceOfSatisfying(BusinessException.class,ex->assertThat(ex.getErrorCode()).isEqualTo(PlayErrorCode.PLAY_PAYLOAD_INVALID));
+	}
+	@Test void unknownScoreRuleVersionIsConflict() {
+		assertThatThrownBy(()->validator.structure(read(good("SCORE_V3",80,"40"))))
+				.isInstanceOfSatisfying(BusinessException.class,ex->assertThat(ex.getErrorCode()).isEqualTo(PlayErrorCode.PLAY_SCHEMA_UNSUPPORTED));
+	}
 	@Test void unsupportedVersionIsConflict() { assertThatThrownBy(()->validator.structure(read(PlayFixtures.free(id).replace("\"schemaVersion\":1","\"schemaVersion\":2"))))
 			.isInstanceOfSatisfying(BusinessException.class,ex->assertThat(ex.getErrorCode()).isEqualTo(PlayErrorCode.PLAY_SCHEMA_UNSUPPORTED)); }
 	@Test void partialPlayDoesNotInventFutureMisses() {

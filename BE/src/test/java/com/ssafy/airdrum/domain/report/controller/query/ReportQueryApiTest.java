@@ -149,6 +149,20 @@ class ReportQueryApiTest {
         assertThat(snare.get("meanDeltaMs").asDouble()).isZero();
         assertThat(snare.get("meanVelocity").asDouble()).isZero();
     }
+    @Test void padPercentUsesTheScoreRuleOfThePlay() throws Exception {
+        // GOOD 80점(SCORE_V2)으로 친 기록은 리포트 패드 정확도도 같은 규칙: (100 + 80) / 3
+        upload();
+        db.update("""
+                UPDATE play_sessions SET judgement_context=jsonb_set(judgement_context,'{judgementVersion}','"SCORE_V2"') WHERE id=?
+                """, play);
+        db.update("""
+                UPDATE reports SET pad_stats=jsonb_set(pad_stats,'{1}',
+                '{"pad":"SNARE","accuracy":0.6,"meanDeltaMs":0,"meanVelocity":0,
+                "judgementCounts":{"perfect":1,"good":1,"miss":1},"sampleCount":2}'::jsonb)
+                WHERE play_session_id=?
+                """, play);
+        assertThat(read("").get("padStats").get(1).get("accuracy").asDouble()).isEqualTo(60.00);
+    }
     @Test void abortedPlayKeepsWholeChartAndEvaluatedPadDenominatorsSeparate() throws Exception {
         // 검증 가능한 100노트 채보 중 첫 노트 하나만 평가한 중단 플레이.
         db.update("""
