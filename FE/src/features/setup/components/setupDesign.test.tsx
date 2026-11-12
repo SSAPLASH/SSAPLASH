@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { KitPreset } from '@/domain/preset';
 import type { RecentHit } from '@/components/drum/useRecentHits';
 import { HitLog } from './HitLog';
-import { HIT_LOG_ROWS, hitAgoText } from './hitLogFormat';
+import { HIT_FLOAT_MIN_H_LEFT, HIT_FLOAT_MIN_W, HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText, hitLogPlacement } from './hitLogFormat';
 import { PresetNameDialog } from './PresetNameDialog';
 import { ReturnBanner } from './ReturnBanner';
 import { StepCard } from './StepCard';
@@ -26,6 +26,32 @@ describe('hitLogFormat', () => {
   });
   it('시계가 어긋나 미래 시각이어도 방금', () => {
     expect(hitAgoText(now + 5000, now)).toBe('방금');
+  });
+  it('판 안 카드는 3행, 판 안 최소 크기 상수', () => {
+    expect(HIT_LOG_FLOAT_ROWS).toBe(3);
+    expect(HIT_FLOAT_MIN_W).toBe(720);
+    expect(HIT_FLOAT_MIN_H_LEFT).toBe(400);
+  });
+});
+
+describe('hitLogPlacement 규칙표', () => {
+  const big = { w: 1000, h: 500 };
+  it('보정 중이면 아래', () => {
+    expect(hitLogPlacement({ capturing: true, figSize: big, corner: 'right' })).toBe('below');
+  });
+  it('그림 영역을 못 쟀으면(null) 판 안', () => {
+    expect(hitLogPlacement({ capturing: false, figSize: null, corner: 'left' })).toBe('panel');
+  });
+  it('그림 영역 폭이 720 미만이면 아래(720은 판 안)', () => {
+    expect(hitLogPlacement({ capturing: false, figSize: { w: 719, h: 600 }, corner: 'right' })).toBe('below');
+    expect(hitLogPlacement({ capturing: false, figSize: { w: 720, h: 600 }, corner: 'right' })).toBe('panel');
+  });
+  it('정보 카드가 왼쪽이고 높이가 400 미만이면 아래(400은 판 안)', () => {
+    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 399 }, corner: 'left' })).toBe('below');
+    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 400 }, corner: 'left' })).toBe('panel');
+  });
+  it('그 밖에는 판 안(정보 카드가 오른쪽이면 낮아도)', () => {
+    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 300 }, corner: 'right' })).toBe('panel');
   });
 });
 
@@ -58,6 +84,11 @@ describe('HitLog', () => {
     expect(html.indexOf('>6<')).toBeGreaterThan(-1);
     expect(html.indexOf('>6<')).toBeLessThan(html.indexOf('>5<'));
     expect(html).not.toContain('>1<');
+  });
+  it('rows를 주면 그 수만큼만(3이면 3행)', () => {
+    const hits = [6, 5, 4, 3, 2, 1].map((id) => hit(id, { velocity: id }));
+    const html = renderToStaticMarkup(<HitLog hits={hits} now={now} rows={3} />);
+    expect((html.match(/<li /g) ?? []).length).toBe(3);
   });
 });
 

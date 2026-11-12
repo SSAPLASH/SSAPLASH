@@ -222,6 +222,44 @@ describe('SetupPage 드럼 배치 카드 칩 줄(UX-64)', () => {
   });
 });
 
+describe('SetupPage 재배치(판 키우기·타격 확인 판 안으로)', () => {
+  it('상태 타일 3개가 .setup-tiles 안에 있다', async () => {
+    putSettings({ timingCal: null });
+    const html = await renderSetup();
+    const start = html.indexOf('class="setup-tiles"');
+    const end = html.indexOf('드럼 배치</h2>');
+    const tiles = html.slice(start, end);
+    expect((tiles.match(/class="setup-tile /g) ?? []).length).toBe(3);
+    expect(tiles).toContain('id="setup-timing"');
+    expect(tiles.indexOf('setup-timing')).toBeGreaterThan(tiles.indexOf('시작 위치 보정'));
+  });
+
+  it('평소에는 카드 머리가 한 줄이고 설명 문장(setup-card-desc)이 드럼 배치 카드에 없다', async () => {
+    const html = await renderSetup();
+    expect(html).toContain('class="setup-kit-head"');
+    const kit = html.slice(html.indexOf('setup-kit-head'), html.indexOf('setup-adv'));
+    expect(kit).not.toContain('setup-card-desc');
+    expect(kit).not.toContain('프리셋을 골라 고쳐요');
+  });
+
+  it('편집 화면에서는 타격 확인이 판 안(is-float, 3행 카드)에 있고 판 아래에는 없다', async () => {
+    const html = await renderSetup();
+    expect(html.match(/class="setup-hit[ "]/g) ?? []).toHaveLength(1);
+    expect(html).toContain('class="setup-hit is-float"');
+    const panelEnd = html.indexOf('setup-kit-foot');
+    expect(html.indexOf('is-float')).toBeLessThan(panelEnd);
+    expect(html.indexOf('is-float')).toBeGreaterThan(html.indexOf('setup-stage-inner'));
+  });
+
+  it('스틱 입력 중단 알림은 판 안 타격 확인이어도 판 아래에 남는다', async () => {
+    putSettings({ sensorKind: 'pointer' });
+    putLive({ connected: [false, false] });
+    const html = await renderSetup();
+    expect(html).toContain('is-float');
+    expect(html.indexOf('스틱 입력 중단')).toBeGreaterThan(html.indexOf('setup-kit-foot'));
+  });
+});
+
 describe('SetupPage 보정 중(UX-64)', () => {
   it('추가하기 보정 중이면 드럼 배치 카드가 보정 무대이고 칩 줄은 「새 프리셋 · 보정 중」 + pill + [보정 취소], 하단 바는 보정 문구만(저장 버튼 없음, D13)', async () => {
     putSettings({ sensorKind: 'pointer', stickAnchors: [null, null], activePresetId: SYSTEM_PRESET_ID });
@@ -258,16 +296,21 @@ describe('SetupPage 보정 중(UX-64)', () => {
     expect(html).not.toMatch(/<button[^>]*>새 프리셋으로 저장</);
     expect(html).toContain('setup-bar');
     expect(html).not.toContain('setup-editor');
+    // 보정 중에는 안내 문장이 보이고 타격 확인은 판 아래(5행 카드, is-float 아님)
+    expect(html).toContain('setup-card-desc');
+    expect(html).toContain('class="setup-hit"');
+    expect(html).not.toContain('is-float');
   });
 });
 
-describe('SetupPage 박자 맞추기 줄', () => {
+describe('SetupPage 박자 맞추기 타일', () => {
   it('맞춘 적이 없으면 "안 맞춤"과 [맞추기]', async () => {
     putSettings({ timingCal: null, audioOffsetMs: 0 });
     const html = await renderSetup();
-    expect(html).toContain('timing-cal-row');
+    expect(html).not.toContain('timing-cal-row');
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*class="setup-tile is-off is-todo"/);
     expect(html).toContain('안 맞춤');
-    expect(html).toMatch(/<button[^>]*>맞추기<\/button>/);
+    expect(html).toContain('<span class="setup-tile-action" aria-hidden="true">맞추기</span>');
   });
 
   it('맞춘 뒤에는 지금 보정값과 [다시 맞추기]', async () => {
@@ -277,7 +320,8 @@ describe('SetupPage 박자 맞추기 줄', () => {
     });
     const html = await renderSetup();
     expect(html).toContain('맞춤 · -65ms');
-    expect(html).toContain('다시 맞추기');
+    expect(html).toContain('>다시 맞추기</span>');
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*class="setup-tile is-on"/);
   });
 
   it('패드 보정 중에는 버튼이 비활성이고 이유를 보인다', async () => {
@@ -288,6 +332,6 @@ describe('SetupPage 박자 맞추기 줄', () => {
     });
     const html = await renderSetup();
     expect(html).toContain('보정 중에는 열 수 없어요');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>맞추기<\/button>/);
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*disabled/);
   });
 });
