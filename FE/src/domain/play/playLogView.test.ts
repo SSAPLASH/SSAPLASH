@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { filterPlayLogs, formatPlayDate, historyRowLevel, HISTORY_PAGE_SIZE, pageInfo, playModeName, searchPlayLogs, sortPlayLogs } from './playLogView';
+import {
+  accuracyTier,
+  filterPlayLogs,
+  formatPlayClock,
+  formatPlayDate,
+  groupByDay,
+  historyRowLevel,
+  historyRowLink,
+  inPeriod,
+  mergeUnsaved,
+  periodRange,
+  playDayLabel,
+  playModeName,
+  saveStatusOf,
+  searchPlayLogs,
+  unsavedLogs,
+} from './playLogView';
+import type { PlayUploadState } from '@/domain/playLog';
 
 describe('formatPlayDate', () => {
   it('YYYY.MM.DD HH:mm 형식(로컬 시간, 0 채움)', () => {
@@ -19,10 +36,11 @@ describe('formatPlayDate', () => {
 });
 
 describe('playModeName', () => {
-  it('RHYTHM=게임, SHEET=악보, 그 밖은 값 그대로', () => {
-    expect(playModeName('RHYTHM')).toBe('게임');
-    expect(playModeName('SHEET')).toBe('악보');
-    expect(playModeName('FREE')).toBe('FREE');
+  it('리듬 게임·악보 연습·자유 연습, 모르는 모드는 값 그대로', () => {
+    expect(playModeName('RHYTHM')).toBe('리듬 게임');
+    expect(playModeName('SHEET')).toBe('악보 연습');
+    expect(playModeName('FREE')).toBe('자유 연습');
+    expect(playModeName('TEMPO')).toBe('TEMPO');
   });
 });
 
@@ -55,34 +73,6 @@ describe('filterPlayLogs', () => {
   });
 });
 
-describe('pageInfo', () => {
-  it('0건: 1쪽, 범위 0~0', () => {
-    expect(pageInfo(0, 0)).toEqual({ page: 0, pageCount: 1, from: 0, to: 0 });
-  });
-
-  it('10건: 1쪽, 1~10', () => {
-    expect(pageInfo(10, 0)).toEqual({ page: 0, pageCount: 1, from: 1, to: 10 });
-  });
-
-  it('13건: 2쪽, 1쪽 1~10, 2쪽 11~13', () => {
-    expect(pageInfo(13, 0)).toEqual({ page: 0, pageCount: 2, from: 1, to: 10 });
-    expect(pageInfo(13, 1)).toEqual({ page: 1, pageCount: 2, from: 11, to: 13 });
-  });
-
-  it('범위 밖 페이지는 보정한다(너무 크면 마지막, 음수면 0)', () => {
-    expect(pageInfo(13, 5).page).toBe(1);
-    expect(pageInfo(13, 5).from).toBe(11);
-    expect(pageInfo(13, -3).page).toBe(0);
-    expect(pageInfo(0, 4)).toEqual({ page: 0, pageCount: 1, from: 0, to: 0 });
-  });
-
-  it('쪽 크기 기본값은 HISTORY_PAGE_SIZE(10), 직접 지정도 된다', () => {
-    expect(HISTORY_PAGE_SIZE).toBe(10);
-    expect(pageInfo(20, 1)).toEqual({ page: 1, pageCount: 2, from: 11, to: 20 });
-    expect(pageInfo(7, 1, 3)).toEqual({ page: 1, pageCount: 3, from: 4, to: 6 });
-  });
-});
-
 describe('searchPlayLogs', () => {
   const logs = [{ title: 'Hello World' }, { title: '봄날' }, { title: 'hello' }];
 
@@ -105,38 +95,159 @@ describe('searchPlayLogs', () => {
   });
 });
 
-describe('sortPlayLogs', () => {
-  const at = (m: number) => new Date(2026, 10, 1, 9, m).toISOString();
-  const logs = [
-    { id: 1, startedAt: at(5) },
-    { id: 2, startedAt: at(1) },
-    { id: 3, startedAt: at(5) },
-    { id: 4, startedAt: at(9) },
-  ];
-
-  it('NEWEST는 최신 먼저, 같은 시각은 원래 순서', () => {
-    expect(sortPlayLogs(logs, 'NEWEST').map((l) => l.id)).toEqual([4, 1, 3, 2]);
-  });
-
-  it('OLDEST는 오래된 것 먼저, 같은 시각은 원래 순서', () => {
-    expect(sortPlayLogs(logs, 'OLDEST').map((l) => l.id)).toEqual([2, 1, 3, 4]);
-  });
-
-  it('원본은 바뀌지 않는다', () => {
-    sortPlayLogs(logs, 'OLDEST');
-    expect(logs.map((l) => l.id)).toEqual([1, 2, 3, 4]);
-  });
-});
-
 describe('historyRowLevel', () => {
-  it('게임 행은 난이도, 악보 행은 null', () => {
+  it('리듬 게임·악보 연습 행 모두 난이도를 보인다(338 개편), 그 밖의 모드는 null', () => {
     expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'EASY' })).toBe('EASY');
     expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'HARD' })).toBe('HARD');
-    expect(historyRowLevel({ mode: 'SHEET', difficulty: 'EASY' })).toBeNull();
+    expect(historyRowLevel({ mode: 'SHEET', difficulty: 'NORMAL' })).toBe('NORMAL');
+    expect(historyRowLevel({ mode: 'FREE', difficulty: 'EASY' })).toBeNull();
   });
 
   it('EASY·NORMAL·HARD가 아니면 null', () => {
     expect(historyRowLevel({ mode: 'RHYTHM', difficulty: 'weird' })).toBeNull();
     expect(historyRowLevel({ mode: 'RHYTHM', difficulty: '' })).toBeNull();
+  });
+});
+
+describe('날짜 묶음', () => {
+  const now = new Date(2026, 10, 12, 15, 0); // 로컬 11월 12일(목)
+  const at = (day: number, h: number, m = 0, month = 10, year = 2026) => new Date(year, month, day, h, m).toISOString();
+
+  it('오늘·어제는 앞에 붙이고, 그 밖은 날짜와 요일만', () => {
+    expect(playDayLabel(at(12, 0, 5), now)).toBe('오늘 · 11월 12일 (목)');
+    expect(playDayLabel(at(11, 23, 59), now)).toBe('어제 · 11월 11일 (수)');
+    expect(playDayLabel(at(3, 9), now)).toBe('11월 3일 (화)');
+  });
+
+  it('해가 다르면 연도를 붙이고, 못 읽는 시각은 "-"', () => {
+    expect(playDayLabel(at(31, 9, 0, 11, 2025), now)).toBe('2025년 12월 31일 (수)');
+    expect(playDayLabel('nope', now)).toBe('-');
+  });
+
+  it('행 순서를 지키며 같은 날끼리 묶는다', () => {
+    const rows = [
+      { id: 1, at: at(12, 14) },
+      { id: 2, at: at(12, 9) },
+      { id: 3, at: at(11, 22) },
+      { id: 4, at: at(3, 8) },
+    ];
+    const groups = groupByDay(rows, (r) => r.at, now);
+    expect(groups.map((g) => [g.label, g.items.map((r) => r.id)])).toEqual([
+      ['오늘 · 11월 12일 (목)', [1, 2]],
+      ['어제 · 11월 11일 (수)', [3]],
+      ['11월 3일 (화)', [4]],
+    ]);
+    expect(new Set(groups.map((g) => g.key)).size).toBe(3);
+  });
+
+  it('formatPlayClock: 오전·오후 h:mm', () => {
+    expect(formatPlayClock(at(12, 0, 5))).toBe('오전 12:05');
+    expect(formatPlayClock(at(12, 9, 30))).toBe('오전 9:30');
+    expect(formatPlayClock(at(12, 12, 0))).toBe('오후 12:00');
+    expect(formatPlayClock(at(12, 23, 59))).toBe('오후 11:59');
+    expect(formatPlayClock('nope')).toBe('-');
+  });
+});
+
+describe('기간 → 서버 날짜(한국 시간)', () => {
+  // 한국 시간 11월 13일 01:00 (UTC로는 12일 16:00)
+  const now = new Date(Date.UTC(2026, 10, 12, 16, 0));
+
+  it('전체 기간은 비우고, 7일·30일은 오늘을 포함해 센다', () => {
+    expect(periodRange('ALL', now)).toEqual({});
+    expect(periodRange('7D', now)).toEqual({ from: '2026-11-07', to: '2026-11-13' });
+    expect(periodRange('30D', now)).toEqual({ from: '2026-10-15', to: '2026-11-13' });
+  });
+
+  it('inPeriod는 한국 시간 날짜로 양 끝을 포함해 본다', () => {
+    const range = periodRange('7D', now);
+    expect(inPeriod('2026-11-06T15:00:00Z', range)).toBe(true); // 한국 시간 7일 00:00
+    expect(inPeriod('2026-11-06T14:59:59Z', range)).toBe(false); // 한국 시간 6일 23:59
+    expect(inPeriod('2026-11-13T14:59:59Z', range)).toBe(true); // 한국 시간 13일 23:59
+    expect(inPeriod('2026-11-13T15:00:00Z', range)).toBe(false);
+    expect(inPeriod('2020-01-01T00:00:00Z', {})).toBe(true);
+    expect(inPeriod('nope', range)).toBe(false);
+    // 전체 기간이면 날짜를 못 읽는 로그도 거르지 않는다(목록에서 사라지지 않게)
+    expect(inPeriod('nope', {})).toBe(true);
+  });
+});
+
+describe('저장 상태', () => {
+  const up = (status: PlayUploadState['status'], retryable = false): PlayUploadState => ({ status, reason: null, retryable, attempts: 1, updatedAt: '' });
+
+  it('올리는 중은 SAVING, 다시 보낼 수 있는 실패는 FAILED, 그 밖은 UNSAVED, 끝났으면 null', () => {
+    expect(saveStatusOf(up('UPLOADING'))).toBe('SAVING');
+    expect(saveStatusOf(up('FAILED', true))).toBe('FAILED');
+    expect(saveStatusOf(up('FAILED', false))).toBe('UNSAVED');
+    expect(saveStatusOf(up('SKIPPED'))).toBe('UNSAVED');
+    expect(saveStatusOf(undefined)).toBe('UNSAVED');
+    expect(saveStatusOf(up('DONE'))).toBeNull();
+  });
+
+  it('unsavedLogs: 받은 서버 목록에 있거나 저장이 끝난 로그는 뺀다', () => {
+    const logs = [
+      { playId: 'a', upload: up('UPLOADING') },
+      { playId: 'b', upload: up('DONE') }, // 서버에 있다(아직 받지 않은 쪽일 수 있다)
+      { playId: 'c', upload: up('FAILED', true) },
+      { playId: 'd' }, // 옛 로그
+      { playId: 'e', upload: up('FAILED', true) }, // 받은 서버 쪽에 이미 있다
+    ];
+    expect(unsavedLogs(logs, new Set(['e']), {}).map((l) => l.playId)).toEqual(['a', 'c', 'd']);
+  });
+
+  it('unsavedLogs: 이번 접속의 상태가 저장된 값보다 먼저다', () => {
+    const logs = [
+      { playId: 'a', upload: up('UPLOADING') },
+      { playId: 'c', upload: up('FAILED', true) },
+    ];
+    expect(unsavedLogs(logs, new Set(), { a: up('DONE') }).map((l) => l.playId)).toEqual(['c']);
+  });
+});
+
+describe('mergeUnsaved', () => {
+  const t = (h: number) => new Date(2026, 10, 12, h).toISOString();
+  const server = [{ id: 's1', at: t(20) }, { id: 's2', at: t(15) }, { id: 's3', at: t(10) }];
+  const local = [{ id: 'l1', at: t(22) }, { id: 'l2', at: t(12) }, { id: 'l3', at: t(5) }];
+  type Row = { id: string; at: string };
+  const opts = { serverTime: (r: Row) => r.at, localTime: (r: Row) => r.at };
+  const ids = (rows: Row[]) => rows.map((r) => r.id);
+
+  it('다음 쪽이 없으면 전부 시각 순서로 섞는다', () => {
+    expect(ids(mergeUnsaved(server, local, { ...opts, sort: 'NEWEST', hasNext: false }))).toEqual(['l1', 's1', 's2', 'l2', 's3', 'l3']);
+  });
+
+  it('다음 쪽이 있으면 받은 범위 안의 것만 섞는다(최신순: 마지막 서버 행보다 오래된 것은 뺀다)', () => {
+    expect(ids(mergeUnsaved(server, local, { ...opts, sort: 'NEWEST', hasNext: true }))).toEqual(['l1', 's1', 's2', 'l2', 's3']);
+  });
+
+  it('오래된순은 방향이 반대다', () => {
+    const asc = [...server].reverse();
+    expect(ids(mergeUnsaved(asc, local, { ...opts, sort: 'OLDEST', hasNext: true }))).toEqual(['l3', 's3', 'l2', 's2', 's1']);
+    expect(ids(mergeUnsaved(asc, local, { ...opts, sort: 'OLDEST', hasNext: false }))).toEqual(['l3', 's3', 'l2', 's2', 's1', 'l1']);
+  });
+
+  it('서버 행이 없으면 서버에 없는 기록만, 같은 시각이면 서버 행이 먼저', () => {
+    expect(ids(mergeUnsaved([], local, { ...opts, sort: 'NEWEST', hasNext: false }))).toEqual(['l1', 'l2', 'l3']);
+    expect(ids(mergeUnsaved([{ id: 's', at: t(12) }], [{ id: 'l', at: t(12) }], { ...opts, sort: 'NEWEST', hasNext: false }))).toEqual(['s', 'l']);
+  });
+});
+
+describe('accuracyTier', () => {
+  it('90 이상 PERFECT, 70 이상 GOOD, 그 아래 MISS(판정 색과 같은 뜻)', () => {
+    expect(accuracyTier(100)).toBe('PERFECT');
+    expect(accuracyTier(90)).toBe('PERFECT');
+    expect(accuracyTier(89.99)).toBe('GOOD');
+    expect(accuracyTier(70)).toBe('GOOD');
+    expect(accuracyTier(69.99)).toBe('MISS');
+    expect(accuracyTier(0)).toBe('MISS');
+  });
+});
+
+describe('historyRowLink', () => {
+  it('리포트가 있으면 리포트, 없고 이 브라우저에 로그가 있으면 결과, 둘 다 없으면 null', () => {
+    expect(historyRowLink({ playId: 'p1', hasReport: true, hasLocal: false })).toEqual({ kind: 'REPORT', to: '/result/p1/report' });
+    expect(historyRowLink({ playId: 'p1', hasReport: true, hasLocal: true })).toEqual({ kind: 'REPORT', to: '/result/p1/report' });
+    expect(historyRowLink({ playId: 'p1', hasReport: false, hasLocal: true })).toEqual({ kind: 'RESULT', to: '/result/p1' });
+    expect(historyRowLink({ playId: 'p1', hasReport: false, hasLocal: false })).toBeNull();
   });
 });

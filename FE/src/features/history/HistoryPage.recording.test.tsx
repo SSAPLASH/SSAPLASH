@@ -50,7 +50,7 @@ describe('HistoryPage (녹음 기능 켬)', () => {
     expect(tabs).toContain('>플레이 기록<');
     expect(tabs).toContain('>녹음<');
     expect(tabs.match(/<button[^>]*aria-checked="true"[^>]*>플레이 기록</)).not.toBeNull();
-    expect(html).toContain('전체 기록 1개');
+    expect(html).toContain('<strong>1</strong>개 기록');
     expect(html).not.toContain('history-tab-recordings');
   });
 
@@ -60,7 +60,7 @@ describe('HistoryPage (녹음 기능 켬)', () => {
     expect(html).toContain('불러오는 중…');
     expect(html).toContain('aria-label="모드 필터"');
     expect(html.match(/<button[^>]*aria-checked="true"[^>]*>녹음</)).not.toBeNull();
-    expect(html).not.toContain('전체 기록');
+    expect(html).not.toContain('개 기록');
   });
 
   it('기록이 0건이어도 탭 줄은 남고 EmptyState가 그 아래에 나온다', () => {
