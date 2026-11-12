@@ -1,8 +1,8 @@
 """ADTOF 점수 평균(여러 가중치·여러 입력)으로 채보해 8패드 채점 (11/08, 학습 없는 개선 후보).
 
-후보 하나 = 구성원 여러 개. 구성원 = 가중치@입력. 가중치는 default(서비스 기본) 또는 5종 출력 .pth 경로,
+후보 하나 = 구성원 여러 개. 구성원 = 가중치@입력. 가중치는 default(ADTOF 원래 가중치) 또는 5종 출력 .pth 경로,
 입력은 drums(분리 드럼, 서비스와 같음) · mix(원곡) · drums_lp(분리 드럼 + 원곡 0.3배).
-구성원마다 ADTOF 프레임별 점수 (프레임, 5)를 내고 열마다 평균한 뒤(가중치@입력:열로 일부 열만 넣을 수 있음) 기본 가중치의 피크 고르기와 서비스 규칙으로 8패드를 붙임.
+구성원마다 ADTOF 프레임별 점수 (프레임, 5)를 내고 열마다 평균한 뒤(가중치@입력:열로 일부 열만 넣을 수 있음) 기본 가중치의 피크 고르기와 ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml`)으로 8패드를 붙임.
 출력 csv 한 줄 = (후보, 곡): 8패드 tp/fp/fn. postproc_eval.py의 f1_of·bootstrap으로 읽음.
 
   uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_songs.yaml \

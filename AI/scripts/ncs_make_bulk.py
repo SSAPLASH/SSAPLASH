@@ -3,7 +3,7 @@
 입력: `<charts>/<곡 이름>/chart.json`·`accompaniment.flac`(GPU 서버 `ncs_charts_server.ipynb` 결과), 50곡 표.
 출력
 - `<out>/<곡 이름>.mid`: 드럼 MIDI. 0틱 = 드럼리스 MR 0초. 첫 박이 정수 틱에 오도록 0틱에 맞춘 템포, 첫 박에 채보 bpm
-  (BE 관리자 MIDI 등록 규칙, -245 `make_aligned_midi.py`와 같은 계산). 10번 채널, 길이 60틱, 세기는 velocityHint(없으면 95)
+  (BE 관리자 MIDI 등록 규칙에 맞춘 계산). 10번 채널, 길이 60틱, 세기는 velocityHint(없으면 95)
 - `<out>/<곡 이름>.wav`: 드럼리스 MR. BE 반주 업로드가 flac을 받지 않아 WAV(16bit)로
 - `<out>/register.csv`: 등록 입력. 관리자 화면 일괄 추가 양식과 같은 열(제목·아티스트·MIDI·드럼리스 MR·offsetMs·라이선스·공개)
 - `<out>/check.csv`: 곡별 점검 표. 기준을 넘은 곡은 `문제` 칸에 이유

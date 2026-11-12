@@ -1,6 +1,7 @@
 """11/08 추가 공용 곡을 검증·학습 목록으로 나누고 학습 설정을 만듦 (설계 CHART-003-songsterr-expand-train).
 
-- 시험 곡: configs/bench/datasets/public_songs.yaml(기존 31곡). 여기 있는 곡은 학습·검증에 넣지 않음
+- 시험 곡: configs/bench/datasets/public_songs.yaml(31곡)과 public_songs_holdout38.yaml(38곡).
+  두 목록의 곡은 학습·검증에 넣지 않음
 - 추가 곡 중 정렬 결과가 나쁜 곡(마디 시작을 실제 박에 붙인 비율 < 0.85)과 노트 < 300곡은 뺌
 - 곡 폴더 이름의 sha1 순서로 앞 10곡은 검증, 나머지는 학습. 학습 곡 수 25·50·전부는 같은 순서의 앞부분이라 겹침
 - 학습 설정: 5종 출력(25·50·전부), 8패드 출력(전부)
