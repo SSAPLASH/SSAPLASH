@@ -2,7 +2,7 @@
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
 import type { PadId } from '@/domain/pads';
 import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
-import { CLOCK_POLL_MS, CLOCK_WAIT_MAX_MS, PRIMED_MIN_WAIT_MS, SOUND_RECENT_MS, clockFlowing, type ClockSample } from '@/domain/audioClock';
+import { CLOCK_POLL_MS, CLOCK_WAIT_MAX_MS, PRIMED_MIN_WAIT_MS, SOUND_RECENT_MS, clockFlowing, type ClockSample } from '@/domain/time/audioClock';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -323,7 +323,7 @@ export class AudioEngine {
    * (2) 출력이 30~45초 넘게 조용했으면 장치가 쉬고 있어, 다음 첫 소리가 나기 시작한 직후 오디오 시계가 0.4~0.8초 멈춘다.
    * 어느 쪽이든 그동안 예약한 클릭은 몰리고 한 번만 예약하는 반주는 곡 내내 늦는다.
    * 최근(SOUND_RECENT_MS)에 소리를 낸 적이 없으면 들리지 않는 신호로 장치를 먼저 깨우고 PRIMED_MIN_WAIT_MS 이상 기다린다.
-   * 20ms마다 표본을 읽어 domain/audioClock.clockFlowing이 참이면 끝낸다. 최대 대기를 넘으면 timedOut으로 끝내고(그냥 시작),
+   * 20ms마다 표본을 읽어 domain/time/audioClock.clockFlowing이 참이면 끝낸다. 최대 대기를 넘으면 timedOut으로 끝내고(그냥 시작),
    * 컨텍스트가 없거나 running이 아니면 skipped로 바로 끝낸다. 거절하지 않는다. resume()은 부르지 않는다 — 사용자 제스처 안의 ensure()가 이미 했다.
    */
   async whenClockFlowing(opts: ClockWaitOptions = {}): Promise<ClockWaitResult> {

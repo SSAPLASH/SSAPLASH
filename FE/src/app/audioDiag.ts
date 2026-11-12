@@ -3,7 +3,7 @@
 // 모니터가 보고 있지 않으면 즉시 반환해 비용을 얹지 않는다.
 import { diagTap } from '@/engine/diagTap';
 import { addDiagSessionStartHook, diagActiveAudioOffsetMs } from '@/engine/diagReport';
-import type { TimingCalRecord } from '@/domain/timingCalibration';
+import type { TimingCalRecord } from '@/domain/kit/timingCalibration';
 
 /** audio 진단 줄 주기(ms) */
 export const AUDIO_DIAG_INTERVAL_MS = 10_000;

@@ -1,12 +1,12 @@
 // 박자 맞추기 대화상자(설계 PLAY-004-timing-offset-calibration 4-1). 안내 → 클릭 16박 진행 → 결과.
-// 진행·계산은 app/timingCalSession이 하고, 여기서는 스냅샷을 그리고 적용을 누르면 설정에 저장한다.
+// 진행·계산은 runtime/timingCalSession이 하고, 여기서는 스냅샷을 그리고 적용을 누르면 설정에 저장한다.
 // TimingCalView는 props만 받는 표시부(정적 렌더 테스트용), TimingCalDialog가 세션·설정을 잇는다.
 import { useEffect, useId, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { timingCalSession, TIMING_CAL_TOTAL_BEATS, type TimingCalSnapshot } from '@/app/timingCalSession';
-import { useKeyboardDrum } from '@/app/keyboardDrum';
-import { TIMING_CAL_LISTEN_BEATS, TIMING_CAL_MEASURE_BEATS } from '@/domain/timingCalibration';
+import { timingCalSession, TIMING_CAL_TOTAL_BEATS, type TimingCalSnapshot } from '@/runtime/timingCalSession';
+import { useKeyboardDrum } from '@/runtime/keyboardDrum';
+import { TIMING_CAL_LISTEN_BEATS, TIMING_CAL_MEASURE_BEATS } from '@/domain/kit/timingCalibration';
 import { useSettings } from '@/store/settingsStore';
 import { outputLatencyWarnText, timingCalResultText, timingOffsetText } from './timingCalText';
 import './timingCal.css';

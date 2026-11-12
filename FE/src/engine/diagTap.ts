@@ -2,7 +2,7 @@
 // 구독자가 없으면 즉시 반환해 판정 경로에 비용을 얹지 않는다. 저장·집계는 하지 않는다(모니터 judgeLog 몫).
 import type { ResolvedHit } from '@/domain/events';
 import type { Judgement, TimingWindows } from '@/domain/judgement';
-import type { CoachBasis } from '@/domain/coachBasis';
+import type { CoachBasis } from '@/domain/play/coachBasis';
 import type { PadId } from '@/domain/pads';
 
 /** 세션 요약(종료 시점 스냅샷). RhythmSession.snapshot()에서 필요한 값만 */

@@ -1,0 +1,698 @@
+/* 자유 연습(/free) 화면 스타일. 접두사 free-. 토큰은 tokens.css의 새 이름만 쓴다 */
+
+/* ---- 페이지 ---- */
+.free-page {
+  --free-px: var(--space-xl);
+  --free-py: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  /* 1440×900에서 정보 띠까지 한 화면에 들어오게 캔버스 카드가 남는 높이를 채운다(TopBar 56) */
+  min-height: calc(100vh - 56px);
+  padding: var(--free-py) var(--free-px);
+  box-sizing: border-box;
+}
+@media (max-width: 1024px) {
+  .free-page {
+    --free-px: var(--space-l);
+    --free-py: var(--space-l);
+  }
+}
+
+/* ---- 반주 바 (Figma 226:5485, 설계 MODE-002 4-1~4-4·4-6): 글래스 캡슐. 데스크톱 64 / ≤640 미니 56 ---- */
+.free-accomp {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 1152px; /* 드럼 캔버스와 같은 가로 중심: 좁으면 폭을 채우고 넓으면 가운데 */
+  height: 64px;
+  margin-inline: auto;
+  padding: 0 14px 0 20px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 32px;
+  background: var(--surface-float);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-dock);
+}
+.free-accomp .free-accomp-cover {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+.free-accomp .free-accomp-cover.is-dim {
+  opacity: 0.5;
+}
+.free-accomp-info {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 170px;
+  min-width: 0;
+}
+.free-accomp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* 제목 최대 폭 = 170 − 6 − 13(이퀄라이저) = 151. 칸보다 길면 playing에서만 흐르고(MarqueeTitle) 그 외는 말줄임 */
+.free-accomp-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 151px;
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.free-accomp-sub {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.free-accomp-sub.is-error {
+  color: var(--miss);
+}
+.free-accomp-progress {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.free-accomp-progress > .free-seek {
+  flex: none;
+}
+/* 불러오는 중 → 재생: 경과·남은 시간이 2px 떠오르며 나타난다(움직임 줄이기면 페이드만) */
+.free-accomp-progress.is-ready {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    free-accomp-rise var(--motion-move) var(--ease-out);
+}
+/* 채움이 0에서 지금 위치까지 자란다(등록한 --free-seek-pct를 애니메이션. 인라인 값보다 애니메이션이 우선한다) */
+.free-accomp-progress.is-ready .free-seek-range {
+  animation: free-seek-grow var(--motion-move) var(--ease-out);
+}
+@keyframes free-seek-grow {
+  from {
+    --free-seek-pct: 0%;
+  }
+}
+@keyframes free-accomp-rise {
+  from {
+    transform: translateY(2px);
+  }
+  to {
+    transform: none;
+  }
+}
+/* 불러오는 중 막대: 앞 25% 옅은 채움(Figma 그대로) + 빛 훑기(U7 B). 막대 두께·자리는 재생 중 range와 같다 */
+.free-accomp-track {
+  position: relative;
+  display: block;
+  height: 3px;
+  margin: 6px 0;
+  overflow: hidden;
+  border-radius: 1.5px;
+  background: var(--fill-track);
+}
+.free-accomp-track-soft {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 25%;
+  background: var(--fill-soft);
+}
+.free-accomp-track::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent 0, color-mix(in srgb, var(--text-1) 35%, transparent) 50%, transparent 100%);
+  animation: free-accomp-sheen 1.4s var(--ease-out) infinite;
+}
+@keyframes free-accomp-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+/* 커버에도 같은 결의 빛이 한 번씩 지나간다 */
+.free-accomp.is-loading .free-accomp-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--text-1) 10%, transparent) 50%, transparent 70%);
+  animation: free-accomp-cover-sheen 1.4s var(--ease-out) infinite;
+}
+@keyframes free-accomp-cover-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.free-accomp-loadtext {
+  min-height: 14px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 14px;
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+}
+.free-accomp-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+}
+.free-accomp-text.is-error {
+  color: var(--miss);
+  font-weight: 500;
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    free-accomp-rise var(--motion-move) var(--ease-out);
+}
+.free-accomp .free-accomp-pick {
+  flex: none;
+  width: 160px;
+}
+.free-accomp-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.free-accomp.is-error .free-accomp-actions {
+  gap: 8px;
+}
+.free-accomp .free-accomp-quiet {
+  color: var(--text-2);
+}
+.free-accomp .free-accomp-quiet:hover:not(:disabled) {
+  color: var(--text-1);
+}
+.free-accomp .free-accomp-text-btn {
+  color: var(--brand-text);
+}
+
+/* ---- ≤640 미니 바 (Figma 979:4468): 커버 40 · 제목 칸 · 재생/일시정지 · 10초 앞으로 · ×, 안쪽 아래 2px 진행선 ---- */
+.free-accomp.is-mini {
+  height: 56px;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  overflow: hidden;
+  border-radius: 28px;
+}
+.free-accomp.is-mini .free-accomp-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+.free-accomp.is-mini .free-accomp-info {
+  flex: 1;
+  width: auto;
+  gap: 1px;
+}
+.free-accomp.is-mini .free-accomp-sub {
+  font-size: 11px;
+}
+.free-accomp.is-mini .free-accomp-transport {
+  gap: 0;
+}
+/* 제목 칸(커버 + 제목)은 고르기 시트를 여는 버튼(U2) */
+.free-accomp-who {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0; /* 전역 button { min-height: 44px }을 푼다 */
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-press);
+}
+.free-accomp-who:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.free-accomp-who:disabled {
+  cursor: default;
+}
+.free-accomp-who:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.free-accomp .free-accomp-line {
+  position: absolute;
+  top: 50px;
+  right: 25px;
+  left: 25px;
+  height: 2px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--fill-track);
+}
+.free-accomp-line i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--text-1);
+  transition: width 250ms linear; /* 250ms 위치 읽기마다 선형으로 이어 늘어난다 */
+}
+/* 움직임 줄이기: 빛 훑기를 끄고 Figma 정지 모습(25% 옅은 채움)만 둔다 */
+@media (prefers-reduced-motion: reduce) {
+  .free-accomp-track::after,
+  .free-accomp.is-loading .free-accomp-cover::after {
+    display: none;
+  }
+  .free-accomp-line i {
+    transition: none;
+  }
+}
+
+/* ---- 캔버스 카드 ---- */
+.free-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-m);
+  gap: var(--space-s);
+}
+.free-canvas-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.free-canvas-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 500;
+}
+.free-canvas-meta {
+  color: var(--text-3);
+  font-size: 12px;
+}
+/* 킷 영역: 남는 높이의 가운데. 포인터 모의 IMU의 자세 기준면도 이 요소다 */
+.free-kit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.free-kit-inner {
+  width: 100%;
+  transition: opacity var(--motion-fade) var(--ease-out);
+}
+/* 연결 대기: 킷은 뒤에 흐리게 남는다 */
+.free-kit.is-dim .free-kit-inner {
+  opacity: 0.4;
+}
+.free-empty-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.free-empty-wrap > * {
+  pointer-events: auto;
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.free-guide {
+  flex: none;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+}
+.free-guide.is-wait {
+  color: var(--brand-sub);
+}
+.free-guide .kbd {
+  margin-right: 2px;
+}
+.free-guide-pad {
+  margin-right: var(--space-s);
+  white-space: nowrap;
+}
+
+/* ---- 끊김 띠(Figma 228:5881) ---- */
+.free-band {
+  position: absolute;
+  top: var(--space-m);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  width: 560px;
+  max-width: calc(100% - 2 * var(--space-m));
+  padding: var(--space-s) var(--space-m);
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--brand-sub) 60%, transparent);
+  border-radius: var(--radius-panel);
+  /* 아래 킷이 비치지 않게 바탕을 먼저 깔고 10% 색을 얹는다 */
+  background-color: var(--bg-base);
+  background-image: linear-gradient(color-mix(in srgb, var(--brand-sub) 10%, transparent), color-mix(in srgb, var(--brand-sub) 10%, transparent));
+}
+.free-band-dots {
+  flex: none;
+  display: flex;
+  gap: var(--space-s);
+}
+.free-band-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid var(--good);
+  border-radius: 50%;
+  color: var(--good);
+  font-family: var(--font-display);
+  font-size: 13px;
+  line-height: 1;
+}
+.free-band-dot.off {
+  border-style: dashed;
+  border-color: var(--miss);
+  color: var(--miss);
+}
+.free-band-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.free-band-title {
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 500;
+}
+.free-band-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-sub);
+  font-size: 12px;
+}
+.free-band-dot.pulse {
+  animation: stick-dot-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .free-band-dot.pulse {
+    animation-duration: 2s;
+  }
+}
+
+/* ---- 정보 띠 ---- */
+.free-info {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-l);
+  height: 72px;
+  padding: 0 var(--space-l);
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.free-info-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+.free-info-key {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.free-info-stats {
+  display: flex;
+  gap: var(--space-l);
+  font-size: 14px;
+  color: var(--text-1);
+}
+.free-info-stats .num {
+  font-family: var(--font-num);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+
+/* ---- 반주 고르기 창 (Figma 802:35314 · 모바일 시트 803:35356, 설계 MODE-002 4-5) ---- */
+.dialog.free-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+  max-height: min(640px, calc(100vh - 32px));
+  padding: 24px;
+  box-sizing: border-box;
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-dock);
+}
+.free-picker-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.dialog .free-picker-top h2 {
+  flex: 1;
+  margin: 0;
+  color: var(--text-1);
+  font-size: 20px;
+  font-weight: 700;
+}
+.free-picker .ui-input {
+  flex: none;
+}
+/* 검색칸 안에 자체 지우기 ×가 있어 브라우저 기본 × 는 숨긴다 */
+.free-picker input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+.free-picker-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.free-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.free-picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding-left: 4px;
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+.free-picker-count {
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 400;
+}
+.dialog .free-picker-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: 2px;
+}
+.free-picker-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fast);
+}
+.free-picker-row:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.free-picker-row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.free-picker-row .free-picker-cover {
+  flex: none;
+  width: 40px;
+  border-radius: 8px;
+}
+.free-picker-names {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.free-picker-title,
+.free-picker-artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.free-picker-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+.free-picker-artist {
+  color: var(--text-2);
+  font-size: 12px;
+}
+/* 지금 곡: brand 14% 옅은 칠 + brand 글자 + 이퀄라이저(U3) */
+.free-picker-row.is-current {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.free-picker-row.is-current:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.free-picker-row.is-current .free-picker-title {
+  color: var(--brand-text);
+}
+.free-picker-now {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+/* 반주 만드는 중: 행은 비활성, 제목·커버만 흐리게(배지는 흐리게 하지 않는다) */
+.free-picker-row.is-generating {
+  cursor: default;
+  opacity: 1; /* 전역 button:disabled 흐림을 끄고 커버·글자만 흐리게 둔다(배지는 또렷하게, Figma 802:35426) */
+}
+.free-picker-row.is-generating .free-picker-cover,
+.free-picker-row.is-generating .free-picker-names {
+  opacity: 0.5;
+}
+.free-picker-row .studio-badge-dot {
+  animation: free-picker-breathe 1.6s ease-in-out infinite;
+}
+@keyframes free-picker-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+.free-picker-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.free-picker-more {
+  align-self: flex-start;
+}
+
+/* ---- ≤640 바텀 시트(Figma 803:35369): 화면 아래에 붙어 아래에서 밀려 올라온다. 스크림 배치는 Dialog를 고치지 않고 :has로 준다 ---- */
+.dialog-backdrop:has(> .free-picker.is-sheet) {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation-duration: 360ms;
+}
+.dialog.free-picker.is-sheet {
+  width: 100%;
+  max-width: none;
+  max-height: min(640px, 90vh);
+  gap: 14px;
+  padding: 10px 16px 24px;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  animation: free-picker-sheet-in 360ms var(--ease-sheet);
+}
+@keyframes free-picker-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.free-picker-grab {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.free-picker.is-sheet .free-picker-top h2 {
+  font-size: 18px;
+}
+.free-picker.is-sheet .free-picker-body {
+  gap: 18px;
+}
+.free-picker.is-sheet .free-picker-section {
+  gap: 6px;
+}
+.free-picker.is-sheet .free-picker-row {
+  padding: 8px;
+}
+.free-picker.is-sheet .free-picker-row .free-picker-cover {
+  width: 44px;
+}
+.free-picker.is-sheet .free-picker-title {
+  font-size: 15px;
+}
+.free-picker.is-sheet .free-picker-more {
+  align-self: stretch;
+}
+/* 움직임 줄이기: 시트는 밀려 올라오지 않고 페이드만, 배지 점도 숨 쉬지 않는다 */
+@media (prefers-reduced-motion: reduce) {
+  .dialog.free-picker.is-sheet {
+    animation: motion-fade-in var(--motion-fade) var(--ease-out);
+  }
+  .free-picker-row .studio-badge-dot {
+    animation: none;
+  }
+}
+

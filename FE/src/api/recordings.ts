@@ -1,4 +1,4 @@
-// 녹음 API (REC-001, BE 256·257). 재시도 정책은 app/recordingSync가 맡는다.
+// 녹음 API (REC-001, BE 256·257). 재시도 정책은 runtime/recordingSync가 맡는다.
 import type { RecordingBody, RecordingDetail, RecordingMode, RecordingSort, RecordingSummary } from '@/domain/recording';
 import { apiFetch } from './http';
 

@@ -1,10 +1,10 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
-import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/timingCalibration';
+import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/kit/timingCalibration';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
 import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
-import { moveAnchorsForPad } from '@/domain/kitModel';
+import { moveAnchorsForPad } from '@/domain/kit/kitModel';
 import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { isHitFxTheme } from '@/domain/hitFx/themes';
 import type { HitFxTheme } from '@/domain/hitFx/types';
@@ -13,7 +13,7 @@ import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
 import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/preset';
-import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
+import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/time/metronome';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
 interface SettingsState {
@@ -38,7 +38,7 @@ interface SettingsState {
   /** 지금 적용 중인 프리셋 id. 사용자 프리셋 id 또는 SYSTEM_PRESET_ID(시스템 기본). v18부터 null 없음 */
   activePresetId: string;
   timing: TimingWindows;
-  /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/timingCalibration) */
+  /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/kit/timingCalibration) */
   audioOffsetMs: number;
   /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
   timingCal: TimingCalRecord | null;

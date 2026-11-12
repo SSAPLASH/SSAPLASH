@@ -1,5 +1,5 @@
 // 원형 스테이지 맵 (설계 SETUP-입문-코스 3-5). 스테이지가 구불구불한 길을 따라 순서대로 놓인다. 잠긴 스테이지는 고를 수 없다.
-import { lessonDisplayTitle, stageWord, type Lesson, type StageState } from '@/domain/lesson';
+import { lessonDisplayTitle, stageWord, type Lesson, type StageState } from '@/domain/play/lesson';
 
 /** 스테이지 가로 흔들림(px). 순서대로 돌려 쓴다 */
 const OFFSETS = [0, 64, 88, 48, -16, -72, -88, -40];

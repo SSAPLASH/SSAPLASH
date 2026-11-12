@@ -9,20 +9,20 @@ type RouteModule = { default: ComponentType };
  * React·라우터를 import하지 않는다(타입 제외) — 미리 받기 등 다른 모듈이 이 파일만 가져다 쓴다.
  */
 const routeImports = {
-  setup: () => import('@/pages/SetupPage').then((m) => ({ default: m.SetupPage })),
-  play: () => import('@/pages/PlayPage').then((m) => ({ default: m.PlayPage })),
-  sheet: () => import('@/pages/SheetPage').then((m) => ({ default: m.SheetPage })),
+  setup: () => import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage })),
+  play: () => import('@/features/play/PlayPage').then((m) => ({ default: m.PlayPage })),
+  sheet: () => import('@/features/play/SheetPage').then((m) => ({ default: m.SheetPage })),
   /** 입문 코스 알아보기 레슨(Jira 331) */
-  lessonRead: () => import('@/pages/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
-  studio: () => import('@/pages/StudioPage').then((m) => ({ default: m.StudioPage })),
-  settings: () => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-  history: () => import('@/pages/HistoryPage').then((m) => ({ default: m.HistoryPage })),
-  result: () => import('@/pages/ResultPage').then((m) => ({ default: m.ResultPage })),
-  report: () => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })),
-  adminSongs: () => import('@/pages/AdminSongsPage').then((m) => ({ default: m.AdminSongsPage })),
-  landing: () => import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
+  lessonRead: () => import('@/features/lesson/LessonReadPage').then((m) => ({ default: m.LessonReadPage })),
+  studio: () => import('@/features/studio/StudioPage').then((m) => ({ default: m.StudioPage })),
+  settings: () => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+  history: () => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })),
+  result: () => import('@/features/result/ResultPage').then((m) => ({ default: m.ResultPage })),
+  report: () => import('@/features/result/ReportPage').then((m) => ({ default: m.ReportPage })),
+  adminSongs: () => import('@/features/admin/AdminSongsPage').then((m) => ({ default: m.AdminSongsPage })),
+  landing: () => import('@/features/landing/LandingPage').then((m) => ({ default: m.LandingPage })),
   /** 악보 뷰어. pdf.js가 이 화면 청크에만 들어간다 */
-  sheetViewer: () => import('@/pages/SheetViewerPage').then((m) => ({ default: m.SheetViewerPage })),
+  sheetViewer: () => import('@/features/studio/SheetViewerPage').then((m) => ({ default: m.SheetViewerPage })),
 } satisfies Record<string, () => Promise<RouteModule>>;
 
 export type RouteKey = keyof typeof routeImports;

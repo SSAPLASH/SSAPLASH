@@ -4,7 +4,7 @@ import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { SYSTEM_PRESET_ID } from '@/domain/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/tuning';
-import { anchorsToLayout, defaultHandAnchors } from '@/domain/kitModel';
+import { anchorsToLayout, defaultHandAnchors } from '@/domain/kit/kitModel';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {

@@ -3,7 +3,7 @@
 // 모션(누름 0.88배 · 10초 화살표 회전 · 글리프 pop)은 song.css의 .playback-*에만 둔다. 움직임 줄이기면 회전·pop을 끈다.
 import { useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { SKIP_MS } from '@/domain/freeAccompaniment';
+import { SKIP_MS } from '@/domain/song/freeAccompaniment';
 import { Back10Icon, Forward10Icon, PauseGlyph, PlayGlyph } from './PlaybackIcons';
 import './song.css';
 

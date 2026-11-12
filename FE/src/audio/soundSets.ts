@@ -3,7 +3,7 @@
 import type { PadId } from '@/domain/pads';
 import { resolveKitPads, resolveKitVariants, type KitConfig, type KitVariantId } from './kitConfig';
 
-import type { SoundSetId } from '@/domain/soundSet';
+import type { SoundSetId } from '@/domain/kit/soundSet';
 
 export type { SoundSetId };
 

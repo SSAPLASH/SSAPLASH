@@ -3,7 +3,7 @@
 // 흐를 때는 묶음(제목 + 뒤 간격) 두 개를 나란히 두고 트랙을 −50%까지 옮겨 끊김 없이 돈다. 둘째 묶음은 aria-hidden이다.
 // 움직임 줄이기 설정이면 CSS가 말줄임으로 되돌린다.
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { marqueeDurationSec, marqueeOverflows } from '@/domain/marquee';
+import { marqueeDurationSec, marqueeOverflows } from '@/domain/song/marquee';
 import './song.css';
 
 interface Props {

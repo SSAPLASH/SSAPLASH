@@ -1,6 +1,6 @@
 // 회원 API (설계 3-5).
 import type { UserMe } from '@/domain/auth';
-import type { RecommendationConsent } from '@/domain/recommendationConsent';
+import type { RecommendationConsent } from '@/domain/account/recommendationConsent';
 import type { ConsentVersions } from '@/domain/signupTerms';
 import { apiFetch } from './http';
 

@@ -1,14 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetRecordingForTest, useRecordingStore } from '@/app/recordingStore';
-import { formatElapsed } from '@/domain/recordingView';
+import { resetRecordingForTest, useRecordingStore } from '@/runtime/recordingStore';
+import { formatElapsed } from '@/domain/play/recordingView';
 import { RecordButton } from './RecordButton';
 import { recordButtonVisible } from './recordButtonRoute';
 
 // renderToStaticMarkup은 zustand의 서버 스냅샷(초기 상태)을 읽으므로, 훅이 현재 상태를 읽도록 바꾼다
-vi.mock('@/app/recordingStore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/app/recordingStore')>();
+vi.mock('@/runtime/recordingStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/runtime/recordingStore')>();
   const hook = <T,>(sel: (s: ReturnType<typeof actual.useRecordingStore.getState>) => T) => sel(actual.useRecordingStore.getState());
   return { ...actual, useRecordingStore: Object.assign(hook, actual.useRecordingStore) };
 });

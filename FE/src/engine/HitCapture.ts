@@ -2,7 +2,7 @@
 // 패드가 차면 같은 손의 다른 패드 앵커(이번 세션 끝난 패드 + 세션 밖 base)와 간격을 검사한다.
 // 경고 여부와 상관없이 advanceDelayMs 뒤 자동으로 다음 패드(순서상 안 끝난 첫 패드, 없으면 done)로 간다(v0.2 D3, 멈추지 않는다).
 // 간격 경고(gapWarnings)는 자동 진행 후에도 남고, 다음 패드의 첫 타격이 수락될 때·redo·start/restart·cancel 때 비운다 — 화면의 경고 배너.
-// 소리·스틱 명령·전송은 하지 않는다 — app/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
+// 소리·스틱 명령·전송은 하지 않는다 — runtime/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
 import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { angleBetween, computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';

@@ -1,20 +1,20 @@
 // 메뉴 미리 받기 (설계 TECH-351 3절)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listAllPlays } from '@/api/plays';
-import { listSheets } from '@/api/sheets';
+import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import type { UserMe } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from './queryClient';
+import { queryClient } from '@/runtime/queryClient';
 import { canPrefetch, prefetchRoute } from './prefetchRoute';
 import { loadRoute } from './routeModules';
 
 vi.mock('./routeModules', () => ({ loadRoute: vi.fn(() => Promise.resolve({ default: () => null })) }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
-vi.mock('@/api/sheets', async (orig) => ({ ...(await orig<typeof import('@/api/sheets')>()), listSheets: vi.fn() }));
+vi.mock('@/features/studio/api/sheets', async (orig) => ({ ...(await orig<typeof import('@/features/studio/api/sheets')>()), listSheets: vi.fn() }));
 vi.mock('@/api/plays', async (orig) => ({ ...(await orig<typeof import('@/api/plays')>()), listAllPlays: vi.fn() }));
 
 const setConnection = (c: object | undefined) => Object.defineProperty(navigator, 'connection', { value: c, configurable: true });
