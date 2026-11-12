@@ -58,6 +58,8 @@ describe('LandingView', () => {
     expect(html).not.toContain('role="tab"');
     expect(html).toContain('lp-progress');
     expect(html).toContain('lp-wipe');
+    // 스틱 그림은 캔버스(장식이라 스크린리더에서 숨김)
+    expect(html).toMatch(/<canvas[^>]*aria-hidden="true"/);
     // 초기 진행도 0: 스틱 첫 단계만 켜짐
     expect(html.match(/class="lp-step lp-on"/g)).toHaveLength(1);
     expect(html).toContain('드럼을 칠 수 있다면.');

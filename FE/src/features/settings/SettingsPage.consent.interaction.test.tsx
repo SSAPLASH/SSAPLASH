@@ -5,11 +5,12 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '@/api/http';
-import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
+import { getRecommendationConsent, putRecommendationConsent, withdrawMe } from '@/api/users';
 import type { UserMe } from '@/domain/auth';
 import { recommendationVersion } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
+import { usePresets } from '@/store/presetStore';
 import { SettingsPage } from './SettingsPage';
 
 // Node 실험적 localStorage가 happy-dom 것을 가려 persist 저장이 실패한다 — import 전에 메모리 저장소로 대체한다
@@ -30,11 +31,6 @@ vi.mock('@/api/users', () => ({
   postSignupConsent: vi.fn(),
   withdrawMe: vi.fn(),
 }));
-vi.mock('@/store/presetStore', async (orig) => {
-  const mod = await orig<typeof import('@/store/presetStore')>();
-  mod.usePresets.setState({ refresh: async () => {} });
-  return mod;
-});
 
 const V = recommendationVersion();
 const USER: UserMe = {
@@ -149,5 +145,29 @@ describe('설정 데이터 활용 토글', () => {
     vi.mocked(getRecommendationConsent).mockResolvedValue({ agreed: false, version: null, updatedAt: null });
     await userEvent.setup().click(screen.getByRole('button', { name: '다시 시도' }));
     expect(await screen.findByText('미동의')).toBeTruthy();
+  });
+});
+
+
+describe('설정 회원 탈퇴', () => {
+  it('텍스트 버튼은 되돌릴 수 없음 확인 창만 열고 취소할 수 있다', async () => {
+    setup({ agreed: false, version: null, updatedAt: null });
+    await userEvent.setup().click(screen.getByRole('button', { name: '회원 탈퇴' }));
+    expect(screen.getByText('탈퇴하면 되돌릴 수 없습니다.')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '취소' }));
+    expect(withdrawMe).not.toHaveBeenCalled();
+    await userEvent.setup().click(screen.getByRole('button', { name: '취소' }));
+    expect(screen.queryByText('탈퇴하면 되돌릴 수 없습니다.')).toBeNull();
+    expect(withdrawMe).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('설정 진입', () => {
+  it('기기 카드 제거 후 프리셋 목록을 다시 불러오지 않는다', () => {
+    const refresh = vi.spyOn(usePresets.getState(), 'refresh');
+    setup({ agreed: false, version: null, updatedAt: null });
+    expect(refresh).not.toHaveBeenCalled();
+    refresh.mockRestore();
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// useStickSwing: 화면 안에서만 rAF를 돌리고, 화면 밖·언마운트·비활성에서 정리하며, 스윙 부호가 바뀔 때 타격을 알린다.
+// useStickSwing: 화면 안에서만 rAF를 돌리고, 화면 밖·언마운트·비활성에서 정리하며, onFrame에 경과 초를 넘긴다.
 import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStickSwing } from './useStickSwing';
@@ -52,13 +52,12 @@ function frame(ms: number) {
 
 function setup(enabled = true) {
   const onFrame = vi.fn();
-  const onStrike = vi.fn();
   const stage = document.createElement('div');
   const stageRef = { current: stage };
-  const view = renderHook((props: { enabled: boolean }) => useStickSwing({ stageRef, enabled: props.enabled, onFrame, onStrike }), {
+  const view = renderHook((props: { enabled: boolean }) => useStickSwing({ stageRef, enabled: props.enabled, onFrame }), {
     initialProps: { enabled },
   });
-  return { onFrame, onStrike, ...view };
+  return { onFrame, ...view };
 }
 
 describe('useStickSwing', () => {
@@ -79,7 +78,7 @@ describe('useStickSwing', () => {
     ioCallback!([{ isIntersecting: true }]);
     expect(raf).toHaveBeenCalledTimes(1);
     frame(1000); // 시작 시각
-    expect(onFrame).toHaveBeenLastCalledWith(-6); // t=0 각도
+    expect(onFrame).toHaveBeenLastCalledWith(0); // 시작 프레임은 0초
     expect(raf).toHaveBeenCalledTimes(2);
 
     ioCallback!([{ isIntersecting: false }]);
@@ -108,20 +107,21 @@ describe('useStickSwing', () => {
     expect(rafCallbacks.size).toBe(0);
   });
 
-  it('스윙 부호가 양수에서 음수로 넘어갈 때만 onStrike를 한 번 부른다', () => {
-    const { onStrike, onFrame } = setup();
+  it('onFrame에 루프 시작 뒤 지난 초를 넘기고, 화면에 다시 들어오면 0부터 센다', () => {
+    const { onFrame } = setup();
     ioCallback!([{ isIntersecting: true }]);
-    frame(0); // t=0, 부호 0
-    frame(125); // t=.125, sin=1 → 각도 20
-    expect(onFrame).toHaveBeenLastCalledWith(expect.closeTo(20, 5));
-    expect(onStrike).not.toHaveBeenCalled();
-    frame(375); // t=.375, sin=-1 → 양수에서 음수로 전환
-    expect(onStrike).toHaveBeenCalledTimes(1);
-    frame(400); // 아직 음수: 추가 타격 없음
-    expect(onStrike).toHaveBeenCalledTimes(1);
-    frame(625); // t=.625, 다시 양수
-    frame(875); // t=.875, 음수 → 두 번째 타격
-    expect(onStrike).toHaveBeenCalledTimes(2);
+    frame(2000); // 시작
+    frame(2500);
+    expect(onFrame).toHaveBeenLastCalledWith(0.5);
+    frame(3250);
+    expect(onFrame).toHaveBeenLastCalledWith(1.25);
+
+    ioCallback!([{ isIntersecting: false }]);
+    ioCallback!([{ isIntersecting: true }]);
+    frame(9000);
+    expect(onFrame).toHaveBeenLastCalledWith(0);
+    frame(9100);
+    expect(onFrame).toHaveBeenLastCalledWith(0.1);
   });
 
   it('IntersectionObserver가 없는 환경에서는 돌리지 않는다', () => {

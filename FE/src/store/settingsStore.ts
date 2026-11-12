@@ -1,5 +1,6 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/kit/timingCalibration';
+import { isTimingCalPrompt, type TimingCalPrompt } from '@/domain/kit/timingCalPrompt';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
@@ -40,8 +41,12 @@ interface SettingsState {
   timing: TimingWindows;
   /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/kit/timingCalibration) */
   audioOffsetMs: number;
+  /** 발 타격(하이햇 페달·킥)용 판정 타이밍 보정(ms). null이면 audioOffsetMs(스틱·기본 값)를 쓴다. 이 기기에만 저장 */
+  kickOffsetMs: number | null;
   /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
   timingCal: TimingCalRecord | null;
+  /** 박자 맞추기 권유 상태(이 기기에만 저장). none 아직 권하지 않음 / skipped 첫 권유에서 건너뜀 / done 더 권하지 않음 */
+  timingCalPrompt: TimingCalPrompt;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
   scrollMs: number;
   /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
@@ -59,6 +64,8 @@ interface SettingsState {
   hitFxTheme: HitFxTheme;
   /** 타이밍 오차 막대 표시(게임 판정선 아래·악보 아래). 기본 켬 */
   timingBar: boolean;
+  /** 스틱 방위각 자동 보정(연주 중 타격 위치로 드리프트를 되돌림, 기기별 로컬). 기본 끔. 꺼져 있으면 재정렬로만 맞춘다 */
+  yawAutoCorrect: boolean;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -76,6 +83,8 @@ interface SettingsState {
   sheetPadCount: boolean;
   /** 악보 연습에서 반주를 재생한다(MODE-003 시작 확인 창의 「반주」 줄). 꺼져 있으면 반주를 불러오지도 않는다 */
   accompaniment: boolean;
+  /** 자유 연습 키트 가이드(패드 이름표) 표시(MODE-002). 기본 켬 */
+  kitGuide: boolean;
   /** 사이드바 접힘(≤1024에서는 셸이 강제로 접는다) */
   sidebarCollapsed: boolean;
   /** 상단 Dock 접힘(알약) */
@@ -110,7 +119,9 @@ interface SettingsState {
   setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
+  setKickOffsetMs: (v: number | null) => void;
   setTimingCal: (v: TimingCalRecord | null) => void;
+  setTimingCalPrompt: (v: TimingCalPrompt) => void;
   setScrollMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
   setTuning: (partial: PartialTuning) => void;
@@ -132,16 +143,18 @@ interface SettingsState {
   setSoundOn: (v: boolean) => void;
   setSheetPadCount: (v: boolean) => void;
   setAccompaniment: (v: boolean) => void;
+  setKitGuide: (v: boolean) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
   setTimingBar: (v: boolean) => void;
+  setYawAutoCorrect: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 23;
+export const SETTINGS_VERSION = 24;
 
 /** v22까지의 시스템 기본 배치(x·y). v23 이행에서 "기본 배치 그대로인 저장 값"을 알아보는 데만 쓴다 */
 const LEGACY_DEFAULT_XY: Record<string, readonly [number, number]> = {
@@ -187,6 +200,7 @@ function isLegacyDefaultLayout(raw: unknown): boolean {
  * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
  * v21 → v22: accompaniment(기본 true) 추가. boolean이 아니면 true.
  * v22 → v23: 시스템 기본 배치 값 변경(원근 보기용으로 넓힘). kitLayout이 옛 기본 배치와 같으면 새 기본 배치로 바꾼다. 손으로 옮긴 배치와 프리셋 layout은 그대로.
+ * v23 → v24: kitGuide(기본 true) 추가. boolean이 아니면 true.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -299,6 +313,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   if (version < 22) p.accompaniment = typeof p.accompaniment === 'boolean' ? p.accompaniment : true;
   // 시스템 기본 배치 값이 바뀌었다. 옛 기본 배치 그대로인 저장 값은 새 기본 배치로 맞춰 "변경 있음"으로 보이지 않게 한다(손으로 옮긴 배치는 둔다)
   if (version < 23 && isLegacyDefaultLayout(p.kitLayout)) p.kitLayout = DEFAULT_KIT_LAYOUT;
+  if (version < 24) p.kitGuide = typeof p.kitGuide === 'boolean' ? p.kitGuide : true;
   return p as unknown as SettingsState;
 }
 
@@ -323,10 +338,20 @@ const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number
  * 저장분의 판정 타이밍 보정과 박자 맞추기 기록을 정리한다(merge용).
  * 범위가 바뀌기 전에 저장된 값(예: +150)은 지금 범위로 자르고, 기록은 모양이 틀리면 버린다.
  */
-export function sanitizeTimingSettings(p: { audioOffsetMs?: unknown; timingCal?: unknown }): Pick<SettingsState, 'audioOffsetMs' | 'timingCal'> {
+export function sanitizeTimingSettings(p: {
+  audioOffsetMs?: unknown;
+  kickOffsetMs?: unknown;
+  timingCal?: unknown;
+  timingCalPrompt?: unknown;
+}): Pick<SettingsState, 'audioOffsetMs' | 'kickOffsetMs' | 'timingCal' | 'timingCalPrompt'> {
+  const timingCal = sanitizeTimingCalRecord(p.timingCal);
   return {
     audioOffsetMs: clampTimingOffset(isFiniteNum(p.audioOffsetMs) ? p.audioOffsetMs : 0),
-    timingCal: sanitizeTimingCalRecord(p.timingCal),
+    // 값이 없던 저장분은 null(스틱 값을 따름)
+    kickOffsetMs: isFiniteNum(p.kickOffsetMs) ? clampTimingOffset(p.kickOffsetMs) : null,
+    timingCal,
+    // 값이 없거나 이상하면 기록이 있던 사용자는 done(권하지 않음), 없으면 none
+    timingCalPrompt: isTimingCalPrompt(p.timingCalPrompt) ? p.timingCalPrompt : timingCal ? 'done' : 'none',
   };
 }
 
@@ -387,7 +412,9 @@ export const useSettings = create<SettingsState>()(
       activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
+      kickOffsetMs: null,
       timingCal: null,
+      timingCalPrompt: 'none',
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
@@ -398,6 +425,7 @@ export const useSettings = create<SettingsState>()(
       kitSkin: 'acoustic',
       hitFxTheme: 'auto',
       timingBar: true,
+      yawAutoCorrect: false,
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -407,6 +435,7 @@ export const useSettings = create<SettingsState>()(
       soundOn: true,
       sheetPadCount: true,
       accompaniment: true,
+      kitGuide: true,
       sidebarCollapsed: false,
       dockCollapsed: false,
       liveCoach: true,
@@ -470,7 +499,9 @@ export const useSettings = create<SettingsState>()(
       setPresets: (presets) => set({ presets }),
       setTiming: (timing) => set({ timing }),
       setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs: clampTimingOffset(audioOffsetMs) }),
+      setKickOffsetMs: (v) => set({ kickOffsetMs: v === null ? null : clampTimingOffset(v) }),
       setTimingCal: (timingCal) => set({ timingCal }),
+      setTimingCalPrompt: (timingCalPrompt) => set({ timingCalPrompt }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
       resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
@@ -494,10 +525,12 @@ export const useSettings = create<SettingsState>()(
       setSoundOn: (soundOn) => set({ soundOn }),
       setSheetPadCount: (sheetPadCount) => set({ sheetPadCount }),
       setAccompaniment: (accompaniment) => set({ accompaniment }),
+      setKitGuide: (kitGuide) => set({ kitGuide }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
       setTimingBar: (timingBar) => set({ timingBar }),
+      setYawAutoCorrect: (yawAutoCorrect) => set({ yawAutoCorrect }),
     }),
     {
       name: 'ssaplash.settings',
@@ -518,6 +551,8 @@ export const useSettings = create<SettingsState>()(
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
+          kitGuide: typeof p.kitGuide === 'boolean' ? p.kitGuide : true,
+          yawAutoCorrect: typeof p.yawAutoCorrect === 'boolean' ? p.yawAutoCorrect : false,
           ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,

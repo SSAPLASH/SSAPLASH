@@ -2,21 +2,44 @@
 .settings-head {
   margin-bottom: var(--space-l);
 }
-.settings-cols {
+.settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-l);
+  column-gap: var(--space-xl);
+  row-gap: var(--space-xl);
   align-items: start;
 }
-.settings-col {
+.settings-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-l);
+  gap: var(--space-m);
   min-width: 0;
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--line-strong);
 }
-/* 태블릿(1024)도 본문 폭이 약 896이라 두 열을 유지하고, 그보다 좁을 때만 한 열 */
+.settings-section-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+@media (min-width: 861px) {
+  .settings-grid {
+    grid-template-areas: "audio play" "account play";
+    grid-template-rows: max-content minmax(0, 1fr);
+  }
+  .settings-grid.has-data {
+    grid-template-areas: "audio play" "account play" "data play";
+    grid-template-rows: max-content max-content minmax(0, 1fr);
+  }
+  .settings-section--audio { grid-area: audio; }
+  .settings-section--play { grid-area: play; }
+  .settings-section--account { grid-area: account; }
+  .settings-section--data { grid-area: data; }
+}
 @media (max-width: 860px) {
-  .settings-cols {
+  .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -106,7 +129,8 @@
   gap: var(--space-m);
 }
 .settings-row-control.wide {
-  width: 260px;
+  width: min(260px, 50%);
+  min-width: 0;
 }
 .settings-row-control.wide .ui-slider {
   flex: 1;
@@ -121,22 +145,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.settings-value {
-  color: var(--text-1);
-  font-size: 14px;
-  text-align: right;
-}
-.settings-value.good {
-  color: var(--good);
-}
-.settings-value.warn {
-  color: var(--miss);
-}
-.settings-conn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-}
 .settings-note {
   margin: 0;
   color: var(--text-3);
@@ -147,13 +155,38 @@
   color: var(--text-2);
   font-size: 13px;
 }
-.settings-danger {
-  border-color: var(--miss);
-}
 .settings-desc {
   margin: 0;
   color: var(--text-2);
   font-size: 14px;
+}
+
+.settings-withdraw {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-m);
+  margin-top: var(--space-xl);
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--line);
+}
+.settings-withdraw-button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--space-m);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-withdraw-button:hover { color: var(--miss); }
+.settings-withdraw-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .settings-row:not(.stacked) { flex-wrap: wrap; }
+  .settings-row-control.wide { width: 100%; }
 }
 
 /* 동의 저장 결과 알림 위치 */

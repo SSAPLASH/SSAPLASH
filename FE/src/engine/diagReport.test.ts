@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { Chart } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import { diagTap, type DiagEvent } from './diagTap';
-import { diagSessionEnd, diagSessionPhase, diagSessionStart, onDiagSessionStart, reportHit } from './diagReport';
+import { diagActiveAudioOffsetMs, diagActiveKickOffsetMs, diagSessionEnd, diagSessionPhase, diagSessionStart, onDiagSessionStart, reportHit } from './diagReport';
 import { RhythmSession } from './RhythmSession';
 
 const chart: Chart = {
@@ -20,7 +20,7 @@ const chart: Chart = {
   durationMs: 3000,
 };
 const windows = { perfectMs: 25, goodMs: 60 };
-const mkSession = () => new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0 });
+const mkSession = () => new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0, kickOffsetMs: 0 });
 const hit = (over: Partial<ResolvedHit> = {}): ResolvedHit => ({
   id: 1,
   stickId: 0,
@@ -76,9 +76,17 @@ describe('reportHit', () => {
 });
 
 describe('세션 진단', () => {
+  it('session 줄과 활성 값에 kickOffsetMs를 싣는다', () => {
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: -65, kickOffsetMs: -40 });
+    const s = events[0];
+    expect(s).toMatchObject({ type: 'session', audioOffsetMs: -65, kickOffsetMs: -40 });
+    expect(diagActiveAudioOffsetMs()).toBe(-65);
+    expect(diagActiveKickOffsetMs()).toBe(-40);
+  });
+
   it('시작은 session start와 notes를 내고, 시간 초과 MISS는 missed로 파생된다', () => {
     const ss = mkSession();
-    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: 5 });
+    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: 5, kickOffsetMs: 5 });
     expect(events.map((e) => e.type)).toEqual(['session', 'notes']);
     const s = events[0];
     expect(s.type === 'session' && s.phase).toBe('start');
@@ -92,7 +100,7 @@ describe('세션 진단', () => {
 
   it('타격으로 맞춘 노트는 missed가 아니다', () => {
     const ss = mkSession();
-    diagSessionStart(ss, 'SHEET', { windows, audioOffsetMs: 0 });
+    diagSessionStart(ss, 'SHEET', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
     ss.start(0);
     ss.handleHit(hit({ tHit: 1000 }));
     expect(events.filter((e) => e.type === 'missed')).toHaveLength(0);
@@ -100,7 +108,7 @@ describe('세션 진단', () => {
 
   it('일시정지·재개·종료 순서로 session을 내고 종료에는 요약이 붙는다', () => {
     const ss = mkSession();
-    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: 0 });
+    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
     events.length = 0;
     diagSessionPhase('pause');
     diagSessionPhase('resume');
@@ -123,7 +131,7 @@ describe('곡 시작 anchors 줄 (PLAY-002 실연주 진단)', () => {
     const ss = mkSession();
     diagSessionStart(ss, 'RHYTHM', {
       windows,
-      audioOffsetMs: 0,
+      audioOffsetMs: 0, kickOffsetMs: 0,
       anchors: [{ SNARE: a('SNARE', -20), HIHAT: a('HIHAT', -50) }, null],
       calibratedAt: 1234,
       presetId: 'system',
@@ -142,14 +150,14 @@ describe('곡 시작 anchors 줄 (PLAY-002 실연주 진단)', () => {
 
   it('재시작하면 다시 낸다. anchors를 넘기지 않으면 내지 않는다', () => {
     const ss = mkSession();
-    const opts = { windows, audioOffsetMs: 0, anchors: [null, null] as [null, null] };
+    const opts = { windows, audioOffsetMs: 0, kickOffsetMs: 0, anchors: [null, null] as [null, null] };
     diagSessionStart(ss, 'SHEET', opts);
     diagSessionStart(ss, 'SHEET', opts);
     const anchors = events.filter((e) => e.type === 'anchors');
     expect(anchors).toHaveLength(2);
     expect(anchors[0].type === 'anchors' && anchors[0].calibratedAt).toBeNull();
     events.length = 0;
-    diagSessionStart(ss, 'SHEET', { windows, audioOffsetMs: 0 });
+    diagSessionStart(ss, 'SHEET', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
     expect(events.map((e) => e.type)).toEqual(['session', 'notes']);
   });
 
@@ -157,7 +165,7 @@ describe('곡 시작 anchors 줄 (PLAY-002 실연주 진단)', () => {
     const order: string[] = [];
     const offOrder = diagTap.subscribe((e) => order.push(e.type));
     onDiagSessionStart(() => order.push('hook'));
-    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, anchors: [null, null] });
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0, anchors: [null, null] });
     onDiagSessionStart(null);
     offOrder();
     expect(order).toEqual(['session', 'notes', 'anchors', 'hook']);

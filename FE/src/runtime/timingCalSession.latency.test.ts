@@ -25,6 +25,7 @@ function setup(ahead: number, useAhead = true) {
     stopMetronome: () => {},
     busy: () => false,
     outputLatencyMs: () => ahead,
+    kickConnected: () => false,
     now: () => now,
     setInterval: (fn) => {
       tickFn = fn;
@@ -78,6 +79,6 @@ describe('TimingCalSession 출력 지연', () => {
     });
     const snap = t.s.snapshot();
     expect(snap.phase).toBe('result');
-    expect(snap.result).toMatchObject({ status: 'ok', offsetMs: -65 });
+    expect(snap.outcome?.stick).toMatchObject({ status: 'ok', offsetMs: -65 });
   });
 });

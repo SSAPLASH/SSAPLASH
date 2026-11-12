@@ -30,6 +30,12 @@ describe('StatusTile', () => {
     expect(render({ status: 'skipped', statusText: '필요 없음', attention: true })).toContain('class="setup-tile is-off"');
   });
 
+  it('statusWarn이면 is-todo를 더하고, 없으면 붙이지 않는다', () => {
+    const needed = { status: 'needed', statusText: '안 맞춤' } as const;
+    expect(render({ ...needed, statusWarn: true })).toContain('class="setup-tile is-off is-todo"');
+    expect(render(needed)).not.toContain('is-todo');
+  });
+
   it('비활성이면 disabled와 이유 문구가 보인다', () => {
     const html = render({ disabled: true, reason: '보정 중에는 열 수 없어요' });
     expect(html).toMatch(/<button[^>]*disabled/);

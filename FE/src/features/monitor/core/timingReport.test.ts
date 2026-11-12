@@ -13,7 +13,7 @@ const sessionStart = (t: number, title = '곡A'): DiagEvent => ({
   title,
   chartVersionId: 7,
   windows,
-  audioOffsetMs: 0,
+  audioOffsetMs: 0, kickOffsetMs: 0,
   noteCount: 100,
   t,
 });

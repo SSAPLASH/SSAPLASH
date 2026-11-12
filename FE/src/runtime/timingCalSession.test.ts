@@ -1,6 +1,6 @@
 // 박자 맞추기 진행 검증: 16박 예약, 단계 전환, 타격 가로채기(소리만), 결과 계산, 취소.
 import { describe, expect, it } from 'vitest';
-import { TimingCalSession, TIMING_CAL_TOTAL_BEATS, type TimingCalDeps } from './timingCalSession';
+import { TimingCalSession, TIMING_CAL_TOTAL_BEATS, TIMING_CAL_TOTAL_BEATS_WITH_KICK, type TimingCalDeps } from './timingCalSession';
 import { timingCalBeatMs, TIMING_CAL_LISTEN_BEATS } from '@/domain/kit/timingCalibration';
 import type { ResolvedHit } from '@/domain/events';
 
@@ -23,6 +23,7 @@ function setup(over: Partial<TimingCalDeps> = {}) {
     stopMetronome: () => metronomeStops++,
     busy: () => false,
     outputLatencyMs: () => 42,
+    kickConnected: () => false,
     now: () => now,
     setInterval: (fn) => {
       tickFn = fn;
@@ -83,7 +84,7 @@ describe('TimingCalSession', () => {
     });
     const snap = t.s.snapshot();
     expect(snap.phase).toBe('result');
-    expect(snap.result).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -65, input: 'sensor' });
+    expect(snap.outcome?.stick).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -65, input: 'sensor' });
     expect(snap.outputLatencyMs).toBe(42);
     expect(t.played).toHaveLength(12);
     expect(t.ticking()).toBe(false);
@@ -95,7 +96,7 @@ describe('TimingCalSession', () => {
     const t = setup();
     await t.s.start();
     t.advanceTo(1400 + 16 * BEAT + 400);
-    expect(t.s.snapshot().result).toMatchObject({ status: 'few', pairs: 0, offsetMs: null });
+    expect(t.s.snapshot().outcome?.stick).toMatchObject({ status: 'few', pairs: 0, offsetMs: null });
   });
 
   it('패드가 정해지지 않은 타격은 소리 없이 버린다', async () => {
@@ -150,6 +151,83 @@ describe('TimingCalSession', () => {
     t.advanceTo(first + 16 * BEAT + 400, (now) => {
       while (next < targets.length && targets[next] <= now) t.s.intercept(hit(targets[next++]));
     });
-    expect(t.s.snapshot().result).toMatchObject({ status: 'ok', offsetMs: 20 });
+    expect(t.s.snapshot().outcome?.stick).toMatchObject({ status: 'ok', offsetMs: 20 });
+  });
+
+  it('킥이 연결돼 있지 않으면 16박이고 킥 결과는 null', async () => {
+    const t = setup();
+    await t.s.start();
+    expect(t.s.snapshot()).toMatchObject({ withKick: false, totalBeats: 16 });
+    t.advanceTo(1400 + 16 * BEAT + 400);
+    const snap = t.s.snapshot();
+    expect(t.clicks).toHaveLength(16);
+    expect(snap.phase).toBe('result');
+    expect(snap.outcome?.kick).toBeNull();
+  });
+
+  describe('킥 연결', () => {
+    const first = 1400;
+    const stickAt = (i: number) => first + (TIMING_CAL_LISTEN_BEATS + i) * BEAT;
+    const kickAt = (i: number) => first + (TIMING_CAL_LISTEN_BEATS + 12 + 4 + i) * BEAT;
+
+    it('32박을 예약하고 listen, measure, switch, kick, result 순으로 넘어간다', async () => {
+      const t = setup({ kickConnected: () => true });
+      await t.s.start();
+      expect(t.s.snapshot()).toMatchObject({ withKick: true, totalBeats: 32 });
+      const phases: string[] = [];
+      t.advanceTo(first + 32 * BEAT + 400, () => {
+        const p = t.s.snapshot().phase;
+        if (phases[phases.length - 1] !== p) phases.push(p);
+      });
+      expect(t.clicks).toHaveLength(TIMING_CAL_TOTAL_BEATS_WITH_KICK);
+      expect(phases).toEqual(['listen', 'measure', 'switch', 'kick', 'result']);
+      expect(t.s.snapshot().phase).toBe('result');
+    });
+
+    it('구간 경계에서 단계가 바뀌고 running은 result 전까지 true', async () => {
+      const t = setup({ kickConnected: () => true });
+      await t.s.start();
+      t.advanceTo(first + 15 * BEAT + 10);
+      expect(t.s.snapshot()).toMatchObject({ phase: 'measure', beat: 16 });
+      t.advanceTo(first + 16 * BEAT + 10);
+      expect(t.s.snapshot()).toMatchObject({ phase: 'switch', beat: 17 });
+      expect(t.s.running).toBe(true);
+      t.advanceTo(first + 20 * BEAT + 10);
+      expect(t.s.snapshot()).toMatchObject({ phase: 'kick', beat: 21 });
+      expect(t.s.running).toBe(true);
+    });
+
+    it('스틱 −65, 킥 −40: 구간별로 그 입력만 계산하고 하이햇 페달은 소리만 낸다', async () => {
+      const t = setup({ kickConnected: () => true });
+      await t.s.start();
+      const events: { at: number; h: ResolvedHit }[] = [];
+      for (let i = 0; i < 12; i++) events.push({ at: stickAt(i) - 65, h: hit(stickAt(i) - 65) });
+      for (let i = 0; i < 12; i++) events.push({ at: kickAt(i) - 40, h: hit(kickAt(i) - 40, { pad: 'KICK', foot: 3 } as Partial<ResolvedHit>) });
+      // 하이햇 페달: 킥 박 위에 밟아도 모으지 않는다
+      events.push({ at: kickAt(0), h: hit(kickAt(0), { pad: 'HIHAT_PEDAL', foot: 2 } as Partial<ResolvedHit>) });
+      events.sort((a, b) => a.at - b.at);
+      let next = 0;
+      t.advanceTo(first + 32 * BEAT + 400, (now) => {
+        while (next < events.length && events[next].at <= now) t.s.intercept(events[next++].h);
+      });
+      const o = t.s.snapshot().outcome;
+      expect(o?.stick).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -65 });
+      expect(o?.kick).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -40 });
+      expect(o?.recheck).toBe(false);
+      expect(t.played).toHaveLength(25);
+    });
+
+    it('화면용 타격 수는 지금 구간 입력만 센다', async () => {
+      const t = setup({ kickConnected: () => true });
+      await t.s.start();
+      t.advanceTo(stickAt(3) + 10);
+      t.s.intercept(hit(stickAt(2)));
+      t.s.intercept(hit(stickAt(3), { pad: 'KICK', foot: 3 } as Partial<ResolvedHit>));
+      expect(t.s.snapshot()).toMatchObject({ phase: 'measure', taps: 1 });
+      t.advanceTo(kickAt(2) + 10);
+      expect(t.s.snapshot()).toMatchObject({ phase: 'kick', taps: 0 });
+      t.s.intercept(hit(kickAt(2), { pad: 'KICK', foot: 3 } as Partial<ResolvedHit>));
+      expect(t.s.snapshot().taps).toBe(1);
+    });
   });
 });
