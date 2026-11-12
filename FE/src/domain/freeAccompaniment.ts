@@ -1,5 +1,4 @@
 // 자유 연습 반주 화면 상태 계산 (설계 MODE-002 3-4·3-5·3-6). React·오디오·네트워크를 모르는 순수 함수.
-import { ApiError } from '@/api/error';
 import type { AccompanimentStatus } from '@/domain/songCatalog';
 import type { SongSummary } from '@/domain/songCatalog';
 
@@ -86,18 +85,8 @@ export function pickableForAccompaniment(song: Pick<SongSummary, 'status' | 'acc
   return 'hidden';
 }
 
-/** URL이 null이거나 반주 객체가 없을 때의 문구 */
-export const ACCOMPANIMENT_NO_FILE_TEXT = '이 곡은 반주 파일이 없어요';
-
-/** 반주 불러오기 오류 → 바 문구(3-6). ApiError가 아니면(네트워크·디코드) 일반 실패 문구 */
-export function accompanimentErrorText(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 404 && error.code === 'CHART_ASSET_NOT_FOUND') return ACCOMPANIMENT_NO_FILE_TEXT;
-    if (error.status === 404 && error.code === 'SONG_NOT_FOUND') return '곡을 찾을 수 없어요. 삭제됐을 수 있어요';
-    if (error.status === 409) return '곡이 아직 준비 중이에요';
-  }
-  return '반주를 불러오지 못했어요';
-}
+/** 반주를 불러오지 못했을 때의 일반 문구. 바 계산과 오류 변환(components/song/accompanimentError)이 같이 쓴다 */
+export const ACCOMPANIMENT_LOAD_FAIL_TEXT = '반주를 불러오지 못했어요';
 
 /** 훅 내부 상태 → 바가 그릴 값(3-5) */
 export function accompanimentBarView(input: AccompanimentBarInput): AccompanimentBarView {
@@ -113,7 +102,7 @@ export function accompanimentBarView(input: AccompanimentBarInput): Accompanimen
     seekable: phase === 'playing' || phase === 'paused',
   });
   if (!pick) return make('none', 0);
-  if (errorText !== null || playerState === 'error') return make('error', 0, errorText ?? accompanimentErrorText(null));
+  if (errorText !== null || playerState === 'error') return make('error', 0, errorText ?? ACCOMPANIMENT_LOAD_FAIL_TEXT);
   if (loading || playerState === 'loading' || playerState === 'idle') return make('loading', 0);
   if (playerState === 'playing') return make('playing', num(input.positionMs));
   if (playerState === 'paused') return make('paused', num(input.positionMs));

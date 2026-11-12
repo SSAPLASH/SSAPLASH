@@ -6,13 +6,12 @@ import { Accompaniment } from '@/audio/Accompaniment';
 import { audioEngine, type AudioEngine } from '@/audio/AudioEngine';
 import { unlockAudio } from '@/app/bootstrap';
 import {
-  ACCOMPANIMENT_NO_FILE_TEXT,
   accompanimentBarView,
-  accompanimentErrorText,
   seekTarget,
   type AccompanimentBarView,
   type AccompanimentPick,
 } from '@/domain/freeAccompaniment';
+import { ACCOMPANIMENT_NO_FILE_TEXT, accompanimentErrorText } from './accompanimentError';
 import { SONGS_SOURCE } from '@/store/songStore';
 
 /** 훅이 쓰는 재생기 부분(Accompaniment가 만족한다. 테스트에서 가짜로 바꾼다) */
