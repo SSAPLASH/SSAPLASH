@@ -78,6 +78,8 @@ interface SettingsState {
   sheetPadCount: boolean;
   /** 악보 연습에서 반주를 재생한다(MODE-003 시작 확인 창의 「반주」 줄). 꺼져 있으면 반주를 불러오지도 않는다 */
   accompaniment: boolean;
+  /** 자유 연습 키트 가이드(패드 이름표) 표시(MODE-002). 기본 켬 */
+  kitGuide: boolean;
   /** 사이드바 접힘(≤1024에서는 셸이 강제로 접는다) */
   sidebarCollapsed: boolean;
   /** 상단 Dock 접힘(알약) */
@@ -134,6 +136,7 @@ interface SettingsState {
   setSoundOn: (v: boolean) => void;
   setSheetPadCount: (v: boolean) => void;
   setAccompaniment: (v: boolean) => void;
+  setKitGuide: (v: boolean) => void;
   setSidebarCollapsed: (v: boolean) => void;
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
@@ -144,7 +147,7 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 23;
+export const SETTINGS_VERSION = 24;
 
 /** v22까지의 시스템 기본 배치(x·y). v23 이행에서 "기본 배치 그대로인 저장 값"을 알아보는 데만 쓴다 */
 const LEGACY_DEFAULT_XY: Record<string, readonly [number, number]> = {
@@ -190,6 +193,7 @@ function isLegacyDefaultLayout(raw: unknown): boolean {
  * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
  * v21 → v22: accompaniment(기본 true) 추가. boolean이 아니면 true.
  * v22 → v23: 시스템 기본 배치 값 변경(원근 보기용으로 넓힘). kitLayout이 옛 기본 배치와 같으면 새 기본 배치로 바꾼다. 손으로 옮긴 배치와 프리셋 layout은 그대로.
+ * v23 → v24: kitGuide(기본 true) 추가. boolean이 아니면 true.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -302,6 +306,7 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   if (version < 22) p.accompaniment = typeof p.accompaniment === 'boolean' ? p.accompaniment : true;
   // 시스템 기본 배치 값이 바뀌었다. 옛 기본 배치 그대로인 저장 값은 새 기본 배치로 맞춰 "변경 있음"으로 보이지 않게 한다(손으로 옮긴 배치는 둔다)
   if (version < 23 && isLegacyDefaultLayout(p.kitLayout)) p.kitLayout = DEFAULT_KIT_LAYOUT;
+  if (version < 24) p.kitGuide = typeof p.kitGuide === 'boolean' ? p.kitGuide : true;
   return p as unknown as SettingsState;
 }
 
@@ -411,6 +416,7 @@ export const useSettings = create<SettingsState>()(
       soundOn: true,
       sheetPadCount: true,
       accompaniment: true,
+      kitGuide: true,
       sidebarCollapsed: false,
       dockCollapsed: false,
       liveCoach: true,
@@ -498,6 +504,7 @@ export const useSettings = create<SettingsState>()(
       setSoundOn: (soundOn) => set({ soundOn }),
       setSheetPadCount: (sheetPadCount) => set({ sheetPadCount }),
       setAccompaniment: (accompaniment) => set({ accompaniment }),
+      setKitGuide: (kitGuide) => set({ kitGuide }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
@@ -523,6 +530,7 @@ export const useSettings = create<SettingsState>()(
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
+          kitGuide: typeof p.kitGuide === 'boolean' ? p.kitGuide : true,
           yawAutoCorrect: typeof p.yawAutoCorrect === 'boolean' ? p.yawAutoCorrect : false,
           ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),

@@ -90,6 +90,10 @@ export interface DrumKitProps {
   pedalOff?: boolean;
   /** 하이햇 페달을 밟을 때마다 바뀌는 값. 0보다 크면 바뀔 때 "칙" 모션을 재생한다 */
   pedalHitSeq?: number;
+  /** SVG 뒤에 깔리는 내용(킷 크기 래퍼 .drum-kit-fx 안 첫 자식). 래퍼 기준으로 절대 배치한다 */
+  underlay?: ReactNode;
+  /** SVG·이펙트 캔버스 위에 덮는 내용(래퍼 안 마지막 자식). 누름을 받지 않게 쓰는 쪽 CSS가 pointer-events: none을 준다 */
+  overlay?: ReactNode;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -173,6 +177,8 @@ export function DrumKit({
   hihatClosed,
   pedalOff = false,
   pedalHitSeq,
+  underlay,
+  overlay,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -352,11 +358,14 @@ export function DrumKit({
     </svg>
   );
 
-  // 이펙트가 켜진 킷은 SVG 크기에 맞춘 래퍼에 캔버스를 겹친다(꺼진 킷은 마크업 불변)
-  const body = effects ? (
+  // 이펙트가 켜졌거나 깔개·덮개가 있는 킷은 SVG 크기에 맞춘 래퍼로 감싼다(셋 다 없으면 마크업 불변)
+  const wrapped = effects || underlay != null || overlay != null;
+  const body = wrapped ? (
     <div className="drum-kit-fx">
+      {underlay}
       {svg}
-      <FxCanvas skin={skin} view={view} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />
+      {effects && <FxCanvas skin={skin} view={view} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />}
+      {overlay}
     </div>
   ) : (
     svg
