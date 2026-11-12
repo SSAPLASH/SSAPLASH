@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { JUDGEMENT_SCORE } from '@/domain/judgement';
 import {
   LESSONS_PATH,
   lessonsFromDto,
@@ -97,6 +98,17 @@ describe('playPassed', () => {
     expect(playPassed({ score: 6999, noteCount: 100 }, 70)).toBe(false);
     expect(playPassed({ score: 69995, noteCount: 1000 }, 70)).toBe(true);
     expect(playPassed({ score: 0, noteCount: 0 }, 70)).toBe(false);
+  });
+
+  it('GOOD 점수(SCORE_V2 80점) 기준: 하나도 놓치지 않고 전부 GOOD이면 70%를 넘어 통과한다', () => {
+    const score = (perfect: number, good: number) => perfect * JUDGEMENT_SCORE.PERFECT + good * JUDGEMENT_SCORE.GOOD;
+    // 16노트 레슨 전부 GOOD = 80%
+    expect(playPassed({ score: score(0, 16), noteCount: 16 }, 70)).toBe(true);
+    // 전부 GOOD이면 16개 중 MISS 2개까지(14×80 / 16 = 70%)
+    expect(playPassed({ score: score(0, 14), noteCount: 16 }, 70)).toBe(true);
+    expect(playPassed({ score: score(0, 13), noteCount: 16 }, 70)).toBe(false);
+    // PERFECT 2·GOOD 10·MISS 4(11/12 로컬 기록) = 62.5%
+    expect(playPassed({ score: score(2, 10), noteCount: 16 }, 70)).toBe(false);
   });
 });
 
