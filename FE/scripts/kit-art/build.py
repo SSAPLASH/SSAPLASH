@@ -39,27 +39,48 @@ def cutout(a):
     return col, alpha
 
 
+def cutout_texture(a):
+    """무늬가 있는 어두운 바닥에서 물체만 남긴다: 밝은 곳·색이 있는 곳·아주 어두운 곳을 물체로 보고 안쪽 구멍을 메운다."""
+    lum = a @ np.array([0.299, 0.587, 0.114], np.float32)
+    sat = a.max(2) - a.min(2)
+    m = (lum > 64) | (sat > 36) | (lum < 8)
+    m = ndi.binary_opening(m, iterations=1)  # 바닥 무늬의 점 잡음
+    m = ndi.binary_fill_holes(ndi.binary_closing(m, iterations=4))
+    m = ndi.binary_erosion(m, iterations=1)
+    return a / 255, ndi.gaussian_filter(m.astype(np.float32), 1.2)
+
+
 def shape_mask(spec, size):
-    """한 덩어리 안에서 나눌 영역(타원·사각형·다각형)을 합친 마스크."""
+    """손으로 적은 영역(타원·사각형·다각형)을 합친 마스크."""
     im = Image.new("L", size, 0)
     d = ImageDraw.Draw(im)
     if "ellipse" in spec:
         cx, cy, rx, ry = spec["ellipse"]
         d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=255)
-    if "rect" in spec:
-        d.rectangle(spec["rect"], fill=255)
+    for rect in spec.get("rects", [spec["rect"]] if "rect" in spec else []):
+        d.rectangle(rect, fill=255)
     if "polygon" in spec:
         d.polygon([tuple(p) for p in spec["polygon"]], fill=255)
     return np.asarray(im) > 0
 
 
+def white_of(mask, a):
+    """드럼 헤드의 흰 면. 헤드 무늬의 어두운 점은 메운다."""
+    return ndi.binary_fill_holes(mask & (a.min(2) > 150) & (a.max(2) - a.min(2) < 45))
+
+
+def gold_of(mask, a):
+    return mask & (a[..., 0] > 110) & (a[..., 0] - a[..., 2] > 45)
+
+
+def largest(m):
+    lab, n = ndi.label(m)
+    return m if n <= 1 else lab == (1 + int(np.argmax(ndi.sum(m, lab, range(1, n + 1)))))
+
+
 def disc_mask(parent, a):
     """심벌 원판: 그 덩어리의 금색 면. 가운데 너트처럼 금색에 둘러싸인 곳도 넣는다."""
-    gold = parent & (a[..., 0] > 110) & (a[..., 0] - a[..., 2] > 45)
-    m = ndi.binary_fill_holes(ndi.binary_closing(gold, iterations=6))
-    lab, n = ndi.label(m)
-    if n > 1:
-        m = lab == (1 + int(np.argmax(ndi.sum(m, lab, range(1, n + 1)))))
+    m = largest(ndi.binary_fill_holes(ndi.binary_closing(gold_of(parent, a), iterations=6)))
     return ndi.binary_dilation(m, iterations=2) & parent
 
 
@@ -69,7 +90,7 @@ def bbox(mask):
 
 
 def head_of(kind, mask, a):
-    """헤드 타원(중심 x·y, 반지름 가로·세로, 원본 픽셀)."""
+    """헤드 타원(중심 x·y, 반지름 가로·세로, 원본 픽셀). kind가 없으면 그 조각의 상자."""
     if isinstance(kind, list):
         return [float(v) for v in kind]
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
@@ -77,28 +98,19 @@ def head_of(kind, mask, a):
         m = mask & (r > 150) & (r - b > 70)
     elif kind == "hoop":  # 킥 앞면의 금색 테
         m = mask & (r > 140) & (r - b > 60) & (g > 80)
-    else:  # 드럼 헤드: 넓은 흰 면(가는 크롬은 깎아 낸다)
-        m = ndi.binary_erosion(mask & (a.min(2) > 150) & (a.max(2) - a.min(2) < 45), iterations=8)
-        lab, n = ndi.label(m)
-        if n > 1:
-            m = lab == (1 + int(np.argmax(ndi.sum(m, lab, range(1, n + 1)))))
-        m = ndi.binary_dilation(m, iterations=8)
+    elif kind == "white":  # 드럼 헤드: 넓은 흰 면(가는 크롬은 깎아 낸다)
+        m = ndi.binary_dilation(largest(ndi.binary_erosion(white_of(mask, a), iterations=8)), iterations=8)
+    else:
+        m = mask
     x0, y0, x1, y1 = bbox(m)
     return [(x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2]
 
 
-def r1(v):
-    return round(float(v), 1)
-
-
-def build(view, spec):
-    a = np.asarray(Image.open(HERE / spec["source"]).convert("RGB")).astype(np.float32)
-    col, alpha = cutout(a)
+def split_components(spec, a, alpha):
+    """조각이 서로 떨어져 있는 그림: 이어진 덩어리 하나가 조각 하나다. 한 덩어리 안에서 나눌 것만 영역으로 적는다."""
     H, W = alpha.shape
-    solid = ndi.binary_closing(alpha > 0.5, iterations=6)
-    lab, _ = ndi.label(solid)
+    lab, _ = ndi.label(ndi.binary_closing(alpha > 0.5, iterations=6))
     grow = ndi.grey_dilation(lab, size=(5, 5))  # 가장자리의 반투명 픽셀까지 그 조각에 넣는다
-
     pieces = spec["pieces"]
     masks = {}
     for p in pieces:
@@ -111,9 +123,62 @@ def build(view, spec):
         if "partOf" in p:
             parent = whole[p["partOf"]]
             masks[p["name"]] = disc_mask(parent, a) if p.get("disc") else parent & shape_mask(p, (W, H))
+            whole[p["name"]] = masks[p["name"]]
     for p in pieces:
         for other in p.get("minus", []):
             masks[p["name"]] = masks[p["name"]] & ~masks[other]
+    return masks, whole
+
+
+def split_regions(spec, a, alpha):
+    """조각이 붙어 있거나 겹친 그림(위에서 본 그림): 심벌 원판 → 손으로 적은 사각형 → 드럼 헤드 둘레 순으로 주인을 정하고,
+    남은 픽셀(스탠드 등)은 가장 가까운 조각에 준다. 이 그림의 조각은 화면에서 자리를 옮기지 않아 다시 놓으면 원본과 같다."""
+    H, W = alpha.shape
+    solid = alpha > 0.5
+    pieces = [p for p in spec["pieces"] if "shape" in p]
+    gold_lab, _ = ndi.label(ndi.binary_fill_holes(ndi.binary_closing(gold_of(solid, a), iterations=4)))
+    white_lab, _ = ndi.label(ndi.binary_erosion(white_of(solid, a), iterations=4))
+    owner = np.zeros((H, W), np.int32)  # 0 = 주인 없음, i + 1 = pieces[i]
+    discs = {}
+    for i, p in enumerate(pieces):  # 심벌 원판이 맨 위다
+        if p["shape"] == "cymbal":
+            sx, sy = p["seed"]
+            assert gold_lab[sy, sx] > 0, f"{p['name']}: seed가 원판 위에 있지 않다"
+            discs[p["name"]] = ndi.binary_dilation(gold_lab == gold_lab[sy, sx], iterations=2) & solid
+            owner[discs[p["name"]]] = i + 1
+    for i, p in enumerate(pieces):
+        if "rects" in p or "rect" in p:
+            owner[shape_mask(p, (W, H)) & solid & (owner == 0)] = i + 1
+    for i, p in enumerate(pieces):  # 드럼: 헤드에서 테두리·통만큼 넓힌다
+        if p["shape"] == "drum":
+            sx, sy = p["seed"]
+            assert white_lab[sy, sx] > 0, f"{p['name']}: seed가 헤드 위에 있지 않다"
+            body = ndi.binary_dilation(white_lab == white_lab[sy, sx], iterations=spec.get("drumGrow", 34)) & solid
+            owner[body & (owner == 0)] = i + 1
+    near = ndi.distance_transform_edt(owner == 0, return_distances=False, return_indices=True)
+    rest = solid & (owner == 0)
+    owner[rest] = owner[near[0][rest], near[1][rest]]
+    masks, whole = {}, {}
+    for i, p in enumerate(pieces):
+        whole[p["name"]] = owner == i + 1
+        masks[p["name"]] = whole[p["name"]] & ~discs.get(p["name"], np.zeros_like(solid))
+    for p in spec["pieces"]:
+        if p.get("top"):
+            masks[p["name"]] = whole[p["name"]] = discs[p["partOf"]]
+    return masks, whole
+
+
+def r1(v):
+    return round(float(v), 1)
+
+
+def build(view, spec):
+    a = np.asarray(Image.open(HERE / spec["source"]).convert("RGB")).astype(np.float32)
+    textured = spec.get("background") == "texture"
+    col, alpha = cutout_texture(a) if textured else cutout(a)
+    masks, whole = split_regions(spec, a, alpha) if textured else split_components(spec, a, alpha)
+    H, W = alpha.shape
+    pieces = spec["pieces"]
 
     out_dir = SPRITES / view
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -124,6 +189,7 @@ def build(view, spec):
     boxes = {}
     for p in pieces:
         m = masks[p["name"]]
+        assert m.any(), f"{p['name']}: 조각이 비었다"
         soft = np.asarray(Image.fromarray((m * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))).astype(np.float32) / 255
         x0, y0, x1, y1 = bbox(m)
         x0, y0, x1, y1 = max(x0 - 2, 0), max(y0 - 2, 0), min(x1 + 2, W), min(y1 + 2, H)
@@ -140,11 +206,7 @@ def build(view, spec):
             continue  # 원판 조각은 받침 항목에 붙는다
         x0, y0, x1, y1 = boxes[p["name"]]
         u = ART_W / (x1 - x0)
-        if "polygon" in p:
-            px0, py0, px1, py1 = bbox(masks[p["name"]])
-            hx, hy, hrx, hry = (px0 + px1) / 2, (py0 + py1) / 2, (px1 - px0) / 2, (py1 - py0) / 2
-        else:
-            hx, hy, hrx, hry = head_of(p["head"], whole[p["name"]], a)
+        hx, hy, hrx, hry = head_of(p.get("head"), whole[p["name"]], a)
         heads.append((hx, hy, hrx, hry))
         head = {"cx": r1((hx - x0) * u), "cy": r1((hy - y0) * u), "rx": r1(hrx * u), "ry": r1(hry * u)}
         ring = {"cx": head["cx"], "cy": head["cy"], "rx": r1(head["rx"] * 1.09), "ry": r1(head["ry"] * 1.12)}
@@ -185,8 +247,9 @@ def build(view, spec):
         check.paste(piece, (x0, y0), Image.composite(piece.getchannel("A"), Image.new("L", piece.size, 0), keep))
     d = ImageDraw.Draw(check)
     for hx, hy, hrx, hry in heads:
-        d.ellipse([hx - hrx, hy - hry, hx + hrx, hy + hry], outline=(255, 60, 60), width=5)
-    check.resize((W // 3, H // 3), Image.LANCZOS).save(HERE / "out" / f"{view}-check.jpg", quality=85)
+        d.ellipse([hx - hrx, hy - hry, hx + hrx, hy + hry], outline=(255, 60, 60), width=max(3, W // 600))
+    s = min(1.0, 1024 / max(W, H))
+    check.resize((round(W * s), round(H * s)), Image.LANCZOS).save(HERE / "out" / f"{view}-check.jpg", quality=85)
     return {"box": {"w": KIT_W, "h": r1((cy1 - cy0) * k)}, "pads": rows}
 
 
@@ -240,7 +303,7 @@ export interface KitArtPad {
   badge: ArtPoint;
   /** 고정 배치에서 조각 상자의 왼쪽 위와 폭(킷 단위) */
   kit: { left: number; top: number; w: number };
-  /** 심벌만: 흔들리는 원판 조각과 받침 상자 안에서의 자리. closeDy는 하이햇만 — 닫힐 때 내려가는 거리 */
+  /** 심벌만: 흔들리는 원판 조각과 받침 상자 안에서의 자리. closeDy는 원근 그림의 하이햇만 — 닫힐 때 내려가는 거리 */
   top?: { sprite: string; x: number; y: number; w: number; h: number; closeDy?: number };
 }
 
