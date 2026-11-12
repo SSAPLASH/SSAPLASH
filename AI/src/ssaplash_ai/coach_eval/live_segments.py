@@ -627,6 +627,27 @@ def _json(text: Any) -> dict[str, Any]:
     return v if isinstance(v, dict) else {}
 
 
+def poses_from_hits(hits: Sequence[AimHit]) -> dict[str, dict[str, float]]:
+    """업로드에 캘리브레이션 기준 자세가 없을 때(FE가 `calibration.pads`를 null로 보낸다) 쓰는 대체 기준.
+
+    그 판에서 맞게 친 타격(다른 패드로 잡힌 타격 제외)의 패드별 고도각·방위각 중앙값을 기준으로 본다. 그래서 이 기준의
+    `aim`은 "그 사람이 평소 치는 자리에서 이 구간에 얼마나 벗어났나"이고, FE의 캘리브레이션 기준과는 다르다.
+    맞게 친 타격이 `AIM_MIN_HITS`개 미만인 패드는 기준을 만들지 않는다.
+    """
+    by: dict[str, list[AimHit]] = {}
+    for h in hits:
+        if not h.wrongPad:
+            by.setdefault(h.notePad, []).append(h)
+    return {
+        pad: {
+            "pitch": statistics.median(h.pitch for h in hs),
+            "yaw": statistics.median(h.yaw for h in hs),
+        }
+        for pad, hs in by.items()
+        if len(hs) >= AIM_MIN_HITS
+    }
+
+
 def rebuild_segments(
     chart: SegmentChart, play: PlayRecord, *, with_aim: bool, trust_yaw: bool = True
 ) -> list[FinishedSegment]:
@@ -634,10 +655,9 @@ def rebuild_segments(
     input_kind: Literal["stick", "keyboard"] = (
         "stick" if play.input_source == "STICK" else "keyboard"
     )
-    tracker = SegmentTracker(
-        chart, play.good_ms, input_kind, play.pad_poses if with_aim else None, trust_yaw=trust_yaw
-    )
     judged, aim_hits = _judged_notes(chart, play)
+    poses = (play.pad_poses or poses_from_hits(aim_hits)) if with_aim else None
+    tracker = SegmentTracker(chart, play.good_ms, input_kind, poses, trust_yaw=trust_yaw)
     for h in aim_hits:
         tracker.note_aim(h)
     # 같은 시각이면 판정이 먼저다(FE push: 구간 마무리 → 지적 붙이기)

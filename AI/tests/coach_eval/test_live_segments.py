@@ -20,6 +20,7 @@ from ssaplash_ai.coach_eval.live_segments import (
     chart_from_detail,
     js_round,
     pad_radius,
+    poses_from_hits,
     rebuild_segments,
     segment_bars,
     segment_index_at,
@@ -286,3 +287,17 @@ def test_키보드_판에는_aim을_넣지_않는다() -> None:
 def test_빈_판은_구간이_없다(with_aim: bool) -> None:
     chart, play = _play([], [])
     assert rebuild_segments(chart, play, with_aim=with_aim) == []
+
+
+def test_기준_자세가_없으면_그_판에서_맞게_친_타격의_중앙값을_기준으로_쓴다() -> None:
+    # FE 업로드는 calibration.pads를 null로 보낸다. 둘째 구간만 스틱 끝을 낮게 쳤다
+    notes = [(f"n{i}", i * STEP, "SNARE") for i in range(96)]
+    hits = [
+        _hit(i, f"n{i}", i * STEP + 5, pitch=-60.0 if 32 <= i < 64 else -30.0) for i in range(96)
+    ]
+    chart = chart_from_detail(detail(notes))
+    play = PlayRecord("k1", "STICK", 60.0, hits, (), {})
+    first, second = rebuild_segments(chart, play, with_aim=True)
+    assert "aim" not in first.facts
+    assert second.facts["aim"][0]["vertical"] == "LOW" and second.facts["aim"][0]["size"] == "CLEAR"
+    assert poses_from_hits([AimHit(0, "SNARE", -30, 0, 0, False)] * 3) == {}
