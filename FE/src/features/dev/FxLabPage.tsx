@@ -13,7 +13,7 @@ import { HIT_FX_LAB_THEMES, HIT_FX_THEME_LABELS } from '@/domain/hitFx/themes';
 import type { FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/pads';
 import { audioEngine } from '@/audio/AudioEngine';
-import { unlockAudio } from '@/app/bootstrap';
+import { unlockAudio } from '@/runtime/audioUnlock';
 import { LAB_COMBO_DEFAULT, LAB_COMBO_STEP_MS, LAB_JUDGEMENTS, LAB_PATTERNS, combineStats, comboSeqSteps, hitsInWindow, isLabJudgement, isLabPattern, labJudgementFields, type LabJudgementId, type LabPatternId, type LabStats } from './fxLabPatterns';
 import './FxLabPage.css';
 

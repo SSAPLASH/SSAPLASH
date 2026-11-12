@@ -11,7 +11,7 @@ import { LessonResultBand } from '@/components/lesson/LessonResultBand';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/runtime/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
 import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/playRetry';
-import { unlockAudio } from '@/app/bootstrap';
+import { unlockAudio } from '@/runtime/audioUnlock';
 import { SONGS_SOURCE } from '@/store/songStore';
 import { isServerPlayId } from '@/domain/playUpload';
 import { SheetSnippet } from '@/features/result/components/SheetSnippet';

@@ -15,7 +15,7 @@ import { useSettings } from '@/store/settingsStore';
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn().mockResolvedValue({ items: [], hasNext: false }), listAllSongs: vi.fn() }));
 vi.mock('@/store/songStore', async (orig) => ({ ...(await orig<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
 // 카드 클릭 안에서 부르는 오디오 잠금 해제는 AudioContext가 없는 테스트 환경에서 막아 둔다
-vi.mock('@/app/bootstrap', async (orig) => ({ ...(await orig<typeof import('@/app/bootstrap')>()), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn().mockResolvedValue({ items: [] }) }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: 's', strategy: 'x', items: [] }) }));
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: 'r', strategy: 's', items: [] }), postRecommendationClick: vi.fn() }));

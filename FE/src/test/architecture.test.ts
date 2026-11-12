@@ -52,7 +52,6 @@ const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app
 const ALLOWED = new Set<string>([
   // 공유 → app
   'components/shell/Sidebar.tsx -> app/prefetchRoute.ts',
-  'components/song/useFreeAccompaniment.ts -> app/bootstrap.ts',
 ]);
 
 /** domain 파일 여부와 그 파일이 속한 기능(공유 domain이면 null) */

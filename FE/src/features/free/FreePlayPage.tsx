@@ -34,7 +34,8 @@ import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/runtime/sou
 import { stopFree } from '@/runtime/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
-import { bindSensorSurface, setSoundOnHit, unlockAudio, useKeyboardDrum } from '@/app/bootstrap';
+import { bindSensorSurface, setSoundOnHit, useKeyboardDrum } from '@/app/bootstrap';
+import { unlockAudio } from '@/runtime/audioUnlock';
 import type { PadId } from '@/domain/pads';
 
 /** 킷 최대 배율(Figma 1.25, 태블릿 ≤1024는 1.1) */
