@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { PlaySummary } from '@/api/plays';
-import { playListQuery } from './plays';
+import { playListQuery } from '@/api/queries/plays';
 import { useApiQuery } from '@/app/useApiQuery';
 import { HistoryTable, type HistoryServerRow } from './HistoryTable';
 import './history.css';
