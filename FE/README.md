@@ -515,6 +515,7 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **흐름:** 연주 종료 → 로컬 저장 → 결과 화면(로컬 값, 기다리지 않음). 동시에 `runtime/playSync.startPlaySync`가 `POST /api/v1/plays`(ACCT-002 요약)를 보낸다. 성공하면 리포트 요약과 노트 첫 페이지를 미리 받아 두고 결과 화면의 **상세 분석 보기**가 `/result/:playId/report`로 열린다.
 - **playId:** 연주마다 UUID(`newPlayId`). 이전 로그(`play-…`)는 업로드하지 않는다.
 - **seq:** `engine/playRecorder`가 활성 타격과 MISS 판정에 처리 순서대로 번호를 매긴다. 서버가 seq 순서로 maxCombo를 다시 계산하므로 이 순서가 어긋나면 400이다.
+- **점수 규칙:** `domain/judgement.JUDGEMENT_SCORE` — PERFECT 100 · GOOD 80 · MISS 0, 버전 `SCORE_RULE = 'SCORE_V2'`(업로드 `judgementContext.judgementVersion`). GOOD은 11/12 팀 결정으로 60(`SCORE_V1`)에서 80으로 올렸다(330번, 하나도 놓치지 않고 전부 GOOD이면 80%라 입문 코스 통과 70%를 넘는다). 세션 점수·HUD·결과·피드백·업로드가 모두 이 상수를 쓴다. 값을 바꾸면 버전을 올리고 BE `ScoreRule`에 같은 버전을 더한다(서버가 버전별 규칙으로 검산). 지난 기록은 다시 계산하지 않는다.
 - **본문 조립:** `domain/play/playUpload.buildUploadBody`. 판정 타격 `tMs` = 노트 시각 + Δ, MISS `tMs` = 노트 시각, 정확도는 `score / 전체 노트 수` 백분율 소수 둘째 자리 HALF_UP. 입력은 실제 스틱(ble·webserial·websocket)만 `STICK`, 키보드·포인터는 `KEYBOARD`(센서 필드 null). `consent`는 플레이 시작 시점에 로그에 저장해 둔 값(`PlayLog.consent`)을 `domain/play/dataConsent.logConsent`로 싣는다. 필드가 없는 옛 로그는 `false`.
 - **업로드하지 않는 경우(SKIPPED):** 내장 곡, 이전 로그, 변환에서 버린 노트가 있는 채보, 자유 연주, 50,000행 초과. 결과 화면 버튼에 사유가 나온다.
 - **실패·재전송:** 상태는 로그의 `upload`(UPLOADING·DONE·FAILED·SKIPPED)에 저장한다. 처음 조립한 본문을 보관해 같은 playId로 그대로 다시 보낸다(같은 UUID에 다른 내용은 409). 네트워크·5xx·401·`PLAY_STATE_CHANGED`는 재시도 가능, 400·404·그 밖의 409·413은 불가. 결과 화면에 들어올 때 한 번 자동 재전송하고 이후는 **다시 시도** 버튼.
@@ -877,8 +878,8 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 - **화면:** 원형 스테이지 맵(`StageMap`)과 고른 레슨의 카드. 카드에는 설명, 레슨 음표(`PadNotation`, 위치·머리는 `domain/sheet`의 `staffPosOf`), 드럼 그림(`DrumKit`에서 레슨 패드만 `armed`), [레슨 시작하기]. 드럼 그림은 악보 아래에 둔다.
 - **잠금·통과:** 서버 `passed`에 이번 접속에서 통과한 레슨(`lessonStore.localPassed`)을 더해 `domain/play/lesson.stageStates`가 다시 계산한다. 통과 전인 첫 스테이지만 열린다. 잠금은 화면 안내이고 서버는 순서를 강제하지 않는다.
 - **연주 레슨(`PLAY`):** 기존 악보 연습 흐름 그대로(`/sheet?tab=lessons&song=&chart=&start=1` — 시작 확인 창이 열리고, 코스 카드 버튼 이름은 「플레이」, 알아보기 레슨은 「레슨 시작하기」). 결과 화면은 기록의 채보가 레슨이면 `LessonResultBand`로 통과(정확도 70% 이상, 기준값은 서버 `passAccuracy`, 서버와 같은 `accuracyPercent`)·재도전과 [다음 레슨]·[코스로]를 보이고, 통과하면 업로드를 기다리지 않고 `localPassed`에 더한다.
-- **알아보기 레슨(`READ`):** `/sheet/lesson/:songId`(`features/lesson/LessonReadPage`). 악보가 흐르지 않고 음표를 한 줄로 늘어놓는다. 지금 음표의 드럼을 치면 다음으로, 틀리면 그대로 두고 답을 알려 준다(`guide`가 꺼진 레슨은 틀리기 전에는 묻기만). 소리는 자유 연습과 같은 공용 경로(`setSoundOnHit`)가 내고 화면은 `liveStore`의 마지막 타격만 본다. 드럼 그림을 눌러도 친다. 끝까지 치면 완료를 저장하고, 실패하면 이번 접속에서는 통과로 두고 [다시 저장]을 보인다.
-- **권유 카드:** `LessonInvite`(셸 본문 위). 로그인, 레슨 1개 이상, 통과한 레슨 0개, 이 브라우저에서 닫은 적 없음(`localStorage` `airdrum.lessonInvite.dismissed`), 지금 [입문 코스] 탭이 아님일 때만 보인다. 로그인 없는 빌드·내장 곡 빌드에서는 그리지 않는다.
+- **알아보기 레슨(`READ`):** `/sheet/lesson/:songId`(`features/lesson/LessonReadPage`). 악보가 흐르지 않고 음표를 한 줄로 늘어놓는다. 지금 음표의 드럼을 치면 다음으로, 틀리면 그대로 두고 답을 알려 준다(`guide`가 꺼진 레슨은 틀리기 전에는 묻기만). 소리는 자유 연습과 같은 공용 경로(`setSoundOnHit`)가 내고 화면은 `liveStore`의 마지막 타격만 본다. 드럼 그림을 눌러도 친다. 화면에 있는 동안 키보드 드럼을 켠다(`useKeyboardDrum(true)`, 자유 연습과 같음. 켜지 않으면 키보드 타격이 무시된다). 끝까지 치면 완료를 저장하고, 실패하면 이번 접속에서는 통과로 두고 [다시 저장]을 보인다.
+- **권유 카드:** `LessonInvite`(셸 본문 위). 로그인, 레슨 1개 이상, 통과한 레슨 0개, 이 브라우저에서 닫은 적 없음(`localStorage` `airdrum.lessonInvite.dismissed`), 지금 [입문 코스] 탭이 아님일 때만 보인다. [입문 코스] 탭(`LessonCourse`)에 한 번 들어오면 카드 버튼이든 다른 길이든 [닫기]와 같이 기억해 다시 띄우지 않는다. 로그인 없는 빌드·내장 곡 빌드에서는 그리지 않는다.
 - **실패:** 레슨 API가 실패하면 탭 본문에 다시 시도, 0개면 「입문 코스를 준비하고 있어요」, 카드는 띄우지 않는다. 다른 탭·화면은 영향이 없다.
 
 ```powershell
