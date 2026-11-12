@@ -8,7 +8,7 @@ import { FreePlayPage } from '@/features/free/FreePlayPage';
 import { NotFoundPage } from '@/components/shell/NotFoundPage';
 import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
 import { AuthCallbackPage } from '@/features/landing/AuthCallbackPage';
-import { AUTH_REQUIRED } from './authBootstrap';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { loadRoute } from './routeModules';
 
 // 지연 로드 규칙: 새 화면은 routeModules 표에 추가하고 여기서 lazy로 연결한다. 첫 진입 화면(자유 연습·콜백)만 정적 import.

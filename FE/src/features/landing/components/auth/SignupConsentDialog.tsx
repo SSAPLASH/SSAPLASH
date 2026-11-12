@@ -5,7 +5,7 @@
 // 가입 전 회원은 GET이 403 SIGNUP_INCOMPLETE라 읽지 않고, 선택 항목은 꺼진 채로 시작한다.
 // 동의 없이는 앱을 쓸 수 없으므로 Esc·배경으로 닫지 않고, 대신 "다른 계정으로 로그인"을 둔다.
 import { useEffect, useState } from 'react';
-import { AUTH_REQUIRED } from '@/app/authBootstrap';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { LANDING_MODES } from '@/features/landing/components/landingContent';
 import { SignupConsentCard } from './SignupConsentCard';
 import { Button } from '@/components/ui/Button';

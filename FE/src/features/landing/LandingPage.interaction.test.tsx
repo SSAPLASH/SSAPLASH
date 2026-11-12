@@ -21,7 +21,7 @@ vi.hoisted(() => {
 
 // 개발용 .env.local(VITE_AUTH_REQUIRED=false)이 테스트에 새지 않게 값을 직접 정한다
 const flags = vi.hoisted(() => ({ required: true }));
-vi.mock('@/app/authBootstrap', () => ({
+vi.mock('@/config/auth', () => ({
   get AUTH_REQUIRED() {
     return flags.required;
   },

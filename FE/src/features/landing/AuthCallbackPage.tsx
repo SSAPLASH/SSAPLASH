@@ -3,7 +3,7 @@
 // 원래 목적지를 state.from에 실어 /signup으로, 아니면 원래 화면으로 보낸다.
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AUTH_REQUIRED } from '@/app/authBootstrap';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { needsSignup } from '@/domain/signupGate';
 import { useAuth } from '@/store/authStore';
 
