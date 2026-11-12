@@ -25,6 +25,8 @@ interface ViewProps {
   onStart: () => void;
   onApply: () => void;
   onClose: () => void;
+  /** 첫 연주 전 권유로 띄운 경우: 안내 한 줄을 더하고 닫기 버튼을 [나중에 하기]로 쓴다 */
+  intro?: boolean;
 }
 
 /** 스틱 구간이 끝나는 박 번호(0부터). 킥 구간을 그릴 때 박 점의 시작점 */
@@ -37,7 +39,7 @@ const PHASE_TEXT: Record<'listen' | 'measure' | 'switch' | 'kick', string> = {
   kick: '킥 페달로 박에 맞춰 밟으세요',
 };
 
-export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply, onClose }: ViewProps) {
+export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply, onClose, intro = false }: ViewProps) {
   const { phase, outcome } = snap;
   const result = outcome?.stick ?? null;
   const kickResult = outcome?.kick ?? null;
@@ -53,13 +55,14 @@ export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply
 
       {(phase === 'idle' || phase === 'starting') && (
         <>
+          {intro && <p className="timing-cal-sub">처음 한 번만 박자를 맞추면 판정이 정확해져요.</p>}
           <p className="timing-cal-text">
             클릭 소리에 맞춰 아무 패드나 쳐 주세요. 처음 {TIMING_CAL_LISTEN_BEATS}번은 듣기만 하고, 이어지는 {TIMING_CAL_MEASURE_BEATS}번을 맞춰 치면 돼요.
           </p>
           <p className="timing-cal-sub">내 드럼 소리가 클릭과 겹쳐 들리게 치세요. 그 타이밍에 판정을 맞춰요.</p>
           <div className="dialog-actions">
             <Button variant="secondary" onClick={onClose}>
-              닫기
+              {intro ? '나중에 하기' : '닫기'}
             </Button>
             <Button onClick={onStart} disabled={phase === 'starting'}>
               시작
@@ -137,7 +140,15 @@ export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply
   );
 }
 
-export function TimingCalDialog({ onClose }: { onClose: () => void }) {
+interface DialogProps {
+  onClose: () => void;
+  /** 첫 연주 전 권유로 띄웠는가(PlayPage·SheetPage의 useTimingCalGate) */
+  intro?: boolean;
+  /** [적용]으로 값이 저장됐을 때, onClose 전에 부른다 */
+  onApplied?: () => void;
+}
+
+export function TimingCalDialog({ onClose, intro = false, onApplied }: DialogProps) {
   const titleId = useId();
   const snap = useSyncExternalStore(timingCalSession.subscribe, timingCalSession.snapshot);
   const currentOffsetMs = useSettings((s) => s.audioOffsetMs);
@@ -167,6 +178,7 @@ export function TimingCalDialog({ onClose }: { onClose: () => void }) {
         outputLatencyMs: snap.outputLatencyMs,
         kick: kickOk ? { medianMs: k.medianMs!, madMs: k.madMs!, pairs: k.pairs } : null,
       });
+      onApplied?.();
     }
     onClose();
   };
@@ -180,6 +192,7 @@ export function TimingCalDialog({ onClose }: { onClose: () => void }) {
         onStart={() => void timingCalSession.start()}
         onApply={onApply}
         onClose={onClose}
+        intro={intro}
       />
     </Dialog>
   );

@@ -127,6 +127,15 @@ export function lessonOfChart(lessons: readonly Lesson[], chartId: number | null
   return chartId == null ? undefined : lessons.find((l) => l.chartId === chartId);
 }
 
+/**
+ * 초보 판정 폭 대상: 쉬운(EASY) 채보이거나 입문 코스의 연주 레슨 채보. 레슨 목록을 아직 못 읽었으면 난이도만 본다
+ * (설계 PLAY-004-timing-cal-stick-kick 3-5)
+ */
+export function isBeginnerChart(i: { difficulty: string | null | undefined; chartId: number | null | undefined; lessons: readonly Lesson[] }): boolean {
+  if (i.difficulty === 'EASY') return true;
+  return lessonOfChart(i.lessons, i.chartId)?.kind === 'PLAY';
+}
+
 /** 레슨을 여는 주소. 연주 레슨은 [입문 코스] 탭을 유지한 악보 연습(시작 확인 창부터, `start=1`), 알아보기는 알아보기 화면 */
 export function lessonPath(lesson: Pick<Lesson, 'kind' | 'songId' | 'chartId'>): string {
   return lesson.kind === 'READ' ? `/sheet/lesson/${lesson.songId}` : `${LESSONS_PATH}&song=${lesson.songId}&chart=${lesson.chartId}&start=1`;

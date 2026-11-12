@@ -48,7 +48,10 @@ import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalo
 import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import type { PadId } from '@/domain/pads';
-import type { InputSourceKind } from '@/domain/events';
+import { isSensorSource, type InputSourceKind } from '@/domain/events';
+import { appliedWindows } from '@/domain/judgement';
+import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
+import { useLessons } from '@/store/lessonStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
@@ -64,6 +67,7 @@ import { startPlaySync } from '@/runtime/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
+import { useTimingCalGate } from './useTimingCalGate';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
@@ -96,6 +100,9 @@ function parseId(raw: string | null): number | null {
   const n = Number(raw);
   return Number.isSafeInteger(n) ? n : null;
 }
+
+/** 입문 코스 목록을 아직 못 읽었을 때 쓰는 빈 목록(구독 값 정체성 유지) */
+const NO_LESSONS: readonly Lesson[] = [];
 
 /** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
 interface AccResult {
@@ -164,18 +171,24 @@ function PlayPageBody() {
   const accError = accUrl !== null && accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
   const readyChart: Chart | null = paramLoaded && (accUrl === null || accCurrent?.ok) ? paramLoaded.chart : null;
 
+  // 판정 폭: 쉬운 채보·입문 코스 연주 레슨이면 GOOD을 넓힌다(PLAY-004 3-5). 세션·타이밍 막대·진단 줄·플레이 로그가 이 값 하나를 쓴다
+  const lessons = useLessons((l) => l.list)?.items ?? NO_LESSONS;
+  const beginner = readyChart ? isBeginnerChart({ difficulty: readyChart.difficulty, chartId: readyChart.chartId, lessons }) : false;
+  const windows = useMemo(() => appliedWindows(settings.timing, beginner), [settings.timing, beginner]);
+  const widened = beginner && windows.goodMs > settings.timing.goodMs;
+
   // 시작 확인 창이 열린 동안의 세션. 설정이 바뀌면 이 단계에서만 새로 만든다
   const session = useMemo(
     () =>
       readyChart
         ? new RhythmSession(readyChart, {
-            windows: settings.timing,
+            windows,
             countInBars: settings.countInBars,
             audioOffsetMs: settings.audioOffsetMs,
             kickOffsetMs: kickOffsetOrStick(settings.audioOffsetMs, settings.kickOffsetMs),
           })
         : null,
-    [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs, settings.kickOffsetMs],
+    [readyChart, windows, settings.countInBars, settings.audioOffsetMs, settings.kickOffsetMs],
   );
   const activeSession = playSession ?? session;
   // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
@@ -260,6 +273,14 @@ function PlayPageBody() {
 
   const returnTo = location.pathname + location.search;
   const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
+  // 첫 연주 전 박자 맞추기 권유(PLAY-004 4-3). 시작 확인 창 없이 곡 선택에서 바로 시작한 경우에는 닫을 때 시작 대기를 풀어 곡 선택으로 돌린다
+  const popupOpenRef = useRef(false);
+  const { gate: timingGate, dialog: timingDialog, open: timingOpen } = useTimingCalGate({
+    isSensor: () => isSensorSource(inputSource),
+    onClosed: () => {
+      if (!popupOpenRef.current) setStartTarget(null);
+    },
+  });
 
   const resetCountdown = useCallback(() => {
     wasCounting.current = false;
@@ -448,7 +469,7 @@ function PlayPageBody() {
     const llmMode = st.liveCoach ? model.llm : null;
     let llm: LlmCoach | null = null;
     const coach = new LiveCoach({
-      goodMs: st.timing.goodMs,
+      goodMs: ss.windows.goodMs,
       enabled: st.liveCoach,
       setupHints: isStickSensor(st.sensorKind),
       noteGapMedianMs: coachContext.noteGapMedianMs,
@@ -483,7 +504,7 @@ function PlayPageBody() {
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
     if (MONITOR_ENABLED) {
-      const goodMs = st.timing.goodMs;
+      const goodMs = ss.windows.goodMs;
       void import('@/coach/live/shadowCoach').then((m) => {
         if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
         shadowRef.current = m.createCoachShadow({
@@ -510,7 +531,7 @@ function PlayPageBody() {
     clockRef.current = clock;
     clock.begin();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
-    diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
+    diagSessionStart(ss, 'RHYTHM', diagSessionOpts(ss.windows));
     setPlaySession(ss);
     return true;
   }, [acc, resetRun, clearCoachLine, showCoachMessage, waitAudioClock]);
@@ -570,7 +591,7 @@ function PlayPageBody() {
       // 기다리는 사이 나갔거나 곡이 바뀌었으면 다시 시작하지 않는다
       if (!ok || clockRef.current !== clock || sessionRef.current !== ss) return;
       clock.restart();
-      diagSessionStart(ss, 'RHYTHM', diagSessionOpts());
+      diagSessionStart(ss, 'RHYTHM', diagSessionOpts(ss.windows));
       resetRun(ss);
       coachRef.current?.reset();
       llmRef.current?.cancel(crypto.randomUUID());
@@ -605,13 +626,15 @@ function PlayPageBody() {
   const beginning = useRef(false);
   const startPlay = useCallback(async () => {
     if (beginning.current) return;
+    // 센서 입력이고 박자 맞추기 기록이 없는 첫 연주는 시작 대신 대화상자를 연다(닫은 뒤 다시 시작하면 바로 시작)
+    if (stageRef.current === 'ready' && readyRef.current && timingGate()) return;
     beginning.current = true;
     try {
       if (await begin()) setStartTarget(null);
     } finally {
       beginning.current = false;
     }
-  }, [begin]);
+  }, [begin, timingGate]);
 
   const finish = useCallback(
     (ss: RhythmSession) => {
@@ -632,7 +655,7 @@ function PlayPageBody() {
         countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
-        timing: settings.timing,
+        timing: ss.windows,
         startedAt: songStartedAt,
         chartVersionId: ss.chart.chartVersionId ?? null,
         songNumericId: ss.chart.songNumericId ?? null,
@@ -648,7 +671,7 @@ function PlayPageBody() {
       void startPlaySync(log.playId);
       navigate(`/result/${log.playId}`, { state: { prevBest: prevBest.current } });
     },
-    [navigate, inputSource, settings.timing],
+    [navigate, inputSource],
   );
 
   // 매 프레임: 세션 시계(Miss 처리·종료 감지·박 클릭 예약)는 PlayClock, 여기서는 카운트다운 값과 HUD 4Hz 갱신
@@ -739,6 +762,9 @@ function PlayPageBody() {
   if (!startOpen && popupSeen) setPopupSeen(false);
   else if (popupWanted && !popupSeen) setPopupSeen(true);
   const popupOpen = startOpen && (popupWanted || popupSeen);
+  useLayoutEffect(() => {
+    popupOpenRef.current = popupOpen;
+  }, [popupOpen]);
 
   // 자동 시작: 팝업 없이 진행 중이던 경우에만. 신기록 판정을 위해 서버 최고 기록 조회가 끝난 뒤(ready·error·idle)에 한다
   const autoStart =
@@ -770,7 +796,7 @@ function PlayPageBody() {
           </main>
         </StageFade>
         <StartDialog
-          open={popupOpen}
+          open={popupOpen && !timingOpen}
           variant={ready ? 'play' : 'setup'}
           song={{
             title: chart?.title ?? (sameSong ? detail.title : '곡 정보를 불러오는 중'),
@@ -785,6 +811,7 @@ function PlayPageBody() {
           keyboardOnly={settings.sensorKind === 'none'}
           pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           countInBars={settings.countInBars}
+          goodMsNote={widened ? windows.goodMs : null}
           realign={realign.info}
           loading={loadError === null && stage !== 'ready'}
           error={loadError}
@@ -796,6 +823,7 @@ function PlayPageBody() {
           onRetry={param.reload}
           onClose={closeStart}
         />
+        {timingDialog}
       </>
     );
   }
@@ -867,7 +895,7 @@ function PlayPageBody() {
             topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={laneFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} missSource={missSource} />
+                <TimingBar source={laneFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
               ) : undefined
             }
           />

@@ -468,6 +468,13 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
   - 판정(`engine/RhythmSession.hitSongTimeMs`): 발 타격(`foot` 2 하이햇 페달·3 킥, `isFootHit`)은 킥 값, 손 타격과 키보드·화면 터치는 스틱 값을 뺀다. IMU 후보 패드 계산은 스틱 값이다.
   - 기록: 플레이 로그에 `kickOffsetMs`가 남는다. BE 업로드 `calibration.audioOffsetMs`에는 스틱 값만 간다(BE 파서가 모르는 필드를 거부한다). 타격별 `deltaMs`에는 입력별 값이 반영돼 있다.
   - 화면: 설정 오디오 구역에 「스틱 판정 타이밍」「킥 판정 타이밍」 두 칸(킥 값이 없으면 스틱 값을 보이고, 움직이면 따로 저장), 드럼 세팅 상태 줄은 킥 값이 있으면 「맞춤 · 스틱 … · 킥 …」.
+- **첫 연주 전 권유**(`features/play/useTimingCalGate`, `domain/kit/timingCalPrompt`): 박자 맞추기를 직접 찾아 누르지 않으면 보정값이 0으로 남아서, 측정 기록이 없는 센서 사용자에게 첫 연주 직전에 한 번 띄운다.
+  - 상태는 설정 `timingCalPrompt`(이 기기에만 저장): `none` 아직 권하지 않음 → 첫 시작에서 [적용]하면 `done`, [나중에 하기]·닫기면 `skipped` → 다음 결과 화면에서 한 번 권한 뒤 `done`. 옛 저장분은 측정 기록이 있으면 `done`, 없으면 `none`으로 읽는다.
+  - 관문은 `PlayPage`·`SheetPage`의 `startPlay`(모든 시작 경로가 거치는 곳)에 있다. 조건(센서 입력 + 측정 기록 없음 + `none`)이면 연주 대신 `TimingCalDialog`를 권유 모드(`intro`)로 연다. 닫으면 연주를 자동으로 시작하지 않고 시작 확인 창이나 곡 선택으로 돌아가며, 다시 시작하면 바로 연주한다. 키보드 모드와 [다시 하기]에는 걸지 않는다. 연주 시작을 막는 것은 이 한 번뿐이다.
+  - 건너뛴 사용자가 연주를 마치고 도착한 결과 화면에는 권유 띠(「박자 맞추기를 하면 판정이 더 정확해져요.」 + [박자 맞추기])를 한 번 보인다. 연주 기록에서 옛 결과를 열 때는 보이지 않는다.
+- **초보 판정 폭**(`domain/judgement.appliedWindows`, `domain/play/lesson.isBeginnerChart`): 난이도 EASY 채보와 입문 코스 연주 레슨은 GOOD 폭을 ±90ms(`BEGINNER_GOOD_MS`)까지 넓힌다. 넓히기만 하므로 사용자가 더 넓게 둔 값은 그대로 쓰고, PERFECT 폭은 바꾸지 않는다.
+  - 연주 화면이 적용 폭을 한 곳에서 계산해 판정 세션에 넘기고, 타이밍 막대·실시간 코칭·진단 `session` 줄·플레이 로그 `timing`·업로드 `timingWindows`는 세션의 값(`RhythmSession.windows`)을 쓴다. 코칭 기준 폭(60ms 고정)은 그대로다.
+  - 넓혀진 판은 시작 확인 창에 「판정 여유 ±90ms」, 결과 화면에 「판정 여유 ±90ms로 연주한 기록이에요」를 보인다. 같은 채보의 옛 기록(±60ms)과는 최고 기록 비교에서 섞인다.
 
 ## 통합 설정(프리셋·캘리브레이션)
 
