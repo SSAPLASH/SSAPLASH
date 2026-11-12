@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   clampTimingOffset,
   evaluateTimingCal,
+  evaluateTimingCalPhases,
+  sanitizeTimingCalRecord,
+  timingCalApply,
+  TIMING_CAL_KICK_BEATS,
+  TIMING_CAL_RECHECK_DIFF_MS,
+  type TimingCalOutcome,
+  type TimingCalResult,
   pairTaps,
   timingCalBeatMs,
   TIMING_CAL_MEASURE_BEATS,
@@ -18,7 +25,7 @@ import type { ResolvedHit } from '../events';
 const BEAT = timingCalBeatMs();
 /** 측정 박 12개. 첫 측정 박이 10_000ms */
 const beats = Array.from({ length: TIMING_CAL_MEASURE_BEATS }, (_, i) => 10_000 + i * BEAT);
-const tap = (tHit: number, input: TimingCalTap['input'] = 'sensor'): TimingCalTap => ({ tHit, input });
+const tap = (tHit: number, input: TimingCalTap['input'] = 'sensor', limb: TimingCalTap['limb'] = 'stick'): TimingCalTap => ({ tHit, input, limb });
 
 describe('clampTimingOffset', () => {
   it('5ms 단위로 반올림한다', () => {
@@ -62,7 +69,7 @@ describe('evaluateTimingCal', () => {
     const r = evaluateTimingCal(beats, beats.map((b, i) => tap(b - 65 + ((i % 3) - 1) * 4)));
     expect(r.status).toBe('ok');
     const chart: Chart = { songId: 't', title: 't', bpm: 100, beatsPerBar: 4, notes: [{ timeMs: 1000, pad: 'SNARE' }] } as Chart;
-    const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: r.offsetMs as number });
+    const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: r.offsetMs as number, kickOffsetMs: r.offsetMs as number });
     ss.start(5000);
     const ev = ss.handleHit({ id: 1, pad: 'SNARE', velocity: 100, tHit: 5000 + 1000 - 65, source: 'serial', stickId: 0 } as ResolvedHit);
     expect(Math.abs(ev?.deltaMs ?? 99)).toBeLessThanOrEqual(3);
@@ -112,5 +119,82 @@ describe('evaluateTimingCal', () => {
     const r = evaluateTimingCal(beats, beats.map((b) => tap(b - 249)));
     expect(r.status).toBe('ok');
     expect(r.offsetMs).toBe(TIMING_OFFSET_MIN_MS);
+  });
+});
+
+describe('evaluateTimingCalPhases', () => {
+  const kickBeats = Array.from({ length: TIMING_CAL_KICK_BEATS }, (_, i) => 20_000 + i * BEAT);
+  const stickTaps = (d: number) => beats.map((b) => tap(b + d, 'sensor', 'stick'));
+  const kickTaps = (d: number) => kickBeats.map((b) => tap(b + d, 'sensor', 'kick'));
+
+  it('구간마다 그 구간 입력의 타격만 계산한다', () => {
+    // 스틱 −65, 킥 −40. 서로의 박 근처에 다른 limb 타격이 있어도 섞이지 않는다
+    const stray = [tap(beats[0] + 5, 'sensor', 'kick'), tap(kickBeats[0] + 5, 'sensor', 'stick')];
+    const o = evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-65), ...kickTaps(-40), ...stray]);
+    expect(o.stick).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -65 });
+    expect(o.kick).toMatchObject({ status: 'ok', pairs: 12, offsetMs: -40 });
+  });
+
+  it('kickBeats가 null이면 kick은 null이고 recheck는 false', () => {
+    const o = evaluateTimingCalPhases(beats, null, [...stickTaps(-65), ...kickTaps(-40)]);
+    expect(o.kick).toBeNull();
+    expect(o.recheck).toBe(false);
+  });
+
+  it('recheck: 차가 60ms 이하면 false, 넘으면 true', () => {
+    expect(TIMING_CAL_RECHECK_DIFF_MS).toBe(60);
+    expect(evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-100), ...kickTaps(-40)]).recheck).toBe(false);
+    expect(evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-105), ...kickTaps(-40)]).recheck).toBe(true);
+    expect(evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-10), ...kickTaps(-90)]).recheck).toBe(true);
+  });
+
+  it('recheck: 한쪽이 실패면 false', () => {
+    const kickFail = evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-200), ...kickTaps(0).slice(0, 3)]);
+    expect(kickFail.kick?.status).toBe('few');
+    expect(kickFail.recheck).toBe(false);
+    const stickFail = evaluateTimingCalPhases(beats, kickBeats, [...stickTaps(-200).slice(0, 3), ...kickTaps(0)]);
+    expect(stickFail.stick.status).toBe('few');
+    expect(stickFail.recheck).toBe(false);
+  });
+});
+
+describe('timingCalApply', () => {
+  const res = (status: TimingCalResult['status'], offsetMs: number | null): TimingCalResult => ({
+    status,
+    pairs: 12,
+    medianMs: offsetMs,
+    madMs: 5,
+    offsetMs: status === 'ok' ? offsetMs : null,
+    input: 'sensor',
+  });
+  const outcome = (stick: TimingCalResult, kick: TimingCalResult | null): TimingCalOutcome => ({ stick, kick, recheck: false });
+
+  it('스틱이 ok가 아니면 null (킥이 ok여도)', () => {
+    expect(timingCalApply(outcome(res('few', null), res('ok', -40)))).toBeNull();
+    expect(timingCalApply(outcome(res('scattered', null), null))).toBeNull();
+  });
+
+  it('스틱·킥 모두 ok면 둘 다 적용한다', () => {
+    expect(timingCalApply(outcome(res('ok', -65), res('ok', -40)))).toEqual({ audioOffsetMs: -65, kickOffsetMs: -40 });
+  });
+
+  it('킥 구간이 없었거나 실패하면 kickOffsetMs는 null', () => {
+    expect(timingCalApply(outcome(res('ok', -65), null))).toEqual({ audioOffsetMs: -65, kickOffsetMs: null });
+    expect(timingCalApply(outcome(res('ok', -65), res('scattered', null)))).toEqual({ audioOffsetMs: -65, kickOffsetMs: null });
+  });
+});
+
+describe('sanitizeTimingCalRecord (kick)', () => {
+  const rec = { measuredAt: 1, medianMs: -66, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
+
+  it('옛 기록(kick 없음)은 kick null로 그대로 읽는다', () => {
+    expect(sanitizeTimingCalRecord(rec)).toEqual({ ...rec, kick: null });
+  });
+
+  it('kick이 있으면 읽고, 모양이 틀리면 kick만 null로 둔다', () => {
+    const kick = { medianMs: -40, madMs: 6, pairs: 11 };
+    expect(sanitizeTimingCalRecord({ ...rec, kick })?.kick).toEqual(kick);
+    expect(sanitizeTimingCalRecord({ ...rec, kick: { medianMs: 'x' } })).toEqual({ ...rec, kick: null });
+    expect(sanitizeTimingCalRecord({ ...rec, kick: 5 })).toEqual({ ...rec, kick: null });
   });
 });

@@ -29,6 +29,8 @@ export interface SessionInfo {
   chartVersionId: number | null;
   windows: TimingWindows;
   audioOffsetMs: number;
+  /** 발 타격에 적용된 값. 옛 녹화의 session 줄에는 없어 audioOffsetMs와 같다고 본다 */
+  kickOffsetMs: number;
   noteCount: number;
   /** running 진행 중 / paused 일시정지 / ended 종료(값은 고정) */
   status: 'running' | 'paused' | 'ended';
@@ -406,6 +408,7 @@ function infoOf(ev: Extract<DiagEvent, { type: 'session' }>) {
     chartVersionId: ev.chartVersionId,
     windows: ev.windows,
     audioOffsetMs: ev.audioOffsetMs,
+    kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs,
     noteCount: ev.noteCount,
   };
 }

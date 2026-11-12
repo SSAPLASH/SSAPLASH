@@ -40,6 +40,8 @@ interface SettingsState {
   timing: TimingWindows;
   /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/kit/timingCalibration) */
   audioOffsetMs: number;
+  /** 발 타격(하이햇 페달·킥)용 판정 타이밍 보정(ms). null이면 audioOffsetMs(스틱·기본 값)를 쓴다. 이 기기에만 저장 */
+  kickOffsetMs: number | null;
   /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
   timingCal: TimingCalRecord | null;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
@@ -114,6 +116,7 @@ interface SettingsState {
   setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
+  setKickOffsetMs: (v: number | null) => void;
   setTimingCal: (v: TimingCalRecord | null) => void;
   setScrollMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
@@ -331,9 +334,15 @@ const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number
  * 저장분의 판정 타이밍 보정과 박자 맞추기 기록을 정리한다(merge용).
  * 범위가 바뀌기 전에 저장된 값(예: +150)은 지금 범위로 자르고, 기록은 모양이 틀리면 버린다.
  */
-export function sanitizeTimingSettings(p: { audioOffsetMs?: unknown; timingCal?: unknown }): Pick<SettingsState, 'audioOffsetMs' | 'timingCal'> {
+export function sanitizeTimingSettings(p: {
+  audioOffsetMs?: unknown;
+  kickOffsetMs?: unknown;
+  timingCal?: unknown;
+}): Pick<SettingsState, 'audioOffsetMs' | 'kickOffsetMs' | 'timingCal'> {
   return {
     audioOffsetMs: clampTimingOffset(isFiniteNum(p.audioOffsetMs) ? p.audioOffsetMs : 0),
+    // 값이 없던 저장분은 null(스틱 값을 따름)
+    kickOffsetMs: isFiniteNum(p.kickOffsetMs) ? clampTimingOffset(p.kickOffsetMs) : null,
     timingCal: sanitizeTimingCalRecord(p.timingCal),
   };
 }
@@ -395,6 +404,7 @@ export const useSettings = create<SettingsState>()(
       activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
+      kickOffsetMs: null,
       timingCal: null,
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
@@ -480,6 +490,7 @@ export const useSettings = create<SettingsState>()(
       setPresets: (presets) => set({ presets }),
       setTiming: (timing) => set({ timing }),
       setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs: clampTimingOffset(audioOffsetMs) }),
+      setKickOffsetMs: (v) => set({ kickOffsetMs: v === null ? null : clampTimingOffset(v) }),
       setTimingCal: (timingCal) => set({ timingCal }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),

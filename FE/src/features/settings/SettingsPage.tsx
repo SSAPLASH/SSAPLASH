@@ -17,7 +17,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { outputLatencyWarnText, timingCalMismatchText, timingCalRecordText, timingOffsetText } from '@/components/calibration/timingCalText';
-import { TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/timingCalibration';
+import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/timingCalibration';
 import { audioEngine } from '@/audio/AudioEngine';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/signupTerms';
 import type { SocialProvider } from '@/domain/auth';
@@ -53,6 +53,8 @@ export function SettingsPage() {
   const setSongVolume = useSettings((s) => s.setSongVolume);
   const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
+  const kickOffsetMs = useSettings((s) => s.kickOffsetMs);
+  const setKickOffsetMs = useSettings((s) => s.setKickOffsetMs);
   const timingCal = useSettings((s) => s.timingCal);
   const [timingCalOpen, setTimingCalOpen] = useState(false);
   const kitSkin = useSettings((s) => s.kitSkin);
@@ -197,17 +199,31 @@ export function SettingsPage() {
             <p className="settings-note">{timingCalRecordText(timingCal)}</p>
             {timingMismatch && <p className="settings-note">{timingMismatch}</p>}
             {latencyWarn && <p className="settings-note">{latencyWarn}</p>}
-            <SettingRow label="판정 타이밍 보정" help="판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요" wideControl>
+            <SettingRow label="스틱 판정 타이밍" help="판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요" wideControl>
               {(aria) => (
                 <Slider
                   {...aria}
-                  label="판정 타이밍 보정"
+                  label="스틱 판정 타이밍"
                   min={TIMING_OFFSET_MIN_MS}
                   max={TIMING_OFFSET_MAX_MS}
                   step={TIMING_OFFSET_STEP_MS}
                   value={audioOffsetMs}
                   valueText={timingOffsetText(audioOffsetMs)}
                   onChange={setAudioOffsetMs}
+                />
+              )}
+            </SettingRow>
+            <SettingRow label="킥 판정 타이밍" help="킥 페달 판정만 따로 맞춰요." wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="킥 판정 타이밍"
+                  min={TIMING_OFFSET_MIN_MS}
+                  max={TIMING_OFFSET_MAX_MS}
+                  step={TIMING_OFFSET_STEP_MS}
+                  value={kickOffsetOrStick(audioOffsetMs, kickOffsetMs)}
+                  valueText={timingOffsetText(kickOffsetOrStick(audioOffsetMs, kickOffsetMs))}
+                  onChange={setKickOffsetMs}
                 />
               )}
             </SettingRow>

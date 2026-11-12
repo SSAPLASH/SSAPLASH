@@ -1,5 +1,6 @@
 // 박자 맞추기 화면 문구(순수 함수). 대화상자·설정·드럼 세팅이 같이 쓴다.
 import {
+  clampTimingOffset,
   OUTPUT_LATENCY_WARN_MS,
   TIMING_CAL_MIN_PAIRS,
   type TimingCalInput,
@@ -28,12 +29,16 @@ export function timingCalResultText(r: TimingCalResult): string {
 export function timingCalRecordText(rec: TimingCalRecord | null): string {
   if (!rec) return '아직 박자를 맞추지 않았어요';
   const d = new Date(rec.measuredAt);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일에 ${INPUT_WITH[rec.input]} 맞췄어요`;
+  const base = `${d.getMonth() + 1}월 ${d.getDate()}일에 ${INPUT_WITH[rec.input]} 맞췄어요`;
+  return rec.kick ? `${base} · 킥 ${timingOffsetText(clampTimingOffset(rec.kick.medianMs))}` : base;
 }
 
-/** 드럼 세팅 상태 줄: 맞춘 적 있으면 지금 보정값, 없으면 안 맞춤 */
-export function timingCalStatusText(rec: TimingCalRecord | null, offsetMs: number): string {
-  return rec ? `맞춤 · ${timingOffsetText(offsetMs)}` : '안 맞춤';
+/** 드럼 세팅 상태 줄: 맞춘 적 있으면 지금 보정값(킥 값이 따로 있으면 같이), 없으면 안 맞춤 */
+export function timingCalStatusText(rec: TimingCalRecord | null, offsetMs: number, kickOffsetMs: number | null = null): string {
+  if (!rec) return '안 맞춤';
+  return kickOffsetMs === null
+    ? `맞춤 · ${timingOffsetText(offsetMs)}`
+    : `맞춤 · 스틱 ${timingOffsetText(offsetMs)} · 킥 ${timingOffsetText(kickOffsetMs)}`;
 }
 
 /** 측정한 입력과 지금 입력 방식이 다르면 다시 맞추라는 안내. 같거나 기록이 없으면 null */

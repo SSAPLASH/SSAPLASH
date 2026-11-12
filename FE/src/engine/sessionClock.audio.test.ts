@@ -73,7 +73,7 @@ function setup(o: Opts = {}) {
   const session = new RhythmSession(makeChart(o.durationMs ?? 120_000, o.noteEveryMs ?? 0), {
     windows: { perfectMs: 25, goodMs: 60 },
     countInBars: 1,
-    audioOffsetMs: 0,
+    audioOffsetMs: 0, kickOffsetMs: 0,
   });
   let tickFn: (() => void) | null = null;
   let visFn: (() => void) | null = null;
@@ -294,7 +294,7 @@ describe('PlayClock 오디오 시계 기준', () => {
   it('audioReading이 없으면 예전 화면 시계 방식으로 돈다', () => {
     let now = 1000;
     const timer: { fn: (() => void) | null } = { fn: null };
-    const session = new RhythmSession(makeChart(60_000), { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
+    const session = new RhythmSession(makeChart(60_000), { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 });
     const perfClicks: number[] = [];
     const clock = new PlayClock(session, {
       click: (at) => {

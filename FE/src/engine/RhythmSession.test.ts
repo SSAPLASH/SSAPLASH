@@ -5,7 +5,7 @@ import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 
-const OPTS: RhythmOptions = { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 };
+const OPTS: RhythmOptions = { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 };
 
 /** 120BPM(박 500ms, 1마디 2000ms) 테스트 채보 */
 function chart(notes: ChartNote[], durationMs = 2500): Chart {
@@ -146,9 +146,38 @@ describe('노트 배정과 판정', () => {
   });
 
   it('오디오 오프셋은 타격 시각에서 뺀다', () => {
-    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
     const ev = s.handleHit(hit('HIHAT', T0 + 1010));
     expect(ev?.deltaMs).toBe(0);
+  });
+
+  it('발 타격은 킥 오프셋, 손 타격은 스틱 오프셋으로 곡 시각을 계산한다', () => {
+    const opts = { ...OPTS, audioOffsetMs: -65, kickOffsetMs: -40 };
+    const footHit = { ...hit('KICK', T0 + 1500 - 40), foot: 3 } as ResolvedHit;
+    const handHit = hit('SNARE', T0 + 1000 - 65);
+    // 킥 값을 쓰면 발 타격은 0ms, 스틱 값을 쓴다면 25ms 늦게 판정된다
+    expect(playing(NOTES, opts).handleHit(footHit)?.deltaMs).toBe(0);
+    expect(playing(NOTES, opts).handleHit(handHit)?.deltaMs).toBe(0);
+    // 같은 tHit라도 값 차이(25ms)만큼 delta가 다르다
+    const same = { ...opts, kickOffsetMs: -65 };
+    expect(playing(NOTES, same).handleHit(footHit)?.deltaMs).toBe(25);
+    const s = playing(NOTES, opts);
+    expect(s.hitSongTimeMs(T0 + 1000, true)).toBe(1040);
+    expect(s.hitSongTimeMs(T0 + 1000)).toBe(1065);
+    expect(s.kickOffsetMs).toBe(-40);
+  });
+
+  it('두 값이 같으면 발 타격도 손 타격과 같은 곡 시각이다', () => {
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
+    expect(s.hitSongTimeMs(T0 + 1010, true)).toBe(s.hitSongTimeMs(T0 + 1010));
+  });
+
+  it('IMU 후보 패드 계산은 스틱 오프셋을 쓴다', () => {
+    // 곡 시각 1000 근처: 스틱 값이면 1000(SNARE·HIHAT 후보), 킥 값이면 1500 근처로 밀려 KICK이 후보에 든다
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 0, kickOffsetMs: 450 });
+    const c = s.candidates(T0 + 1000) ?? [];
+    expect(c).toContain('SNARE');
+    expect(c).not.toContain('CRASH');
   });
 
   it('채보에 없는 패드는 감점·콤보 영향 없이 채보 외 타격만 센다', () => {
@@ -162,7 +191,7 @@ describe('노트 배정과 판정', () => {
   });
 
   it('채보 밖 타격을 패드·곡 시각과 함께 알리고, 받는 쪽 오류는 세션에 전하지 않는다', () => {
-    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
     const got: StrayHitEvent[] = [];
     s.onStray(() => {
       throw new Error('코칭 오류');

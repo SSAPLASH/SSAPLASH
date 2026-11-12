@@ -315,13 +315,24 @@ describe('SetupPage 박자 맞추기 타일', () => {
 
   it('맞춘 뒤에는 지금 보정값과 [다시 맞추기]', async () => {
     putSettings({
-      timingCal: { measuredAt: 1, medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: null },
+      timingCal: { measuredAt: 1, medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: null, kick: null },
       audioOffsetMs: -65,
     });
     const html = await renderSetup();
     expect(html).toContain('맞춤 · -65ms');
     expect(html).toContain('>다시 맞추기</span>');
     expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*class="setup-tile is-on"/);
+  });
+
+  it('킥 값이 따로 있으면 스틱·킥 값을 같이 보인다', async () => {
+    putSettings({
+      timingCal: { measuredAt: 1, medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: null, kick: null },
+      audioOffsetMs: -65,
+      kickOffsetMs: -40,
+    });
+    const html = await renderSetup();
+    expect(html).toContain('맞춤 · 스틱 -65ms · 킥 -40ms');
+    putSettings({ kickOffsetMs: null });
   });
 
   it('패드 보정 중에는 버튼이 비활성이고 이유를 보인다', async () => {

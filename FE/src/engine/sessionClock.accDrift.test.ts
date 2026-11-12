@@ -17,7 +17,7 @@ function makeSession(durationMs: number): RhythmSession {
     source: 'BUILTIN',
     durationMs,
   };
-  return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
+  return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 });
 }
 
 function setup(audioRate: number | null) {

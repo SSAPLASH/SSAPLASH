@@ -538,7 +538,7 @@ export function SetupPage() {
           id="setup-timing"
           title="박자 맞추기"
           status={s.timingCal ? 'done' : 'needed'}
-          statusText={timingCalStatusText(s.timingCal, s.audioOffsetMs)}
+          statusText={timingCalStatusText(s.timingCal, s.audioOffsetMs, s.kickOffsetMs)}
           statusWarn={!s.timingCal}
           summary="클릭 소리에 맞춰 쳐서 판정 타이밍을 맞춰요"
           actionText={s.timingCal ? '다시 맞추기' : '맞추기'}

@@ -61,6 +61,7 @@ beforeEach(() => {
     sensorKind: 'none',
     volume: 0.8,
     audioOffsetMs: 0,
+    kickOffsetMs: null,
     timingCal: null,
     liveCoach: true,
   });
@@ -269,14 +270,32 @@ describe('SettingsPage 박자 맞추기', () => {
     expect(html).not.toContain('다시 맞춰 주세요');
   });
 
+  it('킥 기록이 있으면 박자 맞추기 기록 줄에 킥 값도 보인다', () => {
+    put(useSettings, { sensorKind: 'serial', timingCal: { ...rec, kick: { medianMs: -41, madMs: 5, pairs: 12 } } });
+    expect(render()).toContain('11월 11일에 스틱으로 맞췄어요 · 킥 -40ms');
+  });
+
+  it('킥 값이 없으면 킥 슬라이더는 스틱 값을 보여 주고, 있으면 킥 값을 보인다', () => {
+    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: null });
+    const html = render();
+    expect(html.match(/-65ms/g)).toHaveLength(2);
+    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: -40 });
+    const html2 = render();
+    expect(html2.match(/-65ms/g)).toHaveLength(1);
+    expect(html2).toContain('-40ms');
+  });
+
   it('스틱으로 맞췄는데 지금 키보드만이면 다시 맞추라고 안내한다', () => {
     put(useSettings, { sensorKind: 'none', timingCal: rec });
     expect(render()).toContain('스틱으로 맞춘 값이에요. 키보드로 칠 때는 다시 맞춰 주세요.');
   });
 
-  it('수동 칸은 판정 타이밍 보정이고 범위 −250~+100, 5ms 단위다', () => {
+  it('수동 칸은 스틱·킥 판정 타이밍이고 범위 −250~+100, 5ms 단위다', () => {
     const html = render();
-    expect(html).toContain('판정 타이밍 보정');
+    expect(html).toContain('스틱 판정 타이밍');
+    expect(html).toContain('킥 판정 타이밍');
+    expect(html).toContain('킥 페달 판정만 따로 맞춰요.');
+    expect(html.match(/min="-250"/g)).toHaveLength(2);
     expect(html).toContain('판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요');
     expect(html).not.toContain('타격음 지연 보정');
     expect(html).toMatch(/min="-250"/);

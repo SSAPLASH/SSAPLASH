@@ -7,7 +7,7 @@ import type { Chart } from '@/domain/chart';
 
 function makeSession(): RhythmSession {
   const chart: Chart = { songId: 't', title: '테스트', difficulty: 'EASY', bpm: 120, offsetMs: 0, beatsPerBar: 4, notes: [], source: 'BUILTIN', durationMs: 20 * 60_000 };
-  return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
+  return new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 });
 }
 
 /** 오디오 시계는 화면 시계보다 lagMs만큼 뒤에 있다(lag를 키우면 그만큼 멈췄던 것) */
