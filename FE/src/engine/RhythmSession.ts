@@ -82,6 +82,8 @@ export class RhythmSession {
   readonly notes: NoteState[];
   private opts: RhythmOptions;
   private startTime = 0; // 곡 0ms에 해당하는 performance.now()
+  /** 오디오가 멈춘 동안 묶어 둔 곡 시각. 다음 retime·start·reset·pause·resume에서 비운다 */
+  private heldSong: number | null = null;
   private status: SessionStatus = 'idle';
   private score = 0;
   private combo = 0;
@@ -144,6 +146,7 @@ export class RhythmSession {
   /** at: 곡 0ms(반주 0초)가 울리는 performance.now 시각. 리드인은 at + originMs − preRollMs부터 시작한다 */
   start(at: number): void {
     this.startTime = at;
+    this.heldSong = null;
     this.status = this.opts.countInBars > 0 ? 'countin' : 'playing';
   }
 
@@ -151,6 +154,7 @@ export class RhythmSession {
   reset(): void {
     this.status = 'idle';
     this.startTime = 0;
+    this.heldSong = null;
     this.pausedAt = 0;
     this.score = 0;
     this.combo = 0;
@@ -183,15 +187,29 @@ export class RhythmSession {
   songTime(now: number = performance.now()): number {
     if (this.status === 'idle') return this.preRollMs > 0 ? -this.preRollMs : 0;
     if (this.status === 'paused') return this.pausedAt - this.startTime;
+    if (this.heldSong !== null) return this.heldSong;
     return now - this.startTime;
   }
 
   /** 중단 확인 팝업 동안 시계를 멈춘다 (설계 4-2 중단 확인, U12). 플레이·카운트인에서만 */
   pause(now: number = performance.now()): void {
     if (this.status !== 'playing' && this.status !== 'countin') return;
+    if (this.heldSong !== null) this.startTime = now - this.heldSong;
+    this.heldSong = null;
     this.pausedAt = now;
     this.statusBeforePause = this.status;
     this.status = 'paused';
+  }
+
+  /**
+   * 곡 0ms가 들리는 performance.now 시각을 바깥에서 다시 넣는다(설계 MODE-001 연주 시계를 오디오 시계 하나로).
+   * 연주 시계가 들리는 오디오 시각으로 계산해 프레임마다 부른다. 플레이·카운트인에서만.
+   * holdSongMs를 주면 다음 retime까지 곡 시각을 그 값에 묶는다(오디오가 멈춘 동안)
+   */
+  retime(startPerfMs: number, holdSongMs: number | null = null): void {
+    if (this.status !== 'playing' && this.status !== 'countin') return;
+    this.startTime = startPerfMs;
+    this.heldSong = holdSongMs;
   }
 
   /** 멈춘 만큼 시작 시각을 밀어 곡 시각을 보존한 채 재개한다. 재개 카운트는 없다 */

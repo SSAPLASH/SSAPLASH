@@ -4,6 +4,19 @@ import { diagTap } from './diagTap';
 import type { RhythmSession } from './RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
 import { clockStalled } from '@/domain/time/audioClock';
+import {
+  CLICK_AHEAD_SEC,
+  CLICK_LATE_SKIP_SEC,
+  HIDDEN_CLICK_AHEAD_SEC,
+  contextToHeardPerfMs,
+  heardOffsetMs,
+  sessionStartPerf,
+  smoothOffsetMs,
+  songToContextSec,
+  stallAwareHeard,
+  type AudioReading,
+  type HeardState,
+} from '@/domain/time/audioTimeline';
 
 /** 박 클릭을 미리 예약하는 선행 시간. 프레임 간격(16ms)보다 넉넉하게 */
 export const CLICK_LOOKAHEAD_MS = 200;
@@ -28,6 +41,8 @@ export interface ClockAccompaniment {
   readonly zeroPerfMs?: number | null;
   /** perfMs 시점의 오디오 시계 기준 반주 위치(ms, 1배 곡 시각 축). 재생 중이 아니거나 시작 전이면 null. 드리프트 측정용 */
   audioPositionAt?(perfMs: number): number | null;
+  /** 오디오 시계 시각 ctxSec(초)에 fromMs 위치가 울리도록 예약. 오디오 시계 기준 연주에서 쓴다 */
+  startAtContext?(ctxSec: number, fromMs: number): void;
 }
 
 export interface PlayClockDeps {
@@ -49,6 +64,18 @@ export interface PlayClockDeps {
   onFinish?(): void;
   /** 지금의 화면 시계·오디오 시계 값(곡 도중 멈춤 진단용). 없거나 null이면 진단하지 않는다 */
   audioClock?(): { perfMs: number; ctxSec: number } | null;
+  /**
+   * 오디오 시계 읽기(설계 MODE-001 연주 시계를 오디오 시계 하나로). clickAt과 함께 주고 begin 때 값이 있으면
+   * 반주·클릭을 오디오 시계에 바로 예약하고 세션 곡 시각을 들리는 오디오 시각에서 다시 계산한다. 없으면 예전 방식(화면 시계)
+   */
+  audioReading?(): AudioReading | null;
+  /** 오디오 시계 시각(초)에 클릭 예약. 실제 예약된 오디오 시계 시각을 돌려준다 */
+  clickAt?(ctxSec: number, accent: boolean): number | null;
+  /**
+   * 탭 가림 상태 변경 구독(테스트 주입용). 해제 함수를 돌려준다. 기본은 document visibilitychange.
+   * 가려지는 순간 브라우저가 타이머를 최대 1초 늦추므로 그 전에 넓은 예약 창으로 한 번 예약한다
+   */
+  onVisibilityChange?(fn: () => void): () => void;
 }
 
 export type ClockPhase = 'idle' | 'running' | 'paused' | 'finished';
@@ -64,6 +91,7 @@ export class PlayClock {
   private deps: PlayClockDeps;
   private nextBeat = 0;
   private timer: unknown = null;
+  private unsubVisibility: (() => void) | null = null;
   private pausedSongTime = 0;
   private _state: ClockState = { phase: 'idle', reason: null };
   private lastDriftAt = -Infinity;
@@ -71,6 +99,18 @@ export class PlayClock {
   /** 직전에 읽은 (화면 시계 − 오디오 시계) 차이(ms). 시작·일시정지·재개에서 비운다 */
   private prevClockOffset: number | null = null;
   private _sync: { begin: number | null; resume: number | null } = { begin: null, resume: null };
+  /** 오디오 시계 기준으로 도는지(begin에서 정함) */
+  private audioMode = false;
+  /** 곡 0ms를 울리는 오디오 시계 시각(초) */
+  private ctxZero = 0;
+  /** 들리는 오디오 시각과 화면 시계 차이의 고른 값(ms). audioTimeline.heardOffsetMs */
+  private heardOffset: number | null = null;
+  /** 마지막으로 세션에 넣은 곡 시각. 곡 시각이 줄지 않게 하는 바닥 */
+  private lastSong: number | null = null;
+  /** 들리는 시각 추정 상태(멈춤 판단). audioTimeline.stallAwareHeard */
+  private heardState: HeardState | null = null;
+  /** 오디오가 멈춘 동안 묶어 둔 곡 시각. 흐르면 null */
+  private frozenSong: number | null = null;
 
   constructor(session: RhythmSession, deps: PlayClockDeps) {
     this.session = session;
@@ -94,9 +134,17 @@ export class PlayClock {
     if (this.timer !== null) return;
     const si = this.deps.setInterval ?? ((fn, ms) => globalThis.setInterval(fn, ms));
     this.timer = si(() => this.schedule(this.now()), SCHEDULE_TICK_MS);
+    const onVis = () => this.schedule(this.now());
+    if (this.deps.onVisibilityChange) this.unsubVisibility = this.deps.onVisibilityChange(onVis);
+    else if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVis);
+      this.unsubVisibility = () => document.removeEventListener('visibilitychange', onVis);
+    }
   }
 
   private stopTimer(): void {
+    this.unsubVisibility?.();
+    this.unsubVisibility = null;
     if (this.timer === null) return;
     const ci = this.deps.clearInterval ?? ((id) => globalThis.clearInterval(id as number));
     ci(this.timer);
@@ -118,6 +166,20 @@ export class PlayClock {
   }
 
   /**
+   * 곡 시각 songMs를 울릴 오디오 시계 시각(초, ctxZero + 곡 시각). 오디오 시계 기준으로 돌 때만, 아니면 null.
+   * 채보 자동 재생이 반주·클릭과 같은 기준으로 소리를 예약할 때 쓴다. 곡 시각이 잠깐 멈춰 있어도(재개 직후·오디오 멈춤) 그대로 맞다
+   */
+  songTimeToContext(songMs: number): number | null {
+    if (!this.audioMode) return null;
+    return songToContextSec(songMs, this.ctxZero);
+  }
+
+  /** 곡 0ms를 울리는 오디오 시계 시각(초). 오디오 시계 기준으로 돌 때만, 아니면 null */
+  get contextZero(): number | null {
+    return this.audioMode ? this.ctxZero : null;
+  }
+
+  /**
    * 리드인(카운트다운) → 1마디 1박(originMs) = 세션 originMs. 반주 0초 = 세션 0ms.
    * 리드인이 원점에서 끝나도록 반주 0초는 now + lead + max(0, preRollMs − originMs)에 울린다.
    * originMs가 리드인보다 길면 반주(인트로)가 먼저 시작되고 1마디 직전에 카운트인 클릭이 난다.
@@ -129,8 +191,21 @@ export class PlayClock {
     this.lastDriftAt = -Infinity;
     this.resetStall();
     this._sync = { begin: null, resume: null };
-    this.session.start(at);
-    this.deps.accompaniment?.start(at, 0);
+    const r = this.deps.clickAt ? (this.deps.audioReading?.() ?? null) : null;
+    this.audioMode = r !== null;
+    if (r) {
+      // 곡 0ms를 오디오 시계 시각 하나로 정하고 반주·클릭을 그 기준으로 예약한다
+      this.ctxZero = r.ctxSec + (at - now) / 1000;
+      this.heardOffset = heardOffsetMs(r);
+      this.lastSong = null;
+      this.heardState = null;
+      this.frozenSong = null;
+      this.session.start(contextToHeardPerfMs(this.ctxZero, this.heardOffset));
+      this.startAccompaniment(0);
+    } else {
+      this.session.start(at);
+      this.deps.accompaniment?.start(at, 0);
+    }
     this._sync.begin = this.measureDelta(now);
     this._state = { phase: 'running', reason: null };
     this.startTimer();
@@ -145,9 +220,59 @@ export class PlayClock {
     return zero - (ref - this.session.songTime(ref));
   }
 
-  /** 매 프레임(rAF): 세션 tick과 종료 감지만. 박 예약은 자체 타이머의 schedule이 맡는다 */
+  /** 반주를 곡 시각 fromMs부터 ctxZero 기준 오디오 시계 시각에 예약한다. startAtContext가 없으면 화면 시계로 */
+  private startAccompaniment(fromMs: number): void {
+    const acc = this.deps.accompaniment;
+    if (!acc) return;
+    const from = Math.max(0, fromMs);
+    if (acc.startAtContext) acc.startAtContext(songToContextSec(from, this.ctxZero), from);
+    else acc.start(contextToHeardPerfMs(songToContextSec(from, this.ctxZero), this.heardOffset ?? 0), from);
+  }
+
+  /**
+   * 들리는 오디오 시각으로 세션 startTime을 다시 넣는다(오디오 시계 기준일 때만). 곡 시각은 줄지 않는다.
+   * 오디오 시계가 멈추면 곡 시각도 멈추고, 들리는 시각 추정값의 작은 흔들림은 고르게 따라간다
+   */
+  private retime(): void {
+    if (!this.audioMode || this.session.currentStatus === 'paused') return;
+    const r = this.deps.audioReading?.();
+    if (!r) {
+      // 컨텍스트가 running이 아니면(suspended·interrupted) 오디오가 안 흐르므로 곡 시각을 멈춘다
+      this.freeze();
+      this.heardState = null;
+      return;
+    }
+    const h = stallAwareHeard(this.heardState, r);
+    this.heardState = h.state;
+    if (h.stalled) {
+      this.freeze();
+      return;
+    }
+    this.frozenSong = null;
+    this.heardOffset = smoothOffsetMs(this.heardOffset, heardOffsetMs({ ...r, heardCtxSec: h.heardCtxSec }));
+    // 바닥은 직전 값과 지금 화면이 보고 있는 값(직전 다시 넣기 뒤 화면 시계로 이어 셈한 값) 중 큰 쪽. 프레임 사이에 읽힌 값보다 뒤로 가지 않게 한다
+    const shown = this.session.songTime(r.perfMs);
+    const floor = this.lastSong === null ? null : Math.max(this.lastSong, shown);
+    const next = sessionStartPerf(this.heardOffset, this.ctxZero, r.perfMs, floor);
+    this.session.retime(next.startPerf, next.held ? next.songMs : null);
+    this.lastSong = next.songMs;
+  }
+
+  /**
+   * 오디오가 안 흐르는 동안 곡 시각을 멈춘다. 처음 멈출 때 화면이 보고 있던 곡 시각(직전 다시 넣기 뒤 화면 시계로 이어 셈한 값)에 묶어
+   * 뒤로 돌아가지 않게 한다. 오디오가 다시 흐르면 들리는 곡 시각이 이 값을 넘을 때까지 그대로 둔다
+   */
+  private freeze(): void {
+    const now = this.now();
+    if (this.frozenSong === null) this.frozenSong = Math.max(this.lastSong ?? -Infinity, this.session.songTime(now));
+    this.session.retime(now - this.frozenSong, this.frozenSong);
+    this.lastSong = this.frozenSong;
+  }
+
+  /** 매 프레임(rAF): 세션 시각 다시 넣기, 세션 tick과 종료 감지. 박 예약은 자체 타이머의 schedule이 맡는다 */
   onFrame(now: number): void {
     if (this._state.phase !== 'running') return;
+    this.retime();
     this.session.tick(now);
     if (this.session.currentStatus === 'finished') {
       this._state = { phase: 'finished', reason: null };
@@ -163,6 +288,10 @@ export class PlayClock {
    */
   private schedule(now: number): void {
     if (this._state.phase !== 'running' || this.session.currentStatus === 'paused') return;
+    if (this.audioMode) {
+      this.scheduleAudio(now);
+      return;
+    }
     const t = this.session.songTime(now);
     this.measureAccDrift(now, t);
     this.measureClockStall(now, t);
@@ -181,6 +310,34 @@ export class PlayClock {
         const beatInBar = this.nextBeat % beatsPerBar;
         if (bt < originMs || this.deps.clickOn()) this.deps.click(atMs, beatInBar === 0);
         this.deps.onBeat?.(beatInBar, atMs);
+      }
+      this.nextBeat += 1;
+    }
+  }
+
+  /**
+   * 오디오 시계 기준 박 예약. 박 i는 ctxZero + 박 시각에 오디오 시계로 바로 예약하므로 출력 지연이 얼마든 반주와 같은 기준이다.
+   * currentTime + 예약 여유(오디오 시계 기준) 안의 박을 예약하고, CLICK_LATE_SKIP_SEC 넘게 지난 박은 건너뛴다
+   */
+  private scheduleAudio(now: number): void {
+    // 컨텍스트가 멈춰 읽기 값이 없어도 곡 시각은 멈춰야 하므로 먼저 다시 넣는다
+    this.retime();
+    const r = this.deps.audioReading?.();
+    if (!r) return;
+    this.measureClockStall(now, this.session.songTime(now));
+    const countInBeats = Math.round(this.session.countInMs / this.session.beatMs);
+    const beatsPerBar = this.session.chart.beatsPerBar;
+    const duration = this.session.chart.durationMs;
+    const originMs = this.session.originMs;
+    const aheadSec = this.lookahead() === HIDDEN_LOOKAHEAD_MS ? HIDDEN_CLICK_AHEAD_SEC : CLICK_AHEAD_SEC;
+    for (;;) {
+      const bt = beatTimeMs(this.session.chart, this.nextBeat - countInBeats);
+      const ctxAt = songToContextSec(bt, this.ctxZero);
+      if (ctxAt > r.ctxSec + aheadSec || bt > duration) break;
+      if (ctxAt >= r.ctxSec - CLICK_LATE_SKIP_SEC) {
+        const beatInBar = this.nextBeat % beatsPerBar;
+        if (bt < originMs || this.deps.clickOn()) this.deps.clickAt?.(ctxAt, beatInBar === 0);
+        this.deps.onBeat?.(beatInBar, contextToHeardPerfMs(ctxAt, this.heardOffset ?? heardOffsetMs(r)));
       }
       this.nextBeat += 1;
     }
@@ -224,6 +381,7 @@ export class PlayClock {
     if (this._state.phase !== 'running') return;
     const now = this.now();
     this.stopTimer();
+    this.retime();
     this.pausedSongTime = this.session.songTime(now);
     this.session.pause(now);
     this.deps.accompaniment?.pause();
@@ -239,6 +397,24 @@ export class PlayClock {
    */
   resume(): void {
     if (this._state.phase !== 'paused') return;
+    const r = this.audioMode ? (this.deps.audioReading?.() ?? null) : null;
+    if (r) {
+      // 멈춘 곡 시각을 RESUME_LEAD_MS 뒤의 오디오 시계 시각에 다시 놓는다. 곡 시각은 멈춘 값에서 다시 흐른다
+      const now = this.now();
+      this.ctxZero = r.ctxSec + RESUME_LEAD_MS / 1000 - this.pausedSongTime / 1000;
+      this.heardOffset = heardOffsetMs(r);
+      this.heardState = null;
+      this.frozenSong = null;
+      this.session.resume(now);
+      const next = sessionStartPerf(this.heardOffset, this.ctxZero, r.perfMs, this.pausedSongTime);
+      this.session.retime(next.startPerf, next.held ? next.songMs : null);
+      this.lastSong = next.songMs;
+      this.startAccompaniment(this.pausedSongTime);
+      this._sync.resume = this.measureDelta(now + RESUME_LEAD_MS);
+      this._state = { phase: 'running', reason: null };
+      this.startTimer();
+      return;
+    }
     const at = this.now() + RESUME_LEAD_MS;
     this.session.resume(at);
     this.deps.accompaniment?.resume(at + Math.max(0, -this.pausedSongTime));
