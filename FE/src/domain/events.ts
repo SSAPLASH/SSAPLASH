@@ -112,6 +112,11 @@ export function isSensorSource(source: InputSourceKind | string | undefined): bo
   return source !== undefined && !(NON_SENSOR_SOURCES as readonly string[]).includes(source);
 }
 
+/** 발 타격(하이햇 페달·킥)인가. 판정 타이밍 보정에서 스틱 값 대신 킥 값을 쓴다 */
+export function isFootHit(hit: { foot?: FootId }): boolean {
+  return hit.foot !== undefined;
+}
+
 /** 소스별 설정값 하나. 항목 스키마는 입력 소스 디스크립터가 선언한다 */
 export type OptionValue = string | number | boolean;
 
