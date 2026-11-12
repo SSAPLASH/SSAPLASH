@@ -57,7 +57,7 @@ export function KitSkinCarousel({ value, onChange, labelledBy }: Props) {
           <Chevron dir="left" />
         </IconButton>
         <div className="kit-skin-preview">
-          <DrumKit fitWidth scale={0.55} skin={value} labels />
+          <DrumKit fitContain scale={0.55} skin={value} labels />
         </div>
         <IconButton label="다음 드럼 모양" className="kit-skin-nav" onClick={() => onChange(nextSkin(value, 1))}>
           <Chevron dir="right" />

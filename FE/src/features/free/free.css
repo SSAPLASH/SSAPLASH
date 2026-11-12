@@ -321,14 +321,15 @@
 }
 /* 킷 영역: 남는 높이의 가운데. 포인터 모의 IMU의 자세 기준면도 이 요소다 */
 .free-kit {
+  position: relative;
   flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* 킷은 남은 높이에 맞춰 줄어든다(DrumKit fitContain). 화면이 낮으면 이 높이까지만 줄고 페이지가 스크롤된다 */
+  min-height: 220px;
 }
+/* 킷 크기가 카드 높이를 밀어내지 않게 자리만 채운다 */
 .free-kit-inner {
-  width: 100%;
+  position: absolute;
+  inset: 0;
   transition: opacity var(--motion-fade) var(--ease-out);
 }
 /* 연결 대기: 킷은 뒤에 흐리게 남는다 */

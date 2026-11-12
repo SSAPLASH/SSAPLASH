@@ -370,3 +370,88 @@
   position: absolute;
   pointer-events: none;
 }
+
+/* ---- 실물 스킨(이미지 조각, components/drum/acoustic) ---- */
+/* 조각 상자끼리 겹치므로 이미지는 누름을 받지 않고, 헤드 타원이 누름 영역이다 */
+.drum-pad-art {
+  pointer-events: none;
+}
+.drum-pad-hitarea {
+  fill: transparent;
+  pointer-events: all;
+}
+/* 이미지 위에 놓이는 라벨은 어두운 테두리로 읽히게 한다 */
+.drum-pad:not([data-skin]) .drum-pad-label {
+  fill: var(--text-1);
+  paint-order: stroke;
+  stroke: var(--bg-canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* ---- 실물 하이햇: 닫힘 모션 + 페달 "칙"(motion 토큰, 동작 줄이기는 토큰이 0ms라 위치만 즉시 바뀐다) ---- */
+/* 원판 그룹이 열림(원위치) ↔ 닫힘(closeDy만큼 아래)을 옮긴다. 닫힐 때는 빠르게(press), 열릴 때는 조금 느리게(fast) */
+.drum-pad-top {
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.drum-pad-top[data-closed] {
+  transform: translateY(var(--close-dy));
+  transition-duration: var(--motion-press);
+}
+/* 닫힌 하이햇은 흔들림 각도를 절반으로 */
+.drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-top[data-closed] .drum-pad-cymbal {
+  animation: drum-pad-sway-closed 450ms ease-out;
+}
+@keyframes drum-pad-sway-closed {
+  0% { transform: rotate(0deg); filter: brightness(1); }
+  10% { transform: rotate(-2deg); filter: brightness(1.15); }
+  40% { transform: rotate(1.5deg); }
+  70% { transform: rotate(-0.75deg); }
+  100% { transform: rotate(0deg); filter: brightness(1); }
+}
+/* 페달을 밟는 순간(칙): 원판이 한 번 더 closeDy*4/28 눌렸다 돌아온다. pedalHitSeq가 0보다 클 때만 */
+.drum-pad-pulse[data-pulse] {
+  animation: drum-hihat-chick var(--motion-press) var(--ease-out);
+}
+@keyframes drum-hihat-chick {
+  0% { transform: translateY(0); }
+  45% { transform: translateY(calc(var(--close-dy) * 4 / 28)); }
+  100% { transform: translateY(0); }
+}
+
+/* 페달 그림: 닫힘(밟힘)이면 뒤꿈치를 기준으로 살짝 눌리고, 연결이 없으면 어둡게 */
+.drum-pad-pedal,
+.drum-pad-pedal-pulse {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.drum-pad-pedal {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    filter var(--motion-fast) var(--ease-out);
+}
+.drum-pad-pedal[data-pressed] {
+  transform: scaleY(0.96);
+  transition-duration: var(--motion-press);
+}
+.drum-pad-pedal[data-off] {
+  filter: brightness(0.32);
+}
+.drum-pad-pedal-pulse[data-pulse] {
+  animation: drum-pedal-chick var(--motion-press) var(--ease-out);
+}
+@keyframes drum-pedal-chick {
+  0% { transform: scaleY(1); }
+  45% { transform: scaleY(0.97); }
+  100% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-pulse[data-pulse],
+  .drum-pad-pedal-pulse[data-pulse] {
+    animation: none;
+  }
+  /* 닫힌 하이햇도 흔들림 없이 밝기 변화만(위의 일반 심벌 규칙보다 선택자가 구체적이라 따로 둔다) */
+  .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-top[data-closed] .drum-pad-cymbal {
+    animation: drum-pad-bright 220ms ease-out;
+  }
+}

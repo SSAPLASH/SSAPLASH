@@ -3,7 +3,7 @@
 // 포인터 기준면 등록만 맡는다. 앵커 거리·패드별 통계 같은 실측 UI는 모니터 빌드(FreeMeasureSection)로 옮겼다.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DrumKit } from '@/components/drum/DrumKit';
+import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useRecentHits } from '@/components/drum/useRecentHits';
 import { AccompanimentBar } from './AccompanimentBar';
@@ -201,7 +201,7 @@ export function FreePlayPage() {
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`} data-pointer-strike="">
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <DrumKit fitWidth effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
+            <LiveDrumKit fitContain effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
           </div>
         </div>
 

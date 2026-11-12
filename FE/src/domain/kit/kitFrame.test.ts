@@ -1,6 +1,6 @@
 // 드럼 세팅 자유 틀 검증: 원근 자리 → 스킨 그림 자리·크기·눌림.
 import { describe, expect, it } from 'vitest';
-import { PAD_HEAD_CENTER } from '../drumKit';
+import { KIT_ART_PERSP, kitArtPad } from './kitArt';
 import { frameOf, framePad, kitFrame } from './kitFrame';
 import { DEFAULT_KIT_LAYOUT } from '../kitLayout';
 import { kitShapes, makeCamera } from './kitPerspective';
@@ -15,11 +15,13 @@ describe('framePad', () => {
     const f = fig('SNARE');
     const p = framePad(f, 'acoustic');
     const s = p.w / 160;
+    const head = kitArtPad(KIT_ART_PERSP, 'SNARE')!.head;
     expect(p.shape).toBe('drum');
-    expect(p.left + PAD_HEAD_CENTER.drum.x * s).toBeCloseTo(f.cx, 6);
-    expect(p.top + PAD_HEAD_CENTER.drum.y * s).toBeCloseTo(f.cy, 6);
-    // 그림의 헤드 테두리(반지름 79)가 원근 가로 반지름과 같다
-    expect(79 * s).toBeCloseTo(f.rx, 6);
+    expect(p.art?.head).toBe(head);
+    expect(p.left + head.cx * s).toBeCloseTo(f.cx, 6);
+    expect(p.top + head.cy * s).toBeCloseTo(f.cy, 6);
+    // 그림의 헤드 가로 반지름이 원근 가로 반지름과 같다
+    expect(head.rx * s).toBeCloseTo(f.rx, 6);
     expect(p.tilt).toBeUndefined();
   });
 
@@ -46,9 +48,9 @@ describe('framePad', () => {
   });
 
   it('먼 패드가 가까운 같은 종류 패드보다 작지 않게, 크기는 원근 반지름에 비례한다', () => {
-    const a = framePad(fig('SMALL_TOM'), 'acoustic');
-    const b = framePad(fig('SNARE'), 'acoustic');
-    expect(a.w / b.w).toBeCloseTo(fig('SMALL_TOM').rx / fig('SNARE').rx, 6);
+    // 조각 상자 폭은 패드마다 달라, 화면에서의 헤드 반지름으로 견준다
+    const headRx = (pad: 'SMALL_TOM' | 'SNARE') => (framePad(fig(pad), 'acoustic').w * kitArtPad(KIT_ART_PERSP, pad)!.head.rx) / 160;
+    expect(headRx('SMALL_TOM') / headRx('SNARE')).toBeCloseTo(fig('SMALL_TOM').rx / fig('SNARE').rx, 6);
   });
 });
 
