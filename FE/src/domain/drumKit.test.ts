@@ -3,6 +3,10 @@ import {
   DRUM_KIT_H,
   DRUM_KIT_FLAT_PADS,
   DRUM_KIT_PADS,
+  DRUM_KIT_PADS_TOP,
+  PLAY_KIT_TOP_H,
+  SHEET_KIT_TOP_H,
+  smallKitSpec,
   KIT_SKINS,
   isKitSkin,
   kitBoxFor,
@@ -14,7 +18,7 @@ import {
   labelFontSize,
   visualPadOf,
 } from './drumKit';
-import { KIT_ART_PERSP, kitArtPad } from './kit/kitArt';
+import { KIT_ART_PERSP, KIT_ART_TOP, kitArtPad } from './kit/kitArt';
 import { PAD_META } from './pads';
 
 describe('DRUM_KIT_PADS (실물 스킨 고정 배치)', () => {
@@ -192,5 +196,67 @@ describe('이름 출처 통일(PAD_META)', () => {
     const tags = Object.fromEntries(DRUM_KIT_FLAT_PADS.map((p) => [p.pad, p.tag]));
     expect(tags.SMALL_TOM).toBe('ST');
     expect(tags.MID_TOM).toBe('MT');
+  });
+});
+describe('view(위에서 본 그림)', () => {
+  it('kitBoxFor: 실물은 view에 따라 상자가 다르고, 전자·네온은 view를 무시한다', () => {
+    expect(kitBoxFor('acoustic')).toBe(KIT_ART_PERSP.box);
+    expect(kitBoxFor('acoustic', 'persp')).toBe(KIT_ART_PERSP.box);
+    expect(kitBoxFor('acoustic', 'top')).toBe(KIT_ART_TOP.box);
+    for (const skin of ['electronic', 'neon'] as const) {
+      expect(kitBoxFor(skin, 'top')).toEqual({ w: DRUM_KIT_W, h: DRUM_KIT_H });
+    }
+  });
+
+  it('kitPadsFor: 실물 top은 위에서 본 그림의 9패드, 전자·네온은 view와 무관', () => {
+    expect(kitPadsFor('acoustic', 'top')).toBe(DRUM_KIT_PADS_TOP);
+    expect(kitPadsFor('acoustic', 'persp')).toBe(DRUM_KIT_PADS);
+    expect(DRUM_KIT_PADS_TOP).toHaveLength(9);
+    for (const p of DRUM_KIT_PADS_TOP) expect(p.art, p.pad).toBe(kitArtPad(KIT_ART_TOP, p.pad));
+    expect(kitPadsFor('neon', 'top')).toBe(DRUM_KIT_FLAT_PADS);
+    expect(kitPadsFor('electronic', 'top')).toBe(DRUM_KIT_FLAT_PADS);
+  });
+
+  it('위에서 본 고정 배치의 패드가 모두 킷 상자 안에 들어간다', () => {
+    const box = kitBoxFor('acoustic', 'top');
+    for (const p of DRUM_KIT_PADS_TOP) {
+      expect(p.left + p.w, p.pad).toBeLessThanOrEqual(box.w);
+      expect(p.top + p.h, p.pad).toBeLessThanOrEqual(box.h);
+    }
+  });
+
+  it('kitSizeAt: 실물 top은 760×650.7 × scale', () => {
+    expect(kitSizeAt(0.5, 'acoustic', 'top')).toEqual({ width: 380, height: 650.7 * 0.5 });
+    expect(kitSizeAt(0.5, 'acoustic')).toEqual(kitSizeAt(0.5, 'acoustic', 'persp'));
+    expect(kitSizeAt(0.5, 'neon', 'top')).toEqual({ width: 380, height: 150 });
+  });
+});
+
+describe('smallKitSpec (작은 연주 킷)', () => {
+  it('실물 · 리듬 게임: 위에서 본 그림, 높이 200(폭 약 233.6)', () => {
+    const { view, scale } = smallKitSpec('play', 'acoustic');
+    expect(view).toBe('top');
+    const size = kitSizeAt(scale, 'acoustic', view);
+    expect(Math.abs(size.height - 200)).toBeLessThan(0.5);
+    expect(size.height).toBeCloseTo(PLAY_KIT_TOP_H);
+    expect(size.width).toBeCloseTo(233.6, 0);
+  });
+
+  it('실물 · 악보 연습: 위에서 본 그림, 높이 210(폭 약 245.2)', () => {
+    const { view, scale } = smallKitSpec('sheet', 'acoustic');
+    expect(view).toBe('top');
+    const size = kitSizeAt(scale, 'acoustic', view);
+    expect(Math.abs(size.height - 210)).toBeLessThan(0.5);
+    expect(size.height).toBeCloseTo(SHEET_KIT_TOP_H);
+    expect(size.width).toBeCloseTo(245.3, 0);
+  });
+
+  it('전자·네온은 기존 그대로(게임 0.5 · 악보 0.7, persp)', () => {
+    for (const skin of ['electronic', 'neon'] as const) {
+      expect(smallKitSpec('play', skin)).toEqual({ view: 'persp', scale: 0.5 });
+      expect(smallKitSpec('sheet', skin)).toEqual({ view: 'persp', scale: 0.7 });
+      expect(kitSizeAt(0.5, skin).height).toBeCloseTo(150);
+      expect(kitSizeAt(0.7, skin).height).toBeCloseTo(210);
+    }
   });
 });

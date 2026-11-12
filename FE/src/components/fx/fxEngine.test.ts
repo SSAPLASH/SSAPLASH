@@ -115,6 +115,13 @@ describe('fxEngine', () => {
     expect(h.pending).toBe(false);
   });
 
+  it('위에서 본 그림(top)에서도 패드를 찾아 이펙트를 만든다', () => {
+    const h = harness();
+    h.engine.setSkin('acoustic', 'top');
+    h.engine.emit(ev(1, 'HIHAT_PEDAL'));
+    expect(h.engine.stats().alive).toBeGreaterThan(0);
+  });
+
   it('모션 줄이기면 덩어리 1개만, 테마·스킨은 다음 emit부터 적용', () => {
     const h = harness();
     h.engine.setReduced(true);
