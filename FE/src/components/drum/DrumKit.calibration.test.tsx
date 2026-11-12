@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DrumKit } from './DrumKit';
-import { DRUM_KIT_PADS, padCenter, placePad } from '@/domain/drumKit';
+import { DRUM_KIT_PADS, kitBoxFor, padCenter, placePad } from '@/domain/drumKit';
 
 const count = (html: string, re: RegExp) => (html.match(re) ?? []).length;
 
@@ -23,10 +23,12 @@ describe('DrumKit 보정 props', () => {
 
   it('placement는 패드 헤드 중심을 그 좌표로 옮긴다', () => {
     const snare = DRUM_KIT_PADS.find((p) => p.pad === 'SNARE')!;
-    const moved = placePad(snare, 0.2, 0.3);
+    const boxH = kitBoxFor('acoustic').h;
+    const moved = placePad(snare, 0.2, 0.3, boxH);
     const html = renderToStaticMarkup(<DrumKit placement={{ SNARE: { x: 0.2, y: 0.3 } }} />);
     expect(html).toContain(`translate(${moved.left} ${moved.top})`);
     expect(padCenter(moved).x).toBeCloseTo(0.2 * 760);
+    expect(padCenter(moved).y).toBeCloseTo(0.3 * boxH);
   });
 
   it('faded·appear 그룹 클래스', () => {

@@ -107,8 +107,9 @@ describe('fxEngine', () => {
     expect(h.engine.stats().dropped).toBe(1);
   });
 
-  it('패드가 킷에 없으면(HIHAT_PEDAL) 무시한다', () => {
+  it('패드가 킷에 없으면(전자·네온의 HIHAT_PEDAL) 무시한다', () => {
     const h = harness();
+    h.engine.setSkin('neon');
     h.engine.emit(ev(1, 'HIHAT_PEDAL'));
     expect(h.engine.stats().alive).toBe(0);
     expect(h.pending).toBe(false);
