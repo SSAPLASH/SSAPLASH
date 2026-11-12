@@ -33,8 +33,8 @@ export interface KitArtPad {
   badge: ArtPoint;
   /** 고정 배치에서 조각 상자의 왼쪽 위와 폭(킷 단위) */
   kit: { left: number; top: number; w: number };
-  /** 하이햇만: 윗판 조각. 받침 상자 안의 자리와, 닫힐 때 내려가는 거리 */
-  top?: { sprite: string; x: number; y: number; w: number; h: number; closeDy: number };
+  /** 심벌만: 흔들리는 원판 조각과 받침 상자 안에서의 자리. closeDy는 하이햇만 — 닫힐 때 내려가는 거리 */
+  top?: { sprite: string; x: number; y: number; w: number; h: number; closeDy?: number };
 }
 
 export interface KitArt {
@@ -59,6 +59,7 @@ export const KIT_ART_PERSP: KitArt = {
       judge: { x: 79.8, y: 8.0 },
       badge: { x: 79.8, y: 10.0 },
       kit: { left: 22.8, top: 7.5, w: 123.1 },
+      top: { sprite: 'crash-top', x: 1.3, y: 1.0, w: 157.3, h: 112.8 },
     },
     {
       pad: 'RIDE',
@@ -71,6 +72,7 @@ export const KIT_ART_PERSP: KitArt = {
       judge: { x: 79.7, y: 8.0 },
       badge: { x: 79.7, y: 10.0 },
       kit: { left: 602.5, top: 5.2, w: 152.6 },
+      top: { sprite: 'ride-top', x: 0.8, y: 0.8, w: 158.1, h: 114.6 },
     },
     {
       pad: 'SMALL_TOM',
