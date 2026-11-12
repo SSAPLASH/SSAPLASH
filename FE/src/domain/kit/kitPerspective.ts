@@ -14,10 +14,13 @@ export const VIEW_PITCH_DEG = 50;
 export const VIEW_TARGET: Point3 = [0.03, 0.5, -0.1];
 /** 바라보는 점에서 시점까지 거리(m) */
 export const VIEW_DIST = 2.15;
-/** 화각 배율. 화면 기준 길이(min(폭, 높이×1.6))에 곱한다 */
-export const VIEW_FOCAL = 0.82;
-/** 그림 세로 가운데(높이 비율). 기본 배치가 위아래로 고르게 놓이는 값 */
-export const VIEW_CENTER_Y = 0.53;
+/**
+ * 화각 배율. 화면 기준 길이(min(폭, 높이×1.6))에 곱한다.
+ * 심벌을 배치 위쪽 끝(y 0.05)에 둬도 판 안쪽 여백(16px)까지 쓰면 위아래가 잘리지 않는 크기다
+ */
+export const VIEW_FOCAL = 0.78;
+/** 그림 세로 가운데(높이 비율). 가운데보다 아래에 둬 높이 잡힌 심벌이 들어갈 자리를 위쪽에 남긴다 */
+export const VIEW_CENTER_Y = 0.56;
 /** 바닥 높이(m) */
 export const FLOOR_Z = -0.65;
 /** 방향의 출발점: 두 손 출발점의 가운데 */
