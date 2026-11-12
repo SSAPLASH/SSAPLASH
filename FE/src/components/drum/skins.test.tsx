@@ -75,14 +75,14 @@ describe('2D 스킨 렌더', () => {
 });
 
 describe('DrumKit 스킨', () => {
-  it('skin별 패드 8개가 kitPadsFor 좌표에 놓인다', () => {
+  it('skin별 패드가 kitPadsFor 좌표에 놓인다(실물 9개 · 전자·네온 8개)', () => {
     for (const skin of KIT_SKINS) {
       const html = renderToStaticMarkup(<DrumKit skin={skin} />);
       const pads = kitPadsFor(skin);
       const found = [...html.matchAll(/class="drum-pad" data-state="idle" data-shape="\w+"(?: data-skin="\w+")? transform="([^"]+)"/g)].map(
         (m) => m[1],
       );
-      expect(found).toHaveLength(8);
+      expect(found).toHaveLength(skin === 'acoustic' ? 9 : 8);
       expect(found).toEqual(pads.map((p) => `translate(${p.left} ${p.top}) scale(${p.w / 160})`));
       expect(html.includes('<svg class="drum-kit"')).toBe(true);
       expect(/<svg class="drum-kit"[^>]*data-skin=/.test(html)).toBe(skin !== 'acoustic');

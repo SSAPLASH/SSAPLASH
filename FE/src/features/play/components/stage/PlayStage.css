@@ -103,6 +103,20 @@
   width: 380px;
   height: 150px;
 }
+/* 실물 스킨(위에서 본 그림): 킷 상자 760×650.7이라 세로로 길다. 게임은 233.6×200, 악보는 245.1×210(domain/drumKit smallKitSpec).
+   드럼 영역이 150 → 200으로 커지고 하이웨이(flex 1)가 그만큼 줄어든다. 타이밍 막대는 하이웨이 안쪽이라 킷과 겹치지 않는다.
+   슬롯 폭은 킷에 맞춰 줄여 안내 칸·최근 타격 칸이 킷 옆에 붙게 한다 */
+.play-stage.game.kit-top .play-stage-drum {
+  height: 200px;
+}
+.play-stage.game.kit-top .play-stage-kit {
+  width: 234px;
+  height: 200px;
+}
+.play-stage.sheet.kit-top .play-stage-kit {
+  width: 246px;
+}
+
 /* 킷을 줄인 만큼 패드 위 판정 글씨는 키운다(SVG 단위 32 × 0.5배 = 화면 16px) */
 .play-stage.game .drum-pad .drum-pad-judge {
   font-size: 32px;
