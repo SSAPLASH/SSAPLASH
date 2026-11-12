@@ -130,3 +130,29 @@ describe('TimingCalView', () => {
     expect(html).toContain('적용');
   });
 });
+
+describe('TimingCalView intro (첫 연주 전 권유)', () => {
+  const introView = (snap: Partial<TimingCalSnapshot>) =>
+    renderToStaticMarkup(
+      <TimingCalView snap={{ ...base, ...snap }} currentOffsetMs={0} titleId="t" onStart={noop} onApply={noop} onClose={noop} intro />,
+    );
+
+  it('안내 단계: 한 줄 안내가 위에 있고 닫기 버튼 글자가 [나중에 하기]다', () => {
+    const html = introView({});
+    expect(html).toContain('처음 한 번만 박자를 맞추면 판정이 정확해져요.');
+    expect(html).toContain('나중에 하기');
+    expect(html).not.toContain('>닫기<');
+    expect(html.indexOf('처음 한 번만')).toBeLessThan(html.indexOf('처음 4번은 듣기만'));
+  });
+
+  it('intro가 아니면 한 줄 안내가 없고 [닫기]다', () => {
+    const html = view({});
+    expect(html).not.toContain('처음 한 번만');
+    expect(html).not.toContain('나중에 하기');
+  });
+
+  it('진행·결과 단계는 intro여도 같다', () => {
+    expect(introView({ phase: 'listen', beat: 1 })).toContain('취소');
+    expect(introView({ phase: 'result', beat: 16, outcome: outcome(okRes(-66, -65)) })).not.toContain('나중에 하기');
+  });
+});
