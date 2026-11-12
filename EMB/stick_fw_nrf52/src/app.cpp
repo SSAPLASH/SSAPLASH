@@ -39,8 +39,14 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 9                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345) */
-#define FW_TAG   "BOOT 1.9 nrf52"
+#define FW_MINOR 10                    /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345), 10 = 정지 바이어스 재추정 조건 강화 (346) */
+/* 비교 실험용: 1이면 1.9의 느슨한 정지 판정으로 빌드 (11/10 1.9 vs 1.10 비교). 평소엔 0 */
+#define BIAS_STILL_V19    0
+#if BIAS_STILL_V19
+#define FW_TAG   "BOOT 1.10 nrf52 bias19"
+#else
+#define FW_TAG   "BOOT 1.10 nrf52"
+#endif
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -81,11 +87,22 @@ static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 �
  * 2026-11-04 실측: 왼손 보드는 7분 쓰는 동안 바이어스가 +0.5°/s 변해 방위각이 분당 약 17° 밀렸다 (칩 온도 변화).
  * 부팅 때 한 번 잰 값으로는 못 따라가서, 스틱이 멈춰 있을 때마다 그 순간의 자이로 평균으로 천천히 다시 잡는다.
  * 기준값은 swing_1026·nohit_1026 녹화로 확인: 스윙 중에는 정지로 잡히지 않아 바이어스가 0.1°/s 넘게 흔들리지 않음 */
-#define STILL_DPS         4.0f         /* 바이어스 뺀 각속도 크기가 이보다 작고 */
+#if BIAS_STILL_V19
+#define STILL_DPS         4.0f
+#define STILL_MIN_SAMPLES 500
+#else
+#define STILL_DPS         1.5f         /* 바이어스 뺀 각속도 크기가 이보다 작고 (1.9까지 4.0: 손에 들고 천천히 돌리는 것까지 정지로 봤다) */
+#define STILL_MIN_SAMPLES 1666         /* 1초(1.66kHz) 이상 이어지면 정지 (1.9까지 0.3초) */
+#endif
 #define STILL_ACC_MS2     0.6f         /* | |a| − g | 가 이보다 작은 샘플이 */
-#define STILL_MIN_SAMPLES 500          /* 0.3초(1.66kHz) 이상 이어지면 정지 */
 #define BIAS_TAU_S        2.0f         /* 정지 중 바이어스를 따라가는 시간 상수 */
-#define BIAS_MAX_DEV_DPS  4.0f         /* 부팅 값에서 이보다 멀어지지 않게 (오판정 방어) */
+#if BIAS_STILL_V19
+#define BIAS_MAX_DEV_DPS  4.0f
+#else
+#define BIAS_MAX_DEV_DPS  1.0f         /* 부팅 값에서 이보다 멀어지지 않게 (1.9까지 4.0)
+                                        * 11/10 리듬 게임 중 왼손 BT x가 0.83 → −0.56 → 1.05°/s로 튐: 쉬는 박자에 들고 있던 움직임을
+                                        * 바이어스로 먹어 방향이 분당 수십 도 흘렀다. 온도로 변하는 양은 ±1°/s 안 */
+#endif
 
 /* ===================== µs 시계 (TIMER4, 1MHz, 32비트) =====================
  * 프로토콜 시각이 µs u32(약 71.6분 랩어라운드)이므로 하드웨어 타이머를 그대로 쓴다.
