@@ -46,16 +46,10 @@ const featureOf = (f: string) => (f.startsWith('features/') ? f.split('/')[1] : 
 const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app/') && f !== 'main.tsx';
 
 /**
- * 허용하는 예외(`from -> to` 형식).
+ * 허용하는 예외(`from -> to` 형식). 지금은 비어 있다.
  * 새 항목은 막을 수 없는 이유를 주석으로 함께 적고, 풀리면 지운다.
  */
-const ALLOWED = new Set<string>([
-  // 기능 → app: 센서 연결 함수(activateSensor·connectSensor·bindSensorSurface)가 bootstrap의 모듈 상태
-  // (활성 센서 인스턴스·입력 표면·재연결 핸들러)를 같이 쓴다. 센서 세션을 runtime으로 떼어 내면 풀린다
-  'features/free/FreePlayPage.tsx -> app/bootstrap.ts',
-  'features/monitor/StickMonitorPage.tsx -> app/bootstrap.ts',
-  'features/setup/SetupPage.tsx -> app/bootstrap.ts',
-]);
+const ALLOWED = new Set<string>([]);
 
 /** domain 파일 여부와 그 파일이 속한 기능(공유 domain이면 null) */
 const domainOwner = (f: string): { feature: string | null } | null => {
