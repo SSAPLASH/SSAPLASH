@@ -36,6 +36,7 @@ interface ActiveSession {
   mode: 'RHYTHM' | 'SHEET';
   windows: TimingWindows;
   audioOffsetMs: number;
+  kickOffsetMs: number;
   /** onJudgement 구독 해제(missed 파생) */
   off: () => void;
 }
@@ -55,6 +56,7 @@ function sessionBody(a: ActiveSession, phase: 'start' | 'pause' | 'resume' | 'en
     chartVersionId: c.chartVersionId ?? null,
     windows: a.windows,
     audioOffsetMs: a.audioOffsetMs,
+    kickOffsetMs: a.kickOffsetMs,
     noteCount: a.ss.notes.length,
     reason,
     summary: snap
@@ -78,6 +80,8 @@ export type DiagHandAnchors = Partial<Record<PadId, PadAnchor>> | null;
 export interface DiagSessionOpts {
   windows: TimingWindows;
   audioOffsetMs: number;
+  /** 발 타격에 적용한 킥 값(풀린 값). 따로 재지 않았으면 audioOffsetMs와 같다 */
+  kickOffsetMs: number;
   /** 손별 앵커(0 왼손, 1 오른손). 반경이 계산된 판정 프로필 값을 넘긴다. 없으면 anchors 줄을 내지 않는다 */
   anchors?: [DiagHandAnchors, DiagHandAnchors];
   calibratedAt?: number | null;
@@ -111,6 +115,11 @@ export function diagActiveAudioOffsetMs(): number | null {
   return active ? active.audioOffsetMs : null;
 }
 
+/** 진행 중인 판의 발 타격 보정(ms). 판이 없으면 null */
+export function diagActiveKickOffsetMs(): number | null {
+  return active ? active.kickOffsetMs : null;
+}
+
 /** 곡 시작(재시작 포함). 노트 배열·앵커 표를 1회 내보내고, MISS 노트를 missed로 파생하는 구독을 건다 */
 export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', opts: DiagSessionOpts): void {
   active?.off();
@@ -119,7 +128,7 @@ export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', op
     const d = judgementToDiag(ss, e);
     if (d) diagTap.publish(d);
   });
-  active = { ss, mode, windows: opts.windows, audioOffsetMs: opts.audioOffsetMs, off };
+  active = { ss, mode, windows: opts.windows, audioOffsetMs: opts.audioOffsetMs, kickOffsetMs: opts.kickOffsetMs, off };
   if (!diagTap.active) return;
   diagTap.publish(sessionBody(active, 'start'));
   diagTap.publish({

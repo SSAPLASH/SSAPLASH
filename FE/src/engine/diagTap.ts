@@ -77,6 +77,8 @@ export type DiagBody =
       chartVersionId: number | null;
       windows: TimingWindows;
       audioOffsetMs: number;
+      /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
+      kickOffsetMs: number;
       noteCount: number;
       /** end일 때: 끝까지 쳤는지('finished') 중간에 나갔는지('left') */
       reason?: 'finished' | 'left';
@@ -100,6 +102,8 @@ export type DiagBody =
   | {
       type: 'audio';
       audioOffsetMs: number;
+      /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
+      kickOffsetMs: number;
       baseLatencyMs: number | null;
       outputLatencyMs: number | null;
       sampleRate: number | null;
