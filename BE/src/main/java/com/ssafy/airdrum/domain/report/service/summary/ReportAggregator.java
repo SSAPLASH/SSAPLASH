@@ -1,0 +1,61 @@
+package com.ssafy.airdrum.domain.report.service.summary;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import org.springframework.stereotype.Component;
+import static com.ssafy.airdrum.domain.report.model.ReportSummaryInput.*;
+import static com.ssafy.airdrum.domain.report.model.ReportAggregate.*;
+import com.ssafy.airdrum.domain.report.model.ReportAggregate;
+import com.ssafy.airdrum.domain.report.model.ReportSummaryInput;
+import com.ssafy.airdrum.domain.report.model.ScoreRule;
+
+/** 노트 검증을 통과한 요청만 집계한다. 판정·점수·MISS를 새로 만들지 않는다. */
+@Component
+public class ReportAggregator {
+	private static final BigDecimal BIN_MS = BigDecimal.TEN;
+	public ReportAggregate aggregate(ReportSummaryInput request) {
+		int extent = Math.max(1, BigDecimal.valueOf(request.goodMs())
+				.divide(BIN_MS, 0, RoundingMode.CEILING).intValueExact()) * 10;
+		Integer[] bins = new Integer[extent / 5];
+		Arrays.fill(bins, 0);
+		var pads = new EnumMap<Pad, Accumulator>(Pad.class);
+		for (Pad pad : Pad.values()) pads.put(pad, new Accumulator(request.rule()));
+		for (Hit hit : request.hits()) {
+			if (hit.judgement() == null) continue;
+			var pad = pads.get(hit.pad());
+			if (hit.judgement() == Judgement.MISS) { pad.miss++; continue; }
+			if (hit.judgement() == Judgement.PERFECT) pad.perfect++; else pad.good++;
+			BigDecimal delta = BigDecimal.valueOf(hit.deltaMs());
+			pad.delta = pad.delta.add(delta);
+			pad.velocity += hit.velocity();
+			// 십진수로 경계를 계산해 미세한 음수를 0ms 구간으로 반올림하지 않는다.
+			int index = delta.add(BigDecimal.valueOf(extent)).divide(BIN_MS, 0, RoundingMode.FLOOR).intValueExact();
+			index = Math.min(index, bins.length - 1); // 마지막 구간만 오른쪽 끝을 포함한다.
+			bins[index]++;
+		}
+		var stats = new ArrayList<PadStats>();
+		for (Pad pad : Pad.values()) stats.add(pads.get(pad).result(pad));
+		return new ReportAggregate(new TimingHistogram(10, -extent, Arrays.asList(bins)), stats);
+	}
+	private static final class Accumulator {
+		final ScoreRule rule;
+		int perfect, good, miss;
+		long velocity;
+		BigDecimal delta = BigDecimal.ZERO;
+		Accumulator(ScoreRule rule) { this.rule = rule; }
+		PadStats result(Pad pad) {
+			int samples = perfect + good;
+			int evaluated = samples + miss;
+			// 저장 비율(0~1). 그 기록의 점수 규칙으로 계산한다
+			BigDecimal accuracy = evaluated == 0 ? null : BigDecimal.valueOf(rule.score(perfect, good))
+					.divide(BigDecimal.valueOf(evaluated * (long) ScoreRule.PERFECT_POINTS), 4, RoundingMode.HALF_UP);
+			BigDecimal meanDelta = samples == 0 ? null : delta.divide(BigDecimal.valueOf(samples), 2, RoundingMode.HALF_UP);
+			BigDecimal meanVelocity = samples == 0 ? null : BigDecimal.valueOf(velocity)
+					.divide(BigDecimal.valueOf(samples), 2, RoundingMode.HALF_UP);
+			return new PadStats(pad, accuracy, meanDelta, meanVelocity, new Counts(perfect, good, miss), samples);
+		}
+	}
+}
