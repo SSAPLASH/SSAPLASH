@@ -33,7 +33,7 @@ import { StartDialog } from '@/features/play/components/start/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { PlayOptions } from '@/features/play/components/start/PlayOptions';
 import { useNextBeatLabels } from '@/features/play/components/stage/useNextBeatLabels';
-import { DrumKit } from '@/components/drum/DrumKit';
+import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/features/play/components/stage/TimingBar';
 import { strayMissSource } from '@/features/play/components/stage/strayMissSource';
@@ -934,7 +934,7 @@ function SheetPageBody() {
         }
         kit={
           <div className="coach-kit">
-            <DrumKit
+            <LiveDrumKit
               scale={0.7}
               effects
               states={padStates}

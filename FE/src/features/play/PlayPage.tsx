@@ -35,7 +35,7 @@ import { CoachHandChip } from '@/features/play/components/stage/CoachHandChip';
 import { HitReadout } from '@/components/drum/HitReadout';
 import { StartDialog } from '@/features/play/components/start/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
-import { DrumKit } from '@/components/drum/DrumKit';
+import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/features/play/components/stage/TimingBar';
 import { strayMissSource } from '@/features/play/components/stage/strayMissSource';
@@ -873,7 +873,7 @@ function PlayPageBody() {
         }
         kit={
           <div className="coach-kit">
-            <DrumKit
+            <LiveDrumKit
               scale={0.5}
               effects
               states={padStates}
