@@ -12,6 +12,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
+import { preloadSprites } from '@/components/drum/acoustic/sprites';
 import { startClockDiag } from './clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
@@ -279,6 +280,18 @@ export function bootstrapInput(): void {
   }));
   startRelay();
   startTelemetry();
+  preloadKitSpritesWhenIdle();
+}
+
+/**
+ * 실물 드럼 스킨이면 조각 이미지를 한가할 때 미리 받는다(설계 DESIGN-acoustic-kit-image 4-6).
+ * 시작을 막지 않도록 requestIdleCallback(없으면 1.5초 뒤)으로 미룬다.
+ */
+function preloadKitSpritesWhenIdle(): void {
+  if (useSettings.getState().kitSkin !== 'acoustic') return;
+  const run = () => void preloadSprites();
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run);
+  else setTimeout(run, 1500);
 }
 
 /**
