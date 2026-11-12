@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import statistics
 import time
 from collections import Counter
@@ -303,11 +304,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repeat", type=int, default=10, help="상황마다 몇 번 쓰게 할지")
     p.add_argument("--timeout", type=float, default=8.0, help="모델 한 번 호출의 시간 제한(초)")
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    p.add_argument(
+        "--facts",
+        type=Path,
+        help="실제 기록 세트(live_real_set이 만든 real.jsonl·real-aim.jsonl). 없으면 골든 10가지",
+    )
+    p.add_argument("--sample", type=int, help="실제 기록 세트에서 무작위로 고를 구간 수")
+    p.add_argument(
+        "--seed", type=int, default=0, help="--sample의 난수 씨앗(세트끼리 같은 구간을 고른다)"
+    )
     p.add_argument("--mlflow", action="store_true", help="MLflow 실험 coach-live-tip에 기록")
     p.add_argument("--tracking-uri")
     args = p.parse_args(argv)
 
     cases = None
+    if args.facts is not None:
+        from ssaplash_ai.coach_eval.live_real_set import load_cases
+
+        cases = sample_cases(load_cases(args.facts), args.sample, args.seed)
     for model in args.model:
         # 운영 워커(`ssaplash-worker live-run`)와 같은 설정: 토큰 상한 80, JSON 출력
         generator = LocalServerGenerator(
@@ -326,6 +340,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.mlflow:
             print("MLflow run:", log_mlflow(summary, trials, out, args.tracking_uri))
     return 0
+
+
+def sample_cases(
+    cases: dict[str, LiveSegmentFacts], n: int | None, seed: int
+) -> dict[str, LiveSegmentFacts]:
+    """이름을 정렬한 뒤 씨앗으로 고른다. real과 real-aim은 이름이 같아서 같은 씨앗이면 같은 구간이 뽑힌다"""
+    if n is None or n >= len(cases):
+        return cases
+    names = sorted(random.Random(seed).sample(sorted(cases), n))
+    return {k: cases[k] for k in names}
 
 
 def out_path(out: Path, model: str, models: int) -> Path:
