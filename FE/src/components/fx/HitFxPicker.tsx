@@ -108,7 +108,7 @@ export function HitFxPicker({ value, onChange, skin, labelledBy }: Props) {
           <Chevron dir="left" />
         </IconButton>
         <div ref={previewRef} className="kit-skin-preview">
-          <DrumKit fitWidth scale={0.55} skin={skin} labels={false} effects fxTheme={value} fxSource={emitter.source} />
+          <DrumKit fitContain scale={0.55} skin={skin} labels={false} effects fxTheme={value} fxSource={emitter.source} />
         </div>
         <IconButton label="다음 타격 이펙트" className="kit-skin-nav" onClick={() => onChange(nextFxTheme(value, 1))}>
           <Chevron dir="right" />

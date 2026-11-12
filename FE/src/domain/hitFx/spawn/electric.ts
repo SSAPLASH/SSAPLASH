@@ -88,7 +88,7 @@ export function spawnElectric(event: FxEvent, geo: FxGeo, shape: PadShape, inten
     out.push(flash(geo.cx, geo.cy, geo.rx * 0.5, geo.ry * 0.5, 0.6 * a));
   } else {
     // 킥: 킷 아래쪽을 가로지르는 방전 2줄 + 중앙 섬광
-    const y = Math.min(DRUM_KIT_H + 4, geo.cy + geo.ry + 6 * geo.k);
+    const y = Math.min((geo.floor ?? DRUM_KIT_H) + 4, geo.cy + geo.ry + 6 * geo.k);
     const half = geo.rx * 2.1 * intensity.size;
     out.push(bolt([geo.cx - half, y, geo.cx, y, geo.cx + half, y], seedBase, 6 * geo.k, a, 2.6));
     out.push(bolt([geo.cx - half * 0.7, y + 6, geo.cx + half * 0.7, y + 6], seedBase + 1, 5 * geo.k, 0.7 * a, 1.8));

@@ -1,5 +1,5 @@
 // FX 랩 자동 연주 패턴 — 순수 함수. 시각(ms) 구간 → 그 구간에 칠 패드·세기 목록.
-import { DRUM_KIT_PADS } from '@/domain/drumKit';
+import { DRUM_KIT_FLAT_PADS } from '@/domain/drumKit';
 import type { PadId } from '@/domain/pads';
 import type { Judgement } from '@/domain/judgement';
 import { rand01 } from '@/domain/hitFx/rand';
@@ -34,7 +34,7 @@ interface LabLoop {
   events: readonly LabEvent[];
 }
 
-const KIT_PADS: readonly PadId[] = DRUM_KIT_PADS.map((p) => p.pad);
+const KIT_PADS: readonly PadId[] = DRUM_KIT_FLAT_PADS.map((p) => p.pad);
 
 /** 8비트 120BPM: 한 마디 2000ms. 하이햇 8분, 킥 1·3박, 스네어 2·4박(악센트), 첫 박 크래시 */
 function beat8(): LabLoop {

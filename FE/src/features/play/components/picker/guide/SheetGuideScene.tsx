@@ -1,10 +1,11 @@
 // 악보 연습 안내 장면 (설계 MODE-001-MODE-003-song-picker-guide 2장, 11/10 악보 모드 목업).
-// 위: 악보 한 마디(보표·마디선·박자표·기둥·빔·머리·커서·박 라벨) SVG. 아래: 실제 DrumKit(사용자 kitSkin, 0.85배).
+// 위: 악보 한 마디(보표·마디선·박자표·기둥·빔·머리·커서·박 라벨) SVG. 아래: 실제 DrumKit(사용자 kitSkin, 전자·네온 0.85배 · 실물은 위에서 본 그림을 같은 칸에 맞춤, guideKitPlace).
 // 연결선·음표 고리는 킷 위에 겹치는 SVG(pointer-events none). 논리 좌표 760×470 한 판을 CSS 비율로 줄인다.
 // 악보 색·굵기는 sheetStripDraw와 같은 토큰. 패드 중심은 kitPadsFor(skin)에서 계산한다. 소리·이펙트 없음.
 import { memo, useMemo, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { DRUM_KIT_W, kitPadsFor, padCenter, type PadVisualState } from '@/domain/drumKit';
+import { kitPadsFor, padCenter, type PadVisualState } from '@/domain/drumKit';
+import { guideKitPlace } from './guideKitPlace';
 import { CURSOR_END_POS, CURSOR_START_POS, EXAMPLE_STEPS, STEPS_PER_BAR, type GuideState } from '@/features/play/domain/guideScript';
 import { PAD_META, type PadId } from '@/domain/pads';
 import { staffPosOf, type NoteHead } from '@/domain/sheet';
@@ -20,10 +21,6 @@ const BOT = 130; // 선1 y
 const HALF = 5; // 보표 위치 1단위(반 칸) = 5px (sheetStripDraw LINE_GAP 10)
 const X0 = L + 28; // 첫 음표 x
 const SPAN = R - L - 50; // 첫 음표 ~ 마디 끝(8칸) 폭
-/** 킷: 760×300 원본을 0.85배로 (57, 200)에 둔다 */
-const KIT_X = 57;
-const KIT_Y = 200;
-const KIT_SCALE = 0.85;
 const STEM_DX = 5.25;
 const STEM_LEN = 30;
 
@@ -102,7 +99,7 @@ const StaffStatic = memo(function StaffStatic() {
 });
 
 /** DrumKit은 states·hitSeq가 바뀔 때만 다시 그린다(커서가 프레임마다 움직여도 킷은 그대로) */
-const KitView = memo(DrumKit);
+const MemoKit = memo(DrumKit);
 
 export interface SheetGuideSceneProps {
   state: GuideState;
@@ -132,7 +129,8 @@ export function SheetGuideScene({ state, hoverPad }: SheetGuideSceneProps) {
   const hitSeq = useMemo(() => Object.fromEntries(activePads.map((p) => [p, seq])) as Partial<Record<PadId, number>>, [activePads, seq]);
 
   // 연결선 끝: 패드 헤드 중심(킷 원본 좌표 → 장면 좌표). 하드코딩하지 않고 스킨별 배치표에서 읽는다
-  const kitPads = kitPadsFor(skin);
+  const place = guideKitPlace(skin);
+  const kitPads = kitPadsFor(skin, place.view);
   const links =
     active === null
       ? []
@@ -140,8 +138,8 @@ export function SheetGuideScene({ state, hoverPad }: SheetGuideSceneProps) {
           const kp = kitPads.find((p) => p.pad === pad);
           if (!kp) return [];
           const c = padCenter(kp);
-          const tx = KIT_X + c.x * KIT_SCALE;
-          const ty = KIT_Y + c.y * KIT_SCALE;
+          const tx = place.x + c.x * place.scale;
+          const ty = place.y + c.y * place.scale;
           const nx = COLS[active].x;
           const ny = yOf(staffPosOf(pad).line);
           return [{ pad, d: `M${nx},${ny + 12} C${nx},${ny + 90} ${tx},${ty - 110} ${tx},${ty - 22}` }];
@@ -157,12 +155,12 @@ export function SheetGuideScene({ state, hoverPad }: SheetGuideSceneProps) {
       <div
         className="guide-scene-kit"
         style={{
-          left: `${(KIT_X / SCENE_W) * 100}%`,
-          top: `${(KIT_Y / SCENE_H) * 100}%`,
-          width: `${((DRUM_KIT_W * KIT_SCALE) / SCENE_W) * 100}%`,
+          left: `${(place.x / SCENE_W) * 100}%`,
+          top: `${(place.y / SCENE_H) * 100}%`,
+          width: `${(place.w / SCENE_W) * 100}%`,
         }}
       >
-        <KitView scale={KIT_SCALE} skin={skin} states={states} hitSeq={hitSeq} effects={false} />
+        <MemoKit scale={place.scale} view={place.view} skin={skin} states={states} hitSeq={hitSeq} effects={false} />
       </div>
       <svg
         className="guide-scene-svg"
