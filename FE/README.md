@@ -461,6 +461,13 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
 - **저장**: [적용]을 누르면 `audioOffsetMs`와 마지막 측정 기록 `settingsStore.timingCal`(측정 시각·중앙값·흩어짐·짝 수·입력·그때 보고된 출력 지연)을 이 기기에 저장한다. 프리셋에는 넣지 않는다. 다음 곡 시작부터 판정에 쓰이고, 플레이 로그의 `calibration.audioOffsetMs`에도 같은 값이 실린다. 저장분의 `audioOffsetMs`가 범위 밖이면(범위를 바꾸기 전 값) 읽을 때 자른다(`sanitizeTimingSettings`).
 - **안내**: 측정한 입력(스틱·키보드)과 지금 입력 방식이 다르면 설정에 다시 맞추라는 문구를, 브라우저가 보고한 출력 지연(`AudioContext.outputLatency`)이 100ms를 넘으면 유선 출력을 권하는 문구를 보인다.
 - **진단**: `audio` 진단 줄(`app/audioDiag`)이 판정 타이밍 보정과 오디오 지연을 곡 시작 직후와 10초마다 낸다(아래 녹화 파일 표).
+- **스틱·킥 값 분리**(설계 `.claude/plans/PLAY-004-timing-cal-stick-kick.md`): 11/12 실측에서 같은 사람이 쳐도 킥이 스틱보다 10~40ms 이르게 판정돼 값을 둘로 나눴다.
+  - 값: `audioOffsetMs`는 이름을 그대로 두고 스틱·기본 값으로 쓴다. 킥용 `kickOffsetMs`(null이면 스틱 값을 따름)를 따로 둔다. 고르는 함수는 `kickOffsetOrStick`.
+  - 측정: 시작할 때 킥 페달이 연결돼 있으면 듣기 4박 → 스틱 12박 → 전환 4박 → 킥 12박(32박, 약 19초)으로 클릭을 멈추지 않고 이어서 잰다. 연결이 없거나 키보드 모드면 위의 16박 그대로다. 구간마다 그 입력의 타격만 계산한다(스틱 구간의 킥, 킥 구간의 스틱, 하이햇 페달은 소리만 낸다). 전환 박은 짝짓지 않는다.
+  - 적용(`timingCalApply`): 스틱이 성공하면 스틱 값을 넣는다. 킥도 성공하면 킥 값을 넣고, 킥 구간이 없었거나 실패하면 `kickOffsetMs`를 null로 둔다. 스틱이 실패하면 아무것도 바꾸지 않는다. 두 중앙값 차가 60ms(`TIMING_CAL_RECHECK_DIFF_MS`)를 넘으면 「한 번 더 재 볼까요?」를 보이되 적용은 막지 않는다.
+  - 판정(`engine/RhythmSession.hitSongTimeMs`): 발 타격(`foot` 2 하이햇 페달·3 킥, `isFootHit`)은 킥 값, 손 타격과 키보드·화면 터치는 스틱 값을 뺀다. IMU 후보 패드 계산은 스틱 값이다.
+  - 기록: 플레이 로그에 `kickOffsetMs`가 남는다. BE 업로드 `calibration.audioOffsetMs`에는 스틱 값만 간다(BE 파서가 모르는 필드를 거부한다). 타격별 `deltaMs`에는 입력별 값이 반영돼 있다.
+  - 화면: 설정 오디오 구역에 「스틱 판정 타이밍」「킥 판정 타이밍」 두 칸(킥 값이 없으면 스틱 값을 보이고, 움직이면 따로 저장), 드럼 세팅 상태 줄은 킥 값이 있으면 「맞춤 · 스틱 … · 킥 …」.
 
 ## 통합 설정(프리셋·캘리브레이션)
 
@@ -720,7 +727,7 @@ Shift를 같이 누르면 악센트. 킥·하이햇 페달의 센서 입력은 �
 - **복원:** 앱이 뜰 때마다 `authBootstrap`이 `POST /api/auth/refresh` → `GET /api/users/me`로 로그인을 복원한다(`authStore.restore`). access 토큰(30분)은 `api/auth` 모듈 메모리에만 있고 localStorage·sessionStorage에 쓰지 않는다. 복원 결과(`authenticated`/`anonymous`)에 따라 `app/presetBootstrap`이 프리셋 저장소를 서버/로컬로 맞춘다([프리셋](#프리셋)).
 - **만료:** 보호 API가 401이면 `apiFetch`가 refresh를 한 번 하고 같은 요청을 다시 보낸다. 동시에 여러 401이 나도 refresh는 한 번이다. refresh가 401이면 300ms 뒤 한 번 더 시도하고(두 탭이 동시에 회전하면 진 탭이 이긴 탭의 새 쿠키로 성공한다), 그래도 401이면 `authStore`가 `anonymous`가 되고 `RequireAuth`가 `/login?error=session_expired`로 보낸다.
 - **로그아웃:** 상단바 아바타 메뉴의 "로그아웃" → `POST /api/auth/logout`(204) → 메모리 토큰·활성 채보 작업 기록 폐기 → 랜딩(`/`).
-- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 오디오·연주·계정·데이터 활용 순서의 설정 구역이다. 넓은 화면은 두 열, 좁은 화면은 한 열이며 기기 연결·프리셋·보정은 드럼 세팅(`/setup`)에서 관리한다. 오디오는 전체·드럼(0~200%)·노래(0~100%) 음량, 박자 맞추기, 판정 타이밍 보정(−250~+100ms, 5ms 단위)을 제공한다. 연주는 실시간 코칭·타이밍 막대·패드 위치 자동 보정(기본 끔)·드럼 모양·타격 이펙트를 제공한다. 계정과 데이터 활용은 로그인 상태에 따라 표시하고 회원 탈퇴 버튼은 하단에 둔다. 최근 플레이는 연주 기록(`/history`)이 맡는다.
+- **설정(`/settings`, 옛 마이페이지 `/me`는 여기로 이동):** 오디오·연주·계정·데이터 활용 순서의 설정 구역이다. 넓은 화면은 두 열, 좁은 화면은 한 열이며 기기 연결·프리셋·보정은 드럼 세팅(`/setup`)에서 관리한다. 오디오는 전체·드럼(0~200%)·노래(0~100%) 음량, 박자 맞추기, 스틱·킥 판정 타이밍(각 −250~+100ms, 5ms 단위)을 제공한다. 연주는 실시간 코칭·타이밍 막대·패드 위치 자동 보정(기본 끔)·드럼 모양·타격 이펙트를 제공한다. 계정과 데이터 활용은 로그인 상태에 따라 표시하고 회원 탈퇴 버튼은 하단에 둔다. 최근 플레이는 연주 기록(`/history`)이 맡는다.
 - **플레이 기록은 계정별이다:** 로컬 플레이 로그 키는 로그인 계정마다 `ssaplash.playlogs.u{userId}`, 비로그인(인증 끔 개발 모드)은 `ssaplash.playlogs`. `app/authBootstrap`이 로그인 상태에 맞춰 `engine/playLog`의 주인을 바꾼다. 다른 계정의 기록은 최근 플레이·결과·악보 기록에 보이지 않는다. 계정 키가 생기기 전 기존 키의 기록은 계정으로 옮기지 않는다(누구 것인지 알 수 없다).
 - **맞춤 곡 추천 학습 활용 동의(COACH-004):** `VITE_RECOMMENDATION_CONSENT_ENABLED=true`일 때만 신규 동의를 수집한다. 기본은 비활성이다. 공개 전 문구 확정과 BE 허용 판 반영이 필요하다. 동의 여부와 R1·R2는 독립이다. 서버의 GET/PUT이 원본이고 PUT은 항상 현재 판을 보낸다. 해당 판이 허용 목록에 없으면 422이며 기존 상태를 유지한다.
   - **설정 "데이터 활용" 구역:** 기존 동의자는 수집 비활성 중에도 상태 조회와 철회가 가능하다. 읽기 실패는 미동의로 표시하지 않고 재시도를 제공한다. 이전 판에 동의한 상태는 켜진 토글과 판 갱신 필요 안내로 표시한다. 공개된 수집에서 새 동의는 본문을 확인한 뒤 명시적으로 수행한다.
@@ -879,13 +886,13 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 | --- | --- | --- |
 | `anchors` | 곡 시작(재시작 포함)마다 `session` start·`notes` 뒤 1회. `/play`·`/sheet` | `hands[2]`(0 왼손·1 오른손, 보정 안 한 손은 `null`) 원소 `{pad, pitch, yaw, radius, samples, spread}` — `radius`는 판정 프로필과 같은 값(자동 반경·override 반영). `calibratedAt`(ms), `presetId` |
 | `clock` | 센서 소스가 켜져 있고 모니터가 보는 동안 10초마다 + 곡 시작 직후 1회(`app/clockDiag`) | `offsets[4]` = role 0·1·2·3의 브라우저 − 센서 오프셋(ms, 미동기·미연결 `null`), `source`(센서 종류) |
-| `audio` | 모니터가 보는 동안 10초마다 + 곡 시작 직후 1회(`app/audioDiag`). `session` 줄은 곡 시작 순간에만 나가므로 녹화를 늦게 켜도 이 줄로 값을 알 수 있다 | `audioOffsetMs`(진행 중인 판의 판정 타이밍 보정, 판이 없으면 설정 값), `baseLatencyMs`·`outputLatencyMs`·`sampleRate`(AudioContext 보고값, 오디오를 안 켰으면 `null`), `measured`(마지막 박자 맞추기: `medianMs`·`madMs`·`pairs`·`input`·`measuredAt`, 없으면 `null`) |
+| `audio` | 모니터가 보는 동안 10초마다 + 곡 시작 직후 1회(`app/audioDiag`). `session` 줄은 곡 시작 순간에만 나가므로 녹화를 늦게 켜도 이 줄로 값을 알 수 있다 | `audioOffsetMs`(진행 중인 판의 판정 타이밍 보정 = 스틱 값, 판이 없으면 설정 값), `kickOffsetMs`(발 타격에 쓰는 값. 따로 재지 않았으면 `audioOffsetMs`와 같다. 옛 녹화에는 없다), `baseLatencyMs`·`outputLatencyMs`·`sampleRate`(AudioContext 보고값, 오디오를 안 켰으면 `null`), `measured`(마지막 박자 맞추기: `medianMs`·`madMs`·`pairs`·`input`·`measuredAt`, 없으면 `null`) |
 | `yawCorrect` | `yawDriftMonitor`가 `SET_YAW_OFFSET`을 보낼 때(`onCorrection`) | `stickId`, `reason`(`drift` 자동 보정 · `realign` 재정렬 · `connected` 연결 직후 0 초기화), `prevDeg`(보내기 전 적용값), `sentDeg`(보낸 절대값 = wrap180(`prevDeg` − `medianDeg`)), `medianDeg`(`drift` 링 중앙값 · `realign` 요청 오차 · `connected` `null`), `madDeg`(`drift`만), `samples[]`(`drift`만: 그때 링의 스틱 yaw − 앵커 yaw). 적용 확인은 PARAM_ACK `0x21` 패킷 줄 |
 | `yawAuto` | 모니터가 보는 동안 10초마다 + 곡 시작 직후 1회 + 설정 값이 바뀔 때(`app/yawAutoDiag`). 녹화를 곡 시작 뒤에 켜도 남는다 | `on`(패드 위치 자동 보정이 켜져 있는가). 켠 판과 끈 판을 녹화로 비교할 때 쓴다. 끈 판에는 `yawCorrect`의 `drift`가 나오지 않는다 |
 
 #### 녹화 요약
 
-제어 섹션의 "녹화 요약" 패널이 녹화의 구간 지연·SYNC rtt·채점 delta 분포를 표로 보여준다. 요약 값에는 마지막 `audio` 줄(`summary.audio`)이 들어가고 "표 복사"의 Markdown에 「오디오: 판정 타이밍 보정 · base · output」 한 줄로 나온다. 녹화 정지 직후 방금 녹화가 표시되고, "녹화 파일 열기"로 이전 `.jsonl`을 열 수 있다(읽기 실패 시 오류 문구 표시). "표 복사"는 Wiki에 붙여넣을 Markdown 표를 클립보드에 넣는다. 각 지표 옆 "기준"은 `HEALTH_THRESHOLDS`의 대응 값이다(rtt p50 ≤ `clock.rttWarnMs`, 판정→오디오 p95 ≤ `output.audioP95WarnMs`, 센서→오디오 p95 ≤ `output.totalP95WarnMs`, delta |평균| ≤ `score.deltaMeanWarnMs`). rtt는 송신 SYNC의 t0와 SYNC_ACK `t0Ms`를 packetLog와 같은 규칙(`features/monitor/core/syncPair`)으로 짝지어 구한다. 진단 줄이 없는 이전 파일은 패킷 수·rtt만 채워진다.
+제어 섹션의 "녹화 요약" 패널이 녹화의 구간 지연·SYNC rtt·채점 delta 분포를 표로 보여준다. 요약 값에는 마지막 `audio` 줄(`summary.audio`)이 들어가고 "표 복사"의 Markdown에 「오디오: 판정 타이밍 보정 · base · output」 한 줄로 나온다. 스틱 값과 킥 값이 다르면 보정 자리에 「스틱 … · 킥 …」로 둘 다 나오고, 같거나 옛 녹화면 값 하나만 나온다(세션 표의 오디오 오프셋 열도 같다). 녹화 정지 직후 방금 녹화가 표시되고, "녹화 파일 열기"로 이전 `.jsonl`을 열 수 있다(읽기 실패 시 오류 문구 표시). "표 복사"는 Wiki에 붙여넣을 Markdown 표를 클립보드에 넣는다. 각 지표 옆 "기준"은 `HEALTH_THRESHOLDS`의 대응 값이다(rtt p50 ≤ `clock.rttWarnMs`, 판정→오디오 p95 ≤ `output.audioP95WarnMs`, 센서→오디오 p95 ≤ `output.totalP95WarnMs`, delta |평균| ≤ `score.deltaMeanWarnMs`). rtt는 송신 SYNC의 t0와 SYNC_ACK `t0Ms`를 packetLog와 같은 규칙(`features/monitor/core/syncPair`)으로 짝지어 구한다. 진단 줄이 없는 이전 파일은 패킷 수·rtt만 채워진다.
 
 ### 텔레메트리 전송 (ADMIN 진단)
 
