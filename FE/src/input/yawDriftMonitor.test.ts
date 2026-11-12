@@ -56,12 +56,13 @@ const feed = (errs: number[]) => {
 };
 
 const PARAM_ACK_YAW_OFFSET = 0x21;
-const ack = (value: number, stickId: 0 | 1 | null = null) =>
+/** 0x21 응답. stickId는 레코드의 손(BLE·WS 링크), role은 패킷 flags 비트 0–1(0 왼손·1 오른손·2·3 페달) */
+const ack = (value: number, stickId: 0 | 1 | null = null, role = 0) =>
   packetTap.publish({
     dir: 'in',
     transport: 'ble',
     stickId,
-    bytes: new Uint8Array([0x06, 0, PARAM_ACK_YAW_OFFSET, value & 0xff, (value >> 8) & 0xff]),
+    bytes: new Uint8Array([0x06, role, PARAM_ACK_YAW_OFFSET, value & 0xff, (value >> 8) & 0xff]),
     recvTime: 0,
   });
 
@@ -206,10 +207,10 @@ describe('yawDriftMonitor', () => {
     expect(last[0]).toMatchObject({ appliedDeg: 0, samples: 0, lastSentAt: null });
   });
 
-  it('WS형 소스(stickId 무시)에서 0x21 null stickId는 창이 열린 스틱에 반영된다', () => {
+  it('손을 알 수 없는 0x21(레코드 손 없음 + 손이 아닌 role)은 창이 열린 스틱에 반영된다', () => {
     connected();
     for (const e of NINE_PLUS6) yawDriftMonitor.observe(hit(e, { stickId: 1 }), profile);
-    ack(-600, null);
+    ack(-600, null, 2);
     expect(last[1]).toMatchObject({ appliedDeg: -6, acked: true });
     expect(last[0]).toBeNull();
   });
@@ -260,6 +261,114 @@ describe('yawDriftMonitor', () => {
     expect(last[0]?.samples).toBe(2);
     src.set('disconnected');
     expect(last[0]).toBeNull();
+  });
+});
+
+describe('yawDriftMonitor PARAM_ACK 손 구분 (PLAY-004)', () => {
+  it('손 정보 없는 레코드(Web Serial)의 0x21은 패킷 role의 손에만 반영된다', () => {
+    connected();
+    yawDriftMonitor.correct(0, 58);
+    ack(-5800, null, 0);
+    expect(last[0]).toMatchObject({ appliedDeg: -58, acked: true });
+    yawDriftMonitor.correct(1, 10);
+    ack(-1000, null, 1);
+    expect(last[1]).toMatchObject({ appliedDeg: -10, acked: true });
+    expect(last[0]).toMatchObject({ appliedDeg: -58, acked: true });
+  });
+
+  it('양손 확인 창이 함께 열려 있어도 각 응답은 자기 손에만 반영된다(양손 재정렬)', () => {
+    connected();
+    yawDriftMonitor.correct(0, 58);
+    yawDriftMonitor.correct(1, 45);
+    ack(-5800, null, 0);
+    expect(last[1]).toMatchObject({ appliedDeg: -45, acked: null });
+    ack(-4500, null, 1);
+    expect(last[0]).toMatchObject({ appliedDeg: -58, acked: true });
+    expect(last[1]).toMatchObject({ appliedDeg: -45, acked: true });
+  });
+
+  it('한 손에 보낸 0의 응답이 창 없이 와도 다른 손 적용값은 남고, 그 손의 다음 보정은 남은 적용값 기준이다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    ack(-5800, null, 0);
+    vi.advanceTimersByTime(600);
+    // 오른손이 새로 붙어 0으로 맞춘다(확인 창 없음)
+    yawDriftMonitor.onConnected(1);
+    ack(0, null, 1);
+    expect(last[0]).toMatchObject({ appliedDeg: -58 });
+    expect(last[1]).toMatchObject({ appliedDeg: 0 });
+    // 쿨다운 뒤 왼손 드리프트 보정: −58 − 6 = −64 (0 − 6이 아니다)
+    vi.advanceTimersByTime(10_000);
+    feed(NINE_PLUS6);
+    const sent = src.sent[src.sent.length - 1];
+    expect(sent.stickId).toBe(0);
+    expect(sentDeg(sent.bytes)).toBeCloseTo(-64);
+  });
+
+  it('레코드에 손이 있으면(BLE·WS 링크) 패킷 role보다 먼저다', () => {
+    connected();
+    yawDriftMonitor.correct(1, 12);
+    ack(-1200, 1, 0);
+    expect(last[1]).toMatchObject({ appliedDeg: -12, acked: true });
+    expect(last[0]).toBeNull();
+  });
+
+  it('손을 알 수 없고 열린 확인 창도 없으면 어느 손에도 반영하지 않는다', () => {
+    connected();
+    yawDriftMonitor.correct(0, 58);
+    yawDriftMonitor.correct(1, 45);
+    vi.advanceTimersByTime(600);
+    ack(-900, null, 3);
+    expect(last[0]).toMatchObject({ appliedDeg: -58, acked: false });
+    expect(last[1]).toMatchObject({ appliedDeg: -45, acked: false });
+  });
+});
+
+describe('yawDriftMonitor 소스 상태 변화와 적용값 기억 (PLAY-004)', () => {
+  it('포트를 다시 열어도(연결 중 → 연결됨) 적용값은 남고 링·쿨다운은 비워진다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    ack(-5800, null, 0);
+    feed([6, 6]);
+    src.set('connecting');
+    expect(last[0]).toBeNull();
+    src.set('connected');
+    // 쿨다운이 비워져 바로 보정이 나가고, 기준은 남아 있던 −58이다: −58 − 6 = −64
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(2);
+    expect(sentDeg(src.sent[1].bytes)).toBeCloseTo(-64);
+    // 끊기기 전 샘플 2개가 남았다면 6번째에 보내 3개가 남는다. 비워졌으므로 8번째에 보내고 9번째 1개만 남는다
+    expect(last[0]).toMatchObject({ appliedDeg: -64, samples: 1 });
+  });
+
+  it('끊긴 동안 열려 있던 확인 창은 닫힌다(다시 붙은 뒤 acked false로 바뀌지 않는다)', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    src.set('disconnected');
+    src.set('connected');
+    vi.advanceTimersByTime(600);
+    expect(last[0]).toBeNull();
+    yawDriftMonitor.correct(0, 2);
+    expect(last[0]).toMatchObject({ appliedDeg: -60, acked: null });
+  });
+
+  it('다시 붙은 스틱이 꺼졌다 켜진 것이면(onConnected) 0으로 맞추고 기억도 0이다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    src.set('connecting');
+    src.set('connected');
+    yawDriftMonitor.onConnected(0);
+    expect(last[0]).toMatchObject({ appliedDeg: 0 });
+    yawDriftMonitor.correct(0, 5);
+    expect(sentDeg(src.sent[src.sent.length - 1].bytes)).toBeCloseTo(-5);
+  });
+
+  it('소스를 바꾸면 적용값을 잊는다', () => {
+    connected();
+    yawDriftMonitor.correct(0, 58);
+    const next = connected();
+    yawDriftMonitor.correct(0, 5);
+    expect(sentDeg(next.sent[0].bytes)).toBeCloseTo(-5);
   });
 });
 
