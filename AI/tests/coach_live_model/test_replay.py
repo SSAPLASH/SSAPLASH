@@ -127,7 +127,7 @@ def test_pick_cause_follows_the_rule_order() -> None:
 
 
 def _transition_notes(contrast_misses: tuple[int, ...] = ()) -> list[JudgedNote]:
-    """스네어 → 탐1에서만 놓치고, 하이햇 → 탐1(비교 대상)은 친다. FE `cause.test.ts`와 같은 연주."""
+    """스네어 → 스몰탐에서만 놓치고, 하이햇 → 스몰탐(비교 대상)은 친다. FE `cause.test.ts`와 같은 연주."""
     notes = []
     for k in range(4):
         base = 4 * k
