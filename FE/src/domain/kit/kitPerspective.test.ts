@@ -7,8 +7,10 @@ import {
   AIM_ORIGIN,
   FLOOR_Z,
   PAD_SOLIDS,
+  VIEW_EDGE,
   dragToLayout,
   hitTestPads,
+  isMovablePad,
   kitShapes,
   makeCamera,
   padPoint,
@@ -26,11 +28,41 @@ const shapes = kitShapes(DEFAULT_KIT_LAYOUT, cam);
 const shapeOf = (pad: PadId) => shapes.find((s) => s.pad === pad)!;
 
 describe('makeCamera', () => {
-  it('투영한 점을 같은 깊이로 되돌리면 원래 점이다', () => {
+  it('그림 자리(place)는 세로·크기·깊이가 원근 투영과 같고 가로만 다르다', () => {
     const pt = [0.3, 0.6, 0.2] as const;
     const q = cam.project(pt);
-    const back = cam.unproject(q.sx, q.sy, q.depth);
-    for (const i of [0, 1, 2]) expect(back[i]).toBeCloseTo(pt[i], 6);
+    const p = cam.place(pt);
+    expect(p.sy).toBe(q.sy);
+    expect(p.scale).toBe(q.scale);
+    expect(p.depth).toBe(q.depth);
+  });
+
+  it('가로 자리는 기준점에서 본 방위각에 비례한다: 같은 방위각이면 거리·높이와 상관없이 같은 가로 자리', () => {
+    // 방위각 30°: 가까운 점과 먼 점, 낮은 점과 높은 점
+    const dir = [Math.sin(Math.PI / 6), Math.cos(Math.PI / 6)];
+    const near = cam.place([AIM_ORIGIN[0] + dir[0] * 0.4, AIM_ORIGIN[1] + dir[1] * 0.4, -0.2]);
+    const far = cam.place([AIM_ORIGIN[0] + dir[0] * 1.1, AIM_ORIGIN[1] + dir[1] * 1.1, 0.5]);
+    expect(near.sx).toBeCloseTo(far.sx, 6);
+    // 정면은 가로 가운데, 반대쪽 각도는 가운데를 두고 대칭
+    expect(cam.place([AIM_ORIGIN[0], 0.7, 0]).sx).toBeCloseTo(BOX.w / 2, 6);
+    const left = cam.place([AIM_ORIGIN[0] - dir[0] * 0.4, AIM_ORIGIN[1] + dir[1] * 0.4, -0.2]);
+    expect(left.sx + near.sx).toBeCloseTo(BOX.w, 6);
+  });
+
+  it.each([BOX, { w: 1004, h: 468 }, { w: 600, h: 600 }])('배치 가로 끝(x 0.05·0.95)의 스틱 패드 중심은 그림 영역 끝에서 기준 길이의 10% 안쪽에 온다 %o', (box) => {
+    const c = makeCamera(box);
+    const edge = Math.min(box.w, box.h * 1.6) * VIEW_EDGE;
+    for (const pad of ['SNARE', 'HIHAT', 'CRASH', 'FLOOR_TOM'] as const) {
+      expect(padShape(pad, padPoint(pad, { x: 0.05, y: 0.5 }), c).cx).toBeCloseTo(edge, 4);
+      expect(padShape(pad, padPoint(pad, { x: 0.95, y: 0.3 }), c).cx).toBeCloseTo(box.w - edge, 4);
+    }
+  });
+
+  it('layoutXAt은 place 가로 자리의 역변환이다', () => {
+    for (const x of [0.05, 0.3, 0.5, 0.8, 0.95]) {
+      const s = padShape('MID_TOM', padPoint('MID_TOM', { x, y: 0.4 }), cam);
+      expect(cam.layoutXAt(s.cx)).toBeCloseTo(x, 6);
+    }
   });
 
   it('먼 점은 작고 화면 위쪽에, 높은 점은 화면 위쪽에 놓인다', () => {
@@ -57,17 +89,19 @@ describe('padPoint', () => {
     expect(padPoint('RIDE', DEFAULT_KIT_LAYOUT.RIDE)[0]).toBeGreaterThan(padPoint('CRASH', DEFAULT_KIT_LAYOUT.CRASH)[0]);
   });
 
-  it('페달은 바닥 가까이 고정 줄에 있고 배치 y와 무관하다', () => {
-    const a = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.9 });
-    const b = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.3 });
-    expect(a).toEqual(b);
-    expect(a[2]).toBeLessThan(-0.5);
+  it('하이햇 페달의 3D 점은 하이햇 바로 아래 바닥이다(하이햇의 배치 좌표를 넘긴다)', () => {
+    const hh = padPoint('HIHAT', DEFAULT_KIT_LAYOUT.HIHAT);
+    const pedal = padPoint('HIHAT_PEDAL', DEFAULT_KIT_LAYOUT.HIHAT);
+    expect(pedal[0]).toBe(hh[0]);
+    expect(pedal[1]).toBe(hh[1]);
+    expect(pedal[2]).toBeLessThan(-0.5);
   });
 
-  it('킥은 바닥에 세워져 있다: 중심 높이 = 바닥 + 반지름, 배치 y와 무관', () => {
+  it('킥은 자리가 고정이다: 배치 좌표와 무관하게 바닥에 서고(중심 높이 = 바닥 + 반지름) 화면 가로 가운데에 놓인다', () => {
     const a = padPoint('KICK', { x: 0.6, y: 0.9 });
-    expect(a).toEqual(padPoint('KICK', { x: 0.6, y: 0.2 }));
+    expect(a).toEqual(padPoint('KICK', { x: 0.1, y: 0.2 }));
     expect(a[2]).toBeCloseTo(FLOOR_Z + PAD_SOLIDS.KICK.radius, 6);
+    expect(shapeOf('KICK').cx).toBeCloseTo(BOX.w / 2, 6);
   });
 
   it('padPointCm은 같은 점을 cm로 준다', () => {
@@ -204,13 +238,14 @@ describe('dragToLayout', () => {
     expect(dragToLayout('SNARE', BOX.w, shapeOf('SNARE').cy, DEFAULT_KIT_LAYOUT.SNARE, cam).x).toBe(0.95);
   });
 
-  it('페달은 좌우로만 움직이고 y는 그대로다', () => {
-    const s = shapeOf('KICK');
-    const next = dragToLayout('KICK', s.cx - 80, s.cy - 100, DEFAULT_KIT_LAYOUT.KICK, cam);
-    expect(next.y).toBe(DEFAULT_KIT_LAYOUT.KICK.y);
-    expect(next.x).toBeLessThan(DEFAULT_KIT_LAYOUT.KICK.x);
-    const moved = padShape('KICK', padPoint('KICK', next), cam);
-    expect(moved.cx).toBeCloseTo(s.cx - 80, 0);
+  it('킥과 하이햇 페달은 끌어도 옮겨지지 않는다', () => {
+    expect(isMovablePad('KICK')).toBe(false);
+    expect(isMovablePad('HIHAT_PEDAL')).toBe(false);
+    expect(isMovablePad('SNARE')).toBe(true);
+    for (const pad of ['KICK', 'HIHAT_PEDAL'] as const) {
+      const s = shapeOf(pad);
+      expect(dragToLayout(pad, s.cx - 80, s.cy - 100, DEFAULT_KIT_LAYOUT[pad], cam)).toEqual({ x: DEFAULT_KIT_LAYOUT[pad].x, y: DEFAULT_KIT_LAYOUT[pad].y });
+    }
   });
 });
 
@@ -268,11 +303,28 @@ describe('PAD_SOLIDS', () => {
   });
 });
 
-describe('기본 배치의 하이햇 페달', () => {
-  it('화면에서 하이햇 바로 아래에 있다(가로 어긋남이 하이햇 반지름의 1/4 이내)', () => {
+describe('하이햇 페달', () => {
+  it('기본 배치: 화면에서 하이햇 바로 아래에 붙어 있다', () => {
     const hh = shapeOf('HIHAT');
     const pedal = shapeOf('HIHAT_PEDAL');
-    expect(Math.abs(pedal.cx - hh.cx)).toBeLessThan(hh.rx / 4);
+    // 받침 그림의 페달 자리라 가로는 거의 같고(하이햇 반지름의 1/10 이내) 세로로 아래다
+    expect(Math.abs(pedal.cx - hh.cx)).toBeLessThan(hh.rx / 10);
     expect(pedal.cy).toBeGreaterThan(hh.cy + hh.ry);
+    // 하이햇보다 살짝 앞이라 받침 위에 그려진다
+    expect(pedal.depth).toBeLessThan(hh.depth);
+  });
+
+  it('하이햇을 옮기면 따라간다: 배치의 페달 좌표와 무관하게 하이햇과의 간격·크기 비가 같다', () => {
+    const gap = (layout: typeof DEFAULT_KIT_LAYOUT) => {
+      const list = kitShapes(layout, cam);
+      const hh = list.find((s) => s.pad === 'HIHAT')!;
+      const pedal = list.find((s) => s.pad === 'HIHAT_PEDAL')!;
+      return { dx: (pedal.cx - hh.cx) / hh.rx, drop: (pedal.cy - hh.cy) / hh.rx, size: pedal.rx / hh.rx };
+    };
+    const base = gap(DEFAULT_KIT_LAYOUT);
+    const moved = gap({ ...DEFAULT_KIT_LAYOUT, HIHAT: { ...DEFAULT_KIT_LAYOUT.HIHAT, x: 0.7, y: 0.2 }, HIHAT_PEDAL: { ...DEFAULT_KIT_LAYOUT.HIHAT_PEDAL, x: 0.1 } });
+    expect(moved.dx).toBeCloseTo(base.dx, 6);
+    expect(moved.drop).toBeCloseTo(base.drop, 6);
+    expect(moved.size).toBeCloseTo(base.size, 6);
   });
 });

@@ -284,3 +284,20 @@ export const KIT_ART_TOP: KitArt = {
 export function kitArtPad(art: KitArt, pad: PadId): KitArtPad | undefined {
   return art.pads.find((p) => p.pad === pad);
 }
+
+/**
+ * 원근 그림에서 하이햇 페달 조각이 하이햇 받침 그림에 맞물리는 자리·크기. 받침 그림(hihat-base)은 페달 자리가 네모로 비어 있고
+ * 페달 조각(hihat-pedal)이 그 네모를 채운다. 이 비율로 놓아야 이음매 없이 한 그림으로 보인다(다르게 놓으면 페달이 잘려 보이고 받침에 구멍이 보인다).
+ * 값은 하이햇 헤드 가로 반지름 대비다: dx·drop은 헤드 중심에서 페달 중심까지의 가로·세로 거리, size는 페달 가로 반지름
+ */
+export const HIHAT_PEDAL_FIT: { dx: number; drop: number; size: number } = (() => {
+  const hh = KIT_ART_PERSP.pads.find((p) => p.pad === 'HIHAT')!;
+  const pedal = KIT_ART_PERSP.pads.find((p) => p.pad === 'HIHAT_PEDAL')!;
+  /** 하이햇 조각 상자(폭 160) 단위 ÷ 킷 단위 */
+  const u = 160 / hh.kit.w;
+  /** 페달 조각 상자(폭 160) 단위 → 킷 단위 */
+  const k = pedal.kit.w / 160;
+  const px = (pedal.kit.left + pedal.head.cx * k - hh.kit.left) * u;
+  const py = (pedal.kit.top + pedal.head.cy * k - hh.kit.top) * u;
+  return { dx: (px - hh.head.cx) / hh.head.rx, drop: (py - hh.head.cy) / hh.head.rx, size: (pedal.head.rx * k * u) / hh.head.rx };
+})();

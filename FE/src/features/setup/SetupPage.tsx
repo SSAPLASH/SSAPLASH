@@ -1,4 +1,4 @@
-// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·캔버스 판(행 전체 폭) 안의 선택 패드 정보 카드·타격 확인, 보정 중에는 하단 바 [저장] 숨김) → 접힌 고급 설정 → 하단 고정 바.
+// 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 상태 타일 3장(스틱 연결·시작 위치 보정·박자 맞추기, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·캔버스 판(행 전체 폭) 안의 선택 패드 정보 카드·타격 확인, 보정 중에는 하단 바 [저장] 숨김) → 접힌 고급 설정 → 하단 고정 바.
 // 프리셋 고르기·고치기·저장은 드럼 배치 카드 한 곳이다: 칩으로 적용, [추가하기]로 패드별 2타 보정 → 새 프리셋 저장, [전체 보정]·[이 드럼 다시 치기]로 적용 프리셋 편집.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
 // 단계 판정·문구는 domain/kit/setupSteps, 저장은 presetStore, 보정·재정렬은 runtime/calibrationSession이 맡고
@@ -14,9 +14,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Slider } from '@/components/ui/Slider';
 import { Toggle } from '@/components/ui/Toggle';
 import { HitLog } from '@/features/setup/components/HitLog';
-import { HIT_LOG_ROWS } from '@/features/setup/components/hitLogFormat';
+import { HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitLogPlacement } from '@/features/setup/components/hitLogFormat';
 import '@/features/setup/components/setup.css';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
+import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { timingCalStatusText } from '@/components/calibration/timingCalText';
 import { SensorOptionsPanel } from '@/features/setup/components/SensorOptionsPanel';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/features/setup/components/PresetChips';
@@ -155,6 +156,8 @@ function calibratedText(at: number | null, now: number): string | null {
 type NamePurpose = 'leave' | 'save' | 'draft';
 
 export function SetupPage() {
+  // 타격 확인·패드 소리 확인을 위해 이 화면에서도 키보드 드럼을 받는다(입력 칸·대화상자의 키는 소스가 건드리지 않는다)
+  useKeyboardDrum(true);
   const s = useSettings();
   const presets = usePresets();
   const connected = useLive((l) => l.connected);
@@ -228,7 +231,8 @@ export function SetupPage() {
   // 스테이지 행·캔버스·카드 실제 크기로 가림 영역을 재고 행 높이를 화면에 맞춘다(측정 불가면 고정 비율·CSS 폴백)
   const overlay = useOverlayRegion();
   const [advOpen, setAdvOpen] = useState(false);
-  const selectedPlacement = s.kitLayout[selectedPad];
+  // 하이햇 페달은 하이햇을 따라다닌다: 표시 좌표도 하이햇 자리 기준이다
+  const selectedPlacement = s.kitLayout[selectedPad === 'HIHAT_PEDAL' ? 'HIHAT' : selectedPad];
   // 선택 패드의 표시 좌표(cm). 그림에 놓인 3D 점 그대로다(거리는 모델 가정값)
   const selectedPoint = padPointCm(selectedPad, selectedPlacement, s.tuning.angleRange);
   // 보정 전 판정 범위(°): 3D 모델 기본 앵커의 손별 평균. 페달은 없다(null)
@@ -476,6 +480,12 @@ export function SetupPage() {
   const nameDialogError = presets.status === 'error' && presets.error ? ERROR_TEXT[presets.error] : null;
   const showPresetError = presets.status === 'error' && presets.error !== null && nameOpen === null;
   const calNeeded = stepOf('calibration').status === 'needed' && !realigning;
+  // 정보 카드 모서리는 한 번만 구해 정보 카드와 타격 확인 자리 판단에 같이 쓴다
+  const infoCorner = pickOverlayCorner(padCircles, overlay.region, [selectedPad], overlay.figSize ?? undefined);
+  // 타격 확인 자리: 편집 화면이고 판이 충분히 크면 판 안(왼쪽 위 카드, 3건), 아니면 판 아래(5건)
+  const hitInPanel = hitLogPlacement({ capturing, figSize: overlay.figSize, corner: infoCorner }) === 'panel';
+  const hitNotice =
+    sensorMode && !anyConnected ? <div className="setup-notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div> : null;
 
   return (
     <main className="main setup-page">
@@ -524,18 +534,20 @@ export function SetupPage() {
           disabled={capturing}
           reason={capturing ? '보정 중에는 열 수 없어요' : undefined}
         />
+        <StatusTile
+          id="setup-timing"
+          title="박자 맞추기"
+          status={s.timingCal ? 'done' : 'needed'}
+          statusText={timingCalStatusText(s.timingCal, s.audioOffsetMs)}
+          statusWarn={!s.timingCal}
+          summary="클릭 소리에 맞춰 쳐서 판정 타이밍을 맞춰요"
+          actionText={s.timingCal ? '다시 맞추기' : '맞추기'}
+          onOpen={() => setTimingCalOpen(true)}
+          disabled={timingCalBlocked}
+          reason={timingCalBlocked ? '보정 중에는 열 수 없어요' : undefined}
+        />
       </div>
 
-      <div className="timing-cal-row">
-        <span className="timing-cal-row-title">박자 맞추기</span>
-        <span className={`timing-cal-row-status${s.timingCal ? '' : ' todo'}`}>{timingCalStatusText(s.timingCal, s.audioOffsetMs)}</span>
-        <span className="timing-cal-row-help">
-          {timingCalBlocked ? '보정 중에는 열 수 없어요' : '클릭 소리에 맞춰 쳐서 판정 타이밍을 자동으로 맞춰요'}
-        </span>
-        <Button variant="secondary" size="sm" disabled={timingCalBlocked} onClick={() => setTimingCalOpen(true)}>
-          {s.timingCal ? '다시 맞추기' : '맞추기'}
-        </Button>
-      </div>
       {timingCalOpen && <TimingCalDialog onClose={() => setTimingCalOpen(false)} />}
 
       {stepDialog === 'stick' && (
@@ -649,29 +661,26 @@ export function SetupPage() {
 
       {/* 드럼 배치 카드: 프리셋 칩 줄 · 배치 편집기(보정 중에는 보정 무대) · 선택 패드 정보 · 타격 확인(준비 조건이 아니라 단계가 아니다) */}
       <Card padding="md" className="setup-kit" role="region" aria-labelledby="setup-kit-title">
-        <h2 id="setup-kit-title" className="setup-card-title">
-          드럼 배치
-        </h2>
-        <p className="setup-card-desc">
-          {capturing
-            ? calibration.capture?.phase === 'done'
-              ? RESULT_GUIDE_TEXT
-              : CAPTURE_GUIDE_TEXT
-            : '프리셋을 골라 고쳐요. 추가하기를 누르면 패드마다 2번씩 쳐서 새 배치를 만들어요'}
-        </p>
-        <PresetChips
-          presets={presets.items}
-          activeId={s.activePresetId}
-          calibrating={calibrating}
-          calibratedText={calibratedText(s.calibratedAt, now)}
-          sensorMode={sensorMode}
-          canCalibrate={anyConnected}
-          busy={saving}
-          onSelect={(id) => presets.apply(id)}
-          onAdd={startAdd}
-          onManage={openManage}
-          onCancel={stopCapture}
-        />
+        <div className="setup-kit-head">
+          <h2 id="setup-kit-title" className="setup-card-title">
+            드럼 배치
+          </h2>
+          <PresetChips
+            presets={presets.items}
+            activeId={s.activePresetId}
+            calibrating={calibrating}
+            calibratedText={calibratedText(s.calibratedAt, now)}
+            sensorMode={sensorMode}
+            canCalibrate={anyConnected}
+            busy={saving}
+            onSelect={(id) => presets.apply(id)}
+            onAdd={startAdd}
+            onManage={openManage}
+            onCancel={stopCapture}
+          />
+        </div>
+        {/* 평소 설명 문장은 뺀다. 보정 중 안내 문장만 머리 아래에 보인다 */}
+        {capturing && <p className="setup-card-desc">{calibration.capture?.phase === 'done' ? RESULT_GUIDE_TEXT : CAPTURE_GUIDE_TEXT}</p>}
         {showPresetError && (
           <div className="setup-notice error setup-row" style={{ justifyContent: 'space-between' }}>
             <span>{ERROR_TEXT[presets.error!]}</span>
@@ -698,11 +707,19 @@ export function SetupPage() {
                   </Button>
                 )
               }
+              log={
+                hitInPanel ? (
+                  <div className="setup-hit is-float">
+                    <h3 className="setup-hit-title">타격 확인</h3>
+                    <HitLog hits={recentHits} now={now} rows={HIT_LOG_FLOAT_ROWS} />
+                  </div>
+                ) : undefined
+              }
               card={
                 /* 선택 패드 카드(편집 상태). 그림과 겹칠 때 패드를 더 가리면 왼쪽 아래로 옮긴다 */
                 <KitInfoOverlay
                   cardRef={overlay.cardRef}
-                  corner={pickOverlayCorner(padCircles, overlay.region, [selectedPad], overlay.figSize ?? undefined)}
+                  corner={infoCorner}
                   name={PAD_META[selectedPad].label}
                   x={String(Math.round(selectedPoint.x))}
                   y={String(Math.round(selectedPoint.y))}
@@ -767,11 +784,16 @@ export function SetupPage() {
           </>
         )}
 
-        <div className="setup-hit">
-          <h3 className="setup-hit-title">타격 확인</h3>
-          {sensorMode && !anyConnected && <div className="setup-notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div>}
-          <HitLog hits={recentHits} now={now} />
-        </div>
+        {/* 판 안에 들어가지 않을 때만 여기에 그린다(보정 중·좁은 화면). 「스틱 입력 중단」 알림은 언제나 판 아래 */}
+        {hitInPanel ? (
+          hitNotice
+        ) : (
+          <div className="setup-hit">
+            <h3 className="setup-hit-title">타격 확인</h3>
+            {hitNotice}
+            <HitLog hits={recentHits} now={now} />
+          </div>
+        )}
       </Card>
 
       {/* 고급 설정: 판정 반경·연주 환경(설정 스토어에 즉시 저장되어 미저장 판정 대상이 아니다) */}

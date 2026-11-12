@@ -60,4 +60,15 @@ describe('keyboardDrum', () => {
     expect(press()).toBe(false);
     expect(hits).toHaveLength(1);
   });
+
+  it('두 곳이 겹쳐 쓰면 한 곳이 떠나도 켜져 있고, 둘 다 떠나야 꺼진다(드럼 세팅 화면 위의 박자 맞추기 창)', async () => {
+    await attach();
+    const page = renderHook(() => useKeyboardDrum(true));
+    const dialog = renderHook(() => useKeyboardDrum(true));
+    expect(press()).toBe(true);
+    dialog.unmount();
+    expect(press()).toBe(true);
+    page.unmount();
+    expect(press()).toBe(false);
+  });
 });
