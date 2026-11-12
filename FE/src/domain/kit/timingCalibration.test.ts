@@ -69,7 +69,7 @@ describe('evaluateTimingCal', () => {
     const r = evaluateTimingCal(beats, beats.map((b, i) => tap(b - 65 + ((i % 3) - 1) * 4)));
     expect(r.status).toBe('ok');
     const chart: Chart = { songId: 't', title: 't', bpm: 100, beatsPerBar: 4, notes: [{ timeMs: 1000, pad: 'SNARE' }] } as Chart;
-    const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: r.offsetMs as number });
+    const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: r.offsetMs as number, kickOffsetMs: r.offsetMs as number });
     ss.start(5000);
     const ev = ss.handleHit({ id: 1, pad: 'SNARE', velocity: 100, tHit: 5000 + 1000 - 65, source: 'serial', stickId: 0 } as ResolvedHit);
     expect(Math.abs(ev?.deltaMs ?? 99)).toBeLessThanOrEqual(3);

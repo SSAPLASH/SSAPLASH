@@ -22,7 +22,7 @@ function setup(latency: number, stall?: [number, number]) {
   const perfToHeardCtx = (at: number) => heardOf(now) + (at - now) / 1000;
   const reading = (): AudioReading => ({ perfMs: now, ctxSec: ctxAt(now), heardCtxSec: heardOf(now) });
   const chart: Chart = { songId: 't', title: 't', difficulty: 'EASY', bpm: 120, offsetMs: 0, beatsPerBar: 4, notes: NOTES, source: 'BUILTIN', durationMs: 25_000 };
-  const session = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 });
+  const session = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 });
   const acc: ClockAccompaniment = { start() {}, startAtContext() {}, pause: () => 0, resume() {}, stop() {} };
   const timers: Array<() => void> = [];
   const clock = new PlayClock(session, {
