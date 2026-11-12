@@ -109,13 +109,39 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   });
 });
 
+describe('SettingsPage 패드 위치 자동 보정', () => {
+  it('기본은 끔이고 스위치가 store 값을 따른다', () => {
+    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('false');
+    put(useSettings, { yawAutoCorrect: true });
+    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('true');
+  });
+});
+
+describe('SettingsPage 연주 구역 줄', () => {
+  it('스위치 세 줄 사이에 안내 문단이 끼지 않는다(줄마다 구분선이 고르게 나온다)', () => {
+    put(useSettings, { yawAutoCorrect: true });
+    const html = render();
+    const from = html.indexOf('실시간 코칭');
+    const to = html.indexOf('드럼 모양');
+    expect(html.slice(from, to)).not.toContain('settings-note');
+  });
+
+  it('스위치 줄 설명은 한 문장이다', () => {
+    const html = render();
+    for (const text of ['연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.', '최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.', '틀어진 스틱 방향을 타격 위치로 바로잡아요.']) {
+      expect(html).toContain(text);
+    }
+  });
+});
+
 describe('SettingsPage 드럼 모양', () => {
   it('연주 토글 다음에 드럼 모양·타격 이펙트 캐러셀이 나온다', () => {
     const html = render();
     expect(html).toContain('드럼 모양');
     expect(html).toContain('aria-roledescription="carousel"');
     expect(html.indexOf('실시간 코칭')).toBeLessThan(html.indexOf('타이밍 막대'));
-    expect(html.indexOf('타이밍 막대')).toBeLessThan(html.indexOf('드럼 모양'));
+    expect(html.indexOf('타이밍 막대')).toBeLessThan(html.indexOf('패드 위치 자동 보정'));
+    expect(html.indexOf('패드 위치 자동 보정')).toBeLessThan(html.indexOf('드럼 모양'));
     expect(html.indexOf('드럼 모양')).toBeLessThan(html.indexOf('타격 이펙트'));
   });
 });

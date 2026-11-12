@@ -109,6 +109,39 @@ describe('yawDriftMonitor', () => {
     expect(last[0]?.lastErrorDeg).not.toBeNull();
   });
 
+  it('자동 보정을 끄면 타격을 모으지 않고 보내지 않는다. 보낸 오프셋은 그대로 둔다', () => {
+    const src = connected();
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(1);
+    const applied = last[0]?.appliedDeg;
+    yawDriftMonitor.setAuto(false);
+    expect(last[0]).toMatchObject({ appliedDeg: applied, samples: 0, lastErrorDeg: null });
+    vi.advanceTimersByTime(20_000);
+    feed(NINE_PLUS6);
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(1);
+    expect(last[0]?.samples).toBe(0);
+  });
+
+  it('자동 보정을 꺼도 재정렬(correct)은 보낸다', () => {
+    const src = connected();
+    yawDriftMonitor.setAuto(false);
+    yawDriftMonitor.correct(0, 8);
+    expect(src.sent).toHaveLength(1);
+    expect(sentDeg(src.sent[0].bytes)).toBe(-8);
+  });
+
+  it('다시 켜면 꺼진 동안의 타격 없이 새로 모아 보정한다', () => {
+    const src = connected();
+    yawDriftMonitor.setAuto(false);
+    feed(NINE_PLUS6);
+    yawDriftMonitor.setAuto(true);
+    feed(NINE_PLUS6.slice(0, 7));
+    expect(src.sent).toHaveLength(0);
+    feed([6]);
+    expect(src.sent).toHaveLength(1);
+  });
+
   it('쿨다운이 지나면 다시 보낼 수 있다', () => {
     const src = connected();
     feed(NINE_PLUS6);
