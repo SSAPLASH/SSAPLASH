@@ -15,6 +15,7 @@ import {
   placePad,
   type DrumKitPad,
   type KitSkin,
+  type KitView,
   type PadBadge,
   type PadVisualState,
 } from '@/domain/drumKit';
@@ -41,6 +42,11 @@ export interface DrumKitProps {
   onPadDown?: (pad: PadId, pointerType: string) => void;
   /** 드럼 모양. 기본 'acoustic'(실물) */
   skin?: KitSkin;
+  /**
+   * 실물 스킨의 그림 종류. 기본 'persp'(원근, 큰 킷). 'top'은 위에서 본 그림(작은 킷)이라 킷 상자·배치·조각 이미지가 모두 바뀐다.
+   * 전자·네온과 자유 틀(frame, 항상 원근)에서는 무시한다
+   */
+  view?: KitView;
   /** 패드별 타격 횟수 카운터. 값이 바뀔 때마다 타격 모션을 처음부터 다시 재생한다(usePadHitSeq) */
   hitSeq?: Partial<Record<PadId, number>>;
   /** 타격 이펙트(테마 캔버스) 표시. 기본 false — 연주 화면에서만 켠다 */
@@ -146,6 +152,7 @@ export function DrumKit({
   onPadClick,
   onPadDown,
   skin = 'acoustic',
+  view: viewProp = 'persp',
   hitSeq,
   effects = false,
   fxTheme,
@@ -171,7 +178,9 @@ export function DrumKit({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
-  const box = kitBoxFor(skin);
+  // 위에서 본 그림은 실물 고정 배치에서만. 자유 틀·전자·네온은 view와 무관하다
+  const view: KitView = !frame && skin === 'acoustic' ? viewProp : 'persp';
+  const box = kitBoxFor(skin, view);
   const fitting = !frame && (fitWidth || fitContain);
   useEffect(() => {
     if (!fitting) return;
@@ -185,12 +194,12 @@ export function DrumKit({
   }, [fitting, fitContain, scale, box.h]);
 
   const eff = fitting ? (fit ?? scale) : scale;
-  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff, skin);
+  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff, skin, view);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
   const pads: readonly (DrumKitPad & { tilt?: number })[] = frame
     ? frame.pads.filter((p) => !hidden?.includes(p.pad)).map((p) => ({ ...p, h: p.w }))
-    : kitPadsFor(skin)
+    : kitPadsFor(skin, view)
         .filter((p) => !hidden?.includes(p.pad))
         .map((p) => {
           const at = placement?.[p.pad];
@@ -240,7 +249,7 @@ export function DrumKit({
         <>
       {underPads.map((p) => {
         const wrapClass = wrapClassOf(p.pad);
-        const under = <Pad shape={p.shape} left={p.left} top={p.top} w={p.w} label={p.label} defsId={defsId} skin={skin} art={p.art} layer="under" />;
+        const under = <Pad shape={p.shape} left={p.left} top={p.top} w={p.w} label={p.label} defsId={defsId} skin={skin} art={p.art} layer="under" view={view} />;
         return wrapClass ? (
           <g key={`under-${p.pad}`} className={wrapClass}>
             {under}
@@ -269,14 +278,16 @@ export function DrumKit({
           hitKey={hitSeq?.[p.pad]}
           tilt={p.tilt}
           art={p.art}
+          view={view}
           layer={skin === 'acoustic' && p.art?.top ? 'over' : undefined}
           // 하이햇·페달만 받는다(다른 패드의 memo props는 바뀌지 않는다)
           closed={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? closedHihat : undefined}
           pedalOff={p.pad === 'HIHAT_PEDAL' ? pedalOff : undefined}
           pedalHitSeq={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? pedalHitSeq : undefined}
-          // 고정 배치의 실물 패드는 글자 크기를 통일하고, 킷이 줄어도 약 12px 아래로 작아지지 않게 키운다(최대 1.6배).
+          // 고정 배치의 실물 패드는 글자 크기를 통일하고, 킷이 줄어도 약 12px 아래로 작아지지 않게 키운다(최대 1.6배,
+          // 위에서 본 작은 킷은 scale이 0.3대라 2.4배까지 — 그래도 화면 글자는 약 9px).
           // 자유 틀은 헤드 크기에 비례(Pad 기본)
-          textSize={frame || !p.art ? undefined : Math.min(1.6, Math.max(1, eff > 0 ? 1 / eff : 1))}
+          textSize={frame || !p.art ? undefined : Math.min(view === 'top' ? 2.4 : 1.6, Math.max(1, eff > 0 ? 1 / eff : 1))}
           onClick={onPadClick ? () => onPadClick(p.pad) : undefined}
           onPointerDown={
             onPadDown
@@ -345,7 +356,7 @@ export function DrumKit({
   const body = effects ? (
     <div className="drum-kit-fx">
       {svg}
-      <FxCanvas skin={skin} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />
+      <FxCanvas skin={skin} view={view} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />
     </div>
   ) : (
     svg
