@@ -1,6 +1,7 @@
 // 곡 선택 안내 시계 (설계 MODE-001-MODE-003-song-picker-guide 2장). rAF로 경과 시간(ms)을 누적하고 일시정지·한 칸 이동을 맡는다.
 // 장면 계산은 하지 않는다(domain/guideScript.stateAt). 대상 요소가 화면 밖이거나 탭이 숨겨지면 누적을 멈추고,
 // 모션 줄이기(prefers-reduced-motion)이면 첫 칸에 멈춘 채로 시작한다.
+// active=false(접이 바가 접힘)면 누적을 멈추고, 다시 true가 되면 멈춘 시각에서 이어 간다.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { holdStartOf, type GuideScript } from '@/features/play/domain/guideScript';
 
@@ -20,7 +21,7 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 }
 
-export function useGuideClock(script: GuideScript, targetRef: RefObject<Element | null>): GuideClock {
+export function useGuideClock(script: GuideScript, targetRef: RefObject<Element | null>, active = true): GuideClock {
   const [reduced] = useState(prefersReducedMotion);
   const [t, setT] = useState(() => (reduced ? holdStartOf(script, 0) + 1 : 0));
   const [paused, setPaused] = useState(reduced);
@@ -47,7 +48,7 @@ export function useGuideClock(script: GuideScript, targetRef: RefObject<Element 
     return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 
-  const running = !paused && inView && !docHidden;
+  const running = !paused && inView && !docHidden && active;
   useEffect(() => {
     if (!running) return;
     let last: number | null = null;

@@ -18,15 +18,17 @@ const GAME_SCRIPT = buildGuideScript(undefined, undefined, GAME_GUIDE_OPTIONS);
 
 export interface PickerGuideProps {
   mode: 'play' | 'sheet';
+  /** false면 안내 시계를 멈춘다(접이 바가 접힌 동안). 기본 true */
+  active?: boolean;
 }
 
-export function PickerGuide({ mode }: PickerGuideProps) {
-  return mode === 'sheet' ? <SheetGuide /> : <GameGuide />;
+export function PickerGuide({ mode, active = true }: PickerGuideProps) {
+  return mode === 'sheet' ? <SheetGuide active={active} /> : <GameGuide active={active} />;
 }
 
-function SheetGuide() {
+function SheetGuide({ active }: { active: boolean }) {
   const animRef = useRef<HTMLDivElement>(null);
-  const clock = useGuideClock(SCRIPT, animRef);
+  const clock = useGuideClock(SCRIPT, animRef, active);
   const state = useMemo(() => stateAt(SCRIPT, clock.t), [clock.t]);
   const [hoverPad, setHoverPad] = useState<PadId | null>(null);
   const activePads = useMemo(() => (state.active === null ? [] : EXAMPLE_STEPS[state.active].pads), [state.active]);
@@ -57,9 +59,9 @@ function SheetGuide() {
   );
 }
 
-function GameGuide() {
+function GameGuide({ active }: { active: boolean }) {
   const animRef = useRef<HTMLDivElement>(null);
-  const clock = useGuideClock(GAME_SCRIPT, animRef);
+  const clock = useGuideClock(GAME_SCRIPT, animRef, active);
   const state = useMemo(() => stateAt(GAME_SCRIPT, clock.t), [clock.t]);
   const [hoverPad, setHoverPad] = useState<PadId | null>(null);
   const activePads = useMemo(() => (state.active === null ? [] : EXAMPLE_STEPS[state.active].pads), [state.active]);
