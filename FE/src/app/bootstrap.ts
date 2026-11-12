@@ -300,9 +300,11 @@ export function bootstrapMetronome(): void {
     stopMetronome: () => metronome.stop(),
     busy: () => useLive.getState().calibration.mode !== 'idle',
     outputLatencyMs: () => audioEngine.latency()?.outputLatencyMs ?? null,
+    renderAheadMs: () => audioEngine.renderAheadMs(),
   });
   metronome.bind({
     click: (atMs, accent) => audioEngine.click(atMs, accent),
+    renderAheadMs: () => audioEngine.renderAheadMs(),
     ensureAudio: unlockAudio,
     onAudioState: (listener) => {
       audioEngine.onStateChange(listener);
