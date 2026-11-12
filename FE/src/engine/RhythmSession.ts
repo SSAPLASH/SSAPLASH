@@ -230,6 +230,11 @@ export class RhythmSession {
     return this.status;
   }
 
+  /** 이 판에 적용 중인 판정 폭 */
+  get windows(): TimingWindows {
+    return this.opts.windows;
+  }
+
   /** 판정에 적용 중인 오디오 출력 오프셋(ms) */
   get audioOffsetMs(): number {
     return this.opts.audioOffsetMs;

@@ -9,6 +9,15 @@ export interface TimingWindows {
 /** 공통 명세서 10장 가정치. 센서 정밀도 실측 후 확정 */
 export const DEFAULT_TIMING: TimingWindows = { perfectMs: 25, goodMs: 60 };
 
+/** 초보 대상 채보(쉬운 채보·입문 코스 연주 레슨)의 GOOD 폭 하한(ms). 설계 PLAY-004-timing-cal-stick-kick 3-5 */
+export const BEGINNER_GOOD_MS = 90;
+
+/** 판정에 실제로 쓰는 폭. 초보 대상이면 GOOD을 하한까지 넓히고(사용자 값이 더 넓으면 유지), PERFECT는 그대로 둔다 */
+export function appliedWindows(base: TimingWindows, beginner: boolean): TimingWindows {
+  if (!beginner) return base;
+  return { perfectMs: base.perfectMs, goodMs: Math.max(base.goodMs, BEGINNER_GOOD_MS) };
+}
+
 /**
  * 코칭·피드백 임계값 계산에 쓰는 고정 기준 폭(ms). 현재 기본 goodMs와 같다.
  * 판정 폭과 분리한 이유: 판정 폭은 게임 난이도이고 코칭은 실제 박에서 벗어난 정도다
