@@ -10,9 +10,9 @@ const chart = { songId: 's', title: 't', bpm: 120, beatsPerBar: 4, notes: [{ tim
 const windows = { perfectMs: 25, goodMs: 60 };
 
 const info: AudioDiagInfo = {
-  audioOffsetMs: -65,
+  audioOffsetMs: -65, kickOffsetMs: -65,
   latency: { sampleRate: 48000, baseLatencyMs: 10, outputLatencyMs: 45 },
-  timingCal: { measuredAt: 111, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 },
+  timingCal: { measuredAt: 111, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45, kick: null },
 };
 
 let stop: (() => void) | null = null;
@@ -40,7 +40,7 @@ describe('audio 진단 줄', () => {
     vi.advanceTimersByTime(1);
     expect(got[0]).toMatchObject({
       type: 'audio',
-      audioOffsetMs: -65,
+      audioOffsetMs: -65, kickOffsetMs: -65,
       baseLatencyMs: 10,
       outputLatencyMs: 45,
       sampleRate: 48000,
@@ -63,7 +63,7 @@ describe('audio 진단 줄', () => {
 
   it('오디오를 안 켰고 측정 기록이 없으면 null로 낸다', () => {
     const { got, off } = listen();
-    stop = startAudioDiag(() => ({ audioOffsetMs: 0, latency: null, timingCal: null }));
+    stop = startAudioDiag(() => ({ audioOffsetMs: 0, kickOffsetMs: 0, latency: null, timingCal: null }));
     vi.advanceTimersByTime(AUDIO_DIAG_INTERVAL_MS);
     expect(got[0]).toMatchObject({ audioOffsetMs: 0, baseLatencyMs: null, outputLatencyMs: null, sampleRate: null, measured: null });
     off();
@@ -72,11 +72,11 @@ describe('audio 진단 줄', () => {
   it('곡 시작 직후 1회 내고, 그 판에 적용된 값을 싣는다', () => {
     const { got, off } = listen();
     stop = startAudioDiag(() => info);
-    const ss = new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: -40 });
-    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: -40 });
+    const ss = new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: -40, kickOffsetMs: -40 });
+    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: -40, kickOffsetMs: -40 });
     const a = audioOf(got);
     expect(a).toHaveLength(1);
-    expect(a[0]).toMatchObject({ audioOffsetMs: -40 });
+    expect(a[0]).toMatchObject({ audioOffsetMs: -40, kickOffsetMs: -40 });
     // session 줄이 먼저다
     expect(got[0].type).toBe('session');
     // 판이 끝나면 설정 값으로 돌아온다
@@ -86,11 +86,22 @@ describe('audio 진단 줄', () => {
     off();
   });
 
+  it('audio 줄의 킥 값은 판 중이면 그 판의 값, 아니면 설정 값이다', () => {
+    const { got, off } = listen();
+    stop = startAudioDiag(() => ({ ...info, kickOffsetMs: -30 }));
+    vi.advanceTimersByTime(AUDIO_DIAG_INTERVAL_MS);
+    expect(audioOf(got)[0]).toMatchObject({ audioOffsetMs: -65, kickOffsetMs: -30 });
+    const ss = new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: -50, kickOffsetMs: -20 });
+    diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: -50, kickOffsetMs: -20 });
+    expect(audioOf(got)[1]).toMatchObject({ audioOffsetMs: -50, kickOffsetMs: -20 });
+    off();
+  });
+
   it('해제하면 주기·곡 시작 모두 내지 않는다', () => {
     const { got, off } = listen();
     startAudioDiag(() => info)();
     vi.advanceTimersByTime(AUDIO_DIAG_INTERVAL_MS * 2);
-    diagSessionStart(new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0 }), 'RHYTHM', { windows, audioOffsetMs: 0 });
+    diagSessionStart(new RhythmSession(chart, { windows, countInBars: 0, audioOffsetMs: 0, kickOffsetMs: 0 }), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
     expect(audioOf(got)).toHaveLength(0);
     off();
   });

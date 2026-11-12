@@ -1,6 +1,6 @@
 // 연주 중 타격·판정 기록기. 활성 타격과 MISS 판정에 처리 순서대로 순번을 매긴다(업로드 hits.seq).
 // 서버는 seq 순서로 maxCombo를 다시 계산하므로, 타격과 MISS가 실제로 처리된 순서를 잃으면 안 된다.
-import type { ResolvedHit } from '@/domain/events';
+import { isFootHit, type ResolvedHit } from '@/domain/events';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';
 import { toLoggedHit } from './playLog';
 import type { LoggedHit } from '@/domain/playLog';
@@ -24,7 +24,7 @@ export class PlayRecorder {
   hit(hit: ResolvedHit, ev: JudgementEvent | null, ss: RhythmSession): LoggedHit {
     const lh = toLoggedHit(hit);
     lh.seq = this.next++;
-    lh.tSongMs = ss.hitSongTimeMs(hit.tHit);
+    lh.tSongMs = ss.hitSongTimeMs(hit.tHit, isFootHit(hit));
     if (ev) {
       lh.judgement = ev.judgement;
       lh.matchedNoteIndex = ev.noteIndex;
