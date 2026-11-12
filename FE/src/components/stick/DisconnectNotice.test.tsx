@@ -33,12 +33,13 @@ describe('DisconnectNotice 제목', () => {
 });
 
 describe('DisconnectNotice 연결 점', () => {
-  it('연결은 on·연결됨, 끊김은 off·끊김', () => {
+  it('연결은 on·연결됨, 끊긴 점은 off·연결 안 됨', () => {
     const html = render({ left: true, right: false });
     expect(html).toContain('stick-dot on');
     expect(html).toContain('stick-dot off');
     expect(html).toContain('연결됨');
-    expect(html).toContain('끊김');
+    expect(html).toContain('연결 안 됨');
+    expect(html).not.toContain('끊김');
   });
   it('둘 다 연결이면 off 없음', () => {
     expect(render({ left: true, right: true })).not.toContain('stick-dot off');

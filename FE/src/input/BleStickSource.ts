@@ -3,8 +3,9 @@
 // 페어링한 BluetoothDevice는 끊겨도 보관한다. 끊기면 autoConnect()가 선택 창 없이 gatt.connect()로 다시 붙는다
 // (재연결 시도는 사용자 제스처가 필요 없는 동작만 쓴다). 끊김 리스너는 기기당 한 번만 단다.
 import type { DeviceRole, StickId } from '@/domain/events';
-import { BaseInputSource, ClockSync } from './InputSource';
+import { BaseInputSource, ClockSync, SYNC_INTERVAL_MS } from './InputSource';
 import type { TransportStats } from './InputSource';
+import { MAX_PENDING_SYNC } from './deviceState';
 import { packetTap } from './packetTap';
 import type { SourceDescriptor } from './SourceDescriptor';
 import {
@@ -145,6 +146,8 @@ export class BleStickSource extends BaseInputSource {
       const t0 = performance.now();
       const key = Math.floor(t0) >>> 0;
       link.pendingSync.set(key, t0);
+      // 답이 없는 SYNC가 쌓이지 않게 오래된 것부터 버린다
+      while (link.pendingSync.size > MAX_PENDING_SYNC) link.pendingSync.delete(link.pendingSync.keys().next().value!);
       try {
         await this.write(link, encodeSync(t0));
       } catch {
@@ -198,10 +201,10 @@ export class BleStickSource extends BaseInputSource {
   async connect(): Promise<void> {
     if (this.links.size > 0) this.setState('connected');
     if (this.syncTimer === null) {
-      // 주기적 재동기화 (드리프트 대응)
+      // 주기적 재동기화 (드리프트 대응). 1초마다 1회
       this.syncTimer = window.setInterval(() => {
-        for (const l of this.links.values()) void this.syncClock(l, 2);
-      }, 30_000);
+        for (const l of this.links.values()) void this.syncClock(l, 1);
+      }, SYNC_INTERVAL_MS);
     }
   }
 

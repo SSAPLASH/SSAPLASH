@@ -87,3 +87,24 @@ describe('PointerStickSource 키 타격의 수식키', () => {
     expect(await run({ code: 'KeyF', shiftKey: true })).toEqual({ hits: 1, prevented: true });
   });
 });
+
+describe('PointerStickSource 기준면 변환', () => {
+  it('표면이 화면 → 자세 변환을 주면 그 값을 자세로 쓰고, 표면을 떼면 선형 변환으로 돌아간다', async () => {
+    const host = el('<div id="s"></div>').querySelector('#s') as HTMLElement;
+    host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const src = new PointerStickSource();
+    const seen: [number, number][] = [];
+    src.setSurface(host, (nx, ny) => {
+      seen.push([nx, ny]);
+      return { yaw: 11, pitch: -7 };
+    });
+    await src.connect();
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 50, clientY: 25 }));
+    expect(seen.at(-1)).toEqual([0.25, 0.25]);
+    expect(src.getPose()).toEqual({ yaw: 11, pitch: -7 });
+    src.setSurface(null);
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 }));
+    expect(src.getPose().yaw).toBeCloseTo(0, 6);
+    await src.disconnect();
+  });
+});

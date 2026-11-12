@@ -1,0 +1,72 @@
+/* 기기 준비 카드(DeviceCheck, Figma ReadyCheck 222:856) 규칙. 시작 확인 창의 「기기 준비 필요」 변형도 쓴다. 토큰은 tokens.css의 새 이름만 */
+.play-rp-check.need {
+  border-color: var(--brand-sub);
+}
+.play-rp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.play-rp-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  font-size: 14px;
+}
+.play-rp-row-label {
+  width: 80px;
+  color: var(--text-2);
+}
+.play-rp-row-value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  color: var(--text-1);
+}
+.play-rp-row-value .need {
+  color: var(--brand-sub);
+}
+.play-rp-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.play-rp-dot.ok {
+  background: var(--good);
+}
+.play-rp-dot.need {
+  background: var(--brand-sub);
+}
+.play-rp-hands {
+  display: flex;
+  gap: var(--space-s);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.play-rp-hand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.play-rp-hand-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--text-3);
+}
+.play-rp-hand-dot.on.l {
+  border-color: var(--left);
+  background: var(--left);
+}
+.play-rp-hand-dot.on.r {
+  border-color: var(--right);
+  background: var(--right);
+}
+.play-rp-hand-dot.on.p {
+  border-color: var(--good);
+  background: var(--good);
+}

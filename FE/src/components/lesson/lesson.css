@@ -219,7 +219,8 @@
 }
 .lesson-card-kit {
   width: 100%;
-  max-width: 560px;
+  /* 실물 킷(원근 그림)이 세로로 길어 폭 440이면 높이 약 282. 고정(sticky) 카드가 화면에 들어오게 한다 */
+  max-width: 440px;
 }
 .lesson-card-meta {
   margin: 0;
@@ -445,4 +446,12 @@
   justify-content: flex-end;
   gap: var(--space-s);
   margin-top: 8px;
+}
+/* 완료 창의 저장 실패 줄(ui/InlineError) — 가운데 정렬된 창 안에서 가운데에 둔다 */
+.lesson-done-dialog .ui-inline-error {
+  align-self: center;
+}
+/* 실물 스킨(원근 그림 760×486.9)은 세로가 길다(가로세로 비 1.56). 카드가 높이 고정에 overflow hidden이라 폭을 더 줄여 잘리지 않게 한다 */
+.lesson-read-kit[data-skin='acoustic'] {
+  width: min(720px, 100%, max(300px, calc((100dvh - 520px) * 1.56)));
 }

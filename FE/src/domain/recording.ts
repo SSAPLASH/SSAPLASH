@@ -1,7 +1,7 @@
 // 연주 녹음 도메인 (설계 REC-001). 타입·변환·본문 조립·제목 규칙만 둔다. 순수 함수라 네트워크·스토어·시계에 접근하지 않는다(시각은 인자로 받는다).
 import { isSensorSource, type ResolvedHit } from './events';
 import type { PadId } from './pads';
-import type { LoggedHit } from '@/engine/playLog';
+import type { LoggedHit } from '@/domain/playLog';
 
 /** 녹음 한 건의 타격 수 상한(BE 계약) */
 export const MAX_RECORDING_HITS = 50_000;

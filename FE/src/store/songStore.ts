@@ -4,9 +4,9 @@ import { create } from 'zustand';
 import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
 import { getSong } from '@/api/songs';
-import { builtinSummary } from '@/domain/builtinSongs';
+import { builtinSummary } from '@/domain/song/builtinSongs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
-import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
+import { chartFromDetail, type ChartAssetsDto } from '@/domain/song/chartMapping';
 import type { SongDetail, SongScope } from '@/domain/songCatalog';
 
 export type SongsSource = 'api' | 'builtin';

@@ -1,158 +1,42 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
-import type { InputSource } from '@/input/InputSource';
-import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from './sources';
+import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 import { KEY_MAP } from '@/domain/keyMap';
-import { resolveOptions, sensorRegistry } from './sensorRegistry';
-import { onStickLinked } from './hapticMode';
+import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
+import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
-import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
-import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';
-import { RECONNECT_WAIT_MS, hintFor, shouldResend, waitForDevices } from './reconnectPolicy';
+import { useLive, type MetronomeLive } from '@/store/liveStore';
+import { useReconnect } from '@/store/reconnectStore';
+import { shouldResend } from '@/runtime/reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
-import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
+import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
+import { preloadSprites } from '@/components/drum/acoustic/sprites';
 import { startClockDiag } from './clockDiag';
-import type { ResolvedHit, SensorId, StickId } from '@/domain/events';
+import type { ResolvedHit, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
-import { anchorsToProfile } from '@/domain/kitJudge';
-import { calibrationSession } from './calibrationSession';
+import { calibrationSession } from '@/runtime/calibrationSession';
+import { timingCalSession } from '@/runtime/timingCalSession';
+import { startAudioDiag } from './audioDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { smoothBattery } from '@/domain/stickStatus';
-import { devicesReady, pedalRequired } from '@/domain/pedalStatus';
-import type { CalibrationProfile, PadTableStatus, YawDriftStatus } from '@/domain/calibration';
+import { smoothBattery } from '@/domain/kit/stickStatus';
+import { devicesReady } from '@/domain/pedalStatus';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';
-import { hitSoundActive, setCalibrationSound } from './hitSound';
-
-let currentSensor: SensorId = 'none';
-/** 지금 연결된 센서 인스턴스. 'none'이면 null */
-let activeInstance: InputSource | null = null;
-let unsubState: (() => void) | null = null;
-let unsubDongle: (() => void) | null = null;
-/** 손별 최근 배터리 측정값(평균용). 그 손이 끊기거나 센서가 바뀌면 비운다 */
-let batteryHistory: [number[], number[]] = [[], []];
-/** 발별 최근 배터리 측정값(평균용). 두 발이 모두 끊기거나 센서가 바뀌면 비운다 */
-let pedalBatteryHistory: [number[], number[]] = [[], []];
-/** 화면이 마지막으로 등록한 입력 표면. 센서가 바뀌어도 새 인스턴스에 다시 넘긴다 */
-let lastSurface: HTMLElement | null = null;
-/** 손별 마지막 설정 재전송 시각(비트 5 쿨다운, D5). 센서가 바뀌면 비운다 */
-const lastResendAt: [number | null, number | null] = [null, null];
-
-/** 타격음 스위치는 hitSound 모듈에 있다. 화면들이 이 경로로 import하므로 그대로 다시 내보낸다 */
-export { setSoundOnHit } from './hitSound';
-/** 키보드 드럼 스위치는 keyboardDrum 모듈에 있다. 연주 중인 화면이 이 경로로 import한다 */
-export { setKeyboardDrum, useKeyboardDrum } from './keyboardDrum';
-
-/** 활성 센서의 디스크립터에 현재 설정값(기본값 병합)을 적용한다 */
-function applySensorOptions(): void {
-  const desc = sensorRegistry.get(currentSensor);
-  if (!desc || !activeInstance) return;
-  const stored = useSettings.getState().sensorOptions[currentSensor];
-  desc.applyOptions?.(activeInstance, resolveOptions(desc, stored));
-  desc.applyTuning?.(activeInstance, useSettings.getState().tuning);
-}
-
-/** 현재 설정에서 유도한 손별 판정 프로필(PLAY-004 D1). 보정 안 된 손은 3D 모델 기본 앵커 */
-function currentProfiles(): [CalibrationProfile, CalibrationProfile] {
-  const s = useSettings.getState();
-  return [anchorsToProfile(s.stickAnchors[0], s.tuning, 0), anchorsToProfile(s.stickAnchors[1], s.tuning, 1)];
-}
-
-/** 그 손에 현재 프로필을 보낸다. 보정 중에는 표를 비워 둬야 하므로 보내지 않는다(D6) */
-function pushTable(stickId: StickId, force = false): void {
-  if (calibrationSession.currentMode === 'capture') return;
-  padTableSync.push(currentProfiles()[stickId], { stickId, force });
-}
-
-/** 센서 소스 교체. 키보드는 건드리지 않는다 */
-export async function activateSensor(id: SensorId, auto = false): Promise<void> {
-  if (currentSensor === id) return;
-  if (activeInstance) await inputManager.detach(activeInstance.kind);
-  unsubState?.();
-  unsubState = null;
-  unsubDongle?.();
-  unsubDongle = null;
-  batteryHistory = [[], []];
-  pedalBatteryHistory = [[], []];
-  lastResendAt[0] = lastResendAt[1] = null;
-  activeInstance = null;
-  padTableSync.setSource(null);
-  yawDriftMonitor.setSource(null);
-  currentSensor = id;
-  // 이전 소스의 재연결 동작은 내린다. 새 소스가 준비되면 아래에서 다시 등록한다
-  setReconnectHandler(null);
-  audioEngine.setHihatOpen(false);
-  useLive.setState({
-    activeSensor: id,
-    connected: [false, false],
-    battery: [null, null],
-    dongle: null,
-    pedal: initialPedal(),
-    sourceState: 'disconnected',
-    sourceMessage: null,
-  });
-  if (id === 'none') return;
-  try {
-    const src = sensorRegistry.instance(id);
-    activeInstance = src;
-    padTableSync.setSource(src);
-    yawDriftMonitor.setSource(src);
-    applySensorOptions();
-    src.setSurface?.(lastSurface);
-    unsubState = src.onState((s, message) => useLive.setState({ sourceState: s, sourceMessage: message ?? null }));
-    unsubDongle = src.onDongle?.((link) => useLive.setState({ dongle: link })) ?? null;
-    // 연결 개념이 없는 소스(포인터)는 autoConnect·reopen이 없어 핸들러를 등록하지 않는다 → [다시 연결]이 숨는다
-    if (src.autoConnect || src.reopen) {
-      setReconnectHandler((_attempt, signal) => reconnectAttempt(src, signal), hintFor(src.kind));
-    }
-    await inputManager.attach(src, auto);
-  } catch (e) {
-    useLive.setState({ sourceState: 'error', sourceMessage: (e as Error).message });
-  }
-}
-
-/** 활성 센서를 사용자 클릭으로 다시 연다(동글 연결·다른 동글 연결). 클릭 처리 안에서 불러야 포트 선택 창이 열린다 */
-export async function connectSensor(): Promise<void> {
-  try {
-    await activeInstance?.connect();
-  } catch {
-    // 실패 사유는 소스가 sourceState·sourceMessage로 남긴다
-  }
-}
-
-/**
- * 재연결 시도 하나(설계 4-2, D1·D3): 제스처가 필요 없는 동작을 한 번 하고, 손·발이 모두 돌아올 때까지 최대 3초 기다린다.
- * 연결 중이면 reopen(동글: 포트 닫고 다시 열기), 끊겨 있으면 autoConnect(허락된 포트·보관 기기·재접속).
- */
-async function reconnectAttempt(src: InputSource, signal: AbortSignal): Promise<void> {
-  if (activeInstance !== src) throw new Error('입력 소스가 바뀌었습니다');
-  if (src.state === 'connected' && src.reopen) await src.reopen();
-  else if (src.autoConnect) await src.autoConnect();
-  else await src.connect();
-  if (signal.aborted || activeInstance !== src) throw new Error('취소됨');
-  await waitForDevices(
-    () => {
-      const live = useLive.getState();
-      // 페달은 동글 소스에서만 필요한 기기다(D3)
-      return pedalRequired(live.activeSensor) ? [...live.connected, ...live.pedal.connected] : [...live.connected];
-    },
-    (l) => useLive.subscribe(l),
-    RECONNECT_WAIT_MS,
-    signal,
-  );
-}
-
-/**
- * 화면이 자세 기준면(캔버스)을 등록한다. 활성 센서가 setSurface를 지원하면 넘기고 아니면 무시한다.
- * 언마운트 시 null로 해제한다.
- */
-export function bindSensorSurface(el: HTMLElement | null): void {
-  lastSurface = el;
-  activeInstance?.setSurface?.(el);
-}
+import { hitSoundActive, setCalibrationSound } from '@/runtime/hitSound';
+import {
+  activateSensor,
+  activeInstance,
+  applySensorOptions,
+  batteryHistory,
+  currentProfiles,
+  lastResendAt,
+  pedalBatteryHistory,
+  pushTable,
+} from '@/runtime/sensorSession';
 
 /** 키보드 소스가 반응할 키. 센서 소스가 점유하는 키(디스크립터 reservedKeys)는 뺀다 — 한 키에 두 번 울리지 않게 */
 function keyboardKeys(): string[] {
@@ -361,6 +245,8 @@ export function bootstrapInput(): void {
   inputManager.onHit((hit: ResolvedHit) => {
     // 보정·재정렬 중인 손의 타격은 세션이 가로챈다(소리는 목표 패드로, 판정·텔레메트리 없음)
     if (calibrationSession.intercept(hit)) return;
+    // 박자 맞추기 중인 타격은 소리만 내고 시각을 모은다(판정·텔레메트리·진단 없음)
+    if (timingCalSession.intercept(hit)) return;
     if (hitSoundActive() && hit.pad) {
       // 소리를 예약하지 못했으면(오디오 미해제 등) tAudio를 비워 둔다
       const tAudio = audioEngine.trigger(hit.pad, hit.velocity);
@@ -386,8 +272,26 @@ export function bootstrapInput(): void {
   });
   // 센서 시계 오프셋 진단 줄: 10초마다 + 곡 시작 직후 1회
   startClockDiag(() => activeInstance);
+  // 판정 타이밍 보정·오디오 지연 진단 줄: 10초마다 + 곡 시작 직후 1회
+  startAudioDiag(() => ({
+    audioOffsetMs: useSettings.getState().audioOffsetMs,
+    latency: audioEngine.latency(),
+    timingCal: useSettings.getState().timingCal,
+  }));
   startRelay();
   startTelemetry();
+  preloadKitSpritesWhenIdle();
+}
+
+/**
+ * 실물 드럼 스킨이면 조각 이미지를 한가할 때 미리 받는다(설계 DESIGN-acoustic-kit-image 4-6).
+ * 시작을 막지 않도록 requestIdleCallback(없으면 1.5초 뒤)으로 미룬다.
+ */
+function preloadKitSpritesWhenIdle(): void {
+  if (useSettings.getState().kitSkin !== 'acoustic') return;
+  const run = () => void preloadSprites();
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run);
+  else setTimeout(run, 1500);
 }
 
 /**
@@ -399,8 +303,21 @@ export function bootstrapMetronome(): void {
   // 초기값: settings → 엔진
   metronome.setBpm(s0.metronomeBpm);
   metronome.setBeatsPerBar(s0.metronomeBeatsPerBar);
+  // 박자 맞추기: 클릭·타격음은 게임과 같은 오디오 경로를 쓴다
+  timingCalSession.bind({
+    click: (atMs, accent) => audioEngine.click(atMs, accent),
+    ensureAudio: unlockAudio,
+    playHit: (hit) => {
+      if (hit.pad) audioEngine.trigger(hit.pad, hit.velocity);
+    },
+    stopMetronome: () => metronome.stop(),
+    busy: () => useLive.getState().calibration.mode !== 'idle',
+    outputLatencyMs: () => audioEngine.latency()?.outputLatencyMs ?? null,
+    renderAheadMs: () => audioEngine.renderAheadMs(),
+  });
   metronome.bind({
     click: (atMs, accent) => audioEngine.click(atMs, accent),
+    renderAheadMs: () => audioEngine.renderAheadMs(),
     ensureAudio: unlockAudio,
     onAudioState: (listener) => {
       audioEngine.onStateChange(listener);
@@ -458,59 +375,6 @@ export function bootstrapMetronome(): void {
   if (import.meta.env.DEV) (window as unknown as { __metronome?: typeof metronome }).__metronome = metronome;
 }
 
-// ── 사운드 세트 ──────────────────────────────────────────────
-/** 디코드가 끝난 세트 캐시. 세트를 다시 고를 때 재다운로드하지 않는다 */
-const soundSetCache = new Map<SoundSetId, SoundSet>();
-let appliedSetId: SoundSetId | null = null;
-let loadingSetId: SoundSetId | null = null;
-/** 세트를 빠르게 바꿔 응답이 뒤섞여도 마지막 선택만 반영하기 위한 번호 */
-let soundSetRequest = 0;
-
-function commitSoundSet(set: SoundSet | null, id: SoundSetId): void {
-  audioEngine.setSoundSet(set);
-  appliedSetId = id;
-  useLive.setState({ soundSetState: 'ready', soundSetMissing: set?.missing ?? [] });
-}
-
-/**
- * 설정의 soundSetId에 맞춰 세트를 적용한다. 오디오가 아직 켜지지 않았으면(디코드할 컨텍스트가 없으면)
- * 아무것도 하지 않고, unlockAudio가 다시 부른다. 로딩 중 타격은 합성음으로 울린다.
- */
-async function applySoundSet(): Promise<void> {
-  const id = useSettings.getState().soundSetId;
-  if (id === 'synth') {
-    soundSetRequest++;
-    loadingSetId = null;
-    commitSoundSet(null, id);
-    return;
-  }
-  const cached = soundSetCache.get(id);
-  if (cached) {
-    soundSetRequest++;
-    loadingSetId = null;
-    commitSoundSet(cached, id);
-    return;
-  }
-  const ctx = audioEngine.context;
-  if (!ctx || loadingSetId === id) return;
-  const req = ++soundSetRequest;
-  loadingSetId = id;
-  appliedSetId = null;
-  audioEngine.setSoundSet(null);
-  useLive.setState({ soundSetState: 'loading', soundSetMissing: [] });
-  try {
-    const set = await loadSampleSet(ctx, id);
-    soundSetCache.set(id, set);
-    if (req !== soundSetRequest) return;
-    loadingSetId = null;
-    commitSoundSet(set, id);
-  } catch {
-    if (req !== soundSetRequest) return;
-    loadingSetId = null;
-    useLive.setState({ soundSetState: 'error', soundSetMissing: [] });
-  }
-}
-
 let previewSeq = 0;
 /**
  * 세팅 화면의 "톡 치기". 소리와 화면 표시(lastHit·hitSeq)만 내고 텔레메트리·통계에는 넣지 않는다(source 'preview').
@@ -534,12 +398,4 @@ export async function previewHit(pad: PadId, velocity: number): Promise<void> {
   const tAudio = audioEngine.trigger(pad, velocity);
   if (tAudio !== null) hit.tAudio = tAudio;
   useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
-}
-
-/** 첫 사용자 제스처에서 오디오 켜기 */
-export async function unlockAudio(): Promise<void> {
-  await audioEngine.ensure();
-  useLive.setState({ audioReady: audioEngine.ready });
-  // 첫 제스처 이후 세트 로드(이미 적용·로딩 중이면 건너뜀)
-  if (appliedSetId !== useSettings.getState().soundSetId) void applySoundSet();
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AppShell } from '@/components/AppShell';
+import { AppShell } from '@/app/AppShell';
 import { ApiError } from '@/api/http';
 import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
 import type { UserMe } from '@/domain/auth';
@@ -41,7 +41,7 @@ vi.mock('@/components/shell/StickStatusIndicator', () => ({ StickStatusIndicator
 vi.mock('@/components/shell/useMediaQuery', () => ({ useSidebarCollapsed: () => false }));
 vi.mock('@/components/recording/SaveRecordingDialog', () => ({ SaveRecordingDialog: () => null }));
 vi.mock('@/components/recording/RecordingToast', () => ({ RecordingToast: () => null }));
-vi.mock('@/components/DebugOverlay', () => ({ DebugOverlay: () => null }));
+vi.mock('./DebugOverlay', () => ({ DebugOverlay: () => null }));
 
 const V = recommendationVersion();
 const NONE = { agreed: false, version: null, updatedAt: null };

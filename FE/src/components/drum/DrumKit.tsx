@@ -7,18 +7,19 @@ import { createLiveFxSource } from '@/components/fx/fxSource';
 import { useSettings } from '@/store/settingsStore';
 import type { PadId } from '@/domain/pads';
 import {
-  DRUM_KIT_H,
-  DRUM_KIT_W,
   fitScale,
   fitScaleBox,
+  kitBoxFor,
   kitPadsFor,
   kitSizeAt,
   placePad,
   type DrumKitPad,
   type KitSkin,
+  type KitView,
   type PadBadge,
   type PadVisualState,
 } from '@/domain/drumKit';
+import type { KitFrame } from '@/domain/kit/kitFrame';
 import { Pad, PadDefs } from './Pad';
 import { RING } from './padRing';
 import './drum.css';
@@ -41,6 +42,11 @@ export interface DrumKitProps {
   onPadDown?: (pad: PadId, pointerType: string) => void;
   /** 드럼 모양. 기본 'acoustic'(실물) */
   skin?: KitSkin;
+  /**
+   * 실물 스킨의 그림 종류. 기본 'persp'(원근, 큰 킷). 'top'은 위에서 본 그림(작은 킷)이라 킷 상자·배치·조각 이미지가 모두 바뀐다.
+   * 전자·네온과 자유 틀(frame, 항상 원근)에서는 무시한다
+   */
+  view?: KitView;
   /** 패드별 타격 횟수 카운터. 값이 바뀔 때마다 타격 모션을 처음부터 다시 재생한다(usePadHitSeq) */
   hitSeq?: Partial<Record<PadId, number>>;
   /** 타격 이펙트(테마 캔버스) 표시. 기본 false — 연주 화면에서만 켠다 */
@@ -73,6 +79,17 @@ export interface DrumKitProps {
   warnPads?: PadId[];
   /** 선택한 패드(보정 결과 화면). 브랜드색 링을 그린다 */
   selectedPad?: PadId;
+  /**
+   * 자유 틀(드럼 세팅의 원근 보기). 주면 760×300 고정 배치 대신 틀 크기(px)에 패드를 그 자리·크기로, 목록 순서(먼 것부터)대로 그린다.
+   * 하이햇 페달도 그린다. scale·fitWidth·fitContain·placement는 무시한다(domain/kit/kitFrame)
+   */
+  frame?: KitFrame;
+  /** 실물 스킨 하이햇 닫힘(왼발 페달 밟힘 또는 페달 없음). 없으면 닫힌 채 정지해 그린다. 실시간 값은 LiveDrumKit이 넣는다 */
+  hihatClosed?: boolean;
+  /** 실물 스킨: 왼발 하이햇 페달이 연결되지 않음 → 페달 그림을 어둡게 */
+  pedalOff?: boolean;
+  /** 하이햇 페달을 밟을 때마다 바뀌는 값. 0보다 크면 바뀔 때 "칙" 모션을 재생한다 */
+  pedalHitSeq?: number;
 }
 
 /** 이 세기 이상으로 친 드럼 계열 패드만 흔든다(E4) */
@@ -123,7 +140,7 @@ function Shake({ count, className, children }: { count: number | undefined; clas
   );
 }
 
-/** 드럼 킷(고정 배치 8패드). 렌더 크기는 760×300 × scale(CSS px) */
+/** 드럼 킷(고정 배치). 렌더 크기는 스킨별 킷 상자(실물 760×487 · 전자·네온 760×300) × scale(CSS px) */
 export function DrumKit({
   scale = 1,
   fitWidth = false,
@@ -135,6 +152,7 @@ export function DrumKit({
   onPadClick,
   onPadDown,
   skin = 'acoustic',
+  view: viewProp = 'persp',
   hitSeq,
   effects = false,
   fxTheme,
@@ -151,33 +169,42 @@ export function DrumKit({
   coachPad,
   warnPads,
   selectedPad,
+  frame,
+  hihatClosed,
+  pedalOff = false,
+  pedalHitSeq,
 }: DrumKitProps) {
   const defsId = `kit${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
-  const fitting = fitWidth || fitContain;
+  // 위에서 본 그림은 실물 고정 배치에서만. 자유 틀·전자·네온은 view와 무관하다
+  const view: KitView = !frame && skin === 'acoustic' ? viewProp : 'persp';
+  const box = kitBoxFor(skin, view);
+  const fitting = !frame && (fitWidth || fitContain);
   useEffect(() => {
     if (!fitting) return;
     const el = wrapRef.current;
     if (!el) return;
-    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale) : fitScale(el.clientWidth, scale));
+    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale, box.h) : fitScale(el.clientWidth, scale));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fitting, fitContain, scale]);
+  }, [fitting, fitContain, scale, box.h]);
 
   const eff = fitting ? (fit ?? scale) : scale;
-  const { width, height } = kitSizeAt(eff);
+  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff, skin, view);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
-  const pads: readonly DrumKitPad[] = kitPadsFor(skin)
-    .filter((p) => !hidden?.includes(p.pad))
-    .map((p) => {
-      const at = placement?.[p.pad];
-      return at ? placePad(p, at.x, at.y) : p;
-    });
+  const pads: readonly (DrumKitPad & { tilt?: number })[] = frame
+    ? frame.pads.filter((p) => !hidden?.includes(p.pad)).map((p) => ({ ...p, h: p.w }))
+    : kitPadsFor(skin, view)
+        .filter((p) => !hidden?.includes(p.pad))
+        .map((p) => {
+          const at = placement?.[p.pad];
+          return at ? placePad(p, at.x, at.y, box.h) : p;
+        });
   const settingsTheme = useSettings((st) => st.hitFxTheme);
   const shakes = usePadShakeCounts(effects, fxSource ?? LIVE_SHAKE_SOURCE, (pad) => pads.find((p) => p.pad === pad)?.shape);
   // 킥 진동은 킷 전체(캔버스 이펙트는 SVG 밖이라 흔들리지 않는다)를 흔든다. 이펙트가 꺼진 킷은 감싸지 않는다
@@ -190,12 +217,27 @@ export function DrumKit({
       kids
     );
 
+  // 유령·흐림·나타남·어둡게·켬 클래스(패드 바깥 그룹과 받침 층이 같이 쓴다)
+  const wrapClassOf = (pad: PadId) =>
+    [
+      ghost === pad ? 'drum-pad-ghost' : '',
+      faded?.includes(pad) === true ? 'drum-pad-faded' : '',
+      appear && ghost !== pad ? 'drum-pad-appear' : '',
+      dimAll && lit !== pad ? 'drum-pad-dim' : '',
+      lit === pad ? 'drum-pad-lit' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  // 실물 심벌(원판 조각이 있는 패드)은 받침(스탠드)이 길어 먼저 그린 가까운 패드 위로 겹친다 → 받침만 모든 패드보다 먼저 깐다
+  const underPads = skin === 'acoustic' ? pads.filter((p) => p.art?.top) : [];
+  const closedHihat = hihatClosed ?? true;
+
   const svg = (
     <svg
       className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
       data-no-pointer-strike={onPadDown ? '' : undefined}
       data-pointer-strike={onPadDown ? undefined : ''}
-      viewBox={`0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
+      viewBox={frame ? `0 0 ${frame.w} ${frame.h}` : `0 0 ${box.w} ${box.h}`}
       width={width}
       height={height}
       role="img"
@@ -205,9 +247,19 @@ export function DrumKit({
       <PadDefs id={defsId} />
       {withKitShake(
         <>
+      {underPads.map((p) => {
+        const wrapClass = wrapClassOf(p.pad);
+        const under = <Pad shape={p.shape} left={p.left} top={p.top} w={p.w} label={p.label} defsId={defsId} skin={skin} art={p.art} layer="under" view={view} />;
+        return wrapClass ? (
+          <g key={`under-${p.pad}`} className={wrapClass}>
+            {under}
+          </g>
+        ) : (
+          <Fragment key={`under-${p.pad}`}>{under}</Fragment>
+        );
+      })}
       {pads.map((p) => {
         const isGhost = ghost === p.pad;
-        const isFaded = faded?.includes(p.pad) === true;
         const padEl = (
         <Pad
           key={p.pad}
@@ -224,6 +276,18 @@ export function DrumKit({
           skin={skin}
           tag={p.tag}
           hitKey={hitSeq?.[p.pad]}
+          tilt={p.tilt}
+          art={p.art}
+          view={view}
+          layer={skin === 'acoustic' && p.art?.top ? 'over' : undefined}
+          // 하이햇·페달만 받는다(다른 패드의 memo props는 바뀌지 않는다)
+          closed={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? closedHihat : undefined}
+          pedalOff={p.pad === 'HIHAT_PEDAL' ? pedalOff : undefined}
+          pedalHitSeq={p.pad === 'HIHAT' || p.pad === 'HIHAT_PEDAL' ? pedalHitSeq : undefined}
+          // 고정 배치의 실물 패드는 글자 크기를 통일하고, 킷이 줄어도 약 12px 아래로 작아지지 않게 키운다(최대 1.6배,
+          // 위에서 본 작은 킷은 scale이 0.3대라 2.4배까지 — 그래도 화면 글자는 약 9px).
+          // 자유 틀은 헤드 크기에 비례(Pad 기본)
+          textSize={frame || !p.art ? undefined : Math.min(view === 'top' ? 2.4 : 1.6, Math.max(1, eff > 0 ? 1 / eff : 1))}
           onClick={onPadClick ? () => onPadClick(p.pad) : undefined}
           onPointerDown={
             onPadDown
@@ -238,16 +302,7 @@ export function DrumKit({
         />
         );
         // 유령·흐림·나타남은 패드 바깥 그룹에 건다(Pad 마크업 불변)
-        const isLit = lit === p.pad;
-        const wrapClass = [
-          isGhost ? 'drum-pad-ghost' : '',
-          isFaded ? 'drum-pad-faded' : '',
-          appear && !isGhost ? 'drum-pad-appear' : '',
-          dimAll && !isLit ? 'drum-pad-dim' : '',
-          isLit ? 'drum-pad-lit' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
+        const wrapClass = wrapClassOf(p.pad);
         const pad0 = wrapClass ? (
           <g className={wrapClass} data-ghost={isGhost || undefined}>
             {padEl}
@@ -256,7 +311,7 @@ export function DrumKit({
           padEl
         );
         // 코칭 링: 패드 위에 같은 좌표계(원본 160 기준)로 그린다. 클릭을 가로채지 않는다
-        const ring = RING[p.shape];
+        const ring = p.art?.ring ?? RING[p.shape];
         const markTransform = `translate(${p.left} ${p.top}) scale(${p.w / 160})`;
         const isWarn = warnPads?.includes(p.pad) === true;
         const isSelected = selectedPad === p.pad;
@@ -301,7 +356,7 @@ export function DrumKit({
   const body = effects ? (
     <div className="drum-kit-fx">
       {svg}
-      <FxCanvas skin={skin} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />
+      <FxCanvas skin={skin} view={view} theme={fxTheme ?? settingsTheme} source={fxSource} engineRef={fxEngineRef} {...fxOptions} />
     </div>
   ) : (
     svg

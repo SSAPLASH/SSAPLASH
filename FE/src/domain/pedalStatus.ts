@@ -1,5 +1,6 @@
-// 페달 연결 판정·표시 문구 순수 함수(스토어를 모른다). 손 쪽은 domain/stickStatus가 맡고, 페달 조각은 여기서 따로 만들어 컴포넌트가 나란히 쓴다.
-import type { SetupDongleState } from './setupSteps';
+// 페달 연결 판정·표시 문구 순수 함수(스토어를 모른다). 손 쪽은 domain/kit/stickStatus가 맡고, 페달 조각은 여기서 따로 만들어 컴포넌트가 나란히 쓴다.
+import { CONNECTED_TEXT, DEVICE_META, DISCONNECTED_TEXT } from './devices';
+import type { SetupDongleState } from './kit/setupSteps';
 
 /** 페달 보드가 필요한 두 발(하이햇·킥)이 모두 붙었는지. 준비 조건·재연결 settle·일시정지가 쓰는 한 식 */
 export function pedalConnected(pedal: { connected: readonly [boolean, boolean] }): boolean {
@@ -43,7 +44,8 @@ export function pedalStatus(pedal: PedalView): PedalStatusView {
   const on = pedalConnected(pedal);
   const known = pedal.battery !== null && Number.isFinite(pedal.battery);
   const batteryText = known ? `${Math.round(Math.min(100, Math.max(0, pedal.battery as number)))}%` : null;
-  const text = on ? (batteryText ? `페달 연결됨 · ${batteryText}` : '페달 연결됨') : '페달 연결 안 됨';
+  const name = DEVICE_META.PEDAL.name;
+  const text = on ? (batteryText ? `${name} ${CONNECTED_TEXT} · ${batteryText}` : `${name} ${CONNECTED_TEXT}`) : `${name} ${DISCONNECTED_TEXT}`;
   return { dot: on ? 'on' : 'off', batteryText: on ? batteryText : null, text };
 }
 

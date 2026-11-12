@@ -8,9 +8,9 @@ import * as Popover from '@radix-ui/react-popover';
 import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/app/features';
-import { useRecordingStore } from '@/app/recordingStore';
-import { BPM_STEP } from '@/domain/metronome';
+import { RECORDING_ENABLED } from '@/config/features';
+import { useRecordingStore } from '@/runtime/recordingStore';
+import { BPM_STEP } from '@/domain/time/metronome';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
@@ -19,6 +19,7 @@ import { RecordButton } from '@/components/recording/RecordButton';
 import { recordButtonVisible } from '@/components/recording/recordButtonRoute';
 import { IconButton } from '@/components/ui/IconButton';
 import { createDockAutoCollapse } from './dockAutoCollapse';
+import { metronomeDisabledRoute } from './metronomeRoute';
 import { DOCK_SLIDE, DOCK_TRANSITION, PANEL_TRANSITION } from './dockMotion';
 import './glass-dock.css';
 import { MetronomePanel } from './MetronomePanel';
@@ -92,8 +93,10 @@ export function GlassDock() {
   const setDockPanel = useShellStore((s) => s.setDockPanel);
   const playRunning = useShellStore((s) => s.playRunning);
   const { pathname } = useLocation();
-  // 접힘 Dock의 녹음 점: 자유 녹음 중, 또는 게임·악보에서 녹음을 켠 채 연주 중
-  const recordingDot = useRecordingStore((s) => RECORDING_ENABLED && (s.phase === 'recording' || (s.phase === 'armed' && s.locked)));
+  // 접힘 Dock의 녹음 점: 자유 녹음 중, 또는 악보에서 녹음을 켠 채 연주 중(리듬 게임은 녹음하지 않는다)
+  const recordingDot = useRecordingStore(
+    (s) => RECORDING_ENABLED && (s.phase === 'recording' || (s.phase === 'armed' && s.locked && recordButtonVisible(pathname))),
+  );
 
   const mode = immersive ? 'play' : 'shell';
   // 연주 중(카운트인 이후·일시정지 아님)에는 저장된 설정 대신 로컬 자동 접힘 상태를 쓴다(UX-41)
@@ -104,7 +107,9 @@ export function GlassDock() {
   const expand = () => (autoMode ? auto.expand() : setSavedCollapsed(false));
   const collapse = () => (autoMode ? auto.collapse() : setSavedCollapsed(true));
   const locked = met.locked;
-  const running = locked ? clickOn : met.playing;
+  // 리듬 게임은 메트로놈을 쓰지 않는다: 켜짐 표시도 없고 조작은 모두 비활성
+  const gameNoMetro = metronomeDisabledRoute(pathname);
+  const running = gameNoMetro ? false : locked ? clickOn : met.playing;
 
   useEffect(() => auto.subscribe(setAutoCollapsed), [auto]);
   useEffect(() => {
@@ -122,6 +127,7 @@ export function GlassDock() {
   // 잠금(곡 연주) 중 on/off는 세션 클릭 on/off, 아니면 메트로놈 재생·정지
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (gameNoMetro) return;
     if (locked) {
       setClickOn(!clickOn);
       return;
@@ -134,7 +140,7 @@ export function GlassDock() {
   const pause = () => useLive.setState({ pauseRequested: 'menu' });
   // 접힌 Dock의 녹음 상태: 녹음 버튼이 있는 화면이면 늘 보이고(꺼진 원), 녹음 중이면 빨간 원
   const recStatusShown = recordingDot || (RECORDING_ENABLED && recordButtonVisible(pathname));
-  const metroLabel = locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : met.playing ? '메트로놈 정지' : '메트로놈 재생';
+  const metroLabel = gameNoMetro ? '리듬 게임에서는 메트로놈을 쓰지 않아요' : locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : met.playing ? '메트로놈 정지' : '메트로놈 재생';
 
   return (
     <Popover.Root open={panelOpen} onOpenChange={(o) => setDockPanel(o ? 'metronome' : null)} modal={false}>
@@ -159,7 +165,8 @@ export function GlassDock() {
                   aria-checked={running}
                   className={`ui-icon-btn ui-icon-btn-sm dock-metro-mini${running ? ' on' : ''}`}
                   aria-label={metroLabel}
-                  title="메트로놈 켜기 / 끄기"
+                  title={gameNoMetro ? metroLabel : '메트로놈 켜기 / 끄기'}
+                  disabled={gameNoMetro}
                   onClick={toggle}
                 >
                   <MetroIcon />
@@ -182,19 +189,20 @@ export function GlassDock() {
                       aria-checked={running}
                       className={`dock-switch${running ? ' on' : ''}`}
                       aria-label={metroLabel}
-                      title="메트로놈 켜기 / 끄기"
+                      title={gameNoMetro ? metroLabel : '메트로놈 켜기 / 끄기'}
+                      disabled={gameNoMetro}
                       onClick={toggle}
                     >
                       <span className="dock-switch-knob" />
                     </button>
                   </div>
                 </Popover.Anchor>
-                <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(met.bpm - BPM_STEP)}>
+                <IconButton size="sm" disabled={locked || gameNoMetro} label={`BPM ${BPM_STEP} 감소`} onClick={() => metronome.setBpm(met.bpm - BPM_STEP)}>
                   <svg {...svgProps}>
                     <path d="M6 12h12" />
                   </svg>
                 </IconButton>
-                <IconButton size="sm" disabled={locked} label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(met.bpm + BPM_STEP)}>
+                <IconButton size="sm" disabled={locked || gameNoMetro} label={`BPM ${BPM_STEP} 증가`} onClick={() => metronome.setBpm(met.bpm + BPM_STEP)}>
                   <svg {...svgProps}>
                     <path d="M6 12h12M12 6v12" />
                   </svg>
@@ -259,7 +267,7 @@ export function GlassDock() {
                 exit={{ opacity: 0, y: 4 }}
                 transition={PANEL_TRANSITION}
               >
-                <MetronomePanel />
+                <MetronomePanel gameDisabled={gameNoMetro} />
               </m.div>
             </Popover.Content>
           </Popover.Portal>

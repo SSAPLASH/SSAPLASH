@@ -4,7 +4,7 @@
 // dismissed는 이번 세션만 안내 모달을 다시 띄우지 않는 메모리 플래그다(PUT 실패 시).
 import { create } from 'zustand';
 import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
-import type { RecommendationConsent } from '@/domain/recommendationConsent';
+import type { RecommendationConsent } from '@/domain/account/recommendationConsent';
 import { recommendationVersion } from '@/domain/signupTerms';
 
 export type RecommendationConsentStatus = 'idle' | 'loading' | 'ready' | 'error';

@@ -1,0 +1,67 @@
+/* Controls / KitSkinCarousel */
+.kit-skin-carousel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  width: 100%;
+}
+.kit-skin-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.kit-skin-carousel .kit-skin-nav {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.kit-skin-preview {
+  flex: 1;
+  min-width: 0;
+  /* 실물(원근 그림)이 가장 커서 그 높이에 맞춰 두고, 킷은 상자 안에 맞춰(fitContain) 모양을 바꿔도 카드가 뛰지 않게 한다 */
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+}
+.kit-skin-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+}
+.kit-skin-name {
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+.kit-skin-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.kit-skin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.kit-skin-dot.active {
+  width: 8px;
+  height: 8px;
+  background: var(--brand);
+}
+.kit-skin-count {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.kit-skin-desc {
+  margin: 0;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 13px;
+}

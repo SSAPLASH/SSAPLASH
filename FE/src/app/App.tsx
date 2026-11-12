@@ -1,13 +1,14 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from '@/components/shell/PublicLayout';
-import { AppShell } from '@/components/AppShell';
-import { RequireAdmin } from '@/components/RequireAdmin';
-import { RequireAuth } from '@/components/RequireAuth';
-import { FreePlayPage } from '@/pages/FreePlayPage';
-import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
-import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
-import { AUTH_REQUIRED } from './authBootstrap';
+import { AppShell } from './AppShell';
+import { RequireAdmin } from '@/components/shell/RequireAdmin';
+import { RequireAuth } from '@/components/shell/RequireAuth';
+import { FreePlayPage } from '@/features/free/FreePlayPage';
+import { NotFoundPage } from '@/components/shell/NotFoundPage';
+import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
+import { AuthCallbackPage } from '@/features/landing/AuthCallbackPage';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { loadRoute } from './routeModules';
 
 // 지연 로드 규칙: 새 화면은 routeModules 표에 추가하고 여기서 lazy로 연결한다. 첫 진입 화면(자유 연습·콜백)만 정적 import.
@@ -31,12 +32,12 @@ const SheetViewerPage = lazy(() => loadRoute('sheetViewer'));
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 // 삼항으로 감싸야 미설정 빌드에서 dynamic import가 통째로 제거돼 청크가 만들어지지 않는다
 const StickMonitorPage = MONITOR_ENABLED
-  ? lazy(() => import('@/pages/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
+  ? lazy(() => import('@/features/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
   : null;
 
 /** FX 랩(개발 전용, 설계 MODE-002-hit-fx-theme D7). 개발 서버에서만 라우트·청크가 생긴다 */
 const FxLabPage = import.meta.env.DEV
-  ? lazy(() => import('@/pages/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
+  ? lazy(() => import('@/features/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
   : null;
 
 export default function App() {
@@ -96,6 +97,8 @@ export default function App() {
           {StickMonitorPage && (
             <Route path="monitor/stick" element={<StickMonitorPage />} />
           )}
+          {/* 나머지 주소는 404 화면(설계 TECH-364). 로그인하지 않았으면 다른 보호 화면처럼 로그인으로 간다 */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
     </Routes>

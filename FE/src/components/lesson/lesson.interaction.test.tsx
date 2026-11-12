@@ -8,15 +8,15 @@ import { fetchSimilarSongs } from '@/api/similarSongs';
 import { listSongs } from '@/api/songs';
 import { getBestRecords } from '@/api/plays';
 import type { UserMe } from '@/domain/auth';
-import type { Lesson, LessonList } from '@/domain/lesson';
-import type { PlayLog } from '@/engine/playLog';
+import type { Lesson, LessonList } from '@/domain/play/lesson';
+import type { PlayLog } from '@/domain/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
-import { queryClient } from '@/app/queryClient';
-import { useChartParam } from '@/components/useChartParam';
-import { SongPicker } from '@/components/SongPicker';
+import { queryClient } from '@/runtime/queryClient';
+import { useChartParam } from '@/features/play/components/picker/useChartParam';
+import { SongPicker } from '@/features/play/components/picker/SongPicker';
 import { LessonCourse } from './LessonCourse';
 import { LessonInvite } from './LessonInvite';
 import { LessonResultBand } from './LessonResultBand';
@@ -95,21 +95,21 @@ afterEach(() => {
 
 describe('곡 선택의 [입문 코스] 탭', () => {
   it('악보 연습에만 있고 리듬 게임·로그인 전에는 없다', async () => {
-    at('/sheet', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
     await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡', '입문 코스']));
     cleanup();
-    at('/play', <SongPicker mode="play" onSelect={vi.fn()} />);
+    at('/play', <SongPicker mode="play" onStart={vi.fn()} />);
     expect(screen.getAllByRole('radio').map((r) => r.textContent)).not.toContain('입문 코스');
     cleanup();
     useAuth.setState({ status: 'anonymous', user: null });
-    at('/sheet', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
     expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
     expect(fetchLessons).not.toHaveBeenCalled();
   });
 
   it('?tab=lessons로 열면 입문 코스 탭이고, 탭을 바꾸면 주소에서 빠진다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2)]));
-    at('/sheet?tab=lessons', <SongPicker mode="sheet" onSelect={vi.fn()} />);
+    at('/sheet?tab=lessons', <SongPicker mode="sheet" onStart={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
     expect(screen.queryByRole('searchbox')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
@@ -132,7 +132,7 @@ describe('주소가 바뀌면 탭이 따라간다 (검증 추가 발견 1)', () 
 
   it('곡 선택이 떠 있는 동안 ?tab=lessons로 바뀌면 입문 코스 탭, tab이 빠지면 기본 곡 탭', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1)]));
-    at('/sheet', <><Nav /><SongPicker mode="sheet" onSelect={vi.fn()} /></>);
+    at('/sheet', <><Nav /><SongPicker mode="sheet" onStart={vi.fn()} /></>);
     await waitFor(() => expect(screen.getByRole('radio', { name: '기본 곡' }).getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: '코스로 가기' }));
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
@@ -263,6 +263,36 @@ describe('권유 카드', () => {
     at('/free', <LessonInvite />);
     fireEvent.click(await screen.findByRole('button', { name: '닫기' }));
     expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
+    cleanup();
+    useLessons.getState().resetForTest();
+    at('/free', <LessonInvite />);
+    await Promise.resolve();
+    expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
+  });
+
+  it('[입문 코스] 탭에 한 번 들어오면(카드 버튼이 아닌 길이어도) 나와도 다시 보이지 않는다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2)]));
+    function Nav() {
+      const navigate = useNavigate();
+      return (
+        <>
+          <button onClick={() => navigate('/sheet?tab=lessons')}>사이드바 악보 연습 입문 코스</button>
+          <button onClick={() => navigate('/free')}>자유 연습</button>
+        </>
+      );
+    }
+    function Page() {
+      const { pathname } = useLocation();
+      return pathname === '/sheet' ? <SongPicker mode="sheet" onStart={vi.fn()} /> : null;
+    }
+    at('/free', <><Nav /><LessonInvite /><Page /></>);
+    expect(await screen.findByRole('region', { name: '입문 코스 안내' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '사이드바 악보 연습 입문 코스' }));
+    expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '자유 연습' }));
+    await waitFor(() => expect(where()).toBe('/free'));
+    expect(screen.queryByRole('region', { name: '입문 코스 안내' })).toBeNull();
+    // 새로 고쳐도(브라우저에 기억) 다시 뜨지 않는다
     cleanup();
     useLessons.getState().resetForTest();
     at('/free', <LessonInvite />);

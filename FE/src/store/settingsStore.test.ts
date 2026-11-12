@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, useSettings } from './settingsStore';
+import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, sanitizeTimingSettings, useSettings } from './settingsStore';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { SYSTEM_PRESET_ID } from '@/domain/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/tuning';
-import { anchorsToLayout, defaultHandAnchors } from '@/domain/kitModel';
+import { anchorsToLayout, defaultHandAnchors } from '@/domain/kit/kitModel';
 
 describe('migrateSettings', () => {
   it('v2: pointerHitKeys·wsUrl을 sensorOptions로 옮기고 옛 필드를 지운다', () => {
@@ -279,7 +279,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(22);
+    expect(SETTINGS_VERSION).toBe(23);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -446,7 +446,7 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
   });
 
   it('스토어 초기값은 system·빈 기록', () => {
-    expect(SETTINGS_VERSION).toBe(22);
+    expect(SETTINGS_VERSION).toBe(23);
     expect(useSettings.getInitialState().activePresetId).toBe(SYSTEM_PRESET_ID);
     expect(useSettings.getInitialState().presetAnchors).toEqual({});
   });
@@ -484,5 +484,74 @@ describe('movePad (드래그 편집, kit-drag)', () => {
     useSettings.getState().movePad('KICK', 0.4, 0.8);
     expect(useSettings.getState().kitLayout.KICK).toMatchObject({ x: 0.4, y: 0.8 });
     expect(useSettings.getState().stickAnchors).toEqual([null, null]);
+  });
+});
+
+describe('migrateSettings v22 → v23 (시스템 기본 배치 변경)', () => {
+  const legacy = {
+    CRASH: { x: 0.2, y: 0.22, r: 0.1 },
+    HIHAT: { x: 0.24, y: 0.52, r: 0.085 },
+    SNARE: { x: 0.42, y: 0.68, r: 0.095 },
+    SMALL_TOM: { x: 0.42, y: 0.34, r: 0.07 },
+    MID_TOM: { x: 0.6, y: 0.34, r: 0.07 },
+    FLOOR_TOM: { x: 0.72, y: 0.66, r: 0.1 },
+    RIDE: { x: 0.8, y: 0.26, r: 0.11 },
+    KICK: { x: 0.58, y: 0.9, r: 0.065 },
+    HIHAT_PEDAL: { x: 0.24, y: 0.9, r: 0.055 },
+  };
+
+  it('옛 기본 배치 그대로인 저장 값은 새 기본 배치로 바꾼다', () => {
+    const out = migrateSettings({ kitLayout: legacy }, 22);
+    expect(out.kitLayout).toEqual(DEFAULT_KIT_LAYOUT);
+  });
+
+  it('손으로 옮긴 배치는 그대로 둔다', () => {
+    const moved = { ...legacy, SNARE: { x: 0.5, y: 0.7, r: 0.095 } };
+    expect(migrateSettings({ kitLayout: moved }, 22).kitLayout).toEqual(moved);
+  });
+
+  it('v23 저장 값은 건드리지 않는다', () => {
+    expect(migrateSettings({ kitLayout: legacy }, 23).kitLayout).toEqual(legacy);
+  });
+});
+
+describe('판정 타이밍 보정·박자 맞추기 기록', () => {
+  const merge = sanitizeTimingSettings;
+
+  it('기본값은 0, 기록 없음', () => {
+    expect(useSettings.getInitialState()).toMatchObject({ audioOffsetMs: 0, timingCal: null });
+  });
+
+  it('setAudioOffsetMs는 5ms 단위로 맞추고 −250~+100으로 자른다', () => {
+    const st = useSettings.getState();
+    st.setAudioOffsetMs(-67);
+    expect(useSettings.getState().audioOffsetMs).toBe(-65);
+    st.setAudioOffsetMs(180);
+    expect(useSettings.getState().audioOffsetMs).toBe(100);
+    st.setAudioOffsetMs(-999);
+    expect(useSettings.getState().audioOffsetMs).toBe(-250);
+    st.setAudioOffsetMs(0);
+  });
+
+  it('옛 범위로 저장된 값(+150)은 읽을 때 지금 범위로 자른다', () => {
+    expect(merge({ audioOffsetMs: 150 }).audioOffsetMs).toBe(100);
+    expect(merge({ audioOffsetMs: -40 }).audioOffsetMs).toBe(-40);
+    expect(merge({ audioOffsetMs: 'x' }).audioOffsetMs).toBe(0);
+  });
+
+  it('박자 맞추기 기록은 저장분에서 복원하고, 모양이 틀리면 버린다', () => {
+    const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
+    expect(merge({ timingCal: rec }).timingCal).toEqual(rec);
+    expect(merge({}).timingCal).toBeNull();
+    expect(merge({ timingCal: { ...rec, input: 'mouse' } }).timingCal).toBeNull();
+    expect(merge({ timingCal: { ...rec, outputLatencyMs: 'x' } }).timingCal).toMatchObject({ outputLatencyMs: null });
+  });
+
+  it('setTimingCal로 기록을 넣고 지운다', () => {
+    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null };
+    useSettings.getState().setTimingCal(rec);
+    expect(useSettings.getState().timingCal).toEqual(rec);
+    useSettings.getState().setTimingCal(null);
+    expect(useSettings.getState().timingCal).toBeNull();
   });
 });

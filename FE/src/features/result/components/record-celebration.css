@@ -1,0 +1,104 @@
+/* 최고 기록 갱신 축하(RecordCelebration): 창 전체를 덮고 클릭을 막지 않는다 */
+.record-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.record-celebrate-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 가운데 글: 카드·테두리 없이 네온사인 글자만. 뒤 화면 글과 섞이지 않게 글 뒤만 아주 옅게 어둡힌다 */
+.record-celebrate-text {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 72px 120px;
+  background: radial-gradient(closest-side, rgba(5, 6, 10, 0.84), rgba(5, 6, 10, 0.5) 55%, transparent);
+  font-family: var(--font);
+  text-align: center;
+  /* 길이는 RECORD_TEXT_MS(3000ms)와 같다 */
+  animation: record-neon 3000ms linear both;
+  will-change: transform, opacity, filter;
+}
+/* 네온 관: 흰빛 심지 + 같은 색 빛이 세 겹으로 번진다. 번짐은 넓고 옅게(은은하게) */
+.record-celebrate-eyebrow {
+  color: #eafcff;
+  font-size: clamp(13px, 1.3vw, 17px);
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  /* 자간만큼 오른쪽이 비어 보이지 않게 */
+  margin-right: -0.42em;
+  text-shadow:
+    0 0 4px rgba(120, 232, 255, 0.9),
+    0 0 14px rgba(64, 210, 255, 0.55),
+    0 0 36px rgba(64, 210, 255, 0.3);
+}
+.record-celebrate-title {
+  color: #fff3f8;
+  font-size: clamp(52px, 8.4vw, 116px);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-shadow:
+    0 0 5px rgba(255, 150, 200, 0.7),
+    0 0 20px rgba(255, 70, 150, 0.45),
+    0 0 56px rgba(255, 55, 135, 0.28),
+    0 0 120px rgba(255, 55, 135, 0.16);
+}
+.record-celebrate-detail {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-num);
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-weight: 500;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.28);
+}
+
+/* 네온이 켜지듯 두어 번 깜빡이며 들어와(0~0.5초) 살짝 커진 채 머물고, 끝에서 흐려지며 꺼진다 */
+@keyframes record-neon {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: blur(6px);
+  }
+  4% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  7% {
+    opacity: 0.25;
+  }
+  10% {
+    opacity: 1;
+  }
+  13% {
+    opacity: 0.55;
+  }
+  17% {
+    opacity: 1;
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  82% {
+    opacity: 1;
+    transform: scale(1.03);
+    filter: blur(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(8px);
+  }
+}

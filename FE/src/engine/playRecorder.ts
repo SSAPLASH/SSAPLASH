@@ -2,7 +2,8 @@
 // 서버는 seq 순서로 maxCombo를 다시 계산하므로, 타격과 MISS가 실제로 처리된 순서를 잃으면 안 된다.
 import type { ResolvedHit } from '@/domain/events';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';
-import { toLoggedHit, type LoggedHit } from './playLog';
+import { toLoggedHit } from './playLog';
+import type { LoggedHit } from '@/domain/playLog';
 
 export class PlayRecorder {
   hits: LoggedHit[] = [];

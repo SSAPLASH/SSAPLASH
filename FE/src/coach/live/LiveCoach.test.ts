@@ -74,7 +74,7 @@ describe('LiveCoach 놓침 원인', () => {
     expect(c).toMatchObject({ cause: 'WRONG_PAD', pad: 'SMALL_TOM', intoPad: 'MID_TOM' });
   });
 
-  /** 탐1을 놓치고 탐2를 치는 연주. 놓침 지적이 원인과 함께 뜨는지 본다 */
+  /** 스몰탐을 놓치고 미드탐을 치는 연주. 놓침 지적이 원인과 함께 뜨는지 본다 */
   function wrongPadPlay(coach: LiveCoach, count: number): CoachMessage[] {
     const out: CoachMessage[] = [];
     for (let i = 0; i < count; i++) {

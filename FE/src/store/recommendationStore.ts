@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { fetchRecommendations, postRecommendationClick, type FetchRecommendationsParams } from '@/api/recommendations';
 import { fetchSimilarSongs, type FetchSimilarParams } from '@/api/similarSongs';
-import { cardOf, similarCardOf, type RecommendCard } from '@/domain/recommendation';
+import { cardOf, similarCardOf, type RecommendCard } from '@/domain/account/recommendation';
 
 /** 추천 조회 시간 초과(D5). telemetry/sender의 REQUEST_TIMEOUT_MS와 같은 값이지만 store는 domain·api만 import한다(README 의존 방향) */
 export const RECOMMENDATION_TIMEOUT_MS = 5000;

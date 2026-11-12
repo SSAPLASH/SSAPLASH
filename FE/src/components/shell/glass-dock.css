@@ -147,3 +147,10 @@
   background: var(--brand-on);
   transform: translateX(12px);
 }
+
+/* 리듬 게임: 메트로놈 조작 비활성 */
+.dock-switch:disabled,
+.dock-metro-mini:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

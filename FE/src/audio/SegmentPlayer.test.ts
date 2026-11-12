@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SEGMENT_LOOP_GAP_MS, type SegmentPlan } from '@/domain/segmentPlayback';
+import { SEGMENT_LOOP_GAP_MS, type SegmentPlan } from '@/domain/time/segmentPlayback';
 import { SEGMENT_START_LEAD_MS, SegmentPlayer } from './SegmentPlayer';
 
 const plan: SegmentPlan = {
