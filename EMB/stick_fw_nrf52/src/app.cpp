@@ -39,8 +39,14 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 9                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345) */
-#define FW_TAG   "BOOT 1.9 nrf52"
+#define FW_MINOR 11                    /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345), 10 = 정지 바이어스 재추정 조건 강화 (346), 11 = 크리스탈(HFXO) 실패 재시도·연주 중 감시 (345), 자이로 포화 로그 SAT (346) */
+/* 비교 실험용: 1이면 1.9의 느슨한 정지 판정으로 빌드 (11/10 1.9 vs 1.10 비교). 평소엔 0 */
+#define BIAS_STILL_V19    0
+#if BIAS_STILL_V19
+#define FW_TAG   "BOOT 1.11 nrf52 bias19"
+#else
+#define FW_TAG   "BOOT 1.11 nrf52"
+#endif
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -81,11 +87,22 @@ static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 �
  * 2026-11-04 실측: 왼손 보드는 7분 쓰는 동안 바이어스가 +0.5°/s 변해 방위각이 분당 약 17° 밀렸다 (칩 온도 변화).
  * 부팅 때 한 번 잰 값으로는 못 따라가서, 스틱이 멈춰 있을 때마다 그 순간의 자이로 평균으로 천천히 다시 잡는다.
  * 기준값은 swing_1026·nohit_1026 녹화로 확인: 스윙 중에는 정지로 잡히지 않아 바이어스가 0.1°/s 넘게 흔들리지 않음 */
-#define STILL_DPS         4.0f         /* 바이어스 뺀 각속도 크기가 이보다 작고 */
+#if BIAS_STILL_V19
+#define STILL_DPS         4.0f
+#define STILL_MIN_SAMPLES 500
+#else
+#define STILL_DPS         1.5f         /* 바이어스 뺀 각속도 크기가 이보다 작고 (1.9까지 4.0: 손에 들고 천천히 돌리는 것까지 정지로 봤다) */
+#define STILL_MIN_SAMPLES 1666         /* 1초(1.66kHz) 이상 이어지면 정지 (1.9까지 0.3초) */
+#endif
 #define STILL_ACC_MS2     0.6f         /* | |a| − g | 가 이보다 작은 샘플이 */
-#define STILL_MIN_SAMPLES 500          /* 0.3초(1.66kHz) 이상 이어지면 정지 */
 #define BIAS_TAU_S        2.0f         /* 정지 중 바이어스를 따라가는 시간 상수 */
-#define BIAS_MAX_DEV_DPS  4.0f         /* 부팅 값에서 이보다 멀어지지 않게 (오판정 방어) */
+#if BIAS_STILL_V19
+#define BIAS_MAX_DEV_DPS  4.0f
+#else
+#define BIAS_MAX_DEV_DPS  1.0f         /* 부팅 값에서 이보다 멀어지지 않게 (1.9까지 4.0)
+                                        * 11/10 리듬 게임 중 왼손 BT x가 0.83 → −0.56 → 1.05°/s로 튐: 쉬는 박자에 들고 있던 움직임을
+                                        * 바이어스로 먹어 방향이 분당 수십 도 흘렀다. 온도로 변하는 양은 ±1°/s 안 */
+#endif
 
 /* ===================== µs 시계 (TIMER4, 1MHz, 32비트) =====================
  * 프로토콜 시각이 µs u32(약 71.6분 랩어라운드)이므로 하드웨어 타이머를 그대로 쓴다.
@@ -111,6 +128,26 @@ static bool hfxo_hold()
     for (int i = 0; i < 50 && !running; i++) { sd_clock_hfclk_is_running(&running); delay(1); }   /* 기동 약 0.4ms */
     return running != 0;
 }
+/* 11/12 왼손이 하루 종일 분당 −21~−39ms로 흘렀다(오른손·페달 0~3ms). 부팅 때 크리스탈이 안 걸렸거나 도중에 풀린 것으로 본다.
+ * 부팅 때 3번까지 다시 시도하고, 연주 중에도 10초마다 확인해 꺼져 있으면 다시 켠다 (345) */
+static void send_log(const char *s);
+static uint16_t hfxo_lost = 0;                          /* 연주 중 풀려서 다시 켠 횟수 */
+static void hfxo_watch()
+{
+    uint32_t running = 0;
+    sd_clock_hfclk_is_running(&running);
+    if (running) return;
+    sd_clock_hfclk_request();
+    hfxo_lost++;
+    char m[19];
+    snprintf(m, sizeof m, "HFXO lost %u", hfxo_lost);
+    send_log(m);
+}
+
+/* 자이로 포화 (346): ±2000dps 끝에 닿은 샘플 수를 축별로 센다. 빠른 연주에서 오른손 방향이 25~60° 흐른 원인 확인용 */
+#define SAT_LSB 27857                                   /* 1950dps / 0.070 */
+static uint32_t sat_n[3] = {0, 0, 0};
+
 static inline uint32_t now_us()                        /* 메인 루프용 (CC[0]) */
 {
     NRF_TIMER4->TASKS_CAPTURE[0] = 1;
@@ -835,7 +872,9 @@ void app_setup()
     Wire.begin();
     Wire.setClock(400000);
     ble_init();
-    bool hfxo = hfxo_hold();
+    bool hfxo = false;
+    uint8_t hfxo_try = 0;
+    while (!hfxo && hfxo_try < 3) { hfxo_try++; hfxo = hfxo_hold(); if (!hfxo) delay(100); }
     InternalFS.begin();                                 /* 보드별 바이어스 저장 (Bluefruit 본딩과 같은 파일시스템) */
 
     if (!imu_init()) {
@@ -854,7 +893,11 @@ void app_setup()
     pad_table_default(&pads);
 
     send_log(FW_TAG);
-    send_log(hfxo ? "HFXO on" : "HFXO FAIL");
+    {
+        char m[19];
+        snprintf(m, sizeof m, hfxo ? "HFXO on %u" : "HFXO FAIL %u", hfxo_try);   /* 숫자 = 시도 횟수 */
+        send_log(m);
+    }
     if (i2c_state) send_log(i2c_state == 1 ? "I2C stuck->freed" : "I2C stuck SDA low");
     drv_init();                                         /* 자동 보정 진동 = 켜짐 알림. 정지 측정 전에 끝냄 */
     delay(200);
@@ -901,7 +944,7 @@ void app_loop()
 
     /* 상태 5초마다 */
     if (status_due) { status_due = false; t_status = millis(); send_status(); send_bias(); }   /* 연결 직후 1회 */
-    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); } }
+    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); hfxo_watch(); } }
     if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 
     /* IMU 새 샘플 */
@@ -914,6 +957,7 @@ void app_loop()
     int16_t v[6];
     if (!imu_read(v)) return;
     n_samples++;
+    for (int i = 0; i < 3; i++) if (v[i] >= SAT_LSB || v[i] <= -SAT_LSB) sat_n[i]++;
     if (vib_t0_us) {                                    /* 진동 지연 측정 중 */
         int32_t dsum = 0;
         for (int i = 0; i < 3; i++) { dsum += abs(v[3 + i] - vib_prev[i]); vib_prev[i] = v[3 + i]; }
@@ -1024,6 +1068,18 @@ void app_loop()
         char m[20]; snprintf(m, sizeof m, "drop %s %ld", why[i], (long)(hd.peak / 16));
         send_log(m);
         rej_prev[i] = rej[i];
+    }
+
+    /* 자이로 포화 → LOG "SAT x y z" (축별 샘플 수, 1초에 한 번까지). 재무장 단계라 HIT을 늦추지 않음 */
+    {
+        static uint32_t t_sat = 0;
+        if ((sat_n[0] | sat_n[1] | sat_n[2]) && millis() - t_sat >= 1000) {
+            t_sat = millis();
+            char m[20];
+            snprintf(m, sizeof m, "SAT %lu %lu %lu", (unsigned long)sat_n[0], (unsigned long)sat_n[1], (unsigned long)sat_n[2]);
+            send_log(m);
+            sat_n[0] = sat_n[1] = sat_n[2] = 0;
+        }
     }
 
     /* 설정 모드: POSE 주기 전송 */
