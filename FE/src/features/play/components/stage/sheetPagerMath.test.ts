@@ -1,7 +1,7 @@
 // SheetPager 순수 계산 테스트 (페이지당 마디 수, 슬롯 교체, 커서, 박 스냅)
 import { describe, expect, it } from 'vitest';
-import { xInBar } from '@/components/sheetmusic/sheetStripMath';
-import { barsPerPage, cursorPos, pagerSlots, snapToBeat } from './sheetPagerMath';
+import { xInBar, xInBarContinuous, xOfTimeInBar } from '@/components/sheetmusic/sheetStripMath';
+import { barsPerPage, cursorPos, flowGeometry, pagerSlots, snapToBeat } from './sheetPagerMath';
 
 // 120 BPM 4/4: 박 500ms, 마디 2000ms
 const BAR_MS = 2000;
@@ -86,5 +86,42 @@ describe('snapToBeat', () => {
     expect(snapToBeat(1200, BEAT_MS)).toBe(1000);
     expect(snapToBeat(1000, BEAT_MS)).toBe(1000);
     expect(snapToBeat(0, BEAT_MS)).toBe(0);
+  });
+});
+
+
+describe('연속 악보 좌표', () => {
+  it.each([360, 640, 1280])('폭 %spx에서 페이지와 마디 경계를 끊김 없이 지나고 모든 칸이 음표 중심과 맞는다', (width) => {
+    const gutter = 44;
+    const barPx = (width - gutter) / barsPerPage(width - gutter);
+    const geometry = (t: number) => flowGeometry(t, BAR_MS, 16, width, gutter, barPx, 20, 0);
+    for (let step = 0; step < 16 * 8; step++) {
+      const t = step * BAR_MS / 16;
+      const g = geometry(t);
+      const bar = Math.floor(step / 16);
+      expect(g.cursorX).toBeCloseTo(xInBarContinuous(g.barZeroX + bar * barPx, barPx, (step % 16) / 16, 16));
+      expect(g.cursorX).toBeCloseTo(xOfTimeInBar(t, 0, width, barPx, g.barZeroX / width, BAR_MS, 0, 16));
+    }
+    for (const boundary of [BAR_MS, 2 * BAR_MS, 4 * BAR_MS]) {
+      const before = geometry(boundary - 0.001), after = geometry(boundary + 0.001);
+      expect(Math.abs(after.cursorX - before.cursorX)).toBeLessThan(0.01);
+      expect(Math.abs(after.barZeroX - before.barZeroX)).toBeLessThan(0.01);
+    }
+    const position = (t: number) => { const g = geometry(t); return g.cursorX - g.barZeroX; };
+    expect(position(BAR_MS) - position(BAR_MS - 125)).toBeCloseTo(position(BAR_MS + 125) - position(BAR_MS));
+    expect(geometry(0).cursorX).toBeCloseTo(xInBarContinuous(gutter, barPx, 0, 16));
+    expect(geometry(8 * BAR_MS).cursorX).toBeCloseTo(width * 0.36);
+  });
+
+  it('준비 마디 앞은 멈추고 준비 마디에서 첫 음표까지 이어지며 시킹과 크기 변경에도 좌표가 맞는다', () => {
+    const flow = (t: number, width: number) => flowGeometry(t, BAR_MS, 16, width, 44, (width - 44) / barsPerPage(width - 44), 20, 1);
+    expect(flow(-3 * BAR_MS, 640)).toEqual(flow(-BAR_MS, 640));
+    expect(Math.abs(flow(-0.001, 640).cursorX - flow(0, 640).cursorX)).toBeLessThan(0.01);
+    for (const width of [640, 1280]) {
+      const g = flow(5 * BAR_MS, width);
+      const barPx = (width - 44) / barsPerPage(width - 44);
+      expect(g.cursorX).toBeCloseTo(xInBarContinuous(g.barZeroX + 5 * barPx, barPx, 0, 16));
+      expect(flow(5 * BAR_MS, width)).toEqual(g);
+    }
   });
 });

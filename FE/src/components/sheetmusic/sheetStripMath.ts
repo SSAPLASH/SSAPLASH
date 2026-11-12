@@ -13,6 +13,11 @@ export function xInBar(left: number, barPx: number, ratio: number): number {
   return left + BAR_LEAD_PX + ratio * (barPx - BAR_LEAD_PX);
 }
 
+/** 연속 모드의 칸 간격은 모두 같다. 첫 머리는 마디선과 떨어뜨린다. */
+export function xInBarContinuous(left: number, barPx: number, ratio: number, stepsPerBar: number): number {
+  return left + Math.min(BAR_LEAD_PX, barPx / stepsPerBar / 2) + ratio * barPx;
+}
+
 /** 곡 시각 t가 속한 마디(격자 원점 기준, 음수 마디 허용)를 찾아 그 마디 안 비율의 x를 돌려준다. 채보 밖 타격 점에 쓴다 */
 export function xOfTimeInBar(
   t: number,
@@ -22,9 +27,11 @@ export function xOfTimeInBar(
   baseRatio: number,
   barMs: number,
   originMs: number,
+  stepsPerBar?: number,
 ): number {
   const bar = Math.floor((t - originMs) / barMs);
   const barStart = originMs + bar * barMs;
   const left = xOfTime(barStart, songTime, width, barPx, baseRatio, barMs);
-  return xInBar(left, barPx, (t - barStart) / barMs);
+  const ratio = (t - barStart) / barMs;
+  return stepsPerBar ? xInBarContinuous(left, barPx, ratio, stepsPerBar) : xInBar(left, barPx, ratio);
 }

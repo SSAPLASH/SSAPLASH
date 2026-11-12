@@ -1,6 +1,6 @@
 // drawSheet 시간 → x 계산 테스트
 import { describe, expect, it } from 'vitest';
-import { BAR_LEAD_PX, xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
+import { BAR_LEAD_PX, xInBar, xInBarContinuous, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
 // 120 BPM 4/4: 마디 2000ms, 마디 폭 320px → 0.16px/ms
 const BAR_MS = 2000;
@@ -45,5 +45,17 @@ describe('xOfTimeInBar', () => {
     const songTime = ORIGIN;
     expect(call(ORIGIN - 500, songTime)).toBeCloseTo(headX(-1, 0.75, songTime));
     expect(call(ORIGIN - BAR_MS, songTime)).toBeCloseTo(headX(-1, 0, songTime));
+  });
+});
+
+
+describe('연속 타격 위치', () => {
+  it('마지막 칸과 다음 마디 첫 칸 사이에서 연속이며 음수 마디에도 같은 규칙을 쓴다', () => {
+    const x = (t: number) => xOfTimeInBar(t, 0, 800, 320, 0, BAR_MS, 0, 16);
+    for (const boundary of [0, BAR_MS, 4 * BAR_MS]) {
+      expect(Math.abs(x(boundary + 0.001) - x(boundary - 0.001))).toBeLessThan(0.01);
+      expect(x(boundary)).toBeCloseTo(xInBarContinuous(boundary / BAR_MS * 320, 320, 0, 16));
+    }
+    expect(x(BAR_MS - BAR_MS / 16)).toBeCloseTo(xInBarContinuous(0, 320, 15 / 16, 16));
   });
 });
