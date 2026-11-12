@@ -849,20 +849,7 @@ uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_s
 
 ### 오디오 LLM 마디 단위 하이햇·라이드 시험 (S15P31A307-325)
 
-소리를 직접 듣는 LLM에 한 마디 길이 오디오를 들려주고 박을 세는 심벌이 하이햇인지 라이드인지 물어, 같은 마디의 지금 채보·8패드 모델·분리 트랙 에너지와 비교한다. 2026-11-10 결과로 채택하지 않았다. 6개 모델 모두 기존 방법보다 낮았다(`docs/chart-rules/audio-llm-cymbal-2026-11/summary.md`). 모델 GPU 실행은 서버에서 `notebooks/cymrole_audio_server.ipynb`(8개 모델), `notebooks/cymrole_audio_qwen_server.ipynb`(Qwen3-Omni만, 스크립트를 셀 안에 넣음)로 한다. 노트북은 모델마다 별도 가상환경을 작업 폴더 아래에 만들고 운영 코드와 `.venv`는 건드리지 않는다.
-
-| 스크립트 | 하는 일 |
-| --- | --- |
-| `cymrole_audio_cases.py` | 마디마다 정답(H·R)·지금 채보 이름·비교 기준 점수를 계산하고 원곡·분리 드럼 마디 wav, 모델용 `cases.jsonl`, 채점용 `truth.jsonl`, 작은 시험 `pilot.txt`, 서버 업로드 zip을 만듦. 로컬 채보 결과와 판정 실험 스크립트(`judge_cymrole.py` 등, 저장소에 없음)가 있어야 돎 |
-| `cymrole_audio_llm.py` | 모델 하나로 마디마다 H·R·N을 묻고 첫 답 토큰 확률을 저장. 백엔드 9개(Qwen3-Omni, Nemotron-3-Nano-Omni, Voxtral, Audio Flamingo Next, MOSS-Music, MiMo-Audio, Step-Audio-2-mini, Kimi-Audio, GMS Gemini). 끊겨도 이어 감 |
-| `cymrole_audio_eval.py` | `score`: 정확도·AUC·고친 마디·망친 마디를 비교 기준과 나란히 채점하고 통과 여부를 냄. `sections`: 답을 `judge_cymrole.py score`가 읽는 마디 이름 바꾸기 JSON으로 바꿈 |
-| `cymrole_audio_pipeline.py` | 서버에서 가상환경 → 가중치 → 작은 시험 → 통과 판단 → 전체 마디 → 결과 zip을 모델마다 차례로 돌림. `status`로 진행 확인 |
-
-```bash
-uv run python scripts/cymrole_audio_cases.py --out data/results/cymrole_audio --pack data/upload/server/cymrole_audio.zip
-uv run python scripts/cymrole_audio_llm.py --backend gemini --cases data/results/cymrole_audio --audio drums --subset data/results/cymrole_audio/pilot.txt --out data/results/cymrole_audio/answers_gemini
-uv run python scripts/cymrole_audio_eval.py score --answers data/results/cymrole_audio/answers_gemini --truth data/results/cymrole_audio/truth.jsonl --subset data/results/cymrole_audio/pilot.txt --out data/results/cymrole_audio/pilot_scores.csv
-```
+소리를 직접 듣는 LLM에 한 마디 길이 오디오를 들려주고 박을 세는 심벌이 하이햇인지 라이드인지 물어, 같은 마디의 지금 채보·8패드 모델·분리 트랙 에너지와 비교했다. 2026-11-10 결과로 채택하지 않았다. 6개 모델 모두 기존 방법보다 낮았다(`docs/chart-rules/audio-llm-cymbal-2026-11/summary.md`). 실험 스크립트 `cymrole_audio_*.py`와 서버 노트북은 저장소만으로는 돌지 않아 S15P31A307-324에서 뺐고, MR !411 이력에 남아 있다.
 
 ### 채보 모델 파인튜닝 (S15P31A307-164)
 
