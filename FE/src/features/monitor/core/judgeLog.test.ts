@@ -89,7 +89,7 @@ describe('JudgeLog 채점 집계', () => {
     log.push(ev(judged({ hitId: 3, judgement: 'PERFECT', noteIndex: 3 })));
     const s = log.stats([]).score;
     expect(s.counts).toEqual({ PERFECT: 2, GOOD: 1, MISS: 1 });
-    expect(s.score).toBe(260);
+    expect(s.score).toBe(280);
     expect(s.maxScore).toBe(400);
     expect(s.combo).toBe(1);
     expect(s.maxCombo).toBe(2);

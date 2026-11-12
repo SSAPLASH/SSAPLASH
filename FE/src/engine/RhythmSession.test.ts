@@ -134,12 +134,12 @@ describe('노트 배정과 판정', () => {
     expect(s2.snapshot(T0 + 1561).strayHits).toBe(1);
   });
 
-  it('점수: Perfect 100, Good 60, 만점 = 노트 수 × 100', () => {
+  it('점수: Perfect 100, Good 80(330번), 만점 = 노트 수 × 100', () => {
     const s = playing();
     s.handleHit(hit('HIHAT', T0 + 1000));
     s.handleHit(hit('SNARE', T0 + 1040));
     const snap = s.snapshot(T0 + 1100);
-    expect(snap.score).toBe(160);
+    expect(snap.score).toBe(180);
     expect(snap.maxScore).toBe(500);
     expect(snap.counts).toEqual({ PERFECT: 1, GOOD: 1, MISS: 0 });
     expect(snap.judgedCount).toBe(2);
@@ -450,5 +450,5 @@ it('열린 하이햇 속성은 같은 채보의 판정·점수·콤보를 바꾸
     return { judgements: [first?.judgement, second?.judgement], score: snap.score, combo: snap.combo, maxCombo: snap.maxCombo, counts: snap.counts };
   };
   expect(run(true)).toEqual(run(false));
-  expect(run(true)).toMatchObject({ judgements: ['PERFECT', 'GOOD'], score: 160, maxCombo: 2 });
+  expect(run(true)).toMatchObject({ judgements: ['PERFECT', 'GOOD'], score: 180, maxCombo: 2 });
 });

@@ -43,7 +43,7 @@ function log(over: Partial<PlayLog> = {}): PlayLog {
       note(1, { judgement: 'MISS', seq: 1 }),
       note(2, { judgement: 'GOOD', deltaMs: -40 }),
     ],
-    summary: { score: 160, maxScore: 300, accuracy: 160 / 300, maxCombo: 1, counts: { PERFECT: 1, GOOD: 1, MISS: 1 }, strayHits: 1 },
+    summary: { score: 180, maxScore: 300, accuracy: 180 / 300, maxCombo: 1, counts: { PERFECT: 1, GOOD: 1, MISS: 1 }, strayHits: 1 },
     audioOffsetMs: 12,
     lastSongTimeMs: 2800,
     elapsedActiveMs: 4800,
@@ -118,15 +118,15 @@ describe('buildUploadBody', () => {
     expect(b.hits[3]).toMatchObject({ stickId: 0, pitch: null });
   });
 
-  it('집계는 서버 규칙(seq 순서 콤보, 정확도 백분율)', () => {
-    expect(body().summary).toEqual({ score: 160, accuracy: 53.33, maxCombo: 1, judgementCounts: { perfect: 1, good: 1, miss: 1 } });
+  it('집계는 서버 규칙(seq 순서 콤보, 정확도 백분율, SCORE_V2 GOOD 80점)', () => {
+    expect(body().summary).toEqual({ score: 180, accuracy: 60, maxCombo: 1, judgementCounts: { perfect: 1, good: 1, miss: 1 } });
   });
 
   it('판정 컨텍스트·메타·프리셋', () => {
     const b = body(log({ presetId: '5' }));
     expect(b.judgementContext).toEqual({
       schemaVersion: 1,
-      judgementVersion: 'SCORE_V1',
+      judgementVersion: 'SCORE_V2',
       timingWindows: { perfectMs: 25, goodMs: 60 },
       playbackRate: 1,
       padMapping: {},

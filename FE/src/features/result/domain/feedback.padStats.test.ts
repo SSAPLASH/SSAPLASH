@@ -49,10 +49,10 @@ function logOf(notes: LogNote[], hits?: LoggedHit[]): PlayLog {
 }
 
 describe('summarizeByPad 패드 정확도', () => {
-  it('PERFECT·GOOD·MISS가 섞이면 점수 평균(100·60·0)으로 계산한다', () => {
+  it('PERFECT·GOOD·MISS가 섞이면 점수 평균(100·80·0, 330번)으로 계산한다', () => {
     const s = summarizeByPad(logOf([note(0, 'SNARE', 'PERFECT', 0), note(1, 'SNARE', 'GOOD', 40), note(2, 'SNARE', 'MISS')]));
     expect(s).toHaveLength(1);
-    expect(s[0].accuracy).toBeCloseTo((100 + 60 + 0) / 300, 10);
+    expect(s[0].accuracy).toBeCloseTo((100 + 80 + 0) / 300, 10);
   });
 
   it('전부 PERFECT면 1, 전부 MISS면 0', () => {

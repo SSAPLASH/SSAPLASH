@@ -64,6 +64,15 @@ const perfect = (bar: number, pad: PadId = 'SNARE'): N => ({ bar, pad, j: 'PERFE
 const miss = (bar: number, pad: PadId = 'SNARE'): N => ({ bar, pad, j: 'MISS', d: null });
 const good = (bar: number, pad: PadId, d: number): N => ({ bar, pad, j: 'GOOD', d });
 const many = (n: number, f: (i: number) => N): N[] => Array.from({ length: n }, (_, i) => f(i));
+/**
+ * 규칙 3용: 0~3·8~11마디 전부 PERFECT, 4~7마디 전부 GOOD(80%). 전체 96% − 구간 80% = 16%p.
+ * GOOD이 60점일 때는 0~7마디만으로 26.7%p였으나 80점(330번)에서는 13.3%p라 앞뒤 PERFECT 구간을 둔다
+ */
+const weakBars4to7 = (): N[] => [
+  ...many(16, (i) => perfect(Math.floor(i / 4))),
+  ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0)),
+  ...many(16, (i) => perfect(8 + Math.floor(i / 4))),
+];
 
 describe('buildFeedback', () => {
   it('규칙 1: 패드 MISS 비율 25% 이상이면 그 패드 카드', () => {
@@ -87,17 +96,14 @@ describe('buildFeedback', () => {
   });
 
   it('규칙 3: 4마디 구간 정확도가 전체보다 15%p 이상 낮으면 구간 카드', () => {
-    const ns = [
-      ...many(16, (i) => perfect(Math.floor(i / 4))), // 0~3마디 전부 PERFECT
-      ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0)), // 4~7마디 60%
-    ];
+    const ns = weakBars4to7();
     const f = buildFeedback(logOf(ns), chart);
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ id: 'segment', title: '5~8마디에서 흔들려요', bars: [4, 7] });
   });
 
   it('규칙 3: SHEET 로그의 bpm·beatsPerBar로 마디 규칙이 돈다(ResultPage 경로)', () => {
-    const ns = [...many(16, (i) => perfect(Math.floor(i / 4))), ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0))];
+    const ns = weakBars4to7();
     const log = logOf(ns);
     const f = buildFeedback(log, { bpm: log.bpm, beatsPerBar: log.beatsPerBar });
     expect(f[0]).toMatchObject({ id: 'segment', bars: [4, 7] });
@@ -105,7 +111,7 @@ describe('buildFeedback', () => {
 
   it('규칙 3: offsetMs가 있으면 마디를 원점부터 센다(음원 곡 약점 마디가 밀리지 않는다)', () => {
     // 노트 시각을 1250ms 뒤로 민 로그. 원점 없이 세면 5~8마디 구간이 6~9마디로 흩어진다
-    const ns = [...many(16, (i) => perfect(Math.floor(i / 4))), ...many(8, (i) => good(4 + Math.floor(i / 2), 'KICK', 0))];
+    const ns = weakBars4to7();
     const base = logOf(ns);
     const log = { ...base, offsetMs: 1250, notes: base.notes.map((n) => ({ ...n, timeMs: n.timeMs + 1250 })) };
     const f = buildFeedback(log, { bpm: log.bpm, beatsPerBar: log.beatsPerBar, offsetMs: log.offsetMs });

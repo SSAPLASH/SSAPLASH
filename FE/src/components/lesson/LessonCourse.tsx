@@ -19,12 +19,18 @@ export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
   const list = useLessons((s) => s.list);
   const localPassed = useLessons((s) => s.localPassed);
   const load = useLessons((s) => s.load);
+  const dismissInvite = useLessons((s) => s.dismissInvite);
   const navigate = useNavigate();
   const [picked, setPicked] = useState<number | null>(null);
 
   useEffect(() => {
     void load(true);
   }, [load]);
+
+  // 코스에 한 번 들어왔으면 권유 카드는 할 일을 마쳤다. 어느 길로 들어왔든 [닫기]처럼 기억해 다시 띄우지 않는다
+  useEffect(() => {
+    dismissInvite();
+  }, [dismissInvite]);
 
   const lessons = useMemo(() => list?.items ?? [], [list]);
   const states = useMemo(() => stageStates(lessons, localPassed), [lessons, localPassed]);
