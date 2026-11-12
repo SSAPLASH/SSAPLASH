@@ -217,7 +217,7 @@ export function LessonReadPage() {
               {target ? readPrompt(target, lesson.guide, miss) : '모두 쳤어요! 다시 하거나 코스로 돌아갈 수 있어요.'}
             </p>
             <ReadStaff pads={seq} at={at} />
-            <div className="lesson-read-kit">
+            <div className="lesson-read-kit" data-skin={kitSkin}>
               <LiveDrumKit fitWidth effects labels skin={kitSkin} states={kitStates} hitSeq={hitSeq} onPadDown={onPadDown} />
             </div>
             {done && !popup && (
