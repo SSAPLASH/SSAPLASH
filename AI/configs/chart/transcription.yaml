@@ -55,7 +55,10 @@ tempo:
 max_duration_sec: 600
 # 채보 가능 검사 (S15P31A307-246). 걸리면 실패 사유 NOT_TRANSCRIBABLE로 보고함
 drum_check:
-  # 곡 1분당 노트 수가 이보다 적으면 실패. 비워 두면 검사 안 함. 실제 곡 분포를 측정한 뒤 정함
-  min_notes_per_minute:
+  # 곡 1분당 노트 수가 이보다 적으면 실패. 비워 두면 검사 안 함
+  # 92: 드럼 있는 곡 179곡(공용 곡 129곡, MUSDB18-HQ test 50곡)의 1분당 노트 수 분포에서 정상 곡 1만 곡 중 1곡이 걸리는 값.
+  # 같은 MUSDB 50곡에서 드럼을 뺀 음원은 최대 32.7 (S15P31A307-321, scripts/note_count_measure.py)
+  # 채보 모델 songsterr_avg 기준. strum은 공용 곡 69곡에서 같은 계산으로 100이라 92면 두 모델 모두 1만 곡 중 1곡 이하
+  min_notes_per_minute: 92
   # 박 추적 실패(bpm 기본값 120)를 실패로 볼지. 틀린 bpm으로 메트로놈이 나가지 않게 함
   fail_on_unknown_tempo: true
