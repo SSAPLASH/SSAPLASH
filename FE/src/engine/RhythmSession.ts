@@ -6,7 +6,7 @@ import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
 import { COUNTDOWN_MS } from '@/domain/time/leadIn';
 import { gridOriginMs } from '@/domain/sheet';
-import { isSensorSource } from '@/domain/events';
+import { isFootHit, isSensorSource } from '@/domain/events';
 import { hitMatch, type MatchCandidate, type MatchRule } from './hitMatch';
 
 export interface NoteState {
@@ -80,6 +80,8 @@ export interface RhythmOptions {
   countInBars: number;
   /** 오디오 출력 오프셋. 타격 시각에서 뺀다 */
   audioOffsetMs: number;
+  /** 발 타격(하이햇 페달·킥)에 쓰는 오프셋. 이미 풀린 숫자(따로 재지 않았으면 audioOffsetMs와 같다) */
+  kickOffsetMs: number;
 }
 
 export class RhythmSession {
@@ -233,9 +235,14 @@ export class RhythmSession {
     return this.opts.audioOffsetMs;
   }
 
-  /** 타격 시각(performance.now) → 판정에 쓰는 곡 시각(ms). 오디오 출력 오프셋을 뺀다 */
-  hitSongTimeMs(tHit: number): number {
-    return tHit - this.opts.audioOffsetMs - this.startTime;
+  /** 발 타격에 적용 중인 오프셋(ms). 따로 재지 않았으면 audioOffsetMs와 같다 */
+  get kickOffsetMs(): number {
+    return this.opts.kickOffsetMs;
+  }
+
+  /** 타격 시각(performance.now) → 판정에 쓰는 곡 시각(ms). 발 타격이면 킥 오프셋, 아니면 스틱 오프셋을 뺀다 */
+  hitSongTimeMs(tHit: number, foot = false): number {
+    return tHit - (foot ? this.opts.kickOffsetMs : this.opts.audioOffsetMs) - this.startTime;
   }
 
   /** IMU 판정용 후보: 이 시각 근처에 칠 법한 패드들 */
@@ -254,7 +261,7 @@ export class RhythmSession {
 
   handleHit(hit: ResolvedHit): JudgementEvent | null {
     if (!hit.pad || (this.status !== 'playing' && this.status !== 'countin')) return null;
-    const t = this.hitSongTimeMs(hit.tHit);
+    const t = this.hitSongTimeMs(hit.tHit, isFootHit(hit));
     const w = this.opts.windows.goodMs;
     const cands: MatchCandidate[] = [];
     for (let i = this.cursor; i < this.notes.length; i++) {
