@@ -303,7 +303,7 @@ uv run ssaplash-worker run
 | heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패, 내려받은 파일의 크기·sha256이 3번 다 배정과 다름 | 보고 안 함 | — | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
 | 분리 전 음악 여부 검사에서 음악이 아닌 파일로 판단 (아래 "분리 전 음악 여부 검사") | `INPUT_INVALID` | 거짓 | `NOT_TRANSCRIBABLE` | 분리를 돌리지 않고 BE가 FAILED |
 
-`reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다.
+`reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다. 서비스 설정값은 1분당 92개이고, 이보다 적으면 `NOT_TRANSCRIBABLE`로 끝난다.
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
 
