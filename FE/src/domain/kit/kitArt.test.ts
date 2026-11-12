@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_PADS, type PadId } from '../pads';
-import { KIT_ART_PERSP, kitArtPad, type KitArtPad } from './kitArt';
+import { KIT_ART_PERSP, KIT_ART_TOP, kitArtPad, type KitArtPad } from './kitArt';
 
 const art = KIT_ART_PERSP;
 const of = (pad: PadId): KitArtPad => {
@@ -95,5 +95,66 @@ describe('실물 드럼 자리 표(원근 그림)', () => {
   it('모양은 심벌 3·드럼 4·킥 1·페달 1이다', () => {
     const count = (shape: string) => art.pads.filter((p) => p.shape === shape).length;
     expect([count('cymbal'), count('drum'), count('kick'), count('pedal')]).toEqual([3, 4, 1, 1]);
+  });
+});
+
+describe('실물 드럼 자리 표(위에서 본 그림)', () => {
+  const top = KIT_ART_TOP;
+
+  it('킷 상자는 폭 760에 원근 그림보다 세로가 길다', () => {
+    expect(top.box).toEqual({ w: 760, h: 650.7 });
+    expect(top.box.h).toBeGreaterThan(KIT_ART_PERSP.box.h);
+  });
+
+  it('패드 9개가 한 번씩 있다', () => {
+    expect(top.pads.map((p) => p.pad).sort()).toEqual([...ALL_PADS].sort());
+  });
+
+  it('조각 이미지 이름 12개가 겹치지 않고 원근 그림과 같은 이름이다', () => {
+    const names = top.pads.flatMap((p) => (p.top ? [p.sprite, p.top.sprite] : [p.sprite]));
+    expect(new Set(names).size).toBe(12);
+    expect(names).toHaveLength(12);
+    const persp = KIT_ART_PERSP.pads.flatMap((p) => (p.top ? [p.sprite, p.top.sprite] : [p.sprite]));
+    expect([...names].sort()).toEqual([...persp].sort());
+  });
+
+  it('조각 상자가 킷 상자 안에 있다', () => {
+    for (const p of top.pads) {
+      expect(p.kit.left, p.pad).toBeGreaterThanOrEqual(0);
+      expect(p.kit.left + p.kit.w, p.pad).toBeLessThanOrEqual(top.box.w);
+      expect(p.kit.top, p.pad).toBeGreaterThanOrEqual(0);
+      expect(p.kit.top + (p.kit.w * p.boxH) / 160, p.pad).toBeLessThanOrEqual(top.box.h);
+    }
+  });
+
+  it('원판 조각도 킷 상자 안에 있다(조각 상자 밖으로 나가도 킷 밖으로는 나가지 않는다)', () => {
+    for (const p of top.pads) {
+      if (!p.top) continue;
+      const s = p.kit.w / 160;
+      expect(p.kit.left + p.top.x * s, p.pad).toBeGreaterThanOrEqual(0);
+      expect(p.kit.left + (p.top.x + p.top.w) * s, p.pad).toBeLessThanOrEqual(top.box.w);
+      expect(p.kit.top + p.top.y * s, p.pad).toBeGreaterThanOrEqual(0);
+      expect(p.kit.top + (p.top.y + p.top.h) * s, p.pad).toBeLessThanOrEqual(top.box.h);
+    }
+  });
+
+  it('원판 조각은 심벌 셋에만 있고 닫힘 이동(closeDy)은 어디에도 없다', () => {
+    expect(top.pads.filter((p) => p.top).map((p) => p.pad).sort()).toEqual(['CRASH', 'HIHAT', 'RIDE']);
+    expect(top.pads.filter((p) => p.top?.closeDy !== undefined)).toHaveLength(0);
+  });
+
+  it('링은 헤드와 중심이 같고 헤드보다 크다', () => {
+    for (const p of top.pads) {
+      expect(p.ring.cx, p.pad).toBe(p.head.cx);
+      expect(p.ring.cy, p.pad).toBe(p.head.cy);
+      expect(p.ring.rx, p.pad).toBeGreaterThan(p.head.rx);
+      expect(p.ring.ry, p.pad).toBeGreaterThan(p.head.ry);
+    }
+  });
+
+  it('모양은 심벌 3·드럼 4·킥 1·페달 1이고 페달을 맨 앞에 그린다', () => {
+    const count = (shape: string) => top.pads.filter((p) => p.shape === shape).length;
+    expect([count('cymbal'), count('drum'), count('kick'), count('pedal')]).toEqual([3, 4, 1, 1]);
+    expect(top.pads[top.pads.length - 1]?.pad).toBe('HIHAT_PEDAL');
   });
 });
