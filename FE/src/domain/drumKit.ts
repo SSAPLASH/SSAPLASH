@@ -1,7 +1,7 @@
 // 연주 화면 드럼 킷(Figma Play / DrumKit) 고정 배치·상태 상수·크기 계산.
 // 판정용 배치(kitLayout)와는 별개로, 표시 전용이다. 그리기는 components/drum이 한다.
 // 실물 스킨의 자리는 그림 자리 표(kit/kitArt)에서 온다. 전자·네온은 이 파일의 평면 배치표를 쓴다.
-import { KIT_ART_PERSP, type KitArtPad } from './kit/kitArt';
+import { KIT_ART_PERSP, KIT_ART_TOP, type KitArt, type KitArtPad } from './kit/kitArt';
 import { PAD_META, type PadId } from './pads';
 
 /** pedal은 하이햇 페달(발판). 실물 스킨의 고정 킷과 드럼 세팅의 자유 틀(DrumKit frame)에서 그린다 */
@@ -49,9 +49,20 @@ export const DRUM_KIT_W = 760;
 /** 전자·네온 킷의 원본 높이. 실물은 그림마다 달라 kitBoxFor로 읽는다 */
 export const DRUM_KIT_H = 300;
 
-/** 스킨별 킷 상자(원본 px). scale 1일 때 렌더 크기다 */
-export function kitBoxFor(skin: KitSkin): { w: number; h: number } {
-  return skin === 'acoustic' ? KIT_ART_PERSP.box : { w: DRUM_KIT_W, h: DRUM_KIT_H };
+/**
+ * 실물 스킨의 그림 종류. persp = 원근 그림(큰 킷), top = 위에서 본 그림(작은 킷).
+ * 전자·네온은 평면 하나뿐이라 무시한다
+ */
+export type KitView = 'persp' | 'top';
+
+/** 실물 그림 자리 표(view별) */
+function artOf(view: KitView): KitArt {
+  return view === 'top' ? KIT_ART_TOP : KIT_ART_PERSP;
+}
+
+/** 스킨별 킷 상자(원본 px). scale 1일 때 렌더 크기다. view는 실물 스킨에서만 뜻이 있다 */
+export function kitBoxFor(skin: KitSkin, view: KitView = 'persp'): { w: number; h: number } {
+  return skin === 'acoustic' ? artOf(view).box : { w: DRUM_KIT_W, h: DRUM_KIT_H };
 }
 
 /** 타격 점등 지속 시간(ms) */
@@ -59,17 +70,24 @@ export const HIT_MS = 220;
 /** 판정(PERFECT/GOOD/MISS) 표시 지속 시간(ms) */
 export const JUDGE_MS = 400;
 
-/** 실물 스킨의 고정 배치: 그림 자리 표의 9패드(하이햇 페달 포함). 배열 순서가 겹침 순서(뒤 → 앞)다 */
-export const DRUM_KIT_PADS: readonly DrumKitPad[] = KIT_ART_PERSP.pads.map((art) => ({
-  pad: art.pad,
-  shape: art.shape,
-  left: art.kit.left,
-  top: art.kit.top,
-  w: art.kit.w,
-  h: (art.kit.w * art.boxH) / 160,
-  label: PAD_META[art.pad].label,
-  art,
-}));
+/** 그림 자리 표 → 고정 배치표 */
+const padsFromArt = (kitArt: KitArt): readonly DrumKitPad[] =>
+  kitArt.pads.map((art) => ({
+    pad: art.pad,
+    shape: art.shape,
+    left: art.kit.left,
+    top: art.kit.top,
+    w: art.kit.w,
+    h: (art.kit.w * art.boxH) / 160,
+    label: PAD_META[art.pad].label,
+    art,
+  }));
+
+/** 실물 스킨의 고정 배치(원근): 그림 자리 표의 9패드(하이햇 페달 포함). 배열 순서가 겹침 순서(뒤 → 앞)다 */
+export const DRUM_KIT_PADS: readonly DrumKitPad[] = padsFromArt(KIT_ART_PERSP);
+
+/** 실물 스킨의 고정 배치(위에서 본 그림, 작은 킷). 9패드이고 하이햇 원판은 열림·닫힘 이동이 없다 */
+export const DRUM_KIT_PADS_TOP: readonly DrumKitPad[] = padsFromArt(KIT_ART_TOP);
 
 /** 원 중심(cx, cy)·지름 d → 좌상단 left/top, w = h = d. 라벨·태그는 PAD_META에서 가져온다 */
 function flatPad(pad: PadId, shape: PadShape, cx: number, cy: number, d: number): DrumKitPad {
@@ -89,8 +107,9 @@ export const DRUM_KIT_FLAT_PADS: readonly DrumKitPad[] = [
 ];
 
 /** 스킨에 맞는 고정 배치표. 실물은 하이햇 페달까지 9패드, 전자·네온은 8패드 */
-export function kitPadsFor(skin: KitSkin): readonly DrumKitPad[] {
-  return skin === 'acoustic' ? DRUM_KIT_PADS : DRUM_KIT_FLAT_PADS;
+export function kitPadsFor(skin: KitSkin, view: KitView = 'persp'): readonly DrumKitPad[] {
+  if (skin !== 'acoustic') return DRUM_KIT_FLAT_PADS;
+  return view === 'top' ? DRUM_KIT_PADS_TOP : DRUM_KIT_PADS;
 }
 
 /** 라벨 글자 크기(원본 px). 12px × (패드 폭 / 160) */
@@ -99,9 +118,24 @@ export function labelFontSize(w: number): number {
 }
 
 /** scale에서의 킷 렌더 크기(CSS px) */
-export function kitSizeAt(scale: number, skin: KitSkin): { width: number; height: number } {
-  const box = kitBoxFor(skin);
+export function kitSizeAt(scale: number, skin: KitSkin, view: KitView = 'persp'): { width: number; height: number } {
+  const box = kitBoxFor(skin, view);
   return { width: box.w * scale, height: box.h * scale };
+}
+
+/** 리듬 게임·악보 연습 화면의 작은 킷 높이(CSS px). 실물(위에서 본 그림)일 때만 쓴다 */
+export const PLAY_KIT_TOP_H = 200;
+export const SHEET_KIT_TOP_H = 210;
+
+/**
+ * 작은 연주 킷(리듬 게임·악보 연습)의 그림 종류와 scale.
+ * 실물은 위에서 본 그림을 화면별 높이(게임 200 · 악보 210px)에 맞추고, 전자·네온은 기존 scale 그대로다
+ */
+export function smallKitSpec(screen: 'play' | 'sheet', skin: KitSkin): { view: KitView; scale: number } {
+  const flatScale = screen === 'play' ? 0.5 : 0.7;
+  if (skin !== 'acoustic') return { view: 'persp', scale: flatScale };
+  const h = screen === 'play' ? PLAY_KIT_TOP_H : SHEET_KIT_TOP_H;
+  return { view: 'top', scale: h / kitBoxFor('acoustic', 'top').h };
 }
 
 /** 부모 가용 폭에 맞는 scale. maxScale을 넘지 않고, 폭이 0 이하면 0 */
