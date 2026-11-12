@@ -8,7 +8,7 @@ import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/sheet';
-import { barsPerPage, cursorPos, flowGeometry, noteHeadAt, pagerSlots, snapToBeat, type PagerSlot } from './sheetPagerMath';
+import { barsPerPage, CONTENT_BOTTOM, CONTENT_TOP, cursorPos, flowGeometry, noteHeadAt, pagerSlots, snapToBeat, staffScale, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from '@/components/sheetmusic/sheetStripDraw';
 
@@ -35,9 +35,6 @@ export interface SheetPagerProps {
 const CLIP_PAD = 2;
 /** 왼쪽 여백(px). 첫 마디 앞 박자표(drawSheet가 마디 왼쪽 22px에 그린다)가 잘리지 않게 둔다 */
 const GUTTER_X = 44;
-/** 보표·커서·박 번호가 차지하는 세로 범위(px). 캔버스가 더 높으면 이만큼을 세로 가운데에 놓는다 */
-const CONTENT_TOP = STAFF_TOP_Y - 46;
-const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 
 export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarnings, hitMarks, fxSource, overlay, countInMs = 0 }: SheetPagerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -64,8 +61,9 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
     return { sheet, layoutOf };
   }, [chart]);
 
-  // 마지막으로 그린 프레임의 슬롯 배치. 이펙트 위치 찾기가 읽는다(그리기 루프가 매 프레임 갱신)
-  const geom = useRef<{ slots: PagerSlot[]; slotW: number; offsetY: number; firstX: number; width: number; continuousStepsPerBar?: number }>({ slots: [], slotW: 0, offsetY: 0, firstX: 0, width: 0 });
+  // 마지막으로 그린 프레임의 슬롯 배치. 이펙트 위치 찾기가 읽는다(그리기 루프가 매 프레임 갱신).
+  // slotW·offsetY·firstX·width는 배율 k를 나눈 논리 좌표이고, CSS 픽셀로 바꿀 때 k를 곱한다
+  const geom = useRef<{ slots: PagerSlot[]; slotW: number; offsetY: number; firstX: number; width: number; k: number; continuousStepsPerBar?: number }>({ slots: [], slotW: 0, offsetY: 0, firstX: 0, width: 0, k: 1 });
 
   // 이벤트 → 노트 머리 화면 위치(현재 페이지에 없으면 null). 헛침·판정 없는 이벤트도 null
   const locate = useCallback(
@@ -81,8 +79,10 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
         continuousStepsPerBar: g.continuousStepsPerBar,
         lineY: headY,
       });
-      // 이펙트 캔버스는 그리기 캔버스의 세로 정렬 offset을 모르므로 여기서 더한다. 크기는 머리의 2배(D3)
-      return at && at.x >= 0 && at.x <= g.width ? { geo: { cx: at.x, cy: at.y + g.offsetY, rx: HEAD_RX * 2, ry: HEAD_RY * 2, k: 1 }, shape: 'head' } : null;
+      // 이펙트 캔버스는 그리기 캔버스의 세로 정렬 offset·배율을 모르므로 여기서 더하고 곱해 CSS 픽셀로 바꾼다. 크기는 머리의 2배(D3)
+      return at && at.x >= 0 && at.x <= g.width
+        ? { geo: { cx: at.x * g.k, cy: (at.y + g.offsetY) * g.k, rx: HEAD_RX * 2 * g.k, ry: HEAD_RY * 2 * g.k, k: g.k }, shape: 'head' }
+        : null;
     },
     [model],
   );
@@ -121,12 +121,16 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
         geom.current.slots = [];
         return;
       }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, width, height);
+      // 악보를 배율 k로 그린다: 이후 좌표는 모두 논리 크기(W×H = 칸 ÷ k)이고 변환이 한 번에 키운다
+      const k = staffScale(height);
+      const W = width / k;
+      const H = height / k;
+      ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+      ctx.clearRect(0, 0, W, H);
       // 세로 가운데 정렬. 가로는 슬롯 x에 왼쪽 여백을 더한다(보표 선은 drawSheet가 전체 폭에 긋는다)
-      const offsetY = Math.max(0, (height - (CONTENT_BOTTOM - CONTENT_TOP)) / 2 - CONTENT_TOP);
+      const offsetY = Math.max(0, (H - (CONTENT_BOTTOM - CONTENT_TOP)) / 2 - CONTENT_TOP);
       ctx.translate(0, offsetY);
-      const inner = Math.max(1, width - GUTTER_X);
+      const inner = Math.max(1, W - GUTTER_X);
 
       const raw = p.getSongTime() ?? lastRaw;
       lastRaw = raw;
@@ -136,17 +140,17 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
       const slotW = inner / perPage;
       const leadBars = p.countInMs > 0 ? 1 : 0;
       if (!reduced) {
-        const flow = flowGeometry(t, barMs, sheet.stepsPerBar, width, GUTTER_X, slotW, totalBars, leadBars);
+        const flow = flowGeometry(t, barMs, sheet.stepsPerBar, W, GUTTER_X, slotW, totalBars, leadBars);
         const slots: PagerSlot[] = [];
         for (let bar = flow.first; bar <= flow.last; bar++) slots.push({ bar, upcoming: false });
-        geom.current = { slots, slotW, offsetY, firstX: flow.barZeroX + flow.first * slotW, width, continuousStepsPerBar: sheet.stepsPerBar };
-        if (leadBars && flow.barZeroX - slotW < width && flow.barZeroX > 0) {
-          drawEmptyBar(ctx, flow.barZeroX - slotW, width, colors);
+        geom.current = { slots, slotW, offsetY, firstX: flow.barZeroX + flow.first * slotW, width: W, k, continuousStepsPerBar: sheet.stepsPerBar };
+        if (leadBars && flow.barZeroX - slotW < W && flow.barZeroX > 0) {
+          drawEmptyBar(ctx, flow.barZeroX - slotW, W, colors);
         }
         drawSheet(ctx, {
           chart, noteStates: p.noteStates, strayHits: p.strayHits, hitMarks: hitMarks?.current,
-          songTime: songTimeAtGrid(chart, 0), rawSongTime: raw, originMs, width, height,
-          barPx: slotW, baseRatio: flow.barZeroX / width, colors, layoutOf,
+          songTime: songTimeAtGrid(chart, 0), rawSongTime: raw, originMs, width: W, height: H,
+          barPx: slotW, baseRatio: flow.barZeroX / W, colors, layoutOf,
           bars: { first: flow.first, last: flow.last }, barMs, beatMs, showBase: false,
           continuousStepsPerBar: sheet.stepsPerBar, openWarnings: openWarnings?.current, nowMs,
         });
@@ -159,7 +163,8 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
       geom.current.slotW = slotW;
       geom.current.offsetY = offsetY;
       geom.current.firstX = GUTTER_X;
-      geom.current.width = width;
+      geom.current.width = W;
+      geom.current.k = k;
       geom.current.continuousStepsPerBar = undefined;
 
       slots.forEach((slot, i) => {
@@ -170,12 +175,12 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
         // 첫 슬롯은 왼쪽 여백(박자표 자리)까지 포함한다
         const slotX = GUTTER_X + i * slotW;
         const clipLeft = i === 0 ? 0 : slotX - CLIP_PAD;
-        ctx.rect(clipLeft, -offsetY, slotX + slotW - clipLeft, height);
+        ctx.rect(clipLeft, -offsetY, slotX + slotW - clipLeft, H);
         ctx.clip();
         if (slot.upcoming) ctx.globalAlpha = 0.35;
         if (slot.bar === null) {
           // 빈 준비 마디: 보표·마디선만
-          drawEmptyBar(ctx, slotX, width, colors);
+          drawEmptyBar(ctx, slotX, W, colors);
           ctx.restore();
           return;
         }
@@ -187,10 +192,10 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
           songTime: songTimeAtGrid(chart, slot.bar * barMs),
           rawSongTime: raw,
           originMs,
-          width,
-          height,
+          width: W,
+          height: H,
           barPx: slotW,
-          baseRatio: slotX / width,
+          baseRatio: slotX / W,
           colors,
           layoutOf,
           bars: { first: slot.bar, last: slot.bar },
