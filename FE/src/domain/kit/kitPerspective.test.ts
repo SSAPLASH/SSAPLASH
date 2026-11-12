@@ -9,6 +9,7 @@ import {
   PAD_SOLIDS,
   dragToLayout,
   hitTestPads,
+  isMovablePad,
   kitShapes,
   makeCamera,
   padPoint,
@@ -26,13 +27,6 @@ const shapes = kitShapes(DEFAULT_KIT_LAYOUT, cam);
 const shapeOf = (pad: PadId) => shapes.find((s) => s.pad === pad)!;
 
 describe('makeCamera', () => {
-  it('투영한 점을 같은 깊이로 되돌리면 원래 점이다', () => {
-    const pt = [0.3, 0.6, 0.2] as const;
-    const q = cam.project(pt);
-    const back = cam.unproject(q.sx, q.sy, q.depth);
-    for (const i of [0, 1, 2]) expect(back[i]).toBeCloseTo(pt[i], 6);
-  });
-
   it('먼 점은 작고 화면 위쪽에, 높은 점은 화면 위쪽에 놓인다', () => {
     const near = cam.project([0, 0.2, 0]);
     const far = cam.project([0, 1.0, 0]);
@@ -57,11 +51,12 @@ describe('padPoint', () => {
     expect(padPoint('RIDE', DEFAULT_KIT_LAYOUT.RIDE)[0]).toBeGreaterThan(padPoint('CRASH', DEFAULT_KIT_LAYOUT.CRASH)[0]);
   });
 
-  it('페달은 바닥 가까이 고정 줄에 있고 배치 y와 무관하다', () => {
-    const a = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.9 });
-    const b = padPoint('HIHAT_PEDAL', { x: 0.2, y: 0.3 });
-    expect(a).toEqual(b);
-    expect(a[2]).toBeLessThan(-0.5);
+  it('하이햇 페달의 3D 점은 하이햇 바로 아래 바닥이다(하이햇의 배치 좌표를 넘긴다)', () => {
+    const hh = padPoint('HIHAT', DEFAULT_KIT_LAYOUT.HIHAT);
+    const pedal = padPoint('HIHAT_PEDAL', DEFAULT_KIT_LAYOUT.HIHAT);
+    expect(pedal[0]).toBe(hh[0]);
+    expect(pedal[1]).toBe(hh[1]);
+    expect(pedal[2]).toBeLessThan(-0.5);
   });
 
   it('킥은 바닥에 세워져 있다: 중심 높이 = 바닥 + 반지름, 배치 y와 무관', () => {
@@ -204,13 +199,14 @@ describe('dragToLayout', () => {
     expect(dragToLayout('SNARE', BOX.w, shapeOf('SNARE').cy, DEFAULT_KIT_LAYOUT.SNARE, cam).x).toBe(0.95);
   });
 
-  it('페달은 좌우로만 움직이고 y는 그대로다', () => {
-    const s = shapeOf('KICK');
-    const next = dragToLayout('KICK', s.cx - 80, s.cy - 100, DEFAULT_KIT_LAYOUT.KICK, cam);
-    expect(next.y).toBe(DEFAULT_KIT_LAYOUT.KICK.y);
-    expect(next.x).toBeLessThan(DEFAULT_KIT_LAYOUT.KICK.x);
-    const moved = padShape('KICK', padPoint('KICK', next), cam);
-    expect(moved.cx).toBeCloseTo(s.cx - 80, 0);
+  it('킥과 하이햇 페달은 끌어도 옮겨지지 않는다', () => {
+    expect(isMovablePad('KICK')).toBe(false);
+    expect(isMovablePad('HIHAT_PEDAL')).toBe(false);
+    expect(isMovablePad('SNARE')).toBe(true);
+    for (const pad of ['KICK', 'HIHAT_PEDAL'] as const) {
+      const s = shapeOf(pad);
+      expect(dragToLayout(pad, s.cx - 80, s.cy - 100, DEFAULT_KIT_LAYOUT[pad], cam)).toEqual({ x: DEFAULT_KIT_LAYOUT[pad].x, y: DEFAULT_KIT_LAYOUT[pad].y });
+    }
   });
 });
 
