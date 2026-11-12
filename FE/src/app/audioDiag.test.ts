@@ -12,7 +12,7 @@ const windows = { perfectMs: 25, goodMs: 60 };
 const info: AudioDiagInfo = {
   audioOffsetMs: -65,
   latency: { sampleRate: 48000, baseLatencyMs: 10, outputLatencyMs: 45 },
-  timingCal: { measuredAt: 111, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 },
+  timingCal: { measuredAt: 111, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45, kick: null },
 };
 
 let stop: (() => void) | null = null;
