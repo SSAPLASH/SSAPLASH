@@ -7,10 +7,9 @@ import { createLiveFxSource } from '@/components/fx/fxSource';
 import { useSettings } from '@/store/settingsStore';
 import type { PadId } from '@/domain/pads';
 import {
-  DRUM_KIT_H,
-  DRUM_KIT_W,
   fitScale,
   fitScaleBox,
+  kitBoxFor,
   kitPadsFor,
   kitSizeAt,
   placePad,
@@ -129,7 +128,7 @@ function Shake({ count, className, children }: { count: number | undefined; clas
   );
 }
 
-/** 드럼 킷(고정 배치 8패드). 렌더 크기는 760×300 × scale(CSS px) */
+/** 드럼 킷(고정 배치). 렌더 크기는 스킨별 킷 상자(실물 760×487 · 전자·네온 760×300) × scale(CSS px) */
 export function DrumKit({
   scale = 1,
   fitWidth = false,
@@ -163,20 +162,21 @@ export function DrumKit({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
+  const box = kitBoxFor(skin);
   const fitting = !frame && (fitWidth || fitContain);
   useEffect(() => {
     if (!fitting) return;
     const el = wrapRef.current;
     if (!el) return;
-    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale) : fitScale(el.clientWidth, scale));
+    const update = () => setFit(fitContain ? fitScaleBox(el.clientWidth, el.clientHeight, scale, box.h) : fitScale(el.clientWidth, scale));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fitting, fitContain, scale]);
+  }, [fitting, fitContain, scale, box.h]);
 
   const eff = fitting ? (fit ?? scale) : scale;
-  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff);
+  const { width, height } = frame ? { width: frame.w, height: frame.h } : kitSizeAt(eff, skin);
 
   // 위치 덮어쓰기·숨김(보정 화면). 겹침 순서는 그대로
   const pads: readonly (DrumKitPad & { tilt?: number })[] = frame
@@ -185,7 +185,7 @@ export function DrumKit({
         .filter((p) => !hidden?.includes(p.pad))
         .map((p) => {
           const at = placement?.[p.pad];
-          return at ? placePad(p, at.x, at.y) : p;
+          return at ? placePad(p, at.x, at.y, box.h) : p;
         });
   const settingsTheme = useSettings((st) => st.hitFxTheme);
   const shakes = usePadShakeCounts(effects, fxSource ?? LIVE_SHAKE_SOURCE, (pad) => pads.find((p) => p.pad === pad)?.shape);
@@ -204,7 +204,7 @@ export function DrumKit({
       className={onPadDown ? 'drum-kit touchable' : 'drum-kit'}
       data-no-pointer-strike={onPadDown ? '' : undefined}
       data-pointer-strike={onPadDown ? undefined : ''}
-      viewBox={frame ? `0 0 ${frame.w} ${frame.h}` : `0 0 ${DRUM_KIT_W} ${DRUM_KIT_H}`}
+      viewBox={frame ? `0 0 ${frame.w} ${frame.h}` : `0 0 ${box.w} ${box.h}`}
       width={width}
       height={height}
       role="img"
@@ -234,6 +234,10 @@ export function DrumKit({
           tag={p.tag}
           hitKey={hitSeq?.[p.pad]}
           tilt={p.tilt}
+          art={p.art}
+          // 고정 배치의 실물 패드는 글자 크기를 통일하고, 킷이 줄어도 약 12px 아래로 작아지지 않게 키운다(최대 1.6배).
+          // 자유 틀은 헤드 크기에 비례(Pad 기본)
+          textSize={frame || !p.art ? undefined : Math.min(1.6, Math.max(1, eff > 0 ? 1 / eff : 1))}
           onClick={onPadClick ? () => onPadClick(p.pad) : undefined}
           onPointerDown={
             onPadDown
@@ -266,7 +270,7 @@ export function DrumKit({
           padEl
         );
         // 코칭 링: 패드 위에 같은 좌표계(원본 160 기준)로 그린다. 클릭을 가로채지 않는다
-        const ring = RING[p.shape];
+        const ring = p.art?.ring ?? RING[p.shape];
         const markTransform = `translate(${p.left} ${p.top}) scale(${p.w / 160})`;
         const isWarn = warnPads?.includes(p.pad) === true;
         const isSelected = selectedPad === p.pad;

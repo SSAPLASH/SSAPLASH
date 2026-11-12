@@ -370,3 +370,21 @@
   position: absolute;
   pointer-events: none;
 }
+
+/* ---- 실물 스킨(이미지 조각, components/drum/acoustic) ---- */
+/* 조각 상자끼리 겹치므로 이미지는 누름을 받지 않고, 헤드 타원이 누름 영역이다 */
+.drum-pad-art {
+  pointer-events: none;
+}
+.drum-pad-hitarea {
+  fill: transparent;
+  pointer-events: all;
+}
+/* 이미지 위에 놓이는 라벨은 어두운 테두리로 읽히게 한다 */
+.drum-pad:not([data-skin]) .drum-pad-label {
+  fill: var(--text-1);
+  paint-order: stroke;
+  stroke: var(--bg-canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
