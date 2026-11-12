@@ -1,22 +1,57 @@
 /* 자유 연습(/free) 화면 스타일. 접두사 free-. 토큰은 tokens.css의 새 이름만 쓴다 */
 
 /* ---- 페이지 ---- */
-.free-page {
-  --free-px: var(--space-xl);
-  --free-py: 28px;
+/* 무대 개편(MODE-002-free-stage): 조명 층(.free-lights)이 페이지 전체에 깔리고 반주 바·무대가 그 위에 놓인다 */
+.main.free-page {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-m);
-  /* 1440×900에서 정보 띠까지 한 화면에 들어오게 캔버스 카드가 남는 높이를 채운다(TopBar 56) */
+  gap: var(--space-dock-gap);
+  /* 1440×900에서 HUD까지 한 화면에 들어오게 무대가 남는 높이를 채운다(TopBar 56) */
   min-height: calc(100vh - 56px);
-  padding: var(--free-py) var(--free-px);
+  padding: var(--space-s) var(--space-xl) var(--space-l);
   box-sizing: border-box;
+  /* 카드 여백이 없어져 이펙트 캔버스의 여유분이 페이지 밖으로 나가 가로 스크롤을 만들지 않게 자른다(세로는 그대로) */
+  overflow-x: clip;
 }
 @media (max-width: 1024px) {
-  .free-page {
-    --free-px: var(--space-l);
-    --free-py: var(--space-l);
+  .main.free-page {
+    padding: var(--space-l);
   }
+}
+.free-page > .free-accomp,
+.free-page > .free-stage {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- 조명: 랜딩 히어로 빛줄기(.lp-beam)와 같은 구성. 반주 바 유리 뒤로도 비친다 ---- */
+.free-lights {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.free-lights.is-on {
+  opacity: 1;
+}
+.free-beam {
+  position: absolute;
+  left: 50%;
+  top: -4%;
+  width: min(1040px, 96%);
+  height: 108%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 26% 46% at 50% 0%, rgba(226, 240, 255, 0.32), transparent 70%),
+    conic-gradient(from 180deg at 50% 0%, transparent 148deg, rgba(210, 228, 245, 0.075) 164deg, rgba(232, 244, 255, 0.2) 180deg, rgba(210, 228, 245, 0.075) 196deg, transparent 212deg);
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
 }
 
 /* ---- 반주 바 (Figma 226:5485, 설계 MODE-002 4-1~4-4·4-6): 글래스 캡슐. 데스크톱 64 / ≤640 미니 56 ---- */
@@ -294,83 +329,248 @@
   }
 }
 
-/* ---- 캔버스 카드 ---- */
-.free-canvas {
-  position: relative;
+/* ---- 무대: 카드 면·테두리 없이 배경과 한 면(D1). 머리 줄 · 킷 영역 · HUD ---- */
+.free-stage {
   flex: 1;
   min-height: 0;
-  padding: var(--space-m);
-  gap: var(--space-s);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
-.free-canvas-head {
+.free-stage-head {
   flex: none;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-m);
+  height: 36px;
 }
-.free-canvas-title {
+.free-stage-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.free-stage-title h2 {
   margin: 0;
   color: var(--text-1);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
-.free-canvas-meta {
+.free-stage-title span {
+  overflow: hidden;
   color: var(--text-3);
   font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-/* 킷 영역: 남는 높이의 가운데. 포인터 모의 IMU의 자세 기준면도 이 요소다 */
-.free-kit {
+
+/* 키트 가이드 스위치(목업 .guide-sw) */
+.free-guide-sw {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  min-height: 0; /* 전역 button { min-height: 44px }을 푼다 */
+  padding: 0 8px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-float);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+.free-guide-sw:hover {
+  border-color: var(--line-strong);
+}
+.free-guide-sw:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.free-guide-sw[aria-checked='true'] {
+  color: var(--text-1);
+}
+.free-guide-sw i {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--surface-3);
+  transition: background 0.2s ease;
+}
+.free-guide-sw i::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease;
+}
+.free-guide-sw[aria-checked='true'] i {
+  background: var(--brand);
+}
+.free-guide-sw[aria-checked='true'] i::after {
+  transform: translateX(14px);
+}
+
+/* 킷 영역: 남는 높이. 끊김 띠·재정렬 띠는 위쪽 가운데, 빈 상태 카드는 가운데에 뜬다 */
+.free-kit-zone {
   position: relative;
   flex: 1;
   /* 킷은 남은 높이에 맞춰 줄어든다(DrumKit fitContain). 화면이 낮으면 이 높이까지만 줄고 페이지가 스크롤된다 */
   min-height: 220px;
 }
-/* 킷 크기가 카드 높이를 밀어내지 않게 자리만 채운다 */
+/* 포인터 모의 IMU의 자세 기준면도 이 요소다 */
+.free-kit {
+  position: absolute;
+  inset: 0;
+}
+/* 킷 크기가 무대 높이를 밀어내지 않게 자리만 채운다 */
 .free-kit-inner {
   position: absolute;
   inset: 0;
-  transition: opacity var(--motion-fade) var(--ease-out);
+  transition:
+    filter 1.2s ease,
+    opacity 0.6s ease;
+  animation: free-kit-rise 0.7s ease both;
 }
-/* 연결 대기: 킷은 뒤에 흐리게 남는다 */
-.free-kit.is-dim .free-kit-inner {
-  opacity: 0.4;
+@keyframes free-kit-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
 }
+/* 연결 대기: 조명이 꺼지고 킷은 어둡게 남는다 */
+.free-stage.is-empty .free-kit-inner {
+  filter: brightness(0.3) saturate(0.6);
+}
+/* 바닥 빛(DrumKit underlay)이 SVG 뒤에 깔리도록 SVG를 위로 올린다 */
+.free-kit .drum-kit-fx > .drum-kit {
+  position: relative;
+}
+.free-floor {
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  bottom: -7%;
+  height: 52%;
+  pointer-events: none;
+  background: radial-gradient(ellipse closest-side, rgba(220, 236, 255, 0.16), rgba(220, 236, 255, 0.05) 55%, transparent 100%);
+  transition: opacity 0.8s ease;
+}
+.free-stage.is-empty .free-floor {
+  opacity: 0;
+}
+
+/* 키트 가이드 이름표(DrumKit overlay). 글자 크기는 킷 폭에 비례한다 */
+.free-plabels {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+.free-plabel {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(5, 6, 7, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(242, 245, 248, 0.92);
+  font-size: clamp(11px, 1.25cqw, 13px);
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+  word-break: keep-all;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  transition-delay: calc(var(--i) * 18ms);
+}
+.free-plabel.is-hit {
+  animation: free-plabel-hit 0.7s var(--ease-out);
+}
+@keyframes free-plabel-hit {
+  0%,
+  25% {
+    border-color: var(--brand-text);
+    background: color-mix(in srgb, var(--brand) 55%, var(--bg-canvas));
+    color: #fff;
+  }
+}
+.free-plabels.is-off .free-plabel {
+  opacity: 0;
+  transform: translate(-50%, -30%) scale(0.94);
+  transition-delay: 0s;
+}
+.free-plabel kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-2);
+  font: 600 10px var(--font-num);
+}
+.free-plabel kbd:first-of-type {
+  margin-left: 3px;
+}
+
+/* 빈 상태: 목업의 유리 카드 */
 .free-empty-wrap {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
-.free-empty-wrap > * {
+.free-empty-wrap > .ui-empty.free-empty-card {
+  gap: var(--space-m);
+  padding: 28px 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-dock);
+  background: color-mix(in srgb, var(--surface-1) 62%, transparent);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow:
+    var(--shadow-dock),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   pointer-events: auto;
-  background: var(--surface-2);
-  border-color: var(--line-strong);
 }
-.free-guide {
-  flex: none;
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
-  text-align: center;
-}
-.free-guide.is-wait {
-  color: var(--brand-sub);
-}
-.free-guide .kbd {
-  margin-right: 2px;
-}
-.free-guide-pad {
-  margin-right: var(--space-s);
-  white-space: nowrap;
+.free-empty-card .ui-empty-desc {
+  margin-top: calc(-1 * var(--space-s));
 }
 
-/* ---- 끊김 띠(Figma 228:5881) ---- */
+/* ---- 끊김 띠(Figma 228:5881): 킷 영역 위쪽 가운데 ---- */
 .free-band {
   position: absolute;
-  top: var(--space-m);
+  top: var(--space-s);
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
@@ -439,38 +639,154 @@
   }
 }
 
-/* ---- 정보 띠 ---- */
-.free-info {
+/* ---- HUD: 상자 없이 무대 아래 두 모서리에 글자로(목업 .hud) ---- */
+.free-hud {
   flex: none;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-l);
-  height: 72px;
-  padding: 0 var(--space-l);
-  box-sizing: border-box;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-1);
+  height: 56px;
 }
-.free-info-block {
-  display: flex;
-  align-items: center;
-  gap: var(--space-m);
-}
-.free-info-key {
+.free-hud-cap {
+  display: block;
   color: var(--text-3);
   font-size: 12px;
 }
-.free-info-stats {
-  display: flex;
-  gap: var(--space-l);
-  font-size: 14px;
-  color: var(--text-1);
+.free-hud-last {
+  min-width: 0;
 }
-.free-info-stats .num {
+.free-hud-last-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.free-hud-pad {
+  color: var(--text-1);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+.free-hud-pad.is-nil,
+.free-hud-stats b.is-nil {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.free-hud-pad.is-pop {
+  animation: free-hud-pad-in 0.28s var(--ease-out);
+}
+@keyframes free-hud-pad-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.free-hud-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-2);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.free-hud-num {
+  color: var(--text-1);
   font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 500;
   font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+.free-hud-hand {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.free-hud-hand[data-hand='left'] {
+  background: var(--left);
+}
+.free-hud-hand[data-hand='right'] {
+  background: var(--right);
+}
+.free-hud-vbar {
+  position: relative;
+  width: 56px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 1.5px;
+  background: var(--fill-track);
+}
+.free-hud-vbar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 1.5px;
+  background: var(--brand);
+  transition: width 0.18s var(--ease-out);
+}
+.free-stage.is-empty .free-hud-meta {
+  visibility: hidden;
+}
+.free-hud-stats {
+  display: flex;
+  gap: 32px;
+}
+.free-hud-stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.free-hud-stats b {
+  color: var(--text-1);
+  font: 500 26px var(--font-num);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.free-hud-stats b small {
+  margin-left: 3px;
+  color: var(--text-2);
+  font: 400 13px var(--font);
+  letter-spacing: 0;
+}
+.free-hud-stats b.is-pop {
+  animation: free-hud-num-pop 0.4s var(--ease-out);
+}
+@keyframes free-hud-num-pop {
+  0% {
+    color: var(--brand-text);
+  }
+}
+@media (max-width: 760px) {
+  .free-stage-title span {
+    display: none;
+  }
+  .free-hud-pad {
+    font-size: 22px;
+  }
+  .free-hud-stats {
+    gap: 18px;
+  }
+  .free-hud-stats b {
+    font-size: 20px;
+  }
+  .free-hud-vbar {
+    display: none;
+  }
+}
+/* 움직임 줄이기: 연결 깜빡임·킥 밝아짐은 StageLights가 재생하지 않고, 입장 떠오름·이름 떠오름은 여기서 끈다.
+   켜짐·꺼짐의 투명도 전환은 남긴다 */
+@media (prefers-reduced-motion: reduce) {
+  .free-kit-inner,
+  .free-hud-pad.is-pop {
+    animation: none;
+  }
+  .free-plabels.is-off .free-plabel {
+    transform: translate(-50%, -50%);
+  }
 }
 
 /* ---- 반주 고르기 창 (Figma 802:35314 · 모바일 시트 803:35356, 설계 MODE-002 4-5) ---- */
