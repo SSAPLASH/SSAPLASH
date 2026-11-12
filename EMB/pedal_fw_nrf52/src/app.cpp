@@ -23,8 +23,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 3                     /* 3 = 페달 보드 */
-#define FW_MINOR 1                     /* 1 = 박스 전원 버튼(D5)·LED(D6) */
-#define FW_TAG   "BOOT 3.1 pedal"
+#define FW_MINOR 2                     /* 1 = 박스 전원 버튼(D5)·LED(D6), 2 = 버튼 튐(1초 안 반복 짧은 누름)은 BAT 표시·로그 대신 10초마다 BTN noise 집계 */
+#define FW_TAG   "BOOT 3.2 pedal"
 #define BLE_NAME "SSAPLASH-PEDAL"
 
 #define ROLE_HIHAT   2                 /* 왼발 */
@@ -134,6 +134,9 @@ static void bat_update()
 #define LONG_PRESS_MS 2000
 #define AUTO_OFF_MS   (10UL * 60UL * 1000UL)
 
+static uint32_t ui_last_click = 0;    /* 직전 짧은 누름 시각 (튐 판별) */
+static uint16_t ui_noise = 0;         /* 10초 동안 모인 튐 수 */
+static uint32_t ui_noise_ms = 0;
 static bool     ui_armed = false;     /* 부팅을 깨운 누름이 떨어진 뒤부터 버튼을 받는다 */
 static uint32_t ui_t_down = 0;        /* 누르고 있는 중이면 누른 시각, 아니면 0 */
 static uint32_t ui_link_ms = 0, ui_blink_t0 = 0;
@@ -178,13 +181,25 @@ static void ui_update()
     } else if (ui_t_down) {
         uint32_t held = now - ui_t_down;
         ui_t_down = 0;
-        if (held >= 30) {                               /* 30ms 미만은 튐 */
+        if (held >= 30 && ui_last_click && now - ui_last_click < 1000) {
+            ui_noise++;                                 /* 1초 안에 또 짧게 눌림 = 배선 튐으로 본다 (11/11 0.3초마다 BTN BAT 297건) */
+            ui_last_click = now;
+        } else if (held >= 30) {                        /* 30ms 미만은 튐 */
+            ui_last_click = now;
             ui_blinks = bat_pct == 0xFF ? 1 : bat_pct > 75 ? 4 : bat_pct > 50 ? 3 : bat_pct > 25 ? 2 : 1;
             ui_blink_t0 = now;
             char s[19];
             snprintf(s, sizeof s, "BTN BAT %u%%", bat_pct);
             send_log(s);
         }
+    }
+
+    if (ui_noise && now - ui_noise_ms >= 10000) {        /* 튐은 10초에 한 번만 알린다 */
+        char s[19];
+        snprintf(s, sizeof s, "BTN noise %u", ui_noise);
+        send_log(s);
+        ui_noise = 0;
+        ui_noise_ms = now;
     }
 
     if (ble_connected || Serial) ui_link_ms = now;
