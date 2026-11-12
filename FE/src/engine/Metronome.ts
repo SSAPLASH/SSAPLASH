@@ -1,4 +1,5 @@
 // 전역 메트로놈 스케줄러. lookahead(창 100ms, 틱 25ms)로 클릭을 미리 예약한다.
+// 창·첫 박은 오디오 시계가 들리는 시각보다 앞선 정도만큼 더 앞에서 예약한다(설계 MODE-001, renderAheadMs).
 // 클릭 출력(sink)·오디오 언락은 bind로 주입받는다 — engine은 audio·store를 import하지 않는다.
 import {
   BPM_DEFAULT,
@@ -47,11 +48,17 @@ export interface MetronomeDeps {
   visibility?: () => 'visible' | 'hidden';
   /** AudioContext 상태 변경 구독 */
   onAudioState?: (listener: (state: string) => void) => void;
+  /**
+   * 오디오 시계가 들리는 시각보다 앞선 정도(ms, AudioEngine.renderAheadMs). 창·첫 박·복구 기준점에 더한다.
+   * 안 더하면 출력 지연이 창보다 클 때 클릭이 "지금"으로 당겨져 늦게·불규칙하게 울린다(설계 MODE-001). 없으면 0
+   */
+  renderAheadMs?: () => number;
 }
 
 type Status = 'idle' | 'starting' | 'playing';
 
 interface ResolvedDeps {
+  renderAheadMs: () => number;
   click: MetronomeDeps['click'];
   ensureAudio: MetronomeDeps['ensureAudio'];
   now: () => number;
@@ -82,6 +89,7 @@ export class Metronome {
 
   bind(deps: MetronomeDeps): void {
     this.deps = {
+      renderAheadMs: deps.renderAheadMs ?? (() => 0),
       click: deps.click,
       ensureAudio: deps.ensureAudio,
       now: deps.now ?? (() => performance.now()),
@@ -138,7 +146,7 @@ export class Metronome {
       return;
     }
     this.status = 'playing';
-    this.clock = { anchorMs: d.now() + START_LEAD_MS, anchorIndex: 0, bpm: this.bpm, beatsPerBar: this.beatsPerBar };
+    this.clock = { anchorMs: d.now() + START_LEAD_MS + d.renderAheadMs(), anchorIndex: 0, bpm: this.bpm, beatsPerBar: this.beatsPerBar };
     this.nextIndex = 0;
     this._stats = { scheduled: 0, late: 0, maxDriftMs: 0 };
     this.timer = d.setInterval(() => this.tick(), TICK_MS);
@@ -282,7 +290,7 @@ export class Metronome {
    */
   private catchUp(now: number): void {
     if (beatAt(this.clock, this.nextIndex).atMs >= now - TICK_MS) return;
-    this.clock = { anchorMs: now + START_LEAD_MS, anchorIndex: this.nextIndex, bpm: this.bpm, beatsPerBar: this.beatsPerBar };
+    this.clock = { anchorMs: now + START_LEAD_MS + (this.deps?.renderAheadMs() ?? 0), anchorIndex: this.nextIndex, bpm: this.bpm, beatsPerBar: this.beatsPerBar };
     this.emitResync();
   }
 
@@ -291,7 +299,7 @@ export class Metronome {
     if (!d || this.status !== 'playing') return;
     const now = d.now();
     this.catchUp(now);
-    const window = d.visibility() === 'hidden' ? HIDDEN_LOOKAHEAD_MS : LOOKAHEAD_MS;
+    const window = (d.visibility() === 'hidden' ? HIDDEN_LOOKAHEAD_MS : LOOKAHEAD_MS) + d.renderAheadMs();
     const beats = beatsInWindow(this.clock, -Infinity, now + window, this.nextIndex);
     for (const b of beats) {
       const at = d.click(b.atMs, b.accent);

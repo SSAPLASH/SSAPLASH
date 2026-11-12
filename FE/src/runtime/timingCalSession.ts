@@ -33,6 +33,11 @@ export interface TimingCalDeps {
   busy: () => boolean;
   /** 브라우저가 보고한 출력 지연(ms). 모르면 null */
   outputLatencyMs: () => number | null;
+  /**
+   * 오디오 시계가 들리는 시각보다 앞선 정도(ms, AudioEngine.renderAheadMs). 첫 박 여유와 예약 창에 더한다.
+   * 안 더하면 출력 지연이 창보다 클 때 클릭이 "지금"으로 당겨져 늦게·불규칙하게 울린다(설계 MODE-001). 없으면 0
+   */
+  renderAheadMs?: () => number;
   now?: () => number;
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (id: unknown) => void;
@@ -100,7 +105,8 @@ export class TimingCalSession {
     d.stopMetronome();
     const now = (d.now ?? (() => performance.now()))();
     const beatMs = timingCalBeatMs();
-    this.planned = Array.from({ length: TIMING_CAL_TOTAL_BEATS }, (_, i) => now + START_LEAD_MS + i * beatMs);
+    const ahead = d.renderAheadMs?.() ?? 0;
+    this.planned = Array.from({ length: TIMING_CAL_TOTAL_BEATS }, (_, i) => now + START_LEAD_MS + ahead + i * beatMs);
     this.actual = [];
     this.taps = [];
     this.set({ ...IDLE, phase: 'listen' });
@@ -136,8 +142,9 @@ export class TimingCalSession {
     const d = this.deps;
     if (!d || !this.running) return;
     const now = (d.now ?? (() => performance.now()))();
-    // 창 안에 들어온 박을 예약한다
-    while (this.actual.length < this.planned.length && this.planned[this.actual.length] <= now + LOOKAHEAD_MS) {
+    // 창 안에 들어온 박을 예약한다. 창은 오디오 시계가 앞선 만큼 넓힌다
+    const window = LOOKAHEAD_MS + (d.renderAheadMs?.() ?? 0);
+    while (this.actual.length < this.planned.length && this.planned[this.actual.length] <= now + window) {
       const i = this.actual.length;
       const at = d.click(this.planned[i], i % 4 === 0);
       this.actual.push(at ?? this.planned[i]);
