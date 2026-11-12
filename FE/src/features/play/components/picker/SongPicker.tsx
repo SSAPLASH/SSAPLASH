@@ -31,7 +31,7 @@ import { useBestRecords } from '@/features/play/useBestRecords';
 import { BestRecordsNotice } from './BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
 import { songListQuery } from '@/api/queries/songs';
-import { useApiQuery } from '@/app/useApiQuery';
+import { useApiQuery } from '@/runtime/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';

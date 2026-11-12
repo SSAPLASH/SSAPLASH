@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { postLessonCompletion } from '@/api/lessons';
-import { setSoundOnHit } from './hitSound';
+import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { touchSource } from '@/runtime/sources';
 import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/lesson';
