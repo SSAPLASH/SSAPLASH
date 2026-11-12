@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
 import { fetchSimilarSongs } from '@/api/similarSongs';
 import { getSong, listSongs } from '@/api/songs';
-import type { RecommendationItem } from '@/domain/recommendation';
+import type { RecommendationItem } from '@/domain/account/recommendation';
 import type { SongSummary } from '@/domain/songCatalog';
 import { useAuth } from '@/store/authStore';
 import { useRecommendations } from '@/store/recommendationStore';

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
 import { fetchSimilarSongs } from '@/api/similarSongs';
 import { loadAllReportNotes, prefetchReport, refreshReport } from '@/runtime/playSync';
-import type { RecommendationItem } from '@/domain/recommendation';
+import type { RecommendationItem } from '@/domain/account/recommendation';
 import type { Report } from '@/domain/report';
 import type { SongSummary } from '@/domain/songCatalog';
 import { useAuth } from '@/store/authStore';

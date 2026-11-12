@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { discard, retry, save, useRecordingStore, type PendingRecording } from '@/runtime/recordingStore';
 import { MAX_RECORDING_TITLE_LENGTH } from '@/domain/recording';
-import { pendingDurationMs, recordingSummaryLine } from '@/domain/recordingView';
+import { pendingDurationMs, recordingSummaryLine } from '@/domain/play/recordingView';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';

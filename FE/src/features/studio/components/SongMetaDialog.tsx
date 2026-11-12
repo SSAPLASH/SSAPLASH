@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { SongSummary } from '@/domain/songCatalog';
-import { META_CHECK_TEXT, MAX_NAME_LEN, diffMeta, validateMeta, type SongMetaPatch } from '@/domain/songEdit';
+import { META_CHECK_TEXT, MAX_NAME_LEN, diffMeta, validateMeta, type SongMetaPatch } from '@/domain/song/songEdit';
 import { EditDialog } from './EditDialog';
 import './studio.css';
 

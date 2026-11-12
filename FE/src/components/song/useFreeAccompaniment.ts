@@ -10,7 +10,7 @@ import {
   seekTarget,
   type AccompanimentBarView,
   type AccompanimentPick,
-} from '@/domain/freeAccompaniment';
+} from '@/domain/song/freeAccompaniment';
 import { ACCOMPANIMENT_NO_FILE_TEXT, accompanimentErrorText } from './accompanimentError';
 import { SONGS_SOURCE } from '@/store/songStore';
 

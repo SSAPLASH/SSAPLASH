@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AUTH_REQUIRED } from '@/config/auth';
-import { LESSONS_PATH, shouldInvite } from '@/domain/lesson';
+import { LESSONS_PATH, shouldInvite } from '@/domain/play/lesson';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { SONGS_SOURCE } from '@/store/songStore';

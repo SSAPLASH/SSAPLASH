@@ -7,7 +7,7 @@
 // 게임은 곡 중 메트로놈 클릭이 없고(카운트다운 박 소리만) 녹음하지 않는다(E1·E2). 연주 중은 셸을 숨긴 전체 화면이다(D2).
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { NoteHighway, type Popup } from '@/features/play/components/stage/NoteHighway';
@@ -25,7 +25,7 @@ import { PlayHud } from '@/features/play/components/stage/PlayHud';
 import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotice';
 import { Countdown } from '@/features/play/components/stage/Countdown';
 import { useAudioClockGate } from '@/features/play/components/stage/useAudioClockGate';
-import { countdownValue } from '@/domain/leadIn';
+import { countdownValue } from '@/domain/time/leadIn';
 import { ScreenGate } from '@/features/play/components/stage/ScreenGate';
 import { useScreenFits } from '@/features/play/components/stage/screenFit';
 import { GuideSlot } from '@/features/play/components/stage/GuideSlot';
@@ -44,7 +44,7 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
 import type { Chart } from '@/domain/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import type { PadId } from '@/domain/pads';
 import type { InputSourceKind } from '@/domain/events';
@@ -57,7 +57,7 @@ import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoac
 import { liveCoachClient } from '@/features/play/api/liveCoach';
 import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
-import { COACH_BASIS } from '@/domain/coachBasis';
+import { COACH_BASIS } from '@/domain/play/coachBasis';
 import { diagTap } from '@/engine/diagTap';
 import { startPlaySync } from '@/runtime/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';

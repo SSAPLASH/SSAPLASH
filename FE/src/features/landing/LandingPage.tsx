@@ -11,7 +11,7 @@ import { SignupConsentDialog } from '@/features/landing/components/auth/SignupCo
 import { Dialog } from '@/components/ui/Dialog';
 import { sanitizeReturnTo } from '@/domain/auth';
 import { landingDialog, modeRoute } from '@/features/landing/domain/landingRoute';
-import { signupGateDecision } from '@/domain/signupGate';
+import { signupGateDecision } from '@/domain/account/signupGate';
 import { useAuth } from '@/store/authStore';
 
 const noop = () => {};

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { PRESET_NAME_MAX, normalizePresetName, validatePresetName, type KitPreset } from '@/domain/preset';
-import { PRESET_NAME_ERROR_TEXT } from '@/domain/setupSteps';
+import { PRESET_NAME_ERROR_TEXT } from '@/domain/kit/setupSteps';
 import './setup.css';
 
 interface Props {

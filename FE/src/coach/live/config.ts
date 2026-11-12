@@ -3,7 +3,7 @@
 // 곱하는 폭은 coachBasisMs가 고른다(기본: 고정 기준 폭 60, 사용자 판정 폭과 분리).
 // 사용자가 goodMs를 30~150ms로 바꿀 수 있어서 ms를 직접 적지 않고 기준 폭에 비례시킨다.
 // 수치는 가정값이다. 직접 플레이해 보며 여기서 고친다.
-import { type CoachBasis, COACH_BASIS, coachBasisMs } from '@/domain/coachBasis';
+import { type CoachBasis, COACH_BASIS, coachBasisMs } from '@/domain/play/coachBasis';
 import { DEFAULT_TIMING } from '@/domain/judgement';
 
 export { type CoachBasis, COACH_BASIS, coachBasisMs };

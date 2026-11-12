@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { DEVICE_META, deviceGroupName } from '@/domain/devices';
-import { stickStatus } from '@/domain/stickStatus';
+import { stickStatus } from '@/domain/kit/stickStatus';
 import { pedalRequired, pedalStatus, type PedalView } from '@/domain/pedalStatus';
 
 interface ChipProps {

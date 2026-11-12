@@ -4,7 +4,7 @@ import type { Chart, ChartNote } from '@/domain/chart';
 import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
-import { COUNTDOWN_MS } from '@/domain/leadIn';
+import { COUNTDOWN_MS } from '@/domain/time/leadIn';
 import { gridOriginMs } from '@/domain/sheet';
 import { isSensorSource } from '@/domain/events';
 import { hitMatch, type MatchCandidate, type MatchRule } from './hitMatch';

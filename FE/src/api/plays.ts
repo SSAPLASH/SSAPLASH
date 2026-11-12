@@ -1,5 +1,5 @@
-// 플레이 로그 요약 업로드 (ACCT-002 v1, BE 98). 본문 조립은 domain/playUpload.
-import type { PlayUploadBody } from '@/domain/playUpload';
+// 플레이 로그 요약 업로드 (ACCT-002 v1, BE 98). 본문 조립은 domain/play/playUpload.
+import type { PlayUploadBody } from '@/domain/play/playUpload';
 import { apiFetch } from './http';
 import type { PageResponse } from './recordings';
 

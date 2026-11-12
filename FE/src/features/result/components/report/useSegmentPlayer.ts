@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Accompaniment } from '@/audio/Accompaniment';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { SegmentPlayer, type SegmentPlayerOptions } from '@/audio/SegmentPlayer';
-import type { SegmentPlan } from '@/domain/segmentPlayback';
+import type { SegmentPlan } from '@/domain/time/segmentPlayback';
 
 /** SegmentPlayer 중 컨트롤러가 쓰는 부분(테스트에서 가짜로 바꾼다) */
 export interface SegmentPlayerPort {

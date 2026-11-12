@@ -29,7 +29,7 @@ import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { freeStage } from './freeStage';
 import { deviceGroupName } from '@/domain/devices';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
-import { addHit, emptyHitStats, meanVelocity } from '@/domain/hitStats';
+import { addHit, emptyHitStats, meanVelocity } from '@/domain/play/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/runtime/sources';
 import { stopFree } from '@/runtime/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';

@@ -1,7 +1,7 @@
 // PLAY-10 키보드 입력. 키 코드를 실은 타격 이벤트만 낸다 — 어느 패드인지는 키 매퍼(padMapper)가 정한다.
 // 항상 켜진 보조 소스(설계 D9). 센서 소스가 있어도 킥(Space)·시연 안전망으로 쓴다.
 import type { StickId } from '@/domain/events';
-import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { BaseInputSource } from './InputSource';
 
 /** 키보드 타격의 가속도 모사값. 벨로시티 ≈ 100 / Shift 누르면 악센트 */

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLessons, postLessonCompletion } from '@/api/lessons';
 import { hitSoundActive, resetHitSoundForTest } from '@/runtime/hitSound';
 import type { UserMe } from '@/domain/auth';
-import type { Lesson } from '@/domain/lesson';
+import type { Lesson } from '@/domain/play/lesson';
 import type { PadId } from '@/domain/pads';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';

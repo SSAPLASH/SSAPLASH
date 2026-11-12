@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/freeAccompaniment';
+import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/song/freeAccompaniment';
 import { artistLabel, type SongSummary } from '@/domain/songCatalog';
 import { useAccompanimentSongs, type AccompanimentSongsDeps, type SectionKey, type SongSection } from './useAccompanimentSongs';
 import './free.css';

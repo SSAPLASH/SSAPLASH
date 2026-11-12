@@ -1,5 +1,5 @@
 // 박자 맞추기 진행(설계 PLAY-004-timing-offset-calibration 4-1). 클릭 16박을 예약하고, 그동안의 타격을 가로채 소리만 낸 뒤
-// 박과 타격의 어긋남으로 판정 타이밍 보정값을 계산한다. 계산은 domain/timingCalibration, 화면은 TimingCalDialog가 맡는다.
+// 박과 타격의 어긋남으로 판정 타이밍 보정값을 계산한다. 계산은 domain/kit/timingCalibration, 화면은 TimingCalDialog가 맡는다.
 // bootstrap이 bind()로 의존을 넣고 타격 핸들러에서 intercept()를 부른다. 설정 저장은 하지 않는다(적용은 화면이 한다).
 import type { ResolvedHit } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
@@ -11,7 +11,7 @@ import {
   TIMING_CAL_PAIR_WINDOW_MS,
   type TimingCalResult,
   type TimingCalTap,
-} from '@/domain/timingCalibration';
+} from '@/domain/kit/timingCalibration';
 
 /** 클릭을 미리 예약하는 창과 틱(전역 메트로놈과 같은 값) */
 const LOOKAHEAD_MS = 100;

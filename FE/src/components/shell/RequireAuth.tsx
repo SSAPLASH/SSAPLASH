@@ -1,8 +1,8 @@
 // 보호 라우트 (설계 3-7, COACH-003-signup-consent D25). 로그인 확인 중이면 안내만, 익명이면 /login으로,
-// 로그인했지만 가입 동의가 필요하면 /signup으로, 아니면 자식 라우트. 분기는 domain/signupGate가 정한다.
+// 로그인했지만 가입 동의가 필요하면 /signup으로, 아니면 자식 라우트. 분기는 domain/account/signupGate가 정한다.
 // required=false(VITE_AUTH_REQUIRED=false 빌드)면 검사 없이 통과 — App.tsx가 값을 내려준다.
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { signupGateDecision } from '@/domain/signupGate';
+import { signupGateDecision } from '@/domain/account/signupGate';
 import { useAuth } from '@/store/authStore';
 
 interface Props {

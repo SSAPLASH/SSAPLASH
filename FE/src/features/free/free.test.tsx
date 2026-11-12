@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MOBILE_QUERY } from '@/components/shell/useMediaQuery';
-import { SEEK_END_MARGIN_MS, SKIP_MS, seekTarget, type AccompanimentBarView, type AccompanimentPick } from '@/domain/freeAccompaniment';
+import { SEEK_END_MARGIN_MS, SKIP_MS, seekTarget, type AccompanimentBarView, type AccompanimentPick } from '@/domain/song/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 import { AccompanimentBar } from './AccompanimentBar';
 import { AccompanimentPicker } from './AccompanimentPicker';

@@ -3,7 +3,7 @@
 // - empty: 센서 선택 + 양손 미연결 → 캔버스 위 빈 상태 카드
 // - oneHand: 한 손만 연결 → 끊김 띠(연주는 계속)
 // 스틱 연결이 필요 없는 소스(키보드 전용·포인터 모의 IMU)는 항상 ready — Dock 칩과 같은 규칙(stickConnectionRequired).
-import { stickConnectionRequired } from '@/domain/dockChip';
+import { stickConnectionRequired } from '@/domain/kit/dockChip';
 import type { SensorId } from '@/domain/events';
 
 export type FreeStage = 'ready' | 'empty' | 'oneHand';

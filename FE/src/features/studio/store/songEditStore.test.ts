@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from '@/api/auth';
-import { SONG_EDIT_UNCERTAIN_TEXT } from '@/domain/songEdit';
+import { SONG_EDIT_UNCERTAIN_TEXT } from '@/domain/song/songEdit';
 import { useSongEdit } from './songEditStore';
 
 function json(status: number, body: unknown, type = 'application/json'): Response {

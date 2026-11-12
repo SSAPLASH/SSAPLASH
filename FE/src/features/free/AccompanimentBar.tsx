@@ -10,7 +10,7 @@ import { MOBILE_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
 import { CloseIcon } from '@/components/song/StudioIcons';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import type { AccompanimentBarView } from '@/domain/freeAccompaniment';
+import type { AccompanimentBarView } from '@/domain/song/freeAccompaniment';
 import { SeekBar } from '@/components/song/SeekBar';
 import './free.css';
 

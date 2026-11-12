@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useSettings } from '@/store/settingsStore';
 import type { TelemetryRow } from '@/engine/telemetry';
 import { PAD_META } from '@/domain/pads';
-import { anchorsToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import {
   TUNING_RANGES,
   countChangedTuning,

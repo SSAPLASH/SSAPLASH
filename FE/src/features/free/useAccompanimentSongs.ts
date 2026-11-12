@@ -2,7 +2,7 @@
 // 두 섹션(공용 곡·내 곡)을 같은 검색어로 따로 받고, 반주 없는 곡은 한 번 더 거른다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listSongs } from '@/api/songs';
-import { pickableForAccompaniment } from '@/domain/freeAccompaniment';
+import { pickableForAccompaniment } from '@/domain/song/freeAccompaniment';
 import type { SongPage, SongScope, SongSummary } from '@/domain/songCatalog';
 
 /** 섹션 한 페이지 크기 */

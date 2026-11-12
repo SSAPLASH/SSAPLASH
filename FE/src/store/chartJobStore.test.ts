@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from '@/api/auth';
-import { ACTIVE_JOB_KEY, type UploadDraft } from '@/domain/chartJob';
+import { ACTIVE_JOB_KEY, type UploadDraft } from '@/domain/song/chartJob';
 import { useChartJob } from './chartJobStore';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;

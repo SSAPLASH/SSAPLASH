@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from '@/api/auth';
-import { MIDI_UNCERTAIN_TEXT, type MidiDraft } from '@/domain/midiUpload';
+import { MIDI_UNCERTAIN_TEXT, type MidiDraft } from '@/domain/song/midiUpload';
 import { useMidiUpload } from './midiUploadStore';
 
 function json(status: number, body: unknown, type = 'application/json'): Response {
@@ -66,7 +66,7 @@ describe('midiUploadStore', () => {
     expect(useMidiUpload.getState().error).toMatchObject({ text: MIDI_UNCERTAIN_TEXT, uncertain: true });
   });
 
-  // 293 MusicXML: 확장자로 경로를 가른다. 상한·문구는 domain/midiUpload.
+  // 293 MusicXML: 확장자로 경로를 가른다. 상한·문구는 domain/song/midiUpload.
   it('.musicxml·.mxl은 /api/v1/songs/musicxml로 보내고 MUSICXML 곡을 보관한다', async () => {
     const fetch = mockFetch(() => json(201, { id: 9, title: '악보', artist: '', source: 'MUSICXML', status: 'READY', charts: [] }));
     await useMidiUpload.getState().upload(draft({ file: new File(['<score-partwise/>'], 'score.musicxml') }));

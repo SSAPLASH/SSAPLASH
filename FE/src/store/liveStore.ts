@@ -2,7 +2,7 @@
 // 자세는 60Hz로 들어오므로 구독 컴포넌트는 필요한 필드만 select 한다.
 import { create } from 'zustand';
 import type { PadId } from '@/domain/pads';
-import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/metronome';
+import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/time/metronome';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } from '@/domain/events';
 import type { CaptureSnapshot } from '@/engine/HitCapture';

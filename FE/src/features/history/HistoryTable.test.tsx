@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { HistoryTable } from './HistoryTable';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
-import { DELETED_SONG_LABEL } from '@/domain/songAvailability';
+import { DELETED_SONG_LABEL } from '@/domain/song/songAvailability';
 import type { PlayLog } from '@/domain/playLog';
 
 function log(over: Partial<PlayLog> & { playId: string }): PlayLog {

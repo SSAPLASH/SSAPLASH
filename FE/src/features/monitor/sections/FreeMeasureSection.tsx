@@ -3,7 +3,7 @@
 // 집계는 모듈에 둬서 섹션을 오가도 이어진다. 구독은 섹션이 열려 있는 동안만 건다.
 import { useEffect, useSyncExternalStore } from 'react';
 import { inputManager } from '@/runtime/sources';
-import { addHit, emptyHitStats, meanSensorDistance, type HitStats } from '@/domain/hitStats';
+import { addHit, emptyHitStats, meanSensorDistance, type HitStats } from '@/domain/play/hitStats';
 import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { useLive } from '@/store/liveStore';
 import { isSensorSource } from '@/domain/events';

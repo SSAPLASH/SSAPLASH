@@ -2,8 +2,8 @@
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { deleteSong, deleteSongCover, updateSongMeta, uploadSongCover } from '@/api/songs';
-import type { CoverChange } from '@/domain/songCover';
-import { songEditFailure, type SongMetaPatch } from '@/domain/songEdit';
+import type { CoverChange } from '@/domain/song/songCover';
+import { songEditFailure, type SongMetaPatch } from '@/domain/song/songEdit';
 
 export type SongEditPhase = 'idle' | 'saving' | 'done' | 'failed';
 

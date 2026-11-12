@@ -21,7 +21,7 @@ import { startAudioDiag } from './audioDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { smoothBattery } from '@/domain/stickStatus';
+import { smoothBattery } from '@/domain/kit/stickStatus';
 import { devicesReady } from '@/domain/pedalStatus';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';

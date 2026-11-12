@@ -1,10 +1,10 @@
 // 콜백 화면 (설계 4-B 5~6). BE가 refresh 쿠키를 심고 여기로 302한다. 주소에 토큰은 없다.
-// 앱 시작 복원(bootstrapAuth → restore)이 이미 돌고 있으므로 결과만 기다린다. 가입 동의가 필요한 회원(domain/signupGate)은
+// 앱 시작 복원(bootstrapAuth → restore)이 이미 돌고 있으므로 결과만 기다린다. 가입 동의가 필요한 회원(domain/account/signupGate)은
 // 원래 목적지를 state.from에 실어 /signup으로, 아니면 원래 화면으로 보낸다.
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AUTH_REQUIRED } from '@/config/auth';
-import { needsSignup } from '@/domain/signupGate';
+import { needsSignup } from '@/domain/account/signupGate';
 import { useAuth } from '@/store/authStore';
 
 export function AuthCallbackPage() {

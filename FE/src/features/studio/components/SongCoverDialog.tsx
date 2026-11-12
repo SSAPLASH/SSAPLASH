@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { SongSummary } from '@/domain/songCatalog';
-import { COVER_ACCEPT, COVER_PRECHECK_TEXT, precheckCover, type CoverChange } from '@/domain/songCover';
+import { COVER_ACCEPT, COVER_PRECHECK_TEXT, precheckCover, type CoverChange } from '@/domain/song/songCover';
 import { makeCoverBlob } from '@/media/coverImage';
 import { EditDialog } from './EditDialog';
 import './studio.css';

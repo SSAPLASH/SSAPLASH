@@ -1,7 +1,7 @@
 // Figma 228:5712 메트로놈 패널 — Dock 아래 오른쪽 360 팝오버. 머리(켜기) · BPM −/+ · 박자 · 탭 템포 · 메트로놈 음량.
 // 값의 주인은 engine/Metronome(조작은 엔진 메서드), 화면 값은 liveStore.metronome, 음량만 settingsStore.
 // 열림·바깥 클릭·Esc·포커스 복귀는 GlassDock의 Radix Popover가 맡는다 — 이 컴포넌트는 Popover.Content 안 본문만 그린다. 연주는 멈추지 않는다.
-import { BPM_STEP, type BeatsPerBar } from '@/domain/metronome';
+import { BPM_STEP, type BeatsPerBar } from '@/domain/time/metronome';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';

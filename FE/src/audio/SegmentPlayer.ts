@@ -1,6 +1,6 @@
 // 약점 구간 재생기(설계 3-4). 구간 일정(SegmentPlan)을 AudioEngine 합성음 예약과 Accompaniment 반주로 실제 재생한다.
 // 어떤 오류도 밖으로 던지지 않는다 — 실패하면 조용히 idle.
-import { SEGMENT_LOOP_GAP_MS, type SegmentPlan } from '@/domain/segmentPlayback';
+import { SEGMENT_LOOP_GAP_MS, type SegmentPlan } from '@/domain/time/segmentPlayback';
 import type { Accompaniment } from './Accompaniment';
 import type { AudioEngine } from './AudioEngine';
 

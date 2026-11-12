@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
-import type { SetupStepStatus } from '@/domain/setupSteps';
+import type { SetupStepStatus } from '@/domain/kit/setupSteps';
 import './setup.css';
 
 interface Props {
