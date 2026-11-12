@@ -72,32 +72,55 @@ describe('frameOf · kitFrame', () => {
   });
 });
 
+describe('하이햇 페달 조각', () => {
+  it.each([DEFAULT_KIT_LAYOUT, { ...DEFAULT_KIT_LAYOUT, HIHAT: { ...DEFAULT_KIT_LAYOUT.HIHAT, x: 0.6, y: 0.25 } }])(
+    '자유 틀에서도 받침 그림의 페달 자리에 꼭 맞는다(고정 배치와 같은 상대 자리·크기) %#',
+    (layout) => {
+      const pads = kitFrame(layout, BOX, 'acoustic').pads;
+      const hh = pads.find((p) => p.pad === 'HIHAT')!;
+      const pedal = pads.find((p) => p.pad === 'HIHAT_PEDAL')!;
+      const artHh = kitArtPad(KIT_ART_PERSP, 'HIHAT')!.kit;
+      const artPedal = kitArtPad(KIT_ART_PERSP, 'HIHAT_PEDAL')!.kit;
+      // 하이햇 상자 폭을 1로 본 상대 자리
+      expect((pedal.left - hh.left) / hh.w).toBeCloseTo((artPedal.left - artHh.left) / artHh.w, 6);
+      expect((pedal.top - hh.top) / hh.w).toBeCloseTo((artPedal.top - artHh.top) / artHh.w, 6);
+      expect(pedal.w / hh.w).toBeCloseTo(artPedal.w / artHh.w, 6);
+    },
+  );
+});
+
 describe('가로로 넓은 판에서 실물 킷이 잘리지 않는다', () => {
-  // 드럼 세팅 판(1440×900 화면): 그림 영역 1040×338, 그림은 판 안쪽 여백(setup.css --setup-panel-pad 16px)까지 넘어갈 수 있다
-  const WIDE = { w: 1040, h: 338 };
+  // 드럼 세팅 판의 그림 영역. 그림은 판 안쪽 여백(setup.css --setup-panel-pad 16px)까지 넘어갈 수 있다.
+  // 여백이 고정 px라 판이 클수록 빠듯하다: 낮은 판(338), 노트북 창(468), 1920×1080(648), 가장 큰 판(700)을 본다
+  const BOXES = [
+    { w: 1040, h: 338 },
+    { w: 1004, h: 468 },
+    { w: 1080, h: 648 },
+    { w: 1128, h: 700 },
+  ];
   const PANEL_PAD = 16;
   /** 심벌 셋을 배치가 허용하는 위쪽 끝(y 0.05)에 올린 배치 */
   const HIGH = { ...DEFAULT_KIT_LAYOUT };
   for (const pad of ['CRASH', 'RIDE', 'HIHAT'] as const) HIGH[pad] = { ...DEFAULT_KIT_LAYOUT[pad], y: 0.05 };
 
   /** 실물 그림 상자들의 위·아래 끝(틀 px) */
-  const extent = (layout: typeof DEFAULT_KIT_LAYOUT) => {
-    const pads = kitFrame(layout, WIDE, 'acoustic').pads;
+  const extent = (layout: typeof DEFAULT_KIT_LAYOUT, box: { w: number; h: number }) => {
+    const pads = kitFrame(layout, box, 'acoustic').pads;
     return {
       top: Math.min(...pads.map((p) => p.top)),
       bottom: Math.max(...pads.map((p) => p.top + (p.art!.boxH * p.w) / 160)),
     };
   };
 
-  it('기본 배치: 위아래 모두 판 안에 든다', () => {
-    const e = extent(DEFAULT_KIT_LAYOUT);
+  it.each(BOXES)('기본 배치: 위아래 모두 판 안에 든다 %o', (box) => {
+    const e = extent(DEFAULT_KIT_LAYOUT, box);
     expect(e.top).toBeGreaterThanOrEqual(-PANEL_PAD);
-    expect(e.bottom).toBeLessThanOrEqual(WIDE.h + PANEL_PAD);
+    expect(e.bottom).toBeLessThanOrEqual(box.h + PANEL_PAD);
   });
 
-  it('심벌을 위쪽 끝에 올려도 위아래 모두 판 안에 든다', () => {
-    const e = extent(HIGH);
+  it.each(BOXES)('심벌을 위쪽 끝에 올려도 위아래 모두 판 안에 든다 %o', (box) => {
+    const e = extent(HIGH, box);
     expect(e.top).toBeGreaterThanOrEqual(-PANEL_PAD);
-    expect(e.bottom).toBeLessThanOrEqual(WIDE.h + PANEL_PAD);
+    expect(e.bottom).toBeLessThanOrEqual(box.h + PANEL_PAD);
   });
 });
