@@ -105,6 +105,8 @@ export interface PlayLog {
   endedAt?: string;
   /** 판정에 적용한 오디오 출력 오프셋(ms) */
   audioOffsetMs?: number;
+  /** 발 타격에 적용한 킥 오프셋(ms). 옛 로그에는 없다 */
+  kickOffsetMs?: number;
   /** 종료 시 곡 시각, 일시정지를 뺀 카운트인 포함 경과(ms) */
   lastSongTimeMs?: number;
   elapsedActiveMs?: number;
