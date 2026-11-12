@@ -39,6 +39,8 @@ export interface StartDialogProps {
   error?: string | null;
   /** 카운트다운 켬(1)·끔(0). 안내 문구용 */
   countInBars: number;
+  /** 넓힌 GOOD 판정 폭(ms)이 적용되는 판이면 그 값. 아니면 null·생략 */
+  goodMsNote?: number | null;
   onStart: () => void;
   onSetup: () => void;
   /** 있을 때만 [다시 연결]을 보인다(setup 창) */
@@ -62,6 +64,7 @@ export function StartDialog({
   loading = false,
   error = null,
   countInBars,
+  goodMsNote = null,
   onStart,
   onSetup,
   onReconnect,
@@ -122,6 +125,7 @@ export function StartDialog({
           <LevelBadge level={song.level} size="sm" />
           <span>{isPlay ? meta.join(' · ') : `${song.title} · ${artistLabel(song.artist)}`}</span>
         </p>
+        {isPlay && goodMsNote !== null && <p className="start-dialog-notice">판정 여유 ±{goodMsNote}ms</p>}
       </header>
 
       {isPlay ? (

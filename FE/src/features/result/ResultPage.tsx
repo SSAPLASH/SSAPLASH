@@ -8,6 +8,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/features/result/components/ReportEntry';
 import { LessonResultBand } from '@/components/lesson/LessonResultBand';
+import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
+import { DEFAULT_TIMING } from '@/domain/judgement';
+import { isSensorSource } from '@/domain/events';
+import { shouldRemindTimingCal } from '@/domain/kit/timingCalPrompt';
+import { useSettings } from '@/store/settingsStore';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/runtime/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/play/playRetry';
@@ -77,6 +82,17 @@ export function ResultPage() {
       );
     return bestRecordDelta(log, prev);
   }, [log, arrived]);
+  // 박자 맞추기 권유 띠(PLAY-004 4-3): 첫 권유를 건너뛴 센서 사용자에게, 연주를 마치고 도착한 결과 화면에서 한 번만 보인다
+  // (연주 기록에서 옛 결과를 열 때는 보이지 않는다). 처음 판단 결과를 붙잡아 두어 아래에서 설정을 done으로 바꿔도
+  // 이 화면에 머무는 동안 띠가 남는다
+  const [remind] = useState(() => {
+    const st = useSettings.getState();
+    return stateBest !== null && log !== null && shouldRemindTimingCal({ sensor: isSensorSource(log.inputSource), timingCal: st.timingCal, prompt: st.timingCalPrompt });
+  });
+  const [calOpen, setCalOpen] = useState(false);
+  useEffect(() => {
+    if (remind) useSettings.getState().setTimingCalPrompt('done');
+  }, [remind]);
   const celebrating = arrived !== null && delta?.kind === 'new' && !reducedMotion;
 
   // 서버 업로드 상태(설계 COACH-002 4-1). 진입 시 한 번 끊긴 업로드·재시도 가능한 실패를 다시 보낸다 —
@@ -188,6 +204,22 @@ export function ResultPage() {
         {/* 최고 기록 갱신: 화면 전체 색종이 + 가운데 네온 글자(요약 카드 안 작은 폭발 대신) */}
         {celebrating && <RecordCelebration detail={badge?.text.split(' · ')[1]} />}
         <LessonResultBand log={log} />
+        {remind && (
+          <div className="lesson-band" role="status">
+            <div className="lesson-band-text">
+              <b>박자 맞추기를 하면 판정이 더 정확해져요.</b>
+            </div>
+            <div className="lesson-band-actions">
+              <Button variant="secondary" onClick={() => setCalOpen(true)}>
+                박자 맞추기
+              </Button>
+            </div>
+          </div>
+        )}
+        {calOpen && <TimingCalDialog onClose={() => setCalOpen(false)} />}
+        {log.timing.goodMs > DEFAULT_TIMING.goodMs && (
+          <p className="result-caption">판정 여유 ±{log.timing.goodMs}ms로 연주한 기록이에요</p>
+        )}
 
         <ReportEntry
           playId={log.playId}
