@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
 import { fetchSimilarSongs } from '@/api/similarSongs';
@@ -599,5 +599,138 @@ describe('SongPicker 바로 플레이 (설계 MODE-001-MODE-003-picker-quick-sta
     expect(card.textContent).not.toContain('98,765');
     // 표의 최고 점수 열은 곡 전체 최고
     expect(screen.getByText('98,765', { selector: '.play-st-row td, .play-st-row td *' })).toBeTruthy();
+  });
+});
+
+describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연습-하위-메뉴)', () => {
+  /** 지금 주소를 읽는 표시와, 사이드바 하위 메뉴 클릭을 흉내 내는 링크들 */
+  function Shell() {
+    const loc = useLocation();
+    return (
+      <>
+        <output data-testid="loc">{loc.pathname + loc.search}</output>
+        <Link to="/sheet">go-builtin</Link>
+        <Link to="/sheet?scope=MINE">go-mine</Link>
+        <Link to="/sheet?tab=recommend">go-ai</Link>
+        <Link to="/sheet?tab=lessons">go-lessons</Link>
+      </>
+    );
+  }
+  const open = (url: string, props: { mode?: 'play' | 'sheet'; tabsInSidebar?: boolean } = {}) =>
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <Shell />
+        <SongPicker mode={props.mode ?? 'sheet'} tabsInSidebar={props.tabsInSidebar} onStart={vi.fn()} />
+      </MemoryRouter>,
+    );
+  const loc = () => screen.getByTestId('loc').textContent;
+  const checked = () => screen.getAllByRole('radio').find((r) => r.getAttribute('aria-checked') === 'true')?.textContent;
+  const lastScope = () => (vi.mocked(listSongs).mock.calls.at(-1)?.[0] as { source?: string } | undefined)?.source;
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
+    vi.mocked(listSongs).mockResolvedValue({ items: [song(1, '목록곡')], hasNext: false });
+  });
+
+  it('주소 값이 없으면 기본 곡이다 — 마지막에 본 범위(라이브러리)를 기억하지 않는다', async () => {
+    useSongs.setState({ scope: 'MINE' });
+    open('/sheet');
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('기본 곡');
+    expect(lastScope()).toBe('BUILTIN');
+  });
+
+  it('리듬 게임은 그대로 마지막에 본 범위로 연다', async () => {
+    useSongs.setState({ scope: 'MINE' });
+    open('/play', { mode: 'play' });
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('라이브러리');
+  });
+
+  it('?scope=MINE은 라이브러리, ?tab=recommend는 AI 추천곡, ?tab=lessons는 입문 코스로 연다', async () => {
+    open('/sheet?scope=MINE');
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('라이브러리');
+    expect(lastScope()).toBe('MINE');
+    cleanup();
+
+    open('/sheet?tab=recommend');
+    await screen.findByText('추천곡', { selector: '.play-st-name' });
+    expect(checked()).toBe('AI 추천곡');
+    cleanup();
+
+    open('/sheet?tab=lessons');
+    await waitFor(() => expect(checked()).toBe('입문 코스'));
+    expect(document.querySelector('.play-sp-grid')).toBeNull();
+  });
+
+  it('탭을 누르면 주소가 그 범위 값으로 바뀌고 곡·단계 값은 남는다', async () => {
+    open('/sheet?song=1&chart=11');
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
+    expect(loc()).toBe('/sheet?song=1&chart=11&tab=recommend');
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    expect(loc()).toBe('/sheet?song=1&chart=11&scope=MINE');
+    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    expect(loc()).toBe('/sheet?song=1&chart=11&tab=lessons');
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    expect(loc()).toBe('/sheet?song=1&chart=11');
+  });
+
+  it('주소만 바뀌어도(사이드바 하위 메뉴) 범위가 따라 바뀐다', async () => {
+    open('/sheet');
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByText('go-ai'));
+    await waitFor(() => expect(checked()).toBe('AI 추천곡'));
+    await screen.findByText('추천곡', { selector: '.play-st-name' });
+    fireEvent.click(screen.getByText('go-mine'));
+    await waitFor(() => expect(checked()).toBe('라이브러리'));
+    fireEvent.click(screen.getByText('go-lessons'));
+    await waitFor(() => expect(checked()).toBe('입문 코스'));
+    fireEvent.click(screen.getByText('go-builtin'));
+    await waitFor(() => expect(checked()).toBe('기본 곡'));
+  });
+
+  it('로그인하지 않았으면 ?tab=recommend·?tab=lessons도 기본 곡이다', async () => {
+    useAuth.setState({ status: 'anonymous', user: null });
+    open('/sheet?tab=recommend');
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('기본 곡');
+    cleanup();
+    open('/sheet?tab=lessons');
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('기본 곡');
+  });
+
+  it('리듬 게임의 AI 추천곡 탭은 주소에 값을 남기지 않는다(바뀌지 않음)', async () => {
+    open('/play', { mode: 'play' });
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
+    expect(checked()).toBe('AI 추천곡');
+    expect(loc()).toBe('/play');
+    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    expect(loc()).toBe('/play?scope=MINE');
+  });
+
+  it('리듬 게임은 ?tab=recommend를 범위로 읽지 않는다', async () => {
+    open('/play?tab=recommend', { mode: 'play' });
+    await screen.findAllByText('목록곡');
+    expect(checked()).toBe('기본 곡');
+  });
+
+  it('tabsInSidebar면 화면 위 탭을 그리지 않고, 범위는 주소대로 열린다', async () => {
+    open('/sheet?tab=recommend', { tabsInSidebar: true });
+    await screen.findByText('추천곡', { selector: '.play-st-name' });
+    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+    // 사이드바 하위 메뉴 클릭(주소 변경)으로 범위가 바뀐다
+    fireEvent.click(screen.getByText('go-builtin'));
+    await screen.findByText('목록곡', { selector: '.play-st-name' });
+    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+  });
+
+  it('tabsInSidebar가 아니면 화면 위 탭이 있다', async () => {
+    open('/sheet');
+    await screen.findAllByText('목록곡');
+    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
   });
 });
