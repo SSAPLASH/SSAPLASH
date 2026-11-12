@@ -1,15 +1,19 @@
-// 박자 맞추기 진행(설계 PLAY-004-timing-offset-calibration 4-1). 클릭 16박을 예약하고, 그동안의 타격을 가로채 소리만 낸 뒤
+// 박자 맞추기 진행(설계 PLAY-004-timing-offset-calibration 4-1, PLAY-004-timing-cal-stick-kick). 킥이 연결돼 있으면 스틱 구간 뒤 전환 박을 거쳐
+// 킥 구간까지 32박, 아니면 16박의 클릭을 예약하고, 그동안의 타격을 가로채 소리만 낸 뒤
 // 박과 타격의 어긋남으로 판정 타이밍 보정값을 계산한다. 계산은 domain/kit/timingCalibration, 화면은 TimingCalDialog가 맡는다.
 // bootstrap이 bind()로 의존을 넣고 타격 핸들러에서 intercept()를 부른다. 설정 저장은 하지 않는다(적용은 화면이 한다).
 import type { ResolvedHit } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
 import {
-  evaluateTimingCal,
+  evaluateTimingCalPhases,
   timingCalBeatMs,
   TIMING_CAL_LISTEN_BEATS,
+  TIMING_CAL_KICK_BEATS,
   TIMING_CAL_MEASURE_BEATS,
   TIMING_CAL_PAIR_WINDOW_MS,
-  type TimingCalResult,
+  TIMING_CAL_SWITCH_BEATS,
+  type TimingCalLimb,
+  type TimingCalOutcome,
   type TimingCalTap,
 } from '@/domain/kit/timingCalibration';
 
@@ -19,7 +23,16 @@ const TICK_MS = 25;
 /** 시작을 누른 뒤 첫 박까지의 여유 */
 const START_LEAD_MS = 400;
 
+/** 킥 없이 재는 전체 박 수(듣기 + 스틱 구간) */
 export const TIMING_CAL_TOTAL_BEATS = TIMING_CAL_LISTEN_BEATS + TIMING_CAL_MEASURE_BEATS;
+/** 킥 구간까지 재는 전체 박 수(듣기 + 스틱 구간 + 전환 + 킥 구간) */
+export const TIMING_CAL_TOTAL_BEATS_WITH_KICK = TIMING_CAL_TOTAL_BEATS + TIMING_CAL_SWITCH_BEATS + TIMING_CAL_KICK_BEATS;
+
+/** 스틱 구간 박 번호 범위(0부터). 킥 구간은 전환 박 뒤 */
+const STICK_FROM = TIMING_CAL_LISTEN_BEATS;
+const STICK_TO = STICK_FROM + TIMING_CAL_MEASURE_BEATS;
+const KICK_FROM = STICK_TO + TIMING_CAL_SWITCH_BEATS;
+const KICK_TO = KICK_FROM + TIMING_CAL_KICK_BEATS;
 
 export interface TimingCalDeps {
   /** 클릭 예약. 실제 예약된 시각(performance.now 기준)을 돌려준다. 소리를 못 냈으면 null */
@@ -33,6 +46,8 @@ export interface TimingCalDeps {
   busy: () => boolean;
   /** 브라우저가 보고한 출력 지연(ms). 모르면 null */
   outputLatencyMs: () => number | null;
+  /** 킥 페달이 연결돼 있는가. 시작할 때 한 번 읽어 킥 구간을 넣을지 정한다 */
+  kickConnected: () => boolean;
   /**
    * 오디오 시계가 들리는 시각보다 앞선 정도(ms, AudioEngine.renderAheadMs). 첫 박 여유와 예약 창에 더한다.
    * 안 더하면 출력 지연이 창보다 클 때 클릭이 "지금"으로 당겨져 늦게·불규칙하게 울린다(설계 MODE-001). 없으면 0
@@ -43,21 +58,33 @@ export interface TimingCalDeps {
   clearInterval?: (id: unknown) => void;
 }
 
-/** idle 대기 / starting 오디오 준비 / listen 듣기 박 / measure 측정 박 / result 결과 */
-export type TimingCalPhase = 'idle' | 'starting' | 'listen' | 'measure' | 'result';
+/** idle 대기 / starting 오디오 준비 / listen 듣기 박 / measure 스틱 구간 / switch 전환 박 / kick 킥 구간 / result 결과 */
+export type TimingCalPhase = 'idle' | 'starting' | 'listen' | 'measure' | 'switch' | 'kick' | 'result';
 
 export interface TimingCalSnapshot {
   phase: TimingCalPhase;
-  /** 지금까지 울린 박 수(0~16) */
+  /** 지금까지 울린 박 수(0~totalBeats) */
   beat: number;
-  /** 측정 박과 짝지을 수 있는 타격 수(화면 진행 표시용) */
+  /** 킥 구간을 넣었는가(시작할 때 킥이 연결돼 있었는가) */
+  withKick: boolean;
+  /** 전체 박 수. 킥 구간이 있으면 32, 없으면 16 */
+  totalBeats: number;
+  /** 지금 구간에서 짝지을 수 있는 그 구간 입력의 타격 수(화면 진행 표시용) */
   taps: number;
-  result: TimingCalResult | null;
+  outcome: TimingCalOutcome | null;
   /** 결과를 낼 때 읽은 출력 지연(ms) */
   outputLatencyMs: number | null;
 }
 
-const IDLE: TimingCalSnapshot = { phase: 'idle', beat: 0, taps: 0, result: null, outputLatencyMs: null };
+const IDLE: TimingCalSnapshot = {
+  phase: 'idle',
+  beat: 0,
+  withKick: false,
+  totalBeats: TIMING_CAL_TOTAL_BEATS,
+  taps: 0,
+  outcome: null,
+  outputLatencyMs: null,
+};
 
 export class TimingCalSession {
   private deps: TimingCalDeps | null = null;
@@ -69,6 +96,8 @@ export class TimingCalSession {
   /** 박마다 실제 예약된 시각. 아직 예약 전이면 길이가 짧다 */
   private actual: number[] = [];
   private taps: TimingCalTap[] = [];
+  /** 이번 측정에 킥 구간이 있는가 */
+  private withKick = false;
   /** 진행 중인 실행 번호. 취소 뒤 늦게 끝난 오디오 준비를 버리는 데 쓴다 */
   private run = 0;
 
@@ -85,7 +114,8 @@ export class TimingCalSession {
 
   /** 듣기·측정 중인가 */
   get running(): boolean {
-    return this.snap.phase === 'listen' || this.snap.phase === 'measure';
+    const p = this.snap.phase;
+    return p === 'listen' || p === 'measure' || p === 'switch' || p === 'kick';
   }
 
   /** 측정을 시작한다. 패드 보정 중이거나 이미 진행 중이면 false */
@@ -106,10 +136,12 @@ export class TimingCalSession {
     const now = (d.now ?? (() => performance.now()))();
     const beatMs = timingCalBeatMs();
     const ahead = d.renderAheadMs?.() ?? 0;
-    this.planned = Array.from({ length: TIMING_CAL_TOTAL_BEATS }, (_, i) => now + START_LEAD_MS + ahead + i * beatMs);
+    this.withKick = d.kickConnected();
+    const total = this.withKick ? TIMING_CAL_TOTAL_BEATS_WITH_KICK : TIMING_CAL_TOTAL_BEATS;
+    this.planned = Array.from({ length: total }, (_, i) => now + START_LEAD_MS + ahead + i * beatMs);
     this.actual = [];
     this.taps = [];
-    this.set({ ...IDLE, phase: 'listen' });
+    this.set({ ...IDLE, phase: 'listen', withKick: this.withKick, totalBeats: total });
     const every = d.setInterval ?? ((fn, ms) => globalThis.setInterval(fn, ms));
     this.timer = every(() => this.tick(), TICK_MS);
     this.tick();
@@ -131,11 +163,25 @@ export class TimingCalSession {
     if (!this.running || !this.deps) return false;
     if (!hit.pad) return true;
     this.deps.playHit(hit);
-    this.taps.push({ tHit: hit.tHit, input: isSensorSource(hit.source) ? 'sensor' : 'keyboard' });
-    const firstMeasure = this.planned[TIMING_CAL_LISTEN_BEATS] - TIMING_CAL_PAIR_WINDOW_MS;
-    const taps = this.taps.filter((t) => t.tHit >= firstMeasure).length;
-    if (taps !== this.snap.taps) this.set({ ...this.snap, taps });
+    // 하이햇 페달은 스틱도 킥도 아니다. 소리만 내고 모으지 않는다
+    if (hit.foot === 2) return true;
+    const limb: TimingCalLimb = hit.foot === 3 ? 'kick' : 'stick';
+    this.taps.push({ tHit: hit.tHit, input: isSensorSource(hit.source) ? 'sensor' : 'keyboard', limb });
+    this.refreshTaps();
     return true;
+  }
+
+  /** 지금 구간의 입력으로 짝지을 수 있는 타격 수를 갱신한다(전환 박에는 0) */
+  private refreshTaps(): void {
+    const phase = this.snap.phase;
+    let taps = 0;
+    if (phase === 'measure' || phase === 'kick') {
+      const from = phase === 'kick' ? KICK_FROM : STICK_FROM;
+      const limb: TimingCalLimb = phase === 'kick' ? 'kick' : 'stick';
+      const start = this.planned[from] - TIMING_CAL_PAIR_WINDOW_MS;
+      taps = this.taps.filter((t) => t.limb === limb && t.tHit >= start).length;
+    }
+    if (taps !== this.snap.taps) this.set({ ...this.snap, taps });
   }
 
   private tick(): void {
@@ -152,17 +198,26 @@ export class TimingCalSession {
     // 울린 박 수와 단계
     let beat = 0;
     while (beat < this.actual.length && this.actual[beat] <= now) beat++;
-    const phase: TimingCalPhase = beat > TIMING_CAL_LISTEN_BEATS ? 'measure' : 'listen';
-    if (beat !== this.snap.beat || phase !== this.snap.phase) this.set({ ...this.snap, beat, phase });
+    const phase: TimingCalPhase =
+      beat > KICK_FROM && this.withKick ? 'kick' : beat > STICK_TO && this.withKick ? 'switch' : beat > STICK_FROM ? 'measure' : 'listen';
+    if (beat !== this.snap.beat || phase !== this.snap.phase) {
+      // 구간이 바뀌면 화면의 타격 수는 새 구간 기준으로 다시 센다
+      this.set({ ...this.snap, beat, phase, taps: 0 });
+      this.refreshTaps();
+    }
     // 마지막 박의 짝짓기 폭이 지나면 끝낸다
-    const last = this.actual[TIMING_CAL_TOTAL_BEATS - 1];
+    const last = this.actual[this.planned.length - 1];
     if (last !== undefined && now >= last + TIMING_CAL_PAIR_WINDOW_MS) this.finish();
   }
 
   private finish(): void {
     this.stopTimer();
-    const result = evaluateTimingCal(this.actual.slice(TIMING_CAL_LISTEN_BEATS), this.taps);
-    this.set({ ...this.snap, phase: 'result', beat: TIMING_CAL_TOTAL_BEATS, result, outputLatencyMs: this.deps?.outputLatencyMs() ?? null });
+    const outcome = evaluateTimingCalPhases(
+      this.actual.slice(STICK_FROM, STICK_TO),
+      this.withKick ? this.actual.slice(KICK_FROM, KICK_TO) : null,
+      this.taps,
+    );
+    this.set({ ...this.snap, phase: 'result', beat: this.planned.length, outcome, outputLatencyMs: this.deps?.outputLatencyMs() ?? null });
   }
 
   private stopTimer(): void {
