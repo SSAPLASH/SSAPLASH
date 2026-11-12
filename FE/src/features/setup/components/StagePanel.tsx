@@ -1,6 +1,6 @@
 // 드럼 배치 캔버스 판(PLAY-004 D11, v0.3). 편집(KitCanvas)과 보정(DrumKit)이 같은 구조를 쓴다.
 // 행(.setup-stage-row, 카드 안쪽 전체 폭) 안에 판 하나(.setup-stage-panel: --bg-canvas, 안쪽 여백 16px, position: relative)를 두고,
-// 드럼 그림 영역(.setup-stage-fig)은 판 안쪽 전체를 채운다(카드·배너는 그 위에 겹친다). 떠 있는 요소의 자리: 위쪽 가운데 top / 오른쪽 아래 card / 아래쪽 가운데 banner.
+// 드럼 그림 영역(.setup-stage-fig)은 판 안쪽 전체를 채운다(카드·배너는 그 위에 겹친다). 떠 있는 요소의 자리: 왼쪽 위 log / 위쪽 가운데 top / 오른쪽 아래 card / 아래쪽 가운데 banner.
 // 자리·겹침 계산은 useOverlayRegion이 하고 이 컴포넌트는 배치만 맡는다.
 import type { ReactNode } from 'react';
 import type { UseOverlayRegion } from './useOverlayRegion';
@@ -13,6 +13,8 @@ export interface StagePanelProps {
   noPointerStrike?: boolean;
   /** 위쪽 가운데: 보정 안내·진행 점 */
   top?: ReactNode;
+  /** 왼쪽 위에 겹쳐 놓는 타격 확인 카드(포인터를 받지 않는다) */
+  log?: ReactNode;
   /** 오른쪽(또는 왼쪽) 아래 정보 카드(KitInfoFrame) */
   card?: ReactNode;
   /** 아래쪽 가운데 경고 배너(GapBanner) */
@@ -23,7 +25,7 @@ export interface StagePanelProps {
   children: ReactNode;
 }
 
-export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, figClassName, noPointerStrike, top, card, banner, action, children }: StagePanelProps) {
+export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, figClassName, noPointerStrike, top, log, card, banner, action, children }: StagePanelProps) {
   return (
     <div className="setup-stage-row" ref={rowRef}>
       <div className="setup-stage-panel">
@@ -31,6 +33,7 @@ export function StagePanel({ layout: { rowRef, figRef, bannerRef, bannerPos }, f
           <div className={`setup-stage-fig${figClassName ? ` ${figClassName}` : ''}`} ref={figRef} data-no-pointer-strike={noPointerStrike ? '' : undefined}>
             {children}
           </div>
+          {log}
         </div>
         {top}
         {action && <div className="setup-stage-action">{action}</div>}

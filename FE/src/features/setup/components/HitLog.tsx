@@ -9,10 +9,12 @@ interface Props {
   hits: RecentHit[];
   /** 경과 문구 기준 시각(Date.now). 호출자가 1초마다 갱신한다 */
   now: number;
+  /** 보일 최대 행 수(기본 HIT_LOG_ROWS). 판 안 카드는 HIT_LOG_FLOAT_ROWS */
+  rows?: number;
 }
 
-export function HitLog({ hits, now }: Props) {
-  const rows = hits.slice(0, HIT_LOG_ROWS);
+export function HitLog({ hits, now, rows: maxRows = HIT_LOG_ROWS }: Props) {
+  const rows = hits.slice(0, maxRows);
   return (
     <div className="setup-hitlog">
       <div className="setup-hitlog-row head" aria-hidden="true">

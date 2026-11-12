@@ -261,13 +261,14 @@ describe('SetupPage 보정 중(UX-64)', () => {
   });
 });
 
-describe('SetupPage 박자 맞추기 줄', () => {
+describe('SetupPage 박자 맞추기 타일', () => {
   it('맞춘 적이 없으면 "안 맞춤"과 [맞추기]', async () => {
     putSettings({ timingCal: null, audioOffsetMs: 0 });
     const html = await renderSetup();
-    expect(html).toContain('timing-cal-row');
+    expect(html).not.toContain('timing-cal-row');
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*class="setup-tile is-off is-todo"/);
     expect(html).toContain('안 맞춤');
-    expect(html).toMatch(/<button[^>]*>맞추기<\/button>/);
+    expect(html).toContain('<span class="setup-tile-action" aria-hidden="true">맞추기</span>');
   });
 
   it('맞춘 뒤에는 지금 보정값과 [다시 맞추기]', async () => {
@@ -277,7 +278,8 @@ describe('SetupPage 박자 맞추기 줄', () => {
     });
     const html = await renderSetup();
     expect(html).toContain('맞춤 · -65ms');
-    expect(html).toContain('다시 맞추기');
+    expect(html).toContain('>다시 맞추기</span>');
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*class="setup-tile is-on"/);
   });
 
   it('패드 보정 중에는 버튼이 비활성이고 이유를 보인다', async () => {
@@ -288,6 +290,6 @@ describe('SetupPage 박자 맞추기 줄', () => {
     });
     const html = await renderSetup();
     expect(html).toContain('보정 중에는 열 수 없어요');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>맞추기<\/button>/);
+    expect(html).toMatch(/<button[^>]*id="setup-timing"[^>]*disabled/);
   });
 });

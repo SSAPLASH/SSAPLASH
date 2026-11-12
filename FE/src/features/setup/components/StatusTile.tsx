@@ -24,14 +24,16 @@ interface Props {
   disabled?: boolean;
   /** 비활성 이유(타일 안 보조 문구) */
   reason?: string;
+  /** 상태 글자를 주의색으로 보인다(is-todo). 테두리 강조는 하지 않는다(박자 맞추기를 안 맞췄을 때) */
+  statusWarn?: boolean;
 }
 
-export function StatusTile({ id, title, status, statusText, summary, actionText, onOpen, urgent = false, attention = false, disabled = false, reason }: Props) {
+export function StatusTile({ id, title, status, statusText, summary, actionText, onOpen, urgent = false, attention = false, disabled = false, reason, statusWarn = false }: Props) {
   const on = status === 'done';
   const needed = status === 'needed';
   const tone = on ? 'on' : needed && urgent ? 'urgent' : needed && attention ? 'attention' : 'off';
   return (
-    <button type="button" id={id} className={`setup-tile is-${tone}`} aria-haspopup="dialog" disabled={disabled} onClick={onOpen}>
+    <button type="button" id={id} className={`setup-tile is-${tone}${statusWarn ? ' is-todo' : ''}`} aria-haspopup="dialog" disabled={disabled} onClick={onOpen}>
       <span className="setup-tile-top">
         <span className="setup-tile-dot" aria-hidden="true" />
         <span className="setup-tile-title">{title}</span>
