@@ -75,7 +75,7 @@ import { ReferencePoseGuide } from '@/features/setup/components/calibration/Refe
 import { useReferenceCapture } from '@/features/setup/components/calibration/useReferenceCapture';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
-import { bindSensorSurface, connectSensor } from '@/app/bootstrap';
+import { bindSensorSurface, connectSensor } from '@/runtime/sensorSession';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 

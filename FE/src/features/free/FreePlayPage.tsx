@@ -34,7 +34,7 @@ import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/runtime/sou
 import { stopFree } from '@/runtime/recordingStore';
 import { KEY_MAP } from '@/domain/keyMap';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
-import { bindSensorSurface } from '@/app/bootstrap';
+import { bindSensorSurface } from '@/runtime/sensorSession';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { unlockAudio } from '@/runtime/audioUnlock';
