@@ -50,6 +50,10 @@ export function ChartAutoplayRunner({ clockRef, session }: RunnerProps) {
         return clock && clock.state.phase === 'running' ? clock.songTime() : null;
       },
       play: (pad, velocity, atMs) => audioEngine.triggerScheduled(pad, velocity, atMs)?.cancel,
+      renderAheadMs: () => audioEngine.renderAheadMs(),
+      songToContext: (songMs) => clockRef.current?.songTimeToContext(songMs) ?? null,
+      contextNow: () => audioEngine.audioReading()?.ctxSec ?? null,
+      playAtContext: (pad, velocity, ctxSec) => audioEngine.triggerAtContext(pad, velocity, ctxSec)?.cancel,
     });
     ap.start();
     return () => ap.stop();

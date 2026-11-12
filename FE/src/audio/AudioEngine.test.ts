@@ -73,7 +73,14 @@ describe('AudioEngine 시각 변환', () => {
     expect(e.perfToContextTime(6000)).toBeCloseTo(11);
   });
 
-  it('짝이 현재 시각과 1초 넘게 어긋나면(오래된 값) 대체 짝을 쓴다', async () => {
+  it('출력 지연이 1.2초여도 정상 짝이면 그 짝을 쓴다(지연 보정 유지)', async () => {
+    // 들리는 시각 = 8.8 + 0.05 = 8.85 → currentTime 10보다 1.15초 뒤
+    const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 8.8, performanceTime: 4950 } });
+    expect(e.perfToContextTime(5000)).toBeCloseTo(8.85, 9);
+    expect(e.renderAheadMs()).toBeCloseTo(1150, 6);
+  });
+
+  it('짝이 현재 시각과 3초 넘게 어긋나면(오래된 값) 대체 짝을 쓴다', async () => {
     const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 1, performanceTime: 100 } });
     expect(e.contextToPerfTime(11)).toBeCloseTo(6000);
     expect(e.perfToContextTime(6000)).toBeCloseTo(11);
@@ -116,6 +123,62 @@ describe('AudioEngine trigger·click 반환', () => {
     const c = e.click(undefined, true);
     expect(c).not.toBeNull();
     expect(Math.abs((c as number) - 5000)).toBeLessThan(100);
+  });
+});
+
+describe('AudioEngine 앞선 정도·오디오 시계 읽기·오디오 시각 클릭 (설계 MODE-001 연주 시계를 오디오 시계 하나로)', () => {
+  beforeEach(() => {
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('앞선 정도 = currentTime − 지금 들리는 오디오 시각', async () => {
+    // 지금 들리는 시각 = 9.9 + (5000 − 4950)/1000 = 9.95 → 50ms 앞섬
+    const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 9.9, performanceTime: 4950 } });
+    expect(e.renderAheadMs()).toBeCloseTo(50, 6);
+    const r = e.audioReading();
+    expect(r?.ctxSec).toBe(10);
+    expect(r?.heardCtxSec).toBeCloseTo(9.95, 9);
+  });
+
+  it('출력 지연이 0.45초면 100ms 앞 예약은 당겨지고, 앞선 정도를 더한 예약은 그대로다', async () => {
+    // 들리는 시각 = 9.5 + 0.05 = 9.55 → 450ms 앞섬
+    const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
+    const ahead = e.renderAheadMs();
+    expect(ahead).toBeCloseTo(450, 6);
+    // 100ms 뒤에 들리게 하려는 클릭: 바꾼 오디오 시각 9.65 < currentTime 10 → 지금(10)으로 당겨져 450ms에 들림
+    const late = e.click(5100, false) as number;
+    expect(late - 5100).toBeCloseTo(350, 6);
+    // 여유에 앞선 정도를 더하면 당겨지지 않음
+    const want = 5000 + 100 + ahead;
+    expect(e.click(want, false) as number).toBeCloseTo(want, 6);
+  });
+
+  it('오디오 시각 클릭은 currentTime보다 뒤면 그 시각, 앞이면 currentTime', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
+    expect(e.clickAtContext(10.2, true)).toBeCloseTo(10.2, 9);
+    expect(e.clickAtContext(9.8, true)).toBe(10);
+  });
+
+  it('오디오 시각 타격음 예약은 그 시각에 놓이고 취소 핸들을 준다', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
+    const h = e.triggerAtContext('KICK', 100, 10.3);
+    expect(h).not.toBeNull();
+    // 들리는 화면 시계 시각 = 4950 + (10.3 − 9.5) × 1000
+    expect(h?.at).toBeCloseTo(5750, 6);
+    expect(() => h?.cancel()).not.toThrow();
+    const past = e.triggerAtContext('KICK', 100, 9.9);
+    expect(past?.at).toBeCloseTo(4950 + (10 - 9.5) * 1000, 6);
+  });
+
+  it('running이 아니면 앞선 정도 0, 읽기 값 null', async () => {
+    const e = await engineWith({ state: 'suspended', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
+    expect(e.renderAheadMs()).toBe(0);
+    expect(e.audioReading()).toBeNull();
+    expect(e.clickAtContext(10.2, true)).toBeNull();
   });
 });
 
