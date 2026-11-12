@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { uploadPlay } from '@/api/plays';
-import { playKeys } from '@/features/history/plays';
+import { playKeys } from '@/api/queries/plays';
 import { queryClient } from './queryClient';
 import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/reports';
 import { logConsent } from '@/domain/dataConsent';
