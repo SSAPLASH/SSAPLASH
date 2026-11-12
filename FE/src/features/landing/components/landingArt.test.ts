@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartArt, sheetArt, waveformBars } from './landingArt';
+import { chartArt, SHEET_RED, sheetArt, waveformBars } from './landingArt';
 
 describe('waveformBars', () => {
   it('음원·드럼 각 140개 막대를 만든다', () => {
@@ -62,7 +62,10 @@ describe('sheetArt', () => {
     const s = sheetArt();
     expect(s.highlight.x).toBe(450);
     expect(s.highlight.width).toBe(215);
-    expect(s.notes.filter((n) => n.fill === '#ff3b30')).toHaveLength(2);
+    // '3마디' 글자는 빔 아래(악보 아래)에 있고 강조 상자 안에 든다
+    expect(s.highlight.labelY).toBeGreaterThan(104);
+    expect(s.highlight.labelY).toBeLessThan(s.highlight.y + s.highlight.height);
+    expect(s.notes.filter((n) => n.fill === SHEET_RED)).toHaveLength(2);
     // 일반 음표: 마디당 윗줄 2 + 아랫줄 2 = 16, 3마디 추가 1 = 17
     expect(s.notes).toHaveLength(17);
   });
