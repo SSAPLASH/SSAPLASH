@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSongAccompaniment, type SongAccompaniment } from '@/api/songs';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { audioEngine, type AudioEngine } from '@/audio/AudioEngine';
-import { unlockAudio } from '@/app/bootstrap';
+import { unlockAudio } from '@/runtime/audioUnlock';
 import {
   accompanimentBarView,
   seekTarget,

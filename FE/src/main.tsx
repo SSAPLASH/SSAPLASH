@@ -5,7 +5,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import App from './app/App';
 import MotionProvider from './app/MotionProvider';
 import './app/sensors'; // 입력 소스 등록 (bootstrapInput보다 먼저)
-import { bootstrapInput, bootstrapMetronome, unlockAudio } from './app/bootstrap';
+import { bootstrapInput, bootstrapMetronome } from './app/bootstrap';
+import { unlockAudio } from './runtime/audioUnlock';
 import { bootstrapAuth } from './app/authBootstrap';
 import { bootstrapPresets } from './app/presetBootstrap';
 import { installPreloadErrorHandler } from './config/chunkRecovery';

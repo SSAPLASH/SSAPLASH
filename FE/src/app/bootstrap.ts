@@ -10,7 +10,7 @@ import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
 import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';
 import { RECONNECT_WAIT_MS, hintFor, shouldResend, waitForDevices } from './reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
-import { loadSampleSet, type SoundSet, type SoundSetId } from '@/audio/soundSets';
+import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
 import { startClockDiag } from './clockDiag';
@@ -481,59 +481,6 @@ export function bootstrapMetronome(): void {
   if (import.meta.env.DEV) (window as unknown as { __metronome?: typeof metronome }).__metronome = metronome;
 }
 
-// ── 사운드 세트 ──────────────────────────────────────────────
-/** 디코드가 끝난 세트 캐시. 세트를 다시 고를 때 재다운로드하지 않는다 */
-const soundSetCache = new Map<SoundSetId, SoundSet>();
-let appliedSetId: SoundSetId | null = null;
-let loadingSetId: SoundSetId | null = null;
-/** 세트를 빠르게 바꿔 응답이 뒤섞여도 마지막 선택만 반영하기 위한 번호 */
-let soundSetRequest = 0;
-
-function commitSoundSet(set: SoundSet | null, id: SoundSetId): void {
-  audioEngine.setSoundSet(set);
-  appliedSetId = id;
-  useLive.setState({ soundSetState: 'ready', soundSetMissing: set?.missing ?? [] });
-}
-
-/**
- * 설정의 soundSetId에 맞춰 세트를 적용한다. 오디오가 아직 켜지지 않았으면(디코드할 컨텍스트가 없으면)
- * 아무것도 하지 않고, unlockAudio가 다시 부른다. 로딩 중 타격은 합성음으로 울린다.
- */
-async function applySoundSet(): Promise<void> {
-  const id = useSettings.getState().soundSetId;
-  if (id === 'synth') {
-    soundSetRequest++;
-    loadingSetId = null;
-    commitSoundSet(null, id);
-    return;
-  }
-  const cached = soundSetCache.get(id);
-  if (cached) {
-    soundSetRequest++;
-    loadingSetId = null;
-    commitSoundSet(cached, id);
-    return;
-  }
-  const ctx = audioEngine.context;
-  if (!ctx || loadingSetId === id) return;
-  const req = ++soundSetRequest;
-  loadingSetId = id;
-  appliedSetId = null;
-  audioEngine.setSoundSet(null);
-  useLive.setState({ soundSetState: 'loading', soundSetMissing: [] });
-  try {
-    const set = await loadSampleSet(ctx, id);
-    soundSetCache.set(id, set);
-    if (req !== soundSetRequest) return;
-    loadingSetId = null;
-    commitSoundSet(set, id);
-  } catch {
-    if (req !== soundSetRequest) return;
-    loadingSetId = null;
-    useLive.setState({ soundSetState: 'error', soundSetMissing: [] });
-  }
-}
-
 let previewSeq = 0;
 /**
  * 세팅 화면의 "톡 치기". 소리와 화면 표시(lastHit·hitSeq)만 내고 텔레메트리·통계에는 넣지 않는다(source 'preview').
@@ -557,12 +504,4 @@ export async function previewHit(pad: PadId, velocity: number): Promise<void> {
   const tAudio = audioEngine.trigger(pad, velocity);
   if (tAudio !== null) hit.tAudio = tAudio;
   useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
-}
-
-/** 첫 사용자 제스처에서 오디오 켜기 */
-export async function unlockAudio(): Promise<void> {
-  await audioEngine.ensure();
-  useLive.setState({ audioReady: audioEngine.ready });
-  // 첫 제스처 이후 세트 로드(이미 적용·로딩 중이면 건너뜀)
-  if (appliedSetId !== useSettings.getState().soundSetId) void applySoundSet();
 }

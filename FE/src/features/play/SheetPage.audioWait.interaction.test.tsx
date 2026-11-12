@@ -36,7 +36,8 @@ vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockReso
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
-vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn(), unlockAudio: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn() }));
+vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 vi.mock('@/features/play/components/SheetPager', () => ({ SheetPager: () => null }));
