@@ -48,6 +48,13 @@ export class AccompanimentPoller {
     if (this.timer === null && this.ctrl === null) this.schedule();
   }
 
+  /** 사용자가 재시도한 곡은 화면을 오래 열어 폴링 횟수를 소진했어도 다시 확인한다. */
+  restart(id: number): void {
+    this.gone.delete(id);
+    this.tries = 0;
+    if (this.timer === null && this.ctrl === null) this.schedule();
+  }
+
   dispose(): void {
     this.active = false;
     this.cancel();
