@@ -163,22 +163,15 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="주 메뉴">
       {/* 헤더: 로고 + 접기/펼치기(UX-19, 2026-10-30). 태블릿은 강제 접힘이라 버튼을 숨긴다 */}
       <div className="side-header">
-        {/* 로고는 링크가 아니다(Figma). 접기 버튼 옆에서 잘못 눌려 이동하는 것을 막는다 */}
-        {/* 두 글자를 겹쳐 두고 접힘 때 교차 페이드한다(CSS .side-logo-full/.side-logo-short) */}
-        <span className="side-logo" aria-label="SSAPLASH">
-          <span className="side-logo-full" aria-hidden="true">
-            SSAPLASH
-          </span>
-          <span className="side-logo-short" aria-hidden="true">
-            S
-          </span>
-        </span>
+        {/* 펼친 사이드바에는 워드마크를 표시한다. */}
+        {!collapsed && <span className="side-wordmark">SSAPLASH</span>}
         {!tablet && (
           <button
             type="button"
             className="side-toggle"
             title={collapsed ? '펼치기' : '접기'}
             aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            aria-expanded={!collapsed}
             onClick={() => setStored(!stored)}
           >
             <SidebarToggleIcon collapsed={collapsed} />
