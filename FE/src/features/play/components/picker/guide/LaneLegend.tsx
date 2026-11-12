@@ -4,7 +4,7 @@
 import type { CSSProperties } from 'react';
 import { HIGHWAY_LANES, LANE_COLOR, laneColorOf } from '@/features/play/domain/highwayLanes';
 import { PAD_META, type PadId } from '@/domain/pads';
-import '@/features/play/components/staff-legend.css';
+import '@/features/play/components/picker/staff-legend.css';
 import './lane-legend.css';
 
 /** 미니 레인 띠 viewBox. 하이햇 페달 칸은 맨 왼쪽에 떼어 두고 나머지 8칸을 이어 붙인다 */

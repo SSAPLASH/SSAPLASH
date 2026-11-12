@@ -43,7 +43,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from './SongTable';
 import { SongDetailPane } from './SongDetailPane';
 import { LessonCourse } from '@/components/lesson/LessonCourse';
-import { PickerGuide } from '@/features/play/components/guide/PickerGuide';
+import { PickerGuide } from '@/features/play/components/picker/guide/PickerGuide';
 import './song-picker.css';
 import { InlineError } from '@/components/ui/InlineError';
 

@@ -4,7 +4,7 @@
 import { Card } from '@/components/ui/Card';
 import { DEVICE_META, deviceGroupName, deviceListText, type DeviceId } from '@/domain/devices';
 import type { ReadinessMissing } from '@/domain/readiness';
-import './ready.css';
+import '../ready.css';
 
 export interface DeviceCheckProps {
   /** 빠진 준비 조건(domain/readiness). 비면 준비 완료 */

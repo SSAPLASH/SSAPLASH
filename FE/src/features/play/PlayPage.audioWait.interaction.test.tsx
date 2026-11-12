@@ -23,7 +23,7 @@ const gate = vi.hoisted(() => ({
   notice: false,
   calls: [] as { phase: string; resolve: (ok: boolean) => void }[],
 }));
-vi.mock('@/features/play/components/useAudioClockGate', () => ({
+vi.mock('@/features/play/components/stage/useAudioClockGate', () => ({
   useAudioClockGate: () => ({
     notice: gate.notice,
     wait: (phase: string) =>
@@ -37,10 +37,10 @@ vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedVa
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/features/play/components/screenFit', () => ({ useScreenFits: () => true }));
+vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
-vi.mock('@/features/play/components/guide/PickerGuide', () => ({ PickerGuide: () => null }));
-vi.mock('@/features/play/components/NoteHighway', () => ({ NoteHighway: () => null }));
+vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
+vi.mock('@/features/play/components/stage/NoteHighway', () => ({ NoteHighway: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
 vi.mock('@/audio/Accompaniment', () => {
   const load = vi.fn().mockResolvedValue(undefined);

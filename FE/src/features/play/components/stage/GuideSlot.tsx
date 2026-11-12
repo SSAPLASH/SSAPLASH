@@ -1,4 +1,4 @@
-import './play.css';
+import '../play.css';
 
 export type GuideSlotMode = 'guide' | 'coach-info' | 'coach-warn' | 'coach-good';
 
