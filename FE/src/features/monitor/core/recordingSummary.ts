@@ -33,6 +33,8 @@ export interface SessionSummary {
   title: string;
   mode: 'RHYTHM' | 'SHEET';
   audioOffsetMs: number;
+  /** 발 타격에 적용된 값. 옛 녹화에는 없어 audioOffsetMs와 같다고 본다 */
+  kickOffsetMs: number;
   /** 이 세션에서 후보 노트가 둘 이상이었던 타격 수(매칭 경합) */
   contested: number;
   /** 코칭 기준 방식별 그림자 평가 문구(coachEval). 이벤트가 없으면 두 방식 모두 0 */
@@ -76,7 +78,7 @@ export interface RecordingSummary {
   contested: number;
   sessions: SessionSummary[];
   /** 마지막 audio 진단 줄: 판정 타이밍 보정과 브라우저가 보고한 오디오 지연. 줄이 없으면 null */
-  audio: { audioOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
+  audio: { audioOffsetMs: number; kickOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
   /** yawAuto 진단 줄: 패드 위치 자동 보정의 첫 값·마지막 값. 줄이 없으면(옛 녹화) null */
   yawAuto: { first: boolean; last: boolean } | null;
   /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
@@ -164,11 +166,11 @@ export function summarizeRecording(input: {
     } else if (ev.type === 'missed') {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
-      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
+      sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
     } else if (ev.type === 'yawAuto') {
       yawAuto = yawAuto ? { first: yawAuto.first, last: ev.on } : { first: ev.on, last: ev.on };
     } else if (ev.type === 'audio') {
-      audioLine = { audioOffsetMs: ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
+      audioLine = { audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
     } else if (ev.type === 'matchContested') {
       contested++;
       const cur = sessions[sessions.length - 1];
@@ -220,6 +222,12 @@ function thresholdText(t: ThresholdRef | null): string {
 
 const INPUT_MODE_LABEL = { direct: '직접 연결', follow: '따라보기' } as const;
 
+/** 보정값 표시. 스틱·킥 값이 같으면 스틱 값 하나만(옛 출력 그대로), 다르면 둘 다 보인다 */
+function offsetText(stickMs: number, kickMs: number, unit: boolean): string {
+  if (stickMs === kickMs) return unit ? `${f1(stickMs)}ms` : f1(stickMs);
+  return `스틱 ${f1(stickMs)}ms · 킥 ${f1(kickMs)}ms`;
+}
+
 /** 부호 붙인 1자리 소수(delta·기울기용). 없으면 '–' */
 const sf1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`);
 
@@ -238,7 +246,7 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     `- 입력 방식: ${meta.inputMode ? INPUT_MODE_LABEL[meta.inputMode] : '–'}`,
     `- 메모: ${meta.note || '–'}`,
     `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
-    `- 오디오: ${s.audio ? `판정 타이밍 보정 ${f1(s.audio.audioOffsetMs)}ms · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
+    `- 오디오: ${s.audio ? `판정 타이밍 보정 ${offsetText(s.audio.audioOffsetMs, s.audio.kickOffsetMs, true)} · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
     ...(s.yawAuto ? [`- 패드 위치 자동 보정: ${s.yawAuto.first === s.yawAuto.last ? onOff(s.yawAuto.last) : `도중 변경(${onOff(s.yawAuto.first)} → ${onOff(s.yawAuto.last)})`}`] : []),
     '',
     '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
@@ -258,7 +266,7 @@ export function summaryToMarkdown(s: RecordingSummary): string {
   ];
   if (s.sessions.length > 0) {
     lines.push('', '| 세션 | 모드 | 오디오 오프셋(ms) | 매칭 경합 |', '| --- | --- | --- | --- |');
-    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${f1(x.audioOffsetMs)} | ${x.contested} |`);
+    for (const x of s.sessions) lines.push(`| ${x.title} | ${x.mode} | ${offsetText(x.audioOffsetMs, x.kickOffsetMs, false)} | ${x.contested} |`);
   }
   // 세션별 타이밍 분석(T1). 채보 vs FE 판별표(설계 4-2)의 수치 열
   if (s.timing.length > 0) {
