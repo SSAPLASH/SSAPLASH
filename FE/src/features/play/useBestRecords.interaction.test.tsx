@@ -7,7 +7,7 @@ import { useAuth } from '@/store/authStore';
 import { usePlaySync } from '@/app/playSync';
 import { useBestRecords } from './useBestRecords';
 import type { UserMe } from '@/domain/auth';
-import type { PlayUploadState } from '@/engine/playLog';
+import type { PlayUploadState } from '@/domain/playLog';
 
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
 vi.mock('@/app/playSync', () => ({ usePlaySync: create(() => ({ states: {} })) }));

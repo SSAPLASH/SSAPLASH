@@ -11,7 +11,8 @@ import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto }
 import { logConsent } from '@/domain/dataConsent';
 import { buildUploadBody, type PlayUploadBody } from '@/domain/playUpload';
 import type { Report, ReportNote } from '@/domain/report';
-import { getPlayLog, updatePlayLog, type PlayUploadState } from '@/engine/playLog';
+import { getPlayLog, updatePlayLog } from '@/engine/playLog';
+import type { PlayUploadState } from '@/domain/playLog';
 
 const APP_VERSION: string | null = import.meta.env.VITE_APP_VERSION || null;
 

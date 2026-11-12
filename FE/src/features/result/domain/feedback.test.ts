@@ -3,7 +3,7 @@ import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from 
 import type { Chart } from '@/domain/chart';
 import type { Judgement } from '@/domain/judgement';
 import type { PadId } from '@/domain/pads';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 // bpm 120 → 마디 2000ms
 const chart: Chart = {

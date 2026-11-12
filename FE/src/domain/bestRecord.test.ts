@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, localPrevBest, mergePrevBest, recordBadgeOf } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { formatPlayDate, historyRowLevel, playModeName } from '@/domain/playLogView';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 import type { PlaySummary } from '@/api/plays';
 import '@/components/ui/table.css';
 import './history.css';
