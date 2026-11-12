@@ -319,6 +319,8 @@ export function bootstrapMetronome(): void {
     busy: () => useLive.getState().calibration.mode !== 'idle',
     outputLatencyMs: () => audioEngine.latency()?.outputLatencyMs ?? null,
     renderAheadMs: () => audioEngine.renderAheadMs(),
+    // pedal.connected는 [하이햇 페달(foot 2), 킥(foot 3)] 순서(인덱스 = foot - 2)
+    kickConnected: () => useLive.getState().pedal.connected[1],
   });
   metronome.bind({
     click: (atMs, accent) => audioEngine.click(atMs, accent),
