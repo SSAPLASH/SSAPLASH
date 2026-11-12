@@ -46,10 +46,16 @@ const featureOf = (f: string) => (f.startsWith('features/') ? f.split('/')[1] : 
 const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app/') && f !== 'main.tsx';
 
 /**
- * 허용하는 예외(`from -> to` 형식). 지금은 비어 있다.
+ * 허용하는 예외(`from -> to` 형식).
  * 새 항목은 막을 수 없는 이유를 주석으로 함께 적고, 풀리면 지운다.
  */
-const ALLOWED = new Set<string>([]);
+const ALLOWED = new Set<string>([
+  // 기능 → app: 센서 연결 함수(activateSensor·connectSensor·bindSensorSurface)가 bootstrap의 모듈 상태
+  // (활성 센서 인스턴스·입력 표면·재연결 핸들러)를 같이 쓴다. 센서 세션을 runtime으로 떼어 내면 풀린다
+  'features/free/FreePlayPage.tsx -> app/bootstrap.ts',
+  'features/monitor/StickMonitorPage.tsx -> app/bootstrap.ts',
+  'features/setup/SetupPage.tsx -> app/bootstrap.ts',
+]);
 
 /** domain 파일 여부와 그 파일이 속한 기능(공유 domain이면 null) */
 const domainOwner = (f: string): { feature: string | null } | null => {
@@ -93,6 +99,8 @@ describe('폴더 구조 의존 규칙', () => {
     ...violations((from, to) => from.startsWith('runtime/') && to.startsWith('components/')),
     // R7 core·store·domain은 runtime을 모른다(runtime이 이들 위의 층이다)
     ...violations((from, to) => /^(store|api|domain|input|engine|audio|coach|telemetry|media)\//.test(from) && to.startsWith('runtime/')),
+    // R8 기능은 app을 import하지 않는다(app이 기능을 조립하는 맨 위 층이다)
+    ...violations((from, to) => from.startsWith('features/') && to.startsWith('app/')),
   ];
   const unique = [...new Set(found)].sort();
 
