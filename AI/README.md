@@ -160,7 +160,7 @@ PyAV 라이선스: PyAV는 BSD-3이고, 휠에 든 FFmpeg는 LGPL 3 이상으로
 | 환경 변수 | 뜻 |
 | --- | --- |
 | `SSAPLASH_CHART_DEVICE` | `device` 값을 덮어쓴다 |
-| `SSAPLASH_CHART_MODEL` | 채보 설정의 `model` 값을 덮어쓴다. `songsterr_avg`·`original`·`combo` |
+| `SSAPLASH_CHART_MODEL` | 채보 설정의 `model` 값을 덮어쓴다. `strum`·`songsterr_avg`·`original`·`combo` |
 | `SSAPLASH_MODELS_DIR` | 가중치 폴더. 기본 `data/models`. 벤치마크 어댑터도 같이 읽는다 |
 | `SSAPLASH_WORK_DIR` | `--out`이 없을 때 출력 폴더의 부모. `<WORK_DIR>/<원곡 파일 이름>/`에 쓴다 |
 
@@ -174,7 +174,7 @@ uv run ssaplash-chart separate <원곡> --out data/chart/check --config configs/
 
 ## 드럼 채보 실행 (서비스 추론 모듈, S15P31A307-169)
 
-드럼 트랙 파일 하나로 채보 JSON을 만든다. 채보 모델은 벤치마크 어댑터를 그대로 쓰므로 모델 실행 패키지가 필요하다 (`uv sync --extra models --extra transcribers`). 기본 모델은 ADTOF + 드럼 킷 분리(MDX23C DrumSep)이고, 드럼 킷 분리 가중치는 첫 실행 때 `data/models/mdx23c_drumsep/`에 받는다. bpm 추정에 쓰는 Beat This! 가중치(81MB)도 첫 실행 때 `data/models/beat_this/`에 받고 md5로 확인한다. 공식 서버가 안 되면 개발자 사이트에서 받는다.
+드럼 트랙 파일 하나로 채보 JSON을 만든다. 채보 모델은 벤치마크 어댑터를 그대로 쓰므로 모델 실행 패키지가 필요하다 (`uv sync --extra models --extra transcribers`). 기본 모델은 STRUM 8종 온셋 CRNN 학습 가중치다(아래 "STRUM 학습 가중치" 참고). 가중치 `data/models/strum_ft/songsterr_egmd/best.pt`(169MB)는 자동으로 받지 않으므로 직접 넣고, 파일이 없으면 모델 오류로 끝난다. ADTOF 계열 모델(`songsterr_avg`·`original`·`combo`)을 고르면 드럼 킷 분리(MDX23C DrumSep) 가중치를 첫 실행 때 `data/models/mdx23c_drumsep/`에 받는다. bpm 추정에 쓰는 Beat This! 가중치(81MB)도 첫 실행 때 `data/models/beat_this/`에 받고 md5로 확인한다. 공식 서버가 안 되면 개발자 사이트에서 받는다.
 
 ```bash
 # 드럼 트랙 → 채보
@@ -203,12 +203,12 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 - 저장 전에 BE 워커 API와 같은 검사를 한다. 걸리면 파일을 남기지 않고 출력 오류(종료 코드 4)로 끝난다
 - 곡 안에서 빠르기가 바뀌는 채보는 `timing`에 `ppq`·`tempoMap`·`timeSignatureMap`을 더 넣을 수 있다. 형식은 BE MIDI 채보와 같다. `tempoMap`은 `{tick, bpm}` 목록이고 tick 0이 `offsetMs`, 첫 항목 bpm은 `timing.bpm`과 같아야 한다. 검사는 BE `ChartDocumentReader.timing`과 같은 조건이다. 음원 채보 명령은 지금 이 필드를 만들지 않는다
 
-채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `songsterr_avg`·`original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=original`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 탐·심벌 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
+채보 모델을 바꿀 때는 `configs/chart/transcription.yaml`의 `model` 한 줄을 `strum`·`songsterr_avg`·`original`·`combo` 중 하나로 바꾸거나, 파일은 두고 `SSAPLASH_CHART_MODEL=songsterr_avg`처럼 환경 변수를 주고 워커를 다시 띄운다. 워커 로그의 "채보 모델 선택:" 줄과 채보 JSON의 `generatorVersion`(`<모델 yaml name>@…`)으로 어느 모델이 도는지 확인한다. 규칙을 바꿀 때는 모델 yaml을 고친다. 규칙 값(STRUM의 패드별 문턱값·킥 규칙, ADTOF 계열의 탐 음높이 경계 등)은 그 경로가 가리키는 벤치마크 yaml의 `rules`에 있다.
 
 | 키 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `model` | `songsterr_avg` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
-| `models` | `songsterr_avg`, `original`, `combo` | 이름 → 채보 모델 yaml. `songsterr_avg`는 원래 ADTOF와 실제 곡 학습 가중치 점수 평균(아래 "실제 곡 점수 평균 조합" 참고), `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고). `songsterr_avg`도 같은 겹침 2 드럼 킷 분리를 쓴다 |
+| `model` | `strum` | 쓸 채보 모델 이름. `models` 안의 이름 하나. 환경 변수 `SSAPLASH_CHART_MODEL`이 있으면 그 값이 우선 |
+| `models` | `strum`, `songsterr_avg`, `original`, `combo` | 이름 → 채보 모델 yaml. `strum`은 STRUM 8종 온셋 CRNN 학습 가중치 + 킥 규칙(아래 "STRUM 학습 가중치" 참고), `songsterr_avg`는 원래 ADTOF와 실제 곡 학습 가중치 점수 평균(아래 "실제 곡 점수 평균 조합" 참고), `original`은 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep_ds_ov2.yaml`, 드럼 킷 분리 조각 겹침 2), `combo`는 패드별 가중치 조합 `adtof_drumsep_realrec.yaml`(실험용, 아래 "패드별 가중치 조합" 참고). `songsterr_avg`도 같은 겹침 2 드럼 킷 분리를 쓴다 |
 | `device` | `cuda` | 없으면 `cpu`로 내려간다 |
 | `schema_version` | 1 | 채보 JSON `schemaVersion`. BE가 1만 받는다 |
 | `tempo.method` | `beat_this` | bpm 추정 방법. `beat_this` 또는 `librosa`. librosa는 torch 없이 돌아서 mock 설정이 쓴다 |
@@ -266,7 +266,7 @@ NCS 50곡(표 `configs/ncs/songs.csv`)을 서비스 채보로 만들어 운영 �
 
 BE 채보 작업 워커 API(`/internal/v1/chart-jobs`, S15P31A307-160)에서 작업을 가져가 음원 분리와 드럼 채보를 돌리고 결과를 돌려주는 상시 프로세스다. 작업 하나를 분리 → 채보까지 한 워커가 처리하고, 한 번에 작업 하나만 한다. 실제 모델이 필요하므로 `uv sync --extra models --extra transcribers`가 끝난 환경에서 돌린다.
 
-흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
+흐름: claim → 원곡 내려받기(크기·sha256을 배정과 대조) → 음악 여부 검사(아래 "분리 전 음악 여부 검사") → 분리(`duration_ms`로 BE 길이에 맞춤) → flac 두 개를 서명 URL로 올리기 → 분리 결과 제출 → 같은 claim 재조회로 TRANSCRIBING 배정 받기 → 채보(로컬 드럼 트랙의 sha256이 배정과 같으면 그대로 씀) → 채보 결과 제출. heartbeat는 별도 스레드에서 10초마다 보내고 진행률은 분리 0~49, 분리 인수 뒤 50, 채보 50~99다. 모델 두 개는 첫 claim 전에 한 번 올린다.
 
 | 환경 변수 | 필수 | 기본값 | 뜻 |
 | --- | --- | --- | --- |
@@ -301,10 +301,49 @@ uv run ssaplash-worker run
 | 모델 올리기·추론 중 그 밖의 예외, 워커 내부 예외 | `MODEL_FAILED` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
 | 채보 JSON 검증 실패, 출력 파일 128MiB 초과 | `OUTPUT_INVALID` | 거짓 | `INTERNAL_ERROR` | BE가 FAILED |
 | heartbeat 409(임대 상실), 409·422 응답, 503·연결 오류 재시도(2·5·15초) 소진, 서명 URL 재발급 3회 실패, 내려받은 파일의 크기·sha256이 3번 다 배정과 다름 | 보고 안 함 | — | — | 작업을 놓는다. 임대가 끝나면 BE가 다시 배정 |
+| 분리 전 음악 여부 검사에서 음악이 아닌 파일로 판단 (아래 "분리 전 음악 여부 검사") | `INPUT_INVALID` | 거짓 | `NOT_TRANSCRIBABLE` | 분리를 돌리지 않고 BE가 FAILED |
 
 `reason`은 `SSAPLASH_WORKER_SEND_REASON`이 참일 때만 보낸다. 내려받은 파일의 크기·sha256이 다르면 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우라 같은 URL로 다시 받고, 다를 때마다 jobId·attemptId·role·크기·sha256 앞 12자리를 WARNING 로그로 남긴다. 채보 가능 검사 기준은 `configs/chart/transcription.yaml`의 `drum_check`에 있고, `min_notes_per_minute`를 비워 두면 노트 수 검사는 하지 않는다.
 
 결과 봉투의 `payloadHash`는 `result`만 BE와 같은 규칙(키 UTF-16 순 정렬, 공백 없음, Decimal 숫자)으로 정규화한 SHA-256이고 요청 본문도 그 정규 바이트다. 503이면 같은 `resultId`·`payloadHash`로 다시 보내 기존 Receipt를 받는다. 메모리 지표는 모듈이 MiB로 재고 BE는 MB(1,000,000바이트)라 워커가 환산한다.
+
+### 분리 전 음악 여부 검사
+
+노래가 아닌 파일(말소리, 소음, 해설이 대부분인 영상)을 올리면 분리와 채보가 GPU로 끝까지 돈 뒤 노트가 없는 채보가 만들어진다. 이를 막으려고 워커가 원곡을 내려받은 직후, 분리를 시작하기 전에 CPU로 검사 한 번을 돌린다. 걸린 파일은 분리를 돌리지 않고 실패 보고(`stage` `SEPARATING`, `reason` `NOT_TRANSCRIBABLE`)로 끝낸다. 실패 보고 본문 형식은 그대로라 BE·FE 변경이 없다.
+
+- 원곡의 20·40·60·80% 위치에서 10초 구간 4개를 뽑아, 소리 종류를 맞히도록 학습된 분류 모델 AST(`MIT/ast-finetuned-audioset-10-10-0.4593`)로 구간마다 "음악일 확률"과 "말소리일 확률"을 구한다. 두 확률은 서로 독립이라 합이 1이 아니다
+- 4구간 평균으로 판정한다. **음악 확률 평균이 0.28 미만이거나 말소리 확률 평균이 0.44 이상이면 실패**다. 구간 하나로 판정하지 않는 이유는 정상 랩 곡도 구간 하나는 말소리 확률이 0.5를 넘기 때문이다
+- 드럼이 없는 음악은 이 검사로 못 거른다. 분류 모델이 섞인 소리에서 드럼 유무를 가르지 못했다. 그런 곡은 채보 뒤 노트 수 검사(`drum_check.min_notes_per_minute`)가 맡는다
+
+기준값 0.28과 0.44는 "정상 곡이 1만 곡 중 1곡꼴로만 잘못 걸리는 값"이다. 정상 곡 782개의 두 확률을 구해 분포의 평균과 표준편차를 계산하고(확률을 logit으로 바꾼 값 기준), 1만 곡 중 1곡에 해당하는 위치를 기준값으로 삼았다. 2026-11-11 측정 결과는 아래와 같다.
+
+| 파일 종류 | 파일 수 | 음악 확률 | 말소리 확률 | 검사에 걸림 |
+| --- | --- | --- | --- | --- |
+| 정상 곡: Songsterr 공용 곡, MUSDB18-HQ test, NCS 전자음악, 랩 곡 등 | 782 | 최소 0.38 | 최대 0.32 | 0 |
+| 한국어 말소리 | 100 | 최대 0.01 | 최소 0.61 | 100 |
+| 한국어 말소리에 실제 곡을 배경음악으로 깐 파일. 음악 크기는 말소리와 같거나 10·20·30dB 작게 | 120 | 최대 0.61 | 최소 0.46 | 120 |
+| 소음·비명 | 8 | 최대 0.70 | 최대 0.50 | 8 |
+| 축구 하이라이트 영상 | 1 | 0.11 | 0.57 | 1 |
+
+- 정상 곡 가운데 음악 확률이 가장 낮은 곡은 발 구르기와 박수로 된 Queen의 We Will Rock You(0.38), 말소리 확률이 가장 높은 곡은 말로 시작하는 Van Halen의 Hot for Teacher(0.32)였다
+- 말소리보다 배경음악이 더 큰 파일은 측정하지 않았다
+- 분류 모델을 바꾸면 확률 분포가 달라지므로 기준값을 다시 정해야 한다
+
+```bash
+uv sync --extra models --extra transcribers --extra music-check   # 분류 모델 실행 패키지 transformers 추가
+uv run ssaplash-chart music-check song.mp3    # 파일 하나의 두 확률과 판정. 걸리면 종료 코드 2
+```
+
+- 설정은 `configs/chart/music_check.yaml`이다. `min_music_prob`·`max_speech_prob`를 둘 다 비우면 검사를 하지 않고 분류 모델도 올리지 않는다. 워커에서 다른 설정 파일을 쓰려면 `--music-check-config <경로>`, 검사 없이 띄우려면 `--music-check-config ""`
+- 분류 모델 가중치 330MB는 처음 올릴 때 Hugging Face에서 받아 사용자 캐시 폴더에 둔다
+- 검사 시간은 곡 하나에 2~3초다(원곡 읽기 포함, 개발 PC CPU 기준). GPU는 쓰지 않는다
+- 워커가 시작할 때 분류 모델을 올리지 못하면(패키지 없음, 가중치 내려받기 실패) 워커를 멈추지 않고 검사 없이 채보 작업을 계속한다. 검사가 빠진 채 도는 것은 세 곳에서 알 수 있다
+  - 시작 로그에 ERROR 한 줄: `분리 전 음악 여부 검사 모델을 올리지 못해 검사 없이 계속함: <사유>`
+  - 작업마다 WARNING 한 줄: `작업 <번호> 음악 여부 검사 없이 분리로 넘어감: 워커 시작 때 검사 모델을 올리지 못함 (<사유>)`
+  - `uv run ssaplash-worker check` 출력의 `음악 여부 검사:` 줄. 정상이면 `켜짐`, 못 올렸으면 `[주의] 모델을 올리지 못해 검사 없이 돎`, 설정으로 껐으면 `꺼짐`
+- 곡을 검사하다가 분류 모델 실행이 실패하면 그 곡만 WARNING `작업 <번호> 음악 여부 검사를 건너뛰고 분리로 넘어감: <사유>`를 남기고 분리로 넘어간다
+- 검사가 도는지 확인하는 명령: `grep "음악 여부 검사" ~/ssaplash/results/worker.log | tail`
+- 통과한 곡도 워커 로그에 `음악 여부 검사 통과: 음악 확률 0.80, 말소리 확률 0.02, 2118 ms`처럼 한 줄이 남는다. 운영 곡의 분포를 다시 확인할 때 쓴다
 
 ### LLM 총평 작업 (선택, COACH-003 후속)
 
@@ -325,11 +364,11 @@ BE 접속 정보가 없어도 혼자 끝까지 돌려 볼 수 있게 BE 대역�
 # 터미널 1: 곡을 작업으로 넣고 BE 대역을 띄운다. 작업이 다 끝나면 요약을 찍고 종료한다
 uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
 # 터미널 2: 터미널 1이 출력한 환경 변수 3개와 SSAPLASH_WORK_DIR을 넣고 워커를 돌린다
-uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml
+uv run ssaplash-worker run --once --separation-config configs/chart/separation_mock.yaml --transcription-config configs/chart/transcription_mock.yaml --music-check-config ""
 uv run pytest tests/worker
 ```
 
-실제 모델로 같은 흐름을 보려면 두 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
+`--music-check-config ""`는 분리 전 음악 여부 검사를 끈다. 켜 두면 실제 분류 모델을 올리고, 합성곡은 음악이 아닌 파일로 걸릴 수 있다. 실제 모델로 같은 흐름을 보려면 세 `--*-config` 인자를 빼면 된다. `data/fake_be/job-<번호>/`에 BE 대역이 받은 flac 두 개와 결과 JSON이 남는다.
 
 ### GPU 서버에서 띄우기
 
@@ -338,7 +377,7 @@ uv run pytest tests/worker
 서버 주의 두 가지. 서버 드라이버는 570(CUDA 12.8)인데 `uv sync`는 lock의 기본 PyPI torch(CUDA 13 휠)를 깔아 `libcusparseLt.so.0` 오류로 import가 깨진다. `uv sync` 뒤에는 아래처럼 torch를 CUDA 12.8 휠로 다시 깔고, 그다음부터는 `uv run --no-sync`로 실행해 `uv run`이 다시 lock에 맞추지 않게 한다. 작업 폴더에는 `separation.json`·`transcription.json`(시간·메모리)이 남으며 `SSAPLASH_WORKER_KEEP_FILES=1`일 때만 보존된다.
 
 ```bash
-cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers
+cd ~/ssaplash/S15P31A307/AI && git pull && uv sync --extra models --extra transcribers --extra music-check
 uv pip install --reinstall "torch==2.8.0" "torchaudio==2.8.0" --index-url https://download.pytorch.org/whl/cu128
 uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # 2.8.0+cu128 True
 # ~/ssaplash/worker.env 내용 (값은 BE·인프라에게 받음):
@@ -347,7 +386,7 @@ uv run --no-sync python -c "import torch; print(torch.__version__, torch.cuda.is
 #   SSAPLASH_WORKER_TOKEN=<토큰>
 #   SSAPLASH_WORK_DIR=$HOME/ssaplash/work
 #   SSAPLASH_CHART_DEVICE=cuda
-#   SSAPLASH_CHART_MODEL=songsterr_avg   # 채보 모델. 가중치를 못 올렸으면 original로 바꾸고 워커를 다시 띄움
+#   SSAPLASH_CHART_MODEL=strum           # 채보 모델. 이전 모델로 되돌릴 때는 songsterr_avg로 바꾸고 워커를 다시 띄움
 #   CUDA_VISIBLE_DEVICES=6
 #   OMP_NUM_THREADS=16              # CPU 스레드 수. 네 줄 모두 16
 #   MKL_NUM_THREADS=16
@@ -361,6 +400,14 @@ sleep 3; pgrep -f "\.venv/bin/ssaplash-worker run" | tee ~/ssaplash/worker.pid  
 grep Cpus_allowed_list /proc/$(cat ~/ssaplash/worker.pid)/status                 # 0-127
 tail -f ~/ssaplash/results/worker.log        # 상태
 kill -TERM $(cat ~/ssaplash/worker.pid)      # 멈추기. 한 번만 보낸다. 두 번 보내면 처리 중인 곡을 버리고 바로 끈다
+```
+
+채보 모델 `strum`의 가중치는 이 서버에서 학습한 파일을 복사해 둔다. `SSAPLASH_MODELS_DIR`을 주지 않으면 가중치 폴더는 `AI/data/models`다. `worker.env`에 `SSAPLASH_CHART_MODEL`이 적혀 있으면 채보 설정 기본값보다 그 값이 우선이므로, 모델을 바꿀 때는 그 줄을 고치고 워커를 다시 띄운다. 띄운 뒤 워커 로그의 "채보 모델 선택:" 줄로 확인한다.
+
+```bash
+mkdir -p ~/ssaplash/S15P31A307/AI/data/models/strum_ft/songsterr_egmd
+cp ~/ssaplash/ext_ft/runs/strum_p3_RE/best.pt ~/ssaplash/S15P31A307/AI/data/models/strum_ft/songsterr_egmd/best.pt
+sha256sum ~/ssaplash/S15P31A307/AI/data/models/strum_ft/songsterr_egmd/best.pt   # 8b40efb11ef5…로 시작
 ```
 
 워커는 CPU 0~127번 코어에 묶어 띄운다. 이 서버는 CPU 0~127번과 128~255번이 서로 다른 NUMA 노드인데, 2026-11-10 측정에서 128~255번 코어에서 돌면 같은 곡이 26.8초에서 265.2초로 10배 느려졌다. 묶지 않으면 리눅스가 고르는 코어에 따라 처리 시간이 40초에서 545초까지 달라진다. CPU 스레드 수를 정하지 않으면 워커가 코어를 수십 개 쓰면서 오히려 느려지므로 `worker.env`에 16을 넣는다. 처리 시간이 다시 늘어나면 [docs/트러블슈팅-워커-처리-속도.md](docs/트러블슈팅-워커-처리-속도.md)의 "다시 확인하는 법" 명령으로 두 노드를 다시 비교한다.
@@ -626,6 +673,7 @@ MLflow 실험 이름은 `transcription-bench`다. 모델 yaml의 `labels`가 바
 | ADTOF + 드럼 킷 분리 | `adtof_drumsep/adtof_drumsep.yaml` | adtof_drumsep | extra `models` + `transcribers` | 8 | ADTOF 결과의 탐·심벌을 MDX23C DrumSep 6스템(첫 실행 때 437MB 다운로드)과 규칙(탐 음높이 구간, 크래시·라이드 스템 에너지)으로 나눔. DrumSep 가중치 라이선스 미명시 |
 | ADT_STR | `external/adt_str_tau08.yaml` (tau 0.4·0.6 변형도 있음) | external | `.venv-adt-str` + `ext/ADT_STR` | 8 | torch 2.8 고정이라 별도 환경. HF `Pierfrancesco/adt-str`에서 가중치 자동 다운로드. CC BY-SA |
 | Inverse Drum Machine | `external/idm.yaml` | external | `.venv-idm` + `ext/inverse-drum-machine` | 8 | numpy<2 등 고정이라 별도 환경. 가중치 저장소 포함. Apache-2.0 |
+| STRUM 8종 온셋 CRNN | `strum/strum_crnn_songsterr_egmd.yaml` | strum_crnn | extra `models` | 8 | STRUM `drums_phase3`(42M)을 실제 곡과 E-GMD로 이어 학습한 가중치 + 킥 규칙. 서비스 기본. 가중치 169MB는 직접 넣는다. 코드·공개 가중치 MIT |
 | Omnizart drum | `external/omnizart.yaml` | external | `.venv-omnizart` | 킥·스네어·하이햇만 | TensorFlow. 저장소 공개 추론이 3가지만 MIDI로 내서 탐·심벌은 못 맞힌다 |
 | YourMT3+ | `external/yourmt3.yaml` (앱 기본값), `external/yourmt3_ps.yaml` (보조) | external | `.venv-yourmt3` + `ext/YourMT3` | 8 | 피아노·베이스까지 받아 적는 다악기 모델. 그중 드럼 노트만 쓴다. 코드는 GitHub이 아니라 HF Space에만 있어 스크립트의 `download`로 코드와 체크포인트(하나에 약 0.55GB)를 판을 고정해 받는다. 코드·가중치 Apache-2.0 |
 | drum2midi | `external/drum2midi.yaml` (세기·페달 학습 모델 끔), `external/drum2midi_learned.yaml` (세기·페달 학습 모델 켬, `--pedal auto`) | external | `.venv-drum2midi` + `ext/drum2midi` | 8 | ADTOF + 드럼 킷 분리 어댑터가 참고한 원본 프로그램(S15P31A307-164 비교용). 곡마다 `drum2midi.py`를 불러서 채보 시간에 분리 모델 로드가 섞인다. 기준값·탐 나누기를 MDB Drums로 맞춘 프로그램이라 MDB 점수는 유리할 수 있다. 코드 MIT, 가중치는 ADTOF(CC BY-NC-SA)·DrumSep(미명시) |
@@ -860,10 +908,32 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 
 패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 채보 JSON을 만들 때 하이햇 페달은 하이햇으로 합친다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
 
-실제 곡 점수 평균 조합(`adtof_drumsep_songsterr_avg.yaml`, 모델 이름 `songsterr_avg`, 서비스 기본)은 ADTOF를 세 번 돌린다. 원래 가중치와 Songsterr 인기곡 83곡으로 이어 학습한 5종 가중치의 프레임별 점수를 킥·스네어·하이햇·심벌 열만 평균하고(`average_checkpoints`, 탐 열은 원래 것), 그 점수로 서비스와 같은 규칙을 돌린 뒤 크래시·라이드 이름만 같은 곡으로 학습한 8패드 가중치 판정으로 바꾼다(`cymbal_mode: name`). 원래 모델 대비 8패드 F1은 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST +0.008·+0.013, MDB +0.022, PDO 무료 5곡 +0.006이다. 같은 곡의 ADTOF 입력 특징은 한 번만 만들어 세 가중치가 같이 쓰므로, 시험 31곡 채보 단계 시간은 원래 모델과 차이가 측정 흔들림보다 작았다. 2026-11-10부터 서비스 기본이다. `SSAPLASH_MODELS_DIR/songsterr_ft/` 아래 `five_all/last.pth`, `pads_all_noguard/last.pth`가 있어야 하고, 없으면 워커가 모델을 올리다 실패하므로 `SSAPLASH_CHART_MODEL=original`로 띄운다. 모델 yaml로 데이터셋을 서비스 어댑터 그대로 채보해 비교할 때는 `scripts/model_yaml_eval.py`를 쓰고, `--separator`를 주면 원곡을 분리한 드럼부터 돌린다.
+실제 곡 점수 평균 조합(`adtof_drumsep_songsterr_avg.yaml`, 모델 이름 `songsterr_avg`, `strum` 전 서비스 기본)은 ADTOF를 세 번 돌린다. 원래 가중치와 Songsterr 인기곡 83곡으로 이어 학습한 5종 가중치의 프레임별 점수를 킥·스네어·하이햇·심벌 열만 평균하고(`average_checkpoints`, 탐 열은 원래 것), 그 점수로 서비스와 같은 규칙을 돌린 뒤 크래시·라이드 이름만 같은 곡으로 학습한 8패드 가중치 판정으로 바꾼다(`cymbal_mode: name`). 원래 모델 대비 8패드 F1은 처음 보는 Songsterr 38곡 +0.025, 시험 31곡 +0.013, ENST +0.008·+0.013, MDB +0.022, PDO 무료 5곡 +0.006이다. 같은 곡의 ADTOF 입력 특징은 한 번만 만들어 세 가중치가 같이 쓰므로, 시험 31곡 채보 단계 시간은 원래 모델과 차이가 측정 흔들림보다 작았다. 2026-11-10부터 `strum`으로 바꾸기 전까지 서비스 기본이었다. `SSAPLASH_MODELS_DIR/songsterr_ft/` 아래 `five_all/last.pth`, `pads_all_noguard/last.pth`가 있어야 하고, 없으면 워커가 모델을 올리다 실패하므로 `SSAPLASH_CHART_MODEL=original`로 띄운다. 모델 yaml로 데이터셋을 서비스 어댑터 그대로 채보해 비교할 때는 `scripts/model_yaml_eval.py`를 쓰고, `--separator`를 주면 원곡을 분리한 드럼부터 돌린다.
 
 ```bash
 uv run python scripts/model_yaml_eval.py --dataset configs/bench/datasets/mdb_drums.yaml --model configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml --model configs/bench/transcribers/adtof_drumsep/adtof_drumsep_songsterr_avg.yaml --out data/results/model_yaml/mdb.csv
+```
+
+STRUM 학습 가중치(`configs/bench/transcribers/strum/strum_crnn_songsterr_egmd.yaml`, 모델 이름 `strum`, 서비스 기본, S15P31A307-326)는 [STRUM](https://github.com/opria123/strum)(코드·공개 가중치 MIT)의 8종 온셋 CRNN `drums_phase3`(42M)을 Songsterr 인기곡 457곡과 E-GMD 어쿠스틱 킷으로 이어 학습한 것이다. 드럼 트랙 하나로 8패드 온셋 점수를 바로 내므로 ADTOF와 드럼 킷 분리를 돌리지 않는다. 어댑터는 `strum_crnn`(`bench/transcribers/strum_transcriber.py`)이고, 모델 정의는 STRUM 저장소 파일을 그대로 둔 `bench/transcribers/strum/drums_v13.py`다. 별도 가상환경 없이 워커와 같은 환경(torch·torchaudio)에서 돈다.
+
+채보 흐름은 드럼 트랙 채널 평균 → 로그 멜(n_fft 2048, hop 512, 멜 128) → 10초 구간을 5초씩 밀어 가며 계산해 겹친 곳 평균 → 패드별 피크 → 킥 규칙 → 패드별 문턱값이다(`bench/transcribers/strum_rules.py`). 킥 규칙은 문턱값을 넘는 탐이 킥보다 많은 곡에서만 킥 점수를 키우고, 그 킥에서 30ms 안에 있는 탐을 지운다. ENST 드러머 1처럼 킥이 탐으로 잡히는 드럼 세트를 고치려는 규칙이고 실제 발매곡 69곡 중 5곡, ENST 64곡 중 19곡, MDB 23곡 중 0곡에 걸린다. ENST·MDB를 보고 만든 규칙이라 두 묶음 점수는 이 규칙의 공정한 시험이 아니다. 문턱값(검증 10곡에서 고름), 킥 규칙 값, 가중치 sha256은 모델 yaml에 있고, 가중치 파일의 sha256이 yaml과 다르면 모델을 올리다 오류로 끝난다.
+
+| 묶음 (8패드 F1, ±50ms) | `songsterr_avg` | `strum` | 차이 (곡 재추출 95% 구간) |
+| --- | --- | --- | --- |
+| Songsterr 시험 31곡 | 0.791 | 0.809 | +0.018 (+0.006 ~ +0.031) |
+| 처음 보는 Songsterr 38곡 | 0.828 | 0.840 | +0.012 (+0.002 ~ +0.022) |
+| MDB 23곡 | 0.877 | 0.904 | +0.028 (−0.003 ~ +0.064) |
+| ENST 64곡 드럼 단독 | 0.836 | 0.861 | +0.025 (+0.009 ~ +0.043) |
+| ENST 64곡 원곡 분리 | 0.798 | 0.818 | +0.020 (−0.000 ~ +0.040) |
+
+평가 곡은 학습 457곡·검증 10곡과 겹치지 않는다. 패드별로 실제 발매곡 두 묶음은 하이햇·탐 3종·크래시·라이드가 오르고(시험 31곡 크래시 0.741 → 0.815, 라이드 0.547 → 0.662, 플로어 탐 0.200 → 0.429) 킥·스네어가 0.007 ~ 0.017 내려간다. MDB는 탐과 크래시가 내려가고(미드 탐 0.708 → 0.074, 플로어 탐 0.680 → 0.372, 크래시 0.760 → 0.644) 스네어가 0.815 → 0.922로 오른다. ENST 드럼 단독은 스몰 탐이 0.523 → 0.215로 내려간다.
+
+채보 단계 시간은 로컬 RTX 4070에서 시험 31곡 곡당 중앙값 1.9초(최대 3.7초, 곡 길이의 0.008배), 최대 GPU 메모리 1,005MiB다(처음 보는 38곡 묶음에서는 1,495MiB). CPU만 쓰면 230초 곡 하나가 27초 걸린다(스레드 8개). 같은 PC에서 fake BE 전체 흐름으로 실제 발매곡 3곡(230 ~ 314초)을 돌리면 채보 단계가 2.3 ~ 2.8초(`songsterr_avg` 17.2 ~ 30.8초), 분리를 포함한 곡당 전체가 49.7 ~ 63.0초(`songsterr_avg` 68.4 ~ 79.9초)다. 분리 모델 패키지(msst)가 켜 두는 `cudnn.benchmark`는 입력 모양이 곡마다 달라지는 STRUM에서 곡당 8 ~ 15초를 더 쓰게 하므로 어댑터가 계산하는 동안만 끈다. 가중치는 Songsterr 탭(학습·교육 목적, 비상업 조건)으로 학습했으므로 `songsterr_avg`와 같은 범위에서만 쓴다.
+
+서비스 어댑터를 곡 목록에 돌려 채보 시간·GPU 메모리를 측정하고 실험 때 저장한 노트와 비교할 때는 `scripts/strum_service_check.py`를 쓴다. 곡 목록(`songs[].drums`가 드럼 트랙 경로인 json)과 실험 노트는 학습 실험을 한 PC의 `data/`에 있다. 실험 채점은 채널 평균을 16비트로 다시 쓴 모노 파일로 했으므로 `--mono16`을 주면 같은 입력이 된다. 실험은 프레임별 점수를 float16으로 저장해 피크가 한 프레임(11.6ms) 옮겨진 노트가 0.4 ~ 0.6% 있어서, 같은 노트로 보는 시각 차이를 `--tolerance-ms 12`로 주면 다섯 묶음 모두 99.96% 이상 같다. 워커처럼 드럼 트랙을 그대로 넣으면(`--mono16` 없이, 1ms 기준) 98.9 ~ 99.6%가 같고, 8패드 F1은 다섯 묶음 모두 소수 셋째 자리까지 같다.
+
+```bash
+uv run python scripts/strum_service_check.py --manifest data/ext_train/test31.json --reference data/results/ext_notes/strum_p3_RE_sg --mono16 --tolerance-ms 12
 ```
 
 서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 현재 사용 중 모델, 실제 녹음 학습 모델, 조합(탐만 현재 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.

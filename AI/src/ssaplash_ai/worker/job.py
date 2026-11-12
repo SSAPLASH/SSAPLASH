@@ -1,7 +1,8 @@
 """작업 실행기 (설계 4장 데이터 흐름, 3-3절 결과 본문, 3-4절 진행률, 3-5절 실패 보고, 3-6절 응답 처리).
 
 JobRunner.run(배정)이 작업 하나를 끝까지 처리함.
-SEPARATING: 원곡 내려받기 → 분리 모듈 → flac 두 개 올리기 → 분리 결과 제출 → 같은 claim 재조회 → TRANSCRIBING
+SEPARATING: 원곡 내려받기 → 음악 여부 검사(켜져 있을 때) → 분리 모듈 → flac 두 개 올리기 → 분리 결과 제출
+  → 같은 claim 재조회 → TRANSCRIBING
 TRANSCRIBING: 드럼 트랙 준비(로컬 파일 sha256이 같으면 그대로, 아니면 내려받기) → 채보 모듈 → 채보 결과 제출
 
 끝나는 방식 세 가지(JobOutcome.status):
@@ -29,8 +30,10 @@ from ssaplash_ai.chart.errors import (
     REASON_INTERNAL_ERROR,
     ChartError,
     ChartInputError,
+    ChartModelError,
     ChartOutputError,
 )
+from ssaplash_ai.chart.music_check import MusicCheckModule
 from ssaplash_ai.chart.separation import SeparationModule, SeparationOutput
 from ssaplash_ai.chart.transcription import TranscriptionModule, TranscriptionOutput
 from ssaplash_ai.worker.api import (
@@ -119,7 +122,11 @@ class JobOutcome:
 
 
 class JobRunner:
-    """배정 하나를 끝까지 처리. 모델 두 개는 밖(loop)에서 올려서 넘김."""
+    """배정 하나를 끝까지 처리. 모델 두 개는 밖(loop)에서 올려서 넘김.
+
+    music_check를 주면 원곡을 내려받은 직후 분리 전에 음악 여부 검사를 함. 걸린 파일은 분리를 돌리지 않고
+    NOT_TRANSCRIBABLE로 보고함. 검사 모델 자체가 실패하면 경고 로그만 남기고 분리로 넘어감.
+    """
 
     def __init__(
         self,
@@ -129,11 +136,16 @@ class JobRunner:
         transcription: TranscriptionModule,
         session: requests.Session | None = None,
         heartbeat_factory: Callable[..., Heartbeat] = Heartbeat,
+        music_check: MusicCheckModule | None = None,
+        music_check_error: str | None = None,
     ) -> None:
         self.settings = settings
         self.api = api
         self.separation = separation
         self.transcription = transcription
+        self.music_check = music_check
+        # 워커 시작 때 검사 모델을 못 올린 사유. 있으면 작업마다 검사 없이 넘어간다는 경고를 남김
+        self.music_check_error = music_check_error
         self.session = session or api.session
         self._heartbeat_factory = heartbeat_factory
 
@@ -231,6 +243,8 @@ class JobRunner:
         )
         hb.set_progress(PROGRESS_SOURCE_READY)
         _check_lease(hb)
+        self._check_music(a, source)
+        _check_lease(hb)
 
         out = self.separation.separate_file(
             source,
@@ -264,6 +278,36 @@ class JobRunner:
             raise JobAbandoned(f"분리 결과가 인수되지 않음 (jobStatus {receipt.job_status})")
         logger.info("작업 %d 분리 결과 인수 (revision %d)", a.job_id, receipt.revision)
         return out
+
+    def _check_music(self, a: Assignment, source: Path) -> None:
+        """분리 전 음악 여부 검사. 걸리면 ChartNotTranscribableError가 올라가 실패 보고로 끝남.
+
+        원곡을 못 읽는 경우의 ChartInputError도 그대로 올림(분리 모듈이 같은 파일을 읽어도 같은 오류).
+        분류 모델 실행이 실패하면(ChartModelError) 검사를 건너뛰고 분리로 넘어감.
+        """
+        if self.music_check is None or not self.music_check.enabled:
+            if self.music_check_error:
+                logger.warning(
+                    "작업 %d 음악 여부 검사 없이 분리로 넘어감: 워커 시작 때 검사 모델을 올리지 못함 (%s)",
+                    a.job_id,
+                    self.music_check_error,
+                )
+            return
+        try:
+            result = self.music_check.check_file(source)
+        except ChartModelError as e:
+            logger.warning(
+                "작업 %d 음악 여부 검사를 건너뛰고 분리로 넘어감: %s", a.job_id, e.message
+            )
+            return
+        if result is not None:
+            logger.info(
+                "작업 %d 음악 여부 검사 통과: 음악 확률 %.2f, 말소리 확률 %.2f, %d ms",
+                a.job_id,
+                result.music_prob,
+                result.speech_prob,
+                result.check_ms,
+            )
 
     def _upload_outputs(
         self, a: Assignment, out: SeparationOutput, sizes: dict[str, int]
