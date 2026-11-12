@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   MODE_CARD_FINAL,
-  PAD_FLASH_MS,
-  RIPPLE_REMOVE_MS,
-  RIPPLE_TIMING,
-  STRIKE_PAD_SEQUENCE,
   billboardTransform,
   billboardValues,
   chartLayerOpacity,
@@ -12,19 +8,13 @@ import {
   clamp,
   easeInOutCubic,
   fillClip,
-  glowKeyframes,
   heroValues,
-  isAccentHit,
-  isStrike,
   modeCardValues,
-  pickStrikePad,
   span,
   statementLineFill,
   statementSubValues,
   stickLayers,
   stickStep,
-  swingAngle,
-  swingSign,
 } from './landingMotion';
 
 describe('landingMotion 공통', () => {
@@ -211,58 +201,5 @@ describe('전광판', () => {
     const v = billboardValues(0.5);
     expect(v.x).toBeCloseTo((1 - bw) * 55);
     expect(v.fill).toBeCloseTo(easeInOutCubic(0.4 / 0.7));
-  });
-});
-
-describe('스틱 스윙', () => {
-  it('각도', () => {
-    expect(swingAngle(0)).toBeCloseTo(-6);
-    expect(swingAngle(0.125)).toBeCloseTo(20); // sin(pi/2)=1
-    expect(swingAngle(0.375)).toBeCloseTo(-32);
-  });
-
-  it('부호와 타격 판정', () => {
-    expect(swingSign(0.125)).toBe(1);
-    expect(swingSign(0.375)).toBe(-1);
-    expect(isStrike(1, -1)).toBe(true);
-    expect(isStrike(0, -1)).toBe(true);
-    expect(isStrike(-1, -1)).toBe(false);
-    expect(isStrike(1, 1)).toBe(false);
-    expect(isStrike(-1, 1)).toBe(false);
-  });
-
-  it('패드 선택', () => {
-    expect([...STRIKE_PAD_SEQUENCE]).toEqual([0, 1, 2, 3, 4, 1, 0, 1]);
-    expect(pickStrikePad(0)).toBe(0);
-    expect(pickStrikePad(0.3)).toBe(2);
-    expect(pickStrikePad(0.5)).toBe(4);
-    expect(pickStrikePad(0.99)).toBe(1);
-    expect(pickStrikePad(1)).toBe(1);
-  });
-});
-
-describe('glow 타격', () => {
-  it('4번에 한 번 강세', () => {
-    expect(isAccentHit(0)).toBe(true);
-    expect(isAccentHit(1)).toBe(false);
-    expect(isAccentHit(3)).toBe(false);
-    expect(isAccentHit(4)).toBe(true);
-  });
-
-  it('keyframes와 타이밍', () => {
-    const a = glowKeyframes(true);
-    expect(a.keyframes[0]).toEqual({ transform: 'scale(1.22)', opacity: 1 });
-    expect(a.timing).toEqual({ duration: 340, easing: 'cubic-bezier(.15,.9,.3,1)' });
-    const n = glowKeyframes(false);
-    expect(n.keyframes[0].transform).toBe('scale(1.1)');
-    expect(n.keyframes[1]).toEqual({ transform: 'scale(.97)', opacity: 0.42, offset: 0.55 });
-    expect(n.keyframes[2]).toEqual({ transform: 'scale(1)', opacity: 0.5 });
-    expect(n.timing.duration).toBe(220);
-  });
-
-  it('물결·번쩍임 상수', () => {
-    expect(RIPPLE_TIMING).toEqual({ duration: 600, easing: 'ease-out' });
-    expect(RIPPLE_REMOVE_MS).toBe(620);
-    expect(PAD_FLASH_MS).toBe(160);
   });
 });

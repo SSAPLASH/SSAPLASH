@@ -1,23 +1,20 @@
-// 센서 스틱 그림의 스윙 rAF 루프. 장면이 화면 안에 있고 enabled일 때만 돌며, 프레임마다 React 상태를 바꾸지 않고 콜백으로 DOM을 직접 갱신한다.
+// 센서 스틱 그림의 rAF 루프. 장면이 화면 안에 있고 enabled일 때만 돌며, 프레임마다 React 상태를 바꾸지 않고 경과 초를 콜백으로 넘긴다.
 import { useEffect, useRef, type RefObject } from 'react';
-import { isStrike, swingAngle, swingSign } from '@/features/landing/domain/landingMotion';
 
 interface Options {
   /** 화면 안 여부를 지켜볼 스틱 그림 영역 */
   stageRef: RefObject<Element | null>;
   /** false면(모션 줄이기) 루프를 돌리지 않는다 */
   enabled: boolean;
-  /** 매 프레임 스틱 각도(deg) */
-  onFrame: (angle: number) => void;
-  /** 스틱이 내려치는 순간 */
-  onStrike: () => void;
+  /** 매 프레임: 루프가 시작된 뒤 지난 초(화면에 다시 들어오면 0부터) */
+  onFrame: (tSec: number) => void;
 }
 
-export function useStickSwing({ stageRef, enabled, onFrame, onStrike }: Options): void {
+export function useStickSwing({ stageRef, enabled, onFrame }: Options): void {
   // 콜백은 ref로 들고 있어 루프·관찰자를 다시 만들지 않는다
-  const handlers = useRef({ onFrame, onStrike });
+  const handler = useRef(onFrame);
   useEffect(() => {
-    handlers.current = { onFrame, onStrike };
+    handler.current = onFrame;
   });
 
   useEffect(() => {
@@ -28,22 +25,16 @@ export function useStickSwing({ stageRef, enabled, onFrame, onStrike }: Options)
     let raf = 0;
     let running = false;
     let startedAt = -1;
-    let lastSign = 1;
 
     const tick = (now: number) => {
       if (startedAt < 0) startedAt = now;
-      const t = (now - startedAt) / 1000;
-      handlers.current.onFrame(swingAngle(t));
-      const sign = swingSign(t);
-      if (isStrike(lastSign, sign)) handlers.current.onStrike();
-      lastSign = sign;
+      handler.current((now - startedAt) / 1000);
       raf = requestAnimationFrame(tick);
     };
     const start = () => {
       if (running) return;
       running = true;
       startedAt = -1;
-      lastSign = 1;
       raf = requestAnimationFrame(tick);
     };
     const stop = () => {
