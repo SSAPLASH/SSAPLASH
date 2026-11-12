@@ -11,6 +11,7 @@ import com.ssafy.airdrum.domain.play.dto.PlayUploadRequest;
 import com.ssafy.airdrum.domain.play.exception.PlayErrorCode;
 import com.ssafy.airdrum.domain.play.model.PlayJson;
 import com.ssafy.airdrum.domain.play.repository.session.PlaySessionRepository;
+import com.ssafy.airdrum.domain.report.model.ScoreRule;
 import com.ssafy.airdrum.global.error.BusinessException;
 import static com.ssafy.airdrum.domain.play.dto.PlayUploadRequest.*;
 
@@ -31,7 +32,7 @@ public class PlayUploadValidator {
 		if (p.scored()) {
 			check(p.songId() != null && p.songId() > 0 && p.chartVersionId() != null && p.chartVersionId() > 0);
 			var c = p.judgementContext(); check(c != null && c.schemaVersion() != null);
-			if (c.schemaVersion() != 1 || !"SCORE_V1".equals(c.judgementVersion())) throw new BusinessException(PlayErrorCode.PLAY_SCHEMA_UNSUPPORTED);
+			if (c.schemaVersion() != 1 || ScoreRule.of(c.judgementVersion()).isEmpty()) throw new BusinessException(PlayErrorCode.PLAY_SCHEMA_UNSUPPORTED);
 			check(c.timingWindows() != null && finite(c.timingWindows().perfectMs()) && finite(c.timingWindows().goodMs()));
 			check(c.timingWindows().perfectMs() >= 0 && c.timingWindows().goodMs() > c.timingWindows().perfectMs() && c.timingWindows().goodMs() <= 1000);
 			check(finite(c.playbackRate()) && c.playbackRate() > 0 && c.playbackRate() <= 4);
@@ -96,7 +97,8 @@ public class PlayUploadValidator {
 				maxCombo = Math.max(maxCombo, ++combo);
 			}
 		}
-		int score = perfect * 100 + good * 60;
+		// 기록이 보낸 규칙 버전으로 검산한다(structure가 아는 버전만 통과시켰다)
+		long score = ScoreRule.of(p.judgementContext().judgementVersion()).orElseThrow().score(perfect, good);
 		BigDecimal accuracy = chart.noteCount() == 0 ? BigDecimal.ZERO : BigDecimal.valueOf(score).divide(BigDecimal.valueOf(chart.noteCount()), 2, RoundingMode.HALF_UP);
 		var s = p.summary(); check(s.score() == score && s.accuracy().compareTo(accuracy) == 0 && s.maxCombo() == maxCombo
 				&& new Counts(perfect, good, miss).equals(s.judgementCounts()));

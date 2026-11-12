@@ -7,6 +7,7 @@ import com.ssafy.airdrum.domain.report.dto.ReportNotesResponse;
 import com.ssafy.airdrum.domain.report.dto.ReportResponse;
 import com.ssafy.airdrum.domain.report.exception.ReportErrorCode;
 import com.ssafy.airdrum.domain.report.model.ReportAggregate;
+import com.ssafy.airdrum.domain.report.model.ScoreRule;
 import com.ssafy.airdrum.global.error.BusinessException;
 import com.ssafy.airdrum.domain.report.model.ReportAggregate.Counts;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,23 +36,27 @@ public class ReportRepository {
 			SELECT r.id,s.id AS play_id,s.score,s.accuracy,s.max_combo,s.judgement_counts::text,
 				r.timing_histogram::text,r.pad_stats::text,s.mode,s.input_source,s.client_meta->>'endReason' AS end_reason,
 				r.analysis_status,r.weak_segments::text,r.recommended_drills::text,r.generator_version,r.generated_at,
-				r.coach_summary::text,s.song_id,v.chart_id,c.difficulty
+				r.coach_summary::text,s.song_id,v.chart_id,c.difficulty,s.judgement_context->>'judgementVersion' AS judgement_version
 			FROM play_sessions s JOIN reports r ON r.play_session_id=s.id
 			LEFT JOIN chart_versions v ON v.id=s.chart_version_id LEFT JOIN charts c ON c.id=v.chart_id
 			WHERE s.id=? AND s.user_id=?
-			""", (r,n) -> new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
+			""", (r,n) -> {
+				// 그 기록의 점수 규칙. 판정 기록은 업로드 검증을 거쳐 아는 버전만 있다(모르면 처음 규칙 V1)
+				ScoreRule rule = ScoreRule.of(r.getString("judgement_version")).orElse(ScoreRule.SCORE_V1);
+				return new ReportResponse(r.getLong("id"), r.getObject("play_id", UUID.class),
 				r.getInt("score"), r.getBigDecimal("accuracy"), r.getInt("max_combo"),
 				json.readValue(r.getString("judgement_counts"), Counts.class),
 				json.readValue(r.getString("timing_histogram"), ReportAggregate.TimingHistogram.class),
 				Arrays.stream(json.readValue(r.getString("pad_stats"), ReportAggregate.PadStats[].class))
-						.map(ReportResponse.PadStats::from).toList(),
+						.map(p -> ReportResponse.PadStats.from(p, rule)).toList(),
 				r.getString("mode"), r.getString("input_source"), r.getString("end_reason"),
 				ReportResponse.AnalysisStatus.valueOf(r.getString("analysis_status")),
 				r.getString("weak_segments") == null ? null : json.readTree(r.getString("weak_segments")),
 				r.getString("recommended_drills") == null ? null : json.readTree(r.getString("recommended_drills")),
 				r.getString("generator_version"), r.getTimestamp("generated_at").toInstant(),
 				r.getString("coach_summary") == null ? null : json.readTree(r.getString("coach_summary")),
-				r.getObject("song_id", Long.class), r.getObject("chart_id", Long.class), r.getString("difficulty")), playId, userId)
+				r.getObject("song_id", Long.class), r.getObject("chart_id", Long.class), r.getString("difficulty"));
+			}, playId, userId)
 				.stream().findFirst().orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
 	}
 	public List<ReportNotesResponse.Item> notes(long userId, UUID playId, int afterSeq, int fetchSize) {
