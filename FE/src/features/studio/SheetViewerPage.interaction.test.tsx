@@ -8,7 +8,7 @@ import { deleteSheet, getSheet, updateSheetTitle } from '@/features/studio/api/s
 import { SheetError, type SheetDetail } from '@/features/studio/domain/sheetMusic';
 
 const flags = vi.hoisted(() => ({ archive: true }));
-vi.mock('@/app/features', () => ({
+vi.mock('@/config/features', () => ({
   get SHEET_ARCHIVE_ENABLED() {
     return flags.archive;
   },

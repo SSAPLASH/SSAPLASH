@@ -14,7 +14,7 @@ import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/app/queryClient';
 import { StudioPage } from './StudioPage';
 
-vi.mock('@/app/features', async (orig) => ({ ...(await orig<typeof import('@/app/features')>()), SHEET_ARCHIVE_ENABLED: true }));
+vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_ARCHIVE_ENABLED: true }));
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
 

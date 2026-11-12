@@ -8,7 +8,7 @@ import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
 import { useRecordingStore } from './recordingStore';
 import { useSongs } from '@/store/songStore';
-import { SHEET_ARCHIVE_ENABLED } from './features';
+import { SHEET_ARCHIVE_ENABLED } from '@/config/features';
 import { queryClient } from './queryClient';
 import { loadRoute, type RouteKey } from './routeModules';
 

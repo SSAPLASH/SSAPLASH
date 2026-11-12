@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RELOAD_GUARD_KEY } from '@/app/chunkRecovery';
+import { RELOAD_GUARD_KEY } from '@/config/chunkRecovery';
 import { RouteErrorBoundary } from './RouteErrorBoundary';
 
 function Thrower({ message }: { message: string }): never {

@@ -9,7 +9,7 @@ import { sheetKeys, sheetListQuery } from '@/features/studio/api/queries/sheets'
 import { mineSongsQuery, songKeys } from '@/api/queries/songs';
 import { queryClient } from '@/app/queryClient';
 import { useApiQuery } from '@/app/useApiQuery';
-import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/app/features';
+import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';

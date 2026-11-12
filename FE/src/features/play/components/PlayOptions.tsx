@@ -1,7 +1,7 @@
 // 연주 옵션 줄 목록 (설계 MODE-001-MODE-003-picker-quick-start, Figma 905:4457 「연주 옵션」). 카드 껍데기 없이 체크 줄만 낸다 —
 // 감싸는 쪽(시작 확인 창 등)이 제목·여백을 정한다. 보일 줄은 `rows`로 고른다(리듬 게임 재활용 대비).
 // 메트로놈·패드 번호·반주는 props만 받고(설정 스토어 연결은 페이지), 녹음 줄만 녹음 스토어의 arm(`toggleArm`)을 직접 쓴다.
-import { RECORDING_ENABLED } from '@/app/features';
+import { RECORDING_ENABLED } from '@/config/features';
 import { toggleArm, useRecordingStore } from '@/app/recordingStore';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { accompanimentOptionText, type AccompanimentStatus } from '@/domain/songCatalog';

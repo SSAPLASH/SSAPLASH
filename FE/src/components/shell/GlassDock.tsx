@@ -8,7 +8,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/app/features';
+import { RECORDING_ENABLED } from '@/config/features';
 import { useRecordingStore } from '@/app/recordingStore';
 import { BPM_STEP } from '@/domain/metronome';
 import { metronome } from '@/engine/Metronome';

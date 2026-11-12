@@ -6,8 +6,8 @@ import { resetRecordingForTest, useRecordingStore } from '@/app/recordingStore';
 import { useSettings } from '@/store/settingsStore';
 import { GlassDock } from './GlassDock';
 
-vi.mock('@/app/features', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/features')>()),
+vi.mock('@/config/features', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/features')>()),
   RECORDING_ENABLED: true,
 }));
 

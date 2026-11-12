@@ -4,7 +4,7 @@ import type { SongSummary } from '@/domain/songCatalog';
 import { SongDeleteDialog } from './SongDeleteDialog';
 
 // 악보 재연결 스위치 켜짐(BE 회신 3 이후): 곡을 지워도 연결된 악보는 남는다 (D18)
-vi.mock('@/app/features', async (orig) => ({ ...(await orig<typeof import('@/app/features')>()), SHEET_RELINK_ENABLED: true }));
+vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_RELINK_ENABLED: true }));
 
 const song = { id: 7, title: '별빛 산책', sheetId: null } as SongSummary;
 const noop = () => {};
