@@ -541,14 +541,17 @@ describe('판정 타이밍 보정·박자 맞추기 기록', () => {
 
   it('박자 맞추기 기록은 저장분에서 복원하고, 모양이 틀리면 버린다', () => {
     const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
-    expect(merge({ timingCal: rec }).timingCal).toEqual(rec);
+    // 옛 저장분(kick 없음)도 그대로 읽는다
+    expect(merge({ timingCal: rec }).timingCal).toEqual({ ...rec, kick: null });
+    const kick = { medianMs: -40, madMs: 6, pairs: 11 };
+    expect(merge({ timingCal: { ...rec, kick } }).timingCal).toEqual({ ...rec, kick });
     expect(merge({}).timingCal).toBeNull();
     expect(merge({ timingCal: { ...rec, input: 'mouse' } }).timingCal).toBeNull();
     expect(merge({ timingCal: { ...rec, outputLatencyMs: 'x' } }).timingCal).toMatchObject({ outputLatencyMs: null });
   });
 
   it('setTimingCal로 기록을 넣고 지운다', () => {
-    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null };
+    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null, kick: null };
     useSettings.getState().setTimingCal(rec);
     expect(useSettings.getState().timingCal).toEqual(rec);
     useSettings.getState().setTimingCal(null);
