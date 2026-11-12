@@ -324,6 +324,54 @@ describe('yawDriftMonitor PARAM_ACK 손 구분 (PLAY-004)', () => {
   });
 });
 
+describe('yawDriftMonitor 소스 상태 변화와 적용값 기억 (PLAY-004)', () => {
+  it('포트를 다시 열어도(연결 중 → 연결됨) 적용값은 남고 링·쿨다운은 비워진다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    ack(-5800, null, 0);
+    feed([6, 6]);
+    src.set('connecting');
+    expect(last[0]).toBeNull();
+    src.set('connected');
+    // 쿨다운이 비워져 바로 보정이 나가고, 기준은 남아 있던 −58이다: −58 − 6 = −64
+    feed(NINE_PLUS6);
+    expect(src.sent).toHaveLength(2);
+    expect(sentDeg(src.sent[1].bytes)).toBeCloseTo(-64);
+    // 끊기기 전 샘플 2개가 남았다면 6번째에 보내 3개가 남는다. 비워졌으므로 8번째에 보내고 9번째 1개만 남는다
+    expect(last[0]).toMatchObject({ appliedDeg: -64, samples: 1 });
+  });
+
+  it('끊긴 동안 열려 있던 확인 창은 닫힌다(다시 붙은 뒤 acked false로 바뀌지 않는다)', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    src.set('disconnected');
+    src.set('connected');
+    vi.advanceTimersByTime(600);
+    expect(last[0]).toBeNull();
+    yawDriftMonitor.correct(0, 2);
+    expect(last[0]).toMatchObject({ appliedDeg: -60, acked: null });
+  });
+
+  it('다시 붙은 스틱이 꺼졌다 켜진 것이면(onConnected) 0으로 맞추고 기억도 0이다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    src.set('connecting');
+    src.set('connected');
+    yawDriftMonitor.onConnected(0);
+    expect(last[0]).toMatchObject({ appliedDeg: 0 });
+    yawDriftMonitor.correct(0, 5);
+    expect(sentDeg(src.sent[src.sent.length - 1].bytes)).toBeCloseTo(-5);
+  });
+
+  it('소스를 바꾸면 적용값을 잊는다', () => {
+    connected();
+    yawDriftMonitor.correct(0, 58);
+    const next = connected();
+    yawDriftMonitor.correct(0, 5);
+    expect(sentDeg(next.sent[0].bytes)).toBeCloseTo(-5);
+  });
+});
+
 describe('yawDriftMonitor 페달(stickId null, PLAY-002)', () => {
   // 인수 조건: 손 없는 타격은 방위각 보정 샘플에서 제외
   it('observe는 stickId null 타격을 무시한다(샘플·송신 없음)', () => {
