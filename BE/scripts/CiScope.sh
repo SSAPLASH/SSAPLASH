@@ -17,11 +17,11 @@ case "${1:-}" in
         fi
         set -- test
         for test_class in \
-            auth.AccessTokenServiceTest auth.RefreshTokenCookieTest user.SignupConsentVersionsTest \
-            common.validation.JsonObjectValidatorTest chart.ChartDocumentReaderTest chart.worker.WorkerPayloadTest \
-            play.PlayPayloadTest recording.RecordingPayloadTest telemetry.TelemetryBatchValidatorTest \
-            song.audio.AudioDurationTest song.midi.GmDrumMappingTest song.midi.DifficultyThinnerTest \
-            report.ReportAggregatorTest; do
+            domain.auth.service.token.AccessTokenServiceTest domain.auth.cookie.RefreshTokenCookieTest domain.user.model.SignupConsentVersionsTest \
+            global.validation.JsonObjectValidatorTest domain.chart.model.ChartDocumentReaderTest domain.chart.service.worker.WorkerPayloadTest \
+            domain.play.service.upload.PlayPayloadTest domain.recording.validation.RecordingPayloadTest domain.telemetry.validation.TelemetryBatchValidatorTest \
+            global.media.AudioDurationTest domain.song.service.midi.GmDrumMappingTest domain.chart.model.DifficultyThinnerTest \
+            domain.report.service.summary.ReportAggregatorTest; do
             set -- "$@" --tests "com.ssafy.airdrum.$test_class"
         done
         set -- "$@" bootJar
