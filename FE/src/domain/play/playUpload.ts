@@ -1,7 +1,7 @@
 // 플레이 로그 → 요약 업로드 본문 (ACCT-002 v1, 설계 COACH-002 3-2). 순수 함수, 네트워크 없음.
 // 서버는 같은 규칙으로 다시 계산해 모순이면 400을 낸다(PlayUploadValidator). 여기서 계산식을 서버와 맞춘다.
 import type { LiveCoachEvent, LoggedHit, PlayLog } from '@/domain/playLog';
-import { JUDGEMENT_SCORE, type Judgement } from '../judgement';
+import { JUDGEMENT_SCORE, SCORE_RULE, type Judgement } from '../judgement';
 import type { PadId } from '../pads';
 import { isSensorSource } from '@/domain/events';
 
@@ -35,7 +35,7 @@ export interface PlayUploadBody {
   calibration: { audioOffsetMs: number; pads: null };
   judgementContext: {
     schemaVersion: 1;
-    judgementVersion: 'SCORE_V1';
+    judgementVersion: typeof SCORE_RULE;
     timingWindows: { perfectMs: number; goodMs: number };
     playbackRate: 1;
     padMapping: Record<string, never>;
@@ -197,7 +197,7 @@ export function buildUploadBody(log: PlayLog, ctx: UploadContext): BuildUploadRe
       calibration: { audioOffsetMs: log.audioOffsetMs ?? 0, pads: null },
       judgementContext: {
         schemaVersion: 1,
-        judgementVersion: 'SCORE_V1',
+        judgementVersion: SCORE_RULE,
         timingWindows: { perfectMs: log.timing.perfectMs, goodMs: log.timing.goodMs },
         playbackRate: 1,
         padMapping: {},
