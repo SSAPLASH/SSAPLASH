@@ -75,7 +75,8 @@ import { ReferencePoseGuide } from '@/features/setup/components/calibration/Refe
 import { useReferenceCapture } from '@/features/setup/components/calibration/useReferenceCapture';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
-import { bindSensorSurface, connectSensor, setSoundOnHit } from '@/app/bootstrap';
+import { bindSensorSurface, connectSensor } from '@/app/bootstrap';
+import { setSoundOnHit } from '@/runtime/hitSound';
 import { KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 
 /** 편집기 표시 크기(Figma 720×320). 위치 값은 이 좌표계의 px로 보여 준다 */
