@@ -39,9 +39,16 @@ function StaffHead({ pad, x }: { pad: PadId; x: number }) {
   );
 }
 
+/**
+ * 이름·손발 글자의 기준선. 킥은 오선 아래 칸이라 기둥이 오선 아래로 약 25px 내려온다.
+ * 이름 글자(13px)가 그 기둥 끝보다 아래에서 시작하게 둔다(11/12, 겹쳐 보인다는 로컬 확인 반영)
+ */
+const NAME_Y = BOTTOM + 44;
+const LIMB_Y = NAME_Y + 17;
+
 export function PadNotation({ pads }: { pads: readonly PadId[] }) {
   const width = SIDE * 2 + COL * pads.length;
-  const height = BOTTOM + 56;
+  const height = LIMB_Y + 8;
   const names = pads.map((p) => PAD_META[p].label).join(', ');
   return (
     <div className="lesson-staff">
@@ -54,10 +61,10 @@ export function PadNotation({ pads }: { pads: readonly PadId[] }) {
           return (
             <g key={pad} data-pad={pad}>
               <StaffHead pad={pad} x={x} />
-              <text className="lesson-staff-name" x={x} y={BOTTOM + 30} textAnchor="middle">
+              <text className="lesson-staff-name" x={x} y={NAME_Y} textAnchor="middle">
                 {PAD_META[pad].label}
               </text>
-              <text className="lesson-staff-limb" x={x} y={BOTTOM + 48} textAnchor="middle">
+              <text className="lesson-staff-limb" x={x} y={LIMB_Y} textAnchor="middle">
                 {PAD_LIMB[pad]}
               </text>
             </g>
