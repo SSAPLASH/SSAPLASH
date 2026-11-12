@@ -63,6 +63,8 @@ export function SettingsPage() {
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
   const timingBar = useSettings((s) => s.timingBar);
   const setTimingBar = useSettings((s) => s.setTimingBar);
+  const yawAutoCorrect = useSettings((s) => s.yawAutoCorrect);
+  const setYawAutoCorrect = useSettings((s) => s.setYawAutoCorrect);
 
   const consentStatus = useRecommendationConsent((s) => s.status);
   const consent = useRecommendationConsent((s) => s.consent);
@@ -214,12 +216,14 @@ export function SettingsPage() {
 
           <section className="settings-section settings-section--play" aria-labelledby="settings-play">
             <h3 id="settings-play" className="settings-section-title">연주</h3>
-            <SettingRow label="실시간 코칭" help="리듬 게임·악보 연습 공통. 연주 중 늦음·빠름·연속 MISS 같은 신호를 드럼 옆 안내 칸에 3초간 띄워요.">
+            <SettingRow label="실시간 코칭" help="연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.">
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>
-            <p className="settings-note">연주를 시작할 때의 값이 그 판에 적용돼요. 끄면 코칭 문구가 뜨지 않아요.</p>
-            <SettingRow label="타이밍 막대" help="리듬 게임 판정선 아래·악보 아래에 최근 타격이 빠른지 늦은지를 눈금으로 보여줘요. 판정 범위를 벗어나면 막대 바깥에 빨간 점으로 보여줘요. 바로 적용되고, 이 기기에만 저장돼요.">
+            <SettingRow label="타이밍 막대" help="최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
+            </SettingRow>
+            <SettingRow label="패드 위치 자동 보정" help="틀어진 스틱 방향을 타격 위치로 바로잡아요.">
+              {(aria) => <Toggle {...aria} label="패드 위치 자동 보정" checked={yawAutoCorrect} onChange={setYawAutoCorrect} />}
             </SettingRow>
             <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
               {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}
