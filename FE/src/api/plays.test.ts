@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getBestRecords, listAllPlays } from './plays';
+import { getBestRecords, listPlays } from './plays';
 import { apiFetch } from './http';
 
 vi.mock('./http', () => ({ apiFetch: vi.fn() }));
@@ -25,22 +25,30 @@ describe('getBestRecords', () => {
   });
 });
 
-describe('listAllPlays', () => {
-  it('모든 페이지를 읽고 페이지 경계에서 중복된 playId를 제거한다', async () => {
-    vi.mocked(apiFetch).mockResolvedValueOnce({ items: [{ playId: 'a' }, { playId: 'b' }], hasNext: true })
-      .mockResolvedValueOnce({ items: [{ playId: 'b' }, { playId: 'c' }], hasNext: false });
+describe('listPlays', () => {
+  const page = { items: [{ playId: 'a' }], page: 0, size: 20, totalElements: 1, totalPages: 1, hasNext: false };
+
+  it('조건을 쿼리로 보낸다(검색어는 앞뒤 공백 제거)', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(page);
     const signal = new AbortController().signal;
-    expect((await listAllPlays(signal)).map((p) => p.playId)).toEqual(['a', 'b', 'c']);
-    expect(apiFetch).toHaveBeenNthCalledWith(1, '/api/v1/plays?page=0&size=100', { signal });
-    expect(apiFetch).toHaveBeenNthCalledWith(2, '/api/v1/plays?page=1&size=100', { signal });
+    expect(await listPlays({ q: '  별빛 ', from: '2026-11-06', to: '2026-11-12', mode: 'SHEET', sort: 'OLDEST', page: 2, size: 20 }, signal)).toBe(page);
+    const [url, init] = vi.mocked(apiFetch).mock.calls[0];
+    const parsed = new URL(url, 'http://x');
+    expect(parsed.pathname).toBe('/api/v1/plays');
+    expect(Object.fromEntries(parsed.searchParams)).toEqual({ q: '별빛', from: '2026-11-06', to: '2026-11-12', mode: 'SHEET', sort: 'OLDEST', page: '2', size: '20' });
+    expect(init).toEqual({ signal });
   });
 
-  it('실패나 중단은 빈 목록으로 취급하지 않는다', async () => {
+  it('값이 없는 조건은 넣지 않는다', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(page);
+    await listPlays({ q: '   ', page: 0, size: 20 });
+    expect(vi.mocked(apiFetch).mock.calls[0][0]).toBe('/api/v1/plays?page=0&size=20');
+    await listPlays();
+    expect(vi.mocked(apiFetch).mock.calls[1][0]).toBe('/api/v1/plays');
+  });
+
+  it('실패는 빈 목록으로 취급하지 않는다', async () => {
     vi.mocked(apiFetch).mockRejectedValueOnce(new Error('network'));
-    await expect(listAllPlays(new AbortController().signal)).rejects.toThrow('network');
-    const controller = new AbortController();
-    controller.abort();
-    vi.mocked(apiFetch).mockResolvedValueOnce({ items: [], hasNext: false });
-    await expect(listAllPlays(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(listPlays({ page: 0 })).rejects.toThrow('network');
   });
 });

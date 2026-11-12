@@ -41,17 +41,34 @@ export interface PlaySummary {
   hasReport: boolean;
 }
 
-/** 필터와 정렬이 클라이언트에서 전체 기록에 적용되도록 모든 페이지를 읽는다. */
-export async function listAllPlays(signal: AbortSignal): Promise<PlaySummary[]> {
-  const plays = new Map<string, PlaySummary>();
-  for (let page = 0; page <= 100000; page += 1) {
-    const result = await apiFetch<PageResponse<PlaySummary>>(`/api/v1/plays?page=${page}&size=100`, { signal });
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    for (const play of result.items) if (!plays.has(play.playId)) plays.set(play.playId, play);
-    if (!result.hasNext) return [...plays.values()];
-    if (result.items.length === 0) throw new Error('Invalid play page');
-  }
-  throw new Error('Too many play pages');
+/** `GET /api/v1/plays` 조건(BE 309). 서버가 검색·기간·모드·정렬을 처리한다 */
+export interface ListPlaysParams {
+  /** 곡 제목 부분 검색(접근할 수 있는 곡 제목만 대상) */
+  q?: string;
+  /** 종료일 범위, 한국 시간, 양 끝 포함(`YYYY-MM-DD`) */
+  from?: string;
+  to?: string;
+  /** 생략하면 전체 */
+  mode?: 'FREE' | 'RHYTHM' | 'SHEET' | 'TEMPO';
+  /** 종료 시각 기준. 생략하면 NEWEST */
+  sort?: 'NEWEST' | 'OLDEST';
+  page?: number;
+  size?: number;
+}
+
+/** `GET /api/v1/plays` — 본인 연주 기록 한 쪽. 값이 없는 쿼리는 넣지 않는다 */
+export function listPlays(params: ListPlaysParams = {}, signal?: AbortSignal): Promise<PageResponse<PlaySummary>> {
+  const qs = new URLSearchParams();
+  const q = params.q?.trim();
+  if (q) qs.set('q', q);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.mode) qs.set('mode', params.mode);
+  if (params.sort) qs.set('sort', params.sort);
+  if (params.page !== undefined) qs.set('page', String(params.page));
+  if (params.size !== undefined) qs.set('size', String(params.size));
+  const query = qs.toString();
+  return apiFetch<PageResponse<PlaySummary>>(query ? `/api/v1/plays?${query}` : '/api/v1/plays', { signal });
 }
 
 export interface PlayUploadResponse {

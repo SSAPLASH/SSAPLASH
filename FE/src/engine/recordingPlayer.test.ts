@@ -228,4 +228,150 @@ describe('RecordingPlayer', () => {
     await s.player.play([hit(0)]);
     expect(cb).not.toHaveBeenCalled();
   });
+
+  // ---- 일시정지·이어 재생·위치 옮기기 (338 녹음 재생바) ----
+  it('pause는 위치를 붙잡고 예약을 멈춘다. 이어 재생하면 그 위치부터 남은 타격만 예약한다', async () => {
+    const s = setup();
+    const events: RecordingPlayerEvent[] = [];
+    s.player.onState((e) => events.push(e));
+    await s.player.play([hit(0), hit(400), hit(800)], { durationMs: 1000 });
+    s.advance(250); // 위치 200
+    s.player.pause();
+    expect(s.player.playing).toBe(false);
+    expect(s.player.paused).toBe(true);
+    expect(s.player.active).toBe(true);
+    expect(s.hasTimer()).toBe(false);
+    expect(s.player.positionMs()).toBe(200);
+    const before = s.calls.length;
+    s.advance(5000);
+    expect(s.calls).toHaveLength(before);
+    expect(s.player.positionMs()).toBe(200);
+
+    const t = s.now();
+    await s.player.resume();
+    expect(s.player.playing).toBe(true);
+    expect(s.player.paused).toBe(false);
+    s.advance(1000);
+    // 이어 재생의 기준 시각 = now + 선행 − 붙잡은 위치
+    const start = t + PLAYER_START_LEAD_MS - 200;
+    expect(s.calls.slice(before).map((c) => c.whenMs)).toEqual([start + 400, start + 800]);
+    expect(events.map((e) => e.reason)).toEqual(['start', 'pause', 'resume', 'end']);
+    expect(events[1]).toEqual({ playing: false, reason: 'pause' });
+    expect(events[2]).toEqual({ playing: true, reason: 'resume' });
+  });
+
+  it('pause·resume은 해당 상태가 아니면 아무 일도 하지 않는다', async () => {
+    const s = setup();
+    const events: RecordingPlayerEvent[] = [];
+    s.player.onState((e) => events.push(e));
+    s.player.pause();
+    await s.player.resume();
+    expect(events).toEqual([]);
+    await s.player.play([hit(0), hit(500)]);
+    await s.player.resume(); // 재생 중 resume은 무시
+    s.player.pause();
+    s.player.pause(); // 두 번째는 무시
+    expect(events.map((e) => e.reason)).toEqual(['start', 'pause']);
+  });
+
+  it('재생 중 seek은 그 위치부터 다시 예약하고 positionMs가 따라간다', async () => {
+    const s = setup();
+    await s.player.play([hit(0), hit(400), hit(800)], { durationMs: 1000 });
+    s.advance(100);
+    const before = s.calls.length; // hit(0)만 예약됨
+    const t = s.now();
+    s.player.seek(700);
+    expect(s.player.positionMs()).toBe(700 - PLAYER_START_LEAD_MS); // 선행만큼 뒤에서 시작
+    s.advance(100);
+    expect(s.player.positionMs()).toBe(750);
+    s.advance(400);
+    const start = t + PLAYER_START_LEAD_MS - 700;
+    // 지나친 400은 건너뛰고 800만 예약
+    expect(s.calls.slice(before).map((c) => c.whenMs)).toEqual([start + 800]);
+    expect(s.player.playing).toBe(false); // 길이 1000에서 종료
+  });
+
+  it('뒤로 seek하면 지나간 타격을 다시 예약한다', async () => {
+    const s = setup();
+    await s.player.play([hit(0), hit(400), hit(800)], { durationMs: 1000 });
+    s.advance(600);
+    const before = s.calls.length; // 0·400 예약됨
+    s.player.seek(300);
+    s.advance(300);
+    expect(s.calls.slice(before).map((c) => c.pad)).toHaveLength(1); // 400을 다시
+    expect(s.player.playing).toBe(true);
+  });
+
+  it('일시정지 중 seek은 위치만 옮기고, 이어 재생하면 그 위치부터다', async () => {
+    const s = setup();
+    await s.player.play([hit(0), hit(400), hit(800)], { durationMs: 1000 });
+    s.advance(100);
+    s.player.pause();
+    const before = s.calls.length;
+    s.player.seek(600);
+    expect(s.player.positionMs()).toBe(600);
+    expect(s.calls).toHaveLength(before);
+    expect(s.hasTimer()).toBe(false);
+    await s.player.resume();
+    s.advance(1000);
+    expect(s.calls.slice(before)).toHaveLength(1); // 800만
+  });
+
+  it('seek은 0~길이로 자르고, 재생 대상이 없으면 무시한다', async () => {
+    const s = setup();
+    s.player.seek(500);
+    expect(s.player.positionMs()).toBe(0);
+    await s.player.play([hit(0), hit(500)], { durationMs: 1000 });
+    s.player.pause();
+    s.player.seek(-50);
+    expect(s.player.positionMs()).toBe(0);
+    s.player.seek(99_999);
+    expect(s.player.positionMs()).toBe(1000);
+    s.player.seek(Number.NaN);
+    expect(s.player.positionMs()).toBe(1000);
+  });
+
+  it('일시정지 중 stop은 stop 알림을 보내고 위치를 0으로 되돌린다', async () => {
+    const s = setup();
+    const onEnd = vi.fn();
+    const events: RecordingPlayerEvent[] = [];
+    s.player.onState((e) => events.push(e));
+    await s.player.play([hit(0), hit(500)], { onEnd });
+    s.advance(200);
+    s.player.pause();
+    s.player.stop();
+    expect(s.player.active).toBe(false);
+    expect(s.player.paused).toBe(false);
+    expect(s.player.positionMs()).toBe(0);
+    expect(events.at(-1)).toEqual({ playing: false, reason: 'stop' });
+    expect(onEnd).not.toHaveBeenCalled();
+    await s.player.resume(); // 정지 뒤 resume은 무시
+    expect(s.player.playing).toBe(false);
+  });
+
+  it('일시정지 중 새 play는 일시정지를 풀고 처음부터 재생한다', async () => {
+    const s = setup();
+    await s.player.play([hit(0), hit(500)]);
+    s.advance(200);
+    s.player.pause();
+    await s.player.play([hit(0, 'kick'), hit(100, 'kick')]);
+    expect(s.player.paused).toBe(false);
+    expect(s.player.playing).toBe(true);
+    expect(s.player.positionMs()).toBe(0);
+  });
+
+  it('ensure 대기 중인 resume은 그 사이 stop이 오면 재생하지 않는다', async () => {
+    let release: () => void = () => {};
+    let gate = false;
+    const s = setup(() => (gate ? new Promise<void>((r) => (release = r)) : Promise.resolve()));
+    await s.player.play([hit(0), hit(500)]);
+    s.player.pause();
+    gate = true;
+    const p = s.player.resume();
+    s.player.stop();
+    release();
+    await p;
+    expect(s.player.playing).toBe(false);
+    expect(s.hasTimer()).toBe(false);
+  });
 });

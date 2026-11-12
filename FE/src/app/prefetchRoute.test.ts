@@ -1,6 +1,6 @@
 // 메뉴 미리 받기 (설계 TECH-351 3절)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listAllPlays } from '@/api/plays';
+import { listPlays } from '@/api/plays';
 import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import type { UserMe } from '@/domain/auth';
@@ -15,7 +15,7 @@ import { loadRoute } from './routeModules';
 vi.mock('./routeModules', () => ({ loadRoute: vi.fn(() => Promise.resolve({ default: () => null })) }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
 vi.mock('@/features/studio/api/sheets', async (orig) => ({ ...(await orig<typeof import('@/features/studio/api/sheets')>()), listSheets: vi.fn() }));
-vi.mock('@/api/plays', async (orig) => ({ ...(await orig<typeof import('@/api/plays')>()), listAllPlays: vi.fn() }));
+vi.mock('@/api/plays', async (orig) => ({ ...(await orig<typeof import('@/api/plays')>()), listPlays: vi.fn() }));
 
 const setConnection = (c: object | undefined) => Object.defineProperty(navigator, 'connection', { value: c, configurable: true });
 const metronome = useLive.getState().metronome;
@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.mocked(loadRoute).mockClear();
   vi.mocked(listAllSongs).mockReset().mockResolvedValue([]);
   vi.mocked(listSheets).mockReset().mockResolvedValue({ items: [], hasNext: false });
-  vi.mocked(listAllPlays).mockReset().mockResolvedValue([]);
+  vi.mocked(listPlays).mockReset().mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false });
   useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
   useSongs.setState({ source: 'api', scope: 'BUILTIN' });
   useShellStore.setState({ immersive: false });
@@ -74,12 +74,13 @@ describe('prefetchRoute', () => {
     await vi.waitFor(() => expect(listAllSongs).toHaveBeenCalled());
     expect(vi.mocked(listAllSongs).mock.calls[0][0]).toMatchObject({ source: 'MINE', playableOnly: true });
   });
-  it('연주 기록: 연주 목록을 받고, 30초 안 두 번째 미리 받기는 요청하지 않는다', async () => {
+  it('연주 기록: 기본 조건의 첫 쪽만 받고, 30초 안 두 번째 미리 받기는 요청하지 않는다', async () => {
     prefetchRoute('/history');
-    await vi.waitFor(() => expect(listAllPlays).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(listPlays).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(listPlays).mock.calls[0][0]).toEqual({ sort: 'NEWEST', size: 20, page: 0 });
     prefetchRoute('/history');
     await Promise.resolve();
-    expect(listAllPlays).toHaveBeenCalledTimes(1);
+    expect(listPlays).toHaveBeenCalledTimes(1);
   });
   it('금지 조건이면 화면 코드도 데이터도 받지 않는다', () => {
     useShellStore.setState({ immersive: true });
