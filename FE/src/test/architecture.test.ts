@@ -1,26 +1,30 @@
 // 폴더 구조 의존 규칙 검사(설계 TECH-fe-feature-scaffolding 3-1). import 관계를 읽어 금지된 방향이 있으면 실패한다.
 // 규칙을 어기는 import를 새로 넣지 않는다. 불가피하면 ALLOWED에 이유와 함께 추가하고, 풀리면 지운다(남아 있어도 실패한다).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, normalize, relative } from 'node:path';
+import { join } from 'node:path';
+// 경로 비교는 `/` 기준이다. Windows에서도 같은 결과가 나오게 posix 경로 함수로 다룬다.
+import { dirname, join as joinPosix, normalize } from 'node:path/posix';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
+const SRC = join(fileURLToPath(new URL('..', import.meta.url)));
 
-function walk(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    return statSync(path).isDirectory() ? walk(path) : [relative(SRC, path)];
+function walk(dir: string, rel = ''): string[] {
+  return readdirSync(join(dir, rel)).flatMap((name) => {
+    const path = rel ? `${rel}/${name}` : name;
+    return statSync(join(dir, path)).isDirectory() ? walk(dir, path) : [path];
   });
 }
 
 const ALL = walk(SRC);
+// 목록이 비면 모든 규칙이 그냥 통과한다. 경로 처리가 깨지지 않았는지 먼저 본다.
+if (!ALL.includes('main.tsx')) throw new Error(`src 목록을 읽지 못했다: ${SRC}`);
 const EXISTS = new Set(ALL);
 /** 검사 대상: 테스트·테스트 보조를 뺀 소스 */
 const SOURCES = ALL.filter((f) => /\.tsx?$/.test(f) && !f.includes('.test.') && !f.startsWith('test/'));
 
 function resolveImport(from: string, spec: string): string | null {
-  const base = spec.startsWith('@/') ? spec.slice(2) : normalize(join(dirname(from), spec));
+  const base = spec.startsWith('@/') ? spec.slice(2) : normalize(joinPosix(dirname(from), spec));
   return [base, `${base}.ts`, `${base}.tsx`].find((c) => EXISTS.has(c)) ?? null;
 }
 
