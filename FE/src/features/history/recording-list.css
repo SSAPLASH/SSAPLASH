@@ -1,117 +1,129 @@
-/* 녹음 보관함(연주 기록 · 녹음 탭) 스타일. 접두사 rec-list-. 도구 줄·표 머리글·빈 상태는 history.css를 그대로 쓰고,
- * 여기에는 녹음 표의 열 폭·행·진행 바·⋯ 열·더 보기·토스트 영역만 둔다. */
+/* 녹음 보관함(연주 기록 · 녹음 탭) 스타일. 접두사 rec-list-·rec-playbar-. 도구 줄·목록 패널·제목 줄·보조 줄·빈 상태는 history.css를 그대로 쓰고,
+ * 여기에는 녹음 행의 칸·재생바 틀·타격 수·⋯·더 보기·토스트 영역만 둔다(설계 COACH-연주-기록-화면-개편 v1.4). */
 
-/* ---- 표 열 ----
- * 열 폭 = 내용 폭 + 좌우 8 안쪽 여백(셀 사이 간격 16). 첫 열 왼쪽·마지막 열 오른쪽은 16.
- * 내용 폭(Figma RecordingRow 523:31270, v0.5): 재생 32 · 모드 88 · 녹음 시각 148 · 길이 56 · 타격 72 · ⋯ 123. 머리글도 같은 col을 쓴다 */
-.rec-list-col-play {
-  width: 56px;
+/* ---- 행: 제목과 보조 줄 · 재생바 · 타격 수 · ⋯ ---- */
+.rec-list-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 72px 32px;
+  align-items: center;
+  gap: var(--space-l);
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-1);
 }
-.rec-list-col-mode {
-  width: 104px;
-}
-.rec-list-col-date {
-  width: 164px;
-}
-.rec-list-col-length {
-  width: 72px;
-}
-.rec-list-col-hits {
-  width: 88px;
-}
-.rec-list-col-more {
-  width: 147px;
-}
-
-.history-table.rec-list-table thead th,
-.history-table.rec-list-table tbody td {
-  padding-inline: 8px;
-}
-.history-table.rec-list-table thead th:first-child,
-.history-table.rec-list-table tbody td:first-child {
-  padding-left: var(--space-m);
-}
-.history-table.rec-list-table thead th:last-child,
-.history-table.rec-list-table tbody td:last-child {
-  padding-right: var(--space-m);
-}
-.rec-list-table thead th {
-  white-space: nowrap;
-}
-.history-table.rec-list-table thead th.rec-list-th-title {
-  text-align: center;
-}
-
-/* ---- 행 ---- */
-.history-table.rec-list-table tbody td {
-  height: 64px;
-  background: transparent;
-  font-size: 16px;
-}
-.history-table.rec-list-table tbody tr:last-child td {
+.rec-list-row:last-child {
   border-bottom: 0;
 }
-.history-table.rec-list-table tbody tr.playing td {
+.rec-list-row.playing {
   background: var(--surface-2);
 }
-.rec-list-mode {
-  color: var(--text-2);
-}
-.rec-list-num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
-.rec-list-title-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+/* 정보 칸은 플레이 기록 행과 같은 배치다(history.css): 넓은 화면은 제목 뒤에 모드·곡·녹음 시각을 한 줄로 이어 붙이고, 좁으면 제목 아래 줄.
+ * 재생바에 폭을 내주므로 보조 정보는 줄바꿈 없이 한 줄로 두고, 자리가 모자라면 곡 제목이 먼저 "…"으로 줄어든다 */
+.rec-list-row .history-row-sub {
+  flex-wrap: nowrap;
   min-width: 0;
-  padding-block: var(--space-s);
-}
-.rec-list-title {
-  max-width: 100%;
   overflow: hidden;
-  color: var(--text-1);
-  font-size: 16px;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rec-list-row .history-row-sub > span {
+  flex: none;
+}
+.rec-list-row .history-row-sub > .rec-list-song {
+  flex: 0 1 auto;
+}
+/* 넓은 화면: 제목과 보조 정보가 자리를 나눠 쓴다. 둘 다 내용 폭까지만 차지해 왼쪽으로 붙고, 모자라면 긴 쪽부터 줄어든다(보조 정보에서는 곡 제목이 줄어든다) */
+@media (min-width: 901px) {
+  .rec-list-row .history-row-info {
+    grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+  }
+  .rec-list-row .history-row-sub::before {
+    flex: none;
+  }
 }
 .rec-list-song {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  max-width: 100%;
+  gap: 6px;
   min-width: 0;
-  color: var(--text-2);
-  font-size: 14px;
+}
+/* 보조 줄의 구분점이 이 묶음에서는 flex 항목이 되어 gap이 한 번 더 붙는다. 뒤쪽 여백을 빼 다른 구분점과 간격을 맞춘다 */
+.history-row-sub > .rec-list-song::before {
+  flex: none;
+  margin-right: 0;
+}
+.rec-list-song > .song-level {
+  flex: none;
 }
 .rec-list-song-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 재생 진행 바: 제목 열 전체 폭 */
-.rec-list-progress {
-  align-self: stretch;
-  height: 10px;
-  overflow: hidden;
-  border-radius: 8px;
-  background: var(--surface-3);
+
+/* ---- 재생바 (RecordingPlayBar). 라이브러리 목록 줄의 곡 재생바(studio.css의 .song-playbar)와 같은 값이다 —
+ * 기능 폴더끼리 스타일을 나눠 쓰지 않으므로 틀만 옮겨 왔다. 조작부·막대는 공유 부품(song.css · SeekBar.css)이 그린다 ---- */
+.rec-playbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  min-height: 34px;
+  color: var(--text-1);
 }
-.rec-list-progress-fill {
-  height: 100%;
-  background: var(--brand);
+.rec-playbar-progress {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+/* 쉬는 상태·준비 중의 빈 막대(누를 수 없다). 재생 중 막대와 같은 자리·두께 */
+.rec-playbar-track {
+  display: block;
+  height: 3px;
+  margin: 6px 0;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+/* 준비 중(상세 조회·오디오 준비): 모양은 쉬는 상태 그대로 두고, 1초 넘게 걸릴 때만 ▶가 흐려진다.
+ * 페이지에서 처음 누른 클릭이면 브라우저가 오디오를 켜느라 0.2~0.4초가 걸려, 0.3초로 두면 ▶ 색이 잠깐 바뀌었다 돌아온다 */
+.rec-playbar.is-loading .playback-toggle {
+  color: var(--text-3);
+  transition: color 0s linear 1000ms;
+}
+
+/* 타격 수 */
+.rec-list-hits {
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  text-align: right;
+  white-space: nowrap;
 }
 .rec-list-more-cell {
   display: flex;
   justify-content: flex-end;
 }
-/* 머리글 마지막 열: 정렬 토글을 오른쪽 맞춤 */
-.rec-list-sort {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+
+/* 좁은 화면: 타격 수를 숨기고, 재생바는 막대·10초 버튼을 숨겨 ▶만 남긴다(라이브러리 목록 줄과 같은 규칙) */
+@media (max-width: 720px) {
+  .rec-list-row {
+    grid-template-columns: minmax(0, 1fr) auto 32px;
+    gap: 12px;
+    min-height: 72px;
+    padding: 12px;
+  }
+  .rec-list-hits,
+  .rec-playbar-progress,
+  .rec-playbar .playback-skip,
+  .rec-playbar .playback-skip-gap {
+    display: none;
+  }
 }
 
 /* ---- 아래 영역·오류 ---- */
@@ -199,9 +211,17 @@
   width: 160px;
 }
 
-/* 행의 ⋯ 팝오버가 표 틀(overflow hidden)에 잘리지 않게 한다. 행 바탕이 투명이라 둥근 모서리는 테두리로만 보인다 */
-.history-table-wrap.rec-list-table-wrap {
+/* 행의 ⋯ 팝오버가 목록 패널(overflow hidden)에 잘리지 않게 한다. 대신 재생 중 행의 바탕이 패널 모서리 밖으로 나가지 않게 첫·마지막 행을 굴린다 */
+.history-list.rec-list {
   overflow: visible;
+}
+.rec-list-row:first-child {
+  border-top-left-radius: calc(var(--radius-panel) - 1px);
+  border-top-right-radius: calc(var(--radius-panel) - 1px);
+}
+.rec-list-row:last-child {
+  border-bottom-right-radius: calc(var(--radius-panel) - 1px);
+  border-bottom-left-radius: calc(var(--radius-panel) - 1px);
 }
 
 /* 삭제 창(571:29597): 머리·본문·버튼 간격 16, 본문 두 줄 간격 4, [취소][삭제]가 폭을 반씩 나눠 채움(간격 8) */

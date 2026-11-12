@@ -1,11 +1,12 @@
-// 연주 기록 화면의 [녹음] 탭 본문 (Figma 연주 기록 · 녹음 탭 524:32144, Recording / RecordingRow 523:31333).
+// 연주 기록 화면의 [녹음] 탭 본문 (설계 COACH-연주-기록-화면-개편, 시안 v7). 플레이 기록 탭과 같은 행 목록이다.
 // 상태부(RecordingList)는 모드·정렬·검색어와 조회·재생 훅을 갖고, 표시부(RecordingBoard)는 props만 받아 그린다(서버 렌더 테스트 대상).
-// 열: 재생 · 제목·곡 · 모드 · 녹음 시각 · 길이 · 타격 · ⋯. 제목 변경·삭제 창은 상태부(RecordingList)가 띄운다.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+// 행: 제목(+보조 줄: 모드·곡·녹음 시각) · 재생바 · 타격 수 · ⋯. 제목 변경·삭제 창은 상태부(RecordingList)가 띄운다.
+// 재생바(RecordingPlayBar)는 라이브러리 목록 줄의 곡 재생바와 같은 모양으로 모든 행에 항상 보인다. 녹음 길이는 막대 끝의 남은 시간으로 보인다.
+// 기본 제목(`곡 제목 · M월 D일 HH:mm`) 그대로인 녹음은 곡 제목·시각이 두 번 나오지 않게 이름만 제목으로 보인다(recordingRowLabel).
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { Segmented } from '@/components/ui/Segmented';
@@ -17,16 +18,16 @@ import { midiFileName, recordingToMidi } from '@/domain/play/recordingMidi';
 import { downloadBlob } from '@/media/downloadFile';
 import {
   formatHitCount,
-  formatRecordingLength,
   recordingCountLabel,
   recordingModeName,
+  recordingRowLabel,
   songDifficulty,
 } from '@/domain/play/recordingView';
 import { formatPlayDate } from '@/domain/play/playLogView';
 import './history.css';
-import '@/components/ui/table.css';
 import './recording-list.css';
 import { RecordingDeleteDialog } from './RecordingDeleteDialog';
+import { RecordingPlayBar, type RecordingPlayPhase } from './RecordingPlayBar';
 import { RecordingTitleDialog } from './RecordingTitleDialog';
 import { useRecordingList, type RecordingModeFilter } from './useRecordingList';
 import { useRecordingPlayback } from './useRecordingPlayback';
@@ -34,9 +35,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 
 const MODES: { value: RecordingModeFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },
-  { value: 'FREE', label: '자유' },
-  { value: 'RHYTHM', label: '게임' },
-  { value: 'SHEET', label: '악보' },
+  { value: 'FREE', label: '자유 연습' },
+  { value: 'RHYTHM', label: '리듬 게임' },
+  { value: 'SHEET', label: '악보 연습' },
 ];
 
 const SORTS: { value: RecordingSort; label: string }[] = [
@@ -54,89 +55,66 @@ const MENU_ITEMS_WITH_MIDI = [{ key: 'midi', label: 'MIDI로 내보내기' }, ..
 
 const TOAST_MS = 4000;
 
-function PlayGlyph() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor" stroke="none">
-      <path d="M4.5 2.8v10.4a.6.6 0 0 0 .92.5l8.2-5.2a.6.6 0 0 0 0-1L5.42 2.3a.6.6 0 0 0-.92.5Z" />
-    </svg>
-  );
-}
-
-function PauseGlyph() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor" stroke="none">
-      <rect x="3.5" y="2.5" width="3.2" height="11" rx="1" />
-      <rect x="9.3" y="2.5" width="3.2" height="11" rx="1" />
-    </svg>
-  );
-}
-
 interface RowProps {
   item: RecordingSummary;
+  /** 재생 대상 행(재생 중이거나 일시정지) */
   playing: boolean;
+  paused: boolean;
   loading: boolean;
-  progress: number;
+  positionMs: number;
   onToggle: (item: RecordingSummary) => void;
-  onRename?: (item: RecordingSummary) => void;
-  onDelete?: (item: RecordingSummary) => void;
-  onExportMidi?: (item: RecordingSummary) => void;
+  onSeek: (ms: number) => void;
+  onRename: (item: RecordingSummary) => void;
+  onDelete: (item: RecordingSummary) => void;
+  onExportMidi: (item: RecordingSummary) => void;
 }
 
-function RecordingRow({ item, playing, loading, progress, onToggle, onRename, onDelete, onExportMidi }: RowProps) {
+// memo: 재생 중에는 위치가 매 프레임 바뀐다. 재생 대상이 아닌 행은 props가 그대로라 다시 그리지 않는다
+// (전부 다시 그리면 20행 × 초당 60번이라 화면이 끊긴다). 그래서 콜백은 표시부가 고정된 것을 넘긴다
+const RecordingRow = memo(function RecordingRow({ item, playing, paused, loading, positionMs, onToggle, onSeek, onRename, onDelete, onExportMidi }: RowProps) {
   const level = item.song ? songDifficulty(item.song.difficulty) : null;
-  const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  // 기본 제목 그대로인 녹음은 곡 제목·녹음 시각이 보조 정보와 겹치지 않게 이름만 보인다
+  const label = recordingRowLabel(item);
+  const phase: RecordingPlayPhase = playing ? (paused ? 'paused' : 'playing') : loading ? 'loading' : 'idle';
   const pick = (key: string) => {
-    if (key === 'rename') onRename?.(item);
-    else if (key === 'delete') onDelete?.(item);
-    else if (key === 'midi') onExportMidi?.(item);
+    if (key === 'rename') onRename(item);
+    else if (key === 'delete') onDelete(item);
+    else if (key === 'midi') onExportMidi(item);
   };
   return (
-    <tr className={playing ? 'rec-list-row playing' : 'rec-list-row'}>
-      <td>
-        <IconButton
-          size="sm"
-          label={playing ? '정지' : '재생'}
-          aria-busy={loading || undefined}
-          onClick={() => onToggle(item)}
-        >
-          {playing ? <PauseGlyph /> : <PlayGlyph />}
-        </IconButton>
-      </td>
-      <td>
-        <div className="rec-list-title-cell">
-          <span className="rec-list-title">{item.title}</span>
-          {item.song ? (
+    <li className={playing ? 'rec-list-row playing' : 'rec-list-row'}>
+      <div className="history-row-info">
+        <div className="history-row-title-line">
+          <span className="history-row-title">{label.title}</span>
+          {label.songInTitle && level ? <LevelBadge level={level} size="sm" /> : null}
+          {item.hitCount === 0 ? <span className="history-chip">타격 없음</span> : null}
+        </div>
+        <div className="history-row-sub">
+          {label.showMode ? <span>{recordingModeName(item.mode)}</span> : null}
+          {item.song && !label.songInTitle ? (
             <span className="rec-list-song">
               <span className="rec-list-song-title">{item.song.title}</span>
               {level ? <LevelBadge level={level} size="sm" /> : null}
             </span>
           ) : null}
-          {playing ? (
-            <div
-              className="rec-list-progress"
-              role="progressbar"
-              aria-label="재생 진행"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={percent}
-            >
-              <div className="rec-list-progress-fill" style={{ width: `${percent}%` }} />
-            </div>
-          ) : null}
+          <span className="history-num">{formatPlayDate(item.startedAt)}</span>
         </div>
-      </td>
-      <td className="rec-list-mode">{recordingModeName(item.mode)}</td>
-      <td className="rec-list-num">{formatPlayDate(item.startedAt)}</td>
-      <td className="rec-list-num">{formatRecordingLength(item.durationMs)}</td>
-      <td className="rec-list-num">{formatHitCount(item.hitCount)}</td>
-      <td>
-        <div className="rec-list-more-cell">
-          <MoreMenu label={`${item.title} 메뉴`} items={item.hitCount > 0 ? MENU_ITEMS_WITH_MIDI : MENU_ITEMS} onPick={pick} />
-        </div>
-      </td>
-    </tr>
+      </div>
+      <RecordingPlayBar
+        title={item.title}
+        durationMs={item.durationMs}
+        phase={phase}
+        positionMs={positionMs}
+        onToggle={() => onToggle(item)}
+        onSeek={onSeek}
+      />
+      <span className="rec-list-hits">{formatHitCount(item.hitCount)}</span>
+      <div className="rec-list-more-cell">
+        <MoreMenu label={`${item.title} 메뉴`} items={item.hitCount > 0 ? MENU_ITEMS_WITH_MIDI : MENU_ITEMS} onPick={pick} />
+      </div>
+    </li>
   );
-}
+});
 
 export interface RecordingBoardProps {
   items: RecordingSummary[];
@@ -150,15 +128,21 @@ export interface RecordingBoardProps {
   mode: RecordingModeFilter;
   sort: RecordingSort;
   q: string;
+  /** 재생 대상 행(재생 중이거나 일시정지) */
   playingId: number | null;
   loadingId: number | null;
-  progress: number;
+  /** 재생 대상이 일시정지 상태다 */
+  paused?: boolean;
+  /** 재생 대상의 위치(ms) */
+  positionMs: number;
   onModeChange?: (mode: RecordingModeFilter) => void;
   onSortChange?: (sort: RecordingSort) => void;
   onQueryChange?: (q: string) => void;
   onLoadMore?: () => void;
   onRetry?: () => void;
   onToggle?: (item: RecordingSummary) => void;
+  /** 재생바로 위치 옮기기 */
+  onSeek?: (ms: number) => void;
   onRename?: (item: RecordingSummary) => void;
   onDelete?: (item: RecordingSummary) => void;
   onExportMidi?: (item: RecordingSummary) => void;
@@ -177,17 +161,34 @@ export function RecordingBoard({
   q,
   playingId,
   loadingId,
-  progress,
+  paused = false,
+  positionMs,
   onModeChange,
   onSortChange,
   onQueryChange,
   onLoadMore,
   onRetry,
   onToggle,
+  onSeek,
   onRename,
   onDelete,
   onExportMidi,
 }: RecordingBoardProps) {
+  // 행에 넘길 콜백은 한 번만 만들고(행 memo가 깨지지 않게) 부를 때 최신 props를 읽는다
+  const latest = useRef({ onToggle, onSeek, onRename, onDelete, onExportMidi });
+  useEffect(() => {
+    latest.current = { onToggle, onSeek, onRename, onDelete, onExportMidi };
+  });
+  const rowHandlers = useMemo(
+    () => ({
+      toggle: (item: RecordingSummary) => latest.current.onToggle?.(item),
+      seek: (ms: number) => latest.current.onSeek?.(ms),
+      rename: (item: RecordingSummary) => latest.current.onRename?.(item),
+      remove: (item: RecordingSummary) => latest.current.onDelete?.(item),
+      exportMidi: (item: RecordingSummary) => latest.current.onExportMidi?.(item),
+    }),
+    [],
+  );
   const hasCondition = mode !== 'ALL' || q.trim() !== '';
   const firstLoading = loading && items.length === 0;
   const showCount = !firstLoading && !error;
@@ -212,54 +213,23 @@ export function RecordingBoard({
   } else {
     body = (
       <>
-        <div className="history-table-wrap rec-list-table-wrap">
-          <table className="ui-table history-table rec-list-table" aria-label="녹음 보관함">
-            <colgroup>
-              <col className="rec-list-col-play" />
-              <col />
-              <col className="rec-list-col-mode" />
-              <col className="rec-list-col-date" />
-              <col className="rec-list-col-length" />
-              <col className="rec-list-col-hits" />
-              <col className="rec-list-col-more" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">
-                  <span className="history-visually-hidden">재생</span>
-                </th>
-                <th scope="col" className="rec-list-th-title">
-                  제목 · 곡
-                </th>
-                <th scope="col">모드</th>
-                <th scope="col">녹음 시각</th>
-                <th scope="col">길이</th>
-                <th scope="col">타격</th>
-                <th scope="col">
-                  <span className="history-visually-hidden">메뉴</span>
-                  <div className="rec-list-sort">
-                    <Segmented options={SORTS} value={sort} onChange={(v) => onSortChange?.(v)} label="정렬" />
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <RecordingRow
-                  key={item.id}
-                  item={item}
-                  playing={item.id === playingId}
-                  loading={item.id === loadingId}
-                  progress={item.id === playingId ? progress : 0}
-                  onToggle={(it) => onToggle?.(it)}
-                  onRename={onRename}
-                  onDelete={onDelete}
-                  onExportMidi={onExportMidi}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="history-list rec-list" aria-label="녹음 보관함">
+          {items.map((item) => (
+            <RecordingRow
+              key={item.id}
+              item={item}
+              playing={item.id === playingId}
+              paused={item.id === playingId && paused}
+              loading={item.id === loadingId}
+              positionMs={item.id === playingId ? positionMs : 0}
+              onToggle={rowHandlers.toggle}
+              onSeek={rowHandlers.seek}
+              onRename={rowHandlers.rename}
+              onDelete={rowHandlers.remove}
+              onExportMidi={rowHandlers.exportMidi}
+            />
+          ))}
+        </ul>
         {hasNext ? (
           <div className="rec-list-more">
             <Button variant="secondary" size="sm" disabled={loadingMore} onClick={onLoadMore}>
@@ -274,20 +244,19 @@ export function RecordingBoard({
   return (
     <>
       <div className="history-toolbar">
-        <p className="history-count">{showCount ? recordingCountLabel(total) : null}</p>
-        <div className="history-tools">
-          <Segmented options={MODES} value={mode} onChange={(v) => onModeChange?.(v)} label="모드 필터" />
-          <Input
-            compact
-            className="history-search"
-            label="제목 검색"
-            placeholder="제목 검색"
-            type="search"
-            value={q}
-            onChange={(e) => onQueryChange?.(e.target.value)}
-          />
-        </div>
+        <Input
+          compact
+          className="history-search"
+          label="제목 검색"
+          placeholder="제목 검색"
+          type="search"
+          value={q}
+          onChange={(e) => onQueryChange?.(e.target.value)}
+        />
+        <Segmented options={MODES} value={mode} onChange={(v) => onModeChange?.(v)} label="모드 필터" />
+        <Segmented className="history-toolbar-end" options={SORTS} value={sort} onChange={(v) => onSortChange?.(v)} label="정렬" />
       </div>
+      {showCount ? <p className="history-count">{recordingCountLabel(total)}</p> : null}
       {body}
     </>
   );
@@ -392,13 +361,15 @@ export function RecordingList() {
         q={q}
         playingId={playback.playingId}
         loadingId={playback.loadingId}
-        progress={playback.progress}
+        paused={playback.paused}
+        positionMs={playback.positionMs}
         onModeChange={setMode}
         onSortChange={setSort}
         onQueryChange={setQ}
         onLoadMore={list.loadMore}
         onRetry={list.reload}
         onToggle={playback.toggle}
+        onSeek={playback.seek}
         onRename={(item) => setEditing({ kind: 'rename', item })}
         onDelete={(item) => setEditing({ kind: 'delete', item })}
         onExportMidi={exportMidi}

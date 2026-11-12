@@ -1,6 +1,6 @@
 // 메뉴 hover·포커스 시 다음 화면의 코드와 대표 데이터를 미리 받는다 (설계 TECH-351 3절).
 // 연주 중·데이터 절약·2G 이하·비로그인에서는 받지 않는다. 받은 데이터는 같은 30초 신선 규칙을 따른다.
-import { playListQuery } from '@/api/queries/plays';
+import { DEFAULT_PLAY_LIST, playPageQuery } from '@/api/queries/plays';
 import { sheetListQuery } from '@/features/studio/api/queries/sheets';
 import { mineSongsQuery, songListQuery } from '@/api/queries/songs';
 import { useAuth } from '@/store/authStore';
@@ -49,7 +49,8 @@ function prefetchData(path: string): void {
     if (SHEET_ARCHIVE_ENABLED) void queryClient.prefetchQuery(sheetListQuery());
   } else if (path === '/history') {
     const userId = useAuth.getState().user?.id;
-    if (userId != null) void queryClient.prefetchQuery(playListQuery(userId));
+    // 연주 기록 화면이 처음 읽는 조건(전체·최신순)의 첫 쪽
+    if (userId != null) void queryClient.prefetchInfiniteQuery(playPageQuery(userId, DEFAULT_PLAY_LIST));
   }
 }
 

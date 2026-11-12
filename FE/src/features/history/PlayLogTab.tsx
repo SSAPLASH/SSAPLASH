@@ -1,35 +1,46 @@
-// 서버 기록과 이 기기에만 남은 기록을 합쳐 필터·검색·정렬·10행 페이지를 적용한다.
-// 로컬 기록의 곡 삭제 판정은 useDeletedSongIds, 서버 기록은 목록의 접근 가능 여부를 쓴다.
-import { useMemo, useState } from 'react';
+// 플레이 기록 탭 (설계 COACH-연주-기록-화면-개편). 서버 기록을 쪽 단위로 받아 날짜별로 묶어 보인다.
+// 검색·모드·기간·정렬은 서버가 처리하고(usePlayLogList), 아직 서버에 없는 이 브라우저의 기록은 같은 조건을 화면에서 적용해 시각 순서로 섞는다.
+// 그런 기록은 행 오른쪽에 저장 상태로 구분한다. 로그인 없는 빌드는 서버 없이 이 브라우저의 기록만 보인다.
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { PlaySummary } from '@/api/plays';
-import { playListQuery } from '@/api/queries/plays';
-import { useApiQuery } from '@/runtime/useApiQuery';
-import { HistoryTable, type HistoryServerRow } from './HistoryTable';
+import { PlayLogRow } from './PlayLogRow';
+import { localRowView, serverRowView, type PlayRowView } from './playLogRows';
+import { usePlayLogList } from './usePlayLogList';
 import './history.css';
 import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';
 import { Button } from '@/components/ui/Button';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { InlineError } from '@/components/ui/InlineError';
 import { Input } from '@/components/ui/Input';
 import { Segmented } from '@/components/ui/Segmented';
 import {
   filterPlayLogs,
-  HISTORY_PAGE_SIZE,
-  pageInfo,
+  groupByDay,
+  inPeriod,
+  mergeUnsaved,
+  periodRange,
   searchPlayLogs,
-  sortPlayLogs,
+  unsavedLogs,
   type HistoryFilter,
+  type HistoryPeriod,
   type PlayLogSort,
 } from '@/domain/play/playLogView';
 import { loadPlayLogs } from '@/engine/playLog';
+import { startPlaySync, usePlaySync } from '@/runtime/playSync';
 import { useAuth } from '@/store/authStore';
-import { InlineError } from '@/components/ui/InlineError';
 
 const FILTERS: { value: HistoryFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },
-  { value: 'RHYTHM', label: '게임' },
-  { value: 'SHEET', label: '악보' },
+  { value: 'RHYTHM', label: '리듬 게임' },
+  { value: 'SHEET', label: '악보 연습' },
+];
+
+const PERIODS: { value: HistoryPeriod; label: string }[] = [
+  { value: 'ALL', label: '전체 기간' },
+  { value: '7D', label: '7일' },
+  { value: '30D', label: '30일' },
 ];
 
 const SORTS: { value: PlayLogSort; label: string }[] = [
@@ -37,62 +48,72 @@ const SORTS: { value: PlayLogSort; label: string }[] = [
   { value: 'OLDEST', label: '오래된' },
 ];
 
-/** 처음 상태. 서버 렌더 테스트에서 검색·정렬 결과를 확인하려고 둔 시작값이며 화면에서는 쓰지 않는다 */
-export interface PlayLogTabProps {
-  initialQuery?: string;
-  initialSort?: PlayLogSort;
-}
+const rowTime = (row: PlayRowView) => row.at;
 
-export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLogTabProps = {}) {
+export function PlayLogTab() {
   const status = useAuth((s) => s.status);
   const userId = useAuth((s) => s.user?.id ?? null);
-  // 서버 기록은 서버 데이터 캐시로 읽는다(설계 TECH-351). 사용자가 바뀌면 캐시가 비워진다(app/queryAuthBinding)
-  const server = useApiQuery({ ...playListQuery(userId ?? 0), enabled: status === 'authenticated' && userId != null });
-  const localLogs = useMemo(() => status === 'anonymous' || (status === 'authenticated' && userId != null) ? loadPlayLogs() : [], [status, userId]);
-  // 읽기 전이면 null, 실패면 plays null (기존 표시 규칙 유지)
-  const serverPlays = server.data;
-  const current: { plays: PlaySummary[] | null } | null = useMemo(
-    () => (server.status === 'ready' ? { plays: serverPlays ?? [] } : server.status === 'error' ? { plays: null } : null),
-    [server.status, serverPlays],
-  );
-  const logs = useMemo(() => {
-    const plays = current?.plays ?? [];
-    const ids = new Set(plays.map((p) => p.playId));
-    const localIds = new Set(localLogs.map((log) => log.playId));
-    const server: HistoryServerRow[] = plays.map((play) => ({
-      source: 'server', play, playId: play.playId,
-      title: play.songTitle ?? '제목 없는 연주',
-      mode: play.mode, difficulty: play.difficulty ?? '', startedAt: play.startedAt, hasLocal: localIds.has(play.playId),
-    }));
-    return [...server, ...localLogs.filter((log) => !ids.has(log.playId))];
-  }, [current, localLogs]);
+  const authed = status === 'authenticated' && userId != null;
   const [filter, setFilter] = useState<HistoryFilter>('ALL');
-  const [q, setQ] = useState(initialQuery);
-  const [sort, setSort] = useState<PlayLogSort>(initialSort);
-  const [rawPage, setRawPage] = useState(0);
+  const [period, setPeriod] = useState<HistoryPeriod>('ALL');
+  const [sort, setSort] = useState<PlayLogSort>('NEWEST');
+  const [q, setQ] = useState('');
+  // 날짜 묶음(오늘·어제)과 기간 계산의 기준 시각. 조건을 바꿀 때마다 새로 잡아, 화면을 켜 둔 채 자정을 넘겨도 맞게 한다
+  const [now, setNow] = useState(() => new Date());
+  /** 조건을 바꾸는 조작에 기준 시각 갱신을 붙인다 */
+  const fresh = <T,>(set: (value: T) => void) => (value: T) => {
+    set(value);
+    setNow(new Date());
+  };
 
-  const visible = useMemo(
-    () => sortPlayLogs(searchPlayLogs(filterPlayLogs(logs, filter), q), sort),
-    [logs, filter, q, sort],
-  );
-  const info = pageInfo(visible.length, rawPage);
-  const rows = visible.slice(info.page * HISTORY_PAGE_SIZE, (info.page + 1) * HISTORY_PAGE_SIZE);
+  const list = usePlayLogList(authed ? userId : null, { mode: filter, period, sort, q }, now);
+  // 이 브라우저의 로그(계정별 저장이라 계정이 바뀌면 다시 읽는다). 로그인 없는 빌드는 공용 키의 로그다
+  const localLogs = useMemo(() => (status === 'anonymous' || (status === 'authenticated' && userId != null) ? loadPlayLogs() : []), [status, userId]);
+  const live = usePlaySync((s) => s.states);
   const deletedIds = useDeletedSongIds(localLogs);
 
-  if (status === 'unknown' || status === 'restoring' || (status === 'authenticated' && (!userId || !current))) {
+  // 올리다 끊긴 기록(창을 닫아 UPLOADING으로 남은 것)은 들어올 때 다시 보낸다. 진행 중이면 startPlaySync가 그 요청을 그대로 돌려준다
+  useEffect(() => {
+    if (!authed) return;
+    for (const log of localLogs) if (log.upload?.status === 'UPLOADING') void startPlaySync(log.playId);
+  }, [authed, localLogs]);
+
+  const rows = useMemo(() => {
+    const serverIds = new Set(list.items.map((p) => p.playId));
+    const localIds = new Set(localLogs.map((l) => l.playId));
+    const server = list.items.map((p) => serverRowView(p, localIds.has(p.playId)));
+    // 로그인 없는 빌드는 서버가 없으므로 이 브라우저의 로그가 전부다
+    const pending = authed ? unsavedLogs(localLogs, serverIds, live) : localLogs;
+    const range = periodRange(period, now);
+    const local = searchPlayLogs(filterPlayLogs(pending, filter), list.appliedQ)
+      .map((log) => localRowView(log, { deleted: log.songNumericId != null && deletedIds.has(log.songNumericId), upload: live[log.playId] ?? log.upload, showSave: authed }))
+      .filter((row) => inPeriod(row.at, range));
+    return {
+      merged: mergeUnsaved(server, local, { sort, hasNext: list.hasNext, serverTime: rowTime, localTime: rowTime }),
+      total: list.total + local.length,
+    };
+  }, [list.items, list.total, list.hasNext, list.appliedQ, localLogs, live, deletedIds, authed, filter, period, sort, now]);
+
+  if (status === 'unknown' || status === 'restoring' || (status === 'authenticated' && userId == null)) {
     return <p role="status">연주 기록을 불러오는 중…</p>;
   }
 
-  const error = status === 'authenticated' && current?.plays === null;
-  // 기록이 하나도 없으면 오류 줄이 본문에 혼자 뜨므로 크게 그린다
-  const errorNotice = error ? <InlineError size={logs.length === 0 ? 'lg' : 'md'} onRetry={server.refetch}>서버 기록을 불러오지 못했어요.</InlineError> : null;
+  const plain = filter === 'ALL' && period === 'ALL' && q.trim() === '' && list.appliedQ.trim() === '';
+  const clear = () => {
+    setFilter('ALL');
+    setPeriod('ALL');
+    setQ('');
+    setNow(new Date());
+  };
 
-  if (logs.length === 0) {
-    if (error) return errorNotice;
+  // 처음 읽는 동안, 그리고 조건 없이 아무 기록도 없을 때는 도구 줄 없이 상태만 보인다
+  if (plain && rows.merged.length === 0) {
+    if (list.loading) return <p role="status">연주 기록을 불러오는 중…</p>;
+    if (list.error) return <ErrorState size="lg" title="연주 기록을 불러오지 못했어요" description="네트워크를 확인하고 다시 시도해 주세요." onRetry={list.reload} />;
     return (
       <EmptyState
         title="아직 연주 기록이 없어요"
-        description="곡을 골라 연주하면 여기에 쌓여요."
+        description="곡을 골라 연주하면 여기에 날짜별로 쌓여요."
         action={
           <Link to="/play" className={buttonClassName({ variant: 'primary', size: 'md' })}>
             리듬 게임 시작
@@ -102,75 +123,74 @@ export function PlayLogTab({ initialQuery = '', initialSort = 'NEWEST' }: PlayLo
     );
   }
 
-  // 조건이 바뀌면 첫 쪽부터 다시 본다
-  const pickFilter = (value: HistoryFilter) => {
-    setFilter(value);
-    setRawPage(0);
-  };
-  const changeQuery = (value: string) => {
-    setQ(value);
-    setRawPage(0);
-  };
-  const pickSort = (value: PlayLogSort) => {
-    setSort(value);
-    setRawPage(0);
-  };
+  const groups = groupByDay(rows.merged, rowTime, now);
+  const retry = (playId: string) => void startPlaySync(playId);
 
   return (
     <>
-      {errorNotice}
       <div className="history-toolbar">
-        <p className="history-count">전체 기록 {visible.length}개</p>
-        <div className="history-tools">
-          <Segmented options={FILTERS} value={filter} onChange={pickFilter} label="모드 필터" />
-          <Input
-            compact
-            className="history-search"
-            label="곡 제목 검색"
-            placeholder="곡 제목 검색"
-            type="search"
-            value={q}
-            onChange={(e) => changeQuery(e.target.value)}
-          />
-        </div>
+        {/* 서버가 100자를 넘는 검색어를 400으로 거부한다(BE 309) */}
+        <Input compact className="history-search" label="곡 제목 검색" placeholder="곡 제목 검색" type="search" maxLength={100} value={q} onChange={(e) => fresh(setQ)(e.target.value)} />
+        <Segmented options={FILTERS} value={filter} onChange={fresh(setFilter)} label="모드 필터" />
+        <Segmented options={PERIODS} value={period} onChange={fresh(setPeriod)} label="기간" />
+        <Segmented className="history-toolbar-end" options={SORTS} value={sort} onChange={fresh(setSort)} label="정렬" />
       </div>
 
-      {visible.length === 0 ? (
-        <EmptyState size="sm" title="조건에 맞는 기록이 없어요" />
-      ) : (
-        <>
-          <HistoryTable
-            logs={rows}
-            deletedIds={deletedIds}
-            sortSlot={<Segmented options={SORTS} value={sort} onChange={pickSort} label="정렬" />}
+      <p className="history-count">
+        <strong>{rows.total}</strong>개 기록
+      </p>
+
+      {list.error ? (
+        <InlineError size="md" onRetry={list.reload}>
+          서버 기록을 불러오지 못했어요.
+        </InlineError>
+      ) : null}
+
+      {rows.merged.length === 0 ? (
+        list.loading ? (
+          <p className="history-filter-empty" role="status">
+            불러오는 중…
+          </p>
+        ) : list.error ? null : (
+          <EmptyState
+            size="sm"
+            title="조건에 맞는 기록이 없어요"
+            description="검색어나 기간을 바꿔 보세요."
+            action={
+              <Button variant="text" size="sm" onClick={clear}>
+                조건 지우기
+              </Button>
+            }
           />
-          <div className="history-pager">
-            <p className="history-range">
-              {info.from}–{info.to} / {visible.length}개
-            </p>
-            <nav className="history-pager-nav" aria-label="페이지 이동">
-              <Button variant="text" size="sm" disabled={info.page === 0} onClick={() => setRawPage(info.page - 1)}>
-                이전
-              </Button>
-              {Array.from({ length: info.pageCount }, (_, i) => (
-                <Button
-                  key={i}
-                  variant="text"
-                  size="sm"
-                  className="history-page-no"
-                  aria-current={i === info.page ? 'page' : undefined}
-                  onClick={() => setRawPage(i)}
-                >
-                  {i + 1}
-                </Button>
-              ))}
-              <Button variant="text" size="sm" disabled={info.page >= info.pageCount - 1} onClick={() => setRawPage(info.page + 1)}>
-                다음
-              </Button>
-            </nav>
-          </div>
-        </>
+        )
+      ) : (
+        <div className="history-groups">
+          {groups.map((group) => (
+            <section key={group.key} className="history-group" aria-label={group.label}>
+              <div className="history-group-head">
+                <h2>{group.label}</h2>
+                <span>{group.items.length}판</span>
+              </div>
+              <ul className="history-list">
+                {group.items.map((row) => (
+                  <PlayLogRow key={row.playId} row={row} onRetry={retry} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
+
+      {list.hasNext ? (
+        <div className="history-more">
+          <Button variant="secondary" size="sm" disabled={list.loadingMore} onClick={list.loadMore}>
+            {list.loadingMore ? '불러오는 중…' : '더 보기'}
+            <span className="history-more-count">
+              {rows.merged.length}/{rows.total}
+            </span>
+          </Button>
+        </div>
+      ) : null}
     </>
   );
 }
