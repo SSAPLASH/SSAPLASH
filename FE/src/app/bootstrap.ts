@@ -19,6 +19,7 @@ import type { PadId } from '@/domain/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
 import { startAudioDiag } from './audioDiag';
+import { startYawAutoDiag } from './yawAutoDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
@@ -133,6 +134,7 @@ export function bootstrapInput(): void {
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
+    yawDriftMonitor.setAuto(s.yawAutoCorrect);
     audioEngine.setVolume(s.volume);
     audioEngine.setDrumVolume(s.drumVolume);
     audioEngine.setSongVolume(s.songVolume);
@@ -278,6 +280,9 @@ export function bootstrapInput(): void {
     latency: audioEngine.latency(),
     timingCal: useSettings.getState().timingCal,
   }));
+  // 패드 위치 자동 보정 켬·끔 진단 줄: 10초마다 + 곡 시작 직후 1회 + 값이 바뀔 때
+  const yawAutoDiag = startYawAutoDiag(() => useSettings.getState().yawAutoCorrect);
+  useSettings.subscribe(() => yawAutoDiag.sync());
   startRelay();
   startTelemetry();
   preloadKitSpritesWhenIdle();
