@@ -201,7 +201,7 @@ export function FreePlayPage() {
 
         <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`} data-pointer-strike="">
           <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <DrumKit fitWidth effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
+            <DrumKit fitContain effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
           </div>
         </div>
 
