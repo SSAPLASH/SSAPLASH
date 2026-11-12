@@ -378,6 +378,38 @@ p {
 .side-icon {
   flex: none;
 }
+/* 「악보 연습」 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴, 시안 v4). 세로 선·활성 막대·숫자 없이 들여쓰기와 배경색으로만 구분한다.
+ * 상자는 부모 항목과 좌우 끝을 맞추고 글자만 24px에서 시작한다(부모 라벨은 44px). 현재 위치 표시(.side-active-mark)는 부모에만 둔다 */
+.side-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 메뉴 간격(--space-s)을 줄여 부모 바로 아래에 붙인다 */
+  margin: calc(2px - var(--space-s)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.side-sub-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-m) 0 24px;
+  box-sizing: border-box;
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.side-sub-item:hover {
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.side-sub-item[aria-current='page'] {
+  background: var(--brand-tint);
+  color: var(--brand-text);
+  font-weight: 600;
+}
 .side-badge {
   position: absolute;
   top: 10px;
