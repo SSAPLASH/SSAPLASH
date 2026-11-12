@@ -23,6 +23,8 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  /* 점 아래 「연결 안 됨」이 한 줄로 들어가도록 점(56)보다 넓게 둔다 */
+  min-width: 72px;
 }
 .stick-dot {
   display: flex;
@@ -47,6 +49,7 @@
 .stick-dot-label {
   color: var(--text-2);
   font-size: 12px;
+  white-space: nowrap;
 }
 .stick-disconnect-title {
   margin: 0;

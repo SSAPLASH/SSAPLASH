@@ -1,6 +1,6 @@
 // 반주 재생기(설계 D3·3-3). 긴 오디오를 전부 디코드해 AudioBufferSourceNode로 예약 재생한다.
 // 패드·클릭과 같은 AudioContext 시계를 쓰므로 performance.now 시각으로 시작·재개를 예약할 수 있다.
-import { playbackPosition, zeroPerfMs } from '@/domain/accompanimentClock';
+import { playbackPosition, zeroPerfMs } from '@/domain/time/accompanimentClock';
 import type { AudioEngine } from './AudioEngine';
 
 export type AccompanimentState = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
@@ -65,6 +65,20 @@ export class Accompaniment {
 
   /** atPerfMs(performance.now)에 반주의 fromMs 위치가 울리도록 예약한다 */
   start(atPerfMs: number, fromMs = 0): void {
+    const ctx = this.engine.context;
+    if (!ctx) return;
+    this.startAt(this.engine.perfToContextTime(atPerfMs), fromMs);
+  }
+
+  /**
+   * 오디오 시계 시각 ctxSec(초)에 반주의 fromMs 위치가 울리도록 예약한다. 화면 시계를 거치지 않는다
+   * (설계 MODE-001 연주 시계를 오디오 시계 하나로). 연주 시계(PlayClock)가 메트로놈 클릭과 같은 기준으로 쓴다
+   */
+  startAtContext(ctxSec: number, fromMs = 0): void {
+    this.startAt(ctxSec, fromMs);
+  }
+
+  private startAt(wantCtxSec: number, fromMs: number): void {
     const bus = this.engine.accompanimentBus;
     const ctx = this.engine.context;
     if (!this.buffer || !bus || !ctx) return;
@@ -80,7 +94,7 @@ export class Accompaniment {
     src.playbackRate.value = this.rate;
     src.connect(bus);
     // 이미 지난 시각이면 AudioContext가 즉시 시작한다. 실제 시작 시각을 기록해 동기 Δ에 드러낸다
-    const when = Math.max(ctx.currentTime, this.engine.perfToContextTime(atPerfMs));
+    const when = Math.max(ctx.currentTime, wantCtxSec);
     this.startPerf = this.engine.contextToPerfTime(when);
     this.zeroPerf = zeroPerfMs(this.startPerf, fromMs);
     this.ctxWhen = when;

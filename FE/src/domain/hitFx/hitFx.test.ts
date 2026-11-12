@@ -310,3 +310,26 @@ describe('pixel', () => {
     expect(Math.min(...get('KICK').map((p) => p.size0))).toBeGreaterThan(Math.max(...get('CRASH').map((p) => p.size0)));
   });
 });
+
+describe('fxGeoOf · 위에서 본 그림(view)', () => {
+  it('바닥선(floor)이 view의 킷 상자 높이를 따른다', () => {
+    const snTop = kitPadsFor('acoustic', 'top').find((p) => p.pad === 'SNARE')!;
+    const snPersp = kitPadsFor('acoustic').find((p) => p.pad === 'SNARE')!;
+    expect(fxGeoOf(snTop, 'acoustic', 'top').floor).toBeCloseTo(650.7);
+    expect(fxGeoOf(snPersp, 'acoustic').floor).toBeCloseTo(486.9);
+  });
+
+  it('헤드 중심·반지름은 위에서 본 그림의 패드 자리에서 온다', () => {
+    const sn = kitPadsFor('acoustic', 'top').find((p) => p.pad === 'SNARE')!;
+    const g = fxGeoOf(sn, 'acoustic', 'top');
+    const s = sn.w / 160;
+    expect(g.cx).toBeCloseTo(sn.left + sn.art!.head.cx * s);
+    expect(g.cy).toBeCloseTo(sn.top + sn.art!.head.cy * s);
+    expect(g.rx).toBeCloseTo(sn.art!.head.rx * s);
+  });
+
+  it('전자·네온은 view를 줘도 같다(floor 없음)', () => {
+    const kick = kitPadsFor('electronic', 'top').find((p) => p.pad === 'KICK')!;
+    expect(fxGeoOf(kick, 'electronic', 'top')).toEqual(fxGeoOf(kick, 'electronic'));
+  });
+});

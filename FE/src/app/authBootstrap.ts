@@ -5,12 +5,6 @@ import { clearPlayLogs, setPlayLogOwner } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 
 /**
- * 로그인 검사 여부. 빌드 시 VITE_AUTH_REQUIRED=false면 RequireAuth가 모든 화면을 통과시킨다 —
- * BE 없이 게임 화면을 개발할 때 `.env.local`에 둔다. 미설정(운영 빌드)은 켜짐.
- */
-export const AUTH_REQUIRED = import.meta.env.VITE_AUTH_REQUIRED !== 'false';
-
-/**
  * 로컬 플레이 로그의 주인을 로그인 계정에 맞춘다(설계 ACCT-001 마이페이지 D5·D6).
  * 다른 계정의 기록은 보이지 않고, 탈퇴하면 그 계정의 로컬 기록을 지운다. 해제 함수를 돌려준다(테스트용)
  */

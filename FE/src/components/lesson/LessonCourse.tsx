@@ -2,7 +2,7 @@
 // 탭을 열 때마다 진도를 다시 읽는다(방금 친 레슨이 반영되게). 연주는 기존 악보 연습 화면으로 넘긴다.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { lessonDisplayTitle, lessonPath, stageStates, stageWord } from '@/domain/lesson';
+import { lessonDisplayTitle, lessonPath, stageStates, stageWord } from '@/domain/play/lesson';
 import type { PadVisualState } from '@/domain/drumKit';
 import type { PadId } from '@/domain/pads';
 import { useLessons } from '@/store/lessonStore';
@@ -12,18 +12,25 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { PadNotation } from './PadNotation';
 import { StageMap } from './StageMap';
 import './lesson.css';
+import { InlineError } from '@/components/ui/InlineError';
 
 export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
   const status = useLessons((s) => s.status);
   const list = useLessons((s) => s.list);
   const localPassed = useLessons((s) => s.localPassed);
   const load = useLessons((s) => s.load);
+  const dismissInvite = useLessons((s) => s.dismissInvite);
   const navigate = useNavigate();
   const [picked, setPicked] = useState<number | null>(null);
 
   useEffect(() => {
     void load(true);
   }, [load]);
+
+  // 코스에 한 번 들어왔으면 권유 카드는 할 일을 마쳤다. 어느 길로 들어왔든 [닫기]처럼 기억해 다시 띄우지 않는다
+  useEffect(() => {
+    dismissInvite();
+  }, [dismissInvite]);
 
   const lessons = useMemo(() => list?.items ?? [], [list]);
   const states = useMemo(() => stageStates(lessons, localPassed), [lessons, localPassed]);
@@ -33,12 +40,9 @@ export function LessonCourse({ onOpenBuiltin }: { onOpenBuiltin: () => void }) {
 
   if (status === 'error' && !list) {
     return (
-      <div className="notice error col" role="alert">
-        <span>입문 코스를 불러오지 못했어요.</span>
-        <Button variant="secondary" size="sm" onClick={() => void load(true)}>
-          다시 시도
-        </Button>
-      </div>
+      <InlineError size="lg" onRetry={() => void load(true)}>
+        입문 코스를 불러오지 못했어요.
+      </InlineError>
     );
   }
   if (!list) {

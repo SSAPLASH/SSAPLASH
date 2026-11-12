@@ -9,8 +9,8 @@ const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 const tokens = read('./tokens.css')
 const globalCss = read('./global.css')
 const motionCss = read('./motion.css')
-// 라이브러리 화면 CSS는 components/studio/studio.css로 옮겼다(펄스·하이라이트 허용 항목이 그쪽에 있다)
-const studioCss = read('../components/studio/studio.css')
+// 라이브러리 화면 CSS는 features/studio/components/studio.css에 있다(펄스·하이라이트 허용 항목이 그쪽에 있다)
+const studioCss = read('../features/studio/components/studio.css')
 
 /** reduced-motion 미디어 블록 본문(중괄호 짝을 세어 잘라낸다) */
 function reducedBlock(css: string): string {

@@ -1,5 +1,5 @@
 // 전자 드럼 스킨(Figma Play / Pad Electronic). 흰 후프·검은 개스킷·메시 헤드, 심벌은 검은 고무 + 금색 테두리
-import { FlatJudgeRing, FlatMotion, FlatTexts, onCircle, type FlatSkinProps } from './flatParts';
+import { FlatJudgeRing, FlatMotion, FlatTexts, FlatTilt, PEDAL_GROOVES, PEDAL_PLATE, onCircle, type FlatSkinProps } from './flatParts';
 
 /** 심벌 홈 줄 지름 */
 const GROOVES = [126, 112, 98, 84, 70];
@@ -45,7 +45,35 @@ function CymbalBody({ defsId }: { defsId: string }) {
   );
 }
 
-export function ElectronicPad({ shape, state, defsId, tag, label, labelVisible, hitKey }: FlatSkinProps) {
+/** 하이햇 페달: 흰 테 발판 + 검은 고무 + 가로 홈 */
+function PedalBody({ defsId }: { defsId: string }) {
+  return (
+    <>
+      <path className="el-hoop" d={PEDAL_PLATE} fill={`url(#${defsId}-el-hoop)`} />
+      <path d={PEDAL_PLATE} transform="translate(80 81) scale(0.84 0.88) translate(-80 -81)" fill={`url(#${defsId}-el-rubber)`} />
+      {PEDAL_GROOVES.map((y) => (
+        <line key={y} x1="58" y1={y} x2="102" y2={y} stroke="#fff" strokeOpacity="0.08" strokeWidth="2" />
+      ))}
+    </>
+  );
+}
+
+export function ElectronicPad({ shape, state, defsId, tag, label, labelVisible, hitKey, tilt }: FlatSkinProps) {
+  if (shape === 'pedal') {
+    const lit = state === 'hit' || state === 'armed';
+    return (
+      <>
+        <FlatTilt tilt={tilt}>
+          <FlatMotion shape={shape} state={state} hitKey={hitKey}>
+            <PedalBody defsId={defsId} />
+            {state === 'hit' && <path className="drum-pad-flash el-flash" d={PEDAL_PLATE} />}
+            {lit && <path className="drum-pad-led" d={PEDAL_PLATE} strokeWidth={state === 'armed' ? 2.5 : 4} />}
+          </FlatMotion>
+        </FlatTilt>
+        <FlatTexts shape={shape} state={state} tag={tag} label={label} labelVisible={labelVisible} tagTop={140} />
+      </>
+    );
+  }
   const cymbal = shape === 'cymbal';
   // 플래시·LED 지름: drum·kick은 메시/개스킷, cymbal은 고무 원판 기준
   const flashR = cymbal ? 69 : 61;
@@ -54,12 +82,14 @@ export function ElectronicPad({ shape, state, defsId, tag, label, labelVisible, 
   const led = state === 'hit' || state === 'armed';
   return (
     <>
-      <FlatMotion shape={shape} state={state} hitKey={hitKey}>
-        {cymbal ? <CymbalBody defsId={defsId} /> : <MeshBody shape={shape} defsId={defsId} />}
-        {state === 'hit' && <circle className="drum-pad-flash el-flash" cx="80" cy="80" r={flashR} />}
-        {led && <circle className="drum-pad-led" cx="80" cy="80" r={ledR - ledW / 2} strokeWidth={ledW} />}
-      </FlatMotion>
-      <FlatJudgeRing state={state} />
+      <FlatTilt tilt={tilt}>
+        <FlatMotion shape={shape} state={state} hitKey={hitKey}>
+          {cymbal ? <CymbalBody defsId={defsId} /> : <MeshBody shape={shape} defsId={defsId} />}
+          {state === 'hit' && <circle className="drum-pad-flash el-flash" cx="80" cy="80" r={flashR} />}
+          {led && <circle className="drum-pad-led" cx="80" cy="80" r={ledR - ledW / 2} strokeWidth={ledW} />}
+        </FlatMotion>
+        <FlatJudgeRing state={state} />
+      </FlatTilt>
       <FlatTexts shape={shape} state={state} tag={tag} label={label} labelVisible={labelVisible} tagTop={cymbal ? 106 : 63} />
     </>
   );

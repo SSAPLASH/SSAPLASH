@@ -24,7 +24,7 @@ const input = (notes: JudgedNote[], over: Partial<CauseInput> = {}): CauseInput 
 const causes = (i: CauseInput) => missCauses(i).map((c) => c.cause);
 
 describe('놓침 원인: 패드 이동', () => {
-  // 스네어 → 탐1로 넘어갈 때만 놓친다. 하이햇 → 탐1(비교 대상)은 친다
+  // 스네어 → 스몰탐으로 넘어갈 때만 놓친다. 하이햇 → 스몰탐(비교 대상)은 친다
   const notes: JudgedNote[] = [];
   for (let k = 0; k < 4; k++) {
     notes.push(hit(4 * k, 'SNARE', 0, { prevPads: ['SMALL_TOM'], prevGapMs: GAP }));
@@ -45,7 +45,7 @@ describe('놓침 원인: 패드 이동', () => {
   });
 
   it('비교 대상도 비슷하게 놓치면 TRANSITION이 아니다', () => {
-    // 비교 대상(하이햇 → 탐1) 4개 중 앞의 둘을 놓쳤다: 이동 놓침 비율 1.0 < 2.5 × 0.5
+    // 비교 대상(하이햇 → 스몰탐) 4개 중 앞의 둘을 놓쳤다: 이동 놓침 비율 1.0 < 2.5 × 0.5
     const both = notes.map((n, i) => (i === 3 || i === 7 ? miss(i, 'SMALL_TOM', { prevPads: ['HIHAT'], prevGapMs: GAP }) : n));
     expect(causes(input(both))).not.toContain('TRANSITION');
     // 하나만 놓쳤으면(0.25) 1.0 ≥ 2.5 × 0.25라 이동 탓이다

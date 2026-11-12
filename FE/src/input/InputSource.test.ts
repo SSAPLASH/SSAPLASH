@@ -1,4 +1,4 @@
-// ClockSync 검증: 센서 µs 시각 랩어라운드 펼치기.
+// ClockSync 검증: 센서 µs 시각 랩어라운드 펼치기, 흐르는 시계 따라가기.
 import { describe, expect, it } from 'vitest';
 import { ClockSync, WRAP_MS } from './InputSource';
 
@@ -51,5 +51,76 @@ describe('ClockSync 랩어라운드 펼치기', () => {
     expect(c.offset).toBeNull();
     c.addSample(0, 0, 0);
     expect(c.toBrowserTime(600, 0)).toBeCloseTo(600);
+  });
+});
+
+describe('ClockSync 한 바퀴(71.6분) 전후', () => {
+  it('랩 직전 SYNC → 랩 직후 HIT → 랩 직후 SYNC 순서에서 타격 시각과 오프셋이 연속이다', () => {
+    const c = new ClockSync();
+    const B0 = 10_000; // 브라우저 시각
+    const S0 = WRAP_MS - 1000; // 그때 센서 시각(랩 1초 전)
+    // 랩 직전 SYNC (왕복 4ms)
+    c.addSample(B0 - 2, S0, B0 + 2);
+    const before = c.offset as number;
+    expect(before).toBeCloseTo(B0 - S0, 6);
+
+    // 1.5초 뒤 타격: 센서 시각은 랩을 넘어 500ms. 3ms 뒤에 도착
+    expect(c.toBrowserTime(500, B0 + 1503)).toBeCloseTo(B0 + 1500, 6);
+
+    // 2.5초 뒤 SYNC: 센서 시각 1500ms
+    c.addSample(B0 + 2498, 1500, B0 + 2502);
+    expect(c.offset as number).toBeCloseTo(before, 6);
+    expect(c.targetOffset as number).toBeCloseTo(before, 6);
+
+    // 그 뒤 타격도 같은 기준
+    expect(c.toBrowserTime(2000, B0 + 3003)).toBeCloseTo(B0 + 3000, 6);
+  });
+
+  it('랩 직후 첫 패킷이 SYNC여도 같다', () => {
+    const c = new ClockSync();
+    const B0 = 10_000;
+    const S0 = WRAP_MS - 1000;
+    c.addSample(B0 - 2, S0, B0 + 2);
+    const before = c.offset as number;
+    c.addSample(B0 + 1498, 500, B0 + 1502);
+    expect(c.offset as number).toBeCloseTo(before, 6);
+    expect(c.toBrowserTime(1000, B0 + 2003)).toBeCloseTo(B0 + 2000, 6);
+  });
+
+  it('랩 뒤에 초기화돼도 새 오프셋이 한 바퀴를 흡수해 타격 시각이 맞는다', () => {
+    const c = new ClockSync();
+    const B0 = 10_000;
+    c.addSample(B0 - 2, WRAP_MS - 1000, B0 + 2);
+    c.toBrowserTime(500, B0 + 1503);
+    c.reset();
+    c.addSample(B0 + 2498, 1500, B0 + 2502);
+    expect(c.toBrowserTime(2000, B0 + 3003)).toBeCloseTo(B0 + 3000, 6);
+  });
+});
+
+describe('ClockSync 흐르는 센서 시계', () => {
+  it('분당 30ms 흐르는 시계로 10분 연주해도 타격 시각 오차가 10ms 미만이다', () => {
+    const c = new ClockSync();
+    // 센서 시계는 브라우저보다 초당 0.5ms 느리게 간다. 브라우저 시각 b일 때 센서 시각
+    const sensorAt = (b: number) => 5000 + b * (1 - 0.0005);
+    let worst = 0;
+    for (let b = 0; b <= 600_000; b += 1000) {
+      const rtt = 4 + ((b / 1000) % 5);
+      c.addSample(b - rtt / 2, sensorAt(b), b + rtt / 2);
+      // 250ms마다 타격, 3ms 뒤 도착
+      for (const dt of [100, 350, 600, 850]) {
+        const hitAt = b + dt;
+        worst = Math.max(worst, Math.abs(c.toBrowserTime(sensorAt(hitAt), hitAt + 3) - hitAt));
+      }
+    }
+    expect(worst).toBeLessThan(10);
+  });
+
+  it('rtt는 역대 최소가 아니라 최근 창 안 최소다', () => {
+    const c = new ClockSync();
+    c.addSample(0, 0, 2);
+    expect(c.rtt).toBe(2);
+    c.addSample(20_000, 20_000, 20_006);
+    expect(c.rtt).toBe(6);
   });
 });

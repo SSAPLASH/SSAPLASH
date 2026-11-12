@@ -1,8 +1,8 @@
-// 곡 API (BE 96, 설계 3-1). 응답 숫자 id·bpm 변환까지만 하고 Chart 변환은 domain/chartMapping이 맡는다.
-import type { UploadDraft } from '@/domain/chartJob';
-import type { MidiDraft } from '@/domain/midiUpload';
-import { availabilityFromFailure, type SongAvailability } from '@/domain/songAvailability';
-import type { SongMetaPatch } from '@/domain/songEdit';
+// 곡 API (BE 96, 설계 3-1). 응답 숫자 id·bpm 변환까지만 하고 Chart 변환은 domain/song/chartMapping이 맡는다.
+import type { UploadDraft } from '@/domain/song/chartJob';
+import type { MidiDraft } from '@/domain/song/midiUpload';
+import { availabilityFromFailure, type SongAvailability } from '@/domain/song/songAvailability';
+import type { SongMetaPatch } from '@/domain/song/songEdit';
 import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongLevel, type SongPage, type SongScope, type SongSummary } from '@/domain/songCatalog';
 import { ApiError } from './error';
 import { apiFetch } from './http';

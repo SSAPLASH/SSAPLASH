@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSerialStickSource } from './WebSerialStickSource';
 import { frame } from './serialFraming';
-import { buildHit, buildLink, buildPedal, buildStatus, buildSyncAck } from '@/monitor/mockStick';
+import { buildHit, buildLink, buildPedal, buildStatus, buildSyncAck } from '@/features/monitor/core/mockStick';
 
 function fakePort(open: () => Promise<void>) {
   return {
@@ -353,14 +353,23 @@ describe('WebSerialStickSource 재연결(비트 5·시계 초기화·reopen·con
     await settle(ms);
   };
 
+  it('주기 SYNC는 1초마다 1회 보낸다', async () => {
+    const { src, written } = await open();
+    const base = syncCount(written);
+    await settle(3000);
+    expect(syncCount(written) - base).toBe(3);
+    await src.disconnect();
+  });
+
   it('동글 순서: LINK 0b01 → STATUS(role 1, 비트 5) → LINK 0b11이면 오른손 연결을 설정 전과 함께 한 번 알리고 SYNC 5회', async () => {
     const { src, feed, written, status } = await open();
-    await feedAndSettle(feed, buildLink({ linkMask: 0b01 }));
+    // 주기 SYNC(1초마다)가 세는 구간에 끼지 않게 각 단계를 200ms씩만 돌린다(연속 5회는 200ms 안에 끝난다)
+    await feedAndSettle(feed, buildLink({ linkMask: 0b01 }), 200);
     const base = syncCount(written);
     status.length = 0;
-    await feedAndSettle(feed, buildStatus({ role: 1, batteryPct: 64, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }));
+    await feedAndSettle(feed, buildStatus({ role: 1, batteryPct: 64, rssi: -50, fwMajor: 2, fwMinor: 1, unconfigured: true }), 200);
     expect(status).toEqual([]); // 안 붙은 손은 보류
-    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }));
+    await feedAndSettle(feed, buildLink({ linkMask: 0b11 }), 200);
     expect(status).toEqual([{ stickId: 1, connected: true, batteryPct: 64, unconfigured: true }]);
     // 비트 5와 LINK 0→1이 2초 안에 겹쳐도 SYNC는 한 묶음(5회)
     expect(syncCount(written) - base).toBe(5);

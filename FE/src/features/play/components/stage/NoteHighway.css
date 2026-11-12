@@ -1,0 +1,42 @@
+/* 노트 하이웨이 래퍼. 크기는 부모(PlayStage area)가 정한다 */
+.play-highway {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  /* 페달 칸과 나머지 칸 사이 간격에는 레인 바탕을 칠하지 않는다(레인 바탕은 캔버스가 칠한다) */
+  background: var(--bg-canvas);
+}
+.play-highway canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 판정 이펙트 캔버스: 하이웨이 위에 같은 크기로 겹친다(그리기 코드는 건드리지 않음) */
+.play-highway .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+/* 판정선 아래 가운데(레인 이름 아래 키 글자보다 아래) */
+.play-highway-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
+  width: max-content;
+  max-width: 100%;
+  pointer-events: none;
+}
+/* 상단 가운데(레인 이름 줄 아래): 콤보 표시 자리. 위치 B(단계 때만)는 가운데로 내린다 */
+.play-highway-top {
+  position: absolute;
+  left: 50%;
+  top: 34px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}

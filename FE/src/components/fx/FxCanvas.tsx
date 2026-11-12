@@ -2,7 +2,7 @@
 // 테마·스킨·모션 줄이기만 속성으로 받아 엔진 설정을 바꾼다. 포인터 이벤트는 받지 않는다.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { DRUM_KIT_H, DRUM_KIT_W, type KitSkin } from '@/domain/drumKit';
+import { DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/drumKit';
 import type { FxLocate, FxMode, FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import { MAX_PARTICLES, createFxEngine, type FxEngine } from './fxEngine';
 import type { FxView } from './fxDraw';
@@ -17,6 +17,8 @@ const MAX_DPR = 2;
 export interface FxCanvasProps {
   /** 킷 좌표 공간(기본)에서 패드 위치·테마를 찾는 데 쓴다. 픽셀 공간에서는 쓰지 않는다 */
   skin?: KitSkin;
+  /** 실물 스킨의 그림 종류(킷 상자 높이·패드 자리가 다르다). 기본 persp */
+  view?: KitView;
   theme?: HitFxTheme;
   /**
    * 좌표 공간. 'kit'(기본) = 킷 좌표 760×300을 부모 폭에 맞춰 늘리고 여백(bleed)을 둔다 / 'pixel' = 부모 크기 그대로 CSS 픽셀
@@ -39,7 +41,7 @@ export interface FxCanvasProps {
   glow?: boolean;
 }
 
-export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', locate, source, mode = 'free', bleed = DEFAULT_BLEED, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
+export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', space = 'kit', locate, source, mode = 'free', bleed = DEFAULT_BLEED, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine] = useState(() => createFxEngine());
   const osReduced = useReducedMotion() ?? false;
@@ -63,9 +65,9 @@ export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', loc
   // 설정은 구독보다 먼저 반영한다(같은 커밋 안의 effect는 선언 순서대로 돈다)
   useEffect(() => {
     engine.setTheme(theme);
-    engine.setSkin(skin);
+    engine.setSkin(skin, view);
     engine.setReduced(reduced);
-  }, [engine, theme, skin, reduced]);
+  }, [engine, theme, skin, view, reduced]);
 
   useEffect(() => {
     engine.setLocate(hasLocate ? (e) => locateRef.current?.(e) ?? null : null);
@@ -77,6 +79,7 @@ export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', loc
   }, [engine, maxParticles, glow]);
 
   // 캔버스 크기·좌표: 부모(킷 래퍼)의 실제 렌더 크기 + bleed 여백
+  const boxH = kitBoxFor(skin, view).h;
   useEffect(() => {
     const canvas = canvasRef.current;
     const host = canvas?.parentElement;
@@ -92,7 +95,7 @@ export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', loc
       if (!(w > 0)) return;
       const pixel = space === 'pixel';
       const scale = pixel ? 1 : w / DRUM_KIT_W;
-      const h = pixel ? host.clientHeight : DRUM_KIT_H * scale;
+      const h = pixel ? host.clientHeight : boxH * scale;
       if (!(h > 0)) return;
       const bx = pixel ? 0 : Math.round(w * bleed);
       const by = pixel ? 0 : Math.round(h * bleed);
@@ -120,7 +123,7 @@ export function FxCanvas({ skin = 'acoustic', theme = 'auto', space = 'kit', loc
       ro?.disconnect();
       engine.detach();
     };
-  }, [engine, bleed, space]);
+  }, [engine, bleed, space, boxH]);
 
   // 이벤트 구독: 타격마다 React를 거치지 않고 엔진으로 간다
   useEffect(() => src((e) => engine.emit(e)), [engine, src]);

@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import { NavLink } from 'react-router-dom';
 import { isAdmin } from '@/domain/auth';
-import { PREFETCH_HOVER_MS, prefetchRoute } from '@/app/prefetchRoute';
+import { PREFETCH_HOVER_MS } from '@/config/prefetch';
 import { useAuth } from '@/store/authStore';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
@@ -94,7 +94,8 @@ interface MenuItem {
 /** 현재 위치 표시 이동. 200ms ease-out(tokens.css --motion-base·--ease-out과 같은 값) */
 const ACTIVE_MARK_TRANSITION = { duration: 0.2, ease: [0, 0, 0.58, 1] } as const;
 
-export function Sidebar() {
+/** onPrefetch: 메뉴에 hover(PREFETCH_HOVER_MS)·포커스가 오면 그 경로를 미리 받는 함수. 경로별 모듈은 app이 알고 있으므로 조립하는 쪽(AppShell)이 넘겨준다 */
+export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = {}) {
   const stored = useSettings((s) => s.sidebarCollapsed);
   const setStored = useSettings((s) => s.setSidebarCollapsed);
   const tablet = useMediaQuery(TABLET_QUERY);
@@ -113,10 +114,10 @@ export function Sidebar() {
   const prefetchProps = (to: string) => ({
     onMouseEnter: () => {
       cancelHover();
-      hoverTimer.current = setTimeout(() => prefetchRoute(to), PREFETCH_HOVER_MS);
+      hoverTimer.current = setTimeout(() => onPrefetch?.(to), PREFETCH_HOVER_MS);
     },
     onMouseLeave: cancelHover,
-    onFocus: () => prefetchRoute(to),
+    onFocus: () => onPrefetch?.(to),
   });
 
   const item = (mi: MenuItem) => (

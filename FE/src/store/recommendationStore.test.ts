@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
-import type { RecommendationItem, RecommendationPage } from '@/domain/recommendation';
+import type { RecommendationItem, RecommendationPage } from '@/domain/account/recommendation';
 import { fetchSimilarSongs } from '@/api/similarSongs';
-import type { SimilarPage } from '@/domain/recommendation';
+import type { SimilarPage } from '@/domain/account/recommendation';
 import { RECOMMENDATION_TIMEOUT_MS, useRecommendations } from './recommendationStore';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));

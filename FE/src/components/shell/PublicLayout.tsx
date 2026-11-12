@@ -1,7 +1,7 @@
 // 공개 화면(로그인·콜백) 공용 전체 화면 틀. 셸(nav·메트로놈·연결 상태) 없이 Outlet만 가운데에 둔다.
 import { Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { RouteErrorBoundary } from '../RouteErrorBoundary';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
 
 export function PublicLayout() {
   const { pathname } = useLocation();

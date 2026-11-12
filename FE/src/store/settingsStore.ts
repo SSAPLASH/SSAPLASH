@@ -1,9 +1,10 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
+import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/kit/timingCalibration';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
 import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
-import { moveAnchorsForPad } from '@/domain/kitModel';
+import { moveAnchorsForPad } from '@/domain/kit/kitModel';
 import { isKitSkin, type KitSkin } from '@/domain/drumKit';
 import { isHitFxTheme } from '@/domain/hitFx/themes';
 import type { HitFxTheme } from '@/domain/hitFx/types';
@@ -12,7 +13,7 @@ import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
 import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/preset';
-import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/metronome';
+import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/time/metronome';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
 
 interface SettingsState {
@@ -37,7 +38,10 @@ interface SettingsState {
   /** 지금 적용 중인 프리셋 id. 사용자 프리셋 id 또는 SYSTEM_PRESET_ID(시스템 기본). v18부터 null 없음 */
   activePresetId: string;
   timing: TimingWindows;
+  /** 판정 타이밍 보정(ms). 타격 시각에서 뺀다. 박자 맞추기 적용 또는 수동 조절로 바뀐다(범위·단위는 domain/kit/timingCalibration) */
   audioOffsetMs: number;
+  /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
+  timingCal: TimingCalRecord | null;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
   scrollMs: number;
   /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
@@ -106,6 +110,7 @@ interface SettingsState {
   setPresets: (list: KitPreset[]) => void;
   setTiming: (t: TimingWindows) => void;
   setAudioOffsetMs: (v: number) => void;
+  setTimingCal: (v: TimingCalRecord | null) => void;
   setScrollMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
   setTuning: (partial: PartialTuning) => void;
@@ -136,7 +141,26 @@ interface SettingsState {
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 
-export const SETTINGS_VERSION = 22;
+export const SETTINGS_VERSION = 23;
+
+/** v22까지의 시스템 기본 배치(x·y). v23 이행에서 "기본 배치 그대로인 저장 값"을 알아보는 데만 쓴다 */
+const LEGACY_DEFAULT_XY: Record<string, readonly [number, number]> = {
+  CRASH: [0.2, 0.22],
+  HIHAT: [0.24, 0.52],
+  SNARE: [0.42, 0.68],
+  SMALL_TOM: [0.42, 0.34],
+  MID_TOM: [0.6, 0.34],
+  FLOOR_TOM: [0.72, 0.66],
+  RIDE: [0.8, 0.26],
+  KICK: [0.58, 0.9],
+  HIHAT_PEDAL: [0.24, 0.9],
+};
+
+function isLegacyDefaultLayout(raw: unknown): boolean {
+  if (typeof raw !== 'object' || raw === null) return false;
+  const layout = raw as Record<string, { x?: unknown; y?: unknown } | undefined>;
+  return Object.entries(LEGACY_DEFAULT_XY).every(([pad, [x, y]]) => layout[pad]?.x === x && layout[pad]?.y === y);
+}
 
 /**
  * 저장된 설정 이행.
@@ -162,6 +186,7 @@ export const SETTINGS_VERSION = 22;
  * v19 → v20: timingBar(기본 true) 추가. boolean이 아니면 true.
  * v20 → v21: countInBars는 카운트다운 켬(1)·끔(0) 두 값(MODE-001 D13). 0이면 0, 그 밖(1·2·모르는 값)은 1.
  * v21 → v22: accompaniment(기본 true) 추가. boolean이 아니면 true.
+ * v22 → v23: 시스템 기본 배치 값 변경(원근 보기용으로 넓힘). kitLayout이 옛 기본 배치와 같으면 새 기본 배치로 바꾼다. 손으로 옮긴 배치와 프리셋 layout은 그대로.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -272,6 +297,8 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
     p.countInBars = n === 0 ? 0 : 1;
   }
   if (version < 22) p.accompaniment = typeof p.accompaniment === 'boolean' ? p.accompaniment : true;
+  // 시스템 기본 배치 값이 바뀌었다. 옛 기본 배치 그대로인 저장 값은 새 기본 배치로 맞춰 "변경 있음"으로 보이지 않게 한다(손으로 옮긴 배치는 둔다)
+  if (version < 23 && isLegacyDefaultLayout(p.kitLayout)) p.kitLayout = DEFAULT_KIT_LAYOUT;
   return p as unknown as SettingsState;
 }
 
@@ -291,6 +318,17 @@ export function sanitizePresetAnchors(raw: unknown): PresetAnchors {
 }
 
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * 저장분의 판정 타이밍 보정과 박자 맞추기 기록을 정리한다(merge용).
+ * 범위가 바뀌기 전에 저장된 값(예: +150)은 지금 범위로 자르고, 기록은 모양이 틀리면 버린다.
+ */
+export function sanitizeTimingSettings(p: { audioOffsetMs?: unknown; timingCal?: unknown }): Pick<SettingsState, 'audioOffsetMs' | 'timingCal'> {
+  return {
+    audioOffsetMs: clampTimingOffset(isFiniteNum(p.audioOffsetMs) ? p.audioOffsetMs : 0),
+    timingCal: sanitizeTimingCalRecord(p.timingCal),
+  };
+}
 
 /** 저장된 앵커 하나를 검증한다. 숫자 필드가 깨졌으면 null */
 function sanitizeAnchor(pad: PadId, raw: unknown): PadAnchor | null {
@@ -349,6 +387,7 @@ export const useSettings = create<SettingsState>()(
       activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
       audioOffsetMs: 0,
+      timingCal: null,
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
@@ -430,7 +469,8 @@ export const useSettings = create<SettingsState>()(
       setActivePresetId: (activePresetId) => set({ activePresetId }),
       setPresets: (presets) => set({ presets }),
       setTiming: (timing) => set({ timing }),
-      setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs }),
+      setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs: clampTimingOffset(audioOffsetMs) }),
+      setTimingCal: (timingCal) => set({ timingCal }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
       resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
@@ -478,6 +518,7 @@ export const useSettings = create<SettingsState>()(
           kitSkin: isKitSkin(p.kitSkin) ? p.kitSkin : 'acoustic',
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
+          ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
           presetAnchors: sanitizePresetAnchors(p.presetAnchors),

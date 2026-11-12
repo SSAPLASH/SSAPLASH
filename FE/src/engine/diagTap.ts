@@ -2,7 +2,7 @@
 // 구독자가 없으면 즉시 반환해 판정 경로에 비용을 얹지 않는다. 저장·집계는 하지 않는다(모니터 judgeLog 몫).
 import type { ResolvedHit } from '@/domain/events';
 import type { Judgement, TimingWindows } from '@/domain/judgement';
-import type { CoachBasis } from '@/domain/coachBasis';
+import type { CoachBasis } from '@/domain/play/coachBasis';
 import type { PadId } from '@/domain/pads';
 
 /** 세션 요약(종료 시점 스냅샷). RhythmSession.snapshot()에서 필요한 값만 */
@@ -18,6 +18,9 @@ export interface DiagSessionSummary {
   contestedHits?: number;
   judgedCount: number;
 }
+
+/** 오디오 시계 대기가 붙는 시점 */
+export type ClockWaitPhase = 'begin' | 'resume' | 'restart';
 
 /** 이벤트 본문. 시각 t는 publish가 performance.now()로 붙인다 */
 export type DiagBody =
@@ -55,6 +58,14 @@ export type DiagBody =
    * 양수면 반주가 세션 곡 시각보다 앞서 있다.
    */
   | { type: 'accDrift'; songTimeMs: number; audioPosMs: number; driftMs: number }
+  /**
+   * 시작·재개·처음부터 전에 오디오 시계가 흐를 때까지 기다린 결과(설계 MODE-001 오디오 시계 시작 대기).
+   * timedOut은 최대 대기를 넘어 그냥 시작한 경우, skipped는 컨텍스트가 없거나 running이 아니어서 기다리지 않은 경우,
+   * primed는 출력이 오래 조용해 들리지 않는 신호로 장치를 먼저 깨운 경우.
+   */
+  | { type: 'audioClockWait'; phase: ClockWaitPhase; waitedMs: number; timedOut: boolean; skipped: boolean; primed: boolean }
+  /** 곡 도중 오디오 시계가 멈췄다 흐른 흔적. jumpMs는 (화면 시계 − 오디오 시계) 차이가 커진 양. 기록만 하고 연주에는 손대지 않는다 */
+  | { type: 'audioClockStall'; songTimeMs: number; jumpMs: number }
   /** 연결된 타격 없이 시간 초과로 MISS가 된 노트 */
   | { type: 'missed'; noteIndex: number; pad: PadId; songTimeMs: number }
   | {
@@ -81,6 +92,19 @@ export type DiagBody =
    * offsets 인덱스 = role(0 왼손, 1 오른손, 2·3 페달). 미동기·미연결은 null
    */
   | { type: 'clock'; offsets: [number | null, number | null, number | null, number | null]; source: string }
+  /**
+   * 판정 타이밍 보정과 오디오 지연. 곡 시작 직후 1회 + 10초마다.
+   * audioOffsetMs는 진행 중인 판의 값(없으면 설정 값). 지연은 AudioContext가 보고한 값이며 오디오를 아직 안 켰으면 null.
+   * measured는 마지막 박자 맞추기 기록(없으면 null)
+   */
+  | {
+      type: 'audio';
+      audioOffsetMs: number;
+      baseLatencyMs: number | null;
+      outputLatencyMs: number | null;
+      sampleRate: number | null;
+      measured: { medianMs: number; madMs: number; pairs: number; input: 'sensor' | 'keyboard'; measuredAt: number } | null;
+    }
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
   | ({ type: 'yawCorrect' } & DiagYawCorrection);
 

@@ -99,6 +99,18 @@ export function onDiagSessionStart(cb: (() => void) | null): void {
   sessionStartHook = cb;
 }
 
+/** 곡 시작 직후 부를 훅을 더한다(여러 개). clock 줄 뒤에 등록 순서대로 부른다. 반환값은 해제 함수 */
+const sessionStartExtras = new Set<() => void>();
+export function addDiagSessionStartHook(cb: () => void): () => void {
+  sessionStartExtras.add(cb);
+  return () => sessionStartExtras.delete(cb);
+}
+
+/** 진행 중인 판의 판정 타이밍 보정(ms). 판이 없으면 null */
+export function diagActiveAudioOffsetMs(): number | null {
+  return active ? active.audioOffsetMs : null;
+}
+
 /** 곡 시작(재시작 포함). 노트 배열·앵커 표를 1회 내보내고, MISS 노트를 missed로 파생하는 구독을 건다 */
 export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', opts: DiagSessionOpts): void {
   active?.off();
@@ -124,6 +136,7 @@ export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', op
     });
   }
   sessionStartHook?.();
+  for (const cb of sessionStartExtras) cb();
 }
 
 /** 일시정지·재개 */

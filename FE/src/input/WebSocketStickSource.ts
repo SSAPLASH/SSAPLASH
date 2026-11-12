@@ -7,7 +7,8 @@
 // 브리지는 스틱 1개당 1개(포트 따로)라서, 주소를 둘 주면 링크 2개(첫째 왼손·둘째 오른손)로 연결한다.
 // 둘째 주소가 비면 링크 1개를 두 손이 함께 쓴다(기존 동작).
 import type { DeviceRole, StickEvent, StickId } from '@/domain/events';
-import { BaseInputSource, ClockSync } from './InputSource';
+import { BaseInputSource, ClockSync, SYNC_INTERVAL_MS } from './InputSource';
+import { MAX_PENDING_SYNC } from './deviceState';
 import type { TransportStats } from './InputSource';
 import { packetTap } from './packetTap';
 import { encodeHaptic, encodeResetPose, encodeSetMode, encodeSync, parsePacket } from './stickProtocol';
@@ -77,6 +78,8 @@ export class WebSocketStickSource extends BaseInputSource {
   private sync(link: BridgeLink): void {
     const t0 = performance.now();
     link.pending.set(Math.floor(t0) >>> 0, t0);
+    // 답이 없는 SYNC가 쌓이지 않게 오래된 것부터 버린다
+    while (link.pending.size > MAX_PENDING_SYNC) link.pending.delete(link.pending.keys().next().value!);
     this.write(link, encodeSync(t0));
   }
 
@@ -192,7 +195,7 @@ export class WebSocketStickSource extends BaseInputSource {
         link.clock.reset();
         this.setState('connected');
         for (let i = 0; i < 5; i++) setTimeout(() => this.sync(link), i * 50);
-        link.syncTimer = setInterval(() => this.sync(link), 10_000);
+        link.syncTimer = setInterval(() => this.sync(link), SYNC_INTERVAL_MS);
         resolve();
       };
       ws.onmessage = (ev) => this.onMessage(link, ev);

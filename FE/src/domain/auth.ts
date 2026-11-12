@@ -30,7 +30,7 @@ export interface UserMe {
   createdAt: string;
   updatedAt: string;
   dataConsent: DataConsent;
-  /** 가입 동의 완료 여부. 이용약관·개인정보 둘 다 동의 기록이 있으면 true (메일 ACCT-001 회신). 전환기(D28)에는 필드가 없는 응답을 완료로 본다 — 판단은 domain/signupGate */
+  /** 가입 동의 완료 여부. 이용약관·개인정보 둘 다 동의 기록이 있으면 true (메일 ACCT-001 회신). 전환기(D28)에는 필드가 없는 응답을 완료로 본다 — 판단은 domain/account/signupGate */
   signupCompleted: boolean;
   /** 이용약관·개인정보 동의 기록. 동의한 적 없으면 null (메일 ACCT-001 회신) */
   consents: { terms: ConsentRecord | null; privacy: ConsentRecord | null };
