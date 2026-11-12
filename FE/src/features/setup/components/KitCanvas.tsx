@@ -10,7 +10,7 @@ import type { KitSkin } from '@/domain/drumKit';
 import { frameOf } from '@/domain/kit/kitFrame';
 import { DEFAULT_ANGLE_RANGE, type AngleRange } from '@/domain/kit/kitMapping';
 import { HAND_ORIGINS, anchorToPoint } from '@/domain/kit/kitModel';
-import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
+import { dragToLayout, hitTestPads, isMovablePad, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
 import type { KeyMap } from '@/domain/keyMap';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
@@ -101,7 +101,7 @@ export function KitCanvas(props: KitCanvasProps) {
   // 패드 모양(먼 것부터)과 스킨 그림 자리. 그리기·클릭 판정·끌기가 같은 값을 쓴다
   const scene = useMemo(() => {
     if (!box) return null;
-    const cam = makeCamera(box);
+    const cam = makeCamera(box, range);
     const shapes = kitShapes(props.layout, cam, range);
     return { cam, shapes, frame: frameOf(shapes, box, skin) };
   }, [box, props.layout, range, skin]);
@@ -113,15 +113,16 @@ export function KitCanvas(props: KitCanvasProps) {
     const rect = wrapRef.current!.getBoundingClientRect();
     const cur = sceneRef.current;
     if (cur && cur.cam.w === rect.width && cur.cam.h === rect.height) return { shapes: cur.shapes, cam: cur.cam, rect };
-    const cam = makeCamera({ w: rect.width, h: rect.height });
-    return { shapes: kitShapes(propsRef.current.layout, cam, propsRef.current.angleRange ?? DEFAULT_ANGLE_RANGE), cam, rect };
+    const r = propsRef.current.angleRange ?? DEFAULT_ANGLE_RANGE;
+    const cam = makeCamera({ w: rect.width, h: rect.height }, r);
+    return { shapes: kitShapes(propsRef.current.layout, cam, r), cam, rect };
   };
 
   useEffect(() => {
     // 포인터 모의 IMU: 패드 위에 마우스를 두면 그 패드의 배치 자세가 되게 화면 → 자세 변환을 같이 넘긴다
     props.surfaceRef?.(wrapRef.current, (nx, ny) => {
       const { shapes, cam, rect } = sceneNow();
-      return screenPointToPose(nx * rect.width, ny * rect.height, shapes, cam);
+      return screenPointToPose(nx * rect.width, ny * rect.height, shapes, cam, propsRef.current.angleRange ?? DEFAULT_ANGLE_RANGE);
     });
     return () => props.surfaceRef?.(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +161,7 @@ export function KitCanvas(props: KitCanvasProps) {
             if (!cm) continue;
             const pt = [cm.x / 100, cm.y / 100, cm.z / 100] as const;
             const dist = Math.hypot(pt[0] - o[0], pt[1] - o[1], pt[2] - o[2]);
-            const q = sc.cam.project(pt);
+            const q = sc.cam.place(pt);
             paintAnchorZone(ctx, h, a.pad, q.sx, q.sy, dist * Math.tan((a.radius * Math.PI) / 180) * q.scale);
           }
         });
@@ -169,7 +170,7 @@ export function KitCanvas(props: KitCanvasProps) {
       if (p.showPoses && p.poses) {
         p.poses.forEach((pose, i) => {
           const from = p.posesFromCenter ? 'center' : (i as 0 | 1);
-          paintStickTip(ctx, i as 0 | 1, sc.cam.project(poseTip(from, pose, sc.shapes)));
+          paintStickTip(ctx, i as 0 | 1, sc.cam.place(poseTip(from, pose, sc.shapes)));
         });
       }
     };
@@ -186,7 +187,8 @@ export function KitCanvas(props: KitCanvasProps) {
     const pad = hitTestPads(shapes, px, py);
     if (!pad) return;
     pressRef.current = { pad, x: e.clientX, y: e.clientY, moved: false };
-    if (props.draggable) {
+    // 킥은 자리가 고정이고 하이햇 페달은 하이햇을 따라다녀 끌지 않는다(톡 쳐서 고르기만)
+    if (props.draggable && isMovablePad(pad)) {
       // 잡은 자리와 패드 윗면 중심의 차이를 기억해 패드가 포인터로 튀지 않게 한다
       const s = shapes.find((v) => v.pad === pad)!;
       dragRef.current = { pad, dx: s.cx - px, dy: s.cy - py };
