@@ -162,6 +162,7 @@ def live_run_cmd(args: argparse.Namespace) -> int:
         settings.narrative_llm_api,
         timeout_sec=settings.live_llm_timeout_sec,
         max_tokens=80,
+        json_output=True,
     )
     runner = LiveCoachRunner(LiveCoachApi(settings), generator, settings.narrative_model)
     stop = threading.Event()

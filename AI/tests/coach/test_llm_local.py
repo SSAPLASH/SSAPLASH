@@ -129,3 +129,14 @@ def test_답이_비어_오면_GeneratorError이다():
 
     with pytest.raises(GeneratorError, match="비어"):
         gen("s", "u")
+
+
+def test_json_output이면_ollama에_format_json을_보낸다():
+    gen, session = _gen(_Response(200, {"message": {"content": "{}"}}), json_output=True)
+
+    gen("s", "u")
+
+    assert session.calls[0]["json"]["format"] == "json"
+    plain, plain_session = _gen(_Response(200, {"message": {"content": "{}"}}))
+    plain("s", "u")
+    assert "format" not in plain_session.calls[0]["json"]

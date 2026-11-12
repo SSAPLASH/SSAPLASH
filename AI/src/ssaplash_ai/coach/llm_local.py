@@ -35,6 +35,7 @@ class LocalServerGenerator:
         max_tokens: int = 400,
         num_ctx: int = DEFAULT_NUM_CTX,
         think: bool | None = False,
+        json_output: bool = False,
         session: requests.Session | None = None,
     ) -> None:
         if api not in SUPPORTED_APIS:
@@ -50,6 +51,8 @@ class LocalServerGenerator:
         self.num_ctx = num_ctx
         # 생각(추론) 모드를 끈다. 켜 두면 최신 모델이 토큰 상한을 생각에 다 써서 답이 비어 올 수 있다. None이면 보내지 않는다
         self.think = think
+        # JSON 하나만 내게 한다(Ollama `format: json`). 모양만 강제하고 길이는 강제하지 않는다. 연주 중 코칭이 쓴다
+        self.json_output = json_output
         self.session = session or requests.Session()
 
     def __call__(self, system: str, user: str) -> str:
@@ -77,6 +80,8 @@ class LocalServerGenerator:
             }
         if self.api == API_OLLAMA and self.think is not None:
             body["think"] = self.think
+        if self.api == API_OLLAMA and self.json_output:
+            body["format"] = "json"
         response = self._post(url, body)
         if response.status_code == 400 and "think" in body and "think" in _error_text(response):
             # 생각 모드를 모르는 모델이면 그 항목 없이 한 번 더 보낸다
