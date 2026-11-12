@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.*;
 import static com.ssafy.airdrum.domain.report.model.ReportSummaryInput.*;
 import com.ssafy.airdrum.domain.report.model.ReportAggregate;
 import com.ssafy.airdrum.domain.report.model.ReportSummaryInput;
+import com.ssafy.airdrum.domain.report.model.ScoreRule;
 import com.ssafy.airdrum.domain.report.model.ReportAggregate.Counts;
 
 class ReportAggregatorTest {
@@ -59,8 +60,14 @@ class ReportAggregatorTest {
 		assertThat(report.padStats().get(1).meanVelocity()).isEqualByComparingTo("127");
 		assertThat(report.timingHistogram().counts().stream().mapToInt(Integer::intValue).sum()).isEqualTo(50_000);
 	}
+	@Test void padAccuracyFollowsTheScoreRuleOfThePlay() {
+		var hits = List.of(hit(0, Judgement.PERFECT, -20d, 80), hit(1, Judgement.GOOD, 40d, 100), hit(2, Judgement.MISS, null, null));
+		// (100 + 60) / 300, (100 + 80) / 300
+		assertThat(aggregator.aggregate(new ReportSummaryInput(60, ScoreRule.SCORE_V1, hits)).padStats().get(1).accuracy()).isEqualByComparingTo("0.5333");
+		assertThat(aggregator.aggregate(new ReportSummaryInput(60, ScoreRule.SCORE_V2, hits)).padStats().get(1).accuracy()).isEqualByComparingTo("0.6000");
+	}
 	private ReportAggregate aggregate(double goodMs, List<Hit> hits) {
-		return aggregator.aggregate(new ReportSummaryInput(goodMs, hits));
+		return aggregator.aggregate(new ReportSummaryInput(goodMs, ScoreRule.SCORE_V1, hits));
 	}
 	private static Hit hit(int seq, Judgement judgement, Double delta, Integer velocity) {
 		return new Hit(Pad.SNARE, judgement, delta, velocity);

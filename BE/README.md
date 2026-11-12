@@ -822,11 +822,20 @@ Runner 연결·운영과 CD는 인프라 작업 범위다.
 업로드를 기다리지 않는다. FREE·TEMPO는 리포트를 생성하지 않는다. 업로드 응답의 `rawLogStatus`는
 원본 로그 상태이며 리포트 상태가 아니다. 신규 scored 업로드 201 직후 조회할 수 있다.
 
+**점수 규칙(`report/model/ScoreRule`, 330번):** 점수 = PERFECT×100 + GOOD×(GOOD 점수), 정확도 = 점수 ÷ 채보 노트 수(소수 둘째 자리 HALF_UP). 규칙 버전은 업로드 `judgementContext.judgementVersion`이고 기록에 그대로 저장된다.
+
+| 버전 | GOOD 점수 | 비고 |
+| --- | --- | --- |
+| `SCORE_V1` | 60 | 11/12까지의 규칙. 옛 화면·늦게 올라오는 기록을 위해 계속 받는다 |
+| `SCORE_V2` | 80 | 11/12 팀 결정. 지금 FE가 보내는 값. 전부 GOOD이면 80%라 입문 코스 통과(70%)를 넘는다 |
+
+업로드는 기록이 보낸 버전의 규칙으로 점수·정확도를 검산하고(어긋나면 400 `PLAY_PAYLOAD_INVALID`, 모르는 버전은 409 `PLAY_SCHEMA_UNSUPPORTED`) 받은 값 그대로 저장한다. 지난 기록은 다시 계산하지 않는다(V1 기록은 V1 점수 그대로, 최고 기록 비교에 섞인다).
+
 내부 저장 통계는 `BE_REPORT_V1`이다. FE 회신을 반영한 공개 응답은 저장 DTO와 분리한다.
 
 - `timingHistogram`: PERFECT·GOOD의 deltaMs만 10ms 구간으로 집계한다. 판정창을 10ms 단위로
   올림한 ±범위이며 마지막 구간만 우측 끝값을 포함한다. MISS·미매칭 타격은 제외한다.
-- `padStats`: 신규 리포트는 enum 순서의 9패드이며 기존 리포트는 8패드일 수 있다. 과거 `HI_TOM`은 조회 시 `SMALL_TOM`으로 반환한다. accuracy는 `(perfect+0.6×good)/(perfect+good+miss)`의
+- `padStats`: 신규 리포트는 enum 순서의 9패드이며 기존 리포트는 8패드일 수 있다. 과거 `HI_TOM`은 조회 시 `SMALL_TOM`으로 반환한다. accuracy는 `(perfect+g×good)/(perfect+good+miss)`(g는 그 기록 점수 규칙의 GOOD 점수 ÷ 100: V1 0.6, V2 0.8)의
   내부 저장은 0~1 비율(소수 넷째 자리 HALF_UP)이다. **API accuracy는 모두 0~100, 소수 둘째 자리 HALF_UP**이며
   패드 값은 원본 판정 개수에서 직접 계산한다. 평가 표본이 없으면 null이다. 전체 summary 값은 그대로 유지한다.
 - `meanDeltaMs`, `meanVelocity`: PERFECT·GOOD 표본의 평균(소수 둘째 자리 HALF_UP), 표본 없으면 null.
@@ -1162,7 +1171,7 @@ SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하�
 | GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(순서대로): `order`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
 | POST | `/api/v1/lessons/{songId}/completion` | 알아보기 레슨 완료 저장. 본문 없음, 204. 다시 보내도 204이고 처음 시각을 유지 |
 
-- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 앞 순서 중 통과하지 못한 레슨이 있으면 참이다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
+- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 앞 순서 중 통과하지 못한 레슨이 있으면 참이다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
 - **오류:** 로그인 안 함·탈퇴 401, 완료 저장에서 연주 레슨 400 `VALIDATION_FAILED`, 레슨이 아니거나 삭제·비공개 곡 404 `SONG_NOT_FOUND`. 두 API 모두 `Cache-Control: private, no-store`.
 - **탈퇴:** 탈퇴 커밋 뒤 그 회원의 `lesson_completions`를 지운다(`LessonWithdrawalListener`). 연주 기록은 기존 탈퇴 규칙을 따른다.
 - **알려진 점:** AI 배치 뷰 `recommend_songs_v`(V37)는 레슨 곡을 거르지 않는다. 학습 데이터에서 빼야 하면 뷰를 바꾸는 후속 작업이 필요하다.

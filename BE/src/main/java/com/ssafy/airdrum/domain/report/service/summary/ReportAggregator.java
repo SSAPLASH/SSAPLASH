@@ -10,6 +10,7 @@ import static com.ssafy.airdrum.domain.report.model.ReportSummaryInput.*;
 import static com.ssafy.airdrum.domain.report.model.ReportAggregate.*;
 import com.ssafy.airdrum.domain.report.model.ReportAggregate;
 import com.ssafy.airdrum.domain.report.model.ReportSummaryInput;
+import com.ssafy.airdrum.domain.report.model.ScoreRule;
 
 /** 노트 검증을 통과한 요청만 집계한다. 판정·점수·MISS를 새로 만들지 않는다. */
 @Component
@@ -21,7 +22,7 @@ public class ReportAggregator {
 		Integer[] bins = new Integer[extent / 5];
 		Arrays.fill(bins, 0);
 		var pads = new EnumMap<Pad, Accumulator>(Pad.class);
-		for (Pad pad : Pad.values()) pads.put(pad, new Accumulator());
+		for (Pad pad : Pad.values()) pads.put(pad, new Accumulator(request.rule()));
 		for (Hit hit : request.hits()) {
 			if (hit.judgement() == null) continue;
 			var pad = pads.get(hit.pad());
@@ -40,14 +41,17 @@ public class ReportAggregator {
 		return new ReportAggregate(new TimingHistogram(10, -extent, Arrays.asList(bins)), stats);
 	}
 	private static final class Accumulator {
+		final ScoreRule rule;
 		int perfect, good, miss;
 		long velocity;
 		BigDecimal delta = BigDecimal.ZERO;
+		Accumulator(ScoreRule rule) { this.rule = rule; }
 		PadStats result(Pad pad) {
 			int samples = perfect + good;
 			int evaluated = samples + miss;
-			BigDecimal accuracy = evaluated == 0 ? null : BigDecimal.valueOf(perfect * 10L + good * 6L)
-					.divide(BigDecimal.valueOf(evaluated * 10L), 4, RoundingMode.HALF_UP);
+			// 저장 비율(0~1). 그 기록의 점수 규칙으로 계산한다
+			BigDecimal accuracy = evaluated == 0 ? null : BigDecimal.valueOf(rule.score(perfect, good))
+					.divide(BigDecimal.valueOf(evaluated * (long) ScoreRule.PERFECT_POINTS), 4, RoundingMode.HALF_UP);
 			BigDecimal meanDelta = samples == 0 ? null : delta.divide(BigDecimal.valueOf(samples), 2, RoundingMode.HALF_UP);
 			BigDecimal meanVelocity = samples == 0 ? null : BigDecimal.valueOf(velocity)
 					.divide(BigDecimal.valueOf(samples), 2, RoundingMode.HALF_UP);
