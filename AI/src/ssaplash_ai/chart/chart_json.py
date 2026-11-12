@@ -5,8 +5,10 @@
 - charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
 - timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고. origin이 notes면 align_origin_to_notes로
   킥·스네어 노트에 맞춰 박 안 위치를 보정
+- 빠르기 구간이 둘 이상이면 timing에 ppq·tempoMap·timeSignatureMap을 더 넣음(tempo_map_timing).
+  설정 tempo.refine이 참이면 refine_chart_timing이 bpm·offsetMs를 다시 맞춤
 - notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
-  패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
+  패드 9종 순서(HIHAT_PEDAL이 마지막). 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
 
 validate_chart는 BE `WorkerResults.java`의 검사를 그대로 옮긴 것. 실패하면 ChartOutputError.
 """

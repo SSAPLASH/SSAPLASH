@@ -6,8 +6,8 @@ BE 안내문의 형식과 검사 중 워커가 맞춰야 하는 것만 재현함
 - payloadHash 재계산 대조(422), 같은 resultId 재전송은 기존 Receipt, 다른 내용은 409
 - 분리 결과: 올린 파일의 크기·sha256과 manifest 대조, flac 16비트 44,100Hz 스테레오, 길이 올림 ms == durationMs
 - 채보 결과: chart_json.validate_chart(BE WorkerResults와 같은 검사)
-- 고장 주입(Faults): 첫 PUT 403, 첫 결과 제출 503, heartbeat 409 (테스트용)
-실제 BE의 DB 잠금·탈퇴·정리·재시도 상한은 재현하지 않음.
+- 고장 주입(Faults): 첫 PUT 403, 첫 GET 403, 첫 내려받기 절반만 응답, 첫 결과 제출 503, heartbeat 409 (테스트용)
+실제 BE의 DB 잠금·탈퇴·정리는 재현하지 않음. 재시도 상한은 단계별 2회(MAX_RETRIES_PER_STAGE)로 흉내 냄.
 
 명령줄: `ssaplash-worker fake-be --song <원곡> --out <폴더>` (cli.fake_be_cmd → serve).
 테스트: FakeBackendServer로 uvicorn을 스레드에 띄움.
@@ -70,7 +70,7 @@ class Rejected(Exception):
 
 @dataclass
 class Faults:
-    """테스트용 고장 주입. 한 번 쓰이면 꺼짐."""
+    """테스트용 고장 주입. 이름이 _once로 끝나는 것은 한 번 쓰이면 꺼지고 heartbeat_409는 계속 켜져 있음."""
 
     put_403_once: bool = False
     submit_503_once: bool = False

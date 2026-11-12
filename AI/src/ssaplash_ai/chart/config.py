@@ -8,6 +8,7 @@ AI/ 폴더(현재 작업 폴더) 기준. `configs/chart/music_check.yaml` → Mu
 - SSAPLASH_CHART_DEVICE: 장치(cuda / cpu)
 - SSAPLASH_MODELS_DIR: 가중치 폴더. 벤치마크 어댑터(`SeparatorConfig.model_dir`)가 읽음. 기본 data/models
 - SSAPLASH_WORK_DIR: 중간 파일 폴더. 명령줄 --out이 없을 때 cli가 씀
+- SSAPLASH_CHART_MODEL: 채보 모델 이름. transcription.yaml의 model 값보다 우선
 """
 
 from __future__ import annotations
@@ -177,7 +178,8 @@ class TempoConfig:
 class DrumCheckConfig:
     """채보 가능 검사 (S15P31A307-246 설계 3-3절). 걸리면 NOT_TRANSCRIBABLE 실패.
 
-    min_notes_per_minute가 None이면 노트 수 검사를 하지 않음. 기준값은 실제 곡 분포를 측정한 뒤 정함.
+    min_notes_per_minute가 None이면 노트 수 검사를 하지 않음. 코드 기본값은 None이고 서비스 설정
+    `configs/chart/transcription.yaml`은 92(S15P31A307-321 측정).
     """
 
     min_notes_per_minute: float | None = None

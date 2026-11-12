@@ -9,7 +9,7 @@ BE(`WorkerPayload`)와 같은 규칙:
   json.loads(parse_float=Decimal)와 같은 결과
 - payloadHash는 봉투 전체가 아니라 `result` 객체만 정규 JSON으로 만든 UTF-8 바이트의 SHA-256
 
-요청 본문도 정규 직렬화 결과 바이트를 그대로 보냄(make_envelope). 검증 벡터는 tests/worker/test_payload.py.
+요청 본문도 정규 직렬화 결과 바이트를 그대로 보냄(make_envelope). 검증 벡터는 tests/worker/test_worker_payload.py.
 """
 
 from __future__ import annotations

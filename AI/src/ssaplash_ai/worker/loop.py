@@ -1,6 +1,7 @@
 """실행 루프 (설계 4-1절 시작, 4-5절 종료).
 
 WorkerLoop: 설정 yaml 읽기 → 분리·채보 모델 올리기(claim 전에 한 번) → claim 폴링 → JobRunner → 반복.
+채보 작업이 없으면 LLM 총평 작업 하나를 처리함(켜져 있을 때).
 분리 전 음악 여부 검사 모델도 claim 전에 올림. 못 올리면 오류 로그를 남기고 검사 없이 계속함(채보는 막지 않음).
 SIGINT·SIGTERM 첫 번째는 처리 중인 작업을 끝내고 종료, 두 번째는 바로 종료(임대 만료로 BE가 재배정).
 종료 코드: 0 정상, 1 설정·모델 오류, 2 인증 실패(401).
@@ -68,7 +69,10 @@ class WorkerLoop:
     # ---- 준비 ----
 
     def load_models(self) -> tuple[float, float]:
-        """설정 yaml 읽기와 모델 두 개 올리기. (분리 올린 초, 채보 올린 초). 실패는 ValueError·ChartModelError."""
+        """설정 yaml 읽기, 분리·채보 모델 올리기, 음악 여부 검사 모델 올리기(실패해도 계속).
+
+        (분리 올린 초, 채보 올린 초)를 돌려줌. 실패는 ValueError·ChartModelError.
+        """
         sep_config = SeparationConfig.from_yaml(self.settings.separation_config)
         tr_config = TranscriptionConfig.from_yaml(self.settings.transcription_config)
         mc_config = None
