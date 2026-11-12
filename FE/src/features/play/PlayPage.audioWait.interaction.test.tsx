@@ -35,7 +35,8 @@ vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/so
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
-vi.mock('@/app/bootstrap', () => ({ setSoundOnHit: vi.fn(), useKeyboardDrum: vi.fn() }));
+vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
+vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
