@@ -1,5 +1,6 @@
 // 사용자 설정. localStorage에 영속. SETUP-04 프리셋의 0단계(로컬) 버전.
 import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from '@/domain/kit/timingCalibration';
+import { isTimingCalPrompt, type TimingCalPrompt } from '@/domain/kit/timingCalPrompt';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
@@ -44,6 +45,8 @@ interface SettingsState {
   kickOffsetMs: number | null;
   /** 마지막 박자 맞추기 기록. 한 번도 안 했으면 null */
   timingCal: TimingCalRecord | null;
+  /** 박자 맞추기 권유 상태(이 기기에만 저장). none 아직 권하지 않음 / skipped 첫 권유에서 건너뜀 / done 더 권하지 않음 */
+  timingCalPrompt: TimingCalPrompt;
   /** 노트가 위에서 판정선까지 내려오는 시간 */
   scrollMs: number;
   /** 센서 튜닝(반경 계수·상한, 세기 곡선, 시각 보정, 앵커 밖 정책). 디버그 창 튜닝 패널과 세팅 화면이 같은 값을 쓴다 */
@@ -118,6 +121,7 @@ interface SettingsState {
   setAudioOffsetMs: (v: number) => void;
   setKickOffsetMs: (v: number | null) => void;
   setTimingCal: (v: TimingCalRecord | null) => void;
+  setTimingCalPrompt: (v: TimingCalPrompt) => void;
   setScrollMs: (v: number) => void;
   /** 부분 갱신. 범위 보정(clampTuning)을 거쳐 병합한다 */
   setTuning: (partial: PartialTuning) => void;
@@ -338,12 +342,16 @@ export function sanitizeTimingSettings(p: {
   audioOffsetMs?: unknown;
   kickOffsetMs?: unknown;
   timingCal?: unknown;
-}): Pick<SettingsState, 'audioOffsetMs' | 'kickOffsetMs' | 'timingCal'> {
+  timingCalPrompt?: unknown;
+}): Pick<SettingsState, 'audioOffsetMs' | 'kickOffsetMs' | 'timingCal' | 'timingCalPrompt'> {
+  const timingCal = sanitizeTimingCalRecord(p.timingCal);
   return {
     audioOffsetMs: clampTimingOffset(isFiniteNum(p.audioOffsetMs) ? p.audioOffsetMs : 0),
     // 값이 없던 저장분은 null(스틱 값을 따름)
     kickOffsetMs: isFiniteNum(p.kickOffsetMs) ? clampTimingOffset(p.kickOffsetMs) : null,
-    timingCal: sanitizeTimingCalRecord(p.timingCal),
+    timingCal,
+    // 값이 없거나 이상하면 기록이 있던 사용자는 done(권하지 않음), 없으면 none
+    timingCalPrompt: isTimingCalPrompt(p.timingCalPrompt) ? p.timingCalPrompt : timingCal ? 'done' : 'none',
   };
 }
 
@@ -406,6 +414,7 @@ export const useSettings = create<SettingsState>()(
       audioOffsetMs: 0,
       kickOffsetMs: null,
       timingCal: null,
+      timingCalPrompt: 'none',
       scrollMs: 1400,
       tuning: DEFAULT_SENSOR_TUNING,
       metronome: true,
@@ -492,6 +501,7 @@ export const useSettings = create<SettingsState>()(
       setAudioOffsetMs: (audioOffsetMs) => set({ audioOffsetMs: clampTimingOffset(audioOffsetMs) }),
       setKickOffsetMs: (v) => set({ kickOffsetMs: v === null ? null : clampTimingOffset(v) }),
       setTimingCal: (timingCal) => set({ timingCal }),
+      setTimingCalPrompt: (timingCalPrompt) => set({ timingCalPrompt }),
       setScrollMs: (scrollMs) => set({ scrollMs }),
       setTuning: (partial) => set({ tuning: mergeTuning(get().tuning, partial) }),
       resetTuning: () => set({ tuning: DEFAULT_SENSOR_TUNING }),
