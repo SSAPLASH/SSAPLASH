@@ -1,8 +1,15 @@
 // 패드 큐: 마디·판정 상태에서 패드별 "다음 박 라벨"과 강조 단계를 계산한다. 그리기·시계는 모른다.
-import type { NoteState } from '@/engine/RhythmSession';
+import type { ChartNote } from '@/domain/chart';
 import type { PadBadge } from '@/domain/drumKit';
+import type { Judgement } from '@/domain/judgement';
 import type { PadId } from '@/domain/pads';
 import { countLabel, type SheetModel } from '@/domain/sheet';
+
+/** 큐 계산에 쓰는 음표 판정 상태. engine의 NoteState가 이 모양을 그대로 만족한다 */
+export interface CueNoteState {
+  note: Pick<ChartNote, 'timeMs'>;
+  judgement: Judgement | null;
+}
 
 export interface PadCue {
   pad: PadId;
@@ -18,7 +25,7 @@ export interface PadCue {
 }
 
 /** bar 마디에서 아직 판정되지 않은 칸 중 패드마다 가장 이른 칸 하나를 큐로 만든다 */
-export function padCues(sheet: SheetModel, bar: number, notes: NoteState[]): PadCue[] {
+export function padCues(sheet: SheetModel, bar: number, notes: readonly CueNoteState[]): PadCue[] {
   const cells = sheet.bars[bar]?.cells;
   if (!cells) return [];
 
