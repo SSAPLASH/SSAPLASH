@@ -96,3 +96,41 @@ describe('SetupPage 단계 팝업', () => {
     expect(screen.getByRole('button', { name: /시작 위치 보정/ }).className).toContain('is-attention');
   });
 });
+
+describe('SetupPage 패드 위치 자동 보정 표시', () => {
+  const openStick = () => {
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /스틱·페달 연결/ }));
+    return screen.getByRole('dialog', { name: '스틱·페달 연결' });
+  };
+
+  it('켜져 있고 연결된 손이 있으면 연결 팝업 상태 줄에 알린다', () => {
+    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: true });
+    useLive.setState({ connected: [true, false] });
+    expect(openStick().textContent).toContain('자동 보정 켜짐');
+  });
+
+  it('꺼져 있으면 알리지 않는다', () => {
+    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: false });
+    useLive.setState({ connected: [true, true] });
+    expect(openStick().textContent).not.toContain('자동 보정 켜짐');
+  });
+
+  it('연결된 손이 없으면 알리지 않는다', () => {
+    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: true });
+    useLive.setState({ connected: [false, false] });
+    expect(openStick().textContent).not.toContain('자동 보정 켜짐');
+  });
+
+  it('꺼져 있으면 재정렬 직후에도 「잠시 뒤 보정」을 알리지 않는다', () => {
+    const st = { appliedDeg: -8, samples: 0, lastErrorDeg: 8, lastSentAt: performance.now(), acked: true };
+    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: false });
+    useLive.setState({ connected: [true, false], yawDrift: [st, null] });
+    const off = openStick().textContent ?? '';
+    expect(off).toContain('방위각 보정 왼손');
+    expect(off).not.toContain('잠시 뒤 보정');
+    cleanup();
+    useSettings.setState({ yawAutoCorrect: true });
+    expect(openStick().textContent).toContain('잠시 뒤 보정');
+  });
+});

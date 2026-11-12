@@ -19,10 +19,12 @@ import type { PadId } from '@/domain/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
 import { startAudioDiag } from './audioDiag';
+import { startYawAutoDiag } from './yawAutoDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { smoothBattery } from '@/domain/kit/stickStatus';
+import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
 import { devicesReady } from '@/domain/pedalStatus';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';
@@ -133,6 +135,7 @@ export function bootstrapInput(): void {
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
+    yawDriftMonitor.setAuto(s.yawAutoCorrect);
     audioEngine.setVolume(s.volume);
     audioEngine.setDrumVolume(s.drumVolume);
     audioEngine.setSongVolume(s.songVolume);
@@ -275,9 +278,13 @@ export function bootstrapInput(): void {
   // 판정 타이밍 보정·오디오 지연 진단 줄: 10초마다 + 곡 시작 직후 1회
   startAudioDiag(() => ({
     audioOffsetMs: useSettings.getState().audioOffsetMs,
+    kickOffsetMs: kickOffsetOrStick(useSettings.getState().audioOffsetMs, useSettings.getState().kickOffsetMs),
     latency: audioEngine.latency(),
     timingCal: useSettings.getState().timingCal,
   }));
+  // 패드 위치 자동 보정 켬·끔 진단 줄: 10초마다 + 곡 시작 직후 1회 + 값이 바뀔 때
+  const yawAutoDiag = startYawAutoDiag(() => useSettings.getState().yawAutoCorrect);
+  useSettings.subscribe(() => yawAutoDiag.sync());
   startRelay();
   startTelemetry();
   preloadKitSpritesWhenIdle();
@@ -314,6 +321,8 @@ export function bootstrapMetronome(): void {
     busy: () => useLive.getState().calibration.mode !== 'idle',
     outputLatencyMs: () => audioEngine.latency()?.outputLatencyMs ?? null,
     renderAheadMs: () => audioEngine.renderAheadMs(),
+    // pedal.connected는 [하이햇 페달(foot 2), 킥(foot 3)] 순서(인덱스 = foot - 2)
+    kickConnected: () => useLive.getState().pedal.connected[1],
   });
   metronome.bind({
     click: (atMs, accent) => audioEngine.click(atMs, accent),

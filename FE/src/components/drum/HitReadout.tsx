@@ -3,8 +3,8 @@ import { PAD_META } from '@/domain/pads';
 import './HitReadout.css';
 
 interface Props {
-  /** stack: 연주 화면(두 줄, 180폭) · row: 자유 연습 정보 띠(패드·손·세기 세 칸) */
-  variant: 'stack' | 'row';
+  /** stack: 연주 화면(두 줄, 180폭) */
+  variant: 'stack';
   pad?: PadId;
   hand?: 'L' | 'R' | null;
   velocity?: number;
@@ -24,28 +24,9 @@ export function HitReadout({ variant, pad, hand, velocity }: Props) {
   const hText = handText(hand);
   const vText = velocity === undefined ? DASH : String(Math.round(velocity));
 
-  if (variant === 'row') {
-    return (
-      <div className="hit-readout row">
-        <div className="hit-readout-cell">
-          <span className="hit-readout-key">패드</span>
-          <span className="hit-readout-val">{padName}</span>
-        </div>
-        <div className="hit-readout-cell">
-          <span className="hit-readout-key">손</span>
-          <span className="hit-readout-val">{hText}</span>
-        </div>
-        <div className="hit-readout-cell">
-          <span className="hit-readout-key">세기</span>
-          <span className="hit-readout-val num">{vText}</span>
-        </div>
-      </div>
-    );
-  }
-
   const second = hand || velocity !== undefined ? `${hText} · 세기 ${vText}` : DASH;
   return (
-    <div className="hit-readout stack">
+    <div className={`hit-readout ${variant}`}>
       <span className="hit-readout-line1">최근 타격: {padName}</span>
       <span className="hit-readout-line2">{second}</span>
     </div>

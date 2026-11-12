@@ -279,7 +279,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(23);
+    expect(SETTINGS_VERSION).toBe(24);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -446,7 +446,7 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
   });
 
   it('스토어 초기값은 system·빈 기록', () => {
-    expect(SETTINGS_VERSION).toBe(23);
+    expect(SETTINGS_VERSION).toBe(24);
     expect(useSettings.getInitialState().activePresetId).toBe(SYSTEM_PRESET_ID);
     expect(useSettings.getInitialState().presetAnchors).toEqual({});
   });
@@ -541,17 +541,52 @@ describe('판정 타이밍 보정·박자 맞추기 기록', () => {
 
   it('박자 맞추기 기록은 저장분에서 복원하고, 모양이 틀리면 버린다', () => {
     const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
-    expect(merge({ timingCal: rec }).timingCal).toEqual(rec);
+    // 옛 저장분(kick 없음)도 그대로 읽는다
+    expect(merge({ timingCal: rec }).timingCal).toEqual({ ...rec, kick: null });
+    const kick = { medianMs: -40, madMs: 6, pairs: 11 };
+    expect(merge({ timingCal: { ...rec, kick } }).timingCal).toEqual({ ...rec, kick });
     expect(merge({}).timingCal).toBeNull();
     expect(merge({ timingCal: { ...rec, input: 'mouse' } }).timingCal).toBeNull();
     expect(merge({ timingCal: { ...rec, outputLatencyMs: 'x' } }).timingCal).toMatchObject({ outputLatencyMs: null });
   });
 
   it('setTimingCal로 기록을 넣고 지운다', () => {
-    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null };
+    const rec = { measuredAt: 2, medianMs: -10, madMs: 3, pairs: 11, input: 'keyboard' as const, outputLatencyMs: null, kick: null };
     useSettings.getState().setTimingCal(rec);
     expect(useSettings.getState().timingCal).toEqual(rec);
     useSettings.getState().setTimingCal(null);
     expect(useSettings.getState().timingCal).toBeNull();
+  });
+});
+
+describe('박자 맞추기 권유 상태(timingCalPrompt)', () => {
+  const merge = sanitizeTimingSettings;
+  const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
+
+  it('기본값은 none', () => {
+    expect(useSettings.getInitialState().timingCalPrompt).toBe('none');
+  });
+
+  it('값이 없던 저장분: 기록이 있으면 done, 없으면 none', () => {
+    expect(merge({ timingCal: rec }).timingCalPrompt).toBe('done');
+    expect(merge({}).timingCalPrompt).toBe('none');
+  });
+
+  it('저장된 세 값은 그대로 유지한다(skipped도 기록이 없으면 유지)', () => {
+    expect(merge({ timingCalPrompt: 'skipped' }).timingCalPrompt).toBe('skipped');
+    expect(merge({ timingCalPrompt: 'done' }).timingCalPrompt).toBe('done');
+    expect(merge({ timingCalPrompt: 'none', timingCal: rec }).timingCalPrompt).toBe('none');
+  });
+
+  it('이상한 값은 없는 값처럼 다룬다', () => {
+    expect(merge({ timingCalPrompt: 'later' }).timingCalPrompt).toBe('none');
+    expect(merge({ timingCalPrompt: 3, timingCal: rec }).timingCalPrompt).toBe('done');
+    expect(merge({ timingCalPrompt: null }).timingCalPrompt).toBe('none');
+  });
+
+  it('setTimingCalPrompt로 바꾼다', () => {
+    useSettings.getState().setTimingCalPrompt('skipped');
+    expect(useSettings.getState().timingCalPrompt).toBe('skipped');
+    useSettings.getState().setTimingCalPrompt('none');
   });
 });

@@ -77,6 +77,8 @@ export type DiagBody =
       chartVersionId: number | null;
       windows: TimingWindows;
       audioOffsetMs: number;
+      /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
+      kickOffsetMs: number;
       noteCount: number;
       /** end일 때: 끝까지 쳤는지('finished') 중간에 나갔는지('left') */
       reason?: 'finished' | 'left';
@@ -100,13 +102,17 @@ export type DiagBody =
   | {
       type: 'audio';
       audioOffsetMs: number;
+      /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
+      kickOffsetMs: number;
       baseLatencyMs: number | null;
       outputLatencyMs: number | null;
       sampleRate: number | null;
       measured: { medianMs: number; madMs: number; pairs: number; input: 'sensor' | 'keyboard'; measuredAt: number } | null;
     }
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
-  | ({ type: 'yawCorrect' } & DiagYawCorrection);
+  | ({ type: 'yawCorrect' } & DiagYawCorrection)
+  /** 패드 위치 자동 보정(설정 yawAutoCorrect) 켬·끔. 10초마다 + 곡 시작 직후 1회 + 값이 바뀔 때 */
+  | { type: 'yawAuto'; on: boolean };
 
 /** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
 export interface DiagAnchor {

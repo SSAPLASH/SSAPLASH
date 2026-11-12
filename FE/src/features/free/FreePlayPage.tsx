@@ -1,7 +1,7 @@
-// 자유 연습 (MODE-02, Figma 112:76·112:146·228:5881, 설계 4-4). 채보 없이 치면 바로 울린다.
-// 소리·텔레메트리는 bootstrap의 공용 경로가 내고, 이 페이지는 표시(패드 점등·최근 타격·세션 통계)와
+// 자유 연습 (MODE-02, Figma 112:76·112:146·228:5881, 설계 4-4 · 무대 개편 MODE-002-free-stage). 채보 없이 치면 바로 울린다.
+// 소리·텔레메트리는 bootstrap의 공용 경로가 내고, 이 페이지는 표시(무대·패드 점등·키트 가이드·HUD)와
 // 포인터 기준면 등록만 맡는다. 앵커 거리·패드별 통계 같은 실측 UI는 모니터 빌드(FreeMeasureSection)로 옮겼다.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
@@ -12,39 +12,34 @@ import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { DisconnectBand } from './DisconnectBand';
 import { RealignPrompt } from '@/components/calibration/RealignPrompt';
 import { useRealign } from '@/components/calibration/useRealign';
-import { HitReadout } from '@/components/drum/HitReadout';
-import { TABLET_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
 import { useDock } from '@/components/shell/useShell';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FreeHud } from './components/FreeHud';
+import { KitGuideLabels, KitGuideSwitch } from './components/KitGuide';
+import { StageBeam, StageFloor } from './components/StageLights';
+import { kitGuideLabels } from './domain/kitGuide';
 import './free.css';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { audioEngine } from '@/audio/AudioEngine';
 import { usePresets } from '@/store/presetStore';
 import { useReconnect } from '@/store/reconnectStore';
-import { ALL_PADS, PAD_META } from '@/domain/pads';
 import { SYSTEM_PRESET_NAME, presetDisplayName } from '@/domain/preset';
 import { freeStage } from './freeStage';
-import { deviceGroupName } from '@/domain/devices';
 import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
 import { addHit, emptyHitStats, meanVelocity } from '@/domain/play/hitStats';
 import { inputManager, KEYBOARD_INPUT_ENABLED, touchSource } from '@/runtime/sources';
 import { stopFree } from '@/runtime/recordingStore';
-import { KEY_MAP } from '@/domain/keyMap';
-import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
+import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { bindSensorSurface } from '@/runtime/sensorSession';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import type { PadId } from '@/domain/pads';
 
-/** 킷 최대 배율(Figma 1.25, 태블릿 ≤1024는 1.1) */
-const KIT_SCALE = 1.25;
-const KIT_SCALE_TABLET = 1.1;
-
-const keyLabel = (code: string) => code.replace('Key', '').replace('Digit', '');
+/** 킷 최대 배율(설계 D7). 폭이 좁으면 fitContain이 어차피 폭에 맞춰 줄인다 */
+const KIT_SCALE = 1.6;
 
 /** 빈 상태 조준 아이콘(Figma 112:146) */
 function TargetIcon() {
@@ -56,33 +51,11 @@ function TargetIcon() {
   );
 }
 
-/** 키보드 전용일 때 안내 줄의 패드별 키 */
-function KeyGuide() {
-  return (
-    <>
-      키보드로 칩니다.{' '}
-      {KEYBOARD_INPUT_ENABLED &&
-        ALL_PADS.map((pad) => (
-          <span key={pad} className="free-guide-pad">
-            <span style={{ color: PAD_META[pad].color }}>{PAD_META[pad].label}</span>{' '}
-            {Object.entries(KEY_MAP)
-              .filter(([, b]) => b.pad === pad)
-              .map(([code]) => (
-                <kbd className="kbd" key={code}>
-                  {keyLabel(code)}
-                </kbd>
-              ))}
-          </span>
-        ))}
-    </>
-  );
-}
-
 export function FreePlayPage() {
   const navigate = useNavigate();
-  const tablet = useMediaQuery(TABLET_QUERY);
   const sensorKind = useSettings((s) => s.sensorKind);
-  const sensorOptions = useSettings((s) => s.sensorOptions);
+  const kitGuide = useSettings((s) => s.kitGuide);
+  const setKitGuide = useSettings((s) => s.setKitGuide);
   const activePresetId = useSettings((s) => s.activePresetId);
   const presetItems = usePresets((s) => s.items);
   const connected = useLive((s) => s.connected);
@@ -101,6 +74,8 @@ export function FreePlayPage() {
   // 스틱이 다시 켜진 손이 있으면 스네어 재정렬 띠(다른 손은 계속 친다, PLAY-004 4-2)
   const realign = useRealign(true);
   const [stats, setStats] = useState(emptyHitStats);
+  // 이름표 켜짐용 패드별 타격 횟수. 킷 점등(hitSeq)과 달리 하이햇 페달을 하이햇으로 합치지 않는다
+  const [labelSeq, setLabelSeq] = useState<Partial<Record<PadId, number>>>({});
   // 반주(MODE-002 설계 D1): 페이지가 재생기를 하나 들고 떠나면 해제한다
   const accomp = useFreeAccompaniment();
   // 자유 연습은 화면에 있는 동안 키보드 드럼을 켠다
@@ -127,6 +102,8 @@ export function FreePlayPage() {
       if (s.hitSeq === prev.hitSeq || !s.lastHit) return;
       const hit = s.lastHit;
       setStats((st) => addHit(st, hit));
+      const pad = hit.pad;
+      if (pad) setLabelSeq((q) => ({ ...q, [pad]: (q[pad] ?? 0) + 1 }));
     });
   }, []);
 
@@ -138,12 +115,10 @@ export function FreePlayPage() {
   const showBand = stage === 'oneHand' || (stage === 'ready' && pedal === false);
   const mean = meanVelocity(stats);
   const presetName = presetDisplayName(presetItems, activePresetId) ?? SYSTEM_PRESET_NAME;
-
-  let guide: React.ReactNode;
-  if (empty) guide = `연결 대기 중 · ${deviceGroupName(pedal !== undefined)}을 연결해 주세요`;
-  else if (sensorKind === 'none') guide = <KeyGuide />;
-  else if (desc?.usageGuide) guide = desc.usageGuide(resolveOptions(desc, sensorOptions[sensorKind]));
-  else guide = '스틱을 움직여 자유롭게 연주하세요';
+  // 키트 가이드: 실물은 이름표 알약(키보드로 칠 때만 키), 전자·네온은 내장 글자를 스위치로 켜고 끈다(D6)
+  const showKeys = sensorKind === 'none' && KEYBOARD_INPUT_ENABLED;
+  const guideLabels = useMemo(() => kitGuideLabels(kitSkin, showKeys), [kitSkin, showKeys]);
+  const acoustic = kitSkin === 'acoustic';
 
   // 터치 연주(MODE-002). 오디오가 깨어 있으면 동기 경로로 바로 친다. 첫 터치만 깨운 뒤 친다
   const onPadDown = (pad: PadId) => {
@@ -155,7 +130,8 @@ export function FreePlayPage() {
   const openSetup = () => navigate('/setup', { state: { returnTo: '/free', returnLabel: '자유 연습' } });
 
   return (
-    <main className="main free-page">
+    <main className={`main free-page${empty ? ' is-empty' : ''}`}>
+      <StageBeam on={!empty} />
       <AccompanimentBar
         view={accomp.view}
         onPick={accomp.available ? () => setPickerOpen(true) : undefined}
@@ -177,69 +153,70 @@ export function FreePlayPage() {
         />
       )}
 
-      <Card className="free-canvas" aria-label="연주 캔버스">
-        <div className="free-canvas-head">
-          <h2 className="free-canvas-title">드럼 킷</h2>
-          <span className="free-canvas-meta">프리셋: {presetName} · 8패드</span>
+      <section className={`free-stage${empty ? ' is-empty' : ''}`} aria-label="연주 캔버스">
+        <div className="free-stage-head">
+          <div className="free-stage-title">
+            <h2>드럼 킷</h2>
+            <span>프리셋: {presetName} · 8패드</span>
+          </div>
+          <KitGuideSwitch on={kitGuide} onChange={setKitGuide} />
         </div>
 
-        {showBand ? (
-          <DisconnectBand
-            left={connected[0]}
-            right={connected[1]}
-            pedal={pedal}
-            reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
-            onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
-          />
-        ) : (
-          realign.info && (
-            <div className="free-band motion-toast" role="status">
-              <RealignPrompt hands={realign.info.hands} done={realign.info.done} variant="band" onSkip={realign.info.onSkip} />
+        <div className="free-kit-zone">
+          <div ref={bindSensorSurface} className="free-kit" data-pointer-strike="">
+            <div className="free-kit-inner" aria-hidden={empty || undefined}>
+              <LiveDrumKit
+                fitContain
+                effects
+                scale={KIT_SCALE}
+                states={padStates}
+                skin={kitSkin}
+                hitSeq={hitSeq}
+                labels={acoustic ? false : kitGuide}
+                underlay={<StageFloor />}
+                overlay={acoustic ? <KitGuideLabels labels={guideLabels} visible={kitGuide && !empty} hitSeq={labelSeq} /> : undefined}
+                onPadDown={empty ? undefined : onPadDown}
+              />
             </div>
-          )
-        )}
-
-        <div ref={bindSensorSurface} className={`free-kit${empty ? ' is-dim' : ''}`} data-pointer-strike="">
-          <div className="free-kit-inner" aria-hidden={empty || undefined}>
-            <LiveDrumKit fitContain effects scale={tablet ? KIT_SCALE_TABLET : KIT_SCALE} states={padStates} skin={kitSkin} hitSeq={hitSeq} onPadDown={empty ? undefined : onPadDown} />
           </div>
-        </div>
 
-        {empty && (
-          <div className="free-empty-wrap">
-            <EmptyState
-              icon={<TargetIcon />}
-              title="스틱을 연결하면 바로 칠 수 있어요"
-              action={<Button onClick={openSetup}>드럼 세팅에서 연결하기</Button>}
+          {showBand ? (
+            <DisconnectBand
+              left={connected[0]}
+              right={connected[1]}
+              pedal={pedal}
+              reconnect={{ status: reconnect, attempt, max, hint: reconnectHint }}
+              onReconnect={reconnectAvailable ? () => void doReconnect() : undefined}
             />
-          </div>
-        )}
+          ) : (
+            realign.info && (
+              <div className="free-band motion-toast" role="status">
+                <RealignPrompt hands={realign.info.hands} done={realign.info.done} variant="band" onSkip={realign.info.onSkip} />
+              </div>
+            )
+          )}
 
-        <p className={`free-guide${empty ? ' is-wait' : ''}`}>{guide}</p>
-      </Card>
+          {empty && (
+            <div className="free-empty-wrap">
+              <EmptyState
+                className="free-empty-card"
+                icon={<TargetIcon />}
+                title="스틱을 연결하면 바로 칠 수 있어요"
+                description="연결되면 무대에 조명이 켜집니다."
+                action={<Button onClick={openSetup}>드럼 세팅에서 연결하기</Button>}
+              />
+            </div>
+          )}
+        </div>
 
-      <div className="free-info">
-        <div className="free-info-block">
-          <span className="free-info-key">최근 타격</span>
-          <HitReadout
-            variant="row"
-            pad={lastHit?.pad ?? undefined}
-            hand={lastHit?.hand === 0 ? 'L' : lastHit?.hand === 1 ? 'R' : null}
-            velocity={lastHit?.velocity}
-          />
-        </div>
-        <div className="free-info-block">
-          <span className="free-info-key">세션 통계</span>
-          <div className="free-info-stats">
-            <span>
-              타격 <span className="num">{stats.total}</span>회
-            </span>
-            <span>
-              평균 세기 <span className="num">{mean === null ? '—' : Math.round(mean)}</span>
-            </span>
-          </div>
-        </div>
-      </div>
+        <FreeHud
+          pad={lastHit?.pad ?? undefined}
+          hand={lastHit?.hand ?? null}
+          velocity={lastHit?.velocity}
+          total={stats.total}
+          mean={mean}
+        />
+      </section>
     </main>
   );
 }

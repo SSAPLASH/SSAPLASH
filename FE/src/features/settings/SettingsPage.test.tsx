@@ -3,8 +3,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { UserMe } from '@/domain/auth';
 import { useAuth } from '@/store/authStore';
-import { useLive } from '@/store/liveStore';
-import { usePresets } from '@/store/presetStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
 import { recommendationVersion } from '@/domain/signupTerms';
@@ -61,18 +59,16 @@ beforeEach(() => {
   put(useAuth, { status: 'authenticated', user });
   put(useSettings, {
     sensorKind: 'none',
-    activePresetId: 'system',
     volume: 0.8,
     audioOffsetMs: 0,
+    kickOffsetMs: null,
     timingCal: null,
     liveCoach: true,
   });
-  put(useLive, { connected: [false, false], referenceSetAt: null });
-  put(usePresets, { items: [] });
 });
 
 describe('SettingsPage 계정 카드', () => {
-  it('로그인 사용자: 닉네임·제공자·로그아웃·회원 탈퇴 카드', () => {
+  it('로그인 사용자: 닉네임·제공자·로그아웃·회원 탈퇴 버튼', () => {
     const html = render();
     expect(html).toContain('드러머곰');
     expect(html).toContain('Google 계정으로 로그인');
@@ -85,7 +81,7 @@ describe('SettingsPage 계정 카드', () => {
     expect(render()).toContain('SSAFY 계정으로 로그인');
   });
 
-  it('사용자 없음: 로그인 링크만, 탈퇴 카드 없음', () => {
+  it('사용자 없음: 로그인 링크만, 탈퇴 버튼 없음', () => {
     put(useAuth, { status: 'anonymous', user: null });
     const html = render();
     expect(html).toContain('href="/login"');
@@ -114,12 +110,40 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   });
 });
 
+describe('SettingsPage 패드 위치 자동 보정', () => {
+  it('기본은 끔이고 스위치가 store 값을 따른다', () => {
+    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('false');
+    put(useSettings, { yawAutoCorrect: true });
+    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('true');
+  });
+});
+
+describe('SettingsPage 연주 구역 줄', () => {
+  it('스위치 세 줄 사이에 안내 문단이 끼지 않는다(줄마다 구분선이 고르게 나온다)', () => {
+    put(useSettings, { yawAutoCorrect: true });
+    const html = render();
+    const from = html.indexOf('실시간 코칭');
+    const to = html.indexOf('드럼 모양');
+    expect(html.slice(from, to)).not.toContain('settings-note');
+  });
+
+  it('스위치 줄 설명은 한 문장이다', () => {
+    const html = render();
+    for (const text of ['연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.', '최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.', '틀어진 스틱 방향을 타격 위치로 바로잡아요.']) {
+      expect(html).toContain(text);
+    }
+  });
+});
+
 describe('SettingsPage 드럼 모양', () => {
-  it('연주 카드에 드럼 모양 행과 캐러셀이 실시간 코칭 위에 있다', () => {
+  it('연주 토글 다음에 드럼 모양·타격 이펙트 캐러셀이 나온다', () => {
     const html = render();
     expect(html).toContain('드럼 모양');
     expect(html).toContain('aria-roledescription="carousel"');
-    expect(html.indexOf('드럼 모양')).toBeLessThan(html.indexOf('실시간 코칭'));
+    expect(html.indexOf('실시간 코칭')).toBeLessThan(html.indexOf('타이밍 막대'));
+    expect(html.indexOf('타이밍 막대')).toBeLessThan(html.indexOf('패드 위치 자동 보정'));
+    expect(html.indexOf('패드 위치 자동 보정')).toBeLessThan(html.indexOf('드럼 모양'));
+    expect(html.indexOf('드럼 모양')).toBeLessThan(html.indexOf('타격 이펙트'));
   });
 });
 
@@ -147,48 +171,25 @@ describe('SettingsPage 드럼·노래 음량', () => {
   });
 });
 
-describe('SettingsPage 기기 행', () => {
-  it('키보드 전용', () => {
-    expect(render()).toContain('키보드 전용');
-  });
-
-  it('센서 양손 연결됨', () => {
-    put(useSettings, { sensorKind: 'ble' });
-    put(useLive, { connected: [true, true] });
-    expect(render()).toContain('>왼손·오른손 연결됨<');
-  });
-
-  it('동글 소스는 페달을 포함해 빠진 기기를 말한다(E4)', () => {
-    put(useSettings, { sensorKind: 'webserial' });
-    put(useLive, { connected: [true, true], pedal: { connected: [false, false], battery: null } });
+describe('SettingsPage 설정 순서', () => {
+  it('오디오·연주·계정·데이터 순으로 표시하고 기기 카드와 프리셋 요약은 없다', () => {
     const html = render();
-    expect(html).toContain('페달 연결 안 됨');
-    expect(html).toContain('스틱·페달 연결');
+    const headings = ['오디오', '연주', '계정', '데이터 활용'].map((name) => html.indexOf(`>${name}</h3>`));
+    expect(headings.every((index) => index >= 0)).toBe(true);
+    expect(headings).toEqual([...headings].sort((a, b) => a - b));
+    expect(html).not.toContain('>기기</h3>');
+    expect(html).not.toContain('드럼 세팅 열기');
+    expect(html).not.toContain('프리셋 · 보정');
+    expect(html).toContain('settings-grid has-data');
   });
 
-  it('센서 한 손만', () => {
-    put(useSettings, { sensorKind: 'ble' });
-    put(useLive, { connected: [true, false] });
-    expect(render()).toContain('오른손 연결 안 됨');
-  });
-
-  it('센서 미연결', () => {
-    put(useSettings, { sensorKind: 'ble' });
-    put(useLive, { connected: [false, false] });
-    expect(render()).toContain('연결 안 됨');
-  });
-
-  it('프리셋 값: 보정 필요·보정 완료·시스템 기본(UX-64)', () => {
-    put(usePresets, { items: [{ id: 'p1', name: '내 세팅' } as never] });
-    put(useSettings, { sensorKind: 'ble', activePresetId: 'p1' });
-    put(useLive, { referenceSetAt: null });
-    expect(render()).toContain('내 세팅 · 보정 필요');
-    put(useLive, { referenceSetAt: 123 });
-    expect(render()).toContain('내 세팅 · 보정 완료');
-    put(useSettings, { activePresetId: 'system' });
-    expect(render()).toContain('시스템 기본 · 보정 완료');
-    put(useSettings, { sensorKind: 'none' });
-    expect(render()).toContain('>시스템 기본<');
+  it('비로그인에서는 데이터 구역과 그리드 예약 행을 두지 않는다', () => {
+    put(useAuth, { status: 'anonymous', user: null });
+    const html = render();
+    expect(html).toContain('class="settings-grid"');
+    expect(html).not.toContain('settings-grid has-data');
+    expect(html).not.toContain('settings-data');
+    expect(html).not.toContain('회원 탈퇴');
   });
 });
 
@@ -200,7 +201,7 @@ describe('SettingsPage 데이터 활용 카드', () => {
     const html = render();
     expect(html).toContain('데이터 활용');
     expect(html.indexOf('데이터 활용')).toBeGreaterThan(html.indexOf('드러머곰'));
-    expect(html.indexOf('데이터 활용')).toBeLessThan(html.indexOf('>기기<'));
+    expect(html.indexOf('데이터 활용')).toBeGreaterThan(html.indexOf('>계정</h3>'));
     expect(html).toContain('연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요');
     expect(html).not.toContain('맞춤 곡 추천 학습 활용');
   });
@@ -269,14 +270,32 @@ describe('SettingsPage 박자 맞추기', () => {
     expect(html).not.toContain('다시 맞춰 주세요');
   });
 
+  it('킥 기록이 있으면 박자 맞추기 기록 줄에 킥 값도 보인다', () => {
+    put(useSettings, { sensorKind: 'serial', timingCal: { ...rec, kick: { medianMs: -41, madMs: 5, pairs: 12 } } });
+    expect(render()).toContain('11월 11일에 스틱으로 맞췄어요 · 킥 -40ms');
+  });
+
+  it('킥 값이 없으면 킥 슬라이더는 스틱 값을 보여 주고, 있으면 킥 값을 보인다', () => {
+    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: null });
+    const html = render();
+    expect(html.match(/-65ms/g)).toHaveLength(2);
+    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: -40 });
+    const html2 = render();
+    expect(html2.match(/-65ms/g)).toHaveLength(1);
+    expect(html2).toContain('-40ms');
+  });
+
   it('스틱으로 맞췄는데 지금 키보드만이면 다시 맞추라고 안내한다', () => {
     put(useSettings, { sensorKind: 'none', timingCal: rec });
     expect(render()).toContain('스틱으로 맞춘 값이에요. 키보드로 칠 때는 다시 맞춰 주세요.');
   });
 
-  it('수동 칸은 판정 타이밍 보정이고 범위 −250~+100, 5ms 단위다', () => {
+  it('수동 칸은 스틱·킥 판정 타이밍이고 범위 −250~+100, 5ms 단위다', () => {
     const html = render();
-    expect(html).toContain('판정 타이밍 보정');
+    expect(html).toContain('스틱 판정 타이밍');
+    expect(html).toContain('킥 판정 타이밍');
+    expect(html).toContain('킥 페달 판정만 따로 맞춰요.');
+    expect(html.match(/min="-250"/g)).toHaveLength(2);
     expect(html).toContain('판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요');
     expect(html).not.toContain('타격음 지연 보정');
     expect(html).toMatch(/min="-250"/);

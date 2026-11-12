@@ -41,14 +41,17 @@ import { strayMissSource } from '@/features/play/components/stage/strayMissSourc
 import type { HitMark } from '@/components/sheetmusic/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
+import { useSidebarCollapsed } from '@/components/shell/useMediaQuery';
 import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
 import type { Chart } from '@/domain/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
 import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
-import type { Judgement } from '@/domain/judgement';
-import type { InputSourceKind } from '@/domain/events';
+import { appliedWindows, type Judgement } from '@/domain/judgement';
+import { isSensorSource, type InputSourceKind } from '@/domain/events';
+import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
+import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
@@ -57,7 +60,9 @@ import { readCurrentConsent } from './dataConsent';
 import { startPlaySync } from '@/runtime/playSync';
 import { disarm, finishSong, setLocked } from '@/runtime/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
+import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
+import { useTimingCalGate } from './useTimingCalGate';
 import { PlayClock } from '@/engine/sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/runtime/sources';
@@ -68,6 +73,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
+import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSettings } from '@/store/settingsStore';
 import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
@@ -97,6 +103,9 @@ function parseId(raw: string | null): number | null {
 /** HUD 갱신 간격(ms) */
 const HUD_INTERVAL_MS = 250;
 
+/** 입문 코스 목록을 아직 못 읽었을 때 쓰는 빈 목록(구독 값 정체성 유지) */
+const NO_LESSONS: readonly Lesson[] = [];
+
 /** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
 interface AccResult {
   loaded: LoadedChart;
@@ -108,6 +117,8 @@ function SheetPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
+  // 사이드바 실제 접힘(사용자 설정 또는 태블릿 폭). 펼쳐져 있으면 곡 범위를 사이드바 하위 메뉴가 보인다
+  const sidebarCollapsed = useSidebarCollapsed();
   // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
   const smallKit = smallKitSpec('sheet', settings.kitSkin);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,17 +181,24 @@ function SheetPageBody() {
   const accError = accUrl !== null && accCurrent && !accCurrent.ok ? (accCurrent.error ?? '반주를 불러오지 못했습니다.') : null;
   const readyChart: Chart | null = paramLoaded && (accUrl === null || accCurrent?.ok) ? paramLoaded.chart : null;
 
+  // 판정 폭: 쉬운 채보·입문 코스 연주 레슨이면 GOOD을 넓힌다(PLAY-004 3-5). 세션·타이밍 막대·진단 줄·플레이 로그가 이 값 하나를 쓴다
+  const lessons = useLessons((l) => l.list)?.items ?? NO_LESSONS;
+  const beginner = readyChart ? isBeginnerChart({ difficulty: readyChart.difficulty, chartId: readyChart.chartId, lessons }) : false;
+  const windows = useMemo(() => appliedWindows(settings.timing, beginner), [settings.timing, beginner]);
+  const widened = beginner && windows.goodMs > settings.timing.goodMs;
+
   // 준비 단계 세션. 설정이 바뀌면 준비 화면에서만 새로 만든다
   const session = useMemo(
     () =>
       readyChart
         ? new RhythmSession(readyChart, {
-            windows: settings.timing,
+            windows,
             countInBars: settings.countInBars,
             audioOffsetMs: settings.audioOffsetMs,
+            kickOffsetMs: kickOffsetOrStick(settings.audioOffsetMs, settings.kickOffsetMs),
           })
         : null,
-    [readyChart, settings.timing, settings.countInBars, settings.audioOffsetMs],
+    [readyChart, windows, settings.countInBars, settings.audioOffsetMs, settings.kickOffsetMs],
   );
   const activeSession = playSession ?? session;
   // 타이밍 막대 범위 밖 점: 채보 밖 타격 중 가까운 같은 패드 노트가 있는 것
@@ -236,13 +254,15 @@ function SheetPageBody() {
   const goTimer = useRef<number | null>(null);
 
   const returnTo = location.pathname + location.search;
+  const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
+  // 첫 연주 전 박자 맞추기 권유(PLAY-004 4-3). 닫으면 시작 확인 창이 그대로 남아 다시 [플레이]를 누르면 시작한다
+  const { gate: timingGate, dialog: timingDialog, open: timingOpen } = useTimingCalGate({ isSensor: () => isSensorSource(inputSource) });
   // 일시정지에서 드럼 세팅으로 갔다 돌아오면 시작 확인 창이 다시 열리게 start=1을 싣는다(연주 중 주소에는 start가 없다)
   const pauseReturnTo = useMemo(() => {
     const p = new URLSearchParams(location.search);
     p.set('start', '1');
     return `${location.pathname}?${p.toString()}`;
   }, [location.pathname, location.search]);
-  const inputSource: InputSourceKind = settings.sensorKind === 'none' ? 'keyboard' : settings.sensorKind;
 
   const resetCountdown = useCallback(() => {
     wasCounting.current = false;
@@ -318,7 +338,7 @@ function SheetPageBody() {
     if (!activeSession) return;
     // 놓침 원인 계산용 노트 맥락(직전 패드·간격). 세션마다 한 번 계산한다
     const coachContext = chartCoachContext(activeSession.chart.notes);
-    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs));
+    const offStray = activeSession.onStray((s) => coachRef.current?.pushStray(s.pad, s.songTimeMs, s.stickId, s.pose));
     const offJudgement = activeSession.onJudgement((e) => {
       recorder.current.judgement(e);
       // 놓친 노트 머리 파편(악보만). PERFECT·GOOD 이펙트는 onHit 경로에서 낸다
@@ -341,6 +361,7 @@ function SheetPageBody() {
         pad: e.pad,
         stickId: e.stickId,
         velocity: e.velocity,
+        pose: e.pose,
         ...coachContext.notes[e.noteIndex],
       };
       // 비동기 거름의 문구는 늦게 온다. 그사이 다른 판으로 바뀌었으면 띄우지 않는다
@@ -451,10 +472,11 @@ function SheetPageBody() {
         hits: recorder.current.hits,
         missSeqs: recorder.current.missSeqs,
         audioOffsetMs: ss.audioOffsetMs,
+        kickOffsetMs: ss.kickOffsetMs,
         countInMs: ss.preRollMs,
         chart: ss.chart,
         inputSource,
-        timing: settings.timing,
+        timing: ss.windows,
         startedAt: songStartedAt,
         chartVersionId: ss.chart.chartVersionId ?? null,
         songNumericId: ss.chart.songNumericId ?? null,
@@ -484,7 +506,7 @@ function SheetPageBody() {
       }
       navigate(`/result/${log.playId}`, { replace: true, state: { prevBest: prevBest.current } });
     },
-    [navigate, inputSource, settings.timing],
+    [navigate, inputSource],
   );
   const finishRef = useRef(finish);
   useEffect(() => {
@@ -545,7 +567,7 @@ function SheetPageBody() {
       causeArm: model.causeArm,
       llmArm: model.llmArm,
       segments: llmMode
-        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg) }
+        ? { chart: ss.chart, input: st.sensorKind === 'none' ? 'keyboard' : 'stick', onSegment: (seg) => void llm?.submit(seg), aim: liveAimSource() }
         : undefined,
     });
     llmRef.current?.cancel();
@@ -576,7 +598,7 @@ function SheetPageBody() {
     shadowRef.current = null;
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
     if (MONITOR_ENABLED) {
-      const goodMs = st.timing.goodMs;
+      const goodMs = ss.windows.goodMs;
       void import('@/coach/live/shadowCoach').then((m) => {
         if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
         shadowRef.current = m.createCoachShadow({
@@ -603,7 +625,7 @@ function SheetPageBody() {
     clockRef.current = clock;
     clock.begin();
     inputManager.setCandidateProvider((t) => ss.candidates(t));
-    diagSessionStart(ss, 'SHEET', diagSessionOpts());
+    diagSessionStart(ss, 'SHEET', diagSessionOpts(ss.windows));
     setPlaySession(ss);
     return true;
   }, [acc, resetRun, clearCoachLine, showCoachLine, waitAudioClock]);
@@ -642,7 +664,7 @@ function SheetPageBody() {
       if (!ok || clockRef.current !== clock || sessionRef.current !== ss) return;
       // 재시작은 카운트인부터. 메트로놈 잠금은 유지한다
       clock.restart();
-      diagSessionStart(ss, 'SHEET', diagSessionOpts());
+      diagSessionStart(ss, 'SHEET', diagSessionOpts(ss.windows));
       resetRun(ss);
       coachRef.current?.reset();
       llmRef.current?.cancel(crypto.randomUUID());
@@ -687,8 +709,10 @@ function SheetPageBody() {
 
   /** [플레이]: 카운트다운으로 들어가고, 연주 중 주소에서는 start를 지워 둔다(뒤로 가기·나가기가 창을 다시 열지 않게) */
   const startPlay = useCallback(async () => {
+    // 센서 입력이고 박자 맞추기 기록이 없는 첫 연주는 시작 대신 대화상자를 연다(닫은 뒤 다시 시작하면 바로 시작)
+    if (stageRef.current === 'ready' && readyRef.current && timingGate()) return;
     if (await begin()) closeStart();
-  }, [begin, closeStart]);
+  }, [begin, closeStart, timingGate]);
 
   // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
   useEffect(() => {
@@ -813,11 +837,12 @@ function SheetPageBody() {
         <AudioWaitNotice show={audioWaiting} />
         <StageFade stageKey="select">
           <main className="main">
-            <SongPicker mode="sheet" onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
+            {/* 사이드바가 펼쳐져 있으면 「악보 연습」 하위 메뉴가 곡 범위를 보이므로 화면 위 탭은 두지 않는다(설계 MODE-003-악보-연습-하위-메뉴) */}
+            <SongPicker mode="sheet" tabsInSidebar={!sidebarCollapsed} onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
           </main>
         </StageFade>
         <StartDialog
-          open={startOpen}
+          open={startOpen && !timingOpen}
           variant={ready ? 'play' : 'setup'}
           song={{
             title: chart?.title ?? (sameSong ? detail.title : '곡 정보를 불러오는 중'),
@@ -832,6 +857,7 @@ function SheetPageBody() {
           keyboardOnly={settings.sensorKind === 'none'}
           pedal={pedalRequired(settings.sensorKind) ? pedalConnected({ connected: pedalPair }) : undefined}
           countInBars={settings.countInBars}
+          goodMsNote={widened ? windows.goodMs : null}
           realign={realign.info}
           loading={loadError === null && stage !== 'ready'}
           error={loadError}
@@ -857,6 +883,7 @@ function SheetPageBody() {
           onRetry={param.reload}
           onClose={closeStart}
         />
+        {timingDialog}
       </>
     );
   }
@@ -924,7 +951,7 @@ function SheetPageBody() {
             fxSource={sheetFx.source}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={sheetFx.source} perfectMs={settings.timing.perfectMs} goodMs={settings.timing.goodMs} resetToken={fxRun} missSource={missSource} />
+                <TimingBar source={sheetFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
               ) : undefined
             }
           />

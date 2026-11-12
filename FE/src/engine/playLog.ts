@@ -61,6 +61,8 @@ export function buildPlayLog(args: {
   /** MISS 판정 순번(noteIndex → seq). PlayRecorder.missSeqs */
   missSeqs?: ReadonlyMap<number, number>;
   audioOffsetMs?: number;
+  /** 그 판에 적용된 킥 오프셋(ms). 넘기지 않으면 필드를 넣지 않는다 */
+  kickOffsetMs?: number;
   /** 곡 시작 전 리드인 실제 길이(ms, 세션 preRollMs). 경과 시간 계산용 */
   countInMs?: number;
   endedAt?: Date;
@@ -109,6 +111,7 @@ export function buildPlayLog(args: {
     },
     endedAt: (args.endedAt ?? new Date()).toISOString(),
     audioOffsetMs: args.audioOffsetMs ?? 0,
+    ...(args.kickOffsetMs !== undefined ? { kickOffsetMs: args.kickOffsetMs } : {}),
     lastSongTimeMs: s.songTimeMs,
     elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
     sourceNoteCount: args.chart.sourceNoteCount ?? null,

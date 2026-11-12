@@ -11,6 +11,8 @@ import { useLive } from '@/store/liveStore';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
+import { useLessons } from '@/store/lessonStore';
+import { lessonsFromDto } from '@/domain/play/lesson';
 import { BUILTIN_CHARTS } from '@/domain/chart';
 import type { UserMe } from '@/domain/auth';
 import type { SongDetail } from '@/domain/songCatalog';
@@ -83,7 +85,8 @@ beforeEach(() => {
   }));
   useSongs.setState({ source: 'api', selectSong: vi.fn().mockResolvedValue(detail) });
   useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
-  useSettings.setState({ sensorKind: 'none', countInBars: 0, firstSetupDone: true, accompaniment: true });
+  useSettings.setState({ sensorKind: 'none', countInBars: 0, firstSetupDone: true, accompaniment: true, timingCal: null, timingCalPrompt: 'done' });
+  useLessons.getState().resetForTest();
   vi.mocked(Accompaniment as never as { load: ReturnType<typeof vi.fn> }).load?.mockClear?.();
 });
 afterEach(() => {
@@ -177,5 +180,122 @@ describe('SheetPage 반주 설정', () => {
     await screen.findByRole('button', { name: '플레이' });
     expect(accLoad()).not.toHaveBeenCalled();
     expect((screen.getByLabelText('반주 재생') as HTMLInputElement).checked).toBe(false);
+  });
+});
+
+describe('SheetPage 곡 범위 탭과 사이드바 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴)', () => {
+  /** 화면 폭을 가장한다. 테스트 환경의 기본 폭(1024)은 태블릿(사이드바 강제 접힘)으로 잡힌다 */
+  const viewport = (tablet: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: tablet && query === '(max-width: 1024px)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useSettings.setState({ sidebarCollapsed: false });
+  });
+
+  it('사이드바가 펼쳐져 있으면 화면 위 탭을 두지 않는다(사이드바 하위 메뉴가 범위를 보인다)', async () => {
+    viewport(false);
+    useSettings.setState({ sidebarCollapsed: false });
+    show('/sheet');
+    await screen.findAllByText('시험곡');
+    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+  });
+
+  it('사이드바를 접어 두었으면 화면 위 탭이 있다', async () => {
+    viewport(false);
+    useSettings.setState({ sidebarCollapsed: true });
+    show('/sheet');
+    await screen.findAllByText('시험곡');
+    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
+  });
+
+  it('태블릿 폭(1024px 이하)이면 사이드바가 접히므로 화면 위 탭이 있다', async () => {
+    viewport(true);
+    useSettings.setState({ sidebarCollapsed: false });
+    show('/sheet');
+    await screen.findAllByText('시험곡');
+    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
+  });
+});
+
+describe('SheetPage 첫 연주 전 박자 맞추기 권유', () => {
+  const sensorReady = (over: Partial<ReturnType<typeof useSettings.getState>> = {}) => {
+    useSettings.setState({ sensorKind: 'pointer', timingCal: null, timingCalPrompt: 'none', ...over });
+    useLive.setState({ connected: [true, true] });
+  };
+
+  it('센서 + 기록 없음 + none: [플레이]를 누르면 시작 대신 대화상자가 뜨고 시작 확인 창은 잠시 물러난다', async () => {
+    sensorReady();
+    show('/sheet?song=1&chart=12&start=1');
+    const start = await screen.findByRole('dialog', { name: '시험곡' });
+    fireEvent.click(await within(start).findByRole('button', { name: '플레이' }));
+    const cal = await screen.findByRole('dialog', { name: '박자 맞추기' });
+    expect(within(cal).getByText('처음 한 번만 박자를 맞추면 판정이 정확해져요.')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: '시험곡' })).toBeNull();
+    // 연주는 시작되지 않았다(곡 선택이 남아 있고 주소의 start도 그대로)
+    expect(screen.getByRole('complementary', { name: '선택한 곡' })).toBeTruthy();
+    expect(where()).toContain('start=1');
+  });
+
+  it('[나중에 하기]로 닫으면 skipped가 되고 시작 확인 창으로 돌아오며, 다시 [플레이]하면 바로 시작한다', async () => {
+    sensorReady();
+    show('/sheet?song=1&chart=12&start=1');
+    fireEvent.click(await within(await screen.findByRole('dialog', { name: '시험곡' })).findByRole('button', { name: '플레이' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: '박자 맞추기' })).getByRole('button', { name: '나중에 하기' }));
+    expect(useSettings.getState().timingCalPrompt).toBe('skipped');
+    const start = await screen.findByRole('dialog', { name: '시험곡' });
+    expect(screen.getByRole('complementary', { name: '선택한 곡' })).toBeTruthy();
+    fireEvent.click(await within(start).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull());
+    expect(screen.queryByRole('dialog', { name: '박자 맞추기' })).toBeNull();
+  });
+
+  it.each([
+    ['키보드 모드', { sensorKind: 'none' as const }],
+    ['측정 기록이 있으면', { timingCal: { measuredAt: 1, medianMs: -60, madMs: 8, pairs: 12, input: 'sensor' as const, outputLatencyMs: null, kick: null } }],
+    ['skipped이면', { timingCalPrompt: 'skipped' as const }],
+    ['done이면', { timingCalPrompt: 'done' as const }],
+  ])('%s 바로 시작한다', async (_name, over) => {
+    sensorReady(over);
+    show('/sheet?song=1&chart=12&start=1');
+    fireEvent.click(await within(await screen.findByRole('dialog', { name: '시험곡' })).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull());
+    expect(screen.queryByRole('dialog', { name: '박자 맞추기' })).toBeNull();
+  });
+});
+
+describe('SheetPage 시작 확인 창의 판정 여유', () => {
+  it('EASY 채보는 「판정 여유 ±90ms」를 보인다', async () => {
+    show('/sheet?song=1&chart=11&start=1');
+    expect(await screen.findByText('판정 여유 ±90ms')).toBeTruthy();
+  });
+
+  it('EASY가 아니면 보이지 않는다', async () => {
+    show('/sheet?song=1&chart=12&start=1');
+    await screen.findByRole('button', { name: '플레이' });
+    expect(screen.queryByText(/판정 여유/)).toBeNull();
+  });
+
+  it('입문 코스 연주 레슨의 채보는 난이도와 상관없이 보인다', async () => {
+    useLessons.setState({
+      status: 'ready',
+      list: lessonsFromDto({
+        passAccuracy: 70,
+        items: [{ order: 1, kind: 'PLAY', songId: 1, chartId: 12, title: '레슨', summary: 's', pads: ['KICK'], guide: true, bpm: 70, durationMs: 1000, noteCount: 4, bestAccuracy: null, passed: false, locked: false }],
+      }),
+    });
+    show('/sheet?song=1&chart=12&start=1');
+    expect(await screen.findByText('판정 여유 ±90ms')).toBeTruthy();
+  });
+
+  it('사용자 GOOD이 이미 90ms 이상이면 보이지 않는다', async () => {
+    useSettings.setState({ timing: { perfectMs: 25, goodMs: 100 } });
+    show('/sheet?song=1&chart=11&start=1');
+    await screen.findByRole('button', { name: '플레이' });
+    expect(screen.queryByText(/판정 여유/)).toBeNull();
+    useSettings.setState({ timing: { perfectMs: 25, goodMs: 60 } });
   });
 });

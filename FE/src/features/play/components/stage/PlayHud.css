@@ -19,10 +19,6 @@
   width: 72px;
   height: 72px;
 }
-.play-hud.sheet .play-hud-cover {
-  width: 64px;
-  height: 64px;
-}
 .play-hud-cover .song-cover {
   height: 100%;
   border-radius: var(--radius-control);
@@ -110,11 +106,6 @@
   align-items: center;
   justify-content: space-between;
   width: 460px;
-}
-.play-hud.sheet .play-hud-stats {
-  width: min(420px, 52vw);
-  /* 오른쪽 위 프로필·기기 상태와 수치 라벨이 겹치지 않게 한다. */
-  transform: translateY(16px);
 }
 .play-hud-stat {
   display: flex;

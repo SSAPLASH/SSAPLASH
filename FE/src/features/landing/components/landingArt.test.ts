@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartArt, sheetArt, stickPads, waveformBars } from './landingArt';
+import { chartArt, sheetArt, waveformBars } from './landingArt';
 
 describe('waveformBars', () => {
   it('음원·드럼 각 140개 막대를 만든다', () => {
@@ -69,14 +69,5 @@ describe('sheetArt', () => {
 
   it('결정적이다', () => {
     expect(sheetArt()).toEqual(sheetArt());
-  });
-});
-
-describe('stickPads', () => {
-  it('패드 6개와 대표 좌표', () => {
-    const p = stickPads();
-    expect(p).toHaveLength(6);
-    expect(p[0]).toEqual({ name: 'HI-HAT', x: 130, y: 190, rx: 62, ry: 26 });
-    expect(p[5]).toEqual({ name: 'KICK', x: 300, y: 395, rx: 70, ry: 26 });
   });
 });

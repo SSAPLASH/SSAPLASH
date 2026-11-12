@@ -24,7 +24,7 @@ const hitAt = (id: number, tHit: number, pad: ResolvedHit['pad']): ResolvedHit =
   ({ id, stickId: 0, pad, velocity: 90, tHit, tRecv: tHit, tResolved: tHit }) as ResolvedHit;
 
 function setup() {
-  const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10 });
+  const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10, kickOffsetMs: 10 });
   const rec = new PlayRecorder();
   ss.onJudgement((e) => rec.judgement(e));
   ss.start(1000); // 곡 0ms = performance.now 1000
@@ -47,6 +47,17 @@ describe('PlayRecorder', () => {
     expect(rec.hits[1].judgement).toBeUndefined();
   });
 
+  it('발 타격의 tSongMs는 킥 오프셋으로, 손 타격은 스틱 오프셋으로 기록한다', () => {
+    const ss = new RhythmSession(chart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10, kickOffsetMs: -30 });
+    const rec = new PlayRecorder();
+    ss.start(1000);
+    const foot = { ...hitAt(1, 2040, 'KICK'), stickId: null, foot: 3 } as ResolvedHit;
+    const hand = hitAt(2, 2040, 'SNARE');
+    // 곡 시각 = tHit - 오프셋 - 1000
+    expect(rec.hit(foot, ss.handleHit(foot), ss).tSongMs).toBe(1070);
+    expect(rec.hit(hand, ss.handleHit(hand), ss).tSongMs).toBe(1030);
+  });
+
   it('reset하면 순번과 기록을 비운다', () => {
     const { ss, rec } = setup();
     const h = hitAt(1, 1010, 'SNARE');
@@ -62,7 +73,7 @@ describe('PlayRecorder', () => {
 it('페달 스냅샷을 기록해도 판정과 점수는 유지된다', () => {
   const hihatChart = { ...chart, notes: [{ timeMs: 0, pad: 'HIHAT' as const, hihatOpen: true as const }] };
   const run = (closed: boolean | null) => {
-    const ss = new RhythmSession(hihatChart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10 });
+    const ss = new RhythmSession(hihatChart, { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 0, audioOffsetMs: 10, kickOffsetMs: 10 });
     const rec = new PlayRecorder(); ss.start(1000);
     const hit = { ...hitAt(1, 1010, 'HIHAT'), hihatClosed: closed };
     rec.hit(hit, ss.handleHit(hit), ss);

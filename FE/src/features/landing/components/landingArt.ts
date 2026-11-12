@@ -1,4 +1,4 @@
-// 랜딩 그림 데이터(파형·채보·결과 악보·스틱 패드). SVG 문자열이 아니라 속성 객체 배열을 돌려준다.
+// 랜딩 그림 데이터(파형·채보·결과 악보). SVG 문자열이 아니라 속성 객체 배열을 돌려준다.
 // 순수 함수 — React·DOM을 쓰지 않는다.
 
 const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -181,24 +181,4 @@ export function sheetArt(): SheetArt {
     });
   }
   return { highlight, staffLines, barLines, hihats, notes, beams };
-}
-
-// ───── 스틱 그림: 패드 6개 (위에서 본 드럼 세트) ─────
-export interface StickPad {
-  name: string;
-  x: number;
-  y: number;
-  rx: number;
-  ry: number;
-}
-
-export function stickPads(): StickPad[] {
-  return [
-    { name: 'HI-HAT', x: 130, y: 190, rx: 62, ry: 26 },
-    { name: 'SNARE', x: 190, y: 300, rx: 66, ry: 28 },
-    { name: 'TOM', x: 270, y: 170, rx: 50, ry: 22 },
-    { name: 'TOM', x: 360, y: 190, rx: 50, ry: 22 },
-    { name: 'RIDE', x: 420, y: 290, rx: 72, ry: 28 },
-    { name: 'KICK', x: 300, y: 395, rx: 70, ry: 26 },
-  ];
 }

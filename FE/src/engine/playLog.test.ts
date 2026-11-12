@@ -112,6 +112,14 @@ describe('buildPlayLog 실시간 코칭 기록', () => {
     expect(buildPlayLog(base).hihatPedalCoverage).toBeUndefined();
   });
 
+  it('넘긴 kickOffsetMs를 싣고, 안 넘기면 필드가 없다', () => {
+    const log = buildPlayLog({ ...base, audioOffsetMs: -65, kickOffsetMs: -40 });
+    expect(log).toMatchObject({ audioOffsetMs: -65, kickOffsetMs: -40 });
+    const old = buildPlayLog({ ...base, audioOffsetMs: -65 });
+    expect(old.audioOffsetMs).toBe(-65);
+    expect('kickOffsetMs' in old).toBe(false);
+  });
+
   it('넘긴 liveCoachEvents를 그대로 싣고, 안 넘기면 필드가 없다', () => {
     const events = [{ tMs: 1000, tag: 'LIVE_LATE', text: '늦어요' }];
     expect(buildPlayLog({ ...base, liveCoachEvents: events }).liveCoachEvents).toEqual(events);

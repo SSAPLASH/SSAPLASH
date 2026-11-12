@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { JUDGEMENT_SCORE } from '@/domain/judgement';
 import {
   LESSONS_PATH,
+  isBeginnerChart,
   lessonsFromDto,
   lessonOfChart,
   lessonPath,
@@ -183,5 +184,27 @@ describe('lessonDisplayTitle', () => {
     const { lessonDisplayTitle } = await import('./lesson');
     expect(lessonDisplayTitle('입문 · 킥으로 박자 세기')).toBe('킥으로 박자 세기');
     expect(lessonDisplayTitle('기본 8비트')).toBe('기본 8비트');
+  });
+});
+
+describe('isBeginnerChart', () => {
+  const lessons = list([item(1), item(2, { kind: 'READ' })]);
+
+  it('EASY 채보는 레슨 목록과 상관없이 대상이다', () => {
+    expect(isBeginnerChart({ difficulty: 'EASY', chartId: 999, lessons: [] })).toBe(true);
+  });
+
+  it('입문 코스 연주 레슨의 채보는 NORMAL이어도 대상이다', () => {
+    expect(isBeginnerChart({ difficulty: 'NORMAL', chartId: 201, lessons })).toBe(true);
+  });
+
+  it('알아보기(READ) 레슨 채보와 그 밖의 채보는 대상이 아니다', () => {
+    expect(isBeginnerChart({ difficulty: 'NORMAL', chartId: 202, lessons })).toBe(false);
+    expect(isBeginnerChart({ difficulty: 'HARD', chartId: 999, lessons })).toBe(false);
+    expect(isBeginnerChart({ difficulty: 'NORMAL', chartId: null, lessons })).toBe(false);
+  });
+
+  it('레슨 목록을 아직 못 읽었으면 난이도만 본다', () => {
+    expect(isBeginnerChart({ difficulty: 'NORMAL', chartId: 201, lessons: [] })).toBe(false);
   });
 });

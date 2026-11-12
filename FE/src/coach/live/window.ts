@@ -1,6 +1,7 @@
 // 최근 판정을 링 버퍼로 두고 코칭 지표를 계산한다. 문구 결정은 하지 않는다(rules·policy).
 // 입력은 판정 한 건. 시계·DOM·저장소를 쓰지 않는 순수 로직이다.
 import type { Judgement } from '@/domain/judgement';
+import type { Pose } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { LIVE_COACH_CONFIG } from './config';
 
@@ -22,6 +23,8 @@ export interface JudgedNote {
   prevPads?: readonly PadId[];
   /** 직전 시점과의 간격(ms). 첫 노트는 null. 없으면 빠른 구간 원인을 계산하지 않는다 */
   prevGapMs?: number | null;
+  /** 타격 순간 스틱 끝 방향(도). 센서 타격만. 구간 사실의 스틱 끝 방향(aim)에 쓴다 */
+  pose?: Pose | null;
 }
 
 /** 채보 밖 타격 한 건. 시각은 곡 시각(ms) */
