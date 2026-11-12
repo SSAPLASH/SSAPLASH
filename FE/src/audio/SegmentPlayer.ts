@@ -21,7 +21,7 @@ export interface SegmentPlayerDeps {
 /** 첫 소리를 now보다 이만큼 뒤에 둬 예약이 늦지 않게 한다 */
 export const SEGMENT_START_LEAD_MS = 120;
 
-type EnginePort = Pick<AudioEngine, 'ensure' | 'triggerScheduled'>;
+type EnginePort = Pick<AudioEngine, 'ensure' | 'triggerScheduled'> & Partial<Pick<AudioEngine, 'renderAheadMs'>>;
 type AccompanimentPort = Pick<Accompaniment, 'load' | 'start' | 'stop' | 'setRate'>;
 
 export class SegmentPlayer {
@@ -67,7 +67,10 @@ export class SegmentPlayer {
         }
         if (token !== this.token) return;
       }
-      const startPerf = this.now() + SEGMENT_START_LEAD_MS;
+      // 시작 여유에 오디오 시계가 들리는 시각보다 앞선 정도를 더한다. 안 더하면 출력 지연이 여유보다 클 때
+      // 첫 소리들이 "지금"으로 당겨져 늦게 울린다(설계 MODE-001 "같은 원인의 나머지 예약 경로")
+      const lead = SEGMENT_START_LEAD_MS + (this.engine.renderAheadMs?.() ?? 0);
+      const startPerf = this.now() + lead;
       for (const e of plan.events) {
         const h = this.engine.triggerScheduled(e.pad, e.velocity, startPerf + e.atMs);
         if (h) this.handles.push(h);
@@ -75,7 +78,7 @@ export class SegmentPlayer {
       if (hasAcc && this.accompaniment) {
         this.accompaniment.setRate(opts.rate);
         this.accompaniment.start(startPerf, plan.fromMs);
-        this.timers.push(this.setT(() => this.accompaniment?.stop(), SEGMENT_START_LEAD_MS + plan.lengthMs));
+        this.timers.push(this.setT(() => this.accompaniment?.stop(), lead + plan.lengthMs));
       }
       this.timers.push(
         this.setT(() => {
@@ -87,7 +90,7 @@ export class SegmentPlayer {
             this._state = 'idle';
             this.onEnd?.();
           }
-        }, SEGMENT_START_LEAD_MS + plan.lengthMs + SEGMENT_LOOP_GAP_MS),
+        }, lead + plan.lengthMs + SEGMENT_LOOP_GAP_MS),
       );
     } catch {
       if (token === this.token) {

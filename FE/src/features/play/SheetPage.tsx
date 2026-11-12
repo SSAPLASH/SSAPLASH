@@ -592,6 +592,9 @@ function SheetPageBody() {
       clickOn: () => useSettings.getState().metronome,
       onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
       audioClock: () => audioEngine.clockReading(),
+      // 반주·클릭을 오디오 시계에 바로 예약하고 곡 시각을 들리는 오디오 시각에서 계산한다(설계 MODE-001 연주 시계를 오디오 시계 하나로)
+      audioReading: () => audioEngine.audioReading(),
+      clickAt: (ctxSec, accent) => audioEngine.clickAtContext(ctxSec, accent),
       onFinish: () => finishRef.current(ss),
     });
     clockRef.current = clock;
