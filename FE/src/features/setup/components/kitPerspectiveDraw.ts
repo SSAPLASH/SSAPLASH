@@ -1,7 +1,7 @@
 // 드럼 배치 원근 보기의 캔버스 층(PLAY-004 원근 보기 설계): 바닥 격자·그림자(패드 아래)와 손별 판정 범위·L·R 표식(패드 위).
 // 패드 그림은 DrumKit(SVG, 사용자가 고른 스킨)이 그린다. 좌표 계산은 domain/kit/kitPerspective 몫이다.
 import { PAD_META, type PadId } from '@/domain/pads';
-import { FLOOR_Z, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
+import { AIM_ORIGIN, FLOOR_Z, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
 import type { Point3 } from '@/domain/kit/kitModel';
 import { FONT } from '@/components/drum/kitPadPaint';
 
@@ -16,21 +16,35 @@ export function canvasBleed(clientWidth: number, w: number): number {
   return Number.isFinite(b) && b > 0 ? b : 0;
 }
 
-/** 바닥 격자(0.2m 간격) */
+/**
+ * 바닥 격자. 패드 가로 자리가 방위각에 비례하게 펴져 있어(Camera.place) 격자도 같은 규칙으로 그린다:
+ * 기준점에서 본 방위각 15°마다 세로 줄, 바닥 거리 0.3m마다 가로 줄(양옆으로 갈수록 가까워져 아래로 휜다).
+ * 뒤쪽은 고정 자리의 킥(앞쪽 1.7m)이 격자 위에 서도록 2.4m까지 깐다
+ */
 export function paintFloor(ctx: CanvasRenderingContext2D, cam: Camera): void {
+  const RAD = Math.PI / 180;
+  const NEAR = 0.3;
+  const FAR = 2.4;
+  /** 방위각 yaw(도)·바닥 거리 d(m)의 바닥 점 */
+  const at = (yaw: number, d: number): Point3 => [AIM_ORIGIN[0] + Math.sin(yaw * RAD) * d, AIM_ORIGIN[1] + Math.cos(yaw * RAD) * d, FLOOR_Z];
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1;
-  const line = (a: Point3, b: Point3) => {
-    const p = cam.project(a);
-    const q = cam.project(b);
+  const path = (pts: Point3[]) => {
     ctx.beginPath();
-    ctx.moveTo(p.sx, p.sy);
-    ctx.lineTo(q.sx, q.sy);
+    pts.forEach((pt, i) => {
+      const q = cam.place(pt);
+      if (i === 0) ctx.moveTo(q.sx, q.sy);
+      else ctx.lineTo(q.sx, q.sy);
+    });
     ctx.stroke();
   };
-  for (let i = -6; i <= 6; i++) line([i * 0.2, -0.4, FLOOR_Z], [i * 0.2, 1.4, FLOOR_Z]);
-  for (let j = -2; j <= 7; j++) line([-1.2, j * 0.2, FLOOR_Z], [1.2, j * 0.2, FLOOR_Z]);
+  for (let yaw = -60; yaw <= 60; yaw += 15) path([at(yaw, NEAR), at(yaw, FAR)]);
+  for (let d = NEAR; d <= FAR + 1e-9; d += 0.3) {
+    const pts: Point3[] = [];
+    for (let yaw = -60; yaw <= 60; yaw += 5) pts.push(at(yaw, d));
+    path(pts);
+  }
   ctx.restore();
 }
 
