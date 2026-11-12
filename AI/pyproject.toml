@@ -110,7 +110,8 @@ build-backend = "uv_build"
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["data", "notebooks"]
+# strum/drums_v13.py는 STRUM 저장소 원본 그대로 두는 파일
+extend-exclude = ["data", "notebooks", "src/ssaplash_ai/bench/transcribers/strum/drums_v13.py"]
 
 [tool.ruff.lint]
 # E/W: pycodestyle, F: pyflakes, I: import 정렬, B: 흔한 버그, UP: 최신 문법
