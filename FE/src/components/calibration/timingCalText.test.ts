@@ -1,6 +1,6 @@
 // 박자 맞추기 문구 검증: 결과·기록·상태·입력 불일치·출력 지연 안내.
 import { describe, expect, it } from 'vitest';
-import { OUTPUT_LATENCY_WARN_MS, type TimingCalRecord, type TimingCalResult } from '@/domain/timingCalibration';
+import { OUTPUT_LATENCY_WARN_MS, type TimingCalRecord, type TimingCalResult } from '@/domain/kit/timingCalibration';
 import {
   outputLatencyWarnText,
   timingCalMismatchText,

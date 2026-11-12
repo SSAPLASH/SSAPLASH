@@ -2,7 +2,7 @@
 // 통과는 서버와 같은 정확도 계산으로 바로 판정하고, 업로드를 기다리지 않고 이번 접속의 진도에 더한다.
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LESSONS_PATH, lessonOfChart, lessonPath, nextLesson, playPassed } from '@/domain/lesson';
+import { LESSONS_PATH, lessonOfChart, lessonPath, nextLesson, playPassed } from '@/domain/play/lesson';
 import type { PlayLog } from '@/domain/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';

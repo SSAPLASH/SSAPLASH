@@ -7,7 +7,7 @@ import { postLessonCompletion } from '@/api/lessons';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { touchSource } from '@/runtime/sources';
-import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/lesson';
+import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/play/lesson';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
 import type { PadVisualState } from '@/domain/drumKit';
 import type { PadId } from '@/domain/pads';

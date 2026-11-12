@@ -11,7 +11,7 @@
 // AI 추천곡 탭 목록과 기본 곡 탭의 「✦ AI 추천」 라벨이 같은 결과를 쓴다. 선택한 곡 패널 아래는 그 곡과 비슷한 곡(R2) 한 건이다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/recommendation';
+import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/account/recommendation';
 import {
   chartFallback,
   defaultChartId,
@@ -24,7 +24,7 @@ import {
   type SongScope,
   type SongSummary,
 } from '@/domain/songCatalog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/play/bestRecord';
 import { presetDisplayName } from '@/domain/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/features/play/useBestRecords';

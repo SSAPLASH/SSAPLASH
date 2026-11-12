@@ -2,7 +2,7 @@
 // 커버 아래 재생 UI (설계 CHART-003 4-4·6절): 상태별 모양, 10초 이동, is-pinned, 시간 바.
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { accompanimentBarView, type AccompanimentBarView } from '@/domain/freeAccompaniment';
+import { accompanimentBarView, type AccompanimentBarView } from '@/domain/song/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 import type { SongPlayback } from '@/features/studio/domain/songPlayback';
 import { CoverPlayer } from './CoverPlayer';

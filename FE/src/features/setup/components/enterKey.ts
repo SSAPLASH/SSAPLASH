@@ -1,6 +1,6 @@
 // 복귀 띠의 Enter 처리 조건(순수 함수). 컴포넌트 파일과 분리해 단위 테스트한다.
 
-import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 
 type EnterTarget = KeyTarget;
 

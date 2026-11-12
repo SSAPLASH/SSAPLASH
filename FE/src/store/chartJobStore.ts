@@ -17,7 +17,7 @@ import {
   type ActiveJob,
   type JobProgress,
   type UploadDraft,
-} from '@/domain/chartJob';
+} from '@/domain/song/chartJob';
 
 export type ChartJobPhase = 'idle' | 'uploading' | 'polling' | 'done' | 'failed';
 

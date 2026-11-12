@@ -1,6 +1,6 @@
 // 녹화 요약(순수 함수). 녹화 JSONL을 되읽은 결과(meta·패킷 행·진단 이벤트)에서 구간 지연·SYNC rtt·채점 delta의 분위수를 내고,
 // 현재 HEALTH_THRESHOLDS의 대응 기준값을 옆에 붙인다. R1(임계값 재설정)·체감 지연 측정의 근거 표를 만드는 도구다.
-import type { CoachBasis } from '@/domain/coachBasis';
+import type { CoachBasis } from '@/domain/play/coachBasis';
 import type { DiagEvent } from '@/engine/diagTap';
 import { CommandType } from '@/input/stickProtocol';
 import { HEALTH_THRESHOLDS } from './health';

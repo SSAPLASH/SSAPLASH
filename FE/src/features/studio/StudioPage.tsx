@@ -29,11 +29,11 @@ import type { SongEditKind, SongSheetKind } from '@/features/studio/components/S
 import { PlusIcon } from '@/components/song/StudioIcons';
 import { UploadDialog, type UploadSection } from '@/features/studio/components/UploadDialog';
 import { UploadPanel, type UploadTab } from '@/features/studio/components/UploadPanel';
-import type { MidiDraft } from '@/domain/midiUpload';
+import type { MidiDraft } from '@/domain/song/midiUpload';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
 import { summarizeMineSongs, type SongSummary } from '@/domain/songCatalog';
-import { coverRefreshDue, type CoverChange } from '@/domain/songCover';
-import type { SongMetaPatch } from '@/domain/songEdit';
+import { coverRefreshDue, type CoverChange } from '@/domain/song/songCover';
+import type { SongMetaPatch } from '@/domain/song/songEdit';
 import type { SongPlayback } from '@/features/studio/domain/songPlayback';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';

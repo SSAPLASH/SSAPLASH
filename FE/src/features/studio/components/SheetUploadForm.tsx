@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import { uploadSheet } from '@/features/studio/api/sheets';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { defaultTitleFromFile } from '@/domain/chartJob';
+import { defaultTitleFromFile } from '@/domain/song/chartJob';
 import {
   SHEET_MAX_IMAGES,
   SHEET_TITLE_MAX,

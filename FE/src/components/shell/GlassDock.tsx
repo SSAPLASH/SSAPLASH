@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/config/features';
 import { useRecordingStore } from '@/runtime/recordingStore';
-import { BPM_STEP } from '@/domain/metronome';
+import { BPM_STEP } from '@/domain/time/metronome';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';

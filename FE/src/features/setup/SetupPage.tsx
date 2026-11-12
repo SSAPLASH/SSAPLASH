@@ -1,7 +1,7 @@
 // 통합 설정 페이지(/setup, Figma 03 드럼 세팅, UX-64). 단계 타일 2장(스틱 연결·시작 위치 보정, 요약만 보이고 누르면 단계 팝업 StepDialog가 열린다, PLAY-004 D8) → 드럼 배치 카드(프리셋 칩 줄·캔버스 판(행 전체 폭) 안의 선택 패드 정보 카드·타격 확인, 보정 중에는 하단 바 [저장] 숨김) → 접힌 고급 설정 → 하단 고정 바.
 // 프리셋 고르기·고치기·저장은 드럼 배치 카드 한 곳이다: 칩으로 적용, [추가하기]로 패드별 2타 보정 → 새 프리셋 저장, [전체 보정]·[이 드럼 다시 치기]로 적용 프리셋 편집.
 // 연주 준비에서 왔으면(returnTo) 위에 복귀 띠를 고정하고, 저장하지 않은 변경이 있으면 나가기 전에 확인한다.
-// 단계 판정·문구는 domain/setupSteps, 저장은 presetStore, 보정·재정렬은 runtime/calibrationSession이 맡고
+// 단계 판정·문구는 domain/kit/setupSteps, 저장은 presetStore, 보정·재정렬은 runtime/calibrationSession이 맡고
 // 이 페이지는 조립과 표시만 한다. 팝업은 진입·재정렬 때 자동으로 열지 않는다(모자란 단계는 타일 강조만, 보정 중에는 ② 팝업을 열 수 없다). 판정은 손별 앵커(stickAnchors, 적용 프리셋의 사본)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
@@ -34,14 +34,14 @@ import { selectDirty, usePresets } from '@/store/presetStore';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { StickId } from '@/domain/events';
 import { KEY_MAP } from '@/domain/keyMap';
-import { anchorsToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { pickOverlayCorner } from '@/domain/kitLayout';
-import { defaultHandAnchorSet } from '@/domain/kitModel';
-import { padPointCm, padScreenCircles } from '@/domain/kitPerspective';
+import { defaultHandAnchorSet } from '@/domain/kit/kitModel';
+import { padPointCm, padScreenCircles } from '@/domain/kit/kitPerspective';
 import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { sanitizeReturnTo } from '@/domain/auth';
-import { calibrationReady, readiness } from '@/domain/readiness';
+import { calibrationReady, readiness } from '@/domain/kit/readiness';
 import { deviceGroupName, deviceListText } from '@/domain/devices';
 import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
 import {
@@ -62,7 +62,7 @@ import {
   UNSAVED_LEAVE_SYSTEM_SAVE_LABEL,
   type SetupDongleState,
   type SetupStepId,
-} from '@/domain/setupSteps';
+} from '@/domain/kit/setupSteps';
 import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/features/setup/components/calibration/CalibrationStage';

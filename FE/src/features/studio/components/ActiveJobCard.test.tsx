@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { ActiveJob, JobProgress } from '@/domain/chartJob';
+import type { ActiveJob, JobProgress } from '@/domain/song/chartJob';
 import { ActiveJobCard } from './ActiveJobCard';
 
 const job = (over: Partial<ActiveJob> = {}): ActiveJob => ({

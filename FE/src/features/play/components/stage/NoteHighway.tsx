@@ -10,7 +10,7 @@ import { highwayLayout, laneCenterX, laneLeft, locateHighway, noteY } from './hi
 import { PAD_META, type PadId } from '@/domain/pads';
 import { HIGHWAY_LANES, laneColorOf } from '@/features/play/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
-import { barTimeMs, beatAtMs } from '@/domain/tempo';
+import { barTimeMs, beatAtMs } from '@/domain/time/tempo';
 import type { Judgement } from '@/domain/judgement';
 import type { KeyMap } from '@/domain/keyMap';
 import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from '@/features/play/components/pause/popupLook';
@@ -144,7 +144,7 @@ export function NoteHighway(props: NoteHighwayProps) {
         }
       });
 
-      // 마디선: 곡 시각 0부터 마디 시작마다. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/tempo)
+      // 마디선: 곡 시각 0부터 마디 시작마다. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/time/tempo)
       if (s) {
         const firstBar = Math.floor(beatAtMs(s.chart, t) / s.chart.beatsPerBar);
         for (let b = firstBar; barTimeMs(s.chart, b) < t + p.scrollMs; b++) {

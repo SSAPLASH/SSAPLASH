@@ -17,7 +17,7 @@ import {
   stickParamById,
 } from '@/input/stickProtocol';
 import { STICK_PADS } from '@/domain/pads';
-import { defaultHandAnchors } from '@/domain/kitModel';
+import { defaultHandAnchors } from '@/domain/kit/kitModel';
 import type { DeviceRole } from '@/domain/events';
 
 /** 손별 기본 앵커(모의 타격 각도의 기준). 튜닝 기본값으로 한 번만 만든다 */

@@ -13,7 +13,7 @@ import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { ApiError } from '@/api/error';
 import { getRecording } from '@/api/recordings';
 import type { RecordingSort, RecordingSummary } from '@/domain/recording';
-import { midiFileName, recordingToMidi } from '@/domain/recordingMidi';
+import { midiFileName, recordingToMidi } from '@/domain/play/recordingMidi';
 import { downloadBlob } from '@/media/downloadFile';
 import {
   formatHitCount,
@@ -21,8 +21,8 @@ import {
   recordingCountLabel,
   recordingModeName,
   songDifficulty,
-} from '@/domain/recordingView';
-import { formatPlayDate } from '@/domain/playLogView';
+} from '@/domain/play/recordingView';
+import { formatPlayDate } from '@/domain/play/playLogView';
 import './history.css';
 import '@/components/ui/table.css';
 import './recording-list.css';

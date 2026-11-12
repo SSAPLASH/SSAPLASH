@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
-import type { AccompanimentPick } from '@/domain/freeAccompaniment';
+import type { AccompanimentPick } from '@/domain/song/freeAccompaniment';
 import { POLL_MS, useFreeAccompaniment, type AccompanimentPlayerPort } from './useFreeAccompaniment';
 
 class FakePlayer implements AccompanimentPlayerPort {

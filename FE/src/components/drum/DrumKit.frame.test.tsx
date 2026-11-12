@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KIT_SKINS } from '@/domain/drumKit';
-import { kitFrame } from '@/domain/kitFrame';
+import { kitFrame } from '@/domain/kit/kitFrame';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { DrumKit } from './DrumKit';
 import { Pad, PadDefs } from './Pad';

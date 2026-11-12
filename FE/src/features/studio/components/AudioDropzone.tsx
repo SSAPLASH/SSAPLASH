@@ -12,7 +12,7 @@ import {
   precheckAudio,
   type PrecheckResult,
   type UploadDraft,
-} from '@/domain/chartJob';
+} from '@/domain/song/chartJob';
 import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 

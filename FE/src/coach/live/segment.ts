@@ -4,7 +4,7 @@
 // 사실에는 타격 원본·playId·곡 정보를 넣지 않는다. DOM·네트워크·시계를 쓰지 않는 순수 모듈이다.
 import type { Chart } from '@/domain/chart';
 import type { PadId } from '@/domain/pads';
-import { barTimeMs, type TempoChart } from '@/domain/tempo';
+import { barTimeMs, type TempoChart } from '@/domain/time/tempo';
 import type { CoachStage } from './config';
 import type { JudgedNote } from './window';
 

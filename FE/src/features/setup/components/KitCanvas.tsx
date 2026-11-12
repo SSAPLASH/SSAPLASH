@@ -1,16 +1,16 @@
 // 드럼 세팅의 드럼 배치 그림(편집). 원근 자리(내려다보는 각도 50°)에 사용자가 고른 드럼 모양(skin)의 패드를 놓는다.
-// 패드 그림은 보정 화면과 같은 DrumKit(자유 틀, domain/kitFrame)이 그리고, 여기는 그 아래(바닥 격자·그림자)와 위(손별 판정 범위·L·R 표식)의
-// 캔버스 층, 그리고 고르기·끌기 포인터 처리를 맡는다. 좌표 계산은 domain/kitPerspective 몫이다. 끌기 편집은 draggable일 때만(kit-drag 설계 D6).
+// 패드 그림은 보정 화면과 같은 DrumKit(자유 틀, domain/kit/kitFrame)이 그리고, 여기는 그 아래(바닥 격자·그림자)와 위(손별 판정 범위·L·R 표식)의
+// 캔버스 층, 그리고 고르기·끌기 포인터 처리를 맡는다. 좌표 계산은 domain/kit/kitPerspective 몫이다. 끌기 편집은 draggable일 때만(kit-drag 설계 D6).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PadId } from '@/domain/pads';
 import type { KitLayout } from '@/domain/kitLayout';
 import type { Pose } from '@/domain/events';
 import type { HandAnchorSet } from '@/domain/calibration';
 import type { KitSkin } from '@/domain/drumKit';
-import { frameOf } from '@/domain/kitFrame';
-import { DEFAULT_ANGLE_RANGE, type AngleRange } from '@/domain/kitMapping';
-import { HAND_ORIGINS, anchorToPoint } from '@/domain/kitModel';
-import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kitPerspective';
+import { frameOf } from '@/domain/kit/kitFrame';
+import { DEFAULT_ANGLE_RANGE, type AngleRange } from '@/domain/kit/kitMapping';
+import { HAND_ORIGINS, anchorToPoint } from '@/domain/kit/kitModel';
+import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
 import type { KeyMap } from '@/domain/keyMap';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';

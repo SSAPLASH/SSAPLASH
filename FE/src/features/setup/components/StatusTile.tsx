@@ -1,6 +1,6 @@
 // Figma Setup / StatusTile 505:2449 — 드럼 세팅 상단 2열 상태 타일(스틱 연결·시작 위치 보정). 요약만 보여 주는 버튼이고, 누르면 단계 팝업(StepDialog)이 열린다(PLAY-004 D8).
 // on=초록(연결됨·보정됨), urgent=빨강(복귀 띠가 떠 있는 필요 단계), attention=강조(모자란 단계), off=회색. 상태 판정은 하지 않는다(호출자가 정한다).
-import type { SetupStepStatus } from '@/domain/setupSteps';
+import type { SetupStepStatus } from '@/domain/kit/setupSteps';
 import './setup.css';
 
 interface Props {

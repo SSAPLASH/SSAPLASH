@@ -597,9 +597,9 @@ describe('MockStick 타격 각도(PLAY-004)', () => {
       .filter((d): d is Extract<typeof d, { kind: 'hit' }> => d.kind === 'hit');
 
   it('표를 받기 전(패드 0개)에는 pad 0xFF(null), 각도는 그 손의 기본 앵커 ±1.5° 안', async () => {
-    const { defaultHandAnchors } = await import('@/domain/kitModel');
+    const { defaultHandAnchors } = await import('@/domain/kit/kitModel');
     const { resolvePad } = await import('@/domain/calibration');
-    const { anchorsToProfile } = await import('@/domain/kitJudge');
+    const { anchorsToProfile } = await import('@/domain/kit/kitJudge');
     const { DEFAULT_SENSOR_TUNING } = await import('@/domain/tuning');
     mock.start({ sticks: 2, hitIntervalMs: 100, poseHz: 1 });
     vi.advanceTimersByTime(100 * 30);

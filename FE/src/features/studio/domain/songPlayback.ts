@@ -1,5 +1,5 @@
 // 라이브러리 곡 재생바 상태 (설계 CHART-003 라이브러리 재생바 3절). 페이지가 만들어 목록 → 카드·줄로 내려보낸다.
-import { pickableForAccompaniment, type AccompanimentBarView } from '@/domain/freeAccompaniment';
+import { pickableForAccompaniment, type AccompanimentBarView } from '@/domain/song/freeAccompaniment';
 import type { SongSummary } from '@/domain/songCatalog';
 
 /** 페이지가 목록 → 카드·줄로 내려보내는 듣기 상태와 조작 */

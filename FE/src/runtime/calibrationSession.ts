@@ -5,7 +5,7 @@ import type { ResolvedHit, StickId } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
 import type { PadId } from '@/domain/pads';
 import { computeBoundaries, type HandAnchors } from '@/domain/calibration';
-import { anchorsToLayout } from '@/domain/kitJudge';
+import { anchorsToLayout } from '@/domain/kit/kitJudge';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
 import { isSystemPreset, type CaptureDraft } from '@/domain/preset';
 import { HitCapture } from '@/engine/HitCapture';

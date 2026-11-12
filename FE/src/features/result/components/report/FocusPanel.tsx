@@ -17,7 +17,7 @@ import {
   notesInRange,
   type Focus,
 } from '@/features/result/domain/reportView';
-import { planSegment } from '@/domain/segmentPlayback';
+import { planSegment } from '@/domain/time/segmentPlayback';
 import './report.css';
 
 interface Props {

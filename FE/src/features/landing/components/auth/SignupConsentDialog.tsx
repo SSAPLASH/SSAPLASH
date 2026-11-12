@@ -1,5 +1,5 @@
 // 가입 동의 팝업 (설계 UX-353 4-4, COACH-003-signup-consent). 랜딩 위에 뜬다.
-// 서버 가입 상태(domain/signupGate)로 pass/signup을 가르고 동의를 저장한다 — 비로그인·완료 분기는 호출한 쪽(pages/LandingPage)이 맡는다.
+// 서버 가입 상태(domain/account/signupGate)로 pass/signup을 가르고 동의를 저장한다 — 비로그인·완료 분기는 호출한 쪽(pages/LandingPage)이 맡는다.
 // 제출하면 POST로 저장하고 응답으로 회원 정보를 갱신한 뒤 onDone(원래 목적지)을 부른다. VITE_AUTH_REQUIRED=false 빌드(pass)는 저장 없이 /free로 보낸다.
 // 약관 개정으로 다시 온 기존 회원(signupCompleted=true)은 추천 학습 동의 상태를 읽어 선택 항목을 미리 켜 둔다(설계 COACH-004 4-4).
 // 가입 전 회원은 GET이 403 SIGNUP_INCOMPLETE라 읽지 않고, 선택 항목은 꺼진 채로 시작한다.
@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { signupErrorMessage } from '@/domain/auth';
 import { modeForRoute } from '@/features/landing/domain/landingRoute';
-import { isRecommendationConsentCurrent } from '@/domain/recommendationConsent';
-import { signupGateDecision } from '@/domain/signupGate';
+import { isRecommendationConsentCurrent } from '@/domain/account/recommendationConsent';
+import { signupGateDecision } from '@/domain/account/signupGate';
 import { recommendationConsentEnabled, SIGNUP_TERMS, type ConsentVersions } from '@/domain/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';

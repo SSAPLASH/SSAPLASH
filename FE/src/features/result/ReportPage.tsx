@@ -18,7 +18,7 @@ import { TimingHistogram } from '@/features/result/components/report/TimingHisto
 import { useSegmentPlayer } from '@/features/result/components/report/useSegmentPlayer';
 import { RecommendRow } from '@/components/song/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/report';
-import { recommendationPathOf } from '@/domain/recommendation';
+import { recommendationPathOf } from '@/domain/account/recommendation';
 import {
   clockRange,
   flowBins,

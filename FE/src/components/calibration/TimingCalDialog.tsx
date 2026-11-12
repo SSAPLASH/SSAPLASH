@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { timingCalSession, TIMING_CAL_TOTAL_BEATS, type TimingCalSnapshot } from '@/runtime/timingCalSession';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
-import { TIMING_CAL_LISTEN_BEATS, TIMING_CAL_MEASURE_BEATS } from '@/domain/timingCalibration';
+import { TIMING_CAL_LISTEN_BEATS, TIMING_CAL_MEASURE_BEATS } from '@/domain/kit/timingCalibration';
 import { useSettings } from '@/store/settingsStore';
 import { outputLatencyWarnText, timingCalResultText, timingOffsetText } from './timingCalText';
 import './timingCal.css';

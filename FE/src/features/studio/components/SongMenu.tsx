@@ -1,7 +1,7 @@
 // 곡 ⋯ 메뉴 (Figma Studio / MoreMenu 212:757). 완료 곡 = 커버 변경·곡 정보 수정·곡 삭제, 실패 곡 = 곡 삭제만. 삭제 앞에 구분선, 삭제 글자는 위험 색.
 // 처리 중 곡에는 메뉴를 그리지 않는다. 트리거는 IconButton sm(32). Esc·바깥 클릭으로 닫힌다(공용 ui/MoreMenu 사용). 카드는 커버 위, 목록 행은 행 끝에 둔다.
 import { MoreMenu } from '@/components/ui/MoreMenu';
-import { menuKinds, type SongEditKind, type SongSheetKind } from '@/domain/songEdit';
+import { menuKinds, type SongEditKind, type SongSheetKind } from '@/domain/song/songEdit';
 
 export type { SongEditKind, SongSheetKind };
 

@@ -1,5 +1,5 @@
-import { STICK_POWER_HINT } from '@/domain/setupSteps';
-import { stickStatus } from '@/domain/stickStatus';
+import { STICK_POWER_HINT } from '@/domain/kit/setupSteps';
+import { stickStatus } from '@/domain/kit/stickStatus';
 
 interface Props {
   /** 0 왼손, 1 오른손 */

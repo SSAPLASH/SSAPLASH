@@ -3,11 +3,11 @@
 // props만 받는다. 준비 조건 계산(useReadiness)·이동은 호출자가 한다.
 import { Card } from '@/components/ui/Card';
 import { DEVICE_META, deviceGroupName, deviceListText, type DeviceId } from '@/domain/devices';
-import type { ReadinessMissing } from '@/domain/readiness';
+import type { ReadinessMissing } from '@/domain/kit/readiness';
 import './ready.css';
 
 export interface DeviceCheckProps {
-  /** 빠진 준비 조건(domain/readiness). 비면 준비 완료 */
+  /** 빠진 준비 조건(domain/kit/readiness). 비면 준비 완료 */
   missing: ReadinessMissing[];
   /** 왼손·오른손 스틱 연결. keyboardOnly면 연결 줄을 키보드 입력으로 보인다 */
   connected: [boolean, boolean];

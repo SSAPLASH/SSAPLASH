@@ -19,7 +19,7 @@ import {
   type PadBadge,
   type PadVisualState,
 } from '@/domain/drumKit';
-import type { KitFrame } from '@/domain/kitFrame';
+import type { KitFrame } from '@/domain/kit/kitFrame';
 import { Pad, PadDefs } from './Pad';
 import { RING } from './padRing';
 import './drum.css';
@@ -76,7 +76,7 @@ export interface DrumKitProps {
   selectedPad?: PadId;
   /**
    * 자유 틀(드럼 세팅의 원근 보기). 주면 760×300 고정 배치 대신 틀 크기(px)에 패드를 그 자리·크기로, 목록 순서(먼 것부터)대로 그린다.
-   * 하이햇 페달도 그린다. scale·fitWidth·fitContain·placement는 무시한다(domain/kitFrame)
+   * 하이햇 페달도 그린다. scale·fitWidth·fitContain·placement는 무시한다(domain/kit/kitFrame)
    */
   frame?: KitFrame;
 }

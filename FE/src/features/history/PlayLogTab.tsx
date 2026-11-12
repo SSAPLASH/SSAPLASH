@@ -21,7 +21,7 @@ import {
   sortPlayLogs,
   type HistoryFilter,
   type PlayLogSort,
-} from '@/domain/playLogView';
+} from '@/domain/play/playLogView';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 import { InlineError } from '@/components/ui/InlineError';

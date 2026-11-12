@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
-import { formatPlayDate, historyRowLevel, playModeName } from '@/domain/playLogView';
+import { formatPlayDate, historyRowLevel, playModeName } from '@/domain/play/playLogView';
 import type { PlayLog } from '@/domain/playLog';
 import type { PlaySummary } from '@/api/plays';
 import '@/components/ui/table.css';

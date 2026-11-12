@@ -8,7 +8,7 @@ import { fetchSimilarSongs } from '@/api/similarSongs';
 import { listSongs } from '@/api/songs';
 import { getBestRecords } from '@/api/plays';
 import type { UserMe } from '@/domain/auth';
-import type { Lesson, LessonList } from '@/domain/lesson';
+import type { Lesson, LessonList } from '@/domain/play/lesson';
 import type { PlayLog } from '@/domain/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';

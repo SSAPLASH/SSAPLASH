@@ -1,8 +1,8 @@
 // 드럼 배치 원근 보기의 캔버스 층(PLAY-004 원근 보기 설계): 바닥 격자·그림자(패드 아래)와 손별 판정 범위·L·R 표식(패드 위).
-// 패드 그림은 DrumKit(SVG, 사용자가 고른 스킨)이 그린다. 좌표 계산은 domain/kitPerspective 몫이다.
+// 패드 그림은 DrumKit(SVG, 사용자가 고른 스킨)이 그린다. 좌표 계산은 domain/kit/kitPerspective 몫이다.
 import { PAD_META, type PadId } from '@/domain/pads';
-import { FLOOR_Z, type Camera, type PadShape } from '@/domain/kitPerspective';
-import type { Point3 } from '@/domain/kitModel';
+import { FLOOR_Z, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
+import type { Point3 } from '@/domain/kit/kitModel';
 import { FONT } from '@/components/drum/kitPadPaint';
 
 /** 손 색(왼손, 오른손). 자세 마커와 판정 범위가 같이 쓴다 */

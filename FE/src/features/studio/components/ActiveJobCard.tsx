@@ -1,7 +1,7 @@
 // Figma Studio / ActiveJobCard 203:665 — 생성 중(활성 작업) 카드. 목록 맨 위 한 줄 전체 폭에 4단계 진행 띠(접수·드럼 분리·채보 생성·완료)와 경과 시간을 보인다.
 // 세부 단계를 모르면 분리·생성 두 칸을 함께 진행 중으로 칠한다. store를 구독하지 않고 props만 그린다.
 import { useEffect, useState } from 'react';
-import { JOB_STAGE_ORDER, STAGE_LABEL, type ActiveJob, type JobProgress } from '@/domain/chartJob';
+import { JOB_STAGE_ORDER, STAGE_LABEL, type ActiveJob, type JobProgress } from '@/domain/song/chartJob';
 import { SongCover } from '@/components/song/SongCover';
 import { SongStatusBadge } from '@/components/song/SongStatusBadge';
 

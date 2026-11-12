@@ -1,5 +1,5 @@
 // 보정·재정렬 본문(PLAY-004 4-1·4-2, 개편 D2·D3·D6·D10·D11·D14, v0.2). 보정 중(드럼 배치 카드 안): 스테이지 행 전체 폭 판(StagePanel) 안에
-// 킷 하나(편집 화면과 같은 원근 틀 + 사용자가 고른 스킨, domain/kitFrame). 판 안 자리: 위쪽 가운데 큰 안내 「하이햇을 2번 타격하세요」·진행 점 / 오른쪽 아래 정보 카드 / 아래쪽 가운데 경고 배너(GapBanner).
+// 킷 하나(편집 화면과 같은 원근 틀 + 사용자가 고른 스킨, domain/kit/kitFrame). 판 안 자리: 위쪽 가운데 큰 안내 「하이햇을 2번 타격하세요」·진행 점 / 오른쪽 아래 정보 카드 / 아래쪽 가운데 경고 배너(GapBanner).
 // 킷 전체는 어둡게(0.18) 두고 지금 칠 패드만 원래 밝기 + 글로우. 간격 경고는 멈추지 않는다: 진행 중에는 배너([◯◯ 다시])로, 다음 패드를 치면 사라진다.
 // 정보 카드 상태: 진행(「하이햇 1/7」+손별 타격 점, 버튼 없음) / 결과(done: 선택 패드 값·반지름·겹침·[다시 치기][저장]).
 // 결과 화면에서는 같은 손에서 20° 미만으로 붙은 패드(세션 밖 앵커 base 포함, D14)에 --warn 테두리를 그리고 겹침 요약 배너를 띄우며, 패드를 눌러 고른다(진행 중 클릭은 무동작).
@@ -19,12 +19,12 @@ import { calibrationSession } from '@/runtime/calibrationSession';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureSnapshot } from '@/engine/HitCapture';
-import { anchorsToLayout } from '@/domain/kitJudge';
+import { anchorsToLayout } from '@/domain/kit/kitJudge';
 import type { KitLayout } from '@/domain/kitLayout';
 import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
-import { kitFrame } from '@/domain/kitFrame';
-import { padScreenCircles } from '@/domain/kitPerspective';
-import { padPointOf } from '@/domain/kitModel';
+import { kitFrame } from '@/domain/kit/kitFrame';
+import { padScreenCircles } from '@/domain/kit/kitPerspective';
+import { padPointOf } from '@/domain/kit/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/calibration';
 import type { Pose, StickId } from '@/domain/events';

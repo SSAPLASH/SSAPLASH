@@ -2,7 +2,7 @@
 // 탭을 열 때마다 진도를 다시 읽는다(방금 친 레슨이 반영되게). 연주는 기존 악보 연습 화면으로 넘긴다.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { lessonDisplayTitle, lessonPath, stageStates, stageWord } from '@/domain/lesson';
+import { lessonDisplayTitle, lessonPath, stageStates, stageWord } from '@/domain/play/lesson';
 import type { PadVisualState } from '@/domain/drumKit';
 import type { PadId } from '@/domain/pads';
 import { useLessons } from '@/store/lessonStore';

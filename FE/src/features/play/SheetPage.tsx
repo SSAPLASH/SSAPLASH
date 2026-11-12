@@ -5,7 +5,7 @@
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/keyTarget';
+import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { SheetPager } from '@/features/play/components/stage/SheetPager';
@@ -21,7 +21,7 @@ import { PlayHud } from '@/features/play/components/stage/PlayHud';
 import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotice';
 import { Countdown } from '@/features/play/components/stage/Countdown';
 import { useAudioClockGate } from '@/features/play/components/stage/useAudioClockGate';
-import { countdownValue } from '@/domain/leadIn';
+import { countdownValue } from '@/domain/time/leadIn';
 import { ScreenGate } from '@/features/play/components/stage/ScreenGate';
 import { useScreenFits } from '@/features/play/components/stage/screenFit';
 import { GuideSlot } from '@/features/play/components/stage/GuideSlot';
@@ -44,14 +44,14 @@ import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
 import type { Chart } from '@/domain/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import type { Judgement } from '@/domain/judgement';
 import type { InputSourceKind } from '@/domain/events';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
 import { PlayRecorder } from '@/engine/playRecorder';
-import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/hihatPedalCoverage';
+import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/kit/hihatPedalCoverage';
 import { readCurrentConsent } from './dataConsent';
 import { startPlaySync } from '@/runtime/playSync';
 import { disarm, finishSong, setLocked } from '@/runtime/recordingStore';
@@ -73,7 +73,7 @@ import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoac
 import { liveCoachClient } from '@/features/play/api/liveCoach';
 import { useAuth } from '@/store/authStore';
 import type { CoachShadow } from '@/coach/live/shadowCoach';
-import { COACH_BASIS } from '@/domain/coachBasis';
+import { COACH_BASIS } from '@/domain/play/coachBasis';
 import { diagTap } from '@/engine/diagTap';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시

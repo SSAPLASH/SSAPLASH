@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { activateSensor } from '@/runtime/sensorSession';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
 import { audioEngine } from '@/audio/AudioEngine';
-import { anchorsToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import type { InputSource } from '@/input/InputSource';
 import { decodePacket, PacketType } from '@/input/stickProtocol';
 import { feed, type FeedMode } from '@/features/monitor/core/feed';

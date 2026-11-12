@@ -4,7 +4,7 @@
 // 그래서 정사각 캔버스의 보이는 범위는 ±max(yawDeg, pitchDeg)이고, 실제 입력 범위(±yawDeg × ±pitchDeg)는 점선 사각형으로 표시한다.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { CalibrationProfile } from '@/domain/calibration';
-import type { AngleRange } from '@/domain/kitMapping';
+import type { AngleRange } from '@/domain/kit/kitMapping';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
 import type { DecodedHit, PadTableEntry } from '@/input/stickProtocol';
 import { edgeDeg, edgeTone, hitPose, type EdgeResult } from '@/features/monitor/core/boundary';

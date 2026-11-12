@@ -3,7 +3,7 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { MAX_TITLE_LEN, defaultTitleFromFile } from '@/domain/chartJob';
+import { MAX_TITLE_LEN, defaultTitleFromFile } from '@/domain/song/chartJob';
 import {
   MAX_MIDI_BYTES,
   MAX_MUSICXML_BYTES,
@@ -12,7 +12,7 @@ import {
   precheckUpload,
   type MidiDraft,
   type UploadPrecheck,
-} from '@/domain/midiUpload';
+} from '@/domain/song/midiUpload';
 import { UploadIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 

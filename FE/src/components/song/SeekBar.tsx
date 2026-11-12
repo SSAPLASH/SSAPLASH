@@ -1,7 +1,7 @@
 // 반주 진행 막대 (설계 MODE-002 3-11, D11·D13). 네이티브 range 입력을 감싸 누르기·끌기·키보드 탐색을 맡는다.
 // 끄는 동안은 채움과 시간 글자만 따라가고, 손을 떼면 onSeek을 한 번만 부른다. 위치 계산(자르기)은 호출자가 한다.
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { formatClock, formatSpoken } from '@/domain/freeAccompaniment';
+import { formatClock, formatSpoken } from '@/domain/song/freeAccompaniment';
 import './SeekBar.css';
 
 /** ←/→ 한 번에 옮기는 간격(ms) */

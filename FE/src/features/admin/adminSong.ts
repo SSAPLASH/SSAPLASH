@@ -1,6 +1,6 @@
 // 관리자 공용 곡 관리(설계 CHART-001-관리자-공용곡-화면, Jira 262). BE 156 `/api/v1/admin/songs` 계약의 화면 타입과 입력 규칙.
 // 권한 판단은 BE(@PreAuthorize ADMIN)가 한다. 여기 규칙은 요청 전에 막는 사전 검사다.
-import { MAX_MIDI_BYTES } from '@/domain/midiUpload';
+import { MAX_MIDI_BYTES } from '@/domain/song/midiUpload';
 import { toSafeId } from '@/domain/songCatalog';
 
 export const MAX_ADMIN_TITLE_LEN = 100;

@@ -9,7 +9,7 @@ import { setReconnectHandler } from '@/store/reconnectStore';
 import { RECONNECT_WAIT_MS, hintFor, waitForDevices } from '@/runtime/reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
 import type { SensorId, StickId } from '@/domain/events';
-import { anchorsToProfile } from '@/domain/kitJudge';
+import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
