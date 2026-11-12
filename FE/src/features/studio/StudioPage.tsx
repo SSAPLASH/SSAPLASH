@@ -8,7 +8,7 @@ import { deleteSheet, updateSheetTitle } from '@/features/studio/api/sheets';
 import { sheetKeys, sheetListQuery } from '@/features/studio/api/queries/sheets';
 import { mineSongsQuery, songKeys } from '@/api/queries/songs';
 import { queryClient } from '@/runtime/queryClient';
-import { useApiQuery } from '@/app/useApiQuery';
+import { useApiQuery } from '@/runtime/useApiQuery';
 import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';

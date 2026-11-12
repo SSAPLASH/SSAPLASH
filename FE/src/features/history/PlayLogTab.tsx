@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { PlaySummary } from '@/api/plays';
 import { playListQuery } from '@/api/queries/plays';
-import { useApiQuery } from '@/app/useApiQuery';
+import { useApiQuery } from '@/runtime/useApiQuery';
 import { HistoryTable, type HistoryServerRow } from './HistoryTable';
 import './history.css';
 import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';

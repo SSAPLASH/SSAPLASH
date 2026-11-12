@@ -27,7 +27,7 @@ import { smoothBattery } from '@/domain/stickStatus';
 import { devicesReady, pedalRequired } from '@/domain/pedalStatus';
 import type { CalibrationProfile, PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import { isSensorSource } from '@/domain/events';
-import { hitSoundActive, setCalibrationSound } from '@/features/lesson/hitSound';
+import { hitSoundActive, setCalibrationSound } from '@/runtime/hitSound';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -45,7 +45,7 @@ let lastSurfaceToPose: SurfaceToPose | undefined;
 const lastResendAt: [number | null, number | null] = [null, null];
 
 /** 타격음 스위치는 hitSound 모듈에 있다. 화면들이 이 경로로 import하므로 그대로 다시 내보낸다 */
-export { setSoundOnHit } from '@/features/lesson/hitSound';
+export { setSoundOnHit } from '@/runtime/hitSound';
 /** 키보드 드럼 스위치는 keyboardDrum 모듈에 있다. 연주 중인 화면이 이 경로로 import한다 */
 export { setKeyboardDrum, useKeyboardDrum } from '@/runtime/keyboardDrum';
 
