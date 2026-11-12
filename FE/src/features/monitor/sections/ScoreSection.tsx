@@ -16,7 +16,7 @@ function SessionLine({ s }: { s: SessionInfo }) {
     <div className="mon-summary-line">
       <strong>{s.mode === 'RHYTHM' ? '리듬 게임' : '악보 연주'}</strong> · {s.title || s.songId} · 채보 버전{' '}
       {s.chartVersionId ?? '내장'} · 판정 창 PERFECT ±{s.windows.perfectMs} / GOOD ±{s.windows.goodMs}ms · 오디오 오프셋{' '}
-      {s.audioOffsetMs}ms · 노트 {s.noteCount}개 · {STATUS_LABEL[s.status]}
+      {s.audioOffsetMs}ms{s.kickOffsetMs !== s.audioOffsetMs ? ` (킥 ${s.kickOffsetMs}ms)` : ''} · 노트 {s.noteCount}개 · {STATUS_LABEL[s.status]}
       {end}
     </div>
   );
