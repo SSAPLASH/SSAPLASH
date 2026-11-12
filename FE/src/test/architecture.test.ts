@@ -46,13 +46,10 @@ const featureOf = (f: string) => (f.startsWith('features/') ? f.split('/')[1] : 
 const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app/') && f !== 'main.tsx';
 
 /**
- * 지금 남아 있는 예외. 모두 재편 전 구조에서 넘어온 것이다.
- * - 공유 → app: 입력 인스턴스·녹음 상태·빌드 스위치처럼 조립 폴더가 가진 단일 인스턴스를 읽는 곳
+ * 허용하는 예외(`from -> to` 형식). 지금은 비어 있다.
+ * 새 항목은 막을 수 없는 이유를 주석으로 함께 적고, 풀리면 지운다.
  */
-const ALLOWED = new Set<string>([
-  // 공유 → app
-  'components/shell/Sidebar.tsx -> app/prefetchRoute.ts',
-]);
+const ALLOWED = new Set<string>([]);
 
 /** domain 파일 여부와 그 파일이 속한 기능(공유 domain이면 null) */
 const domainOwner = (f: string): { feature: string | null } | null => {

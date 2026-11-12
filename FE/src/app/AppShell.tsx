@@ -9,6 +9,7 @@ import { useLive } from '@/store/liveStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
 import { RouteErrorBoundary } from '@/components/shell/RouteErrorBoundary';
+import { prefetchRoute } from './prefetchRoute';
 import { LazyChartAutoplayToggle } from '@/features/play/components/diag/lazyChartAutoplay';
 import { RecordingToast } from '@/components/recording/RecordingToast';
 import { SaveRecordingDialog } from '@/components/recording/SaveRecordingDialog';
@@ -128,7 +129,7 @@ export function AppShell({ authRequired }: Props) {
 
   return (
     <div className={`shell${immersive ? ' immersive' : ''}`} style={{ '--side-w': immersive ? '0px' : sideCollapsed ? '80px' : '240px' } as CSSProperties}>
-      {!immersive && <Sidebar />}
+      {!immersive && <Sidebar onPrefetch={prefetchRoute} />}
       <div className="workarea" ref={workareaRef}>
         {!immersive && <TopBar />}
         {!immersive && <LessonInvite />}
