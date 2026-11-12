@@ -71,3 +71,33 @@ describe('frameOf · kitFrame', () => {
     expect(kitFrame(DEFAULT_KIT_LAYOUT, BOX, 'electronic')).toEqual(frameOf(figs, BOX, 'electronic'));
   });
 });
+
+describe('가로로 넓은 판에서 실물 킷이 잘리지 않는다', () => {
+  // 드럼 세팅 판(1440×900 화면): 그림 영역 1040×338, 그림은 판 안쪽 여백(setup.css --setup-panel-pad 16px)까지 넘어갈 수 있다
+  const WIDE = { w: 1040, h: 338 };
+  const PANEL_PAD = 16;
+  /** 심벌 셋을 배치가 허용하는 위쪽 끝(y 0.05)에 올린 배치 */
+  const HIGH = { ...DEFAULT_KIT_LAYOUT };
+  for (const pad of ['CRASH', 'RIDE', 'HIHAT'] as const) HIGH[pad] = { ...DEFAULT_KIT_LAYOUT[pad], y: 0.05 };
+
+  /** 실물 그림 상자들의 위·아래 끝(틀 px) */
+  const extent = (layout: typeof DEFAULT_KIT_LAYOUT) => {
+    const pads = kitFrame(layout, WIDE, 'acoustic').pads;
+    return {
+      top: Math.min(...pads.map((p) => p.top)),
+      bottom: Math.max(...pads.map((p) => p.top + (p.art!.boxH * p.w) / 160)),
+    };
+  };
+
+  it('기본 배치: 위아래 모두 판 안에 든다', () => {
+    const e = extent(DEFAULT_KIT_LAYOUT);
+    expect(e.top).toBeGreaterThanOrEqual(-PANEL_PAD);
+    expect(e.bottom).toBeLessThanOrEqual(WIDE.h + PANEL_PAD);
+  });
+
+  it('심벌을 위쪽 끝에 올려도 위아래 모두 판 안에 든다', () => {
+    const e = extent(HIGH);
+    expect(e.top).toBeGreaterThanOrEqual(-PANEL_PAD);
+    expect(e.bottom).toBeLessThanOrEqual(WIDE.h + PANEL_PAD);
+  });
+});
