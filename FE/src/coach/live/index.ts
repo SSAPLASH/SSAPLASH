@@ -3,6 +3,7 @@ export { LiveCoach, LIVE_CAUSE_TAG, LIVE_GATE_DROP_TAG, LIVE_GATE_FALLBACK_TAG, 
 export type { CoachMessage, DeferredMessage, LiveCoachLogEntry, LiveCoachOptions } from './LiveCoach';
 export type { GateDecision } from './gate/gate';
 export type { JudgedNote, StrayHit } from './window';
+export type { AimFact, AimSource } from './segment';
 export { chartCoachContext } from './noteContext';
 export type { ChartCoachContext, NoteContext } from './noteContext';
 export type { CauseCandidate, MissCause } from './cause';
