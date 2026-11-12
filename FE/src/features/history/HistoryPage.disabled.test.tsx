@@ -48,6 +48,6 @@ describe('HistoryPage (녹음 스위치 꺼짐)', () => {
     const html = render('/history?tab=recordings');
     expect(html).not.toContain('history-tabs');
     expect(html).not.toContain('불러오는 중');
-    expect(html).toContain('전체 기록 1개');
+    expect(html).toContain('<strong>1</strong>개 기록');
   });
 });
