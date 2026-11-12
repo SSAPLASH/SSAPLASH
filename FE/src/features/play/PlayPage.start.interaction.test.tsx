@@ -12,6 +12,7 @@ import { useLive } from '@/store/liveStore';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
+import { loadPlayLogs } from '@/engine/playLog';
 import { BUILTIN_CHARTS } from '@/domain/chart';
 import type { UserMe } from '@/domain/auth';
 import type { SongDetail } from '@/domain/songCatalog';
@@ -19,13 +20,14 @@ import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayPage } from './PlayPage';
 
 // PlayClock 생성 인자를 잡는다(clickOn 확인용)
-const clock = vi.hoisted(() => ({ deps: null as { clickOn(): boolean } | null }));
+const clock = vi.hoisted(() => ({ deps: null as { clickOn(): boolean } | null, session: null as { windows: { perfectMs: number; goodMs: number } } | null }));
 vi.mock('@/engine/sessionClock', async (orig) => {
   const m = await orig<typeof import('@/engine/sessionClock')>();
   class PlayClock extends m.PlayClock {
     constructor(session: ConstructorParameters<typeof m.PlayClock>[0], deps: ConstructorParameters<typeof m.PlayClock>[1]) {
       super(session, deps);
       clock.deps = deps;
+      clock.session = session;
     }
   }
   return { ...m, PlayClock };
@@ -106,6 +108,7 @@ const playing = () => screen.queryByRole('complementary', { name: '선택한 곡
 beforeEach(() => {
   frame.current = null;
   clock.deps = null;
+  clock.session = null;
   localStorage.clear();
   resetRecordingForTest();
   vi.mocked(getBestRecords).mockReset().mockResolvedValue({ items: [] });
@@ -117,7 +120,7 @@ beforeEach(() => {
   useSongs.setState({ source: 'api', selectSong: vi.fn().mockResolvedValue(detail) });
   useAuth.setState({ status: 'authenticated', user: { id: 1 } as UserMe });
   // 반주 설정은 악보 연습 설정이다. 꺼 둬도 게임은 반주를 불러온다
-  useSettings.setState({ sensorKind: 'none', countInBars: 0, firstSetupDone: true, accompaniment: false, metronome: false });
+  useSettings.setState({ sensorKind: 'none', countInBars: 0, firstSetupDone: true, accompaniment: false, metronome: false, timingCal: null, timingCalPrompt: 'done' });
   accLoad().mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
@@ -309,5 +312,89 @@ describe('PlayPage 게임의 메트로놈·녹음', () => {
     expect(rec.phase).toBe('armed');
     expect(rec.pending).toBeNull();
     expect(rec.free).toBeNull();
+  });
+});
+
+describe('PlayPage 첫 연주 전 박자 맞추기 권유', () => {
+  const rec = { measuredAt: 1, medianMs: -60, madMs: 8, pairs: 12, input: 'sensor' as const, outputLatencyMs: null, kick: null };
+  const sensorReady = (over: Partial<ReturnType<typeof useSettings.getState>> = {}) => {
+    useSettings.setState({ sensorKind: 'pointer', timingCal: null, timingCalPrompt: 'none', ...over });
+    useLive.setState({ connected: [true, true] });
+  };
+
+  it('센서 + 기록 없음 + none: 연주 대신 대화상자가 뜨고 연주가 시작되지 않는다', async () => {
+    sensorReady();
+    show();
+    await clickCardPlay();
+    const dialog = await screen.findByRole('dialog', { name: '박자 맞추기' });
+    expect(within(dialog).getByText('처음 한 번만 박자를 맞추면 판정이 정확해져요.')).toBeTruthy();
+    expect(playing()).toBe(false);
+    expect(clock.deps).toBeNull();
+    expect(useSettings.getState().timingCalPrompt).toBe('none');
+  });
+
+  it('[나중에 하기]로 닫으면 skipped가 되고 곡 선택으로 돌아오며, 다시 시작하면 바로 연주한다', async () => {
+    sensorReady();
+    show();
+    await clickCardPlay();
+    const dialog = await screen.findByRole('dialog', { name: '박자 맞추기' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '나중에 하기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(useSettings.getState().timingCalPrompt).toBe('skipped');
+    // 자동으로 시작하지 않는다
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(playing()).toBe(false);
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('키보드 모드는 권하지 않고 바로 시작한다', async () => {
+    useSettings.setState({ sensorKind: 'none', timingCal: null, timingCalPrompt: 'none' });
+    show();
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(useSettings.getState().timingCalPrompt).toBe('none');
+  });
+
+  it.each([
+    ['측정 기록이 있으면', { timingCal: rec, timingCalPrompt: 'none' as const }],
+    ['skipped이면', { timingCalPrompt: 'skipped' as const }],
+    ['done이면', { timingCalPrompt: 'done' as const }],
+  ])('센서여도 %s 바로 시작한다', async (_name, over) => {
+    sensorReady(over);
+    show();
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(screen.queryByRole('dialog', { name: '박자 맞추기' })).toBeNull();
+  });
+});
+
+describe('PlayPage 초보 판정 폭', () => {
+  const finishAndLog = async () => {
+    await waitFor(() => expect(frame.current).not.toBeNull());
+    await act(async () => frame.current?.(performance.now() + 3_600_000));
+    await screen.findByText('결과 화면');
+    return loadPlayLogs()[0];
+  };
+
+  it('EASY 채보는 세션·플레이 로그의 GOOD이 90ms다(PERFECT는 그대로)', async () => {
+    show();
+    fireEvent.click(await screen.findByRole('radio', { name: 'EASY' }));
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(clock.session?.windows).toEqual({ perfectMs: 25, goodMs: 90 });
+    expect((await finishAndLog()).timing).toEqual({ perfectMs: 25, goodMs: 90 });
+  });
+
+  it('그 밖의 난이도는 설정 값 60ms 그대로다', async () => {
+    show();
+    fireEvent.click(await screen.findByRole('radio', { name: 'HARD' }));
+    await clickCardPlay();
+    await waitFor(() => expect(playing()).toBe(true));
+    expect(clock.session?.windows).toEqual({ perfectMs: 25, goodMs: 60 });
+    expect((await finishAndLog()).timing).toEqual({ perfectMs: 25, goodMs: 60 });
   });
 });

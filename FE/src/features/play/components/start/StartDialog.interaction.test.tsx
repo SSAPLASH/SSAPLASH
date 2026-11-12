@@ -25,6 +25,21 @@ function setup(over: Partial<StartDialogProps> = {}) {
   return props;
 }
 
+describe('StartDialog 판정 여유 한 줄', () => {
+  it('넓힌 폭이 적용되는 판이면 「판정 여유 ±90ms」를 보인다', () => {
+    setup({ goodMsNote: 90 });
+    expect(screen.getByText('판정 여유 ±90ms')).toBeTruthy();
+  });
+
+  it('적용되지 않으면(null·생략) 아무것도 보이지 않는다', () => {
+    setup({ goodMsNote: null });
+    expect(screen.queryByText(/판정 여유/)).toBeNull();
+    cleanup();
+    setup();
+    expect(screen.queryByText(/판정 여유/)).toBeNull();
+  });
+});
+
 describe('StartDialog play', () => {
   it('곡 요약·옵션·안내·두 버튼이 보이고 ▶ 플레이에 초점이 간다', () => {
     setup();
