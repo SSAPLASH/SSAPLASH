@@ -8,7 +8,7 @@
 - 임시 파일은 응답 전에 지운다.
 
 응답: 200 `{"chart": <chart.json>, "sheet": <변환 메타>}` · 400 `INPUT_INVALID` · 413 `BODY_TOO_LARGE` · 422 `NO_DRUM_NOTES` · 500 `INTERNAL_ERROR`.
-오류 본문은 `{"error": 코드, "message": 한 줄}`이며 message는 BE가 사용자에게 그대로 보여 줄 수 있는 문구다.
+오류 본문은 `{"error": 코드}`이고 400·422에는 `"message": 한 줄`이 더 붙는다. message는 BE가 사용자에게 그대로 보여 줄 수 있는 문구다.
 """
 
 from __future__ import annotations

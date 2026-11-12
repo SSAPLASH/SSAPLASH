@@ -12,7 +12,8 @@
 빠르기 구간(tempoMap)도 만듦(tempo_map_from_beats, 설계 CHART-003-variable-tempo-exp).
 
 박을 못 찾으면(타격이 거의 없는 드럼 트랙) BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
-채보 JSON의 offsetMs는 첫 박·첫 마디 시각으로 chart_json이 정함(U14·U16).
+채보 JSON의 offsetMs는 마디 첫 박 다수결 위치(없으면 첫 마디 첫 박, 첫 박)로 chart_json이 정하고,
+설정에 따라 킥·스네어 노트 보정과 빠르기 구간을 반영함(U14·U16).
 
 Beat This! 가중치는 SSAPLASH_MODELS_DIR(기본 data/models)/beat_this/에 두고 md5로 확인함. 없으면 공식 서버,
 안 되면 개발자 사이트에서 받음(2026-10 공식 서버 고장, GitHub 이슈 #20·#23).
@@ -294,7 +295,7 @@ class TempoEstimator(abc.ABC):
 
     @abc.abstractmethod
     def estimate(self, audio: np.ndarray, sample_rate: int) -> TempoEstimate:
-        """(채널, 샘플) 드럼 트랙 → TempoEstimate."""
+        """(채널, 샘플) 소리(원곡 또는 드럼 트랙) → TempoEstimate."""
 
     @property
     def version_id(self) -> str:

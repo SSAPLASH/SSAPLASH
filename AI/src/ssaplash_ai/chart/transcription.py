@@ -1,8 +1,9 @@
 """드럼 채보 추론 모듈 (설계 2장 transcription, 3장 "채보 모듈", 4-1절 5~6번).
 
 드럼 트랙 파일 → 채보 JSON 파일 + TranscriptionOutput. 모델은 `configs/chart/transcription.yaml`의
-model_config가 가리키는 벤치마크 yaml로 고르고(기본 ADTOF + 드럼 킷 분리), 벤치마크 어댑터
-(`bench/transcribers`)를 그대로 import해 씀. 모델·규칙을 바꿀 때는 그 경로만 바꾸고 이 파일은 고치지 않음.
+`models` 중 `model` 이름(환경 변수 SSAPLASH_CHART_MODEL 우선)으로 고른 벤치마크 yaml을 쓰고(기본 strum:
+STRUM 8종 온셋 CRNN 학습 가중치), 벤치마크 어댑터(`bench/transcribers`)를 그대로 import해 씀.
+모델을 바꿀 때는 `model` 이름이나 환경 변수만, 규칙 값은 그 모델 yaml에서 바꾸고 이 파일은 고치지 않음.
 
 흐름: TranscriptionModule(config).load() 한 번 → transcribe_file() 곡마다 → close().
 진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·TRANSCRIBE·JSON, fraction은 단계 시작 0·끝 1.
@@ -121,7 +122,7 @@ class TranscriptionModule:
 
     @property
     def model_name(self) -> str:
-        """모델 yaml의 name (예: adtof_drumsep)."""
+        """모델 yaml의 name (예: strum_crnn_songsterr_egmd)."""
         self._require_loaded()
         return self._model_config.name
 
@@ -147,7 +148,10 @@ class TranscriptionModule:
         return f"{self._model_config.name}@{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
     def load(self) -> float:
-        """모델 yaml 읽기 → 가중치 다운로드(없으면) → 채보 모델·bpm 모델 올리기. 올리는 데 걸린 초를 돌려줌."""
+        """모델 yaml 읽기 → 채보 모델 올리기 → bpm 모델 올리기. 올리는 데 걸린 초를 돌려줌.
+
+        가중치는 어댑터에 따라 없으면 내려받거나(ADTOF 계열, Beat This!) 직접 넣은 파일을 확인함(strum).
+        """
         try:
             model_config = TranscriberConfig.from_yaml(self.config.model_config)
             transcriber = create_transcriber(model_config, self.device)

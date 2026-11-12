@@ -120,7 +120,7 @@ def format_sheet_summary(output: SheetOutput) -> str:
         f"길이 {output.duration_ms} ms, bpm {bpm}, 박자 {output.time_signature}, "
         f"첫 마디 첫 박(offsetMs) {output.offset_ms} ms",
         f"마디 {output.measures_written} → 반복 펼쳐 {output.measures_played}",
-        f"열린 하이햇 {output.n_open_hihat}개, 하이햇 페달 {output.n_hihat_pedal}개(HIHAT으로 합침), "
+        f"열린 하이햇 {output.n_open_hihat}개, 하이햇 페달 {output.n_hihat_pedal}개, "
         f"패드에 없어 뺀 타악기: {dropped}",
         f"변환 {output.convert_ms} ms ({output.generator_version})",
     ]

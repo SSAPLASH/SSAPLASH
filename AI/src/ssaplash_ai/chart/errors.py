@@ -8,12 +8,12 @@
 | ChartModelError | 가중치 없음·다운로드 실패, GPU 메모리 부족, 추론 중 예외 | MODEL_FAILED | 메모리 부족만 참 |
 | ChartOutputError | JSON 검증 실패, 파일 쓰기 실패 | OUTPUT_INVALID | 거짓 |
 
-`reason`은 사용자에게 보여 줄 실패 사유 (S15P31A307-246 설계 3-1절). 워커가 실패 보고 본문 `reason`으로 보냄.
+`reason`은 사용자에게 보여 줄 실패 사유 (S15P31A307-246 설계 3-1절). 워커가 설정 send_reason이 참일 때 실패 보고 본문 `reason`으로 보냄.
 
 | reason | 예외 |
 | --- | --- |
 | SOURCE_INVALID | ChartInputError (ChartSilentError 포함) |
-| NOT_TRANSCRIBABLE | ChartNotTranscribableError: 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패 |
+| NOT_TRANSCRIBABLE | ChartNotTranscribableError: 분리 전 음악 여부 검사에서 음악이 아닌 파일로 판단, 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패 |
 | GPU_OUT_OF_MEMORY | ChartModelError 중 retryable 참 |
 | INTERNAL_ERROR | 그 밖의 ChartModelError, ChartOutputError, 워커 내부 예외 |
 
@@ -66,7 +66,7 @@ class ChartSilentError(ChartInputError):
 
 
 class ChartNotTranscribableError(ChartInputError):
-    """채보를 만들 수 없음. 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패."""
+    """채보를 만들 수 없음. 음악이 아닌 파일(분리 전 음악 여부 검사), 드럼 트랙 무음, 노트 수 기준 미달, 박 추적 실패."""
 
     reason = REASON_NOT_TRANSCRIBABLE
 

@@ -1,7 +1,10 @@
 """채보 워커 명령줄 (설계 3-1절 명령 표). AI/ 폴더에서 실행.
 
-- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복. 환경 변수 SSAPLASH_WORKER_* 필요
-- check: 환경 변수·설정 yaml 검사, 모델 두 개 올려 보고 시간 출력. BE는 부르지 않음
+- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복.
+  환경 변수 SSAPLASH_WORKER_BASE_URL·ID·TOKEN과 SSAPLASH_WORK_DIR 필요
+- check: 환경 변수·설정 yaml 검사, 분리·채보 모델과 음악 여부 검사 모델을 올려 보고 시간·검사 상태 출력.
+  BE는 부르지 않음
+- live-run: 연주 중 LLM 구간 코칭 워커. 채보 모델을 올리지 않고 연주 코칭 큐만 봄
 - fake-be: 테스트·로컬 확인용 BE 대역을 띄우고 곡을 작업으로 넣음 (개발용)
 
 예

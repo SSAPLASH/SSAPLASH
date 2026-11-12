@@ -1,4 +1,6 @@
-"""워커 설정 (설계 3-1절). 환경 변수 `SSAPLASH_WORKER_*` → WorkerSettings.
+"""워커 설정 (설계 3-1절).
+
+환경 변수 `SSAPLASH_WORKER_*`·`SSAPLASH_WORK_DIR`·`SSAPLASH_NARRATIVE_*`·`SSAPLASH_LIVE_*` → WorkerSettings.
 
 비밀 값(BE 주소·workerId·토큰)은 환경 변수로만 받음. 토큰은 repr·오류 메시지에 넣지 않음.
 모델 설정 yaml 경로는 명령줄 인자로 받고, 기본값은 `configs/chart/*.yaml`(chart.config).
