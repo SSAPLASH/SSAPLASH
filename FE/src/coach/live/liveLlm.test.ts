@@ -4,7 +4,9 @@ import { coachCopy } from './copy';
 import { LIVE_LLM_TAG, LiveCoach } from './LiveCoach';
 import { LlmCoach, type LlmCoachClient, type LlmRecord, type LlmTip } from './llmCoach';
 import { assignLlm, parseCoachLiveConfig } from './models/experiment';
-import { MIN_SEGMENT_JUDGED, SegmentTracker, segmentBars, segmentIndexAt, segmentRange, type FinishedSegment, type SegmentChart } from './segment';
+import type { HandAnchors, PadAnchor } from '@/domain/calibration';
+import type { PadId } from '@/domain/pads';
+import { AIM_CLEAR, MIN_SEGMENT_JUDGED, SegmentTracker, aimFacts, segmentBars, segmentIndexAt, segmentRange, type AimSource, type FinishedSegment, type SegmentChart } from './segment';
 import type { JudgedNote } from './window';
 
 // 120BPM 4/4: 한 마디 2000ms, 첫 마디는 0ms
@@ -83,6 +85,80 @@ describe('구간 사실', () => {
     expect(seg.facts.ruleCoach).toEqual({ tags: ['LIVE_LATE', 'LIVE_PAD_MISS'], causes: ['WRONG_PAD'] });
     t.reset();
     expect(t.push(note(100), 0)).toEqual([]);
+  });
+});
+
+// 손별 기준 자세(도)와 판정 반경 20도. 두 손 모두 같은 기준
+const RADIUS = 20;
+function anchorSet(): Partial<Record<PadId, PadAnchor>> {
+  const a = (pad: PadId, pitch: number, yaw: number): PadAnchor => ({ pad, pitch, yaw, radius: RADIUS, samples: 2, spread: 0 });
+  return { SNARE: a('SNARE', -30, 0), SMALL_TOM: a('SMALL_TOM', -15, 40), HIHAT: a('HIHAT', -20, -45) };
+}
+const ANCHORS: HandAnchors = [anchorSet(), anchorSet()];
+const AIM: AimSource = { anchors: ANCHORS };
+
+/** 기준보다 dPitch·dYaw(도)만큼 벗어나 친 스틱 타격 */
+function aimed(t: number, pad: PadId, dPitch: number, dYaw = 0, stickId: 0 | 1 = 1): JudgedNote {
+  const ref = anchorSet()[pad]!;
+  return { ...note(t, 'GOOD', 10, pad), stickId, pose: { pitch: ref.pitch + dPitch, yaw: ref.yaw + dYaw } };
+}
+
+describe('스틱 끝 방향(aim)', () => {
+  it('낮게 친 패드는 LOW이고, 반경 대비 정도와 손을 센다', () => {
+    const t = new SegmentTracker(CHART, 60, 'stick', AIM);
+    for (let ms = 0; ms < 8000; ms += STEP) t.push(aimed(ms, 'SNARE', -0.7 * RADIUS, 0, 0), 1);
+    const [seg] = t.push(note(8100), 2);
+    expect(seg.facts.aim).toEqual([{ pad: 'SNARE', hits: 32, wrongPad: 0, vertical: 'LOW', horizontal: null, size: 'CLEAR', hand: 'LEFT' }]);
+    expect(seg.facts.contractVersion).toBe(1);
+  });
+
+  it('치우침이 작거나 타격이 4개 미만이면 넣지 않는다', () => {
+    const small = new SegmentTracker(CHART, 60, 'stick', AIM);
+    for (let ms = 0; ms < 8000; ms += STEP) small.push(aimed(ms, 'SNARE', -0.1 * RADIUS), 1);
+    expect(small.push(note(8100), 2)[0].facts.aim).toBeUndefined();
+    expect(aimFacts([0, 1, 2].map(() => ({ notePad: 'SNARE' as PadId, stickId: 0 as const, pose: { pitch: -50, yaw: 0 }, wrongPad: false })), AIM)).toEqual([]);
+  });
+
+  it('키보드 판과 기준이 없는 판에는 aim이 없다', () => {
+    const kb = new SegmentTracker(CHART, 60, 'keyboard', AIM);
+    for (let ms = 0; ms < 8000; ms += STEP) kb.push(aimed(ms, 'SNARE', -0.7 * RADIUS), 1);
+    expect(kb.push(note(8100), 2)[0].facts.aim).toBeUndefined();
+    const none = new SegmentTracker(CHART, 60, 'stick');
+    for (let ms = 0; ms < 8000; ms += STEP) none.push(aimed(ms, 'SNARE', -0.7 * RADIUS), 1);
+    expect(none.push(note(8100), 2)[0].facts.aim).toBeUndefined();
+  });
+
+  it('놓친 노트 근처에서 다른 패드로 잡힌 타격은 그 노트 패드의 wrongPad로 센다', () => {
+    const t = new SegmentTracker(CHART, 60, 'stick', AIM);
+    for (let ms = 0; ms < 8000; ms += STEP) {
+      if (ms % 1000 === 0) {
+        // 스몰탐을 치려다 낮게 쳐서 스네어로 잡혔다: 채보 밖 타격이 먼저 오고 놓침 판정이 뒤에 온다
+        t.noteStray('SNARE', ms + 10, 1, { pitch: -15 - 0.7 * RADIUS, yaw: 40 });
+        t.push(note(ms, 'MISS', null, 'SMALL_TOM'), 1);
+      } else t.push(aimed(ms, 'SNARE', 0), 1);
+    }
+    const [seg] = t.push(note(8100), 2);
+    expect(seg.facts.aim?.[0]).toMatchObject({ pad: 'SMALL_TOM', hits: 8, wrongPad: 8, vertical: 'LOW', size: 'CLEAR' });
+  });
+
+  it('방위각을 믿을 수 없는 손이면 좌우를 말하지 않는다', () => {
+    const hits = Array.from({ length: 6 }, () => ({ notePad: 'SNARE' as PadId, stickId: 1 as const, pose: { pitch: -30, yaw: 0.5 * RADIUS }, wrongPad: false }));
+    expect(aimFacts(hits, AIM)[0]).toMatchObject({ horizontal: 'RIGHT', vertical: null, size: 'SLIGHT' });
+    expect(aimFacts(hits, { ...AIM, trustYaw: () => false })).toEqual([]);
+    expect(aimFacts(hits.map((h) => ({ ...h, pose: { pitch: -30, yaw: AIM_CLEAR * RADIUS } })), AIM)[0].size).toBe('CLEAR');
+  });
+
+  it('LiveCoach가 채보 밖 타격의 방향도 구간에 넘긴다', () => {
+    const segs: FinishedSegment[] = [];
+    const coach = new LiveCoach({ goodMs: 60, enabled: true, gate: null, segments: { chart: CHART, input: 'stick', onSegment: (s) => segs.push(s), aim: AIM } });
+    for (let ms = 0; ms < 8000; ms += STEP) {
+      if (ms % 1000 === 0) {
+        coach.pushStray('SNARE', ms + 10, 1, { pitch: -15 - 0.7 * RADIUS, yaw: 40 });
+        coach.push(note(ms, 'MISS', null, 'SMALL_TOM'));
+      } else coach.push(aimed(ms, 'SNARE', 0));
+    }
+    coach.push(note(8100));
+    expect(segs[0]?.facts.aim?.[0]).toMatchObject({ pad: 'SMALL_TOM', wrongPad: 8 });
   });
 });
 

@@ -3,7 +3,7 @@ import type { JudgementEvent } from '@/engine/RhythmSession';
 import { judgedFxEvent, missFxEvent } from './fxSource';
 
 const hit = (pad: Parameters<typeof judgedFxEvent>[0]['pad'], id = 5, velocity = 90) => ({ id, pad, velocity });
-const judged = (over: Partial<JudgementEvent> = {}): JudgementEvent => ({ judgement: 'PERFECT', deltaMs: -12, pad: 'SNARE', noteIndex: 3, at: 0, stickId: null, velocity: null, ...over });
+const judged = (over: Partial<JudgementEvent> = {}): JudgementEvent => ({ judgement: 'PERFECT', deltaMs: -12, pad: 'SNARE', noteIndex: 3, at: 0, stickId: null, velocity: null, pose: null, ...over });
 
 describe('judgedFxEvent', () => {
   it('판정 중 + 판정 있음 → 판정·deltaMs·noteIndex가 실린 이벤트', () => {
