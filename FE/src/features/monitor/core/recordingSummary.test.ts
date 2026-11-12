@@ -120,7 +120,7 @@ describe('summarizeRecording', () => {
         audioOffsetMs: 12,
         noteCount: 10,
         t: 0,
-      },
+      } as unknown as DiagEvent, // 옛 녹화: kickOffsetMs 없음
     ];
     const s = summarizeRecording({ meta, rows: [], diags });
     expect(s.delta).toMatchObject({ n: 2, mean: 2, p50: 2, max: 8 });
@@ -132,13 +132,13 @@ describe('summarizeRecording', () => {
     expect(s.judgements).toEqual({ PERFECT: 1, GOOD: 1, MISS: 1 });
     expect(s.stray).toBe(2);
     expect(s.missed).toBe(1);
-    expect(s.sessions).toEqual([{ title: '곡 A', mode: 'RHYTHM', audioOffsetMs: 12, contested: 0, coach: { fixed: { total: 0, byTag: {} }, window: { total: 0, byTag: {} } } }]);
+    expect(s.sessions).toEqual([{ title: '곡 A', mode: 'RHYTHM', audioOffsetMs: 12, kickOffsetMs: 12, contested: 0, coach: { fixed: { total: 0, byTag: {} }, window: { total: 0, byTag: {} } } }]);
   });
 
   it('매칭 경합: 세션별·전체 수를 세고 Markdown에 보인다', () => {
     const start = (title: string): DiagEvent => ({
       type: 'session', phase: 'start', mode: 'RHYTHM', songId: title, title, chartVersionId: 1,
-      windows: { perfectMs: 25, goodMs: 60 } as never, audioOffsetMs: 0, noteCount: 3, t: 0,
+      windows: { perfectMs: 25, goodMs: 60 } as never, audioOffsetMs: 0, kickOffsetMs: 0, noteCount: 3, t: 0,
     });
     const c = (hitId: number): DiagEvent => ({
       type: 'matchContested', hitId, songTimeMs: 1055, pad: 'KICK', candidates: [0, 1], picked: 0, rule: 'earliest', t: 0,
@@ -192,7 +192,7 @@ describe('summaryToMarkdown', () => {
   it('코칭 기준 비교: coachEval을 세션별·방식별·tag별로 세고 Markdown에 나란히 보인다', () => {
     const start = (title: string): DiagEvent => ({
       type: 'session', phase: 'start', mode: 'RHYTHM', songId: title, title, chartVersionId: 1,
-      windows: { perfectMs: 25, goodMs: 150 } as never, audioOffsetMs: 0, noteCount: 3, t: 0,
+      windows: { perfectMs: 25, goodMs: 150 } as never, audioOffsetMs: 0, kickOffsetMs: 0, noteCount: 3, t: 0,
     });
     const e = (basis: 'fixed' | 'window', tag: string): DiagEvent => ({
       type: 'coachEval', basis, active: basis === 'fixed', tag, tMs: 1000, t: 0,
@@ -235,14 +235,40 @@ describe('녹화 요약의 패드 위치 자동 보정 줄', () => {
 });
 
 describe('녹화 요약의 audio 줄', () => {
-  const audio = (t: number, audioOffsetMs: number, outputLatencyMs: number | null): DiagEvent => ({
-    type: 'audio', t, audioOffsetMs, baseLatencyMs: 10, outputLatencyMs, sampleRate: 48000, measured: null,
-  });
+  // kickOffsetMs를 넘기지 않으면 옛 녹화처럼 필드가 없는 줄이 된다
+  const audio = (t: number, audioOffsetMs: number, outputLatencyMs: number | null, kickOffsetMs?: number): DiagEvent =>
+    ({
+      type: 'audio', t, audioOffsetMs, ...(kickOffsetMs === undefined ? {} : { kickOffsetMs }),
+      baseLatencyMs: 10, outputLatencyMs, sampleRate: 48000, measured: null,
+    }) as DiagEvent;
 
   it('마지막 audio 줄의 판정 타이밍 보정·지연을 싣고 Markdown에 한 줄로 낸다', () => {
     const s = summarizeRecording({ meta, rows: [], diags: [audio(1, 0, 40), audio(2, -65, 45.25)] });
-    expect(s.audio).toEqual({ audioOffsetMs: -65, baseLatencyMs: 10, outputLatencyMs: 45.25 });
+    expect(s.audio).toEqual({ audioOffsetMs: -65, kickOffsetMs: -65, baseLatencyMs: 10, outputLatencyMs: 45.25 });
     expect(summaryToMarkdown(s)).toContain('- 오디오: 판정 타이밍 보정 -65.0ms · base 10.0ms · output 45.3ms');
+  });
+
+  it('킥 값이 스틱 값과 다르면 Markdown에 둘 다 보인다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [audio(1, -65, 45.25, -40)] });
+    expect(s.audio).toMatchObject({ audioOffsetMs: -65, kickOffsetMs: -40 });
+    expect(summaryToMarkdown(s)).toContain('- 오디오: 판정 타이밍 보정 스틱 -65.0ms · 킥 -40.0ms · base 10.0ms · output 45.3ms');
+  });
+
+  it('킥 값이 스틱 값과 같으면 옛 출력과 똑같다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [audio(1, -65, 45.25, -65)] });
+    expect(summaryToMarkdown(s)).toContain('- 오디오: 판정 타이밍 보정 -65.0ms · base 10.0ms · output 45.3ms');
+  });
+
+  it('세션 표: 옛 녹화(킥 값 없음)는 오프셋 한 칸 그대로, 값이 다르면 둘 다', () => {
+    const start = (title: string, kick?: number): DiagEvent =>
+      ({
+        type: 'session', phase: 'start', mode: 'RHYTHM', songId: title, title, chartVersionId: 1,
+        windows: { perfectMs: 25, goodMs: 60 }, audioOffsetMs: -65, ...(kick === undefined ? {} : { kickOffsetMs: kick }),
+        noteCount: 3, t: 0,
+      }) as DiagEvent;
+    const md = summaryToMarkdown(summarizeRecording({ meta, rows: [], diags: [start('옛 곡'), start('새 곡', -40)] }));
+    expect(md).toContain('| 옛 곡 | RHYTHM | -65.0 | 0 |');
+    expect(md).toContain('| 새 곡 | RHYTHM | 스틱 -65.0ms · 킥 -40.0ms | 0 |');
   });
 
   it('audio 줄이 없으면 null이고 Markdown은 –', () => {

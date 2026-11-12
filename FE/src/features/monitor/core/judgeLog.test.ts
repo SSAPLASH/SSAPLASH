@@ -48,7 +48,7 @@ const start = (noteCount = 10): SessionBody => ({
   title: '곡',
   chartVersionId: 3,
   windows,
-  audioOffsetMs: 0,
+  audioOffsetMs: 0, kickOffsetMs: 0,
   noteCount,
 });
 const judged = (over: Partial<Extract<DiagBody, { type: 'judged' }>> = {}): DiagBody => ({
@@ -133,6 +133,16 @@ describe('JudgeLog 채점 집계', () => {
     log.push(ev(start()));
     log.push(ev(judged({ hitId: 7 })));
     expect(log.stats([]).score.recent[0]).toMatchObject({ seq: 42, stick: 1 });
+  });
+
+  it('세션 정보에 킥 값을 싣고, 옛 녹화(필드 없음)는 스틱 값과 같다고 본다', () => {
+    const log = new JudgeLog();
+    log.push(ev({ ...start(2), audioOffsetMs: -65, kickOffsetMs: -40 }));
+    expect(log.stats([]).score.session).toMatchObject({ audioOffsetMs: -65, kickOffsetMs: -40 });
+    const old = new JudgeLog();
+    const { kickOffsetMs: _drop, ...oldBody } = start(2);
+    old.push(ev({ ...oldBody, audioOffsetMs: -65 } as unknown as DiagBody));
+    expect(old.stats([]).score.session).toMatchObject({ audioOffsetMs: -65, kickOffsetMs: -65 });
   });
 
   it('세션 상태: 일시정지·재개·종료 후 값이 고정되고 요약이 우선한다', () => {

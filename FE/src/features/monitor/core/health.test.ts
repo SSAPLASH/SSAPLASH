@@ -446,7 +446,7 @@ const mkScore = (over: Partial<ScoreStats> = {}): ScoreStats => ({
     title: '곡',
     chartVersionId: null,
     windows: { perfectMs: 25, goodMs: 60 },
-    audioOffsetMs: 0,
+    audioOffsetMs: 0, kickOffsetMs: 0,
     noteCount: 10,
     status: 'running',
     endReason: null,
