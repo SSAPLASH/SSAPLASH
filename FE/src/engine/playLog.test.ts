@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildPlayLog, clearPlayLogs, getPlayLog, loadPlayLogs, savePlayLog, setPlayLogOwner, updatePlayLog, type PlayLog } from './playLog';
+import { buildPlayLog, clearPlayLogs, getPlayLog, loadPlayLogs, savePlayLog, setPlayLogOwner, updatePlayLog } from './playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 afterEach(() => {
   vi.unstubAllGlobals();

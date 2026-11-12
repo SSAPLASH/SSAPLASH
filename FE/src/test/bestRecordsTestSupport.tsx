@@ -13,6 +13,7 @@ import { BUILTIN_CHARTS } from '@/domain/chart';
 import type { UserMe } from '@/domain/auth';
 import type { SongDetail } from '@/domain/songCatalog';
 import * as playLogs from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
@@ -95,7 +96,7 @@ export function testReadyBestRecords(Page: ComponentType) {
       view.unmount();
       vi.mocked(getBestRecords).mockClear();
       useSongs.setState({ source: 'builtin' });
-      vi.spyOn(playLogs, 'loadPlayLogs').mockReturnValue([{ mode, chartId: 11, songNumericId: 1, summary: { score: 4200, accuracy: 0.42 } } as playLogs.PlayLog]);
+      vi.spyOn(playLogs, 'loadPlayLogs').mockReturnValue([{ mode, chartId: 11, songNumericId: 1, summary: { score: 4200, accuracy: 0.42 } } as PlayLog]);
       show();
       await waitFor(() => expect(cardText()).toContain('4,200'));
       expect(getBestRecords).not.toHaveBeenCalled();

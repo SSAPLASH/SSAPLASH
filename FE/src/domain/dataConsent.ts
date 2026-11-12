@@ -3,7 +3,7 @@
 // React·브라우저·fetch·store에 의존하지 않는다.
 import type { DataConsent } from './auth';
 import { dataConsentVersion } from './signupTerms';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 /** 서버 값이 현재 판에 동의한 상태인가. 없음·null·거부·판 불일치는 모두 false */
 export function isConsentCurrent(dc: DataConsent | null | undefined, version: string = dataConsentVersion()): boolean {

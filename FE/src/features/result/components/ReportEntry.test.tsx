@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { Report } from '@/domain/report';
-import type { PlayUploadState } from '@/engine/playLog';
+import type { PlayUploadState } from '@/domain/playLog';
 import { ReportEntry } from './ReportEntry';
 
 const done: PlayUploadState = { status: 'DONE', reason: null, retryable: false, attempts: 1, updatedAt: '2026-10-28T00:00:00Z' };

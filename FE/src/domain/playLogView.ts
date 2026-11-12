@@ -1,7 +1,7 @@
 // 연주 로그를 화면에 보여 줄 때 쓰는 순수 함수(결과·연주 기록 공용): 날짜·모드 표기, 모드 필터, 페이지 계산.
 import type { Difficulty } from '@/domain/chart';
 import { songDifficulty } from '@/domain/recordingView';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 /** ISO 시각 → `YYYY.MM.DD HH:mm`(브라우저 로컬 시간). 해석 못 하면 '-' */
 export function formatPlayDate(iso: string): string {

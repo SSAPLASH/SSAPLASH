@@ -5,7 +5,7 @@ import type { Chart } from '@/domain/chart';
 import { JUDGEMENT_SCORE } from '@/domain/judgement';
 import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
 import { gridOriginMs, gridTimeOf, type GridChart } from '@/domain/sheet';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 /** 1. 패드의 MISS 비율 하한과 그 판단에 필요한 최소 노트 수 */
 export const MISS_RATE_THRESHOLD = 0.25;

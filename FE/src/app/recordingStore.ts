@@ -15,7 +15,8 @@ import {
   type RecordingMode,
   type RecordingSummary,
 } from '@/domain/recording';
-import { newPlayId, type LoggedHit } from '@/engine/playLog';
+import { newPlayId } from '@/engine/playLog';
+import type { LoggedHit } from '@/domain/playLog';
 import { describeRecordingError, resolvePlayId, uploadRecording, type RecordingErrorInfo } from './recordingSync';
 import { inputManager } from './sources';
 

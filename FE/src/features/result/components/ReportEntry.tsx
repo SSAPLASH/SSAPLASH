@@ -2,7 +2,7 @@
 // 상태 구독·재전송은 화면(ResultPage)이 app/playSync로 하고 여기는 그리기만 한다.
 import { Link } from 'react-router-dom';
 import { analysisTeaser, type Report } from '@/domain/report';
-import type { PlayUploadState } from '@/engine/playLog';
+import type { PlayUploadState } from '@/domain/playLog';
 
 /** 업로드하지 않은 사유·실패 코드 → 안내 문구 */
 const REASON_TEXT: Record<string, string> = {

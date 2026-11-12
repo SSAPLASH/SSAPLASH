@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 import type { Report } from '@/domain/report';
 import {
   prefetchReport,

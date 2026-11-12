@@ -36,7 +36,8 @@ import { formatPlayDate } from '@/domain/playLogView';
 import { timingHistogram } from '@/features/result/domain/timingHistogram';
 import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from '@/features/result/domain/feedback';
 import { isUploadTarget } from '@/domain/report';
-import { getPlayLog, loadPlayLogs, type PlayLog } from '@/engine/playLog';
+import { getPlayLog, loadPlayLogs } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 /** 모드별 선택 화면 경로 */
 const pickPath = (l: PlayLog): string => pickPathOf(l.mode);

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { HistoryTable } from './HistoryTable';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { DELETED_SONG_LABEL } from '@/domain/songAvailability';
-import type { PlayLog } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/playLog';
 
 function log(over: Partial<PlayLog> & { playId: string }): PlayLog {
   return {
