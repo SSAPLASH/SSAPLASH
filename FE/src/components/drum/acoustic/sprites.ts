@@ -31,3 +31,23 @@ const PERSP: Record<string, string> = {
 export function spriteUrl(name: string): string | undefined {
   return PERSP[name];
 }
+
+let preloaded = false;
+
+/**
+ * 조각 이미지를 미리 받는다. 앱 시작 뒤 한가할 때 한 번만 부른다(두 번째부터는 아무 일도 하지 않는다).
+ * 이미지가 오기 전에도 킷 크기와 누름 영역은 같아서 치는 동작은 된다.
+ */
+export function preloadSprites(): void {
+  if (preloaded || typeof Image === 'undefined') return;
+  preloaded = true;
+  for (const url of Object.values(PERSP)) {
+    const img = new Image();
+    img.src = url;
+  }
+}
+
+/** 테스트용: 미리 받기 기록을 지운다 */
+export function resetPreloadForTest(): void {
+  preloaded = false;
+}
