@@ -66,8 +66,9 @@ describe('CalibrationStage 보정 진행', () => {
     expect(screen.getByText('2 / 7')).toBeTruthy();
     expect(container.querySelector('[aria-label="왼손 1/2"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
-    expect(container.querySelectorAll('.drum-pad-lit').length).toBe(1);
-    expect(container.querySelectorAll('.drum-pad-dim').length).toBe(8); // 하이햇 페달까지 9패드 중 목표 하나만 켜진다
+    // 하이햇 페달까지 9패드 중 목표 하나만 켜진다. 심벌(크래시·라이드·하이햇)은 받침 층·원판 층 두 그룹이라 클래스가 둘씩 붙는다
+    expect(container.querySelectorAll('.drum-pad-lit').length).toBe(2);
+    expect(container.querySelectorAll('.drum-pad-dim').length).toBe(10);
     expect(container.querySelector('.drum-pad-ghost')).toBeNull();
     expect(container.querySelectorAll('button').length).toBe(0);
     expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();
@@ -116,7 +117,7 @@ describe('CalibrationStage 보정 진행', () => {
     setCapture({ order: ['HIHAT'], index: 0, target: 'HIHAT', counts: [0, 0], captured: {} });
     const { container } = render(<CalibrationStage />);
     expect(screen.getByText('1 / 1')).toBeTruthy();
-    expect(container.querySelectorAll('.drum-pad-lit').length).toBe(1);
+    expect(container.querySelectorAll('.drum-pad-lit').length).toBe(2); // 하이햇은 받침 층·원판 층
     expect(container.querySelector('[aria-label="0 / 1 패드 완료"]')).not.toBeNull();
   });
 });

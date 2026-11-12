@@ -24,9 +24,11 @@ describe('DrumKit frame', () => {
   it('패드는 틀이 준 자리·크기로, 목록 순서(먼 것부터)대로 그린다', () => {
     const frame = kitFrame(DEFAULT_KIT_LAYOUT, BOX, 'acoustic');
     const html = renderToStaticMarkup(<DrumKit frame={frame} />);
+    // 심벌 받침 층은 모두 그보다 앞에 깔리므로, 패드 그룹(class="drum-pad")부터 순서를 본다
+    const main = html.slice(html.indexOf('class="drum-pad"'));
     let at = -1;
     for (const p of frame.pads) {
-      const next = html.indexOf(`translate(${p.left} ${p.top}) scale(${p.w / 160})`);
+      const next = main.indexOf(`translate(${p.left} ${p.top}) scale(${p.w / 160})`);
       expect(next).toBeGreaterThan(at);
       at = next;
     }
@@ -46,7 +48,8 @@ describe('DrumKit frame', () => {
     const frame = kitFrame(DEFAULT_KIT_LAYOUT, BOX, 'acoustic');
     const html = renderToStaticMarkup(<DrumKit frame={frame} hidden={['RIDE']} dimAll lit="SNARE" selectedPad="CRASH" />);
     expect(count(html, /class="drum-pad"/g)).toBe(8);
-    expect(count(html, /drum-pad-dim/g)).toBe(7);
+    // 라이드를 숨기면 7패드: 심벌(크래시·하이햇)은 받침 층이 따로 있어 dim이 둘씩 붙는다
+    expect(count(html, /drum-pad-dim/g)).toBe(7 + 2);
     expect(count(html, /drum-pad-lit/g)).toBe(1);
     expect(html).toContain('data-selected-pad="CRASH"');
   });

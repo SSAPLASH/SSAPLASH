@@ -39,10 +39,12 @@ describe('DrumKit 보정 props', () => {
 
   it('dimAll·lit(UX-64): lit 패드만 drum-pad-lit, 나머지는 전부 drum-pad-dim', () => {
     const html = renderToStaticMarkup(<DrumKit dimAll lit="HIHAT" />);
-    expect(count(html, /drum-pad-lit/g)).toBe(1);
-    expect(count(html, /drum-pad-dim/g)).toBe(DRUM_KIT_PADS.length - 1);
+    // 심벌(하이햇)은 받침 층과 원판 층 두 그룹에 같은 클래스가 붙는다
+    const cymbals = DRUM_KIT_PADS.filter((p) => p.shape === 'cymbal').length;
+    expect(count(html, /drum-pad-lit/g)).toBe(2);
+    expect(count(html, /drum-pad-dim/g)).toBe(DRUM_KIT_PADS.length - 1 + (cymbals - 1));
     // lit 그룹 안의 첫 라벨이 하이햇이다(다음 패드 그룹(dim)보다 앞)
-    const after = html.slice(html.indexOf('class="drum-pad-lit"'));
+    const after = html.slice(html.lastIndexOf('class="drum-pad-lit"'));
     const nextDim = after.indexOf('drum-pad-dim');
     expect(after.indexOf('>하이햇<')).toBeLessThan(nextDim === -1 ? Infinity : nextDim);
   });
