@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
-import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, listAllSongs, listSongs, SONG_LIST_MAX_PAGES, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
+import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, retryMidiAccompaniment, listAllSongs, listSongs, SONG_LIST_MAX_PAGES, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };
 
@@ -253,5 +253,19 @@ describe('listAllSongs 전체 페이지 (Jira 363)', () => {
     const items = await listAllSongs({ source: 'MINE' }, { isStale: () => true });
     expect(fn).toHaveBeenCalledTimes(1);
     expect(items.map((s) => s.id)).toEqual([1]);
+  });
+});
+
+
+describe('retryMidiAccompaniment', () => {
+  it('본문 없이 Bearer 인증 POST를 보내고 빈 202를 처리한다', async () => {
+    const fn = vi.fn(async () => new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fn);
+    await expect(retryMidiAccompaniment(7)).resolves.toBeUndefined();
+    const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/v1/songs/7/accompaniment/retry');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeUndefined();
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer tok');
   });
 });

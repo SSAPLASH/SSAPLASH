@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { deleteSheet, updateSheetTitle } from '@/features/studio/api/sheets';
 import { sheetKeys, sheetListQuery } from '@/features/studio/api/queries/sheets';
 import { mineSongsQuery, songKeys } from '@/api/queries/songs';
+import { ApiError } from '@/api/http';
+import { getSong, retryMidiAccompaniment } from '@/api/songs';
 import { queryClient } from '@/runtime/queryClient';
 import { useApiQuery } from '@/runtime/useApiQuery';
 import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED, SONG_EDIT_ENABLED } from '@/config/features';
@@ -24,7 +26,7 @@ import { SongCoverDialog } from '@/features/studio/components/SongCoverDialog';
 import { SongDeleteDialog } from '@/features/studio/components/SongDeleteDialog';
 import { SongMetaDialog } from '@/features/studio/components/SongMetaDialog';
 import { StudioToast } from '@/features/studio/components/StudioToast';
-import { useAccompanimentPolling } from '@/features/studio/components/useAccompanimentPolling';
+import { patchCachedSong, useAccompanimentPolling } from '@/features/studio/components/useAccompanimentPolling';
 import type { SongEditKind, SongSheetKind } from '@/features/studio/components/SongMenu';
 import { PlusIcon } from '@/components/song/StudioIcons';
 import { UploadDialog, type UploadSection } from '@/features/studio/components/UploadDialog';
@@ -40,6 +42,7 @@ import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSheetLink } from '@/features/studio/store/sheetLinkStore';
 import { useSongEdit } from '@/features/studio/store/songEditStore';
 import { useSongs } from '@/store/songStore';
+import { useAuth } from '@/store/authStore';
 
 const JUST_DONE_MS = 2000;
 /** 삭제 완료 알림을 보이는 시간(U8) */
@@ -138,6 +141,8 @@ export function StudioPage() {
   const [tab, setTab] = useState<UploadTab>('AUDIO');
   const prevPhase = useRef(phase);
   const justDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [retryingAccompanimentIds, setRetryingAccompanimentIds] = useState<ReadonlySet<number>>(() => new Set());
+  const retryingAccompanimentRef = useRef(new Set<number>());
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 커버 오류로 목록을 마지막으로 다시 읽은 시각(U10)
@@ -409,7 +414,52 @@ export function StudioPage() {
     if (listeningId !== null && status === 'ready' && !items.some((s) => s.id === listeningId)) listenOff();
   }, [listeningId, status, items, listenOff]);
   // 채보는 READY인데 반주가 생성 중인 곡만 짧게 다시 읽어 배지를 갱신한다(설계 CHART-002 반주 상태 4-2)
-  useAccompanimentPolling(items, status === 'ready');
+  const restartAccompanimentPolling = useAccompanimentPolling(items, status === 'ready');
+
+  const onRetryAccompaniment = useCallback(async (song: SongSummary) => {
+    const auth = useAuth.getState();
+    const userId = auth.status === 'authenticated' ? auth.user?.id : undefined;
+    if (userId == null || song.source !== 'MIDI' || song.status !== 'READY' || song.accompanimentStatus !== 'FAILED' || retryingAccompanimentRef.current.has(song.id)) return;
+    const sameUser = () => useAuth.getState().status === 'authenticated' && useAuth.getState().user?.id === userId;
+    retryingAccompanimentRef.current.add(song.id);
+    setRetryingAccompanimentIds(new Set(retryingAccompanimentRef.current));
+    try {
+      let conflict = false;
+      try {
+        await retryMidiAccompaniment(song.id);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409 && error.code === 'MIDI_RETRY_UNAVAILABLE') conflict = true;
+        else throw error;
+      }
+      if (!sameUser()) return;
+      // 상세 조회가 실패하더라도 목록 재조회에서 GENERATING을 발견하면 폴링이 다시 시작된다.
+      restartAccompanimentPolling(song.id);
+      try {
+        const latest = await getSong(song.id);
+        if (!sameUser()) return;
+        patchCachedSong(latest);
+      } catch {
+        if (!sameUser()) return;
+        void reloadSongs();
+        showToast(conflict ? '현재 반주 상태를 확인하지 못했어요' : '반주 재시도 요청은 접수됐지만 상태를 확인하지 못했어요');
+        return;
+      }
+      showToast(conflict ? '이미 처리 중이거나 반주를 다시 만들 수 없어요' : '반주 생성을 다시 시작했어요');
+    } catch (error) {
+      if (!sameUser()) return;
+      if (error instanceof ApiError && error.status === 404) {
+        showToast('곡을 찾을 수 없어요');
+        void reloadSongs();
+      } else if (error instanceof ApiError && error.status === 401) {
+        showToast('다시 로그인해 주세요');
+      } else {
+        showToast('반주 생성을 다시 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요');
+      }
+    } finally {
+      retryingAccompanimentRef.current.delete(song.id);
+      setRetryingAccompanimentIds(new Set(retryingAccompanimentRef.current));
+    }
+  }, [reloadSongs, restartAccompanimentPolling, showToast]);
 
   // store가 이미 사용자용 문장으로 만들어 둔다
   const errorText = error?.detail ?? null;
@@ -508,6 +558,8 @@ export function StudioPage() {
             progress={progress}
             justDoneId={justDoneId}
             onReupload={onReupload}
+            onRetryAccompaniment={onRetryAccompaniment}
+            retryingAccompanimentIds={retryingAccompanimentIds}
             view={view}
             onEdit={SONG_EDIT_ENABLED ? openEdit : undefined}
             onCoverError={onCoverError}

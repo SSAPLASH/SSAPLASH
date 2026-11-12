@@ -22,6 +22,8 @@ interface Props {
   /** 방금 완료·편집돼 잠깐 강조할 행 */
   justDone: boolean;
   onReupload: (song: SongSummary) => void;
+  onRetryAccompaniment?: (song: SongSummary) => void;
+  retryingAccompaniment?: boolean;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
   /** 있으면 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다(악보-곡 연결 스위치 켜짐) */
@@ -31,7 +33,7 @@ interface Props {
   playback?: SongPlayback;
 }
 
-export function MySongRow({ song, justDone, onReupload, onEdit, onSheet, onCoverError, playback }: Props) {
+export function MySongRow({ song, justDone, onReupload, onRetryAccompaniment, retryingAccompaniment, onEdit, onSheet, onCoverError, playback }: Props) {
   const listenable = playback !== undefined && canListen(song);
   const query = `scope=MINE&song=${song.id}`;
   const ready = song.status === 'READY';
@@ -54,7 +56,7 @@ export function MySongRow({ song, justDone, onReupload, onEdit, onSheet, onCover
       </span>
       {listenable && <SongPlayBar song={song} playback={playback} />}
       <SongStatusBadge status={song.status} />
-      <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
+      <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} onRetry={song.source === 'MIDI' && onRetryAccompaniment ? () => onRetryAccompaniment(song) : undefined} retrying={retryingAccompaniment} />
       <span className="studio-row-date">{dateLabel(song.createdAt)}</span>
       <span className="studio-row-actions">
         {ready && (

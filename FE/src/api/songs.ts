@@ -72,6 +72,11 @@ export async function getSongAccompaniment(songId: number, signal?: AbortSignal)
   return { url, expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : null };
 }
 
+/** 실패한 MIDI 반주 생성을 다시 접수한다. 성공 응답은 본문 없는 202다. */
+export async function retryMidiAccompaniment(id: number, signal?: AbortSignal): Promise<void> {
+  await apiFetch(`/api/v1/songs/${id}/accompaniment/retry`, { method: 'POST', signal });
+}
+
 /** `GET /api/v1/songs/{id}` — 난이도별 채보 요약 포함 */
 export async function getSong(id: number, signal?: AbortSignal): Promise<SongDetail> {
   const body = await apiFetch<Record<string, unknown>>(`/api/v1/songs/${id}`, { signal });

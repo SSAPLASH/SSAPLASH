@@ -1035,3 +1035,14 @@
     transition: none;
   }
 }
+
+/* 반주 실패 배지는 기존 배지 크기와 색을 유지하는 재시도 버튼이다. */
+button.studio-badge-retry {
+  min-height: 0;
+  border: 0;
+  font-family: inherit;
+  font-weight: inherit;
+}
+button.studio-badge-retry:hover {
+  background: color-mix(in srgb, var(--badge-color) 16%, transparent);
+}

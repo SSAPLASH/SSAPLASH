@@ -26,6 +26,8 @@ interface Props {
   /** 방금 편집·완료돼 잠깐 강조할 카드 */
   justDone: boolean;
   onReupload: (song: SongSummary) => void;
+  onRetryAccompaniment?: (song: SongSummary) => void;
+  retryingAccompaniment?: boolean;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
   /** 있으면 ⋯ 메뉴와 맨 아래 버튼에 [악보 보기 | 악보 올리기]를 넣는다(악보-곡 연결 스위치 켜짐). 없으면 맨 아래 버튼은 비활성 [악보 보기] */
@@ -36,7 +38,7 @@ interface Props {
   playback?: SongPlayback;
 }
 
-export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCoverError, playback }: Props) {
+export function MySongCard({ song, justDone, onReupload, onRetryAccompaniment, retryingAccompaniment, onEdit, onSheet, onCoverError, playback }: Props) {
   // 플레이 메뉴는 body 끝(portal)에 그려져 카드의 :hover·:focus-within 밖이므로, 열린 동안은 클래스로 강조를 유지한다
   const [menuOpen, setMenuOpen] = useState(false);
   const listenable = playback !== undefined && canListen(song);
@@ -72,7 +74,7 @@ export function MySongCard({ song, justDone, onReupload, onEdit, onSheet, onCove
           <span className="studio-card-artist">{artistLabel(song.artist)}</span>
           <div className="studio-card-badges">
             <SongStatusBadge status={song.status} />
-            <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} />
+            <AccompanimentBadge songStatus={song.status} accompanimentStatus={song.accompanimentStatus} onRetry={song.source === 'MIDI' && onRetryAccompaniment ? () => onRetryAccompaniment(song) : undefined} retrying={retryingAccompaniment} />
             {song.source === 'MIDI' && <span className="studio-chip">MIDI</span>}
             {song.source === 'MUSICXML' && <span className="studio-chip">MusicXML</span>}
             {failed && <span className="studio-card-reason">{chartFailureText(song.chartFailure)}</span>}
