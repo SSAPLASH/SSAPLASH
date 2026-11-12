@@ -1,5 +1,5 @@
 // 타격 이펙트 엔진 — 파티클 풀·예산·시간 진행·rAF 시작/정지·통계. React와 테마 이름을 모른다(테마는 정의 조회만).
-import { kitPadsFor, type KitSkin } from '@/domain/drumKit';
+import { kitPadsFor, type KitSkin, type KitView } from '@/domain/drumKit';
 import { fxGeoOf } from '@/domain/hitFx/geometry';
 import { fxIntensity } from '@/domain/hitFx/intensity';
 import { createRand } from '@/domain/hitFx/rand';
@@ -52,7 +52,8 @@ export interface FxEngine {
   /** 판정 색(디자인 토큰을 읽은 값). 캔버스는 CSS 변수를 못 쓴다 */
   setJudgeColors(colors: JudgeColors): void;
   setTheme(id: HitFxTheme): void;
-  setSkin(skin: KitSkin): void;
+  /** view는 실물 스킨의 그림 종류(패드 자리·바닥선). 생략하면 persp */
+  setSkin(skin: KitSkin, view?: KitView): void;
   setReduced(flag: boolean): void;
   /** brand 색(캔버스는 CSS 변수를 못 쓴다) */
   setBrand(color: string): void;
@@ -74,6 +75,7 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
 
   let theme: HitFxTheme = 'auto';
   let skin: KitSkin = 'acoustic';
+  let kitView: KitView = 'persp';
   let reduced = false;
   let brand = BRAND_FALLBACK;
   let judgeColors = JUDGE_COLORS_FALLBACK;
@@ -117,8 +119,8 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
 
   /** 기본 위치 찾기: 킷 좌표의 패드 헤드. 패드가 없는 킷이면 null */
   function kitLocate(event: FxEvent): FxLocation | null {
-    const pad = kitPadsFor(skin).find((p) => p.pad === event.pad);
-    return pad ? { geo: fxGeoOf(pad, skin), shape: pad.shape } : null;
+    const pad = kitPadsFor(skin, kitView).find((p) => p.pad === event.pad);
+    return pad ? { geo: fxGeoOf(pad, skin, kitView), shape: pad.shape } : null;
   }
 
   function emit(event: FxEvent) {
@@ -200,8 +202,9 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     setTheme(id) {
       theme = id;
     },
-    setSkin(s) {
+    setSkin(s, v = 'persp') {
       skin = s;
+      kitView = v;
     },
     setReduced(flag) {
       reduced = flag;
