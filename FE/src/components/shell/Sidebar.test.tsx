@@ -5,7 +5,7 @@ import { prefetchRoute } from '@/app/prefetchRoute';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 
-vi.mock('@/app/prefetchRoute', () => ({ PREFETCH_HOVER_MS: 100, prefetchRoute: vi.fn() }));
+vi.mock('@/app/prefetchRoute', () => ({ prefetchRoute: vi.fn() }));
 
 afterEach(cleanup);
 
