@@ -2,7 +2,7 @@
 // 네트워크·5xx·401 같은 다른 실패는 "모름"으로 두어 표시하지 않는다. 언마운트·로그 변경 시 진행 중 요청을 중단한다.
 import { useEffect, useState } from 'react';
 import { checkSongAvailability } from '@/api/songs';
-import { songIdsToCheck } from '@/domain/songAvailability';
+import { songIdsToCheck } from '@/domain/song/songAvailability';
 
 const EMPTY: ReadonlySet<number> = new Set();
 

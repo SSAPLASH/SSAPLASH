@@ -1,0 +1,39 @@
+/* 타격 읽기 줄(HitReadout) — 자유 연습과 연주 화면이 같이 쓴다. 클래스 접두사 hit-readout */
+.hit-readout {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.hit-readout.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 180px;
+}
+.hit-readout-line1 {
+  color: var(--text-1);
+}
+.hit-readout-line2 {
+  color: var(--brand);
+}
+.hit-readout.row {
+  display: flex;
+  gap: 24px;
+}
+.hit-readout-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 72px;
+}
+.hit-readout-key {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.hit-readout-val {
+  color: var(--text-1);
+}
+.hit-readout-val.num {
+  font-family: var(--font-num);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}

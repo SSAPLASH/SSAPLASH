@@ -2,13 +2,13 @@
 // 자세는 60Hz로 들어오므로 구독 컴포넌트는 필요한 필드만 select 한다.
 import { create } from 'zustand';
 import type { PadId } from '@/domain/pads';
-import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/metronome';
+import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/time/metronome';
 import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
 import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } from '@/domain/events';
 import type { CaptureSnapshot } from '@/engine/HitCapture';
 import type { RealignSnapshot } from '@/engine/SnareRealign';
 
-/** 보정·재정렬 세션 스냅샷(PLAY-004 3-7). app/calibrationSession이 쓰고 화면이 읽는다 */
+/** 보정·재정렬 세션 스냅샷(PLAY-004 3-7). runtime/calibrationSession이 쓰고 화면이 읽는다 */
 export interface CalibrationSnapshot {
   mode: 'idle' | 'capture' | 'realign';
   capture: CaptureSnapshot | null;

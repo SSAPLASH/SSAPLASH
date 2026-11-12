@@ -4,7 +4,7 @@ import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } f
 import { ApiError } from '@/api/http';
 import { fetchMe, postSignupConsent, withdrawMe } from '@/api/users';
 import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
-import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
+import { ACTIVE_JOB_KEY } from '@/domain/song/chartJob';
 import type { ConsentVersions } from '@/domain/signupTerms';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */

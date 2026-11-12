@@ -9,7 +9,7 @@ import { HIT_FX_THEMES, HIT_FX_THEME_LABELS, hitFxThemeDef } from '@/domain/hitF
 import type { HitFxTheme } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/pads';
 import { createFxEmitter } from './fxSource';
-import '@/components/settings/KitSkinCarousel.css';
+import './KitSkinCarousel.css';
 
 /** 이전(-1)·다음(1) 테마. 끝에서 넘기면 반대편 끝으로 순환한다 */
 export function nextFxTheme(cur: HitFxTheme, dir: 1 | -1): HitFxTheme {

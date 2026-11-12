@@ -13,7 +13,7 @@ import {
   type BeatInfo,
   type BeatsPerBar,
   type TapState,
-} from '@/domain/metronome';
+} from '@/domain/time/metronome';
 
 export const LOOKAHEAD_MS = 100;
 export const TICK_MS = 25;

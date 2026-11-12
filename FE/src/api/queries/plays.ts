@@ -1,6 +1,6 @@
 // 연주 목록 쿼리 (설계 TECH-351). 연주 업로드가 끝나면(playSync DONE) ['plays']를 무효화한다.
 import { queryOptions } from '@tanstack/react-query';
-import { listAllPlays, type PlaySummary } from '../plays';
+import { listAllPlays, type PlaySummary } from '@/api/plays';
 
 export const playKeys = {
   all: ['plays'] as const,

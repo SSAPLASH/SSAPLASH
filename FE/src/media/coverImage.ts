@@ -1,6 +1,6 @@
 // 브라우저에서 이미지 읽기 → 가운데 정사각형 자르기 → 512×512 JPEG Blob (설계 CHART-001 D3).
-// 크기 계산은 domain/songCover의 순수 함수가 하고, 여기는 캔버스를 얇게 감싼다(jsdom 테스트 대상 아님).
-import { COVER_OUTPUT, centerSquareCrop } from '@/domain/songCover';
+// 크기 계산은 domain/song/songCover의 순수 함수가 하고, 여기는 캔버스를 얇게 감싼다(jsdom 테스트 대상 아님).
+import { COVER_OUTPUT, centerSquareCrop } from '@/domain/song/songCover';
 
 interface Source {
   image: CanvasImageSource;

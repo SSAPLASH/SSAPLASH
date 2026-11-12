@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { PAD_META, type PadId } from '@/domain/pads';
 import { staffPosOf } from '@/domain/sheet';
-import { PAD_LIMB } from '@/domain/lesson';
+import { PAD_LIMB } from '@/domain/play/lesson';
 
 const GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
 const COL = 104;

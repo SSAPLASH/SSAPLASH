@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SKIP_MS } from '@/domain/freeAccompaniment';
+import { SKIP_MS } from '@/domain/song/freeAccompaniment';
 import { PlaybackTransport } from './PlaybackTransport';
 
 afterEach(cleanup);

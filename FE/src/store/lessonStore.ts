@@ -2,7 +2,7 @@
 // 이번 접속에서 통과한 레슨(업로드·저장이 늦어도 다음 스테이지를 열어 두려고), 권유 카드 닫기만 들고 있다.
 import { create } from 'zustand';
 import { fetchLessons } from '@/api/lessons';
-import type { LessonList } from '@/domain/lesson';
+import type { LessonList } from '@/domain/play/lesson';
 
 /** 권유 카드를 닫았는지(브라우저마다). 진도가 아니라 표시 편의라 서버에 두지 않는다 */
 const DISMISS_KEY = 'airdrum.lessonInvite.dismissed';

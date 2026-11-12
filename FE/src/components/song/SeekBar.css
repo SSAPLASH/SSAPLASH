@@ -1,0 +1,225 @@
+/* 진행 막대(SeekBar) — 반주 바·라이브러리 재생바·커버 재생이 같이 쓴다. 클래스 접두사는 옮기기 전 이름(free-seek)을 유지한다 */
+@property --free-seek-pct {
+  syntax: '<percentage>';
+  inherits: true; /* 막대 의사 요소(::-webkit-slider-runnable-track)가 물려받아 쓴다 */
+  initial-value: 0%;
+}
+
+/* ---- 진행 막대(3-11) ---- */
+.free-seek {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.free-seek-range {
+  --free-seek-pct: 0%;
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.free-seek-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--brand) var(--free-seek-pct), var(--line-strong) var(--free-seek-pct));
+}
+.free-seek-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.free-seek-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+/* 손잡이는 올리거나 끄는 동안·초점일 때만 보인다 */
+.free-seek-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-1);
+  opacity: 0;
+  transition: opacity var(--motion-fade) var(--ease-out);
+}
+.free-seek-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-1);
+  opacity: 0;
+}
+.free-seek-range:hover::-webkit-slider-thumb,
+.free-seek-range:focus-visible::-webkit-slider-thumb,
+.free-seek-range.is-dragging::-webkit-slider-thumb {
+  opacity: 1;
+}
+.free-seek-range:hover::-moz-range-thumb,
+.free-seek-range:focus-visible::-moz-range-thumb,
+.free-seek-range.is-dragging::-moz-range-thumb {
+  opacity: 1;
+}
+.free-seek-range:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.free-seek-time {
+  flex: none;
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+  font-size: 12px;
+}
+
+/* ---- 진행 막대 ends 배치 (Figma 시안 C · 애플 스타일 971:50701): 손잡이 없는 3px 막대, 끄는 동안 7px, 시간은 막대 아래 양끝 ---- */
+.free-seek.is-ends {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.free-seek.is-ends .free-seek-range {
+  flex: none;
+  width: 100%;
+  height: 15px;
+}
+.free-seek.is-ends .free-seek-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 1.5px;
+  background: linear-gradient(
+    to right,
+    var(--text-1) var(--free-seek-pct),
+    color-mix(in srgb, var(--text-1) 16%, transparent) var(--free-seek-pct)
+  );
+  transition: height var(--motion-fast) var(--ease-out);
+}
+.free-seek.is-ends .free-seek-range::-moz-range-track {
+  height: 3px;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+.free-seek.is-ends .free-seek-range::-moz-range-progress {
+  height: 3px;
+  border-radius: 1.5px;
+  background: var(--text-1);
+}
+.free-seek.is-ends .free-seek-range.is-dragging::-webkit-slider-runnable-track {
+  height: 7px;
+  border-radius: 3.5px;
+}
+.free-seek.is-ends .free-seek-range.is-dragging::-moz-range-track,
+.free-seek.is-ends .free-seek-range.is-dragging::-moz-range-progress {
+  height: 7px;
+  border-radius: 3.5px;
+}
+/* 손잡이는 끌 수 있게 남기되 보이지 않는다 */
+.free-seek.is-ends .free-seek-range::-webkit-slider-thumb {
+  width: 7px;
+  height: 7px;
+  margin-top: -2px;
+  opacity: 0;
+}
+.free-seek.is-ends .free-seek-range.is-dragging::-webkit-slider-thumb {
+  margin-top: 0;
+}
+.free-seek.is-ends .free-seek-range:hover::-webkit-slider-thumb,
+.free-seek.is-ends .free-seek-range:focus-visible::-webkit-slider-thumb,
+.free-seek.is-ends .free-seek-range.is-dragging::-webkit-slider-thumb {
+  opacity: 0;
+}
+.free-seek.is-ends .free-seek-range::-moz-range-thumb,
+.free-seek.is-ends .free-seek-range:hover::-moz-range-thumb,
+.free-seek.is-ends .free-seek-range:focus-visible::-moz-range-thumb,
+.free-seek.is-ends .free-seek-range.is-dragging::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
+  opacity: 0;
+}
+.free-seek-ends {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 14px;
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+  transition: color 160ms var(--ease-out);
+}
+/* 끄는 동안 시간 글자가 밝아진다 */
+.free-seek.is-ends:has(.is-dragging) .free-seek-ends {
+  color: var(--text-1);
+}
+
+/* ---- 진행 막대 bare 배치 (라이브러리 카드 커버 재생 UI, 설계 CHART-003): 시간 글자 없이 막대만.
+   3px → 마우스 올림 5px → 끌기·키보드 초점 7px, 바탕 text-1 20%, 채움 text-1, 손잡이는 끌 수 있게 남기되 보이지 않는다 ---- */
+.free-seek.is-bare {
+  display: block;
+}
+.free-seek.is-bare .free-seek-range {
+  --bare-h: 3px;
+  display: block;
+  width: 100%;
+  height: 15px;
+}
+.free-seek.is-bare .free-seek-range:hover {
+  --bare-h: 5px;
+}
+.free-seek.is-bare .free-seek-range.is-dragging,
+.free-seek.is-bare .free-seek-range:focus-visible {
+  --bare-h: 7px;
+}
+.free-seek.is-bare .free-seek-range:focus-visible {
+  outline-offset: 0;
+  border-radius: 4px;
+}
+.free-seek.is-bare .free-seek-range::-webkit-slider-runnable-track {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: linear-gradient(
+    to right,
+    var(--text-1) var(--free-seek-pct),
+    color-mix(in srgb, var(--text-1) 20%, transparent) var(--free-seek-pct)
+  );
+  transition: height var(--motion-fast) var(--ease-out);
+}
+.free-seek.is-bare .free-seek-range::-moz-range-track {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: color-mix(in srgb, var(--text-1) 20%, transparent);
+}
+.free-seek.is-bare .free-seek-range::-moz-range-progress {
+  height: var(--bare-h);
+  border-radius: calc(var(--bare-h) / 2);
+  background: var(--text-1);
+}
+.free-seek.is-bare .free-seek-range::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range:hover::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range:focus-visible::-webkit-slider-thumb,
+.free-seek.is-bare .free-seek-range.is-dragging::-webkit-slider-thumb {
+  width: 7px;
+  height: 7px;
+  margin-top: calc((var(--bare-h) - 7px) / 2);
+  opacity: 0;
+}
+.free-seek.is-bare .free-seek-range::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range:hover::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range:focus-visible::-moz-range-thumb,
+.free-seek.is-bare .free-seek-range.is-dragging::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
+  opacity: 0;
+}

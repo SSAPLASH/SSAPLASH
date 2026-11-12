@@ -1,5 +1,5 @@
-// 입문 코스 레슨 (BE 331 `/api/v1/lessons`). 응답 검증·정렬은 domain/lesson이 맡는다.
-import { lessonsFromDto, type LessonList } from '@/domain/lesson';
+// 입문 코스 레슨 (BE 331 `/api/v1/lessons`). 응답 검증·정렬은 domain/play/lesson이 맡는다.
+import { lessonsFromDto, type LessonList } from '@/domain/play/lesson';
 import { apiFetch } from './http';
 
 export async function fetchLessons(signal?: AbortSignal): Promise<LessonList> {

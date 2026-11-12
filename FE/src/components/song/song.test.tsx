@@ -4,7 +4,7 @@ import { LevelBadge } from "./LevelBadge";
 import { SongCover } from "./SongCover";
 import { SongMeta } from "./SongMeta";
 import { RecommendRow } from "./RecommendRow";
-import { cardOf, type RecommendationItem } from "@/domain/recommendation";
+import { cardOf, type RecommendationItem } from "@/domain/account/recommendation";
 
 describe("LevelBadge", () => {
   it.each([

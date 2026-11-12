@@ -1,5 +1,5 @@
-// 채보 API (BE 96, 설계 3-1). DTO를 그대로 돌려준다 — 변환은 domain/chartMapping.
-import type { ChartAssetsDto, ChartDetailDto } from '@/domain/chartMapping';
+// 채보 API (BE 96, 설계 3-1). DTO를 그대로 돌려준다 — 변환은 domain/song/chartMapping.
+import type { ChartAssetsDto, ChartDetailDto } from '@/domain/song/chartMapping';
 import { apiFetch } from './http';
 
 /** `GET /api/v1/charts/{chartId}` — 최신 버전. 곡 선택 직후 1회만 쓴다 */

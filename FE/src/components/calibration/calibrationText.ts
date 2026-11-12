@@ -3,7 +3,7 @@ import type { CaptureSnapshot, GapWarning } from '@/engine/HitCapture';
 import type { PadGap } from '@/domain/calibration';
 import type { StickId } from '@/domain/events';
 import { PAD_META, type PadId } from '@/domain/pads';
-import { josaEulReul } from '@/domain/setupSteps';
+import { josaEulReul } from '@/domain/kit/setupSteps';
 
 export const HAND_NAME = ['왼손', '오른손'] as const;
 

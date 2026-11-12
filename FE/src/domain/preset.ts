@@ -4,7 +4,7 @@ import type { HandAnchors } from './calibration';
 import type { KitLayout } from './kitLayout';
 import { ALL_PADS } from './pads';
 // 타입만 가져온다(런타임 의존 없음). 사운드 세트 id의 주인은 audio/soundSets
-import type { SoundSetId } from './soundSet';
+import type { SoundSetId } from './kit/soundSet';
 
 /** 프리셋 상한(BE와 동일) */
 export const MAX_PRESETS = 10;

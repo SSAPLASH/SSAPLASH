@@ -1,6 +1,6 @@
 // 반주 재생기(설계 D3·3-3). 긴 오디오를 전부 디코드해 AudioBufferSourceNode로 예약 재생한다.
 // 패드·클릭과 같은 AudioContext 시계를 쓰므로 performance.now 시각으로 시작·재개를 예약할 수 있다.
-import { playbackPosition, zeroPerfMs } from '@/domain/accompanimentClock';
+import { playbackPosition, zeroPerfMs } from '@/domain/time/accompanimentClock';
 import type { AudioEngine } from './AudioEngine';
 
 export type AccompanimentState = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
