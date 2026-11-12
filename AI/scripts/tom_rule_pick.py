@@ -199,7 +199,7 @@ def cmd_enst(args) -> int:
     lines = [
         "# ENST 확인 채점 (탐 그룹 규칙)",
         "",
-        f"고른 후보 `{pick['chosen']}`. current는 서비스 규칙, current_order는 이름 규칙만 order. "
+        f"고른 후보 `{pick['chosen']}`. current는 adtof_drumsep.yaml 규칙, current_order는 이름 규칙만 order. "
         "차이는 current 대비, 괄호는 같은 곡끼리 2,000번 다시 뽑은 95% 구간. 8패드는 페달을 하이햇에 합친 값이고 "
         "RIDE 기준 값은 `분리와 채보` 베이스라인에 차이를 더한 것",
         "",

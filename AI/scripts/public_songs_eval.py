@@ -5,7 +5,7 @@
 입력: 같은 폴더 `drums.flac` (서비스 분리 모델로 원곡에서 뽑은 드럼, 정답과 같은 시간축).
 
 - features: 곡마다 ADTOF + 드럼 킷 분리 특징을 저장(이미 있으면 건너뜀). GPU
-- score: 후보 json(postproc_eval.py 형식)마다 서비스 규칙으로 예측해 곡별 8패드 tp/fp/fn csv. CPU
+- score: 후보 json(postproc_eval.py 형식)마다 `adtof_drumsep.yaml` 규칙으로 예측해 곡별 8패드 tp/fp/fn csv. CPU
 - report: 전체·패드별·곡별 F1, current 대비 차이와 곡을 다시 뽑은 95% 구간
 
   uv run python scripts/public_songs_eval.py features --songs data/songsterr --out data/rule_features/public_songs

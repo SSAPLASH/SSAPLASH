@@ -127,7 +127,7 @@ def main() -> int:
     ap.add_argument("--candidate", default="pk_gap30")
     ap.add_argument("--name", default="real_heldout", help="합친 결과의 이름")
     ap.add_argument("--ref", default="tom_6cls", help="H1·H2 비교 기준")
-    ap.add_argument("--base", default="base", help="서비스 개선 판정의 기본 가중치")
+    ap.add_argument("--base", default="base", help="개선 판정 기준인 ADTOF 원래 가중치")
     ap.add_argument("--plain", default="tom_6cls_plain", help="H2 설정 대조")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
