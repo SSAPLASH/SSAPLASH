@@ -68,6 +68,11 @@ coach-live = [
     "onnxruntime>=1.20",
     "scikit-learn>=1.5",
 ]
+# 분리 전 음악 여부 검사의 분류 모델 AST 실행용 (chart/music_check.py). torch는 models extra 것을 씀.
+# 채보 워커 환경에 `uv sync --extra models --extra transcribers --extra music-check`
+music-check = [
+    "transformers>=4.40",
+]
 
 [project.scripts]
 # AI/ 에서 `uv run ssaplash-bench check-data configs/bench/datasets/*.yaml`
@@ -105,7 +110,8 @@ build-backend = "uv_build"
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["data", "notebooks"]
+# strum/drums_v13.py는 STRUM 저장소 원본 그대로 두는 파일
+extend-exclude = ["data", "notebooks", "src/ssaplash_ai/bench/transcribers/strum/drums_v13.py"]
 
 [tool.ruff.lint]
 # E/W: pycodestyle, F: pyflakes, I: import 정렬, B: 흔한 버그, UP: 최신 문법

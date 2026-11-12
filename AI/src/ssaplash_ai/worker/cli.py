@@ -20,7 +20,11 @@ import logging
 import sys
 from collections.abc import Sequence
 
-from ssaplash_ai.chart.config import DEFAULT_SEPARATION_CONFIG, DEFAULT_TRANSCRIPTION_CONFIG
+from ssaplash_ai.chart.config import (
+    DEFAULT_MUSIC_CHECK_CONFIG,
+    DEFAULT_SEPARATION_CONFIG,
+    DEFAULT_TRANSCRIPTION_CONFIG,
+)
 from ssaplash_ai.chart.errors import ChartModelError
 from ssaplash_ai.coach.llm_local import LocalServerGenerator
 from ssaplash_ai.worker.config import WorkerSettings
@@ -47,6 +51,7 @@ def _settings(args: argparse.Namespace) -> WorkerSettings | None:
         return WorkerSettings.from_env(
             separation_config=args.separation_config,
             transcription_config=args.transcription_config,
+            music_check_config=getattr(args, "music_check_config", None),
         )
     except ValueError as e:
         logger.error("설정 오류: %s", e)
@@ -93,6 +98,23 @@ def run_cmd(args: argparse.Namespace) -> int:
     return loop.run(once=args.once, max_jobs=args.max_jobs)
 
 
+def _music_check_line(loop: WorkerLoop) -> str:
+    """분리 전 음악 여부 검사 상태 한 줄. 켜짐·꺼짐·올리기 실패를 구분해 보여 줌."""
+    if loop.music_check is not None:
+        config = loop.music_check.config
+        return (
+            f"음악 여부 검사: 켜짐 ({config.model}, 장치 {config.device}, "
+            f"음악 확률 기준 {config.min_music_prob}, 말소리 확률 기준 {config.max_speech_prob}), "
+            f"올리기 {loop.music_check.load_sec:.1f}초"
+        )
+    if loop.music_check_error:
+        return (
+            f"음악 여부 검사: [주의] 모델을 올리지 못해 검사 없이 돎 ({loop.music_check_error}). "
+            "uv sync --extra music-check와 가중치 내려받기를 확인"
+        )
+    return "음악 여부 검사: 꺼짐"
+
+
 def check_cmd(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if settings is None:
@@ -114,6 +136,7 @@ def check_cmd(args: argparse.Namespace) -> int:
         print(
             f"모델 올리기: 분리 {loop.separation.load_sec:.1f}초, 채보 {loop.transcription.load_sec:.1f}초"
         )
+        print(_music_check_line(loop))
         print("설정 정상. BE 연결은 run에서 첫 claim으로 확인")
     finally:
         loop.close()
@@ -181,6 +204,12 @@ def _add_config_args(parser: argparse.ArgumentParser) -> None:
         "--transcription-config",
         default=str(DEFAULT_TRANSCRIPTION_CONFIG),
         help=f"채보 설정 yaml (기본 {DEFAULT_TRANSCRIPTION_CONFIG.as_posix()})",
+    )
+    parser.add_argument(
+        "--music-check-config",
+        default=str(DEFAULT_MUSIC_CHECK_CONFIG),
+        help=f"분리 전 음악 여부 검사 설정 yaml (기본 {DEFAULT_MUSIC_CHECK_CONFIG.as_posix()}). "
+        "빈 문자열이면 검사 안 함",
     )
 
 

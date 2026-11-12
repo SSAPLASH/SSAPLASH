@@ -4,6 +4,7 @@
 - transcribe: 드럼 트랙(flac·wav) → chart.json(채보) + transcription.json(결과 메타) (S15P31A307-169)
 - run: separate와 transcribe를 이어서. 마지막에 단계별 시간·메모리 요약
 - sheet: MusicXML 드럼 악보 → chart.json + sheet.json(결과 메타). 모델 없이 CPU (S15P31A307-292)
+- music-check: 원곡 → 음악 확률·말소리 확률과 판정. 분리 전 음악 여부 검사를 파일 하나에 돌려 봄
 
 예
   uv run ssaplash-chart separate data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
@@ -12,9 +13,11 @@
   uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/funk_108
   uv run ssaplash-chart run song.mp3 --out out/song --duration-ms 183450   # BE가 준 원곡 길이에 맞춤
   uv run ssaplash-chart sheet score.mxl --out out/score
+  uv run ssaplash-chart music-check song.mp3
 
 종료 코드: 0 정상, 1 설정·인자 오류, 2 입력 오류(INPUT_INVALID), 3 모델 오류(MODEL_FAILED),
 4 출력 오류(OUTPUT_INVALID). 진행 상황은 표준 오류, 결과 요약은 표준 출력.
+music-check는 기준에 걸린 파일도 입력 오류와 같이 2.
 """
 
 from __future__ import annotations
@@ -26,13 +29,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ssaplash_ai.chart.config import (
+    DEFAULT_MUSIC_CHECK_CONFIG,
     DEFAULT_SEPARATION_CONFIG,
     DEFAULT_TRANSCRIPTION_CONFIG,
+    MusicCheckConfig,
     SeparationConfig,
     TranscriptionConfig,
     work_dir_from_env,
 )
 from ssaplash_ai.chart.errors import ChartError
+from ssaplash_ai.chart.music_check import MusicCheckModule, MusicCheckOutput, failure_message
 from ssaplash_ai.chart.separation import SeparationModule, SeparationOutput
 from ssaplash_ai.chart.sheet import DEFAULT_SHEET_CONFIG, SheetConfig, SheetOutput, convert_sheet
 from ssaplash_ai.chart.transcription import TranscriptionModule, TranscriptionOutput
@@ -280,6 +286,48 @@ def sheet_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def format_music_check_summary(
+    output: MusicCheckOutput, config: MusicCheckConfig, failed: str | None
+) -> str:
+    def limit(value: float | None) -> str:
+        return "없음" if value is None else f"{value:.2f}"
+
+    windows = ", ".join(f"{w['music']:.2f}/{w['speech']:.2f}" for w in output.window_probs)
+    lines = [
+        f"음악 확률 {output.music_prob:.4f} (기준 {limit(config.min_music_prob)} 이상이어야 통과)",
+        f"말소리 확률 {output.speech_prob:.4f} (기준 {limit(config.max_speech_prob)} 미만이어야 통과)",
+        f"구간별 음악/말소리: {windows}",
+        f"모델 {output.model_name} ({output.model_version}), 검사 {output.check_ms} ms",
+        f"판정: {'실패 - ' + failed if failed else '통과'}",
+    ]
+    return "\n".join(lines)
+
+
+def music_check_cmd(args: argparse.Namespace) -> int:
+    input_path = Path(args.input)
+    try:
+        config = MusicCheckConfig.from_yaml(args.config)
+    except (OSError, ValueError, TypeError) as e:
+        _log(f"설정을 읽지 못함: {args.config} ({e})")
+        return 1
+
+    _log(f"입력: {input_path}")
+    module = MusicCheckModule(config)
+    try:
+        # 기준값이 비어 있어도 확률은 구해서 보여 줌
+        load_sec = module.load(force=True)
+        _log(f"분류 모델 올리기 {load_sec:.1f}초 ({config.model}, 장치 {config.device})")
+        output = module.measure_file(input_path)
+    except ChartError as e:
+        return _report_error(e)
+    finally:
+        module.close()
+
+    failed = failure_message(output, config)
+    print(format_music_check_summary(output, config, failed))
+    return EXIT_CODES["INPUT_INVALID"] if failed else 0
+
+
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", help="출력 폴더. 없으면 SSAPLASH_WORK_DIR/<입력 파일 이름>/")
     parser.add_argument("--device", help="cuda 또는 cpu. 없으면 설정값(없으면 cpu로 내려감)")
@@ -343,6 +391,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"악보 설정 yaml (기본 {DEFAULT_SHEET_CONFIG.as_posix()})",
     )
     sh.set_defaults(func=sheet_cmd)
+
+    mc = sub.add_parser("music-check", help="원곡 → 음악 확률·말소리 확률과 분리 전 검사 판정")
+    mc.add_argument("input", help="원곡 파일 (mp3·wav·flac·opus·m4a)")
+    mc.add_argument(
+        "--config",
+        default=str(DEFAULT_MUSIC_CHECK_CONFIG),
+        help=f"음악 여부 검사 설정 yaml (기본 {DEFAULT_MUSIC_CHECK_CONFIG.as_posix()})",
+    )
+    mc.set_defaults(func=music_check_cmd)
     return parser
 
 
