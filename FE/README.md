@@ -129,7 +129,7 @@ src/
 ├─ coach/                실시간 코칭 규칙(live/)
 ├─ telemetry/            진단 수집·전송
 ├─ media/                이미지·파일 내려받기
-├─ domain/               공유 순수 타입·함수 (React·브라우저 API 의존 없음)
+├─ domain/               공유 순수 타입·함수 (React·브라우저 API 의존 없음). 10곳 이상이 쓰는 핵심 파일은 바로 아래, 나머지는 kit/ · song/ · time/ · play/ · account/ · hitFx/
 ├─ styles/               tokens.css · motion.css · global.css
 └─ test/                 구조 테스트(architecture.test.ts)·테스트 보조
 
@@ -246,7 +246,8 @@ public/
 - `coach/` — 실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · cause · noteContext · LiveCoach · copy(화면 문구 표) · models(서버 모델·실험군)). 순수 TypeScript, domain만 import
 - `media/` — coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스) · downloadFile(Blob 내려받기)
 - `audio/` — AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
-- `domain/` — 순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상)
+- `domain/` — 순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상). **10곳 이상이 import하는 파일은 바로 아래에 두고**(pads · events · songCatalog · judgement · drumKit · calibration · chart · auth · playLog · preset · kitLayout · tuning · report · recording · devices · signupTerms · sheet · pedalStatus · keyMap), 나머지는 개념별 하위 폴더로 묶는다. 새 파일도 쓰는 곳이 적으면 맞는 하위 폴더에 두고, 10곳을 넘어 핵심이 되어도 옮기지 않는다(경로 변경을 줄이려고)
+  - `kit/` 킷 배치·판정·기기·준비(kitModel · kitMapping · kitJudge · kitPerspective · kitFrame · setupSteps · readiness · timingCalibration · stickStatus · hihatPedalCoverage · soundSet · dockChip · keyTarget) · `song/` 곡·채보·반주(chartJob · chartMapping · builtinSongs · songEdit · songCover · songAvailability · midiUpload · midiFile · freeAccompaniment · marquee) · `time/` 박자·시계(tempo · metronome · audioClock · accompanimentClock · leadIn · segmentPlayback · formatTime) · `play/` 연주 기록·결과·입문 코스(playUpload · playLogView · playRetry · bestRecord · hitStats · coachBasis · dataConsent · recordingView · recordingMidi · lesson) · `account/` 가입·추천(signupGate · recommendation · recommendationConsent) · `hitFx/` 타격 이펙트
   - pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(내장 개발 소스 로컬 최고 기록) · serverBestRecord(서버 최고 기록 → 모드별 곡·채보 최고값) · guideScript(곡 선택 안내 애니메이션 예시 마디·시간표·시각 → 상태 순수 함수) · highwayLanes(하이웨이 9레인 순서 HP \| HH CR SN ST KK MT FT RD, 하이햇 페달 맨 왼쪽·간격 16px(`highwayGeometry.HIGHWAY_PEDAL_GAP`), 노트·레인 플래시·MISS 파편 색 = 네온 3색 `LANE_COLOR`: 심벌 #ffc24a · 북 #22e4ff · 킥 #ff3ec8; 킷 그림·결과·리포트는 `PAD_META.color` 그대로) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입) · pedalStatus(페달 연결·배터리 표시 문구, 페달 필수 기기 판정) · adminSong(관리자 공용 곡 타입·입력 검사·첫 박 시각·반주 파일 검사·오류 문구) · adminBulk(CSV 파싱·인코딩 판별·양식·파일 짝 맞추기·줄별 판정)
 - `styles/` — tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
