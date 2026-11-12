@@ -28,11 +28,14 @@ def cutout(a):
     t = np.clip((np.abs(a - bg).max(2) - 5) / 12, 0, 1)
     alpha = t * t * (3 - 2 * t)
     col = np.clip((a - (bg + 6)) / (255 - (bg + 6)), 0, 1) ** 0.92
-    # 원본에 그려진 하늘색 빛(스네어 테두리)을 무채색으로 낮춘다. 타격 표시는 화면이 그린다
+    # 원본에 그려진 하늘색 빛(스네어 테두리)을 지운다. 타격 표시는 화면이 그린다.
+    # 밝은 곳(테두리 금속)은 은색으로 남기고, 어둡게 번진 빛은 투명하게 한다
     r, g, b = col[..., 0], col[..., 1], col[..., 2]
-    w = np.clip((np.minimum(g, b) - r - 0.10) / 0.16, 0, 1)[..., None]
-    lum = (0.2126 * r + 0.7152 * g + 0.0722 * b)[..., None]
-    col = col * (1 - w) + lum * 0.55 * w
+    w = np.clip((np.minimum(g, b) - r - 0.10) / 0.16, 0, 1)
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    keep = np.clip((lum - 0.22) / 0.3, 0, 1)
+    col = col * (1 - w[..., None]) + (lum * w)[..., None]
+    alpha = alpha * (1 - w * (1 - keep))
     return col, alpha
 
 
@@ -48,6 +51,16 @@ def shape_mask(spec, size):
     if "polygon" in spec:
         d.polygon([tuple(p) for p in spec["polygon"]], fill=255)
     return np.asarray(im) > 0
+
+
+def disc_mask(parent, a):
+    """심벌 원판: 그 덩어리의 금색 면. 가운데 너트처럼 금색에 둘러싸인 곳도 넣는다."""
+    gold = parent & (a[..., 0] > 110) & (a[..., 0] - a[..., 2] > 45)
+    m = ndi.binary_fill_holes(ndi.binary_closing(gold, iterations=6))
+    lab, n = ndi.label(m)
+    if n > 1:
+        m = lab == (1 + int(np.argmax(ndi.sum(m, lab, range(1, n + 1)))))
+    return ndi.binary_dilation(m, iterations=2) & parent
 
 
 def bbox(mask):
@@ -93,9 +106,11 @@ def build(view, spec):
             sx, sy = p["seed"]
             assert lab[sy, sx] > 0, f"{p['name']}: seed가 물체 위에 있지 않다"
             masks[p["name"]] = grow == lab[sy, sx]
+    whole = dict(masks)  # 떼어 내기 전의 덩어리(헤드를 찾을 때 쓴다)
     for p in pieces:
         if "partOf" in p:
-            masks[p["name"]] = masks[p["partOf"]] & shape_mask(p, (W, H))
+            parent = whole[p["partOf"]]
+            masks[p["name"]] = disc_mask(parent, a) if p.get("disc") else parent & shape_mask(p, (W, H))
     for p in pieces:
         for other in p.get("minus", []):
             masks[p["name"]] = masks[p["name"]] & ~masks[other]
@@ -122,14 +137,14 @@ def build(view, spec):
     rows, heads = [], []
     for p in pieces:
         if "shape" not in p:
-            continue  # 하이햇 윗판은 받침 항목에 붙는다
+            continue  # 원판 조각은 받침 항목에 붙는다
         x0, y0, x1, y1 = boxes[p["name"]]
         u = ART_W / (x1 - x0)
         if "polygon" in p:
             px0, py0, px1, py1 = bbox(masks[p["name"]])
             hx, hy, hrx, hry = (px0 + px1) / 2, (py0 + py1) / 2, (px1 - px0) / 2, (py1 - py0) / 2
         else:
-            hx, hy, hrx, hry = head_of(p["head"], masks[p["name"]], a)
+            hx, hy, hrx, hry = head_of(p["head"], whole[p["name"]], a)
         heads.append((hx, hy, hrx, hry))
         head = {"cx": r1((hx - x0) * u), "cy": r1((hy - y0) * u), "rx": r1(hrx * u), "ry": r1(hry * u)}
         ring = {"cx": head["cx"], "cy": head["cy"], "rx": r1(head["rx"] * 1.09), "ry": r1(head["ry"] * 1.12)}
@@ -152,16 +167,12 @@ def build(view, spec):
             "badge": {"x": head["cx"], "y": r1(max(10, head["cy"] - head["ry"] - 14))},
             "kit": {"left": r1((x0 - cx0) * k), "top": r1((y0 - cy0) * k), "w": r1((x1 - x0) * k)},
         }
-        if p["name"] == "hihat-base":
-            tx0, ty0, tx1, ty1 = boxes["hihat-top"]
-            row["top"] = {
-                "sprite": "hihat-top",
-                "x": r1((tx0 - x0) * u),
-                "y": r1((ty0 - y0) * u),
-                "w": r1((tx1 - tx0) * u),
-                "h": r1((ty1 - ty0) * u),
-                "closeDy": r1(spec["closeDy"] * u),
-            }
+        top = next((t for t in pieces if t.get("top") and t.get("partOf") == p["name"]), None)
+        if top:
+            tx0, ty0, tx1, ty1 = boxes[top["name"]]
+            row["top"] = {"sprite": top["name"], "x": r1((tx0 - x0) * u), "y": r1((ty0 - y0) * u), "w": r1((tx1 - tx0) * u), "h": r1((ty1 - ty0) * u)}
+            if "closeDy" in top:
+                row["top"]["closeDy"] = r1(top["closeDy"] * u)
         rows.append(row)
 
     # 확인용: 조각을 제자리에 다시 놓은 그림 위에 헤드 타원을 그린다
@@ -229,8 +240,8 @@ export interface KitArtPad {
   badge: ArtPoint;
   /** 고정 배치에서 조각 상자의 왼쪽 위와 폭(킷 단위) */
   kit: { left: number; top: number; w: number };
-  /** 하이햇만: 윗판 조각. 받침 상자 안의 자리와, 닫힐 때 내려가는 거리 */
-  top?: { sprite: string; x: number; y: number; w: number; h: number; closeDy: number };
+  /** 심벌만: 흔들리는 원판 조각과 받침 상자 안에서의 자리. closeDy는 하이햇만 — 닫힐 때 내려가는 거리 */
+  top?: { sprite: string; x: number; y: number; w: number; h: number; closeDy?: number };
 }
 
 export interface KitArt {
