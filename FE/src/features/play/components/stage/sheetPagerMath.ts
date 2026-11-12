@@ -2,6 +2,22 @@
 // 시각 입력(songTime)은 모두 격자 시각(곡 시각 − 격자 원점 offsetMs)이다. 0이 1마디 1박, 음수는 리드인.
 import type { BarLayout } from '@/domain/sheet';
 import { xInBar, xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
+import { STAFF_BOTTOM_Y, STAFF_TOP_Y } from '@/components/sheetmusic/sheetStripDraw';
+
+/** 보표·커서·박 번호가 차지하는 세로 범위(논리 px, 배율 1 기준). 캔버스가 더 높으면 이만큼을 세로 가운데에 놓는다 */
+export const CONTENT_TOP = STAFF_TOP_Y - 46;
+export const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
+/** 악보를 키우는 배율의 최대·최소. 선 간격 10px이 최대 16px, 최소 12px이 된다 */
+export const STAFF_SCALE_MAX = 1.6;
+export const STAFF_SCALE_MIN = 1.2;
+
+/**
+ * 악보 영역 높이(CSS px)에 맞춘 악보 배율: 보표 콘텐츠 높이가 칸을 채우는 값을 [MIN, MAX]로 자른다.
+ * 칸이 1.2배로도 모자라게 낮으면 최소가 이긴다(콘텐츠가 위아래로 조금 넘칠 수 있다)
+ */
+export function staffScale(heightPx: number): number {
+  return Math.min(STAFF_SCALE_MAX, Math.max(STAFF_SCALE_MIN, heightPx / (CONTENT_BOTTOM - CONTENT_TOP)));
+}
 
 /** 악보 영역 폭(px)에 따른 페이지당 마디 수 */
 export function barsPerPage(width: number): number {
