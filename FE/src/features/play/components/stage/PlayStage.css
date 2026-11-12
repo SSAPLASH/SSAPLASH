@@ -16,10 +16,20 @@
 }
 .play-stage.game .play-stage-hud,
 .play-stage.game .play-stage-divider,
-.play-stage.game .play-stage-area {
+.play-stage.game .play-stage-area,
+.play-stage.sheet .play-stage-hud,
+.play-stage.sheet .play-stage-divider {
   width: 100%;
   max-width: 1060px;
   margin-inline: auto;
+}
+/* 악보 연습: HUD는 리듬 게임과 같은 1060 열에 두고(안쪽 좌우 20), 위 줄(Dock·기기 칩·아바타, 화면 위 0–60) 아래인 y 64에서 시작한다 */
+.play-stage.sheet {
+  padding-top: 64px;
+}
+.play-stage.sheet .play-stage-hud {
+  padding-inline: 20px;
+  box-sizing: border-box;
 }
 .play-stage-divider {
   flex: none;
@@ -37,7 +47,7 @@
 /* 세로가 900보다 작으면 영역을 줄인다 */
 @media (max-height: 899px) {
   .play-stage-area {
-    height: min(420px, calc(100vh - 24px - 96px - 210px - 73px));
+    height: min(420px, calc(100vh - 64px - 96px - 210px - 73px));
   }
 }
 /* 드럼 영역 1392×210: 가운데 정렬 gap 16 */
