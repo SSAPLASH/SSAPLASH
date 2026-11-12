@@ -1,19 +1,16 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { prefetchRoute } from '@/app/prefetchRoute';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
-
-vi.mock('@/app/prefetchRoute', () => ({ prefetchRoute: vi.fn() }));
 
 afterEach(cleanup);
 
 // LazyMotion 공급자 없이 그린다 — 기능 청크가 오기 전에도 표시가 제자리에 있어야 한다(설계 D6)
-function view(path: string) {
+function view(path: string, onPrefetch?: (to: string) => void) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Sidebar />
+      <Sidebar onPrefetch={onPrefetch} />
     </MemoryRouter>,
   );
 }
@@ -42,21 +39,21 @@ describe('Sidebar 현재 위치 표시', () => {
 
 describe('Sidebar 미리 받기 (설계 TECH-351)', () => {
   it('hover 100ms 뒤·포커스 즉시 그 메뉴 경로를 미리 받고, 100ms 전에 떠나면 받지 않는다', () => {
-    vi.mocked(prefetchRoute).mockClear();
+    const onPrefetch = vi.fn();
     vi.useFakeTimers();
     try {
-      view('/free');
+      view('/free', onPrefetch);
       const studio = screen.getByRole('link', { name: '라이브러리' });
       fireEvent.mouseEnter(studio);
       vi.advanceTimersByTime(50);
       fireEvent.mouseLeave(studio);
       vi.advanceTimersByTime(200);
-      expect(prefetchRoute).not.toHaveBeenCalled();
+      expect(onPrefetch).not.toHaveBeenCalled();
       fireEvent.mouseEnter(studio);
       vi.advanceTimersByTime(100);
-      expect(prefetchRoute).toHaveBeenCalledWith('/studio');
+      expect(onPrefetch).toHaveBeenCalledWith('/studio');
       fireEvent.focus(screen.getByRole('link', { name: '연주 기록' }));
-      expect(prefetchRoute).toHaveBeenCalledWith('/history');
+      expect(onPrefetch).toHaveBeenCalledWith('/history');
     } finally {
       vi.useRealTimers();
     }
