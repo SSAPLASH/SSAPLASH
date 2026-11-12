@@ -14,7 +14,7 @@ import { dragToLayout, hitTestPads, kitShapes, makeCamera, poseTip, screenPointT
 import type { KeyMap } from '@/domain/keyMap';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { paintAnchorZone, paintFloor, paintShadow, paintStickTip } from './kitPerspectiveDraw';
+import { canvasBleed, paintAnchorZone, paintFloor, paintShadow, paintStickTip } from './kitPerspectiveDraw';
 
 export interface KitCanvasProps {
   layout: KitLayout;
@@ -48,17 +48,23 @@ export interface KitCanvasProps {
 /** 톡 치기와 끌기를 가르는 이동 거리(px) */
 const TAP_SLOP_PX = 6;
 
-/** 캔버스를 래퍼 크기·화면 배율에 맞추고 지운다 */
+/**
+ * 캔버스를 그림 영역 크기·화면 배율에 맞추고 지운다. 좌표 원점은 그림 영역의 왼쪽 위다.
+ * 캔버스가 그림 영역보다 크면(넘침) 그만큼 원점을 안쪽으로 옮겨, 그림 영역 밖으로 나간 패드 둘레도 그려지게 한다
+ */
 function prepare(canvas: HTMLCanvasElement, w: number, h: number): CanvasRenderingContext2D | null {
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   const dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
+  const bleed = canvasBleed(canvas.clientWidth, w);
+  const bw = Math.round((w + 2 * bleed) * dpr);
+  const bh = Math.round((h + 2 * bleed) * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
   }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+  ctx.setTransform(dpr, 0, 0, dpr, bleed * dpr, bleed * dpr);
+  ctx.clearRect(-bleed, -bleed, w + 2 * bleed, h + 2 * bleed);
   return ctx;
 }
 

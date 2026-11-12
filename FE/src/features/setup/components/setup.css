@@ -363,6 +363,14 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+  /* 그림은 판 안쪽 여백까지 넘어가고 판 가장자리에서 잘린다(보정 화면 킷과 같다). 높이 잡힌 심벌 위쪽과 페달 아래쪽이 그림 영역 경계에서 잘리지 않게 한다 */
+  overflow: visible;
+}
+/* 바닥·판정 범위 캔버스도 같은 만큼 넘친다. 넘친 폭은 KitCanvas가 캔버스 크기에서 읽어 좌표를 맞춘다 */
+.setup-editor .kit-stack > canvas {
+  inset: calc(-1 * var(--setup-panel-pad));
+  width: calc(100% + 2 * var(--setup-panel-pad));
+  height: calc(100% + 2 * var(--setup-panel-pad));
 }
 /* 아래쪽 가운데 경고 배너 감싸개: 폭 ≤ 판의 60%. bottom은 useOverlayRegion이 정한다(카드와 가로로 겹치면 카드 위로 쌓임) */
 .setup-panel-banner {
