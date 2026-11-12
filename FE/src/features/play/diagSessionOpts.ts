@@ -2,14 +2,16 @@
 // 구독자가 없으면 앵커를 만들지 않는다(반경 계산 비용, 설계 PLAY-002 live-play-diagnostics D7).
 import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
+import type { TimingWindows } from '@/domain/judgement';
 import { diagTap } from '@/engine/diagTap';
 import type { DiagSessionOpts } from '@/engine/diagReport';
 import { useSettings } from '@/store/settingsStore';
 
-export function diagSessionOpts(): DiagSessionOpts {
+/** windows: 이 판에 적용된 판정 폭(초보 대상이면 넓힌 값). 설정 값을 그대로 읽지 않는다 */
+export function diagSessionOpts(windows: TimingWindows): DiagSessionOpts {
   const s = useSettings.getState();
   const base: DiagSessionOpts = {
-    windows: s.timing,
+    windows,
     audioOffsetMs: s.audioOffsetMs,
     kickOffsetMs: kickOffsetOrStick(s.audioOffsetMs, s.kickOffsetMs),
   };
