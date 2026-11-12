@@ -120,7 +120,7 @@ src/
 │   ├─ recording/        녹음 버튼·저장 창·저장 토스트(셸이 얹는다). 녹음 목록은 features/history
 │   ├─ lesson/           입문 코스 목록·초대·결과 띠(곡 선택·결과·셸이 같이 씀)
 │   └─ sheetmusic/       악보 띠 그리기(연주·결과가 같이 씀)
-├─ runtime/              앱에 하나뿐인 인스턴스·세션 — 입력 소스(sources·sensorRegistry)·쿼리 캐시(queryClient)·녹음(recordingStore·recordingSync)·업로드(playSync)·보정(calibrationSession·timingCalSession)·키보드 드럼·오디오 켜기(audioUnlock)
+├─ runtime/              앱에 하나뿐인 인스턴스·세션 — 입력 소스(sources·sensorRegistry·sensorSession·reconnectPolicy)·타격음 스위치(hitSound)·공통 조회 훅(useApiQuery)·쿼리 캐시(queryClient)·녹음(recordingStore·recordingSync)·업로드(playSync)·보정(calibrationSession·timingCalSession)·키보드 드럼·오디오 켜기(audioUnlock)
 ├─ store/                공유 상태(zustand) — settings · live · auth · shell · preset · song …
 ├─ api/                  BE 호출 — http 공통 래퍼와 여러 기능이 쓰는 호출 (+ queries/)
 ├─ input/                입력 소스와 매퍼
@@ -173,7 +173,7 @@ public/
 | 층 | 폴더 | import 허용 |
 | --- | --- | --- |
 | 조립 | `app`, `main.tsx` | 전부 |
-| 기능 | `features/*` | 공유 UI · runtime · 공유 상태 · 코어 · 도메인 · config. **다른 기능 폴더는 금지**. app도 금지(남은 예외: 센서 연결 함수 3곳) |
+| 기능 | `features/*` | 공유 UI · runtime · 공유 상태 · 코어 · 도메인 · config. **다른 기능 폴더는 금지**. app도 금지 |
 | 공유 UI | `components/*` | runtime · store · engine · audio · domain · config. 기능 폴더와 app은 금지 |
 | 런타임 | `runtime` | store · 코어 · domain · config. 기능·app·공유 UI는 금지 |
 | 상태 | `store` | domain · api · config |
@@ -182,7 +182,7 @@ public/
 | 설정값 | `config` | 다른 config 파일만 |
 
 - **구조 테스트가 규칙을 검사한다**(`src/test/architecture.test.ts`, `npm test`에 포함). R1 기능끼리의 import, R2 공유 층(runtime·config 포함)에서 기능·app으로 가는 import, R3 domain에서 domain 밖·패키지로 가는 import, R4 `components/ui`에서 store·domain·api로 가는 import, R5 config에서 config 밖으로 가는 import, R6 runtime에서 공유 UI로 가는 import, R7 상태·코어·domain에서 runtime으로 가는 import, R8 기능에서 app으로 가는 import, `pages/`나 `components/` 바로 아래 파일이 생기면 실패한다. 개발 전용 `features/dev`만 다른 기능을 import할 수 있다.
-- **예외(`ALLOWED`)는 3건이다.** 자유 연습·드럼 세팅·모니터 화면이 `app/bootstrap`의 센서 연결 함수(`activateSensor`·`connectSensor`·`bindSensorSurface`)를 부른다. 이 함수들이 bootstrap의 활성 센서 상태를 같이 써서, 센서 세션을 `runtime/`으로 떼어 내면 풀린다. 새 예외는 막을 수 없는 이유를 주석으로 함께 적고, 풀리면 목록에서 지운다(남겨 두면 테스트가 실패한다).
+- **예외(`ALLOWED`)는 지금 0건이다.** 새 예외는 막을 수 없는 이유를 주석으로 함께 적고, 풀리면 목록에서 지운다(남겨 두면 테스트가 실패한다).
 - 「앱에 하나뿐인 것」은 `runtime/`에 둔다. 아래 층(store·코어·domain)만 읽으면 runtime, 라우트 표나 기능 폴더를 알아야 하면 `app/`이다. 예: 미리 받기(`app/prefetchRoute`)는 라우트 표를 알아서 app에 남고, 사이드바는 AppShell이 넘겨주는 `onPrefetch`로 부른다.
 - 화면 여러 개가 같이 쓰는 조립은 `app/`이 한다. `AppShell`은 녹음 저장 창·입문 코스 초대처럼 기능·공유 부품을 한데 얹으므로 `app/`에 있다.
 - `monitor`는 판정 경로와 분리한다. `features/monitor/core`는 input·domain만 읽고, 다른 기능은 monitor를 읽지 않는다.
@@ -196,7 +196,7 @@ public/
 - `app/` — 앱 조립 — 아래 전부를 알아도 되는 유일한 곳
   - `App.tsx` — 라우터. 랜딩(`/`·`/login`·`/signup`·`/welcome`, `features/landing/LandingPage` 지연 로드)과 /auth/callback 밖의 화면은 RequireAuth 아래. 로그인 상태의 `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262). 악보 뷰어 `/studio/sheets/:id`는 지연 로드(278)
   - `sensors.ts` — 센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
-  - `bootstrap.ts` — 설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착, 표면 연결(bindSensorSurface)
+  - `bootstrap.ts` — 설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착(타격 핸들러·연결 상태·메트로놈). 센서 세션은 `runtime/sensorSession`
   - `authBootstrap.ts` — 앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결
   - `signupGate.ts` — 403 SIGNUP_INCOMPLETE 알림 → /me 재조회 연결(bindSignupIncomplete)
   - `presetBootstrap.ts` — 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
@@ -206,6 +206,8 @@ public/
 - `runtime/` — 앱 단일 인스턴스·세션
   - `sources.ts` — 키보드 소스 · inputManager 단일 인스턴스
   - `sensorRegistry.ts` — 센서 소스 디스크립터 등록·조회, 인스턴스 지연 생성
+  - `sensorSession.ts` — 센서 하나 켜고 끄기(activateSensor)·다시 열기(connectSensor)·입력 표면 등록(bindSensorSurface), 활성 인스턴스·배터리 기록·재연결 동작. `reconnectPolicy.ts`는 재시도 간격·기기 복귀 대기
+  - `hitSound.ts` — 공용 타격음 스위치 · `useApiQuery.ts` — 공통 조회 훅
   - `queryClient.ts` — TanStack Query 캐시 인스턴스와 공통 정책
   - `playSync.ts` — 플레이 로그 서버 업로드·상태·재전송, 리포트 미리 받기·재조회(refreshReport)·프리패치 구독(usePrefetchedReport)·조회 오류 분류
   - `recordingStore.ts`·`recordingSync.ts` — 녹음 상태 기계와 서버 저장
