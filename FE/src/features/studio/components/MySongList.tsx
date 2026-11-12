@@ -28,6 +28,8 @@ interface Props {
   progress: JobProgress | null;
   justDoneId: number | null;
   onReupload: (song: SongSummary) => void;
+  onRetryAccompaniment?: (song: SongSummary) => void;
+  retryingAccompanimentIds?: ReadonlySet<number>;
   /** 카드 보기(기본)/목록 보기 */
   view?: StudioView;
   /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
@@ -85,6 +87,8 @@ export function MySongList({
   progress,
   justDoneId,
   onReupload,
+  onRetryAccompaniment,
+  retryingAccompanimentIds,
   view = 'card',
   onEdit,
   onCoverError,
@@ -162,6 +166,8 @@ export function MySongList({
                   song={it.song}
                   justDone={it.song.id === justDoneId}
                   onReupload={onReupload}
+                  onRetryAccompaniment={onRetryAccompaniment}
+                  retryingAccompaniment={retryingAccompanimentIds?.has(it.song.id)}
                   onEdit={onEdit}
                   onSheet={onSongSheet}
                   onCoverError={onCoverError}
@@ -181,6 +187,8 @@ export function MySongList({
                   song={it.song}
                   justDone={it.song.id === justDoneId}
                   onReupload={onReupload}
+                  onRetryAccompaniment={onRetryAccompaniment}
+                  retryingAccompaniment={retryingAccompanimentIds?.has(it.song.id)}
                   onEdit={onEdit}
                   onSheet={onSongSheet}
                   onCoverError={onCoverError}
