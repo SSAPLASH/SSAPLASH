@@ -6,6 +6,7 @@ import { gridTimeAt } from '@/domain/sheet';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { drawCursor, drawSheet } from '@/components/sheetmusic/sheetStripDraw';
 import { SheetPager } from './SheetPager';
+import { STAFF_SCALE_MAX } from './sheetPagerMath';
 
 vi.mock('@/components/sheetmusic/sheetStripDraw', async (load) => {
   const actual = await load<typeof import('@/components/sheetmusic/sheetStripDraw')>();
@@ -53,7 +54,8 @@ describe('SheetPager 프레임', () => {
     width = 0; resize(); frame();
     expect(vi.mocked(drawSheet)).toHaveBeenCalledTimes(2);
     width = 1280; resize(); frame();
-    expect(sheet().width).toBe(1280);
+    // 높이 300 칸은 최대 배율 1.6으로 그리므로 논리 폭은 CSS 폭 ÷ 1.6이다
+    expect(sheet().width).toBe(1280 / STAFF_SCALE_MAX);
     time = chart.durationMs + 5000; frame();
     const endCursor = cursor(), endOrigin = sheet().baseRatio;
     time = null; frame();
