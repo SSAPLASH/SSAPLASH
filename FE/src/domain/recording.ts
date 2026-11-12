@@ -128,12 +128,20 @@ export function hitFromFreeInput(hit: ResolvedHit, startPerfMs: number): Recordi
   return out;
 }
 
-/** 기본 제목: `{곡 제목} · {M월 D일 HH:mm}`. 곡이 없으면 "자유 연습". 로컬 24시간제. 100자 초과면 곡 제목 쪽을 줄인다 */
-export function defaultRecordingTitle(songTitle: string | null, startedAt: Date): string {
+/** 곡 없이 저장한 녹음의 기본 이름 */
+export const FREE_RECORDING_NAME = '자유 연습';
+
+/** 기본 제목 끝에 붙는 녹음 시각: ` · {M월 D일 HH:mm}`. 로컬 24시간제 */
+export function recordingTitleSuffix(startedAt: Date): string {
   const hh = String(startedAt.getHours()).padStart(2, '0');
   const mm = String(startedAt.getMinutes()).padStart(2, '0');
-  const suffix = ` · ${startedAt.getMonth() + 1}월 ${startedAt.getDate()}일 ${hh}:${mm}`;
-  const name = songTitle === null || songTitle.trim() === '' ? '자유 연습' : songTitle.trim();
+  return ` · ${startedAt.getMonth() + 1}월 ${startedAt.getDate()}일 ${hh}:${mm}`;
+}
+
+/** 기본 제목: `{곡 제목} · {M월 D일 HH:mm}`. 곡이 없으면 "자유 연습". 로컬 24시간제. 100자 초과면 곡 제목 쪽을 줄인다 */
+export function defaultRecordingTitle(songTitle: string | null, startedAt: Date): string {
+  const suffix = recordingTitleSuffix(startedAt);
+  const name = songTitle === null || songTitle.trim() === '' ? FREE_RECORDING_NAME : songTitle.trim();
   const room = MAX_RECORDING_TITLE_LENGTH - codePoints(suffix).length;
   const chars = codePoints(name);
   if (chars.length <= room) return name + suffix;
