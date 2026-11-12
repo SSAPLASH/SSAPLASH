@@ -213,6 +213,27 @@ describe('summaryToMarkdown', () => {
   });
 });
 
+describe('녹화 요약의 패드 위치 자동 보정 줄', () => {
+  const yawAuto = (t: number, on: boolean): DiagEvent => ({ type: 'yawAuto', t, on });
+
+  it('yawAuto 줄이 하나면 그 값을 낸다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [yawAuto(1, false)] });
+    expect(s.yawAuto).toEqual({ first: false, last: false });
+    expect(summaryToMarkdown(s)).toContain('- 패드 위치 자동 보정: 끔');
+  });
+
+  it('도중에 바뀌면 처음 값과 마지막 값을 낸다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [yawAuto(1, false), yawAuto(2, true)] });
+    expect(summaryToMarkdown(s)).toContain('- 패드 위치 자동 보정: 도중 변경(끔 → 켬)');
+  });
+
+  it('줄이 없는 녹화는 null이고 Markdown에 줄을 내지 않는다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [] });
+    expect(s.yawAuto).toBeNull();
+    expect(summaryToMarkdown(s)).not.toContain('패드 위치 자동 보정');
+  });
+});
+
 describe('녹화 요약의 audio 줄', () => {
   const audio = (t: number, audioOffsetMs: number, outputLatencyMs: number | null): DiagEvent => ({
     type: 'audio', t, audioOffsetMs, baseLatencyMs: 10, outputLatencyMs, sampleRate: 48000, measured: null,
