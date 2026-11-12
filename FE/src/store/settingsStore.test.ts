@@ -558,3 +558,35 @@ describe('판정 타이밍 보정·박자 맞추기 기록', () => {
     expect(useSettings.getState().timingCal).toBeNull();
   });
 });
+
+describe('박자 맞추기 권유 상태(timingCalPrompt)', () => {
+  const merge = sanitizeTimingSettings;
+  const rec = { measuredAt: 1, medianMs: -66.5, madMs: 9, pairs: 12, input: 'sensor', outputLatencyMs: 45 };
+
+  it('기본값은 none', () => {
+    expect(useSettings.getInitialState().timingCalPrompt).toBe('none');
+  });
+
+  it('값이 없던 저장분: 기록이 있으면 done, 없으면 none', () => {
+    expect(merge({ timingCal: rec }).timingCalPrompt).toBe('done');
+    expect(merge({}).timingCalPrompt).toBe('none');
+  });
+
+  it('저장된 세 값은 그대로 유지한다(skipped도 기록이 없으면 유지)', () => {
+    expect(merge({ timingCalPrompt: 'skipped' }).timingCalPrompt).toBe('skipped');
+    expect(merge({ timingCalPrompt: 'done' }).timingCalPrompt).toBe('done');
+    expect(merge({ timingCalPrompt: 'none', timingCal: rec }).timingCalPrompt).toBe('none');
+  });
+
+  it('이상한 값은 없는 값처럼 다룬다', () => {
+    expect(merge({ timingCalPrompt: 'later' }).timingCalPrompt).toBe('none');
+    expect(merge({ timingCalPrompt: 3, timingCal: rec }).timingCalPrompt).toBe('done');
+    expect(merge({ timingCalPrompt: null }).timingCalPrompt).toBe('none');
+  });
+
+  it('setTimingCalPrompt로 바꾼다', () => {
+    useSettings.getState().setTimingCalPrompt('skipped');
+    expect(useSettings.getState().timingCalPrompt).toBe('skipped');
+    useSettings.getState().setTimingCalPrompt('none');
+  });
+});
