@@ -104,9 +104,9 @@ src/
 │   ├─ history/          연주 기록 — 플레이 기록 탭·녹음 목록 탭
 │   ├─ lesson/           입문 코스 레슨 화면
 │   ├─ settings/         설정
-│   ├─ landing/          랜딩·로그인·가입 동의 (components/ + components/auth/)
+│   ├─ landing/          랜딩·로그인·가입 동의 (components/ + components/auth/, domain/)
 │   ├─ admin/            공용 곡 관리(관리자)
-│   ├─ monitor/          스틱 패킷 모니터(EMB용) — 화면 + core/(판정 경로와 분리된 수집·분석)
+│   ├─ monitor/          스틱 패킷 모니터(EMB용) — 화면 + core/(판정 경로와 분리된 수집·분석) · layout/ · sections/
 │   └─ dev/              개발 전용 화면(FX 랩)
 │
 ├─ components/           공유 UI — 둘 이상의 기능이 쓰는 부품만. 바로 아래에 파일을 두지 않는다
@@ -197,15 +197,20 @@ public/
 
 ### 폴더별 구성(상세)
 
+공유 층을 먼저, 기능 폴더를 뒤에 적는다. 경로는 `src/` 기준이다.
+
+#### 조립·설정값·런타임
+
 - `app/` — 앱 조립 — 아래 전부를 알아도 되는 유일한 곳
-  - `App.tsx` — 라우터. 랜딩(`/`·`/login`·`/signup`·`/welcome`, `features/landing/LandingPage` 지연 로드)과 /auth/callback 밖의 화면은 RequireAuth 아래. 로그인 상태의 `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 새 화면 `/settings`·`/history`. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262). 악보 뷰어 `/studio/sheets/:id`는 지연 로드(278)
+  - `App.tsx` — 라우터. 랜딩(`/`·`/login`·`/signup`·`/welcome`, `features/landing/LandingPage` 지연 로드)과 /auth/callback 밖의 화면은 RequireAuth 아래. 로그인 상태의 `/`→`/free`, `/me`→`/settings`, `/calibration`→`/setup` 이동. 관리자 전용 `/admin/songs`는 RequireAdmin 아래(Jira 262). 악보 뷰어 `/studio/sheets/:id`는 지연 로드(278)
+  - `routeModules.ts` — 화면별 지연 로드 표(라우터와 미리 받기가 같이 쓴다)
+  - `AppShell.tsx` — 셸 조립. 녹음 저장 창·입문 코스 초대처럼 기능·공유 부품을 한데 얹는다
   - `sensors.ts` — 센서 소스 등록 한 줄씩 (새 소스는 여기에 추가)
   - `bootstrap.ts` — 설정 ↔ 소스 ↔ 스토어 ↔ 오디오 접착(타격 핸들러·연결 상태·메트로놈). 센서 세션은 `runtime/sensorSession`
   - `authBootstrap.ts` — 앱 시작 시 로그인 복원, 토큰 소실 → authStore 연결
   - `signupGate.ts` — 403 SIGNUP_INCOMPLETE 알림 → /me 재조회 연결(bindSignupIncomplete)
   - `presetBootstrap.ts` — 로그인 상태(authStore) → 프리셋 저장소(서버/로컬) 전환, 목록 읽기, 기본 프리셋 적용
   - `prefetchRoute.ts` — 메뉴 미리 받기(화면 코드·대표 데이터). AppShell이 Sidebar에 `onPrefetch`로 넘긴다
-  - 기능 폴더로 간 것: `dataConsent`(→ `features/play`) · `analysisPoller`(→ `features/result`)
 - `config/` — 값·순수 함수 — `features.ts`(빌드 기능 스위치 SONG_EDIT_ENABLED·RECORDING_ENABLED·SHEET_ARCHIVE_ENABLED·SHEET_SONG_LINK_ENABLED·SHEET_RELINK_ENABLED) · `auth.ts`(AUTH_REQUIRED) · `prefetch.ts`(PREFETCH_HOVER_MS) · `chunkRecovery.ts`(청크 로드 실패 판별·자동 새로고침)
 - `runtime/` — 앱 단일 인스턴스·세션
   - `sources.ts` — 키보드 소스 · inputManager 단일 인스턴스
@@ -218,21 +223,25 @@ public/
   - `calibrationSession.ts`·`timingCalSession.ts` — 2타 보정·재정렬, 박자 맞추기 세션
   - `keyboardDrum.ts` — 키보드 드럼 켜기·끄기
   - `audioUnlock.ts` — 첫 제스처의 오디오 켜기(unlockAudio)와 사운드 세트 적용(applySoundSet)
+
+#### 공유 UI (`components/`)
+
 - `components/ui/` — 도메인을 모르는 기본 부품(Figma 01 Design System과 같은 이름) — Button(`buttonStyle`의 `buttonClassName`으로 링크에도 같은 모양) · IconButton · Card · Chip(필터) · StatusPill(상태 표시) · EmptyState(빈 상태, `headingLevel`·`size="sm"`) · ErrorState(패널형 오류) · InlineError(알림 줄형 오류) · Toggle · Checkbox(네이티브 input + label) · Segmented · Pagination(쪽 번호, 10개 묶음·« ‹ › ») · Slider · Input · Dialog(배경·포커스 순환·Esc, `useDialogFocus`·`focusCycle`) · Menu(바깥 클릭·Esc 팝오버) · Toast · table.css(`.ui-table`)
-- `components/song/` — 곡 표시 공통 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄) · DeletedSongChip(삭제된 곡 칩) · useDeletedSongIds(삭제된 BE 곡 id 집합 훅) · MarqueeTitle(재생 중이고 칸보다 긴 제목만 흐름, 그 밖에는 말줄임 span) · PlayingEq(제목 옆 재생 중 이퀄라이저) · PlaybackIcons(10초 뒤로·앞으로·재생·일시정지 글리프와 반주 [바꾸기]용 `PickListIcon`) · PlaybackTransport(조작부 [10초 뒤로][재생/일시정지][10초 앞으로] + 누름·회전·pop 모션, 라이브러리 재생바와 반주 바 공용)
-- `components/stick/` — 스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, 동글 소스면 P 점 추가, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행) · 점 아래 상태 글자는 「연결됨」「연결 안 됨」
-- `components/shell/` — 앱 셸 — Sidebar · TopBar · GlassDock · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed` · `TABLET_QUERY`(≤1024) · `MOBILE_QUERY`(≤640)) · defaultTitles(라우트별 기본 제목) · SoundToggle · MetronomePanel(Dock 메트로놈 패널, 리듬 게임에서는 `gameDisabled`로 조작 비활성) · StickStatusIndicator · ProfileMenu · PublicLayout · WithdrawDialog(회원 탈퇴 확인). 옛 `Metronome.tsx`(칩·팝오버)는 삭제 — 메트로놈 조작은 GlassDock이 맡는다
-- `components/drum/` — 드럼 킷 그리기 — Pad · padRing(링 기하, 실물이면 패드별 자리 표를 읽는다) · DrumKit(코칭 대상 패드 링 `coachPad`, 스킨별 킷 상자·`fitContain`·하이햇 `hihatClosed`·`pedalOff`) · usePadStates · padStateMachine · drum.css · `acoustic/`(실물 스킨: AcousticPad 이미지 패드 · sprites 조각 이미지 import 표·미리 받기 · `persp/`·`top/` 조각 12장씩은 도구가 만든다)
+- `components/shell/` — 앱 셸 — Sidebar(+ SidebarToggleIcon) · TopBar · GlassDock(dockMotion·dockAutoCollapse) · RequireAuth · RequireAdmin(ADMIN 아니면 /free, 표시만 — 권한은 BE) · RouteErrorBoundary · NotFoundPage · PublicLayout · ProfileMenu · WithdrawDialog(회원 탈퇴 확인) · RecommendationConsentDialog · useShell(페이지가 제목·전체 화면 선언) · useMediaQuery(`useSidebarCollapsed` · `TABLET_QUERY`(≤1024) · `MOBILE_QUERY`(≤640)) · defaultTitles(라우트별 기본 제목) · SoundToggle(+ SoundIcon) · MetronomePanel(Dock 메트로놈 패널, 리듬 게임에서는 `gameDisabled`로 조작 비활성, metronomeRoute) · StickStatusIndicator · DebugOverlay·TuningPanel(디버그 창)
+- `components/song/` — 곡 표시·재생 조작 — SongCover · LevelBadge(연습 단계 EASY·NORM·HARD 배지) · SongMeta(아티스트·BPM·길이 한 줄) · SongStatusBadge · DeletedSongChip(삭제된 곡 칩) · useDeletedSongIds(삭제된 BE 곡 id 집합 훅) · MarqueeTitle(재생 중이고 칸보다 긴 제목만 흐름, 그 밖에는 말줄임 span) · PlayingEq(제목 옆 재생 중 이퀄라이저) · PlaybackIcons(10초 뒤로·앞으로·재생·일시정지 글리프와 반주 [바꾸기]용 `PickListIcon`) · PlaybackTransport(조작부 [10초 뒤로][재생/일시정지][10초 앞으로] + 누름·회전·pop 모션, 라이브러리 재생바와 반주 바 공용) · SeekBar(진행 막대, `layout="ends"`는 반주 바·라이브러리 재생바용) · useFreeAccompaniment(반주 재생 훅)·accompanimentError · RecommendRow(추천 곡 줄) · StudioIcons(더보기·닫기·업로드·플러스·재생)
+- `components/drum/` — 드럼 킷 그리기 — DrumKit(코칭 대상 패드 링 `coachPad`, 스킨별 킷 상자·`fitContain`·하이햇 `hihatClosed`·`pedalOff`) · Pad · ElectronicPad · NeonPad(곡 선택 안내의 네온 킷) · flatParts · padRing(링 기하, 실물이면 패드별 자리 표를 읽는다) · kitPadPaint(킷 패드 그리기 공용) · LiveDrumKit(하이햇 페달 구독을 가둔 DrumKit 래퍼) · useHihatPedal·usePedalHitSeq(페달 상태·밟는 순간) · usePadStates · padStateMachine · HitReadout(최근 타격 표시, stack/row)·useRecentHits · drum.css · `acoustic/`(실물 스킨: AcousticPad 이미지 패드 · sprites 조각 이미지 import 표·미리 받기 · `persp/`·`top/` 조각 12장씩은 도구가 만든다)
 - `FE/scripts/kit-art/` — 실물 드럼 조각 이미지·자리 표(`domain/kit/kitArt.ts`)를 만드는 개발용 Python 도구(build.py · regions.json · README). 원본 그림이 바뀔 때만 돌리고, 원본 이미지는 커밋하지 않는다
-- `features/landing/components/auth/` — 로그인·가입 동의 — LoginDialog·SignupConsentDialog(랜딩 위 팝업) · ProviderIcons(Google 공식 4색 고정·SSAFY 자리표시) · TermsItem(약관 한 항목, 96 높이 스크롤 상자) · SignupConsentCard(가입 동의 카드, 동의 상태 보관·`initialAgreed`로 선택 항목 미리 켜기) · auth.css
-- `features/landing/components/` — 랜딩 페이지(설계 UX-353) — landing.css(전부 `.lp` 아래·`lp-` 접두사) · HeroScene(히어로+와이프) · StatementScene(점 글자 채움) · StickScene(센서 스틱 3단계·스윙·타격) · ChartScene(음원→드럼→채보) · ModesScene(카드 비행·전광판 네온) · ResultSection · CtaSection(둘 다 reveal) · LandingNav · ScrollCue · useSceneProgress(스크롤 진행도 0~1) · useStickSwing(스윙 rAF 루프) · useReveal(화면 진입 시 나타남) · landingArt(파형·채보·악보 SVG 데이터) · landingContent(모드·문구·이미지 경로) · LandingView(전체 조립)
-- `features/result/components/report/` — 연주 리포트 구역(설계 COACH-002 리포트 화면 개편) — NoteFlowChart(전체 노트 흐름: 5초 막대·툴팁·놓친 구간 버튼) · FocusPanel(선택 구간 확대: 제목·근거·AI 문구·패드 줄 노트 표시·노트 넘겨 보기·재생 조작) · ReportSections(StatsLine 요약 수치 · ObservationList 관찰 목록 · PadTable 패드별 기록 · AnalysisNotice 분석 상태 안내) · TimingHistogram · CoachSummaryCard(총평) · useSegmentPlayer(구간 재생 상태) · report.css(`rp-` 접두사)
-- `features/free/` (`SeekBar`·`useFreeAccompaniment`는 `components/song/`) — 자유 연습 전용 — AccompanimentBar(글래스 캡슐 반주 바 5변이 + ≤640 미니 바) · SeekBar(진행 막대, `layout="ends"`는 반주 바·라이브러리 재생바용) · AccompanimentPicker(반주 고르기 창·≤640 바텀 시트) · useFreeAccompaniment(반주 재생 훅) · useAccompanimentSongs(선택 창 목록 훅) · DisconnectBand(한 손·페달 끊김 띠) · free.css
-- `features/play/components/picker/guide/` — 곡 선택 안내 줄(설계 MODE-001-MODE-003-song-picker-guide) — PickerGuide가 `mode='sheet'`이면 [SheetGuideScene \| StaffLegend], `mode='play'`이면 [GameGuideScene \| LaneLegend]를 조립한다. SheetGuideScene(악보 한 마디 SVG + 실제 `DrumKit`(사용자 `kitSkin` 0.85배) + 음표→패드 연결선) · GameGuideScene(9레인 띠(하이햇 페달 칸 분리, 머리 약어 HP·HH·CR·SN·ST·KK·MT·FT·RD)에서 노트가 떨어져 판정선에 닿으면 레인이 빛나고 `NeonPad` 네온 킷(킷 스킨과 무관, 글자는 `PAD_META`)의 같은 패드로 점선이 이어지며 번쩍인다. 레인 x는 `highwayGeometry.laneLeft`를 그대로 쓴다) · 두 장면 모두 논리 좌표 760×470을 폭에 맞춰 줄이고 소리·이펙트 없음 · LaneLegend(StaffLegend와 같은 `play-sl` 2열 카드 CSS를 재사용: 레인 순서 9칸(미니 레인 띠 + 이름 + 레인 위치 「맨 왼쪽·n번째」 + 발 표시) + 색 설명 칸, 강조색은 `laneColorOf`) · GuideControls(단계 칩 ①②·◀ 일시정지/재생 ▶·「지금 칠 것」 줄; 게임에서는 `noun="노트"`·`colorOf={laneColorOf}`로 문구·색 점만 바꾼다) · useGuideClock(rAF 누적·일시정지·`stepTo`·화면 밖/탭 숨김 정지·모션 줄이기면 첫 칸에 멈춰 시작) · guide.css · lane-legend.css. 시간표·`stateAt`은 `domain/guideScript`(게임은 `GAME_GUIDE_OPTIONS`로 노트가 판정선 위 4칸에서 내려오게 시작 위치를 앞당긴다). SongPicker가 두 모드에서 그리고 구분선을 둔다(악보 연습의 입문 코스 탭은 숨김)
-- `features/play/components/` (`HitReadout`은 `components/drum/`) — 연주 흐름 공용(리듬 게임·악보 연습). 흐름 단계로 나눈다: `picker/`(곡 선택 표·상세·안내 줄) · `start/`(시작 확인 창·기기 준비·연주 옵션) · `stage/`(연주 화면·HUD·하이웨이·악보·코칭 칸) · `pause/`(일시정지·자동 일시정지·재연결 이어 하기). 여러 단계가 같이 쓰는 `play.css`는 바로 아래 — SongTable·SongDetailPane(곡 선택 표·상세, 두 모드 모두 단계 세그먼트 + [플레이] 모양, 기록 칸은 `quickStart.bestKind`) · DeviceCheck(기기 준비 카드, StartDialog의 setup 변형이 씀) · StartDialog(악보 연습 시작 확인 창이자 리듬 게임의 기기 준비·오류·재정렬 팝업, `variant` play·setup, `options`가 없으면 옵션 구역을 그리지 않는다) · PlayOptions(연주 옵션 줄 목록) · PlayStage(연주 화면 골격) · PlayHud(HUD game/sheet) · Countdown(카운트인 숫자) · GuideSlot(안내·코칭 칸, 구령+보조 두 줄) · CoachHandChip(코칭 손 대상 칩) · coachDisplay(밀집 구간 유예·구령만 판단) · useCoachLine·coachLineTimer(코칭 문구 3초 표시, 유예 지원) · HitReadout(최근 타격 표시, stack/row) · 컴포넌트별 CSS
-- 옛 `components/` 바로 아래에 있던 부품(지금은 `features/play/components`·`features/setup/components`·`components/shell`·`components/drum`·`components/sheetmusic` 등으로 옮김) — 공용 UI — AppShell · RequireAuth · RequireAdmin(ADMIN 아니면 /free, 표시만 — 권한은 BE) · SensorOptionsPanel · KitCanvas · NoteHighway · DebugOverlay · PublicLayout · ProfileMenu · SongPicker(곡 선택) · useChartParam(URL 곡 선택 훅) · SheetPager(마디 고정 5선 악보 Canvas) · kitPadPaint(킷 패드 그리기 공용) · sheetStripDraw(그리기 순수 함수) · SheetSnippet(결과 페이지 약점 마디 미니 악보) · PauseOverlay(일시정지, 포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · ReportEntry(결과 → 상세 분석 진입부) · studio/(AudioDropzone·MidiUploadForm·UploadPanel·UploadDialog·ActiveJobCard·LibraryEmpty(곡·악보 없을 때 빈 안내)·SongStatusBadge·StudioIcons(더보기·닫기·업로드·플러스·재생)·MySongRow·MySongCard·MySongList·SongMenu·EditDialog·SongCoverDialog·SongMetaDialog·SongDeleteDialog·StudioToast·dateLabel·studio.css, 라이브러리 화면) · settings/(SettingRow · DataConsentCard, 설정 화면) · result/(ResultSummaryCard·JudgeBars·TimingHistogram·FeedbackCard·PadSummaryTable, 결과 화면 전용) · history/(HistoryTable·PlayLogTab, 연주 기록 화면 전용) · admin/(AdminSongTable·AdminSongAddDialog·AdminBulkDialog(CSV 일괄 추가·양식 받기)·admin.css, 공용 곡 관리 화면 전용) · recording/(RecordButton·SaveRecordingDialog·RecordingToast·RecordingList·RecordingTitleDialog·RecordingDeleteDialog·useRecordingList·useRecordingPlayback, 녹음 UI)
-- `store/` — zustand — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · recommendationConsentStore(맞춤 곡 추천 학습 동의 상태, 서버 원본·영속 안 함) · songStore(곡 소스·마지막 곡 선택 탭·상세·`loadChart`, 목록은 `api/queries`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · songEditStore(곡 정보·커버·삭제 1회 실행) · adminSongStore(관리자 공용 곡 목록·등록·행별 반주 업로드) · adminBulkStore(CSV 일괄 추가 순차 실행·줄별 결과) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다)
-- `api/` — BE 호출 — http(공통 래퍼·ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent·recommendation-consent) · songs·charts(곡·채보 조회, BE 96) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157) · adminSongs(관리자 공용 곡 목록·MIDI 등록·반주 업로드, BE 156·262)
+- `components/fx/` — 타격 이펙트 — FxCanvas · fxEngine · fxDraw · fxSource · judgeColors · HitFxPicker(이펙트 고르기) · KitSkinCarousel(킷 스킨 고르기)
+- `components/stick/` — 스틱 연결 표시 — DisconnectNotice(연주 중 끊김 카드, 동글 소스면 P 점 추가, [다시 연결]은 `store/reconnectStore`) · ConnectionDots(L·R 연결 점 72×32, 설정 기기 행) · 점 아래 상태 글자는 「연결됨」「연결 안 됨」
+- `components/calibration/` — 세팅·설정·연주가 같이 쓰는 보정 창 — RealignPrompt·useRealign·calibrationText(스네어 재정렬) · TimingCalDialog·timingCalText(박자 맞추기)
+- `components/recording/` — 셸이 얹는 녹음 UI — RecordButton(recordButtonRoute) · SaveRecordingDialog · RecordingToast(toastContent). 녹음 목록·재생은 `features/history`
+- `components/lesson/` — 입문 코스 — LessonCourse(코스 목록) · StageMap · LessonInvite(초대) · LessonResultBand(결과 띠) · PadNotation
+- `components/sheetmusic/` — 악보 띠 그리기 순수 함수 — sheetStripDraw · sheetStripMath (연주·결과가 같이 씀)
+
+#### 상태·코어
+
+- `store/` — 공유 zustand 상태 — settingsStore(영속) · liveStore(실시간) · shellStore(셸 제목·전체 화면·Dock 패널, 영속 안 함) · presetStore · localPresetSource · authStore(로그인 상태, 영속 안 함) · recommendationConsentStore(맞춤 곡 추천 학습 동의 상태, 서버 원본·영속 안 함) · recommendationStore · lessonStore · songStore(곡 소스·마지막 곡 선택 탭·상세·`loadChart`, 목록은 `api/queries`) · chartJobStore(음원 업로드·채보 생성 작업 폴링, 활성 작업 1개 영속) · reconnectStore(스틱 재연결 상태 기계 idle·trying(n/3)·failed·reconnected와 자동·수동 액션, 실제 동작은 `app/bootstrap`이 끼운다). 한 기능만 쓰는 상태는 기능 폴더에 있다(`features/studio/store`, `features/admin`의 adminSongStore·adminBulkStore)
+- `api/` — 여러 기능이 쓰는 BE 호출 — http(공통 래퍼) · error(ApiError) · auth(access 토큰·refresh·logout) · users(me·signup-consent·recommendation-consent) · songs·charts(곡·채보 조회, BE 96) · jobs(채보 생성 작업) · presets(프리셋 CRUD, BE 90 — PresetSource 서버 구현) · plays(플레이 로그 요약 업로드, BE 98) · reports(리포트 조회·화면 타입 변환, BE 157) · recordings · lessons · recommendations · similarSongs · `queries/`(songs·plays·recordings 조회 키와 훅). 한 기능만 쓰는 호출은 그 기능 폴더에 있다(악보 보관 `features/studio/api`, 관리자 곡 `features/admin/adminSongs`)
 - `input/` — 입력 소스와 매퍼 (인스턴스는 만들지 않는다 → runtime/sensorRegistry · runtime/sources)
   - `InputSource` — 공통 인터페이스 · ClockSync(센서 시각 펼치기) · 주기 SYNC 간격
   - `clockEstimate` — 시계 오프셋 추정(최근 10초 창의 최소 왕복 표본 → 목표, 적용값은 초당 1ms로 따라감)
@@ -251,9 +260,49 @@ public/
 - `coach/` — 실시간 코칭(COACH-001) 규칙 모듈 — live/(config · window · rules · policy · cause · noteContext · LiveCoach · copy(화면 문구 표) · models(서버 모델·실험군)). 순수 TypeScript, domain만 import
 - `media/` — coverImage(이미지 → 가운데 정사각형 512 JPEG, 캔버스) · downloadFile(Blob 내려받기)
 - `audio/` — AudioEngine · soundSets(사운드 세트) · kitConfig(kit-config.json 스키마)
-- `domain/` — 순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상). **10곳 이상이 import하는 파일은 바로 아래에 두고**(pads · events · songCatalog · judgement · drumKit · calibration · chart · auth · playLog · preset · kitLayout · tuning · report · recording · devices · signupTerms · sheet · pedalStatus · keyMap), 나머지는 개념별 하위 폴더로 묶는다. 새 파일도 쓰는 곳이 적으면 맞는 하위 폴더에 두고, 10곳을 넘어 핵심이 되어도 옮기지 않는다(경로 변경을 줄이려고)
-  - `kit/` 킷 배치·판정·기기·준비(kitModel · kitMapping · kitJudge · kitPerspective · kitFrame · setupSteps · readiness · timingCalibration · stickStatus · hihatPedalCoverage · soundSet · dockChip · keyTarget) · `song/` 곡·채보·반주(chartJob · chartMapping · builtinSongs · songEdit · songCover · songAvailability · midiUpload · midiFile · freeAccompaniment · marquee) · `time/` 박자·시계(tempo · metronome · audioClock · audioTimeline · accompanimentClock · leadIn · segmentPlayback · formatTime) · `play/` 연주 기록·결과·입문 코스(playUpload · playLogView · playRetry · bestRecord · hitStats · coachBasis · dataConsent · recordingView · recordingMidi · lesson) · `account/` 가입·추천(signupGate · recommendation · recommendationConsent) · `hitFx/` 타격 이펙트
-  - pads · kitLayout · drumKit(연주 화면 킷 고정 배치·상태 상수) · preset · events · keyMap · calibration · kitMapping · chart · songCatalog(곡 타입·난이도 정렬) · songCover(커버 파일 검사·정사각형 자르기 계산·커버 오류 재조회 간격) · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songAvailability(연주 기록의 곡 삭제 판정) · playLogView(날짜·모드 표기·기록 모드 필터·페이지 계산) · timingHistogram(결과 타이밍 분포·평균 Δ) · bestRecord(내장 개발 소스 로컬 최고 기록) · serverBestRecord(서버 최고 기록 → 모드별 곡·채보 최고값) · guideScript(곡 선택 안내 애니메이션 예시 마디·시간표·시각 → 상태 순수 함수) · highwayLanes(하이웨이 9레인 순서 HP \| HH CR SN ST KK MT FT RD, 하이햇 페달 맨 왼쪽·간격 16px(`highwayGeometry.HIGHWAY_PEDAL_GAP`), 노트·레인 플래시·MISS 파편 색 = 네온 3색 `LANE_COLOR`: 심벌 #ffc24a · 북 #22e4ff · 킥 #ff3ec8; 킷 그림·결과·리포트는 `PAD_META.color` 그대로) · chartMapping(BE 채보 → Chart) · judgement · hitStats · auth · signupTerms(가입 약관 문구·판·동의 규칙) · signupGate(가입 필요 판단·라우트 결정) · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · playUpload(로그 → 업로드 본문) · report(리포트 화면 타입) · pedalStatus(페달 연결·배터리 표시 문구, 페달 필수 기기 판정) · adminSong(관리자 공용 곡 타입·입력 검사·첫 박 시각·반주 파일 검사·오류 문구) · adminBulk(CSV 파싱·인코딩 판별·양식·파일 짝 맞추기·줄별 판정)
+- `domain/` — 공유 순수 타입·함수. React·브라우저 API 의존 없음 (단위 테스트 대상). **10곳 이상이 import하는 파일은 바로 아래에 두고**(pads · events · songCatalog · judgement · drumKit · calibration · chart · auth · playLog · preset · kitLayout · tuning · report · recording · devices · signupTerms · sheet · pedalStatus · keyMap), 나머지는 개념별 하위 폴더로 묶는다. 새 파일도 쓰는 곳이 적으면 맞는 하위 폴더에 두고, 10곳을 넘어 핵심이 되어도 옮기지 않는다(경로 변경을 줄이려고). 한 기능만 쓰는 순수 로직은 `features/<기능>/domain/`에 둔다
+  - `kit/` 킷 배치·판정·기기·준비 — kitModel · kitMapping · kitJudge · kitPerspective · kitFrame · kitArt(실물 그림 패드 자리 표) · setupSteps · readiness · timingCalibration · stickStatus · hihatPedalCoverage · soundSet · dockChip · keyTarget
+  - `song/` 곡·채보·반주 — chartJob · chartMapping(BE 채보 → Chart) · builtinSongs · songEdit(곡 정보 검증·바뀐 필드·오류 문구·상태별 ⋯ 메뉴) · songCover(커버 파일 검사·정사각형 자르기 계산) · songAvailability(연주 기록의 곡 삭제 판정) · midiUpload · midiFile · freeAccompaniment · marquee
+  - `time/` 박자·시계 — tempo · metronome · audioClock · audioTimeline · accompanimentClock · leadIn · segmentPlayback · formatTime
+  - `play/` 연주 기록·결과·입문 코스 — playUpload(로그 → 업로드 본문) · playLogView(날짜·모드 표기·필터·페이지 계산) · playRetry · bestRecord(내장 개발 소스 로컬 최고 기록) · hitStats · coachBasis · dataConsent(연주 기록 활용 동의 판 일치·이관·업로드 consent 규칙) · recordingView · recordingMidi · lesson
+  - `account/` 가입·추천 — signupGate(가입 필요 판단·라우트 결정) · recommendation · recommendationConsent
+  - `hitFx/` 타격 이펙트 계산
+
+#### 기능 폴더 (`features/`)
+
+- `features/play/` — 리듬 게임·악보 연습
+  - 바로 아래 — PlayPage · SheetPage · useBestRecords · hapticMode · dataConsent · diagSessionOpts
+  - `api/` — serverBestRecord(서버 최고 기록 → 모드별 곡·채보 최고값) · liveCoach
+  - `domain/` — guideScript(곡 선택 안내 애니메이션 예시 마디·시간표·시각 → 상태 순수 함수, 게임은 `GAME_GUIDE_OPTIONS`로 노트가 판정선 위 4칸에서 내려오게 시작 위치를 앞당긴다) · highwayLanes(하이웨이 9레인 순서 HP \| HH CR SN ST KK MT FT RD, 하이햇 페달 맨 왼쪽·간격 16px(`highwayGeometry.HIGHWAY_PEDAL_GAP`), 노트·레인 플래시·MISS 파편 색 = 네온 3색 `LANE_COLOR`: 심벌 #ffc24a · 북 #22e4ff · 킥 #ff3ec8; 킷 그림·결과·리포트는 `PAD_META.color` 그대로) · comboFx · haptics · padCue
+  - `components/` — 흐름 단계로 나눈다. 여러 단계가 같이 쓰는 `play.css`만 바로 아래에 둔다
+    - `picker/` 곡 선택 — SongPicker(두 모드 공용, 안내 줄과 구분선, 악보 연습의 입문 코스 탭은 숨김) · SongTable·SongDetailPane(곡 선택 표·상세, 두 모드 모두 단계 세그먼트 + [플레이] 모양, 기록 칸은 `quickStart.bestKind`) · StaffLegend · BestRecordsNotice · useChartParam(URL 곡 선택 훅)
+    - `picker/guide/` 곡 선택 안내 줄(설계 MODE-001-MODE-003-song-picker-guide) — PickerGuide가 `mode='sheet'`이면 [SheetGuideScene \| StaffLegend], `mode='play'`이면 [GameGuideScene \| LaneLegend]를 조립한다. SheetGuideScene(악보 한 마디 SVG + 실제 `DrumKit`(사용자 `kitSkin` 0.85배) + 음표→패드 연결선) · GameGuideScene(9레인 띠에서 노트가 떨어져 판정선에 닿으면 레인이 빛나고 `NeonPad` 네온 킷(킷 스킨과 무관, 글자는 `PAD_META`)의 같은 패드로 점선이 이어지며 번쩍인다. 레인 x는 `highwayGeometry.laneLeft`를 그대로 쓴다) · 두 장면 모두 논리 좌표 760×470을 폭에 맞춰 줄이고 소리·이펙트 없음 · LaneLegend(StaffLegend와 같은 `play-sl` 2열 카드 CSS 재사용, 강조색은 `laneColorOf`) · GuideControls(단계 칩 ①②·◀ 일시정지/재생 ▶·「지금 칠 것」 줄) · useGuideClock(rAF 누적·일시정지·`stepTo`·화면 밖/탭 숨김 정지·모션 줄이기면 첫 칸에 멈춰 시작) · guideKitPlace(악보 안내 장면의 스킨별 킷 자리)
+    - `start/` 시작 확인 — StartDialog(악보 연습 시작 확인 창이자 리듬 게임의 기기 준비·오류·재정렬 팝업, `variant` play·setup, `options`가 없으면 옵션 구역을 그리지 않는다) · DeviceCheck(기기 준비 카드) · ReadinessNotice·useReadiness · PlayOptions(연주 옵션 줄 목록)
+    - `stage/` 연주 화면 — PlayStage(골격) · PlayHud(HUD game/sheet) · NoteHighway·highwayGeometry · SheetPager(마디 고정 5선 악보 Canvas)·sheetPagerMath · KitPlayView·kitPlayDraw·kitSoundStage · Countdown(카운트인 숫자) · ComboDisplay · TimingBar · GuideSlot(안내·코칭 칸, 구령+보조 두 줄) · CoachHandChip · coachDisplay(밀집 구간 유예·구령만 판단) · useCoachLine·coachLineTimer(코칭 문구 3초 표시) · ScreenGate·screenFit · AudioWaitNotice·useAudioClockGate · StageFade · strayMissSource · useJudgementHaptic · useNextBeatLabels
+    - `pause/` 일시정지 — PauseOverlay(포커스는 `ui/useDialogFocus`) · usePauseTriggers(끊김·메뉴 자동 일시정지 훅) · useReconnectResume(재연결 이어 하기) · popupLook
+    - `diag/` 진단 자동 연주 — ChartAutoplayControl · lazyChartAutoplay
+- `features/setup/` — 드럼 세팅·위치 보정 — SetupPage
+  - `components/` — StagePanel · KitCanvas · kitPerspectiveDraw · KitInfoOverlay · StepCard·StepDialog · StickCard · StatusTile · SensorOptionsPanel · PresetChips·PresetNameDialog·PresetSlotDialog · HitLog·hitLogFormat · ReturnBanner · UnsavedLeaveDialog · useStageFit·useOverlayRegion · enterKey · setup.css
+  - `components/calibration/` — CalibrationStage · ReferencePoseGuide·referencePose·useReferenceCapture · RadiusSlider·captureRadius · GapBanner · usePoseStream
+- `features/free/` — 자유 연습 — FreePlayPage · AccompanimentBar(글래스 캡슐 반주 바 5변이 + ≤640 미니 바) · AccompanimentPicker(반주 고르기 창·≤640 바텀 시트) · useAccompanimentSongs(선택 창 목록 훅) · DisconnectBand(한 손·페달 끊김 띠) · freeStage · free.css. 진행 막대(SeekBar)·반주 재생 훅(useFreeAccompaniment)은 `components/song/`
+- `features/studio/` — 라이브러리 — StudioPage · SheetViewerPage
+  - `components/` — 곡 올리기(UploadPanel·UploadDialog·AudioDropzone·MidiUploadForm·SheetUploadForm·ActiveJobCard) · 내 곡(MySongList·MySongRow·MySongCard·SongMenu·PlayModeMenu·SongPlayBar·CoverPlayer·AccompanimentBadge·useAccompanimentPolling·accompanimentPoller) · 곡 편집(EditDialog·SongMetaDialog·SongCoverDialog·SongDeleteDialog) · 악보(SheetItemRow·SheetItemCard·SheetCover·SheetMenu·sheetItemText) · LibraryEmpty(곡·악보 없을 때 빈 안내) · StudioToast · dateLabel · studio.css
+  - `components/sheet/` — 악보 뷰어 — SheetViewer · PdfPages · SheetTitleDialog · SheetDeleteDialog
+  - `store/`(songEditStore · midiUploadStore · sheetLinkStore) · `api/`(sheets · queries/sheets) · `domain/`(sheetMusic · songPlayback)
+- `features/result/` — 결과·상세 리포트 — ResultPage · ReportPage · analysisPoller
+  - `components/` — 결과 화면 — ResultSummaryCard · JudgeBars · TimingHistogram · FeedbackCard · PadSummaryTable · SheetSnippet(약점 마디 미니 악보) · SetupHintCard · RecordCelebration·CelebrationFx · ReportEntry(결과 → 상세 분석 진입부) · result.css
+  - `components/report/` — 연주 리포트(설계 COACH-002 리포트 화면 개편) — NoteFlowChart(전체 노트 흐름: 5초 막대·툴팁·놓친 구간 버튼) · FocusPanel(선택 구간 확대: 제목·근거·AI 문구·패드 줄 노트 표시·노트 넘겨 보기·재생 조작) · ReportSections(StatsLine 요약 수치 · ObservationList 관찰 목록 · PadTable 패드별 기록 · AnalysisNotice 분석 상태 안내) · TimingHistogram(리포트용, 결과 화면의 것과 다른 컴포넌트) · CoachSummaryCard(총평) · useSegmentPlayer(구간 재생 상태) · report.css(`rp-` 접두사)
+  - `domain/` — timingHistogram(타이밍 분포·평균 Δ) · feedback · reportView · confetti
+- `features/history/` — 연주 기록 — HistoryPage · PlayLogTab·HistoryTable(플레이 기록 탭) · RecordingList·useRecordingList·useRecordingPlayback·RecordingTitleDialog·RecordingDeleteDialog·recordingMutation(녹음 목록 탭)
+- `features/lesson/` — LessonReadPage(입문 코스 레슨 화면)
+- `features/settings/` — SettingsPage · SettingRow
+- `features/landing/` — 랜딩(설계 UX-353)·로그인·가입 동의 — LandingPage · AuthCallbackPage
+  - `components/` — landing.css(전부 `.lp` 아래·`lp-` 접두사) · HeroScene(히어로+와이프) · StatementScene(점 글자 채움) · StickScene(센서 스틱 3단계·스윙·타격) · ChartScene(음원→드럼→채보) · ModesScene(카드 비행·전광판 네온) · ResultSection · CtaSection(둘 다 reveal) · LandingNav · ScrollCue · useSceneProgress(스크롤 진행도 0~1) · useStickSwing(스윙 rAF 루프) · useReveal(화면 진입 시 나타남) · landingArt(파형·채보·악보 SVG 데이터) · landingContent(모드·문구·이미지 경로) · LandingView(전체 조립)
+  - `components/auth/` — LoginDialog·SignupConsentDialog(랜딩 위 팝업) · ProviderIcons(Google 공식 4색 고정·SSAFY 자리표시) · TermsItem(약관 한 항목, 96 높이 스크롤 상자) · SignupConsentCard(가입 동의 카드, 동의 상태 보관·`initialAgreed`로 선택 항목 미리 켜기) · auth.css
+  - `domain/` — landingMotion · landingRoute
+- `features/admin/` — 공용 곡 관리(관리자, Jira 262) — AdminSongsPage · AdminSongTable · AdminSongAddDialog · AdminBulkDialog(CSV 일괄 추가·양식 받기) · adminSongStore(목록·등록·행별 반주 업로드) · adminBulkStore(CSV 일괄 추가 순차 실행·줄별 결과) · adminSongs(BE 156·262 호출) · adminSong(타입·입력 검사·첫 박 시각·반주 파일 검사·오류 문구) · adminBulk(CSV 파싱·인코딩 판별·양식·파일 짝 맞추기·줄별 판정) · admin.css
+- `features/monitor/` — 스틱 패킷 모니터(EMB용) — StickMonitorPage와 그래프·표 부품은 바로 아래, `core/`(판정 경로와 분리된 수집·분석, input·domain만 읽는다) · `layout/`(Sidebar·Fold·KeyMetricsBar·MetricRow·ReplayBar·sections) · `sections/`(Overview·Sensor·Clock·Transport·Resolve·Score·Trace·Output·Control·FreeMeasure 구역). 자세한 내용은 아래 「스틱 패킷 모니터」 절
+- `features/dev/` — 개발 전용 FX 랩(`/dev/fx`) — FxLabPage · fxLabPatterns. 다른 기능을 import할 수 있는 유일한 기능 폴더
 - `styles/` — tokens.css(디자인 토큰·모션 토큰·폰트·텍스트 유틸) · motion.css(공통 키프레임·역할 클래스) · global.css(전역·셸 레이아웃)
 
 ## 디자인 토큰
