@@ -1,13 +1,25 @@
 // 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
+// 예외 하나: 「악보 연습」에 들어와 있고 펼쳐져 있으면 그 아래에 곡 범위 하위 메뉴(기본 곡·내 곡·AI 추천곡·입문 코스)를 보인다
+// (설계 MODE-003-악보-연습-하위-메뉴). 범위는 주소 값이 기준이라 곡 고르기와 서로를 모른 채 같은 값을 본다. 접힘·태블릿에서는 화면 위 탭이 대신한다.
 import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { isAdmin } from '@/domain/auth';
+import {
+  isSheetPath,
+  resolveSheetCategory,
+  SHEET_CATEGORY_LABEL,
+  SHEET_PATH,
+  sheetCategoryAt,
+  sheetCategorySearch,
+  visibleSheetCategories,
+} from '@/domain/song/sheetCategory';
 import { PREFETCH_HOVER_MS } from '@/config/prefetch';
 import { useAuth } from '@/store/authStore';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSettings } from '@/store/settingsStore';
+import { useSongs } from '@/store/songStore';
 import { SidebarToggleIcon } from './SidebarToggleIcon';
 import { TABLET_QUERY, useMediaQuery, useSidebarCollapsed } from './useMediaQuery';
 
@@ -103,6 +115,15 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
   // 채보 변환 작업이 진행 중일 때 라이브러리에 점을 단다
   const libraryBadge = useChartJob((s) => s.active !== null && s.phase !== 'done' && s.phase !== 'failed');
   const admin = useAuth((s) => isAdmin(s.user));
+  // 악보 연습 하위 메뉴: 펼쳐져 있고 악보 연습 안일 때만. 보일 범위·지금 범위는 곡 고르기와 같은 규칙(domain/song/sheetCategory)으로 정한다
+  const { pathname, search } = useLocation();
+  const authed = useAuth((s) => s.status === 'authenticated');
+  const songSource = useSongs((s) => s.source);
+  const sheetCategories =
+    !collapsed && isSheetPath(pathname)
+      ? visibleSheetCategories({ source: songSource, authed, authRequired: import.meta.env.VITE_AUTH_REQUIRED !== 'false' })
+      : [];
+  const sheetCurrent = resolveSheetCategory(sheetCategoryAt(pathname, search), sheetCategories);
 
   // 메뉴에 커서가 100ms 머물거나 키보드 포커스가 오면 그 화면을 미리 받는다(설계 TECH-351)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,7 +189,24 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
       <nav className="side-menu">
         {item({ to: '/free', label: '자유 연습', icon: ICONS.free })}
         {item({ to: '/play', label: '리듬 게임', icon: ICONS.rhythm })}
-        {item({ to: '/sheet', label: '악보 연습', icon: ICONS.sheet })}
+        {item({ to: SHEET_PATH, label: '악보 연습', icon: ICONS.sheet })}
+        {sheetCategories.length > 0 && (
+          <ul className="side-sub" aria-label="악보 연습 범위">
+            {sheetCategories.map((category) => (
+              <li key={category}>
+                {/* 곡 고르기 안에서 범위만 바꿀 때는 방문 기록을 쌓지 않는다(화면 위 탭과 같은 규칙) */}
+                <Link
+                  to={{ pathname: SHEET_PATH, search: sheetCategorySearch(category) }}
+                  replace={pathname === SHEET_PATH}
+                  className="side-sub-item"
+                  aria-current={category === sheetCurrent ? 'page' : undefined}
+                >
+                  {SHEET_CATEGORY_LABEL[category].menu}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
         {item({ to: '/studio', label: '라이브러리', icon: ICONS.library, badge: libraryBadge })}
         {item({ to: '/history', label: '연주 기록', icon: ICONS.history })}
         {item({ to: '/setup', label: '드럼 세팅', icon: ICONS.setup })}

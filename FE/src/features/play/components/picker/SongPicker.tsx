@@ -9,9 +9,13 @@
 // 0곡이면 표 틀(머리글·「총 0곡」)을 두고 본문 자리에 안내를 둔다. 라이브러리 안내는 라이브러리 탭 0곡일 때만 보인다.
 // 추천(설계 COACH-004-song-picker-ai-tab): 로그인·API 소스면 탭 [AI 추천곡]이 붙는다. 추천 곡(R1)은 진입 때 모드마다 한 번 읽고
 // AI 추천곡 탭 목록과 기본 곡 탭의 「✦ AI 추천」 라벨이 같은 결과를 쓴다. 선택한 곡 패널 아래는 그 곡과 비슷한 곡(R2) 한 건이다.
+// 범위(설계 MODE-003-악보-연습-하위-메뉴): 악보 연습은 주소(`?scope=MINE`·`?tab=recommend`·`?tab=lessons`, 없으면 기본 곡)가 범위의 단일 기준이다 —
+// 사이드바 하위 메뉴와 화면 위 탭이 같은 주소 값을 바꾼다. 사이드바가 하위 메뉴를 보일 때(`tabsInSidebar`)는 화면 위 탭을 그리지 않는다.
+// 리듬 게임은 그대로다: 탭 상태를 갖고, 주소 값이 없으면 마지막에 본 범위로 연다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/account/recommendation';
+import { sheetCategoryOf, sheetCategoryQuery, type SheetCategory } from '@/domain/song/sheetCategory';
 import {
   chartFallback,
   defaultChartId,
@@ -21,7 +25,6 @@ import {
   SONG_LEVEL_ORDER,
   type SongDetail,
   type SongLevel,
-  type SongScope,
   type SongSummary,
 } from '@/domain/songCatalog';
 import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/play/bestRecord';
@@ -53,6 +56,8 @@ interface Props {
   mode: 'play' | 'sheet';
   /** 시작 대기 중(채보·반주를 읽는 동안): 카드의 ▶ 플레이가 스피너. 리듬 게임만 넘긴다 */
   starting?: boolean;
+  /** 사이드바가 「악보 연습」 하위 메뉴로 범위를 보이고 있다 — 화면 위 탭을 그리지 않는다. 악보 연습 페이지만 넘긴다 */
+  tabsInSidebar?: boolean;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -70,7 +75,7 @@ const COPY: Record<Props['mode'], { title: string }> = {
 };
 
 /** 곡 선택 탭. 기본 곡·라이브러리는 곡 목록 scope, RECOMMEND는 추천 API 결과, LESSONS는 입문 코스(악보 연습만, Jira 331)다 */
-type PickerTab = SongScope | 'RECOMMEND' | 'LESSONS';
+type PickerTab = SheetCategory;
 
 const SCOPE_OPTIONS: { value: PickerTab; label: string }[] = [
   { value: 'BUILTIN', label: '기본 곡' },
@@ -78,8 +83,6 @@ const SCOPE_OPTIONS: { value: PickerTab; label: string }[] = [
 ];
 const AI_OPTION: { value: PickerTab; label: string } = { value: 'RECOMMEND', label: 'AI 추천곡' };
 const LESSONS_OPTION: { value: PickerTab; label: string } = { value: 'LESSONS', label: '입문 코스' };
-/** `?tab=lessons`면 입문 코스 탭으로 연다(레슨 연주 준비의 뒤로 가기·권유 카드·결과 화면) */
-const LESSONS_TAB_PARAM = 'lessons';
 
 type LevelFilter = SongLevel | 'ALL';
 
@@ -117,7 +120,7 @@ function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommen
 
 type DetailState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; detail: SongDetail };
 
-export function SongPicker({ onStart, mode, starting }: Props) {
+export function SongPicker({ onStart, mode, starting, tabsInSidebar = false }: Props) {
   const source = useSongs((s) => s.source);
   const selectSong = useSongs((s) => s.selectSong);
   const presets = useSettings((s) => s.presets);
@@ -131,36 +134,29 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   const loadSimilar = useRecommendations((r) => r.loadSimilar);
   const clickReco = useRecommendations((r) => r.click);
   const clearReco = useRecommendations((r) => r.clear);
-  // `?scope=MINE`로 열면 내 곡 탭에서 시작한다(곡 작업실 완료 → 플레이 진입)
   const [params, setParams] = useSearchParams();
-  const [rawTab, setRawTab] = useState<PickerTab>(
-    params.get('tab') === LESSONS_TAB_PARAM ? 'LESSONS' : params.get('scope') === 'MINE' ? 'MINE' : useSongs.getState().scope,
-  );
-  // 곡 선택이 떠 있는 동안 주소의 tab만 바뀌면(권유 카드 [입문 코스 시작], 사이드바 「악보 연습」) 탭을 따라 바꾼다.
-  // 같은 경로라 화면이 다시 만들어지지 않으므로 렌더 중에 맞춘다
-  const urlLessons = params.get('tab') === LESSONS_TAB_PARAM;
-  const [seenUrlLessons, setSeenUrlLessons] = useState(urlLessons);
-  if (urlLessons !== seenUrlLessons) {
-    setSeenUrlLessons(urlLessons);
-    if (urlLessons) setRawTab('LESSONS');
-    else if (rawTab === 'LESSONS') setRawTab('BUILTIN');
-  }
+  const sheet = mode === 'sheet';
+  // 리듬 게임의 탭 상태. `?scope=MINE`로 열면 내 곡 탭에서, 아니면 마지막에 본 범위에서 시작한다(곡 작업실 완료 → 플레이 진입)
+  const [playTab, setPlayTab] = useState<PickerTab>(params.get('scope') === 'MINE' ? 'MINE' : useSongs.getState().scope);
+  // 악보 연습은 주소가 범위의 기준이다: 사이드바 하위 메뉴·권유 카드·레슨 뒤로 가기가 주소만 바꿔도 범위가 따라 바뀐다
+  const wantedTab: PickerTab = sheet ? sheetCategoryOf({ tab: params.get('tab'), scope: params.get('scope') }) : playTab;
   // 입문 코스는 악보 연습에서만, 추천과 같은 조건(로그인·API 곡 소스)일 때 보인다(설계 SETUP-입문-코스 3-5)
-  const lessonsEnabled = mode === 'sheet' && recoEnabled;
+  const lessonsEnabled = sheet && recoEnabled;
   // 로그인이 풀리면 AI 추천곡·입문 코스 탭은 사라지므로 기본 곡으로 본다
-  const tab: PickerTab = (rawTab === 'RECOMMEND' && !recoEnabled) || (rawTab === 'LESSONS' && !lessonsEnabled) ? 'BUILTIN' : rawTab;
+  const tab: PickerTab = (wantedTab === 'RECOMMEND' && !recoEnabled) || (wantedTab === 'LESSONS' && !lessonsEnabled) ? 'BUILTIN' : wantedTab;
   const tabOptions = [...SCOPE_OPTIONS, ...(recoEnabled ? [AI_OPTION] : []), ...(lessonsEnabled ? [LESSONS_OPTION] : [])];
-  // 입문 코스 탭은 주소에 남겨 레슨에서 돌아올 때 같은 탭으로 연다
+  // 범위를 주소에 남긴다. 곡·단계 값은 그대로 두고 방문 기록은 쌓지 않는다.
+  // 리듬 게임은 지금처럼 라이브러리 탭만 주소에 남긴다(곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게)
   const setTab = (next: PickerTab) => {
-    setRawTab(next);
+    if (!sheet) setPlayTab(next);
     setParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        if (next === 'LESSONS') p.set('tab', LESSONS_TAB_PARAM);
-        else p.delete('tab');
-        // 라이브러리 탭은 주소에도 남겨 곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게 한다
-        if (next === 'MINE') p.set('scope', 'MINE');
-        else p.delete('scope');
+        const keep = sheet ? sheetCategoryQuery(next) : next === 'MINE' ? { scope: 'MINE' } : {};
+        p.delete('tab');
+        p.delete('scope');
+        if (keep.tab) p.set('tab', keep.tab);
+        if (keep.scope) p.set('scope', keep.scope);
         return p;
       },
       { replace: true },
@@ -372,7 +368,8 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   );
   const copy = COPY[mode];
 
-  const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  // 사이드바가 하위 메뉴로 범위를 보이는 동안에는 화면 위 탭을 두지 않는다(같은 선택지가 두 군데 보이지 않게)
+  const tabs = source === 'api' && !tabsInSidebar ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
   // 안내 접이 바(안내 줄·구분선)는 두 모드 모두 보인다. 악보 연습의 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
   const showGuide = mode === 'play' || tab !== 'LESSONS';
 
