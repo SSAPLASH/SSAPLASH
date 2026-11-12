@@ -8,7 +8,7 @@ import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
 import { initialPedal, useLive, type MetronomeLive } from '@/store/liveStore';
 import { setReconnectHandler, useReconnect } from '@/store/reconnectStore';
-import { RECONNECT_WAIT_MS, hintFor, shouldResend, waitForDevices } from './reconnectPolicy';
+import { RECONNECT_WAIT_MS, hintFor, shouldResend, waitForDevices } from '@/runtime/reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
 import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
