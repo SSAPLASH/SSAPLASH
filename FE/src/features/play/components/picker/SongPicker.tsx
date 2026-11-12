@@ -1,4 +1,4 @@
-// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · (악보 연습만) 안내 줄+구분선 · [왼쪽 열: 탭 · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) | 선택한 곡 패널(SongDetailPane)].
+// 곡 선택 (설계 2-1, Figma 112:381·481:30675). 제목 행 · 안내 접이 바(안내 줄+구분선, 악보 연습 입문 코스 탭 제외) · [왼쪽 열: 탭 · 검색(300ms 디바운스)+곡 난이도 칩 · 표(SongTable) | 선택한 곡 패널(SongDetailPane)].
 // 목록은 플레이 후보(playableOnly)만 서버에서 받는다 — READY이고 곡 난이도가 있는 곡(설계 CHART-001 곡 난이도 4-1).
 // /play·/sheet가 같이 쓴다.
 // 두 모드가 같은 흐름이다(설계 MODE-001-MODE-003-picker-quick-start, MODE-001-play-quick-start): 선택 곡 카드에서 연습 단계까지 고르고
@@ -43,7 +43,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { SongTable } from './SongTable';
 import { SongDetailPane } from './SongDetailPane';
 import { LessonCourse } from '@/components/lesson/LessonCourse';
-import { PickerGuide } from '@/features/play/components/picker/guide/PickerGuide';
+import { GuideFold } from '@/features/play/components/picker/guide/GuideFold';
 import './song-picker.css';
 import { InlineError } from '@/components/ui/InlineError';
 
@@ -373,19 +373,14 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   const copy = COPY[mode];
 
   const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
-  // 안내 줄·구분선은 두 모드 모두 보인다. 악보 연습의 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
+  // 안내 접이 바(안내 줄·구분선)는 두 모드 모두 보인다. 악보 연습의 입문 코스 탭은 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
   const showGuide = mode === 'play' || tab !== 'LESSONS';
 
   return (
     <div className="play-sp">
       <PageHeader title={copy.title} />
 
-      {showGuide && (
-        <>
-          <PickerGuide mode={mode} />
-          <hr className="play-sp-divider" />
-        </>
-      )}
+      {showGuide && <GuideFold mode={mode} />}
 
       {tab === 'LESSONS' ? (
         <>

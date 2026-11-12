@@ -378,6 +378,35 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
       </MemoryRouter>,
     );
   const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  // 접힘 상태가 테스트 사이에 새지 않게 비운다
+  beforeEach(() => {
+    localStorage.removeItem('airdrum.picker.guideFold.sheet');
+    localStorage.removeItem('airdrum.picker.guideFold.play');
+  });
+
+  it.each([
+    ['sheet', '악보로 차근차근 연습해요', '악보 연습 안내'],
+    ['play', '리듬에 맞춰 도전해요', '리듬 게임 안내'],
+  ] as const)('%s: 안내 접이 바가 제목과 안내 줄 사이에 있고 접으면 안쪽이 inert가 된다', async (mode, title, label) => {
+    showMode(mode);
+    await screen.findAllByText('목록곡');
+    const bar = document.querySelector('.guide-fold-bar') as HTMLElement;
+    expect(bar).toBeTruthy();
+    expect(follows(screen.getByRole('heading', { name: title }), bar)).toBe(true);
+    expect(follows(bar, screen.getByRole('region', { name: label }))).toBe(true);
+    expect(bar.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(bar);
+    expect(bar.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.guide-fold-inner')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('/sheet: 입문 코스 탭에는 안내 접이 바가 없다', async () => {
+    showMode('sheet');
+    await screen.findAllByText('목록곡');
+    expect(document.querySelector('.guide-fold-bar')).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    expect(document.querySelector('.guide-fold-bar')).toBeNull();
+  });
 
   it('/sheet: 제목 → 안내 줄 → 구분선 → 목록 영역 순서', async () => {
     showMode('sheet');
