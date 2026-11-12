@@ -21,7 +21,7 @@ import { useShell } from '@/components/shell/useShell';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { DrumKit } from '@/components/drum/DrumKit';
+import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { ReadStaff } from '@/components/lesson/PadNotation';
 import '@/components/lesson/lesson.css';
@@ -218,7 +218,7 @@ export function LessonReadPage() {
             </p>
             <ReadStaff pads={seq} at={at} />
             <div className="lesson-read-kit">
-              <DrumKit fitWidth effects labels skin={kitSkin} states={kitStates} hitSeq={hitSeq} onPadDown={onPadDown} />
+              <LiveDrumKit fitWidth effects labels skin={kitSkin} states={kitStates} hitSeq={hitSeq} onPadDown={onPadDown} />
             </div>
             {done && !popup && (
               <div className="lesson-read-actions">
