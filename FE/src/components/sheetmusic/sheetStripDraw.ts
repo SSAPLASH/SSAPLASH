@@ -1,7 +1,7 @@
 // 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
 import type { Judgement } from '@/domain/judgement';
 import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/sheet';
-import { xInBar, xOfTime, xOfTimeInBar } from './sheetStripMath';
+import { xInBar, xInBarContinuous, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
 const LINE_GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
 const STAFF_BOTTOM = 150; // 선 1의 y
@@ -83,6 +83,8 @@ export interface DrawSheetOpts {
   beatMs: number;
   /** false면 기준선·박 번호·카운트인 숫자를 그리지 않는다 */
   showBase: boolean;
+  /** 연속 커서 모드에서 타격 시각의 마디 경계를 보간한다 */
+  continuousStepsPerBar?: number;
   openWarnings?: ReadonlyMap<number, number>;
   nowMs?: number;
 }
@@ -97,6 +99,9 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   const gT = G(t);
   const X = (gridMs: number) => xOfTime(gridMs, gT, width, barPx, baseRatio, barMs);
   const baseX = width * baseRatio;
+  const headX = (left: number, ratio: number) => opts.continuousStepsPerBar
+    ? xInBarContinuous(left, barPx, ratio, opts.continuousStepsPerBar)
+    : xInBar(left, barPx, ratio);
   const top = STAFF_TOP_Y;
   const bottom = STAFF_BOTTOM_Y;
 
@@ -150,7 +155,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     ctx.strokeStyle = colors.ink;
     ctx.lineWidth = 1.5;
     for (const [xr, lines] of columns) {
-      const x = xInBar(left, barPx, xr) + STEM_DX;
+      const x = headX(left, xr) + STEM_DX;
       const yTop = yOfPos(Math.max(...lines)) - STEM_LEN;
       stemTop.set(xr, yTop);
       ctx.beginPath();
@@ -164,11 +169,11 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
     for (const b of layout.beams) {
       const xrs = [...new Set(b.glyphIndices.map((gi) => layout.glyphs[gi].xRatio))];
       const yBeam = Math.min(...xrs.map((xr) => stemTop.get(xr)!));
-      const xa = xInBar(left, barPx, Math.min(...xrs)) + STEM_DX;
-      const xb = xInBar(left, barPx, Math.max(...xrs)) + STEM_DX;
+      const xa = headX(left, Math.min(...xrs)) + STEM_DX;
+      const xb = headX(left, Math.max(...xrs)) + STEM_DX;
       ctx.beginPath();
       for (const xr of xrs) {
-        const x = xInBar(left, barPx, xr) + STEM_DX;
+        const x = headX(left, xr) + STEM_DX;
         ctx.moveTo(x, stemTop.get(xr)!);
         ctx.lineTo(x, yBeam);
       }
@@ -179,7 +184,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
 
     // 머리 (판정 색)
     for (const g of layout.glyphs) {
-      const x = xInBar(left, barPx, g.xRatio);
+      const x = headX(left, g.xRatio);
       const y = yOfPos(g.line);
       const j = noteStates[g.noteIndex];
       const c = j ? colors.judge[j] : colors.ink;
@@ -235,7 +240,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   // 채보 밖 타격: 보표 아래 작은 점(같은 시각 노트 머리와 같은 x, 마디 앞 여백 포함)
   ctx.fillStyle = colors.judge.MISS;
   for (const h of strayHits) {
-    const x = xOfTimeInBar(G(h.timeMs), gT, width, barPx, baseRatio, barMs, 0);
+    const x = xOfTimeInBar(G(h.timeMs), gT, width, barPx, baseRatio, barMs, 0, opts.continuousStepsPerBar);
     if (x < -4 || x > width + 4) continue;
     ctx.beginPath();
     ctx.arc(x, bottom + 26, 3, 0, Math.PI * 2);
@@ -245,7 +250,7 @@ export function drawSheet(ctx: CanvasRenderingContext2D, opts: DrawSheetOpts): v
   // 친 위치 눈금: 보표 바로 아래 판정 색 짧은 세로선(같은 시각 노트 머리와 같은 x). 눈금 색이 판정을 말한다
   if (opts.hitMarks) {
     for (const m of opts.hitMarks) {
-      const x = xOfTimeInBar(G(m.timeMs), gT, width, barPx, baseRatio, barMs, 0);
+      const x = xOfTimeInBar(G(m.timeMs), gT, width, barPx, baseRatio, barMs, 0, opts.continuousStepsPerBar);
       if (x < -4 || x > width + 4) continue;
       ctx.fillStyle = colors.judge[m.judgement];
       ctx.fillRect(x - 1, bottom + 8, 2, 12);
