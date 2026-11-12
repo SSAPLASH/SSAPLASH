@@ -15,7 +15,10 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <h1 className="topbar-title t-title-20" tabIndex={-1}>{title || defaultTitle(pathname)}</h1>
+      <div className="topbar-heading">
+        <span className="brand-symbol topbar-logo" aria-hidden="true">S</span>
+        <h1 className="topbar-title t-title-20" tabIndex={-1}>{title || defaultTitle(pathname)}</h1>
+      </div>
       {/* Figma에 없는 센서 종류 표시. 기능 손실을 피하려 제목 옆에 작게 남긴다 */}
       <span className="small dim topbar-sensor">
         {sensorKind === 'none' ? '키보드' : (sensorRegistry.get(sensorKind)?.label ?? sensorKind)}
