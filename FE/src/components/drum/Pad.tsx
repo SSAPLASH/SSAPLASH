@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { KitSkin, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
+import type { KitSkin, KitView, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
 import type { KitArtPad } from '@/domain/kit/kitArt';
 import { AcousticPad, AcousticUnder } from './acoustic/AcousticPad';
 import { ElectronicPad } from './ElectronicPad';
@@ -95,6 +95,8 @@ interface PadProps {
   pedalOff?: boolean;
   /** 실물 하이햇·페달: 페달을 밟을 때마다 바뀌는 값("칙" 모션 재시작) */
   pedalHitSeq?: number;
+  /** 실물 스킨의 그림 종류(조각 이미지 폴더). 기본 persp */
+  view?: KitView;
 }
 
 /** 패드 하나(SVG <g>). 원본 160 기준으로 그리고 w에 맞춰 확대·축소한다. 상태 타이머는 없다 */
@@ -121,6 +123,7 @@ export const Pad = memo(function Pad({
   closed,
   pedalOff,
   pedalHitSeq,
+  view = 'persp',
 }: PadProps) {
   const s = w / BASE_W;
   // 문자열 배지는 next. now이거나 badgeHighlight면 강조 모양
@@ -138,7 +141,7 @@ export const Pad = memo(function Pad({
   if (layer === 'under') {
     return (
       <g className="drum-pad-under" data-shape={shape} transform={`translate(${left} ${top}) scale(${s})`}>
-        {image && <AcousticUnder art={image} />}
+        {image && <AcousticUnder art={image} view={view} />}
       </g>
     );
   }
@@ -160,7 +163,7 @@ export const Pad = memo(function Pad({
           <NeonPad shape={shape} state={state} defsId={defsId} tag={tag} label={label} labelVisible={labelVisible} hitKey={hitKey} tilt={tilt} />
         )
       ) : (
-        image && <AcousticPad art={image} state={state} label={label} labelVisible={labelVisible} hitKey={hitKey} k={k} layer={layer} closed={closed} pedalOff={pedalOff} pedalHitSeq={pedalHitSeq} />
+        image && <AcousticPad art={image} state={state} label={label} labelVisible={labelVisible} hitKey={hitKey} k={k} layer={layer} closed={closed} pedalOff={pedalOff} pedalHitSeq={pedalHitSeq} view={view} />
       )}
       {badge && (
         <g
