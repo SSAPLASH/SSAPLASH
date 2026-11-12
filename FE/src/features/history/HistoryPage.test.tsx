@@ -46,13 +46,13 @@ describe('HistoryPage', () => {
     const html = render();
     expect(html).toContain('아직 연주 기록이 없어요');
     expect(html).toContain('href="/play"');
-    expect(html).not.toContain('전체 기록');
+    expect(html).not.toContain('개 기록');
   });
 
-  it('기록이 있으면 「전체 기록 n개」와 모드 Segmented radio 3개(전체 선택)', () => {
+  it('기록이 있으면 「n개 기록」과 모드 Segmented radio 3개(전체 선택)', () => {
     stubLogs([saved(1), saved(2, 'SHEET'), saved(3)]);
     const html = render();
-    expect(html).toContain('전체 기록 3개');
+    expect(html).toContain('<strong>3</strong>개 기록');
     expect(html).toContain('aria-label="모드 필터"');
     expect(html).not.toContain('ui-chip');
     const group = html.slice(html.indexOf('aria-label="모드 필터"'));
@@ -61,9 +61,9 @@ describe('HistoryPage', () => {
     expect(radios[0]).toContain('aria-checked="true"');
     expect(radios[0]).toContain('>전체<');
     expect(radios[1]).toContain('aria-checked="false"');
-    expect(radios[1]).toContain('>게임<');
+    expect(radios[1]).toContain('>리듬 게임<');
     expect(radios[2]).toContain('aria-checked="false"');
-    expect(radios[2]).toContain('>악보<');
+    expect(radios[2]).toContain('>악보 연습<');
   });
 
   it('RECORDING_ENABLED 기본값은 켜짐이라 탭 줄이 있고 기본 탭은 플레이 기록이다', () => {
@@ -71,7 +71,7 @@ describe('HistoryPage', () => {
     stubLogs([saved(1)]);
     const html = render();
     expect(html).toContain('history-tabs');
-    expect(html).toContain('전체 기록 1개');
+    expect(html).toContain('<strong>1</strong>개 기록');
   });
 
   it('검색칸과 정렬 토글이 있다', () => {
@@ -82,11 +82,12 @@ describe('HistoryPage', () => {
     expect(html).toContain('aria-label="정렬"');
   });
 
-  it('13건이면 첫 쪽 10행과 범위 「1–10 / 13개」', () => {
+  it('이 브라우저의 기록 13건은 쪽 나눔 없이 모두 행으로 보이고 표는 쓰지 않는다', () => {
     stubLogs(Array.from({ length: 13 }, (_, i) => saved(i)));
     const html = render();
-    const body = html.slice(html.indexOf('<tbody'), html.indexOf('</tbody>'));
-    expect(body.match(/<tr/g)).toHaveLength(10);
-    expect(html).toContain('1–10 / 13개');
+    expect(html.match(/<li class="history-row"/g)).toHaveLength(13);
+    expect(html).toContain('<strong>13</strong>개 기록');
+    expect(html).not.toContain('<table');
+    expect(html).not.toContain('더 보기');
   });
 });

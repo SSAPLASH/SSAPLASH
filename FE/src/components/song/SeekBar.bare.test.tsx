@@ -37,4 +37,10 @@ describe('SeekBar bare', () => {
     const ends = render(<SeekBar layout="ends" positionMs={12_000} durationMs={60_000} onSeek={() => {}} />);
     expect(ends.container.querySelector('.free-seek-ends')).toBeTruthy();
   });
+
+  it('label을 주면 그 이름으로 읽힌다(녹음 재생바). 없으면 「반주 위치」', () => {
+    render(<SeekBar label="녹음 위치" positionMs={12_000} durationMs={60_000} onSeek={() => {}} />);
+    expect(screen.getByRole('slider', { name: '녹음 위치' })).toBeTruthy();
+    expect(screen.queryByRole('slider', { name: '반주 위치' })).toBeNull();
+  });
 });
