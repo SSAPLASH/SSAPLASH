@@ -1655,3 +1655,272 @@
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
+
+/* =====================================================================
+ * 세팅 팝업 키움·애플 톤 v2: 단계 팝업(StepDialog — 스틱 연결·시작 위치 보정)과 박자 맞추기(TimingCalDialog, 세팅에서만 .setup-timing-dialog).
+ * 프리셋 슬롯 창과 같은 재료: 82% 반투명 + blur 24, 머리카락 선, 모서리 28px, 큰 제목·넉넉한 본문, 알약형 큰 버튼, 진행 중인 것만 은은한 시안 네온.
+ * 박자 맞추기 팝업은 다른 화면(설정·결과·연주 권유)에서는 기본 모양 그대로다. 위 블록들을 덮어야 하므로 파일 맨 끝에 둔다.
+ * ===================================================================== */
+.dialog.setup-step-dialog,
+.dialog.setup-timing-dialog {
+  --pop-hair: rgba(255, 255, 255, 0.07);
+  --pop-fill: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --pop-neon: var(--brand);
+  border: 1px solid var(--pop-hair);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--bg-base) 82%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+/* 버튼: 알약형으로 크게 */
+.dialog.setup-step-dialog .ui-btn:not(.ui-btn-sm),
+.dialog.setup-timing-dialog .ui-btn {
+  min-height: 46px;
+  padding: 0 24px;
+  border-color: transparent;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dialog.setup-timing-dialog .ui-btn-secondary {
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+.dialog.setup-timing-dialog .ui-btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+/* 주 버튼에는 옅은 네온 번짐 */
+.dialog.setup-step-dialog .ui-btn-primary:not(:disabled),
+.dialog.setup-timing-dialog .ui-btn-primary:not(:disabled) {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--pop-neon) 30%, transparent);
+}
+
+/* ---- 단계 팝업: 폭 860, 제목 26px ---- */
+.dialog.setup-step-dialog {
+  gap: 24px;
+  max-width: min(860px, calc(100vw - 48px));
+  padding: 36px 40px 36px;
+}
+.dialog.setup-step-dialog .setup-step-head h2 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.dialog.setup-step-dialog .setup-step-body,
+.dialog.setup-step-dialog .setup-col {
+  gap: 20px;
+}
+.dialog.setup-step-dialog .setup-note {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.dialog.setup-step-dialog .setup-note.faint {
+  font-size: 14px;
+  color: var(--text-3);
+}
+.dialog.setup-step-dialog .setup-notice {
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-size: 15px;
+}
+/* 진행 막대: 굵고 둥글게, 채움은 시안 그라데이션 + 빛 */
+.dialog.setup-step-dialog .setup-progress-bar {
+  height: 10px;
+  background: color-mix(in srgb, var(--text-1) 8%, transparent);
+}
+.dialog.setup-step-dialog .setup-progress-bar > div {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pop-neon), var(--brand-text));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--pop-neon) 55%, transparent);
+  transition: width 120ms linear;
+}
+
+/* 시작 위치 보정 자세 안내: 그림 카드를 크게, 테두리 대신 바탕 차이 */
+.dialog.setup-step-dialog .pose-guide {
+  gap: 18px;
+}
+.dialog.setup-step-dialog .pose-guide-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.dialog.setup-step-dialog .pose-guide-figs {
+  gap: 16px;
+}
+.dialog.setup-step-dialog .pose-guide-fig {
+  border: 1px solid var(--pop-hair);
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 70%),
+    var(--pop-fill);
+  transition:
+    border-color 240ms ease,
+    box-shadow 320ms ease;
+}
+.dialog.setup-step-dialog .pose-guide-fig figcaption {
+  top: 14px;
+  left: 16px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+/* 잡는 중: 그림 카드에 은은한 시안 빛. 흔들림은 빨강, 끝나면 초록 */
+.dialog.setup-step-dialog .pose-guide[data-state='holding'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--pop-neon) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--pop-neon) 18%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide[data-state='shaky'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--miss) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--miss) 16%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide[data-state='done'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--good) 16%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide-steps {
+  gap: 16px;
+}
+.dialog.setup-step-dialog .pose-guide-steps li {
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.dialog.setup-step-dialog .pose-guide-steps li i {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+.dialog.setup-step-dialog .pose-guide-steps li.on i {
+  background: var(--pop-neon);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--pop-neon) 60%, transparent);
+}
+
+/* 스틱 연결 팝업: 센서 고르기 줄을 카드처럼 */
+.dialog.setup-step-dialog .setup-sensor-choice {
+  padding: 14px 16px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 16px;
+  background: var(--pop-fill);
+  font-size: 15px;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease;
+}
+.dialog.setup-step-dialog .setup-sensor-choice:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.dialog.setup-step-dialog .setup-sensor-choice:has(input:checked) {
+  border-color: color-mix(in srgb, var(--pop-neon) 50%, transparent);
+  background: color-mix(in srgb, var(--pop-neon) 7%, var(--pop-fill));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pop-neon) 14%, transparent);
+}
+
+/* ---- 박자 맞추기(세팅): 폭 680, 가운데 정렬, 큰 글자와 큰 박 점 ---- */
+.dialog.setup-timing-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: min(680px, calc(100vw - 48px));
+  padding: 44px 48px 36px;
+  text-align: center;
+}
+.dialog.setup-timing-dialog h2 {
+  margin: 0 0 18px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.dialog.setup-timing-dialog .timing-cal-text {
+  max-width: 520px;
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.dialog.setup-timing-dialog .timing-cal-sub {
+  max-width: 520px;
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.dialog.setup-timing-dialog .timing-cal-warn {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 15px;
+}
+.dialog.setup-timing-dialog .timing-cal-change {
+  margin: 0 0 20px;
+  font-size: 17px;
+}
+.dialog.setup-timing-dialog .timing-cal-change strong {
+  color: var(--brand-text);
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--pop-neon) 40%, transparent);
+}
+/* 박 점: 크게, 지금 박은 시안 네온이 울린다 */
+.dialog.setup-timing-dialog .timing-cal-beats {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0 24px;
+}
+.dialog.setup-timing-dialog .timing-cal-beat {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.dialog.setup-timing-dialog .timing-cal-beat.listen {
+  width: 10px;
+  height: 10px;
+}
+.dialog.setup-timing-dialog .timing-cal-beat.on {
+  background: color-mix(in srgb, var(--text-1) 38%, transparent);
+}
+.dialog.setup-timing-dialog .timing-cal-beat.now {
+  background: var(--pop-neon);
+  box-shadow:
+    0 0 10px var(--pop-neon),
+    0 0 26px color-mix(in srgb, var(--pop-neon) 50%, transparent);
+  animation: timing-beat-pop 360ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes timing-beat-pop {
+  0% {
+    transform: scale(1.6);
+  }
+}
+.dialog.setup-timing-dialog .dialog-actions {
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+.dialog.setup-timing-dialog .dialog-actions .ui-btn {
+  min-width: 120px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog.setup-timing-dialog .timing-cal-beat.now {
+    animation: none;
+  }
+}
+@media (max-width: 720px) {
+  .dialog.setup-step-dialog {
+    padding: 28px 20px 24px;
+  }
+  .dialog.setup-timing-dialog {
+    padding: 32px 20px 24px;
+  }
+}
