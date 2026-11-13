@@ -84,6 +84,14 @@ describe('세션 진단', () => {
     expect(diagActiveKickOffsetMs()).toBe(-40);
   });
 
+  it('session 줄에 이 판의 진동 방식(haptic)을 싣고, 없으면 판정 진동이다', () => {
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0, haptic: 'local' });
+    expect(events[0]).toMatchObject({ type: 'session', haptic: 'local' });
+    events.length = 0;
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
+    expect(events[0]).toMatchObject({ type: 'session', haptic: 'judgement' });
+  });
+
   it('시작은 session start와 notes를 내고, 시간 초과 MISS는 missed로 파생된다', () => {
     const ss = mkSession();
     diagSessionStart(ss, 'RHYTHM', { windows, audioOffsetMs: 5, kickOffsetMs: 5 });
