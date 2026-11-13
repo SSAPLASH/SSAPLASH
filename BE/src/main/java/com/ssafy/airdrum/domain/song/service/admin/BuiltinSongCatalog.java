@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 
+import com.ssafy.airdrum.domain.lesson.model.LessonCourse;
 import com.ssafy.airdrum.domain.lesson.model.LessonKind;
 import com.ssafy.airdrum.domain.lesson.model.LessonSpec;
 import com.ssafy.airdrum.domain.song.model.SongMetadata;
@@ -32,7 +33,7 @@ public final class BuiltinSongCatalog {
 	 * 카탈로그 한 곡. MIDI는 이미 읽은 바이트다. {@code offsetMs}는 원본 음원 0초 기준 첫 마디 첫 박 시각(ms)으로,
 	 * MIDI 0틱 = 음원 0초인 곡에서 솎기 격자의 원점이 된다(260번 설계 3-1절). 생략하면 0.
 	 * {@code meta}는 곡 추천용 메타데이터(255번 설계 3-1절)이고 생략하면 null.
-	 * {@code lesson}은 입문 코스 레슨 정보(331번 설계 3-1절)이고 레슨이 아닌 곡은 null.
+	 * {@code lesson}은 학습 코스 레슨 정보(331번 설계 3-1절, 코스는 학습 코스 설계 3-1절)이고 레슨이 아닌 곡은 null.
 	 */
 	record Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs, SongMetadata meta, LessonSpec lesson) {
 		Entry(String title, String artist, String license, boolean published, byte[] midi, int offsetMs, SongMetadata meta) {
@@ -48,7 +49,7 @@ public final class BuiltinSongCatalog {
 	}
 
 	private static final Set<String> FIELDS = Set.of("title", "artist", "license", "midi", "published", "offsetMs", "meta", "lesson");
-	private static final Set<String> LESSON_FIELDS = Set.of("order", "kind", "summary", "pads", "guide");
+	private static final Set<String> LESSON_FIELDS = Set.of("order", "course", "kind", "summary", "pads", "guide");
 	private static final Set<String> META_FIELDS = Set.of("genre", "subGenres", "mood", "energy", "releaseYear", "language", "drumStyle",
 			"source", "sourceNote");
 	/** 곡 길이 상한(30분, MIDI 변환 규칙)과 같다. */
@@ -124,6 +125,15 @@ public final class BuiltinSongCatalog {
 			if (!LESSON_FIELDS.contains(field)) throw new Invalid(where + ": lesson에 모르는 필드 " + field);
 		var order = node.get("order");
 		if (order == null || !order.isIntegralNumber() || !order.canConvertToInt()) throw new Invalid(where + ": lesson.order는 정수여야 합니다.");
+		LessonCourse course = LessonCourse.BEGINNER;
+		if (node.has("course")) {
+			if (!node.get("course").isString()) throw new Invalid(where + ": lesson.course는 BEGINNER·INTERMEDIATE여야 합니다.");
+			try {
+				course = LessonCourse.valueOf(node.get("course").asString());
+			} catch (IllegalArgumentException e) {
+				throw new Invalid(where + ": lesson.course는 BEGINNER·INTERMEDIATE여야 합니다.");
+			}
+		}
 		LessonKind kind = LessonKind.PLAY;
 		if (node.has("kind")) {
 			if (!node.get("kind").isString()) throw new Invalid(where + ": lesson.kind는 READ·PLAY여야 합니다.");
@@ -149,21 +159,25 @@ public final class BuiltinSongCatalog {
 			guide = node.get("guide").asBoolean();
 		}
 		try {
-			return new LessonSpec(order.asInt(), kind, summary.asString(), names, guide);
+			return new LessonSpec(order.asInt(), kind, summary.asString(), names, guide, course);
 		} catch (IllegalArgumentException e) {
 			throw new Invalid(where + ": lesson." + e.getMessage());
 		}
 	}
 
-	/** 레슨 순서는 카탈로그 안에서 겹치지 않고 1부터 빈 번호 없이 이어진다. */
+	/** 레슨 순서는 코스마다 겹치지 않고 1부터 빈 번호 없이 이어진다(학습 코스 설계 3-1절). */
 	private static void lessonOrders(List<Entry> entries) {
-		var orders = new HashSet<Integer>();
+		var orders = new java.util.EnumMap<LessonCourse, Set<Integer>>(LessonCourse.class);
 		for (var entry : entries) {
 			if (entry.lesson() == null) continue;
-			if (!orders.add(entry.lesson().order())) throw new Invalid(entry.title() + ": 레슨 순서 " + entry.lesson().order() + "이 겹칩니다.");
+			var lesson = entry.lesson();
+			if (!orders.computeIfAbsent(lesson.course(), c -> new HashSet<>()).add(lesson.order()))
+				throw new Invalid(entry.title() + ": " + lesson.course() + " 레슨 순서 " + lesson.order() + "이 겹칩니다.");
 		}
-		for (int i = 1; i <= orders.size(); i++)
-			if (!orders.contains(i)) throw new Invalid("레슨 순서는 1부터 빈 번호 없이 이어져야 합니다(" + i + "번이 없습니다).");
+		orders.forEach((course, set) -> {
+			for (int i = 1; i <= set.size(); i++)
+				if (!set.contains(i)) throw new Invalid(course + " 레슨 순서는 1부터 빈 번호 없이 이어져야 합니다(" + i + "번이 없습니다).");
+		});
 	}
 
 	/** 255번 설계 3-1절. 형식(객체·문자열·정수·문자열 배열)은 여기서, 값 규칙은 {@link SongMetadata}가 검사한다. */

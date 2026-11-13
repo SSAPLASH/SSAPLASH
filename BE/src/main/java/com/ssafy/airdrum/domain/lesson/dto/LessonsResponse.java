@@ -5,7 +5,7 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** 입문 코스 레슨 목록과 본인 진도(331번 설계 3-3절). */
+/** 학습 코스(입문·중급) 레슨 목록과 본인 진도(331번 설계 3-3절, 학습 코스 설계 3-3절). */
 public record LessonsResponse(
 		@Schema(description = "연주 레슨 통과 기준 정확도(백분율)", example = "70") int passAccuracy,
 		List<Item> items) {
@@ -16,7 +16,8 @@ public record LessonsResponse(
 
 	@Schema(name = "LessonItem")
 	public record Item(
-			@Schema(description = "순서(1부터)") int order,
+			@Schema(description = "코스 안의 순서(1부터)") int order,
+			@Schema(description = "학습 코스. 목록은 BEGINNER 전부 뒤에 INTERMEDIATE가 온다", allowableValues = { "BEGINNER", "INTERMEDIATE" }) String course,
 			@Schema(description = "READ: 악보가 흐르지 않는 알아보기, PLAY: 악보 연습 화면으로 치는 연주", allowableValues = { "READ", "PLAY" }) String kind,
 			long songId,
 			@Schema(description = "레슨 채보(NORMAL)") long chartId,
@@ -29,6 +30,6 @@ public record LessonsResponse(
 			int noteCount,
 			@Schema(description = "연주 레슨: 본인의 악보 연습 최고 정확도(0~100). 알아보기는 항상 null", nullable = true) BigDecimal bestAccuracy,
 			@Schema(description = "통과. 연주는 최고 정확도가 기준 이상, 알아보기는 완료 기록 있음") boolean passed,
-			@Schema(description = "앞 순서 레슨 중 통과하지 못한 것이 있음") boolean locked) {
+			@Schema(description = "목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있음") boolean locked) {
 	}
 }
