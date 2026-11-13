@@ -1,5 +1,5 @@
 // 보정·재정렬 본문(PLAY-004 4-1·4-2, 개편 D2·D3·D6·D10·D11·D14, v0.2 · SETUP-fixed-kit-noir D5·D11). 보정 중(capture)에는 보정 팝업(CalibrationDialog)의 본문이다:
-// 큰 안내(「하이햇을 2번 타격하세요」, 패드 이름은 브랜드색) · 진행 점 · 드럼 그림(항상 기본 배치, 전체 어둡게 0.18 + 지금 칠 패드만 원래 밝기·글로우) · 아래 손별 타격 점·약한 타격 안내.
+// 큰 안내(「하이햇을 2번 타격하세요」, 패드 이름은 브랜드색) · 진행 점 · 드럼 그림(항상 기본 배치, 전체 어둡게 0.18 + 지금 칠 패드만 원래 밝기·글로우, 팝업이 열릴 때는 그 위에 첫 안내 CaptureNotice) · 아래 손별 타격 점·약한 타격 안내.
 // 간격 경고는 멈추지 않는다: 진행 중에는 배너([◯◯ 다시])로, 다음 패드를 치면 사라진다. 결과 화면(done)은 「n곳 모두 잡았어요」 + 같은 손에서 20° 미만으로 붙은 패드(세션 밖 앵커 base 포함, D14)를
 // 문구(「스네어와 스몰탐이 너무 가까워요(14°)」)와 [◯◯ 다시] 버튼으로 알리고 그 패드에 --warn 테두리를 그린 뒤 [저장]한다. 그림이 고정이라 붙어 보이지 않으므로 문구가 대신한다.
 // 재정렬 중(② 카드): 스네어 유령 + RealignPrompt. 계산·전송은 하지 않는다: liveStore.calibration 스냅샷을 읽고 calibrationSession 액션만 부른다.
@@ -9,6 +9,8 @@ import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { Button } from '@/components/ui/action/Button';
 import { RealignPrompt } from '@/components/calibration/RealignPrompt';
+import { CaptureNotice } from './CaptureNotice';
+import { useCaptureNotice } from './useCaptureNotice';
 import { GapBanner } from './GapBanner';
 import { HAND_NAME, captureHeadline, overlapPairText, spreadWarningText, wrongHandText } from '@/components/calibration/calibrationText';
 import { calibrationSession } from '@/runtime/calibrationSession';
@@ -76,6 +78,8 @@ export interface CalibrationStageProps {
   onRestart?: () => void;
   /** 결과 화면의 [저장]: 세션을 끝내고(active) 또는 초안을 받아(new) 저장 흐름을 연다 */
   onSave?: () => void;
+  /** 보정 팝업에서만 켠다: 열릴 때 드럼 그림 가운데에 첫 안내(CaptureNotice)를 겹쳐 띄운다 */
+  notice?: boolean;
 }
 
 type HandGap = PadGap & { stickId: StickId };
@@ -150,7 +154,8 @@ function uniquePairs(overlaps: readonly HandGap[]): { a: PadId; b: PadId; deg: n
   return [...pairs.values()].sort((x, y) => x.deg - y.deg);
 }
 
-export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
+export function CalibrationStage({ onRestart, onSave, notice = false }: CalibrationStageProps) {
+  const noticeOpen = useCaptureNotice(notice);
   const cal = useLive((l) => l.calibration);
   const kitSkin = useSettings((s) => s.kitSkin);
   const padStates = usePadStates();
@@ -214,6 +219,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
           lit={isDone ? undefined : (cap.target ?? undefined)}
           warnPads={warnPads}
         />
+        {notice && <CaptureNotice open={noticeOpen} />}
       </div>
 
       <div className="cal-stage-bottom">
