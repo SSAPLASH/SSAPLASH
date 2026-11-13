@@ -1,11 +1,11 @@
 // 드럼 세팅의 "자유 틀": 원근 자리(kitPerspective)에 스킨 패드 그림(components/drum/Pad)을 놓을 자리·크기를 구한다.
 // 편집 화면(KitCanvas)과 보정 화면(CalibrationStage)이 같은 값으로 DrumKit을 그려 두 화면의 드럼 모양이 같다.
-import { DRUM_KIT_PADS, type KitSkin, type PadShape } from '../drumKit';
-import type { FigBox, KitLayout } from '../kitLayout';
+import { DRUM_KIT_PADS, type KitSkin, type PadShape } from './drumKit';
+import type { FigBox, KitLayout } from './kitLayout';
 import { KIT_ART_PERSP, kitArtPad, type KitArtPad } from './kitArt';
 import { DEFAULT_ANGLE_RANGE, type AngleRange } from './kitMapping';
 import { kitShapes, makeCamera, type PadShape as PadFigure } from './kitPerspective';
-import type { PadId } from '../pads';
+import type { PadId } from './pads';
 
 /** 틀 안의 패드 하나. 좌표는 틀 px */
 export interface FramePad {

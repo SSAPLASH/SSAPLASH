@@ -1,5 +1,5 @@
 // 패드 정의 — 공통 명세서 5장·9-2 enum 표기를 그대로 따른다.
-// 배치 타입은 domain/kitLayout로 옮겼다. 기존 import 경로 호환용 재export
+// 배치 타입은 domain/kit/kitLayout로 옮겼다. 기존 import 경로 호환용 재export
 export type { KitLayout, PadPlacement } from './kitLayout';
 
 export type PadId =

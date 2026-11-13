@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { IconButton } from '@/components/ui/IconButton';
-import type { KitSkin } from '@/domain/drumKit';
+import type { KitSkin } from '@/domain/kit/drumKit';
 import { HIT_FX_THEMES, HIT_FX_THEME_LABELS, hitFxThemeDef } from '@/domain/hitFx/themes';
 import type { HitFxTheme } from '@/domain/hitFx/types';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { createFxEmitter } from './fxSource';
 import './KitSkinCarousel.css';
 

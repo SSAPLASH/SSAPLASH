@@ -4,7 +4,7 @@
 // 질문 16 + 안내 14, 하단 [취소] secondary md + [삭제] danger md.
 import { SHEET_RELINK_ENABLED } from '@/config/features';
 import { Button } from '@/components/ui/Button';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { EditDialog } from './EditDialog';
 import './studio.css';
 

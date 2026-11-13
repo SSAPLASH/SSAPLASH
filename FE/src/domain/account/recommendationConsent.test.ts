@@ -8,7 +8,7 @@ import {
   needsRecommendationPrompt,
   type RecommendationConsent,
 } from './recommendationConsent';
-import { recommendationVersion } from '../signupTerms';
+import { recommendationVersion } from './signupTerms';
 
 const V = recommendationVersion();
 const c = (over: Partial<RecommendationConsent> = {}): RecommendationConsent => ({ agreed: true, version: V, updatedAt: '2026-11-05T12:00:00Z', ...over });

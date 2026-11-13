@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FxCanvas } from '@/components/fx/FxCanvas';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
-import type { Chart } from '@/domain/chart';
-import type { Judgement } from '@/domain/judgement';
-import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/sheet';
+import type { Chart } from '@/domain/song/chart';
+import type { Judgement } from '@/domain/play/judgement';
+import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/song/sheet';
 import { barsPerPage, CONTENT_BOTTOM, CONTENT_TOP, cursorPos, flowGeometry, noteHeadAt, pagerSlots, snapToBeat, staffScale, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from '@/components/sheetmusic/sheetStripDraw';

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listSongs } from '@/api/songs';
 import { pickableForAccompaniment } from '@/domain/song/freeAccompaniment';
-import type { SongPage, SongScope, SongSummary } from '@/domain/songCatalog';
+import type { SongPage, SongScope, SongSummary } from '@/domain/song/songCatalog';
 
 /** 섹션 한 페이지 크기 */
 export const PAGE_SIZE = 30;

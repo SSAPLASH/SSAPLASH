@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DRUM_KIT_W, kitBoxFor, kitPadsFor, padCenter, type KitSkin } from '@/domain/drumKit';
-import { PAD_META } from '@/domain/pads';
+import { DRUM_KIT_W, kitBoxFor, kitPadsFor, padCenter, type KitSkin } from '@/domain/kit/drumKit';
+import { PAD_META } from '@/domain/kit/pads';
 import { buildGuideScript, EXAMPLE_STEPS, holdStartOf, stateAt } from '@/features/play/domain/guideScript';
 import { useSettings } from '@/store/settingsStore';
 import { guideKitPlace } from './guideKitPlace';

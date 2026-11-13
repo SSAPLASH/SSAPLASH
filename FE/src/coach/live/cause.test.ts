@@ -1,6 +1,6 @@
 // 합성 연주로 원인별로 맞는 원인이 나오는지 확인한다(설계 6절 인수 조건).
 import { describe, expect, it } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { missCauses, pickCauseByRule, UNKNOWN_CAUSE, type CauseInput } from './cause';
 import type { JudgedNote, StrayHit } from './window';
 

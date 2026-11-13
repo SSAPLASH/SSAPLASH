@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeLibraryItems, needsRefresh, sheetErrorCodeOf, sheetErrorText, SheetError, validateSheetFiles, type SheetSummary } from './sheetMusic';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 
 const MB = 1024 * 1024;
 const img = (size = 1 * MB, name = 'a.png', type = 'image/png') => ({ name, type, size });

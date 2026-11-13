@@ -9,7 +9,7 @@ import { MarqueeTitle } from '@/components/song/MarqueeTitle';
 import { PlayingEq } from '@/components/song/PlayingEq';
 import { SongCover } from '@/components/song/SongCover';
 import { canListen, isListening, isSounding, type SongPlayback } from '@/features/studio/domain/songPlayback';
-import { artistLabel, chartFailureText, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, chartFailureText, type SongSummary } from '@/domain/song/songCatalog';
 import { dateLabel } from './dateLabel';
 import { SongMenu, type SongEditKind, type SongSheetKind } from './SongMenu';
 import { AccompanimentBadge } from './AccompanimentBadge';

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { SongTable } from './SongTable';
 
 function song(id: number, over: Partial<SongSummary> = {}): SongSummary {

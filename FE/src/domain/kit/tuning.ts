@@ -1,7 +1,7 @@
 // 센서 튜닝 값(PLAY-002 센서 튜닝 설계). 코드 상수였던 판정 반경 계수·세기 곡선·입력 시각 보정·앵커 밖 처리를
 // 설정값으로 꺼내고, 이를 적용하는 순수 계산을 한곳에 모은다.
 // 기본값은 모두 하드웨어(스틱) 도착 전 초안이다 — 실측 후 DEFAULT_SENSOR_TUNING만 고친다.
-import { DEFAULT_ANGLE_RANGE, type AngleRange } from './kit/kitMapping';
+import { DEFAULT_ANGLE_RANGE, type AngleRange } from './kitMapping';
 
 /** 피크 가속도 → 벨로시티(0~127) 변환 파라미터 (공통 설계 3-6) */
 export interface VelocityCurve {

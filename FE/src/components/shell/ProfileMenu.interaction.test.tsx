@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileMenu } from '@/components/shell/ProfileMenu';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 
 // Node 실험적 localStorage가 happy-dom 것을 가려 persist 저장이 실패한다 — import 전에 메모리 저장소로 대체한다

@@ -2,8 +2,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { PresetSlotDialog } from './PresetSlotDialog';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { PRESET_SLOTS, SYSTEM_PRESET_ID, type KitPreset } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { PRESET_SLOTS, SYSTEM_PRESET_ID, type KitPreset } from '@/domain/kit/preset';
 
 const preset = (id: string, name: string): KitPreset => ({
   id,

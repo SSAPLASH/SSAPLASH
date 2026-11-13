@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AudioDropzone } from './AudioDropzone';
 import { SongCoverDialog } from './SongCoverDialog';
 import { UploadPanel, type UploadTab } from './UploadPanel';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 
 const noop = () => {};
 const audio = { busy: false, error: null, retryable: false, onSubmit: noop, onRetry: noop, prefill: null, onCancelPrefill: noop };

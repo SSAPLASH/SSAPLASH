@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/api/error';
 import type { PageResponse } from '@/api/recordings';
-import type { RecordingSummary } from '@/domain/recording';
+import type { RecordingSummary } from '@/domain/play/recording';
 import { appendPage, buildListParams, listErrorMessage, type RecordingListData } from './useRecordingList';
 
 const rec = (id: number): RecordingSummary => ({

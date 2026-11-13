@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SIGNUP_INTRO, SIGNUP_TERMS } from '@/domain/signupTerms';
+import { SIGNUP_INTRO, SIGNUP_TERMS } from '@/domain/account/signupTerms';
 import { SignupConsentCard } from './SignupConsentCard';
 import { TermsItem } from './TermsItem';
 

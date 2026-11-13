@@ -1,6 +1,6 @@
 // 녹음 재생기 검증. 가짜 시계·타이머·오디오만 쓰고 performance.now·실제 타이머는 쓰지 않는다.
 import { describe, expect, it, vi } from 'vitest';
-import type { RecordingHit } from '@/domain/recording';
+import type { RecordingHit } from '@/domain/play/recording';
 import {
   PLAYER_LOOKAHEAD_MS,
   PLAYER_START_LEAD_MS,

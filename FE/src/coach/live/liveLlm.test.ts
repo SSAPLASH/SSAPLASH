@@ -4,8 +4,8 @@ import { coachCopy } from './copy';
 import { LIVE_LLM_TAG, LiveCoach } from './LiveCoach';
 import { LlmCoach, type LlmCoachClient, type LlmRecord, type LlmTip } from './llmCoach';
 import { assignLlm, parseCoachLiveConfig } from './models/experiment';
-import type { HandAnchors, PadAnchor } from '@/domain/calibration';
-import type { PadId } from '@/domain/pads';
+import type { HandAnchors, PadAnchor } from '@/domain/kit/calibration';
+import type { PadId } from '@/domain/kit/pads';
 import { AIM_CLEAR, MIN_SEGMENT_JUDGED, SegmentTracker, aimFacts, segmentBars, segmentIndexAt, segmentRange, type AimSource, type FinishedSegment, type SegmentChart } from './segment';
 import type { JudgedNote } from './window';
 

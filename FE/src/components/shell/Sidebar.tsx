@@ -5,7 +5,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { isAdmin } from '@/domain/auth';
+import { isAdmin } from '@/domain/account/auth';
 import {
   isSheetPath,
   resolveSheetCategory,

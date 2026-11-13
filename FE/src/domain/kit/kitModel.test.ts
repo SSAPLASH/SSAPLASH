@@ -1,10 +1,10 @@
 // 3D 드럼셋 모델 검증(PLAY-004 D4): 손별 기본 앵커가 손마다 다르고, 반경이 튜닝 범위 안이며, 기본 배치가 화면 안에 있다.
 import { describe, expect, it } from 'vitest';
 import { anchorsToLayout, anchorToPoint, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, moveAnchorsForPad, padPointOf, HAND_ORIGINS, PAD_POINTS } from './kitModel';
-import { DEFAULT_KIT_LAYOUT } from '../kitLayout';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { poseToScreen } from './kitMapping';
-import { STICK_PADS } from '../pads';
-import { DEFAULT_SENSOR_TUNING } from '../tuning';
+import { STICK_PADS } from './pads';
+import { DEFAULT_SENSOR_TUNING } from './tuning';
 
 describe('handPoseTo', () => {
   it('정면·같은 높이 점은 (0, 0), 오른쪽은 방위 +, 위는 고도 +', () => {

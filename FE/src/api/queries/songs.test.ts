@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from '@/api/auth';
 import { createQueryClient } from '@/runtime/queryClient';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { SongSummary } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { mineSongsQuery, patchSongStatus, songListQuery } from './songs';
 
 const song = (over: Partial<SongSummary> = {}): SongSummary => ({

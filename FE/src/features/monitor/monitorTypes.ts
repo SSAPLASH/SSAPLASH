@@ -1,6 +1,6 @@
 // 모니터 페이지 하위 컴포넌트가 공유하는 스냅샷 타입과 작은 표시 헬퍼.
-import type { CalibrationProfile } from '@/domain/calibration';
-import { STICK_PADS } from '@/domain/pads';
+import type { CalibrationProfile } from '@/domain/kit/calibration';
+import { STICK_PADS } from '@/domain/kit/pads';
 import type { PadTableEntry } from '@/input/stickProtocol';
 import type { TransportStats } from '@/input/InputSource';
 import type { AudioLatencyInput } from '@/features/monitor/core/health';

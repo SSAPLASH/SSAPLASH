@@ -2,7 +2,7 @@
 // SheetPager 악보 배율: 변환 행렬, 논리 크기, 이펙트 좌표(CSS 픽셀) 검사
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 import type { FxLocate } from '@/domain/hitFx/types';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { drawSheet, HEAD_RX, headY } from '@/components/sheetmusic/sheetStripDraw';

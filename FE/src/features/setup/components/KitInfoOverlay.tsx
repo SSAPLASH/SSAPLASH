@@ -9,7 +9,7 @@ import { RadiusSlider, type RadiusSliderProps } from '@/features/setup/component
 export type KitInfoCorner = 'right' | 'left';
 
 export interface KitInfoFrameProps {
-  /** 캔버스 안에서 붙일 아래쪽 모서리. 지금 칠 패드를 가리면 left(domain/kitLayout.overlayCorner) */
+  /** 캔버스 안에서 붙일 아래쪽 모서리. 지금 칠 패드를 가리면 left(domain/kit/kitLayout.overlayCorner) */
   corner?: KitInfoCorner;
   /** warn이면 --warn 테두리(간격 경고·겹침 표시) */
   tone?: 'warn';

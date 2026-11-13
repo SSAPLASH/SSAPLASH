@@ -3,8 +3,8 @@
 // 일시정지(pause)·이어 재생(resume)·위치 옮기기(seek)를 지원한다(338 녹음 재생바). 일시정지·옮기기에서도 이미 예약된 100ms 이내 소리는 난다.
 // 오디오·시계·타이머는 주입받는다 — engine은 app·components를 import하지 않는다.
 import { audioEngine } from '@/audio/AudioEngine';
-import type { RecordingHit } from '@/domain/recording';
-import type { PadId } from '@/domain/pads';
+import type { RecordingHit } from '@/domain/play/recording';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 예약 창(ms). 시작 + tMs가 now + 이 값 이내인 타격을 미리 예약한다 */
 export const PLAYER_LOOKAHEAD_MS = 100;

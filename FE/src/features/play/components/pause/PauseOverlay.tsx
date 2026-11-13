@@ -14,7 +14,7 @@ import { SoundIcon } from '@/components/shell/SoundIcon';
 import { useDockRaised } from '@/components/shell/useShell';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
-import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
+import { pedalConnected, pedalRequired } from '@/domain/kit/pedalStatus';
 import { useReconnect } from '@/store/reconnectStore';
 import './PauseOverlay.css';
 

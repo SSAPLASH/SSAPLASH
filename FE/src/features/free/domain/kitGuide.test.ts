@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kitBoxFor, kitPadsFor } from '@/domain/drumKit';
+import { kitBoxFor, kitPadsFor } from '@/domain/kit/drumKit';
 import { kitGuideLabels } from './kitGuide';
 
 describe('kitGuideLabels (자유 연습 키트 가이드 이름표)', () => {

@@ -10,7 +10,7 @@ import { SheetViewer, type SheetViewerState } from '@/features/studio/components
 import { useShell } from '@/components/shell/useShell';
 import { SheetMenu, type SheetMenuKind } from '@/features/studio/components/SheetMenu';
 import { SHEET_REFRESH_LEAD_MS, needsRefresh, sheetErrorCodeOf, type SheetDetail } from '@/features/studio/domain/sheetMusic';
-import { toSafeId } from '@/domain/songCatalog';
+import { toSafeId } from '@/domain/song/songCatalog';
 import '@/features/studio/components/sheet/sheet-viewer.css';
 
 /** 갱신이 같은 만료 시각을 돌려줄 때 무한 반복을 막는 최소 간격(ms) */

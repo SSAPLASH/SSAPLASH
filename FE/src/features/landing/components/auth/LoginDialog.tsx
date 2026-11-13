@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { enabledProviders, loginErrorMessage, type ProviderKey } from '@/domain/auth';
+import { enabledProviders, loginErrorMessage, type ProviderKey } from '@/domain/account/auth';
 import { modeForRoute } from '@/features/landing/domain/landingRoute';
 import { LANDING_MODES } from '@/features/landing/components/landingContent';
 import { useAuth } from '@/store/authStore';

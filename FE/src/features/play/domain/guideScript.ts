@@ -1,7 +1,7 @@
 // 곡 선택 안내 애니메이션의 시간표 (설계 MODE-001-MODE-003-song-picker-guide 2·3장, 11/10 악보 모드 목업).
 // 예시 한 마디(8분 8칸)를 ① 하나씩 보기(칸마다 멈춤) → ② 72 BPM으로 이어서 → 반복으로 돌린다.
 // 시각(ms) → 장면 상태를 내는 순수 함수만 둔다. DOM·시간 읽기 없음 — 시계는 components/picker/guide/useGuideClock이 맡는다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 예시 한 칸. 같은 칸 패드는 동시에 친다 */
 export interface GuideStep {

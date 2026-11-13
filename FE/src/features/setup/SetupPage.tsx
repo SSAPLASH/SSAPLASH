@@ -32,19 +32,19 @@ import { UnsavedLeaveDialog } from '@/features/setup/components/UnsavedLeaveDial
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
-import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
+import { PAD_META, STICK_PADS, type PadId } from '@/domain/kit/pads';
 import type { StickId } from '@/domain/events';
-import { KEY_MAP } from '@/domain/keyMap';
+import { KEY_MAP } from '@/domain/kit/keyMap';
 import { anchorsToProfile } from '@/domain/kit/kitJudge';
-import { pickOverlayCorner } from '@/domain/kitLayout';
+import { pickOverlayCorner } from '@/domain/kit/kitLayout';
 import { defaultHandAnchorSet } from '@/domain/kit/kitModel';
 import { padPointCm, padScreenCircles } from '@/domain/kit/kitPerspective';
-import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/preset';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
-import { sanitizeReturnTo } from '@/domain/auth';
+import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/kit/preset';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration';
+import { sanitizeReturnTo } from '@/domain/account/auth';
 import { calibrationReady, readiness } from '@/domain/kit/readiness';
-import { deviceGroupName, deviceListText } from '@/domain/devices';
-import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/pedalStatus';
+import { deviceGroupName, deviceListText } from '@/domain/kit/devices';
+import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/kit/pedalStatus';
 import {
   dongleLine,
   referenceHoldingLine,
@@ -64,7 +64,7 @@ import {
   type SetupDongleState,
   type SetupStepId,
 } from '@/domain/kit/setupSteps';
-import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/tuning';
+import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/kit/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/features/setup/components/calibration/CalibrationStage';
 import { CAPTURE_GUIDE_TEXT, RESULT_GUIDE_TEXT } from '@/components/calibration/calibrationText';

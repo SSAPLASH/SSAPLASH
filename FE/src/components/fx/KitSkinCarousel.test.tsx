@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/drumKit';
+import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/kit/drumKit';
 import { KitSkinCarousel, nextSkin } from './KitSkinCarousel';
 
 describe('nextSkin', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BarLayout } from '@/domain/sheet';
+import type { BarLayout } from '@/domain/song/sheet';
 import { noteHeadAt, type PagerSlot } from './sheetPagerMath';
 import { xInBar, xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 

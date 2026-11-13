@@ -2,7 +2,7 @@
 // 구독자가 없으면 앵커를 만들지 않는다(반경 계산 비용, 설계 PLAY-002 live-play-diagnostics D7).
 import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
-import type { TimingWindows } from '@/domain/judgement';
+import type { TimingWindows } from '@/domain/play/judgement';
 import { diagTap } from '@/engine/diagTap';
 import type { DiagSessionOpts } from '@/engine/diagReport';
 import { useSettings } from '@/store/settingsStore';

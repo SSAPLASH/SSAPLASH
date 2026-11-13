@@ -2,7 +2,7 @@
 // 그 아래 카드 그리드(최대 5열) 또는 목록 행. 곡·악보가 모두 없으면(페이지가 empty로 알림) 빈 안내를 둔다.
 import type { ActiveJob, JobProgress } from '@/domain/song/chartJob';
 import { mergeLibraryItems, type SheetSummary } from '@/features/studio/domain/sheetMusic';
-import { sortMineSongs, type SongSummary } from '@/domain/songCatalog';
+import { sortMineSongs, type SongSummary } from '@/domain/song/songCatalog';
 import type { SongPlayback } from '@/features/studio/domain/songPlayback';
 import { ActiveJobCard } from './ActiveJobCard';
 import { LibraryEmpty } from './LibraryEmpty';

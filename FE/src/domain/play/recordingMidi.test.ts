@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_PADS } from '../pads';
-import type { RecordingDetail, RecordingHit, RecordingTiming } from '../recording';
+import { ALL_PADS } from '@/domain/kit/pads';
+import type { RecordingDetail, RecordingHit, RecordingTiming } from './recording';
 import {
   MIDI_FALLBACK_BPM,
   MIDI_FALLBACK_PPQ,

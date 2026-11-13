@@ -1,7 +1,7 @@
 // 실물 드럼 패드 한 개(이미지). Pad의 바깥 g(translate·scale) 안에서 "그림 단위"(조각 상자의 폭 160)로 그린다.
 // 조각 이미지 위에 번쩍임·상태 링·판정 글자·라벨을 그 패드의 헤드 자리(domain/kit/kitArt)에 얹는다.
 import type { CSSProperties } from 'react';
-import type { KitView, PadVisualState } from '@/domain/drumKit';
+import type { KitView, PadVisualState } from '@/domain/kit/drumKit';
 import type { KitArtPad } from '@/domain/kit/kitArt';
 import { spriteUrl } from './sprites';
 

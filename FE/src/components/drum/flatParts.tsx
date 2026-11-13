@@ -1,6 +1,6 @@
 // 전자·네온 스킨이 같이 쓰는 조각: 타격 모션 그룹, 판정 링, 글자. 원본 160 좌표, 원 중심 (80,80)
 import type { ReactNode } from 'react';
-import type { PadShape, PadVisualState } from '@/domain/drumKit';
+import type { PadShape, PadVisualState } from '@/domain/kit/drumKit';
 
 export interface FlatSkinProps {
   shape: PadShape;

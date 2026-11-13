@@ -2,10 +2,10 @@
 // - 정확도: 서버 0~100 → 화면 0~1. null은 그대로 두고 화면에서 "–"
 // - 패드 코드: normalizePadId(옛 이름 HI_TOM → SMALL_TOM). 모르는 패드는 버린다
 // - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
-import type { Difficulty } from '@/domain/chart';
-import type { Judgement } from '@/domain/judgement';
-import { normalizePadId, type PadId } from '@/domain/pads';
-import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/report';
+import type { Difficulty } from '@/domain/song/chart';
+import type { Judgement } from '@/domain/play/judgement';
+import { normalizePadId, type PadId } from '@/domain/kit/pads';
+import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/play/report';
 import { apiFetch } from './http';
 
 type Num = number | string;

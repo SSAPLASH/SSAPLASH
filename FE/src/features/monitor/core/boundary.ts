@@ -1,8 +1,8 @@
 // 바운더리 거리 계산: 자세가 가장 가까운 패드 원의 경계에서 얼마나 안쪽·바깥쪽인지.
 // FE 판정(resolvePad)과 같은 규칙이라 펌웨어가 보낸 margin과 비교하는 기준이 된다. input·domain만 import한다.
-import type { CalibrationProfile } from '@/domain/calibration';
-import { resolvePad } from '@/domain/calibration';
-import type { PadId } from '@/domain/pads';
+import type { CalibrationProfile } from '@/domain/kit/calibration';
+import { resolvePad } from '@/domain/kit/calibration';
+import type { PadId } from '@/domain/kit/pads';
 import type { DecodedHit } from '@/input/stickProtocol';
 import type { LogRow } from './packetLog';
 

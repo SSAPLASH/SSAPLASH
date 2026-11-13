@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listPlays } from '@/api/plays';
 import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';

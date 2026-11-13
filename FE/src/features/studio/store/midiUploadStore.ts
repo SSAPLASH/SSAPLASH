@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { uploadMidi, uploadMusicXml } from '@/api/songs';
 import { MIDI_PRECHECK_TEXT, isMidiUncertain, midiErrorText, precheckUpload, type MidiDraft } from '@/domain/song/midiUpload';
-import type { SongDetail } from '@/domain/songCatalog';
+import type { SongDetail } from '@/domain/song/songCatalog';
 
 export type MidiUploadPhase = 'idle' | 'uploading' | 'done' | 'failed';
 

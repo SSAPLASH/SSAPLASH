@@ -4,11 +4,11 @@
 // 악보 색·굵기는 sheetStripDraw와 같은 토큰. 패드 중심은 kitPadsFor(skin)에서 계산한다. 소리·이펙트 없음.
 import { memo, useMemo, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
-import { kitPadsFor, padCenter, type PadVisualState } from '@/domain/drumKit';
+import { kitPadsFor, padCenter, type PadVisualState } from '@/domain/kit/drumKit';
 import { guideKitPlace } from './guideKitPlace';
 import { CURSOR_END_POS, CURSOR_START_POS, EXAMPLE_STEPS, STEPS_PER_BAR, type GuideState } from '@/features/play/domain/guideScript';
-import { PAD_META, type PadId } from '@/domain/pads';
-import { staffPosOf, type NoteHead } from '@/domain/sheet';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { staffPosOf, type NoteHead } from '@/domain/song/sheet';
 import { useSettings } from '@/store/settingsStore';
 import './guide.css';
 

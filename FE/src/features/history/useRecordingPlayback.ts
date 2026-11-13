@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/api/error';
 import { getRecording } from '@/api/recordings';
-import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
+import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
 import { recordingPlayer } from '@/engine/recordingPlayer';
 
 export interface UseRecordingPlaybackOptions {

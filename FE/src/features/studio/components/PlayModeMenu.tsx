@@ -3,7 +3,7 @@
 // 열고 닫기·Esc·바깥 클릭은 공용 ui/Menu가 맡는다. 이 메뉴만 열릴 때 첫 항목에 초점을 두고 ↑/↓로 항목을 옮긴다.
 import { Link } from 'react-router-dom';
 import { Menu } from '@/components/ui/Menu';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { GameIcon, PlayIcon, SheetIcon } from '@/components/song/StudioIcons';
 import './studio.css';
 

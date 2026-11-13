@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
-import type { RecordingBody, RecordingSummary } from '@/domain/recording';
+import type { RecordingBody, RecordingSummary } from '@/domain/play/recording';
 
 vi.mock('@/api/recordings', () => ({ saveRecording: vi.fn() }));
 vi.mock('./playSync', () => ({ startPlaySync: vi.fn() }));

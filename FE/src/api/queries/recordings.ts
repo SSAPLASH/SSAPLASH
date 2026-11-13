@@ -1,7 +1,7 @@
 // 녹음 보관함 쪽 단위 목록 쿼리 (설계 TECH-351). 녹음 업로드가 성공하면 ['recordings']를 무효화한다.
 // 503은 공통 정책(5xx 1초 뒤 1회 재시도)이 맡는다.
 import { infiniteQueryOptions } from '@tanstack/react-query';
-import type { RecordingSummary } from '@/domain/recording';
+import type { RecordingSummary } from '@/domain/play/recording';
 import { listRecordings, type ListRecordingsParams, type PageResponse } from '../recordings';
 
 /** 키에 넣는 조회 조건(쪽 번호 제외) */

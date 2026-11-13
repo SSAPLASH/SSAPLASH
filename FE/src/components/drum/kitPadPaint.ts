@@ -1,6 +1,6 @@
 // 킷 패드 그리기 공용 함수. KitPlayView(리듬 게임 킷 뷰, 코드 보존)가 쓴다. 악보 연습 드럼 가이드는 SVG DrumKit + useNextBeatLabels로 바뀌었다.
 // 노트 계산은 kitPlayDraw 몫이고, 여기는 캔버스에 칠하는 일만 한다.
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import type { HitFx } from '@/domain/events';
 
 export interface PadGeo {

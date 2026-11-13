@@ -5,7 +5,7 @@
 import type { Pose, StickId } from '@/domain/events';
 import { BaseInputSource, type SurfaceToPose } from './InputSource';
 import type { SourceDescriptor } from './SourceDescriptor';
-import type { SensorTuning } from '@/domain/tuning';
+import type { SensorTuning } from '@/domain/kit/tuning';
 
 export interface PointerStickOptions {
   /** 화면 가로 전체를 yaw 몇 도에 대응시킬지 (±) */

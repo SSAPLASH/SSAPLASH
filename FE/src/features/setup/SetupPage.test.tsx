@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
-import { SYSTEM_PRESET_ID, type KitPreset } from '@/domain/preset';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { SYSTEM_PRESET_ID, type KitPreset } from '@/domain/kit/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { CAPTURE_ORDER } from '@/engine/HitCapture';
 import { SetupPage } from './SetupPage';
 

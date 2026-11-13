@@ -20,13 +20,13 @@ import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureSnapshot } from '@/engine/HitCapture';
 import { anchorsToLayout } from '@/domain/kit/kitJudge';
-import type { KitLayout } from '@/domain/kitLayout';
-import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
+import type { KitLayout } from '@/domain/kit/kitLayout';
+import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kit/kitLayout';
 import { kitFrame } from '@/domain/kit/kitFrame';
 import { padScreenCircles } from '@/domain/kit/kitPerspective';
 import { padPointOf } from '@/domain/kit/kitModel';
-import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
-import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/calibration';
+import { PAD_META, STICK_PADS, type PadId } from '@/domain/kit/pads';
+import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/kit/calibration';
 import type { Pose, StickId } from '@/domain/events';
 import '@/components/calibration/calibration.css';
 

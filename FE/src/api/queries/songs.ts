@@ -1,7 +1,7 @@
 // 곡 목록 쿼리 키·조회 옵션 (설계 TECH-350 3절). 키 앞부분 ['songs']로 곡 관련 캐시를 한꺼번에 무효화한다.
 import { queryOptions } from '@tanstack/react-query';
 import { listBuiltinSongs } from '@/domain/song/builtinSongs';
-import type { SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
+import type { SongLevel, SongScope, SongSummary } from '@/domain/song/songCatalog';
 import { listAllSongs } from '../songs';
 
 export interface SongListParams {

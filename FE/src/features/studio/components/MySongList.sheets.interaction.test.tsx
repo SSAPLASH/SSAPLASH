@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { MySongList, type StudioView } from './MySongList';
 
 afterEach(cleanup);

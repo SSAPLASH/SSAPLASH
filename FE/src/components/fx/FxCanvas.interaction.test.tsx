@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { LazyMotion, MotionGlobalConfig, domMax } from 'motion/react';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { useLive } from '@/store/liveStore';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { FxCanvas } from './FxCanvas';

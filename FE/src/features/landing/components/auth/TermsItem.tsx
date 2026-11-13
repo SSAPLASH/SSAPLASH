@@ -1,7 +1,7 @@
 // Figma Auth / TermsItem 440:19746 — 머리 줄([체크박스] [필수] 제목) + 높이 96 스크롤 상자. 동의 상태는 부모가 든다.
 import { useId } from 'react';
 import { Checkbox } from '@/components/ui/Checkbox';
-import type { SignupTerm } from '@/domain/signupTerms';
+import type { SignupTerm } from '@/domain/account/signupTerms';
 import './auth.css';
 
 interface Props {

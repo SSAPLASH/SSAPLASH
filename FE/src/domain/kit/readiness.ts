@@ -1,8 +1,8 @@
 // 준비 조건 판정(순수 함수). 홈·자유 연주·곡 시작 확인 창·설정 페이지가 같은 규칙을 쓴다.
 // 키보드 전용(sensorKind === 'none')은 면제한다(설계 D11).
 import type { SensorId } from '../events';
-import { DEVICE_META } from '../devices';
-import { pedalRequired } from '../pedalStatus';
+import { DEVICE_META } from './devices';
+import { pedalRequired } from './pedalStatus';
 
 // 프리셋 조건은 없다: 시스템 기본이 항상 적용 가능해 "적용된 프리셋 없음" 상태가 없다(UX-64 D1).
 export type ReadinessMissing = 'stick' | 'pedal' | 'firstSetup';

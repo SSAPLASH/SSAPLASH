@@ -7,7 +7,7 @@ import { PlayClock, type ClockAccompaniment } from './sessionClock';
 import { RhythmSession } from './RhythmSession';
 import { createChartAutoplay } from './chartAutoplay';
 import type { AudioReading } from '@/domain/time/audioTimeline';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 
 const NOTES = Array.from({ length: 160 }, (_, i) => ({ timeMs: i * 125, pad: 'SNARE' as const }));
 

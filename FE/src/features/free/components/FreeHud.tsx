@@ -1,6 +1,6 @@
 // 자유 연습 무대 아래 두 모서리의 글자 정보(MODE-002 설계 3장 「FreeHud 표시 규칙」).
 // 왼쪽 최근 타격(패드·손·세기), 오른쪽 세션 통계(타격 수·평균 세기). 타격 구독은 페이지가 맡는다
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 
 interface Props {
   /** 최근 타격 패드. 타격 전이면 undefined */

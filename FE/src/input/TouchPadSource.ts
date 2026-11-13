@@ -1,7 +1,7 @@
 // MODE-002 화면 터치 입력. 드럼 킷의 패드를 누르면 어느 패드인지를 실은 타격 이벤트를 낸다(설계 3-3).
 // 키보드처럼 항상 켜진 보조 소스이고 센서가 아니다(isSensorSource). 판정은 자세 매퍼가 이벤트의 pad를 그대로 쓴다.
 import type { StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { BaseInputSource } from './InputSource';
 
 /** 터치 타격 세기 고정값(U4). 손가락으로는 세기를 알 수 없다 */

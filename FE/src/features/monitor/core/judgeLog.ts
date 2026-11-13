@@ -2,8 +2,8 @@
 // 타이머는 만들지 않는다 — stats() 호출 주기는 화면이 정한다. packetLog 행은 호출 때 넘겨받는다(HIT 패킷의 펌웨어 pad 대조용).
 import type { DiagEvent, DiagSessionSummary } from '@/engine/diagTap';
 import type { HitJudgedBy, ResolvedHit } from '@/domain/events';
-import { JUDGEMENT_SCORE, type Judgement, type TimingWindows } from '@/domain/judgement';
-import type { PadId } from '@/domain/pads';
+import { JUDGEMENT_SCORE, type Judgement, type TimingWindows } from '@/domain/play/judgement';
+import type { PadId } from '@/domain/kit/pads';
 import type { LogRow } from './packetLog';
 import { median } from './syncTrend';
 

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { SongDeleteDialog } from './SongDeleteDialog';
 
 // 악보 재연결 스위치 켜짐(BE 회신 3 이후): 곡을 지워도 연결된 악보는 남는다 (D18)

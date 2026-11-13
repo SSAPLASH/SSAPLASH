@@ -1,9 +1,9 @@
 // 플레이 기록 행에 보일 값(설계 COACH-연주-기록-화면-개편 1·4). 서버 기록과 아직 서버에 없는 이 브라우저의 기록을 같은 모양으로 만든다.
 // 화면(PlayLogRow)은 이 값만 그리고, 어디서 온 기록인지 따지지 않는다.
 import type { PlaySummary } from '@/api/plays';
-import type { Difficulty } from '@/domain/chart';
+import type { Difficulty } from '@/domain/song/chart';
 import { historyRowLevel, historyRowLink, saveStatusOf, type HistoryRowLink, type SaveStatus } from '@/domain/play/playLogView';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
 /** 제목 옆 칩. ABORTED 끝까지 치지 않음 · DELETED 삭제된 곡(로컬 판정) · UNAVAILABLE 접근할 수 없는 곡(서버 판정) */
 export type PlayRowChip = 'ABORTED' | 'DELETED' | 'UNAVAILABLE';

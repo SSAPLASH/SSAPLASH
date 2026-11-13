@@ -8,8 +8,8 @@ import { fetchRecommendations, postRecommendationClick } from '@/api/recommendat
 import { fetchSimilarSongs } from '@/api/similarSongs';
 import { loadAllReportNotes, prefetchReport, refreshReport } from '@/runtime/playSync';
 import type { RecommendationItem } from '@/domain/account/recommendation';
-import type { Report } from '@/domain/report';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { Report } from '@/domain/play/report';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { useAuth } from '@/store/authStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';

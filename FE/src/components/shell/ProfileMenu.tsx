@@ -2,7 +2,7 @@
 // 아바타 버튼 → 닉네임·제공자·로그아웃 메뉴. 설정은 사이드바 하단에서 간다(QA 352).
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { SocialProvider } from '@/domain/auth';
+import type { SocialProvider } from '@/domain/account/auth';
 import { Menu } from '@/components/ui/Menu';
 import { useAuth } from '@/store/authStore';
 

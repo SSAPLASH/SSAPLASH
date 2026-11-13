@@ -1,7 +1,7 @@
 // 연주 중 LLM 구간 사실의 스틱 끝 방향(aim) 기준. 키트 판정과 같은 손별 패드 기준 자세·반경을 쓴다
 // (설계 COACH-001 각도·실측평가 3.2). 판마다 연주 시작 때 한 번 읽는다.
 import type { AimSource } from '@/coach/live';
-import type { YawDriftStatus } from '@/domain/calibration';
+import type { YawDriftStatus } from '@/domain/kit/calibration';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 

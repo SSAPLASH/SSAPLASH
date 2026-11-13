@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
 import { getRecommendationConsent, postSignupConsent, putRecommendationConsent } from './users';
-import type { UserMe } from '@/domain/auth';
-import { currentConsentVersions } from '@/domain/signupTerms';
+import type { UserMe } from '@/domain/account/auth';
+import { currentConsentVersions } from '@/domain/account/signupTerms';
 
 const ME: UserMe = {
   id: 7,

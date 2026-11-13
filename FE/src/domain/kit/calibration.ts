@@ -2,7 +2,7 @@
 // 패드마다 "중심 자세(앵커)"를 잡고, 경계는 앵커 간 거리로 자동 계산한다.
 // 거리·평균은 방향 벡터(단위 벡터)로 계산해 방위각 ±180° 끊김이 없고 펌웨어 판정과 같은 기준이다(PLAY-004 D3).
 import type { PadId } from './pads';
-import type { Pose, SensorId, StickId } from './events';
+import type { Pose, SensorId, StickId } from '@/domain/events';
 import { DEFAULT_SENSOR_TUNING } from './tuning';
 
 /** 스틱에 보낸 패드 표의 적용 상태. 입력 계층(padTableSync)이 만들고 store가 보관한다 */

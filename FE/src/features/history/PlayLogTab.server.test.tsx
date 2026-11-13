@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listPlays, type PlaySummary } from '@/api/plays';
 import type { PageResponse } from '@/api/recordings';
-import type { PlayUploadState } from '@/domain/playLog';
+import type { PlayUploadState } from '@/domain/play/playLog';
 import { setPlayLogOwner } from '@/engine/playLog';
 import { queryClient } from '@/runtime/queryClient';
 import { startPlaySync, usePlaySync } from '@/runtime/playSync';

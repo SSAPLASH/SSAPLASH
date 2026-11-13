@@ -2,8 +2,8 @@
 // 각각 keyMap / 캘리브레이션 프로필만으로 패드를 정하는지 확인한다.
 import { describe, expect, it } from 'vitest';
 import { mapHit, mapHitByKey, mapHitByPose, mapperFor } from './padMapper';
-import { KEY_MAP } from '@/domain/keyMap';
-import { angleBetween, computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/calibration';
+import { KEY_MAP } from '@/domain/kit/keyMap';
+import { angleBetween, computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration';
 import type { StickHitEvent } from '@/domain/events';
 
 function hit(partial: Partial<StickHitEvent> = {}): StickHitEvent {

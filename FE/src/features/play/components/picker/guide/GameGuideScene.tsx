@@ -5,10 +5,10 @@
 import { memo, useId, useMemo, useState, type CSSProperties } from 'react';
 import { NeonPad } from '@/components/drum/NeonPad';
 import { highwayLayout, laneLeft } from '@/features/play/components/stage/highwayGeometry';
-import { DRUM_KIT_FLAT_PADS, visualPadOf, type PadVisualState } from '@/domain/drumKit';
+import { DRUM_KIT_FLAT_PADS, visualPadOf, type PadVisualState } from '@/domain/kit/drumKit';
 import { EXAMPLE_STEPS, GAME_GUIDE_OPTIONS, type GuideState } from '@/features/play/domain/guideScript';
 import { HIGHWAY_LANES, LANE_COLOR, laneColorOf, laneGroupOf, type LaneGroup } from '@/features/play/domain/highwayLanes';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import '@/components/drum/drum.css';
 import './guide.css';
 

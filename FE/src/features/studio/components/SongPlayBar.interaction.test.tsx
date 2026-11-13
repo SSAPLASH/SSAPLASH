@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { accompanimentBarView, type AccompanimentBarView } from '@/domain/song/freeAccompaniment';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import type { SongPlayback } from '@/features/studio/domain/songPlayback';
 import { MySongCard } from './MySongCard';
 import { MySongList } from './MySongList';

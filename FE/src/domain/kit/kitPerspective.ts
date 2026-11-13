@@ -1,13 +1,13 @@
 // 드럼 배치 원근 보기의 좌표 계산(PLAY-004 원근 보기 설계). DOM·캔버스를 모른다.
 // 저장 값(배치 x·y, 손별 앵커)은 그대로 두고, 그릴 때만 배치 좌표를 3D 점(몸 기준 미터: x 오른쪽·y 앞·z 위)으로 바꿔 투영한다.
 // 스틱은 방향만 알고 거리를 모르므로 거리는 3D 모델(kitModel.PAD_POINTS)의 패드별 값을 가정값으로 쓴다.
-import { poseToVec } from '../calibration';
+import { poseToVec } from './calibration';
 import type { Pose, StickId } from '../events';
-import { radiusBasisOf, type FigBox, type KitLayout, type PadPlacement } from '../kitLayout';
+import { radiusBasisOf, type FigBox, type KitLayout, type PadPlacement } from './kitLayout';
 import { DEFAULT_ANGLE_RANGE, screenToPose, type AngleRange } from './kitMapping';
 import { HIHAT_PEDAL_FIT } from './kitArt';
 import { HAND_ORIGINS, PAD_POINTS, type Point3 } from './kitModel';
-import { LANE_PADS, type PadId } from '../pads';
+import { LANE_PADS, type PadId } from './pads';
 
 /** 내려다보는 각도(도) */
 export const VIEW_PITCH_DEG = 50;

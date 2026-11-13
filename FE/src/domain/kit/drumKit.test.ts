@@ -18,7 +18,7 @@ import {
   labelFontSize,
   visualPadOf,
 } from './drumKit';
-import { KIT_ART_PERSP, KIT_ART_TOP, kitArtPad } from './kit/kitArt';
+import { KIT_ART_PERSP, KIT_ART_TOP, kitArtPad } from './kitArt';
 import { PAD_META } from './pads';
 
 describe('DRUM_KIT_PADS (실물 스킨 고정 배치)', () => {

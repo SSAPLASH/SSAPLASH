@@ -7,12 +7,12 @@ import { readFxColors } from '@/components/fx/judgeColors';
 import { JUDGE_COLORS_FALLBACK } from '@/domain/hitFx/judgeFx';
 import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import { highwayLayout, laneCenterX, laneLeft, locateHighway, noteY } from './highwayGeometry';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { HIGHWAY_LANES, laneColorOf } from '@/features/play/domain/highwayLanes';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { barTimeMs, beatAtMs } from '@/domain/time/tempo';
-import type { Judgement } from '@/domain/judgement';
-import type { KeyMap } from '@/domain/keyMap';
+import type { Judgement } from '@/domain/play/judgement';
+import type { KeyMap } from '@/domain/kit/keyMap';
 import { MAX_POPUPS, POPUP_LIFE_MS, popupLook } from '@/features/play/components/pause/popupLook';
 import './NoteHighway.css';
 

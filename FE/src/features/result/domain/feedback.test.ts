@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from './feedback';
-import type { Chart } from '@/domain/chart';
-import type { Judgement } from '@/domain/judgement';
-import type { PadId } from '@/domain/pads';
-import type { PlayLog } from '@/domain/playLog';
+import type { Chart } from '@/domain/song/chart';
+import type { Judgement } from '@/domain/play/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { PlayLog } from '@/domain/play/playLog';
 
 // bpm 120 → 마디 2000ms
 const chart: Chart = {

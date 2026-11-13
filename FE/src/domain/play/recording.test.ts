@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ResolvedHit } from './events';
-import type { LoggedHit } from '@/domain/playLog';
+import type { ResolvedHit } from '@/domain/events';
+import type { LoggedHit } from './playLog';
 import {
   MAX_RECORDING_HITS,
   buildRecordingBody,

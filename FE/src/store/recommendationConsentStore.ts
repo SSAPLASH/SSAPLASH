@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
 import type { RecommendationConsent } from '@/domain/account/recommendationConsent';
-import { recommendationVersion } from '@/domain/signupTerms';
+import { recommendationVersion } from '@/domain/account/signupTerms';
 
 export type RecommendationConsentStatus = 'idle' | 'loading' | 'ready' | 'error';
 

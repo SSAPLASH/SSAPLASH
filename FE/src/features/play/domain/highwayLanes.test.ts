@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HIGHWAY_LANES, LANE_COLOR, laneColorOf, laneGroupOf } from './highwayLanes';
-import { ALL_PADS } from '@/domain/pads';
+import { ALL_PADS } from '@/domain/kit/pads';
 
 describe('HIGHWAY_LANES', () => {
   it('드럼 배치 순이고 하이햇 페달만 맨 왼쪽(MODE 2차 U1)', () => {
@@ -21,7 +21,7 @@ describe('HIGHWAY_LANES', () => {
     expect(new Set(HIGHWAY_LANES).size).toBe(HIGHWAY_LANES.length);
   });
 
-  it('domain/pads의 패드 집합과 일치한다', () => {
+  it('domain/kit/pads의 패드 집합과 일치한다', () => {
     expect([...HIGHWAY_LANES].sort()).toEqual([...ALL_PADS].sort());
   });
 });

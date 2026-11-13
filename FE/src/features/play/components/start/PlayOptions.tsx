@@ -4,7 +4,7 @@
 import { RECORDING_ENABLED } from '@/config/features';
 import { toggleArm, useRecordingStore } from '@/runtime/recordingStore';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { accompanimentOptionText, type AccompanimentStatus } from '@/domain/songCatalog';
+import { accompanimentOptionText, type AccompanimentStatus } from '@/domain/song/songCatalog';
 import './play-options.css';
 
 export type PlayOptionRow = 'metronome' | 'padCount' | 'accompaniment' | 'recording';

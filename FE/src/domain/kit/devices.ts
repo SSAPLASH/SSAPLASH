@@ -1,5 +1,5 @@
 // 기기(왼손·오른손 스틱, 페달) 이름과 연결 상태 문구의 단일 출처(UX-device-naming-unify E1~E7).
-// 화면은 기기 이름·상태 단어를 따로 적지 않고 여기서 가져온다. 연결 판정은 domain/pedalStatus가 맡는다.
+// 화면은 기기 이름·상태 단어를 따로 적지 않고 여기서 가져온다. 연결 판정은 domain/kit/pedalStatus가 맡는다.
 
 export type DeviceId = 'LEFT' | 'RIGHT' | 'PEDAL';
 

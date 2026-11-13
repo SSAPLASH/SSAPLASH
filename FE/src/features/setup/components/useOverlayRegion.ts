@@ -8,7 +8,7 @@
 // 재지 못하면(jsdom·SSR·ResizeObserver 없음) region은 고정 비율 OVERLAY_REGION, figSize는 null, bannerPos는 CSS 기본 자리(가운데, 아래 여백)다.
 // 행의 높이 맞춤(useStageFit)도 여기서 함께 건다: 행 ref 하나로 두 가지를 맡는다.
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
-import { OVERLAY_REGION } from '@/domain/kitLayout';
+import { OVERLAY_REGION } from '@/domain/kit/kitLayout';
 import { useStageFit } from './useStageFit';
 
 /** 판 안쪽 여백(px). setup.css의 .setup-stage-panel padding과 같아야 한다 */

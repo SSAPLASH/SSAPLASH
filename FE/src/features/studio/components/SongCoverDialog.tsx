@@ -2,7 +2,7 @@
 // 저장을 눌러야 onSave로 넘긴다(여기서는 요청하지 않는다).
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/Button';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { COVER_ACCEPT, COVER_PRECHECK_TEXT, precheckCover, type CoverChange } from '@/domain/song/songCover';
 import { makeCoverBlob } from '@/media/coverImage';
 import { EditDialog } from './EditDialog';

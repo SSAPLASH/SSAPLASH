@@ -1,5 +1,5 @@
 // water 테마 — 드럼: 동심원 파문 2~3겹 + 튀었다 떨어지는 물방울(중력), 심벌: 가는 물보라, 킥: 큰 파문 + 낮은 물결. 일반 합성.
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { MAX_LIFE_MS, particle } from './util';
 

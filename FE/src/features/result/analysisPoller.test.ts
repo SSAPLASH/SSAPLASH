@@ -1,6 +1,6 @@
 // PENDING 재조회 타이머 (COACH-003 4-1): 간격·횟수·즉시 중단·실패 소모·정리
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AnalysisStatus, Report } from '@/domain/report';
+import type { AnalysisStatus, Report } from '@/domain/play/report';
 import { createAnalysisPoller } from './analysisPoller';
 
 const rep = (analysisStatus: AnalysisStatus) => ({ analysisStatus }) as Report;

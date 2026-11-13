@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
 import { useSongs } from '@/store/songStore';

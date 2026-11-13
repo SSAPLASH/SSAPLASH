@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 import type { ResolvedHit } from '@/domain/events';
 import { RhythmSession } from './RhythmSession';
 import { PlayRecorder } from './playRecorder';

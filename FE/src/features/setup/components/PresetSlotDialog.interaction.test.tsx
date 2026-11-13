@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PresetSlotDialog } from './PresetSlotDialog';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import type { KitPreset } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import type { KitPreset } from '@/domain/kit/preset';
 
 const preset = (id: string, name: string): KitPreset => ({
   id,

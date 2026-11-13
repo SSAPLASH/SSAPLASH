@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LocalPresetSource } from './localPresetSource';
 import { useSettings } from './settingsStore';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
-import { MAX_PRESETS, type PresetDraft } from '@/domain/preset';
+import { MAX_PRESETS, type PresetDraft } from '@/domain/kit/preset';
 
 const src = new LocalPresetSource();
 const draft = (name: string, over: Partial<PresetDraft> = {}): PresetDraft => ({

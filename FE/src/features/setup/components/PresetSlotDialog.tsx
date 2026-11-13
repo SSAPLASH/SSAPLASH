@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { PRESET_SLOTS, SYSTEM_PRESET_ID, isSystemPreset, type KitPreset } from '@/domain/preset';
+import { PRESET_SLOTS, SYSTEM_PRESET_ID, isSystemPreset, type KitPreset } from '@/domain/kit/preset';
 import './setup.css';
 
 interface Props {

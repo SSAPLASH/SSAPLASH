@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CalibrationProfile, PadAnchor } from '@/domain/calibration';
-import type { PadId } from '@/domain/pads';
+import type { CalibrationProfile, PadAnchor } from '@/domain/kit/calibration';
+import type { PadId } from '@/domain/kit/pads';
 import type { DecodedHit } from '@/input/stickProtocol';
 import { agreeRate, edgeDeg, edgeTone, hitPose, insideRate } from './boundary';
 import type { LogRow } from './packetLog';

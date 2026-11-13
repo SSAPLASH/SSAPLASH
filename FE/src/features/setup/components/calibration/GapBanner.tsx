@@ -5,9 +5,9 @@
 // 표시용 값과 콜백만 받는다: 계산은 엔진·도메인, 문구는 calibrationText가 한다.
 import { Button } from '@/components/ui/Button';
 import type { GapWarning } from '@/engine/HitCapture';
-import type { PadGap } from '@/domain/calibration';
+import type { PadGap } from '@/domain/kit/calibration';
 import type { StickId } from '@/domain/events';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { gapAdviceText, gapWarningText, overlapBannerText, RESULT_BANNER_ADVICE_TEXT } from '@/components/calibration/calibrationText';
 
 export type GapBannerProps =

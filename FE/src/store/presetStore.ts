@@ -1,6 +1,6 @@
 // 프리셋 목록·저장 흐름 상태. 저장소는 PresetSource 뒤(기본 로컬). 영속하지 않는다(값의 주인은 소스).
 import { create } from 'zustand';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import {
   PresetError,
   SYSTEM_PRESET_ID,
@@ -12,7 +12,7 @@ import {
   type KitPreset,
   type PresetErrorCode,
   type PresetSource,
-} from '@/domain/preset';
+} from '@/domain/kit/preset';
 import { LocalPresetSource } from './localPresetSource';
 import { useSettings } from './settingsStore';
 

@@ -5,7 +5,7 @@ import { deleteRecording } from '@/api/recordings';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
-import type { RecordingSummary } from '@/domain/recording';
+import type { RecordingSummary } from '@/domain/play/recording';
 import { classifyMutationError, runWithRetry } from './recordingMutation';
 import './recording-list.css';
 

@@ -1,7 +1,7 @@
 // 입력 소스 디스크립터 타입. 구현 없음 — 각 소스 파일이 자기 디스크립터를 만들어 export하고,
 // 조립 층(app/sensors.ts)이 레지스트리에 등록한다. 화면·bootstrap은 소스 종류 대신 이 타입만 읽는다.
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
-import type { SensorTuning } from '@/domain/tuning';
+import type { SensorTuning } from '@/domain/kit/tuning';
 import type { InputSource } from './InputSource';
 
 /** 설정 항목 하나의 스키마. 세팅 화면이 이걸 보고 입력 컨트롤을 그린다 */

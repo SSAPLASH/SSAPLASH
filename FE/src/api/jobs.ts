@@ -1,5 +1,5 @@
 // 채보 작업 상태 조회. 서버의 스냅샷 ID와 revision은 안전한 정수여야 한다.
-import { toSafeId } from '@/domain/songCatalog';
+import { toSafeId } from '@/domain/song/songCatalog';
 import { apiFetch } from './http';
 
 export interface JobSnapshot {

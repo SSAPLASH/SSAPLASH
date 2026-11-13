@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { timingHistogram } from './timingHistogram';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
 type In = Pick<PlayLog, 'timing' | 'notes'>;
 

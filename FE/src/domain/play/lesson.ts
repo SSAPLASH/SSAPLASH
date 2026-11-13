@@ -1,10 +1,10 @@
 // 입문 코스 (SETUP, Jira 331, 설계 SETUP-입문-코스). BE `GET /api/v1/lessons` 응답 검증과 스테이지 상태·다음 레슨·통과 판정(순수 함수).
 // 잠금은 화면 안내다: 서버 진도에 이번 접속에서 통과한 레슨을 더해 다시 계산한다(업로드가 늦어도 다음 스테이지가 열려 있게).
-import { PAD_META, type PadId } from '../pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { accuracyPercent } from './playUpload';
 import { stickConnectionRequired } from '../kit/dockChip';
-import { DEVICE_META, deviceGroupName } from '../devices';
-import { pedalConnected, pedalRequired } from '../pedalStatus';
+import { DEVICE_META, deviceGroupName } from '@/domain/kit/devices';
+import { pedalConnected, pedalRequired } from '@/domain/kit/pedalStatus';
 
 export type LessonKind = 'READ' | 'PLAY';
 

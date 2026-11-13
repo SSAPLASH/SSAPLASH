@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import type { UserMe } from '@/domain/auth';
-import { SIGNUP_TERMS } from '@/domain/signupTerms';
+import type { UserMe } from '@/domain/account/auth';
+import { SIGNUP_TERMS } from '@/domain/account/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { LandingPage } from './LandingPage';
 

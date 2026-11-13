@@ -1,7 +1,7 @@
 // 타이밍 오차 막대 상태(설계 3-5, D8) — 순수 함수. 그리기·시계는 모른다.
 // 판정(PERFECT·GOOD)마다 눈금 하나를 쌓고, 시각에서 눈금 목록(위치 −1~1·투명도)과 최근 평균 위치를 계산한다.
 // 판정 범위 밖 타격(MISS)은 막대 양옆 MISS 구간에 눈금으로 따로 낸다(설계 MODE-001-lead-in-bars D19). 평균에는 넣지 않는다.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 
 /** 보관하는 눈금 최대 수 */
 export const TIMING_BAR_MAX = 20;

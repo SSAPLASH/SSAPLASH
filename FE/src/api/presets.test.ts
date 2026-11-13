@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerPresetSource, toKitPreset, toPresetError } from './presets';
 import { resetForTest } from './auth';
 import { ApiError } from './http';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { PRESET_SCHEMA_VERSION, PresetError, type PresetDraft } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { PRESET_SCHEMA_VERSION, PresetError, type PresetDraft } from '@/domain/kit/preset';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
 

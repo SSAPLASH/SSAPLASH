@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRecording, listRecordings } from '@/api/recordings';
-import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
+import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
 import { recordingRowLabel } from '@/domain/play/recordingView';
 import { queryClient } from '@/runtime/queryClient';
 import { RecordingList } from './RecordingList';

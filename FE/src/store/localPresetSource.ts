@@ -8,7 +8,7 @@ import {
   type KitPreset,
   type PresetDraft,
   type PresetSource,
-} from '@/domain/preset';
+} from '@/domain/kit/preset';
 import { useSettings } from './settingsStore';
 
 function read(): KitPreset[] {

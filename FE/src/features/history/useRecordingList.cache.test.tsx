@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listRecordings, type PageResponse } from '@/api/recordings';
 import { recordingKeys } from '@/api/queries/recordings';
 import { queryClient } from '@/runtime/queryClient';
-import type { RecordingSummary } from '@/domain/recording';
+import type { RecordingSummary } from '@/domain/play/recording';
 import { useRecordingList } from './useRecordingList';
 
 vi.mock('@/api/recordings', () => ({ listRecordings: vi.fn() }));

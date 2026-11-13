@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { MySongCard } from './MySongCard';
 import { MySongRow } from './MySongRow';
 import { SongDeleteDialog } from './SongDeleteDialog';

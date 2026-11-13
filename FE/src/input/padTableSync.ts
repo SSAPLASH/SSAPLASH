@@ -1,9 +1,9 @@
 // 패드 테이블 동기화(손별, PLAY-004). 손마다 다른 판정 프로필의 앵커를 그 손에만 SET_PAD_TABLE로 보내고,
 // PARAM_ACK_PAD_TABLE(적용 후 패드 개수)로 손별 적용을 확인한다. 보정 시작 때는 지우기 전용 패킷으로 표를 비운다(D6).
 // 센서가 연결된 동안만 동작한다. input → store 직접 import는 금지라 상태는 onStatus 콜백으로 밖에 알린다(bootstrap이 liveStore에 연결).
-import type { CalibrationProfile, PadTableStatus } from '@/domain/calibration';
+import type { CalibrationProfile, PadTableStatus } from '@/domain/kit/calibration';
 import type { StickId } from '@/domain/events';
-import { STICK_PADS } from '@/domain/pads';
+import { STICK_PADS } from '@/domain/kit/pads';
 import type { InputSource } from './InputSource';
 import { packetTap } from './packetTap';
 import { decodePacket, encodeSetPadTable, PARAM_ACK_PAD_TABLE, type PadTableEntry } from './stickProtocol';

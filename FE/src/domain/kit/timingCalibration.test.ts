@@ -19,7 +19,7 @@ import {
   type TimingCalTap,
 } from './timingCalibration';
 import { RhythmSession } from '@/engine/RhythmSession';
-import type { Chart } from '../chart';
+import type { Chart } from '@/domain/song/chart';
 import type { ResolvedHit } from '../events';
 
 const BEAT = timingCalBeatMs();

@@ -9,10 +9,10 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { CAPTURE_ORDER } from '@/engine/HitCapture';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { SYSTEM_PRESET_ID } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { SYSTEM_PRESET_ID } from '@/domain/kit/preset';
 import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** BLE형 모의 소스: 보낸 명령과 resetPose 호출을 기록한다 */
 class MockSource extends BaseInputSource {

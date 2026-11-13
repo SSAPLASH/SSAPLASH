@@ -3,9 +3,9 @@ import { create } from 'zustand';
 import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
 import { ApiError } from '@/api/http';
 import { fetchMe, postSignupConsent, withdrawMe } from '@/api/users';
-import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
+import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/account/auth';
 import { ACTIVE_JOB_KEY } from '@/domain/song/chartJob';
-import type { ConsentVersions } from '@/domain/signupTerms';
+import type { ConsentVersions } from '@/domain/account/signupTerms';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { lessonDisplayTitle, lessonPath, stageStates, stageWord } from '@/domain/play/lesson';
-import type { PadVisualState } from '@/domain/drumKit';
-import type { PadId } from '@/domain/pads';
+import type { PadVisualState } from '@/domain/kit/drumKit';
+import type { PadId } from '@/domain/kit/pads';
 import { useLessons } from '@/store/lessonStore';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';

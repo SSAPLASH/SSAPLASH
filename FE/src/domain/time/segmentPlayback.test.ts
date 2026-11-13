@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ReportNote } from '../report';
+import type { ReportNote } from '@/domain/play/report';
 import { SEGMENT_NOTE_VELOCITY, planSegment } from './segmentPlayback';
 
 function note(timeMs: number, pad: ReportNote['pad'] = 'KICK', judgement: ReportNote['judgement'] = 'PERFECT'): ReportNote {

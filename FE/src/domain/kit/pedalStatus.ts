@@ -1,6 +1,6 @@
 // 페달 연결 판정·표시 문구 순수 함수(스토어를 모른다). 손 쪽은 domain/kit/stickStatus가 맡고, 페달 조각은 여기서 따로 만들어 컴포넌트가 나란히 쓴다.
 import { CONNECTED_TEXT, DEVICE_META, DISCONNECTED_TEXT } from './devices';
-import type { SetupDongleState } from './kit/setupSteps';
+import type { SetupDongleState } from './setupSteps';
 
 /** 페달 보드가 필요한 두 발(하이햇·킥)이 모두 붙었는지. 준비 조건·재연결 settle·일시정지가 쓰는 한 식 */
 export function pedalConnected(pedal: { connected: readonly [boolean, boolean] }): boolean {

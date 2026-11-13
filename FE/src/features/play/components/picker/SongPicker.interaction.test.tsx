@@ -6,14 +6,14 @@ import { fetchRecommendations, postRecommendationClick } from '@/api/recommendat
 import { fetchSimilarSongs } from '@/api/similarSongs';
 import { getSong, listSongs } from '@/api/songs';
 import type { RecommendationItem } from '@/domain/account/recommendation';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { useAuth } from '@/store/authStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { SongPicker } from './SongPicker';
 import { getBestRecords } from '@/api/plays';
 import { queryClient } from '@/runtime/queryClient';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 
 vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
