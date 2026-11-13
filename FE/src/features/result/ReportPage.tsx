@@ -16,7 +16,7 @@ import { NoteFlowChart } from '@/features/result/components/report/NoteFlowChart
 import { AnalysisNotice, ObservationList, PadTable, StatsLine, type ObservationRow, type PollingState } from '@/features/result/components/report/ReportSections';
 import { TimingHistogram } from '@/features/result/components/report/TimingHistogram';
 import { useSegmentPlayer } from '@/features/result/components/report/useSegmentPlayer';
-import { RecommendRow } from '@/components/song/RecommendRow';
+import { RecommendRow } from '@/features/result/components/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { recommendationPathOf } from '@/domain/song/recommendation';
 import {
@@ -38,7 +38,7 @@ import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import '@/features/result/components/report/report.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 type Load<T> = { s: 'loading' } | { s: 'ok'; v: T } | { s: 'error'; e: unknown };
 

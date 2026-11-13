@@ -1,8 +1,8 @@
 // ② 센서: 스틱이 무엇을 보냈는가. 지표 줄(M) + HIT 표(M, 항상 보임) + POSE·SWING·세기 산점(N, 접힘).
-import type { CalibrationProfile } from '@/domain/kit/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { AngleRange } from '@/domain/kit/kitMapping';
 import type { StageHealth } from '@/features/monitor/core/health';
-import type { PedalStats } from '@/features/monitor/core/packetLog';
+import type { PedalStats } from '@/features/monitor/core/recording/packetLog';
 import type { SwingAssembler } from '@/features/monitor/core/swingAssembler';
 import { HitTable } from '@/features/monitor/HitTable';
 import { Fold } from '@/features/monitor/layout/Fold';

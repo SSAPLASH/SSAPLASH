@@ -1,6 +1,6 @@
 // 명령 바. 명령 인코더로 바이트를 만들어 페이지가 준 send로 보낸다. 적용 확인은 ParamStore가 쌓은 줄을 보여 준다.
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { CalibrationProfile } from '@/domain/kit/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import {
   encodeHaptic,
   encodeResetPose,

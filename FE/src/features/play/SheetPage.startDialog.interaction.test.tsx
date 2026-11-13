@@ -30,7 +30,7 @@ vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboard
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
-vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/sheet/SheetPager', () => ({ SheetPager: () => null }));
 // 안내 애니메이션의 rAF 갱신이 라우터 전환 렌더를 굶기지 않게 막는다
 vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));

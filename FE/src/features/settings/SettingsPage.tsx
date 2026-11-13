@@ -4,20 +4,20 @@
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { KitSkinCarousel } from '@/components/fx/KitSkinCarousel';
-import { HitFxPicker } from '@/components/fx/HitFxPicker';
+import { KitSkinCarousel } from '@/features/settings/components/KitSkinCarousel';
+import { HitFxPicker } from '@/features/settings/components/HitFxPicker';
 import { SettingRow } from './SettingRow';
-import { WithdrawDialog } from '@/components/shell/WithdrawDialog';
-import { useShell } from '@/components/shell/useShell';
-import { Button } from '@/components/ui/Button';
-import { Slider } from '@/components/ui/Slider';
-import { Toast, type ToastVariant } from '@/components/ui/Toast';
-import { Toggle } from '@/components/ui/Toggle';
-import { Dialog } from '@/components/ui/Dialog';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { WithdrawDialog } from '@/features/settings/components/WithdrawDialog';
+import { useShell } from '@/components/shell/nav/useShell';
+import { Button } from '@/components/ui/action/Button';
+import { Slider } from '@/components/ui/form/Slider';
+import { Toast, type ToastVariant } from '@/components/ui/feedback/Toast';
+import { Toggle } from '@/components/ui/form/Toggle';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { outputLatencyWarnText, timingCalMismatchText, timingCalRecordText, timingOffsetText } from '@/components/calibration/timingCalText';
-import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/timingCalibration';
+import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/calibration/timingCalibration';
 import { audioEngine } from '@/audio/AudioEngine';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/account/signupTerms';
 import type { SocialProvider } from '@/domain/account/auth';
@@ -26,7 +26,7 @@ import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
 import './settings.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 const PROVIDER_LABEL: Record<SocialProvider, string> = {
   GOOGLE: 'Google',

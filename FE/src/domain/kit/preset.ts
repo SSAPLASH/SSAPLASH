@@ -1,6 +1,6 @@
 // 키트 프리셋 도메인: 타입·상수·이름 검증·변경 여부 판정. 저장소(로컬/서버)는 PresetSource 뒤에 둔다.
 // 시스템 기본(SYSTEM_PRESET_ID)은 목록에 없는 예약 프리셋이다(UX-64 D1): 고정 배치 + 3D 모델 기본 앵커, 편집 불가.
-import type { HandAnchors } from './calibration';
+import type { HandAnchors } from './calibration/calibration';
 import type { KitLayout } from './kitLayout';
 import { ALL_PADS } from './pads';
 // 타입만 가져온다(런타임 의존 없음). 사운드 세트 id의 주인은 audio/soundSets

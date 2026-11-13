@@ -2,11 +2,11 @@
 // 행은 React.memo로 감싸 새 행만 렌더되게 한다. hex는 같은 행 오른쪽에 필드 경계로 묶어 보이고,
 // 필드 셀 ↔ 바이트 묶음 hover를 행 단위 state 하나로 서로 강조한다(M12).
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import type { CalibrationProfile } from '@/domain/kit/calibration';
-import { resolvePad } from '@/domain/kit/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { resolvePad } from '@/domain/kit/calibration/calibration';
 import { arrivalLevel, negate as neg } from '@/features/monitor/core/health';
 import { agreeRate, edgeDeg, edgeTone, hitPose, insideRate } from '@/features/monitor/core/boundary';
-import type { LogRow } from '@/features/monitor/core/packetLog';
+import type { LogRow } from '@/features/monitor/core/recording/packetLog';
 import { hexGroups, hexSpaced, type HitFieldKey } from './hitFields';
 import { cssVar, fmt, prepareCanvas, stickName, type Snap } from './monitorTypes';
 

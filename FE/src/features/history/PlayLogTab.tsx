@@ -8,13 +8,13 @@ import { localRowView, serverRowView, type PlayRowView } from './playLogRows';
 import { usePlayLogList } from './usePlayLogList';
 import './history.css';
 import { useDeletedSongIds } from '@/components/song/useDeletedSongIds';
-import { Button } from '@/components/ui/Button';
-import { buttonClassName } from '@/components/ui/buttonStyle';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { ErrorState } from '@/components/ui/ErrorState';
-import { InlineError } from '@/components/ui/InlineError';
-import { Input } from '@/components/ui/Input';
-import { Segmented } from '@/components/ui/Segmented';
+import { Button } from '@/components/ui/action/Button';
+import { buttonClassName } from '@/components/ui/action/buttonStyle';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
+import { ErrorState } from '@/components/ui/feedback/ErrorState';
+import { InlineError } from '@/components/ui/feedback/InlineError';
+import { Input } from '@/components/ui/form/Input';
+import { Segmented } from '@/components/ui/form/Segmented';
 import {
   filterPlayLogs,
   groupByDay,

@@ -2,7 +2,7 @@
 // 평균 타이밍 열은 ≤1024px에서 숨긴다(설계 1-1 #10).
 import { PAD_META } from '@/domain/kit/pads';
 import type { PadSummary } from '@/features/result/domain/feedback';
-import '@/components/ui/table.css';
+import '@/components/ui/layout/table.css';
 import './result.css';
 
 const fmtDelta = (ms: number | null) => (ms === null ? '—' : `${ms >= 0 ? '+' : '−'}${Math.abs(ms).toFixed(0)}ms`);

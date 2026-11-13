@@ -4,7 +4,7 @@ import { anchorsToLayout, anchorToPoint, defaultHandAnchorSet, defaultHandAnchor
 import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { poseToScreen } from './kitMapping';
 import { STICK_PADS } from './pads';
-import { DEFAULT_SENSOR_TUNING } from './tuning';
+import { DEFAULT_SENSOR_TUNING } from './calibration/tuning';
 
 describe('handPoseTo', () => {
   it('정면·같은 높이 점은 (0, 0), 오른쪽은 방위 +, 위는 고도 +', () => {

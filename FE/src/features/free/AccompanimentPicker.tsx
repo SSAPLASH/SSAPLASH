@@ -7,15 +7,15 @@ import { SongCover } from '@/components/song/SongCover';
 import { MOBILE_QUERY, useMediaQuery } from '@/components/shell/useMediaQuery';
 import { CloseIcon } from '@/components/song/StudioIcons';
 import { SongStatusBadge } from '@/components/song/SongStatusBadge';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { IconButton } from '@/components/ui/IconButton';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { IconButton } from '@/components/ui/action/IconButton';
+import { Input } from '@/components/ui/form/Input';
 import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/song/freeAccompaniment';
 import { artistLabel, type SongSummary } from '@/domain/song/songCatalog';
 import { useAccompanimentSongs, type AccompanimentSongsDeps, type SectionKey, type SongSection } from './useAccompanimentSongs';
 import './free.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 interface Props {
   /** 지금 반주로 고른 곡 id. 다시 누르면 처음부터 다시 틀지 않고 창만 닫는다 */

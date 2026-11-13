@@ -3,9 +3,9 @@
 // 따라보기 프로토콜은 설계 3-5-1. 채널 이름·메시지 모양은 app/monitorRelay와 같지만 import하지 않는다(의존 방향).
 import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import type { ResolvedHit } from '@/domain/events';
-import type { TransportStats } from '@/input/InputSource';
+import type { TransportStats } from '@/input/source/InputSource';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
-import { ReplayOffsets, ReplayPlayer, type ReplaySpeed, type Timeline } from './replay';
+import { ReplayOffsets, ReplayPlayer, type ReplaySpeed, type Timeline } from './recording/replay';
 
 export type FeedMode = 'direct' | 'follow' | 'replay';
 

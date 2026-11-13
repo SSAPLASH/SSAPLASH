@@ -2,7 +2,7 @@
 // 선택은 ② HIT 표 행·⑤ 판정 목록 행·이 목록에서 정해지고 사이드바 하단 카드로 고정된다.
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { hitIdLabel } from '@/features/monitor/core/feed';
-import type { JudgeLog } from '@/features/monitor/core/judgeLog';
+import type { JudgeLog } from '@/features/monitor/core/recording/judgeLog';
 import type { SwingAssembler } from '@/features/monitor/core/swingAssembler';
 import {
   entryMatches,
@@ -12,7 +12,7 @@ import {
   TRACE_STAGE_ORDER,
   type TraceCard,
   type TraceSelection,
-} from '@/features/monitor/core/traceIndex';
+} from '@/features/monitor/core/recording/traceIndex';
 import { SwingScope } from '@/features/monitor/SwingScope';
 import { fmt, stickName, type SendFn, type Snap } from '@/features/monitor/monitorTypes';
 

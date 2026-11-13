@@ -1,9 +1,9 @@
 // InputManager 통합 검증: 스틱 판정 우선·스틱 velocity·키보드·채보 후보 보정.
 import { describe, expect, it } from 'vitest';
 import { InputManager } from './InputManager';
-import { BaseInputSource } from './InputSource';
-import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration';
-import { accelToVelocity, DEFAULT_SENSOR_TUNING } from '@/domain/kit/tuning';
+import { BaseInputSource } from './source/InputSource';
+import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING } from '@/domain/kit/calibration/tuning';
 import { KEY_MAP } from '@/domain/kit/keyMap';
 import type { InputSourceKind, ResolvedHit, StickEvent, StickHitEvent } from '@/domain/events';
 import { packetTap } from './packetTap';

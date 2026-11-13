@@ -1,8 +1,8 @@
 // 드럼 세팅 단계 팝업 틀(PLAY-004 D8). ui/Dialog를 감싸 제목 줄·[닫기]·본문을 갖춘다.
 // 열림은 호출자가 마운트 여부로 정한다. 닫으면 useDialogFocus가 팝업을 열던 타일로 포커스를 돌린다.
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
 import './setup.css';
 
 interface Props {

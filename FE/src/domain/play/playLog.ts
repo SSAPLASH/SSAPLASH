@@ -1,5 +1,5 @@
 // 연주 기록(PlayLog)의 데이터 모양. 저장·조립은 engine/playLog, 이 모양을 읽는 계산은 domain이 한다.
-import type { HihatPedalCoverage } from '@/domain/kit/hihatPedalCoverage';
+import type { HihatPedalCoverage } from '@/domain/kit/device/hihatPedalCoverage';
 import type { Judgement, TimingWindows } from './judgement';
 import type { InputSourceKind } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';

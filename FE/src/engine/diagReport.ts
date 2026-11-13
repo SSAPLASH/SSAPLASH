@@ -3,7 +3,7 @@
 // 판정 경로는 바꾸지 않는다: 값을 읽어 내보내기만 한다.
 import type { ResolvedHit } from '@/domain/events';
 import type { TimingWindows } from '@/domain/play/judgement';
-import type { PadAnchor } from '@/domain/kit/calibration';
+import type { PadAnchor } from '@/domain/kit/calibration/calibration';
 import type { PadId } from '@/domain/kit/pads';
 import { diagTap, judgementToDiag, type DiagAnchor, type DiagBody } from './diagTap';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';

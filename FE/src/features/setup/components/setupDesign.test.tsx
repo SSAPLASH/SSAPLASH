@@ -5,7 +5,7 @@ import type { KitPreset } from '@/domain/kit/preset';
 import type { RecentHit } from '@/components/drum/useRecentHits';
 import { HitLog } from './HitLog';
 import { HIT_FLOAT_MIN_H_LEFT, HIT_FLOAT_MIN_W, HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText, hitLogPlacement } from './hitLogFormat';
-import { PresetNameDialog } from './PresetNameDialog';
+import { PresetNameDialog } from './preset/PresetNameDialog';
 import { ReturnBanner } from './ReturnBanner';
 import { StepCard } from './StepCard';
 

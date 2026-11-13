@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import type { PadId } from '@/domain/kit/pads';
 import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/time/metronome';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } from '@/domain/events';
 import type { CaptureSnapshot } from '@/engine/HitCapture';
 import type { RealignSnapshot } from '@/engine/SnareRealign';

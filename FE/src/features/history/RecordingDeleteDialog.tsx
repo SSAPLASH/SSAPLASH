@@ -2,9 +2,9 @@
 // 본문 첫 줄은 녹음 제목(16 Medium, 말줄임), 둘째 줄은 안내(14 text-2). 하단 [취소] secondary + [삭제] danger가 폭을 반씩 채운다.
 import { useEffect, useRef, useState } from 'react';
 import { deleteRecording } from '@/api/play/recordings';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { IconButton } from '@/components/ui/IconButton';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { IconButton } from '@/components/ui/action/IconButton';
 import type { RecordingSummary } from '@/domain/play/recording';
 import { classifyMutationError, runWithRetry } from './recordingMutation';
 import './recording-list.css';

@@ -1,7 +1,7 @@
 // 연주 중 세팅 안내가 떴던 판의 결과 화면 카드. 어디서 고치는지 바로 갈 수 있게 한다.
 import { Link } from 'react-router-dom';
-import { Card } from '@/components/ui/Card';
-import { buttonClassName } from '@/components/ui/buttonStyle';
+import { Card } from '@/components/ui/layout/Card';
+import { buttonClassName } from '@/components/ui/action/buttonStyle';
 
 interface Props {
   /** 이 판에서 뜬 세팅 안내 태그 */

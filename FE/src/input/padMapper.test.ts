@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapHit, mapHitByKey, mapHitByPose, mapperFor } from './padMapper';
 import { KEY_MAP } from '@/domain/kit/keyMap';
-import { angleBetween, computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration';
+import { angleBetween, computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { StickHitEvent } from '@/domain/events';
 
 function hit(partial: Partial<StickHitEvent> = {}): StickHitEvent {

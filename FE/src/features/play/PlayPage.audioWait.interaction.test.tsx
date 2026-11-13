@@ -41,7 +41,7 @@ vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue
 vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
-vi.mock('@/features/play/components/stage/NoteHighway', () => ({ NoteHighway: () => null }));
+vi.mock('@/features/play/components/stage/highway/NoteHighway', () => ({ NoteHighway: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
 vi.mock('@/audio/Accompaniment', () => {
   const load = vi.fn().mockResolvedValue(undefined);

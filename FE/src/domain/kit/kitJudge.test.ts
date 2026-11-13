@@ -5,8 +5,8 @@ import { defaultHandAnchors } from './kitModel';
 import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { DEFAULT_ANGLE_RANGE, poseToScreen, screenRadiusToDeg, radiusToScreen } from './kitMapping';
 import { STICK_PADS, type PadId } from './pads';
-import { DEFAULT_SENSOR_TUNING } from './tuning';
-import type { HandAnchorSet, PadAnchor } from './calibration';
+import { DEFAULT_SENSOR_TUNING } from './calibration/tuning';
+import type { HandAnchorSet, PadAnchor } from './calibration/calibration';
 
 const anchor = (pad: PadId, pitch: number, yaw: number): PadAnchor => ({ pad, pitch, yaw, radius: 0, samples: 2, spread: 1 });
 

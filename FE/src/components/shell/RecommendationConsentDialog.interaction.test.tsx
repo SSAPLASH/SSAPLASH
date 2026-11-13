@@ -33,11 +33,11 @@ vi.mock('@/api/account/users', () => ({
   withdrawMe: vi.fn(),
 }));
 // 이 테스트가 보는 것은 안내 모달뿐이다 — 셸의 무거운 자식은 비운다
-vi.mock('@/components/shell/Sidebar', () => ({ Sidebar: () => null }));
-vi.mock('@/components/shell/TopBar', () => ({ TopBar: () => null }));
-vi.mock('@/components/shell/GlassDock', () => ({ GlassDock: () => null }));
-vi.mock('@/components/shell/ProfileMenu', () => ({ ProfileMenu: () => null }));
-vi.mock('@/components/shell/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
+vi.mock('@/components/shell/nav/Sidebar', () => ({ Sidebar: () => null }));
+vi.mock('@/components/shell/nav/TopBar', () => ({ TopBar: () => null }));
+vi.mock('@/components/shell/dock/GlassDock', () => ({ GlassDock: () => null }));
+vi.mock('@/components/shell/account/ProfileMenu', () => ({ ProfileMenu: () => null }));
+vi.mock('@/components/shell/dock/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
 vi.mock('@/components/shell/useMediaQuery', () => ({ useSidebarCollapsed: () => false }));
 vi.mock('@/components/recording/SaveRecordingDialog', () => ({ SaveRecordingDialog: () => null }));
 vi.mock('@/components/recording/RecordingToast', () => ({ RecordingToast: () => null }));

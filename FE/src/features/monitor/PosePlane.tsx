@@ -3,12 +3,12 @@
 // 가로·세로 스케일이 다르면 원이 타원이 되므로, 두 축 모두 범위가 넓은 쪽 기준의 같은 px/°를 쓴다.
 // 그래서 정사각 캔버스의 보이는 범위는 ±max(yawDeg, pitchDeg)이고, 실제 입력 범위(±yawDeg × ±pitchDeg)는 점선 사각형으로 표시한다.
 import { memo, useEffect, useRef, useState } from 'react';
-import type { CalibrationProfile } from '@/domain/kit/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { AngleRange } from '@/domain/kit/kitMapping';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/kit/pads';
 import type { DecodedHit, PadTableEntry } from '@/input/stickProtocol';
 import { edgeDeg, edgeTone, hitPose, type EdgeResult } from '@/features/monitor/core/boundary';
-import type { LogRow } from '@/features/monitor/core/packetLog';
+import type { LogRow } from '@/features/monitor/core/recording/packetLog';
 import { cssVar, fmt, prepareCanvas, stickName, type Snap } from './monitorTypes';
 
 const GRID_DEG = 10;

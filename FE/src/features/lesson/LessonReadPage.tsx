@@ -17,15 +17,15 @@ import { useLessons } from '@/store/lessonStore';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { loadChart } from '@/store/songStore';
-import { useShell } from '@/components/shell/useShell';
-import { Dialog } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { useShell } from '@/components/shell/nav/useShell';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { ReadStaff } from '@/components/lesson/PadNotation';
 import '@/components/lesson/lesson.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 

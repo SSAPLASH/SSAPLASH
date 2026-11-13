@@ -6,10 +6,10 @@ import { DEFAULT_KIT_LAYOUT, type KitLayout } from './kitLayout';
 import type { PadId } from './pads';
 import { STICK_PADS } from './pads';
 import type { StickId } from '../events';
-import { computeBoundaries, meanPose, poseToVec, type HandAnchors, type HandAnchorSet, type PadAnchor } from './calibration';
+import { computeBoundaries, meanPose, poseToVec, type HandAnchors, type HandAnchorSet, type PadAnchor } from './calibration/calibration';
 import { DEFAULT_ANGLE_RANGE, poseToScreen, screenToPose, type AngleRange } from './kitMapping';
 import type { Pose } from '../events';
-import { DEFAULT_SENSOR_TUNING, type SensorTuning } from './tuning';
+import { DEFAULT_SENSOR_TUNING, type SensorTuning } from './calibration/tuning';
 
 /** 몸 기준 좌표(미터): x 오른쪽(+), y 앞(+), z 위(+). 원점은 앉은 사람의 가슴 */
 export type Point3 = readonly [number, number, number];

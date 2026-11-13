@@ -5,17 +5,17 @@
 // 기본 제목(`곡 제목 · M월 D일 HH:mm`) 그대로인 녹음은 곡 제목·시각이 두 번 나오지 않게 이름만 제목으로 보인다(recordingRowLabel).
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LevelBadge } from '@/components/song/LevelBadge';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Input } from '@/components/ui/Input';
-import { MoreMenu } from '@/components/ui/MoreMenu';
-import { Segmented } from '@/components/ui/Segmented';
-import { Toast, type ToastVariant } from '@/components/ui/Toast';
+import { Button } from '@/components/ui/action/Button';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
+import { Input } from '@/components/ui/form/Input';
+import { MoreMenu } from '@/components/ui/overlay/MoreMenu';
+import { Segmented } from '@/components/ui/form/Segmented';
+import { Toast, type ToastVariant } from '@/components/ui/feedback/Toast';
 import { ApiError } from '@/api/error';
 import { getRecording } from '@/api/play/recordings';
 import type { RecordingSort, RecordingSummary } from '@/domain/play/recording';
-import { midiFileName, recordingToMidi } from '@/domain/play/recordingMidi';
-import { downloadBlob } from '@/media/downloadFile';
+import { midiFileName, recordingToMidi } from '@/features/history/domain/recordingMidi';
+import { downloadBlob } from '@/features/history/media/downloadFile';
 import {
   formatHitCount,
   recordingCountLabel,
@@ -31,7 +31,7 @@ import { RecordingPlayBar, type RecordingPlayPhase } from './RecordingPlayBar';
 import { RecordingTitleDialog } from './RecordingTitleDialog';
 import { useRecordingList, type RecordingModeFilter } from './useRecordingList';
 import { useRecordingPlayback } from './useRecordingPlayback';
-import { ErrorState } from '@/components/ui/ErrorState';
+import { ErrorState } from '@/components/ui/feedback/ErrorState';
 
 const MODES: { value: RecordingModeFilter; label: string }[] = [
   { value: 'ALL', label: '전체' },

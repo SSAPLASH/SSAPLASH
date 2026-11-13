@@ -1,10 +1,10 @@
 // Figma StepHeader 236:1287 — 단계 카드 한 장: 번호/체크 원 32, 제목 + 상태 알약, 한 줄 요약, 오른쪽 텍스트 버튼 160×44, 펼침 본문.
 // 단계 판정은 하지 않는다(상태는 호출자가 정한다).
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { StatusPill } from '@/components/ui/StatusPill';
-import type { SetupStepStatus } from '@/domain/kit/setupSteps';
+import { Button } from '@/components/ui/action/Button';
+import { Card } from '@/components/ui/layout/Card';
+import { StatusPill } from '@/components/ui/feedback/StatusPill';
+import type { SetupStepStatus } from '@/domain/kit/calibration/setupSteps';
 import './setup.css';
 
 interface Props {

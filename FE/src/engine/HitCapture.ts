@@ -5,8 +5,8 @@
 // 소리·스틱 명령·전송은 하지 않는다 — runtime/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
 import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
-import { angleBetween, computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/kit/calibration';
-import type { SensorTuning } from '@/domain/kit/tuning';
+import { angleBetween, computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/kit/calibration/calibration';
+import type { SensorTuning } from '@/domain/kit/calibration/tuning';
 
 /** 보정 순서(개편 D1): 게임 레인 순서. 붙어 있기 쉬운 하이햇·크래시를 바로 이어 확인한다 */
 export const CAPTURE_ORDER: readonly PadId[] = ['HIHAT', 'CRASH', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE'];

@@ -1,8 +1,8 @@
 // POSE 탭: 왼쪽 최근 10초 고도각·방위각 시계열(스틱별 색) + 요약, 오른쪽 자세 평면(PosePlane).
 import { memo, useEffect, useRef } from 'react';
-import type { CalibrationProfile } from '@/domain/kit/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { AngleRange } from '@/domain/kit/kitMapping';
-import type { LogRow } from '@/features/monitor/core/packetLog';
+import type { LogRow } from '@/features/monitor/core/recording/packetLog';
 import { cssVar, fmt, prepareCanvas, type Snap } from './monitorTypes';
 import { PosePlane } from './PosePlane';
 

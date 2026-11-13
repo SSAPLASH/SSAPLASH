@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BaseInputSource } from '@/input/InputSource';
+import { BaseInputSource } from '@/input/source/InputSource';
 import { SensorRegistry } from './sensorRegistry';
 
 class FakeSource extends BaseInputSource {

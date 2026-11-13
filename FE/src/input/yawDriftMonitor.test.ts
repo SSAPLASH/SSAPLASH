@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalibrationProfile, PadAnchor, YawDriftStatus } from '@/domain/kit/calibration';
+import type { CalibrationProfile, PadAnchor, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
-import { BaseInputSource } from './InputSource';
+import { BaseInputSource } from './source/InputSource';
 import { packetTap } from './packetTap';
 import { yawDriftMonitor, type YawCorrection } from './yawDriftMonitor';
 

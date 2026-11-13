@@ -1,9 +1,9 @@
 // 단계별 상태(ok·warn·bad·idle)와 이유 한 줄. 사이드바 상태 점·개요 상자·지표 카드가 이 결과를 그대로 그린다.
 // 입력은 페이지가 100ms마다 찍는 스냅샷뿐이고 새 통계는 만들지 않는다(설계 3-1·3-4).
-import type { TransportStats } from '@/input/InputSource';
-import type { ResolveStats, ScoreStats } from './judgeLog';
+import type { TransportStats } from '@/input/source/InputSource';
+import type { ResolveStats, ScoreStats } from './recording/judgeLog';
 import type { LatencyStats } from './latencyStats';
-import type { LogRow, MonitorStats } from './packetLog';
+import type { LogRow, MonitorStats } from './recording/packetLog';
 import { median, slopeMsPerMin } from './syncTrend';
 
 export type HealthLevel = 'ok' | 'warn' | 'bad' | 'idle';

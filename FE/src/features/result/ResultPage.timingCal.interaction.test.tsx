@@ -17,7 +17,7 @@ vi.mock('@/runtime/playSync', () => ({
   resumePlaySync: vi.fn(),
 }));
 vi.mock('@/components/song/useDeletedSongIds', () => ({ useDeletedSongIds: () => new Set<number>() }));
-vi.mock('@/components/lesson/LessonResultBand', () => ({ LessonResultBand: () => null }));
+vi.mock('@/features/result/components/LessonResultBand', () => ({ LessonResultBand: () => null }));
 vi.mock('@/features/result/components/ReportEntry', () => ({ ReportEntry: () => null }));
 vi.mock('@/runtime/keyboardDrum', () => ({ useKeyboardDrum: vi.fn() }));
 // 스냅샷은 매번 같은 객체여야 한다(useSyncExternalStore)

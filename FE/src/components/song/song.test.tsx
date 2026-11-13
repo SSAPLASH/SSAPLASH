@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LevelBadge } from "./LevelBadge";
 import { SongCover } from "./SongCover";
-import { SongMeta } from "./SongMeta";
-import { RecommendRow } from "./RecommendRow";
+import { SongMeta } from "@/features/play/components/picker/SongMeta";
+import { RecommendRow } from "@/features/result/components/RecommendRow";
 import { cardOf, type RecommendationItem } from "@/domain/song/recommendation";
 
 describe("LevelBadge", () => {

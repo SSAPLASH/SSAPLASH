@@ -9,7 +9,7 @@ import { listSheets } from '@/features/studio/api/sheets';
 import { queryClient } from '@/runtime/queryClient';
 import { useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
-import { AccompanimentPoller } from './components/accompanimentPoller';
+import { AccompanimentPoller } from './components/accompaniment/accompanimentPoller';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));

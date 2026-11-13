@@ -2,9 +2,9 @@
 // 잠금은 화면 안내다: 서버 진도에 이번 접속에서 통과한 레슨을 더해 다시 계산한다(업로드가 늦어도 다음 스테이지가 열려 있게).
 import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { accuracyPercent } from './playUpload';
-import { stickConnectionRequired } from '../kit/dockChip';
-import { DEVICE_META, deviceGroupName } from '@/domain/kit/devices';
-import { pedalConnected, pedalRequired } from '@/domain/kit/pedalStatus';
+import { stickConnectionRequired } from '@/domain/kit/device/dockChip';
+import { DEVICE_META, deviceGroupName } from '@/domain/kit/device/devices';
+import { pedalConnected, pedalRequired } from '@/domain/kit/device/pedalStatus';
 
 export type LessonKind = 'READ' | 'PLAY';
 

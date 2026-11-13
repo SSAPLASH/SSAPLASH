@@ -4,17 +4,17 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReadinessNotice } from '@/features/play/components/start/ReadinessNotice';
-import { DisconnectNotice } from '@/components/stick/DisconnectNotice';
+import { DisconnectNotice } from '@/features/play/components/pause/DisconnectNotice';
 import type { RealignInfo } from '@/components/calibration/RealignPrompt';
-import { buttonClassName } from '@/components/ui/buttonStyle';
-import '@/components/ui/Button.css';
-import { Slider } from '@/components/ui/Slider';
-import { useDialogFocus } from '@/components/ui/useDialogFocus';
-import { SoundIcon } from '@/components/shell/SoundIcon';
-import { useDockRaised } from '@/components/shell/useShell';
+import { buttonClassName } from '@/components/ui/action/buttonStyle';
+import '@/components/ui/action/Button.css';
+import { Slider } from '@/components/ui/form/Slider';
+import { useDialogFocus } from '@/components/ui/overlay/useDialogFocus';
+import { SoundIcon } from '@/components/shell/dock/SoundIcon';
+import { useDockRaised } from '@/components/shell/nav/useShell';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
-import { pedalConnected, pedalRequired } from '@/domain/kit/pedalStatus';
+import { pedalConnected, pedalRequired } from '@/domain/kit/device/pedalStatus';
 import { useReconnect } from '@/store/reconnectStore';
 import './PauseOverlay.css';
 
