@@ -213,6 +213,22 @@ describe('summaryToMarkdown', () => {
   });
 });
 
+describe('녹화 요약의 자동 보정 멈춤 줄', () => {
+  const halt = (t: number, stickId: 0 | 1): DiagEvent => ({ type: 'yawHalt', t, stickId, flips: 2, medianDeg: 7, appliedDeg: -3 });
+
+  it('yawHalt 줄 수를 손별로 세고 Markdown에 한 줄을 낸다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [halt(1, 0), halt(2, 1), halt(3, 1)] });
+    expect(s.yawHalts).toEqual([1, 2]);
+    expect(summaryToMarkdown(s)).toContain('- 자동 보정 멈춤: 왼손 1번 · 오른손 2번');
+  });
+
+  it('줄이 없는 녹화는 [0, 0]이고 Markdown에 줄을 내지 않는다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [] });
+    expect(s.yawHalts).toEqual([0, 0]);
+    expect(summaryToMarkdown(s)).not.toContain('자동 보정 멈춤');
+  });
+});
+
 describe('녹화 요약의 audio 줄', () => {
   // kickOffsetMs를 넘기지 않으면 옛 녹화처럼 필드가 없는 줄이 된다
   const audio = (t: number, audioOffsetMs: number, outputLatencyMs: number | null, kickOffsetMs?: number): DiagEvent =>
