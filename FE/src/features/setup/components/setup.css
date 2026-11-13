@@ -648,6 +648,10 @@
 .setup-tile > * {
   position: relative;
 }
+/* 울림 링 층은 타일 전체를 덮어야 하므로 위 규칙에서 뺀다 */
+.setup-tile > .setup-strike-rings {
+  position: absolute;
+}
 .setup-tile-top {
   display: flex;
   align-items: center;
@@ -1214,11 +1218,29 @@
   border: 0;
   border-radius: 20px;
   background: var(--surface-1);
-  transition: background-color var(--motion-fast);
+  isolation: isolate;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 200ms ease,
+    box-shadow 320ms ease;
 }
+/* 호버: 프리셋 슬롯 카드와 같은 떠오름 + 은은한 시안 테두리 빛(울림 링은 StrikeButton) */
 .setup-page .setup-tile:not(:disabled):hover,
 .setup-page .setup-tile.is-on:not(:disabled):hover {
+  transform: translateY(-3px);
   background: var(--surface-2);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.35),
+    0 0 0 1px color-mix(in srgb, var(--brand) 22%, transparent),
+    0 0 24px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-page .setup-tile {
+    transition: none;
+  }
+  .setup-page .setup-tile:not(:disabled):hover {
+    transform: none;
+  }
 }
 /* 켜진 타일의 초록 면 대신 점·상태 글자로만 알린다 */
 .setup-page .setup-tile.is-on::before {
