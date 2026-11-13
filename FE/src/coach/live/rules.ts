@@ -1,7 +1,7 @@
 // 실시간 코칭 규칙. 지적 6종은 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 하고,
 // 칭찬은 지금 연주 상태에 맞는 후보 하나를 고른다. 실제로 띄울지(간격·쿨다운)는 policy가 정한다.
 // 상태를 갖지 않는 순수 함수다.
-import { STICK_PADS, type PadId } from '@/domain/pads';
+import { STICK_PADS, type PadId } from '@/domain/kit/pads';
 import { LIVE_COACH_CONFIG, type LiveThresholds } from './config';
 import { coachPadName, objectParticle } from './padName';
 import type { WindowMetrics } from './window';

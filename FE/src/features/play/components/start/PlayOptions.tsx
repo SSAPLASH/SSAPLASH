@@ -3,8 +3,8 @@
 // 메트로놈·패드 번호·반주는 props만 받고(설정 스토어 연결은 페이지), 녹음 줄만 녹음 스토어의 arm(`toggleArm`)을 직접 쓴다.
 import { RECORDING_ENABLED } from '@/config/features';
 import { toggleArm, useRecordingStore } from '@/runtime/recordingStore';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { accompanimentOptionText, type AccompanimentStatus } from '@/domain/songCatalog';
+import { Checkbox } from '@/components/ui/form/Checkbox';
+import { accompanimentOptionText, type AccompanimentStatus } from '@/domain/song/songCatalog';
 import './play-options.css';
 
 export type PlayOptionRow = 'metronome' | 'padCount' | 'accompaniment' | 'recording';

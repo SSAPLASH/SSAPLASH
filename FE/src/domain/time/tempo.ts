@@ -1,7 +1,7 @@
 // 빠르기가 바뀌는 곡의 박 시각 (CHART-001 tempo map 실험). 순수 함수, 화면·엔진을 모른다.
 // 박 번호는 1마디 1박(격자 원점 = offsetMs)을 0으로 센다. 원점 앞(카운트인·인트로)은 chart.bpm 고정 간격으로 거꾸로 센다.
-import type { Chart, TempoSegment } from '../chart';
-import { gridOriginMs } from '../sheet';
+import type { Chart, TempoSegment } from '@/domain/song/chart';
+import { gridOriginMs } from '@/domain/song/sheet';
 
 export type TempoChart = Pick<Chart, 'bpm'> & Partial<Pick<Chart, 'offsetMs' | 'tempoSegments'>>;
 

@@ -2,8 +2,8 @@
 // 인스턴스 생성은 조립 층(app)만 한다는 규칙 때문에 input/이 아니라 여기에 둔다.
 // 활성화·연결은 하지 않는다(그건 bootstrap).
 import type { OptionValues, SensorId } from '@/domain/events';
-import type { InputSource } from '@/input/InputSource';
-import type { SourceDescriptor } from '@/input/SourceDescriptor';
+import type { InputSource } from '@/input/source/InputSource';
+import type { SourceDescriptor } from '@/input/source/SourceDescriptor';
 
 /** 레지스트리가 id로 받지 않는 예약어 */
 const RESERVED_IDS: readonly string[] = ['none', 'keyboard', 'preview', 'touch'];

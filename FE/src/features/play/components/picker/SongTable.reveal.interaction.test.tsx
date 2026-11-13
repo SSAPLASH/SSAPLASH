@@ -2,7 +2,7 @@
 // 주소로 골라 둔 곡(revealId): 그 곡이 있는 쪽을 연다(다시 하기·추천·세팅 복귀).
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { SongTable } from './SongTable';
 
 afterEach(cleanup);

@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import { accuracyTier, formatPlayClock, playModeName } from '@/domain/play/playLogView';
 import { formatRecordingLength } from '@/domain/play/recordingView';
 import type { PlayRowView } from './playLogRows';

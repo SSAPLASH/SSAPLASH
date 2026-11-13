@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { subscribeTelemetry, type TelemetryRow } from '@/engine/telemetry';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useLive } from '@/store/liveStore';
-import { TuningPanel } from './TuningPanel';
+import { TuningPanel } from './dock/TuningPanel';
 
 export function DebugOverlay({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<TelemetryRow[]>([]);

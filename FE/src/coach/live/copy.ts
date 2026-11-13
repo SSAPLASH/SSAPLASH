@@ -6,7 +6,7 @@
 // 문구는 상태 알림·격려보다 "몸의 어디를 어떻게"와 따라 할 기준(주먹 하나 높이, 마디 첫 박)을 말한다.
 // 스틱 전용 지시(스틱 높이, 손목)는 키보드 입력이면 키보드에 맞는 지시(손가락, 키 이름)로 바꾼다.
 // 지시 어휘는 QA 전 가정이다(설계 U6).
-import { STICK_PADS } from '@/domain/pads';
+import { STICK_PADS } from '@/domain/kit/pads';
 import { coachPadName, objectParticle, padKeys, padMissHint, padPosition, topicParticle } from './padName';
 import type { CoachMessage } from './LiveCoach';
 import type { CoachTarget } from './rules';

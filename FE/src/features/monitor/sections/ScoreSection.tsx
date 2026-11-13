@@ -2,7 +2,7 @@
 // 직접 연결(모니터 창에 연주 화면이 없음)에서는 세션이 없어 안내만 보인다.
 import { hitIdLabel } from '@/features/monitor/core/feed';
 import type { StageHealth } from '@/features/monitor/core/health';
-import type { JudgeLog, RecentRow, SessionInfo } from '@/features/monitor/core/judgeLog';
+import type { JudgeLog, RecentRow, SessionInfo } from '@/features/monitor/core/recording/judgeLog';
 import { DeltaHistogram } from '@/features/monitor/DeltaHistogram';
 import { Fold } from '@/features/monitor/layout/Fold';
 import { MetricRow } from '@/features/monitor/layout/MetricRow';

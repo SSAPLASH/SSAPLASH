@@ -3,11 +3,11 @@
 // 화면은 liveStore.calibration 스냅샷만 읽고 여기 액션만 부른다. bootstrap이 bind()로 의존을 넣고 타격 핸들러 맨 앞에서 intercept()를 부른다.
 import type { ResolvedHit, StickId } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
-import { computeBoundaries, type HandAnchors } from '@/domain/calibration';
+import type { PadId } from '@/domain/kit/pads';
+import { computeBoundaries, type HandAnchors } from '@/domain/kit/calibration/calibration';
 import { anchorsToLayout } from '@/domain/kit/kitJudge';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { isSystemPreset, type CaptureDraft } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { isSystemPreset, type CaptureDraft } from '@/domain/kit/preset';
 import { HitCapture } from '@/engine/HitCapture';
 import { SnareRealign } from '@/engine/SnareRealign';
 import { inputManager } from './sources';

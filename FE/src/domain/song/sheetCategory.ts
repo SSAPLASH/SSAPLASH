@@ -1,9 +1,9 @@
-// 악보 연습 곡 고르기의 범위(기본 곡·내 곡·AI 추천곡·입문 코스)와 주소 값 변환 (설계 MODE-003-악보-연습-하위-메뉴).
+// 악보 연습 곡 고르기의 범위(기본 곡·내 곡·AI 추천곡·학습 코스)와 주소 값 변환 (설계 MODE-003-악보-연습-하위-메뉴).
 // 사이드바 하위 메뉴(components/shell/Sidebar)와 곡 고르기(features/play SongPicker)가 서로를 모른 채 같은 주소 값을 보도록 여기에 둔다.
 // 순수 함수만 둔다. React·스토어·라우터에 접근하지 않는다.
-import type { SongScope } from '../songCatalog';
+import type { SongScope } from './songCatalog';
 
-/** 곡 고르기 범위. 기본 곡·내 곡은 곡 목록 scope, RECOMMEND는 추천 결과, LESSONS는 입문 코스 */
+/** 곡 고르기 범위. 기본 곡·내 곡은 곡 목록 scope, RECOMMEND는 추천 결과, LESSONS는 학습 코스(입문·중급) */
 export type SheetCategory = SongScope | 'RECOMMEND' | 'LESSONS';
 
 /** 악보 연습 경로. 곡 고르기는 이 경로이고 알아보기 레슨 화면은 `/sheet/lesson/:songId`다 */
@@ -18,14 +18,14 @@ export const SHEET_TAB_LESSONS = 'lessons';
 const ORDER: readonly SheetCategory[] = ['BUILTIN', 'MINE', 'RECOMMEND', 'LESSONS'];
 
 /**
- * 표시 이름. menu는 사이드바 하위 메뉴, tab은 화면 위 탭이다.
- * 사이드바에는 이미 「라이브러리」(곡 작업실) 메뉴가 있어 하위 항목은 「내 곡」으로 적는다
+ * 표시 이름. 사이드바 하위 메뉴와 화면 위 버튼(악보 연습·리듬 게임)이 같은 이름을 쓴다(설계 SETUP-학습-코스-중급 3-6).
+ * 사이드바에는 이미 「라이브러리」(곡 작업실) 메뉴가 있어 내 곡 범위는 「내 곡」으로 적는다
  */
-export const SHEET_CATEGORY_LABEL: Record<SheetCategory, { menu: string; tab: string }> = {
-  BUILTIN: { menu: '기본 곡', tab: '기본 곡' },
-  MINE: { menu: '내 곡', tab: '라이브러리' },
-  RECOMMEND: { menu: 'AI 추천곡', tab: 'AI 추천곡' },
-  LESSONS: { menu: '입문 코스', tab: '입문 코스' },
+export const SHEET_CATEGORY_LABEL: Record<SheetCategory, string> = {
+  BUILTIN: '기본 곡',
+  MINE: '내 곡',
+  RECOMMEND: 'AI 추천곡',
+  LESSONS: '학습 코스',
 };
 
 /** 주소 값 → 범위. `tab`이 `scope`보다 먼저다. 값이 없거나 모르는 값이면 기본 곡 */

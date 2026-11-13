@@ -3,13 +3,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listPlays } from '@/api/plays';
+import { listPlays } from '@/api/play/plays';
 import { setPlayLogOwner } from '@/engine/playLog';
 import { queryClient } from '@/runtime/queryClient';
 import { useAuth } from '@/store/authStore';
 import { PlayLogTab } from './PlayLogTab';
 
-vi.mock('@/api/plays', () => ({ listPlays: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ listPlays: vi.fn() }));
 vi.mock('@/components/song/useDeletedSongIds', () => ({ useDeletedSongIds: () => new Set() }));
 
 const saved = (id: string, title: string, day: number, hour: number, over: object = {}) => ({

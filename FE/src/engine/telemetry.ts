@@ -1,8 +1,8 @@
 // 텔레메트리 링버퍼 (공통 명세서 9-5, MONITOR-02 라이브 디버그의 로컬 버전).
 // 타격마다 수신·판정·오디오 구간 지연을 쌓는다. 서버 전송(MONITOR-01)은 BE 연동 시.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 import type { HitJudgedBy, InputSourceKind, ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 export interface TelemetryRow {
   hitId: number;
   /** null = 손 없음(페달 타격) */

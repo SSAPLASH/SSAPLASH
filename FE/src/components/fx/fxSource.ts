@@ -1,5 +1,5 @@
 // 이펙트 이벤트 소스 — liveStore 구독, 그리고 랩·미리보기가 쓰는 자체 emitter.
-import { visualPadOf } from '@/domain/drumKit';
+import { visualPadOf } from '@/domain/kit/drumKit';
 import type { ResolvedHit } from '@/domain/events';
 import type { FxEvent, FxMode, FxSource } from '@/domain/hitFx/types';
 import type { JudgementEvent } from '@/engine/RhythmSession';

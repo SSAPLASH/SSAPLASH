@@ -1,12 +1,12 @@
 // 악보 뷰어 본문 (Figma Studio / SheetViewer 452:1685 — image·pdf·missing·unavailable 4변형, 설계 CHART-001 악보 보관 4-3·4-4).
 // 데이터는 모른다. 조회·갱신·재시도는 SheetViewerPage가 맡고, 여기는 받은 상태를 그린다.
 import { useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/action/Button';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
 import { sheetErrorText, type SheetDetail } from '@/features/studio/domain/sheetMusic';
 import { PdfPages } from './PdfPages';
 import './sheet-viewer.css';
-import { ErrorState } from '@/components/ui/ErrorState';
+import { ErrorState } from '@/components/ui/feedback/ErrorState';
 
 export type SheetViewerState = 'loading' | 'ready' | 'missing' | 'unavailable';
 

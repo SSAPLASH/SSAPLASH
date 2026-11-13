@@ -1,9 +1,9 @@
 // 레슨 카드의 음표 (설계 SETUP-입문-코스 3-5). 패드마다 오선 위 음표 하나와 이름·치는 손발.
 // 위치·머리 모양은 악보 화면과 같은 staffPosOf를 써서 실제 악보와 항상 같다.
 import { useEffect, useRef } from 'react';
-import { PAD_META, type PadId } from '@/domain/pads';
-import { staffPosOf } from '@/domain/sheet';
-import { PAD_LIMB } from '@/domain/play/lesson';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { staffPosOf } from '@/domain/song/sheet';
+import { PAD_LIMB, notationRows } from '@/domain/play/lesson';
 
 const GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
 const COL = 104;
@@ -39,39 +39,71 @@ function StaffHead({ pad, x }: { pad: PadId; x: number }) {
   );
 }
 
+/** 기둥 길이. StaffHead와 같은 값 */
+const STEM = 28;
+
+/** 음표 하나(머리·기둥·덧줄 동그라미)의 위·아래 끝 y. StaffHead와 같은 모양 규칙이다 */
+function noteExtent(pad: PadId): { top: number; bottom: number } {
+  const { line, head } = staffPosOf(pad);
+  const y = yOf(line);
+  if (head === 'normal') return line < 4 ? { top: y - 4.4, bottom: y + STEM } : { top: y - STEM, bottom: y + 4.4 };
+  return { top: y - STEM, bottom: y + (head === 'circle-cross' ? 7 : 5) };
+}
+
+/** 이름 글자 크기(CSS .lesson-staff-name과 같은 값)와 음표 아래 여백 */
+const NAME_FONT = 13;
+const NAME_GAP = 6;
+/** 줄 위·아래 여백 */
+const EDGE = 6;
+
 /**
- * 이름·손발 글자의 기준선. 킥은 오선 아래 칸이라 기둥이 오선 아래로 약 25px 내려온다.
- * 이름 글자(13px)가 그 기둥 끝보다 아래에서 시작하게 둔다(11/12, 겹쳐 보인다는 로컬 확인 반영)
+ * 한 줄의 세로 자리. 그 줄 음표가 차지하는 높이만큼만 잡는다(11/13 로컬 확인: 두 줄이 되니 카드가 너무 컸다).
+ * 이름 글자는 그 줄에서 가장 아래로 내려온 음표(킥·플로어탐 기둥) 아래에서 시작한다(11/12, 겹쳐 보인다는 로컬 확인 반영)
  */
-const NAME_Y = BOTTOM + 44;
-const LIMB_Y = NAME_Y + 17;
+function rowLayout(pads: readonly PadId[]) {
+  const extents = pads.map(noteExtent);
+  const top = Math.min(TOP, ...extents.map((e) => e.top)) - EDGE;
+  const nameY = Math.max(BOTTOM, ...extents.map((e) => e.bottom)) + NAME_GAP + NAME_FONT;
+  const limbY = nameY + 17;
+  return { top, nameY, limbY, height: limbY + EDGE - top };
+}
 
 export function PadNotation({ pads }: { pads: readonly PadId[] }) {
-  const width = SIDE * 2 + COL * pads.length;
-  const height = LIMB_Y + 8;
   const names = pads.map((p) => PAD_META[p].label).join(', ');
+  // 읽는 이름은 줄과 상관없이 하나다. 줄마다 그린 오선은 화면 읽기에서 숨긴다
   return (
-    <div className="lesson-staff">
-      <svg width={width * NOTATION_ZOOM} height={height * NOTATION_ZOOM} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`악보 위치: ${names}`}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <line key={i} className="lesson-staff-line" x1={6} x2={width - 6} y1={TOP + GAP * i} y2={TOP + GAP * i} />
-        ))}
-        {pads.map((pad, i) => {
-          const x = SIDE + COL * i + COL / 2;
-          return (
-            <g key={pad} data-pad={pad}>
-              <StaffHead pad={pad} x={x} />
-              <text className="lesson-staff-name" x={x} y={NAME_Y} textAnchor="middle">
-                {PAD_META[pad].label}
-              </text>
-              <text className="lesson-staff-limb" x={x} y={LIMB_Y} textAnchor="middle">
-                {PAD_LIMB[pad]}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+    <div className="lesson-staff" role="img" aria-label={`악보 위치: ${names}`}>
+      {notationRows(pads).map((row, r) => (
+        <StaffRow key={r} pads={row} />
+      ))}
     </div>
+  );
+}
+
+/** 오선 한 줄과 그 위 음표·이름·손발 */
+function StaffRow({ pads }: { pads: readonly PadId[] }) {
+  const width = SIDE * 2 + COL * pads.length;
+  const { top, nameY, limbY, height } = rowLayout(pads);
+  return (
+    <svg width={width * NOTATION_ZOOM} height={height * NOTATION_ZOOM} viewBox={`0 ${top} ${width} ${height}`} aria-hidden="true">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <line key={i} className="lesson-staff-line" x1={6} x2={width - 6} y1={TOP + GAP * i} y2={TOP + GAP * i} />
+      ))}
+      {pads.map((pad, i) => {
+        const x = SIDE + COL * i + COL / 2;
+        return (
+          <g key={pad} data-pad={pad}>
+            <StaffHead pad={pad} x={x} />
+            <text className="lesson-staff-name" x={x} y={nameY} textAnchor="middle">
+              {PAD_META[pad].label}
+            </text>
+            <text className="lesson-staff-limb" x={x} y={limbY} textAnchor="middle">
+              {PAD_LIMB[pad]}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 

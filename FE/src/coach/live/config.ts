@@ -4,7 +4,7 @@
 // 사용자가 goodMs를 30~150ms로 바꿀 수 있어서 ms를 직접 적지 않고 기준 폭에 비례시킨다.
 // 수치는 가정값이다. 직접 플레이해 보며 여기서 고친다.
 import { type CoachBasis, COACH_BASIS, coachBasisMs } from '@/domain/play/coachBasis';
-import { DEFAULT_TIMING } from '@/domain/judgement';
+import { DEFAULT_TIMING } from '@/domain/play/judgement';
 
 export { type CoachBasis, COACH_BASIS, coachBasisMs };
 

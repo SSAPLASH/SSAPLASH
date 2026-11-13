@@ -4,15 +4,15 @@
 //  - setup: 「기기 준비가 필요해요」 · 빠진 항목 · [취소] [다시 연결] [드럼 세팅으로]. 플레이 버튼 없음
 // props만 받는다 — 스토어 구독·준비 조건 계산·이동은 페이지가 한다. 초점 가둠·Esc는 ui/Dialog(useDialogFocus)가 맡는다.
 import { useEffect, useRef, type ReactNode } from 'react';
-import type { Difficulty } from '@/domain/chart';
-import type { ReadinessMissing } from '@/domain/kit/readiness';
-import { artistLabel } from '@/domain/songCatalog';
+import type { Difficulty } from '@/domain/song/chart';
+import type { ReadinessMissing } from '@/domain/kit/device/readiness';
+import { artistLabel } from '@/domain/song/songCatalog';
 import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
 import { formatDuration } from '@/domain/time/formatTime';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { PlayIcon } from '@/components/song/StudioIcons';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
 import { DeviceCheck } from './DeviceCheck';
 import './start-dialog.css';
 

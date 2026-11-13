@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { ACCOMPANIMENT_PRECHECK_TEXT, ADMIN_DRAFT_TEXT, adminErrorText, type AdminSongDraft } from './adminSong';
 import { useAdminSongs } from './adminSongStore';
 

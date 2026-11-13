@@ -1,7 +1,7 @@
 // 박자 맞추기 진행 검증: 16박 예약, 단계 전환, 타격 가로채기(소리만), 결과 계산, 취소.
 import { describe, expect, it } from 'vitest';
 import { TimingCalSession, TIMING_CAL_TOTAL_BEATS, TIMING_CAL_TOTAL_BEATS_WITH_KICK, type TimingCalDeps } from './timingCalSession';
-import { timingCalBeatMs, TIMING_CAL_LISTEN_BEATS } from '@/domain/kit/timingCalibration';
+import { timingCalBeatMs, TIMING_CAL_LISTEN_BEATS } from '@/domain/kit/calibration/timingCalibration';
 import type { ResolvedHit } from '@/domain/events';
 
 const BEAT = timingCalBeatMs();

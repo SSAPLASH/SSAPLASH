@@ -1,7 +1,7 @@
 // 노트 하이웨이 레인 순서 (설계 MODE-001-MODE-003-song-picker-guide 2차, U1). 왼쪽 → 오른쪽.
 // 드럼이 놓인 순서(네온 킷 DRUM_KIT_FLAT_PADS 중심 x 순)이고, 가장 덜 쓰는 하이햇 페달만 맨 왼쪽에 떼어 둔다.
 // 킷 뷰·칩 목록이 쓰는 LANE_PADS와는 별개다. 키보드 매핑(KEY_MAP)은 패드 기준이라 이 순서와 무관하다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export const HIGHWAY_LANES: PadId[] = [
   'HIHAT_PEDAL',

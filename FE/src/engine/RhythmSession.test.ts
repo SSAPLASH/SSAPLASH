@@ -1,9 +1,9 @@
 // 리듬 게임 세션(설계 4-2 판정 절차) 규칙 검증. 가짜 시각(ms)만 넣고 performance.now는 쓰지 않는다.
 import { describe, expect, it } from 'vitest';
 import { RhythmSession, type RhythmOptions, type StrayHitEvent } from './RhythmSession';
-import type { Chart, ChartNote } from '@/domain/chart';
+import type { Chart, ChartNote } from '@/domain/song/chart';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 const OPTS: RhythmOptions = { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 };
 

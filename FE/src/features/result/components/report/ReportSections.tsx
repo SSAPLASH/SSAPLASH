@@ -1,9 +1,9 @@
 // 리포트의 작은 구역들 (설계 COACH-002 리포트 화면 개편 2장): 요약 수치 한 줄 · 관찰 목록 · 패드별 기록 표 · AI 분석 상태 안내.
 // 모두 props만 그린다. 계산은 domain/reportView, 조회·타이머는 페이지가 맡는다.
 import type { ReactNode } from 'react';
-import type { Judgement } from '@/domain/judgement';
-import { PAD_META } from '@/domain/pads';
-import { isTooShortForAnalysis, type AnalysisStatus, type PadStat, type Report, type WeakSegment } from '@/domain/report';
+import type { Judgement } from '@/domain/play/judgement';
+import { PAD_META } from '@/domain/kit/pads';
+import { isTooShortForAnalysis, type AnalysisStatus, type PadStat, type Report, type WeakSegment } from '@/domain/play/report';
 import { deltaText, padRows, padStatTotal } from '@/features/result/domain/reportView';
 import './report.css';
 

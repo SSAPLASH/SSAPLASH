@@ -2,7 +2,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildGuideScript, GAME_GUIDE_OPTIONS, holdStartOf, stateAt, type GuideState } from '@/features/play/domain/guideScript';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { GameGuideScene } from './GameGuideScene';
 
 afterEach(cleanup);

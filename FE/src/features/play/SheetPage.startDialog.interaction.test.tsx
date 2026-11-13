@@ -5,32 +5,32 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
-import { getBestRecords } from '@/api/plays';
-import { listSongs } from '@/api/songs';
+import { getBestRecords } from '@/api/play/plays';
+import { listSongs } from '@/api/song/songs';
 import { useLive } from '@/store/liveStore';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
 import { useLessons } from '@/store/lessonStore';
 import { lessonsFromDto } from '@/domain/play/lesson';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { SheetPage } from './SheetPage';
 
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
 vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
-vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/sheet/SheetPager', () => ({ SheetPager: () => null }));
 // 안내 애니메이션의 rAF 갱신이 라우터 전환 렌더를 굶기지 않게 막는다
 vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
@@ -183,7 +183,7 @@ describe('SheetPage 반주 설정', () => {
   });
 });
 
-describe('SheetPage 곡 범위 탭과 사이드바 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴)', () => {
+describe('SheetPage 곡 범위 버튼과 사이드바 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴, SETUP-학습-코스-중급 4-4)', () => {
   /** 화면 폭을 가장한다. 테스트 환경의 기본 폭(1024)은 태블릿(사이드바 강제 접힘)으로 잡힌다 */
   const viewport = (tablet: boolean) =>
     vi.stubGlobal('matchMedia', (query: string) => ({
@@ -196,12 +196,12 @@ describe('SheetPage 곡 범위 탭과 사이드바 하위 메뉴 (설계 MODE-00
     useSettings.setState({ sidebarCollapsed: false });
   });
 
-  it('사이드바가 펼쳐져 있으면 화면 위 탭을 두지 않는다(사이드바 하위 메뉴가 범위를 보인다)', async () => {
+  it('사이드바가 펼쳐져 있어도 화면 위 버튼이 있다(11/13 요청으로 다시 둔다)', async () => {
     viewport(false);
     useSettings.setState({ sidebarCollapsed: false });
     show('/sheet');
     await screen.findAllByText('시험곡');
-    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
   });
 
   it('사이드바를 접어 두었으면 화면 위 탭이 있다', async () => {

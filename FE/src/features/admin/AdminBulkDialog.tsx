@@ -1,13 +1,13 @@
 // 공용 곡 CSV 일괄 추가 창 (Jira 262 v0.3). 양식 받기 → CSV·파일 고르기 → 미리보기 → 업로드(차례로) → 결과.
 // 판정은 domain/adminBulk, 실행은 store/adminBulkStore. 실행 중에는 닫기·Esc·배경 클릭을 막는다.
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { IconButton } from '@/components/ui/IconButton';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { IconButton } from '@/components/ui/action/IconButton';
 import { BULK_TEMPLATE_FILENAME, bulkTemplateCsv, decodeCsvBytes, planBulk, type BulkAction, type BulkFile, type BulkPlan } from './adminBulk';
 import type { AdminSong } from './adminSong';
 import { useAdminBulk, type BulkRowStatus } from './adminBulkStore';
-import '@/components/ui/table.css';
+import '@/components/ui/layout/table.css';
 import './admin.css';
 
 interface Props {

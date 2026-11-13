@@ -1,7 +1,7 @@
 // 단계 사이드바. 항목마다 상태 점과 이유 툴팁을 달고, 좁은 화면(<900px)에서는 위쪽 가로 스크롤 칩이 된다.
 import { memo } from 'react';
 import { hitIdLabel } from '@/features/monitor/core/feed';
-import type { TraceSummary } from '@/features/monitor/core/traceIndex';
+import type { TraceSummary } from '@/features/monitor/core/recording/traceIndex';
 import { fmt, stickName } from '@/features/monitor/monitorTypes';
 import { LEVEL_LABEL, sectionLevel, sectionReason, SECTION_ITEMS, type Section, type StageHealthMap } from './sections';
 

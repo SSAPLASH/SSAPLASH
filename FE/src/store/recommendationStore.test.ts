@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
-import type { RecommendationItem, RecommendationPage } from '@/domain/account/recommendation';
-import { fetchSimilarSongs } from '@/api/similarSongs';
-import type { SimilarPage } from '@/domain/account/recommendation';
+import { fetchRecommendations, postRecommendationClick } from '@/api/song/recommendations';
+import type { RecommendationItem, RecommendationPage } from '@/domain/song/recommendation';
+import { fetchSimilarSongs } from '@/api/song/similarSongs';
+import type { SimilarPage } from '@/domain/song/recommendation';
 import { RECOMMENDATION_TIMEOUT_MS, useRecommendations } from './recommendationStore';
 
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 
 const KEY = 'SONG_PICKER:RHYTHM';
 const PARAMS = { context: 'SONG_PICKER', mode: 'RHYTHM', size: 5 } as const;

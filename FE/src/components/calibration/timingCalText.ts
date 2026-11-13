@@ -6,7 +6,7 @@ import {
   type TimingCalInput,
   type TimingCalRecord,
   type TimingCalResult,
-} from '@/domain/kit/timingCalibration';
+} from '@/domain/kit/calibration/timingCalibration';
 
 /** 보정값 표시: +20ms · 0ms · -65ms */
 export function timingOffsetText(ms: number): string {

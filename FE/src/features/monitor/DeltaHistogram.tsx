@@ -1,7 +1,7 @@
 // ⑤ 채점 N: delta 히스토그램. 이번 세션의 delta(타격 − 노트, +면 늦음)를 구간별 막대로 그리고
 // PERFECT·GOOD 판정 창을 띠로 겹쳐 보인다. 평균이 한쪽으로 치우쳐 있으면 계통 오차(오디오 오프셋·지연)를 의심한다.
 import { useEffect, useRef } from 'react';
-import type { TimingWindows } from '@/domain/judgement';
+import type { TimingWindows } from '@/domain/play/judgement';
 import { cssVar, fmt, prepareCanvas } from './monitorTypes';
 
 const BIN_MS = 5;

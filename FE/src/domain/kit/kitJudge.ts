@@ -2,9 +2,9 @@
 // 보정한 손은 저장된 앵커(settingsStore.stickAnchors)로, 보정하지 않은 손은 3D 모델 기본 앵커로 프로필을 만든다.
 // 배치(layout)는 판정에 쓰지 않고 앵커에서 유도해 표시만 한다.
 import type { StickId } from '../events';
-import { computeBoundaries, type CalibrationProfile, type HandAnchorSet } from '../calibration';
+import { computeBoundaries, type CalibrationProfile, type HandAnchorSet } from './calibration/calibration';
 import { defaultHandAnchorSet } from './kitModel';
-import type { SensorTuning } from '../tuning';
+import type { SensorTuning } from './calibration/tuning';
 
 export { anchorsToLayout } from './kitModel';
 

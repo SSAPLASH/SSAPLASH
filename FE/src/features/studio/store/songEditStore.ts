@@ -1,8 +1,8 @@
 // 곡 편집 1회 실행 store (설계 CHART-001 3-3). 표시명·커버·삭제 각각 요청 한 번. 창 닫기·목록 재조회는 하지 않는다 — 페이지가 접착한다.
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
-import { deleteSong, deleteSongCover, updateSongMeta, uploadSongCover } from '@/api/songs';
-import type { CoverChange } from '@/domain/song/songCover';
+import { deleteSong, deleteSongCover, updateSongMeta, uploadSongCover } from '@/api/song/songs';
+import type { CoverChange } from '@/features/studio/domain/songCover';
 import { songEditFailure, type SongMetaPatch } from '@/domain/song/songEdit';
 
 export type SongEditPhase = 'idle' | 'saving' | 'done' | 'failed';

@@ -1,7 +1,7 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
-import { KEY_MAP } from '@/domain/keyMap';
+import { KEY_MAP } from '@/domain/kit/keyMap';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
@@ -13,20 +13,20 @@ import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
 import { preloadSprites } from '@/components/drum/acoustic/sprites';
-import { startClockDiag } from './clockDiag';
+import { startClockDiag } from './diag/clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
-import { startAudioDiag } from './audioDiag';
-import { startYawAutoDiag } from './yawAutoDiag';
+import { startAudioDiag } from './diag/audioDiag';
+import { startYawAutoDiag } from './diag/yawAutoDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { smoothBattery } from '@/domain/kit/stickStatus';
-import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
-import { devicesReady } from '@/domain/pedalStatus';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
+import { smoothBattery } from '@/domain/kit/device/stickStatus';
+import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
+import { devicesReady } from '@/domain/kit/device/pedalStatus';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import { isSensorSource } from '@/domain/events';
 import { hitSoundActive, setCalibrationSound } from '@/runtime/hitSound';
 import {
@@ -195,9 +195,11 @@ export function bootstrapInput(): void {
       } else if (!wasConnected) {
         // 새로 붙은 손에만(ROUTE) 현재 표를 보낸다 — 프로토콜 5장 "연결할 때마다 설정 재전송". 포트를 닫았다 연 뒤 첫 전송만 나가고
         // 그 손에 같은 표를 이미 보냈으면 무동작(해시는 손별). 다른 손에는 가지 않는다.
-        // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③)
+        // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③).
+        // 그 대신 스틱이 가진 현재 오프셋을 물어 FE 기억을 맞춘다(새로 고침 뒤에는 FE 기억이 0이다. 스틱 FW 1.12부터 답한다)
         pushTable(stickId);
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
+        else yawDriftMonitor.onLinked(stickId);
         // 새로 붙은 손에 현재 진동 모드 값을 보낸다(곡 연주 중이면 0, 아니면 1)
         onStickLinked(stickId);
       }

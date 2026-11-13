@@ -1,5 +1,5 @@
 // 콤보 연출 단계 판정(설계 MODE-001-score-combo-fx 3-1). 순수 함수 — 시간·애니메이션·DOM은 모른다.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 
 /** 콤보 표시가 시작되는 최소 콤보 */
 export const COMBO_SHOW = 2;

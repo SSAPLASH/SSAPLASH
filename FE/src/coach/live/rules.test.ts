@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STICK_PADS } from '@/domain/pads';
+import { STICK_PADS } from '@/domain/kit/pads';
 import { liveThresholds } from './config';
 import { evaluatePraise, evaluateRules, isPraiseTag, RECOVERED_PRAISE, type RuleEvaluation } from './rules';
 import type { HandStat, WindowMetrics } from './window';

@@ -5,16 +5,16 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
-import { getBestRecords } from '@/api/plays';
-import { listSongs } from '@/api/songs';
+import { getBestRecords } from '@/api/play/plays';
+import { listSongs } from '@/api/song/songs';
 import { useLive } from '@/store/liveStore';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
-import { PlayClock } from '@/engine/sessionClock';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
+import { PlayClock } from './sessionClock';
 import { SheetPage } from './SheetPage';
 
 // 오디오 시계 대기: 테스트가 끝낼 때까지 걸어 두거나(manual) 바로 통과시킨다
@@ -30,18 +30,18 @@ vi.mock('@/features/play/components/stage/useAudioClockGate', () => ({
       gate.manual ? new Promise<boolean>((resolve) => gate.calls.push({ phase, resolve })) : Promise.resolve(true),
   }),
 }));
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked((await import('@/api/songs')).listSongs)(p as never)).items) }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked((await import('@/api/song/songs')).listSongs)(p as never)).items) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
 vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));
 vi.mock('@/runtime/audioUnlock', () => ({ unlockAudio: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: () => true }));
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
-vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/sheet/SheetPager', () => ({ SheetPager: () => null }));
 vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...(await original<typeof import('@/store/songStore')>()), loadChart: vi.fn() }));
 vi.mock('@/audio/Accompaniment', () => {

@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { m, useReducedMotion, type TargetAndTransition } from 'motion/react';
 import { comboStage, type ComboStage } from '@/features/play/domain/comboFx';
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 import './ComboDisplay.css';
 
 export interface ComboDisplayProps {

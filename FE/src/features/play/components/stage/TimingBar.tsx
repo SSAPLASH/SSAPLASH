@@ -4,7 +4,7 @@
 // 표시는 기본 크기의 TIMING_BAR_SCALE배(CSS 크기)이고 비트맵도 그만큼 키워 선명하게 그린다.
 import { useEffect, useRef } from 'react';
 import type { FxSource } from '@/domain/hitFx/types';
-import { addMissMark, addTimingMark, EMPTY_TIMING_BAR, hasLiveTicks, timingBarView, type MissSource, type TimingBarState } from '@/domain/hitFx/timingBar';
+import { addMissMark, addTimingMark, EMPTY_TIMING_BAR, hasLiveTicks, timingBarView, type MissSource, type TimingBarState } from '@/features/play/domain/timingBar';
 import { JUDGE_COLORS_FALLBACK } from '@/domain/hitFx/judgeFx';
 import { readJudgeColors } from '@/components/fx/judgeColors';
 import './TimingBar.css';

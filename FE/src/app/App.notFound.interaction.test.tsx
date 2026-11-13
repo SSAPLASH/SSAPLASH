@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Suspense } from 'react';
 import { MemoryRouter, Outlet } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import App from './App';
 

@@ -1,9 +1,9 @@
 // 반주 선택 창 목록 훅 (설계 MODE-002 3-8, D7·D12). 전역 songStore를 쓰지 않고 listSongs를 직접 부른다.
 // 두 섹션(공용 곡·내 곡)을 같은 검색어로 따로 받고, 반주 없는 곡은 한 번 더 거른다.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listSongs } from '@/api/songs';
+import { listSongs } from '@/api/song/songs';
 import { pickableForAccompaniment } from '@/domain/song/freeAccompaniment';
-import type { SongPage, SongScope, SongSummary } from '@/domain/songCatalog';
+import type { SongPage, SongScope, SongSummary } from '@/domain/song/songCatalog';
 
 /** 섹션 한 페이지 크기 */
 export const PAGE_SIZE = 30;

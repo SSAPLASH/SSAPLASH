@@ -897,23 +897,36 @@
   margin: 28px auto 0;
   width: min(980px, 100%);
 }
-/* 결과 지표: 위쪽 색 띠와 값 색으로 구분. 약점 마디는 '실패'보다 '연습할 곳' 느낌의 연보라 */
+/* 결과 지표: 밤거리 간판처럼 위쪽 네온관이 빛나고, 그 빛이 어두운 카드 안으로 은은하게 번진다.
+   --c는 네온 본색, --c-glow는 번지는 빛, --c-haze는 카드 안 옅은 잔광. 약점 마디는 '실패'보다 '연습할 곳' 느낌의 보라 */
 .lp .lp-stat {
   position: relative;
   overflow: hidden;
   border-radius: 22px;
-  background: var(--card);
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, var(--c-haze), transparent 70%),
+    linear-gradient(180deg, #121216 0%, #0a0a0c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 30px 60px rgba(0, 0, 0, 0.55);
   padding: 32px 22px;
   text-align: center;
 }
+/* 네온관: 가운데가 가장 밝고 양끝으로 흐려진다 */
 .lp .lp-stat::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 12%;
+  right: 12%;
   top: 0;
-  height: 3px;
-  background: var(--c);
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--c) 20%, var(--c) 80%, transparent);
+  box-shadow:
+    0 0 6px var(--c),
+    0 0 18px var(--c-glow),
+    0 0 42px var(--c-glow);
 }
 .lp .lp-stat .lp-k {
   font-size: clamp(15px, 1.3vw, 18px);
@@ -926,15 +939,24 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--c);
+  text-shadow:
+    0 0 8px var(--c-glow),
+    0 0 26px var(--c-glow);
 }
 .lp .lp-stat.lp-acc {
-  --c: #30d158;
+  --c: #5dffa0;
+  --c-glow: rgba(48, 255, 140, 0.45);
+  --c-haze: rgba(48, 255, 140, 0.1);
 }
 .lp .lp-stat.lp-dist {
-  --c: #0a84ff;
+  --c: #6cc4ff;
+  --c-glow: rgba(58, 160, 255, 0.5);
+  --c-haze: rgba(58, 160, 255, 0.12);
 }
 .lp .lp-stat.lp-weak {
-  --c: #c4a7ff;
+  --c: #d4a8ff;
+  --c-glow: rgba(178, 110, 255, 0.5);
+  --c-haze: rgba(178, 110, 255, 0.12);
 }
 
 /* ───────── 7. 시작하기 ───────── */

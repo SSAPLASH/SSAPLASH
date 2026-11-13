@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { LazyMotion, MotionGlobalConfig, domMax } from 'motion/react';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { useLive } from '@/store/liveStore';
 import { DrumKit } from './DrumKit';
 

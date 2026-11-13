@@ -7,9 +7,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
 import { ApiError } from '@/api/http';
-import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
-import type { UserMe } from '@/domain/auth';
-import { recommendationVersion } from '@/domain/signupTerms';
+import { getRecommendationConsent, putRecommendationConsent } from '@/api/account/users';
+import type { UserMe } from '@/domain/account/auth';
+import { recommendationVersion } from '@/domain/account/signupTerms';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useShellStore } from '@/store/shellStore';
@@ -25,7 +25,7 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@/api/users', () => ({
+vi.mock('@/api/account/users', () => ({
   getRecommendationConsent: vi.fn(),
   putRecommendationConsent: vi.fn(),
   fetchMe: vi.fn(),
@@ -33,11 +33,11 @@ vi.mock('@/api/users', () => ({
   withdrawMe: vi.fn(),
 }));
 // 이 테스트가 보는 것은 안내 모달뿐이다 — 셸의 무거운 자식은 비운다
-vi.mock('@/components/shell/Sidebar', () => ({ Sidebar: () => null }));
-vi.mock('@/components/shell/TopBar', () => ({ TopBar: () => null }));
-vi.mock('@/components/shell/GlassDock', () => ({ GlassDock: () => null }));
-vi.mock('@/components/shell/ProfileMenu', () => ({ ProfileMenu: () => null }));
-vi.mock('@/components/shell/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
+vi.mock('@/components/shell/nav/Sidebar', () => ({ Sidebar: () => null }));
+vi.mock('@/components/shell/nav/TopBar', () => ({ TopBar: () => null }));
+vi.mock('@/components/shell/dock/GlassDock', () => ({ GlassDock: () => null }));
+vi.mock('@/components/shell/account/ProfileMenu', () => ({ ProfileMenu: () => null }));
+vi.mock('@/components/shell/dock/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
 vi.mock('@/components/shell/useMediaQuery', () => ({ useSidebarCollapsed: () => false }));
 vi.mock('@/components/recording/SaveRecordingDialog', () => ({ SaveRecordingDialog: () => null }));
 vi.mock('@/components/recording/RecordingToast', () => ({ RecordingToast: () => null }));

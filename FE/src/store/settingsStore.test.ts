@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, sanitizeTimingSettings, useSettings } from './settingsStore';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
-import { SYSTEM_PRESET_ID } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { SYSTEM_PRESET_ID } from '@/domain/kit/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
-import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/tuning';
+import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/kit/calibration/tuning';
 import { anchorsToLayout, defaultHandAnchors } from '@/domain/kit/kitModel';
 
 describe('migrateSettings', () => {

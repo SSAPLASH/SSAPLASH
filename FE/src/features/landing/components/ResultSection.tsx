@@ -1,6 +1,6 @@
 // 6 연주 결과: 놓친 마디를 악보로 보여 주는 예시 + 지표 3개. 각 요소는 화면에 들어오면 떠오른다(reveal).
 import { useRef } from 'react';
-import { sheetArt } from './landingArt';
+import { SHEET_RED, sheetArt } from './landingArt';
 import { RESULT_COPY, RESULT_STATS } from './landingContent';
 import { joinClass, useReveal } from './useReveal';
 
@@ -38,8 +38,20 @@ export function ResultSection() {
           <span>{RESULT_COPY.sheetNote}</span>
         </div>
         <svg viewBox="0 0 900 150" aria-hidden="true">
+          <defs>
+            {/* 놓친 음표 네온 번짐: 가까운 빛과 먼 빛을 겹친 뒤 원래 음표를 위에 다시 그린다 */}
+            <filter id="lp-neon-red" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="near" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="far" />
+              <feMerge>
+                <feMergeNode in="far" />
+                <feMergeNode in="near" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
           <rect x={h.x} y={h.y} width={h.width} height={h.height} rx={h.rx} fill="rgba(0,113,227,.09)" stroke="#0071e3" strokeWidth="1.5" />
-          <text x={h.labelX} y={h.labelY} textAnchor="middle" fontSize="12" fontWeight="700" fill="#0071e3">
+          <text x={h.labelX} y={h.labelY} textAnchor="middle" fontSize="14" fontWeight="700" fill="#0071e3">
             3마디
           </text>
           {SHEET.staffLines.map((l, i) => (
@@ -55,7 +67,15 @@ export function ResultSection() {
             </g>
           ))}
           {SHEET.notes.map((n, i) => (
-            <ellipse key={`n${i}`} cx={n.cx} cy={n.cy} rx={n.rx} ry={n.ry} fill={n.fill} />
+            <ellipse
+              key={`n${i}`}
+              cx={n.cx}
+              cy={n.cy}
+              rx={n.rx}
+              ry={n.ry}
+              fill={n.fill}
+              filter={n.fill === SHEET_RED ? 'url(#lp-neon-red)' : undefined}
+            />
           ))}
           {SHEET.beams.map((l, i) => (
             <line key={`m${i}`} x1={l.x1} x2={l.x2} y1={l.y1} y2={l.y2} stroke={l.stroke} strokeWidth={l.strokeWidth} />

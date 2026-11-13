@@ -8,14 +8,14 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
-import { SheetPager } from '@/features/play/components/stage/SheetPager';
+import { SheetPager } from '@/features/play/components/stage/sheet/SheetPager';
 import { usePauseTriggers } from '@/features/play/components/pause/usePauseTriggers';
 import { useReconnectResume } from '@/features/play/components/pause/useReconnectResume';
 import { useJudgementHaptic } from '@/features/play/components/stage/useJudgementHaptic';
 import { PauseOverlay, type PauseReason } from '@/features/play/components/pause/PauseOverlay';
 import { StageFade } from '@/features/play/components/stage/StageFade';
 import { PlayStage } from '@/features/play/components/stage/PlayStage';
-import { kitSoundStage, type PlayStageName } from '@/features/play/components/stage/kitSoundStage';
+import { kitSoundStage, type PlayStageName } from '@/features/play/components/stage/kit/kitSoundStage';
 import { LazyChartAutoplayRunner } from '@/features/play/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/features/play/components/stage/PlayHud';
 import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotice';
@@ -25,13 +25,13 @@ import { countdownValue } from '@/domain/time/leadIn';
 import { ScreenGate } from '@/features/play/components/stage/ScreenGate';
 import { useScreenFits } from '@/features/play/components/stage/screenFit';
 import { GuideSlot } from '@/features/play/components/stage/GuideSlot';
-import { useCoachLine } from '@/features/play/components/stage/useCoachLine';
-import { planCoachDisplay } from '@/features/play/components/stage/coachDisplay';
-import { CoachHandChip } from '@/features/play/components/stage/CoachHandChip';
-import { HitReadout } from '@/components/drum/HitReadout';
+import { useCoachLine } from '@/features/play/components/stage/coach/useCoachLine';
+import { planCoachDisplay } from '@/features/play/components/stage/coach/coachDisplay';
+import { CoachHandChip } from '@/features/play/components/stage/coach/CoachHandChip';
+import { HitReadout } from '@/features/play/components/stage/HitReadout';
 import { StartDialog } from '@/features/play/components/start/StartDialog';
-import { pedalConnected, pedalRequired } from '@/domain/pedalStatus';
-import { smallKitSpec } from '@/domain/drumKit';
+import { pedalConnected, pedalRequired } from '@/domain/kit/device/pedalStatus';
+import { smallKitSpec } from '@/domain/kit/drumKit';
 import { PlayOptions } from '@/features/play/components/start/PlayOptions';
 import { useNextBeatLabels } from '@/features/play/components/stage/useNextBeatLabels';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
@@ -40,30 +40,29 @@ import { TimingBar } from '@/features/play/components/stage/TimingBar';
 import { strayMissSource } from '@/features/play/components/stage/strayMissSource';
 import type { HitMark } from '@/components/sheetmusic/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { useDock, usePlayRunning, useShell } from '@/components/shell/useShell';
-import { useSidebarCollapsed } from '@/components/shell/useMediaQuery';
+import { useDock, usePlayRunning, useShell } from '@/components/shell/nav/useShell';
 import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
-import type { Chart } from '@/domain/chart';
-import { artistLabel, chartFallback, type SongDetail } from '@/domain/songCatalog';
+import type { Chart } from '@/domain/song/chart';
+import { artistLabel, chartFallback, type SongDetail } from '@/domain/song/songCatalog';
 import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
-import { appliedWindows, type Judgement } from '@/domain/judgement';
+import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
-import { PlayRecorder } from '@/engine/playRecorder';
-import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/kit/hihatPedalCoverage';
+import { PlayRecorder } from './playRecorder';
+import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/kit/device/hihatPedalCoverage';
 import { readCurrentConsent } from './dataConsent';
 import { startPlaySync } from '@/runtime/playSync';
 import { disarm, finishSong, setLocked } from '@/runtime/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
-import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
+import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
 import { useTimingCalGate } from './useTimingCalGate';
-import { PlayClock } from '@/engine/sessionClock';
+import { PlayClock } from './sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/runtime/sources';
 import { setSoundOnHit } from '@/runtime/hitSound';
@@ -79,7 +78,7 @@ import { useSettings } from '@/store/settingsStore';
 import { chartCoachContext, chooseCoachModel, coachCopy, isStickSensor, LiveCoach, LlmCoach, refreshCoachModels, type CoachCopy, type CoachMessage } from '@/coach/live';
 import { liveCoachClient } from '@/features/play/api/liveCoach';
 import { useAuth } from '@/store/authStore';
-import type { CoachShadow } from '@/coach/live/shadowCoach';
+import type { CoachShadow } from '@/features/play/coach/shadowCoach';
 import { COACH_BASIS } from '@/domain/play/coachBasis';
 import { diagTap } from '@/engine/diagTap';
 
@@ -118,7 +117,6 @@ function SheetPageBody() {
   const location = useLocation();
   const settings = useSettings();
   // 사이드바 실제 접힘(사용자 설정 또는 태블릿 폭). 펼쳐져 있으면 곡 범위를 사이드바 하위 메뉴가 보인다
-  const sidebarCollapsed = useSidebarCollapsed();
   // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
   const smallKit = smallKitSpec('sheet', settings.kitSkin);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -599,7 +597,7 @@ function SheetPageBody() {
     // 진단 빌드 전용: 두 기준 방식의 문구를 그림자로 평가해 진단 녹화에 남긴다. 상수 분기라 일반 빌드에는 청크가 없다
     if (MONITOR_ENABLED) {
       const goodMs = ss.windows.goodMs;
-      void import('@/coach/live/shadowCoach').then((m) => {
+      void import('@/features/play/coach/shadowCoach').then((m) => {
         if (coachRef.current !== coach) return; // 그 사이 나가거나 다시 시작한 경우
         shadowRef.current = m.createCoachShadow({
           goodMs,
@@ -838,7 +836,7 @@ function SheetPageBody() {
         <StageFade stageKey="select">
           <main className="main">
             {/* 사이드바가 펼쳐져 있으면 「악보 연습」 하위 메뉴가 곡 범위를 보이므로 화면 위 탭은 두지 않는다(설계 MODE-003-악보-연습-하위-메뉴) */}
-            <SongPicker mode="sheet" tabsInSidebar={!sidebarCollapsed} onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
+            <SongPicker mode="sheet" onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
           </main>
         </StageFade>
         <StartDialog

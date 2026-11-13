@@ -2,9 +2,9 @@
 // 텔레메트리(pushTelemetry)와 진단 탭(diagTap) 호출을 한 곳에 묶어, 새 모드를 추가해도 한 줄만 부르면 되게 한다(설계 R6).
 // 판정 경로는 바꾸지 않는다: 값을 읽어 내보내기만 한다.
 import type { ResolvedHit } from '@/domain/events';
-import type { TimingWindows } from '@/domain/judgement';
-import type { PadAnchor } from '@/domain/calibration';
-import type { PadId } from '@/domain/pads';
+import type { TimingWindows } from '@/domain/play/judgement';
+import type { PadAnchor } from '@/domain/kit/calibration/calibration';
+import type { PadId } from '@/domain/kit/pads';
 import { diagTap, judgementToDiag, type DiagAnchor, type DiagBody } from './diagTap';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';
 import { pushTelemetry } from './telemetry';

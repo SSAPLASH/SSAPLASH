@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getBestRecords, type BestRecordDto } from '@/api/plays';
+import { getBestRecords, type BestRecordDto } from '@/api/play/plays';
 import { selectServerBestRecords, type BestRecordMode } from '@/features/play/api/serverBestRecord';
 import { useAuth } from '@/store/authStore';
 import type { SongsSource } from '@/store/songStore';

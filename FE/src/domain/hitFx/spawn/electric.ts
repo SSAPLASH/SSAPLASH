@@ -1,7 +1,7 @@
 // electric 테마 — 드럼: 중심에서 갈라지는 번개 3~5줄 + 흰 섬광, 심벌: 테두리를 도는 가지 번개, 킥: 킷 아래쪽 가로 방전.
 // 번개 꺾임은 그릴 때 40ms마다 seed+시간으로 다시 계산한다(깜빡임). 가산 합성.
-import type { PadShape } from '@/domain/drumKit';
-import { DRUM_KIT_H } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
+import { DRUM_KIT_H } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { particle } from './util';
 

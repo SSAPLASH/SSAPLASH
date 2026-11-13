@@ -1,10 +1,10 @@
 // 제어 섹션: 데이터가 아니라 도구(파라미터 표·명령 바). 기존 파라미터·명령 탭을 그대로 옮겼다.
 import { Fragment, useRef, useState, useSyncExternalStore } from 'react';
-import type { CalibrationProfile } from '@/domain/calibration';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { ParamStore } from '@/features/monitor/core/params';
 import { telemetryStore } from '@/telemetry/enable';
-import { parseJsonl } from '@/features/monitor/core/recorder';
-import { summarizeRecording, summaryToMarkdown, type RecordingSummary } from '@/features/monitor/core/recordingSummary';
+import { parseJsonl } from '@/features/monitor/core/recording/recorder';
+import { summarizeRecording, summaryToMarkdown, type RecordingSummary } from '@/features/monitor/core/recording/recordingSummary';
 import { CommandBar } from '@/features/monitor/CommandBar';
 import type { SendFn } from '@/features/monitor/monitorTypes';
 import { ParamPanel } from '@/features/monitor/ParamPanel';

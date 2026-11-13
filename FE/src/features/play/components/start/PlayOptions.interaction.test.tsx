@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRecordingStore } from '@/runtime/recordingStore';
-import type { AccompanimentStatus } from '@/domain/songCatalog';
+import type { AccompanimentStatus } from '@/domain/song/songCatalog';
 import { PlayOptions } from './PlayOptions';
 
 vi.mock('@/runtime/sources', () => ({ inputManager: { onHit: () => () => {} } }));

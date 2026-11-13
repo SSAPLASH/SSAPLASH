@@ -1,10 +1,10 @@
 // 녹음 업로드 실행 (설계 REC-001 2절·3-5·3-6). 503 자동 재시도, 오류 → 사용자 문구, 게임·악보 playId 결정을 맡는다.
-// 본문 조립은 domain/recording, 상태 보관은 runtime/recordingStore가 한다.
+// 본문 조립은 domain/play/recording, 상태 보관은 runtime/recordingStore가 한다.
 import { ApiError } from '@/api/error';
-import { saveRecording } from '@/api/recordings';
-import { recordingKeys } from '@/api/queries/recordings';
+import { saveRecording } from '@/api/play/recordings';
+import { recordingKeys } from '@/api/play/recordingQueries';
 import { queryClient } from './queryClient';
-import type { RecordingBody, RecordingSummary } from '@/domain/recording';
+import type { RecordingBody, RecordingSummary } from '@/domain/play/recording';
 import { startPlaySync } from './playSync';
 
 /** 503 자동 재시도 횟수와 기본 대기(1·2·4초) */

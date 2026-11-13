@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_PADS, STICK_PADS } from '@/domain/pads';
+import { ALL_PADS, STICK_PADS } from '@/domain/kit/pads';
 import { coachCopy } from './copy';
 import type { CoachMessage } from './LiveCoach';
 import type { LiveTag } from './rules';

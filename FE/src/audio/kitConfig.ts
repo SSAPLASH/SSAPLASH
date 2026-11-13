@@ -1,6 +1,6 @@
 // 샘플 키트의 재생 설정 파일(public/sounds/<id>/kit-config.json) 스키마와 패드 매핑.
 // 팀원이 키트를 교체해 보내면 이 JSON만 바꾸면 되도록, 게인·재생 속도는 코드에 박지 않는다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export interface KitPadConfig {
   file: string;

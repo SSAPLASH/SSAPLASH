@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { UserRole } from '@/domain/auth';
+import type { UserRole } from '@/domain/account/auth';
 import type { SenderState } from './sender';
 import {
   TELEMETRY_STORAGE_KEY,

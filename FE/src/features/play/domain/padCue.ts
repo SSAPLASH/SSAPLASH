@@ -1,9 +1,9 @@
 // 패드 큐: 마디·판정 상태에서 패드별 "다음 박 라벨"과 강조 단계를 계산한다. 그리기·시계는 모른다.
-import type { ChartNote } from '@/domain/chart';
-import type { PadBadge } from '@/domain/drumKit';
-import type { Judgement } from '@/domain/judgement';
-import type { PadId } from '@/domain/pads';
-import { countLabel, type SheetModel } from '@/domain/sheet';
+import type { ChartNote } from '@/domain/song/chart';
+import type { PadBadge } from '@/domain/kit/drumKit';
+import type { Judgement } from '@/domain/play/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import { countLabel, type SheetModel } from '@/domain/song/sheet';
 
 /** 큐 계산에 쓰는 음표 판정 상태. engine의 NoteState가 이 모양을 그대로 만족한다 */
 export interface CueNoteState {

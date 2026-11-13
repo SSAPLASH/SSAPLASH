@@ -1,11 +1,11 @@
 // Figma 반영 후 세팅 컴포넌트 테스트(HitLog·hitLogFormat·StepCard·ReturnBanner·PresetNameDialog 마크업).
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { KitPreset } from '@/domain/preset';
+import type { KitPreset } from '@/domain/kit/preset';
 import type { RecentHit } from '@/components/drum/useRecentHits';
 import { HitLog } from './HitLog';
 import { HIT_FLOAT_MIN_H_LEFT, HIT_FLOAT_MIN_W, HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText, hitLogPlacement } from './hitLogFormat';
-import { PresetNameDialog } from './PresetNameDialog';
+import { PresetNameDialog } from './preset/PresetNameDialog';
 import { ReturnBanner } from './ReturnBanner';
 import { StepCard } from './StepCard';
 

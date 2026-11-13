@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { usePresets, selectDirty } from './presetStore';
 import { LocalPresetSource } from './localPresetSource';
 import { useSettings } from './settingsStore';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
-import { PresetError, SYSTEM_PRESET_ID, type PresetSource } from '@/domain/preset';
-import type { HandAnchors } from '@/domain/calibration';
+import { PresetError, SYSTEM_PRESET_ID, type PresetSource } from '@/domain/kit/preset';
+import type { HandAnchors } from '@/domain/kit/calibration/calibration';
 import { defaultHandAnchors } from '@/domain/kit/kitModel';
 
 const ANCHOR = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };

@@ -1,7 +1,7 @@
 // 리포트 화면용 계산 (설계 COACH-002 리포트 화면 개편 3장)
 import { describe, expect, it } from 'vitest';
-import type { PadId } from '@/domain/pads';
-import type { PadStat, ReportNote, WeakSegment } from '@/domain/report';
+import type { PadId } from '@/domain/kit/pads';
+import type { PadStat, ReportNote, WeakSegment } from '@/domain/play/report';
 import {
   clockHundredth,
   clockRange,
