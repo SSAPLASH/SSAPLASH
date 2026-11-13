@@ -195,9 +195,11 @@ export function bootstrapInput(): void {
       } else if (!wasConnected) {
         // 새로 붙은 손에만(ROUTE) 현재 표를 보낸다 — 프로토콜 5장 "연결할 때마다 설정 재전송". 포트를 닫았다 연 뒤 첫 전송만 나가고
         // 그 손에 같은 표를 이미 보냈으면 무동작(해시는 손별). 다른 손에는 가지 않는다.
-        // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③)
+        // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③).
+        // 그 대신 스틱이 가진 현재 오프셋을 물어 FE 기억을 맞춘다(새로 고침 뒤에는 FE 기억이 0이다. 스틱 FW 1.12부터 답한다)
         pushTable(stickId);
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
+        else yawDriftMonitor.onLinked(stickId);
         // 새로 붙은 손에 현재 진동 모드 값을 보낸다(곡 연주 중이면 0, 아니면 1)
         onStickLinked(stickId);
       }
