@@ -530,7 +530,7 @@ export function SetupPage() {
         />
       </div>
 
-      {timingCalOpen && <TimingCalDialog onClose={() => setTimingCalOpen(false)} />}
+      {timingCalOpen && <TimingCalDialog className="setup-timing-dialog" onClose={() => setTimingCalOpen(false)} />}
 
       {stepDialog === 'stick' && (
         <StepDialog title={`${deviceGroupName(withPedal)} 연결`} titleId="step-dialog-stick" onClose={closeStep}>
