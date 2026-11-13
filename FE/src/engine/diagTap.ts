@@ -110,7 +110,9 @@ export type DiagBody =
       measured: { medianMs: number; madMs: number; pairs: number; input: 'sensor' | 'keyboard'; measuredAt: number } | null;
     }
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
-  | ({ type: 'yawCorrect' } & DiagYawCorrection);
+  | ({ type: 'yawCorrect' } & DiagYawCorrection)
+  /** 부호가 연달아 뒤집혀 그 손의 자동 보정을 멈춤. medianDeg는 보내지 않은 오차 */
+  | { type: 'yawHalt'; stickId: 0 | 1; flips: number; medianDeg: number; appliedDeg: number };
 
 /** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
 export interface DiagAnchor {
@@ -137,6 +139,8 @@ export interface DiagYawCorrection {
   madDeg: number | null;
   /** 그때 링의 (스틱 yaw − 앵커 yaw) 샘플. drift만 채운다 */
   samples: number[];
+  /** samples와 같은 순서의 판정 주체(stick·chart·pose·key). drift만 채운다 */
+  judgedBy: string[];
 }
 
 export type DiagEvent = DiagBody & { /** performance.now() */ t: number };

@@ -96,3 +96,16 @@ describe('SetupPage 단계 팝업', () => {
     expect(screen.getByRole('button', { name: /시작 위치 보정/ }).className).toContain('is-attention');
   });
 });
+
+describe('SetupPage 자동 보정 멈춤 표시', () => {
+  it('멈춘 손이 있으면 연결 팝업 상태 줄에 「자동 보정 멈춤(방향 흔들림)」을 알리고, 그 손의 「잠시 뒤 보정」은 내지 않는다', () => {
+    const st = { appliedDeg: -8, samples: 0, lastErrorDeg: 8, lastSentAt: performance.now(), acked: true, halted: true };
+    useSettings.setState({ sensorKind: 'webserial' });
+    useLive.setState({ connected: [true, false], yawDrift: [st, null] });
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /스틱·페달 연결/ }));
+    const text = screen.getByRole('dialog', { name: '스틱·페달 연결' }).textContent ?? '';
+    expect(text).toContain('자동 보정 멈춤(방향 흔들림)');
+    expect(text).not.toContain('잠시 뒤 보정');
+  });
+});
