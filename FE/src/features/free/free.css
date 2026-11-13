@@ -25,35 +25,6 @@
   z-index: 1;
 }
 
-/* ---- 조명: 랜딩 히어로 빛줄기(.lp-beam)와 같은 구성. 반주 바 유리 뒤로도 비친다 ---- */
-.free-lights {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.8s ease;
-}
-.free-lights.is-on {
-  opacity: 1;
-}
-.free-beam {
-  position: absolute;
-  left: 50%;
-  top: -4%;
-  width: min(1040px, 96%);
-  height: 108%;
-  transform: translateX(-50%);
-  background:
-    radial-gradient(ellipse 26% 46% at 50% 0%, rgba(226, 240, 255, 0.32), transparent 70%),
-    conic-gradient(from 180deg at 50% 0%, transparent 148deg, rgba(210, 228, 245, 0.075) 164deg, rgba(232, 244, 255, 0.2) 180deg, rgba(210, 228, 245, 0.075) 196deg, transparent 212deg);
-  filter: blur(10px);
-  mix-blend-mode: screen;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
-  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
-}
-
 /* ---- 반주 바 (Figma 226:5485, 설계 MODE-002 4-1~4-4·4-6): 글래스 캡슐. 데스크톱 64 / ≤640 미니 56 ---- */
 .free-accomp {
   position: relative;
@@ -463,81 +434,8 @@
 .free-kit .drum-kit-fx > .drum-kit {
   position: relative;
 }
-.free-floor {
-  position: absolute;
-  left: 3%;
-  right: 3%;
-  bottom: -7%;
-  height: 52%;
-  pointer-events: none;
-  background: radial-gradient(ellipse closest-side, rgba(220, 236, 255, 0.16), rgba(220, 236, 255, 0.05) 55%, transparent 100%);
-  transition: opacity 0.8s ease;
-}
 .free-stage.is-empty .free-floor {
   opacity: 0;
-}
-
-/* 키트 가이드 이름표(DrumKit overlay). 글자 크기는 킷 폭에 비례한다 */
-.free-plabels {
-  position: absolute;
-  inset: 0;
-  container-type: inline-size;
-  pointer-events: none;
-}
-.free-plabel {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  background: rgba(5, 6, 7, 0.62);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: rgba(242, 245, 248, 0.92);
-  font-size: clamp(11px, 1.25cqw, 13px);
-  font-weight: 600;
-  line-height: 1.45;
-  white-space: nowrap;
-  word-break: keep-all;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
-  transition-delay: calc(var(--i) * 18ms);
-}
-.free-plabel.is-hit {
-  animation: free-plabel-hit 0.7s var(--ease-out);
-}
-@keyframes free-plabel-hit {
-  0%,
-  25% {
-    border-color: var(--brand-text);
-    background: color-mix(in srgb, var(--brand) 55%, var(--bg-canvas));
-    color: #fff;
-  }
-}
-.free-plabels.is-off .free-plabel {
-  opacity: 0;
-  transform: translate(-50%, -30%) scale(0.94);
-  transition-delay: 0s;
-}
-.free-plabel kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  color: var(--text-2);
-  font: 600 10px var(--font-num);
-}
-.free-plabel kbd:first-of-type {
-  margin-left: 3px;
 }
 
 /* 빈 상태: 목업의 유리 카드 */
@@ -783,9 +681,6 @@
   .free-kit-inner,
   .free-hud-pad.is-pop {
     animation: none;
-  }
-  .free-plabels.is-off .free-plabel {
-    transform: translate(-50%, -50%);
   }
 }
 
