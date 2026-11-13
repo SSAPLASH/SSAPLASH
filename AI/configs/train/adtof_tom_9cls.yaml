@@ -1,4 +1,4 @@
-# ADTOF Frame_RNN 파인튜닝, 9패드 직접 출력(KICK·SNARE·SMALL_TOM·MID_TOM·FLOOR_TOM·HIHAT·CRASH·RIDE·HIHAT_PEDAL) (설계 4-5절).
+# ADTOF Frame_RNN 파인튜닝, 9패드 직접 출력(KICK·SNARE·SMALL_TOM·MID_TOM·FLOOR_TOM·HIHAT·CRASH·RIDE·HIHAT_PEDAL).
 # 출력층 9개를 5클래스 가중치에서 복사해 초기화(탐 3개 ← 탐, 크래시·라이드 ← 심벌, 페달 ← 하이햇). 나머지 설정은 5클래스와 같음.
 # 실행: uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_9cls.yaml --out data/models/adtof_ft/tom_9cls
 base_checkpoint: null

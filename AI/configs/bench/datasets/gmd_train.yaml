@@ -1,5 +1,5 @@
 # GMD train 분할 전부 (beat 328 + fill 518 = 846개, 8.4시간). Roland TD-11 전자 드럼 한 킷.
-# 채보 모델 탐 파인튜닝의 학습 데이터 중 하나 (S15P31A307-164). 평가용 gmd_test.yaml(test 분할)과 겹치지 않음.
+# 채보 모델 탐 파인튜닝의 학습 데이터 중 하나. 평가용 gmd_test.yaml(test 분할)과 겹치지 않음.
 name: gmd_train
 kind: gmd
 root: data/gmd/groove

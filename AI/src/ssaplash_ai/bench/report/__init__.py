@@ -1,4 +1,4 @@
-"""결과 보고서. CSV만 읽고 모델·지표 코드는 모름 (설계 2장 의존 방향).
+"""결과 보고서. CSV만 읽고 모델·지표 코드는 모름.
 
 - summary_table: CSV 집계, 모델별 요약 표(md), MLflow용 요약 dict
 - charts: 지표 막대·RTF 대 SDR 산점도 PNG

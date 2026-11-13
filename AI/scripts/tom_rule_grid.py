@@ -1,4 +1,4 @@
-"""탐 그룹 규칙 후보 yaml 만들기 (설계 CHART-003-tom-rule-retune v0.2 3장).
+"""탐 그룹 규칙 후보 yaml 만들기.
 
 ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml` rules, 되돌리기용 모델)에서 곡 안 탐 그룹 나누기·이름 붙이기
 키만 바꾼 후보를 만듦.

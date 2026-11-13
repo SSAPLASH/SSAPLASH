@@ -1,4 +1,4 @@
-"""체크포인트 하나를 데이터셋에서 돌려 클래스별 F1 (설계 CHART-003-tom-finetune 3-5절).
+"""체크포인트 하나를 데이터셋에서 돌려 클래스별 F1.
 
 학습 중 검증과 학습 뒤 확인이 같은 함수를 씀. 입력은 정답 드럼 트랙, 피크 고르기는 어댑터와
 같은 madmom 방식(`adtof_drumsep_transcriber.pick_peaks`), 점수는 `hit_f1.score_hits`.

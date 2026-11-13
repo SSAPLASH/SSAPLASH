@@ -1,4 +1,4 @@
-"""별도 가상환경 스크립트로 도는 채보 모델 어댑터 (채보 설계 3-10절 프로토콜).
+"""별도 가상환경 스크립트로 도는 채보 모델 어댑터.
 
 TensorFlow(Omnizart)·torch 2.8 고정(ADT_STR)·numpy<2(Inverse Drum Machine)처럼 지금 환경에 같이
 설치할 수 없는 모델용. yaml에 적힌 python_exe로 script를 한 번 띄워 곡 목록을 통째로 넘기고,

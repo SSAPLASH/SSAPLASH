@@ -1,4 +1,4 @@
-"""NCS 기본곡 50곡을 BE 관리자 API로 공용 곡 일괄 등록·공개 (S15P31A307-322).
+"""NCS 기본곡 50곡을 BE 관리자 API로 공용 곡 일괄 등록·공개.
 
 입력: `ncs_make_bulk.py`가 만든 `<bulk>/register.csv`와 같은 폴더의 MIDI·WAV.
 - 등록: 곡마다 `POST /api/v1/admin/songs/midi`(제목·아티스트·라이선스·offsetMs·공개 false·MIDI)

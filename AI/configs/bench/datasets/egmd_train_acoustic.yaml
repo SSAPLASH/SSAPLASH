@@ -1,5 +1,5 @@
 # E-GMD train 분할 중 어쿠스틱 음색 킷 26개 (egmd_test_acoustic.yaml과 같은 킷 목록). beat + fill 21,294개, 206시간.
-# 채보 모델 탐 파인튜닝의 학습 데이터 (S15P31A307-164). test 분할(평가용)과 연주가 겹치지 않음.
+# 채보 모델 탐 파인튜닝의 학습 데이터. test 분할(평가용)과 연주가 겹치지 않음.
 # 전체 zip(96GB)을 data/e-gmd/ 에 풀어 e-gmd-v1.0.0/ 안에 csv와 drummer 폴더가 오게 둔다. 서버에만 있음.
 name: egmd_train_acoustic
 kind: egmd

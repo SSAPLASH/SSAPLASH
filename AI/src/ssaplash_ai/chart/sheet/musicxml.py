@@ -1,6 +1,6 @@
-"""MusicXML → 파트별 음표 목록(초 단위) (설계 CHART-003-sheet-to-chart 3·4장).
+"""MusicXML → 파트별 음표 목록(초 단위).
 
-표준 라이브러리만 씀. music21은 드럼 악기 정보를 잃고 partitura는 드럼 꾸밈음에서 못 읽어서(설계 U7) 직접 해석함.
+표준 라이브러리만 씀. music21은 드럼 악기 정보를 잃고 partitura는 드럼 꾸밈음에서 못 읽어서 직접 해석함.
 - 연주 순서: 첫 파트의 도돌이표·1/2번 괄호·D.C.·D.S.·Fine·To Coda를 펼친 마디 순서를 모든 파트가 같이 씀
 - 시간: 연주 순서대로 <sound tempo>를 따라 초로 바꿈. 모든 파트가 같은 마디 시작 시각을 씀
 - 드럼: 음표의 <instrument id> → <midi-unpitched>(1부터) → GM 번호. 없으면 표준 드럼 기보 위치로 추정
@@ -8,7 +8,6 @@
 - 못갖춘마디: 첫 마디가 implicit="yes"면 그 길이가 pickup_sec(첫 정마디 시작 시각)
 - 마디 반복 기호: <measure-repeat type="start">N이 켜진 동안 음표가 없는 마디는 N마디 앞 음표를 복사
 - 세기: 음표 dynamics 값 × 0.9, 없으면 90, 괄호 친 고스트 노트는 40
-가능 여부 시험(11/03) 때 고친 것: <direction><offset>의 템포 위치, TAB 보표 파트 옥타브 무시, 두 보표 중복 음 제거.
 """
 
 from __future__ import annotations

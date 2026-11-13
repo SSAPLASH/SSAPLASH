@@ -85,7 +85,7 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert work_dir_from_env() == tmp_path / "work"
 
 
-# ---- 채보 설정 (S15P31A307-169) ----
+# ---- 채보 설정 ----
 
 
 def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
@@ -189,7 +189,7 @@ def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
         TranscriptionConfig.from_dict(raw)
 
 
-# ---- 채보 모델 이름으로 고르기 (S15P31A307-243) ----
+# ---- 채보 모델 이름으로 고르기 ----
 
 MODELS_RAW = {"model": "original", "models": {"original": "a.yaml", "combo": "b.yaml"}}
 

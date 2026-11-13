@@ -1,14 +1,9 @@
-"""ADTOF 어댑터 (ADTOF-pytorch 포트, 5가지: 킥·스네어·탐·하이햇·심벌).
+"""ADTOF 어댑터 (ADTOF-pytorch 포트, 5가지: 킥·스네어·탐·하이햇·심벌). 세기는 안 냄.
 
-패키지 `adtof_pytorch`(extra `transcribers`). 모델은 load()에서 한 번 만들고 가중치는 패키지에 들어 있음.
-입력은 파일로만 받으므로 임시 wav(44.1kHz)를 쓰고, 활성값(프레임 100fps × 5) → PeakPicker(저장소 기본
-문턱값 [0.22, 0.24, 0.32, 0.22, 0.30]) → MIDI 피치별 시각 목록. 원래 라벨은 MIDI 피치
-35 킥, 38 스네어, 47 탐, 42 하이햇, 49 심벌. 세기는 안 냄.
-
-checkpoint_path(파인튜닝 가중치, S15P31A307-164)가 있으면 그 파일의 model_info를 읽음: classes가
-출력 채널 라벨(five 계열은 MIDI 피치 5·6·7개, pads는 패드 이름 9개), thresholds가 있으면 그 문턱값. 없으면 지금처럼 5클래스·저장소 기본값.
-yaml의 thresholds가 있으면 그것이 우선. checkpoint_path가 `data/models/`로 시작하는 상대 경로이고 환경 변수
-SSAPLASH_MODELS_DIR이 있으면 그 폴더 기준으로 찾음(서비스 컨테이너는 가중치를 /models로 받음).
+입력은 파일로만 받아서 임시 wav(44.1kHz)를 씀. 활성값(100fps) → PeakPicker → MIDI 피치별 시각 목록.
+원래 라벨은 MIDI 피치 35 킥, 38 스네어, 47 탐, 42 하이햇, 49 심벌.
+checkpoint_path가 있으면 그 파일 model_info의 classes(출력 채널 라벨)와 thresholds를 읽음. yaml의 thresholds가 우선.
+`data/models/`로 시작하는 checkpoint_path는 환경 변수 SSAPLASH_MODELS_DIR이 있으면 그 폴더 기준으로 찾음.
 """
 
 from __future__ import annotations

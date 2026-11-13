@@ -1,4 +1,4 @@
-"""attack slope 왜곡 (설계 3-5절, 미결 U5 간이 버전).
+"""attack slope 왜곡 (간이 버전).
 
 정답 온셋 시각마다 정답 드럼과 예측 드럼의 진폭 포락선이 온셋 후 10ms 동안 오른 기울기를
 구해 로그 비율의 절댓값을 온셋 전체로 평균. 0이면 타격 앞머리(attack slope)가 그대로.
@@ -10,7 +10,7 @@
 - 정답 기울기가 바닥값 이하인 온셋(구간 안에 상승이 없는 온셋)은 제외하고 개수만 기록.
 
 참고 논문(Beyond SDR, arXiv 2609.04224)의 attack slope를 단순화한 것이며 재현이 아님.
-결과 해석 때 이 한계를 적어야 함 (ADR-006).
+결과 해석 때 이 한계를 적어야 함.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ SLOPE_FLOOR = 1e-6
 
 @dataclass
 class TransientResult:
-    """attack slope 왜곡. distortion이 3-3절 attackSlopeDistortion. 나머지는 보조값."""
+    """attack slope 왜곡. distortion이 CSV의 attackSlopeDistortion. 나머지는 보조값."""
 
     distortion: float
     n_used: int

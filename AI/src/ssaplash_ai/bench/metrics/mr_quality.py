@@ -1,4 +1,4 @@
-"""드럼리스 MR 품질 지표 (S15P31A307-165 설계 3장).
+"""드럼리스 MR 품질 지표.
 
 정답 MR(원곡 − 정답 드럼)과 예측 MR을 비교함. 분리 커뮤니티가 "SDR은 높은데 먹먹한" 결과를 잡으려고
 쓰는 fullness·bleedless(MSST `msst.utils.metrics.bleed_full`, MVSEP)를 numpy로 옮긴 것과, 우리가
@@ -30,7 +30,7 @@ HIGH_FMIN_HZ = 5000.0
 
 @dataclass
 class MrQuality:
-    """MR 품질. 3-3절 CSV 열 mrFullness·mrBleedless·mrFullnessHigh·mrLufsDiff·mrClipRatio와 1:1."""
+    """MR 품질. CSV 열 mrFullness·mrBleedless·mrFullnessHigh·mrLufsDiff·mrClipRatio와 1:1."""
 
     fullness: float
     bleedless: float

@@ -1,4 +1,4 @@
-"""채보 bpm 보정(chart/tempo_refine.py) 전후 측정 (설계 CHART-001-ncs-builtin-songs v0.5 인수 조건, S15P31A307-322).
+"""채보 bpm 보정(chart/tempo_refine.py) 전후 측정.
 
 1. Songsterr: 정답 마디(`<곡>/final/bars.json` bar_start, 탭 마디를 음원에 맞춘 시각)가 마디선 70ms 안에 든 비율.
    마디선은 서비스와 같은 계산: 분리 드럼 Beat This! 박 캐시(`<곡>.npz`) → `estimate_from_beats` → `grid_origin_ms`

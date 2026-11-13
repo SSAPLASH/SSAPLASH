@@ -1,4 +1,4 @@
-# 로컬 개발·동작 확인용. 테스트 곡 3개의 30초 구간만 (설계 4-3).
+# 로컬 개발·동작 확인용. 테스트 곡 3개의 30초 구간만.
 name: musdb18hq_test_clip30
 kind: musdb
 root: data/musdb18hq

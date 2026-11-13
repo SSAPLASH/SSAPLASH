@@ -1,4 +1,4 @@
-"""채보 모델 어댑터 공통 인터페이스 (채보 설계 3-8절, 3-9절).
+"""채보 모델 어댑터 공통 인터페이스.
 
 어댑터는 "드럼(또는 원곡) 배열을 받아 타격 목록을 돌려주는" 같은 모양의 클래스. 하위 클래스는
 모델 원래 라벨 그대로의 (시각, 라벨, 세기) 목록만 돌려주고, 라벨 → 패드 변환은 이 공통 틀이
@@ -126,7 +126,7 @@ class TranscriberConfig:
 
     @property
     def eight_pad(self) -> bool:
-        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참 (설계 1-1절 결정). HIHAT_PEDAL은 없어도 됨."""
+        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참. HIHAT_PEDAL은 없어도 됨."""
         values = set(self.labels.values())
         return not (values & set(COARSE)) and set(SCORED_PADS) <= values
 
@@ -154,7 +154,7 @@ def map_label(labels: dict, label: object) -> str | None:
 
 @dataclass
 class TranscriberInfo:
-    """3-8절 info. 보고서 라이선스 열과 CSV 열에 사용."""
+    """모델 정보. 보고서 라이선스 열과 CSV 열에 사용."""
 
     name: str
     adapter: str

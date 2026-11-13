@@ -1,4 +1,4 @@
-# ADTOF Frame_RNN 파인튜닝, 5클래스(킥·스네어·탐·하이햇·심벌) 그대로 (S15P31A307-164, 설계 3-2절).
+# ADTOF Frame_RNN 파인튜닝, 5클래스(킥·스네어·탐·하이햇·심벌) 그대로.
 # 학습 입력은 정답 드럼 트랙. 탐 강조: 윈도 절반을 탐 타격 중심으로, 탐 클래스 가중치 ×2.
 # 체크포인트 선택은 E-GMD validation 어쿠스틱 20곡 + STAR validation 20곡의 탐 검출 F1(tom_f1).
 # 실행: uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_5cls.yaml --out data/models/adtof_ft/tom_5cls

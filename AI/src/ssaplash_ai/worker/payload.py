@@ -1,4 +1,4 @@
-"""결과 봉투의 정규 JSON 직렬화와 payloadHash (설계 3-3절, BE 안내문 "payloadHash" 절).
+"""결과 봉투의 정규 JSON 직렬화와 payloadHash.
 
 BE(`WorkerPayload`)와 같은 규칙:
 - 객체 키는 UTF-16 코드 단위 순서, 배열은 원래 순서, 공백 없음

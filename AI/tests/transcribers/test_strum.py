@@ -1,4 +1,4 @@
-"""STRUM CRNN 어댑터와 규칙 계산 테스트 (S15P31A307-326).
+"""STRUM CRNN 어댑터와 규칙 계산 테스트.
 
 규칙 계산(strum_rules)은 numpy·scipy만으로 돎. 모델을 올리는 테스트는 torch·torchaudio가 없으면 건너뜀.
 """
