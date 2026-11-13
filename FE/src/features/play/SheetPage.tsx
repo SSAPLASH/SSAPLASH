@@ -54,7 +54,7 @@ import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
-import { PlayRecorder } from '@/engine/playRecorder';
+import { PlayRecorder } from './playRecorder';
 import { HihatPedalCoverageTracker, shouldWarnOpenHihat } from '@/domain/kit/hihatPedalCoverage';
 import { readCurrentConsent } from './dataConsent';
 import { startPlaySync } from '@/runtime/playSync';
@@ -63,7 +63,7 @@ import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@
 import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
 import { useTimingCalGate } from './useTimingCalGate';
-import { PlayClock } from '@/engine/sessionClock';
+import { PlayClock } from './sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/runtime/sources';
 import { setSoundOnHit } from '@/runtime/hitSound';

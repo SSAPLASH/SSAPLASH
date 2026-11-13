@@ -1,7 +1,7 @@
 // 세션 시계(설계 3-4·D5·D8). RhythmSession + 반주 + 클릭 예약을 한 곳에서 묶는다.
 // audio는 import하지 않는다(같은 층) — 클릭·반주 제어는 deps로 주입받는다(Metronome과 같은 방식).
-import { diagTap } from './diagTap';
-import type { RhythmSession } from './RhythmSession';
+import { diagTap } from '@/engine/diagTap';
+import type { RhythmSession } from '@/engine/RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
 import { clockStalled } from '@/domain/time/audioClock';
 import {

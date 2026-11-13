@@ -12,7 +12,7 @@ import { RecordingList } from './RecordingList';
 
 vi.mock('@/api/recordings');
 vi.mock('@/media/downloadFile', () => ({ downloadBlob: vi.fn() }));
-vi.mock('@/engine/recordingPlayer', () => ({
+vi.mock('./recordingPlayer', () => ({
   recordingPlayer: { playing: false, onState: () => () => {}, stop: () => {}, play: vi.fn(), positionMs: () => 0 },
 }));
 

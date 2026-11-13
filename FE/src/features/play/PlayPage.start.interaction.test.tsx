@@ -21,8 +21,8 @@ import { PlayPage } from './PlayPage';
 
 // PlayClock 생성 인자를 잡는다(clickOn 확인용)
 const clock = vi.hoisted(() => ({ deps: null as { clickOn(): boolean } | null, session: null as { windows: { perfectMs: number; goodMs: number } } | null }));
-vi.mock('@/engine/sessionClock', async (orig) => {
-  const m = await orig<typeof import('@/engine/sessionClock')>();
+vi.mock('./sessionClock', async (orig) => {
+  const m = await orig<typeof import('./sessionClock')>();
   class PlayClock extends m.PlayClock {
     constructor(session: ConstructorParameters<typeof m.PlayClock>[0], deps: ConstructorParameters<typeof m.PlayClock>[1]) {
       super(session, deps);

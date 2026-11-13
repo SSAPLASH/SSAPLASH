@@ -2,7 +2,7 @@
 // 모의 오디오 시계: currentTime은 화면 시계와 같은 빠르기로 흐르되 멈춤 구간이 있고, 들리는 시각은 currentTime − 출력 지연(시간에 따라 커짐).
 import { describe, expect, it } from 'vitest';
 import { PlayClock, type ClockAccompaniment } from './sessionClock';
-import { RhythmSession } from './RhythmSession';
+import { RhythmSession } from '@/engine/RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
 import type { AudioReading } from '@/domain/time/audioTimeline';
 import type { Chart } from '@/domain/song/chart';

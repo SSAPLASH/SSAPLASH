@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/api/error';
 import { getRecording } from '@/api/recordings';
 import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
-import { recordingPlayer } from '@/engine/recordingPlayer';
+import { recordingPlayer } from './recordingPlayer';
 
 export interface UseRecordingPlaybackOptions {
   /** 상세 조회가 404 RECORDING_NOT_FOUND(이미 지워진 녹음)일 때 */

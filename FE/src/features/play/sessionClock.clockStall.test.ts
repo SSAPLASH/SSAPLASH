@@ -1,8 +1,8 @@
 // PlayClock의 곡 도중 오디오 시계 멈춤 감지(진단 기록만, 설계 MODE-001 오디오 시계 시작 대기 D6). 연주에는 손대지 않는다.
 import { afterEach, describe, expect, it } from 'vitest';
-import { diagTap, type DiagEvent } from './diagTap';
+import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import { PlayClock, ACC_DRIFT_INTERVAL_MS } from './sessionClock';
-import { RhythmSession } from './RhythmSession';
+import { RhythmSession } from '@/engine/RhythmSession';
 import type { Chart } from '@/domain/song/chart';
 
 function makeSession(): RhythmSession {

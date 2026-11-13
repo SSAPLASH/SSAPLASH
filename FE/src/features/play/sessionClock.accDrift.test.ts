@@ -1,8 +1,8 @@
 // PlayClock의 accDrift 발행 검증(T2). 오디오 시계를 1.0001배속으로 흘린 모의 반주를 쓴다.
 import { afterEach, describe, expect, it } from 'vitest';
-import { diagTap, type DiagEvent } from './diagTap';
+import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import { PlayClock, ACC_DRIFT_INTERVAL_MS, type ClockAccompaniment } from './sessionClock';
-import { RhythmSession } from './RhythmSession';
+import { RhythmSession } from '@/engine/RhythmSession';
 import type { Chart } from '@/domain/song/chart';
 
 function makeSession(durationMs: number): RhythmSession {
