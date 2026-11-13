@@ -67,6 +67,8 @@ interface SettingsState {
   hitFxTheme: HitFxTheme;
   /** 타이밍 오차 막대 표시(게임 판정선 아래·악보 아래). 기본 켬 */
   timingBar: boolean;
+  /** 연주 중 타격 진동 방식(PLAY-006). judgement FE 판정 결과로 진동 / local 스틱이 치는 즉시 진동. 설정 화면 스위치는 모니터 빌드에만 있다 */
+  playHaptic: PlayHaptic;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -151,10 +153,12 @@ interface SettingsState {
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
   setTimingBar: (v: boolean) => void;
+  setPlayHaptic: (v: PlayHaptic) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
+export type PlayHaptic = 'judgement' | 'local';
 
 export const SETTINGS_VERSION = 24;
 
@@ -435,6 +439,7 @@ export const useSettings = create<SettingsState>()(
       kitSkin: 'acoustic',
       hitFxTheme: 'auto',
       timingBar: true,
+      playHaptic: 'judgement',
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -544,6 +549,7 @@ export const useSettings = create<SettingsState>()(
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
       setTimingBar: (timingBar) => set({ timingBar }),
+      setPlayHaptic: (playHaptic) => set({ playHaptic }),
     }),
     {
       name: 'ssaplash.settings',
@@ -565,6 +571,8 @@ export const useSettings = create<SettingsState>()(
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
           kitGuide: typeof p.kitGuide === 'boolean' ? p.kitGuide : true,
+          // 저장분에 없거나 모르는 값이면 판정 진동(PLAY-006). 설정 버전은 올리지 않는다
+          playHaptic: p.playHaptic === 'local' ? 'local' : 'judgement',
           ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,

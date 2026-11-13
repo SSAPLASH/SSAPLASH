@@ -7,6 +7,7 @@ import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/ca
 import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } from '@/domain/events';
 import type { CaptureSnapshot } from '@/engine/HitCapture';
 import type { RealignSnapshot } from '@/engine/SnareRealign';
+import type { ClockSkew } from '@/domain/kit/device/arrivalSkew';
 
 /** 보정·재정렬 세션 스냅샷(PLAY-004 3-7). runtime/calibrationSession이 쓰고 화면이 읽는다 */
 export interface CalibrationSnapshot {
@@ -83,6 +84,8 @@ interface LiveState {
   calibration: CalibrationSnapshot;
   /** 스틱별 방위각 드리프트 보정 상태. 연결 안 됐거나 소스가 보정을 못 하면 null */
   yawDrift: [YawDriftStatus | null, YawDriftStatus | null];
+  /** 기기 사이 시각 차이 경고(PLAY-006). 경고 중이 아니면 null. runtime/arrivalSkewWatch가 알리면 bootstrap이 옮긴다 */
+  clockSkew: ClockSkew | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -110,4 +113,5 @@ export const useLive = create<LiveState>(() => ({
   realignNeeded: [false, false],
   calibration: IDLE_CALIBRATION,
   yawDrift: [null, null],
+  clockSkew: null,
 }));

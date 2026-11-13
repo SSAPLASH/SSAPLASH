@@ -91,7 +91,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  useLive.setState({ connected: [false, false] });
+  useLive.setState({ connected: [false, false], clockSkew: null });
 });
 
 describe('SheetPage 시작 확인 창', () => {
@@ -146,6 +146,13 @@ describe('SheetPage 시작 확인 창', () => {
     await screen.findByRole('dialog', { name: '기기 준비가 필요해요' });
     useLive.setState({ connected: [true, true] });
     await screen.findByRole('dialog', { name: '시험곡' });
+  });
+
+  it('기기 시각 차이 경고 중이면 시작 창에 문구가 보인다(PLAY-006)', async () => {
+    useLive.setState({ clockSkew: { spreadMs: 40, medians: { left: 10, right: 10, pedal: 50 }, outlier: 'pedal' } });
+    show('/sheet?song=1&chart=12&start=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    expect(within(dialog).getByText('페달 시간이 어긋났어요. 껐다 켜 주세요.')).toBeTruthy();
   });
 
   it('숨긴 단계 URL은 기본 단계로 보정하면서 창은 열어 둔다', async () => {
