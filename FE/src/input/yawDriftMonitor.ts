@@ -73,8 +73,6 @@ class YawDriftMonitor {
   private sticks: [StickState, StickState] = [blank(), blank()];
   /** 일시정지 중에는 observe를 무시한다(보정·재정렬 중, PLAY-004 D7) */
   private paused = false;
-  /** 자동 보정 사용 여부(설정). 꺼져 있으면 observe를 무시한다. 재정렬(correct)·연결 직후 초기화는 그대로 한다 */
-  private auto = true;
   private statusCb: ((stickId: StickId, st: YawDriftStatus | null) => void) | null = null;
 
   constructor() {
@@ -243,21 +241,6 @@ class YawDriftMonitor {
     for (const i of STICKS) this.sticks[i].ring = [];
   }
 
-  /**
-   * 자동 보정을 켜고 끈다(설정 「패드 위치 자동 보정」). 이미 보낸 오프셋은 그대로 둔다(끄는 순간 패드가 튀지 않게).
-   * 바뀔 때 링과 마지막 오차를 비워, 꺼진 동안의 타격이나 옛 샘플이 다음 보정에 섞이지 않게 한다
-   */
-  setAuto(on: boolean): void {
-    if (this.auto === on) return;
-    this.auto = on;
-    for (const i of STICKS) {
-      const s = this.sticks[i];
-      s.ring = [];
-      s.lastErr = null;
-      if (this.active[i]) this.report(i);
-    }
-  }
-
   get isPaused(): boolean {
     return this.paused;
   }
@@ -284,7 +267,7 @@ class YawDriftMonitor {
 
   /** 타격 1건을 보고 샘플로 쓸 수 있으면 링에 넣고, 조건이 맞으면 보정을 보낸다 */
   observe(hit: ResolvedHit, profile: CalibrationProfile | null): void {
-    if (this.paused || !this.auto) return;
+    if (this.paused) return;
     const src = this.usable();
     if (!src) return;
     if (!isSensorSource(hit.source)) return;
@@ -328,7 +311,6 @@ class YawDriftMonitor {
     this.offState = null;
     this.source = null;
     this.paused = false;
-    this.auto = true;
     for (const i of STICKS) {
       this.clearWindow(this.sticks[i]);
       this.sticks[i] = blank();
