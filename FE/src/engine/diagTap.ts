@@ -79,6 +79,8 @@ export type DiagBody =
       audioOffsetMs: number;
       /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
       kickOffsetMs: number;
+      /** 이 판의 타격 진동 방식(PLAY-006): judgement FE 판정 파형 / local 스틱 즉시 진동. 옛 녹화에는 없다 */
+      haptic?: 'judgement' | 'local';
       noteCount: number;
       /** end일 때: 끝까지 쳤는지('finished') 중간에 나갔는지('left') */
       reason?: 'finished' | 'left';
@@ -117,7 +119,18 @@ export type DiagBody =
    * 그 손에 최소 타격 세기(SET_PARAM 0x03)를 보낸 순간(PLAY-004 ③). dps는 보낸 값, medianDps는 보정 타격 중앙값(없으면 null),
    * samples는 계산에 쓴 표본 수. reason: capture 보정 저장 / linked 손이 붙음·설정 변경 / reset 저장값이 지워져 기본(400)으로 돌아감
    */
-  | { type: 'minPeak'; stickId: 0 | 1; dps: number; medianDps: number | null; samples: number; reason: 'capture' | 'linked' | 'reset' };
+  | { type: 'minPeak'; stickId: 0 | 1; dps: number; medianDps: number | null; samples: number; reason: 'capture' | 'linked' | 'reset' }
+  /**
+   * 기기(왼손·오른손·페달) 사이 도착 지연 중앙값의 최대 차가 한도를 넘은 채 이어져 경고가 시작·끝날 때(PLAY-006).
+   * medians는 기기별 도착 지연 중앙값(ms, 표본 부족이면 null), outlier는 가른 어긋난 기기(못 가르면 null)
+   */
+  | {
+      type: 'arrivalSkew';
+      phase: 'start' | 'end';
+      spreadMs: number;
+      medians: { left: number | null; right: number | null; pedal: number | null };
+      outlier: 'left' | 'right' | 'pedal' | null;
+    };
 
 /** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
 export interface DiagAnchor {
