@@ -107,11 +107,11 @@ public class AuthController {
 			return redirect(frontend(properties.loginSuccessPath()));
 		}
 		catch (OAuth2FlowException ex) {
-			log.warn("로그인 실패 provider={} reason={}", oauth2Provider.key(), ex.getMessage());
+			log.warn("로그인 실패 provider={} reason={}", oauth2Provider.key(), ex.getReason());
 			return redirect(failure(ex.errorCode()));
 		}
 		catch (RuntimeException ex) {
-			log.error("로그인 처리 중 예상하지 못한 오류 provider={}", oauth2Provider.key(), ex);
+			log.error("로그인 실패 provider={} reason=UNEXPECTED_ERROR", oauth2Provider.key());
 			return redirect(failure(OAuth2FlowException.OAUTH_FAILED));
 		}
 	}
