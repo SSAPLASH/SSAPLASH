@@ -15,14 +15,14 @@
 | `app/` | 라우터·지연 로드 표(`routeModules`)·bootstrap·프로바이더·AppShell. 전부를 import할 수 있는 유일한 층 |
 | `config/` | 빌드 스위치·`AUTH_REQUIRED`·지연값처럼 값과 순수 함수. 다른 config 파일만 import한다 |
 | `features/<기능>/` | 한 기능만 쓰는 화면(`XxxPage.tsx`)과 `components/`·`store/`·`api/`·`domain/`. 기능: play·setup·free·studio·result·history·lesson·settings·landing·admin·monitor·dev |
-| `components/<묶음>/` | 둘 이상의 기능이 쓰는 UI. `ui/`(디자인 시스템)·`shell/`·`song/`·`drum/`·`fx/`·`stick/`·`calibration/`·`recording/`·`lesson/`·`sheetmusic/` |
+| `components/<묶음>/` | 여러 기능·app이 쓰는 UI와 디자인 시스템. `ui/`(디자인 시스템)·`shell/`·`song/`·`drum/`·`fx/`·`stick/`·`calibration/`·`recording/`·`lesson/`·`sheetmusic/` |
 | `runtime/` | 앱에 하나뿐인 인스턴스·세션(입력 소스·센서 세션·쿼리 캐시·녹음·업로드·보정·오디오 켜기·`useApiQuery`) |
 | `store/` | 공유 zustand 상태 |
-| `api/`(account·kit·song·play)·`input/`·`engine/`·`audio/`·`coach/`·`telemetry/`·`media/` | 코어. domain·config만 import한다 |
+| `api/`(account·kit·song·play)·`input/`·`engine/`·`audio/`·`coach/`·`telemetry/` | 코어. domain·config만 import한다 |
 | `domain/` | 공유 순수 타입·함수. 바로 아래에는 `events`만, 나머지는 `kit/`·`song/`·`time/`·`play/`·`account/`·`hitFx/` |
 | `styles/`·`test/` | 전역 CSS 토큰, 구조 테스트와 테스트 보조 |
 
-`features/play/components/`는 흐름 단계로 나뉜다. `picker/`(곡 선택, 안내 줄은 `guide/`), `start/`(시작 확인 창), `stage/`(연주 화면), `pause/`(일시정지), `diag/`(진단 자동 연주). `play.css`는 루트에 둔다.
+`features/play/components/`는 흐름 단계로 나뉜다. `picker/`(곡 선택, 안내 줄은 `guide/`), `start/`(시작 확인 창), `stage/`(연주 화면), `pause/`(일시정지), `diag/`(진단 자동 연주). `picker/lesson/`은 입문 코스, `stage/` 아래 highway/·sheet/·kit/·coach/는 화면 부품이다. `play.css`는 루트에 둔다. 공유 셸은 nav/·dock/·account/, 디자인 시스템은 action/·feedback/·form/·layout/·overlay/로 나눈다.
 
 ## 새 파일을 둘 자리
 
@@ -35,9 +35,9 @@
    - 앱에 하나뿐인 인스턴스·세션은 `runtime/`에 둔다. 라우트 표나 기능 폴더를 알아야 하면 `app/`에 둔다.
    - 값·순수 함수 스위치는 `config/`에 둔다.
 4. 새 화면은 `features/<기능>/XxxPage.tsx`로 만들고 `app/routeModules`와 `app/App.tsx`에 연결한다. 새 기능 폴더는 자기 라우트가 있을 때만 만든다.
-5. 기능 폴더의 소스가 15개 이하이면 하위 폴더 없이 평평하게 둔다.
+5. 모든 소스 폴더에서 바로 아래 프로덕션 `.ts`·`.tsx` 파일이 15개를 넘으면 응집도에 따라 하위 폴더 분리를 검토한다. 테스트·CSS는 세지 않으며 CI 강제 규칙은 아니다.
 6. `domain/` 바로 아래에는 `events`만, `api/` 바로 아래에는 `http`·`error`만 둔다. 둘 다 같은 개념 이름(`account`·`kit`·`song`·`play` 등)의 하위 폴더로 묶는다. 새 파일은 맞는 하위 폴더에 두고, 맞는 폴더가 없을 때만 새 하위 폴더를 만든다.
-7. 공유 층(`api/`·`engine/`·`input/` 등)도 1번을 따른다. 한 기능만 쓰게 된 파일은 그 기능 폴더로 옮긴다.
+7. 공유 층에서도 기능 전용 코드는 기능 폴더에 둔다. 단, 여러 계층의 공용 계약은 현재 소비 기능 수만으로 이동하지 않고 재사용성과 의존 방향을 함께 판단한다.
 
 ## 의존 규칙 (구조 테스트가 검사한다)
 
@@ -51,6 +51,7 @@
 - R6: runtime은 components를 import하지 않는다.
 - R7: store·코어·domain은 runtime을 import하지 않는다.
 - R8: 기능은 app을 import하지 않는다. 기능이 app의 기능을 써야 하면 app이 props나 콜백으로 넘긴다(예: Sidebar의 `onPrefetch`).
+- 공유 화면 컴포넌트와 engine·audio·coach의 값 구현을 전이 경로로 추적해 한 기능만 소비하면 실패한다. app 소비, 다른 공유 계층이 쓰는 코어 구현과 `components/ui` 기본 부품은 공용으로 보고 dev 진단 화면은 기능 수에서 제외한다. domain·api와 타입 전용 계약은 이 검사에서 제외한다.
 - `pages/`나 `components/` 바로 아래에 파일이 생기면 실패한다.
 - `domain/` 바로 아래에 `events`, `api/` 바로 아래에 `http`·`error` 말고 다른 파일이 생기면 실패한다.
 
