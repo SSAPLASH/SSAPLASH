@@ -19,7 +19,7 @@ describe('serverRowView', () => {
   it('서버 기록: 제목·난이도·종료 시각·연주 길이·정확도·점수와 리포트 링크', () => {
     expect(serverRowView(play(), false)).toEqual({
       playId: 'p1', title: '별빛 산책', titleMuted: false, mode: 'RHYTHM', level: 'HARD', at: '2026-11-12T05:01:04Z', durationMs: 64000,
-      accuracy: 74.1, score: 141250, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' },
+      accuracy: 74.1, score: 141250, wideGoodMs: null, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' },
     });
   });
 
@@ -44,11 +44,25 @@ describe('serverRowView', () => {
   });
 });
 
+describe('판정 폭 표시(wideGoodMs)', () => {
+  const timed = (goodMs: number) => ({ timing: { perfectMs: 25, goodMs } });
+  it('서버 기록은 이 브라우저에 로그가 남은 것만 넓힌 폭을 안다', () => {
+    expect(serverRowView(play(), true, timed(90)).wideGoodMs).toBe(90);
+    expect(serverRowView(play(), false).wideGoodMs).toBeNull();
+    expect(serverRowView(play(), true, timed(60)).wideGoodMs).toBeNull();
+  });
+  it('로컬 기록은 로그의 판정 폭을 쓴다', () => {
+    const o = { deleted: false, upload: undefined, showSave: false } as unknown as Parameters<typeof localRowView>[1];
+    expect(localRowView(log(timed(90)), o).wideGoodMs).toBe(90);
+    expect(localRowView(log(timed(60)), o).wideGoodMs).toBeNull();
+  });
+});
+
 describe('localRowView', () => {
   it('서버에 없는 기록: 정확도는 백분율로, 결과 링크, 저장 상태', () => {
     expect(localRowView(log(), { deleted: false, upload: up('FAILED', true), showSave: true })).toEqual({
       playId: 'l1', title: '기본 8비트', titleMuted: false, mode: 'RHYTHM', level: 'NORMAL', at: '2026-11-12T05:01:04Z', durationMs: 64000,
-      accuracy: 85.2, score: 82300, chips: [], save: 'FAILED', link: { kind: 'RESULT', to: '/result/l1' },
+      accuracy: 85.2, score: 82300, wideGoodMs: null, chips: [], save: 'FAILED', link: { kind: 'RESULT', to: '/result/l1' },
     });
   });
 
