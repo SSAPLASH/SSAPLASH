@@ -258,6 +258,8 @@ export class MockStick {
   private bridgeTick = 0;
   /** 손별로 스틱이 가진 패드 개수 */
   private padCount: number[] = [0, 0, 0, 0];
+  /** 손별로 스틱이 가진 방위각 오프셋(×100). SET_YAW_OFFSET으로 바뀌고 RESET_POSE·재부팅으로 0이 된다 */
+  private yawOffset: number[] = [0, 0, 0, 0];
   private lastElevationDeg = 0;
   /** SET_MODE로 정한 스트림 모드. 기본 HIT_AND_POSE */
   private mode: number = StreamMode.HIT_AND_POSE;
@@ -311,6 +313,7 @@ export class MockStick {
     this.bridgeCrc = 0;
     this.bridgeTick = 0;
     this.padCount = [0, 0, 0, 0];
+    this.yawOffset = [0, 0, 0, 0];
     this.mode = StreamMode.HIT_AND_POSE;
 
     // Feather fw 1.0 모사: BOOT 뒤 스틱마다 부팅 바이어스(0.1°/s) 로그
@@ -378,6 +381,7 @@ export class MockStick {
       this.clockBaseUs[role] = 0;
       this.unconfigured[role] = true;
       this.padCount[role] = 0;
+      this.yawOffset[role] = 0;
     }
     this.emitStatusOf(role);
     if (this.dongle) this.emitLink();
@@ -509,7 +513,11 @@ export class MockStick {
             this.publish(buildParamAck({ role: first, paramId: p.id, value: stickParamDefault(p, 'feather') })),
           );
         });
+        // 스틱 FW 1.12 모사: 끝 표시 앞에 현재 방위각 오프셋(0x21)을 보낸다. 끝 표시의 개수에는 넣지 않는다
         this.later(REPLY_GAP_MS * (STICK_PARAMS.length + 1), () =>
+          this.publish(buildParamAck({ role: first, paramId: PARAM_ACK_YAW_OFFSET, value: this.yawOffset[first] })),
+        );
+        this.later(REPLY_GAP_MS * (STICK_PARAMS.length + 2), () =>
           this.publish(buildParamAck({ role: first, paramId: PARAM_ACK_END, value: STICK_PARAMS.length })),
         );
         break;
@@ -540,12 +548,15 @@ export class MockStick {
         if (bytes.length < 3) break;
         const value = v.getInt16(1, true);
         for (const role of targets) {
+          this.yawOffset[role] = value;
           this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role, paramId: PARAM_ACK_YAW_OFFSET, value })));
         }
         break;
       }
       case CommandType.RESET_POSE: {
         const value = Math.round(this.lastElevationDeg * 100);
+        // 기준 자세를 다시 잡으면 펌웨어 오프셋이 0이 된다
+        for (const role of targets) this.yawOffset[role] = 0;
         this.later(REPLY_GAP_MS, () => this.publish(buildParamAck({ role: first, paramId: PARAM_ACK_RESET_POSE, value })));
         break;
       }

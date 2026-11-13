@@ -20,7 +20,7 @@ import {
 } from '@/domain/tuning';
 import type { InputSource } from './InputSource';
 import { packetTap } from './packetTap';
-import { decodePacket, encodeSetYawOffset, handOf, PARAM_ACK_YAW_OFFSET } from './stickProtocol';
+import { decodePacket, encodeGetParams, encodeSetYawOffset, handOf, PARAM_ACK_YAW_OFFSET } from './stickProtocol';
 import { isSensorSource } from '@/domain/events';
 
 export type { YawDriftStatus };
@@ -207,6 +207,20 @@ class YawDriftMonitor {
     src.sendCommand!(encodeSetYawOffset(0), stickId);
     this.correctionCb?.({ stickId, reason: 'connected', prevDeg, sentDeg: 0, medianDeg: null, madDeg: null, samples: [] });
     this.forget(stickId);
+    this.report(stickId);
+  }
+
+  /**
+   * 꺼지지 않은 스틱이 붙었다(STATUS 비트 5 = 0): 스틱이 가진 오프셋은 그대로 두고, 현재 값을 물어 FE 기억을 맞춘다.
+   * 스틱 FW 1.12부터 GET_PARAMS 응답에 0x21(현재 방위각 오프셋)이 들어 있어, subscribeTap이 그 손 적용값에 넣는다.
+   * 페이지를 새로 고치면 FE 기억은 0인데 스틱은 값을 갖고 있어 다음 보정(절대값)이 그만큼 튀던 것을 막는다.
+   * 0x21이 오지 않으면(FW 1.11 이하) 기억은 그대로다. 확인 창을 열지 않고 쿨다운·링도 건드리지 않는다.
+   * 상태를 보고해 두어야 창 없이 온 응답이 이 손에 반영된다(상태 없는 손의 응답은 건너뛴다)
+   */
+  onLinked(stickId: StickId): void {
+    const src = this.usable();
+    if (!src) return;
+    src.sendCommand!(encodeGetParams(), stickId);
     this.report(stickId);
   }
 

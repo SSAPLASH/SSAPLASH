@@ -401,8 +401,9 @@ Figma 01 Design System의 변수·텍스트 스타일을 `src/styles/tokens.css`
   - **적용값 기억**(설계 `.claude/plans/PLAY-004-yaw-ack-hand-routing.md`): 보정은 FE가 기억한 적용값에서 오차를 뺀 절대값으로 나간다. 기억값이 스틱의 실제 오프셋과 다르면 다음 보정·재정렬이 그 차이만큼 튄다.
     - `0x21` 응답은 손별로 가려 받는다. 순서는 수신 기록의 손(BLE·WS 링크) → 패킷 role(flags 비트 0–1이 0·1) → 확인 창이 열린 손이고, 모두 없으면 버린다(`padTableSync`와 같은 규칙). Web Serial 수신 기록에는 손 정보가 없어 role로 가린다. 양손에 한꺼번에 덮어쓰지 않는다.
     - 같은 소스가 끊기거나 포트를 다시 열 때는 링·쿨다운·확인 창만 비우고 적용값은 남긴다. 꺼지지 않은 스틱은 오프셋을 그대로 갖고 있기 때문이다. 꺼졌다 켜진 스틱(STATUS 비트 5)은 `onConnected`가 0으로 다시 맞춘다. 소스를 바꾸거나 떼면 모두 잊는다.
-    - 페이지를 새로 고치면 FE 기억값은 0에서 시작하는데 스틱은 값을 갖고 있을 수 있다(스틱의 현재 오프셋을 읽는 명령이 없다). 이 경우 첫 재정렬이 어긋나고 한 번 더 하면 맞는다.
-- 연결 직후엔 `SET_YAW_OFFSET(0)`을 보내 기억을 맞추고, `inputManager.resetPose()`(펌웨어가 오프셋을 0으로 되돌림) 때는 FE 상태도 0으로 비운다. 상태(`YawDriftStatus`)는 `liveStore.yawDrift`로 옮겨 세팅 화면 "스틱 연결" 카드에 보인다.
+    - 꺼지지 않은 스틱(STATUS 비트 5 = 0)이 붙으면 `onLinked`가 그 손에 `GET_PARAMS`를 한 번 보내 현재 오프셋을 읽는다. 스틱 FW 1.12부터 응답의 끝 표시 앞에 `0x21`(현재 방위각 오프셋)이 오고, 위 규칙대로 그 손 적용값에 들어간다. 페이지를 새로 고쳐 FE 기억이 0이 된 경우가 이렇게 맞춰진다. 이 응답은 확인 창·쿨다운·링을 건드리지 않는다.
+    - 스틱 FW 1.11 이하는 `0x21`을 답하지 않는다. 이때는 FE 기억이 그대로이고(새로 고친 뒤면 0), 첫 재정렬이 어긋난 뒤 한 번 더 하면 맞는다.
+- 꺼졌다 켜진 스틱(비트 5 = 1)이나 비트 5 정보가 없는 소스(BLE 직결)가 붙으면 `SET_YAW_OFFSET(0)`을 보내 기억을 맞추고, `inputManager.resetPose()`(펌웨어가 오프셋을 0으로 되돌림) 때는 FE 상태도 0으로 비운다. 상태(`YawDriftStatus`)는 `liveStore.yawDrift`로 옮겨 세팅 화면 "스틱 연결" 카드에 보인다.
 - 보정·재정렬 중에는 `pause()`로 감시를 멈추고(그 타격은 샘플이 아니다) 끝나면 `resume()`(링 비움). 스네어 재정렬은 `correct(stickId, d)`로 쿨다운 없이 `SET_YAW_OFFSET(적용값 − d)`를 바로 보낸다.
 - **스틱 USER 버튼 보정(0x22)**: FE가 `RESET_POSE`를 보낸 뒤 1초 안에 온 `PARAM_ACK 0x22`는 그 응답, 밖에서 온 것은 버튼 보정으로 보고 `InputManager.onResetPose('button', stickId)`로 알린다. 보정 중이면 처음부터, 아니면 그 손이 "재정렬 필요"가 된다.
 
@@ -868,7 +869,7 @@ relay(`app/monitorRelay`) 비용은 모니터를 보지 않을 때 0이다. 모�
 - 센서 시각은 바퀴 수를 세지 않고 환산한다: 원시 µs + 소스 오프셋에 한 바퀴(2^32 µs)의 정수배를 더해 **수신 시각에 가장 가까운 값**을 쓰고(`tsUnwrap.nearBrowserMs`), 관측·채택 오프셋은 그 손에서 처음 본 값과 반 바퀴 이내로 맞춘다(`normalizeOffsetMs`). 소스 `ClockSync`와 모니터가 각자 바퀴를 세면 한쪽만 초기화될 때(스틱 재연결, 로그 지우기) 정확히 한 바퀴만큼 어긋나기 때문이다.
 - 페달 보드(role 2·3)는 손 L·R 통계에 섞지 않는다. SYNC 짝 실패·ACK 수는 손 응답만 세고, 페달은 ② 센서의 **페달** 칸에 배터리·fw·SYNC 왕복(최근/최소)·오프셋(관측/채택)·짝 실패를 따로 보인다. 페달 보드 하나가 두 role을 같은 시계로 보내므로 SYNC는 role 2 응답만 센다. 채택 오프셋은 직결 소스에서만 나온다(따라보기·재생은 –).
 - 통계는 1초 슬라이딩 창: 타입별 패킷/초, HIT·POSE seq 유실, 브리지 CRC(0x7E `BRIDGE_STATS`)와 직결 CRC(Web Serial `transportStats`), SYNC→SYNC_ACK 지연, `timestamp − 수신 시각`(미래 ms), LOG `drop`·`I2C REC`·`BOOT` 집계.
-- 제어 섹션: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
+- 제어 섹션: GET_PARAMS → PARAM_ACK 14개 + 종료 표시(0x00). 스틱 FW 1.12부터 종료 표시 앞에 현재 방위각 오프셋(0x21)이 하나 더 오고, 종료 표시의 개수에는 들어가지 않는다(모의 스틱도 같게 답한다). SET_PARAM 응답 500ms 대기. SET_PAD_TABLE·SET_YAW_OFFSET·RESET_POSE 적용 확인(0x20·0x21·0x22)은 명령 바에 쌓인다.
 - 파라미터 기본값은 펌웨어별 표다(`stickParamDefault`). STATUS의 fwMajor가 0이면 NUCLEO, 1이면 Feather(nRF52840)이고 STATUS를 받기 전에는 Feather 표를 쓴다(스틱 2개의 fwMajor가 다르면 마지막 STATUS 기준). 차이는 minDecel 30/60, maxSwingMs 400/160, tsCorrUs 3000/800, velMax 1000/1200(NUCLEO/Feather)이다. "기본값 복원"은 이 표를 쓰고, 패널 머리글에 지금 쓰는 표를 보여 준다. 현재값은 항상 GET_PARAMS 결과다.
 - 스틱 USER 버튼으로 정면 보정을 하면 요청 없이 PARAM_ACK 0x22가 온다. 열린 확인 창이 없을 때 온 0x22는 명령 바 확인 목록에 "스틱 버튼 정면 보정(요청 없음)"으로 기록된다(명령 응답과 구분).
 - ② 센서 "IMU·바이어스" 항목: 스틱별 마지막 LOG `BIAS x y z`(0.1°/s)는 정상, `BIAS default`는 주의(부팅 때 흔들려 바이어스 기본값), `IMU FAIL`은 이상이다. 다음 `BOOT`에서 초기화된다. `drop short`는 기존 거른 스윙으로 집계하고, `hold still...` 등 그 밖의 LOG는 텍스트로 남는다.
