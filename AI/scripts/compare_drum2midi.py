@@ -1,4 +1,4 @@
-"""drum2midi 원본과 우리 탐 규칙 비교표 (S15P31A307-164 작업 16).
+"""drum2midi 원본과 우리 탐 규칙 비교표.
 
 drum2midi는 run-transcription 결과 폴더의 hits_by_class.csv(8패드·5가지, 50ms)에서,
 우리 규칙은 rule-eval 결과 폴더의 by_song.csv(8패드 tp·fp·fn)와 tom* 열에서 곡별 개수를 읽어 같은 기준으로 셈.
@@ -57,7 +57,7 @@ def read_run(name: str, folder: Path, model: str | None, counts: Counts) -> None
             if (r["dataset"], r["songId"]) in failed:
                 continue
             if r["scheme"] == "pads":
-                # 2026-10-26 패드 이름 변경(S15P31A307-170) 전 결과는 SMALL_TOM이 HI_TOM
+                # 2026-10-26 패드 이름 변경 전 결과는 SMALL_TOM이 HI_TOM
                 key = "SMALL_TOM" if r["label"] == "HI_TOM" else r["label"]
             elif r["scheme"] == "five" and r["label"] == "tom":
                 key = "TOM_ANY"

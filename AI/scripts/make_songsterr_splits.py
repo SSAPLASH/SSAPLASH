@@ -1,4 +1,4 @@
-"""11/08 추가 공용 곡을 검증·학습 목록으로 나누고 학습 설정을 만듦 (설계 CHART-003-songsterr-expand-train).
+"""11/08 추가 공용 곡을 검증·학습 목록으로 나누고 학습 설정을 만듦.
 
 - 시험 곡: configs/bench/datasets/public_songs.yaml(31곡)과 public_songs_holdout38.yaml(38곡).
   두 목록의 곡은 학습·검증에 넣지 않음

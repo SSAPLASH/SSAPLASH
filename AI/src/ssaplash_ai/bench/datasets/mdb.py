@@ -1,4 +1,4 @@
-"""MDB Drums 로더 (설계 3-3절, 4-3절).
+"""MDB Drums 로더.
 
 MedleyDB 23곡에 사람이 타격 시각·드럼 종류를 적은 공개 데이터셋 (CC BY-NC-SA 4.0).
 폴더 규칙은 `{root}/audio/full_mix/{곡}_MIX.wav`, `{root}/audio/drum_only/{곡}_Drum.wav`,
@@ -15,7 +15,7 @@ import numpy as np
 from ssaplash_ai.bench.datasets.base import BaseDataset, SongItem, match_length
 from ssaplash_ai.bench.datasets.pads import DROP, clip_hits, make_hits
 
-# 세부 분류(subclass) 21종 → 패드. 23곡 주석에서 모은 라벨 전부 (2026-10-21)
+# 세부 분류(subclass) 21종 → 패드. 23곡 주석에서 모은 라벨 전부
 MDB_SUBCLASS_PAD: dict[str, str] = {
     "KD": "KICK",
     "SD": "SNARE",
@@ -41,7 +41,7 @@ MDB_SUBCLASS_PAD: dict[str, str] = {
 }
 
 # MUSDB18 train에도 들어 있는 곡 (같은 MedleyDB 녹음). 분리 모델이 학습 때 본 곡이라
-# "분리 후 F1 변화"에서는 뺀다 (설계 1장 핵심 결정)
+# "분리 후 F1 변화"에서는 뺀다
 MDB_IN_MUSDB_TRAIN: tuple[str, ...] = (
     "MusicDelta_80sRock",
     "MusicDelta_Beatles",

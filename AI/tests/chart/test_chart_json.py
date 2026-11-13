@@ -75,7 +75,7 @@ def test_offsetMs는_마디_첫_박을_한_마디씩_당긴_가장_이른_마디
 
 
 def test_offsetMs는_다수결_위치가_있으면_그_값():
-    # 첫 마디 첫 박(1300ms → 한 마디 당기면 1300)보다 다수결 위치(300ms)를 씀 (설계 CHART-003-downbeat-vote)
+    # 첫 마디 첫 박(1300ms → 한 마디 당기면 1300)보다 다수결 위치(300ms)를 씀
     tempo = replace(TEMPO, bpm=120.0, first_downbeat_ms=1300, downbeat_phase_ms=300)
     assert grid_origin_ms(tempo) == 300
     failed = replace(tempo, estimated=False)
@@ -94,7 +94,7 @@ def test_offsetMs는_bpm_추정_실패나_박이_없으면_0():
     assert grid_origin_ms(hinted) == 0
 
 
-# ---- 원점을 킥·스네어 노트에 맞추기 (설계 v0.5, 인수 조건 22) ----
+# ---- 원점을 킥·스네어 노트에 맞추기 ----
 
 TEMPO_120 = replace(TEMPO, bpm=120.0, first_beat_ms=1880, first_downbeat_ms=1880)
 
@@ -294,7 +294,7 @@ def test_빠르기_변화_목록이_있어도_통과():
     validate_chart(chart, 3000)
 
 
-# ---- 빠르기 구간 (설계 CHART-003-variable-tempo-exp 3-1) ----
+# ---- 빠르기 구간 ----
 
 # 120bpm 마디 첫 박 4500ms에서 시작, 16박 뒤(12500ms) 100bpm
 TEMPO_MAP = replace(

@@ -1,4 +1,4 @@
-# 실제 녹음 학습 확인 실험 (S15P31A307-164, 설계 CHART-003-real-drum-data-check). 묶음 표는 configs/train/real_check/folds.yaml
+# 실제 녹음 학습 확인 실험. 묶음 표는 configs/train/real_check/folds.yaml
 # 평가용. ENST 드러머 3의 반주 있는 곡(minus-one·MIDI-minus-one) 21곡. tom_6cls_real_no_d3 학습이 안 본 곡.
 name: enst_minus_one_d3
 kind: enst

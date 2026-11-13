@@ -1,19 +1,9 @@
-"""분리 전 음악 여부 검사 모듈.
+"""분리 전 음악 여부 검사. 원곡 파일 → 음악 확률·말소리 확률 → 기준에 걸리면 ChartNotTranscribableError.
 
-원곡 파일 → 음악 확률·말소리 확률 → 기준에 걸리면 ChartNotTranscribableError. 분리 모델(GPU)을 돌리기 전에
-말소리·소음 파일을 걸러 내려는 검사라 CPU에서 돎.
-
-판별 방법
-- 원곡의 20·40·60·80% 위치(설정 positions)에서 10초(window_sec) 구간을 뽑아 모노 16kHz로 바꿈
-- AudioSet으로 학습된 분류 모델 AST가 구간마다 "Music"·"Speech" 확률을 냄. 분류끼리 독립인 확률이라 합이 1이 아님
-- 구간 평균으로 판정. 음악 확률 평균이 min_music_prob 미만이거나 말소리 확률 평균이 max_speech_prob 이상이면 걸림
-- 구간 하나로 판정하지 않음. 랩 곡은 구간 하나의 말소리 확률이 0.5를 넘기도 함
-
+원곡의 positions 위치에서 window_sec 구간을 뽑아 AST 분류 모델로 "Music"·"Speech" 확률을 구하고 구간 평균으로 판정.
+구간 하나로 판정하지 않는 이유: 랩 곡은 구간 하나의 말소리 확률이 0.5를 넘기도 함.
 흐름: MusicCheckModule(config).load() 한 번 → check_file() 곡마다 → close().
-설정의 기준값 두 개가 모두 비어 있으면 load()는 모델을 올리지 않고 check_file()은 None을 돌려줌.
-measure_file()은 기준과 상관없이 확률만 구함(명령줄 `ssaplash-chart music-check`). load(force=True)로 올린 뒤 씀.
-
-분류 모델은 AudioTagger 규약(load·predict·close)만 지키면 바꿀 수 있음. 기준값은 모델마다 다시 정해야 함.
+기준값 두 개가 모두 비어 있으면 모델을 올리지 않고 check_file()은 None을 돌려줌.
 """
 
 from __future__ import annotations

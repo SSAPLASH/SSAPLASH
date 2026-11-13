@@ -1,4 +1,4 @@
-"""Inverse Drum Machine 채보 스크립트 (별도 환경 `.venv-idm`, 채보 설계 3-10절).
+"""Inverse Drum Machine 채보 스크립트 (별도 환경 `.venv-idm`).
 
 저장소(options.repo_dir, 기본 ext/inverse-drum-machine)를 sys.path에 넣고 idm 패키지를 import.
 가중치는 저장소 pretrained/idm-44-train-kits/checkpoints/*.ckpt(2.5MB, 저장소에 포함).

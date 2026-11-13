@@ -1,4 +1,4 @@
-"""POST /chart/sheet — BE가 MusicXML 업로드 때 동기로 부르는 드럼 악보 → 채보 변환(S15P31A307-293).
+"""POST /chart/sheet — BE가 MusicXML 업로드 때 동기로 부르는 드럼 악보 → 채보 변환.
 
 - 내부망 전용(인증 없음, 외부 포트를 열지 않는다). 약점 분석과 같다.
 - 본문은 파일 바이트 그대로(`application/octet-stream`), 파일 이름은 쿼리 `name`. 확장자로 `.mxl`(zip)과 XML을 가른다.

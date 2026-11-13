@@ -1,4 +1,4 @@
-"""ENST minus-one 곡을 MUSDB 폴더 모양(곡 폴더마다 mixture.wav·drums.wav)으로 내보냄 (S15P31A307-165).
+"""ENST minus-one 곡을 MUSDB 폴더 모양(곡 폴더마다 mixture.wav·drums.wav)으로 내보냄.
 
 MR 품질 비교는 정답 MR이 정확한 데이터가 필요해서, ENST를 이 스크립트로 한 번 내보내고 측정은 MUSDB 로더로 함.
 mixture = 드럼 wet_mix + MR × 반주 게인, drums = wet_mix. 0dB를 넘을 수 있어 32비트 float wav로 저장.

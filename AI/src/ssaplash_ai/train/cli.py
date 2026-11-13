@@ -1,4 +1,4 @@
-"""`ssaplash-train` 명령 (설계 CHART-003-tom-finetune 3-4절).
+"""`ssaplash-train` 명령.
 
 uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_5cls.yaml --out data/models/adtof_ft/tom_5cls
 uv run ssaplash-train adtof-finetune --config configs/train/adtof_tom_6cls.yaml --out data/models/adtof_ft/tom_6cls

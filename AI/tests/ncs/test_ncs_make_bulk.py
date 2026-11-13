@@ -1,4 +1,4 @@
-"""NCS 기본곡 등록 파일 만들기 스크립트 테스트 (S15P31A307-322)."""
+"""NCS 기본곡 등록 파일 만들기 스크립트 테스트."""
 
 from __future__ import annotations
 

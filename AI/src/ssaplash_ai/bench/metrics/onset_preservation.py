@@ -1,4 +1,4 @@
-"""온셋 검출과 온셋 보존율 (설계 3-5절).
+"""온셋 검출과 온셋 보존율.
 
 검출기는 librosa 스펙트럼 플럭스(onset_strength → onset_detect, hop 512 샘플 = 11.6ms)이며
 정답 드럼 스템과 예측 드럼 스템에 같은 설정을 적용. 매칭은 mir_eval.onset.f_measure.
@@ -9,7 +9,7 @@
 
 MIDI·사람 주석 정답은 동시에 친 킥·하이햇을 따로 적어 같은 시각이 여러 번 나오는데, 검출기는 한 순간에
 하나만 냄. 그대로 채점하면 남는 정답이 전부 놓친 것으로 세져 재현율이 막히므로, 러너는 이런 정답을
-merge_onsets로 MERGE_GAP_SEC 안에 붙은 시각을 하나로 합친 뒤 넘김 (S15P31A307-166).
+merge_onsets로 MERGE_GAP_SEC 안에 붙은 시각을 하나로 합친 뒤 넘김.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def merge_onsets(times: np.ndarray, gap_sec: float = MERGE_GAP_SEC) -> np.ndarra
 
 @dataclass
 class OnsetResult:
-    """온셋 보존율. 3-3절 CSV 열과 1:1. 온셋 개수는 보조값."""
+    """온셋 보존율. CSV 열과 1:1. 온셋 개수는 보조값."""
 
     f1: float
     precision: float

@@ -1,4 +1,4 @@
-"""GM 드럼 번호 → 패드 (설계 CHART-003-sheet-to-chart 1장 "핵심 설계 결정").
+"""GM 드럼 번호 → 패드.
 
 BE `song/midi/GmDrumMapping.java`와 같은 표. 같은 악보를 MIDI로 올리든 MusicXML로 올리든 같은 패드가 나오게 함.
 표에 없는 번호(클랩·탬버린·카우벨 등)는 None이고 채보에서 뺌. 58은 GM에서 비브라슬랩이지만 BE 표대로 플로어탐.

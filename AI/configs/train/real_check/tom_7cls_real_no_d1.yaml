@@ -1,4 +1,4 @@
-# 7클래스 + 실제 녹음 학습 (S15P31A307-241, 설계 CHART-003-real-drum-data-check 작업 12). tom_6cls_real_no_d1.yaml과 같고
+# 7클래스 + 실제 녹음 학습. tom_6cls_real_no_d1.yaml과 같고
 # classes만 five_pedal_cym(크래시·라이드를 따로 냄), 체크포인트 선택은 focus_f1(탐·페달·크래시·라이드 F1 평균). adtof_tom_7cls.yaml과 같은 차이
 # 실행: 서버 notebooks/cym7_real_server.ipynb, 결과 data/models/adtof_ft/tom_7cls_real_no_d1
 base_checkpoint: null  # null이면 adtof_pytorch 패키지 기본 가중치

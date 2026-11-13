@@ -1,4 +1,4 @@
-"""NCS 기본곡 서버 채보 결과 → 공용 곡 등록 파일·점검 표·검수 음원 (S15P31A307-322).
+"""NCS 기본곡 서버 채보 결과 → 공용 곡 등록 파일·점검 표·검수 음원.
 
 입력: `<charts>/<곡 이름>/chart.json`·`accompaniment.flac`(GPU 서버 `ncs_charts_server.ipynb` 결과), 50곡 표.
 출력
@@ -61,7 +61,7 @@ REGISTER_COLUMNS = ["제목", "아티스트", "MIDI", "드럼리스 MR", "offset
 def fix_timing(chart: dict) -> tuple[dict, dict]:
     """채보 bpm이 소수점만큼 틀려 곡 뒤로 갈수록 노트가 박자 칸에서 밀리는 곡의 bpm·첫 박 고치기.
 
-    계산은 서비스 채보와 같은 `ssaplash_ai.chart.tempo_refine.refine_timing`(설계 v0.5). 노트 시각은 그대로.
+    계산은 서비스 채보와 같은 `ssaplash_ai.chart.tempo_refine.refine_timing`. 노트 시각은 그대로.
     (모델 출력이 아니라 우리가 붙인 규칙. 원래 값은 점검 표에 남김) → (고친 timing, 점검 표 정보)
     """
     timing = chart["timing"]

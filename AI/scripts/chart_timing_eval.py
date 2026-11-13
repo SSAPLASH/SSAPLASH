@@ -1,4 +1,4 @@
-"""채보 JSON 격자 원점(offsetMs)·bpm 측정 (S15P31A307-242, 설계 "격자 원점·bpm 계산 수정" 인수 조건 16·17).
+"""채보 JSON 격자 원점(offsetMs)·bpm 측정 (설계 "격자 원점·bpm 계산 수정" 인수 조건 16·17).
 
 드럼 트랙에 Beat This!만 돌려 서비스와 같은 코드(`estimate_from_beats`, `grid_origin_ms`)로 bpm·offsetMs를 만듦.
 서비스가 그 뒤에 하는 노트 기준 원점 보정·DBN 후처리·tempoMap은 넣지 않음.

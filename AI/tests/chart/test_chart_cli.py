@@ -129,7 +129,7 @@ def test_device_인자가_설정을_덮어쓴다(tmp_path: Path, capsys: pytest.
     assert "장치: cpu" in capsys.readouterr().err
 
 
-# ---- transcribe·run (S15P31A307-169) ----
+# ---- transcribe·run ----
 
 
 def _write_transcription_config(tmp_path: Path, label: str = "KICK") -> Path:

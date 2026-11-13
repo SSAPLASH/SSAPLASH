@@ -1,4 +1,4 @@
-"""ADT_STR 채보 스크립트 (별도 환경 `.venv-adt-str`, 채보 설계 3-10절).
+"""ADT_STR 채보 스크립트 (별도 환경 `.venv-adt-str`).
 
 ADT_STR은 패키지가 아니라 저장소를 받아 그 안에서 실행해야 하고 torch 2.8을 고정함.
 options.repo_dir(저장소 클론 경로, 기본 ext/ADT_STR)를 sys.path에 넣고 adt_transcriber를 import.

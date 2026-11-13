@@ -1,4 +1,4 @@
-"""채보 후처리 후보 채점·고르기 (설계 CHART-003-postproc-activation).
+"""채보 후처리 후보 채점·고르기.
 
 저장 특징의 ADTOF 프레임별 점수로 피크를 다시 고르고(thr·co), ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml`)으로 예측한 뒤, 탐·하이햇 타격을
 스네어로 바꾸는(tom2sn·hh2sn) 후처리를 후보마다 걸어 8패드 tp/fp/fn을 곡마다 셈.

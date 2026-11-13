@@ -1,4 +1,4 @@
-# 실제 녹음 학습 확인 실험 (S15P31A307-164, 설계 CHART-003-real-drum-data-check). 묶음 표는 configs/train/real_check/folds.yaml
+# 실제 녹음 학습 확인 실험. 묶음 표는 configs/train/real_check/folds.yaml
 # 평가용. MDB 묶음 1 8곡. tom_6cls_real_no_d1 학습이 안 본 곡.
 name: mdb_fold1
 kind: mdb

@@ -1,4 +1,4 @@
-"""정답 탐 타격의 음높이 분석과 고정 경계 후보 (탐·크래시 규칙 설계 4-2절 1~2, 4-4절). S15P31A307-163.
+"""정답 탐 타격의 음높이 분석과 고정 경계 후보.
 
 저장 특징의 toms 트랙에서 정답 탐 타격(SMALL_TOM·MID_TOM·FLOOR_TOM) 직후 구간의 음높이(스펙트럼 최대 피크,
 규칙 함수 tom_f0_at 그대로)를 뽑아
@@ -33,7 +33,7 @@ from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import (
 )
 
 PAD_ORDER: tuple[str, ...] = ("FLOOR_TOM", "MID_TOM", "SMALL_TOM")  # 음높이 낮은 순
-# 거르기 문턱값 후보. 문턱값마다 버려지는 정답 탐·정답 없는 탐 수를 셈 (S15P31A307-164)
+# 거르기 문턱값 후보. 문턱값마다 버려지는 정답 탐·정답 없는 탐 수를 셈
 GATE_THRESHOLDS: tuple[float, ...] = (0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5)
 PRED_COLUMNS = [
     "dataset",
@@ -160,7 +160,7 @@ def leave_one_song_out(
     return pd.DataFrame(rows, columns=["songId", "nHits", "lo", "hi", "acc"])
 
 
-# ---------- 예측 탐 분석: 거르기 비율·근처 정답 (S15P31A307-164) ----------
+# ---------- 예측 탐 분석: 거르기 비율·근처 정답 ----------
 
 
 def predicted_tom_table(
@@ -380,7 +380,7 @@ class TomPitchResult:
     loo: pd.DataFrame
     out_dir: Path
     files: list[Path] = field(default_factory=list)
-    pred: pd.DataFrame = field(default_factory=pd.DataFrame)  # 예측 탐 표 (S15P31A307-164)
+    pred: pd.DataFrame = field(default_factory=pd.DataFrame)  # 예측 탐 표
 
 
 def plot_distribution(

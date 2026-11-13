@@ -1,4 +1,4 @@
-"""실행 루프 (설계 4-1절 시작, 4-5절 종료).
+"""실행 루프.
 
 WorkerLoop: 설정 yaml 읽기 → 분리·채보 모델 올리기(claim 전에 한 번) → claim 폴링 → JobRunner → 반복.
 채보 작업이 없으면 LLM 총평 작업 하나를 처리함(켜져 있을 때).
@@ -69,10 +69,7 @@ class WorkerLoop:
     # ---- 준비 ----
 
     def load_models(self) -> tuple[float, float]:
-        """설정 yaml 읽기, 분리·채보 모델 올리기, 음악 여부 검사 모델 올리기(실패해도 계속).
-
-        (분리 올린 초, 채보 올린 초)를 돌려줌. 실패는 ValueError·ChartModelError.
-        """
+        """설정 yaml 읽기, 분리·채보·음악 여부 검사 모델 올리기. (분리 올린 초, 채보 올린 초)를 돌려줌."""
         sep_config = SeparationConfig.from_yaml(self.settings.separation_config)
         tr_config = TranscriptionConfig.from_yaml(self.settings.transcription_config)
         mc_config = None
@@ -195,7 +192,7 @@ class WorkerLoop:
                         logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
                         return EXIT_AUTH
                     if e.status == 403:
-                        # 인프라 회신(10/30): Nginx가 GPU 서버 공인 IP만 허용. IP가 바뀌면 403
+                        # Nginx가 GPU 서버 공인 IP만 허용. IP가 바뀌면 403
                         logger.error(
                             "Nginx IP 허용에 막힘(403). 토큰 문제가 아님. GPU 서버 공인 IP가 바뀌었는지 "
                             "`curl -s https://api.ipify.org`로 확인하고 인프라에 알림. %.0f초 뒤 다시 시도",
