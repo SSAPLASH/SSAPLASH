@@ -74,6 +74,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
+import { clockSkewText } from '@/domain/kit/device/arrivalSkew';
 import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSettings } from '@/store/settingsStore';
@@ -162,6 +163,7 @@ function SheetPageBody() {
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
   const connected = useLive((l) => l.connected);
+  const clockSkew = useLive((l) => l.clockSkew);
   const pedalPair = useLive((l) => l.pedal.connected);
   const lastHit = useLive((l) => l.lastHit);
   const reconnectAvailable = useReconnect((r) => r.available);
@@ -918,7 +920,7 @@ function SheetPageBody() {
           realign={realign.info}
           loading={loadError === null && stage !== 'ready'}
           error={loadError}
-          notices={chart?.variableTempo ? ['변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)'] : []}
+          notices={[...(chart?.variableTempo ? ['변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)'] : []), ...(clockSkew ? [clockSkewText(clockSkew)] : [])]}
           options={
             <PlayOptions
               rows={['metronome', 'padCount', 'accompaniment', 'recording']}

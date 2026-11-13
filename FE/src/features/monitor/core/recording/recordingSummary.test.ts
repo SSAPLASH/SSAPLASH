@@ -272,3 +272,34 @@ describe('녹화 요약의 audio 줄', () => {
     expect(summaryToMarkdown(s)).toContain('- 오디오: –');
   });
 });
+
+describe('녹화 탭 숨김 요약 (PLAY-006)', () => {
+  const row = (t: number): RecordedRow => ({ t, dir: 'in', transport: 'mock', stick: 0, hex: '', decoded: { kind: 'pose' } });
+
+  it('숨김 횟수와 합계를 세고 마크다운에 한 줄을 넣는다', () => {
+    const s = summarizeRecording({
+      meta,
+      rows: [row(0), row(60_000)],
+      diags: [],
+      vis: [
+        { t: 10_000, hidden: true },
+        { t: 14_000, hidden: false },
+        { t: 20_000, hidden: true },
+        { t: 22_000, hidden: false },
+      ],
+    });
+    expect(s.hidden).toEqual({ count: 2, totalMs: 6000 });
+    expect(summaryToMarkdown(s)).toContain('- 녹화 탭 숨김: 2번, 합계 6초');
+  });
+
+  it('끝까지 숨겨진 채면 마지막 줄 시각까지 합산한다', () => {
+    const s = summarizeRecording({ meta, rows: [row(0), row(30_000)], diags: [], vis: [{ t: 10_000, hidden: true }] });
+    expect(s.hidden).toEqual({ count: 1, totalMs: 20_000 });
+  });
+
+  it('vis 줄이 없으면 null이고 마크다운에도 줄이 없다', () => {
+    const s = summarizeRecording({ meta, rows: [row(0)], diags: [] });
+    expect(s.hidden).toBeNull();
+    expect(summaryToMarkdown(s)).not.toContain('녹화 탭 숨김');
+  });
+});
