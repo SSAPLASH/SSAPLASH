@@ -16,6 +16,7 @@ import { decodePacket, encodeHapticWave, encodeSetParam, PARAM_ACK_RESET_POSE, S
 
 /** 스틱 로컬 진동 사용(hapticEnable) 파라미터 id. 표에서 찾아 id 중복 정의를 피한다 */
 const HAPTIC_ENABLE_PARAM_ID = STICK_PARAMS.find((p) => p.key === 'hapticEnable')!.id;
+const MIN_PEAK_PARAM_ID = STICK_PARAMS.find((p) => p.key === 'minPeak')!.id;
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
@@ -204,6 +205,12 @@ export class InputManager {
   /** 스틱 로컬 진동(hapticEnable)을 켜고 끈다. stickId가 없으면 붙은 손 전부 */
   setLocalHaptic(enabled: boolean, stickId?: StickId): void {
     const bytes = encodeSetParam(HAPTIC_ENABLE_PARAM_ID, enabled ? 1 : 0);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
+  }
+
+  /** 그 손의 최소 타격 세기(minPeak, °/s)를 보낸다(PLAY-004 ③). 그 손에만 간다 */
+  setMinPeak(stickId: StickId, dps: number): void {
+    const bytes = encodeSetParam(MIN_PEAK_PARAM_ID, dps);
     for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
   }
 

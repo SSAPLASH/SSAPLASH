@@ -51,7 +51,7 @@ const hit = (stickId: StickId | null, pitch: number, yaw: number, over: Partial<
 const anchor = (pad: PadId, pitch: number, yaw: number) => ({ pad, pitch, yaw, radius: 18, samples: 2, spread: 1 });
 
 let src: MockSource;
-let deps: { setSoundOnHit: ReturnType<typeof vi.fn>; pushTable: ReturnType<typeof vi.fn> };
+let deps: { setSoundOnHit: ReturnType<typeof vi.fn>; pushTable: ReturnType<typeof vi.fn>; noteMinPeakCapture: ReturnType<typeof vi.fn> };
 let trigger: ReturnType<typeof spyTrigger>;
 const spyTrigger = () => vi.spyOn(audioEngine, 'trigger');
 
@@ -60,19 +60,20 @@ const yawOffsets = () => src.sent.filter((s) => s.bytes[0] === 0x16);
 const sentDeg = (b: Uint8Array) => new DataView(b.buffer, b.byteOffset).getInt16(1, true) / 100;
 
 /** 손 h가 자세 p로 두 번 친다 */
-function twice(h: StickId, pitch: number, yaw: number) {
-  expect(calibrationSession.intercept(hit(h, pitch, yaw))).toBe(true);
-  expect(calibrationSession.intercept(hit(h, pitch, yaw + 1))).toBe(true);
+function twice(h: StickId, pitch: number, yaw: number, over: Partial<ResolvedHit> = {}) {
+  expect(calibrationSession.intercept(hit(h, pitch, yaw, over))).toBe(true);
+  expect(calibrationSession.intercept(hit(h, pitch, yaw + 1, over))).toBe(true);
 }
 
 /** 자동 진행 지연(400ms)을 넘긴다. 호출하는 테스트는 vi.useFakeTimers()를 먼저 켠다 */
 const tick = () => vi.advanceTimersByTime(400);
 
 /** 7패드를 손마다 채우고 패드마다 자동 진행을 기다린다(패드끼리 약 30° 떨어져 간격 경고 없음). 끝나면 done이라 [저장](finish)은 호출자가 */
-function fillAll(hands: StickId[]) {
+function fillAll(hands: StickId[], over: Partial<ResolvedHit> = {}) {
   if (!vi.isFakeTimers()) vi.useFakeTimers();
   CAPTURE_ORDER.forEach((_, i) => {
-    for (const h of hands) twice(h, -10 + i * 5, (h === 0 ? -40 : -20) + i * 30);
+    // 라이드는 오른손만 받는다(PLAY-004 ①). 왼손이 쳐도 가로채기는 true지만 앵커는 안 잡힌다
+    for (const h of hands) twice(h, -10 + i * 5, (h === 0 ? -40 : -20) + i * 30, over);
     tick();
   });
 }
@@ -91,7 +92,7 @@ beforeEach(async () => {
   // 사용자 프리셋 'p'가 적용 중(시스템 기본이면 'active' 보정이 열리지 않는다, UX-64 D6)
   useSettings.setState({ stickAnchors: [null, null], calibratedAt: null, kitLayout: DEFAULT_KIT_LAYOUT, activePresetId: 'p', presetAnchors: {} });
   useLive.setState({ activeSensor: 'ble', connected: [true, true], realignNeeded: [false, false], referenceSetAt: null });
-  deps = { setSoundOnHit: vi.fn(), pushTable: vi.fn() };
+  deps = { setSoundOnHit: vi.fn(), pushTable: vi.fn(), noteMinPeakCapture: vi.fn() };
   calibrationSession.bind(deps);
   trigger = spyTrigger().mockReturnValue(123);
 });
@@ -259,7 +260,57 @@ describe('보정 완료([저장] = finish)', () => {
     calibrationSession.finish();
     const s = useSettings.getState();
     expect(s.stickAnchors[0]).not.toBeNull();
-    expect(s.stickAnchors[1]).toEqual({ SNARE: anchor('SNARE', -20, 5) });
+    // 왼손만 친 라이드의 오른손 앵커는 스네어 양손 차이로 만들어 얹는다(PLAY-004 ①). 나머지 이전 앵커는 그대로
+    expect(s.stickAnchors[1]?.SNARE).toMatchObject({ pitch: -20, yaw: 5, samples: 2 });
+    expect(Object.keys(s.stickAnchors[1]!).sort()).toEqual(['RIDE', 'SNARE']);
+    expect(s.stickAnchors[1]?.RIDE?.derived).toBe(true);
+  });
+
+  it('전체 보정 저장 뒤 왼손 라이드는 오른손 라이드 + 스네어 양손 차이로 만든 derived 앵커다(PLAY-004 ①)', () => {
+    calibrationSession.startCapture();
+    fillAll([0, 1]);
+    // 라이드는 오른손이 2타만 쳐도 끝나 done이다(왼손 라이드 타격은 받지 않았다)
+    expect(cap()?.phase).toBe('done');
+    calibrationSession.finish();
+    const [l, r] = useSettings.getState().stickAnchors;
+    expect(r?.RIDE?.derived).toBeUndefined();
+    expect(l?.RIDE).toMatchObject({ derived: true, samples: 0, spread: 0 });
+    // 왼손 SNARE(-0, 인덱스 2): pitch 0, yaw 20 평균 → 오른손 SNARE yaw 40 평균. 차이를 오른손 라이드에 옮긴다
+    const dPitch = l!.SNARE!.pitch - r!.SNARE!.pitch;
+    const dYaw = l!.SNARE!.yaw - r!.SNARE!.yaw;
+    expect(l!.RIDE!.pitch).toBeCloseTo(r!.RIDE!.pitch + dPitch, 1);
+    expect(l!.RIDE!.yaw).toBeCloseTo(r!.RIDE!.yaw + dYaw, 1);
+    expect(l!.RIDE!.radius).toBeGreaterThan(0);
+  });
+
+  it("'new' 초안에도 왼손 라이드 derived 앵커가 들어간다", () => {
+    useSettings.setState({ activePresetId: SYSTEM_PRESET_ID });
+    calibrationSession.startCapture({ target: 'new' });
+    fillAll([0, 1]);
+    const draft = calibrationSession.finish()!;
+    expect(draft.anchors[0]?.RIDE?.derived).toBe(true);
+    expect(draft.anchors[1]?.RIDE?.derived).toBeUndefined();
+  });
+
+  it('손별 최소 타격 세기: 보정 타격 중앙값 × 0.4를 저장하고, 6타 미만인 손은 그대로 둔다(PLAY-004 ③)', () => {
+    useSettings.setState({ stickMinPeak: [null, 300] });
+    calibrationSession.startCapture();
+    fillAll([0, 1], { peakSpeedDps: 800 });
+    calibrationSession.finish();
+    // 왼손은 라이드를 빼고 6패드 × 2타 + 라이드 왼손 2타(다시 친 것 포함) = 14타, 800 → 320
+    expect(useSettings.getState().stickMinPeak).toEqual([320, 320]);
+    expect(deps.noteMinPeakCapture).toHaveBeenCalledWith(0, 800, 14);
+    expect(deps.noteMinPeakCapture).toHaveBeenCalledWith(1, 800, 14);
+  });
+
+  it('표본이 6타 미만인 손은 최소 타격 세기를 바꾸지 않는다', () => {
+    useSettings.setState({ stickMinPeak: [null, 300] });
+    useLive.setState({ connected: [false, true] });
+    calibrationSession.startCapture({ pads: ['SNARE'] });
+    twice(1, -10, 0, { peakSpeedDps: 900 });
+    calibrationSession.finish();
+    expect(useSettings.getState().stickMinPeak).toEqual([null, 300]);
+    expect(deps.noteMinPeakCapture).not.toHaveBeenCalled();
   });
 
   it('보정 중 반지름 슬라이더(setRadiusOverride)는 저장 때 합쳐진 앵커에 남고 반경을 자른다', () => {

@@ -207,3 +207,42 @@ describe('패킷 줄 role (PLAY-002 실연주 진단)', () => {
     expect(diags[0]).toMatchObject({ type: 'clock', t: 6 });
   });
 });
+
+describe('vis 줄 (녹화 탭 숨김, PLAY-006)', () => {
+  it('녹화 중 appendVis는 kind vis 줄(t·hidden)을 남기고 되읽으면 vis로 나온다', () => {
+    const rows = makeRows();
+    const rec = new Recorder();
+    rec.start(meta);
+    rec.append(rows[0]);
+    rec.appendVis(true, 100);
+    rec.appendVis(false, 4100);
+    const text = rec.stop();
+    const lines = text.split('\n');
+    expect(JSON.parse(lines[2])).toEqual({ kind: 'vis', t: 100, hidden: true });
+    expect(JSON.parse(lines[3])).toEqual({ kind: 'vis', t: 4100, hidden: false });
+    const parsed = parseJsonl(text);
+    expect(parsed.vis).toEqual([
+      { t: 100, hidden: true },
+      { t: 4100, hidden: false },
+    ]);
+    // 패킷 행·진단 이벤트에는 섞이지 않는다
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.diags).toEqual([]);
+  });
+
+  it('녹화 중이 아니면 무시한다', () => {
+    const rec = new Recorder();
+    rec.appendVis(true, 1);
+    rec.start(meta);
+    expect(rec.stop().split('\n')).toHaveLength(1);
+    rec.appendVis(false, 2);
+    expect(rec.stop().split('\n')).toHaveLength(1);
+  });
+
+  it('옛 파일(vis 줄 없음)은 vis가 빈 배열이고 모르는 kind는 여전히 건너뛴다', () => {
+    const text = [JSON.stringify(meta), JSON.stringify({ kind: 'future', t: 1 }), JSON.stringify({ kind: 'vis', t: 5, hidden: 'yes' })].join('\n');
+    const parsed = parseJsonl(text);
+    expect(parsed.vis).toEqual([]);
+    expect(parsed.rows).toEqual([]);
+  });
+});

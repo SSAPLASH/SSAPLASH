@@ -8,7 +8,7 @@ import type { PlayRowView } from './playLogRows';
 
 const row = (over: Partial<PlayRowView> = {}): PlayRowView => ({
   playId: 'p1', title: '별빛 산책', titleMuted: false, mode: 'RHYTHM', level: 'HARD', at: new Date(2026, 10, 12, 14, 31).toISOString(), durationMs: 192000,
-  accuracy: 74.1, score: 141250, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' }, ...over,
+  accuracy: 74.1, score: 141250, wideGoodMs: null, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' }, ...over,
 });
 const show = (r: PlayRowView, onRetry = vi.fn()) => {
   render(
@@ -32,6 +32,14 @@ describe('PlayLogRow', () => {
     expect(item.querySelector('.history-row-sub')?.textContent).toBe('리듬 게임오후 2:313:12');
     expect(screen.getByLabelText('정확도 74.1%, 점수 141,250')).toBeTruthy();
     expect(item.querySelector('svg.history-mode-icon')).toBeNull();
+  });
+
+  it('넓혀 연주한 판은 보조 줄에 「판정 여유 ±Nms」를 보이고, 아니면 없다', () => {
+    show(row({ wideGoodMs: 90 }));
+    expect(screen.getByText('판정 여유 ±90ms')).toBeTruthy();
+    cleanup();
+    show(row({ wideGoodMs: null }));
+    expect(screen.queryByText(/판정 여유/)).toBeNull();
   });
 
   it('정확도 막대는 판정 색 단계를 따른다: 90 이상 perfect, 70 이상 good, 그 아래 miss', () => {

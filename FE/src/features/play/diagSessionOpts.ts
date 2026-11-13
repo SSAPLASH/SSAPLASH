@@ -5,6 +5,7 @@ import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
 import type { TimingWindows } from '@/domain/play/judgement';
 import { diagTap } from '@/engine/diagTap';
 import type { DiagSessionOpts } from '@/engine/diagReport';
+import { effectivePlayHaptic } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
 
 /** windows: 이 판에 적용된 판정 폭(초보 대상이면 넓힌 값). 설정 값을 그대로 읽지 않는다 */
@@ -14,6 +15,7 @@ export function diagSessionOpts(windows: TimingWindows): DiagSessionOpts {
     windows,
     audioOffsetMs: s.audioOffsetMs,
     kickOffsetMs: kickOffsetOrStick(s.audioOffsetMs, s.kickOffsetMs),
+    haptic: effectivePlayHaptic(s.playHaptic),
   };
   if (!diagTap.active) return base;
   // 보정한 손만 판정 프로필과 같은 반경(자동값·override 반영)으로 싣는다. 보정 안 한 손은 null

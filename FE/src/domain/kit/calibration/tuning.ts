@@ -48,6 +48,13 @@ export const DEFAULT_SENSOR_TUNING: SensorTuning = {
   angleRange: DEFAULT_ANGLE_RANGE,
 };
 
+/** 유저별 최소 타격 세기(PLAY-004 ③): 보정 타격 peakSpeedDps 중앙값 × 비율, 하한~기본값으로 자른다. 표본이 모자라면 바꾸지 않는다 */
+export const MIN_PEAK_RATIO = 0.4;
+export const MIN_PEAK_FLOOR_DPS = 250;
+/** 펌웨어 기본값(°/s). 저장값이 없을 때 보내는 값이자 상한 */
+export const MIN_PEAK_DEFAULT_DPS = 400;
+export const MIN_PEAK_MIN_SAMPLES = 6;
+
 export interface TuningRange {
   min: number;
   max: number;
@@ -162,3 +169,7 @@ export const DRIFT_MIN_SAMPLES = 8;
 export const DRIFT_WINDOW = 12;
 /** 송신 뒤 재송신 금지 시간(ms) */
 export const DRIFT_COOLDOWN_MS = 10_000;
+/** 한 번 자동 보정으로 움직이는 최대 각도(도). 남은 오차는 다음 표본 모음에서 다시 본다 */
+export const DRIFT_MAX_STEP_DEG = 8;
+/** 직전 자동 보정과 부호가 반대인 보정이 연달아 이 횟수만큼 나오려 하면 그 손의 자동 보정을 멈춘다 */
+export const DRIFT_FLIP_LIMIT = 2;

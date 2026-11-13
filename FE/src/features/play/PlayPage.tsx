@@ -45,7 +45,7 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/nav/useShell';
 import type { Chart } from '@/domain/song/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/song/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, prevBestFor, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import type { PadId } from '@/domain/kit/pads';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
@@ -78,6 +78,7 @@ import { PlayClock } from './sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
+import { clockSkewText } from '@/domain/kit/device/arrivalSkew';
 import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSongs, type LoadedChart } from '@/store/songStore';
@@ -210,6 +211,7 @@ function PlayPageBody() {
   useDock(stage === 'play');
 
   const connected = useLive((l) => l.connected);
+  const clockSkew = useLive((l) => l.clockSkew);
   const pedalPair = useLive((l) => l.pedal.connected);
   const reconnectAvailable = useReconnect((r) => r.available);
   const reconnect = useReconnect((r) => r.reconnect);
@@ -247,8 +249,8 @@ function PlayPageBody() {
   const prevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
   const freezePrevBest = useCallback((ss: RhythmSession) => {
     const c = ss.chart;
-    const local = localPrevBest(loadPlayLogs(), { mode: 'RHYTHM', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
-    prevBest.current = mergePrevBest(local, serverPrevBest.current);
+    const local = localPrevBest(loadPlayLogs(), { mode: 'RHYTHM', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty, goodMs: ss.windows.goodMs });
+    prevBest.current = prevBestFor(local, serverPrevBest.current, ss.windows.goodMs);
   }, []);
   const recorder = useRef(new PlayRecorder());
   // 실시간 코칭: 연주를 시작할 때 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
@@ -756,8 +758,8 @@ function PlayPageBody() {
   }, [stage, songIdParam, fallbackChart, selectParam]);
 
   const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError;
-  // 팝업을 띄워야 하는 경우: 기기 준비 안 됨(E3) · 불러오기 실패(E5) · 스네어 재정렬(E8)
-  const popupWanted = startOpen && (!ready || loadError !== null || realign.pending);
+  // 팝업을 띄워야 하는 경우: 기기 준비 안 됨(E3) · 불러오기 실패(E5) · 스네어 재정렬(E8) · 기기 시각 차이 경고(PLAY-006, 시작은 막지 않는다)
+  const popupWanted = startOpen && (!ready || loadError !== null || realign.pending || clockSkew !== null);
   // 렌더 중 상태 맞춤(React 허용 패턴): 시작 대기가 끝나면 비우고, 팝업이 필요해지는 순간 기억한다
   if (!startOpen && popupSeen) setPopupSeen(false);
   else if (popupWanted && !popupSeen) setPopupSeen(true);
@@ -768,7 +770,7 @@ function PlayPageBody() {
 
   // 자동 시작: 팝업 없이 진행 중이던 경우에만. 신기록 판정을 위해 서버 최고 기록 조회가 끝난 뒤(ready·error·idle)에 한다
   const autoStart =
-    startOpen && stage === 'ready' && ready && !popupSeen && !realign.pending && records.status !== 'loading' && fallbackChart === null && loadError === null;
+    startOpen && stage === 'ready' && ready && !popupSeen && !realign.pending && clockSkew === null && records.status !== 'loading' && fallbackChart === null && loadError === null;
   useEffect(() => {
     if (autoStart) void startPlay();
   }, [autoStart, startPlay]);
@@ -813,6 +815,7 @@ function PlayPageBody() {
           countInBars={settings.countInBars}
           goodMsNote={widened ? windows.goodMs : null}
           realign={realign.info}
+          notices={clockSkew ? [clockSkewText(clockSkew)] : []}
           loading={loadError === null && stage !== 'ready'}
           error={loadError}
           onStart={() => void startPlay()}

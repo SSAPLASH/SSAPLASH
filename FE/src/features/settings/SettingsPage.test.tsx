@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
@@ -110,17 +110,8 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
   });
 });
 
-describe('SettingsPage 패드 위치 자동 보정', () => {
-  it('기본은 끔이고 스위치가 store 값을 따른다', () => {
-    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('false');
-    put(useSettings, { yawAutoCorrect: true });
-    expect(switchChecked(render(), '패드 위치 자동 보정')).toBe('true');
-  });
-});
-
 describe('SettingsPage 연주 구역 줄', () => {
-  it('스위치 세 줄 사이에 안내 문단이 끼지 않는다(줄마다 구분선이 고르게 나온다)', () => {
-    put(useSettings, { yawAutoCorrect: true });
+  it('스위치 두 줄 사이에 안내 문단이 끼지 않는다(줄마다 구분선이 고르게 나온다)', () => {
     const html = render();
     const from = html.indexOf('실시간 코칭');
     const to = html.indexOf('드럼 모양');
@@ -129,9 +120,13 @@ describe('SettingsPage 연주 구역 줄', () => {
 
   it('스위치 줄 설명은 한 문장이다', () => {
     const html = render();
-    for (const text of ['연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.', '최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.', '틀어진 스틱 방향을 타격 위치로 바로잡아요.']) {
+    for (const text of ['연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.', '최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.']) {
       expect(html).toContain(text);
     }
+  });
+
+  it('패드 위치 자동 보정 스위치는 없다(항상 동작한다)', () => {
+    expect(render()).not.toContain('패드 위치 자동 보정');
   });
 });
 
@@ -141,8 +136,7 @@ describe('SettingsPage 드럼 모양', () => {
     expect(html).toContain('드럼 모양');
     expect(html).toContain('aria-roledescription="carousel"');
     expect(html.indexOf('실시간 코칭')).toBeLessThan(html.indexOf('타이밍 막대'));
-    expect(html.indexOf('타이밍 막대')).toBeLessThan(html.indexOf('패드 위치 자동 보정'));
-    expect(html.indexOf('패드 위치 자동 보정')).toBeLessThan(html.indexOf('드럼 모양'));
+    expect(html.indexOf('타이밍 막대')).toBeLessThan(html.indexOf('드럼 모양'));
     expect(html.indexOf('드럼 모양')).toBeLessThan(html.indexOf('타격 이펙트'));
   });
 });
@@ -301,5 +295,24 @@ describe('SettingsPage 박자 맞추기', () => {
     expect(html).toMatch(/min="-250"/);
     expect(html).toMatch(/max="100"/);
     expect(html).toMatch(/step="5"/);
+  });
+});
+
+describe('SettingsPage 타격 진동 방식(PLAY-006, 모니터 빌드 전용)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('일반 빌드에는 줄이 없다', () => {
+    vi.stubEnv('VITE_MONITOR', 'false');
+    expect(render()).not.toContain('타격 진동 방식');
+  });
+
+  it('모니터 빌드에는 두 선택지가 보이고 store 값이 선택돼 있다', () => {
+    vi.stubEnv('VITE_MONITOR', 'true');
+    put(useSettings, { playHaptic: 'local' });
+    const html = render();
+    expect(html).toContain('타격 진동 방식');
+    expect(html).toContain('연주 중 진동을 판정 결과로 낼지 스틱이 치는 즉시 낼지 고릅니다.');
+    expect(html).toMatch(/aria-checked="false"[^>]*data-value="judgement"[^>]*>판정 진동/);
+    expect(html).toMatch(/aria-checked="true"[^>]*data-value="local"[^>]*>스틱 즉시 진동/);
   });
 });

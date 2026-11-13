@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appliedWindows, BEGINNER_GOOD_MS, DEFAULT_TIMING } from './judgement';
+import { appliedWindows, BEGINNER_GOOD_MS, DEFAULT_TIMING, wideGoodMs } from './judgement';
 
 describe('appliedWindows (초보 판정 폭)', () => {
   it('초보 하한은 90ms', () => {
@@ -22,5 +22,19 @@ describe('appliedWindows (초보 판정 폭)', () => {
     const base = { perfectMs: 25, goodMs: 60 };
     appliedWindows(base, true);
     expect(base).toEqual({ perfectMs: 25, goodMs: 60 });
+  });
+});
+
+describe('wideGoodMs (넓혀 연주한 판의 GOOD 폭)', () => {
+  it('기본 폭보다 넓을 때만 그 값을 돌려준다', () => {
+    expect(wideGoodMs({ goodMs: 60 })).toBeNull();
+    expect(wideGoodMs({ goodMs: 61 })).toBe(61);
+    expect(wideGoodMs({ goodMs: 90 })).toBe(90);
+  });
+
+  it('값이 없거나 유한하지 않으면 null', () => {
+    expect(wideGoodMs(undefined)).toBeNull();
+    expect(wideGoodMs(null)).toBeNull();
+    expect(wideGoodMs({ goodMs: NaN })).toBeNull();
   });
 });

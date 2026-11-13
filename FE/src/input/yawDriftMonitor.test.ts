@@ -4,7 +4,7 @@ import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domai
 import type { PadId } from '@/domain/kit/pads';
 import { BaseInputSource } from './source/InputSource';
 import { packetTap } from './packetTap';
-import { yawDriftMonitor, type YawCorrection } from './yawDriftMonitor';
+import { yawDriftMonitor, type YawCorrection, type YawHalt } from './yawDriftMonitor';
 
 /** BLE형: stickId를 받아 기록한다 */
 class MockSource extends BaseInputSource {
@@ -48,6 +48,7 @@ const hit = (errDeg: number, over: Partial<ResolvedHit> = {}): ResolvedHit =>
     pose: { pitch: 10, yaw: -27 + errDeg },
     peakAccel: 0,
     judgedBy: 'stick',
+    inside: true,
     ...over,
   }) as ResolvedHit;
 
@@ -110,39 +111,6 @@ describe('yawDriftMonitor', () => {
     expect(last[0]?.lastErrorDeg).not.toBeNull();
   });
 
-  it('자동 보정을 끄면 타격을 모으지 않고 보내지 않는다. 보낸 오프셋은 그대로 둔다', () => {
-    const src = connected();
-    feed(NINE_PLUS6);
-    expect(src.sent).toHaveLength(1);
-    const applied = last[0]?.appliedDeg;
-    yawDriftMonitor.setAuto(false);
-    expect(last[0]).toMatchObject({ appliedDeg: applied, samples: 0, lastErrorDeg: null });
-    vi.advanceTimersByTime(20_000);
-    feed(NINE_PLUS6);
-    feed(NINE_PLUS6);
-    expect(src.sent).toHaveLength(1);
-    expect(last[0]?.samples).toBe(0);
-  });
-
-  it('자동 보정을 꺼도 재정렬(correct)은 보낸다', () => {
-    const src = connected();
-    yawDriftMonitor.setAuto(false);
-    yawDriftMonitor.correct(0, 8);
-    expect(src.sent).toHaveLength(1);
-    expect(sentDeg(src.sent[0].bytes)).toBe(-8);
-  });
-
-  it('다시 켜면 꺼진 동안의 타격 없이 새로 모아 보정한다', () => {
-    const src = connected();
-    yawDriftMonitor.setAuto(false);
-    feed(NINE_PLUS6);
-    yawDriftMonitor.setAuto(true);
-    feed(NINE_PLUS6.slice(0, 7));
-    expect(src.sent).toHaveLength(0);
-    feed([6]);
-    expect(src.sent).toHaveLength(1);
-  });
-
   it('쿨다운이 지나면 다시 보낼 수 있다', () => {
     const src = connected();
     feed(NINE_PLUS6);
@@ -169,7 +137,7 @@ describe('yawDriftMonitor', () => {
     expect(last[0]?.lastErrorDeg).toBeCloseTo(3, 0);
   });
 
-  it('키보드·preview·pad null·judgedBy pose && !inside 타격은 샘플에 들어가지 않는다', () => {
+  it('키보드·preview·pad null·chart·key·pose·패드 밖(inside false·없음) 타격은 샘플에 들어가지 않는다', () => {
     const src = connected();
     const bad: Partial<ResolvedHit>[] = [
       { source: 'keyboard' as InputSourceKind },
@@ -178,25 +146,29 @@ describe('yawDriftMonitor', () => {
       { judgedBy: 'pose', inside: false },
       { judgedBy: 'pose' },
       { judgedBy: 'key' },
+      { judgedBy: 'chart' },
+      { judgedBy: 'chart', inside: false },
+      { judgedBy: 'stick', inside: false },
+      { judgedBy: 'stick', inside: undefined },
+      { judgedBy: 'pose', inside: true },
     ];
     for (const o of bad) for (let k = 0; k < 9; k++) yawDriftMonitor.observe(hit(6, o), profile);
     expect(src.sent).toHaveLength(0);
     expect(last[0]).toBeNull();
-    // 반경 안 pose, chart는 샘플이 된다. 앵커 없는 패드는 제외
-    yawDriftMonitor.observe(hit(6, { judgedBy: 'pose', inside: true }), profile);
-    yawDriftMonitor.observe(hit(6, { judgedBy: 'chart' }), profile);
+    // 스틱이 직접 판정했고 패드 안인 타격만 샘플이 된다. 앵커 없는 패드는 제외
+    yawDriftMonitor.observe(hit(6), profile);
     yawDriftMonitor.observe(hit(6, { pad: 'CRASH' }), profile);
-    expect(last[0]?.samples).toBe(2);
+    expect(last[0]?.samples).toBe(1);
   });
 
-  it('두 번째 보정은 applied − m (적용 −6에서 +9 측정 → −15 송신)', () => {
+  it('두 번째 보정은 applied − m (적용 −6에서 +7 측정 → −13 송신)', () => {
     const src = connected();
     feed(NINE_PLUS6);
     ack(-600, 0);
     vi.advanceTimersByTime(10_001);
-    feed([9, 9.5, 8.5, 9, 9.2, 8.8, 9, 9.1, 8.9]); // 앵커 대비 +9 → applied −6 − 9 = −15
-    expect(Math.abs(sentDeg(src.sent[1].bytes) - -15)).toBeLessThanOrEqual(0.5);
-    expect(last[0]?.appliedDeg).toBeCloseTo(-15, 0);
+    feed([7, 7.5, 6.5, 7, 7.2, 6.8, 7, 7.1, 6.9]); // 앵커 대비 +7 → applied −6 − 7 = −13
+    expect(Math.abs(sentDeg(src.sent[1].bytes) - -13)).toBeLessThanOrEqual(0.5);
+    expect(last[0]?.appliedDeg).toBeCloseTo(-13, 0);
   });
 
   it('resetPose 경로의 reset() → appliedDeg 0, 샘플 0', () => {
@@ -544,8 +516,8 @@ describe('yawDriftMonitor onCorrection (PLAY-002 실연주 진단)', () => {
     yawDriftMonitor.correct(1, 12);
     yawDriftMonitor.correct(1, 3);
     expect(got).toEqual([
-      { stickId: 1, reason: 'realign', prevDeg: 0, sentDeg: -12, medianDeg: 12, madDeg: null, samples: [] },
-      { stickId: 1, reason: 'realign', prevDeg: -12, sentDeg: -15, medianDeg: 3, madDeg: null, samples: [] },
+      { stickId: 1, reason: 'realign', prevDeg: 0, sentDeg: -12, medianDeg: 12, madDeg: null, samples: [], judgedBy: [] },
+      { stickId: 1, reason: 'realign', prevDeg: -12, sentDeg: -15, medianDeg: 3, madDeg: null, samples: [], judgedBy: [] },
     ]);
   });
 
@@ -555,7 +527,7 @@ describe('yawDriftMonitor onCorrection (PLAY-002 실연주 진단)', () => {
     yawDriftMonitor.correct(0, 5);
     got.length = 0;
     yawDriftMonitor.onConnected(0);
-    expect(got).toEqual([{ stickId: 0, reason: 'connected', prevDeg: -5, sentDeg: 0, medianDeg: null, madDeg: null, samples: [] }]);
+    expect(got).toEqual([{ stickId: 0, reason: 'connected', prevDeg: -5, sentDeg: 0, medianDeg: null, madDeg: null, samples: [], judgedBy: [] }]);
   });
 
   it('보낼 수 없는 소스에서는 부르지 않고, resetAll이 콜백을 지운다', () => {
@@ -567,5 +539,168 @@ describe('yawDriftMonitor onCorrection (PLAY-002 실연주 진단)', () => {
     connected();
     yawDriftMonitor.correct(0, 5);
     expect(got).toHaveLength(0);
+  });
+});
+
+describe('yawDriftMonitor 표본 좁히기·보정량 상한·흔들림 정지 (PLAY-004 yaw drift guard)', () => {
+  /** 오차 e가 일정한 표본 8개(후보 조건을 채운다)를 그 손에 넣고, 다음 후보가 쿨다운에 걸리지 않게 시간을 보낸다 */
+  const round = (e: number, stickId: StickId = 0) => {
+    for (let k = 0; k < 8; k++) yawDriftMonitor.observe(hit(e, { stickId }), profile);
+    vi.advanceTimersByTime(10_001);
+  };
+  const halts = () => {
+    const got: YawHalt[] = [];
+    yawDriftMonitor.onHalt((h) => got.push(h));
+    return got;
+  };
+
+  it('judgedBy chart 타격과 inside false 타격은 8개를 넣어도 표본이 되지 않아 보내지 않는다', () => {
+    const src = connected();
+    for (let k = 0; k < 8; k++) yawDriftMonitor.observe(hit(10, { judgedBy: 'chart', inside: true }), profile);
+    for (let k = 0; k < 8; k++) yawDriftMonitor.observe(hit(10, { judgedBy: 'stick', inside: false }), profile);
+    expect(src.sent).toHaveLength(0);
+    expect(last[0]).toBeNull();
+  });
+
+  it('pose 판정은 inside가 true여도 표본이 되지 않는다', () => {
+    const src = connected();
+    for (let k = 0; k < 8; k++) yawDriftMonitor.observe(hit(10, { judgedBy: 'pose', inside: true }), profile);
+    expect(src.sent).toHaveLength(0);
+    expect(last[0]).toBeNull();
+  });
+
+  it('오차 15°가 모여도 한 번에 8°만 움직인다(적용값 0 → −8). medianDeg는 자르기 전 15', () => {
+    const got: YawCorrection[] = [];
+    yawDriftMonitor.onCorrection((c) => got.push(c));
+    const src = connected();
+    round(15);
+    expect(src.sent).toHaveLength(1);
+    expect(sentDeg(src.sent[0].bytes)).toBe(-8);
+    expect(got[0]).toMatchObject({ reason: 'drift', prevDeg: 0, sentDeg: -8, medianDeg: 15 });
+    expect(last[0]?.appliedDeg).toBe(-8);
+  });
+
+  it('음수 오차도 +8°로 자른다', () => {
+    const src = connected();
+    round(-20);
+    expect(sentDeg(src.sent[0].bytes)).toBe(8);
+  });
+
+  it('+, −, + 순서의 후보: 세 번째는 보내지 않고 halted가 true, onHalt가 한 번 불린다', () => {
+    const h = halts();
+    const src = connected();
+    round(7);
+    round(-7);
+    expect(src.sent).toHaveLength(2);
+    expect(h).toHaveLength(0);
+    expect(last[0]?.halted).toBe(false);
+    round(7);
+    expect(src.sent).toHaveLength(2);
+    expect(last[0]?.halted).toBe(true);
+    expect(last[0]?.samples).toBe(0);
+    expect(h).toHaveLength(1);
+    expect(h[0]).toMatchObject({ stickId: 0, flips: 2, medianDeg: 7 });
+    expect(h[0].appliedDeg).toBeCloseTo(last[0]!.appliedDeg);
+  });
+
+  it('+, −, −, + 는 멈추지 않는다(같은 부호가 나오면 뒤집힘 횟수가 0으로 돌아간다)', () => {
+    const h = halts();
+    const src = connected();
+    round(7);
+    round(-7);
+    round(-7);
+    round(7);
+    expect(src.sent).toHaveLength(4);
+    expect(h).toHaveLength(0);
+    expect(last[0]?.halted).toBe(false);
+  });
+
+  it('멈춘 손의 타격은 링에 쌓이지 않고, 다른 손은 계속 보정된다', () => {
+    const src = connected();
+    round(7);
+    round(-7);
+    round(7); // 왼손 멈춤
+    expect(last[0]?.halted).toBe(true);
+    for (let k = 0; k < 5; k++) yawDriftMonitor.observe(hit(7), profile);
+    expect(last[0]?.samples).toBe(0);
+    const before = src.sent.length;
+    round(9, 1);
+    expect(src.sent.length).toBe(before + 1);
+    expect(src.sent[before].stickId).toBe(1);
+    expect(last[1]?.halted).toBe(false);
+    expect(last[0]?.halted).toBe(true);
+  });
+
+  it('beginRun() 뒤 다시 보정된다. 링·적용값은 그대로다', () => {
+    const src = connected();
+    round(7);
+    round(-7);
+    round(7);
+    const applied = last[0]!.appliedDeg;
+    yawDriftMonitor.beginRun();
+    expect(last[0]?.halted).toBe(false);
+    expect(last[0]?.appliedDeg).toBe(applied);
+    const before = src.sent.length;
+    round(7);
+    expect(src.sent.length).toBe(before + 1);
+  });
+
+  it('beginRun() 뒤 부호 추적도 비워져, 직전 부호와 반대여도 뒤집힘으로 세지 않는다', () => {
+    const h = halts();
+    connected();
+    round(7);
+    round(-7);
+    round(7); // 멈춤
+    yawDriftMonitor.beginRun();
+    round(-7);
+    round(7);
+    expect(h).toHaveLength(1);
+    expect(last[0]?.halted).toBe(false);
+  });
+
+  it('재정렬(correct) 뒤에도 풀린다', () => {
+    const src = connected();
+    round(7);
+    round(-7);
+    round(7);
+    expect(last[0]?.halted).toBe(true);
+    yawDriftMonitor.correct(0, 3);
+    expect(last[0]?.halted).toBe(false);
+    vi.advanceTimersByTime(10_001); // 재정렬도 쿨다운을 시작한다
+    const before = src.sent.length;
+    round(7);
+    expect(src.sent.length).toBe(before + 1);
+  });
+
+  it('drift의 judgedBy는 samples와 길이가 같고 모두 stick이다. 재정렬·연결 직후는 빈 배열', () => {
+    const got: YawCorrection[] = [];
+    yawDriftMonitor.onCorrection((c) => got.push(c));
+    connected();
+    round(7);
+    expect(got[0].judgedBy).toHaveLength(got[0].samples.length);
+    expect(got[0].samples.length).toBeGreaterThan(0);
+    expect(got[0].judgedBy.every((j) => j === 'stick')).toBe(true);
+    yawDriftMonitor.correct(0, 2);
+    yawDriftMonitor.onConnected(0);
+    expect(got[1].judgedBy).toEqual([]);
+    expect(got[2].judgedBy).toEqual([]);
+  });
+
+  it('소스를 바꾸면(forget) 멈춤도 비워지고, resetAll이 정지 콜백을 지운다', () => {
+    const h = halts();
+    connected();
+    round(7);
+    round(-7);
+    round(7);
+    expect(h).toHaveLength(1);
+    yawDriftMonitor.setSource(null);
+    connected();
+    expect(last[0]).toBeNull();
+    round(-7);
+    round(7); // 부호 추적이 비워져 뒤집힘으로 세지 않는다
+    expect(h).toHaveLength(1);
+    expect(last[0]?.halted).toBe(false);
+    yawDriftMonitor.resetAll();
+    expect(h).toHaveLength(1);
   });
 });

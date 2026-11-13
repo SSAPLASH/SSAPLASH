@@ -13,6 +13,8 @@ export interface RealignInfo {
   hands: readonly StickId[];
   /** 손별 완료 여부 */
   done: readonly [boolean, boolean];
+  /** 자동 보정이 방향 흔들림으로 멈춰 걸린 재정렬이면 문구 앞에 이유를 붙인다 */
+  unstable?: boolean;
   onSkip: () => void;
 }
 
@@ -20,7 +22,7 @@ export interface RealignPromptProps extends RealignInfo {
   variant?: RealignVariant;
 }
 
-export function RealignPrompt({ hands, done, variant = 'card', onSkip }: RealignPromptProps) {
+export function RealignPrompt({ hands, done, unstable, variant = 'card', onSkip }: RealignPromptProps) {
   return (
     <div className={`realign-prompt ${variant}`} role="status" data-testid="realign-prompt">
       <span className="realign-hands" aria-hidden="true">
@@ -34,7 +36,7 @@ export function RealignPrompt({ hands, done, variant = 'card', onSkip }: Realign
           );
         })}
       </span>
-      <span className="realign-text">{realignPromptText(hands, done)}</span>
+      <span className="realign-text">{realignPromptText(hands, done, unstable)}</span>
       <Button variant="text" size="sm" className="realign-skip" onClick={onSkip}>
         건너뛰기
       </Button>

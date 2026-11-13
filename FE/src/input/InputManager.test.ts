@@ -280,6 +280,18 @@ describe('hapticWave·setLocalHaptic', () => {
     ]);
   });
 
+  it('setMinPeak은 SET_PARAM 0x03 값을 그 손에만 보낸다(PLAY-004 ③)', async () => {
+    const m = new InputManager();
+    const sensor = new CommandSource('ble');
+    await m.attach(sensor);
+    m.setMinPeak(0, 320);
+    m.setMinPeak(1, 400);
+    expect(sensor.sent).toEqual([
+      { bytes: [0x14, 0x03, 0x40, 0x01], stickId: 0 },
+      { bytes: [0x14, 0x03, 0x90, 0x01], stickId: 1 },
+    ]);
+  });
+
   it('sendCommand가 없는 소스(키보드 등)는 무시하고 던지지 않는다', async () => {
     const m = new InputManager();
     await m.attach(new MockSource('keyboard'));

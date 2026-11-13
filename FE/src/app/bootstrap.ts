@@ -12,6 +12,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
+import { addPlayStartHook } from '@/engine/diagReport';
 import { preloadSprites } from '@/components/drum/acoustic/sprites';
 import { startClockDiag } from './diag/clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
@@ -19,10 +20,10 @@ import type { PadId } from '@/domain/kit/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
 import { startAudioDiag } from './diag/audioDiag';
-import { startYawAutoDiag } from './diag/yawAutoDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
+import { arrivalSkewWatch } from '@/runtime/arrivalSkewWatch';
 import { smoothBattery } from '@/domain/kit/device/stickStatus';
 import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
 import { devicesReady } from '@/domain/kit/device/pedalStatus';
@@ -36,7 +37,9 @@ import {
   batteryHistory,
   currentProfiles,
   lastResendAt,
+  noteMinPeakCapture,
   pedalBatteryHistory,
+  pushMinPeak,
   pushTable,
 } from '@/runtime/sensorSession';
 
@@ -101,7 +104,11 @@ export function bootstrapInput(): void {
       return { padTable: arr };
     }),
   );
-  calibrationSession.bind({ setSoundOnHit: setCalibrationSound, pushTable: (stickId, force) => pushTable(stickId, force) });
+  calibrationSession.bind({
+    setSoundOnHit: setCalibrationSound,
+    pushTable: (stickId, force) => pushTable(stickId, force),
+    noteMinPeakCapture,
+  });
   // 방위각 드리프트 보정 상태도 같은 방식으로 스틱별로 옮긴다
   yawDriftMonitor.onStatus((stickId, st) =>
     useLive.setState((s) => {
@@ -112,6 +119,19 @@ export function bootstrapInput(): void {
   );
   // 보정 전송을 진단 줄로 남긴다(구독자가 없으면 publish가 즉시 반환)
   yawDriftMonitor.onCorrection((c) => diagTap.publish({ type: 'yawCorrect', ...c }));
+  // 부호가 연달아 뒤집혀 손이 멈추면 진단 줄을 남기고, 그 손을 재정렬 필요로 올린다(다음 곡 시작 확인 창·자유 연습 띠가 이어받는다)
+  yawDriftMonitor.onHalt((h) => {
+    diagTap.publish({ type: 'yawHalt', ...h });
+    if (useSettings.getState().stickAnchors[h.stickId] && calibrationSession.currentMode !== 'capture') {
+      useLive.setState((s) => {
+        const r: [boolean, boolean] = [s.realignNeeded[0], s.realignNeeded[1]];
+        r[h.stickId] = true;
+        return { realignNeeded: r };
+      });
+    }
+  });
+  // 곡을 시작할 때마다(재시작 포함, 진단 구독과 무관) 멈춤을 푼다. 재정렬 안내를 건너뛰어도 다음 판에는 다시 시도한다
+  addPlayStartHook(() => yawDriftMonitor.beginRun());
   // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다.
   // 스틱 버튼 보정(0x22)은 세션이 처리한다: 보정 중이면 처음부터, 아니면 그 손 재정렬 필요
   inputManager.onResetPose((source, stickId) => {
@@ -131,11 +151,15 @@ export function bootstrapInput(): void {
     // 연결된 손마다 보낸다(같은 표면 padTableSync가 생략한다)
     inputManager.setProfiles(currentProfiles());
     const live = useLive.getState();
-    for (const i of [0, 1] as StickId[]) if (live.connected[i]) pushTable(i);
+    // 최소 타격 세기도 손별로 보낸다(같은 값이면 생략, 보정 저장·지우기로 바뀌면 이유가 진단 줄에 남는다)
+    for (const i of [0, 1] as StickId[]) {
+      if (!live.connected[i]) continue;
+      pushTable(i);
+      pushMinPeak(i);
+    }
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
-    yawDriftMonitor.setAuto(s.yawAutoCorrect);
     audioEngine.setVolume(s.volume);
     audioEngine.setDrumVolume(s.drumVolume);
     audioEngine.setSongVolume(s.songVolume);
@@ -181,7 +205,10 @@ export function bootstrapInput(): void {
         if (shouldResend(lastResendAt[stickId], now)) {
           lastResendAt[stickId] = now;
           pushTable(stickId, true);
+          pushMinPeak(stickId, { force: true, reason: 'linked' });
           yawDriftMonitor.onConnected(stickId);
+          // 스틱이 다시 켜져 시계가 새로 시작됐다 — 그 손의 도착 지연 표본을 비운다
+          arrivalSkewWatch.resetDevice(stickId === 0 ? 'left' : 'right');
           if (useSettings.getState().stickAnchors[stickId] && calibrationSession.currentMode !== 'capture') {
             useLive.setState((s) => {
               const r: [boolean, boolean] = [s.realignNeeded[0], s.realignNeeded[1]];
@@ -198,6 +225,8 @@ export function bootstrapInput(): void {
         // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③).
         // 그 대신 스틱이 가진 현재 오프셋을 물어 FE 기억을 맞춘다(새로 고침 뒤에는 FE 기억이 0이다. 스틱 FW 1.12부터 답한다)
         pushTable(stickId);
+        pushMinPeak(stickId, { force: true, reason: 'linked' });
+        arrivalSkewWatch.resetDevice(stickId === 0 ? 'left' : 'right');
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
         else yawDriftMonitor.onLinked(stickId);
         // 새로 붙은 손에 현재 진동 모드 값을 보낸다(곡 연주 중이면 0, 아니면 1)
@@ -229,6 +258,7 @@ export function bootstrapInput(): void {
     // 왼발(하이햇)이 끊기면 닫힘으로 되돌린다(D5)
     const hihatClosed = foot === 2 && !connected ? true : live.pedal.hihatClosed;
     useLive.setState({ pedal: { connected: c, battery, hihatClosed } });
+    if (connected && !wasConnected) arrivalSkewWatch.resetDevice('pedal');
     audioEngine.setHihatOpen(c[0] && !hihatClosed);
     if (!connected && wasConnected && useLive.getState().activeSensor !== 'none') {
       // 발이 끊겼다 → 손과 같이 자동 재연결 시작
@@ -248,6 +278,8 @@ export function bootstrapInput(): void {
     useLive.setState({ pose: p });
   });
   inputManager.onHit((hit: ResolvedHit) => {
+    // 기기 사이 도착 지연 표본. 보정·박자 맞추기가 가로채는 타격도 시각은 유효하므로 가로채기 앞에서 모은다(센서 타격만 받는다)
+    arrivalSkewWatch.observe(hit);
     // 보정·재정렬 중인 손의 타격은 세션이 가로챈다(소리는 목표 패드로, 판정·텔레메트리 없음)
     if (calibrationSession.intercept(hit)) return;
     // 박자 맞추기 중인 타격은 소리만 내고 시각을 모은다(판정·텔레메트리·진단 없음)
@@ -264,6 +296,17 @@ export function bootstrapInput(): void {
     diagTap.publish({ type: 'resolved', hit });
     // 센서 타격의 방위각 오차를 모아 드리프트를 보정한다(소리·텔레메트리 뒤라 지연에 영향 없음)
     if (isSensorSource(hit.source) && hit.stickId !== null) yawDriftMonitor.observe(hit, inputManager.profileFor(hit.stickId));
+  });
+
+  // 기기 사이 시각 차이 경고(PLAY-006): 감시 상태를 store로 옮기고 시작·끝에 진단 줄을 남긴다. 센서 소스가 바뀌거나 내려가면 표본을 비운다
+  arrivalSkewWatch.onChange((skew, phase) => {
+    useLive.setState({ clockSkew: phase === 'end' ? null : skew });
+    if (skew && phase !== 'update') {
+      diagTap.publish({ type: 'arrivalSkew', phase, spreadMs: skew.spreadMs, medians: skew.medians, outlier: skew.outlier });
+    }
+  });
+  useLive.subscribe((s, prev) => {
+    if (s.activeSensor !== prev.activeSensor) arrivalSkewWatch.reset();
   });
 
   if (KEYBOARD_INPUT_ENABLED) void inputManager.attach(keyboardSource);
@@ -284,9 +327,6 @@ export function bootstrapInput(): void {
     latency: audioEngine.latency(),
     timingCal: useSettings.getState().timingCal,
   }));
-  // 패드 위치 자동 보정 켬·끔 진단 줄: 10초마다 + 곡 시작 직후 1회 + 값이 바뀔 때
-  const yawAutoDiag = startYawAutoDiag(() => useSettings.getState().yawAutoCorrect);
-  useSettings.subscribe(() => yawAutoDiag.sync());
   startRelay();
   startTelemetry();
   preloadKitSpritesWhenIdle();

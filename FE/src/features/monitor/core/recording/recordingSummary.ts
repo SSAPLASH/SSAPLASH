@@ -5,7 +5,7 @@ import type { DiagEvent } from '@/engine/diagTap';
 import { CommandType } from '@/input/stickProtocol';
 import { HEALTH_THRESHOLDS } from '@/features/monitor/core/health';
 import { percentile } from '@/features/monitor/core/latencyStats';
-import { hexToBytes, type RecordedRow, type RecordingMeta } from './recorder';
+import { hexToBytes, type RecordedRow, type RecordingMeta, type VisEvent } from './recorder';
 import { SyncPairer, syncKeyOf } from '@/features/monitor/core/syncPair';
 import { timingReport, type SessionTiming } from '@/features/monitor/core/timingReport';
 
@@ -79,10 +79,30 @@ export interface RecordingSummary {
   sessions: SessionSummary[];
   /** 마지막 audio 진단 줄: 판정 타이밍 보정과 브라우저가 보고한 오디오 지연. 줄이 없으면 null */
   audio: { audioOffsetMs: number; kickOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
-  /** yawAuto 진단 줄: 패드 위치 자동 보정의 첫 값·마지막 값. 줄이 없으면(옛 녹화) null */
-  yawAuto: { first: boolean; last: boolean } | null;
+  /** yawHalt 진단 줄 수(손별 [왼손, 오른손]): 부호가 연달아 뒤집혀 자동 보정을 멈춘 횟수. 줄이 없으면(옛 녹화) [0, 0] */
+  yawHalts: [number, number];
   /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
   timing: SessionTiming[];
+  /** 녹화 중 이 탭이 숨겨진 횟수와 합계(ms). 끝까지 숨겨진 채면 마지막 줄 시각까지. vis 줄이 없으면(옛 녹화·숨김 없음) null */
+  hidden: { count: number; totalMs: number } | null;
+}
+
+/** vis 줄에서 숨김 횟수·합계를 낸다. lastT는 파일의 마지막 줄 시각(끝까지 숨겨진 채일 때 닫는 기준) */
+export function summarizeHidden(vis: readonly VisEvent[], lastT: number): RecordingSummary['hidden'] {
+  let count = 0;
+  let totalMs = 0;
+  let since: number | null = null;
+  for (const v of [...vis].sort((a, b) => a.t - b.t)) {
+    if (v.hidden && since === null) {
+      since = v.t;
+      count++;
+    } else if (!v.hidden && since !== null) {
+      totalMs += v.t - since;
+      since = null;
+    }
+  }
+  if (since !== null) totalMs += Math.max(0, lastT - since);
+  return count === 0 ? null : { count, totalMs };
 }
 
 function metric(xs: number[], threshold: ThresholdRef | null, withMean = false): MetricSummary {
@@ -116,12 +136,22 @@ function pairRtts(rows: readonly RecordedRow[]): number[] {
   return out;
 }
 
+/** 파일 마지막 줄의 시각(패킷·진단·vis 줄 중 가장 늦은 t). 행이 많아도 안전하게 반복문으로 잰다 */
+function lastLineT(rows: readonly RecordedRow[], diags: readonly DiagEvent[], vis: readonly VisEvent[]): number {
+  let m = 0;
+  for (const r of rows) if (r.t > m) m = r.t;
+  for (const d of diags) if (d.t > m) m = d.t;
+  for (const v of vis) if (v.t > m) m = v.t;
+  return m;
+}
+
 export function summarizeRecording(input: {
   meta: RecordingMeta;
   rows: readonly RecordedRow[];
   diags: readonly DiagEvent[];
+  vis?: readonly VisEvent[];
 }): RecordingSummary {
-  const { meta, rows, diags } = input;
+  const { meta, rows, diags, vis = [] } = input;
   const inKinds: Record<string, number> = {};
   const outTypes: Record<string, number> = {};
   let inTotal = 0;
@@ -147,7 +177,7 @@ export function summarizeRecording(input: {
   let stray = 0;
   let missed = 0;
   let audioLine: RecordingSummary['audio'] = null;
-  let yawAuto: RecordingSummary['yawAuto'] = null;
+  const yawHalts: [number, number] = [0, 0];
   let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
@@ -167,8 +197,8 @@ export function summarizeRecording(input: {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
       sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
-    } else if (ev.type === 'yawAuto') {
-      yawAuto = yawAuto ? { first: yawAuto.first, last: ev.on } : { first: ev.on, last: ev.on };
+    } else if (ev.type === 'yawHalt') {
+      yawHalts[ev.stickId]++;
     } else if (ev.type === 'audio') {
       audioLine = { audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
     } else if (ev.type === 'matchContested') {
@@ -205,8 +235,9 @@ export function summarizeRecording(input: {
     contested,
     sessions,
     audio: audioLine,
-    yawAuto,
+    yawHalts,
     timing: timingReport(diags),
+    hidden: summarizeHidden(vis, lastLineT(rows, diags, vis)),
   };
 }
 
@@ -232,8 +263,6 @@ function offsetText(stickMs: number, kickMs: number, unit: boolean): string {
 const sf1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`);
 
 /** Wiki에 붙여넣을 Markdown 표. 숫자는 1자리 소수, 값이 없으면 '–' */
-const onOff = (v: boolean) => (v ? '켬' : '끔');
-
 export function summaryToMarkdown(s: RecordingSummary): string {
   const { meta } = s;
   const row = (name: string, m: MetricSummary): string =>
@@ -247,7 +276,8 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     `- 메모: ${meta.note || '–'}`,
     `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
     `- 오디오: ${s.audio ? `판정 타이밍 보정 ${offsetText(s.audio.audioOffsetMs, s.audio.kickOffsetMs, true)} · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
-    ...(s.yawAuto ? [`- 패드 위치 자동 보정: ${s.yawAuto.first === s.yawAuto.last ? onOff(s.yawAuto.last) : `도중 변경(${onOff(s.yawAuto.first)} → ${onOff(s.yawAuto.last)})`}`] : []),
+    ...(s.yawHalts[0] + s.yawHalts[1] > 0 ? [`- 자동 보정 멈춤: 왼손 ${s.yawHalts[0]}번 · 오른손 ${s.yawHalts[1]}번`] : []),
+    ...(s.hidden ? [`- 녹화 탭 숨김: ${s.hidden.count}번, 합계 ${Math.round(s.hidden.totalMs / 1000)}초`] : []),
     '',
     '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
     '| --- | --- | --- | --- | --- | --- |',

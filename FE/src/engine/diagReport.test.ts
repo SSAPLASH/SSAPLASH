@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { Chart } from '@/domain/song/chart';
 import type { ResolvedHit } from '@/domain/events';
 import { diagTap, type DiagEvent } from './diagTap';
-import { diagActiveAudioOffsetMs, diagActiveKickOffsetMs, diagSessionEnd, diagSessionPhase, diagSessionStart, onDiagSessionStart, reportHit } from './diagReport';
+import { addDiagSessionStartHook, addPlayStartHook, diagActiveAudioOffsetMs, diagActiveKickOffsetMs, diagSessionEnd, diagSessionPhase, diagSessionStart, onDiagSessionStart, reportHit } from './diagReport';
 import { RhythmSession } from './RhythmSession';
 
 const chart: Chart = {
@@ -82,6 +82,14 @@ describe('세션 진단', () => {
     expect(s).toMatchObject({ type: 'session', audioOffsetMs: -65, kickOffsetMs: -40 });
     expect(diagActiveAudioOffsetMs()).toBe(-65);
     expect(diagActiveKickOffsetMs()).toBe(-40);
+  });
+
+  it('session 줄에 이 판의 진동 방식(haptic)을 싣고, 없으면 판정 진동이다', () => {
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0, haptic: 'local' });
+    expect(events[0]).toMatchObject({ type: 'session', haptic: 'local' });
+    events.length = 0;
+    diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
+    expect(events[0]).toMatchObject({ type: 'session', haptic: 'judgement' });
   });
 
   it('시작은 session start와 notes를 내고, 시간 초과 MISS는 missed로 파생된다', () => {
@@ -169,5 +177,30 @@ describe('곡 시작 anchors 줄 (PLAY-002 실연주 진단)', () => {
     onDiagSessionStart(null);
     offOrder();
     expect(order).toEqual(['session', 'notes', 'anchors', 'hook']);
+  });
+});
+
+describe('곡 시작 훅', () => {
+  it('addPlayStartHook은 진단 구독이 없어도 곡 시작(재시작 포함)마다 불리고, 해제하면 멈춘다', () => {
+    // 진단 구독을 잠시 내려 diagTap.active가 거짓인 상태를 만든다
+    off();
+    try {
+      expect(diagTap.active).toBe(false);
+      let play = 0;
+      let diag = 0;
+      const offPlay = addPlayStartHook(() => play++);
+      const offDiag = addDiagSessionStartHook(() => diag++);
+      diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
+      diagSessionStart(mkSession(), 'SHEET', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
+      expect(play).toBe(2);
+      // 기존 훅은 진단 구독 중에만 돈다(동작 그대로)
+      expect(diag).toBe(0);
+      offPlay();
+      offDiag();
+      diagSessionStart(mkSession(), 'RHYTHM', { windows, audioOffsetMs: 0, kickOffsetMs: 0 });
+      expect(play).toBe(2);
+    } finally {
+      diagTap.subscribe((e) => events.push(e));
+    }
   });
 });

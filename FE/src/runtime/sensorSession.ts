@@ -15,6 +15,8 @@ import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { pedalRequired } from '@/domain/kit/device/pedalStatus';
 import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { MIN_PEAK_DEFAULT_DPS } from '@/domain/kit/calibration/tuning';
+import { diagTap } from '@/engine/diagTap';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */
@@ -52,6 +54,47 @@ export function pushTable(stickId: StickId, force = false): void {
   padTableSync.push(currentProfiles()[stickId], { stickId, force });
 }
 
+/** 손별로 마지막에 보낸 최소 타격 세기(°/s). 같은 값은 다시 보내지 않는다. 센서가 바뀌면 비운다 */
+const lastMinPeakSent: [number | null, number | null] = [null, null];
+/** 보정 저장이 남긴 계산 근거. 다음 pushMinPeak가 진단 줄에 싣고 비운다(저장 → 설정 변경 알림 → 전송 순서라 이유를 미리 적어 둔다) */
+const pendingMinPeakNote: [{ medianDps: number; samples: number } | null, { medianDps: number; samples: number } | null] = [null, null];
+
+/** 보정 저장 직전에 부른다: 이어지는 전송을 reason 'capture'로 남기게 근거를 적어 둔다 */
+export function noteMinPeakCapture(stickId: StickId, medianDps: number, samples: number): void {
+  pendingMinPeakNote[stickId] = { medianDps, samples };
+}
+
+export interface PushMinPeakOptions {
+  /** 같은 값이어도 보낸다(손이 새로 붙을 때: 마지막에 보낸 값 기억이 맞지 않는다) */
+  force?: boolean;
+  /** 진단 줄의 이유. 없으면 보정 근거가 있으면 capture, 저장값이 없으면 reset, 아니면 linked */
+  reason?: 'capture' | 'linked' | 'reset';
+  medianDps?: number | null;
+  samples?: number;
+}
+
+/**
+ * 그 손에 최소 타격 세기를 보낸다(PLAY-004 ③). 값 = 저장값, 없으면 펌웨어 기본(400)을 보내 스틱에 남은 이전 사용자 값을 되돌린다.
+ * 마지막에 보낸 값과 같으면 생략하고, 보낼 때마다 minPeak 진단 줄을 남긴다. 보정 캡처 중에도 보낸다(패드 표와 달리 막을 이유가 없다)
+ */
+export function pushMinPeak(stickId: StickId, opts: PushMinPeakOptions = {}): void {
+  const stored = useSettings.getState().stickMinPeak[stickId];
+  const dps = stored ?? MIN_PEAK_DEFAULT_DPS;
+  const note = pendingMinPeakNote[stickId];
+  pendingMinPeakNote[stickId] = null;
+  if (!opts.force && lastMinPeakSent[stickId] === dps) return;
+  lastMinPeakSent[stickId] = dps;
+  inputManager.setMinPeak(stickId, dps);
+  diagTap.publish({
+    type: 'minPeak',
+    stickId,
+    dps,
+    medianDps: opts.medianDps ?? note?.medianDps ?? null,
+    samples: opts.samples ?? note?.samples ?? 0,
+    reason: opts.reason ?? (note ? 'capture' : stored === null ? 'reset' : 'linked'),
+  });
+}
+
 /** 센서 소스 교체. 키보드는 건드리지 않는다 */
 export async function activateSensor(id: SensorId, auto = false): Promise<void> {
   if (currentSensor === id) return;
@@ -63,6 +106,7 @@ export async function activateSensor(id: SensorId, auto = false): Promise<void> 
   batteryHistory = [[], []];
   pedalBatteryHistory = [[], []];
   lastResendAt[0] = lastResendAt[1] = null;
+  lastMinPeakSent[0] = lastMinPeakSent[1] = null;
   activeInstance = null;
   padTableSync.setSource(null);
   yawDriftMonitor.setSource(null);

@@ -104,27 +104,29 @@ const STEP_DOM_ID: Record<SetupStepId, string> = {
   calibration: 'step-calibration',
 };
 
-/** 스틱별 방위각 보정 문구. 보일 게 없으면 null. 쿨다운 경과는 1초 tick 리렌더로 갱신된다. auto는 설정의 패드 위치 자동 보정(켜져 있고 연결된 손이 있으면 알린다) */
-function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], connected: [boolean, boolean], auto: boolean): string | null {
+/** 스틱별 방위각 보정 문구. 보일 게 없으면 null. 쿨다운 경과는 1초 tick 리렌더로 갱신된다. */
+function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], connected: [boolean, boolean]): string | null {
   const names = ['왼손', '오른손'];
   const fmt = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`;
   const applied: string[] = [];
   let unconfirmed = false;
+  let halted = false;
   let pending: number | null = null;
   drift.forEach((st, i) => {
     if (!st || !connected[i]) return;
+    if (st.halted) halted = true;
     if (st.appliedDeg !== 0) {
       applied.push(`${names[i]} ${fmt(st.appliedDeg)}`);
       if (st.acked === false) unconfirmed = true;
     }
-    const cooling = st.lastSentAt !== null && performance.now() - st.lastSentAt < DRIFT_COOLDOWN_MS;
-    // 꺼져 있으면 뒤따르는 자동 보정이 없으므로 "잠시 뒤 보정"을 알리지 않는다(재정렬 직후에도 오차·쿨다운이 남는다)
-    if (auto && pending === null && st.lastErrorDeg !== null && Math.abs(st.lastErrorDeg) >= DRIFT_MIN_DEG && cooling) pending = st.lastErrorDeg;
+    // 멈춘 손은 뒤따르는 보정이 없으므로 그 손의 오차로는 「잠시 뒤 보정」을 알리지 않는다
+    const cooling = !st.halted && st.lastSentAt !== null && performance.now() - st.lastSentAt < DRIFT_COOLDOWN_MS;
+    if (pending === null && st.lastErrorDeg !== null && Math.abs(st.lastErrorDeg) >= DRIFT_MIN_DEG && cooling) pending = st.lastErrorDeg;
   });
   const parts: string[] = [];
   if (applied.length) parts.push(`방위각 보정 ${applied.join(' · ')}${unconfirmed ? ' (미확인)' : ''}`);
   if (pending !== null) parts.push(`방위각 드리프트 감지(${Math.round(pending)}°) · 잠시 뒤 보정`);
-  if (auto && (connected[0] || connected[1])) parts.push('자동 보정 켜짐');
+  if (halted) parts.push('자동 보정 멈춤(방향 흔들림)');
   return parts.length ? parts.join(' / ') : null;
 }
 
@@ -187,7 +189,7 @@ export function SetupPage() {
 
   const sensorMode = s.sensorKind !== 'none';
   const anyConnected = connected[0] || connected[1];
-  const yawDriftLine = sensorMode ? yawDriftText(yawDrift, connected, s.yawAutoCorrect) : null;
+  const yawDriftLine = sensorMode ? yawDriftText(yawDrift, connected) : null;
   const dirty = selectDirty(s, presets);
   const systemPreset = isSystemPreset(s.activePresetId);
   /** 슬롯이 가득 차면 새 프리셋을 못 만든다(추가하기와 같은 규칙, kit-drag D12) */

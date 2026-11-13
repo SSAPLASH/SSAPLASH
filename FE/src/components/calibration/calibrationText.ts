@@ -3,7 +3,7 @@ import type { CaptureSnapshot, GapWarning } from '@/engine/HitCapture';
 import type { PadGap } from '@/domain/kit/calibration/calibration';
 import type { StickId } from '@/domain/events';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import { josaEulReul } from '@/domain/kit/calibration/setupSteps';
+import { josaEulReul, josaEunNeun } from '@/domain/kit/calibration/setupSteps';
 
 export const HAND_NAME = ['왼손', '오른손'] as const;
 
@@ -14,11 +14,20 @@ export function captureLine(target: PadId, hands: readonly StickId[]): string {
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 쳐 주세요`;
 }
 
-/** 킷 위 큰 안내(UX-64): "하이햇을 2번 타격하세요" / 한 손 "하이햇을 왼손으로 2번 타격하세요" */
+/**
+ * 킷 위 큰 안내(UX-64, PLAY-004 ①): 받을 손이 둘이면 "하이햇을 양손으로 2번씩 타격하세요", 하나면 "라이드를 오른손으로 2번 타격하세요".
+ * hands는 세션 손이 아니라 현재 패드를 받을 손(CaptureSnapshot.targetHands)
+ */
 export function captureHeadline(target: PadId, hands: readonly StickId[]): string {
   const label = PAD_META[target].label;
-  if (hands.length === 2) return `${label}${josaEulReul(label)} 2번 타격하세요`;
+  if (hands.length === 2) return `${label}${josaEulReul(label)} 양손으로 2번씩 타격하세요`;
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 타격하세요`;
+}
+
+/** 받을 손이 아닌 손으로 쳤을 때 힌트(PLAY-004 ①): "라이드는 오른손으로 쳐요" */
+export function wrongHandText(pad: PadId, targetHand: StickId): string {
+  const label = PAD_META[pad].label;
+  return `${label}${josaEunNeun(label)} ${HAND_NAME[targetHand]}으로 쳐요`;
 }
 
 /** 정보 카드 진행 제목(D10): "하이햇 1/7". index는 0부터 */
@@ -37,12 +46,13 @@ export function spreadWarningText(w: NonNullable<CaptureSnapshot['warning']>): s
   return `두 번 친 자리가 너무 달라요(${Math.round(w.spread)}°). ${HAND_NAME[w.stickId]}으로 ${label}${josaEulReul(label)} 다시 쳐 주세요`;
 }
 
-/** 재정렬 안내. 두 손이면 한 번씩, 한 손이면 그 손으로 */
-export function realignPromptText(hands: readonly StickId[], done: readonly [boolean, boolean]): string {
+/** 재정렬 안내. 두 손이면 한 번씩, 한 손이면 그 손으로. unstable(자동 보정이 방향 흔들림으로 멈춤)이고 칠 손이 남았으면 이유를 앞에 붙인다 */
+export function realignPromptText(hands: readonly StickId[], done: readonly [boolean, boolean], unstable?: boolean): string {
   const left = hands.filter((h) => !done[h]);
   if (left.length === 0) return '스네어 재정렬을 마쳤어요';
-  if (left.length === 2) return '스네어를 왼손·오른손 한 번씩 쳐 주세요';
-  return `${HAND_NAME[left[0]]}으로 스네어를 한 번 쳐 주세요`;
+  const lead = unstable ? '방향이 흔들렸어요. ' : '';
+  if (left.length === 2) return `${lead}스네어를 왼손·오른손 한 번씩 쳐 주세요`;
+  return `${lead}${HAND_NAME[left[0]]}으로 스네어를 한 번 쳐 주세요`;
 }
 
 /** 와/과 조사(받침 있으면 과). setupSteps에 없어 여기서만 쓴다 */

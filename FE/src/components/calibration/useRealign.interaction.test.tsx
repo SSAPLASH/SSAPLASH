@@ -55,6 +55,27 @@ describe('useRealign', () => {
     expect(useLive.getState().realignNeeded).toEqual([false, false]);
   });
 
+  it('자동 보정이 멈춘 손이 대상이면 info.unstable이 true이고, 그 손을 치고 멈춤이 풀려도 재정렬이 끝날 때까지 유지된다', () => {
+    const st = { appliedDeg: 0, samples: 0, lastErrorDeg: 7, lastSentAt: null, acked: null };
+    useLive.setState({ yawDrift: [{ ...st, halted: false }, { ...st, halted: true }] });
+    const { result } = renderHook(() => useRealign(true));
+    act(() => useLive.setState({ realignNeeded: [true, true] }));
+    expect(result.current.pending).toBe(true);
+    expect(result.current.info?.unstable).toBe(true);
+    // 오른손을 치면 monitor가 그 손의 멈춤을 푼다(correct). 아직 왼손이 남아 있어 문구가 사라지지 않아야 한다
+    act(() => useLive.setState({ yawDrift: [{ ...st, halted: false }, { ...st, halted: false }] }));
+    expect(result.current.info?.unstable).toBe(true);
+    act(() => result.current.skip());
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('멈춘 손이 없으면 info.unstable은 거짓이다', () => {
+    const { result } = renderHook(() => useRealign(true));
+    act(() => useLive.setState({ realignNeeded: [false, true] }));
+    expect(result.current.pending).toBe(true);
+    expect(result.current.info?.unstable).toBeFalsy();
+  });
+
   it('enabled가 아니면 시작하지 않고, 켜졌다 꺼지면 취소(realignNeeded는 남는다)', () => {
     useLive.setState({ realignNeeded: [true, false] });
     const { result, rerender } = renderHook(({ on }: { on: boolean }) => useRealign(on), { initialProps: { on: false } });

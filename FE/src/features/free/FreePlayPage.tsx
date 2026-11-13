@@ -191,7 +191,7 @@ export function FreePlayPage() {
           ) : (
             realign.info && (
               <div className="free-band motion-toast" role="status">
-                <RealignPrompt hands={realign.info.hands} done={realign.info.done} variant="band" onSkip={realign.info.onSkip} />
+                <RealignPrompt hands={realign.info.hands} done={realign.info.done} unstable={realign.info.unstable} variant="band" onSkip={realign.info.onSkip} />
               </div>
             )
           )}

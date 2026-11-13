@@ -10,9 +10,11 @@ import {
   type CalibrationProfile,
   type YawDriftStatus,
 } from '@/domain/kit/calibration/calibration';
-import type { ResolvedHit, StickId } from '@/domain/events';
+import type { HitJudgedBy, ResolvedHit, StickId } from '@/domain/events';
 import {
   DRIFT_COOLDOWN_MS,
+  DRIFT_FLIP_LIMIT,
+  DRIFT_MAX_STEP_DEG,
   DRIFT_MAX_SPREAD_DEG,
   DRIFT_MIN_DEG,
   DRIFT_MIN_SAMPLES,
@@ -40,6 +42,19 @@ export interface YawCorrection {
   madDeg: number | null;
   /** 그때 링의 (스틱 yaw − 앵커 yaw) 샘플. drift만 채운다 */
   samples: number[];
+  /** samples와 같은 순서의 판정 주체. drift만 채운다(재정렬·연결 직후는 빈 배열) */
+  judgedBy: HitJudgedBy[];
+}
+
+/** 부호가 연달아 뒤집혀 그 손의 자동 보정을 멈췄다는 알림. bootstrap이 진단 줄(yawHalt)과 재정렬 안내로 잇는다 */
+export interface YawHalt {
+  stickId: StickId;
+  /** 연달아 뒤집힌 횟수 */
+  flips: number;
+  /** 보내지 않은 오차(도) */
+  medianDeg: number;
+  /** 그때 적용값(도) */
+  appliedDeg: number;
 }
 
 /** 전송 후 PARAM_ACK를 기다리는 시간(ms) */
@@ -48,22 +63,34 @@ const STICKS: readonly StickId[] = [0, 1];
 
 interface StickState {
   ring: number[];
+  /** ring과 같은 순서의 표본별 judgedBy */
+  ringBy: HitJudgedBy[];
   applied: number;
   lastErr: number | null;
   lastSentAt: number | null;
   acked: boolean | null;
   windowOpen: boolean;
   timer: ReturnType<typeof setTimeout> | null;
+  /** 직전 자동 보정의 오차 부호. 없으면 0 */
+  lastSign: -1 | 0 | 1;
+  /** 부호가 연달아 뒤집힌 횟수. 같은 부호가 나오면 0 */
+  flips: number;
+  /** 부호가 연달아 뒤집혀 자동 보정을 멈춘 상태 */
+  halted: boolean;
 }
 
 const blank = (): StickState => ({
   ring: [],
+  ringBy: [],
   applied: 0,
   lastErr: null,
   lastSentAt: null,
   acked: null,
   windowOpen: false,
   timer: null,
+  lastSign: 0,
+  flips: 0,
+  halted: false,
 });
 
 class YawDriftMonitor {
@@ -73,8 +100,6 @@ class YawDriftMonitor {
   private sticks: [StickState, StickState] = [blank(), blank()];
   /** 일시정지 중에는 observe를 무시한다(보정·재정렬 중, PLAY-004 D7) */
   private paused = false;
-  /** 자동 보정 사용 여부(설정). 꺼져 있으면 observe를 무시한다. 재정렬(correct)·연결 직후 초기화는 그대로 한다 */
-  private auto = true;
   private statusCb: ((stickId: StickId, st: YawDriftStatus | null) => void) | null = null;
 
   constructor() {
@@ -84,6 +109,13 @@ class YawDriftMonitor {
   /** 상태 보고 콜백 등록(1개). 이후 스틱 상태가 바뀔 때마다 호출한다 */
   onStatus(cb: (stickId: StickId, st: YawDriftStatus | null) => void): void {
     this.statusCb = cb;
+  }
+
+  private haltCb: ((h: YawHalt) => void) | null = null;
+
+  /** 자동 보정 정지 콜백 등록(1개). 부호가 연달아 뒤집혀 손이 멈출 때 한 번 호출한다 */
+  onHalt(cb: (h: YawHalt) => void): void {
+    this.haltCb = cb;
   }
 
   private correctionCb: ((c: YawCorrection) => void) | null = null;
@@ -135,6 +167,7 @@ class YawDriftMonitor {
       lastErrorDeg: s.lastErr,
       lastSentAt: s.lastSentAt,
       acked: s.acked,
+      halted: s.halted,
     };
   }
 
@@ -205,7 +238,7 @@ class YawDriftMonitor {
     if (!src) return;
     const prevDeg = this.sticks[stickId].applied;
     src.sendCommand!(encodeSetYawOffset(0), stickId);
-    this.correctionCb?.({ stickId, reason: 'connected', prevDeg, sentDeg: 0, medianDeg: null, madDeg: null, samples: [] });
+    this.correctionCb?.({ stickId, reason: 'connected', prevDeg, sentDeg: 0, medianDeg: null, madDeg: null, samples: [], judgedBy: [] });
     this.forget(stickId);
     this.report(stickId);
   }
@@ -240,20 +273,24 @@ class YawDriftMonitor {
   /** 감시 재개. 링은 비워 옛 앵커 기준 샘플이 섞이지 않게 한다 */
   resume(): void {
     this.paused = false;
-    for (const i of STICKS) this.sticks[i].ring = [];
+    for (const i of STICKS) this.clearRing(this.sticks[i]);
   }
 
-  /**
-   * 자동 보정을 켜고 끈다(설정 「패드 위치 자동 보정」). 이미 보낸 오프셋은 그대로 둔다(끄는 순간 패드가 튀지 않게).
-   * 바뀔 때 링과 마지막 오차를 비워, 꺼진 동안의 타격이나 옛 샘플이 다음 보정에 섞이지 않게 한다
-   */
-  setAuto(on: boolean): void {
-    if (this.auto === on) return;
-    this.auto = on;
+  private clearRing(s: StickState): void {
+    s.ring = [];
+    s.ringBy = [];
+  }
+
+  private clearHalt(s: StickState): void {
+    s.lastSign = 0;
+    s.flips = 0;
+    s.halted = false;
+  }
+
+  /** 곡 시작(재시작 포함): 부호 추적과 멈춤을 풀어 새 판에서 다시 시도한다. 링·적용값·쿨다운은 그대로 둔다 */
+  beginRun(): void {
     for (const i of STICKS) {
-      const s = this.sticks[i];
-      s.ring = [];
-      s.lastErr = null;
+      this.clearHalt(this.sticks[i]);
       if (this.active[i]) this.report(i);
     }
   }
@@ -272,25 +309,26 @@ class YawDriftMonitor {
     const s = this.sticks[stickId];
     const next = wrap180(s.applied - errorDeg);
     src.sendCommand!(encodeSetYawOffset(next), stickId);
-    this.correctionCb?.({ stickId, reason: 'realign', prevDeg: s.applied, sentDeg: next, medianDeg: errorDeg, madDeg: null, samples: [] });
+    this.correctionCb?.({ stickId, reason: 'realign', prevDeg: s.applied, sentDeg: next, medianDeg: errorDeg, madDeg: null, samples: [], judgedBy: [] });
     s.applied = next;
     s.lastErr = errorDeg;
     s.lastSentAt = performance.now();
     s.acked = null;
-    s.ring = [];
+    this.clearRing(s);
+    this.clearHalt(s);
     this.openWindow(stickId);
     this.report(stickId);
   }
 
   /** 타격 1건을 보고 샘플로 쓸 수 있으면 링에 넣고, 조건이 맞으면 보정을 보낸다 */
   observe(hit: ResolvedHit, profile: CalibrationProfile | null): void {
-    if (this.paused || !this.auto) return;
+    if (this.paused) return;
     const src = this.usable();
     if (!src) return;
     if (!isSensorSource(hit.source)) return;
     if (hit.pad === null) return;
-    const trusted = hit.judgedBy === 'stick' || hit.judgedBy === 'chart' || (hit.judgedBy === 'pose' && hit.inside === true);
-    if (!trusted) return;
+    // 스틱이 직접 판정했고 패드 안인 타격만 표본이다. 악보로 짐작(chart)하거나 자세로 가린(pose) 타격은 기준 패드가 틀릴 수 있다
+    if (hit.judgedBy !== 'stick' || hit.inside !== true) return;
     const anchor = profile?.anchors[hit.pad];
     if (!anchor) return;
 
@@ -298,8 +336,14 @@ class YawDriftMonitor {
     if (hit.stickId === null) return;
     const i = hit.stickId;
     const s = this.sticks[i];
+    // 멈춘 손은 표본을 모으지 않는다(재정렬이나 다음 곡 시작까지)
+    if (s.halted) return;
     s.ring.push(wrap180(hit.pose.yaw - anchor.yaw));
-    if (s.ring.length > DRIFT_WINDOW) s.ring.shift();
+    s.ringBy.push(hit.judgedBy);
+    if (s.ring.length > DRIFT_WINDOW) {
+      s.ring.shift();
+      s.ringBy.shift();
+    }
 
     if (s.ring.length >= DRIFT_MIN_SAMPLES) {
       const m = median(s.ring);
@@ -308,14 +352,37 @@ class YawDriftMonitor {
       const now = performance.now();
       const cooled = s.lastSentAt === null || now - s.lastSentAt >= DRIFT_COOLDOWN_MS;
       if (Math.abs(m) >= DRIFT_MIN_DEG && mad <= DRIFT_MAX_SPREAD_DEG && cooled) {
-        const next = wrap180(s.applied - m);
+        const sign = Math.sign(m) as -1 | 1;
+        s.flips = s.lastSign !== 0 && sign !== s.lastSign ? s.flips + 1 : 0;
+        if (s.flips >= DRIFT_FLIP_LIMIT) {
+          // 부호가 연달아 뒤집히면 방향값이 흔들리는 것이다. 더 보내 봐야 다시 뒤집히므로 보내지 않고 그 손을 멈춘다
+          s.halted = true;
+          this.clearRing(s);
+          s.lastErr = m;
+          this.haltCb?.({ stickId: i, flips: s.flips, medianDeg: m, appliedDeg: s.applied });
+          this.report(i);
+          return;
+        }
+        // 한 번에 움직이는 각도는 ±DRIFT_MAX_STEP_DEG로 자른다. 남은 오차는 다음 표본 모음에서 다시 본다
+        const step = Math.max(-DRIFT_MAX_STEP_DEG, Math.min(DRIFT_MAX_STEP_DEG, m));
+        const next = wrap180(s.applied - step);
         src.sendCommand!(encodeSetYawOffset(next), i);
-        // 링을 비우기 전에 근거 샘플을 넘긴다(콜백이 없으면 복사하지 않는다)
-        this.correctionCb?.({ stickId: i, reason: 'drift', prevDeg: s.applied, sentDeg: next, medianDeg: m, madDeg: mad, samples: s.ring.slice() });
+        // 링을 비우기 전에 근거 샘플을 넘긴다(콜백이 없으면 복사하지 않는다). medianDeg는 자르기 전 오차다
+        this.correctionCb?.({
+          stickId: i,
+          reason: 'drift',
+          prevDeg: s.applied,
+          sentDeg: next,
+          medianDeg: m,
+          madDeg: mad,
+          samples: s.ring.slice(),
+          judgedBy: s.ringBy.slice(),
+        });
+        s.lastSign = sign;
         s.applied = next;
         s.lastSentAt = now;
         s.acked = null;
-        s.ring = [];
+        this.clearRing(s);
         this.openWindow(i);
       }
     }
@@ -328,7 +395,6 @@ class YawDriftMonitor {
     this.offState = null;
     this.source = null;
     this.paused = false;
-    this.auto = true;
     for (const i of STICKS) {
       this.clearWindow(this.sticks[i]);
       this.sticks[i] = blank();
@@ -336,6 +402,7 @@ class YawDriftMonitor {
     }
     this.statusCb = null;
     this.correctionCb = null;
+    this.haltCb = null;
     this.subscribeTap();
   }
 }

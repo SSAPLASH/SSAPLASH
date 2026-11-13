@@ -7,6 +7,8 @@ import { create } from 'zustand';
 import { savePlayLog } from '@/engine/playLog';
 import { EMPTY_PREV_BEST } from '@/domain/play/bestRecord';
 import { useSettings } from '@/store/settingsStore';
+import { useLive } from '@/store/liveStore';
+import type { ClockSkew } from '@/domain/kit/device/arrivalSkew';
 import type { PlayLog } from '@/domain/play/playLog';
 import { ResultPage } from './ResultPage';
 
@@ -83,7 +85,10 @@ const rec = { measuredAt: 1, medianMs: -60, madMs: 8, pairs: 12, input: 'sensor'
 beforeEach(() => {
   useSettings.setState({ timingCal: null, timingCalPrompt: 'skipped' });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useLive.setState({ clockSkew: null });
+});
 
 describe('ResultPage 박자 맞추기 권유 띠', () => {
   it('skipped + 센서 기록이면 띠가 보이고 설정이 done이 된다(화면에 머무는 동안 띠는 남는다)', () => {
@@ -130,5 +135,33 @@ describe('ResultPage 넓힌 판정 폭 안내', () => {
   it('기본 폭이면 보이지 않는다', () => {
     show(logOf());
     expect(screen.queryByText(/로 연주한 기록이에요/)).toBeNull();
+  });
+});
+
+describe('ResultPage 기기 시각 차이 경고 띠 (PLAY-006)', () => {
+  const SKEW_TEXT = '왼손 스틱 시간이 어긋났어요. 껐다 켜 주세요.';
+  const skew: ClockSkew = { spreadMs: 40, medians: { left: 50, right: 10, pedal: 10 }, outlier: 'left' };
+
+  it('연주를 마치고 도착했을 때 경고 중이면 띠 한 줄을 보인다(버튼 없음, 화면에 머무는 동안 남는다)', () => {
+    useLive.setState({ clockSkew: skew });
+    const { rerender } = show(logOf());
+    const band = screen.getByText(SKEW_TEXT).closest('.lesson-band') as HTMLElement;
+    expect(band.getAttribute('role')).toBe('status');
+    expect(band.querySelector('button')).toBeNull();
+    // 경고가 끝나도 도착 시점 값을 붙잡는다
+    useLive.setState({ clockSkew: null });
+    rerender(page);
+    expect(screen.getByText(SKEW_TEXT)).toBeTruthy();
+  });
+
+  it('경고 중이 아니면 띠가 없다', () => {
+    show(logOf());
+    expect(screen.queryByText(SKEW_TEXT)).toBeNull();
+  });
+
+  it('연주 기록에서 연 옛 결과에는 경고 중이어도 보이지 않는다', () => {
+    useLive.setState({ clockSkew: skew });
+    show(logOf(), oldPage);
+    expect(screen.queryByText(SKEW_TEXT)).toBeNull();
   });
 });
