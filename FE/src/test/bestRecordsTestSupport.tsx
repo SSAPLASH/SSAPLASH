@@ -166,10 +166,18 @@ export function testReadyBestRecords(Page: ComponentType) {
         await new Promise((r) => setTimeout(r, 30));
         return real!(...args);
       });
-      show();
+      // 기본 판정 폭(HARD 채보)이라 서버 값을 합친다
+      show('song=1&chart=12');
       await clickPlay();
       const state = await finishRun();
       expect(state.prevBest.score).toBe(500);
+    });
+    it('넓힌 판정 폭(EASY 채보)으로 시작한 판은 서버 최고값을 치기 전 최고값에 넣지 않는다', async () => {
+      // 서버 응답에는 판정 폭이 없어 ±60ms 기록과 섞을 수 없다. 같은 폭의 로컬 로그가 없으니 null
+      show('song=1&chart=11');
+      await clickPlay();
+      const state = await finishRun();
+      expect(state.prevBest.score).toBeNull();
     });
     it('서버 기록이 없으면 이전 최고 점수 없음(null)으로 넘어간다', async () => {
       vi.mocked(getBestRecords).mockResolvedValue({ items: [] });

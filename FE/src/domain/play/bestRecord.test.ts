@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayLog } from './playLog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, localPrevBest, mergePrevBest, recordBadgeOf } from './bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, localPrevBest, mergePrevBest, prevBestFor, recordBadgeOf } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */
 function log(p: {
@@ -199,6 +199,33 @@ describe('localPrevBest·mergePrevBest', () => {
   it('내장 곡(id 없음)은 곡 id·단계로 맞춘다', () => {
     const logs = [full({ songId: 'b1', difficulty: 'HARD', score: 70 }), full({ songId: 'b1', difficulty: 'EASY', score: 900 })];
     expect(localPrevBest(logs, { mode: 'RHYTHM', songNumericId: null, chartId: null, songId: 'b1', difficulty: 'HARD' }).score).toBe(70);
+  });
+  describe('GOOD 폭이 같은 기록끼리만 비교', () => {
+    const withTiming = (goodMs: number | undefined, p: Parameters<typeof full>[0]) => ({ ...full(p), ...(goodMs === undefined ? {} : { timing: { perfectMs: 25, goodMs } }) }) as PlayLog;
+    const target = { mode: 'RHYTHM' as const, songNumericId: 1, chartId: 10, songId: 's', difficulty: 'EASY' };
+    const logs = [withTiming(60, { song: 1, chart: 10, score: 900, playId: 'a' }), withTiming(90, { song: 1, chart: 10, score: 700, playId: 'b' }), withTiming(undefined, { song: 1, chart: 10, score: 950, playId: 'old' })];
+    it('goodMs를 주면 같은 폭의 로그만 대상이다(timing 없는 옛 로그는 뺀다)', () => {
+      expect(localPrevBest(logs, { ...target, goodMs: 90 }).score).toBe(700);
+      expect(localPrevBest(logs, { ...target, goodMs: 60 }).score).toBe(900);
+    });
+    it('같은 폭의 기록이 없으면 null이라 첫 기록이 된다', () => {
+      const prev = localPrevBest(logs, { ...target, goodMs: 120 });
+      expect(prev).toEqual({ score: null, accuracy: null });
+      expect(bestRecordDelta(log({ score: 10 }), prev).kind).toBe('first');
+    });
+    it('goodMs 없이 부르면 폭을 따지지 않는다', () => {
+      expect(localPrevBest(logs, target).score).toBe(950);
+    });
+    it('악보 정확도도 같은 폭끼리만 비교한다', () => {
+      const sheet = [withTiming(60, { mode: 'SHEET', song: 1, chart: 10, accuracy: 0.95 }), withTiming(90, { mode: 'SHEET', song: 1, chart: 10, accuracy: 0.8 })];
+      expect(localPrevBest(sheet, { ...target, mode: 'SHEET', goodMs: 90 }).accuracy).toBe(0.8);
+    });
+  });
+  it('prevBestFor는 기본 폭에서만 서버 값을 합친다', () => {
+    const local = { score: 100, accuracy: null };
+    const server = { score: 500, accuracy: 0.9 };
+    expect(prevBestFor(local, server, 60)).toEqual({ score: 500, accuracy: 0.9 });
+    expect(prevBestFor(local, server, 90)).toBe(local);
   });
   it('mergePrevBest는 큰 값, 둘 다 없으면 null', () => {
     expect(mergePrevBest({ score: 10, accuracy: null }, { score: 20, accuracy: 0.5 })).toEqual({ score: 20, accuracy: 0.5 });
