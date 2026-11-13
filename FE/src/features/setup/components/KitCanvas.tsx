@@ -2,16 +2,16 @@
 // 패드 그림은 보정 화면과 같은 DrumKit(자유 틀, domain/kit/kitFrame)이 그리고, 여기는 그 아래(바닥 격자·그림자)와 위(손별 판정 범위·L·R 표식)의
 // 캔버스 층, 그리고 고르기·끌기 포인터 처리를 맡는다. 좌표 계산은 domain/kit/kitPerspective 몫이다. 끌기 편집은 draggable일 때만(kit-drag 설계 D6).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PadId } from '@/domain/pads';
-import type { KitLayout } from '@/domain/kitLayout';
+import type { PadId } from '@/domain/kit/pads';
+import type { KitLayout } from '@/domain/kit/kitLayout';
 import type { Pose } from '@/domain/events';
-import type { HandAnchorSet } from '@/domain/calibration';
-import type { KitSkin } from '@/domain/drumKit';
+import type { HandAnchorSet } from '@/domain/kit/calibration';
+import type { KitSkin } from '@/domain/kit/drumKit';
 import { frameOf } from '@/domain/kit/kitFrame';
 import { DEFAULT_ANGLE_RANGE, type AngleRange } from '@/domain/kit/kitMapping';
 import { HAND_ORIGINS, anchorToPoint } from '@/domain/kit/kitModel';
 import { dragToLayout, hitTestPads, isMovablePad, kitShapes, makeCamera, poseTip, screenPointToPose, type Camera, type PadShape } from '@/domain/kit/kitPerspective';
-import type { KeyMap } from '@/domain/keyMap';
+import type { KeyMap } from '@/domain/kit/keyMap';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { canvasBleed, paintAnchorZone, paintFloor, paintShadow, paintStickTip } from './kitPerspectiveDraw';

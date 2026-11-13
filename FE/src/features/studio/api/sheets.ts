@@ -1,6 +1,6 @@
 // 내 악보 보관 API (BE 155, 설계 CHART-001 악보 보관 3-1). 응답을 도메인 타입으로 바꾸고 실패를 SheetError로 바꾼다.
 import { SHEET_LIST_SIZE, SheetError, type SheetDetail, type SheetKind, type SheetPage, type SheetPageResult, type SheetSummary } from '@/features/studio/domain/sheetMusic';
-import { toSafeId } from '@/domain/songCatalog';
+import { toSafeId } from '@/domain/song/songCatalog';
 import { ApiError } from '@/api/error';
 import { apiFetch } from '@/api/http';
 

@@ -6,7 +6,7 @@ import { listAllAdminSongs, registerAdminSong, uploadAccompaniment } from './adm
 import { RequireAdmin } from '@/components/shell/RequireAdmin';
 import { Sidebar } from '@/components/shell/Sidebar';
 import type { AdminSong } from './adminSong';
-import type { UserRole } from '@/domain/auth';
+import type { UserRole } from '@/domain/account/auth';
 import { useAdminSongs } from './adminSongStore';
 import { useAuth } from '@/store/authStore';
 import { AdminSongsPage } from './AdminSongsPage';

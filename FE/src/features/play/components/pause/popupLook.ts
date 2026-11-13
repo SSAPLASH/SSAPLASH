@@ -1,5 +1,5 @@
 // 판정 팝업 시간 곡선(순수). NoteHighway 캔버스가 매 프레임 읽는다. 설계 MODE-001-score-combo-fx 3-3.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 
 /** 팝업 수명(ms)·동시 상한(설계 MODE-001-score-combo-fx 3-3, UX-21) */
 export const POPUP_LIFE_MS = 600;

@@ -1,7 +1,7 @@
 // 플레이 리포트 화면 타입 (COACH-002). 서버 응답 변환은 api/reports, 정확도는 0~1, 표본 없음은 null.
-import type { Difficulty } from './chart';
+import type { Difficulty } from '@/domain/song/chart';
 import type { Judgement } from './judgement';
-import type { PadId } from './pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export type AnalysisStatus = 'NOT_REQUESTED' | 'PENDING' | 'DONE' | 'FAILED';
 

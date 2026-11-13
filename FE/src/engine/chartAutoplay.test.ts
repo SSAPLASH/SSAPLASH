@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createChartAutoplay, AUTOPLAY_TICK_MS } from './chartAutoplay';
-import type { ChartNote } from '@/domain/chart';
+import type { ChartNote } from '@/domain/song/chart';
 
 const NOTES: ChartNote[] = Array.from({ length: 40 }, (_, i) => ({
   timeMs: 500 + i * 250,

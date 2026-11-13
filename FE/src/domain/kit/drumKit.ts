@@ -1,7 +1,7 @@
 // 연주 화면 드럼 킷(Figma Play / DrumKit) 고정 배치·상태 상수·크기 계산.
 // 판정용 배치(kitLayout)와는 별개로, 표시 전용이다. 그리기는 components/drum이 한다.
 // 실물 스킨의 자리는 그림 자리 표(kit/kitArt)에서 온다. 전자·네온은 이 파일의 평면 배치표를 쓴다.
-import { KIT_ART_PERSP, KIT_ART_TOP, type KitArt, type KitArtPad } from './kit/kitArt';
+import { KIT_ART_PERSP, KIT_ART_TOP, type KitArt, type KitArtPad } from './kitArt';
 import { PAD_META, type PadId } from './pads';
 
 /** pedal은 하이햇 페달(발판). 실물 스킨의 고정 킷과 드럼 세팅의 자유 틀(DrumKit frame)에서 그린다 */

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { SongDeleteDialog } from './SongDeleteDialog';
 
 const song = { id: 7, title: '별빛 산책', sheetId: null } as SongSummary;

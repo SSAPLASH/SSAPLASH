@@ -8,7 +8,7 @@ import { listAllSongs } from '@/api/songs';
 import { queryClient } from '@/runtime/queryClient';
 import type { UseFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { accompanimentBarView } from '@/domain/song/freeAccompaniment';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSongs } from '@/store/songStore';

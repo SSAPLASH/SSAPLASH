@@ -1,5 +1,5 @@
 // 채보. 공통 명세서 9-2.
-import type { PadId } from './pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export type Difficulty = 'EASY' | 'NORMAL' | 'HARD';
 export type ChartSource = 'BUILTIN' | 'MIDI' | 'AUDIO' | 'MUSICXML';

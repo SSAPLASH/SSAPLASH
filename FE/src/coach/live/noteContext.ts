@@ -1,6 +1,6 @@
 // 채보에서 노트마다 직전 시점의 패드와 간격을 미리 계산한다. 원인 계산(cause)이 판정 한 건에서 쓸 맥락이다.
 // 화면은 판정을 받을 때 notes[noteIndex]를 JudgedNote에 펼쳐 넣는다. 채보마다 한 번만 계산한다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 같은 시각으로 보는 노트 간격(ms). 킥과 하이햇처럼 동시에 치는 노트를 한 묶음으로 본다 */
 const CHORD_MS = 1;

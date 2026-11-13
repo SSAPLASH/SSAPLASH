@@ -5,7 +5,7 @@ import { PlayClock, type ClockAccompaniment } from './sessionClock';
 import { RhythmSession } from './RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
 import type { AudioReading } from '@/domain/time/audioTimeline';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 
 function makeChart(durationMs: number, noteEveryMs = 0): Chart {
   const notes = [];

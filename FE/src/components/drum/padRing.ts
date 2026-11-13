@@ -1,5 +1,5 @@
 // 패드 링 기하(원본 160 기준). Pad의 상태 링과 DrumKit의 코칭 링이 같이 쓴다.
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 
 export interface RingGeo {
   cx: number;

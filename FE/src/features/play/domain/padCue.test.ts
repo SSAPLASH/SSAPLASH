@@ -1,10 +1,10 @@
 // padCues 테스트: 패드별 다음 박 라벨과 next/later 단계
 import { describe, expect, it } from 'vitest';
 import type { NoteState } from '@/engine/RhythmSession';
-import type { Chart } from '@/domain/chart';
-import type { Judgement } from '@/domain/judgement';
+import type { Chart } from '@/domain/song/chart';
+import type { Judgement } from '@/domain/play/judgement';
 import { cueLabelText, nextBeatBadges, NOW_TOLERANCE_MS, padCues, type PadCue } from './padCue';
-import { buildSheet } from '@/domain/sheet';
+import { buildSheet } from '@/domain/song/sheet';
 
 // 120 BPM 4/4: 칸 125ms, 마디 2000ms
 const notes: Chart['notes'] = [

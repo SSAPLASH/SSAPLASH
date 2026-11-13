@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
-import type { AccompanimentStatus, SongSummary } from '@/domain/songCatalog';
+import type { AccompanimentStatus, SongSummary } from '@/domain/song/songCatalog';
 import { ACC_POLL_INTERVAL_MS, ACC_POLL_MAX_TRIES, AccompanimentPoller } from './accompanimentPoller';
 
 const song = (id: number, accompanimentStatus: AccompanimentStatus): SongSummary => ({

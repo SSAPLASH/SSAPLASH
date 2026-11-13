@@ -26,9 +26,9 @@ import {
   type SongDetail,
   type SongLevel,
   type SongSummary,
-} from '@/domain/songCatalog';
+} from '@/domain/song/songCatalog';
 import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/play/bestRecord';
-import { presetDisplayName } from '@/domain/preset';
+import { presetDisplayName } from '@/domain/kit/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/features/play/useBestRecords';
 import { BestRecordsNotice } from './BestRecordsNotice';

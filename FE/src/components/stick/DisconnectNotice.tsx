@@ -5,7 +5,7 @@
 // 재연결 상태(status)는 store/reconnectStore가 정한 값을 호출부가 넘긴다. 이 컴포넌트는 props만 받는다.
 import type { Ref } from 'react';
 import { RealignPrompt, type RealignInfo } from '@/components/calibration/RealignPrompt';
-import { DEVICE_META, DISCONNECTED_TEXT, CONNECTED_TEXT, disconnectTitle, type DeviceId } from '@/domain/devices';
+import { DEVICE_META, DISCONNECTED_TEXT, CONNECTED_TEXT, disconnectTitle, type DeviceId } from '@/domain/kit/devices';
 import { buttonClassName } from '@/components/ui/buttonStyle';
 import '@/components/ui/Button.css';
 import './DisconnectNotice.css';

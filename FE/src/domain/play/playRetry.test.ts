@@ -1,6 +1,6 @@
 // 다시 하기 경로 테스트
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_CHARTS } from '../chart';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
 import { RETRY_AUTOSTART_STATE, retryPathOf } from './playRetry';
 
 const builtinSongId = BUILTIN_CHARTS[1].songId;

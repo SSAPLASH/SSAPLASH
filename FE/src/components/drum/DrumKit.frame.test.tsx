@@ -1,10 +1,10 @@
 // DrumKit 자유 틀(드럼 세팅 원근 보기) 검증: 틀 크기·자리·순서, 하이햇 페달, 전자·네온 눌림. SSR 문자열.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { KIT_SKINS } from '@/domain/drumKit';
+import { KIT_SKINS } from '@/domain/kit/drumKit';
 import { KIT_ART_PERSP, kitArtPad } from '@/domain/kit/kitArt';
 import { kitFrame } from '@/domain/kit/kitFrame';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { DrumKit } from './DrumKit';
 import { Pad, PadDefs } from './Pad';
 

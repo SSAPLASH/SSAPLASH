@@ -16,7 +16,7 @@ import {
   type ConsentVersions,
   type SignupTerm,
   type SignupTermId,
-} from '@/domain/signupTerms';
+} from '@/domain/account/signupTerms';
 import { TermsItem } from './TermsItem';
 import './auth.css';
 

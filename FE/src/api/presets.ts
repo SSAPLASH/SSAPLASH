@@ -1,8 +1,8 @@
 // 프리셋 API (BE README "키트 프리셋 (90번)", 설계 SETUP-002 프리셋 서버연동 3-2·3-3).
 // PresetSource의 서버 구현. 로그인 상태에서 app/presetBootstrap이 presetStore.setSource로 끼운다.
 // 화면·store는 이 파일을 직접 부르지 않는다. 요청·응답에 calibration은 없다(명세 미결 #23: FE가 쓰지 않음).
-import { fillLayout, type KitLayout, type PadPlacement } from '@/domain/kitLayout';
-import { normalizePadKeys } from '@/domain/pads';
+import { fillLayout, type KitLayout, type PadPlacement } from '@/domain/kit/kitLayout';
+import { normalizePadKeys } from '@/domain/kit/pads';
 import {
   PRESET_SCHEMA_VERSION,
   PresetError,
@@ -10,7 +10,7 @@ import {
   type PresetDraft,
   type PresetErrorCode,
   type PresetSource,
-} from '@/domain/preset';
+} from '@/domain/kit/preset';
 import type { SoundSetId } from '@/domain/kit/soundSet';
 import { ApiError, apiFetch } from './http';
 

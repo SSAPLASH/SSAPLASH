@@ -1,7 +1,7 @@
 // 기준 자세 보정(PLAY-004) 상태 기계. 스틱을 든 채 자세를 3초 유지하면 done이 된다.
 // 입력 소스와 무관하게 pose만 받는다. done을 받은 호출자가 inputManager.resetPose()를 부른다.
 import type { Pose } from '@/domain/events';
-import { summarizePoses } from '@/domain/calibration';
+import { summarizePoses } from '@/domain/kit/calibration';
 
 export interface ReferenceCaptureOptions {
   /** 이만큼 자세가 안정되면 완료 */

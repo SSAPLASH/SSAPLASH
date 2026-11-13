@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { diagTap, type DiagEvent } from './diagTap';
 import { PlayClock, ACC_DRIFT_INTERVAL_MS } from './sessionClock';
 import { RhythmSession } from './RhythmSession';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 
 function makeSession(): RhythmSession {
   const chart: Chart = { songId: 't', title: '테스트', difficulty: 'EASY', bpm: 120, offsetMs: 0, beatsPerBar: 4, notes: [], source: 'BUILTIN', durationMs: 20 * 60_000 };

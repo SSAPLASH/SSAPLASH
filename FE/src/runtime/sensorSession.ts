@@ -13,8 +13,8 @@ import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { pedalRequired } from '@/domain/pedalStatus';
-import type { CalibrationProfile } from '@/domain/calibration';
+import { pedalRequired } from '@/domain/kit/pedalStatus';
+import type { CalibrationProfile } from '@/domain/kit/calibration';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */

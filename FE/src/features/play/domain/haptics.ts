@@ -1,5 +1,5 @@
 // 판정 → 스틱 진동 파형 번호 표 (PLAY-006). 곡 연주 중 FE가 판정한 즉시 그 손에 보낸다.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 
 /**
  * 판정별 DRV2605 라이브러리 파형 번호.

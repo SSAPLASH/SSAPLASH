@@ -3,8 +3,8 @@
 // 빠르기 구간(tempoSegments)이 있는 곡은 격자 시각을 박 번호 × 첫 빠르기 한 박 길이로 센다(gridTimeAt). 마디 폭이 같고
 // 노트가 그 구간 빠르기의 칸에 맞는다 (CHART-003-variable-tempo-exp). 구간이 없으면 timeMs − originMs와 같다.
 import type { Chart } from './chart';
-import { ALL_PADS, type PadId } from './pads';
-import { beatAtMs, beatTimeMs } from './time/tempo';
+import { ALL_PADS, type PadId } from '@/domain/kit/pads';
+import { beatAtMs, beatTimeMs } from '@/domain/time/tempo';
 
 /** 격자 원점·격자 밖 판정에 필요한 채보 필드. offsetMs가 없으면(이전 플레이 로그) 0으로 본다 */
 export type GridChart = Pick<Chart, 'bpm' | 'beatsPerBar' | 'notes'> & Partial<Pick<Chart, 'offsetMs' | 'tempoSegments'>>;

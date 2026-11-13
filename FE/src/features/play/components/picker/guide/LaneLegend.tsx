@@ -3,7 +3,7 @@
 // 칸 순서는 실제 하이웨이 레인 순서(HIGHWAY_LANES), 색은 게임 노트와 같은 네온 3색(laneColorOf). props만 받는다.
 import type { CSSProperties } from 'react';
 import { HIGHWAY_LANES, LANE_COLOR, laneColorOf } from '@/features/play/domain/highwayLanes';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import '@/features/play/components/picker/staff-legend.css';
 import './lane-legend.css';
 

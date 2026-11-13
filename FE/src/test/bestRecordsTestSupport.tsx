@@ -9,11 +9,11 @@ import { listSongs } from '@/api/songs';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import * as playLogs from '@/engine/playLog';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
 vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
 vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));

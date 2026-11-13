@@ -1,6 +1,6 @@
 // 스틱별 연결·배터리를 화면 표시용 값으로 바꾸는 순수 함수. 스토어는 호출자가 읽는다.
 // 배터리 기준(EMB 회신 Q4): 20% 이하 부족(주황), 10% 이하 곧 꺼짐(빨강). 펌웨어는 3.3V 아래 15초면 스스로 꺼진다.
-import { CONNECTED_TEXT, DEVICE_META, DISCONNECTED_TEXT } from '../devices';
+import { CONNECTED_TEXT, DEVICE_META, DISCONNECTED_TEXT } from './devices';
 
 export const BATTERY_LOW_PCT = 20;
 export const BATTERY_CRITICAL_PCT = 10;

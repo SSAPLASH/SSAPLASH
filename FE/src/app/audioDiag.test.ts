@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import { diagSessionEnd, diagSessionStart } from '@/engine/diagReport';
 import { RhythmSession } from '@/engine/RhythmSession';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 import { AUDIO_DIAG_INTERVAL_MS, startAudioDiag, type AudioDiagInfo } from './audioDiag';
 
 const chart = { songId: 's', title: 't', bpm: 120, beatsPerBar: 4, notes: [{ timeMs: 0, pad: 'SNARE' }] } as Chart;

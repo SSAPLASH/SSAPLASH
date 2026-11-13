@@ -16,7 +16,7 @@ import {
   stickParamDefault,
   stickParamById,
 } from '@/input/stickProtocol';
-import { STICK_PADS } from '@/domain/pads';
+import { STICK_PADS } from '@/domain/kit/pads';
 import { defaultHandAnchors } from '@/domain/kit/kitModel';
 import type { DeviceRole } from '@/domain/events';
 

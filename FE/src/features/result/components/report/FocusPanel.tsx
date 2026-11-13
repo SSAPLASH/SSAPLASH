@@ -4,8 +4,8 @@
 // 재생기는 페이지가 useSegmentPlayer로 만들어 내려준다. AI 문구(description·detail·tip)는 고치지 않고 그대로 보인다.
 import { useEffect, useState } from 'react';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
-import { ALL_PADS, PAD_META } from '@/domain/pads';
-import { levelBadge, segmentLevel, type ReportNote } from '@/domain/report';
+import { ALL_PADS, PAD_META } from '@/domain/kit/pads';
+import { levelBadge, segmentLevel, type ReportNote } from '@/domain/play/report';
 import {
   clockHundredth,
   clockRange,

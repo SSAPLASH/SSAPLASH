@@ -4,7 +4,7 @@
 import { useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { SIGNUP_TERMS } from '@/domain/signupTerms';
+import { SIGNUP_TERMS } from '@/domain/account/signupTerms';
 
 interface Props {
   /** 저장(PUT) 진행 중. 버튼·Esc·배경을 잠근다 */

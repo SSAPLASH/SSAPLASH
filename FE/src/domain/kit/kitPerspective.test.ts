@@ -1,8 +1,8 @@
 // 드럼 배치 원근 보기 좌표 계산 검증(PLAY-004 원근 보기): 투영·역투영, 배치 ↔ 3D 점, 끌기, 겹침 순서·클릭 판정, 스틱 끝점.
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KIT_LAYOUT } from '../kitLayout';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { screenToPose } from './kitMapping';
-import { ALL_PADS, type PadId } from '../pads';
+import { ALL_PADS, type PadId } from './pads';
 import {
   AIM_ORIGIN,
   FLOOR_Z,

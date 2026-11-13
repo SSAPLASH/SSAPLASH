@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/features/studio/api/sheets';
 import { listAllSongs } from '@/api/songs';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSongs } from '@/store/songStore';

@@ -1,7 +1,7 @@
 // 드럼 세팅 단계 판정·복귀 띠 문구(순수 함수). 판정은 readiness()의 missing에서 유도해 규칙을 중복하지 않는다.
-import { deviceListText } from '../devices';
-import { pedalConnected, pedalRequired } from '../pedalStatus';
-import { PRESET_NAME_MAX, type PresetNameError } from '../preset';
+import { deviceListText } from './devices';
+import { pedalConnected, pedalRequired } from './pedalStatus';
+import { PRESET_NAME_MAX, type PresetNameError } from './preset';
 import { READINESS_MESSAGES, readiness, stickMissingText, type ReadinessInput, type ReadinessMissing } from './readiness';
 
 /** 단계는 둘(UX-64): ③ 프리셋은 드럼 배치 카드의 칩 줄로 합쳐졌다 */

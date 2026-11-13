@@ -1,7 +1,7 @@
 // 자유 연습 키트 가이드(MODE-002 D2·D5): 무대 오른쪽 위 스위치와 실물 킷 위에 덮는 패드 이름표 알약.
 // 설정 저장은 페이지가 맡고, 여기서는 받은 값만 그린다. 이름표 자리·키는 domain/kitGuide가 정한다
 import type { CSSProperties } from 'react';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import type { KitGuideLabel } from '@/features/free/domain/kitGuide';
 
 interface SwitchProps {

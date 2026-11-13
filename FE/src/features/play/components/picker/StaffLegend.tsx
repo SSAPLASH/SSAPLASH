@@ -1,9 +1,9 @@
 // 악보 읽는 법 카드 (Figma 378:12946, 설계 10/31 결정 ④). 오선 위치 → 패드 9칸 2열 카드 + 기호 설명 칸.
 // 세로 목록 모양은 없앴다. 되돌리려면 git 이력·Figma 10 섹션 시안 913:44073을 본다.
-// 기호 위치·모양은 domain/sheet의 staffPosOf를 그대로 쓴다(악보와 어긋나지 않게 표를 새로 만들지 않는다). props만 받는다.
+// 기호 위치·모양은 domain/song/sheet의 staffPosOf를 그대로 쓴다(악보와 어긋나지 않게 표를 새로 만들지 않는다). props만 받는다.
 import type { CSSProperties } from 'react';
-import { PAD_META, type PadId } from '@/domain/pads';
-import { staffPosOf, type NoteHead } from '@/domain/sheet';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { staffPosOf, type NoteHead } from '@/domain/song/sheet';
 import './staff-legend.css';
 
 /** 위에서부터 보여 주는 순서(악보 위치 높은 순) */

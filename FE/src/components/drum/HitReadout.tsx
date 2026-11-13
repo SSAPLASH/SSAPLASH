@@ -1,5 +1,5 @@
-import type { PadId } from '@/domain/pads';
-import { PAD_META } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
+import { PAD_META } from '@/domain/kit/pads';
 import './HitReadout.css';
 
 interface Props {

@@ -1,6 +1,6 @@
 // 약점 구간 재생 일정 계산(순수). Web Audio를 모른다 — 실제 예약은 audio/SegmentPlayer가 한다.
-import type { PadId } from '@/domain/pads';
-import type { ReportNote } from '@/domain/report';
+import type { PadId } from '@/domain/kit/pads';
+import type { ReportNote } from '@/domain/play/report';
 
 export interface SegmentEvent {
   /** 구간 시작을 0으로 한 상대 시각(ms). 배속이 반영돼 있다 */

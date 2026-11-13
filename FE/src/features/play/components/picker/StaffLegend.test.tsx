@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { PAD_META, type PadId } from '@/domain/pads';
-import { staffPosOf } from '@/domain/sheet';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { staffPosOf } from '@/domain/song/sheet';
 import { StaffLegend, type StaffLegendProps } from './StaffLegend';
 
 const ORDER: PadId[] = ['CRASH', 'HIHAT', 'RIDE', 'SMALL_TOM', 'MID_TOM', 'SNARE', 'FLOOR_TOM', 'KICK', 'HIHAT_PEDAL'];

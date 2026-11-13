@@ -1,7 +1,7 @@
 // 판 안 배치 계산 검증(PLAY-004 D10·D11): 판 안쪽 폭·그림·카드 px → 그림 정규 영역 / 겹침 없음(null) / 측정 불가(undefined), 배너 쌓기 offset.
 import { describe, expect, it } from 'vitest';
 import { bannerPlacement, PANEL_PAD, regionFromSizes, STACK_GAP } from './useOverlayRegion';
-import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT, pickOverlayCorner } from '@/domain/kit/kitLayout';
 
 describe('regionFromSizes', () => {
   it('카드가 그림 영역에서 차지하는 비율을 그림 정규 좌표로 돌려준다(항상 겹침)', () => {

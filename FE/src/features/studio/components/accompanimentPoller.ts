@@ -1,7 +1,7 @@
 // 반주 생성 중 곡 폴링 (설계 CHART-002 반주 상태 4-2). React와 무관한 타이머·조회 순서만 맡고, 화면 연결은 useAccompanimentPolling이 한다.
 // 3초 뒤 대상 곡을 한 곡씩 다시 읽어 넘기고, 회차가 끝나면 남은 대상이 있을 때 다음 회차를 건다. 인스턴스당(화면 진입당) 최대 20회.
 import { ApiError } from '@/api/http';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 
 export const ACC_POLL_INTERVAL_MS = 3000;
 export const ACC_POLL_MAX_TRIES = 20;

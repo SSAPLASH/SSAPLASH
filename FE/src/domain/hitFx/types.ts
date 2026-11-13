@@ -1,7 +1,7 @@
 // 타격 이펙트 공용 타입 — 이벤트(FxEvent)·테마 id·파티클·강도. 그리기·상태는 여기 없다.
-import type { PadId } from '@/domain/pads';
-import type { PadShape } from '@/domain/drumKit';
-import type { Judgement } from '@/domain/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { PadShape } from '@/domain/kit/drumKit';
+import type { Judgement } from '@/domain/play/judgement';
 
 /** 이펙트가 나오는 화면. 1단계에서는 미리보기·랩의 크기 조정에만 쓴다 */
 export type FxMode = 'free' | 'game' | 'sheet' | 'lab' | 'preview';

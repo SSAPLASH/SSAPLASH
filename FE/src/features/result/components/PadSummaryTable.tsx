@@ -1,6 +1,6 @@
 // Figma Controls / TableHeader 134:2686 + Feedback / PadSummaryRow 126:4143 — 패드별 타격 수·정확도·평균 세기·평균 타이밍 표.
 // 평균 타이밍 열은 ≤1024px에서 숨긴다(설계 1-1 #10).
-import { PAD_META } from '@/domain/pads';
+import { PAD_META } from '@/domain/kit/pads';
 import type { PadSummary } from '@/features/result/domain/feedback';
 import '@/components/ui/table.css';
 import './result.css';

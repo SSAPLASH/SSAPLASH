@@ -1,6 +1,6 @@
 // 세팅 「타격 확인」 최근 타격 표(Figma 254:8004). 패드·손·세기·시각 최대 5행, 새 타격이 위. 표시 전용 —
 // 구독은 useRecentHits가 하고 이 컴포넌트는 받은 행만 그린다.
-import { PAD_META } from '@/domain/pads';
+import { PAD_META } from '@/domain/kit/pads';
 import type { RecentHit } from '@/components/drum/useRecentHits';
 import { HIT_LOG_ROWS, hitAgoText } from './hitLogFormat';
 import './setup.css';

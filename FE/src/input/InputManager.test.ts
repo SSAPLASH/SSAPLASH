@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { InputManager } from './InputManager';
 import { BaseInputSource } from './InputSource';
-import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/calibration';
-import { accelToVelocity, DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
-import { KEY_MAP } from '@/domain/keyMap';
+import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING } from '@/domain/kit/tuning';
+import { KEY_MAP } from '@/domain/kit/keyMap';
 import type { InputSourceKind, ResolvedHit, StickEvent, StickHitEvent } from '@/domain/events';
 import { packetTap } from './packetTap';
 

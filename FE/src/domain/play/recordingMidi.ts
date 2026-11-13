@@ -1,7 +1,7 @@
 // 녹음 상세 → MIDI 이벤트·바이트·파일명 (설계 REC-002 3-3~3-6, 4-2). 순수 함수라 네트워크·DOM에 접근하지 않는다.
 import { writeMidiFile, type MidiEvent, type MidiFileInput } from '../song/midiFile';
-import type { PadId } from '../pads';
-import type { RecordingDetail } from '../recording';
+import type { PadId } from '@/domain/kit/pads';
+import type { RecordingDetail } from './recording';
 
 export const MIDI_FALLBACK_BPM = 120;
 export const MIDI_FALLBACK_PPQ = 480;

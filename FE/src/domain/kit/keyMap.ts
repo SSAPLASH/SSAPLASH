@@ -1,6 +1,6 @@
 // 개발·시연용 고정 키보드 매핑. 설정에 저장하지 않는다. 매핑 규칙은 input/padMapper가 쓴다.
 import type { PadId } from './pads';
-import type { StickId } from './events';
+import type { StickId } from '@/domain/events';
 
 export interface KeyBinding {
   pad: PadId;

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetForTest } from './auth';
 import { ApiError } from './http';
 import { deleteRecording, getRecording, listRecordings, renameRecording, saveRecording } from './recordings';
-import type { RecordingBody } from '@/domain/recording';
+import type { RecordingBody } from '@/domain/play/recording';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
 

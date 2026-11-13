@@ -1,7 +1,7 @@
 // 악보 연습 곡 고르기의 범위(기본 곡·내 곡·AI 추천곡·입문 코스)와 주소 값 변환 (설계 MODE-003-악보-연습-하위-메뉴).
 // 사이드바 하위 메뉴(components/shell/Sidebar)와 곡 고르기(features/play SongPicker)가 서로를 모른 채 같은 주소 값을 보도록 여기에 둔다.
 // 순수 함수만 둔다. React·스토어·라우터에 접근하지 않는다.
-import type { SongScope } from '../songCatalog';
+import type { SongScope } from './songCatalog';
 
 /** 곡 고르기 범위. 기본 곡·내 곡은 곡 목록 scope, RECOMMEND는 추천 결과, LESSONS는 입문 코스 */
 export type SheetCategory = SongScope | 'RECOMMEND' | 'LESSONS';

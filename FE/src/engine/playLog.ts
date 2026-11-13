@@ -1,10 +1,10 @@
 // 플레이 로그 (공통 명세서 9-3) 의 로컬 버전. 텔레메트리는 telemetry.ts.
 // localStorage에 계정별 최근 N건. 서버 업로드(ACCT-002 요약)는 runtime/playSync가 이 로그로 하고 상태를 upload에 적는다.
 import type { HihatPedalCoverage } from '@/domain/kit/hihatPedalCoverage';
-import type { TimingWindows } from '@/domain/judgement';
+import type { TimingWindows } from '@/domain/play/judgement';
 import type { InputSourceKind, ResolvedHit } from '@/domain/events';
-import { normalizePadId } from '@/domain/pads';
-import type { LiveCoachEvent, LoggedHit, PlayLog } from '@/domain/playLog';
+import { normalizePadId } from '@/domain/kit/pads';
+import type { LiveCoachEvent, LoggedHit, PlayLog } from '@/domain/play/playLog';
 import type { NoteState, SessionSnapshot } from './RhythmSession';
 
 /** 비로그인(인증 끔 개발 모드)의 저장 키. 계정 로그는 뒤에 `.u{userId}`를 붙여 따로 둔다 */

@@ -2,12 +2,12 @@
 // 키보드(항상 켜짐) + 센서 소스 1개(포인터 모의·BLE·WS)를 동시에 구독하고,
 // 소스 종류에 맞는 매퍼(padMapper: 키 매퍼 / 자세 매퍼)로 패드를 정한다 (설계 D8·D9, PLAY-03 기준선).
 // 판정 경로는 동기 함수만 쓴다 (지연 예산 안에서 끝나야 한다).
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import type { FootId, InputSourceKind, Pose, ResolvedHit, StickEvent, StickHitEvent, StickId } from '@/domain/events';
-import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
+import { resolvePad, type CalibrationProfile } from '@/domain/kit/calibration';
 import { mapHit } from './padMapper';
-import type { KeyMap } from '@/domain/keyMap';
-import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
+import type { KeyMap } from '@/domain/kit/keyMap';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/kit/tuning';
 import type { InputSource } from './InputSource';
 import { isSensorSource } from '@/domain/events';
 import { PedalTimeline } from './pedalTimeline';

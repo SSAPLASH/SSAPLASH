@@ -17,7 +17,7 @@ import { AnalysisNotice, ObservationList, PadTable, StatsLine, type ObservationR
 import { TimingHistogram } from '@/features/result/components/report/TimingHistogram';
 import { useSegmentPlayer } from '@/features/result/components/report/useSegmentPlayer';
 import { RecommendRow } from '@/components/song/RecommendRow';
-import type { Report, ReportNote, WeakSegment } from '@/domain/report';
+import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { recommendationPathOf } from '@/domain/account/recommendation';
 import {
   clockRange,

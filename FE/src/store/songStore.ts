@@ -5,9 +5,9 @@ import { getChartAssets, getChartLatest } from '@/api/charts';
 import { ApiError } from '@/api/http';
 import { getSong } from '@/api/songs';
 import { builtinSummary } from '@/domain/song/builtinSongs';
-import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
+import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/song/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/song/chartMapping';
-import type { SongDetail, SongScope } from '@/domain/songCatalog';
+import type { SongDetail, SongScope } from '@/domain/song/songCatalog';
 
 export type SongsSource = 'api' | 'builtin';
 

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { MAX_RECORDING_TITLE_LENGTH, type RecordingSummary } from '@/domain/recording';
+import { MAX_RECORDING_TITLE_LENGTH, type RecordingSummary } from '@/domain/play/recording';
 import { classifyMutationError, runWithRetry } from './recordingMutation';
 import './recording-list.css';
 

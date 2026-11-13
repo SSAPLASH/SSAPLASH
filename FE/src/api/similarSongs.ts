@@ -1,6 +1,6 @@
 // 비슷한 곡 R2 API (BE README "비슷한 곡 R2", 설계 COACH-004-similar-songs 2장). URL·쿼리와 DTO 변환까지만 한다.
 // 시간 초과·숨김 판단은 store가 맡는다. 404 SONG_NOT_FOUND는 ApiError로 던진다.
-import type { Difficulty } from '@/domain/chart';
+import type { Difficulty } from '@/domain/song/chart';
 import { similarFromDto, type SimilarPage } from '@/domain/account/recommendation';
 import { apiFetch } from './http';
 

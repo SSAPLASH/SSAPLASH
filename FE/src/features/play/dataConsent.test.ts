@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readCurrentConsent } from './dataConsent';
-import type { DataConsent, UserMe } from '@/domain/auth';
-import { dataConsentVersion } from '@/domain/signupTerms';
+import type { DataConsent, UserMe } from '@/domain/account/auth';
+import { dataConsentVersion } from '@/domain/account/signupTerms';
 import { resetAuthStoreForTest, useAuth } from '@/store/authStore';
 
 const NONE: DataConsent = { agreed: null, version: null, updatedAt: null };

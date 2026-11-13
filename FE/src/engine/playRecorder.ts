@@ -3,7 +3,7 @@
 import { isFootHit, type ResolvedHit } from '@/domain/events';
 import type { JudgementEvent, RhythmSession } from './RhythmSession';
 import { toLoggedHit } from './playLog';
-import type { LoggedHit } from '@/domain/playLog';
+import type { LoggedHit } from '@/domain/play/playLog';
 
 export class PlayRecorder {
   hits: LoggedHit[] = [];

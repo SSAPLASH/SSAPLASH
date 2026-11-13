@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { PlayClock, type ClockAccompaniment } from './sessionClock';
 import { RhythmSession } from './RhythmSession';
-import type { Chart } from '@/domain/chart';
+import type { Chart } from '@/domain/song/chart';
 
 /** 120BPM(박 500ms, 마디 2000ms), 카운트다운 켬(preRollMs = 5000 + 1마디 2000 = 7000, 클릭은 마지막 1마디 4박) */
 function makeSession(durationMs: number, offsetMs = 0, tempoSegments?: Chart['tempoSegments']): RhythmSession {

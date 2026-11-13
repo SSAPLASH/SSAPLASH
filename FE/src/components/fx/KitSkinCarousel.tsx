@@ -3,8 +3,8 @@
 import type { KeyboardEvent } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { IconButton } from '@/components/ui/IconButton';
-import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/drumKit';
-import type { KitSkin } from '@/domain/drumKit';
+import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/kit/drumKit';
+import type { KitSkin } from '@/domain/kit/drumKit';
 import './KitSkinCarousel.css';
 
 /** 이전(-1)·다음(1) 스킨. 끝에서 넘기면 반대편 끝으로 순환한다 */

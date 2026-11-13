@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
 import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
-import { recommendationVersion } from '@/domain/signupTerms';
+import { recommendationVersion } from '@/domain/account/signupTerms';
 import { useRecommendationConsent } from './recommendationConsentStore';
 
 vi.mock('@/api/users', () => ({ getRecommendationConsent: vi.fn(), putRecommendationConsent: vi.fn() }));

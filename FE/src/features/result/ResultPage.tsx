@@ -9,7 +9,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/features/result/components/ReportEntry';
 import { LessonResultBand } from '@/components/lesson/LessonResultBand';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
-import { DEFAULT_TIMING } from '@/domain/judgement';
+import { DEFAULT_TIMING } from '@/domain/play/judgement';
 import { isSensorSource } from '@/domain/events';
 import { shouldRemindTimingCal } from '@/domain/kit/timingCalPrompt';
 import { useSettings } from '@/store/settingsStore';
@@ -40,9 +40,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPlayDate } from '@/domain/play/playLogView';
 import { timingHistogram } from '@/features/result/domain/timingHistogram';
 import { buildFeedback, chartFromLog, summarizeByPad, summarizeOpenHihat } from '@/features/result/domain/feedback';
-import { isUploadTarget } from '@/domain/report';
+import { isUploadTarget } from '@/domain/play/report';
 import { getPlayLog, loadPlayLogs } from '@/engine/playLog';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
 /** 모드별 선택 화면 경로 */
 const pickPath = (l: PlayLog): string => pickPathOf(l.mode);

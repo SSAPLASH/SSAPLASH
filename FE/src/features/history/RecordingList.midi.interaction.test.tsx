@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
 import { getRecording, listRecordings } from '@/api/recordings';
-import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
+import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
 import { downloadBlob } from '@/media/downloadFile';
 import { queryClient } from '@/runtime/queryClient';
 import { RecordingList } from './RecordingList';

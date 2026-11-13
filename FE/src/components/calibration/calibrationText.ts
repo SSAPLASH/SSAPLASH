@@ -1,8 +1,8 @@
 // 보정·재정렬 화면 문구(순수 함수, PLAY-004 4-1·3-9). 컴포넌트 파일과 분리해 테스트와 Fast Refresh가 편하게 한다.
 import type { CaptureSnapshot, GapWarning } from '@/engine/HitCapture';
-import type { PadGap } from '@/domain/calibration';
+import type { PadGap } from '@/domain/kit/calibration';
 import type { StickId } from '@/domain/events';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { josaEulReul } from '@/domain/kit/setupSteps';
 
 export const HAND_NAME = ['왼손', '오른손'] as const;

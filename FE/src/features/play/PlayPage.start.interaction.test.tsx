@@ -13,9 +13,9 @@ import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
 import { loadPlayLogs } from '@/engine/playLog';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayPage } from './PlayPage';
 

@@ -1,6 +1,6 @@
 // 하이웨이 위치 계산 — 레인·판정선·노트 y. NoteHighway의 그리기 루프와 이펙트 위치 찾기(locate)가 같은 식을 쓰도록 순수 함수로 뺐다.
 import type { FxEvent, FxGeo, FxLocation } from '@/domain/hitFx/types';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 판정선은 캔버스 아래에서 이만큼 위 */
 export const JUDGE_FROM_BOTTOM = 90;

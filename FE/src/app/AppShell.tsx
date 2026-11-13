@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from 
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { RECORDING_ENABLED } from '@/config/features';
 import { needsRecommendationPrompt } from '@/domain/account/recommendationConsent';
-import { recommendationConsentEnabled } from '@/domain/signupTerms';
+import { recommendationConsentEnabled } from '@/domain/account/signupTerms';
 import { metronome } from '@/engine/Metronome';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';

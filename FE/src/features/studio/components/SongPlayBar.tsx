@@ -8,7 +8,7 @@
 import { SeekBar } from '@/components/song/SeekBar';
 import { PlaybackTransport } from '@/components/song/PlaybackTransport';
 import { formatClock } from '@/domain/song/freeAccompaniment';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { isListening, type SongPlayback } from '@/features/studio/domain/songPlayback';
 import './studio.css';
 import { InlineError } from '@/components/ui/InlineError';

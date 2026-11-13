@@ -2,7 +2,7 @@
 // 모의 엔진: 화면 시계 시각 at에 들리게 하려는 소리는 at이 now + 앞선 정도보다 이르면 now + 앞선 정도로 당겨진다(AudioEngine.fire와 같은 동작).
 import { describe, expect, it } from 'vitest';
 import { createChartAutoplay, AUTOPLAY_TICK_MS } from './chartAutoplay';
-import type { ChartNote } from '@/domain/chart';
+import type { ChartNote } from '@/domain/song/chart';
 
 const NOTES: ChartNote[] = Array.from({ length: 80 }, (_, i) => ({ timeMs: 500 + i * 125, pad: i % 2 === 0 ? 'KICK' : 'HIHAT', velocityHint: 90 }));
 

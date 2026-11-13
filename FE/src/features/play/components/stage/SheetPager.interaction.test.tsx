@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import type { Chart } from '@/domain/chart';
-import { gridTimeAt } from '@/domain/sheet';
+import type { Chart } from '@/domain/song/chart';
+import { gridTimeAt } from '@/domain/song/sheet';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { drawCursor, drawSheet } from '@/components/sheetmusic/sheetStripDraw';
 import { SheetPager } from './SheetPager';

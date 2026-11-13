@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { kitShapes, makeCamera, padPoint, padShape } from '@/domain/kit/kitPerspective';
 import { KitCanvas, type KitCanvasProps } from './KitCanvas';
 

@@ -3,19 +3,19 @@ import { clampTimingOffset, sanitizeTimingCalRecord, type TimingCalRecord } from
 import { isTimingCalPrompt, type TimingCalPrompt } from '@/domain/kit/timingCalPrompt';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kitLayout';
-import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/calibration';
+import { DEFAULT_KIT_LAYOUT, fillLayout, type KitLayout } from '@/domain/kit/kitLayout';
+import { withRadiusOverride, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/kit/calibration';
 import { moveAnchorsForPad } from '@/domain/kit/kitModel';
-import { isKitSkin, type KitSkin } from '@/domain/drumKit';
+import { isKitSkin, type KitSkin } from '@/domain/kit/drumKit';
 import { isHitFxTheme } from '@/domain/hitFx/themes';
 import type { HitFxTheme } from '@/domain/hitFx/types';
-import { normalizePadKeys, type PadId } from '@/domain/pads';
-import { DEFAULT_TIMING, type TimingWindows } from '@/domain/judgement';
+import { normalizePadKeys, type PadId } from '@/domain/kit/pads';
+import { DEFAULT_TIMING, type TimingWindows } from '@/domain/play/judgement';
 import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
-import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/preset';
+import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/kit/preset';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/time/metronome';
-import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/tuning';
+import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/kit/tuning';
 
 interface SettingsState {
   /** 센서 소스 선택 (설계 D9). 'none'이 아니면 입력 소스 레지스트리의 id. 키보드는 항목이 아니라 항상 켜진 보조 소스 */

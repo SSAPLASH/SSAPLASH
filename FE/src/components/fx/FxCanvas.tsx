@@ -2,7 +2,7 @@
 // 테마·스킨·모션 줄이기만 속성으로 받아 엔진 설정을 바꾼다. 포인터 이벤트는 받지 않는다.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/drumKit';
+import { DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/kit/drumKit';
 import type { FxLocate, FxMode, FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import { MAX_PARTICLES, createFxEngine, type FxEngine } from './fxEngine';
 import type { FxView } from './fxDraw';

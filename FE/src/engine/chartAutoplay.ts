@@ -1,7 +1,7 @@
 // 채보 확인 재생(T2, 진단 빌드 전용). 사람·센서 없이 채보 노트를 세션 곡 시각 기준으로 드럼 소리로 예약한다.
 // 판정에는 아무것도 넣지 않는다(소리만 낸다). audio는 import하지 않는다 — 소리 함수는 deps로 주입받는다.
-import type { ChartNote } from '@/domain/chart';
-import type { PadId } from '@/domain/pads';
+import type { ChartNote } from '@/domain/song/chart';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 노트를 미리 예약하는 선행 시간(PlayClock과 같은 값) */
 export const AUTOPLAY_LOOKAHEAD_MS = 200;

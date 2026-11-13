@@ -1,5 +1,5 @@
 // 악보 연습 안내 장면의 킷 자리(장면 논리 좌표 760×470). 스킨별로 킷 그림이 달라 연결선 끝 계산과 같은 변환을 쓴다.
-import { DRUM_KIT_H, DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/drumKit';
+import { DRUM_KIT_H, DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/kit/drumKit';
 
 /** 킷: 760×300 원본을 0.85배로 (57, 200)에 둔다 */
 const KIT_X = 57;

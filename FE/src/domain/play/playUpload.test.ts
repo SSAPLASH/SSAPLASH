@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LoggedHit, LogNote, PlayLog } from '@/domain/playLog';
+import type { LoggedHit, LogNote, PlayLog } from './playLog';
 import { accuracyPercent, buildUploadBody, uploadInputSource } from './playUpload';
 
 const UUID = '9da79b76-5d88-4875-bc71-c826c3fb4293';

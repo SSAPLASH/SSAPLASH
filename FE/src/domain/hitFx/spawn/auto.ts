@@ -1,5 +1,5 @@
 // auto 테마 — 옛 HitEffects(충격파 링 450ms + 심벌 스파크 8개 350ms)를 캔버스 파티클로 재현한다.
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { particle } from './util';
 

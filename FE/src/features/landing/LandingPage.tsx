@@ -9,7 +9,7 @@ import type { LandingModeKey } from '@/features/landing/components/landingConten
 import { LoginDialog } from '@/features/landing/components/auth/LoginDialog';
 import { SignupConsentDialog } from '@/features/landing/components/auth/SignupConsentDialog';
 import { Dialog } from '@/components/ui/Dialog';
-import { sanitizeReturnTo } from '@/domain/auth';
+import { sanitizeReturnTo } from '@/domain/account/auth';
 import { landingDialog, modeRoute } from '@/features/landing/domain/landingRoute';
 import { signupGateDecision } from '@/domain/account/signupGate';
 import { useAuth } from '@/store/authStore';

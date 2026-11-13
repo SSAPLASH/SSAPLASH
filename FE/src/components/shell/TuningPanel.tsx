@@ -4,14 +4,14 @@
 import { useState } from 'react';
 import { useSettings } from '@/store/settingsStore';
 import type { TelemetryRow } from '@/engine/telemetry';
-import { PAD_META } from '@/domain/pads';
+import { PAD_META } from '@/domain/kit/pads';
 import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import {
   TUNING_RANGES,
   countChangedTuning,
   type OutsidePolicy,
   type TuningRange,
-} from '@/domain/tuning';
+} from '@/domain/kit/tuning';
 
 interface SliderProps {
   label: string;

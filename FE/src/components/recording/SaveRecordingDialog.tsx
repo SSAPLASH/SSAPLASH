@@ -2,7 +2,7 @@
 // phase가 pendingSave·saving·failed이고 pending이 있을 때만 그린다. Esc·배경 클릭으로는 닫지 않는다(실수로 녹음을 잃지 않게).
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { discard, retry, save, useRecordingStore, type PendingRecording } from '@/runtime/recordingStore';
-import { MAX_RECORDING_TITLE_LENGTH } from '@/domain/recording';
+import { MAX_RECORDING_TITLE_LENGTH } from '@/domain/play/recording';
 import { pendingDurationMs, recordingSummaryLine } from '@/domain/play/recordingView';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';

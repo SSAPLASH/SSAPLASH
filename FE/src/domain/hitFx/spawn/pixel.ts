@@ -1,5 +1,5 @@
 // pixel 테마 — 드럼: 사각 블록 파편, 심벌: 작은 블록 별(8방향), 킥: 큰 블록 고리. 12fps 계단 움직임(ease step12), 일반 합성.
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { particle } from './util';
 

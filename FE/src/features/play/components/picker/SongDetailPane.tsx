@@ -4,9 +4,9 @@
 // 스틱 연결 문구는 두지 않는다 — 상단 바 스틱 상태로 충분하다(Figma 11/03).
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
 import { useEffect, useRef } from 'react';
-import type { Difficulty } from '@/domain/chart';
+import type { Difficulty } from '@/domain/song/chart';
 import type { RecommendCard } from '@/domain/account/recommendation';
-import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/song/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { Button } from '@/components/ui/Button';
 import { PlayIcon } from '@/components/song/StudioIcons';

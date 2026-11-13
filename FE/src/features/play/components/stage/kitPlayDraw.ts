@@ -1,7 +1,7 @@
 // 킷 위 연주 뷰의 계산부(순수 함수). 캔버스를 모르므로 단위 테스트가 가능하다.
 // 노트 위치 계산만 맡고, 그리기는 KitPlayView가 한다.
-import type { PadId } from '@/domain/pads';
-import type { Judgement } from '@/domain/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { Judgement } from '@/domain/play/judgement';
 import type { NoteState } from '@/engine/RhythmSession';
 
 export interface ApproachNote {

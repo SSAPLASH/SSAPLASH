@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
-import { DEVICE_META, deviceGroupName } from '@/domain/devices';
+import { DEVICE_META, deviceGroupName } from '@/domain/kit/devices';
 import { stickStatus } from '@/domain/kit/stickStatus';
-import { pedalRequired, pedalStatus, type PedalView } from '@/domain/pedalStatus';
+import { pedalRequired, pedalStatus, type PedalView } from '@/domain/kit/pedalStatus';
 
 interface ChipProps {
   connected: readonly [boolean, boolean];

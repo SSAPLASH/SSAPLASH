@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteState } from '@/engine/RhythmSession';
-import type { PadId } from '@/domain/pads';
-import type { Judgement } from '@/domain/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { Judgement } from '@/domain/play/judgement';
 import { chordGroups, nextTargets, visibleNotes } from './kitPlayDraw';
 
 function note(index: number, timeMs: number, pad: PadId, judgement: Judgement | null = null): NoteState {

@@ -1,7 +1,7 @@
 // 총평 카드 렌더 (COACH-003 설계 6장). 정적 마크업 문자열로 검사한다.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { CoachSummary } from '@/domain/report';
+import type { CoachSummary } from '@/domain/play/report';
 import { CoachSummaryCard } from './CoachSummaryCard';
 
 const S: CoachSummary = { level: 'FAIR', text: '박자는 안정적이에요.\n스네어를 신경 써 보세요.', focusPattern: null, source: 'RULE' };

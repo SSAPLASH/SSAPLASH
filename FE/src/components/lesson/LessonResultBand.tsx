@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LESSONS_PATH, lessonOfChart, lessonPath, nextLesson, playPassed } from '@/domain/play/lesson';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { Button } from '@/components/ui/Button';

@@ -3,7 +3,7 @@
 // 짝짓기: seq는 u8이라 256건마다 돈다(설계 R4) — 같은 stick+seq라도 수신 시각 차가 SEQ_MATCH_MS 안일 때만 같은 타격으로 본다.
 import type { DiagEvent } from '@/engine/diagTap';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { negate } from './health';
 import { findHitRow, SEQ_MATCH_MS } from './judgeLog';
 import type { LogRow } from './packetLog';

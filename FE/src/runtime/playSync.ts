@@ -10,9 +10,9 @@ import { queryClient } from './queryClient';
 import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/reports';
 import { logConsent } from '@/domain/play/dataConsent';
 import { buildUploadBody, type PlayUploadBody } from '@/domain/play/playUpload';
-import type { Report, ReportNote } from '@/domain/report';
+import type { Report, ReportNote } from '@/domain/play/report';
 import { getPlayLog, updatePlayLog } from '@/engine/playLog';
-import type { PlayUploadState } from '@/domain/playLog';
+import type { PlayUploadState } from '@/domain/play/playLog';
 
 const APP_VERSION: string | null = import.meta.env.VITE_APP_VERSION || null;
 

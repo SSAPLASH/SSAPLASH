@@ -5,7 +5,7 @@
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { PRESET_SLOTS, SYSTEM_PRESET_ID, isSystemPreset, type KitPreset } from '@/domain/preset';
+import { PRESET_SLOTS, SYSTEM_PRESET_ID, isSystemPreset, type KitPreset } from '@/domain/kit/preset';
 import { capturePillText } from '@/components/calibration/calibrationText';
 
 export interface PresetChipsProps {

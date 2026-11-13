@@ -12,7 +12,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { pickableForAccompaniment, type AccompanimentPick } from '@/domain/song/freeAccompaniment';
-import { artistLabel, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, type SongSummary } from '@/domain/song/songCatalog';
 import { useAccompanimentSongs, type AccompanimentSongsDeps, type SectionKey, type SongSection } from './useAccompanimentSongs';
 import './free.css';
 import { InlineError } from '@/components/ui/InlineError';

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
 import { getSong, listAllSongs, retryMidiAccompaniment } from '@/api/songs';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { SongSummary } from '@/domain/song/songCatalog';
 import { listSheets } from '@/features/studio/api/sheets';
 import { queryClient } from '@/runtime/queryClient';
 import { useSongs } from '@/store/songStore';

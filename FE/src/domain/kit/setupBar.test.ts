@@ -6,7 +6,7 @@ import {
   setupBarChangedText,
   setupBarView,
   unsavedLeaveText,
-} from './kit/setupSteps';
+} from './setupSteps';
 
 describe('setupBarView 4상태', () => {
   it('변경 없음: 사용 중 문구, 보조색, [저장] 비활성', () => {

@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { savePlayLog } from '@/engine/playLog';
 import { EMPTY_PREV_BEST } from '@/domain/play/bestRecord';
 import { useSettings } from '@/store/settingsStore';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 import { ResultPage } from './ResultPage';
 
 vi.mock('@/runtime/playSync', () => ({

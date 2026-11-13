@@ -1,6 +1,6 @@
 // 악보 스트립 그리기 — 5선 드럼 악보를 Canvas 2D에 그리는 순수 함수. SheetPager(연주 중 마디 고정 페이지)과 SheetSnippet(결과 페이지 정지 화면)이 같이 쓴다.
-import type { Judgement } from '@/domain/judgement';
-import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/sheet';
+import type { Judgement } from '@/domain/play/judgement';
+import { gridTimeAt, type BarLayout, type GridChart } from '@/domain/song/sheet';
 import { xInBar, xInBarContinuous, xOfTime, xOfTimeInBar } from './sheetStripMath';
 
 const LINE_GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px
