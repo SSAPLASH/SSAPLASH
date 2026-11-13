@@ -64,8 +64,6 @@ interface SettingsState {
   hitFxTheme: HitFxTheme;
   /** 타이밍 오차 막대 표시(게임 판정선 아래·악보 아래). 기본 켬 */
   timingBar: boolean;
-  /** 스틱 방위각 자동 보정(연주 중 타격 위치로 드리프트를 되돌림, 기기별 로컬). 기본 끔. 꺼져 있으면 재정렬로만 맞춘다 */
-  yawAutoCorrect: boolean;
   /** 노래(게임·악보 반주) 음량(0~1). 1 = 기본. 전체 음량(volume)과 곱해진다 */
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
@@ -148,7 +146,6 @@ interface SettingsState {
   setDockCollapsed: (v: boolean) => void;
   setLiveCoach: (v: boolean) => void;
   setTimingBar: (v: boolean) => void;
-  setYawAutoCorrect: (v: boolean) => void;
 }
 
 export type TestVelocity = 64 | 96 | 120;
@@ -425,7 +422,6 @@ export const useSettings = create<SettingsState>()(
       kitSkin: 'acoustic',
       hitFxTheme: 'auto',
       timingBar: true,
-      yawAutoCorrect: false,
       songVolume: 1,
       soundSetId: 'ssaplash',
       testVelocity: 96,
@@ -530,7 +526,6 @@ export const useSettings = create<SettingsState>()(
       setDockCollapsed: (dockCollapsed) => set({ dockCollapsed }),
       setLiveCoach: (liveCoach) => set({ liveCoach }),
       setTimingBar: (timingBar) => set({ timingBar }),
-      setYawAutoCorrect: (yawAutoCorrect) => set({ yawAutoCorrect }),
     }),
     {
       name: 'ssaplash.settings',
@@ -552,7 +547,6 @@ export const useSettings = create<SettingsState>()(
           hitFxTheme: isHitFxTheme(p.hitFxTheme) ? p.hitFxTheme : 'auto',
           timingBar: typeof p.timingBar === 'boolean' ? p.timingBar : true,
           kitGuide: typeof p.kitGuide === 'boolean' ? p.kitGuide : true,
-          yawAutoCorrect: typeof p.yawAutoCorrect === 'boolean' ? p.yawAutoCorrect : false,
           ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
