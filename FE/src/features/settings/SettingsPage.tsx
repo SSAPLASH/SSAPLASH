@@ -10,6 +10,7 @@ import { SettingRow } from './SettingRow';
 import { WithdrawDialog } from '@/features/settings/components/WithdrawDialog';
 import { useShell } from '@/components/shell/nav/useShell';
 import { Button } from '@/components/ui/action/Button';
+import { Segmented } from '@/components/ui/form/Segmented';
 import { Slider } from '@/components/ui/form/Slider';
 import { Toast, type ToastVariant } from '@/components/ui/feedback/Toast';
 import { Toggle } from '@/components/ui/form/Toggle';
@@ -24,7 +25,7 @@ import type { SocialProvider } from '@/domain/account/auth';
 import { consentSaveErrorMessage, consentStatusText, isRecommendationVersionStale } from '@/domain/account/recommendationConsent';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
-import { useSettings } from '@/store/settingsStore';
+import { useSettings, type PlayHaptic } from '@/store/settingsStore';
 import './settings.css';
 import { InlineError } from '@/components/ui/feedback/InlineError';
 
@@ -32,6 +33,12 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
   GOOGLE: 'Google',
   SSAFY: 'SSAFY',
 };
+
+/** 타격 진동 방식 선택지(모니터 빌드 전용, PLAY-006) */
+const HAPTIC_OPTIONS: { value: PlayHaptic; label: string }[] = [
+  { value: 'judgement', label: '판정 진동' },
+  { value: 'local', label: '스틱 즉시 진동' },
+];
 
 /** 동의 저장 결과 토스트가 보이는 시간 */
 const TOAST_MS = 3000;
@@ -65,6 +72,8 @@ export function SettingsPage() {
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
   const timingBar = useSettings((s) => s.timingBar);
   const setTimingBar = useSettings((s) => s.setTimingBar);
+  const playHaptic = useSettings((s) => s.playHaptic);
+  const setPlayHaptic = useSettings((s) => s.setPlayHaptic);
 
   const consentStatus = useRecommendationConsent((s) => s.status);
   const consent = useRecommendationConsent((s) => s.consent);
@@ -236,6 +245,18 @@ export function SettingsPage() {
             <SettingRow label="타이밍 막대" help="최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
             </SettingRow>
+            {import.meta.env.VITE_MONITOR === 'true' && (
+              <SettingRow label="타격 진동 방식" help="연주 중 진동을 판정 결과로 낼지 스틱이 치는 즉시 낼지 고릅니다." wideControl>
+                {() => (
+                  <Segmented<PlayHaptic>
+                    label="타격 진동 방식"
+                    options={HAPTIC_OPTIONS}
+                    value={playHaptic}
+                    onChange={setPlayHaptic}
+                  />
+                )}
+              </SettingRow>
+            )}
             <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
               {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}
             </SettingRow>
