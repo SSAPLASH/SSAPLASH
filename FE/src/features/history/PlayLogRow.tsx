@@ -118,6 +118,7 @@ export function PlayLogRow({ row, onRetry }: PlayLogRowProps) {
           <span>{playModeName(row.mode)}</span>
           <span>{formatPlayClock(row.at)}</span>
           {row.durationMs == null ? null : <span className="history-num">{formatRecordingLength(row.durationMs)}</span>}
+          {row.wideGoodMs == null ? null : <span>판정 여유 ±{row.wideGoodMs}ms</span>}
         </div>
       </div>
       <Accuracy row={row} />

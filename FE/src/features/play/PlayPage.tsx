@@ -45,7 +45,7 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/nav/useShell';
 import type { Chart } from '@/domain/song/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/song/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, prevBestFor, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import type { PadId } from '@/domain/kit/pads';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
@@ -247,8 +247,8 @@ function PlayPageBody() {
   const prevBest = useRef<PrevBest>(EMPTY_PREV_BEST);
   const freezePrevBest = useCallback((ss: RhythmSession) => {
     const c = ss.chart;
-    const local = localPrevBest(loadPlayLogs(), { mode: 'RHYTHM', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
-    prevBest.current = mergePrevBest(local, serverPrevBest.current);
+    const local = localPrevBest(loadPlayLogs(), { mode: 'RHYTHM', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty, goodMs: ss.windows.goodMs });
+    prevBest.current = prevBestFor(local, serverPrevBest.current, ss.windows.goodMs);
   }, []);
   const recorder = useRef(new PlayRecorder());
   // 실시간 코칭: 연주를 시작할 때 설정값을 고정해 만든다(설계 D7). 안내 칸에 띄울 문구는 훅이 displayMs 동안 들고 있는다
