@@ -274,6 +274,8 @@ describe('SetupPage 보정 중(UX-64)', () => {
           order: [...CAPTURE_ORDER],
           index: 0,
           target: 'SNARE',
+          targetHands: [0, 1],
+          wrongHand: null,
           counts: [0, 0],
           captured: {},
           warning: null,
@@ -286,7 +288,7 @@ describe('SetupPage 보정 중(UX-64)', () => {
     });
     const html = await renderSetup();
     expect(html).toContain('cal-stage-capture');
-    expect(html).toContain('스네어를 2번 타격하세요');
+    expect(html).toContain('스네어를 양손으로 2번씩 타격하세요');
     expect(html).toContain('새 프리셋 · 보정 중');
     expect(html).toContain('보정 중 1 / 7');
     expect(html).toContain('보정 취소');

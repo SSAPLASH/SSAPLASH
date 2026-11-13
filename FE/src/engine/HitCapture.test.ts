@@ -20,8 +20,9 @@ function twice(c: HitCapture, h: 0 | 1, pitch: number, yaw: number) {
 
 /** 순서대로 7패드를 양손 모두 채운다(패드끼리 약 30° 떨어져 경고 없음 → 자동 진행). 손마다 다른 자리 */
 function fillAll(c: HitCapture) {
-  CAPTURE_ORDER.forEach((_, i) => {
-    twice(c, 0, -10 + i * 5, -40 + i * 30);
+  CAPTURE_ORDER.forEach((pad, i) => {
+    // 라이드는 오른손만 받는다(PLAY-004 ①)
+    if (pad !== 'RIDE') twice(c, 0, -10 + i * 5, -40 + i * 30);
     twice(c, 1, -10 + i * 5, -20 + i * 30);
   });
 }
@@ -500,5 +501,130 @@ describe('HitCapture 패드 단위(T9)', () => {
     const c = sync();
     c.start([0], ['KICK']);
     expect(c.snapshot().phase).toBe('done');
+  });
+});
+
+describe('HitCapture 패드별 보정 손(PLAY-004 ①)', () => {
+  /** 라이드 차례까지 양손으로 6패드를 채운다 */
+  function toRide(c: HitCapture) {
+    CAPTURE_ORDER.slice(0, 6).forEach((_, i) => {
+      twice(c, 0, -10 + i * 5, -40 + i * 30);
+      twice(c, 1, -10 + i * 5, -20 + i * 30);
+    });
+  }
+
+  it('양손 세션에서 라이드는 오른손 2타만으로 끝나고, 스냅샷 targetHands는 [1]', () => {
+    const c = sync();
+    c.start([0, 1]);
+    expect(c.snapshot().targetHands).toEqual([0, 1]);
+    toRide(c);
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'RIDE', targetHands: [1] });
+    twice(c, 1, 20, 80);
+    expect(c.snapshot().phase).toBe('done');
+    expect(c.snapshot().captured.RIDE?.[0]).toBeUndefined();
+    expect(c.snapshot().captured.RIDE?.[1]).toMatchObject({ pad: 'RIDE', samples: 2 });
+    expect(c.completedPads()).toContain('RIDE');
+  });
+
+  it('라이드 중 왼손 타격은 받지 않고 wrongHand를 남긴다. 오른손이 치면 지운다', () => {
+    const c = sync();
+    c.start([0, 1]);
+    toRide(c);
+    expect(c.onHit(0, P(20, 80), 500)).toBe(false);
+    expect(c.snapshot().wrongHand).toEqual({ pad: 'RIDE', stickId: 0, at: 500 });
+    expect(c.snapshot().counts).toEqual([0, 0]);
+    expect(c.onHit(1, P(20, 80), 600)).toBe(true);
+    expect(c.snapshot().wrongHand).toBeNull();
+  });
+
+  it('패드가 넘어가면 wrongHand를 지운다', () => {
+    const c = sync();
+    c.start([0, 1], ['RIDE', 'SNARE']);
+    c.onHit(0, P(0, 0), 10);
+    expect(c.snapshot().wrongHand).not.toBeNull();
+    twice(c, 1, 20, 80);
+    expect(c.snapshot()).toMatchObject({ target: 'SNARE', wrongHand: null });
+  });
+
+  it('다른 패드는 지금처럼 양손이 채워야 끝난다', () => {
+    const c = sync();
+    c.start([0, 1]);
+    twice(c, 1, -10, 0);
+    expect(c.snapshot()).toMatchObject({ target: 'HIHAT', phase: 'capturing', wrongHand: null });
+    twice(c, 0, -10, -40);
+    expect(c.snapshot().target).toBe('CRASH');
+  });
+
+  it('왼손만 세션이면 라이드를 왼손이 받는다', () => {
+    const c = sync();
+    c.start([0], ['RIDE']);
+    expect(c.snapshot().targetHands).toEqual([0]);
+    twice(c, 0, 20, 80);
+    expect(c.snapshot().phase).toBe('done');
+    expect(c.capturedHands()).toEqual([{ pad: 'RIDE', hands: [0] }]);
+  });
+
+  it('capturedHands: 패드별로 실제 친 손', () => {
+    const c = sync();
+    c.start([0, 1]);
+    fillAll(c);
+    const m = new Map(c.capturedHands().map((e) => [e.pad, e.hands]));
+    expect(m.get('SNARE')).toEqual([0, 1]);
+    expect(m.get('RIDE')).toEqual([1]);
+    expect(c.capturedHands()).toHaveLength(7);
+  });
+
+  it('라이드 단계에 왼손이 새로 붙어도 오른손이 이미 채웠으면 바로 done을 유지한다', () => {
+    const c = sync();
+    c.start([1], ['RIDE']);
+    twice(c, 1, 20, 80);
+    expect(c.snapshot().phase).toBe('done');
+    c.addHand(0);
+    expect(c.snapshot().phase).toBe('done');
+  });
+
+  it('checkGaps: base의 derived 앵커는 간격 경고 비교에서 뺀다', () => {
+    const c = sync();
+    const base: HandAnchors = [{ RIDE: { ...anchorOf('RIDE', 0, 5), derived: true } }, null];
+    c.start([0], ['SNARE'], base);
+    twice(c, 0, 0, 0);
+    expect(c.snapshot().gapWarnings).toEqual([]);
+    const c2 = sync();
+    c2.start([0], ['SNARE'], [{ RIDE: anchorOf('RIDE', 0, 5) }, null]);
+    twice(c2, 0, 0, 0);
+    expect(c2.snapshot().gapWarnings).toHaveLength(1);
+  });
+});
+
+describe('HitCapture 타격 세기 표본(PLAY-004 ③)', () => {
+  it('손별로 쌓이고 받을 손이 아닌 손·다시 친 것도 포함하며 비정상 값은 뺀다', () => {
+    const c = sync();
+    c.start([0, 1], ['RIDE']);
+    c.onHit(1, P(20, 80), 2, 800);
+    c.onHit(0, P(0, 0), 3, NaN); // 받을 손이 아닌 손의 비정상 값
+    c.onHit(0, P(0, 0), 4, 0);
+    c.onHit(0, P(0, 0), 5, -5);
+    c.onHit(0, P(0, 0), 6);
+    c.onHit(0, P(0, 0), 7, 700); // 받을 손 아님이어도 쌓는다
+    expect(c.peakSpeeds()).toEqual([[700], [800]]);
+  });
+
+  it('퍼짐 때문에 되돌린 타격도 쌓는다', () => {
+    const c = sync();
+    c.start([1], ['SNARE']);
+    c.onHit(1, P(0, 0), 1, 500);
+    c.onHit(1, P(0, 40), 2, 600); // 퍼짐 초과 → 되돌림
+    expect(c.snapshot().warning).not.toBeNull();
+    expect(c.peakSpeeds()[1]).toEqual([500, 600]);
+  });
+
+  it('restart는 비우고, 읽은 배열을 고쳐도 내부는 그대로', () => {
+    const c = sync();
+    c.start([1], ['SNARE']);
+    c.onHit(1, P(0, 0), 1, 500);
+    c.peakSpeeds()[1].push(1);
+    expect(c.peakSpeeds()[1]).toEqual([500]);
+    c.restart();
+    expect(c.peakSpeeds()).toEqual([[], []]);
   });
 });

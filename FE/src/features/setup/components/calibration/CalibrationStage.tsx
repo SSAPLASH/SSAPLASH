@@ -13,7 +13,7 @@ import { KitInfoFrame, KitInfoHead, KitInfoOverlay } from '@/features/setup/comp
 import { StagePanel } from '@/features/setup/components/stage/StagePanel';
 import { GapBanner } from './GapBanner';
 import { useOverlayRegion } from '@/features/setup/components/stage/useOverlayRegion';
-import { HAND_NAME, captureHeadline, overlapLineText, spreadWarningText } from '@/components/calibration/calibrationText';
+import { HAND_NAME, captureHeadline, overlapLineText, spreadWarningText, wrongHandText } from '@/components/calibration/calibrationText';
 import { previewRadius } from './captureRadius';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { useLive } from '@/store/liveStore';
@@ -26,18 +26,21 @@ import { kitFrame } from '@/domain/kit/kitFrame';
 import { padScreenCircles } from '@/domain/kit/kitPerspective';
 import { padPointOf } from '@/domain/kit/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/kit/pads';
+import { captureHandsFor } from '@/domain/kit/calibration/captureHands';
 import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/kit/calibration/calibration';
 import type { Pose, StickId } from '@/domain/events';
 import '@/components/calibration/calibration.css';
 
+/** 받을 손이 아닌 손으로 친 뒤 이 시간(ms) 동안 「…는 오른손으로 쳐요」를 보인다 */
+const WRONG_HAND_MS = 2000;
 /** 마지막 수락 타격 뒤 이만큼(ms) 타격이 없고 스틱은 움직이면 "조금 세게" 안내 */
 const WEAK_HINT_MS = 2000;
 /** 스틱이 "움직이고 있다"고 볼 자세 변화(도/0.5초) */
 const MOVING_DEG = 3;
 
-/** 끝난 패드(대상 손 전부가 채운 패드) */
+/** 끝난 패드(그 패드를 받을 손 전부가 채운 패드) */
 function completedOf(cap: CaptureSnapshot): PadId[] {
-  return cap.order.filter((pad) => cap.hands.length > 0 && cap.hands.every((h) => cap.captured[pad]?.[h] !== undefined));
+  return cap.order.filter((pad) => cap.hands.length > 0 && captureHandsFor(pad, cap.hands).every((h) => cap.captured[pad]?.[h] !== undefined));
 }
 
 /** 그림 영역을 못 쟀을 때(jsdom 등) 쓰는 16:10 상자 */
@@ -90,6 +93,18 @@ function useWeakHint(cap: CaptureSnapshot | null): boolean {
   return cap !== null && hint;
 }
 
+/** 받을 손이 아닌 손이 친 지 WRONG_HAND_MS 안이면 그 기록을 돌려준다. 시간이 지나면 타이머가 가린다(렌더 중에는 시계를 읽지 않는다) */
+function useWrongHand(cap: CaptureSnapshot | null): CaptureSnapshot['wrongHand'] {
+  const w = cap?.wrongHand ?? null;
+  const [hiddenAt, setHiddenAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!w) return;
+    const id = window.setTimeout(() => setHiddenAt(w.at), Math.max(0, WRONG_HAND_MS - (performance.now() - w.at)));
+    return () => window.clearTimeout(id);
+  }, [w]);
+  return w && hiddenAt !== w.at ? w : null;
+}
+
 export interface CalibrationStageProps {
   /** 재정렬 중 [처음부터 보정] 버튼. 없으면 버튼을 그리지 않는다 */
   onRestart?: () => void;
@@ -123,12 +138,12 @@ function overlapsOf(cap: CaptureSnapshot): HandGap[] {
 
 const fmtCm = (v: number | undefined) => (v === undefined ? '–' : String(Math.round(v)));
 
-/** 지금 대상 손마다 타격 점(●○)과 라벨 */
+/** 지금 패드를 받을 손마다 타격 점(●○)과 라벨 */
 function HitDots({ cap, full }: { cap: CaptureSnapshot; full: boolean }) {
   const per = DEFAULT_CAPTURE_OPTIONS.hitsPerPad;
   return (
     <div className="cal-hands">
-      {cap.hands.map((h) => {
+      {cap.targetHands.map((h) => {
         const n = full ? per : cap.counts[h];
         return (
           <div key={h} className="cal-hand-row" aria-label={`${HAND_NAME[h]} ${n}/${per}`}>
@@ -153,6 +168,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
   const weak = useWeakHint(cal.capture);
+  const wrongHand = useWrongHand(cal.capture);
   const [picked, setPicked] = useState<PadId | null>(null);
   const overlay = useOverlayRegion();
   const { cardRef, region, figSize } = overlay;
@@ -244,7 +260,7 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
 
   const top = (
     <div className="cal-stage-top">
-      {!isDone && cap.target && <p className="cal-stage-headline">{captureHeadline(cap.target, cap.hands)}</p>}
+      {!isDone && cap.target && <p className="cal-stage-headline">{captureHeadline(cap.target, cap.targetHands)}</p>}
       <span className="cal-stage-progress" aria-label={`${completed.length} / ${cap.order.length} 패드 완료`}>
         {cap.order.map((pad) => (
           <span key={pad} className={`cal-stage-dot ${completed.includes(pad) ? 'done' : pad === cap.target ? 'now' : ''}`} title={PAD_META[pad].label} />
@@ -276,7 +292,11 @@ export function CalibrationStage({ onRestart, onSave }: CalibrationStageProps) {
         </div>
       </StagePanel>
       {cap.warning && <p className="cal-stage-warn">{spreadWarningText(cap.warning)}</p>}
-      {weak && !cap.warning && <p className="cal-stage-hint">조금 세게 쳐 보세요</p>}
+      {wrongHand && !cap.warning ? (
+        <p className="cal-stage-hint">{wrongHandText(wrongHand.pad, cap.targetHands[0] ?? 1)}</p>
+      ) : (
+        weak && !cap.warning && <p className="cal-stage-hint">조금 세게 쳐 보세요</p>
+      )}
     </div>
   );
 }
