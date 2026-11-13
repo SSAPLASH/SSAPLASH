@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrapPresets, resetPresetBootstrapForTest, syncPresetSource } from './presetBootstrap';
-import { ServerPresetSource } from '@/api/presets';
-import { resetForTest } from '@/api/auth';
+import { ServerPresetSource } from '@/api/kit/presets';
+import { resetForTest } from '@/api/account/auth';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { SYSTEM_PRESET_ID, type KitPreset } from '@/domain/kit/preset';

@@ -5,7 +5,7 @@
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
 import { useEffect, useRef } from 'react';
 import type { Difficulty } from '@/domain/song/chart';
-import type { RecommendCard } from '@/domain/account/recommendation';
+import type { RecommendCard } from '@/domain/song/recommendation';
 import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/song/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
 import { Button } from '@/components/ui/Button';

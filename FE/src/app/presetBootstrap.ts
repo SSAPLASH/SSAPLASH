@@ -1,8 +1,8 @@
 // 로그인 상태 ↔ 프리셋 저장소 접착 (설계 SETUP-002 프리셋 서버연동 3-4). main.tsx에서 bootstrapAuth() 앞에 한 번 부른다.
-// authenticated면 서버(api/presets), anonymous면 로컬(settingsStore.presets[]), 복원 중(unknown·restoring)이면 기다린다.
+// authenticated면 서버(api/kit/presets), anonymous면 로컬(settingsStore.presets[]), 복원 중(unknown·restoring)이면 기다린다.
 // 저장소를 바꾼 뒤 목록을 읽고 적용 프리셋을 맞춘다: 목록에 있으면 유지, 없으면 기본 프리셋, 기본도 없으면 시스템 기본(UX-64 D1).
 // 로그인 전 로컬 프리셋은 서버로 옮기지 않는다(10/23 합의). 화면·presetStore·settingsStore는 수정하지 않는다.
-import { ServerPresetSource } from '@/api/presets';
+import { ServerPresetSource } from '@/api/kit/presets';
 import { SYSTEM_PRESET_ID, isSystemPreset, type PresetSource } from '@/domain/kit/preset';
 import { useAuth, type AuthStatus } from '@/store/authStore';
 import { LocalPresetSource } from '@/store/localPresetSource';

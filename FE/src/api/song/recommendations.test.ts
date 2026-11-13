@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from './auth';
+import { resetForTest } from '@/api/account/auth';
 import { fetchRecommendations, postRecommendationClick } from './recommendations';
 
 const songDto = {

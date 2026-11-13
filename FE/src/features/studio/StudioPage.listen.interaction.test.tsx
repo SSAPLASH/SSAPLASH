@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/features/studio/api/sheets';
-import { listAllSongs } from '@/api/songs';
+import { listAllSongs } from '@/api/song/songs';
 import { queryClient } from '@/runtime/queryClient';
 import type { UseFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { accompanimentBarView } from '@/domain/song/freeAccompaniment';
@@ -27,7 +27,7 @@ const playingView = (songId: number) =>
 const hook = vi.hoisted(() => ({ current: null as unknown as UseFreeAccompaniment }));
 vi.mock('@/components/song/useFreeAccompaniment', () => ({ useFreeAccompaniment: () => hook.current }));
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn() }));
 
 const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   id: 1,

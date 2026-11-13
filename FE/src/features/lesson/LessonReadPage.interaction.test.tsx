@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchLessons, postLessonCompletion } from '@/api/lessons';
+import { fetchLessons, postLessonCompletion } from '@/api/play/lessons';
 import { hitSoundActive, resetHitSoundForTest } from '@/runtime/hitSound';
 import { keyboardSource } from '@/runtime/sources';
 import type { UserMe } from '@/domain/account/auth';
@@ -15,7 +15,7 @@ import { useLive } from '@/store/liveStore';
 import { loadChart } from '@/store/songStore';
 import { LessonReadPage } from './LessonReadPage';
 
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
 vi.mock('@/store/songStore', async (importOriginal) => ({ ...(await importOriginal<object>()), loadChart: vi.fn() }));
 vi.mock('@/components/drum/usePadStates', () => ({ usePadStates: () => ({}), usePadHitSeq: () => ({}) }));
 vi.mock('@/components/drum/DrumKit', () => ({

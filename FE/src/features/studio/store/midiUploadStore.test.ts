@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { MIDI_UNCERTAIN_TEXT, type MidiDraft } from '@/domain/song/midiUpload';
 import { useMidiUpload } from './midiUploadStore';
 

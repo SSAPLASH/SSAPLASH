@@ -1,6 +1,6 @@
 // 추천 곡·비슷한 곡 줄 (설계 COACH-004-song-recommend-picker 2장·D9, COACH-004-similar-songs D7). 그리기와 클릭 전달만 한다 — store·api를 모른다.
 // 카드 = 커버 · 제목 · 아티스트 · 연습 단계 배지 · 이유 한 줄(card.line, 비면 줄 없음). items가 비면 아무것도 그리지 않는다.
-import type { RecommendCard } from '@/domain/account/recommendation';
+import type { RecommendCard } from '@/domain/song/recommendation';
 import { artistLabel } from '@/domain/song/songCatalog';
 import { LevelBadge } from './LevelBadge';
 import { SongCover } from './SongCover';

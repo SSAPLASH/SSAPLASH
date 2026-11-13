@@ -2,7 +2,7 @@
 // 503은 공통 정책(5xx 1초 뒤 1회 재시도)이 맡는다.
 import { infiniteQueryOptions } from '@tanstack/react-query';
 import type { RecordingSummary } from '@/domain/play/recording';
-import { listRecordings, type ListRecordingsParams, type PageResponse } from '../recordings';
+import { listRecordings, type ListRecordingsParams, type PageResponse } from './recordings';
 
 /** 키에 넣는 조회 조건(쪽 번호 제외) */
 export type RecordingListKeyParams = Omit<ListRecordingsParams, 'page'>;

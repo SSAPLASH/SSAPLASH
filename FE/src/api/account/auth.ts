@@ -1,7 +1,7 @@
 // access 토큰 보관과 refresh·logout (설계 3-3). 토큰은 이 모듈 변수에만 있고 저장소에 쓰지 않는다.
 // 인증 경로에는 Bearer·401 재시도 규칙이 없으므로 공통 래퍼(http) 대신 fetch를 직접 쓴다 — http ↔ auth 순환 방지.
 import type { ProviderKey } from '@/domain/account/auth';
-import { ApiError, errorFromResponse, networkError } from './error';
+import { ApiError, errorFromResponse, networkError } from '@/api/error';
 
 /** refresh가 401일 때 재시도 전 대기. 두 탭이 동시에 회전하면 진 쪽이 401을 받고, 이긴 쪽의 새 쿠키로 다시 시도하면 성공한다 */
 export const REFRESH_RETRY_DELAY_MS = 300;

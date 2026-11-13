@@ -3,7 +3,7 @@
 // load는 idle일 때만 요청한다(세션당 1회: StrictMode·재마운트에도 한 번). set은 PUT 뒤 응답으로 consent를 바꾸고 오류는 던진다(화면이 문구로 보인다).
 // dismissed는 이번 세션만 안내 모달을 다시 띄우지 않는 메모리 플래그다(PUT 실패 시).
 import { create } from 'zustand';
-import { getRecommendationConsent, putRecommendationConsent } from '@/api/users';
+import { getRecommendationConsent, putRecommendationConsent } from '@/api/account/users';
 import type { RecommendationConsent } from '@/domain/account/recommendationConsent';
 import { recommendationVersion } from '@/domain/account/signupTerms';
 

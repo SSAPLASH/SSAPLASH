@@ -2,7 +2,7 @@
 import type { UserMe } from '@/domain/account/auth';
 import type { RecommendationConsent } from '@/domain/account/recommendationConsent';
 import type { ConsentVersions } from '@/domain/account/signupTerms';
-import { apiFetch } from './http';
+import { apiFetch } from '@/api/http';
 
 /** `GET /api/users/me`. id는 JSON 숫자 그대로 둔다(BE README FE 소비 계약) */
 export function fetchMe(): Promise<UserMe> {

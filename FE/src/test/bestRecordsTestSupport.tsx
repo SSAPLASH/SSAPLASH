@@ -4,8 +4,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentType } from 'react';
 import { create } from 'zustand';
-import { getBestRecords } from '@/api/plays';
-import { listSongs } from '@/api/songs';
+import { getBestRecords } from '@/api/play/plays';
+import { listSongs } from '@/api/song/songs';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
@@ -15,11 +15,11 @@ import type { SongDetail } from '@/domain/song/songCatalog';
 import * as playLogs from '@/engine/playLog';
 import type { PlayLog } from '@/domain/play/playLog';
 
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
 // 곡 선택의 비슷한 곡·추천이 실제 네트워크로 나가지 않게 막는다(이 시나리오는 추천을 검증하지 않는다)
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
 vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));

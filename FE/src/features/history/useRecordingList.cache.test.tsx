@@ -2,13 +2,13 @@
 // 녹음 보관함 목록 캐시 (설계 TECH-351)
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listRecordings, type PageResponse } from '@/api/recordings';
-import { recordingKeys } from '@/api/queries/recordings';
+import { listRecordings, type PageResponse } from '@/api/play/recordings';
+import { recordingKeys } from '@/api/play/recordingQueries';
 import { queryClient } from '@/runtime/queryClient';
 import type { RecordingSummary } from '@/domain/play/recording';
 import { useRecordingList } from './useRecordingList';
 
-vi.mock('@/api/recordings', () => ({ listRecordings: vi.fn() }));
+vi.mock('@/api/play/recordings', () => ({ listRecordings: vi.fn() }));
 
 const rec = (id: number, title = `녹음 ${id}`): RecordingSummary => ({
   id, clientKey: `k${id}`, title, mode: 'FREE', inputSource: 'KEYBOARD', playId: null, hitCount: 10, durationMs: 1000,

@@ -3,7 +3,7 @@
 // 소리·텔레메트리는 자유 연습처럼 공용 경로(setSoundOnHit)가 내고, 이 화면은 마지막 타격만 구독한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { postLessonCompletion } from '@/api/lessons';
+import { postLessonCompletion } from '@/api/play/lessons';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';

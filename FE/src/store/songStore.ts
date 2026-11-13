@@ -1,9 +1,9 @@
-// 곡 상세·채보 로드와 곡 소스 (설계 2·4-1). 곡 목록은 서버 데이터 캐시(api/queries/songs)가 읽는다(설계 TECH-351). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
+// 곡 상세·채보 로드와 곡 소스 (설계 2·4-1). 곡 목록은 서버 데이터 캐시(api/song/songQueries)가 읽는다(설계 TECH-351). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
 // 내장 소스의 id 규칙: 곡·채보 id 모두 -(BUILTIN_CHARTS 인덱스 + 1). chartVersionId는 null.
 import { create } from 'zustand';
-import { getChartAssets, getChartLatest } from '@/api/charts';
+import { getChartAssets, getChartLatest } from '@/api/song/charts';
 import { ApiError } from '@/api/http';
-import { getSong } from '@/api/songs';
+import { getSong } from '@/api/song/songs';
 import { builtinSummary } from '@/domain/song/builtinSongs';
 import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/song/chart';
 import { chartFromDetail, type ChartAssetsDto } from '@/domain/song/chartMapping';
@@ -40,7 +40,7 @@ function messageOf(e: unknown): string {
 
 interface SongsState {
   source: SongsSource;
-  /** 곡 선택 창이 마지막으로 연 목록 탭. 다음 진입의 기본 탭이 된다(설계 TECH-350 U4). 목록 자체는 서버 데이터 캐시(api/queries/songs)가 갖는다 */
+  /** 곡 선택 창이 마지막으로 연 목록 탭. 다음 진입의 기본 탭이 된다(설계 TECH-350 U4). 목록 자체는 서버 데이터 캐시(api/song/songQueries)가 갖는다 */
   scope: SongScope;
   /** 곡 상세(난이도별 채보 요약 포함) */
   selectSong: (id: number) => Promise<SongDetail>;

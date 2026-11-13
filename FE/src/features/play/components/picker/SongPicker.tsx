@@ -14,7 +14,7 @@
 // 리듬 게임은 그대로다: 탭 상태를 갖고, 주소 값이 없으면 마지막에 본 범위로 연다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/account/recommendation';
+import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/song/recommendation';
 import { sheetCategoryOf, sheetCategoryQuery, type SheetCategory } from '@/domain/song/sheetCategory';
 import {
   chartFallback,
@@ -33,7 +33,7 @@ import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/features/play/useBestRecords';
 import { BestRecordsNotice } from './BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
-import { songListQuery } from '@/api/queries/songs';
+import { songListQuery } from '@/api/song/songQueries';
 import { useApiQuery } from '@/runtime/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';

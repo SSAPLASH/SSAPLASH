@@ -1,7 +1,7 @@
 // 녹음 삭제 확인 창 (Figma 03 Screens / 연주 기록 · 녹음 삭제 571:29597, Studio / DeleteDialog 폭 420. 설계 REC-001 U10 v0.5).
 // 본문 첫 줄은 녹음 제목(16 Medium, 말줄임), 둘째 줄은 안내(14 text-2). 하단 [취소] secondary + [삭제] danger가 폭을 반씩 채운다.
 import { useEffect, useRef, useState } from 'react';
-import { deleteRecording } from '@/api/recordings';
+import { deleteRecording } from '@/api/play/recordings';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';

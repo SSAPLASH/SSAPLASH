@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from './auth';
+import { resetForTest } from '@/api/account/auth';
 import { checkSongAvailability, deleteSong, deleteSongCover, getSongAccompaniment, retryMidiAccompaniment, listAllSongs, listSongs, SONG_LIST_MAX_PAGES, updateSongMeta, uploadMidi, uploadMusicXml, uploadSongCover } from './songs';
 
 const body = { id: 7, title: '곡', artist: '가수', source: 'MIDI', status: 'READY', hasAccompaniment: false, charts: [] };

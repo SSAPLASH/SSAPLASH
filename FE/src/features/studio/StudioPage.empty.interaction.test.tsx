@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/features/studio/api/sheets';
-import { listAllSongs } from '@/api/songs';
+import { listAllSongs } from '@/api/song/songs';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
@@ -16,7 +16,7 @@ import { StudioPage } from './StudioPage';
 
 vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_ARCHIVE_ENABLED: true }));
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn() }));
 
 const HINT = '나만의 곡과 악보를 추가해 봐요!';
 

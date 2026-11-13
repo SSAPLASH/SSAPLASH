@@ -1,7 +1,7 @@
 // 플레이 기록 목록 조회의 순수 부분 (설계 COACH-연주-기록-화면-개편 3-1·4)
 import { describe, expect, it } from 'vitest';
-import type { PlaySummary } from '@/api/plays';
-import type { PageResponse } from '@/api/recordings';
+import type { PlaySummary } from '@/api/play/plays';
+import type { PageResponse } from '@/api/play/recordings';
 import { appendPlayPage, buildPlayParams, PLAY_LIST_EMPTY } from './usePlayLogList';
 
 // 한국 시간 11월 12일 15:00

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindSignupIncomplete } from './signupGate';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { apiFetch, resetSignupIncompleteForTest } from '@/api/http';
 import type { UserMe } from '@/domain/account/auth';
 import { termVersion } from '@/domain/account/signupTerms';

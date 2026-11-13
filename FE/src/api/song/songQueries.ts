@@ -2,7 +2,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { listBuiltinSongs } from '@/domain/song/builtinSongs';
 import type { SongLevel, SongScope, SongSummary } from '@/domain/song/songCatalog';
-import { listAllSongs } from '../songs';
+import { listAllSongs } from './songs';
 
 export interface SongListParams {
   scope: SongScope;

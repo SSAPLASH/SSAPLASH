@@ -1,7 +1,7 @@
 // 추천 곡 R1 API (BE README "곡 추천 R1", 설계 COACH-004-song-recommend-picker 2장). URL·쿼리·본문 모양과 DTO 변환까지만 한다.
 // 재시도·시간 초과·숨김 판단은 store가 맡는다.
-import { recommendationFromDto, type RecommendationContext, type RecommendationPage } from '@/domain/account/recommendation';
-import { apiFetch } from './http';
+import { recommendationFromDto, type RecommendationContext, type RecommendationPage } from '@/domain/song/recommendation';
+import { apiFetch } from '@/api/http';
 
 export interface FetchRecommendationsParams {
   context: RecommendationContext;

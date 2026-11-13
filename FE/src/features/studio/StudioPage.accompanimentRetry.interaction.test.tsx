@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
-import { getSong, listAllSongs, retryMidiAccompaniment } from '@/api/songs';
+import { getSong, listAllSongs, retryMidiAccompaniment } from '@/api/song/songs';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { listSheets } from '@/features/studio/api/sheets';
 import { queryClient } from '@/runtime/queryClient';
@@ -13,7 +13,7 @@ import { AccompanimentPoller } from './components/accompanimentPoller';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn(), getSong: vi.fn(), retryMidiAccompaniment: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn(), getSong: vi.fn(), retryMidiAccompaniment: vi.fn() }));
 
 const song: SongSummary = { id: 7, title: '테스트 곡', artist: '', source: 'MIDI', status: 'READY', bpm: 120, timeSignature: '4/4', durationMs: 60000, hasAccompaniment: false, accompanimentStatus: 'FAILED', songLevel: null, difficulties: [], createdAt: '2026-11-01T00:00:00Z', coverUrl: null, sheetId: null };
 const detail = { ...song, accompanimentStatus: 'GENERATING' as const, charts: [], license: null, updatedAt: song.createdAt };
