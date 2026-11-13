@@ -5,6 +5,9 @@ import type { ResolvedHit, StickId } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
 import { computeBoundaries, type HandAnchors } from '@/domain/kit/calibration/calibration';
+import { deriveSingleHandAnchors } from '@/domain/kit/calibration/captureHands';
+import { minPeakFromSpeeds } from '@/domain/kit/calibration/minPeak';
+import type { SensorTuning } from '@/domain/kit/calibration/tuning';
 import { anchorsToLayout } from '@/domain/kit/kitJudge';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { isSystemPreset, type CaptureDraft } from '@/domain/kit/preset';
@@ -23,9 +26,11 @@ export interface CalibrationDeps {
   setSoundOnHit: (v: boolean) => void;
   /** 현재 프로필을 그 손에 다시 보낸다(force). 중단 복구용 */
   pushTable: (stickId: StickId, force: boolean) => void;
+  /** 보정 저장이 최소 타격 세기를 바꾸기 직전에 부른다: 이어지는 전송의 진단 줄에 계산 근거를 싣는다 */
+  noteMinPeakCapture: (stickId: StickId, medianDps: number, samples: number) => void;
 }
 
-const noDeps: CalibrationDeps = { setSoundOnHit: () => {}, pushTable: () => {} };
+const noDeps: CalibrationDeps = { setSoundOnHit: () => {}, pushTable: () => {}, noteMinPeakCapture: () => {} };
 
 /** 패드 완료 햅틱(강도, ms) */
 const PAD_DONE_HAPTIC: [number, number] = [120, 60];
@@ -162,7 +167,9 @@ class CalibrationSession {
     if (this.mode !== 'capture' || this.capture.snapshot().phase !== 'done') return null;
     if (this.target === 'new') {
       const settings = useSettings.getState();
-      const anchors = this.capture.build(settings.tuning);
+      // 한 손만 친 패드(라이드)의 다른 손 앵커는 스네어 양손 차이로 만든다. 새 프리셋은 기존 앵커와 합치지 않는다
+      const anchors = this.withDerived(this.capture.build(settings.tuning), settings.tuning);
+      this.saveMinPeak();
       const draft: CaptureDraft = {
         anchors,
         layout: anchorsToLayout(anchors, DEFAULT_KIT_LAYOUT, settings.tuning.angleRange),
@@ -184,13 +191,14 @@ class CalibrationSession {
     const t = settings.tuning;
     const mergeHand = (h: 0 | 1) =>
       built[h] ? computeBoundaries({ ...(settings.stickAnchors[h] ?? {}), ...built[h] }, t.maxRadiusDeg, t.radiusFactor, t.minRadiusDeg) : settings.stickAnchors[h];
-    const merged: HandAnchors = [mergeHand(0), mergeHand(1)];
+    const merged = this.withDerived([mergeHand(0), mergeHand(1)], t);
     const now = Date.now();
     this.mode = 'idle';
     this.target = null;
     this.capture.cancel();
     this.hands = [];
     // 저장(사본 + 적용 프리셋 기록) → applySettings(손별 프로필·연결된 손마다 push). 표는 clear로 해시가 비어 반드시 나간다
+    this.saveMinPeak();
     settings.setStickAnchors(merged, now);
     // 표시 배치: 이번에 친 패드만 앵커에서 유도해 옮기고 나머지는 현재 배치를 유지한다(D2, T9 "디폴트에서 옮겨서 저장")
     useSettings.getState().setKitLayout(anchorsToLayout(built, useSettings.getState().kitLayout, settings.tuning.angleRange));
@@ -199,6 +207,27 @@ class CalibrationSession {
     this.deps.setSoundOnHit(true);
     useLive.setState({ referenceSetAt: now, referenceStale: false, realignNeeded: [false, false] });
     this.publish();
+  }
+
+  /**
+   * 이번 보정에서 한 손만 친 지정 패드(라이드)의 다른 손 앵커를 만들어 얹고, 반경을 손별로 다시 계산한다.
+   * 만들 게 없으면 입력과 같은 앵커를 돌려준다
+   */
+  private withDerived(anchors: HandAnchors, t: SensorTuning): HandAnchors {
+    const derived = deriveSingleHandAnchors(anchors, this.capture.capturedHands());
+    const fix = (h: 0 | 1) => (derived[h] ? computeBoundaries(derived[h], t.maxRadiusDeg, t.radiusFactor, t.minRadiusDeg) : derived[h]);
+    return [fix(0), fix(1)];
+  }
+
+  /** 손별 최소 타격 세기 저장(PLAY-004 ③). 표본이 6타 미만이면 그 손 값은 그대로 둔다. 캡처가 접히기 전에 불러야 표본이 남아 있다 */
+  private saveMinPeak(): void {
+    const speeds = this.capture.peakSpeeds();
+    for (const h of [0, 1] as StickId[]) {
+      const r = minPeakFromSpeeds(speeds[h]);
+      if (!r) continue;
+      this.deps.noteMinPeakCapture(h, r.medianDps, speeds[h].length);
+      useSettings.getState().setStickMinPeak(h, r.dps);
+    }
   }
 
   /**
@@ -281,7 +310,7 @@ class CalibrationSession {
       const target = this.capture.snapshot().target;
       if (target) this.playAs(hit, target);
       const before = this.capture.completedPads().length;
-      this.capture.onHit(stickId, hit.pose, hit.tRecv);
+      this.capture.onHit(stickId, hit.pose, hit.tRecv, hit.peakSpeedDps);
       const snap = this.capture.snapshot();
       if (this.capture.completedPads().length > before) {
         for (const h of snap.hands) inputManager.haptic(h, PAD_DONE_HAPTIC[0], PAD_DONE_HAPTIC[1]);
