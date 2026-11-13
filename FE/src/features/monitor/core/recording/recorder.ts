@@ -1,6 +1,8 @@
 // 세션 녹화. LogRow를 JSONL 한 줄씩 직렬화하고(첫 줄은 meta), 되읽기와 파일 다운로드를 제공한다.
 // 서버 전송은 하지 않는다. hex는 공백 없는 대문자 2자리 연속이다.
 // 패킷 줄은 kind가 없고, 진단 줄은 {"kind":"diag","t":<ev.t>,"ev":{...t를 뺀 이벤트}}다. 알 수 없는 kind는 되읽을 때 건너뛴다.
+// 녹화 중 이 탭이 숨겨지거나 다시 보이면 {"kind":"vis","t":<performance.now()>,"hidden":true|false} 한 줄을 남긴다(다른 줄의 t와 같은 시계).
+// 탭이 숨겨진 동안은 브라우저가 타이머·프레임을 늦춰 그 구간 기록이 빠질 수 있다.
 import type { DiagEvent } from '@/engine/diagTap';
 import type { LogRow, PacketLog } from './packetLog';
 
@@ -55,22 +57,35 @@ export function serializeDiag(ev: DiagEvent): string {
   return JSON.stringify({ kind: 'diag', t, ev: body }, typedArrayReplacer);
 }
 
+/** 녹화 중 탭 숨김·복귀 한 건(vis 줄) */
+export interface VisEvent {
+  t: number;
+  hidden: boolean;
+}
+
+/** 탭 숨김 줄 한 줄 */
+export function serializeVis(t: number, hidden: boolean): string {
+  return JSON.stringify({ kind: 'vis', t, hidden });
+}
+
 /**
- * 되읽기. 첫 줄은 meta, 나머지는 kind 없음 = 패킷 행, 'diag' = 진단 이벤트, 그 밖의 kind는 건너뛴다.
- * 빈 줄은 건너뛴다. 이전 형식 파일은 diags가 빈 배열이다
+ * 되읽기. 첫 줄은 meta, 나머지는 kind 없음 = 패킷 행, 'diag' = 진단 이벤트, 'vis' = 탭 숨김, 그 밖의 kind는 건너뛴다.
+ * 빈 줄은 건너뛴다. 이전 형식 파일은 diags·vis가 빈 배열이다
  */
-export function parseJsonl(text: string): { meta: RecordingMeta; rows: RecordedRow[]; diags: DiagEvent[] } {
+export function parseJsonl(text: string): { meta: RecordingMeta; rows: RecordedRow[]; diags: DiagEvent[]; vis: VisEvent[] } {
   const lines = text.split('\n').filter((l) => l.trim() !== '');
   if (lines.length === 0) throw new Error('빈 녹화 파일');
   const meta = JSON.parse(lines[0]) as RecordingMeta;
   const rows: RecordedRow[] = [];
   const diags: DiagEvent[] = [];
+  const vis: VisEvent[] = [];
   for (const l of lines.slice(1)) {
-    const obj = JSON.parse(l) as { kind?: string; t?: number; ev?: object };
+    const obj = JSON.parse(l) as { kind?: string; t?: number; ev?: object; hidden?: unknown };
     if (obj.kind === undefined) rows.push(obj as unknown as RecordedRow);
     else if (obj.kind === 'diag' && obj.ev && typeof obj.t === 'number') diags.push({ ...obj.ev, t: obj.t } as DiagEvent);
+    else if (obj.kind === 'vis' && typeof obj.t === 'number' && typeof obj.hidden === 'boolean') vis.push({ t: obj.t, hidden: obj.hidden });
   }
-  return { meta, rows, diags };
+  return { meta, rows, diags, vis };
 }
 
 export class Recorder {
@@ -105,6 +120,12 @@ export class Recorder {
     if (!this._recording) return;
     this.items.push(ev);
     this.rowCount++;
+  }
+
+  /** 탭 숨김(hidden=true)·복귀(false) 한 줄. t는 performance.now(). 녹화 중이 아니면 무시한다 */
+  appendVis(hidden: boolean, t: number): void {
+    if (!this._recording) return;
+    this.items.push(serializeVis(t, hidden));
   }
 
   /** 진단 이벤트 구독(feed.subscribeDiag 등)을 걸어 녹화 중 이벤트를 자동으로 append한다. 반환값은 해제 함수 */
