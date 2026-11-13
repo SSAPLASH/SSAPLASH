@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
@@ -295,5 +295,24 @@ describe('SettingsPage 박자 맞추기', () => {
     expect(html).toMatch(/min="-250"/);
     expect(html).toMatch(/max="100"/);
     expect(html).toMatch(/step="5"/);
+  });
+});
+
+describe('SettingsPage 타격 진동 방식(PLAY-006, 모니터 빌드 전용)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('일반 빌드에는 줄이 없다', () => {
+    vi.stubEnv('VITE_MONITOR', 'false');
+    expect(render()).not.toContain('타격 진동 방식');
+  });
+
+  it('모니터 빌드에는 두 선택지가 보이고 store 값이 선택돼 있다', () => {
+    vi.stubEnv('VITE_MONITOR', 'true');
+    put(useSettings, { playHaptic: 'local' });
+    const html = render();
+    expect(html).toContain('타격 진동 방식');
+    expect(html).toContain('연주 중 진동을 판정 결과로 낼지 스틱이 치는 즉시 낼지 고릅니다.');
+    expect(html).toMatch(/aria-checked="false"[^>]*data-value="judgement"[^>]*>판정 진동/);
+    expect(html).toMatch(/aria-checked="true"[^>]*data-value="local"[^>]*>스틱 즉시 진동/);
   });
 });
