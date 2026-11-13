@@ -22,7 +22,7 @@ import com.ssafy.airdrum.domain.song.repository.SongMetadataRepository;
  * MIDI로 채운다. 이미 3난이도면 건너뛴다. 곡마다 따로 처리해 하나가 실패해도 나머지는 계속한다.
  * 라이선스·아티스트·공개 여부는 등록 때만 쓰고 이후에는 덮지 않는다(운영자가 ADMIN API로 바꾼 값을 지키려고).
  * 곡 추천용 메타데이터(255번)는 결과와 무관하게 매번 카탈로그 값으로 맞춘다.
- * 입문 코스 레슨(331번)은 곡을 모두 처리한 뒤 카탈로그 레슨으로 통째로 바꾼다. 그래서 {@link #seed}는 카탈로그 전체를 받는다.
+ * 학습 코스 레슨(331번, 중급은 학습 코스 설계)은 곡을 모두 처리한 뒤 카탈로그 레슨으로 통째로 바꾼다. 그래서 {@link #seed}는 카탈로그 전체를 받는다.
  */
 @Component
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -116,9 +116,9 @@ class BuiltinSongSeeder {
 	private void syncLessons(java.util.Map<Long, LessonSpec> lessonSongs) {
 		try {
 			lessons.replaceAll(lessonSongs);
-			if (!lessonSongs.isEmpty()) log.info("입문 코스 레슨 {}개", lessonSongs.size());
+			if (!lessonSongs.isEmpty()) log.info("학습 코스 레슨 {}개", lessonSongs.size());
 		} catch (RuntimeException e) {
-			log.warn("입문 코스 레슨 교체 실패 errorType={} message={}", e.getClass().getSimpleName(), e.getMessage());
+			log.warn("학습 코스 레슨 교체 실패 errorType={} message={}", e.getClass().getSimpleName(), e.getMessage());
 		}
 	}
 

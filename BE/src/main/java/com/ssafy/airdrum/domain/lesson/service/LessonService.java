@@ -19,7 +19,7 @@ import com.ssafy.airdrum.global.error.CommonErrorCode;
 import com.ssafy.airdrum.domain.play.service.history.PlayQueryService;
 
 /**
- * 입문 코스 진도(331번 설계 4-2절). 연주 레슨의 통과는 이미 저장되는 악보 연습 기록에서 계산하고, 알아보기 레슨만 완료 기록을 쓴다.
+ * 학습 코스 진도(331번 설계 4-2절, 학습 코스 설계 3-3절). 목록은 입문 → 중급 한 줄이라 앞 코스를 다 통과해야 다음 코스가 열린다. 연주 레슨의 통과는 이미 저장되는 악보 연습 기록에서 계산하고, 알아보기 레슨만 완료 기록을 쓴다.
  * 잠금은 화면 안내라 서버는 순서를 강제하지 않는다.
  */
 @Service
@@ -65,7 +65,7 @@ public class LessonService {
 		for (var row : rows) {
 			BigDecimal accuracy = row.kind() == LessonKind.PLAY ? best.get(row.songId()) : null;
 			boolean passed = row.kind() == LessonKind.READ ? completed.contains(row.songId()) : accuracy != null && accuracy.compareTo(PASS) >= 0;
-			items.add(new LessonsResponse.Item(row.position(), row.kind().name(), row.songId(), row.chartId(), row.title(), row.summary(), row.pads(),
+			items.add(new LessonsResponse.Item(row.position(), row.course().name(), row.kind().name(), row.songId(), row.chartId(), row.title(), row.summary(), row.pads(),
 					row.guide(), row.bpm(), row.durationMs(), row.noteCount(), accuracy, passed, blocked));
 			if (!passed) blocked = true;
 		}
