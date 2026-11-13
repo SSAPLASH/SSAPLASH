@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { KitPreset } from '@/domain/kit/preset';
 import type { RecentHit } from '@/components/drum/useRecentHits';
 import { HitLog } from './HitLog';
-import { HIT_FLOAT_MIN_H_LEFT, HIT_FLOAT_MIN_W, HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText, hitLogPlacement } from './hitLogFormat';
+import { HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText } from './hitLogFormat';
 import { PresetNameDialog } from './preset/PresetNameDialog';
 import { ReturnBanner } from './ReturnBanner';
 import { StepCard } from './StepCard';
@@ -27,31 +27,8 @@ describe('hitLogFormat', () => {
   it('시계가 어긋나 미래 시각이어도 방금', () => {
     expect(hitAgoText(now + 5000, now)).toBe('방금');
   });
-  it('판 안 카드는 3행, 판 안 최소 크기 상수', () => {
+  it('무대 위 떠 있는 카드는 3행', () => {
     expect(HIT_LOG_FLOAT_ROWS).toBe(3);
-    expect(HIT_FLOAT_MIN_W).toBe(720);
-    expect(HIT_FLOAT_MIN_H_LEFT).toBe(400);
-  });
-});
-
-describe('hitLogPlacement 규칙표', () => {
-  const big = { w: 1000, h: 500 };
-  it('보정 중이면 아래', () => {
-    expect(hitLogPlacement({ capturing: true, figSize: big, corner: 'right' })).toBe('below');
-  });
-  it('그림 영역을 못 쟀으면(null) 판 안', () => {
-    expect(hitLogPlacement({ capturing: false, figSize: null, corner: 'left' })).toBe('panel');
-  });
-  it('그림 영역 폭이 720 미만이면 아래(720은 판 안)', () => {
-    expect(hitLogPlacement({ capturing: false, figSize: { w: 719, h: 600 }, corner: 'right' })).toBe('below');
-    expect(hitLogPlacement({ capturing: false, figSize: { w: 720, h: 600 }, corner: 'right' })).toBe('panel');
-  });
-  it('정보 카드가 왼쪽이고 높이가 400 미만이면 아래(400은 판 안)', () => {
-    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 399 }, corner: 'left' })).toBe('below');
-    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 400 }, corner: 'left' })).toBe('panel');
-  });
-  it('그 밖에는 판 안(정보 카드가 오른쪽이면 낮아도)', () => {
-    expect(hitLogPlacement({ capturing: false, figSize: { w: 1000, h: 300 }, corner: 'right' })).toBe('panel');
   });
 });
 
@@ -64,17 +41,16 @@ describe('HitLog', () => {
     expect(html).toContain('패드를 치면 여기에 기록돼요');
     expect(html).not.toContain('setup-hitlog-list');
   });
-  it('패드·손·세기(반올림)·경과를 보인다', () => {
+  it('패드·세기(반올림)·경과를 보인다(손 열은 없다)', () => {
     const html = renderToStaticMarkup(<HitLog hits={[hit(1, { pad: 'HIHAT', hand: 1, velocity: 80.6, at: now - 5000 })]} now={now} />);
     expect(html).toContain('하이햇');
-    expect(html).toContain('오른손');
+    expect(html).not.toContain('오른손');
     expect(html).toContain('>81<');
     expect(html).toContain('5초 전');
   });
-  it('왼손·손 모름(—)·판정 없음 패드', () => {
+  it('판정 없음 패드', () => {
     const html = renderToStaticMarkup(<HitLog hits={[hit(1), hit(2, { hand: null, pad: null })]} now={now} />);
-    expect(html).toContain('왼손');
-    expect(html).toContain('>—<');
+    expect(html).not.toContain('왼손');
     expect(html).toContain('판정 없음');
   });
   it('6건을 주면 5행만, 순서는 받은 그대로(새 것이 위)', () => {

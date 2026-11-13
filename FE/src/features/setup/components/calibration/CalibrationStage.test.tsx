@@ -1,18 +1,16 @@
 // @vitest-environment happy-dom
-// CalibrationStage 검증(PLAY-004 4-1, 개편 D2·D3·D6·D10·D11·D14, v0.2): 진행 중(카드 버튼 없음)·자동 진행 대기·간격 경고 배너([◯◯ 다시], 스냅샷 기준으로 사라짐)·
-// 결과 화면(겹침 테두리·결과 배너·base 포함 겹침·선택·다시 치기·저장)·재정렬.
+// CalibrationStage 검증(PLAY-004 4-1, 개편 D2·D3·D6·D10·D11·D14, v0.2 · SETUP-fixed-kit-noir): 진행 중(버튼 없음)·자동 진행 대기·간격 경고 배너([◯◯ 다시], 스냅샷 기준으로 사라짐)·
+// 결과 화면(겹침 테두리·겹침 문구·base 포함 겹침·[◯◯ 다시]·저장)·재정렬. 정보 카드·패드 선택·반지름 슬라이더는 고정 배치 개편으로 없어졌다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-const h = vi.hoisted(() => ({ redo: vi.fn(), next: vi.fn(), setRadiusOverride: vi.fn(), skipRealign: vi.fn() }));
+const h = vi.hoisted(() => ({ redo: vi.fn(), next: vi.fn(), skipRealign: vi.fn() }));
 vi.mock('@/runtime/calibrationSession', () => ({ calibrationSession: h }));
 
 import { CalibrationStage } from './CalibrationStage';
-import { previewRadius } from './captureRadius';
 import { IDLE_CALIBRATION, useLive, type CalibrationSnapshot } from '@/store/liveStore';
 import { CAPTURE_ORDER, type CaptureSnapshot } from '@/engine/HitCapture';
 import type { PadId } from '@/domain/kit/pads';
-import { DEFAULT_SENSOR_TUNING } from '@/domain/kit/calibration/tuning';
 
 const anchor = (pad: PadId, pitch: number, yaw: number) => ({ pad, pitch, yaw, radius: 0, samples: 2, spread: 1 });
 /** 양손이 같은 자리를 친 앵커 */
@@ -60,12 +58,13 @@ afterEach(() => {
 });
 
 describe('CalibrationStage 보정 진행', () => {
-  it('킷 전체는 어둡고(dim) 목표 패드만 켜진다(lit). 큰 안내·진행 제목·손별 타격 점이 보이고 버튼은 없다', () => {
+  it('킷 전체는 어둡고(dim) 목표 패드만 켜진다(lit). 큰 안내·진행 점·손별 타격 점이 보이고 버튼은 없다', () => {
     setCapture();
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('[data-testid="cal-stage-capture"]')).not.toBeNull();
     expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('크래시를 양손으로 2번씩 타격하세요');
-    expect(screen.getByText('2 / 7')).toBeTruthy();
+    expect(container.querySelector('[aria-label="1 / 7 패드 완료"]')).not.toBeNull();
+    expect(container.querySelector('.cal-stage-pad')?.textContent).toBe('크래시');
     expect(container.querySelector('[aria-label="왼손 1/2"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
     // 하이햇 페달까지 9패드 중 목표 하나만 켜진다. 심벌(크래시·라이드·하이햇)은 받침 층·원판 층 두 그룹이라 클래스가 둘씩 붙는다
@@ -73,7 +72,6 @@ describe('CalibrationStage 보정 진행', () => {
     expect(container.querySelectorAll('.drum-pad-dim').length).toBe(10);
     expect(container.querySelector('.drum-pad-ghost')).toBeNull();
     expect(container.querySelectorAll('button').length).toBe(0);
-    expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();
   });
 
   it('자동 진행 대기(padDone·advancing) 중에도 버튼이 없다. 타격 점은 다 찬 상태', () => {
@@ -81,14 +79,6 @@ describe('CalibrationStage 보정 진행', () => {
     const { container } = render(<CalibrationStage />);
     expect(container.querySelectorAll('button').length).toBe(0);
     expect(container.querySelector('[aria-label="왼손 2/2"]')).not.toBeNull();
-  });
-
-  it('진행 중 끝난 패드를 눌러도 아무 일도 없다(다시 치기·선택 없음)', () => {
-    setCapture();
-    const { container } = render(<CalibrationStage />);
-    fireEvent.click(screen.getByText('하이햇'));
-    expect(h.redo).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-selected-pad]')).toBeNull();
   });
 
   it('한 손만 대상이면 그 손 문구와 그 손 타격 점만', () => {
@@ -134,20 +124,9 @@ describe('CalibrationStage 보정 진행', () => {
     expect(screen.getByText('두 번 친 자리가 너무 달라요(12°). 왼손으로 크래시를 다시 쳐 주세요')).toBeTruthy();
   });
 
-  it('판정 범위 슬라이더 값: 사용자 값이 있으면 그 값, 없으면 자동값(앵커 하나면 상한)', () => {
-    const t = DEFAULT_SENSOR_TUNING;
-    setCapture();
-    const cap = useLive.getState().calibration.capture!;
-    expect(previewRadius(cap, 'CRASH', t)).toBe(t.maxRadiusDeg);
-    expect(previewRadius(cap, 'HIHAT', t)).toBe(t.maxRadiusDeg);
-    expect(previewRadius({ ...cap, radiusOverrides: { CRASH: 20 } }, 'CRASH', t)).toBe(20);
-    expect(previewRadius({ ...cap, radiusOverrides: { CRASH: 99 } }, 'CRASH', t)).toBe(t.maxRadiusDeg);
-  });
-
   it('패드 단위 재보정(T9): order가 한 패드면 진행 점 1개, 그 패드만 켜진다', () => {
     setCapture({ order: ['HIHAT'], index: 0, target: 'HIHAT', counts: [0, 0], captured: {} });
     const { container } = render(<CalibrationStage />);
-    expect(screen.getByText('1 / 1')).toBeTruthy();
     expect(container.querySelectorAll('.drum-pad-lit').length).toBe(2); // 하이햇은 받침 층·원판 층
     expect(container.querySelector('[aria-label="0 / 1 패드 완료"]')).not.toBeNull();
   });
@@ -164,18 +143,16 @@ describe('CalibrationStage 간격 경고 배너(D3, v0.2)', () => {
     ...over,
   });
 
-  it('멈추지 않는다: 다음 패드를 기다리는 capturing에서 경고 머리·안내·[크래시 다시] 배너가 뜨고 정보 카드는 진행 표시 그대로', () => {
+  it('멈추지 않는다: 다음 패드를 기다리는 capturing에서 경고 머리·안내·[크래시 다시] 배너가 뜬다', () => {
     setCapture(warnCap());
     const { container } = render(<CalibrationStage />);
-    expect(container.querySelector('.setup-kitinfo.warn')).toBeNull();
-    expect(screen.getByText('3 / 7')).toBeTruthy();
+    expect(container.querySelector('[aria-label="2 / 7 패드 완료"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
     expect(screen.getByText('왼손 크래시가 하이햇과 10°밖에 안 떨어져 있어요')).toBeTruthy();
     expect(screen.getByText('크래시는 스틱 끝을 더 높이 들고 바깥쪽으로, 하이햇은 앞쪽 아래로 쳐 보세요')).toBeTruthy();
     expect(screen.getByRole('button', { name: '크래시 다시' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '다음' })).toBeNull();
     expect(screen.queryByRole('button', { name: '결과 보기' })).toBeNull();
-    expect(container.querySelectorAll('.setup-kitinfo button').length).toBe(0);
   });
 
   it('자동 진행 대기(padDone·advancing) 중에도 배너를 보인다', () => {
@@ -213,7 +190,6 @@ describe('CalibrationStage 간격 경고 배너(D3, v0.2)', () => {
     expect(container.querySelector('[data-testid="gap-banner-progress"]')).not.toBeNull();
     act(() => setCapture(warnCap({ gapWarnings: [], counts: [1, 0] })));
     expect(container.querySelector('[data-testid="gap-banner-progress"]')).toBeNull();
-    expect(container.querySelector('.setup-panel-banner')).toBeNull();
   });
 
   it('경고가 없으면 배너가 없다', () => {
@@ -223,35 +199,36 @@ describe('CalibrationStage 간격 경고 배너(D3, v0.2)', () => {
   });
 });
 
-describe('CalibrationStage 결과 화면(D6)', () => {
+describe('CalibrationStage 결과 화면(D6·D11)', () => {
   const doneCap = (over: Partial<CaptureSnapshot> = {}): Partial<CaptureSnapshot> => ({ phase: 'done', index: 6, target: null, counts: [0, 0], captured: ALL, ...over });
 
-  it('20° 미만 쌍에 --warn 테두리, 첫 선택은 겹침 있는 첫 패드, 겹침 한 줄과 목록 요약', () => {
+  it('「7곳 모두 잡았어요」, 20° 미만 쌍에 --warn 테두리·겹침 문구·[◯◯ 다시]·[저장]', () => {
     setCapture(doneCap());
     const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('7곳 모두 잡았어요');
     const warn = [...container.querySelectorAll('[data-warn-pad]')].map((e) => e.getAttribute('data-warn-pad'));
     expect(warn.sort()).toEqual(['CRASH', 'HIHAT']);
-    expect(container.querySelector('[data-selected-pad]')?.getAttribute('data-selected-pad')).toBe('HIHAT');
-    expect(container.querySelector('.setup-kitinfo-name')?.textContent).toBe('하이햇');
-    expect(container.querySelector('.cal-overlap-line')?.textContent).toMatch(/^크래시와 \d+°$/);
     // 양손이 같은 쌍으로 겹치면 한 쌍으로 센다
-    expect(container.querySelector('[data-testid="gap-banner-result"] .cal-stage-overlaps')?.textContent).toMatch(/^1쌍이 너무 가까워요 · 하이햇–크래시 \d+°$/);
-    expect(screen.getByText('드럼을 눌러 [다시 치기]로 그 자리를 다시 잡을 수 있어요')).toBeTruthy();
+    const lines = [...container.querySelectorAll('.cal-result-overlaps .cal-overlap-line')].map((e) => e.textContent);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^하이햇과 크래시가 너무 가까워요\(\d+°\)$/);
+    expect(screen.getByRole('button', { name: '하이햇 다시' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '크래시 다시' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '저장' })).toBeTruthy();
     expect(container.querySelector('[data-testid="gap-banner-progress"]')).toBeNull();
-    expect(container.querySelector('.cal-stage-headline')).toBeNull();
     expect(container.querySelector('.drum-pad-dim')).toBeNull(); // 결과 화면은 어둡게 하지 않는다
   });
 
-  it('겹침이 없으면 첫 패드를 선택하고 테두리·겹침 줄이 없다', () => {
+  it('겹침이 없으면 테두리·겹침 문구·[다시] 버튼이 없고 [저장]만 남는다', () => {
     setCapture(doneCap({ captured: { ...ALL, CRASH: both('CRASH', 0, 100) } }));
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('[data-warn-pad]')).toBeNull();
-    expect(container.querySelector('[data-selected-pad]')?.getAttribute('data-selected-pad')).toBe('HIHAT');
     expect(container.querySelector('.cal-overlap-line')).toBeNull();
-    expect(container.querySelector('.cal-gap-banner')).toBeNull();
+    expect(screen.queryByRole('button', { name: /다시$/ })).toBeNull();
+    expect(screen.getByRole('button', { name: '저장' })).toBeTruthy();
   });
 
-  it('D14: 패드 하나만 다시 보정해도 세션 밖 앵커(base)와의 겹침이 결과 배너·테두리에 보인다. 세션 밖 패드끼리의 쌍은 제외', () => {
+  it('D14: 패드 하나만 다시 보정해도 세션 밖 앵커(base)와의 겹침이 문구·테두리에 보인다. 세션 밖 패드끼리의 쌍은 제외', () => {
     // 세션은 크래시만. base: 왼손 하이햇이 크래시와 8° 거리, 스네어와 미드탐이 서로 8° 거리(세션 밖끼리)
     const base: CaptureSnapshot['base'] = [
       { HIHAT: anchor('HIHAT', 0, -40), SNARE: anchor('SNARE', -20, 0), MID_TOM: anchor('MID_TOM', -20, 8) },
@@ -261,8 +238,8 @@ describe('CalibrationStage 결과 화면(D6)', () => {
     const { container } = render(<CalibrationStage />);
     const warn = [...container.querySelectorAll('[data-warn-pad]')].map((e) => e.getAttribute('data-warn-pad'));
     expect(warn.sort()).toEqual(['CRASH', 'HIHAT']);
-    expect(container.querySelector('[data-testid="gap-banner-result"] .cal-stage-overlaps')?.textContent).toMatch(/^1쌍이 너무 가까워요 · 하이햇–크래시 \d+°$/);
-    expect(container.querySelector('.cal-overlap-line')?.textContent).toMatch(/^(하이햇|크래시)와 \d+°$/);
+    expect(container.querySelectorAll('.cal-result-overlaps .cal-overlap-line')).toHaveLength(1);
+    expect(container.querySelector('.cal-result-overlaps')?.textContent).toMatch(/^(하이햇과 크래시가|크래시와 하이햇이) 너무 가까워요\(\d+°\)$/);
   });
 
   it('D14: 세션 패드와 base 패드가 같은 패드면 base 값은 쓰지 않는다(옛 자리와 겹침 없음)', () => {
@@ -270,29 +247,17 @@ describe('CalibrationStage 결과 화면(D6)', () => {
     setCapture(doneCap({ order: ['CRASH'], index: 0, hands: [0], captured: { CRASH: [anchor('CRASH', 0, 60), undefined] }, base }));
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('[data-warn-pad]')).toBeNull();
-    expect(container.querySelector('.cal-gap-banner')).toBeNull();
+    expect(container.querySelector('.cal-overlap-line')).toBeNull();
   });
 
-  it('패드를 누르면 선택이 바뀌고 [다시 치기]는 선택 패드를 redo, [저장]은 onSave', () => {
+  it('[◯◯ 다시]는 그 패드를 redo, [저장]은 onSave', () => {
     const onSave = vi.fn();
     setCapture(doneCap());
-    const { container } = render(<CalibrationStage onSave={onSave} />);
-    fireEvent.click(screen.getByText('스네어'));
-    expect(container.querySelector('[data-selected-pad]')?.getAttribute('data-selected-pad')).toBe('SNARE');
-    expect(container.querySelector('.setup-kitinfo-name')?.textContent).toBe('스네어');
-    expect(container.querySelector('.cal-overlap-line')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '다시 치기' }));
-    expect(h.redo).toHaveBeenCalledWith('SNARE');
+    render(<CalibrationStage onSave={onSave} />);
+    fireEvent.click(screen.getByRole('button', { name: '크래시 다시' }));
+    expect(h.redo).toHaveBeenCalledWith('CRASH');
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
     expect(onSave).toHaveBeenCalledTimes(1);
-  });
-
-  it('판정 범위 슬라이더를 움직이면 선택 패드의 판정 반경을 바꾼다', () => {
-    setCapture(doneCap());
-    const { container } = render(<CalibrationStage />);
-    const input = container.querySelector('input[type="range"]') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: '22' } });
-    expect(h.setRadiusOverride).toHaveBeenCalledWith('HIHAT', 22);
   });
 });
 
