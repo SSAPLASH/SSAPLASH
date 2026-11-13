@@ -83,7 +83,7 @@ export function ResultPage() {
       arrived ??
       localPrevBest(
         loadPlayLogs(),
-        { mode: log.mode, songNumericId: log.songNumericId, chartId: log.chartId, songId: log.songId, difficulty: log.difficulty },
+        { mode: log.mode, songNumericId: log.songNumericId, chartId: log.chartId, songId: log.songId, difficulty: log.difficulty, goodMs: log.timing.goodMs },
         (l) => l.playId === log.playId || !(l.startedAt < log.startedAt),
       );
     return bestRecordDelta(log, prev);

@@ -80,8 +80,8 @@ export function PlayLogTab() {
 
   const rows = useMemo(() => {
     const serverIds = new Set(list.items.map((p) => p.playId));
-    const localIds = new Set(localLogs.map((l) => l.playId));
-    const server = list.items.map((p) => serverRowView(p, localIds.has(p.playId)));
+    const localById = new Map(localLogs.map((l) => [l.playId, l]));
+    const server = list.items.map((p) => serverRowView(p, localById.has(p.playId), localById.get(p.playId)));
     // 로그인 없는 빌드는 서버가 없으므로 이 브라우저의 로그가 전부다
     const pending = authed ? unsavedLogs(localLogs, serverIds, live) : localLogs;
     const range = periodRange(period, now);

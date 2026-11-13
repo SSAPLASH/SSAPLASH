@@ -46,7 +46,7 @@ import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
 import type { Chart } from '@/domain/song/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/song/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, prevBestFor, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
@@ -523,8 +523,8 @@ function SheetPageBody() {
     finishing.current = false;
     {
       const c = ss.chart;
-      const local = localPrevBest(loadPlayLogs(), { mode: 'SHEET', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
-      prevBest.current = mergePrevBest(local, serverPrevBest.current);
+      const local = localPrevBest(loadPlayLogs(), { mode: 'SHEET', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty, goodMs: ss.windows.goodMs });
+      prevBest.current = prevBestFor(local, serverPrevBest.current, ss.windows.goodMs);
     }
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
