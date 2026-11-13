@@ -7,7 +7,7 @@ import type { FxLocate } from '@/domain/hitFx/types';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { drawSheet, HEAD_RX, headY } from '@/components/sheetmusic/sheetStripDraw';
 import { SheetPager } from './SheetPager';
-import { CONTENT_BOTTOM, CONTENT_TOP, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffScale } from './sheetPagerMath';
+import { STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffOffsetY, staffScale } from './sheetPagerMath';
 
 vi.mock('@/components/sheetmusic/sheetStripDraw', async (load) => {
   const actual = await load<typeof import('@/components/sheetmusic/sheetStripDraw')>();
@@ -74,7 +74,7 @@ describe('SheetPager 악보 배율', () => {
     const glyph = opts.layoutOf(0).glyphs.find((g) => g.noteIndex === 0)!;
     // 논리 좌표의 머리 위치: 슬롯 왼쪽 x(= 논리 폭 × baseRatio)에서 연속 배치, y는 보표 위치에 세로 정렬 offset을 더한다
     const logicalX = xInBarContinuous(opts.width * opts.baseRatio, opts.barPx, glyph.xRatio, opts.continuousStepsPerBar!);
-    const offsetY = Math.max(0, (opts.height - (CONTENT_BOTTOM - CONTENT_TOP)) / 2 - CONTENT_TOP);
+    const offsetY = staffOffsetY(opts.height);
     const loc = locate!({ judgement: 'PERFECT', noteIndex: 0 } as never)!;
     expect(loc.shape).toBe('head');
     expect(loc.geo.cx).toBeCloseTo(logicalX * k);
