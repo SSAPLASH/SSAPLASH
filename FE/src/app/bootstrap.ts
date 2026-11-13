@@ -12,6 +12,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
+import { addPlayStartHook } from '@/engine/diagReport';
 import { preloadSprites } from '@/components/drum/acoustic/sprites';
 import { startClockDiag } from './diag/clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
@@ -111,6 +112,19 @@ export function bootstrapInput(): void {
   );
   // 보정 전송을 진단 줄로 남긴다(구독자가 없으면 publish가 즉시 반환)
   yawDriftMonitor.onCorrection((c) => diagTap.publish({ type: 'yawCorrect', ...c }));
+  // 부호가 연달아 뒤집혀 손이 멈추면 진단 줄을 남기고, 그 손을 재정렬 필요로 올린다(다음 곡 시작 확인 창·자유 연습 띠가 이어받는다)
+  yawDriftMonitor.onHalt((h) => {
+    diagTap.publish({ type: 'yawHalt', ...h });
+    if (useSettings.getState().stickAnchors[h.stickId] && calibrationSession.currentMode !== 'capture') {
+      useLive.setState((s) => {
+        const r: [boolean, boolean] = [s.realignNeeded[0], s.realignNeeded[1]];
+        r[h.stickId] = true;
+        return { realignNeeded: r };
+      });
+    }
+  });
+  // 곡을 시작할 때마다(재시작 포함, 진단 구독과 무관) 멈춤을 푼다. 재정렬 안내를 건너뛰어도 다음 판에는 다시 시도한다
+  addPlayStartHook(() => yawDriftMonitor.beginRun());
   // 기준 자세를 다시 잡으면 펌웨어가 방위각 오프셋을 0으로 되돌리므로 FE 기억도 비운다.
   // 스틱 버튼 보정(0x22)은 세션이 처리한다: 보정 중이면 처음부터, 아니면 그 손 재정렬 필요
   inputManager.onResetPose((source, stickId) => {
