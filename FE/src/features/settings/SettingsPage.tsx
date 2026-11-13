@@ -65,8 +65,6 @@ export function SettingsPage() {
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
   const timingBar = useSettings((s) => s.timingBar);
   const setTimingBar = useSettings((s) => s.setTimingBar);
-  const yawAutoCorrect = useSettings((s) => s.yawAutoCorrect);
-  const setYawAutoCorrect = useSettings((s) => s.setYawAutoCorrect);
 
   const consentStatus = useRecommendationConsent((s) => s.status);
   const consent = useRecommendationConsent((s) => s.consent);
@@ -237,9 +235,6 @@ export function SettingsPage() {
             </SettingRow>
             <SettingRow label="타이밍 막대" help="최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
-            </SettingRow>
-            <SettingRow label="패드 위치 자동 보정" help="틀어진 스틱 방향을 타격 위치로 바로잡아요.">
-              {(aria) => <Toggle {...aria} label="패드 위치 자동 보정" checked={yawAutoCorrect} onChange={setYawAutoCorrect} />}
             </SettingRow>
             <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
               {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}

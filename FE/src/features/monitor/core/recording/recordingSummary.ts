@@ -79,8 +79,6 @@ export interface RecordingSummary {
   sessions: SessionSummary[];
   /** 마지막 audio 진단 줄: 판정 타이밍 보정과 브라우저가 보고한 오디오 지연. 줄이 없으면 null */
   audio: { audioOffsetMs: number; kickOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
-  /** yawAuto 진단 줄: 패드 위치 자동 보정의 첫 값·마지막 값. 줄이 없으면(옛 녹화) null */
-  yawAuto: { first: boolean; last: boolean } | null;
   /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
   timing: SessionTiming[];
 }
@@ -147,7 +145,6 @@ export function summarizeRecording(input: {
   let stray = 0;
   let missed = 0;
   let audioLine: RecordingSummary['audio'] = null;
-  let yawAuto: RecordingSummary['yawAuto'] = null;
   let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
@@ -167,8 +164,6 @@ export function summarizeRecording(input: {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
       sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
-    } else if (ev.type === 'yawAuto') {
-      yawAuto = yawAuto ? { first: yawAuto.first, last: ev.on } : { first: ev.on, last: ev.on };
     } else if (ev.type === 'audio') {
       audioLine = { audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
     } else if (ev.type === 'matchContested') {
@@ -205,7 +200,6 @@ export function summarizeRecording(input: {
     contested,
     sessions,
     audio: audioLine,
-    yawAuto,
     timing: timingReport(diags),
   };
 }
@@ -232,8 +226,6 @@ function offsetText(stickMs: number, kickMs: number, unit: boolean): string {
 const sf1 = (v: number | null | undefined): string => (v === null || v === undefined ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}`);
 
 /** Wiki에 붙여넣을 Markdown 표. 숫자는 1자리 소수, 값이 없으면 '–' */
-const onOff = (v: boolean) => (v ? '켬' : '끔');
-
 export function summaryToMarkdown(s: RecordingSummary): string {
   const { meta } = s;
   const row = (name: string, m: MetricSummary): string =>
@@ -247,7 +239,6 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     `- 메모: ${meta.note || '–'}`,
     `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
     `- 오디오: ${s.audio ? `판정 타이밍 보정 ${offsetText(s.audio.audioOffsetMs, s.audio.kickOffsetMs, true)} · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
-    ...(s.yawAuto ? [`- 패드 위치 자동 보정: ${s.yawAuto.first === s.yawAuto.last ? onOff(s.yawAuto.last) : `도중 변경(${onOff(s.yawAuto.first)} → ${onOff(s.yawAuto.last)})`}`] : []),
     '',
     '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
     '| --- | --- | --- | --- | --- | --- |',
