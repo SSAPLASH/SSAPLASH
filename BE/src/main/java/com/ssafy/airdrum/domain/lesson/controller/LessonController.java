@@ -25,7 +25,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/v1/lessons")
-@Tag(name = "Lessons", description = "입문 코스 레슨과 본인 진도")
+@Tag(name = "Lessons", description = "학습 코스(입문·중급) 레슨과 본인 진도")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @ApiResponse(responseCode = "401", description = "인증 필요", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiErrorResponse.class)))
 public class LessonController {
@@ -42,9 +42,9 @@ public class LessonController {
 	}
 
 	@GetMapping
-	@Operation(summary = "입문 코스 레슨 목록과 진도",
-			description = "순서대로 레슨과 채보(NORMAL), 본인의 통과 여부, 잠김 여부를 준다. 연주 레슨은 악보 연습(SHEET)으로 끝까지 친 기록의 최고 정확도가 "
-					+ "passAccuracy 이상이면 통과, 알아보기 레슨은 완료를 저장했으면 통과다. 앞 순서 중 통과하지 못한 레슨이 있으면 locked다.")
+	@Operation(summary = "학습 코스(입문·중급) 레슨 목록과 진도",
+			description = "입문 전부 → 중급 순서로 레슨(코스·코스 안 순서)과 채보(NORMAL), 본인의 통과 여부, 잠김 여부를 준다. 연주 레슨은 악보 연습(SHEET)으로 끝까지 친 기록의 최고 정확도가 "
+					+ "passAccuracy 이상이면 통과, 알아보기 레슨은 완료를 저장했으면 통과다. 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 locked다.")
 	@ApiResponse(responseCode = "200", description = "레슨 목록")
 	public LessonsResponse list(@Parameter(hidden = true) AuthUser me) {
 		return lessons.list(me.id());

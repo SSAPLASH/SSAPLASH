@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.ssafy.airdrum.domain.lesson.model.LessonCourse;
 import com.ssafy.airdrum.domain.lesson.model.LessonKind;
 import com.ssafy.airdrum.domain.lesson.model.LessonSpec;
 import com.ssafy.airdrum.domain.song.model.SongMetadata;
@@ -201,8 +202,9 @@ class BuiltinSongCatalogTest {
 				"{\"order\":1,\"summary\":\"" + "가".repeat(201) + "\",\"pads\":[\"KICK\"]}",
 				"{\"order\":1,\"summary\":\"s\"}", "{\"order\":1,\"summary\":\"s\",\"pads\":[]}",
 				"{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\",\"KICK\"]}", "{\"order\":1,\"summary\":\"s\",\"pads\":[\"COWBELL\"]}",
-				"{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\",\"SNARE\",\"HIHAT\",\"RIDE\",\"CRASH\"]}",
 				"{\"order\":1,\"summary\":\"s\",\"pads\":[1]}",
+				"{\"order\":1,\"course\":\"ADVANCED\",\"summary\":\"s\",\"pads\":[\"KICK\"]}",
+				"{\"order\":1,\"course\":1,\"summary\":\"s\",\"pads\":[\"KICK\"]}",
 				"{\"order\":1,\"kind\":\"READ\",\"summary\":\"s\",\"pads\":[\"KICK\"],\"guide\":\"no\"}",
 				"{\"order\":1,\"kind\":\"PLAY\",\"summary\":\"s\",\"pads\":[\"KICK\"],\"guide\":false}" })
 			assertThat(invalid("[" + lessonEntry("레슨 X", lesson) + "]")).as(lesson).hasMessageContaining("레슨 X");
@@ -216,5 +218,24 @@ class BuiltinSongCatalogTest {
 		assertThat(invalid("[" + lessonEntry("레슨 A", one) + "," + lessonEntry("레슨 B", one) + "]")).hasMessageContaining("순서");
 		assertThat(invalid("[" + lessonEntry("레슨 A", one) + "," + lessonEntry("레슨 B", three) + "]")).hasMessageContaining("순서");
 		assertThat(invalid("[" + lessonEntry("레슨 A", two) + "]")).hasMessageContaining("순서");
+	}
+
+	/** 학습 코스 설계 3-1절: course는 선택(기본 입문)이고, 순서는 코스마다 1부터 이어진다. 패드는 9개까지 쓸 수 있다. */
+	@Test
+	void lesson_course는_기본이_입문이고_순서는_코스마다_따로_센다() {
+		var entries = BuiltinSongCatalog.parse(("[" + lessonEntry("입문 1", "{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\"]}") + ","
+				+ lessonEntry("중급 1", "{\"order\":1,\"course\":\"INTERMEDIATE\",\"kind\":\"READ\",\"summary\":\"s\",\"pads\":[\"CRASH\",\"RIDE\"]}") + ","
+				+ lessonEntry("중급 2", "{\"order\":2,\"course\":\"INTERMEDIATE\",\"summary\":\"s\",\"pads\":[\"CRASH\",\"HIHAT\",\"SNARE\",\"KICK\",\"SMALL_TOM\",\"MID_TOM\",\"FLOOR_TOM\",\"RIDE\",\"HIHAT_PEDAL\"]}")
+				+ "]").getBytes(StandardCharsets.UTF_8), FILES::get);
+		assertThat(entries).extracting(e -> e.lesson().course()).containsExactly(LessonCourse.BEGINNER, LessonCourse.INTERMEDIATE, LessonCourse.INTERMEDIATE);
+		assertThat(entries.get(1).lesson()).isEqualTo(new LessonSpec(1, LessonKind.READ, "s", List.of("CRASH", "RIDE"), true, LessonCourse.INTERMEDIATE));
+		assertThat(entries.get(2).lesson().pads()).hasSize(9);
+
+		String one = "{\"order\":1,\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		String midOne = "{\"order\":1,\"course\":\"INTERMEDIATE\",\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		String midTwo = "{\"order\":2,\"course\":\"INTERMEDIATE\",\"summary\":\"s\",\"pads\":[\"KICK\"]}";
+		// 같은 코스 안에서 겹치거나, 코스 안에서 1부터 이어지지 않으면 거부한다
+		assertThat(invalid("[" + lessonEntry("레슨 A", midOne) + "," + lessonEntry("레슨 B", midOne) + "]")).hasMessageContaining("순서");
+		assertThat(invalid("[" + lessonEntry("레슨 A", one) + "," + lessonEntry("레슨 B", midTwo) + "]")).hasMessageContaining("순서");
 	}
 }

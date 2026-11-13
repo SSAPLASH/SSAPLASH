@@ -461,6 +461,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
 | V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
 | V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
+| V50 | `V50__add_lesson_course.sql` | 학습 코스 `lessons.course`(`BEGINNER`·`INTERMEDIATE`, 기존 행은 `BEGINNER`). 순서 유일 조건을 `position`에서 `(course, position)`으로 바꿨다. 진도 표는 그대로 | 학습 코스(중급) |
 
 규칙:
 
@@ -1158,20 +1159,20 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 .\gradlew.bat test --tests '*BuiltinSong*' --tests '*SongMetadata*'
 ```
 
-## 입문 코스 (331번)
+## 학습 코스(입문·중급) (331번, 중급 11/13)
 
-SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [입문 코스] 탭이다.
+SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 입문 코스(킥·스네어·하이햇, 레슨 12개) 뒤에 중급 코스(크래시·라이드·탐 세 개·하이햇 페달, 레슨 10개)가 이어진다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [학습 코스]다.
 
-- **카탈로그 `lesson`:** `order`(1 이상, 카탈로그 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~4개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
-- **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하). 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
+- **카탈로그 `lesson`:** `course`(`BEGINNER`·`INTERMEDIATE`, 기본 `BEGINNER`)·`order`(1 이상, 같은 코스 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~9개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 레슨 곡 제목은 「입문 · 」·「중급 · 」로 시작한다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48·V50)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
+- **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하 — 스크립트가 검사한다). 중급 파일은 `lesson-int-*.mid`이고 GM 번호는 `GmDrumMapping` 표를 따른다(크래시 49·라이드 51·스몰탐 48·미드탐 45·플로어탐 43·하이햇 페달 44). 다시 만들어도 기존 입문 파일은 바이트가 같다. 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같으며 채보의 패드가 `lesson.pads`와 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
 - **목록에서 빠짐:** `lessons`에 있는 곡은 공용 곡 목록(`GET /api/v1/songs?source=BUILTIN`)·추천 R1(곡 선택·리포트·연습)·비슷한 곡 R2 후보에 나오지 않는다(`LessonRepository.NOT_LESSON`). 곡 상세·채보 조회·연주 저장·최고 기록·ADMIN 목록은 그대로 된다.
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(순서대로): `order`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
+| GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(입문 전부 → 중급, 코스 안 순서대로): `order`(코스 안 순서)·`course`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
 | POST | `/api/v1/lessons/{songId}/completion` | 알아보기 레슨 완료 저장. 본문 없음, 204. 다시 보내도 204이고 처음 시각을 유지 |
 
-- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 앞 순서 중 통과하지 못한 레슨이 있으면 참이다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
+- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
 - **오류:** 로그인 안 함·탈퇴 401, 완료 저장에서 연주 레슨 400 `VALIDATION_FAILED`, 레슨이 아니거나 삭제·비공개 곡 404 `SONG_NOT_FOUND`. 두 API 모두 `Cache-Control: private, no-store`.
 - **탈퇴:** 탈퇴 커밋 뒤 그 회원의 `lesson_completions`를 지운다(`LessonWithdrawalListener`). 연주 기록은 기존 탈퇴 규칙을 따른다.
 - **알려진 점:** AI 배치 뷰 `recommend_songs_v`(V37)는 레슨 곡을 거르지 않는다. 학습 데이터에서 빼야 하면 뷰를 바꾸는 후속 작업이 필요하다.
