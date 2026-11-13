@@ -3,8 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listPlays, type PlaySummary } from '@/api/plays';
-import type { PageResponse } from '@/api/recordings';
+import { listPlays, type PlaySummary } from '@/api/play/plays';
+import type { PageResponse } from '@/api/play/recordings';
 import type { PlayUploadState } from '@/domain/play/playLog';
 import { setPlayLogOwner } from '@/engine/playLog';
 import { queryClient } from '@/runtime/queryClient';
@@ -12,7 +12,7 @@ import { startPlaySync, usePlaySync } from '@/runtime/playSync';
 import { useAuth } from '@/store/authStore';
 import { PlayLogTab } from './PlayLogTab';
 
-vi.mock('@/api/plays', () => ({ listPlays: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ listPlays: vi.fn() }));
 vi.mock('@/components/song/useDeletedSongIds', () => ({ useDeletedSongIds: () => new Set() }));
 vi.mock('@/runtime/playSync', async () => {
   const { create } = await import('zustand');

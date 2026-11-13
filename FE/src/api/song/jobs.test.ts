@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from './auth';
+import { resetForTest } from '@/api/account/auth';
 import { getJob } from './jobs';
 
 const body = { jobId: 11, songId: 22, status: 'TRANSCRIBING', progress: 53, revision: 2, error: null };

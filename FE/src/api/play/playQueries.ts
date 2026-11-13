@@ -1,7 +1,7 @@
 // 연주 기록 쪽 단위 목록 쿼리 (설계 TECH-351, COACH-연주-기록-화면-개편). 연주 업로드가 끝나면(playSync DONE) ['plays']를 무효화한다.
 import { infiniteQueryOptions } from '@tanstack/react-query';
-import { listPlays, type ListPlaysParams, type PlaySummary } from '@/api/plays';
-import type { PageResponse } from '@/api/recordings';
+import { listPlays, type ListPlaysParams, type PlaySummary } from './plays';
+import type { PageResponse } from './recordings';
 
 /** 키에 넣는 조회 조건(쪽 번호 제외) */
 export type PlayListKeyParams = Omit<ListPlaysParams, 'page'>;

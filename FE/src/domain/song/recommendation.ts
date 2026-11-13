@@ -1,6 +1,6 @@
 // 추천 곡 R1·비슷한 곡 R2 도메인 (설계 COACH-004-song-recommend-picker 3-2, COACH-004-similar-songs 3-2). 타입·문구 표·카드 모델·BE 응답 변환.
 import type { Difficulty } from '@/domain/song/chart';
-import { pickPathOf } from '../play/playRetry';
+import { pickPathOf } from '@/domain/play/playRetry';
 import { DIFFICULTY_ORDER, songFromDto, toSafeId, type SongLevel, type SongSummary } from '@/domain/song/songCatalog';
 
 /** 추천 노출 위치 */

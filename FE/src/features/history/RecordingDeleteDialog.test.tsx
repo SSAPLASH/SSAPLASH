@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RecordingSummary } from '@/domain/play/recording';
 import { RecordingDeleteDialog } from './RecordingDeleteDialog';
 
-vi.mock('@/api/recordings');
+vi.mock('@/api/play/recordings');
 
 const item: RecordingSummary = {
   id: 1,

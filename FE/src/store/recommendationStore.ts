@@ -1,9 +1,9 @@
 // 추천 곡·비슷한 곡 상태 (설계 COACH-004-similar-songs D8, 설계 COACH-004-song-recommend-picker 2장·4-1, COACH-004-song-recommend-report D2). 키별로 idle → loading → ready | hidden.
 // 키가 없거나 idle일 때만 요청한다 — loading·ready·hidden이면 load는 무시하고, clear 뒤에야 다시 요청한다(StrictMode·재마운트·폴링에도 키당 1회). 시간 초과 5초, 오류·빈 결과는 hidden(D5·D6).
 import { create } from 'zustand';
-import { fetchRecommendations, postRecommendationClick, type FetchRecommendationsParams } from '@/api/recommendations';
-import { fetchSimilarSongs, type FetchSimilarParams } from '@/api/similarSongs';
-import { cardOf, similarCardOf, type RecommendCard } from '@/domain/account/recommendation';
+import { fetchRecommendations, postRecommendationClick, type FetchRecommendationsParams } from '@/api/song/recommendations';
+import { fetchSimilarSongs, type FetchSimilarParams } from '@/api/song/similarSongs';
+import { cardOf, similarCardOf, type RecommendCard } from '@/domain/song/recommendation';
 
 /** 추천 조회 시간 초과(D5). telemetry/sender의 REQUEST_TIMEOUT_MS와 같은 값이지만 store는 domain·api만 import한다(README 의존 방향) */
 export const RECOMMENDATION_TIMEOUT_MS = 5000;

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from './auth';
-import { ApiError } from './http';
+import { resetForTest } from '@/api/account/auth';
+import { ApiError } from '@/api/http';
 import { fetchSimilarSongs } from './similarSongs';
 
 const songDto = {

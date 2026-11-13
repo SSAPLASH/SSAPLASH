@@ -1,7 +1,7 @@
 // 녹음 제목 변경 창 (Figma 03 Screens / 연주 기록 · 녹음 제목 변경 571:29534, Studio / SheetTitleDialog rename 변형 폭 480. 설계 REC-001 U10 v0.5).
 // 제목 20 + 닫기 X, Input + [취소][저장]. 제목 1~100자, 400 RECORDING_INVALID는 입력칸 아래에 detail을 보인다.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { renameRecording } from '@/api/recordings';
+import { renameRecording } from '@/api/play/recordings';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { IconButton } from '@/components/ui/IconButton';

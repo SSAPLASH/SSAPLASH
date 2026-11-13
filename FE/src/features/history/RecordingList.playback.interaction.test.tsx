@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRecording, listRecordings } from '@/api/recordings';
+import { getRecording, listRecordings } from '@/api/play/recordings';
 import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
 import { recordingRowLabel } from '@/domain/play/recordingView';
 import { queryClient } from '@/runtime/queryClient';
@@ -64,7 +64,7 @@ const fake = vi.hoisted(() => {
   return { state, player, emit, listeners };
 });
 
-vi.mock('@/api/recordings');
+vi.mock('@/api/play/recordings');
 // 행을 그릴 때마다 한 번 불리는 함수를 감싸 행별 그리기 횟수를 센다(동작은 그대로)
 vi.mock('@/domain/play/recordingView', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/domain/play/recordingView')>();

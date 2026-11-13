@@ -5,7 +5,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '@/api/http';
-import { getRecommendationConsent, putRecommendationConsent, withdrawMe } from '@/api/users';
+import { getRecommendationConsent, putRecommendationConsent, withdrawMe } from '@/api/account/users';
 import type { UserMe } from '@/domain/account/auth';
 import { recommendationVersion } from '@/domain/account/signupTerms';
 import { useAuth } from '@/store/authStore';
@@ -24,7 +24,7 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@/api/users', () => ({
+vi.mock('@/api/account/users', () => ({
   getRecommendationConsent: vi.fn(),
   putRecommendationConsent: vi.fn(),
   fetchMe: vi.fn(),

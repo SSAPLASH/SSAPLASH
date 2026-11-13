@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SegmentFacts } from '@/coach/live/segment';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { liveCoachClient } from './liveCoach';
 
 const FACTS = {

@@ -4,8 +4,8 @@ import type { MidiDraft } from '@/domain/song/midiUpload';
 import { availabilityFromFailure, type SongAvailability } from '@/domain/song/songAvailability';
 import type { SongMetaPatch } from '@/domain/song/songEdit';
 import { songDetailFromDto, songFromDto, toSafeId, type SongDetail, type SongLevel, type SongPage, type SongScope, type SongSummary } from '@/domain/song/songCatalog';
-import { ApiError } from './error';
-import { apiFetch } from './http';
+import { ApiError } from '@/api/error';
+import { apiFetch } from '@/api/http';
 
 export interface ListSongsParams {
   source: SongScope;

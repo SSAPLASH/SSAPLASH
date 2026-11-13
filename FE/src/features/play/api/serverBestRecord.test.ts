@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BestRecordDto } from '@/api/plays';
+import type { BestRecordDto } from '@/api/play/plays';
 import { selectServerBestRecords } from './serverBestRecord';
 
 const row = (over: Partial<BestRecordDto> = {}): BestRecordDto => ({ songId: 1, chartId: 11, difficulty: 'EASY', mode: 'RHYTHM', bestScore: 100, bestAccuracy: 98.76, ...over });

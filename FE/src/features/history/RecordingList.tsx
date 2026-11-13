@@ -12,7 +12,7 @@ import { MoreMenu } from '@/components/ui/MoreMenu';
 import { Segmented } from '@/components/ui/Segmented';
 import { Toast, type ToastVariant } from '@/components/ui/Toast';
 import { ApiError } from '@/api/error';
-import { getRecording } from '@/api/recordings';
+import { getRecording } from '@/api/play/recordings';
 import type { RecordingSort, RecordingSummary } from '@/domain/play/recording';
 import { midiFileName, recordingToMidi } from '@/domain/play/recordingMidi';
 import { downloadBlob } from '@/media/downloadFile';

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerPresetSource, toKitPreset, toPresetError } from './presets';
-import { resetForTest } from './auth';
-import { ApiError } from './http';
+import { resetForTest } from '@/api/account/auth';
+import { ApiError } from '@/api/http';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { PRESET_SCHEMA_VERSION, PresetError, type PresetDraft } from '@/domain/kit/preset';
 

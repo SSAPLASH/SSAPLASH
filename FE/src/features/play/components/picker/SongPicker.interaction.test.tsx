@@ -2,29 +2,29 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
-import { fetchSimilarSongs } from '@/api/similarSongs';
-import { getSong, listSongs } from '@/api/songs';
-import type { RecommendationItem } from '@/domain/account/recommendation';
+import { fetchRecommendations, postRecommendationClick } from '@/api/song/recommendations';
+import { fetchSimilarSongs } from '@/api/song/similarSongs';
+import { getSong, listSongs } from '@/api/song/songs';
+import type { RecommendationItem } from '@/domain/song/recommendation';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { useAuth } from '@/store/authStore';
 import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { SongPicker } from './SongPicker';
-import { getBestRecords } from '@/api/plays';
+import { getBestRecords } from '@/api/play/plays';
 import { queryClient } from '@/runtime/queryClient';
 import type { UserMe } from '@/domain/account/auth';
 
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 // songStore는 전체 페이지를 읽는 listAllSongs를 쓴다. 기존 단언을 그대로 쓰려고 mock된 listSongs 한 페이지로 이어 준다
-vi.mock('@/api/songs', () => {
+vi.mock('@/api/song/songs', () => {
   const listSongs = vi.fn();
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
 // 입문 코스 탭 본문은 이 파일의 관심사가 아니다 — 응답하지 않는 요청으로 둔다
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 
 const song = (id: number, title: string): SongSummary => ({
   id, title, artist: `가수${id}`, source: 'BUILTIN', status: 'READY', bpm: 100, timeSignature: '4/4', durationMs: 60000,

@@ -8,7 +8,7 @@ import {
   resetForTest,
   subscribeSession,
 } from './auth';
-import { ApiError } from './http';
+import { ApiError } from '@/api/http';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
 

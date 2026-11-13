@@ -6,7 +6,7 @@ import type { Difficulty } from '@/domain/song/chart';
 import type { Judgement } from '@/domain/play/judgement';
 import { normalizePadId, type PadId } from '@/domain/kit/pads';
 import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/play/report';
-import { apiFetch } from './http';
+import { apiFetch } from '@/api/http';
 
 type Num = number | string;
 

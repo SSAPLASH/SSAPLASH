@@ -4,13 +4,13 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
-import { getRecording, listRecordings } from '@/api/recordings';
+import { getRecording, listRecordings } from '@/api/play/recordings';
 import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
 import { downloadBlob } from '@/media/downloadFile';
 import { queryClient } from '@/runtime/queryClient';
 import { RecordingList } from './RecordingList';
 
-vi.mock('@/api/recordings');
+vi.mock('@/api/play/recordings');
 vi.mock('@/media/downloadFile', () => ({ downloadBlob: vi.fn() }));
 vi.mock('./recordingPlayer', () => ({
   recordingPlayer: { playing: false, onState: () => () => {}, stop: () => {}, play: vi.fn(), positionMs: () => 0 },

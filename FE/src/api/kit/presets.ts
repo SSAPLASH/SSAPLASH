@@ -12,7 +12,7 @@ import {
   type PresetSource,
 } from '@/domain/kit/preset';
 import type { SoundSetId } from '@/domain/kit/soundSet';
-import { ApiError, apiFetch } from './http';
+import { ApiError, apiFetch } from '@/api/http';
 
 /** BE 응답. 응답에 `calibration`(V11, 항상 null)이 와도 읽지 않으므로 타입에 두지 않는다 */
 export interface PresetDto {

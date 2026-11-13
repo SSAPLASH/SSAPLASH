@@ -4,10 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecommendations, postRecommendationClick } from '@/api/recommendations';
-import { fetchSimilarSongs } from '@/api/similarSongs';
+import { fetchRecommendations, postRecommendationClick } from '@/api/song/recommendations';
+import { fetchSimilarSongs } from '@/api/song/similarSongs';
 import { loadAllReportNotes, prefetchReport, refreshReport } from '@/runtime/playSync';
-import type { RecommendationItem } from '@/domain/account/recommendation';
+import type { RecommendationItem } from '@/domain/song/recommendation';
 import type { Report } from '@/domain/play/report';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { useAuth } from '@/store/authStore';
@@ -15,9 +15,9 @@ import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { ReportPage } from './ReportPage';
 
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
-vi.mock('@/api/charts', () => ({ getChartAssets: vi.fn().mockResolvedValue({ accompanimentUrl: null }) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
+vi.mock('@/api/song/charts', () => ({ getChartAssets: vi.fn().mockResolvedValue({ accompanimentUrl: null }) }));
 vi.mock('@/runtime/playSync', async (orig) => ({
   ...(await orig<typeof import('@/runtime/playSync')>()),
   prefetchReport: vi.fn(),

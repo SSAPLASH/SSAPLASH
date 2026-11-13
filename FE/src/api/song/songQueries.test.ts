@@ -1,10 +1,10 @@
 // 곡 목록 쿼리 (설계 TECH-350·351). 옛 songStore.load·patchItem 테스트를 옮겼다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { createQueryClient } from '@/runtime/queryClient';
 import { BUILTIN_CHARTS } from '@/domain/song/chart';
 import type { SongSummary } from '@/domain/song/songCatalog';
-import { mineSongsQuery, patchSongStatus, songListQuery } from './songs';
+import { mineSongsQuery, patchSongStatus, songListQuery } from './songQueries';
 
 const song = (over: Partial<SongSummary> = {}): SongSummary => ({
   id: 7, title: '별빛 산책', artist: '', source: 'MIDI', status: 'READY', bpm: 120, timeSignature: '4/4', durationMs: 60000,

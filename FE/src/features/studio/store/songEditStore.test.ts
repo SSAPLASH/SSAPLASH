@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { SONG_EDIT_UNCERTAIN_TEXT } from '@/domain/song/songEdit';
 import { useSongEdit } from './songEditStore';
 

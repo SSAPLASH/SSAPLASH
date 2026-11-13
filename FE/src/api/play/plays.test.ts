@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getBestRecords, listPlays } from './plays';
-import { apiFetch } from './http';
+import { apiFetch } from '@/api/http';
 
-vi.mock('./http', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/api/http', () => ({ apiFetch: vi.fn() }));
 
 beforeEach(() => { vi.mocked(apiFetch).mockReset(); });
 

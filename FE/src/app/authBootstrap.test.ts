@@ -3,7 +3,7 @@ import { bindPlayLogOwner, bootstrapAuth } from './authBootstrap';
 import { loadPlayLogs, savePlayLog, setPlayLogOwner } from '@/engine/playLog';
 import type { PlayLog } from '@/domain/play/playLog';
 import { resetAuthStoreForTest, useAuth } from '@/store/authStore';
-import { REFRESH_RETRY_DELAY_MS, refreshAccessToken, resetForTest } from '@/api/auth';
+import { REFRESH_RETRY_DELAY_MS, refreshAccessToken, resetForTest } from '@/api/account/auth';
 import type { UserMe } from '@/domain/account/auth';
 
 function json(status: number, body: unknown, type = 'application/json'): Response {

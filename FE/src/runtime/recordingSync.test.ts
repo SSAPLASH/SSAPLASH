@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
 import type { RecordingBody, RecordingSummary } from '@/domain/play/recording';
 
-vi.mock('@/api/recordings', () => ({ saveRecording: vi.fn() }));
+vi.mock('@/api/play/recordings', () => ({ saveRecording: vi.fn() }));
 vi.mock('./playSync', () => ({ startPlaySync: vi.fn() }));
 
-import { saveRecording } from '@/api/recordings';
+import { saveRecording } from '@/api/play/recordings';
 import { startPlaySync } from './playSync';
 import { describeRecordingError, resolvePlayId, uploadRecording } from './recordingSync';
 

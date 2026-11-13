@@ -6,7 +6,7 @@
 // 하단 "추천 곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getChartAssets } from '@/api/charts';
+import { getChartAssets } from '@/api/song/charts';
 import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from './analysisPoller';
 import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/runtime/playSync';
@@ -18,7 +18,7 @@ import { TimingHistogram } from '@/features/result/components/report/TimingHisto
 import { useSegmentPlayer } from '@/features/result/components/report/useSegmentPlayer';
 import { RecommendRow } from '@/components/song/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
-import { recommendationPathOf } from '@/domain/account/recommendation';
+import { recommendationPathOf } from '@/domain/song/recommendation';
 import {
   clockRange,
   flowBins,
