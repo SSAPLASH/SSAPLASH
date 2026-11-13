@@ -10,6 +10,8 @@ import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { touchSource } from '@/runtime/sources';
 import {
   LESSONS_PATH,
+  autoAdvanceTarget,
+  autoAdvanceText,
   courseFinishText,
   courseMeta,
   coursePath,
@@ -38,6 +40,7 @@ import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { ReadStaff } from '@/components/lesson/PadNotation';
 import '@/components/lesson/lesson.css';
 import { InlineError } from '@/components/ui/feedback/InlineError';
+import { useAutoAdvance } from '@/components/lesson/useAutoAdvance';
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 
@@ -158,6 +161,15 @@ export function LessonReadPage() {
     return { ...states, ...hitStates };
   }, [showAnswer, target, hitStates]);
 
+  // 완료 팝업이 떠 있는 동안 3초 뒤 다음 레슨으로 넘긴다(같은 코스일 때만). 저장 실패가 떠 있으면 세지 않는다(설계 SETUP-학습-코스-자동-넘김 4-2)
+  const autoTarget = lesson ? autoAdvanceTarget(lesson, next, done) : null;
+  const auto = useAutoAdvance({
+    enabled: done && popup && save !== 'failed' && autoTarget !== null,
+    onGo: () => {
+      if (autoTarget) navigate(lessonPath(autoTarget, { auto: true }));
+    },
+  });
+
   const toCourse = () => navigate(lesson ? coursePath(lesson.course) : LESSONS_PATH);
   const back = (
     <div className="lesson-read-back">
@@ -258,16 +270,30 @@ export function LessonReadPage() {
                 진도를 저장하지 못했어요. 이번 접속에서는 다음 스테이지가 열려 있어요.
               </InlineError>
             )}
-            <div className="lesson-done-actions">
-              <Button variant="secondary" onClick={toCourse}>
-                코스로
-              </Button>
-              {next && (
-                <Button ref={nextButton} onClick={() => navigate(lessonPath(next))}>
-                  다음 레슨
+            {auto.remaining !== null && next ? (
+              <div className="lesson-done-actions">
+                <span className="lesson-auto-text" aria-live="polite">
+                  {autoAdvanceText(auto.remaining)}
+                </span>
+                <Button variant="secondary" onClick={auto.stop}>
+                  머무르기
                 </Button>
-              )}
-            </div>
+                <Button ref={nextButton} data-auto-go onClick={auto.goNow}>
+                  지금 가기
+                </Button>
+              </div>
+            ) : (
+              <div className="lesson-done-actions">
+                <Button variant="secondary" onClick={toCourse}>
+                  코스로
+                </Button>
+                {next && (
+                  <Button ref={nextButton} onClick={() => navigate(lessonPath(next))}>
+                    다음 레슨
+                  </Button>
+                )}
+              </div>
+            )}
           </Dialog>
         )}
       </section>
