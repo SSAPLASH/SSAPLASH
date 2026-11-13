@@ -3,8 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PadId } from '@/domain/kit/pads';
 import { CAPTURE_ORDER, HitCapture } from './HitCapture';
-import { DEFAULT_SENSOR_TUNING } from '@/domain/kit/tuning';
-import type { HandAnchors } from '@/domain/kit/calibration';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/kit/calibration/tuning';
+import type { HandAnchors } from '@/domain/kit/calibration/calibration';
 
 /** 지연 없이 동기 진행하는 캡처(타이머가 필요 없는 테스트용) */
 const sync = () => new HitCapture({ advanceDelayMs: 0 });

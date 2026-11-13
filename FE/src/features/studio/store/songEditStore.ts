@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
 import { deleteSong, deleteSongCover, updateSongMeta, uploadSongCover } from '@/api/song/songs';
-import type { CoverChange } from '@/domain/song/songCover';
+import type { CoverChange } from '@/features/studio/domain/songCover';
 import { songEditFailure, type SongMetaPatch } from '@/domain/song/songEdit';
 
 export type SongEditPhase = 'idle' | 'saving' | 'done' | 'failed';

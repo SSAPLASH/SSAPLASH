@@ -4,7 +4,7 @@
 // 사실에는 타격 원본·playId·곡 정보를 넣지 않는다. DOM·네트워크·시계를 쓰지 않는 순수 모듈이다.
 // 스틱 입력이면 스틱 끝 방향 치우침(aim)도 넣는다(설계 COACH-001 각도·실측평가 3.1·3.2). 각도 숫자는 넣지 않고 방향·정도만 넣는다.
 // 계산은 AI `coach_eval/live_segments.py`의 aim_facts와 같다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
-import type { HandAnchors } from '@/domain/kit/calibration';
+import type { HandAnchors } from '@/domain/kit/calibration/calibration';
 import type { Chart } from '@/domain/song/chart';
 import type { Pose } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';

@@ -4,7 +4,7 @@
 import type { ResolvedHit, StickId } from '@/domain/events';
 import { isSensorSource } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
-import { computeBoundaries, type HandAnchors } from '@/domain/kit/calibration';
+import { computeBoundaries, type HandAnchors } from '@/domain/kit/calibration/calibration';
 import { anchorsToLayout } from '@/domain/kit/kitJudge';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { isSystemPreset, type CaptureDraft } from '@/domain/kit/preset';

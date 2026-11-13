@@ -7,12 +7,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import { RealignPrompt } from '@/components/calibration/RealignPrompt';
-import { KitInfoFrame, KitInfoHead, KitInfoOverlay } from '@/features/setup/components/KitInfoOverlay';
-import { StagePanel } from '@/features/setup/components/StagePanel';
+import { KitInfoFrame, KitInfoHead, KitInfoOverlay } from '@/features/setup/components/stage/KitInfoOverlay';
+import { StagePanel } from '@/features/setup/components/stage/StagePanel';
 import { GapBanner } from './GapBanner';
-import { useOverlayRegion } from '@/features/setup/components/useOverlayRegion';
+import { useOverlayRegion } from '@/features/setup/components/stage/useOverlayRegion';
 import { HAND_NAME, captureHeadline, overlapLineText, spreadWarningText } from '@/components/calibration/calibrationText';
 import { previewRadius } from './captureRadius';
 import { calibrationSession } from '@/runtime/calibrationSession';
@@ -26,7 +26,7 @@ import { kitFrame } from '@/domain/kit/kitFrame';
 import { padScreenCircles } from '@/domain/kit/kitPerspective';
 import { padPointOf } from '@/domain/kit/kitModel';
 import { PAD_META, STICK_PADS, type PadId } from '@/domain/kit/pads';
-import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/kit/calibration';
+import { angleBetween, padGaps, type HandAnchors, type HandAnchorSet, type PadAnchor, type PadGap } from '@/domain/kit/calibration/calibration';
 import type { Pose, StickId } from '@/domain/events';
 import '@/components/calibration/calibration.css';
 

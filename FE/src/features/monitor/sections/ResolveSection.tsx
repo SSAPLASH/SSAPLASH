@@ -1,7 +1,7 @@
 // ④ 판정: 타격이 어떤 패드·세기로 결정됐는가. 지표 줄(M) + 세기 곡선(N, 접힘).
 import { useMemo } from 'react';
 import type { StageHealth } from '@/features/monitor/core/health';
-import type { JudgeLog } from '@/features/monitor/core/judgeLog';
+import type { JudgeLog } from '@/features/monitor/core/recording/judgeLog';
 import { Fold } from '@/features/monitor/layout/Fold';
 import { MetricRow } from '@/features/monitor/layout/MetricRow';
 import type { Snap } from '@/features/monitor/monitorTypes';

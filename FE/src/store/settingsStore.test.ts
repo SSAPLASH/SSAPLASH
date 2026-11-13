@@ -3,7 +3,7 @@ import { SETTINGS_VERSION, migrateSettings, sanitizePresetAnchors, sanitizeTimin
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { SYSTEM_PRESET_ID } from '@/domain/kit/preset';
 import { WIDE_LAYOUT } from '@/test/layoutFixtures';
-import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/kit/tuning';
+import { DEFAULT_SENSOR_TUNING, mergeTuning } from '@/domain/kit/calibration/tuning';
 import { anchorsToLayout, defaultHandAnchors } from '@/domain/kit/kitModel';
 
 describe('migrateSettings', () => {

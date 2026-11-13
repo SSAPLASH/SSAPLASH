@@ -3,9 +3,9 @@
 //   멈추지 않으므로 다음 패드의 첫 타격이 수락되면(엔진이 gapWarnings를 비운다) 사라진다.
 // - 결과 화면(kind 'result'): 겹친 쌍 요약(「2쌍이 너무 가까워요 · 하이햇–크래시 10°, …」) + 안내 한 줄.
 // 표시용 값과 콜백만 받는다: 계산은 엔진·도메인, 문구는 calibrationText가 한다.
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import type { GapWarning } from '@/engine/HitCapture';
-import type { PadGap } from '@/domain/kit/calibration';
+import type { PadGap } from '@/domain/kit/calibration/calibration';
 import type { StickId } from '@/domain/events';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { gapAdviceText, gapWarningText, overlapBannerText, RESULT_BANNER_ADVICE_TEXT } from '@/components/calibration/calibrationText';

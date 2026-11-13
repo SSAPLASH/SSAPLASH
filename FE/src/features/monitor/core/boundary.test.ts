@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CalibrationProfile, PadAnchor } from '@/domain/kit/calibration';
+import type { CalibrationProfile, PadAnchor } from '@/domain/kit/calibration/calibration';
 import type { PadId } from '@/domain/kit/pads';
 import type { DecodedHit } from '@/input/stickProtocol';
 import { agreeRate, edgeDeg, edgeTone, hitPose, insideRate } from './boundary';
-import type { LogRow } from './packetLog';
+import type { LogRow } from './recording/packetLog';
 
 const anchor = (pad: PadId, pitch: number, yaw: number, radius: number): PadAnchor => ({
   pad,

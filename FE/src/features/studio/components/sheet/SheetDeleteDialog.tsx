@@ -1,8 +1,8 @@
 // 악보 삭제 확인 창 (설계 CHART-001 악보 보관 4-5). SongDeleteDialog 틀을 따른다: [취소] secondary md + [삭제] danger md.
 // 데이터는 모른다. onConfirm이 거부되면 오류 코드를 sheetErrorText로 바꿔 창 안에 보이고, 성공하면 onClose를 부른다.
 import { useState } from 'react';
-import { EditDialog } from '@/features/studio/components/EditDialog';
-import { Button } from '@/components/ui/Button';
+import { EditDialog } from '@/features/studio/components/songs/EditDialog';
+import { Button } from '@/components/ui/action/Button';
 import { sheetErrorCodeOf, sheetErrorText } from '@/features/studio/domain/sheetMusic';
 import '@/features/studio/components/studio.css';
 

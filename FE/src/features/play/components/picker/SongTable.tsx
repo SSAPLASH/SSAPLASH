@@ -7,8 +7,8 @@ import { artistLabel, songLevelLabel, songStatusView, type SongSummary } from '@
 import { formatDuration } from '@/domain/time/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
-import { Pagination } from '@/components/ui/Pagination';
-import '@/components/ui/table.css';
+import { Pagination } from '@/components/ui/layout/Pagination';
+import '@/components/ui/layout/table.css';
 import './song-table.css';
 
 export const SONG_TABLE_PAGE_SIZE = 6;

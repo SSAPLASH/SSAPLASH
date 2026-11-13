@@ -2,10 +2,10 @@
 // 제목 20 + 닫기 X, Input + [취소][저장]. 제목 1~100자, 400 RECORDING_INVALID는 입력칸 아래에 detail을 보인다.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { renameRecording } from '@/api/play/recordings';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { IconButton } from '@/components/ui/IconButton';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { IconButton } from '@/components/ui/action/IconButton';
+import { Input } from '@/components/ui/form/Input';
 import { MAX_RECORDING_TITLE_LENGTH, type RecordingSummary } from '@/domain/play/recording';
 import { classifyMutationError, runWithRetry } from './recordingMutation';
 import './recording-list.css';

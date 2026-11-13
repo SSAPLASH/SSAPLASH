@@ -4,11 +4,11 @@
 // 판정 경로는 동기 함수만 쓴다 (지연 예산 안에서 끝나야 한다).
 import type { PadId } from '@/domain/kit/pads';
 import type { FootId, InputSourceKind, Pose, ResolvedHit, StickEvent, StickHitEvent, StickId } from '@/domain/events';
-import { resolvePad, type CalibrationProfile } from '@/domain/kit/calibration';
+import { resolvePad, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import { mapHit } from './padMapper';
 import type { KeyMap } from '@/domain/kit/keyMap';
-import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/kit/tuning';
-import type { InputSource } from './InputSource';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/kit/calibration/tuning';
+import type { InputSource } from './source/InputSource';
 import { isSensorSource } from '@/domain/events';
 import { PedalTimeline } from './pedalTimeline';
 import { packetTap } from './packetTap';

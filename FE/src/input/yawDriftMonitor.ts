@@ -9,7 +9,7 @@ import {
   wrap180,
   type CalibrationProfile,
   type YawDriftStatus,
-} from '@/domain/kit/calibration';
+} from '@/domain/kit/calibration/calibration';
 import type { ResolvedHit, StickId } from '@/domain/events';
 import {
   DRIFT_COOLDOWN_MS,
@@ -17,8 +17,8 @@ import {
   DRIFT_MIN_DEG,
   DRIFT_MIN_SAMPLES,
   DRIFT_WINDOW,
-} from '@/domain/kit/tuning';
-import type { InputSource } from './InputSource';
+} from '@/domain/kit/calibration/tuning';
+import type { InputSource } from './source/InputSource';
 import { packetTap } from './packetTap';
 import { decodePacket, encodeSetYawOffset, handOf, PARAM_ACK_YAW_OFFSET } from './stickProtocol';
 import { isSensorSource } from '@/domain/events';

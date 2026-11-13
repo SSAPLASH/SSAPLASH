@@ -2,9 +2,9 @@
 // 표시할 제공자는 VITE_LOGIN_PROVIDERS로 거른다. 버튼은 Figma 로그인 카드 134:2733대로 로고 + 「…로 계속하기」.
 // 돌아갈 경로가 모드(/free·/sheet·/play)면 어느 모드로 시작하는지 한 줄 안내한다.
 import { useEffect, type ReactNode } from 'react';
-import { Dialog } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { IconButton } from '@/components/ui/action/IconButton';
 import { enabledProviders, loginErrorMessage, type ProviderKey } from '@/domain/account/auth';
 import { modeForRoute } from '@/features/landing/domain/landingRoute';
 import { LANDING_MODES } from '@/features/landing/components/landingContent';

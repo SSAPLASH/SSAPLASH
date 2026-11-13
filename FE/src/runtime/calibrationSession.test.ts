@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { calibrationSession } from './calibrationSession';
 import { inputManager } from './sources';
-import { BaseInputSource } from '@/input/InputSource';
+import { BaseInputSource } from '@/input/source/InputSource';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { audioEngine } from '@/audio/AudioEngine';

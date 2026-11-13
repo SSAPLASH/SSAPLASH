@@ -2,11 +2,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { KitPreset } from '@/domain/kit/preset';
-import { PresetNameDialog } from './PresetNameDialog';
-import { isEnterBlockedTarget, shouldReturnOnEnter } from './enterKey';
+import { PresetNameDialog } from './preset/PresetNameDialog';
+import { isEnterBlockedTarget, shouldReturnOnEnter } from './preset/enterKey';
 import { ReturnBanner } from './ReturnBanner';
 import { StepCard } from './StepCard';
-import { UnsavedLeaveDialog } from './UnsavedLeaveDialog';
+import { UnsavedLeaveDialog } from './preset/UnsavedLeaveDialog';
 
 const noop = () => {};
 

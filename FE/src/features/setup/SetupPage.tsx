@@ -5,14 +5,14 @@
 // 이 페이지는 조립과 표시만 한다. 팝업은 진입·재정렬 때 자동으로 열지 않는다(모자란 단계는 타일 강조만, 보정 중에는 ② 팝업을 열 수 없다). 판정은 손별 앵커(stickAnchors, 적용 프리셋의 사본)가 맡고 배치(kitLayout)는 표시 전용이다(PLAY-004 D1·D2).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
-import { KitCanvas } from '@/features/setup/components/KitCanvas';
+import { KitCanvas } from '@/features/setup/components/stage/KitCanvas';
 import { useRecentHits } from '@/components/drum/useRecentHits';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Segmented } from '@/components/ui/Segmented';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Slider } from '@/components/ui/Slider';
-import { Toggle } from '@/components/ui/Toggle';
+import { Button } from '@/components/ui/action/Button';
+import { Card } from '@/components/ui/layout/Card';
+import { Segmented } from '@/components/ui/form/Segmented';
+import { PageHeader } from '@/components/ui/layout/PageHeader';
+import { Slider } from '@/components/ui/form/Slider';
+import { Toggle } from '@/components/ui/form/Toggle';
 import { HitLog } from '@/features/setup/components/HitLog';
 import { HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitLogPlacement } from '@/features/setup/components/hitLogFormat';
 import '@/features/setup/components/setup.css';
@@ -20,15 +20,15 @@ import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { timingCalStatusText } from '@/components/calibration/timingCalText';
 import { SensorOptionsPanel } from '@/features/setup/components/SensorOptionsPanel';
-import { PresetChips, SLOTS_FULL_TEXT } from '@/features/setup/components/PresetChips';
-import { PresetNameDialog } from '@/features/setup/components/PresetNameDialog';
-import { PresetSlotDialog } from '@/features/setup/components/PresetSlotDialog';
+import { PresetChips, SLOTS_FULL_TEXT } from '@/features/setup/components/preset/PresetChips';
+import { PresetNameDialog } from '@/features/setup/components/preset/PresetNameDialog';
+import { PresetSlotDialog } from '@/features/setup/components/preset/PresetSlotDialog';
 import { ReturnBanner } from '@/features/setup/components/ReturnBanner';
 import { StatusTile } from '@/features/setup/components/StatusTile';
 import { StepDialog } from '@/features/setup/components/StepDialog';
 import { StickCard } from '@/features/setup/components/StickCard';
-import { KitInfoOverlay } from '@/features/setup/components/KitInfoOverlay';
-import { UnsavedLeaveDialog } from '@/features/setup/components/UnsavedLeaveDialog';
+import { KitInfoOverlay } from '@/features/setup/components/stage/KitInfoOverlay';
+import { UnsavedLeaveDialog } from '@/features/setup/components/preset/UnsavedLeaveDialog';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { selectDirty, usePresets } from '@/store/presetStore';
@@ -40,11 +40,11 @@ import { pickOverlayCorner } from '@/domain/kit/kitLayout';
 import { defaultHandAnchorSet } from '@/domain/kit/kitModel';
 import { padPointCm, padScreenCircles } from '@/domain/kit/kitPerspective';
 import { PRESET_SLOTS, isSystemPreset, presetDisplayName, type CaptureDraft, type PresetErrorCode } from '@/domain/kit/preset';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import { sanitizeReturnTo } from '@/domain/account/auth';
-import { calibrationReady, readiness } from '@/domain/kit/readiness';
-import { deviceGroupName, deviceListText } from '@/domain/kit/devices';
-import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/kit/pedalStatus';
+import { calibrationReady, readiness } from '@/domain/kit/device/readiness';
+import { deviceGroupName, deviceListText } from '@/domain/kit/device/devices';
+import { pedalConnected, pedalRequired, pedalSetupLine, pedalStatus } from '@/domain/kit/device/pedalStatus';
 import {
   dongleLine,
   referenceHoldingLine,
@@ -63,13 +63,13 @@ import {
   UNSAVED_LEAVE_SYSTEM_SAVE_LABEL,
   type SetupDongleState,
   type SetupStepId,
-} from '@/domain/kit/setupSteps';
-import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/kit/tuning';
+} from '@/domain/kit/calibration/setupSteps';
+import { DRIFT_COOLDOWN_MS, DRIFT_MIN_DEG, TUNING_RANGES } from '@/domain/kit/calibration/tuning';
 import { audioEngine } from '@/audio/AudioEngine';
 import { CalibrationStage } from '@/features/setup/components/calibration/CalibrationStage';
 import { CAPTURE_GUIDE_TEXT, RESULT_GUIDE_TEXT } from '@/components/calibration/calibrationText';
-import { StagePanel } from '@/features/setup/components/StagePanel';
-import { useOverlayRegion } from '@/features/setup/components/useOverlayRegion';
+import { StagePanel } from '@/features/setup/components/stage/StagePanel';
+import { useOverlayRegion } from '@/features/setup/components/stage/useOverlayRegion';
 import { useRealign } from '@/components/calibration/useRealign';
 import { usePoseStream } from '@/features/setup/components/calibration/usePoseStream';
 import { ReferencePoseGuide } from '@/features/setup/components/calibration/ReferencePoseGuide';

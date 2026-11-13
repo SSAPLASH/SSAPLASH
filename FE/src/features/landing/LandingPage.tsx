@@ -8,7 +8,7 @@ import { LandingView } from '@/features/landing/components/LandingView';
 import type { LandingModeKey } from '@/features/landing/components/landingContent';
 import { LoginDialog } from '@/features/landing/components/auth/LoginDialog';
 import { SignupConsentDialog } from '@/features/landing/components/auth/SignupConsentDialog';
-import { Dialog } from '@/components/ui/Dialog';
+import { Dialog } from '@/components/ui/overlay/Dialog';
 import { sanitizeReturnTo } from '@/domain/account/auth';
 import { landingDialog, modeRoute } from '@/features/landing/domain/landingRoute';
 import { signupGateDecision } from '@/domain/account/signupGate';

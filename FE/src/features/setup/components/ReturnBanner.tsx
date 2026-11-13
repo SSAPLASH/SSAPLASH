@@ -1,8 +1,8 @@
 // Figma ReturnBanner 236:1306 — 시작 확인 창에서 설정으로 온 사용자에게 상단에 고정하는 복귀 띠. 이동 자체는 하지 않는다(onReturn 콜백).
 // blocked(준비 중) = brand 10% 배경·60% 테두리, ready = good 계열.
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/Button';
-import { shouldReturnOnEnter } from './enterKey';
+import { Button } from '@/components/ui/action/Button';
+import { shouldReturnOnEnter } from './preset/enterKey';
 import './setup.css';
 
 interface Props {

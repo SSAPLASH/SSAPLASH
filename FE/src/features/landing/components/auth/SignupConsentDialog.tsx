@@ -8,8 +8,8 @@ import { useEffect, useState } from 'react';
 import { AUTH_REQUIRED } from '@/config/auth';
 import { LANDING_MODES } from '@/features/landing/components/landingContent';
 import { SignupConsentCard } from './SignupConsentCard';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
 import { signupErrorMessage } from '@/domain/account/auth';
 import { modeForRoute } from '@/features/landing/domain/landingRoute';
 import { isRecommendationConsentCurrent } from '@/domain/account/recommendationConsent';
@@ -18,7 +18,7 @@ import { recommendationConsentEnabled, SIGNUP_TERMS, type ConsentVersions } from
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import './auth.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 interface Props {
   /** 동의 뒤 갈 목적지(검증된 경로) */

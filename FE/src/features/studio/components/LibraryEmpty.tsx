@@ -1,6 +1,6 @@
 // 라이브러리 빈 안내 (설계 QA-studio-empty-state). 곡·악보·진행 작업이 모두 없을 때 카드·목록 영역 자리에 둔다.
 // 올리기 진입점은 헤더 [+ 올리기] 하나라서 여기에는 버튼을 두지 않는다.
-import type { StudioView } from './MySongList';
+import type { StudioView } from './songs/MySongList';
 import './studio.css';
 
 interface Props {

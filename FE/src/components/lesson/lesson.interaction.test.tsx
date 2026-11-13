@@ -17,9 +17,9 @@ import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/runtime/queryClient';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
-import { LessonCourse } from './LessonCourse';
+import { LessonCourse } from '@/features/play/components/picker/lesson/LessonCourse';
 import { LessonInvite } from './LessonInvite';
-import { LessonResultBand } from './LessonResultBand';
+import { LessonResultBand } from '@/features/result/components/LessonResultBand';
 
 vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
 vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));

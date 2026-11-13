@@ -2,8 +2,8 @@
 // 진행·계산은 runtime/timingCalSession이 하고, 여기서는 스냅샷을 그리고 적용을 누르면 설정에 저장한다.
 // TimingCalView는 props만 받는 표시부(정적 렌더 테스트용), TimingCalDialog가 세션·설정을 잇는다.
 import { useEffect, useId, useSyncExternalStore } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
 import { timingCalSession, type TimingCalSnapshot } from '@/runtime/timingCalSession';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import {
@@ -12,7 +12,7 @@ import {
   TIMING_CAL_MEASURE_BEATS,
   TIMING_CAL_RECHECK_DIFF_MS,
   TIMING_CAL_SWITCH_BEATS,
-} from '@/domain/kit/timingCalibration';
+} from '@/domain/kit/calibration/timingCalibration';
 import { useSettings } from '@/store/settingsStore';
 import { outputLatencyWarnText, timingCalResultText, timingOffsetText } from './timingCalText';
 import './timingCal.css';

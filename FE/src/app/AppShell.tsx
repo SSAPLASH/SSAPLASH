@@ -13,12 +13,12 @@ import { prefetchRoute } from './prefetchRoute';
 import { LazyChartAutoplayToggle } from '@/features/play/components/diag/lazyChartAutoplay';
 import { RecordingToast } from '@/components/recording/RecordingToast';
 import { SaveRecordingDialog } from '@/components/recording/SaveRecordingDialog';
-import { GlassDock } from '@/components/shell/GlassDock';
-import { ProfileMenu } from '@/components/shell/ProfileMenu';
-import { Sidebar } from '@/components/shell/Sidebar';
+import { GlassDock } from '@/components/shell/dock/GlassDock';
+import { ProfileMenu } from '@/components/shell/account/ProfileMenu';
+import { Sidebar } from '@/components/shell/nav/Sidebar';
 import { LessonInvite } from '@/components/lesson/LessonInvite';
-import { StickStatusIndicator } from '@/components/shell/StickStatusIndicator';
-import { TopBar } from '@/components/shell/TopBar';
+import { StickStatusIndicator } from '@/components/shell/dock/StickStatusIndicator';
+import { TopBar } from '@/components/shell/nav/TopBar';
 import { useSidebarCollapsed } from '@/components/shell/useMediaQuery';
 
 // 조건부로만 뜨는 셸 UI라 첫 로드에서 뺀다(설계 TECH-route-code-split U2 ①)

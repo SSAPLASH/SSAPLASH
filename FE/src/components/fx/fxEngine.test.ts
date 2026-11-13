@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HIT_FX_LAB_THEMES } from '@/domain/hitFx/themes';
-import { celebrate } from '@/domain/hitFx/spawn/celebrate';
+import { celebrate } from '@/features/result/domain/celebrate';
 import type { FxEvent } from '@/domain/hitFx/types';
 import { createFxEngine, MAX_PARTICLES } from './fxEngine';
 

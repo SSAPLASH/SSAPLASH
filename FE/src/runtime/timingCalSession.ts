@@ -15,7 +15,7 @@ import {
   type TimingCalLimb,
   type TimingCalOutcome,
   type TimingCalTap,
-} from '@/domain/kit/timingCalibration';
+} from '@/domain/kit/calibration/timingCalibration';
 
 /** 클릭을 미리 예약하는 창과 틱(전역 메트로놈과 같은 값) */
 const LOOKAHEAD_MS = 100;

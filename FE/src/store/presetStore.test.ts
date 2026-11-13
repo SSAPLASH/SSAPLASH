@@ -5,7 +5,7 @@ import { useSettings } from './settingsStore';
 import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { TIGHT_LAYOUT, WIDE_LAYOUT } from '@/test/layoutFixtures';
 import { PresetError, SYSTEM_PRESET_ID, type PresetSource } from '@/domain/kit/preset';
-import type { HandAnchors } from '@/domain/kit/calibration';
+import type { HandAnchors } from '@/domain/kit/calibration/calibration';
 import { defaultHandAnchors } from '@/domain/kit/kitModel';
 
 const ANCHOR = { pad: 'SNARE' as const, pitch: -20, yaw: 3, radius: 18, samples: 2, spread: 1 };

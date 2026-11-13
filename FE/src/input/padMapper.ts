@@ -4,8 +4,8 @@
 import type { PadId } from '@/domain/kit/pads';
 import type { HitJudgedBy, InputSourceKind, StickHitEvent, StickId } from '@/domain/events';
 import type { KeyMap } from '@/domain/kit/keyMap';
-import { poseDistance, resolvePad, type CalibrationProfile } from '@/domain/kit/calibration';
-import { AMBIGUOUS_MARGIN_DEG, type OutsidePolicy } from '@/domain/kit/tuning';
+import { poseDistance, resolvePad, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { AMBIGUOUS_MARGIN_DEG, type OutsidePolicy } from '@/domain/kit/calibration/tuning';
 
 export type MapperKind = 'key' | 'pose';
 
