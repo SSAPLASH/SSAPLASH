@@ -41,7 +41,6 @@ import { strayMissSource } from '@/features/play/components/stage/strayMissSourc
 import type { HitMark } from '@/components/sheetmusic/sheetStripDraw';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { useDock, usePlayRunning, useShell } from '@/components/shell/nav/useShell';
-import { useSidebarCollapsed } from '@/components/shell/useMediaQuery';
 import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
 import type { Chart } from '@/domain/song/chart';
@@ -118,7 +117,6 @@ function SheetPageBody() {
   const location = useLocation();
   const settings = useSettings();
   // 사이드바 실제 접힘(사용자 설정 또는 태블릿 폭). 펼쳐져 있으면 곡 범위를 사이드바 하위 메뉴가 보인다
-  const sidebarCollapsed = useSidebarCollapsed();
   // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
   const smallKit = smallKitSpec('sheet', settings.kitSkin);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -838,7 +836,7 @@ function SheetPageBody() {
         <StageFade stageKey="select">
           <main className="main">
             {/* 사이드바가 펼쳐져 있으면 「악보 연습」 하위 메뉴가 곡 범위를 보이므로 화면 위 탭은 두지 않는다(설계 MODE-003-악보-연습-하위-메뉴) */}
-            <SongPicker mode="sheet" tabsInSidebar={!sidebarCollapsed} onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
+            <SongPicker mode="sheet" onStart={(song, chartId) => param.select(song, chartId, { start: true })} />
           </main>
         </StageFade>
         <StartDialog

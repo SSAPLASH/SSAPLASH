@@ -1,6 +1,6 @@
 // 좌측 사이드바(Figma Navigation / Sidebar 126:2122). 펼침 240 · 접힘 80(아이콘만 + title 툴팁). 하단은 설정만 두고 로그아웃은 프로필 메뉴에 있다(UX-22).
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
-// 예외 하나: 「악보 연습」에 들어와 있고 펼쳐져 있으면 그 아래에 곡 범위 하위 메뉴(기본 곡·내 곡·AI 추천곡·입문 코스)를 보인다
+// 예외 하나: 「악보 연습」에 들어와 있고 펼쳐져 있으면 그 아래에 곡 범위 하위 메뉴(기본 곡·내 곡·AI 추천곡·학습 코스)를 보인다
 // (설계 MODE-003-악보-연습-하위-메뉴). 범위는 주소 값이 기준이라 곡 고르기와 서로를 모른 채 같은 값을 본다. 접힘·태블릿에서는 화면 위 탭이 대신한다.
 import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
@@ -194,7 +194,7 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
                   className="side-sub-item"
                   aria-current={category === sheetCurrent ? 'page' : undefined}
                 >
-                  {SHEET_CATEGORY_LABEL[category].menu}
+                  {SHEET_CATEGORY_LABEL[category]}
                 </Link>
               </li>
             ))}
