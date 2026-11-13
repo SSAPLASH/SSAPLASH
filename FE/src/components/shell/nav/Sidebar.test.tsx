@@ -87,7 +87,7 @@ describe('Sidebar 악보 연습 하위 메뉴 (설계 MODE-003-악보-연습-하
 
   it('악보 연습에 들어와 있으면 「악보 연습」 바로 아래에 네 범위가 이 순서·이 주소로 보인다', () => {
     const { container } = view('/sheet');
-    expect(items().map((a) => a.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡', '입문 코스']);
+    expect(items().map((a) => a.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡', '학습 코스']);
     expect(items().map((a) => a.getAttribute('href'))).toEqual(['/sheet', '/sheet?scope=MINE', '/sheet?tab=recommend', '/sheet?tab=lessons']);
     // 부모 항목 바로 다음 자리
     const parent = container.querySelector('.side-item[aria-label="악보 연습"]');
@@ -105,19 +105,19 @@ describe('Sidebar 악보 연습 하위 메뉴 (설계 MODE-003-악보-연습-하
     expect(current()).toBe('AI 추천곡');
     cleanup();
     view('/sheet?tab=lessons&song=9&chart=91');
-    expect(current()).toBe('입문 코스');
+    expect(current()).toBe('학습 코스');
   });
 
-  it('알아보기 레슨 화면에서도 하위 메뉴가 보이고 입문 코스가 표시된다', () => {
+  it('알아보기 레슨 화면에서도 하위 메뉴가 보이고 학습 코스가 표시된다', () => {
     view('/sheet/lesson/12');
     expect(items()).toHaveLength(4);
-    expect(current()).toBe('입문 코스');
+    expect(current()).toBe('학습 코스');
   });
 
   it('하위 항목을 누르면 그 범위로 가고 표시가 옮겨 간다', () => {
     view('/sheet');
-    fireEvent.click(screen.getByRole('link', { name: '입문 코스' }));
-    expect(current()).toBe('입문 코스');
+    fireEvent.click(screen.getByRole('link', { name: '학습 코스' }));
+    expect(current()).toBe('학습 코스');
     fireEvent.click(screen.getByRole('link', { name: '내 곡' }));
     expect(current()).toBe('내 곡');
     // 부모 「악보 연습」을 누르면 기본 곡으로 돌아간다
