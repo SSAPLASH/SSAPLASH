@@ -530,6 +530,11 @@ p {
   background: var(--stick-on);
   box-shadow: 0 0 8px var(--stick-on);
 }
+.stick-dot.on.warn {
+  /* 기기 사이 시각 차이 경고(PLAY-006): 배터리 부족과 같은 주황 */
+  background: var(--stick-low);
+  box-shadow: none;
+}
 .stick-status {
   display: inline-flex;
   flex-shrink: 0;
