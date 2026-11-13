@@ -208,7 +208,7 @@ uv run ssaplash-chart run data/synth_v1/funk_108/mixture.wav --out data/chart/fu
 
 `chart.json`에서 정해진 값은 다음과 같다.
 
-- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<해시 12자리>`로 남는다. 해시에는 모델 yaml, bpm 방법·설정, `offsetMs`·bpm 계산 규칙 버전(`chart_json.TIMING_RULES_VERSION`)이 들어간다
+- `generator`는 BE가 `ADT_MODEL`만 받아서 고정이다. 어떤 모델·규칙으로 만들었는지는 `generatorVersion`에 `<모델 yaml name>@<해시 12자리>`로 남는다. 해시에는 모델 yaml, bpm 방법·설정, `offsetMs`·bpm 계산 규칙 버전(`chart_json.TIMING_RULES_VERSION`)이 들어간다. 모델 yaml은 주석을 포함한 파일 글자 전체가 들어가므로 주석만 고쳐도 `generatorVersion`이 바뀐다
 - 난이도는 `NORMAL` 하나, `notationStatus`는 `UNAVAILABLE`이다
 - 노트는 시각순으로 `n0001`부터 번호를 붙인다. `timeMs`는 반주 시작 기준 정수 ms이고 같은 시각은 패드 순서(KICK·SNARE·HIHAT·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE·HIHAT_PEDAL)다
 - `pad`는 위 9종 중 하나다. 음원 채보는 하이햇 페달을 따로 내지 않고, 채보 모델이 `HIHAT_PEDAL`을 내도 `HIHAT`으로 합친다. 페달이 따로 적힌 실제 녹음 드럼 데이터가 MDB Drums 한 묶음뿐이라, 처음 보는 드럼 세트에서도 맞는지 확인할 수 없어서다. MDB에서는 원래 ADTOF + 드럼 킷 분리 모델의 `HIHAT` 노트에 실제 녹음 학습 모델의 페달 예측이 30ms 안에 있으면 페달로 바꿨을 때 페달 정밀도 0.835, F1 0.548이었다(`scripts/score_pedal_relabel.py`). ENST는 페달만 밟은 하이햇도 닫힌 하이햇과 같은 `chh`로 적어서 페달 채점에 쓸 수 없다
@@ -880,7 +880,7 @@ uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_s
 
 ### 오디오 LLM 마디 단위 하이햇·라이드 시험 (S15P31A307-325)
 
-소리를 직접 듣는 LLM에 한 마디 길이 오디오를 들려주고 박을 세는 심벌이 하이햇인지 라이드인지 물어, 같은 마디의 지금 채보·8패드 모델·분리 트랙 에너지와 비교했다. 2026-11-10 결과로 채택하지 않았다. 6개 모델 모두 기존 방법보다 낮았다(`docs/chart-rules/audio-llm-cymbal-2026-11/summary.md`). 실험 스크립트 `cymrole_audio_*.py`와 서버 노트북은 저장소만으로는 돌지 않아 S15P31A307-324에서 뺐고, MR !411 이력에 남아 있다.
+소리를 직접 듣는 LLM에 한 마디 길이 오디오를 들려주고 박을 세는 심벌이 하이햇인지 라이드인지 물어, 같은 마디의 당시 서비스 채보·8패드 모델·분리 트랙 에너지와 비교했다. 2026-11-10 결과로 채택하지 않았다. 6개 모델 모두 기존 방법보다 낮았다(`docs/chart-rules/audio-llm-cymbal-2026-11/summary.md`). 실험 스크립트 `cymrole_audio_*.py`와 서버 노트북은 저장소만으로는 돌지 않아 S15P31A307-324에서 뺐고, MR !411 이력에 남아 있다.
 
 ### 채보 모델 파인튜닝 (S15P31A307-164)
 
@@ -922,7 +922,7 @@ uv run python scripts/score_cymbal.py --rule-eval now=data/results/rule-eval-bas
 
 #### 실제 녹음 학습 확인 실험
 
-학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. 서비스 후보로 ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
+학습 데이터에 실제 녹음 드럼이 없어서 ENST 탐이 떨어졌는지 확인하는 실험이다(2026-10-31 MDB·ENST 제공 측에서 학생 학업용 학습 허락). ENST 드러머 하나와 MDB 묶음 하나를 빼고 학습해 뺀 곡으로 평가하는 것을 세 번 하고(`configs/train/real_check/tom_6cls_real_no_d{1,2,3}.yaml`), 데이터는 그대로 두고 탐 강조 설정만 끈 학습(`tom_6cls_plain.yaml`)과 비교한다. 묶음 표는 `configs/train/real_check/folds.yaml`, 데이터셋 yaml은 `configs/bench/datasets/real_check/`, 채보 어댑터는 `configs/bench/transcribers/adtof_drumsep/real_check/`에 있다. 서버 실행은 `notebooks/real_drum_check_server.ipynb`. 결과는 학습마다 안 본 곡만 모아 합친다. ENST 드러머 1·2·3과 MDB 23곡을 모두 넣은 학습은 `tom_6cls_real_full.yaml`이고 같은 노트북 FULL 절로 돌린다. 학습에 안 쓴 실제 녹음이 없어 실제 녹음 점수는 no_d* 세 학습의 합친 결과로 대신한다.
 
 패드별 가중치 조합(`adtof_drumsep_realrec.yaml`, 실험용)은 드럼 킷 분리는 한 번, ADTOF는 가중치 셋으로 세 번 돌려 패드별로 가져온다. 킥·스네어·하이햇은 실제 녹음 학습 모델(`tom_6cls_real_full`), 탐 3종은 원래 ADTOF 가중치(`tom_checkpoint_path: default`), 크래시·라이드는 7클래스 실제 녹음 학습 모델(`tom_7cls_real_full`, `cymbal_checkpoint_path`)이다. 채보 JSON을 만들 때 하이햇 페달은 하이햇으로 합친다. 드럼 분리 입력 8패드 F1이 MDB 0.844 → 0.886, ENST 0.790 → 0.830으로 올랐으나, 실제 발매곡인 PDO 무료 5곡 악보와 노트 단위로 비교하면 0.647 → 0.608로 떨어져 서비스에는 쓰지 않는다(2026-11-03). 이 조합으로 워커를 띄우려면 `SSAPLASH_MODELS_DIR/adtof_ft/` 아래에 두 파인튜닝 가중치가 있어야 한다.
 
