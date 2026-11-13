@@ -4,8 +4,11 @@ import type { BarLayout } from '@/domain/song/sheet';
 import { xInBar, xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { STAFF_BOTTOM_Y, STAFF_TOP_Y } from '@/components/sheetmusic/sheetStripDraw';
 
-/** 보표·커서·박 번호가 차지하는 세로 범위(논리 px, 배율 1 기준). 캔버스가 더 높으면 이만큼을 세로 가운데에 놓는다 */
-export const CONTENT_TOP = STAFF_TOP_Y - 46;
+/**
+ * 보표·커서·박 번호·마디 번호가 차지하는 세로 범위(논리 px, 배율 1 기준). 캔버스가 더 높으면 이만큼을 세로 가운데에 놓는다.
+ * 위 끝은 마디 번호(보표 위 40, 11px 글자) 윗부분까지 들어가게 보표 위 52로 잡는다
+ */
+export const CONTENT_TOP = STAFF_TOP_Y - 52;
 export const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 /** 악보를 키우는 배율의 최대·최소. 선 간격 10px이 최대 16px, 최소 12px이 된다 */
 export const STAFF_SCALE_MAX = 1.6;
@@ -17,6 +20,19 @@ export const STAFF_SCALE_MIN = 1.2;
  */
 export function staffScale(heightPx: number): number {
   return Math.min(STAFF_SCALE_MAX, Math.max(STAFF_SCALE_MIN, heightPx / (CONTENT_BOTTOM - CONTENT_TOP)));
+}
+
+/** 악보 칸 안쪽 아래에 얹는 타이밍 막대가 차지하는 높이(CSS px): 막대 28 + 아래 여백 14(global.css .sheet-pager-overlay) + 틈 2 */
+export const OVERLAY_RESERVE_PX = 44;
+
+/**
+ * 악보를 그리는 세로 이동량(논리 px). 칸에서 아래 reserve(논리 px)를 뺀 높이의 세로 가운데에 보표 콘텐츠를 놓는다.
+ * 그림 좌표는 보표가 y 110–150에 있어 위가 비어 있으므로 위로 올릴 때(음수)도 그대로 쓴다.
+ * 칸이 콘텐츠보다 낮으면 콘텐츠 위 끝을 칸 위 끝에 맞춘다(마디 번호·기둥이 위로 잘리지 않게, 넘침은 아래로)
+ */
+export function staffOffsetY(H: number, reserve = 0): number {
+  const room = H - reserve - (CONTENT_BOTTOM - CONTENT_TOP);
+  return Math.max(0, room / 2) - CONTENT_TOP;
 }
 
 /** 악보 영역 폭(px)에 따른 페이지당 마디 수 */
