@@ -18,6 +18,12 @@ export function appliedWindows(base: TimingWindows, beginner: boolean): TimingWi
   return { perfectMs: base.perfectMs, goodMs: Math.max(base.goodMs, BEGINNER_GOOD_MS) };
 }
 
+/** 기본보다 넓혀 연주한 판의 GOOD 폭(ms). 기본 폭 이하이거나 값이 없으면 null */
+export function wideGoodMs(timing: { goodMs: number } | null | undefined): number | null {
+  const v = timing?.goodMs;
+  return v != null && Number.isFinite(v) && v > DEFAULT_TIMING.goodMs ? v : null;
+}
+
 /**
  * 코칭·피드백 임계값 계산에 쓰는 고정 기준 폭(ms). 현재 기본 goodMs와 같다.
  * 판정 폭과 분리한 이유: 판정 폭은 게임 난이도이고 코칭은 실제 박에서 벗어난 정도다
