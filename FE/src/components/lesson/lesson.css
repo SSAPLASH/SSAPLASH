@@ -1,30 +1,84 @@
-/* 입문 코스 (Jira 331). 색·간격은 tokens.css만 쓴다 */
+/* 학습 코스(입문·중급) (Jira 331, 설계 SETUP-학습-코스-중급). 색·간격은 tokens.css만 쓴다 */
 .lesson-course {
   display: flex;
   flex-direction: column;
   gap: var(--space-l);
 }
 
-.lesson-progress {
+/* 코스 칸: 입문·중급을 나란히, 좁으면 한 줄에 하나 */
+.lesson-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  max-width: 860px;
+}
+.lesson-course-pick {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.lesson-progress-label {
+.lesson-course-pick:hover {
+  border-color: var(--line-strong);
+}
+.lesson-course-pick[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--surface-2);
+}
+.lesson-course-pick:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+}
+.lesson-course-pick-top {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-s) var(--space-m);
+  align-items: baseline;
+  gap: var(--space-s);
+}
+.lesson-course-pick-top b {
+  font-size: 16px;
+  font-weight: 600;
+}
+.lesson-course-pick-count,
+.lesson-course-pick-done {
+  margin-left: auto;
+  font-size: 13px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.lesson-course-pick-done {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--brand-text);
+}
+.lesson-course-pick-summary {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lesson-course-pick-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.lesson-course-note {
+  margin: 0;
   font-size: 14px;
   color: var(--text-2);
 }
-.lesson-progress-label b {
-  color: var(--text-1);
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
 .lesson-progress-bar {
-  height: 8px;
+  display: block;
+  height: 6px;
   border-radius: 999px;
   background: var(--surface-3);
   overflow: hidden;
@@ -143,6 +197,9 @@
   font-size: 12px;
   line-height: 1.35;
   color: var(--text-2);
+  /* 긴 레슨 이름(중급 「크래시·라이드 음표 알아보기」)이 낱말 중간에서 끊기지 않게 띄어쓰기에서 줄을 바꾼다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .lesson-stage-label b {
   display: block;
@@ -192,6 +249,9 @@
 .lesson-card.is-passed .lesson-card-eyebrow {
   color: var(--brand-text);
 }
+.lesson-card.is-locked .lesson-card-eyebrow {
+  color: var(--text-3);
+}
 .lesson-card-title {
   margin: 0;
   font-size: 20px;
@@ -214,8 +274,19 @@
   align-items: center;
   gap: var(--space-m);
 }
+/* 음표가 4개를 넘으면 오선을 줄로 나눠 가운데 맞춰 쌓는다(PadNotation.notationRows).
+   그래도 카드보다 넓으면(좁은 화면) 비율을 지킨 채 줄인다. 가로 스크롤을 만들지 않는다 */
 .lesson-card-figures .lesson-staff {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   max-width: 100%;
+  overflow: visible;
+}
+.lesson-card-figures .lesson-staff svg {
+  max-width: 100%;
+  height: auto;
 }
 .lesson-card-kit {
   width: 100%;

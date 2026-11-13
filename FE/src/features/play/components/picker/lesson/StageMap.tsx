@@ -1,4 +1,5 @@
 // 원형 스테이지 맵 (설계 SETUP-입문-코스 3-5). 스테이지가 구불구불한 길을 따라 순서대로 놓인다. 잠긴 스테이지는 고를 수 없다.
+// 한 코스의 스테이지만 받는다. 맨 아래 목표 문구는 코스마다 다르다(설계 SETUP-학습-코스-중급 4-1).
 import { lessonDisplayTitle, stageWord, type Lesson, type StageState } from '@/domain/play/lesson';
 
 /** 스테이지 가로 흔들림(px). 순서대로 돌려 쓴다 */
@@ -12,10 +13,13 @@ interface Props {
   lessons: readonly Lesson[];
   states: readonly StageState[];
   selected: number | null;
+  /** 맨 아래 목표 문구(다 통과 전·후) */
+  goal: string;
+  reached: string;
   onSelect: (index: number) => void;
 }
 
-export function StageMap({ lessons, states, selected, onSelect }: Props) {
+export function StageMap({ lessons, states, selected, goal, reached, onSelect }: Props) {
   const x = (i: number) => WIDTH / 2 + OFFSETS[i % OFFSETS.length];
   const y = (i: number) => TOP + i * STEP;
   const height = TOP + Math.max(0, lessons.length - 1) * STEP + 92;
@@ -65,7 +69,7 @@ export function StageMap({ lessons, states, selected, onSelect }: Props) {
         })}
       </ol>
       <span className={`lesson-map-goal${allPassed ? ' is-reached' : ''}`} style={{ top: height - 40 }}>
-        {allPassed ? '8비트를 칠 수 있게 됐어요' : '여기까지 오면 8비트를 칠 수 있어요'}
+        {allPassed ? reached : goal}
       </span>
     </div>
   );

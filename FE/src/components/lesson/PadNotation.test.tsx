@@ -3,6 +3,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { notationRows } from '@/domain/play/lesson';
 import { PadNotation } from './PadNotation';
 
 /** CSS의 .lesson-staff-name 글자 크기(px, SVG 좌표 단위) */
@@ -27,5 +28,53 @@ describe('PadNotation 글자 자리', () => {
     const name = group.querySelector('.lesson-staff-name')!;
     const nameTop = Number(name.getAttribute('y')) - NAME_FONT;
     expect(nameTop).toBeGreaterThanOrEqual(lowestNoteY(group) + MIN_GAP);
+  });
+});
+
+// 11/13 로컬 확인: 드럼 7개(중급 「8비트에 필인 넣기」)를 한 줄에 두면 카드에 맞추느라 글자가 너무 작아진다 → 4개를 넘으면 줄을 나눈다
+describe('PadNotation 줄 나누기', () => {
+  it('4개까지는 한 줄, 넘으면 줄 수를 늘려 고르게 나눈다(앞줄이 같거나 많다)', () => {
+    const sizes = (n: number) => notationRows(Array.from({ length: n }, (_, i) => i)).map((r) => r.length);
+    expect(sizes(1)).toEqual([1]);
+    expect(sizes(4)).toEqual([4]);
+    expect(sizes(5)).toEqual([3, 2]);
+    expect(sizes(6)).toEqual([3, 3]);
+    expect(sizes(7)).toEqual([4, 3]);
+    expect(sizes(8)).toEqual([4, 4]);
+    expect(sizes(9)).toEqual([3, 3, 3]);
+    expect(notationRows(['a', 'b', 'c', 'd', 'e'])).toEqual([['a', 'b', 'c'], ['d', 'e']]);
+  });
+
+  it('드럼 7개는 오선 두 줄(4개·3개)로 그리고, 읽는 이름은 하나로 모든 드럼을 순서대로 말한다', () => {
+    const pads: PadId[] = ['CRASH', 'HIHAT', 'KICK', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM'];
+    const { container, getByRole } = render(<PadNotation pads={pads} />);
+    const rows = container.querySelectorAll('.lesson-staff svg');
+    expect(rows).toHaveLength(2);
+    expect([...rows].map((r) => r.querySelectorAll('[data-pad]').length)).toEqual([4, 3]);
+    expect(getByRole('img', { name: '악보 위치: 크래시, 하이햇, 킥, 스네어, 스몰탐, 미드탐, 플로어탐' })).toBeTruthy();
+  });
+
+  // 11/13 로컬 확인: 두 줄이 되니 카드가 너무 커졌다 → 줄마다 실제 음표가 차지하는 높이만큼만 자리를 잡는다
+  it('줄마다 음표 높이만큼만 자리를 잡는다: 아래로 뻗는 기둥이 없으면 이름이 오선에 붙고, 위로 높은 음표가 없으면 위쪽이 줄어든다', () => {
+    const row = (pads: PadId[]) => {
+      const { container } = render(<PadNotation pads={pads} />);
+      const svg = container.querySelector('.lesson-staff svg')!;
+      const [, top, , height] = svg.getAttribute('viewBox')!.split(' ').map(Number);
+      const nameY = Number(container.querySelector('.lesson-staff-name')!.getAttribute('y'));
+      cleanup();
+      return { top, height, nameY };
+    };
+    const kick = row(['KICK']);
+    const snare = row(['SNARE']);
+    const crash = row(['CRASH']);
+    const toms = row(['SMALL_TOM', 'MID_TOM']);
+    expect(snare.nameY).toBeLessThan(kick.nameY);
+    expect(toms.top).toBeGreaterThan(crash.top);
+    expect(toms.height).toBeLessThan(crash.height + (kick.nameY - snare.nameY));
+  });
+
+  it('4개 이하는 오선 한 줄이다', () => {
+    const { container } = render(<PadNotation pads={['HIHAT', 'KICK', 'SNARE']} />);
+    expect(container.querySelectorAll('.lesson-staff svg')).toHaveLength(1);
   });
 });

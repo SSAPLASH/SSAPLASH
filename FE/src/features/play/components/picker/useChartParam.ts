@@ -18,11 +18,13 @@ interface Fetched {
   error: string | null;
 }
 
-/** 곡 선택 탭 쿼리만 남긴다(Jira 331: `?tab=lessons`, 악보 연습 라이브러리 탭 `?scope=MINE`) */
+/** 곡 선택 범위 쿼리만 남긴다(Jira 331: `?tab=lessons`와 고른 코스 `course`, 악보 연습 내 곡 `?scope=MINE`) */
 function keptTab(prev: URLSearchParams): Record<string, string> {
   const out: Record<string, string> = {};
   const tab = prev.get('tab');
   if (tab) out.tab = tab;
+  const course = prev.get('course');
+  if (tab === 'lessons' && course) out.course = course;
   const scope = prev.get('scope');
   if (scope === 'MINE') out.scope = scope;
   return out;
@@ -80,7 +82,7 @@ export function useChartParam({ enabled = true }: { enabled?: boolean } = {}) {
     setFetched(null);
     setAttempt((n) => n + 1);
   }, []);
-  /** 곡 선택 단계로: 쿼리를 지운다. 곡 선택 탭(`tab`, 입문 코스)은 남겨 같은 탭으로 돌아간다 */
+  /** 곡 선택 단계로: 쿼리를 지운다. 곡 선택 범위(`tab`, 학습 코스와 고른 코스)는 남겨 같은 자리로 돌아간다 */
   const clear = useCallback(() => {
     setFetched(null);
     setParams((prev) => keptTab(prev), { replace: true });
