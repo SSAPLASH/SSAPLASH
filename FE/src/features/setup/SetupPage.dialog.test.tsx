@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useSettings } from '@/store/settingsStore';
 import { useLive } from '@/store/liveStore';
 import { usePresets } from '@/store/presetStore';
-import { SYSTEM_PRESET_ID } from '@/domain/preset';
+import { SYSTEM_PRESET_ID } from '@/domain/kit/preset';
 import { CAPTURE_ORDER } from '@/engine/HitCapture';
 import { SetupPage } from './SetupPage';
 

@@ -1,15 +1,15 @@
 // 랜딩 전체 화면(표시 전용). 라우트·로그인 팝업은 이 컴포넌트를 쓰는 쪽(pages/LandingPage)이 맡는다.
 import { useCallback, useEffect, useRef } from 'react';
 import './landing.css';
-import { ChartScene } from './ChartScene';
+import { ChartScene } from './scene/ChartScene';
 import { CtaSection } from './CtaSection';
-import { HeroScene } from './HeroScene';
+import { HeroScene } from './scene/HeroScene';
 import { LandingNav } from './LandingNav';
 import { LANDING_MODES, type LandingModeKey } from './landingContent';
-import { ModesScene } from './ModesScene';
+import { ModesScene } from './scene/ModesScene';
 import { ResultSection } from './ResultSection';
-import { StatementScene } from './StatementScene';
-import { StickScene } from './StickScene';
+import { StatementScene } from './scene/StatementScene';
+import { StickScene } from './scene/StickScene';
 
 export interface LandingViewProps {
   /** 헤더 로그인, CTA "로그인하고 시작하기" */

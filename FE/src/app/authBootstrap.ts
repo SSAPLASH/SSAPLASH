@@ -1,5 +1,5 @@
 // 로그인 상태 접착 (설계 4-A). main.tsx에서 bootstrapInput 뒤 한 번 부른다.
-import { subscribeSession } from '@/api/auth';
+import { subscribeSession } from '@/api/account/auth';
 import { bindSignupIncomplete } from './signupGate';
 import { clearPlayLogs, setPlayLogOwner } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';

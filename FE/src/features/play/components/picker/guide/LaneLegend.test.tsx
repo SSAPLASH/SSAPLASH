@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { HIGHWAY_LANES } from '@/features/play/domain/highwayLanes';
-import { PAD_META } from '@/domain/pads';
+import { PAD_META } from '@/domain/kit/pads';
 import { LaneLegend, type LaneLegendProps } from './LaneLegend';
 
 const render = (p: LaneLegendProps = {}) => renderToStaticMarkup(<LaneLegend {...p} />);

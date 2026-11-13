@@ -1,5 +1,5 @@
 // 센서 → 브라우저 이벤트. 공통 명세서 9-1 타격 이벤트 필드명을 그대로 쓴다.
-import type { PadId } from './pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 0 = 왼손, 1 = 오른손 */
 export type StickId = 0 | 1;

@@ -1,5 +1,5 @@
 // 패드 헤드 중심·반지름(킷 좌표). 옛 HitEffects의 geoOf를 옮겼다.
-import { kitBoxFor, type DrumKitPad, type KitSkin, type KitView } from '@/domain/drumKit';
+import { kitBoxFor, type DrumKitPad, type KitSkin, type KitView } from '@/domain/kit/drumKit';
 import type { FxGeo } from './types';
 
 /** view는 실물 스킨의 그림 종류(바닥선 높이가 달라진다). 전자·네온은 무시 */

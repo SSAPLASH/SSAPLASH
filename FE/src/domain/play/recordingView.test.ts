@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultRecordingTitle, type RecordingHit, type RecordingMode } from '../recording';
+import { defaultRecordingTitle, type RecordingHit, type RecordingMode } from './recording';
 import {
   formatElapsed,
   formatHitCount,

@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DrumKit } from './DrumKit';
-import { DRUM_KIT_PADS, kitBoxFor, padCenter, placePad } from '@/domain/drumKit';
+import { DRUM_KIT_PADS, kitBoxFor, padCenter, placePad } from '@/domain/kit/drumKit';
 
 const count = (html: string, re: RegExp) => (html.match(re) ?? []).length;
 

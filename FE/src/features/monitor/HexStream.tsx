@@ -1,7 +1,7 @@
 // 원시 탭: 최근 300건 hex 스트림(타입·방향 필터) + LOG 콘솔.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandType } from '@/input/stickProtocol';
-import type { LogRow } from '@/features/monitor/core/packetLog';
+import type { LogRow } from '@/features/monitor/core/recording/packetLog';
 import { hexSpaced } from './hitFields';
 import { fmt, type Snap } from './monitorTypes';
 

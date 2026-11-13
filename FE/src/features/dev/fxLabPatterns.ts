@@ -1,7 +1,7 @@
 // FX 랩 자동 연주 패턴 — 순수 함수. 시각(ms) 구간 → 그 구간에 칠 패드·세기 목록.
-import { DRUM_KIT_FLAT_PADS } from '@/domain/drumKit';
-import type { PadId } from '@/domain/pads';
-import type { Judgement } from '@/domain/judgement';
+import { DRUM_KIT_FLAT_PADS } from '@/domain/kit/drumKit';
+import type { PadId } from '@/domain/kit/pads';
+import type { Judgement } from '@/domain/play/judgement';
 import { rand01 } from '@/domain/hitFx/rand';
 
 export type LabPatternId = 'off' | 'beat8' | 'fill16' | 'crash' | 'stress';

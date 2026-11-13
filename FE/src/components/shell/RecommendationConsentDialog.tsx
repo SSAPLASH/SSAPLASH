@@ -2,9 +2,9 @@
 // 상태를 갖지 않는다 — 열림·진행은 호출자(AppShell)가 정하고 서버 저장은 store가 한다. 본문은 가입 카드 항목과 같은 문구를 요약해 보인다.
 // 기본은 미동의(D9): 초기 초점은 [괜찮아요]에 두고, Esc·배경 클릭도 미동의 응답이다. 저장 중에는 닫지 않는다.
 import { useRef } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { SIGNUP_TERMS } from '@/domain/signupTerms';
+import { Button } from '@/components/ui/action/Button';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { SIGNUP_TERMS } from '@/domain/account/signupTerms';
 
 interface Props {
   /** 저장(PUT) 진행 중. 버튼·Esc·배경을 잠근다 */

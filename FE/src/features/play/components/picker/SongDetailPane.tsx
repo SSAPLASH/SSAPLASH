@@ -4,17 +4,17 @@
 // 스틱 연결 문구는 두지 않는다 — 상단 바 스틱 상태로 충분하다(Figma 11/03).
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
 import { useEffect, useRef } from 'react';
-import type { Difficulty } from '@/domain/chart';
-import type { RecommendCard } from '@/domain/account/recommendation';
-import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/songCatalog';
+import type { Difficulty } from '@/domain/song/chart';
+import type { RecommendCard } from '@/domain/song/recommendation';
+import { artistLabel, LEVEL_LABEL, SONG_LEVEL_LABEL, type SongSummary } from '@/domain/song/songCatalog';
 import { formatAccuracy } from '@/engine/playLog';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import { PlayIcon } from '@/components/song/StudioIcons';
-import { Segmented } from '@/components/ui/Segmented';
+import { Segmented } from '@/components/ui/form/Segmented';
 import { SongCover } from '@/components/song/SongCover';
-import { SongMeta } from '@/components/song/SongMeta';
+import { SongMeta } from '@/features/play/components/picker/SongMeta';
 import './song-detail.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 /** 바로 플레이 카드(악보 연습·리듬 게임). 단계는 쉬움 → 어려움 순 */
 export interface QuickStartProps {

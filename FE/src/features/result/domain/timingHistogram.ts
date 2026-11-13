@@ -1,5 +1,5 @@
 // 결과 화면 타이밍 분포 계산. Δms(−goodMs~+goodMs)를 bins칸으로 나누고 평균 Δ·빠름/늦음 평균을 함께 낸다.
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
 export interface TimingHistogram {
   counts: number[];

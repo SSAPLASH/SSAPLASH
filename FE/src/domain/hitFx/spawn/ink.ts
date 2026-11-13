@@ -1,6 +1,6 @@
 // ink 테마 — 드럼: 먹물 튐 덩어리가 번지며 사라짐, 심벌: 가는 먹선 튐, 킥: 큰 먹 자국. 일반 합성.
 // 어두운 배경에서 보이도록 남색-흰 계열의 밝은 잉크색을 쓴다. 수명 상한은 600ms(D10 예외).
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { particle } from './util';
 

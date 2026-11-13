@@ -1,11 +1,11 @@
 // 공용 곡 추가 창 (Jira 262). MIDI·제목·아티스트·출처·라이선스·첫 박 시각(선택)·공개·반주(선택). 검사는 domain, 호출은 onSubmit을 받은 쪽이 한다.
 // saving(등록·반주 업로드 중)이면 닫기·Esc·배경 클릭을 막는다.
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Dialog } from '@/components/ui/Dialog';
-import { IconButton } from '@/components/ui/IconButton';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/action/Button';
+import { Checkbox } from '@/components/ui/form/Checkbox';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { IconButton } from '@/components/ui/action/IconButton';
+import { Input } from '@/components/ui/form/Input';
 import {
   ADMIN_DRAFT_TEXT,
   ADMIN_LICENSE_EXAMPLE,

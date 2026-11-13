@@ -2,7 +2,7 @@
 // 라이브러리 재생바(SongPlayBar)와 자유 연습 반주 바가 같이 쓴다. 위치 계산·재생기는 모른다 — 누름은 콜백으로만 알린다.
 // 모션(누름 0.88배 · 10초 화살표 회전 · 글리프 pop)은 song.css의 .playback-*에만 둔다. 움직임 줄이기면 회전·pop을 끈다.
 import { useState } from 'react';
-import { IconButton } from '@/components/ui/IconButton';
+import { IconButton } from '@/components/ui/action/IconButton';
 import { SKIP_MS } from '@/domain/song/freeAccompaniment';
 import { Back10Icon, Forward10Icon, PauseGlyph, PlayGlyph } from './PlaybackIcons';
 import './song.css';

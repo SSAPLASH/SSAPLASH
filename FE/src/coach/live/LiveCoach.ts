@@ -3,7 +3,7 @@
 // DOM·저장소·시계를 쓰지 않는다. 시각은 입력(곡 시각 ms)으로 받는다.
 // 코칭 계산이 플레이를 막으면 안 되므로 push는 예외를 던지지 않는다.
 import type { Pose } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { missCauses, pickCauseByRule, type CauseCandidate } from './cause';
 import type { CauseModel } from './models/remoteCause';
 import { type CoachBasis, type CoachStage, coachStage, coachThresholds, LIVE_COACH_CONFIG, type LiveThresholds } from './config';

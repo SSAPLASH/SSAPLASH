@@ -119,7 +119,8 @@ export interface SheetArt {
   beams: LineShape[];
 }
 
-export const SHEET_RED = '#ff3b30';
+// 놓친 음표: 밤거리 네온 간판 같은 빨강. 번지는 빛은 ResultSection의 SVG 필터가 준다
+export const SHEET_RED = '#ff2a55';
 const SHEET_INK = '#1d1d1f';
 
 export function sheetArt(): SheetArt {
@@ -132,10 +133,11 @@ export function sheetArt(): SheetArt {
     x: x0 + mw * 2,
     y: top - 26,
     width: mw,
-    height: gap * 4 + 52,
+    // 강조 상자는 악보 아래 '3마디' 글자까지 감싼다. 글자가 하이햇과 겹치지 않게 빔(top + 64) 아래에 둔다
+    height: gap * 4 + 80,
     rx: 12,
     labelX: x0 + mw * 2.5,
-    labelY: top - 6,
+    labelY: top + gap * 4 + 40,
   };
   const staffLines: LineShape[] = [];
   for (let i = 0; i < 5; i++) {

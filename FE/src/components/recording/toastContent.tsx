@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { RecordingNotice } from '@/runtime/recordingStore';
-import type { ToastVariant } from '@/components/ui/Toast';
+import type { ToastVariant } from '@/components/ui/feedback/Toast';
 
 /** 알림 → 토스트 문구·색. SSR 테스트용으로 순수 함수로 둔다 */
 export function toastContent(notice: RecordingNotice): { variant: ToastVariant; text: ReactNode } {

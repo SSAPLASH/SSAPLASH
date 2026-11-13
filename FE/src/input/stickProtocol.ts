@@ -2,7 +2,7 @@
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
 // 현재 구현 기준: v0.8.1(2026-11-03) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전)·PEDAL(0x08)·role 2·3(페달) 반영
 import type { FootId, StickEvent, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export const STICK_SERVICE_UUID = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
 /** 스틱 → 브라우저. Notify. 모든 패킷이 이 특성 하나로 온다 (첫 바이트 = 타입) */
@@ -501,7 +501,10 @@ export function encodeSetYawOffset(deg: number): Uint8Array<ArrayBuffer> {
   return buf;
 }
 
-/** GET_PARAMS: [0x17]. 응답은 PARAM_ACK 14개 + 끝 표시(PARAM_ACK_END) */
+/**
+ * GET_PARAMS: [0x17]. 응답은 파라미터마다 PARAM_ACK 하나(스틱 FW 기준 15개) + 끝 표시(PARAM_ACK_END, value = 파라미터 개수).
+ * 스틱 FW 1.12부터 끝 표시 앞에 PARAM_ACK_YAW_OFFSET(0x21, 현재 방위각 오프셋 ×100)이 하나 더 온다. 이 응답은 개수에 들어가지 않는다
+ */
 export function encodeGetParams(): Uint8Array<ArrayBuffer> {
   return new Uint8Array([CommandType.GET_PARAMS]);
 }

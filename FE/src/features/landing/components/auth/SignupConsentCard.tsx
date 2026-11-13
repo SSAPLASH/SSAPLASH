@@ -1,9 +1,9 @@
 // Figma Auth / SignupConsentCard 440:19890 — 가입 동의 카드. 동의 상태(어느 항목을 켰는지)는 여기서 들고, 제출 뒤 동작은 onSubmit으로 넘긴다.
 // 「필수 항목에 모두 동의합니다」는 별도 상태가 아니라 필수 항목이 전부 켜졌는지의 파생값이고, 선택 항목은 켜지도 끄지도 않는다(설계 COACH-003 D7, COACH-004 D2).
 import { useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Checkbox } from '@/components/ui/Checkbox';
+import { Button } from '@/components/ui/action/Button';
+import { Card } from '@/components/ui/layout/Card';
+import { Checkbox } from '@/components/ui/form/Checkbox';
 import {
   SIGNUP_INTRO,
   SIGNUP_TERMS,
@@ -16,7 +16,7 @@ import {
   type ConsentVersions,
   type SignupTerm,
   type SignupTermId,
-} from '@/domain/signupTerms';
+} from '@/domain/account/signupTerms';
 import { TermsItem } from './TermsItem';
 import './auth.css';
 

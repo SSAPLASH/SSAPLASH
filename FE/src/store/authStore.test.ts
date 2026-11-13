@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetAuthStoreForTest, useAuth } from './authStore';
-import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from '@/api/auth';
-import { RETURN_TO_KEY, type UserMe } from '@/domain/auth';
-import { currentConsentVersions, termVersion } from '@/domain/signupTerms';
+import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from '@/api/account/auth';
+import { RETURN_TO_KEY, type UserMe } from '@/domain/account/auth';
+import { currentConsentVersions, termVersion } from '@/domain/account/signupTerms';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response;
 

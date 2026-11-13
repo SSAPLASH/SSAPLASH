@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from '@/store/settingsStore';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
-import type { OptionSpec } from '@/input/SourceDescriptor';
+import type { OptionSpec } from '@/input/source/SourceDescriptor';
 import type { OptionValue, SensorId } from '@/domain/events';
 
 const keyName = (code: string) => code.replace('Key', '').replace('Digit', '');

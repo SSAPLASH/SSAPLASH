@@ -1,7 +1,7 @@
 // Pad 배지 마크업 테스트: 문자열 배지 호환, PadBadge level(now·next·later), 격자 밖 점
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { PadBadge } from '@/domain/drumKit';
+import type { PadBadge } from '@/domain/kit/drumKit';
 import { KIT_ART_PERSP, kitArtPad } from '@/domain/kit/kitArt';
 import { DrumKit, type DrumKitProps } from './DrumKit';
 import { Pad, PadDefs } from './Pad';

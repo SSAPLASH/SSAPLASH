@@ -1,5 +1,5 @@
 // 코칭·피드백 임계값 기준 방식(MODE-001 설계 D2·D6). 실시간 코칭(coach/live)과 결과 피드백(domain/feedback)이 같이 쓴다.
-import { COACH_REF_GOOD_MS } from '../judgement';
+import { COACH_REF_GOOD_MS } from './judgement';
 
 /**
  * 코칭 임계값에 곱하는 폭을 고르는 방식.

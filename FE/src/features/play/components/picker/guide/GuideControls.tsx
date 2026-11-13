@@ -1,7 +1,7 @@
 // 곡 선택 안내 조작·문구 (Figma 112:696 「악보 연습 안내」 무대). 단계 칩 ①② · ◀ 일시정지/재생 ▶ 한 줄(GuideControls)과
 // 장면 아래 「지금 칠 것」 줄(GuideNowLine). props만 받는다 — 시계·장면 상태는 PickerGuide가 쥔다.
 import { Fragment } from 'react';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { EXAMPLE_STEPS, type GuideState } from '@/features/play/domain/guideScript';
 
 export interface GuideControlsProps {

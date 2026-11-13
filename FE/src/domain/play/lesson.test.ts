@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { JUDGEMENT_SCORE } from '@/domain/judgement';
+import { JUDGEMENT_SCORE } from './judgement';
 import {
+  COURSES,
   LESSONS_PATH,
+  courseFinishText,
+  courseOfQuery,
+  coursePath,
+  courseProgress,
+  courseQuery,
+  defaultCourse,
   isBeginnerChart,
   lessonsFromDto,
+  lessonsOfCourse,
   lessonOfChart,
   lessonPath,
   nextLesson,
@@ -86,10 +94,69 @@ describe('nextLesson · lessonOfChart · lessonPath', () => {
     expect(lessonOfChart(ls, null)).toBeUndefined();
   });
 
-  it('연주 레슨은 탭을 유지한 악보 연습, 알아보기 레슨은 알아보기 화면으로 간다', () => {
-    expect(lessonPath(ls[1])).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
+  it('연주 레슨은 탭·코스를 유지한 악보 연습, 알아보기 레슨은 알아보기 화면으로 간다', () => {
+    expect(lessonPath(ls[1])).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
+    expect(lessonPath({ ...ls[1], course: 'INTERMEDIATE' })).toBe('/sheet?tab=lessons&course=intermediate&song=102&chart=202&start=1');
     expect(lessonPath(ls[0])).toBe('/sheet/lesson/101');
     expect(LESSONS_PATH).toBe('/sheet?tab=lessons');
+  });
+});
+
+// 학습 코스 설계 3-4절
+describe('학습 코스(입문·중급)', () => {
+  const both = () =>
+    list([
+      item(1, { kind: 'READ', passed: true, locked: false }),
+      item(2, { locked: false }),
+      item(1, { course: 'INTERMEDIATE', songId: 301, chartId: 401 }),
+      item(2, { course: 'INTERMEDIATE', songId: 302, chartId: 402 }),
+    ]);
+
+  it('응답의 course를 읽고, 없거나 모르는 값은 입문으로 본다. 정렬은 코스 → 코스 안 순서', () => {
+    const r = lessonsFromDto({
+      passAccuracy: 70,
+      items: [item(1, { course: 'INTERMEDIATE', songId: 301 }), item(2), item(1, { course: 'ADVANCED' })],
+    });
+    expect(r.items.map((l) => `${l.course}:${l.order}`)).toEqual(['BEGINNER:1', 'BEGINNER:2', 'INTERMEDIATE:1']);
+  });
+
+  it('코스 목록은 입문 → 중급 순서이고 주소 값과 서로 바뀐다', () => {
+    expect(COURSES.map((c) => c.name)).toEqual(['입문 코스', '중급 코스']);
+    expect(courseQuery('INTERMEDIATE')).toBe('intermediate');
+    expect(courseOfQuery('intermediate')).toBe('INTERMEDIATE');
+    expect(courseOfQuery('beginner')).toBe('BEGINNER');
+    expect(courseOfQuery('INTERMEDIATE')).toBeNull();
+    expect(courseOfQuery(null)).toBeNull();
+    expect(coursePath('INTERMEDIATE')).toBe('/sheet?tab=lessons&course=intermediate');
+  });
+
+  it('코스별로 나누고 진도(전체·통과·잠김)를 센다. 앞 코스가 남았으면 뒤 코스는 잠김', () => {
+    const ls = both();
+    const states = stageStates(ls, new Set());
+    expect(lessonsOfCourse(ls, 'INTERMEDIATE').map((l) => l.songId)).toEqual([301, 302]);
+    expect(courseProgress(ls, states)).toEqual([
+      { course: 'BEGINNER', total: 2, passed: 1, locked: false },
+      { course: 'INTERMEDIATE', total: 2, passed: 0, locked: true },
+    ]);
+    // 레슨이 없는 코스는 빠진다(중급이 등록되기 전 서버)
+    const old = list([item(1), item(2)]);
+    expect(courseProgress(old, stageStates(old, new Set())).map((p) => p.course)).toEqual(['BEGINNER']);
+  });
+
+  it('기본 코스는 도전할 레슨이 있는 코스, 다 통과했으면 마지막 코스', () => {
+    const ls = both();
+    expect(defaultCourse(ls, stageStates(ls, new Set()))).toBe('BEGINNER');
+    expect(defaultCourse(ls, stageStates(ls, new Set([102])))).toBe('INTERMEDIATE');
+    expect(defaultCourse(ls, stageStates(ls, new Set([102, 301, 302])))).toBe('INTERMEDIATE');
+    expect(defaultCourse([], [])).toBe('BEGINNER');
+  });
+
+  it('다음 레슨은 코스 경계를 넘고, 마친 뒤 안내 문구는 같은 코스·다음 코스·끝을 가른다', () => {
+    const ls = both();
+    expect(nextLesson(ls, 102)?.songId).toBe(301);
+    expect(courseFinishText(ls[0], ls[1])).toBe('다음 스테이지가 열렸어요.');
+    expect(courseFinishText(ls[1], ls[2])).toBe('입문 코스를 모두 마쳤어요. 중급 코스가 열렸어요.');
+    expect(courseFinishText(ls[3], null)).toBe('중급 코스를 모두 마쳤어요.');
   });
 });
 
@@ -180,9 +247,10 @@ describe('readDeviceHint (검증 추가 발견 2)', () => {
 });
 
 describe('lessonDisplayTitle', () => {
-  it('코스 안에서는 「입문 · 」 머리말을 뺀다', async () => {
+  it('코스 안에서는 「입문 · 」「중급 · 」 머리말을 뺀다', async () => {
     const { lessonDisplayTitle } = await import('./lesson');
     expect(lessonDisplayTitle('입문 · 킥으로 박자 세기')).toBe('킥으로 박자 세기');
+    expect(lessonDisplayTitle('중급 · 탐 필인')).toBe('탐 필인');
     expect(lessonDisplayTitle('기본 8비트')).toBe('기본 8비트');
   });
 });

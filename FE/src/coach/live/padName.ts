@@ -1,6 +1,6 @@
 // 코칭 문구에 쓰는 패드 이름과 안내. 이름은 PAD_META.label 하나만 쓴다(드럼 키트 그림·결과 화면과 같다).
-import { KEY_MAP } from '@/domain/keyMap';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { KEY_MAP } from '@/domain/kit/keyMap';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 
 /** 위치를 말로 구분할 수 있는 패드만 적는다 */
 const POSITION: Partial<Record<PadId, string>> = { SMALL_TOM: '왼쪽 탐', MID_TOM: '오른쪽 탐' };

@@ -2,7 +2,7 @@
 // 막대(칸)를 누르거나 구간 버튼을 누르면 페이지에 알린다. 선택 상태는 페이지가 든다.
 // 칸에 마우스를 올리거나 초점을 주면 그 5초의 시각과 판정 수가 뜬다.
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import type { WeakSegment } from '@/domain/report';
+import type { WeakSegment } from '@/domain/play/report';
 import { binTotal, clockSecond, clockTenth, FLOW_BIN_MS, JUDGEMENT_LABEL, metricNumber, type FlowBin, type Focus } from '@/features/result/domain/reportView';
 import './report.css';
 

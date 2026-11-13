@@ -1,5 +1,5 @@
 // 총평 카드 — Figma Feedback / CoachSummaryCard 605:31287. summary가 없으면 그리지 않는다.
-import { summaryBadge, type CoachSummary } from '@/domain/report';
+import { summaryBadge, type CoachSummary } from '@/domain/play/report';
 
 export function CoachSummaryCard({ summary }: { summary: CoachSummary | null }) {
   if (!summary) return null;

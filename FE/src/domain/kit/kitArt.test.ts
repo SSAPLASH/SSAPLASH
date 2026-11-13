@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_PADS, type PadId } from '../pads';
+import { ALL_PADS, type PadId } from './pads';
 import { KIT_ART_PERSP, KIT_ART_TOP, kitArtPad, type KitArtPad } from './kitArt';
 
 const art = KIT_ART_PERSP;

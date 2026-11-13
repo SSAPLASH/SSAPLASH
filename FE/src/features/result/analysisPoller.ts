@@ -1,6 +1,6 @@
 // PENDING 리포트 재조회 타이머 (COACH-003 4-1). React에 의존하지 않아 fake timers로 검증한다.
 // interval마다 refresh를 호출해 결과를 알리고, PENDING이 아니면 즉시 멈춘다. max회 뒤에도 PENDING이면 onExhausted.
-import type { Report } from '@/domain/report';
+import type { Report } from '@/domain/play/report';
 
 export interface AnalysisPollerOptions {
   intervalMs: number;

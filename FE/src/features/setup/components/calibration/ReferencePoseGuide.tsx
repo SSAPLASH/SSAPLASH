@@ -2,7 +2,7 @@
 // 대기에서는 두 손이 모이고 스틱 끝이 맞닿는 동작(∧)을 되풀이한다. 그림은 안내용 고정 동작이고 실제 센서 값과 무관하다.
 // 프레임마다 SVG 속성만 고치고 React 상태는 바꾸지 않는다. 3초 판정·버튼·진행 막대는 SetupPage가 맡는다.
 import { useEffect, useRef, useState } from 'react';
-import { REFERENCE_POSE_STEPS, REFERENCE_POSE_TITLE } from '@/domain/kit/setupSteps';
+import { REFERENCE_POSE_STEPS, REFERENCE_POSE_TITLE } from '@/domain/kit/calibration/setupSteps';
 import { POSE_CENTER_X, POSE_HAND_Y, POSE_STICK_LEN, idleProgress, poseAt, shakyJitter, type ReferencePose } from './referencePose';
 import '@/components/calibration/calibration.css';
 

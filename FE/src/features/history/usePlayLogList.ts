@@ -4,9 +4,9 @@
 // 조회 로직의 순수 부분(buildPlayParams·appendPlayPage)은 따로 export해 테스트한다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import type { ListPlaysParams, PlaySummary } from '@/api/plays';
-import { PLAY_PAGE_SIZE, playPageQuery } from '@/api/queries/plays';
-import type { PageResponse } from '@/api/recordings';
+import type { ListPlaysParams, PlaySummary } from '@/api/play/plays';
+import { PLAY_PAGE_SIZE, playPageQuery } from '@/api/play/playQueries';
+import type { PageResponse } from '@/api/play/recordings';
 import { periodRange, type HistoryFilter, type HistoryPeriod, type PlayLogSort } from '@/domain/play/playLogView';
 import { queryClient } from '@/runtime/queryClient';
 import { listErrorMessage, SEARCH_DEBOUNCE_MS } from './useRecordingList';

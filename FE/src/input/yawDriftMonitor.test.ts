@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalibrationProfile, PadAnchor, YawDriftStatus } from '@/domain/calibration';
+import type { CalibrationProfile, PadAnchor, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import type { InputSourceKind, ResolvedHit, SourceState, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
-import { BaseInputSource } from './InputSource';
+import type { PadId } from '@/domain/kit/pads';
+import { BaseInputSource } from './source/InputSource';
 import { packetTap } from './packetTap';
 import { yawDriftMonitor, type YawCorrection } from './yawDriftMonitor';
 
@@ -369,6 +369,72 @@ describe('yawDriftMonitor 소스 상태 변화와 적용값 기억 (PLAY-004)', 
     const next = connected();
     yawDriftMonitor.correct(0, 5);
     expect(sentDeg(next.sent[0].bytes)).toBeCloseTo(-5);
+  });
+});
+
+describe('yawDriftMonitor onLinked: 현재 오프셋 읽기 (PLAY-004)', () => {
+  it('GET_PARAMS([0x17])를 그 손에만 보내고 상태를 보고한다. SET_YAW_OFFSET은 보내지 않는다', () => {
+    const src = connected();
+    yawDriftMonitor.onLinked(1);
+    expect(src.sent).toHaveLength(1);
+    expect(Array.from(src.sent[0].bytes)).toEqual([0x17]);
+    expect(src.sent[0].stickId).toBe(1);
+    expect(last[1]).toMatchObject({ appliedDeg: 0, samples: 0, lastSentAt: null, acked: null });
+    expect(last[0]).toBeNull();
+  });
+
+  it('창 없이 온 0x21(스틱 FW 1.12의 GET_PARAMS 응답)이 그 손 적용값이 되고, 다음 재정렬은 그 값 기준이다', () => {
+    const src = connected();
+    yawDriftMonitor.onLinked(1);
+    ack(-7760, null, 1);
+    expect(last[1]).toMatchObject({ appliedDeg: -77.6, acked: null, lastSentAt: null });
+    expect(last[0]).toBeNull();
+    yawDriftMonitor.correct(1, 5);
+    expect(sentDeg(src.sent[src.sent.length - 1].bytes)).toBeCloseTo(-82.6);
+  });
+
+  it('읽어 온 응답은 쿨다운을 시작하지 않는다(바로 드리프트 보정이 나갈 수 있다)', () => {
+    const src = connected();
+    yawDriftMonitor.onLinked(0);
+    ack(-5800, null, 0);
+    feed(NINE_PLUS6);
+    const sent = src.sent[src.sent.length - 1];
+    expect(sentDeg(sent.bytes)).toBeCloseTo(-64);
+  });
+
+  it('0x21이 오지 않으면(FW 1.11 이하) 적용값은 그대로 0이다', () => {
+    const src = connected();
+    yawDriftMonitor.onLinked(0);
+    vi.advanceTimersByTime(2000);
+    expect(last[0]).toMatchObject({ appliedDeg: 0, acked: null });
+    yawDriftMonitor.correct(0, 5);
+    expect(sentDeg(src.sent[src.sent.length - 1].bytes)).toBeCloseTo(-5);
+  });
+
+  it('onLinked를 부르지 않은 손(상태 없음)은 창 없이 온 0x21을 건너뛴다', () => {
+    connected();
+    ack(-7760, null, 1);
+    expect(last[1]).toBeNull();
+  });
+
+  it('포트를 다시 연 뒤에는 남아 있던 적용값을 보고하고, 응답이 오면 스틱 값으로 맞춘다', () => {
+    const src = connected();
+    yawDriftMonitor.correct(0, 58);
+    ack(-5800, null, 0);
+    src.set('connecting');
+    src.set('connected');
+    yawDriftMonitor.onLinked(0);
+    expect(last[0]).toMatchObject({ appliedDeg: -58 });
+    ack(-6000, null, 0);
+    expect(last[0]).toMatchObject({ appliedDeg: -60 });
+  });
+
+  it('보낼 수 없는 소스에서는 무동작', () => {
+    const src = new NoCmdSource();
+    yawDriftMonitor.setSource(src);
+    src.set('connected');
+    yawDriftMonitor.onLinked(0);
+    expect(last[0]).toBeNull();
   });
 });
 

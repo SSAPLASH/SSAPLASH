@@ -5,9 +5,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { linkSheetToSong, listSheets } from '@/features/studio/api/sheets';
-import { listAllSongs, uploadMidi } from '@/api/songs';
+import { listAllSongs, uploadMidi } from '@/api/song/songs';
 import { SheetError, type SheetSummary } from '@/features/studio/domain/sheetMusic';
-import type { SongDetail } from '@/domain/songCatalog';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import { useChartJob } from '@/store/chartJobStore';
 import { useMidiUpload } from '@/features/studio/store/midiUploadStore';
 import { useSheetLink } from '@/features/studio/store/sheetLinkStore';
@@ -17,7 +17,7 @@ import { StudioPage } from './StudioPage';
 
 vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_RELINK_ENABLED: true }));
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn(), uploadMidi: vi.fn(), uploadMusicXml: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn(), uploadMidi: vi.fn(), uploadMusicXml: vi.fn() }));
 
 const sheet: SheetSummary = {
   id: 10,

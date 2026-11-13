@@ -1,4 +1,4 @@
-import type { BestRecordDto } from '@/api/plays';
+import type { BestRecordDto } from '@/api/play/plays';
 
 export type BestRecordMode = 'RHYTHM' | 'SHEET';
 

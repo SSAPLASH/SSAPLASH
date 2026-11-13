@@ -16,7 +16,7 @@ import {
   searchPlayLogs,
   unsavedLogs,
 } from './playLogView';
-import type { PlayUploadState } from '@/domain/playLog';
+import type { PlayUploadState } from './playLog';
 
 describe('formatPlayDate', () => {
   it('YYYY.MM.DD HH:mm 형식(로컬 시간, 0 채움)', () => {

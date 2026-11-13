@@ -1,6 +1,6 @@
 // 테스트 전용 배치 고정값. 넓게/좁게 배치 프리셋은 제품에서 없어졌으므로(PLAY-004 U9) "기본과 다른 배치"가 필요한 테스트만 쓴다.
-import { DEFAULT_KIT_LAYOUT, type KitLayout } from '@/domain/kitLayout';
-import type { PadId } from '@/domain/pads';
+import { DEFAULT_KIT_LAYOUT, type KitLayout } from '@/domain/kit/kitLayout';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 화면 정중앙 기준으로 패드 위치만 배율 조정. 위치는 0.08~0.92로 자른다 */
 export function scaleLayout(base: KitLayout, factor: number): KitLayout {

@@ -1,7 +1,7 @@
 // 놓침 원인 후보를 규칙으로 계산한다(설계 3.1). 문구는 정하지 않는다(copy).
 // 판정은 노트 순서와 다르게 들어오므로(MISS는 판정 폭이 지난 뒤 온다) 창 안 기록을 노트 시각 순으로 정렬해서 본다.
 // 상태를 갖지 않는 순수 함수다.
-import { STICK_PADS, type PadId } from '@/domain/pads';
+import { STICK_PADS, type PadId } from '@/domain/kit/pads';
 import { LIVE_COACH_CONFIG, type CoachStage } from './config';
 import type { JudgedNote, StrayHit } from './window';
 

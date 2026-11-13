@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
 import { useSheetLink } from './sheetLinkStore';
 

@@ -5,24 +5,24 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
-import { getBestRecords } from '@/api/plays';
-import { listSongs } from '@/api/songs';
+import { getBestRecords } from '@/api/play/plays';
+import { listSongs } from '@/api/song/songs';
 import { resetRecordingForTest, toggleArm, useRecordingStore } from '@/runtime/recordingStore';
 import { useLive } from '@/store/liveStore';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
 import { loadPlayLogs } from '@/engine/playLog';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { PlayPage } from './PlayPage';
 
 // PlayClock 생성 인자를 잡는다(clickOn 확인용)
 const clock = vi.hoisted(() => ({ deps: null as { clickOn(): boolean } | null, session: null as { windows: { perfectMs: number; goodMs: number } } | null }));
-vi.mock('@/engine/sessionClock', async (orig) => {
-  const m = await orig<typeof import('@/engine/sessionClock')>();
+vi.mock('./sessionClock', async (orig) => {
+  const m = await orig<typeof import('./sessionClock')>();
   class PlayClock extends m.PlayClock {
     constructor(session: ConstructorParameters<typeof m.PlayClock>[0], deps: ConstructorParameters<typeof m.PlayClock>[1]) {
       super(session, deps);
@@ -32,10 +32,10 @@ vi.mock('@/engine/sessionClock', async (orig) => {
   }
   return { ...m, PlayClock };
 });
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
 vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));
@@ -46,7 +46,7 @@ vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 vi.mock('@/features/play/components/picker/guide/PickerGuide', () => ({ PickerGuide: () => null }));
 // 하이웨이는 그리지 않고 프레임 콜백만 잡아 둔다 — 테스트가 곡 끝을 흉내 낸다
 const frame: { current: ((now: number) => void) | null } = { current: null };
-vi.mock('@/features/play/components/stage/NoteHighway', () => ({
+vi.mock('@/features/play/components/stage/highway/NoteHighway', () => ({
   NoteHighway: ({ onFrame }: { onFrame?: (now: number) => void }) => {
     frame.current = onFrame ?? null;
     return null;

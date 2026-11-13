@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { createQueryClient } from '@/runtime/queryClient';
 import { bindQueryCacheToAuth } from './queryAuthBinding';

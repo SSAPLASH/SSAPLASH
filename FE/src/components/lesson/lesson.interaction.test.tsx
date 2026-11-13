@@ -2,14 +2,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchLessons } from '@/api/lessons';
-import { fetchRecommendations } from '@/api/recommendations';
-import { fetchSimilarSongs } from '@/api/similarSongs';
-import { listSongs } from '@/api/songs';
-import { getBestRecords } from '@/api/plays';
-import type { UserMe } from '@/domain/auth';
+import { fetchLessons } from '@/api/play/lessons';
+import { fetchRecommendations } from '@/api/song/recommendations';
+import { fetchSimilarSongs } from '@/api/song/similarSongs';
+import { listSongs } from '@/api/song/songs';
+import { getBestRecords } from '@/api/play/plays';
+import type { UserMe } from '@/domain/account/auth';
 import type { Lesson, LessonList } from '@/domain/play/lesson';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { useRecommendations } from '@/store/recommendationStore';
@@ -17,20 +17,20 @@ import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/runtime/queryClient';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
-import { LessonCourse } from './LessonCourse';
+import { LessonCourse } from '@/features/play/components/picker/lesson/LessonCourse';
 import { LessonInvite } from './LessonInvite';
-import { LessonResultBand } from './LessonResultBand';
+import { LessonResultBand } from '@/features/result/components/LessonResultBand';
 
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
-vi.mock('@/api/songs', () => {
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
+vi.mock('@/api/song/songs', () => {
   const listSongs = vi.fn();
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
 // useChartParam이 주소의 채보를 읽으려 하므로 네트워크로 나가지 않게 막는다
-vi.mock('@/api/charts', () => ({ getChartLatest: vi.fn(() => Promise.reject(new Error('test'))), getChartAssets: vi.fn(() => Promise.reject(new Error('test'))) }));
+vi.mock('@/api/song/charts', () => ({ getChartLatest: vi.fn(() => Promise.reject(new Error('test'))), getChartAssets: vi.fn(() => Promise.reject(new Error('test'))) }));
 // 연주 데이터가 필요 없는 그림이라 실제 드럼 킷 대신 밝힌 패드만 적는다
 vi.mock('@/components/drum/DrumKit', () => ({
   DrumKit: ({ states }: { states?: Record<string, string> }) => <div data-testid="kit">{Object.keys(states ?? {}).join(',')}</div>,
@@ -38,6 +38,7 @@ vi.mock('@/components/drum/DrumKit', () => ({
 
 const lesson = (order: number, over: Partial<Lesson> = {}): Lesson => ({
   order,
+  course: 'BEGINNER',
   kind: 'PLAY',
   songId: 100 + order,
   chartId: 200 + order,
@@ -54,6 +55,9 @@ const lesson = (order: number, over: Partial<Lesson> = {}): Lesson => ({
   ...over,
 });
 const course = (items: Lesson[]): LessonList => ({ passAccuracy: 70, items });
+/** 중급 레슨(곡 300번대·채보 400번대). 1번은 알아보기 */
+const mid = (order: number, over: Partial<Lesson> = {}): Lesson =>
+  lesson(order, { course: 'INTERMEDIATE', kind: order === 1 ? 'READ' : 'PLAY', songId: 300 + order, chartId: 400 + order, title: `중급 · 중급 ${order}`, locked: true, ...over });
 
 function Where() {
   const l = useLocation();
@@ -93,28 +97,28 @@ afterEach(() => {
   useAuth.setState({ status: 'unknown', user: null });
 });
 
-describe('곡 선택의 [입문 코스] 탭', () => {
+describe('곡 선택의 [학습 코스] 버튼', () => {
   it('악보 연습에만 있고 리듬 게임·로그인 전에는 없다', async () => {
     at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
-    await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡', '입문 코스']));
+    await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡', '학습 코스']));
     cleanup();
     at('/play', <SongPicker mode="play" onStart={vi.fn()} />);
-    expect(screen.getAllByRole('radio').map((r) => r.textContent)).not.toContain('입문 코스');
+    expect(screen.getAllByRole('radio').map((r) => r.textContent)).not.toContain('학습 코스');
     cleanup();
     useAuth.setState({ status: 'anonymous', user: null });
     at('/sheet', <SongPicker mode="sheet" onStart={vi.fn()} />);
-    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
+    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡']);
     expect(fetchLessons).not.toHaveBeenCalled();
   });
 
-  it('?tab=lessons로 열면 입문 코스 탭이고, 탭을 바꾸면 주소에서 빠진다', async () => {
+  it('?tab=lessons로 열면 학습 코스이고, 범위를 바꾸면 주소에서 빠진다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2)]));
     at('/sheet?tab=lessons', <SongPicker mode="sheet" onStart={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
     expect(screen.queryByRole('searchbox')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
     await waitFor(() => expect(where()).toBe('/sheet'));
-    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    fireEvent.click(screen.getByRole('radio', { name: '학습 코스' }));
     await waitFor(() => expect(where()).toBe('/sheet?tab=lessons'));
   });
 });
@@ -130,20 +134,20 @@ describe('주소가 바뀌면 탭이 따라간다 (검증 추가 발견 1)', () 
     );
   }
 
-  it('곡 선택이 떠 있는 동안 ?tab=lessons로 바뀌면 입문 코스 탭, tab이 빠지면 기본 곡 탭', async () => {
+  it('곡 선택이 떠 있는 동안 ?tab=lessons로 바뀌면 학습 코스, tab이 빠지면 기본 곡', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1)]));
     at('/sheet', <><Nav /><SongPicker mode="sheet" onStart={vi.fn()} /></>);
     await waitFor(() => expect(screen.getByRole('radio', { name: '기본 곡' }).getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: '코스로 가기' }));
     expect(await screen.findByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: '입문 코스' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: '학습 코스' }).getAttribute('aria-checked')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: '악보 연습 메뉴' }));
     await waitFor(() => expect(screen.getByRole('radio', { name: '기본 곡' }).getAttribute('aria-checked')).toBe('true'));
     expect(screen.queryByRole('heading', { name: '1. 레슨 1' })).toBeNull();
   });
 });
 
-describe('입문 코스 탭 본문', () => {
+describe('학습 코스 본문(입문 코스만 있을 때)', () => {
   it('통과·도전 가능·잠김을 보이고, 처음에는 도전할 스테이지 카드가 열린다', async () => {
     vi.mocked(fetchLessons).mockResolvedValue(
       course([lesson(1, { passed: true, bestAccuracy: 91.2 }), lesson(2, { pads: ['KICK', 'SNARE'], locked: false }), lesson(3)]),
@@ -181,7 +185,7 @@ describe('입문 코스 탭 본문', () => {
     vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { kind: 'READ', passed: true }), lesson(2, { locked: false })]));
     at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: '플레이' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
   });
 
   it('이번 접속에서 통과한 레슨은 서버 반영 전이어도 다음 스테이지를 연다', async () => {
@@ -202,11 +206,11 @@ describe('입문 코스 탭 본문', () => {
     vi.mocked(fetchLessons).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(course([]));
     at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={open} />);
     fireEvent.click(await screen.findByRole('button', { name: '다시 시도' }));
-    expect(await screen.findByText('입문 코스를 준비하고 있어요')).toBeTruthy();
+    expect(await screen.findByText('학습 코스를 준비하고 있어요')).toBeTruthy();
   });
 });
 
-describe('결과 화면 입문 코스 띠', () => {
+describe('결과 화면 학습 코스 띠', () => {
   const log = (chartId: number | null, score: number, mode: PlayLog['mode'] = 'SHEET') =>
     ({ mode, chartId, sourceNoteCount: 20, notes: new Array(20).fill({}), summary: { score } }) as unknown as PlayLog;
 
@@ -220,7 +224,7 @@ describe('결과 화면 입문 코스 띠', () => {
     expect(within(band).getByText('통과!')).toBeTruthy();
     expect(useLessons.getState().localPassed.has(102)).toBe(true);
     fireEvent.click(within(band).getByRole('button', { name: '다음 레슨' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=103&chart=203&start=1');
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=103&chart=203&start=1');
   });
 
   it('70% 미만이면 재도전 안내와 [다시 하기], 마지막 레슨 통과는 [코스로]만', async () => {
@@ -228,7 +232,7 @@ describe('결과 화면 입문 코스 띠', () => {
     const band = await screen.findByRole('status');
     expect(within(band).getByText('정확도 70%를 넘기면 통과예요.')).toBeTruthy();
     fireEvent.click(within(band).getByRole('button', { name: '다시 하기' }));
-    expect(where()).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
     expect(useLessons.getState().localPassed.size).toBe(0);
     cleanup();
     at('/result/x', <LessonResultBand log={log(203, 2000)} />);
@@ -236,7 +240,24 @@ describe('결과 화면 입문 코스 띠', () => {
     expect(within(last).getByText('입문 코스를 모두 마쳤어요.')).toBeTruthy();
     expect(within(last).queryByRole('button', { name: '다음 레슨' })).toBeNull();
     fireEvent.click(within(last).getByRole('button', { name: '코스로' }));
-    expect(where()).toBe('/sheet?tab=lessons');
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner');
+  });
+
+  it('입문 마지막 레슨을 통과하면 중급 코스가 열렸다고 알리고 [중급 코스로]', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2), mid(1), mid(2)]));
+    at('/result/x', <LessonResultBand log={log(202, 2000)} />);
+    const band = await screen.findByRole('status');
+    expect(within(band).getByText('입문 코스를 모두 마쳤어요. 중급 코스가 열렸어요.')).toBeTruthy();
+    expect(within(band).queryByRole('button', { name: '다음 레슨' })).toBeNull();
+    fireEvent.click(within(band).getByRole('button', { name: '중급 코스로' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate');
+  });
+
+  it('중급 레슨의 다음 레슨·다시 하기는 중급 코스 주소다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), mid(1), mid(2)]));
+    at('/result/x', <LessonResultBand log={log(401, 2000)} />);
+    fireEvent.click(within(await screen.findByRole('status')).getByRole('button', { name: '다음 레슨' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate&song=302&chart=402&start=1');
   });
 
   it('레슨이 아닌 곡·리듬 게임 기록에는 띠가 없다', async () => {
@@ -314,7 +335,7 @@ describe('권유 카드', () => {
   });
 });
 
-describe('곡·채보 주소를 바꿔도 입문 코스 탭은 남는다', () => {
+describe('곡·채보 주소를 바꿔도 학습 코스·고른 코스는 남는다', () => {
   function Probe() {
     const p = useChartParam();
     return (
@@ -332,8 +353,79 @@ describe('곡·채보 주소를 바꿔도 입문 코스 탭은 남는다', () =>
     fireEvent.click(screen.getByRole('button', { name: '지우기' }));
     expect(where()).toBe('/sheet?tab=lessons');
     cleanup();
+    at('/sheet?tab=lessons&course=intermediate', <Probe />);
+    fireEvent.click(screen.getByRole('button', { name: '고르기' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate&song=102&chart=202');
+    fireEvent.click(screen.getByRole('button', { name: '지우기' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate');
+    cleanup();
     at('/play', <Probe />);
     fireEvent.click(screen.getByRole('button', { name: '고르기' }));
     expect(where()).toBe('/play?song=102&chart=202');
+  });
+});
+
+// 학습 코스 설계 4-1·4-2절
+describe('학습 코스: 입문·중급 코스 고르기', () => {
+  const picker = () => screen.getByRole('group', { name: '코스 고르기' });
+  const courseButton = (name: string) => within(picker()).getByRole('button', { name: new RegExp(`^${name}`) });
+
+  it('코스 칸 두 개에 진도가 보이고, 입문이 남았으면 중급은 잠김이며 기본으로 입문이 보인다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), lesson(2, { locked: false }), mid(1), mid(2)]));
+    at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: '2. 레슨 2' })).toBeTruthy();
+    expect(courseButton('입문 코스').getAttribute('aria-pressed')).toBe('true');
+    expect(within(courseButton('입문 코스')).getByText('2개 중 1개 통과')).toBeTruthy();
+    expect(within(courseButton('중급 코스')).getByText('입문 코스를 다 통과하면 열려요')).toBeTruthy();
+  });
+
+  it('잠긴 중급을 고르면 스테이지가 모두 잠김이고 [입문 코스 이어 하기]가 입문으로 돌린다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { locked: false }), mid(1), mid(2)]));
+    at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
+    await screen.findByRole('heading', { name: '1. 레슨 1' });
+    fireEvent.click(courseButton('중급 코스'));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate');
+    expect(screen.getByRole('heading', { name: '입문 코스를 먼저 통과해요' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /1번 중급 1, 알아보기 · 잠김/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /2번 중급 2, 연주 · 잠김/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '입문 코스 이어 하기' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner');
+    expect(screen.getByRole('heading', { name: '1. 레슨 1' })).toBeTruthy();
+  });
+
+  it('주소에 코스가 없으면 도전할 레슨이 있는 코스가 보이고, 맵 아래 목표 문구가 코스마다 다르다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), mid(1, { locked: false }), mid(2)]));
+    at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: '1. 중급 1' })).toBeTruthy();
+    expect(courseButton('중급 코스').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('여기까지 오면 드럼 아홉 개를 모두 칠 수 있어요')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '레슨 시작하기' })).toBeTruthy();
+  });
+
+  it('입문을 다 통과하고 입문을 보면 완료 카드의 [중급 코스 시작하기]가 중급으로 바꾼다', async () => {
+    const open = vi.fn();
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), mid(1, { locked: false })]));
+    at('/sheet?tab=lessons&course=beginner', <LessonCourse onOpenBuiltin={open} />);
+    expect(await screen.findByRole('heading', { name: '8비트를 칠 수 있게 됐어요' })).toBeTruthy();
+    expect(within(courseButton('입문 코스')).getByText('코스 완료')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '기본 곡 보러 가기' }));
+    expect(open).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '중급 코스 시작하기' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate');
+    expect(screen.getByRole('heading', { name: '1. 중급 1' })).toBeTruthy();
+  });
+
+  it('중급까지 다 통과하면 중급 완료 카드', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), mid(1, { passed: true })]));
+    at('/sheet?tab=lessons', <LessonCourse onOpenBuiltin={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: '드럼 아홉 개를 모두 칠 수 있게 됐어요' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '중급 코스 시작하기' })).toBeNull();
+  });
+
+  it('중급 연주 레슨의 [플레이]는 중급 코스를 유지한다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1, { passed: true }), mid(1, { kind: 'PLAY', locked: false })]));
+    at('/sheet?tab=lessons&course=intermediate', <LessonCourse onOpenBuiltin={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: '플레이' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=intermediate&song=301&chart=401&start=1');
   });
 });

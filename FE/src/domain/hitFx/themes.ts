@@ -1,5 +1,5 @@
 // 타격 이펙트 테마 목록·이름·정의 조회. 테마는 "데이터 + 생성 함수"이고 그리는 일은 공통 엔진이 한다.
-import type { KitSkin, PadShape } from '@/domain/drumKit';
+import type { KitSkin, PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, HitFxTheme } from './types';
 import { spawnAuto } from './spawn/auto';
 import { ELECTRIC_PALETTE, spawnElectric } from './spawn/electric';

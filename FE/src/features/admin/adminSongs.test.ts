@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { listAllAdminSongs, registerAdminSong, uploadAccompaniment } from './adminSongs';
 
 function json(status: number, body: unknown) {

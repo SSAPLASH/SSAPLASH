@@ -3,7 +3,7 @@
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { initialPedal, useLive } from '@/store/liveStore';
 import { LiveDrumKit } from './LiveDrumKit';
 

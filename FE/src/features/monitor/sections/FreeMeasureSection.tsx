@@ -4,7 +4,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { inputManager } from '@/runtime/sources';
 import { addHit, emptyHitStats, meanSensorDistance, type HitStats } from '@/domain/play/hitStats';
-import { ALL_PADS, PAD_META } from '@/domain/pads';
+import { ALL_PADS, PAD_META } from '@/domain/kit/pads';
 import { useLive } from '@/store/liveStore';
 import { isSensorSource } from '@/domain/events';
 

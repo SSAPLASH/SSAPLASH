@@ -1,11 +1,11 @@
 // 악보 모드 피드백 (MODE-sheet-practice 3-3). PlayLog만 보고 규칙으로 문장을 만든다.
 // AI 스코어링이 오면 이 생성기를 AI 응답으로 교체한다. 임계값은 팀 체감 후 조정(U3).
 import { COACH_BASIS, type CoachBasis, coachBasisMs } from '@/domain/play/coachBasis';
-import type { Chart } from '@/domain/chart';
-import { JUDGEMENT_SCORE } from '@/domain/judgement';
-import { ALL_PADS, PAD_META, type PadId } from '@/domain/pads';
-import { gridOriginMs, gridTimeOf, type GridChart } from '@/domain/sheet';
-import type { PlayLog } from '@/domain/playLog';
+import type { Chart } from '@/domain/song/chart';
+import { JUDGEMENT_SCORE } from '@/domain/play/judgement';
+import { ALL_PADS, PAD_META, type PadId } from '@/domain/kit/pads';
+import { gridOriginMs, gridTimeOf, type GridChart } from '@/domain/song/sheet';
+import type { PlayLog } from '@/domain/play/playLog';
 
 /** 1. 패드의 MISS 비율 하한과 그 판단에 필요한 최소 노트 수 */
 export const MISS_RATE_THRESHOLD = 0.25;

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { LazyMotion, MotionGlobalConfig, domMax } from 'motion/react';
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 import { COMBO_BREAK_MS, ComboDisplay } from './ComboDisplay';
 
 afterEach(() => {

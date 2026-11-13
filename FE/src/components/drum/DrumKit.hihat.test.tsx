@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KIT_ART_PERSP, kitArtPad } from '@/domain/kit/kitArt';
 import { kitFrame } from '@/domain/kit/kitFrame';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { spriteUrl } from './acoustic/sprites';
 import { DrumKit, type DrumKitProps } from './DrumKit';
 import { Pad } from './Pad';

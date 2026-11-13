@@ -1,6 +1,6 @@
 // 자유 연습 반주 화면 상태 계산 (설계 MODE-002 3-4·3-5·3-6). React·오디오·네트워크를 모르는 순수 함수.
-import type { AccompanimentStatus } from '@/domain/songCatalog';
-import type { SongSummary } from '@/domain/songCatalog';
+import type { AccompanimentStatus } from './songCatalog';
+import type { SongSummary } from './songCatalog';
 
 /** 곡 끝에 붙여 바로 끝나 버리지 않게 두는 여유(ms) */
 export const SEEK_END_MARGIN_MS = 250;
