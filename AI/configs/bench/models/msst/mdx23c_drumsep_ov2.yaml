@@ -1,4 +1,4 @@
-# 되돌리기용 채보 모델 original·songsterr_avg가 쓰는 드럼 킷 분리. 겹침 4 → 2. 로컬 RTX 4070 노트북 MUSDB 5곡 드럼 킷 분리 시간 −55%
+# 서비스 채보(adtof_drumsep_ds_ov2.yaml)가 쓰는 드럼 킷 분리. 겹침 4 → 2. 로컬 RTX 4070 노트북 MUSDB 5곡 드럼 킷 분리 시간 −55%
 # 가중치는 mdx23c_drumsep과 같은 것을 씀 (weights_name).
 name: mdx23c_drumsep_ov2
 weights_name: mdx23c_drumsep
