@@ -7,6 +7,7 @@ import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
 import { angleBetween, computeBoundaries, meanPose, pairSpread, type HandAnchors, type HandAnchorSet, type PadAnchor } from '@/domain/kit/calibration/calibration';
 import type { SensorTuning } from '@/domain/kit/calibration/tuning';
+import { CAPTURE_HANDS, captureHandsFor } from '@/domain/kit/calibration/captureHands';
 
 /** 보정 순서(개편 D1): 게임 레인 순서. 붙어 있기 쉬운 하이햇·크래시를 바로 이어 확인한다 */
 export const CAPTURE_ORDER: readonly PadId[] = ['HIHAT', 'CRASH', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE'];
@@ -21,6 +22,8 @@ export interface HitCaptureOptions {
   minGapDeg: number;
   /** 자동 진행 전 대기(ms). 0이면 동기 진행. 그동안 타격은 무시한다 */
   advanceDelayMs: number;
+  /** 패드별 지정 손(PLAY-004 ①). 표에 없는 패드는 양손 */
+  handsByPad: Partial<Record<PadId, readonly StickId[]>>;
 }
 
 export const DEFAULT_CAPTURE_OPTIONS: HitCaptureOptions = {
@@ -29,9 +32,10 @@ export const DEFAULT_CAPTURE_OPTIONS: HitCaptureOptions = {
   order: CAPTURE_ORDER,
   minGapDeg: 20,
   advanceDelayMs: 400,
+  handsByPad: CAPTURE_HANDS,
 };
 
-/** padDone = 현재 패드를 대상 손 전부가 채웠다. advancing 동안 잠깐 있다 자동 진행한다(경고가 있어도 같다) */
+/** padDone = 현재 패드를 받을 손 전부가 채웠다. advancing 동안 잠깐 있다 자동 진행한다(경고가 있어도 같다) */
 export type CapturePhase = 'idle' | 'capturing' | 'padDone' | 'done';
 
 export interface CaptureWarning {
@@ -62,6 +66,10 @@ export interface CaptureSnapshot {
   index: number;
   /** 지금 치라고 하는 패드(capturing) 또는 방금 채워 확인을 기다리는 패드(padDone). idle·done이면 null */
   target: PadId | null;
+  /** 현재 패드를 받을 손(패드별 지정 손 ∩ 세션 손, 없으면 세션 손 전부). idle·done이면 빈 배열 */
+  targetHands: StickId[];
+  /** 받을 손이 아닌 세션 손이 친 마지막 타격(화면 힌트용). 받을 손이 치거나 패드가 넘어가면 null */
+  wrongHand: { pad: PadId; stickId: StickId; at: number } | null;
   /** 현재 패드에서 손별로 받은 타격 수 */
   counts: [number, number];
   /** 끝난 패드의 손별 앵커(반경은 build에서 채운다) */
@@ -89,6 +97,9 @@ export class HitCapture {
   private order: readonly PadId[] = [];
   private index = 0;
   private samples: [Pose[], Pose[]] = [[], []];
+  /** 손별 타격 최대 각속도(°/s). 세션 손의 타격이면 받을 손이 아니어도·다시 친 것도 쌓는다. 최소 타격 세기 계산용 */
+  private speeds: [number[], number[]] = [[], []];
+  private wrongHand: CaptureSnapshot['wrongHand'] = null;
   private captured: CaptureSnapshot['captured'] = {};
   private warning: CaptureWarning | null = null;
   private gapWarnings: GapWarning[] = [];
@@ -117,6 +128,8 @@ export class HitCapture {
       order: [...this.order],
       index: this.index,
       target: active ? this.order[this.index] : null,
+      targetHands: active ? this.targetHands() : [],
+      wrongHand: this.wrongHand ? { ...this.wrongHand } : null,
       counts: [this.samples[0].length, this.samples[1].length],
       captured: { ...this.captured },
       warning: this.warning,
@@ -126,6 +139,16 @@ export class HitCapture {
       radiusOverrides: { ...this.radiusOverrides },
       base: [this.base[0], this.base[1]],
     };
+  }
+
+  /** 현재 목표 패드를 받을 손 */
+  private targetHands(): StickId[] {
+    return captureHandsFor(this.order[this.index], this.hands, this.opts.handsByPad);
+  }
+
+  /** 그 패드를 받을 손(세션 손 기준) */
+  private handsFor(pad: PadId): StickId[] {
+    return captureHandsFor(pad, this.hands, this.opts.handsByPad);
   }
 
   private notify(): void {
@@ -146,6 +169,8 @@ export class HitCapture {
     this.order = order ? order.filter((p) => this.opts.order.includes(p)) : this.opts.order;
     this.index = 0;
     this.samples = [[], []];
+    this.speeds = [[], []];
+    this.wrongHand = null;
     this.captured = {};
     this.warning = null;
     this.lastAccepted = null;
@@ -170,7 +195,10 @@ export class HitCapture {
     if (this.phase === 'done' || this.phase === 'padDone') {
       this.clearAdvance();
       this.gapWarnings = [];
+      this.wrongHand = null;
       this.phase = 'capturing';
+      // 새 손이 현재 패드의 받을 손이 아니면(라이드의 왼손 등) 이미 다 채운 상태일 수 있다
+      this.settleIfFilled();
     }
     this.notify();
   }
@@ -204,6 +232,7 @@ export class HitCapture {
     this.index = i;
     this.samples = [[], []];
     this.warning = null;
+    this.wrongHand = null;
     this.phase = 'capturing';
     this.notify();
   }
@@ -218,6 +247,7 @@ export class HitCapture {
   private advance(): void {
     this.clearAdvance();
     this.samples = [[], []];
+    this.wrongHand = null;
     const next = this.order.findIndex((p) => !this.captured[p]?.some((a) => a !== undefined));
     if (next < 0) {
       this.phase = 'done';
@@ -252,9 +282,17 @@ export class HitCapture {
    * 타격 1건. pad는 받지 않는다(지금 목표 패드로 친 것으로 본다). 수락하면 true.
    * 그 손이 대상이 아니거나 이미 다 채웠거나 확인 대기 중이면 무시(false)
    */
-  onHit(stickId: StickId, pose: Pose, now: number = performance.now()): boolean {
+  onHit(stickId: StickId, pose: Pose, now: number = performance.now(), peakSpeedDps?: number): boolean {
     if (this.phase !== 'capturing' || !this.hands.includes(stickId)) return false;
     const target = this.order[this.index];
+    if (peakSpeedDps !== undefined && Number.isFinite(peakSpeedDps) && peakSpeedDps > 0) this.speeds[stickId].push(peakSpeedDps);
+    // 이 패드를 받을 손이 아니면 받지 않고 화면 힌트만 남긴다
+    if (!this.targetHands().includes(stickId)) {
+      this.wrongHand = { pad: target, stickId, at: now };
+      this.notify();
+      return false;
+    }
+    this.wrongHand = null;
     const ring = this.samples[stickId];
     if (ring.length >= this.opts.hitsPerPad) return false;
     ring.push({ pitch: pose.pitch, yaw: pose.yaw });
@@ -293,7 +331,7 @@ export class HitCapture {
    */
   private settleIfFilled(): void {
     const target = this.order[this.index];
-    const filled = this.hands.every((h) => this.captured[target]?.[h] !== undefined);
+    const filled = this.targetHands().every((h) => this.captured[target]?.[h] !== undefined);
     if (!filled) return;
     this.gapWarnings = this.checkGaps(target);
     this.phase = 'padDone';
@@ -324,7 +362,8 @@ export class HitCapture {
         }
       };
       for (const [pad, a] of Object.entries(this.base[h] ?? {}) as [PadId, PadAnchor | undefined][]) {
-        if (a && pad !== target && !this.order.includes(pad)) consider(pad, a);
+        // 다른 손에서 옮겨 만든 앵커는 직접 친 자리가 아니라 간격 비교에서 뺀다
+        if (a && !a.derived && pad !== target && !this.order.includes(pad)) consider(pad, a);
       }
       for (const pad of this.order) {
         const a = this.captured[pad]?.[h];
@@ -354,11 +393,28 @@ export class HitCapture {
     return out;
   }
 
-  /** 끝난 패드 목록(대상 손 전부가 채운 패드) */
+  /** 끝난 패드 목록(그 패드를 받을 손 전부가 채운 패드) */
   completedPads(): PadId[] {
     return this.order.filter((pad) => {
       const slot = this.captured[pad];
-      return !!slot && this.hands.every((h) => slot[h] !== undefined);
+      return !!slot && this.handsFor(pad).every((h) => slot[h] !== undefined);
     });
+  }
+
+  /** 이번 보정에서 패드별로 실제 친 손(앵커가 잡힌 손). 안 친 패드는 빠진다 */
+  capturedHands(): { pad: PadId; hands: StickId[] }[] {
+    const out: { pad: PadId; hands: StickId[] }[] = [];
+    for (const pad of this.order) {
+      const slot = this.captured[pad];
+      if (!slot) continue;
+      const hands = ([0, 1] as StickId[]).filter((h) => slot[h] !== undefined);
+      if (hands.length > 0) out.push({ pad, hands });
+    }
+    return out;
+  }
+
+  /** 손별로 쌓인 타격 최대 각속도(°/s). 복사본 */
+  peakSpeeds(): [number[], number[]] {
+    return [[...this.speeds[0]], [...this.speeds[1]]];
   }
 }
