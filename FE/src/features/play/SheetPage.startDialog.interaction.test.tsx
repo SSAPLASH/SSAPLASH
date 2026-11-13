@@ -165,6 +165,80 @@ describe('SheetPage 시작 확인 창', () => {
   });
 });
 
+// 설계 SETUP-학습-코스-자동-넘김 3-3·3-4: 레슨을 통과해 자동으로 넘어온 주소(auto=1)는 조건이 맞으면 플레이를 누르지 않아도 시작한다
+describe('SheetPage 자동 시작(auto=1)', () => {
+  /** 채보 12를 연주 레슨으로 둔 레슨 목록 */
+  const lessonOn = (chartId: number) =>
+    useLessons.setState({
+      status: 'ready',
+      list: lessonsFromDto({
+        passAccuracy: 70,
+        items: [{ order: 1, course: 'BEGINNER', kind: 'PLAY', songId: 1, chartId, title: '입문 · 시험', summary: 's', pads: ['KICK'], guide: true, bpm: 70, durationMs: 1000, noteCount: 4, bestAccuracy: null, passed: false, locked: false }],
+      }),
+    });
+  const URL = '/sheet?tab=lessons&course=beginner&song=1&chart=12&start=1&auto=1';
+
+  beforeEach(() => {
+    useSettings.setState({ countInBars: 1 });
+    lessonOn(12);
+  });
+
+  it('레슨 채보이고 기기·카운트다운 조건이 맞으면 누르지 않아도 시작하고 주소에서 start·auto가 빠진다', async () => {
+    show(URL);
+    await waitFor(() => expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=1&chart=12'));
+    expect(screen.queryByRole('dialog', { name: '시험곡' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull();
+  });
+
+  it('불러오는 동안에는 시작 확인 창·곡 선택 대신 준비 화면만 보인다(화면이 잠깐 바뀌어 보이지 않게)', async () => {
+    vi.mocked(loadChart).mockImplementation(() => new Promise(() => {}));
+    show(URL);
+    expect(await screen.findByText('다음 레슨을 준비하고 있어요')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+  });
+
+  it('자동 시작이 끝내 시작하지 못하면(오디오 준비 실패 등) 준비 화면에 갇히지 않고 시작 확인 창으로 돌아온다', async () => {
+    const { unlockAudio } = await import('@/runtime/audioUnlock');
+    vi.mocked(unlockAudio).mockRejectedValueOnce(new Error('blocked'));
+    show(URL);
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    await within(dialog).findByRole('button', { name: '플레이' });
+    await waitFor(() => expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=1&chart=12&start=1'));
+    expect(screen.queryByText('다음 레슨을 준비하고 있어요')).toBeNull();
+  });
+
+  it('설정에서 카운트다운을 꺼 두었으면 시작하지 않고 창이 남는다. auto는 주소에서 지운다', async () => {
+    useSettings.setState({ countInBars: 0 });
+    show(URL);
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    await within(dialog).findByRole('button', { name: '플레이' });
+    await waitFor(() => expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=1&chart=12&start=1'));
+    expect(within(dialog).queryByText(/준비되면 바로 시작해요/)).toBeNull();
+  });
+
+  it('레슨이 아닌 채보는 auto=1이어도 시작하지 않는다', async () => {
+    lessonOn(999);
+    show('/sheet?song=1&chart=12&start=1&auto=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    await within(dialog).findByRole('button', { name: '플레이' });
+    await waitFor(() => expect(where()).toBe('/sheet?song=1&chart=12&start=1'));
+  });
+
+  it('기기가 준비되지 않았으면 기기 준비 창에서 멈추고, 그 뒤 연결해도 저절로 시작하지 않는다', async () => {
+    useSettings.setState({ sensorKind: 'pointer' });
+    show(URL);
+    await screen.findByRole('dialog', { name: '기기 준비가 필요해요' });
+    await waitFor(() => expect(where()).not.toContain('auto=1'));
+    useLive.setState({ connected: [true, true] });
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    await within(dialog).findByRole('button', { name: '플레이' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole('dialog', { name: '시험곡' })).toBeTruthy();
+    expect(where()).toContain('start=1');
+  });
+});
+
 describe('SheetPage 반주 설정', () => {
   const accLoad = () => (Accompaniment as never as { load: ReturnType<typeof vi.fn> }).load;
 

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { JUDGEMENT_SCORE } from './judgement';
 import {
+  AUTO_ADVANCE_SECONDS,
   COURSES,
+  autoAdvanceTarget,
+  autoAdvanceText,
   LESSONS_PATH,
   courseFinishText,
   courseOfQuery,
@@ -274,5 +277,33 @@ describe('isBeginnerChart', () => {
 
   it('레슨 목록을 아직 못 읽었으면 난이도만 본다', () => {
     expect(isBeginnerChart({ difficulty: 'NORMAL', chartId: 201, lessons: [] })).toBe(false);
+  });
+});
+
+// 설계 SETUP-학습-코스-자동-넘김 3-1
+describe('자동 넘김 판단', () => {
+  const ls = list([
+    item(1, { kind: 'READ' }),
+    item(2),
+    item(1, { course: 'INTERMEDIATE', songId: 301, chartId: 401 }),
+  ]);
+
+  it('통과했고 다음 레슨이 같은 코스일 때만 다음 레슨을 준다', () => {
+    expect(autoAdvanceTarget(ls[0], ls[1], true)?.songId).toBe(102);
+    expect(autoAdvanceTarget(ls[0], ls[1], false)).toBeNull();
+    // 코스의 마지막 레슨(다음이 다른 코스)·다음이 없음
+    expect(autoAdvanceTarget(ls[1], ls[2], true)).toBeNull();
+    expect(autoAdvanceTarget(ls[2], null, true)).toBeNull();
+  });
+
+  it('자동으로 넘길 때 연주 레슨 주소에는 auto=1이 붙고 알아보기 레슨 주소는 그대로다', () => {
+    expect(lessonPath(ls[1], { auto: true })).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1&auto=1');
+    expect(lessonPath(ls[1])).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
+    expect(lessonPath(ls[0], { auto: true })).toBe('/sheet/lesson/101');
+  });
+
+  it('카운트다운은 3초이고 안내 문구에 남은 초가 들어간다', () => {
+    expect(AUTO_ADVANCE_SECONDS).toBe(3);
+    expect(autoAdvanceText(2)).toBe('2초 뒤 다음 레슨으로 넘어가요.');
   });
 });

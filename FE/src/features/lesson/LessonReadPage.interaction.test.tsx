@@ -116,8 +116,10 @@ describe('알아보기 화면', () => {
     expect(screen.getByRole('img', { name: /음표 2개 중/ })).toBeTruthy();
     expect(postLessonCompletion).toHaveBeenCalledWith(101);
     expect(useLessons.getState().localPassed.has(101)).toBe(true);
-    fireEvent.click(within(dialog).getByRole('button', { name: '다음 레슨' }));
-    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
+    // 다음 레슨이 같은 코스라 카운트다운이 돈다. [지금 가기]는 자동 시작 주소로 간다
+    expect(within(dialog).getByText('3초 뒤 다음 레슨으로 넘어가요.')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: '지금 가기' }));
+    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1&auto=1');
   });
 
   it('완료 팝업을 닫으면 같은 화면에 [다시 하기]·[코스로]가 남고, 다시 하면 처음 음표부터 친다', async () => {
@@ -182,6 +184,56 @@ describe('알아보기 화면', () => {
     expect(await screen.findByText('레슨을 찾을 수 없어요')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '학습 코스로' }));
     expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons');
+  });
+
+  // 설계 SETUP-학습-코스-자동-넘김 4-2
+  describe('완료 팝업의 자동 넘김', () => {
+    const pass = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+    const finish = async () => {
+      open();
+      await screen.findByRole('img', { name: '음표 2개 중 1번째' });
+      hit('KICK');
+      hit('KICK');
+      return screen.findByRole('dialog', { name: '레슨 완료!' });
+    };
+    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+    afterEach(() => vi.useRealTimers());
+
+    it('3초 뒤 다음 레슨으로 넘어간다', async () => {
+      const dialog = await finish();
+      expect(within(dialog).getByText('3초 뒤 다음 레슨으로 넘어가요.')).toBeTruthy();
+      await pass(3000);
+      expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1&auto=1');
+    });
+
+    it('[머무르기]면 멈추고 [다음 레슨]이 남는다. 팝업을 닫아도 멈춘다', async () => {
+      const dialog = await finish();
+      fireEvent.click(within(dialog).getByRole('button', { name: '머무르기' }));
+      expect(within(dialog).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+      expect(within(dialog).getByRole('button', { name: '다음 레슨' })).toBeTruthy();
+      await pass(5000);
+      expect(screen.getByTestId('where').textContent).toBe('/sheet/lesson/101');
+      cleanup();
+      await finish();
+      fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+      await pass(5000);
+      expect(screen.getByTestId('where').textContent).toBe('/sheet/lesson/101');
+    });
+
+    it('완료 저장이 실패해 있으면 세지 않는다', async () => {
+      vi.mocked(postLessonCompletion).mockRejectedValue(new Error('offline'));
+      const dialog = await finish();
+      await within(dialog).findByRole('button', { name: '다시 저장' });
+      expect(within(dialog).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+      await pass(5000);
+      expect(screen.getByTestId('where').textContent).toBe('/sheet/lesson/101');
+    });
+
+    it('코스의 마지막 레슨이면 세지 않는다', async () => {
+      vi.mocked(fetchLessons).mockResolvedValue({ passAccuracy: 70, items: [lesson(1)] });
+      const dialog = await finish();
+      expect(within(dialog).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    });
   });
 
   it('떠나면 타격음 스위치를 끈다', async () => {
