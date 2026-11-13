@@ -63,6 +63,9 @@ const recorder = new Recorder();
 let offAttach: (() => void) | null = null;
 let offAttachDiag: (() => void) | null = null;
 
+/** 녹화 중 이 탭이 숨겨진 동안의 탭 제목(PLAY-006). 브라우저가 숨긴 탭의 타이머를 늦춰 그 구간 기록이 빠질 수 있다 */
+const HIDDEN_TAB_TITLE = '⚠ 녹화 탭 숨김';
+
 /** 시계 섹션 추이 패널의 POSE 유실률 이력. 섹션을 오가도 이어지도록 모듈에 둔다 */
 const lossHistory = new LossHistory();
 
@@ -164,6 +167,8 @@ export function StickMonitorPage() {
   const [mockSticks, setMockSticks] = useState<1 | 2>(2);
   const [recording, setRecording] = useState(recorder.recording);
   const [note, setNote] = useState('');
+  // 녹화 중 탭이 숨겨졌던 시간 합계(ms). 녹화를 멈추거나 새로 시작하면 0으로 되돌린다
+  const [hiddenMs, setHiddenMs] = useState(0);
   // 녹화 요약 패널에 보일 요약. 녹화 정지 직후 또는 파일 열기로 채운다
   const [summary, setSummary] = useState<RecordingSummary | null>(null);
 
@@ -184,6 +189,36 @@ export function StickMonitorPage() {
       void activateSensor(useSettings.getState().sensorKind);
     }
   }, [mode]);
+
+  // 녹화 중에만 탭 숨김을 듣는다: 숨겨지면 vis 줄 + 탭 제목 경고, 돌아오면 vis 줄 + 제목 복구 + 숨겨진 시간 합산.
+  // 녹화가 끝나거나 화면을 떠날 때(숨겨진 채 멈추는 경우 포함) 제목을 되돌린다. 열린 숨김 구간은 요약이 마지막 줄 시각까지로 닫는다
+  useEffect(() => {
+    if (!recording) return;
+    const originalTitle = document.title;
+    let hiddenSince: number | null = document.hidden ? performance.now() : null;
+    const onVisibility = () => {
+      const now = performance.now();
+      if (document.hidden) {
+        if (hiddenSince !== null) return;
+        hiddenSince = now;
+        recorder.appendVis(true, now);
+        document.title = HIDDEN_TAB_TITLE;
+      } else {
+        recorder.appendVis(false, now);
+        document.title = originalTitle;
+        if (hiddenSince !== null) {
+          const span = now - hiddenSince;
+          setHiddenMs((ms) => ms + span);
+        }
+        hiddenSince = null;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.title = originalTitle;
+    };
+  }, [recording]);
 
   const takeSnap = useCallback((tick: number, src: InputSource | null): Snap => {
     const now = performance.now();
@@ -449,8 +484,10 @@ export function StickMonitorPage() {
         setSummary(null);
       }
       setRecording(false);
+      setHiddenMs(0);
       return;
     }
+    setHiddenMs(0);
     const stats = packetLog.stats();
     const fw = stats.perStick[0].lastStatus ?? stats.perStick[1].lastStatus;
     const meta: RecordingMeta = {
@@ -543,6 +580,11 @@ export function StickMonitorPage() {
           </button>
         </div>
       </div>
+      {recording && hiddenMs > 0 && (
+        <p className="mon-hidden-warn warn" role="status">
+          녹화 중 이 탭이 {Math.max(1, Math.round(hiddenMs / 1000))}초 숨겨졌어요. 그 구간은 기록이 빠졌을 수 있어요.
+        </p>
+      )}
       {replaying && replayStatus && (
         <ReplayBar
           name={replayName ?? ''}
