@@ -2,6 +2,7 @@
 // 큰 안내(「하이햇을 2번 타격하세요」, 패드 이름은 브랜드색) · 진행 점 · 드럼 그림(항상 기본 배치, 전체 어둡게 0.18 + 지금 칠 패드만 원래 밝기·글로우, 팝업이 열릴 때는 그 위에 첫 안내 CaptureNotice) · 아래 손별 타격 점·약한 타격 안내.
 // 간격 경고는 멈추지 않는다: 진행 중에는 배너([◯◯ 다시])로, 다음 패드를 치면 사라진다. 결과 화면(done)은 「n곳 모두 잡았어요」 + 같은 손에서 20° 미만으로 붙은 패드(세션 밖 앵커 base 포함, D14)를
 // 문구(「스네어와 스몰탐이 너무 가까워요(14°)」)와 [◯◯ 다시] 버튼으로 알리고 그 패드에 --warn 테두리를 그린 뒤 [저장]한다. 그림이 고정이라 붙어 보이지 않으므로 문구가 대신한다.
+// 실수 안내(v0.4 D15~D20): 평소에는 없고 실수가 이어질 때만 하나(hint/hintPick) — 같은 지점·멀어질 방향은 드럼 그림 위(CaptureHint), 방향 그림은 그림 영역 모서리(AimGuide).
 // 재정렬 중(② 카드): 스네어 유령 + RealignPrompt. 계산·전송은 하지 않는다: liveStore.calibration 스냅샷을 읽고 calibrationSession 액션만 부른다.
 import { useEffect, useRef, useState } from 'react';
 import { DrumKit } from '@/components/drum/DrumKit';
@@ -11,6 +12,10 @@ import { Button } from '@/components/ui/action/Button';
 import { RealignPrompt } from '@/components/calibration/RealignPrompt';
 import { CaptureNotice } from './CaptureNotice';
 import { useCaptureNotice } from './useCaptureNotice';
+import { AimGuide } from './hint/AimGuide';
+import { CaptureHint } from './hint/CaptureHint';
+import { hintBox, padRing } from './hint/hintGeometry';
+import { STUCK_HINT_MS, pickCaptureHint } from './hint/hintPick';
 import { GapBanner } from './GapBanner';
 import { HAND_NAME, captureHeadline, overlapPairText, spreadWarningText, wrongHandText } from '@/components/calibration/calibrationText';
 import { calibrationSession } from '@/runtime/calibrationSession';
@@ -35,30 +40,48 @@ function completedOf(cap: CaptureSnapshot): PadId[] {
   return cap.order.filter((pad) => cap.hands.length > 0 && captureHandsFor(pad, cap.hands).every((h) => cap.captured[pad]?.[h] !== undefined));
 }
 
-/** 스틱이 움직이는데 타격이 안 들어오는지(약한 타격 안내용) */
-function useWeakHint(cap: CaptureSnapshot | null): boolean {
-  const [hint, setHint] = useState(false);
-  const startAt = useRef<number | null>(null);
+const NO_IDLE = { weak: false, stuck: false } as const;
+
+/**
+ * 스틱이 움직이는데 타격이 안 들어오는지. weak = WEAK_HINT_MS 넘게 없음(「조금 세게」 안내, 움직이는 동안만),
+ * stuck = STUCK_HINT_MS 넘게 없음(방향 그림). stuck은 한 번 켜지면 타격이 수락되거나 패드가 바뀔 때까지 켜 둔다(스틱이 잠깐 멈춰도 깜빡이지 않게).
+ * stuck의 기준 시각은 마지막 수락 타격과 패드가 바뀐 때([◯◯ 다시] 포함) 가운데 늦은 쪽
+ */
+function useIdleHints(cap: CaptureSnapshot | null): { weak: boolean; stuck: boolean } {
+  const [hints, setHints] = useState<{ weak: boolean; stuck: boolean }>(NO_IDLE);
   const lastPose = useRef<[Pose, Pose] | null>(null);
   useEffect(() => {
-    startAt.current = performance.now();
+    const startAt = performance.now();
+    let target: PadId | null | undefined;
+    let targetAt = startAt;
+    let stuck = false;
     lastPose.current = useLive.getState().pose;
+    const set = (weak: boolean, next: boolean) => setHints((prev) => (prev.weak === weak && prev.stuck === next ? prev : { weak, stuck: next }));
     const id = window.setInterval(() => {
       const c = useLive.getState().calibration.capture;
       if (!c || c.phase !== 'capturing') {
-        setHint(false);
+        target = c?.target ?? null;
+        stuck = false;
+        set(false, false);
         return;
+      }
+      const now = performance.now();
+      if (c.target !== target) {
+        target = c.target;
+        targetAt = now;
       }
       const pose = useLive.getState().pose;
       const prev = lastPose.current ?? pose;
       const moved = ([0, 1] as const).some((i) => angleBetween(pose[i], prev[i]) >= MOVING_DEG);
       lastPose.current = pose;
-      const since = performance.now() - (c.lastAccepted?.at ?? startAt.current ?? performance.now());
-      setHint(moved && since > WEAK_HINT_MS);
+      const acceptedAt = c.lastAccepted?.at ?? startAt;
+      if (now - Math.max(acceptedAt, targetAt) <= STUCK_HINT_MS) stuck = false;
+      else if (moved) stuck = true;
+      set(moved && now - acceptedAt > WEAK_HINT_MS, stuck);
     }, 500);
     return () => window.clearInterval(id);
   }, []);
-  return cap !== null && hint;
+  return cap !== null ? hints : NO_IDLE;
 }
 
 /** 받을 손이 아닌 손이 친 지 WRONG_HAND_MS 안이면 그 기록을 돌려준다. 시간이 지나면 타이머가 가린다(렌더 중에는 시계를 읽지 않는다) */
@@ -160,7 +183,7 @@ export function CalibrationStage({ onRestart, onSave, notice = false }: Calibrat
   const kitSkin = useSettings((s) => s.kitSkin);
   const padStates = usePadStates();
   const hitSeq = usePadHitSeq();
-  const weak = useWeakHint(cal.capture);
+  const { weak, stuck } = useIdleHints(cal.capture);
   const wrongHand = useWrongHand(cal.capture);
 
   if (cal.mode === 'realign' && cal.realign) {
@@ -194,6 +217,11 @@ export function CalibrationStage({ onRestart, onSave, notice = false }: Calibrat
   // 진행 중 간격 경고 배너: 멈추지 않는다. 다음 패드의 첫 타격이 수락되면 엔진이 gapWarnings를 비워 사라진다
   const gapWarnings = !isDone ? (cap.gapWarnings ?? []) : [];
 
+  // 실수 안내: 한 번에 하나. 방향 그림(aim)은 칠 패드의 반대편 모서리에 둔다
+  const hint = pickCaptureHint(cap, stuck, noticeOpen);
+  const aimRing = hint?.kind === 'aim' ? padRing(kitSkin, hint.pad) : null;
+  const aimSide = aimRing && aimRing.cx < hintBox(kitSkin).w / 2 ? 'right' : 'left';
+
   return (
     <div className="cal-stage cal-stage-capture" data-testid="cal-stage-capture">
       <div className="cal-stage-top">
@@ -218,7 +246,9 @@ export function CalibrationStage({ onRestart, onSave, notice = false }: Calibrat
           dimAll={!isDone}
           lit={isDone ? undefined : (cap.target ?? undefined)}
           warnPads={warnPads}
+          overlay={<CaptureHint key={hint ? `${hint.kind}-${hint.pad}` : 'none'} hint={hint} skin={kitSkin} />}
         />
+        {hint?.kind === 'aim' && <AimGuide key={`${hint.pad}-${hint.stickId}`} pad={hint.pad} stickId={hint.stickId} side={aimSide} />}
         {notice && <CaptureNotice open={noticeOpen} />}
       </div>
 
