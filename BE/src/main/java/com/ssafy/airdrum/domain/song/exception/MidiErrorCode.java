@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import com.ssafy.airdrum.global.error.ErrorCode;
 
 public enum MidiErrorCode implements ErrorCode {
+	RETRY_UNAVAILABLE(HttpStatus.CONFLICT, "이 MIDI 반주를 재시도할 수 없습니다."),
 	INVALID(HttpStatus.BAD_REQUEST, "MIDI 업로드 요청이 올바르지 않습니다."),
 	TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "MIDI 파일의 허용 크기를 초과했습니다."),
 	UNSUPPORTED(HttpStatus.UNPROCESSABLE_ENTITY, "변환할 수 없는 MIDI 파일입니다."),
