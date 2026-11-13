@@ -7,7 +7,7 @@ import { LESSONS_PATH, shouldInvite } from '@/domain/play/lesson';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { SONGS_SOURCE } from '@/store/songStore';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import './lesson.css';
 
 const ENABLED = AUTH_REQUIRED && SONGS_SOURCE === 'api';

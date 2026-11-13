@@ -1,8 +1,8 @@
 // 실물 드럼 그림의 패드별 자리 표. FE/scripts/kit-art/build.py가 만든다 — 손으로 고치지 않는다.
 // 단위: head·ring·label·judge·badge·top은 조각 상자의 폭을 160으로 본 "그림 단위"(Pad가 쓰는 폭 160 기준과 같다),
 // kit·box는 킷 단위(킷 폭 760)다. 이미지 파일은 components/drum/acoustic이 sprite 이름으로 찾는다.
-import type { PadShape } from '../drumKit';
-import type { PadId } from '../pads';
+import type { PadShape } from './drumKit';
+import type { PadId } from './pads';
 
 export interface ArtEllipse {
   cx: number;

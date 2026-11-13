@@ -1,7 +1,7 @@
 // 내장 곡(VITE_SONGS_SOURCE=builtin) 목록 규칙. songStore와 곡 목록 쿼리가 같이 쓴다.
 // id 규칙: 곡·채보 id 모두 -(BUILTIN_CHARTS 인덱스 + 1).
-import { BUILTIN_CHARTS, builtinId, type Chart } from '../chart';
-import type { SongLevel, SongScope, SongSummary } from '../songCatalog';
+import { BUILTIN_CHARTS, builtinId, type Chart } from './chart';
+import type { SongLevel, SongScope, SongSummary } from './songCatalog';
 
 export function builtinSummary(c: Chart, index: number): SongSummary {
   return {

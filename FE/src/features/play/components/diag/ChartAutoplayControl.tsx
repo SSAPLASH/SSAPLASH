@@ -2,8 +2,8 @@
 import { useEffect, type MutableRefObject } from 'react';
 import { create } from 'zustand';
 import { audioEngine } from '@/audio/AudioEngine';
-import { createChartAutoplay } from '@/engine/chartAutoplay';
-import type { PlayClock } from '@/engine/sessionClock';
+import { createChartAutoplay } from './chartAutoplay';
+import type { PlayClock } from '@/features/play/sessionClock';
 import type { RhythmSession } from '@/engine/RhythmSession';
 
 interface AutoplayToggleState {

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import type { RecordingSummary } from '@/domain/recording';
+import type { RecordingSummary } from '@/domain/play/recording';
 import { toastContent } from './toastContent';
 
 const html = (node: React.ReactNode) => renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);

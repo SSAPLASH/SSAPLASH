@@ -1,7 +1,7 @@
 // Figma 228:5881 — 한 손 스틱 연결이 끊겼을 때 캔버스 위 가운데에 얹는 띠(폭 560). 연주는 막지 않는다.
 // 재연결 상태는 호출부(store/reconnectStore)가 넘긴다. 이 컴포넌트는 props만 받는다.
-import { DEVICE_META, disconnectTitle, type DeviceId } from '@/domain/devices';
-import { Button } from '@/components/ui/Button';
+import { DEVICE_META, disconnectTitle, type DeviceId } from '@/domain/kit/device/devices';
+import { Button } from '@/components/ui/action/Button';
 import '@/components/stick/DisconnectNotice.css';
 import './free.css';
 

@@ -1,5 +1,5 @@
 // Figma Studio / SongStatusBadge 202:503 — 내 곡 상태 배지(완료 · 채보 생성 중 · 생성 실패). 알약 모양, 상태색 16% 배경 + 점 + 글자.
-import { songStatusView } from '@/domain/songCatalog';
+import { songStatusView } from '@/domain/song/songCatalog';
 import './SongStatusBadge.css';
 
 interface Props {

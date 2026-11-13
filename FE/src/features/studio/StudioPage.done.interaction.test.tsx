@@ -4,14 +4,14 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSheets } from '@/features/studio/api/sheets';
-import { listAllSongs } from '@/api/songs';
+import { listAllSongs } from '@/api/song/songs';
 import { useChartJob } from '@/store/chartJobStore';
 import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/runtime/queryClient';
 import { StudioPage } from './StudioPage';
 
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), listAllSongs: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn() }));
 
 const job = { jobId: 5, songId: 42, title: '별빛 산책', idempotencyKey: 'k', startedAt: '2026-11-09T01:00:00Z' };
 

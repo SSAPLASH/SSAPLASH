@@ -1,7 +1,7 @@
 // 재정렬 상태 기계(PLAY-004 3-6). 스틱을 껐다 켜거나 재연결해 방위각 기준이 밀렸을 때,
 // 손마다 스네어를 한 번 쳐서 저장된 스네어 앵커 방위각과의 차 d를 낸다. 오프셋 전송은 세션이 한다(D5).
 import type { Pose, StickId } from '@/domain/events';
-import { wrap180 } from '@/domain/calibration';
+import { wrap180 } from '@/domain/kit/calibration/calibration';
 
 export interface RealignSnapshot {
   /** 재정렬 대상 손 */

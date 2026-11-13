@@ -1,8 +1,8 @@
 // 최근 판정을 링 버퍼로 두고 코칭 지표를 계산한다. 문구 결정은 하지 않는다(rules·policy).
 // 입력은 판정 한 건. 시계·DOM·저장소를 쓰지 않는 순수 로직이다.
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 import type { Pose } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { LIVE_COACH_CONFIG } from './config';
 
 /** 판정 한 건. 손·세기는 MISS와 키보드 타격에서 null */

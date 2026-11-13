@@ -1,8 +1,8 @@
 // 패드 표시 상태 타이머 규칙(순수 모듈). 리액트·liveStore·세션을 모른다.
 // hit → HIT_MS 후 idle, 판정 → JUDGE_MS 후 idle, 판정 중 들어온 hit은 무시, 새 점등은 이전 타이머를 대체한다.
-import type { PadId } from '@/domain/pads';
-import type { PadVisualState } from '@/domain/drumKit';
-import type { Judgement } from '@/domain/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { PadVisualState } from '@/domain/kit/drumKit';
+import type { Judgement } from '@/domain/play/judgement';
 
 type Kind = 'hit' | 'judge';
 

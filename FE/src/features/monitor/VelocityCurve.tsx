@@ -1,7 +1,7 @@
 // ④ 판정 N: 세기 곡선. 스틱이 보낸 velocity(가로, 입력)와 FE가 쓴 velocity(세로, 출력)를 점으로 찍는다.
 // 입력 = 같은 seq의 HIT 패킷, 출력 = ResolvedHit. 점선은 y = x 기준선일 뿐 펌웨어·FE 곡선을 가정하지 않는다.
 import { memo, useEffect, useRef } from 'react';
-import type { VelocityPair } from '@/features/monitor/core/judgeLog';
+import type { VelocityPair } from '@/features/monitor/core/recording/judgeLog';
 import { cssVar, prepareCanvas } from './monitorTypes';
 
 const PAD_L = 34;

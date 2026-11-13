@@ -1,7 +1,7 @@
 // 자유 연습 반주 재생 훅 (설계 MODE-002 3-7·4-1~4-3, D1·D4·D9·D11). 재생기 1개를 들고 고르기→재생·일시정지·탐색·끄기를 맡는다.
 // 재생기·API·잠금 해제·시계는 주입할 수 있다(기본값은 실제 구현). 재생 중에만 250ms 간격으로 상태를 읽는다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getSongAccompaniment, type SongAccompaniment } from '@/api/songs';
+import { getSongAccompaniment, type SongAccompaniment } from '@/api/song/songs';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { audioEngine, type AudioEngine } from '@/audio/AudioEngine';
 import { unlockAudio } from '@/runtime/audioUnlock';

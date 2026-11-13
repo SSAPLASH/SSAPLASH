@@ -2,9 +2,9 @@
 // 293: 파일 확장자로 MIDI(/songs/midi)와 MusicXML(/songs/musicxml)을 가른다. 응답 모양과 오류 처리는 같다.
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
-import { uploadMidi, uploadMusicXml } from '@/api/songs';
+import { uploadMidi, uploadMusicXml } from '@/api/song/songs';
 import { MIDI_PRECHECK_TEXT, isMidiUncertain, midiErrorText, precheckUpload, type MidiDraft } from '@/domain/song/midiUpload';
-import type { SongDetail } from '@/domain/songCatalog';
+import type { SongDetail } from '@/domain/song/songCatalog';
 
 export type MidiUploadPhase = 'idle' | 'uploading' | 'done' | 'failed';
 

@@ -1,12 +1,12 @@
 // 모니터 페이지 하위 컴포넌트가 공유하는 스냅샷 타입과 작은 표시 헬퍼.
-import type { CalibrationProfile } from '@/domain/calibration';
-import { STICK_PADS } from '@/domain/pads';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { STICK_PADS } from '@/domain/kit/pads';
 import type { PadTableEntry } from '@/input/stickProtocol';
-import type { TransportStats } from '@/input/InputSource';
+import type { TransportStats } from '@/input/source/InputSource';
 import type { AudioLatencyInput } from '@/features/monitor/core/health';
-import type { JudgeStats } from '@/features/monitor/core/judgeLog';
+import type { JudgeStats } from '@/features/monitor/core/recording/judgeLog';
 import type { LatencyStats } from '@/features/monitor/core/latencyStats';
-import type { LogRow, MonitorStats } from '@/features/monitor/core/packetLog';
+import type { LogRow, MonitorStats } from '@/features/monitor/core/recording/packetLog';
 
 /** 100ms마다 페이지가 한 번 찍는 화면용 스냅샷. 일시정지 중에는 갱신하지 않는다 */
 export interface Snap {

@@ -1,6 +1,6 @@
 // 녹음 표시용 순수 함수 (설계 REC-001 6-2). React·스토어·네트워크에 접근하지 않는다.
-import type { Difficulty } from '../chart';
-import { FREE_RECORDING_NAME, recordingTitleSuffix, type RecordingHit, type RecordingMode, type RecordingSummary } from '../recording';
+import type { Difficulty } from '@/domain/song/chart';
+import { FREE_RECORDING_NAME, recordingTitleSuffix, type RecordingHit, type RecordingMode, type RecordingSummary } from './recording';
 
 /** 보관함 최대 녹음 개수(도구 줄 문구용) */
 export const RECORDING_QUOTA = 200;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutBar } from '@/domain/sheet';
+import { layoutBar } from '@/domain/song/sheet';
 import { xInBarContinuous } from './sheetStripMath';
 import { drawSheet, type Colors } from './sheetStripDraw';
 

@@ -4,7 +4,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { buildGuideScript, EXAMPLE_STEPS, GAME_GUIDE_OPTIONS, stateAt, stepTarget } from '@/features/play/domain/guideScript';
 import { laneColorOf } from '@/features/play/domain/highwayLanes';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { StaffLegend } from '@/features/play/components/picker/StaffLegend';
 import { GameGuideScene } from './GameGuideScene';
 import { GuideControls, GuideNowLine } from './GuideControls';

@@ -11,8 +11,8 @@ import { CalibrationStage } from './CalibrationStage';
 import { previewRadius } from './captureRadius';
 import { IDLE_CALIBRATION, useLive, type CalibrationSnapshot } from '@/store/liveStore';
 import { CAPTURE_ORDER, type CaptureSnapshot } from '@/engine/HitCapture';
-import type { PadId } from '@/domain/pads';
-import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
+import type { PadId } from '@/domain/kit/pads';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/kit/calibration/tuning';
 
 const anchor = (pad: PadId, pitch: number, yaw: number) => ({ pad, pitch, yaw, radius: 0, samples: 2, spread: 1 });
 /** 양손이 같은 자리를 친 앵커 */

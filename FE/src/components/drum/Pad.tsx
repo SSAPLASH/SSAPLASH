@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { KitSkin, KitView, PadBadge, PadShape, PadVisualState } from '@/domain/drumKit';
+import type { KitSkin, KitView, PadBadge, PadShape, PadVisualState } from '@/domain/kit/drumKit';
 import type { KitArtPad } from '@/domain/kit/kitArt';
 import { AcousticPad, AcousticUnder } from './acoustic/AcousticPad';
 import { ElectronicPad } from './ElectronicPad';

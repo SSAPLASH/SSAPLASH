@@ -1,7 +1,7 @@
 // 설정 ↔ 입력 소스 ↔ 라이브 스토어 ↔ 오디오를 잇는 접착 코드. main.tsx에서 한 번 부른다.
 // 키보드 소스는 항상 켜 두고, 센서 소스는 설정 sensorKind가 가리키는 하나만 켠다 (설계 D9).
 import { inputManager, keyboardSource, touchSource, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
-import { KEY_MAP } from '@/domain/keyMap';
+import { KEY_MAP } from '@/domain/kit/keyMap';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
@@ -13,20 +13,20 @@ import { applySoundSet, unlockAudio } from '@/runtime/audioUnlock';
 import { pushTelemetry } from '@/engine/telemetry';
 import { diagTap } from '@/engine/diagTap';
 import { preloadSprites } from '@/components/drum/acoustic/sprites';
-import { startClockDiag } from './clockDiag';
+import { startClockDiag } from './diag/clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
-import { startAudioDiag } from './audioDiag';
-import { startYawAutoDiag } from './yawAutoDiag';
+import { startAudioDiag } from './diag/audioDiag';
+import { startYawAutoDiag } from './diag/yawAutoDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { smoothBattery } from '@/domain/kit/stickStatus';
-import { kickOffsetOrStick } from '@/domain/kit/timingCalibration';
-import { devicesReady } from '@/domain/pedalStatus';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
+import { smoothBattery } from '@/domain/kit/device/stickStatus';
+import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
+import { devicesReady } from '@/domain/kit/device/pedalStatus';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import { isSensorSource } from '@/domain/events';
 import { hitSoundActive, setCalibrationSound } from '@/runtime/hitSound';
 import {

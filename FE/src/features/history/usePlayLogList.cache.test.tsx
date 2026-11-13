@@ -2,13 +2,13 @@
 // 플레이 기록 쪽 단위 조회 (설계 COACH-연주-기록-화면-개편 4, TECH-351 캐시 규칙)
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { listPlays, type PlaySummary } from '@/api/plays';
-import { DEFAULT_PLAY_LIST, playKeys, playPageQuery } from '@/api/queries/plays';
-import type { PageResponse } from '@/api/recordings';
+import { listPlays, type PlaySummary } from '@/api/play/plays';
+import { DEFAULT_PLAY_LIST, playKeys, playPageQuery } from '@/api/play/playQueries';
+import type { PageResponse } from '@/api/play/recordings';
 import { queryClient } from '@/runtime/queryClient';
 import { usePlayLogList, type PlayLogQuery } from './usePlayLogList';
 
-vi.mock('@/api/plays', () => ({ listPlays: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ listPlays: vi.fn() }));
 
 const play = (playId: string): PlaySummary => ({
   playId, startedAt: '2026-11-12T05:00:00Z', endedAt: '2026-11-12T05:01:00Z', mode: 'RHYTHM', inputSource: 'KEYBOARD', songId: 1, songTitle: '곡',

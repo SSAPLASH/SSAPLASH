@@ -9,7 +9,7 @@ import { AppShell } from './AppShell';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
-import { useDock, useDockRaised } from '@/components/shell/useShell';
+import { useDock, useDockRaised } from '@/components/shell/nav/useShell';
 
 // Node 실험적 localStorage가 happy-dom 것을 가려 persist 저장이 실패한다 — import 전에 메모리 저장소로 대체한다
 vi.hoisted(() => {
@@ -23,11 +23,11 @@ vi.hoisted(() => {
 });
 
 // 이 테스트가 보는 것은 Dock 자리뿐이다 — 셸의 무거운 자식은 비운다
-vi.mock('@/components/shell/Sidebar', () => ({ Sidebar: () => null }));
-vi.mock('@/components/shell/TopBar', () => ({ TopBar: () => null }));
-vi.mock('@/components/shell/GlassDock', () => ({ GlassDock: () => <div role="toolbar" aria-label="Dock" /> }));
-vi.mock('@/components/shell/ProfileMenu', () => ({ ProfileMenu: () => null }));
-vi.mock('@/components/shell/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
+vi.mock('@/components/shell/nav/Sidebar', () => ({ Sidebar: () => null }));
+vi.mock('@/components/shell/nav/TopBar', () => ({ TopBar: () => null }));
+vi.mock('@/components/shell/dock/GlassDock', () => ({ GlassDock: () => <div role="toolbar" aria-label="Dock" /> }));
+vi.mock('@/components/shell/account/ProfileMenu', () => ({ ProfileMenu: () => null }));
+vi.mock('@/components/shell/dock/StickStatusIndicator', () => ({ StickStatusIndicator: () => null }));
 vi.mock('@/components/shell/useMediaQuery', () => ({ useSidebarCollapsed: () => false }));
 vi.mock('@/components/recording/SaveRecordingDialog', () => ({ SaveRecordingDialog: () => null }));
 vi.mock('@/components/recording/RecordingToast', () => ({ RecordingToast: () => null }));

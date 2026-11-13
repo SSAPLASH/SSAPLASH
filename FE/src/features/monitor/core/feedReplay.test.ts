@@ -5,8 +5,8 @@ import { packetTap, type PacketRecord } from '@/input/packetTap';
 import { encodeSync } from '@/input/stickProtocol';
 import { MonitorFeed } from './feed';
 import { buildSyncAck } from './mockStick';
-import { bytesToHex, type RecordedRow } from './recorder';
-import { buildTimeline } from './replay';
+import { bytesToHex, type RecordedRow } from './recording/recorder';
+import { buildTimeline } from './recording/replay';
 
 const hit = (): ResolvedHit => ({
   id: 7,

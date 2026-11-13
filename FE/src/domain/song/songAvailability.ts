@@ -1,5 +1,5 @@
 // 연주 기록의 곡이 아직 있는지 판정 (설계 CHART-001 4-2, U7). BE는 곡을 소프트 삭제하고, 지운 곡의 상세는 404 `SONG_NOT_FOUND`다.
-// 404만 "삭제됨"으로 보고, 네트워크·5xx·401 같은 다른 실패는 "모름"으로 둔다(삭제로 잘못 표시하지 않는다). 요청은 api/songs가 한다.
+// 404만 "삭제됨"으로 보고, 네트워크·5xx·401 같은 다른 실패는 "모름"으로 둔다(삭제로 잘못 표시하지 않는다). 요청은 api/song/songs가 한다.
 
 export type SongAvailability = 'available' | 'deleted' | 'unknown';
 

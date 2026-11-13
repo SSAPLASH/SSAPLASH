@@ -2,7 +2,7 @@
 // 레슨 카드 음표: 아래로 뻗는 기둥(킥·플로어탐)이 그 아래 패드 이름 글자를 가리지 않아야 한다(11/12 로컬 확인 발견)
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PAD_META, type PadId } from '@/domain/pads';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { PadNotation } from './PadNotation';
 
 /** CSS의 .lesson-staff-name 글자 크기(px, SVG 좌표 단위) */

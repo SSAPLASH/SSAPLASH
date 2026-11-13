@@ -1,5 +1,5 @@
 // Figma Feedback / TimingHistogram 126:4267 — 타이밍 분포 막대(퍼펙트 범위 --perfect, 그 밖 --good)와 빠름·정확·느림 축.
-import { Card } from '@/components/ui/Card';
+import { Card } from '@/components/ui/layout/Card';
 import './result.css';
 
 export interface TimingHistogramProps {

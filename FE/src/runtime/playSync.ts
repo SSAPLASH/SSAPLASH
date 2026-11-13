@@ -4,15 +4,15 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
-import { uploadPlay } from '@/api/plays';
-import { playKeys } from '@/api/queries/plays';
+import { uploadPlay } from '@/api/play/plays';
+import { playKeys } from '@/api/play/playQueries';
 import { queryClient } from './queryClient';
-import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/reports';
+import { getAllReportNotes, getReport, getReportNotesPage, type ReportNotesDto } from '@/api/play/reports';
 import { logConsent } from '@/domain/play/dataConsent';
 import { buildUploadBody, type PlayUploadBody } from '@/domain/play/playUpload';
-import type { Report, ReportNote } from '@/domain/report';
+import type { Report, ReportNote } from '@/domain/play/report';
 import { getPlayLog, updatePlayLog } from '@/engine/playLog';
-import type { PlayUploadState } from '@/domain/playLog';
+import type { PlayUploadState } from '@/domain/play/playLog';
 
 const APP_VERSION: string | null = import.meta.env.VITE_APP_VERSION || null;
 

@@ -3,12 +3,12 @@
 // 추천 곡(isRecommended)은 제목 옆에 「✦ AI 추천」 라벨을 붙인다 — 제목만 말줄임하고 라벨은 줄이지 않는다(Figma SongRow `AI 추천 라벨`, 설계 COACH-004-song-picker-ai-tab 3-3).
 // 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { artistLabel, songLevelLabel, songStatusView, type SongSummary } from '@/domain/songCatalog';
+import { artistLabel, songLevelLabel, songStatusView, type SongSummary } from '@/domain/song/songCatalog';
 import { formatDuration } from '@/domain/time/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
-import { Pagination } from '@/components/ui/Pagination';
-import '@/components/ui/table.css';
+import { Pagination } from '@/components/ui/layout/Pagination';
+import '@/components/ui/layout/table.css';
 import './song-table.css';
 
 export const SONG_TABLE_PAGE_SIZE = 6;

@@ -1,5 +1,5 @@
 // 결과 화면 [다시 하기] 경로 계산(D8). 로그·업로드는 건드리지 않고 경로만 복구한다.
-import { BUILTIN_CHARTS, builtinId } from '../chart';
+import { BUILTIN_CHARTS, builtinId } from '@/domain/song/chart';
 
 /** 경로 계산에 쓰는 로그 필드(PlayLog의 부분) */
 export interface RetryLog {

@@ -1,7 +1,7 @@
 // 전자·네온 스킨 마크업 테스트
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { kitPadsFor, KIT_SKINS, type KitSkin, type PadShape, type PadVisualState } from '@/domain/drumKit';
+import { kitPadsFor, KIT_SKINS, type KitSkin, type PadShape, type PadVisualState } from '@/domain/kit/drumKit';
 import { DrumKit } from './DrumKit';
 import { Pad, PadDefs } from './Pad';
 

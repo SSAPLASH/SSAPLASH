@@ -1,6 +1,6 @@
 // 실물 드럼 조각 이미지. 이름은 domain/kit/kitArt의 sprite와 같다. 파일은 FE/scripts/kit-art/build.py가 만든다.
 // 같은 이름의 조각이 persp(원근, 큰 킷)·top(위에서 본 그림, 작은 킷) 폴더에 하나씩 있다.
-import type { KitView } from '@/domain/drumKit';
+import type { KitView } from '@/domain/kit/drumKit';
 import crash from './persp/crash.webp';
 import crashTop from './persp/crash-top.webp';
 import floorTom from './persp/floor-tom.webp';

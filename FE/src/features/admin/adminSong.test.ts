@@ -10,7 +10,7 @@ import {
   validateAdminDraft,
   type AdminSongDraft,
 } from './adminSong';
-import { isAdmin } from '@/domain/auth';
+import { isAdmin } from '@/domain/account/auth';
 
 const midi = new File(['abc'], 'a.mid');
 

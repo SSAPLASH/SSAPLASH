@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
-import type { PadId } from '@/domain/pads';
-import type { PadStat, Report, ReportNote, WeakSegment } from '@/domain/report';
+import type { PadId } from '@/domain/kit/pads';
+import type { PadStat, Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { flowBins, focusOfBin, focusOfCluster, focusOfTransition } from '@/features/result/domain/reportView';
 import { FocusPanel } from './FocusPanel';
 import { NoteFlowChart } from './NoteFlowChart';

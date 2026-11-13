@@ -2,7 +2,7 @@
 // 일시정지 버튼은 없다(U20, Dock ‖·Esc). 각 수치는 data-stat 요소로 분리해 카운트업 같은 이펙트를 나중에 얹을 수 있게 한다.
 import { useEffect, useRef, useState } from 'react';
 import { animate, m, useMotionValue, useReducedMotion } from 'motion/react';
-import type { Difficulty } from '@/domain/chart';
+import type { Difficulty } from '@/domain/song/chart';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { SongCover } from '@/components/song/SongCover';
 import './PlayHud.css';

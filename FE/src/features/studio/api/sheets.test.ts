@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SheetError } from '@/features/studio/domain/sheetMusic';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { deleteSheet, getSheet, linkSheetToSong, listSheets, updateSheetTitle, uploadSheet } from './sheets';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };

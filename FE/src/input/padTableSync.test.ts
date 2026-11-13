@@ -1,9 +1,9 @@
 // 손별 패드 표 전송·지우기·적용 확인 검증(PLAY-004).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalibrationProfile, PadAnchor, PadTableStatus } from '@/domain/calibration';
+import type { CalibrationProfile, PadAnchor, PadTableStatus } from '@/domain/kit/calibration/calibration';
 import type { InputSourceKind, SourceState } from '@/domain/events';
-import { STICK_PADS, type PadId } from '@/domain/pads';
-import { BaseInputSource } from './InputSource';
+import { STICK_PADS, type PadId } from '@/domain/kit/pads';
+import { BaseInputSource } from './source/InputSource';
 import { packetTap } from './packetTap';
 import { padTableSync } from './padTableSync';
 

@@ -5,7 +5,7 @@ import type { FxEngine } from '@/components/fx/fxEngine';
 import type { FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import { createLiveFxSource } from '@/components/fx/fxSource';
 import { useSettings } from '@/store/settingsStore';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import {
   fitScale,
   fitScaleBox,
@@ -18,7 +18,7 @@ import {
   type KitView,
   type PadBadge,
   type PadVisualState,
-} from '@/domain/drumKit';
+} from '@/domain/kit/drumKit';
 import type { KitFrame } from '@/domain/kit/kitFrame';
 import { Pad, PadDefs } from './Pad';
 import { RING } from './padRing';

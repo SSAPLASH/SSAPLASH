@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { JUDGEMENT_SCORE } from '@/domain/judgement';
+import { JUDGEMENT_SCORE } from './judgement';
 import {
   LESSONS_PATH,
   isBeginnerChart,

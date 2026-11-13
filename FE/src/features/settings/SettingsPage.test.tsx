@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { UserMe } from '@/domain/auth';
+import type { UserMe } from '@/domain/account/auth';
 import { useAuth } from '@/store/authStore';
 import { useRecommendationConsent } from '@/store/recommendationConsentStore';
 import { useSettings } from '@/store/settingsStore';
-import { recommendationVersion } from '@/domain/signupTerms';
+import { recommendationVersion } from '@/domain/account/signupTerms';
 import { SettingsPage } from './SettingsPage';
 
 const user: UserMe = {

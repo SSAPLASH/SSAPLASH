@@ -1,8 +1,8 @@
 // 공용 곡 표 (Jira 262). 행마다 반주 올리기/교체 — 숨긴 파일 입력을 버튼으로 연다. 업로드 호출은 하지 않고 onUpload로 넘긴다.
 import { useRef } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/action/Button';
 import type { AdminSong } from './adminSong';
-import '@/components/ui/table.css';
+import '@/components/ui/layout/table.css';
 import './admin.css';
 
 interface Props {

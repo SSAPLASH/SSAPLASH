@@ -2,8 +2,8 @@
 // jobId가 있으면 작업 스냅샷을 조회하고, 없으면 곡 상태로 복원한다.
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
-import { getJob } from '@/api/jobs';
-import { getSong, listAllSongs, uploadAudio } from '@/api/songs';
+import { getJob } from '@/api/song/jobs';
+import { getSong, listAllSongs, uploadAudio } from '@/api/song/songs';
 import {
   ACTIVE_JOB_KEY,
   PRECHECK_TEXT,

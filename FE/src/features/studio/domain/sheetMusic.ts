@@ -1,5 +1,5 @@
 // 내 악보 보관 도메인 (설계 CHART-001 악보 보관·보기 3-2, 4-5). 타입·업로드 전 검사·오류 문구·만료 판단·라이브러리 목록 합치기. 네트워크는 api/sheets가 맡는다.
-import { createdTime, mineGroup, type SongSummary } from '@/domain/songCatalog';
+import { createdTime, mineGroup, type SongSummary } from '@/domain/song/songCatalog';
 
 /** BE `kind` */
 export type SheetKind = 'IMAGE' | 'PDF';

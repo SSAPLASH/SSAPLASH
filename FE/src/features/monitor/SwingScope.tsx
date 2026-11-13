@@ -4,7 +4,7 @@
 import { memo, useEffect, useState } from 'react';
 import { useRef } from 'react';
 import { encodeSetMode, StreamMode, type DecodedHit } from '@/input/stickProtocol';
-import type { LogRow } from '@/features/monitor/core/packetLog';
+import type { LogRow } from '@/features/monitor/core/recording/packetLog';
 import { toSeries, type SwingAssembler, type SwingRecord } from '@/features/monitor/core/swingAssembler';
 import { cssVar, fmt, prepareCanvas, stickName, type SendFn } from './monitorTypes';
 

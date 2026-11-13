@@ -5,7 +5,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { useRealign } from './useRealign';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { inputManager } from '@/runtime/sources';
-import { BaseInputSource } from '@/input/InputSource';
+import { BaseInputSource } from '@/input/source/InputSource';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
 import { useLive } from '@/store/liveStore';

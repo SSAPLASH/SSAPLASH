@@ -12,9 +12,9 @@ import {
   type HealthInput,
   type StageHealth,
 } from './health';
-import type { ResolveStats, ScoreStats } from './judgeLog';
+import type { ResolveStats, ScoreStats } from './recording/judgeLog';
 import type { LatencyStats } from './latencyStats';
-import type { LogRow, MonitorStats, StickStats, SyncSample } from './packetLog';
+import type { LogRow, MonitorStats, StickStats, SyncSample } from './recording/packetLog';
 
 const NOW = 100_000;
 

@@ -1,6 +1,6 @@
 // 구간 재생 상태 컨트롤러 (COACH-003 설계 D8). 훅은 컨트롤러를 구독만 하므로 컨트롤러를 가짜 플레이어로 검사한다.
 import { describe, expect, it, vi } from 'vitest';
-import type { SegmentPlan } from '@/domain/time/segmentPlayback';
+import type { SegmentPlan } from '@/features/result/domain/segmentPlayback';
 import { SegmentPlaybackController, type SegmentPlayerPort } from './useSegmentPlayer';
 
 const plan: SegmentPlan = { events: [], lengthMs: 1000, fromMs: 0, toMs: 1000 };

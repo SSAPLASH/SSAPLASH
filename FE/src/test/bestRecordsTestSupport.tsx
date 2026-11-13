@@ -4,22 +4,22 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentType } from 'react';
 import { create } from 'zustand';
-import { getBestRecords } from '@/api/plays';
-import { listSongs } from '@/api/songs';
+import { getBestRecords } from '@/api/play/plays';
+import { listSongs } from '@/api/song/songs';
 import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
-import { BUILTIN_CHARTS } from '@/domain/chart';
-import type { UserMe } from '@/domain/auth';
-import type { SongDetail } from '@/domain/songCatalog';
+import { BUILTIN_CHARTS } from '@/domain/song/chart';
+import type { UserMe } from '@/domain/account/auth';
+import type { SongDetail } from '@/domain/song/songCatalog';
 import * as playLogs from '@/engine/playLog';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
-vi.mock('@/api/songs', async (orig) => ({ ...(await orig<typeof import('@/api/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
 // 곡 선택의 비슷한 곡·추천이 실제 네트워크로 나가지 않게 막는다(이 시나리오는 추천을 검증하지 않는다)
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }) }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
 vi.mock('@/runtime/playSync', () => ({ usePlaySync: create(() => ({ states: {} })), startPlaySync: vi.fn() }));
 vi.mock('@/runtime/hitSound', async (orig) => ({ ...(await orig<typeof import('@/runtime/hitSound')>()), setSoundOnHit: vi.fn() }));
 vi.mock('@/runtime/keyboardDrum', () => ({ setKeyboardDrum: vi.fn(), useKeyboardDrum: vi.fn() }));
@@ -28,13 +28,13 @@ vi.mock('@/features/play/components/stage/screenFit', () => ({ useScreenFits: ()
 vi.mock('@/components/drum/DrumKit', () => ({ DrumKit: () => null }));
 // 하이웨이는 그리지 않고 프레임 콜백만 잡아 둔다 — 테스트가 곡 끝을 흉내 낸다
 const frame: { current: ((now: number) => void) | null } = { current: null };
-vi.mock('@/features/play/components/stage/NoteHighway', () => ({
+vi.mock('@/features/play/components/stage/highway/NoteHighway', () => ({
   NoteHighway: ({ onFrame }: { onFrame?: (now: number) => void }) => {
     frame.current = onFrame ?? null;
     return null;
   },
 }));
-vi.mock('@/features/play/components/stage/SheetPager', () => ({ SheetPager: () => null }));
+vi.mock('@/features/play/components/stage/sheet/SheetPager', () => ({ SheetPager: () => null }));
 vi.mock('@/store/songStore', async (original) => ({ ...await original<typeof import('@/store/songStore')>(), loadChart: vi.fn() }));
 
 const detail: SongDetail = {

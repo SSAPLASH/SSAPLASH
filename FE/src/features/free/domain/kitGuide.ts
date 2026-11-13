@@ -1,7 +1,7 @@
 // 자유 연습 키트 가이드(MODE-002 D2·D6): 패드 이름표 알약의 목록·자리·키를 만든다. React·runtime을 모르는 순수 함수
-import { kitBoxFor, kitPadsFor, type KitSkin } from '@/domain/drumKit';
-import { KEY_MAP } from '@/domain/keyMap';
-import type { PadId } from '@/domain/pads';
+import { kitBoxFor, kitPadsFor, type KitSkin } from '@/domain/kit/drumKit';
+import { KEY_MAP } from '@/domain/kit/keyMap';
+import type { PadId } from '@/domain/kit/pads';
 
 export interface KitGuideLabel {
   pad: PadId;

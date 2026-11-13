@@ -1,9 +1,9 @@
 // 진단 탭. 판정(④)·채점(⑤)·출력(⑥) 관찰용 이벤트를 publish하고 모니터가 구독한다(packetTap과 같은 스타일).
 // 구독자가 없으면 즉시 반환해 판정 경로에 비용을 얹지 않는다. 저장·집계는 하지 않는다(모니터 judgeLog 몫).
 import type { ResolvedHit } from '@/domain/events';
-import type { Judgement, TimingWindows } from '@/domain/judgement';
+import type { Judgement, TimingWindows } from '@/domain/play/judgement';
 import type { CoachBasis } from '@/domain/play/coachBasis';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 세션 요약(종료 시점 스냅샷). RhythmSession.snapshot()에서 필요한 값만 */
 export interface DiagSessionSummary {

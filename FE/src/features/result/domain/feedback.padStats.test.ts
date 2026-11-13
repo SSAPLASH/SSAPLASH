@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeByPad } from './feedback';
-import type { Judgement } from '@/domain/judgement';
-import type { PadId } from '@/domain/pads';
-import type { LoggedHit, LogNote, PlayLog } from '@/domain/playLog';
+import type { Judgement } from '@/domain/play/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import type { LoggedHit, LogNote, PlayLog } from '@/domain/play/playLog';
 
 const note = (index: number, pad: PadId, judgement: Judgement | null, deltaMs: number | null = null): LogNote => ({
   index,

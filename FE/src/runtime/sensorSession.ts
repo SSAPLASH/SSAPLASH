@@ -1,6 +1,6 @@
 // 센서 소스 세션: 설정 sensorKind가 가리키는 센서 하나를 켜고 끄며, 그 인스턴스·입력 표면·배터리 기록·재연결 동작을 가진다.
 // 화면은 activateSensor·connectSensor·bindSensorSurface를 부르고, 타격·상태 접착은 app/bootstrap이 아래 export를 읽어 한다.
-import type { InputSource, SurfaceToPose } from '@/input/InputSource';
+import type { InputSource, SurfaceToPose } from '@/input/source/InputSource';
 import { inputManager } from '@/runtime/sources';
 import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { useSettings } from '@/store/settingsStore';
@@ -13,8 +13,8 @@ import { anchorsToProfile } from '@/domain/kit/kitJudge';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { padTableSync } from '@/input/padTableSync';
 import { yawDriftMonitor } from '@/input/yawDriftMonitor';
-import { pedalRequired } from '@/domain/pedalStatus';
-import type { CalibrationProfile } from '@/domain/calibration';
+import { pedalRequired } from '@/domain/kit/device/pedalStatus';
+import type { CalibrationProfile } from '@/domain/kit/calibration/calibration';
 
 let currentSensor: SensorId = 'none';
 /** 지금 연결된 센서 인스턴스. 'none'이면 null */

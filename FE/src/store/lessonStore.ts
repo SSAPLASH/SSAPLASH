@@ -1,7 +1,7 @@
 // 입문 코스 상태 (Jira 331, 설계 SETUP-입문-코스 2장). 진도의 원본은 서버다. 여기서는 목록과
 // 이번 접속에서 통과한 레슨(업로드·저장이 늦어도 다음 스테이지를 열어 두려고), 권유 카드 닫기만 들고 있다.
 import { create } from 'zustand';
-import { fetchLessons } from '@/api/lessons';
+import { fetchLessons } from '@/api/play/lessons';
 import type { LessonList } from '@/domain/play/lesson';
 
 /** 권유 카드를 닫았는지(브라우저마다). 진도가 아니라 표시 편의라 서버에 두지 않는다 */
