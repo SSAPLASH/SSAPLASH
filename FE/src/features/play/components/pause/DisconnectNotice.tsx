@@ -74,7 +74,7 @@ export function DisconnectNotice({ left, right, pedal, status, onExit, onReconne
         {reconnected ? '재연결 성공!' : disconnectTitle(left, right, pedal)}
       </h2>
       {reconnected && realign ? (
-        <RealignPrompt hands={realign.hands} done={realign.done} variant="card" onSkip={realign.onSkip} />
+        <RealignPrompt hands={realign.hands} done={realign.done} unstable={realign.unstable} variant="card" onSkip={realign.onSkip} />
       ) : (
         <p className="stick-disconnect-status" role={reconnected ? undefined : 'status'}>
           {trying && <span className="stick-spinner" aria-hidden="true" />}
