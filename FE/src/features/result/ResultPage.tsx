@@ -15,6 +15,8 @@ import { DEFAULT_TIMING } from '@/domain/play/judgement';
 import { isSensorSource } from '@/domain/events';
 import { shouldRemindTimingCal } from '@/domain/kit/calibration/timingCalPrompt';
 import { useSettings } from '@/store/settingsStore';
+import { useLive } from '@/store/liveStore';
+import { clockSkewText } from '@/domain/kit/device/arrivalSkew';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/runtime/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/play/playRetry';
@@ -94,6 +96,12 @@ export function ResultPage() {
   const [remind] = useState(() => {
     const st = useSettings.getState();
     return stateBest !== null && log !== null && shouldRemindTimingCal({ sensor: isSensorSource(log.inputSource), timingCal: st.timingCal, prompt: st.timingCalPrompt });
+  });
+  // 기기 사이 시각 차이 경고 띠(PLAY-006): 연주를 마치고 도착한 시점에 경고 중이었으면 한 줄만 보인다(버튼 없음).
+  // 도착 시점 값을 붙잡아 이 화면에 머무는 동안 흔들리지 않게 하고, 연주 기록에서 연 옛 결과에는 보이지 않는다
+  const [skewText] = useState(() => {
+    const skew = useLive.getState().clockSkew;
+    return stateBest !== null && skew !== null ? clockSkewText(skew) : null;
   });
   const [calOpen, setCalOpen] = useState(false);
   useEffect(() => {
@@ -227,6 +235,13 @@ export function ResultPage() {
               <Button variant="secondary" onClick={() => setCalOpen(true)}>
                 박자 맞추기
               </Button>
+            </div>
+          </div>
+        )}
+        {skewText !== null && (
+          <div className="lesson-band" role="status">
+            <div className="lesson-band-text">
+              <b>{skewText}</b>
             </div>
           </div>
         )}
