@@ -1,4 +1,4 @@
-"""지난 결과 폴더를 MLflow에 다시 기록 (설계 CHART-003-mlflow-relog 2·3장).
+"""지난 결과 폴더를 MLflow에 다시 기록.
 
 결과 파일이 원본이고 MLflow 기록은 거기서 만듦. 폴더 종류는 파일·열로 판별:
 - separation: results.csv에 sdrDrums 열 → 실험 separation-bench, run 1개
@@ -37,7 +37,7 @@ RULES_EXPERIMENT = "chart-rules"  # bench.analysis.rule_eval과 같은 이름
 FINETUNE_EXPERIMENT = "adtof-finetune"
 ADTOF_EVAL_EXPERIMENT = "adtof-eval"
 
-# 확인용·합본·분석 그림 폴더와 큰 하위 폴더. --recursive에서 들어가지 않음 (설계 1장 제외)
+# 확인용·합본·분석 그림 폴더와 큰 하위 폴더. --recursive에서 들어가지 않음
 SKIP_PREFIXES = ("check-", "local-", "combined", "tom-pitch", "tom-detect-", "smoke_")
 SKIP_SUFFIXES = ("-check",)
 SKIP_NAMES = {"separation_demo", "separated", "midi", "inputs", "mlruns", ".git", "__pycache__"}
@@ -74,7 +74,7 @@ class RelogOutcome:
     kind: str | None
     experiment: str
     run_id: str
-    status: str  # 기록 / 건너뜀(중복) / 건너뜀(이유) / 실패
+    status: str  # 기록 / 기록 예정(dry-run) / 건너뜀(중복) / 건너뜀 / 실패
     mlflow_run_id: str = ""
     detail: str = ""
 

@@ -1,16 +1,10 @@
-"""드럼 채보 추론 모듈 (설계 2장 transcription, 3장 "채보 모듈", 4-1절 5~6번).
+"""드럼 채보 추론 모듈. 드럼 트랙 파일 → 채보 JSON 파일 + TranscriptionOutput.
 
-드럼 트랙 파일 → 채보 JSON 파일 + TranscriptionOutput. 모델은 `configs/chart/transcription.yaml`의
-model_config가 가리키는 벤치마크 yaml로 고르고(기본 ADTOF + 드럼 킷 분리), 벤치마크 어댑터
-(`bench/transcribers`)를 그대로 import해 씀. 모델·규칙을 바꿀 때는 그 경로만 바꾸고 이 파일은 고치지 않음.
-
+모델은 `configs/chart/transcription.yaml`의 `models` 중 `model` 이름(환경 변수 SSAPLASH_CHART_MODEL 우선)으로 고름.
 흐름: TranscriptionModule(config).load() 한 번 → transcribe_file() 곡마다 → close().
-진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·TRANSCRIBE·JSON, fraction은 단계 시작 0·끝 1.
-bpm은 설정 tempo.method의 추정기(서비스는 Beat This!, 설계 U15)로 구하고, 채보 모델과 같이 load()에서 올림.
-채보 가능 검사(S15P31A307-246): 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패면
-ChartNotTranscribableError. 노트 수 기준은 설정 drum_check에 값이 있을 때만 봄.
-generatorVersion은 `<모델 yaml name>@<해시 12자리>`. 해시에 모델 yaml, bpm 방법·설정, offsetMs·bpm 계산 규칙 버전이
-들어가서 채보 모델·규칙 값·bpm 방법·시각 규칙 중 하나만 바뀌어도 같이 바뀜(설계 U5·U15).
+진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·TRANSCRIBE·JSON.
+채보 가능 검사: 드럼 트랙 무음, 1분당 노트 수 기준 미달, 박 추적 실패면 ChartNotTranscribableError.
+generatorVersion은 `<모델 yaml name>@<해시 12자리>`. 모델 yaml·bpm 설정·시각 규칙 버전 중 하나만 바뀌어도 바뀜.
 """
 
 from __future__ import annotations
@@ -52,7 +46,7 @@ from ssaplash_ai.chart.tempo import TempoEstimate, TempoEstimator, create_tempo_
 
 STAGES = ("LOAD_INPUT", "TRANSCRIBE", "JSON")
 CHART_FILENAME = "chart.json"
-# 박 추정 입력. 원곡이 있으면 원곡(설계 CHART-003-variable-tempo-exp), 없으면 드럼 트랙
+# 박 추정 입력. 원곡이 있으면 원곡, 없으면 드럼 트랙
 BEAT_SOURCE_MIX = "mix"
 BEAT_SOURCE_DRUMS = "drums"
 
@@ -63,7 +57,7 @@ ProgressCallback = Callable[[str, float], None]
 
 @dataclass
 class TranscriptionOutput:
-    """transcribe_file 결과. chart는 chart.json과 같은 내용. BE 대응은 설계 3장 표."""
+    """transcribe_file 결과. chart는 chart.json과 같은 내용."""
 
     chart_json_path: Path
     chart: dict
@@ -121,13 +115,13 @@ class TranscriptionModule:
 
     @property
     def model_name(self) -> str:
-        """모델 yaml의 name (예: adtof_drumsep)."""
+        """모델 yaml의 name (예: strum_crnn_songsterr_egmd)."""
         self._require_loaded()
         return self._model_config.name
 
     @property
     def model_version(self) -> str:
-        """모델 yaml name + 해시 12자리(모델 yaml·bpm 방법·tempo 설정·시각 규칙 버전). 채보 JSON generatorVersion (설계 U5)."""
+        """모델 yaml name + 해시 12자리(모델 yaml·bpm 방법·tempo 설정·시각 규칙 버전). 채보 JSON generatorVersion."""
         self._require_loaded()
         tempo = self.config.tempo
         key = "|".join(
@@ -147,7 +141,7 @@ class TranscriptionModule:
         return f"{self._model_config.name}@{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
     def load(self) -> float:
-        """모델 yaml 읽기 → 가중치 다운로드(없으면) → 채보 모델·bpm 모델 올리기. 올리는 데 걸린 초를 돌려줌."""
+        """모델 yaml 읽기 → 채보 모델 올리기 → bpm 모델 올리기. 올리는 데 걸린 초를 돌려줌."""
         try:
             model_config = TranscriberConfig.from_yaml(self.config.model_config)
             transcriber = create_transcriber(model_config, self.device)
@@ -180,10 +174,8 @@ class TranscriptionModule:
     ) -> TranscriptionOutput:
         """드럼 트랙 파일 → out_dir/chart.json 저장 → TranscriptionOutput.
 
-        duration_ms를 주면(워커가 BE claim의 원곡 길이를 넘김, 설계 U13) 노트 시각 상한과
-        metrics.durationMs에 그 값을 씀. 없으면 드럼 트랙 길이.
-        beat_audio_path를 주면(워커가 작업 폴더의 원곡을 넘김) 박 추정을 그 파일로 함. 드럼 트랙과 같은 시간축이어야
-        하고, 읽지 못하면 드럼 트랙으로 함 (설계 CHART-003-variable-tempo-exp).
+        duration_ms를 주면 노트 시각 상한과 metrics.durationMs에 그 값을 씀.
+        beat_audio_path를 주면 박을 그 파일(원곡)에서 찾음. 읽지 못하면 드럼 트랙으로 함.
         """
         self._require_loaded()
         notify = on_progress or _no_progress
@@ -286,7 +278,7 @@ class TranscriptionModule:
 def check_transcribable(
     n_notes: int, length_ms: int, tempo: TempoEstimate, check: DrumCheckConfig
 ) -> None:
-    """채보를 만들 수 있는지. 노트 수를 먼저 보고, 통과하면 박 추적 결과를 봄 (설계 4-1절 5~6번).
+    """채보를 만들 수 있는지. 노트 수를 먼저 보고, 통과하면 박 추적 결과를 봄.
 
     걸리면 ChartNotTranscribableError. 메시지는 실패 보고 summary로 나가므로 어느 경우인지 적음.
     """

@@ -1,8 +1,7 @@
-"""워커 설정 (설계 3-1절). 환경 변수 `SSAPLASH_WORKER_*` → WorkerSettings.
+"""워커 설정. 환경 변수 → WorkerSettings.
 
 비밀 값(BE 주소·workerId·토큰)은 환경 변수로만 받음. 토큰은 repr·오류 메시지에 넣지 않음.
-모델 설정 yaml 경로는 명령줄 인자로 받고, 기본값은 `configs/chart/*.yaml`(chart.config).
-음악 여부 검사 설정 경로(music_check_config)가 None이면 분리 전 검사를 하지 않음. 명령줄은 기본 경로를 넘김.
+music_check_config가 None이면 분리 전 검사를 하지 않음.
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ ENV_TOKEN = "SSAPLASH_WORKER_TOKEN"
 ENV_POLL_SEC = "SSAPLASH_WORKER_POLL_SEC"
 ENV_HEARTBEAT_SEC = "SSAPLASH_WORKER_HEARTBEAT_SEC"
 ENV_KEEP_FILES = "SSAPLASH_WORKER_KEEP_FILES"
-# 실패 보고 본문에 reason을 넣을지 (S15P31A307-246). BE 저장·노출 연동을 확인하기 전까지 기본 꺼짐
+# 실패 보고 본문에 reason을 넣을지. BE 저장·노출 연동을 확인하기 전까지 기본 꺼짐
 ENV_SEND_REASON = "SSAPLASH_WORKER_SEND_REASON"
 
 REQUIRED_ENV = (ENV_BASE_URL, ENV_WORKER_ID, ENV_TOKEN, ENV_WORK_DIR)
@@ -61,7 +60,7 @@ class WorkerSettings:
     transcription_config: Path = DEFAULT_TRANSCRIPTION_CONFIG
     # 분리 전 음악 여부 검사 설정 yaml. None이면 검사 안 함
     music_check_config: Path | None = None
-    # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기 (설계 3-2·3-6절)
+    # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기
     connect_timeout_sec: float = 5.0
     read_timeout_sec: float = 30.0
     download_timeout_sec: float = 120.0

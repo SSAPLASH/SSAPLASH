@@ -1,11 +1,11 @@
-"""규칙 후보 평가 (탐·크래시 규칙 설계 3장 "rule-eval 점수", 4장).
+"""규칙 후보 평가.
 
 저장한 특징(rule_features) + 규칙 설정 → assign_pads로 패드 붙이기 → 정답과 짝지어 점수. 후보 여러 개를
 한 번에 비교하고, 후보 하나 = MLflow run 하나(실험 chart-rules)로 기록.
 
 점수
 - f1{패드}: 패드별 F1(50ms). 벤치마크 hit_f1과 같은 짝짓기라 기본 규칙으로 돌리면 지난 벤치마크
-  hits_by_class.csv와 같은 개수가 나와야 함(인수 조건 2)
+  hits_by_class.csv와 같은 개수가 나와야 함
 - tomAssignAcc / cymbalAssignAcc: 탐(심벌) 정답과 시각이 맞은 타격 중 3종(2종)을 맞게 붙인 비율. ADTOF가
   놓치거나 잘못 잡은 것은 빼고 규칙만의 성능을 봄
 - tomFalseKept / cymbalFalseKept: 정답이 근처에 없는데 탐(심벌)으로 남은 타격 수
@@ -221,19 +221,19 @@ class SongEval:
     cymbal: GroupResult
     n_true: int
     n_pred: int
-    # 탐 거르기로 버린 타격 수, 상대 방식의 묶음 수와 묶음 중앙값 Hz (S15P31A307-164)
+    # 탐 거르기로 버린 타격 수, 상대 방식의 묶음 수와 묶음 중앙값 Hz
     tom_dropped: int = 0
     tom_clusters: int = 0
     tom_cluster_hz: str = ""
     # 곡의 킥 음높이(Hz). 킥 울림 빼기(tom_kick_exclude_st)를 껐으면 빈 문자열
     tom_kick_hz: str = ""
-    # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 수 (S15P31A307-164 재연구)
+    # 거르기 기준 아래였지만 낮은 탐 되살리기로 남긴 수
     tom_rescued: int = 0
     # 이름을 붙인 뒤 킥과 겹쳐 버린 탐 수 (tom_kick_drop_ms)
     tom_kick_dropped: int = 0
     # 곡 안 일대일 대응으로 셌을 때 맞는 탐 수 (이름이 서로 바뀐 것은 맞은 것으로)
     tom_consistent: int = 0
-    # 패드 9종 기준(페달을 HIHAT에 안 합침) 개수와 하이햇·페달 혼동 수 (S15P31A307-164 v0.2)
+    # 패드 9종 기준(페달을 HIHAT에 안 합침) 개수와 하이햇·페달 혼동 수
     pads9: dict[str, MatchCounts] = field(default_factory=dict)
     pedal: PedalConfusion = field(default_factory=PedalConfusion)
 

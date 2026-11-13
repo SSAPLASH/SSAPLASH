@@ -1,19 +1,10 @@
-"""원곡 읽기·트랙 쓰기 (설계 2장 audio_io, 4-1절 1·3번).
+"""원곡 읽기·트랙 쓰기.
 
-읽기: mp3·wav·flac·opus·m4a → (채널 2, 샘플) float32, 44.1kHz. 디코딩·샘플레이트 변환·모노 복사는 벤치마크
-`datasets/base.py`의 read_audio(soundfile + soxr)를 그대로 쓰고, 여기서는 입력 검사만 더함.
-soundfile 0.14(libsndfile 1.2)가 mp3·Ogg Opus를 읽으므로 ffmpeg가 필요 없음(설계 U3).
-libsndfile이 못 여는 파일(m4a의 AAC·ALAC)만 PyAV로 디코딩함. 확장자가 아니라 soundfile이 열었는지로 고름.
-PyAV는 FFmpeg 라이브러리를 휠에 묶어 와서 시스템 ffmpeg가 필요 없음. AAC 앞쪽 인코더 지연은 FFmpeg가 잘라 주고,
-마지막 프레임의 채움 샘플은 헤더 길이로 자름(_read_pyav).
-
-검사 순서: 파일 열기 → 길이 상한(헤더만 읽고 디코딩 전에) → 샘플레이트 범위 → 디코딩 → 무음.
-어느 하나라도 걸리면 ChartInputError, 모델은 돌지 않음(4-4절).
-
-쓰기: flac 16비트(기본) 또는 wav PCM_16. ±1을 넘는 값은 잘라 저장. 실패하면 ChartOutputError.
-
-길이 맞추기: BE가 준 원곡 길이(ms)로 샘플 수를 정하고(samples_for_ms) 끝에서만 자르거나 채움(fit_length).
-워커 설계 3-7절. BE는 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 정확히 같은지 검사함.
+읽기: mp3·wav·flac·opus·m4a → (채널 2, 샘플) float32, 44.1kHz. soundfile로 열고 못 여는 m4a만 PyAV로 디코딩.
+검사 순서: 파일 열기 → 길이 상한(디코딩 전) → 샘플레이트 범위 → 디코딩 → 무음. 걸리면 ChartInputError.
+쓰기: flac 16비트 또는 wav PCM_16. ±1을 넘는 값은 잘라 저장. 실패하면 ChartOutputError.
+길이 맞추기: BE가 준 원곡 길이(ms)로 샘플 수를 정하고 끝에서만 자르거나 채움.
+BE가 분리 결과 flac의 길이를 ms로 올림해 원곡 길이와 같은지 검사하기 때문.
 """
 
 from __future__ import annotations
@@ -105,11 +96,9 @@ def _probe_pyav(path: Path) -> AudioInfo:
 
 
 def _read_pyav(path: Path, sample_rate: int, frames: int) -> np.ndarray:
-    """PyAV로 디코딩 → (2, 샘플) float32. 변환·채널 정리는 datasets/base.py read_audio와 같음.
+    """PyAV로 디코딩 → (2, 샘플) float32.
 
-    frames는 probe가 읽은 원본 샘플레이트 기준 길이. AAC는 마지막 프레임을 1024샘플로 채워 저장하는데
-    PyAV 18(Python 3.11에서 쓸 수 있는 마지막 판)은 이 채움을 잘라 주지 않아, 디코딩 결과가 더 길면 frames에서 자름.
-    앞쪽 인코더 지연은 FFmpeg가 m4a의 edit list를 읽어 이미 건너뜀.
+    AAC는 마지막 프레임을 1024샘플로 채워 저장하는데 PyAV가 잘라 주지 않아, 결과가 더 길면 frames에서 자름.
     """
     chunks: list[np.ndarray] = []
     with av.open(str(path)) as container:
@@ -191,10 +180,7 @@ def duration_ms(n_samples: int, sample_rate: int) -> int:
 
 
 def samples_for_ms(duration_ms: int, sample_rate: int) -> int:
-    """길이(ms) → 샘플 수. 정수 연산 내림 (BE 회신 2: N = durationMs × 44100 // 1000).
-
-    이 N으로 만든 파일의 길이를 ms로 올림하면 항상 duration_ms와 같음 (워커 설계 인수 조건 9).
-    """
+    """길이(ms) → 샘플 수. N = durationMs × 44100 // 1000. 이 N의 길이를 ms로 올림하면 duration_ms와 같음."""
     if duration_ms <= 0:
         raise ValueError(f"길이는 양수: {duration_ms} ms")
     return duration_ms * sample_rate // 1000

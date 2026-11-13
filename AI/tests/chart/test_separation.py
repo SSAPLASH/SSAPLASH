@@ -252,7 +252,7 @@ def test_close_뒤에는_다시_load(tmp_path: Path):
     m.close()
 
 
-# ---- 원곡 길이 맞추기 (워커 설계 3-7절, 인수 조건 9) ----
+# ---- 원곡 길이 맞추기 ----
 
 
 def test_duration_ms를_주면_끝에_무음을_채우고_메타도_그_값(
@@ -313,7 +313,7 @@ def test_가중치_폴더_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 def test_피크가_0dB를_넘는_원곡도_잘리지_않고_반주는_넘는_곳만_누른다(tmp_path: Path):
     # 크게 마스터링된 곡처럼 앞 0.5초만 피크 2.4, 뒤 1.5초는 0.4인 원곡. mock이 절반씩 나눠 앞부분은 두 파일 모두
-    # 피크 1.2라 그대로 저장하면 잘림 (S15P31A307-165)
+    # 피크 1.2라 그대로 저장하면 잘림
     song, audio = _song(tmp_path, 2.0)
     loud = (audio / np.max(np.abs(audio)) * 0.4).astype(np.float32)
     loud[:, : SR // 2] *= 6.0

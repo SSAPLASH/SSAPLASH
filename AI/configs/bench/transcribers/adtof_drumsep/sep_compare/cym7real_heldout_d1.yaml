@@ -1,4 +1,4 @@
-# 드럼 분리 입력 비교용 (S15P31A307-241, 설계 CHART-003-real-drum-data-check 작업 12). 7클래스 + 실제 녹음 학습의 채점용 버전 d1
+# 드럼 분리 입력 비교용. 7클래스 + 실제 녹음 학습의 채점용 버전 d1
 # (학습에서 뺀 것: ENST 드러머 1, MDB 묶음 1). adtof_drumsep_ft7.yaml과 같고 이름과 checkpoint_path만 다름. 비교에는 크래시·라이드만 씀
 name: cym7real_heldout_d1
 adapter: adtof_drumsep
@@ -23,7 +23,7 @@ rules:
     crash: crash
     ride: ride
 license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
-license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치를 E-GMD·STAR로 파인튜닝, 페달·크래시·라이드 출력 추가) + 미명시 (MDX23C DrumSep 가중치)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치를 E-GMD·STAR·ENST·MDB로 파인튜닝, 페달·크래시·라이드 출력 추가) + 미명시 (MDX23C DrumSep 가중치)
 source_url: https://github.com/xavriley/ADTOF-pytorch
 labels:
   KICK: KICK

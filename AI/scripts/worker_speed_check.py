@@ -1,12 +1,14 @@
 """운영 워커 처리 시간이 fake BE 측정보다 느린 원인 측정 (ai_2_to_4 3-C, 11/10).
 
 사이트에서 곡을 올렸을 때와 같은 흐름을 서버 안에서 재현함: fake BE(BE 워커 API·저장소 대역)에 곡들을 작업으로
-넣고, 운영과 같은 `ssaplash-worker run`을 따로 띄워 claim → 원곡 내려받기 → 분리 → flac 올리기 → 분리 결과 제출 →
+넣고, 운영과 같은 `ssaplash-worker run`을 따로 띄워 claim → 원곡 내려받기 → 음악 여부 검사 → 분리 → flac 올리기 → 분리 결과 제출 →
 재조회 → 채보 → 채보 결과 제출을 곡마다 끝까지 돌림. 운영과 다른 점은 BE·저장소가 같은 서버(localhost)라
 EC2까지 오가는 네트워크 시간이 빠진다는 것 하나뿐. 그 시간은 운영 워커 로그의 실제 작업들로 따로 봄.
 
 채보 설정은 서비스 설정 그대로(service)와 드럼 킷 분리 겹침만 줄인 채보(drumsep_overlap_N) 중 고름.
---threads로 워커 CPU 스레드 수(OMP·MKL·OpenBLAS·torch)를 바꿔 가며 같은 곡들을 돌릴 수 있음. --rounds 2면
+겹침 변형은 SSAPLASH_CHART_MODEL이 ADTOF 계열(original·songsterr_avg)일 때만 되고, 드럼 킷 분리를 안 쓰는
+서비스 기본 STRUM에서는 --skip-variant를 줌.
+--threads로 워커 CPU 스레드 수(OMP·MKL·OpenBLAS·NumExpr 환경 변수)를 바꿔 가며 같은 곡들을 돌릴 수 있음. --rounds 2면
 설정 순서를 한 번 뒤집어 한 번 더 돌려, 시간이 지나며 서버 상태가 바뀐 효과가 한 설정에만 몰리지 않게 함.
 돌리는 동안 GPU 사용률·메모리·그 GPU를 쓰는 프로세스 수·서버 load·워커 프로세스 CPU 사용률을 1초마다 기록해
 작업마다 평균을 붙임.
@@ -217,7 +219,8 @@ def _sec(ms: str) -> float | None:
 def parse_worker_log(path: Path) -> list[dict]:
     """워커 로그 → 끝난 작업별 시간. 같은 작업 번호가 다시 나오면(재배정·재기동) 마지막 시도만 씀.
 
-    sep_outside_sec = 분리 결과 인수 시각 − 작업 시작 − 분리 모델 시간 (내려받기·읽기·flac 쓰기·올리기·제출)
+    sep_outside_sec = 분리 결과 인수 시각 − 작업 시작 − 분리 모델 시간
+    (내려받기·음악 여부 검사·읽기·flac 쓰기·올리기·제출)
     tr_outside_sec = 작업 끝 − 분리 결과 인수 − 채보 모델 시간 (재조회·읽기·Beat This!·JSON·제출)
     """
     jobs: dict[str, dict] = {}

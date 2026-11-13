@@ -1,8 +1,8 @@
 # ENST-Drums (Gillet & Richard 2006) 중 반주가 있는 minus-one·MIDI-minus-one 64곡 (드러머 1·2·3이 21·22·21곡).
-# 실제 드러머 녹음이라 채보 규칙·파인튜닝 전후를 실제 녹음에서 비교하는 기준 (S15P31A307-164).
+# 실제 드러머 녹음이라 채보 규칙·파인튜닝 전후를 실제 녹음에서 비교하는 기준.
 # 이용 조건: 본인만·연구용·변형물 금지·공유 금지. 2026-10-31 제공 측 회신으로 학생 학업용 학습은 허락받음(학습한 가중치는 실험 전용). 결과 공개 시 Gillet & Richard ISMIR 2006 인용.
 # 서버 `~/ssaplash/datasets/enst-drums/ENST-drums-public`을 data/enst/ 아래에 링크해 둔다. 로더는 bench/datasets/enst.py.
-# 입력 드럼은 wet_mix(드럼만, 처리된 믹스). mixture는 wet_mix + accompaniment × accomp_gain (U16, 분리 경로에만 영향).
+# 입력 드럼은 wet_mix(드럼만, 처리된 믹스). mixture는 wet_mix + accompaniment × accomp_gain (분리 경로에만 영향).
 # 드러머 3은 탐이 넷(mt·lmt·lt·lft)이라 tom4로 패드 3개에 대응한다 (U15. 2026-10-29 결정: 랙탐 둘은 스몰·미드, 플로어탐 둘은 플로어).
 name: enst_minus_one
 kind: enst

@@ -1,21 +1,9 @@
-"""bpm 추정 (설계 3장 채보 JSON `timing`, U4·U14·U15).
+"""bpm 추정. 방법은 설정 `tempo.method`: beat_this(서비스) 또는 librosa(torch 없이 도는 mock·테스트용).
 
-방법은 설정 `tempo.method`로 고름.
-- beat_this(서비스): Beat This!(CPJKU, ISMIR 2024, 코드·가중치 MIT)로 박과 마디 첫 박 시각을 구함.
-  GMD test 45곡에서 정답 bpm ±2% 안에 45곡이 들어 librosa(25곡)·madmom(32곡)보다 나았음(설계 U15)
-- librosa: `beat.beat_track`. torch 없이 돌아서 mock 설정과 테스트용으로 남김
-
-박 시각에서 bpm을 계산하는 방법은 둘이 같음. 박 간격 중앙값에서 15% 넘게 벗어난 간격(박을 건너뛰거나
-두 번 잡은 곳)에서 박을 구간으로 나누고, 구간마다 몇 번째 박인지와 울린 시각을 짝지어 박들이 몇 초에 걸쳐
-나왔는지로 한 박 길이를 구함. 구간들은 합쳐 한 박 길이 하나로 냄.
-[min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음. 설정 tempo.tempo_map이 켜져 있으면 찾은 박을 따라가는
-빠르기 구간(tempoMap)도 만듦(tempo_map_from_beats, 설계 CHART-003-variable-tempo-exp).
-
-박을 못 찾으면(타격이 거의 없는 드럼 트랙) BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
-채보 JSON의 offsetMs는 첫 박·첫 마디 시각으로 chart_json이 정함(U14·U16).
-
-Beat This! 가중치는 SSAPLASH_MODELS_DIR(기본 data/models)/beat_this/에 두고 md5로 확인함. 없으면 공식 서버,
-안 되면 개발자 사이트에서 받음(2026-10 공식 서버 고장, GitHub 이슈 #20·#23).
+박 간격 중앙값에서 15% 넘게 벗어난 곳에서 박을 구간으로 나누고, 구간마다 박 번호와 시각을 짝지어 한 박 길이를 구함.
+[min_bpm, max_bpm] 밖이면 2배·절반으로 접음. tempo.tempo_map이 켜져 있으면 빠르기 구간(tempoMap)도 만듦.
+박을 못 찾으면 BE가 받는 기본값 120을 쓰고 estimated를 거짓으로 둠.
+Beat This! 가중치는 SSAPLASH_MODELS_DIR/beat_this/에 두고 md5로 확인함.
 """
 
 from __future__ import annotations
@@ -55,11 +43,9 @@ DEFAULT_MODELS_DIR = Path("data/models")
 
 @dataclass
 class TempoEstimate:
-    """bpm 추정 결과. bpm은 박 간격으로 계산하고 접은 값(소수 둘째 자리), raw_bpm은 접기 전 값.
+    """bpm 추정 결과. bpm은 접은 값(소수 둘째 자리), raw_bpm은 접기 전 값.
 
-    downbeat_phase_ms는 마디 첫 박 전부를 한 마디 길이로 접은 다수결 위치(downbeat_phase_ms 함수).
-    마디 첫 박이 없거나 bpm 추정 실패면 None.
-    tempo_map은 찾은 박을 따라가는 빠르기 구간 시작 목록(tempo_map_from_beats). 설정이 꺼졌거나 못 만들면 None.
+    downbeat_phase_ms는 마디 첫 박 다수결 위치, tempo_map은 빠르기 구간 시작 목록. 없으면 None.
     """
 
     bpm: float
@@ -119,9 +105,7 @@ def _beat_period_from_runs(beats: np.ndarray, even: np.ndarray) -> float | None:
 def bpm_from_beats(beats: np.ndarray) -> float | None:
     """박 시각(초) → bpm. 고른 간격(중앙값 ±15%)이 MIN_INTERVALS 미만이면 None.
 
-    고른 간격이 이어지는 구간마다 박 번호와 시각을 짝지어 한 박 길이를 구함. 박 시각이 20ms 단위라 간격 평균은
-    0.03~0.06bpm 오차가 남아 3분 곡 끝에서 16분 격자를 벗어남(설계 "격자 원점·bpm 계산 수정").
-    그런 구간이 없으면 고른 간격 평균.
+    간격 평균이 아니라 박 번호와 시각을 짝지어 구함. 박 시각이 20ms 단위라 간격 평균은 곡 끝에서 격자를 벗어남.
     """
     if beats.size < 2:
         return None
@@ -143,13 +127,9 @@ def _ms(seconds: np.ndarray) -> int | None:
 
 
 def downbeat_phase_ms(downbeats: np.ndarray, bar_ms: float) -> int | None:
-    """마디 첫 박 시각(초) 전부를 한 마디 길이로 접어 가장 많이 모인 위치(ms, 0 이상 bar_ms 미만).
+    """마디 첫 박 시각 전부를 한 마디 길이로 접어 가장 많이 모인 위치(ms, 0 이상 bar_ms 미만).
 
-    0부터 DOWNBEAT_VOTE_STEP_MS 간격 후보마다 ±DOWNBEAT_VOTE_WINDOW_MS 안의 마디 첫 박 수를 셈. 마디 길이를
-    넘는 차이는 한 바퀴 돌려 셈(마디 끝 근처와 처음 근처가 같은 위치). 가장 많이 센 후보(동점이면 가장 이른
-    후보)의 창 안 마디 첫 박들과 후보의 차이 중앙값만큼 옮긴 위치를 냄. 후보 간격·창 폭 때문에 생기는 치우침을 없앰.
-    첫 번째 마디 첫 박 하나만 쓰면 드럼 인트로·필인에서 틀린 박을 원점으로 잡는 곡이 많아서 곡 전체로 정함
-    (설계 CHART-003-downbeat-vote, Songsterr 131곡 중 마디선이 맞는 곡 52 → 75).
+    첫 번째 마디 첫 박 하나만 쓰면 드럼 인트로·필인에서 틀린 박을 원점으로 잡는 곡이 많아 곡 전체 다수결로 정함.
     마디 첫 박이 없거나 bar_ms가 0 이하면 None.
     """
     if downbeats.size == 0 or not bar_ms > 0:
@@ -190,15 +170,11 @@ def tempo_map_from_beats(
     min_bpm: float,
     max_bpm: float,
 ) -> list[TempoMapPoint] | None:
-    """찾은 박을 따라가는 빠르기 구간 (설계 CHART-003-variable-tempo-exp 4장).
+    """찾은 박을 따라가는 빠르기 구간.
 
-    1. 박을 beats_per_bar개씩 묶어 마디를 만듦. 어느 박을 마디 첫 박으로 할지는 박 번호를 beats_per_bar로 나눈
-       나머지마다 마디 첫 박(±DOWNBEAT_VOTE_WINDOW_MS)과 겹치는 수를 세어 가장 많은 쪽(다수결)
-    2. 마디 경계를 _merge_bar_knots로 묶어 구간을 만들고, 구간 bpm = 구간 박 수 × 60000 / 구간 길이
-    3. bpm을 소수 둘째 자리로 반올림하면서 생기는 어긋남이 쌓이지 않게, 다음 구간 bpm은 반올림한 bpm으로
-       다시 계산한 구간 시작에서 실제 다음 경계까지로 구함
-    박이 beats_per_bar × 2 + 1개 미만이거나 마디 첫 박이 없거나, 구간 bpm 중앙값이 [min_bpm, max_bpm] 밖이면
-    (박을 8분·2분 단위로 잡은 경우) None. 그때는 고정 bpm으로 냄.
+    박을 beats_per_bar개씩 마디로 묶고(마디 첫 박은 다수결), 마디 경계를 묶어 구간을 만듦.
+    구간 bpm은 소수 둘째 자리로 반올림하되, 어긋남이 쌓이지 않게 반올림한 bpm으로 다음 구간 시작을 다시 계산함.
+    박이 모자라거나 구간 bpm 중앙값이 [min_bpm, max_bpm] 밖이면 None.
     """
     if beats.size < beats_per_bar * 2 + 1 or downbeats.size == 0:
         return None
@@ -294,7 +270,7 @@ class TempoEstimator(abc.ABC):
 
     @abc.abstractmethod
     def estimate(self, audio: np.ndarray, sample_rate: int) -> TempoEstimate:
-        """(채널, 샘플) 드럼 트랙 → TempoEstimate."""
+        """(채널, 샘플) 소리(원곡 또는 드럼 트랙) → TempoEstimate."""
 
     @property
     def version_id(self) -> str:
@@ -385,7 +361,7 @@ class BeatThisTempo(TempoEstimator):
         from beat_this.inference import Audio2Beats
 
         self.checkpoint_path = ensure_beat_this_checkpoint()
-        # dbn은 madmom이 있어야 함(transcribers extra, 설계 CHART-003-variable-tempo-exp U1)
+        # dbn은 madmom이 있어야 함(transcribers extra)
         self._model = Audio2Beats(
             checkpoint_path=str(self.checkpoint_path),
             device=self.device,

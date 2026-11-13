@@ -1,7 +1,7 @@
-"""SDR·SIR·SAR·SI-SDR (설계 3-5절).
+"""SDR·SIR·SAR·SI-SDR.
 
 museval `evaluate`(BSS Eval v4, images 방식)에 정답(드럼, 반주)과 예측(드럼, 반주) 2소스를
-넣고 1초 윈도우 프레임별 값의 중앙값을 곡 값으로 사용. fast_bss_eval은 쓰지 않음 (설계 1장).
+넣고 1초 윈도우 프레임별 값의 중앙값을 곡 값으로 사용. fast_bss_eval은 쓰지 않음.
 배열 모양은 전부 (채널 2, 샘플). museval은 (소스, 샘플, 채널)을 받으므로 내부에서 전치.
 
 무음 처리: BSS Eval은 예측을 정답 부분공간에 사영하는 배율 불변 분해라 무음 예측의 값이 정의되지
@@ -22,7 +22,7 @@ SILENCE_DITHER = 1e-9
 
 @dataclass
 class BssResult:
-    """곡 하나의 BSS 지표. 단위 dB. 3-3절 CSV 열과 1:1 (드럼 SIR·SAR은 보조값)."""
+    """곡 하나의 BSS 지표. 단위 dB. CSV 열과 1:1 (드럼 SIR·SAR은 보조값)."""
 
     sdr_drums: float
     sdr_accomp: float

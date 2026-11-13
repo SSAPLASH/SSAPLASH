@@ -1,11 +1,10 @@
-"""ENST minus-one 곡을 MUSDB 폴더 모양(곡 폴더마다 mixture.wav·drums.wav)으로 내보냄 (S15P31A307-165).
+"""ENST minus-one 곡을 MUSDB 폴더 모양(곡 폴더마다 mixture.wav·drums.wav)으로 내보냄.
 
-MR 품질 비교는 정답 MR이 정확한 데이터가 필요한데, ENST 로더는 아직 S15P31A307-164 브랜치에만 있음.
-그래서 ENST 로더가 있는 코드 폴더에서 이 스크립트로 한 번 내보내고, 측정은 MUSDB 로더로 함.
+MR 품질 비교는 정답 MR이 정확한 데이터가 필요해서, ENST를 이 스크립트로 한 번 내보내고 측정은 MUSDB 로더로 함.
 mixture = 드럼 wet_mix + MR × 반주 게인, drums = wet_mix. 0dB를 넘을 수 있어 32비트 float wav로 저장.
 곡 폴더 이름은 `drummer_1/107_...` 의 `/`를 `__`로 바꾼 것.
 
-  # ENST 로더가 있는 코드 폴더(AI/)에서
+  # AI/ 폴더에서
   .venv/bin/python <이 파일> configs/bench/datasets/enst_minus_one.yaml ~/ssaplash/datasets/enst-gain1-musdb/test --accomp-gain 1.0
 """
 
@@ -36,7 +35,9 @@ def main(argv: list[str] | None = None) -> int:
 
     config = DatasetConfig.from_yaml(args.dataset)
     if not hasattr(config, "extra"):
-        raise SystemExit("이 코드에는 ENST 로더가 없음. S15P31A307-164 코드 폴더의 파이썬으로 실행")
+        raise SystemExit(
+            "이 코드에는 ENST 로더가 없음. bench/datasets/enst.py가 있는 코드에서 실행"
+        )
     config.extra["accomp_gain"] = args.accomp_gain
     ds = load_dataset(config)
     n = 0

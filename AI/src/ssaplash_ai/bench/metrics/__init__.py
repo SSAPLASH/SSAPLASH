@@ -1,10 +1,10 @@
-"""벤치마크 지표. numpy 배열만 받고 모델·파일은 모름 (설계 2장 의존 방향).
+"""벤치마크 지표. numpy 배열만 받고 모델·파일은 모름.
 
 - bss: SDR·SIR·SAR (museval, BSS Eval v4) + SI-SDR
 - onset: 온셋 검출과 온셋 보존율 (F1·정밀도·재현율, ±50ms·±25ms)
 - transient: attack slope 왜곡 (온셋 직후 10ms 포락선 기울기의 로그 비율)
 - resource: 처리 시간·피크 RAM·피크 VRAM 측정
-- mr_quality: 드럼리스 MR fullness·bleedless·고음 fullness·음량 차이·잘림 비율 (S15P31A307-165)
+- mr_quality: 드럼리스 MR fullness·bleedless·고음 fullness·음량 차이·잘림 비율
 - hit_f1: 채보 타격 F1 (라벨별 짝짓기, SUM 집계, 5가지·8패드·9패드·라벨 무시 기준, 시각 오차·세기 상관, 페달 혼동 수)
 """
 

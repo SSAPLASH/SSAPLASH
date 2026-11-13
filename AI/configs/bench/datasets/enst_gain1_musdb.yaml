@@ -1,4 +1,4 @@
-# ENST minus-one 64곡을 MR 음량 그대로(반주 게인 1.0) 합쳐 MUSDB 폴더 모양으로 내보낸 것 (S15P31A307-165).
+# ENST minus-one 64곡을 MR 음량 그대로(반주 게인 1.0) 합쳐 MUSDB 폴더 모양으로 내보낸 것.
 # scripts/export_enst_as_musdb.py로 만듦. 정답 MR = mixture − drums가 정확해서 MR fullness를 잼.
 # 서버는 ~/ssaplash/datasets/enst-gain1-musdb 를 data/enst_gain1_musdb 로 링크. ENST 이용 조건은 enst_minus_one.yaml과 같음.
 name: enst_gain1_musdb

@@ -1,4 +1,4 @@
-# 실제 녹음 학습 확인 실험 후속 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 9). 서비스 후보 학습용
+# 실제 녹음 학습 확인 실험 후속. tom_6cls_real_full·tom_7cls_real_full 학습용
 # 학습용. ENST 드러머 1·2·3의 전체 종류(hits·phrase·solo·minus-one·MIDI-minus-one). 평가용으로 빼 둔 곡 없음.
 # ENST 주석에 페달 하이햇 표시가 없어 학습 설정에서 ignore_classes: [pedal]로 씀.
 name: enst_train_all

@@ -1,4 +1,4 @@
-# 자체 합성곡 5곡 (ADR-012). 드럼은 GMD, 반주는 MUSDB18-HQ train 비드럼 스템 합.
+# 자체 합성곡 5곡. 드럼은 GMD, 반주는 MUSDB18-HQ train 비드럼 스템 합.
 # 만드는 법: uv run python scripts/make_synth_songs.py build configs/bench/datasets/synth_v1_recipe.yaml
 name: synth_v1
 kind: synth

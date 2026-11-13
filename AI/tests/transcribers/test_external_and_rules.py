@@ -1,4 +1,5 @@
-"""external 어댑터(가짜 스크립트)와 ADTOF+드럼 킷 분리 규칙 테스트 (채보 설계 3-10절, U8, 인수 조건 13)."""
+"""external 어댑터(가짜 스크립트), ADTOF+드럼 킷 분리 규칙·가중치 조합, 저장소 모델 yaml 읽기,
+YourMT3·drum2midi 스크립트 테스트."""
 
 from __future__ import annotations
 
@@ -728,7 +729,7 @@ def test_히스토그램_피크_묶기는_타격이_많아_틈이_없어도_탐_
         rules_with_defaults({"tom_relative_method": "x"})
 
 
-# ---- drum2midi 원본 비교 (S15P31A307-164 작업 16) ----
+# ---- drum2midi 원본 비교 ----
 
 # 가짜 drum2midi.py: 받은 인자를 args.json에 적고 -o 경로에 노트 세 개짜리 MIDI를 씀. FAIL 인자면 실패
 FAKE_DRUM2MIDI = """

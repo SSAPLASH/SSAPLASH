@@ -4,7 +4,7 @@ run-transcription 결과 폴더는 hits_by_class.csv의 pads9 기준 행(HIHAT_P
 HIHAT_AS_PEDAL)과 pads 기준 HIHAT(페달을 합친 하이햇)을, rule-eval 결과 폴더는 by_song.csv의
 tpHIHAT_PEDAL9 등 열과 tpHIHAT(합친 하이햇)을 곡별로 읽어 같은 기준으로 셈. 50ms.
 점수는 묶음 안 모든 곡의 개수를 더해 계산하고, 곡 단위로 2,000번 다시 뽑은 95% 구간을 붙임.
-채택 기준(설계 U22): MDB·GMD test 둘 다 페달 F1 0.5 이상·정밀도 0.6 이상, 하이햇+페달 F1이
+채택 기준: MDB·GMD test 둘 다 페달 F1 0.5 이상·정밀도 0.6 이상, 하이햇+페달 F1이
 기준 방식(--baseline)보다 어느 데이터에서도 0.02 넘게 떨어지지 않음.
 
   uv run python scripts/score_pedal.py \\

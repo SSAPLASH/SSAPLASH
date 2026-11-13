@@ -1,5 +1,5 @@
 # E-GMD validation 분할 중 어쿠스틱 음색 킷 26개. beat + fill 3,042개, 31.5시간.
-# 채보 모델 탐 파인튜닝의 검증(체크포인트 선택)용 (S15P31A307-164). 학습 설정 yaml이 이 중 일부 곡만 고정 시드로 뽑아 씀.
+# 채보 모델 탐 파인튜닝의 검증(체크포인트 선택)용. 학습 설정 yaml이 이 중 일부 곡만 고정 시드로 뽑아 씀.
 name: egmd_validation_acoustic
 kind: egmd
 root: data/e-gmd/e-gmd-v1.0.0

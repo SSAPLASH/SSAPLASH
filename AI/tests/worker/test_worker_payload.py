@@ -1,4 +1,4 @@
-"""정규 JSON 직렬화·payloadHash 테스트. 검증 벡터는 BE 안내문(최진우, 10/27)의 값 그대로 (설계 인수 조건 1)."""
+"""정규 JSON 직렬화·payloadHash 테스트. 검증 벡터는 BE 안내문(최진우, 10/27)의 값 그대로."""
 
 from __future__ import annotations
 

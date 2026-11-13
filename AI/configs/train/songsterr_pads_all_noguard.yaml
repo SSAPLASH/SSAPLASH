@@ -1,4 +1,4 @@
-# guard_drop 1.0: 8패드 출력은 5종 기준 안전장치에 걸려 3에폭에 멈춰서 끔. 11/08 실제 곡(Songsterr 인기곡) 학습. scripts/make_songsterr_splits.py가 만듦 (설계 CHART-003-songsterr-expand-train)
+# guard_drop 1.0: 9패드 출력(classes: pads)은 5종 기준 안전장치에 걸려 3에폭에 멈춰서 끔. 11/08 실제 곡(Songsterr 인기곡) 학습. scripts/make_songsterr_splits.py가 만듦
 classes: pads
 base_checkpoint: null
 window_frames: 412

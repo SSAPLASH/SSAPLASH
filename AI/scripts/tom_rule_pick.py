@@ -1,11 +1,11 @@
-"""탐 그룹 규칙 후보 고르기와 ENST 확인 (설계 CHART-003-tom-rule-retune v0.3 3장).
+"""탐 그룹 규칙 후보 고르기와 ENST 확인.
 
 입력은 `scripts/tom_rule_eval_stream.py`가 낸 곡별 csv (한 줄 = 후보 × 곡).
 
 - select: E-GMD 결과에서 키트마다 탐 이름 정확도(탐 자리를 맞힌 타격 중 이름이 맞은 비율)를 내고, 26킷 평균이 가장 높은
-  후보를 고름. 1등과 0.005 안에 여럿이면 지금 규칙에서 바꾼 키가 적은 쪽. 키트 하나를 빼고 고른 뒤 뺀 키트에서
-  지금 규칙 대비 차이를 재는 것을 키트마다 반복함. ENST·MDB는 읽지 않음
-- enst: ENST 드럼 단독·분리 입력 결과에서 지금 규칙(current)과 고른 후보의 차이를 64곡 전체·드러머 1·드러머 2·3으로
+  후보를 고름. 1등과 0.005 안에 여럿이면 current(`adtof_drumsep.yaml` 규칙)에서 바꾼 키가 적은 쪽.
+  키트 하나를 빼고 고른 뒤 뺀 키트에서 current 대비 차이를 측정하는 것을 키트마다 반복함. ENST·MDB는 읽지 않음
+- enst: ENST 드럼 단독·분리 입력 결과에서 current와 고른 후보의 차이를 64곡 전체·드러머 1·드러머 2·3으로
   나눠 냄. 같은 곡끼리 다시 뽑는 부트스트랩 95% 구간
 
   uv run python scripts/tom_rule_pick.py select --egmd egmd.csv --candidates cands.yaml --out pick.json
@@ -199,7 +199,7 @@ def cmd_enst(args) -> int:
     lines = [
         "# ENST 확인 채점 (탐 그룹 규칙)",
         "",
-        f"고른 후보 `{pick['chosen']}`. current는 서비스 규칙, current_order는 이름 규칙만 order. "
+        f"고른 후보 `{pick['chosen']}`. current는 adtof_drumsep.yaml 규칙, current_order는 이름 규칙만 order. "
         "차이는 current 대비, 괄호는 같은 곡끼리 2,000번 다시 뽑은 95% 구간. 8패드는 페달을 하이햇에 합친 값이고 "
         "RIDE 기준 값은 `분리와 채보` 베이스라인에 차이를 더한 것",
         "",

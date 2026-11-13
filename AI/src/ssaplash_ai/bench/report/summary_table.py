@@ -1,11 +1,11 @@
 """결과 CSV 집계와 모델별 요약 표(마크다운). report 패키지의 데이터 쪽.
 
-CSV만 읽고 모델·지표 코드는 모름 (설계 2장 의존 방향).
-모델 단위 값은 곡 값들의 중앙값 (MUSDB 관례, 설계 3-5절). 실패한 곡(error 열)은 집계에서 뺌.
-비교표 지표는 ADR-011의 6개(드럼 SDR, 타격 보존율, attack slope 왜곡, 반주 SIR, RTF, 피크 GPU 메모리)
+CSV만 읽고 모델·지표 코드는 모름.
+모델 단위 값은 곡 값들의 중앙값 (MUSDB 관례). 실패한 곡(error 열)은 집계에서 뺌.
+비교표 지표는 6개(드럼 SDR, 타격 보존율, attack slope 왜곡, 반주 SIR, RTF, 피크 GPU 메모리)
 + 가중치 라이선스. 나머지 열은 보조값 표에 둠.
-합성곡(synth)은 정답 온셋이 MIDI라 MUSDB(검출기)와 온셋 지표 의미가 달라 데이터셋별 표도 따로 냄.
-모델 순서는 드럼 SDR 중앙값 내림차순. 조사 단계의 1·2순위 등급은 쓰지 않음 (ADR-017).
+정답 온셋 출처(MIDI·주석·검출기)가 데이터셋마다 달라 온셋 지표 뜻이 다르므로 데이터셋별 표도 따로 냄.
+모델 순서는 드럼 SDR 중앙값 내림차순.
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame) -> str:
 
 
 def summary_metrics_by_model(summary: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """tracking.log_run에 넘길 {모델: {열: 중앙값}}."""
+    """mlflow_tracking.log_run에 넘길 {모델: {열: 중앙값}}."""
     metric_cols = [c for c, _, _ in COMPARISON_METRICS] + [c for c, _ in AUXILIARY_METRICS]
     out: dict[str, dict[str, float]] = {}
     for _, r in summary.iterrows():

@@ -1,16 +1,10 @@
-"""벤치마크 러너 (설계 4-1절). 모델 × 곡 반복 실행, 예외 격리, 결과 행 생성.
+"""분리 벤치마크 러너. 모델 × 곡 반복 실행, 예외 격리, 결과 행 생성.
 
-흐름: 모델마다 어댑터 생성·load(loadSec) → 곡마다 separate(시간·메모리 측정) → 예측 반주 =
-원곡 − 예측 드럼 → 지표 네 묶음 → 행을 CSV에 즉시 추가 → 선택 시 wav 저장 → 어댑터 해제.
+흐름: 모델마다 어댑터 생성·load → 곡마다 separate(시간·메모리 측정) → 지표 계산 → 행을 CSV에 즉시 추가 → 어댑터 해제.
 곡 하나가 실패하면 error 열에 적고 다음 곡으로. 모델 로드가 실패하면 그 모델의 모든 곡에 같은 error.
-로드 직후 첫 곡을 한 번 분리하고 버림(워밍업). msst가 cudnn.benchmark를 켜서 입력 모양마다 커널
-자동 조정이 돌기 때문에 무음 2초·12초 워밍업으로는 첫 곡 RTF가 나머지의 5~8배였음. 첫 곡 자체로
-워밍업하면 그 곡의 모양이 미리 조정됨. 모델당 분리 1회가 추가됨.
-이어하기(설계 #7-1): --run-id를 지정했고 그 폴더에 results.csv가 있으면 error가 빈 (dataset, model, songId)
-행은 건너뛰고 유지, error가 있던 행은 지우고 다시 돌림. 한 모델의 곡이 전부 끝나 있으면 로드·워밍업도 생략.
-열 구성이 지금 CSV_COLUMNS와 다르면 다른 버전의 결과이므로 중단.
-CSV 열 이름은 설계 3-3절 camelCase 그대로. 지표 정의는 metrics 패키지가 담당.
-runId·host·장치 판정·CSV 쓰기·이어하기 읽기는 run_support(채보 러너와 공용)에서 가져옴.
+로드 직후 첫 곡을 한 번 분리하고 버림(워밍업). msst가 cudnn.benchmark를 켜서 입력 모양마다 커널 조정이 돌기 때문.
+이어하기: --run-id 폴더에 results.csv가 있으면 error가 빈 행은 건너뛰고, error가 있던 행은 다시 돌림.
+열 구성이 지금 CSV_COLUMNS와 다르면 중단.
 """
 
 from __future__ import annotations
@@ -89,7 +83,7 @@ CSV_COLUMNS: tuple[str, ...] = (
     # attack slope 왜곡
     "attackSlopeDistortion",
     "attackOnsetsUsed",
-    # 드럼리스 MR 품질 (S15P31A307-165)
+    # 드럼리스 MR 품질
     "mrFullness",
     "mrBleedless",
     "mrFullnessHigh",
@@ -133,7 +127,7 @@ RESUME_KEY: tuple[str, ...] = ("dataset", "model", "songId")
 
 @dataclass
 class RunOptions:
-    """run 명령 입력 (설계 3-6절)."""
+    """run 명령 입력."""
 
     model_configs: Sequence[Path]
     dataset_config: Path
@@ -192,7 +186,7 @@ def load_resume_rows(csv_path: Path) -> tuple[list[dict], int]:
 
 
 def true_onsets(song: SongItem) -> np.ndarray:
-    """정답 온셋. 합성곡은 MIDI, MUSDB는 정답 드럼 스템에 검출기 적용 (설계 3-5절).
+    """정답 온셋. 로더가 준 onsets_true가 있으면 그것, 없으면 정답 드럼 스템에 검출기 적용.
 
     MIDI·사람 주석 정답은 동시 타격이 같은 시각으로 여러 번 들어 있어 30ms 안 시각을 하나로 합침.
     """
@@ -207,7 +201,7 @@ def evaluate_song(
     onsets_true: np.ndarray,
     accomp_pred: np.ndarray | None = None,
 ) -> dict:
-    """곡 하나의 지표 다섯 묶음을 3-3절 열 이름의 dict로. 예측 반주가 없으면 원곡 − 예측 드럼."""
+    """곡 하나의 지표 네 묶음(BSS·온셋·attack slope·MR 품질)을 CSV 열 이름의 dict로. 예측 반주가 없으면 원곡 − 예측 드럼."""
     if accomp_pred is None:
         accomp_pred = song.mixture - drums_pred
     bss = bss_metrics(song.drums_true, song.accomp_true, drums_pred, accomp_pred, song.sample_rate)
@@ -365,7 +359,7 @@ def run_model(
 
 
 def run_benchmark(opts: RunOptions, log: Logger = print) -> RunResult:
-    """설계 4-1절 1~4단계. 보고서·MLflow 기록(5단계)은 cli가 report·tracking으로 이어서 함."""
+    """벤치마크 실행. 보고서·MLflow 기록은 cli가 report·mlflow_tracking으로 이어서 함."""
     run_id = opts.run_id or new_run_id()
     run_dir = Path(opts.out_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

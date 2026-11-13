@@ -1,9 +1,9 @@
-"""채보 타격 F1 (채보 설계 3-12절). 정답 타격 표와 예측 타격 표를 라벨별로 짝지어 점수를 냄.
+"""채보 타격 F1. 정답 타격 표와 예측 타격 표를 라벨별로 짝지어 점수를 냄.
 
-짝짓기: 라벨(패드 8종 또는 5가지 묶음)별로 나눠 각 라벨 안에서 mir_eval.util.match_events로
+짝짓기: 라벨(기준에 따라 패드 8종·9종, 5가지 묶음, 라벨 무시)별로 나눠 각 라벨 안에서 mir_eval.util.match_events로
 ±창 안에서 1:1(짝 수가 최대가 되는 매칭. 둘 다 창 안이면 어느 쪽과 짝지을지는 보장하지 않음). 짝 = 맞힌 것(tp), 예측에만 있으면 헛것(fp), 정답에만 있으면
 놓친 것(fn). 창은 50ms(기본)와 25ms(Perfect 폭).
-집계: 모든 라벨의 tp·fp·fn을 더해 F1 (논문 표의 SUM, -107 규칙). 곡 단위 값은 보조이고 묶음 단위
+집계: 모든 라벨의 tp·fp·fn을 더해 F1 (논문 표의 SUM). 곡 단위 값은 보조이고 묶음 단위
 F1은 보고서가 곡별 개수를 다시 더해 계산하므로 개수를 그대로 돌려줌.
 기준(scheme): five = 양쪽을 5가지 묶음으로(거친 라벨 tom·cymbal 포함), pads = 패드 8종(양쪽의 HIHAT_PEDAL을
 HIHAT으로 합침. 지난 결과와 같은 조건, 예측에 거친 라벨이 있으면 못 씀), pads9 = 패드 9종 그대로(페달 점수용),
@@ -138,7 +138,7 @@ def velocity_correlation(pairs: np.ndarray, min_pairs: int = MIN_VELOCITY_PAIRS)
 
 @dataclass
 class HitScores:
-    """기준 하나(five / pads / any)의 곡 단위 점수. 개수가 원본이고 F1은 개수에서 나옴."""
+    """기준 하나(five / pads / pads9 / any)의 곡 단위 점수. 개수가 원본이고 F1은 개수에서 나옴."""
 
     scheme: str
     counts: MatchCounts  # 50ms
