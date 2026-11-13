@@ -177,6 +177,10 @@ export function josaEulReul(word: string): string {
   return batchim(word) === 'none' ? '를' : '을';
 }
 
+export function josaEunNeun(word: string): string {
+  return batchim(word) === 'none' ? '는' : '은';
+}
+
 export function josaEuroRo(word: string): string {
   const b = batchim(word);
   return b === 'has' ? '으로' : '로';
