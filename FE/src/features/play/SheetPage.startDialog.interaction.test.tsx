@@ -183,7 +183,7 @@ describe('SheetPage 반주 설정', () => {
   });
 });
 
-describe('SheetPage 곡 범위 탭과 사이드바 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴)', () => {
+describe('SheetPage 곡 범위 버튼과 사이드바 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴, SETUP-학습-코스-중급 4-4)', () => {
   /** 화면 폭을 가장한다. 테스트 환경의 기본 폭(1024)은 태블릿(사이드바 강제 접힘)으로 잡힌다 */
   const viewport = (tablet: boolean) =>
     vi.stubGlobal('matchMedia', (query: string) => ({
@@ -196,12 +196,12 @@ describe('SheetPage 곡 범위 탭과 사이드바 하위 메뉴 (설계 MODE-00
     useSettings.setState({ sidebarCollapsed: false });
   });
 
-  it('사이드바가 펼쳐져 있으면 화면 위 탭을 두지 않는다(사이드바 하위 메뉴가 범위를 보인다)', async () => {
+  it('사이드바가 펼쳐져 있어도 화면 위 버튼이 있다(11/13 요청으로 다시 둔다)', async () => {
     viewport(false);
     useSettings.setState({ sidebarCollapsed: false });
     show('/sheet');
     await screen.findAllByText('시험곡');
-    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
   });
 
   it('사이드바를 접어 두었으면 화면 위 탭이 있다', async () => {

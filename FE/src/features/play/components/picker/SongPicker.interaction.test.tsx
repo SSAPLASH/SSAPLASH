@@ -23,7 +23,7 @@ vi.mock('@/api/song/songs', () => {
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
 vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
-// 입문 코스 탭 본문은 이 파일의 관심사가 아니다 — 응답하지 않는 요청으로 둔다
+// 학습 코스 탭 본문은 이 파일의 관심사가 아니다 — 응답하지 않는 요청으로 둔다
 vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(() => new Promise(() => {})), postLessonCompletion: vi.fn() }));
 
 const song = (id: number, title: string): SongSummary => ({
@@ -126,10 +126,10 @@ describe('SongPicker AI 추천곡 탭·라벨 (설계 COACH-004-song-picker-ai-t
     );
   });
 
-  it('탭이 [기본 곡][라이브러리][AI 추천곡]이고 추천은 진입 때 한 번(size 10), 필터 아래 카드 줄은 없다', async () => {
+  it('탭이 [기본 곡][내 곡][AI 추천곡]이고 추천은 진입 때 한 번(size 10), 필터 아래 카드 줄은 없다', async () => {
     show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
-    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리', 'AI 추천곡']);
+    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡']);
     await waitFor(() => expect(fetchRecommendations).toHaveBeenCalledTimes(1));
     expect(vi.mocked(fetchRecommendations).mock.calls[0][0]).toEqual({ context: 'SONG_PICKER', mode: 'RHYTHM', size: 10 });
     expect(screen.queryByRole('region', { name: '추천곡' })).toBeNull();
@@ -220,7 +220,7 @@ describe('SongPicker AI 추천곡 탭·라벨 (설계 COACH-004-song-picker-ai-t
     useAuth.setState({ status: 'unknown' });
     show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
-    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '라이브러리']);
+    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡']);
     await new Promise((r) => setTimeout(r, 400));
     expect(fetchRecommendations).not.toHaveBeenCalled();
     expect(fetchSimilarSongs).not.toHaveBeenCalled();
@@ -307,12 +307,12 @@ describe('SongPicker 빈 목록·선택 유지 (설계 CHART-001 곡 난이도 4
     expect(screen.getByText('총 0곡')).toBeTruthy();
   });
 
-  it('라이브러리 탭 0곡이면 본문에 라이브러리 안내, 곡이 있으면 안내가 없다', async () => {
+  it('내 곡 범위 0곡이면 본문에 라이브러리 안내, 곡이 있으면 안내가 없다', async () => {
     vi.mocked(listSongs).mockImplementation(async (p) => ({ items: p.source === 'MINE' ? [] : [song(1, '목록곡')], hasNext: false }));
     show();
     await screen.findByText('목록곡', { selector: '.play-st-name' });
     expect(screen.queryByText(/처리 중·실패한 곡은/)).toBeNull();
-    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
     await screen.findByText('아직 고를 수 있는 곡이 없어요');
     expect(screen.getByText(/처리 중·실패한 곡은/).querySelector('a')?.getAttribute('href')).toBe('/studio');
   });
@@ -347,7 +347,7 @@ describe('SongPicker 곡 목록 캐시 (설계 TECH-350)', () => {
     show();
     await screen.findAllByText('목록곡');
     expect(listSongs).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
     await waitFor(() => expect(listSongs).toHaveBeenCalledTimes(2));
     expect(vi.mocked(listSongs).mock.calls[1][0]).toMatchObject({ source: 'MINE' });
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
@@ -365,7 +365,7 @@ describe('SongPicker 곡 목록 캐시 (설계 TECH-350)', () => {
   it('마지막으로 연 목록 탭을 songStore.scope에 남긴다', async () => {
     show();
     await screen.findAllByText('목록곡');
-    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
     await waitFor(() => expect(useSongs.getState().scope).toBe('MINE'));
   });
 });
@@ -400,11 +400,11 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(document.querySelector('.guide-fold-inner')?.hasAttribute('inert')).toBe(true);
   });
 
-  it('/sheet: 입문 코스 탭에는 안내 접이 바가 없다', async () => {
+  it('/sheet: 학습 코스 탭에는 안내 접이 바가 없다', async () => {
     showMode('sheet');
     await screen.findAllByText('목록곡');
     expect(document.querySelector('.guide-fold-bar')).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    fireEvent.click(screen.getByRole('radio', { name: '학습 코스' }));
     expect(document.querySelector('.guide-fold-bar')).toBeNull();
   });
 
@@ -438,10 +438,10 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(screen.queryByRole('region', { name: '악보 읽는 법' })).toBeNull();
   });
 
-  it('/sheet: 입문 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
+  it('/sheet: 학습 코스 탭에서는 안내 줄·구분선이 숨고 기본 곡 탭으로 돌아오면 다시 보인다', async () => {
     showMode('sheet');
     await screen.findAllByText('목록곡');
-    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    fireEvent.click(screen.getByRole('radio', { name: '학습 코스' }));
     expect(screen.queryByRole('region', { name: '악보 연습 안내' })).toBeNull();
     expect(screen.queryByRole('separator')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
@@ -616,11 +616,11 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
       </>
     );
   }
-  const open = (url: string, props: { mode?: 'play' | 'sheet'; tabsInSidebar?: boolean } = {}) =>
+  const open = (url: string, props: { mode?: 'play' | 'sheet' } = {}) =>
     render(
       <MemoryRouter initialEntries={[url]}>
         <Shell />
-        <SongPicker mode={props.mode ?? 'sheet'} tabsInSidebar={props.tabsInSidebar} onStart={vi.fn()} />
+        <SongPicker mode={props.mode ?? 'sheet'} onStart={vi.fn()} />
       </MemoryRouter>,
     );
   const loc = () => screen.getByTestId('loc').textContent;
@@ -632,7 +632,7 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     vi.mocked(listSongs).mockResolvedValue({ items: [song(1, '목록곡')], hasNext: false });
   });
 
-  it('주소 값이 없으면 기본 곡이다 — 마지막에 본 범위(라이브러리)를 기억하지 않는다', async () => {
+  it('주소 값이 없으면 기본 곡이다 — 마지막에 본 범위(내 곡)를 기억하지 않는다', async () => {
     useSongs.setState({ scope: 'MINE' });
     open('/sheet');
     await screen.findAllByText('목록곡');
@@ -644,13 +644,13 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     useSongs.setState({ scope: 'MINE' });
     open('/play', { mode: 'play' });
     await screen.findAllByText('목록곡');
-    expect(checked()).toBe('라이브러리');
+    expect(checked()).toBe('내 곡');
   });
 
-  it('?scope=MINE은 라이브러리, ?tab=recommend는 AI 추천곡, ?tab=lessons는 입문 코스로 연다', async () => {
+  it('?scope=MINE은 내 곡, ?tab=recommend는 AI 추천곡, ?tab=lessons는 학습 코스로 연다', async () => {
     open('/sheet?scope=MINE');
     await screen.findAllByText('목록곡');
-    expect(checked()).toBe('라이브러리');
+    expect(checked()).toBe('내 곡');
     expect(lastScope()).toBe('MINE');
     cleanup();
 
@@ -660,7 +660,7 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     cleanup();
 
     open('/sheet?tab=lessons');
-    await waitFor(() => expect(checked()).toBe('입문 코스'));
+    await waitFor(() => expect(checked()).toBe('학습 코스'));
     expect(document.querySelector('.play-sp-grid')).toBeNull();
   });
 
@@ -669,9 +669,9 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     await screen.findAllByText('목록곡');
     fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
     expect(loc()).toBe('/sheet?song=1&chart=11&tab=recommend');
-    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
     expect(loc()).toBe('/sheet?song=1&chart=11&scope=MINE');
-    fireEvent.click(screen.getByRole('radio', { name: '입문 코스' }));
+    fireEvent.click(screen.getByRole('radio', { name: '학습 코스' }));
     expect(loc()).toBe('/sheet?song=1&chart=11&tab=lessons');
     fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
     expect(loc()).toBe('/sheet?song=1&chart=11');
@@ -684,9 +684,9 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     await waitFor(() => expect(checked()).toBe('AI 추천곡'));
     await screen.findByText('추천곡', { selector: '.play-st-name' });
     fireEvent.click(screen.getByText('go-mine'));
-    await waitFor(() => expect(checked()).toBe('라이브러리'));
+    await waitFor(() => expect(checked()).toBe('내 곡'));
     fireEvent.click(screen.getByText('go-lessons'));
-    await waitFor(() => expect(checked()).toBe('입문 코스'));
+    await waitFor(() => expect(checked()).toBe('학습 코스'));
     fireEvent.click(screen.getByText('go-builtin'));
     await waitFor(() => expect(checked()).toBe('기본 곡'));
   });
@@ -708,7 +708,7 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
     expect(checked()).toBe('AI 추천곡');
     expect(loc()).toBe('/play');
-    fireEvent.click(screen.getByRole('radio', { name: '라이브러리' }));
+    fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
     expect(loc()).toBe('/play?scope=MINE');
   });
 
@@ -718,19 +718,20 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     expect(checked()).toBe('기본 곡');
   });
 
-  it('tabsInSidebar면 화면 위 탭을 그리지 않고, 범위는 주소대로 열린다', async () => {
-    open('/sheet?tab=recommend', { tabsInSidebar: true });
-    await screen.findByText('추천곡', { selector: '.play-st-name' });
-    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
-    // 사이드바 하위 메뉴 클릭(주소 변경)으로 범위가 바뀐다
-    fireEvent.click(screen.getByText('go-builtin'));
-    await screen.findByText('목록곡', { selector: '.play-st-name' });
-    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
-  });
-
-  it('tabsInSidebar가 아니면 화면 위 탭이 있다', async () => {
-    open('/sheet');
-    await screen.findAllByText('목록곡');
-    expect(screen.getByRole('radiogroup', { name: '곡 범위' })).toBeTruthy();
+  // 학습 코스 설계 4-4절: 사이드바 하위 메뉴가 펼쳐져 있어도 화면 위 버튼을 다시 둔다
+  it('화면 위 범위 버튼은 네 범위 모두에서 보이고 주소의 범위가 켜져 있다', async () => {
+    const cases: [string, string][] = [
+      ['/sheet', '기본 곡'],
+      ['/sheet?scope=MINE', '내 곡'],
+      ['/sheet?tab=recommend', 'AI 추천곡'],
+      ['/sheet?tab=lessons', '학습 코스'],
+    ];
+    for (const [url, label] of cases) {
+      open(url);
+      const group = await screen.findByRole('radiogroup', { name: '곡 범위' });
+      expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡', '학습 코스']);
+      await waitFor(() => expect(checked()).toBe(label));
+      cleanup();
+    }
   });
 });

@@ -88,15 +88,9 @@ describe('resolveSheetCategory: 보이지 않는 범위는 기본 곡으로 본�
   });
 });
 
-describe('SHEET_CATEGORY_LABEL: 표시 이름', () => {
-  it('사이드바에서는 「내 곡」, 화면 위 탭에서는 「라이브러리」(사이드바에 같은 이름의 메뉴가 있어서)', () => {
-    expect(SHEET_CATEGORY_LABEL.MINE).toEqual({ menu: '내 곡', tab: '라이브러리' });
-  });
-
-  it('나머지는 두 자리에서 같은 이름이다', () => {
-    expect(SHEET_CATEGORY_LABEL.BUILTIN).toEqual({ menu: '기본 곡', tab: '기본 곡' });
-    expect(SHEET_CATEGORY_LABEL.RECOMMEND).toEqual({ menu: 'AI 추천곡', tab: 'AI 추천곡' });
-    expect(SHEET_CATEGORY_LABEL.LESSONS).toEqual({ menu: '입문 코스', tab: '입문 코스' });
+describe('SHEET_CATEGORY_LABEL: 표시 이름(학습 코스 설계 3-6절)', () => {
+  it('사이드바 하위 메뉴와 화면 위 버튼이 같은 이름이다: 기본 곡 · 내 곡 · AI 추천곡 · 학습 코스', () => {
+    expect(SHEET_CATEGORY_LABEL).toEqual({ BUILTIN: '기본 곡', MINE: '내 곡', RECOMMEND: 'AI 추천곡', LESSONS: '학습 코스' });
   });
 });
 

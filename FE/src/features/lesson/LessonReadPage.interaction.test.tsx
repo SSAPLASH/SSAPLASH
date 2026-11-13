@@ -24,6 +24,7 @@ vi.mock('@/components/drum/DrumKit', () => ({
 
 const lesson = (order: number, over: Partial<Lesson> = {}): Lesson => ({
   order,
+  course: 'BEGINNER',
   kind: 'READ',
   songId: 100 + order,
   chartId: 200 + order,
@@ -116,7 +117,7 @@ describe('알아보기 화면', () => {
     expect(postLessonCompletion).toHaveBeenCalledWith(101);
     expect(useLessons.getState().localPassed.has(101)).toBe(true);
     fireEvent.click(within(dialog).getByRole('button', { name: '다음 레슨' }));
-    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&song=102&chart=202&start=1');
+    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
   });
 
   it('완료 팝업을 닫으면 같은 화면에 [다시 하기]·[코스로]가 남고, 다시 하면 처음 음표부터 친다', async () => {
@@ -138,7 +139,19 @@ describe('알아보기 화면', () => {
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: '코스로' }));
-    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons');
+    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=beginner');
+  });
+
+  // 학습 코스 설계 3-6·4-3절: 화면 이름과 돌아가는 곳은 그 레슨의 코스다
+  it('중급 알아보기 레슨은 「← 중급 코스」이고 코스로 가면 중급 코스가 보인다', async () => {
+    vi.mocked(fetchLessons).mockResolvedValue({
+      passAccuracy: 70,
+      items: [lesson(1, { passed: true }), lesson(1, { course: 'INTERMEDIATE', songId: 301, chartId: 401, title: '중급 · 탐 음표 알아보기' })],
+    });
+    open(301);
+    expect(await screen.findByRole('heading', { name: '1. 탐 음표 알아보기' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '← 중급 코스' }));
+    expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons&course=intermediate');
   });
 
   it('guide가 꺼진 레슨은 틀리기 전에는 답을 알려 주지 않는다', async () => {
@@ -167,7 +180,7 @@ describe('알아보기 화면', () => {
   it('알아보기 레슨이 아니거나 없으면 안내하고 코스로 돌아갈 수 있다', async () => {
     open(102);
     expect(await screen.findByText('레슨을 찾을 수 없어요')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '입문 코스로' }));
+    fireEvent.click(screen.getByRole('button', { name: '학습 코스로' }));
     expect(screen.getByTestId('where').textContent).toBe('/sheet?tab=lessons');
   });
 
