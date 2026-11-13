@@ -1,6 +1,6 @@
 // 합성 플레이로 설계의 인수 조건을 확인한다: 경향이 있으면 지적이 뜨고, 없으면 칭찬만 뜨고, 간격을 지킨다.
 import { describe, expect, it, vi } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { LIVE_COACH_CONFIG } from './config';
 import type { CoachGate, GateDecision } from './gate/gate';
 import {

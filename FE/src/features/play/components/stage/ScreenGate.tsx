@@ -1,7 +1,7 @@
 // 세로·좁은 화면 차단 안내. 화면을 바꿔 끼우지 않고 위에 덮어 세션·반주 상태를 보존한다(MODE-003 D8).
 // 포커스: 안내 자체(tabIndex -1)에 두고, Tab·Esc는 useDialogFocus가 가둔다. 버튼이 없다.
 import { useEffect, useRef } from 'react';
-import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { useDialogFocus } from '@/components/ui/overlay/useDialogFocus';
 import './ScreenGate.css';
 
 interface Props {

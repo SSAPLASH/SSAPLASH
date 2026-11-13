@@ -14,7 +14,7 @@
 // 리듬 게임은 그대로다: 탭 상태를 갖고, 주소 값이 없으면 마지막에 본 범위로 연다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/account/recommendation';
+import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/song/recommendation';
 import { sheetCategoryOf, sheetCategoryQuery, type SheetCategory } from '@/domain/song/sheetCategory';
 import {
   chartFallback,
@@ -26,29 +26,29 @@ import {
   type SongDetail,
   type SongLevel,
   type SongSummary,
-} from '@/domain/songCatalog';
+} from '@/domain/song/songCatalog';
 import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreBySong } from '@/domain/play/bestRecord';
-import { presetDisplayName } from '@/domain/preset';
+import { presetDisplayName } from '@/domain/kit/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/features/play/useBestRecords';
 import { BestRecordsNotice } from './BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
-import { songListQuery } from '@/api/queries/songs';
+import { songListQuery } from '@/api/song/songQueries';
 import { useApiQuery } from '@/runtime/useApiQuery';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
-import { Chip } from '@/components/ui/Chip';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Input } from '@/components/ui/Input';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Segmented } from '@/components/ui/Segmented';
+import { Chip } from '@/components/ui/layout/Chip';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
+import { Input } from '@/components/ui/form/Input';
+import { PageHeader } from '@/components/ui/layout/PageHeader';
+import { Segmented } from '@/components/ui/form/Segmented';
 import { SongTable } from './SongTable';
 import { SongDetailPane } from './SongDetailPane';
-import { LessonCourse } from '@/components/lesson/LessonCourse';
+import { LessonCourse } from '@/features/play/components/picker/lesson/LessonCourse';
 import { GuideFold } from '@/features/play/components/picker/guide/GuideFold';
 import './song-picker.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 interface Props {
   /** [플레이]·표 더블클릭·Enter. 고른 단계(채보)로 시작 확인 창을 연다 */

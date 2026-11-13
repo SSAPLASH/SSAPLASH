@@ -1,6 +1,6 @@
 // 생성 함수 공용 도우미 — 파티클 기본값, 모션 줄이기용 덩어리.
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 
 /** 한 타격이 만들 수 있는 파티클 상한(D10) */
 export const MAX_SPAWN = 24;

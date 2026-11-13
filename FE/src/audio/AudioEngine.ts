@@ -1,6 +1,6 @@
 // PLAY-06 저지연 사운드. Web Audio로 패드 소리를 낸다.
 // 소리 출처는 사운드 세트(audio/soundSets). 세트가 없거나 해당 패드 샘플이 없으면 합성음으로 폴백한다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
 import { CLOCK_POLL_MS, CLOCK_WAIT_MAX_MS, PRIMED_MIN_WAIT_MS, SOUND_RECENT_MS, clockFlowing, type ClockSample } from '@/domain/time/audioClock';
 import type { AudioReading } from '@/domain/time/audioTimeline';

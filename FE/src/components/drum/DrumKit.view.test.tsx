@@ -1,9 +1,9 @@
 // DrumKit view(위에서 본 그림) 검증: 킷 상자·조각 이미지 폴더·전자/네온·자유 틀에서의 무시. SSR 문자열.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { kitBoxFor, smallKitSpec } from '@/domain/drumKit';
+import { kitBoxFor, smallKitSpec } from '@/domain/kit/drumKit';
 import { kitFrame } from '@/domain/kit/kitFrame';
-import { DEFAULT_KIT_LAYOUT } from '@/domain/kitLayout';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
 import { DrumKit } from './DrumKit';
 import { spriteUrl } from './acoustic/sprites';
 

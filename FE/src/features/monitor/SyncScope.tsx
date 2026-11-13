@@ -1,7 +1,7 @@
 // 추이·분포 탭 왼쪽: 시계 동기화 추이. 위 패널은 관측 오프셋(점)과 채택 오프셋(계단선), 아래 패널은 왕복 rtt(점)와
 // 1초 창 POSE 유실률(회색 막대). 계산(기울기·중앙값)은 monitor/syncTrend, 여기는 그리기와 표시만 한다.
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import type { SyncSample } from '@/features/monitor/core/packetLog';
+import type { SyncSample } from '@/features/monitor/core/recording/packetLog';
 import { type LossHistory, median, slopeMsPerMin } from '@/features/monitor/core/syncTrend';
 import { cssVar, fmt, prepareCanvas, stickName, type Snap } from './monitorTypes';
 

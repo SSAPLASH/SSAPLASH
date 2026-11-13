@@ -1,8 +1,8 @@
 // 맞춤 곡 추천 학습 활용 동의의 순수 규칙 (설계 COACH-004-recommendation-consent D5·D7).
 // 서버 값이 지금 판에 동의한 것인지, 기존 사용자에게 안내가 필요한지, 설정 상태 줄 문구만 정한다.
 // 가입 게이트(signupGate)는 이 판단을 쓰지 않는다 — 선택 항목의 판 변경이 가입을 막으면 안 된다. React·fetch·store에 의존하지 않는다.
-import { SIGNUP_CONSENT_VERSION_INVALID } from '../auth';
-import { recommendationVersion } from '../signupTerms';
+import { SIGNUP_CONSENT_VERSION_INVALID } from './auth';
+import { recommendationVersion } from './signupTerms';
 
 /** `GET`·`PUT /api/users/me/recommendation-consent` 응답. 응답한 적 없으면 agreed=false, version·updatedAt=null */
 export interface RecommendationConsent {

@@ -2,7 +2,7 @@
 // 자유 연습 정보 띠는 타격 수·평균 세기를, 모니터 빌드의 실측 섹션은 패드별·앵커 거리를 쓴다.
 // 판정 반경 상수(미결 U6)와 앵커 밖 타격 처리(미결 U11)를 하드웨어 실측으로 정할 때 쓰는 임시 집계다.
 import type { ResolvedHit } from '../events';
-import { ALL_PADS, type PadId } from '../pads';
+import { ALL_PADS, type PadId } from '@/domain/kit/pads';
 import { isSensorSource } from '@/domain/events';
 
 export interface HitStats {

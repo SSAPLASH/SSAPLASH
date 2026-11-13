@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { JudgedWindow, type JudgedNote } from './window';
 
 let t = 0;

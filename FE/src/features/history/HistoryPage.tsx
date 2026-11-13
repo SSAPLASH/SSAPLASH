@@ -5,9 +5,9 @@ import { RECORDING_ENABLED } from '@/config/features';
 import { PlayLogTab } from './PlayLogTab';
 import './history.css';
 import { RecordingList } from './RecordingList';
-import { useShell } from '@/components/shell/useShell';
-import { Segmented } from '@/components/ui/Segmented';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { useShell } from '@/components/shell/nav/useShell';
+import { Segmented } from '@/components/ui/form/Segmented';
+import { PageHeader } from '@/components/ui/layout/PageHeader';
 
 type HistoryTab = 'logs' | 'recordings';
 

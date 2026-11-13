@@ -2,14 +2,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchLessons } from '@/api/lessons';
-import { fetchRecommendations } from '@/api/recommendations';
-import { fetchSimilarSongs } from '@/api/similarSongs';
-import { listSongs } from '@/api/songs';
-import { getBestRecords } from '@/api/plays';
-import type { UserMe } from '@/domain/auth';
+import { fetchLessons } from '@/api/play/lessons';
+import { fetchRecommendations } from '@/api/song/recommendations';
+import { fetchSimilarSongs } from '@/api/song/similarSongs';
+import { listSongs } from '@/api/song/songs';
+import { getBestRecords } from '@/api/play/plays';
+import type { UserMe } from '@/domain/account/auth';
 import type { Lesson, LessonList } from '@/domain/play/lesson';
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 import { useAuth } from '@/store/authStore';
 import { useLessons } from '@/store/lessonStore';
 import { useRecommendations } from '@/store/recommendationStore';
@@ -17,20 +17,20 @@ import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/runtime/queryClient';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { SongPicker } from '@/features/play/components/picker/SongPicker';
-import { LessonCourse } from './LessonCourse';
+import { LessonCourse } from '@/features/play/components/picker/lesson/LessonCourse';
 import { LessonInvite } from './LessonInvite';
-import { LessonResultBand } from './LessonResultBand';
+import { LessonResultBand } from '@/features/result/components/LessonResultBand';
 
-vi.mock('@/api/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
-vi.mock('@/api/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
-vi.mock('@/api/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
-vi.mock('@/api/songs', () => {
+vi.mock('@/api/play/lessons', () => ({ fetchLessons: vi.fn(), postLessonCompletion: vi.fn() }));
+vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
+vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
+vi.mock('@/api/song/songs', () => {
   const listSongs = vi.fn();
   return { listSongs, getSong: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await listSongs(p)).items) };
 });
-vi.mock('@/api/plays', () => ({ getBestRecords: vi.fn() }));
+vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
 // useChartParam이 주소의 채보를 읽으려 하므로 네트워크로 나가지 않게 막는다
-vi.mock('@/api/charts', () => ({ getChartLatest: vi.fn(() => Promise.reject(new Error('test'))), getChartAssets: vi.fn(() => Promise.reject(new Error('test'))) }));
+vi.mock('@/api/song/charts', () => ({ getChartLatest: vi.fn(() => Promise.reject(new Error('test'))), getChartAssets: vi.fn(() => Promise.reject(new Error('test'))) }));
 // 연주 데이터가 필요 없는 그림이라 실제 드럼 킷 대신 밝힌 패드만 적는다
 vi.mock('@/components/drum/DrumKit', () => ({
   DrumKit: ({ states }: { states?: Record<string, string> }) => <div data-testid="kit">{Object.keys(states ?? {}).join(',')}</div>,

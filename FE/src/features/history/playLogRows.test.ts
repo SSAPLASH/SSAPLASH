@@ -1,7 +1,7 @@
 // 플레이 기록 행에 보일 값 만들기 (설계 COACH-연주-기록-화면-개편 1·4)
 import { describe, expect, it } from 'vitest';
-import type { PlaySummary } from '@/api/plays';
-import type { PlayLog, PlayUploadState } from '@/domain/playLog';
+import type { PlaySummary } from '@/api/play/plays';
+import type { PlayLog, PlayUploadState } from '@/domain/play/playLog';
 import { localRowView, serverRowView } from './playLogRows';
 
 const play = (over: Partial<PlaySummary> = {}): PlaySummary => ({

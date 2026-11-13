@@ -3,7 +3,7 @@
 // 다시 [시작]을 누르면 상태가 done·skipped라 관문이 열린다. 연주 시작을 막는 일은 이 한 번뿐이다.
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
-import { shouldPromptTimingCal } from '@/domain/kit/timingCalPrompt';
+import { shouldPromptTimingCal } from '@/domain/kit/calibration/timingCalPrompt';
 import { useSettings } from '@/store/settingsStore';
 
 interface Options {

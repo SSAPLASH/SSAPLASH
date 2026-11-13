@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BaseInputSource } from '@/input/InputSource';
-import type { SourceDescriptor } from '@/input/SourceDescriptor';
+import { BaseInputSource } from '@/input/source/InputSource';
+import type { SourceDescriptor } from '@/input/source/SourceDescriptor';
 import { SensorRegistry, resolveOptions } from './sensorRegistry';
 
 class FakeSource extends BaseInputSource {

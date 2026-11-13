@@ -7,7 +7,7 @@ import './result.css';
 import { FxCanvas } from '@/components/fx/FxCanvas';
 import type { FxEngine } from '@/components/fx/fxEngine';
 import { readFxColors } from '@/components/fx/judgeColors';
-import { CELEBRATE_DELAYS_MS, CELEBRATE_LIFE_MAX_MS, celebrate } from '@/domain/hitFx/spawn/celebrate';
+import { CELEBRATE_DELAYS_MS, CELEBRATE_LIFE_MAX_MS, celebrate } from '@/features/result/domain/celebrate';
 import type { FxSource } from '@/domain/hitFx/types';
 
 /** 이벤트를 받지 않는 소스(파티클은 spawn으로 직접 넣는다) */

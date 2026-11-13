@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { KIT_ART_PERSP, kitArtPad } from './kitArt';
 import { frameOf, framePad, kitFrame } from './kitFrame';
-import { DEFAULT_KIT_LAYOUT } from '../kitLayout';
+import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { kitShapes, makeCamera } from './kitPerspective';
-import { ALL_PADS, STICK_PADS } from '../pads';
+import { ALL_PADS, STICK_PADS } from './pads';
 
 const BOX = { w: 1000, h: 625 };
 const figs = kitShapes(DEFAULT_KIT_LAYOUT, makeCamera(BOX));

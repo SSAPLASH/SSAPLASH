@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { UserMe } from '../auth';
+import type { UserMe } from './auth';
 import { needsSignup, signupGateDecision } from './signupGate';
-import { termVersion } from '../signupTerms';
+import { termVersion } from './signupTerms';
 
 const NOW = '2026-11-02T01:00:00Z';
 

@@ -1,5 +1,5 @@
 // 타격 이펙트 엔진 — 파티클 풀·예산·시간 진행·rAF 시작/정지·통계. React와 테마 이름을 모른다(테마는 정의 조회만).
-import { kitPadsFor, type KitSkin, type KitView } from '@/domain/drumKit';
+import { kitPadsFor, type KitSkin, type KitView } from '@/domain/kit/drumKit';
 import { fxGeoOf } from '@/domain/hitFx/geometry';
 import { fxIntensity } from '@/domain/hitFx/intensity';
 import { createRand } from '@/domain/hitFx/rand';

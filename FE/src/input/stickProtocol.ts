@@ -2,7 +2,7 @@
 // 사양 원문: Docs/Service Design/스틱 통신 프로토콜.md — 바꾸면 양쪽을 같이 고친다.
 // 현재 구현 기준: v0.8.1(2026-11-03) — LINK(0x07)·ROUTE(0x70)·STATUS flags 비트 5(설정 전)·PEDAL(0x08)·role 2·3(페달) 반영
 import type { FootId, StickEvent, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
 export const STICK_SERVICE_UUID = 'a7d50001-9a3c-4f2e-b1c8-5f0e2d7c0001';
 /** 스틱 → 브라우저. Notify. 모든 패킷이 이 특성 하나로 온다 (첫 바이트 = 타입) */

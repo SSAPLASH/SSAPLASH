@@ -1,8 +1,8 @@
 // 메뉴 hover·포커스 시 다음 화면의 코드와 대표 데이터를 미리 받는다 (설계 TECH-351 3절).
 // 연주 중·데이터 절약·2G 이하·비로그인에서는 받지 않는다. 받은 데이터는 같은 30초 신선 규칙을 따른다.
-import { DEFAULT_PLAY_LIST, playPageQuery } from '@/api/queries/plays';
+import { DEFAULT_PLAY_LIST, playPageQuery } from '@/api/play/playQueries';
 import { sheetListQuery } from '@/features/studio/api/queries/sheets';
-import { mineSongsQuery, songListQuery } from '@/api/queries/songs';
+import { mineSongsQuery, songListQuery } from '@/api/song/songQueries';
 import { useAuth } from '@/store/authStore';
 import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';

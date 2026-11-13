@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { TimingCalSnapshot } from '@/runtime/timingCalSession';
-import type { TimingCalOutcome, TimingCalResult } from '@/domain/kit/timingCalibration';
+import type { TimingCalOutcome, TimingCalResult } from '@/domain/kit/calibration/timingCalibration';
 import { TimingCalView } from './TimingCalDialog';
 
 const noop = () => {};

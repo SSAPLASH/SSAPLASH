@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { nextBeatBadges, padCues, type NextBeatBadges } from '@/features/play/domain/padCue';
-import { buildSheet, gridTimeAt } from '@/domain/sheet';
+import { buildSheet, gridTimeAt } from '@/domain/song/sheet';
 
 const EMPTY: NextBeatBadges = { badges: {}, nowPads: [] };
 

@@ -3,10 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listAllAdminSongs, registerAdminSong, uploadAccompaniment } from './adminSongs';
-import { RequireAdmin } from '@/components/shell/RequireAdmin';
-import { Sidebar } from '@/components/shell/Sidebar';
+import { RequireAdmin } from '@/components/shell/account/RequireAdmin';
+import { Sidebar } from '@/components/shell/nav/Sidebar';
 import type { AdminSong } from './adminSong';
-import type { UserRole } from '@/domain/auth';
+import type { UserRole } from '@/domain/account/auth';
 import { useAdminSongs } from './adminSongStore';
 import { useAuth } from '@/store/authStore';
 import { AdminSongsPage } from './AdminSongsPage';

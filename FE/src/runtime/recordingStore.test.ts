@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/error';
-import type { RecordingBody, RecordingSummary } from '@/domain/recording';
+import type { RecordingBody, RecordingSummary } from '@/domain/play/recording';
 import type { ResolvedHit } from '@/domain/events';
-import type { LoggedHit } from '@/domain/playLog';
+import type { LoggedHit } from '@/domain/play/playLog';
 
-vi.mock('@/api/recordings', () => ({ saveRecording: vi.fn() }));
+vi.mock('@/api/play/recordings', () => ({ saveRecording: vi.fn() }));
 vi.mock('./playSync', () => ({ startPlaySync: vi.fn() }));
 vi.mock('./sources', () => {
   const listeners = new Set<(h: ResolvedHit) => void>();
@@ -20,7 +20,7 @@ vi.mock('./sources', () => {
   };
 });
 
-import { saveRecording } from '@/api/recordings';
+import { saveRecording } from '@/api/play/recordings';
 import { startPlaySync } from './playSync';
 import {
   consumeNotice,

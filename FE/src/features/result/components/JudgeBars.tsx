@@ -1,5 +1,5 @@
 // Figma Feedback / JudgeBar 126:3767 — 판정 분포 막대 3줄(PERFECT·GOOD·MISS). 막대 폭 = 개수 / 총합.
-import { Card } from '@/components/ui/Card';
+import { Card } from '@/components/ui/layout/Card';
 import './result.css';
 
 export interface JudgeBarsProps {

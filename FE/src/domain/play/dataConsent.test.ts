@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { DataConsent } from '../auth';
+import type { DataConsent } from '@/domain/account/auth';
 import { isConsentCurrent, logConsent } from './dataConsent';
-import { dataConsentVersion } from '../signupTerms';
+import { dataConsentVersion } from '@/domain/account/signupTerms';
 
 const dc = (agreed: boolean | null, version: string | null): DataConsent => ({
   agreed,

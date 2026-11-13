@@ -1,9 +1,9 @@
 // 악보 제목 수정 창 (설계 CHART-001 악보 보관 4-5). SongMetaDialog 틀을 따른다: 제목 1~100자, 저장 중 잠금, 창 안 오류 문구.
 // 데이터는 모른다. onSubmit이 거부되면 오류 코드를 sheetErrorText로 바꿔 창 안에 보이고, 성공하면 onClose를 부른다.
 import { useState } from 'react';
-import { EditDialog } from '@/features/studio/components/EditDialog';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { EditDialog } from '@/features/studio/components/songs/EditDialog';
+import { Button } from '@/components/ui/action/Button';
+import { Input } from '@/components/ui/form/Input';
 import { SHEET_TITLE_MAX, isValidSheetTitle, sheetErrorCodeOf, sheetErrorText } from '@/features/studio/domain/sheetMusic';
 import '@/features/studio/components/studio.css';
 

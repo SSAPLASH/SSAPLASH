@@ -1,5 +1,5 @@
 // fire 테마 — 드럼: 위로 솟는 불씨 + 짧은 불꽃, 심벌: 사방으로 흩어지는 불티, 킥: 아래에서 치솟는 불길. 가산 합성.
-import type { PadShape } from '@/domain/drumKit';
+import type { PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
 import { particle } from './util';
 

@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { defaultRecordingTitle, type RecordingSummary } from '@/domain/recording';
+import { defaultRecordingTitle, type RecordingSummary } from '@/domain/play/recording';
 import { RecordingBoard, type RecordingBoardProps } from './RecordingList';
 
-vi.mock('@/api/recordings');
+vi.mock('@/api/play/recordings');
 
 const summary = (over: Partial<RecordingSummary> = {}): RecordingSummary => ({
   id: 1,

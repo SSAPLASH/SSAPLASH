@@ -3,9 +3,9 @@
 // 재생 중인 행의 버튼은 정지가 아니라 일시정지·이어 재생이고, 재생바로 위치를 옮길 수 있다(338 녹음 재생바).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/api/error';
-import { getRecording } from '@/api/recordings';
-import type { RecordingDetail, RecordingSummary } from '@/domain/recording';
-import { recordingPlayer } from '@/engine/recordingPlayer';
+import { getRecording } from '@/api/play/recordings';
+import type { RecordingDetail, RecordingSummary } from '@/domain/play/recording';
+import { recordingPlayer } from './recordingPlayer';
 
 export interface UseRecordingPlaybackOptions {
   /** 상세 조회가 404 RECORDING_NOT_FOUND(이미 지워진 녹음)일 때 */

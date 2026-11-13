@@ -1,5 +1,5 @@
 // 녹화 재생 바: 재생 모드에서만 상단 바 아래에 보인다. 재생·일시정지, 처음부터, 배속, 진행(경과/전체), 파일 이름, 닫기.
-import { REPLAY_SPEEDS, type ReplaySpeed } from '@/features/monitor/core/replay';
+import { REPLAY_SPEEDS, type ReplaySpeed } from '@/features/monitor/core/recording/replay';
 
 /** ms → m:ss */
 function fmtClock(ms: number): string {

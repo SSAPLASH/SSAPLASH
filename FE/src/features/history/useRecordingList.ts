@@ -6,10 +6,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { ApiError } from '@/api/error';
-import { recordingKeys, recordingListQuery } from '@/api/queries/recordings';
-import type { ListRecordingsParams, PageResponse } from '@/api/recordings';
+import { recordingKeys, recordingListQuery } from '@/api/play/recordingQueries';
+import type { ListRecordingsParams, PageResponse } from '@/api/play/recordings';
 import { queryClient } from '@/runtime/queryClient';
-import type { RecordingMode, RecordingSort, RecordingSummary } from '@/domain/recording';
+import type { RecordingMode, RecordingSort, RecordingSummary } from '@/domain/play/recording';
 
 /** 모드 필터 값. ALL이면 mode 쿼리를 생략한다 */
 export type RecordingModeFilter = 'ALL' | Exclude<RecordingMode, 'TEMPO'>;

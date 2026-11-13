@@ -1,7 +1,7 @@
 // 이 기기의 로컬 플레이 로그에서 최고 기록을 뽑는 순수 함수 (설계 U18).
 // 곡 선택 표 = 곡별 최고 점수·정확도, 선택 곡 카드 = 연습 단계(채보)별 최고 점수(게임)·정확도(악보). 기록이 없으면 Map에 키가 없다.
 // 로그는 끝까지 친 판만 저장된다(PlayPage·SheetPage의 finish에서만 savePlayLog) — 중간에 나간 판은 애초에 로그가 없어 따로 거르지 않는다.
-import type { PlayLog } from '@/domain/playLog';
+import type { PlayLog } from './playLog';
 
 type LogMode = PlayLog['mode'];
 

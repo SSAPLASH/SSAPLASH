@@ -1,8 +1,8 @@
 // 레슨 카드의 음표 (설계 SETUP-입문-코스 3-5). 패드마다 오선 위 음표 하나와 이름·치는 손발.
 // 위치·머리 모양은 악보 화면과 같은 staffPosOf를 써서 실제 악보와 항상 같다.
 import { useEffect, useRef } from 'react';
-import { PAD_META, type PadId } from '@/domain/pads';
-import { staffPosOf } from '@/domain/sheet';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import { staffPosOf } from '@/domain/song/sheet';
 import { PAD_LIMB } from '@/domain/play/lesson';
 
 const GAP = 10; // 선 간격(px). 보표 위치 1단위(반 칸) = 5px

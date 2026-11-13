@@ -3,29 +3,29 @@
 // 소리·텔레메트리는 자유 연습처럼 공용 경로(setSoundOnHit)가 내고, 이 화면은 마지막 타격만 구독한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { postLessonCompletion } from '@/api/lessons';
+import { postLessonCompletion } from '@/api/play/lessons';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { touchSource } from '@/runtime/sources';
 import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/play/lesson';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
-import type { PadVisualState } from '@/domain/drumKit';
-import type { PadId } from '@/domain/pads';
+import type { PadVisualState } from '@/domain/kit/drumKit';
+import type { PadId } from '@/domain/kit/pads';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useLessons } from '@/store/lessonStore';
 import { useLive } from '@/store/liveStore';
 import { useSettings } from '@/store/settingsStore';
 import { loadChart } from '@/store/songStore';
-import { useShell } from '@/components/shell/useShell';
-import { Dialog } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { useShell } from '@/components/shell/nav/useShell';
+import { Dialog } from '@/components/ui/overlay/Dialog';
+import { Button } from '@/components/ui/action/Button';
+import { EmptyState } from '@/components/ui/feedback/EmptyState';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { usePadHitSeq, usePadStates } from '@/components/drum/usePadStates';
 import { ReadStaff } from '@/components/lesson/PadNotation';
 import '@/components/lesson/lesson.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 

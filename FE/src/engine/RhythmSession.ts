@@ -1,11 +1,11 @@
 // MODE-01 리듬 게임 세션. 채보와 타격을 대조해 Perfect/Good/Miss를 낸다.
 // 판정은 센서 타격 시각(tHit) 기준 — 통신·처리 지연과 무관 (공통 명세서 2-4).
-import type { Chart, ChartNote } from '@/domain/chart';
+import type { Chart, ChartNote } from '@/domain/song/chart';
 import type { Pose, ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
-import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/judgement';
+import type { PadId } from '@/domain/kit/pads';
+import { JUDGEMENT_SCORE, judgeDelta, type Judgement, type TimingWindows } from '@/domain/play/judgement';
 import { COUNTDOWN_MS } from '@/domain/time/leadIn';
-import { gridOriginMs } from '@/domain/sheet';
+import { gridOriginMs } from '@/domain/song/sheet';
 import { isFootHit, isSensorSource } from '@/domain/events';
 import { hitMatch, type MatchCandidate, type MatchRule } from './hitMatch';
 

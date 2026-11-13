@@ -1,9 +1,9 @@
 // 기기 준비 줄 묶음 (Figma ReadyCheck 222:856). 시작 확인 창의 「기기 준비 필요」 변형이 쓴다: 스틱 연결·보정 두 줄.
 // 준비 화면이 있던 때의 카드 머리·버튼 줄·프리셋 줄은 없앴다(머리와 버튼은 창이 갖는다).
 // props만 받는다. 준비 조건 계산(useReadiness)·이동은 호출자가 한다.
-import { Card } from '@/components/ui/Card';
-import { DEVICE_META, deviceGroupName, deviceListText, type DeviceId } from '@/domain/devices';
-import type { ReadinessMissing } from '@/domain/kit/readiness';
+import { Card } from '@/components/ui/layout/Card';
+import { DEVICE_META, deviceGroupName, deviceListText, type DeviceId } from '@/domain/kit/device/devices';
+import type { ReadinessMissing } from '@/domain/kit/device/readiness';
 import './ready.css';
 
 export interface DeviceCheckProps {

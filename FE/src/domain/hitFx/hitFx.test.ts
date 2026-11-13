@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRUM_KIT_H, DRUM_KIT_W, KIT_SKINS, kitPadsFor } from '@/domain/drumKit';
+import { DRUM_KIT_H, DRUM_KIT_W, KIT_SKINS, kitPadsFor } from '@/domain/kit/drumKit';
 import { fxGeoOf } from './geometry';
 import { fxIntensity } from './intensity';
 import { BOLT_SUB, createSample, jagPath, sampleParticle } from './motion';

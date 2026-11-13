@@ -1,9 +1,9 @@
 // 리포트 화면용 계산 (설계 COACH-002 리포트 화면 개편 3장). React·DOM·네트워크를 모르는 순수 함수.
 // 노트 목록을 5초 칸으로 묶고, AI 약점을 화면 자리(놓친 구간·패드 전환·그 밖)로 나누고, 확대해서 볼 구간(Focus)과 그 문구를 만든다.
 // 약점 문구는 서버 값을 그대로 쓰고, 숫자(metrics)는 있으면 쓰고 없으면 그 문구만 뺀다(D5).
-import type { Judgement } from '@/domain/judgement';
-import { PAD_META, type PadId } from '@/domain/pads';
-import type { PadStat, ReportNote, WeakSegment } from '@/domain/report';
+import type { Judgement } from '@/domain/play/judgement';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
+import type { PadStat, ReportNote, WeakSegment } from '@/domain/play/report';
 
 /** 전체 노트 흐름의 칸 폭(ms) */
 export const FLOW_BIN_MS = 5000;

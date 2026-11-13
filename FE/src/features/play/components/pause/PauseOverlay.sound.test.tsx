@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { KeyboardPadSource } from '@/input/KeyboardPadSource';
+import { KeyboardPadSource } from '@/input/source/KeyboardPadSource';
 import { setReconnectHandler } from '@/store/reconnectStore';
 import { useSettings } from '@/store/settingsStore';
 import { useShellStore } from '@/store/shellStore';

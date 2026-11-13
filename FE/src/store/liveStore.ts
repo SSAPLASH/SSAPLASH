@@ -1,9 +1,9 @@
 // 실시간 상태 (영속 안 함): 스틱 연결·자세·최근 타격·소스 상태.
 // 자세는 60Hz로 들어오므로 구독 컴포넌트는 필요한 필드만 select 한다.
 import { create } from 'zustand';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { BPM_DEFAULT, type BeatsPerBar } from '@/domain/time/metronome';
-import type { PadTableStatus, YawDriftStatus } from '@/domain/calibration';
+import type { PadTableStatus, YawDriftStatus } from '@/domain/kit/calibration/calibration';
 import type { DongleLink, Pose, ResolvedHit, SensorId, SourceState, StickId } from '@/domain/events';
 import type { CaptureSnapshot } from '@/engine/HitCapture';
 import type { RealignSnapshot } from '@/engine/SnareRealign';

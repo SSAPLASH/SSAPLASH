@@ -1,10 +1,10 @@
 // 2타 보정 상태 기계 검증(PLAY-004 3-5, UX-64 D3, 보정 흐름 개편): 순서·손별 2타·자동 진행(지연)·간격 경고(멈추지 않음·다음 첫 수락 타격에서 비움, v0.2)·
 // next(외부 호출용)·redo(done에서도)·base 스냅샷·base(재보정)·손별 독립 비교·퍼짐 되돌림·손 추가/제거·restart·build.
 import { describe, expect, it, vi } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { CAPTURE_ORDER, HitCapture } from './HitCapture';
-import { DEFAULT_SENSOR_TUNING } from '@/domain/tuning';
-import type { HandAnchors } from '@/domain/calibration';
+import { DEFAULT_SENSOR_TUNING } from '@/domain/kit/calibration/tuning';
+import type { HandAnchors } from '@/domain/kit/calibration/calibration';
 
 /** 지연 없이 동기 진행하는 캡처(타이머가 필요 없는 테스트용) */
 const sync = () => new HitCapture({ advanceDelayMs: 0 });

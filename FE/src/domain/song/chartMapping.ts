@@ -1,7 +1,7 @@
 // BE 채보 응답(ChartDetail) → FE Chart 변환 (설계 3-2). 순수 함수, 네트워크 없음.
-import type { Chart, ChartNote, ChartSource, Difficulty } from '../chart';
-import { normalizePadId } from '../pads';
-import { toSafeId } from '../songCatalog';
+import type { Chart, ChartNote, ChartSource, Difficulty } from './chart';
+import { normalizePadId } from '@/domain/kit/pads';
+import { toSafeId } from './songCatalog';
 import { tempoSegmentsFrom } from '../time/tempo';
 
 export interface ChartNoteDto {

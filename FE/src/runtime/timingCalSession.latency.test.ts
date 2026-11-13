@@ -2,7 +2,7 @@
 // 모의 엔진: 화면 시계 시각 w에 들리게 하려는 클릭은 w가 now + 앞선 정도보다 이르면 now + 앞선 정도로 당겨진다(AudioEngine.click과 같은 동작).
 import { describe, expect, it } from 'vitest';
 import type { ResolvedHit } from '@/domain/events';
-import { timingCalBeatMs } from '@/domain/kit/timingCalibration';
+import { timingCalBeatMs } from '@/domain/kit/calibration/timingCalibration';
 import { TIMING_CAL_TOTAL_BEATS, TimingCalSession } from './timingCalSession';
 
 const BEAT = timingCalBeatMs();

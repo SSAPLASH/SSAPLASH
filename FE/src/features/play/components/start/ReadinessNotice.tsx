@@ -1,6 +1,6 @@
 // 준비 조건 미비 안내. 자기 완결 — useSettings·useLive로 readiness를 계산해 미비일 때만 문구와 "설정으로" 버튼을 그린다.
 import { useNavigate } from 'react-router-dom';
-import { READINESS_MESSAGES, stickMissingText } from '@/domain/kit/readiness';
+import { READINESS_MESSAGES, stickMissingText } from '@/domain/kit/device/readiness';
 import { useReadiness } from './useReadiness';
 import { useLive } from '@/store/liveStore';
 

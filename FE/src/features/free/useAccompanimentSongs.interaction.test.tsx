@@ -2,7 +2,7 @@
 // 반주 선택 창 목록 훅 (설계 MODE-002 3-8, D12). listSongs를 가짜로 주입한다.
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SongPage, SongSummary } from '@/domain/songCatalog';
+import type { SongPage, SongSummary } from '@/domain/song/songCatalog';
 import { MAX_FILL_PAGES, PAGE_SIZE, SEARCH_DEBOUNCE_MS, useAccompanimentSongs } from './useAccompanimentSongs';
 
 const song = (id: number, acc: SongSummary['accompanimentStatus'] = 'READY'): SongSummary => ({

@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import { AdminBulkDialog } from './AdminBulkDialog';
 import { AdminSongAddDialog } from './AdminSongAddDialog';
 import { AdminSongTable } from './AdminSongTable';
-import { useShell } from '@/components/shell/useShell';
-import { Button } from '@/components/ui/Button';
+import { useShell } from '@/components/shell/nav/useShell';
+import { Button } from '@/components/ui/action/Button';
 import type { AdminSongDraft } from './adminSong';
 import { useAdminSongs } from './adminSongStore';
 import './admin.css';
-import { InlineError } from '@/components/ui/InlineError';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 
 export function AdminSongsPage() {
   useShell({ title: '공용 곡 관리' });
