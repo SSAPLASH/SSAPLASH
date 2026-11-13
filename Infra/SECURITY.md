@@ -588,7 +588,7 @@ ZAP 자동 스캔과 별개로, 같은 로컬 환경(`victim`/`attacker`/`admin`
 
 **BE 수정 (로컬, 2026-11-03) — 완료**
 
-깨진 multipart와 NUL 문자 입력이 `500`이 되던 결함을 고쳤다. 이번 주 BE 파트를 겸임하는 담당자(정인웅)가 직접 처리했고, 다른 파트 작업이 아니므로 `mail` 요청 문서는 만들지 않았다.
+깨진 multipart와 NUL 문자 입력이 `500`이 되던 결함을 고쳤다.
 
 - `NulParameterFilter`(신규, `common/error`): 요청 파라미터에 NUL 문자(`\u0000`)가 있으면 컨트롤러·DB 전에 `400 INVALID_INPUT`으로 거절한다. multipart 요청은 검사하지 않는다(멀티파트 파싱 전에 `getParameterMap()`을 부르면 본문 스트림을 먼저 소모해 이후 파싱이 깨질 수 있어서).
 - `GlobalExceptionHandler`에 `MultipartException`(경계 없음·크기 초과 포함) 핸들러를 추가해 `500` 대신 `400 INVALID_INPUT`으로 매핑했다.

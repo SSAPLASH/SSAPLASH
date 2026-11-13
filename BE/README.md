@@ -1059,7 +1059,7 @@ CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리�
 
 CHART-001. 사용자가 올린 **드럼 MusicXML**(`.musicxml`·`.xml`·`.mxl`)을 AI 서버가 채보 JSON으로 바꾸고, BE가 음원 채보와 같은 규칙으로 HARD·NORMAL·EASY를 만들어
 **내 곡**(`source=MUSICXML`)으로 저장한다. MIDI 업로드(151번)처럼 요청 안에서 끝나는 동기 API다. 이미지·PDF 악보 인식은 넣지 않는다(AI 측정: 악기 정확도 평균 0.49,
-곡당 크레딧 약 6,600). 설계 `.claude/plans/CHART-001-MusicXML-악보-업로드-곡-등록.md`.
+곡당 크레딧 약 6,600).
 
 `POST /api/v1/songs/musicxml`: Bearer 인증, multipart `file`(5 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
 다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, `Cache-Control: private, no-store`, 본문은 곡 상세
@@ -1160,7 +1160,7 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 
 ## 입문 코스 (331번)
 
-SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [입문 코스] 탭이다. 설계 `.claude/plans/SETUP-입문-코스.md`(개인 문서).
+SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [입문 코스] 탭이다.
 
 - **카탈로그 `lesson`:** `order`(1 이상, 카탈로그 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~4개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
 - **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하). 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
@@ -1378,7 +1378,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
 - 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
 
-## 연주 중 LLM 구간 코칭 작업 (COACH-001, 설계 `.claude/plans/COACH-001-연주중-LLM-코칭-설계.md`)
+## 연주 중 LLM 구간 코칭 작업 (COACH-001)
 
 연주 중 4·8·16마디 구간이 끝날 때 FE가 구간 사실(`facts`)을 보내면, 교내 GPU 서버의 워커가 가져가 리포트 총평과 같은 로컬 모델로 안내 칸 문구(`title` 8자, `sub` 16자)를 써서 제출한다. FE는 짧은 주기로 결과를 조회해 다음 구간에 띄운다. 늦은 답은 쓸모없어서 짧게 살다 지워지는 큐(`live_coach_jobs`, V47)다. 계약과 가드레일은 AI `AI/docs/live-coach-llm.md`.
 
@@ -1405,7 +1405,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 IP 허용으로 연다.
 - 시험: `LiveCoachQueueTest`(요청·claim·result·조회, claim 멱등성, 남의 요청 404, 판당·분당 상한 429, 잘못된 사실, 실패·만료 410, 오래된 작업 미배정, 결과 길이 검증과 임대 확인, 꺼짐).
 
-## 곡 추천 R1: 규칙 추천 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md`)
+## 곡 추천 R1: 규칙 추천
 
 공용 곡 중 "지금 치기 좋은 채보"를 규칙 점수로 골라 이유와 함께 돌려준다. 학습·AI 호출이 없고 요청 시 DB의 본인 기록과 공용 곡만 읽는다. 추천 단위는 채보(곡+난이도)이고 응답은 곡당 하나다.
 
@@ -1564,7 +1564,6 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 ### 측정 세션 실험 조건 (259번)
 
 MONITOR-002. 세션끼리 "어떤 조건에서 쟀는지"를 비교하기 위한 환경 정보다. 필드·값은 FE가 EMB와 맞춰 확정했다(`MONITOR-002_측정세션-실험조건`, 2026-11-06).
-설계: `.claude/plans/MONITOR-002-측정-세션-실험-조건.md`.
 
 배치 외피의 선택 객체 `conditions`로 받는다. **FE는 같은 `sessionId`의 매 배치에 그 시점의 전체 값을 붙이고**, BE는 `telemetry_session_conditions`(V39)의
 `(user_id, session_id)` 한 행을 **마지막으로 받은 값으로 통째로 바꾼다**(null이 된 값은 null이 된다). `conditions`가 없거나 null인 배치는 행을 건드리지 않는다.
@@ -1625,7 +1624,7 @@ Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다�
 권한·저장·null 보존·전체 거절·롤백·조회와 259 조건의 저장·통째 교체·행 유지·롤백·세션 목록 응답을, `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과
 컬럼 타입, V39의 PK·CHECK를 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다. 탈퇴 시 조건 행 삭제는 `WithdrawalServiceTest`가 본다.
 
-## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
+## 곡 추천 R3: 후보 적재와 서빙
 
 AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 규칙으로 거르고 섞는다. 요청 경로에서 AI를 부르지 않는다. **기본은 꺼져 있고, 꺼져 있으면 응답과 기록이 R1과 같다.**
 
