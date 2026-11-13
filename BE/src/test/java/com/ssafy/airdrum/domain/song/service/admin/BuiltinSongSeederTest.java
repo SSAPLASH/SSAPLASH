@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.ssafy.airdrum.domain.lesson.model.LessonCourse;
 import com.ssafy.airdrum.domain.lesson.model.LessonKind;
 import com.ssafy.airdrum.domain.lesson.model.LessonSpec;
 import com.ssafy.airdrum.domain.song.service.admin.BuiltinSongSeeder.Outcome;
@@ -310,10 +311,18 @@ class BuiltinSongSeederTest {
 	@Test
 	void 저장소_카탈로그의_레슨은_순서가_이어지고_NORMAL이_원본과_같다() {
 		var entries = BuiltinSongCatalog.load("classpath:builtin-songs/").stream().filter(e -> e.lesson() != null).toList();
-		assertThat(entries).extracting(e -> e.lesson().order()).containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
-		// 알아보기 4개(1~4) 뒤에 연주 8개(5~12). 「섞어서 읽기」(4)만 처음부터 알려 주지 않는다
-		assertThat(entries).allSatisfy(e -> assertThat(e.lesson().kind()).isEqualTo(e.lesson().order() <= 4 ? LessonKind.READ : LessonKind.PLAY));
-		assertThat(entries).filteredOn(e -> !e.lesson().guide()).extracting(e -> e.lesson().order()).containsExactly(4);
+		var beginner = entries.stream().filter(e -> e.lesson().course() == LessonCourse.BEGINNER).toList();
+		var intermediate = entries.stream().filter(e -> e.lesson().course() == LessonCourse.INTERMEDIATE).toList();
+		assertThat(beginner).extracting(e -> e.lesson().order()).containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+		// 입문: 알아보기 4개(1~4) 뒤에 연주 8개(5~12). 「섞어서 읽기」(4)만 처음부터 알려 주지 않는다
+		assertThat(beginner).allSatisfy(e -> assertThat(e.lesson().kind()).isEqualTo(e.lesson().order() <= 4 ? LessonKind.READ : LessonKind.PLAY));
+		assertThat(beginner).filteredOn(e -> !e.lesson().guide()).extracting(e -> e.lesson().order()).containsExactly(4);
+		assertThat(beginner).allSatisfy(e -> assertThat(e.title()).startsWith("입문 · "));
+		// 중급(학습 코스 설계 3-7절): 알아보기 3개(1~3) 뒤에 연주 7개(4~10). 입문에서 안 친 드럼 여섯 개를 모두 쓴다
+		assertThat(intermediate).extracting(e -> e.lesson().order()).containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+		assertThat(intermediate).allSatisfy(e -> assertThat(e.lesson().kind()).isEqualTo(e.lesson().order() <= 3 ? LessonKind.READ : LessonKind.PLAY));
+		assertThat(intermediate).allSatisfy(e -> assertThat(e.title()).startsWith("중급 · "));
+		assertThat(intermediate).flatExtracting(e -> e.lesson().pads()).contains("CRASH", "RIDE", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "HIHAT_PEDAL");
 		for (var entry : entries) {
 			// 레슨 채보는 NORMAL이다(설계 1절). 솎기로 노트가 빠지면 레슨 내용이 바뀐다.
 			var renamed = new BuiltinSongCatalog.Entry(prefix + entry.title(), entry.artist(), entry.license(), entry.published(), entry.midi(), entry.offsetMs(), entry.meta());
@@ -321,6 +330,20 @@ class BuiltinSongSeederTest {
 			var counts = db.queryForMap("SELECT max(v.note_count) FILTER (WHERE c.difficulty='HARD') AS hard, max(v.note_count) FILTER (WHERE c.difficulty='NORMAL') AS normal "
 					+ "FROM charts c JOIN chart_versions v ON v.chart_id=c.id JOIN songs s ON s.id=c.song_id WHERE s.title=?", renamed.title());
 			assertThat(counts.get("normal")).as(entry.title()).isNotNull().isEqualTo(counts.get("hard"));
+			// 채보에 나오는 패드가 레슨이 알려 주는 패드와 같다(GM 번호를 잘못 쓰면 다른 패드가 나온다)
+			var pads = db.queryForList("SELECT DISTINCT n->>'pad' FROM charts c JOIN chart_versions v ON v.chart_id=c.id JOIN songs s ON s.id=c.song_id "
+					+ "CROSS JOIN jsonb_array_elements(v.notes) n WHERE s.title=? AND c.difficulty='NORMAL'", String.class, renamed.title());
+			assertThat(pads).as(entry.title()).containsExactlyInAnyOrderElementsOf(entry.lesson().pads());
 		}
+	}
+
+	@Test
+	void 레슨_코스가_lessons에_들어가고_다른_코스는_같은_순서를_쓸_수_있다() throws Exception {
+		var a = lesson("코스 입문 1", new LessonSpec(1, LessonKind.READ, "킥", List.of("KICK"), true));
+		var b = lesson("코스 중급 1", new LessonSpec(1, LessonKind.READ, "크래시", List.of("CRASH"), true, LessonCourse.INTERMEDIATE));
+		seeder.seed(List.of(a, b));
+		assertThat(db.queryForList("SELECT s.title, l.course FROM lessons l JOIN songs s ON s.id=l.song_id WHERE s.title LIKE ? ORDER BY l.course, l.position",
+				prefix + "코스%")).extracting(m -> m.get("title") + ":" + m.get("course"))
+				.containsExactly(a.title() + ":BEGINNER", b.title() + ":INTERMEDIATE");
 	}
 }

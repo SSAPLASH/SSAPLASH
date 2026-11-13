@@ -99,6 +99,10 @@ class LessonApiTest {
 		db.update("INSERT INTO lessons(song_id,position,kind,summary,pads,guide) VALUES(?,?,?,?,?::jsonb,?)", song, position, kind, summary, pads, guide);
 	}
 
+	void lesson(long song, String course, int position, String kind, String summary, String pads) {
+		db.update("INSERT INTO lessons(song_id,course,position,kind,summary,pads) VALUES(?,?,?,?,?,?::jsonb)", song, course, position, kind, summary, pads);
+	}
+
 	long chart(long song, String difficulty) {
 		return db.queryForObject("SELECT id FROM charts WHERE song_id=? AND difficulty=?", Long.class, song, difficulty);
 	}
@@ -171,6 +175,40 @@ class LessonApiTest {
 		assertThat(items).extracting(i -> i.path("passed").asBoolean()).containsExactly(false, false, false);
 		assertThat(items).extracting(i -> i.path("locked").asBoolean()).containsExactly(false, true, true);
 		assertThat(items.get(2).path("pads").valueStream().map(JsonNode::asString).toList()).containsExactly("HIHAT", "KICK", "SNARE");
+	}
+
+	/** 학습 코스 설계 3-3절: 항목마다 코스가 있고, 입문 → 중급 순서이며 순서 번호는 코스 안에서 1부터다. */
+	@Test
+	void 항목마다_코스가_있고_입문_뒤에_중급이_코스_안_순서로_온다() throws Exception {
+		long crash = song("레슨검사 중급 크래시");
+		long ride = song("레슨검사 중급 라이드");
+		lesson(ride, "INTERMEDIATE", 2, "PLAY", "라이드 8비트", "[\"RIDE\",\"SNARE\",\"KICK\"]");
+		lesson(crash, "INTERMEDIATE", 1, "READ", "크래시 음표", "[\"CRASH\"]");
+		var items = mine(lessons(token));
+		assertThat(items).extracting(i -> i.path("songId").asLong()).containsExactly(read, play1, play2, crash, ride);
+		assertThat(items).extracting(i -> i.path("course").asString()).containsExactly("BEGINNER", "BEGINNER", "BEGINNER", "INTERMEDIATE", "INTERMEDIATE");
+		assertThat(items).extracting(i -> i.path("order").asInt()).containsExactly(1, 2, 3, 1, 2);
+	}
+
+	/** 학습 코스 설계 1절: 중급은 입문을 다 통과해야 열린다(목록이 한 줄이라 잠금 계산은 그대로). */
+	@Test
+	void 입문을_다_통과해야_중급_1번이_열린다() throws Exception {
+		long crash = song("레슨검사 중급 크래시");
+		long ride = song("레슨검사 중급 라이드");
+		lesson(crash, "INTERMEDIATE", 1, "READ", "크래시 음표", "[\"CRASH\"]");
+		lesson(ride, "INTERMEDIATE", 2, "PLAY", "라이드 8비트", "[\"RIDE\",\"SNARE\",\"KICK\"]");
+		complete(read, token);
+		play(user, play1, "SHEET", "80.00", "COMPLETED");
+		var before = mine(lessons(token));
+		assertThat(before).extracting(i -> i.path("locked").asBoolean()).containsExactly(false, false, false, true, true);
+
+		play(user, play2, "SHEET", "75.00", "COMPLETED");
+		var after = mine(lessons(token));
+		assertThat(after).extracting(i -> i.path("passed").asBoolean()).containsExactly(true, true, true, false, false);
+		assertThat(after).extracting(i -> i.path("locked").asBoolean()).containsExactly(false, false, false, false, true);
+		// 중급 알아보기도 완료를 저장할 수 있다
+		assertThat(complete(crash, token)).isEqualTo(204);
+		assertThat(mine(lessons(token)).get(4).path("locked").asBoolean()).isFalse();
 	}
 
 	@Test
