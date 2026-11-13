@@ -141,7 +141,7 @@ export function StartDialog({
               {n}
             </p>
           ))}
-          {realign && <RealignPrompt hands={realign.hands} done={realign.done} variant="row" onSkip={realign.onSkip} />}
+          {realign && <RealignPrompt hands={realign.hands} done={realign.done} unstable={realign.unstable} variant="row" onSkip={realign.onSkip} />}
         </>
       ) : (
         <DeviceCheck missing={missing} connected={connected} keyboardOnly={keyboardOnly} pedal={pedal} />

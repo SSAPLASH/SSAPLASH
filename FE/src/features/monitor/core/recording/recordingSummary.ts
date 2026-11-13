@@ -79,6 +79,8 @@ export interface RecordingSummary {
   sessions: SessionSummary[];
   /** 마지막 audio 진단 줄: 판정 타이밍 보정과 브라우저가 보고한 오디오 지연. 줄이 없으면 null */
   audio: { audioOffsetMs: number; kickOffsetMs: number; baseLatencyMs: number | null; outputLatencyMs: number | null } | null;
+  /** yawHalt 진단 줄 수(손별 [왼손, 오른손]): 부호가 연달아 뒤집혀 자동 보정을 멈춘 횟수. 줄이 없으면(옛 녹화) [0, 0] */
+  yawHalts: [number, number];
   /** 세션별 타이밍 분석(설계 3-1, T1). 계산은 timingReport가 한다 */
   timing: SessionTiming[];
 }
@@ -145,6 +147,7 @@ export function summarizeRecording(input: {
   let stray = 0;
   let missed = 0;
   let audioLine: RecordingSummary['audio'] = null;
+  const yawHalts: [number, number] = [0, 0];
   let contested = 0;
   const sessions: SessionSummary[] = [];
   for (const ev of diags) {
@@ -164,6 +167,8 @@ export function summarizeRecording(input: {
       missed++;
     } else if (ev.type === 'session' && ev.phase === 'start') {
       sessions.push({ title: ev.title, mode: ev.mode, audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, contested: 0, coach: emptyCoach() });
+    } else if (ev.type === 'yawHalt') {
+      yawHalts[ev.stickId]++;
     } else if (ev.type === 'audio') {
       audioLine = { audioOffsetMs: ev.audioOffsetMs, kickOffsetMs: ev.kickOffsetMs ?? ev.audioOffsetMs, baseLatencyMs: ev.baseLatencyMs, outputLatencyMs: ev.outputLatencyMs };
     } else if (ev.type === 'matchContested') {
@@ -200,6 +205,7 @@ export function summarizeRecording(input: {
     contested,
     sessions,
     audio: audioLine,
+    yawHalts,
     timing: timingReport(diags),
   };
 }
@@ -239,6 +245,7 @@ export function summaryToMarkdown(s: RecordingSummary): string {
     `- 메모: ${meta.note || '–'}`,
     `- 패킷: 수신 ${s.packets.inTotal}건(HIT ${s.packets.hits}) · 송신 ${s.packets.outTotal}건 · 진단 이벤트 ${s.diagCount}건`,
     `- 오디오: ${s.audio ? `판정 타이밍 보정 ${offsetText(s.audio.audioOffsetMs, s.audio.kickOffsetMs, true)} · base ${f1(s.audio.baseLatencyMs)}ms · output ${f1(s.audio.outputLatencyMs)}ms` : '–'}`,
+    ...(s.yawHalts[0] + s.yawHalts[1] > 0 ? [`- 자동 보정 멈춤: 왼손 ${s.yawHalts[0]}번 · 오른손 ${s.yawHalts[1]}번`] : []),
     '',
     '| 지표 (ms) | n | p50 | p95 | max | 기준 |',
     '| --- | --- | --- | --- | --- | --- |',

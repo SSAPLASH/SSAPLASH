@@ -162,3 +162,7 @@ export const DRIFT_MIN_SAMPLES = 8;
 export const DRIFT_WINDOW = 12;
 /** 송신 뒤 재송신 금지 시간(ms) */
 export const DRIFT_COOLDOWN_MS = 10_000;
+/** 한 번 자동 보정으로 움직이는 최대 각도(도). 남은 오차는 다음 표본 모음에서 다시 본다 */
+export const DRIFT_MAX_STEP_DEG = 8;
+/** 직전 자동 보정과 부호가 반대인 보정이 연달아 이 횟수만큼 나오려 하면 그 손의 자동 보정을 멈춘다 */
+export const DRIFT_FLIP_LIMIT = 2;

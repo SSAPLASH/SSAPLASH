@@ -110,6 +110,16 @@ export function addDiagSessionStartHook(cb: () => void): () => void {
   return () => sessionStartExtras.delete(cb);
 }
 
+/**
+ * 곡 시작(재시작 포함)마다 부를 훅을 더한다. 진단 구독 여부와 무관하게 돈다(앱 동작이 걸린 훅용).
+ * addDiagSessionStartHook은 진단 구독 중에만 돈다. 반환값은 해제 함수
+ */
+const playStartHooks = new Set<() => void>();
+export function addPlayStartHook(cb: () => void): () => void {
+  playStartHooks.add(cb);
+  return () => playStartHooks.delete(cb);
+}
+
 /** 진행 중인 판의 판정 타이밍 보정(ms). 판이 없으면 null */
 export function diagActiveAudioOffsetMs(): number | null {
   return active ? active.audioOffsetMs : null;
@@ -129,6 +139,7 @@ export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', op
     if (d) diagTap.publish(d);
   });
   active = { ss, mode, windows: opts.windows, audioOffsetMs: opts.audioOffsetMs, kickOffsetMs: opts.kickOffsetMs, off };
+  for (const cb of playStartHooks) cb();
   if (!diagTap.active) return;
   diagTap.publish(sessionBody(active, 'start'));
   diagTap.publish({

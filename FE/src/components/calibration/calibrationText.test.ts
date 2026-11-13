@@ -86,4 +86,11 @@ describe('realignPromptText', () => {
     expect(realignPromptText([0], [false, false])).toBe('왼손으로 스네어를 한 번 쳐 주세요');
     expect(realignPromptText([0], [true, false])).toBe('스네어 재정렬을 마쳤어요');
   });
+
+  it('unstable(방향 흔들림으로 자동 보정이 멈춤)이면 칠 손이 남았을 때만 앞에 이유를 붙인다', () => {
+    expect(realignPromptText([0, 1], [false, false], true)).toBe('방향이 흔들렸어요. 스네어를 왼손·오른손 한 번씩 쳐 주세요');
+    expect(realignPromptText([0, 1], [true, false], true)).toBe('방향이 흔들렸어요. 오른손으로 스네어를 한 번 쳐 주세요');
+    expect(realignPromptText([0], [true, false], true)).toBe('스네어 재정렬을 마쳤어요');
+    expect(realignPromptText([0, 1], [false, false], false)).toBe('스네어를 왼손·오른손 한 번씩 쳐 주세요');
+  });
 });
