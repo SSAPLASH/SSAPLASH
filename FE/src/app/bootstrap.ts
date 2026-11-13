@@ -36,7 +36,9 @@ import {
   batteryHistory,
   currentProfiles,
   lastResendAt,
+  noteMinPeakCapture,
   pedalBatteryHistory,
+  pushMinPeak,
   pushTable,
 } from '@/runtime/sensorSession';
 
@@ -101,7 +103,11 @@ export function bootstrapInput(): void {
       return { padTable: arr };
     }),
   );
-  calibrationSession.bind({ setSoundOnHit: setCalibrationSound, pushTable: (stickId, force) => pushTable(stickId, force) });
+  calibrationSession.bind({
+    setSoundOnHit: setCalibrationSound,
+    pushTable: (stickId, force) => pushTable(stickId, force),
+    noteMinPeakCapture,
+  });
   // 방위각 드리프트 보정 상태도 같은 방식으로 스틱별로 옮긴다
   yawDriftMonitor.onStatus((stickId, st) =>
     useLive.setState((s) => {
@@ -144,7 +150,12 @@ export function bootstrapInput(): void {
     // 연결된 손마다 보낸다(같은 표면 padTableSync가 생략한다)
     inputManager.setProfiles(currentProfiles());
     const live = useLive.getState();
-    for (const i of [0, 1] as StickId[]) if (live.connected[i]) pushTable(i);
+    // 최소 타격 세기도 손별로 보낸다(같은 값이면 생략, 보정 저장·지우기로 바뀌면 이유가 진단 줄에 남는다)
+    for (const i of [0, 1] as StickId[]) {
+      if (!live.connected[i]) continue;
+      pushTable(i);
+      pushMinPeak(i);
+    }
     inputManager.setVelocityCurve(s.tuning.velocity);
     inputManager.setSensorOffsetMs(s.tuning.sensorOffsetMs);
     inputManager.setOutsidePolicy(s.tuning.outsidePolicy);
@@ -193,6 +204,7 @@ export function bootstrapInput(): void {
         if (shouldResend(lastResendAt[stickId], now)) {
           lastResendAt[stickId] = now;
           pushTable(stickId, true);
+          pushMinPeak(stickId, { force: true, reason: 'linked' });
           yawDriftMonitor.onConnected(stickId);
           if (useSettings.getState().stickAnchors[stickId] && calibrationSession.currentMode !== 'capture') {
             useLive.setState((s) => {
@@ -210,6 +222,7 @@ export function bootstrapInput(): void {
         // 방위각 0은 비트 5 정보가 없는 소스(BLE 직결 등)에만 — 비트 5 = 0인 재연결은 스틱의 보정을 지우지 않는다(설계 1-4 ③).
         // 그 대신 스틱이 가진 현재 오프셋을 물어 FE 기억을 맞춘다(새로 고침 뒤에는 FE 기억이 0이다. 스틱 FW 1.12부터 답한다)
         pushTable(stickId);
+        pushMinPeak(stickId, { force: true, reason: 'linked' });
         if (unconfigured === undefined) yawDriftMonitor.onConnected(stickId);
         else yawDriftMonitor.onLinked(stickId);
         // 새로 붙은 손에 현재 진동 모드 값을 보낸다(곡 연주 중이면 0, 아니면 1)
