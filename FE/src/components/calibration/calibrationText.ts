@@ -3,7 +3,7 @@ import type { CaptureSnapshot, GapWarning } from '@/engine/HitCapture';
 import type { PadGap } from '@/domain/kit/calibration/calibration';
 import type { StickId } from '@/domain/events';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import { josaEulReul } from '@/domain/kit/calibration/setupSteps';
+import { josaEulReul, josaEunNeun } from '@/domain/kit/calibration/setupSteps';
 
 export const HAND_NAME = ['왼손', '오른손'] as const;
 
@@ -14,11 +14,20 @@ export function captureLine(target: PadId, hands: readonly StickId[]): string {
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 쳐 주세요`;
 }
 
-/** 킷 위 큰 안내(UX-64): "하이햇을 2번 타격하세요" / 한 손 "하이햇을 왼손으로 2번 타격하세요" */
+/**
+ * 킷 위 큰 안내(UX-64, PLAY-004 ①): 받을 손이 둘이면 "하이햇을 양손으로 2번씩 타격하세요", 하나면 "라이드를 오른손으로 2번 타격하세요".
+ * hands는 세션 손이 아니라 현재 패드를 받을 손(CaptureSnapshot.targetHands)
+ */
 export function captureHeadline(target: PadId, hands: readonly StickId[]): string {
   const label = PAD_META[target].label;
-  if (hands.length === 2) return `${label}${josaEulReul(label)} 2번 타격하세요`;
+  if (hands.length === 2) return `${label}${josaEulReul(label)} 양손으로 2번씩 타격하세요`;
   return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 타격하세요`;
+}
+
+/** 받을 손이 아닌 손으로 쳤을 때 힌트(PLAY-004 ①): "라이드는 오른손으로 쳐요" */
+export function wrongHandText(pad: PadId, targetHand: StickId): string {
+  const label = PAD_META[pad].label;
+  return `${label}${josaEunNeun(label)} ${HAND_NAME[targetHand]}으로 쳐요`;
 }
 
 /** 정보 카드 진행 제목(D10): "하이햇 1/7". index는 0부터 */
