@@ -65,6 +65,8 @@ export interface PadAnchor {
   samples: number;
   /** 샘플 퍼짐 (도). 손떨림·센서 노이즈 지표 */
   spread: number;
+  /** 다른 손 앵커에서 옮겨 만든 앵커(PLAY-004 ①). 직접 친 값이 아니라 samples 0, 간격 경고에서 뺀다 */
+  derived?: true;
 }
 
 export interface CalibrationProfile {

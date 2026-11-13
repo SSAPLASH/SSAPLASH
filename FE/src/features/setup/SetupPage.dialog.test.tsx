@@ -35,6 +35,8 @@ const CAPTURING = {
     order: [...CAPTURE_ORDER],
     index: 0,
     target: 'SNARE',
+    targetHands: [0, 1],
+    wrongHand: null,
     counts: [0, 0],
     captured: {},
     warning: null,

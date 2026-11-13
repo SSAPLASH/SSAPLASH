@@ -13,6 +13,7 @@ import {
   overlapBannerText,
   realignPromptText,
   spreadWarningText,
+  wrongHandText,
 } from './calibrationText';
 
 describe('captureLine', () => {
@@ -25,8 +26,8 @@ describe('captureLine', () => {
 
 describe('UX-64 보정 카드 문구', () => {
   it('큰 안내: 양손이면 손 없이, 한 손이면 그 손으로. 조사 처리', () => {
-    expect(captureHeadline('HIHAT', [0, 1])).toBe('하이햇을 2번 타격하세요');
-    expect(captureHeadline('RIDE', [0, 1])).toBe('라이드를 2번 타격하세요');
+    expect(captureHeadline('HIHAT', [0, 1])).toBe('하이햇을 양손으로 2번씩 타격하세요');
+    expect(captureHeadline('RIDE', [0, 1])).toBe('라이드를 양손으로 2번씩 타격하세요');
     expect(captureHeadline('SNARE', [1])).toBe('스네어를 오른손으로 2번 타격하세요');
   });
   it('정보 카드 진행 제목·pill은 1부터 센다', () => {
@@ -92,5 +93,18 @@ describe('realignPromptText', () => {
     expect(realignPromptText([0, 1], [true, false], true)).toBe('방향이 흔들렸어요. 오른손으로 스네어를 한 번 쳐 주세요');
     expect(realignPromptText([0], [true, false], true)).toBe('스네어 재정렬을 마쳤어요');
     expect(realignPromptText([0, 1], [false, false], false)).toBe('스네어를 왼손·오른손 한 번씩 쳐 주세요');
+  });
+});
+
+describe('PLAY-004 ① 한 손 패드 문구', () => {
+  it('받을 손이 하나면 그 손으로, 둘이면 양손으로', () => {
+    expect(captureHeadline('RIDE', [1])).toBe('라이드를 오른손으로 2번 타격하세요');
+    expect(captureHeadline('RIDE', [0])).toBe('라이드를 왼손으로 2번 타격하세요');
+    expect(captureHeadline('SNARE', [0, 1])).toBe('스네어를 양손으로 2번씩 타격하세요');
+  });
+  it('wrongHandText: 은/는 조사', () => {
+    expect(wrongHandText('RIDE', 1)).toBe('라이드는 오른손으로 쳐요');
+    expect(wrongHandText('SNARE', 0)).toBe('스네어는 왼손으로 쳐요');
+    expect(wrongHandText('HIHAT', 1)).toBe('하이햇은 오른손으로 쳐요');
   });
 });

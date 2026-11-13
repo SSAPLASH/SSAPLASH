@@ -15,6 +15,7 @@ import type { OptionValue, OptionValues, SensorId } from '@/domain/events';
 import type { SoundSetId } from '@/audio/soundSets';
 import { SYSTEM_PRESET_ID, isSystemPreset, type KitPreset, type PresetAnchorRecord, type PresetAnchors } from '@/domain/kit/preset';
 import { BPM_DEFAULT, BPM_MAX, BPM_MIN, type BeatsPerBar } from '@/domain/time/metronome';
+import { sanitizeMinPeak } from '@/domain/kit/calibration/minPeak';
 import { DEFAULT_SENSOR_TUNING, mergeTuning, type PartialTuning, type SensorTuning } from '@/domain/kit/calibration/tuning';
 
 interface SettingsState {
@@ -32,6 +33,8 @@ interface SettingsState {
    * 시스템 기본이면 [null, null]. 판정·전송 경로(currentProfiles·pushTable)는 이 사본만 본다
    */
   stickAnchors: HandAnchors;
+  /** 손별 최소 타격 세기(°/s, PLAY-004 ③). null이면 펌웨어 기본(400)을 쓴다. 사람의 값이라 기기에 하나만 두고 프리셋 전환에서는 건드리지 않는다 */
+  stickMinPeak: [number | null, number | null];
   /** 적용 중 프리셋의 보정 시각(Date.now). 없으면 null */
   calibratedAt: number | null;
   /** 프리셋별 앵커(기기 로컬, UX-64 D2). 키 = 프리셋 id. 시스템 기본은 항목이 없다 */
@@ -102,7 +105,9 @@ interface SettingsState {
    * 시스템 기본이 적용 중이면 사본만 바뀐다(호출자는 시스템 기본에서 보정을 열지 않는다)
    */
   setStickAnchors: (anchors: HandAnchors, at?: number) => void;
-  /** 앵커 전부 지우기(보정 전 상태로). 적용 중 사용자 프리셋의 기록도 지운다 */
+  /** 한 손의 최소 타격 세기 저장. null이면 지운다(펌웨어 기본). 범위 밖 값은 null로 본다 */
+  setStickMinPeak: (stickId: 0 | 1, dps: number | null) => void;
+  /** 앵커 전부 지우기(보정 전 상태로). 적용 중 사용자 프리셋의 기록도 지운다. 손별 최소 타격 세기도 지운다 */
   clearStickAnchors: () => void;
   /** 프리셋 하나의 앵커 기록(새 프리셋 저장·초안 반영). 적용 중 프리셋이면 사본도 같이 바꾼다 */
   setPresetAnchors: (id: string, record: PresetAnchorRecord) => void;
@@ -366,6 +371,7 @@ function sanitizeAnchor(pad: PadId, raw: unknown): PadAnchor | null {
     spread: isFiniteNum(a.spread) ? a.spread : 0,
   };
   if (isFiniteNum(a.radiusOverride)) out.radiusOverride = a.radiusOverride;
+  if (a.derived === true) out.derived = true;
   return out;
 }
 
@@ -382,6 +388,12 @@ export function sanitizeAnchors(raw: unknown): HandAnchors {
     return Object.keys(out).length ? out : null;
   };
   return [hand(raw[0]), hand(raw[1])];
+}
+
+/** 저장된 손별 최소 타격 세기를 검증한다. 형이 아니거나 범위 밖이면 그 손은 null(펌웨어 기본) */
+function sanitizeStickMinPeak(raw: unknown): [number | null, number | null] {
+  if (!Array.isArray(raw)) return [null, null];
+  return [sanitizeMinPeak(raw[0]), sanitizeMinPeak(raw[1])];
 }
 
 /** 음량 값을 0~max로 자른다. 숫자가 아니면 기본값 1 */
@@ -405,6 +417,7 @@ export const useSettings = create<SettingsState>()(
       firstSetupDone: false,
       stickAnchors: [null, null],
       calibratedAt: null,
+      stickMinPeak: [null, null],
       presetAnchors: {},
       activePresetId: SYSTEM_PRESET_ID,
       timing: DEFAULT_TIMING,
@@ -461,7 +474,12 @@ export const useSettings = create<SettingsState>()(
         const { activePresetId, presetAnchors } = get();
         const records = { ...presetAnchors };
         delete records[activePresetId];
-        set({ stickAnchors: [null, null], calibratedAt: null, presetAnchors: records });
+        set({ stickAnchors: [null, null], calibratedAt: null, presetAnchors: records, stickMinPeak: [null, null] });
+      },
+      setStickMinPeak: (stickId, dps) => {
+        const next: [number | null, number | null] = [get().stickMinPeak[0], get().stickMinPeak[1]];
+        next[stickId] = sanitizeMinPeak(dps);
+        set({ stickMinPeak: next });
       },
       setPresetAnchors: (id, record) => {
         const copy: PresetAnchorRecord = { anchors: [record.anchors[0], record.anchors[1]], calibratedAt: record.calibratedAt };
@@ -550,6 +568,7 @@ export const useSettings = create<SettingsState>()(
           ...sanitizeTimingSettings(p),
           stickAnchors: sanitizeAnchors(p.stickAnchors),
           calibratedAt: isFiniteNum(p.calibratedAt) ? p.calibratedAt : null,
+          stickMinPeak: sanitizeStickMinPeak(p.stickMinPeak),
           presetAnchors: sanitizePresetAnchors(p.presetAnchors),
           activePresetId: typeof p.activePresetId === 'string' && p.activePresetId.length > 0 ? p.activePresetId : SYSTEM_PRESET_ID,
         };
