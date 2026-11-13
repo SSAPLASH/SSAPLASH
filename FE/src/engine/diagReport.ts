@@ -37,6 +37,8 @@ interface ActiveSession {
   windows: TimingWindows;
   audioOffsetMs: number;
   kickOffsetMs: number;
+  /** 이 판의 타격 진동 방식 */
+  haptic: 'judgement' | 'local';
   /** onJudgement 구독 해제(missed 파생) */
   off: () => void;
 }
@@ -57,6 +59,7 @@ function sessionBody(a: ActiveSession, phase: 'start' | 'pause' | 'resume' | 'en
     windows: a.windows,
     audioOffsetMs: a.audioOffsetMs,
     kickOffsetMs: a.kickOffsetMs,
+    haptic: a.haptic,
     noteCount: a.ss.notes.length,
     reason,
     summary: snap
@@ -82,6 +85,8 @@ export interface DiagSessionOpts {
   audioOffsetMs: number;
   /** 발 타격에 적용한 킥 값(풀린 값). 따로 재지 않았으면 audioOffsetMs와 같다 */
   kickOffsetMs: number;
+  /** 이 판의 타격 진동 방식(PLAY-006). 없으면 판정 진동 */
+  haptic?: 'judgement' | 'local';
   /** 손별 앵커(0 왼손, 1 오른손). 반경이 계산된 판정 프로필 값을 넘긴다. 없으면 anchors 줄을 내지 않는다 */
   anchors?: [DiagHandAnchors, DiagHandAnchors];
   calibratedAt?: number | null;
@@ -110,6 +115,16 @@ export function addDiagSessionStartHook(cb: () => void): () => void {
   return () => sessionStartExtras.delete(cb);
 }
 
+/**
+ * 곡 시작(재시작 포함)마다 부를 훅을 더한다. 진단 구독 여부와 무관하게 돈다(앱 동작이 걸린 훅용).
+ * addDiagSessionStartHook은 진단 구독 중에만 돈다. 반환값은 해제 함수
+ */
+const playStartHooks = new Set<() => void>();
+export function addPlayStartHook(cb: () => void): () => void {
+  playStartHooks.add(cb);
+  return () => playStartHooks.delete(cb);
+}
+
 /** 진행 중인 판의 판정 타이밍 보정(ms). 판이 없으면 null */
 export function diagActiveAudioOffsetMs(): number | null {
   return active ? active.audioOffsetMs : null;
@@ -128,7 +143,8 @@ export function diagSessionStart(ss: RhythmSession, mode: 'RHYTHM' | 'SHEET', op
     const d = judgementToDiag(ss, e);
     if (d) diagTap.publish(d);
   });
-  active = { ss, mode, windows: opts.windows, audioOffsetMs: opts.audioOffsetMs, kickOffsetMs: opts.kickOffsetMs, off };
+  active = { ss, mode, windows: opts.windows, audioOffsetMs: opts.audioOffsetMs, kickOffsetMs: opts.kickOffsetMs, haptic: opts.haptic ?? 'judgement', off };
+  for (const cb of playStartHooks) cb();
   if (!diagTap.active) return;
   diagTap.publish(sessionBody(active, 'start'));
   diagTap.publish({

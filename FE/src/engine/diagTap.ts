@@ -79,6 +79,8 @@ export type DiagBody =
       audioOffsetMs: number;
       /** 발 타격에 적용된 값. 따로 재지 않았으면 audioOffsetMs와 같다 */
       kickOffsetMs: number;
+      /** 이 판의 타격 진동 방식(PLAY-006): judgement FE 판정 파형 / local 스틱 즉시 진동. 옛 녹화에는 없다 */
+      haptic?: 'judgement' | 'local';
       noteCount: number;
       /** end일 때: 끝까지 쳤는지('finished') 중간에 나갔는지('left') */
       reason?: 'finished' | 'left';
@@ -111,8 +113,24 @@ export type DiagBody =
     }
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
   | ({ type: 'yawCorrect' } & DiagYawCorrection)
-  /** 패드 위치 자동 보정(설정 yawAutoCorrect) 켬·끔. 10초마다 + 곡 시작 직후 1회 + 값이 바뀔 때 */
-  | { type: 'yawAuto'; on: boolean };
+  /** 부호가 연달아 뒤집혀 그 손의 자동 보정을 멈춤. medianDeg는 보내지 않은 오차 */
+  | { type: 'yawHalt'; stickId: 0 | 1; flips: number; medianDeg: number; appliedDeg: number }
+  /**
+   * 그 손에 최소 타격 세기(SET_PARAM 0x03)를 보낸 순간(PLAY-004 ③). dps는 보낸 값, medianDps는 보정 타격 중앙값(없으면 null),
+   * samples는 계산에 쓴 표본 수. reason: capture 보정 저장 / linked 손이 붙음·설정 변경 / reset 저장값이 지워져 기본(400)으로 돌아감
+   */
+  | { type: 'minPeak'; stickId: 0 | 1; dps: number; medianDps: number | null; samples: number; reason: 'capture' | 'linked' | 'reset' }
+  /**
+   * 기기(왼손·오른손·페달) 사이 도착 지연 중앙값의 최대 차가 한도를 넘은 채 이어져 경고가 시작·끝날 때(PLAY-006).
+   * medians는 기기별 도착 지연 중앙값(ms, 표본 부족이면 null), outlier는 가른 어긋난 기기(못 가르면 null)
+   */
+  | {
+      type: 'arrivalSkew';
+      phase: 'start' | 'end';
+      spreadMs: number;
+      medians: { left: number | null; right: number | null; pedal: number | null };
+      outlier: 'left' | 'right' | 'pedal' | null;
+    };
 
 /** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
 export interface DiagAnchor {
@@ -139,6 +157,8 @@ export interface DiagYawCorrection {
   madDeg: number | null;
   /** 그때 링의 (스틱 yaw − 앵커 yaw) 샘플. drift만 채운다 */
   samples: number[];
+  /** samples와 같은 순서의 판정 주체(stick·chart·pose·key). drift만 채운다 */
+  judgedBy: string[];
 }
 
 export type DiagEvent = DiagBody & { /** performance.now() */ t: number };

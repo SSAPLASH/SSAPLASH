@@ -8,11 +8,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ReportEntry } from '@/features/result/components/ReportEntry';
 import { LessonResultBand } from '@/features/result/components/LessonResultBand';
+import { lessonOfChart, lessonPath } from '@/domain/play/lesson';
+import { useLessons } from '@/store/lessonStore';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { DEFAULT_TIMING } from '@/domain/play/judgement';
 import { isSensorSource } from '@/domain/events';
 import { shouldRemindTimingCal } from '@/domain/kit/calibration/timingCalPrompt';
 import { useSettings } from '@/store/settingsStore';
+import { useLive } from '@/store/liveStore';
+import { clockSkewText } from '@/domain/kit/device/arrivalSkew';
 import { resumePlaySync, startPlaySync, usePlaySync, usePrefetchedReport } from '@/runtime/playSync';
 import { isKeyOwnedByTarget, type KeyTarget } from '@/domain/kit/keyTarget';
 import { pickPathOf, RETRY_AUTOSTART_STATE, retryPathOf } from '@/domain/play/playRetry';
@@ -61,9 +65,13 @@ export function ResultPage() {
   // 최고 기록 비교(설계 MODE-001-score-combo-fx D4). 연주 직후 도착이면 치기 전 최고값(prevBest)이 navigate state로 온다.
   // 도착 때 한 번만 정해 두고(state를 곧 비우므로) 그 뒤 로컬 로그가 바뀌어도 칩이 흔들리지 않게 한다
   const stateBest = (location.state as { prevBest?: PrevBest } | null)?.prevBest ?? null;
-  const [arrival, setArrival] = useState<{ playId: string | undefined; prev: PrevBest | null } | null>(null);
-  if (arrival === null || arrival.playId !== playId) setArrival({ playId, prev: stateBest });
+  // 연주를 막 끝내고 온 화면만 state에 prevBest 키가 있다(값은 첫 연주면 null). 이것도 도착 때 한 번 정해 둔다 —
+  // 아래에서 state를 비워도 학습 코스 띠의 자동 넘김이 꺼지지 않게(설계 SETUP-학습-코스-자동-넘김 U4)
+  const stateFresh = location.state !== null && typeof location.state === 'object' && 'prevBest' in location.state;
+  const [arrival, setArrival] = useState<{ playId: string | undefined; prev: PrevBest | null; fresh: boolean } | null>(null);
+  if (arrival === null || arrival.playId !== playId) setArrival({ playId, prev: stateBest, fresh: stateFresh });
   const arrived = arrival !== null && arrival.playId === playId ? arrival.prev : stateBest;
+  const fresh = arrival !== null && arrival.playId === playId ? arrival.fresh : stateFresh;
   // 새로고침해도 축하가 다시 나오지 않도록 도착 state를 비운다(칩은 로컬 로그로 다시 계산)
   useEffect(() => {
     if (stateBest) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
@@ -77,7 +85,7 @@ export function ResultPage() {
       arrived ??
       localPrevBest(
         loadPlayLogs(),
-        { mode: log.mode, songNumericId: log.songNumericId, chartId: log.chartId, songId: log.songId, difficulty: log.difficulty },
+        { mode: log.mode, songNumericId: log.songNumericId, chartId: log.chartId, songId: log.songId, difficulty: log.difficulty, goodMs: log.timing.goodMs },
         (l) => l.playId === log.playId || !(l.startedAt < log.startedAt),
       );
     return bestRecordDelta(log, prev);
@@ -88,6 +96,12 @@ export function ResultPage() {
   const [remind] = useState(() => {
     const st = useSettings.getState();
     return stateBest !== null && log !== null && shouldRemindTimingCal({ sensor: isSensorSource(log.inputSource), timingCal: st.timingCal, prompt: st.timingCalPrompt });
+  });
+  // 기기 사이 시각 차이 경고 띠(PLAY-006): 연주를 마치고 도착한 시점에 경고 중이었으면 한 줄만 보인다(버튼 없음).
+  // 도착 시점 값을 붙잡아 이 화면에 머무는 동안 흔들리지 않게 하고, 연주 기록에서 연 옛 결과에는 보이지 않는다
+  const [skewText] = useState(() => {
+    const skew = useLive.getState().clockSkew;
+    return stateBest !== null && skew !== null ? clockSkewText(skew) : null;
   });
   const [calOpen, setCalOpen] = useState(false);
   useEffect(() => {
@@ -132,8 +146,15 @@ export function ResultPage() {
   const songDeleted = log?.songNumericId != null && deletedIds.has(log.songNumericId);
 
   // 리듬 게임은 곡 선택을 거치지 않고 같은 곡·단계의 카운트다운으로 바로 간다(state.autoStart). 악보 연습은 주소의 start=1이 시작 확인 창을 연다
+  // 레슨 기록이면 그 코스를 유지한 학습 코스 주소로 다시 한다(시작 확인 창을 닫으면 코스 화면이 남게). 띠에는 다시 하기를 두지 않는다
+  const lessonItems = useLessons((l) => l.list)?.items;
+  const retryLesson = log?.mode === 'SHEET' && lessonItems ? lessonOfChart(lessonItems, log.chartId) : undefined;
   const retry = () => {
     if (!log || songDeleted) return;
+    if (retryLesson) {
+      navigate(lessonPath(retryLesson));
+      return;
+    }
     if (log.mode !== 'SHEET') void unlockAudio(); // 사용자 동작 안에서 오디오 잠금을 풀어 둔다(시작은 화면이 바뀐 뒤 자동으로 일어난다)
     navigate(retryPathOf(log, { songsSource: SONGS_SOURCE }), log.mode === 'SHEET' ? undefined : { state: RETRY_AUTOSTART_STATE });
   };
@@ -203,7 +224,8 @@ export function ResultPage() {
         />
         {/* 최고 기록 갱신: 화면 전체 색종이 + 가운데 네온 글자(요약 카드 안 작은 폭발 대신) */}
         {celebrating && <RecordCelebration detail={badge?.text.split(' · ')[1]} />}
-        <LessonResultBand log={log} />
+        {/* 연주 기록·리포트에서 다시 연 결과는 자동으로 넘기지 않는다 */}
+        <LessonResultBand log={log} fresh={fresh} />
         {remind && (
           <div className="lesson-band" role="status">
             <div className="lesson-band-text">
@@ -213,6 +235,13 @@ export function ResultPage() {
               <Button variant="secondary" onClick={() => setCalOpen(true)}>
                 박자 맞추기
               </Button>
+            </div>
+          </div>
+        )}
+        {skewText !== null && (
+          <div className="lesson-band" role="status">
+            <div className="lesson-band-text">
+              <b>{skewText}</b>
             </div>
           </div>
         )}

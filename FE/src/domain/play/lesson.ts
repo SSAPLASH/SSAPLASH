@@ -257,10 +257,27 @@ export function isBeginnerChart(i: { difficulty: string | null | undefined; char
 
 /**
  * 레슨을 여는 주소. 연주 레슨은 [학습 코스]와 그 코스를 유지한 악보 연습(시작 확인 창부터, `start=1`) — 곡 고르기로 돌아오면 같은 코스가 보인다.
- * 알아보기는 알아보기 화면
+ * 알아보기는 알아보기 화면. `auto`면 연주 레슨 주소에 `auto=1`을 붙여 시작 확인 창의 플레이까지 자동으로 시작하게 한다(설계 SETUP-학습-코스-자동-넘김 3-3)
  */
-export function lessonPath(lesson: Pick<Lesson, 'kind' | 'songId' | 'chartId' | 'course'>): string {
-  return lesson.kind === 'READ' ? `/sheet/lesson/${lesson.songId}` : `${coursePath(lesson.course)}&song=${lesson.songId}&chart=${lesson.chartId}&start=1`;
+export function lessonPath(lesson: Pick<Lesson, 'kind' | 'songId' | 'chartId' | 'course'>, options: { auto?: boolean } = {}): string {
+  if (lesson.kind === 'READ') return `/sheet/lesson/${lesson.songId}`;
+  return `${coursePath(lesson.course)}&song=${lesson.songId}&chart=${lesson.chartId}&start=1${options.auto ? '&auto=1' : ''}`;
+}
+
+/** 통과 뒤 다음 레슨으로 자동으로 넘어가기까지 기다리는 시간(초) */
+export const AUTO_ADVANCE_SECONDS = 3;
+
+/**
+ * 자동으로 넘길 다음 레슨. 통과했고 다음 레슨이 같은 코스일 때만 준다.
+ * 통과하지 못했거나 코스의 마지막 레슨(다음 코스로 넘어가는 경계 포함)은 사용자가 버튼으로 고른다
+ */
+export function autoAdvanceTarget<T extends Pick<Lesson, 'course'>>(lesson: Pick<Lesson, 'course'>, next: T | null, passed: boolean): T | null {
+  return passed && next !== null && next.course === lesson.course ? next : null;
+}
+
+/** 카운트다운 안내 한 줄 */
+export function autoAdvanceText(remaining: number): string {
+  return `${remaining}초 뒤 다음 레슨으로 넘어가요.`;
 }
 
 /** 연주 레슨 통과. 서버와 같은 정확도 계산(score / noteCount, 소수 둘째 자리 HALF_UP) */

@@ -8,10 +8,11 @@ function render(
   connected: [boolean, boolean],
   battery: [number | null, number | null],
   pedal?: { connected: readonly [boolean, boolean]; battery: number | null },
+  skewed?: readonly ('left' | 'right' | 'pedal')[],
 ): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <StickStatusChip connected={connected} battery={battery} pedal={pedal} />
+      <StickStatusChip connected={connected} battery={battery} pedal={pedal} skewed={skewed} />
     </MemoryRouter>,
   );
 }
@@ -62,6 +63,35 @@ describe('StickStatusChip 페달 조각', () => {
     expect(html).toContain('페달');
     expect(html.match(/stick-dot off/g)).toHaveLength(1);
     expect(html.match(/stick-dot on/g)).toHaveLength(2);
+  });
+});
+
+describe('StickStatusChip 시간 어긋남 경고 (PLAY-006)', () => {
+  it('경고가 없으면 지금과 같다(warn 없음, 접근성 이름도 그대로)', () => {
+    const html = render([true, true], [82, 64], { connected: [true, true], battery: 90 });
+    expect(html).not.toContain('warn');
+    expect(html).not.toContain('시간 어긋남');
+    expect(html).toContain('aria-label="스틱·페달 연결 상태"');
+  });
+
+  it('경고 기기의 점에만 warn이 붙고 title·aria-label에 「시간 어긋남」이 들어간다', () => {
+    const html = render([true, true], [82, 64], { connected: [true, true], battery: 90 }, ['left']);
+    expect(html.match(/stick-dot on warn/g)).toHaveLength(1);
+    expect(html.match(/stick-dot on"/g)).toHaveLength(2);
+    expect(html).toContain('title="왼손 연결됨 · 82% · 시간 어긋남"');
+    expect(html).toContain('aria-label="스틱·페달 연결 상태 · 시간 어긋남"');
+  });
+
+  it('페달이 경고 기기면 페달 점이 warn', () => {
+    const html = render([true, true], [82, 64], { connected: [true, true], battery: 90 }, ['pedal']);
+    expect(html.match(/stick-dot on warn/g)).toHaveLength(1);
+    expect(html).toMatch(/페달<span class="stick-dot on warn"/);
+  });
+
+  it('연결되지 않은 기기에는 warn을 붙이지 않는다', () => {
+    const html = render([false, true], [null, 64], undefined, ['left', 'right']);
+    expect(html.match(/stick-dot off warn/g)).toBeNull();
+    expect(html.match(/stick-dot on warn/g)).toHaveLength(1);
   });
 });
 

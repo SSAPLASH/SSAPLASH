@@ -213,24 +213,19 @@ describe('summaryToMarkdown', () => {
   });
 });
 
-describe('녹화 요약의 패드 위치 자동 보정 줄', () => {
-  const yawAuto = (t: number, on: boolean): DiagEvent => ({ type: 'yawAuto', t, on });
+describe('녹화 요약의 자동 보정 멈춤 줄', () => {
+  const halt = (t: number, stickId: 0 | 1): DiagEvent => ({ type: 'yawHalt', t, stickId, flips: 2, medianDeg: 7, appliedDeg: -3 });
 
-  it('yawAuto 줄이 하나면 그 값을 낸다', () => {
-    const s = summarizeRecording({ meta, rows: [], diags: [yawAuto(1, false)] });
-    expect(s.yawAuto).toEqual({ first: false, last: false });
-    expect(summaryToMarkdown(s)).toContain('- 패드 위치 자동 보정: 끔');
+  it('yawHalt 줄 수를 손별로 세고 Markdown에 한 줄을 낸다', () => {
+    const s = summarizeRecording({ meta, rows: [], diags: [halt(1, 0), halt(2, 1), halt(3, 1)] });
+    expect(s.yawHalts).toEqual([1, 2]);
+    expect(summaryToMarkdown(s)).toContain('- 자동 보정 멈춤: 왼손 1번 · 오른손 2번');
   });
 
-  it('도중에 바뀌면 처음 값과 마지막 값을 낸다', () => {
-    const s = summarizeRecording({ meta, rows: [], diags: [yawAuto(1, false), yawAuto(2, true)] });
-    expect(summaryToMarkdown(s)).toContain('- 패드 위치 자동 보정: 도중 변경(끔 → 켬)');
-  });
-
-  it('줄이 없는 녹화는 null이고 Markdown에 줄을 내지 않는다', () => {
+  it('줄이 없는 녹화는 [0, 0]이고 Markdown에 줄을 내지 않는다', () => {
     const s = summarizeRecording({ meta, rows: [], diags: [] });
-    expect(s.yawAuto).toBeNull();
-    expect(summaryToMarkdown(s)).not.toContain('패드 위치 자동 보정');
+    expect(s.yawHalts).toEqual([0, 0]);
+    expect(summaryToMarkdown(s)).not.toContain('자동 보정 멈춤');
   });
 });
 
@@ -275,5 +270,36 @@ describe('녹화 요약의 audio 줄', () => {
     const s = summarizeRecording({ meta, rows: [], diags: [] });
     expect(s.audio).toBeNull();
     expect(summaryToMarkdown(s)).toContain('- 오디오: –');
+  });
+});
+
+describe('녹화 탭 숨김 요약 (PLAY-006)', () => {
+  const row = (t: number): RecordedRow => ({ t, dir: 'in', transport: 'mock', stick: 0, hex: '', decoded: { kind: 'pose' } });
+
+  it('숨김 횟수와 합계를 세고 마크다운에 한 줄을 넣는다', () => {
+    const s = summarizeRecording({
+      meta,
+      rows: [row(0), row(60_000)],
+      diags: [],
+      vis: [
+        { t: 10_000, hidden: true },
+        { t: 14_000, hidden: false },
+        { t: 20_000, hidden: true },
+        { t: 22_000, hidden: false },
+      ],
+    });
+    expect(s.hidden).toEqual({ count: 2, totalMs: 6000 });
+    expect(summaryToMarkdown(s)).toContain('- 녹화 탭 숨김: 2번, 합계 6초');
+  });
+
+  it('끝까지 숨겨진 채면 마지막 줄 시각까지 합산한다', () => {
+    const s = summarizeRecording({ meta, rows: [row(0), row(30_000)], diags: [], vis: [{ t: 10_000, hidden: true }] });
+    expect(s.hidden).toEqual({ count: 1, totalMs: 20_000 });
+  });
+
+  it('vis 줄이 없으면 null이고 마크다운에도 줄이 없다', () => {
+    const s = summarizeRecording({ meta, rows: [row(0)], diags: [] });
+    expect(s.hidden).toBeNull();
+    expect(summaryToMarkdown(s)).not.toContain('녹화 탭 숨김');
   });
 });

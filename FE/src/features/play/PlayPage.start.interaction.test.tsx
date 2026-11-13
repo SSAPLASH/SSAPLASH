@@ -125,7 +125,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  useLive.setState({ connected: [false, false] });
+  useLive.setState({ connected: [false, false], clockSkew: null });
   resetRecordingForTest();
 });
 
@@ -284,6 +284,20 @@ describe('PlayPage 시작 흐름', () => {
     await clickCardPlay();
     await waitFor(() => expect(playing()).toBe(true));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('PlayPage 기기 시각 차이 경고 (PLAY-006)', () => {
+  it('경고 중이면 기기가 준비돼도 자동 시작하지 않고 시작 창에 문구를 보이며, [플레이]로 그대로 시작한다', async () => {
+    useSettings.setState({ sensorKind: 'pointer' });
+    useLive.setState({ connected: [true, true], clockSkew: { spreadMs: 40, medians: { left: 50, right: 10, pedal: null }, outlier: null } });
+    show();
+    await clickCardPlay();
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    expect(within(dialog).getByText('스틱 시간이 서로 어긋났어요. 스틱을 껐다 켜 주세요.')).toBeTruthy();
+    expect(playing()).toBe(false);
+    fireEvent.click(await within(dialog).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(playing()).toBe(true));
   });
 });
 

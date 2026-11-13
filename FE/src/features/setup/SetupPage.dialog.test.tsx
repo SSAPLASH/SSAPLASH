@@ -35,6 +35,8 @@ const CAPTURING = {
     order: [...CAPTURE_ORDER],
     index: 0,
     target: 'SNARE',
+    targetHands: [0, 1],
+    wrongHand: null,
     counts: [0, 0],
     captured: {},
     warning: null,
@@ -97,40 +99,15 @@ describe('SetupPage 단계 팝업', () => {
   });
 });
 
-describe('SetupPage 패드 위치 자동 보정 표시', () => {
-  const openStick = () => {
+describe('SetupPage 자동 보정 멈춤 표시', () => {
+  it('멈춘 손이 있으면 연결 팝업 상태 줄에 「자동 보정 멈춤(방향 흔들림)」을 알리고, 그 손의 「잠시 뒤 보정」은 내지 않는다', () => {
+    const st = { appliedDeg: -8, samples: 0, lastErrorDeg: 8, lastSentAt: performance.now(), acked: true, halted: true };
+    useSettings.setState({ sensorKind: 'webserial' });
+    useLive.setState({ connected: [true, false], yawDrift: [st, null] });
     renderSetup();
     fireEvent.click(screen.getByRole('button', { name: /스틱·페달 연결/ }));
-    return screen.getByRole('dialog', { name: '스틱·페달 연결' });
-  };
-
-  it('켜져 있고 연결된 손이 있으면 연결 팝업 상태 줄에 알린다', () => {
-    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: true });
-    useLive.setState({ connected: [true, false] });
-    expect(openStick().textContent).toContain('자동 보정 켜짐');
-  });
-
-  it('꺼져 있으면 알리지 않는다', () => {
-    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: false });
-    useLive.setState({ connected: [true, true] });
-    expect(openStick().textContent).not.toContain('자동 보정 켜짐');
-  });
-
-  it('연결된 손이 없으면 알리지 않는다', () => {
-    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: true });
-    useLive.setState({ connected: [false, false] });
-    expect(openStick().textContent).not.toContain('자동 보정 켜짐');
-  });
-
-  it('꺼져 있으면 재정렬 직후에도 「잠시 뒤 보정」을 알리지 않는다', () => {
-    const st = { appliedDeg: -8, samples: 0, lastErrorDeg: 8, lastSentAt: performance.now(), acked: true };
-    useSettings.setState({ sensorKind: 'webserial', yawAutoCorrect: false });
-    useLive.setState({ connected: [true, false], yawDrift: [st, null] });
-    const off = openStick().textContent ?? '';
-    expect(off).toContain('방위각 보정 왼손');
-    expect(off).not.toContain('잠시 뒤 보정');
-    cleanup();
-    useSettings.setState({ yawAutoCorrect: true });
-    expect(openStick().textContent).toContain('잠시 뒤 보정');
+    const text = screen.getByRole('dialog', { name: '스틱·페달 연결' }).textContent ?? '';
+    expect(text).toContain('자동 보정 멈춤(방향 흔들림)');
+    expect(text).not.toContain('잠시 뒤 보정');
   });
 });

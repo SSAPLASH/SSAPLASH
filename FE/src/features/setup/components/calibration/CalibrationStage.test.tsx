@@ -2,7 +2,7 @@
 // CalibrationStage 검증(PLAY-004 4-1, 개편 D2·D3·D6·D10·D11·D14, v0.2): 진행 중(카드 버튼 없음)·자동 진행 대기·간격 경고 배너([◯◯ 다시], 스냅샷 기준으로 사라짐)·
 // 결과 화면(겹침 테두리·결과 배너·base 포함 겹침·선택·다시 치기·저장)·재정렬.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ redo: vi.fn(), next: vi.fn(), setRadiusOverride: vi.fn(), skipRealign: vi.fn() }));
 vi.mock('@/runtime/calibrationSession', () => ({ calibrationSession: h }));
@@ -33,6 +33,8 @@ function setCapture(over: Partial<CaptureSnapshot> = {}, target: CalibrationSnap
   const cap: CaptureSnapshot = {
     phase: 'capturing',
     hands: [0, 1],
+    targetHands: [0, 1],
+    wrongHand: null,
     order: [...CAPTURE_ORDER],
     index: 1,
     target: 'CRASH',
@@ -62,7 +64,7 @@ describe('CalibrationStage 보정 진행', () => {
     setCapture();
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('[data-testid="cal-stage-capture"]')).not.toBeNull();
-    expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('크래시를 2번 타격하세요');
+    expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('크래시를 양손으로 2번씩 타격하세요');
     expect(screen.getByText('2 / 7')).toBeTruthy();
     expect(container.querySelector('[aria-label="왼손 1/2"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
@@ -90,11 +92,40 @@ describe('CalibrationStage 보정 진행', () => {
   });
 
   it('한 손만 대상이면 그 손 문구와 그 손 타격 점만', () => {
-    setCapture({ hands: [1], counts: [0, 0] });
+    setCapture({ hands: [1], targetHands: [1], counts: [0, 0] });
     const { container } = render(<CalibrationStage />);
     expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('크래시를 오른손으로 2번 타격하세요');
     expect(container.querySelectorAll('.cal-hand-row').length).toBe(1);
     expect(container.querySelector('[aria-label="오른손 0/2"]')).not.toBeNull();
+  });
+
+  it('라이드 단계(PLAY-004 ①): 큰 문구에 오른손, 타수 점은 오른손 줄만. 다 친 패드로 센다', () => {
+    setCapture({ index: 6, target: 'RIDE', targetHands: [1], counts: [0, 1], captured: { ...CLOSE, SNARE: both('SNARE', -20, 0) } });
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('.cal-stage-headline')?.textContent).toBe('라이드를 오른손으로 2번 타격하세요');
+    expect(container.querySelectorAll('.cal-hand-row').length).toBe(1);
+    expect(container.querySelector('[aria-label="오른손 1/2"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="왼손 0/2"]')).toBeNull();
+  });
+
+  it('라이드는 오른손 앵커만 있어도 끝난 패드로 센다(done 화면의 진행 점)', () => {
+    const rideRight: CaptureSnapshot['captured'] = { ...ALL, RIDE: [undefined, anchor('RIDE', 20, 80)] };
+    setCapture({ phase: 'done', index: 6, target: null, targetHands: [], counts: [0, 0], captured: rideRight });
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('[aria-label="7 / 7 패드 완료"]')).not.toBeNull();
+  });
+
+  it('다른 손으로 쳤으면 2초 동안 「라이드는 오른손으로 쳐요」를 힌트 자리에 보인다', () => {
+    setCapture({ index: 6, target: 'RIDE', targetHands: [1], wrongHand: { pad: 'RIDE', stickId: 0, at: performance.now() } });
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('.cal-stage-hint')?.textContent).toBe('라이드는 오른손으로 쳐요');
+  });
+
+  it('다른 손 힌트는 2초가 지나면 사라진다', async () => {
+    setCapture({ index: 6, target: 'RIDE', targetHands: [1], wrongHand: { pad: 'RIDE', stickId: 0, at: performance.now() - 1990 } });
+    const { container } = render(<CalibrationStage />);
+    expect(container.querySelector('.cal-stage-hint')?.textContent).toBe('라이드는 오른손으로 쳐요');
+    await waitFor(() => expect(container.querySelector('.cal-stage-hint')).toBeNull());
   });
 
   it('퍼짐 경고 문구', () => {

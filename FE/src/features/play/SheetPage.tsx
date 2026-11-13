@@ -2,6 +2,7 @@
 // PlayPage와 같은 골격(PlayClock·반주·메트로놈 잠금)이다. 준비 화면은 없다 — 곡 선택 위에 시작 확인 창(StartDialog)이 열린다:
 // 곡 선택 SongPicker · 시작 확인 StartDialog(+PlayOptions) · 연주 PlayStage(PlayHud sheet·SheetPager·DrumKit 다음 박 배지). 연주 중은 셸을 숨긴 전체 화면이다.
 // 주소: `?song=&chart=`는 곡 선택에서 곡·단계를 골라 두고, `&start=1`이 더해지면 시작 확인 창이 열린다.
+// `&auto=1`(학습 코스 레슨을 통과해 자동으로 넘어온 주소)이면 조건이 맞을 때 플레이를 누르지 않아도 시작한다(설계 SETUP-학습-코스-자동-넘김).
 // 점수·콤보는 보이지 않고 노트 색과 판정 수만 보인다. 일시정지는 Esc·스틱 끊김·메뉴 요청 3종(PauseOverlay).
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,11 +46,12 @@ import { useReadiness } from '@/features/play/components/start/useReadiness';
 import { useRealign } from '@/components/calibration/useRealign';
 import type { Chart } from '@/domain/song/chart';
 import { artistLabel, chartFallback, type SongDetail } from '@/domain/song/songCatalog';
-import { EMPTY_PREV_BEST, localPrevBest, mergePrevBest, type PrevBest } from '@/domain/play/bestRecord';
+import { EMPTY_PREV_BEST, localPrevBest, prevBestFor, type PrevBest } from '@/domain/play/bestRecord';
 import { useBestRecords } from './useBestRecords';
 import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
-import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
+import '@/components/lesson/lesson.css';
+import { isBeginnerChart, lessonOfChart, type Lesson } from '@/domain/play/lesson';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
@@ -72,6 +74,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { useSongs, type LoadedChart } from '@/store/songStore';
 import { useLive } from '@/store/liveStore';
+import { clockSkewText } from '@/domain/kit/device/arrivalSkew';
 import { liveAimSource } from './liveAim';
 import { useReconnect } from '@/store/reconnectStore';
 import { useSettings } from '@/store/settingsStore';
@@ -124,6 +127,8 @@ function SheetPageBody() {
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
   // 시작 확인 창이 열려 있는가: `?start=1`이고 곡·단계가 주소에 있을 때. 채보·반주는 이때부터(연주 중에도) 읽는다
   const startParam = searchParams.get('start') === '1';
+  // 레슨을 통과해 자동으로 넘어온 주소. 한 번 쓰면 주소에서 지운다
+  const autoParam = searchParams.get('auto') === '1';
   const param = useChartParam({ enabled: startParam || playSession !== null });
   const { status: paramStatus, loaded: paramLoaded } = param;
   const songIdParam = parseId(searchParams.get('song'));
@@ -158,6 +163,7 @@ function SheetPageBody() {
   // 준비 조건 미충족이면 시작·재개하지 못한다(키보드 전용은 면제)
   const { ready, missing } = useReadiness();
   const connected = useLive((l) => l.connected);
+  const clockSkew = useLive((l) => l.clockSkew);
   const pedalPair = useLive((l) => l.pedal.connected);
   const lastHit = useLive((l) => l.lastHit);
   const reconnectAvailable = useReconnect((r) => r.available);
@@ -519,8 +525,8 @@ function SheetPageBody() {
     finishing.current = false;
     {
       const c = ss.chart;
-      const local = localPrevBest(loadPlayLogs(), { mode: 'SHEET', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty });
-      prevBest.current = mergePrevBest(local, serverPrevBest.current);
+      const local = localPrevBest(loadPlayLogs(), { mode: 'SHEET', songNumericId: c.songNumericId ?? null, chartId: c.chartId ?? null, songId: c.songId, difficulty: c.difficulty, goodMs: ss.windows.goodMs });
+      prevBest.current = prevBestFor(local, serverPrevBest.current, ss.windows.goodMs);
     }
     startedAt.current = new Date();
     consentAtStart.current = readCurrentConsent();
@@ -693,12 +699,13 @@ function SheetPageBody() {
     navigate(returnTo, { replace: true });
   }, [navigate, returnTo, resetCountdown, clearCoachLine]);
 
-  /** 시작 확인 창 닫기: 주소에서 start만 지운다(곡·단계 선택은 남긴다) */
+  /** 시작 확인 창 닫기: 주소에서 start(와 자동 시작 표시 auto)만 지운다(곡·단계 선택은 남긴다) */
   const closeStart = useCallback(() => {
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
         p.delete('start');
+        p.delete('auto');
         return p;
       },
       { replace: true },
@@ -706,11 +713,50 @@ function SheetPageBody() {
   }, [setSearchParams]);
 
   /** [플레이]: 카운트다운으로 들어가고, 연주 중 주소에서는 start를 지워 둔다(뒤로 가기·나가기가 창을 다시 열지 않게) */
-  const startPlay = useCallback(async () => {
+  const startPlay = useCallback(async (): Promise<boolean> => {
     // 센서 입력이고 박자 맞추기 기록이 없는 첫 연주는 시작 대신 대화상자를 연다(닫은 뒤 다시 시작하면 바로 시작)
-    if (stageRef.current === 'ready' && readyRef.current && timingGate()) return;
-    if (await begin()) closeStart();
+    if (stageRef.current === 'ready' && readyRef.current && timingGate()) return false;
+    if (!(await begin())) return false;
+    closeStart();
+    return true;
   }, [begin, closeStart, timingGate]);
+
+  // 자동 시작(설계 SETUP-학습-코스-자동-넘김 3-4): 레슨 채보이고 기기가 준비됐고 설정의 카운트다운이 켜져 있을 때만,
+  // 채보·반주 준비가 끝나는 순간 [플레이]를 한 번 대신 누른다. 조건이 하나라도 어긋나면 auto만 지우고 창은 그대로 둔다
+  // (나중에 조건이 맞아져도 저절로 시작하지 않는다). 박자 맞추기 권유 같은 [플레이]의 관문은 그대로 거친다
+  const autoEligible =
+    autoParam && startOpen && ready && settings.countInBars > 0 && paramStatus !== 'error' && accError === null && lessonOfChart(lessons, chartIdParam)?.kind === 'PLAY';
+  const autoHandled = useRef(false);
+  useEffect(() => {
+    if (!autoParam) {
+      autoHandled.current = false;
+      return;
+    }
+    if (autoHandled.current) return;
+    // 조건은 맞는데 아직 읽는 중이면 기다린다
+    if (autoEligible && stage === 'loading') return;
+    autoHandled.current = true;
+    const dropAuto = () =>
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.delete('auto');
+          return p;
+        },
+        { replace: true },
+      );
+    if (autoEligible && stage === 'ready') {
+      // 시작하지 못했으면(박자 맞추기 권유·오디오 준비 실패 등) auto를 지워 시작 확인 창으로 돌아온다
+      startPlay().then(
+        (started) => {
+          if (!started) dropAuto();
+        },
+        () => dropAuto(),
+      );
+      return;
+    }
+    dropAuto();
+  }, [autoParam, autoEligible, stage, startPlay, setSearchParams]);
 
   // 서버 코칭 모델·실험 설정을 미리 받아 둔다. 못 받으면 빌드 기본값으로 동작한다
   useEffect(() => {
@@ -825,6 +871,21 @@ function SheetPageBody() {
     if (fallback !== null) selectParam(songIdParam, fallback, { replace: true, start: true });
   }, [stage, songIdParam, chartIdParam, detail, selectParam]);
 
+  // 자동 시작을 기다리는 동안(auto가 주소에 남아 있는 동안)에는 곡 선택·시작 확인 창 대신 준비 화면만 보인다 —
+  // 결과 화면에서 넘어올 때 학습 코스 화면과 창이 잠깐 비쳤다 사라지지 않게(11/13 로컬 확인). 시작하지 못하면 auto가 지워져 창이 뜬다
+  if (stage !== 'play' && autoEligible) {
+    return (
+      <StageFade stageKey="auto">
+        <main className="main">
+          <div className="lesson-read" role="status">
+            <span className="spinner" aria-hidden="true" />
+            <p className="lesson-read-prompt">다음 레슨을 준비하고 있어요</p>
+          </div>
+        </main>
+        {timingDialog}
+      </StageFade>
+    );
+  }
   // 곡 선택(+시작 확인 창). 연주 단계가 아니면 항상 곡 선택이 바닥에 있고, 창은 그 위에 뜬다
   if (stage !== 'play' || !chart || !activeSession) {
     const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
@@ -859,7 +920,7 @@ function SheetPageBody() {
           realign={realign.info}
           loading={loadError === null && stage !== 'ready'}
           error={loadError}
-          notices={chart?.variableTempo ? ['변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)'] : []}
+          notices={[...(chart?.variableTempo ? ['변박 곡은 현재 지원하지 않습니다(고정 템포로 표시)'] : []), ...(clockSkew ? [clockSkewText(clockSkew)] : [])]}
           options={
             <PlayOptions
               rows={['metronome', 'padCount', 'accompaniment', 'recording']}

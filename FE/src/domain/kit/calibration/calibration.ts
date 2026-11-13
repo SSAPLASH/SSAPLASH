@@ -28,6 +28,8 @@ export interface YawDriftStatus {
   lastSentAt: number | null;
   /** 마지막 송신의 PARAM_ACK 0x21 확인 여부. null = 아직 확인 창 안(또는 송신 없음) */
   acked: boolean | null;
+  /** 부호가 연달아 뒤집혀 자동 보정을 멈춘 상태(재정렬·다음 곡 시작 때 풀린다) */
+  halted: boolean;
 }
 
 /** 각도를 (−180, 180]로 접는다 */
@@ -63,6 +65,8 @@ export interface PadAnchor {
   samples: number;
   /** 샘플 퍼짐 (도). 손떨림·센서 노이즈 지표 */
   spread: number;
+  /** 다른 손 앵커에서 옮겨 만든 앵커(PLAY-004 ①). 직접 친 값이 아니라 samples 0, 간격 경고에서 뺀다 */
+  derived?: true;
 }
 
 export interface CalibrationProfile {
