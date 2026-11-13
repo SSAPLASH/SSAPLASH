@@ -109,4 +109,12 @@ describe('폴더 구조 의존 규칙', () => {
   it('옛 폴더(pages·components 바로 아래 파일)가 다시 생기지 않는다', () => {
     expect(ALL.filter((f) => f.startsWith('pages/') || /^components\/[^/]+$/.test(f))).toEqual([]);
   });
+
+  it('공유 domain 바로 아래에는 events만 둔다(나머지는 kit·song·time·play·account·hitFx 하위 폴더)', () => {
+    expect(ALL.filter((f) => /^domain\/[^/]+$/.test(f) && !/^domain\/events(\.test)?\.ts$/.test(f))).toEqual([]);
+  });
+
+  it('api 바로 아래에는 공통 래퍼(http·error)만 둔다(나머지는 account·kit·song·play 하위 폴더)', () => {
+    expect(ALL.filter((f) => /^api\/[^/]+$/.test(f) && !/^api\/(http|error)(\.test)?\.ts$/.test(f))).toEqual([]);
+  });
 });
