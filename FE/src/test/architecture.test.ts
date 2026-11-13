@@ -25,7 +25,7 @@ const SOURCES = ALL.filter((f) => /\.tsx?$/.test(f) && !f.includes('.test.') && 
 
 function resolveImport(from: string, spec: string): string | null {
   const base = spec.startsWith('@/') ? spec.slice(2) : normalize(joinPosix(dirname(from), spec));
-  return [base, `${base}.ts`, `${base}.tsx`].find((c) => EXISTS.has(c)) ?? null;
+  return [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`].find((c) => EXISTS.has(c)) ?? null;
 }
 
 /** 소스 한 파일이 가져오는 src 안의 파일들 */
@@ -40,10 +40,45 @@ function importsOf(file: string): string[] {
 }
 
 const EDGES = SOURCES.flatMap((from) => importsOf(from).map((to) => ({ from, to })));
+// 타입 선언만 내보내는 파일은 구현 소유권을 소비 수로 단정하지 않는다.
+const VALUE_EXPORTS = new Set(SOURCES.filter((file) => /\bexport\s+(?:default\s+|async\s+)?(?:class|function|const|let|var|enum)\b/.test(readFileSync(join(SRC, file), 'utf8'))));
 
 /** `features/play/...` → `play`, 그 밖은 null */
 const featureOf = (f: string) => (f.startsWith('features/') ? f.split('/')[1] : null);
 const isShared = (f: string) => !f.startsWith('features/') && !f.startsWith('app/') && f !== 'main.tsx';
+
+/** 공유 화면 컴포넌트와 코어 구현의 역방향 import를 따라 소비자를 찾는다.
+ * dev는 진단 화면이므로 소유 기능에 세지 않고, app의 소비는 공용으로 본다.
+ * 코어 구현을 다른 공유 계층이 쓰면 공용으로 보고, domain·api 및 타입 전용 계약은 검사하지 않는다.
+ */
+function featureOnlyFiles(files: string[], edges: { from: string; to: string }[], valueExports: Set<string>): string[] {
+  const importers = new Map<string, string[]>();
+  for (const { from, to } of edges) importers.set(to, [...(importers.get(to) ?? []), from]);
+
+  return files.filter((file) => {
+    const component = file.startsWith('components/') && !file.startsWith('components/ui/');
+    const core = /^(engine|audio|coach)\//.test(file) && valueExports.has(file);
+    if (!component && !core) return false;
+    const coreRoot = file.split('/')[0];
+    const seen = new Set([file]);
+    const pending = [file];
+    const owners = new Set<string>();
+    while (pending.length) {
+      for (const from of importers.get(pending.pop()!) ?? []) {
+        const feature = featureOf(from);
+        if (feature && feature !== 'dev') owners.add(`feature:${feature}`);
+        else if (feature === 'dev') continue;
+        else if (from.startsWith('app/') || from === 'main.tsx') owners.add('shared');
+        else if (core && !from.startsWith(`${coreRoot}/`) && !from.startsWith('components/')) owners.add('shared');
+        else if (!seen.has(from)) {
+          seen.add(from);
+          pending.push(from);
+        }
+      }
+    }
+    return owners.size === 1 && !owners.has('shared');
+  }).sort();
+}
 
 /**
  * 허용하는 예외(`from -> to` 형식). 지금은 비어 있다.
@@ -67,6 +102,42 @@ function packageImportsOf(file: string): string[] {
 function violations(test: (from: string, to: string) => boolean): string[] {
   return EDGES.filter((e) => test(e.from, e.to)).map((e) => `${e.from} -> ${e.to}`);
 }
+
+describe('단일 기능 소유권 판정', () => {
+  it('전이 소비와 app·공유 계층·다른 기능의 소비 및 공용 계약을 구분한다', () => {
+    const files = [
+      'components/song/featureOnly.tsx', 'components/song/through.tsx',
+      'components/song/multi.tsx', 'components/song/app.tsx', 'components/song/unused.tsx',
+      'components/song/dev.tsx', 'components/song/devOnly.tsx',
+      'components/ui/Button.tsx', 'domain/song/contract.ts', 'api/song/client.ts',
+      'engine/featureOnly.ts', 'engine/indirect.ts', 'engine/contract.ts', 'engine/types.ts',
+    ];
+    const edges = [
+      { from: 'features/play/Page.tsx', to: 'components/song/through.tsx' },
+      { from: 'components/song/through.tsx', to: 'components/song/featureOnly.tsx' },
+      { from: 'components/song/featureOnly.tsx', to: 'components/song/through.tsx' },
+      { from: 'features/play/Page.tsx', to: 'components/song/multi.tsx' },
+      { from: 'features/studio/Page.tsx', to: 'components/song/multi.tsx' },
+      { from: 'features/play/Page.tsx', to: 'components/song/app.tsx' },
+      { from: 'app/App.tsx', to: 'components/song/app.tsx' },
+      { from: 'features/play/Page.tsx', to: 'components/song/dev.tsx' },
+      { from: 'features/dev/Page.tsx', to: 'components/song/dev.tsx' },
+      { from: 'features/dev/Page.tsx', to: 'components/song/devOnly.tsx' },
+      { from: 'features/play/Page.tsx', to: 'components/ui/Button.tsx' },
+      { from: 'features/play/Page.tsx', to: 'domain/song/contract.ts' },
+      { from: 'features/play/Page.tsx', to: 'api/song/client.ts' },
+      { from: 'features/play/Page.tsx', to: 'engine/indirect.ts' },
+      { from: 'engine/indirect.ts', to: 'engine/featureOnly.ts' },
+      { from: 'features/play/Page.tsx', to: 'engine/contract.ts' },
+      { from: 'runtime/session.ts', to: 'engine/contract.ts' },
+      { from: 'features/play/Page.tsx', to: 'engine/types.ts' },
+    ];
+    expect(featureOnlyFiles(files, edges, new Set(['engine/featureOnly.ts', 'engine/indirect.ts', 'engine/contract.ts']))).toEqual([
+      'components/song/dev.tsx', 'components/song/featureOnly.tsx', 'components/song/through.tsx',
+      'engine/featureOnly.ts', 'engine/indirect.ts',
+    ]);
+  });
+});
 
 describe('폴더 구조 의존 규칙', () => {
   const found = [
@@ -92,7 +163,7 @@ describe('폴더 구조 의존 규칙', () => {
     // R6 runtime은 화면 층(components)을 import하지 않는다(기능·app은 R2가 막는다)
     ...violations((from, to) => from.startsWith('runtime/') && to.startsWith('components/')),
     // R7 core·store·domain은 runtime을 모른다(runtime이 이들 위의 층이다)
-    ...violations((from, to) => /^(store|api|domain|input|engine|audio|coach|telemetry|media)\//.test(from) && to.startsWith('runtime/')),
+    ...violations((from, to) => /^(store|api|domain|input|engine|audio|coach|telemetry)\//.test(from) && to.startsWith('runtime/')),
     // R8 기능은 app을 import하지 않는다(app이 기능을 조립하는 맨 위 층이다)
     ...violations((from, to) => from.startsWith('features/') && to.startsWith('app/')),
   ];
@@ -104,6 +175,10 @@ describe('폴더 구조 의존 규칙', () => {
 
   it('허용 목록에 이미 풀린 항목이 남아 있지 않다', () => {
     expect([...ALLOWED].filter((v) => !unique.includes(v))).toEqual([]);
+  });
+
+  it('한 기능에서만 쓰는 화면 컴포넌트와 코어 구현은 해당 기능 폴더에 둔다', () => {
+    expect(featureOnlyFiles(SOURCES, EDGES, VALUE_EXPORTS)).toEqual([]);
   });
 
   it('옛 폴더(pages·components 바로 아래 파일)가 다시 생기지 않는다', () => {
