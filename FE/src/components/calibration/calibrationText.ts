@@ -37,12 +37,13 @@ export function spreadWarningText(w: NonNullable<CaptureSnapshot['warning']>): s
   return `두 번 친 자리가 너무 달라요(${Math.round(w.spread)}°). ${HAND_NAME[w.stickId]}으로 ${label}${josaEulReul(label)} 다시 쳐 주세요`;
 }
 
-/** 재정렬 안내. 두 손이면 한 번씩, 한 손이면 그 손으로 */
-export function realignPromptText(hands: readonly StickId[], done: readonly [boolean, boolean]): string {
+/** 재정렬 안내. 두 손이면 한 번씩, 한 손이면 그 손으로. unstable(자동 보정이 방향 흔들림으로 멈춤)이고 칠 손이 남았으면 이유를 앞에 붙인다 */
+export function realignPromptText(hands: readonly StickId[], done: readonly [boolean, boolean], unstable?: boolean): string {
   const left = hands.filter((h) => !done[h]);
   if (left.length === 0) return '스네어 재정렬을 마쳤어요';
-  if (left.length === 2) return '스네어를 왼손·오른손 한 번씩 쳐 주세요';
-  return `${HAND_NAME[left[0]]}으로 스네어를 한 번 쳐 주세요`;
+  const lead = unstable ? '방향이 흔들렸어요. ' : '';
+  if (left.length === 2) return `${lead}스네어를 왼손·오른손 한 번씩 쳐 주세요`;
+  return `${lead}${HAND_NAME[left[0]]}으로 스네어를 한 번 쳐 주세요`;
 }
 
 /** 와/과 조사(받침 있으면 과). setupSteps에 없어 여기서만 쓴다 */
