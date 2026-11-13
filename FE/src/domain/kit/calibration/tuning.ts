@@ -48,6 +48,13 @@ export const DEFAULT_SENSOR_TUNING: SensorTuning = {
   angleRange: DEFAULT_ANGLE_RANGE,
 };
 
+/** 유저별 최소 타격 세기(PLAY-004 ③): 보정 타격 peakSpeedDps 중앙값 × 비율, 하한~기본값으로 자른다. 표본이 모자라면 바꾸지 않는다 */
+export const MIN_PEAK_RATIO = 0.4;
+export const MIN_PEAK_FLOOR_DPS = 250;
+/** 펌웨어 기본값(°/s). 저장값이 없을 때 보내는 값이자 상한 */
+export const MIN_PEAK_DEFAULT_DPS = 400;
+export const MIN_PEAK_MIN_SAMPLES = 6;
+
 export interface TuningRange {
   min: number;
   max: number;
