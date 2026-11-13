@@ -18,8 +18,8 @@
 | `components/<묶음>/` | 둘 이상의 기능이 쓰는 UI. `ui/`(디자인 시스템)·`shell/`·`song/`·`drum/`·`fx/`·`stick/`·`calibration/`·`recording/`·`lesson/`·`sheetmusic/` |
 | `runtime/` | 앱에 하나뿐인 인스턴스·세션(입력 소스·센서 세션·쿼리 캐시·녹음·업로드·보정·오디오 켜기·`useApiQuery`) |
 | `store/` | 공유 zustand 상태 |
-| `api/`·`input/`·`engine/`·`audio/`·`coach/`·`telemetry/`·`media/` | 코어. domain·config만 import한다 |
-| `domain/` | 공유 순수 타입·함수. 10곳 이상이 쓰는 핵심 파일은 바로 아래, 나머지는 `kit/`·`song/`·`time/`·`play/`·`account/`·`hitFx/` |
+| `api/`(account·kit·song·play)·`input/`·`engine/`·`audio/`·`coach/`·`telemetry/`·`media/` | 코어. domain·config만 import한다 |
+| `domain/` | 공유 순수 타입·함수. 바로 아래에는 `events`만, 나머지는 `kit/`·`song/`·`time/`·`play/`·`account/`·`hitFx/` |
 | `styles/`·`test/` | 전역 CSS 토큰, 구조 테스트와 테스트 보조 |
 
 `features/play/components/`는 흐름 단계로 나뉜다. `picker/`(곡 선택, 안내 줄은 `guide/`), `start/`(시작 확인 창), `stage/`(연주 화면), `pause/`(일시정지), `diag/`(진단 자동 연주). `play.css`는 루트에 둔다.
@@ -36,7 +36,8 @@
    - 값·순수 함수 스위치는 `config/`에 둔다.
 4. 새 화면은 `features/<기능>/XxxPage.tsx`로 만들고 `app/routeModules`와 `app/App.tsx`에 연결한다. 새 기능 폴더는 자기 라우트가 있을 때만 만든다.
 5. 기능 폴더의 소스가 15개 이하이면 하위 폴더 없이 평평하게 둔다.
-6. `domain/` 바로 아래에는 10곳 이상이 import하는 파일만 둔다. 나머지는 하위 폴더에 두고, 맞는 폴더가 없을 때만 새 하위 폴더를 만든다.
+6. `domain/` 바로 아래에는 `events`만, `api/` 바로 아래에는 `http`·`error`만 둔다. 둘 다 같은 개념 이름(`account`·`kit`·`song`·`play` 등)의 하위 폴더로 묶는다. 새 파일은 맞는 하위 폴더에 두고, 맞는 폴더가 없을 때만 새 하위 폴더를 만든다.
+7. 공유 층(`api/`·`engine/`·`input/` 등)도 1번을 따른다. 한 기능만 쓰게 된 파일은 그 기능 폴더로 옮긴다.
 
 ## 의존 규칙 (구조 테스트가 검사한다)
 
@@ -51,6 +52,7 @@
 - R7: store·코어·domain은 runtime을 import하지 않는다.
 - R8: 기능은 app을 import하지 않는다. 기능이 app의 기능을 써야 하면 app이 props나 콜백으로 넘긴다(예: Sidebar의 `onPrefetch`).
 - `pages/`나 `components/` 바로 아래에 파일이 생기면 실패한다.
+- `domain/` 바로 아래에 `events`, `api/` 바로 아래에 `http`·`error` 말고 다른 파일이 생기면 실패한다.
 
 예외 목록 `ALLOWED`는 지금 0건이다. 규칙을 피하려고 예외를 추가하지 않는다. 코드를 맞는 층으로 옮기거나 의존을 뒤집는다. 정말 막을 수 없을 때만 이유를 주석으로 적어 추가하고, 사용자에게 알린다.
 
