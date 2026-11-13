@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import tools.jackson.databind.json.JsonMapper;
+import com.ssafy.airdrum.domain.lesson.model.LessonCourse;
 import com.ssafy.airdrum.domain.lesson.model.LessonKind;
 import com.ssafy.airdrum.domain.lesson.model.LessonSpec;
 
@@ -31,7 +32,11 @@ public class LessonRepository {
 			  AND s.status = 'READY' AND s.published
 			""";
 
-	public record Row(int position, LessonKind kind, String summary, List<String> pads, boolean guide, long songId, String title,
+	/** 코스 순서(LessonCourse 선언 순서) → 코스 안 순서. 잠금은 이 한 줄에서 계산한다(학습 코스 설계 3-3절). */
+	private static final String COURSE_ORDER = "array_position(ARRAY[" + java.util.Arrays.stream(LessonCourse.values())
+			.map(c -> "'" + c.name() + "'").collect(java.util.stream.Collectors.joining(",")) + "]::varchar[], l.course::varchar)";
+
+	public record Row(LessonCourse course, int position, LessonKind kind, String summary, List<String> pads, boolean guide, long songId, String title,
 			BigDecimal bpm, Integer durationMs, long chartId, int noteCount) {
 	}
 
@@ -48,20 +53,20 @@ public class LessonRepository {
 		db.update("DELETE FROM lessons");
 		for (var entry : lessons.entrySet()) {
 			var spec = entry.getValue();
-			db.update("INSERT INTO lessons(song_id,position,kind,summary,pads,guide,updated_at) VALUES(?,?,?,?,?::jsonb,?,now())",
-					entry.getKey(), spec.order(), spec.kind().name(), spec.summary(), json.writeValueAsString(spec.pads()), spec.guide());
+			db.update("INSERT INTO lessons(song_id,course,position,kind,summary,pads,guide,updated_at) VALUES(?,?,?,?,?,?::jsonb,?,now())",
+					entry.getKey(), spec.course().name(), spec.order(), spec.kind().name(), spec.summary(), json.writeValueAsString(spec.pads()), spec.guide());
 		}
 	}
 
-	/** 공개 공용 곡인 레슨을 순서대로. 채보는 NORMAL 최신 버전이고 NORMAL이 없는 곡은 빠진다. */
+	/** 공개 공용 곡인 레슨을 코스 순서 → 코스 안 순서대로. 채보는 NORMAL 최신 버전이고 NORMAL이 없는 곡은 빠진다. */
 	public List<Row> visible() {
-		return db.query("SELECT l.position, l.kind, l.summary, l.pads::text, l.guide, s.id, s.title, s.bpm, s.duration_ms, c.id, v.note_count "
+		return db.query("SELECT l.course, l.position, l.kind, l.summary, l.pads::text, l.guide, s.id, s.title, s.bpm, s.duration_ms, c.id, v.note_count "
 				+ VISIBLE_LESSON + """
 				JOIN charts c ON c.song_id = s.id AND c.difficulty = 'NORMAL'
 				JOIN chart_versions v ON v.id = (SELECT x.id FROM chart_versions x WHERE x.chart_id = c.id ORDER BY x.version DESC LIMIT 1)
-				ORDER BY l.position
-				""", (r, n) -> new Row(r.getInt(1), LessonKind.valueOf(r.getString(2)), r.getString(3), pads(r.getString(4)), r.getBoolean(5),
-				r.getLong(6), r.getString(7), r.getBigDecimal(8), r.getObject(9, Integer.class), r.getLong(10), r.getInt(11)));
+				ORDER BY""" + " " + COURSE_ORDER + ", l.position", (r, n) -> new Row(LessonCourse.valueOf(r.getString(1)), r.getInt(2),
+				LessonKind.valueOf(r.getString(3)), r.getString(4), pads(r.getString(5)), r.getBoolean(6), r.getLong(7), r.getString(8),
+				r.getBigDecimal(9), r.getObject(10, Integer.class), r.getLong(11), r.getInt(12)));
 	}
 
 	/** 공개 공용 곡인 레슨의 종류. 레슨이 아니거나 볼 수 없는 곡이면 비어 있다. */

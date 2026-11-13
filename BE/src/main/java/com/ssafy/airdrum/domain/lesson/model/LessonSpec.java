@@ -9,19 +9,26 @@ import com.ssafy.airdrum.domain.chart.model.DrumPad;
  * 카탈로그 한 곡에 붙는 레슨 정보(331번 설계 3-1절). 값 규칙은 여기서 검사하고 어기면 {@link IllegalArgumentException}이다.
  * 순서가 카탈로그 안에서 1부터 이어지는지는 카탈로그가 본다.
  *
- * @param order   1 이상 순서
+ * @param order   코스 안의 1 이상 순서
  * @param summary 1~200자 설명
- * @param pads    1~4개 패드 이름(중복 없음)
+ * @param pads    1~9개 패드 이름(중복 없음). 중급 마지막 레슨이 일곱 개를 쓴다(학습 코스 설계 3-1절)
  * @param guide   알아보기에서 음표 이름과 드럼을 처음부터 알려 주는가. 연주 레슨은 항상 참
+ * @param course  학습 코스(학습 코스 설계 3-1절)
  */
-public record LessonSpec(int order, LessonKind kind, String summary, List<String> pads, boolean guide) {
+public record LessonSpec(int order, LessonKind kind, String summary, List<String> pads, boolean guide, LessonCourse course) {
 
 	static final int SUMMARY_MAX = 200;
-	static final int PADS_MAX = 4;
+	static final int PADS_MAX = DrumPad.values().length;
+
+	/** 입문 코스 레슨. */
+	public LessonSpec(int order, LessonKind kind, String summary, List<String> pads, boolean guide) {
+		this(order, kind, summary, pads, guide, LessonCourse.BEGINNER);
+	}
 
 	public LessonSpec {
 		if (order < 1) throw new IllegalArgumentException("order는 1 이상이어야 합니다.");
 		if (kind == null) throw new IllegalArgumentException("kind가 없습니다.");
+		if (course == null) throw new IllegalArgumentException("course가 없습니다.");
 		if (summary == null || summary.isBlank()) throw new IllegalArgumentException("summary가 비어 있습니다.");
 		if (summary.codePointCount(0, summary.length()) > SUMMARY_MAX)
 			throw new IllegalArgumentException("summary는 " + SUMMARY_MAX + "자 이하여야 합니다.");

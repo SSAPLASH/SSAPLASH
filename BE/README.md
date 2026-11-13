@@ -461,6 +461,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V46 | `V46__add_musicxml_source.sql` | MusicXML 업로드(293): `songs.source` CHECK에 `MUSICXML`, `chart_versions.generator` CHECK에 `MUSICXML_RULE` 추가(제약 이름 `songs_source_check`·`chart_versions_generator_check` 재생성). 기존 행 변경 없음 | -293 |
 | V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
 | V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
+| V50 | `V50__add_lesson_course.sql` | 학습 코스 `lessons.course`(`BEGINNER`·`INTERMEDIATE`, 기존 행은 `BEGINNER`). 순서 유일 조건을 `position`에서 `(course, position)`으로 바꿨다. 진도 표는 그대로 | 학습 코스(중급) |
 
 규칙:
 
@@ -1048,7 +1049,7 @@ GRANT INSERT, UPDATE ON file_cleanup_tasks TO midi_worker;
 GRANT USAGE, SELECT ON SEQUENCE midi_accompaniment_jobs_id_seq, file_cleanup_tasks_id_seq TO midi_worker;
 ```
 
-운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자가 호출하는 재시도 API는 없다.
+운영 재합성은 실행 이미지를 같은 설정으로 띄워 `--resynthesize songId [songId ...]`를 실행하면 dry-run이고, `--resynthesize --apply songId [songId ...]`에서만 지정한 곡을 큐에 넣는다. 원본 무결성·회원·곡·드럼 외 노트와 활성 작업을 확인한다. 사용자는 `POST /api/v1/songs/{songId}/accompaniment/retry`로 본인 MIDI 반주의 최종 실패를 재시도할 수 있다. 본문 없이 Bearer 인증을 사용하며 등록 성공은 빈 202다. 키가 없고 최신 합성 작업이 FAILED이며 ACCEPTED 원본·최신 HARD timing·드럼 외 노트가 있어야 한다. 큐 등록 뒤 목록·상세의 `accompanimentStatus`를 확인한다. 타인·삭제 곡은 404 `SONG_NOT_FOUND`, 대상이 아니거나 중복 요청이면 409 `MIDI_RETRY_UNAVAILABLE`, 저장소 장애는 503 `MIDI_STORAGE_UNAVAILABLE`이다. 기존 반주 교체와 AUDIO 재시도는 지원하지 않는다.
 
 워커 이미지는 Ubuntu Jammy의 [FluidSynth 2.2.5-1](https://packages.ubuntu.com/jammy/fluidsynth), [FluidR3 GM 3.1-5.3](https://packages.ubuntu.com/source/jammy/fluid-soundfont), [FFmpeg 7:4.4.2-0ubuntu0.22.04.1](https://packages.ubuntu.com/jammy-updates/ffmpeg)을 사용하며 SoundFont SHA-256 `74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0`를 빌드·시작 시 확인한다. FluidSynth는 LGPL, FluidR3 GM은 MIT이며 이미지에 패키지 저작권 고지가 포함된다. 로컬 2.4.6 실측을 운영 2.2.5의 성능 보장으로 해석하지 않는다.
 
@@ -1059,7 +1060,7 @@ CI 렌더 검사는 일반 사용자로 Ubuntu 패키지를 작업 디렉터리�
 
 CHART-001. 사용자가 올린 **드럼 MusicXML**(`.musicxml`·`.xml`·`.mxl`)을 AI 서버가 채보 JSON으로 바꾸고, BE가 음원 채보와 같은 규칙으로 HARD·NORMAL·EASY를 만들어
 **내 곡**(`source=MUSICXML`)으로 저장한다. MIDI 업로드(151번)처럼 요청 안에서 끝나는 동기 API다. 이미지·PDF 악보 인식은 넣지 않는다(AI 측정: 악기 정확도 평균 0.49,
-곡당 크레딧 약 6,600). 설계 `.claude/plans/CHART-001-MusicXML-악보-업로드-곡-등록.md`.
+곡당 크레딧 약 6,600).
 
 `POST /api/v1/songs/musicxml`: Bearer 인증, multipart `file`(5 MiB 이하) 1개, `title`(앞뒤 공백 제거 후 1~100자) 1개, 선택 `artist`(0~100자, 빈 값은 null).
 다른 필드나 같은 필드 여러 개는 400이다. 성공은 `201 Created`, `Location: /api/v1/songs/{songId}`, `Cache-Control: private, no-store`, 본문은 곡 상세
@@ -1158,20 +1159,20 @@ CHART-001. 공용 곡(기본 곡)을 저장소의 카탈로그로 관리하고 *
 .\gradlew.bat test --tests '*BuiltinSong*' --tests '*SongMetadata*'
 ```
 
-## 입문 코스 (331번)
+## 학습 코스(입문·중급) (331번, 중급 11/13)
 
-SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [입문 코스] 탭이다. 설계 `.claude/plans/SETUP-입문-코스.md`(개인 문서).
+SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하며 배우는 코스다. 입문 코스(킥·스네어·하이햇, 레슨 12개) 뒤에 중급 코스(크래시·라이드·탐 세 개·하이햇 페달, 레슨 10개)가 이어진다. 레슨은 공용 곡 카탈로그의 곡이고, 화면은 FE 악보 연습의 [학습 코스]다.
 
-- **카탈로그 `lesson`:** `order`(1 이상, 카탈로그 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~4개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
-- **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하). 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
+- **카탈로그 `lesson`:** `course`(`BEGINNER`·`INTERMEDIATE`, 기본 `BEGINNER`)·`order`(1 이상, 같은 코스 안에서 겹치지 않고 1부터 이어짐)·`kind`(`READ` 알아보기·`PLAY` 연주, 기본 `PLAY`)·`summary`(1~200자)·`pads`(패드 이름 1~9개, 중복 없음)·`guide`(`READ`에만, 기본 true: 음표 이름과 드럼을 처음부터 알려 줌). 레슨 곡은 `meta`를 두지 않는다. 레슨 곡 제목은 「입문 · 」·「중급 · 」로 시작한다. 앱이 시작할 때마다 곡을 모두 처리한 뒤 `lessons`(V48·V50)를 카탈로그 레슨으로 통째로 바꾼다(빼면 레슨에서 빠지고 곡은 남는다). 교체가 실패해도 곡 등록 결과는 그대로이고 레슨은 이전 상태로 남는다.
+- **레슨 MIDI:** `scripts/lesson_midi.py`로 만든다(4/4, 70 BPM, 세기 100, 8분 격자 위, 같은 시각 2개 이하 — 스크립트가 검사한다). 중급 파일은 `lesson-int-*.mid`이고 GM 번호는 `GmDrumMapping` 표를 따른다(크래시 49·라이드 51·스몰탐 48·미드탐 45·플로어탐 43·하이햇 페달 44). 다시 만들어도 기존 입문 파일은 바이트가 같다. 레슨 채보는 NORMAL이고 NORMAL 솎기 결과가 원본과 같으며 채보의 패드가 `lesson.pads`와 같다(`BuiltinSongSeederTest.저장소_카탈로그의_레슨은_…`이 검사). 260번 규칙으로 HARD·EASY는 목록에서 숨는다.
 - **목록에서 빠짐:** `lessons`에 있는 곡은 공용 곡 목록(`GET /api/v1/songs?source=BUILTIN`)·추천 R1(곡 선택·리포트·연습)·비슷한 곡 R2 후보에 나오지 않는다(`LessonRepository.NOT_LESSON`). 곡 상세·채보 조회·연주 저장·최고 기록·ADMIN 목록은 그대로 된다.
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(순서대로): `order`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
+| GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(입문 전부 → 중급, 코스 안 순서대로): `order`(코스 안 순서)·`course`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
 | POST | `/api/v1/lessons/{songId}/completion` | 알아보기 레슨 완료 저장. 본문 없음, 204. 다시 보내도 204이고 처음 시각을 유지 |
 
-- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 앞 순서 중 통과하지 못한 레슨이 있으면 참이다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
+- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
 - **오류:** 로그인 안 함·탈퇴 401, 완료 저장에서 연주 레슨 400 `VALIDATION_FAILED`, 레슨이 아니거나 삭제·비공개 곡 404 `SONG_NOT_FOUND`. 두 API 모두 `Cache-Control: private, no-store`.
 - **탈퇴:** 탈퇴 커밋 뒤 그 회원의 `lesson_completions`를 지운다(`LessonWithdrawalListener`). 연주 기록은 기존 탈퇴 규칙을 따른다.
 - **알려진 점:** AI 배치 뷰 `recommend_songs_v`(V37)는 레슨 곡을 거르지 않는다. 학습 데이터에서 빼야 하면 뷰를 바꾸는 후속 작업이 필요하다.
@@ -1378,7 +1379,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - Nginx는 `^~ /internal/v1/coach-narratives/`를 채보 워커 경로와 같은 IP 허용으로 연다(`Infra/nginx/default.conf`, 본문 64 KiB).
 - 시험: `CoachNarrativeQueueTest`(저장·작업 생성, claim 멱등성, result·failure 검증, 임대 만료, 사실의 식별자 제외, 이전 플레이 비교, 노트 구간 필터)와 `CoachSummaryClientTest`(총평 파싱).
 
-## 연주 중 LLM 구간 코칭 작업 (COACH-001, 설계 `.claude/plans/COACH-001-연주중-LLM-코칭-설계.md`)
+## 연주 중 LLM 구간 코칭 작업 (COACH-001)
 
 연주 중 4·8·16마디 구간이 끝날 때 FE가 구간 사실(`facts`)을 보내면, 교내 GPU 서버의 워커가 가져가 리포트 총평과 같은 로컬 모델로 안내 칸 문구(`title` 8자, `sub` 16자)를 써서 제출한다. FE는 짧은 주기로 결과를 조회해 다음 구간에 띄운다. 늦은 답은 쓸모없어서 짧게 살다 지워지는 큐(`live_coach_jobs`, V47)다. 계약과 가드레일은 AI `AI/docs/live-coach-llm.md`.
 
@@ -1405,7 +1406,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 - Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 IP 허용으로 연다.
 - 시험: `LiveCoachQueueTest`(요청·claim·result·조회, claim 멱등성, 남의 요청 404, 판당·분당 상한 429, 잘못된 사실, 실패·만료 410, 오래된 작업 미배정, 결과 길이 검증과 임대 확인, 꺼짐).
 
-## 곡 추천 R1: 규칙 추천 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md`)
+## 곡 추천 R1: 규칙 추천
 
 공용 곡 중 "지금 치기 좋은 채보"를 규칙 점수로 골라 이유와 함께 돌려준다. 학습·AI 호출이 없고 요청 시 DB의 본인 기록과 공용 곡만 읽는다. 추천 단위는 채보(곡+난이도)이고 응답은 곡당 하나다.
 
@@ -1564,7 +1565,6 @@ MONITOR-001 진단 텔레메트리. 스틱 → 브라우저 → 판정 → 오�
 ### 측정 세션 실험 조건 (259번)
 
 MONITOR-002. 세션끼리 "어떤 조건에서 쟀는지"를 비교하기 위한 환경 정보다. 필드·값은 FE가 EMB와 맞춰 확정했다(`MONITOR-002_측정세션-실험조건`, 2026-11-06).
-설계: `.claude/plans/MONITOR-002-측정-세션-실험-조건.md`.
 
 배치 외피의 선택 객체 `conditions`로 받는다. **FE는 같은 `sessionId`의 매 배치에 그 시점의 전체 값을 붙이고**, BE는 `telemetry_session_conditions`(V39)의
 `(user_id, session_id)` 한 행을 **마지막으로 받은 값으로 통째로 바꾼다**(null이 된 값은 null이 된다). `conditions`가 없거나 null인 배치는 행을 건드리지 않는다.
@@ -1625,7 +1625,7 @@ Infra와 합의한 뒤 새 마이그레이션(`remove_retention_policy` 후 다�
 권한·저장·null 보존·전체 거절·롤백·조회와 259 조건의 저장·통째 교체·행 유지·롤백·세션 목록 응답을, `TelemetrySchemaMigrationTest`는 V17 적용 전후 행 보존과
 컬럼 타입, V39의 PK·CHECK를 검사한다. hypertable에서의 V17은 위 TimescaleDB 검사가 확인한다. 탈퇴 시 조건 행 삭제는 `WithdrawalServiceTest`가 본다.
 
-## 곡 추천 R3: 후보 적재와 서빙 (설계: `.claude/plans/CHART-COACH-곡추천-설계.md` 부록 C)
+## 곡 추천 R3: 후보 적재와 서빙
 
 AI 배치가 미리 계산한 후보를 저장해 두고 추천 요청 때 R1 규칙으로 거르고 섞는다. 요청 경로에서 AI를 부르지 않는다. **기본은 꺼져 있고, 꺼져 있으면 응답과 기록이 R1과 같다.**
 

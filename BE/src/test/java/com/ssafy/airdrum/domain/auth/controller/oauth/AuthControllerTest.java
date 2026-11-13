@@ -3,6 +3,9 @@ package com.ssafy.airdrum.domain.auth.controller.oauth;
 import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.AutoConfigureMockRestServiceServer;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -46,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 설계 문서 3-3·4-A~C, 인수 조건 1~4·6·7: 로그인 시작과 콜백을 실제 컨텍스트에서 확인한다.
  * 제공자는 MockRestServiceServer가 대신하고, 결과가 로컬 BE/.env에 흔들리지 않도록 환경변수를 모두 지정한다.
  */
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(properties = {
 		"GOOGLE_CLIENT_ID=google-id", "GOOGLE_CLIENT_SECRET=google-secret",
 		"SSAFY_CLIENT_ID=ssafy-id", "SSAFY_CLIENT_SECRET=ssafy-secret",
@@ -202,14 +206,15 @@ public class AuthControllerTest {
 	}
 
 	@Test
-	void sessionIssuerFailureRedirectsWithOauthFailed() throws Exception {
-		doThrow(new IllegalStateException("발급 실패")).when(sessionIssuer).issue(any(), any());
+	void sessionIssuerFailureRedirectsWithOauthFailed(CapturedOutput output) throws Exception {
+		doThrow(new IllegalStateException("sensitive-session-failure")).when(sessionIssuer).issue(any(), any());
 		server.expect(requestTo(GOOGLE_TOKEN))
 				.andRespond(withSuccess("{\"access_token\":\"at\"}", MediaType.APPLICATION_JSON));
 		server.expect(requestTo(GOOGLE_USERINFO))
 				.andRespond(withSuccess("{\"sub\":\"g-300\"}", MediaType.APPLICATION_JSON));
 
 		assertFailure(callback("google", "code", "s", "s"), "oauth_failed");
+		assertThat(output).contains("reason=SESSION_ISSUE_FAILED").doesNotContain("sensitive-session-failure");
 	}
 
 	private String startLogin(String provider) throws Exception {
