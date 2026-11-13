@@ -1,0 +1,41 @@
+/* 무대 조명(StageLights.tsx): 페이지 전체 빛줄기와 킷 바닥 빛. 클래스 접두사 free-는 옮겨도 그대로 둔다 */
+
+/* ---- 조명: 랜딩 히어로 빛줄기(.lp-beam)와 같은 구성. 반주 바 유리 뒤로도 비친다 ---- */
+.free-lights {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.free-lights.is-on {
+  opacity: 1;
+}
+.free-beam {
+  position: absolute;
+  left: 50%;
+  top: -4%;
+  width: min(1040px, 96%);
+  height: 108%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 26% 46% at 50% 0%, rgba(226, 240, 255, 0.32), transparent 70%),
+    conic-gradient(from 180deg at 50% 0%, transparent 148deg, rgba(210, 228, 245, 0.075) 164deg, rgba(232, 244, 255, 0.2) 180deg, rgba(210, 228, 245, 0.075) 196deg, transparent 212deg);
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 66%, transparent 98%);
+}
+
+.free-floor {
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  bottom: -7%;
+  height: 52%;
+  pointer-events: none;
+  background: radial-gradient(ellipse closest-side, rgba(220, 236, 255, 0.16), rgba(220, 236, 255, 0.05) 55%, transparent 100%);
+  transition: opacity 0.8s ease;
+}
