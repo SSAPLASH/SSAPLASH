@@ -1,18 +1,10 @@
-"""규칙 분석용 특징 저장 (탐·크래시 규칙 설계 2장·3장 "저장하는 특징").
+"""규칙 분석용 특징 저장. ADTOF 타격 시각과 드럼 킷 분리 트랙을 곡마다 한 번만 GPU로 계산해 npz로 저장.
 
-ADTOF + 드럼 킷 분리 어댑터의 무거운 계산(ADTOF 활성값 → 피치별 타격 시각, 드럼 킷 분리 트랙)을 곡마다
-한 번만 GPU로 돌려 npz 파일로 저장. 이후 규칙 후보 비교(rule_eval)·탐 음높이 분석(tom_pitch)은 이 파일만
-읽어 CPU로 몇 초 안에 끝남.
-
-저장 내용 (곡 하나 = npz 하나)
-- peaks_{피치}: ADTOF가 잡은 시각(초). 피치 35 킥·38 스네어·42 하이햇·47 탐·49 심벌(페달 체크포인트는 44 페달 하이햇, 크래시·라이드 체크포인트는 49가 크래시만이고 51 라이드도)
-- activations: ADTOF가 프레임(100fps)마다 내는 5가지 확신 점수 (프레임, 5) float16. 페달 체크포인트는 (프레임, 6), 끝 열이 44번. 크래시·라이드 체크포인트는 (프레임, 7), 끝 열이 51번. 탐 기준값·타격 시각
-  고르기를 규칙으로 바꿔 다시 돌리기 위해 저장 (S15P31A307-164 재연구). 옛 파일에는 없을 수 있음
-- stem_{이름}: 드럼 킷 분리 트랙 전부(kick·snare·toms·hh·ride·crash). 모노 float16, 샘플레이트는 입력과 같음(44.1kHz).
-  float16은 float32의 절반 크기이고 규칙(스펙트럼 봉우리·에너지 비교)에는 차이가 거의 없음.
-  옛 파일은 toms·crash·ride 셋만 있음
+저장 내용 (곡 하나 = npz 하나, 경로 `data/rule_features/{데이터셋}/{곡}.npz`. 이미 있으면 건너뜀)
+- peaks_{피치}: ADTOF가 잡은 시각(초). 35 킥·38 스네어·42 하이햇·47 탐·49 심벌, 체크포인트에 따라 44 페달·51 라이드
+- activations: 프레임(100fps)별 확신 점수 (프레임, 클래스 수) float16. 옛 파일에는 없을 수 있음
+- stem_{이름}: 드럼 킷 분리 트랙(kick·snare·toms·hh·ride·crash). 모노 float16. 옛 파일은 toms·crash·ride만
 - sample_rate, duration_sec, meta(json: 모델·checkpoint·설정 해시·기본 규칙)
-경로 `data/rule_features/{데이터셋}/{곡}.npz`. 이미 있으면 건너뜀. `data/`는 git 미추적.
 """
 
 from __future__ import annotations
@@ -40,7 +32,7 @@ class RuleFeatures:
     """곡 하나의 저장 특징. stems 값은 (1, 샘플) float32로 돌려줌 (규칙 함수가 (채널, 샘플)을 받음).
 
     input_audio는 어댑터에 넣은 드럼 입력(모노 (1, 샘플) float16). npz에는 없고 rule_eval이 데이터셋에서
-    읽어 채움. 탐 아닌 소리 거르기(tom_gate_ratio, S15P31A307-164)가 toms 트랙과 비교할 기준.
+    읽어 채움. 탐 아닌 소리 거르기(tom_gate_ratio)가 toms 트랙과 비교할 기준.
     """
 
     peaks: dict[int, np.ndarray]

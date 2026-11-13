@@ -1,4 +1,4 @@
-# 실제 녹음 학습 확인 실험 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 3-2절). adtof_tom_6cls.yaml과 같고 아래만 다름.
+# 실제 녹음 학습 확인 실험. adtof_tom_6cls.yaml과 같고 아래만 다름.
 # H3 조건부: tom_6cls_real_no_d2에 드러머 2의 반주 없는 연주를 더함. H1 판정이 '아님'일 때만 돌림.
 # 실행: 서버 notebooks/real_drum_check_server.ipynb (scripts/train_queue.py --parallel), 결과 data/models/adtof_ft/tom_6cls_real_d2_practice
 base_checkpoint: null  # null이면 adtof_pytorch 패키지 기본 가중치
@@ -23,7 +23,7 @@ learning_rate: 0.0001
 lr_reduce_patience: 2
 early_stop_patience: 4
 label_radiation: 1
-class_weights: null  # null이면 ADTOF 원본 [1.078, 1.353, 3.414, 1.144, 1.768]
+class_weights: null  # null이면 [1.078, 1.353, 3.414, 1.144, 1.768, 1.144] (ADTOF 원본 + 페달은 하이햇 값)
 tom_weight_mult: 2.0
 pedal_weight_mult: 2.0
 tom_window_frac: 0.5

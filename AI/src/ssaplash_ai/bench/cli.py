@@ -1,24 +1,15 @@
-"""벤치마크 명령줄 진입점 (설계 3-6절). AI/ 폴더에서 실행.
+"""벤치마크 명령줄 진입점. AI/ 폴더에서 실행.
 
-- check-data: 데이터셋 yaml → 곡 수·길이 합·누락 파일·패드별 타격 수 (S15P31A307-103, -108)
+- check-data: 데이터셋 yaml → 곡 수·길이 합·누락 파일·패드별 타격 수
 - run: 모델 yaml 목록 × 데이터셋 yaml → 결과 CSV, 보고서, 분리 wav(선택), MLflow run
 - report: 결과 CSV 1개 이상 → 모델별 요약 표(md), 곡별 CSV, 그래프 PNG 2종
 - run-transcription: 채보 모델 yaml 목록 × 데이터셋 yaml(타격 정답 있는 것) × 입력 1가지 → 결과 CSV,
-  라벨별 개수 CSV, 보고서, 예측 MIDI(선택), MLflow run (S15P31A307-109)
-- report-transcription: 채보 결과 CSV 1개 이상 → 묶음별 요약 표(md), 곡별 CSV, 그래프 PNG 2종
-- rule-features: ADTOF + 드럼 킷 분리 특징(타격 시각·분리 트랙)을 곡마다 npz로 저장 (S15P31A307-163)
+  라벨별 개수 CSV, 보고서, 예측 MIDI(선택), MLflow run
+- report-transcription: 채보 결과 CSV 1개 이상 → 묶음별 요약 표(md), 곡별 CSV, 그래프 PNG 2~3종
+- rule-features: ADTOF + 드럼 킷 분리 특징(타격 시각·분리 트랙)을 곡마다 npz로 저장
 - rule-eval: 저장한 특징 + 규칙 후보 yaml → 패드별 F1·탐/심벌 배정 정확도·혼동표, MLflow run
 - tom-pitch: 정답 탐 타격의 음높이 분포와 고정 경계 후보, 곡 하나 빼고 확인
 - relog: 지난 결과 폴더(벤치마크·규칙 채점·파인튜닝·체크포인트 평가)나 로컬 mlruns를 MLflow에 다시 기록
-  (설계 CHART-003-mlflow-relog)
-
-예
-  uv run ssaplash-bench check-data configs/bench/datasets/musdb18hq_test.yaml
-  uv run ssaplash-bench run --models configs/bench/models/msst/scnet_large.yaml \\
-      --dataset configs/bench/datasets/musdb18hq_test_clip30.yaml --out data/results
-  uv run ssaplash-bench report data/results/<runId>/results.csv --out data/results/<runId>
-  uv run ssaplash-bench run-transcription --models configs/bench/transcribers/mock/mock_clicks.yaml \\
-      --dataset configs/bench/datasets/synth_v1.yaml --input drums --out data/results
 """
 
 from __future__ import annotations
@@ -66,7 +57,7 @@ def check_data(config_paths: Sequence[Path]) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
-    """벤치마크 실행 → 보고서 → MLflow 기록 (설계 4-1절)."""
+    """벤치마크 실행 → 보고서 → MLflow 기록."""
     from ssaplash_ai.bench import report as report_mod
     from ssaplash_ai.bench.runner import RunOptions, log_run, run_benchmark
 
@@ -121,7 +112,7 @@ def report(args: argparse.Namespace) -> int:
 
 
 def run_transcription_cmd(args: argparse.Namespace) -> int:
-    """채보 벤치마크 실행 → 보고서 → MLflow 기록 (채보 설계 4-5절)."""
+    """채보 벤치마크 실행 → 보고서 → MLflow 기록."""
     from ssaplash_ai.bench.report import transcription_summary as ts
     from ssaplash_ai.bench.report import write_transcription_report
     from ssaplash_ai.bench.runner import (
@@ -152,7 +143,7 @@ def run_transcription_cmd(args: argparse.Namespace) -> int:
     else:
         summary = ts.summarize(ts.load_results([result.csv_path]))
         summary_metrics = ts.summary_metrics_by_model(summary)
-        # 패드별 F1 (S15P31A307-163): 규칙을 바꾼 run끼리 MLflow에서 패드 단위로 비교
+        # 패드별 F1: 규칙을 바꾼 run끼리 MLflow에서 패드 단위로 비교
         hits = ts.load_hits_by_class([result.csv_path])
         for model, values in ts.label_f1_metrics(hits).items():
             summary_metrics.setdefault(model, {}).update(values)
@@ -186,7 +177,8 @@ def run_transcription_cmd(args: argparse.Namespace) -> int:
 
 def rules_params(model_configs: Sequence[Path]) -> dict[str, object]:
     """채보 모델 yaml의 규칙값(탐 경계 등)을 MLflow 파라미터로. 모델이 하나면 `rules.{키}`, 여럿이면
-    `rules.{모델}.{키}`. 규칙이 없는 모델은 건너뜀. 기본값은 어댑터 기본값으로 채움 (S15P31A307-163)."""
+    `rules.{모델}.{키}`. rules가 없는 다른 어댑터 모델은 건너뜀. 빠진 키는 adtof_drumsep 기본값으로 채움
+    (strum_crnn rules에도 같은 기본값이 붙음)."""
     from ssaplash_ai.bench.transcribers import TranscriberConfig
     from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import rules_with_defaults
 
@@ -303,10 +295,14 @@ def relog_cmd(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ssaplash-bench", description="드럼 분리 벤치마크 하네스")
+    parser = argparse.ArgumentParser(
+        prog="ssaplash-bench", description="드럼 분리·채보 벤치마크 하네스"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    check = sub.add_parser("check-data", help="데이터셋 yaml을 읽어 곡 수·길이·누락 파일 출력")
+    check = sub.add_parser(
+        "check-data", help="데이터셋 yaml을 읽어 곡 수·길이·누락 파일·패드별 타격 수 출력"
+    )
     check.add_argument("configs", nargs="+", type=Path, help="configs/bench/datasets/*.yaml")
 
     run_p = sub.add_parser("run", help="모델 × 데이터셋 벤치마크 실행, 보고서·MLflow 기록까지")
@@ -425,7 +421,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="후보 yaml. `candidates: [{name, rules}]` 또는 `{name, rules}` 하나",
     )
     re_p.add_argument(
-        "--out", required=True, help="결과 폴더 (candidates.csv·confusion.csv·summary.md)"
+        "--out",
+        required=True,
+        help="결과 폴더 (candidates.csv·confusion.csv·by_song.csv·summary.md·candidates.yaml)",
     )
     re_p.add_argument(
         "--two-tom-upper",

@@ -1,6 +1,7 @@
-"""채보 JSON 격자 원점(offsetMs)·bpm 측정 (S15P31A307-242, 설계 "격자 원점·bpm 계산 수정" 인수 조건 16·17).
+"""채보 JSON 격자 원점(offsetMs)·bpm 측정 (설계 "격자 원점·bpm 계산 수정" 인수 조건 16·17).
 
 드럼 트랙에 Beat This!만 돌려 서비스와 같은 코드(`estimate_from_beats`, `grid_origin_ms`)로 bpm·offsetMs를 만듦.
+서비스가 그 뒤에 하는 노트 기준 원점 보정·DBN 후처리·tempoMap은 넣지 않음.
 노트는 다시 만들지 않고 이미 있는 chart.json의 timeMs를 씀. 비교용으로 이전 방식(원점 0, 박 간격 평균 bpm)도 같이 잼.
 
 - 데모 곡: 폴더마다 drums.flac·chart.json(채보 결과 폴더). 16분 격자 밖 노트 비율(칸 중심에서 stepMs/4 초과,

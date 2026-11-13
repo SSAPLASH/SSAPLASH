@@ -1,13 +1,13 @@
-"""처리 시간·메모리 측정 (설계 3-5절).
+"""처리 시간·메모리 측정.
 
 - 시간: 벽시계(perf_counter). RTF = 처리 시간 / 곡 길이는 runner가 계산.
 - RAM: 측정 구간 동안 별도 스레드가 50ms마다 프로세스 RSS를 읽어 최댓값. psutil.
 - GPU 이름: torch.cuda.get_device_name. 이어하기 중 다른 GPU가 배정됐는지 확인하는 용도.
 - VRAM: torch.cuda.max_memory_allocated. 구간 시작에 peak 통계를 초기화하고 끝에 읽음.
-  torch가 없거나 CUDA를 못 쓰면 nan. (ADR-011: 본측정은 GPU, RAM은 CSV 보조값)
+  torch가 없거나 CUDA를 못 쓰면 nan.
 - VRAM(nvidia-smi): 다른 프로세스(별도 환경 채보 스크립트)의 GPU 메모리는 torch로 못 읽으므로
-  nvidia-smi를 주기적으로 읽어 "측정 중 최댓값 − 시작값"을 씀 (채보 설계 3-10절). 프로세스 전체 값이라
-  곡별이 아니고 다른 프로세스 사용량이 섞일 수 있음(U7).
+  nvidia-smi를 주기적으로 읽어 "측정 중 최댓값 − 시작값"을 씀. 프로세스 전체 값이라
+  곡별이 아니고 다른 프로세스 사용량이 섞일 수 있음.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def cuda_available(device: str) -> bool:
 
 
 def gpu_name(device: str) -> str:
-    """cuda 장치의 이름(예: NVIDIA A100-SXM4-40GB). CUDA를 못 쓰면 빈 문자열 (설계 #7-2 gpuName)."""
+    """cuda 장치의 이름(예: NVIDIA A100-SXM4-40GB). CUDA를 못 쓰면 빈 문자열."""
     if not cuda_available(device):
         return ""
     import torch

@@ -1,4 +1,4 @@
-"""패드 어휘·타격 표 테스트 (설계 3-2절, 인수 조건 4)."""
+"""패드 어휘·타격 표 테스트."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def test_to_five_groups():
     assert hits["pad"].tolist() == ["CRASH", "KICK"]
 
 
-# ---- 모델 예측 표: 거친 라벨 (채보 설계 3-8절) ----
+# ---- 모델 예측 표: 거친 라벨 ----
 
 PRED_TABLE = {
     "kick": "KICK",

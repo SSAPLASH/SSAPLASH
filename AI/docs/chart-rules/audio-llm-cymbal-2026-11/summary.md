@@ -57,8 +57,8 @@ Gemini 3.8 Flash (SSAFY GMS, 분리 드럼, Ozzy Osbourne No More Tears 142마�
 
 ## 5. 다시 해 볼 조건
 
-- 공개 오디오 LLM이 악기 구분 벤치마크에서 하이햇과 라이드를 가려낸다는 결과가 나올 때. 새 모델은 `cymrole_audio_llm.py`에 백엔드 하나를 더하면 같은 120마디로 바로 비교할 수 있음
+- 공개 오디오 LLM이 악기 구분 벤치마크에서 하이햇과 라이드를 가려낸다는 결과가 나올 때. 새 모델은 MR !411 이력의 `cymrole_audio_llm.py`에 백엔드 하나를 더하면 같은 120마디로 비교할 수 있음
 
 ## 6. 다시 돌리는 법
 
-`AI/README.md`의 "오디오 LLM 마디 단위 하이햇·라이드 시험" 절. 문제 만들기(`cymrole_audio_cases.py`)는 로컬 채보 결과(`data/results/judge/*/private/chart.npz`), 박 위치, 실제 곡 학습 가중치와 11/09 AI 판정 실험 스크립트(`judge_cymrole.py`·`judge_song.py`·`judge_recheck.py`, 저장소에 없음)가 있어야 돎. 판정·채점·서버 실행은 만들어 둔 문제 폴더만 있으면 돎.
+실험 스크립트 `cymrole_audio_*.py`와 서버 노트북은 S15P31A307-324에서 저장소에서 뺐고 MR !411 이력에 남아 있음. 문제 만들기(`cymrole_audio_cases.py`)는 로컬 채보 결과(`data/results/judge/*/private/chart.npz`), 박 위치, 실제 곡 학습 가중치와 11/09 AI 판정 실험 스크립트(`judge_cymrole.py`·`judge_song.py`·`judge_recheck.py`, 저장소에 없음)가 있어야 돎. 판정·채점·서버 실행은 만들어 둔 문제 폴더만 있으면 돎.

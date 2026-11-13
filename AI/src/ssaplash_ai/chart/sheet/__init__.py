@@ -1,4 +1,4 @@
-"""드럼 악보 → 채보 변환 (S15P31A307-292, 설계 CHART-003-sheet-to-chart). 지금은 MusicXML만.
+"""드럼 악보 → 채보 변환. 지금은 MusicXML만.
 
 MIDI 드럼 파일은 BE `POST /api/v1/songs/midi`가 바꿈. PDF·사진은 드럼 OMR이 없어 받지 않음.
 """

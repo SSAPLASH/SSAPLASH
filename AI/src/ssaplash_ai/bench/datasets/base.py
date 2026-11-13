@@ -1,10 +1,7 @@
 """벤치마크 데이터셋 공통 인터페이스.
 
-설계 문서 3-1절 "데이터셋 항목"을 그대로 옮긴 것. 로더는 곡 하나를
-원곡·정답 드럼·정답 반주 배열로 반환. runner는 이 모양을 전제로 동작.
-배열은 전부 float32, 모양은 (채널 2, 샘플), 샘플레이트는 44100으로 통일.
-채보 벤치마크(설계 CHART-003-transcription-benchmark 3-1절)용 타격 표 hits_true는
-온셋 시각 배열 onsets_true와 별개 필드. 분리 하네스는 onsets_true만 사용.
+로더는 곡 하나를 원곡·정답 드럼·정답 반주 배열로 돌려줌. 배열은 float32, 모양 (채널 2, 샘플), 44100Hz.
+채보 벤치마크용 타격 표 hits_true는 온셋 시각 배열 onsets_true와 별개 필드.
 """
 
 from __future__ import annotations
@@ -26,7 +23,7 @@ SAMPLE_RATE = 44100
 
 @dataclass
 class SongItem:
-    """곡 하나. 설계 3-1절 표의 필드를 snake_case로 옮긴 것."""
+    """곡 하나."""
 
     dataset: str
     song_id: str
@@ -198,7 +195,7 @@ class BaseDataset(abc.ABC):
         return len(self.song_ids())
 
     def check(self) -> CheckReport:
-        """파일 유무와 길이만 확인. 오디오 본문은 읽지 않음."""
+        """파일 유무·길이·패드별 타격 수 확인. 오디오 본문은 읽지 않음."""
         missing: list[str] = []
         total = 0.0
         hits_by_pad: dict[str, int] | None = None

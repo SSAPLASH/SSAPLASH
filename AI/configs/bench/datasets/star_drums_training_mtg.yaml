@@ -1,5 +1,5 @@
 # STAR Drums training 분할 중 MTG-Jamendo 출처 (약 4,807곡). 실제 반주 + 샘플 킷 20개 합성 드럼, 탐 3종 정답.
-# 채보 모델 탐 파인튜닝의 학습 데이터 (S15P31A307-164). test(MedleyDB 출처)·validation과 곡이 겹치지 않음.
+# 채보 모델 탐 파인튜닝의 학습 데이터. test(MedleyDB 출처)·validation과 곡이 겹치지 않음.
 # 오디오는 MTG-Jamendo 개별 라이선스(비상업 포함)라 학습 결과도 비상업 조건. 서버 data/star_drums/full 링크 아래에 있음.
 name: star_drums_training_mtg
 kind: star

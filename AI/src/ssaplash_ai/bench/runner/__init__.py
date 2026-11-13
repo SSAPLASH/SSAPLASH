@@ -4,6 +4,7 @@
 - benchmark_runner: 분리 모델 × 곡 반복, 예외 격리, 결과 CSV
 - transcription_runner: 채보 모델 × 곡 반복, 입력 3가지, 결과 CSV + 라벨별 개수 CSV
 - mlflow_tracking: MLflow run 기록
+- relog: 지난 결과 폴더·로컬 mlruns를 MLflow에 다시 기록
 """
 
 from ssaplash_ai.bench.runner.benchmark_runner import (

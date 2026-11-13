@@ -3,7 +3,8 @@
 # ptrace_scope=1이라 떠 있는 워커에는 붙을 수 없으므로, py-spy가 워커를 자식 프로세스로 직접 띄움.
 # 사용법: JupyterHub 터미널에서 bash ~/ssaplash/notebooks/profile_worker.sh
 # 순서: 운영 워커 멈춤 → py-spy 아래에서 운영 워커 시작 → 사이트 업로드 한 곡 기록 → 테스트용 BE로 같은 곡 기록
-#       → 운영 워커 원래대로 다시 시작 → 결과 zip
+#       → 운영 워커를 CPU 0~127번에 묶어 다시 시작 → 결과 zip
+# 운영 워커는 taskset -c 0-127로 띄움 (docs/트러블슈팅-워커-처리-속도.md)
 set -u
 AI=~/ssaplash/S15P31A307/AI
 RES=~/ssaplash/results/profile-$(date +%m%d_%H%M)
@@ -46,7 +47,7 @@ M=$(grep -c "채보 모델 올림" "$LOG")
     pkill -INT -f "py-spy record .*prod_profile" # SIGINT를 받으면 py-spy가 기록을 파일로 씀
 ) &
 WATCH=$!
-"$PYSPY" "${SPY_OPTS[@]}" -o "$RES/prod_profile.txt" -- "$AI/.venv/bin/ssaplash-worker" run \
+taskset -c 0-127 "$PYSPY" "${SPY_OPTS[@]}" -o "$RES/prod_profile.txt" -- "$AI/.venv/bin/ssaplash-worker" run \
     >> "$LOG" 2>&1 < /dev/null
 kill "$WATCH" 2>/dev/null # py-spy가 다른 이유로 먼저 끝났을 때 대기 루프 정리
 stop_workers
@@ -58,7 +59,7 @@ echo "[5/6] 테스트용 BE로 같은 곡 기록 (2분 안팎). 이동안 사이
 grep -A4 "설정별 중앙값" "$RES/fake/summary.md" | tail -1 | tee "$RES/fake_job.txt"
 
 echo "[6/6] 운영 워커를 원래 방식으로 다시 시작하고 결과를 묶음"
-setsid nohup uv run --no-sync ssaplash-worker run >> "$LOG" 2>&1 < /dev/null &
+setsid nohup taskset -c 0-127 uv run --no-sync ssaplash-worker run >> "$LOG" 2>&1 < /dev/null &
 sleep 5
 pgrep -f "$PAT" | head -1 | tee ~/ssaplash/worker.pid
 tail -300 "$LOG" > "$RES/worker_tail.log"

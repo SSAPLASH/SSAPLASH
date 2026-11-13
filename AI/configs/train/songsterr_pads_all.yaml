@@ -1,4 +1,4 @@
-# 11/08 실제 곡(Songsterr 인기곡) 학습. scripts/make_songsterr_splits.py가 만듦 (설계 CHART-003-songsterr-expand-train)
+# 11/08 실제 곡(Songsterr 인기곡) 학습. scripts/make_songsterr_splits.py가 만듦
 classes: pads
 base_checkpoint: null
 window_frames: 412

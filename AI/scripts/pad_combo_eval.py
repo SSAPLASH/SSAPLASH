@@ -1,5 +1,6 @@
-"""지금 서비스 채보와 8패드 학습 모델을 패드별로 섞어 채점 (11/08, expand.md 다음 후보).
+"""ADTOF + 드럼 킷 분리 채보와 8패드 학습 모델을 패드별로 섞어 채점 (11/08, expand.md 다음 후보).
 
+아래에서 서비스 채보·서비스 규칙은 11/08 당시 서비스이던 ADTOF + 드럼 킷 분리(`adtof_drumsep.yaml`)를 가리킴.
 곡마다 서비스 채보(기본 ADTOF 또는 --base 가중치 + 서비스 규칙)와 8패드 모델 채보를 만들고 아래 조합을 셈.
 - base: 서비스 그대로
 - cym_name: 서비스 크래시·라이드 타격의 이름만, 50ms 안 8패드 모델의 가장 가까운 크래시·라이드 이름으로
@@ -69,7 +70,7 @@ def main() -> int:
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--features", default="data/rule_features")
     ap.add_argument("--pads", required=True, help="8패드 출력 가중치")
-    ap.add_argument("--base", default="default", help="서비스 채보 가중치. default면 기본 ADTOF")
+    ap.add_argument("--base", default="default", help="ADTOF 가중치. default면 원래 ADTOF 가중치")
     ap.add_argument("--prefix", default="", help="조합 이름 앞에 붙일 말")
     ap.add_argument("--enst-c1-ride", action="store_true")
     ap.add_argument("--device", default="cuda")

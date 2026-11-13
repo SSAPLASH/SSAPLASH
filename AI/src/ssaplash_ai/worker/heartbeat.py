@@ -1,7 +1,7 @@
-"""heartbeat 스레드와 eventSeq 번호 (설계 2장 heartbeat, 3-4절 진행률, 3-6절 임대 상실).
+"""heartbeat 스레드와 eventSeq 번호.
 
 - EventSeq: heartbeat와 failure가 같이 쓰는 증가 번호. BE는 중복·이전 순번을 무시하므로 잠금으로 순서를 지킴
-- Heartbeat: 추론과 독립된 스레드. heartbeat_sec마다 현재 진행률을 보냄. 409(임대 만료·다른 attempt)면
+- Heartbeat: 추론과 독립된 스레드. heartbeat_sec마다 현재 진행률을 보냄. 409(임대 만료·다른 attempt)·404·422면
   lease_lost를 켜고 더 보내지 않음. 연결 오류는 로그만 남기고 다음 주기에 다시 보냄
 """
 
@@ -68,11 +68,11 @@ class Heartbeat:
 
     @property
     def lease_lost(self) -> bool:
-        """409를 받아 임대를 잃음. JobRunner가 단계 경계에서 확인해 중단."""
+        """409·404·422를 받아 임대를 잃음. JobRunner가 단계 경계에서 확인해 중단."""
         return self._lease_lost.is_set()
 
     def set_progress(self, value: int) -> None:
-        """진행률 갱신. 줄어드는 값은 무시(3-4절: 진행률은 줄지 않음)."""
+        """진행률 갱신. 줄어드는 값은 무시."""
         value = _clamp(value)
         with self._lock:
             if value > self._progress:
