@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { kitGuideLabels } from '@/features/free/domain/kitGuide';
-import { KitGuideLabels, KitGuideSwitch } from './KitGuide';
+import { kitGuideLabels } from '@/domain/kit/kitGuide';
+import { KitGuideLabels } from '@/components/drum/KitGuideLabels';
+import { KitGuideSwitch } from './KitGuide';
 
 afterEach(() => cleanup());
 

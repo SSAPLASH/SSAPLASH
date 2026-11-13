@@ -90,6 +90,14 @@ export function overlapLineText(other: PadId, deg: number): string {
   return `${label}${josaWaGwa(label)} ${Math.round(deg)}°`;
 }
 
+/** 보정 팝업 결과 화면의 겹침 한 줄(SETUP-fixed-kit-noir D11): 「스네어와 스몰탐이 너무 가까워요(14°)」 */
+export function overlapPairText(a: PadId, b: PadId, deg: number): string {
+  const la = PAD_META[a].label;
+  const lb = PAD_META[b].label;
+  const subj = josaEulReul(lb) === '를' ? '가' : '이';
+  return `${la}${josaWaGwa(la)} ${lb}${subj} 너무 가까워요(${Math.round(deg)}°)`;
+}
+
 /** 결과 배너 안내 한 줄(v0.2) */
 export const RESULT_BANNER_ADVICE_TEXT = '드럼을 눌러 [다시 치기]로 그 자리를 다시 잡을 수 있어요';
 

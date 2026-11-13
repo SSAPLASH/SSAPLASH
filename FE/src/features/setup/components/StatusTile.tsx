@@ -1,6 +1,7 @@
-// Figma Setup / StatusTile 505:2449 — 드럼 세팅 상단 2열 상태 타일(스틱 연결·시작 위치 보정). 요약만 보여 주는 버튼이고, 누르면 단계 팝업(StepDialog)이 열린다(PLAY-004 D8).
+// Figma Setup / StatusTile 505:2449 — 드럼 세팅 상단 2열 상태 타일(스틱 연결·시작 위치 보정). 요약만 보여 주는 버튼이고(호버·누름 울림은 StrikeButton), 누르면 단계 팝업(StepDialog)이 열린다(PLAY-004 D8).
 // on=초록(연결됨·보정됨), urgent=빨강(복귀 띠가 떠 있는 필요 단계), attention=강조(모자란 단계), off=회색. 상태 판정은 하지 않는다(호출자가 정한다).
 import type { SetupStepStatus } from '@/domain/kit/calibration/setupSteps';
+import { StrikeButton } from './StrikeButton';
 import './setup.css';
 
 interface Props {
@@ -33,7 +34,7 @@ export function StatusTile({ id, title, status, statusText, summary, actionText,
   const needed = status === 'needed';
   const tone = on ? 'on' : needed && urgent ? 'urgent' : needed && attention ? 'attention' : 'off';
   return (
-    <button type="button" id={id} className={`setup-tile is-${tone}${statusWarn ? ' is-todo' : ''}`} aria-haspopup="dialog" disabled={disabled} onClick={onOpen}>
+    <StrikeButton type="button" id={id} className={`setup-tile is-${tone}${statusWarn ? ' is-todo' : ''}`} aria-haspopup="dialog" disabled={disabled} onClick={onOpen}>
       <span className="setup-tile-top">
         <span className="setup-tile-dot" aria-hidden="true" />
         <span className="setup-tile-title">{title}</span>
@@ -44,6 +45,6 @@ export function StatusTile({ id, title, status, statusText, summary, actionText,
       </span>
       <span className="setup-tile-summary">{summary}</span>
       {reason && <span className="setup-tile-reason">{reason}</span>}
-    </button>
+    </StrikeButton>
   );
 }

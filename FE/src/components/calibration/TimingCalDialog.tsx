@@ -146,9 +146,11 @@ interface DialogProps {
   intro?: boolean;
   /** [적용]으로 값이 저장됐을 때, onClose 전에 부른다 */
   onApplied?: () => void;
+  /** 화면별 모양을 덧입힐 클래스(드럼 세팅은 setup-timing-dialog). 기본 모양은 timing-cal-dialog */
+  className?: string;
 }
 
-export function TimingCalDialog({ onClose, intro = false, onApplied }: DialogProps) {
+export function TimingCalDialog({ onClose, intro = false, onApplied, className }: DialogProps) {
   const titleId = useId();
   const snap = useSyncExternalStore(timingCalSession.subscribe, timingCalSession.snapshot);
   const currentOffsetMs = useSettings((s) => s.audioOffsetMs);
@@ -184,7 +186,7 @@ export function TimingCalDialog({ onClose, intro = false, onApplied }: DialogPro
   };
 
   return (
-    <Dialog labelledBy={titleId} onClose={onClose} className="timing-cal-dialog">
+    <Dialog labelledBy={titleId} onClose={onClose} className={`timing-cal-dialog${className ? ` ${className}` : ''}`}>
       <TimingCalView
         snap={snap}
         currentOffsetMs={currentOffsetMs}

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { useLive } from '@/store/liveStore';
+import './StageLights.css';
 
 /** 연결 순간 깜빡임(목업 beam-on, 1.1초). 계단식이라 키프레임마다 steps(1, end) */
 const BEAM_ON: Keyframe[] = [
