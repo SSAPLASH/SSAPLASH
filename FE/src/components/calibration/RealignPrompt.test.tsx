@@ -15,6 +15,13 @@ describe('RealignPrompt', () => {
     expect(both).toContain('realign-hand wait');
   });
 
+  it('unstable이면 문구 앞에 「방향이 흔들렸어요.」가 붙는다', () => {
+    const html = renderToStaticMarkup(<RealignPrompt hands={[0, 1]} done={[false, false]} unstable onSkip={noop} />);
+    expect(html).toContain('방향이 흔들렸어요. 스네어를 왼손·오른손 한 번씩 쳐 주세요');
+    const plain = renderToStaticMarkup(<RealignPrompt hands={[0, 1]} done={[false, false]} onSkip={noop} />);
+    expect(plain).not.toContain('방향이 흔들렸어요');
+  });
+
   it('variant 클래스와 role=status, [건너뛰기]는 항상', () => {
     for (const v of ['card', 'row', 'band'] as const) {
       const html = renderToStaticMarkup(<RealignPrompt hands={[0]} done={[false, false]} variant={v} onSkip={noop} />);
