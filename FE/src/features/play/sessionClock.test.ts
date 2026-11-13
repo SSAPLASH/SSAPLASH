@@ -1,7 +1,7 @@
 // PlayClock 검증. 가짜 시각·클릭·반주만 쓰고 AudioContext는 쓰지 않는다.
 import { describe, expect, it } from 'vitest';
 import { PlayClock, type ClockAccompaniment } from './sessionClock';
-import { RhythmSession } from './RhythmSession';
+import { RhythmSession } from '@/engine/RhythmSession';
 import type { Chart } from '@/domain/song/chart';
 
 /** 120BPM(박 500ms, 마디 2000ms), 카운트다운 켬(preRollMs = 5000 + 1마디 2000 = 7000, 클릭은 마지막 1마디 4박) */

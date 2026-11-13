@@ -1,7 +1,7 @@
 // 시작 위치 보정(PLAY-004): 연결된 손마다 ReferenceCapture를 돌려, 모든 손이 3초 안정되면 기준 자세를 다시 잡는다.
 // 2타 보정 상태 기계(calibrationSession)와 섞지 않고 화면 훅에 둔다.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ReferenceCapture } from '@/engine/ReferenceCapture';
+import { ReferenceCapture } from './ReferenceCapture';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { inputManager } from '@/runtime/sources';
 import type { StickId } from '@/domain/events';

@@ -14,7 +14,7 @@ import { useSettings } from '@/store/settingsStore';
 import { BUILTIN_CHARTS } from '@/domain/song/chart';
 import type { UserMe } from '@/domain/account/auth';
 import type { SongDetail } from '@/domain/song/songCatalog';
-import { PlayClock } from '@/engine/sessionClock';
+import { PlayClock } from './sessionClock';
 import { SheetPage } from './SheetPage';
 
 // 오디오 시계 대기: 테스트가 끝낼 때까지 걸어 두거나(manual) 바로 통과시킨다

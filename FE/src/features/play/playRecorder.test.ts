@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Chart } from '@/domain/song/chart';
 import type { ResolvedHit } from '@/domain/events';
-import { RhythmSession } from './RhythmSession';
+import { RhythmSession } from '@/engine/RhythmSession';
 import { PlayRecorder } from './playRecorder';
 
 const chart: Chart = {

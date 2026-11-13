@@ -3,8 +3,8 @@
 // 모의 오디오: currentTime은 화면 시계와 같이 흐르되 멈춤 구간이 있고, 들리는 시각 = currentTime − 출력 지연.
 // 화면 시계 시각 at에 들리게 하려는 소리의 오디오 시각 = 들리는 시각 변환, 그게 currentTime보다 이르면 늦음.
 import { describe, expect, it } from 'vitest';
-import { PlayClock, type ClockAccompaniment } from './sessionClock';
-import { RhythmSession } from './RhythmSession';
+import { PlayClock, type ClockAccompaniment } from '@/features/play/sessionClock';
+import { RhythmSession } from '@/engine/RhythmSession';
 import { createChartAutoplay } from './chartAutoplay';
 import type { AudioReading } from '@/domain/time/audioTimeline';
 import type { Chart } from '@/domain/song/chart';

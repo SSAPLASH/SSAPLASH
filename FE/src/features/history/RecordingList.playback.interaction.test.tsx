@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // 녹음 보관함 재생 흐름 (설계 COACH-연주-기록-화면-개편, 338 녹음 재생바): 재생 → 일시정지 → 이어 재생, 재생바로 위치 옮기기, 다른 행 재생.
-// 재생기는 상태만 흉내 내는 가짜로 바꾼다(소리·타이머 없음). 재생기 자체는 engine/recordingPlayer.test.ts가 본다.
+// 재생기는 상태만 흉내 내는 가짜로 바꾼다(소리·타이머 없음). 재생기 자체는 features/history/recordingPlayer.test.ts가 본다.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,7 +70,7 @@ vi.mock('@/domain/play/recordingView', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/domain/play/recordingView')>();
   return { ...actual, recordingRowLabel: vi.fn(actual.recordingRowLabel) };
 });
-vi.mock('@/engine/recordingPlayer', () => ({ recordingPlayer: fake.player }));
+vi.mock('./recordingPlayer', () => ({ recordingPlayer: fake.player }));
 
 const summary = (over: Partial<RecordingSummary> = {}): RecordingSummary => ({
   id: 1,
