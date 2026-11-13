@@ -112,7 +112,12 @@ export type DiagBody =
   /** yawDriftMonitor가 SET_YAW_OFFSET을 보낸 순간. 적용 확인(PARAM_ACK 0x21)은 패킷 줄에 있다 */
   | ({ type: 'yawCorrect' } & DiagYawCorrection)
   /** 부호가 연달아 뒤집혀 그 손의 자동 보정을 멈춤. medianDeg는 보내지 않은 오차 */
-  | { type: 'yawHalt'; stickId: 0 | 1; flips: number; medianDeg: number; appliedDeg: number };
+  | { type: 'yawHalt'; stickId: 0 | 1; flips: number; medianDeg: number; appliedDeg: number }
+  /**
+   * 그 손에 최소 타격 세기(SET_PARAM 0x03)를 보낸 순간(PLAY-004 ③). dps는 보낸 값, medianDps는 보정 타격 중앙값(없으면 null),
+   * samples는 계산에 쓴 표본 수. reason: capture 보정 저장 / linked 손이 붙음·설정 변경 / reset 저장값이 지워져 기본(400)으로 돌아감
+   */
+  | { type: 'minPeak'; stickId: 0 | 1; dps: number; medianDps: number | null; samples: number; reason: 'capture' | 'linked' | 'reset' };
 
 /** anchors 줄의 앵커 하나. radius는 판정에 쓰는 값(override 반영) */
 export interface DiagAnchor {
