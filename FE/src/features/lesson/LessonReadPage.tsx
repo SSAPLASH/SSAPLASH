@@ -1,4 +1,4 @@
-// 입문 코스 알아보기 레슨 (Jira 331, 설계 SETUP-입문-코스 4-3). 악보가 흐르지 않는다. 음표를 한 줄로 늘어놓고
+// 학습 코스 알아보기 레슨 (Jira 331, 설계 SETUP-입문-코스 4-3, SETUP-학습-코스-중급 4-3). 화면 이름·돌아가는 곳은 그 레슨의 코스다. 악보가 흐르지 않는다. 음표를 한 줄로 늘어놓고
 // 지금 칠 음표의 드럼을 치면 다음 음표로 넘어간다. 틀리면 넘어가지 않고 답을 알려 준다. 시간·판정 기록은 없다.
 // 소리·텔레메트리는 자유 연습처럼 공용 경로(setSoundOnHit)가 내고, 이 화면은 마지막 타격만 구독한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,7 +8,19 @@ import { setSoundOnHit } from '@/runtime/hitSound';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
 import { touchSource } from '@/runtime/sources';
-import { LESSONS_PATH, lessonDisplayTitle, lessonPath, nextLesson, readDeviceHint, readPrompt, readSequence, readStep } from '@/domain/play/lesson';
+import {
+  LESSONS_PATH,
+  courseFinishText,
+  courseMeta,
+  coursePath,
+  lessonDisplayTitle,
+  lessonPath,
+  nextLesson,
+  readDeviceHint,
+  readPrompt,
+  readSequence,
+  readStep,
+} from '@/domain/play/lesson';
 import { sensorRegistry } from '@/runtime/sensorRegistry';
 import type { PadVisualState } from '@/domain/kit/drumKit';
 import type { PadId } from '@/domain/kit/pads';
@@ -30,7 +42,6 @@ import { InlineError } from '@/components/ui/feedback/InlineError';
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 
 export function LessonReadPage() {
-  useShell({ title: '입문 코스' });
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const songId = Number(useParams().songId);
@@ -48,6 +59,9 @@ export function LessonReadPage() {
 
   const lesson = list?.items.find((l) => l.songId === songId && l.kind === 'READ');
   const next = lesson && list ? nextLesson(list.items, lesson.songId) : null;
+  // 레슨을 찾기 전·못 찾으면 학습 코스 전체 이름
+  const courseName = lesson ? courseMeta(lesson.course).name : '학습 코스';
+  useShell({ title: courseName });
   const [seq, setSeq] = useState<PadId[] | null>(null);
   const [chartError, setChartError] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -144,11 +158,11 @@ export function LessonReadPage() {
     return { ...states, ...hitStates };
   }, [showAnswer, target, hitStates]);
 
-  const toCourse = () => navigate(LESSONS_PATH);
+  const toCourse = () => navigate(lesson ? coursePath(lesson.course) : LESSONS_PATH);
   const back = (
     <div className="lesson-read-back">
       <Button variant="text" size="sm" onClick={toCourse}>
-        ← 입문 코스
+        {`← ${courseName}`}
       </Button>
     </div>
   );
@@ -158,7 +172,7 @@ export function LessonReadPage() {
       return (
         <main className="main">
           <InlineError size="lg" onRetry={() => void load(true)}>
-            입문 코스를 불러오지 못했어요.
+            학습 코스를 불러오지 못했어요.
           </InlineError>
         </main>
       );
@@ -174,8 +188,8 @@ export function LessonReadPage() {
       <main className="main">
         <EmptyState
           title="레슨을 찾을 수 없어요"
-          description="입문 코스에서 다시 골라 주세요."
-          action={<Button onClick={toCourse}>입문 코스로</Button>}
+          description="학습 코스에서 다시 골라 주세요."
+          action={<Button onClick={toCourse}>학습 코스로</Button>}
         />
       </main>
     );
@@ -198,7 +212,7 @@ export function LessonReadPage() {
         {deviceHint && !done && (
           <div className="notice col">
             <span>{deviceHint}</span>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/setup', { state: { returnTo: pathname, returnLabel: '입문 코스' } })}>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/setup', { state: { returnTo: pathname, returnLabel: courseName } })}>
               드럼 세팅
             </Button>
           </div>
@@ -237,7 +251,7 @@ export function LessonReadPage() {
               레슨 완료!
             </h2>
             <p className="lesson-done-text">
-              음표 {seq.length}개를 모두 쳤어요. {next ? '다음 스테이지가 열렸어요.' : '입문 코스를 모두 마쳤어요.'}
+              음표 {seq.length}개를 모두 쳤어요. {courseFinishText(lesson, next)}
             </p>
             {save === 'failed' && (
               <InlineError onRetry={complete} retryLabel="다시 저장">
