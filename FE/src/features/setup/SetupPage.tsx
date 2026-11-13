@@ -110,19 +110,23 @@ function yawDriftText(drift: [YawDriftStatus | null, YawDriftStatus | null], con
   const fmt = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}°`;
   const applied: string[] = [];
   let unconfirmed = false;
+  let halted = false;
   let pending: number | null = null;
   drift.forEach((st, i) => {
     if (!st || !connected[i]) return;
+    if (st.halted) halted = true;
     if (st.appliedDeg !== 0) {
       applied.push(`${names[i]} ${fmt(st.appliedDeg)}`);
       if (st.acked === false) unconfirmed = true;
     }
-    const cooling = st.lastSentAt !== null && performance.now() - st.lastSentAt < DRIFT_COOLDOWN_MS;
+    // 멈춘 손은 뒤따르는 보정이 없으므로 그 손의 오차로는 「잠시 뒤 보정」을 알리지 않는다
+    const cooling = !st.halted && st.lastSentAt !== null && performance.now() - st.lastSentAt < DRIFT_COOLDOWN_MS;
     if (pending === null && st.lastErrorDeg !== null && Math.abs(st.lastErrorDeg) >= DRIFT_MIN_DEG && cooling) pending = st.lastErrorDeg;
   });
   const parts: string[] = [];
   if (applied.length) parts.push(`방위각 보정 ${applied.join(' · ')}${unconfirmed ? ' (미확인)' : ''}`);
   if (pending !== null) parts.push(`방위각 드리프트 감지(${Math.round(pending)}°) · 잠시 뒤 보정`);
+  if (halted) parts.push('자동 보정 멈춤(방향 흔들림)');
   return parts.length ? parts.join(' / ') : null;
 }
 
