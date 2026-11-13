@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLessons } from '@/api/play/lessons';
@@ -227,12 +227,12 @@ describe('결과 화면 학습 코스 띠', () => {
     expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=103&chart=203&start=1');
   });
 
-  it('70% 미만이면 재도전 안내와 [다시 하기], 마지막 레슨 통과는 [코스로]만', async () => {
+  it('70% 미만이면 재도전 안내와 [코스로]만(다시 하기는 결과 화면 아래 버튼이 맡는다), 마지막 레슨 통과는 [코스로]만', async () => {
     at('/result/x', <LessonResultBand log={log(202, 1399)} />);
     const band = await screen.findByRole('status');
     expect(within(band).getByText('정확도 70%를 넘기면 통과예요.')).toBeTruthy();
-    fireEvent.click(within(band).getByRole('button', { name: '다시 하기' }));
-    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=102&chart=202&start=1');
+    expect(within(band).queryByRole('button', { name: '다시 하기' })).toBeNull();
+    expect(within(band).getByRole('button', { name: '코스로' })).toBeTruthy();
     expect(useLessons.getState().localPassed.size).toBe(0);
     cleanup();
     at('/result/x', <LessonResultBand log={log(203, 2000)} />);
@@ -267,6 +267,79 @@ describe('결과 화면 학습 코스 띠', () => {
     cleanup();
     at('/result/x', <LessonResultBand log={log(202, 2000, 'RHYTHM')} />);
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+// 설계 SETUP-학습-코스-자동-넘김 4-1·4-3: 방금 친 결과(fresh)에서 통과하면 3초 뒤 다음 레슨으로 넘어간다
+describe('결과 화면 띠의 자동 넘김', () => {
+  const log = (playId: string, chartId: number, score: number) =>
+    ({ playId, mode: 'SHEET', chartId, sourceNoteCount: 20, notes: new Array(20).fill({}), summary: { score } }) as unknown as PlayLog;
+  const pass = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(fetchLessons).mockResolvedValue(course([lesson(1), lesson(2), lesson(3)]));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('통과하면 남은 초를 보이고 3초 뒤 다음 연주 레슨을 자동 시작 주소로 연다', async () => {
+    at('/result/a1', <LessonResultBand log={log('a1', 202, 1400)} fresh />);
+    const band = await screen.findByRole('status');
+    expect(within(band).getByText('3초 뒤 다음 레슨으로 넘어가요.')).toBeTruthy();
+    expect(within(band).getByRole('button', { name: '지금 가기' })).toBeTruthy();
+    await pass(1000);
+    expect(within(band).getByText('2초 뒤 다음 레슨으로 넘어가요.')).toBeTruthy();
+    await pass(2000);
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=103&chart=203&start=1&auto=1');
+  });
+
+  it('[지금 가기]는 바로 간다', async () => {
+    at('/result/a2', <LessonResultBand log={log('a2', 202, 1400)} fresh />);
+    fireEvent.click(within(await screen.findByRole('status')).getByRole('button', { name: '지금 가기' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=103&chart=203&start=1&auto=1');
+  });
+
+  it('[머무르기]나 화면 조작이면 멈추고 [다음 레슨]·[코스로]가 남는다. 이때 [다음 레슨]은 자동 시작 없이 간다', async () => {
+    at('/result/a3', <LessonResultBand log={log('a3', 202, 1400)} fresh />);
+    const band = await screen.findByRole('status');
+    fireEvent.click(within(band).getByRole('button', { name: '머무르기' }));
+    expect(within(band).getByText('다음 스테이지가 열렸어요.')).toBeTruthy();
+    await pass(5000);
+    expect(where()).toBe('/result/a3');
+    expect(within(band).getByRole('button', { name: '코스로' })).toBeTruthy();
+    fireEvent.click(within(band).getByRole('button', { name: '다음 레슨' }));
+    expect(where()).toBe('/sheet?tab=lessons&course=beginner&song=103&chart=203&start=1');
+    cleanup();
+    at('/result/a4', <LessonResultBand log={log('a4', 202, 1400)} fresh />);
+    const again = await screen.findByRole('status');
+    fireEvent.pointerDown(document.body);
+    expect(within(again).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    await pass(5000);
+    expect(where()).toBe('/result/a4');
+  });
+
+  it('통과 못 함·코스 마지막 레슨·지난 결과(fresh 아님)는 세지 않는다', async () => {
+    at('/result/b1', <LessonResultBand log={log('b1', 202, 1399)} fresh />);
+    expect(within(await screen.findByRole('status')).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    cleanup();
+    at('/result/b2', <LessonResultBand log={log('b2', 203, 2000)} fresh />);
+    expect(within(await screen.findByRole('status')).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    cleanup();
+    at('/result/b3', <LessonResultBand log={log('b3', 202, 1400)} />);
+    const band = await screen.findByRole('status');
+    expect(within(band).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    await pass(5000);
+    expect(where()).toBe('/result/b3');
+  });
+
+  it('같은 결과 화면으로 돌아오면(뒤로 가기) 다시 세지 않는다', async () => {
+    at('/result/c1', <LessonResultBand log={log('c1', 202, 1400)} fresh />);
+    await screen.findByText('3초 뒤 다음 레슨으로 넘어가요.');
+    cleanup();
+    at('/result/c1', <LessonResultBand log={log('c1', 202, 1400)} fresh />);
+    const band = await screen.findByRole('status');
+    expect(within(band).queryByText(/초 뒤 다음 레슨/)).toBeNull();
+    expect(within(band).getByRole('button', { name: '다음 레슨' })).toBeTruthy();
   });
 });
 
