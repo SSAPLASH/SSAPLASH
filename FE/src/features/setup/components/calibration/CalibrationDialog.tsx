@@ -1,6 +1,6 @@
 // 패드 보정 팝업(SETUP-fixed-kit-noir D5, 안 B). 드럼 세팅의 [새로 보정]·[다시 보정]을 누르면 calibration.mode가 capture가 되고, 그동안 이 팝업이 열린다.
 // 열림은 호출자(SetupPage)가 마운트 여부로 정한다. 바깥을 눌러도 닫지 않는다(실수로 진행을 날리지 않게, U6): Esc와 [그만하기]만 calibrationSession.cancelCapture()를 부른다.
-// 껍데기만 맡는다: 위쪽 작은 라벨(무엇을 보정 중인지) + [그만하기], 본문은 CalibrationStage(큰 안내·진행 점·드럼 그림·손별 타격 점·결과 화면). 계산은 하지 않는다.
+// 껍데기만 맡는다: 위쪽 작은 라벨(무엇을 보정 중인지) + [그만하기], 본문은 CalibrationStage(큰 안내·진행 점·드럼 그림과 그 위 첫 안내·손별 타격 점·결과 화면). 계산은 하지 않는다.
 import { Button } from '@/components/ui/action/Button';
 import { Dialog } from '@/components/ui/overlay/Dialog';
 import { calibrationSession } from '@/runtime/calibrationSession';
@@ -28,7 +28,7 @@ export function CalibrationDialog({ presetName, onSave }: CalibrationDialogProps
           그만하기
         </Button>
       </div>
-      <CalibrationStage onSave={onSave} />
+      <CalibrationStage onSave={onSave} notice />
     </Dialog>
   );
 }
