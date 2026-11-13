@@ -52,6 +52,8 @@ const CAPTURING = {
     lastAccepted: null,
     radiusOverrides: {},
     base: [null, null],
+    spreadStreak: [0, 0],
+    gapHints: [],
   },
   realign: null,
   hands: [0, 1],
