@@ -1270,7 +1270,7 @@
   border-color: var(--warn);
 }
 
-/* 타격 확인: 좁으면 그림 아래 목록, 무대가 720px 이상으로 넓으면 그림 왼쪽 위에 떠 있는 글래스 카드(3행). 낮은 화면에서 무대 아래쪽은 스크롤해야 보이므로 위에 둔다.
+/* 타격 확인: 좁으면 그림 아래 목록, 무대가 720px 이상으로 넓으면 그림 가운데 위(킥 위 탐 사이 빈자리)에 떠 있는 글래스 카드(3행). 왼쪽 위는 크래시를 가려 옮겼다. 낮은 화면에서 무대 아래쪽은 스크롤해야 보이므로 위에 둔다.
  * 떠 있는 카드는 포인터를 받지 않는다(아래 그림·센서 면을 가리지 않게) */
 .setup-kit-stage > .setup-hit {
   margin-top: var(--space-s);
@@ -1278,11 +1278,12 @@
 @container (min-width: 720px) {
   .setup-kit-stage > .setup-hit {
     position: absolute;
-    left: 0;
+    left: 50%;
     top: 0;
     z-index: 2;
     box-sizing: border-box;
-    width: 248px;
+    width: 220px;
+    transform: translateX(-50%);
     gap: 4px;
     margin: 0;
     padding: 12px 14px 8px;
