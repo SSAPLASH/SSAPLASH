@@ -25,22 +25,21 @@ public class OAuth2FlowException extends RuntimeException {
 	}
 
 	private final Reason reason;
-	private final String providerError;
+	private final boolean accessDenied;
 
 	public OAuth2FlowException(Reason reason, String detail) {
-		this(reason, detail, null);
+		this(reason, detail, false);
 	}
 
-	private OAuth2FlowException(Reason reason, String detail, String providerError) {
+	private OAuth2FlowException(Reason reason, String detail, boolean accessDenied) {
 		super(detail == null ? reason.name() : reason.name() + ": " + detail);
 		this.reason = reason;
-		this.providerError = providerError;
+		this.accessDenied = accessDenied;
 	}
 
-	/** 제공자가 돌려준 {@code error} 값. 형식 밖의 값은 로그에 그대로 남기지 않도록 잘라 둔다. */
+	/** 제공자 원문을 저장하지 않고 동의 거부 여부만 보관한다. */
 	public static OAuth2FlowException providerError(String error) {
-		var value = error.length() > 64 ? error.substring(0, 64) : error;
-		return new OAuth2FlowException(Reason.PROVIDER_ERROR, "error=" + value, value);
+		return new OAuth2FlowException(Reason.PROVIDER_ERROR, null, ACCESS_DENIED.equals(error));
 	}
 
 	public Reason getReason() {
@@ -49,7 +48,7 @@ public class OAuth2FlowException extends RuntimeException {
 
 	/** FE에 넘기는 {@code error} 코드. 사용자가 동의를 거부한 경우만 따로 구분한다. */
 	public String errorCode() {
-		return (reason == Reason.PROVIDER_ERROR && ACCESS_DENIED.equals(providerError)) ? ACCESS_DENIED : OAUTH_FAILED;
+		return (reason == Reason.PROVIDER_ERROR && accessDenied) ? ACCESS_DENIED : OAUTH_FAILED;
 	}
 
 }
