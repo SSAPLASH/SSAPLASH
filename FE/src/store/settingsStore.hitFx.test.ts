@@ -8,8 +8,8 @@ describe('hitFxTheme', () => {
     useSettings.getState().setHitFxTheme('auto');
   });
 
-  it('설정 버전은 24, 기본값은 auto', () => {
-    expect(SETTINGS_VERSION).toBe(24);
+  it('설정 버전은 25, 기본값은 auto', () => {
+    expect(SETTINGS_VERSION).toBe(25);
     expect(useSettings.getInitialState().hitFxTheme).toBe('auto');
   });
 

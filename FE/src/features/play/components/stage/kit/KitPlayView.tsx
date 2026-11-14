@@ -7,7 +7,7 @@ import type { HitFx } from '@/domain/events';
 import type { Judgement } from '@/domain/play/judgement';
 import type { KeyMap } from '@/domain/kit/keyMap';
 import type { RhythmSession } from '@/engine/RhythmSession';
-import { FONT, paintHitFx, paintPad } from '@/components/drum/kitPadPaint';
+import { FONT, paintHitFx, paintPad } from './kitPadPaint';
 import { chordGroups, MISS_SHRINK_MS, nextTargets, visibleNotes } from './kitPlayDraw';
 
 export interface KitPlayViewProps {
