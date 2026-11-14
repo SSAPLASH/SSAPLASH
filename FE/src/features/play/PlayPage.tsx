@@ -917,14 +917,11 @@ function PlayPageBody() {
             onFrame={onFrame}
             fxSource={laneFx.source}
             topInset={GAME_HUD_INSET}
-            // 판정선 아래는 연결 구역이라 타이밍 막대는 콤보 아래에 둔다
-            topOverlay={
-              <>
-                <ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />
-                {settings.timingBar && (
-                  <TimingBar source={laneFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
-                )}
-              </>
+            topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
+            overlay={
+              settings.timingBar ? (
+                <TimingBar source={laneFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
+              ) : undefined
             }
           />
         }
