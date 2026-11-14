@@ -35,7 +35,10 @@ import { CoachHandChip } from '@/features/play/components/stage/coach/CoachHandC
 import { HitReadout } from '@/features/play/components/stage/HitReadout';
 import { StartDialog } from '@/features/play/components/start/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/kit/device/pedalStatus';
-import { smallKitSpec } from '@/domain/kit/drumKit';
+import { visualPadOf } from '@/domain/kit/drumKit';
+import { LaneLinkLayer, type GuideLevel } from '@/features/play/components/stage/link/LaneLinkLayer';
+import { useGameKitScale } from '@/features/play/components/stage/link/useGameKitScale';
+import { useNextBeatLabels } from '@/features/play/components/stage/useNextBeatLabels';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
 import { createFxEmitter, judgedFxEvent, missFxEvent } from '@/components/fx/fxSource';
 import { TimingBar } from '@/features/play/components/stage/TimingBar';
@@ -117,7 +120,8 @@ function PlayPageBody() {
   const location = useLocation();
   const settings = useSettings();
   // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
-  const smallKit = smallKitSpec('play', settings.kitSkin);
+  // 킷은 설정의 드럼 모양과 무관하게 네온이다(레인 색과 같은 3색). 배율은 화면 높이에 따라 0.6 / 0.7
+  const kitScale = useGameKitScale();
   const [searchParams] = useSearchParams();
   // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
@@ -221,6 +225,24 @@ function PlayPageBody() {
   // 킷 미니 뷰: 타격(hit)·판정 색
   const padStates = usePadStates(activeSession);
   const hitSeq = usePadHitSeq();
+  // 가이드(설정 gameGuide): 악보 연습과 같은 「다음 칠 박 번호」를 패드 배지와 레인 → 패드 점선으로 보인다
+  const getGuideTime = useCallback(() => (stageRef.current === 'play' ? (clockRef.current?.songTime() ?? null) : null), []);
+  const { badges: nextBadges } = useNextBeatLabels({ session: activeSession, getSongTime: getGuideTime, enabled: settings.gameGuide });
+  const guideLevels = useMemo(() => {
+    if (!settings.gameGuide) return undefined;
+    const m: Partial<Record<PadId, GuideLevel>> = {};
+    for (const [pad, b] of Object.entries(nextBadges)) if (b) m[pad as PadId] = b.level;
+    return m;
+  }, [nextBadges, settings.gameGuide]);
+  // 네온 킷에는 페달 패드가 없어 페달 배지는 하이햇 패드에 붙인다(하이햇 배지가 있으면 그쪽이 우선)
+  const guideBadges = useMemo(() => {
+    const m = { ...nextBadges };
+    for (const [pad, b] of Object.entries(nextBadges)) {
+      const v = visualPadOf(pad as PadId);
+      if (b && v && v !== pad && !m[v]) m[v] = b;
+    }
+    return m;
+  }, [nextBadges]);
 
   // 그리기 루프·입력 리스너가 최신 상태를 보도록 ref에 복사 (렌더 중 ref 쓰기 회피)
   const stageRef = useRef<Stage>(stage);
@@ -869,7 +891,7 @@ function PlayPageBody() {
     <main>
       <PlayStage
         variant="game"
-        kitTop={smallKit.view === 'top'}
+        link={<LaneLinkLayer flashes={flashes} kitScale={kitScale} guide={guideLevels} />}
         hud={
           <PlayHud
             variant="game"
@@ -895,11 +917,14 @@ function PlayPageBody() {
             onFrame={onFrame}
             fxSource={laneFx.source}
             topInset={GAME_HUD_INSET}
-            topOverlay={<ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />}
-            overlay={
-              settings.timingBar ? (
-                <TimingBar source={laneFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
-              ) : undefined
+            // 판정선 아래는 연결 구역이라 타이밍 막대는 콤보 아래에 둔다
+            topOverlay={
+              <>
+                <ComboDisplay combo={snap.combo} judgement={snap.last?.judgement ?? null} at={snap.last?.at ?? null} />
+                {settings.timingBar && (
+                  <TimingBar source={laneFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
+                )}
+              </>
             }
           />
         }
@@ -914,12 +939,13 @@ function PlayPageBody() {
         kit={
           <div className="coach-kit">
             <LiveDrumKit
-              scale={smallKit.scale}
-              view={smallKit.view}
+              scale={kitScale}
+              view="persp"
               effects
               states={padStates}
               labels={false}
-              skin={settings.kitSkin}
+              skin="neon"
+              badges={settings.gameGuide ? guideBadges : undefined}
               hitSeq={hitSeq}
               fxSource={padFx.source}
               coachPad={coachLine?.target?.kind === 'pad' ? coachLine.target.pad : undefined}
