@@ -1061,7 +1061,7 @@ function SheetPageBody() {
         }
         guide={
           coachLine ? (
-            <GuideSlot mode={coachLine.mode} title={coachLine.title} sub={coachLine.sub} />
+            <GuideSlot mode={coachLine.mode} title={coachLine.title} sub={coachLine.sub} size="lg" />
           ) : (
             <GuideSlot mode="guide" title="악보 연습" sub="세로선에 도달한 마디를 연주하세요." />
           )
