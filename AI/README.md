@@ -84,7 +84,8 @@ AI/
 ├─ configs/coach/        약점 분석 보정 정책, 실시간 코칭 설정
 ├─ configs/ncs/          NCS 기본곡 50곡 표 (songs.csv)
 ├─ scripts/              데이터 준비(make_*·pack_*), 평가·측정(*_eval.py·score_*.py·check_*.py), NCS 기본곡 적재(ncs_*·builtin_reset),
-│                        워커 속도 측정(worker_speed_check·profile_worker.sh), 별도 환경 채보 스크립트(transcribers_ext/)
+│                        워커 속도 측정(worker_speed_check·profile_worker.sh), 별도 환경 채보 스크립트(transcribers_ext/),
+│                        STRUM 채보 모델 학습·채점 스크립트(train_ext/)
 ├─ ext/                  채보 모델 저장소 클론·코드 (ADT_STR, inverse-drum-machine, YourMT3, drum2midi. git 미추적)
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. 패키지·모듈별 폴더(bench 하위 모듈은 bench/ 없이 최상위, 스크립트 테스트는 analysis/·ncs/).
@@ -973,6 +974,31 @@ uv run python scripts/score_heldout.py --run tom_6cls_real_no_d1=data/results/re
 ENST 64곡·MDB 23곡의 탐 3종 F1, 정답에 없는 탐 수, MDB 페달 정밀도·재현율·F1을 비교 모델과 같은 곡으로 나란히 놓고, `tom_6cls` 대비 차이에 곡 단위 95% 구간과 판정 줄을 붙인다. MDB는 모두 MusicDelta 녹음이라 묶음끼리 같은 킷일 수 있어, MDB 결과는 처음 보는 곡 기준으로 읽는다.
 
 체크포인트는 기본 가중치 파일과 같은 `{'model_weights': state_dict, 'model_info': {...}}`이고 `model_info`에 `class_set`(five·five_pedal·five_pedal_cym·pads)·`classes`(원래 라벨: five 계열은 MIDI 피치, 9패드는 패드 이름)·`thresholds`·학습 설정·검증 점수가 들어간다. `adtof` 어댑터는 `checkpoint_path`의 이 정보를 읽어 출력 수·라벨·문턱값을 정하고, 정보가 없는 옛 파일은 지금처럼 5클래스·저장소 기본 문턱값으로 돈다. 9패드 체크포인트는 `configs/bench/transcribers/adtof/adtof_ft_9cls.yaml`처럼 `labels`에 `KICK: KICK`으로 적는다. 페달 출력이 있는 체크포인트를 드럼 킷 분리 어댑터에 쓸 때는 `adtof_drumsep_ft6.yaml`처럼 `labels`에 `HIHAT_PEDAL: HIHAT_PEDAL`을 더한다. 파인튜닝한 가중치의 라이선스는 원본과 같은 CC BY-NC-SA 4.0이다.
+
+### STRUM 채보 모델 학습 (S15P31A307-326)
+
+서비스 기본 채보 모델 `strum`의 가중치를 만든 학습과 채점이다. STRUM의 8종 온셋 CRNN을 실제 발매곡으로 이어서 학습하고, ADTOF + 드럼 킷 분리 모델(`original`)과 같은 곡으로 채점한다. 서비스 가중치는 GPU 서버 학습 `strum_p3_RE`의 `best.pt`이고, 모델 yaml의 패드별 문턱값과 킥 규칙 기준값은 이 채점에서 나온 값이다. 결과는 `docs/bench/other-models-2026-11/summary.md`에 있다. 스크립트는 전부 `scripts/train_ext/`에 있다.
+
+```bash
+# 1. 곡 목록 만들기. STRUM은 가상환경이 달라 음원 경로와 정답을 파일로 풀어 둔다 (data/ext_train/<이름>.json)
+uv run python scripts/train_ext/export_manifest.py --dataset configs/bench/datasets/public_songs_train_full.yaml --name train457
+uv run python scripts/train_ext/export_manifest.py --dataset configs/bench/datasets/public_songs_val.yaml --name val10
+# 2. 학습. 곡 목록 뒤에 :비율을 붙이면 그 비율로 섞는다. best.pt·last.pt·train_log.jsonl이 --out에 생기고 다시 실행하면 이어 간다
+.venv-strum/Scripts/python.exe scripts/train_ext/strum_crnn.py train --train data/ext_train/train457.json --val data/ext_train/val10.json --out data/models/ext_ft/strum_p3 --batch 4 --seconds 10 --lr 3e-5 --spec-augment --mem-fraction 0.85
+# 3. 검증·평가 곡의 프레임별 점수 저장 (data/ext_train/acts/<태그>/<목록>/<곡>.npz)
+.venv-strum/Scripts/python.exe scripts/train_ext/strum_crnn.py dump --tag strum_p3 --checkpoint data/models/ext_ft/strum_p3/best.pt --manifest data/ext_train/val10.json --manifest data/ext_train/test31.json --manifest data/ext_train/holdout38.json --manifest data/ext_train/mdb.json --manifest data/ext_train/enst.json --manifest data/ext_train/enst_sep.json
+# 4. 채점. 검증 10곡으로 시각 옮김과 문턱값을 고르고 평가 데이터 다섯 묶음을 ADTOF + 드럼 킷 분리 모델과 비교한다
+uv run python scripts/train_ext/eval_run.py --tag strum_p3
+# 5. 킥이 탐으로 잡히는 곡 규칙을 붙여 다시 채점
+uv run python scripts/train_ext/song_gain.py --src strum_p3 --dst strum_p3_sg --kind p3 --params data/results/ext_notes/rules_strum_p3.json
+uv run python scripts/train_ext/eval_run.py --tag strum_p3_sg --notes-ready
+```
+
+- 평가 묶음 다섯 개의 곡 목록(`test31`·`holdout38`·`mdb`·`enst`·`enst_sep`)도 1번과 같은 스크립트로 만든다. 묶음별 데이터셋 yaml은 `eval_run.py`의 `SETS`에 있다
+- GPU 서버에서는 `notebooks/ext_models_finetune_server.ipynb`의 1번 셀 하나로 파일 확인부터 학습, 채보, 결과 묶기까지 돈다. 실제 곡만 쓴 `strum_p3_R`과 E-GMD를 30% 섞은 `strum_p3_RE` 두 개를 학습한다. 노트북은 `scripts/train_ext/make_server_notebook.py`가 만들고, 서버에 올릴 zip은 `pack_server_data.py`·`pack_server_models.py`가 묶는다
+- 로컬 GPU 메모리가 8GB면 학습에 `--mem-fraction 0.85`를 준다. 메모리가 넘치면 그 학습만 오류로 끝난다
+- 노트 시각 옮김 값은 허용 오차 ±25ms 점수로 고른다(`scripts/ext_rule_eval.py fit`)
+- 결과 문서에는 같은 때 측정한 Inverse Drum Machine·YourMT3+·ADT_STR의 점수도 있다. 서비스에 쓰지 않는 모델이라 그 학습·채점 코드는 저장소에 넣지 않았다
 
 ## 팀 MLflow에 기록하기
 
