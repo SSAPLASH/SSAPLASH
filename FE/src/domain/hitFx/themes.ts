@@ -3,7 +3,8 @@ import type { KitSkin, PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, FxSheetId, HitFxTheme } from './types';
 import { spawnAuto } from './spawn/auto';
 import { ELECTRIC_PALETTE, spawnElectric } from './spawn/electric';
-import { FIRE_PALETTE, spawnFire } from './spawn/fire';
+import { spawnFire } from './spawn/fire';
+import { FIRE_PALETTE, spawnFireLite } from './spawn/fireLite';
 import { INK_MAX_LIFE_MS, INK_PALETTE, spawnInk } from './spawn/ink';
 import { PIXEL_PALETTE, spawnPixel } from './spawn/pixel';
 import { spawnWater } from './spawn/water';
@@ -100,12 +101,12 @@ const DEFS: Record<HitFxTheme, HitFxThemeDef> = {
   fire: {
     id: 'fire',
     label: '불',
-    description: '불씨가 솟고 불꽃이 치솟아요',
+    description: '불길이 갈라져 솟고 불티가 날아올라요',
     palette: () => FIRE_PALETTE,
     blend: 'additive',
     spawn: spawnFire,
     sheets: FIRE_SHEETS,
-    spawnLite: spawnFire,
+    spawnLite: spawnFireLite,
     spawnReduced,
     maxSpawn: 12,
     bleedTop: 0.35,

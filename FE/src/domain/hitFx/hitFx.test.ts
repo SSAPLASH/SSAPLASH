@@ -311,10 +311,10 @@ describe('jagPath', () => {
   });
 });
 
-describe('fire', () => {
+describe('fire(입자만의 대체 함수 spawnLite)', () => {
   it('가산 합성, 드럼: 불꽃(덩어리)+위로 솟는 불씨, 심벌: 사방 불티, 킥: 아래에서 치솟는 불길', () => {
     expect(hitFxThemeDef('fire').blend).toBe('additive');
-    const get = (pad: string) => spawnAll('fire', 2, 100).find((x) => x.skin === 'electronic' && x.pad === pad)!.list;
+    const get = (pad: string) => spawnAll('fire', 2, 100, false, true).find((x) => x.skin === 'electronic' && x.pad === pad)!.list;
     const drum = get('SNARE');
     expect(drum.some((p) => p.kind === 'blob' && p.vy < 0)).toBe(true);
     expect(drum.filter((p) => p.kind === 'dot').every((p) => p.vy < 0)).toBe(true);
