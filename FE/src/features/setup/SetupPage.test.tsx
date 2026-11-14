@@ -260,11 +260,12 @@ describe('SetupPage 재배치(내 드럼 무대·타격 확인)', () => {
     expect(html).toContain('아무 패드나 쳐 보세요. 맞게 잡히면 그 자리에 불이 들어와요.');
   });
 
-  it('스틱 입력 중단 알림은 타격 확인 카드 안에 있다', async () => {
+  it('스틱 연결 끊김 알림은 타격 확인 카드 안에 있고 제목과 안내 두 줄이다', async () => {
     putSettings({ sensorKind: 'pointer' });
     putLive({ connected: [false, false] });
     const html = await renderSetup();
-    expect(html.indexOf('스틱 입력 중단')).toBeGreaterThan(html.indexOf('class="setup-hit"'));
+    expect(html.indexOf('스틱 연결 끊김')).toBeGreaterThan(html.indexOf('class="setup-hit"'));
+    expect(html).toContain('<strong>스틱 연결 끊김</strong><span>연결 상태를 확인해주세요.</span>');
   });
 });
 

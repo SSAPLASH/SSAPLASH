@@ -628,3 +628,85 @@ describe('HitCapture 타격 세기 표본(PLAY-004 ③)', () => {
     expect(c.peakSpeeds()).toEqual([[], []]);
   });
 });
+
+describe('HitCapture 실수 안내용 기록(v0.4)', () => {
+  it('spreadStreak: 퍼짐 경고가 날 때마다 그 손만 오르고, 그 손이 채우면 0', () => {
+    const c = sync();
+    c.start([0, 1]);
+    expect(c.snapshot().spreadStreak).toEqual([0, 0]);
+    c.onHit(0, P(0, -40), 100);
+    c.onHit(0, P(0, -20), 200); // 20° 퍼짐 → 되돌림
+    expect(c.snapshot().spreadStreak).toEqual([1, 0]);
+    c.onHit(0, P(0, -40), 300);
+    expect(c.snapshot().spreadStreak).toEqual([1, 0]); // 다시 치는 첫 타격으로는 지우지 않는다
+    c.onHit(0, P(0, -20), 400);
+    expect(c.snapshot().spreadStreak).toEqual([2, 0]);
+    twice(c, 0, 0, -40);
+    expect(c.snapshot().spreadStreak).toEqual([0, 0]);
+  });
+
+  it('spreadStreak: 패드가 넘어가거나 redo·restart하면 0', () => {
+    const c = sync();
+    c.start([1]);
+    c.onHit(1, P(0, -40), 100);
+    c.onHit(1, P(0, -20), 200);
+    expect(c.snapshot().spreadStreak).toEqual([0, 1]);
+    twice(c, 1, 0, -40); // 하이햇 끝 → 크래시
+    expect(c.snapshot()).toMatchObject({ target: 'CRASH', spreadStreak: [0, 0] });
+    c.onHit(1, P(30, 0), 300);
+    c.onHit(1, P(30, 20), 400);
+    expect(c.snapshot().spreadStreak).toEqual([0, 1]);
+    c.redo('CRASH');
+    expect(c.snapshot().spreadStreak).toEqual([0, 0]);
+    c.onHit(1, P(30, 0), 500);
+    c.onHit(1, P(30, 20), 600);
+    c.restart();
+    expect(c.snapshot().spreadStreak).toEqual([0, 0]);
+  });
+
+  it('gapHints: 이웃과 가까웠던 패드를 redo하면 손·이웃·각도를 남기고, 그 패드가 채워져 넘어가면 비운다', () => {
+    const c = sync();
+    c.start([0]);
+    twice(c, 0, 0, -40); // 하이햇
+    twice(c, 0, 0, -32); // 크래시: 하이햇과 8°
+    expect(c.snapshot()).toMatchObject({ target: 'SNARE', gapHints: [] });
+    c.redo('CRASH');
+    const hints = c.snapshot().gapHints;
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toMatchObject({ stickId: 0, pad: 'CRASH', near: 'HIHAT' });
+    expect(hints[0].deg).toBeLessThan(20);
+    c.onHit(0, P(30, 0), 100);
+    expect(c.snapshot().gapHints).toHaveLength(1); // 치는 동안은 남는다
+    c.onHit(0, P(30, 1), 200);
+    expect(c.snapshot()).toMatchObject({ target: 'SNARE', gapHints: [] });
+  });
+
+  it('gapHints: 멀리 떨어진 패드를 redo하면 비어 있고, 다른 redo·cancel에서도 비운다', () => {
+    const c = sync();
+    c.start([0]);
+    twice(c, 0, 0, -40);
+    twice(c, 0, 0, -32);
+    twice(c, 0, -30, 40); // 스네어: 멀다
+    c.redo('SNARE');
+    expect(c.snapshot().gapHints).toEqual([]);
+    c.redo('CRASH');
+    expect(c.snapshot().gapHints).toHaveLength(1);
+    c.redo('SNARE');
+    expect(c.snapshot().gapHints).toEqual([]);
+    c.redo('CRASH');
+    expect(c.snapshot().gapHints).toEqual([]); // 크래시는 앞 redo에서 지워져 비교할 앵커가 없다
+    c.cancel();
+    expect(c.snapshot().gapHints).toEqual([]);
+  });
+
+  it('gapHints: 결과 화면(done)에서 redo해도 남긴다', () => {
+    const c = sync();
+    c.start([0], ['HIHAT', 'CRASH']);
+    twice(c, 0, 0, -40);
+    twice(c, 0, 0, -32);
+    expect(c.snapshot().phase).toBe('done');
+    c.redo('HIHAT');
+    expect(c.snapshot()).toMatchObject({ phase: 'capturing', target: 'HIHAT' });
+    expect(c.snapshot().gapHints[0]).toMatchObject({ pad: 'HIHAT', near: 'CRASH' });
+  });
+});

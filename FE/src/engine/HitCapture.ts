@@ -2,6 +2,7 @@
 // 패드가 차면 같은 손의 다른 패드 앵커(이번 세션 끝난 패드 + 세션 밖 base)와 간격을 검사한다.
 // 경고 여부와 상관없이 advanceDelayMs 뒤 자동으로 다음 패드(순서상 안 끝난 첫 패드, 없으면 done)로 간다(v0.2 D3, 멈추지 않는다).
 // 간격 경고(gapWarnings)는 자동 진행 후에도 남고, 다음 패드의 첫 타격이 수락될 때·redo·start/restart·cancel 때 비운다 — 화면의 경고 배너.
+// 실수 안내용(v0.4): 손별 연속 퍼짐 횟수(spreadStreak)와, redo로 다시 치는 패드가 그 직전에 이웃과 너무 가까웠다는 기록(gapHints)을 스냅샷에 싣는다.
 // 소리·스틱 명령·전송은 하지 않는다 — runtime/calibrationSession이 맡는다. 입력 소스와 무관하게 (손, 자세)만 받는다.
 import type { Pose, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
@@ -86,6 +87,10 @@ export interface CaptureSnapshot {
   radiusOverrides: Partial<Record<PadId, number>>;
   /** 세션 밖 패드의 손별 앵커(D14). 결과 화면의 겹침 계산이 세션 앵커와 합친다. 없으면 [null, null] */
   base: HandAnchors;
+  /** 현재 패드에서 손별로 퍼짐 경고가 연속으로 난 횟수(v0.4). 그 손이 채우거나 패드가 바뀌면 0 */
+  spreadStreak: [number, number];
+  /** redo로 다시 치는 패드가 직전에 같은 손 이웃과 minGapDeg 미만이었다(v0.4, 손별 최대 1개). 그 패드가 채워져 넘어가거나 다른 redo·start·cancel에서 비운다 */
+  gapHints: GapWarning[];
 }
 
 type Listener = (s: CaptureSnapshot) => void;
@@ -103,6 +108,8 @@ export class HitCapture {
   private captured: CaptureSnapshot['captured'] = {};
   private warning: CaptureWarning | null = null;
   private gapWarnings: GapWarning[] = [];
+  private spreadStreak: [number, number] = [0, 0];
+  private gapHints: GapWarning[] = [];
   private advanceTimer: ReturnType<typeof setTimeout> | null = null;
   /** 세션 밖 패드의 손별 앵커. 간격 검사에만 쓴다 */
   private base: HandAnchors = [null, null];
@@ -138,6 +145,8 @@ export class HitCapture {
       lastAccepted: this.lastAccepted,
       radiusOverrides: { ...this.radiusOverrides },
       base: [this.base[0], this.base[1]],
+      spreadStreak: [this.spreadStreak[0], this.spreadStreak[1]],
+      gapHints: this.gapHints.map((w) => ({ ...w })),
     };
   }
 
@@ -165,6 +174,8 @@ export class HitCapture {
     this.clearAdvance();
     this.base = base ?? [null, null];
     this.gapWarnings = [];
+    this.gapHints = [];
+    this.spreadStreak = [0, 0];
     this.hands = [...new Set(hands)].sort() as StickId[];
     this.order = order ? order.filter((p) => this.opts.order.includes(p)) : this.opts.order;
     this.index = 0;
@@ -208,6 +219,7 @@ export class HitCapture {
     if (!this.hands.includes(stickId)) return;
     this.hands = this.hands.filter((h) => h !== stickId);
     this.samples[stickId] = [];
+    this.spreadStreak[stickId] = 0;
     if (this.hands.length === 0) {
       this.clearAdvance();
       this.gapWarnings = [];
@@ -221,13 +233,17 @@ export class HitCapture {
 
   /**
    * 특정 패드를 다시: 그 패드의 모든 손 결과를 지우고 index를 그 패드로. 확인 대기 중 [다시]는 현재 패드로 부른다.
-   * done(결과 화면)에서도 부를 수 있다. 다시 친 패드가 끝나면 순서상 안 끝난 첫 패드로(없으면 done, D7)
+   * done(결과 화면)에서도 부를 수 있다. 다시 친 패드가 끝나면 순서상 안 끝난 첫 패드로(없으면 done, D7).
+   * 그 패드가 같은 손 이웃과 minGapDeg 미만이었으면 gapHints에 남긴다(v0.4)
    */
   redo(pad: PadId): void {
     const i = this.order.indexOf(pad);
     if (i < 0) return;
     this.clearAdvance();
     this.gapWarnings = [];
+    // 지우기 전 앵커로 이웃과의 간격을 다시 본다: 가까웠으면 다시 치는 동안 화면이 멀어질 방향을 안내한다
+    this.gapHints = this.checkGaps(pad);
+    this.spreadStreak = [0, 0];
     delete this.captured[pad];
     this.index = i;
     this.samples = [[], []];
@@ -248,6 +264,8 @@ export class HitCapture {
     this.clearAdvance();
     this.samples = [[], []];
     this.wrongHand = null;
+    this.spreadStreak = [0, 0];
+    this.gapHints = [];
     const next = this.order.findIndex((p) => !this.captured[p]?.some((a) => a !== undefined));
     if (next < 0) {
       this.phase = 'done';
@@ -267,6 +285,8 @@ export class HitCapture {
   cancel(): void {
     this.clearAdvance();
     this.gapWarnings = [];
+    this.gapHints = [];
+    this.spreadStreak = [0, 0];
     this.phase = 'idle';
     this.notify();
   }
@@ -304,6 +324,7 @@ export class HitCapture {
       if (spread > this.opts.maxSpreadDeg) {
         // 두 번 친 자리가 너무 다르다: 그 손의 그 패드만 다시
         this.samples[stickId] = [];
+        this.spreadStreak[stickId] += 1;
         this.warning = { pad: target, stickId, spread };
         this.notify();
         return true;
@@ -312,6 +333,7 @@ export class HitCapture {
       const slot = this.captured[target] ?? [undefined, undefined];
       slot[stickId] = { pad: target, pitch: mean.pitch, yaw: mean.yaw, radius: 0, samples: ring.length, spread };
       this.captured[target] = slot;
+      this.spreadStreak[stickId] = 0;
       this.settleIfFilled();
     }
     this.notify();

@@ -403,6 +403,21 @@
   font-size: 16px;
   font-weight: 500;
 }
+/* 연결 끊김 알림: 제목(큰 글씨) + 안내 한 줄 */
+.setup-hit-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-hit-notice strong {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.setup-hit-notice span {
+  font-size: 13px;
+  line-height: 1.4;
+}
 .setup-hitlog {
   display: flex;
   flex-direction: column;
@@ -1595,6 +1610,89 @@
   position: relative;
   height: clamp(300px, calc(100dvh - 340px), 560px);
 }
+/* 첫 안내(CaptureNotice): 드럼 그림 한가운데 큰 글씨 두 줄. 글자는 은은한 네온 화이트, 강조할 말만 은은한 네온 색.
+   뒤 그림이 비치지 않게 가운데만 어둡게 깔고, 사라질 때는 0.5초 페이드. 누를 것이 없으므로 포인터는 통과시킨다.
+   등장은 애플풍: 줄마다 흐림에서 또렷하게 올라오고(둘째 줄은 조금 늦게), 강조할 말 위로 빛이 한 번씩 지나간다 */
+.cal-dialog .cal-notice {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  padding: var(--space-l);
+  text-align: center;
+  pointer-events: none;
+  background: radial-gradient(62% 72% at 50% 50%, color-mix(in srgb, var(--bg-base) 86%, transparent) 0%, color-mix(in srgb, var(--bg-base) 60%, transparent) 55%, transparent 100%);
+  transition:
+    opacity 0.5s ease,
+    visibility 0s linear 0.5s;
+  animation: apple-fade 0.6s ease both;
+}
+.cal-dialog .cal-notice[data-open='false'] {
+  opacity: 0;
+  visibility: hidden;
+}
+.cal-dialog .cal-notice p {
+  margin: 0;
+  color: var(--text-1);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--text-1) 28%, transparent);
+  word-break: keep-all;
+  text-wrap: balance;
+  animation: cal-notice-line 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cal-dialog .cal-notice-main {
+  font-size: clamp(24px, 3.4vw, 42px);
+  font-weight: 700;
+  line-height: 1.3;
+  animation-delay: 0.1s;
+}
+.cal-dialog .cal-notice-sub {
+  font-size: clamp(17px, 2.2vw, 26px);
+  font-weight: 600;
+  line-height: 1.4;
+  animation-delay: 0.28s;
+}
+/* 강조할 말: 글자를 그라디언트로 칠해 밝은 띠가 지나가게 한다. 글자색이 투명이라 번짐은 text-shadow 대신 drop-shadow로 준다 */
+.cal-dialog .cal-notice em {
+  color: var(--brand-text);
+  font-style: normal;
+  text-shadow: none;
+  background: linear-gradient(100deg, var(--brand-text) 42%, #dff5ff 50%, var(--brand-text) 58%) 100% 0 / 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--brand) 45%, transparent));
+  animation: cal-notice-sheen 4.2s cubic-bezier(0.32, 0.72, 0, 1) 1.1s infinite;
+}
+@keyframes cal-notice-line {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes cal-notice-sheen {
+  0% {
+    background-position: 100% 0;
+  }
+  45%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-dialog .cal-notice {
+    transition: none;
+    animation: none;
+  }
+  .cal-dialog .cal-notice p,
+  .cal-dialog .cal-notice em {
+    animation: none;
+  }
+}
 .cal-stage-bottom {
   display: flex;
   flex-direction: column;
@@ -1839,7 +1937,7 @@
   line-height: 1.2;
 }
 .dialog.setup-timing-dialog .timing-cal-text {
-  max-width: 520px;
+  max-width: 560px;
   margin: 0 0 12px;
   font-size: 18px;
   line-height: 1.6;
