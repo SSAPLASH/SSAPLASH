@@ -228,6 +228,37 @@ describe('sampleParticle', () => {
     sampleParticle(q, 160, b);
     expect(a.x).toBe(b.x);
   });
+  it('expo: 처음에 빠르게 올라 1에 가까워진다', () => {
+    const q = particle({ kind: 'dot', x: 0, y: 0, size0: 0, size1: 1, alpha0: 0, alpha1: 1, color: '#fff', lifeMs: 100, ease: 'expo' });
+    const s = createSample();
+    sampleParticle(q, 10, s);
+    expect(s.size).toBeCloseTo(1 - Math.pow(2, -1));
+    sampleParticle(q, 90, s);
+    expect(s.size).toBeGreaterThan(0.99);
+  });
+  it('순간 속도 = 위치 식의 미분(감속·가속 포함)', () => {
+    const q = particle({ kind: 'drop', x: 0, y: 0, vx: 100, vy: -200, ax: 10, ay: 500, drag: 3, color: '#fff', lifeMs: 800, ease: 'linear' });
+    const a = createSample();
+    const b = createSample();
+    sampleParticle(q, 200, a);
+    sampleParticle(q, 201, b);
+    expect(a.vx).toBeCloseTo((b.x - a.x) / 0.001, 0);
+    expect(a.vy).toBeCloseTo((b.y - a.y) / 0.001, 0);
+    const nodrag = particle({ kind: 'drop', x: 0, y: 0, vx: 50, ay: 1000, color: '#fff', lifeMs: 800 });
+    sampleParticle(nodrag, 100, a);
+    expect(a.vx).toBe(50);
+    expect(a.vy).toBeCloseTo(100);
+  });
+  it('hold: 수명의 hold 비율까지 alpha0 유지, 그 뒤 alpha1로', () => {
+    const q = particle({ kind: 'dot', x: 0, y: 0, alpha0: 0.8, alpha1: 0, color: '#fff', lifeMs: 100, hold: 0.5, ease: 'linear' });
+    const s = createSample();
+    sampleParticle(q, 40, s);
+    expect(s.alpha).toBeCloseTo(0.8);
+    sampleParticle(q, 75, s);
+    expect(s.alpha).toBeCloseTo(0.8 * (1 - 0.25));
+    sampleParticle(q, 99.9, s);
+    expect(s.alpha).toBeLessThan(0.01);
+  });
   it('번개 꺾임 단계는 40ms마다 오른다', () => {
     const s = createSample();
     sampleParticle(p, 39, s);

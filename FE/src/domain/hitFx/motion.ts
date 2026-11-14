@@ -17,10 +17,13 @@ export interface FxSample {
   step: number;
   /** 조각 회전각(rad) */
   rot: number;
+  /** 순간 속도(킷 좌표/초). 위치 식을 미분한 값 */
+  vx: number;
+  vy: number;
 }
 
 export function createSample(): FxSample {
-  return { x: 0, y: 0, size: 0, alpha: 0, width: 0, step: 0, rot: 0 };
+  return { x: 0, y: 0, size: 0, alpha: 0, width: 0, step: 0, rot: 0, vx: 0, vy: 0 };
 }
 
 /**
@@ -31,13 +34,19 @@ export function sampleParticle(p: FxParticle, ageMs: number, out: FxSample): boo
   if (ageMs < 0 || ageMs >= p.lifeMs) return false;
   const tq = p.ease === 'step12' ? Math.floor(ageMs / STEP12_MS) * STEP12_MS : ageMs;
   const prog = tq / p.lifeMs;
-  const e = p.ease === 'out' ? 1 - (1 - prog) * (1 - prog) : prog;
+  const e = p.ease === 'out' ? 1 - (1 - prog) * (1 - prog) : p.ease === 'expo' ? 1 - Math.pow(2, -10 * prog) : prog;
   const sec = tq / 1000;
-  const disp = p.drag > 0 ? (1 - Math.exp(-p.drag * sec)) / p.drag : sec;
+  const dk = p.drag > 0 ? Math.exp(-p.drag * sec) : 1;
+  const disp = p.drag > 0 ? (1 - dk) / p.drag : sec;
   out.x = p.x + p.vx * disp + 0.5 * p.ax * sec * sec;
   out.y = p.y + p.vy * disp + 0.5 * p.ay * sec * sec;
   out.size = p.size0 + (p.size1 - p.size0) * e;
-  out.alpha = p.alpha0 + (p.alpha1 - p.alpha0) * e;
+  out.vx = p.vx * dk + p.ax * sec;
+  out.vy = p.vy * dk + p.ay * sec;
+  // hold: 수명의 hold 비율까지 alpha0 유지, 그 뒤 alpha1로 가속하며(p²) 간다
+  const hold = p.hold ?? 0;
+  const ae = hold > 0 ? (prog < hold ? 0 : ((prog - hold) / (1 - hold)) ** 2) : e;
+  out.alpha = p.alpha0 + (p.alpha1 - p.alpha0) * ae;
   out.width = p.w0 + (p.w1 - p.w0) * e;
   out.step = Math.floor(ageMs / BOLT_STEP_MS);
   out.rot = (p.rot ?? 0) + (p.spin ?? 0) * sec;
