@@ -58,6 +58,17 @@
   font-size: 12px;
   line-height: 1.4;
 }
+.play-hud-rate {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-sub) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-sub) 14%, transparent);
+  color: var(--brand-sub);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
 .play-hud-artist {
   margin: 0;
   overflow: hidden;
