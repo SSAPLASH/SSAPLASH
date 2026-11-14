@@ -6,6 +6,7 @@ import { RhythmSession } from '@/engine/RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
 import type { AudioReading } from '@/domain/time/audioTimeline';
 import type { Chart } from '@/domain/song/chart';
+import type { ClickLevel, Subdivision } from '@/domain/time/metronome';
 
 function makeChart(durationMs: number, noteEveryMs = 0): Chart {
   const notes = [];
@@ -36,6 +37,8 @@ interface Opts {
   suspended?: boolean;
   /** 탭이 가려진 화면 시계 구간 [시작, 끝). 이 동안 박 타이머가 1초에 한 번만 돈다(브라우저 타이머 제한) */
   hidden?: [number, number];
+  /** 박 분할(없으면 4분) */
+  subdivision?: Subdivision;
 }
 
 function setup(o: Opts = {}) {
@@ -57,7 +60,7 @@ function setup(o: Opts = {}) {
     if (o.suspended && o.stall && now >= o.stall[0] && now < o.stall[1]) return null;
     return { perfMs: now, ctxSec: ctxAt(now), heardCtxSec: heardAt(now) };
   };
-  const clicks: Array<{ at: number; nowCtx: number }> = [];
+  const clicks: Array<{ at: number; nowCtx: number; level: ClickLevel }> = [];
   const accStarts: Array<{ ctx: number; from: number; nowCtx: number }> = [];
   const accompaniment: ClockAccompaniment = {
     start() {
@@ -87,10 +90,11 @@ function setup(o: Opts = {}) {
     click: () => {
       throw new Error('오디오 시계 기준에서는 화면 시계 click을 쓰지 않음');
     },
-    clickAt: (ctx) => {
-      clicks.push({ at: ctx, nowCtx: ctxAt(now) });
+    clickAt: (ctx, level) => {
+      clicks.push({ at: ctx, nowCtx: ctxAt(now), level });
       return ctx;
     },
+    subdivision: o.subdivision ? () => o.subdivision as Subdivision : undefined,
     audioReading: reading,
     accompaniment,
     clickOn: () => true,
@@ -289,6 +293,21 @@ describe('PlayClock 오디오 시계 기준', () => {
       const i = Math.round(song / s.session.beatMs) + countIn;
       expect(song).toBeCloseTo(beatTimeMs(s.session.chart, i - countIn), 6);
     }
+  });
+
+  it('8분: 사이 박도 반주와 같은 오디오 시계(ctxZero + 반 박 시각)에 예약되고 탭이 가려져도 빠지지 않는다', () => {
+    const hidden: [number, number] = [1000 + 12_510, 1000 + 20_510];
+    const s = setup({ latency: () => 0.6, hidden, subdivision: 2 });
+    s.clock.begin();
+    s.run(1000 + 30_000);
+    const zero = s.accStarts[0].ctx;
+    const countIn = Math.round(s.session.countInMs / s.session.beatMs);
+    expect(s.clicks.length).toBeGreaterThan(80);
+    s.clicks.forEach((c, i) => {
+      expect(c.at).toBeCloseTo(zero + beatTimeMs(s.session.chart, i / 2 - countIn) / 1000, 9);
+      expect(c.at).toBeGreaterThanOrEqual(c.nowCtx);
+      expect(c.level === 'sub').toBe(i % 2 === 1);
+    });
   });
 
   it('audioReading이 없으면 예전 화면 시계 방식으로 돈다', () => {

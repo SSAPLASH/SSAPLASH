@@ -21,6 +21,8 @@ interface Props {
   onSubmit?: FormEventHandler<HTMLFormElement>;
   /** 패널에 덧붙일 클래스 (예: upload-dialog) */
   className?: string;
+  /** 배경(스크림)에 덧붙일 클래스. 창마다 스크림 모양을 달리할 때 쓴다 (예: start-dialog-backdrop) */
+  backdropClassName?: string;
   children: ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function Dialog({
   as = 'div',
   onSubmit,
   className,
+  backdropClassName,
   children,
 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
@@ -64,7 +67,7 @@ export function Dialog({
 
   return (
     <div
-      className="dialog-backdrop"
+      className={backdropClassName ? `dialog-backdrop ${backdropClassName}` : 'dialog-backdrop'}
       onMouseDown={(e) => {
         // 배경을 직접 눌렀을 때만 닫는다(창 안 드래그가 밖에서 끝나는 경우는 제외)
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
