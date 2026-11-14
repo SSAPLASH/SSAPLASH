@@ -1,5 +1,9 @@
 # BE API 서버
 
+## 악보 연습 속도와 연주 기록 (MODE-003)
+
+타격 위치와 리포트 노트 구간은 곡 시각(ms), 타격 오차와 판정 폭은 실제 시간(ms)을 쓴다. 업로드 검증은 곡 시각 차이를 `judgementContext.playbackRate`로 나눈다. 연주 목록과 리포트의 `playbackRate`는 숫자이며 옛 기록은 1이다. 최고 점수·최고 정확도와 추천의 숙련도 기준에는 1배속 기록만 쓰고 최근 연주 시각에는 모든 배율을 포함한다. 내부 약점 분석 요청에도 배율을 전달한다.
+
 ## 곡 난이도와 채보 실패 사유 (269번)
 
 `GET /api/v1/songs`와 `GET /api/v1/songs/{songId}`는 곡별 `songLevel`을 제공한다.
@@ -948,7 +952,7 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 
 `GET /api/v1/plays/best-records?songIds=1,2`는 활성 Bearer 인증 회원의 기록만 조회한다. `songIds`는 양의 64비트 정수 1~100개를 쉼표로 구분한 필수 값이다. 중복 제거 전 100개를 초과하거나 빈 항목·잘못된 값이 있으면 400이다. 중복은 제거한다. 접근 불가·삭제·없는 곡과 기록 없는 곡은 결과에서 생략하며 구분하지 않는다.
 
-응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
+응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. 1배속(미기록 포함)의 `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
 
 곡 선택 화면은 모드에 맞는 전체 단계 중 최고 점수 또는 정확도를 선택하고 연주 준비 화면은 선택한 `chartId`를 쓴다. `bestAccuracy`는 0~100이므로 FE의 0~1 비율로 쓰려면 100으로 나눈다. 이 API 제공은 FE 연동 완료를 뜻하지 않는다.
 
@@ -1172,7 +1176,7 @@ SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하�
 | GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(입문 전부 → 중급, 코스 안 순서대로): `order`(코스 안 순서)·`course`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
 | POST | `/api/v1/lessons/{songId}/completion` | 알아보기 레슨 완료 저장. 본문 없음, 204. 다시 보내도 204이고 처음 시각을 유지 |
 
-- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
+- **통과:** 연주 레슨은 1배속 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
 - **오류:** 로그인 안 함·탈퇴 401, 완료 저장에서 연주 레슨 400 `VALIDATION_FAILED`, 레슨이 아니거나 삭제·비공개 곡 404 `SONG_NOT_FOUND`. 두 API 모두 `Cache-Control: private, no-store`.
 - **탈퇴:** 탈퇴 커밋 뒤 그 회원의 `lesson_completions`를 지운다(`LessonWithdrawalListener`). 연주 기록은 기존 탈퇴 규칙을 따른다.
 - **알려진 점:** AI 배치 뷰 `recommend_songs_v`(V37)는 레슨 곡을 거르지 않는다. 학습 데이터에서 빼야 하면 뷰를 바꾸는 후속 작업이 필요하다.
@@ -1453,7 +1457,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
 
 - 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. 악보 이미지 유무(`notation_status`)는 추천에 쓰지 않는다. 악보 연습은 채보 노트로 그리기 때문이다. `mode`는 값을 검사만 하고 결과에는 영향을 주지 않는다. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
-- **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
+- **기준 밀도:** 최근 1배속 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
 - **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
 - **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.
 - **기록(V34 `recommendation_items`):** 조회할 때마다 노출을 남긴다(`request_id`, `rank`, 위치, 전략, 곡·채보, 점수, 이유 코드, `shown_at`). 클릭은 `clicked_at`. 90일이 지난 기록은 `RecommendationRetention`이 하루에 한 번 지운다(`recommendation.retention-days`). **회원 탈퇴 트랜잭션에서 그 회원의 기록을 같이 지운다**(`WithdrawalService`).
@@ -1464,7 +1468,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 신규 RHYTHM/SHEET 플레이의 세션·전체 타격·기본 리포트를 함께 저장한 뒤 별도 작업에서
 AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트는 AI 응답을 기다리지 않는다.
 `AI_ANALYSIS_BASE_URL` 기본값은 `http://ai-api:8000`이며 로컬 AI 시험 시 해당 서버 주소로 바꾼다.
-요청에는 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
+요청에는 `playbackRate`(미기록이면 1), 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
 넘으면 자르지 않고 실패 처리한다. 연결 1초·응답 3초이며 연결 실패·시간 초과·5xx만 한 번 더 시도한다.
 
 `analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을

@@ -84,6 +84,26 @@ class RecommendationServiceTest {
 		db.update("DELETE FROM users WHERE id IN (?,?)", users);
 	}
 
+	@Test void 느린_기록은_최근성에만_반영한다() {
+		Instant now = Instant.now();
+		UUID practice = play(user, mid, midVersion, 99, now);
+		db.update("UPDATE play_sessions SET mode='SHEET', judgement_context='{\"playbackRate\":0.7}' WHERE id=?", practice);
+		assertThat(service.baselineDensity(user)).isNull();
+
+		long baseVersion = db.queryForObject("SELECT v.id FROM chart_versions v JOIN charts c ON c.id=v.chart_id WHERE c.song_id=?", Long.class, personal);
+		play(user, personal, baseVersion, 90, now.minus(20, ChronoUnit.DAYS));
+		play(user, mid, midVersion, 75, now.minus(20, ChronoUnit.DAYS));
+		var recent = service.recommend(user, Context.SONG_PICKER, null, 10);
+		var item = recent.items().stream().filter(i -> i.song().id() == mid).findFirst().orElseThrow();
+		assertThat(item.reasons()).extracting(RecommendationResponses.Reason::code).contains("RETRY");
+
+		db.update("DELETE FROM play_sessions WHERE id=?", practice);
+		var older = service.recommend(user, Context.SONG_PICKER, null, 10);
+		String score = "SELECT score FROM recommendation_items WHERE request_id=? AND song_id=?";
+		assertThat(db.queryForObject(score, Double.class, recent.requestId(), mid))
+				.isLessThan(db.queryForObject(score, Double.class, older.requestId(), mid));
+	}
+
 	private java.util.List<Long> songIds(RecommendationResponses.Recommendations r) { return r.items().stream().map(i -> i.song().id()).toList(); }
 
 	@Test void HARD_채보가_없는_곡은_난이도가_산정되지_않아_채보_특징도_추천_후보도_없다() {
