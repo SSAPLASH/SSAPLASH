@@ -2,7 +2,8 @@
 import type { KitSkin, PadShape } from '@/domain/kit/drumKit';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, FxSheetId, HitFxTheme } from './types';
 import { spawnAuto } from './spawn/auto';
-import { ELECTRIC_PALETTE, spawnElectric } from './spawn/electric';
+import { spawnElectric } from './spawn/electric';
+import { ELECTRIC_PALETTE, spawnElectricLite } from './spawn/electricLite';
 import { spawnFire } from './spawn/fire';
 import { FIRE_PALETTE, spawnFireLite } from './spawn/fireLite';
 import { INK_MAX_LIFE_MS, INK_PALETTE, spawnInk } from './spawn/ink';
@@ -73,12 +74,12 @@ const DEFS: Record<HitFxTheme, HitFxThemeDef> = {
   electric: {
     id: 'electric',
     label: '전기',
-    description: '번개가 갈라지고 흰 섬광이 번쩍여요',
+    description: '방전이 헤드를 타고 퍼지며 번쩍여요',
     palette: () => ELECTRIC_PALETTE,
     blend: 'additive',
     spawn: spawnElectric,
     sheets: BOLT_SHEETS,
-    spawnLite: spawnElectric,
+    spawnLite: spawnElectricLite,
     spawnReduced,
     maxSpawn: 12,
     bleedTop: 0.35,
