@@ -89,6 +89,26 @@ describe('테마 목록', () => {
   });
 });
 
+describe('테마 정의 · 연속 그림·상한·여백', () => {
+  it('그림 묶음은 물·불·전기 각 4개, 나머지는 빈 목록', () => {
+    expect(hitFxThemeDef('water').sheets).toEqual(['water-side-a', 'water-side-b', 'water-cymbal', 'water-front']);
+    expect(hitFxThemeDef('fire').sheets).toEqual(['fire-side-a', 'fire-side-b', 'fire-cymbal', 'fire-front']);
+    expect(hitFxThemeDef('electric').sheets).toEqual(['bolt-side-a', 'bolt-side-b', 'bolt-cymbal', 'bolt-front']);
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(hitFxThemeDef(t).sheets).toEqual([]);
+  });
+  it('maxSpawn·bleedTop', () => {
+    const v = (t: (typeof HIT_FX_LAB_THEMES)[number]) => [hitFxThemeDef(t).maxSpawn, hitFxThemeDef(t).bleedTop];
+    expect(v('water')).toEqual([16, 0.4]);
+    expect(v('fire')).toEqual([12, 0.35]);
+    expect(v('electric')).toEqual([12, 0.35]);
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(v(t)).toEqual([24, 0.12]);
+  });
+  it('그림 없는 테마의 spawnLite는 spawn과 같다, 테마 라벨은 그대로', () => {
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(hitFxThemeDef(t).spawnLite).toBe(hitFxThemeDef(t).spawn);
+    expect(HIT_FX_THEMES.map((t) => HIT_FX_THEME_LABELS[t])).toEqual(['기본', '전기', '물', '불']);
+  });
+});
+
 describe.each(HIT_FX_LAB_THEMES)('spawn %s', (theme) => {
   const def = hitFxThemeDef(theme);
   it('같은 seq → 같은 결과, 다른 seq → 다른 결과', () => {
@@ -103,8 +123,8 @@ describe.each(HIT_FX_LAB_THEMES)('spawn %s', (theme) => {
       }
     }
   });
-  it('수명(시작 지연 포함)은 maxLifeMs 이하(450, 잉크만 600), 좌표·시간은 유한', () => {
-    expect(def.maxLifeMs).toBeLessThanOrEqual(theme === 'ink' ? 600 : 450);
+  it('수명(시작 지연 포함)은 테마의 maxLifeMs 이하(물·불 640, 전기 360, 잉크 600, 나머지 450), 좌표·시간은 유한', () => {
+    expect(def.maxLifeMs).toBe({ auto: 450, electric: 360, water: 640, fire: 640, ink: 600, pixel: 450 }[theme]);
     for (const r of [...spawnAll(theme, 3, 127), ...spawnAll(theme, 4, 10)]) {
       for (const p of r.list) {
         expect(p.lifeMs + p.delayMs).toBeLessThanOrEqual(def.maxLifeMs);

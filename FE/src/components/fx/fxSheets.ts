@@ -25,8 +25,8 @@ export interface FxSheetStoreOptions {
 export const MIN_DEVICE_MEMORY_GB = 4;
 
 interface Entry {
+  /** 디코드가 끝나면 채워진다. 그 전에는 null */
   image: CanvasImageSource | null;
-  loading: boolean;
 }
 
 function browserLoader(src: string): Promise<CanvasImageSource> {
@@ -38,7 +38,8 @@ function browserLoader(src: string): Promise<CanvasImageSource> {
 
 /** 이 환경에서 그림을 불러와도 되는지: Image가 있고 기기 메모리가 작지 않을 때 */
 function canLoadSheets(): boolean {
-  if (typeof Image === 'undefined') return false;
+  // jsdom 같은 환경에는 Image는 있어도 decode가 없다
+  if (typeof Image === 'undefined' || typeof Image.prototype.decode !== 'function') return false;
   const mem = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
   return !(typeof mem === 'number' && mem < MIN_DEVICE_MEMORY_GB);
 }
@@ -50,20 +51,21 @@ export function createFxSheetStore(options: FxSheetStoreOptions = {}): FxSheetSt
   const entries = new Map<FxSheetId, Entry>();
 
   function start(id: FxSheetId) {
-    const entry: Entry = { image: null, loading: true };
+    const entry: Entry = { image: null };
     entries.set(id, entry);
-    load(SHEET_DEFS[id].src).then(
-      (image) => {
-        // 그동안 버려졌거나 다시 만들어졌으면 이 결과는 무시한다
-        if (entries.get(id) !== entry) return;
-        entry.image = image;
-        entry.loading = false;
-      },
-      () => {
-        // 실패는 "없음"으로 두고 다음 use에서 다시 시도한다
-        if (entries.get(id) === entry) entries.delete(id);
-      },
-    );
+    // load가 동기로 던져도 실패로 다룬다
+    Promise.resolve()
+      .then(() => load(SHEET_DEFS[id].src))
+      .then(
+        (image) => {
+          // 그동안 버려졌거나 다시 만들어졌으면 이 결과는 무시한다
+          if (entries.get(id) === entry) entry.image = image;
+        },
+        () => {
+          // 실패는 "없음"으로 두고 다음 use에서 다시 시도한다
+          if (entries.get(id) === entry) entries.delete(id);
+        },
+      );
   }
 
   return {
