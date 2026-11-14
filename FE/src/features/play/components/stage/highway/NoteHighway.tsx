@@ -208,7 +208,8 @@ export function NoteHighway(props: NoteHighwayProps) {
             .join(' ');
           ctx.fillStyle = C.text3;
           ctx.font = '400 11px Pretendard Variable, Pretendard, sans-serif';
-          ctx.fillText(keys, cx, judgeY + 20);
+          // 판정선 아래는 연결 구역이라 레인 이름 바로 아래에 적는다
+          ctx.fillText(keys, cx, (p.topInset ?? 0) + 32);
         }
       });
 

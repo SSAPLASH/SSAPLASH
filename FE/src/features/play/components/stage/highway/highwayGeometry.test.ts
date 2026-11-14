@@ -17,21 +17,21 @@ const input = (over: Partial<HighwayLocateInput> = {}): HighwayLocateInput => ({
 });
 
 describe('highwayGeometry', () => {
-  it('판정선은 아래에서 90px, 칸 폭은 (폭 − 페달 칸 간격) ÷ 칸 수로 균등', () => {
-    expect(L.judgeY).toBe(510);
+  it('판정선은 아래에서 80px, 칸 폭은 (폭 − 페달 칸 간격) ÷ 칸 수로 균등', () => {
+    expect(L.judgeY).toBe(520);
     expect(L.laneW).toBe(100);
     expect(L.gap).toBe(16);
     expect(HIGHWAY_PEDAL_GAP).toBe(16);
-    expect(L.travel).toBe(480);
+    expect(L.travel).toBe(490);
   });
   it('noteY: dt 0은 판정선, 양수는 위, 음수는 아래', () => {
-    expect(noteY(L, 0, 1400)).toBe(510);
+    expect(noteY(L, 0, 1400)).toBe(520);
     expect(noteY(L, 1400, 1400)).toBe(30);
-    expect(noteY(L, -60, 1400)).toBeGreaterThan(510);
+    expect(noteY(L, -60, 1400)).toBeGreaterThan(520);
   });
   it('레인 geo: 가운데 x, rx = 레인 폭 0.4, ry = 12', () => {
     expect(laneCenterX(L, 2)).toBe(266);
-    expect(laneFxGeo(L, 2, 510)).toEqual({ cx: 266, cy: 510, rx: 40, ry: 12, k: 1 });
+    expect(laneFxGeo(L, 2, 520)).toEqual({ cx: 266, cy: 520, rx: 40, ry: 12, k: 1 });
   });
   it('페달 칸(첫 칸)만 간격 없이 왼쪽 끝, 둘째 칸부터 간격만큼 밀린다', () => {
     expect(laneLeft(L, 0)).toBe(0);

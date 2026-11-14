@@ -8,6 +8,9 @@
   border-radius: var(--radius-panel);
   /* 페달 칸과 나머지 칸 사이 간격에는 레인 바탕을 칠하지 않는다(레인 바탕은 캔버스가 칠한다) */
   background: var(--bg-canvas);
+  /* 판정선 아래 80px(연결 구역, JUDGE_FROM_BOTTOM)은 아래로 갈수록 사라져 연결 층·킷과 이어진다 */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 80px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 80px), transparent 100%);
 }
 .play-highway canvas {
   display: block;
@@ -38,5 +41,12 @@
   left: 50%;
   top: 34px;
   transform: translateX(-50%);
+  /* 콤보 아래에 타이밍 막대를 쌓는다(판정선 아래는 연결 구역) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+  width: max-content;
+  max-width: 100%;
   pointer-events: none;
 }
