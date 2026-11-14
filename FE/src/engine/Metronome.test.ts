@@ -1,6 +1,7 @@
 // 메트로놈 스케줄러 검증. 가짜 시계·타이머·sink만 쓰고 performance.now·실제 타이머는 쓰지 않는다.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { HIDDEN_LOOKAHEAD_MS, LOOKAHEAD_MS, Metronome, START_LEAD_MS, TICK_MS } from './Metronome';
+import type { ClickLevel } from '@/domain/time/metronome';
 
 interface Click {
   atMs: number;
@@ -13,10 +14,12 @@ function setup(opts: { drift?: number } = {}) {
   let tickFn: (() => void) | null = null;
   let audioListener: ((state: string) => void) | null = null;
   const clicks: Click[] = [];
+  const levels: ClickLevel[] = [];
   const m = new Metronome();
   m.bind({
-    click: (atMs, accent) => {
-      clicks.push({ atMs, accent });
+    click: (atMs, level) => {
+      clicks.push({ atMs, accent: level === 'accent' });
+      levels.push(level);
       return atMs + (opts.drift ?? 0);
     },
     ensureAudio: () => Promise.resolve(),
@@ -36,6 +39,7 @@ function setup(opts: { drift?: number } = {}) {
   return {
     m,
     clicks,
+    levels,
     /** 시각을 ms만큼 25ms 틱 단위로 흘린다 */
     advance(ms: number) {
       for (let t = 0; t < ms; t += TICK_MS) {
@@ -237,10 +241,10 @@ describe('Metronome 설정·이벤트', () => {
     await t.m.start();
     t.m.stop();
     expect(seen).toEqual([
-      { playing: false, bpm: 90, beatsPerBar: 4, locked: false },
-      { playing: false, bpm: 90, beatsPerBar: 3, locked: false },
-      { playing: true, bpm: 90, beatsPerBar: 3, locked: false },
-      { playing: false, bpm: 90, beatsPerBar: 3, locked: false },
+      { playing: false, bpm: 90, beatsPerBar: 4, subdivision: 1, locked: false },
+      { playing: false, bpm: 90, beatsPerBar: 3, subdivision: 1, locked: false },
+      { playing: true, bpm: 90, beatsPerBar: 3, subdivision: 1, locked: false },
+      { playing: false, bpm: 90, beatsPerBar: 3, subdivision: 1, locked: false },
     ]);
   });
 
@@ -284,12 +288,12 @@ describe('Metronome 잠금', () => {
       await t.m.start();
       t.m.setBpm(100);
       t.m.lock({ bpm: 120, beatsPerBar: 3 });
-      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, locked: true });
+      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, subdivision: 1, locked: true });
       t.m.setBpm(200);
       t.m.setBeatsPerBar(4);
       t.m.toggle();
       await t.m.start();
-      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, locked: true });
+      expect(t.m.state).toEqual({ playing: false, bpm: 120, beatsPerBar: 3, subdivision: 1, locked: true });
       const n = t.clicks.length;
       t.advance(1000);
       expect(t.clicks).toHaveLength(n);
@@ -307,7 +311,7 @@ describe('Metronome 잠금', () => {
       t.m.onChange((s) => states.push(s.locked));
       t.m.lock({ bpm: 120, beatsPerBar: 4 });
       t.m.unlock();
-      expect(t.m.state).toEqual({ playing: false, bpm: 100, beatsPerBar: 4, locked: false });
+      expect(t.m.state).toEqual({ playing: false, bpm: 100, beatsPerBar: 4, subdivision: 1, locked: false });
       expect(states).toEqual([true, false]);
     });
 
@@ -322,4 +326,92 @@ describe('Metronome 잠금', () => {
       expect(got[0]).toEqual({ index: 0, beatInBar: 0, accent: true, atMs: 5000 });
       expect(got[1]).toMatchObject({ index: 1, beatInBar: 1, accent: false, atMs: 1000 });
     });
+});
+
+describe('Metronome 박 분할 (설계 MODE-002-MODE-003-metronome-subdivision)', () => {
+  const FIRST = 1000 + START_LEAD_MS; // 120BPM: 박 500ms, 사이 박 250ms
+
+  it('8분이면 박마다 2번 울리고 사이 박은 정박 가운데, 박 리스너는 박마다 1번', async () => {
+    const t = setup();
+    const beats: number[] = [];
+    t.m.onBeat((b) => beats.push(b.index));
+    t.m.setSubdivision(2);
+    expect(t.m.state.subdivision).toBe(2);
+    await t.m.start();
+    t.advance(2100);
+    expect(t.clicks.slice(0, 9).map((c) => c.atMs)).toEqual([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000].map((d) => FIRST + d));
+    expect(t.levels.slice(0, 9)).toEqual(['accent', 'sub', 'beat', 'sub', 'beat', 'sub', 'beat', 'sub', 'accent']);
+    expect(beats.slice(0, 5)).toEqual([0, 1, 2, 3, 4]);
+    expect(t.m.stats.scheduled).toBe(t.clicks.length);
+  });
+
+  it('4분(기본)은 사이 박이 없다', async () => {
+    const t = setup();
+    await t.m.start();
+    t.advance(2100);
+    expect(t.m.state.subdivision).toBe(1);
+    expect(t.levels).not.toContain('sub');
+  });
+
+  it('재생 중 4분 → 8분: 박 위치가 이어지고 예약돼 있던 다음 박부터 사이 박이 낀다', async () => {
+    const t = setup();
+    await t.m.start();
+    t.advance(600); // 박 0(FIRST)·박 1(FIRST+500) 예약됨
+    const before = t.clicks.length;
+    t.m.setSubdivision(2);
+    t.advance(1200);
+    const after = t.clicks.slice(before);
+    expect(after.slice(0, 3).map((c) => c.atMs)).toEqual([FIRST + 1000, FIRST + 1250, FIRST + 1500]);
+    expect(t.levels.slice(before, before + 3)).toEqual(['beat', 'sub', 'beat']);
+  });
+
+  it('재생 중 8분 → 4분: 다음이 사이 박이어도 건너뛰고 다음 정박에서 이어진다', async () => {
+    const t = setup();
+    t.m.setSubdivision(2);
+    await t.m.start();
+    t.advance(100); // 틱 0만 예약, 다음은 사이 박(FIRST+250)
+    expect(t.clicks).toHaveLength(1);
+    t.m.setSubdivision(1);
+    t.advance(1600);
+    expect(t.clicks.slice(1, 4).map((c) => c.atMs)).toEqual([FIRST + 500, FIRST + 1000, FIRST + 1500]);
+    expect(t.levels.slice(1)).not.toContain('sub');
+  });
+
+  it('8분에서 BPM을 바꿔도 다음 틱 시각이 그대로이고 그 뒤는 새 BPM의 반 박 간격, 마디 안 위치가 이어진다', async () => {
+    const t = setup();
+    t.m.setSubdivision(2);
+    await t.m.start();
+    t.advance(100); // 다음 틱 = 사이 박(0.5박, FIRST+250)
+    t.m.setBpm(60); // 박 1000ms, 사이 박 500ms
+    expect(t.m.currentBeat()).toBe(-1); // 새 기준점 전에는 -1(4분에서의 기존 동작과 같음)
+    t.advance(1400);
+    expect(t.clicks.slice(1, 4).map((c) => c.atMs)).toEqual([FIRST + 250, FIRST + 750, FIRST + 1250]);
+    expect(t.levels.slice(1, 4)).toEqual(['sub', 'beat', 'sub']);
+    expect(t.m.currentBeat()).toBe(1); // now = 2500, 1박(FIRST+750) 지남
+  });
+
+  it('값이 같으면 변경 알림이 없고, 다르면 한 번 알린다(잠금 중에도 값은 받는다)', () => {
+    const t = setup();
+    const seen: number[] = [];
+    t.m.onChange((s) => seen.push(s.subdivision));
+    t.m.setSubdivision(1);
+    expect(seen).toEqual([]);
+    t.m.setSubdivision(2);
+    expect(seen).toEqual([2]);
+    t.m.lock({ bpm: 72, beatsPerBar: 4 });
+    t.m.setSubdivision(1);
+    expect(t.m.state).toMatchObject({ locked: true, subdivision: 1 });
+  });
+
+  it('탭이 가려져 넓은 창으로 예약해도 8분 틱이 빠지거나 겹치지 않는다', async () => {
+    const t = setup();
+    t.m.setSubdivision(2);
+    await t.m.start();
+    t.setVisibility('hidden');
+    t.tickNow();
+    t.advance(3000);
+    const at = t.clicks.map((c) => c.atMs);
+    at.forEach((v, i) => expect(v).toBe(FIRST + i * 250));
+    expect(new Set(at).size).toBe(at.length);
+  });
 });

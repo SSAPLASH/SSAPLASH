@@ -542,7 +542,7 @@ function PlayPageBody() {
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
-      click: (at, accent) => audioEngine.click(at, accent),
+      click: (at, level) => audioEngine.click(at, level),
       accompaniment: acc.state === 'ready' ? acc : undefined,
       // 게임은 곡 중 클릭을 내지 않는다(E1). 카운트다운 박 소리는 PlayClock이 clickOn과 무관하게 항상 낸다
       clickOn: () => false,
@@ -550,7 +550,7 @@ function PlayPageBody() {
       audioClock: () => audioEngine.clockReading(),
       // 반주·클릭을 오디오 시계에 바로 예약하고 곡 시각을 들리는 오디오 시각에서 계산한다(설계 MODE-001 연주 시계를 오디오 시계 하나로)
       audioReading: () => audioEngine.audioReading(),
-      clickAt: (ctxSec, accent) => audioEngine.clickAtContext(ctxSec, accent),
+      clickAt: (ctxSec, level) => audioEngine.clickAtContext(ctxSec, level),
     });
     clockRef.current = clock;
     clock.begin();

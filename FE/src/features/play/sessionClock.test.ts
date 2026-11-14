@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { PlayClock, type ClockAccompaniment } from './sessionClock';
 import { RhythmSession } from '@/engine/RhythmSession';
 import type { Chart } from '@/domain/song/chart';
+import type { ClickLevel, Subdivision } from '@/domain/time/metronome';
 
 /** 120BPM(박 500ms, 마디 2000ms), 카운트다운 켬(preRollMs = 5000 + 1마디 2000 = 7000, 클릭은 마지막 1마디 4박) */
 function makeSession(durationMs: number, offsetMs = 0, tempoSegments?: Chart['tempoSegments']): RhythmSession {
@@ -24,6 +25,8 @@ function makeSession(durationMs: number, offsetMs = 0, tempoSegments?: Chart['te
 function setup(
   opts: {
     clickOn?: boolean;
+    /** 박 분할. 함수로 주면 예약 때마다 다시 읽힌다(연주 중 변경) */
+    subdivision?: () => Subdivision;
     withAcc?: boolean;
     durationMs?: number;
     offsetMs?: number;
@@ -32,6 +35,7 @@ function setup(
 ) {
   let now = 1000;
   const clicks: { at: number; accent: boolean }[] = [];
+  const levels: ClickLevel[] = [];
   const beats: { beatInBar: number; at: number }[] = [];
   const acc = { starts: [] as [number, number][], resumes: [] as number[], pauses: 0, stops: 0, zero: null as number | null };
   const accompaniment: ClockAccompaniment = {
@@ -60,10 +64,12 @@ function setup(
   const timer = { fn: null as (() => void) | null, sets: 0, clears: 0 };
   let visibility: 'visible' | 'hidden' = 'visible';
   const clock = new PlayClock(session, {
-    click: (at, accent) => {
-      clicks.push({ at, accent });
+    click: (at, level) => {
+      clicks.push({ at, accent: level === 'accent' });
+      levels.push(level);
       return at;
     },
+    subdivision: opts.subdivision,
     accompaniment: opts.withAcc === false ? undefined : accompaniment,
     clickOn: () => opts.clickOn ?? false,
     now: () => now,
@@ -86,6 +92,7 @@ function setup(
     clock,
     session,
     clicks,
+    levels,
     beats,
     acc,
     finished: () => finished,
@@ -282,5 +289,78 @@ describe('PlayClock', () => {
     t.frame(6200);
     expect(t.clock.sync.begin).toBeNull();
     expect(t.clicks.length).toBeGreaterThan(0);
+  });
+});
+
+describe('PlayClock 박 분할 (설계 MODE-002-MODE-003-metronome-subdivision)', () => {
+  // 반주 0초 = 8300, 준비 마디 4박 = 6300·6800·7300·7800 (120BPM, 박 500ms)
+  it('8분 + 클릭 켬: 준비 마디와 곡 중 모두 박마다 2번, 박 표시는 박마다 1번', () => {
+    const t = setup({ clickOn: true, subdivision: () => 2 });
+    t.clock.begin();
+    for (let n = 6000; n <= 9200; n += 50) t.frame(n);
+    expect(t.clicks.map((c) => c.at)).toEqual([6300, 6550, 6800, 7050, 7300, 7550, 7800, 8050, 8300, 8550, 8800, 9050, 9300]);
+    expect(t.levels).toEqual(['accent', 'sub', 'beat', 'sub', 'beat', 'sub', 'beat', 'sub', 'accent', 'sub', 'beat', 'sub', 'beat']);
+    expect(t.beats.map((b) => b.at)).toEqual([6300, 6800, 7300, 7800, 8300, 8800, 9300]);
+    expect(t.beats.map((b) => b.beatInBar)).toEqual([0, 1, 2, 3, 0, 1, 2]);
+  });
+
+  it('8분 + 클릭 끔: 준비 마디는 4분 클릭만, 곡 중에는 소리 없이 박 표시만', () => {
+    const t = setup({ clickOn: false, subdivision: () => 2 });
+    t.clock.begin();
+    for (let n = 6000; n <= 9200; n += 50) t.frame(n);
+    expect(t.clicks.map((c) => c.at)).toEqual([6300, 6800, 7300, 7800]);
+    expect(t.levels).toEqual(['accent', 'beat', 'beat', 'beat']);
+    expect(t.beats.filter((b) => b.at >= 8300).map((b) => b.at)).toEqual([8300, 8800, 9300]);
+  });
+
+  it('subdivision을 안 주면 4분(리듬 게임과 같은 조건)', () => {
+    const t = setup({ clickOn: true });
+    t.clock.begin();
+    for (let n = 6000; n <= 9200; n += 50) t.frame(n);
+    expect(t.levels).not.toContain('sub');
+    expect(t.clicks.map((c) => c.at)).toEqual([6300, 6800, 7300, 7800, 8300, 8800, 9300]);
+  });
+
+  it('빠르기 구간이 있으면 사이 박이 그 구간 bpm의 반 박에 온다', () => {
+    // 0~4박 120bpm(박 500ms), 4박부터 60bpm(박 1000ms)
+    const t = setup({
+      clickOn: true,
+      subdivision: () => 2,
+      durationMs: 5000,
+      tempoSegments: [
+        { beat: 0, startMs: 0, bpm: 120 },
+        { beat: 4, startMs: 2000, bpm: 60 },
+      ],
+    });
+    t.clock.begin();
+    for (let n = 8200; n <= 12400; n += 50) t.frame(n);
+    const song = t.clicks.filter((c) => c.at >= 8300).map((c) => c.at - 8300);
+    expect(song).toEqual([0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 3500, 4000]);
+  });
+
+  it('연주 중 4분 → 8분 → 4분으로 바꾸면 한 박 안에 반영되고 박 표시는 끊기지 않는다', () => {
+    let sub: Subdivision = 1;
+    const t = setup({ clickOn: true, subdivision: () => sub, durationMs: 6000 });
+    t.clock.begin();
+    for (let n = 8200; n <= 9000; n += 50) t.frame(n);
+    sub = 2;
+    for (let n = 9050; n <= 10000; n += 50) t.frame(n);
+    sub = 1;
+    for (let n = 10050; n <= 11400; n += 50) t.frame(n);
+    const song = t.clicks.filter((c) => c.at >= 8300).map((c) => c.at - 8300);
+    // 0.7초에 8분으로: 이미 예약된 1박(500) 뒤 다음 박(1000)부터 사이 박.
+    // 1.7초에 4분으로: 예약 창(200ms) 안이라 이미 예약된 사이 박(1750)은 울리고 다음 정박(2000)부터 4분
+    expect(song).toEqual([0, 500, 1000, 1250, 1500, 1750, 2000, 2500, 3000]);
+    expect(t.beats.filter((b) => b.at >= 8300).map((b) => b.at - 8300)).toEqual([0, 500, 1000, 1500, 2000, 2500, 3000]);
+  });
+
+  it('탭이 가려져 넓은 창으로 예약해도 8분 틱이 빠지거나 겹치지 않는다', () => {
+    const t = setup({ clickOn: true, subdivision: () => 2, durationMs: 6000 });
+    t.clock.begin();
+    t.setVisibility('hidden');
+    for (let n = 6000; n <= 12000; n += 1000) t.tick(n);
+    const at = t.clicks.map((c) => c.at);
+    at.forEach((v, i) => expect(v).toBe(6300 + i * 250));
+    expect(at.length).toBeGreaterThan(20);
   });
 });
