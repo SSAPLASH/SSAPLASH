@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_SPAWN } from '@/domain/hitFx/spawn/util';
+import { hitFxThemeDef } from '@/domain/hitFx/themes';
 import type { FxEvent, FxLocate } from '@/domain/hitFx/types';
 import { createFxEngine } from './fxEngine';
 
@@ -52,12 +52,12 @@ describe('fxEngine 판정 이펙트', () => {
     expect(h.engine.stats().alive).toBe(8);
   });
 
-  it('한 이벤트 상한 24: 테마가 많아도 합쳐서 넘지 않는다', () => {
+  it('한 이벤트 상한 = 판정 파티클(PERFECT 링 1) + 테마 maxSpawn: 테마가 많아도 넘지 않는다', () => {
     for (const theme of ['auto', 'electric', 'water', 'fire', 'ink', 'pixel'] as const) {
       const h = make();
       h.engine.setTheme(theme);
       h.engine.emit(ev({ pad: 'CRASH', velocity: 127, judgement: 'PERFECT', deltaMs: 0 }));
-      expect(h.engine.stats().alive).toBeLessThanOrEqual(MAX_SPAWN);
+      expect(h.engine.stats().alive).toBeLessThanOrEqual(hitFxThemeDef(theme).maxSpawn + 1);
     }
   });
 
