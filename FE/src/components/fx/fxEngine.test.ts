@@ -333,3 +333,38 @@ describe('이펙트 시계(랩용)', () => {
     expect(engine.stats().frameMsAvg).toBe(0);
   });
 });
+
+describe('물 테마 · 그림 준비 여부에 따른 경로(실제 테마)', () => {
+  function run(ready: boolean) {
+    const sheetDraws: unknown[][] = [];
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_t, k) => {
+          if (k === 'createRadialGradient') return () => ({ addColorStop() {} });
+          if (k === 'drawImage') return (...a: unknown[]) => a.length === 9 && sheetDraws.push(a);
+          return () => undefined;
+        },
+        set: () => true,
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    let t = 0;
+    let cb: (() => void) | null = null;
+    const store = { use: () => {}, ready: () => ready, get: () => ({}) as CanvasImageSource };
+    const engine = createFxEngine({ sheets: store, now: () => t, raf: (f) => ((cb = () => f(t)), 1), caf: () => {} });
+    engine.attach({ getContext: () => ctx } as unknown as HTMLCanvasElement, { width: 800, height: 400, scale: 1, offsetX: 0, offsetY: 0, dpr: 1 });
+    engine.setTheme('water');
+    engine.emit(ev(3, 'SNARE', 100));
+    t += 100;
+    cb!();
+    return { sheetDraws, alive: engine.stats().alive };
+  }
+
+  it('준비 전: 입자만(그림을 그리지 않는다), 준비 후: 그림이 그려진다', () => {
+    expect(run(false).sheetDraws).toHaveLength(0);
+    expect(run(false).alive).toBeGreaterThan(0);
+    const ready = run(true);
+    expect(ready.sheetDraws.length).toBeGreaterThanOrEqual(1);
+    expect(ready.alive).toBeLessThanOrEqual(16);
+  });
+});

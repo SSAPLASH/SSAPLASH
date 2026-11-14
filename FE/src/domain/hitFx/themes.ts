@@ -6,7 +6,8 @@ import { ELECTRIC_PALETTE, spawnElectric } from './spawn/electric';
 import { FIRE_PALETTE, spawnFire } from './spawn/fire';
 import { INK_MAX_LIFE_MS, INK_PALETTE, spawnInk } from './spawn/ink';
 import { PIXEL_PALETTE, spawnPixel } from './spawn/pixel';
-import { WATER_PALETTE, spawnWater } from './spawn/water';
+import { spawnWater } from './spawn/water';
+import { WATER_PALETTE, spawnWaterLite } from './spawn/waterLite';
 import { MAX_LIFE_MS, MAX_SPAWN, spawnReduced } from './spawn/util';
 
 export type FxBlend = 'normal' | 'additive';
@@ -85,12 +86,12 @@ const DEFS: Record<HitFxTheme, HitFxThemeDef> = {
   water: {
     id: 'water',
     label: '물',
-    description: '파문이 퍼지고 물방울이 튀었다 떨어져요',
+    description: '물막이 솟아 가닥이 되고 방울로 흩어져요',
     palette: () => WATER_PALETTE,
     blend: 'normal',
     spawn: spawnWater,
     sheets: WATER_SHEETS,
-    spawnLite: spawnWater,
+    spawnLite: spawnWaterLite,
     spawnReduced,
     maxSpawn: 16,
     bleedTop: 0.4,

@@ -10,13 +10,13 @@ import type { FxEvent, FxParticle } from './types';
 
 const ev = (seq: number, pad: FxEvent['pad'], velocity = 100): FxEvent => ({ seq, pad, velocity, mode: 'lab', judgement: null, deltaMs: null, combo: null });
 
-function spawnAll(theme: (typeof HIT_FX_LAB_THEMES)[number], seq: number, velocity: number, reduced = false) {
+function spawnAll(theme: (typeof HIT_FX_LAB_THEMES)[number], seq: number, velocity: number, reduced = false, lite = false) {
   const def = hitFxThemeDef(theme);
   const out: { skin: string; pad: string; list: FxParticle[] }[] = [];
   for (const skin of KIT_SKINS) {
     for (const p of kitPadsFor(skin)) {
       const e = ev(seq, p.pad, velocity);
-      const run = reduced ? def.spawnReduced : def.spawn;
+      const run = reduced ? def.spawnReduced : lite ? def.spawnLite : def.spawn;
       out.push({ skin, pad: p.pad, list: run(e, fxGeoOf(p, skin), p.shape, fxIntensity(e), createRand(seq), def.palette(skin, p.shape, '#35a3d4')) });
     }
   }
@@ -214,9 +214,9 @@ describe('electric', () => {
   });
 });
 
-describe('water', () => {
+describe('water(입자만의 대체 함수 spawnLite)', () => {
   it('드럼: 파문 2~3겹(지연) + 중력 물방울', () => {
-    const r = spawnAll('water', 2, 100).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
+    const r = spawnAll('water', 2, 100, false, true).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
     const rings = r.list.filter((p) => p.kind === 'ring');
     expect(rings.length).toBeGreaterThanOrEqual(2);
     expect(rings.length).toBeLessThanOrEqual(3);
