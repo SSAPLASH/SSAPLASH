@@ -973,8 +973,16 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 - 재생 중 페이지를 이동해도 유지된다(엔진이 React 밖 싱글턴, 칩은 `AppShell`에 있음). 새로고침 후에는 정지 상태로 시작한다.
 - 리듬 게임·악보 연습에서 세션을 시작하면 메트로놈이 곡에 잠긴다(`Metronome.lock`): 칩이 곡 BPM·박자와 "곡" 배지를 보이고 슬라이더·박자·탭 템포는 비활성이며, 점은 세션이 `pulse`로 알리는 박에 깜빡이고 ▶/■는 세션 클릭(`settings.metronome`)을 켜고 끈다.
 - 세션이 끝나거나 나가면 `unlock`으로 사용자 BPM·박자(정지 상태)로 돌아온다. 잠금 중 값은 설정에 저장되지 않는다.
+- **박 분할(4분·8분):** 설정 `metronomeSubdivision`(`auto`·`quarter`·`eighth`, 기본 `auto`)이 박당 클릭 수를 정한다. 자동은 기준 BPM이 90 미만이면 8분이다(`domain/time/metronome.resolveSubdivision`, 경계 `AUTO_EIGHTH_BELOW_BPM`). 기준 BPM은 자유 연습에서는 메트로놈 BPM, 악보 연습에서는 곡의 대표 BPM(`chart.bpm`)이다.
+  - 예약 단위는 틱(박 × 분할)이다. 틱의 박 위치는 틱 ÷ 분할이고, 분할이 바뀌면 `retick`이 다음 틱을 같은 박 위치 이상으로 옮긴다(8분 → 4분은 다음 정박부터).
+  - 클릭 소리는 3단계다: 첫 박 1600Hz · 정박 1100Hz · 사이 박 800Hz(더 작고 짧다, `audio/AudioEngine`의 `CLICK_VOICE`).
+  - 박 점과 패드 박 번호는 4분음표 그대로다. `onBeat`·`pulse`는 정박에만 불린다.
+  - 자유 연습: `bootstrap`이 설정과 엔진 BPM이 바뀔 때마다 풀어 `Metronome.setSubdivision`에 넣는다.
+  - 악보 연습: `PlayClock`이 `subdivision()`을 예약 때마다 읽어 연주 중에 바뀌어도 한 박 안에 반영한다. 사이 박은 준비 마디를 포함해 곡 중 클릭(`settings.metronome`)이 켜져 있을 때만 난다. 빠르기 구간이 있는 곡은 사이 박도 구간 BPM의 반 박에 온다.
+  - 리듬 게임(`subdivision`을 넘기지 않음)과 박자 맞추기(강·약 두 단계)는 4분음표 그대로다.
+  - 고르는 화면(Dock 패널·설정·시작 확인 창)은 아직 없다. 지금은 `useSettings.getState().setMetronomeSubdivision('quarter')`처럼 값으로만 바꿀 수 있다.
 - 사운드 토글은 패드 소리만 음소거한다. 메트로놈 클릭은 계속 난다.
-- 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`metronomeVolume`·`soundOn`이 localStorage에 저장된다.
+- 설정 `metronomeBpm`·`metronomeBeatsPerBar`·`metronomeSubdivision`·`metronomeVolume`·`soundOn`이 localStorage에 저장된다.
 - 개발 모드에서는 콘솔에서 `window.__metronome.stats`(`scheduled`·`late`·`maxDriftMs`)로 예약 지터를 읽을 수 있다.
 
 ## 키보드 입력(임시)
