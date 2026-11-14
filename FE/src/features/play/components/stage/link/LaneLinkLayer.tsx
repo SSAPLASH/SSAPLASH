@@ -18,7 +18,7 @@ export interface LaneLinkLayerProps {
 
 /** 타격 띠가 사라지는 시간(ms) */
 export const BAND_MS = 420;
-const GUIDE_ALPHA: Record<GuideLevel, number> = { now: 0.8, next: 0.45, later: 0.24 };
+const GUIDE_ALPHA: Record<GuideLevel, number> = { now: 1, next: 0.7, later: 0.45 };
 
 function rgba(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -99,19 +99,23 @@ export function LaneLinkLayer(props: LaneLinkLayerProps) {
           trace(ctx, l.band);
           ctx.stroke();
         }
+      }
+      // 가이드 점선은 띠를 다 그린 뒤 그 위에 그린다(띠에 묻히지 않게). 패드 쪽으로 흐른다(모션 줄이기면 멈춤)
+      for (const l of active) {
         const level = p.guide?.[l.lane];
-        if (level !== undefined) {
-          // 가이드 점선: 패드 쪽으로 흐른다(모션 줄이기면 멈춤)
-          ctx.save();
-          ctx.strokeStyle = rgba(color, GUIDE_ALPHA[level]);
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([3, 7]);
-          ctx.lineDashOffset = reduced ? 0 : -((now / 40) % 10);
-          ctx.lineJoin = 'miter';
-          trace(ctx, l.points);
-          ctx.stroke();
-          ctx.restore();
-        }
+        if (level === undefined) continue;
+        const color = laneColorOf(l.lane);
+        ctx.save();
+        ctx.strokeStyle = rgba(color, GUIDE_ALPHA[level]);
+        ctx.lineWidth = level === 'now' ? 3 : 2;
+        ctx.setLineDash([6, 6]);
+        ctx.lineDashOffset = reduced ? 0 : -((now / 30) % 12);
+        ctx.lineJoin = 'miter';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = level === 'now' ? 8 : 4;
+        trace(ctx, l.points);
+        ctx.stroke();
+        ctx.restore();
       }
       raf = requestAnimationFrame(draw);
     };
