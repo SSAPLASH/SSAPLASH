@@ -106,13 +106,40 @@ describe('AudioEngine trigger·click 반환', () => {
   it('컨텍스트가 없으면 null', () => {
     const e = new AudioEngine();
     expect(e.trigger('KICK', 100)).toBeNull();
-    expect(e.click(undefined, true)).toBeNull();
+    expect(e.click(undefined, 'accent')).toBeNull();
   });
 
   it('suspended이면 소리를 예약하지 않고 null', async () => {
     const e = await engineWith({ state: 'suspended', currentTime: 0, ts: { contextTime: 0, performanceTime: 0 } });
     expect(e.trigger('KICK', 100)).toBeNull();
-    expect(e.click(5100, false)).toBeNull();
+    expect(e.click(5100, 'beat')).toBeNull();
+  });
+
+  it('클릭 3단계(첫 박·정박·사이 박)는 주파수와 음량이 서로 다르고 사이 박이 가장 낮고 작다', async () => {
+    const e = await engineWith({ state: 'running', currentTime: 10, ts });
+    const ctx = e.context as unknown as { createOscillator: () => unknown; createGain: () => unknown };
+    const oscs: { frequency: { value: number } }[] = [];
+    const gains: { gain: { setValueAtTime: ReturnType<typeof vi.fn> } }[] = [];
+    const osc = ctx.createOscillator;
+    const gain = ctx.createGain;
+    ctx.createOscillator = () => {
+      const n = osc() as (typeof oscs)[number];
+      oscs.push(n);
+      return n;
+    };
+    ctx.createGain = () => {
+      const n = gain() as (typeof gains)[number];
+      gains.push(n);
+      return n;
+    };
+    e.click(undefined, 'accent');
+    e.click(undefined, 'beat');
+    e.clickAtContext(10.2, 'sub');
+    expect(oscs.map((o) => o.frequency.value)).toEqual([1600, 1100, 800]);
+    const vol = gains.map((g) => g.gain.setValueAtTime.mock.calls[0][0] as number);
+    expect(vol[0]).toBeGreaterThan(vol[1]);
+    expect(vol[1]).toBeGreaterThan(vol[2]);
+    expect(vol[2]).toBeGreaterThan(0);
   });
 
   it('running이면 performance.now 기준 숫자를 돌려준다', async () => {
@@ -120,7 +147,7 @@ describe('AudioEngine trigger·click 반환', () => {
     const t = e.trigger('KICK', 100);
     expect(t).not.toBeNull();
     expect(Math.abs((t as number) - 5000)).toBeLessThan(100);
-    const c = e.click(undefined, true);
+    const c = e.click(undefined, 'accent');
     expect(c).not.toBeNull();
     expect(Math.abs((c as number) - 5000)).toBeLessThan(100);
   });
@@ -150,17 +177,17 @@ describe('AudioEngine 앞선 정도·오디오 시계 읽기·오디오 시각 �
     const ahead = e.renderAheadMs();
     expect(ahead).toBeCloseTo(450, 6);
     // 100ms 뒤에 들리게 하려는 클릭: 바꾼 오디오 시각 9.65 < currentTime 10 → 지금(10)으로 당겨져 450ms에 들림
-    const late = e.click(5100, false) as number;
+    const late = e.click(5100, 'beat') as number;
     expect(late - 5100).toBeCloseTo(350, 6);
     // 여유에 앞선 정도를 더하면 당겨지지 않음
     const want = 5000 + 100 + ahead;
-    expect(e.click(want, false) as number).toBeCloseTo(want, 6);
+    expect(e.click(want, 'beat') as number).toBeCloseTo(want, 6);
   });
 
   it('오디오 시각 클릭은 currentTime보다 뒤면 그 시각, 앞이면 currentTime', async () => {
     const e = await engineWith({ state: 'running', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
-    expect(e.clickAtContext(10.2, true)).toBeCloseTo(10.2, 9);
-    expect(e.clickAtContext(9.8, true)).toBe(10);
+    expect(e.clickAtContext(10.2, 'accent')).toBeCloseTo(10.2, 9);
+    expect(e.clickAtContext(9.8, 'accent')).toBe(10);
   });
 
   it('오디오 시각 타격음 예약은 그 시각에 놓이고 취소 핸들을 준다', async () => {
@@ -178,7 +205,7 @@ describe('AudioEngine 앞선 정도·오디오 시계 읽기·오디오 시각 �
     const e = await engineWith({ state: 'suspended', currentTime: 10, ts: { contextTime: 9.5, performanceTime: 4950 } });
     expect(e.renderAheadMs()).toBe(0);
     expect(e.audioReading()).toBeNull();
-    expect(e.clickAtContext(10.2, true)).toBeNull();
+    expect(e.clickAtContext(10.2, 'accent')).toBeNull();
   });
 });
 
@@ -458,7 +485,7 @@ describe('AudioEngine.whenClockFlowing', () => {
       },
       /** 방금 소리를 낸 상태로 만든다(출력 장치가 깨어 있음) */
       sound() {
-        e.click(undefined, false);
+        e.click(undefined, 'beat');
         oscillators.length = 0;
       },
     };

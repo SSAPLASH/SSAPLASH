@@ -4,6 +4,7 @@ import type { PadId } from '@/domain/kit/pads';
 import { SAMPLE_FALLBACK, type SamplePad, type SoundSet } from './soundSets';
 import { CLOCK_POLL_MS, CLOCK_WAIT_MAX_MS, PRIMED_MIN_WAIT_MS, SOUND_RECENT_MS, clockFlowing, type ClockSample } from '@/domain/time/audioClock';
 import type { AudioReading } from '@/domain/time/audioTimeline';
+import type { ClickLevel } from '@/domain/time/metronome';
 
 export interface LatencyInfo {
   sampleRate: number;
@@ -17,6 +18,15 @@ export interface LatencyInfo {
  * 블루투스처럼 지연이 1초 가까이 되는 장치도 짝을 쓰도록 3초로 둔다(설계 MODE-001)
  */
 const ANCHOR_MAX_SKEW_MS = 3000;
+/**
+ * 메트로놈 클릭 소리 3단계(설계 MODE-002-MODE-003-metronome-subdivision D4). 음량은 메트로놈 음량에 곱하는 값.
+ * 사이 박은 정박이 묻히지 않게 더 낮고 작고 짧다
+ */
+const CLICK_VOICE: Record<ClickLevel, { hz: number; gain: number; sec: number }> = {
+  accent: { hz: 1600, gain: 0.35, sec: 0.04 },
+  beat: { hz: 1100, gain: 0.2, sec: 0.04 },
+  sub: { hz: 800, gain: 0.12, sec: 0.03 },
+};
 
 /** 안전 리미터: 이 크기(약 −2dBFS)까지는 그대로 통과시키고, 그 위만 1.0 아래로 부드럽게 눌러 클리핑을 막는다 */
 const LIMIT_KNEE = 0.8;
@@ -498,11 +508,11 @@ export class AudioEngine {
   }
 
   /** 메트로놈 클릭. 반환: 실제 예약된 performance.now() 기준 시각(trigger와 같은 계산). running이 아니면 null */
-  click(whenMs: number | undefined, accent: boolean): number | null {
+  click(whenMs: number | undefined, level: ClickLevel): number | null {
     if (!this.ctx || !this.master || this.ctx.state !== 'running') return null;
     const ctx = this.ctx;
     const at = whenMs === undefined ? ctx.currentTime : Math.max(ctx.currentTime, this.perfToContextTime(whenMs));
-    this.clickVoice(ctx, this.master, at, accent);
+    this.clickVoice(ctx, this.master, at, level);
     return this.contextToPerfTime(at);
   }
 
@@ -510,24 +520,25 @@ export class AudioEngine {
    * 오디오 시계 시각(초)에 메트로놈 클릭. 화면 시계를 거치지 않으므로 출력 지연이 커져도 예약 시각이 지나지 않는다
    * (설계 MODE-001 연주 시계를 오디오 시계 하나로). 반환: 실제 예약된 오디오 시계 시각. running이 아니면 null
    */
-  clickAtContext(ctxSec: number, accent: boolean): number | null {
+  clickAtContext(ctxSec: number, level: ClickLevel): number | null {
     if (!this.ctx || !this.master || this.ctx.state !== 'running') return null;
     const at = Math.max(this.ctx.currentTime, ctxSec);
-    this.clickVoice(this.ctx, this.master, at, accent);
+    this.clickVoice(this.ctx, this.master, at, level);
     return at;
   }
 
-  private clickVoice(ctx: AudioContext, out: AudioNode, at: number, accent: boolean): void {
+  private clickVoice(ctx: AudioContext, out: AudioNode, at: number, level: ClickLevel): void {
     this.lastSoundPerf = performance.now();
+    const v = CLICK_VOICE[level];
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = 'square';
-    o.frequency.value = accent ? 1600 : 1100;
-    g.gain.setValueAtTime(Math.max(0.001, (accent ? 0.35 : 0.2) * this.clickVolume), at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
+    o.frequency.value = v.hz;
+    g.gain.setValueAtTime(Math.max(0.001, v.gain * this.clickVolume), at);
+    g.gain.exponentialRampToValueAtTime(0.001, at + v.sec);
     o.connect(g).connect(out);
     o.start(at);
-    o.stop(at + 0.05);
+    o.stop(at + v.sec + 0.01);
   }
 
   /** 패드 소리 음소거. ensure 전에 불러도 값을 기억했다가 컨텍스트 생성 때 적용한다 */

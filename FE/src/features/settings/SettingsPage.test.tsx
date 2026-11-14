@@ -99,6 +99,15 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
     expect(switchChecked(html, '실시간 코칭')).toBe('false');
   });
 
+  it('오디오 구역에 메트로놈 박 분할(자동·4분음표·8분음표)이 있고 설정 값을 따른다', () => {
+    const html = render();
+    const group = /<div role="radiogroup" aria-label="메트로놈 박 분할".*?<\/div>/.exec(html)?.[0] ?? '';
+    expect(group).toMatch(/aria-checked="true"[^>]*>자동</);
+    expect(group).toContain('4분음표');
+    expect(group).toContain('8분음표');
+    expect(html).toContain('자동은 BPM 90 미만에서 8분음표로 울려요.');
+  });
+
   it('음량 %와 지연 보정 표시', () => {
     put(useSettings, { volume: 0.65, audioOffsetMs: 20 });
     expect(render()).toContain('65%');
