@@ -23,7 +23,8 @@ import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotic
 import { Countdown } from '@/features/play/components/stage/Countdown';
 import { useAudioClockGate } from '@/features/play/components/stage/useAudioClockGate';
 import { countdownValue } from '@/domain/time/leadIn';
-import { resolveSubdivision } from '@/domain/time/metronome';
+import { resolveSubdivision, type SubdivisionPref } from '@/domain/time/metronome';
+import { metronomePreview } from '@/runtime/metronomePreview';
 import { ScreenGate } from '@/features/play/components/stage/ScreenGate';
 import { useScreenFits } from '@/features/play/components/stage/screenFit';
 import { GuideSlot } from '@/features/play/components/stage/GuideSlot';
@@ -704,6 +705,8 @@ function SheetPageBody() {
 
   /** 시작 확인 창 닫기: 주소에서 start(와 자동 시작 표시 auto)만 지운다(곡·단계 선택은 남긴다) */
   const closeStart = useCallback(() => {
+    // 창이 닫히면(취소·플레이) 박 분할 예시 소리도 끊는다
+    metronomePreview.stop();
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -894,6 +897,13 @@ function SheetPageBody() {
     const sameSong = detail !== null && (songIdParam === null || detail.id === songIdParam);
     const chartDifficulty = chart?.difficulty ?? detail?.charts.find((c) => c.id === chartIdParam)?.difficulty ?? 'NORMAL';
     const loadError = paramStatus === 'error' ? (param.error ?? '채보를 불러오지 못했습니다.') : accError ? `${accError} 반주를 끄면 바로 시작할 수 있어요.` : null;
+    // 박 분할 풀이 문구와 예시 소리의 기준 BPM(채보를 아직 못 불러왔으면 곡 정보의 BPM)
+    const startSongBpm = chart?.bpm ?? (sameSong ? detail.bpm : undefined);
+    const pickSubdivision = (v: SubdivisionPref) => {
+      settings.setMetronomeSubdivision(v);
+      // 고른 값을 이 곡의 BPM으로 두 박 들려준다
+      if (startSongBpm !== undefined) void metronomePreview.play('song', startSongBpm, resolveSubdivision(v, startSongBpm));
+    };
     return (
       <>
         <AudioWaitNotice show={audioWaiting} />
@@ -929,6 +939,9 @@ function SheetPageBody() {
               rows={['metronome', 'padCount', 'accompaniment', 'recording']}
               metronome={settings.metronome}
               onMetronome={settings.setMetronome}
+              subdivision={settings.metronomeSubdivision}
+              onSubdivision={pickSubdivision}
+              songBpm={startSongBpm}
               padCount={settings.sheetPadCount}
               onPadCount={settings.setSheetPadCount}
               hasAccompaniment={accAvailableUrl !== null || (paramLoaded === null && sameSong && detail.accompanimentStatus === 'READY')}
