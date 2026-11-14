@@ -104,6 +104,8 @@ export interface FxParticle {
   hold?: number;
   /** 합성 방식. 없으면 테마 blend. sheet는 항상 더하기 */
   blend?: FxBlendMode;
+  /** drop 전용: 발광 번짐 색(없으면 color) */
+  glowColor?: string;
   /** 발광 점·덩어리의 스프라이트 종류(기본 soft) */
   sprite?: 'soft' | 'bokeh';
 }
