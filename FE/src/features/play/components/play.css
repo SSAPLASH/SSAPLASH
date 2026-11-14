@@ -68,6 +68,45 @@
   color: var(--good);
 }
 
+/* 큰 코칭 모양(악보 연습, 설계 MODE-003-practice-speed D13·D14): 킷 왼쪽 빈 곳으로 칸을 넓히고 글자를 키운다.
+   종류별 색(안내 파랑·주의 노랑·칭찬 초록)의 은은한 면과 왼쪽 굵은 선. 보조는 두 줄까지 줄바꿈한다 */
+.guide-slot.lg {
+  --coach-color: var(--brand-text);
+  gap: 6px;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  padding: 14px 18px;
+  box-sizing: border-box;
+  border-left: 6px solid var(--coach-color);
+  border-radius: 0 16px 16px 0;
+  background: color-mix(in srgb, var(--coach-color) 13%, transparent);
+  line-height: 1.3;
+}
+.guide-slot.lg.coach-warn {
+  --coach-color: var(--brand-sub);
+}
+.guide-slot.lg.coach-good {
+  --coach-color: var(--good);
+}
+.guide-slot.lg .guide-slot-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guide-slot.lg .guide-slot-sub {
+  color: var(--text-1);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 /* 코칭 손 대상 칩: 킷 슬롯(게임 380×150 · 악보 532×210) 왼쪽 아래 빈 곳. 하이웨이(위쪽)를 가리지 않는다 */
 .coach-kit {
   position: relative;
