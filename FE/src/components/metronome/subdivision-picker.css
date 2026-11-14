@@ -1,0 +1,47 @@
+/* 메트로놈 박 분할 선택 + 풀이 줄. 선택 칸의 크기·모양은 쓰는 자리(패널·시작 확인 창)가 .ui-seg를 덮어 정한다 */
+.subdiv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.subdiv-seg {
+  display: flex;
+}
+.subdiv-seg > .ui-seg-item {
+  flex: 1;
+}
+.subdiv-hint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 20px;
+}
+.subdiv-hint {
+  margin: 0;
+  color: var(--brand-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+/* 예시 소리가 나는 동안 정박에 맞춰 켜지는 점 */
+.subdiv-dots {
+  flex: none;
+  display: inline-flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity var(--motion-fade);
+}
+.subdiv-dots.live {
+  opacity: 1;
+}
+.subdiv-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fill-soft);
+}
+.subdiv-dots i.on {
+  background: var(--brand);
+  box-shadow: 0 0 10px var(--brand-glow);
+}
