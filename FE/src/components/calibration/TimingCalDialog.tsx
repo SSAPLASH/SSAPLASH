@@ -57,7 +57,9 @@ export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply
         <>
           {intro && <p className="timing-cal-sub">처음 한 번만 박자를 맞추면 판정이 정확해져요.</p>}
           <p className="timing-cal-text">
-            클릭 소리에 맞춰 아무 패드나 쳐 주세요. 처음 {TIMING_CAL_LISTEN_BEATS}번은 듣기만 하고, 이어지는 {TIMING_CAL_MEASURE_BEATS}번을 맞춰 치면 돼요.
+            클릭 소리에 맞춰 아무 패드나 쳐 주세요.
+            <br />
+            처음 {TIMING_CAL_LISTEN_BEATS}번은 듣기만 하고, 이어지는 {TIMING_CAL_MEASURE_BEATS}번을 맞춰 치면 돼요.
           </p>
           <p className="timing-cal-sub">내 드럼 소리가 클릭과 겹쳐 들리게 치세요. 그 타이밍에 판정을 맞춰요.</p>
           <div className="dialog-actions">
