@@ -37,7 +37,8 @@ export interface PlayUploadBody {
     schemaVersion: 1;
     judgementVersion: typeof SCORE_RULE;
     timingWindows: { perfectMs: number; goodMs: number };
-    playbackRate: 1;
+    /** 연습 속도 배율(0.5~1). 1이 아니면 tMs는 곡 시각, deltaMs·timingWindows는 실제 시간이다(mail MODE-003_연습-속도-기록-처리) */
+    playbackRate: number;
     padMapping: Record<string, never>;
   };
   startedAt: string;
@@ -108,6 +109,9 @@ export function buildUploadBody(log: PlayLog, ctx: UploadContext): BuildUploadRe
   const noteCount = log.sourceNoteCount ?? log.notes.length;
   if (noteCount !== log.notes.length || log.notes.some((n) => !n.noteId)) return { ok: false, reason: 'CHART_MISMATCH' };
 
+  // 연습 속도: 로그의 위치 값은 이미 곡 시각이다. 판정 타격의 tMs만 「노트 시각 + 실제 오차 × 배율」로 만들어
+  // 서버 검사식 (tMs − note.timeMs) / playbackRate = deltaMs에 맞춘다
+  const rate = log.playbackRate ?? 1;
   const inputSource = uploadInputSource(log.inputSource);
   const sensorHit = (h: LoggedHit) => inputSource === 'STICK' && isSensorSource(h.source);
 
@@ -120,8 +124,8 @@ export function buildUploadBody(log: PlayLog, ctx: UploadContext): BuildUploadRe
     const note = h.judgement && h.matchedNoteIndex !== undefined ? log.notes[h.matchedNoteIndex] : undefined;
     const judged = note !== undefined && h.deltaMs !== undefined;
     rows.push({
-      // 판정 타격은 서버 검사식(deltaMs = tMs − note.timeMs)과 같은 값이 되도록 노트 시각에서 되돌린다
-      tMs: judged ? note.timeMs + h.deltaMs! : (h.tSongMs ?? 0),
+      // 판정 타격은 서버 검사식(deltaMs = (tMs − note.timeMs) / playbackRate)과 같은 값이 되도록 노트 시각에서 되돌린다
+      tMs: judged ? note.timeMs + h.deltaMs! * rate : (h.tSongMs ?? 0),
       stickId: sensor ? h.stickId : null,
       pad: h.pad,
       baselinePad: null,
@@ -199,7 +203,7 @@ export function buildUploadBody(log: PlayLog, ctx: UploadContext): BuildUploadRe
         schemaVersion: 1,
         judgementVersion: SCORE_RULE,
         timingWindows: { perfectMs: log.timing.perfectMs, goodMs: log.timing.goodMs },
-        playbackRate: 1,
+        playbackRate: rate,
         padMapping: {},
       },
       startedAt: log.startedAt,
