@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { migrateSettings, SETTINGS_VERSION, useSettings } from './settingsStore';
 
 describe('gameGuide 설정 (리듬 게임 가이드, MODE-001)', () => {
-  it('설정 버전은 26, 기본값은 끔', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+  it('설정 버전은 27, 기본값은 끔', () => {
+    expect(SETTINGS_VERSION).toBe(27);
     expect(useSettings.getInitialState().gameGuide).toBe(false);
   });
 
