@@ -56,6 +56,11 @@ class AnalysisIntegrationTest {
         uploadScored();
         var request=repository.request(play);
         assertThat(request.path("timingWindows").path("goodMs").asInt()).isEqualTo(60);
+        assertThat(request.get("playbackRate").asDouble()).isEqualTo(1);
+        db.update("UPDATE play_sessions SET judgement_context=jsonb_set(judgement_context,'{playbackRate}','0.7') WHERE id=?",play);
+        assertThat(repository.request(play).get("playbackRate").asDouble()).isEqualTo(0.7);
+        db.update("UPDATE play_sessions SET judgement_context=judgement_context - 'playbackRate' WHERE id=?",play);
+        assertThat(repository.request(play).get("playbackRate").asDouble()).isEqualTo(1);
         assertThat(request.path("hits").size()).isEqualTo(3);
         assertThat(request.path("hits").get(1).path("judgement").asString()).isEqualTo("MISS");
         assertThat(request.path("hits").get(2).path("judgement").isNull()).isTrue();
