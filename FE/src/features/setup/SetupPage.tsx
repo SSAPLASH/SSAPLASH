@@ -465,7 +465,12 @@ export function SetupPage() {
   const showPresetError = presets.status === 'error' && presets.error !== null && nameOpen === null;
   const calNeeded = stepOf('calibration').status === 'needed' && !realigning;
   const hitNotice =
-    sensorMode && !anyConnected ? <div className="setup-notice error">스틱 입력 중단 — 연결을 확인하세요. 편집은 계속할 수 있습니다.</div> : null;
+    sensorMode && !anyConnected ? (
+      <div className="setup-notice error setup-hit-notice">
+        <strong>스틱 연결 끊김</strong>
+        <span>연결 상태를 확인해주세요.</span>
+      </div>
+    ) : null;
 
   return (
     <main className="main setup-page">

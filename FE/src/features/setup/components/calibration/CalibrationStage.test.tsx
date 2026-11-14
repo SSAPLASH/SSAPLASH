@@ -44,6 +44,8 @@ function setCapture(over: Partial<CaptureSnapshot> = {}, target: CalibrationSnap
     lastAccepted: null,
     radiusOverrides: {},
     base: [null, null],
+    spreadStreak: [0, 0],
+    gapHints: [],
     ...over,
   };
   useLive.setState({ calibration: { mode: 'capture', capture: cap, realign: null, hands: cap.hands, target } });
