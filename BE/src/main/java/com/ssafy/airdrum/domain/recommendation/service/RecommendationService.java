@@ -163,7 +163,7 @@ public class RecommendationService {
 	}
 
 	/**
-	 * 본인의 기준 밀도: 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 해당하는 판이 없으면 {@code null}.
+	 * 본인의 기준 밀도: 최근 1배속 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 해당하는 판이 없으면 {@code null}.
 	 * 추천(R1)의 난이도 점수와 비슷한 곡(R2)의 "너무 어려운 곡 거르기"가 같은 값을 쓴다.
 	 */
 	public Double baselineDensity(long userId) {
@@ -171,6 +171,7 @@ public class RecommendationService {
 				SELECT MAX(f.avg_notes_per_sec) FROM (
 				  SELECT p.chart_version_id, p.accuracy FROM play_sessions p
 				  WHERE p.user_id = ? AND p.mode IN ('RHYTHM', 'SHEET') AND p.accuracy IS NOT NULL
+				    AND COALESCE((p.judgement_context->>'playbackRate')::numeric, 1) = 1
 				  ORDER BY p.ended_at DESC, p.id LIMIT ?) recent
 				JOIN chart_features f ON f.chart_version_id = recent.chart_version_id
 				WHERE recent.accuracy >= ?
@@ -239,7 +240,7 @@ public class RecommendationService {
 		var lastPlayed = new HashMap<Long, Instant>();
 		var bestByChart = new HashMap<Long, Double>();
 		db.query("""
-				SELECT p.song_id, c.id, MAX(p.accuracy), MAX(p.ended_at)
+				SELECT p.song_id, c.id, MAX(p.accuracy) FILTER (WHERE COALESCE((p.judgement_context->>'playbackRate')::numeric, 1) = 1), MAX(p.ended_at)
 				FROM play_sessions p JOIN chart_versions v ON v.id = p.chart_version_id JOIN charts c ON c.id = v.chart_id
 				WHERE p.user_id = ? AND p.mode IN ('RHYTHM', 'SHEET') AND p.song_id IS NOT NULL
 				GROUP BY p.song_id, c.id

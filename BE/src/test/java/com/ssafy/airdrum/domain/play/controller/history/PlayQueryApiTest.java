@@ -229,6 +229,8 @@ class PlayQueryApiTest {
         UUID finished=scored(user,"RHYTHM",own,easy,100,"20.00","COMPLETED");
         scored(user,"RHYTHM",own,easyNext,80,"90.00","COMPLETED");
         scored(user,"SHEET",own,easy,30,"40.00","COMPLETED");
+        UUID practice = scored(user,"SHEET",own,easy,200,"99.00","COMPLETED");
+        db.update("UPDATE play_sessions SET judgement_context='{\"playbackRate\":0.7}'::jsonb WHERE id=?", practice);
         scored(user,"RHYTHM",own,hard,0,"0.00","COMPLETED");
         scored(user,"RHYTHM",visible,pub,null,null,"COMPLETED");
         scored(other,"RHYTHM",own,easy,9999,"99.00","COMPLETED");
@@ -258,7 +260,12 @@ class PlayQueryApiTest {
         assertThat(best(otherToken,Long.toString(own),200).path("items").size()).isZero();
         assertThat(best(token,Long.toString(empty),200).path("items").size()).isZero();
         var page=list(token,"?size=100",200).path("items");
-        assertThat(page.size()).isEqualTo(12);
+        assertThat(page.size()).isEqualTo(13);
+        for (var item : page) {
+            boolean isPractice = item.get("playId").asString().equals(practice.toString());
+            assertThat(item.get("playbackRate").asDouble()).isEqualTo(isPractice ? 0.7 : 1);
+        }
+        assertThat(items.get(1).path("bestScore").asInt()).isEqualTo(30);
         var reasons=new ArrayList<String>();
         page.forEach(item->{ if(!item.path("endReason").isNull()) reasons.add(item.path("endReason").asString()); });
         assertThat(reasons).contains("COMPLETED","ABORTED","DISCONNECTED");
