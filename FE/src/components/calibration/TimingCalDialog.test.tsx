@@ -21,6 +21,8 @@ describe('TimingCalView', () => {
     const html = view({});
     expect(html).toContain('박자 맞추기');
     expect(html).toContain('처음 4번은 듣기만');
+    // 안내는 두 줄: 「…쳐 주세요.」 뒤에서 줄을 나눈다
+    expect(html).toContain('아무 패드나 쳐 주세요.<br/>처음 4번은 듣기만');
     expect(html).toContain('시작');
     expect(html).toContain('닫기');
     expect(html).not.toContain('timing-cal-beats');
