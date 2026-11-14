@@ -260,7 +260,7 @@ describe('SheetPage 반주 설정', () => {
     show('/sheet?song=1&chart=12&start=1');
     await screen.findByRole('button', { name: '플레이' });
     expect(accLoad()).not.toHaveBeenCalled();
-    expect((screen.getByLabelText('반주 재생') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole('switch', { name: '반주' }).getAttribute('aria-checked')).toBe('false');
   });
 });
 
