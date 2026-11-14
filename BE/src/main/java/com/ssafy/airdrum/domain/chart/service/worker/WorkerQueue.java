@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.ssafy.airdrum.global.error.BusinessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,8 +21,12 @@ public class WorkerQueue {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final TransactionTemplate newTx;
-    WorkerQueue(JdbcTemplate db, PlatformTransactionManager manager) {
+    /** 모든 워커의 마지막 연락이 이 시간보다 오래되면 워커가 꺼졌다고 봄. 0 이하면 검사하지 않음 */
+    private final long offlineAfterMs;
+    WorkerQueue(JdbcTemplate db, PlatformTransactionManager manager,
+            @Value("${chart.worker.offline-after-ms:60000}") long offlineAfterMs) {
         this.db = db;
+        this.offlineAfterMs = offlineAfterMs;
         this.tx = new TransactionTemplate(manager);
         this.tx.setTimeout(15);
         this.newTx = new TransactionTemplate(manager);
@@ -60,7 +65,17 @@ public class WorkerQueue {
         if (!Boolean.TRUE.equals(valid)) throw conflict();
         return l;
     }
+    /** 워커 연락 시각 기록. 요청이 거절돼도 워커는 살아 있으므로 트랜잭션 밖에서 바로 반영 */
+    void seen(String worker) {
+        db.update("INSERT INTO chart_worker_presence(worker_id,last_seen_at) VALUES(?,clock_timestamp()) ON CONFLICT (worker_id) DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at",worker);
+    }
+    /** 기록된 워커가 없거나 모든 워커의 마지막 연락이 기준 시간보다 오래되면 true */
+    boolean workerOffline() {
+        if (offlineAfterMs<=0) return false;
+        return Boolean.TRUE.equals(db.queryForObject("SELECT coalesce(max(last_seen_at)<clock_timestamp()-?*interval '1 millisecond',true) FROM chart_worker_presence",Boolean.class,offlineAfterMs));
+    }
     public Assignment claim(String worker, UUID request) {
+        seen(worker);
         recover();
         return tx.execute(s -> {
             db.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", Object.class, worker+":"+request);
@@ -119,6 +134,7 @@ public class WorkerQueue {
             },attempt,id);
     }
     public Heartbeat heartbeat(long job, String worker, UUID attempt, long seq, int progress) {
+        seen(worker);
         return tx.execute(s -> {
             Lock l=lock(job,false);
             if (l==null || !(l.status().equals("SEPARATING") || l.status().equals("TRANSCRIBING"))) throw conflict();
@@ -164,13 +180,16 @@ public class WorkerQueue {
     @Scheduled(fixedDelayString="${chart.worker.recovery-interval-ms:10000}")
     void scheduledRecover() { recover(); }
     void recover() {
-        var queued=db.queryForList("SELECT j.id FROM chart_jobs j JOIN users u ON u.id=j.user_id JOIN songs so ON so.id=j.song_id WHERE j.status='QUEUED' AND (j.queued_at+interval '30 minutes'<=clock_timestamp() OR j.stage_deadline_at<=clock_timestamp() OR u.status<>'ACTIVE' OR so.deleted_at IS NOT NULL) ORDER BY j.id LIMIT 100",Long.class);
+        // 워커 생존 여부는 회차마다 한 번만 조회해 그 회차의 모든 대기 작업에 같이 씀
+        boolean offline=workerOffline();
+        var queued=db.queryForList("SELECT j.id FROM chart_jobs j JOIN users u ON u.id=j.user_id JOIN songs so ON so.id=j.song_id WHERE j.status='QUEUED' AND (? OR j.queued_at+interval '30 minutes'<=clock_timestamp() OR j.stage_deadline_at<=clock_timestamp() OR u.status<>'ACTIVE' OR so.deleted_at IS NOT NULL) ORDER BY j.id LIMIT 100",Long.class,offline);
         for(long id:queued) tx.executeWithoutResult(s -> {
             Lock l=lock(id,true);
             if(l==null || !l.status().equals("QUEUED")) return;
             Boolean expired=db.queryForObject("SELECT queued_at+interval '30 minutes'<=clock_timestamp() OR stage_deadline_at<=clock_timestamp() FROM chart_jobs WHERE id=?",Boolean.class,id);
             if(!l.active() || l.deleted()) finishFailure(l,"JOB_CANCELLED");
             else if(Boolean.TRUE.equals(expired)) finishFailure(l,"STAGE_TIMEOUT");
+            else if(offline) finishFailure(l,"WORKER_OFFLINE");
         });
         var ids=db.queryForList("SELECT j.id FROM chart_jobs j JOIN chart_job_attempts a ON a.id=j.current_attempt_id JOIN users u ON u.id=j.user_id JOIN songs so ON so.id=j.song_id WHERE j.status IN ('SEPARATING','TRANSCRIBING') AND (a.lease_expires_at<=clock_timestamp() OR j.stage_deadline_at<=clock_timestamp() OR u.status<>'ACTIVE' OR so.deleted_at IS NOT NULL) ORDER BY j.id LIMIT 100",Long.class);
         for(long id:ids) tx.executeWithoutResult(s -> {

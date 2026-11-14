@@ -12,6 +12,7 @@ public final class JobErrors {
             case "OUTPUT_INVALID" -> new JobSnapshot.JobError(code,"채보 결과를 처리할 수 없습니다.",reason);
             case "MODEL_FAILED" -> new JobSnapshot.JobError(code,"채보 생성에 실패했습니다.",reason);
             case "JOB_CANCELLED" -> new JobSnapshot.JobError(code,"작업이 취소되었습니다.",reason);
+            case "WORKER_OFFLINE" -> new JobSnapshot.JobError(code,"채보 서버가 잠시 멈춰 있습니다. 잠시 뒤 다시 올려 주세요.",reason);
             default -> new JobSnapshot.JobError("JOB_FAILED","작업을 완료할 수 없습니다.",reason);
         };
     }
