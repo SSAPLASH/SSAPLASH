@@ -443,6 +443,7 @@ sha256sum ~/ssaplash/S15P31A307/AI/data/models/strum_ft/songsterr_egmd/best.pt  
 
 BE가 플레이 후 호출하는 통계 규칙 엔진이다(학습 모델 없음). `POST /analysis/weak-segments`로 `hits[]`를 받아
 `weakSegments[]`를 돌려준다. 호출 형식·패턴 규칙·임계값 위치·시험 방법은 [docs/coach-weak-segments.md](docs/coach-weak-segments.md)에 있다.
+악보 연습을 느리게 친 기록은 요청의 `playbackRate`(없으면 1)로 노트 시각을 곡 시각에 맞춘다(`tMs − deltaMs × playbackRate`).
 
 ```bash
 uv run uvicorn ssaplash_ai.server.app:app --port 8000
