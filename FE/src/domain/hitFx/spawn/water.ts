@@ -2,8 +2,9 @@
 // 그림이 덩어리를 맡고, 입자는 헤드 반짝임·잔물결·그림 밖으로 날아가는 방울·앞 보케만 맡는다.
 // 그림은 파티클 배열의 맨 앞에 둔다(상한에 걸리면 뒤의 입자부터 빠진다). 그림 속 색이 구워져 있어 팔레트는 쓰지 않는다.
 import type { PadShape } from '@/domain/kit/drumKit';
-import { SHEET_DEFS, pickSheet } from '../sheets';
+import { pickSheet } from '../sheets';
 import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, FxSheetId } from '../types';
+import { SHEET_BASE_SCALE, isCompact, sheetParticle, sizeGain } from './sheetFx';
 import { particle } from './util';
 import { spawnWaterLite } from './waterLite';
 
@@ -12,41 +13,10 @@ const WATER = { white: '#f2f9ff', tint: '#9fd8ff', glow: '#6fc3ff' };
 const TAU = Math.PI * 2;
 const SHEETS: readonly FxSheetId[] = ['water-side-a', 'water-side-b', 'water-cymbal', 'water-front'];
 
-/** 그림 크기의 기본 배율(시안 첫 판의 0.76배) */
-export const SHEET_BASE_SCALE = 0.76;
-/** 게임·악보 모드: 그림 크기 ×0.72, 재생 ×1.3 */
-export const COMPACT_SCALE = 0.72;
-export const COMPACT_RATE = 1.3;
 /** 입자 방울은 그림 속 방울과 크기를 맞추려고 작고 짧게 그린다 */
 const DROP_SIZE = 0.5;
 const DROP_STREAK = 0.006;
 const DROP_ALPHA = 0.85;
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-
-function sheetParticle(geo: FxGeo, id: FxSheetId, g: number, compact: boolean, rand: () => number): FxParticle {
-  const def = SHEET_DEFS[id];
-  const mirror = rand() < 0.5;
-  const rot = (rand() - 0.5) * 0.08;
-  const scale = SHEET_BASE_SCALE * (0.74 + 0.34 * g) * (0.95 + 0.1 * rand()) * (compact ? COMPACT_SCALE : 1);
-  const alpha = 0.7 + 0.3 * g;
-  return particle({
-    kind: 'sheet',
-    sheet: id,
-    x: geo.cx,
-    y: geo.cy,
-    size0: def.span * geo.rx * scale,
-    size1: def.span * geo.rx * scale,
-    alpha0: alpha,
-    alpha1: alpha,
-    rot,
-    mirror,
-    color: WATER.white,
-    lifeMs: def.durMs / (compact ? COMPACT_RATE : 1),
-    ease: 'linear',
-    blend: 'add',
-  });
-}
 
 /** 그림 밖으로 날아가는 방울(순간 속도 방향 캡슐). 그림 속 방울과 크기·밝기를 맞춘다 */
 function flyingDrop(o: { x: number; y: number; vx: number; vy: number; ay: number; drag: number; size: number; alpha: number; hold: number; lifeMs: number; streak?: number }): FxParticle {
@@ -102,14 +72,14 @@ export function spawnWater(event: FxEvent, geo: FxGeo, shape: PadShape, intensit
   const { cx, cy, rx, ry, k } = geo;
   const I = intensity;
   const a = I.alpha;
-  const compact = event.mode === 'game' || event.mode === 'sheet';
-  const g = clamp01((I.size - 0.6) / 0.8);
+  const compact = isCompact(event.mode);
+  const g = sizeGain(I);
   const hs = (compact ? 0.6 : 1) * (0.7 + 0.3 * I.size);
   const bokehOn = event.velocity >= 80 && !compact;
   const out: FxParticle[] = [];
 
   const id = pickSheet(SHEETS, shape, rx, ry, rand);
-  if (id) out.push(sheetParticle(geo, id, g, compact, rand));
+  if (id) out.push(sheetParticle(geo, id, g, compact, rand, 0.7, WATER.white));
 
   if (shape === 'drum') {
     // 헤드 반짝임: 헤드 타원이 밝았다 꺼진다(일반 합성)
