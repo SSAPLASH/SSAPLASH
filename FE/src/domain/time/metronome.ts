@@ -23,6 +23,12 @@ export const SUBDIVISION_PREFS: readonly SubdivisionPref[] = ['auto', 'quarter',
 export type ClickLevel = 'accent' | 'beat' | 'sub';
 /** 자동이 8분음표로 바뀌는 경계. 기준 BPM이 이 값 미만이면 8분 */
 export const AUTO_EIGHTH_BELOW_BPM = 90;
+/** 선택 칸 문구. Dock 패널·설정·시작 확인 창이 같은 문구를 쓴다 */
+export const SUBDIVISION_LABEL: Record<SubdivisionPref, string> = { auto: '자동', quarter: '4분음표', eighth: '8분음표' };
+/** 풀이 문구의 기준: 곡(song) BPM인지, 자유 연습 메트로놈(metronome) BPM인지 */
+export type SubdivisionPlace = 'song' | 'metronome';
+/** 분할을 고르면 들려주는 예시 소리의 길이(박) */
+export const PREVIEW_BEATS = 2;
 
 /** 박 anchorIndex가 anchorMs에 울린다는 기준점. 박 i의 시각 = anchorMs + (i − anchorIndex) × 60000 / bpm */
 export interface BeatClock {
@@ -62,6 +68,40 @@ export function resolveSubdivision(pref: SubdivisionPref, bpm: number): Subdivis
   if (pref === 'eighth') return 2;
   if (pref === 'quarter') return 1;
   return Number.isFinite(bpm) && bpm < AUTO_EIGHTH_BELOW_BPM ? 2 : 1;
+}
+
+/**
+ * 고른 값이 지금 어떻게 울리는지 한 줄. 자동은 기준 BPM으로 풀어 적는다(곡이면 「BPM 72 곡이라 …」, 메트로놈이면 「지금 BPM에서는 …」).
+ * 자동인데 BPM을 모르면 빈 문자열
+ */
+export function subdivisionHint(pref: SubdivisionPref, bpm: number | undefined, place: SubdivisionPlace): string {
+  if (pref === 'quarter') return '박마다 한 번 울려요';
+  if (pref === 'eighth') return '박 사이에 한 번 더 울려요';
+  if (bpm === undefined || !Number.isFinite(bpm)) return '';
+  const name = SUBDIVISION_LABEL[resolveSubdivision('auto', bpm) === 2 ? 'eighth' : 'quarter'];
+  return place === 'song' ? `BPM ${Math.round(bpm)} 곡이라 ${name}로 울려요` : `지금 BPM에서는 ${name}로 울려요`;
+}
+
+/** 예시 소리의 틱 하나. beat는 정박이면 0부터의 박 번호, 사이 박이면 null */
+export interface PreviewTick {
+  offsetMs: number;
+  level: ClickLevel;
+  beat: number | null;
+}
+
+/** 예시 소리(PREVIEW_BEATS박)의 틱 목록. 첫 틱만 강세다. BPM이 숫자가 아니거나 0 이하면 빈 목록 */
+export function previewTicks(bpm: number, subdivision: Subdivision): PreviewTick[] {
+  if (!Number.isFinite(bpm) || bpm <= 0) return [];
+  const out: PreviewTick[] = [];
+  for (let t = 0; t < PREVIEW_BEATS * subdivision; t++) {
+    const isBeat = t % subdivision === 0;
+    out.push({
+      offsetMs: (t / subdivision) * beatIntervalMs(bpm),
+      level: !isBeat ? 'sub' : t === 0 ? 'accent' : 'beat',
+      beat: isBeat ? t / subdivision : null,
+    });
+  }
+  return out;
 }
 
 /** 틱의 마디 안 위치와 소리 단계. 분할의 배수인 틱이 정박이다(시각은 호출자가 박 위치 = 틱 ÷ 분할로 구한다) */

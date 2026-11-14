@@ -12,10 +12,12 @@ import {
   beatsInWindow,
   clampBpm,
   isSubdivisionPref,
+  previewTicks,
   pushTap,
   rebaseBpm,
   resolveSubdivision,
   retick,
+  subdivisionHint,
   tapBpm,
   tickAt,
   ticksInWindow,
@@ -179,5 +181,38 @@ describe('박 분할 (설계 MODE-002-MODE-003-metronome-subdivision)', () => {
     expect(beatIndexAt(next, 2249)).toBe(1);
     expect(beatIndexAt(next, 2250)).toBe(2); // 60bpm 반 박 = 500ms 뒤가 2박
     expect(tickAt(next, 4, 2).atMs).toBe(2250);
+  });
+});
+
+describe('박 분할 풀이 문구·예시 소리', () => {
+  it('자동은 기준 BPM으로 풀어 적는다. 곡은 BPM을 정수로 반올림해 적는다', () => {
+    expect(subdivisionHint('auto', 72, 'song')).toBe('BPM 72 곡이라 8분음표로 울려요');
+    expect(subdivisionHint('auto', 78.43, 'song')).toBe('BPM 78 곡이라 8분음표로 울려요');
+    expect(subdivisionHint('auto', 128, 'song')).toBe('BPM 128 곡이라 4분음표로 울려요');
+    expect(subdivisionHint('auto', 85, 'metronome')).toBe('지금 BPM에서는 8분음표로 울려요');
+    expect(subdivisionHint('auto', 90, 'metronome')).toBe('지금 BPM에서는 4분음표로 울려요');
+    // 반올림하면 90이지만 판정은 원래 값(89.6)으로 한다
+    expect(subdivisionHint('auto', 89.6, 'song')).toBe('BPM 90 곡이라 8분음표로 울려요');
+  });
+
+  it('4분·8분은 BPM과 무관한 문구, 자동인데 BPM을 모르면 빈 문자열', () => {
+    expect(subdivisionHint('quarter', 60, 'song')).toBe('박마다 한 번 울려요');
+    expect(subdivisionHint('eighth', undefined, 'metronome')).toBe('박 사이에 한 번 더 울려요');
+    expect(subdivisionHint('auto', undefined, 'song')).toBe('');
+  });
+
+  it('예시 소리는 두 박: 4분이면 2번, 8분이면 4번, 첫 틱만 강세', () => {
+    expect(previewTicks(120, 1)).toEqual([
+      { offsetMs: 0, level: 'accent', beat: 0 },
+      { offsetMs: 500, level: 'beat', beat: 1 },
+    ]);
+    expect(previewTicks(120, 2)).toEqual([
+      { offsetMs: 0, level: 'accent', beat: 0 },
+      { offsetMs: 250, level: 'sub', beat: null },
+      { offsetMs: 500, level: 'beat', beat: 1 },
+      { offsetMs: 750, level: 'sub', beat: null },
+    ]);
+    expect(previewTicks(NaN, 2)).toEqual([]);
+    expect(previewTicks(0, 1)).toEqual([]);
   });
 });
