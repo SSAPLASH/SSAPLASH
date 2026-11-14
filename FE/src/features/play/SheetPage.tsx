@@ -11,6 +11,7 @@ import { SongPicker } from '@/features/play/components/picker/SongPicker';
 import { useChartParam } from '@/features/play/components/picker/useChartParam';
 import { SheetPager } from '@/features/play/components/stage/sheet/SheetPager';
 import { usePauseTriggers } from '@/features/play/components/pause/usePauseTriggers';
+import { useSpacePause } from '@/features/play/components/pause/useSpacePause';
 import { useReconnectResume } from '@/features/play/components/pause/useReconnectResume';
 import { useJudgementHaptic } from '@/features/play/components/stage/useJudgementHaptic';
 import { PauseOverlay, type PauseReason } from '@/features/play/components/pause/PauseOverlay';
@@ -822,6 +823,13 @@ function SheetPageBody() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [stage, isResuming]);
+
+  // Space: 연주 중 일시정지(킥을 페달로 치는 입력일 때만 — 그 밖에서는 Space가 키보드 킥이다)
+  useSpacePause({
+    inSong: () => stageRef.current === 'play' && !gateOpenRef.current,
+    canPause: () => pauseRef.current === null && !isResuming(),
+    pause: () => pauseTo('user'),
+  });
 
   // Enter / Esc
   useEffect(() => {
