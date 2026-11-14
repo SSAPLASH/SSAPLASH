@@ -86,7 +86,7 @@ interface SettingsState {
   soundOn: boolean;
   /** 악보 연주 드럼 가이드의 박 라벨 표시 */
   sheetPadCount: boolean;
-  /** 악보 연습에서 반주를 재생한다(MODE-003 시작 확인 창의 「반주」 줄). 꺼져 있으면 반주를 불러오지도 않는다 */
+  /** 악보 연습에서 반주를 재생한다(MODE-003 시작 확인 창의 「반주」 줄). 꺼져 있으면 반주를 불러오지도 않고 연습 속도를 고를 수 있다. 기본 끔 */
   accompaniment: boolean;
   /** 자유 연습 키트 가이드(패드 이름표) 표시(MODE-002). 기본 켬 */
   kitGuide: boolean;
@@ -166,7 +166,7 @@ export type TestVelocity = 64 | 96 | 120;
 export type GameView = 'highway' | 'kit';
 export type PlayHaptic = 'judgement' | 'local';
 
-export const SETTINGS_VERSION = 26;
+export const SETTINGS_VERSION = 27;
 
 /** v22까지의 시스템 기본 배치(x·y). v23 이행에서 "기본 배치 그대로인 저장 값"을 알아보는 데만 쓴다 */
 const LEGACY_DEFAULT_XY: Record<string, readonly [number, number]> = {
@@ -215,6 +215,7 @@ function isLegacyDefaultLayout(raw: unknown): boolean {
  * v23 → v24: kitGuide(기본 true) 추가. boolean이 아니면 true.
  * v24 → v25: gameGuide(기본 false) 추가. boolean이 아니면 false.
  * v25 → v26: metronomeSubdivision(기본 'auto') 추가. 세 값(auto·quarter·eighth)이 아니면 'auto'.
+ * v26 → v27: accompaniment 기본값을 끔으로 바꾼다(연습 속도를 고를 수 있게, MODE-003). 저장된 값도 한 번 끔으로 되돌린다.
  * 알 수 없는 sensorKind는 여기서 건드리지 않는다 — 레지스트리를 아는 bootstrap이 'none'으로 되돌린다(R6).
  */
 export function migrateSettings(persisted: unknown, version: number): SettingsState {
@@ -330,6 +331,8 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   if (version < 24) p.kitGuide = typeof p.kitGuide === 'boolean' ? p.kitGuide : true;
   if (version < 25) p.gameGuide = typeof p.gameGuide === 'boolean' ? p.gameGuide : false;
   if (version < 26) p.metronomeSubdivision = isSubdivisionPref(p.metronomeSubdivision) ? p.metronomeSubdivision : 'auto';
+  // 반주 기본값이 끔으로 바뀌었다. 기본값(켬) 그대로 저장돼 있던 값도 한 번 끔으로 맞춘다(그 뒤 켠 값은 그대로 남는다)
+  if (version < 27) p.accompaniment = false;
   return p as unknown as SettingsState;
 }
 
@@ -459,7 +462,7 @@ export const useSettings = create<SettingsState>()(
       metronomeSubdivision: 'auto',
       soundOn: true,
       sheetPadCount: true,
-      accompaniment: true,
+      accompaniment: false,
       kitGuide: true,
       gameGuide: false,
       sidebarCollapsed: false,

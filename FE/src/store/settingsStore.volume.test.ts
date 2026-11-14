@@ -40,8 +40,8 @@ describe('drumVolume·songVolume', () => {
     expect(useSettings.getState().songVolume).toBe(1);
   });
 
-  it('설정 버전은 26', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+  it('설정 버전은 27', () => {
+    expect(SETTINGS_VERSION).toBe(27);
   });
 
   it('v14 저장값 → v15에서 두 필드를 1로 채우고 나머지는 보존한다', () => {

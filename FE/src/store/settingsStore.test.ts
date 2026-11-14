@@ -279,7 +279,7 @@ describe('migrateSettings v9 → v10 (패드 이름 이행)', () => {
 
 describe('migrateSettings v10 → v11 (sheetPadCount)', () => {
   it('v10 이하 저장분에 sheetPadCount=true를 채운다', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+    expect(SETTINGS_VERSION).toBe(27);
     expect((migrateSettings({}, 10) as unknown as Record<string, unknown>).sheetPadCount).toBe(true);
   });
 
@@ -446,7 +446,7 @@ describe('migrateSettings v17 → v18 (프리셋별 앵커·시스템 기본, UX
   });
 
   it('스토어 초기값은 system·빈 기록', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+    expect(SETTINGS_VERSION).toBe(27);
     expect(useSettings.getInitialState().activePresetId).toBe(SYSTEM_PRESET_ID);
     expect(useSettings.getInitialState().presetAnchors).toEqual({});
   });
