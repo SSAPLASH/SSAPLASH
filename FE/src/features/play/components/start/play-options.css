@@ -66,3 +66,66 @@
 .play-opt-sub .ui-seg-item.selected {
   font-weight: 700;
 }
+
+/* 연습 속도: [−] 배율 · 실제 BPM [+] */
+.play-opt-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+.play-opt-rate-cap {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.play-opt-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-1);
+}
+.play-opt-step {
+  min-height: 0;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.play-opt-step:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.play-opt-rate-val {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+.play-opt-rate-val b {
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--text-1);
+}
+.play-opt-rate-val span {
+  color: var(--brand-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}

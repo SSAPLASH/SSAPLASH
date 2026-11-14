@@ -82,6 +82,49 @@ describe('PlayOptions 박 분할', () => {
   });
 });
 
+describe('PlayOptions 연습 속도 (MODE-003)', () => {
+  const rateSub = () => document.querySelector('.play-opt-rate')!.closest('.play-opt-sub')!;
+
+  it('onRate가 없으면 속도 줄을 내지 않는다', () => {
+    renderOptions(true, 'READY', { accompaniment: false });
+    expect(screen.queryByRole('group', { name: '연습 속도' })).toBeNull();
+  });
+
+  it('반주가 켜져 있으면 접혀 있고 반주 줄에 안내가 붙는다', () => {
+    renderOptions(true, 'READY', { accompaniment: true, onRate: vi.fn() });
+    expect(rateSub().className).not.toContain('open');
+    expect(rateSub().hasAttribute('inert')).toBe(true);
+    expect(screen.getByText('끄면 연습 속도를 고를 수 있어요')).toBeTruthy();
+  });
+
+  it('반주를 끄거나 반주가 없는 곡이면 펼쳐지고 배율과 실제 BPM을 보인다', () => {
+    const { unmount } = renderOptions(true, 'READY', { accompaniment: false, onRate: vi.fn(), rate: 0.7, sourceBpm: 120 });
+    expect(rateSub().className).toContain('open');
+    expect(rateSub().textContent).toContain('70%');
+    expect(rateSub().textContent).toContain('BPM 120 → 84');
+    unmount();
+    renderOptions(false, 'NONE', { accompaniment: true, onRate: vi.fn(), rate: 1, sourceBpm: 120 });
+    expect(rateSub().className).toContain('open');
+    expect(rateSub().textContent).toContain('원래 빠르기');
+  });
+
+  it('−/+는 5 % 단위이고 50 %·100 %에서 그쪽 버튼이 비활성이다', async () => {
+    const onRate = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = renderOptions(true, 'READY', { accompaniment: false, onRate, rate: 0.7, sourceBpm: 120 });
+    await user.click(screen.getByRole('button', { name: '5% 느리게' }));
+    await user.click(screen.getByRole('button', { name: '5% 빠르게' }));
+    expect(onRate.mock.calls.map((c) => c[0])).toEqual([0.65, 0.75]);
+    unmount();
+    const low = renderOptions(true, 'READY', { accompaniment: false, onRate, rate: 0.5 });
+    expect((screen.getByRole('button', { name: '5% 느리게' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '5% 빠르게' }) as HTMLButtonElement).disabled).toBe(false);
+    low.unmount();
+    renderOptions(true, 'READY', { accompaniment: false, onRate, rate: 1 });
+    expect((screen.getByRole('button', { name: '5% 빠르게' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe('PlayOptions 반주 줄', () => {
   it('반주가 있으면 활성이고 설정을 따른다', () => {
     renderOptions(true, 'READY', { accompaniment: false });

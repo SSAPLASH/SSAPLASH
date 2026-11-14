@@ -98,6 +98,19 @@
   white-space: nowrap;
   color: var(--brand-text);
 }
+/* 연습 속도로 친 판(최고 기록과 비교하지 않는다) */
+.result-rate-chip {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-sub) 60%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-sub) 14%, transparent);
+  color: var(--brand-sub);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
 .result-record-chip[data-kind='new'] {
   color: var(--fx-combo);
 }
