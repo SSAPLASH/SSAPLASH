@@ -2,8 +2,8 @@
 import type { FxEvent, FxGeo, FxLocation } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/kit/pads';
 
-/** 판정선은 캔버스 아래에서 이만큼 위 */
-export const JUDGE_FROM_BOTTOM = 90;
+/** 판정선은 캔버스 아래에서 이만큼 위. 판정선 아래는 레인 → 패드 연결 구역이다(link/laneLinkGeometry의 LINK_ZONE_H) */
+export const JUDGE_FROM_BOTTOM = 80;
 /** 노트가 나타나는 위쪽 여백 */
 export const HIGHWAY_TOP = 30;
 /** 판정선 이펙트 세로 반지름(px) */
