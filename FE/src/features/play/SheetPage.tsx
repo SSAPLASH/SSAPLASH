@@ -23,6 +23,7 @@ import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotic
 import { Countdown } from '@/features/play/components/stage/Countdown';
 import { useAudioClockGate } from '@/features/play/components/stage/useAudioClockGate';
 import { countdownValue } from '@/domain/time/leadIn';
+import { resolveSubdivision } from '@/domain/time/metronome';
 import { ScreenGate } from '@/features/play/components/stage/ScreenGate';
 import { useScreenFits } from '@/features/play/components/stage/screenFit';
 import { GuideSlot } from '@/features/play/components/stage/GuideSlot';
@@ -616,14 +617,16 @@ function SheetPageBody() {
     metronome.lock({ bpm: ss.chart.bpm, beatsPerBar: ss.chart.beatsPerBar });
     clockRef.current?.stop();
     const clock = new PlayClock(ss, {
-      click: (at, accent) => audioEngine.click(at, accent),
+      click: (at, level) => audioEngine.click(at, level),
       accompaniment: acc.state === 'ready' ? acc : undefined,
       clickOn: () => useSettings.getState().metronome,
+      // 박 분할(자동·4분·8분)은 곡의 대표 BPM으로 푼다. 예약 때마다 읽혀 연주 중 Dock에서 바꿔도 반영된다
+      subdivision: () => resolveSubdivision(useSettings.getState().metronomeSubdivision, ss.chart.bpm),
       onBeat: (beatInBar, atMs) => metronome.pulse(beatInBar, atMs),
       audioClock: () => audioEngine.clockReading(),
       // 반주·클릭을 오디오 시계에 바로 예약하고 곡 시각을 들리는 오디오 시각에서 계산한다(설계 MODE-001 연주 시계를 오디오 시계 하나로)
       audioReading: () => audioEngine.audioReading(),
-      clickAt: (ctxSec, accent) => audioEngine.clickAtContext(ctxSec, accent),
+      clickAt: (ctxSec, level) => audioEngine.clickAtContext(ctxSec, level),
       onFinish: () => finishRef.current(ss),
     });
     clockRef.current = clock;

@@ -3,6 +3,7 @@
 import { diagTap } from '@/engine/diagTap';
 import type { RhythmSession } from '@/engine/RhythmSession';
 import { beatTimeMs } from '@/domain/time/tempo';
+import { retick, tickPosition, type ClickLevel, type Subdivision } from '@/domain/time/metronome';
 import { clockStalled } from '@/domain/time/audioClock';
 import {
   CLICK_AHEAD_SEC,
@@ -47,10 +48,15 @@ export interface ClockAccompaniment {
 
 export interface PlayClockDeps {
   /** 클릭 예약. 실제 예약된 시각(ms)을 돌려준다 */
-  click(atMs: number, accent: boolean): number | null;
+  click(atMs: number, level: ClickLevel): number | null;
   accompaniment?: ClockAccompaniment;
-  /** 곡 중 박 클릭을 낼지. 카운트인은 항상 낸다 */
+  /** 곡 중 박 클릭을 낼지. 카운트인의 정박은 항상 낸다. 사이 박(8분 분할)은 카운트인에서도 이 값이 켜져 있을 때만 낸다 */
   clickOn(): boolean;
+  /**
+   * 박당 클릭 수(설계 MODE-002-MODE-003-metronome-subdivision). 예약할 때마다 읽으므로 연주 중에 바뀌어도 한 박 안에 반영된다.
+   * 없으면 1(4분음표) — 리듬 게임은 넘기지 않는다
+   */
+  subdivision?(): Subdivision;
   now?(): number;
   /** begin에서 반주 0초까지 두는 여유(ms). 기본 300 */
   lead?: number;
@@ -58,7 +64,7 @@ export interface PlayClockDeps {
   setInterval?(fn: () => void, ms: number): unknown;
   clearInterval?(id: unknown): void;
   visibility?(): 'visible' | 'hidden';
-  /** 박이 예약될 때마다(카운트인 포함). atMs는 그 박이 울리는 performance.now 시각(최대 lookahead만큼 미래) */
+  /** 정박이 예약될 때마다(카운트인 포함, 사이 박은 부르지 않는다). atMs는 그 박이 울리는 performance.now 시각(최대 lookahead만큼 미래) */
   onBeat?(beatInBar: number, atMs: number): void;
   /** 세션이 끝났을 때 1회 */
   onFinish?(): void;
@@ -70,7 +76,7 @@ export interface PlayClockDeps {
    */
   audioReading?(): AudioReading | null;
   /** 오디오 시계 시각(초)에 클릭 예약. 실제 예약된 오디오 시계 시각을 돌려준다 */
-  clickAt?(ctxSec: number, accent: boolean): number | null;
+  clickAt?(ctxSec: number, level: ClickLevel): number | null;
   /**
    * 탭 가림 상태 변경 구독(테스트 주입용). 해제 함수를 돌려준다. 기본은 document visibilitychange.
    * 가려지는 순간 브라우저가 타이머를 최대 1초 늦추므로 그 전에 넓은 예약 창으로 한 번 예약한다
@@ -89,7 +95,10 @@ export interface ClockState {
 export class PlayClock {
   private session: RhythmSession;
   private deps: PlayClockDeps;
-  private nextBeat = 0;
+  /** 다음에 예약할 틱(카운트인 첫 박 = 0). 박 위치 = nextTick ÷ sub */
+  private nextTick = 0;
+  /** nextTick을 센 박 분할 */
+  private sub: Subdivision = 1;
   private timer: unknown = null;
   private unsubVisibility: (() => void) | null = null;
   private pausedSongTime = 0;
@@ -187,7 +196,8 @@ export class PlayClock {
   begin(): void {
     const now = this.now();
     const at = now + (this.deps.lead ?? BEGIN_LEAD_MS) + Math.max(0, this.session.preRollMs - this.session.originMs);
-    this.nextBeat = 0;
+    this.nextTick = 0;
+    this.sub = this.deps.subdivision?.() ?? 1;
     this.lastDriftAt = -Infinity;
     this.resetStall();
     this._sync = { begin: null, resume: null };
@@ -282,9 +292,28 @@ export class PlayClock {
     }
   }
 
+  /** 박 분할을 다시 읽는다. 바뀌었으면 다음 틱을 새 분할로 옮긴다(박 위치는 그대로) */
+  private readSubdivision(): Subdivision {
+    const sub = this.deps.subdivision?.() ?? 1;
+    if (sub !== this.sub) {
+      this.nextTick = retick(this.nextTick, this.sub, sub);
+      this.sub = sub;
+    }
+    return sub;
+  }
+
   /**
-   * 박 클릭·onBeat 예약(타이머 콜백). lookahead 안의 박을 미리 예약한다.
-   * 이미 50ms 넘게 지난 박(타이머가 늦어 놓친 박)은 클릭도 onBeat도 없이 건너뛴다.
+   * 틱 하나의 소리 단계. 정박은 원점 전(카운트인)이면 항상, 곡 중이면 clickOn()일 때 낸다.
+   * 사이 박은 카운트인·곡 중 모두 clickOn()일 때만 낸다. 소리를 안 내면 null
+   */
+  private clickLevel(level: ClickLevel, isBeat: boolean, beforeOrigin: boolean): ClickLevel | null {
+    if (isBeat) return beforeOrigin || this.deps.clickOn() ? level : null;
+    return this.deps.clickOn() ? level : null;
+  }
+
+  /**
+   * 박 클릭·onBeat 예약(타이머 콜백). lookahead 안의 틱(박 × 박 분할)을 미리 예약한다.
+   * 이미 50ms 넘게 지난 틱(타이머가 늦어 놓친 틱)은 클릭도 onBeat도 없이 건너뛴다.
    */
   private schedule(now: number): void {
     if (this._state.phase !== 'running' || this.session.currentStatus === 'paused') return;
@@ -300,18 +329,19 @@ export class PlayClock {
     const duration = this.session.chart.durationMs;
     const originMs = this.session.originMs;
     const ahead = this.lookahead();
-    // 박 i의 곡 시각 = 원점부터 (i − 카운트인 박 수)번째 박. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/time/tempo).
-    // 원점 전(카운트인) 클릭은 항상, 곡 중은 clickOn()
+    const sub = this.readSubdivision();
+    // 틱 i의 곡 시각 = 원점부터 (i ÷ 분할 − 카운트인 박 수)번째 박 위치. 빠르기 구간이 있으면 구간 bpm을 따른다(domain/time/tempo).
     for (;;) {
-      const bt = beatTimeMs(this.session.chart, this.nextBeat - countInBeats);
+      const bt = beatTimeMs(this.session.chart, this.nextTick / sub - countInBeats);
       if (bt > t + ahead || bt > duration) break;
       if (bt >= t - 50) {
         const atMs = now + (bt - t);
-        const beatInBar = this.nextBeat % beatsPerBar;
-        if (bt < originMs || this.deps.clickOn()) this.deps.click(atMs, beatInBar === 0);
-        this.deps.onBeat?.(beatInBar, atMs);
+        const pos = tickPosition(this.nextTick, sub, beatsPerBar);
+        const level = this.clickLevel(pos.level, pos.isBeat, bt < originMs);
+        if (level) this.deps.click(atMs, level);
+        if (pos.isBeat) this.deps.onBeat?.(pos.beatInBar, atMs);
       }
-      this.nextBeat += 1;
+      this.nextTick += 1;
     }
   }
 
@@ -330,16 +360,18 @@ export class PlayClock {
     const duration = this.session.chart.durationMs;
     const originMs = this.session.originMs;
     const aheadSec = this.lookahead() === HIDDEN_LOOKAHEAD_MS ? HIDDEN_CLICK_AHEAD_SEC : CLICK_AHEAD_SEC;
+    const sub = this.readSubdivision();
     for (;;) {
-      const bt = beatTimeMs(this.session.chart, this.nextBeat - countInBeats);
+      const bt = beatTimeMs(this.session.chart, this.nextTick / sub - countInBeats);
       const ctxAt = songToContextSec(bt, this.ctxZero);
       if (ctxAt > r.ctxSec + aheadSec || bt > duration) break;
       if (ctxAt >= r.ctxSec - CLICK_LATE_SKIP_SEC) {
-        const beatInBar = this.nextBeat % beatsPerBar;
-        if (bt < originMs || this.deps.clickOn()) this.deps.clickAt?.(ctxAt, beatInBar === 0);
-        this.deps.onBeat?.(beatInBar, contextToHeardPerfMs(ctxAt, this.heardOffset ?? heardOffsetMs(r)));
+        const pos = tickPosition(this.nextTick, sub, beatsPerBar);
+        const level = this.clickLevel(pos.level, pos.isBeat, bt < originMs);
+        if (level) this.deps.clickAt?.(ctxAt, level);
+        if (pos.isBeat) this.deps.onBeat?.(pos.beatInBar, contextToHeardPerfMs(ctxAt, this.heardOffset ?? heardOffsetMs(r)));
       }
-      this.nextBeat += 1;
+      this.nextTick += 1;
     }
   }
 

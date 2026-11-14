@@ -6,6 +6,7 @@ import { resolveOptions, sensorRegistry } from '@/runtime/sensorRegistry';
 import { onStickLinked } from '@/features/play/hapticMode';
 import { useSettings } from '@/store/settingsStore';
 import { useLive, type MetronomeLive } from '@/store/liveStore';
+import { resolveSubdivision } from '@/domain/time/metronome';
 import { useReconnect } from '@/store/reconnectStore';
 import { shouldResend } from '@/runtime/reconnectPolicy';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -352,9 +353,14 @@ export function bootstrapMetronome(): void {
   // 초기값: settings → 엔진
   metronome.setBpm(s0.metronomeBpm);
   metronome.setBeatsPerBar(s0.metronomeBeatsPerBar);
+  // 박 분할: 고른 값(자동·4분·8분)을 엔진의 BPM으로 풀어 넣는다. 설정이나 BPM이 바뀔 때마다 다시 푼다(자동이 경계 90을 넘나들 수 있다)
+  const applySubdivision = () =>
+    metronome.setSubdivision(resolveSubdivision(useSettings.getState().metronomeSubdivision, metronome.state.bpm));
+  applySubdivision();
   // 박자 맞추기: 클릭·타격음은 게임과 같은 오디오 경로를 쓴다
   timingCalSession.bind({
-    click: (atMs, accent) => audioEngine.click(atMs, accent),
+    // 박자 맞추기는 강·약 두 단계만 쓴다(박 분할과 무관)
+    click: (atMs, accent) => audioEngine.click(atMs, accent ? 'accent' : 'beat'),
     ensureAudio: unlockAudio,
     playHit: (hit) => {
       if (hit.pad) audioEngine.trigger(hit.pad, hit.velocity);
@@ -367,7 +373,7 @@ export function bootstrapMetronome(): void {
     kickConnected: () => useLive.getState().pedal.connected[1],
   });
   metronome.bind({
-    click: (atMs, accent) => audioEngine.click(atMs, accent),
+    click: (atMs, level) => audioEngine.click(atMs, level),
     renderAheadMs: () => audioEngine.renderAheadMs(),
     ensureAudio: unlockAudio,
     onAudioState: (listener) => {
@@ -395,12 +401,16 @@ export function bootstrapMetronome(): void {
   });
 
   metronome.onChange((st) => {
+    // 화면용 사본에는 박 분할을 싣지 않는다(화면은 설정 값과 BPM으로 직접 푼다)
+    const live = { playing: st.playing, bpm: st.bpm, beatsPerBar: st.beatsPerBar, locked: st.locked };
     if (!st.playing) {
       clearPending();
-      setLive({ ...st, beat: -1 });
+      setLive({ ...live, beat: -1 });
     } else {
-      setLive(st);
+      setLive(live);
     }
+    // BPM이 바뀌었으면 자동 분할을 다시 푼다. 값이 같으면 엔진이 무시하므로 되돌아오지 않는다
+    applySubdivision();
     // 잠금 중 값은 곡 값이므로 사용자 설정에 저장하지 않는다
     if (st.locked) return;
     const cur = useSettings.getState();
@@ -415,12 +425,14 @@ export function bootstrapMetronome(): void {
   });
 
   // 초기 BPM·박자를 화면용 사본에도 반영(위 setBpm은 구독 전에 불렸다)
-  setLive(metronome.state);
+  const st0 = metronome.state;
+  setLive({ playing: st0.playing, bpm: st0.bpm, beatsPerBar: st0.beatsPerBar, locked: st0.locked });
 
   // 패드 소리 음소거(메트로놈 클릭은 남는다)
   audioEngine.setPadMuted(!s0.soundOn);
   useSettings.subscribe((s, prev) => {
     if (s.soundOn !== prev.soundOn) audioEngine.setPadMuted(!s.soundOn);
+    if (s.metronomeSubdivision !== prev.metronomeSubdivision) applySubdivision();
   });
 
   if (import.meta.env.DEV) (window as unknown as { __metronome?: typeof metronome }).__metronome = metronome;
