@@ -39,13 +39,13 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 11                    /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345), 10 = 정지 바이어스 재추정 조건 강화 (346), 11 = 크리스탈(HFXO) 실패 재시도·연주 중 감시 (345), 자이로 포화 로그 SAT (346) */
+#define FW_MINOR 14                    /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345), 10 = 정지 바이어스 재추정 조건 강화 (346), 11 = 크리스탈(HFXO) 실패 재시도·연주 중 감시 (345), 자이로 포화 로그 SAT (346), 12 = GET_PARAMS에 현재 방위각 오프셋 0x21, 놓친 IMU 샘플 로그 MISS (357), 13 = 거른 스윙의 길이 로그 DS (342), 14 = 최소 스윙 20 → 8ms (342) */
 /* 비교 실험용: 1이면 1.9의 느슨한 정지 판정으로 빌드 (11/10 1.9 vs 1.10 비교). 평소엔 0 */
 #define BIAS_STILL_V19    0
 #if BIAS_STILL_V19
-#define FW_TAG   "BOOT 1.11 nrf52 bias19"
+#define FW_TAG   "BOOT 1.14 nrf52 bias19"
 #else
-#define FW_TAG   "BOOT 1.11 nrf52"
+#define FW_TAG   "BOOT 1.14 nrf52"
 #endif
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
@@ -730,6 +730,12 @@ static void handle_cmd(const cmd_t *c)
         break;
     case CMD_GET_PARAMS:
         for (uint8_t i = 0; i < sizeof PARAM_IDS; i++) send_param(PARAM_IDS[i], param_get(PARAM_IDS[i]));
+        /* 현재 방위각 오프셋(0x21)도 같이 보낸다: FE가 새로 고침 뒤 손별 적용값을 맞추는 용도.
+           SET_YAW_OFFSET 응답과 같은 PARAM_ACK 형식이고, 끝 표시 개수에는 넣지 않는다(모니터 유실 계산 유지) */
+        {
+            float o = pose.az_offset_deg * 100.0f;
+            send_param(PID_YAW_OFFSET, (int16_t)(o >= 0 ? o + 0.5f : o - 0.5f));
+        }
         send_param(PID_GET_END, sizeof PARAM_IDS);
         break;
     }
@@ -886,7 +892,9 @@ void app_setup()
     hit_default_params(&hp);                            /* 1.66kHz용 값 (2026-10-26 녹화 swing/nohit 기준) */
     hp.min_decel_x10 = 60;                              /* 가짜(천천히 멈춤) ≤5.2, 진짜 ≥9.2 */
     hp.max_swing_ms  = 160;                             /* 진짜 71~112ms, 가짜 175~219ms */
-    hp.min_swing_ms  = 20;                              /* 버튼·충격 튐(1ms) 제거 */
+    hp.min_swing_ms  = 8;                               /* 버튼·충격 튐(1ms) 제거. 1.13까지 20: 라이드 연타에서 들어올리기가 long으로
+                                                           버려진 뒤 다시 무장되면 진짜 타격을 최고속도에서 잡아 9~19ms로 짧게 보여 버려졌다
+                                                           (11/14 Zombie 오른손 41번, 최고속도 중앙 1105dps). nohit·swing·pad 녹화 재생으로 가짜 타격 증가 0 확인 */
     hp.ts_corr_us    = 800;                             /* 정지 시각 평균 오차 0으로 */
     hp.vel_max_dps   = 1400;                            /* PLAY-006: 세게 친 타격이 100~120 (11/9 1600 실측 오른손 강 79~102 → 1400 환산 94~122) */
     hit_init(&hd, &hp);
@@ -914,6 +922,18 @@ void app_setup()
 #if SERIAL_MODE == SERIAL_TEXT
     if (Serial) Serial.print("n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed\r\n");
 #endif
+}
+
+/* 놓친 IMU 샘플 (1.12): 루프가 막히면(notify 대기 등) 그 사이 샘플을 놓치고, 다음 샘플이 빈 시간 전체를 그 순간 각속도로 적분한다.
+ * 기울기는 중력으로 다시 맞지만 방위각은 기준이 없어 오차가 그대로 쌓인다. 10초 동안 놓친 수가 있으면 LOG "MISS n" (FE 357 ④) */
+static void miss_report()
+{
+    static uint32_t prev = 0;
+    if (n_missed == prev) return;
+    char m[19];
+    snprintf(m, sizeof m, "MISS %lu", (unsigned long)(n_missed - prev));
+    send_log(m);
+    prev = n_missed;
 }
 
 /* ===================== 루프 ===================== */
@@ -944,7 +964,7 @@ void app_loop()
 
     /* 상태 5초마다 */
     if (status_due) { status_due = false; t_status = millis(); send_status(); send_bias(); }   /* 연결 직후 1회 */
-    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); hfxo_watch(); } }
+    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); hfxo_watch(); miss_report(); } }
     if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 
     /* IMU 새 샘플 */
@@ -1066,6 +1086,11 @@ void app_loop()
     static const char *why[4] = {"weak", "slow", "long", "short"};
     for (int i = 0; i < 4; i++) if (rej[i] != rej_prev[i]) {
         char m[20]; snprintf(m, sizeof m, "drop %s %ld", why[i], (long)(hd.peak / 16));
+        send_log(m);
+        /* 1.13: 같은 스윙의 길이(시작 → 판정, ms)와 시작 → 최고속도(ms). FE 파서가 "drop {이유} {dps}" 세 칸만 받으므로 줄을 따로 낸다.
+           11/14 Zombie 라이드 연타에서 long(>160ms)·short(<20ms)로 버려진 진짜 타격의 기준을 정하려는 것 (342) */
+        snprintf(m, sizeof m, "DS %s %lu %lu", why[i],
+                 (unsigned long)((hd.t_last_hit - hd.t_start) / 1000U), (unsigned long)((hd.t_peak - hd.t_start) / 1000U));
         send_log(m);
         rej_prev[i] = rej[i];
     }
