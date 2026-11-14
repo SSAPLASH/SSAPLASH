@@ -11,6 +11,8 @@ import { WithdrawDialog } from '@/features/settings/components/WithdrawDialog';
 import { useShell } from '@/components/shell/nav/useShell';
 import { Button } from '@/components/ui/action/Button';
 import { Segmented } from '@/components/ui/form/Segmented';
+import { SUBDIVISION_LABEL, SUBDIVISION_PREFS, resolveSubdivision, type SubdivisionPref } from '@/domain/time/metronome';
+import { metronomePreview } from '@/runtime/metronomePreview';
 import { Slider } from '@/components/ui/form/Slider';
 import { Toast, type ToastVariant } from '@/components/ui/feedback/Toast';
 import { Toggle } from '@/components/ui/form/Toggle';
@@ -35,6 +37,8 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
 };
 
 /** 타격 진동 방식 선택지(모니터 빌드 전용, PLAY-006) */
+const SUBDIVISION_OPTIONS = SUBDIVISION_PREFS.map((value) => ({ value, label: SUBDIVISION_LABEL[value] }));
+
 const HAPTIC_OPTIONS: { value: PlayHaptic; label: string }[] = [
   { value: 'judgement', label: '판정 진동' },
   { value: 'local', label: '스틱 즉시 진동' },
@@ -58,6 +62,8 @@ export function SettingsPage() {
   const setDrumVolume = useSettings((s) => s.setDrumVolume);
   const songVolume = useSettings((s) => s.songVolume);
   const setSongVolume = useSettings((s) => s.setSongVolume);
+  const metronomeSubdivision = useSettings((s) => s.metronomeSubdivision);
+  const setMetronomeSubdivision = useSettings((s) => s.setMetronomeSubdivision);
   const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
   const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
   const kickOffsetMs = useSettings((s) => s.kickOffsetMs);
@@ -233,6 +239,21 @@ export function SettingsPage() {
                   value={kickOffsetOrStick(audioOffsetMs, kickOffsetMs)}
                   valueText={timingOffsetText(kickOffsetOrStick(audioOffsetMs, kickOffsetMs))}
                   onChange={setKickOffsetMs}
+                />
+              )}
+            </SettingRow>
+            <SettingRow label="메트로놈 박 분할" help="자동은 BPM 90 미만에서 8분음표로 울려요." wideControl>
+              {() => (
+                <Segmented<SubdivisionPref>
+                  label="메트로놈 박 분할"
+                  options={SUBDIVISION_OPTIONS}
+                  value={metronomeSubdivision}
+                  onChange={(v) => {
+                    setMetronomeSubdivision(v);
+                    // 고른 값을 메트로놈 BPM으로 두 박 들려준다(메트로놈이 울리는 중이면 나지 않는다)
+                    const bpm = useSettings.getState().metronomeBpm;
+                    void metronomePreview.play('settings', bpm, resolveSubdivision(v, bpm));
+                  }}
                 />
               )}
             </SettingRow>
