@@ -232,3 +232,104 @@ describe('spawn(판정 밖 파티클 직접 넣기)', () => {
     expect(engine.stats().dropped).toBe(5);
   });
 });
+
+describe('이펙트 시계(랩용)', () => {
+  const alive = (h: ReturnType<typeof harness>) => h.engine.stats().alive;
+
+  it('배율 0.5: 수명이 실제 시간으로 2배가 된다(450ms 링 → 900ms)', () => {
+    const h = harness();
+    h.engine.setTimeScale(0.5);
+    h.engine.emit(ev(1));
+    h.advance(450);
+    h.frame();
+    expect(alive(h)).toBe(1);
+    h.advance(400);
+    h.frame();
+    expect(alive(h)).toBe(1); // 실제 850ms = 가상 425ms
+    h.advance(60);
+    h.frame();
+    expect(alive(h)).toBe(0); // 실제 910ms = 가상 455ms
+  });
+
+  it('배율은 0.1~1로 자른다', () => {
+    const h = harness();
+    h.engine.setTimeScale(0.01);
+    h.engine.emit(ev(1));
+    h.advance(4400); // 가상 440ms
+    h.frame();
+    expect(alive(h)).toBe(1);
+    h.advance(200); // 가상 460ms
+    h.frame();
+    expect(alive(h)).toBe(0);
+    h.engine.setTimeScale(5);
+    h.engine.emit(ev(2));
+    h.advance(460);
+    h.frame();
+    expect(alive(h)).toBe(0); // 1배로 잘렸다
+  });
+
+  it('배율을 바꾼 뒤에는 이미 흐른 시간은 이전 배율로 센다', () => {
+    const h = harness();
+    h.engine.emit(ev(1));
+    h.advance(300); // 가상 300
+    h.engine.setTimeScale(0.5);
+    h.advance(200); // 가상 +100 = 400
+    h.frame();
+    expect(alive(h)).toBe(1);
+    h.advance(120); // 가상 +60 = 460
+    h.frame();
+    expect(alive(h)).toBe(0);
+  });
+
+  it('일시정지: 시계가 멈추고 루프가 돌지 않으며, 풀면 멈춘 시간은 건너뛴다', () => {
+    const h = harness();
+    h.engine.emit(ev(1));
+    h.advance(200);
+    h.engine.setPaused(true);
+    h.frame(); // 이미 예약된 프레임: 그리지만 다시 예약하지 않는다
+    expect(h.pending).toBe(false);
+    h.advance(5000);
+    h.engine.setPaused(false);
+    expect(h.pending).toBe(true);
+    h.advance(200); // 가상 400
+    h.frame();
+    expect(alive(h)).toBe(1);
+    h.advance(60);
+    h.frame();
+    expect(alive(h)).toBe(0);
+  });
+
+  it('멈춘 상태의 새 타격도 한 번 그려지고 루프는 멈춰 있다', () => {
+    const h = harness();
+    h.engine.setPaused(true);
+    h.engine.emit(ev(1));
+    expect(h.pending).toBe(true);
+    h.frame();
+    expect(h.pending).toBe(false);
+    expect(alive(h)).toBe(1);
+  });
+
+  it('stepFrame: 멈춘 상태에서만 16.7ms씩 전진하고, 멈추지 않았으면 아무것도 안 한다', () => {
+    const h = harness();
+    h.engine.emit(ev(1));
+    h.engine.stepFrame(); // 멈추지 않음 → 무시
+    h.advance(440);
+    h.engine.setPaused(true);
+    h.frame();
+    expect(alive(h)).toBe(1);
+    h.engine.stepFrame(); // 456.7 ≥ 450
+    expect(alive(h)).toBe(0);
+  });
+
+  it('통계는 실제 시계를 쓴다(배율과 무관한 프레임 시간)', () => {
+    let t = 0;
+    let cb: (() => void) | null = null;
+    const engine = createFxEngine({ now: () => t, raf: (f) => ((cb = () => f(t)), 1), caf: () => {} });
+    engine.setTimeScale(0.1);
+    engine.emit(ev(1));
+    t += 16;
+    cb!();
+    expect(engine.stats().fps).toBeGreaterThan(0);
+    expect(engine.stats().frameMsAvg).toBe(0);
+  });
+});
