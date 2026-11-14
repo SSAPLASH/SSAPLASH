@@ -88,10 +88,19 @@
 
 /* 리듬 게임: 화면 높이를 꽉 채우고 남는 높이는 모두 하이웨이가 갖는다(레인을 길게).
    HUD는 자리를 차지하지 않고 하이웨이 위쪽에 겹쳐 뜬다(배경 없음 — 레인이 화면 위 끝까지 간다).
-   드럼 영역은 0.5배(380×150)로 줄인다. 악보 연습(sheet)은 위의 고정 크기를 그대로 쓴다 */
+   킷은 네온 0.6배(456×180), 화면 높이 820 이상이면 0.7배(532×210)다(link/laneLinkGeometry의 gameKitScale과 같은 기준).
+   악보 연습(sheet)은 위의 고정 크기를 그대로 쓴다 */
 .play-stage.game {
+  --game-kit-w: 456px;
+  --game-kit-h: 180px;
   height: 100vh;
   min-height: 460px;
+}
+@media (min-height: 820px) {
+  .play-stage.game {
+    --game-kit-w: 532px;
+    --game-kit-h: 210px;
+  }
 }
 /* 하이웨이 안쪽 위(위 여백 8, 좌우 20)에 얹는다. 이 높이(8 + 96)가 PlayPage의 GAME_HUD_INSET이다 */
 .play-stage.game .play-stage-hud {
@@ -115,28 +124,40 @@
   height: auto;
   min-height: 0;
 }
+/* 킷은 하이웨이 바로 아래에 붙인다(간격 없음). 판정선 아래 80px과 킷 위로 연결 층(link/lane-link.css)이 겹친다.
+   킷이 화면 가운데에 정확히 오도록 안내 칸·최근 타격 칸을 양옆 같은 폭 칸에 둔다(연결 층이 킷을 가운데 정렬로 계산한다) */
 .play-stage.game .play-stage-drum {
-  height: 150px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: var(--game-kit-h);
+  margin-top: calc(-1 * var(--space-m));
+}
+.play-stage.game .play-stage-guide {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+}
+.play-stage.game .play-stage-readout {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
 }
 .play-stage.game .play-stage-kit {
-  width: 380px;
-  height: 150px;
+  width: var(--game-kit-w);
+  height: var(--game-kit-h);
 }
-/* 실물 스킨(위에서 본 그림): 킷 상자 760×650.7이라 세로로 길다. 게임은 233.6×200, 악보는 245.1×210(domain/kit/drumKit smallKitSpec).
-   드럼 영역이 150 → 200으로 커지고 하이웨이(flex 1)가 그만큼 줄어든다. 타이밍 막대는 하이웨이 안쪽이라 킷과 겹치지 않는다.
-   슬롯 폭은 킷에 맞춰 줄여 안내 칸·최근 타격 칸이 킷 옆에 붙게 한다 */
-.play-stage.game.kit-top .play-stage-drum {
-  height: 200px;
-}
-.play-stage.game.kit-top .play-stage-kit {
-  width: 234px;
-  height: 200px;
-}
+/* 실물 스킨(위에서 본 그림)은 악보 연습만 쓴다: 킷 상자 760×650.7이라 245.1×210(domain/kit/drumKit smallKitSpec) */
 .play-stage.sheet.kit-top .play-stage-kit {
   width: 246px;
 }
 
-/* 킷을 줄인 만큼 패드 위 판정 글씨는 키운다(SVG 단위 32 × 0.5배 = 화면 16px) */
+/* 킷을 줄인 만큼 패드 위 판정 글씨는 키운다(SVG 단위 26 × 0.6~0.7배 = 화면 16~18px) */
 .play-stage.game .drum-pad .drum-pad-judge {
-  font-size: 32px;
+  font-size: 26px;
+}
+/* 가이드 박 번호 배지도 킷 배율만큼 키운다(네온 평면 패드 배지 자리 (80, 12) 기준 1.6배) */
+.play-stage.game .drum-pad-badge {
+  transform: translate(80px, 12px) scale(1.6);
 }
