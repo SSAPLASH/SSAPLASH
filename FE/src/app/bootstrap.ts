@@ -20,6 +20,7 @@ import type { ResolvedHit, StickId } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
+import { metronomePreview } from '@/runtime/metronomePreview';
 import { startAudioDiag } from './diag/audioDiag';
 import { metronome } from '@/engine/Metronome';
 import { padTableSync } from '@/input/padTableSync';
@@ -381,6 +382,17 @@ export function bootstrapMetronome(): void {
     },
   });
 
+  // 박 분할 예시 소리: 메트로놈과 같은 클릭 경로. 메트로놈이 울리는 중이거나 곡에 잠겨 있으면 내지 않는다
+  metronomePreview.bind({
+    click: (atMs, level) => audioEngine.click(atMs, level),
+    ensureAudio: unlockAudio,
+    renderAheadMs: () => audioEngine.renderAheadMs(),
+    busy: () => {
+      const m = useLive.getState().metronome;
+      return m.playing || m.locked;
+    },
+  });
+
   const setLive = (patch: Partial<MetronomeLive>) =>
     useLive.setState((s) => ({ metronome: { ...s.metronome, ...patch } }));
 
@@ -411,6 +423,8 @@ export function bootstrapMetronome(): void {
     }
     // BPM이 바뀌었으면 자동 분할을 다시 푼다. 값이 같으면 엔진이 무시하므로 되돌아오지 않는다
     applySubdivision();
+    // 메트로놈이 울리기 시작하거나 곡에 잠기면 예시 소리를 끊는다
+    if (st.playing || st.locked) metronomePreview.stop();
     // 잠금 중 값은 곡 값이므로 사용자 설정에 저장하지 않는다
     if (st.locked) return;
     const cur = useSettings.getState();
