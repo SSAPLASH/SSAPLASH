@@ -70,6 +70,7 @@
   color: var(--miss);
 }
 .dock-metro-chip {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -77,7 +78,30 @@
   width: 120px;
   height: 32px;
 }
+/* 패널이 열려 있는 동안 칩 전체(아이콘·숫자·스위치)를 은은한 브랜드 색으로 감싼다. 칩 밖으로 5·7px 번지는 면이라 Dock 폭은 그대로다 */
+.dock-metro-chip::before {
+  content: '';
+  position: absolute;
+  inset: -5px -7px;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition:
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+  pointer-events: none;
+}
+.dock-metro-chip.open::before {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--brand-tint-line);
+}
+.dock-metro-chip.open .dock-metro-body,
+.dock-metro-chip.open .dock-metro-body:hover {
+  background: transparent;
+  color: var(--brand-text);
+}
 .dock-metro-body {
+  position: relative;
   min-height: 0;
   display: flex;
   align-items: center;
