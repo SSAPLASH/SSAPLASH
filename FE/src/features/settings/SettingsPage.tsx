@@ -72,6 +72,8 @@ export function SettingsPage() {
   const setLiveCoach = useSettings((s) => s.setLiveCoach);
   const timingBar = useSettings((s) => s.timingBar);
   const setTimingBar = useSettings((s) => s.setTimingBar);
+  const gameGuide = useSettings((s) => s.gameGuide);
+  const setGameGuide = useSettings((s) => s.setGameGuide);
   const playHaptic = useSettings((s) => s.playHaptic);
   const setPlayHaptic = useSettings((s) => s.setPlayHaptic);
 
@@ -244,6 +246,9 @@ export function SettingsPage() {
             </SettingRow>
             <SettingRow label="타이밍 막대" help="최근 타격이 빠른지 늦은지를 눈금으로 보여 줘요.">
               {(aria) => <Toggle {...aria} label="타이밍 막대" checked={timingBar} onChange={setTimingBar} />}
+            </SettingRow>
+            <SettingRow label="리듬 게임 가이드" help="다음에 칠 패드를 점선과 박 번호로 미리 보여 줘요.">
+              {(aria) => <Toggle {...aria} label="리듬 게임 가이드" checked={gameGuide} onChange={setGameGuide} />}
             </SettingRow>
             {import.meta.env.VITE_MONITOR === 'true' && (
               <SettingRow label="타격 진동 방식" help="연주 중 진동을 판정 결과로 낼지 스틱이 치는 즉시 낼지 고릅니다." wideControl>

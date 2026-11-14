@@ -77,7 +77,7 @@ describe('SetupPage 단계 팝업', () => {
     fireEvent.click(screen.getByRole('button', { name: /시작 위치 보정/ }));
     const dialog = screen.getByRole('dialog', { name: '시작 위치 보정' });
     expect(within(dialog).getByRole('button', { name: /시작 위치 맞추기/ })).toBeTruthy();
-    expect(dialog.textContent).toContain('[전체 보정] 또는 [추가하기]');
+    expect(dialog.textContent).toContain('[다시 보정] 또는 [새로 보정]');
   });
 
   it('보정 중에는 시작 위치 보정 타일이 비활성이라 팝업을 열 수 없다', () => {
@@ -87,7 +87,8 @@ describe('SetupPage 단계 팝업', () => {
     const tile = screen.getByRole('button', { name: /시작 위치 보정/ }) as HTMLButtonElement;
     expect(tile.disabled).toBe(true);
     fireEvent.click(tile);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // 보정 중에는 보정 팝업만 열려 있고 ② 단계 팝업은 열리지 않는다
+    expect(screen.queryByRole('dialog', { name: '시작 위치 보정' })).toBeNull();
   });
 
   it('재정렬이 필요해져도 팝업은 자동으로 열리지 않고 타일만 강조된다', () => {

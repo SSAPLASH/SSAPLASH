@@ -8,7 +8,7 @@ import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import type { Chart } from '@/domain/song/chart';
 import type { Judgement } from '@/domain/play/judgement';
 import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/song/sheet';
-import { barsPerPage, CONTENT_BOTTOM, CONTENT_TOP, cursorPos, flowGeometry, noteHeadAt, pagerSlots, snapToBeat, staffScale, type PagerSlot } from './sheetPagerMath';
+import { barsPerPage, cursorPos, flowGeometry, noteHeadAt, OVERLAY_RESERVE_PX, pagerSlots, snapToBeat, staffOffsetY, staffScale, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from '@/components/sheetmusic/sheetStripDraw';
 
@@ -41,9 +41,10 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // 최신 props를 그리기 루프에 넘긴다 (렌더 중 ref 쓰기 회피)
-  const live = useRef({ noteStates, strayHits, getSongTime, countInMs });
+  const hasOverlay = Boolean(overlay);
+  const live = useRef({ noteStates, strayHits, getSongTime, countInMs, hasOverlay });
   useEffect(() => {
-    live.current = { noteStates, strayHits, getSongTime, countInMs };
+    live.current = { noteStates, strayHits, getSongTime, countInMs, hasOverlay };
   });
 
   // chart가 바뀔 때만 마디 배치를 새로 만든다 (마디별 지연 계산 캐시)
@@ -122,13 +123,15 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
         return;
       }
       // 악보를 배율 k로 그린다: 이후 좌표는 모두 논리 크기(W×H = 칸 ÷ k)이고 변환이 한 번에 키운다
-      const k = staffScale(height);
+      // 타이밍 막대가 있으면 그 자리(칸 아래)를 빼고 악보를 맞춘다: 박 번호가 막대 밑에 깔리지 않는다
+      const reservePx = p.hasOverlay ? OVERLAY_RESERVE_PX : 0;
+      const k = staffScale(height - reservePx);
       const W = width / k;
       const H = height / k;
       ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
       ctx.clearRect(0, 0, W, H);
       // 세로 가운데 정렬. 가로는 슬롯 x에 왼쪽 여백을 더한다(보표 선은 drawSheet가 전체 폭에 긋는다)
-      const offsetY = Math.max(0, (H - (CONTENT_BOTTOM - CONTENT_TOP)) / 2 - CONTENT_TOP);
+      const offsetY = staffOffsetY(H, reservePx / k);
       ctx.translate(0, offsetY);
       const inner = Math.max(1, W - GUTTER_X);
 

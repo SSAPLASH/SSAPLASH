@@ -5,9 +5,9 @@ import { cleanup, render } from '@testing-library/react';
 import type { Chart } from '@/domain/song/chart';
 import type { FxLocate } from '@/domain/hitFx/types';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
-import { drawSheet, HEAD_RX, headY } from '@/components/sheetmusic/sheetStripDraw';
+import { drawBeatLabel, drawSheet, HEAD_RX, headY } from '@/components/sheetmusic/sheetStripDraw';
 import { SheetPager } from './SheetPager';
-import { CONTENT_BOTTOM, CONTENT_TOP, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffScale } from './sheetPagerMath';
+import { CONTENT_TOP, OVERLAY_RESERVE_PX, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffOffsetY, staffScale } from './sheetPagerMath';
 
 vi.mock('@/components/sheetmusic/sheetStripDraw', async (load) => {
   const actual = await load<typeof import('@/components/sheetmusic/sheetStripDraw')>();
@@ -66,6 +66,20 @@ describe('SheetPager 악보 배율', () => {
     expect(setTransform).toHaveBeenLastCalledWith(DPR * STAFF_SCALE_MIN, 0, 0, DPR * STAFF_SCALE_MIN, 0, 0);
   });
 
+  it('타이밍 막대(overlay)가 있으면 그 자리를 빼고 배율·세로 위치를 정한다: 박 번호가 막대에 깔리지 않는다', () => {
+    height = 255;
+    render(<SheetPager chart={chart} noteStates={[]} strayHits={[]} getSongTime={() => 0} overlay={<i />} />);
+    nextFrame(0);
+    const k = staffScale(255 - OVERLAY_RESERVE_PX);
+    expect(setTransform).toHaveBeenLastCalledWith(DPR * k, 0, 0, DPR * k, 0, 0);
+    // 박 번호 기준선이 막대 위 끝(칸 아래에서 OVERLAY_RESERVE_PX)보다 위다
+    const label = vi.mocked(drawBeatLabel).mock.lastCall!;
+    const offsetY = staffOffsetY(255 / k, OVERLAY_RESERVE_PX / k);
+    expect((label[2] + offsetY) * k).toBeLessThanOrEqual(255 - OVERLAY_RESERVE_PX);
+    // 위 끝도 칸 안이다
+    expect((CONTENT_TOP + offsetY) * k).toBeGreaterThanOrEqual(-1e-9);
+  });
+
   it('이펙트 위치는 확대된 음표 머리의 CSS 픽셀 좌표다', () => {
     render(<SheetPager chart={chart} noteStates={[null]} strayHits={[]} getSongTime={() => 0} fxSource={source} />);
     nextFrame(0);
@@ -74,7 +88,7 @@ describe('SheetPager 악보 배율', () => {
     const glyph = opts.layoutOf(0).glyphs.find((g) => g.noteIndex === 0)!;
     // 논리 좌표의 머리 위치: 슬롯 왼쪽 x(= 논리 폭 × baseRatio)에서 연속 배치, y는 보표 위치에 세로 정렬 offset을 더한다
     const logicalX = xInBarContinuous(opts.width * opts.baseRatio, opts.barPx, glyph.xRatio, opts.continuousStepsPerBar!);
-    const offsetY = Math.max(0, (opts.height - (CONTENT_BOTTOM - CONTENT_TOP)) / 2 - CONTENT_TOP);
+    const offsetY = staffOffsetY(opts.height);
     const loc = locate!({ judgement: 'PERFECT', noteIndex: 0 } as never)!;
     expect(loc.shape).toBe('head');
     expect(loc.geo.cx).toBeCloseTo(logicalX * k);

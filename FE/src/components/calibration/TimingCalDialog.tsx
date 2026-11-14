@@ -57,7 +57,9 @@ export function TimingCalView({ snap, currentOffsetMs, titleId, onStart, onApply
         <>
           {intro && <p className="timing-cal-sub">처음 한 번만 박자를 맞추면 판정이 정확해져요.</p>}
           <p className="timing-cal-text">
-            클릭 소리에 맞춰 아무 패드나 쳐 주세요. 처음 {TIMING_CAL_LISTEN_BEATS}번은 듣기만 하고, 이어지는 {TIMING_CAL_MEASURE_BEATS}번을 맞춰 치면 돼요.
+            클릭 소리에 맞춰 아무 패드나 쳐 주세요.
+            <br />
+            처음 {TIMING_CAL_LISTEN_BEATS}번은 듣기만 하고, 이어지는 {TIMING_CAL_MEASURE_BEATS}번을 맞춰 치면 돼요.
           </p>
           <p className="timing-cal-sub">내 드럼 소리가 클릭과 겹쳐 들리게 치세요. 그 타이밍에 판정을 맞춰요.</p>
           <div className="dialog-actions">
@@ -146,9 +148,11 @@ interface DialogProps {
   intro?: boolean;
   /** [적용]으로 값이 저장됐을 때, onClose 전에 부른다 */
   onApplied?: () => void;
+  /** 화면별 모양을 덧입힐 클래스(드럼 세팅은 setup-timing-dialog). 기본 모양은 timing-cal-dialog */
+  className?: string;
 }
 
-export function TimingCalDialog({ onClose, intro = false, onApplied }: DialogProps) {
+export function TimingCalDialog({ onClose, intro = false, onApplied, className }: DialogProps) {
   const titleId = useId();
   const snap = useSyncExternalStore(timingCalSession.subscribe, timingCalSession.snapshot);
   const currentOffsetMs = useSettings((s) => s.audioOffsetMs);
@@ -184,7 +188,7 @@ export function TimingCalDialog({ onClose, intro = false, onApplied }: DialogPro
   };
 
   return (
-    <Dialog labelledBy={titleId} onClose={onClose} className="timing-cal-dialog">
+    <Dialog labelledBy={titleId} onClose={onClose} className={`timing-cal-dialog${className ? ` ${className}` : ''}`}>
       <TimingCalView
         snap={snap}
         currentOffsetMs={currentOffsetMs}
