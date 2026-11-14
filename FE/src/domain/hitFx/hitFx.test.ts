@@ -186,10 +186,10 @@ describe('auto 테마(옛 HitEffects 재현)', () => {
   });
 });
 
-describe('electric', () => {
+describe('electric(입자만의 대체 함수 spawnLite)', () => {
   it('드럼은 번개 3~5줄 + 섬광, 번개는 점 목록과 씨앗이 있다', () => {
     for (const v of [0, 60, 127]) {
-      const r = spawnAll('electric', 2, v).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
+      const r = spawnAll('electric', 2, v, false, true).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
       const bolts = r.list.filter((p) => p.kind === 'bolt');
       expect(bolts.length).toBeGreaterThanOrEqual(3);
       expect(bolts.length).toBeLessThanOrEqual(5);
@@ -201,7 +201,7 @@ describe('electric', () => {
     }
   });
   it('킥 방전은 킷 아래쪽 가로선(y 일정)', () => {
-    const r = spawnAll('electric', 2, 100).find((x) => x.skin === 'electronic' && x.pad === 'KICK')!;
+    const r = spawnAll('electric', 2, 100, false, true).find((x) => x.skin === 'electronic' && x.pad === 'KICK')!;
     const b = r.list.find((p) => p.kind === 'bolt')!;
     const ys = b.points!.filter((_, i) => i % 2 === 1);
     expect(new Set(ys).size).toBe(1);
