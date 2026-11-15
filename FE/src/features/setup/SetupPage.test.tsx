@@ -20,9 +20,13 @@ async function renderSetup(): Promise<string> {
 }
 
 describe('SetupPage 고급 설정', () => {
-  it('접힘 요약에 판정·낙하·카운트다운·메트로놈만 있고 음량·오디오 오프셋은 없다', async () => {
+  it('접힘 요약에 판정 타이밍·패드 인식 범위만 있고 앱 동작 값과 음량은 없다', async () => {
     const html = await renderSetup();
-    expect(html).toContain('판정 반경 · 판정 폭 · 노트 낙하 · 카운트다운 · 메트로놈');
+    expect(html).toContain('판정 타이밍 · 패드 인식 범위');
+    expect(html).not.toContain('판정 폭');
+    expect(html).not.toContain('노트 낙하');
+    expect(html).not.toContain('카운트다운');
+    expect(html).not.toContain('플레이 중 메트로놈');
     expect(html).not.toContain('전체 음량');
     expect(html).not.toContain('타격음 지연 보정');
     expect(html).not.toContain('오디오 오프셋');
