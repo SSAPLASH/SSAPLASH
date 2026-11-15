@@ -191,14 +191,16 @@ function SheetPageBody() {
   const sourceChart: Chart | null = paramLoaded && (accUrl === null || accCurrent?.ok) ? paramLoaded.chart : null;
   // 연습 속도(설계 MODE-003-practice-speed): 반주가 울리지 않을 때만 쓴다. 고른 값은 채보별로 기억하고(저장하지 않는다) 다른 채보에서는 100 %다.
   // 배율이 1이 아니면 채보를 늘려서 세션을 만든다 — 엔진·곡 시계·악보·메트로놈은 늘린 채보를 그대로 본다
+  // 학습 코스의 연주 레슨에서는 속도를 고르지 않는다(설계 MODE-003-practice-speed D17) — 통과는 원래 빠르기 기록만 세므로(BE) 느리게 완주해도 레슨이 열리지 않는다
+  const lessons = useLessons((l) => l.list)?.items ?? NO_LESSONS;
+  const lessonPlay = lessonOfChart(lessons, chartIdParam)?.kind === 'PLAY';
   const rateKey = practiceRateKey(songIdParam, chartIdParam);
   const pickedRate = usePracticeRate((r) => rateFor(r, rateKey));
   const setPracticeRate = usePracticeRate((r) => r.setRate);
-  const rate = accUrl === null ? pickedRate : 1;
+  const rate = accUrl === null && !lessonPlay ? pickedRate : 1;
   const readyChart: Chart | null = useMemo(() => (sourceChart ? scaleChart(sourceChart, rate) : null), [sourceChart, rate]);
 
   // 판정 폭: 쉬운 채보·입문 코스 연주 레슨이면 GOOD을 넓힌다(PLAY-004 3-5). 세션·타이밍 막대·진단 줄·플레이 로그가 이 값 하나를 쓴다
-  const lessons = useLessons((l) => l.list)?.items ?? NO_LESSONS;
   const beginner = readyChart ? isBeginnerChart({ difficulty: readyChart.difficulty, chartId: readyChart.chartId, lessons }) : false;
   const windows = useMemo(() => appliedWindows(settings.timing, beginner), [settings.timing, beginner]);
   const widened = beginner && windows.goodMs > settings.timing.goodMs;
@@ -962,9 +964,13 @@ function SheetPageBody() {
               songBpm={startSongBpm}
               sourceBpm={chart?.sourceTiming?.bpm ?? startSongBpm}
               rate={rate}
-              onRate={(r) => {
-                if (rateKey !== null) setPracticeRate(rateKey, r);
-              }}
+              onRate={
+                lessonPlay
+                  ? undefined
+                  : (r) => {
+                      if (rateKey !== null) setPracticeRate(rateKey, r);
+                    }
+              }
               padCount={settings.sheetPadCount}
               onPadCount={settings.setSheetPadCount}
               hasAccompaniment={accAvailableUrl !== null || (paramLoaded === null && sameSong && detail.accompanimentStatus === 'READY')}

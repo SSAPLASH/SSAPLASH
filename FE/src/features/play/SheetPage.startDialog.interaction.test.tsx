@@ -12,6 +12,7 @@ import { loadChart, useSongs } from '@/store/songStore';
 import { useAuth } from '@/store/authStore';
 import { useSettings } from '@/store/settingsStore';
 import { useLessons } from '@/store/lessonStore';
+import { practiceRateKey, usePracticeRate } from '@/features/play/store/practiceRate';
 import { lessonsFromDto } from '@/domain/play/lesson';
 import { BUILTIN_CHARTS } from '@/domain/song/chart';
 import type { UserMe } from '@/domain/account/auth';
@@ -345,6 +346,50 @@ describe('SheetPage 첫 연주 전 박자 맞추기 권유', () => {
     fireEvent.click(await within(await screen.findByRole('dialog', { name: '시험곡' })).findByRole('button', { name: '플레이' }));
     await waitFor(() => expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull());
     expect(screen.queryByRole('dialog', { name: '박자 맞추기' })).toBeNull();
+  });
+});
+
+// 설계 MODE-003-practice-speed D17: 학습 코스의 연주 레슨은 통과가 원래 빠르기 기록만 세므로 속도를 고르지 않는다
+describe('SheetPage 시작 확인 창의 연습 속도', () => {
+  const lessonOn = (chartId: number) =>
+    useLessons.setState({
+      status: 'ready',
+      list: lessonsFromDto({
+        passAccuracy: 70,
+        items: [{ order: 1, course: 'BEGINNER', kind: 'PLAY', songId: 1, chartId, title: '레슨', summary: 's', pads: ['KICK'], guide: true, bpm: 70, durationMs: 1000, noteCount: 4, bestAccuracy: null, passed: false, locked: false }],
+      }),
+    });
+
+  beforeEach(() => {
+    useSettings.setState({ accompaniment: false });
+  });
+  afterEach(() => {
+    usePracticeRate.setState({ key: null, rate: 1 });
+  });
+
+  it('레슨이 아닌 채보는 반주가 꺼져 있으면 연습 속도를 고를 수 있다', async () => {
+    lessonOn(999);
+    show('/sheet?song=1&chart=12&start=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    expect(await within(dialog).findByRole('button', { name: '5% 느리게' })).toBeTruthy();
+  });
+
+  it('연주 레슨의 채보는 반주가 꺼져 있어도 연습 속도 줄이 없다', async () => {
+    lessonOn(12);
+    show('/sheet?tab=lessons&course=beginner&song=1&chart=12&start=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    await within(dialog).findByRole('button', { name: '플레이' });
+    expect(within(dialog).queryByRole('button', { name: '5% 느리게' })).toBeNull();
+    expect(within(dialog).queryByText('연습 속도')).toBeNull();
+  });
+
+  it('연주 레슨의 채보는 전에 골라 둔 속도가 있어도 원래 빠르기로 시작한다', async () => {
+    usePracticeRate.getState().setRate(practiceRateKey(1, 12)!, 0.7);
+    lessonOn(12);
+    show('/sheet?tab=lessons&course=beginner&song=1&chart=12&start=1');
+    fireEvent.click(await within(await screen.findByRole('dialog', { name: '시험곡' })).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: '선택한 곡' })).toBeNull());
+    expect(screen.queryByText('70%')).toBeNull();
   });
 });
 
