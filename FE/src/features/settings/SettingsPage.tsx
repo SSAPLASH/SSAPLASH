@@ -1,4 +1,5 @@
-// 설정 화면(/settings, ACCT-001). 오디오·연주·계정·데이터 활용을 구역별로 표시한다.
+// 설정 화면(/settings, ACCT-001). 소리·메트로놈·판정·진행·화면 표시·꾸미기·계정·데이터 활용을 구역별로 표시한다.
+// 여기에는 앱 동작·표시 값만 둔다. 스틱·기기에 맞추는 값(박자 맞추기·판정 타이밍·패드 인식 범위)은 드럼 세팅(/setup)에 있다.
 // 값은 settingsStore에 바로 저장한다. 연주 기록 활용 동의는 가입 때 필수이고 철회는 탈퇴뿐이라 토글이 없다.
 // "데이터 활용" 구역(설계 COACH-004-recommendation-consent D7)는 선택 동의인 맞춤 곡 추천 학습 활용만 토글로 켜고 끈다. 상태는 서버가 원본이다.
 // 탈퇴 열림·진행·오류 상태는 여기서 정하고 WithdrawDialog는 표시만 한다. 탈퇴 성공 후엔 로그인 화면으로 간다.
@@ -18,10 +19,6 @@ import { Toast, type ToastVariant } from '@/components/ui/feedback/Toast';
 import { Toggle } from '@/components/ui/form/Toggle';
 import { Dialog } from '@/components/ui/overlay/Dialog';
 import { PageHeader } from '@/components/ui/layout/PageHeader';
-import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
-import { outputLatencyWarnText, timingCalMismatchText, timingCalRecordText, timingOffsetText } from '@/components/calibration/timingCalText';
-import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/calibration/timingCalibration';
-import { audioEngine } from '@/audio/AudioEngine';
 import { recommendationConsentEnabled, SIGNUP_TERMS } from '@/domain/account/signupTerms';
 import type { SocialProvider } from '@/domain/account/auth';
 import { consentSaveErrorMessage, consentStatusText, isRecommendationVersionStale } from '@/domain/account/recommendationConsent';
@@ -36,9 +33,9 @@ const PROVIDER_LABEL: Record<SocialProvider, string> = {
   SSAFY: 'SSAFY',
 };
 
-/** 타격 진동 방식 선택지(모니터 빌드 전용, PLAY-006) */
 const SUBDIVISION_OPTIONS = SUBDIVISION_PREFS.map((value) => ({ value, label: SUBDIVISION_LABEL[value] }));
 
+/** 타격 진동 방식 선택지(모니터 빌드 전용, PLAY-006) */
 const HAPTIC_OPTIONS: { value: PlayHaptic; label: string }[] = [
   { value: 'judgement', label: '판정 진동' },
   { value: 'local', label: '스틱 즉시 진동' },
@@ -55,7 +52,6 @@ export function SettingsPage() {
   const logout = useAuth((s) => s.logout);
   const withdraw = useAuth((s) => s.withdraw);
 
-  const sensorKind = useSettings((s) => s.sensorKind);
   const volume = useSettings((s) => s.volume);
   const setVolume = useSettings((s) => s.setVolume);
   const drumVolume = useSettings((s) => s.drumVolume);
@@ -64,12 +60,14 @@ export function SettingsPage() {
   const setSongVolume = useSettings((s) => s.setSongVolume);
   const metronomeSubdivision = useSettings((s) => s.metronomeSubdivision);
   const setMetronomeSubdivision = useSettings((s) => s.setMetronomeSubdivision);
-  const audioOffsetMs = useSettings((s) => s.audioOffsetMs);
-  const setAudioOffsetMs = useSettings((s) => s.setAudioOffsetMs);
-  const kickOffsetMs = useSettings((s) => s.kickOffsetMs);
-  const setKickOffsetMs = useSettings((s) => s.setKickOffsetMs);
-  const timingCal = useSettings((s) => s.timingCal);
-  const [timingCalOpen, setTimingCalOpen] = useState(false);
+  const metronome = useSettings((s) => s.metronome);
+  const setMetronome = useSettings((s) => s.setMetronome);
+  const timing = useSettings((s) => s.timing);
+  const setTiming = useSettings((s) => s.setTiming);
+  const scrollMs = useSettings((s) => s.scrollMs);
+  const setScrollMs = useSettings((s) => s.setScrollMs);
+  const countInBars = useSettings((s) => s.countInBars);
+  const setCountInBars = useSettings((s) => s.setCountInBars);
   const kitSkin = useSettings((s) => s.kitSkin);
   const setKitSkin = useSettings((s) => s.setKitSkin);
   const hitFxTheme = useSettings((s) => s.hitFxTheme);
@@ -125,11 +123,6 @@ export function SettingsPage() {
       );
   };
 
-  const sensorMode = sensorKind !== 'none';
-  // 박자 맞추기 안내: 측정한 입력과 지금 입력이 다르거나, 보고된 출력 지연이 크면 한 줄씩 보인다
-  const timingMismatch = timingCalMismatchText(timingCal, sensorMode);
-  const latencyWarn = outputLatencyWarnText(audioEngine.latency()?.outputLatencyMs);
-
   const onLogout = () => {
     void logout().then(() => navigate('/', { replace: true }));
   };
@@ -159,9 +152,10 @@ export function SettingsPage() {
     <main className="main">
       <PageHeader className="settings-head" title="설정" />
 
-      <div className={`settings-grid${user ? ' has-data' : ''}`}>
-          <section className="settings-section settings-section--audio" aria-labelledby="settings-audio">
-            <h3 id="settings-audio" className="settings-section-title">오디오</h3>
+      <div className="settings-grid">
+        <div className="settings-col">
+          <section className="settings-section" aria-labelledby="settings-sound">
+            <h3 id="settings-sound" className="settings-section-title">소리</h3>
             <SettingRow label="전체 음량" help="모든 소리의 크기" wideControl>
               {(aria) => (
                 <Slider
@@ -204,43 +198,12 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <SettingRow label="박자 맞추기" help="클릭 소리에 맞춰 치면 판정 타이밍을 자동으로 맞춰요">
-              {() => (
-                <Button variant="secondary" size="sm" onClick={() => setTimingCalOpen(true)}>
-                  {timingCal ? '다시 맞추기' : '맞추기'}
-                </Button>
-              )}
-            </SettingRow>
-            <p className="settings-note">{timingCalRecordText(timingCal)}</p>
-            {timingMismatch && <p className="settings-note">{timingMismatch}</p>}
-            {latencyWarn && <p className="settings-note">{latencyWarn}</p>}
-            <SettingRow label="스틱 판정 타이밍" help="판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요" wideControl>
-              {(aria) => (
-                <Slider
-                  {...aria}
-                  label="스틱 판정 타이밍"
-                  min={TIMING_OFFSET_MIN_MS}
-                  max={TIMING_OFFSET_MAX_MS}
-                  step={TIMING_OFFSET_STEP_MS}
-                  value={audioOffsetMs}
-                  valueText={timingOffsetText(audioOffsetMs)}
-                  onChange={setAudioOffsetMs}
-                />
-              )}
-            </SettingRow>
-            <SettingRow label="킥 판정 타이밍" help="킥 페달 판정만 따로 맞춰요." wideControl>
-              {(aria) => (
-                <Slider
-                  {...aria}
-                  label="킥 판정 타이밍"
-                  min={TIMING_OFFSET_MIN_MS}
-                  max={TIMING_OFFSET_MAX_MS}
-                  step={TIMING_OFFSET_STEP_MS}
-                  value={kickOffsetOrStick(audioOffsetMs, kickOffsetMs)}
-                  valueText={timingOffsetText(kickOffsetOrStick(audioOffsetMs, kickOffsetMs))}
-                  onChange={setKickOffsetMs}
-                />
-              )}
+          </section>
+
+          <section className="settings-section" aria-labelledby="settings-metronome">
+            <h3 id="settings-metronome" className="settings-section-title">메트로놈</h3>
+            <SettingRow label="플레이 중 메트로놈" help="곡을 연주하는 동안 박자 클릭을 함께 들려줘요.">
+              {(aria) => <Toggle {...aria} label="플레이 중 메트로놈" checked={metronome} onChange={setMetronome} />}
             </SettingRow>
             <SettingRow label="메트로놈 박 분할" help="자동은 BPM 90 미만에서 8분음표로 울려요." wideControl>
               {() => (
@@ -257,11 +220,66 @@ export function SettingsPage() {
                 />
               )}
             </SettingRow>
-            <p className="settings-help">메트로놈은 연주 화면 상단 Dock에서도 바꿀 수 있어요.</p>
+            <p className="settings-help">메트로놈 음량과 빠르기는 연주 화면 상단 Dock에서 바꿀 수 있어요.</p>
           </section>
 
-          <section className="settings-section settings-section--play" aria-labelledby="settings-play">
-            <h3 id="settings-play" className="settings-section-title">연주</h3>
+          <section className="settings-section" aria-labelledby="settings-judge">
+            <h3 id="settings-judge" className="settings-section-title">판정·진행</h3>
+            <SettingRow label="판정 폭 Perfect" help="이 범위 안에 치면 Perfect예요. 넓힐수록 쉬워져요." wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="판정 폭 Perfect"
+                  min={10}
+                  max={60}
+                  step={5}
+                  value={timing.perfectMs}
+                  valueText={`±${timing.perfectMs}ms`}
+                  onChange={(v) => setTiming({ ...timing, perfectMs: v })}
+                />
+              )}
+            </SettingRow>
+            <SettingRow label="판정 폭 Good" help="이 범위 안에 치면 Good, 벗어나면 Miss예요." wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="판정 폭 Good"
+                  min={30}
+                  max={150}
+                  step={5}
+                  value={timing.goodMs}
+                  valueText={`±${timing.goodMs}ms`}
+                  onChange={(v) => setTiming({ ...timing, goodMs: v })}
+                />
+              )}
+            </SettingRow>
+            <p className="settings-note">판정 폭 Good을 기본값보다 넓히면 결과 화면에 표시돼요.</p>
+            <SettingRow label="노트 낙하 시간" help="노트가 판정선까지 내려오는 시간이에요. 짧을수록 빨라요." wideControl>
+              {(aria) => (
+                <Slider
+                  {...aria}
+                  label="노트 낙하 시간"
+                  min={600}
+                  max={3000}
+                  step={100}
+                  value={scrollMs}
+                  valueText={`${scrollMs}ms`}
+                  onChange={setScrollMs}
+                />
+              )}
+            </SettingRow>
+            <SettingRow label="카운트다운" help="연주 시작 전에 한 마디를 세어 줘요.">
+              {(aria) => <Toggle {...aria} label="카운트다운" checked={countInBars > 0} onChange={(v) => setCountInBars(v ? 1 : 0)} />}
+            </SettingRow>
+            <p className="settings-help">
+              박자 맞추기와 판정 타이밍은 <Link to="/setup">드럼 세팅</Link>에서 맞춰요.
+            </p>
+          </section>
+        </div>
+
+        <div className="settings-col">
+          <section className="settings-section" aria-labelledby="settings-view">
+            <h3 id="settings-view" className="settings-section-title">화면 표시</h3>
             <SettingRow label="실시간 코칭" help="연주 중 늦음·빠름·연속 MISS를 드럼 옆에 알려 줘요.">
               {(aria) => <Toggle {...aria} label="실시간 코칭" checked={liveCoach} onChange={setLiveCoach} />}
             </SettingRow>
@@ -283,6 +301,10 @@ export function SettingsPage() {
                 )}
               </SettingRow>
             )}
+          </section>
+
+          <section className="settings-section" aria-labelledby="settings-deco">
+            <h3 id="settings-deco" className="settings-section-title">꾸미기</h3>
             <SettingRow label="드럼 모양" help="연주 화면 드럼 킷의 생김새예요. 넘기면 바로 바뀌고, 이 기기에만 저장돼요" stacked>
               {(aria) => <KitSkinCarousel value={kitSkin} onChange={setKitSkin} labelledBy={aria['aria-labelledby']} />}
             </SettingRow>
@@ -290,8 +312,9 @@ export function SettingsPage() {
               {(aria) => <HitFxPicker value={hitFxTheme} onChange={setHitFxTheme} skin={kitSkin} labelledBy={aria['aria-labelledby']} />}
             </SettingRow>
           </section>
+        </div>
 
-          <section className="settings-section settings-section--account" aria-labelledby="settings-account">
+          <section className="settings-section" aria-labelledby="settings-account">
             <h3 id="settings-account" className="settings-section-title">계정</h3>
             {user ? (
               <div className="settings-account">
@@ -325,7 +348,7 @@ export function SettingsPage() {
           </section>
 
           {user && (
-            <section className="settings-section settings-section--data" aria-labelledby="settings-data">
+            <section className="settings-section" aria-labelledby="settings-data">
               <h3 id="settings-data" className="settings-section-title">데이터 활용</h3>
               <p className="settings-note">연주 기록 활용 동의(필수)는 회원 탈퇴로만 철회돼요.</p>
               {(recommendationConsentEnabled() || consentChecked) && <SettingRow label="맞춤 곡 추천 학습 활용" help="동의 상태를 확인하고 철회할 수 있어요.">
@@ -350,8 +373,6 @@ export function SettingsPage() {
           <button type="button" className="settings-withdraw-button" onClick={openWithdraw}>회원 탈퇴</button>
         </div>
       )}
-
-      {timingCalOpen && <TimingCalDialog onClose={() => setTimingCalOpen(false)} />}
 
       <Toast variant={toast?.variant ?? 'info'} text={toast?.text ?? null} regionClassName="settings-toast-region" />
 

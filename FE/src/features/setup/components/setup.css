@@ -472,24 +472,31 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.setup-adv-item {
+/* 묶음(판정 타이밍 / 패드 인식 범위): 제목 + 안내 + 슬라이더 */
+.setup-adv-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-s);
+  min-width: 0;
 }
-.setup-adv-label {
+.setup-adv-group-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 15px;
+  font-weight: 700;
+}
+.setup-adv-note {
+  margin: 0;
   color: var(--text-2);
-  font-size: 14px;
+  font-size: 13px;
 }
-.setup-adv-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-m);
-  font-size: 14px;
+.setup-adv-help {
+  margin: 0 0 var(--space-xs);
+  color: var(--text-3);
+  font-size: 12px;
 }
 .setup-adv-foot {
-  grid-column: 1 / -1;
+  margin: 0;
   color: var(--text-3);
   font-size: 12px;
 }
