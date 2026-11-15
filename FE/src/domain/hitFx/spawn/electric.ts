@@ -1,98 +1,77 @@
-// electric 테마 — 드럼: 중심에서 갈라지는 번개 3~5줄 + 흰 섬광, 심벌: 테두리를 도는 가지 번개, 킥: 킷 아래쪽 가로 방전.
-// 번개 꺾임은 그릴 때 40ms마다 seed+시간으로 다시 계산한다(깜빡임). 가산 합성.
+// electric 테마 — 한 타 = 연속 그림 1회 재생(스틱 자리에서 방전이 헤드 면을 타고 가장자리로 달리며 세 번 깜빡임) + 입자 몇 개.
+// 입자는 첫 방전(0ms)·둘째 방전(85ms)에 맞춘 흰 섬광 2개와 가장자리에서 튀는 짧은 불꽃만 맡는다(심벌은 더 많이, 더 멀리). 그림은 배열 맨 앞. 합성은 모두 더하기.
 import type { PadShape } from '@/domain/kit/drumKit';
-import { DRUM_KIT_H } from '@/domain/kit/drumKit';
-import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
+import { pickSheet } from '../sheets';
+import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, FxSheetId } from '../types';
+import { spawnElectricLite } from './electricLite';
+import { SHEET_BASE_SCALE, isCompact, sheetParticle, sizeGain } from './sheetFx';
 import { particle } from './util';
 
-export const ELECTRIC_PALETTE: FxPalette = { main: '#59c8ff', sub: '#d9f4ff', glow: '#8fdcff' };
-const BOLT_MS = 260;
-const FLASH_MS = 130;
+const SHEETS: readonly FxSheetId[] = ['bolt-side-a', 'bolt-side-b', 'bolt-cymbal', 'bolt-front'];
+const TAU = Math.PI * 2;
+/** 둘째 방전 시각(ms) */
+const SECOND_MS = 85;
 
-function bolt(points: number[], seed: number, jag: number, alpha: number, width: number, life = BOLT_MS): FxParticle {
-  return particle({
-    kind: 'bolt',
-    x: 0,
-    y: 0,
-    points,
-    seed,
-    jag,
-    alpha0: alpha,
-    alpha1: 0,
-    w0: width,
-    w1: width * 0.35,
-    color: ELECTRIC_PALETTE.main,
-    core: '#ffffff',
-    glow: true,
-    lifeMs: life,
-    ease: 'linear',
-  });
+/** 흰 섬광: 헤드 타원 위의 발광 덩어리 */
+function flash(geo: FxGeo, color: string, alpha: number, size0: number, size1: number, delayMs: number, lifeMs: number): FxParticle {
+  return particle({ kind: 'blob', x: geo.cx, y: geo.cy, rx: geo.rx, ry: geo.ry, size0, size1, alpha0: alpha, alpha1: 0, color, glow: true, delayMs, lifeMs, ease: 'expo', blend: 'add' });
 }
 
-function flash(x: number, y: number, rx: number, ry: number, alpha: number): FxParticle {
-  return particle({
-    kind: 'blob',
-    x,
-    y,
-    rx,
-    ry,
-    size0: 0.5,
-    size1: 1,
-    alpha0: alpha,
-    alpha1: 0,
-    color: '#ffffff',
-    glow: true,
-    lifeMs: FLASH_MS,
-  });
-}
-
-export function spawnElectric(event: FxEvent, geo: FxGeo, shape: PadShape, intensity: FxIntensity, rand: () => number): FxParticle[] {
+export function spawnElectric(event: FxEvent, geo: FxGeo, shape: PadShape, intensity: FxIntensity, rand: () => number, palette: FxPalette): FxParticle[] {
+  // 페달은 그림 없이 지금의 작은 입자 이펙트
+  if (shape === 'pedal') return spawnElectricLite(event, geo, shape, intensity, rand);
+  const { cx, cy, rx, ry, k } = geo;
   const out: FxParticle[] = [];
-  const a = intensity.alpha;
-  const seedBase = event.seq * 13;
-  if (shape === 'drum') {
-    // 번개 3~5줄: 균등 각도 + 지터, 길이는 헤드 반지름 안쪽에서 바깥으로
-    const n = Math.min(5, Math.max(3, Math.round(4 * intensity.count)));
-    const a0 = rand() * Math.PI * 2;
-    for (let i = 0; i < n; i++) {
-      const ang = a0 + (i * Math.PI * 2) / n + (rand() - 0.5) * 0.5;
-      const c = Math.cos(ang);
-      const s = Math.sin(ang);
-      const reach = (1.05 + 0.35 * rand()) * intensity.size;
-      out.push(
-        bolt(
-          [geo.cx + c * geo.rx * 0.15, geo.cy + s * geo.ry * 0.15, geo.cx + c * (geo.rx * reach + 10 * geo.k), geo.cy + s * (geo.ry * reach + 10 * geo.k)],
-          seedBase + i,
-          7 * geo.k * intensity.size,
-          a,
-          2.2,
-        ),
-      );
+
+  const id = pickSheet(SHEETS, shape, rx, ry, rand);
+  if (id) out.push(sheetParticle(geo, id, sizeGain(intensity), isCompact(event.mode), rand, 0.8, palette.sub));
+
+  // 흰 섬광: 첫 방전(0~90ms)과 둘째 방전(85~205ms)에 맞춰 헤드가 번쩍인다
+  out.push(flash(geo, palette.sub, 0.42 * intensity.alpha, 0.85, 1.08, 0, 90));
+  out.push(flash(geo, palette.main, 0.14 * intensity.alpha, 1, 1.1, SECOND_MS, 120));
+
+  // 가장자리 불꽃: 가장자리에서 튀는 짧은 drop. 절반(홀수 번째)은 둘째 방전에 맞춘다
+  const cym = shape === 'cymbal';
+  const hs = (isCompact(event.mode) ? 0.6 : 1) * (0.7 + 0.3 * intensity.size);
+  const sparks = cym ? Math.min(9, Math.round(8 * intensity.count)) : Math.round(5 * intensity.count);
+  for (let i = 0; i < sparks; i++) {
+    const a = (i / sparks) * TAU + (rand() - 0.5) * 0.9;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    let sp: number;
+    let vy: number;
+    if (cym) {
+      const u = rand();
+      sp = (420 + 520 * u * u) * k * hs * SHEET_BASE_SCALE;
+      vy = s * sp * 0.45 - (160 + 200 * rand()) * k * hs;
+    } else {
+      sp = (300 + 320 * rand()) * k * SHEET_BASE_SCALE;
+      vy = s * sp * 0.55 - 120 * k;
     }
-    out.push(flash(geo.cx, geo.cy, geo.rx * 0.9, geo.ry * 0.9, 0.9 * a));
-  } else if (shape === 'cymbal') {
-    // 테두리를 도는 가지 번개: 타원 둘레를 따라가는 호 3개
-    const n = Math.min(4, Math.max(2, Math.round(3 * intensity.count)));
-    const a0 = rand() * Math.PI * 2;
-    for (let i = 0; i < n; i++) {
-      const start = a0 + (i * Math.PI * 2) / n;
-      const span = (0.8 + 0.5 * rand()) * intensity.size;
-      const pts: number[] = [];
-      const steps = 5;
-      for (let j = 0; j <= steps; j++) {
-        const ang = start + (span * j) / steps;
-        pts.push(geo.cx + Math.cos(ang) * geo.rx * 1.02, geo.cy + Math.sin(ang) * geo.ry * 1.02);
-      }
-      out.push(bolt(pts, seedBase + i, 4 * geo.k, a, 2));
-    }
-    out.push(flash(geo.cx, geo.cy, geo.rx * 0.5, geo.ry * 0.5, 0.6 * a));
-  } else {
-    // 킥: 킷 아래쪽을 가로지르는 방전 2줄 + 중앙 섬광
-    const y = Math.min((geo.floor ?? DRUM_KIT_H) + 4, geo.cy + geo.ry + 6 * geo.k);
-    const half = geo.rx * 2.1 * intensity.size;
-    out.push(bolt([geo.cx - half, y, geo.cx, y, geo.cx + half, y], seedBase, 6 * geo.k, a, 2.6));
-    out.push(bolt([geo.cx - half * 0.7, y + 6, geo.cx + half * 0.7, y + 6], seedBase + 1, 5 * geo.k, 0.7 * a, 1.8));
-    out.push(flash(geo.cx, geo.cy + geo.ry * 0.5, geo.rx * 0.7, geo.ry * 0.5, 0.8 * a));
+    out.push(
+      particle({
+        kind: 'drop',
+        x: cx + c * rx * 0.95,
+        y: cy + s * ry * 0.95,
+        vx: c * sp,
+        vy,
+        ay: 500 * k,
+        drag: 7,
+        size0: 0.9 * intensity.size,
+        size1: 0.4,
+        alpha0: 0.95,
+        alpha1: 0,
+        hold: 0.3,
+        color: '#ffffff',
+        glow: true,
+        glowColor: palette.main,
+        delayMs: i % 2 ? SECOND_MS : 0,
+        // 심벌 180~275ms: 둘째 방전 지연(85ms)을 더해도 수명 상한(360ms) 안이다
+        lifeMs: cym ? 180 + Math.round(95 * rand()) : 140 + Math.round(100 * rand()),
+        streak: 0.012,
+        blend: 'add',
+      }),
+    );
   }
   return out;
 }

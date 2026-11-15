@@ -30,9 +30,28 @@ export interface FxEvent {
 export type HitFxTheme = 'auto' | 'electric' | 'water' | 'fire' | 'ink' | 'pixel';
 
 /** 엔진이 그리는 기본 도형 6종 */
-export type FxKind = 'ring' | 'dot' | 'bolt' | 'blob' | 'pixel' | 'shard';
+export type FxKind = 'ring' | 'dot' | 'bolt' | 'blob' | 'pixel' | 'shard' | 'sheet' | 'drop';
 
-export type FxEase = 'out' | 'linear' | 'step12';
+/** 진행 p에서 out = 1-(1-p)², expo = 1-2^(-10p), step12 = 12fps 계단 */
+export type FxEase = 'out' | 'linear' | 'step12' | 'expo';
+
+/** 연속 그림(스프라이트 시트) 묶음 id. 테마 3 × 종류 4 = 12개. 정의 표는 sheets.ts */
+export type FxSheetId =
+  | 'water-side-a'
+  | 'water-side-b'
+  | 'water-cymbal'
+  | 'water-front'
+  | 'fire-side-a'
+  | 'fire-side-b'
+  | 'fire-cymbal'
+  | 'fire-front'
+  | 'bolt-side-a'
+  | 'bolt-side-b'
+  | 'bolt-cymbal'
+  | 'bolt-front';
+
+/** 파티클별 합성 방식. 없으면 테마의 blend를 따른다 */
+export type FxBlendMode = 'add' | 'normal';
 
 /** 파티클 한 개. 좌표·크기는 킷 좌표계(760×300), 선 두께(w0·w1)는 화면 px */
 export interface FxParticle {
@@ -75,6 +94,20 @@ export interface FxParticle {
   /** 조각(shard) 시작 각도(rad)·초당 회전(rad/s). size는 삼각형 외접 반지름 */
   rot?: number;
   spin?: number;
+  /** sheet 전용: 재생할 묶음. x·y는 헤드 중심, size0은 그림 한 변(킷 좌표), lifeMs는 재생 길이, alpha0은 전체 밝기, rot은 기울기 */
+  sheet?: FxSheetId;
+  /** sheet 전용: 좌우 뒤집기(기본 false) */
+  mirror?: boolean;
+  /** drop 전용: 늘어짐 시간(초, 기본 0.006). 길이는 크기의 6배까지 */
+  streak?: number;
+  /** 0~1: 수명의 이 비율까지 alpha0을 유지하고 그 뒤 alpha1로 간다(기본 0 = 사용 안 함) */
+  hold?: number;
+  /** 합성 방식. 없으면 테마 blend. sheet는 항상 더하기 */
+  blend?: FxBlendMode;
+  /** drop 전용: 발광 번짐 색(없으면 color) */
+  glowColor?: string;
+  /** 발광 점·덩어리의 스프라이트 종류(기본 soft) */
+  sprite?: 'soft' | 'bokeh';
 }
 
 /** 세기 → 배율. 판정·콤보가 null이면 판정 배율은 1 */
