@@ -10,13 +10,13 @@ import type { FxEvent, FxParticle } from './types';
 
 const ev = (seq: number, pad: FxEvent['pad'], velocity = 100): FxEvent => ({ seq, pad, velocity, mode: 'lab', judgement: null, deltaMs: null, combo: null });
 
-function spawnAll(theme: (typeof HIT_FX_LAB_THEMES)[number], seq: number, velocity: number, reduced = false) {
+function spawnAll(theme: (typeof HIT_FX_LAB_THEMES)[number], seq: number, velocity: number, reduced = false, lite = false) {
   const def = hitFxThemeDef(theme);
   const out: { skin: string; pad: string; list: FxParticle[] }[] = [];
   for (const skin of KIT_SKINS) {
     for (const p of kitPadsFor(skin)) {
       const e = ev(seq, p.pad, velocity);
-      const run = reduced ? def.spawnReduced : def.spawn;
+      const run = reduced ? def.spawnReduced : lite ? def.spawnLite : def.spawn;
       out.push({ skin, pad: p.pad, list: run(e, fxGeoOf(p, skin), p.shape, fxIntensity(e), createRand(seq), def.palette(skin, p.shape, '#35a3d4')) });
     }
   }
@@ -89,6 +89,26 @@ describe('테마 목록', () => {
   });
 });
 
+describe('테마 정의 · 연속 그림·상한·여백', () => {
+  it('그림 묶음은 물·불·전기 각 4개, 나머지는 빈 목록', () => {
+    expect(hitFxThemeDef('water').sheets).toEqual(['water-side-a', 'water-side-b', 'water-cymbal', 'water-front']);
+    expect(hitFxThemeDef('fire').sheets).toEqual(['fire-side-a', 'fire-side-b', 'fire-cymbal', 'fire-front']);
+    expect(hitFxThemeDef('electric').sheets).toEqual(['bolt-side-a', 'bolt-side-b', 'bolt-cymbal', 'bolt-front']);
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(hitFxThemeDef(t).sheets).toEqual([]);
+  });
+  it('maxSpawn·bleedTop', () => {
+    const v = (t: (typeof HIT_FX_LAB_THEMES)[number]) => [hitFxThemeDef(t).maxSpawn, hitFxThemeDef(t).bleedTop];
+    expect(v('water')).toEqual([16, 0.4]);
+    expect(v('fire')).toEqual([12, 0.35]);
+    expect(v('electric')).toEqual([12, 0.35]);
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(v(t)).toEqual([24, 0.12]);
+  });
+  it('그림 없는 테마의 spawnLite는 spawn과 같다, 테마 라벨은 그대로', () => {
+    for (const t of ['auto', 'ink', 'pixel'] as const) expect(hitFxThemeDef(t).spawnLite).toBe(hitFxThemeDef(t).spawn);
+    expect(HIT_FX_THEMES.map((t) => HIT_FX_THEME_LABELS[t])).toEqual(['기본', '전기', '물', '불']);
+  });
+});
+
 describe.each(HIT_FX_LAB_THEMES)('spawn %s', (theme) => {
   const def = hitFxThemeDef(theme);
   it('같은 seq → 같은 결과, 다른 seq → 다른 결과', () => {
@@ -103,8 +123,8 @@ describe.each(HIT_FX_LAB_THEMES)('spawn %s', (theme) => {
       }
     }
   });
-  it('수명(시작 지연 포함)은 maxLifeMs 이하(450, 잉크만 600), 좌표·시간은 유한', () => {
-    expect(def.maxLifeMs).toBeLessThanOrEqual(theme === 'ink' ? 600 : 450);
+  it('수명(시작 지연 포함)은 테마의 maxLifeMs 이하(물·불 640, 전기 360, 잉크 600, 나머지 450), 좌표·시간은 유한', () => {
+    expect(def.maxLifeMs).toBe({ auto: 450, electric: 360, water: 640, fire: 640, ink: 600, pixel: 450 }[theme]);
     for (const r of [...spawnAll(theme, 3, 127), ...spawnAll(theme, 4, 10)]) {
       for (const p of r.list) {
         expect(p.lifeMs + p.delayMs).toBeLessThanOrEqual(def.maxLifeMs);
@@ -166,10 +186,10 @@ describe('auto 테마(옛 HitEffects 재현)', () => {
   });
 });
 
-describe('electric', () => {
+describe('electric(입자만의 대체 함수 spawnLite)', () => {
   it('드럼은 번개 3~5줄 + 섬광, 번개는 점 목록과 씨앗이 있다', () => {
     for (const v of [0, 60, 127]) {
-      const r = spawnAll('electric', 2, v).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
+      const r = spawnAll('electric', 2, v, false, true).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
       const bolts = r.list.filter((p) => p.kind === 'bolt');
       expect(bolts.length).toBeGreaterThanOrEqual(3);
       expect(bolts.length).toBeLessThanOrEqual(5);
@@ -181,7 +201,7 @@ describe('electric', () => {
     }
   });
   it('킥 방전은 킷 아래쪽 가로선(y 일정)', () => {
-    const r = spawnAll('electric', 2, 100).find((x) => x.skin === 'electronic' && x.pad === 'KICK')!;
+    const r = spawnAll('electric', 2, 100, false, true).find((x) => x.skin === 'electronic' && x.pad === 'KICK')!;
     const b = r.list.find((p) => p.kind === 'bolt')!;
     const ys = b.points!.filter((_, i) => i % 2 === 1);
     expect(new Set(ys).size).toBe(1);
@@ -194,9 +214,9 @@ describe('electric', () => {
   });
 });
 
-describe('water', () => {
+describe('water(입자만의 대체 함수 spawnLite)', () => {
   it('드럼: 파문 2~3겹(지연) + 중력 물방울', () => {
-    const r = spawnAll('water', 2, 100).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
+    const r = spawnAll('water', 2, 100, false, true).find((x) => x.skin === 'neon' && x.pad === 'SNARE')!;
     const rings = r.list.filter((p) => p.kind === 'ring');
     expect(rings.length).toBeGreaterThanOrEqual(2);
     expect(rings.length).toBeLessThanOrEqual(3);
@@ -227,6 +247,37 @@ describe('sampleParticle', () => {
     sampleParticle(q, 90, a);
     sampleParticle(q, 160, b);
     expect(a.x).toBe(b.x);
+  });
+  it('expo: 처음에 빠르게 올라 1에 가까워진다', () => {
+    const q = particle({ kind: 'dot', x: 0, y: 0, size0: 0, size1: 1, alpha0: 0, alpha1: 1, color: '#fff', lifeMs: 100, ease: 'expo' });
+    const s = createSample();
+    sampleParticle(q, 10, s);
+    expect(s.size).toBeCloseTo(1 - Math.pow(2, -1));
+    sampleParticle(q, 90, s);
+    expect(s.size).toBeGreaterThan(0.99);
+  });
+  it('순간 속도 = 위치 식의 미분(감속·가속 포함)', () => {
+    const q = particle({ kind: 'drop', x: 0, y: 0, vx: 100, vy: -200, ax: 10, ay: 500, drag: 3, color: '#fff', lifeMs: 800, ease: 'linear' });
+    const a = createSample();
+    const b = createSample();
+    sampleParticle(q, 200, a);
+    sampleParticle(q, 201, b);
+    expect(a.vx).toBeCloseTo((b.x - a.x) / 0.001, 0);
+    expect(a.vy).toBeCloseTo((b.y - a.y) / 0.001, 0);
+    const nodrag = particle({ kind: 'drop', x: 0, y: 0, vx: 50, ay: 1000, color: '#fff', lifeMs: 800 });
+    sampleParticle(nodrag, 100, a);
+    expect(a.vx).toBe(50);
+    expect(a.vy).toBeCloseTo(100);
+  });
+  it('hold: 수명의 hold 비율까지 alpha0 유지, 그 뒤 alpha1로', () => {
+    const q = particle({ kind: 'dot', x: 0, y: 0, alpha0: 0.8, alpha1: 0, color: '#fff', lifeMs: 100, hold: 0.5, ease: 'linear' });
+    const s = createSample();
+    sampleParticle(q, 40, s);
+    expect(s.alpha).toBeCloseTo(0.8);
+    sampleParticle(q, 75, s);
+    expect(s.alpha).toBeCloseTo(0.8 * (1 - 0.25));
+    sampleParticle(q, 99.9, s);
+    expect(s.alpha).toBeLessThan(0.01);
   });
   it('번개 꺾임 단계는 40ms마다 오른다', () => {
     const s = createSample();
@@ -260,10 +311,10 @@ describe('jagPath', () => {
   });
 });
 
-describe('fire', () => {
+describe('fire(입자만의 대체 함수 spawnLite)', () => {
   it('가산 합성, 드럼: 불꽃(덩어리)+위로 솟는 불씨, 심벌: 사방 불티, 킥: 아래에서 치솟는 불길', () => {
     expect(hitFxThemeDef('fire').blend).toBe('additive');
-    const get = (pad: string) => spawnAll('fire', 2, 100).find((x) => x.skin === 'electronic' && x.pad === pad)!.list;
+    const get = (pad: string) => spawnAll('fire', 2, 100, false, true).find((x) => x.skin === 'electronic' && x.pad === pad)!.list;
     const drum = get('SNARE');
     expect(drum.some((p) => p.kind === 'blob' && p.vy < 0)).toBe(true);
     expect(drum.filter((p) => p.kind === 'dot').every((p) => p.vy < 0)).toBe(true);

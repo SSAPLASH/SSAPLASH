@@ -1,87 +1,104 @@
-// fire 테마 — 드럼: 위로 솟는 불씨 + 짧은 불꽃, 심벌: 사방으로 흩어지는 불티, 킥: 아래에서 치솟는 불길. 가산 합성.
+// fire 테마 — 한 타 = 연속 그림 1회 재생(헤드 면이 번쩍 붙고 불길이 혀처럼 갈라져 솟다 밑동부터 꺼지며 떠오름) + 입자 몇 개.
+// 입자는 헤드가 달아오르는 빛 2개와 그림 위로 올라가는 불티(심벌은 가장자리에서 사방으로 튀는 불똥)만 맡는다. 그림은 배열 맨 앞. 합성은 모두 더하기.
 import type { PadShape } from '@/domain/kit/drumKit';
-import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle } from '../types';
+import { pickSheet } from '../sheets';
+import type { FxEvent, FxGeo, FxIntensity, FxPalette, FxParticle, FxSheetId } from '../types';
+import { spawnFireLite } from './fireLite';
+import { SHEET_BASE_SCALE, isCompact, sheetParticle, sizeGain } from './sheetFx';
 import { particle } from './util';
 
-export const FIRE_PALETTE: FxPalette = { main: '#ff7a1a', sub: '#ffd36a', glow: '#ff5a00' };
+const SHEETS: readonly FxSheetId[] = ['fire-side-a', 'fire-side-b', 'fire-cymbal', 'fire-front'];
+const TAU = Math.PI * 2;
+/** 이 테마의 수명 상한(불티 포함, 시작 지연 포함) */
+const MAX_LIFE = 640;
 
-/** 짧은 불꽃(덩어리): 위로 솟으며 줄어든다 */
-function flame(x: number, y: number, rx: number, ry: number, vy: number, alpha: number, color: string, life: number, delayMs = 0): FxParticle {
-  return particle({
-    kind: 'blob',
-    x,
-    y,
-    vy,
-    drag: 2.2,
-    rx,
-    ry,
-    size0: 1,
-    size1: 0.25,
-    alpha0: alpha,
-    alpha1: 0,
-    color,
-    glow: true,
-    lifeMs: life,
-    delayMs,
-  });
+/** 헤드 달아오름: 헤드 타원 위의 발광 덩어리 */
+function heat(geo: FxGeo, color: string, alpha: number, size0: number, size1: number, lifeMs: number, ease: 'expo' | 'out'): FxParticle {
+  return particle({ kind: 'blob', x: geo.cx, y: geo.cy, rx: geo.rx, ry: geo.ry, size0, size1, alpha0: alpha, alpha1: 0, color, glow: true, lifeMs, ease, blend: 'add' });
 }
 
-/** 불씨·불티(점): 가벼워서 위로 떠오르거나 흩어진다 */
-function ember(x: number, y: number, vx: number, vy: number, size: number, alpha: number, color: string, life: number, ay = -120): FxParticle {
-  return particle({
-    kind: 'dot',
-    x,
-    y,
-    vx,
-    vy,
-    ay,
-    drag: 1.6,
-    size0: size,
-    size1: size * 0.3,
-    alpha0: alpha,
-    alpha1: 0,
-    color,
-    glow: true,
-    lifeMs: life,
-    ease: 'linear',
-  });
-}
-
-export function spawnFire(_event: FxEvent, geo: FxGeo, shape: PadShape, intensity: FxIntensity, rand: () => number, palette: FxPalette): FxParticle[] {
+export function spawnFire(event: FxEvent, geo: FxGeo, shape: PadShape, intensity: FxIntensity, rand: () => number, palette: FxPalette): FxParticle[] {
+  // 페달은 그림 없이 지금의 작은 입자 이펙트
+  if (shape === 'pedal') return spawnFireLite(event, geo, shape, intensity, rand, palette);
+  const { cx, cy, rx, ry, k } = geo;
   const out: FxParticle[] = [];
-  const a = intensity.alpha;
-  if (shape === 'drum') {
-    // 짧은 불꽃 4~7개 + 위로 솟는 불씨 6~10개
-    const flames = Math.round(5 * intensity.count);
-    for (let i = 0; i < flames; i++) {
-      const x = geo.cx + (rand() - 0.5) * geo.rx * 1.2;
-      out.push(flame(x, geo.cy - geo.ry * 0.1, geo.rx * 0.2 * intensity.size, geo.ry * 0.34 * intensity.size, -(150 + 110 * rand()) * geo.k, 0.85 * a, i % 2 ? palette.sub : palette.main, 280 + Math.round(80 * rand())));
-    }
-    const embers = Math.round(8 * intensity.count);
-    for (let i = 0; i < embers; i++) {
-      out.push(ember(geo.cx + (rand() - 0.5) * geo.rx * 1.3, geo.cy, (rand() - 0.5) * 90 * geo.k, -(120 + 190 * rand()) * geo.k * (0.7 + 0.3 * intensity.size), 2.4 * intensity.size, 0.95 * a, rand() > 0.5 ? palette.sub : palette.main, 350 + Math.round(90 * rand())));
-    }
-  } else if (shape === 'cymbal') {
-    // 흩어지는 불티: 사방으로 퍼지며 감속, 약한 중력
-    const n = Math.round(14 * intensity.count);
-    for (let i = 0; i < n; i++) {
-      const ang = rand() * Math.PI * 2;
-      const speed = (130 + 220 * rand()) * geo.k * (0.7 + 0.3 * intensity.size);
+
+  const id = pickSheet(SHEETS, shape, rx, ry, rand);
+  if (id) out.push(sheetParticle(geo, id, sizeGain(intensity), isCompact(event.mode), rand, 0.75, palette.sub));
+
+  // 헤드 달아오름: 밝은 노랑이 짧게(0~120ms), 주황이 길게(0~420ms) 남는다. 심벌은 면을 덩어리로 덮지 않게 옅고 짧게(주황 0~260ms)
+  const cym = shape === 'cymbal';
+  out.push(heat(geo, palette.sub, (cym ? 0.2 : 0.3) * intensity.alpha, 0.9, 1.05, 120, 'expo'));
+  out.push(heat(geo, palette.main, (cym ? 0.1 : 0.16) * intensity.alpha, 1, 1.1, cym ? 260 : 420, 'out'));
+
+  if (cym) {
+    // 불똥: 가장자리에서 바깥으로 튀는 캡슐. 위로 살짝 뜬 뒤 떨어진다
+    const hs = (isCompact(event.mode) ? 0.6 : 1) * (0.7 + 0.3 * intensity.size);
+    const sparks = Math.min(9, Math.round(7 * intensity.count));
+    for (let i = 0; i < sparks; i++) {
+      const a = (i / sparks) * TAU + (rand() - 0.5) * 0.9;
+      const u = rand();
+      const sp = (420 + 620 * u * u) * k * hs * SHEET_BASE_SCALE;
+      const vx = Math.cos(a) * sp;
+      const vy = Math.sin(a) * sp * 0.45 - (180 + 260 * rand()) * k * hs * SHEET_BASE_SCALE;
       out.push(
-        ember(geo.cx + Math.cos(ang) * geo.rx * 0.6, geo.cy + Math.sin(ang) * geo.ry * 0.6, Math.cos(ang) * speed, Math.sin(ang) * speed, 1.6 + 1.2 * rand(), 0.95 * a, rand() > 0.4 ? palette.sub : palette.main, 300 + Math.round(120 * rand()), 160 * geo.k),
+        particle({
+          kind: 'drop',
+          x: cx + Math.cos(a) * rx * 0.9,
+          y: cy + Math.sin(a) * ry * 0.9,
+          vx,
+          vy,
+          ay: 520 * k,
+          drag: 6,
+          size0: (0.9 + 0.8 * rand()) * intensity.size,
+          size1: 0.4,
+          alpha0: 0.95,
+          alpha1: 0,
+          hold: 0.4,
+          color: i % 2 ? palette.main : palette.sub,
+          core: '#ffffff',
+          glow: true,
+          glowColor: palette.main,
+          delayMs: Math.round(40 * rand()),
+          // 260~500ms + 지연 0~40ms는 수명 상한(MAX_LIFE) 안이다
+          lifeMs: 260 + Math.round(rand() * 240),
+          streak: 0.012,
+          blend: 'add',
+        }),
       );
     }
-  } else {
-    // 킥: 패드 아래쪽에서 치솟는 불길 5~9개(폭을 따라 늘어서 순서대로 올라온다) + 불씨 몇 개
-    const base = geo.cy + geo.ry * 0.7;
-    const flames = Math.round(7 * intensity.count);
-    for (let i = 0; i < flames; i++) {
-      const x = geo.cx + ((i + 0.5) / flames - 0.5) * geo.rx * 1.7;
-      out.push(flame(x, base, geo.rx * 0.2, geo.ry * 0.5 * intensity.size, -(260 + 120 * rand()) * geo.k * (0.7 + 0.3 * intensity.size), 0.9 * a, i % 3 === 0 ? palette.sub : palette.main, 300, Math.round(rand() * 60)));
-    }
-    for (let i = 0; i < 4; i++) {
-      out.push(ember(geo.cx + (rand() - 0.5) * geo.rx * 1.4, base, (rand() - 0.5) * 70 * geo.k, -(200 + 160 * rand()) * geo.k, 2.2, 0.9 * a, palette.sub, 380));
-    }
+    return out;
+  }
+
+  // 불티: 그림 위로 올라가는 작은 발광 점. 위로 가속한다. 킥은 덜 올라간다
+  const up = shape === 'kick' ? 0.5 : 1;
+  const embers = Math.round(5 * intensity.count);
+  for (let i = 0; i < embers; i++) {
+    const a = rand() * TAU;
+    const rr = Math.sqrt(rand()) * 0.8;
+    const delay = 40 + Math.round(120 * rand());
+    out.push(
+      particle({
+        kind: 'dot',
+        x: cx + Math.cos(a) * rx * rr,
+        y: cy + Math.sin(a) * ry * rr,
+        vx: (rand() - 0.5) * 150 * k,
+        vy: -(240 + 260 * rand()) * k * up * SHEET_BASE_SCALE,
+        ay: -90 * k,
+        drag: 3.2,
+        size0: 1.2 + 0.7 * rand(),
+        size1: 0.4,
+        alpha0: 0.95,
+        alpha1: 0,
+        hold: 0.45,
+        color: i % 2 ? palette.sub : palette.main,
+        glow: true,
+        delayMs: delay,
+        // 380~640ms, 단 시작 지연을 더해서도 수명 상한을 넘지 않게 한다
+        lifeMs: 380 + Math.round(rand() * (MAX_LIFE - delay - 380)),
+        blend: 'add',
+      }),
+    );
   }
   return out;
 }

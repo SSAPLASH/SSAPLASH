@@ -9,6 +9,7 @@ import type { ResolvedHit } from '@/domain/events';
 import type { PadId } from '@/domain/kit/pads';
 import { useLive } from '@/store/liveStore';
 import { DrumKit } from '@/components/drum/DrumKit';
+import { kitBoxFor } from '@/domain/kit/drumKit';
 import { FxCanvas } from './FxCanvas';
 import type { FxEngine } from './fxEngine';
 import { createFxEmitter } from './fxSource';
@@ -70,6 +71,39 @@ describe('FxCanvas', () => {
   it('캔버스는 포인터 이벤트를 받지 않는다(CSS 규칙)', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/components/drum/drum.css'), 'utf8');
     expect(css).toMatch(/\.fx-canvas\s*\{[^}]*pointer-events:\s*none/);
+  });
+});
+
+describe('FxCanvas 위쪽 여백', () => {
+  const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  beforeEach(() => {
+    // happy-dom은 레이아웃이 없어 폭이 0이다 — 킷 폭 760(배율 1)으로 둔다
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 760 });
+  });
+  afterEach(() => {
+    if (desc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', desc);
+    else delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+  });
+
+  const canvasOf = (ui: React.ReactNode) => render(wrap(<div>{ui}</div>)).container.querySelector('canvas') as HTMLCanvasElement;
+
+  it('위쪽만 테마의 bleedTop(물 0.4), 좌우·아래는 기존 bleed 0.12', () => {
+    const h = kitBoxFor('acoustic', 'persp').h;
+    const c = canvasOf(<FxCanvas skin="acoustic" theme="water" />);
+    const top = Math.round(h * 0.4);
+    const bottom = Math.round(h * 0.12);
+    const side = Math.round(760 * 0.12);
+    expect(c.style.top).toBe(`${-top}px`);
+    expect(c.style.left).toBe(`${-side}px`);
+    expect(c.style.width).toBe(`${760 + side * 2}px`);
+    expect(c.style.height).toBe(`${h + top + bottom}px`);
+  });
+
+  it('bleedTop prop이 테마 값보다 우선하고, 그림이 없는 테마는 0.12', () => {
+    const h = kitBoxFor('acoustic', 'persp').h;
+    expect(canvasOf(<FxCanvas skin="acoustic" theme="water" bleedTop={0.2} />).style.top).toBe(`${-Math.round(h * 0.2)}px`);
+    cleanup();
+    expect(canvasOf(<FxCanvas skin="acoustic" theme="auto" />).style.top).toBe(`${-Math.round(h * 0.12)}px`);
   });
 });
 
