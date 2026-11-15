@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chart } from './chart';
-import { isPracticeRate, rateHint, rateLabel, ratePercent, sanitizeRate, scaleChart, stepRate, toSongMs } from './practiceRate';
+import { isPracticeRate, rateHint, rateLabel, ratePercent, sanitizeRate, scaleChart, slowRateOf, stepRate, toSongMs } from './practiceRate';
 
 const chart: Chart = {
   songId: 't',
@@ -42,6 +42,12 @@ describe('연습 속도 배율', () => {
     expect(stepRate(0.95, 1)).toBe(1);
     expect(stepRate(1, 1)).toBe(1);
     expect(stepRate(0.55, 1)).toBe(0.6);
+  });
+
+  it('느리게 친 판의 배율만 꺼낸다: 0 초과 1 미만이면 그 값, 없음·1·이상한 값은 null', () => {
+    expect(slowRateOf(0.7)).toBe(0.7);
+    expect(slowRateOf(0.62)).toBe(0.62);
+    for (const v of [1, undefined, null, 0, -0.5, 1.5, NaN, '0.7']) expect(slowRateOf(v)).toBeNull();
   });
 
   it('표시 문구: 배율과 실제 BPM', () => {
