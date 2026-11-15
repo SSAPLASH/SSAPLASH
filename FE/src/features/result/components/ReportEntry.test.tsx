@@ -19,7 +19,7 @@ const report = (analysisStatus: Report['analysisStatus'], weakSegments: Report['
   songId: null,
   chartId: null,
   difficulty: null,
-  inputSource: 'KEYBOARD',
+  inputSource: 'KEYBOARD', playbackRate: 1,
   analysisStatus,
   weakSegments,
   coachSummary: null,
