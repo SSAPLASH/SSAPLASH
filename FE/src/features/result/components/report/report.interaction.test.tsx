@@ -60,7 +60,8 @@ describe('NoteFlowChart', () => {
   it('5초 칸마다 막대 버튼이 있고 이름에 시각과 판정 수가 든다(A2)', () => {
     draw();
     expect(screen.getAllByRole('button', { name: /^\d+:\d\d–\d+:\d\d: / })).toHaveLength(12);
-    expect(screen.getByRole('button', { name: '0:10–0:15: 정확 0, 타이밍 차이 0, 놓침 2' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '0:10–0:15: 정확 0, 빠름 0, 늦음 0, 놓침 2' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '0:45–0:50: 정확 1, 빠름 1, 늦음 0, 놓침 1' })).toBeTruthy();
     expect(screen.getByLabelText('0:00부터 1:00까지 5초 단위 노트 판정 분포')).toBeTruthy();
   });
 
@@ -72,7 +73,8 @@ describe('NoteFlowChart', () => {
     expect(tip.textContent).toContain('0:45–0:50');
     expect(tip.textContent).toContain('총 3개');
     expect(tip.textContent).toContain('정확 1');
-    expect(tip.textContent).toContain('타이밍 차이 1');
+    expect(tip.textContent).toContain('빠름 1');
+    expect(tip.textContent).toContain('늦음 0');
     expect(tip.textContent).toContain('놓침 1');
     fireEvent.blur(bin);
     expect(screen.queryByRole('tooltip')).toBeNull();
@@ -106,6 +108,13 @@ describe('NoteFlowChart', () => {
     expect(marker.textContent).toBe('0:12.3–0:17.3');
     expect(marker.getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByRole('button', { name: /^0:45–0:50/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('범례는 정확 · 빠름·늦음 · 놓침 — 막대는 색 3개 그대로다(D5)', () => {
+    const { container } = render(<NoteFlowChart bins={flowBins(NOTES, 60000)} totalMs={60000} clusters={[]} focus={null} onPickBin={() => {}} onPickCluster={() => {}} />);
+    expect([...within(screen.getByLabelText('판정 범례')).getAllByText(/./)].map((e) => e.textContent)).toEqual(['정확', '빠름·늦음', '놓침']);
+    expect(container.querySelector('.rp-bin')!.querySelectorAll('span')).toHaveLength(3);
+    expect(container.textContent).not.toContain('타이밍 차이');
   });
 
   it('칸이 많은 긴 곡은 칸 사이 간격을 줄인다', () => {
@@ -170,8 +179,32 @@ describe('FocusPanel', () => {
     expect(screen.getByText('전환 58번 중 57번 놓침 · 98%')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('구간 예시 0:46–0:54');
     expect(screen.getByText('3개 노트')).toBeTruthy();
-    expect(screen.getByText('구간 내 판정: 정확 1 · 타이밍 차이 1 · 놓침 1')).toBeTruthy();
-    expect(screen.getByText('0:46.00 · 킥 · 타이밍 차이 · 39ms 빠름')).toBeTruthy();
+    expect(screen.getByText('구간 내 판정: 정확 1 · 빠름 1 · 늦음 0 · 놓침 1')).toBeTruthy();
+    // 빠름·늦음은 오차 글자가 방향을 말하므로 이름을 따로 쓰지 않는다(D6)
+    expect(screen.getByText('0:46.00 · 킥 · 39ms 빠름')).toBeTruthy();
+  });
+
+  it('타이밍이 어긋난 노트는 빠름 ◀ · 늦음 ▶로 나눠 그리고 읽어 준다(D3·D4)', () => {
+    const notes = [note(10200, 'SNARE', 'GOOD', -39), note(11000, 'SNARE', 'GOOD', 41), note(12000, 'SNARE', 'PERFECT', 12), note(13000, 'KICK', 'MISS')];
+    const { container } = render(<FocusPanel focus={focusOfBin(10000)} notes={notes} player={fakePlayer()} accompanimentUrl={null} />);
+    expect(container.querySelectorAll('.rp-mark.early')).toHaveLength(1);
+    expect(container.querySelectorAll('.rp-mark.late')).toHaveLength(1);
+    expect(container.querySelectorAll('.rp-mark.perfect')).toHaveLength(1);
+    expect(container.querySelectorAll('.rp-mark.miss')).toHaveLength(1);
+    expect(container.querySelector('.rp-mark.good')).toBeNull();
+    expect(screen.getByLabelText('0:10.20 스네어 빠름').classList.contains('early')).toBe(true);
+    expect(screen.getByLabelText('0:11.00 스네어 늦음').classList.contains('late')).toBe(true);
+    expect(screen.getByText('구간 내 판정: 정확 1 · 빠름 1 · 늦음 1 · 놓침 1')).toBeTruthy();
+    expect(screen.getByText('정확 ● · 빠름 ◀ · 늦음 ▶ · 놓침 ×')).toBeTruthy();
+    // 고른 노트 한 줄: 빠름 → 늦음 → 정확 → 놓침
+    expect(screen.getByText('0:10.20 · 스네어 · 39ms 빠름')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다음 노트' }));
+    expect(screen.getByText('0:11.00 · 스네어 · 41ms 늦음')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다음 노트' }));
+    expect(screen.getByText('0:12.00 · 스네어 · 정확 · 12ms 늦음')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '다음 노트' }));
+    expect(screen.getByText('0:13.00 · 킥 · 놓침')).toBeTruthy();
+    expect(container.textContent).not.toContain('타이밍 차이');
   });
 
   it('정답 듣기: 확대 창 범위를 재생하고, 재생 중이면 정지로 바뀐다(A6)', () => {

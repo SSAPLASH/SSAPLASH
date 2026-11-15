@@ -1,9 +1,20 @@
 // 「전체 노트 흐름」 (설계 COACH-002 리포트 화면 개편 2·4장). 곡 전체를 5초 칸으로 묶은 판정 막대와 놓친 구간 버튼 줄.
 // 막대(칸)를 누르거나 구간 버튼을 누르면 페이지에 알린다. 선택 상태는 페이지가 든다.
 // 칸에 마우스를 올리거나 초점을 주면 그 5초의 시각과 판정 수가 뜬다.
+// 막대는 색 3개(정확 · 빠름·늦음 · 놓침)이고, 빠름과 늦음의 수는 툴팁과 읽어 주는 글에서 나눈다(설계 COACH-002-report-timing-direction D5).
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { WeakSegment } from '@/domain/play/report';
-import { binTotal, clockSecond, clockTenth, FLOW_BIN_MS, JUDGEMENT_LABEL, metricNumber, type FlowBin, type Focus } from '@/features/result/domain/reportView';
+import {
+  binTotal,
+  clockSecond,
+  clockTenth,
+  FLOW_BIN_MS,
+  metricNumber,
+  OFF_BEAT_LABEL,
+  VERDICT_LABEL,
+  type FlowBin,
+  type Focus,
+} from '@/features/result/domain/reportView';
 import './report.css';
 
 interface Props {
@@ -46,9 +57,9 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
       <div className="rp-flow-header">
         <h2 id="rp-flow-title">전체 노트 흐름</h2>
         <div className="rp-legend" role="group" aria-label="판정 범례">
-          <span className="p">{JUDGEMENT_LABEL.PERFECT}</span>
-          <span className="g">{JUDGEMENT_LABEL.GOOD}</span>
-          <span className="m">{JUDGEMENT_LABEL.MISS}</span>
+          <span className="p">{VERDICT_LABEL.PERFECT}</span>
+          <span className="g">{OFF_BEAT_LABEL}</span>
+          <span className="m">{VERDICT_LABEL.MISS}</span>
         </div>
       </div>
 
@@ -60,7 +71,7 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
               type="button"
               className="rp-bin"
               style={{ '--rp-delay': `${i * 8}ms` } as CSSProperties}
-              aria-label={`${range(b)}: ${JUDGEMENT_LABEL.PERFECT} ${b.perfect}, ${JUDGEMENT_LABEL.GOOD} ${b.good}, ${JUDGEMENT_LABEL.MISS} ${b.miss}`}
+              aria-label={`${range(b)}: ${VERDICT_LABEL.PERFECT} ${b.perfect}, ${VERDICT_LABEL.EARLY} ${b.early}, ${VERDICT_LABEL.LATE} ${b.late}, ${VERDICT_LABEL.MISS} ${b.miss}`}
               aria-pressed={focus?.kind === 'bin' && focus.fromMs === b.fromMs}
               onClick={() => onPickBin(b.fromMs)}
               onPointerEnter={(e) => setTip({ index: i, x: e.clientX, y: e.clientY })}
@@ -133,13 +144,16 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
           <strong>{range(tipBin)}</strong>
           <span className="total">{binTotal(tipBin) > 0 ? `총 ${binTotal(tipBin)}개` : '노트 없음'}</span>
           <span>
-            {JUDGEMENT_LABEL.PERFECT} {tipBin.perfect}
+            {VERDICT_LABEL.PERFECT} {tipBin.perfect}
           </span>
           <span>
-            {JUDGEMENT_LABEL.GOOD} {tipBin.good}
+            {VERDICT_LABEL.EARLY} {tipBin.early}
           </span>
           <span>
-            {JUDGEMENT_LABEL.MISS} {tipBin.miss}
+            {VERDICT_LABEL.LATE} {tipBin.late}
+          </span>
+          <span>
+            {VERDICT_LABEL.MISS} {tipBin.miss}
           </span>
         </div>
       )}

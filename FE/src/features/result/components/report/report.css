@@ -1,5 +1,5 @@
 /* 연주 상세 리포트 (설계 COACH-002 리포트 화면 개편). 구성·치수는 HTML 목업 「연주 리포트」를 따르고, 색·글꼴은 프로젝트 토큰을 쓴다(D2).
-   모든 클래스는 rp- 접두사. 판정 색: 정확 --perfect · 타이밍 차이 --good · 놓침 --miss. 강조 --brand-text, 옅은 강조 바탕 --rp-soft. */
+   모든 클래스는 rp- 접두사. 판정 색: 정확 --perfect · 빠름·늦음 --good · 놓침 --miss. 강조 --brand-text, 옅은 강조 바탕 --rp-soft. */
 .rp {
   --rp-soft: color-mix(in srgb, var(--brand) 16%, transparent);
   --rp-track: var(--surface-3);
@@ -385,7 +385,8 @@
   height: 34px;
   border-bottom: 1px solid var(--line);
 }
-/* 노트 표시: 정확 ● · 타이밍 차이 ◆ · 놓침 ×. 누르는 자리는 21px, 그림은 그 안의 9~12px */
+/* 노트 표시: 정확 ● · 빠름 ◀ · 늦음 ▶ · 놓침 ×. 누르는 자리는 21px, 그림은 그 안의 9~12px.
+   시간축이 왼쪽에서 오른쪽이라 ◀는 박보다 앞(빠름), ▶는 박보다 뒤(늦음)로 읽힌다. 색은 둘 다 --good이고 자리는 노트 시각 그대로다 */
 .rp-mark {
   position: absolute;
   top: 50%;
@@ -420,10 +421,16 @@
   border-radius: 50%;
   background: var(--perfect);
 }
-.rp-mark.good::before {
-  inset: 6px;
+.rp-mark.early::before,
+.rp-mark.late::before {
+  inset: 5px;
   background: var(--good);
-  transform: rotate(45deg);
+}
+.rp-mark.early::before {
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.rp-mark.late::before {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 .rp-mark.miss::before,
 .rp-mark.miss::after {
