@@ -2,6 +2,7 @@
 // 페이지가 선택(Focus)마다 key를 바꿔 다시 만든다 — 고른 노트는 선택이 바뀌면 처음으로 돌아가고 재생은 멈춘다.
 // 화면 이동의 목적지(id="rp-focus")는 다시 만들어지지 않는 바깥 틀에 페이지가 둔다.
 // 재생기는 페이지가 useSegmentPlayer로 만들어 내려준다. AI 문구(description·detail·tip)는 고치지 않고 그대로 보인다.
+// 타이밍이 어긋난 노트는 빠름 ◀ · 늦음 ▶로 나눠 그리고 센다(설계 COACH-002-report-timing-direction D3·D4).
 import { useEffect, useState } from 'react';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
 import { ALL_PADS, PAD_META } from '@/domain/kit/pads';
@@ -13,9 +14,12 @@ import {
   deltaText,
   focusBasis,
   focusHeadline,
-  JUDGEMENT_LABEL,
+  noteVerdict,
   notesInRange,
+  VERDICT_LABEL,
+  verdictCounts,
   type Focus,
+  type NoteVerdict,
 } from '@/features/result/domain/reportView';
 import { planSegment } from '@/features/result/domain/segmentPlayback';
 import './report.css';
@@ -30,7 +34,13 @@ interface Props {
   accompanimentUrl: string | null;
 }
 
-const MARK_CLASS = { PERFECT: 'perfect', GOOD: 'good', MISS: 'miss' } as const;
+const MARK_CLASS: Record<NoteVerdict, string> = { PERFECT: 'perfect', EARLY: 'early', LATE: 'late', MISS: 'miss' };
+
+/** 고른 노트 한 줄의 판정 글자. 빠름·늦음은 오차 글자(「39ms 빠름」)가 방향을 말하므로 이름을 따로 쓰지 않는다(D6) */
+function readoutVerdict(n: ReportNote): string {
+  const verdict = noteVerdict(n);
+  return (verdict === 'EARLY' || verdict === 'LATE') && deltaText(n.deltaMs) !== '' ? '' : VERDICT_LABEL[verdict];
+}
 
 export function FocusPanel({ focus, notes, notesFailed = false, player, accompanimentUrl }: Props) {
   const [selected, setSelected] = useState(0);
@@ -47,8 +57,7 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
   const span = Math.max(1, focus.toMs - focus.fromMs);
   const index = Math.min(selected, Math.max(0, inWindow.length - 1));
   const current = inWindow[index];
-  const counts = { PERFECT: 0, GOOD: 0, MISS: 0 };
-  for (const n of inWindow) counts[n.judgement] += 1;
+  const counts = verdictCounts(inWindow);
   // 시간축 눈금: 1초마다(창이 길면 8칸으로)
   const tickCount = Math.min(8, Math.max(1, Math.ceil(span / 1000)));
   const playing = player.playingKey === focus.key;
@@ -95,7 +104,8 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
             </div>
             {notes && inWindow.length > 0 && (
               <p className="rp-detail-summary">
-                구간 내 판정: {JUDGEMENT_LABEL.PERFECT} {counts.PERFECT} · {JUDGEMENT_LABEL.GOOD} {counts.GOOD} · {JUDGEMENT_LABEL.MISS} {counts.MISS}
+                구간 내 판정: {VERDICT_LABEL.PERFECT} {counts.PERFECT} · {VERDICT_LABEL.EARLY} {counts.EARLY} · {VERDICT_LABEL.LATE} {counts.LATE} · {VERDICT_LABEL.MISS}{' '}
+                {counts.MISS}
               </p>
             )}
           </>
@@ -117,9 +127,9 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
                           key={n.seq}
                           type="button"
                           tabIndex={-1}
-                          className={`rp-mark ${MARK_CLASS[n.judgement]}${i === index ? ' current' : ''}`}
+                          className={`rp-mark ${MARK_CLASS[noteVerdict(n)]}${i === index ? ' current' : ''}`}
                           style={{ left: `${(100 * (n.timeMs - focus.fromMs)) / span}%` }}
-                          aria-label={`${clockHundredth(n.timeMs)} ${PAD_META[pad].label} ${JUDGEMENT_LABEL[n.judgement]}`}
+                          aria-label={`${clockHundredth(n.timeMs)} ${PAD_META[pad].label} ${VERDICT_LABEL[noteVerdict(n)]}`}
                           onClick={() => setSelected(i)}
                         />
                       ),
@@ -147,14 +157,14 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
               </span>
               {current && (
                 <span className="rp-note-readout">
-                  {[clockHundredth(current.timeMs), PAD_META[current.pad].label, JUDGEMENT_LABEL[current.judgement], deltaText(current.deltaMs)]
+                  {[clockHundredth(current.timeMs), PAD_META[current.pad].label, readoutVerdict(current), deltaText(current.deltaMs)]
                     .filter((t) => t !== '')
                     .join(' · ')}
                 </span>
               )}
             </div>
             <p className="rp-note-key">
-              {JUDGEMENT_LABEL.PERFECT} ● · {JUDGEMENT_LABEL.GOOD} ◆ · {JUDGEMENT_LABEL.MISS} ×
+              {VERDICT_LABEL.PERFECT} ● · {VERDICT_LABEL.EARLY} ◀ · {VERDICT_LABEL.LATE} ▶ · {VERDICT_LABEL.MISS} ×
             </p>
           </>
         )}
