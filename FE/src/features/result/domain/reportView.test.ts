@@ -16,11 +16,15 @@ import {
   focusOfSegment,
   focusOfTransition,
   initialFocus,
+  noteVerdict,
   notesInRange,
   observationText,
+  OFF_BEAT_LABEL,
   padRows,
   splitSegments,
   transitionWindow,
+  VERDICT_LABEL,
+  verdictCounts,
 } from './reportView';
 
 let seq = 0;
@@ -78,6 +82,29 @@ describe('시각·오차 문구', () => {
   });
 });
 
+describe('노트 구분(정확·빠름·늦음·놓침)', () => {
+  it('GOOD은 오차가 음수면 빠름, 양수면 늦음. PERFECT·MISS는 그대로', () => {
+    expect(noteVerdict(note(0, 'KICK', 'GOOD', -39))).toBe('EARLY');
+    expect(noteVerdict(note(0, 'KICK', 'GOOD', 41))).toBe('LATE');
+    expect(noteVerdict(note(0, 'KICK', 'PERFECT', -12))).toBe('PERFECT');
+    expect(noteVerdict(note(0, 'KICK', 'MISS'))).toBe('MISS');
+  });
+  it('오차가 0이거나 없는 GOOD(서버 계약상 오지 않는다)은 늦음에 센다', () => {
+    expect(noteVerdict({ judgement: 'GOOD', deltaMs: 0 })).toBe('LATE');
+    expect(noteVerdict({ judgement: 'GOOD', deltaMs: null })).toBe('LATE');
+  });
+  it('구분별로 세고, 빠름 + 늦음은 GOOD 수와 같다', () => {
+    const notes = [note(0, 'KICK'), note(1, 'KICK', 'GOOD', -30), note(2, 'KICK', 'GOOD', -45), note(3, 'KICK', 'GOOD', 50), note(4, 'KICK', 'MISS')];
+    const counts = verdictCounts(notes);
+    expect(counts).toEqual({ PERFECT: 1, EARLY: 2, LATE: 1, MISS: 1 });
+    expect(counts.EARLY + counts.LATE).toBe(notes.filter((n) => n.judgement === 'GOOD').length);
+  });
+  it('화면 이름에 「타이밍 차이」가 없다', () => {
+    expect(VERDICT_LABEL).toEqual({ PERFECT: '정확', EARLY: '빠름', LATE: '늦음', MISS: '놓침' });
+    expect(OFF_BEAT_LABEL).toBe('빠름·늦음');
+  });
+});
+
 describe('flowBins', () => {
   const notes = [note(0, 'KICK'), note(4999, 'SNARE', 'GOOD'), note(5000, 'KICK', 'MISS'), note(12000, 'HIHAT', 'MISS')];
   it('곡 길이를 알면 그 길이를 5초 단위로 올려 칸을 만든다', () => {
@@ -97,6 +124,14 @@ describe('flowBins', () => {
       [0, 1, 1, 0],
       [5000, 0, 0, 1],
       [10000, 0, 0, 1],
+    ]);
+  });
+  it('칸마다 빠름·늦음을 나눠 세고, 둘의 합이 그 칸의 GOOD 수다', () => {
+    const mixed = [note(100, 'KICK', 'GOOD', -40), note(200, 'KICK', 'GOOD', -30), note(300, 'KICK', 'GOOD', 45), note(400, 'KICK'), note(6000, 'KICK', 'GOOD', 50), note(6100, 'KICK', 'MISS')];
+    const bins = flowBins(mixed, 10000);
+    expect(bins.map((b) => [b.fromMs, b.perfect, b.early, b.late, b.good, b.miss])).toEqual([
+      [0, 1, 2, 1, 3, 0],
+      [5000, 0, 0, 1, 1, 1],
     ]);
   });
 });
