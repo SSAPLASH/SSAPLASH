@@ -531,6 +531,77 @@
   grid-column: 1 / -1;
 }
 
+/* 고급 설정 움직임
+   펼침: 묶음이 차례로 떠오른다(apple-rise, 두 번째는 60ms 늦게).
+   묶음에 마우스를 올리거나 안의 슬라이더에 초점이 가면: 테두리가 메인 색으로 바뀌고 빛줄기가 한 번 지나간 뒤 네온 빛이 천천히 숨 쉰다.
+   조절하는 동안 값 읽기를 방해하지 않게 빛은 테두리와 바깥에만 두고 주기를 길게 잡는다 */
+.setup-adv-group {
+  position: relative;
+  overflow: hidden;
+  animation: apple-rise 220ms ease-out both;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.setup-adv-group + .setup-adv-group {
+  animation-delay: 60ms;
+}
+.setup-adv-group:hover,
+.setup-adv-group:focus-within {
+  border-color: var(--brand);
+  box-shadow:
+    0 0 0 1px var(--brand-tint-line),
+    0 0 18px var(--brand-glow-soft);
+  animation: adv-neon-breathe 2.6s ease-in-out 420ms infinite;
+}
+@keyframes adv-neon-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px var(--brand-glow),
+      0 0 30px var(--brand-glow),
+      inset 0 0 22px var(--brand-glow-soft);
+  }
+}
+/* 빛줄기: 묶음 위를 왼쪽에서 오른쪽으로 한 번 지나간다 */
+.setup-adv-group::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, var(--brand-glow-soft) 50%, transparent 60%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.setup-adv-group:hover::after,
+.setup-adv-group:focus-within::after {
+  animation: adv-sheen 520ms ease-out 1;
+}
+@keyframes adv-sheen {
+  0% {
+    opacity: 1;
+    background-position: 100% 0;
+  }
+  100% {
+    opacity: 1;
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-adv-group {
+    animation-name: apple-fade;
+    transition: none;
+  }
+  .setup-adv-group:hover,
+  .setup-adv-group:focus-within {
+    animation: none;
+  }
+  .setup-adv-group:hover::after,
+  .setup-adv-group:focus-within::after {
+    animation: none;
+  }
+}
+
 /* ---- 하단 고정 바(설계 4-5) ---- */
 .setup-bar {
   position: sticky;
