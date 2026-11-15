@@ -466,6 +466,8 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-m) var(--space-l);
   padding-top: var(--space-s);
+  /* 펼칠 때 스크롤해 보이는 자리: 하단 고정 바에 가려지지 않게 여백을 둔다 */
+  scroll-margin-bottom: 120px;
 }
 @media (max-width: 1024px) {
   .setup-adv-body {
@@ -482,23 +484,39 @@
 .setup-adv-group-title {
   margin: 0;
   color: var(--text-1);
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 700;
+  line-height: 1.4;
 }
 .setup-adv-note {
   margin: 0;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.55;
 }
 .setup-adv-help {
-  margin: 0 0 var(--space-xs);
-  color: var(--text-3);
-  font-size: 12px;
+  margin: 0 0 var(--space-s);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
 }
 .setup-adv-foot {
   margin: 0;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: 13px;
+}
+/* 고급 설정은 글자를 한 단계 키운다: 카드 제목·요약, 슬라이더 이름 */
+.setup-page .setup-adv .setup-card-title {
+  font-size: 22px;
+}
+.setup-page .setup-adv .setup-card-desc {
+  font-size: 16px;
+}
+.setup-adv .ui-slider {
+  font-size: 17px;
+}
+.setup-adv .ui-slider-label {
+  font-weight: 600;
 }
 
 /* ---- 하단 고정 바(설계 4-5) ---- */
