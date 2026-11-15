@@ -14,7 +14,7 @@ describe('묶음 표', () => {
     }
     expect(SHEET_DEFS['water-side-a']).toMatchObject({ durMs: 640, tpow: 1.5, span: 3.8, cy: 0.66 });
     expect(SHEET_DEFS['bolt-front']).toMatchObject({ durMs: 360, tpow: 1.3, span: 4.4, cy: 0.5 });
-    expect(SHEET_DEFS['fire-cymbal']).toMatchObject({ durMs: 440, tpow: 1.5, span: 4.2, cy: 0.64 });
+    expect(SHEET_DEFS['fire-cymbal']).toMatchObject({ durMs: 440, tpow: 1.5, span: 4.2, cy: 0.6 });
   });
 });
 

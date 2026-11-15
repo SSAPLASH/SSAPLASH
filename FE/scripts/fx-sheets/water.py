@@ -166,10 +166,11 @@ DRUM = dict(
     frames=36, dur=0.64, tpow=1.5, streak=1.0,
 )
 # 심벌: 얇은 물막이 가장자리에서 가는 물보라로 털려 나간다
-CYMBAL = dict(DRUM, M=90000, holes=420, beads=1100, feat=0.07, stick=[0.5, 0.3], edge_mode=True, modep=1.3,
-    base=0.25, jet=0.9, jetp=2.0, fine=0.3, V=10.5, crown=0.5, crown_r=0.14, crown_w=0.06, crown_out=2.6,
-    spread=3.4, flare=2.2, lat=2.2, elev=44, t1=0.004, t1j=0.03, d1=0.05, t2=0.035, t2j=0.09, d2=0.07,
-    rb=3.1, bead_var=0.45, mist_n=4200, mist_a=3.4, dur=0.52, span=4.4, cy=0.62)
+# 자주 치는 작은 패드라 드럼보다 덜 튀게 한다(솟는 높이·퍼지는 거리를 첫 판의 75%로, 방울·물안개 수도 줄였다)
+CYMBAL = dict(DRUM, M=90000, holes=420, beads=850, feat=0.07, stick=[0.5, 0.3], edge_mode=True, modep=1.3,
+    base=0.25, jet=0.9, jetp=2.0, fine=0.3, V=7.9, crown=0.5, crown_r=0.14, crown_w=0.06, crown_out=1.95,
+    spread=2.55, flare=1.65, lat=1.65, elev=44, t1=0.004, t1j=0.03, d1=0.05, t2=0.035, t2j=0.09, d2=0.07,
+    rb=3.1, bead_var=0.45, mist_n=3200, mist_a=3.4, dur=0.52, span=3.8, cy=0.62)
 # 킥: 정면으로 선 헤드에서 물막이 앞으로 터져 나와 아래로 떨어진다
 KICK = dict(DRUM, M=110000, holes=150, beads=1500, bead_var=0.6, front=True, persp=0.5, elev=90, span=3.6, cy=0.46,
     V=5.0, base=0.35, jet=1.0, crown=0.3, crown_out=1.6, spread=2.6, flare=2.4, lat=2.0, stick=[0.0, 0.1],
