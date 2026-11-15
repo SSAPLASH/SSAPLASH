@@ -6,11 +6,16 @@ import type { PlayLog } from './playLog';
 
 type LogMode = PlayLog['mode'];
 
+/** 연습 속도(배율 1 미만)로 친 판인지. 최고 기록에는 원래 빠르기로 친 판만 센다(설계 MODE-003-practice-speed D9) */
+export function isSlowedLog(l: Pick<PlayLog, 'playbackRate'>): boolean {
+  return (l.playbackRate ?? 1) !== 1;
+}
+
 /** 곡별(BE 곡 id) 최고 점수. 모든 연습 단계 중 가장 높은 값. 내장 채보(곡 숫자 id 없음)는 건너뛴다 */
 export function bestScoreBySong(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
   const best = new Map<number, number>();
   for (const l of logs) {
-    if (l.mode !== mode || l.songNumericId == null) continue;
+    if (l.mode !== mode || isSlowedLog(l) || l.songNumericId == null) continue;
     const score = l.summary.score;
     if (!Number.isFinite(score)) continue;
     const prev = best.get(l.songNumericId);
@@ -23,7 +28,7 @@ export function bestScoreBySong(logs: readonly PlayLog[], mode: LogMode): Map<nu
 export function bestAccuracyByChart(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
   const best = new Map<number, number>();
   for (const l of logs) {
-    if (l.mode !== mode || l.chartId == null) continue;
+    if (l.mode !== mode || isSlowedLog(l) || l.chartId == null) continue;
     const acc = l.summary.accuracy;
     if (!Number.isFinite(acc)) continue;
     const prev = best.get(l.chartId);
@@ -36,7 +41,7 @@ export function bestAccuracyByChart(logs: readonly PlayLog[], mode: LogMode): Ma
 export function bestAccuracyBySong(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
   const best = new Map<number, number>();
   for (const l of logs) {
-    if (l.mode !== mode || l.songNumericId == null) continue;
+    if (l.mode !== mode || isSlowedLog(l) || l.songNumericId == null) continue;
     const acc = l.summary.accuracy;
     if (!Number.isFinite(acc)) continue;
     const prev = best.get(l.songNumericId);
@@ -51,7 +56,7 @@ export function bestAccuracyBySong(logs: readonly PlayLog[], mode: LogMode): Map
 export function bestScoreByChart(logs: readonly PlayLog[], mode: LogMode): Map<number, number> {
   const best = new Map<number, number>();
   for (const l of logs) {
-    if (l.mode !== mode || l.chartId == null) continue;
+    if (l.mode !== mode || isSlowedLog(l) || l.chartId == null) continue;
     const score = l.summary.score;
     if (!Number.isFinite(score)) continue;
     const prev = best.get(l.chartId);
@@ -104,7 +109,7 @@ export function localPrevBest(logs: readonly PlayLog[], target: PrevBestTarget, 
   let pool = exclude ? logs.filter((l) => !exclude(l)) : logs;
   // 옛 로그에는 timing이 없을 수 있어 옵셔널 체이닝으로 읽고, 없으면 대상에서 뺀다
   if (target.goodMs !== undefined) pool = pool.filter((l) => l.timing?.goodMs === target.goodMs);
-  const builtin = (l: PlayLog) => l.mode === target.mode && l.songNumericId == null && l.chartId == null && l.songId === target.songId && l.difficulty === target.difficulty;
+  const builtin = (l: PlayLog) => l.mode === target.mode && !isSlowedLog(l) && l.songNumericId == null && l.chartId == null && l.songId === target.songId && l.difficulty === target.difficulty;
   const maxOf = (pick: (l: PlayLog) => number) => {
     let best: number | null = null;
     for (const l of pool) {

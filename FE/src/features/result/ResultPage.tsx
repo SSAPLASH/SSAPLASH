@@ -31,7 +31,8 @@ import { PadSummaryTable } from '@/features/result/components/PadSummaryTable';
 import { ResultSummaryCard } from '@/features/result/components/ResultSummaryCard';
 import { RecordCelebration } from '@/features/result/components/RecordCelebration';
 import { useReducedMotion } from 'motion/react';
-import { bestRecordDelta, localPrevBest, recordBadgeOf, type PrevBest } from '@/domain/play/bestRecord';
+import { bestRecordDelta, isSlowedLog, localPrevBest, recordBadgeOf, type PrevBest } from '@/domain/play/bestRecord';
+import { rateLabel } from '@/domain/song/practiceRate';
 import { TimingHistogram } from '@/features/result/components/TimingHistogram';
 import '@/features/result/components/result.css';
 import { useShell } from '@/components/shell/nav/useShell';
@@ -79,7 +80,8 @@ export function ResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const delta = useMemo(() => {
-    if (!log || log.mode === 'FREE') return null;
+    // 연습 속도로 친 판은 최고 기록과 비교하지 않는다(설계 MODE-003-practice-speed D9)
+    if (!log || log.mode === 'FREE' || isSlowedLog(log)) return null;
     // state가 없으면(새로고침·기록 화면에서 연 결과) 이 판보다 먼저 친 로컬 로그만으로 비교한다
     const prev =
       arrived ??
@@ -209,7 +211,14 @@ export function ResultPage() {
         <ResultSummaryCard
           title={log.title}
           meta={metaParts.join(' · ')}
-          titleBadge={songDeleted ? <DeletedSongChip /> : undefined}
+          titleBadge={
+            songDeleted || isSlowedLog(log) ? (
+              <>
+                {songDeleted && <DeletedSongChip />}
+                {isSlowedLog(log) && <span className="result-rate-chip">{rateLabel(log.playbackRate ?? 1)} 속도로 연습</span>}
+              </>
+            ) : undefined
+          }
           scoreText={isSheet ? undefined : `${s.score.toLocaleString('ko-KR')} / ${s.maxCombo}`}
           accuracyText={`${(s.accuracy * 100).toFixed(1)}%`}
           recordBadge={badge}

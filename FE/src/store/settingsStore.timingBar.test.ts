@@ -8,8 +8,8 @@ describe('timingBar', () => {
     useSettings.getState().setTimingBar(true);
   });
 
-  it('설정 버전은 26, 기본값은 켬', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+  it('설정 버전은 27, 기본값은 켬', () => {
+    expect(SETTINGS_VERSION).toBe(27);
     expect(useSettings.getInitialState().timingBar).toBe(true);
   });
 

@@ -12,6 +12,8 @@ export interface ChartNote {
   velocityHint?: number;
   /** BE 채보의 노트 id(업로드 matchedNoteId). 내장 채보는 미설정 */
   noteId?: string;
+  /** 연습 속도로 늘린 채보에서만: 늘리기 전 원래 시각(ms). 기록은 이 값으로 남긴다(domain/song/practiceRate) */
+  sourceTimeMs?: number;
 }
 
 /** 빠르기 구간. beat는 1마디 1박을 0으로 센 박 번호, startMs는 곡 시각(반주 0초 기준) */
@@ -47,6 +49,10 @@ export interface Chart {
   tempoSegments?: TempoSegment[];
   /** BE 채보의 전체 노트 수. 변환에서 버린 노트가 있으면 notes.length와 다르다. 내장 채보는 미설정 */
   sourceNoteCount?: number;
+  /** 연습 속도 배율(0.5~1). 늘린 채보에만 있다. 없으면 1(원래 빠르기) */
+  playbackRate?: number;
+  /** 늘리기 전 원래 채보의 길이·빠르기·원점. 늘린 채보에만 있다. 기록(로그)은 이 값으로 남긴다 */
+  sourceTiming?: { durationMs: number; bpm: number; offsetMs: number };
 }
 
 /* ---------- 내장 데모 채보 생성기 ----------

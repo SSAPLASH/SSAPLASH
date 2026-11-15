@@ -86,6 +86,12 @@ export interface PlayLog {
   presetId: string | null;
   /** 플레이 시작 시점의 연주 기록 활용 동의(설계 COACH-003 D18). 이전 로그에는 없다 → 업로드는 false */
   consent?: boolean;
+  /**
+   * 연습 속도 배율(0.5~1, 설계 MODE-003-practice-speed). 없으면 1.
+   * 1이 아니어도 위치를 나타내는 값(notes.timeMs·hits.tSongMs·코칭 tMs·lastSongTimeMs·durationMs·bpm·offsetMs)은
+   * 원래 채보의 축(곡 시각)이고, 오차·판정 폭(deltaMs·timing)과 경과 시간은 실제 시간이다
+   */
+  playbackRate?: number;
   /** 채보 BPM·박자(마디 단위 피드백용). 이전 로그에는 없을 수 있다 */
   bpm: number;
   beatsPerBar: number;
