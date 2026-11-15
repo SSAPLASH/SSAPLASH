@@ -216,9 +216,18 @@ export function usePrefetchedReport(playId: string | null | undefined): Report |
   return playId && state?.playId === playId ? state.report : null;
 }
 
-/** 노트 전부(시간순). 미리 받은 첫 페이지를 이어 받는다 */
+/**
+ * 노트 전부(시간순). 미리 받은 첫 페이지를 이어 받는다.
+ * 노트 시각에 곱할 연습 배율은 미리 받은 리포트 본문에서 읽는다(노트 응답에는 배율이 없다). 본문을 다시 요청하지 않고,
+ * 본문 조회가 실패하면 배율 1로 바꾼다 — 화면은 어차피 리포트 오류를 보인다
+ */
 export function loadAllReportNotes(playId: string): Promise<ReportNote[]> {
-  return prefetchReport(playId).firstNotes.then((first) => getAllReportNotes(playId, { first }));
+  const entry = prefetchReport(playId);
+  const rate = entry.report.then(
+    (r) => r.playbackRate,
+    () => 1,
+  );
+  return Promise.all([entry.firstNotes, rate]).then(([first, r]) => getAllReportNotes(playId, { first, rate: r }));
 }
 
 /** 리포트 조회 오류 분류 (회신 1 §4). 화면은 ApiError를 직접 보지 않는다 */

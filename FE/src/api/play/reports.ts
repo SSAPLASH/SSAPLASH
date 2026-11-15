@@ -1,7 +1,8 @@
 // 플레이 리포트 조회 (COACH-002, BE 157·158). 서버 응답 → 화면 타입 변환을 여기 한 곳에서 한다(설계 D6).
 // - 정확도: 서버 0~100 → 화면 0~1. null은 그대로 두고 화면에서 "–"
 // - 패드 코드: normalizePadId(옛 이름 HI_TOM → SMALL_TOM). 모르는 패드는 버린다
-// - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
+// - 노트 시각: PERFECT·GOOD은 tMs − deltaMs × playbackRate, MISS는 tMs(tMs는 곡 시각, deltaMs는 실제 시간 — 연습 속도로 친 기록은
+//   배율을 곱해 곡 시각으로 맞춘다. BE·AI와 같은 식). seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
 import type { Difficulty } from '@/domain/song/chart';
 import { slowRateOf } from '@/domain/song/practiceRate';
 import type { Judgement } from '@/domain/play/judgement';
@@ -171,10 +172,12 @@ export function toReport(dto: ReportDto): Report {
   };
 }
 
-export function toReportNote(dto: ReportNoteDto): ReportNote | null {
+/** rate는 리포트 본문의 연습 배율(playbackRate). 원래 빠르기는 1이고, 유한한 양수가 아니면 1로 본다 */
+export function toReportNote(dto: ReportNoteDto, rate = 1): ReportNote | null {
   const pad = normalizePadId(dto.pad);
   if (!pad) return null;
-  const timeMs = dto.judgement !== 'MISS' && dto.deltaMs !== null ? dto.tMs - dto.deltaMs : dto.tMs;
+  const r = Number.isFinite(rate) && rate > 0 ? rate : 1;
+  const timeMs = dto.judgement !== 'MISS' && dto.deltaMs !== null ? dto.tMs - dto.deltaMs * r : dto.tMs;
   return { seq: dto.seq, noteId: dto.matchedNoteId, timeMs, pad, judgement: dto.judgement, deltaMs: dto.deltaMs, velocity: dto.velocity };
 }
 
@@ -192,13 +195,13 @@ export function getReportNotesPage(playId: string, afterSeq: number | null, limi
   return apiFetch<ReportNotesDto>(`${base(playId)}/notes?${q}`, { signal });
 }
 
-/** 노트 전부를 nextAfterSeq가 null이 될 때까지 받아 시간순으로. first가 있으면 첫 페이지 요청을 건너뛴다(미리 받기) */
-export async function getAllReportNotes(playId: string, opts: { first?: ReportNotesDto; signal?: AbortSignal } = {}): Promise<ReportNote[]> {
+/** 노트 전부를 nextAfterSeq가 null이 될 때까지 받아 시간순으로. first가 있으면 첫 페이지 요청을 건너뛴다(미리 받기). rate는 연습 배율(없으면 1) */
+export async function getAllReportNotes(playId: string, opts: { first?: ReportNotesDto; signal?: AbortSignal; rate?: number } = {}): Promise<ReportNote[]> {
   const out: ReportNote[] = [];
   let page = opts.first ?? (await getReportNotesPage(playId, null, 1000, opts.signal));
   for (;;) {
     for (const d of page.items) {
-      const n = toReportNote(d);
+      const n = toReportNote(d, opts.rate);
       if (n) out.push(n);
     }
     if (page.nextAfterSeq === null) break;

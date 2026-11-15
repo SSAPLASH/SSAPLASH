@@ -6,8 +6,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRecommendations, postRecommendationClick } from '@/api/song/recommendations';
 import { fetchSimilarSongs } from '@/api/song/similarSongs';
+import { getPlayLog } from '@/engine/playLog';
 import { loadAllReportNotes, prefetchReport, refreshReport } from '@/runtime/playSync';
 import type { RecommendationItem } from '@/domain/song/recommendation';
+import type { PlayLog } from '@/domain/play/playLog';
 import type { Report } from '@/domain/play/report';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { useAuth } from '@/store/authStore';
@@ -18,6 +20,8 @@ import { ReportPage } from './ReportPage';
 vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 vi.mock('@/api/song/charts', () => ({ getChartAssets: vi.fn().mockResolvedValue({ accompanimentUrl: null }) }));
+// 이 브라우저의 연주 기록. 기본은 없음(다른 기기에서 친 기록을 여는 경우와 같다)
+vi.mock('@/engine/playLog', async (orig) => ({ ...(await orig<typeof import('@/engine/playLog')>()), getPlayLog: vi.fn() }));
 vi.mock('@/runtime/playSync', async (orig) => ({
   ...(await orig<typeof import('@/runtime/playSync')>()),
   prefetchReport: vi.fn(),
@@ -60,6 +64,7 @@ beforeEach(() => {
   vi.mocked(prefetchReport).mockReset();
   setReport(report());
   vi.mocked(loadAllReportNotes).mockReset().mockResolvedValue([]);
+  vi.mocked(getPlayLog).mockReset().mockReturnValue(null);
   vi.mocked(refreshReport).mockReset().mockResolvedValue(report());
   vi.mocked(fetchRecommendations).mockReset().mockImplementation(async (p) => p.context === 'DRILL'
     ? { requestId: 'drill1', strategy: 'DRILL_V1', items: [drillItem] }
@@ -311,6 +316,29 @@ describe('리포트 화면 구성', () => {
     await waitFor(() => expect(headline()).toBe('0:12–0:17놓친 노트 확인'));
     expect(screen.getByText('노트 3개 중 3개 놓침 · 100%')).toBeTruthy();
     expect(screen.getByText('이 구간에서 많이 놓쳐요.')).toBeTruthy();
+  });
+
+  it('이 브라우저에 연주 기록이 있으면 구간 시각 앞에 마디가 붙고, 5초 칸은 시각만이다(설계 COACH-002-report-timing-direction D8·D9)', async () => {
+    // BPM 120·4박·원점 0 — 한 마디 2초
+    const log = { title: '곡', difficulty: 'EASY', mode: 'SHEET', startedAt: '2026-11-15T00:00:00.000Z', durationMs: 60000, timing: { perfectMs: 25, goodMs: 60 }, bpm: 120, beatsPerBar: 4, offsetMs: 0 };
+    vi.mocked(getPlayLog).mockReturnValue(log as unknown as PlayLog);
+    setReport(report({ weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
+    show();
+    await waitFor(() => expect(headline()).toBe('7~9마디 · 0:12–0:17놓친 노트 확인'));
+    expect(screen.getByRole('button', { name: /^7~9마디 · 0:12\.3–0:17\.3/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '24~27마디 · 0:46–0:54 예시 보기' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^0:10–0:15: / })).toBeTruthy();
+  });
+
+  it('연습 속도로 친 리포트에만 「시각은 원래 빠르기 기준이에요」가 보인다(D7)', async () => {
+    setReport(report({ playbackRate: 0.7, weakSegments: [] }));
+    show();
+    expect(await screen.findByText('시각은 원래 빠르기 기준이에요')).toBeTruthy();
+    cleanup();
+    setReport(report({ playbackRate: 1, weakSegments: [] }));
+    show();
+    await screen.findByRole('button', { name: /^0:10–0:15: / });
+    expect(screen.queryByText('시각은 원래 빠르기 기준이에요')).toBeNull();
   });
 
   it('패드 전환 관찰의 [예시 보기]를 누르면 그 전환이 든 구간으로 바뀌고, 구간 버튼으로 되돌아온다', async () => {

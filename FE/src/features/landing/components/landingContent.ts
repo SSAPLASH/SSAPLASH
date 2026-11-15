@@ -103,7 +103,7 @@ export const RESULT_COPY = {
 // 결과 지표. cls는 CSS 색 변수(.lp-stat.acc 등)와 짝이다.
 export const RESULT_STATS = [
   { cls: 'acc', key: '정확도', value: '한눈에' },
-  { cls: 'dist', key: '판정 분포', value: '빠름 · 느림' },
+  { cls: 'dist', key: '판정 분포', value: '빠름 · 늦음' },
   { cls: 'weak', key: '약점 마디', value: '악보로 표시' },
 ] as const;
 

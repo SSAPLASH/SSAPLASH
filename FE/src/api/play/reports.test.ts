@@ -62,6 +62,19 @@ describe('toReportNote', () => {
     expect(toReportNote(n({}))!.timeMs).toBe(500);
     expect(toReportNote(n({ judgement: 'MISS', tMs: 1000, deltaMs: null, velocity: null }))!.timeMs).toBe(1000);
   });
+  it('연습 배율이 있으면 PERFECT·GOOD은 tMs − Δ × 배율(tMs는 곡 시각, Δ는 실제 시간), MISS는 tMs 그대로', () => {
+    // 배율 0.5: 노트 5000을 실제로 40ms 늦게 치면 tMs 5020, 노트 7000을 30ms 빨리 치면 tMs 6985
+    expect(toReportNote(n({ judgement: 'GOOD', tMs: 5020, deltaMs: 40 }), 0.5)!.timeMs).toBe(5000);
+    expect(toReportNote(n({ judgement: 'GOOD', tMs: 6985, deltaMs: -30 }), 0.5)!.timeMs).toBe(7000);
+    expect(toReportNote(n({ judgement: 'MISS', tMs: 9000, deltaMs: null, velocity: null }), 0.5)!.timeMs).toBe(9000);
+    // 오차 값 자체는 실제 시간 그대로 둔다
+    expect(toReportNote(n({ judgement: 'GOOD', tMs: 5020, deltaMs: 40 }), 0.5)!.deltaMs).toBe(40);
+  });
+  it('배율이 1이거나 유한한 양수가 아니면 tMs − Δ와 같다', () => {
+    for (const rate of [1, undefined, 0, -0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(toReportNote(n({ judgement: 'GOOD', tMs: 5020, deltaMs: 40 }), rate)!.timeMs).toBe(4980);
+    }
+  });
 });
 
 describe('getAllReportNotes', () => {
@@ -93,6 +106,24 @@ describe('getAllReportNotes', () => {
     const notes = await getAllReportNotes('p', { first: { items: [], nextAfterSeq: null } });
     expect(notes).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rate를 모든 쪽의 노트에 곱하고, 바뀐 노트 시각으로 정렬한다', async () => {
+    // 배율 0.5. 옛 식이면 a가 4980, b가 4990이라 a가 앞이지만, 실제 노트 시각은 a 5000 · b 4995다
+    const first = { items: [{ seq: 0, matchedNoteId: 'a', tMs: 5020, pad: 'SNARE', judgement: 'GOOD' as const, deltaMs: 40, velocity: 80 }], nextAfterSeq: 0 };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ items: [{ seq: 1, matchedNoteId: 'b', tMs: 5000, pad: 'KICK', judgement: 'PERFECT', deltaMs: 10, velocity: 80 }], nextAfterSeq: null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const notes = await getAllReportNotes('p', { first, rate: 0.5 });
+    expect(notes.map((x) => [x.noteId, x.timeMs])).toEqual([
+      ['b', 4995],
+      ['a', 5000],
+    ]);
   });
 });
 
