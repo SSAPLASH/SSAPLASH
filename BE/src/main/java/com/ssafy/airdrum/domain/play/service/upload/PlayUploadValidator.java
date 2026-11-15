@@ -90,7 +90,8 @@ public class PlayUploadValidator {
 					|| ("HI_TOM".equals(n.pad()) && h.pad() == Pad.SMALL_TOM)));
 			if (h.judgement() == Judgement.MISS) { check(Math.abs(h.tMs() - n.time()) <= .001); miss++; combo = 0; }
 			else {
-				check(Math.abs(h.deltaMs() - (h.tMs() - n.time())) <= .001);
+				double realDeltaMs = (h.tMs() - n.time()) / p.judgementContext().playbackRate();
+				check(Math.abs(h.deltaMs() - realDeltaMs) <= .001);
 				double abs = Math.abs(h.deltaMs()); var w = p.judgementContext().timingWindows();
 				if (h.judgement() == Judgement.PERFECT) { check(abs <= w.perfectMs()); perfect++; }
 				else { check(abs > w.perfectMs() && abs <= w.goodMs()); good++; }

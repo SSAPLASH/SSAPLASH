@@ -1,5 +1,9 @@
 # BE API 서버
 
+## 악보 연습 속도와 연주 기록 (MODE-003)
+
+타격 위치와 리포트 노트 구간은 곡 시각(ms), 타격 오차와 판정 폭은 실제 시간(ms)을 쓴다. 업로드 검증은 곡 시각 차이를 `judgementContext.playbackRate`로 나눈다. 연주 목록과 리포트의 `playbackRate`는 숫자이며 옛 기록은 1이다. 최고 점수·최고 정확도와 추천의 숙련도 기준에는 1배속 기록만 쓰고 최근 연주 시각에는 모든 배율을 포함한다. 내부 약점 분석 요청에도 배율을 전달한다.
+
 ## 곡 난이도와 채보 실패 사유 (269번)
 
 `GET /api/v1/songs`와 `GET /api/v1/songs/{songId}`는 곡별 `songLevel`을 제공한다.
@@ -10,7 +14,7 @@
 이 필터들은 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
 
 본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message,reason}`이 들어간다. 공개 가능한 기존 코드는
-`INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
+`INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`, `WORKER_OFFLINE`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
 선택 필드 `reason`은 `SOURCE_INVALID`, `NOT_TRANSCRIBABLE`, `GPU_OUT_OF_MEMORY`, `INTERNAL_ERROR` 중 하나이며 기존 행과 BE 자체 실패는 `null`이다. 워커가 보낸 메시지·스토리지 정보는 반환하지 않는다. 재시도 중간 실패는 공개하지 않고 최종 실패의 사유만 저장한다. AI 워커 기본 전송 설정은 꺼져 있으므로 BE 배포 뒤 `SSAPLASH_WORKER_SEND_REASON` 설정과 연동을 확인한다.
 
 ### 산정 방식과 한계
@@ -300,7 +304,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 46). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 51). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -462,6 +466,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
 | V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
 | V50 | `V50__add_lesson_course.sql` | 학습 코스 `lessons.course`(`BEGINNER`·`INTERMEDIATE`, 기존 행은 `BEGINNER`). 순서 유일 조건을 `position`에서 `(course, position)`으로 바꿨다. 진도 표는 그대로 | 학습 코스(중급) |
+| V51 | `V51__create_chart_worker_presence.sql` | 채보 워커별 마지막 연락 시각 `chart_worker_presence`(`worker_id` PK, `last_seen_at`). claim·heartbeat가 올 때마다 갱신한다 | -383 |
 
 규칙:
 
@@ -948,7 +953,7 @@ V24는 기존 음원과 MIME을 보존하면서 저장 가능한 MIME을 확장�
 
 `GET /api/v1/plays/best-records?songIds=1,2`는 활성 Bearer 인증 회원의 기록만 조회한다. `songIds`는 양의 64비트 정수 1~100개를 쉼표로 구분한 필수 값이다. 중복 제거 전 100개를 초과하거나 빈 항목·잘못된 값이 있으면 400이다. 중복은 제거한다. 접근 불가·삭제·없는 곡과 기록 없는 곡은 결과에서 생략하며 구분하지 않는다.
 
-응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
+응답은 `items` 배열이다. 각 항목은 `songId`, `chartId`, `difficulty`, `mode`, `bestScore`, `bestAccuracy`이며 곡·채보·모드 오름차순이다. `RHYTHM`과 `SHEET`를 구분하고 같은 연습 단계의 여러 채보 버전을 함께 집계한다. 1배속(미기록 포함)의 `COMPLETED`만 포함하며 `ABORTED`, `DISCONNECTED`, 종료 사유 미기록(null)은 제외한다. 점수와 정확도의 최댓값은 독립적이므로 서로 다른 플레이에서 나올 수 있다. 값이 0인 기록은 반환하며 기록이 없는 경우 항목이 없다. 해당 집계값이 모두 null인 과거 행은 null로 반환한다.
 
 곡 선택 화면은 모드에 맞는 전체 단계 중 최고 점수 또는 정확도를 선택하고 연주 준비 화면은 선택한 `chartId`를 쓴다. `bestAccuracy`는 0~100이므로 FE의 0~1 비율로 쓰려면 100으로 나눈다. 이 API 제공은 FE 연동 완료를 뜻하지 않는다.
 
@@ -1172,7 +1177,7 @@ SETUP. 드럼을 처음 치는 사람이 스테이지를 순서대로 통과하�
 | GET | `/api/v1/lessons` | 레슨 목록과 본인 진도. `passAccuracy`(70)와 `items`(입문 전부 → 중급, 코스 안 순서대로): `order`(코스 안 순서)·`course`·`kind`·`songId`·`chartId`(NORMAL)·`title`·`summary`·`pads`·`guide`·`bpm`·`durationMs`·`noteCount`·`bestAccuracy`·`passed`·`locked` |
 | POST | `/api/v1/lessons/{songId}/completion` | 알아보기 레슨 완료 저장. 본문 없음, 204. 다시 보내도 204이고 처음 시각을 유지 |
 
-- **통과:** 연주 레슨은 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
+- **통과:** 연주 레슨은 1배속 악보 연습(SHEET)으로 끝까지 친(`endReason=COMPLETED`) 기록 중 그 레슨 NORMAL 채보의 최고 정확도가 70 이상(69.99는 아님, 11/10 80에서 낮춤). 11/12부터 GOOD이 80점(`SCORE_V2`)이라 하나도 놓치지 않고 전부 GOOD이면 80%로 통과한다. 지난 V1 기록은 다시 계산하지 않는다. 리듬 게임 기록은 세지 않는다. 알아보기 레슨은 `lesson_completions`에 행이 있으면 통과. `locked`는 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 참이다. 그래서 입문을 다 통과해야 중급 1번이 열린다. 잠금은 화면 안내라 서버는 순서를 강제하지 않는다(잠긴 레슨도 연주 저장은 된다).
 - **오류:** 로그인 안 함·탈퇴 401, 완료 저장에서 연주 레슨 400 `VALIDATION_FAILED`, 레슨이 아니거나 삭제·비공개 곡 404 `SONG_NOT_FOUND`. 두 API 모두 `Cache-Control: private, no-store`.
 - **탈퇴:** 탈퇴 커밋 뒤 그 회원의 `lesson_completions`를 지운다(`LessonWithdrawalListener`). 연주 기록은 기존 탈퇴 규칙을 따른다.
 - **알려진 점:** AI 배치 뷰 `recommend_songs_v`(V37)는 레슨 곡을 거르지 않는다. 학습 데이터에서 빼야 하면 뷰를 바꾸는 후속 작업이 필요하다.
@@ -1354,6 +1359,26 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
 
+### 워커가 꺼졌을 때 대기 작업 실패 처리 (383번)
+
+BE는 채보 워커가 `POST /claim`이나 `POST /{jobId}/heartbeat`를 보낼 때마다 `chart_worker_presence`에 그 워커의 마지막 연락 시각을 기록한다. claim 결과가 204여도, 요청이 409로 거절돼도 기록한다. 워커는 대기 작업이 없을 때 5초마다 claim을, 작업 중에는 10초마다 heartbeat를 보낸다.
+
+10초마다 도는 복구 주기에서 기록된 워커가 없거나 모든 워커의 마지막 연락이 `chart.worker.offline-after-ms`(환경변수 `CHART_WORKER_OFFLINE_AFTER_MS`, 기본 60000)보다 오래되면 대기 중인 채보 작업을 `WORKER_OFFLINE`으로 실패 처리한다. 곡은 FAILED가 되고 원곡은 기존 실패와 같이 정리 대상에 들어간다. 사용자는 실패 화면에서 곡을 다시 올리면 된다. 판정 순서는 탈퇴·곡 삭제(`JOB_CANCELLED`), 대기 30분·단계 마감 초과(`STAGE_TIMEOUT`), 워커 꺼짐(`WORKER_OFFLINE`) 순이다. 값을 0으로 두면 이 검사를 끄고 기존처럼 30분 뒤 `STAGE_TIMEOUT`으로만 끝난다.
+
+- 워커가 꺼진 뒤 올린 곡은 약 10초 안에 실패로 끝난다.
+- 처리 중에 워커가 꺼지면 60초 임대 만료로 작업이 대기로 돌아가고, 다음 복구 주기에서 `WORKER_OFFLINE`으로 끝난다. 워커가 꺼진 뒤 약 70초다.
+- 워커를 다시 띄우면 모델을 올리는 동안에는 claim이 없어서 그 사이에 올린 곡은 실패한다. 첫 claim부터 새 곡은 정상 처리된다.
+- 공개 오류는 `code: WORKER_OFFLINE`, `message: 채보 서버가 잠시 멈춰 있습니다. 잠시 뒤 다시 올려 주세요.`이고 `reason`은 null이다.
+- 리포트 LLM 총평과 연주 중 코칭 작업 큐는 이 검사를 쓰지 않는다.
+
+운영에서 워커 연락 상태는 다음 SQL로 확인한다.
+
+```sql
+SELECT worker_id, last_seen_at, clock_timestamp() - last_seen_at AS 지난_시간 FROM chart_worker_presence ORDER BY last_seen_at DESC;
+```
+
+테스트 컨텍스트는 같은 DB를 쓰고 일부는 10초마다 복구 주기가 돌아서, `TestPropertyDefaultsInitializer`가 이 검사를 기본으로 끈다. 검사 테스트는 `WorkerOfflineTest`이며 `chart.worker.offline-after-ms=60000`으로 켠다.
+
 ## 리포트 종합 총평과 LLM 총평 작업 (COACH-003 후속)
 
 AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`focusPattern`·`strengthPad`·`source`)를 `reports.coach_summary`(V32)에 저장하고
@@ -1453,7 +1478,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | `POST /api/v1/recommendations/{requestId}/clicks` | 본문 `{songId}`. 204. 같은 카드를 다시 눌러도 첫 시각을 유지한다. 없는 추천·타인의 추천·그 추천에 없는 곡은 404 `RECOMMENDATION_NOT_FOUND` |
 
 - 후보: 공개된 BUILTIN 공용 곡 중 READY·곡 난이도 산정 완료·미삭제, 최신 버전에 특징이 있는 채보. 개인 곡은 넣지 않는다. 악보 이미지 유무(`notation_status`)는 추천에 쓰지 않는다. 악보 연습은 채보 노트로 그리기 때문이다. `mode`는 값을 검사만 하고 결과에는 영향을 주지 않는다. 곡 목록의 중복 제거 규칙과 같게 NORMAL과 노트 수가 같은 채보는 뺀다.
-- **기준 밀도:** 최근 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
+- **기준 밀도:** 최근 1배속 RHYTHM·SHEET 연주 10판 중 정확도 85% 이상인 판의 채보 밀도 최댓값. 기준이 없으면(기록 없음, 또는 85% 이상이 없음) BEGINNER 곡의 가장 쉬운 채보를 `STARTER` 이유로 보여 준다. 기준의 1.5배를 넘는 채보는 점수와 무관하게 제외한다.
 - **점수(가정값, `RecommendationScorer`):** 난이도 적합도 0.45(기준의 1.10~1.25배에서 최고점) + 약점 0.30 + 새로움 0.15(안 친 곡 1, 14일 넘게 안 친 곡 0.5) + 재도전 0.10(최고 정확도 70~85% 미만). 같은 점수는 곡 id, 채보 id 순으로 가려 같은 입력이면 같은 순서다. 이유 코드는 `CHALLENGE`·`WEAK_PAD`·`NEW_SONG`·`RETRY`·`STARTER`이고 항목마다 하나 이상이다. 같은 대표 이유는 전체의 절반 이하로 두되 후보가 모자라면 남는 자리를 순서대로 채운다.
 - **약점:** 최근 5개 리포트의 `PAD_LATE`·`PAD_EARLY`·`MISS_CLUSTER` 약점의 `pads`를 `metrics.severity` 가중치로 모은다(오래될수록 0.8배씩 감소, `playId`를 주면 그 연주를 그대로 쓰고 나머지는 절반). 분석이 끝나지 않은 리포트(`weak_segments` null)는 건너뛴다. 전환 약점(`TRANSITION_*`)은 `pads` 순서가 방향인지 확인되지 않아 쓰지 않는다.
 - **기록(V34 `recommendation_items`):** 조회할 때마다 노출을 남긴다(`request_id`, `rank`, 위치, 전략, 곡·채보, 점수, 이유 코드, `shown_at`). 클릭은 `clicked_at`. 90일이 지난 기록은 `RecommendationRetention`이 하루에 한 번 지운다(`recommendation.retention-days`). **회원 탈퇴 트랜잭션에서 그 회원의 기록을 같이 지운다**(`WithdrawalService`).
@@ -1464,7 +1489,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 신규 RHYTHM/SHEET 플레이의 세션·전체 타격·기본 리포트를 함께 저장한 뒤 별도 작업에서
 AI `POST /analysis/weak-segments`를 호출한다. 업로드와 기본 리포트는 AI 응답을 기다리지 않는다.
 `AI_ANALYSIS_BASE_URL` 기본값은 `http://ai-api:8000`이며 로컬 AI 시험 시 해당 서버 주소로 바꾼다.
-요청에는 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
+요청에는 `playbackRate`(미기록이면 1), 저장된 판정 폭과 MISS·여분 타격을 포함한 전체 hits를 전달한다. 입력이 AI의 5 MiB 한도를
 넘으면 자르지 않고 실패 처리한다. 연결 1초·응답 3초이며 연결 실패·시간 초과·5xx만 한 번 더 시도한다.
 
 `analysisStatus`는 PENDING → DONE 또는 FAILED다. DONE의 빈 `weakSegments`는 분석 결과가 비어 있음을

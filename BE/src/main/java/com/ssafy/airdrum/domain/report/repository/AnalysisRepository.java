@@ -49,7 +49,9 @@ public class AnalysisRepository {
             ObjectNode body=json.createObjectNode();
             body.put("playId",playId.toString()); body.put("songId",r.getLong(1));
             body.put("chartVersionId",r.getLong(2)); body.put("mode",r.getString(3));
-            body.set("timingWindows",json.readTree(r.getString(4)).path("timingWindows"));
+            var context = json.readTree(r.getString(4));
+            body.set("timingWindows",context.path("timingWindows"));
+            body.put("playbackRate",context.path("playbackRate").asDouble(1.0));
             body.put("difficulty",r.getString(5)); return body;
         }, playId);
         if (rows.isEmpty()) return null;

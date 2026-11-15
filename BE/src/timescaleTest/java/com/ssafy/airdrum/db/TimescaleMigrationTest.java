@@ -47,7 +47,7 @@ class TimescaleMigrationTest {
 					""".formatted(existingPlay, existingSong, existingVersion, existingPlay));
 			String history = scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history");
 			var latest = flyway(null);
-			assertThat(latest.migrate().migrationsExecuted).isEqualTo(41);
+			assertThat(latest.migrate().migrationsExecuted).isEqualTo(42);
 			assertThat(scalar(connection, "SELECT string_agg(version||':'||checksum,',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version IN ('1','2','3','4','5','6','7','8','9')"))
 					.isEqualTo(history);
 			assertThat(scalar(connection, "SELECT count(*) FROM telemetry_events")).isEqualTo("2");
@@ -124,7 +124,7 @@ class TimescaleMigrationTest {
 		}
 		var fresh = Flyway.configure().dataSource(url() + "_fresh", "postgres", password())
 				.locations("classpath:db/migration").load();
-		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(50);
+		assertThat(fresh.migrate().migrationsExecuted).isEqualTo(51);
 		fresh.validate();
 		assertThat(fresh.migrate().migrationsExecuted).isZero();
 		try (var connection = DriverManager.getConnection(url() + "_fresh", "postgres", password())) {

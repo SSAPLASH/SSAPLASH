@@ -43,7 +43,7 @@ public class LessonController {
 
 	@GetMapping
 	@Operation(summary = "학습 코스(입문·중급) 레슨 목록과 진도",
-			description = "입문 전부 → 중급 순서로 레슨(코스·코스 안 순서)과 채보(NORMAL), 본인의 통과 여부, 잠김 여부를 준다. 연주 레슨은 악보 연습(SHEET)으로 끝까지 친 기록의 최고 정확도가 "
+			description = "입문 전부 → 중급 순서로 레슨(코스·코스 안 순서)과 채보(NORMAL), 본인의 통과 여부, 잠김 여부를 준다. 연주 레슨은 1배속 악보 연습(SHEET)으로 끝까지 친 기록의 최고 정확도가 "
 					+ "passAccuracy 이상이면 통과, 알아보기 레슨은 완료를 저장했으면 통과다. 목록에서 앞 레슨(앞 코스 포함) 중 통과하지 못한 것이 있으면 locked다.")
 	@ApiResponse(responseCode = "200", description = "레슨 목록")
 	public LessonsResponse list(@Parameter(hidden = true) AuthUser me) {

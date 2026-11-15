@@ -18,4 +18,5 @@ public record PlaySummaryResponse(UUID playId, Instant startedAt, Instant endedA
         @Schema(description = "연주 점수", nullable = true) Integer score,
         @Schema(description = "정확도 백분율 (0~100)", nullable = true, minimum = "0", maximum = "100") BigDecimal accuracy,
         @Schema(description = "최대 콤보", nullable = true) Integer maxCombo,
-        @Schema(description = "RHYTHM 또는 SHEET 연주에 리포트가 존재하는지 여부; AI 코칭 상태와 무관") boolean hasReport) {}
+        @Schema(description = "RHYTHM 또는 SHEET 연주에 리포트가 존재하는지 여부; AI 코칭 상태와 무관") boolean hasReport,
+        @Schema(description = "연주 배율. 미기록이면 1") double playbackRate) {}

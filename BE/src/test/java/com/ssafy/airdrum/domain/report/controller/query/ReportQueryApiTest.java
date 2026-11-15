@@ -105,10 +105,28 @@ class ReportQueryApiTest {
         assertThat(notes.get(1).get("deltaMs").isNull()).isTrue();
         assertThat(notes.get(1).get("matchedNoteId").asText()).isEqualTo("n2");
     }
+    @Test void slowSheetGoodUsesActualDeltaAndReportRangeUsesChartTime() throws Exception {
+        String body = PlayFixtures.scored(play, song, version).replace("RHYTHM", "SHEET")
+                .replace("\"playbackRate\":1", "\"playbackRate\":0.7")
+                .replace("\"tMs\":100.125", "\"tMs\":121").replace("\"deltaMs\":0.125", "\"deltaMs\":30")
+                .replace("\"judgement\":\"PERFECT\"", "\"judgement\":\"GOOD\"")
+                .replace("\"score\":100,\"accuracy\":50", "\"score\":60,\"accuracy\":30")
+                .replace("\"perfect\":1,\"good\":0", "\"perfect\":0,\"good\":1");
+        uploadBody(body.replace("\"tMs\":121", "\"tMs\":130"), 400);
+        uploadBody(body.replace("\"tMs\":200", "\"tMs\":201"), 400);
+        uploadBody(body, 201);
+        assertThat(read("").get("playbackRate").asDouble()).isEqualTo(0.7);
+        var hits = read("/notes?fromMs=100&toMs=200").get("items");
+        assertThat(hits.size()).isEqualTo(1);
+        assertThat(hits.get(0).get("deltaMs").asDouble()).isEqualTo(30);
+        assertThat(read("/notes?fromMs=90&toMs=100").get("items").size()).isZero();
+    }
     @Test void reportCarriesThePlayedSongAndChart() throws Exception {
         upload();
         var report = read("");
         assertThat(report.get("songId").asLong()).isEqualTo(song);
+        db.update("UPDATE play_sessions SET judgement_context=judgement_context - 'playbackRate' WHERE id=?", play);
+        assertThat(read("").get("playbackRate").asDouble()).isEqualTo(1);
         assertThat(report.get("chartId").asLong()).isEqualTo(chart);
         assertThat(report.get("difficulty").asText()).isEqualTo("NORMAL");
     }
