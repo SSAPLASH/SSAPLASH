@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayLog } from '@/domain/play/playLog';
 import type { Report } from '@/domain/play/report';
 import {
+  loadAllReportNotes,
   prefetchReport,
   refreshReport,
   resetPlaySyncForTest,
@@ -255,6 +256,62 @@ describe('refreshReport', () => {
     const after = prefetchReport(ID);
     expect(after).toBe(before);
     expect(await after.report).toBe(old);
+  });
+});
+
+describe('loadAllReportNotes', () => {
+  const slowReport = (playbackRate?: number) => () =>
+    json(200, {
+      playId: ID,
+      score: 100,
+      accuracy: 100,
+      maxCombo: 1,
+      judgementCounts: { perfect: 0, good: 1, miss: 0 },
+      timingHistogram: null,
+      padStats: [],
+      mode: 'SHEET',
+      inputSource: 'keyboard',
+      endReason: null,
+      ...(playbackRate === undefined ? {} : { playbackRate }),
+      analysisStatus: 'DONE',
+      weakSegments: [],
+      recommendedDrills: null,
+      generatorVersion: 'v1',
+      generatedAt: '2026-11-15T00:00:00Z',
+    });
+  /** 노트는 한 쪽: 노트 5000을 실제로 40ms 늦게 친 GOOD(배율 0.5면 tMs 5020) */
+  function mockNotes(report: () => Response) {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes('/report/notes')) {
+        return json(200, { items: [{ seq: 0, matchedNoteId: 'a', tMs: 5020, pad: 'SNARE', judgement: 'GOOD', deltaMs: 40, velocity: 80 }], nextAfterSeq: null });
+      }
+      if (url.endsWith('/report')) return report();
+      throw new Error(`예상 밖 요청 ${url}`);
+    });
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  }
+
+  it('미리 받은 리포트 본문의 연습 배율로 노트 시각을 구하고, 본문을 다시 요청하지 않는다', async () => {
+    const fn = mockNotes(slowReport(0.5));
+    prefetchReport(ID);
+    const notes = await loadAllReportNotes(ID);
+    expect(notes.map((n) => n.timeMs)).toEqual([5000]);
+    expect(fn.mock.calls.filter(([u]) => String(u).endsWith('/report'))).toHaveLength(1);
+    expect(fn.mock.calls.filter(([u]) => String(u).includes('/report/notes'))).toHaveLength(1);
+  });
+
+  it('배율이 없거나 1이면 tMs − Δ 그대로다', async () => {
+    mockNotes(slowReport());
+    expect((await loadAllReportNotes(ID)).map((n) => n.timeMs)).toEqual([4980]);
+    resetPlaySyncForTest();
+    mockNotes(slowReport(1));
+    expect((await loadAllReportNotes(ID)).map((n) => n.timeMs)).toEqual([4980]);
+  });
+
+  it('리포트 본문 조회가 실패해도 노트는 배율 1로 받는다', async () => {
+    mockNotes(err500);
+    expect((await loadAllReportNotes(ID)).map((n) => n.timeMs)).toEqual([4980]);
   });
 });
 
