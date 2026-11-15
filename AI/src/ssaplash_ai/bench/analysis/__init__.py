@@ -1,10 +1,6 @@
-"""채보 규칙 분석 도구 (탐·크래시 규칙 설계 2장). S15P31A307-163.
+"""채보 규칙 분석 도구. ADTOF + 드럼 킷 분리 규칙용.
 
-- rule_features: ADTOF 타격 시각 + 드럼 킷 분리 트랙을 곡마다 한 번만 GPU로 계산해 npz로 저장
-- rule_eval: 저장한 특징 + 규칙 설정 → 패드 붙이기 → 정답과 짝지어 점수·혼동표. 후보 여러 개 비교
-- tom_pitch: 정답 탐 타격의 음높이 분포와 고정 경계 후보 계산
-
-의존 방향: cli → analysis → transcribers(규칙 함수)·metrics(짝짓기)·datasets(정답). GPU는 rule_features만 씀.
+rule_features가 무거운 계산을 곡마다 한 번만 GPU로 돌려 저장하고, rule_eval·tom_pitch는 그 파일로 CPU에서 돎.
 """
 
 from ssaplash_ai.bench.analysis.rule_eval import (

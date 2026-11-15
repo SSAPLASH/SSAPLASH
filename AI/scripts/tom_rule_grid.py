@@ -1,11 +1,12 @@
-"""탐 그룹 규칙 후보 yaml 만들기 (설계 CHART-003-tom-rule-retune v0.2 3장).
+"""탐 그룹 규칙 후보 yaml 만들기.
 
-서비스 채보 규칙(`adtof_drumsep.yaml` rules)에서 곡 안 탐 그룹 나누기·이름 붙이기 키만 바꾼 후보를 만듦.
-- current: 서비스 규칙 그대로
+ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml` rules, 되돌리기용 모델)에서 곡 안 탐 그룹 나누기·이름 붙이기
+키만 바꾼 후보를 만듦.
+- current: `adtof_drumsep.yaml` 규칙 그대로
 - current_order: 이름 규칙만 order(그룹 1개면 미드, 2개면 플로어·미드, Hz 기준 없음)
 - 나머지: order + 그룹 사이 최소 반음·히스토그램 폭·작은 그룹 비율·음높이 재는 방식 조합
 
-  uv run python scripts/tom_rule_grid.py --out docs/chart-rules/tom-rule-retune-2026-11/candidates --parts 1
+  uv run python scripts/tom_rule_grid.py --out docs/chart-rules/tom-rule-retune-2026-11 --parts 1
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ F0_METHODS = ("peak", "median")
 
 
 def service_rules(path: Path = SERVICE_YAML) -> dict:
-    """서비스 모델 yaml의 rules (stems 포함)"""
+    """ADTOF + 드럼 킷 분리 모델 yaml의 rules (stems 포함)"""
     return dict(yaml.safe_load(path.read_text(encoding="utf-8"))["rules"])
 
 
@@ -68,7 +69,12 @@ def split(cands: list[dict], parts: int) -> list[list[dict]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--service", type=Path, default=SERVICE_YAML, help="서비스 채보 모델 yaml")
+    ap.add_argument(
+        "--service",
+        type=Path,
+        default=SERVICE_YAML,
+        help="규칙을 읽을 ADTOF + 드럼 킷 분리 모델 yaml",
+    )
     ap.add_argument("--out", type=Path, required=True, help="후보 yaml 폴더")
     ap.add_argument("--parts", type=int, default=1, help="후보 yaml 개수 (서버에서 동시에 돌릴 때)")
     args = ap.parse_args()

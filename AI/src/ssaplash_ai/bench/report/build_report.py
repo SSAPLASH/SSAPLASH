@@ -1,7 +1,7 @@
 """보고서 생성 진입점. CSV 1개 이상 → summary.md, per_song.csv, PNG 2~3종.
 
-- write_report: 분리 벤치마크 (설계 3-6절, 작업 #6)
-- write_transcription_report: 채보 벤치마크 (채보 설계 3-13절). 같은 폴더의 hits_by_class.csv도 읽음
+- write_report: 분리 벤치마크 (작업 #6)
+- write_transcription_report: 채보 벤치마크. 같은 폴더의 hits_by_class.csv도 읽음
 """
 
 from __future__ import annotations

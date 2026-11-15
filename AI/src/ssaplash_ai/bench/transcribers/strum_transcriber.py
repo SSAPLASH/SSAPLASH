@@ -1,19 +1,11 @@
-"""STRUM 8종 온셋 CRNN 어댑터 (S15P31A307-326).
+"""STRUM 8종 온셋 CRNN 어댑터. 드럼 트랙 하나로 8패드를 바로 냄.
 
-STRUM(opria123/strum, 코드·가중치 MIT)의 모델 클래스 `TwoStageDrumsCRNN` 하나만 씀. 저장소의 나머지
-파이프라인(온셋 검출 → 분류기 → 드럼 킷 분리 → 후처리)은 쓰지 않음. 모델 정의 파일은 `strum/drums_v13.py`에
-원본 그대로 둠.
+STRUM(opria123/strum, MIT)의 모델 클래스 `TwoStageDrumsCRNN`만 씀. 모델 정의는 `strum/drums_v13.py`에 원본 그대로.
+흐름: 드럼 트랙 → 모노 44.1kHz → 로그 멜 → 10초 구간을 절반씩 겹쳐 모델에 넣고 겹친 곳은 평균
+→ 프레임별 8종 온셋 점수 → strum_rules(피크 찾기, 킥 규칙, 패드별 문턱값).
 
-흐름: 드럼 트랙 → 모노 44.1kHz → 로그 멜(n_fft 2048, hop 512, 멜 128) → 10초 구간을 절반씩 겹쳐 모델에 넣고
-겹친 곳은 평균 → 프레임별 8종 온셋 점수 → strum_rules(피크 찾기, 킥 규칙, 패드별 문턱값).
-드럼 트랙 하나로 8패드를 바로 내므로 드럼 킷 분리를 돌리지 않음.
-
-모델 yaml
-- checkpoint_path: 학습 가중치(`model_state_dict`만 읽음). `data/models/…`는 SSAPLASH_MODELS_DIR이 있으면 그 아래
-- options.sha256: 있으면 가중치 파일과 대조
-- options.model: 모델 구조 값. 없는 키는 STRUM drums_phase3 공개 가중치의 값
-- options.mel, options.segment_sec, options.batch: 멜 계산과 구간 길이·한 번에 넣는 구간 수
-- rules: strum_rules.rules_with_defaults 참고
+모델 yaml: checkpoint_path(학습 가중치), options.sha256(가중치 파일과 대조), options.model(모델 구조 값),
+options.mel·segment_sec·batch, rules(strum_rules.rules_with_defaults 참고).
 """
 
 from __future__ import annotations
@@ -167,7 +159,7 @@ class StrumCrnnTranscriber(BaseTranscriber):
         device = self._run_device
         cudnn = torch.backends.cudnn
         # 같은 프로세스의 분리 모델 패키지(msst)가 cudnn.benchmark를 켜 두면 구간 수가 곡마다 달라 입력 모양이
-        # 바뀔 때마다 커널 탐색을 다시 해서 곡당 2초가 8 ~ 15초가 됨(2026-11-12 측정). 계산하는 동안만 끔
+        # 바뀔 때마다 커널 탐색을 다시 해서 곡당 2초가 8 ~ 15초가 됨. 계산하는 동안만 끔
         flags = cudnn.flags(
             enabled=cudnn.enabled,
             benchmark=False,

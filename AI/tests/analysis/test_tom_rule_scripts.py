@@ -1,4 +1,4 @@
-"""탐 그룹 규칙 다시 고르기 스크립트 테스트 (설계 CHART-003-tom-rule-retune)."""
+"""탐 그룹 규칙 다시 고르기 스크립트 테스트."""
 
 from __future__ import annotations
 

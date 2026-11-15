@@ -1,13 +1,8 @@
-"""GMD(Groove MIDI Dataset) 연주 로더와 라벨 → 패드 대응표 (설계 3-3절, 4-3절). E-GMD 로더 포함.
+"""GMD(Groove MIDI Dataset)·E-GMD 로더와 MIDI 피치 → 패드 대응표.
 
-폴더 규칙은 `{root}/info.csv`와 그 안의 midi_filename·audio_filename. 연주 하나가 곡 하나이며
-드럼만 있으므로 mixture = drums_true, accomp_true = 무음. 타격 정답은 MIDI에서 추출.
-GMD MIDI 피치는 Roland TD-11 매핑. synth_build.GMD_PITCH_CLASS(9분류)와 같은 출처이며
-여기서는 패드 9종으로 묶음(44번 페달 하이햇은 HIHAT_PEDAL). 합성곡 onsets.csv의 gmd_class 열도 GMD_CLASS_PAD로 변환.
-
-E-GMD(S15P31A307-164 재연구, 작업 12)는 GMD 연주를 Roland TD-17 킷 43개로 다시 녹음한 것(CC BY 4.0,
-Zenodo 10.5281/zenodo.4300943). 목록 csv `e-gmd-v1.0.0.csv`는 GMD info.csv와 열이 같고 kit_name 열이 더 있으며,
-같은 연주 id가 킷마다 한 행씩 있어 곡 id로 오디오 파일 이름(확장자 뺀 것)을 쓴다. MIDI 피치 표는 GMD와 같음.
+폴더 규칙은 `{root}/info.csv`와 그 안의 midi_filename·audio_filename. 드럼만 있어 mixture = drums_true, 반주는 무음.
+타격 정답은 MIDI에서 뽑음. 44번 페달 하이햇은 HIHAT_PEDAL.
+E-GMD는 GMD 연주를 킷 43개로 다시 녹음한 것. 같은 연주 id가 킷마다 한 행이라 곡 id로 오디오 파일 이름을 씀.
 """
 
 from __future__ import annotations
@@ -36,7 +31,7 @@ GMD_CLASS_PAD: dict[str, str] = {
     "other": DROP,
 }
 
-# GMD MIDI 피치 → 패드. 설계 3-3절 표
+# GMD MIDI 피치 → 패드
 GMD_PITCH_PAD: dict[int, str] = {
     36: "KICK",
     38: "SNARE",
@@ -194,8 +189,7 @@ class GmdDataset(BaseDataset):
 def export_subset(dataset: GmdDataset, out_root: Path) -> list[Path]:
     """설정 songs의 wav·mid와 info.csv를 out_root 아래 같은 상대 경로로 복사 (코랩에 올릴 묶음용).
 
-    GMD 전체 11GB 대신 평가에 쓰는 연주만 올리려는 것. info.csv는 통째로 복사(작음).
-    빠진 파일이 있으면 FileNotFoundError. 복사한 파일 경로 목록을 돌려줌(info.csv 포함).
+    빠진 파일이 있으면 FileNotFoundError. 복사한 파일 경로 목록을 돌려줌.
     """
     root = dataset.config.root
     out_root.mkdir(parents=True, exist_ok=True)
@@ -218,7 +212,7 @@ class EgmdDataset(GmdDataset):
 
     설정: `subset`은 split(test·validation·train, 기본 test). `extra.perf_ids`는 GMD 연주 id 목록(없으면 전부),
     `extra.kits`는 kit_name 목록(없으면 43개 전부), `extra.beat_type`은 beat·fill·all 또는 목록(기본 beat).
-    `songs`가 있으면 그대로. GMD 로더도 같은 subset·beat_type 키를 받음(파인튜닝 학습 분할용, S15P31A307-164).
+    `songs`가 있으면 그대로. GMD 로더도 같은 subset·beat_type 키를 받음(파인튜닝 학습 분할용).
     """
 
     kind = "egmd"

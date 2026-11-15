@@ -1,4 +1,4 @@
-"""채보 후처리 후보 함수 테스트 (설계 CHART-003-postproc-activation)."""
+"""채보 후처리 후보 함수 테스트."""
 
 from __future__ import annotations
 

@@ -132,12 +132,14 @@ class LiveCoachRunner:
                 else "가드레일 거절: " + "; ".join(outcome.violations)
             )
             self._fail(a, code, summary)
+            # 거절 이유는 규칙 이름과 글자 수뿐이라 사실 값이 없다. 운영에서 원인을 바로 보려고 남긴다
             logger.info(
-                "연주 코칭 %d 실패 보고 (%s, 시도 %d, %d ms)",
+                "연주 코칭 %d 실패 보고 (%s, 시도 %d, %d ms): %s",
                 a.job_id,
                 code,
                 outcome.attempts,
                 elapsed_ms,
+                "; ".join(outcome.violations),
             )
             return LiveCoachOutcome(
                 a.job_id, STATUS_FAILED_REPORTED, code, outcome.attempts, elapsed_ms

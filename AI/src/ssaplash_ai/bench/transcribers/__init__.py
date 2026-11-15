@@ -2,7 +2,7 @@
 
 모델 패키지(torch·adtof_pytorch·msst)는 어댑터 안에서 늦게 import하므로
 mock 어댑터와 단위 테스트는 `uv sync --extra transcribers` 없이 동작.
-별도 환경이 필요한 모델(ADT_STR·IDM·Omnizart·YourMT3+)은 external 어댑터 + scripts/transcribers_ext/ 스크립트.
+별도 환경이 필요한 모델(ADT_STR·IDM·Omnizart·YourMT3+·drum2midi)은 external 어댑터 + scripts/transcribers_ext/ 스크립트.
 STRUM 8종 온셋 CRNN(strum_crnn)은 torch·torchaudio만 써서 같은 환경에서 돎.
 """
 

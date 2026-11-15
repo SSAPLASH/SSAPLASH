@@ -1,4 +1,4 @@
-"""결과 폴더 MLflow 재기록 테스트 (설계 CHART-003-mlflow-relog 6장). 파일 저장소 mlruns만 씀."""
+"""결과 폴더 MLflow 재기록 테스트. 파일 저장소 mlruns만 씀."""
 
 from __future__ import annotations
 
@@ -60,9 +60,7 @@ def test_채보_폴더_재기록_지표가_원래_실행과_같고_두번_올려
     assert b.data.metrics == a.data.metrics
     for k in ("models", "input", "nSongs", "nModels", "nErrors", "device"):
         assert b.data.params[k] == a.data.params[k], k
-    assert (
-        b.data.params["dataset"] == "fake_synth"
-    )  # 원래는 yaml 이름(ds), 재기록은 CSV 값 (설계 U3)
+    assert b.data.params["dataset"] == "fake_synth"  # 원래는 yaml 이름(ds), 재기록은 CSV 값
     assert b.data.tags["runId"] == "trun" and b.data.tags["relogged"] == "true"
     assert b.data.tags["config_hash.mock_truth"] == a.data.tags["config_hash.mock_truth"]
     assert {"results.csv", "hits_by_class.csv", "summary.md", "f1_by_model.png"} <= _artifacts(b)

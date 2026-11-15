@@ -1,16 +1,11 @@
-"""채보 워커 명령줄 (설계 3-1절 명령 표). AI/ 폴더에서 실행.
+"""채보 워커 명령줄. AI/ 폴더에서 실행.
 
-- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복. 환경 변수 SSAPLASH_WORKER_* 필요
-- check: 환경 변수·설정 yaml 검사, 모델 두 개 올려 보고 시간 출력. BE는 부르지 않음
-- fake-be: 테스트·로컬 확인용 BE 대역을 띄우고 곡을 작업으로 넣음 (개발용)
-
-예
-  uv run ssaplash-worker check
-  uv run ssaplash-worker run --once
-  uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
+- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복
+- check: 환경 변수·설정 yaml 검사, 모델을 올려 보고 시간·음악 여부 검사 상태 출력. BE는 부르지 않음
+- live-run: 연주 중 LLM 구간 코칭 워커
+- fake-be: 테스트·로컬 확인용 BE 대역 (개발용)
 
 종료 코드: 0 정상, 1 설정·모델 오류, 2 인증 실패(401). 로그는 표준 오류.
-로그 설정은 이 파일에서만 함(패키지 안 모듈은 logging.getLogger만 씀).
 """
 
 from __future__ import annotations
@@ -162,6 +157,7 @@ def live_run_cmd(args: argparse.Namespace) -> int:
         settings.narrative_llm_api,
         timeout_sec=settings.live_llm_timeout_sec,
         max_tokens=80,
+        json_output=True,
     )
     runner = LiveCoachRunner(LiveCoachApi(settings), generator, settings.narrative_model)
     stop = threading.Event()

@@ -1,6 +1,6 @@
 """BE API 호출부 단위 테스트. requests.Session 대신 응답을 미리 정해 둔 가짜 세션을 끼운다.
 
-실제 HTTP 왕복은 tests/worker/test_job.py가 BE 대역(fake_be)으로 검사한다.
+실제 HTTP 왕복은 tests/worker/test_worker_job.py가 BE 대역(fake_be)으로 검사한다.
 """
 
 from __future__ import annotations

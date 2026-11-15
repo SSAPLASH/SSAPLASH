@@ -69,7 +69,7 @@ def test_정상_흐름은_DONE이고_파일과_결과가_BE에_남는다(tmp_pat
         be_out = tmp_path / "be_out" / f"job-{job_id}"
         for name in ("drums.flac", "accompaniment.flac", "separation_result.json", "chart.json"):
             assert (be_out / name).is_file()
-        # 분리 ACK 뒤 로컬 드럼 트랙을 다시 써서 DRUM_STEM GET이 없음 (인수 조건 4)
+        # 분리 ACK 뒤 로컬 드럼 트랙을 다시 써서 DRUM_STEM GET이 없음
         accesses = [f for e in _events(rig.backend, job_id, "FILE_ACCESS") for f in e["files"]]
         assert accesses == ["SOURCE_AUDIO:GET", "DRUM_STEM:PUT", "ACCOMPANIMENT:PUT"]
         # 작업 폴더는 지움

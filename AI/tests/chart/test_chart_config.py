@@ -1,4 +1,4 @@
-"""분리 설정 읽기·환경 변수 덮어쓰기 테스트."""
+"""분리·채보 설정 읽기, 환경 변수 덮어쓰기, 채보 모델 이름으로 고르기 테스트."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def test_work_dir_환경_변수(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert work_dir_from_env() == tmp_path / "work"
 
 
-# ---- 채보 설정 (S15P31A307-169) ----
+# ---- 채보 설정 ----
 
 
 def test_저장소_채보_설정_파일을_읽는다(monkeypatch: pytest.MonkeyPatch):
@@ -139,6 +139,15 @@ def test_채보_설정_기본값과_환경_변수(monkeypatch: pytest.MonkeyPatc
     assert cfg.drum_check == DrumCheckConfig(min_notes_per_minute=None, fail_on_unknown_tempo=True)
 
 
+def test_저장소_채보_설정은_1분당_노트_수_기준이_켜져_있다(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(ENV_DEVICE, raising=False)
+    monkeypatch.delenv(ENV_CHART_MODEL, raising=False)
+    cfg = TranscriptionConfig.from_yaml(CONFIG_DIR / "transcription.yaml")
+    # 드럼 있는 곡 179곡 분포에서 1만 곡 중 1곡이 걸리는 값. 드럼 없는 음원 최대는 32.7 (S15P31A307-321 측정)
+    assert cfg.drum_check.min_notes_per_minute == 92
+    assert cfg.drum_check.fail_on_unknown_tempo is True
+
+
 def test_drum_check_설정을_읽는다():
     raw = {"model_config": "m.yaml", "drum_check": {"min_notes_per_minute": 12}}
     assert TranscriptionConfig.from_dict(raw).drum_check.min_notes_per_minute == 12.0
@@ -180,7 +189,7 @@ def test_잘못된_채보_설정은_ValueError(raw: dict, 문구: str):
         TranscriptionConfig.from_dict(raw)
 
 
-# ---- 채보 모델 이름으로 고르기 (S15P31A307-243) ----
+# ---- 채보 모델 이름으로 고르기 ----
 
 MODELS_RAW = {"model": "original", "models": {"original": "a.yaml", "combo": "b.yaml"}}
 

@@ -1,20 +1,11 @@
-"""ADTOF 파인튜닝용 학습 윈도 생성 (설계 CHART-003-tom-finetune 2장·4-3절).
+"""ADTOF 파인튜닝용 학습 윈도 생성.
 
-여러 데이터셋 로더에서 곡을 뽑아 4.12초(412프레임, 100fps) 윈도를 자르고, 추론과 같은 함수
-(`adtof_pytorch.audio.AudioProcessor`의 STFT 2048·hop 441·로그 필터뱅크 84빈)로 입력 특징을,
+데이터셋 로더에서 곡을 뽑아 4.12초(412프레임, 100fps) 윈도를 자르고, 추론과 같은 함수로 입력 특징을,
 정답 타격 표에서 프레임별 정답(프레임 × 클래스)을 만듦.
-
-- 클래스 `five`: ADTOF 5가지(킥·스네어·탐·하이햇·심벌, 출력 순서 MIDI 35·38·47·42·49). 페달 하이햇은 하이햇
-- 클래스 `five_pedal`: five + 페달 하이햇(출력 순서 35·38·47·42·49·44)
-- 클래스 `five_pedal_cym`: five_pedal에서 심벌을 크래시·라이드로 나눔(출력 순서 35·38·47·42·49·44·51,
-  49 채널은 크래시만, 51 채널은 라이드)
-- 클래스 `pads`: 패드 9종(KICK·SNARE·SMALL_TOM·MID_TOM·FLOOR_TOM·HIHAT·CRASH·RIDE·HIHAT_PEDAL)
-- 탐 강조: 윈도의 `tom_window_frac` 비율은 그 곡의 정답 탐 타격 하나를 가운데 두고 자름
-- 반주가 있는 곡(STAR·ENST)은 `accomp_mix_prob` 확률로 반주를 낮은 게인으로 섞음
-- 입력 전체 게인을 `gain_db_range` 안에서 바꿈
-- 데이터셋마다 `ignore_classes`로 손실에서 뺄 클래스를 지정(주석에 그 악기 표시가 없는 데이터용)
-
-모델·손실은 여기 없음(adtof_finetune).
+- 클래스 묶음: five(5가지), five_pedal(+ 페달 하이햇), five_pedal_cym(심벌을 크래시·라이드로), pads(패드 9종)
+- 탐 강조: 윈도의 `tom_window_frac` 비율은 정답 탐 타격 하나를 가운데 두고 자름
+- 반주가 있는 곡은 `accomp_mix_prob` 확률로 반주를 낮은 게인으로 섞음
+- 데이터셋마다 `ignore_classes`로 손실에서 뺄 클래스를 지정
 """
 
 from __future__ import annotations

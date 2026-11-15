@@ -53,7 +53,7 @@ def test_박_간격_계산은_튀는_간격을_뺌():
 
 @pytest.mark.parametrize("bpm", [84.0, 110.0, 178.0])
 def test_20ms_단위_박에서_bpm이_0점01_안(bpm: float):
-    # Beat This! 박 시각처럼 20ms 단위로 끊고, 박 5%를 무작위로 빼서 구간을 끊음 (설계 인수 조건 13)
+    # Beat This! 박 시각처럼 20ms 단위로 끊고, 박 5%를 무작위로 빼서 구간을 끊음
     rng = np.random.default_rng(int(bpm))
     beats = 0.37 + np.arange(int(180 * bpm / 60)) * 60.0 / bpm
     beats = np.round(beats / 0.02) * 0.02
@@ -85,7 +85,7 @@ def test_박이_모자라면_힌트_그것도_없으면_기본값():
     assert hinted.downbeat_phase_ms is None and none.downbeat_phase_ms is None
 
 
-# ---- 마디 첫 박 다수결 (설계 CHART-003-downbeat-vote 인수 조건 4) ----
+# ---- 마디 첫 박 다수결 ----
 
 
 def test_다수결은_첫_번째만_틀리면_다수_쪽_위치():

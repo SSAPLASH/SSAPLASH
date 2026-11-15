@@ -1,9 +1,10 @@
-"""드럼 분리 입력 채보 모델 비교표 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 10).
+"""드럼 분리 입력 채보 모델 비교표.
 
-서버 `notebooks/sep_compare_server.ipynb`가 run-transcription `--save-midi`로 남긴 곡별 예측 MIDI를 읽어
+GPU 서버에서 run-transcription `--save-midi`로 남긴 곡별 예측 MIDI를 읽어
 세 후보를 같은 곡 목록·같은 기준(9패드, ±50ms)으로 채점함.
 
-- 현재 사용 중 모델: 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep.yaml`)
+- 현재 사용 중 모델: 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep.yaml`). 2026-11-02 당시 서비스 모델이고
+  표의 이름은 그때 것을 그대로 둠
 - 실제 녹음 학습 모델: ENST·MDB를 더해 학습한 모델. 학습에 쓴 곡을 채점하면 안 되므로, 드러머·곡 묶음을
   하나씩 빼고 학습한 버전 3개(`realrec_heldout_d1~3`)로 각자 안 본 곡만 채점해 합침
 - 조합: 탐 3종은 현재 사용 중 모델, 나머지 패드는 실제 녹음 학습 모델 예측을 씀

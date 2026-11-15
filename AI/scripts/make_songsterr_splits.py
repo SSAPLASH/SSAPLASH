@@ -1,17 +1,20 @@
-"""11/08 추가 공용 곡을 검증·학습 목록으로 나누고 학습 설정을 만듦 (설계 CHART-003-songsterr-expand-train).
+"""11/08 추가 공용 곡을 검증·학습 목록으로 나누고 학습 설정을 만듦.
 
-- 시험 곡: configs/bench/datasets/public_songs.yaml(기존 31곡). 여기 있는 곡은 학습·검증에 넣지 않음
+- 시험 곡: configs/bench/datasets/public_songs.yaml(31곡)과 public_songs_holdout38.yaml(38곡).
+  두 목록의 곡은 학습·검증에 넣지 않음
 - 추가 곡 중 정렬 결과가 나쁜 곡(마디 시작을 실제 박에 붙인 비율 < 0.85)과 노트 < 300곡은 뺌
 - 곡 폴더 이름의 sha1 순서로 앞 10곡은 검증, 나머지는 학습. 학습 곡 수 25·50·전부는 같은 순서의 앞부분이라 겹침
 - 학습 설정: 5종 출력(25·50·전부), 8패드 출력(전부)
 
   uv run python scripts/make_songsterr_splits.py
+  uv run python scripts/make_songsterr_splits.py --grow   # 11/09: 검증·기존 83곡 고정, 새 곡만 덧붙임
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import yaml
@@ -87,7 +90,61 @@ def write_ds(name: str, songs: list[str], note: str) -> Path:
     return path
 
 
+def read_songs(name: str) -> list[str]:
+    return yaml.safe_load((DS / name).read_text(encoding="utf-8"))["songs"]
+
+
+def grow() -> int:
+    """11/09 새 곡 추가: 검증 10곡·기존 학습 83곡은 그대로 두고 새 곡만 덧붙임.
+
+    새 곡은 폴더 이름 sha1 순서. 학습 150곡 = 기존 83곡 + 새 곡 앞부분, full = 기존 83곡 + 새 곡 전부.
+    기존 25·50·all 목록과 설정은 건드리지 않음.
+    """
+    test = set(read_songs("public_songs.yaml")) | set(read_songs("public_songs_holdout38.yaml"))
+    val = read_songs("public_songs_val.yaml")
+    base = read_songs("public_songs_train_all.yaml")
+    fixed = test | set(val) | set(base)
+    cands = sorted(
+        p.name
+        for p in ROOT.iterdir()
+        if p.is_dir() and (p / "raw/meta.json").is_file() and p.name not in fixed
+    )
+    ok, dropped = [], {}
+    for name in cands:
+        good, why = usable(ROOT / name)
+        (ok.append(name) if good else dropped.__setitem__(name, why))
+    ok.sort(key=lambda s: hashlib.sha1(s.encode()).hexdigest())
+    sizes = {"150": base + ok[: max(0, 150 - len(base))], "full": base + ok}
+    head = "# 11/09 새 곡 추가 학습. 검증 10곡은 11/08 것 그대로. scripts/make_songsterr_splits.py --grow가 만듦\n"
+    for k, songs in sizes.items():
+        write_ds(
+            f"public_songs_train_{k}",
+            sorted(songs),
+            f"11/09 학습 {len(songs)}곡 = 11/08 학습 {len(base)}곡 + 11/09 새 곡 {len(songs) - len(base)}곡(sha1 순서). scripts/make_songsterr_splits.py --grow",
+        )
+        for classes, guard in (("five", 0.02), ("pads", 1.0)):
+            cfg = {"classes": classes, **TRAIN_BASE, "guard_drop": guard,
+                   "train_datasets": [{"path": f"configs/bench/datasets/public_songs_train_{k}.yaml", "weight": 1.0}],
+                   "val_datasets": [{"path": "configs/bench/datasets/public_songs_val.yaml", "n_songs": N_VAL}]}  # fmt: skip
+            note = (
+                "# guard_drop 1.0: 8패드 출력은 5종 기준 안전장치에 걸려서 끔 (11/08과 같음)\n"
+                if classes == "pads"
+                else ""
+            )
+            suffix = "_noguard" if classes == "pads" else ""
+            (TRAIN / f"songsterr_{classes}_{k}{suffix}.yaml").write_text(
+                head + note + yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+                newline="\n",
+            )
+    print(json.dumps({"새 후보": len(cands), "새로 쓸 곡": len(ok), "학습": {k: len(v) for k, v in sizes.items()},
+                      "뺀 곡": dropped}, ensure_ascii=False, indent=1))  # fmt: skip
+    return 0
+
+
 def main() -> int:
+    if "--grow" in sys.argv[1:]:
+        return grow()
     # 시험 31곡과 확인용 처음 보는 곡은 학습·검증에 넣지 않음
     test = set()
     for name in ("public_songs.yaml", "public_songs_holdout38.yaml"):

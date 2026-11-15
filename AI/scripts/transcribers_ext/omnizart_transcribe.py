@@ -1,4 +1,4 @@
-"""Omnizart drum 채보 스크립트 (별도 환경 `.venv-omnizart`, TensorFlow, 채보 설계 3-10절).
+"""Omnizart drum 채보 스크립트 (별도 환경 `.venv-omnizart`, TensorFlow).
 
 `pip install omnizart` + `omnizart download-checkpoints` 뒤에 씀. 저장소의 공개 추론(`inference`)은
 13분류 예측 중 킥(35)·스네어(38)·하이햇(42) 셋만 MIDI로 냄(2026-10-21 코드 확인). 그래서 라벨은 이 셋뿐이고

@@ -1,4 +1,4 @@
-"""STRUM CRNN 프레임별 점수 → 노트 (S15P31A307-326). numpy·scipy만 사용.
+"""STRUM CRNN 프레임별 점수 → 노트. numpy·scipy만 사용.
 
 흐름: pick_peaks(패드별 피크 찾기) → apply_kick_gain(킥이 탐으로 잡히는 곡 보정) → to_hits(패드별 문턱값).
 점수는 실험과 같이 1000을 곱해 반올림한 정수로 다룸. 값은 모델 yaml의 rules에서 읽음.

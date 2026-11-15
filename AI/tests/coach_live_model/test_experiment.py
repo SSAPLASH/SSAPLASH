@@ -81,13 +81,13 @@ def test_off_needs_no_arms() -> None:
 
 
 def test_example_config_is_valid() -> None:
-    assert load_config(EXAMPLE)["gate"]["mode"] == "shadow"
+    assert load_config(EXAMPLE)["gate"]["mode"] == "on"
 
 
 def test_example_config_keeps_llm() -> None:
-    # 운영 게시본(버전 3)과 같은 예시 설정의 llm이 등록 결과에 그대로 남는다
+    # 예시 설정의 llm이 등록 결과에 그대로 남는다
     raw = json.loads(EXAMPLE.read_text(encoding="utf-8"))
-    assert raw["llm"] == {"mode": "shadow", "rolloutPercent": 100}
+    assert raw["llm"] == {"mode": "on", "rolloutPercent": 100}
     assert load_config(EXAMPLE)["llm"] == raw["llm"]
 
 

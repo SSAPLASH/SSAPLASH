@@ -1,11 +1,11 @@
 """반복 마디끼리 ADTOF 점수를 섞어 채보 (11/08, 학습 없는 개선 후보).
 
 곡은 같은 마디 패턴이 되풀이되므로, 한 마디에서 놓친 타격이 비슷한 다른 마디에서는 잡혔을 수 있음.
-1. 서비스 박 추정(Beat This!)으로 마디 첫 박을 찾음 (분리 드럼 입력, 서비스와 같음)
+1. Beat This!를 분리 드럼에 돌려 마디 첫 박을 찾음
 2. 마디마다 저장 특징의 ADTOF 점수 (프레임, 5)를 마디 길이에 맞춰 R칸으로 늘이거나 줄임
 3. 마디끼리 상관계수가 tau 이상인 마디 중 가장 비슷한 k개의 평균을 그 마디 길이로 되돌려
    점수 = (1 − alpha) × 원래 + alpha × 이웃 평균
-4. 기본 가중치 피크 고르기 + 서비스 규칙으로 8패드
+4. 기본 가중치 피크 고르기 + ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml`)으로 8패드
 출력 csv 한 줄 = (후보, 곡): 8패드 tp/fp/fn. 박 추정 결과는 --beats-cache 폴더에 곡마다 저장.
 
   uv run python scripts/repeat_consensus_eval.py --dataset configs/bench/datasets/public_songs.yaml \
