@@ -1,7 +1,7 @@
 """합성곡(synth_v1) 제작 로직. scripts/make_synth_songs.py가 호출.
 
 레시피 yaml의 곡 하나 = GMD 연주 하나 + MUSDB18-HQ train 곡의 드럼 없는 구간 하나.
-산출물은 설계 4-2절대로 mixture.wav, drums.wav, accomp.wav, onsets.csv, meta.yaml.
+산출물은 mixture.wav, drums.wav, accomp.wav, onsets.csv, meta.yaml.
 정답 온셋은 GMD MIDI의 note_on에서 추출. 악기 9종 분류는 Gillick 외 2019년 논문의 매핑.
 """
 

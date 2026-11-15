@@ -1,4 +1,4 @@
-# 실제 녹음 학습 확인 실험의 묶음 표 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 3-3절).
+# 실제 녹음 학습 확인 실험의 묶음 표.
 # 학습 이름 → 그 학습이 안 본 ENST 드러머·MDB 곡. scripts/score_heldout.py가 이 표로 곡을 골라 합침.
 # MDB 묶음은 탐(90타)·페달(523타)이 비슷하게 가도록 나눔: 묶음 1 탐 40·페달 177, 2 탐 25·페달 176, 3 탐 25·페달 170.
 # 묶음 k는 ENST 드러머 k와 짝. 데이터셋 yaml(configs/bench/datasets/real_check/)의 곡 목록도 이 표와 같음.

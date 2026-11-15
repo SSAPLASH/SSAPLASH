@@ -1,12 +1,12 @@
-"""채보 후처리 후보 채점·고르기 (설계 CHART-003-postproc-activation).
+"""채보 후처리 후보 채점·고르기.
 
-저장 특징의 ADTOF 프레임별 점수로 피크를 다시 고르고(thr·co), 서비스 규칙으로 예측한 뒤, 탐·하이햇 타격을
+저장 특징의 ADTOF 프레임별 점수로 피크를 다시 고르고(thr·co), ADTOF + 드럼 킷 분리 규칙(`adtof_drumsep.yaml`)으로 예측한 뒤, 탐·하이햇 타격을
 스네어로 바꾸는(tom2sn·hh2sn) 후처리를 후보마다 걸어 8패드 tp/fp/fn을 곡마다 셈.
 
 - grid: 후보 목록 json (한 가지씩 바꾼 후보 + current)
 - run: 데이터셋 × 후보 → 곡·후보별 개수 csv
 - select: MDB로 후보 묶음마다 하나씩 고르고(E-GMD가 0.005 넘게 떨어지면 뺌), 오른 것을 차례로 더한 조합 json
-- enst: ENST 곡별 csv 두 개(드럼 단독·원곡 분리)로 지금 서비스 대비 차이와 같은 곡끼리 다시 뽑은 95% 구간
+- enst: ENST 곡별 csv 두 개(드럼 단독·원곡 분리)로 current 후보 대비 차이와 같은 곡끼리 다시 뽑은 95% 구간
 
   uv run python scripts/postproc_eval.py grid --out data/results/postproc/grid.json
   uv run python scripts/postproc_eval.py run --dataset configs/bench/datasets/mdb_drums.yaml \
@@ -28,7 +28,7 @@ import numpy as np
 SERVICE_RULES = Path("configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml")
 SCORED = ("KICK", "SNARE", "HIHAT", "SMALL_TOM", "MID_TOM", "FLOOR_TOM", "CRASH", "RIDE")
 LABELS = (35, 38, 47, 42, 49)  # ADTOF 점수 열 순서
-BASE_THR = {35: 0.22, 38: 0.24, 47: 0.32, 42: 0.22, 49: 0.30}  # 서비스 기본 문턱값
+BASE_THR = {35: 0.22, 38: 0.24, 47: 0.32, 42: 0.22, 49: 0.30}  # ADTOF 기본 문턱값
 FPS = 100
 NEAR_SEC = 0.02
 TOMS = ("SMALL_TOM", "MID_TOM", "FLOOR_TOM")

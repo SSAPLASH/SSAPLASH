@@ -2,7 +2,7 @@
 
 학습 셋을 동시에 띄우면 데이터 읽기 작업이 많아 Jupyter가 버벅여서(10/30), 대기열 하나가 학습을
 `nice`로 돌림. 기본은 하나씩이고, `--parallel N`이면 N개까지 같이 돌리며 `--cpus`로 정한 코어에만 묶어
-Jupyter 몫을 남김(실제 녹음 확인 실험, 설계 CHART-003-real-drum-data-check 4-3절).
+Jupyter 몫을 남김(실제 녹음 확인 실험).
 실행 폴더 하나에 코드 사본과 상태 파일을 모아 둠.
 
   <run-dir>/S15P31A307/AI   코드 사본. 학습은 PYTHONPATH로 이 사본의 src를 읽음. data는 공유 폴더 링크

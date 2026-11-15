@@ -1,4 +1,4 @@
-"""MusicXML 드럼 악보 → 채보 테스트 (S15P31A307-292). 테스트가 직접 쓰는 짧은 MusicXML만 사용."""
+"""MusicXML 드럼 악보 → 채보 테스트. 테스트가 직접 쓰는 짧은 MusicXML만 사용."""
 
 from __future__ import annotations
 

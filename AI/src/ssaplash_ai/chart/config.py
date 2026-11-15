@@ -1,13 +1,10 @@
-"""서비스 설정 읽기 (설계 3장 "서비스 설정").
+"""서비스 설정 읽기. `configs/chart/*.yaml` → SeparationConfig·TranscriptionConfig·MusicCheckConfig.
 
-`configs/chart/separation.yaml` → SeparationConfig, `configs/chart/transcription.yaml` → TranscriptionConfig
-(S15P31A307-169). 둘 다 공통 부분(ChartConfig)을 상속. yaml의 상대 경로는 벤치마크 yaml과 같이
-AI/ 폴더(현재 작업 폴더) 기준. `configs/chart/music_check.yaml` → MusicCheckConfig (분리 전 음악 여부 검사).
-
-환경 변수(`SSAPLASH_` 접두사, 인프라 -125 회신과 같은 규칙)가 yaml 값을 덮어씀.
+yaml의 상대 경로는 AI/ 폴더 기준. 아래 환경 변수가 yaml 값을 덮어씀.
 - SSAPLASH_CHART_DEVICE: 장치(cuda / cpu)
-- SSAPLASH_MODELS_DIR: 가중치 폴더. 벤치마크 어댑터(`SeparatorConfig.model_dir`)가 읽음. 기본 data/models
-- SSAPLASH_WORK_DIR: 중간 파일 폴더. 명령줄 --out이 없을 때 cli가 씀
+- SSAPLASH_MODELS_DIR: 가중치 폴더. 기본 data/models
+- SSAPLASH_WORK_DIR: 명령줄 --out이 없을 때 출력 폴더의 부모
+- SSAPLASH_CHART_MODEL: 채보 모델 이름. transcription.yaml의 model 값보다 우선
 """
 
 from __future__ import annotations
@@ -29,11 +26,11 @@ DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
 DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
 DEFAULT_MUSIC_CHECK_CONFIG = Path("configs/chart/music_check.yaml")
 OUTPUT_FORMATS = ("flac", "wav")
-# beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
+# beat_this: 서비스, librosa: torch 없이 도는 mock·테스트용
 TEMPO_METHODS = ("beat_this", "librosa")
-# offsetMs 원점 방식(설계 v0.5). downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
+# offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
 ORIGIN_MODES = ("downbeat", "notes")
-# Beat This! 후처리. minimal: 확률 봉우리 그대로, dbn: madmom DBN으로 박 간격·마디 길이를 고르게 (설계 CHART-003-variable-tempo-exp)
+# Beat This! 후처리. minimal: 확률 봉우리 그대로, dbn: madmom DBN으로 박 간격·마디 길이를 고르게
 TEMPO_POSTPROCESS = ("minimal", "dbn")
 # BE WorkerResults가 schemaVersion 1만 받음
 SCHEMA_VERSIONS = (1,)
@@ -41,7 +38,7 @@ SCHEMA_VERSIONS = (1,)
 
 @dataclass
 class OutputConfig:
-    """드럼 트랙·반주 파일 형식. flac은 16비트 무손실(설계 U2), wav는 PCM_16."""
+    """드럼 트랙·반주 파일 형식. flac은 16비트 무손실, wav는 PCM_16."""
 
     sample_rate: int = 44100
     format: str = "flac"
@@ -107,7 +104,7 @@ class SeparationConfig(ChartConfig):
 
 @dataclass
 class TempoConfig:
-    """bpm 추정 설정 (설계 U4·U15). 추정값이 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음."""
+    """bpm 추정 설정. 추정값이 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음."""
 
     method: str = "beat_this"
     min_bpm: float = 60.0
@@ -175,10 +172,7 @@ class TempoConfig:
 
 @dataclass
 class DrumCheckConfig:
-    """채보 가능 검사 (S15P31A307-246 설계 3-3절). 걸리면 NOT_TRANSCRIBABLE 실패.
-
-    min_notes_per_minute가 None이면 노트 수 검사를 하지 않음. 기준값은 실제 곡 분포를 측정한 뒤 정함.
-    """
+    """채보 가능 검사. 걸리면 NOT_TRANSCRIBABLE 실패. min_notes_per_minute가 None이면 노트 수 검사를 하지 않음."""
 
     min_notes_per_minute: float | None = None
     fail_on_unknown_tempo: bool = True
@@ -279,10 +273,8 @@ class TranscriptionConfig(ChartConfig):
 class MusicCheckConfig:
     """`configs/chart/music_check.yaml` 한 파일. 분리 전에 원곡이 음악인지 보는 검사.
 
-    원곡의 positions 위치에서 window_sec 길이 구간을 뽑아 분류 모델로 음악 확률·말소리 확률을 구하고 평균함.
     음악 확률 평균이 min_music_prob 미만이거나 말소리 확률 평균이 max_speech_prob 이상이면 NOT_TRANSCRIBABLE.
-    기준값 두 개가 모두 None이면 검사하지 않고 모델도 올리지 않음.
-    장치는 분리·채보와 따로 정함(환경 변수 SSAPLASH_CHART_DEVICE를 따르지 않음). GPU를 쓰지 않으려는 검사라 기본 cpu.
+    기준값 두 개가 모두 None이면 검사하지 않고 모델도 올리지 않음. 장치는 SSAPLASH_CHART_DEVICE를 따르지 않음.
     """
 
     model: str = "MIT/ast-finetuned-audioset-10-10-0.4593"

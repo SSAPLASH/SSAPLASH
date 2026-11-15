@@ -1,16 +1,8 @@
-"""테스트·로컬 확인용 BE 대역 (설계 3-8절). 개발용이며 운영 코드가 아님.
+"""테스트·로컬 확인용 BE 대역. 개발용이며 운영 코드가 아님.
 
 BE 워커 API 6개와 저장소 GET/PUT을 FastAPI 앱 하나로 흉내 냄. 상태는 메모리.
-BE 안내문의 형식과 검사 중 워커가 맞춰야 하는 것만 재현함:
-- 토큰(401)·workerId(400 WORKER_INVALID)·다른 attempt(409)·임대 만료(409)·eventSeq 역행 무시
-- payloadHash 재계산 대조(422), 같은 resultId 재전송은 기존 Receipt, 다른 내용은 409
-- 분리 결과: 올린 파일의 크기·sha256과 manifest 대조, flac 16비트 44,100Hz 스테레오, 길이 올림 ms == durationMs
-- 채보 결과: chart_json.validate_chart(BE WorkerResults와 같은 검사)
-- 고장 주입(Faults): 첫 PUT 403, 첫 결과 제출 503, heartbeat 409 (테스트용)
-실제 BE의 DB 잠금·탈퇴·정리·재시도 상한은 재현하지 않음.
-
-명령줄: `ssaplash-worker fake-be --song <원곡> --out <폴더>` (cli.fake_be_cmd → serve).
-테스트: FakeBackendServer로 uvicorn을 스레드에 띄움.
+토큰·attempt·임대·eventSeq·payloadHash·flac 형식과 길이·채보 JSON을 BE처럼 검사하고 고장 주입(Faults)을 지원함.
+실제 BE의 DB 잠금·탈퇴·정리는 재현하지 않음.
 """
 
 from __future__ import annotations
@@ -70,13 +62,13 @@ class Rejected(Exception):
 
 @dataclass
 class Faults:
-    """테스트용 고장 주입. 한 번 쓰이면 꺼짐."""
+    """테스트용 고장 주입. 이름이 _once로 끝나는 것은 한 번 쓰이면 꺼지고 heartbeat_409는 계속 켜져 있음."""
 
     put_403_once: bool = False
     submit_503_once: bool = False
     heartbeat_409: bool = False
     get_403_once: bool = False
-    # 내려받기 응답을 한 번 절반만 줌. 다운로드가 잘린 경우 (S15P31A307-246)
+    # 내려받기 응답을 한 번 절반만 줌. 다운로드가 잘린 경우
     get_truncated_once: bool = False
 
 
@@ -119,7 +111,7 @@ class FakeJob:
     separation_result: dict | None = None
     transcription_result: dict | None = None
     events: list[dict] = field(default_factory=list)
-    # 마지막 실패 보고의 reason. 재시도를 다 써 FAILED가 돼도 남김 (S15P31A307-246)
+    # 마지막 실패 보고의 reason. 재시도를 다 써 FAILED가 돼도 남김
     failure_reason: str | None = None
     chart_version_ids: list[int] = field(default_factory=list)
 

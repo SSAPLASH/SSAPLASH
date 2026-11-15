@@ -1,18 +1,14 @@
-"""ENST-Drums 로더 (S15P31A307-164 재연구, 작업 17).
+"""ENST-Drums 로더. 실제 드러머 3명의 녹음 (Gillet & Richard, ISMIR 2006).
 
-실제 드러머 3명이 친 드럼을 마이크 8개로 녹음한 공개 데이터 (Gillet & Richard, ISMIR 2006). 이용 조건은
-본인만·연구용·변형물 금지라 평가에만 썼으나, 2026-10-31 제공 측 회신으로 학생 학업용 학습은 허락받음.
-학습에 쓴 가중치는 실험 전용으로 두고 서비스 반영은 따로 정함. 데이터는 공유하지 않음. 결과를 공개하면
-Gillet & Richard 2006을 인용한다. 세기 정답은 없다. 주석에 페달 하이햇 라벨이 없어 페달 평가·학습에는 못 씀.
+이용 조건은 본인만·연구용·변형물 금지·공유 금지. 세기 정답과 페달 하이햇 라벨이 없음.
 
 폴더 규칙 (root는 `ENST-drums-public`)
-- `{root}/drummer_{N}/annotation/{번호}_{종류}_{스타일}_{도구}.txt`: 한 줄 "초 라벨". 같은 시각에 여러 줄 가능
-- `{root}/drummer_{N}/audio/wet_mix/{같은 이름}.wav`: 드럼만(믹스·처리된 것). 채보 입력이자 정답 드럼
-- `{root}/drummer_{N}/audio/accompaniment/{같은 이름}.wav`: 반주. 종류가 minus-one·MIDI-minus-one인 곡만
-곡 id는 `drummer_1/107_minus-one_salsa_sticks`. 종류는 hits(단타)·phrase·solo·minus-one·MIDI-minus-one.
+- `{root}/drummer_{N}/annotation/{번호}_{종류}_{스타일}_{도구}.txt`: 한 줄 "초 라벨"
+- `{root}/drummer_{N}/audio/wet_mix/{같은 이름}.wav`: 드럼만. 채보 입력이자 정답 드럼
+- `{root}/drummer_{N}/audio/accompaniment/{같은 이름}.wav`: 반주. minus-one·MIDI-minus-one 곡만
+곡 id는 `drummer_1/107_minus-one_salsa_sticks`. 종류는 hits·phrase·solo·minus-one·MIDI-minus-one.
 
-탐: 드러머 1·2는 탐 둘(mt·lt)이라 위쪽 탐을 MID_TOM으로 적는다(U12 결정). 드러머 3은 탐 넷(mt·lmt·lt·lft)이라
-설정 `extra.tom4`로 대응하며 기본은 mt SMALL_TOM·lmt MID_TOM·lt·lft FLOOR_TOM(U15). 림(mtr·ltr)은 같은 탐.
+탐: 드러머 1·2는 탐 둘(mt·lt)이라 위쪽 탐을 MID_TOM으로 적음. 드러머 3은 탐 넷이라 설정 `extra.tom4`로 대응.
 """
 
 from __future__ import annotations
@@ -24,7 +20,7 @@ import numpy as np
 from ssaplash_ai.bench.datasets.base import BaseDataset, SongItem, match_length
 from ssaplash_ai.bench.datasets.pads import DROP, clip_hits, make_hits
 
-# 탐이 아닌 라벨 → 패드. 드러머 셋의 주석 318개 파일에서 모은 라벨 전부 (2026-10-29)
+# 탐이 아닌 라벨 → 패드. 드러머 셋의 주석 318개 파일에서 모은 라벨 전부
 ENST_LABEL_PAD: dict[str, str] = {
     "bd": "KICK",
     "sd": "SNARE",
@@ -49,9 +45,9 @@ ENST_LABEL_PAD: dict[str, str] = {
     "rc4": "RIDE",
 }
 TOM_LABELS: tuple[str, ...] = ("mt", "lmt", "lt", "lft")
-# 탐 둘인 드러머(1·2): 위쪽 탐은 MID_TOM (U12)
+# 탐 둘인 드러머(1·2): 위쪽 탐은 MID_TOM
 TWO_TOM_PAD: dict[str, str] = {"mt": "MID_TOM", "lt": "FLOOR_TOM"}
-# 탐 넷인 드러머(3)의 기본 대응 (U15). yaml `extra.tom4`로 바꿀 수 있음
+# 탐 넷인 드러머(3)의 기본 대응. yaml `extra.tom4`로 바꿀 수 있음
 DEFAULT_TOM4: dict[str, str] = {
     "mt": "SMALL_TOM",
     "lmt": "MID_TOM",

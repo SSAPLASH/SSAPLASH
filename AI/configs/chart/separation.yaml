@@ -1,4 +1,4 @@
-# 음원 분리 추론 모듈 설정 (S15P31A307-167). 상대 경로는 AI/ 폴더 기준.
+# 음원 분리 추론 모듈 설정. 상대 경로는 AI/ 폴더 기준.
 # 환경 변수: SSAPLASH_CHART_DEVICE(장치), SSAPLASH_MODELS_DIR(가중치 폴더, 기본 data/models),
 # SSAPLASH_WORK_DIR(--out이 없을 때 출력 폴더의 부모).
 # 분리 모델 yaml. 벤치마크 yaml을 그대로 가리킴. 대안은 configs/bench/models/msst/bs_roformer_musdb.yaml

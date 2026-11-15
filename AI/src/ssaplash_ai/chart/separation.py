@@ -1,22 +1,12 @@
-"""음원 분리 추론 모듈 (설계 2장 separation, 3장 "분리 모듈", 4-1절 1~3번).
+"""음원 분리 추론 모듈. 원곡 파일 → 드럼 트랙 파일 + 반주 파일 + SeparationOutput.
 
-원곡 파일 → 드럼 트랙 파일 + 반주 파일 + SeparationOutput. 모델은 벤치마크 어댑터
-(`bench/separators`, 기본 BS Roformer SW)를 그대로 import해 씀. 반주 = 원곡 − 드럼 트랙(샘플 단위 뺄셈,
-모델 yaml accomp_drum_ratio가 1 미만이면 그 비율만큼만 뺌)이라 세 파일의 샘플 수와 시간축이 같음
-(BE 요구 audioTimeOrigin = SOURCE_START).
-
+반주 = 원곡 − 드럼 트랙이라 세 파일의 샘플 수와 시간축이 같음.
 흐름: SeparationModule(config).load() 한 번 → separate_file() 곡마다 → close().
-진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·SEPARATE·WRITE, fraction은 단계 시작 0·끝 1.
-처리 시간·메모리는 벤치마크 `metrics/resource_usage.py`로 잼.
+진행 콜백 on_progress(stage, fraction): stage는 LOAD_INPUT·SEPARATE·WRITE.
 
-원곡 길이 맞추기(워커 설계 3-7절, 추론 모듈 설계 U13): separate_file(duration_ms=)에 BE가 준 원곡 길이(ms)를
-주면 출력 두 파일을 `duration_ms × 샘플레이트 // 1000` 샘플로 끝에서만 자르거나 채우고, 결과 duration_ms에
-그 값을 넣음. 실측 길이와 DURATION_TOLERANCE_MS보다 크게 다르면 모델을 돌리기 전에 입력 오류.
-
-저장 전 피크 처리(S15P31A307-165): 크게 마스터링된 원곡은 피크가 0dB를 넘어 그대로 저장하면 잘림. 드럼 트랙은
-피크가 OUTPUT_PEAK_DBFS를 넘으면 파일 전체에 이득 하나를 곱해 줄임(채보 입력이라 파형 모양은 그대로 둠).
-반주는 넘는 순간만 누르는 리미터(`postprocess.limit_peaks`)를 걸어 곡 전체 음량은 그대로 둠. 그래서 드럼 + 반주는
-원곡과 같지 않을 수 있음. 곱한 이득과 리미터가 가장 많이 누른 양은 결과 메타 drums_gain_db·accompaniment_limit_db.
+duration_ms를 주면 출력 두 파일을 그 길이에 맞춰 끝에서만 자르거나 채움.
+저장 전 피크 처리: 드럼 트랙은 피크가 OUTPUT_PEAK_DBFS를 넘으면 파일 전체 볼륨을 낮추고(채보 입력이라 파형은 그대로),
+반주는 넘는 순간만 누르는 리미터를 걺. 그래서 드럼 + 반주가 원곡과 같지 않을 수 있음.
 """
 
 from __future__ import annotations
@@ -46,7 +36,7 @@ STAGES = ("LOAD_INPUT", "SEPARATE", "WRITE")
 AUDIO_TIME_ORIGIN = "SOURCE_START"
 DRUM_STEM_NAME = "drums"
 ACCOMPANIMENT_NAME = "accompaniment"
-# BE가 준 원곡 길이와 실측 길이의 허용 차이(ms). mp3 디코더·ffprobe 버전 차이는 수십 ms (워커 설계 U4)
+# BE가 준 원곡 길이와 실측 길이의 허용 차이(ms). mp3 디코더·ffprobe 버전 차이는 수십 ms
 DURATION_TOLERANCE_MS = 1000
 # 저장 파일 피크 상한 (dBFS). 스트리밍 음량 권고의 피크 여유 1dB를 따름
 OUTPUT_PEAK_DBFS = LIMIT_DBFS
@@ -56,7 +46,7 @@ ProgressCallback = Callable[[str, float], None]
 
 @dataclass
 class SeparationOutput:
-    """separate_file 결과. BE SeparationResult 대응은 설계 3장 표."""
+    """separate_file 결과. BE SeparationResult에 대응."""
 
     drum_stem_path: Path
     accompaniment_path: Path
@@ -134,7 +124,7 @@ class SeparationModule:
 
     @property
     def model_version(self) -> str:
-        """체크포인트 파일명 + 모델 yaml 해시 12자리 (설계 3장 model_version)."""
+        """체크포인트 파일명 + 모델 yaml 해시 12자리."""
         self._require_loaded()
         return f"{self._separator.info().checkpoint}@{self._model_config.config_hash}"
 

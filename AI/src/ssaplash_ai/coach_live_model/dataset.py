@@ -193,7 +193,7 @@ def build_rows(per_cell: int) -> list[Row]:
 CHORD_MS = 1.0
 CAUSE_SCENARIOS = ("WRONG_PAD", "TRANSITION", "DENSE", "DRIFT_LATE", "NONE")
 CAUSE_STRENGTHS = (0.5, 0.7, 0.9)
-# 다른 패드: 탐1을 칠 차례에 탐2를 친다
+# 다른 패드: 스몰탐을 칠 차례에 미드탐을 친다
 WRONG_PAD_FROM, WRONG_PAD_INTO = "SMALL_TOM", "MID_TOM"
 WRONG_PAD_LAYOUT = ("SNARE", "SMALL_TOM", "HIHAT", "SMALL_TOM")
 # 패드 이동: 하이햇에서 스네어로 넘어갈 때 놓친다(coach_eval의 전환 약점과 같은 이동)
@@ -279,7 +279,7 @@ def _cycle_chart(cycle: tuple[str, ...], n_notes: int) -> list[Note]:
 
 def _cause_chart(scenario: str, n_notes: int, seed: int) -> list[Note]:
     if scenario == "WRONG_PAD":
-        # 탐1이 절반이어야 패드 놓침 지적이 뜰 만큼 놓친다
+        # 스몰탐이 절반이어야 패드 놓침 지적이 뜰 만큼 놓친다
         return _cycle_chart(WRONG_PAD_LAYOUT, n_notes)
     if scenario == "TRANSITION":
         return make_chart(n_notes, "mixed", seed=seed)

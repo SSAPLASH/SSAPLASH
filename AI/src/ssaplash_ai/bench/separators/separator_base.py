@@ -1,11 +1,10 @@
-"""분리 모델 어댑터 공통 인터페이스 (설계 3-2절, 3-4절).
+"""분리 모델 어댑터 공통 인터페이스.
 
 어댑터는 "원곡 배열을 받아 드럼 배열을 돌려주는" 같은 모양의 클래스. 모델을 추가해도
-지표·보고 코드는 안 바뀜. 지표를 모르고 numpy 배열만 주고받음 (설계 2장 의존 방향).
+지표·보고 코드는 안 바뀜. 지표를 모르고 numpy 배열만 주고받음.
 
 흐름: SeparatorConfig.from_yaml → create_separator → load() → separate() 반복 → close().
 길이가 어긋나면 어댑터가 잘라내거나 0으로 채워 입력 길이에 맞춤. runner는 길이를 믿음.
-yaml 키는 설계 3-4절 표를 snake_case로 옮긴 것 (-103 구현 메모와 같은 규칙).
 """
 
 from __future__ import annotations
@@ -49,20 +48,20 @@ class SeparatorConfig:
     fail_on_call: int | None = None
     # 예측 드럼으로 쓸 스템 이름
     drums_stem: str = "drums"
-    # 반주 만드는 방식 (S15P31A307-165). subtract = 원곡 − 드럼, sum_others = 드럼 외 스템의 합
+    # 반주 만드는 방식. subtract = 원곡 − 드럼, sum_others = 드럼 외 스템의 합
     accomp_mode: str = "subtract"
     # subtract일 때 원곡에서 뺄 드럼 비율. 1.0이면 다 뺌. 0.95면 드럼이 5% 남는 대신 드럼과 같이 빠지던 반주가
-    # 덜 빠짐 (S15P31A307-165 후보 I). 드럼 트랙은 그대로
+    # 덜 빠짐. 드럼 트랙은 그대로
     accomp_drum_ratio: float = 1.0
-    # 반주에 피크 리미터(postprocess.limit_peaks)를 검. 서비스 저장 처리와 같은 조건으로 지표를 잴 때 씀 (S15P31A307-165)
+    # 반주에 피크 리미터(postprocess.limit_peaks)를 검. 서비스 저장 처리와 같은 조건으로 지표를 잴 때 씀
     output_limiter: bool = False
-    # 이 주파수(Hz) 위 드럼 트랙의 지속음 성분을 반주로 되돌림. None이면 안 함 (S15P31A307-165 후보 E)
+    # 이 주파수(Hz) 위 드럼 트랙의 지속음 성분을 반주로 되돌림. None이면 안 함
     high_return_hz: float | None = None
-    # ensemble 어댑터가 드럼을 평균할 모델 yaml 경로들 (S15P31A307-165 후보 D)
+    # ensemble 어댑터가 드럼을 평균할 모델 yaml 경로들
     members: list[str] | None = None
     # 가중치 폴더 이름. 같은 가중치를 설정만 바꿔 쓸 때 원래 모델 이름을 적음. None이면 name
     weights_name: str | None = None
-    # 극성 반전·채널 바꿈 입력을 더 분리해 세 결과를 평균 (msst use_tta, S15P31A307-165 후보 G). 분리 시간 약 3배
+    # 극성 반전·채널 바꿈 입력을 더 분리해 세 결과를 평균 (msst use_tta). 분리 시간 약 3배
     use_tta: bool = False
     yaml_text: str = field(default="", repr=False)
     source_path: Path | None = None
@@ -99,7 +98,7 @@ class SeparatorConfig:
 
     @property
     def config_hash(self) -> str:
-        """yaml 내용의 sha256 앞 12자리. 3-3절 configHash."""
+        """yaml 내용의 sha256 앞 12자리. CSV의 configHash."""
         return hashlib.sha256(self.yaml_text.encode("utf-8")).hexdigest()[:12]
 
     @property
@@ -111,7 +110,7 @@ class SeparatorConfig:
 
 @dataclass
 class SeparatorInfo:
-    """3-2절 info. 보고서 라이선스 열과 CSV checkpoint 열에 사용."""
+    """모델 정보. 보고서 라이선스 열과 CSV checkpoint 열에 사용."""
 
     name: str
     adapter: str
@@ -175,7 +174,7 @@ class BaseSeparator(abc.ABC):
         return self.config.name
 
     def load(self) -> float:
-        """가중치를 메모리에 올리고 걸린 초를 반환. 3-3절 loadSec. 파일 다운로드는 시간에서 뺌."""
+        """가중치를 메모리에 올리고 걸린 초를 반환. CSV의 loadSec. 파일 다운로드는 시간에서 뺌."""
         self.prepare()
         start = time.perf_counter()
         self._load()

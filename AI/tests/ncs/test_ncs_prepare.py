@@ -1,4 +1,4 @@
-"""NCS 기본곡 원본 모으기 스크립트 테스트 (S15P31A307-322)."""
+"""NCS 기본곡 원본 모으기 스크립트 테스트."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""작업 실행기 (설계 4장 데이터 흐름, 3-3절 결과 본문, 3-4절 진행률, 3-5절 실패 보고, 3-6절 응답 처리).
+"""작업 실행기.
 
 JobRunner.run(배정)이 작업 하나를 끝까지 처리함.
 SEPARATING: 원곡 내려받기 → 음악 여부 검사(켜져 있을 때) → 분리 모듈 → flac 두 개 올리기 → 분리 결과 제출
@@ -9,7 +9,7 @@ TRANSCRIBING: 드럼 트랙 준비(로컬 파일 sha256이 같으면 그대로, 
 - DONE: 채보 결과가 인수됨
 - FAILED_REPORTED: ChartError·워커 내부 예외를 `POST /failure`로 보고함. 사유는 예외의 reason
 - ABANDONED: 임대 상실·409·422·전송 계층 실패·크기·sha256 불일치 재시도 소진. 보고 없이 놓음.
-  임대가 끝나면 BE가 다시 배정함(설계 U5, S15P31A307-246 설계 4-1절)
+  임대가 끝나면 BE가 다시 배정함
 401은 설정 오류라 밖(loop)으로 올림.
 """
 
@@ -61,7 +61,7 @@ from ssaplash_ai.worker.transfer import (
 
 logger = logging.getLogger("ssaplash_ai.worker.job")
 
-# 설계 3-4절 진행률 표
+# 단계별 진행률 범위
 PROGRESS_SOURCE_READY = 5
 PROGRESS_UPLOADED = 47
 PROGRESS_SEPARATION_SUBMIT = 48
@@ -78,7 +78,7 @@ MAX_DURATION_MS = 600_000
 MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 # 모듈은 MiB(resource_usage.MB = 1024²)로 재고 BE는 MB = 1,000,000바이트
 MIB_TO_MB = 1.048576
-# 서명 URL 재발급·재전송 횟수 (설계 3-6절). 크기·sha256 불일치 다시 받기도 이 횟수 안에서
+# 서명 URL 재발급·재전송 횟수. 크기·sha256 불일치 다시 받기도 이 횟수 안에서
 URL_RETRIES = 3
 EXTENSIONS = {
     "audio/wav": ".wav",
@@ -88,7 +88,7 @@ EXTENSIONS = {
     "audio/mp3": ".mp3",
     "audio/flac": ".flac",
     "audio/x-flac": ".flac",
-    # BE가 받는 MPEG-4 오디오(AAC·ALAC)와 Ogg Opus (S15P31A307-244)
+    # BE가 받는 MPEG-4 오디오(AAC·ALAC)와 Ogg Opus
     "audio/mp4": ".m4a",
     "audio/ogg": ".ogg",
 }
@@ -122,7 +122,7 @@ class JobOutcome:
 
 
 class JobRunner:
-    """배정 하나를 끝까지 처리. 모델 두 개는 밖(loop)에서 올려서 넘김.
+    """배정 하나를 끝까지 처리. 분리·채보 모델과 음악 여부 검사 모델은 밖(loop)에서 올려서 넘김.
 
     music_check를 주면 원곡을 내려받은 직후 분리 전에 음악 여부 검사를 함. 걸린 파일은 분리를 돌리지 않고
     NOT_TRANSCRIBABLE로 보고함. 검사 모델 자체가 실패하면 경고 로그만 남기고 분리로 넘어감.
@@ -380,7 +380,6 @@ class JobRunner:
         _check_lease(hb)
 
         # 같은 작업에서 분리를 했으면 원곡이 작업 폴더에 남아 있어 박 추정에 씀. 채보만 다시 배정받았으면 없음
-        # (설계 CHART-003-variable-tempo-exp U4)
         sources = sorted(job_dir.glob("source.*"))
         beat_audio = sources[0] if sources else None
         out = self.transcription.transcribe_file(
@@ -430,7 +429,7 @@ class JobRunner:
                 )
                 return
             except IntegrityError as e:
-                # 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우. 같은 URL로 다시 받음 (설계 3-4절 로그)
+                # 다운로드가 잘렸거나 스토리지 파일이 바뀐 경우. 같은 URL로 다시 받음
                 logger.warning(
                     "작업 %d 파일 불일치 %d/%d: attempt %s, %s, 크기 %d (배정 %d), "
                     "sha256 %s (배정 %s)",
@@ -504,7 +503,7 @@ def build_separation_result(
     sizes: dict[str, int],
     hashes: dict[str, str],
 ) -> dict:
-    """SeparationOutput → BE SeparationResult (설계 3-3절 표). 메모리는 MiB → MB."""
+    """SeparationOutput → BE SeparationResult. 메모리는 MiB → MB."""
     return {
         "drumStem": _manifest(
             grants[ROLE_DRUM_STEM], sizes[ROLE_DRUM_STEM], hashes[ROLE_DRUM_STEM]

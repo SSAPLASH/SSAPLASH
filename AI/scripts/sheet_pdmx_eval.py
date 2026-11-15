@@ -1,4 +1,4 @@
-"""MusicXML 드럼 악보 변환 정확도 측정 (S15P31A307-292, 설계 CHART-003-sheet-to-chart 4-3절).
+"""MusicXML 드럼 악보 변환 정확도 측정.
 
 PDMX 공개 악보(MuseScore)를 곡마다 `convert_sheet`로 바꾸고, MuseScore가 같은 악보를 재생해 내보낸 MIDI의 드럼(채널 10)
 노트와 비교함. 반복 펼치기·템포 해석이 맞는지 보는 기준.

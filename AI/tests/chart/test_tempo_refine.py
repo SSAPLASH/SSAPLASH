@@ -1,4 +1,4 @@
-"""채보 노트로 bpm·첫 박 다시 맞추기 테스트 (설계 CHART-001-ncs-builtin-songs v0.5, S15P31A307-322)."""
+"""채보 노트로 bpm·첫 박 다시 맞추기 테스트."""
 
 from __future__ import annotations
 

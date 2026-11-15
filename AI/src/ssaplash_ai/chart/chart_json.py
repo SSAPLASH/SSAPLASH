@@ -1,12 +1,10 @@
-"""타격 표 → 채보 JSON (설계 3장 "채보 JSON", BE TranscriptionResult schemaVersion 1).
+"""타격 표 → 채보 JSON (BE TranscriptionResult schemaVersion 1).
 
-모양: {schemaVersion, generator, generatorVersion, metrics, charts: [{difficulty, notationStatus, notes, timing}]}.
-- generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
-- charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
-- timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고. origin이 notes면 align_origin_to_notes로
-  킥·스네어 노트에 맞춰 박 안 위치를 보정
-- notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
-  패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
+- generator는 BE가 `ADT_MODEL`만 받아서 고정. 모델·규칙은 generatorVersion에 남김
+- charts는 NORMAL 하나, notationStatus는 UNAVAILABLE
+- notes: 시각순 `n0001`부터. timeMs는 반올림 정수, 0~durationMs. 같은 시각은 패드 9종 순서,
+  같은 시각·같은 패드는 하나만 남김
+- timing: offsetMs는 곡의 첫 마디 첫 박 시각. 빠르기 구간이 둘 이상이면 ppq·tempoMap·timeSignatureMap을 더 넣음
 
 validate_chart는 BE `WorkerResults.java`의 검사를 그대로 옮긴 것. 실패하면 ChartOutputError.
 """
@@ -75,14 +73,9 @@ def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
 
 
 def grid_origin_ms(tempo: TempoEstimate) -> int:
-    """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(곡의 첫 마디 첫 박, 설계 U14·U16).
+    """채보 JSON offsetMs(곡의 첫 마디 첫 박). FE 악보 격자와 BE 난이도 솎기의 원점.
 
-    - 마디 첫 박 다수결 위치(downbeat_phase_ms, Beat This!)가 있으면 그 값. 곡 맨 앞 한 마디 길이 안의
-      마디 시작이라 드럼 없는 인트로가 있어도 첫 마디가 곡 처음에서 시작함 (설계 CHART-003-downbeat-vote)
-    - 다수결 위치가 없고 첫 마디 첫 박만 있으면 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
-      마디 시작
-    - 마디 첫 박이 없으면(librosa) 첫 박 시각
-    - bpm 추정 실패나 박이 없으면 0
+    마디 첫 박 다수결 위치 → 첫 마디 첫 박을 한 마디씩 당긴 위치 → 첫 박 시각 순으로 있는 것을 씀. 추정 실패면 0.
     """
     if not tempo.estimated:
         return 0
@@ -98,11 +91,10 @@ def grid_origin_ms(tempo: TempoEstimate) -> int:
 
 
 def align_origin_to_notes(origin_ms: int, tempo: TempoEstimate, notes: list[dict]) -> int:
-    """grid_origin_ms 값을 킥·스네어 노트로 박 안 위치만 보정한 원점(설계 v0.5 "보정 규칙").
+    """원점을 킥·스네어 노트로 박 안 위치만 보정.
 
-    노트마다 원점 격자에서 가장 가까운 박까지의 차이를 구해 ORIGIN_ALIGN_WINDOW_MS 안의 것만 모으고, 그 중앙값만큼
-    원점을 옮김. 보정량이 창 안이라 마디 첫 박이 다른 박으로 바뀌지 않음. 결과는 0ms 이상이고, 원점이 첫 마디
-    안이었으면 계속 첫 마디 안. bpm 추정 실패이거나 쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적으면 그대로
+    가장 가까운 박과의 차이가 ORIGIN_ALIGN_WINDOW_MS 안인 노트의 중앙값만큼 옮김.
+    쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적거나 bpm 추정 실패면 그대로.
     """
     if not tempo.estimated:
         return origin_ms
@@ -131,12 +123,11 @@ def _beat_number(points: list[TempoMapPoint], time_ms: np.ndarray) -> np.ndarray
 
 
 def tempo_map_timing(tempo: TempoEstimate, notes: list[dict], origin: str) -> dict | None:
-    """빠르기 구간이 있는 채보 JSON timing (설계 CHART-003-variable-tempo-exp 3-1). 구간이 둘 미만이면 None.
+    """빠르기 구간이 있는 채보 JSON timing. 구간이 둘 미만이면 None.
 
-    - origin이 notes면 킥·스네어 노트가 가장 가까운 박보다 몇 ms 앞뒤인지(ORIGIN_ALIGN_WINDOW_MS 안) 중앙값만큼
-      모든 구간 시작을 옮김. 쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적으면 안 옮김
-    - offsetMs(틱 0)는 첫 구간 시작에서 첫 구간 빠르기로 한 마디씩 당겨 0ms 이상인 가장 이른 마디 시작
-    - tempoMap 첫 항목은 틱 0·첫 구간 bpm(= timing.bpm), 나머지는 구간 시작 박 번호 × TEMPO_MAP_PPQ
+    offsetMs(틱 0)는 첫 구간 시작에서 한 마디씩 당겨 0ms 이상인 가장 이른 마디 시작.
+    tempoMap 첫 항목은 틱 0·첫 구간 bpm, 나머지는 구간 시작 박 번호 × TEMPO_MAP_PPQ.
+    origin이 notes면 align_origin_to_notes와 같은 방식으로 모든 구간 시작을 옮김.
     """
     points = tempo.tempo_map
     if not tempo.estimated or not points or len(points) < 2:
@@ -216,10 +207,7 @@ def build_chart(
 def refine_chart_timing(
     chart: dict, tempo: TempoEstimate, min_bpm: float, max_bpm: float
 ) -> RefineResult | None:
-    """채보 노트로 bpm·offsetMs 다시 맞춰 chart의 timing을 바꿈(설계 CHART-001-ncs-builtin-songs v0.5).
-
-    노트 시각은 그대로. bpm 추정 실패이거나 tempoMap이 있으면 아무것도 안 하고 None. 계산은 chart/tempo_refine.py.
-    """
+    """채보 노트로 chart의 bpm·offsetMs를 다시 맞춤. 추정 실패이거나 tempoMap이 있으면 None."""
     timing = chart["charts"][0]["timing"]
     # 빠르기 구간(tempoMap)이 있는 채보는 박 위치를 이미 따라가므로 bpm 하나로 고치지 않음
     if not tempo.estimated or "tempoMap" in timing:

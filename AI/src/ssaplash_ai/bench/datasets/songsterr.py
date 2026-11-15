@@ -1,4 +1,4 @@
-"""Songsterr 탭을 원곡에 맞춘 공용 곡 로더 (data/songsterr, 11/08).
+"""Songsterr 탭을 원곡에 맞춘 공용 곡 로더 (data/songsterr).
 
 곡 폴더마다 `final/`(빠르기가 바뀌는 곡은 `final_tempomap/`)에 원곡 `mix.flac`, 서비스 분리 모델로 뽑은 드럼
 `drums.flac`, 드럼리스 MR `drumless.flac`, 정답 채보 `chart.json`이 있음. 셋 다 같은 시간축.
