@@ -251,6 +251,24 @@ describe('smallKitSpec (작은 연주 킷)', () => {
     expect(size.width).toBeCloseTo(245.3, 0);
   });
 
+  it('fit(쓸 수 있는 상자)을 주면 그 상자에 들어가는 만큼 키운다: 실물은 높이, 전자·네온은 폭이 먼저 닿는다', () => {
+    const top = smallKitSpec('sheet', 'acoustic', { width: 640, height: 369 });
+    const topSize = kitSizeAt(top.scale, 'acoustic', top.view);
+    expect(top.view).toBe('top');
+    expect(topSize.height).toBeCloseTo(369);
+    expect(topSize.width).toBeLessThanOrEqual(640);
+    const flat = smallKitSpec('sheet', 'neon', { width: 640, height: 369 });
+    const flatSize = kitSizeAt(flat.scale, 'neon', flat.view);
+    expect(flatSize.width).toBeCloseTo(640);
+    expect(flatSize.height).toBeLessThanOrEqual(369);
+  });
+
+  it('fit이 기본 크기보다 작으면 기본 크기를 지킨다(킷은 줄지 않는다)', () => {
+    expect(smallKitSpec('sheet', 'acoustic', { width: 100, height: 100 })).toEqual(smallKitSpec('sheet', 'acoustic'));
+    expect(smallKitSpec('sheet', 'neon', { width: 384, height: 285 })).toEqual({ view: 'persp', scale: 0.7 });
+    expect(smallKitSpec('sheet', 'electronic', { width: 0, height: 210 })).toEqual({ view: 'persp', scale: 0.7 });
+  });
+
   it('전자·네온은 기존 그대로(게임 0.5 · 악보 0.7, persp)', () => {
     for (const skin of ['electronic', 'neon'] as const) {
       expect(smallKitSpec('play', skin)).toEqual({ view: 'persp', scale: 0.5 });
