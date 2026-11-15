@@ -218,7 +218,12 @@ public class WorkerQueue {
     void finishFailure(Lock l,String code,String reason) {
         if(l.currentAttemptId()!=null) db.update("UPDATE chart_job_attempts SET finished_at=coalesce(finished_at,clock_timestamp()) WHERE id=?",l.currentAttemptId());
         db.update("UPDATE chart_jobs SET status='FAILED',error_code=?,error_reason=?,error_message='작업을 완료할 수 없습니다.',finished_at=clock_timestamp(),revision=revision+1 WHERE id=?",code,reason,l.jobId());
-        db.update("UPDATE songs SET status='FAILED',updated_at=clock_timestamp() WHERE id=? AND deleted_at IS NULL AND status='PROCESSING'",l.songId());
+        db.update("""
+                UPDATE songs SET status='FAILED',
+                    accompaniment_key=CASE WHEN source='AUDIO' THEN NULL ELSE accompaniment_key END,
+                    updated_at=clock_timestamp()
+                WHERE id=? AND deleted_at IS NULL AND status='PROCESSING'
+                """, l.songId());
         cleanupInputs(l);
     }
     void cleanupInputs(Lock l) {
