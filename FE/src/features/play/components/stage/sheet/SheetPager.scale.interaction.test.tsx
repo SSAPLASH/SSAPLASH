@@ -7,7 +7,7 @@ import type { FxLocate } from '@/domain/hitFx/types';
 import { xInBarContinuous } from '@/components/sheetmusic/sheetStripMath';
 import { drawBeatLabel, drawSheet, HEAD_RX, headY } from '@/components/sheetmusic/sheetStripDraw';
 import { SheetPager } from './SheetPager';
-import { CONTENT_TOP, OVERLAY_RESERVE_PX, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffOffsetY, staffScale } from './sheetPagerMath';
+import { CONTENT_TOP, OVERLAY_RESERVE_PX, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffOffsetY, staffScale, staffScaleMax } from './sheetPagerMath';
 
 vi.mock('@/components/sheetmusic/sheetStripDraw', async (load) => {
   const actual = await load<typeof import('@/components/sheetmusic/sheetStripDraw')>();
@@ -52,8 +52,10 @@ describe('SheetPager 악보 배율', () => {
   it('변환은 dpr × k이고 악보는 논리 크기(칸 ÷ k)로 그린다', () => {
     render(<SheetPager chart={chart} noteStates={[]} strayHits={[]} getSongTime={() => 0} />);
     nextFrame(0);
-    const k = staffScale(300);
-    expect(k).toBe(STAFF_SCALE_MAX);
+    // 칸 폭 1000이면 최대 배율이 1.6보다 크다(폭이 허락하는 만큼) — 높이 300이 그 최대에 닿는다
+    const k = staffScale(300, 1000);
+    expect(k).toBe(staffScaleMax(1000));
+    expect(k).toBeGreaterThan(STAFF_SCALE_MAX);
     expect(setTransform).toHaveBeenLastCalledWith(DPR * k, 0, 0, DPR * k, 0, 0);
     expect(sheet().width).toBeCloseTo(1000 / k);
     expect(sheet().height).toBeCloseTo(300 / k);
@@ -70,7 +72,7 @@ describe('SheetPager 악보 배율', () => {
     height = 255;
     render(<SheetPager chart={chart} noteStates={[]} strayHits={[]} getSongTime={() => 0} overlay={<i />} />);
     nextFrame(0);
-    const k = staffScale(255 - OVERLAY_RESERVE_PX);
+    const k = staffScale(255 - OVERLAY_RESERVE_PX, 1000);
     expect(setTransform).toHaveBeenLastCalledWith(DPR * k, 0, 0, DPR * k, 0, 0);
     // 박 번호 기준선이 막대 위 끝(칸 아래에서 OVERLAY_RESERVE_PX)보다 위다
     const label = vi.mocked(drawBeatLabel).mock.lastCall!;
@@ -83,7 +85,7 @@ describe('SheetPager 악보 배율', () => {
   it('이펙트 위치는 확대된 음표 머리의 CSS 픽셀 좌표다', () => {
     render(<SheetPager chart={chart} noteStates={[null]} strayHits={[]} getSongTime={() => 0} fxSource={source} />);
     nextFrame(0);
-    const k = staffScale(300);
+    const k = staffScale(300, 1000);
     const opts = sheet();
     const glyph = opts.layoutOf(0).glyphs.find((g) => g.noteIndex === 0)!;
     // 논리 좌표의 머리 위치: 슬롯 왼쪽 x(= 논리 폭 × baseRatio)에서 연속 배치, y는 보표 위치에 세로 정렬 offset을 더한다

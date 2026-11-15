@@ -26,6 +26,8 @@
 /* 악보 연습: HUD는 리듬 게임과 같은 1060 열에 두고(안쪽 좌우 20), 위 줄(Dock·기기 칩·아바타, 화면 위 0–60) 아래인 y 64에서 시작한다 */
 .play-stage.sheet {
   padding-top: 64px;
+  /* 킷 이펙트 캔버스는 킷보다 사방으로 12 %쯤 크다. 킷이 커지면 화면 아래로 넘쳐 세로 스크롤이 생기므로 화면 밖은 잘라 낸다 */
+  overflow: clip;
 }
 .play-stage.sheet .play-stage-hud {
   padding-inline: 20px;
@@ -54,10 +56,17 @@
 .play-stage.sheet .play-stage-divider {
   margin-block: -8px;
 }
-@media (max-height: 899px) {
-  .play-stage.sheet .play-stage-area {
-    height: min(420px, calc(100vh - 64px - 96px - 210px - 57px));
-  }
+/* 악보 연습은 화면 높이를 꽉 채운다. 킷 높이는 kit/sheetKitFit이 정하고(악보가 가장 크게 그려지는 높이를 뺀 나머지, 210~640),
+   악보 칸은 그 나머지를 모두 갖는다 — 1280×860에서 274. 킷이 최대 크기에 닿은 큰 화면에서는 악보 칸이 더 높아지고
+   악보와 타이밍 막대가 그 가운데에 놓인다. 화면이 아주 낮아 킷이 최소 210이면 악보 칸이 줄어든다 */
+.play-stage.sheet {
+  height: 100vh;
+  min-height: 580px;
+}
+.play-stage.sheet .play-stage-area {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
 }
 /* 드럼 영역 1392×210: 가운데 정렬 gap 16 */
 .play-stage-drum {
@@ -86,11 +95,17 @@
   height: 210px;
 }
 
-/* 악보 연습 드럼 줄: [안내 칸 · 킷 · 최근 타격] 3열. 킷은 폭이 고정이고 화면 가운데에 있다.
+/* 악보 연습 드럼 줄: [안내 칸 · 킷 · 최근 타격] 3열. 킷은 화면 가운데에 있고 크기는 화면 높이에 맞춘다
+   (--kit-w·--kit-h는 PlayStage의 kitSize, 계산은 kit/sheetKitFit — 높이 210~640).
    안내 칸은 킷 왼쪽 남는 폭을 쓴다(큰 코칭 모양은 최대 340) — 화면이 좁으면 안내 칸이 먼저 줄고 킷은 줄지 않는다 */
 .play-stage.sheet .play-stage-drum {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: var(--kit-h, 210px);
+}
+.play-stage.sheet .play-stage-kit {
+  width: var(--kit-w, 532px);
+  height: var(--kit-h, 210px);
 }
 .play-stage.sheet .play-stage-guide {
   justify-self: end;
@@ -111,7 +126,7 @@
 /* 리듬 게임: 화면 높이를 꽉 채우고 남는 높이는 모두 하이웨이가 갖는다(레인을 길게).
    HUD는 자리를 차지하지 않고 하이웨이 위쪽에 겹쳐 뜬다(배경 없음 — 레인이 화면 위 끝까지 간다).
    킷은 네온 0.6배(456×180), 화면 높이 820 이상이면 0.7배(532×210)다(link/laneLinkGeometry의 gameKitScale과 같은 기준).
-   악보 연습(sheet)은 위의 고정 크기를 그대로 쓴다 */
+   악보 연습(sheet)의 킷 크기는 위의 --kit-w·--kit-h가 정한다 */
 .play-stage.game {
   --game-kit-w: 456px;
   --game-kit-h: 180px;
@@ -170,11 +185,6 @@
   width: var(--game-kit-w);
   height: var(--game-kit-h);
 }
-/* 실물 스킨(위에서 본 그림)은 악보 연습만 쓴다: 킷 상자 760×650.7이라 245.1×210(domain/kit/drumKit smallKitSpec) */
-.play-stage.sheet.kit-top .play-stage-kit {
-  width: 246px;
-}
-
 /* 킷을 줄인 만큼 패드 위 판정 글씨는 키운다(SVG 단위 26 × 0.6~0.7배 = 화면 16~18px) */
 .play-stage.game .drum-pad .drum-pad-judge {
   font-size: 26px;

@@ -13,17 +13,41 @@ export const CONTENT_BOTTOM = STAFF_BOTTOM_Y + 56;
 /** 악보를 키우는 배율의 최대·최소. 선 간격 10px이 최대 16px, 최소 12px이 된다 */
 export const STAFF_SCALE_MAX = 1.6;
 export const STAFF_SCALE_MIN = 1.2;
+/** 칸이 넓을 때의 최대 배율 */
+export const STAFF_SCALE_WIDE_MAX = 2.6;
+/**
+ * 배율을 키워도 지켜야 하는 논리 폭(칸 ÷ 배율)의 최소. 논리 폭이 900 미만이면 한 화면에 두 마디를 그리는데(barsPerPage),
+ * 그 두 마디가 네 마디 배치의 가장 좁은 마디(900 ÷ 4 = 225)보다 좁아지지 않는 폭이다: 225 × 2 + 왼쪽 여백 44
+ */
+export const STAFF_MIN_LOGICAL_WIDTH = 494;
 
 /**
- * 악보 영역 높이(CSS px)에 맞춘 악보 배율: 보표 콘텐츠 높이가 칸을 채우는 값을 [MIN, MAX]로 자른다.
- * 칸이 1.2배로도 모자라게 낮으면 최소가 이긴다(콘텐츠가 위아래로 조금 넘칠 수 있다)
+ * 칸 폭(CSS px)에 따른 최대 배율. 폭을 모르면 1.6이고, 폭이 넓으면 음표 간격이 지켜지는 만큼(논리 폭 494 이상) 2.6까지 커진다.
+ * 배율이 커지면 논리 폭이 줄어 음표 사이가 좁아지므로 폭이 허락하는 만큼만 키운다(설계 MODE-003-practice-speed D20)
  */
-export function staffScale(heightPx: number): number {
-  return Math.min(STAFF_SCALE_MAX, Math.max(STAFF_SCALE_MIN, heightPx / (CONTENT_BOTTOM - CONTENT_TOP)));
+export function staffScaleMax(widthPx?: number): number {
+  if (widthPx === undefined || !(widthPx > 0)) return STAFF_SCALE_MAX;
+  return Math.min(STAFF_SCALE_WIDE_MAX, Math.max(STAFF_SCALE_MAX, widthPx / STAFF_MIN_LOGICAL_WIDTH));
 }
 
-/** 악보 칸 안쪽 아래에 얹는 타이밍 막대가 차지하는 높이(CSS px): 막대 28 + 아래 여백 14(global.css .sheet-pager-overlay) + 틈 2 */
-export const OVERLAY_RESERVE_PX = 44;
+/**
+ * 악보 영역 높이(CSS px)에 맞춘 악보 배율: 보표 콘텐츠 높이가 칸을 채우는 값을 [MIN, 폭에 따른 최대]로 자른다.
+ * 칸이 1.2배로도 모자라게 낮으면 최소가 이긴다(콘텐츠가 위아래로 조금 넘칠 수 있다)
+ */
+export function staffScale(heightPx: number, widthPx?: number): number {
+  return Math.min(staffScaleMax(widthPx), Math.max(STAFF_SCALE_MIN, heightPx / (CONTENT_BOTTOM - CONTENT_TOP)));
+}
+
+/**
+ * 타이밍 막대를 칸 아래 끝에서 들어 올리는 높이(CSS px). 칸이 악보보다 높으면 악보는 남는 높이의 가운데에 놓이므로,
+ * 막대도 그 절반만큼 올려 박 번호 바로 아래에 붙인다(악보와 막대가 한 덩어리로 칸 가운데에 온다)
+ */
+export function overlayLift(heightPx: number, k: number, reservePx: number): number {
+  return Math.max(0, (heightPx - reservePx - (CONTENT_BOTTOM - CONTENT_TOP) * k) / 2);
+}
+
+/** 악보 칸 안쪽 아래에 얹는 타이밍 막대가 차지하는 높이(CSS px): 얇은 막대 18 + 아래 여백 8(global.css .sheet-pager-overlay) + 틈 2 */
+export const OVERLAY_RESERVE_PX = 28;
 
 /**
  * 악보를 그리는 세로 이동량(논리 px). 칸에서 아래 reserve(논리 px)를 뺀 높이의 세로 가운데에 보표 콘텐츠를 놓는다.
