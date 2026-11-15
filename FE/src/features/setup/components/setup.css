@@ -461,10 +461,11 @@
 }
 
 /* ---- 고급 설정 ---- */
+/* 묶음 둘을 한 줄에 나란히 둔다(1024px 이하는 위아래). 두 묶음의 줄 구성이 같아 제목·안내·슬라이더 높이가 맞는다 */
 .setup-adv-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-m) var(--space-l);
+  gap: var(--space-m);
   padding-top: var(--space-s);
   /* 펼칠 때 스크롤해 보이는 자리: 하단 고정 바에 가려지지 않게 여백을 둔다 */
   scroll-margin-bottom: 120px;
@@ -474,49 +475,60 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* 묶음(판정 타이밍 / 패드 인식 범위): 제목 + 안내 + 슬라이더 */
+/* 묶음(판정 타이밍 / 패드 인식 범위): 얇은 테두리 안에 제목 + 안내 + 슬라이더 */
 .setup-adv-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
+  gap: var(--space-m);
   min-width: 0;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: 16px;
 }
 .setup-adv-group-title {
   margin: 0;
   color: var(--text-1);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.4;
 }
 .setup-adv-note {
   margin: 0;
   color: var(--text-2);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
-}
-.setup-adv-help {
-  margin: 0 0 var(--space-s);
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.5;
 }
 .setup-adv-foot {
   margin: 0;
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 14px;
 }
-/* 고급 설정은 글자를 한 단계 키운다: 카드 제목·요약, 슬라이더 이름 */
+/* 고급 설정은 글자를 키운다: 카드 제목·요약 */
 .setup-page .setup-adv .setup-card-title {
-  font-size: 22px;
+  font-size: 24px;
 }
 .setup-page .setup-adv .setup-card-desc {
   font-size: 16px;
 }
+/* 슬라이더: 이름(왼쪽)과 값(오른쪽)을 한 줄에, 막대는 그 아래 전체 폭 */
 .setup-adv .ui-slider {
-  font-size: 17px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--space-m);
+  row-gap: var(--space-s);
+  font-size: 19px;
 }
 .setup-adv .ui-slider-label {
   font-weight: 600;
+}
+.setup-adv .ui-slider-value {
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+}
+.setup-adv .ui-slider-input {
+  grid-column: 1 / -1;
 }
 
 /* ---- 하단 고정 바(설계 4-5) ---- */

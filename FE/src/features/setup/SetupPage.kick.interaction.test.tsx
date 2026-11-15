@@ -58,7 +58,7 @@ describe('SetupPage 고급 설정 킥 판정 타이밍', () => {
     expect(useSettings.getState().kickOffsetMs).toBe(-40);
   });
 
-  it('범위는 −250~+100, 5ms 단위이고 박자 맞추기 기록·입력 불일치 안내가 함께 보인다', () => {
+  it('범위는 −250~+100, 5ms 단위이고 입력 불일치 안내가 함께 보인다', () => {
     useSettings.setState({
       sensorKind: 'none',
       timingCal: { measuredAt: new Date(2026, 10, 11).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40, kick: null },
@@ -66,7 +66,6 @@ describe('SetupPage 고급 설정 킥 판정 타이밍', () => {
     renderPage();
     const stick = slider('스틱 판정 타이밍');
     expect([stick.min, stick.max, stick.step]).toEqual(['-250', '100', '5']);
-    expect(screen.getByText(/11월 11일에 스틱으로 맞췄어요/)).toBeTruthy();
     expect(screen.getByText('스틱으로 맞춘 값이에요. 키보드로 칠 때는 다시 맞춰 주세요.')).toBeTruthy();
   });
 
