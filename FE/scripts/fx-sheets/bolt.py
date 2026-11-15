@@ -1,4 +1,5 @@
 # 번개 테마용 연속 그림 생성기: 스틱 자리에서 방전이 헤드 면을 타고 가장자리로 달리고, 일부는 공중으로 튄다.
+# 심벌은 가장자리에서 바깥 공중으로 뻗는 방전(rimout)과 튀어 나가는 불꽃(sparks)을 더해 사방으로 튀는 모양이다.
 # 가지 치는 꺾은선을 3차원으로 만들고(중점 변위), 세 번의 방전이 같은 길을 조금씩 달리 타며 깜빡이게 한다.
 # 선을 그린 뒤 흐림으로 얇은 흰 중심과 푸른 빛무리를 만든다. 검은 바탕의 밝은 그림이고, 저장할 때 build.py가 투명 바탕으로 바꾼다.
 import math, numpy as np
@@ -50,9 +51,27 @@ def build(cfg, seed):
             b = rng.uniform(0, 2 * np.pi); out = rng.uniform(0.2, cfg['air_out'])
             end = start + np.array([math.cos(b) * out, math.sin(b) * out, rng.uniform(cfg['air_h'] * 0.45, cfg['air_h'])])
             paths += tree(rng, start, end, cfg, 0, 0.9)
+        nrim = cfg.get('rimout', 0) if si == 0 else max(0, cfg.get('rimout', 0) - 3 * si)
+        b0 = rng.uniform(0, 2 * np.pi)
+        for j in range(nrim):  # 가장자리에서 바깥 공중으로 뻗는 방전(심벌)
+            a = b0 + (j + rng.uniform(-0.35, 0.35)) * 2 * np.pi / nrim
+            start = np.array([math.cos(a) * cfg['rim'], math.sin(a) * cfg['rim'], 0.0])
+            b = a + rng.normal(0, 0.3); out = rng.uniform(0.35, 1.0) * cfg['rim_len']
+            end = start + np.array([math.cos(b) * out, math.sin(b) * out, rng.uniform(0.1, 1.0) * cfg['rim_h']])
+            # 스틱에서 먼 가장자리일수록 늦게 붙도록 시작 거리를 준다
+            paths += tree(rng, start, end, cfg, 0, 0.95, float(np.linalg.norm(start - stick)))
         strokes.append(dict(paths=paths, t0=cfg['times'][si] + (rng.uniform(-0.008, 0.008) if si else 0), amp=cfg['amps'][si],
                             fl=rng.uniform(0, 100)))
-    return dict(strokes=strokes, rng=rng, stick=stick)
+    st = dict(strokes=strokes, rng=rng, stick=stick)
+    n = cfg.get('sparks', 0)
+    if n:  # 가장자리에서 튀어 나가는 불꽃: 방전마다 한 무리씩
+        a = rng.uniform(0, 2 * np.pi, n); sp = cfg['sp_out'] * np.exp(rng.normal(0, 0.45, n)).clip(0.3, 2.4)
+        ta = a + rng.normal(0, 0.3, n); si = rng.choice(len(strokes), n, p=np.array(cfg['amps']) / sum(cfg['amps']))
+        st['sparks'] = dict(x=np.cos(a) * cfg['rim'], y=np.sin(a) * cfg['rim'], vx=np.cos(ta) * sp, vy=np.sin(ta) * sp,
+                            vz=cfg['sp_up'] * rng.uniform(0.1, 1.0, n), k=rng.uniform(3.0, 6.5, n),
+                            t0=np.array([strokes[i]['t0'] for i in si]) + rng.uniform(0.0, 0.02, n),
+                            life=rng.uniform(0.35, 1.0, n) * cfg['sp_life'], w=rng.uniform(0.4, 1.0, n))
+    return st
 
 def proj(cfg, P):
     px = N / cfg['span']; x, y, z = P[:, 0], P[:, 1], P[:, 2]
@@ -77,6 +96,18 @@ def frame(cfg, st, t):
                 v = env * inten
                 if v < 0.02: continue
                 dr.line([(sx[i], sy[i]), (sx[i + 1], sy[i + 1])], fill=float(v), width=4 if inten > 0.7 else (2 if inten > 0.4 else 1))
+    q = st.get('sparks')
+    if q:
+        def pos(tt):
+            age = np.clip(tt - q['t0'], 0, None); D = (1 - np.exp(-q['k'] * age)) / q['k']
+            P = np.stack([q['x'] + q['vx'] * D, q['y'] + q['vy'] * D, (q['vz'] + cfg['sp_grav'] / q['k']) * D - cfg['sp_grav'] * age / q['k']], 1)
+            return proj(cfg, P), age
+        (ax, ay), age = pos(t); (bx, by), _ = pos(t - cfg['sp_expo'])
+        heat = np.clip(1 - age / q['life'], 0, 1)
+        edge = np.minimum(np.minimum(ax, N - ax), np.minimum(ay, N - ay)) / N
+        v = q['w'] * heat ** 0.8 * (age > 0) * np.clip(edge / 0.07, 0, 1) * cfg['sp_amp']
+        for i in np.nonzero(v > 0.03)[0]:
+            dr.line([(ax[i], ay[i]), (bx[i], by[i])], fill=float(v[i]), width=2)
     c = np.array(core)
     thin = ndi.gaussian_filter(c, 1.1)
     glow = ndi.gaussian_filter(c, 5.0) * cfg['glow'] + ndi.gaussian_filter(c, 16.0) * cfg['halo']
@@ -96,7 +127,10 @@ DRUM = dict(stick=[0.08, 0.05], strokes=3, times=[0.0, 0.085, 0.19], amps=[1.0, 
     surf=6, air=4, rim=1.0, air_h=1.5, air_out=0.9, disp=0.135, depth=6, levels=2, branch=2.0, fork=0.7, dim=0.5,
     core=3.4, glow=3.4, halo=3.0, flash=1.1, tint=[0.30, 0.74, 1.0], expo=1.7,
     frames=36, dur=0.36, tpow=1.3, span=3.6, elev=44, cy=0.66)
-CYMBAL = dict(DRUM, stick=[0.5, 0.25], surf=8, air=4, air_h=1.0, air_out=1.6, elev=44, dur=0.36, times=[0.0, 0.075, 0.165], span=4.2, cy=0.64)
+# 심벌: 면을 타는 방전은 줄이고, 가장자리에서 바깥으로 뻗는 방전과 튀는 불꽃을 더했다
+CYMBAL = dict(DRUM, stick=[0.5, 0.25], surf=5, air=2, air_h=1.0, air_out=0.9, rimout=13, rim_len=0.9, rim_h=0.9,
+    sparks=220, sp_out=8.5, sp_up=6.0, sp_grav=30.0, sp_expo=0.009, sp_life=0.22, sp_amp=1.0,
+    elev=44, dur=0.36, times=[0.0, 0.075, 0.165], span=4.2, cy=0.62)
 FRONT = dict(DRUM, stick=[0.0, 0.05], front=True, persp=0.45, surf=8, air=5, air_h=1.1, air_out=1.2, span=4.4, cy=0.50)
 CFGS = dict(side=DRUM, cymbal=CYMBAL, front=FRONT)
 

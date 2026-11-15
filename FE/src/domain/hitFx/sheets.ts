@@ -39,15 +39,15 @@ function def(id: FxSheetId, durMs: number, tpow: number, span: number, cy: numbe
 export const SHEET_DEFS: Record<FxSheetId, FxSheetDef> = {
   'water-side-a': def('water-side-a', 640, 1.5, 3.8, 0.66),
   'water-side-b': def('water-side-b', 640, 1.5, 3.8, 0.66),
-  'water-cymbal': def('water-cymbal', 520, 1.5, 4.4, 0.62),
+  'water-cymbal': def('water-cymbal', 520, 1.5, 3.8, 0.62),
   'water-front': def('water-front', 520, 1.5, 3.6, 0.46),
   'fire-side-a': def('fire-side-a', 500, 1.5, 3.6, 0.68),
   'fire-side-b': def('fire-side-b', 500, 1.5, 3.6, 0.68),
-  'fire-cymbal': def('fire-cymbal', 440, 1.5, 4.2, 0.64),
+  'fire-cymbal': def('fire-cymbal', 440, 1.5, 4.2, 0.6),
   'fire-front': def('fire-front', 440, 1.5, 3.6, 0.56),
   'bolt-side-a': def('bolt-side-a', 360, 1.3, 3.6, 0.66),
   'bolt-side-b': def('bolt-side-b', 360, 1.3, 3.6, 0.66),
-  'bolt-cymbal': def('bolt-cymbal', 360, 1.3, 4.2, 0.64),
+  'bolt-cymbal': def('bolt-cymbal', 360, 1.3, 4.2, 0.62),
   'bolt-front': def('bolt-front', 360, 1.3, 4.4, 0.5),
 };
 

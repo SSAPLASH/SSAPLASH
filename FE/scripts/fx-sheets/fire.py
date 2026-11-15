@@ -1,9 +1,10 @@
 # 불 테마용 연속 그림 생성기: 헤드에서 불길이 한 번 터져 올라, 혀처럼 갈라지며 떠오르다 식는다.
+# 심벌(burst)은 다르다: 면이 번쩍이고 가장자리에서 짧은 불길과 불똥이 사방으로 튀어 나갔다가 식으며 떨어진다.
 # 화면 위에서 직접 계산한다: 불길의 겉모양(높이·폭·떠오름)에 위로 흐르는 잡음을 더해 혀 모양으로 찢고,
 # 그 값을 색 띠(검정 → 붉은색 → 주황 → 노랑 → 흰색)에 대응시킨다. 검은 바탕의 밝은 그림이고, 저장할 때 build.py가 투명 바탕으로 바꾼다.
 import math, numpy as np
 from scipy import ndimage as ndi
-from common import smooth, frame_times, N, FR, SS
+from common import smooth, splat, frame_times, N, FR, SS
 
 class Noise3:
     def __init__(self, rng, shape=(48, 128, 128), sig=2.6):
@@ -83,6 +84,69 @@ def front(cfg, st, t):
     disc = np.clip(1 - (r / cfg['r0']) ** 2, 0, 1) ** 0.4 * math.exp(-t / cfg['t_flash']) * cfg['flash'] * (0.2 + 1.6 * tc)
     return I + disc
 
+def burst_build(cfg, rng):
+    """심벌용: 가장자리에서 튀는 불똥과 짧은 불길 입자의 처음 위치·속도를 정한다(단위: 헤드 반지름, 초)."""
+    def emit(n, v_out, v_up, k, life, rim, tang, jet):
+        a = rng.uniform(0, 2 * np.pi, n)
+        r = rim[0] + (rim[1] - rim[0]) * np.sqrt(rng.uniform(0, 1, n))
+        # 방향마다 세기가 다르다(굵은 가닥 몇 개가 멀리 나간다)
+        ja = np.zeros(n)
+        for f, ph in zip((3, 5, 9), rng.uniform(0, 2 * np.pi, 3)):
+            ja += np.cos(a * f + ph) / 3
+        j = 1 + jet * ja
+        sp = v_out * j * np.exp(rng.normal(0, 0.45, n)).clip(0.25, 2.6)
+        ta = a + rng.normal(0, tang, n)
+        return dict(x=r * np.cos(a), y=r * np.sin(a), vx=np.cos(ta) * sp, vy=np.sin(ta) * sp,
+                    vz=v_up * j * rng.uniform(0.15, 1.0, n) ** 0.8 * np.exp(rng.normal(0, 0.3, n)),
+                    k=rng.uniform(k[0], k[1], n), life=rng.uniform(life[0], life[1], n) * cfg['dur'],
+                    t0=rng.uniform(0, 1, n) ** 2 * cfg['t_emit'], w=rng.uniform(0.35, 1.0, n) ** 1.5, a=a)
+    return dict(sparks=emit(cfg['sparks'], cfg['sp_out'], cfg['sp_up'], cfg['sp_k'], cfg['sp_life'], (0.55, 1.0), 0.35, 0.45),
+                puff=emit(cfg['puffs'], cfg['pf_out'], cfg['pf_up'], cfg['pf_k'], cfg['pf_life'], (0.8, 1.0), 0.22, 0.75))
+
+def burst_pos(p, t, g):
+    age = np.clip(t - p['t0'], 0, None)
+    D = (1 - np.exp(-p['k'] * age)) / p['k']
+    return p['x'] + p['vx'] * D, p['y'] + p['vy'] * D, (p['vz'] + g / p['k']) * D - g * age / p['k'], age
+
+def burst_proj(cfg, x, y, z):
+    px = N / cfg['span']
+    se, ce = math.sin(math.radians(cfg['elev'])), math.cos(math.radians(cfg['elev']))
+    return N / 2 + x * px, N * cfg['cy'] + y * se * px - z * ce * px
+
+def burst(cfg, st, t):
+    X, Y = st['X'], st['Y']; nz = st['nz']; e = math.sin(math.radians(cfg['elev']))
+    # 짧은 불길: 가장자리에서 바깥으로 뿜어 나와 금방 느려지고 위로 뜨며 꺼진다. 밀도를 흐려 잡음으로 찢는다
+    p = st['burst']['puff']
+    x, y, z, age = burst_pos(p, t, -cfg['pf_buoy'])
+    heat = np.clip(1 - age / p['life'], 0, 1)
+    w = p['w'] * heat ** 1.2 * (age > 0)
+    sx, sy = burst_proj(cfg, x, y, z)
+    dens = ndi.gaussian_filter(splat(sx, sy, w), cfg['pf_sig']) * cfg['pf_gain']
+    turb = nz.fbm(X * cfg['fx'], (Y - cfg['flow'] * t) * cfg['fy'], t * cfg['ft'])
+    flame = np.clip(dens + (turb - 0.5) * cfg['tear'] * smooth(0.0, 0.5, dens), 0, None) ** cfg['gamma']
+    # 불똥: 속도 방향으로 늘어난 짧은 줄. 식으면서 흰 노랑 → 주황 → 붉은색으로 어두워진다
+    q = st['burst']['sparks']
+    x, y, z, age = burst_pos(q, t, cfg['sp_grav'])
+    heat = np.clip(1 - age / q['life'], 0, 1)
+    # 심벌 면 아래로 내려간 것은 면 안쪽이면 지운다(면에 가려진다)
+    hide = ((x * x + y * y) < 1.0) & (z < -0.02)
+    w = q['w'] * heat ** cfg['sp_cool'] * (age > 0) * (~hide)
+    x1, y1, z1, _ = burst_pos(q, t - cfg['sp_expo'], cfg['sp_grav'])
+    sx0, sy0 = burst_proj(cfg, x, y, z); sx1, sy1 = burst_proj(cfg, x1, y1, z1)
+    # 그림 가장자리에서 잘려 보이지 않게 테두리 근처는 흐려 없앤다
+    edge = np.minimum(np.minimum(sx0, N - sx0), np.minimum(sy0, N - sy0)) / N
+    w = w * smooth(0.0, 0.07, edge)
+    S = np.zeros((N, N)); ns = 22
+    for i in range(ns):
+        f = i / (ns - 1)
+        S += splat(sx0 + (sx1 - sx0) * f, sy0 + (sy1 - sy0) * f, w * (1 - 0.7 * f) / ns * 2.4)
+    spark = ndi.gaussian_filter(S, cfg['sp_sig']) * cfg['sp_gain'] + ndi.gaussian_filter(S, cfg['sp_sig'] * 3.2) * cfg['sp_gain'] * 0.9
+    # 불이 붙는 순간 가장자리가 고리 모양으로 번쩍인다(면 가운데를 덩어리로 덮지 않는다)
+    r = np.sqrt(X * X + (Y / e) ** 2)
+    ring = np.exp(-((r - 0.93) / 0.11) ** 2) + 0.12 * np.clip(1 - r, 0, 1) ** 0.5
+    disc = ring * math.exp(-t / cfg['t_flash']) * cfg['flash'] * (0.7 + 0.6 * turb)
+    return flame * cfg['gain'] + spark + disc
+
 def shade(cfg, I):
     I = ndi.gaussian_filter(I, 1.0)
     rgb = ramp(I)
@@ -95,7 +159,10 @@ def shade(cfg, I):
 DRUM = dict(view='side', e=0.70, thin=0.2, H=1.05, rise=1.2, t_grow=0.045, W0=1.06, W1=0.8, shape_p=2.6, shape_q=0.55, jet_f=5.0,
     sway=0.10, lift=4.6, t_lift=0.14, flow=6.0, fx=24.0, fy=11.0, ft=30.0, body=1.0, tear=1.45, gamma=1.3, gain=2.0,
     t_cool=0.16, t_flash=0.035, flash=1.0, bloom=0.5, expo=1.5, frames=36, dur=0.50, tpow=1.5, span=3.6, cy=0.68)
-CYMBAL = dict(DRUM, edge_mode=True, jet_f=9.0, H=0.6, rise=0.9, W0=1.1, W1=1.0, lift=4.2, t_lift=0.10, gain=2.0, dur=0.44, span=4.2, cy=0.64)
+# 심벌: 불길이 얹혀 타지 않고 가장자리에서 사방으로 튄다(짧은 불길 puff + 불똥 spark)
+CYMBAL = dict(DRUM, view='burst', elev=44, sparks=340, sp_out=8.0, sp_up=7.0, sp_k=(3.0, 6.0), sp_life=(0.6, 1.0), sp_grav=30.0, sp_expo=0.02,
+    sp_cool=0.75, sp_sig=1.5, sp_gain=110.0, puffs=26000, pf_out=10.0, pf_up=5.0, pf_k=(5.0, 9.0), pf_life=(0.25, 0.6), pf_buoy=9.0, pf_sig=3.0, pf_gain=0.6,
+    t_emit=0.03, tear=0.5, gamma=1.25, gain=1.5, flow=3.0, fx=20.0, fy=14.0, ft=30.0, flash=1.5, t_flash=0.028, bloom=0.45, dur=0.44, span=4.2, cy=0.60)
 FRONT = dict(DRUM, view='front', r0=0.9, H=0.30, rise=0.55, side=0.35, jet_f=1.0, lift=0.9, t_lift=0.12, flow=3.0, fx=22.0, fy=26.0,
     tear=1.5, gain=1.7, gamma=1.4, flash=1.1, t_flash=0.05, t_cool=0.12, dur=0.44, span=3.6, cy=0.56)
 CFGS = dict(side=DRUM, cymbal=CYMBAL, front=FRONT)
@@ -103,10 +170,13 @@ CFGS = dict(side=DRUM, cymbal=CYMBAL, front=FRONT)
 def build(cfg, seed):
     rng = np.random.default_rng(seed)
     X, Y = grid(cfg)
-    return dict(X=X, Y=Y, nz=Noise3(rng), ph=rng.uniform(0, 100, 4))
+    st = dict(X=X, Y=Y, nz=Noise3(rng), ph=rng.uniform(0, 100, 4))
+    if cfg['view'] == 'burst':
+        st['burst'] = burst_build(cfg, rng)
+    return st
 
 def frame(cfg, st, t):
-    return shade(cfg, side(cfg, st, t) if cfg['view'] == 'side' else front(cfg, st, t))
+    return shade(cfg, {'side': side, 'front': front, 'burst': burst}[cfg['view']](cfg, st, t))
 
 
 def frames(cfg, seed):
