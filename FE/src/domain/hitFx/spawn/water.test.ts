@@ -176,4 +176,30 @@ describe('water 테마(연속 그림 + 입자)', () => {
     const drops = run('acoustic', 'SNARE', 6, 127).list.filter((p) => p.kind === 'drop');
     expect(drops.every((p) => p.vy < 0 && p.ay > 0 && p.hold! > 0)).toBe(true);
   });
+
+  it('심벌 한 타: 가장 센 세기·판정 배율에서도 maxSpawn 이하, 수명(지연 포함)은 maxLifeMs 이하', () => {
+    for (const v of [0, 60, 127]) {
+      for (const mode of ['lab', 'game', 'sheet'] as const) {
+        for (const j of [null, 'PERFECT', 'GOOD'] as const) {
+          for (let seq = 1; seq <= 30; seq++) {
+            const e: FxEvent = { seq, pad: 'CRASH', velocity: v, mode, judgement: j, deltaMs: j ? 0 : null, combo: null };
+            const geo = { cx: 300, cy: 200, rx: 80, ry: 20, k: 80 / 57 };
+            const list = def.spawn(e, geo, 'cymbal', fxIntensity(e), createRand(seq), def.palette('acoustic', 'cymbal', 'x'));
+            expect(list.length).toBeLessThanOrEqual(def.maxSpawn);
+            for (const x of list) expect(x.lifeMs + x.delayMs).toBeLessThanOrEqual(def.maxLifeMs);
+          }
+        }
+      }
+    }
+  });
+
+  it('심벌: 보케가 없고 방울 개수가 식과 같다', () => {
+    for (let seq = 1; seq <= 10; seq++) {
+      const e: FxEvent = { seq, pad: 'CRASH', velocity: 127, mode: 'lab', judgement: null, deltaMs: null, combo: null };
+      const list = runGeo('cymbal', 80, 20, seq, 127);
+      expect(list.some((p) => p.sprite === 'bokeh')).toBe(false);
+      expect(list.filter((p) => p.kind === 'drop')).toHaveLength(Math.ceil(Math.round(9 * fxIntensity(e).count) / 3));
+      expect(list.filter((p) => p.kind === 'ring').at(-1)!.size1).toBe(1.16);
+    }
+  });
 });
