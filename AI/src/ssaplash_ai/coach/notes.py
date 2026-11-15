@@ -1,7 +1,8 @@
 """타격 기록 → 노트 표. 모든 통계의 바탕이다.
 
 분석 단위는 타격 한 줄이 아니라 **채보의 노트 한 개**다.
-- `PERFECT`/`GOOD`: 노트를 맞춤. 노트 시각 = `tMs − deltaMs`
+- `PERFECT`/`GOOD`: 노트를 맞춤. 노트 시각 = `tMs − deltaMs × playbackRate`
+  (`tMs`는 곡 시각, `deltaMs`는 실제 시간이라 배율을 곱해 곡 시각으로 맞춘다)
 - `MISS`: 노트를 놓침. 노트 시각 = `tMs` (BE 확인: 놓친 채보 노트의 시각)
 - `judgement`가 null인 행(여분의 타격, stray)은 노트가 아니라서 여기에 들어오지 않는다.
 """
@@ -20,7 +21,7 @@ from ssaplash_ai.coach.schema import AnalysisRequest
 class NoteTable:
     """노트 시각 순으로 정렬된 노트 표. 모든 배열의 길이가 같다."""
 
-    time: np.ndarray  # 노트 시각(ms)
+    time: np.ndarray  # 노트 시각(ms, 곡 시각)
     pad: list[str]  # 노트 패드 (정식 이름)
     miss: np.ndarray  # 놓친 노트면 True
     perfect: np.ndarray  # PERFECT 판정이면 True
@@ -59,7 +60,7 @@ def build_notes(request: AnalysisRequest) -> NoteTable:
         is_miss = hit.judgement == "MISS"
         seq.append(hit.seq)
         # 검증에서 PERFECT/GOOD은 deltaMs가 있음을 보장한다
-        time.append(hit.tMs if is_miss else hit.tMs - (hit.deltaMs or 0.0))
+        time.append(hit.tMs if is_miss else hit.tMs - (hit.deltaMs or 0.0) * request.playbackRate)
         pad.append(hit.pad)
         miss.append(is_miss)
         perfect.append(hit.judgement == "PERFECT")
