@@ -37,7 +37,8 @@ import { CoachHandChip } from '@/features/play/components/stage/coach/CoachHandC
 import { HitReadout } from '@/features/play/components/stage/HitReadout';
 import { StartDialog } from '@/features/play/components/start/StartDialog';
 import { pedalConnected, pedalRequired } from '@/domain/kit/device/pedalStatus';
-import { smallKitSpec } from '@/domain/kit/drumKit';
+import { kitSizeAt, smallKitSpec } from '@/domain/kit/drumKit';
+import { useSheetKitFit } from '@/features/play/components/stage/kit/useSheetKitFit';
 import { PlayOptions } from '@/features/play/components/start/PlayOptions';
 import { useNextBeatLabels } from '@/features/play/components/stage/useNextBeatLabels';
 import { LiveDrumKit } from '@/components/drum/LiveDrumKit';
@@ -126,7 +127,10 @@ function SheetPageBody() {
   const settings = useSettings();
   // 사이드바 실제 접힘(사용자 설정 또는 태블릿 폭). 펼쳐져 있으면 곡 범위를 사이드바 하위 메뉴가 보인다
   // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
-  const smallKit = smallKitSpec('sheet', settings.kitSkin);
+  // 킷은 악보 칸을 뺀 남는 높이에 맞춰 키운다(설계 MODE-003-practice-speed D18)
+  const kitFit = useSheetKitFit();
+  const smallKit = smallKitSpec('sheet', settings.kitSkin, kitFit);
+  const kitBox = kitSizeAt(smallKit.scale, settings.kitSkin, smallKit.view);
   const [searchParams, setSearchParams] = useSearchParams();
   // 연주 중인 세션. 연주 중 설정이 바뀌어도 세션을 새로 만들지 않도록 begin 때 고정한다
   const [playSession, setPlaySession] = useState<RhythmSession | null>(null);
@@ -1031,7 +1035,7 @@ function SheetPageBody() {
     <main>
       <PlayStage
         variant="sheet"
-        kitTop={smallKit.view === 'top'}
+        kitSize={{ width: Math.ceil(kitBox.width), height: Math.round(kitBox.height) }}
         hud={
           <PlayHud
             variant="sheet"
@@ -1060,7 +1064,7 @@ function SheetPageBody() {
             fxSource={sheetFx.source}
             overlay={
               settings.timingBar ? (
-                <TimingBar source={sheetFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} />
+                <TimingBar source={sheetFx.source} perfectMs={activeSession.windows.perfectMs} goodMs={activeSession.windows.goodMs} resetToken={fxRun} missSource={missSource} thin labels />
               ) : undefined
             }
           />
