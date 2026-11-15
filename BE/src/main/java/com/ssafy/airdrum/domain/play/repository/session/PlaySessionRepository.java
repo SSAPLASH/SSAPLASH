@@ -49,7 +49,8 @@ public class PlaySessionRepository {
         return named.query("""
             SELECT p.id,p.started_at,p.ended_at,p.mode,p.input_source,p.song_id,s.title,p.chart_version_id,
                    c.id AS chart_id,c.difficulty,p.client_meta->>'endReason' AS end_reason,(s.id IS NOT NULL) AS accessible,p.score,p.accuracy,p.max_combo,
-                   (p.mode IN ('RHYTHM','SHEET') AND r.id IS NOT NULL) AS has_report
+                   (p.mode IN ('RHYTHM','SHEET') AND r.id IS NOT NULL) AS has_report,
+                   COALESCE((p.judgement_context->>'playbackRate')::numeric, 1) AS playback_rate
             """ + LIST_FROM + """
             LEFT JOIN chart_versions v ON v.id=p.chart_version_id
             LEFT JOIN charts c ON c.id=v.chart_id AND c.song_id=p.song_id
@@ -61,7 +62,7 @@ public class PlaySessionRepository {
                 r.getString("mode"),r.getString("input_source"),r.getObject("song_id", Long.class),
                 r.getString("title"),r.getObject("chart_version_id", Long.class),r.getObject("chart_id", Long.class),r.getString("difficulty"),r.getString("end_reason"),
                 r.getBoolean("accessible"),r.getObject("score", Integer.class),r.getBigDecimal("accuracy"),
-                r.getObject("max_combo", Integer.class),r.getBoolean("has_report")));
+                r.getObject("max_combo", Integer.class),r.getBoolean("has_report"),r.getDouble("playback_rate")));
     }
 	public List<BestRecordsResponse.Item> bestForUser(long userId, List<Long> songIds) {
 		var args = new MapSqlParameterSource().addValue("userId", userId).addValue("songIds", songIds);
@@ -74,6 +75,7 @@ public class PlaySessionRepository {
 			JOIN charts c ON c.id=v.chart_id AND c.song_id=p.song_id
 			WHERE p.user_id=:userId AND p.song_id IN (:songIds) AND p.mode IN ('RHYTHM','SHEET')
 			  AND p.client_meta->>'endReason'='COMPLETED'
+			  AND COALESCE((p.judgement_context->>'playbackRate')::numeric, 1) = 1
 			GROUP BY p.song_id,c.id,c.difficulty,p.mode ORDER BY p.song_id,c.id,p.mode
 			""", args, (r,n) -> new BestRecordsResponse.Item(r.getLong("song_id"),r.getLong("chart_id"),
 				r.getString("difficulty"),r.getString("mode"),r.getObject("best_score", Integer.class),r.getBigDecimal("best_accuracy")));

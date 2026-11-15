@@ -45,7 +45,7 @@ public class PlayQueryController {
     }
     @GetMapping("/best-records")
     @ApiResponse(responseCode = "200", description = "접근 가능한 요청 곡의 본인 최고 기록")
-    @Operation(summary = "곡·연습 단계별 최고 기록", description = "쉼표로 구분한 곡 ID 최대 100개. 명시적으로 완료한 RHYTHM/SHEET 기록만 포함하며, 최고 점수와 정확도는 각각 집계합니다. 정확도는 0~100입니다.")
+    @Operation(summary = "곡·연습 단계별 최고 기록", description = "쉼표로 구분한 곡 ID 최대 100개. 명시적으로 완료한 1배속 RHYTHM/SHEET 기록만 포함하며, 최고 점수와 정확도는 각각 집계합니다. 정확도는 0~100입니다.")
     public BestRecordsResponse bestRecords(@Parameter(hidden = true) AuthUser me,
             @Parameter(description = "양의 곡 ID 1~100개, 쉼표 구분", required = true, example = "1,2") @RequestParam String songIds) {
         return plays.bestRecords(me.id(), songIds);
