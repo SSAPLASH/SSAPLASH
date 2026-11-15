@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from coach_helpers import N, build_request, patterns_of, run, same
-from ssaplash_ai.coach import AnalysisRequest
+from ssaplash_ai.coach import AnalysisRequest, analyze
 from ssaplash_ai.coach.notes import build_notes
 from ssaplash_ai.coach.schema import normalize_pad
 
@@ -105,3 +105,59 @@ def test_타격_기록이_없는_요청도_받는다():
 
     assert AnalysisRequest.model_validate(data).hits == []
     assert patterns_of(run([])) == []
+
+
+def _slow(data: dict, rate: float) -> dict:
+    """배율 1로 만든 요청을 느린 연주 규약으로 바꾼다. `tMs`는 곡 시각, `deltaMs`는 실제 시간."""
+    hits = [
+        {**h, "tMs": h["tMs"] - h["deltaMs"] + h["deltaMs"] * rate}
+        if h["judgement"] in ("PERFECT", "GOOD")
+        else h
+        for h in data["hits"]
+    ]
+    return {**data, "playbackRate": rate, "hits": hits}
+
+
+def test_playbackRate가_없으면_1이고_노트_시각은_이전과_같다():
+    data = build_request([N(delta=4), N(delta=None), N(delta=-10)])
+
+    request = AnalysisRequest.model_validate(data)
+    explicit = AnalysisRequest.model_validate({**data, "playbackRate": 1})
+
+    assert request.playbackRate == 1.0
+    assert build_notes(request).time.tolist() == [1000.0, 1500.0, 2000.0]
+    assert build_notes(explicit).time.tolist() == [1000.0, 1500.0, 2000.0]
+
+
+def test_느린_연주의_노트_시각은_오차에_배율을_곱해_뺀다():
+    # 배율 0.7, 노트 시각 7000, 실제로 30ms 늦게 침 → tMs 7021, deltaMs 30
+    data = build_request([N(delta=30), N(delta=None)], t0=7000, step_ms=500)
+    data["hits"][0]["tMs"] = 7021
+    request = AnalysisRequest.model_validate({**data, "playbackRate": 0.7})
+
+    notes = build_notes(request)
+
+    assert notes.time.tolist() == pytest.approx([7000.0, 7500.0])  # 놓침은 tMs 그대로
+    assert notes.delta[0] == 30  # 오차는 실제 시간 그대로
+
+
+def test_느린_연주도_오차와_놓침이_같으면_결과가_배율_1과_같다():
+    # 5.0~6.5초에 4개를 놓치고 나머지는 20ms 늦음. 구간은 곡 시각이라 배율과 무관하다
+    song = [N(delta=None) if i in {10, 11, 12, 13} else N(delta=20) for i in range(30)]
+    data = build_request(song, t0=0.0)
+
+    normal = analyze(AnalysisRequest.model_validate(data))
+    slow = analyze(AnalysisRequest.model_validate(_slow(data, 0.5)))
+
+    assert "MISS_CLUSTER" in [s.pattern for s in normal.weakSegments]
+    assert slow.model_dump() == normal.model_dump()
+
+
+@pytest.mark.parametrize("rate", [0, -0.5, 4.01, None, "fast"])
+def test_playbackRate가_범위를_벗어나면_검증_오류다(rate):
+    data = {**build_request(same(20)), "playbackRate": rate}
+
+    with pytest.raises(ValidationError) as caught:
+        AnalysisRequest.model_validate(data)
+
+    assert caught.value.errors()[0]["loc"] == ("playbackRate",)
